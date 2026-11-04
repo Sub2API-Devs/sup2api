@@ -25,8 +25,8 @@ var MAX_PLUGIN_MARKDOWN_LENGTH = 4096;
 async function walkPluginMarkdown(rootDir, onFile, opts = {}) {
   let fs = getFsImplementation();
   let label = opts.logLabel ?? "plugin";
-  let y = 0;
-  let S = false;
+  let directoryCount = 0;
+  let limitLogged = false;
   let rootState = {
     dir: rootDir,
   };
@@ -42,9 +42,9 @@ async function walkPluginMarkdown(rootDir, onFile, opts = {}) {
       });
       return;
     }
-    if (++y > MAX_PLUGIN_MARKDOWN_LENGTH) {
-      if (!S) {
-        S = true;
+    if (++directoryCount > MAX_PLUGIN_MARKDOWN_LENGTH) {
+      if (!limitLogged) {
+        limitLogged = true;
         logForDebugging(
           `Stopping ${label} scan after ${MAX_PLUGIN_MARKDOWN_LENGTH} directories (root=${rootDir})`,
           {

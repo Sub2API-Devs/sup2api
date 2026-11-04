@@ -13,14 +13,14 @@ var native_default = {
 };
 //@ chunk-mrx6y2r5.js:224906-224946 esm-layout
 var uint8Array = new Uint8Array(256);
-var is = uint8Array.length;
+var uint8ArrayLength = uint8Array.length;
 //@ chunk-mrx6y2r5.js:224946-225018 esm-layout
 function rng() {
-  if (is > uint8Array.length - 16) {
+  if (uint8ArrayLength > uint8Array.length - 16) {
     randomFillSync(uint8Array);
-    is = 0;
+    uint8ArrayLength = 0;
   }
-  return uint8Array.slice(is, (is += 16));
+  return uint8Array.slice(uint8ArrayLength, (uint8ArrayLength += 16));
 }
 //@ chunk-mrx6y2r5.js:225018-225028 esm-layout
 var byteToHex = [];
@@ -52,7 +52,7 @@ function unsafeStringify(arr, offset = 0) {
   ).toLowerCase();
 }
 //@ chunk-mrx6y2r5.js:225328-225695 esm-fingerprint
-function dy(options, buf, offset) {
+function uuid(options, buf, offset) {
   if (native_default.randomUUID && !buf && !options) return native_default.randomUUID();
   options = options || {};
   let rnds = options.random ?? options.rng?.() ?? rng();
@@ -68,4 +68,4 @@ function dy(options, buf, offset) {
   }
   return unsafeStringify(rnds);
 }
-export { dy };
+export { uuid };

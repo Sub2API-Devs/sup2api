@@ -5,13 +5,13 @@
  * pieces: chunk-82d8c88w.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_safe_buffer } from "../../safe-buffer/index.js";
 import { require_param_bytes_for_alg } from "./param-bytes-for-alg.js";
 
 //@ chunk-82d8c88w.js:1328-3287 cjs-fingerprint
-var require_ecdsa_sig_formatter = x(function (cjsExports, cjsModule) {
-  var B = require_safe_buffer().Buffer;
+var require_ecdsa_sig_formatter = __commonJS(function (cjsExports, cjsModule) {
+  var BufferCtor = require_safe_buffer().Buffer;
   var getParamBytesForAlg = require_param_bytes_for_alg();
   var MAX_OCTET = 128;
   var CLASS_UNIVERSAL = 0;
@@ -24,8 +24,8 @@ var require_ecdsa_sig_formatter = x(function (cjsExports, cjsModule) {
     return base64.replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
   }
   function signatureAsBuffer(signature) {
-    if (B.isBuffer(signature)) return signature;
-    else if (typeof signature === "string") return B.from(signature, "base64");
+    if (BufferCtor.isBuffer(signature)) return signature;
+    else if (typeof signature === "string") return BufferCtor.from(signature, "base64");
     throw TypeError("ECDSA signature must be a Base64 string or a Buffer");
   }
   function derToJose(signature, alg) {
@@ -67,7 +67,7 @@ var require_ecdsa_sig_formatter = x(function (cjsExports, cjsModule) {
       throw Error('Expected to consume entire buffer, but "' + (inputLength - offset) + '" bytes remain');
     var rPadding = paramBytes - rLength;
     var sPadding = paramBytes - sLength;
-    var dst = B.allocUnsafe(rPadding + rLength + sPadding + sLength);
+    var dst = BufferCtor.allocUnsafe(rPadding + rLength + sPadding + sLength);
     for (offset = 0; offset < rPadding; ++offset) dst[offset] = 0;
     signature.copy(dst, offset, rOffset + Math.max(-rPadding, 0), rOffset + rLength);
     offset = paramBytes;
@@ -98,7 +98,7 @@ var require_ecdsa_sig_formatter = x(function (cjsExports, cjsModule) {
     var sLength = paramBytes - sPadding;
     var rsBytes = 2 + rLength + 1 + 1 + sLength;
     var shortLength = rsBytes < MAX_OCTET;
-    var dst = B.allocUnsafe((shortLength ? 2 : 3) + rsBytes);
+    var dst = BufferCtor.allocUnsafe((shortLength ? 2 : 3) + rsBytes);
     var offset = 0;
     dst[offset++] = ENCODED_TAG_SEQ;
     if (shortLength) dst[offset++] = rsBytes;

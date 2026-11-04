@@ -17,6 +17,7 @@ import { getSubscriptionType } from "../auth.js";
 import { isPolicyAllowed } from "../../services/policyLimits/policyEvidence.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hgfr0vx8.js:478-549 placement
 /**
@@ -29,8 +30,8 @@ var SMALL = "small";
 /**
  * 规范化 workflow 规模名。
  */
-function workflowSizeName(e) {
-  return WORKFLOW_SIZE_NAMES.find((o) => o === e);
+function workflowSizeName(size) {
+  return WORKFLOW_SIZE_NAMES.find((name) => name === size);
 }
 //@ chunk-hgfr0vx8.js:593-628 placement
 var WORKFLOW_SIZE_AGENT_HINTS = {
@@ -42,28 +43,31 @@ var WORKFLOW_SIZE_AGENT_HINTS = {
 /**
  * 规模名附上建议的 agent 数量。
  */
-function sizeWithAgentHint(e) {
-  let o = e === "small" || e === "medium" || e === "large" ? WORKFLOW_SIZE_AGENT_HINTS[e] : undefined;
-  return o === undefined ? e : `${e} (aim for <${o} agents)`;
+function sizeWithAgentHint(size) {
+  let isLarge =
+    size === "small" || size === "medium" || size === "large" ? WORKFLOW_SIZE_AGENT_HINTS[size] : undefined;
+  return isLarge === undefined ? size : `${size} (aim for <${isLarge} agents)`;
 }
 //@ chunk-hgfr0vx8.js:749-818 placement
 /**
  * 规模说明（默认规模标注 default）。
  */
-function workflowSizeDisplay(e, o) {
-  return o && e !== "unrestricted" ? `${e} (default)` : sizeWithAgentHint(e);
+function workflowSizeDisplay(size, isDefault) {
+  return isDefault && size !== "unrestricted" ? `${size} (default)` : sizeWithAgentHint(size);
 }
 //@ chunk-hgfr0vx8.js:818-892 placement
 /**
  * 规模对应的建议 agent 数。
  */
-function workflowAgentHint(e) {
-  return e === "small" || e === "medium" || e === "large" ? WORKFLOW_SIZE_AGENT_HINTS[e] : undefined;
+function workflowAgentHint(size) {
+  return size === "small" || size === "medium" || size === "large"
+    ? WORKFLOW_SIZE_AGENT_HINTS[size]
+    : undefined;
 }
 //@ chunk-hgfr0vx8.js:892-984 placement
-function workflowSizeGuideline(e) {
-  if (!(e in WORKFLOW_SIZE_AGENT_HINTS)) return e;
-  return `${e} \u2014 keep workflows under ${WORKFLOW_SIZE_AGENT_HINTS[e]} agents`;
+function workflowSizeGuideline(size) {
+  if (!(size in WORKFLOW_SIZE_AGENT_HINTS)) return size;
+  return `${size} \u2014 keep workflows under ${WORKFLOW_SIZE_AGENT_HINTS[size]} agents`;
 }
 //@ chunk-hgfr0vx8.js:984-1114 placement
 /**
@@ -76,20 +80,22 @@ function guidelineNotLimitText() {
 /**
  * 本会话 workflow 规模指南说明。
  */
-function workflowSizeIntro(e, isDefault) {
-  let t = isDefault
+function workflowSizeIntro(size, isDefault) {
+  let intro = isDefault
     ? "This session has the default workflow size guideline:"
     : "A workflow size guideline is configured for this session:";
-  let r = isDefault ? ' The user can raise or remove it with "Dynamic workflow size" in /config.' : "";
-  return `${t} ${workflowSizeGuideline(e)}. ${guidelineNotLimitText()}${r}`;
+  let configHint = isDefault
+    ? ' The user can raise or remove it with "Dynamic workflow size" in /config.'
+    : "";
+  return `${intro} ${workflowSizeGuideline(size)}. ${guidelineNotLimitText()}${configHint}`;
 }
 //@ chunk-hgfr0vx8.js:1372-1564 placement
 /**
  * workflow 规模指南变更说明。
  */
-function workflowSizeChangedText(e) {
-  if (e === "unrestricted") return "Workflow size is now unrestricted \u2014 no size guideline applies.";
-  return `The workflow size guideline for this session changed: ${workflowSizeGuideline(e)}. ${guidelineNotLimitText()}`;
+function workflowSizeChangedText(size) {
+  if (size === "unrestricted") return "Workflow size is now unrestricted \u2014 no size guideline applies.";
+  return `The workflow size guideline for this session changed: ${workflowSizeGuideline(size)}. ${guidelineNotLimitText()}`;
 }
 //@ chunk-hgfr0vx8.js:1564-1630 placement
 /**
@@ -118,7 +124,10 @@ class WorkflowAvailabilityCache {
   }
 }
 //@ chunk-hgfr0vx8.js:1795-1818 placement
-var workflowAvailabilityByHost = new HostScoped(() => new WorkflowAvailabilityCache());
+var workflowAvailabilityByHost; // deferred: uses WorkflowAvailabilityCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hgfr0vx8.js:1795", () => {
+  workflowAvailabilityByHost = new HostScoped(() => new WorkflowAvailabilityCache());
+});
 //@ chunk-hgfr0vx8.js:1818-1854 placement
 function isWorkflowsAvailable() {
   return getWorkflowsUnavailableReason() === undefined;
@@ -126,12 +135,12 @@ function isWorkflowsAvailable() {
 //@ chunk-hgfr0vx8.js:1854-2313 placement
 function getWorkflowsUnavailableReason() {
   if (!alwaysTrue()) return "unsupported_runtime";
-  let e = isWorkflowsConfiguredOff();
-  let o =
-    e &&
+  let unavailable = isWorkflowsConfiguredOff();
+  let setByUserSettings =
+    unavailable &&
     !env.CLAUDE_CODE_DISABLE_WORKFLOWS &&
     resolveSetting("disableWorkflows", false).source === "userSettings";
-  if (e && !o) return "managed_settings";
+  if (unavailable && !setByUserSettings) return "managed_settings";
   if (!isWorkflowsPolicyAllowed()) return "org_policy";
   let { available, defaultOn } = workflowAvailability();
   if (!available) return "unavailable";
@@ -139,7 +148,7 @@ function getWorkflowsUnavailableReason() {
     let source = resolveSetting("enableWorkflows", defaultOn).source;
     return source === "userSettings" || source === "default" ? "user_setting" : "managed_settings";
   }
-  return o ? "user_setting" : undefined;
+  return setByUserSettings ? "user_setting" : undefined;
 }
 //@ chunk-hgfr0vx8.js:2313-2349 placement
 /**

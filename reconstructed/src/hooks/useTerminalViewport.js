@@ -8,55 +8,62 @@
  * pieces: chunk-18hwfzwa.js (4)
  * attribution: placement 4
  */
-import { Ar } from "../../runtime/bun-runtime.js";
+import { __export } from "../../runtime/bun-runtime.js";
 import { paneHostSlot, describePanePlaced } from "../plugins/functionHooks/panes.js";
-import { P, R, init_react_production } from "../../vendor/react/cjs/react.production.js";
+import { useEffect, useRef, init_react_production } from "../../vendor/react/cjs/react.production.js";
 import {
   STEADY_REDRAW_INTERVAL_MS,
   invalidateViewport,
 } from "../plugins/functionHooks/ui/renderInstances.js";
 import { hasRenderHooks } from "../plugins/functionHooks/ui/renderDispatch.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:36697-36707 placement
 var useTerminalViewportNamespace = {};
 //@ chunk-18hwfzwa.js:36707-36759 placement
-Ar(useTerminalViewportNamespace, {
-  default: () => useTerminalViewportNamespace,
-  useTerminalViewport: () => useTerminalViewport,
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:36707", () => {
+  __export(useTerminalViewportNamespace, {
+    default: () => useTerminalViewportNamespace,
+    useTerminalViewport: () => useTerminalViewport,
+  });
 });
 //@ chunk-18hwfzwa.js:1809635-1810034 placement
-function useTerminalViewport(h, x, D) {
-  let max = Math.max(1, h - D);
-  let ee = paneHostSlot.get();
-  if (ee?.columns !== h || ee.rows !== x || ee.conversationColumns !== max)
+function useTerminalViewport(columns, rows, chromeHeight) {
+  let max = Math.max(1, columns - chromeHeight);
+  let previous = paneHostSlot.get();
+  if (previous?.columns !== columns || previous.rows !== rows || previous.conversationColumns !== max)
     paneHostSlot.set({
-      columns: h,
-      rows: x,
+      columns,
+      rows,
       conversationColumns: max,
     });
-  P(() => {
-    let timer = setTimeout(describePanePlaced, STEADY_REDRAW_INTERVAL_MS, h);
+  useEffect(() => {
+    let timer = setTimeout(describePanePlaced, STEADY_REDRAW_INTERVAL_MS, columns);
     return () => clearTimeout(timer);
-  }, [h]);
-  let Re = R(max);
-  P(() => {
-    if (Re.current === max) return;
+  }, [columns]);
+  let lastWidthRef = useRef(max);
+  useEffect(() => {
+    if (lastWidthRef.current === max) return;
     if (!hasRenderHooks()) {
-      Re.current = max;
+      lastWidthRef.current = max;
       return;
     }
     let timer = setTimeout(
-      (He, We) => {
-        He.current = We;
+      (widthRef, nextWidth) => {
+        widthRef.current = nextWidth;
         invalidateViewport();
       },
       STEADY_REDRAW_INTERVAL_MS,
-      Re,
+      lastWidthRef,
       max,
     );
     return () => clearTimeout(timer);
   }, [max]);
 }
 //@ chunk-18hwfzwa.js:1810034-1810038 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1810034", () => {
+  init_react_production();
+});
 export { useTerminalViewportNamespace };

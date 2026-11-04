@@ -22,47 +22,49 @@ var SPILL_FILE_MAX_AGE_MS = 300000;
 /**
  * 为入站附件打开溢出文件并计算 sha256。
  */
-async function openSpill(attachmentsDir, e, i = 384) {
-  let r = await readdir(attachmentsDir.at).catch(() => []);
+async function openSpill(attachmentsDir, targetPath, mode = 384) {
+  let entries = await readdir(attachmentsDir.at).catch(() => []);
   await Promise.all(
-    r
-      .filter((t) => isOwnTempName(t, basename(e)))
-      .map(async (t) => {
-        let o = join(attachmentsDir.at, t);
-        let d = await lstat(o).catch(() => {
+    entries
+      .filter((name) => isOwnTempName(name, basename(targetPath)))
+      .map(async (name) => {
+        let path = join(attachmentsDir.at, name);
+        let stat = await lstat(path).catch(() => {
           return;
         });
-        if (d !== undefined && d.mtimeMs < Date.now() - SPILL_FILE_MAX_AGE_MS)
-          await rm(o, {
+        if (stat !== undefined && stat.mtimeMs < Date.now() - SPILL_FILE_MAX_AGE_MS)
+          await rm(path, {
             force: true,
           }).catch(() => {});
       }),
   );
-  let n = join(attachmentsDir.at, basename(makeTempSiblingPath(e)));
-  let s = await open(n, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | READ_LIMITS, 384).catch(
-    async (error) => {
-      await attachmentsDir.release();
-      throw error;
-    },
-  );
+  let tempPath = join(attachmentsDir.at, basename(makeTempSiblingPath(targetPath)));
+  let handle = await open(
+    tempPath,
+    constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | READ_LIMITS,
+    384,
+  ).catch(async (error) => {
+    await attachmentsDir.release();
+    throw error;
+  });
   let hash = createHash("sha256");
   let size = 0;
-  let f = false;
+  let closed = false;
   return {
-    async write(t) {
-      hash.update(t);
-      size += t.byteLength;
-      await s.writeFile(t);
+    async write(chunk) {
+      hash.update(chunk);
+      size += chunk.byteLength;
+      await handle.writeFile(chunk);
     },
     async finish() {
-      if (i !== 384) await s.chmod(i);
-      let { dev, ino } = await s.stat();
-      await s.close();
-      f = true;
+      if (mode !== 384) await handle.chmod(mode);
+      let { dev, ino } = await handle.stat();
+      await handle.close();
+      closed = true;
       return {
-        path: n,
-        placeAt: join(attachmentsDir.at, basename(e)),
-        target: e,
+        path: tempPath,
+        placeAt: join(attachmentsDir.at, basename(targetPath)),
+        target: targetPath,
         size,
         sha256: hash.digest("hex"),
         identity: `${dev}:${ino}`,
@@ -70,9 +72,9 @@ async function openSpill(attachmentsDir, e, i = 384) {
       };
     },
     async discard() {
-      if (!f) {
-        await s.close().catch(() => {});
-        await rm(n, {
+      if (!closed) {
+        await handle.close().catch(() => {});
+        await rm(tempPath, {
           force: true,
         }).catch(() => {});
         await attachmentsDir.release();
@@ -81,24 +83,24 @@ async function openSpill(attachmentsDir, e, i = 384) {
   };
 }
 //@ chunk-5wx09b4h.js:1274-1615 placement
-async function sha256OfFile(path, e) {
-  let i = await openRegularFileForRead(path).catch(() => null);
-  if (i === null) return null;
+async function sha256OfFile(path, expectedSize) {
+  let handle = await openRegularFileForRead(path).catch(() => null);
+  if (handle === null) return null;
   try {
-    let stats = await i.stat();
-    if (!stats.isFile() || stats.size !== e) return null;
+    let stats = await handle.stat();
+    if (!stats.isFile() || stats.size !== expectedSize) return null;
     let hash = createHash("sha256");
-    for await (let s of i.createReadStream({
+    for await (let chunk of handle.createReadStream({
       autoClose: false,
-      end: e - 1,
+      end: expectedSize - 1,
       highWaterMark: 1048576,
     }))
-      hash.update(s);
+      hash.update(chunk);
     return hash.digest("hex");
   } catch {
     return null;
   } finally {
-    await i.close().catch(() => {});
+    await handle.close().catch(() => {});
   }
 }
 export { sha256OfFile, openSpill };

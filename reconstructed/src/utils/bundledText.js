@@ -15,12 +15,12 @@ import { errorMessage, getErrnoPath as getErrnoPath_2 } from "./errors.js";
 /**
  * 读取内置文本资源（兼容 default 导出），不是字符串时抛错；读取失败时记录错误日志（资源路径与原因）后重新抛出。
  */
-function loadBundledText(e) {
+function loadBundledText(load) {
   try {
-    let n = e();
-    let r = typeof n === "object" && n !== null && "default" in n ? n.default : n;
-    if (typeof r !== "string") throw Error("a bundled text did not load as a string");
-    return r;
+    let loaded = load();
+    let text = typeof loaded === "object" && loaded !== null && "default" in loaded ? loaded.default : loaded;
+    if (typeof text !== "string") throw Error("a bundled text did not load as a string");
+    return text;
   } catch (error) {
     let cause = error instanceof Error ? error.cause : undefined;
     logForDebugging(

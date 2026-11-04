@@ -15,8 +15,8 @@ import { parseMcpConfigFromFilePath, supportsEnvExpansion, isBuiltinInProcessMcp
 import { logForDebugging } from "../../utils/debug.js";
 import { replaceControlChars } from "../../utils/resultError.js";
 import { isChildSession } from "../../utils/sessionShape.js";
-import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
-import { Uo } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { getPrefixServerKey } from "../../components/agents/ToolSelector.js";
 import { isPluginServerConfig } from "./types.js";
 import { firstPartyServerIdFor, getCliOwnedState } from "./cliOwnedClients.js";
@@ -27,15 +27,15 @@ import { plural } from "../../utils/stringUtils.js";
 
 //@ chunk-3wek6r2k.js:60150-60423 placement
 function mcpServerKindFlags(mcpConfigs) {
-  let o = new Set();
-  for (let n of mcpConfigs) o.add(classifyServerLocation(n));
+  let kinds = new Set();
+  for (let config of mcpConfigs) kinds.add(classifyServerLocation(config));
   return {
-    has_mcp_stdio: o.has("stdio"),
-    has_mcp_managed: o.has("managed"),
-    has_mcp_localhost: o.has("localhost"),
-    has_mcp_private_network: o.has("private_network"),
-    has_mcp_public: o.has("public"),
-    has_mcp_other: o.has("other"),
+    has_mcp_stdio: kinds.has("stdio"),
+    has_mcp_managed: kinds.has("managed"),
+    has_mcp_localhost: kinds.has("localhost"),
+    has_mcp_private_network: kinds.has("private_network"),
+    has_mcp_public: kinds.has("public"),
+    has_mcp_other: kinds.has("other"),
   };
 }
 //@ chunk-3wek6r2k.js:60469-61058 placement
@@ -69,7 +69,7 @@ function loadRemoteMcpConfig(bridgeSessionId, getServerUrl) {
   };
 }
 //@ chunk-3wek6r2k.js:61058-61672 placement
-function mcpConfigProvenanceNote(hostOwnedNames, o) {
+function mcpConfigProvenanceNote(hostOwnedNames, declaredCount) {
   if (hostOwnedNames !== undefined)
     return {
       text: replaceControlChars(
@@ -77,7 +77,7 @@ function mcpConfigProvenanceNote(hostOwnedNames, o) {
       ),
       level: "debug",
     };
-  if (o === 0) return;
+  if (declaredCount === 0) return;
   return isByocEnvironment() && !isChildSession()
     ? {
         text: "--mcp-config: CLAUDE_CODE_REMOTE_MCP_CONFIG did not reach this runner's session (a runner that does not send it, or a wrapper that does not pass it on), so an update of the delivered MCP servers shuts down every --mcp-config server it does not name, the operator's own included. Upgrade a self-hosted runner, or have the wrapper pass the variable on.",
@@ -89,96 +89,103 @@ function mcpConfigProvenanceNote(hostOwnedNames, o) {
       };
 }
 //@ chunk-3wek6r2k.js:61672-61857 placement
-function sameCommandServers(e, servers) {
+function sameCommandServers(configs, servers) {
   if (servers === undefined) return;
-  let n = new Set();
-  for (let [key, value] of Object.entries(e))
+  let same = new Set();
+  for (let [key, value] of Object.entries(configs))
     if (
       Object.hasOwn(servers, key) &&
-      En(Uo(value, "configuredCommand"), Uo(servers[key], "configuredCommand"))
+      import_sortedIndex_2(
+        omitAlias(value, "configuredCommand"),
+        omitAlias(servers[key], "configuredCommand"),
+      )
     )
-      n.add(key);
-  return n;
+      same.add(key);
+  return same;
 }
 //@ chunk-3wek6r2k.js:61857-62915 placement
 /**
  * 合并多个来源的 MCP 配置，并按 --mcp-config 来源声明标记或剔除。
  */
-function mergeMcpConfigs(e, o, remoteMcpConfig) {
-  let r = Object.fromEntries(e.flatMap((w) => Object.entries(w)));
+function mergeMcpConfigs(localConfigs, skippedNames, remoteMcpConfig) {
+  let merged = Object.fromEntries(localConfigs.flatMap((configs) => Object.entries(configs)));
   if (remoteMcpConfig === undefined)
     return {
-      servers: r,
+      servers: merged,
       ownership: undefined,
       refused: [],
     };
-  let u = new Map();
-  let p = new Set();
-  for (let w of e) {
-    let P = sameCommandServers(w, remoteMcpConfig.servers);
-    for (let [key, value] of Object.entries(w))
-      if (P?.has(key)) p.add(key);
-      else u.set(key, value);
+  let operatorByName = new Map();
+  let deliveredSameCommand = new Set();
+  for (let configs of localConfigs) {
+    let sameCommand = sameCommandServers(configs, remoteMcpConfig.servers);
+    for (let [key, value] of Object.entries(configs))
+      if (sameCommand?.has(key)) deliveredSameCommand.add(key);
+      else operatorByName.set(key, value);
   }
-  let h = new Set([...u.keys(), ...o.filter((w) => !remoteMcpConfig.skippedNames.has(w))]);
-  let S = new Map([...h].map((w) => [getPrefixServerKey(w), w]));
-  let y = [];
-  let M = new Set();
-  let E = [];
-  for (let [key, value] of Object.entries(r)) {
-    let A = u.get(key);
-    if (A !== undefined) y.push([key, A]);
-    if (!p.has(key)) continue;
+  let operatorNames = new Set([
+    ...operatorByName.keys(),
+    ...skippedNames.filter((name) => !remoteMcpConfig.skippedNames.has(name)),
+  ]);
+  let byPrefix = new Map([...operatorNames].map((name) => [getPrefixServerKey(name), name]));
+  let kept = [];
+  let hostOwnedNames = new Set();
+  let refused = [];
+  for (let [key, value] of Object.entries(merged)) {
+    let operatorConfig = operatorByName.get(key);
+    if (operatorConfig !== undefined) kept.push([key, operatorConfig]);
+    if (!deliveredSameCommand.has(key)) continue;
     let prefixServerKey = getPrefixServerKey(key);
-    let q = S.get(prefixServerKey);
-    if (q === undefined) {
-      y.push([key, value]);
-      M.add(key);
+    let conflictingName = byPrefix.get(prefixServerKey);
+    if (conflictingName === undefined) {
+      kept.push([key, value]);
+      hostOwnedNames.add(key);
       continue;
     }
-    E.push({
+    refused.push({
       name: key,
       type: "reserved_name",
       message: replaceControlChars(
-        h.has(key)
+        operatorNames.has(key)
           ? `The delivered MCP server "${key}" was not loaded: this runner's operator defines a server of that name with --mcp-config. Rename one of the two.`
-          : `MCP server "${key}" was not loaded: its tool names would start with mcp__${prefixServerKey}__, the same as those of "${q}", which this runner's operator added with --mcp-config. Rename one of the two.`,
+          : `MCP server "${key}" was not loaded: its tool names would start with mcp__${prefixServerKey}__, the same as those of "${conflictingName}", which this runner's operator added with --mcp-config. Rename one of the two.`,
       ),
     });
   }
   return {
-    servers: Object.fromEntries(y),
+    servers: Object.fromEntries(kept),
     ownership: {
-      hostOwnedNames: M,
-      operatorNames: h,
+      hostOwnedNames,
+      operatorNames,
     },
-    refused: E,
+    refused,
   };
 }
 //@ chunk-3wek6r2k.js:62915-63316 placement
-function partitionOperatorServers(e, o) {
-  let n = Object.create(null);
-  let r = new Set(o?.operatorNames);
-  let u = Object.create(null);
-  for (let p of e) {
+function partitionOperatorServers(clients, ownership) {
+  let hostOwnedConfigs = Object.create(null);
+  let operatorOwnedNames = new Set(ownership?.operatorNames);
+  let operatorOwnedConfigs = Object.create(null);
+  for (let client of clients) {
     if (!(
-      p.config.scope === "dynamic" &&
-      !isPluginServerConfig(p.config) &&
-      supportsEnvExpansion(p.config) &&
-      !isBuiltinInProcessMcpServer(p.name) &&
-      firstPartyServerIdFor(p.config) === undefined
+      client.config.scope === "dynamic" &&
+      !isPluginServerConfig(client.config) &&
+      supportsEnvExpansion(client.config) &&
+      !isBuiltinInProcessMcpServer(client.name) &&
+      firstPartyServerIdFor(client.config) === undefined
     ))
       continue;
-    if (o === undefined || o.hostOwnedNames.has(p.name)) n[p.name] = p.config;
+    if (ownership === undefined || ownership.hostOwnedNames.has(client.name))
+      hostOwnedConfigs[client.name] = client.config;
     else {
-      r.add(p.name);
-      u[p.name] = p.config;
+      operatorOwnedNames.add(client.name);
+      operatorOwnedConfigs[client.name] = client.config;
     }
   }
   return {
-    hostOwnedConfigs: n,
-    operatorOwnedMcpConfigNames: r,
-    operatorOwnedConfigs: u,
+    hostOwnedConfigs,
+    operatorOwnedMcpConfigNames: operatorOwnedNames,
+    operatorOwnedConfigs,
   };
 }
 //@ chunk-3wek6r2k.js:63316-63396 placement
@@ -188,10 +195,10 @@ var OPERATOR_SUPPLIED_IGNORED_TEXT = "Configured via --mcp-config on this host (
  * 按企业 MCP 配置与侧载策略剔除服务器，记录被保留但不在允许列表中的项。
  */
 function applyMcpPolicyDrops(
-  e,
+  servers,
   { dropForEnterpriseMcpConfig, dropForSideloadPolicy = false, keptDespiteAllowlist = [] },
 ) {
-  let u = isSafeMode()
+  let dropReason = isSafeMode()
     ? "safe mode"
     : isHermeticRemoteSession()
       ? "hermetic mode"
@@ -200,53 +207,60 @@ function applyMcpPolicyDrops(
         : dropForSideloadPolicy
           ? "disableSideloadFlags policy"
           : undefined;
-  if (!u)
+  if (!dropReason)
     return {
-      servers: e,
+      servers,
       dropped: [],
       keptNotes: removalNoteLines(
         "allowedMcpServers",
-        keptDespiteAllowlist.filter((M) => Object.hasOwn(e, M)),
+        keptDespiteAllowlist.filter((name) => Object.hasOwn(servers, name)),
       ),
-      reason: u,
+      reason: dropReason,
     };
-  let p = {};
-  let h = [];
-  let S = [];
-  let y = u === "enterprise MCP config" || u === "disableSideloadFlags policy";
-  for (let [key, value] of Object.entries(e))
-    if (isAlwaysKeptServer(value, y, u === "disableSideloadFlags policy")) {
-      p[key] = value;
-      if (y && isCcrInjectedConfig(value)) S.push(key);
-    } else h.push(key);
+  let keptServers = {};
+  let dropped = [];
+  let keptNotes = [];
+  let isEnterprise = dropReason === "enterprise MCP config" || dropReason === "disableSideloadFlags policy";
+  for (let [key, value] of Object.entries(servers))
+    if (isAlwaysKeptServer(value, isEnterprise, dropReason === "disableSideloadFlags policy")) {
+      keptServers[key] = value;
+      if (isEnterprise && isCcrInjectedConfig(value)) keptNotes.push(key);
+    } else dropped.push(key);
   return {
-    servers: p,
-    dropped: h,
+    servers: keptServers,
+    dropped,
     keptNotes: [
       ...removalNoteLines(
         "allowedMcpServers",
-        keptDespiteAllowlist.filter((M) => Object.hasOwn(p, M)),
+        keptDespiteAllowlist.filter((name) => Object.hasOwn(keptServers, name)),
       ),
-      ...removalNoteLines(u === "enterprise MCP config" ? "managed-mcp.json" : "disableSideloadFlags", S),
+      ...removalNoteLines(
+        dropReason === "enterprise MCP config" ? "managed-mcp.json" : "disableSideloadFlags",
+        keptNotes,
+      ),
     ],
-    reason: u,
+    reason: dropReason,
   };
 }
 //@ chunk-3wek6r2k.js:64114-64178 placement
-function isAlwaysKeptServer(e, o, n) {
-  return e.type === "sdk" || (n && isOwnToolContainerConfig(e)) || (o && isCcrInjectedConfig(e));
+function isAlwaysKeptServer(config, keepCcrInjected, keepOwnToolContainer) {
+  return (
+    config.type === "sdk" ||
+    (keepOwnToolContainer && isOwnToolContainerConfig(config)) ||
+    (keepCcrInjected && isCcrInjectedConfig(config))
+  );
 }
 //@ chunk-3wek6r2k.js:64178-64479 placement
-function removalNoteLines(e, o) {
-  if (o.length === 0) return [];
-  let n = o.length === 1;
+function removalNoteLines(settingName, names) {
+  if (names.length === 0) return [];
+  let isSingle = names.length === 1;
   return [
-    `Note: ${e} does not remove the MCP ${plural(o.length, "server")} Claude Code adds to its own remote sessions: ${o.join(", ")}. To remove ${n ? "it" : "one"}, add {"serverName": "${n ? o[0] : "<name>"}"} to deniedMcpServers in managed settings.`,
+    `Note: ${settingName} does not remove the MCP ${plural(names.length, "server")} Claude Code adds to its own remote sessions: ${names.join(", ")}. To remove ${isSingle ? "it" : "one"}, add {"serverName": "${isSingle ? names[0] : "<name>"}"} to deniedMcpServers in managed settings.`,
   ];
 }
 //@ chunk-3wek6r2k.js:64479-64532 placement
-function recordSkippedDynamicServers(e) {
-  getCliOwnedState().skippedDynamicServers.push(...e);
+function recordSkippedDynamicServers(names) {
+  getCliOwnedState().skippedDynamicServers.push(...names);
 }
 //@ chunk-3wek6r2k.js:64532-64581 placement
 function getSkippedDynamicServers() {
@@ -254,9 +268,9 @@ function getSkippedDynamicServers() {
 }
 export {
   mcpServerKindFlags,
-  partitionOperatorServers,
   OPERATOR_SUPPLIED_IGNORED_TEXT,
   isAlwaysKeptServer,
+  partitionOperatorServers,
   getSkippedDynamicServers,
   loadRemoteMcpConfig,
   mergeMcpConfigs,

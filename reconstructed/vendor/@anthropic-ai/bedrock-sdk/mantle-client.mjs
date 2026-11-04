@@ -27,7 +27,7 @@ var _AnthropicBedrockMantle_instances;
 var _AnthropicBedrockMantle_signRequest;
 var DEFAULT_SERVICE_NAME = "bedrock-mantle";
 //@ chunk-h87x8cg3.js:16062-17524 esm-fingerprint
-class AnthropicBedrockMantle extends BaseAnthropic {
+class AnthropicBedrockMantle_2 extends BaseAnthropic {
   constructor({
     awsRegion,
     baseURL,
@@ -143,7 +143,7 @@ function makeMantleBetaResource(client) {
   };
 }
 //@ chunk-qhhcfyds.js:4536-5142 esm-fingerprint
-var re = function (receiver, state, kind, f) {
+var __classPrivateFieldGet = function (receiver, state, kind, f) {
   if (kind === "a" && !f) throw TypeError("Private accessor was defined without a getter");
   if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver))
     throw TypeError("Cannot read private member from an object whose class did not declare it");
@@ -152,96 +152,97 @@ var re = function (receiver, state, kind, f) {
 var _AnthropicBedrockMantle_instances_2;
 var _AnthropicBedrockMantle_signRequest_2;
 var DEFAULT_SERVICE_NAME_2 = "aws-external-anthropic";
-var P = () =>
+var noAwsRegionError = () =>
   new AnthropicError(
     "No AWS region or base URL found. Set `awsRegion` in the constructor, the `AWS_REGION` / `AWS_DEFAULT_REGION` environment variable, configure a `region` for your profile in `~/.aws/config`, or provide a `baseURL` / `ANTHROPIC_AWS_BASE_URL` environment variable.",
   );
 //@ chunk-qhhcfyds.js:5142-7547 esm-layout
-class U extends Anthropic {
+class AnthropicBedrockMantle extends Anthropic {
   constructor({
-    awsRegion: e,
-    baseURL: t,
-    apiKey: r,
-    awsAccessKey: n = null,
-    awsSecretAccessKey: o = null,
-    awsSessionToken: i = null,
-    awsProfile: s,
-    providerChainResolver: a = null,
-    workspaceId: R,
-    skipAuth: c = false,
-    credentials: x,
-    config: B,
-    profile: K,
-    ...O
+    awsRegion,
+    baseURL,
+    apiKey,
+    awsAccessKey = null,
+    awsSecretAccessKey = null,
+    awsSessionToken = null,
+    awsProfile,
+    providerChainResolver = null,
+    workspaceId,
+    skipAuth = false,
+    credentials,
+    config,
+    profile,
+    ...opts
   } = {}) {
-    let h = e ?? readEnv_3("AWS_REGION") ?? readEnv_3("AWS_DEFAULT_REGION");
-    let l = t ?? readEnv_3("ANTHROPIC_AWS_BASE_URL");
-    let y;
-    if (l) y = l;
-    else if (h) y = `https://aws-external-anthropic.${h}.api.aws`;
-    else y = undefined;
-    let W = r != null;
-    if ((n != null) !== (o != null))
+    let resolvedRegion = awsRegion ?? readEnv_3("AWS_REGION") ?? readEnv_3("AWS_DEFAULT_REGION");
+    let explicitBaseURL = baseURL ?? readEnv_3("ANTHROPIC_AWS_BASE_URL");
+    let resolvedBaseURL;
+    if (explicitBaseURL) resolvedBaseURL = explicitBaseURL;
+    else if (resolvedRegion) resolvedBaseURL = `https://aws-external-anthropic.${resolvedRegion}.api.aws`;
+    else resolvedBaseURL = undefined;
+    let hasExplicitApiKey = apiKey != null;
+    if ((awsAccessKey != null) !== (awsSecretAccessKey != null))
       throw new AnthropicError(
         "`awsAccessKey` and `awsSecretAccessKey` must be provided together. You provided only one.",
       );
-    let G = n != null && o != null;
-    let V = s != null;
-    let u;
-    if (W) u = r;
-    else if (!G && !V) u = readEnv_3("ANTHROPIC_AWS_API_KEY") ?? undefined;
-    let m = R ?? readEnv_3("ANTHROPIC_AWS_WORKSPACE_ID");
-    if (!m && !c)
+    let hasAwsKeyPair = awsAccessKey != null && awsSecretAccessKey != null;
+    let hasAwsProfile = awsProfile != null;
+    let resolvedApiKey;
+    if (hasExplicitApiKey) resolvedApiKey = apiKey;
+    else if (!hasAwsKeyPair && !hasAwsProfile)
+      resolvedApiKey = readEnv_3("ANTHROPIC_AWS_API_KEY") ?? undefined;
+    let resolvedWorkspaceId = workspaceId ?? readEnv_3("ANTHROPIC_AWS_WORKSPACE_ID");
+    if (!resolvedWorkspaceId && !skipAuth)
       throw new AnthropicError(
         "No workspace ID found. Set `workspaceId` in the constructor or the `ANTHROPIC_AWS_WORKSPACE_ID` environment variable.",
       );
     super({
-      apiKey: u ?? null,
+      apiKey: resolvedApiKey ?? null,
       authToken: null,
-      baseURL: y,
-      ...O,
+      baseURL: resolvedBaseURL,
+      ...opts,
       defaultHeaders: buildHeaders_3([
-        O.defaultHeaders,
+        opts.defaultHeaders,
         {
-          "anthropic-workspace-id": m,
+          "anthropic-workspace-id": resolvedWorkspaceId,
         },
       ]),
     });
     _AnthropicBedrockMantle_instances_2.add(this);
     this.skipAuth = false;
-    if (x != null || B != null || K != null)
+    if (credentials != null || config != null || profile != null)
       loggerFor_2(this).warn(
         "`credentials`, `config`, and `profile` are not supported by the AWS client and were ignored. Authenticate with `apiKey` or AWS credentials (SigV4) instead.",
       );
-    this._baseURLIsExplicit = !!l;
-    this.awsRegion = h;
-    this.awsAccessKey = n;
-    this.awsSecretAccessKey = o;
-    this.awsSessionToken = i;
-    this.awsProfile = s ?? null;
-    this.providerChainResolver = a;
-    this.workspaceId = m;
-    this.skipAuth = c;
-    this._useSigV4 = u == null;
+    this._baseURLIsExplicit = !!explicitBaseURL;
+    this.awsRegion = resolvedRegion;
+    this.awsAccessKey = awsAccessKey;
+    this.awsSecretAccessKey = awsSecretAccessKey;
+    this.awsSessionToken = awsSessionToken;
+    this.awsProfile = awsProfile ?? null;
+    this.providerChainResolver = providerChainResolver;
+    this.workspaceId = resolvedWorkspaceId;
+    this.skipAuth = skipAuth;
+    this._useSigV4 = resolvedApiKey == null;
     let _options = {
       ...this._options,
-      apiKey: u ?? null,
-      baseURL: l,
-      awsRegion: e,
-      awsAccessKey: n,
-      awsSecretAccessKey: o,
-      awsSessionToken: i,
-      awsProfile: s,
-      providerChainResolver: a,
-      workspaceId: m,
-      skipAuth: c,
+      apiKey: resolvedApiKey ?? null,
+      baseURL: explicitBaseURL,
+      awsRegion,
+      awsAccessKey,
+      awsSecretAccessKey,
+      awsSessionToken,
+      awsProfile,
+      providerChainResolver,
+      workspaceId: resolvedWorkspaceId,
+      skipAuth,
     };
     this._options = _options;
-    if (h || l || c) this.ready = Promise.resolve();
+    if (resolvedRegion || explicitBaseURL || skipAuth) this.ready = Promise.resolve();
     else {
-      this.ready = this._resolveRegionFromConfig(s).then((C) => {
-        this.awsRegion = C;
-        this.baseURL = `https://aws-external-anthropic.${C}.api.aws`;
+      this.ready = this._resolveRegionFromConfig(awsProfile).then((region) => {
+        this.awsRegion = region;
+        this.baseURL = `https://aws-external-anthropic.${region}.api.aws`;
       });
       this.ready.catch(() => {});
     }
@@ -249,35 +250,35 @@ class U extends Anthropic {
   _shouldResolveDefaultCredentials() {
     return false;
   }
-  withOptions(e) {
+  withOptions(options) {
     return super.withOptions({
       awsRegion: this.awsRegion,
-      ...e,
+      ...options,
     });
   }
-  _resolveRegionFromConfig(e) {
+  _resolveRegionFromConfig(options) {
     return import_node_config_provider.loadConfig(
       {
         ...import_index_native.NODE_REGION_CONFIG_OPTIONS,
         default: () => {
-          throw P();
+          throw noAwsRegionError();
         },
       },
       {
         ...import_index_native.NODE_REGION_CONFIG_FILE_OPTIONS,
-        ...(e && {
-          profile: e,
+        ...(options && {
+          profile: options,
         }),
       },
     )();
   }
-  async prepareOptions(e) {
-    await super.prepareOptions(e);
+  async prepareOptions(profile) {
+    await super.prepareOptions(profile);
     await this.ready;
   }
-  async authHeaders(e) {
+  async authHeaders(opts) {
     if (this.skipAuth) return;
-    if (!this._useSigV4) return super.authHeaders(e);
+    if (!this._useSigV4) return super.authHeaders(opts);
     return;
   }
   validateHeaders() {}
@@ -286,14 +287,14 @@ class U extends Anthropic {
   }
   backendMiddleware() {
     return [
-      async (e, t) =>
-        t(
-          await re(
+      async (options, ctx) =>
+        ctx(
+          await __classPrivateFieldGet(
             this,
             _AnthropicBedrockMantle_instances_2,
             "m",
             _AnthropicBedrockMantle_signRequest_2,
-          ).call(this, e),
+          ).call(this, options),
         ),
     ];
   }
@@ -302,7 +303,7 @@ class U extends Anthropic {
 _AnthropicBedrockMantle_instances_2 = new WeakSet();
 _AnthropicBedrockMantle_signRequest_2 = async function (request) {
   if (this.skipAuth || !this._useSigV4) return request;
-  if (!this.awsRegion) throw P();
+  if (!this.awsRegion) throw noAwsRegionError();
   let headers = await getAuthHeaders(request, {
     url: request.url,
     regionName: this.awsRegion,
@@ -319,3 +320,4 @@ _AnthropicBedrockMantle_signRequest_2 = async function (request) {
     headers: buildHeaders_3([request.headers, headers]).values,
   };
 };
+export { AnthropicBedrockMantle_2, AnthropicBedrockMantle };

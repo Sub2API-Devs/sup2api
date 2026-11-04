@@ -28,24 +28,26 @@ function logPromptStringsRemoval({ strings, matched }) {
  * 读取要从提示词中删除的字符串列表（环境变量 CLAUDE_CODE_REMOVE_PROMPT_STRINGS 优先，否则取客户端数据），格式不对时告警；有内容则记遥测。
  */
 function loadPromptRemovalConfig() {
-  let e = env.CLAUDE_CODE_REMOVE_PROMPT_STRINGS !== undefined;
-  let n = e
+  let fromEnv = env.CLAUDE_CODE_REMOVE_PROMPT_STRINGS !== undefined;
+  let rawValue = fromEnv
     ? safeParseJSON(env.CLAUDE_CODE_REMOVE_PROMPT_STRINGS, false)
     : getCachedClientData()?.[REMOVE_PROMPT_STRINGS];
-  let r = Array.isArray(n) ? n.filter((y) => typeof y === "string" && y.trim() !== "") : [];
-  let s = Array.isArray(n) ? n.length > 0 : n !== undefined;
-  if (r.length === 0 && s)
+  let strings = Array.isArray(rawValue)
+    ? rawValue.filter((entry) => typeof entry === "string" && entry.trim() !== "")
+    : [];
+  let configured = Array.isArray(rawValue) ? rawValue.length > 0 : rawValue !== undefined;
+  if (strings.length === 0 && configured)
     logForDebugging(
-      `prompt ablation: ignoring ${e ? "CLAUDE_CODE_REMOVE_PROMPT_STRINGS" : `client_data ${REMOVE_PROMPT_STRINGS}`}: not a JSON array of non-empty strings`,
+      `prompt ablation: ignoring ${fromEnv ? "CLAUDE_CODE_REMOVE_PROMPT_STRINGS" : `client_data ${REMOVE_PROMPT_STRINGS}`}: not a JSON array of non-empty strings`,
       {
         level: "warn",
       },
     );
-  let h = {
-    strings: r,
+  let config = {
+    strings,
     matched: new Set(),
   };
-  if (r.length > 0) logPromptStringsRemoval(h);
-  return h;
+  if (strings.length > 0) logPromptStringsRemoval(config);
+  return config;
 }
 export { loadPromptRemovalConfig, logPromptStringsRemoval };

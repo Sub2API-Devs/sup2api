@@ -10,8 +10,9 @@
  */
 import { randomBytes } from "crypto";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, array } from "../../../vendor/zod/v4/classic/schemas.js";
 import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-jp3mzxnv.js:303-646 placement
 /**
@@ -35,42 +36,46 @@ class DesignGateState {
   grantsFetch = null;
 }
 //@ chunk-jp3mzxnv.js:683-807 placement
-var designPlanSchema = DoctorLazy(() =>
-  u({
-    projectId: string(),
-    writes: array(string()),
-    deletes: array(string()),
-    localDir: string().optional(),
-  }),
-);
-var PLAN_TOKEN_REGEX = /^plan_[a-z0-9]{1,16}_[a-f0-9]{12}$/;
+var designPlanSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var PLAN_TOKEN_REGEX;
+deferInit("chunk-jp3mzxnv.js:683", () => {
+  designPlanSchema = DoctorLazy(() =>
+    objectSchema({
+      projectId: stringSchema(),
+      writes: array(stringSchema()),
+      deletes: array(stringSchema()),
+      localDir: stringSchema().optional(),
+    }),
+  );
+  PLAN_TOKEN_REGEX = /^plan_[a-z0-9]{1,16}_[a-f0-9]{12}$/;
+});
 //@ chunk-jp3mzxnv.js:807-934 placement
 function newPlanToken(projectId) {
-  let t =
+  let projectSlug =
     projectId
       .toLowerCase()
       .replace(/[^a-z0-9]/g, "")
       .slice(0, 16) || "anon";
   let str = randomBytes(6).toString("hex");
-  return `plan_${t}_${str}`;
+  return `plan_${projectSlug}_${str}`;
 }
 //@ chunk-jp3mzxnv.js:934-1027 placement
 /**
  * 规范化计划路径（反斜杠转 /、去掉空段与 .）。
  */
-function normalizePlanPath(e) {
-  return e
+function normalizePlanPath(path) {
+  return path
     .replace(/\\/g, "/")
     .split("/")
-    .filter((t) => t !== "" && t !== ".")
+    .filter((segment) => segment !== "" && segment !== ".")
     .join("/");
 }
 //@ chunk-jp3mzxnv.js:1027-1161 placement
 /**
  * 判断设计同步路径是否是保留路径（CLAUDE.md 或 .claude 目录）。
  */
-function isReservedDesignPath(e) {
-  let lower = normalizePlanPath(e).toLowerCase();
+function isReservedDesignPath(path) {
+  let lower = normalizePlanPath(path).toLowerCase();
   return (
     lower === "claude.md" ||
     lower.startsWith("claude.md/") ||
@@ -82,8 +87,8 @@ function isReservedDesignPath(e) {
 /**
  * 判断模式里是否含 * 或 ? 通配符。
  */
-function hasGlobChars(e) {
-  return /[*?]/.test(e);
+function hasGlobChars(path) {
+  return /[*?]/.test(path);
 }
 //@ chunk-jp3mzxnv.js:1198-1214 placement
 /**
@@ -95,57 +100,58 @@ var MAX_PLAN_PATH_CHARS = 256;
 /**
  * 把 glob 模式转换为正则（** 跨目录、* 与 ? 不跨 /），通配符数量有上限。
  */
-function globToRegExp(e) {
-  let t = "";
-  let n = 0;
-  let s = 0;
-  let r = () => {
-    if (++s > MAX_GLOB_WILDCARDS) throw Error(`glob "${e}" exceeds ${MAX_GLOB_WILDCARDS} '*'/'**' wildcards`);
+function globToRegExp(pattern) {
+  let source = "";
+  let index = 0;
+  let wildcardCount = 0;
+  let countWildcard = () => {
+    if (++wildcardCount > MAX_GLOB_WILDCARDS)
+      throw Error(`glob "${pattern}" exceeds ${MAX_GLOB_WILDCARDS} '*'/'**' wildcards`);
   };
-  while (n < e.length) {
-    let i = e.charAt(n);
-    if (i === "*" && e.charAt(n + 1) === "*") {
-      r();
-      if (e.charAt(n + 2) === "/") {
-        t += "(?:.*/)?";
-        n += 3;
+  while (index < pattern.length) {
+    let char = pattern.charAt(index);
+    if (char === "*" && pattern.charAt(index + 1) === "*") {
+      countWildcard();
+      if (pattern.charAt(index + 2) === "/") {
+        source += "(?:.*/)?";
+        index += 3;
       } else {
-        t += ".*";
-        n += 2;
+        source += ".*";
+        index += 2;
       }
-    } else if (i === "*") {
-      r();
-      t += "[^/]*";
-      n += 1;
-    } else if (i === "?") {
-      t += "[^/]";
-      n += 1;
-    } else if (/[.+^$|()[\]{}\\]/.test(i)) {
-      t += "\\" + i;
-      n += 1;
+    } else if (char === "*") {
+      countWildcard();
+      source += "[^/]*";
+      index += 1;
+    } else if (char === "?") {
+      source += "[^/]";
+      index += 1;
+    } else if (/[.+^$|()[\]{}\\]/.test(char)) {
+      source += "\\" + char;
+      index += 1;
     } else {
-      t += i;
-      n += 1;
+      source += char;
+      index += 1;
     }
   }
-  return new RegExp(`^${t}$`);
+  return new RegExp(`^${source}$`);
 }
 //@ chunk-jp3mzxnv.js:1613-1849 placement
 /**
  * 判断路径是否匹配给定的路径或 glob 列表（拒绝含 .. 或 NUL 的路径）。
  */
-function pathMatchesAny(e, t) {
-  let n = normalizePlanPath(e);
-  if (!n) return false;
-  if (n.length > MAX_PLAN_PATH_CHARS) return false;
-  if (n.split("/").includes("..") || n.includes("\x00")) return false;
-  for (let s of t) {
-    let r = normalizePlanPath(s);
-    if (hasGlobChars(r))
+function pathMatchesAny(path, patterns) {
+  let normalized = normalizePlanPath(path);
+  if (!normalized) return false;
+  if (normalized.length > MAX_PLAN_PATH_CHARS) return false;
+  if (normalized.split("/").includes("..") || normalized.includes("\x00")) return false;
+  for (let pattern of patterns) {
+    let normalizedPattern = normalizePlanPath(pattern);
+    if (hasGlobChars(normalizedPattern))
       try {
-        if (globToRegExp(r).test(n)) return true;
+        if (globToRegExp(normalizedPattern).test(normalized)) return true;
       } catch {}
-    else if (r === n) return true;
+    else if (normalizedPattern === normalized) return true;
   }
   return false;
 }
@@ -153,36 +159,37 @@ function pathMatchesAny(e, t) {
 /**
  * 登记设计同步计划（规范化写入与删除路径并校验 glob），返回计划键。
  */
-function registerDesignPlan(e, t) {
-  let n = {
-    projectId: t.projectId,
-    writes: t.writes.map(normalizePlanPath),
-    deletes: t.deletes.map(normalizePlanPath),
-    ...(t.localDir !== undefined && {
-      localDir: t.localDir,
+function registerDesignPlan(session, plan) {
+  let normalizedPlan = {
+    projectId: plan.projectId,
+    writes: plan.writes.map(normalizePlanPath),
+    deletes: plan.deletes.map(normalizePlanPath),
+    ...(plan.localDir !== undefined && {
+      localDir: plan.localDir,
     }),
   };
-  let s = designPlanSchema().safeParse(n);
-  if (!s.success) throw Error("registerPlan: plan failed shape validation");
-  for (let i of [...s.data.writes, ...s.data.deletes]) if (hasGlobChars(i)) globToRegExp(i);
-  let planToken = newPlanToken(t.projectId);
-  e.planStore.set(planToken, s.data);
+  let parseResult = designPlanSchema().safeParse(normalizedPlan);
+  if (!parseResult.success) throw Error("registerPlan: plan failed shape validation");
+  for (let pattern of [...parseResult.data.writes, ...parseResult.data.deletes])
+    if (hasGlobChars(pattern)) globToRegExp(pattern);
+  let planToken = newPlanToken(plan.projectId);
+  session.planStore.set(planToken, parseResult.data);
   return planToken;
 }
 //@ chunk-jp3mzxnv.js:2204-2280 placement
 /**
  * 按令牌取已登记的计划（令牌格式不符返回 null）。
  */
-function getPlanByToken(e, t) {
-  if (!PLAN_TOKEN_REGEX.test(t)) return null;
-  return e.planStore.get(t) ?? null;
+function getPlanByToken(session, token) {
+  if (!PLAN_TOKEN_REGEX.test(token)) return null;
+  return session.planStore.get(token) ?? null;
 }
 //@ chunk-jp3mzxnv.js:2280-2363 placement
 /**
  * 规范化项目/计划 id（小写、去 urn:uuid: 前缀与标点）。
  */
-function normalizeUuid(e) {
-  return e
+function normalizeUuid(uuid) {
+  return uuid
     .toLowerCase()
     .replace(/^urn:uuid:/, "")
     .replace(/[{}-]/g, "");
@@ -198,9 +205,10 @@ function clearPlanStore(state) {
 /**
  * 清除某个项目的所有设计同步计划。
  */
-function clearPlansForProject(e, projectId) {
-  let n = normalizeUuid(projectId);
-  for (let [s, r] of e.planStore) if (normalizeUuid(r.projectId) === n) e.planStore.delete(s);
+function clearPlansForProject(session, projectId) {
+  let normalizedId = normalizeUuid(projectId);
+  for (let [token, plan] of session.planStore)
+    if (normalizeUuid(plan.projectId) === normalizedId) session.planStore.delete(token);
 }
 //@ chunk-jp3mzxnv.js:2499-2668 placement
 /**
@@ -217,17 +225,19 @@ var UNSAFE_PATH_CHAR_REGEX =
 /**
  * 判断路径是否含不安全字符。
  */
-function hasUnsafePathChars(e) {
-  return UNSAFE_PATH_CHAR_REGEX.test(e);
+function hasUnsafePathChars(path) {
+  return UNSAFE_PATH_CHAR_REGEX.test(path);
 }
 //@ chunk-jp3mzxnv.js:2699-2913 placement
-function planFitsOnCard(writes, deletes) {
-  if (writes.length > MAX_PLAN_PATHS || deletes.length > MAX_PLAN_PATHS) return false;
-  for (let r of [...writes, ...deletes])
-    if (r.length > MAX_PLAN_PATH_CHARS_2 || hasUnsafePathChars(r)) return false;
-  let n = (r) =>
-    r.length === 0 ? 0 : 32 + r.reduce((acc, l) => acc + l.length, 0) + 2 * Math.max(0, r.length - 1);
-  return 240 + n(writes) + n(deletes) <= MAX_PLAN_CARD_CHARS;
+function planFitsOnCard(paths, paths_2) {
+  if (paths.length > MAX_PLAN_PATHS || paths_2.length > MAX_PLAN_PATHS) return false;
+  for (let path of [...paths, ...paths_2])
+    if (path.length > MAX_PLAN_PATH_CHARS_2 || hasUnsafePathChars(path)) return false;
+  let pathListCost = (paths) =>
+    paths.length === 0
+      ? 0
+      : 32 + paths.reduce((acc, path) => acc + path.length, 0) + 2 * Math.max(0, paths.length - 1);
+  return 240 + pathListCost(paths) + pathListCost(paths_2) <= MAX_PLAN_CARD_CHARS;
 }
 //@ chunk-jp3mzxnv.js:2913-3184 placement
 /**
@@ -235,12 +245,15 @@ function planFitsOnCard(writes, deletes) {
  */
 function projectsFitOnCard(targets) {
   if (targets === undefined || targets.length === 0 || targets.length > MAX_PLAN_PATHS) return false;
-  for (let r of targets)
-    if ((jsonStringify(r)?.length ?? 1 / 0) > MAX_PLAN_PATH_CHARS_2 || hasUnsafePathChars(r)) return false;
+  for (let target of targets)
+    if ((jsonStringify(target)?.length ?? 1 / 0) > MAX_PLAN_PATH_CHARS_2 || hasUnsafePathChars(target))
+      return false;
   let max = Math.max(0, Math.min(200, Math.floor(1800 / targets.length) - 95));
-  let n = 44 + (max > 0 ? max + 3 : 0);
+  let perTargetCost = 44 + (max > 0 ? max + 3 : 0);
   return (
-    272 + targets.reduce((acc, i) => acc + i.length + n, 0) + 2 * Math.max(0, targets.length - 1) <=
+    272 +
+      targets.reduce((acc, target) => acc + target.length + perTargetCost, 0) +
+      2 * Math.max(0, targets.length - 1) <=
     MAX_PLAN_CARD_CHARS
   );
 }
@@ -259,14 +272,18 @@ function isValidProjectId(projectId) {
 /**
  * 需要重新铸币的成员管理类方法集合。
  */
-var MEMBERSHIP_METHODS = new Set(["update_sharing", "add_member", "update_member_role"]);
+var MEMBERSHIP_METHODS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-jp3mzxnv.js:3241", () => {
+  MEMBERSHIP_METHODS = new Set(["update_sharing", "add_member", "update_member_role"]);
+});
 //@ chunk-jp3mzxnv.js:3311-3419 placement
 /**
  * 清除某个项目的已批准设计计划。
  */
-function clearApprovedPlans(e, projectId) {
-  let n = normalizeUuid(projectId);
-  for (let [s, r] of e.approvedPlans) if (normalizeUuid(r.projectId) === n) e.approvedPlans.delete(s);
+function clearApprovedPlans(session, projectId) {
+  let normalizedId = normalizeUuid(projectId);
+  for (let [token, plan] of session.approvedPlans)
+    if (normalizeUuid(plan.projectId) === normalizedId) session.approvedPlans.delete(token);
 }
 //@ chunk-jp3mzxnv.js:3419-3459 placement
 /**
@@ -279,40 +296,41 @@ function clearApprovedPlansAll(state) {
 /**
  * 标记项目已在云端验证过授权。
  */
-function markProjectGrantVerified(e, projectId) {
+function markProjectGrantVerified(session, projectId) {
   if (typeof projectId !== "string" || projectId.length === 0) return;
-  e.verifiedProjectGrants.add(projectId);
+  session.verifiedProjectGrants.add(projectId);
 }
 //@ chunk-jp3mzxnv.js:3552-3608 placement
 /**
  * 项目是否已验证过授权。
  */
-function isProjectGrantVerified(e, projectId) {
-  return e.verifiedProjectGrants.has(projectId);
+function isProjectGrantVerified(session, projectId) {
+  return session.verifiedProjectGrants.has(projectId);
 }
 //@ chunk-jp3mzxnv.js:3608-3720 placement
 /**
  * 清除某个项目的已验证授权。
  */
-function clearVerifiedProjectGrant(e, projectId) {
-  let n = normalizeUuid(projectId);
-  for (let verifiedProjectGrant of e.verifiedProjectGrants)
-    if (normalizeUuid(verifiedProjectGrant) === n) e.verifiedProjectGrants.delete(verifiedProjectGrant);
+function clearVerifiedProjectGrant(session, projectId) {
+  let normalizedId = normalizeUuid(projectId);
+  for (let verifiedProjectGrant of session.verifiedProjectGrants)
+    if (normalizeUuid(verifiedProjectGrant) === normalizedId)
+      session.verifiedProjectGrants.delete(verifiedProjectGrant);
 }
 //@ chunk-jp3mzxnv.js:3720-3793 placement
 /**
  * 项目是否在需要重新铸币的集合里。
  */
-function isRecardProject(e, projectId) {
-  return e.recardAllProjects || e.recardProjects.has(normalizeUuid(projectId));
+function isRecardProject(session, projectId) {
+  return session.recardAllProjects || session.recardProjects.has(normalizeUuid(projectId));
 }
 //@ chunk-jp3mzxnv.js:3793-3882 placement
 /**
  * 标记项目需要重新铸币。
  */
-function markRecardProject(e, projectId) {
+function markRecardProject(session, projectId) {
   if (typeof projectId !== "string" || projectId.length === 0) return;
-  e.recardProjects.add(normalizeUuid(projectId));
+  session.recardProjects.add(normalizeUuid(projectId));
 }
 //@ chunk-jp3mzxnv.js:3882-3953 placement
 /**
@@ -326,84 +344,84 @@ function resetGrants(state) {
 /**
  * 标记项目无法获得授权。
  */
-function markGrantIneligibleProject(e, t) {
-  if (typeof t !== "string" || t.length === 0) return;
-  e.grantIneligibleProjects.add(normalizeUuid(t));
+function markGrantIneligibleProject(session, projectId) {
+  if (typeof projectId !== "string" || projectId.length === 0) return;
+  session.grantIneligibleProjects.add(normalizeUuid(projectId));
 }
 //@ chunk-jp3mzxnv.js:4051-4112 placement
 /**
  * 项目是否无法获得授权。
  */
-function isGrantIneligibleProject(e, projectId) {
-  return e.grantIneligibleProjects.has(normalizeUuid(projectId));
+function isGrantIneligibleProject(session, projectId) {
+  return session.grantIneligibleProjects.has(normalizeUuid(projectId));
 }
 //@ chunk-jp3mzxnv.js:4112-4594 placement
 /**
  * 记录一个已批准的设计计划令牌：同项目旧批准先清除；项目 id、写/删路径在卡片上可完整显示才接受；过期时间取服务端时间与本地 15 分钟上限的较小者。
  */
-function approveDesignPlan(e, token, n, s = Date.now()) {
+function approveDesignPlan(session, token, plan, now = Date.now()) {
   if (typeof token !== "string" || token.length === 0) return false;
-  clearApprovedPlans(e, n.projectId);
-  if (!isValidProjectId(n.projectId) || !planFitsOnCard(n.writes, n.deletes)) return false;
-  let serverExpiresAtMs = n.serverExpiresAtMs;
+  clearApprovedPlans(session, plan.projectId);
+  if (!isValidProjectId(plan.projectId) || !planFitsOnCard(plan.writes, plan.deletes)) return false;
+  let serverExpiresAtMs = plan.serverExpiresAtMs;
   if (typeof serverExpiresAtMs === "number" && !Number.isFinite(serverExpiresAtMs)) return false;
-  if (typeof serverExpiresAtMs === "number" && Number.isFinite(serverExpiresAtMs) && serverExpiresAtMs <= s)
+  if (typeof serverExpiresAtMs === "number" && Number.isFinite(serverExpiresAtMs) && serverExpiresAtMs <= now)
     return false;
-  e.approvedPlans.set(token, {
-    projectId: n.projectId,
-    writes: new Set(n.writes.map(normalizePlanPath)),
-    deletes: new Set(n.deletes.map(normalizePlanPath)),
+  session.approvedPlans.set(token, {
+    projectId: plan.projectId,
+    writes: new Set(plan.writes.map(normalizePlanPath)),
+    deletes: new Set(plan.deletes.map(normalizePlanPath)),
     expiresAt:
       typeof serverExpiresAtMs === "number" && Number.isFinite(serverExpiresAtMs)
-        ? Math.min(serverExpiresAtMs, s + PLAN_APPROVAL_TTL_MS)
-        : s + PLAN_APPROVAL_TTL_MS,
+        ? Math.min(serverExpiresAtMs, now + PLAN_APPROVAL_TTL_MS)
+        : now + PLAN_APPROVAL_TTL_MS,
   });
   return true;
 }
 //@ chunk-jp3mzxnv.js:4594-5312 placement
 var designPlanTargets = {
-  write_files: (e) => {
-    let files = e.files;
+  write_files: (input) => {
+    let files = input.files;
     if (!Array.isArray(files)) return null;
-    let n = [];
+    let paths = [];
     for (let file of files) {
       let path = file?.path;
       if (typeof path !== "string") return null;
-      n.push(path);
+      paths.push(path);
     }
     return {
-      targets: n,
+      targets: paths,
       set: "writes",
     };
   },
-  delete_files: (e) => {
-    if (e.paths !== undefined && e.files !== undefined) return null;
-    let t = [];
-    if (Array.isArray(e.paths)) {
-      for (let path of e.paths) {
+  delete_files: (input) => {
+    if (input.paths !== undefined && input.files !== undefined) return null;
+    let paths = [];
+    if (Array.isArray(input.paths)) {
+      for (let path of input.paths) {
         if (typeof path !== "string") return null;
-        t.push(path);
+        paths.push(path);
       }
       return {
-        targets: t,
+        targets: paths,
         set: "deletes",
       };
     }
-    if (Array.isArray(e.files)) {
-      for (let file of e.files) {
+    if (Array.isArray(input.files)) {
+      for (let file of input.files) {
         let path = file?.path;
         if (typeof path !== "string") return null;
-        t.push(path);
+        paths.push(path);
       }
       return {
-        targets: t,
+        targets: paths,
         set: "deletes",
       };
     }
     return null;
   },
-  create_support_js: (e) => {
-    let path = e.path;
+  create_support_js: (input) => {
+    let path = input.path;
     if (path === undefined || path === "")
       return {
         targets: ["support.js"],
@@ -420,49 +438,53 @@ var designPlanTargets = {
 /**
  * 判断操作是否属于受计划令牌约束的目标。
  */
-function isPlanGatedTarget(e) {
-  return Object.hasOwn(designPlanTargets, e);
+function isPlanGatedTarget(operation) {
+  return Object.hasOwn(designPlanTargets, operation);
 }
 //@ chunk-jp3mzxnv.js:5352-5772 placement
 /**
  * 检查设计同步目标路径的问题：非法字符、保留路径或段、无法规范化。
  */
-function designPathProblem(target) {
-  if (hasUnsafePathChars(target)) return `rejected character in path: ${target}`;
-  if (isReservedDesignPath(target)) return `reserved path: ${target}`;
+function designPathProblem(path) {
+  if (hasUnsafePathChars(path)) return `rejected character in path: ${path}`;
+  if (isReservedDesignPath(path)) return `reserved path: ${path}`;
   if (
-    normalizePlanPath(target)
+    normalizePlanPath(path)
       .toLowerCase()
       .split("/")
-      .some((n) => {
-        let replaced = n.replace(/[\s.]+$/, "").replace(/^\s+/, "");
+      .some((segment) => {
+        let replaced = segment.replace(/[\s.]+$/, "").replace(/^\s+/, "");
         return replaced === "claude.md" || replaced === ".claude" || /~\d/.test(replaced);
       })
   )
-    return `reserved segment: ${target}`;
-  let t = normalizePlanPath(target);
-  if (!t || t.split("/").some((n) => /^\s*\.\.[\s.]*$/.test(n)) || t.includes("\x00"))
-    return `path does not normalize: ${target}`;
+    return `reserved segment: ${path}`;
+  let normalized = normalizePlanPath(path);
+  if (
+    !normalized ||
+    normalized.split("/").some((segment) => /^\s*\.\.[\s.]*$/.test(segment)) ||
+    normalized.includes("\x00")
+  )
+    return `path does not normalize: ${path}`;
   return null;
 }
 //@ chunk-jp3mzxnv.js:5772-6253 placement
 /**
  * 检查设计操作的目标路径是否可走计划批准：操作受计划约束、目标可枚举、数量不超限且路径都合法，否则需要询问。
  */
-function checkPlanGatedTargets(operation, t) {
-  let n = isPlanGatedTarget(operation) ? designPlanTargets[operation] : undefined;
-  if (!n || !t)
+function checkPlanGatedTargets(operation, input) {
+  let extractor = isPlanGatedTarget(operation) ? designPlanTargets[operation] : undefined;
+  if (!extractor || !input)
     return {
       outcome: "ask",
       reason: "not a plan-gated operation",
     };
-  let s = n(t);
-  if (!s)
+  let extracted = extractor(input);
+  if (!extracted)
     return {
       outcome: "ask",
       reason: "target paths unenumerable",
     };
-  let { targets, set: i } = s;
+  let { targets, set: targetSet } = extracted;
   if (targets.length === 0)
     return {
       outcome: "ask",
@@ -476,60 +498,60 @@ function checkPlanGatedTargets(operation, t) {
       targets,
     };
   for (let target of targets) {
-    let c = designPathProblem(target);
-    if (c !== null)
+    let problem = designPathProblem(target);
+    if (problem !== null)
       return {
         outcome: "ask",
-        reason: c,
+        reason: problem,
         targets,
       };
   }
   return {
     outcome: "pass",
     targets,
-    set: i,
+    set: targetSet,
   };
 }
 //@ chunk-jp3mzxnv.js:6253-7034 placement
-function checkDesignPlanToken(e, operation, n, s = Date.now()) {
-  if (!isPlanGatedTarget(operation) || !n)
+function checkDesignPlanToken(session, operation, input, now = Date.now()) {
+  if (!isPlanGatedTarget(operation) || !input)
     return {
       outcome: "ask",
       reason: "not a plan-gated operation",
     };
-  let { plan_token: planToken, project_id: projectId } = n;
+  let { plan_token: planToken, project_id: projectId } = input;
   if (typeof planToken !== "string" || typeof projectId !== "string")
     return {
       outcome: "ask",
       reason: "missing plan_token or project_id",
     };
-  let l = e.approvedPlans.get(planToken);
-  if (!l)
+  let approved = session.approvedPlans.get(planToken);
+  if (!approved)
     return {
       outcome: "ask",
       reason: "plan_token not approved in this process",
     };
-  if (s >= l.expiresAt) {
-    e.approvedPlans.delete(planToken);
+  if (now >= approved.expiresAt) {
+    session.approvedPlans.delete(planToken);
     return {
       outcome: "ask",
       reason: "approved plan expired",
     };
   }
-  if (l.projectId !== projectId)
+  if (approved.projectId !== projectId)
     return {
       outcome: "ask",
       reason: "plan_token is for a different project",
     };
-  let c = checkPlanGatedTargets(operation, n);
-  if (c.outcome !== "pass")
+  let targetCheck = checkPlanGatedTargets(operation, input);
+  if (targetCheck.outcome !== "pass")
     return {
       outcome: "ask",
-      reason: c.reason,
+      reason: targetCheck.reason,
     };
-  let w = c.set === "writes" ? l.writes : l.deletes;
-  for (let target of c.targets)
-    if (!w.has(normalizePlanPath(target)))
+  let approvedPaths = targetCheck.set === "writes" ? approved.writes : approved.deletes;
+  for (let target of targetCheck.targets)
+    if (!approvedPaths.has(normalizePlanPath(target)))
       return {
         outcome: "ask",
         reason: `path not in approved plan: ${target}`,
@@ -543,13 +565,13 @@ function checkDesignPlanToken(e, operation, n, s = Date.now()) {
  * 从工具结果文本中解析计划令牌与过期时间。
  */
 function readPlanTokenFromResult(content) {
-  for (let t of content)
-    if (t?.type === "text" && typeof t.text === "string")
+  for (let block of content)
+    if (block?.type === "text" && typeof block.text === "string")
       try {
-        let n = jsonParse(t.text);
-        let planToken = n.plan_token;
+        let parsed = jsonParse(block.text);
+        let planToken = parsed.plan_token;
         if (typeof planToken !== "string" || planToken.length === 0) return null;
-        let expiresAt = n.expires_at;
+        let expiresAt = parsed.expires_at;
         let expiresAtMs =
           typeof expiresAt === "number" && Number.isFinite(expiresAt * 1000) ? expiresAt * 1000 : null;
         return {

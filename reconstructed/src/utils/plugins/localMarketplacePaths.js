@@ -9,7 +9,7 @@
  * attribution: placement 45
  */
 import { isAbsolute, resolve, sep, normalize, parse, basename, dirname, join } from "path";
-import { stat, realpath, lstat } from "fs/promises";
+import { stat as stat_2, realpath, lstat } from "fs/promises";
 import { PathSpace } from "../resultError.js";
 import { getPlatform } from "../platform.js";
 import { getFsImplementation } from "../fsOperations.js";
@@ -48,37 +48,37 @@ import { parsePluginIdentifier } from "./pluginIdentifier.js";
 import { jsonParse } from "../slowOperations.js";
 
 //@ chunk-f3qhjfah.js:27379-27485 placement
-function toWorkspacePathSpace(e) {
-  if (isAbsolute(e)) return PathSpace.workspace(e);
+function toWorkspacePathSpace(path) {
+  if (isAbsolute(path)) return PathSpace.workspace(path);
   return PathSpace.workspace(
-    getPlatform() === "windows" ? resolve(e) : getFsImplementation().cwd() + sep + e,
+    getPlatform() === "windows" ? resolve(path) : getFsImplementation().cwd() + sep + path,
   );
 }
 //@ chunk-f3qhjfah.js:27485-27652 placement
-function makeStatEnoentError(e) {
+function makeStatEnoentError(path) {
   return Object.assign(
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `ENOENT: no such file or directory, stat '${e}'`,
+      `ENOENT: no such file or directory, stat '${path}'`,
       "ENOENT: no such file or directory",
     ),
     {
       code: "ENOENT",
       syscall: "stat",
-      path: e,
+      path,
     },
   );
 }
 //@ chunk-f3qhjfah.js:27652-27820 placement
-function enoentError(e) {
+function enoentError(path) {
   return Object.assign(
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `ENOENT: no such file or directory, open '${e}'`,
+      `ENOENT: no such file or directory, open '${path}'`,
       "ENOENT: no such file or directory",
     ),
     {
       code: "ENOENT",
       syscall: "open",
-      path: e,
+      path,
     },
   );
 }
@@ -91,15 +91,15 @@ function storageErrorCause(error) {
     : undefined;
 }
 //@ chunk-f3qhjfah.js:27968-28031 placement
-function pathSpaceFor(e, n) {
-  return e === "workspace" ? toWorkspacePathSpace(n) : PathSpace.system(resolve(n));
+function pathSpaceFor(space, path) {
+  return space === "workspace" ? toWorkspacePathSpace(path) : PathSpace.system(resolve(path));
 }
 //@ chunk-f3qhjfah.js:28031-28485 placement
-async function probeLocalMarketplacePath(storageV5, n, r = "workspace") {
-  if (isDiskless()) throw makeStatEnoentError(n);
-  if (!isStorageV5Enabled() || storageV5 === undefined) return stat(n);
-  if (n === "") throw makeStatEnoentError(n);
-  let stats = await storageV5.hostFiles.stat(pathSpaceFor(r, n), {
+async function probeLocalMarketplacePath(storageV5, path, space = "workspace") {
+  if (isDiskless()) throw makeStatEnoentError(path);
+  if (!isStorageV5Enabled() || storageV5 === undefined) return stat_2(path);
+  if (path === "") throw makeStatEnoentError(path);
+  let stats = await storageV5.hostFiles.stat(pathSpaceFor(space, path), {
     follow: true,
   });
   if (!stats.ok)
@@ -107,7 +107,7 @@ async function probeLocalMarketplacePath(storageV5, n, r = "workspace") {
       storageErrorCause(stats.error) ??
       Object.assign(
         new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `Failed to probe the local marketplace path ${n}: ${formatStorageError(stats.error)}`,
+          `Failed to probe the local marketplace path ${path}: ${formatStorageError(stats.error)}`,
           "failed to probe a local marketplace path (v5 backend error)",
         ),
         {
@@ -115,25 +115,25 @@ async function probeLocalMarketplacePath(storageV5, n, r = "workspace") {
         },
       )
     );
-  if (stats.value.kind === "absent") throw makeStatEnoentError(n);
-  let a = stats.value.kind === "directory";
+  if (stats.value.kind === "absent") throw makeStatEnoentError(path);
+  let isDirectory = stats.value.kind === "directory";
   return {
-    isDirectory: () => a,
+    isDirectory: () => isDirectory,
   };
 }
 //@ chunk-f3qhjfah.js:28485-28838 placement
-async function readLocalMarketplaceFile(storage, space, r) {
-  if (r === "" || isDiskless())
+async function readLocalMarketplaceFile(storage, space, path) {
+  if (path === "" || isDiskless())
     return {
       absent: "ENOENT",
     };
-  let text = await storage.hostFiles.readText(pathSpaceFor(space, r));
+  let text = await storage.hostFiles.readText(pathSpaceFor(space, path));
   if (!text.ok)
     throw (
       storageErrorCause(text.error) ??
       Object.assign(
         new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `Failed to read the marketplace file ${r}: ${formatStorageError(text.error)}`,
+          `Failed to read the marketplace file ${path}: ${formatStorageError(text.error)}`,
           "failed to read a local marketplace file (v5 backend error)",
         ),
         {
@@ -153,11 +153,11 @@ async function readLocalMarketplaceFile(storage, space, r) {
 /**
  * 本地市场路径是否存在（v5 存储经 hostFiles.stat）。
  */
-async function localMarketplacePathExists(e, n, r = "workspace") {
+async function localMarketplacePathExists(storageV5, path, space = "workspace") {
   if (isDiskless()) return false;
-  if (!isStorageV5Enabled() || e === undefined) return pathExists(n);
-  if (n === "") return false;
-  let stats = await e.hostFiles.stat(pathSpaceFor(r, n), {
+  if (!isStorageV5Enabled() || storageV5 === undefined) return pathExists(path);
+  if (path === "") return false;
+  let stats = await storageV5.hostFiles.stat(pathSpaceFor(space, path), {
     follow: true,
   });
   return stats.ok && stats.value.kind !== "absent";
@@ -168,87 +168,89 @@ var UNSAFE_PATH_EXPLANATION = `is on a network drive, has "." or ".." in its pat
 /**
  * 把市场路径解析为绝对路径并判断是否可疑：位于受信根下时只检查尾部；尾部含 . / .. 段直接可疑；否则看是否网络形状或 realpath 不可信。
  */
-function classifyMarketplacePath(installPath, { trustedRoots: n = [] } = {}) {
-  let r = splitMarketplacePath(installPath, n);
-  let { absolute, root, tail } = r;
-  if (r.dotSegmentInTail)
+function classifyMarketplacePath(installPath, { trustedRoots = [] } = {}) {
+  let parts = splitMarketplacePath(installPath, trustedRoots);
+  let { absolute, root, tail } = parts;
+  if (parts.dotSegmentInTail)
     return {
       absolute,
       suspect: true,
     };
   if (root !== undefined) {
-    let g = resolve(getOriginalCwd(), root);
+    let rootPath = resolve(getOriginalCwd(), root);
     return {
       absolute,
-      suspect: pathTraversesFromTrustedRoot(g, tail),
+      suspect: pathTraversesFromTrustedRoot(rootPath, tail),
     };
   }
-  let suspect = r.networkShapedUnvouched || realpathAllowMissing(absolute);
+  let suspect = parts.networkShapedUnvouched || realpathAllowMissing(absolute);
   return {
     absolute,
     suspect,
   };
 }
 //@ chunk-f3qhjfah.js:29454-29719 placement
-function splitMarketplacePath(e, n) {
-  if (e.trim() === "")
+function splitMarketplacePath(installPath, trustedRoots) {
+  if (installPath.trim() === "")
     return {
-      absolute: e,
+      absolute: installPath,
       root: undefined,
-      tail: e,
+      tail: installPath,
       dotSegmentInTail: false,
       networkShapedUnvouched: true,
     };
-  let r = resolve(getOriginalCwd(), e);
-  let { root, tail } = matchTrustedRoot(e, n);
+  let absolute = resolve(getOriginalCwd(), installPath);
+  let { root, tail } = matchTrustedRoot(installPath, trustedRoots);
   return {
-    absolute: r,
+    absolute,
     root,
     tail,
     dotSegmentInTail: hasDotSegmentAlias(tail),
-    networkShapedUnvouched: root === undefined && (isUntrustedLinkPath(e) || isUntrustedLinkPath(r)),
+    networkShapedUnvouched:
+      root === undefined && (isUntrustedLinkPath(installPath) || isUntrustedLinkPath(absolute)),
   };
 }
 //@ chunk-f3qhjfah.js:29719-29760 placement
-function trustedPluginRoots(e) {
-  return [getPluginsDirectory(), ...getPluginSeedDirs(), ...e];
+function trustedPluginRoots(extraRoots) {
+  return [getPluginsDirectory(), ...getPluginSeedDirs(), ...extraRoots];
 }
 //@ chunk-f3qhjfah.js:29760-30106 placement
 /**
  * 找到包含路径且尾部最短的受信根。
  */
-function matchTrustedRoot(e, n) {
-  let r = passThroughPath(e);
-  let s;
-  for (let a of trustedPluginRoots(n))
-    for (let c of [a, normalize(a)]) {
-      let l = passThroughPath(c.replace(/[\\/]+$/, ""));
-      if (l === "" || l === ".") continue;
-      let g;
-      if (r === l) g = "";
-      else if (r.startsWith(l + sep) || r.startsWith(l + "/")) g = e.slice(e.length - (r.length - l.length));
-      if (g !== undefined && (s === undefined || g.length < s.tail.length))
-        s = {
-          root: a,
-          tail: g,
+function matchTrustedRoot(path, extraRoots) {
+  let normalized = passThroughPath(path);
+  let best;
+  for (let root of trustedPluginRoots(extraRoots))
+    for (let rootVariant of [root, normalize(root)]) {
+      let rootNormalized = passThroughPath(rootVariant.replace(/[\\/]+$/, ""));
+      if (rootNormalized === "" || rootNormalized === ".") continue;
+      let tail;
+      if (normalized === rootNormalized) tail = "";
+      else if (normalized.startsWith(rootNormalized + sep) || normalized.startsWith(rootNormalized + "/"))
+        tail = path.slice(path.length - (normalized.length - rootNormalized.length));
+      if (tail !== undefined && (best === undefined || tail.length < best.tail.length))
+        best = {
+          root,
+          tail,
         };
     }
   return (
-    s ?? {
+    best ?? {
       root: undefined,
-      tail: e,
+      tail: path,
     }
   );
 }
 //@ chunk-f3qhjfah.js:30106-30208 placement = getReservedShortcuts (1)
-function normalizePathForPlatform(e) {
+function normalizePathForPlatform(path) {
   switch (getPlatform()) {
     case "windows":
-      return foldCase_2(passThroughPath(e));
+      return foldCase_2(passThroughPath(path));
     case "macos":
-      return foldCase_2(e);
+      return foldCase_2(path);
     default:
-      return e;
+      return path;
   }
 }
 //@ chunk-f3qhjfah.js:30208-30288 placement
@@ -267,68 +269,70 @@ function normalizeMarketplaceInputPath(installPath) {
 /**
  * Windows 上判断路径所在盘是否是 WSL 提供。
  */
-function wslProviderOfPath(e) {
+function wslProviderOfPath(path) {
   if (getPlatform() !== "windows") return;
-  let root = parse(e).root;
-  let r = (a) => wslLocalhostParts(toUncLongPath(a));
-  let s = r(root);
-  if (s === undefined) {
-    let a = realpathCacheEntry(root);
-    if (a === null) return "undeterminable";
-    s = r(a);
+  let root = parse(path).root;
+  let parseUnc = (candidate) => wslLocalhostParts(toUncLongPath(candidate));
+  let parts = parseUnc(root);
+  if (parts === undefined) {
+    let realRoot = realpathCacheEntry(root);
+    if (realRoot === null) return "undeterminable";
+    parts = parseUnc(realRoot);
   }
-  return s === undefined
+  return parts === undefined
     ? undefined
     : {
         walkRoot: root,
-        ...s,
+        ...parts,
       };
 }
 //@ chunk-f3qhjfah.js:30484-30648 placement
 /**
  * WSL 路径的遍历根与发行版目录。
  */
-function wslWalkRootOf(e) {
-  let n = wslProviderOfPath(e);
-  if (n === undefined || n === "undeterminable") return n;
+function wslWalkRootOf(path) {
+  let info = wslProviderOfPath(path);
+  if (info === undefined || info === "undeterminable") return info;
   return {
-    walkRoot: n.walkRoot,
-    distroDir: n.rest.replace(/[\\/]+$/, "").replace(/[\\/]+/g, "/"),
+    walkRoot: info.walkRoot,
+    distroDir: info.rest.replace(/[\\/]+$/, "").replace(/[\\/]+/g, "/"),
   };
 }
 //@ chunk-f3qhjfah.js:30648-30769 placement
 /**
  * Windows/WSL 路径互转。
  */
-function toAlternatePlatformPath(installPath, n) {
+function toAlternatePlatformPath(inputPath, walkRoot) {
   return (
-    toWslPath(installPath, {
+    toWslPath(inputPath, {
       exactDots: true,
     }) ??
-    toWslPathNoop(installPath, {
+    toWslPathNoop(inputPath, {
       exactDots: true,
     }) ??
-    (n === undefined ? undefined : toWindowsPathFromWsl(installPath, n.walkRoot, n.distroDir))
+    (walkRoot === undefined
+      ? undefined
+      : toWindowsPathFromWsl(inputPath, walkRoot.walkRoot, walkRoot.distroDir))
   );
 }
 //@ chunk-f3qhjfah.js:30769-30867 placement
-function isWindowsAbsolutePath(e) {
-  if (!isAbsolute(e)) return false;
-  return getPlatform() !== "windows" || /^(?:[A-Za-z]:[\\/]|[\\/]{2})/.test(e);
+function isWindowsAbsolutePath(path) {
+  if (!isAbsolute(path)) return false;
+  return getPlatform() !== "windows" || /^(?:[A-Za-z]:[\\/]|[\\/]{2})/.test(path);
 }
 //@ chunk-f3qhjfah.js:30867-30996 placement
 /**
  * 本地市场源路径规范化。
  */
-function normalizeLocalMarketplaceSource(source, n) {
+function normalizeLocalMarketplaceSource(source, home) {
   if (!isLocalMarketplaceSource(source)) return source;
-  let r = n === undefined ? expandTildeWithHome(source.path) : expandTildeWith(source.path, n);
-  let s = isWindowsAbsolutePath(r) ? resolve(r) : r;
-  return s === source.path
+  let expanded = home === undefined ? expandTildeWithHome(source.path) : expandTildeWith(source.path, home);
+  let normalized = isWindowsAbsolutePath(expanded) ? resolve(expanded) : expanded;
+  return normalized === source.path
     ? source
     : {
         ...source,
-        path: s,
+        path: normalized,
       };
 }
 //@ chunk-f3qhjfah.js:30996-31173 placement = getErrnoPath (1)
@@ -357,12 +361,12 @@ function getErrnoPath(marketplaceSource, corroboratingSource) {
 /**
  * 返回本地市场来源的路径（directory → path，file → 其所在目录…），非本地返回 undefined。
  */
-function getLocalSourcePath(e) {
-  switch (e?.source) {
+function getLocalSourcePath(source) {
+  switch (source?.source) {
     case "directory":
-      return e.path;
+      return source.path;
     case "file":
-      return basename(dirname(e.path)) === ".claude-plugin" ? dirname(dirname(e.path)) : undefined;
+      return basename(dirname(source.path)) === ".claude-plugin" ? dirname(dirname(source.path)) : undefined;
     default:
       return;
   }
@@ -371,18 +375,21 @@ function getLocalSourcePath(e) {
 /**
  * Windows 绝对路径插件确实位于本地市场目录内（含 realpath）。
  */
-async function isWindowsPluginInsideLocalMarketplace(err, { entrySource, marketplaceLocation, pluginPath }) {
-  let localSourcePath = getLocalSourcePath(err);
+async function isWindowsPluginInsideLocalMarketplace(
+  source,
+  { entrySource, marketplaceLocation, pluginPath },
+) {
+  let localSourcePath = getLocalSourcePath(source);
   if (
     localSourcePath === undefined ||
     typeof entrySource !== "string" ||
     !isWindowsAbsolutePath(localSourcePath) ||
     resolve(marketplaceLocation) !== resolve(localSourcePath) ||
     !isSubpathOf(resolve(localSourcePath), resolve(pluginPath), true) ||
-    [localSourcePath, pluginPath].some((g) => hasBackslash(g) || hasDotSegment(g))
+    [localSourcePath, pluginPath].some((path) => hasBackslash(path) || hasDotSegment(path))
   )
     return false;
-  let [c, l] = await Promise.all([
+  let [realSource, realPlugin] = await Promise.all([
     realpath(localSourcePath).catch(() => {
       return;
     }),
@@ -390,14 +397,14 @@ async function isWindowsPluginInsideLocalMarketplace(err, { entrySource, marketp
       return;
     }),
   ]);
-  return c !== undefined && l !== undefined && isSubpathOf(c, l, true);
+  return realSource !== undefined && realPlugin !== undefined && isSubpathOf(realSource, realPlugin, true);
 }
 //@ chunk-f3qhjfah.js:31648-31751 placement
 /**
  * 插件所在市场的候选路径。
  */
-function getMarketplaceCandidatePaths(e, knownMarketplaces, r) {
-  let marketplaceSources = getMarketplaceSources(e, knownMarketplaces, r);
+function getMarketplaceCandidatePaths(pluginId, knownMarketplaces, corroboratingMarketplaces) {
+  let marketplaceSources = getMarketplaceSources(pluginId, knownMarketplaces, corroboratingMarketplaces);
   return marketplaceSources === undefined
     ? []
     : getErrnoPath(marketplaceSources.marketplaceSource, marketplaceSources.corroboratingSource);
@@ -406,15 +413,15 @@ function getMarketplaceCandidatePaths(e, knownMarketplaces, r) {
 /**
  * classifyMarketplacePathOrUndefined：市场路径不在可疑位置时返回绝对路径。
  */
-function classifyMarketplacePathOrUndefined(e, n, r) {
-  let { absolute, suspect } = classifyMarketplacePath(e, {
-    trustedRoots: getErrnoPath(n, r),
+function classifyMarketplacePathOrUndefined(pluginId, marketplaceSource, corroboratingSource) {
+  let { absolute, suspect } = classifyMarketplacePath(pluginId, {
+    trustedRoots: getErrnoPath(marketplaceSource, corroboratingSource),
   });
   return suspect ? undefined : absolute;
 }
 //@ chunk-f3qhjfah.js:31844-31969 placement
-function formatLocationRefusedMessage(e) {
-  return `Marketplace directory refused: its recorded location ${printableOrEmpty(e)} ${UNSAFE_PATH_EXPLANATION}. ${capitalize(MARKETPLACE_SOURCE_FIX_HINTS["network-location"])}.`;
+function formatLocationRefusedMessage(location) {
+  return `Marketplace directory refused: its recorded location ${printableOrEmpty(location)} ${UNSAFE_PATH_EXPLANATION}. ${capitalize(MARKETPLACE_SOURCE_FIX_HINTS["network-location"])}.`;
 }
 //@ chunk-f3qhjfah.js:31969-31995 placement
 /**
@@ -425,8 +432,8 @@ var DOT_RELATIVE_RE = /^\.(?:[\\/]+|$)/;
 /**
  * isSuspiciousRelativeMarketplacePath：去掉前导点后仍是可疑路径。
  */
-function isSuspiciousRelativeMarketplacePath(e) {
-  let replaced = e.replace(DOT_RELATIVE_RE, "");
+function isSuspiciousRelativeMarketplacePath(entrySource) {
+  let replaced = entrySource.replace(DOT_RELATIVE_RE, "");
   return (
     replaced !== "" &&
     (isAbsolute(replaced) ||
@@ -436,19 +443,16 @@ function isSuspiciousRelativeMarketplacePath(e) {
   );
 }
 //@ chunk-f3qhjfah.js:32079-32181 placement
-function resolveEntryPath(marketplaceDir, entrySource) {
-  let replaced = entrySource.replace(DOT_RELATIVE_RE, "");
-  if (replaced === "") return marketplaceDir;
-  if (
-    isSuspiciousRelativeMarketplacePath(entrySource) ||
-    pathTraversesFromTrustedRoot(marketplaceDir, replaced)
-  )
+function resolveEntryPath(rootPath, entrySource) {
+  let restPath = entrySource.replace(DOT_RELATIVE_RE, "");
+  if (restPath === "") return rootPath;
+  if (isSuspiciousRelativeMarketplacePath(entrySource) || pathTraversesFromTrustedRoot(rootPath, restPath))
     return;
-  return join(marketplaceDir, replaced);
+  return join(rootPath, restPath);
 }
 //@ chunk-f3qhjfah.js:32181-32353 placement
-function formatEntryRefusedMessage(e) {
-  return `Plugin source path refused: ${printableName(e, 300)} does not stay inside its marketplace directory. Check that the marketplace entry has a plain relative path.`;
+function formatEntryRefusedMessage(entrySource) {
+  return `Plugin source path refused: ${printableName(entrySource, 300)} does not stay inside its marketplace directory. Check that the marketplace entry has a plain relative path.`;
 }
 //@ chunk-f3qhjfah.js:32353-33312 placement
 /**
@@ -470,7 +474,7 @@ async function resolveMarketplaceEntryPath(
     isDirectory = (
       marketplaceSource !== undefined && isLocalMarketplaceSource(marketplaceSource)
         ? await probeLocalMarketplacePath(storageV5, location, localMarketplaceSpace)
-        : await stat(location)
+        : await stat_2(location)
     ).isDirectory();
   } catch (error) {
     statError = error;
@@ -505,15 +509,15 @@ async function resolveMarketplaceEntryPath(
       marketplaceDir,
     };
   let identity = await getFileIdentity(marketplaceDir);
-  let fe = false;
+  let skipRealpath = false;
   if (!identity) {
-    for (let P of getErrnoPath(marketplaceSource, corroboratingSource))
-      if (isPathWithin(P, marketplaceDir) && !(await getFileIdentity(P))) {
-        fe = true;
+    for (let path of getErrnoPath(marketplaceSource, corroboratingSource))
+      if (isPathWithin(path, marketplaceDir) && !(await getFileIdentity(path))) {
+        skipRealpath = true;
         break;
       }
   }
-  if (!fe) {
+  if (!skipRealpath) {
     if (identity) {
       if (!(await walkEntryPlainDirectories(marketplaceDir, entrySource)))
         return {
@@ -540,27 +544,27 @@ async function resolveMarketplaceEntryPath(
 async function getFileIdentity(filePath) {
   if (getPlatform() === "windows") return false;
   if (hasBackslash(filePath)) return true;
-  let n;
+  let stat;
   try {
-    n = await stat(filePath, {
+    stat = await stat_2(filePath, {
       bigint: true,
     });
   } catch {
     return false;
   }
-  if (!n.isDirectory()) return false;
-  if (n.ino === 0n) return true;
-  let r;
+  if (!stat.isDirectory()) return false;
+  if (stat.ino === 0n) return true;
+  let real;
   try {
-    r = await realpath(filePath);
+    real = await realpath(filePath);
   } catch {
     return true;
   }
   try {
-    let stats = await stat(r, {
+    let stats = await stat_2(real, {
       bigint: true,
     });
-    return stats.ino === 0n || stats.dev !== n.dev || stats.ino !== n.ino;
+    return stats.ino === 0n || stats.dev !== stat.dev || stats.ino !== stat.ino;
   } catch {
     return true;
   }
@@ -572,23 +576,23 @@ async function getFileIdentity(filePath) {
 async function walkEntryPlainDirectories(marketplaceDir, entrySource) {
   if (isSuspiciousRelativeMarketplacePath(entrySource)) return false;
   let replaced = entrySource.replace(DOT_RELATIVE_RE, "");
-  let s = marketplaceDir;
-  for (let a of replaced.split("/").filter(Boolean)) {
-    s = join(s, a);
-    let c;
+  let current = marketplaceDir;
+  for (let segment of replaced.split("/").filter(Boolean)) {
+    current = join(current, segment);
+    let stat;
     try {
-      c = await lstat(s);
+      stat = await lstat(current);
     } catch (error) {
       let errnoCode = getErrnoCode(error);
       if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR") return true;
       logForDebugging(
-        `Marketplace entry ${printableOrEmpty(s)} refused: lstat failed (${getErrnoCode(error) ?? printableName(errorMessage(error), 160)}) while walking a tree realpath cannot judge`,
+        `Marketplace entry ${printableOrEmpty(current)} refused: lstat failed (${getErrnoCode(error) ?? printableName(errorMessage(error), 160)}) while walking a tree realpath cannot judge`,
       );
       return false;
     }
-    if (!c.isDirectory()) {
+    if (!stat.isDirectory()) {
       logForDebugging(
-        `Marketplace entry ${printableOrEmpty(s)} refused: ${c.isSymbolicLink() ? "a symlink" : "not a directory"} under a marketplace directory realpath cannot judge; only plain directories are allowed there`,
+        `Marketplace entry ${printableOrEmpty(current)} refused: ${stat.isSymbolicLink() ? "a symlink" : "not a directory"} under a marketplace directory realpath cannot judge; only plain directories are allowed there`,
       );
       return false;
     }
@@ -601,46 +605,51 @@ async function walkEntryPlainDirectories(marketplaceDir, entrySource) {
  */
 async function verifyEntryRealpathInside(marketplaceDir, entryPath) {
   if (getPlatform() === "windows") return true;
-  let r = (f) => {
+  let refuse = (reason) => {
     logForDebugging(
-      `Marketplace entry ${printableOrEmpty(entryPath)} refused: ${f} (its declared spelling does not provably open inside ${printableOrEmpty(marketplaceDir)})`,
+      `Marketplace entry ${printableOrEmpty(entryPath)} refused: ${reason} (its declared spelling does not provably open inside ${printableOrEmpty(marketplaceDir)})`,
     );
     return false;
   };
-  let s = (error) => getErrnoCode(error) ?? printableName(errorMessage(error), 160);
-  let a;
+  let errnoText = (error) => getErrnoCode(error) ?? printableName(errorMessage(error), 160);
+  let real;
   try {
-    a = await realpath(entryPath);
+    real = await realpath(entryPath);
   } catch (error) {
     let errnoCode = getErrnoCode(error);
-    if (errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR") return r(`realpath failed (${s(error)})`);
+    if (errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR")
+      return refuse(`realpath failed (${errnoText(error)})`);
     try {
-      await stat(entryPath);
+      await stat_2(entryPath);
     } catch (error) {
       let errnoCode = getErrnoCode(error);
-      return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? true : r(`stat failed (${s(error)})`);
+      return errnoCode === "ENOENT" || errnoCode === "ENOTDIR"
+        ? true
+        : refuse(`stat failed (${errnoText(error)})`);
     }
-    return r("it exists but realpath cannot resolve it as spelled");
+    return refuse("it exists but realpath cannot resolve it as spelled");
   }
-  let c;
+  let stats;
   try {
-    c = await Promise.all([
-      stat(entryPath, {
+    stats = await Promise.all([
+      stat_2(entryPath, {
         bigint: true,
       }),
-      stat(a, {
+      stat_2(real, {
         bigint: true,
       }),
     ]);
   } catch (error) {
-    return r(`stat failed (${s(error)})`);
+    return refuse(`stat failed (${errnoText(error)})`);
   }
-  let [l, g] = c;
-  if (l.ino === 0n || g.ino === 0n) return r("the filesystem reports no inode number");
-  if (l.dev !== g.dev || l.ino !== g.ino)
-    return r(`its spelling opens a different file from the one realpath names (${printableOrEmpty(a)})`);
-  if (!isPathWithin(marketplaceDir, a))
-    return r(`it opens ${printableOrEmpty(a)}, outside the marketplace directory`);
+  let [declaredStat, realStat] = stats;
+  if (declaredStat.ino === 0n || realStat.ino === 0n) return refuse("the filesystem reports no inode number");
+  if (declaredStat.dev !== realStat.dev || declaredStat.ino !== realStat.ino)
+    return refuse(
+      `its spelling opens a different file from the one realpath names (${printableOrEmpty(real)})`,
+    );
+  if (!isPathWithin(marketplaceDir, real))
+    return refuse(`it opens ${printableOrEmpty(real)}, outside the marketplace directory`);
   return true;
 }
 //@ chunk-f3qhjfah.js:35057-35470 placement
@@ -723,16 +732,16 @@ function entryPathOrReason(pluginEntryPath) {
  * 按插件 id 取市场来源后解析条目路径。
  */
 async function resolvePluginEntryPath(
-  e,
+  pluginId,
   marketplaceInstallLocation,
   source,
-  s,
-  a,
+  knownMarketplaces,
+  marketplaces,
   storageV5,
   localMarketplaceSpace,
 ) {
   return resolveMarketplaceEntryPath(marketplaceInstallLocation, source, {
-    ...(getMarketplaceSources(e, s, a) ?? {
+    ...(getMarketplaceSources(pluginId, knownMarketplaces, marketplaces) ?? {
       marketplaceSource: undefined,
       corroboratingSource: undefined,
     }),
@@ -741,13 +750,15 @@ async function resolvePluginEntryPath(
   });
 }
 //@ chunk-f3qhjfah.js:36512-36718 placement
-function getMarketplaceSources(e, n, r) {
-  let { marketplace } = parsePluginIdentifier(e);
+function getMarketplaceSources(pluginId, knownMarketplaces, marketplaces) {
+  let { marketplace } = parsePluginIdentifier(pluginId);
   if (!marketplace) return;
-  let source = Object.hasOwn(r, marketplace) ? r[marketplace]?.source : undefined;
+  let source = Object.hasOwn(marketplaces, marketplace) ? marketplaces[marketplace]?.source : undefined;
   return {
     marketplaceSource:
-      (n !== undefined && Object.hasOwn(n, marketplace) ? n[marketplace]?.source : undefined) ?? source,
+      (knownMarketplaces !== undefined && Object.hasOwn(knownMarketplaces, marketplace)
+        ? knownMarketplaces[marketplace]?.source
+        : undefined) ?? source,
     corroboratingSource: source,
   };
 }
@@ -764,8 +775,8 @@ function getServerUrl(location, marketplaceSource, isDirectory) {
 /**
  * 解析失败转 {code, message}。
  */
-function entryResolutionError(e, marketplaceInstallLocation, source) {
-  switch (e.kind) {
+function entryResolutionError(resolution, marketplaceInstallLocation, source) {
+  switch (resolution.kind) {
     case "location-refused":
       return {
         code: "marketplace_location_refused",
@@ -779,14 +790,14 @@ function entryResolutionError(e, marketplaceInstallLocation, source) {
     case "location-error":
       return {
         code: "marketplace_dir_unreadable",
-        message: `Marketplace directory could not be read at path: ${printableOrEmpty(marketplaceInstallLocation)} (${getErrnoCode(e.error) ?? "unknown error"})`,
+        message: `Marketplace directory could not be read at path: ${printableOrEmpty(marketplaceInstallLocation)} (${getErrnoCode(resolution.error) ?? "unknown error"})`,
       };
     case "entry-refused":
       return {
         code: "marketplace_entry_path_refused",
         message:
           formatEntryRefusedMessage(source) +
-          (e.cause === "plain-directory-walk" ? PLAIN_DIRECTORY_WALK_NOTE : ""),
+          (resolution.cause === "plain-directory-walk" ? PLAIN_DIRECTORY_WALK_NOTE : ""),
       };
   }
 }
@@ -802,28 +813,28 @@ function normalizeRegistryKey(cwd) {
 /**
  * 读小 JSON 对象注册表，逐项校验，键规范化。
  */
-function parseJsonRegistryFile(e, n, r, s) {
-  let a = new Map();
-  if (Buffer.byteLength(n) > r) {
-    logForDebugging(`Ignoring ${e}: larger than the size cap`);
-    return a;
+function parseJsonRegistryFile(fileName, text, maxBytes, parseEntry) {
+  let entries = new Map();
+  if (Buffer.byteLength(text) > maxBytes) {
+    logForDebugging(`Ignoring ${fileName}: larger than the size cap`);
+    return entries;
   }
-  let c;
+  let parsed;
   try {
-    c = jsonParse(n);
+    parsed = jsonParse(text);
   } catch {
-    logForDebugging(`Ignoring ${e}: not valid JSON`);
-    return a;
+    logForDebugging(`Ignoring ${fileName}: not valid JSON`);
+    return entries;
   }
-  if (typeof c !== "object" || c === null || Array.isArray(c)) {
-    logForDebugging(`Ignoring ${e}: not a JSON object`);
-    return a;
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    logForDebugging(`Ignoring ${fileName}: not a JSON object`);
+    return entries;
   }
-  for (let [key, value] of Object.entries(c)) {
-    let f = s(value);
-    if (f !== undefined) a.set(normalizeRegistryKey(key), f);
+  for (let [key, value] of Object.entries(parsed)) {
+    let entry = parseEntry(value);
+    if (entry !== undefined) entries.set(normalizeRegistryKey(key), entry);
   }
-  return a;
+  return entries;
 }
 export {
   resolvePluginEntryPath,

@@ -9,25 +9,29 @@
  * attribution: fingerprint 2
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, literal, string } from "../../vendor/zod/v4/classic/schemas.js";
-import { P } from "../../vendor/react/cjs/react.production.js";
+import { objectSchema, literal, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
+import { useEffect } from "../../vendor/react/cjs/react.production.js";
 import { hasAccessToIDEExtensionDiffFeature } from "../services/compact/idleToolResultClearing.js";
 import { onMcpNotification } from "../services/mcp/mcpWireUtils.js";
 import { logEvent } from "../services/analytics/index.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:207786-207884 fingerprint = LogEventSchema (0.849)
-var LogEventSchema = DoctorLazy(() =>
-  u({
-    method: literal("log_event"),
-    params: u({
-      eventName: string(),
-      eventData: u({}).passthrough(),
+var LogEventSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:207786", () => {
+  LogEventSchema = DoctorLazy(() =>
+    objectSchema({
+      method: literal("log_event"),
+      params: objectSchema({
+        eventName: stringSchema(),
+        eventData: objectSchema({}).passthrough(),
+      }),
     }),
-  }),
-);
+  );
+});
 //@ chunk-18hwfzwa.js:207884-208031 fingerprint = useIdeLogging (0.863)
 function useIdeLogging(mcpClients) {
-  P(() => {
+  useEffect(() => {
     if (!mcpClients.length) return;
     let ideClient = hasAccessToIDEExtensionDiffFeature(mcpClients);
     if (ideClient)

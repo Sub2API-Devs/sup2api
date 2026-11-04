@@ -10,11 +10,18 @@
  */
 import { isDiskless } from "../../bootstrap/state.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
-import { Re } from "../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_ignore } from "../../../vendor/ignore/index.js";
 import { fromEnum, lit } from "../analytics/safeMetadata.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { string, union, u, _enum, array, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  stringSchema,
+  union,
+  objectSchema,
+  _enum,
+  array,
+  numberSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { env } from "../../utils/env.js";
 import { jsonParse } from "../../utils/slowOperations.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -31,24 +38,28 @@ import {
 import { isSafeMode } from "../../utils/envUtils.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { getSessionIngressAuthToken } from "../../utils/sessionIngressAuth.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-82kqcve8.js:8454-8501 placement
 /**
  * 是否为无盘会话且没有 v5 存储状态。
  */
-function isDisklessWithoutState(e) {
-  return isDiskless() && !(isStorageV5Enabled() && e !== undefined);
+function isDisklessWithoutState(storageV5) {
+  return isDiskless() && !(isStorageV5Enabled() && storageV5 !== undefined);
 }
 //@ chunk-82kqcve8.js:8501-8520 placement
 /**
  * 懒加载记忆库环境变量解析模块。
  */
-var memoryStoresEnvModule = Re(require_ignore(), 1);
+var memoryStoresEnvModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-82kqcve8.js:8501", () => {
+  memoryStoresEnvModule = __toESM(require_ignore(), 1);
+});
 //@ chunk-82kqcve8.js:8828-8975 placement
-function isPathAbsoluteSameOrigin(e) {
-  if (!e.startsWith("/")) return false;
+function isPathAbsoluteSameOrigin(path) {
+  if (!path.startsWith("/")) return false;
   try {
-    return new URL(e, "https://sentinel.invalid").origin === "https://sentinel.invalid";
+    return new URL(path, "https://sentinel.invalid").origin === "https://sentinel.invalid";
   } catch {
     return false;
   }
@@ -88,58 +99,66 @@ var STORE_KIND_PREFIXES = [
  * 把记忆存储种类映射为遥测值：精确匹配或按前缀匹配，否则为 other。
  */
 function getStoreKindTelemetry(mountName) {
-  let found = STORE_KIND_LABELS.find((s) => s === mountName);
+  let found = STORE_KIND_LABELS.find((label) => label === mountName);
   if (found) return fromEnum(found);
-  let found_2 = STORE_KIND_PREFIXES.find(([s]) => mountName.startsWith(s));
+  let found_2 = STORE_KIND_PREFIXES.find(([prefixEntry]) => mountName.startsWith(prefixEntry));
   return found_2 ? fromEnum(found_2[1]) : lit("other");
 }
 //@ chunk-82kqcve8.js:9592-10209 placement
 /**
  * CLAUDE_MEMORY_STORES 条目的 schema：路径或 {path, mode, scope, mount, promptIndex, skillsDirs(末段须为 skills), promptIndexMaxBytes}。
  */
-var storePathSchema = DoctorLazy(() =>
-  string().min(1).refine(isPathAbsoluteSameOrigin, {
-    message: "path must be path-absolute and must not override the host",
-  }),
-);
-var MAX_SKILLS_DIRS = 10;
-var relativeSegmentsSchema = DoctorLazy(() =>
-  string().min(1).refine(isValidRelativeSegments, {
-    message: "segments must match [A-Za-z0-9._-]+ and must not be . or ..",
-  }),
-);
-var memoryStoreEntrySchema = DoctorLazy(() =>
-  union([
-    storePathSchema(),
-    u({
-      path: storePathSchema(),
-      mode: _enum(["rw", "ro"]).default("rw"),
-      scope: _enum(["user", "team"]).default("team"),
-      mount: string()
-        .min(1)
-        .refine((e) => /^[A-Za-z0-9_-]+$/.test(e), {
-          message: MOUNT_NAME_RULE_MESSAGE,
-        })
-        .optional(),
-      promptIndex: relativeSegmentsSchema().optional(),
-      skillsDirs: array(
-        relativeSegmentsSchema().refine((e) => e.split("/").at(-1) === "skills", {
-          message: "the last segment must be 'skills'",
-        }),
-      )
-        .max(MAX_SKILLS_DIRS)
-        .optional(),
-      promptIndexMaxBytes: E().int().positive().optional(),
+var storePathSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_SKILLS_DIRS;
+var relativeSegmentsSchema;
+var memoryStoreEntrySchema;
+deferInit("chunk-82kqcve8.js:9592", () => {
+  storePathSchema = DoctorLazy(() =>
+    stringSchema().min(1).refine(isPathAbsoluteSameOrigin, {
+      message: "path must be path-absolute and must not override the host",
     }),
-  ]),
-);
+  );
+  MAX_SKILLS_DIRS = 10;
+  relativeSegmentsSchema = DoctorLazy(() =>
+    stringSchema().min(1).refine(isValidRelativeSegments, {
+      message: "segments must match [A-Za-z0-9._-]+ and must not be . or ..",
+    }),
+  );
+  memoryStoreEntrySchema = DoctorLazy(() =>
+    union([
+      storePathSchema(),
+      objectSchema({
+        path: storePathSchema(),
+        mode: _enum(["rw", "ro"]).default("rw"),
+        scope: _enum(["user", "team"]).default("team"),
+        mount: stringSchema()
+          .min(1)
+          .refine((mountName) => /^[A-Za-z0-9_-]+$/.test(mountName), {
+            message: MOUNT_NAME_RULE_MESSAGE,
+          })
+          .optional(),
+        promptIndex: relativeSegmentsSchema().optional(),
+        skillsDirs: array(
+          relativeSegmentsSchema().refine((relativePath) => relativePath.split("/").at(-1) === "skills", {
+            message: "the last segment must be 'skills'",
+          }),
+        )
+          .max(MAX_SKILLS_DIRS)
+          .optional(),
+        promptIndexMaxBytes: numberSchema().int().positive().optional(),
+      }),
+    ]),
+  );
+});
 //@ chunk-82kqcve8.js:10209-10329 placement
 /**
  * 相对路径各段是否只含安全字符且不是 . 或 ..。
  */
-function isValidRelativeSegments(e) {
-  if (e.length === 0) return false;
-  return e.split("/").every((r) => /^[A-Za-z0-9._-]+$/.test(r) && r !== "." && r !== "..");
+function isValidRelativeSegments(segments) {
+  if (segments.length === 0) return false;
+  return segments
+    .split("/")
+    .every((segment) => /^[A-Za-z0-9._-]+$/.test(segment) && segment !== "." && segment !== "..");
 }
 //@ chunk-82kqcve8.js:10329-10551 placement
 /**
@@ -148,64 +167,65 @@ function isValidRelativeSegments(e) {
 function parseMemoryStoresEnv() {
   let CLAUDE_MEMORY_STORES = env.CLAUDE_MEMORY_STORES;
   if (!CLAUDE_MEMORY_STORES) return null;
-  let n;
+  let parsed;
   try {
-    n = jsonParse(CLAUDE_MEMORY_STORES);
+    parsed = jsonParse(CLAUDE_MEMORY_STORES);
   } catch (error) {
     throw Error(
       `CLAUDE_MEMORY_STORES is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
-  return validateMemoryStores(n, "CLAUDE_MEMORY_STORES");
+  return validateMemoryStores(parsed, "CLAUDE_MEMORY_STORES");
 }
 //@ chunk-82kqcve8.js:10551-11364 placement
-function validateMemoryStores(e, n) {
-  let r = array(memoryStoreEntrySchema()).safeParse(e);
-  if (!r.success) throw Error(`${n} failed validation: ${r.error.message}`);
-  let s = [];
-  let h = new Set();
-  let y = false;
-  for (let w of r.data) {
-    let S =
-      typeof w === "string"
+function validateMemoryStores(raw, label) {
+  let parsed = array(memoryStoreEntrySchema()).safeParse(raw);
+  if (!parsed.success) throw Error(`${label} failed validation: ${parsed.error.message}`);
+  let stores = [];
+  let seenMounts = new Set();
+  let sawUserScope = false;
+  for (let entry of parsed.data) {
+    let store =
+      typeof entry === "string"
         ? {
-            path: w,
+            path: entry,
             mode: "rw",
             scope: "team",
           }
-        : w;
-    let R = S.mount ?? deriveMountName(S.path);
-    if (h.has(R)) throw Error(`${n} has duplicate mount: ${R}`);
-    h.add(R);
-    if (S.scope === "user") {
-      if (y) throw Error(`${n} has more than one scope:"user" entry`);
-      y = true;
+        : entry;
+    let mount = store.mount ?? deriveMountName(store.path);
+    if (seenMounts.has(mount)) throw Error(`${label} has duplicate mount: ${mount}`);
+    seenMounts.add(mount);
+    if (store.scope === "user") {
+      if (sawUserScope) throw Error(`${label} has more than one scope:"user" entry`);
+      sawUserScope = true;
     }
-    s.push({
-      path: S.path,
-      mode: S.mode,
-      scope: S.scope,
-      mount: R,
-      ...(S.promptIndex !== undefined && {
-        promptIndex: S.promptIndex,
+    stores.push({
+      path: store.path,
+      mode: store.mode,
+      scope: store.scope,
+      mount,
+      ...(store.promptIndex !== undefined && {
+        promptIndex: store.promptIndex,
       }),
-      ...(S.promptIndexMaxBytes !== undefined && {
-        promptIndexMaxBytes: S.promptIndexMaxBytes,
+      ...(store.promptIndexMaxBytes !== undefined && {
+        promptIndexMaxBytes: store.promptIndexMaxBytes,
       }),
-      ...(S.skillsDirs !== undefined &&
-        S.skillsDirs.length > 0 && {
-          skillsDirs: S.skillsDirs,
+      ...(store.skillsDirs !== undefined &&
+        store.skillsDirs.length > 0 && {
+          skillsDirs: store.skillsDirs,
         }),
     });
   }
-  if (s.length === 0) return null;
+  if (stores.length === 0) return null;
   logForDebugging(
-    `memory-stores: parsed ${s.length} store(s): ` + s.map((w) => `${w.mount}(${w.mode})`).join(", "),
+    `memory-stores: parsed ${stores.length} store(s): ` +
+      stores.map((store) => `${store.mount}(${store.mode})`).join(", "),
     {
       level: "debug",
     },
   );
-  return s;
+  return stores;
 }
 //@ chunk-82kqcve8.js:11364-11415 placement
 /**

@@ -5,12 +5,12 @@
  * pieces: chunk-1r4fv9mg.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_dynamicAnchor } from "./dynamicAnchor.js";
 import { require_util_2 as require_util } from "../../compile/util.js";
 
 //@ chunk-1r4fv9mg.js:1958-2225 cjs-fingerprint
-var require_recursiveAnchor = x(function (cjsExports) {
+var require_recursiveAnchor = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

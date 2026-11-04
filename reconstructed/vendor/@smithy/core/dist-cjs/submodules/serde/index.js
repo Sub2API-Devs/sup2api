@@ -5,13 +5,13 @@
  * pieces: chunk-wjd9n4jx.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
-import { Jns } from "../../../index.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
+import { require_v4 } from "../../../index.js";
 
 //@ chunk-wjd9n4jx.js:22651-35068 cjs-require-graph
-var require_serde = x(function (cjsExports) {
-  var Hs = Jns();
-  var copyDocumentWithTransform = (e, input, offset = (input) => input) => e;
+var require_serde = __commonJS(function (cjsExports) {
+  var v4 = require_v4();
+  var copyDocumentWithTransform = (source, input, offset = (input) => input) => source;
   var parseBoolean = (value) => {
     switch (value) {
       case "true":
@@ -594,7 +594,7 @@ var require_serde = x(function (cjsExports) {
   Object.defineProperty(cjsExports, "generateIdempotencyToken", {
     enumerable: true,
     get: function () {
-      return Hs.v4;
+      return v4.v4;
     },
   });
   cjsExports.LazyJsonString = LazyJsonString;

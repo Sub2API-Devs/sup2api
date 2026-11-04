@@ -13,8 +13,9 @@ import { uiSignals } from "../state/uiSignals.js";
 import { logForDebugging } from "../utils/debug.js";
 import { withHideWhile } from "../components/dialogs/dialogRequests.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, string, array, _enum } from "../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, array, _enum } from "../../vendor/zod/v4/classic/schemas.js";
 import { getUserDialogTimeoutMs } from "./api/refusalFallback.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-hwmsct5x.js:193981-194030 placement
 /**
@@ -25,28 +26,28 @@ var REQUEST_ID_REGEX = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])$/i;
 /**
  * 合法则返回该字符串，否则 undefined。
  */
-function normalizeRequestId(e) {
-  return e !== undefined && REQUEST_ID_REGEX.test(e) ? e : undefined;
+function normalizeRequestId(requestId) {
+  return requestId !== undefined && REQUEST_ID_REGEX.test(requestId) ? requestId : undefined;
 }
 //@ chunk-hwmsct5x.js:194122-194241 placement
 /**
  * 去掉对象中的 declineMessage 字段后返回。
  */
-function stripDeclineMessage(e) {
-  if (typeof e === "object" && e !== null && "declineMessage" in e) {
-    let { declineMessage, ...r } = e;
-    return r;
+function stripDeclineMessage(message) {
+  if (typeof message === "object" && message !== null && "declineMessage" in message) {
+    let { declineMessage, ...rest } = message;
+    return rest;
   }
-  return e;
+  return message;
 }
 //@ chunk-hwmsct5x.js:194241-194356 placement
 /**
  * 标记屏幕上正在显示某种阻塞对话框。
  */
 function markBlockingDialogShown(blockingDialogKind) {
-  uiSignals.onScreenBlockingDialog.setState((n) =>
-    n.surfaceMounted && n.kind === blockingDialogKind
-      ? n
+  uiSignals.onScreenBlockingDialog.setState((current) =>
+    current.surfaceMounted && current.kind === blockingDialogKind
+      ? current
       : {
           surfaceMounted: true,
           kind: blockingDialogKind,
@@ -58,13 +59,13 @@ function markBlockingDialogShown(blockingDialogKind) {
  * 清除阻塞对话框显示状态。
  */
 function clearBlockingDialog() {
-  uiSignals.onScreenBlockingDialog.setState((e) =>
-    e.surfaceMounted || e.kind !== null
+  uiSignals.onScreenBlockingDialog.setState((current) =>
+    current.surfaceMounted || current.kind !== null
       ? {
           surfaceMounted: false,
           kind: null,
         }
-      : e,
+      : current,
   );
 }
 //@ chunk-hwmsct5x.js:194476-194571 placement
@@ -79,40 +80,40 @@ function otherDialogOnScreen(kind) {
 /**
  * 订阅阻塞对话框状态变化。
  */
-function onBlockingDialogChange(e) {
-  return uiSignals.onScreenBlockingDialog.subscribe(e);
+function onBlockingDialogChange(listener) {
+  return uiSignals.onScreenBlockingDialog.subscribe(listener);
 }
 //@ chunk-hwmsct5x.js:194633-194794 placement
 /**
  * 取消所有（或指定类型的）待处理用户对话请求：从表中删除、回调清理函数、以 cancelled 通知处理器，返回被取消的类型列表。
  */
-function cancelPendingDialogs(e, n, kind) {
-  let s = [];
-  for (let [h, y] of [...e]) {
-    if (kind !== undefined && y.kind !== kind) continue;
-    e.delete(h);
-    n(h);
-    y.handler({
+function cancelPendingDialogs(dialogs, forgetDialog, kind) {
+  let cancelledKinds = [];
+  for (let [requestId, entry] of [...dialogs]) {
+    if (kind !== undefined && entry.kind !== kind) continue;
+    dialogs.delete(requestId);
+    forgetDialog(requestId);
+    entry.handler({
       behavior: "cancelled",
     });
-    s.push(y.kind);
+    cancelledKinds.push(entry.kind);
   }
-  return s;
+  return cancelledKinds;
 }
 //@ chunk-hwmsct5x.js:194794-194897 placement
 /**
  * 以 detached 结束所有待处理的用户对话请求，返回数量。
  */
-function detachPendingDialogs(e) {
-  let n = 0;
-  for (let [r, s] of [...e]) {
-    e.delete(r);
-    s.handler({
+function detachPendingDialogs(dialogs) {
+  let detachedCount = 0;
+  for (let [requestId, entry] of [...dialogs]) {
+    dialogs.delete(requestId);
+    entry.handler({
       behavior: "detached",
     });
-    n++;
+    detachedCount++;
   }
-  return n;
+  return detachedCount;
 }
 //@ chunk-hwmsct5x.js:194897-195024 placement
 /**
@@ -129,16 +130,16 @@ function isDialogResponse(response) {
 function forwardDialogToBridge({ bridge, dialog, payload, toolUseId, onSettled }) {
   let requestId = randomUUID();
   let answered = false;
-  let S = bridge.onResponse(requestId, dialog.kind, (R) => {
-    switch (R.behavior) {
+  let unsubscribe = bridge.onResponse(requestId, dialog.kind, (response) => {
+    switch (response.behavior) {
       case "completed": {
         answered = true;
-        let L = dialog.result().safeParse(R.result);
+        let parsed = dialog.result().safeParse(response.result);
         onSettled(
-          L.success
+          parsed.success
             ? {
                 kind: "answered",
-                result: stripDeclineMessage(L.data),
+                result: stripDeclineMessage(parsed.data),
               }
             : {
                 kind: "malformed",
@@ -161,17 +162,17 @@ function forwardDialogToBridge({ bridge, dialog, payload, toolUseId, onSettled }
   });
   if (!bridge.sendRequest(requestId, dialog.kind, payload, toolUseId)) {
     bridge.cancelRequest(requestId);
-    S();
+    unsubscribe();
     return;
   }
-  let E = false;
+  let retired = false;
   return {
     requestId,
     retire: () => {
-      if (E) return;
-      E = true;
+      if (retired) return;
+      retired = true;
       if (!answered) bridge.cancelRequest(requestId);
-      S();
+      unsubscribe();
     },
   };
 }
@@ -187,11 +188,11 @@ async function requestUserDialogRaced(options) {
       source: "local",
     };
   let abortController = new AbortController();
-  let E = () => abortController.abort(signal.reason);
-  signal.addEventListener("abort", E, {
+  let onAbort = () => abortController.abort(signal.reason);
+  signal.addEventListener("abort", onAbort, {
     once: true,
   });
-  let R;
+  let stopWatchingDialogs;
   let parkTimer;
   let resolveRemote = () => {};
   let promise = new Promise((resolve) => {
@@ -201,11 +202,11 @@ async function requestUserDialogRaced(options) {
     bridge,
     dialog,
     payload,
-    onSettled: (J) => {
-      switch (J.kind) {
+    onSettled: (settled) => {
+      switch (settled.kind) {
         case "answered":
           resolveRemote({
-            result: J.result,
+            result: settled.result,
             source: "bridge",
           });
           return;
@@ -229,28 +230,28 @@ async function requestUserDialogRaced(options) {
           return;
         case "detached":
           clearTimeout(parkTimer);
-          R?.();
+          stopWatchingDialogs?.();
           return;
       }
     },
   });
-  let H = () => {
+  let cleanup = () => {
     clearTimeout(parkTimer);
-    R?.();
+    stopWatchingDialogs?.();
     forwarded?.retire();
   };
-  let j = {
+  let localOpts = {
     ...options.localOpts,
     localOnly: true,
     signal: abortController.signal,
     onClaimed: () => {
-      H();
+      cleanup();
       options.localOpts?.onClaimed?.();
     },
   };
   if (forwarded === undefined) {
-    let result = await requestDialog(dialog, payload, j);
-    signal.removeEventListener("abort", E);
+    let result = await requestDialog(dialog, payload, localOpts);
+    signal.removeEventListener("abort", onAbort);
     return {
       result,
       source: "local",
@@ -260,12 +261,12 @@ async function requestUserDialogRaced(options) {
   let armParkTimer = () => {
     if (parkTimeoutMs <= 0) return;
     parkTimer = setTimeout(
-      (J, result, Q, ne) => {
-        if (otherDialogOnScreen(J)) {
-          ne();
+      (dialogKind, result, settle, rearmParkTimer) => {
+        if (otherDialogOnScreen(dialogKind)) {
+          rearmParkTimer();
           return;
         }
-        Q({
+        settle({
           result,
           source: "timeout",
         });
@@ -279,23 +280,23 @@ async function requestUserDialogRaced(options) {
   };
   armParkTimer();
   if (parkTimeoutMs > 0) {
-    let J = otherDialogOnScreen(dialog.kind);
-    R = onBlockingDialogChange(() => {
-      let Z = otherDialogOnScreen(dialog.kind);
-      if (J && !Z) {
+    let dialogWasOnScreen = otherDialogOnScreen(dialog.kind);
+    stopWatchingDialogs = onBlockingDialogChange(() => {
+      let dialogIsOnScreen = otherDialogOnScreen(dialog.kind);
+      if (dialogWasOnScreen && !dialogIsOnScreen) {
         clearTimeout(parkTimer);
         armParkTimer();
       }
-      J = Z;
+      dialogWasOnScreen = dialogIsOnScreen;
     });
   }
-  let localPromise = requestDialog(dialog, payload, j).then((result) => ({
+  let localPromise = requestDialog(dialog, payload, localOpts).then((result) => ({
     result,
     source: "local",
   }));
   let winner = await Promise.race([localPromise, promise]);
-  H();
-  signal.removeEventListener("abort", E);
+  cleanup();
+  signal.removeEventListener("abort", onAbort);
   if (winner.source !== "local") abortController.abort();
   return winner;
 }
@@ -303,23 +304,26 @@ async function requestUserDialogRaced(options) {
 /**
  * 拒绝回退提示对话的声明：载荷（原模型、回退模型、拒绝类别、指导文本、相关已流出消息 uuid）与结果（retry_fallback/edit_prompt/cancelled），默认 cancelled。
  */
-var REFUSAL_FALLBACK_DIALOG = withHideWhile({
-  kind: "refusal_fallback_prompt",
-  payload: DoctorLazy(() =>
-    u({
-      originalModel: string(),
-      fallbackModel: string(),
-      apiRefusalCategory: string().nullable().optional(),
-      guidanceText: string().optional(),
-      retractedMessageUuids: array(string())
-        .optional()
-        .describe(
-          "Wire uuids of the already-streamed messages this refusal concerns. Evict on RESOLUTION (your own response \u2014 any choice \u2014 or control_cancel_request retirement), never on receipt; a turn torn down mid-dialog keeps the partials. Eviction is idempotent.",
-        ),
-    }),
-  ),
-  result: DoctorLazy(() => _enum(["retry_fallback", "edit_prompt", "cancelled"])),
-  default: "cancelled",
+var REFUSAL_FALLBACK_DIALOG; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hwmsct5x.js:196883", () => {
+  REFUSAL_FALLBACK_DIALOG = withHideWhile({
+    kind: "refusal_fallback_prompt",
+    payload: DoctorLazy(() =>
+      objectSchema({
+        originalModel: stringSchema(),
+        fallbackModel: stringSchema(),
+        apiRefusalCategory: stringSchema().nullable().optional(),
+        guidanceText: stringSchema().optional(),
+        retractedMessageUuids: array(stringSchema())
+          .optional()
+          .describe(
+            "Wire uuids of the already-streamed messages this refusal concerns. Evict on RESOLUTION (your own response \u2014 any choice \u2014 or control_cancel_request retirement), never on receipt; a turn torn down mid-dialog keeps the partials. Eviction is idempotent.",
+          ),
+      }),
+    ),
+    result: DoctorLazy(() => _enum(["retry_fallback", "edit_prompt", "cancelled"])),
+    default: "cancelled",
+  });
 });
 //@ chunk-hwmsct5x.js:227224-227281 placement
 /**

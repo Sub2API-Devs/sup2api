@@ -39,8 +39,8 @@ function decodeJwtPayload(token) {
  * token 的 aud 是否是 claude-gateway。
  */
 function isGatewayToken(token) {
-  let n = token ? decodeJwtPayload(token) : null;
-  let aud = n !== null && typeof n === "object" && "aud" in n ? n.aud : undefined;
+  let payload = token ? decodeJwtPayload(token) : null;
+  let aud = payload !== null && typeof payload === "object" && "aud" in payload ? payload.aud : undefined;
   return aud === "claude-gateway" || (Array.isArray(aud) && aud.includes("claude-gateway"));
 }
 //@ chunk-aepeg2w5.js:276141-276276 layout
@@ -111,37 +111,37 @@ function createTokenRefreshScheduler({
     if (existing) clearTimeout(existing);
     let gen = nextGeneration(sessionId);
     let expiryDate = new Date(expiry * 1000).toISOString();
-    let xe = expiry * 1000 - Date.now();
-    let Ie = adaptiveBuffer
-      ? Math.min(refreshBufferMs, Math.max(1000, Math.floor(xe * 0.2)))
+    let remainingMs = expiry * 1000 - Date.now();
+    let bufferMs = adaptiveBuffer
+      ? Math.min(refreshBufferMs, Math.max(1000, Math.floor(remainingMs * 0.2)))
       : refreshBufferMs;
-    let De = xe - Ie;
-    if (De <= 0)
+    let delayMs = remainingMs - bufferMs;
+    if (delayMs <= 0)
       logForDebugging(
         `[${label}:token] Token for sessionId=${sessionId} expires=${expiryDate} (past or within buffer), refreshing immediately`,
       );
     else {
-      let Ue = adaptiveBuffer ? Math.round(Ie / 1000) : refreshBufferMs / 1000;
+      let bufferSeconds = adaptiveBuffer ? Math.round(bufferMs / 1000) : refreshBufferMs / 1000;
       logForDebugging(
-        `[${label}:token] Scheduled token refresh for sessionId=${sessionId} in ${formatDelay(De)} (expires=${expiryDate}, buffer=${Ue}s)`,
+        `[${label}:token] Scheduled token refresh for sessionId=${sessionId} in ${formatDelay(delayMs)} (expires=${expiryDate}, buffer=${bufferSeconds}s)`,
       );
     }
-    scheduleAt(sessionId, Date.now() + De, gen);
+    scheduleAt(sessionId, Date.now() + delayMs, gen);
   }
   let MAX_TIMER_CHUNK_MS = 60000;
-  function scheduleAt(sessionId, Z, ce) {
+  function scheduleAt(sessionId, dueAt, gen) {
     failureCounts.delete(sessionId);
-    function fe() {
-      if (generations.get(sessionId) !== ce) return;
-      let Ae = Z - Date.now();
-      if (Ae <= 0) {
-        doRefresh(sessionId, ce);
+    function tick() {
+      if (generations.get(sessionId) !== gen) return;
+      let remainingMs = dueAt - Date.now();
+      if (remainingMs <= 0) {
+        doRefresh(sessionId, gen);
         return;
       }
-      let timer = setTimeout(fe, Math.min(Ae, MAX_TIMER_CHUNK_MS));
+      let timer = setTimeout(tick, Math.min(remainingMs, MAX_TIMER_CHUNK_MS));
       timers.set(sessionId, timer);
     }
-    fe();
+    tick();
   }
   function scheduleFromExpiresIn(sessionId, expiresInSeconds) {
     let existing = timers.get(sessionId);
@@ -156,9 +156,9 @@ function createTokenRefreshScheduler({
   function refreshNow(sessionId) {
     let timer = timers.get(sessionId);
     if (timer) clearTimeout(timer);
-    let ce = nextGeneration(sessionId);
+    let gen = nextGeneration(sessionId);
     logForDebugging(`[${label}:token] Immediate token refresh requested for sessionId=${sessionId}`);
-    doRefresh(sessionId, ce);
+    doRefresh(sessionId, gen);
   }
   async function doRefresh(sessionId, gen) {
     let oauthToken;

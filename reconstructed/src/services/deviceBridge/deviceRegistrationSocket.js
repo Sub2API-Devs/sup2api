@@ -37,7 +37,14 @@ import { getWebSocketTLSOptions } from "../../utils/mtls.js";
 import { isBareWssUrl } from "../mcp/ccrMcpUrls.js";
 import { wasLauncherHostLoginToken } from "../../utils/auth/launcherHostLogin.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, literal, union, string, E, QD } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  literal,
+  union,
+  stringSchema,
+  numberSchema,
+  undefinedSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   REMOTE_TOOLS,
   MCP_PASSTHROUGH,
@@ -76,6 +83,7 @@ import { NOT_HELD_LEASE } from "../remoteTools/lease.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
 import { count } from "../../utils/collections.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ksxq075c.js:1585-9343 placement
 /**
@@ -103,13 +111,13 @@ class DeviceRegistrationSession {
   reannounce = {
     phase: "idle",
   };
-  constructor(e) {
-    this.transport = e.transport;
-    this.announced = e.announced;
-    this.onEvent = e.onEvent;
-    this.onTransportEvent = e.onTransportEvent;
-    this.now = e.now ?? Date.now;
-    this.random = e.random ?? Math.random;
+  constructor(options) {
+    this.transport = options.transport;
+    this.announced = options.announced;
+    this.onEvent = options.onEvent;
+    this.onTransportEvent = options.onTransportEvent;
+    this.now = options.now ?? Date.now;
+    this.random = options.random ?? Math.random;
     this.transport.onevent = this.handleTransportEvent;
   }
   start() {
@@ -124,15 +132,15 @@ class DeviceRegistrationSession {
     this.cancelReannounce();
     await this.transport.close();
   }
-  requestReannounce(e) {
+  requestReannounce(reason) {
     if (!this.started || this.stopping) return;
-    let n = REANNOUNCE_DELAYS_MS[e];
+    let delayMs = REANNOUNCE_DELAYS_MS[reason];
     switch (this.reannounce.phase) {
       case "draining":
       case "rotating":
         return;
       case "coalescing":
-        if (this.reannounce.fireAt <= this.now() + n) return;
+        if (this.reannounce.fireAt <= this.now() + delayMs) return;
         clearTimeout(this.reannounce.timer);
         break;
       case "idle":
@@ -140,9 +148,9 @@ class DeviceRegistrationSession {
     }
     this.reannounce = {
       phase: "coalescing",
-      reason: e,
-      fireAt: this.now() + n,
-      timer: setTimeout(this.beginReannounce, n),
+      reason,
+      fireAt: this.now() + delayMs,
+      timer: setTimeout(this.beginReannounce, delayMs),
     };
   }
   getReconnectAttempts() {
@@ -154,30 +162,30 @@ class DeviceRegistrationSession {
   getConsecutivePongTimeouts() {
     return this.consecutivePongTimeouts;
   }
-  handleTransportEvent = (e) => {
-    switch ((this.notifyTransportListener(e), e.kind)) {
+  handleTransportEvent = (event) => {
+    switch ((this.notifyTransportListener(event), event.kind)) {
       case "authenticated":
-        this.handleAuthenticated(e.protocolVersion, e.timings);
+        this.handleAuthenticated(event.protocolVersion, event.timings);
         return;
       case "hb_ack":
         this.handleAck();
         return;
       case "rejected": {
-        let n = this.endRotation();
-        let i = n !== undefined && e.reason === "duplicate_device_id";
-        if (i)
+        let rotationReason = this.endRotation();
+        let contended = rotationReason !== undefined && event.reason === "duplicate_device_id";
+        if (contended)
           this.emit({
             kind: "reannounce_contended",
-            reason: n,
+            reason: rotationReason,
           });
-        else if (e.slotContention) this.lastFailureWasContention = true;
+        else if (event.slotContention) this.lastFailureWasContention = true;
         this.cancelDrain();
         this.clearConnectionTimers();
-        this.scheduleReconnect(i);
+        this.scheduleReconnect(contended);
         return;
       }
       case "closed":
-        if (e.superseded) this.lastFailureWasContention = true;
+        if (event.superseded) this.lastFailureWasContention = true;
         this.endRotation();
         this.cancelDrain();
         this.clearConnectionTimers();
@@ -215,9 +223,9 @@ class DeviceRegistrationSession {
       this.scheduleReconnect();
     }
   }
-  handleAuthenticated(e, n) {
+  handleAuthenticated(protocolVersion, timings) {
     if (this.stopping) return;
-    this.timers = describeDeviceError(n);
+    this.timers = describeDeviceError(timings);
     this.lastAckAt = this.now();
     this.clearKeepaliveTimer();
     if (this.endRotation() === undefined || this.stableTimer === undefined) {
@@ -225,11 +233,11 @@ class DeviceRegistrationSession {
       this.stableTimer = setTimeout(this.markStable, DEVICE_STABLE_QUALIFY_MS);
     }
     if (this.announced.hasUnservedChange()) this.requestReannounce("connected_stale");
-    if (e < 1) {
+    if (protocolVersion < 1) {
       this.consecutivePongTimeouts = 0;
       this.emit({
         kind: "heartbeat_unsupported",
-        protocolVersion: e,
+        protocolVersion,
       });
       return;
     }
@@ -271,22 +279,22 @@ class DeviceRegistrationSession {
       kind: "stabilized",
     });
   };
-  scheduleReconnect(e = false) {
+  scheduleReconnect(fastRetry = false) {
     if (this.stopping || !this.started || this.reconnectTimer !== undefined) return;
-    let n = this.nextDelayMs(e);
+    let delayMs = this.nextDelayMs(fastRetry);
     if (this.stopping) return;
-    this.reconnectTimer = setTimeout(this.reconnect, n);
+    this.reconnectTimer = setTimeout(this.reconnect, delayMs);
     this.emit({
       kind: "reconnect_scheduled",
-      delayMs: n,
+      delayMs,
       attempt: this.reconnectAttempts,
       slotContention: this.consecutiveSlotContention > 0,
     });
   }
-  nextDelayMs(e) {
+  nextDelayMs(contention) {
     let lastFailureWasContention = this.lastFailureWasContention;
     this.lastFailureWasContention = false;
-    if (e) return computeReconnectDelayMs(0, 1, this.timers.slotContentionFastAttempts, this.random);
+    if (contention) return computeReconnectDelayMs(0, 1, this.timers.slotContentionFastAttempts, this.random);
     if (lastFailureWasContention) {
       this.consecutiveSlotContention++;
       if (
@@ -340,53 +348,53 @@ class DeviceRegistrationSession {
     };
     if (this.stopping) return;
     let inFlightAtStart = this.announced.inFlightCalls();
-    let i = this.reannounceSkipOutcome();
-    if (i !== undefined) {
+    let skipOutcome = this.reannounceSkipOutcome();
+    if (skipOutcome !== undefined) {
       this.emit({
         kind: "reannounce",
         reason,
-        outcome: i,
+        outcome: skipOutcome,
         inFlightAtStart,
         drainedMs: 0,
         drainTimedOut: false,
       });
       return;
     }
-    let r = {
+    let drainState = {
       phase: "draining",
       reason,
       startedAt: this.now(),
       inFlightAtStart,
       timer: setTimeout(this.handleDrainTimeout, this.timers.rotateDrainMaxMs),
     };
-    this.reannounce = r;
+    this.reannounce = drainState;
     this.announced.whenIdle().then(
-      () => this.rotate(r, false),
-      () => this.rotate(r, false),
+      () => this.rotate(drainState, false),
+      () => this.rotate(drainState, false),
     );
   };
   handleDrainTimeout = () => {
     if (this.reannounce.phase === "draining") this.rotate(this.reannounce, true);
   };
-  rotate(e, drainTimedOut) {
-    if (this.reannounce !== e) return;
-    clearTimeout(e.timer);
+  rotate(drainState, drainTimedOut) {
+    if (this.reannounce !== drainState) return;
+    clearTimeout(drainState.timer);
     this.reannounce = {
       phase: "idle",
     };
     if (this.stopping) return;
-    let i = this.reannounceSkipOutcome() ?? "rotated";
-    if (i === "rotated")
+    let outcome = this.reannounceSkipOutcome() ?? "rotated";
+    if (outcome === "rotated")
       this.reannounce = {
         phase: "rotating",
-        reason: e.reason,
+        reason: drainState.reason,
       };
     this.emit({
       kind: "reannounce",
-      reason: e.reason,
-      outcome: i,
-      inFlightAtStart: e.inFlightAtStart,
-      drainedMs: this.now() - e.startedAt,
+      reason: drainState.reason,
+      outcome,
+      inFlightAtStart: drainState.inFlightAtStart,
+      drainedMs: this.now() - drainState.startedAt,
       drainTimedOut,
     });
     if (this.reannounce.phase !== "rotating" || this.stopping) return;
@@ -437,16 +445,16 @@ class DeviceRegistrationSession {
       phase: "idle",
     };
   }
-  emit(e) {
+  emit(event) {
     try {
-      this.onEvent?.(e);
+      this.onEvent?.(event);
     } catch (error) {
       logForDebugging(`[deviceBridge] liveness event listener threw: ${toError(error).message}`);
     }
   }
-  notifyTransportListener(e) {
+  notifyTransportListener(event) {
     try {
-      this.onTransportEvent?.(e);
+      this.onTransportEvent?.(event);
     } catch (error) {
       logForDebugging(`[deviceBridge] transport event listener threw: ${toError(error).message}`);
     }
@@ -478,36 +486,39 @@ class DeviceRegistrationSession {
  * 设备工具注册表（按组设置、去重）
  */
 function createDeviceToolRegistry() {
-  let e = new Map();
+  let groupsByName = new Map();
   let signal = createSignal();
-  let i = dedupeToolsByName(e);
-  let r;
+  let current = dedupeToolsByName(groupsByName);
+  let servedHash;
   return {
-    get: (s) => i.byName.get(s),
-    setGroup(s, d, S = "tools_changed") {
-      e.set(s, [...d]);
-      let b = dedupeToolsByName(e);
-      let O = i;
-      i = b;
-      if (b.dropped.length > 0 && jsonStringify(b.dropped) !== jsonStringify(O.dropped))
+    get: (name) => current.byName.get(name),
+    setGroup(group, tools, reason = "tools_changed") {
+      groupsByName.set(group, [...tools]);
+      let next = dedupeToolsByName(groupsByName);
+      let previous = current;
+      current = next;
+      if (next.dropped.length > 0 && jsonStringify(next.dropped) !== jsonStringify(previous.dropped))
         logForDebugging(
-          `[deviceBridge] duplicate device tool names not announced: ${jsonStringify(b.dropped)}`,
+          `[deviceBridge] duplicate device tool names not announced: ${jsonStringify(next.dropped)}`,
         );
-      if (b.hash === O.hash) return;
+      if (next.hash === previous.hash) return;
       try {
-        signal.emit(S);
+        signal.emit(reason);
       } catch (error) {
-        for (let k of error instanceof AggregateError ? error.errors : [error]) logError(k);
+        for (let reportedError of error instanceof AggregateError ? error.errors : [error])
+          logError(reportedError);
       }
     },
-    definitions: () => i.definitions,
-    definitionsOf: (s) =>
-      (e.get(s) ?? []).flatMap((d) => (i.byName.get(d.definition.name) === d ? [d.definition] : [])),
+    definitions: () => current.definitions,
+    definitionsOf: (group) =>
+      (groupsByName.get(group) ?? []).flatMap((entry) =>
+        current.byName.get(entry.definition.name) === entry ? [entry.definition] : [],
+      ),
     serve() {
-      r = i.hash;
-      return i.definitions;
+      servedHash = current.hash;
+      return current.definitions;
     },
-    hasUnservedChange: () => r !== i.hash,
+    hasUnservedChange: () => servedHash !== current.hash,
     subscribe: signal.subscribe,
   };
 }
@@ -515,12 +526,12 @@ function createDeviceToolRegistry() {
 /**
  * 按名字去重工具并记录丢弃
  */
-function dedupeToolsByName(e) {
-  let { byName, dropped } = [...e.values()].flat().reduce(
-    (acc, d) => {
-      let S = d.definition.name;
-      if (acc.byName.has(S)) acc.dropped.push(S);
-      else acc.byName.set(S, d);
+function dedupeToolsByName(toolGroups) {
+  let { byName, dropped } = [...toolGroups.values()].flat().reduce(
+    (acc, tool) => {
+      let name = tool.definition.name;
+      if (acc.byName.has(name)) acc.dropped.push(name);
+      else acc.byName.set(name, tool);
       return acc;
     },
     {
@@ -528,7 +539,7 @@ function dedupeToolsByName(e) {
       dropped: [],
     },
   );
-  let mapped = [...byName.values()].map((s) => s.definition);
+  let mapped = [...byName.values()].map((entry) => entry.definition);
   return {
     byName,
     definitions: mapped,
@@ -540,20 +551,28 @@ function dedupeToolsByName(e) {
 /**
  * 设备桥接 RPC 的常量：状态值、JSON-RPC 内部错误码、令牌截止符号、合成初始化 id、最大消息大小。
  */
-var RPC_STATE_IDLE = 0;
-var WS_OPEN = 1;
-var JSONRPC_INTERNAL_ERROR = -32603;
-var TOKEN_DEADLINE_SYMBOL = Symbol("device-bridge-token-deadline");
-var SYNTHETIC_INIT_ID = "__synthetic_init__";
-var MAX_BRIDGE_MESSAGE_BYTES = 33554432;
+var RPC_STATE_IDLE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var WS_OPEN;
+var JSONRPC_INTERNAL_ERROR;
+var TOKEN_DEADLINE_SYMBOL;
+var SYNTHETIC_INIT_ID;
+var MAX_BRIDGE_MESSAGE_BYTES;
+deferInit("chunk-ksxq075c.js:10251", () => {
+  RPC_STATE_IDLE = 0;
+  WS_OPEN = 1;
+  JSONRPC_INTERNAL_ERROR = -32603;
+  TOKEN_DEADLINE_SYMBOL = Symbol("device-bridge-token-deadline");
+  SYNTHETIC_INIT_ID = "__synthetic_init__";
+  MAX_BRIDGE_MESSAGE_BYTES = 33554432;
+});
 //@ chunk-ksxq075c.js:10351-10473 placement
-function openBridgeWebSocket(e) {
-  let n = new globalThis.WebSocket(e, {
-    proxy: getWebSocketProxyUrl(e),
+function openBridgeWebSocket(url) {
+  let socket = new globalThis.WebSocket(url, {
+    proxy: getWebSocketProxyUrl(url),
     tls: getWebSocketTLSOptions(undefined) || undefined,
   });
-  n.binaryType = "arraybuffer";
-  return n;
+  socket.binaryType = "arraybuffer";
+  return socket;
 }
 //@ chunk-ksxq075c.js:10473-16507 placement
 /**
@@ -589,31 +608,31 @@ class DeviceBridgeTransport {
     });
     this.onclose?.();
   }
-  async send(e) {
-    if (isSyntheticInitResponse(e)) return;
+  async send(message) {
+    if (isSyntheticInitResponse(message)) return;
     let ws = this.ws;
     if (!ws || !this.authenticated || ws.readyState !== WS_OPEN) {
       this.emit({
         kind: "outbound_dropped",
-        messageType: getJsonRpcResponseId(e) === undefined ? "other" : "request",
+        messageType: getJsonRpcResponseId(message) === undefined ? "other" : "request",
       });
       return;
     }
     try {
-      ws.send(jsonStringify(e));
+      ws.send(jsonStringify(message));
     } catch (error) {
       logForDebugging(`[deviceBridge] outbound send failed: ${toError(error).message}`);
       this.emit({
         kind: "outbound_dropped",
-        messageType: getJsonRpcResponseId(e) === undefined ? "other" : "request",
+        messageType: getJsonRpcResponseId(message) === undefined ? "other" : "request",
       });
     }
   }
-  sendRaw(e) {
+  sendRaw(frame) {
     let ws = this.ws;
     if (!ws || ws.readyState !== WS_OPEN) return false;
     try {
-      ws.send(e);
+      ws.send(frame);
     } catch (error) {
       logForDebugging(`[deviceBridge] raw send failed: ${toError(error).message}`);
       return false;
@@ -631,20 +650,20 @@ class DeviceBridgeTransport {
   }
   async openConnection() {
     if (this.closing || this.ws) return;
-    let e = ++this.connectGeneration;
+    let generation = ++this.connectGeneration;
     let accessToken = await this.resolveAccessToken();
-    if (e !== this.connectGeneration || this.closing || this.ws !== undefined) return;
+    if (generation !== this.connectGeneration || this.closing || this.ws !== undefined) return;
     if (!accessToken) {
       this.emit({
         kind: "token_unavailable",
       });
       return;
     }
-    let i;
-    let r;
+    let url;
+    let urlAllowed;
     try {
-      i = this.options.getUrl();
-      r = (this.options.isAllowedUrl ?? isBareWssUrl)(i);
+      url = this.options.getUrl();
+      urlAllowed = (this.options.isAllowedUrl ?? isBareWssUrl)(url);
     } catch (error) {
       this.emit({
         kind: "dial_failed",
@@ -652,7 +671,7 @@ class DeviceBridgeTransport {
       });
       return;
     }
-    if (!r) {
+    if (!urlAllowed) {
       logForDebugging("[deviceBridge] refusing dial: bridge URL failed validation");
       this.emit({
         kind: "dial_failed",
@@ -660,9 +679,9 @@ class DeviceBridgeTransport {
       });
       return;
     }
-    let s;
+    let ws;
     try {
-      s = (this.options.createSocket ?? openBridgeWebSocket)(i);
+      ws = (this.options.createSocket ?? openBridgeWebSocket)(url);
     } catch (error) {
       this.emit({
         kind: "dial_failed",
@@ -670,26 +689,30 @@ class DeviceBridgeTransport {
       });
       return;
     }
-    this.ws = s;
+    this.ws = ws;
     this.pendingToken = accessToken;
     this.handshakeTimer = setTimeout(this.handleHandshakeTimeout, HANDSHAKE_TIMEOUT_MS);
-    s.addEventListener("open", this.handleOpen);
-    s.addEventListener("message", this.handleMessage);
-    s.addEventListener("close", this.handleClose);
-    s.addEventListener("error", this.handleSocketError);
+    ws.addEventListener("open", this.handleOpen);
+    ws.addEventListener("message", this.handleMessage);
+    ws.addEventListener("close", this.handleClose);
+    ws.addEventListener("error", this.handleSocketError);
     this.emit({
       kind: "connecting",
     });
-    if (this.closing || this.ws !== s) return;
-    if (s.readyState === WS_OPEN) this.handleOpen();
+    if (this.closing || this.ws !== ws) return;
+    if (ws.readyState === WS_OPEN) this.handleOpen();
   }
   async resolveAccessToken() {
-    let e;
+    let deadlineTimer;
     try {
       let winner = await Promise.race([
         Promise.resolve(this.options.getAccessToken()),
         new Promise((resolve) => {
-          e = setTimeout((r) => r(TOKEN_DEADLINE_SYMBOL), HANDSHAKE_TIMEOUT_MS, resolve);
+          deadlineTimer = setTimeout(
+            (resolve) => resolve(TOKEN_DEADLINE_SYMBOL),
+            HANDSHAKE_TIMEOUT_MS,
+            resolve,
+          );
         }),
       ]);
       if (winner === TOKEN_DEADLINE_SYMBOL) {
@@ -705,7 +728,7 @@ class DeviceBridgeTransport {
       logForDebugging(`[deviceBridge] access token resolution failed: ${toError(error).message}`);
       return;
     } finally {
-      if (e !== undefined) clearTimeout(e);
+      if (deadlineTimer !== undefined) clearTimeout(deadlineTimer);
     }
   }
   disconnect() {
@@ -728,9 +751,9 @@ class DeviceBridgeTransport {
         logForDebugging(`[deviceBridge] socket close failed: ${toError(error).message}`);
       }
   }
-  emit(e) {
+  emit(event) {
     try {
-      this.onevent?.(e);
+      this.onevent?.(event);
     } catch (error) {
       logForDebugging(`[deviceBridge] transport event listener threw: ${toError(error).message}`);
     }
@@ -772,9 +795,9 @@ class DeviceBridgeTransport {
       });
     }
   };
-  handleMessage = (e) => {
-    let n = decodeSocketFrame(e.data);
-    if (n.kind === "unsupported") {
+  handleMessage = (messageEvent) => {
+    let decoded = decodeSocketFrame(messageEvent.data);
+    if (decoded.kind === "unsupported") {
       logForDebugging("[deviceBridge] dropping unsupported inbound payload type");
       this.emit({
         kind: "inbound_invalid",
@@ -782,9 +805,9 @@ class DeviceBridgeTransport {
       });
       return;
     }
-    if (n.kind === "oversize") {
+    if (decoded.kind === "oversize") {
       logForDebugging(
-        `[deviceBridge] dropping ${n.size}-unit inbound frame (cap ${MAX_BRIDGE_MESSAGE_BYTES})`,
+        `[deviceBridge] dropping ${decoded.size}-unit inbound frame (cap ${MAX_BRIDGE_MESSAGE_BYTES})`,
       );
       this.emit({
         kind: "inbound_invalid",
@@ -792,7 +815,7 @@ class DeviceBridgeTransport {
       });
       return;
     }
-    let deviceFrame = parseDeviceFrame(n.text);
+    let deviceFrame = parseDeviceFrame(decoded.text);
     switch (deviceFrame.kind) {
       case "ignored":
         if (this.authenticated) {
@@ -842,9 +865,9 @@ class DeviceBridgeTransport {
     this.injectSyntheticInitialize();
   }
   injectSyntheticInitialize() {
-    let e;
+    let initMessage;
     try {
-      e = this.options.parseMessage(buildInitializeRequest());
+      initMessage = this.options.parseMessage(buildInitializeRequest());
     } catch (error) {
       this.emit({
         kind: "inbound_invalid",
@@ -853,7 +876,7 @@ class DeviceBridgeTransport {
       return;
     }
     try {
-      this.onmessage?.(e);
+      this.onmessage?.(initMessage);
     } catch (error) {
       this.emit({
         kind: "inbound_invalid",
@@ -861,43 +884,43 @@ class DeviceBridgeTransport {
       });
     }
   }
-  handleReject(e, status, detail) {
-    let r = !this.authenticated;
+  handleReject(reason, status, detail) {
+    let preAuth = !this.authenticated;
     this.disconnect();
     this.emit({
       kind: "rejected",
-      phase: r ? "pre_auth" : "post_auth",
-      reason: e,
+      phase: preAuth ? "pre_auth" : "post_auth",
+      reason,
       status,
       detail,
-      slotContention: r && isDeviceIdentityConflict(e),
+      slotContention: preAuth && isDeviceIdentityConflict(reason),
     });
   }
-  deliver(e) {
+  deliver(frame) {
     if (!this.authenticated) return;
-    let n;
+    let message;
     try {
-      n = this.options.parseMessage(e);
+      message = this.options.parseMessage(frame);
     } catch (error) {
       this.emit({
         kind: "inbound_invalid",
         error: toError(error),
       });
-      this.replyInternalError(e);
+      this.replyInternalError(frame);
       return;
     }
     try {
-      this.onmessage?.(n);
+      this.onmessage?.(message);
     } catch (error) {
       this.emit({
         kind: "inbound_invalid",
         error: toError(error),
       });
-      this.replyInternalError(e);
+      this.replyInternalError(frame);
     }
   }
-  replyInternalError(e) {
-    let jsonRpcResponseId = getJsonRpcResponseId(e);
+  replyInternalError(request) {
+    let jsonRpcResponseId = getJsonRpcResponseId(request);
     if (jsonRpcResponseId === undefined) return;
     this.sendRaw(
       jsonStringify({
@@ -910,10 +933,10 @@ class DeviceBridgeTransport {
       }),
     );
   }
-  handleClose = (e) => {
+  handleClose = (closeEvent) => {
     let phase = this.authenticated ? "post_auth" : "pre_auth";
-    let code = typeof e.code === "number" ? e.code : undefined;
-    let reason = typeof e.reason === "string" ? e.reason : undefined;
+    let code = typeof closeEvent.code === "number" ? closeEvent.code : undefined;
+    let reason = typeof closeEvent.reason === "string" ? closeEvent.reason : undefined;
     this.disconnect();
     this.emit({
       kind: "closed",
@@ -956,57 +979,60 @@ function isSyntheticInitResponse(r) {
   return "id" in r && r.id === SYNTHETIC_INIT_ID && ("result" in r || "error" in r);
 }
 //@ chunk-ksxq075c.js:16753-16862 placement
-var JSONRPC_RESPONSE_SCHEMA = DoctorLazy(() =>
-  u({
-    jsonrpc: literal("2.0"),
-    id: union([string(), E()]),
-    method: string(),
-    result: QD().optional(),
-    error: QD().optional(),
-  }),
-);
+var JSONRPC_RESPONSE_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ksxq075c.js:16753", () => {
+  JSONRPC_RESPONSE_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      jsonrpc: literal("2.0"),
+      id: union([stringSchema(), numberSchema()]),
+      method: stringSchema(),
+      result: undefinedSchema().optional(),
+      error: undefinedSchema().optional(),
+    }),
+  );
+});
 //@ chunk-ksxq075c.js:16862-16935 placement
 /**
  * 解析 JSON-RPC 响应里的 id（解析失败返回 undefined）。
  */
-function getJsonRpcResponseId(e) {
-  let n = JSONRPC_RESPONSE_SCHEMA().safeParse(e);
-  return n.success ? n.data.id : undefined;
+function getJsonRpcResponseId(frame) {
+  let parsed = JSONRPC_RESPONSE_SCHEMA().safeParse(frame);
+  return parsed.success ? parsed.data.id : undefined;
 }
 //@ chunk-ksxq075c.js:16935-17375 placement
 /**
  * 解码 WebSocket 帧并限制大小
  */
-function decodeSocketFrame(e) {
-  if (typeof e === "string")
-    return e.length > MAX_BRIDGE_MESSAGE_BYTES
+function decodeSocketFrame(data) {
+  if (typeof data === "string")
+    return data.length > MAX_BRIDGE_MESSAGE_BYTES
       ? {
           kind: "oversize",
-          size: e.length,
+          size: data.length,
         }
       : {
           kind: "text",
-          text: e,
+          text: data,
         };
-  if (e instanceof ArrayBuffer)
-    return e.byteLength > MAX_BRIDGE_MESSAGE_BYTES
+  if (data instanceof ArrayBuffer)
+    return data.byteLength > MAX_BRIDGE_MESSAGE_BYTES
       ? {
           kind: "oversize",
-          size: e.byteLength,
+          size: data.byteLength,
         }
       : {
           kind: "text",
-          text: Buffer.from(e).toString("utf8"),
+          text: Buffer.from(data).toString("utf8"),
         };
-  if (ArrayBuffer.isView(e))
-    return e.byteLength > MAX_BRIDGE_MESSAGE_BYTES
+  if (ArrayBuffer.isView(data))
+    return data.byteLength > MAX_BRIDGE_MESSAGE_BYTES
       ? {
           kind: "oversize",
-          size: e.byteLength,
+          size: data.byteLength,
         }
       : {
           kind: "text",
-          text: Buffer.from(e.buffer, e.byteOffset, e.byteLength).toString("utf8"),
+          text: Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString("utf8"),
         };
   return {
     kind: "unsupported",
@@ -1016,39 +1042,40 @@ function decodeSocketFrame(e) {
 /**
  * 服务组只读视图
  */
-function servingGroupView(e) {
+function servingGroupView(kit) {
   return {
-    policy: e.policy,
+    policy: kit.policy,
     get description() {
-      return e.description;
+      return kit.description;
     },
-    onRedescribed: e.onRedescribed,
-    heldServedCall: e.heldServedCall,
-    ensureSettingsHeld: e.ensureSettingsHeld,
-    deps: e.deps,
+    onRedescribed: kit.onRedescribed,
+    heldServedCall: kit.heldServedCall,
+    ensureSettingsHeld: kit.ensureSettingsHeld,
+    deps: kit.deps,
   };
 }
 //@ chunk-ksxq075c.js:17568-17913 placement
 /**
  * 原生与透传工具定义视图
  */
-function deviceToolDefinitions(e) {
-  let n = () => jsonStringify([e.definitionsOf(REMOTE_TOOLS), e.definitionsOf(MCP_PASSTHROUGH)]);
+function deviceToolDefinitions(registry) {
+  let hashOfGroups = () =>
+    jsonStringify([registry.definitionsOf(REMOTE_TOOLS), registry.definitionsOf(MCP_PASSTHROUGH)]);
   return {
-    native: () => e.definitionsOf(REMOTE_TOOLS).flatMap(toNativeToolAnnouncement),
-    passthrough: () => e.definitionsOf(MCP_PASSTHROUGH).flatMap(toPassthroughToolAnnouncement),
-    localNameFor: (i) =>
-      e
+    native: () => registry.definitionsOf(REMOTE_TOOLS).flatMap(toNativeToolAnnouncement),
+    passthrough: () => registry.definitionsOf(MCP_PASSTHROUGH).flatMap(toPassthroughToolAnnouncement),
+    localNameFor: (remoteName) =>
+      registry
         .definitionsOf(MCP_PASSTHROUGH)
-        .filter((r) => r.name === i)
+        .filter((definition) => definition.name === remoteName)
         .flatMap(toPassthroughToolAnnouncement)[0]?.local_name,
-    subscribe: (i) => {
-      let r = n();
-      return e.subscribe((s) => {
-        let d = n();
-        if (d !== r) {
-          r = d;
-          i(s);
+    subscribe: (listener) => {
+      let lastHash = hashOfGroups();
+      return registry.subscribe((reason) => {
+        let hash = hashOfGroups();
+        if (hash !== lastHash) {
+          lastHash = hash;
+          listener(reason);
         }
       });
     },
@@ -1058,17 +1085,17 @@ function deviceToolDefinitions(e) {
 /**
  * 原生设备工具的公告
  */
-function toNativeToolAnnouncement(e) {
-  let registration = parseRegistration(e._meta?.[ANTHROPIC_REMOTETOOLEXECUTION]);
+function toNativeToolAnnouncement(tool) {
+  let registration = parseRegistration(tool._meta?.[ANTHROPIC_REMOTETOOLEXECUTION]);
   return registration === undefined
     ? []
     : [
         {
-          name: e.name,
+          name: tool.name,
           refused_input_fields: registration.refused_input_fields,
           protocol_versions: registration.protocol_versions ?? [REMOTE_TOOL_PROTOCOL_VERSION],
-          description: e.description,
-          input_schema: e.inputSchema,
+          description: tool.description,
+          input_schema: tool.inputSchema,
         },
       ];
 }
@@ -1076,22 +1103,22 @@ function toNativeToolAnnouncement(e) {
 /**
  * 透传工具的公告
  */
-function toPassthroughToolAnnouncement(e) {
-  let passthroughMarker = parsePassthroughMarker(e._meta?.[PASSTHROUGH_MARKER_KEY]);
+function toPassthroughToolAnnouncement(tool) {
+  let passthroughMarker = parsePassthroughMarker(tool._meta?.[PASSTHROUGH_MARKER_KEY]);
   if (passthroughMarker === undefined) return [];
-  let i = pickToolAnnotations(e.annotations ?? {});
-  let r = toolHintsFromMeta(e._meta ?? {});
+  let annotations = pickToolAnnotations(tool.annotations ?? {});
+  let hints = toolHintsFromMeta(tool._meta ?? {});
   return [
     {
-      name: e.name,
+      name: tool.name,
       local_name: passthroughMarker.tool,
-      description: e.description,
-      input_schema: e.inputSchema,
-      ...(i !== undefined && {
-        annotations: i,
+      description: tool.description,
+      input_schema: tool.inputSchema,
+      ...(annotations !== undefined && {
+        annotations,
       }),
-      ...(r !== undefined && {
-        hints: r,
+      ...(hints !== undefined && {
+        hints,
       }),
     },
   ];
@@ -1101,7 +1128,7 @@ function toPassthroughToolAnnouncement(e) {
  * 挑出工具注解字段
  */
 function pickToolAnnotations({ title, readOnlyHint, destructiveHint, openWorldHint }) {
-  let s = {
+  let picked = {
     ...(title !== undefined && {
       title,
     }),
@@ -1115,32 +1142,32 @@ function pickToolAnnotations({ title, readOnlyHint, destructiveHint, openWorldHi
       openWorldHint,
     }),
   };
-  return Object.keys(s).length > 0 ? s : undefined;
+  return Object.keys(picked).length > 0 ? picked : undefined;
 }
 //@ chunk-ksxq075c.js:18635-18955 placement
 /**
  * 从 _meta 取工具提示
  */
-function toolHintsFromMeta(e) {
-  let n = e[TOOL_META_KEYS.searchHint];
-  let i = e[TOOL_META_KEYS.alwaysLoad];
-  let r = e[TOOL_META_KEYS.maxResultSizeChars];
-  let s = e[TOOL_META_KEYS.requiresUserInteraction];
-  let d = {
-    ...(typeof n === "string" && {
-      search_hint: n,
+function toolHintsFromMeta(meta) {
+  let searchHint = meta[TOOL_META_KEYS.searchHint];
+  let alwaysLoad = meta[TOOL_META_KEYS.alwaysLoad];
+  let maxResultSizeChars = meta[TOOL_META_KEYS.maxResultSizeChars];
+  let requiresUserInteraction = meta[TOOL_META_KEYS.requiresUserInteraction];
+  let hints = {
+    ...(typeof searchHint === "string" && {
+      search_hint: searchHint,
     }),
-    ...(i === true && {
+    ...(alwaysLoad === true && {
       always_load: true,
     }),
-    ...(typeof r === "number" && {
-      max_result_size_chars: r,
+    ...(typeof maxResultSizeChars === "number" && {
+      max_result_size_chars: maxResultSizeChars,
     }),
-    ...(s === true && {
+    ...(requiresUserInteraction === true && {
       requires_user_interaction: true,
     }),
   };
-  return Object.keys(d).length > 0 ? d : undefined;
+  return Object.keys(hints).length > 0 ? hints : undefined;
 }
 //@ chunk-ksxq075c.js:18955-20076 placement
 /**
@@ -1178,34 +1205,35 @@ var buildInfo =
 /**
  * 生成设备名：主机名加会话 id 后缀。
  */
-function deviceNameForSession(e, sessionId) {
-  let i = deviceSlugOrFallback(e);
-  let r = slugifyName(sessionIdBody(sessionId).slice(-SESSION_SLUG_CHARS), SESSION_SLUG_CHARS);
-  return r ? `${i}-cc-${r}` : i;
+function deviceNameForSession(device, sessionId) {
+  let deviceSlug = deviceSlugOrFallback(device);
+  let sessionSlug = slugifyName(sessionIdBody(sessionId).slice(-SESSION_SLUG_CHARS), SESSION_SLUG_CHARS);
+  return sessionSlug ? `${deviceSlug}-cc-${sessionSlug}` : deviceSlug;
 }
 //@ chunk-ksxq075c.js:20159-20283 placement
-function getDeviceBridgePath(e, orgUuid, accountUuid, r) {
-  return `${e}/devices/${encodeURIComponent(orgUuid)}_${encodeURIComponent(accountUuid)}/${encodeURIComponent(r)}/bridge`;
+function getDeviceBridgePath(baseUrl, orgUuid, accountUuid, deviceKey) {
+  return `${baseUrl}/devices/${encodeURIComponent(orgUuid)}_${encodeURIComponent(accountUuid)}/${encodeURIComponent(deviceKey)}/bridge`;
 }
 //@ chunk-ksxq075c.js:20283-20539 placement
 /**
  * WebSocket 地址是否与 API 同源
  */
-function isSameOriginWsUrl(e, n) {
-  let i;
-  let r;
+function isSameOriginWsUrl(urlA, urlB) {
+  let parsedA;
+  let parsedB;
   try {
-    i = new URL(e);
-    r = new URL(n);
+    parsedA = new URL(urlA);
+    parsedB = new URL(urlB);
   } catch {
     return false;
   }
-  let s = i.hostname === "localhost" || i.hostname === "127.0.0.1" || i.hostname === "[::1]";
+  let isLoopback =
+    parsedA.hostname === "localhost" || parsedA.hostname === "127.0.0.1" || parsedA.hostname === "[::1]";
   return (
-    i.origin === r.origin &&
-    i.username === "" &&
-    i.password === "" &&
-    (i.protocol === "wss:" || (i.protocol === "ws:" && s))
+    parsedA.origin === parsedB.origin &&
+    parsedA.username === "" &&
+    parsedA.password === "" &&
+    (parsedA.protocol === "wss:" || (parsedA.protocol === "ws:" && isLoopback))
   );
 }
 //@ chunk-ksxq075c.js:20539-20717 placement
@@ -1227,290 +1255,295 @@ function getDeviceBridgeUrl() {
 /**
  * 启动设备注册：通过 WebSocket 设备桥公告本机工具、心跳与重连。
  */
-function startDeviceRegistration(e) {
-  let n = e.transport ?? (isSessionChannelDisabled() ? "bridge" : "auto");
-  let i = false;
-  let r;
-  let s;
-  let d;
-  let S;
-  let b = false;
-  let O = false;
-  let f = false;
-  let k = new Set();
-  let I = false;
-  let R;
-  let D;
-  let w = {
+function startDeviceRegistration(options) {
+  let transportKind = options.transport ?? (isSessionChannelDisabled() ? "bridge" : "auto");
+  let stopped = false;
+  let unregisterExit;
+  let unsubscribeGates;
+  let runGroupCleanups;
+  let servingDisposer;
+  let readinessDone = false;
+  let bridgeStarted = false;
+  let outcomeLogged = false;
+  let loggedTransportEvents = new Set();
+  let loggedReconnectExhausted = false;
+  let bridge;
+  let registry;
+  let servingKitRef = {
     current: undefined,
   };
-  let C;
-  let B = (h) => (S ??= V(h));
-  let V = async (h) => {
-    i = true;
-    s?.();
-    s = undefined;
-    if (b) await P.catch(() => false);
-    r?.();
-    r = undefined;
-    d?.();
-    d = undefined;
-    w.current?.kit.dispose();
-    let v = C?.dispose();
-    C = undefined;
-    await U(h);
-    await v;
+  let execution;
+  let stopRegistration = (reason) => (servingDisposer ??= tearDown(reason));
+  let tearDown = async (reason) => {
+    stopped = true;
+    unsubscribeGates?.();
+    unsubscribeGates = undefined;
+    if (readinessDone) await startPromise.catch(() => false);
+    unregisterExit?.();
+    unregisterExit = undefined;
+    runGroupCleanups?.();
+    runGroupCleanups = undefined;
+    servingKitRef.current?.kit.dispose();
+    let executionDispose = execution?.dispose();
+    execution = undefined;
+    await stopBridge(reason);
+    await executionDispose;
   };
-  let U = async (h) => {
-    let v = R;
-    if (v === undefined) return;
-    R = undefined;
-    await v.stop();
-    if (O)
+  let stopBridge = async (reason) => {
+    let currentBridge = bridge;
+    if (currentBridge === undefined) return;
+    bridge = undefined;
+    await currentBridge.stop();
+    if (bridgeStarted)
       logEvent("tengu_device_bridge_stopped", {
-        reason: fromEnum(h),
+        reason: fromEnum(reason),
       });
   };
-  let q = async () => {
-    let h = e.readiness ?? (await import("./chunk-60g26dt5.js")).createServingReadiness();
+  let startUp = async () => {
+    let readiness =
+      options.readiness ??
+      (await import("../../remote/tools/serve/servingReadiness.js")).createServingReadiness();
     let startTime = performance.now();
-    await h.whenReady();
+    await readiness.whenReady();
     let readinessWaitMs = Math.round(performance.now() - startTime);
-    let { cloudClient } = e;
-    let Q = await (
-      e.isEnabled ??
+    let { cloudClient } = options;
+    let enabled = await (
+      options.isEnabled ??
       (() =>
         isToolServingEnabled({
           cloudClient,
         }))
     )();
-    b = true;
-    if (!Q) return false;
-    let isEgressAllowed = e.isEgressAllowed ?? isDeviceBindingAllowed;
+    readinessDone = true;
+    if (!enabled) return false;
+    let isEgressAllowed = options.isEgressAllowed ?? isDeviceBindingAllowed;
     if (!isEgressAllowed()) {
       logForDebugging(
         "[deviceBridge] skipped: non-essential egress disabled, non-first-party provider, or remote sessions policy-denied",
       );
       return false;
     }
-    if (i) return false;
-    if (n === "bridge" && (e.isBridgeRefused ?? isTrustedDeviceRequiredOrUnknown)()) {
+    if (stopped) return false;
+    if (transportKind === "bridge" && (options.isBridgeRefused ?? isTrustedDeviceRequiredOrUnknown)()) {
       logForDebugging(
         "[deviceBridge] skipped: the bridge cannot check a device proof and trusted devices are required or unknown",
       );
-      f = true;
+      outcomeLogged = true;
       logFeatureBad("device_bridge_register", "trusted_devices_required_or_unknown");
-      e.onNotice?.(
+      options.onNotice?.(
         SERVED_BRIDGE_TRUSTED_DEVICES,
         REMOTE_TOOLS_CONSENT_TEXT["serving_off.bridge_trusted_devices"],
       );
       return false;
     }
-    let M = await (e.getAccount ?? resolveCurrentDeviceBinding)();
-    let orgUuid = e.orgUuid;
-    if (!orgUuid || M.status !== "resolved") {
+    let binding = await (options.getAccount ?? resolveCurrentDeviceBinding)();
+    let orgUuid = options.orgUuid;
+    if (!orgUuid || binding.status !== "resolved") {
       logEvent("tengu_device_bridge_skipped", {
         missing_org: orgUuid === undefined,
-        missing_account: M.status === "missing",
-        account_mismatch: M.status === "mismatch",
+        missing_account: binding.status === "missing",
+        account_mismatch: binding.status === "mismatch",
       });
-      logForDebugging(`[deviceBridge] skipped: ${orgUuid ? `account ${M.status}` : "no org"}`);
+      logForDebugging(`[deviceBridge] skipped: ${orgUuid ? `account ${binding.status}` : "no org"}`);
       return false;
     }
-    let { accountUuid } = M;
+    let { accountUuid } = binding;
     let limiter = createConcurrencyLimiter(DEFAULT_MAX_IN_FLIGHT);
-    D = createDeviceToolRegistry();
-    D.setGroup(CORE, []);
+    registry = createDeviceToolRegistry();
+    registry.setGroup(CORE, []);
     await primeWindowsProfileDirs();
-    if (i) return false;
-    let W = remoteToolServingOffReason(undefined, {
+    if (stopped) return false;
+    let offReason = remoteToolServingOffReason(undefined, {
       ignoringMute: true,
     });
-    if (W === undefined) {
+    if (offReason === undefined) {
       await primeWindowsPlatform();
-      if (i) return false;
+      if (stopped) return false;
     }
-    let te =
-      W === undefined && isViolinRibEnabled()
-        ? await import("./chunk-3f6fc86f.js")
-            .then((y) => y.gatherHostInventory(getOriginalCwd()))
+    let hostInventory =
+      offReason === undefined && isViolinRibEnabled()
+        ? await import("../../remote/tools/serve/hostInventory.js")
+            .then((inventoryModule) => inventoryModule.gatherHostInventory(getOriginalCwd()))
             .catch((error) => {
               logError(toError(error));
               return;
             })
         : undefined;
-    if (i) return false;
-    let nn = undefined;
-    let tn = undefined;
-    let be = e.toolGroupProviders ?? (await loadServingGroupProviders(W));
-    if (i) return false;
-    let X = [];
-    d = runCleanups(be, {
-      registry: D,
-      holdStartUntil: (y) => X.push(y),
-      sessionId: e.sessionId,
+    if (stopped) return false;
+    let deviceMcpQuestion = undefined;
+    let deviceMcpAnswer = undefined;
+    let groupProviders = options.toolGroupProviders ?? (await loadServingGroupProviders(offReason));
+    if (stopped) return false;
+    let holdReads = [];
+    runGroupCleanups = runCleanups(groupProviders, {
+      registry,
+      holdStartUntil: (holdRead) => holdReads.push(holdRead),
+      sessionId: options.sessionId,
       serving: {
-        offReason: W,
+        offReason,
       },
       getDeviceId:
-        e.getDeviceId ??
+        options.getDeviceId ??
         (() => {
           return;
         }),
       limiter,
-      storageV5: e.storageV5,
-      servedSettingsChanged: e.servedSettingsChanged,
-      ...(e.deviceMcpQuestion && {
-        deviceMcpQuestion: e.deviceMcpQuestion,
+      storageV5: options.storageV5,
+      servedSettingsChanged: options.servedSettingsChanged,
+      ...(options.deviceMcpQuestion && {
+        deviceMcpQuestion: options.deviceMcpQuestion,
       }),
-      servingKit: w,
-      transport: n,
-      readiness: h,
-      ...(te !== undefined && {
-        hostInventory: te,
+      servingKit: servingKitRef,
+      transport: transportKind,
+      readiness,
+      ...(hostInventory !== undefined && {
+        hostInventory,
       }),
-      ...(C !== undefined && {
-        execution: C.execution,
+      ...(execution !== undefined && {
+        execution: execution.execution,
       }),
       sandboxRequiredNow: remoteToolVmRequired,
-      ...(e.dirSync !== undefined && {
-        dirSync: e.dirSync,
+      ...(options.dirSync !== undefined && {
+        dirSync: options.dirSync,
       }),
-      ...(e.folderRelation !== undefined && {
-        folderRelation: e.folderRelation,
+      ...(options.folderRelation !== undefined && {
+        folderRelation: options.folderRelation,
       }),
       onNotice:
-        e.onNotice ??
-        ((y, De) => {
-          logForDebugging(`[remote-tools] ${y}: ${De}`);
+        options.onNotice ??
+        ((noticeId, noticeText) => {
+          logForDebugging(`[remote-tools] ${noticeId}: ${noticeText}`);
         }),
     });
-    logForDebugging(`[deviceBridge] start-up held on ${X.length} reads of its tool groups`);
+    logForDebugging(`[deviceBridge] start-up held on ${holdReads.length} reads of its tool groups`);
     let startTime_2 = performance.now();
-    await Promise.allSettled(X);
+    await Promise.allSettled(holdReads);
     let rounded = Math.round(performance.now() - startTime_2);
     logForDebugging(`[deviceBridge] start-up released after ${rounded} ms`);
-    if (i) return false;
-    let registry = D;
-    if (n === "bridge") {
-      R = await openDeviceBridge({
-        options: e,
+    if (stopped) return false;
+    let registry_2 = registry;
+    if (transportKind === "bridge") {
+      bridge = await openDeviceBridge({
+        options,
         orgUuid,
         accountUuid,
-        registry,
+        registry: registry_2,
         isEgressAllowed,
-        isStopped: () => i,
+        isStopped: () => stopped,
         onLivenessEvent,
         onTransportEvent,
       });
-      if (R === undefined || i) {
-        await R?.stop();
-        R = undefined;
+      if (bridge === undefined || stopped) {
+        await bridge?.stop();
+        bridge = undefined;
         return false;
       }
     }
-    let re = () => {
-      if (!isEgressAllowed()) B("egress_denied");
+    let checkEgress = () => {
+      if (!isEgressAllowed()) stopRegistration("egress_denied");
     };
-    let ke =
-      e.isStillEnabled ??
+    let stillEnabled =
+      options.isStillEnabled ??
       (() =>
         getToolServingFlagAnsweredOff({
           cloudClient,
         }) === undefined);
-    let oe = () => {
-      if (!ke()) {
+    let checkEnabled = () => {
+      if (!stillEnabled()) {
         logForDebugging("[deviceBridge] stopping: the gate turned off");
-        B("gate_off");
+        stopRegistration("gate_off");
       }
     };
-    let Re = (e.onEgressGateChange ?? onComplianceTaintsChanged)(re);
-    let Ee = (e.onEnabledChange ?? onGrowthBookRefresh)(oe);
-    s = () => {
-      Re();
-      Ee();
+    let unsubscribeEgress = (options.onEgressGateChange ?? onComplianceTaintsChanged)(checkEgress);
+    let unsubscribeEnabled = (options.onEnabledChange ?? onGrowthBookRefresh)(checkEnabled);
+    unsubscribeGates = () => {
+      unsubscribeEgress();
+      unsubscribeEnabled();
     };
-    re();
-    oe();
-    if (i) return false;
-    O = true;
+    checkEgress();
+    checkEnabled();
+    if (stopped) return false;
+    bridgeStarted = true;
     logEvent("tengu_device_bridge_started", {
-      account_source: fromEnum(M.source),
-      transport: fromEnum(n),
+      account_source: fromEnum(binding.source),
+      transport: fromEnum(transportKind),
       redial: false,
       readiness_wait_ms: readinessWaitMs,
       held_ms: rounded,
     });
-    if (n === "auto" && !f) {
-      f = true;
+    if (transportKind === "auto" && !outcomeLogged) {
+      outcomeLogged = true;
       logFeatureOk("device_bridge_register");
     }
-    R?.start();
+    bridge?.start();
     return true;
   };
-  let onTransportEvent = (h) => {
-    if (h.kind === "authenticated") {
-      k.clear();
-      I = false;
-      if (!f) {
-        f = true;
+  let onTransportEvent = (event) => {
+    if (event.kind === "authenticated") {
+      loggedTransportEvents.clear();
+      loggedReconnectExhausted = false;
+      if (!outcomeLogged) {
+        outcomeLogged = true;
         logFeatureOk("device_bridge_register");
       }
-      logTransportEvent(h);
+      logTransportEvent(event);
       return;
     }
-    let v = describeTransportEvent(h);
-    if (v === undefined) return;
-    if (k.has(v)) return;
-    k.add(v);
-    logTransportEvent(h);
+    let eventKey = describeTransportEvent(event);
+    if (eventKey === undefined) return;
+    if (loggedTransportEvents.has(eventKey)) return;
+    loggedTransportEvents.add(eventKey);
+    logTransportEvent(event);
   };
-  let onLivenessEvent = (h) => {
-    if (h.kind === "reconnect_exhausted") {
-      if (!f) {
-        f = true;
+  let onLivenessEvent = (event) => {
+    if (event.kind === "reconnect_exhausted") {
+      if (!outcomeLogged) {
+        outcomeLogged = true;
         logFeatureBad("device_bridge_register", "reconnect_exhausted");
       }
-      if (I) return;
-      I = true;
+      if (loggedReconnectExhausted) return;
+      loggedReconnectExhausted = true;
     }
-    logLivenessEvent(h);
+    logLivenessEvent(event);
   };
-  r = (e.registerExitCleanup ?? registerCleanup)(() => B("exit"));
-  let P = q().catch((error) => {
+  unregisterExit = (options.registerExitCleanup ?? registerCleanup)(() => stopRegistration("exit"));
+  let startPromise = startUp().catch((error) => {
     logForDebugging(`[deviceBridge] registration failed: ${toError(error).message}`);
     logEvent("tengu_device_bridge_start_failed", {});
-    if (!f) {
-      f = true;
+    if (!outcomeLogged) {
+      outcomeLogged = true;
       logFeatureBad("device_bridge_register", "start_failed");
     }
     return false;
   });
-  let serving = P.then((h) =>
-    h && D !== undefined && w.current !== undefined
+  let serving = startPromise.then((started) =>
+    started && registry !== undefined && servingKitRef.current !== undefined
       ? {
-          kit: servingGroupView(w.current.kit),
-          source: deviceToolDefinitions(D),
+          kit: servingGroupView(servingKitRef.current.kit),
+          source: deviceToolDefinitions(registry),
         }
       : undefined,
   );
-  P.then((h) => {
-    if (!h && !i) {
-      r?.();
-      r = undefined;
-      d?.();
-      d = undefined;
-      w.current?.kit.dispose();
-      C?.dispose();
-      C = undefined;
+  startPromise.then((started) => {
+    if (!started && !stopped) {
+      unregisterExit?.();
+      unregisterExit = undefined;
+      runGroupCleanups?.();
+      runGroupCleanups = undefined;
+      servingKitRef.current?.kit.dispose();
+      execution?.dispose();
+      execution = undefined;
     }
   });
   return {
-    started: P,
+    started: startPromise,
     announceSettled: () => {},
     serving,
-    stop: () => B("attach_ended"),
-    heldServedCall: (h) => (i || w.current === undefined ? NOT_HELD_LEASE : w.current.kit.heldServedCall(h)),
+    stop: () => stopRegistration("attach_ended"),
+    heldServedCall: (call) =>
+      stopped || servingKitRef.current === undefined
+        ? NOT_HELD_LEASE
+        : servingKitRef.current.kit.heldServedCall(call),
   };
 }
 //@ chunk-ksxq075c.js:24949-26363 placement
@@ -1527,37 +1560,38 @@ async function openDeviceBridge({
   onLivenessEvent,
   onTransportEvent,
 }) {
-  let O = deviceNameForSession((options.getHostname ?? hostname)(), options.sessionId);
-  let f = options.getBridgeBaseUrl !== undefined || antEnv.CLAUDE_REMOTE_TOOLS_BRIDGE_URL !== undefined;
-  let k = (options.getBridgeBaseUrl ?? getDeviceBridgeUrl)();
-  if (k === undefined) {
+  let deviceName = deviceNameForSession((options.getHostname ?? hostname)(), options.sessionId);
+  let adminBridgeUrl =
+    options.getBridgeBaseUrl !== undefined || antEnv.CLAUDE_REMOTE_TOOLS_BRIDGE_URL !== undefined;
+  let bridgeBaseUrl = (options.getBridgeBaseUrl ?? getDeviceBridgeUrl)();
+  if (bridgeBaseUrl === undefined) {
     logForDebugging("[deviceBridge] skipped: no device bridge for this OAuth environment");
     return;
   }
-  let deviceBridgePath = getDeviceBridgePath(k, orgUuid, accountUuid, O);
+  let deviceBridgePath = getDeviceBridgePath(bridgeBaseUrl, orgUuid, accountUuid, deviceName);
   let { createDeviceMcpServer, deviceInfoProbeTool, parseJsonRpcMessage } =
-    await import("./chunk-zethn0a3.js");
+    await import("../../bridge/createDeviceMcpServer.lazy.js");
   if (isStopped()) return;
-  let C = {
-    getDeviceName: () => O,
+  let deviceInfo = {
+    getDeviceName: () => deviceName,
     version: buildInfo,
   };
-  let B = deviceInfoProbeTool(C);
-  let V = deviceInfoProbeTool({
-    ...C,
+  let probeTool = deviceInfoProbeTool(deviceInfo);
+  let idleProbeTool = deviceInfoProbeTool({
+    ...deviceInfo,
     idle: true,
   });
-  let U = (A) => {
-    let all = registry.definitions().every((L) => L.name === B.definition.name);
-    registry.setGroup(CORE, [all ? V : B], A);
+  let syncCoreGroup = (reason) => {
+    let all = registry.definitions().every((definition) => definition.name === probeTool.definition.name);
+    registry.setGroup(CORE, [all ? idleProbeTool : probeTool], reason);
   };
-  U();
-  let q = registry.subscribe(U);
-  let x = () => {
-    q();
+  syncCoreGroup();
+  let unsubscribeCore = registry.subscribe(syncCoreGroup);
+  let resetCoreGroup = () => {
+    unsubscribeCore();
     registry.setGroup(CORE, []);
   };
-  let G = new DeviceBridgeTransport({
+  let transport = new DeviceBridgeTransport({
     getUrl: () => deviceBridgePath,
     getAccessToken: () => options.getAccessToken(),
     getTools: () => announcedToolsForConnect(registry),
@@ -1565,7 +1599,8 @@ async function openDeviceBridge({
     getSessionId: () => toInfraSessionId(options.sessionId),
     parseMessage: parseJsonRpcMessage,
     createSocket: options.createSocket,
-    isAllowedUrl: (A) => isEgressAllowed() && (isBareWssUrl(A) || (f && isSameOriginWsUrl(A, k))),
+    isAllowedUrl: (url) =>
+      isEgressAllowed() && (isBareWssUrl(url) || (adminBridgeUrl && isSameOriginWsUrl(url, bridgeBaseUrl))),
   });
   let { server, inFlightCalls, whenIdle } = createDeviceMcpServer({
     registry,
@@ -1573,18 +1608,18 @@ async function openDeviceBridge({
     sessionId: options.sessionId,
   });
   try {
-    await server.connect(G);
+    await server.connect(transport);
   } catch (error) {
-    x();
+    resetCoreGroup();
     throw error;
   }
   if (isStopped()) {
-    x();
+    resetCoreGroup();
     await server.close();
     return;
   }
-  let v = new DeviceRegistrationSession({
-    transport: G,
+  let session = new DeviceRegistrationSession({
+    transport,
     announced: {
       hasUnservedChange: registry.hasUnservedChange,
       inFlightCalls,
@@ -1593,15 +1628,15 @@ async function openDeviceBridge({
     onEvent: onLivenessEvent,
     onTransportEvent,
   });
-  let J = registry.subscribe((A) => v.requestReannounce(A));
-  let j;
+  let unsubscribeRegistry = registry.subscribe((reason) => session.requestReannounce(reason));
+  let stopping;
   return {
-    start: () => v.start(),
+    start: () => session.start(),
     stop: () =>
-      (j ??= (async () => {
-        J();
-        x();
-        await Promise.allSettled([v.stop(), server.close()]);
+      (stopping ??= (async () => {
+        unsubscribeRegistry();
+        resetCoreGroup();
+        await Promise.allSettled([session.stop(), server.close()]);
       })()),
   };
 }
@@ -1609,17 +1644,17 @@ async function openDeviceBridge({
 /**
  * 传输事件转键
  */
-function describeTransportEvent(e) {
-  switch (e.kind) {
+function describeTransportEvent(event) {
+  switch (event.kind) {
     case "rejected":
-      return `rejected:${e.phase}:${e.reason ?? ""}:${e.status ?? ""}`;
+      return `rejected:${event.phase}:${event.reason ?? ""}:${event.status ?? ""}`;
     case "closed":
-      return `closed:${e.phase}:${e.code ?? ""}:${e.superseded}`;
+      return `closed:${event.phase}:${event.code ?? ""}:${event.superseded}`;
     case "token_unavailable":
     case "handshake_timeout":
     case "socket_error":
     case "dial_failed":
-      return e.kind;
+      return event.kind;
     default:
       return;
   }
@@ -1628,36 +1663,36 @@ function describeTransportEvent(e) {
 /**
  * 记录设备桥传输事件遥测
  */
-function logTransportEvent(e) {
-  switch (e.kind) {
+function logTransportEvent(event) {
+  switch (event.kind) {
     case "authenticated":
       logEvent("tengu_device_bridge_connected", {
-        protocol_version: e.protocolVersion,
-        hb_interval_ms: e.timings.hbIntervalMs,
-        staleness_ms: e.timings.stalenessMs,
-        rpc_timeout_ms: e.timings.rpcTimeoutMs,
+        protocol_version: event.protocolVersion,
+        hb_interval_ms: event.timings.hbIntervalMs,
+        staleness_ms: event.timings.stalenessMs,
+        rpc_timeout_ms: event.timings.rpcTimeoutMs,
       });
       return;
     case "rejected":
       logEvent("tengu_device_bridge_rejected", {
-        phase: fromEnum(e.phase),
-        reason: fromEnumOpt(e.reason),
-        status: fromNumberOpt(e.status),
-        slot_contention: e.slotContention,
+        phase: fromEnum(event.phase),
+        reason: fromEnumOpt(event.reason),
+        status: fromNumberOpt(event.status),
+        slot_contention: event.slotContention,
       });
       return;
     case "closed":
       logEvent("tengu_device_bridge_closed", {
-        phase: fromEnum(e.phase),
-        code: fromNumberOpt(e.code),
-        superseded: e.superseded,
+        phase: fromEnum(event.phase),
+        code: fromNumberOpt(event.code),
+        superseded: event.superseded,
       });
       return;
     case "token_unavailable":
     case "handshake_timeout":
     case "socket_error":
       logEvent("tengu_device_bridge_connect_failed", {
-        cause: fromEnum(e.kind),
+        cause: fromEnum(event.kind),
       });
       return;
     case "dial_failed":
@@ -1673,11 +1708,11 @@ function logTransportEvent(e) {
 /**
  * 记录设备桥存活事件遥测
  */
-function logLivenessEvent(e) {
-  switch (e.kind) {
+function logLivenessEvent(event) {
+  switch (event.kind) {
     case "pong_timeout":
       logEvent("tengu_device_bridge_pong_timeout", {
-        consecutive: e.consecutive,
+        consecutive: event.consecutive,
       });
       return;
     case "reconnect_exhausted":
@@ -1685,21 +1720,21 @@ function logLivenessEvent(e) {
       return;
     case "heartbeat_unsupported":
       logEvent("tengu_device_bridge_heartbeat_unsupported", {
-        protocol_version: fromNumber(e.protocolVersion),
+        protocol_version: fromNumber(event.protocolVersion),
       });
       return;
     case "reannounce":
       logEvent("tengu_device_bridge_reannounce", {
-        reason: fromEnum(e.reason),
-        outcome: fromEnum(e.outcome),
-        inflight_at_start: e.inFlightAtStart,
-        drained_ms: e.drainedMs,
-        drain_timed_out: e.drainTimedOut,
+        reason: fromEnum(event.reason),
+        outcome: fromEnum(event.outcome),
+        inflight_at_start: event.inFlightAtStart,
+        drained_ms: event.drainedMs,
+        drain_timed_out: event.drainTimedOut,
       });
       return;
     case "reannounce_contended":
       logEvent("tengu_device_bridge_reannounce_contended", {
-        reason: fromEnum(e.reason),
+        reason: fromEnum(event.reason),
       });
       return;
     default:
@@ -1710,12 +1745,19 @@ function logLivenessEvent(e) {
 /**
  * 加载远程工具与透传服务组
  */
-async function loadServingGroupProviders(e) {
-  if (e === undefined || isPersonFixableOffReason(e))
+async function loadServingGroupProviders(offReason) {
+  if (offReason === undefined || isPersonFixableOffReason(offReason))
     try {
-      let [{ remoteToolServingGroupProvider: n }, { passthroughServingGroupProvider: i }, r] =
-        await Promise.all([import("./chunk-wa3cc7ae.js"), import("./chunk-xqfbbyzk.js"), undefined]);
-      return e === undefined ? [n(), i(), ...[]] : [n()];
+      let [
+        { remoteToolServingGroupProvider: remoteProvider },
+        { passthroughServingGroupProvider: passthroughProvider },
+        thirdProvider,
+      ] = await Promise.all([
+        import("../../remote/tools/serve/createServingKit.js"),
+        import("../deviceMcp/passthroughServingGroup.js"),
+        undefined,
+      ]);
+      return offReason === undefined ? [remoteProvider(), passthroughProvider(), ...[]] : [remoteProvider()];
     } catch (error) {
       logError(toError(error));
     }
@@ -1725,20 +1767,20 @@ async function loadServingGroupProviders(e) {
 /**
  * 依次执行并收集清理函数
  */
-function runCleanups(e, n) {
-  let flattened = e.flatMap((r) => {
+function runCleanups(cleanups, context) {
+  let flattened = cleanups.flatMap((cleanup) => {
     try {
-      let s = r(n);
-      return s ? [s] : [];
+      let cleanupFn = cleanup(context);
+      return cleanupFn ? [cleanupFn] : [];
     } catch (error) {
       logError(toError(error));
       return [];
     }
   });
   return () =>
-    flattened.forEach((r) => {
+    flattened.forEach((cleanupFn) => {
       try {
-        r();
+        cleanupFn();
       } catch (error) {
         logError(toError(error));
       }
@@ -1749,19 +1791,19 @@ function runCleanups(e, n) {
  * 连接帧公告的工具
  */
 function announcedToolsForConnect(registry) {
-  let n = registry.hasUnservedChange();
-  let i = registry.serve();
-  if (!n) return i;
-  let mapped = i.map((s) => s.name);
+  let hasUnserved = registry.hasUnservedChange();
+  let definitions = registry.serve();
+  if (!hasUnserved) return definitions;
+  let mapped = definitions.map((definition) => definition.name);
   logForDebugging(
-    `[deviceBridge] connect frame announces ${i.length} tools: ${mapped.slice(0, 12).join(", ")}${mapped.length > 12 ? ", \u2026" : ""}`,
+    `[deviceBridge] connect frame announces ${definitions.length} tools: ${mapped.slice(0, 12).join(", ")}${mapped.length > 12 ? ", \u2026" : ""}`,
   );
   logEvent("tengu_device_bridge_connect_frame", {
-    tool_count: i.length,
+    tool_count: definitions.length,
     serves_bash: mapped.includes(BASH_TOOL_NAME),
     serves_powershell: mapped.includes(POWERSHELL_TOOL_NAME),
-    mcp_tool_count: count(mapped, (s) => s.includes("__")),
+    mcp_tool_count: count(mapped, (toolName) => toolName.includes("__")),
   });
-  return i;
+  return definitions;
 }
 export { startDeviceRegistration };

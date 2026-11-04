@@ -9,14 +9,18 @@
  * attribution: callgraph-fingerprint 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, record, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, record, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-4pc1m5n9.js:4092-4155 callgraph-fingerprint = RemoteManagedSettingsResponseSchema (0.502)
-var RemoteManagedSettingsResponseSchema = DoctorLazy(() =>
-  u({
-    uuid: string(),
-    checksum: string(),
-    settings: record(string(), unknown()),
-  }),
-);
+var RemoteManagedSettingsResponseSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4pc1m5n9.js:4092", () => {
+  RemoteManagedSettingsResponseSchema = DoctorLazy(() =>
+    objectSchema({
+      uuid: stringSchema(),
+      checksum: stringSchema(),
+      settings: record(stringSchema(), unknown()),
+    }),
+  );
+});
 export { RemoteManagedSettingsResponseSchema };

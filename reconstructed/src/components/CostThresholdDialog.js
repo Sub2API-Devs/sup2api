@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (2)
  * attribution: affinity 1, fingerprint 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import {
   jsxProd_default_2,
@@ -22,7 +22,7 @@ import { Dialog } from "./design-system/Dialog.js";
 var HTTPS_CODE_CLAUDE_COM_DOCS_EN_COSTS = "https://code.claude.com/docs/en/costs";
 //@ chunk-18hwfzwa.js:1127663-1128195 fingerprint = CostThresholdDialog (0.635)
 function CostThresholdDialog(props) {
-  let $ = w(7);
+  let $ = useMemoCache(7);
   let { onDone } = props;
   let t1;
   if ($[0] === MEMO_CACHE_SENTINEL) {

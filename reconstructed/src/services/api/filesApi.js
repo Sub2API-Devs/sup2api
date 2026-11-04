@@ -50,19 +50,19 @@ function getDefaultApiBaseUrl() {
 /**
  * 仅第一方；校验端点与登录方式；HIPAA 组织禁用上传。
  */
-function assertFilesApiAvailable(baseUrl, n) {
-  let r = baseUrl || getDefaultApiBaseUrl();
+function assertFilesApiAvailable(baseUrl, config) {
+  let base = baseUrl || getDefaultApiBaseUrl();
   if (getAPIProvider() !== "firstParty")
     throw Error("Files API is unavailable on third-party providers (data-residency)");
-  assertProviderAllowed("firstParty", r, "files");
+  assertProviderAllowed("firstParty", base, "files");
   if (
-    (isClaudeAISubscriber() && isStoredLoginRefused(r, false, true)) ||
-    (n?.isStoredLogin &&
-      isStoredLoginRefused(r, true, true) &&
+    (isClaudeAISubscriber() && isStoredLoginRefused(base, false, true)) ||
+    (config?.isStoredLogin &&
+      isStoredLoginRefused(base, true, true) &&
       (!isClaudeAIOAuthTokenHostInjected() ||
         isOauthTokenFromBgSnapshot() ||
         isLoginStashedInTokenSlot() ||
-        getClaudeAIOAuthTokens()?.accessToken !== n.oauthToken))
+        getClaudeAIOAuthTokens()?.accessToken !== config.oauthToken))
   )
     throw new StoredLoginHeldBackError(storedLoginRefusalReason());
   if (hasComplianceTaint("hipaa")) throw Error("File upload is disabled by your organization's policy.");
@@ -174,7 +174,7 @@ function buildDownloadPath(basePath, sessionId, relativePath) {
   let matchedPrefix = [
     pathModule_2.join(basePath, sessionId, "uploads") + pathModule_2.sep,
     pathModule_2.sep + "uploads" + pathModule_2.sep,
-  ].find((R) => normalized.startsWith(R));
+  ].find((prefix) => normalized.startsWith(prefix));
   let cleanPath = matchedPrefix ? normalized.slice(matchedPrefix.length) : normalized;
   return pathModule_2.join(uploadsBase, cleanPath);
 }
@@ -233,7 +233,7 @@ async function downloadSessionFiles(files, config, concurrency = FILE_DOWNLOAD_C
     files.map(limitConcurrency(concurrency, (file) => downloadAndSaveFile(file, config))),
   );
   let elapsedMs = Date.now() - startTime;
-  let successCount = count(results, (w) => w.success);
+  let successCount = count(results, (result) => result.success);
   logFilesApiDebug(`Downloaded ${successCount}/${files.length} file(s) in ${elapsedMs}ms`);
   if (successCount === files.length) logFeatureOk("api_files_download");
   else if (successCount > 0) logFeatureSad("api_files_download", "partial_failed");
@@ -320,18 +320,18 @@ ${opts.expiresInSeconds}\r
   );
   let body = Buffer.concat(bodyParts);
   try {
-    return await retryWithBackoff(`Upload file ${relativePath}`, async (G) => {
+    return await retryWithBackoff(`Upload file ${relativePath}`, async (attempt) => {
       if (opts?.signal?.aborted) throw new UploadNonRetriableError("Upload canceled", "canceled");
-      let L = (q) => {
-        if (G >= FILES_API_MAX_ATTEMPTS) {
+      let retryOnFailure = (reason) => {
+        if (attempt >= FILES_API_MAX_ATTEMPTS) {
           logEvent("tengu_file_upload_failed", {
             error_type: lit("server"),
           });
-          throw new UploadNonRetriableError(`${q} after ${FILES_API_MAX_ATTEMPTS} attempts`, "server");
+          throw new UploadNonRetriableError(`${reason} after ${FILES_API_MAX_ATTEMPTS} attempts`, "server");
         }
         return {
           done: false,
-          error: q,
+          error: reason,
         };
       };
       try {
@@ -347,7 +347,7 @@ ${opts.expiresInSeconds}\r
         });
         if (response.status === 200 || response.status === 201) {
           let fileId = response.data?.id;
-          if (!fileId) return L("Upload succeeded but no file ID returned");
+          if (!fileId) return retryOnFailure("Upload succeeded but no file ID returned");
           logFilesApiDebug(`Uploaded ${relativePath} (${fileSize} bytes)`);
           return {
             done: true,
@@ -383,7 +383,7 @@ ${opts.expiresInSeconds}\r
           });
           throw new UploadNonRetriableError(`status ${response.status}`, "server");
         }
-        return L(`status ${response.status}`);
+        return retryOnFailure(`status ${response.status}`);
       } catch (error) {
         if (error instanceof UploadNonRetriableError) throw error;
         if (axios_default.isCancel(error)) throw new UploadNonRetriableError("Upload canceled", "canceled");
@@ -429,8 +429,8 @@ ${opts.expiresInSeconds}\r
 /**
  * multipart 文件名里的 " CR LF 转义。
  */
-function escapeMultipartFilename(e) {
-  return e.replace(/["\r\n]/g, (n) => (n === '"' ? "%22" : n === "\r" ? "%0D" : "%0A"));
+function escapeMultipartFilename(filename) {
+  return filename.replace(/["\r\n]/g, (ch) => (ch === '"' ? "%22" : ch === "\r" ? "%0D" : "%0A"));
 }
 //@ chunk-s61vbvea.js:492422-492529 fingerprint = UploadNonRetriableError (1)
 /**
@@ -448,23 +448,23 @@ class UploadNonRetriableError extends Error {
 /**
  * DELETE /v1/files/<id>，返回 success 或 auth/forbidden/not_found 等原因。旧版名 listFilesCreatedAfter 为错配。
  */
-async function deleteFile(e, n, r) {
-  let s = n.baseUrl || getDefaultApiBaseUrl();
-  assertFilesApiAvailable(n.baseUrl, n);
-  let h = `${s}/v1/files/${encodeURIComponent(e)}`;
+async function deleteFile(fileId, config, opts) {
+  let baseUrl = config.baseUrl || getDefaultApiBaseUrl();
+  assertFilesApiAvailable(config.baseUrl, config);
+  let url = `${baseUrl}/v1/files/${encodeURIComponent(fileId)}`;
   try {
-    let y = await axios_default.delete(h, {
-      headers: getOAuthApiHeaders(n),
-      timeout: r.timeoutMs,
+    let response = await axios_default.delete(url, {
+      headers: getOAuthApiHeaders(config),
+      timeout: opts.timeoutMs,
       validateStatus: () => true,
     });
-    if (y.status >= 200 && y.status < 300) {
-      logFilesApiDebug(`Deleted file ${e}`);
+    if (response.status >= 200 && response.status < 300) {
+      logFilesApiDebug(`Deleted file ${fileId}`);
       return {
         success: true,
       };
     }
-    switch ((logFilesApiDebug(`Delete file ${e} failed: HTTP ${y.status}`), y.status)) {
+    switch ((logFilesApiDebug(`Delete file ${fileId} failed: HTTP ${response.status}`), response.status)) {
       case 401:
         return {
           success: false,
@@ -488,7 +488,7 @@ async function deleteFile(e, n, r) {
     }
   } catch (error) {
     if (!axios_default.isAxiosError(error)) throw error;
-    logFilesApiDebug(`Delete file ${e} failed: ${error.message}`);
+    logFilesApiDebug(`Delete file ${fileId} failed: ${error.message}`);
     return {
       success: false,
       reason: "network",

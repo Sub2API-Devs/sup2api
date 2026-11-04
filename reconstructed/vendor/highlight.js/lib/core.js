@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:565279-586332 cjs-fingerprint
-var require_core = x(function (cjsExports, cjsModule) {
+var require_core = __commonJS(function (cjsExports, cjsModule) {
   function deepFreeze(obj) {
     if (obj instanceof Map)
       obj.clear =
@@ -32,7 +32,7 @@ var require_core = x(function (cjsExports, cjsModule) {
     });
     return obj;
   }
-  class Ve {
+  class MatchContext {
     constructor(mode) {
       if (mode.data === undefined) mode.data = {};
       this.data = mode.data;
@@ -509,10 +509,10 @@ var require_core = x(function (cjsExports, cjsModule) {
     let scopeNames = mode[key];
     let emit = {};
     let positions = {};
-    for (let i = 1; i <= regexes.length; i++) {
-      positions[i + offset] = scopeNames[i];
-      emit[i + offset] = true;
-      offset += countMatchGroups(regexes[i - 1]);
+    for (let patternIndex = 1; patternIndex <= regexes.length; patternIndex++) {
+      positions[patternIndex + offset] = scopeNames[patternIndex];
+      emit[patternIndex + offset] = true;
+      offset += countMatchGroups(regexes[patternIndex - 1]);
     }
     mode[key] = positions;
     mode[key]._emit = emit;
@@ -572,10 +572,13 @@ var require_core = x(function (cjsExports, cjsModule) {
     endMultiClass(mode);
   }
   function compileLanguage(language) {
-    function langRe(value, i) {
+    function langRe(value, globalObject) {
       return new RegExp(
         source(value),
-        "m" + (language.case_insensitive ? "i" : "") + (language.unicodeRegex ? "u" : "") + (i ? "g" : ""),
+        "m" +
+          (language.case_insensitive ? "i" : "") +
+          (language.unicodeRegex ? "u" : "") +
+          (globalObject ? "g" : ""),
       );
     }
     class MultiRegex {
@@ -753,7 +756,7 @@ var require_core = x(function (cjsExports, cjsModule) {
       this.html = html;
     }
   }
-  var Ke = escapeHTML;
+  var escapeHTMLExport = escapeHTML;
   var inherit = inherit$1;
   var NO_MATCH = Symbol("nomatch");
   var MAX_KEYWORD_HITS = 7;
@@ -932,7 +935,7 @@ https://github.com/highlightjs/highlight.js/issues/2277`,
         let matched = startsWith(mode.endRe, matchPlusRemainder);
         if (matched) {
           if (mode["on:end"]) {
-            let resp = new Ve(mode);
+            let resp = new MatchContext(mode);
             mode["on:end"](match, resp);
             if (resp.isMatchIgnored) matched = false;
           }
@@ -955,7 +958,7 @@ https://github.com/highlightjs/highlight.js/issues/2277`,
       function doBeginMatch(match) {
         let lexeme = match[0];
         let newMode = match.rule;
-        let resp = new Ve(newMode);
+        let resp = new MatchContext(newMode);
         let beforeCallbacks = [newMode.__beforeBegin, newMode["on:begin"]];
         for (let cb of beforeCallbacks) {
           if (!cb) continue;
@@ -1092,7 +1095,7 @@ https://github.com/highlightjs/highlight.js/issues/2277`,
         if (err.message && err.message.includes("Illegal"))
           return {
             language: languageName,
-            value: Ke(codeToHighlight),
+            value: escapeHTMLExport(codeToHighlight),
             illegal: true,
             relevance: 0,
             _illegalBy: {
@@ -1107,7 +1110,7 @@ https://github.com/highlightjs/highlight.js/issues/2277`,
         else if (SAFE_MODE)
           return {
             language: languageName,
-            value: Ke(codeToHighlight),
+            value: escapeHTMLExport(codeToHighlight),
             illegal: false,
             relevance: 0,
             errorRaised: err,
@@ -1119,7 +1122,7 @@ https://github.com/highlightjs/highlight.js/issues/2277`,
     }
     function justTextHighlightResult(code) {
       let result = {
-        value: Ke(code),
+        value: escapeHTMLExport(code),
         illegal: false,
         relevance: 0,
         _top: PLAINTEXT_LANGUAGE,

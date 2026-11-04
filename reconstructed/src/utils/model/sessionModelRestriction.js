@@ -57,39 +57,39 @@ async function recheckDeniedRunningModel(sessionModelDenyReprobe, model, rowDeny
     logForDebugging(
       "[model-access] cached deny appeared under the running model; re-asking the server before demoting",
     );
-    let y = (await sessionModelDenyReprobe.reprobe?.(model)) ?? "probe_failed";
+    let outcome = (await sessionModelDenyReprobe.reprobe?.(model)) ?? "probe_failed";
     logEvent("tengu_session_model_cached_deny_reprobe", {
-      outcome: fromEnum(y),
+      outcome: fromEnum(outcome),
     });
-    if (y === "probe_failed") logFeatureSad("model_cached_deny_reprobe", "probe_failed");
+    if (outcome === "probe_failed") logFeatureSad("model_cached_deny_reprobe", "probe_failed");
     else
       logFeatureOk("model_cached_deny_reprobe", {
-        outcome: fromEnum(y),
+        outcome: fromEnum(outcome),
       });
     if (sessionModelDenyReprobe.generation !== generation) return;
-    switch (y) {
+    switch (outcome) {
       case "probe_failed": {
-        let S = Date.now() + SESSION_MODEL_DENY_TTL_MS;
-        for (let w of rowDenyKeys) sessionModelDenyReprobe.contestedDenies.set(w, S);
+        let until = Date.now() + SESSION_MODEL_DENY_TTL_MS;
+        for (let key of rowDenyKeys) sessionModelDenyReprobe.contestedDenies.set(key, until);
         return;
       }
       case "overturned":
-        for (let S of rowDenyKeys) sessionModelDenyReprobe.contestedDenies.delete(S);
+        for (let key of rowDenyKeys) sessionModelDenyReprobe.contestedDenies.delete(key);
         return;
       case "denied_by_server":
       case "denied_by_policy": {
-        for (let w of rowDenyKeys) sessionModelDenyReprobe.contestedDenies.delete(w);
+        for (let key of rowDenyKeys) sessionModelDenyReprobe.contestedDenies.delete(key);
         sessionModelDenyReprobe.refusedModels.add(model);
-        let S = formatModelRestrictedNotice(model, describeFallbackModel());
+        let notice = formatModelRestrictedNotice(model, describeFallbackModel());
         enqueueTaskNotification({
           type: "system",
           subtype: "notification",
           key: SESSION_MODEL_RESTRICTED,
-          text: S,
+          text: notice,
           priority: "high",
           color: "warning",
         });
-        sessionModelDenyReprobe.restricted.emit(S);
+        sessionModelDenyReprobe.restricted.emit(notice);
         return;
       }
     }
@@ -97,8 +97,8 @@ async function recheckDeniedRunningModel(sessionModelDenyReprobe, model, rowDeny
     logError(error);
     logFeatureBad("model_cached_deny_reprobe", "internal_error");
     if (sessionModelDenyReprobe.generation !== generation) return;
-    let S = Date.now() + SESSION_MODEL_DENY_TTL_MS;
-    for (let w of rowDenyKeys) sessionModelDenyReprobe.contestedDenies.set(w, S);
+    let until = Date.now() + SESSION_MODEL_DENY_TTL_MS;
+    for (let key of rowDenyKeys) sessionModelDenyReprobe.contestedDenies.set(key, until);
   }
 }
 //@ chunk-aepeg2w5.js:409538-409789 placement
@@ -119,8 +119,8 @@ function resetEntitlementDenies() {
 /**
  * 订阅会话模型受限状态。
  */
-function subscribeSessionModelRestriction(e) {
-  return getProviderState().sessionModelDenyReprobe.restricted.subscribe(e);
+function subscribeSessionModelRestriction(listener) {
+  return getProviderState().sessionModelDenyReprobe.restricted.subscribe(listener);
 }
 export {
   SESSION_MODEL_RESTRICTED,

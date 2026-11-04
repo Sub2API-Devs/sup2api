@@ -22,25 +22,25 @@ import { defaultHaikuModel, isOpusFableAdvisorSetting } from "./planModeModel.js
 /**
  * 别名的内置默认模型（不看 ANTHROPIC_DEFAULT_*_MODEL）：opus→opus 档默认（catalog aliases.opus，第一方 claude-opus-5-5）、sonnet/opusplan→sonnet 档、haiku→haiku 档、fable→fable 档、best→catalog best 族（fable，可用时）否则 opus；非别名返回 null。旧版名 MODEL_ALIASES（常量）为错配。
  */
-function resolveBuiltinAlias(e) {
-  let rawModelStrings = getRawModelStrings();
-  switch (e) {
+function resolveBuiltinAlias(alias) {
+  let modelStrings = getRawModelStrings();
+  switch (alias) {
     case "opus":
-      return getDefaultOpusBuiltin(rawModelStrings);
+      return getDefaultOpusBuiltin(modelStrings);
     case "sonnet":
-      return getDefaultSonnetBuiltin(rawModelStrings);
+      return getDefaultSonnetBuiltin(modelStrings);
     case "haiku":
-      return defaultHaikuModel(rawModelStrings);
+      return defaultHaikuModel(modelStrings);
     case "fable":
-      return getDefaultFableBuiltin(rawModelStrings);
+      return getDefaultFableBuiltin(modelStrings);
     case "opusplan":
-      return getDefaultSonnetBuiltin(rawModelStrings);
+      return getDefaultSonnetBuiltin(modelStrings);
     case "best": {
-      let r = FAMILY_AVAILABILITY[getBestAvailableAlias()];
-      return r !== undefined ? r.builtinDefault(rawModelStrings) : getDefaultOpusBuiltin(rawModelStrings);
+      let family = FAMILY_AVAILABILITY[getBestAvailableAlias()];
+      return family !== undefined ? family.builtinDefault(modelStrings) : getDefaultOpusBuiltin(modelStrings);
     }
     default:
-      return isOpusFableAdvisorSetting(e) ? getDefaultOpusBuiltin(rawModelStrings) : null;
+      return isOpusFableAdvisorSetting(alias) ? getDefaultOpusBuiltin(modelStrings) : null;
   }
 }
 export { resolveBuiltinAlias };

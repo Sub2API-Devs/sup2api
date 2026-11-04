@@ -18,7 +18,12 @@ import {
 import { sleep, withDeadline } from "../../../src/utils/sleep.js";
 import { STARTUP_MARK, MAX_MARK_NAME_CHARS } from "../../../src/utils/startupMarks.js";
 import { HookConfigError } from "../../../src/schemas/hooks.js";
-import { le, SDK_MANIFEST_CAPTURE, Ft, Nt } from "./transport.js";
+import {
+  suppressControlResponse,
+  SDK_MANIFEST_CAPTURE,
+  MANIFEST_CAPTURE_TIMEOUT_MS,
+  logIgnoredMcpServerFields,
+} from "./transport.js";
 import { jsonStringify, jsonParse } from "../../../src/utils/slowOperations.js";
 import { REMOTE_TOOLS_LOG_EVENTS } from "../../../src/services/remoteTools/remoteToolsDebug.js";
 import {
@@ -29,13 +34,13 @@ import { logEvent } from "../../../src/services/analytics/index.js";
 import { fromEnum } from "../../../src/services/analytics/safeMetadata.js";
 import { isLauncherEndReason } from "../../../src/utils/auth/launcherHostLogin.js";
 import { MCP_PROTOCOL_LATEST } from "../../../src/services/mcp/mcpCallConstants.js";
-import { T_t, A_t } from "../../../src/services/mcp/client.js";
+import { EMPTY_CAPABILITIES, CLAUDE_CODE_SERVER_INFO } from "../../../src/services/mcp/client.js";
 import {
   logFeatureSad,
   logFeatureOk,
   withFeatureTelemetry,
 } from "../../../src/services/analytics/featureTelemetry.js";
-import { sr } from "./index.js";
+import { extractSessionIdFromIngressToken } from "./index.js";
 import { parseMcpServerSettings, sameToolPolicies } from "../../../src/services/mcp/serverIdentity.js";
 import { MAX_TIMER_DELAY_MS } from "../../../src/utils/timerDelayClamp.js";
 import { isToolListChangedNotification } from "../../../src/services/mcp/toolsListChanged.js";
@@ -99,20 +104,20 @@ class Query {
   setTranscriptMirrorBatcher(transcriptMirrorBatcher) {
     this.transcriptMirrorBatcher = transcriptMirrorBatcher;
   }
-  reportMirrorError(e, error) {
-    let r = {
+  reportMirrorError(batcher, error) {
+    let event = {
       type: "system",
       subtype: "mirror_error",
       error,
-      key: e,
+      key: batcher,
       uuid: randomUUID(),
-      session_id: e.sessionId,
+      session_id: batcher.sessionId,
     };
-    this.inputStream.enqueue(r);
+    this.inputStream.enqueue(event);
   }
-  addCleanupCallback(e) {
-    if (this.cleanupPerformed) e();
-    else this.cleanupCallbacks.push(e);
+  addCleanupCallback(callback) {
+    if (this.cleanupPerformed) callback();
+    else this.cleanupCallbacks.push(callback);
   }
   isClosed() {
     return this.cleanupPerformed;
@@ -138,7 +143,7 @@ class Query {
     canUseTool,
     hooks,
     abortController,
-    m = new Map(),
+    sdkMcpServers = new Map(),
     jsonSchema,
     initConfig,
     onElicitation,
@@ -161,7 +166,7 @@ class Query {
     this.onUserDialog = onUserDialog;
     this.verbatimPrompts = verbatimPrompts;
     this.runEndCeilingMs = runEndCeilingMs;
-    for (let [E, P] of m) this.connectSdkMcpServer(E, P);
+    for (let [serverName, serverConfig] of sdkMcpServers) this.connectSdkMcpServer(serverName, serverConfig);
     this.sdkMessages = this.readSdkMessages();
     this.readMessages();
     this.initializeWritten = new Promise((resolve) => {
@@ -175,15 +180,15 @@ class Query {
     });
     this.initialization.catch(() => {});
   }
-  setError(e) {
-    this.inputStream.error(e);
+  setError(error) {
+    this.inputStream.error(error);
   }
   setFrameObserver(frameObserver) {
     this.frameObserver = frameObserver;
   }
-  dropUnreadHookProgress(e) {
+  dropUnreadHookProgress(observer) {
     this.inputStream.dropNewestQueued(
-      (s) => s.type === "system" && s.subtype === "hook_progress" && s.hook_id === e,
+      (frame) => frame.type === "system" && frame.subtype === "hook_progress" && frame.hook_id === observer,
     );
   }
   async stopTask(taskId) {
@@ -205,16 +210,16 @@ class Query {
   close() {
     this.cleanup();
   }
-  cleanup(e) {
+  cleanup(cause) {
     this.clearRunEndCeiling();
     if (this.cleanupPromise) return this.cleanupPromise;
     this.cleanupPerformed = true;
-    this.cleanupCause = e;
+    this.cleanupCause = cause;
     this.stopSdkMcpManifestCapture?.();
-    this.cleanupPromise = this.performCleanup(e);
+    this.cleanupPromise = this.performCleanup(cause);
     return this.cleanupPromise;
   }
-  async performCleanup(e) {
+  async performCleanup(cause) {
     for (let cleanupCallback of this.cleanupCallbacks)
       try {
         cleanupCallback();
@@ -234,16 +239,16 @@ class Query {
       });
     }
     try {
-      let s = e ?? st();
-      for (let { reject } of this.pendingControlResponses.values()) reject(s);
+      let err = cause ?? closedBeforeResponseError();
+      for (let { reject } of this.pendingControlResponses.values()) reject(err);
       this.pendingControlResponses.clear();
       this.unmatchedControlResponses.clear();
-      for (let { reject } of this.pendingMcpResponses.values()) reject(s);
+      for (let { reject } of this.pendingMcpResponses.values()) reject(err);
       this.pendingMcpResponses.clear();
       this.hookCallbacks.clear();
       for (let { transport } of this.sdkMcpServers.values()) transport.close().catch(() => {});
       this.sdkMcpServers.clear();
-      if (e) this.inputStream.error(e);
+      if (cause) this.inputStream.error(cause);
       else this.inputStream.done();
     } catch (error) {}
     if (this.transport.waitForExit) {
@@ -256,16 +261,16 @@ class Query {
       }
     }
   }
-  next(...[e]) {
-    return this.sdkMessages.next(...[e]);
+  next(...[value]) {
+    return this.sdkMessages.next(...[value]);
   }
-  async return(e) {
+  async return(value) {
     await this.cleanup();
-    return this.sdkMessages.return(e);
+    return this.sdkMessages.return(value);
   }
-  async throw(e) {
+  async throw(error) {
     await this.cleanup();
-    return this.sdkMessages.throw(e);
+    return this.sdkMessages.throw(error);
   }
   [Symbol.asyncIterator]() {
     return this.sdkMessages;
@@ -275,74 +280,76 @@ class Query {
   }
   async readMessages() {
     try {
-      for await (let e of this.transport.readMessages()) {
-        if (e.type === "control_response") {
-          let s = this.pendingControlResponses.get(e.response.request_id);
-          if (s) s.handler(e.response);
+      for await (let frame of this.transport.readMessages()) {
+        if (frame.type === "control_response") {
+          let pending = this.pendingControlResponses.get(frame.response.request_id);
+          if (pending) pending.handler(frame.response);
           else {
             if (this.unmatchedControlResponses.size >= Query.UNMATCHED_CONTROL_RESPONSES_MAX) {
-              let r = this.unmatchedControlResponses.keys().next().value;
-              if (r !== undefined) this.unmatchedControlResponses.delete(r);
+              let oldestRequestId = this.unmatchedControlResponses.keys().next().value;
+              if (oldestRequestId !== undefined) this.unmatchedControlResponses.delete(oldestRequestId);
             }
-            this.unmatchedControlResponses.set(e.response.request_id, e.response);
+            this.unmatchedControlResponses.set(frame.response.request_id, frame.response);
           }
           continue;
-        } else if (e.type === "control_request") {
-          this.handleControlRequest(e);
+        } else if (frame.type === "control_request") {
+          this.handleControlRequest(frame);
           continue;
-        } else if (e.type === "control_cancel_request") {
-          this.handleControlCancelRequest(e);
+        } else if (frame.type === "control_cancel_request") {
+          this.handleControlCancelRequest(frame);
           continue;
-        } else if (e.type === "keep_alive") {
-          if (STARTUP_MARK in e) {
-            let s = e[STARTUP_MARK];
-            if (typeof s === "string" && s.length <= MAX_MARK_NAME_CHARS)
+        } else if (frame.type === "keep_alive") {
+          if (STARTUP_MARK in frame) {
+            let mark = frame[STARTUP_MARK];
+            if (typeof mark === "string" && mark.length <= MAX_MARK_NAME_CHARS)
               this.startupMark = {
-                mark: s,
+                mark,
                 atMs: Date.now(),
               };
           }
           continue;
-        } else if (e.type === "transcript_mirror") {
-          this.transcriptMirrorBatcher?.enqueue(e.filePath, e.entries);
+        } else if (frame.type === "transcript_mirror") {
+          this.transcriptMirrorBatcher?.enqueue(frame.filePath, frame.entries);
           continue;
         }
-        if (e.type === "system" && e.subtype === "commands_changed" && Array.isArray(e.commands))
-          this.latestCommands = e.commands;
+        if (frame.type === "system" && frame.subtype === "commands_changed" && Array.isArray(frame.commands))
+          this.latestCommands = frame.commands;
         if (
-          e.type === "system" &&
-          (e.subtype === "post_turn_summary" ||
-            e.subtype === "task_summary" ||
-            e.subtype === "session_metadata")
+          frame.type === "system" &&
+          (frame.subtype === "post_turn_summary" ||
+            frame.subtype === "task_summary" ||
+            frame.subtype === "session_metadata")
         ) {
-          this.inputStream.enqueue(e);
+          this.inputStream.enqueue(frame);
           continue;
         }
-        if (e.type === "active_goal") {
-          this.inputStream.enqueue(e);
+        if (frame.type === "active_goal") {
+          this.inputStream.enqueue(frame);
           continue;
         }
-        if (e.type === "autocompact_state") {
-          this.inputStream.enqueue(e);
+        if (frame.type === "autocompact_state") {
+          this.inputStream.enqueue(frame);
           continue;
         }
-        if (e.type === "result") {
+        if (frame.type === "result") {
           if (this.transcriptMirrorBatcher) await this.transcriptMirrorBatcher.flush();
-          let s = e.is_error
-            ? e.subtype === "success"
-              ? e.result
-              : e.errors
+          let errorText = frame.is_error
+            ? frame.subtype === "success"
+              ? frame.result
+              : frame.errors
                   .map((error) => error.trim())
                   .filter(Boolean)
                   .join("; ")
             : undefined;
-          this.lastErrorResultText = s || undefined;
+          this.lastErrorResultText = errorText || undefined;
           this.lastStartupFailureReason =
-            e.is_error && "startup_failure_reason" in e && typeof e.startup_failure_reason === "string"
-              ? e.startup_failure_reason
+            frame.is_error &&
+            "startup_failure_reason" in frame &&
+            typeof frame.startup_failure_reason === "string"
+              ? frame.startup_failure_reason
               : undefined;
           this.modelLessTurnEnded =
-            e.subtype === "success" && !e.is_error && e.num_turns === 0 && e.result === "";
+            frame.subtype === "success" && !frame.is_error && frame.num_turns === 0 && frame.result === "";
           if (!this.modelLessTurnEnded) this.errorTextBeforeModelLessTurns = this.lastErrorResultText;
           this.resultReceived = true;
           if (
@@ -352,27 +359,27 @@ class Query {
           )
             this.endRun();
           else this.armRunEndCeiling();
-        } else if (e.type === "system" && e.subtype === "session_state_changed") {
-          this.sessionState = e.state;
-          if (e.state === "idle") {
+        } else if (frame.type === "system" && frame.subtype === "session_state_changed") {
+          this.sessionState = frame.state;
+          if (frame.state === "idle") {
             if (this.resultReceived) this.endRun();
           } else if (!(this.isSingleUserTurn && this.runEnded)) {
             this.runEnded = false;
-            if (e.state === "requires_action") this.clearRunEndCeiling();
+            if (frame.state === "requires_action") this.clearRunEndCeiling();
             else if (this.resultReceived) this.armRunEndCeiling();
           }
-          if ("sdk_host_only" in e && e.sdk_host_only === true) continue;
+          if ("sdk_host_only" in frame && frame.sdk_host_only === true) continue;
         } else {
           this.lastErrorResultText = undefined;
           this.lastStartupFailureReason = undefined;
-          if (e.type === "system" && e.subtype === "init") this.modelLessTurnEnded = false;
-          else if (e.type !== "system" || e.subtype === "compact_boundary") {
+          if (frame.type === "system" && frame.subtype === "init") this.modelLessTurnEnded = false;
+          else if (frame.type !== "system" || frame.subtype === "compact_boundary") {
             this.errorTextBeforeModelLessTurns = undefined;
             this.modelLessTurnEnded = false;
           }
           if (
-            (e.type === "assistant" || e.type === "stream_event") &&
-            e.parent_tool_use_id === null &&
+            (frame.type === "assistant" || frame.type === "stream_event") &&
+            frame.parent_tool_use_id === null &&
             !(this.isSingleUserTurn && this.runEnded)
           ) {
             this.runEnded = false;
@@ -380,24 +387,24 @@ class Query {
           }
         }
         try {
-          this.frameObserver?.(e);
+          this.frameObserver?.(frame);
         } catch (error) {
           logForDebugging(`[Query.readMessages] The frame observer threw: ${errorMessage(error)}`, {
             level: "error",
           });
         }
-        this.inputStream.enqueue(e);
+        this.inputStream.enqueue(frame);
       }
       if (this.transcriptMirrorBatcher) await this.transcriptMirrorBatcher.flush();
       this.inputStream.done();
       this.cleanup();
     } catch (error) {
       if (this.transcriptMirrorBatcher) await this.transcriptMirrorBatcher.flush();
-      let s =
+      let errorText =
         this.lastErrorResultText ??
         (this.modelLessTurnEnded ? this.errorTextBeforeModelLessTurns : undefined);
-      if (s !== undefined && !(error instanceof HookConfigError) && error?.name !== "SSEHttpError") {
-        let r = withTelemetryFacts(Error(`Claude Code returned an error result: ${s}`), {
+      if (errorText !== undefined && !(error instanceof HookConfigError) && error?.name !== "SSEHttpError") {
+        let wrapped = withTelemetryFacts(Error(`Claude Code returned an error result: ${errorText}`), {
           telemetryMessage: "Claude Code returned an error result",
           errorClass: "error_result",
           startupFailureReason: this.lastStartupFailureReason,
@@ -405,127 +412,127 @@ class Query {
         logForDebugging(
           `[Query.readMessages] Replacing exit error with result text. Original: ${errorMessage(error)}`,
         );
-        this.inputStream.error(r);
-        this.cleanup(r);
+        this.inputStream.error(wrapped);
+        this.cleanup(wrapped);
         return;
       }
       this.inputStream.error(error);
       this.cleanup(error);
     }
   }
-  async handleControlRequest(e) {
+  async handleControlRequest(frame) {
     if (this.cleanupPerformed) {
       logForDebugging(
-        `[Query.handleControlRequest] Request ${e.request_id} (${e.request.subtype}) arrived after close \u2014 skipping`,
+        `[Query.handleControlRequest] Request ${frame.request_id} (${frame.request.subtype}) arrived after close \u2014 skipping`,
       );
       return;
     }
-    if (this.cancelControllers.has(e.request_id)) {
+    if (this.cancelControllers.has(frame.request_id)) {
       logForDebugging(
-        `[Query.handleControlRequest] Duplicate delivery of in-flight request ${e.request_id} (${e.request.subtype}) \u2014 skipping`,
+        `[Query.handleControlRequest] Duplicate delivery of in-flight request ${frame.request_id} (${frame.request.subtype}) \u2014 skipping`,
       );
       return;
     }
     let abortController = new AbortController();
-    this.cancelControllers.set(e.request_id, abortController);
+    this.cancelControllers.set(frame.request_id, abortController);
     try {
-      let r;
+      let controller;
       try {
-        let n = await this.processControlRequest(e, abortController.signal);
+        let result = await this.processControlRequest(frame, abortController.signal);
         if (this.cleanupPerformed) return;
-        if (n === le) return;
-        let i = {
+        if (result === suppressControlResponse) return;
+        let response = {
           type: "control_response",
           response: {
             subtype: "success",
-            request_id: e.request_id,
-            response: n,
+            request_id: frame.request_id,
+            response: result,
           },
         };
-        r =
-          jsonStringify(i) +
+        controller =
+          jsonStringify(response) +
           `
 `;
       } catch (error) {
         if (this.cleanupPerformed) return;
-        let i = {
+        let errorResponse = {
           type: "control_response",
           response: {
             subtype: "error",
-            request_id: e.request_id,
+            request_id: frame.request_id,
             error: errorMessage(error),
           },
         };
-        r =
-          jsonStringify(i) +
+        controller =
+          jsonStringify(errorResponse) +
           `
 `;
       }
       try {
-        await Promise.resolve(this.transport.write(r));
+        await Promise.resolve(this.transport.write(controller));
       } catch (error) {
         logForDebugging(`[Query.handleControlRequest] Response write failed: ${errorMessage(error)}`, {
           level: "error",
         });
       }
     } finally {
-      if (this.cancelControllers.get(e.request_id) === abortController)
-        this.cancelControllers.delete(e.request_id);
+      if (this.cancelControllers.get(frame.request_id) === abortController)
+        this.cancelControllers.delete(frame.request_id);
     }
   }
-  handleControlCancelRequest(e) {
-    let s = this.cancelControllers.get(e.request_id);
-    if (s) {
-      s.abort();
-      this.cancelControllers.delete(e.request_id);
+  handleControlCancelRequest(frame) {
+    let controller = this.cancelControllers.get(frame.request_id);
+    if (controller) {
+      controller.abort();
+      this.cancelControllers.delete(frame.request_id);
     }
   }
-  async processControlRequest(e, s) {
-    if (REMOTE_TOOLS_LOG_EVENTS.some((r) => r === e.request.subtype)) {
+  async processControlRequest(frame, signal) {
+    if (REMOTE_TOOLS_LOG_EVENTS.some((subtype) => subtype === frame.request.subtype)) {
       logForDebugging(
-        `[Query.processControlRequest] ${e.request.subtype} ${e.request_id} is for the machine serving this session's tools \u2014 leaving it unanswered`,
+        `[Query.processControlRequest] ${frame.request.subtype} ${frame.request_id} is for the machine serving this session's tools \u2014 leaving it unanswered`,
       );
-      return le;
+      return suppressControlResponse;
     }
-    if (e.request.subtype === "can_use_tool") {
+    if (frame.request.subtype === "can_use_tool") {
       if (!this.canUseTool) throw Error("canUseTool callback is not provided.");
-      let computerFolder = e.request.computer_folder;
-      let n = await this.canUseTool(e.request.tool_name, e.request.input, {
-        signal: s,
-        suggestions: e.request.permission_suggestions,
-        blockedPath: e.request.blocked_path,
-        ...(e.request.mcp_server && {
+      let computerFolder = frame.request.computer_folder;
+      let result = await this.canUseTool(frame.request.tool_name, frame.request.input, {
+        signal,
+        suggestions: frame.request.permission_suggestions,
+        blockedPath: frame.request.blocked_path,
+        ...(frame.request.mcp_server && {
           mcpServer: {
-            name: e.request.mcp_server.name,
-            source: e.request.mcp_server.source,
+            name: frame.request.mcp_server.name,
+            source: frame.request.mcp_server.source,
           },
         }),
-        decisionReason: e.request.decision_reason,
-        ...(typeof e.request.decision_reason_type === "string" && {
-          decisionReasonType: e.request.decision_reason_type,
+        decisionReason: frame.request.decision_reason,
+        ...(typeof frame.request.decision_reason_type === "string" && {
+          decisionReasonType: frame.request.decision_reason_type,
         }),
-        ...(typeof e.request.decision_reason_code === "string" && {
-          decisionReasonCode: e.request.decision_reason_code,
+        ...(typeof frame.request.decision_reason_code === "string" && {
+          decisionReasonCode: frame.request.decision_reason_code,
         }),
-        ...(typeof e.request.server_policy_ask_only === "boolean" && {
-          serverPolicyAskOnly: e.request.server_policy_ask_only,
+        ...(typeof frame.request.server_policy_ask_only === "boolean" && {
+          serverPolicyAskOnly: frame.request.server_policy_ask_only,
         }),
-        title: e.request.title,
-        displayName: e.request.display_name,
-        description: e.request.description,
-        defaultToNo: e.request.default_to_no,
-        suppressAlwaysAllowRule: e.request.suppress_always_allow_rule,
-        toolUseID: e.request.tool_use_id,
-        agentID: e.request.agent_id,
-        ...(typeof e.request.plugin === "string" && {
-          plugin: e.request.plugin,
+        title: frame.request.title,
+        displayName: frame.request.display_name,
+        description: frame.request.description,
+        defaultToNo: frame.request.default_to_no,
+        suppressAlwaysAllowRule: frame.request.suppress_always_allow_rule,
+        toolUseID: frame.request.tool_use_id,
+        agentID: frame.request.agent_id,
+        ...(typeof frame.request.plugin === "string" && {
+          plugin: frame.request.plugin,
         }),
-        requestId: e.request_id,
-        ...(typeof e.request.requires_user_interaction === "boolean" && {
-          requiresUserInteraction: e.request.requires_user_interaction,
+        requestId: frame.request_id,
+        ...(typeof frame.request.requires_user_interaction === "boolean" && {
+          requiresUserInteraction: frame.request.requires_user_interaction,
         }),
-        ...(typeof e.request.server_prompt === "string" && {
-          serverPrompt: e.request.server_prompt,
+        ...(typeof frame.request.server_prompt === "string" && {
+          serverPrompt: frame.request.server_prompt,
         }),
         ...(typeof computerFolder === "object" &&
           computerFolder !== null &&
@@ -538,25 +545,30 @@ class Query {
               computer_name: computerFolder.computer_name,
             },
           }),
-        ...(e.request.matched_ask_rule && {
+        ...(frame.request.matched_ask_rule && {
           matchedAskRule: {
-            source: e.request.matched_ask_rule.source,
-            toolName: e.request.matched_ask_rule.tool_name,
-            ...(e.request.matched_ask_rule.rule_content !== undefined && {
-              ruleContent: e.request.matched_ask_rule.rule_content,
+            source: frame.request.matched_ask_rule.source,
+            toolName: frame.request.matched_ask_rule.tool_name,
+            ...(frame.request.matched_ask_rule.rule_content !== undefined && {
+              ruleContent: frame.request.matched_ask_rule.rule_content,
             }),
           },
         }),
       });
-      if (n === null) return le;
+      if (result === null) return suppressControlResponse;
       return {
-        ...n,
-        toolUseID: e.request.tool_use_id,
+        ...result,
+        toolUseID: frame.request.tool_use_id,
       };
-    } else if (e.request.subtype === "hook_callback")
-      return await this.handleHookCallbacks(e.request.callback_id, e.request.input, e.request.tool_use_id, s);
-    else if (e.request.subtype === "mcp_message") {
-      let request = e.request;
+    } else if (frame.request.subtype === "hook_callback")
+      return await this.handleHookCallbacks(
+        frame.request.callback_id,
+        frame.request.input,
+        frame.request.tool_use_id,
+        signal,
+      );
+    else if (frame.request.subtype === "mcp_message") {
+      let request = frame.request;
       let transport = this.sdkMcpServers.get(request.server_name)?.transport;
       if (!transport) throw Error(`SDK MCP server not found: ${request.server_name}`);
       if (isJsonRpcRequest(request.message))
@@ -573,10 +585,10 @@ class Query {
           },
         };
       }
-    } else if (e.request.subtype === "elicitation") {
-      let request = e.request;
+    } else if (frame.request.subtype === "elicitation") {
+      let request = frame.request;
       if (this.onElicitation) {
-        let n = await this.onElicitation(
+        let request_2 = await this.onElicitation(
           {
             serverName: request.mcp_server_name,
             message: request.message,
@@ -589,163 +601,164 @@ class Query {
             description: request.description,
           },
           {
-            signal: s,
-            requestId: e.request_id,
+            signal,
+            requestId: frame.request_id,
           },
         );
-        if (n === null) return le;
-        return n;
+        if (request_2 === null) return suppressControlResponse;
+        return request_2;
       }
       return {
         action: "decline",
       };
-    } else if (e.request.subtype === "request_user_dialog") {
+    } else if (frame.request.subtype === "request_user_dialog") {
       if (this.onUserDialog) {
-        let r = await this.onUserDialog(
+        let request = await this.onUserDialog(
           {
-            dialogKind: e.request.dialog_kind,
-            payload: e.request.payload,
-            toolUseID: e.request.tool_use_id,
+            dialogKind: frame.request.dialog_kind,
+            payload: frame.request.payload,
+            toolUseID: frame.request.tool_use_id,
           },
           {
-            signal: s,
-            requestId: e.request_id,
+            signal,
+            requestId: frame.request_id,
           },
         );
-        if (r === null) return le;
-        return r;
+        if (request === null) return suppressControlResponse;
+        return request;
       }
       logForDebugging(
-        `[Query] No onUserDialog handler for request_user_dialog (kind=${e.request.dialog_kind}) \u2014 staying silent so a capable client (or the worker's park deadline) settles it`,
+        `[Query] No onUserDialog handler for request_user_dialog (kind=${frame.request.dialog_kind}) \u2014 staying silent so a capable client (or the worker's park deadline) settles it`,
       );
       logEvent("tengu_request_user_dialog_response_ignored", {
         shape: fromEnum("auto_cancel"),
       });
-      return le;
-    } else if (e.request.subtype === "oauth_token_refresh") {
+      return suppressControlResponse;
+    } else if (frame.request.subtype === "oauth_token_refresh") {
       if (!this.getOAuthToken) throw Error("getOAuthToken callback is not provided.");
-      let r;
-      let n =
+      let result;
+      let declined =
         (await this.getOAuthToken({
-          signal: s,
-          onDecline: (i) => {
-            if (isLauncherEndReason(i)) r = i;
+          signal,
+          onDecline: (reason) => {
+            if (isLauncherEndReason(reason)) result = reason;
           },
-          ...(e.request.kind !== undefined && {
-            kind: e.request.kind,
+          ...(frame.request.kind !== undefined && {
+            kind: frame.request.kind,
           }),
         })) ?? null;
-      return n === null && r !== undefined
+      return declined === null && result !== undefined
         ? {
-            accessToken: n,
-            reason: r,
+            accessToken: declined,
+            reason: result,
           }
         : {
-            accessToken: n,
+            accessToken: declined,
           };
-    } else if (e.request.subtype === "host_auth_token_refresh") {
+    } else if (frame.request.subtype === "host_auth_token_refresh") {
       if (!this.getHostAuthToken) throw Error("getHostAuthToken callback is not provided.");
-      let r =
+      let result =
         (await this.getHostAuthToken({
-          signal: s,
+          signal,
         })) ?? null;
-      return typeof r === "string" || r === null
+      return typeof result === "string" || result === null
         ? {
-            authToken: r,
+            authToken: result,
           }
-        : r;
-    } else if (e.request.subtype === "remote_control_work_secret") {
+        : result;
+    } else if (frame.request.subtype === "remote_control_work_secret") {
       let workSecretAnswerer = this.workSecretAnswerer;
       if (!workSecretAnswerer) throw Error("refreshWorkSecret callback is not provided.");
-      if (!Kt(workSecretAnswerer.sessionId, e.request.session_id))
+      if (!sharesCallbackSuffix(workSecretAnswerer.sessionId, frame.request.session_id))
         throw Error("remote_control_work_secret names a session this host did not attach.");
       return {
         work_secret:
           (await workSecretAnswerer.refresh(workSecretAnswerer.sessionId, {
-            signal: s,
+            signal,
           })) || null,
       };
     }
-    if (e.request.subtype === "ui_copy" && this.uiHost?.copy) {
-      let { subtype, ...n } = e.request;
-      return this.uiHost.copy(n, {
-        signal: s,
+    if (frame.request.subtype === "ui_copy" && this.uiHost?.copy) {
+      let { subtype, ...payload } = frame.request;
+      return this.uiHost.copy(payload, {
+        signal,
       });
     }
-    if (e.request.subtype === "ui_prompt_read" && this.uiHost?.promptRead) {
-      let { subtype, ...n } = e.request;
-      return this.uiHost.promptRead(n, {
-        signal: s,
+    if (frame.request.subtype === "ui_prompt_read" && this.uiHost?.promptRead) {
+      let { subtype, ...payload } = frame.request;
+      return this.uiHost.promptRead(payload, {
+        signal,
       });
     }
-    if (e.request.subtype === "ui_prompt_fill" && this.uiHost?.promptFill) {
-      let { subtype, ...n } = e.request;
-      return this.uiHost.promptFill(n, {
-        signal: s,
+    if (frame.request.subtype === "ui_prompt_fill" && this.uiHost?.promptFill) {
+      let { subtype, ...payload } = frame.request;
+      return this.uiHost.promptFill(payload, {
+        signal,
       });
     }
-    if (e.request.subtype === "ui_prompt_paint" && this.uiHost?.promptPaint) {
-      let { subtype, ...n } = e.request;
-      return this.uiHost.promptPaint(n, {
-        signal: s,
+    if (frame.request.subtype === "ui_prompt_paint" && this.uiHost?.promptPaint) {
+      let { subtype, ...payload } = frame.request;
+      return this.uiHost.promptPaint(payload, {
+        signal,
       });
     }
-    if (e.request.subtype === "ui_prompt_suggest" && this.uiHost?.promptSuggest) {
-      let { subtype, ...n } = e.request;
-      return this.uiHost.promptSuggest(n, {
-        signal: s,
+    if (frame.request.subtype === "ui_prompt_suggest" && this.uiHost?.promptSuggest) {
+      let { subtype, ...payload } = frame.request;
+      return this.uiHost.promptSuggest(payload, {
+        signal,
       });
     }
-    if (e.request.subtype === "ui_read_selection" && this.uiHost?.readSelection) {
-      let { subtype, ...n } = e.request;
-      return this.uiHost.readSelection(n, {
-        signal: s,
+    if (frame.request.subtype === "ui_read_selection" && this.uiHost?.readSelection) {
+      let { subtype, ...payload } = frame.request;
+      return this.uiHost.readSelection(payload, {
+        signal,
       });
     }
-    throw Error("Unsupported control request subtype: " + e.request.subtype);
+    throw Error("Unsupported control request subtype: " + frame.request.subtype);
   }
   async *readSdkMessages() {
     try {
-      for await (let e of this.inputStream) {
-        this.transport.markDelivered?.(e);
-        yield e;
+      for await (let message of this.inputStream) {
+        this.transport.markDelivered?.(message);
+        yield message;
       }
     } finally {
       await this.cleanup();
     }
   }
   async initialize(
-    { first: e } = {
+    { first } = {
       first: false,
     },
   ) {
-    if (!e && !this.initializeHasBeenWritten) await this.initializeWritten;
-    let s;
-    let r;
+    if (!first && !this.initializeHasBeenWritten) await this.initializeWritten;
+    let result;
+    let toolChange;
     try {
-      if (e && this.initConfig?.captureSdkMcpManifests === true && this.sdkMcpServers.size > 0) {
-        s = await this.captureSdkMcpServerManifests();
-        for (let l of this.sdkMcpToolsChangedDuringCapture) {
-          let h = s !== undefined && Object.hasOwn(s, l) ? s[l] : undefined;
-          if (h?.toolsListResult !== undefined)
-            s[l] = {
-              initializeResult: h.initializeResult,
+      if (first && this.initConfig?.captureSdkMcpManifests === true && this.sdkMcpServers.size > 0) {
+        result = await this.captureSdkMcpServerManifests();
+        for (let manifests of this.sdkMcpToolsChangedDuringCapture) {
+          let entry =
+            result !== undefined && Object.hasOwn(result, manifests) ? result[manifests] : undefined;
+          if (entry?.toolsListResult !== undefined)
+            result[manifests] = {
+              initializeResult: entry.initializeResult,
             };
         }
       }
       this.sdkMcpToolsChangedDuringCapture.clear();
-      let initializeRequest = this.buildInitializeRequest(s);
+      let initializeRequest = this.buildInitializeRequest(result);
       if (this.cleanupPerformed) throw this.cleanupCause ?? Error("Query closed before initialize was sent");
-      this.writingFirstInitialize = e;
+      this.writingFirstInitialize = first;
       try {
-        r = this.request(initializeRequest);
+        toolChange = this.request(initializeRequest);
       } finally {
         this.writingFirstInitialize = false;
       }
     } finally {
-      if (e) this.markInitializeWritten();
+      if (first) this.markInitializeWritten();
     }
-    let response = (await r).response;
+    let response = (await toolChange).response;
     if (
       this.initConfig?.plugins !== undefined &&
       this.initConfig.plugins.length > 0 &&
@@ -764,23 +777,23 @@ class Query {
       this.initHooksPayload = {};
       for (let [key, value] of Object.entries(this.hooks))
         if (value.length > 0)
-          this.initHooksPayload[key] = value.map((h) => {
-            let S = [];
-            for (let hook of h.hooks) {
-              let w = `hook_${this.nextCallbackId++}`;
-              this.hookCallbacks.set(w, hook);
-              S.push(w);
+          this.initHooksPayload[key] = value.map((hook) => {
+            let callbacks = [];
+            for (let hook_2 of hook.hooks) {
+              let callbackId = `hook_${this.nextCallbackId++}`;
+              this.hookCallbacks.set(callbackId, hook_2);
+              callbacks.push(callbackId);
             }
             return {
-              matcher: h.matcher,
-              hookCallbackIds: S,
-              timeout: h.timeout,
+              matcher: hook.matcher,
+              hookCallbackIds: callbacks,
+              timeout: hook.timeout,
             };
           });
     }
     let sdkMcpServers = this.sdkMcpServers.size > 0 ? Array.from(this.sdkMcpServers.keys()) : undefined;
-    let flattened = Array.from(this.sdkMcpServers).flatMap(([m, { settings: l }]) =>
-      Object.keys(l).length > 0 ? [[m, l]] : [],
+    let flattened = Array.from(this.sdkMcpServers).flatMap(([serverName, { settings }]) =>
+      Object.keys(settings).length > 0 ? [[serverName, settings]] : [],
     );
     let sdkMcpServerConfigs = flattened.length > 0 ? Object.fromEntries(flattened) : undefined;
     return {
@@ -818,25 +831,25 @@ class Query {
   }
   async captureSdkMcpServerManifests() {
     let startTime = performance.now();
-    let s = new Map();
-    let r = false;
-    let n = async (b, R) => {
+    let captured = new Map();
+    let aborted = false;
+    let captureOne = async (serverName, signal) => {
       try {
-        await this.sdkMcpServers.get(b)?.connection;
-        if (r) return;
-        let T = await this.handleMcpControlRequest(
-          b,
+        await this.sdkMcpServers.get(serverName)?.connection;
+        if (aborted) return;
+        let initResult = await this.handleMcpControlRequest(
+          serverName,
           {
-            server_name: b,
+            server_name: serverName,
             message: {
               jsonrpc: "2.0",
               id: SDK_MANIFEST_CAPTURE + "initialize",
               method: "initialize",
               params: {
                 protocolVersion: MCP_PROTOCOL_LATEST,
-                capabilities: T_t,
+                capabilities: EMPTY_CAPABILITIES,
                 clientInfo: {
-                  ...A_t,
+                  ...CLAUDE_CODE_SERVER_INFO,
                   version:
                     {
                       ISSUES_EXPLAINER:
@@ -855,138 +868,142 @@ class Query {
               },
             },
           },
-          R,
+          signal,
         );
-        if (r) return;
-        if (!("result" in T)) {
+        if (aborted) return;
+        if (!("result" in initResult)) {
           logForDebugging(
-            `[Query.captureSdkMcpServerManifests] '${b}' answered initialize with an error; leaving it to the CLI: ${jsonStringify(T)}`,
+            `[Query.captureSdkMcpServerManifests] '${serverName}' answered initialize with an error; leaving it to the CLI: ${jsonStringify(initResult)}`,
             {
               level: "warn",
             },
           );
           return;
         }
-        let E = T.result;
-        R.onmessage?.({
+        let initResult_2 = initResult.result;
+        signal.onmessage?.({
           jsonrpc: "2.0",
           method: "notifications/initialized",
         });
-        let capabilities = E.capabilities;
-        let D =
+        let capabilities = initResult_2.capabilities;
+        let capabilities_2 =
           typeof capabilities === "object" &&
           capabilities !== null &&
           "tools" in capabilities &&
           capabilities.tools !== undefined &&
           capabilities.tools !== null;
-        let F;
-        if (D) {
-          let G = await this.handleMcpControlRequest(
-            b,
+        let hasTools;
+        if (capabilities_2) {
+          let toolsResult = await this.handleMcpControlRequest(
+            serverName,
             {
-              server_name: b,
+              server_name: serverName,
               message: {
                 jsonrpc: "2.0",
                 id: SDK_MANIFEST_CAPTURE + "tools-list",
                 method: "tools/list",
               },
             },
-            R,
+            signal,
           );
-          if (r) return;
-          if (!("result" in G)) {
+          if (aborted) return;
+          if (!("result" in toolsResult)) {
             logForDebugging(
-              `[Query.captureSdkMcpServerManifests] '${b}' answered tools/list with an error; leaving it to the CLI: ${jsonStringify(G)}`,
+              `[Query.captureSdkMcpServerManifests] '${serverName}' answered tools/list with an error; leaving it to the CLI: ${jsonStringify(toolsResult)}`,
               {
                 level: "warn",
               },
             );
             return;
           }
-          if (G.result.nextCursor === undefined) F = G.result;
+          if (toolsResult.result.nextCursor === undefined) hasTools = toolsResult.result;
         }
         let manifest = jsonParse(
           jsonStringify(
-            F === undefined
+            hasTools === undefined
               ? {
-                  initializeResult: E,
+                  initializeResult: initResult_2,
                 }
               : {
-                  initializeResult: E,
-                  toolsListResult: F,
+                  initializeResult: initResult_2,
+                  toolsListResult: hasTools,
                 },
           ),
         );
-        s.set(b, {
-          transport: R,
+        captured.set(serverName, {
+          transport: signal,
           manifest,
         });
       } catch (error) {
-        if (!r)
+        if (!aborted)
           logForDebugging(
-            `[Query.captureSdkMcpServerManifests] '${b}': ${error}; the CLI will handshake it over the control channel`,
+            `[Query.captureSdkMcpServerManifests] '${serverName}': ${error}; the CLI will handshake it over the control channel`,
             {
               level: "warn",
             },
           );
       }
     };
-    let list = Array.from(this.sdkMcpServers, ([b, { transport: R }]) => n(b, R));
-    let m = Promise.all(list).then(() => "settled");
+    let list = Array.from(this.sdkMcpServers, ([serverName, { transport }]) =>
+      captureOne(serverName, transport),
+    );
+    let captures = Promise.all(list).then(() => "settled");
     let promise = new Promise((resolve) => {
       this.stopSdkMcpManifestCapture = () => resolve("closed");
     });
-    let h = await withDeadline(Promise.race([m, promise]), Ft);
-    r = true;
+    let stringified = await withDeadline(Promise.race([captures, promise]), MANIFEST_CAPTURE_TIMEOUT_MS);
+    aborted = true;
     this.stopSdkMcpManifestCapture = undefined;
     let rounded = Math.round(performance.now() - startTime);
-    let y = {
+    let elapsedMs = {
       servers: list.length,
-      captured: s.size,
+      captured: captured.size,
       elapsed_ms: rounded,
     };
-    if (h === "closed") {
-      logFeatureSad("sdk_mcp_manifest_capture", "closed", y);
+    if (stringified === "closed") {
+      logFeatureSad("sdk_mcp_manifest_capture", "closed", elapsedMs);
       return;
     }
-    if (h === undefined) {
+    if (stringified === undefined) {
       logForDebugging(
-        `[Query.captureSdkMcpServerManifests] ${s.size}/${list.length} in-process MCP servers captured within ${Ft} ms; the rest will handshake over the control channel`,
+        `[Query.captureSdkMcpServerManifests] ${captured.size}/${list.length} in-process MCP servers captured within ${MANIFEST_CAPTURE_TIMEOUT_MS} ms; the rest will handshake over the control channel`,
         {
           level: "warn",
         },
       );
-      logFeatureSad("sdk_mcp_manifest_capture", "deadline", y);
-    } else if (s.size < list.length) logFeatureSad("sdk_mcp_manifest_capture", "partial", y);
-    else logFeatureOk("sdk_mcp_manifest_capture", y);
-    if (s.size === 0) return;
-    let w = Object.fromEntries(
-      Array.from(this.sdkMcpServers).flatMap(([b, R]) => {
-        let T = s.get(b);
-        return T !== undefined && T.transport === R.transport ? [[b, T.manifest]] : [];
+      logFeatureSad("sdk_mcp_manifest_capture", "deadline", elapsedMs);
+    } else if (captured.size < list.length) logFeatureSad("sdk_mcp_manifest_capture", "partial", elapsedMs);
+    else logFeatureOk("sdk_mcp_manifest_capture", elapsedMs);
+    if (captured.size === 0) return;
+    let capturedTools = Object.fromEntries(
+      Array.from(this.sdkMcpServers).flatMap(([serverName, entry]) => {
+        let capturedServer = captured.get(serverName);
+        return capturedServer !== undefined && capturedServer.transport === entry.transport
+          ? [[serverName, capturedServer.manifest]]
+          : [];
       }),
     );
-    if (Object.keys(w).length === 0) return;
+    if (Object.keys(capturedTools).length === 0) return;
     logForDebugging(
-      `[Query.captureSdkMcpServerManifests] manifests for [${Object.keys(w).join(", ")}] captured in ${rounded} ms`,
+      `[Query.captureSdkMcpServerManifests] manifests for [${Object.keys(capturedTools).join(", ")}] captured in ${rounded} ms`,
     );
-    return w;
+    return capturedTools;
   }
-  async interrupt(e) {
+  async interrupt(cancelQueuedMessages) {
     return withFeatureTelemetry("sdk_interrupt", async () => {
-      let s = await this.request({
+      let result = await this.request({
         subtype: "interrupt",
-        ...(e?.cancelQueued === true && {
+        ...(cancelQueuedMessages?.cancelQueued === true && {
           cancel_queued: true,
         }),
       });
-      let stillQueued = s.response?.still_queued;
+      let stillQueued = result.response?.still_queued;
       if (!Array.isArray(stillQueued)) return;
-      let cancelled = s.response?.cancelled;
+      let cancelled = result.response?.cancelled;
       return {
-        still_queued: stillQueued.filter((i) => typeof i === "string"),
+        still_queued: stillQueued.filter((item) => typeof item === "string"),
         ...(Array.isArray(cancelled) && {
-          cancelled: cancelled.filter((i) => typeof i === "string"),
+          cancelled: cancelled.filter((item) => typeof item === "string"),
         }),
       };
     });
@@ -1020,10 +1037,10 @@ class Query {
       ).response ?? {}
     );
   }
-  async setChromeBrowserHints(e) {
+  async setChromeBrowserHints(hints) {
     await this.request({
       subtype: "set_chrome_browser_hints",
-      ...e,
+      ...hints,
     });
   }
   async setPromptSuggestionsPaused(paused) {
@@ -1032,42 +1049,46 @@ class Query {
       paused,
     });
   }
-  awaitControlResponse(e) {
-    this.transport.expectControlResponse?.(e);
+  awaitControlResponse(requestId) {
+    this.transport.expectControlResponse?.(requestId);
     return new Promise((resolve, reject) => {
-      let n = (m) => {
-        if (m.subtype === "success") {
+      let handler = (response) => {
+        if (response.subtype === "success") {
           let {
             pending_permission_requests: pendingPermissionRequests,
             pending_user_dialog_requests: pendingUserDialogRequests,
             pending_elicitation_requests: pendingElicitationRequests,
-            ...y
-          } = m;
-          resolve(y);
+            ...extra
+          } = response;
+          resolve(extra);
         } else
           reject(
             new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              m.error,
+              response.error,
               "awaitControlResponse: CLI error verdict",
             ),
           );
-        if (m.pending_permission_requests || m.pending_user_dialog_requests || m.pending_elicitation_requests)
+        if (
+          response.pending_permission_requests ||
+          response.pending_user_dialog_requests ||
+          response.pending_elicitation_requests
+        )
           logForDebugging("[Query] Ignoring prompt-redelivery fields on awaitControlResponse response");
       };
       if (this.cleanupPerformed) {
-        reject(st());
+        reject(closedBeforeResponseError());
         return;
       }
-      let i = this.unmatchedControlResponses.get(e);
-      if (i) {
-        this.unmatchedControlResponses.delete(e);
-        n(i);
+      let unmatched = this.unmatchedControlResponses.get(requestId);
+      if (unmatched) {
+        this.unmatchedControlResponses.delete(requestId);
+        handler(unmatched);
         return;
       }
-      this.pendingControlResponses.set(e, {
-        handler: (m) => {
-          this.pendingControlResponses.delete(e);
-          n(m);
+      this.pendingControlResponses.set(requestId, {
+        handler: (response) => {
+          this.pendingControlResponses.delete(requestId);
+          handler(response);
         },
         reject,
       });
@@ -1132,7 +1153,7 @@ class Query {
       });
     });
   }
-  async rewindFiles(userMessageId, s) {
+  async rewindFiles(userMessageId, settings) {
     return withFeatureTelemetry(
       "sdk_rewind_files",
       async () =>
@@ -1140,7 +1161,7 @@ class Query {
           await this.request({
             subtype: "rewind_files",
             user_message_id: userMessageId,
-            dry_run: s?.dryRun,
+            dry_run: settings?.dryRun,
           })
         ).response,
     );
@@ -1160,7 +1181,7 @@ class Query {
       mtime,
     });
   }
-  async setCwd(path, s) {
+  async setCwd(path, mtime) {
     return withFeatureTelemetry(
       "sdk_set_cwd",
       async () =>
@@ -1168,38 +1189,38 @@ class Query {
           await this.request({
             subtype: "set_cwd",
             path,
-            ...(s?.trustAccepted !== undefined && {
-              trust_accepted: s.trustAccepted,
+            ...(mtime?.trustAccepted !== undefined && {
+              trust_accepted: mtime.trustAccepted,
             }),
-            ...(s?.trustedDirectory !== undefined && {
-              trusted_directory: s.trustedDirectory,
+            ...(mtime?.trustedDirectory !== undefined && {
+              trusted_directory: mtime.trustedDirectory,
             }),
           })
         ).response,
     );
   }
-  async claimSession(e) {
-    let s = withFeatureTelemetry(
+  async claimSession(trustedDirectory) {
+    let claim = withFeatureTelemetry(
       "sdk_claim_session",
       async () =>
         (
           await this.request({
             subtype: "claim_session",
-            ...e,
-            include_initialize: e.include_initialize ?? true,
+            ...trustedDirectory,
+            include_initialize: trustedDirectory.include_initialize ?? true,
           })
         ).response,
     );
     let initialization = this.initialization;
-    this.initialization = s.then(
-      async (n) => {
-        if (n?.initialize === undefined) return initialization;
-        let initialize = n.initialize;
-        let m = await initialization.then(
-          (y) => ({
-            hooks_applied: y.hooks_applied,
-            plugins_applied: y.plugins_applied,
-            code_running_mcp_tools_applied: y.code_running_mcp_tools_applied,
+    this.initialization = claim.then(
+      async (initResult) => {
+        if (initResult?.initialize === undefined) return initialization;
+        let initialize = initResult.initialize;
+        let hooksApplied = await initialization.then(
+          (applied) => ({
+            hooks_applied: applied.hooks_applied,
+            plugins_applied: applied.plugins_applied,
+            code_running_mcp_tools_applied: applied.code_running_mcp_tools_applied,
           }),
           () => ({
             hooks_applied: undefined,
@@ -1207,14 +1228,14 @@ class Query {
             code_running_mcp_tools_applied: undefined,
           }),
         );
-        let hooksApplied = initialize.hooks_applied ?? m.hooks_applied;
-        let pluginsApplied = initialize.plugins_applied ?? m.plugins_applied;
+        let hooksApplied_2 = initialize.hooks_applied ?? hooksApplied.hooks_applied;
+        let pluginsApplied = initialize.plugins_applied ?? hooksApplied.plugins_applied;
         let codeRunningMcpToolsApplied =
-          initialize.code_running_mcp_tools_applied ?? m.code_running_mcp_tools_applied;
+          initialize.code_running_mcp_tools_applied ?? hooksApplied.code_running_mcp_tools_applied;
         return {
           ...initialize,
-          ...(hooksApplied !== undefined && {
-            hooks_applied: hooksApplied,
+          ...(hooksApplied_2 !== undefined && {
+            hooks_applied: hooksApplied_2,
           }),
           ...(pluginsApplied !== undefined && {
             plugins_applied: pluginsApplied,
@@ -1227,68 +1248,73 @@ class Query {
       () => initialization,
     );
     this.initialization.catch(() => {});
-    return s;
+    return claim;
   }
-  async enableRemoteControl(e, s, r) {
-    let n = ++this.remoteControlCallGeneration;
+  async enableRemoteControl(workSecret, reattachSessionId, options) {
+    let generation = ++this.remoteControlCallGeneration;
     let workSecretAnswerer = this.workSecretAnswerer;
-    let m = r?.reattachSessionId || (r?.workSecret === undefined ? undefined : sr(r.workSecret));
-    let l =
-      e && r?.workSecret !== undefined && r.refreshWorkSecret && m !== undefined
+    let reattachId =
+      options?.reattachSessionId ||
+      (options?.workSecret === undefined ? undefined : extractSessionIdFromIngressToken(options.workSecret));
+    let answerer =
+      workSecret && options?.workSecret !== undefined && options.refreshWorkSecret && reattachId !== undefined
         ? {
-            sessionId: m,
-            refresh: r.refreshWorkSecret,
+            sessionId: reattachId,
+            refresh: options.refreshWorkSecret,
           }
         : undefined;
-    this.workSecretAnswerer = l;
-    let h;
+    this.workSecretAnswerer = answerer;
+    let response;
     try {
-      h = (
+      response = (
         await this.request({
           subtype: "remote_control",
-          enabled: e,
-          ...(s !== undefined && {
-            name: s,
+          enabled: workSecret,
+          ...(reattachSessionId !== undefined && {
+            name: reattachSessionId,
           }),
-          reattach_session_id: r?.reattachSessionId,
-          keep_session_on_exit: r?.keepSessionOnExit,
-          work_secret: r?.workSecret,
+          reattach_session_id: options?.reattachSessionId,
+          keep_session_on_exit: options?.keepSessionOnExit,
+          work_secret: options?.workSecret,
         })
       ).response;
     } catch (error) {
-      if (n === this.remoteControlCallGeneration) this.workSecretAnswerer = undefined;
+      if (generation === this.remoteControlCallGeneration) this.workSecretAnswerer = undefined;
       throw error;
     }
-    if (e && n === this.remoteControlCallGeneration) {
-      let bridgeSessionId = h.bridge_session_id;
-      let y = [l, workSecretAnswerer];
+    if (workSecret && generation === this.remoteControlCallGeneration) {
+      let bridgeSessionId = response.bridge_session_id;
+      let bridgeSessionId_2 = [answerer, workSecretAnswerer];
       this.workSecretAnswerer =
         typeof bridgeSessionId === "string"
-          ? y.find((w) => w !== undefined && Kt(w.sessionId, bridgeSessionId))
+          ? bridgeSessionId_2.find(
+              (answerer) =>
+                answerer !== undefined && sharesCallbackSuffix(answerer.sessionId, bridgeSessionId),
+            )
           : undefined;
     }
-    return h;
+    return response;
   }
-  async submitFeedback(description, s) {
+  async submitFeedback(description, message) {
     return (
       await this.request({
         subtype: "submit_feedback",
         description,
-        surface: s?.surface,
-        draft_id: s?.draft_id,
-        type: s?.type,
-        title: s?.title,
-        area: s?.area,
-        attach_transcript: s?.attach_transcript,
-        save_locally: s?.save_locally,
+        surface: message?.surface,
+        draft_id: message?.draft_id,
+        type: message?.type,
+        title: message?.title,
+        area: message?.area,
+        attach_transcript: message?.attach_transcript,
+        save_locally: message?.save_locally,
       })
     ).response;
   }
-  async submitSurveyFeedback(e) {
+  async submitSurveyFeedback(options) {
     return (
       await this.request({
         subtype: "submit_survey_feedback",
-        ...e,
+        ...options,
       })
     ).response;
   }
@@ -1300,7 +1326,7 @@ class Query {
       session_id: sessionId,
     });
   }
-  async generateSessionTitle(description, s) {
+  async generateSessionTitle(description, sessionId) {
     return withFeatureTelemetry(
       "sdk_session_title_generate",
       async () =>
@@ -1308,12 +1334,12 @@ class Query {
           await this.request({
             subtype: "generate_session_title",
             description,
-            persist: s?.persist,
+            persist: sessionId?.persist,
           })
         ).response.title,
     );
   }
-  async askSideQuestion(question, s) {
+  async askSideQuestion(question, sessionId) {
     return withFeatureTelemetry(
       "sdk_side_question",
       async () => {
@@ -1322,11 +1348,11 @@ class Query {
             {
               subtype: "side_question",
               question,
-              ...(s?.history?.length && {
-                history: [...s.history],
+              ...(sessionId?.history?.length && {
+                history: [...sessionId.history],
               }),
             },
-            s,
+            sessionId,
           )
         ).response;
         return response.response === null
@@ -1343,77 +1369,78 @@ class Query {
               }),
             };
       },
-      () => (s?.signal?.aborted ? "cancelled" : "error"),
+      () => (sessionId?.signal?.aborted ? "cancelled" : "error"),
     );
   }
-  async launchUltrareview(args, s) {
+  async launchUltrareview(args, options) {
     return (
       await this.request({
         subtype: "ultrareview_launch",
         args,
-        confirm: s?.confirm ?? false,
+        confirm: options?.confirm ?? false,
       })
     ).response;
   }
-  async messageRated(e) {
+  async messageRated(options) {
     await this.request({
       subtype: "message_rated",
-      messageUuid: e.messageUuid,
-      sentiment: e.sentiment,
-      surface: e.surface,
-      cleared: e.cleared ?? false,
+      messageUuid: options.messageUuid,
+      sentiment: options.sentiment,
+      surface: options.surface,
+      cleared: options.cleared ?? false,
     });
   }
-  processPendingPermissionRequests(e) {
-    for (let s of e)
-      if (s.request.subtype === "can_use_tool")
+  processPendingPermissionRequests(requests) {
+    for (let request of requests)
+      if (request.request.subtype === "can_use_tool")
         this.handleControlRequest({
-          ...s,
+          ...request,
           request: {
-            ...s.request,
+            ...request.request,
             server_policy_ask_only: undefined,
           },
         }).catch(() => {});
   }
-  processPendingUserDialogRequests(e) {
-    for (let s of e)
-      if (s.request.subtype === "request_user_dialog") this.handleControlRequest(s).catch(() => {});
+  processPendingUserDialogRequests(requests) {
+    for (let request of requests)
+      if (request.request.subtype === "request_user_dialog")
+        this.handleControlRequest(request).catch(() => {});
   }
-  request(e, s) {
-    let signal = s?.signal;
+  request(request, options) {
+    let signal = options?.signal;
     if (signal?.aborted) return Promise.reject(toError(signal.reason ?? "Control request aborted"));
-    if (this.cleanupPerformed) return Promise.reject(st());
-    let n = Math.random().toString(36).substring(2, 15);
-    this.transport.expectControlResponse?.(n);
-    let i = {
-      request_id: n,
+    if (this.cleanupPerformed) return Promise.reject(closedBeforeResponseError());
+    let requestId = Math.random().toString(36).substring(2, 15);
+    this.transport.expectControlResponse?.(requestId);
+    let controlRequest = {
+      request_id: requestId,
       type: "control_request",
-      request: e,
+      request,
     };
-    let m = e.subtype === "initialize";
+    let isInitialize = request.subtype === "initialize";
     return new Promise((resolve, reject) => {
-      let S;
-      let y = false;
-      let w = (E) => {
-        this.pendingControlResponses.delete(n);
-        S?.();
-        resolve(E);
+      let onAbortListener;
+      let settled = false;
+      let onAbort = (response) => {
+        this.pendingControlResponses.delete(requestId);
+        onAbortListener?.();
+        resolve(response);
       };
-      let b = (error) => {
-        this.pendingControlResponses.delete(n);
-        S?.();
+      let onError = (error) => {
+        this.pendingControlResponses.delete(requestId);
+        onAbortListener?.();
         reject(error);
       };
       if (signal) {
-        let E = () => {
-          b(toError(signal.reason ?? "Control request aborted"));
-          if (!y) return;
+        let abortHandler = () => {
+          onError(toError(signal.reason ?? "Control request aborted"));
+          if (!settled) return;
           try {
             Promise.resolve(
               this.transport.write(
                 jsonStringify({
                   type: "control_cancel_request",
-                  request_id: n,
+                  request_id: requestId,
                 }) +
                   `
 `,
@@ -1421,68 +1448,70 @@ class Query {
             ).catch(() => {});
           } catch {}
         };
-        signal.addEventListener("abort", E, {
+        signal.addEventListener("abort", abortHandler, {
           once: true,
         });
-        S = () => {
-          signal.removeEventListener("abort", E);
+        onAbortListener = () => {
+          signal.removeEventListener("abort", abortHandler);
         };
       }
-      this.pendingControlResponses.set(n, {
-        handler: (E) => {
-          if (E.subtype === "success") w(E);
+      this.pendingControlResponses.set(requestId, {
+        handler: (response) => {
+          if (response.subtype === "success") onAbort(response);
           else
-            b(
-              withTelemetryFacts(Error(E.error), {
-                telemetryMessage: `Claude Code control request failed (${e.subtype})`,
+            onError(
+              withTelemetryFacts(Error(response.error), {
+                telemetryMessage: `Claude Code control request failed (${request.subtype})`,
                 errorClass: "control_request_failed",
                 errorCode:
-                  typeof E.error_code === "string" && tr.test(E.error_code) ? E.error_code : undefined,
+                  typeof response.error_code === "string" && CALLBACK_ID_SUFFIX_RE.test(response.error_code)
+                    ? response.error_code
+                    : undefined,
               }),
             );
           if (
-            !m &&
-            (E.pending_permission_requests ||
-              E.pending_user_dialog_requests ||
-              E.pending_elicitation_requests)
+            !isInitialize &&
+            (response.pending_permission_requests ||
+              response.pending_user_dialog_requests ||
+              response.pending_elicitation_requests)
           )
             logForDebugging(
-              `[Query] Ignoring prompt-redelivery fields on non-initialize response (subtype=${e.subtype})`,
+              `[Query] Ignoring prompt-redelivery fields on non-initialize response (subtype=${request.subtype})`,
             );
           else {
-            if (E.pending_permission_requests)
-              this.processPendingPermissionRequests(E.pending_permission_requests);
-            if (E.pending_user_dialog_requests)
-              this.processPendingUserDialogRequests(E.pending_user_dialog_requests);
+            if (response.pending_permission_requests)
+              this.processPendingPermissionRequests(response.pending_permission_requests);
+            if (response.pending_user_dialog_requests)
+              this.processPendingUserDialogRequests(response.pending_user_dialog_requests);
           }
         },
-        reject: b,
+        reject: onError,
       });
-      let R =
-        jsonStringify(i) +
+      let stringified =
+        jsonStringify(controlRequest) +
         `
 `;
-      let T = () => {
+      let onAbort_2 = () => {
         if (signal?.aborted) return;
-        y = true;
-        return this.transport.write(R);
+        settled = true;
+        return this.transport.write(stringified);
       };
       try {
         (this.initializeHasBeenWritten || this.writingFirstInitialize
-          ? Promise.resolve(T())
-          : this.initializeWritten.then(T)
-        ).catch(b);
+          ? Promise.resolve(onAbort_2())
+          : this.initializeWritten.then(onAbort_2)
+        ).catch(onError);
       } catch (error) {
-        b(error);
+        onError(error);
       }
     });
   }
   initializationResult() {
     return this.initialization;
   }
-  writeAfterInitialize(e) {
-    if (this.initializeHasBeenWritten) return Promise.resolve(this.transport.write(e));
-    return this.initializeWritten.then(() => this.transport.write(e));
+  writeAfterInitialize(message) {
+    if (this.initializeHasBeenWritten) return Promise.resolve(this.transport.write(message));
+    return this.initializeWritten.then(() => this.transport.write(message));
   }
   reinitialize() {
     return withFeatureTelemetry("sdk_reinitialize", () =>
@@ -1590,19 +1619,19 @@ class Query {
       })
     ).response.mcpServers;
   }
-  async getContextUsage(e) {
+  async getContextUsage(options) {
     return (
       await this.request({
         subtype: "get_context_usage",
-        ...e,
+        ...options,
       })
     ).response;
   }
-  async usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET(e) {
+  async usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET(options) {
     return (
       await this.request({
         subtype: "get_usage",
-        ...(e?.skipBehaviors && {
+        ...(options?.skipBehaviors && {
           skip_behaviors: true,
         }),
       })
@@ -1636,8 +1665,8 @@ class Query {
       })
     ).response;
   }
-  async readCloudSessions(e, s) {
-    return (await this.request(e, s)).response;
+  async readCloudSessions(request, options) {
+    return (await this.request(request, options)).response;
   }
   async getChromeDialog() {
     return (
@@ -1668,14 +1697,14 @@ class Query {
       })
     ).response;
   }
-  async readFile(path, s) {
+  async readFile(path, options) {
     try {
       return (
         await this.request({
           subtype: "read_file",
           path,
-          max_bytes: s?.maxBytes,
-          encoding: s?.encoding,
+          max_bytes: options?.maxBytes,
+          encoding: options?.encoding,
         })
       ).response;
     } catch {
@@ -1689,19 +1718,19 @@ class Query {
       })
     ).response;
   }
-  async reloadPlugins(e) {
+  async reloadPlugins(options) {
     return withFeatureTelemetry(
       "sdk_reload_plugins",
       async () =>
         (
           await this.request({
             subtype: "reload_plugins",
-            ...(e?.holdOnCacheImpact && {
+            ...(options?.holdOnCacheImpact && {
               hold_on_cache_impact: true,
             }),
-            ...(e?.addPlugins &&
-              e.addPlugins.length > 0 && {
-                add_plugins: e.addPlugins,
+            ...(options?.addPlugins &&
+              options.addPlugins.length > 0 && {
+                add_plugins: options.addPlugins,
               }),
           })
         ).response,
@@ -1729,47 +1758,48 @@ class Query {
         ).response,
     );
   }
-  async setMcpServers(e) {
+  async setMcpServers(servers) {
     return withFeatureTelemetry("sdk_mcp_set_servers", async () => {
-      let s = {};
-      let r = {};
-      for (let [key, value] of Object.entries(e))
-        if (value.type === "sdk" && "instance" in value) s[key] = value;
-        else r[key] = value;
-      let n = new Set(this.sdkMcpServers.keys());
-      let i = new Set(Object.keys(s));
-      for (let h of n) if (!i.has(h)) await this.disconnectSdkMcpServer(h);
-      for (let [key, value] of Object.entries(s)) {
-        let y = this.sdkMcpServers.get(key);
-        if (!y) {
+      let sdkServers = {};
+      let capturedServers = {};
+      for (let [key, value] of Object.entries(servers))
+        if (value.type === "sdk" && "instance" in value) sdkServers[key] = value;
+        else capturedServers[key] = value;
+      let currentNames = new Set(this.sdkMcpServers.keys());
+      let nextNames = new Set(Object.keys(sdkServers));
+      for (let serverName of currentNames)
+        if (!nextNames.has(serverName)) await this.disconnectSdkMcpServer(serverName);
+      for (let [key, value] of Object.entries(sdkServers)) {
+        let existing = this.sdkMcpServers.get(key);
+        if (!existing) {
           this.connectSdkMcpServer(key, value);
           continue;
         }
         let { settings, ignored } = parseMcpServerSettings(value);
-        Nt(key, value, ignored);
+        logIgnoredMcpServerFields(key, value, ignored);
         if (
-          settings.timeout !== y.settings.timeout ||
-          settings.disableAutoBackground !== y.settings.disableAutoBackground ||
-          settings.connectorId !== y.settings.connectorId
+          settings.timeout !== existing.settings.timeout ||
+          settings.disableAutoBackground !== existing.settings.disableAutoBackground ||
+          settings.connectorId !== existing.settings.connectorId
         )
           logForDebugging(
             `[Query.setMcpServers] MCP server '${key}' is already registered, so the different timeout, disableAutoBackground or connectorId passed to setMcpServers is ignored; remove and re-add the server to change it`,
           );
-        if (settings.tools !== undefined && !sameToolPolicies(settings.tools, y.settings.tools)) {
+        if (settings.tools !== undefined && !sameToolPolicies(settings.tools, existing.settings.tools)) {
           logForDebugging(
             settings.tools.length === 0
               ? `[Query.setMcpServers] MCP server '${key}': per-tool policy cleared`
               : `[Query.setMcpServers] MCP server '${key}': per-tool policy replaced (${settings.tools.length} ${settings.tools.length === 1 ? "entry" : "entries"})`,
           );
-          y.settings = {
-            ...y.settings,
+          existing.settings = {
+            ...existing.settings,
             tools: settings.tools,
           };
         }
       }
-      let m = {};
-      for (let key of Object.keys(s))
-        m[key] = {
+      let manifest = {};
+      for (let key of Object.keys(sdkServers))
+        manifest[key] = {
           type: "sdk",
           name: key,
           ...this.sdkMcpServers.get(key)?.settings,
@@ -1778,8 +1808,8 @@ class Query {
         await this.request({
           subtype: "mcp_set_servers",
           servers: {
-            ...r,
-            ...m,
+            ...capturedServers,
+            ...manifest,
           },
         })
       ).response;
@@ -1788,14 +1818,14 @@ class Query {
   async accountInfo() {
     return (await this.initialization).account;
   }
-  async streamInput(e) {
+  async streamInput(input) {
     logForDebugging("[Query.streamInput] Starting to process input stream");
     try {
       if (!this.initializeHasBeenWritten) await this.initializeWritten;
-      let s = 0;
-      for await (let r of e) {
-        s++;
-        logForDebugging(`[Query.streamInput] Processing message ${s}: ${r.type}`);
+      let messageCount = 0;
+      for await (let message of input) {
+        messageCount++;
+        logForDebugging(`[Query.streamInput] Processing message ${messageCount}: ${message.type}`);
         if (this.abortController?.signal.aborted) break;
         this.runEnded = false;
         this.resultReceived = false;
@@ -1805,18 +1835,18 @@ class Query {
             jsonStringify(
               this.verbatimPrompts
                 ? {
-                    ...r,
+                    ...message,
                     client_composed: true,
                   }
-                : r,
+                : message,
             ) +
               `
 `,
           ),
         );
       }
-      logForDebugging(`[Query.streamInput] Finished processing ${s} messages from input stream`);
-      if (s > 0 && this.hasBidirectionalNeeds()) {
+      logForDebugging(`[Query.streamInput] Finished processing ${messageCount} messages from input stream`);
+      if (messageCount > 0 && this.hasBidirectionalNeeds()) {
         logForDebugging("[Query.streamInput] Has bidirectional needs, waiting for the run to end");
         await this.waitForRunEnd();
       }
@@ -1865,85 +1895,87 @@ class Query {
         resolve();
         return;
       }
-      let r = () => resolve();
-      signal?.addEventListener("abort", r, {
+      let onAbort = () => resolve();
+      signal?.addEventListener("abort", onAbort, {
         once: true,
       });
       this.addCleanupCallback(() => {
-        signal?.removeEventListener("abort", r);
+        signal?.removeEventListener("abort", onAbort);
         resolve();
       });
       this.runEndedResolve = () => {
-        signal?.removeEventListener("abort", r);
+        signal?.removeEventListener("abort", onAbort);
         resolve();
       };
     });
   }
-  handleHookCallbacks(e, s, r, signal) {
-    let i = this.hookCallbacks.get(e);
-    if (!i) throw Error(`No hook callback found for ID: ${e}`);
-    return i(s, r, {
+  handleHookCallbacks(callbackId, input, outputOptions, signal) {
+    let callback = this.hookCallbacks.get(callbackId);
+    if (!callback) throw Error(`No hook callback found for ID: ${callbackId}`);
+    return callback(input, outputOptions, {
       signal,
     });
   }
-  connectSdkMcpServer(e, s) {
-    let r = new SdkControlServerTransport((l) => this.sendMcpServerMessageToCli(e, l));
-    let connection = s.instance.connect(r).catch((error) => {
-      if (this.sdkMcpServers.get(e)?.transport === r) this.sdkMcpServers.delete(e);
-      logForDebugging(`[Query.connectSdkMcpServer] Failed to connect MCP server '${e}': ${error}`, {
+  connectSdkMcpServer(serverName, serverConfig) {
+    let transport = new SdkControlServerTransport((message) =>
+      this.sendMcpServerMessageToCli(serverName, message),
+    );
+    let connection = serverConfig.instance.connect(transport).catch((error) => {
+      if (this.sdkMcpServers.get(serverName)?.transport === transport) this.sdkMcpServers.delete(serverName);
+      logForDebugging(`[Query.connectSdkMcpServer] Failed to connect MCP server '${serverName}': ${error}`, {
         level: "error",
       });
     });
-    let { settings, ignored } = parseMcpServerSettings(s);
-    Nt(e, s, ignored);
-    this.sdkMcpServers.set(e, {
-      transport: r,
+    let { settings, ignored } = parseMcpServerSettings(serverConfig);
+    logIgnoredMcpServerFields(serverName, serverConfig, ignored);
+    this.sdkMcpServers.set(serverName, {
+      transport,
       settings,
       connection,
     });
   }
-  async disconnectSdkMcpServer(e) {
-    let s = this.sdkMcpServers.get(e);
-    if (s) {
-      let r = `${e}:${SDK_MANIFEST_CAPTURE}`;
-      for (let [n, i] of this.pendingMcpResponses)
-        if (n.startsWith(r)) {
-          this.pendingMcpResponses.delete(n);
-          i.reject(Error("MCP server was removed during the manifest capture"));
+  async disconnectSdkMcpServer(serverName) {
+    let serverConfig = this.sdkMcpServers.get(serverName);
+    if (serverConfig) {
+      let prefix = `${serverName}:${SDK_MANIFEST_CAPTURE}`;
+      for (let [key, pending] of this.pendingMcpResponses)
+        if (key.startsWith(prefix)) {
+          this.pendingMcpResponses.delete(key);
+          pending.reject(Error("MCP server was removed during the manifest capture"));
         }
-      await s.transport.close();
-      if (this.sdkMcpServers.get(e) === s) this.sdkMcpServers.delete(e);
+      await serverConfig.transport.close();
+      if (this.sdkMcpServers.get(serverName) === serverConfig) this.sdkMcpServers.delete(serverName);
     }
   }
-  sendMcpServerMessageToCli(e, s) {
-    if ("id" in s && s.id !== null && s.id !== undefined) {
-      let n = `${e}:${s.id}`;
-      let i = this.pendingMcpResponses.get(n);
-      if (i) {
-        i.resolve(s);
-        this.pendingMcpResponses.delete(n);
+  sendMcpServerMessageToCli(serverName, message) {
+    if ("id" in message && message.id !== null && message.id !== undefined) {
+      let key = `${serverName}:${message.id}`;
+      let pending = this.pendingMcpResponses.get(key);
+      if (pending) {
+        pending.resolve(message);
+        this.pendingMcpResponses.delete(key);
         return;
       }
-      if (typeof s.id === "string" && s.id.startsWith(SDK_MANIFEST_CAPTURE)) {
+      if (typeof message.id === "string" && message.id.startsWith(SDK_MANIFEST_CAPTURE)) {
         logForDebugging(
-          `[Query.sendMcpServerMessageToCli] Dropping late manifest-capture reply from '${e}' (${s.id})`,
+          `[Query.sendMcpServerMessageToCli] Dropping late manifest-capture reply from '${serverName}' (${message.id})`,
         );
         return;
       }
     }
-    let r = {
+    let controlRequest = {
       type: "control_request",
       request_id: randomUUID(),
       request: {
         subtype: "mcp_message",
-        server_name: e,
-        message: s,
+        server_name: serverName,
+        message,
       },
     };
-    if (!this.initializeHasBeenWritten && isToolListChangedNotification(s))
-      this.sdkMcpToolsChangedDuringCapture.add(e);
+    if (!this.initializeHasBeenWritten && isToolListChangedNotification(message))
+      this.sdkMcpToolsChangedDuringCapture.add(serverName);
     this.writeAfterInitialize(
-      jsonStringify(r) +
+      jsonStringify(controlRequest) +
         `
 `,
     ).catch((error) => {
@@ -1952,28 +1984,28 @@ class Query {
       });
     });
   }
-  handleMcpControlRequest(e, s, r) {
-    let id = "id" in s.message ? s.message.id : null;
-    let i = `${e}:${id}`;
+  handleMcpControlRequest(serverName, server, replyTo) {
+    let id = "id" in server.message ? server.message.id : null;
+    let key = `${serverName}:${id}`;
     return new Promise((resolve, reject) => {
-      let h = () => {
-        this.pendingMcpResponses.delete(i);
+      let cleanup = () => {
+        this.pendingMcpResponses.delete(key);
       };
-      let resolve_2 = (w) => {
-        h();
-        resolve(w);
+      let resolve_2 = (message) => {
+        cleanup();
+        resolve(message);
       };
-      let reject_2 = (w) => {
-        h();
-        reject(w);
+      let reject_2 = (message) => {
+        cleanup();
+        reject(message);
       };
-      this.pendingMcpResponses.set(i, {
+      this.pendingMcpResponses.set(key, {
         resolve: resolve_2,
         reject: reject_2,
       });
-      if (r.onmessage) r.onmessage(s.message);
+      if (replyTo.onmessage) replyTo.onmessage(server.message);
       else {
-        h();
+        cleanup();
         reject(Error("No message handler registered"));
         return;
       }
@@ -1981,16 +2013,16 @@ class Query {
   }
 }
 //@ chunk-y805ph4h.js:62908-62976 placement
-function st() {
+function closedBeforeResponseError() {
   return Error("Query closed before response received");
 }
 //@ chunk-y805ph4h.js:62976-63008 placement
-var tr = /^[a-z][a-z0-9_]{0,63}$/;
+var CALLBACK_ID_SUFFIX_RE = /^[a-z][a-z0-9_]{0,63}$/;
 //@ chunk-y805ph4h.js:63008-63137 placement
-function Kt(sessionId, s) {
-  if (sessionId === s) return true;
+function sharesCallbackSuffix(sessionId, otherId) {
+  if (sessionId === otherId) return true;
   let sliced = sessionId.slice(sessionId.lastIndexOf("_") + 1);
-  let sliced_2 = s.slice(s.lastIndexOf("_") + 1);
+  let sliced_2 = otherId.slice(otherId.lastIndexOf("_") + 1);
   return sliced.length >= 4 && sliced === sliced_2;
 }
 export { Query };

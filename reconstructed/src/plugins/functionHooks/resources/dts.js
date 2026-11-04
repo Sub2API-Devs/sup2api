@@ -21,3 +21,4 @@ var DTS_RESOURCE = __cc_resource_0;
  * 读取资源文本
  */
 var dtsResourceText = readEmbeddedTextSync(DTS_RESOURCE, import.meta.dirname);
+export { dtsResourceText };

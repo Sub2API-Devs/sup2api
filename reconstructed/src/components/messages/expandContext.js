@@ -8,7 +8,7 @@
  * pieces: chunk-g6fxv0zg.js (2)
  * attribution: placement 2
  */
-import { init_react_production, qt } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, createContext } from "../../../vendor/react/cjs/react.production.js";
 
 //@ chunk-g6fxv0zg.js:229-233 placement
 init_react_production();
@@ -16,5 +16,5 @@ init_react_production();
 /**
  * 导出值：expandContextSignal（展开上下文标记）。
  */
-var expandContextSignal = qt(false);
+var expandContextSignal = createContext(false);
 export { expandContextSignal };

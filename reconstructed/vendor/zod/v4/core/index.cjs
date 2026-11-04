@@ -5,7 +5,7 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_core } from "./core.cjs";
 import { require_parse } from "./parse.cjs";
 import { require_errors_2 } from "./errors.cjs";
@@ -26,7 +26,7 @@ import { require_json_schema_generator } from "./json-schema-generator.cjs";
 import { require_json_schema } from "./json-schema.cjs";
 
 //@ chunk-1ny7cxrt.js:585984-587814 cjs-fingerprint
-var require_core_2 = x(function (cjsExports) {
+var require_core_2 = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||
     (Object.create
@@ -60,9 +60,10 @@ var require_core_2 = x(function (cjsExports) {
         });
   var __exportStar =
     (cjsExports && cjsExports.__exportStar) ||
-    function (m, t) {
+    function (m, exportTarget) {
       for (var p in m)
-        if (p !== "default" && !Object.prototype.hasOwnProperty.call(t, p)) __createBinding(t, m, p);
+        if (p !== "default" && !Object.prototype.hasOwnProperty.call(exportTarget, p))
+          __createBinding(exportTarget, m, p);
     };
   var __importStar =
     (cjsExports && cjsExports.__importStar) ||

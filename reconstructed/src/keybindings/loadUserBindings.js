@@ -12,7 +12,7 @@ import { join, dirname } from "path";
 import { readFileSync } from "fs";
 import { readFile, stat } from "fs/promises";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, string, record } from "../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, record } from "../../vendor/zod/v4/classic/schemas.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { createSignal } from "../utils/signal.js";
 import { logEvent } from "../services/analytics/index.js";
@@ -33,20 +33,24 @@ import { getIsNonInteractiveSession } from "../bootstrap/state.js";
 import { chokidar_default } from "../../vendor/chokidar/index.js";
 import { registerCleanup } from "../utils/cleanupRegistry.js";
 import { getActionDisplayText } from "./match.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-x1mwqya5.js:2941-3004 fingerprint = isKeybindingBlock (0.69)
 /**
  * 宽松的 zod 结构：{context: string, bindings: Record<string, string|null>}，加载用户配置时只用它判断块形状（上下文与动作是否合法由 validate 另报）。
  */
-var keybindingBlockSchema = DoctorLazy(() =>
-  u({
-    context: string(),
-    bindings: record(string(), string().nullable()),
-  }),
-);
+var keybindingBlockSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-x1mwqya5.js:2941", () => {
+  keybindingBlockSchema = DoctorLazy(() =>
+    objectSchema({
+      context: stringSchema(),
+      bindings: record(stringSchema(), stringSchema().nullable()),
+    }),
+  );
+});
 //@ chunk-x1mwqya5.js:3004-3052 layout
-function isKeybindingBlock(n) {
-  return keybindingBlockSchema().safeParse(n).success;
+function isKeybindingBlock(block) {
+  return keybindingBlockSchema().safeParse(block).success;
 }
 //@ chunk-x1mwqya5.js:3052-3103 file-local
 /**
@@ -94,7 +98,10 @@ function createKeybindingsState() {
   return state;
 }
 //@ chunk-x1mwqya5.js:9749-9761 layout
-var keybindingsState = createKeybindingsState();
+var keybindingsState; // deferred: uses createKeybindingsState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-x1mwqya5.js:9749", () => {
+  keybindingsState = createKeybindingsState();
+});
 //@ chunk-x1mwqya5.js:9761-9952 fingerprint = logCustomBindingsLoadedOncePerDay (0.876)
 /**
  * 每天最多发一次 tengu_custom_keybindings_loaded（带用户绑定条数）。
@@ -115,7 +122,10 @@ function getKeybindingsPath() {
   return join(getClaudeConfigDir(), "keybindings.json");
 }
 //@ chunk-x1mwqya5.js:10002-10034 placement
-var keybindingsStoreKey = STORAGE_SPACES.state("keybindings");
+var keybindingsStoreKey; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x1mwqya5.js:10002", () => {
+  keybindingsStoreKey = STORAGE_SPACES.state("keybindings");
+});
 //@ chunk-x1mwqya5.js:10034-10062 placement
 function getDefaultParsedBindings() {
   return parseBindings(DEFAULT_BINDINGS);
@@ -124,9 +134,9 @@ function getDefaultParsedBindings() {
 /**
  * 展开用户块，只保留动作为 null（解绑）或合法动作/command:* 的绑定。
  */
-function parseValidUserBindings(userBlocks) {
-  return parseBindings(migrateDeprecatedActions(userBlocks)).filter(
-    (r) => r.action === null || isValidBindingAction(r.action),
+function parseValidUserBindings(blocks) {
+  return parseBindings(migrateDeprecatedActions(blocks)).filter(
+    (binding) => binding.action === null || isValidBindingAction(binding.action),
   );
 }
 //@ chunk-x1mwqya5.js:10275-10411 sole-consumer
@@ -149,10 +159,10 @@ function isKeybindingCustomizationBlocked() {
 /**
  * 同步取绑定（不记日志、不报警告）：默认绑定 + 合法的用户绑定；自定义被禁或特定模式下只返回默认绑定。
  */
-function loadKeybindingsSyncWithWarnings(n) {
+function loadKeybindingsSyncWithWarnings(options) {
   let defaultBindings = getDefaultParsedBindings();
   if (isKeybindingCustomizationBlocked()) return defaultBindings;
-  if (isStorageV5Enabled() && n !== undefined) return defaultBindings;
+  if (isStorageV5Enabled() && options !== undefined) return defaultBindings;
   try {
     let content = readFileSync(getKeybindingsPath(), "utf-8");
     let parsed = jsonParse(content);
@@ -181,8 +191,8 @@ async function loadKeybindingsAsync(state, backend, options) {
     let readResult = await backend.read([keybindingsStoreKey]);
     if (!readResult.ok) {
       let error = readResult.error;
-      let k = formatStorageError(error);
-      logForDebugging(`[keybindings] Error loading ${userPath}: ${k}`);
+      let message = formatStorageError(error);
+      logForDebugging(`[keybindings] Error loading ${userPath}: ${message}`);
       if (options?.suppressFeatureEvents)
         logFeatureSad("keybinding_load_user_config", "warm_backend_read_failed_fell_back");
       reportUserConfigLoad(options, "keybinding_config_parse_error");
@@ -192,13 +202,13 @@ async function loadKeybindingsAsync(state, backend, options) {
           {
             type: "parse_error",
             severity: "error",
-            message: `Failed to parse keybindings.json: ${k}`,
+            message: `Failed to parse keybindings.json: ${message}`,
           },
         ],
       };
     }
-    let h = readResult.value.items[0];
-    if (!h.found) {
+    let item = readResult.value.items[0];
+    if (!item.found) {
       reportUserConfigLoad(options, "ok");
       return {
         bindings: defaultBindings,
@@ -206,7 +216,7 @@ async function loadKeybindingsAsync(state, backend, options) {
       };
     }
     return loadKeybindingsFromText(
-      Buffer.from(h.value).toString("utf-8"),
+      Buffer.from(item.value).toString("utf-8"),
       state,
       defaultBindings,
       userPath,
@@ -394,15 +404,15 @@ async function warmKeybindingsFromBackend(state, backend) {
 /**
  * 预热得到的绑定只用一次：若此后自定义被禁则清空状态，返回是否需要重新加载。
  */
-function invalidateWarmedBindings(n) {
-  if (!n.warmedFromBackend) return false;
+function invalidateWarmedBindings(state) {
+  if (!state.warmedFromBackend) return false;
   if (isKeybindingCustomizationBlocked()) {
-    n.bindings = null;
-    n.warnings = [];
-    n.warmedFromBackend = false;
+    state.bindings = null;
+    state.warnings = [];
+    state.warmedFromBackend = false;
     return true;
   }
-  n.warmedFromBackend = false;
+  state.warmedFromBackend = false;
   return false;
 }
 //@ chunk-x1mwqya5.js:14525-14604 layout
@@ -519,8 +529,8 @@ function loadKeybindingsSync(state) {
 /**
  * 启动 keybindings.json 的 chokidar 监视（轮询 2 秒、写入稳定 500ms）：add/change 时异步重载并发 changed 信号，unlink 时回到默认绑定；目录不存在或自定义被禁时不监视。
  */
-async function initializeKeybindingWatcher(keybindingsState) {
-  if (keybindingsState.initialized || keybindingsState.disposed) return;
+async function initializeKeybindingWatcher(state) {
+  if (state.initialized || state.disposed) return;
   if (!isKeybindingCustomizationEnabled() || isCustomizationDisabled("keybindings")) {
     logForDebugging("[keybindings] Skipping file watcher - user customization disabled");
     return;
@@ -538,9 +548,9 @@ async function initializeKeybindingWatcher(keybindingsState) {
     logFeatureSad("keybinding_watcher_init", "watch_dir_inaccessible");
     return;
   }
-  keybindingsState.initialized = true;
+  state.initialized = true;
   logForDebugging(`[keybindings] Watching for changes to ${userPath}`);
-  keybindingsState.watcher = chokidar_default.watch(userPath, {
+  state.watcher = chokidar_default.watch(userPath, {
     persistent: true,
     ignoreInitial: true,
     awaitWriteFinish: {
@@ -552,23 +562,23 @@ async function initializeKeybindingWatcher(keybindingsState) {
     interval: 2000,
     atomic: true,
   });
-  keybindingsState.watcher.on("add", (s) => handleChange(keybindingsState, s));
-  keybindingsState.watcher.on("change", (s) => handleChange(keybindingsState, s));
-  keybindingsState.watcher.on("unlink", (s) => handleDelete(keybindingsState, s));
-  keybindingsState.watcher.on("error", (s) =>
-    logForDebugging(`[keybindings] watcher error: ${errorMessage(s)}`, {
+  state.watcher.on("add", (path) => handleChange(state, path));
+  state.watcher.on("change", (path) => handleChange(state, path));
+  state.watcher.on("unlink", (path) => handleDelete(state, path));
+  state.watcher.on("error", (error) =>
+    logForDebugging(`[keybindings] watcher error: ${errorMessage(error)}`, {
       level: "warn",
     }),
   );
-  registerCleanup(keybindingsState);
+  registerCleanup(state);
   logFeatureOk("keybinding_watcher_init");
 }
 //@ chunk-x1mwqya5.js:17400-17708 fingerprint = handleChange (0.678)
 /**
  * 文件变化：重新加载，写入状态并通知订阅者（热重载）。
  */
-async function handleChange(state, r) {
-  logForDebugging(`[keybindings] Detected change to ${r}`);
+async function handleChange(state, path) {
+  logForDebugging(`[keybindings] Detected change to ${path}`);
   try {
     let result = await loadKeybindingsAsync(state);
     state.bindings = result.bindings;
@@ -585,20 +595,20 @@ async function handleChange(state, r) {
 /**
  * 文件被删除：回到默认绑定并通知订阅者。
  */
-function handleDelete(n, r) {
-  logForDebugging(`[keybindings] Detected deletion of ${r}`);
+function handleDelete(state, path) {
+  logForDebugging(`[keybindings] Detected deletion of ${path}`);
   let defaultBindings = getDefaultParsedBindings();
-  n.bindings = defaultBindings;
-  n.warnings = [];
-  n.warmedFromBackend = false;
-  n.changed.emit({
+  state.bindings = defaultBindings;
+  state.warnings = [];
+  state.warmedFromBackend = false;
+  state.changed.emit({
     bindings: defaultBindings,
     warnings: [],
   });
 }
 //@ chunk-4t8fx0s8.js:21206-21260 callgraph-fingerprint = loadKeybindingsSync (0.512)
-function getChatActionDisplayText(e) {
-  return getActionDisplayText(e, "Chat", keybindingsState.bindings ?? loadKeybindingsSyncWithWarnings());
+function getChatActionDisplayText(action) {
+  return getActionDisplayText(action, "Chat", keybindingsState.bindings ?? loadKeybindingsSyncWithWarnings());
 }
 export {
   isKeybindingCustomizationEnabled,

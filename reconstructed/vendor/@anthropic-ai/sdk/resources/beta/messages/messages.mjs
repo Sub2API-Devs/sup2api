@@ -7,9 +7,9 @@
  */
 import { APIResource } from "../../../core/resource.mjs";
 import { Batches } from "./batches.mjs";
-import { bd, parseMessageContent } from "../../../lib/beta-parser.mjs";
+import { getOutputFormat, parseMessageContent } from "../../../lib/beta-parser.mjs";
 import { MODEL_NONSTREAMING_TOKENS } from "../../../internal/constants.mjs";
-import { stainlessHelperHeader } from "../../../internal/stainless-helper-header.mjs";
+import { stainlessHelperHeader_2 } from "../../../internal/stainless-helper-header.mjs";
 import { buildHeaders } from "../../../internal/headers.mjs";
 import { BetaMessageStream } from "../../../lib/BetaMessageStream.mjs";
 import { BetaToolRunner } from "../../../lib/tools/BetaToolRunner.mjs";
@@ -25,7 +25,7 @@ var Messages = (() => {
       this.batches = new Batches(this._client);
     }
     create(params, options) {
-      let modifiedParams = bd(params);
+      let modifiedParams = getOutputFormat(params);
       let { betas, user_profile_id, workspace_id, ...body } = modifiedParams;
       if (body.model in DEPRECATED_MODELS)
         console.warn(`The model '${body.model}' is deprecated and will reach end-of-life on ${DEPRECATED_MODELS[body.model]}
@@ -43,7 +43,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
         let maxNonstreamingTokens = MODEL_NONSTREAMING_TOKENS[body.model] ?? undefined;
         timeout = this._client.calculateNonstreamingTimeout(body.max_tokens, maxNonstreamingTokens);
       }
-      let helperHeader = stainlessHelperHeader(body.tools, body.messages);
+      let helperHeader = stainlessHelperHeader_2(body.tools, body.messages);
       return this._client.post("/v1/messages?beta=true", {
         body,
         timeout: timeout ?? 600000,
@@ -92,7 +92,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
       return BetaMessageStream.createMessage(this, body, options);
     }
     countTokens(params, options) {
-      let modifiedParams = bd(params);
+      let modifiedParams = getOutputFormat(params);
       let { betas, user_profile_id, workspace_id, ...body } = modifiedParams;
       return this._client.post("/v1/messages/count_tokens?beta=true", {
         body,

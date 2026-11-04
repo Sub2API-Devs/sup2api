@@ -22,6 +22,7 @@ import { getErrnoCode, errorMessage, sanitizeErrnoTokenForTelemetry } from "../e
 import { logEvent } from "../../services/analytics/index.js";
 import { sanitizeMarkName } from "../startupMarks.js";
 import { isAxiosError } from "../../../vendor/axios/dist/esm/axios.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:4204213-4204348 fingerprint = GCS_BASE (0.667)
 var OFFICIAL_MARKETPLACE_GCS_URL =
@@ -31,7 +32,7 @@ var MARKETPLACES_CLAUDE_PLUGINS_OFFICIAL = "marketplaces/claude-plugins-official
 /**
  * 从 GCS 镜像（downloads.claude.ai/.../claude-plugins-official）下载官方市场：读 latest 指针，sha 未变则跳过，否则下载 zip 解压到市场缓存目录并写 .gcs-sha；失败返回 null 由调用方回退 git。
  */
-async function fetchOfficialMarketplaceFromGcs(installLocation, marketplacesCacheDir, r) {
+async function fetchOfficialMarketplaceFromGcs(installLocation, marketplacesCacheDir, storageV5) {
   let cacheDir = resolve_2(marketplacesCacheDir);
   let resolvedLoc = resolve_2(installLocation);
   if (resolvedLoc !== cacheDir && !resolvedLoc.startsWith(cacheDir + sep)) {
@@ -53,23 +54,23 @@ async function fetchOfficialMarketplaceFromGcs(installLocation, marketplacesCach
     });
     sha = String(latest.data).trim();
     if (!sha) throw Error("latest pointer returned empty body");
-    let Z = join(installLocation, GCS_SHA_MARKER_FILE);
-    let Se =
-      isStorageV5Enabled() && r !== undefined
-        ? getMarketplaceStorageKey(Z, dirname(marketplacesCacheDir))
+    let markerPath = join(installLocation, GCS_SHA_MARKER_FILE);
+    let storageKey =
+      isStorageV5Enabled() && storageV5 !== undefined
+        ? getMarketplaceStorageKey(markerPath, dirname(marketplacesCacheDir))
         : null;
     if (
-      (r !== undefined && Se !== null
-        ? await r.readText([Se]).then(
-            (lt) => {
-              let Je = lt.ok ? lt.value.items[0] : undefined;
-              return Je?.found ? Je.value.trim() : null;
+      (storageV5 !== undefined && storageKey !== null
+        ? await storageV5.readText([storageKey]).then(
+            (readResult) => {
+              let item = readResult.ok ? readResult.value.items[0] : undefined;
+              return item?.found ? item.value.trim() : null;
             },
             () => null,
           )
         : isDiskless()
           ? null
-          : await readFile(Z, "utf8").then(
+          : await readFile(markerPath, "utf8").then(
               (file) => file.trim(),
               () => null,
             )) === sha
@@ -110,25 +111,25 @@ async function fetchOfficialMarketplaceFromGcs(installLocation, marketplacesCach
       if (mode && mode & 73) await chmod(dest, mode & DEFAULT_FILE_MODE).catch(() => {});
     }
     await writeFile(join(staging, GCS_SHA_MARKER_FILE), sha);
-    let We = `${installLocation}.backup`;
-    await rm_2(We, {
+    let backupPath = `${installLocation}.backup`;
+    await rm_2(backupPath, {
       recursive: true,
       force: true,
     }).catch(() => {});
-    let ze = false;
+    let movedAside = false;
     try {
-      await rename(installLocation, We);
-      ze = true;
+      await rename(installLocation, backupPath);
+      movedAside = true;
     } catch (error) {
       if (getErrnoCode(error) !== "ENOENT") throw error;
     }
     try {
       await rename(staging, installLocation);
     } catch (error) {
-      if (ze) await rename(We, installLocation).catch(() => {});
+      if (movedAside) await rename(backupPath, installLocation).catch(() => {});
       throw error;
     }
-    await rm_2(We, {
+    await rm_2(backupPath, {
       recursive: true,
       force: true,
     }).catch(() => {});
@@ -141,12 +142,12 @@ async function fetchOfficialMarketplaceFromGcs(installLocation, marketplacesCach
     });
     return null;
   } finally {
-    let q = outcome;
+    let finalOutcome = outcome;
     logEvent("tengu_plugin_remote_fetch", {
       source: lit_2("marketplace_gcs"),
       host: lit_2("downloads.claude.ai"),
       is_official: true,
-      outcome: fromEnum(q),
+      outcome: fromEnum(finalOutcome),
       duration_ms: Math.round(performance.now() - start),
       ...(bytes !== undefined && {
         bytes,
@@ -161,31 +162,34 @@ async function fetchOfficialMarketplaceFromGcs(installLocation, marketplacesCach
   }
 }
 //@ chunk-e6aww6q8.js:4206218-4206330 fingerprint = KNOWN_FS_CODES (1)
-var KNOWN_FS_CODES = new Set([
-  "ENOSPC",
-  "EACCES",
-  "EPERM",
-  "EXDEV",
-  "EBUSY",
-  "ENOENT",
-  "ENOTDIR",
-  "EROFS",
-  "EMFILE",
-  "ENAMETOOLONG",
-]);
+var KNOWN_FS_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4206218", () => {
+  KNOWN_FS_CODES = new Set([
+    "ENOSPC",
+    "EACCES",
+    "EPERM",
+    "EXDEV",
+    "EBUSY",
+    "ENOENT",
+    "ENOTDIR",
+    "EROFS",
+    "EMFILE",
+    "ENAMETOOLONG",
+  ]);
+});
 //@ chunk-e6aww6q8.js:4206330-4206760 fingerprint = classifyGcsError (0.978)
-function classifyGcsError(e) {
-  if (isAxiosError(e)) {
-    if (e.code === "ECONNABORTED") return lit_2("timeout");
-    if (e.response) return concatSafe(lit_2("http_"), fromNumber(e.response.status));
+function classifyGcsError(error) {
+  if (isAxiosError(error)) {
+    if (error.code === "ECONNABORTED") return lit_2("timeout");
+    if (error.response) return concatSafe(lit_2("http_"), fromNumber(error.response.status));
     return lit_2("network");
   }
-  let code = getErrnoCode(e);
+  let code = getErrnoCode(error);
   if (code && /^E[A-Z]+$/.test(code) && !code.startsWith("ERR_")) {
-    let s = KNOWN_FS_CODES.has(code) ? sanitizeErrnoTokenForTelemetry(code) : undefined;
-    return s ? concatSafe(lit_2("fs_"), s) : lit_2("fs_other");
+    let knownCode = KNOWN_FS_CODES.has(code) ? sanitizeErrnoTokenForTelemetry(code) : undefined;
+    return knownCode ? concatSafe(lit_2("fs_"), knownCode) : lit_2("fs_other");
   }
-  let msg = errorMessage(e);
+  let msg = errorMessage(error);
   if (/unzip|invalid zip|central directory/i.test(msg)) return lit_2("zip_parse");
   if (/empty body/.test(msg)) return lit_2("empty_latest");
   return lit_2("other");

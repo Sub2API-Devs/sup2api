@@ -17,19 +17,19 @@ import { settingsSourceLabel } from "./settingsLabel.js";
  * 把设置问题分为仅状态提示与无效条目两类。
  */
 function splitStatusNotices(errors) {
-  let r = [];
-  let i = [];
-  for (let n of errors) (n.statusOnly ? r : i).push(n);
+  let statusNotices = [];
+  let invalidEntries = [];
+  for (let error of errors) (error.statusOnly ? statusNotices : invalidEntries).push(error);
   return {
-    statusNotices: r,
-    invalidEntries: i,
+    statusNotices,
+    invalidEntries,
   };
 }
 //@ chunk-1ptrwbb7.js:565-721 placement
-function logSkippedInvalidSetting(o) {
-  for (let r of o)
+function logSkippedInvalidSetting(errors) {
+  for (let error of errors)
     logForDebugging(
-      `Invalid setting skipped without dialog (automated session): ${cleanForDisplay(settingsSourceLabel(r.file))}: ${r.path}: ${r.message}`,
+      `Invalid setting skipped without dialog (automated session): ${cleanForDisplay(settingsSourceLabel(error.file))}: ${error.path}: ${error.message}`,
       {
         level: "error",
       },

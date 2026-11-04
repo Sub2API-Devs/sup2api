@@ -5,10 +5,10 @@
  * pieces: chunk-h6b7mazd.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-h6b7mazd.js:8007-8054 cjs-require-graph
-var require_pow = x(function (cjsExports, cjsModule) {
+var require_pow = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = Math.pow;
 });
 export { require_pow };

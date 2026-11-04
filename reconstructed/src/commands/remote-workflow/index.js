@@ -21,8 +21,8 @@ var remoteWorkflowCommandDefinition = {
   disableModelInvocation: true,
   supportsNonInteractive: true,
   load: () =>
-    import("./chunk-cg8zacmh.js").then((e) => ({
-      call: e.call,
+    import("./remote-workflow.js").then((mod) => ({
+      call: mod.call,
     })),
 };
 var remoteWorkflowCommand = remoteWorkflowCommandDefinition;
@@ -38,8 +38,8 @@ var workflowLaunchExecCommandDefinition = {
   disableModelInvocation: true,
   supportsNonInteractive: true,
   load: () =>
-    import("./chunk-3sew516d.js").then((e) => ({
-      call: e.call,
+    import("../../services/workflows/call.lazy.js").then((mod) => ({
+      call: mod.call,
     })),
 };
 var workflowLaunchExecCommand = workflowLaunchExecCommandDefinition;

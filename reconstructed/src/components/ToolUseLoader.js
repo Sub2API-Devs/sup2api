@@ -8,7 +8,7 @@
  * pieces: chunk-ah34pb7m.js (4)
  * attribution: sole-consumer 3, fingerprint 1
  */
-import { init_react_production, R, P } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, useRef, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { useTerminalFocus } from "../ink/hooks/use-terminal-focus.js";
 import { useAnimationFrame } from "../ink/components/Input.js";
 import { useIsScreenReaderEnabled } from "../ink/components/ErrorBoundary.js";
@@ -17,43 +17,47 @@ import { useScreenReaderBell } from "../hooks/useScreenReaderBell.js";
 import { UUID_MISSING_LOG_INTERVAL_MS } from "../bridge/inboundMessages.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../ink/components/Text.js";
-import { BLACK_CIRCLE } from "../utils/permissions/autoModeRulesPrompt.js";
+import { BLACK_CIRCLE } from "../constants/figures.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ah34pb7m.js:39964-39968 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ah34pb7m.js:39964", () => {
+  init_react_production();
+});
 //@ chunk-ah34pb7m.js:39968-39979 sole-consumer
 var BLINK_INTERVAL_MS = 600;
 //@ chunk-ah34pb7m.js:39979-40095 sole-consumer
-function useBlinkingDot(m, d = BLINK_INTERVAL_MS) {
+function useBlinkingDot(enabled, intervalMs = BLINK_INTERVAL_MS) {
   let terminalFocus = useTerminalFocus();
-  let [g, f] = useAnimationFrame(m && terminalFocus ? d : null);
-  if (!m || !terminalFocus) return [g, true];
-  let h = Math.floor(f / d) % 2 === 0;
-  return [g, h];
+  let [ref, time] = useAnimationFrame(enabled && terminalFocus ? intervalMs : null);
+  if (!enabled || !terminalFocus) return [ref, true];
+  let isVisible = Math.floor(time / intervalMs) % 2 === 0;
+  return [ref, isVisible];
 }
 //@ chunk-ah34pb7m.js:40095-40534 fingerprint = ToolUseLoader (0.573)
 function ToolUseLoader({ isError, isNeutral = false, isUnresolved, shouldAnimate }) {
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let prefersReducedMotion = usePrefersReducedMotion();
-  let [M, T] = useBlinkingDot(shouldAnimate && !isScreenReaderEnabled && !prefersReducedMotion);
-  let x = isUnresolved && shouldAnimate && prefersReducedMotion && !isScreenReaderEnabled;
+  let [ref, isVisible] = useBlinkingDot(shouldAnimate && !isScreenReaderEnabled && !prefersReducedMotion);
+  let showStaticDot = isUnresolved && shouldAnimate && prefersReducedMotion && !isScreenReaderEnabled;
   let screenReaderBell = useScreenReaderBell();
-  let b = R(null);
-  P(() => {
-    if (isUnresolved) b.current ??= Date.now();
-    else if (b.current !== null) {
-      if (Date.now() - b.current > UUID_MISSING_LOG_INTERVAL_MS) screenReaderBell();
-      b.current = null;
+  let unresolvedSinceRef = useRef(null);
+  useEffect(() => {
+    if (isUnresolved) unresolvedSinceRef.current ??= Date.now();
+    else if (unresolvedSinceRef.current !== null) {
+      if (Date.now() - unresolvedSinceRef.current > UUID_MISSING_LOG_INTERVAL_MS) screenReaderBell();
+      unresolvedSinceRef.current = null;
     }
   }, [isUnresolved, screenReaderBell]);
   return jsxProd_default(Box, {
-    ref: M,
+    ref,
     minWidth: 2,
     children: jsxProd_default(Text, {
       "aria-label": isError && !isNeutral ? "tool error:" : "tool:",
-      color: x ? "text" : isUnresolved || isNeutral ? undefined : isError ? "error" : "success",
-      dimColor: (isUnresolved && !x) || isNeutral,
-      children: !shouldAnimate || T || isError || !isUnresolved ? BLACK_CIRCLE : " ",
+      color: showStaticDot ? "text" : isUnresolved || isNeutral ? undefined : isError ? "error" : "success",
+      dimColor: (isUnresolved && !showStaticDot) || isNeutral,
+      children: !shouldAnimate || isVisible || isError || !isUnresolved ? BLACK_CIRCLE : " ",
     }),
   });
 }

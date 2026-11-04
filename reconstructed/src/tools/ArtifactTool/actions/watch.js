@@ -257,21 +257,21 @@ function isLiveCommentsWatchPossible() {
   return sessionWatchRail() === "live" && artifactCommentsPromptGateOpen() && isAutoReactEnabled();
 }
 //@ chunk-8wvtd8sr.js:252942-256296 placement
-function describeWatchCommentsReach(e, n, s) {
+function describeWatchCommentsReach(autoReplies, connecting, notArmedReason) {
   if (!artifactCommentsPromptGateOpen()) return "";
-  if (s === "declined" && e !== "armed")
+  if (notArmedReason === "declined" && autoReplies !== "armed")
     return ' Comments on it do NOT reach this session through this watch (auto-replies for this artifact were not approved earlier in the session \u2014 declined or left unanswered \u2014 so it is watched without them); if the user wants them they can say so with the link, and the next watch asks again. Read them with action "comments" when the user asks.';
-  if (s === "cannot_edit" && e !== "armed")
+  if (notArmedReason === "cannot_edit" && autoReplies !== "armed")
     return ' Comments on it do NOT reach this session through this watch (auto-replies arm only on an artifact the user can edit, and this account could not edit it when the watch last connected \u2014 if the user has since been given edit access, unwatch and watch it again to re-check); read them with action "comments" when the user asks.';
-  if (s === "unattended_turn" && e !== "armed")
+  if (notArmedReason === "unattended_turn" && autoReplies !== "armed")
     return ' Comments on it do NOT reach this session through this watch (auto-replies arm only when the user asks for the watch in their own message, and no message from the user started this turn); read them with action "comments" when the user asks.';
-  if (s === "not_named_by_user" && e !== "armed")
+  if (notArmedReason === "not_named_by_user" && autoReplies !== "armed")
     return ' Comments on it do NOT reach this session through this watch (auto-replies arm only for an artifact whose link the user gave in their own message, and this link came from elsewhere); if the user wants its comments answered, they can say so with the link. Read them with action "comments" when the user asks.';
-  switch (e) {
+  switch (autoReplies) {
     case "armed":
       return ` A comment on it sent to Claude reaches this session (its status row says ${AUTO_REPLIES_ARMED_TOKEN}); plain comments never notify \u2014 read them with action "comments" when asked.`;
     case undefined:
-      return n
+      return connecting
         ? ` It is still connecting, so whether a comment sent to Claude reaches this session through it is not settled \u2014 its \`status\` row will say (${AUTO_REPLIES_ARMED_TOKEN}, or not); plain comments never notify.`
         : ` Whether a comment sent to Claude reaches this session through it shows on its \`status\` row (${AUTO_REPLIES_ARMED_TOKEN}, or not); plain comments never notify.`;
     case "none":
@@ -289,57 +289,57 @@ function describeWatchCommentsReach(e, n, s) {
     case "denied":
       return ` Comments on it do NOT reach this session through this watch right now (${AUTO_REPLIES_DENIED_ROW}); read them with action "comments" when the user asks.`;
     default:
-      return ` Comments on it do NOT reach this session through this watch (auto-replies are ${clipUnknown(e)}); read them with action "comments" when the user asks.`;
+      return ` Comments on it do NOT reach this session through this watch (auto-replies are ${clipUnknown(autoReplies)}); read them with action "comments" when the user asks.`;
   }
 }
 //@ chunk-8wvtd8sr.js:256296-258905 placement
-function describeUnwatchedState(rows, n, s) {
-  let r = isLiveCommentsWatchPossible()
+function describeUnwatchedState(rows, moreWatches, singleArtifact) {
+  let headline = isLiveCommentsWatchPossible()
     ? "This session does not keep track of new versions of this artifact or hear comments on it"
     : "This session does not keep track of new versions of this artifact";
-  let mapped = rows.map((R) => {
-    let T = canonicalTargetOrPlaceholder(R.url);
-    let reason = typeof R.reason === "string" ? R.reason : undefined;
-    let failures = typeof R.failures === "number" && Number.isFinite(R.failures) ? R.failures : 0;
-    let V =
-      failures > 0 || R.last_failure !== undefined
-        ? ` (${failures} consecutive failed ${plural(failures, "attempt")} so far${R.last_failure !== undefined ? `; last close or error: ${clipUnknown(R.last_failure)}` : ""})`
+  let mapped = rows.map((row) => {
+    let target = canonicalTargetOrPlaceholder(row.url);
+    let reason = typeof row.reason === "string" ? row.reason : undefined;
+    let failures = typeof row.failures === "number" && Number.isFinite(row.failures) ? row.failures : 0;
+    let failuresNote =
+      failures > 0 || row.last_failure !== undefined
+        ? ` (${failures} consecutive failed ${plural(failures, "attempt")} so far${row.last_failure !== undefined ? `; last close or error: ${clipUnknown(row.last_failure)}` : ""})`
         : "";
-    let M = () => {
-      let x = frameLiveSkipReasonPhrase(reason ?? "unknown");
-      return x !== null ? `${x}.` : `reason: ${clipUnknown(R.reason)}.`;
+    let reasonText = () => {
+      let phrase = frameLiveSkipReasonPhrase(reason ?? "unknown");
+      return phrase !== null ? `${phrase}.` : `reason: ${clipUnknown(row.reason)}.`;
     };
-    if (R.rail !== undefined) {
-      let x = unexpectedWatchFailure(reason ?? "unknown");
-      switch (R.state) {
+    if (row.rail !== undefined) {
+      let hint = unexpectedWatchFailure(reason ?? "unknown");
+      switch (row.state) {
         case "arming":
-          return `- ${T} \u2014 not a wake subscription yet: its registration is in flight right now. Check status again in a few seconds before relying on it.`;
+          return `- ${target} \u2014 not a wake subscription yet: its registration is in flight right now. Check status again in a few seconds before relying on it.`;
         case "failed":
-          return `- ${T} \u2014 NOT subscribed: the durable wake subscription failed to register at ${formatEpochMsIso(R.at)} (${clipUnknown(R.reason)}${labelSuffix(R.detail)}) \u2014 ${describeWatchError(reason ?? "unknown", shortLabelOrUndefined(R.server_message))} Nothing will wake this session about this artifact${x === null ? "" : `; ${x}`}.`;
+          return `- ${target} \u2014 NOT subscribed: the durable wake subscription failed to register at ${formatEpochMsIso(row.at)} (${clipUnknown(row.reason)}${labelSuffix(row.detail)}) \u2014 ${describeWatchError(reason ?? "unknown", shortLabelOrUndefined(row.server_message))} Nothing will wake this session about this artifact${hint === null ? "" : `; ${hint}`}.`;
         default:
-          return `- ${T} \u2014 no wake subscription (state: ${clipUnknown(R.state)}).`;
+          return `- ${target} \u2014 no wake subscription (state: ${clipUnknown(row.state)}).`;
       }
     }
-    switch (R.state) {
+    switch (row.state) {
       case "arming":
-        return R.reconnect === true
-          ? `- ${T} \u2014 reconnecting right now, so nothing reaches this session until it is connected again${V}. Check status again in a few seconds before relying on it.`
-          : `- ${T} \u2014 not a watch yet: its first connection is being set up right now${V}. Check status again in a few seconds before relying on it.`;
+        return row.reconnect === true
+          ? `- ${target} \u2014 reconnecting right now, so nothing reaches this session until it is connected again${failuresNote}. Check status again in a few seconds before relying on it.`
+          : `- ${target} \u2014 not a watch yet: its first connection is being set up right now${failuresNote}. Check status again in a few seconds before relying on it.`;
       case "backing_off":
-        return `- ${T} \u2014 not connected: the next reconnect attempt is in about ${numberText(R.next_in_s)}s (as of this status)${V}; it gives up after more than ${numberText(R.max_failures)} consecutive failures, retries on its own until then, and you are told if it has to stop.`;
+        return `- ${target} \u2014 not connected: the next reconnect attempt is in about ${numberText(row.next_in_s)}s (as of this status)${failuresNote}; it gives up after more than ${numberText(row.max_failures)} consecutive failures, retries on its own until then, and you are told if it has to stop.`;
       case "failed":
-        return `- ${T} \u2014 NOT watching: the live subscription failed to arm at ${formatEpochMsIso(R.at)} \u2014 ${M()} ${r}; ${noRewatchAdvice(reason) ?? 'pass action "watch" with its url if you need that'}.`;
+        return `- ${target} \u2014 NOT watching: the live subscription failed to arm at ${formatEpochMsIso(row.at)} \u2014 ${reasonText()} ${headline}; ${noRewatchAdvice(reason) ?? 'pass action "watch" with its url if you need that'}.`;
       case "ended":
-        return `- ${T} \u2014 NOT watching: the watch ended at ${formatEpochMsIso(R.at)} (${clipUnknown(R.reason)}). ${r}; ${noRewatchAdvice(reason) ?? 'pass action "watch" with its url if you need it again'}.`;
+        return `- ${target} \u2014 NOT watching: the watch ended at ${formatEpochMsIso(row.at)} (${clipUnknown(row.reason)}). ${headline}; ${noRewatchAdvice(reason) ?? 'pass action "watch" with its url if you need it again'}.`;
       default:
-        return `- ${T} \u2014 no live connection (state: ${clipUnknown(R.state)}).`;
+        return `- ${target} \u2014 no live connection (state: ${clipUnknown(row.state)}).`;
     }
   });
-  let y = rows.length;
-  let any = rows.some((R) => R.rail !== undefined);
-  let w = any ? "working" : "connected";
-  let A = any ? "working watch" : "live connection";
-  return `${n ? `${y} more ${plural(y, "artifact")} with watch activity but no ${A}:` : s ? `No ${w} watch on that artifact in this session; its watch activity:` : `No artifact watch is ${w} in this session; ${y} ${plural(y, "artifact")} with watch activity but no ${A}:`}
+  let rowCount = rows.length;
+  let any = rows.some((row) => row.rail !== undefined);
+  let connectedWord = any ? "working" : "connected";
+  let connectionNoun = any ? "working watch" : "live connection";
+  return `${moreWatches ? `${rowCount} more ${plural(rowCount, "artifact")} with watch activity but no ${connectionNoun}:` : singleArtifact ? `No ${connectedWord} watch on that artifact in this session; its watch activity:` : `No artifact watch is ${connectedWord} in this session; ${rowCount} ${plural(rowCount, "artifact")} with watch activity but no ${connectionNoun}:`}
 ${mapped.join(`
 `)}`;
 }
@@ -405,20 +405,20 @@ function durableWakeResult(outcome) {
 /**
  * 刷新标记为 dirty 的 Artifact 评论计数：在截止时间内并发读取评论（共享中止信号），成功且未降级时更新计数缓存。
  */
-async function refreshDirtyCommentCounts(e, signal, credentials) {
-  let filtered = e.filter((p) => censusEntry(p)?.dirty === true);
+async function refreshDirtyCommentCounts(slugs, signal, credentials) {
+  let filtered = slugs.filter((slug) => censusEntry(slug)?.dirty === true);
   if (filtered.length === 0) return;
-  let h = AbortSignal.any([signal, AbortSignal.timeout(APPROVED_PATH_CHECK_MS)]);
+  let combinedSignal = AbortSignal.any([signal, AbortSignal.timeout(APPROVED_PATH_CHECK_MS)]);
   let results = Promise.all(
-    filtered.map(async (p) => {
-      let w = censusGeneration(p);
+    filtered.map(async (slug) => {
+      let generation = censusGeneration(slug);
       try {
         let artifactComments = await readArtifactComments(
           {
-            slug: p,
+            slug,
             env: claudeAiEnvironment(),
           },
-          h,
+          combinedSignal,
           credentials,
           "artifact_status_census_read",
           {
@@ -426,7 +426,12 @@ async function refreshDirtyCommentCounts(e, signal, credentials) {
           },
         );
         if (artifactComments.err === null && artifactComments.threadsDegraded !== true)
-          updateUnreadCounts(p, artifactComments.threads, w, artifactComments.threadsDropped === true);
+          updateUnreadCounts(
+            slug,
+            artifactComments.threads,
+            generation,
+            artifactComments.threadsDropped === true,
+          );
       } catch {}
     }),
   );
@@ -439,8 +444,8 @@ async function refreshDirtyCommentCounts(e, signal, credentials) {
 function commentCountsClause(entry) {
   if (entry.comments_uncounted === true)
     return '; its comment count is not refreshed yet \u2014 action "comments" shows them';
-  let clampCount = (w) =>
-    typeof w === "number" && Number.isInteger(w) && w > 0 ? Math.min(w, MAX_FOLDED_COUNT) : 0;
+  let clampCount = (value) =>
+    typeof value === "number" && Number.isInteger(value) && value > 0 ? Math.min(value, MAX_FOLDED_COUNT) : 0;
   let unreadPlain = clampCount(entry.unread_plain_comments);
   let awaitingReply = clampCount(entry.summons_awaiting_reply);
   let partiallyCounted = entry.comments_partially_counted === true;
@@ -449,31 +454,31 @@ function commentCountsClause(entry) {
       ? '; some of its comments could not be counted \u2014 action "comments" shows them'
       : "";
   let atLeastPrefix = partiallyCounted ? "at least " : "";
-  return `; ${[unreadPlain > 0 ? `${atLeastPrefix}${unreadPlain} plain ${plural(unreadPlain, "comment")} (not sent to Claude) you have not read` : "", awaitingReply > 0 ? `${atLeastPrefix}${awaitingReply} sent to Claude still awaiting a reply` : ""].filter((w) => w !== "").join(" and ")} on this Artifact${partiallyCounted ? " (some comments could not be counted)" : ""} \u2014 action "comments" shows them`;
+  return `; ${[unreadPlain > 0 ? `${atLeastPrefix}${unreadPlain} plain ${plural(unreadPlain, "comment")} (not sent to Claude) you have not read` : "", awaitingReply > 0 ? `${atLeastPrefix}${awaitingReply} sent to Claude still awaiting a reply` : ""].filter((part) => part !== "").join(" and ")} on this Artifact${partiallyCounted ? " (some comments could not be counted)" : ""} \u2014 action "comments" shows them`;
 }
 //@ chunk-8wvtd8sr.js:261425-261670 placement
 function commentCountFields(slug) {
-  let n = censusEntry(slug);
-  if (n === undefined) return {};
-  if (n.dirty)
+  let entry = censusEntry(slug);
+  if (entry === undefined) return {};
+  if (entry.dirty)
     return {
       comments_uncounted: true,
     };
   return {
-    ...(n.plain > 0 && {
-      unread_plain_comments: n.plain,
+    ...(entry.plain > 0 && {
+      unread_plain_comments: entry.plain,
     }),
-    ...(n.awaiting > 0 && {
-      summons_awaiting_reply: n.awaiting,
+    ...(entry.awaiting > 0 && {
+      summons_awaiting_reply: entry.awaiting,
     }),
-    ...(n.partial && {
+    ...(entry.partial && {
       comments_partially_counted: true,
     }),
   };
 }
 //@ chunk-8wvtd8sr.js:261670-261964 placement
-function resumeWatchNote(e) {
-  return `a --resume in an interactive terminal brings back the watch on the most recently used artifact${e ? ` and every watch that was replying to comments, newest first within the ${REFUSED_CAPACITY_HINT}-watch cap, plus any watches a background handoff carried` : ""}; other clients may restore less`;
+function resumeWatchNote(resumed) {
+  return `a --resume in an interactive terminal brings back the watch on the most recently used artifact${resumed ? ` and every watch that was replying to comments, newest first within the ${REFUSED_CAPACITY_HINT}-watch cap, plus any watches a background handoff carried` : ""}; other clients may restore less`;
 }
 //@ chunk-8wvtd8sr.js:261964-295524 placement
 /**
@@ -481,8 +486,8 @@ function resumeWatchNote(e) {
  */
 var ARTIFACT_WATCH_ACTION_HANDLER = {
   actions: ["watch", "unwatch", "status", "resume_replies"],
-  async checkPermissions(e, n, s) {
-    if (n.action === "resume_replies") {
+  async checkPermissions(tool, input, context) {
+    if (input.action === "resume_replies") {
       if (env.CLAUDE_CODE_REMOTE)
         return {
           behavior: "deny",
@@ -515,7 +520,7 @@ var ARTIFACT_WATCH_ACTION_HANDLER = {
               "The auto-react opt-in is session-terminal and off \u2014 a resume is structurally a no-op",
           },
         };
-      if (!canRearmWatchHere(s))
+      if (!canRearmWatchHere(context))
         return {
           behavior: "deny",
           message:
@@ -526,20 +531,20 @@ var ARTIFACT_WATCH_ACTION_HANDLER = {
               "This session shape cannot hold the live socket a resume re-arms \u2014 structurally a no-op",
           },
         };
-      let r = typeof n.url === "string" ? parseArtifactUrl(n.url) : null;
+      let artifactUrl = typeof input.url === "string" ? parseArtifactUrl(input.url) : null;
       runCommentMonitorWithIntent({
-        storageV5: s.storageV5,
+        storageV5: context.storageV5,
       });
-      let h =
-        r === null || !isSlugStopped(r.slug)
+      let stoppedKind =
+        artifactUrl === null || !isSlugStopped(artifactUrl.slug)
           ? null
-          : isYieldResumable(r.slug)
+          : isYieldResumable(artifactUrl.slug)
             ? "yielded"
-            : isSlugSwept(r.slug)
+            : isSlugSwept(artifactUrl.slug)
               ? "swept"
               : "killed";
-      if (r === null || h === null) {
-        if (r !== null && getLiveState().durable.stopLatches.isStopped(r.slug))
+      if (artifactUrl === null || stoppedKind === null) {
+        if (artifactUrl !== null && getLiveState().durable.stopLatches.isStopped(artifactUrl.slug))
           return {
             behavior: "deny",
             message:
@@ -560,7 +565,7 @@ var ARTIFACT_WATCH_ACTION_HANDLER = {
           },
         };
       }
-      if (!isUserDrivenTurn(s.messages))
+      if (!isUserDrivenTurn(context.messages))
         return {
           behavior: "deny",
           message: `Auto-replies were NOT resumed: ${UNVERIFIED_USER_TURN_CLAUSE}, so there is no consent to reverse the stop. Raise it with the user; if they do want auto-replies back, their own next message can ask for it. Do not retry it in this turn, and do not reply to the comments yourself in this turn either \u2014 list them for the user.`,
@@ -571,8 +576,8 @@ var ARTIFACT_WATCH_ACTION_HANDLER = {
             classifierApprovable: false,
           },
         };
-      let y = () => {
-        if (planConsentMustDeny(s))
+      let planConsentRefusal = () => {
+        if (planConsentMustDeny(context))
           return {
             behavior: "deny",
             message:
@@ -585,96 +590,103 @@ var ARTIFACT_WATCH_ACTION_HANDLER = {
           };
         return null;
       };
-      let p = y();
-      if (p !== null) return p;
+      let planRefusal = planConsentRefusal();
+      if (planRefusal !== null) return planRefusal;
       let liveState = getLiveState();
       let stopLatches = liveState.durable.stopLatches;
-      if (s.toolUseId !== undefined) {
-        liveState.wakes.resumeSights.note(s.toolUseId, r.slug, stopGeneration(r.slug));
-        stopLatches.noteRelatchAsk(s.toolUseId, r.slug);
+      if (context.toolUseId !== undefined) {
+        liveState.wakes.resumeSights.note(
+          context.toolUseId,
+          artifactUrl.slug,
+          stopGeneration(artifactUrl.slug),
+        );
+        stopLatches.noteRelatchAsk(context.toolUseId, artifactUrl.slug);
       }
-      let S = stopLatches.isStopped(r.slug)
+      let relatchNote = stopLatches.isStopped(artifactUrl.slug)
         ? ", and re-arms the live watch of this artifact (stopped earlier this session)"
         : "";
-      await warmShareEntry(r, s, "resume_replies");
-      let R = denyOtherOrgArtifact(r, "Auto-replies were not resumed");
-      if (R !== null) return R;
-      let T = y();
-      if (T !== null) return T;
+      await warmShareEntry(artifactUrl, context, "resume_replies");
+      let outsideOrgDenial = denyOtherOrgArtifact(artifactUrl, "Auto-replies were not resumed");
+      if (outsideOrgDenial !== null) return outsideOrgDenial;
+      let planRefusalAgain = planConsentRefusal();
+      if (planRefusalAgain !== null) return planRefusalAgain;
       if (
-        h === "yielded" &&
-        isYieldResumable(r.slug) &&
-        !stopLatches.isStopped(r.slug) &&
-        getToolPermissionContext(s).mode !== "plan"
+        stoppedKind === "yielded" &&
+        isYieldResumable(artifactUrl.slug) &&
+        !stopLatches.isStopped(artifactUrl.slug) &&
+        getToolPermissionContext(context).mode !== "plan"
       )
         return {
           behavior: "allow",
-          updatedInput: n,
+          updatedInput: input,
           decisionReason: {
             type: "other",
             reason:
               "Taking automatic comment replies back from another session of this conversation, in a turn the user started",
           },
         };
-      let P =
-        h === "yielded"
+      let stoppedClause =
+        stoppedKind === "yielded"
           ? " that another session of this conversation took over"
-          : h === "swept"
+          : stoppedKind === "swept"
             ? " that were paused when the user interrupted the session (Ctrl+C or Stop)"
             : " that were stopped earlier this session";
-      let L =
-        h === "yielded"
+      let grantReason =
+        stoppedKind === "yielded"
           ? RESUME_REASON_GRANT_YIELDED
-          : h === "swept"
+          : stoppedKind === "swept"
             ? RESUME_REASON_GRANT_SWEPT
             : RESUME_REASON_GRANT;
       return {
         behavior: "ask",
         message:
-          h === "killed"
+          stoppedKind === "killed"
             ? RESUME_ASK_MESSAGE
-            : h === "yielded"
+            : stoppedKind === "yielded"
               ? RESUME_ASK_MESSAGE_YIELDED
               : RESUME_ASK_MESSAGE_SWEPT,
-        updatedInput: n,
+        updatedInput: input,
         suppressAlwaysAllowRule: true,
         decisionReason:
-          getToolPermissionContext(s).mode === "plan"
+          getToolPermissionContext(context).mode === "plan"
             ? {
                 type: "safetyCheck",
-                reason: `${RESUME_REASON_LEDE}${P} \u2014 ${L}${S}; in plan mode the approval must come from the user, not the auto-permission classifier. ${RESUME_REASON_DENY}`,
+                reason: `${RESUME_REASON_LEDE}${stoppedClause} \u2014 ${grantReason}${relatchNote}; in plan mode the approval must come from the user, not the auto-permission classifier. ${RESUME_REASON_DENY}`,
                 classifierApprovable: false,
               }
             : {
                 type: "safetyCheck",
-                reason: `${RESUME_REASON_LEDE}${P} \u2014 ${L} for the rest of the session${S}. ${RESUME_REASON_DENY}`,
+                reason: `${RESUME_REASON_LEDE}${stoppedClause} \u2014 ${grantReason} for the rest of the session${relatchNote}. ${RESUME_REASON_DENY}`,
                 classifierApprovable: true,
               },
         localDisplayOnly: true,
       };
     }
-    if (n.action === "unwatch" || n.action === "status")
+    if (input.action === "unwatch" || input.action === "status")
       return {
         behavior: "allow",
-        updatedInput: n,
+        updatedInput: input,
         decisionReason: {
           type: "other",
           reason:
-            n.action === "status"
+            input.action === "status"
               ? "Reading this session's own artifact watches"
               : "Stopping a watch this session armed",
         },
       };
-    if (n.action === "watch") {
-      let r = typeof n.url === "string" ? parseArtifactUrl(n.url) : null;
-      let h = consentEpochGuard(s.getAppState()).artifactWatchApproved === true;
-      let y = r !== null && (frameLiveWatchRows(s, r.slug).length > 0 || durableRowFor(r.slug) !== undefined);
-      let { stopLatches, liveDocRegrantSights, firstWatchAskSights } = getLiveState().durable;
+    if (input.action === "watch") {
+      let artifactUrl = typeof input.url === "string" ? parseArtifactUrl(input.url) : null;
+      let watchApproved = consentEpochGuard(context.getAppState()).artifactWatchApproved === true;
+      let stopLatches =
+        artifactUrl !== null &&
+        (frameLiveWatchRows(context, artifactUrl.slug).length > 0 ||
+          durableRowFor(artifactUrl.slug) !== undefined);
+      let { stopLatches: stopLatches_2, liveDocRegrantSights, firstWatchAskSights } = getLiveState().durable;
       runCommentMonitorWithIntent({
-        storageV5: s.storageV5,
+        storageV5: context.storageV5,
       });
-      let S = r !== null && stopLatches.isStopped(r.slug);
-      if (S && !canRearmWatchHere(s))
+      let isStopped = artifactUrl !== null && stopLatches_2.isStopped(artifactUrl.slug);
+      if (isStopped && !canRearmWatchHere(context))
         return {
           behavior: "deny",
           message:
@@ -685,7 +697,7 @@ var ARTIFACT_WATCH_ACTION_HANDLER = {
               "This session shape cannot hold the live socket a re-watch re-arms \u2014 clearing the stop here would arm nothing",
           },
         };
-      if (S && !isUserDrivenTurn(s.messages))
+      if (isStopped && !isUserDrivenTurn(context.messages))
         return {
           behavior: "deny",
           message: `Not watching: watching this artifact was stopped earlier in this session, and ${UNVERIFIED_USER_TURN_CLAUSE}. Raise it with the user; if they want it watched again, their own next message can ask for it. Do not reply to its comments yourself in this turn either \u2014 list them for the user.`,
@@ -696,18 +708,23 @@ var ARTIFACT_WATCH_ACTION_HANDLER = {
             classifierApprovable: false,
           },
         };
-      let R = isLiveCommentsWatchPossible();
-      let T = repliesConsentWriterFor(s);
-      let P =
-        r !== null
-          ? settleRepliesConsent(T, r.slug, s.toolUseId, s.messages)
+      let liveCommentsPossible = isLiveCommentsWatchPossible();
+      let consentWriter = repliesConsentWriterFor(context);
+      let refusal =
+        artifactUrl !== null
+          ? settleRepliesConsent(consentWriter, artifactUrl.slug, context.toolUseId, context.messages)
           : {
               declined: false,
               approved: false,
             };
-      let L = sessionWatchRail() === "durable" && artifactCommentsPromptGateOpen();
-      let V = sessionWatchRail() === "live";
-      if (L && r !== null && P.declined && !hasClassConsent("standing_job", r.slug))
+      let durableRail = sessionWatchRail() === "durable" && artifactCommentsPromptGateOpen();
+      let liveRail = sessionWatchRail() === "live";
+      if (
+        durableRail &&
+        artifactUrl !== null &&
+        refusal.declined &&
+        !hasClassConsent("standing_job", artifactUrl.slug)
+      )
         return {
           behavior: "deny",
           message:
@@ -719,35 +736,39 @@ var ARTIFACT_WATCH_ACTION_HANDLER = {
             classifierApprovable: false,
           },
         };
-      if (r !== null && s.toolUseId !== undefined) {
-        stopLatches.noteRelatchAsk(s.toolUseId, r.slug);
-        liveDocRegrantSights.note(s.toolUseId, r.slug, true);
+      if (artifactUrl !== null && context.toolUseId !== undefined) {
+        stopLatches_2.noteRelatchAsk(context.toolUseId, artifactUrl.slug);
+        liveDocRegrantSights.note(context.toolUseId, artifactUrl.slug, true);
       }
-      let M =
-        r !== null &&
-        R &&
-        canRearmWatchHere(s) &&
-        isStrictHumanTurn(s.messages) &&
-        hasHumanMessageContaining(s.messages, r.slug) &&
-        !P.declined &&
-        !(isSlugStopped(r.slug) && !isSlugSwept(r.slug)) &&
-        !knownNonEditor(r.slug) &&
-        !isAutoReactWired(r.slug);
-      let x = M && (y || h);
-      if (r !== null && !S) {
+      let consentFacts =
+        artifactUrl !== null &&
+        liveCommentsPossible &&
+        canRearmWatchHere(context) &&
+        isStrictHumanTurn(context.messages) &&
+        hasHumanMessageContaining(context.messages, artifactUrl.slug) &&
+        !refusal.declined &&
+        !(isSlugStopped(artifactUrl.slug) && !isSlugSwept(artifactUrl.slug)) &&
+        !knownNonEditor(artifactUrl.slug) &&
+        !isAutoReactWired(artifactUrl.slug);
+      let needsConsent = consentFacts && (stopLatches || watchApproved);
+      if (artifactUrl !== null && !isStopped) {
         if (
-          !M &&
-          !L &&
-          !writeKeepsFlagOffAsk(classifyArtifactConsent(classFactsFor("standing_job", r, s)), s)
+          !consentFacts &&
+          !durableRail &&
+          !writeKeepsFlagOffAsk(
+            classifyArtifactConsent(classFactsFor("standing_job", artifactUrl, context)),
+            context,
+          )
         ) {
-          if (s.toolUseId !== undefined) firstWatchAskSights.note(s.toolUseId, r.slug, false);
+          if (context.toolUseId !== undefined)
+            firstWatchAskSights.note(context.toolUseId, artifactUrl.slug, false);
           return {
             behavior: "allow",
             updatedInput: {
-              ...n,
+              ...input,
               [CONSENT_ASK_TAG]: false,
               [WATCH_ARMS_REPLIES_TAG]: false,
-              ...consentPin(n.action, r),
+              ...consentPin(input.action, artifactUrl),
             },
             decisionReason: {
               type: "other",
@@ -755,296 +776,317 @@ var ARTIFACT_WATCH_ACTION_HANDLER = {
             },
           };
         }
-        let Z = classifyArtifactConsent(classFactsFor("standing_job", r, s));
-        if (!writeKeepsFlagOffAsk(Z, s)) {
-          await warmShareEntry(r, s, "watch");
-          if (!writeKeepsFlagOffAsk(Z, s)) {
-            let ue = decideByClass({
-              ruling: Z,
+        let consentClass = classifyArtifactConsent(classFactsFor("standing_job", artifactUrl, context));
+        if (!writeKeepsFlagOffAsk(consentClass, context)) {
+          await warmShareEntry(artifactUrl, context, "watch");
+          if (!writeKeepsFlagOffAsk(consentClass, context)) {
+            let decision = decideByClass({
+              ruling: consentClass,
               input: {
-                ...n,
-                [WATCH_ARMS_REPLIES_TAG]: M,
-                ...consentPin(n.action, r),
+                ...input,
+                [WATCH_ARMS_REPLIES_TAG]: consentFacts,
+                ...consentPin(input.action, artifactUrl),
               },
-              context: s,
-              slug: r.slug,
-              display: artifactCardTitleFor(r, s),
+              context,
+              slug: artifactUrl.slug,
+              display: artifactCardTitleFor(artifactUrl, context),
               action: "standing_job",
             });
-            if ((M || L) && s.toolUseId !== undefined && (ue.behavior === "ask" || ue.behavior === "allow"))
-              noteRepliesConsentAsk(T, r.slug, s.toolUseId, s.messages, ue.behavior === "allow");
-            if (s.toolUseId !== undefined)
-              firstWatchAskSights.note(
-                s.toolUseId,
-                r.slug,
-                ue.behavior === "ask" && firstWatchAskReachesHuman(s),
+            if (
+              (consentFacts || durableRail) &&
+              context.toolUseId !== undefined &&
+              (decision.behavior === "ask" || decision.behavior === "allow")
+            )
+              noteRepliesConsentAsk(
+                consentWriter,
+                artifactUrl.slug,
+                context.toolUseId,
+                context.messages,
+                decision.behavior === "allow",
               );
-            return ue;
+            if (context.toolUseId !== undefined)
+              firstWatchAskSights.note(
+                context.toolUseId,
+                artifactUrl.slug,
+                decision.behavior === "ask" && firstWatchAskReachesHuman(context),
+              );
+            return decision;
           }
         }
       }
-      let q = !h;
-      if ((y || h) && !S && (!M || P.approved)) {
-        if (r !== null && s.toolUseId !== undefined) firstWatchAskSights.note(s.toolUseId, r.slug, false);
+      let needsWatchConsent = !watchApproved;
+      if ((stopLatches || watchApproved) && !isStopped && (!consentFacts || refusal.approved)) {
+        if (artifactUrl !== null && context.toolUseId !== undefined)
+          firstWatchAskSights.note(context.toolUseId, artifactUrl.slug, false);
         return {
           behavior: "allow",
           updatedInput: {
-            ...n,
+            ...input,
             [CONSENT_ASK_TAG]: false,
             [WATCH_ARMS_REPLIES_TAG]: false,
-            ...consentPin(n.action, r),
+            ...consentPin(input.action, artifactUrl),
           },
           decisionReason: {
             type: "other",
-            reason: y
+            reason: stopLatches
               ? "Already watching this artifact in this session"
               : "Artifact watching already approved this session",
           },
         };
       }
-      if (r !== null && s.toolUseId !== undefined && !S)
-        firstWatchAskSights.note(s.toolUseId, r.slug, firstWatchAskReachesHuman(s));
-      let re =
-        isUserDrivenHere(s.messages) &&
-        s.messages.some(isHumanTurn) &&
-        firstWatchAskReachesHuman(s) &&
-        !consentMustDeny(s) &&
-        getToolPermissionContext(s).mode !== "dontAsk";
-      if (r !== null && s.toolUseId !== undefined && (M || (L && re)))
-        noteRepliesConsentAsk(T, r.slug, s.toolUseId, s.messages);
+      if (artifactUrl !== null && context.toolUseId !== undefined && !isStopped)
+        firstWatchAskSights.note(context.toolUseId, artifactUrl.slug, firstWatchAskReachesHuman(context));
+      let consentReply =
+        isUserDrivenHere(context.messages) &&
+        context.messages.some(isHumanTurn) &&
+        firstWatchAskReachesHuman(context) &&
+        !consentMustDeny(context) &&
+        getToolPermissionContext(context).mode !== "dontAsk";
+      if (
+        artifactUrl !== null &&
+        context.toolUseId !== undefined &&
+        (consentFacts || (durableRail && consentReply))
+      )
+        noteRepliesConsentAsk(consentWriter, artifactUrl.slug, context.toolUseId, context.messages);
       return {
         behavior: "ask",
-        message: S
-          ? `Claude wants to watch an artifact whose watch was deliberately stopped earlier this session \u2014 ${watchResumeAskBody(artifactCommentsPromptGateOpen(), R && !P.declined, V)}`
-          : x
+        message: isStopped
+          ? `Claude wants to watch an artifact whose watch was deliberately stopped earlier this session \u2014 ${watchResumeAskBody(artifactCommentsPromptGateOpen(), liveCommentsPossible && !refusal.declined, liveRail)}`
+          : needsConsent
             ? WATCH_ARM_REPLIES_ASK
-            : `Claude wants to watch an artifact \u2014 ${watchAskBody(artifactCommentsPromptGateOpen(), R && !P.declined, V)}`,
+            : `Claude wants to watch an artifact \u2014 ${watchAskBody(artifactCommentsPromptGateOpen(), liveCommentsPossible && !refusal.declined, liveRail)}`,
         updatedInput: {
-          ...n,
-          [CONSENT_ASK_TAG]: consentAskCanReachUser(s),
-          [WATCH_ARMS_REPLIES_TAG]: M,
-          ...consentPin(n.action, r),
+          ...input,
+          [CONSENT_ASK_TAG]: consentAskCanReachUser(context),
+          [WATCH_ARMS_REPLIES_TAG]: consentFacts,
+          ...consentPin(input.action, artifactUrl),
         },
         suppressAlwaysAllowRule: true,
-        decisionReason: S
+        decisionReason: isStopped
           ? {
               type: "safetyCheck",
               reason: rewatchReason({
-                live: V,
-                replies: M,
-                commentWake: L,
-                coversSession: q,
+                live: liveRail,
+                replies: consentFacts,
+                commentWake: durableRail,
+                coversSession: needsWatchConsent,
               }),
               classifierApprovable: true,
             }
-          : M
+          : consentFacts
             ? {
                 type: "safetyCheck",
-                reason: x
-                  ? watchArmsRepliesReason(q)
+                reason: needsConsent
+                  ? watchArmsRepliesReason(needsWatchConsent)
                   : watchReason({
-                      live: V,
+                      live: liveRail,
                       replies: true,
-                      commentWake: L,
-                      coversSession: q,
+                      commentWake: durableRail,
+                      coversSession: needsWatchConsent,
                     }),
                 classifierApprovable: true,
               }
             : {
                 type: "other",
                 reason: watchReason({
-                  live: V,
+                  live: liveRail,
                   replies: false,
-                  commentWake: L,
-                  coversSession: q,
+                  commentWake: durableRail,
+                  coversSession: needsWatchConsent,
                 }),
               },
         localDisplayOnly: true,
       };
     }
-    return throwUnroutedArtifactAction("watch.checkPermissions", n);
+    return throwUnroutedArtifactAction("watch.checkPermissions", input);
   },
-  async validateInput(e, n) {
-    let { action, url } = n;
+  async validateInput(tool, input) {
+    let { action, url } = input;
     if (action === "watch" || action === "unwatch" || action === "status" || action === "resume_replies")
-      return validateArtifactPathInput(action, n, url);
-    return throwUnroutedArtifactAction("watch.validateInput", n);
+      return validateArtifactPathInput(action, input, url);
+    return throwUnroutedArtifactAction("watch.validateInput", input);
   },
-  toAutoClassifierInput(e) {
-    if (e?.action === "watch" || e?.action === "unwatch") {
-      let n = classifierArtifactTargetFor(e.url, "(no artifact url)");
-      if (e.action === "unwatch") return `stop watching artifact \u2192 ${n}`;
-      let s = typeof e.url === "string" ? parseArtifactUrl(e.url) : null;
+  toAutoClassifierInput(input) {
+    if (input?.action === "watch" || input?.action === "unwatch") {
+      let target = classifierArtifactTargetFor(input.url, "(no artifact url)");
+      if (input.action === "unwatch") return `stop watching artifact \u2192 ${target}`;
+      let artifactUrl = typeof input.url === "string" ? parseArtifactUrl(input.url) : null;
       runCommentMonitorWithIntent();
-      let r = s !== null && getLiveState().durable.stopLatches.isStopped(s.slug);
-      let h = shareClassifierMarks(s !== null ? getShareEntry(s.slug) : undefined);
-      let y = sessionWatchRail();
-      let p =
-        y === "live" && isAutoReactEnabled()
-          ? s !== null && isSlugStopped(s.slug) && !isSlugSwept(s.slug)
+      let isStopped = artifactUrl !== null && getLiveState().durable.stopLatches.isStopped(artifactUrl.slug);
+      let shareMarks = shareClassifierMarks(
+        artifactUrl !== null ? getShareEntry(artifactUrl.slug) : undefined,
+      );
+      let rail = sessionWatchRail();
+      let railSuffix =
+        rail === "live" && isAutoReactEnabled()
+          ? artifactUrl !== null && isSlugStopped(artifactUrl.slug) && !isSlugSwept(artifactUrl.slug)
             ? WATCH_PROJECTION_REPLIES_STOPPED
-            : s !== null && repliesConsentDeclined(s.slug)
+            : artifactUrl !== null && repliesConsentDeclined(artifactUrl.slug)
               ? WATCH_PROJECTION_REPLIES_DECLINED
-              : s !== null && isSlugSwept(s.slug)
+              : artifactUrl !== null && isSlugSwept(artifactUrl.slug)
                 ? WATCH_PROJECTION_REPLIES_PAUSED
                 : WATCH_PROJECTION_COMMENTS
           : undefined;
-      if (p !== undefined) {
-        let S = ` (background connection to claude.ai for the session; notifies on republish${p})`;
-        return r
-          ? `resume watching an artifact whose watch was stopped earlier in this session \u2192 ${n}${S}${h}`
-          : `watch artifact \u2192 ${n}${S}${h}`;
+      if (railSuffix !== undefined) {
+        let railNote = ` (background connection to claude.ai for the session; notifies on republish${railSuffix})`;
+        return isStopped
+          ? `resume watching an artifact whose watch was stopped earlier in this session \u2192 ${target}${railNote}${shareMarks}`
+          : `watch artifact \u2192 ${target}${railNote}${shareMarks}`;
       }
-      let w =
-        y === "durable" && isArtifactsAvailable()
+      let verb =
+        rail === "durable" && isArtifactsAvailable()
           ? "republish and to-Claude comment wake-ups"
           : "republish notifications";
-      let A =
-        y === "durable"
+      let noun =
+        rail === "durable"
           ? " (durable wake subscription held by the artifact service)"
-          : y === "live"
+          : rail === "live"
             ? " (background connection to claude.ai for the session)"
             : ` (watching for republishes is not available in this session; the call only reports that${watchDurableArmsRef?.liveDocStreamGateOpen() === true ? watchDurableArmsRef.NO_WATCH_RAIL_COLLAB_CONSENT_CLAUSE : ""})`;
-      return r
-        ? `resume watching an artifact whose watch was stopped earlier in this session (${w}) \u2192 ${n}${A}${h}`
-        : `watch artifact for ${w} \u2192 ${n}${A}${h}`;
+      return isStopped
+        ? `resume watching an artifact whose watch was stopped earlier in this session (${verb}) \u2192 ${target}${noun}${shareMarks}`
+        : `watch artifact for ${verb} \u2192 ${target}${noun}${shareMarks}`;
     }
-    if (e?.action === "resume_replies") {
-      let n = classifierArtifactTargetFor(e.url, "(no artifact url)");
-      let s = typeof e.url === "string" ? parseArtifactUrl(e.url) : null;
-      let r = s !== null ? getShareEntry(s.slug) : undefined;
-      let h =
-        s === null || !isSlugStopped(s.slug)
+    if (input?.action === "resume_replies") {
+      let target = classifierArtifactTargetFor(input.url, "(no artifact url)");
+      let artifactUrl = typeof input.url === "string" ? parseArtifactUrl(input.url) : null;
+      let shareEntry = artifactUrl !== null ? getShareEntry(artifactUrl.slug) : undefined;
+      let stoppedNote =
+        artifactUrl === null || !isSlugStopped(artifactUrl.slug)
           ? "no stop is recorded, so this is a no-op"
-          : isSlugSwept(s.slug)
+          : isSlugSwept(artifactUrl.slug)
             ? "reverses the stop from the user's Ctrl+C / Stop interrupt, also answering comments sent to Claude since then"
             : "reverses the user's earlier stop of these replies";
-      let y =
-        s !== null && isSlugStopped(s.slug) && getLiveState().durable.stopLatches.isStopped(s.slug)
+      let audienceNote =
+        artifactUrl !== null &&
+        isSlugStopped(artifactUrl.slug) &&
+        getLiveState().durable.stopLatches.isStopped(artifactUrl.slug)
           ? "; also resumes watching the artifact, whose watch was stopped earlier in this session"
           : "";
-      return `resume unattended auto-replies to comments on artifact \u2192 ${n} (${h}${y})${shareClassifierMarks(r)}`;
+      return `resume unattended auto-replies to comments on artifact \u2192 ${target} (${stoppedNote}${audienceNote})${shareClassifierMarks(shareEntry)}`;
     }
-    if (e?.action === "status") return "read this session's artifact watches (local state)";
-    return throwUnroutedArtifactAction("watch.toAutoClassifierInput", e);
+    if (input?.action === "status") return "read this session's artifact watches (local state)";
+    return throwUnroutedArtifactAction("watch.toAutoClassifierInput", input);
   },
-  async description(e, n) {
-    if (n?.action === "watch") {
-      let s = typeof n.url === "string" ? parseArtifactUrl(n.url) : null;
-      return s !== null && getLiveState().durable.stopLatches.isStopped(s.slug)
+  async description(tool, input) {
+    if (input?.action === "watch") {
+      let artifactUrl = typeof input.url === "string" ? parseArtifactUrl(input.url) : null;
+      return artifactUrl !== null && getLiveState().durable.stopLatches.isStopped(artifactUrl.slug)
         ? `Watch a published artifact whose watch was deliberately stopped earlier this session \u2014 ${watchResumeAskBody(artifactCommentsPromptGateOpen(), isLiveCommentsWatchPossible(), sessionWatchRail() === "live")}.`
         : `Watch a published artifact \u2014 ${watchAskBody(artifactCommentsPromptGateOpen(), isLiveCommentsWatchPossible(), sessionWatchRail() === "live")}.`;
     }
-    if (n?.action === "unwatch")
+    if (input?.action === "unwatch")
       return sessionWatchRail() === "live"
         ? "Stop watching a published artifact \u2014 ends this session's watch of it (it stops keeping track of new versions published elsewhere; automatic replies to its comments stop too); nothing is published or read."
         : "Stop watching a published artifact \u2014 ends this session's watch of it (republish notifications and, in cloud sessions, comment wakes; automatic replies to its comments stop too); nothing is published or read.";
-    if (n?.action === "status")
+    if (input?.action === "status")
       return "List this session's own artifact watches and their unread-comment counts (read-only).";
-    if (n?.action === "resume_replies") {
-      let s = typeof n.url === "string" ? parseArtifactUrl(n.url) : null;
-      return s !== null && isSlugSwept(s.slug) ? RESUME_ASK_MESSAGE_SWEPT : RESUME_ASK_MESSAGE;
+    if (input?.action === "resume_replies") {
+      let artifactUrl = typeof input.url === "string" ? parseArtifactUrl(input.url) : null;
+      return artifactUrl !== null && isSlugSwept(artifactUrl.slug)
+        ? RESUME_ASK_MESSAGE_SWEPT
+        : RESUME_ASK_MESSAGE;
     }
-    return throwUnroutedArtifactAction("watch.description", n);
+    return throwUnroutedArtifactAction("watch.description", input);
   },
-  getToolUseSummary(e) {
-    if (e?.action === "watch" || e?.action === "resume_replies") {
-      let n = typeof e.url === "string" ? parseArtifactUrl(e.url) : null;
-      let s = n !== null ? getShareEntry(n.slug) : undefined;
-      let r = shareAudienceMark(s);
-      return e.action === "watch"
-        ? `watch an artifact for new versions and comments${r}`
-        : `resume automatic replies to an artifact's comments${r}`;
+  getToolUseSummary(input) {
+    if (input?.action === "watch" || input?.action === "resume_replies") {
+      let artifactUrl = typeof input.url === "string" ? parseArtifactUrl(input.url) : null;
+      let shareEntry = artifactUrl !== null ? getShareEntry(artifactUrl.slug) : undefined;
+      let audienceMark = shareAudienceMark(shareEntry);
+      return input.action === "watch"
+        ? `watch an artifact for new versions and comments${audienceMark}`
+        : `resume automatic replies to an artifact's comments${audienceMark}`;
     }
-    if (e?.action === "unwatch") return "stop watching an artifact";
-    if (e?.action === "status") return "list this session's artifact watches (read-only)";
-    return throwUnroutedArtifactAction("watch.getToolUseSummary", e);
+    if (input?.action === "unwatch") return "stop watching an artifact";
+    if (input?.action === "status") return "list this session's artifact watches (read-only)";
+    return throwUnroutedArtifactAction("watch.getToolUseSummary", input);
   },
-  async call(e, n, appState, r, h, { consentWriter, takenRepliesAsk }) {
-    if (n.action === "status") {
-      let sessionId = n.url !== undefined ? (parseArtifactUrl(n.url)?.slug ?? undefined) : undefined;
-      let A = isArtifactCommentsEnabled() && artifactCommentsPromptGateOpen();
-      if (A)
+  async call(tool, input, context, canUseTool, options, { consentWriter, takenRepliesAsk }) {
+    if (input.action === "status") {
+      let targetSlug = input.url !== undefined ? (parseArtifactUrl(input.url)?.slug ?? undefined) : undefined;
+      let commentsEnabled = isArtifactCommentsEnabled() && artifactCommentsPromptGateOpen();
+      if (commentsEnabled)
         await refreshDirtyCommentCounts(
-          frameLiveWatchRows(appState, sessionId)
-            .filter((R) => R.connected)
-            .map((R) => R.slug),
-          appState.abortController.signal,
-          appState.credentials,
+          frameLiveWatchRows(context, targetSlug)
+            .filter((row) => row.connected)
+            .map((row) => row.slug),
+          context.abortController.signal,
+          context.credentials,
         );
       return {
         data: {
           watches: [
-            ...frameLiveWatchRows(appState, sessionId).map((R) => ({
+            ...frameLiveWatchRows(context, targetSlug).map((row) => ({
               url: artifactViewerUrlFor({
-                slug: R.slug,
+                slug: row.slug,
                 env: claudeAiEnvironment(),
               }),
-              task_id: R.taskId,
-              since: R.since,
-              explicit: R.explicit,
-              connected: R.connected,
-              ...(isFrameLiveRowConnecting(R) && {
+              task_id: row.taskId,
+              since: row.since,
+              explicit: row.explicit,
+              connected: row.connected,
+              ...(isFrameLiveRowConnecting(row) && {
                 connecting: true,
               }),
-              token_expires_at: R.tokenExpiresAt,
-              auto_reply: R.autoReply,
-              armed_via: R.armedVia,
-              ...(A && commentCountFields(R.slug)),
+              token_expires_at: row.tokenExpiresAt,
+              auto_reply: row.autoReply,
+              armed_via: row.armedVia,
+              ...(commentsEnabled && commentCountFields(row.slug)),
             })),
-            ...frameLiveStoppedRows(appState, sessionId).map((R) => ({
+            ...frameLiveStoppedRows(context, targetSlug).map((row) => ({
               url: artifactViewerUrlFor({
-                slug: R.slug,
+                slug: row.slug,
                 env: claudeAiEnvironment(),
               }),
               rail: "live_stopped",
-              ...(R.since !== undefined && {
-                since: R.since,
+              ...(row.since !== undefined && {
+                since: row.since,
               }),
-              ...(R.explicit !== undefined && {
-                explicit: R.explicit,
+              ...(row.explicit !== undefined && {
+                explicit: row.explicit,
               }),
-              ...(R.armedVia !== undefined && {
-                armed_via: R.armedVia,
+              ...(row.armedVia !== undefined && {
+                armed_via: row.armedVia,
               }),
-              auto_reply: R.autoReply,
-              stop_kind: R.stopKind,
+              auto_reply: row.autoReply,
+              stop_kind: row.stopKind,
             })),
             ...durableRowList()
-              .filter((R) => sessionId === undefined || R.slug === sessionId)
-              .map((R) => ({
+              .filter((row) => targetSlug === undefined || row.slug === targetSlug)
+              .map((row) => ({
                 url: artifactViewerUrlFor({
-                  slug: R.slug,
+                  slug: row.slug,
                   env: claudeAiEnvironment(),
                 }),
                 rail: "durable_wake",
-                trigger_id: R.triggerId,
-                since: R.since,
-                events: [...R.events],
-                ...(R.restored && {
+                trigger_id: row.triggerId,
+                since: row.since,
+                events: [...row.events],
+                ...(row.restored && {
                   restored: true,
                 }),
               })),
           ],
-          ...(sessionId !== undefined && {
+          ...(targetSlug !== undefined && {
             filter_url: artifactViewerUrlFor({
-              slug: sessionId,
+              slug: targetSlug,
               env: claudeAiEnvironment(),
             }),
           }),
-          ...watchArmsStatus(appState, sessionId),
+          ...watchArmsStatus(context, targetSlug),
           ...(() => {
             let mapped = (watchStatusRef?.artifactRoomStatus() ?? [])
-              .filter((T) => sessionId === undefined || T.slug === sessionId)
-              .map((T) => ({
+              .filter((row) => targetSlug === undefined || row.slug === targetSlug)
+              .map((row) => ({
                 url: artifactViewerUrlFor({
-                  slug: T.slug,
+                  slug: row.slug,
                   env: claudeAiEnvironment(),
                 }),
-                connected: T.connected,
-                peers: T.peers,
-                ...(T.viewers.length > 0 && {
-                  viewers: T.viewers,
+                connected: row.connected,
+                peers: row.peers,
+                ...(row.viewers.length > 0 && {
+                  viewers: row.viewers,
                 }),
               }));
             return mapped.length > 0
@@ -1056,80 +1098,83 @@ var ARTIFACT_WATCH_ACTION_HANDLER = {
         },
       };
     }
-    if (n.action === "unwatch") {
-      let artifactUrlOrThrow = parseArtifactUrlOrThrow(n.url);
+    if (input.action === "unwatch") {
+      let artifactUrlOrThrow = parseArtifactUrlOrThrow(input.url);
       let { stopLatches, liveDocArmDeclined } = getLiveState().durable;
-      let R = stopLatches.recordStop(artifactUrlOrThrow.slug);
-      let T =
+      let stopReceipt = stopLatches.recordStop(artifactUrlOrThrow.slug);
+      let hadIntent =
         forgetSlugIntent(artifactUrlOrThrow.slug, {
-          storageV5: appState.storageV5,
+          storageV5: context.storageV5,
         }) !== undefined;
       if (!isSlugYielded(artifactUrlOrThrow.slug)) {
         stopCommentMonitorIntent(artifactUrlOrThrow.slug, {
-          storageV5: appState.storageV5,
+          storageV5: context.storageV5,
         });
-        import("./chunk-4te7h8m1.js").then((re) => re.notifyTakenOverSlugStopped(artifactUrlOrThrow.slug));
+        import("../../../services/artifacts/replyYieldHolder.js").then((artifactSlugModule) =>
+          artifactSlugModule.notifyTakenOverSlugStopped(artifactUrlOrThrow.slug),
+        );
       }
-      let P = !liveDocArmDeclined.has(artifactUrlOrThrow.slug);
+      let armNotDeclined = !liveDocArmDeclined.has(artifactUrlOrThrow.slug);
       liveDocArmDeclined.add(artifactUrlOrThrow.slug);
-      let L = unwatchFrameLive(artifactUrlOrThrow.slug, appState, consentWriter);
-      let V = watchLiveArmsRef != null && watchLiveArmsRef.stopLiveDocCollab(artifactUrlOrThrow.slug);
-      let M = await unwatchArtifactDurably({
+      let frameLiveResult = unwatchFrameLive(artifactUrlOrThrow.slug, context, consentWriter);
+      let docStopped =
+        watchLiveArmsRef != null && watchLiveArmsRef.stopLiveDocCollab(artifactUrlOrThrow.slug);
+      let durableResult = await unwatchArtifactDurably({
         slug: artifactUrlOrThrow.slug,
-        context: appState,
+        context,
       });
-      let x = M.wasWatching || L.wasWatching || V;
-      R.settle({
-        wasWatching: x,
-        teardown: M.teardown,
+      let wasWatching = durableResult.wasWatching || frameLiveResult.wasWatching || docStopped;
+      stopReceipt.settle({
+        wasWatching,
+        teardown: durableResult.teardown,
       });
-      let q = !stopLatches.isStopped(artifactUrlOrThrow.slug);
-      if (q && !T)
+      let stillStopped = !stopLatches.isStopped(artifactUrlOrThrow.slug);
+      if (stillStopped && !hadIntent)
         forgetCommentMonitorIntents(artifactUrlOrThrow.slug, {
-          storageV5: appState.storageV5,
+          storageV5: context.storageV5,
         });
-      if (P && q) liveDocArmDeclined.delete(artifactUrlOrThrow.slug);
+      if (armNotDeclined && stillStopped) liveDocArmDeclined.delete(artifactUrlOrThrow.slug);
       return {
         data: {
           unwatch: {
             url: artifactViewerUrlFor(artifactUrlOrThrow),
-            was_watching: x,
+            was_watching: wasWatching,
           },
         },
       };
     }
-    if (n.action === "watch") {
-      let artifactUrlOrThrow = parseArtifactUrlOrThrow(n.url);
+    if (input.action === "watch") {
+      let artifactUrlOrThrow = parseArtifactUrlOrThrow(input.url);
       let url = artifactViewerUrlFor(artifactUrlOrThrow);
       let durable = getLiveState().durable;
       let { stopLatches } = durable;
       runCommentMonitorWithIntent({
-        storageV5: appState.storageV5,
+        storageV5: context.storageV5,
       });
-      let T =
-        appState.toolUseId !== undefined
-          ? stopLatches.takeRelatchAsk(appState.toolUseId, artifactUrlOrThrow.slug)
+      let relatchAsk =
+        context.toolUseId !== undefined
+          ? stopLatches.takeRelatchAsk(context.toolUseId, artifactUrlOrThrow.slug)
           : undefined;
-      let P =
-        appState.toolUseId === undefined ||
-        durable.liveDocRegrantSights.take(appState.toolUseId, artifactUrlOrThrow.slug) === true;
-      let L =
-        appState.toolUseId !== undefined &&
-        durable.firstWatchAskSights.take(appState.toolUseId, artifactUrlOrThrow.slug) === true;
-      if (consentTargetChanged(n, "watch", artifactUrlOrThrow.slug))
+      let docRegranted =
+        context.toolUseId === undefined ||
+        durable.liveDocRegrantSights.take(context.toolUseId, artifactUrlOrThrow.slug) === true;
+      let repliesApproved =
+        context.toolUseId !== undefined &&
+        durable.firstWatchAskSights.take(context.toolUseId, artifactUrlOrThrow.slug) === true;
+      if (consentTargetChanged(input, "watch", artifactUrlOrThrow.slug))
         throw new ArtifactInputError(
           "`action` or `url` no longer names the artifact watch that was approved \u2014 nothing was armed; retry so it is checked again",
           "watch_target_changed",
         );
       if (
-        T !== undefined &&
-        !isDelegatedObservationContext(appState.agentContext) &&
-        canRearmWatchHere(appState)
+        relatchAsk !== undefined &&
+        !isDelegatedObservationContext(context.agentContext) &&
+        canRearmWatchHere(context)
       ) {
-        stopLatches.clearByApprovedRewatch(artifactUrlOrThrow.slug, T);
+        stopLatches.clearByApprovedRewatch(artifactUrlOrThrow.slug, relatchAsk);
         if (!stopLatches.isStopped(artifactUrlOrThrow.slug))
           forgetCommentMonitorIntents(artifactUrlOrThrow.slug, {
-            storageV5: appState.storageV5,
+            storageV5: context.storageV5,
           });
       }
       if (stopLatches.isStopped(artifactUrlOrThrow.slug)) {
@@ -1148,34 +1193,35 @@ var ARTIFACT_WATCH_ACTION_HANDLER = {
           },
         };
       }
-      let repliesApproved = approveTakenRepliesConsent(
+      let repliesApproved_2 = approveTakenRepliesConsent(
         consentWriter,
         takenRepliesAsk,
         artifactUrlOrThrow.slug,
-        (consentAskReachedUser(n, appState) && repliesAskAnsweredByHuman(appState)) ||
-          classAskStands(appState, "standing_job", artifactUrlOrThrow.slug),
+        (consentAskReachedUser(input, context) && repliesAskAnsweredByHuman(context)) ||
+          classAskStands(context, "standing_job", artifactUrlOrThrow.slug),
       );
       if (
-        L &&
-        firstWatchAskReachesHuman(appState) &&
-        !isDelegatedObservationContext(appState.agentContext) &&
-        canRearmWatchHere(appState) &&
-        isUserDrivenTurn(appState.messages)
+        repliesApproved &&
+        firstWatchAskReachesHuman(context) &&
+        !isDelegatedObservationContext(context.agentContext) &&
+        canRearmWatchHere(context) &&
+        isUserDrivenTurn(context.messages)
       )
         stopLatches.noteApprovedWatch(artifactUrlOrThrow.slug);
-      if (P && !isDelegatedObservationContext(appState.agentContext))
+      if (docRegranted && !isDelegatedObservationContext(context.agentContext))
         durable.liveDocArmDeclined.delete(artifactUrlOrThrow.slug);
-      let M;
+      let durableSkipReason;
       if (env.CLAUDE_CODE_REMOTE) {
         let outcome = await watchArtifactDurably({
           slug: artifactUrlOrThrow.slug,
-          context: appState,
+          context,
         });
         if (outcome.outcome === "subscribed" || outcome.outcome === "already_watching")
           pullStaleWatchLifecycleNotices(artifactUrlOrThrow.slug);
         if (outcome.outcome !== "skipped") {
-          if (consentPinMatches(n, "watch", artifactUrlOrThrow.slug)) stampArtifactWatchConsent(n, appState);
-          let me =
+          if (consentPinMatches(input, "watch", artifactUrlOrThrow.slug))
+            stampArtifactWatchConsent(input, context);
+          let liveDocNote =
             watchLiveArmsRef != null &&
             outcome.outcome !== "failed" &&
             watchLiveArmsRef.hasProbedLiveFile(artifactUrlOrThrow.slug)
@@ -1186,49 +1232,52 @@ var ARTIFACT_WATCH_ACTION_HANDLER = {
               watch: {
                 url,
                 ...durableWakeResult(outcome),
-                ...(me !== undefined && {
+                ...(liveDocNote !== undefined && {
                   liveDocCollab: "remote_session",
-                  note: me,
+                  note: liveDocNote,
                 }),
               },
             },
           };
         }
-        M = outcome.reason;
+        durableSkipReason = outcome.reason;
       }
-      let { publishContext } = derivePublishContext(appState);
-      let tool = e.tool;
-      let re = watchFrameLive({
+      let { publishContext } = derivePublishContext(context);
+      let tool_2 = tool.tool;
+      let frameLiveArm = watchFrameLive({
         slug: artifactUrlOrThrow.slug,
         url,
         publishContext,
-        getKnownVer: makeArtifactReadVersionReader(appState.getAppState, artifactUrlOrThrow.slug),
-        context: appState,
-        tool,
+        getKnownVer: makeArtifactReadVersionReader(context.getAppState, artifactUrlOrThrow.slug),
+        context,
+        tool: tool_2,
         commentVerbsInSchema: artifactCommentsPromptGateOpen(),
-        repliesApproved,
+        repliesApproved: repliesApproved_2,
       });
-      let [Z, ue] = await Promise.all([
+      let [docArmResult, frameLiveResult] = await Promise.all([
         watchLiveArmsRef != null
           ? watchLiveArmsRef.armWatchActionCollab({
               slug: artifactUrlOrThrow.slug,
-              input: n,
+              input,
               livePaths: artifactLivePathsSchemaOpen(),
               url,
-              context: appState,
+              context,
             })
           : undefined,
-        re,
+        frameLiveArm,
       ]);
-      let we = ue.outcome !== "skipped";
-      if (sessionWatchRail() === "live" || we) {
-        if (consentPinMatches(n, "watch", artifactUrlOrThrow.slug)) stampArtifactWatchConsent(n, appState);
+      let isWatching = frameLiveResult.outcome !== "skipped";
+      if (sessionWatchRail() === "live" || isWatching) {
+        if (consentPinMatches(input, "watch", artifactUrlOrThrow.slug))
+          stampArtifactWatchConsent(input, context);
       }
-      let Ie = we ? frameLiveWatchRows(appState, artifactUrlOrThrow.slug)[0] : undefined;
+      let watchRow = isWatching ? frameLiveWatchRows(context, artifactUrlOrThrow.slug)[0] : undefined;
       let degraded =
-        ue.outcome !== "skipped" && Ie !== undefined && Ie.autoReply === "none" ? ue.degraded : undefined;
-      let _e =
-        Z ??
+        frameLiveResult.outcome !== "skipped" && watchRow !== undefined && watchRow.autoReply === "none"
+          ? frameLiveResult.degraded
+          : undefined;
+      let liveDocCollab =
+        docArmResult ??
         (env.CLAUDE_CODE_REMOTE &&
         watchLiveArmsRef != null &&
         watchLiveArmsRef.hasProbedLiveFile(artifactUrlOrThrow.slug)
@@ -1238,20 +1287,20 @@ var ARTIFACT_WATCH_ACTION_HANDLER = {
         data: {
           watch: {
             url,
-            watching: we,
-            outcome: ue.outcome,
-            ...(ue.outcome === "skipped" && {
-              reason: ue.reason,
+            watching: isWatching,
+            outcome: frameLiveResult.outcome,
+            ...(frameLiveResult.outcome === "skipped" && {
+              reason: frameLiveResult.reason,
             }),
-            ...(ue.outcome === "skipped" &&
-              M !== undefined && {
-                durable_skip_reason: M,
+            ...(frameLiveResult.outcome === "skipped" &&
+              durableSkipReason !== undefined && {
+                durable_skip_reason: durableSkipReason,
               }),
-            ...(Ie && {
-              task_id: Ie.taskId,
-              since: Ie.since,
-              token_expires_at: Ie.tokenExpiresAt,
-              auto_reply: Ie.autoReply,
+            ...(watchRow && {
+              task_id: watchRow.taskId,
+              since: watchRow.since,
+              token_expires_at: watchRow.tokenExpiresAt,
+              auto_reply: watchRow.autoReply,
             }),
             ...(degraded === "not_editor" && {
               can_edit: false,
@@ -1265,34 +1314,34 @@ var ARTIFACT_WATCH_ACTION_HANDLER = {
             ...(degraded === "declined" && {
               replies_declined: true,
             }),
-            ...(_e !== undefined && {
-              liveDocCollab: _e,
+            ...(liveDocCollab !== undefined && {
+              liveDocCollab,
             }),
-            ...(_e !== undefined &&
+            ...(liveDocCollab !== undefined &&
               watchLiveArmsRef != null &&
               artifactLivePathsSchemaOpen() &&
-              watchLiveArmsRef.livePathFrom(n) !== undefined &&
+              watchLiveArmsRef.livePathFrom(input) !== undefined &&
               watchLiveArmsRef.hasSeveralLiveFiles(artifactUrlOrThrow.slug) && {
-                liveDocPath: watchLiveArmsRef.livePathFrom(n),
+                liveDocPath: watchLiveArmsRef.livePathFrom(input),
               }),
           },
         },
       };
     }
-    if (n.action === "resume_replies") {
-      let artifactUrlOrThrow = parseArtifactUrlOrThrow(n.url);
+    if (input.action === "resume_replies") {
+      let artifactUrlOrThrow = parseArtifactUrlOrThrow(input.url);
       let url = artifactViewerUrlFor(artifactUrlOrThrow);
       let liveState = getLiveState();
       let stopLatches = liveState.durable.stopLatches;
-      let T =
-        appState.toolUseId === undefined
+      let relatchAsk =
+        context.toolUseId === undefined
           ? undefined
-          : stopLatches.takeRelatchAsk(appState.toolUseId, artifactUrlOrThrow.slug);
-      let P =
-        appState.toolUseId === undefined
+          : stopLatches.takeRelatchAsk(context.toolUseId, artifactUrlOrThrow.slug);
+      let resumeSight =
+        context.toolUseId === undefined
           ? undefined
-          : liveState.wakes.resumeSights.take(appState.toolUseId, artifactUrlOrThrow.slug);
-      let approvedRelatchGen = isDelegatedObservationContext(appState.agentContext) ? undefined : T;
+          : liveState.wakes.resumeSights.take(context.toolUseId, artifactUrlOrThrow.slug);
+      let approvedRelatchGen = isDelegatedObservationContext(context.agentContext) ? undefined : relatchAsk;
       if (env.CLAUDE_CODE_REMOTE)
         return {
           data: {
@@ -1306,7 +1355,7 @@ var ARTIFACT_WATCH_ACTION_HANDLER = {
         };
       if (
         !liveState.autoReact.userDisarmed &&
-        P !== stopGeneration(artifactUrlOrThrow.slug) &&
+        resumeSight !== stopGeneration(artifactUrlOrThrow.slug) &&
         isSlugStopped(artifactUrlOrThrow.slug)
       )
         return {
@@ -1319,35 +1368,35 @@ var ARTIFACT_WATCH_ACTION_HANDLER = {
             },
           },
         };
-      let { publishContext } = derivePublishContext(appState);
-      let M = isSlugSwept(artifactUrlOrThrow.slug);
-      let x = await resumeFrameLiveAutoReplies({
+      let { publishContext } = derivePublishContext(context);
+      let isSwept = isSlugSwept(artifactUrlOrThrow.slug);
+      let resumeResult = await resumeFrameLiveAutoReplies({
         slug: artifactUrlOrThrow.slug,
         url,
         publishContext,
-        getKnownVer: makeArtifactReadVersionReader(appState.getAppState, artifactUrlOrThrow.slug),
-        context: appState,
-        tool: e.tool,
+        getKnownVer: makeArtifactReadVersionReader(context.getAppState, artifactUrlOrThrow.slug),
+        context,
+        tool: tool.tool,
         commentVerbsInSchema: artifactCommentsPromptGateOpen(),
         approvedRelatchGen,
       });
-      let resumed = x.outcome === "armed";
+      let resumed = resumeResult.outcome === "armed";
       return {
         data: {
           resume_replies: {
             url,
             resumed,
-            outcome: x.outcome,
-            ...((x.outcome === "skipped" || x.outcome === "refused") && {
-              reason: x.reason,
+            outcome: resumeResult.outcome,
+            ...((resumeResult.outcome === "skipped" || resumeResult.outcome === "refused") && {
+              reason: resumeResult.reason,
             }),
-            ...(x.outcome === "armed" && {
-              task_id: x.taskId,
-              stop_kind: M ? "interrupt" : "user",
-              ...(x.inPlace === true && {
+            ...(resumeResult.outcome === "armed" && {
+              task_id: resumeResult.taskId,
+              stop_kind: isSwept ? "interrupt" : "user",
+              ...(resumeResult.inPlace === true && {
                 in_place: true,
               }),
-              ...(x.connecting === true && {
+              ...(resumeResult.connecting === true && {
                 connecting: true,
               }),
             }),
@@ -1355,22 +1404,22 @@ var ARTIFACT_WATCH_ACTION_HANDLER = {
         },
       };
     }
-    return throwUnroutedArtifactAction("watch.call", n);
+    return throwUnroutedArtifactAction("watch.call", input);
   },
 };
 var ARTIFACT_WATCH_ACTION_HANDLER_VALUE = {
-  watch(e, toolUseId) {
-    if ("watch" in e) {
-      let watch = typeof e.watch === "object" && e.watch !== null ? e.watch : {};
+  watch(toolResult, toolUseId) {
+    if ("watch" in toolResult) {
+      let watch = typeof toolResult.watch === "object" && toolResult.watch !== null ? toolResult.watch : {};
       if (watch.rail === "durable_wake") {
         let liveDocCollab = typeof watch.liveDocCollab === "string" ? watch.liveDocCollab : undefined;
-        let T =
+        let lead =
           watch.watching === true && watchLiveArmsRef != null && liveDocCollab !== undefined
             ? watchLiveArmsRef.durableLiveDocWatchLead(canonicalTargetOrPlaceholder(watch.url))
             : "";
         let content =
           watch.watching === true
-            ? `${T}Durable wake subscription on ${canonicalTargetOrPlaceholder(watch.url)} \u2014 ${clipLabel(watch.note) ?? `this session will be woken by a new turn when the artifact is ${Array.isArray(watch.events) && watch.events.includes("comment") ? "republished or a comment on it is sent to Claude" : "next published"}; no live updates are streamed, so re-read the artifact on wake.`}`
+            ? `${lead}Durable wake subscription on ${canonicalTargetOrPlaceholder(watch.url)} \u2014 ${clipLabel(watch.note) ?? `this session will be woken by a new turn when the artifact is ${Array.isArray(watch.events) && watch.events.includes("comment") ? "republished or a comment on it is sent to Claude" : "next published"}; no live updates are streamed, so re-read the artifact on wake.`}`
             : `No durable wake subscription on ${canonicalTargetOrPlaceholder(watch.url)}${typeof watch.reason === "string" ? ` (${clipUnknown(watch.reason)}${labelSuffix(watch.detail)})` : ""} \u2014 ${clipLabel(watch.note) ?? "could not register one; publishing and reading still work."}`;
         return {
           tool_use_id: toolUseId,
@@ -1378,12 +1427,12 @@ var ARTIFACT_WATCH_ACTION_HANDLER_VALUE = {
           content,
         };
       }
-      let r =
+      let reconnectNote =
         watch.token_expires_at !== undefined
           ? " It reconnects on its own if the connection drops or its credential expires; you will be told if reconnecting has to stop."
           : "";
       let liveDocPath = watch.liveDocPath;
-      let y =
+      let liveDocLine =
         watchLiveArmsRef != null
           ? watchLiveArmsRef.liveDocWatchCollabLine(
               typeof watch.liveDocCollab === "string" ? watch.liveDocCollab : undefined,
@@ -1393,39 +1442,40 @@ var ARTIFACT_WATCH_ACTION_HANDLER_VALUE = {
                 : undefined,
             )
           : "";
-      let p =
+      let durableSkipNote =
         watch.durable_skip_reason === undefined
           ? ""
           : ` This remote session's durable wake rail was skipped as well: ${watch.durable_skip_reason === "no_wake_minter" ? "no wake-webhook minter is available (the session's own MCP mount was not found)" : watch.durable_skip_reason === "stop_latched" ? "watching this artifact was stopped earlier in this session (do not retry on your own)" : clipUnknown(watch.durable_skip_reason)}.`;
-      let w = () => {
-        let R = artifactCommentsPromptGateOpen();
-        return `${y}Not watching ${canonicalTargetOrPlaceholder(watch.url)} \u2014 watching an artifact for new versions${R ? " and comments" : ""} isn't supported yet from remote sessions, so nothing will notify this session. ${R ? "Publishing, reading comments, and replying still work here." : "Publishing still works here."} To watch it, the user can run \`claude --watch-artifact ${canonicalTargetOrPlaceholder(watch.url)}\` in Claude Code on their own machine.`;
+      let remoteUnsupportedText = () => {
+        let commentsOn = artifactCommentsPromptGateOpen();
+        return `${liveDocLine}Not watching ${canonicalTargetOrPlaceholder(watch.url)} \u2014 watching an artifact for new versions${commentsOn ? " and comments" : ""} isn't supported yet from remote sessions, so nothing will notify this session. ${commentsOn ? "Publishing, reading comments, and replying still work here." : "Publishing still works here."} To watch it, the user can run \`claude --watch-artifact ${canonicalTargetOrPlaceholder(watch.url)}\` in Claude Code on their own machine.`;
       };
-      let A = () => {
-        let R = artifactCommentsPromptGateOpen();
-        return `${y}Not watching ${canonicalTargetOrPlaceholder(watch.url)} \u2014 this cloud session is bound to the desktop it was started from, and that device's trusted-device check means new versions${R ? " and comments" : ""} on the artifact can't wake it. ${R ? "Publishing, reading comments, and replying still work here." : "Publishing still works here."} To be woken, the user can publish from a Claude Code cloud session started on the web, or run \`claude --watch-artifact ${canonicalTargetOrPlaceholder(watch.url)}\` in Claude Code on their own machine.`;
+      let deviceBoundText = () => {
+        let commentsOn = artifactCommentsPromptGateOpen();
+        return `${liveDocLine}Not watching ${canonicalTargetOrPlaceholder(watch.url)} \u2014 this cloud session is bound to the desktop it was started from, and that device's trusted-device check means new versions${commentsOn ? " and comments" : ""} on the artifact can't wake it. ${commentsOn ? "Publishing, reading comments, and replying still work here." : "Publishing still works here."} To be woken, the user can publish from a Claude Code cloud session started on the web, or run \`claude --watch-artifact ${canonicalTargetOrPlaceholder(watch.url)}\` in Claude Code on their own machine.`;
       };
       let content =
         watch.watching === true
-          ? `${y}Watching ${canonicalTargetOrPlaceholder(watch.url)} \u2014 the watch is armed (\`status\` shows whether it has connected yet); this session keeps track of new versions published elsewhere; a new version starts no turn and sends no notification (watch is session-local; ${resumeWatchNote(artifactCommentsPromptGateOpen())}).${describeWatchCommentsReach(typeof watch.auto_reply === "string" ? watch.auto_reply : undefined, watch.task_id === undefined, watch.can_edit === false ? "cannot_edit" : watch.user_turn === false ? "unattended_turn" : watch.named_by_user === false ? "not_named_by_user" : watch.replies_declined === true ? "declined" : undefined)}${r}`
+          ? `${liveDocLine}Watching ${canonicalTargetOrPlaceholder(watch.url)} \u2014 the watch is armed (\`status\` shows whether it has connected yet); this session keeps track of new versions published elsewhere; a new version starts no turn and sends no notification (watch is session-local; ${resumeWatchNote(artifactCommentsPromptGateOpen())}).${describeWatchCommentsReach(typeof watch.auto_reply === "string" ? watch.auto_reply : undefined, watch.task_id === undefined, watch.can_edit === false ? "cannot_edit" : watch.user_turn === false ? "unattended_turn" : watch.named_by_user === false ? "not_named_by_user" : watch.replies_declined === true ? "declined" : undefined)}${reconnectNote}`
           : watch.durable_skip_reason === "tool_not_offered" ||
               watch.durable_skip_reason === "org_not_enabled" ||
               watch.durable_skip_reason === "relay_not_served"
-            ? w()
+            ? remoteUnsupportedText()
             : watch.durable_skip_reason === "session_device_bound"
-              ? A()
-              : `${y}Not watching ${canonicalTargetOrPlaceholder(watch.url)} \u2014 ${describeLiveSubscriptionState(watch.reason ?? watch.outcome)}${p}`;
+              ? deviceBoundText()
+              : `${liveDocLine}Not watching ${canonicalTargetOrPlaceholder(watch.url)} \u2014 ${describeLiveSubscriptionState(watch.reason ?? watch.outcome)}${durableSkipNote}`;
       return {
         tool_use_id: toolUseId,
         type: "tool_result",
         content,
       };
     }
-    return throwUnroutedArtifactAction("watch.watch", e);
+    return throwUnroutedArtifactAction("watch.watch", toolResult);
   },
-  unwatch(e, toolUseId) {
-    if ("unwatch" in e) {
-      let unwatch = typeof e.unwatch === "object" && e.unwatch !== null ? e.unwatch : {};
+  unwatch(toolResult, toolUseId) {
+    if ("unwatch" in toolResult) {
+      let unwatch =
+        typeof toolResult.unwatch === "object" && toolResult.unwatch !== null ? toolResult.unwatch : {};
       let content =
         unwatch.was_watching === true
           ? `Stopped watching ${canonicalTargetOrPlaceholder(unwatch.url)}; republishes of it will no longer be reported in this session. Do not watch it again unless the user asks.`
@@ -1436,12 +1486,14 @@ var ARTIFACT_WATCH_ACTION_HANDLER_VALUE = {
         content,
       };
     }
-    return throwUnroutedArtifactAction("watch.unwatch", e);
+    return throwUnroutedArtifactAction("watch.unwatch", toolResult);
   },
-  resume_replies(e, toolUseId) {
-    if ("resume_replies" in e) {
+  resume_replies(toolResult, toolUseId) {
+    if ("resume_replies" in toolResult) {
       let resumeReplies =
-        typeof e.resume_replies === "object" && e.resume_replies !== null ? e.resume_replies : {};
+        typeof toolResult.resume_replies === "object" && toolResult.resume_replies !== null
+          ? toolResult.resume_replies
+          : {};
       let content =
         resumeReplies.resumed === true
           ? resumeReplies.in_place === true
@@ -1480,144 +1532,144 @@ var ARTIFACT_WATCH_ACTION_HANDLER_VALUE = {
         content,
       };
     }
-    return throwUnroutedArtifactAction("watch.resume_replies", e);
+    return throwUnroutedArtifactAction("watch.resume_replies", toolResult);
   },
-  watches(e, toolUseId) {
-    if ("watches" in e) {
-      if (!Array.isArray(e.watches))
+  watches(toolResult, toolUseId) {
+    if ("watches" in toolResult) {
+      if (!Array.isArray(toolResult.watches))
         return {
           tool_use_id: toolUseId,
           type: "tool_result",
           content:
             'This record of the artifact watches is unreadable \u2014 run action "status" again for the live list.',
         };
-      let s = 'run action "status" again for the live list';
-      let r = capResultRows(e.watches);
-      let rows = r.rows;
-      let y = rows.length === 0 && r.unreadable > 0;
-      let p = capResultRows(e.arms);
-      let rows_2 = p.rows;
-      let A = e.arms !== undefined && !Array.isArray(e.arms);
-      let S = capResultRows(e.rooms);
-      let rows_3 = S.rows;
-      let T = e.rooms !== undefined && !Array.isArray(e.rooms);
+      let retryHint = 'run action "status" again for the live list';
+      let watchRows = capResultRows(toolResult.watches);
+      let rows = watchRows.rows;
+      let allUnreadable = rows.length === 0 && watchRows.unreadable > 0;
+      let armRows = capResultRows(toolResult.arms);
+      let rows_2 = armRows.rows;
+      let armsUnreadable = toolResult.arms !== undefined && !Array.isArray(toolResult.arms);
+      let roomRows = capResultRows(toolResult.rooms);
+      let rows_3 = roomRows.rows;
+      let roomsUnreadable = toolResult.rooms !== undefined && !Array.isArray(toolResult.rooms);
       if (
-        y &&
+        allUnreadable &&
         rows_2.length === 0 &&
-        !A &&
-        p.unreadable === 0 &&
+        !armsUnreadable &&
+        armRows.unreadable === 0 &&
         rows_3.length === 0 &&
-        !T &&
-        S.unreadable === 0
+        !roomsUnreadable &&
+        roomRows.unreadable === 0
       )
         return {
           tool_use_id: toolUseId,
           type: "tool_result",
           content:
-            `No row of this record of the artifact watches could be read \u2014 ${s}.` +
+            `No row of this record of the artifact watches could be read \u2014 ${retryHint}.` +
             formatRowsOmittedNote(
               {
-                ...r,
+                ...watchRows,
                 unreadable: 0,
               },
               "this record",
-              s,
+              retryHint,
             ),
         };
-      let any = rows.some((ie) => "rail" in ie && ie.rail === "durable_wake");
+      let any = rows.some((row) => "rail" in row && row.rail === "durable_wake");
       let { watching, stopped } = splitWatchRows(rows);
-      let M = `${watching} artifact ${plural(watching, "watch", "watches")} in this session${any ? "" : ` (session-local; ${resumeWatchNote(artifactCommentsPromptGateOpen())})`}${stopped > 0 ? `, plus ${stopped} ${plural(stopped, "artifact")} with auto-replies paused or stopped and no connection` : ""}:
+      let headline = `${watching} artifact ${plural(watching, "watch", "watches")} in this session${any ? "" : ` (session-local; ${resumeWatchNote(artifactCommentsPromptGateOpen())})`}${stopped > 0 ? `, plus ${stopped} ${plural(stopped, "artifact")} with auto-replies paused or stopped and no connection` : ""}:
 `;
-      let x = e.filter_url !== undefined;
-      let q = y
-        ? `No row of this record of the artifact watches could be read \u2014 ${s}.`
+      let hasFilterUrl = toolResult.filter_url !== undefined;
+      let noReadableRows = allUnreadable
+        ? `No row of this record of the artifact watches could be read \u2014 ${retryHint}.`
         : rows.length === 0
-          ? x
-            ? `No artifact watch on ${canonicalTargetOrPlaceholder(e.filter_url)} in this session.`
+          ? hasFilterUrl
+            ? `No artifact watch on ${canonicalTargetOrPlaceholder(toolResult.filter_url)} in this session.`
             : env.CLAUDE_CODE_REMOTE
               ? "No artifact watches in this session. In a remote session a watch is a durable wake subscription held by the artifact service (it outlives the session); publishing normally registers one, and the publish result says whether registration began."
               : isFrameLiveSubscribeEnabled()
                 ? `No artifact watches in this session. Publishing an artifact from this session normally arms one \u2014 the publish result says whether the watch armed, and action "status" shows whether auto-replies are on for it; watches are session-local, and ${resumeWatchNote(artifactCommentsPromptGateOpen())}.`
                 : "No artifact watches in this session. Live artifact watching is off in this session, so it does not keep track of new versions published elsewhere."
-          : M +
-            rows.map((ie) =>
-              !("rail" in ie)
-                ? `- ${canonicalTargetOrPlaceholder(ie.url)} \u2014 ${ie.connected ? (ie.connecting === true ? "connecting (handshake not finished; nothing reaches it yet)" : "connected") : "reconnecting"}, ${armedViaWording(labelledArmedVia(ie.explicit === true, parseArmedVia(typeof ie.armed_via === "string" ? ie.armed_via : undefined))).row}${ie.auto_reply === undefined || ie.auto_reply === "none" ? "" : ie.auto_reply === "armed" ? `, ${AUTO_REPLIES_ARMED_TOKEN}` : ie.auto_reply === "paused" ? `, ${AUTO_REPLIES_PAUSED_ROW}` : ie.auto_reply === "yielded" ? `, ${AUTO_REPLIES_YIELDED_ROW}` : ie.auto_reply === "declined" ? `, ${AUTO_REPLIES_DECLINED_ROW}` : ie.auto_reply === "denied" ? `, ${AUTO_REPLIES_DENIED_ROW}` : ie.auto_reply === "stopped" ? ", auto-replies stopped (the user can ask to resume them)" : ie.auto_reply === "disarmed" ? ", auto-replies disarmed for this session" : ""}, since ${formatEpochMsIso(ie.since)}${commentCountsClause(ie)}`
-                : ie.rail === "durable_wake"
-                  ? `- ${canonicalTargetOrPlaceholder(ie.url)} \u2014 durable wake subscription (woken on ${Array.isArray(ie.events) && ie.events.includes("comment") ? "publish and to-Claude comments" : "publish"}; no live updates), since ${clipUnknown(ie.since)}${ie.restored === true ? "; restored after this session restarted and not re-verified since (no action needed unless the user asks)" : ""}`
-                  : `- ${canonicalTargetOrPlaceholder(ie.url)} \u2014 not connected${ie.explicit === undefined ? "" : `, ${armedViaWording(labelledArmedVia(ie.explicit === true, parseArmedVia(typeof ie.armed_via === "string" ? ie.armed_via : undefined))).row}`}, ${ie.auto_reply === "disarmed" ? "auto-replies disarmed for this session; no comment notifications arrive" : `${ie.stop_kind === "interrupt" ? "auto-replies paused by the user's interrupt (Ctrl+C or Stop) and the connection has since dropped \u2014 the next publish of this artifact the user asks for reconnects and resumes them, or the user can ask to resume them (comments sent to Claude meanwhile are answered then); publishing it without being asked, while handling a notification or a wake-up, leaves them paused" : ie.stop_kind === "yielded" ? "auto-replies handed to another session of this conversation, which answers the comments now \u2014 a publish of this artifact the user asks for here, or resume_replies when the user asks for it, takes them back (the user asking is not itself the take-back)" : ie.stop_kind === "user" ? "auto-replies stopped when the watch was killed or unwatched \u2014 they stay stopped: a publish does not re-arm them; the user can ask to resume them or to watch this artifact again" : "auto-replies stopped"}; no comment notifications arrive until then (do not republish or resume just to re-enable them unless the user asks)`}${ie.since === undefined ? "" : `, watching since ${formatEpochMsIso(ie.since)}`}`,
+          : headline +
+            rows.map((row) =>
+              !("rail" in row)
+                ? `- ${canonicalTargetOrPlaceholder(row.url)} \u2014 ${row.connected ? (row.connecting === true ? "connecting (handshake not finished; nothing reaches it yet)" : "connected") : "reconnecting"}, ${armedViaWording(labelledArmedVia(row.explicit === true, parseArmedVia(typeof row.armed_via === "string" ? row.armed_via : undefined))).row}${row.auto_reply === undefined || row.auto_reply === "none" ? "" : row.auto_reply === "armed" ? `, ${AUTO_REPLIES_ARMED_TOKEN}` : row.auto_reply === "paused" ? `, ${AUTO_REPLIES_PAUSED_ROW}` : row.auto_reply === "yielded" ? `, ${AUTO_REPLIES_YIELDED_ROW}` : row.auto_reply === "declined" ? `, ${AUTO_REPLIES_DECLINED_ROW}` : row.auto_reply === "denied" ? `, ${AUTO_REPLIES_DENIED_ROW}` : row.auto_reply === "stopped" ? ", auto-replies stopped (the user can ask to resume them)" : row.auto_reply === "disarmed" ? ", auto-replies disarmed for this session" : ""}, since ${formatEpochMsIso(row.since)}${commentCountsClause(row)}`
+                : row.rail === "durable_wake"
+                  ? `- ${canonicalTargetOrPlaceholder(row.url)} \u2014 durable wake subscription (woken on ${Array.isArray(row.events) && row.events.includes("comment") ? "publish and to-Claude comments" : "publish"}; no live updates), since ${clipUnknown(row.since)}${row.restored === true ? "; restored after this session restarted and not re-verified since (no action needed unless the user asks)" : ""}`
+                  : `- ${canonicalTargetOrPlaceholder(row.url)} \u2014 not connected${row.explicit === undefined ? "" : `, ${armedViaWording(labelledArmedVia(row.explicit === true, parseArmedVia(typeof row.armed_via === "string" ? row.armed_via : undefined))).row}`}, ${row.auto_reply === "disarmed" ? "auto-replies disarmed for this session; no comment notifications arrive" : `${row.stop_kind === "interrupt" ? "auto-replies paused by the user's interrupt (Ctrl+C or Stop) and the connection has since dropped \u2014 the next publish of this artifact the user asks for reconnects and resumes them, or the user can ask to resume them (comments sent to Claude meanwhile are answered then); publishing it without being asked, while handling a notification or a wake-up, leaves them paused" : row.stop_kind === "yielded" ? "auto-replies handed to another session of this conversation, which answers the comments now \u2014 a publish of this artifact the user asks for here, or resume_replies when the user asks for it, takes them back (the user asking is not itself the take-back)" : row.stop_kind === "user" ? "auto-replies stopped when the watch was killed or unwatched \u2014 they stay stopped: a publish does not re-arm them; the user can ask to resume them or to watch this artifact again" : "auto-replies stopped"}; no comment notifications arrive until then (do not republish or resume just to re-enable them unless the user asks)`}${row.since === undefined ? "" : `, watching since ${formatEpochMsIso(row.since)}`}`,
             ).join(`
 `);
-      let re = T
+      let roomsNote = roomsUnreadable
         ? `
-(This record's list of the artifact rooms joined as an agent is unreadable \u2014 ${s}.)`
+(This record's list of the artifact rooms joined as an agent is unreadable \u2014 ${retryHint}.)`
         : rows_3.length === 0
-          ? S.unreadable > 0
+          ? roomRows.unreadable > 0
             ? `
-(No row of this record's list of joined artifact rooms could be read \u2014 ${s}.)`
+(No row of this record's list of joined artifact rooms could be read \u2014 ${retryHint}.)`
             : ""
           : `
 ${rows_3.length} artifact ${plural(rows_3.length, "room")} joined as an agent:
 ` +
             rows_3.map(
-              (ie) =>
-                `- ${canonicalTargetOrPlaceholder(ie.url)} \u2014 ${ie.connected === true ? "connected" : "reconnecting"}, ${numberText(ie.peers)} other ${typeof ie.peers === "number" && ie.peers === 1 ? "peer" : "peers"} seen${describeArtifactPerson(ie.viewers, s)}`,
+              (row) =>
+                `- ${canonicalTargetOrPlaceholder(row.url)} \u2014 ${row.connected === true ? "connected" : "reconnecting"}, ${numberText(row.peers)} other ${typeof row.peers === "number" && row.peers === 1 ? "peer" : "peers"} seen${describeArtifactPerson(row.viewers, retryHint)}`,
             ).join(`
 `);
-      let Z = A
-        ? `(This record's list of other watch activity \u2014 watches connecting, reconnecting, failed or ended \u2014 is unreadable; ${s}.)`
+      let armsNote = armsUnreadable
+        ? `(This record's list of other watch activity \u2014 watches connecting, reconnecting, failed or ended \u2014 is unreadable; ${retryHint}.)`
         : rows_2.length > 0
-          ? describeUnwatchedState(rows_2, rows.length > 0 || y, x)
-          : p.unreadable > 0
-            ? `(No row of this record's list of other watch activity could be read \u2014 ${s}.)`
+          ? describeUnwatchedState(rows_2, rows.length > 0 || allUnreadable, hasFilterUrl)
+          : armRows.unreadable > 0
+            ? `(No row of this record's list of other watch activity could be read \u2014 ${retryHint}.)`
             : "";
-      let ue = rows_2.length > 0 && rows.length === 0 && !y;
-      let we =
-        Z === ""
-          ? q
-          : ue
-            ? Z
-            : `${q}
+      let onlyArmsReadable = rows_2.length > 0 && rows.length === 0 && !allUnreadable;
+      let nextStep =
+        armsNote === ""
+          ? noReadableRows
+          : onlyArmsReadable
+            ? armsNote
+            : `${noReadableRows}
 
-${Z}`;
-      let Ie =
+${armsNote}`;
+      let tail =
         formatRowsOmittedNote(
-          y
+          allUnreadable
             ? {
-                ...r,
+                ...watchRows,
                 unreadable: 0,
               }
-            : r,
+            : watchRows,
           "this record",
-          s,
+          retryHint,
         ) +
         formatRowsOmittedNote(
           rows_2.length === 0
             ? {
-                ...p,
+                ...armRows,
                 unreadable: 0,
               }
-            : p,
+            : armRows,
           "this record's list of other watch activity",
-          s,
+          retryHint,
         ) +
         formatRowsOmittedNote(
           rows_3.length === 0
             ? {
-                ...S,
+                ...roomRows,
                 unreadable: 0,
               }
-            : S,
+            : roomRows,
           "this record's list of joined artifact rooms",
-          s,
+          retryHint,
         );
       return {
         tool_use_id: toolUseId,
         type: "tool_result",
-        content: we + re + Ie,
+        content: nextStep + roomsNote + tail,
       };
     }
-    return throwUnroutedArtifactAction("watch.watches", e);
+    return throwUnroutedArtifactAction("watch.watches", toolResult);
   },
 };
 export { ARTIFACT_WATCH_ACTION_HANDLER, ARTIFACT_WATCH_ACTION_HANDLER_VALUE };

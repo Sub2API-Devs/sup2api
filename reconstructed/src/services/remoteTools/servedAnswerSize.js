@@ -44,7 +44,7 @@ function servedAnswerLimitBytes() {
 }
 //@ chunk-51ajpv6p.js:455-1528 placement
 function servedAnswerTooLargeText({ answer, bytes, status, tooLarge }) {
-  let n = tooLarge
+  let whyText = tooLarge
     ? `is too large for the session service to carry back (${bytes} bytes)`
     : `was refused by the session service (HTTP ${status})`;
   let callResult = readCallResult(
@@ -56,19 +56,19 @@ function servedAnswerTooLargeText({ answer, bytes, status, tooLarge }) {
       content: [
         {
           type: "text",
-          text: `(this machine's answer ${n}, so it was not returned)`,
+          text: `(this machine's answer ${whyText}, so it was not returned)`,
         },
       ],
       isError: true,
     };
-  let s = envelope.target.name;
-  let a = tooLarge
+  let hostName = envelope.target.name;
+  let narrowHint = tooLarge
     ? " Run a narrower command instead: read part of the file (offset and limit), filter the output (head, tail, grep), or for an image or screenshot save a smaller copy on the machine and read that."
     : "";
-  let u =
+  let message =
     envelope.outcome === "completed"
-      ? `The command ran to completion on ${s}, but its result ${n}, so it was not returned. Its effects stand \u2014 do not re-run it just to see the output.${a}`
-      : `${s} answered this call, but the answer ${n}, so it was not returned.${a}`;
+      ? `The command ran to completion on ${hostName}, but its result ${whyText}, so it was not returned. Its effects stand \u2014 do not re-run it just to see the output.${narrowHint}`
+      : `${hostName} answered this call, but the answer ${whyText}, so it was not returned.${narrowHint}`;
   return buildRemoteToolCallResult({
     envelope: {
       v: REMOTE_TOOL_PROTOCOL_VERSION,
@@ -78,13 +78,13 @@ function servedAnswerTooLargeText({ answer, bytes, status, tooLarge }) {
       }),
       target: envelope.target,
       code: "tool_error",
-      message: u,
+      message,
       ...replayedFields(envelope),
     },
     content: [
       {
         type: "text",
-        text: u,
+        text: message,
       },
     ],
   });

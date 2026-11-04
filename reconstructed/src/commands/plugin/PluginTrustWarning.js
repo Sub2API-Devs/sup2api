@@ -8,7 +8,7 @@
  * pieces: chunk-vrb44rx7.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { getPluginTrustMessage } from "../../utils/plugins/marketplacePolicy.js";
 import { jsxProd_default_2 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
@@ -17,7 +17,7 @@ import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/inde
 
 //@ chunk-vrb44rx7.js:52001-52587 fingerprint = PluginTrustWarning (0.578)
 function PluginTrustWarning() {
-  let $ = w(3);
+  let $ = useMemoCache(3);
   let t0;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     t0 = getPluginTrustMessage();

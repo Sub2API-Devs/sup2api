@@ -10,7 +10,7 @@
  */
 import { tokenize } from "../../vendor/@alcalzone/ansi-tokenize/build/tokenize.js";
 import { activeAnsiCodes } from "../components/PromptInput/inputDecorations.js";
-import { VEt } from "../../vendor/@alcalzone/ansi-tokenize/build/ansiCodes.js";
+import { ansiCodesToString } from "../../vendor/@alcalzone/ansi-tokenize/build/ansiCodes.js";
 import { undoAnsiCodes } from "../../vendor/@alcalzone/ansi-tokenize/build/undo.js";
 
 //@ chunk-e6aww6q8.js:64385-64477 callgraph-witnessed = segmentTextByHighlights (0.706)
@@ -26,20 +26,20 @@ function segmentTextByHighlights(text, highlights) {
 }
 //@ chunk-e6aww6q8.js:64477-64702 file-last-pair
 function reduceCodes(codes) {
-  let sortedHighlights = [...codes].sort((h, y) => {
-    if (h.start !== y.start) return h.start - y.start;
-    return y.priority - h.priority;
+  let sortedHighlights = [...codes].sort((left, right) => {
+    if (left.start !== right.start) return left.start - right.start;
+    return right.priority - left.priority;
   });
-  let r = [];
-  let s = -1 / 0;
+  let kept = [];
+  let merged = -1 / 0;
   for (let sortedHighlight of sortedHighlights) {
     if (sortedHighlight.start === sortedHighlight.end) continue;
-    if (sortedHighlight.start >= s) {
-      r.push(sortedHighlight);
-      s = Math.max(s, sortedHighlight.end);
+    if (sortedHighlight.start >= merged) {
+      kept.push(sortedHighlight);
+      merged = Math.max(merged, sortedHighlight.end);
     }
   }
-  return r;
+  return kept;
 }
 //@ chunk-e6aww6q8.js:64702-65856 fingerprint = HighlightSegmenter (1)
 class HighlightSegmenter {
@@ -104,8 +104,8 @@ class HighlightSegmenter {
     let prefixCodes = activeAnsiCodes(codesStart);
     let suffixCodes = activeAnsiCodes(this.codes);
     this.codes = suffixCodes;
-    let prefix = VEt(prefixCodes);
-    let suffix = VEt(undoAnsiCodes(suffixCodes));
+    let prefix = ansiCodesToString(prefixCodes);
+    let suffix = ansiCodesToString(undoAnsiCodes(suffixCodes));
     return {
       text: prefix + this.text.substring(stringStart, this.stringPos) + suffix,
       start: visibleStart,

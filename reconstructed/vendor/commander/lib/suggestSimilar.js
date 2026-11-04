@@ -5,10 +5,10 @@
  * pieces: chunk-b7dyevzy.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-b7dyevzy.js:8871-9832 cjs-fingerprint
-var require_suggestSimilar = x(function (cjsExports) {
+var require_suggestSimilar = __commonJS(function (cjsExports) {
   function editDistance(a, b) {
     if (Math.abs(a.length - b.length) > 3) return Math.max(a.length, b.length);
     let d = [];
@@ -47,7 +47,7 @@ var require_suggestSimilar = x(function (cjsExports) {
         } else if (distance === bestDistance) similar.push(candidate);
       }
     });
-    similar.sort((a, b) => a.localeCompare(b));
+    similar.sort((candidateName, b) => candidateName.localeCompare(b));
     if (searchingOptions) similar = similar.map((candidate) => `--${candidate}`);
     if (similar.length > 1)
       return `

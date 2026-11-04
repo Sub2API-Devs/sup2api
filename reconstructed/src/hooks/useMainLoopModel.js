@@ -8,7 +8,12 @@
  * pieces: chunk-kxxfj8vr.js (7)
  * attribution: placement 7
  */
-import { init_react_production, Uy, P, Q } from "../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useReducer,
+  useEffect,
+  useMemo,
+} from "../../vendor/react/cjs/react.production.js";
 import { subscribeTierMoves } from "../utils/model/modelUnavailability.js";
 import { allowedPickModel, getModelSwitchTarget } from "../utils/model/modelSwitchHooks.js";
 import { getDefaultMainLoopModelSetting } from "../utils/model/planModeModel.js";
@@ -16,14 +21,18 @@ import { parseUserSpecifiedModel } from "../utils/model/modelDisplay.js";
 import { useAppState } from "../state/AppState.js";
 import { useForceRender } from "./useForceRender.js";
 import { useSettingsState } from "./useSettings.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-kxxfj8vr.js:424-428 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-kxxfj8vr.js:424", () => {
+  init_react_production();
+});
 //@ chunk-kxxfj8vr.js:428-491 placement
 function useMainLoopModelVersion() {
-  let [o, e] = Uy((s) => s + 1, 0);
-  P(() => subscribeTierMoves(e), []);
-  return o;
+  let [version, bumpVersion] = useReducer((count) => count + 1, 0);
+  useEffect(() => subscribeTierMoves(bumpVersion), []);
+  return version;
 }
 //@ chunk-kxxfj8vr.js:491-537 placement
 /**
@@ -42,36 +51,36 @@ function getMainLoopModelFromState(state) {
 }
 //@ chunk-kxxfj8vr.js:610-746 placement = useMainLoopModel (1)
 function useMainLoopModelSetting() {
-  let mainLoopModel = useAppState((n) => n.mainLoopModel);
-  let mainLoopModelForSession = useAppState((n) => n.mainLoopModelForSession);
+  let mainLoopModel = useAppState((state) => state.mainLoopModel);
+  let mainLoopModelForSession = useAppState((state) => state.mainLoopModelForSession);
   let forceRender = useForceRender();
   let mainLoopModelVersion = useMainLoopModelVersion();
   let settingsState = useSettingsState();
-  return Q(
+  return useMemo(
     () => getModelSwitchTarget(mainLoopModelForSession, mainLoopModel),
     [mainLoopModelForSession, mainLoopModel, forceRender, settingsState, mainLoopModelVersion],
   );
 }
 //@ chunk-kxxfj8vr.js:746-882 placement = useMainLoopModel (1)
 function useMainLoopModel_2() {
-  let mainLoopModel = useAppState((n) => n.mainLoopModel);
-  let mainLoopModelForSession = useAppState((n) => n.mainLoopModelForSession);
+  let mainLoopModel = useAppState((state) => state.mainLoopModel);
+  let mainLoopModelForSession = useAppState((state) => state.mainLoopModelForSession);
   let forceRender = useForceRender();
   let mainLoopModelVersion = useMainLoopModelVersion();
   let settingsState = useSettingsState();
-  return Q(
+  return useMemo(
     () => resolveMainLoopModel(mainLoopModelForSession, mainLoopModel),
     [mainLoopModelForSession, mainLoopModel, forceRender, settingsState, mainLoopModelVersion],
   );
 }
 //@ chunk-kxxfj8vr.js:882-1056 placement = useMainLoopModel (1)
 function useMainLoopModel() {
-  let mainLoopModel = useAppState((n) => n.mainLoopModel);
-  let mainLoopModelForSession = useAppState((n) => n.mainLoopModelForSession);
+  let mainLoopModel = useAppState((state) => state.mainLoopModel);
+  let mainLoopModelForSession = useAppState((state) => state.mainLoopModelForSession);
   let forceRender = useForceRender();
   let mainLoopModelVersion = useMainLoopModelVersion();
   let settingsState = useSettingsState();
-  return Q(
+  return useMemo(
     () =>
       getMainLoopModelFromState({
         mainLoopModel,

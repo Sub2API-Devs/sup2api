@@ -58,6 +58,7 @@ import { ERASE_SCREEN, CURSOR_HOME } from "../../ink/termio/csi.js";
 import { enqueueCommand } from "../../utils/messageQueueManager.js";
 import { getModeFromInput, stripModePrefix } from "../../components/PromptInput/inputModes.js";
 import { getBgTakeover } from "../../utils/concurrentSessions.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-fd653dqq.js:1305-1364 placement
 /**
@@ -73,13 +74,16 @@ class RendezvousResolverState {
 /**
  * rendezvous 解析器状态的宿主作用域单例。
  */
-var rendezvousResolverState = new HostScoped(() => new RendezvousResolverState());
+var rendezvousResolverState; // deferred: uses RendezvousResolverState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-fd653dqq.js:1364", () => {
+  rendezvousResolverState = new HostScoped(() => new RendezvousResolverState());
+});
 //@ chunk-fd653dqq.js:1387-1433 placement
 /**
  * 注册当前宿主的 rendezvous 命令解析器。
  */
-function registerRendezvousResolver(host, r) {
-  rendezvousResolverState.of(host).registerResolver(r);
+function registerRendezvousResolver(host, resolver) {
+  rendezvousResolverState.of(host).registerResolver(resolver);
 }
 //@ chunk-fd653dqq.js:1433-1482 placement
 /**
@@ -102,13 +106,16 @@ class RendezvousRunnerState {
 /**
  * rendezvous 执行器状态的宿主作用域单例。
  */
-var rendezvousRunnerState = new HostScoped(() => new RendezvousRunnerState());
+var rendezvousRunnerState; // deferred: uses RendezvousRunnerState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-fd653dqq.js:1535", () => {
+  rendezvousRunnerState = new HostScoped(() => new RendezvousRunnerState());
+});
 //@ chunk-fd653dqq.js:1558-1602 placement
 /**
  * 注册当前宿主的 rendezvous 命令执行器。
  */
-function registerRendezvousRunner(host, r) {
-  rendezvousRunnerState.of(host).registerRunner(r);
+function registerRendezvousRunner(host, runner) {
+  rendezvousRunnerState.of(host).registerRunner(runner);
 }
 //@ chunk-fd653dqq.js:1602-1751 placement
 function runRvCommand(rootHost, text) {
@@ -147,29 +154,29 @@ class PromptDraftWriter {
     this.#n = undefined;
   }
   #s = () => {
-    let { value: e, cameBack } = this.#t.getState();
-    if (e !== this.#r?.value || cameBack !== this.#r.cameBack) this.#o();
+    let { value, cameBack } = this.#t.getState();
+    if (value !== this.#r?.value || cameBack !== this.#r.cameBack) this.#o();
   };
-  #o(e = env.CLAUDE_JOB_DIR) {
+  #o(jobDir = env.CLAUDE_JOB_DIR) {
     this.#r = this.#t.getState();
-    if (e) this.#e = this.#e.then(() => this.#a(e)).catch(logJobWriteError);
+    if (jobDir) this.#e = this.#e.then(() => this.#a(jobDir)).catch(logJobWriteError);
     return this.#e;
   }
-  #a(e) {
-    let { value: r, cameBack } = this.#t.getState();
-    let o = join(e, PromptDraftWriter.NAME);
-    return r !== "" && !cameBack
-      ? replaceFileExclusive(o, truncateToLength(r, PromptDraftWriter.MAX_BYTES))
-      : rm(o, {
+  #a(jobDir) {
+    let { value, cameBack } = this.#t.getState();
+    let path = join(jobDir, PromptDraftWriter.NAME);
+    return value !== "" && !cameBack
+      ? replaceFileExclusive(path, truncateToLength(value, PromptDraftWriter.MAX_BYTES))
+      : rm(path, {
           force: true,
         }).catch((error) => {
           logJobWriteError(error);
-          return replaceFileExclusive(o, "");
+          return replaceFileExclusive(path, "");
         });
   }
-  async #i(e) {
-    await e;
-    return e === this.#e ? undefined : this.#i(this.#e);
+  async #i(promise) {
+    await promise;
+    return promise === this.#e ? undefined : this.#i(this.#e);
   }
 }
 //@ chunk-fd653dqq.js:2499-2514 placement
@@ -201,19 +208,19 @@ class RendezvousClient {
   promptInput = promptInputStoreFor(getRootSessionRef());
   promptDraftFile = new PromptDraftWriter(this.promptInput);
   promptStash = new PromptStash(this.promptInput);
-  constructor(e, authToken, admitOnAccept, nativeBrowserEnv, pendingInteractiveMarks, storageV5) {
+  constructor(socketPath, authToken, admitOnAccept, nativeBrowserEnv, pendingInteractiveMarks, storageV5) {
     this.authToken = authToken;
     this.admitOnAccept = admitOnAccept;
     this.storageV5 = storageV5;
     this.nativeBrowserEnv = nativeBrowserEnv;
     this.pendingInteractiveMarks = pendingInteractiveMarks;
-    this.server = createServer((u) => this.onConnection(u));
-    this.server.on("error", (u) =>
-      logForDebugging(`[bg-rv] server error: ${String(u)}`, {
+    this.server = createServer((socket) => this.onConnection(socket));
+    this.server.on("error", (error) =>
+      logForDebugging(`[bg-rv] server error: ${String(error)}`, {
         level: "warn",
       }),
     );
-    this.server.listen(e);
+    this.server.listen(socketPath);
     this.server.unref();
     this.heartbeat = setInterval(
       () =>
@@ -224,15 +231,15 @@ class RendezvousClient {
     );
     this.heartbeat.unref();
   }
-  admit(e) {
-    e.setTimeout(0);
+  admit(socket) {
+    socket.setTimeout(0);
     this.current?.destroy();
-    this.current = e;
+    this.current = socket;
     this.currentAuthed = false;
     setRvSupervisorLinkLive(false);
     while (this.pendingInteractiveMarks.length > 0) {
-      let r = this.pendingInteractiveMarks[0];
-      if (r === undefined || !this.send(r)) break;
+      let mark = this.pendingInteractiveMarks[0];
+      if (mark === undefined || !this.send(mark)) break;
       this.pendingInteractiveMarks.shift();
     }
     this.unauthedDrops = 0;
@@ -242,47 +249,47 @@ class RendezvousClient {
     });
     this.restorePromptDraft().catch(() => {});
     this.promptStash.restore().catch(logError);
-    e.once("close", () => {
-      if (this.current === e) {
+    socket.once("close", () => {
+      if (this.current === socket) {
         this.current = undefined;
         setRvSupervisorLinkLive(false);
       }
     });
   }
-  onConnection(e) {
-    e.on("error", () => e.destroy());
-    if (this.admitOnAccept) this.admit(e);
+  onConnection(socket) {
+    socket.on("error", () => socket.destroy());
+    if (this.admitOnAccept) this.admit(socket);
     else {
-      this.unadmitted.add(e);
-      e.once("close", () => this.unadmitted.delete(e));
-      e.setTimeout(this.silentPeerTimeoutMs, () => {
+      this.unadmitted.add(socket);
+      socket.once("close", () => this.unadmitted.delete(socket));
+      socket.setTimeout(this.silentPeerTimeoutMs, () => {
         logForDebugging(`[bg-rv] closed a connection that wrote nothing in ${this.silentPeerTimeoutMs}ms`);
-        e.destroy();
+        socket.destroy();
       });
     }
-    let r = "";
-    let n = new StringDecoder("utf8");
-    e.on("data", (o) => {
-      if (this.current !== e && !this.unadmitted.has(e)) {
-        e.destroy();
+    let buffer = "";
+    let decoder = new StringDecoder("utf8");
+    socket.on("data", (data) => {
+      if (this.current !== socket && !this.unadmitted.has(socket)) {
+        socket.destroy();
         return;
       }
-      r += n.write(o);
-      let s;
+      buffer += decoder.write(data);
+      let newlineIndex;
       while (
-        (s = r.indexOf(`
+        (newlineIndex = buffer.indexOf(`
 `)) >= 0
       ) {
-        let sliced = r.slice(0, s);
-        r = r.slice(s + 1);
+        let sliced = buffer.slice(0, newlineIndex);
+        buffer = buffer.slice(newlineIndex + 1);
         if (sliced) {
-          if (this.unadmitted.delete(e)) this.admit(e);
+          if (this.unadmitted.delete(socket)) this.admit(socket);
           this.handleLine(sliced);
         }
       }
-      if (r.length > 1048576) {
-        r = "";
-        e.destroy();
+      if (buffer.length > 1048576) {
+        buffer = "";
+        socket.destroy();
       }
     });
   }
@@ -292,7 +299,7 @@ class RendezvousClient {
     this.wedgeTimer = undefined;
     this.current?.destroy();
     this.current = undefined;
-    for (let e of this.unadmitted) e.destroy();
+    for (let socket of this.unadmitted) socket.destroy();
     this.unadmitted.clear();
     setRvSupervisorLinkLive(false);
     this.restoreNativeBrowserEnv();
@@ -300,11 +307,11 @@ class RendezvousClient {
     this.promptStash.dispose();
     this.server.close();
   }
-  send(e) {
+  send(message) {
     if (!this.current || this.current.destroyed) return false;
     try {
       this.current.write(
-        jsonStringify(e) +
+        jsonStringify(message) +
           `
 `,
       );
@@ -324,17 +331,17 @@ class RendezvousClient {
     if (this.nativeBrowserEnv === undefined) delete process.env.BROWSER;
     else process.env.BROWSER = this.nativeBrowserEnv;
   }
-  handleLine(e) {
-    let r;
+  handleLine(line) {
+    let parsed;
     try {
-      r = jsonParse(e);
+      parsed = jsonParse(line);
     } catch {
       return;
     }
-    if (!r || typeof r !== "object") return;
-    if ("role" in r) {
+    if (!parsed || typeof parsed !== "object") return;
+    if ("role" in parsed) {
       if (this.authToken)
-        if ("auth" in r && timingSafeEqualStrings(r.auth, this.authToken)) {
+        if ("auth" in parsed && timingSafeEqualStrings(parsed.auth, this.authToken)) {
           this.currentAuthed = true;
           if (!this.gateReported) {
             this.gateReported = true;
@@ -348,48 +355,48 @@ class RendezvousClient {
         }
       return;
     }
-    let n = r;
-    if (this.authToken && !this.currentAuthed && n.type !== "repaint") {
+    let message = parsed;
+    if (this.authToken && !this.currentAuthed && message.type !== "repaint") {
       logForDebugging(
-        `[bg-rv] dropped ${typeof n.type === "string" ? n.type : "unknown"} from un-authed connection`,
+        `[bg-rv] dropped ${typeof message.type === "string" ? message.type : "unknown"} from un-authed connection`,
         {
           level: "warn",
         },
       );
-      if (n.type !== "attacher-caps") this.noteUnauthedRejection();
+      if (message.type !== "attacher-caps") this.noteUnauthedRejection();
       this.send({
         type: "reply-rejected",
       });
       return;
     }
-    if (n.type === "shutdown") {
+    if (message.type === "shutdown") {
       shutdownBgSession(this.promptDraftFile, this.storageV5);
       return;
     }
-    if (n.type === "repaint") {
+    if (message.type === "repaint") {
       repaintForAttacher();
       return;
     }
-    if (n.type === "attacher-caps") {
-      this.handleAttacherCaps(n);
+    if (message.type === "attacher-caps") {
+      this.handleAttacherCaps(message);
       return;
     }
-    if (n.type === "reply" && typeof n.text === "string") enqueueNextTurnPrompt(n);
+    if (message.type === "reply" && typeof message.text === "string") enqueueNextTurnPrompt(message);
   }
-  handleAttacherCaps(e) {
-    setAttacherCaps(e.caps);
+  handleAttacherCaps(message) {
+    setAttacherCaps(message.caps);
     setRvSupervisorLinkLive(true);
-    if (e.caps) noteAttachStamp(Date.now());
+    if (message.caps) noteAttachStamp(Date.now());
     else markDetachedSinceAttach();
-    clampForAttacher(e.caps?.colorLevel);
-    if (!e.caps) this.restoreNativeBrowserEnv();
-    else if (typeof e.caps.browser === "string") process.env.BROWSER = e.caps.browser;
+    clampForAttacher(message.caps?.colorLevel);
+    if (!message.caps) this.restoreNativeBrowserEnv();
+    else if (typeof message.caps.browser === "string") process.env.BROWSER = message.caps.browser;
     else delete process.env.BROWSER;
-    if (e.caps?.systemTheme) setSystemTheme(e.caps.systemTheme);
+    if (message.caps?.systemTheme) setSystemTheme(message.caps.systemTheme);
   }
-  async waitForInkMount(e) {
+  async waitForInkMount(socket) {
     for (let idx = 0; !getSecondRootError().has(process.stdout); idx++) {
-      if (idx >= 60 || this.current !== e) return false;
+      if (idx >= 60 || this.current !== socket) return false;
       await sleep(500);
     }
     return true;
@@ -399,36 +406,40 @@ class RendezvousClient {
     if (!CLAUDE_JOB_DIR) return;
     if (!(await this.waitForInkMount(this.current))) return;
     await withOwnJobStateWrite(async () => {
-      let jobState = await readJobState(CLAUDE_JOB_DIR, this.storageV5);
-      if (!jobState) return;
-      if (!jobState.forkSourceAlive) {
-        let o = forkMarkerFields(env.CLAUDE_CODE_RESUME_SOURCE_ALIVE);
-        if (o) {
+      let state = await readJobState(CLAUDE_JOB_DIR, this.storageV5);
+      if (!state) return;
+      if (!state.forkSourceAlive) {
+        let markerFields = forkMarkerFields(env.CLAUDE_CODE_RESUME_SOURCE_ALIVE);
+        if (markerFields) {
           await writeStateAtomic(
             CLAUDE_JOB_DIR,
             {
-              ...jobState,
-              ...o,
+              ...state,
+              ...markerFields,
             },
             this.storageV5,
           );
-          Object.assign(jobState, o);
+          Object.assign(state, markerFields);
         }
       }
-      if (jobState.state === "working" && jobState.detail === SEED_DETAIL)
+      if (state.state === "working" && state.detail === SEED_DETAIL)
         this.armStartupWedgeWatchdog(CLAUDE_JOB_DIR);
-      let n = (o) => {
-        let s = attentionRegistryStore.current();
-        return o.tempo === "blocked" && isOverlayNeeds(o) && !(s?.overlay === true && s.text === o.needs);
+      let shouldPrompt = (state) => {
+        let attention = attentionRegistryStore.current();
+        return (
+          state.tempo === "blocked" &&
+          isOverlayNeeds(state) &&
+          !(attention?.overlay === true && attention.text === state.needs)
+        );
       };
-      if (n(jobState)) {
-        let o = (await readJobState(CLAUDE_JOB_DIR, this.storageV5)) ?? jobState;
-        if (!n(o)) return;
+      if (shouldPrompt(state)) {
+        let fresh = (await readJobState(CLAUDE_JOB_DIR, this.storageV5)) ?? state;
+        if (!shouldPrompt(fresh)) return;
         await writeStateAtomic(
           CLAUDE_JOB_DIR,
           {
-            ...o,
-            ...(PRE_BOOT_STATES.includes(o.state) && {
+            ...fresh,
+            ...(PRE_BOOT_STATES.includes(fresh.state) && {
               state: "running",
             }),
             tempo: "idle",
@@ -442,7 +453,7 @@ class RendezvousClient {
         this.send({
           type: "state",
           patch: {
-            ...(PRE_BOOT_STATES.includes(o.state) && {
+            ...(PRE_BOOT_STATES.includes(fresh.state) && {
               state: "running",
             }),
             tempo: "idle",
@@ -451,12 +462,12 @@ class RendezvousClient {
         });
         return;
       }
-      if (!PRE_BOOT_STATES.includes(jobState.state)) return;
-      if (jobState.tempo === "blocked") return;
+      if (!PRE_BOOT_STATES.includes(state.state)) return;
+      if (state.tempo === "blocked") return;
       await writeStateAtomic(
         CLAUDE_JOB_DIR,
         {
-          ...jobState,
+          ...state,
           state: "running",
           tempo: "idle",
           updatedAt: new Date().toISOString(),
@@ -472,11 +483,15 @@ class RendezvousClient {
       });
     });
   }
-  armStartupWedgeWatchdog(e) {
+  armStartupWedgeWatchdog(jobDir) {
     if (this.wedgeDisarmed) return;
     clearTimeout(this.wedgeTimer);
     let CLAUDE_BG_STARTUP_WEDGE_MS = env.CLAUDE_BG_STARTUP_WEDGE_MS || 45000;
-    this.wedgeTimer = setTimeout((n) => this.onStartupWedgeTimeout(n), CLAUDE_BG_STARTUP_WEDGE_MS, e);
+    this.wedgeTimer = setTimeout(
+      (jobDir) => this.onStartupWedgeTimeout(jobDir),
+      CLAUDE_BG_STARTUP_WEDGE_MS,
+      jobDir,
+    );
     this.wedgeTimer.unref();
   }
   disarmStartupWedgeWatchdog() {
@@ -484,8 +499,8 @@ class RendezvousClient {
     clearTimeout(this.wedgeTimer);
     this.wedgeTimer = undefined;
   }
-  onStartupWedgeTimeout(e) {
-    readJobState(e, this.storageV5)
+  onStartupWedgeTimeout(jobDir) {
+    readJobState(jobDir, this.storageV5)
       .then(async (jobState) => {
         if (
           this.wedgeDisarmed ||
@@ -495,7 +510,7 @@ class RendezvousClient {
         )
           return;
         await writeStateAtomic(
-          e,
+          jobDir,
           {
             ...jobState,
             tempo: "blocked",
@@ -521,15 +536,15 @@ class RendezvousClient {
   async restorePromptDraft() {
     let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
     if (!CLAUDE_JOB_DIR) return;
-    let r = join(CLAUDE_JOB_DIR, PromptDraftWriter.NAME);
-    let smallFileOrNull = await readSmallFileOrNull(r, 4 * PromptDraftWriter.MAX_BYTES);
-    if (smallFileOrNull === null) return;
-    await unlink(r).catch(() => {});
-    let o = normalizeStashText(smallFileOrNull);
-    if (!o) return;
-    if (!hasEarlyInput()) seedEarlyInput(o);
+    let draftPath = join(CLAUDE_JOB_DIR, PromptDraftWriter.NAME);
+    let text = await readSmallFileOrNull(draftPath, 4 * PromptDraftWriter.MAX_BYTES);
+    if (text === null) return;
+    await unlink(draftPath).catch(() => {});
+    let draftText = normalizeStashText(text);
+    if (!draftText) return;
+    if (!hasEarlyInput()) seedEarlyInput(draftText);
     if (!(await this.waitForInkMount(this.current))) return;
-    if (this.promptInput.getState().value === "") setPromptValue(this.promptInput, o);
+    if (this.promptInput.getState().value === "") setPromptValue(this.promptInput, draftText);
   }
 }
 //@ chunk-fd653dqq.js:8372-8394 placement
@@ -543,7 +558,10 @@ class RendezvousServerState {
 /**
  * rendezvous 服务端状态的宿主作用域单例。
  */
-var rendezvousServerState = new HostScoped(() => new RendezvousServerState());
+var rendezvousServerState; // deferred: uses RendezvousServerState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-fd653dqq.js:8394", () => {
+  rendezvousServerState = new HostScoped(() => new RendezvousServerState());
+});
 //@ chunk-fd653dqq.js:8417-8441 placement
 /**
  * 取当前根会话对象。
@@ -572,13 +590,13 @@ async function startRendezvousServer(storageV5) {
   if (!CLAUDE_BG_RENDEZVOUS_SOCK || rendezvousServerState.server) return;
   let BROWSER = env.BROWSER;
   let pendingInteractiveMarks = [];
-  setRecoverySender((c) => {
-    let y = {
+  setRecoverySender((mark) => {
+    let frame = {
       type: "interactive-mark",
-      ...c,
+      ...mark,
     };
-    if (sendRv(y)) return true;
-    pendingInteractiveMarks.push(y);
+    if (sendRv(frame)) return true;
+    pendingInteractiveMarks.push(frame);
     return true;
   });
   delete process.env.CLAUDE_BG_RENDEZVOUS_SOCK;
@@ -606,8 +624,8 @@ async function startRendezvousServer(storageV5) {
   registerCleanup(() => server.promptStash.flush());
 }
 //@ chunk-fd653dqq.js:9115-9162 placement
-function sendRv(e) {
-  return getRendezvousServerState().server?.send(e) ?? false;
+function sendRv(frame) {
+  return getRendezvousServerState().server?.send(frame) ?? false;
 }
 //@ chunk-fd653dqq.js:9162-9494 placement
 /**
@@ -618,21 +636,21 @@ function shutdownBgSession(promptDraftFile, storageV5) {
     type: "shutting-down",
   });
   let replBridgeHandle = getReplBridgeHandle();
-  let o = [promptDraftFile.follow()];
+  let cleanups = [promptDraftFile.follow()];
   if (replBridgeHandle) {
-    let lastSequenceNum = replBridgeHandle.getLastSequenceNum();
+    let seq = replBridgeHandle.getLastSequenceNum();
     replBridgeHandle
       .teardown({
         skipArchive: true,
       })
       .catch(() => {});
     let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
-    if (CLAUDE_JOB_DIR && lastSequenceNum > 0)
-      o.push(recordBridgeSessionSeq(CLAUDE_JOB_DIR, lastSequenceNum, storageV5).catch(() => {}));
+    if (CLAUDE_JOB_DIR && seq > 0)
+      cleanups.push(recordBridgeSessionSeq(CLAUDE_JOB_DIR, seq, storageV5).catch(() => {}));
   }
-  o.push(runCleanups());
+  cleanups.push(runCleanups());
   Promise.race([
-    Promise.all(o)
+    Promise.all(cleanups)
       .catch(() => {})
       .then(() => promptDraftFile.settled()),
     sleep(5000),
@@ -660,12 +678,12 @@ function repaintForAttacher() {
   });
 }
 //@ chunk-fd653dqq.js:9727-10318 placement
-function enqueueNextTurnPrompt(e) {
-  if (e.nextTurn === true) {
+function enqueueNextTurnPrompt(frame) {
+  if (frame.nextTurn === true) {
     enqueueCommand({
       agentId: mainAgentId(),
       mode: "prompt",
-      value: e.text,
+      value: frame.text,
       priority: "next",
       origin: {
         kind: "human",
@@ -673,29 +691,29 @@ function enqueueNextTurnPrompt(e) {
       skipSlashCommands: true,
     });
     recordSubmitTime();
-    logForDebugging(`[bg-rv] enqueued next-turn prompt: ${e.text.slice(0, 80)}`);
+    logForDebugging(`[bg-rv] enqueued next-turn prompt: ${frame.text.slice(0, 80)}`);
     return;
   }
-  if (resolveRendezvousCommand(getRootHost(), e.text)) {
-    logForDebugging(`[bg-rv] peer reply answered question: ${e.text.slice(0, 80)}`);
+  if (resolveRendezvousCommand(getRootHost(), frame.text)) {
+    logForDebugging(`[bg-rv] peer reply answered question: ${frame.text.slice(0, 80)}`);
     return;
   }
-  if (runRvCommand(getRootHost(), e.text)) {
-    logForDebugging(`[bg-rv] peer reply ran at once: ${e.text.slice(0, 80)}`);
+  if (runRvCommand(getRootHost(), frame.text)) {
+    logForDebugging(`[bg-rv] peer reply ran at once: ${frame.text.slice(0, 80)}`);
     return;
   }
-  let modeFromInput = getModeFromInput(e.text);
+  let modeFromInput = getModeFromInput(frame.text);
   enqueueCommand({
     agentId: mainAgentId(),
     mode: modeFromInput,
-    value: stripModePrefix(e.text),
+    value: stripModePrefix(frame.text),
     priority: "next",
     origin: {
       kind: "human",
     },
   });
-  if (modeFromInput === "prompt" && !e.text.trim().startsWith("/")) recordSubmitTime();
-  logForDebugging(`[bg-rv] enqueued reply: ${e.text.slice(0, 80)}`);
+  if (modeFromInput === "prompt" && !frame.text.trim().startsWith("/")) recordSubmitTime();
+  logForDebugging(`[bg-rv] enqueued reply: ${frame.text.slice(0, 80)}`);
 }
 //@ chunk-fd653dqq.js:10318-10392 placement
 /**
@@ -711,13 +729,13 @@ function disarmStartupWedgeWatchdog() {
 /**
  * 把作业状态改为 blocked 并写入需要的输入（已是同一需求返回 already，被其他需求占用返回 refused），同步给 rendezvous，返回之前的状态。
  */
-async function markJobBlocked(e, r, detail, o) {
-  let jobState = await readJobState(e, o);
+async function markJobBlocked(jobDir, needs, detail, storageV5) {
+  let jobState = await readJobState(jobDir, storageV5);
   if (!jobState)
     return {
       kind: "refused",
     };
-  if (jobState.tempo === "blocked" && jobState.needs === r)
+  if (jobState.tempo === "blocked" && jobState.needs === needs)
     return {
       kind: "already",
     };
@@ -726,22 +744,22 @@ async function markJobBlocked(e, r, detail, o) {
       kind: "refused",
     };
   await writeStateAtomic(
-    e,
+    jobDir,
     {
       ...jobState,
       tempo: "blocked",
       detail,
-      needs: r,
+      needs,
       updatedAt: new Date().toISOString(),
     },
-    o,
+    storageV5,
   );
   sendRv({
     type: "state",
     patch: {
       tempo: "blocked",
       detail,
-      needs: r,
+      needs,
     },
   });
   return {
@@ -754,78 +772,78 @@ async function markJobBlocked(e, r, detail, o) {
   };
 }
 //@ chunk-fd653dqq.js:10866-11092 placement
-async function restoreJobFromBlocked(e, r, n, o) {
-  let jobState = await readJobState(e, o);
-  if (!jobState || jobState.tempo !== "blocked" || jobState.needs !== r) return;
+async function restoreJobFromBlocked(jobDir, needs, patch, storageV5) {
+  let jobState = await readJobState(jobDir, storageV5);
+  if (!jobState || jobState.tempo !== "blocked" || jobState.needs !== needs) return;
   await writeStateAtomic(
-    e,
+    jobDir,
     {
       ...jobState,
-      ...n,
+      ...patch,
       updatedAt: new Date().toISOString(),
     },
-    o,
+    storageV5,
   );
   sendRv({
     type: "state",
     patch: {
-      tempo: n.tempo,
-      needs: n.needs,
-      detail: n.detail,
+      tempo: patch.tempo,
+      needs: patch.needs,
+      detail: patch.detail,
     },
   });
 }
 //@ chunk-fd653dqq.js:11092-11261 placement
-async function markStartupDialogBlocked(e, r) {
+async function markStartupDialogBlocked(detail, storageV5) {
   let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
   if (!CLAUDE_JOB_DIR || getRendezvousServerState().server?.wedgeDisarmed) return;
-  let detail = e ? `${BLOCKED_STUCK_DIALOG_DETAIL} (${e})` : BLOCKED_STUCK_DIALOG_DETAIL;
-  let s = await markJobBlocked(CLAUDE_JOB_DIR, BLOCKED_STUCK_DIALOG_NEEDS, detail, r);
-  return s.kind === "wrote" ? s.prior : undefined;
+  let detail_2 = detail ? `${BLOCKED_STUCK_DIALOG_DETAIL} (${detail})` : BLOCKED_STUCK_DIALOG_DETAIL;
+  let result = await markJobBlocked(CLAUDE_JOB_DIR, BLOCKED_STUCK_DIALOG_NEEDS, detail_2, storageV5);
+  return result.kind === "wrote" ? result.prior : undefined;
 }
 //@ chunk-fd653dqq.js:11261-11338 placement
-async function clearStartupDialogBlocked(e, r) {
+async function clearStartupDialogBlocked(patch, storageV5) {
   let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
   if (!CLAUDE_JOB_DIR) return;
-  await restoreJobFromBlocked(CLAUDE_JOB_DIR, BLOCKED_STUCK_DIALOG_NEEDS, e, r);
+  await restoreJobFromBlocked(CLAUDE_JOB_DIR, BLOCKED_STUCK_DIALOG_NEEDS, patch, storageV5);
 }
 //@ chunk-fd653dqq.js:11338-11443 placement
-async function markCommandParkBlocked(e, detail, n) {
+async function markCommandParkBlocked(needs, detail, storageV5) {
   let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
   if (!CLAUDE_JOB_DIR)
     return {
       kind: "refused",
     };
-  return withOwnJobStateWrite(() => markJobBlocked(CLAUDE_JOB_DIR, e, detail, n));
+  return withOwnJobStateWrite(() => markJobBlocked(CLAUDE_JOB_DIR, needs, detail, storageV5));
 }
 //@ chunk-fd653dqq.js:11443-11531 placement
-async function clearCommandParkBlocked(e, prior, storageV5) {
+async function clearCommandParkBlocked(needs, patch, storageV5) {
   let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
   if (!CLAUDE_JOB_DIR) return;
-  await withOwnJobStateWrite(() => restoreJobFromBlocked(CLAUDE_JOB_DIR, e, prior, storageV5));
+  await withOwnJobStateWrite(() => restoreJobFromBlocked(CLAUDE_JOB_DIR, needs, patch, storageV5));
 }
 //@ chunk-fd653dqq.js:11531-12162 placement
-async function markReplayNoOp(e) {
+async function markReplayNoOp(storageV5) {
   let CLAUDE_JOB_DIR = env.CLAUDE_CODE_SESSION_KIND === "bg" ? env.CLAUDE_JOB_DIR : undefined;
-  let n = CLAUDE_JOB_DIR ?? getBgTakeover()?.jobDir;
-  if (!n) return;
-  let jobState = await readJobState(n, e);
+  let jobDir = CLAUDE_JOB_DIR ?? getBgTakeover()?.jobDir;
+  if (!jobDir) return;
+  let jobState = await readJobState(jobDir, storageV5);
   if (
     jobState?.replayOwed === true &&
     (await withOwnJobStateWrite(async () => {
-      invalidateJobStateCache(n);
-      let jobState = await readJobState(n, e);
+      invalidateJobStateCache(jobDir);
+      let jobState = await readJobState(jobDir, storageV5);
       if (jobState?.replayOwed !== true || jobState.tempo !== "active" || !isTerminal(jobState.state))
         return false;
       return writeStateAtomic(
-        n,
+        jobDir,
         {
           ...jobState,
           tempo: "idle",
           replayOwed: undefined,
           updatedAt: new Date().toISOString(),
         },
-        e,
+        storageV5,
       ).then(
         () => true,
         (error) => {
@@ -845,14 +863,14 @@ async function markReplayNoOp(e) {
   }
   if (!CLAUDE_JOB_DIR || !jobState || jobState.state !== "working" || jobState.tempo !== "active") return;
   await writeStateAtomic(
-    n,
+    jobDir,
     {
       ...jobState,
       tempo: "blocked",
       needs: IDLE_NEEDS,
       updatedAt: new Date().toISOString(),
     },
-    e,
+    storageV5,
   );
   sendRv({
     type: "state",
@@ -863,17 +881,17 @@ async function markReplayNoOp(e) {
   });
 }
 //@ chunk-fd653dqq.js:12162-12318 placement
-async function recordBridgeSessionSeq(e, r, n) {
-  let jobState = await readJobState(e, n);
-  if (!jobState || jobState.bridgeSessionSeq === r) return;
+async function recordBridgeSessionSeq(jobDir, seq, storageV5) {
+  let jobState = await readJobState(jobDir, storageV5);
+  if (!jobState || jobState.bridgeSessionSeq === seq) return;
   await writeStateAtomic(
-    e,
+    jobDir,
     {
       ...jobState,
-      bridgeSessionSeq: r,
+      bridgeSessionSeq: seq,
       updatedAt: new Date().toISOString(),
     },
-    n,
+    storageV5,
   );
 }
 export {
@@ -884,4 +902,7 @@ export {
   markCommandParkBlocked,
   clearCommandParkBlocked,
   disarmStartupWedgeWatchdog,
+  clearStartupDialogBlocked,
+  markStartupDialogBlocked,
+  startRendezvousServer,
 };

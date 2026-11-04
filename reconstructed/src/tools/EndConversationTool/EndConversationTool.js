@@ -10,7 +10,12 @@
  */
 import { END_CONVERSATION_TOOL_NAME } from "./constants.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, u, M, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  zodStrictObject,
+  objectSchema,
+  booleanSchema,
+  stringSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import {
   DESCRIPTION,
@@ -29,31 +34,34 @@ import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 
 //@ chunk-t1kwhq0j.js:11958-12351 placement = countToolCallsSince (1)
-function countToolCallsSince(e, m, f = false) {
-  let toolCallCount = m !== undefined || f;
-  let l = false;
-  let y = false;
-  for (let j = e.length - 1; j >= 0; j--) {
-    let r = e[j];
-    if (r?.type === "assistant") {
-      l = true;
-      let content = r.message.content;
+function countToolCallsSince(messages, sinceUuid, force = false) {
+  let toolCallCount = sinceUuid !== undefined || force;
+  let sawAssistantMessage = false;
+  let unusedFlag = false;
+  for (let j = messages.length - 1; j >= 0; j--) {
+    let message = messages[j];
+    if (message?.type === "assistant") {
+      sawAssistantMessage = true;
+      let content = message.message.content;
       if (
         Array.isArray(content) &&
-        content.some((g) => g.type === "tool_use" && g.name === END_CONVERSATION_TOOL_NAME)
+        content.some(
+          (contentBlock) =>
+            contentBlock.type === "tool_use" && contentBlock.name === END_CONVERSATION_TOOL_NAME,
+        )
       )
         return true;
       continue;
     }
-    if (r?.type === "user") {
-      let content = r.message.content;
+    if (message?.type === "user") {
+      let content = message.message.content;
       if (!(
         Array.isArray(content) &&
         content.length > 0 &&
         content.every((block) => block.type === "tool_result")
       ))
         return false;
-      if (l) return false;
+      if (sawAssistantMessage) return false;
       continue;
     }
   }
@@ -65,9 +73,9 @@ function countToolCallsSince(e, m, f = false) {
  */
 var EndConversationTool_2 = DoctorLazy(() => zodStrictObject({}));
 var END_CONVERSATION_OUTPUT_SCHEMA = DoctorLazy(() =>
-  u({
-    ended: M(),
-    message: string(),
+  objectSchema({
+    ended: booleanSchema(),
+    message: stringSchema(),
   }),
 );
 var EndConversationTool = buildTool({
@@ -93,8 +101,8 @@ var EndConversationTool = buildTool({
     return END_CONVERSATION_TOOL_NAME;
   },
   isEnabled() {
-    let e = mainLoopCanonicalModel();
-    return e !== undefined && isEndConversationToolEnabled(e);
+    let model = mainLoopCanonicalModel();
+    return model !== undefined && isEndConversationToolEnabled(model);
   },
   isReadOnly() {
     return true;
@@ -108,21 +116,21 @@ var EndConversationTool = buildTool({
   renderToolUseMessage() {
     return null;
   },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
     return {
       tool_use_id: toolUseId,
       type: "tool_result",
-      content: e.message,
+      content: result.message,
     };
   },
-  create(e) {
+  create(toolContext) {
     return {
-      async call(m, f) {
-        let isNonInteractiveSession = e.isNonInteractiveSession;
-        let l = e.agentId ? "fork" : isNonInteractiveSession ? "print" : "repl";
-        if (e.agentId) {
+      async call(input, callOptions) {
+        let isNonInteractiveSession = toolContext.isNonInteractiveSession;
+        let surface = toolContext.agentId ? "fork" : isNonInteractiveSession ? "print" : "repl";
+        if (toolContext.agentId) {
           logEvent("tengu_end_conversation_tool_call", {
-            surface: lit(l),
+            surface: lit(surface),
             is_non_interactive: isNonInteractiveSession,
             phase: lit("reflect"),
           });
@@ -133,10 +141,10 @@ var EndConversationTool = buildTool({
             },
           };
         }
-        let y = false;
-        if (!countToolCallsSince(e.messages(), undefined, false) || y) {
+        let unusedFlag = false;
+        if (!countToolCallsSince(toolContext.messages(), undefined, false) || unusedFlag) {
           logEvent("tengu_end_conversation_tool_call", {
-            surface: lit(l),
+            surface: lit(surface),
             is_non_interactive: isNonInteractiveSession,
             phase: lit("reflect"),
           });
@@ -148,19 +156,19 @@ var EndConversationTool = buildTool({
           };
         }
         logEvent("tengu_end_conversation_tool_call", {
-          surface: lit(l),
+          surface: lit(surface),
           is_non_interactive: isNonInteractiveSession,
           phase: lit("end"),
         });
-        let c;
+        let unusedValue;
         try {
-          await markSessionEndedByModel(getSessionId(), e.storageV5);
+          await markSessionEndedByModel(getSessionId(), toolContext.storageV5);
         } catch (error) {
           logForDebugging(`[EndConversation] marker write failed: ${errorMessage(error)}`);
         }
-        f.abort("end_conversation");
+        callOptions.abort("end_conversation");
         if (isNonInteractiveSession) {
-          let { gracefulShutdown } = await import("./chunk-r3wdn2dp.js");
+          let { gracefulShutdown } = await import("../../utils/gracefulShutdown.js");
           gracefulShutdown(1, "other", {
             finalMessage: END_CONVERSATION_FINAL_MESSAGE,
           });
@@ -171,7 +179,7 @@ var EndConversationTool = buildTool({
             },
           };
         }
-        e.markEndedByModel();
+        toolContext.markEndedByModel();
         return {
           data: {
             ended: true,
@@ -182,3 +190,4 @@ var EndConversationTool = buildTool({
     };
   },
 });
+export { EndConversationTool };

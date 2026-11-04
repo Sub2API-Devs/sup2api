@@ -8,9 +8,9 @@
  * pieces: chunk-x6v6jz2y.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { DOUBLE_CLICK_MS } from "./ErrorBoundary.js";
-import { y, R, P } from "../../../vendor/react/cjs/react.production.js";
+import { useState, useRef, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { useClock } from "./ClockContext.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
@@ -21,61 +21,69 @@ import { BaseBox } from "./Box.js";
  * <Button>：可聚焦的 Box；回车或空格触发 onAction 并短暂（100ms）进入 active 态；点击触发 onAction，但窗口激活点击与挂载后 mountSettleMs（默认 300ms）内的点击当误触丢弃；children 可为 (state)=>节点 拿到 focused/hovered/active。
  */
 function Button_2(t0) {
-  let $ = w(37);
+  let $ = useMemoCache(37);
   let autoFocus;
   let children;
   let onAction;
   let ref;
   let style;
-  let b;
-  let C;
+  let tabIndexProp;
+  let mountSettleMsProp;
   if ($[0] !== t0) {
-    ({ onAction, tabIndex: b, autoFocus, mountSettleMs: C, children, ref, ...style } = t0);
+    ({
+      onAction,
+      tabIndex: tabIndexProp,
+      autoFocus,
+      mountSettleMs: mountSettleMsProp,
+      children,
+      ref,
+      ...style
+    } = t0);
     $[0] = t0;
     $[1] = autoFocus;
     $[2] = children;
     $[3] = onAction;
     $[4] = ref;
     $[5] = style;
-    $[6] = b;
-    $[7] = C;
+    $[6] = tabIndexProp;
+    $[7] = mountSettleMsProp;
   } else {
     autoFocus = $[1];
     children = $[2];
     onAction = $[3];
     ref = $[4];
     style = $[5];
-    b = $[6];
-    C = $[7];
+    tabIndexProp = $[6];
+    mountSettleMsProp = $[7];
   }
-  let tabIndex = b === undefined ? 0 : b;
-  let mountSettleMs = C === undefined ? DOUBLE_CLICK_MS : C;
-  let [focused, setIsFocused] = y(false);
-  let [hovered, setIsHovered] = y(false);
-  let [active, setIsActive] = y(false);
+  let tabIndex = tabIndexProp === undefined ? 0 : tabIndexProp;
+  let mountSettleMs = mountSettleMsProp === undefined ? DOUBLE_CLICK_MS : mountSettleMsProp;
+  let [focused, setIsFocused] = useState(false);
+  let [hovered, setIsHovered] = useState(false);
+  let [active, setIsActive] = useState(false);
   let clock = useClock();
-  let activeTimer = R(null);
-  let B;
+  let activeTimer = useRef(null);
+  let getNow;
   if ($[8] !== clock) {
-    B = () => clock.now();
+    getNow = () => clock.now();
     $[8] = clock;
-    $[9] = B;
-  } else B = $[9];
-  let [mountedAt] = y(B);
-  let H;
+    $[9] = getNow;
+  } else getNow = $[9];
+  let [mountedAt] = useState(getNow);
+  let cleanupEffect;
   let t3;
   if ($[10] === MEMO_CACHE_SENTINEL) {
-    H = () => () => {
+    cleanupEffect = () => () => {
       activeTimer.current?.();
     };
     t3 = [];
-    $[10] = H;
+    $[10] = cleanupEffect;
     $[11] = t3;
   } else {
-    H = $[10];
+    cleanupEffect = $[10];
     t3 = $[11];
   }
-  P(H, t3);
+  useEffect(cleanupEffect, t3);
   let t4;
   if ($[12] !== clock || $[13] !== onAction) {
     t4 = (e) => {
@@ -92,11 +100,11 @@ function Button_2(t0) {
     $[14] = t4;
   } else t4 = $[14];
   let handleKeyDown = t4;
-  let G;
+  let handleClick;
   if ($[15] !== clock || $[16] !== mountSettleMs || $[17] !== mountedAt || $[18] !== onAction) {
-    G = (oe) => {
-      if (oe.isWindowActivation || clock.now() - mountedAt < mountSettleMs) {
-        oe.dropAsStray();
+    handleClick = (click) => {
+      if (click.isWindowActivation || clock.now() - mountedAt < mountSettleMs) {
+        click.dropAsStray();
         return;
       }
       onAction();
@@ -105,9 +113,9 @@ function Button_2(t0) {
     $[16] = mountSettleMs;
     $[17] = mountedAt;
     $[18] = onAction;
-    $[19] = G;
-  } else G = $[19];
-  let handleClick = G;
+    $[19] = handleClick;
+  } else handleClick = $[19];
+  let handleClick_2 = handleClick;
   let t6;
   if ($[20] === MEMO_CACHE_SENTINEL) {
     t6 = (_e_0) => setIsFocused(true);
@@ -151,7 +159,7 @@ function Button_2(t0) {
   if (
     $[29] !== autoFocus ||
     $[30] !== content ||
-    $[31] !== handleClick ||
+    $[31] !== handleClick_2 ||
     $[32] !== handleKeyDown ||
     $[33] !== ref ||
     $[34] !== style ||
@@ -162,7 +170,7 @@ function Button_2(t0) {
       tabIndex,
       autoFocus,
       onKeyDown: handleKeyDown,
-      onClick: handleClick,
+      onClick: handleClick_2,
       onFocus: handleFocus,
       onBlur: handleBlur,
       onMouseEnter: handleMouseEnter,
@@ -173,7 +181,7 @@ function Button_2(t0) {
     });
     $[29] = autoFocus;
     $[30] = content;
-    $[31] = handleClick;
+    $[31] = handleClick_2;
     $[32] = handleKeyDown;
     $[33] = ref;
     $[34] = style;

@@ -29,13 +29,13 @@ import { formatStorageError } from "./storage/storageErrors.js";
 import { STORAGE_SPACES } from "./storage/storageSpaces.js";
 import { readSmallFileOrNull } from "./readSmallFile.js";
 import {
-  PEER_TOKEN_HEX_RE,
   MAX_PEER_KEY_FILE_BYTES,
-  PEER_KEY_FILE_RE,
-  authenticatePeer,
-  AUTH_MESSAGE_TYPE,
-  AUTH,
+  peerKeyFileSchema,
   PEER_KEY_TMP_FILE_RE,
+  authenticatePeer,
+  PEER_KEY_FILE_RE,
+  AUTH,
+  PEER_TOKEN_BYTES,
   MAIN,
 } from "./sessionPeers.js";
 import { isENOENT } from "./errors.js";
@@ -52,28 +52,30 @@ import { isUnixSocketPath } from "./peerMessageHeaders.js";
 import { uniq } from "./collections.js";
 import { shortHash } from "./shortHash.js";
 import { udsEnv } from "./env.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e7z1g8a9.js:4406-4556 placement
-function getMessagingKeyName(pid, n) {
-  let r = hashCanonicalSocketPath(n);
-  if (r === undefined) throw Error("refusing to derive a messaging key name for a non-canonical socket path");
-  return `${pid}.${r}.key`;
+function getMessagingKeyName(pid, socketPath) {
+  let hash = hashCanonicalSocketPath(socketPath);
+  if (hash === undefined)
+    throw Error("refusing to derive a messaging key name for a non-canonical socket path");
+  return `${pid}.${hash}.key`;
 }
 //@ chunk-e7z1g8a9.js:4556-4831 placement = recordConsolidation (0.434)
-async function writeSessionPeerRecord(e, peerToken, r, { sweepPermitted }) {
-  if (isStorageV5Enabled() && r !== undefined) return ensureMessagingKeyDir(r, e, peerToken);
+async function writeSessionPeerRecord(socketPath, peerToken, store, { sweepPermitted }) {
+  if (isStorageV5Enabled() && store !== undefined) return ensureMessagingKeyDir(store, socketPath, peerToken);
   let sessionsDir = getSessionsDir();
   await mkdir(sessionsDir, {
     recursive: true,
     mode: 448,
   });
   await pruneDeadSessionRecords(sessionsDir, sweepPermitted);
-  let a = join(sessionsDir, getMessagingKeyName(process.pid, e));
+  let keyPath = join(sessionsDir, getMessagingKeyName(process.pid, socketPath));
   try {
-    await unlink(a);
+    await unlink(keyPath);
   } catch {}
   await writeFileAtomic(
-    a,
+    keyPath,
     jsonStringify({
       peerToken,
       ...procIdentityFields(await ownProcStartAsync()),
@@ -81,22 +83,22 @@ async function writeSessionPeerRecord(e, peerToken, r, { sweepPermitted }) {
     }),
     384,
   );
-  return a;
+  return keyPath;
 }
 //@ chunk-e7z1g8a9.js:4831-5393 placement
-async function ensureMessagingKeyDir(e, n, peerToken) {
-  let messagingKeyName = getMessagingKeyName(process.pid, n);
-  let c = await e.ensureScope({
+async function ensureMessagingKeyDir(store, socketPath, peerToken) {
+  let messagingKeyName = getMessagingKeyName(process.pid, socketPath);
+  let scope = await store.ensureScope({
     namespace: "session",
   });
-  if (!c.ok) {
-    logForDebugging(`[uds-auth] sessions scope unavailable: ${formatStorageError(c.error)}`);
+  if (!scope.ok) {
+    logForDebugging(`[uds-auth] sessions scope unavailable: ${formatStorageError(scope.error)}`);
     throw Error("messaging key folder could not be made through storage");
   }
   try {
-    await e.delete(STORAGE_SPACES.session(messagingKeyName));
+    await store.delete(STORAGE_SPACES.session(messagingKeyName));
   } catch {}
-  let a = await e.write(
+  let written = await store.write(
     STORAGE_SPACES.session(messagingKeyName),
     jsonStringify({
       peerToken,
@@ -109,8 +111,8 @@ async function ensureMessagingKeyDir(e, n, peerToken) {
       exactMode: 384,
     },
   );
-  if (!a.ok) {
-    logForDebugging(`[uds-auth] key publish failed: ${formatStorageError(a.error)}`);
+  if (!written.ok) {
+    logForDebugging(`[uds-auth] key publish failed: ${formatStorageError(written.error)}`);
     throw Error("messaging key could not be published through storage");
   }
   return join(getSessionsDir(), messagingKeyName);
@@ -119,12 +121,12 @@ async function ensureMessagingKeyDir(e, n, peerToken) {
 /**
  * 读取会话地址记录中的 pidDomain 字段（失败返回 undefined）。
  */
-async function readRecordPidDomain(e) {
+async function readRecordPidDomain(path) {
   try {
-    let smallFileOrNull = await readSmallFileOrNull(e, PEER_TOKEN_HEX_RE);
+    let smallFileOrNull = await readSmallFileOrNull(path, MAX_PEER_KEY_FILE_BYTES);
     if (smallFileOrNull === null) return;
-    let r = MAX_PEER_KEY_FILE_BYTES().safeParse(jsonParseRaw(smallFileOrNull));
-    return r.success ? r.data.pidDomain : undefined;
+    let parsed = peerKeyFileSchema().safeParse(jsonParseRaw(smallFileOrNull));
+    return parsed.success ? parsed.data.pidDomain : undefined;
   } catch {
     return;
   }
@@ -132,21 +134,21 @@ async function readRecordPidDomain(e) {
 //@ chunk-e7z1g8a9.js:5540-5801 placement
 async function pruneDeadSessionRecords(sessionsDir, sweepPermitted) {
   if (!sweepPermitted) return;
-  let r;
+  let files;
   try {
-    r = await readdir(sessionsDir);
+    files = await readdir(sessionsDir);
   } catch {
     return;
   }
-  let i = await ownPidDomain();
+  let myPidDomain = await ownPidDomain();
   await Promise.all(
-    r.map(async (c) => {
-      let match = PEER_KEY_FILE_RE.exec(c);
+    files.map(async (file) => {
+      let match = PEER_KEY_TMP_FILE_RE.exec(file);
       if (!match || !isProcessProvablyGone(parseInt(match[1], 10))) return;
-      let recordPidDomain = await readRecordPidDomain(join(sessionsDir, c));
-      if (recordPidDomain !== undefined && recordPidDomain !== i) return;
+      let recordPidDomain = await readRecordPidDomain(join(sessionsDir, file));
+      if (recordPidDomain !== undefined && recordPidDomain !== myPidDomain) return;
       try {
-        await unlink(join(sessionsDir, c));
+        await unlink(join(sessionsDir, file));
       } catch {}
     }),
   );
@@ -155,10 +157,10 @@ async function pruneDeadSessionRecords(sessionsDir, sweepPermitted) {
 /**
  * 删除会话地址记录（存储 v5 时删除存储项，否则删除文件），错误忽略。
  */
-async function deleteSessionRecord(activeKeyFile, n) {
-  if (isStorageV5Enabled() && n !== undefined) {
+async function deleteSessionRecord(activeKeyFile, store) {
+  if (isStorageV5Enabled() && store !== undefined) {
     try {
-      await n.delete(STORAGE_SPACES.session(basename(activeKeyFile)));
+      await store.delete(STORAGE_SPACES.session(basename(activeKeyFile)));
     } catch {}
     return;
   }
@@ -167,21 +169,21 @@ async function deleteSessionRecord(activeKeyFile, n) {
   } catch {}
 }
 //@ chunk-e7z1g8a9.js:5920-7262 placement
-async function classifySessionAddress(e, n, r) {
+async function classifySessionAddress(socketPath, store, options) {
   let sessionsDir = getSessionsDir();
-  let c;
-  if (isStorageV5Enabled() && n !== undefined) {
-    let m = await authenticatePeer(n, {
+  let files;
+  if (isStorageV5Enabled() && store !== undefined) {
+    let storeFiles = await authenticatePeer(store, {
       partialOnCap: false,
     });
-    if (m === undefined)
+    if (storeFiles === undefined)
       return {
         kind: "unusable",
       };
-    c = m;
+    files = storeFiles;
   } else
     try {
-      c = await readdir(sessionsDir);
+      files = await readdir(sessionsDir);
     } catch (error) {
       return isENOENT(error)
         ? {
@@ -191,59 +193,59 @@ async function classifySessionAddress(e, n, r) {
             kind: "unusable",
           };
     }
-  let a = hashCanonicalSocketPath(e);
-  if (a === undefined)
+  let hash = hashCanonicalSocketPath(socketPath);
+  if (hash === undefined)
     return {
       kind: "no-key",
     };
-  let f = `.${a}.key`;
-  let filtered = c
-    .filter((m) => m.endsWith(f))
-    .map((m) => {
-      let match = AUTH_MESSAGE_TYPE.exec(m);
+  let suffix = `.${hash}.key`;
+  let filtered = files
+    .filter((file) => file.endsWith(suffix))
+    .map((file) => {
+      let match = PEER_KEY_FILE_RE.exec(file);
       return match
         ? {
-            file: m,
+            file,
             pid: parseInt(match[1], 10),
           }
         : undefined;
     })
-    .filter((m) => m !== undefined);
+    .filter((candidate) => candidate !== undefined);
   if (filtered.length === 0)
     return {
       kind: "no-key",
     };
-  let k = async (file) => {
-    let h =
-      isStorageV5Enabled() && n !== undefined
-        ? await readSessionRecord(n, file)
-        : await readSmallFileOrNull(join(sessionsDir, file), PEER_TOKEN_HEX_RE);
-    if (h === null) return;
+  let readRecord = async (key) => {
+    let text =
+      isStorageV5Enabled() && store !== undefined
+        ? await readSessionRecord(store, key)
+        : await readSmallFileOrNull(join(sessionsDir, key), MAX_PEER_KEY_FILE_BYTES);
+    if (text === null) return;
     try {
-      let y = MAX_PEER_KEY_FILE_BYTES().safeParse(jsonParseRaw(h));
-      return y.success ? y.data : undefined;
+      let parsed = peerKeyFileSchema().safeParse(jsonParseRaw(text));
+      return parsed.success ? parsed.data : undefined;
     } catch {
       return;
     }
   };
   if (filtered.length === 1) {
-    let m = filtered[0];
-    if (r?.requireLiveOwner && isProcessProvablyGone(m.pid))
+    let candidate = filtered[0];
+    if (options?.requireLiveOwner && isProcessProvablyGone(candidate.pid))
       return {
         kind: "dead-owner",
       };
-    let h = await k(m.file);
-    if (h === undefined)
+    let record = await readRecord(candidate.file);
+    if (record === undefined)
       return {
         kind: "unusable",
       };
-    if (r?.requireLiveOwner) {
-      let y = procIdentityOf(h);
-      if (y !== undefined) {
-        let processStartTime = await getProcessStartTimeAsync(m.pid, {
+    if (options?.requireLiveOwner) {
+      let identity = procIdentityOf(record);
+      if (identity !== undefined) {
+        let processStartTime = await getProcessStartTimeAsync(candidate.pid, {
           skipCache: true,
         });
-        if (processStartTime !== undefined && !startTokensEqualOrCrossFormat(y, processStartTime))
+        if (processStartTime !== undefined && !startTokensEqualOrCrossFormat(identity, processStartTime))
           return {
             kind: "dead-owner",
           };
@@ -251,58 +253,58 @@ async function classifySessionAddress(e, n, r) {
     }
     return {
       kind: "token",
-      token: h.peerToken,
+      token: record.peerToken,
     };
   }
-  let S;
+  let best;
   for (let { file, pid } of filtered) {
-    let y = await k(file);
-    if (y === undefined) continue;
-    let E = 0;
+    let record = await readRecord(file);
+    if (record === undefined) continue;
+    let rank = 0;
     if (!isProcessProvablyGone(pid)) {
-      let w = procIdentityOf(y);
-      let R =
-        w === undefined
+      let identity = procIdentityOf(record);
+      let startTime =
+        identity === undefined
           ? undefined
           : await getProcessStartTimeAsync(pid, {
               skipCache: true,
             });
-      if (w === undefined || R === undefined) E = 1;
-      else E = startTokensEqualOrCrossFormat(w, R) ? 2 : 0;
+      if (identity === undefined || startTime === undefined) rank = 1;
+      else rank = startTokensEqualOrCrossFormat(identity, startTime) ? 2 : 0;
     }
-    if (S === undefined || E > S.rank)
-      S = {
-        rank: E,
-        peerToken: y.peerToken,
+    if (best === undefined || rank > best.rank)
+      best = {
+        rank,
+        peerToken: record.peerToken,
       };
   }
-  if (S === undefined)
+  if (best === undefined)
     return {
       kind: "unusable",
     };
-  if (r?.requireLiveOwner && S.rank === 0)
+  if (options?.requireLiveOwner && best.rank === 0)
     return {
       kind: "dead-owner",
     };
   return {
     kind: "token",
-    token: S.peerToken,
+    token: best.peerToken,
   };
 }
 //@ chunk-e7z1g8a9.js:7262-7473 placement
-async function readSessionRecord(e, n) {
+async function readSessionRecord(store, key) {
   try {
-    let text = await e.readText([
+    let text = await store.readText([
       {
-        key: STORAGE_SPACES.session(n),
+        key: STORAGE_SPACES.session(key),
         offset: 0,
-        length: PEER_TOKEN_HEX_RE + 1,
+        length: MAX_PEER_KEY_FILE_BYTES + 1,
       },
     ]);
     if (!text.ok) return null;
-    let i = text.value.items[0];
-    if (!i.found || i.totalBytes > PEER_TOKEN_HEX_RE) return null;
-    return i.value;
+    let item = text.value.items[0];
+    if (!item.found || item.totalBytes > MAX_PEER_KEY_FILE_BYTES) return null;
+    return item.value;
   } catch {
     return null;
   }
@@ -325,7 +327,10 @@ function authHandshakeJson(token) {
 /**
  * AUTH_HANDSHAKE_LENGTH：认证握手 JSON 的长度。
  */
-var AUTH_HANDSHAKE_LENGTH = authHandshakeJson("0".repeat(PEER_KEY_TMP_FILE_RE * 2)).length;
+var AUTH_HANDSHAKE_LENGTH; // deferred: uses authHandshakeJson of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e7z1g8a9.js:7520", () => {
+  AUTH_HANDSHAKE_LENGTH = authHandshakeJson("0".repeat(PEER_TOKEN_BYTES * 2)).length;
+});
 //@ chunk-e7z1g8a9.js:7556-7633 placement = extractErrorTypeFromData (1)
 /**
  * 是否是指定 type 的对象。
@@ -348,7 +353,7 @@ function tokenRole(token, activeTokens) {
  * 读取会话稳定地址功能开关（tengu_session_stable_address），出错视为关闭。
  */
 function isStableAddressEnabled() {
-  let { getFeatureValue_SESSION_PINNED } = require("./chunk-6df1d6re.js");
+  let { getFeatureValue_SESSION_PINNED } = require("../services/analytics/ATIS_REQUEST_HEADER.lazy.js");
   try {
     return getFeatureValue_SESSION_PINNED("tengu_session_stable_address", false);
   } catch {
@@ -368,47 +373,49 @@ function stableSessionAddress(sessionId) {
 /**
  * isStableSessionAddress：是否为 sid: 地址。
  */
-function isStableSessionAddress(e) {
-  return e.startsWith(STABLE_SESSION_ID_PREFIX);
+function isStableSessionAddress(address) {
+  return address.startsWith(STABLE_SESSION_ID_PREFIX);
 }
 //@ chunk-e7z1g8a9.js:7985-8020 placement
 /**
  * isNotStableAddress：地址不是稳定形式。
  */
-function isNotStableAddress(e) {
-  return !isStableSessionAddress(e.sock);
+function isNotStableAddress(session) {
+  return !isStableSessionAddress(session.sock);
 }
 //@ chunk-e7z1g8a9.js:8020-8158 placement
 /**
  * 判断会话名是否等同于未命名（空、规范化后为空或为 untitled session）。
  */
 function isUntitledName(title) {
-  let n = typeof title === "string" ? title.trim() : "";
-  let r = normalizeSessionTitle(n);
-  return !n || !r || (r === "untitled session" && n.toLowerCase() !== "untitled session");
+  let text = typeof title === "string" ? title.trim() : "";
+  let normalized = normalizeSessionTitle(text);
+  return (
+    !text || !normalized || (normalized === "untitled session" && text.toLowerCase() !== "untitled session")
+  );
 }
 //@ chunk-e7z1g8a9.js:8158-8238 placement
 /**
  * hasEnvironmentKindOtherThanBridge：环境种类非 bridge。
  */
-function hasEnvironmentKindOtherThanBridge(e) {
-  return e.environmentKind !== undefined && e.environmentKind !== "bridge";
+function hasEnvironmentKindOtherThanBridge(bridge) {
+  return bridge.environmentKind !== undefined && bridge.environmentKind !== "bridge";
 }
 //@ chunk-e7z1g8a9.js:8238-8286 placement
 /**
  * isDisconnectedNonBridge：非 bridge 且未连接。
  */
-function isDisconnectedNonBridge(e) {
-  return !hasEnvironmentKindOtherThanBridge(e) && e.connected === false;
+function isDisconnectedNonBridge(bridge) {
+  return !hasEnvironmentKindOtherThanBridge(bridge) && bridge.connected === false;
 }
 //@ chunk-e7z1g8a9.js:8286-8426 placement
 /**
  * 把会话名规范化为地址用的 slug（NFKC、去控制字符、小写、空白转连字符）。
  */
-function slugifySessionName(e) {
-  return e
+function slugifySessionName(name) {
+  return name
     .normalize("NFKC")
-    .replace(/[\p{Cc}\p{Cf}\p{Cs}]/gu, (n) => (/\s/.test(n) ? n : ""))
+    .replace(/[\p{Cc}\p{Cf}\p{Cs}]/gu, (char) => (/\s/.test(char) ? char : ""))
     .trim()
     .toLowerCase()
     .replace(/\s+/g, "-");
@@ -431,15 +438,15 @@ function isReservedOrInvalidName(name) {
 /**
  * isLocalTeamLead：本会话是该团队的领导。
  */
-function isLocalTeamLead(e, n) {
-  return e.name === TEAM_LEAD && n !== undefined && e.agentId === n;
+function isLocalTeamLead(member, leadAgentId) {
+  return member.name === TEAM_LEAD && leadAgentId !== undefined && member.agentId === leadAgentId;
 }
 //@ chunk-e7z1g8a9.js:8580-8709 placement
 /**
  * 取团队领导的地址：本会话是领导时用其 agent id，否则由团队名推出。
  */
-function teamLeadAddress(e) {
-  let teamContext = e.teamContext;
+function teamLeadAddress(state) {
+  let teamContext = state.teamContext;
   if (teamContext?.leadAgentId && teamContext.isLeader !== false) return teamContext.leadAgentId;
   let teamName = getTeamName(teamContext);
   return teamName ? agentAddress(TEAM_LEAD, teamName) : undefined;
@@ -448,33 +455,45 @@ function teamLeadAddress(e) {
 /**
  * addressableTeamMembers：团队里可寻址的成员。
  */
-function addressableTeamMembers(teamFile, n) {
+function addressableTeamMembers(teamFile, leadAgentId) {
   return teamFile.members.filter(
-    (member) => isLocalTeamLead(member, n) || !isReservedOrInvalidName(member.name),
+    (member) => isLocalTeamLead(member, leadAgentId) || !isReservedOrInvalidName(member.name),
   );
 }
 //@ chunk-e7z1g8a9.js:8780-8861 placement
 /**
  * isReservedSessionName：名字是保留名（main/team-lead/user/system）。
  */
-function isReservedSessionName(e) {
-  let n = slugifySessionName(e);
-  return n === MAIN || n === TEAM_LEAD || n === USER || n === SYSTEM || normalizeAgentIdOrNull(n) !== null;
+function isReservedSessionName(name) {
+  let slug = slugifySessionName(name);
+  return (
+    slug === MAIN ||
+    slug === TEAM_LEAD ||
+    slug === USER ||
+    slug === SYSTEM ||
+    normalizeAgentIdOrNull(slug) !== null
+  );
 }
 //@ chunk-e7z1g8a9.js:8861-8949 placement
 /**
  * MIN_ADDRESS_REF_LENGTH：地址 ref 的最短长度；MAX_ADDRESS_REF_LENGTH：地址 ref 的最长长度；ADDRESS_REF_PATTERN：地址 ref 的十六进制模式（同一声明共 3 个绑定）。
  */
-var MIN_ADDRESS_REF_LENGTH = 6;
-var MAX_ADDRESS_REF_LENGTH = 12;
-var ADDRESS_REF_PATTERN = `[0-9a-f]{${MIN_ADDRESS_REF_LENGTH},${MAX_ADDRESS_REF_LENGTH}}`;
-var regExp_2 = new RegExp(`^(.*\\S)\\s*\\[(${ADDRESS_REF_PATTERN})\\]$`);
+var MIN_ADDRESS_REF_LENGTH; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_ADDRESS_REF_LENGTH;
+var ADDRESS_REF_PATTERN;
+var regExp_2;
+deferInit("chunk-e7z1g8a9.js:8861", () => {
+  MIN_ADDRESS_REF_LENGTH = 6;
+  MAX_ADDRESS_REF_LENGTH = 12;
+  ADDRESS_REF_PATTERN = `[0-9a-f]{${MIN_ADDRESS_REF_LENGTH},${MAX_ADDRESS_REF_LENGTH}}`;
+  regExp_2 = new RegExp(`^(.*\\S)\\s*\\[(${ADDRESS_REF_PATTERN})\\]$`);
+});
 //@ chunk-e7z1g8a9.js:8949-9023 placement
 /**
  * parseNameWithRef：解析 “名字 [ref]” 形式的地址。
  */
-function parseNameWithRef(e) {
-  let match = regExp_2.exec(e.trim());
+function parseNameWithRef(text) {
+  let match = regExp_2.exec(text.trim());
   return match
     ? {
         name: match[1],
@@ -486,9 +505,9 @@ function parseNameWithRef(e) {
 /**
  * 生成代理/会话地址的显示描述（main、in-process、teammate、local_agent）
  */
-function describeAgentAddress(e, n) {
-  let r = [];
-  r.push({
+function describeAgentAddress(state, sources) {
+  let entries = [];
+  entries.push({
     name: MAIN,
     id: mainAgentId(),
     kind: "main",
@@ -496,10 +515,10 @@ function describeAgentAddress(e, n) {
     lastActive: undefined,
     sock: undefined,
   });
-  let i = new Set();
-  for (let [key, value] of Object.entries(e.teamContext?.teammates ?? {})) {
-    i.add(key);
-    r.push({
+  let seenIds = new Set();
+  for (let [key, value] of Object.entries(state.teamContext?.teammates ?? {})) {
+    seenIds.add(key);
+    entries.push({
       name: value.name,
       id: key,
       kind: "teammate",
@@ -508,199 +527,199 @@ function describeAgentAddress(e, n) {
       sock: undefined,
     });
   }
-  for (let [s, l] of e.agentNameRegistry) {
-    let b = e.tasks[l];
-    let A = b?.type === "local_agent" ? b : undefined;
-    r.push({
-      name: s,
-      id: l,
+  for (let [name, id] of state.agentNameRegistry) {
+    let task = state.tasks[id];
+    let localAgent = task?.type === "local_agent" ? task : undefined;
+    entries.push({
+      name,
+      id,
       kind: "subagent",
       where: "in-process",
-      lastActive: A?.startTime,
+      lastActive: localAgent?.startTime,
       sock: undefined,
     });
   }
-  for (let s of n.teamFile?.members ?? []) {
-    if (i.has(s.agentId)) continue;
-    i.add(s.agentId);
-    r.push({
-      name: s.name,
-      id: s.agentId,
+  for (let member of sources.teamFile?.members ?? []) {
+    if (seenIds.has(member.agentId)) continue;
+    seenIds.add(member.agentId);
+    entries.push({
+      name: member.name,
+      id: member.agentId,
       kind: "teammate",
       where: "this-machine",
       lastActive: undefined,
       sock: undefined,
     });
   }
-  let c = isStableAddressEnabled();
-  let filtered = n.sessions.filter(isNotStableAddress);
-  let f = c ? groupBySocket(filtered) : undefined;
-  let g = c ? ambiguousSessionIds(getSessionId(), filtered, f) : undefined;
-  for (let s of filtered) {
-    let claims = f?.get(s)?.claims;
-    r.push({
-      name: s.name || basename(s.cwd),
-      id: s.sock,
+  let stableEnabled = isStableAddressEnabled();
+  let sessions = sources.sessions.filter(isNotStableAddress);
+  let bySock = stableEnabled ? groupBySocket(sessions) : undefined;
+  let ambiguous = stableEnabled ? ambiguousSessionIds(getSessionId(), sessions, bySock) : undefined;
+  for (let session of sessions) {
+    let claims = bySock?.get(session)?.claims;
+    entries.push({
+      name: session.name || basename(session.cwd),
+      id: session.sock,
       kind: "session",
       where: "this-machine",
-      lastActive: s.statusUpdatedAt,
-      sock: s.sock,
+      lastActive: session.statusUpdatedAt,
+      sock: session.sock,
       ...(claims !== undefined &&
         claims.size > 0 && {
           claimedSessionIds: [...claims].sort(),
         }),
-      ...(c &&
-        s.sessionId !== undefined &&
-        !g.has(s.sessionId) && {
-          stableId: stableSessionAddress(s.sessionId),
+      ...(stableEnabled &&
+        session.sessionId !== undefined &&
+        !ambiguous.has(session.sessionId) && {
+          stableId: stableSessionAddress(session.sessionId),
         }),
-      ...(c &&
-        s.nameSource === "derived" && {
+      ...(stableEnabled &&
+        session.nameSource === "derived" && {
           derivedName: true,
         }),
-      ...(s.hostSessionId !== undefined && {
-        hostSessionId: s.hostSessionId,
+      ...(session.hostSessionId !== undefined && {
+        hostSessionId: session.hostSessionId,
       }),
     });
   }
-  let k = new Map();
-  for (let session of n.sessions)
+  let socksByBody = new Map();
+  for (let session of sources.sessions)
     if (session.bridgeSessionId !== undefined) {
-      let l = sessionIdBody(session.bridgeSessionId);
-      k.set(l, [...(k.get(l) ?? []), session.sock]);
+      let body = sessionIdBody(session.bridgeSessionId);
+      socksByBody.set(body, [...(socksByBody.get(body) ?? []), session.sock]);
     }
-  let S = [];
-  for (let s of n.cloud ?? []) {
-    if (hasBridgeSessionId(n.sessions, s.id)) {
-      S.push({
-        rawName: s.title || "untitled",
-        socks: k.get(sessionIdBody(s.id)) ?? [],
+  let shadowed = [];
+  for (let session of sources.cloud ?? []) {
+    if (hasBridgeSessionId(sources.sessions, session.id)) {
+      shadowed.push({
+        rawName: session.title || "untitled",
+        socks: socksByBody.get(sessionIdBody(session.id)) ?? [],
       });
       continue;
     }
-    r.push({
-      name: s.title || "untitled",
-      id: s.id,
+    entries.push({
+      name: session.title || "untitled",
+      id: session.id,
       kind: "cloud-session",
-      ...(isUntitledName(s.title) && {
+      ...(isUntitledName(session.title) && {
         derivedName: true,
       }),
-      ...(s.acceptsPeerMessages === true && {
+      ...(session.acceptsPeerMessages === true && {
         reportsInbound: true,
       }),
-      where: s.remoteControl ? "remote" : "cloud",
-      lastActive: s.lastActive,
+      where: session.remoteControl ? "remote" : "cloud",
+      lastActive: session.lastActive,
       sock: undefined,
-      ...(s.offline && {
+      ...(session.offline && {
         offline: true,
       }),
     });
   }
-  let m = new Set((n.cloud ?? []).map((s) => sessionIdBody(s.id)));
-  let h = bridgeSessionIds(n.sessions);
-  for (let s of n.bridge ?? []) {
-    let l = sessionIdBody(s.id);
-    if (m.has(l)) continue;
-    if (h.has(l)) {
-      S.push({
-        rawName: s.title || "untitled",
-        socks: k.get(l) ?? [],
+  let cloudBodies = new Set((sources.cloud ?? []).map((session) => sessionIdBody(session.id)));
+  let bridgeBodies = bridgeSessionIds(sources.sessions);
+  for (let session of sources.bridge ?? []) {
+    let body = sessionIdBody(session.id);
+    if (cloudBodies.has(body)) continue;
+    if (bridgeBodies.has(body)) {
+      shadowed.push({
+        rawName: session.title || "untitled",
+        socks: socksByBody.get(body) ?? [],
       });
       continue;
     }
-    let timestamp = Date.parse(s.updated_at);
-    r.push({
-      name: s.title || "untitled",
-      id: s.id,
+    let timestamp = Date.parse(session.updated_at);
+    entries.push({
+      name: session.title || "untitled",
+      id: session.id,
       kind: "bridge-session",
-      ...(isUntitledName(s.title) && {
+      ...(isUntitledName(session.title) && {
         derivedName: true,
       }),
-      ...(s.acceptsPeerMessages === true && {
+      ...(session.acceptsPeerMessages === true && {
         reportsInbound: true,
       }),
-      ...(s.inboundReportUnavailable && {
+      ...(session.inboundReportUnavailable && {
         inboundReportUnavailable: true,
       }),
-      where: hasEnvironmentKindOtherThanBridge(s) ? "cloud" : "remote",
+      where: hasEnvironmentKindOtherThanBridge(session) ? "cloud" : "remote",
       lastActive: Number.isNaN(timestamp) ? undefined : timestamp,
       sock: undefined,
-      ...(isDisconnectedNonBridge(s) && {
+      ...(isDisconnectedNonBridge(session) && {
         offline: true,
       }),
     });
   }
-  let y = teamLeadAddress(e);
-  let flattened = r.flatMap((s) => {
-    let l = normalizeSessionTitle(s.name);
-    if (l === null || !isPlainAddressableName(l)) return [];
-    let b =
-      s.kind === "main" ||
-      (s.kind === "teammate" &&
+  let leadAddress = teamLeadAddress(state);
+  let flattened = entries.flatMap((entry) => {
+    let title = normalizeSessionTitle(entry.name);
+    if (title === null || !isPlainAddressableName(title)) return [];
+    let keepAlways =
+      entry.kind === "main" ||
+      (entry.kind === "teammate" &&
         isLocalTeamLead(
           {
-            name: s.name,
-            agentId: s.id,
+            name: entry.name,
+            agentId: entry.id,
           },
-          y,
+          leadAddress,
         ));
-    let A =
-      (s.kind === "session" || s.kind === "cloud-session" || s.kind === "bridge-session") &&
-      slugifySessionName(l) === MAIN;
-    return b || A || !isReservedOrInvalidName(l)
+    let isMainName =
+      (entry.kind === "session" || entry.kind === "cloud-session" || entry.kind === "bridge-session") &&
+      slugifySessionName(title) === MAIN;
+    return keepAlways || isMainName || !isReservedOrInvalidName(title)
       ? [
           {
-            ...s,
-            name: l,
+            ...entry,
+            name: title,
           },
         ]
       : [];
   });
-  let w = new Set();
-  let R = assignShortRefs(
-    flattened.filter((s) => {
-      if (s.kind !== "session") return true;
-      let l = `${slugifySessionName(s.name)}\x00${canonicalSocketPath(s.id) ?? s.id}`;
-      if (w.has(l)) return false;
-      w.add(l);
+  let seenKeys = new Set();
+  let candidates = assignShortRefs(
+    flattened.filter((entry) => {
+      if (entry.kind !== "session") return true;
+      let dedupeKey = `${slugifySessionName(entry.name)}\x00${canonicalSocketPath(entry.id) ?? entry.id}`;
+      if (seenKeys.has(dedupeKey)) return false;
+      seenKeys.add(dedupeKey);
       return true;
     }),
   );
-  let P = new Map();
-  for (let s of R) {
-    let l = slugifySessionName(s.name);
-    let b = P.get(l);
-    if (b) b.push(s);
-    else P.set(l, [s]);
+  let byName = new Map();
+  for (let entry of candidates) {
+    let slug = slugifySessionName(entry.name);
+    let group = byName.get(slug);
+    if (group) group.push(entry);
+    else byName.set(slug, [entry]);
   }
-  let C = new Map();
-  for (let { rawName, socks } of S) {
-    let b = normalizeSessionTitle(rawName);
-    if (b === null || !isPlainAddressableName(b)) continue;
-    let A = slugifySessionName(b);
-    let L = C.get(A) ?? new Set();
-    for (let sock of socks) L.add(sock);
-    C.set(A, L);
+  let remoteNames = new Map();
+  for (let { rawName, socks } of shadowed) {
+    let title = normalizeSessionTitle(rawName);
+    if (title === null || !isPlainAddressableName(title)) continue;
+    let slug = slugifySessionName(title);
+    let sockSet = remoteNames.get(slug) ?? new Set();
+    for (let sock of socks) sockSet.add(sock);
+    remoteNames.set(slug, sockSet);
   }
   return {
-    candidates: R,
-    byName: P,
-    remoteNamesClaimedLocally: C,
+    candidates,
+    byName,
+    remoteNamesClaimedLocally: remoteNames,
   };
 }
 //@ chunk-e7z1g8a9.js:11961-12173 placement
 /**
  * 在按名称分组的候选中解析唯一目标：同进程的直接返回，否则视为有歧义。
  */
-function resolveUniqueCandidate(byName, n, r) {
-  let i = byName.get(n);
-  if (!i || i.length === 0) return;
-  let c = r === undefined ? [] : i.filter((g) => g.name === r);
-  let f = (c.length > 0 ? c : i)[0];
-  if (f.where === "in-process")
+function resolveUniqueCandidate(byName, name, ref) {
+  let candidates = byName.get(name);
+  if (!candidates || candidates.length === 0) return;
+  let byRef = ref === undefined ? [] : candidates.filter((candidate) => candidate.name === ref);
+  let chosen = (byRef.length > 0 ? byRef : candidates)[0];
+  if (chosen.where === "in-process")
     return {
       kind: "one",
-      candidate: f,
+      candidate: chosen,
     };
   return {
     kind: "ambiguous",
@@ -710,8 +729,8 @@ function resolveUniqueCandidate(byName, n, r) {
 /**
  * formatNameWithRef：拼成 “名字 [ref]”。
  */
-function formatNameWithRef(e) {
-  return `${e.name} [${e.ref}]`;
+function formatNameWithRef(entry) {
+  return `${entry.name} [${entry.ref}]`;
 }
 //@ chunk-e7z1g8a9.js:12218-12290 placement
 /**
@@ -726,8 +745,8 @@ function describeLocationWithRemoteControl(where) {
 /**
  * 会话位置的文字描述（本会话、云端、其他机器、本机）。
  */
-function describeSessionLocation(e) {
-  switch (e) {
+function describeSessionLocation(where) {
+  switch (where) {
     case "in-process":
       return "in this session";
     case "cloud":
@@ -739,21 +758,24 @@ function describeSessionLocation(e) {
   }
 }
 //@ chunk-e7z1g8a9.js:12474-12821 placement
-function agentAddressLabel(e, n) {
-  let r =
-    e.kind === "main"
+function agentAddressLabel(entry, now) {
+  let kindLabel =
+    entry.kind === "main"
       ? "main conversation"
-      : e.kind === "session" || e.kind === "cloud-session" || e.kind === "bridge-session"
+      : entry.kind === "session" || entry.kind === "cloud-session" || entry.kind === "bridge-session"
         ? "Claude session"
-        : e.kind;
-  let i = describeLocationWithRemoteControl(e.where);
-  let c =
-    e.lastActive === undefined
+        : entry.kind;
+  let whereLabel = describeLocationWithRemoteControl(entry.where);
+  let activeText =
+    entry.lastActive === undefined
       ? ""
-      : `, ${e.kind === "subagent" ? "started" : "active"} ${formatDuration(Math.max(0, n - e.lastActive), {
-          mostSignificantOnly: true,
-        })} ago`;
-  return `${formatNameWithRef(e)} \u2014 ${r}, ${i}${c}`;
+      : `, ${entry.kind === "subagent" ? "started" : "active"} ${formatDuration(
+          Math.max(0, now - entry.lastActive),
+          {
+            mostSignificantOnly: true,
+          },
+        )} ago`;
+  return `${formatNameWithRef(entry)} \u2014 ${kindLabel}, ${whereLabel}${activeText}`;
 }
 //@ chunk-e7z1g8a9.js:12821-12831 placement
 var MAX_SESSION_TITLE_LENGTH = MAX_SEED_NAME_CHARS;
@@ -761,12 +783,12 @@ var MAX_SESSION_TITLE_LENGTH = MAX_SEED_NAME_CHARS;
 /**
  * 规范化会话标题：去控制字符、合并空白、截断长度，空时为 untitled session。
  */
-function normalizeSessionTitle(e) {
-  if (typeof e !== "string") return null;
+function normalizeSessionTitle(title) {
+  if (typeof title !== "string") return null;
   return (
     [
-      ...e
-        .replace(/[\p{Cc}\p{Cf}\p{Cs}]/gu, (r) => (/\s/.test(r) ? r : ""))
+      ...title
+        .replace(/[\p{Cc}\p{Cf}\p{Cs}]/gu, (char) => (/\s/.test(char) ? char : ""))
         .replace(/\s+/g, " ")
         .trim(),
     ]
@@ -779,83 +801,90 @@ function normalizeSessionTitle(e) {
 /**
  * findSessionByName：按名字或规范名查找会话。
  */
-function findSessionByName(e, n) {
-  return e.find((r) => r.name === n) ?? e.find((r) => normalizeSessionTitle(r.name) === n);
+function findSessionByName(sessions, name) {
+  return (
+    sessions.find((session) => session.name === name) ??
+    sessions.find((session) => normalizeSessionTitle(session.name) === name)
+  );
 }
 //@ chunk-e7z1g8a9.js:13106-13174 placement
 /**
  * addressableSessionTitle：可作为地址的会话标题。
  */
-function addressableSessionTitle(e) {
-  let n = normalizeSessionTitle(e);
-  return n !== null && !looksLikeAddress(n) && isValidPipeOrPath(n) ? n : null;
+function addressableSessionTitle(title) {
+  let normalized = normalizeSessionTitle(title);
+  return normalized !== null && !looksLikeAddress(normalized) && isValidPipeOrPath(normalized)
+    ? normalized
+    : null;
 }
 //@ chunk-e7z1g8a9.js:13174-13240 placement
 /**
  * plainSessionName：普通（非保留、非地址形式）会话名。
  */
 function plainSessionName(name) {
-  let n = normalizeSessionTitle(name);
-  return n !== null && isPlainAddressableName(n) && !isReservedSessionName(n) ? n : null;
+  let normalized = normalizeSessionTitle(name);
+  return normalized !== null && isPlainAddressableName(normalized) && !isReservedSessionName(normalized)
+    ? normalized
+    : null;
 }
 //@ chunk-e7z1g8a9.js:13240-13302 placement
-function isPlainAddressableName(e) {
-  return !looksLikeAddress(e) && isValidPipeOrPath(e) && !e.includes("@") && e !== "*";
+function isPlainAddressableName(name) {
+  return !looksLikeAddress(name) && isValidPipeOrPath(name) && !name.includes("@") && name !== "*";
 }
 //@ chunk-e7z1g8a9.js:13302-13400 placement
 /**
  * looksLikeAddress：名字像地址（任一变体）。
  */
-function looksLikeAddress(e) {
-  let n = slugifySessionName(e);
+function looksLikeAddress(name) {
+  let slug = slugifySessionName(name);
   return (
-    parseAddress(e).scheme !== "other" ||
-    parseAddress(n).scheme !== "other" ||
-    isUnixSocketPath(e) ||
-    isUnixSocketPath(n)
+    parseAddress(name).scheme !== "other" ||
+    parseAddress(slug).scheme !== "other" ||
+    isUnixSocketPath(name) ||
+    isUnixSocketPath(slug)
   );
 }
 //@ chunk-e7z1g8a9.js:13400-13729 placement
 /**
  * 为会话地址列表分配最短可区分前缀 ref：与相邻（排序后）地址比较公共前缀长度，ref 长度至少 M。
  */
-function assignShortRefs(e) {
-  let mapped = e.map((a) => addressHashKey(a.kind, stableSessionKey(a)));
-  let mapped_2 = messagingSocketAddresses().map((a) => addressHashKey("session", a));
+function assignShortRefs(entries) {
+  let mapped = entries.map((entry) => addressHashKey(entry.kind, stableSessionKey(entry)));
+  let mapped_2 = messagingSocketAddresses().map((sock) => addressHashKey("session", sock));
   let sorted = uniq([...mapped, ...mapped_2]).sort();
-  let c = new Map();
+  let refLengths = new Map();
   for (let k = 0; k < sorted.length; k++) {
-    let f = sorted[k];
+    let key = sorted[k];
     let max = Math.max(
-      k > 0 ? commonPrefixLength(f, sorted[k - 1]) : 0,
-      k + 1 < sorted.length ? commonPrefixLength(f, sorted[k + 1]) : 0,
+      k > 0 ? commonPrefixLength(key, sorted[k - 1]) : 0,
+      k + 1 < sorted.length ? commonPrefixLength(key, sorted[k + 1]) : 0,
     );
-    c.set(f, Math.min(f.length, Math.max(MIN_ADDRESS_REF_LENGTH, max + 1)));
+    refLengths.set(key, Math.min(key.length, Math.max(MIN_ADDRESS_REF_LENGTH, max + 1)));
   }
-  return e.map((a, f) => {
-    let g = mapped[f];
+  return entries.map((entry, index) => {
+    let key = mapped[index];
     return {
-      ...a,
-      ref: g.slice(0, c.get(g)),
+      ...entry,
+      ref: key.slice(0, refLengths.get(key)),
     };
   });
 }
 //@ chunk-e7z1g8a9.js:13729-13809 placement
-function commonPrefixLength(e, n) {
-  let r = 0;
-  while (r < e.length && r < n.length && e[r] === n[r]) r++;
-  return r;
+function commonPrefixLength(a, b) {
+  let length = 0;
+  while (length < a.length && length < b.length && a[length] === b[length]) length++;
+  return length;
 }
 //@ chunk-e7z1g8a9.js:13809-13856 placement
-function addressHashKey(e, n) {
-  return String(shortHash(`${e}:${n}`));
+function addressHashKey(kind, key) {
+  return String(shortHash(`${kind}:${key}`));
 }
 //@ chunk-e7z1g8a9.js:13856-13896 placement
 /**
  * stableSessionKey：会话的稳定 id 或 id。
  */
-function stableSessionKey(e) {
-  return e.stableId ?? e.id;
+function stableSessionKey(entry) {
+  return entry.stableId ?? entry.id;
 }
 //@ chunk-e7z1g8a9.js:13896-13975 placement
 function messagingSocketAddresses() {
@@ -866,99 +895,106 @@ function messagingSocketAddresses() {
 /**
  * stableAddressWhenEnabled：稳定地址开启时用 sid: 形式。
  */
-function stableAddressWhenEnabled(e) {
-  return isStableAddressEnabled() ? stableSessionAddress(getSessionId()) : e;
+function stableAddressWhenEnabled(address) {
+  return isStableAddressEnabled() ? stableSessionAddress(getSessionId()) : address;
 }
 //@ chunk-e7z1g8a9.js:14015-14066 placement
-function addressVariants(e) {
-  let n = stableAddressWhenEnabled(e);
-  return n === e ? [e] : [n, e];
+function addressVariants(address) {
+  let stable = stableAddressWhenEnabled(address);
+  return stable === address ? [address] : [stable, address];
 }
 //@ chunk-e7z1g8a9.js:14066-14126 placement
 /**
  * isSessionAddressUnder：地址组里是否含该会话地址。
  */
-function isSessionAddressUnder(ref, n) {
-  return addressVariants(n).some((r) => refMatchesAddress(ref, "session", r));
+function isSessionAddressUnder(ref, address) {
+  return addressVariants(address).some((variant) => refMatchesAddress(ref, "session", variant));
 }
 //@ chunk-e7z1g8a9.js:14126-14522 placement
 /**
  * 按 socket 路径把会话地址记录分组：可能同一路径的记录合并为一组并汇总声明的会话 id，返回记录 → 组的映射。
  */
-function groupBySocket(e) {
-  let n = [];
-  for (let i of e) {
-    let filtered = n.filter((f) => f.records.some((record) => mayBeSamePath(record.sock, i.sock)));
-    let a = {
+function groupBySocket(sessions) {
+  let groups = [];
+  for (let session of sessions) {
+    let filtered = groups.filter((group) =>
+      group.records.some((record) => mayBeSamePath(record.sock, session.sock)),
+    );
+    let merged = {
       records: [],
       claims: new Set(),
     };
-    for (let f of filtered) {
-      a.records.push(...f.records);
-      for (let claim of f.claims) a.claims.add(claim);
+    for (let group of filtered) {
+      merged.records.push(...group.records);
+      for (let claim of group.claims) merged.claims.add(claim);
     }
-    a.records.push(i);
-    if (i.sessionId !== undefined) a.claims.add(i.sessionId);
-    n = n.filter((f) => !filtered.includes(f));
-    n.push(a);
+    merged.records.push(session);
+    if (session.sessionId !== undefined) merged.claims.add(session.sessionId);
+    groups = groups.filter((group) => !filtered.includes(group));
+    groups.push(merged);
   }
-  let r = new Map();
-  for (let i of n) for (let record of i.records) r.set(record, i);
-  return r;
+  let byRecord = new Map();
+  for (let group of groups) for (let record of group.records) byRecord.set(record, group);
+  return byRecord;
 }
 //@ chunk-e7z1g8a9.js:14522-14774 placement
-function ambiguousSessionIds(e, n, r) {
-  let i = new Set([e]);
-  let c = new Set();
-  for (let a of n) {
-    if (a.sessionId === undefined) continue;
-    if (i.has(a.sessionId)) c.add(a.sessionId);
-    i.add(a.sessionId);
+function ambiguousSessionIds(selfId, sessions, byRecord) {
+  let seen = new Set([selfId]);
+  let ambiguous = new Set();
+  for (let session of sessions) {
+    if (session.sessionId === undefined) continue;
+    if (seen.has(session.sessionId)) ambiguous.add(session.sessionId);
+    seen.add(session.sessionId);
   }
-  for (let a of new Set(r.values())) if (a.records.length > 1) for (let claim of a.claims) c.add(claim);
-  return c;
+  for (let group of new Set(byRecord.values()))
+    if (group.records.length > 1) for (let claim of group.claims) ambiguous.add(claim);
+  return ambiguous;
 }
 //@ chunk-e7z1g8a9.js:14774-14914 placement
 /**
  * 判断本会话 id 在会话地址记录中是否存在歧义（多个 socket 声明同一会话）。
  */
-function isOwnSessionIdAmbiguous(e, sock, r) {
-  if (r) return true;
+function isOwnSessionIdAmbiguous(sessions, sock, forced) {
+  if (forced) return true;
   let sessionId = getSessionId();
-  let filtered = e.filter(isNotStableAddress);
+  let sessions_2 = sessions.filter(isNotStableAddress);
   if (sock !== undefined)
-    filtered.push({
+    sessions_2.push({
       sock,
       sessionId,
     });
-  let a = groupBySocket(filtered);
-  return ambiguousSessionIds("", filtered, a).has(sessionId);
+  let byRecord = groupBySocket(sessions_2);
+  return ambiguousSessionIds("", sessions_2, byRecord).has(sessionId);
 }
 //@ chunk-e7z1g8a9.js:14914-14957 placement
 /**
  * addressRef：取地址的前缀 ref。
  */
-function addressRef(kind, id) {
-  return addressHashKey(kind, id).slice(0, MIN_ADDRESS_REF_LENGTH);
+function addressRef(kind, addressId) {
+  return addressHashKey(kind, addressId).slice(0, MIN_ADDRESS_REF_LENGTH);
 }
 //@ chunk-e7z1g8a9.js:14957-15017 placement
-function refMatchesAddress(e, n, r) {
-  return e.length >= MIN_ADDRESS_REF_LENGTH && addressHashKey(n, r).startsWith(e);
+function refMatchesAddress(ref, kind, key) {
+  return ref.length >= MIN_ADDRESS_REF_LENGTH && addressHashKey(kind, key).startsWith(ref);
 }
 //@ chunk-e7z1g8a9.js:15017-15110 placement
 /**
  * bridgeSessionIds：记录中出现的桥接会话 id。
  */
 function bridgeSessionIds(sessions) {
-  return new Set(sessions.flatMap((n) => (n.bridgeSessionId ? [sessionIdBody(n.bridgeSessionId)] : [])));
+  return new Set(
+    sessions.flatMap((session) => (session.bridgeSessionId ? [sessionIdBody(session.bridgeSessionId)] : [])),
+  );
 }
 //@ chunk-e7z1g8a9.js:15110-15214 placement
 /**
  * 判断地址记录中是否有与给定 id 对应的桥接会话 id。
  */
-function hasBridgeSessionId(e, id) {
-  let r = sessionIdBody(id);
-  return e.some((i) => i.bridgeSessionId !== undefined && sessionIdBody(i.bridgeSessionId) === r);
+function hasBridgeSessionId(sessions, id) {
+  let body = sessionIdBody(id);
+  return sessions.some(
+    (session) => session.bridgeSessionId !== undefined && sessionIdBody(session.bridgeSessionId) === body,
+  );
 }
 export {
   slugifySessionName,

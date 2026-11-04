@@ -9,7 +9,7 @@ import { NoopEmitter } from "../../../src/services/analytics/growthbookClient.js
 
 //@ chunk-aepeg2w5.js:648947-648988 placement
 class NoopLoggerProvider {
-  getLogger(e, n, r) {
+  getLogger(name, version, options) {
     return new NoopEmitter();
   }
 }

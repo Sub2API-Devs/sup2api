@@ -32,7 +32,7 @@ async function* cleanupComputerUseAfterTurn(ctx) {
   if (!hasHiddenApps && !wasActiveThisTurn) return;
   let unhideTimedOut = false;
   if (hasHiddenApps) {
-    let { unhideComputerUseApps } = await import("./chunk-hrs3dad1.js");
+    let { unhideComputerUseApps } = await import("./executor.js");
     let unhideSettled = false;
     let unhide = unhideComputerUseApps([...hidden]).then(
       () => {

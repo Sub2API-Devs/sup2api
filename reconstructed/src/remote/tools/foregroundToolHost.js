@@ -32,19 +32,22 @@ import {
 } from "../../services/remoteTools/unattendedConsentStore.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { sequential } from "../../utils/sequential.js";
-import { WARNING_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { WARNING_GLYPH } from "../../constants/figures.js";
 import { logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 
 //@ chunk-qh5wq2v1.js:12181-12397 placement
 function isUnattendedServingFlagOn() {
   try {
-    let { value: u, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_violin_luthier", false);
+    let { value: flagValue, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
+      "tengu_violin_luthier",
+      false,
+    );
     switch (source) {
       case "payload":
       case "override":
-        return u === true;
+        return flagValue === true;
       case "disk":
-        return u === true ? "unknown" : false;
+        return flagValue === true ? "unknown" : false;
       case "disabled":
       case "fallback":
         return false;
@@ -56,11 +59,14 @@ function isUnattendedServingFlagOn() {
 //@ chunk-qh5wq2v1.js:12397-12628 placement
 function isUnattendedServingFlagOnOptimistic() {
   try {
-    let { value: u, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_violin_luthier", false);
+    let { value: flagValue, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
+      "tengu_violin_luthier",
+      false,
+    );
     switch (source) {
       case "payload":
       case "override":
-        return u === true;
+        return flagValue === true;
       case "disabled":
         return false;
       case "disk":
@@ -110,189 +116,215 @@ var REFUSAL_CODE_REASONS = {
 /**
  * 前台工具宿主的状态行文本（云会话连接、断开、重连）
  */
-function ForegroundToolHostStatus(u) {
-  let y = new Map();
-  let d = false;
-  let x = new Set();
+function ForegroundToolHostStatus(options) {
+  let sessions = new Map();
+  let sawMultipleSessions = false;
+  let seenSessionIds = new Set();
   return {
-    linesFor(c, b, _) {
-      d ||= b > 1;
-      let r = y.get(c) ?? {
-        session: b,
+    linesFor(sessionKey, sessionId, update) {
+      sawMultipleSessions ||= sessionId > 1;
+      let state = sessions.get(sessionKey) ?? {
+        session: sessionId,
         serving: false,
         live: new Map(),
         runningSince: new Map(),
         longRunningSaid: new Set(),
         ended: new Set(),
       };
-      y.set(c, r);
-      let a = d ? `Cloud session ${b}` : "Cloud session";
-      let s = [];
-      let h = _.serving === undefined ? r.serving : _.serving === "on";
-      if (h !== r.serving) {
-        r.serving = h;
-        s.push(
-          !h ? `${a} can no longer run commands here.` : x.has(b) ? `${a} reconnected.` : `${a} connected.`,
+      sessions.set(sessionKey, state);
+      let sessionLabel = sawMultipleSessions ? `Cloud session ${sessionId}` : "Cloud session";
+      let lines = [];
+      let serving = update.serving === undefined ? state.serving : update.serving === "on";
+      if (serving !== state.serving) {
+        state.serving = serving;
+        lines.push(
+          !serving
+            ? `${sessionLabel} can no longer run commands here.`
+            : seenSessionIds.has(sessionId)
+              ? `${sessionLabel} reconnected.`
+              : `${sessionLabel} connected.`,
         );
-        if (h) {
-          x.add(b);
-          if (x.size > MAX_SEEN_CALL_IDS) x.delete(x.values().next().value);
+        if (serving) {
+          seenSessionIds.add(sessionId);
+          if (seenSessionIds.size > MAX_SEEN_CALL_IDS)
+            seenSessionIds.delete(seenSessionIds.values().next().value);
         }
       }
-      for (let e of _.recent) {
-        if (r.ended.has(e.callId)) continue;
-        let w = r.runningSince.get(e.callId);
-        r.live.delete(e.callId);
-        r.runningSince.delete(e.callId);
-        r.longRunningSaid.delete(e.callId);
-        let p =
-          w !== undefined && e.at - w >= 1000
-            ? formatDuration(e.at - w, {
+      for (let endedCall of update.recent) {
+        if (state.ended.has(endedCall.callId)) continue;
+        let startedAt = state.runningSince.get(endedCall.callId);
+        state.live.delete(endedCall.callId);
+        state.runningSince.delete(endedCall.callId);
+        state.longRunningSaid.delete(endedCall.callId);
+        let durationText =
+          startedAt !== undefined && endedCall.at - startedAt >= 1000
+            ? formatDuration(endedCall.at - startedAt, {
                 hideTrailingZeros: true,
               })
             : undefined;
-        let v =
-          e.code !== undefined && Object.hasOwn(REFUSAL_CODE_REASONS, e.code)
-            ? REFUSAL_CODE_REASONS[e.code]
+        let refusalReason =
+          endedCall.code !== undefined && Object.hasOwn(REFUSAL_CODE_REASONS, endedCall.code)
+            ? REFUSAL_CODE_REASONS[endedCall.code]
             : undefined;
-        switch (e.ended) {
+        switch (endedCall.ended) {
           case "completed":
-            if (e.code === undefined || e.code === "approved_by_session") {
-              if (u.verbose) s.push(`${a}: ${e.tool} ran${p === undefined ? "" : ` (${p})`}.`);
-            } else s.push(`${a}: ${e.tool} not run${v === undefined ? "" : `: ${v}`}.`);
+            if (endedCall.code === undefined || endedCall.code === "approved_by_session") {
+              if (options.verbose)
+                lines.push(
+                  `${sessionLabel}: ${endedCall.tool} ran${durationText === undefined ? "" : ` (${durationText})`}.`,
+                );
+            } else
+              lines.push(
+                `${sessionLabel}: ${endedCall.tool} not run${refusalReason === undefined ? "" : `: ${refusalReason}`}.`,
+              );
             break;
           case "denied":
-            s.push(`${a}: ${e.tool} was denied in the session.`);
+            lines.push(`${sessionLabel}: ${endedCall.tool} was denied in the session.`);
             break;
           case "withdrawn":
-            s.push(`${a}: ${e.tool} not run: its approval question was withdrawn.`);
+            lines.push(`${sessionLabel}: ${endedCall.tool} not run: its approval question was withdrawn.`);
             break;
           case "refused":
-            s.push(`${a}: ${e.tool} not run${v === undefined ? "" : `: ${v}`}.`);
+            lines.push(
+              `${sessionLabel}: ${endedCall.tool} not run${refusalReason === undefined ? "" : `: ${refusalReason}`}.`,
+            );
             break;
           case "failed":
-            s.push(
-              `${a}: ${e.tool} ${e.code === "timed_out" ? `stopped${p === undefined ? "" : ` after ${p}`}: it hit its time limit` : e.code === "cancelled" ? "was cancelled" : e.code === "tool_error" ? "ended with an error" : "failed on this computer"}.`,
+            lines.push(
+              `${sessionLabel}: ${endedCall.tool} ${endedCall.code === "timed_out" ? `stopped${durationText === undefined ? "" : ` after ${durationText}`}: it hit its time limit` : endedCall.code === "cancelled" ? "was cancelled" : endedCall.code === "tool_error" ? "ended with an error" : "failed on this computer"}.`,
             );
             break;
         }
       }
-      r.ended = new Set(_.recent.map((e) => e.callId));
-      let k = new Map();
-      for (let e of _.live) {
-        if (r.ended.has(e.callId)) continue;
-        let w = r.live.get(e.callId);
-        k.set(e.callId, e);
+      state.ended = new Set(update.recent.map((endedCall) => endedCall.callId));
+      let liveCalls = new Map();
+      for (let call of update.live) {
+        if (state.ended.has(call.callId)) continue;
+        let previousCall = state.live.get(call.callId);
+        liveCalls.set(call.callId, call);
         if (
-          w?.state === e.state &&
-          (e.state !== "asked" || e.classifierEligible !== false || w?.classifierEligible === false)
+          previousCall?.state === call.state &&
+          (call.state !== "asked" ||
+            call.classifierEligible !== false ||
+            previousCall?.classifierEligible === false)
         )
           continue;
-        if (e.state === "running") {
-          r.runningSince.set(e.callId, e.since);
-          if (u.verbose) s.push(`${a}: ${e.tool} ${w === undefined ? "running" : "approved, running"}.`);
+        if (call.state === "running") {
+          state.runningSince.set(call.callId, call.since);
+          if (options.verbose)
+            lines.push(
+              `${sessionLabel}: ${call.tool} ${previousCall === undefined ? "running" : "approved, running"}.`,
+            );
         } else {
-          r.runningSince.delete(e.callId);
-          r.longRunningSaid.delete(e.callId);
-          s.push(
-            e.classifierEligible === false
-              ? `${a}: waiting for you to approve ${e.tool} in the session.`
-              : `${a}: ${e.tool} is waiting for approval in the session${e.classifierEligible === true ? ", which may approve it without you" : ""}.`,
+          state.runningSince.delete(call.callId);
+          state.longRunningSaid.delete(call.callId);
+          lines.push(
+            call.classifierEligible === false
+              ? `${sessionLabel}: waiting for you to approve ${call.tool} in the session.`
+              : `${sessionLabel}: ${call.tool} is waiting for approval in the session${call.classifierEligible === true ? ", which may approve it without you" : ""}.`,
           );
         }
       }
-      for (let key of r.runningSince.keys())
-        if (!k.has(key)) {
-          r.runningSince.delete(key);
-          r.longRunningSaid.delete(key);
+      for (let key of state.runningSince.keys())
+        if (!liveCalls.has(key)) {
+          state.runningSince.delete(key);
+          state.longRunningSaid.delete(key);
         }
-      r.live = k;
-      return s;
+      state.live = liveCalls;
+      return lines;
     },
-    forget(c) {
-      y.delete(c);
+    forget(sessionKey) {
+      sessions.delete(sessionKey);
     },
-    longRunningLines(c) {
-      let b = [];
-      for (let _ of y.values())
-        for (let [r, a] of _.runningSince) {
-          let s = _.live.get(r);
-          if (s?.state !== "running" || _.longRunningSaid.has(r) || c - a < LONG_RUNNING_CALL_NOTICE_MS)
+    longRunningLines(now) {
+      let lines = [];
+      for (let state of sessions.values())
+        for (let [callId, since] of state.runningSince) {
+          let call = state.live.get(callId);
+          if (
+            call?.state !== "running" ||
+            state.longRunningSaid.has(callId) ||
+            now - since < LONG_RUNNING_CALL_NOTICE_MS
+          )
             continue;
-          _.longRunningSaid.add(r);
-          b.push(
-            `${d ? `Cloud session ${_.session}` : "Cloud session"}: ${s.tool} has been running for ${LONG_RUNNING_CALL_NOTICE_MS / 60000} minutes.`,
+          state.longRunningSaid.add(callId);
+          lines.push(
+            `${sawMultipleSessions ? `Cloud session ${state.session}` : "Cloud session"}: ${call.tool} has been running for ${LONG_RUNNING_CALL_NOTICE_MS / 60000} minutes.`,
           );
         }
-      return b;
+      return lines;
     },
     anyRunning() {
-      for (let c of y.values())
-        for (let b of c.live.values()) if (c.serving && b.state === "running") return true;
+      for (let state of sessions.values())
+        for (let call of state.live.values()) if (state.serving && call.state === "running") return true;
       return false;
     },
     rowTail({ liveHelpers, now, noNewOnes, disconnectKey }) {
       if (liveHelpers <= 0) return "";
-      let a = 0;
-      let s = [];
-      let h = [];
-      for (let w of y.values()) {
-        if (!w.serving) continue;
-        a += 1;
-        for (let p of w.live.values())
-          if (p.state === "asked") h.push(p);
+      let connectedCount = 0;
+      let runningCalls = [];
+      let askedCalls = [];
+      for (let state of sessions.values()) {
+        if (!state.serving) continue;
+        connectedCount += 1;
+        for (let call of state.live.values())
+          if (call.state === "asked") askedCalls.push(call);
           else
-            s.push({
-              tool: p.tool,
-              since: w.runningSince.get(p.callId),
+            runningCalls.push({
+              tool: call.tool,
+              since: state.runningSince.get(call.callId),
             });
       }
-      let max = Math.max(0, liveHelpers - a);
-      let e = [];
-      if (a > 0) e.push(`${a} connected`);
-      if (max > 0) e.push(`${max} connecting`);
-      if (noNewOnes) e.push("no new ones");
-      if (a > 0) {
-        if (s.length === 1) {
-          let [w] = s;
-          let p = w.since === undefined ? 0 : Math.max(0, now - w.since);
-          e.push(`running ${w.tool}${p >= 1000 ? ` (${formatDuration(p)})` : ""}`);
-        } else if (s.length > 1) e.push(`running ${s.length} tools`);
-        if (h.length === 1 && s.length === 0) {
-          let [w] = h;
-          e.push(
-            w.classifierEligible === false
-              ? `approve ${w.tool} in that session`
-              : `${w.tool} waiting for approval`,
+      let max = Math.max(0, liveHelpers - connectedCount);
+      let parts = [];
+      if (connectedCount > 0) parts.push(`${connectedCount} connected`);
+      if (max > 0) parts.push(`${max} connecting`);
+      if (noNewOnes) parts.push("no new ones");
+      if (connectedCount > 0) {
+        if (runningCalls.length === 1) {
+          let [onlyCall] = runningCalls;
+          let elapsedMs = onlyCall.since === undefined ? 0 : Math.max(0, now - onlyCall.since);
+          parts.push(`running ${onlyCall.tool}${elapsedMs >= 1000 ? ` (${formatDuration(elapsedMs)})` : ""}`);
+        } else if (runningCalls.length > 1) parts.push(`running ${runningCalls.length} tools`);
+        if (askedCalls.length === 1 && runningCalls.length === 0) {
+          let [onlyAsked] = askedCalls;
+          parts.push(
+            onlyAsked.classifierEligible === false
+              ? `approve ${onlyAsked.tool} in that session`
+              : `${onlyAsked.tool} waiting for approval`,
           );
-        } else if (h.length > 0) e.push(`${h.length} waiting for approval`);
-        if (s.length === 0 && h.length === 0) e.push("idle");
+        } else if (askedCalls.length > 0) parts.push(`${askedCalls.length} waiting for approval`);
+        if (runningCalls.length === 0 && askedCalls.length === 0) parts.push("idle");
       }
-      return ` \xB7 ${e.join(", ")}${a > 0 && disconnectKey ? " \xB7 x to disconnect" : ""}`;
+      return ` \xB7 ${parts.join(", ")}${connectedCount > 0 && disconnectKey ? " \xB7 x to disconnect" : ""}`;
     },
     busySentence() {
-      let c = [];
-      let b = 0;
-      for (let _ of y.values()) {
-        if (!_.serving) continue;
-        b += 1;
-        let r = [..._.live.values()];
-        let filtered = r.filter((h) => h.state === "running");
-        let filtered_2 = r.filter((h) => h.state === "asked");
+      let phrases = [];
+      let servingCount = 0;
+      for (let state of sessions.values()) {
+        if (!state.serving) continue;
+        servingCount += 1;
+        let calls = [...state.live.values()];
+        let filtered = calls.filter((call) => call.state === "running");
+        let filtered_2 = calls.filter((call) => call.state === "asked");
         if (filtered.length > 0)
-          c.push(filtered.length === 1 ? `running ${filtered[0].tool}` : `running ${filtered.length} tools`);
+          phrases.push(
+            filtered.length === 1 ? `running ${filtered[0].tool}` : `running ${filtered.length} tools`,
+          );
         else if (filtered_2.length > 0) {
-          let found = filtered_2.find((k) => k.classifierEligible === false);
-          c.push(
+          let found = filtered_2.find((askedCall) => askedCall.classifierEligible === false);
+          phrases.push(
             found !== undefined
               ? `waiting for you to approve ${found.tool}`
               : `waiting for ${filtered_2[0].tool} to be approved`,
           );
         }
       }
-      if (c.length === 0) return "";
-      if (b === 1) return `It is ${c[0]}.`;
-      return c.length === 1 ? `One is ${c[0]}.` : `${c.length} are busy (${c.join(", ")}).`;
+      if (phrases.length === 0) return "";
+      if (servingCount === 1) return `It is ${phrases[0]}.`;
+      return phrases.length === 1
+        ? `One is ${phrases[0]}.`
+        : `${phrases.length} are busy (${phrases.join(", ")}).`;
     },
   };
 }
@@ -307,11 +339,11 @@ var ASK_FIRST_SERVING_BANNER =
 var UNATTENDED_SERVING_HOWTO =
   'To let cloud sessions in auto mode run commands here without asking, turn on "Unattended commands from cloud sessions on this computer" in /config in claude, or pick a mode in /sandbox in claude in this folder, then start this command again with --allow-unattended-tool-calls.';
 //@ chunk-qh5wq2v1.js:18843-18869 placement
-function emptyStatusText(u, lacks) {
+function emptyStatusText(context, lacks) {
   return "";
 }
 //@ chunk-qh5wq2v1.js:18869-18895 placement
-function cloudFolderUseStatusText(u, y) {
+function cloudFolderUseStatusText(context, state) {
   return "";
 }
 //@ chunk-qh5wq2v1.js:18895-20405 placement
@@ -368,74 +400,74 @@ var SANDBOX_POSTURE_HINTS = {
   },
 };
 //@ chunk-qh5wq2v1.js:20405-22125 placement
-function describeRemoteToolsOffReason(u, y) {
-  let d;
-  switch (u) {
+function describeRemoteToolsOffReason(reason, folderState) {
+  let detail;
+  switch (reason) {
     case "gate_off":
     case "flag_off":
-      d = "it is off for your account";
+      detail = "it is off for your account";
       break;
     case "muted":
-      d = "Anthropic has turned it off for now";
+      detail = "Anthropic has turned it off for now";
       break;
     case "windows":
-      d = "this Claude Code does not serve tools from a Windows computer yet";
+      detail = "this Claude Code does not serve tools from a Windows computer yet";
       break;
     case "platform":
-      d = "it needs macOS, Windows, or Linux outside WSL";
+      detail = "it needs macOS, Windows, or Linux outside WSL";
       break;
     case "profile_dirs_unread":
-      d = "Windows has not yet said where this computer keeps its profile folders";
+      detail = "Windows has not yet said where this computer keeps its profile folders";
       break;
     case "profile_dirs_unreadable":
-      d = "Windows did not say where this computer keeps its profile folders; restarting tries again";
+      detail = "Windows did not say where this computer keeps its profile folders; restarting tries again";
       break;
     case "switch_off":
-      d = "CLAUDE_CODE_REMOTE_TOOLS_SERVE turns it off";
+      detail = "CLAUDE_CODE_REMOTE_TOOLS_SERVE turns it off";
       break;
     case "launched_from_home":
-      d =
+      detail =
         "it or its repository is your home directory, is in a hidden folder there, or is another such place; start from a project folder such as ~/code/my-app";
       break;
     case "policy_org":
-      d = "your organization's policy does not allow it";
+      detail = "your organization's policy does not allow it";
       break;
     case "egress":
-      d = "this computer sends only essential traffic, or uses another provider";
+      detail = "this computer sends only essential traffic, or uses another provider";
       break;
     case "not_stored_login":
-      d = "it needs your saved login (`claude auth login`), not a token from the environment";
+      detail = "it needs your saved login (`claude auth login`), not a token from the environment";
       break;
     case "excluded_repository":
-      d = "it is in a repository that is never offered";
+      detail = "it is in a repository that is never offered";
       break;
     case "not_git_checkout":
-      d = "it is missing or cannot be opened, or its `.git` is not a plain file or folder";
+      detail = "it is missing or cannot be opened, or its `.git` is not a plain file or folder";
       break;
     case "other_sign_in":
-      d = "this run's environment signs in or sends its traffic somewhere else";
+      detail = "this run's environment signs in or sends its traffic somewhere else";
       break;
     case "flags_unloaded":
     case "policy_unloaded":
-      d = "this computer could not check whether it is allowed";
+      detail = "this computer could not check whether it is allowed";
       break;
     default:
-      d = "it could not be set up here (--debug says why)";
+      detail = "it could not be set up here (--debug says why)";
   }
   return `${
     {
       never: "Cloud sessions cannot use this folder",
       stopped: "Cloud sessions can no longer use this folder",
       closed: "New cloud sessions cannot use this folder",
-    }[y]
-  }: ${d}.`;
+    }[folderState]
+  }: ${detail}.`;
 }
 //@ chunk-qh5wq2v1.js:22125-22743 placement
 /**
  * 把前台工具宿主事件（started/refused/ended 等）转成一行英文状态文本；status/stopping 与本机主动停止不显示。
  */
 function describeToolHostEvent(event, verbose) {
-  let d = verbose ? "" : " (--verbose says why)";
+  let verbosityHint = verbose ? "" : " (--verbose says why)";
   switch (event.kind) {
     case "started":
       return "A cloud session is connecting to this folder.";
@@ -451,8 +483,8 @@ function describeToolHostEvent(event, verbose) {
       if (event.stoppedHere) return;
       if (event.code === undefined) return "A cloud session disconnected from this folder.";
       return event.code === "helper_exited"
-        ? `A cloud session lost its connection${d}.`
-        : `A cloud session could not connect${d}.`;
+        ? `A cloud session lost its connection${verbosityHint}.`
+        : `A cloud session could not connect${verbosityHint}.`;
   }
 }
 //@ chunk-qh5wq2v1.js:22743-28316 placement
@@ -470,73 +502,73 @@ async function useForegroundToolHost({
   keys = false,
   now = Date.now,
 }) {
-  let s = unattendedGrant !== undefined;
-  let h = guest !== undefined || testVm !== undefined;
-  let k = liveToolHostChecks(
+  let unattended = unattendedGrant !== undefined;
+  let vmGuest = guest !== undefined || testVm !== undefined;
+  let liveChecks = liveToolHostChecks(
     dir,
     credentials,
-    s ? isUnattendedServingFlagOnOptimistic : isUnattendedServingFlagOn,
+    unattended ? isUnattendedServingFlagOnOptimistic : isUnattendedServingFlagOn,
   );
-  let e = {
+  let verdict = {
     kind: "unknown",
     waitingOn: "feature_flags",
   };
   let switches = liveToolHostSwitches({
     dir,
-    checks: k,
-    isOfferingFolder: () => e.kind === "advertise",
+    checks: liveChecks,
+    isOfferingFolder: () => verdict.kind === "advertise",
     hasAccessToken,
   });
-  let p;
-  let v;
-  let S;
-  let W = s || h ? undefined : "gate_off";
-  let G = false;
-  let L = false;
-  let V;
-  let I = false;
-  let E;
-  let U;
-  let D = 0;
-  let C = ForegroundToolHostStatus({
+  let handler;
+  let logger;
+  let switchState;
+  let lastSwitchState = unattended || vmGuest ? undefined : "gate_off";
+  let wasOffered = false;
+  let servingUnattended = false;
+  let outsideSandbox;
+  let vmOnly = false;
+  let guestOs;
+  let lastGuestOs;
+  let liveCount = 0;
+  let statusModel = ForegroundToolHostStatus({
     verbose,
   });
-  let T;
-  let R;
-  let q = false;
+  let longRunningTimer;
+  let disconnectAskedAt;
+  let startupRan = false;
   let deferred = Promise.withResolvers();
   let promise = deferred.promise;
-  function A(n) {
-    let o = v;
-    if (o === undefined) return;
+  function queueStatus(produce) {
+    let loggerRef = logger;
+    if (loggerRef === undefined) return;
     promise = promise.then(async () => {
       try {
-        for (let f of [await n()].flat()) if (f !== undefined) o.logStatus(f);
+        for (let line of [await produce()].flat()) if (line !== undefined) loggerRef.logStatus(line);
       } catch (error) {
         logError(toError(error));
       }
     });
   }
-  function H() {
+  function refreshStatusRow() {
     try {
-      let n = C.rowTail({
-        liveHelpers: D,
+      let rowTail = statusModel.rowTail({
+        liveHelpers: liveCount,
         now: now(),
-        noNewOnes: S !== "offered",
+        noNewOnes: switchState !== "offered",
         disconnectKey: keys,
       });
-      let o = L
+      let leadText = servingUnattended
         ? STATUS_RUN_WITHOUT_ASKING
-        : V !== undefined
-          ? `${STATUS_ASKING_FIRST} (${SANDBOX_POSTURE_HINTS[V].words})`
+        : outsideSandbox !== undefined
+          ? `${STATUS_ASKING_FIRST} (${SANDBOX_POSTURE_HINTS[outsideSandbox].words})`
           : STATUS_RUN_ASKING_FIRST;
-      v?.setCloudSessionsStatus(
-        S === "offered" || D > 0
+      logger?.setCloudSessionsStatus(
+        switchState === "offered" || liveCount > 0
           ? {
-              text: `${o}${n}`,
-              unattended: L,
+              text: `${leadText}${rowTail}`,
+              unattended: servingUnattended,
             }
-          : s
+          : unattended
             ? {
                 text: STATUS_CANNOT_RUN,
                 unattended: false,
@@ -547,42 +579,42 @@ async function useForegroundToolHost({
       logError(toError(error));
     }
   }
-  function z() {
-    if (!C.anyRunning()) {
-      clearInterval(T);
-      T = undefined;
+  function startLongRunningTimer() {
+    if (!statusModel.anyRunning()) {
+      clearInterval(longRunningTimer);
+      longRunningTimer = undefined;
       return;
     }
-    T ??= setInterval(() => {
-      A(() => C.longRunningLines(now()));
-      H();
-      if (!C.anyRunning()) {
-        clearInterval(T);
-        T = undefined;
+    longRunningTimer ??= setInterval(() => {
+      queueStatus(() => statusModel.longRunningLines(now()));
+      refreshStatusRow();
+      if (!statusModel.anyRunning()) {
+        clearInterval(longRunningTimer);
+        longRunningTimer = undefined;
       }
     }, 1000);
-    T.unref?.();
+    longRunningTimer.unref?.();
   }
-  async function X() {
+  async function computeAutoModeWhy() {
     try {
-      let { autoModeRefusedForServedCallsWhy } = await import("./chunk-xfj8e1gs.js");
+      let { autoModeRefusedForServedCallsWhy } = await import("./serve/servedAutoMode.js");
       await freshUnattendedServingConsent();
-      let o = s
+      let sandboxPosture = unattended
         ? await commandSandboxPosture({
             start: false,
           })
         : undefined;
-      let f = autoModeRefusedForServedCallsWhy(o?.confined === true);
+      let why = autoModeRefusedForServedCallsWhy(sandboxPosture?.confined === true);
       if (
-        o !== undefined &&
-        !o.confined &&
-        (f === "consent_unset" || f === "sandbox_off") &&
+        sandboxPosture !== undefined &&
+        !sandboxPosture.confined &&
+        (why === "consent_unset" || why === "sandbox_off") &&
         unattendedServingConsentViewIsFresh()
       ) {
         let detail = "";
-        if (o.reason === "sandbox_failed_to_start")
+        if (sandboxPosture.reason === "sandbox_failed_to_start")
           try {
-            let { SandboxManager } = await import("./chunk-y0my07fj.js");
+            let { SandboxManager } = await import("../../utils/sandbox/REFUSED_UNTIL_RESTART.lazy.js");
             detail = (await SandboxManager.checkDependenciesAsync()).errors.join("; ");
           } catch (error) {
             logForDebugging(
@@ -591,18 +623,22 @@ async function useForegroundToolHost({
           }
         return {
           why: "sandbox_off",
-          outsideSandbox: o.reason,
+          outsideSandbox: sandboxPosture.reason,
           detail,
         };
       }
-      let O = f === "sandbox_off" ? "consent_unset" : f;
+      let normalizedWhy = why === "sandbox_off" ? "consent_unset" : why;
       return {
-        why: O === "none" || s || unattendedServingConsentView() === "accepted" ? O : "consent_unset",
-        nothingAsked: !s && O === "consent_unset" && unattendedServingConsentViewIsFresh(),
+        why:
+          normalizedWhy === "none" || unattended || unattendedServingConsentView() === "accepted"
+            ? normalizedWhy
+            : "consent_unset",
+        nothingAsked:
+          !unattended && normalizedWhy === "consent_unset" && unattendedServingConsentViewIsFresh(),
       };
     } catch (error) {
       logError(toError(error));
-      return alwaysFalseToolHost(h)
+      return alwaysFalseToolHost(vmGuest)
         ? {
             why: "vm_only",
             unattended: false,
@@ -614,131 +650,146 @@ async function useForegroundToolHost({
           };
     }
   }
-  async function Z() {
-    let n = await X();
-    let o = I && n.why === "none";
-    let unattended = n.why === "vm_only" && n.unattended;
-    let O = unattended && !(I && L);
-    let i = n.why === "vm_only" && n.unattended && n.guestOs !== undefined && n.guestOs !== U;
-    L = n.why === "none" || unattended;
-    V = n.why === "sandbox_off" ? n.outsideSandbox : undefined;
-    I = n.why === "vm_only";
-    E = n.why === "vm_only" ? n.guestOs : undefined;
-    H();
-    if (o || O || i) {
-      U = E;
-      v?.logStatus(
+  async function updateUnattendedBanner() {
+    let whyInfo = await computeAutoModeWhy();
+    let shouldAnnounceUnattended = vmOnly && whyInfo.why === "none";
+    let unattended = whyInfo.why === "vm_only" && whyInfo.unattended;
+    let shouldAnnounceVm = unattended && !(vmOnly && servingUnattended);
+    let guestOsChanged =
+      whyInfo.why === "vm_only" &&
+      whyInfo.unattended &&
+      whyInfo.guestOs !== undefined &&
+      whyInfo.guestOs !== lastGuestOs;
+    servingUnattended = whyInfo.why === "none" || unattended;
+    outsideSandbox = whyInfo.why === "sandbox_off" ? whyInfo.outsideSandbox : undefined;
+    vmOnly = whyInfo.why === "vm_only";
+    guestOs = whyInfo.why === "vm_only" ? whyInfo.guestOs : undefined;
+    refreshStatusRow();
+    if (shouldAnnounceUnattended || shouldAnnounceVm || guestOsChanged) {
+      lastGuestOs = guestOs;
+      logger?.logStatus(
         sequential.yellow(
-          `${WARNING_GLYPH}  ${o ? UNATTENDED_SERVING_BANNER : cloudFolderUseStatusText(E, n.why === "vm_only" ? n.lacks : undefined)}`,
+          `${WARNING_GLYPH}  ${shouldAnnounceUnattended ? UNATTENDED_SERVING_BANNER : cloudFolderUseStatusText(guestOs, whyInfo.why === "vm_only" ? whyInfo.lacks : undefined)}`,
         ),
       );
     }
   }
-  function J() {
-    let n = S;
-    if (n === undefined || n === W) return;
-    let o = s || h || n === "offered" || W === "offered" || k.gate() === true;
-    let f = isSwitchedOffRemotely(e);
-    W = n;
-    if (!o) return;
-    let O = G;
-    G ||= n === "offered";
+  function statusUpdateForSwitch() {
+    let nextState = switchState;
+    if (nextState === undefined || nextState === lastSwitchState) return;
+    let shouldReportChange =
+      unattended ||
+      vmGuest ||
+      nextState === "offered" ||
+      lastSwitchState === "offered" ||
+      liveChecks.gate() === true;
+    let switchedOffRemotely = isSwitchedOffRemotely(verdict);
+    lastSwitchState = nextState;
+    if (!shouldReportChange) return;
+    let wasEverOffered = wasOffered;
+    wasOffered ||= nextState === "offered";
     return async () => {
-      if (n === "offered") {
-        let i = await X();
-        L = i.why === "none" || (i.why === "vm_only" && i.unattended);
-        V = i.why === "sandbox_off" ? i.outsideSandbox : undefined;
-        I = i.why === "vm_only";
-        E = i.why === "vm_only" ? i.guestOs : undefined;
-        U = E;
+      if (nextState === "offered") {
+        let whyInfo = await computeAutoModeWhy();
+        servingUnattended = whyInfo.why === "none" || (whyInfo.why === "vm_only" && whyInfo.unattended);
+        outsideSandbox = whyInfo.why === "sandbox_off" ? whyInfo.outsideSandbox : undefined;
+        vmOnly = whyInfo.why === "vm_only";
+        guestOs = whyInfo.why === "vm_only" ? whyInfo.guestOs : undefined;
+        lastGuestOs = guestOs;
         return {
           text:
-            i.why === "none"
+            whyInfo.why === "none"
               ? UNATTENDED_SERVING_BANNER
-              : i.why === "vm_only"
-                ? i.unattended
-                  ? cloudFolderUseStatusText(E, i.lacks)
-                  : `${emptyStatusText(E, i.lacks)} ${ASK_FIRST_SERVING_BANNER}`
-                : i.why === "consent_unset"
-                  ? i.nothingAsked
+              : whyInfo.why === "vm_only"
+                ? whyInfo.unattended
+                  ? cloudFolderUseStatusText(guestOs, whyInfo.lacks)
+                  : `${emptyStatusText(guestOs, whyInfo.lacks)} ${ASK_FIRST_SERVING_BANNER}`
+                : whyInfo.why === "consent_unset"
+                  ? whyInfo.nothingAsked
                     ? `${ASK_FIRST_SERVING_BANNER} ${UNATTENDED_SERVING_HOWTO}`
                     : ASK_FIRST_SERVING_BANNER
-                  : `${i.why === "sandbox_off" ? `The flag lets commands run without asking only inside the sandbox (${SANDBOX_POSTURE_HINTS[i.outsideSandbox].words} here): ${i.detail === "" ? "" : `${i.detail}; `}${SANDBOX_POSTURE_HINTS[i.outsideSandbox].next}` : AUTO_MODE_OFF_REASONS[i.why]} ${ASK_FIRST_SERVING_BANNER}`,
-          unattended: L,
+                  : `${whyInfo.why === "sandbox_off" ? `The flag lets commands run without asking only inside the sandbox (${SANDBOX_POSTURE_HINTS[whyInfo.outsideSandbox].words} here): ${whyInfo.detail === "" ? "" : `${whyInfo.detail}; `}${SANDBOX_POSTURE_HINTS[whyInfo.outsideSandbox].next}` : AUTO_MODE_OFF_REASONS[whyInfo.why]} ${ASK_FIRST_SERVING_BANNER}`,
+          unattended: servingUnattended,
         };
       }
       return {
-        text: describeRemoteToolsOffReason(n, !O ? "never" : f ? "stopped" : "closed"),
+        text: describeRemoteToolsOffReason(
+          nextState,
+          !wasEverOffered ? "never" : switchedOffRemotely ? "stopped" : "closed",
+        ),
         unattended: false,
       };
     };
   }
   let { getToolHostAdvert, stop } = await watchToolHostAdvert({
     dir,
-    checks: k,
-    log: (n) => logForDebugging(`[bridge:tool-host] ${n}`),
+    checks: liveChecks,
+    log: (message) => logForDebugging(`[bridge:tool-host] ${message}`),
     refuse: helperRefusal,
-    onVerdict: (n) => {
-      e = n;
-      if (n.kind !== "unknown") {
-        S = n.kind === "advertise" ? "offered" : n.blocker;
-        let o = q ? J() : undefined;
-        if (o !== undefined)
-          A(async () => {
-            let f = await o();
-            H();
-            return f.unattended ? sequential.yellow(`${WARNING_GLYPH}  ${f.text}`) : f.text;
+    onVerdict: (nextVerdict) => {
+      verdict = nextVerdict;
+      if (nextVerdict.kind !== "unknown") {
+        switchState = nextVerdict.kind === "advertise" ? "offered" : nextVerdict.blocker;
+        let statusUpdate = startupRan ? statusUpdateForSwitch() : undefined;
+        if (statusUpdate !== undefined)
+          queueStatus(async () => {
+            let statusInfo = await statusUpdate();
+            refreshStatusRow();
+            return statusInfo.unattended
+              ? sequential.yellow(`${WARNING_GLYPH}  ${statusInfo.text}`)
+              : statusInfo.text;
           });
-        if (I)
-          A(async () => {
-            if ((S === "offered" || D > 0) && !isSwitchedOffRemotely(e)) await Z();
+        if (vmOnly)
+          queueStatus(async () => {
+            if ((switchState === "offered" || liveCount > 0) && !isSwitchedOffRemotely(verdict))
+              await updateUnattendedBanner();
             return;
           });
       }
-      if (p !== undefined && isSwitchedOffRemotely(n))
-        p.sweep("gate_off").catch((error) => logError(toError(error)));
+      if (handler !== undefined && isSwitchedOffRemotely(nextVerdict))
+        handler.sweep("gate_off").catch((error) => logError(toError(error)));
     },
   });
-  let j;
-  let B = false;
+  let sweepOnShutdown;
+  let failed = false;
   return {
     getToolHostAdvert: () =>
-      B
+      failed
         ? {
             kind: "withdraw",
           }
         : getToolHostAdvert(),
-    blocker: () => (S === "offered" ? undefined : S),
-    offeredWithoutGit: () => !B && e.kind === "advertise" && e.withoutGit === true,
-    createHandler(n) {
+    blocker: () => (switchState === "offered" ? undefined : switchState),
+    offeredWithoutGit: () => !failed && verdict.kind === "advertise" && verdict.withoutGit === true,
+    createHandler(api) {
       try {
-        p = buildToolHostWorkHandler(
+        handler = buildToolHostWorkHandler(
           {
             folder: dir,
             switches,
-            api: n.api,
+            api: api.api,
             logger: {
               logStatus: () => {},
-              logVerbose: (o) => n.logger.logVerbose(o),
+              logVerbose: (message) => api.logger.logVerbose(message),
             },
-            onLiveCountChange: (o) => {
-              D = o;
-              promise = promise.then(H);
+            onLiveCountChange: (count) => {
+              liveCount = count;
+              promise = promise.then(refreshStatusRow);
             },
             onEvent: (event) => {
-              if (s || G || event.kind !== "refused")
-                A(async () => {
-                  if (event.kind === "started" && S === "offered") await Z();
+              if (unattended || wasOffered || event.kind !== "refused")
+                queueStatus(async () => {
+                  if (event.kind === "started" && switchState === "offered") await updateUnattendedBanner();
                   if (event.kind === "status") {
-                    let f = C.linesFor(event.helper, event.session, event.status);
-                    H();
-                    z();
-                    return f;
+                    let lines = statusModel.linesFor(event.helper, event.session, event.status);
+                    refreshStatusRow();
+                    startLongRunningTimer();
+                    return lines;
                   }
                   if (event.kind === "stopping" || event.kind === "ended") {
-                    C.forget(event.helper);
-                    H();
-                    z();
+                    statusModel.forget(event.helper);
+                    refreshStatusRow();
+                    startLongRunningTimer();
                   }
                   return describeToolHostEvent(event, verbose);
                 });
@@ -755,28 +806,28 @@ async function useForegroundToolHost({
             }),
           },
         );
-        v = n.logger;
+        logger = api.logger;
       } catch (error) {
-        B = true;
+        failed = true;
         logError(toError(error));
       }
-      return p;
+      return handler;
     },
     async startupNotice() {
-      q = true;
+      startupRan = true;
       try {
-        if (p === undefined)
-          return s
+        if (handler === undefined)
+          return unattended
             ? {
                 text: describeRemoteToolsOffReason("error", "never"),
                 unattended: false,
               }
             : undefined;
-        let n = await J()?.();
-        H();
+        let statusInfo = await statusUpdateForSwitch()?.();
+        refreshStatusRow();
         return (
-          n ??
-          (s && S === undefined
+          statusInfo ??
+          (unattended && switchState === undefined
             ? {
                 text: SERVING_STATUS_CHECKING,
                 unattended: false,
@@ -791,66 +842,67 @@ async function useForegroundToolHost({
     bannerDrawn: deferred.resolve,
     disconnectKey() {
       try {
-        let n = now();
-        let o = D;
-        if (p === undefined || v === undefined) return;
-        if (o === 0) {
-          R = undefined;
-          if (S === "offered") v.logStatus("No cloud session is connected to this folder.");
+        let nowMs = now();
+        let count = liveCount;
+        if (handler === undefined || logger === undefined) return;
+        if (count === 0) {
+          disconnectAskedAt = undefined;
+          if (switchState === "offered") logger.logStatus("No cloud session is connected to this folder.");
           return;
         }
-        let f = o === 1 ? "the cloud session" : `${o} cloud sessions`;
-        if (R === undefined || n - R > DISCONNECT_CONFIRM_WINDOW_MS) {
-          R = n;
-          let i = C.busySentence();
-          v.logStatus(
-            `Disconnect ${f} from this folder?${i === "" ? "" : ` ${i}`} Press x again within ${DISCONNECT_CONFIRM_WINDOW_MS / 1000} seconds; any other key cancels.`,
+        let sessionPhrase = count === 1 ? "the cloud session" : `${count} cloud sessions`;
+        if (disconnectAskedAt === undefined || nowMs - disconnectAskedAt > DISCONNECT_CONFIRM_WINDOW_MS) {
+          disconnectAskedAt = nowMs;
+          let busyText = statusModel.busySentence();
+          logger.logStatus(
+            `Disconnect ${sessionPhrase} from this folder?${busyText === "" ? "" : ` ${busyText}`} Press x again within ${DISCONNECT_CONFIRM_WINDOW_MS / 1000} seconds; any other key cancels.`,
           );
           return;
         }
-        R = undefined;
-        p.sweep("released").then(
+        disconnectAskedAt = undefined;
+        handler.sweep("released").then(
           () => logFeatureOk("bridge_tool_host_disconnect"),
           (error) => {
             logError(toError(error));
             logFeatureBad("bridge_tool_host_disconnect", "sweep_failed");
           },
         );
-        let O =
-          S === "offered"
-            ? `${o === 1 ? "It" : "Each"} can ask for this folder again.`
-            : `${o === 1 ? "It" : "They"} cannot come back until this folder is offered to cloud sessions again.`;
-        v.logStatus(`Disconnected ${f}. ${O}`);
+        let returnHint =
+          switchState === "offered"
+            ? `${count === 1 ? "It" : "Each"} can ask for this folder again.`
+            : `${count === 1 ? "It" : "They"} cannot come back until this folder is offered to cloud sessions again.`;
+        logger.logStatus(`Disconnected ${sessionPhrase}. ${returnHint}`);
       } catch (error) {
         logError(toError(error));
       }
     },
     cancelDisconnect() {
-      if (R !== undefined) {
-        R = undefined;
-        v?.logStatus("Not disconnecting.");
+      if (disconnectAskedAt !== undefined) {
+        disconnectAskedAt = undefined;
+        logger?.logStatus("Not disconnecting.");
       }
     },
     async stopHelpers() {
-      if (p !== undefined && j === undefined) {
-        let n = D;
-        j = sweepToolHostForShutdown(p);
-        if (n > 0)
-          A(
+      if (handler !== undefined && sweepOnShutdown === undefined) {
+        let stoppedCount = liveCount;
+        sweepOnShutdown = sweepToolHostForShutdown(handler);
+        if (stoppedCount > 0)
+          queueStatus(
             () =>
-              `Stopped ${n} cloud ${n === 1 ? "session that was" : "sessions that were"} using this folder.`,
+              `Stopped ${stoppedCount} cloud ${stoppedCount === 1 ? "session that was" : "sessions that were"} using this folder.`,
           );
       }
-      await j;
+      await sweepOnShutdown;
     },
     stop() {
-      clearInterval(T);
-      T = undefined;
+      clearInterval(longRunningTimer);
+      longRunningTimer = undefined;
       stop();
     },
   };
 }
 //@ chunk-qh5wq2v1.js:28316-28340 placement
-function alwaysFalseToolHost(u) {
+function alwaysFalseToolHost(state) {
   return false;
 }
+export { useForegroundToolHost };

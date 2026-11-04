@@ -24,8 +24,8 @@ import { isEntryRowNotServed } from "./client.js";
 import { isFoamySpringEnabled as isFoamySpringEnabled_2 } from "../analytics/growthbookGates.js";
 
 //@ chunk-a76knw89.js:41458-41763 placement
-function isPermanentUnavailability(e) {
-  switch (e.kind) {
+function isPermanentUnavailability(availability) {
+  switch (availability.kind) {
     case "policy_blocked":
     case "reserved_address":
     case "org_blocked":
@@ -48,28 +48,37 @@ function isPermanentUnavailability(e) {
 /**
  * 判断错误是否为“永久不可用”（排除 replaced）。
  */
-function isPermanentUnavailabilityFor(e) {
-  return isPermanentUnavailability(e) && e.kind !== "replaced";
+function isPermanentUnavailabilityFor(availability) {
+  return isPermanentUnavailability(availability) && availability.kind !== "replaced";
 }
 //@ chunk-a76knw89.js:41814-42411 placement
 /**
  * 判定一个工具名对应的 MCP 工具当前是否可用及原因。
  */
-function describeToolAvailability(e, n, o, r, c = getDenyRuleIndex(o)) {
-  let mcpInfo = r?.mcpInfo;
-  if (mcpInfo === undefined && mcpInfoFromString(e) === null) {
-    let y = {
-      ...r,
-      name: e,
-      underlyingV1ToolName: aliasOfToolName(e),
-      familyParentToolName: r?.familyParentToolName,
+function describeToolAvailability(
+  toolName,
+  clients,
+  toolPermissionContext,
+  tool,
+  denyIndex = getDenyRuleIndex(toolPermissionContext),
+) {
+  let mcpInfo = tool?.mcpInfo;
+  if (mcpInfo === undefined && mcpInfoFromString(toolName) === null) {
+    let syntheticTool = {
+      ...tool,
+      name: toolName,
+      underlyingV1ToolName: aliasOfToolName(toolName),
+      familyParentToolName: tool?.familyParentToolName,
     };
-    if (isToolDroppedByDenyRules(o, y, c.rules, c.index) && !isToolOmittedByLaunchToolList(o, y))
+    if (
+      isToolDroppedByDenyRules(toolPermissionContext, syntheticTool, denyIndex.rules, denyIndex.index) &&
+      !isToolOmittedByLaunchToolList(toolPermissionContext, syntheticTool)
+    )
       return {
         kind: "denied",
         serverName: undefined,
       };
-    return isBuiltInArtifactReplacedByMcp(y)
+    return isBuiltInArtifactReplacedByMcp(syntheticTool)
       ? {
           kind: "replaced",
         }
@@ -77,29 +86,31 @@ function describeToolAvailability(e, n, o, r, c = getDenyRuleIndex(o)) {
           kind: "withdrawn",
         };
   }
-  let u =
+  let deniedByRules =
     mcpInfo === undefined
-      ? isToolDeniedByIndex(o, c.index, {
-          name: e,
+      ? isToolDeniedByIndex(toolPermissionContext, denyIndex.index, {
+          name: toolName,
         })
       : isToolDroppedByDenyRules(
-          o,
+          toolPermissionContext,
           {
-            name: e,
+            name: toolName,
             mcpInfo,
           },
-          c.rules,
-          c.index,
+          denyIndex.rules,
+          denyIndex.index,
         );
-  let mapped = serverRowsForTool(e, n, mcpInfo).map(({ row, upstream }) =>
-    classifyMcpServerAvailability(row, upstream, u),
+  let mapped = serverRowsForTool(toolName, clients, mcpInfo).map(({ row, upstream }) =>
+    classifyMcpServerAvailability(row, upstream, deniedByRules),
   );
-  let T =
+  let chosen =
     mapped.find(isPermanentUnavailability) ??
-    mapped.find((y) => y.kind === "not_offered" || y.kind === "auth_completed") ??
+    mapped.find(
+      (availability) => availability.kind === "not_offered" || availability.kind === "auth_completed",
+    ) ??
     mapped[0];
-  if (T) return T;
-  return u
+  if (chosen) return chosen;
+  return deniedByRules
     ? {
         kind: "denied",
         serverName: undefined,
@@ -112,8 +123,8 @@ function describeToolAvailability(e, n, o, r, c = getDenyRuleIndex(o)) {
 /**
  * 列出可能提供该工具、仍在连接中的 MCP 服务器名。
  */
-function pendingServersForTool(e, mcpClients) {
-  return serverRowsForTool(e, mcpClients, undefined)
+function pendingServersForTool(toolName, clients) {
+  return serverRowsForTool(toolName, clients, undefined)
     .filter(({ row }) => row.type === "pending")
     .map(({ row }) => row.name);
 }
@@ -121,50 +132,50 @@ function pendingServersForTool(e, mcpClients) {
 /**
  * 找出可能提供该工具名的 MCP 服务器行（按最长前缀匹配，或按给定的服务器与工具名）。
  */
-function serverRowsForTool(e, n, o) {
-  if (o !== undefined) {
-    let upstream = normalizeNameForMCP(o.toolName);
-    return n
-      .filter((u) => u.name === o.serverName)
+function serverRowsForTool(toolName, clients, mcpInfo) {
+  if (mcpInfo !== undefined) {
+    let upstream = normalizeNameForMCP(mcpInfo.toolName);
+    return clients
+      .filter((client) => client.name === mcpInfo.serverName)
       .map((row) => ({
         row,
         upstream,
       }));
   }
-  let filtered = n
-    .map((s) => ({
-      row: s,
-      prefix: getMcpPrefix(s.name),
+  let filtered = clients
+    .map((client) => ({
+      row: client,
+      prefix: getMcpPrefix(client.name),
     }))
-    .filter(({ prefix }) => e.startsWith(prefix));
+    .filter(({ prefix }) => toolName.startsWith(prefix));
   let max = Math.max(0, ...filtered.map(({ prefix }) => prefix.length));
   return filtered
     .filter(({ prefix }) => prefix.length === max)
     .map(({ row, prefix }) => ({
       row,
-      upstream: e.slice(prefix.length),
+      upstream: toolName.slice(prefix.length),
     }));
 }
 //@ chunk-a76knw89.js:42879-43637 placement
 /**
  * 把 MCP 服务器状态归类为 denied/org_blocked/disabled/needs_auth/reconnecting 等。
  */
-function classifyMcpServerAvailability(row, upstream, o) {
-  let serverName = normalizeMcpServerName(row.name);
-  if (o)
+function classifyMcpServerAvailability(client, upstreamName, deniedByRules) {
+  let serverName = normalizeMcpServerName(client.name);
+  if (deniedByRules)
     return {
       kind: "denied",
       serverName,
     };
-  if (isBlockedByToolPermissions(row, upstream))
+  if (isBlockedByToolPermissions(client, upstreamName))
     return {
       kind: "org_blocked",
       serverName,
-      ...(isCliOwnedConfig(row.config) && {
+      ...(isCliOwnedConfig(client.config) && {
         byClaudeCode: true,
       }),
     };
-  switch (row.type) {
+  switch (client.type) {
     case "pending":
       return {
         kind: "reconnecting",
@@ -176,17 +187,17 @@ function classifyMcpServerAvailability(row, upstream, o) {
         serverName,
       };
     case "failed":
-      if (isPolicyDisabledReason(row.error))
+      if (isPolicyDisabledReason(client.error))
         return {
           kind: "policy_blocked",
           serverName,
         };
-      if (isReservedAddressReason(row.error))
+      if (isReservedAddressReason(client.error))
         return {
           kind: "reserved_address",
           serverName,
         };
-      return isUnconfiguredFailure(row)
+      return isUnconfiguredFailure(client)
         ? {
             kind: "not_configured",
           }
@@ -196,17 +207,17 @@ function classifyMcpServerAvailability(row, upstream, o) {
           };
     case "disabled":
       return {
-        kind: row.config.type === "sdk" ? "switched_off" : "disabled",
+        kind: client.config.type === "sdk" ? "switched_off" : "disabled",
         serverName,
       };
     case "connected":
     case "cached":
-      if (isEntryRowNotServed(row))
+      if (isEntryRowNotServed(client))
         return {
           kind: "switched_off",
           serverName,
         };
-      return upstream === AUTHENTICATE || upstream === COMPLETE_AUTHENTICATION
+      return upstreamName === AUTHENTICATE || upstreamName === COMPLETE_AUTHENTICATION
         ? {
             kind: "auth_completed",
             serverName,
@@ -218,12 +229,12 @@ function classifyMcpServerAvailability(row, upstream, o) {
   }
 }
 //@ chunk-a76knw89.js:43637-43809 placement
-function isBlockedByToolPermissions(e, n) {
-  if (!("toolPermissions" in e.config)) return false;
-  let toolPermissions = e.config.toolPermissions;
+function isBlockedByToolPermissions(client, upstreamName) {
+  if (!("toolPermissions" in client.config)) return false;
+  let toolPermissions = client.config.toolPermissions;
   if (!toolPermissions) return false;
   return Object.entries(toolPermissions).some(
-    ([key, value]) => value === "blocked" && normalizeNameForMCP(key) === n,
+    ([key, value]) => value === "blocked" && normalizeNameForMCP(key) === upstreamName,
   );
 }
 //@ chunk-a76knw89.js:43809-43836 placement

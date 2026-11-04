@@ -15,7 +15,7 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { createSignal } from "../../utils/signal.js";
-import { string, u } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema, objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { EMPTY_DIVIDER_STATE } from "./MessageArea.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
@@ -52,70 +52,72 @@ class ScrollPin {
   #a = null;
   #l = null;
   #d = undefined;
-  constructor(h) {
-    this.#e = h;
-    this.#o = h.transcript.subscribe(this.#S);
+  constructor(options) {
+    this.#e = options;
+    this.#o = options.transcript.subscribe(this.#S);
   }
-  subscribe = (h) => this.#t.subscribe(h);
+  subscribe = (listener) => this.#t.subscribe(listener);
   getSnapshot = () => this.#n;
   get dividerY() {
     return this.#n.dividerY;
   }
-  setRenderedLength(h) {
-    this.#c = h;
+  setRenderedLength(length) {
+    this.#c = length;
   }
   dispose() {
     this.#o();
   }
   isAtBottom = () => this.viewport.handle?.isSticky() ?? true;
-  repin = (h = false, x = "?") => {
-    if (!h && !resolveSetting("autoScrollEnabled", true).value) return;
+  repin = (force = false, reason = "?") => {
+    if (!force && !resolveSetting("autoScrollEnabled", true).value) return;
     let handle = this.viewport.handle;
     if (handle && !handle.isSticky())
       logForDebugging(
-        `repinScroll(${x}, force=${h}): yanking from scrollTop=${handle.getScrollTop()} (max=${Math.max(0, handle.getScrollHeight() - handle.getViewportHeight())})`,
+        `repinScroll(${reason}, force=${force}): yanking from scrollTop=${handle.getScrollTop()} (max=${Math.max(0, handle.getScrollHeight() - handle.getViewportHeight())})`,
       );
     this.#m();
     handle?.scrollToBottom();
     this.#f();
     this.#i = false;
   };
-  onPromptEdit(h, x) {
-    if (x !== "" || h === "" || this.#i) return;
+  onPromptEdit(prevValue, nextValue) {
+    if (nextValue !== "" || prevValue === "" || this.#i) return;
     this.repin(false, "typedIntoEmpty");
   }
-  onUserRowLanded(h) {
-    let x = (h.promptSource === "typed" || h.promptSource === "suggestion_accepted") && isHumanTurn(h);
-    if (x || !this.#i) this.repin(false, x ? "ownSubmitLanded" : "rowLanded");
+  onUserRowLanded(rowKey) {
+    let lastRow =
+      (rowKey.promptSource === "typed" || rowKey.promptSource === "suggestion_accepted") &&
+      isHumanTurn(rowKey);
+    if (lastRow || !this.#i) this.repin(false, lastRow ? "ownSubmitLanded" : "rowLanded");
   }
-  onBelowTranscriptSlotChange(h) {
-    let x = this.#d;
-    this.#d = h;
-    if (x === undefined || x === h) return;
+  onBelowTranscriptSlotChange(slotValue) {
+    let previousSlot = this.#d;
+    this.#d = slotValue;
+    if (previousSlot === undefined || previousSlot === slotValue) return;
     if (this.#a === null && (this.viewport.handle?.isSticky() ?? true))
-      this.repin(false, `progressOrPanel\u2192${h}`);
+      this.repin(false, `progressOrPanel\u2192${slotValue}`);
   }
-  onUserScroll = (h, x) => {
+  onUserScroll = (delta, cause) => {
     this.#m();
     this.#e.awaySummary.markUserScrolled();
-    this.#i = !h;
-    if (h) this.#f();
-    else this.#u(x);
+    this.#i = !delta;
+    if (delta) this.#f();
+    else this.#u(cause);
   };
-  onUserScrollWithoutDivider = (h) => {
+  onUserScrollWithoutDivider = (position) => {
     this.#m();
-    this.#i = !h;
+    this.#i = !position;
   };
-  reveal = async (h, x) => {
-    let D = this.revealRef.current;
-    if (!this.viewport.handle || !D) return "unscrollable";
-    let L = D.reveal(h, x);
-    if (!L) return "unknown";
+  reveal = async (rowKey, options) => {
+    let handle = this.revealRef.current;
+    if (!this.viewport.handle || !handle) return "unscrollable";
+    let revealed = handle.reveal(rowKey, options);
+    if (!revealed) return "unknown";
     this.#i = true;
     this.#p();
-    return (await L) ? "revealed" : "unknown";
+    return (await revealed) ? "revealed" : "unknown";
   };
-  rowHolding = (h) => this.revealRef.current?.rowHolding(h);
+  rowHolding = (row) => this.revealRef.current?.rowHolding(row);
   releaseReveal = () => {
     this.revealRef.current?.release();
   };
@@ -132,59 +134,59 @@ class ScrollPin {
     this.viewport.handle?.scrollToBottom();
     this.#i = false;
   };
-  showDialog = (h, x) => {
+  showDialog = (dialog, options) => {
     let handle = this.viewport.handle;
     if (!handle) return false;
-    let { top, bottom } = scrollTargetForRow(handle, h);
-    let ke = handle.getScrollTop() + handle.getPendingDelta();
-    let Re = handle.isSticky();
-    let Be = Re || resolveSetting("autoScrollEnabled", true).value;
-    if (top < bottom || (!x && !Be)) {
-      if (ke === top && !Re) return false;
-      logForDebugging(`ScrollPin.showDialog: from scrollTop=${ke} to ${top}`);
+    let { top, bottom } = scrollTargetForRow(handle, dialog);
+    let scrollTop = handle.getScrollTop() + handle.getPendingDelta();
+    let isSticky = handle.isSticky();
+    let autoScroll = isSticky || resolveSetting("autoScrollEnabled", true).value;
+    if (top < bottom || (!options && !autoScroll)) {
+      if (scrollTop === top && !isSticky) return false;
+      logForDebugging(`ScrollPin.showDialog: from scrollTop=${scrollTop} to ${top}`);
       this.releaseReveal();
-      this.#a ??= x && !Re ? ke : Be ? "bottom" : null;
+      this.#a ??= options && !isSticky ? scrollTop : autoScroll ? "bottom" : null;
       this.#i = true;
       this.#l = top;
       handle.scrollTo(top);
       return true;
     }
-    if (Re) return false;
-    if (!x) {
+    if (isSticky) return false;
+    if (!options) {
       this.repin(true, "dialog");
       return true;
     }
-    logForDebugging(`ScrollPin.showDialog: from scrollTop=${ke}`);
+    logForDebugging(`ScrollPin.showDialog: from scrollTop=${scrollTop}`);
     this.releaseReveal();
-    this.#a ??= ke;
+    this.#a ??= scrollTop;
     handle.scrollToBottom();
     return true;
   };
-  followDialog = (h) => {
+  followDialog = (rowKey) => {
     let handle = this.viewport.handle;
-    if (this.#l === null || !handle || h === undefined) return;
-    let D = handle.getScrollTop() + handle.getPendingDelta();
-    let { top } = scrollTargetForRow(handle, h);
-    if (D !== this.#l && D !== top) {
+    if (this.#l === null || !handle || rowKey === undefined) return;
+    let scrollTop = handle.getScrollTop() + handle.getPendingDelta();
+    let { top } = scrollTargetForRow(handle, rowKey);
+    if (scrollTop !== this.#l && scrollTop !== top) {
       this.#p();
       return;
     }
     this.#l = top;
-    if (D !== top) handle.scrollTo(top);
+    if (scrollTop !== top) handle.scrollTo(top);
   };
   onDialogLeft = () => {
-    let h = this.#a;
+    let restoreTarget = this.#a;
     this.#a = null;
     this.#l = null;
-    if (h === "bottom") this.repin(true, "dialogLeft");
-    else if (h !== null) this.viewport.handle?.scrollTo(h);
+    if (restoreTarget === "bottom") this.repin(true, "dialogLeft");
+    else if (restoreTarget !== null) this.viewport.handle?.scrollTo(restoreTarget);
   };
-  #u(h) {
-    let max = Math.max(0, h.getScrollHeight() - h.getViewportHeight());
-    if (h.getScrollTop() + h.getPendingDelta() >= max) return;
+  #u(handle) {
+    let max = Math.max(0, handle.getScrollHeight() - handle.getViewportHeight());
+    if (handle.getScrollTop() + handle.getPendingDelta() >= max) return;
     if (this.#n.dividerY !== null) return;
     this.#s = this.#c ?? this.#e.transcript.getSnapshot().length;
-    this.#h(h.getScrollHeight(), this.#e.transcript.getSnapshot());
+    this.#h(handle.getScrollHeight(), this.#e.transcript.getSnapshot());
   }
   #f() {
     let dividerY = this.#n.dividerY;
@@ -205,22 +207,22 @@ class ScrollPin {
     }
     if (snapshot.length !== this.#r) this.#h(this.#n.dividerY, snapshot);
   };
-  #h(h, messages) {
+  #h(dividerY, messages) {
     this.#r = messages.length;
-    let D = this.#n;
+    let current = this.#n;
     let unseenDivider = computeUnseenDivider(messages, this.#s, currentToolPermissionContext());
-    let ee =
-      unseenDivider?.firstUnseenUuid === D.unseenDivider?.firstUnseenUuid &&
-      unseenDivider?.count === D.unseenDivider?.count
-        ? D.unseenDivider
+    let unseenDivider_2 =
+      unseenDivider?.firstUnseenUuid === current.unseenDivider?.firstUnseenUuid &&
+      unseenDivider?.count === current.unseenDivider?.count
+        ? current.unseenDivider
         : unseenDivider;
-    if (h === D.dividerY && ee === D.unseenDivider) return;
+    if (dividerY === current.dividerY && unseenDivider_2 === current.unseenDivider) return;
     this.#n =
-      h === null && ee === undefined
+      dividerY === null && unseenDivider_2 === undefined
         ? EMPTY_DIVIDER_STATE
         : {
-            dividerY: h,
-            unseenDivider: ee,
+            dividerY,
+            unseenDivider: unseenDivider_2,
           };
     this.#t.emit();
   }
@@ -229,11 +231,14 @@ class ScrollPin {
 /**
  * 计算让某行区块可见的滚动位置与底部位置。
  */
-function scrollTargetForRow(handle, x) {
+function scrollTargetForRow(handle, rowRange) {
   let viewportHeight = handle.getViewportHeight();
   let max = Math.max(0, handle.getScrollHeight() - viewportHeight);
   return {
-    top: x === undefined ? max : Math.min(max, Math.max(0, x.row + x.rows - viewportHeight)),
+    top:
+      rowRange === undefined
+        ? max
+        : Math.min(max, Math.max(0, rowRange.row + rowRange.rows - viewportHeight)),
     bottom: max,
   };
 }

@@ -19,48 +19,48 @@ var INITIAL_IN_PROGRESS_STATE = {
   inProgressToolUseIDs: EMPTY_TOOL_USE_IDS,
 };
 //@ chunk-6vnxsn99.js:20653-20780 placement
-function inProgressToolUpdate(inProgressToolUseIDs, n) {
-  return inProgressToolUseIDs.size === 0 && n.size > 0
+function inProgressToolUpdate(inProgressToolUseIDs, nextIds) {
+  return inProgressToolUseIDs.size === 0 && nextIds.size > 0
     ? {
-        inProgressToolUseIDs: n,
+        inProgressToolUseIDs: nextIds,
         toolWindowStartTime: Date.now(),
       }
     : {
-        inProgressToolUseIDs: n,
+        inProgressToolUseIDs: nextIds,
       };
 }
 //@ chunk-6vnxsn99.js:20780-21114 placement
 /**
  * 维护某个代理的进行中工具调用集合（add/remove/clear），首个工具开始时记录 toolWindowStartTime。
  */
-function applyInProgressToolUses(transcripts, n, r) {
-  let o = transcripts[n] ?? INITIAL_IN_PROGRESS_STATE;
-  let inProgressToolUseIDs = o.inProgressToolUseIDs;
-  let a;
-  switch (r.action) {
+function applyInProgressToolUses(transcripts, transcriptId, update) {
+  let previous = transcripts[transcriptId] ?? INITIAL_IN_PROGRESS_STATE;
+  let inProgressToolUseIDs = previous.inProgressToolUseIDs;
+  let nextIds;
+  switch (update.action) {
     case "add": {
-      a = new Set(inProgressToolUseIDs);
-      for (let id of r.ids) a.add(id);
+      nextIds = new Set(inProgressToolUseIDs);
+      for (let id of update.ids) nextIds.add(id);
       break;
     }
     case "remove": {
-      a = new Set(inProgressToolUseIDs);
-      for (let id of r.ids) a.delete(id);
-      if (a.size === inProgressToolUseIDs.size) return transcripts;
+      nextIds = new Set(inProgressToolUseIDs);
+      for (let id of update.ids) nextIds.delete(id);
+      if (nextIds.size === inProgressToolUseIDs.size) return transcripts;
       break;
     }
     case "clear":
       if (inProgressToolUseIDs.size === 0) return transcripts;
-      a = new Set();
+      nextIds = new Set();
       break;
     default:
       return transcripts;
   }
   return {
     ...transcripts,
-    [n]: {
-      ...o,
-      ...inProgressToolUpdate(inProgressToolUseIDs, a),
+    [transcriptId]: {
+      ...previous,
+      ...inProgressToolUpdate(inProgressToolUseIDs, nextIds),
     },
   };
 }

@@ -16,38 +16,45 @@ import { ATTRIBUTION_HEADER_COMMITS, ATTRIBUTION_HEADER_PLACEHOLDER } from "./at
 /**
  * 从后往前收集上一条带版本标记的助手消息之后、尚未公告的版本附件消息。
  */
-function unannouncedVersionMessages(e) {
-  let n = [];
-  for (let idx = e.length - 1; idx >= 0; idx--) {
-    let s = e[idx];
-    if (s.type === "assistant" && s.message.model !== SYNTHETIC_MODEL && isLegacyVersionMarker(s)) break;
+function unannouncedVersionMessages(messages) {
+  let unannounced = [];
+  for (let idx = messages.length - 1; idx >= 0; idx--) {
+    let message = messages[idx];
     if (
-      isRemoteSessionChangeAttachment(s) &&
-      s.renderedBesideToolResult !== true &&
-      typeof messageVersion(s) === "string" &&
-      !isLegacyVersionMarker(s)
+      message.type === "assistant" &&
+      message.message.model !== SYNTHETIC_MODEL &&
+      isLegacyVersionMarker(message)
     )
-      n.push(s);
+      break;
+    if (
+      isRemoteSessionChangeAttachment(message) &&
+      message.renderedBesideToolResult !== true &&
+      typeof messageVersion(message) === "string" &&
+      !isLegacyVersionMarker(message)
+    )
+      unannounced.push(message);
   }
-  return n;
+  return unannounced;
 }
 //@ chunk-e6aww6q8.js:115984-116037 placement
 /**
  * 取消息里的 version 字段（没有时 undefined）。
  */
-function messageVersion(e) {
-  return "version" in e ? e.version : undefined;
+function messageVersion(message) {
+  return "version" in message ? message.version : undefined;
 }
 //@ chunk-e6aww6q8.js:116037-116165 placement
-function isLegacyVersionMarker(e) {
-  let n = messageVersion(e);
-  return typeof n === "string" ? n.startsWith("2.1.287") || n.startsWith("2.1.288-dev.") : "sessionId" in e;
+function isLegacyVersionMarker(message) {
+  let version = messageVersion(message);
+  return typeof version === "string"
+    ? version.startsWith("2.1.287") || version.startsWith("2.1.288-dev.")
+    : "sessionId" in message;
 }
 //@ chunk-e6aww6q8.js:116165-116225 placement
 /**
  * 判断文本是否以库更新提示的两种前缀之一开头。
  */
-function isLibraryUpdateMessage(e) {
-  return e.startsWith(ATTRIBUTION_HEADER_COMMITS) || e.startsWith(ATTRIBUTION_HEADER_PLACEHOLDER);
+function isLibraryUpdateMessage(message) {
+  return message.startsWith(ATTRIBUTION_HEADER_COMMITS) || message.startsWith(ATTRIBUTION_HEADER_PLACEHOLDER);
 }
 export { isLibraryUpdateMessage, unannouncedVersionMessages };

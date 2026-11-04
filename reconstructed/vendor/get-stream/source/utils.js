@@ -6,8 +6,8 @@
  * attribution: esm-layout 1
  */
 //@ chunk-m4p5zn6n.js:22818-22966 esm-layout
-var ke = (value) => value;
-var Fe = () => {
+var identity = (value) => value;
+var noop = () => {
   return;
 };
 var getContentsProp = ({ contents }) => contents;
@@ -15,4 +15,4 @@ var throwObjectStream = (chunk) => {
   throw Error(`Streams in object mode are not supported: ${String(chunk)}`);
 };
 var getLengthProp = (convertedChunk) => convertedChunk.length;
-export { throwObjectStream, getLengthProp, Fe, ke, getContentsProp };
+export { throwObjectStream, getLengthProp, noop, identity, getContentsProp };

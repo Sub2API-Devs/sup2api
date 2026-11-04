@@ -46,7 +46,7 @@ import { setMainLoopBusy } from "../../components/LogoV2/Notices.js";
 import { raceWithAbortSignal, sleep } from "../../utils/sleep.js";
 import { AbortError, withTelemetryMessage, toError } from "../../utils/errors.js";
 import {
-  NUDGE_IDS,
+  EFFORT_MEDIUM_NUDGE,
   NUDGE_ID_C,
   AUTO_DEFAULT_NUDGE,
   AUTOCOMPACT_OFFER,
@@ -254,10 +254,11 @@ import { CONTINUE_COMMAND, normalizeContinueInput } from "../../commands/continu
 import { getCurrentLimits } from "../../services/claudeAiLimits.js";
 import { getDisplayPath } from "../../utils/file.js";
 import { hasStringUuid } from "../../bridge/inboundMessages.js";
-import { init_react_production, P } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { useHost } from "../../context/session.js";
 import { useDialogStore, useDialogSelector } from "../../state/dialogQueue.js";
 import { ASK_USER_QUESTION_PERMISSION_CARD } from "../../components/permissions/permissionCardKinds.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1510734-1565335 placement
 /**
@@ -267,11 +268,11 @@ class TurnController {
   guard = new QueryGuard();
   loading = {
     getSnapshot: () => this._snapshot.isLoading,
-    subscribe: (h) => this.subscribe(h),
+    subscribe: (listener) => this.subscribe(listener),
   };
   tasks = {
     getSnapshot: () => this._requireHost().store.getState().tasks,
-    subscribe: (h) => this._requireHost().store.subscribe(h),
+    subscribe: (listener) => this._requireHost().store.subscribe(listener),
   };
   stream;
   engineFeed = {
@@ -301,24 +302,24 @@ class TurnController {
   _signalsAbsorbedLength = 0;
   _spinnerTipHandoff = {
     context: () => this._freshTipContext(),
-    show: (h) => {
+    show: (tip) => {
       let { setAppState } = this._requireHost();
       this._publishTipBetweenTurns(() =>
-        setAppState((D) =>
-          h === undefined
-            ? D.spinnerTip === undefined
-              ? D
+        setAppState((state) =>
+          tip === undefined
+            ? state.spinnerTip === undefined
+              ? state
               : {
-                  ...D,
+                  ...state,
                   spinnerTip: undefined,
                   spinnerTipLabel: undefined,
                 }
-            : D.spinnerTip === h.text && D.spinnerTipLabel === h.label
-              ? D
+            : state.spinnerTip === tip.text && state.spinnerTipLabel === tip.label
+              ? state
               : {
-                  ...D,
-                  spinnerTip: h.text,
-                  spinnerTipLabel: h.label,
+                  ...state,
+                  spinnerTip: tip.text,
+                  spinnerTipLabel: tip.label,
                 },
         ),
       );
@@ -394,10 +395,10 @@ class TurnController {
       turnHasToolUse: () => this._toolUseThisTurn,
       onStreamingTextShown: () => this._firstText?.markFirstTextPainted("stream_line"),
     });
-    let He = () => this._pauseStartTime;
+    let readPauseStart = () => this._pauseStartTime;
     this.pauseStartTimeRef = {
       get current() {
-        return He();
+        return readPauseStart();
       },
     };
     this._snapshot = {
@@ -415,10 +416,10 @@ class TurnController {
     };
     this.guard.subscribe(() => {
       let _guardWasRunning = this._guardWasRunning;
-      let ze = this.guard.generation !== this._guardGenerationSeen;
+      let generationChanged = this.guard.generation !== this._guardGenerationSeen;
       this._guardWasRunning = this.guard.isRunning;
       this._guardGenerationSeen = this.guard.generation;
-      if (_guardWasRunning && !this.guard.isRunning && !ze) this._releaseRowsHeldForTurnEnd();
+      if (_guardWasRunning && !this.guard.isRunning && !generationChanged) this._releaseRowsHeldForTurnEnd();
       this._publish({
         isQueryActive: this.guard.isActive,
       });
@@ -456,33 +457,33 @@ class TurnController {
   get isExternalLoading() {
     return this._snapshot.isExternalLoading;
   }
-  bindHost(h) {
-    let x = this._host === null;
-    this._host = h;
-    if (x) this._mount(h);
-    if (h.mainLoopModel !== this._engineModel) {
-      this._engineModel = h.mainLoopModel;
-      this._engine.setModel(h.mainLoopModel);
+  bindHost(host) {
+    let wasUnbound = this._host === null;
+    this._host = host;
+    if (wasUnbound) this._mount(host);
+    if (host.mainLoopModel !== this._engineModel) {
+      this._engineModel = host.mainLoopModel;
+      this._engine.setModel(host.mainLoopModel);
       this._syncThinking?.();
     }
   }
-  _mount(h) {
-    let { store, dialogStore, messageQueue } = h;
-    tipSeatSlots.of(h.session.host).seat(this._spinnerTipHandoff);
+  _mount(host) {
+    let { store, dialogStore, messageQueue } = host;
+    tipSeatSlots.of(host.session.host).seat(this._spinnerTipHandoff);
     this._unwatchQueue = messageQueue.subscribe(() => {
       this._syncMainLoopBusy();
       this._abortOnNowPriorityCommand();
     });
-    this._unwatchTypedHandedBack = messageQueue.typedHandedBack.subscribe((ke) => {
-      for (let Re of ke)
-        restoreDroppedInput(Re, {
-          land: (Be, { uuid, ideSelection }) => {
+    this._unwatchTypedHandedBack = messageQueue.typedHandedBack.subscribe((commands) => {
+      for (let command of commands)
+        restoreDroppedInput(command, {
+          land: (text, { uuid, ideSelection }) => {
             this.consumeRateLimitAutoContinuePrefill();
-            restorePromptAfterCancel(h.draft, Be);
+            restorePromptAfterCancel(host.draft, text);
             if (uuid && isQueueFreeOfPrompts(messageQueue, ideSelection))
-              h.restoreIdeSelectionConsumedBy(uuid, ideSelection);
+              host.restoreIdeSelectionConsumedBy(uuid, ideSelection);
           },
-          setPastedContents: (Be) => h.draft.setPastedContents(Be),
+          setPastedContents: (pasted) => host.draft.setPastedContents(pasted),
         });
     });
     this._syncMainLoopBusy();
@@ -495,24 +496,24 @@ class TurnController {
       }
     });
     this._setPaused(this._isBlockingDialogOpen());
-    let ee = () => {
+    let syncThinking = () => {
       try {
-        let ke = isThinkingEffectivelyEnabled(
-          (this._host ?? h).mainLoopModel,
+        let enabled = isThinkingEffectivelyEnabled(
+          (this._host ?? host).mainLoopModel,
           store.getState().thinkingEnabled,
         );
-        if (this._engineThinkingEnabled !== null && this._engineThinkingEnabled.value === ke) return;
+        if (this._engineThinkingEnabled !== null && this._engineThinkingEnabled.value === enabled) return;
         this._engineThinkingEnabled = {
-          value: ke,
+          value: enabled,
         };
-        this._engine.setMaxThinkingTokens(ke ? null : 0);
+        this._engine.setMaxThinkingTokens(enabled ? null : 0);
       } catch (error) {
         logError(error);
       }
     };
-    this._syncThinking = ee;
-    this._unwatchThinking = store.subscribe(ee);
-    ee();
+    this._syncThinking = syncThinking;
+    this._unwatchThinking = store.subscribe(syncThinking);
+    syncThinking();
     this._unwatchUserWait = store.subscribe(() => {
       try {
         this._syncUserWaiting();
@@ -532,7 +533,7 @@ class TurnController {
       if (
         this._requireHost()
           .messageQueue.getCommandQueueSnapshot()
-          .some((h) => h.priority === "now")
+          .some((command) => command.priority === "now")
       ) {
         let abortController = this._snapshot.abortController;
         if (abortController && !abortController.signal.aborted) {
@@ -545,9 +546,9 @@ class TurnController {
       logError(error);
     }
   }
-  _displayTransform(h) {
+  _displayTransform(text) {
     if (this._displayTransformQueue !== null) return this._displayTransformQueue;
-    let { session, sessionHooks, setAppState, storageV5, credentials } = h;
+    let { session, sessionHooks, setAppState, storageV5, credentials } = text;
     this._displayTransformQueue = collectHookAttachmentMessages({
       session,
       sessionHooks,
@@ -555,20 +556,20 @@ class TurnController {
       credentials,
       onStreamingDisplay: this.stream.applyTransformedStreamingText,
       onStreamingRewrite: this.stream.applyStreamingRewrite,
-      onMessageDisplay: (Re, Be) => {
+      onMessageDisplay: (message, handle) => {
         let lastMergedContinuation = this.stream.lastMergedContinuation;
-        let We =
-          lastMergedContinuation !== null && lastMergedContinuation.apiMessageId === Re
-            ? joinPartialResponse(lastMergedContinuation.salvageText, Be, lastMergedContinuation.exact)
-            : Be;
-        setAppState((ze) =>
-          ze.displayedMessageContent[Re] === We
-            ? ze
+        let pending =
+          lastMergedContinuation !== null && lastMergedContinuation.apiMessageId === message
+            ? joinPartialResponse(lastMergedContinuation.salvageText, handle, lastMergedContinuation.exact)
+            : handle;
+        setAppState((state) =>
+          state.displayedMessageContent[message] === pending
+            ? state
             : {
-                ...ze,
+                ...state,
                 displayedMessageContent: {
-                  ...ze.displayedMessageContent,
-                  [Re]: We,
+                  ...state.displayedMessageContent,
+                  [message]: pending,
                 },
               },
         );
@@ -596,36 +597,36 @@ class TurnController {
     return this._host;
   }
   readPendingQueryParams = () => {
-    let h = this.engineFeed.pendingQueryParams.shift();
-    if (h === undefined) throw Error("engine: queryParams called before send \u2014 turn wiring bug");
-    return h;
+    let params = this.engineFeed.pendingQueryParams.shift();
+    if (params === undefined) throw Error("engine: queryParams called before send \u2014 turn wiring bug");
+    return params;
   };
   _boundStopWait() {}
-  setAbortController = (h) => {
-    if (h?.signal !== this._sendNowCutSignal) this._sendNowCutSignal = null;
+  setAbortController = (controller) => {
+    if (controller?.signal !== this._sendNowCutSignal) this._sendNowCutSignal = null;
     this._publish({
-      abortController: h,
+      abortController: controller,
     });
   };
-  abort(h) {
-    this._snapshot.abortController?.abort(userAbortReason(h));
+  abort(reason) {
+    this._snapshot.abortController?.abort(userAbortReason(reason));
   }
-  awaitSessionStartHooks(h) {
-    let x = this._host?.awaitPendingHooks();
-    if (!x) return;
-    return raceWithAbortSignal(x, h, () => new AbortError()).catch((error) => {
-      if (!h.aborted) throw error;
+  awaitSessionStartHooks(signal) {
+    let pendingHooks = this._host?.awaitPendingHooks();
+    if (!pendingHooks) return;
+    return raceWithAbortSignal(pendingHooks, signal, () => new AbortError()).catch((error) => {
+      if (!signal.aborted) throw error;
     });
   }
-  setExternalLoading = (h) => {
+  setExternalLoading = (loading) => {
     let isExternalLoading = this._snapshot.isExternalLoading;
     this._publish({
-      isExternalLoading: h,
+      isExternalLoading: loading,
     });
-    if (h && !isExternalLoading) {
+    if (loading && !isExternalLoading) {
       let _host = this._host;
       if (_host !== null) {
-        _host.dialogStore.dismissKind(NUDGE_IDS);
+        _host.dialogStore.dismissKind(EFFORT_MEDIUM_NUDGE);
         if (NUDGE_ID_C !== null) _host.dialogStore.dismissKind(NUDGE_ID_C);
         _host.dialogStore.dismissKind(AUTO_DEFAULT_NUDGE);
         _host.dialogStore.dismissKind(AUTOCOMPACT_OFFER);
@@ -634,9 +635,9 @@ class TurnController {
     }
   };
   markSubmit() {
-    let h = this._snapshot.submitCount + 1;
+    let nextCount = this._snapshot.submitCount + 1;
     this._publish({
-      submitCount: h,
+      submitCount: nextCount,
     });
     this._tipPickedThisTurn = false;
     try {
@@ -645,17 +646,17 @@ class TurnController {
       onUserInput();
       updateLastInteractionTime(true);
       let _host = this._host;
-      if (h === 1 && _host !== null) startBackgroundHousekeeping(_host.session.host, _host.storageV5);
+      if (nextCount === 1 && _host !== null) startBackgroundHousekeeping(_host.session.host, _host.storageV5);
     } catch (error) {
       logError(error);
     }
   }
-  markQueryComplete(h) {
-    let x = h !== this._snapshot.lastQueryCompletionTime;
+  markQueryComplete(completedAt) {
+    let changed = completedAt !== this._snapshot.lastQueryCompletionTime;
     this._publish({
-      lastQueryCompletionTime: h,
+      lastQueryCompletionTime: completedAt,
     });
-    if (!x || h <= 0 || this._disposed) return;
+    if (!changed || completedAt <= 0 || this._disposed) return;
     try {
       this._host?.axBell();
     } catch (error) {
@@ -669,23 +670,23 @@ class TurnController {
     this._compactEndHeld = false;
     spinnerStore.main.resetOverrides();
     spinnerStore.main.setMode("responding");
-    setAppState((D) =>
-      D.taskSummary === null
-        ? D
+    setAppState((state) =>
+      state.taskSummary === null
+        ? state
         : {
-            ...D,
+            ...state,
             taskSummary: null,
           },
     );
     this._pickNewSpinnerTip();
     endInteractionSpan();
   };
-  markRemoteTurnComplete = (h) => {
+  markRemoteTurnComplete = (completedAt) => {
     this.markQueryComplete(Date.now());
-    if (!(h.subtype === "success" && !h.is_error && h.num_turns === 0))
+    if (!(completedAt.subtype === "success" && !completedAt.is_error && completedAt.num_turns === 0))
       this._publish({
         lastTurnEnd: classifyTurnEnd({
-          result: h,
+          result: completedAt,
           messages: this._host?.transcript.getSnapshot() ?? [],
           stopped: false,
           threw: false,
@@ -699,12 +700,12 @@ class TurnController {
       lastTurnStopTime: Date.now(),
     });
   };
-  _publishTipBetweenTurns(h) {
+  _publishTipBetweenTurns(fn) {
     if (this.guard.isActive) {
-      this._tipHeldForTurnEnd = h;
+      this._tipHeldForTurnEnd = fn;
       return;
     }
-    h();
+    fn();
   }
   _publishHeldTip() {
     let _tipHeldForTurnEnd = this._tipHeldForTurnEnd;
@@ -723,19 +724,19 @@ class TurnController {
     let context = this._freshTipContext();
     let { session, theme, setAppState, storageV5 } = this._requireHost();
     if (laptopMemoryTipsPluginEnabled() && tipSeatSlots.of(session.host).pickDue()) return;
-    let ke = () =>
-      setAppState((Re) =>
-        Re.spinnerTip === undefined
-          ? Re
+    let apply = () =>
+      setAppState((state) =>
+        state.spinnerTip === undefined
+          ? state
           : {
-              ...Re,
+              ...state,
               spinnerTip: undefined,
               spinnerTipLabel: undefined,
             },
       );
     getTipToShowOnSpinner(context)
       .then(async (tipToShowOnSpinner) => {
-        let Be = tipToShowOnSpinner
+        let nextTip = tipToShowOnSpinner
           ? await getTipContentSafe(tipToShowOnSpinner, {
               session,
               theme,
@@ -743,20 +744,20 @@ class TurnController {
             })
           : "";
         this._publishTipBetweenTurns(() => {
-          if (!Be) {
-            ke();
+          if (!nextTip) {
+            apply();
             return;
           }
-          setAppState((He) => ({
-            ...He,
-            spinnerTip: Be,
+          setAppState((state) => ({
+            ...state,
+            spinnerTip: nextTip,
             spinnerTipLabel: tipToShowOnSpinner?.label,
           }));
           if (tipToShowOnSpinner) recordShownTip(tipToShowOnSpinner, "spinner", storageV5);
         });
       })
       .catch((error) => {
-        ke();
+        apply();
         logError(withTelemetryMessage(toError(error), "spinner tip failed"));
       });
   }
@@ -790,34 +791,34 @@ class TurnController {
     }
     this._toolUsesThisTurn = 0;
   }
-  _absorbSessionSignals(h) {
-    for (let x of h) {
-      let D = !isHumanTurn(x)
+  _absorbSessionSignals(messages) {
+    for (let message of messages) {
+      let isHuman = !isHumanTurn(message)
         ? undefined
-        : x.type === "user"
-          ? isNonTypedInput(x) || x.promptSource === "suggestion_accepted"
+        : message.type === "user"
+          ? isNonTypedInput(message) || message.promptSource === "suggestion_accepted"
             ? undefined
-            : x.message.content
-          : x.type === "attachment" &&
-              x.attachment.type === "queued_command" &&
-              x.attachment.commandMode === "prompt" &&
-              x.attachment.isMeta !== true &&
-              x.attachment.inputSource !== "suggestion_accepted"
-            ? x.attachment.prompt
+            : message.message.content
+          : message.type === "attachment" &&
+              message.attachment.type === "queued_command" &&
+              message.attachment.commandMode === "prompt" &&
+              message.attachment.isMeta !== true &&
+              message.attachment.inputSource !== "suggestion_accepted"
+            ? message.attachment.prompt
             : undefined;
-      if (D !== undefined && isExplainRequest(stripIdeContextTags(getContentText(D) ?? "")))
-        this._explanationRequestIds.add(x.uuid);
-      if (x.type !== "assistant" || !Array.isArray(x.message.content)) continue;
-      for (let L of x.message.content)
-        if (L.type === "tool_use" && !this._toolUseIdsCounted.has(L.id)) {
-          this._toolUseIdsCounted.add(L.id);
+      if (isHuman !== undefined && isExplainRequest(stripIdeContextTags(getContentText(isHuman) ?? "")))
+        this._explanationRequestIds.add(message.uuid);
+      if (message.type !== "assistant" || !Array.isArray(message.message.content)) continue;
+      for (let block of message.message.content)
+        if (block.type === "tool_use" && !this._toolUseIdsCounted.has(block.id)) {
+          this._toolUseIdsCounted.add(block.id);
           this._toolUsesThisTurn++;
         }
     }
-    for (let x of extractBashCliNames(h)) this._bashTools.add(x);
-    for (let x of referencedBashToolNames(h)) this._bashHosts.add(x);
-    for (let x of collectUsedToolNames(h)) this._toolsUsed.add(x);
-    if (this._host !== null) androidEvidenceByHost.of(this._host.session.host).absorb(h);
+    for (let name of extractBashCliNames(messages)) this._bashTools.add(name);
+    for (let name of referencedBashToolNames(messages)) this._bashHosts.add(name);
+    for (let name of collectUsedToolNames(messages)) this._toolsUsed.add(name);
+    if (this._host !== null) androidEvidenceByHost.of(this._host.session.host).absorb(messages);
   }
   _resetSessionSignals() {
     this._bashTools.clear();
@@ -830,14 +831,14 @@ class TurnController {
     this._signalsAbsorbedLength = 0;
     this._tipHeldForTurnEnd = undefined;
   }
-  resetForConversation(h) {
+  resetForConversation(kind) {
     this._host?.dialogStore.dismissKind(AUTOCOMPACT_OFFER);
     if (this._host !== null) {
-      let x = lastPromptRestampSlot.of(this._host.session);
-      if (h.kind === "rewound") x.rewound();
-      else x.conversationReplaced();
+      let slot = lastPromptRestampSlot.of(this._host.session);
+      if (kind.kind === "rewound") slot.rewound();
+      else slot.conversationReplaced();
     }
-    switch (h.kind) {
+    switch (kind.kind) {
       case "fresh":
         this._publish({
           lastTurnEnd: null,
@@ -860,7 +861,7 @@ class TurnController {
         this._titleFallback = undefined;
         this._titleRequest = null;
         this._resetSessionSignals();
-        this._absorbSessionSignals(h.messages);
+        this._absorbSessionSignals(kind.messages);
         this._toolUsesThisTurn = 0;
         this._rowsHeldForTurnEnd = [];
         return;
@@ -870,9 +871,9 @@ class TurnController {
           this._titleRequest = null;
           this._haikuTitleAttempted = false;
         }
-        let x = new Set(this._host?.transcript.getSnapshot().map((D) => D.uuid));
+        let uuids = new Set(this._host?.transcript.getSnapshot().map((row) => row.uuid));
         for (let _explanationRequestId of this._explanationRequestIds)
-          if (!x.has(_explanationRequestId)) this._explanationRequestIds.delete(_explanationRequestId);
+          if (!uuids.has(_explanationRequestId)) this._explanationRequestIds.delete(_explanationRequestId);
         this._backgroundWaitStartTime = null;
         this._releaseHeldDetachedToolCalls();
         this._rowsHeldForTurnEnd = [];
@@ -883,21 +884,22 @@ class TurnController {
   get haikuTitleAttempted() {
     return this._haikuTitleAttempted;
   }
-  _deferSwarmDuration(h) {
+  _deferSwarmDuration(swarmStart) {
     if (this._swarmStartTime === null) this._swarmStartTime = this.turnStartTime;
     if (this._unwatchSwarm === null) {
-      let tasks = h.getState().tasks;
-      this._unwatchSwarm = h.subscribe(() => {
-        let tasks_2 = h.getState().tasks;
+      let tasks = swarmStart.getState().tasks;
+      this._unwatchSwarm = swarmStart.subscribe(() => {
+        let tasks_2 = swarmStart.getState().tasks;
         if (tasks_2 === tasks) return;
         tasks = tasks_2;
-        this._flushDeferredSwarmDuration(h);
+        this._flushDeferredSwarmDuration(swarmStart);
       });
     }
   }
-  _flushDeferredSwarmDuration(h) {
+  _flushDeferredSwarmDuration(swarmStart) {
     if (this._swarmStartTime === null) return;
-    if (getAllInProcessTeammateTasks(h.getState().tasks).some((L) => L.status === "running")) return;
+    if (getAllInProcessTeammateTasks(swarmStart.getState().tasks).some((task) => task.status === "running"))
+      return;
     let durationMs = Date.now() - this._swarmStartTime;
     this._swarmStartTime = null;
     this._unwatchSwarm?.();
@@ -916,7 +918,7 @@ class TurnController {
       logError(error);
     }
   }
-  _holdDurationForDetachedToolCalls(h) {
+  _holdDurationForDetachedToolCalls(at) {
     this._backgroundWaitStartTime ??= this.turnStartTime;
     this._releaseHeldDetachedToolCalls();
     this._durationHeldForDetachedToolCall = true;
@@ -927,11 +929,11 @@ class TurnController {
         let _backgroundWaitStartTime = this._backgroundWaitStartTime;
         if (_backgroundWaitStartTime === null || this.guard.isActive) return;
         try {
-          let D = this._requireHost();
+          let host = this._requireHost();
           let now = Date.now();
           let turnDurationInfo = computeTurnDurationInfo({
-            tasks: h.getState().tasks,
-            queuedCommands: D.messageQueue.getCommandQueue(),
+            tasks: at.getState().tasks,
+            queuedCommands: host.messageQueue.getCommandQueue(),
             turnDurationMs: now - _backgroundWaitStartTime,
             turnStartTime: _backgroundWaitStartTime,
             now,
@@ -939,12 +941,12 @@ class TurnController {
           });
           this._backgroundWaitStartTime = turnDurationInfo.backgroundWaitStartTime;
           this._durationHeldForDetachedToolCall = false;
-          D.transcript.apply({
+          host.transcript.apply({
             type: "append",
             messages: [
               createTurnDurationMessage(
                 turnDurationInfo.durationMs,
-                count(D.transcript.getSnapshot(), isLoggableMessage),
+                count(host.transcript.getSnapshot(), isLoggableMessage),
                 turnDurationInfo.pendingBackgroundAgentCount,
                 turnDurationInfo.pendingWorkflowCount,
               ),
@@ -996,18 +998,18 @@ class TurnController {
   _syncUserWaiting = () => {
     this._firstText?.setUserWaiting(this._isWaitingOnUser());
   };
-  _setPaused(h, x = Date.now()) {
+  _setPaused(paused, at = Date.now()) {
     if (!this._snapshot.isLoading) return;
-    if (h && this._pauseStartTime === null) this._pauseStartTime = x;
-    else if (!h && this._pauseStartTime !== null) {
-      this._totalPausedMs += x - this._pauseStartTime;
+    if (paused && this._pauseStartTime === null) this._pauseStartTime = at;
+    else if (!paused && this._pauseStartTime !== null) {
+      this._totalPausedMs += at - this._pauseStartTime;
       this._pauseStartTime = null;
       this._mirrorTiming({
         totalPausedMs: this._totalPausedMs,
       });
     }
   }
-  cancel = (h = "local") => {
+  cancel = (source = "local") => {
     let {
       activeRemote,
       elicitationShowing,
@@ -1020,11 +1022,11 @@ class TurnController {
       scope,
     } = this._requireHost();
     let abortController = this.abortController;
-    let Xe =
+    let state =
       this._isBlockingDialogOpen() ||
       (store.getState().transcripts[mainAgentId()]?.inProgressToolUseIDs.size ?? 0) > 0;
-    if (h === "remote" && !activeRemote.isRemoteMode)
-      this._engine.interrupt("remote-cancel", cancelScopeFor(h));
+    if (source === "remote" && !activeRemote.isRemoteMode)
+      this._engine.interrupt("remote-cancel", cancelScopeFor(source));
     if (elicitationShowing) return true;
     if (
       !abortController &&
@@ -1032,9 +1034,12 @@ class TurnController {
       !canUseRemoteFeature(activeRemote, this.isExternalLoading)
     )
       return (
-        h === "local" && draft.value === "" && activeRemote.isRemoteMode && activeRemote.cancelHeldMessages()
+        source === "local" &&
+        draft.value === "" &&
+        activeRemote.isRemoteMode &&
+        activeRemote.cancelHeldMessages()
       );
-    logForDebugging(`[onCancel] source=${h} streamMode=${spinnerStore.get().mode}`);
+    logForDebugging(`[onCancel] source=${source} streamMode=${spinnerStore.get().mode}`);
     this._publish({
       lastTurnEnd: "stopped",
       lastTurnStopTime: Date.now(),
@@ -1042,7 +1047,7 @@ class TurnController {
     gesture.cancelPendingForStoppedTurn();
     gesture.cancelHeldAttach();
     this._frameNotifier.flush();
-    let rt = false;
+    let interrupted = false;
     this.guard.forceEnd();
     let trimmed = this.stream.getSnapshot().streamingThinking?.thinking?.trim();
     if (trimmed && spinnerStore.get().thinkingStartedAt !== null)
@@ -1063,7 +1068,7 @@ class TurnController {
       });
     let { salvage } = this.stream.previewStore.getState();
     let continuationReplacesUuids = this.stream.continuationReplacesUuids;
-    let Ot = this.stream.peekStreamingText();
+    let partialText = this.stream.peekStreamingText();
     if (!activeRemote.isRemoteMode && salvage !== null) {
       this.stream.previewStore.setSalvage(null);
       if (continuationReplacesUuids !== null) {
@@ -1071,37 +1076,37 @@ class TurnController {
         logEvent("tengu_rotunda_pennant_esc", {
           action: lit_2("kept_originals"),
           retained_count: continuationReplacesUuids.length,
-          streamed_chars: (Ot ?? "").length,
+          streamed_chars: (partialText ?? "").length,
         });
       }
     }
-    let Et =
+    let text =
       abortController !== null && abortController.signal.aborted
         ? unwrapAbortReason(abortController.signal.reason)
         : undefined;
-    if (!isCancelAbortReason(Et)) setLastCancelledAPIMessageId(this.stream.inFlightMessageId);
+    if (!isCancelAbortReason(text)) setLastCancelledAPIMessageId(this.stream.inFlightMessageId);
     this.resetLoadingState();
-    let Dt = h === "remote" ? "remote-cancel" : "user-cancel";
+    let abortReason = source === "remote" ? "remote-cancel" : "user-cancel";
     noteAuthRefreshStop();
     MODEL_SWITCH_STATE();
     if (activeRemote.isRemoteMode) {
       activeRemote.cancelRequest();
-      abortController?.abort(userAbortReason(Dt));
+      abortController?.abort(userAbortReason(abortReason));
     } else {
-      abortController?.abort(userAbortReason(Dt));
-      if (h !== "remote") this._engine.interrupt(Dt, cancelScopeFor(h));
+      abortController?.abort(userAbortReason(abortReason));
+      if (source !== "remote") this._engine.interrupt(abortReason, cancelScopeFor(source));
     }
     this.setAbortController(null);
-    if (!rt) {
-      let Lt = Et === undefined || isCancelAbortReason(Et) || Et === "interrupt";
+    if (!interrupted) {
+      let suffix = text === undefined || isCancelAbortReason(text) || text === "interrupt";
       sendBridgeResult(
         resolveTurnTerminalReason({
           userMessageUuid: abortController === null ? undefined : this._turnEchoes.get(abortController),
           outcome: undefined,
           aborted: {
-            by: Lt ? "stop" : "other",
+            by: suffix ? "stop" : "other",
             sendRunsAgain: false,
-            guess: Xe ? "aborted_tools" : "aborted_streaming",
+            guess: state ? "aborted_tools" : "aborted_streaming",
           },
         }),
       );
@@ -1117,36 +1122,37 @@ class TurnController {
     abortController.abort(userAbortReason("user-cancel"));
     return true;
   };
-  _stampSendNowCut(h, x) {
-    return x === this._sendNowCutSignal &&
-      h.type === "user" &&
-      (h.toolUseResult === USER_REJECTED_TOOL_USE || isInterruptionOnlyMessage(h))
+  _stampSendNowCut(message, signal) {
+    return signal === this._sendNowCutSignal &&
+      message.type === "user" &&
+      (message.toolUseResult === USER_REJECTED_TOOL_USE || isInterruptionOnlyMessage(message))
       ? {
-          ...h,
+          ...message,
           interruptedBySendNow: true,
         }
-      : h;
+      : message;
   }
-  buildToolUseContext = (h, x, D, L) => this._buildToolUseContextWith(this._requireHost(), h, x, D, L);
-  appendAfterTurn = (h) => {
-    if (h.length === 0) return;
+  buildToolUseContext = (messages, tools, abortController, model) =>
+    this._buildToolUseContextWith(this._requireHost(), messages, tools, abortController, model);
+  appendAfterTurn = (event) => {
+    if (event.length === 0) return;
     if (this.guard.isRunning && isFoamySpringEnabled()) {
-      this._rowsHeldForTurnEnd.push(...h);
+      this._rowsHeldForTurnEnd.push(...event);
       return;
     }
     this._requireHost().transcript.apply({
       type: "append",
-      messages: h,
+      messages: event,
     });
   };
-  afterTurnEvents = (h) => {
+  afterTurnEvents = (events) => {
     let turnEvents = this._host?.turnEvents;
     if (!turnEvents) {
-      h();
+      events();
       return;
     }
     turnEvents.enqueue("turn.complete", async () => {
-      h();
+      events();
       return [];
     });
   };
@@ -1163,19 +1169,23 @@ class TurnController {
       logError(error);
     }
   }
-  _racingRequestDialog(h, x) {
+  _racingRequestDialog(dialog, descriptor) {
     let _loopRequestDialog = this._loopRequestDialog;
-    if (_loopRequestDialog !== null && _loopRequestDialog.inner === h && _loopRequestDialog.relays === x)
+    if (
+      _loopRequestDialog !== null &&
+      _loopRequestDialog.inner === dialog &&
+      _loopRequestDialog.relays === descriptor
+    )
       return _loopRequestDialog.racing;
-    let L = routeDialogOverBridge(h, x);
+    let bridged = routeDialogOverBridge(dialog, descriptor);
     this._loopRequestDialog = {
-      inner: h,
-      relays: x,
-      racing: L,
+      inner: dialog,
+      relays: descriptor,
+      racing: bridged,
     };
-    return L;
+    return bridged;
   }
-  _buildToolUseContextWith(h, messages, D, abortController, ee) {
+  _buildToolUseContextWith(messages, messages_2, abortController, abortController_2, model) {
     let {
       store,
       scope,
@@ -1213,15 +1223,15 @@ class TurnController {
       deferHookMessages,
       releaseDeferredHookMessages,
       markConversationRemote,
-    } = h;
-    let { replace, apply: Go } = transcript;
+    } = messages;
+    let { replace, apply: applyTranscript } = transcript;
     let { deferred } = this._frameNotifier;
-    let Mn = (cn) => deferred(() => setAppState(cn));
+    let setState = (updater) => deferred(() => setAppState(updater));
     let state = store.getState();
     let { tools, allowedAgentTypes, primitiveToolGrant } = scope.computeToolPoolFresh();
     let { commands } = scope.getSnapshot();
     return {
-      abortController,
+      abortController: abortController_2,
       ...false,
       primitiveToolGrant,
       shouldStopBeforeNextApiCall: () => gesture.pending !== null,
@@ -1234,12 +1244,12 @@ class TurnController {
         toolCatalog: TOOL_CATALOG,
         debug,
         verbose: state.verbose,
-        mainLoopModel: ee,
+        mainLoopModel: model,
         fallbackModel,
         thinkingConfig: resolveThinkingConfig(
           state.thinkingEnabled,
           thinkingConfig,
-          ee,
+          model,
           state.thinkingDisplayOverride,
           thinkingDisplayFlag,
         ),
@@ -1271,7 +1281,7 @@ class TurnController {
         ultraplanSessionUrl: state.ultraplanSessionUrl,
       },
       getAppState: () => store.getState(),
-      setAppState: (cn) => deferred(() => setSessionState(cn)),
+      setAppState: (updater) => deferred(() => setSessionState(updater)),
       ...createAppStateAccessors(() => store.getState(), setAppState),
       queuedNotificationsRegistry: createNotificationDrain(() => store.getState(), setAppState, session),
       taskRegistry,
@@ -1279,9 +1289,9 @@ class TurnController {
       teammateColors,
       rootToolSurface: {
         tools,
-        mainLoopModel: ee,
+        mainLoopModel: model,
       },
-      messages,
+      messages: messages_2,
       getMessages: () => transcript.getSnapshot(),
       getIsResponseStreaming: () => this.guard.isRunning,
       reloadPlugins: async () => {
@@ -1289,56 +1299,56 @@ class TurnController {
           applyStagedInstalls: false,
         });
       },
-      retireDepartedAdditionalDirectories: (cn) => {
-        setAppState((Dn) => {
-          let wn = mergeTrustedDirectories(Dn.toolPermissionContext, cn);
-          return wn === Dn.toolPermissionContext
-            ? Dn
+      retireDepartedAdditionalDirectories: (dirs) => {
+        setAppState((state) => {
+          let merged = mergeTrustedDirectories(state.toolPermissionContext, dirs);
+          return merged === state.toolPermissionContext
+            ? state
             : {
-                ...Dn,
-                toolPermissionContext: wn,
+                ...state,
+                toolPermissionContext: merged,
               };
         });
       },
       turnStartIndex: 0,
       setMessages: replace,
-      applyMessageOp: Go,
+      applyMessageOp: applyTranscript,
       getFileHistoryState: () => store.getState().fileHistory,
-      applyFileHistoryOp(cn) {
-        Mn((Dn) => {
-          let wn = reduceFileHistoryState(Dn.fileHistory, cn, storageV5);
-          if (wn === Dn.fileHistory) return Dn;
+      applyFileHistoryOp(op) {
+        setState((state) => {
+          let next = reduceFileHistoryState(state.fileHistory, op, storageV5);
+          if (next === state.fileHistory) return state;
           return {
-            ...Dn,
-            fileHistory: wn,
+            ...state,
+            fileHistory: next,
           };
         });
       },
-      makeFileHistorySnapshot: (cn) =>
+      makeFileHistorySnapshot: (op) =>
         fileHistoryMakeSnapshot(
           () => store.getState().fileHistory,
-          (Dn) => {
-            Mn((wn) => {
-              let mr = reduceFileHistoryState(wn.fileHistory, Dn, storageV5);
-              if (mr === wn.fileHistory) return wn;
+          (op) => {
+            setState((state) => {
+              let next = reduceFileHistoryState(state.fileHistory, op, storageV5);
+              if (next === state.fileHistory) return state;
               return {
-                ...wn,
-                fileHistory: mr,
+                ...state,
+                fileHistory: next,
               };
             });
           },
-          cn,
+          op,
           {
             preCheckpoint: true,
           },
         ),
-      applyAttributionOp(cn) {
-        Mn((Dn) => {
-          let wn = restoreAttributionStateFromSnapshots(Dn.attribution, cn);
-          if (wn === Dn.attribution) return Dn;
+      applyAttributionOp(op) {
+        setState((state) => {
+          let next = restoreAttributionStateFromSnapshots(state.attribution, op);
+          if (next === state.attribution) return state;
           return {
-            ...Dn,
-            attribution: wn,
+            ...state,
+            attribution: next,
           };
         });
       },
@@ -1353,10 +1363,10 @@ class TurnController {
       emitToolProgress: this.stream.emitToolProgress,
       requestDialog: this._racingRequestDialog(scope.requestDialog, permissionRelays),
       permissionRelays,
-      appendSystemMessage: (cn) =>
-        Go({
+      appendSystemMessage: (message) =>
+        applyTranscript({
           type: "append",
-          messages: [cn],
+          messages: [message],
         }),
       onChangeDynamicMcpConfig: scope.updateDynamicMcpConfig,
       onInstallIDEExtension: installIDEExtension,
@@ -1372,7 +1382,7 @@ class TurnController {
       dialogStore,
       localJsx: scope.localJsx,
       toggleDiffPanel: async () => {
-        let cn = toggleDiffPanel({
+        let replTab = toggleDiffPanel({
           host: session.host,
           getReplTab: () => store.getState().replTab,
           setAppState,
@@ -1380,8 +1390,8 @@ class TurnController {
           trackSequence: store.getState().fileHistory.trackSequence ?? 0,
           storageV5,
         });
-        if (cn.status === "shown") await Promise.race([cn.settled, sleep(DIFF_RETRY_MS)]);
-        return diffToggleResultText(cn);
+        if (replTab.status === "shown") await Promise.race([replTab.settled, sleep(DIFF_RETRY_MS)]);
+        return diffToggleResultText(replTab);
       },
       turnActivity: this.loading,
       tasks: this.tasks,
@@ -1390,46 +1400,46 @@ class TurnController {
       prefillRateLimitAutoQueueContinue: this.prefillRateLimitAutoContinue,
       deferSessionStartHooks: deferHookMessages,
       releaseDeferredSessionStartHooks: releaseDeferredHookMessages,
-      onQueryEvent: (cn) => {
-        if (cn.type === "conversation_reset") applyConversationReset(cn.newConversationId);
-        else if (cn.type === "open_message_selector") {
+      onQueryEvent: (event) => {
+        if (event.type === "conversation_reset") applyConversationReset(event.newConversationId);
+        else if (event.type === "open_message_selector") {
           if (!disabled) openMessageSelector();
-        } else if (cn.type === "notification") addNotification(cn.notification);
-        else if (cn.type === "response_length") this.stream.onResponseLength(cn);
-        else if (cn.type === "apply_flag_settings") applySessionSettingsPatch(cn.settings, setAppState);
+        } else if (event.type === "notification") addNotification(event.notification);
+        else if (event.type === "response_length") this.stream.onResponseLength(event);
+        else if (event.type === "apply_flag_settings") applySessionSettingsPatch(event.settings, setAppState);
       },
       onCompactEvent: this.applyCompactEvent,
       resume,
-      attachLiveBackgroundSession: (cn) => gesture.requestAttach(cn),
+      attachLiveBackgroundSession: (jobDir) => gesture.requestAttach(jobDir),
       markConversationRemote,
       contentReplacementState: scope.contentReplacementState,
     };
   }
-  applyCompactEvent = (h) => {
+  applyCompactEvent = (event) => {
     let { spinnerStore } = this._requireHost();
-    switch (h.type) {
+    switch (event.type) {
       case "compact_progress":
-        spinnerStore.main.applyCompactProgress(h.event);
+        spinnerStore.main.applyCompactProgress(event.event);
         return;
       case "stream_mode":
-        spinnerStore.main.setMode(h.mode);
+        spinnerStore.main.setMode(event.mode);
         return;
       case "sdk_status":
         emitStatusChange({
-          status: h.status,
-          ...h.metadata,
+          status: event.status,
+          ...event.metadata,
         });
         return;
     }
   };
-  _applyMessage = (h) => {
+  _applyMessage = (message) => {
     let { transcript, setAppState, bumpConversationId, terminal, storageV5, credentials } =
       this._requireHost();
-    let Be = this._stampSendNowCut(h, this._snapshot.abortController?.signal);
+    let stamped = this._stampSendNowCut(message, this._snapshot.abortController?.signal);
     let keep = transcript.keep;
     let previewStore = this.stream.previewStore;
-    if (Be.type === "system" && Be.subtype === "api_error") return;
-    if (Be.type === "progress" && Be.data.type === "tool_heartbeat") return;
+    if (stamped.type === "system" && stamped.subtype === "api_error") return;
+    if (stamped.type === "progress" && stamped.data.type === "tool_heartbeat") return;
     if (this.stream.deferredSlashEchoUuid !== null) {
       keep({
         type: "remove-by-uuid",
@@ -1437,14 +1447,14 @@ class TurnController {
       });
       this.stream.deferredSlashEchoUuid = null;
     }
-    if (isCompactBoundaryMessage_2(Be)) {
+    if (isCompactBoundaryMessage_2(stamped)) {
       this.stream.setSettledReply([]);
-      let preservedMessages = Be.compactMetadata.preservedMessages;
+      let preservedMessages = stamped.compactMetadata.preservedMessages;
       let mapped = (preservedMessages?.allUuids ?? preservedMessages?.uuids ?? [])
-        .map((kt) => transcript.getSnapshot().find((At) => At.uuid === kt))
-        .filter((kt) => kt !== undefined)
+        .map((uuid) => transcript.getSnapshot().find((row) => row.uuid === uuid))
+        .filter((row) => row !== undefined)
         .map(getTokenCountFromUsage_4);
-      let excludeUuids = new Set(mapped.map((kt) => kt.uuid));
+      let excludeUuids = new Set(mapped.map((row) => row.uuid));
       this.stream.pendingPreservedInsert =
         preservedMessages && mapped.length > 0
           ? {
@@ -1455,42 +1465,42 @@ class TurnController {
       if (this._presentation === "fullscreen")
         keep({
           type: "remove-uuids-and-append",
-          message: Be,
+          message: stamped,
           excludeUuids,
         });
       else {
         keep({
           type: "replace-all",
-          messages: [Be],
+          messages: [stamped],
         });
         bumpConversationId();
       }
-      if (this.stream.pendingPreservedInsert?.anchorUuid === Be.uuid) {
+      if (this.stream.pendingPreservedInsert?.anchorUuid === stamped.uuid) {
         keep({
           type: "append",
           messages: this.stream.pendingPreservedInsert.preserved,
         });
         this.stream.pendingPreservedInsert = null;
       }
-      setAppState((kt) => pruneDisplayedContent(kt, [...transcript.getSnapshot(), ...mapped]));
-    } else if (Be.type === "progress" && isEphemeralToolProgress(Be.data.type)) {
-      let ze = Be;
-      if (ze !== undefined)
+      setAppState((state) => pruneDisplayedContent(state, [...transcript.getSnapshot(), ...mapped]));
+    } else if (stamped.type === "progress" && isEphemeralToolProgress(stamped.data.type)) {
+      let reply = stamped;
+      if (reply !== undefined)
         keep({
           type: "replace-last-ephemeral-progress",
-          message: ze,
+          message: reply,
         });
     } else {
       if (
-        Be.type === "assistant" &&
-        !Be.isVirtual &&
-        !Be.isApiErrorMessage &&
-        Be.message.content.some((Xe) => Xe.type === "text" && Xe.text.trim().length > 0)
+        stamped.type === "assistant" &&
+        !stamped.isVirtual &&
+        !stamped.isApiErrorMessage &&
+        stamped.message.content.some((block) => block.type === "text" && block.text.trim().length > 0)
       ) {
         let { salvage, exact } = previewStore.getState();
         if (salvage !== null) {
           this.stream.lastMergedContinuation = {
-            apiMessageId: Be.message.id,
+            apiMessageId: stamped.message.id,
             salvageText: salvage,
             exact,
           };
@@ -1508,51 +1518,56 @@ class TurnController {
           }
         }
         previewStore.setSalvage(null);
-        if (!this.stream.getSnapshot().settledReply.some((kt) => kt.uuid === Be.uuid))
+        if (!this.stream.getSnapshot().settledReply.some((settled) => settled.uuid === stamped.uuid))
           this.stream.setSettledReply([]);
       }
-      let ze =
+      let reply =
         this.guard.isRunning &&
-        Be.type === "attachment" &&
-        Be.attachment.type === "total_tokens_reminder" &&
-        isHiddenAttachmentMessage(Be);
+        stamped.type === "attachment" &&
+        stamped.attachment.type === "total_tokens_reminder" &&
+        isHiddenAttachmentMessage(stamped);
       if (this._presentation === "fullscreen")
         keep(
           {
             type: "append-or-move-by-uuid",
-            message: Be,
+            message: stamped,
           },
-          ze,
+          reply,
         );
       else
         keep(
           {
             type: "append",
-            messages: [Be],
+            messages: [stamped],
           },
-          ze,
+          reply,
         );
-      if (this.stream.pendingPreservedInsert?.anchorUuid === Be.uuid) {
+      if (this.stream.pendingPreservedInsert?.anchorUuid === stamped.uuid) {
         keep({
           type: "append",
           messages: this.stream.pendingPreservedInsert.preserved,
         });
         this.stream.pendingPreservedInsert = null;
       }
-      if (Be.type === "assistant" && Be.isApiErrorMessage && Be.error === "rate_limit" && Be.quotaLimits)
+      if (
+        stamped.type === "assistant" &&
+        stamped.isApiErrorMessage &&
+        stamped.error === "rate_limit" &&
+        stamped.quotaLimits
+      )
         try {
-          autoArmQuotaAutoResume(Be.quotaLimits, Date.now(), storageV5);
-          logLowPriorityCapability(Be.quotaLimits);
-          offerUsageCreditsAtWall(Be.quotaLimits, credentials);
-          offerResetAtWallFromMenu(Be.quotaLimits, credentials);
-          offerForCliMenu(Be.quotaLimits, credentials);
+          autoArmQuotaAutoResume(stamped.quotaLimits, Date.now(), storageV5);
+          logLowPriorityCapability(stamped.quotaLimits);
+          offerUsageCreditsAtWall(stamped.quotaLimits, credentials);
+          offerResetAtWallFromMenu(stamped.quotaLimits, credentials);
+          offerForCliMenu(stamped.quotaLimits, credentials);
         } catch (error) {
           logError(error);
         }
       else if (
-        Be.type === "assistant" &&
-        Be.isApiErrorMessage &&
-        Be.apiError === "model_requires_usage_credits"
+        stamped.type === "assistant" &&
+        stamped.isApiErrorMessage &&
+        stamped.apiError === "model_requires_usage_credits"
       )
         try {
           offerCreditsResetAtWall(credentials);
@@ -1569,8 +1584,8 @@ class TurnController {
       type: "compact_end",
     });
   };
-  applyEvent = (messages, x = null) => {
-    let D = this._requireHost();
+  applyEvent = (messages, rows = null) => {
+    let host = this._requireHost();
     let {
       transcript,
       spinnerStore,
@@ -1581,8 +1596,8 @@ class TurnController {
       terminal,
       storageV5,
       credentials,
-    } = D;
-    let { apply: rt, replace } = transcript;
+    } = host;
+    let { apply: applyTranscript, replace } = transcript;
     let previewStore = this.stream.previewStore;
     if (
       messages.type === "compact_progress" &&
@@ -1596,7 +1611,7 @@ class TurnController {
       this._releaseCompactEnd();
     if (messages.type === "attachment") this.stream.awaitModelFor([messages]);
     if (messages.type === "stream_event") {
-      x?.onStreamEvent(messages);
+      rows?.onStreamEvent(messages);
       if (messages.event.type === "message_start") {
         this.stream.markModelReceived();
         spinnerStore.main.setSentEffort(messages.sentEffort ?? null);
@@ -1605,22 +1620,23 @@ class TurnController {
     } else if (messages.type === "assistant") {
       this.stream.markModelReceived();
       if (messages.effort !== undefined) spinnerStore.main.setSentEffort(messages.effort);
-      x?.onAssistantMessage(messages);
-      for (let It of messages.message.content) {
-        if (It.type !== "tool_use") continue;
+      rows?.onAssistantMessage(messages);
+      for (let block of messages.message.content) {
+        if (block.type !== "tool_use") continue;
         this._toolUseThisTurn = true;
-        if (x && BRIEF_TOOL_NAME_SET.has(It.name)) this._pendingReplyToolUses.set(It.id, messages.message.id);
+        if (rows && BRIEF_TOOL_NAME_SET.has(block.name))
+          this._pendingReplyToolUses.set(block.id, messages.message.id);
       }
     } else if (
       messages.type === "user" &&
       this._pendingReplyToolUses.size > 0 &&
       Array.isArray(messages.message.content)
     )
-      for (let It of messages.message.content) {
-        if (It.type !== "tool_result") continue;
-        let Ot = this._pendingReplyToolUses.get(It.tool_use_id);
-        this._pendingReplyToolUses.delete(It.tool_use_id);
-        if (Ot !== undefined && It.is_error !== true) this._noteTextBlockShown(x, Ot);
+      for (let block of messages.message.content) {
+        if (block.type !== "tool_result") continue;
+        let pendingUse = this._pendingReplyToolUses.get(block.tool_use_id);
+        this._pendingReplyToolUses.delete(block.tool_use_id);
+        if (pendingUse !== undefined && block.is_error !== true) this._noteTextBlockShown(rows, pendingUse);
       }
     isNonRenderableSystemMessage(messages, {
       onMessage: this._applyMessage,
@@ -1628,71 +1644,71 @@ class TurnController {
       onSetStreamMode: spinnerStore.main.setMode,
       onStreamingToolUses: this.stream.setStreamingToolUses,
       replInputAccumulator: this._replInputAccumulator,
-      onTombstone: (It) => {
-        rt({
+      onTombstone: (message) => {
+        applyTranscript({
           type: "remove-by-uuid",
-          uuid: It.uuid,
+          uuid: message.uuid,
         });
-        if (this.stream.transcriptRetractedUuids.delete(It.uuid)) return;
-        removeTranscriptMessage(It.uuid, storageV5);
+        if (this.stream.transcriptRetractedUuids.delete(message.uuid)) return;
+        removeTranscriptMessage(message.uuid, storageV5);
       },
-      onRefusalContinuation: (It) => {
-        if (It.phase === "begin") {
+      onRefusalContinuation: (phase) => {
+        if (phase.phase === "begin") {
           this.stream.lastMergedContinuation = null;
           this.stream.continuationReplacesUuids =
-            It.replacesUuids !== undefined && It.replacesUuids.length > 0 ? It.replacesUuids : null;
+            phase.replacesUuids !== undefined && phase.replacesUuids.length > 0 ? phase.replacesUuids : null;
         } else this.stream.continuationReplacesUuids = null;
-        if (It.phase === "begin") previewStore.setSalvage(It.salvageText, It.join === "exact");
+        if (phase.phase === "begin") previewStore.setSalvage(phase.salvageText, phase.join === "exact");
         else previewStore.setSalvage(null);
       },
       onNotification: addNotification,
-      onExpandedView: (It) => {
-        let Ot = It === "teammates" ? "none" : It;
-        setAppState((Et) =>
-          Et.expandedView === Ot
-            ? Et
+      onExpandedView: (view) => {
+        let nextView = view === "teammates" ? "none" : view;
+        setAppState((state) =>
+          state.expandedView === nextView
+            ? state
             : {
-                ...Et,
-                expandedView: Ot,
+                ...state,
+                expandedView: nextView,
               },
         );
       },
-      onPostTurnSummary: (It) =>
-        setAppState((Ot) =>
-          Ot.postTurnSummary === It
-            ? Ot
+      onPostTurnSummary: (summary) =>
+        setAppState((state) =>
+          state.postTurnSummary === summary
+            ? state
             : {
-                ...Ot,
-                postTurnSummary: It,
+                ...state,
+                postTurnSummary: summary,
               },
         ),
-      onActiveGoal: (It) =>
-        setAppState((Ot) =>
-          Ot.activeGoal === It
-            ? Ot
+      onActiveGoal: (goal) =>
+        setAppState((state) =>
+          state.activeGoal === goal
+            ? state
             : {
-                ...Ot,
-                activeGoal: It,
+                ...state,
+                activeGoal: goal,
               },
         ),
-      onInProgressToolUseIDs: (It) =>
-        store.setState((Ot) => {
-          let Et = applyInProgressToolUses(Ot.transcripts, mainAgentId(), It);
-          return Et === Ot.transcripts
-            ? Ot
+      onInProgressToolUseIDs: (ids) =>
+        store.setState((state) => {
+          let next = applyInProgressToolUses(state.transcripts, mainAgentId(), ids);
+          return next === state.transcripts
+            ? state
             : {
-                ...Ot,
-                transcripts: Et,
+                ...state,
+                transcripts: next,
               };
         }),
       onConversationReset: applyConversationReset,
-      onHintClears: (It) => {
-        replace((Ot) =>
-          replaceToolResultContent(Ot, new Set(It.ids), new Map(Object.entries(It.contentById))),
+      onHintClears: (ids) => {
+        replace((rows) =>
+          replaceToolResultContent(rows, new Set(ids.ids), new Map(Object.entries(ids.contentById))),
         );
       },
-      onOSNotification: (It) => {
-        notifyAsync(It, terminal, {
+      onOSNotification: (notification) => {
+        notifyAsync(notification, terminal, {
           storageV5,
           credentials,
         });
@@ -1701,19 +1717,35 @@ class TurnController {
       onStreamingThinking: this.stream.setStreamingThinking,
       onApiMetrics: this.stream.recordApiMetricsEvent,
       onStreamingText: this.stream.applyStreamingText,
-      displayTransform: this._displayTransform(D),
+      displayTransform: this._displayTransform(host),
       onCompactEvent: this.applyCompactEvent,
     });
     if (messages.type === "assistant" && collectReadNotificationsToolUseIds(messages))
-      this._noteTextBlockShown(x, messages.message.id);
+      this._noteTextBlockShown(rows, messages.message.id);
   };
-  _noteTextBlockShown(h, x) {
-    if (this._getStreamingPreviewHold() === "focus") this._textHeldToTurnEnd = x;
-    else h?.markFirstTextPainted("block_complete", x);
+  _noteTextBlockShown(text, startedAt) {
+    if (this._getStreamingPreviewHold() === "focus") this._textHeldToTurnEnd = startedAt;
+    else text?.markFirstTextPainted("block_complete", startedAt);
   }
-  run = async (h, x, D, L, ee, ke, Re, Be, He, We, ze, Xe, rt, kt, At = false) => {
-    let It = this._requireHost();
-    let aborted = x.signal.aborted;
+  run = async (
+    newMessages,
+    abortController,
+    isNewTurn,
+    signal,
+    mainLoopModel,
+    onBeforeQuery,
+    inputOrigin,
+    activeSkill,
+    stopHookActive,
+    clientPlatform,
+    spanEnd,
+    turnId,
+    promptUuid,
+    command,
+    waitedInQueue = false,
+  ) => {
+    let host = this._requireHost();
+    let aborted = abortController.signal.aborted;
     let {
       store,
       transcript,
@@ -1728,15 +1760,17 @@ class TurnController {
       gesture,
       messageQueue,
       turnEvents,
-    } = It;
-    let { replace, apply: Ho } = transcript;
-    let Io = () => this._host ?? It;
-    if (D && store.getState().endedByModel) {
-      let Go = withTaskSuffix("Claude ended this conversation. Start a new session (or /clear) to continue.");
-      replace((hn) => {
-        let last = hn.at(-1);
-        if (last?.type === "system" && "content" in last && last.content === Go) return hn;
-        return [...hn, createSystemMessage(Go, "warning")];
+    } = host;
+    let { replace, apply: applyTranscript } = transcript;
+    let hostOr = () => this._host ?? host;
+    if (isNewTurn && store.getState().endedByModel) {
+      let suffix = withTaskSuffix(
+        "Claude ended this conversation. Start a new session (or /clear) to continue.",
+      );
+      replace((rows) => {
+        let last = rows.at(-1);
+        if (last?.type === "system" && "content" in last && last.content === suffix) return rows;
+        return [...rows, createSystemMessage(suffix, "warning")];
       });
       return;
     }
@@ -1745,210 +1779,219 @@ class TurnController {
       let memberName = getAgentName();
       if (teamName && memberName) setMemberActive(teamName, memberName, true, storageV5);
     }
-    let mainLoopModelFromState = getMainLoopModelFromState(It.store.getState());
-    let mn = this.guard.tryStart();
-    if (mn === null) {
+    let mainLoopModelFromState = getMainLoopModelFromState(host.store.getState());
+    let guardHandle = this.guard.tryStart();
+    if (guardHandle === null) {
       logEvent("tengu_concurrent_onquery_detected", {});
-      let Go = false;
-      let hn;
-      for (let Mn of h) {
-        if (Mn.type !== "user") continue;
-        let Xo = hn;
-        hn = undefined;
-        let Sn = isPendingContinuationUuid(Mn.uuid);
-        if (Mn.isMeta && !isNonHumanInboundOrigin(Mn.origin) && !Sn) {
-          let contentText = getContentText(Mn.message.content);
-          let Dn =
-            getAutoModeSparseInstructions(Mn) && contentText !== null
-              ? extractTaggedGroup(contentText)
-              : undefined;
-          if (Dn !== undefined) hn = Dn.split(",").map((wn) => wn.trim());
+      let finished = false;
+      let continueIds;
+      for (let prompt of newMessages) {
+        if (prompt.type !== "user") continue;
+        let previousIds = continueIds;
+        continueIds = undefined;
+        let isPendingContinuation = isPendingContinuationUuid(prompt.uuid);
+        if (prompt.isMeta && !isNonHumanInboundOrigin(prompt.origin) && !isPendingContinuation) {
+          let text = getContentText(prompt.message.content);
+          let idList =
+            getAutoModeSparseInstructions(prompt) && text !== null ? extractTaggedGroup(text) : undefined;
+          if (idList !== undefined) continueIds = idList.split(",").map((id) => id.trim());
           continue;
         }
-        if (Mn.stackedExpansion) continue;
-        if (Mn.dispatchEcho) continue;
-        let $n = Mn.stackedOriginalInput ? stackedCommandInput(Mn, h) : null;
-        let on = $n?.value ?? Mn.stackedOriginalInput ?? getContentText(Mn.message.content);
-        if (on === null) continue;
-        let _o = normalizedQueueOrigin(Mn);
-        if (shouldDropAutoReactNotice(_o)) {
-          if (_o?.kind === "task-notification" && _o.slug !== undefined) {
-            if (_o.coalesced !== undefined && _o.coalesced.family !== "artifact-changed")
+        if (prompt.stackedExpansion) continue;
+        if (prompt.dispatchEcho) continue;
+        let stackedInput = prompt.stackedOriginalInput ? stackedCommandInput(prompt, newMessages) : null;
+        let origin =
+          stackedInput?.value ?? prompt.stackedOriginalInput ?? getContentText(prompt.message.content);
+        if (origin === null) continue;
+        let normalizedOrigin = normalizedQueueOrigin(prompt);
+        if (shouldDropAutoReactNotice(normalizedOrigin)) {
+          if (normalizedOrigin?.kind === "task-notification" && normalizedOrigin.slug !== undefined) {
+            if (
+              normalizedOrigin.coalesced !== undefined &&
+              normalizedOrigin.coalesced.family !== "artifact-changed"
+            )
               artifactWatchStopNotice(0, [
                 {
-                  slug: _o.slug,
-                  family: _o.coalesced.family,
-                  artifactName: _o.displayName ?? _o.slug,
-                  count: _o.coalesced.count,
+                  slug: normalizedOrigin.slug,
+                  family: normalizedOrigin.coalesced.family,
+                  artifactName: normalizedOrigin.displayName ?? normalizedOrigin.slug,
+                  count: normalizedOrigin.coalesced.count,
                 },
               ]);
-            clearAutoReactNoticePending(_o.slug);
+            clearAutoReactNoticePending(normalizedOrigin.slug);
           }
           continue;
         }
-        markAutoReactNotice(_o);
+        markAutoReactNotice(normalizedOrigin);
         messageQueue.enqueue({
-          value: on,
-          ...(Xo !== undefined && {
-            toolsUsed: Xo,
+          value: origin,
+          ...(previousIds !== undefined && {
+            toolsUsed: previousIds,
           }),
-          mode: queuedNotificationMode(Mn),
+          mode: queuedNotificationMode(prompt),
           agentId: mainAgentId(),
-          uuid: Mn.uuid,
-          ...(Mn.uuid !== undefined &&
-            Mn.uuid === rt && {
-              turnAttributionKey: rt,
+          uuid: prompt.uuid,
+          ...(prompt.uuid !== undefined &&
+            prompt.uuid === promptUuid && {
+              turnAttributionKey: promptUuid,
             }),
           admissionExempt: "resurrected",
-          origin: _o,
-          isMeta: Mn.isMeta,
-          skipSlashCommands: isNonHumanInboundOrigin(Mn.origin),
-          skipAttachments: shouldSkipQueueAttachments(Mn),
+          origin: normalizedOrigin,
+          isMeta: prompt.isMeta,
+          skipSlashCommands: isNonHumanInboundOrigin(prompt.origin),
+          skipAttachments: shouldSkipQueueAttachments(prompt),
           ...queueInputFlags({
-            ...Mn,
+            ...prompt,
             message: {
-              content: on,
+              content: origin,
             },
           }),
-          ...(Mn.queueTranscriptOnly === true && {
+          ...(prompt.queueTranscriptOnly === true && {
             shouldQuery: false,
           }),
-          ...(Mn.taskDelivery && {
-            taskDelivery: Mn.taskDelivery,
+          ...(prompt.taskDelivery && {
+            taskDelivery: prompt.taskDelivery,
           }),
-          stopHookActive: He,
-          clientPlatform: We,
-          priority: Mn.queuePriority,
-          scheduledTaskId: Mn.scheduledTaskId,
-          scheduledFireId: Mn.scheduledFireId,
-          ...wakeupSourceField(Mn),
-          workload: Sn ? WORKLOAD_CRON : undefined,
-          ...relayTurnFlags(Mn),
-          inputSource: Mn.promptSource === "suggestion_accepted" ? "suggestion_accepted" : undefined,
-          preExpansionValue: $n?.preExpansionValue ?? Mn.stackedOriginalInput,
+          stopHookActive,
+          clientPlatform,
+          priority: prompt.queuePriority,
+          scheduledTaskId: prompt.scheduledTaskId,
+          scheduledFireId: prompt.scheduledFireId,
+          ...wakeupSourceField(prompt),
+          workload: isPendingContinuation ? WORKLOAD_CRON : undefined,
+          ...relayTurnFlags(prompt),
+          inputSource: prompt.promptSource === "suggestion_accepted" ? "suggestion_accepted" : undefined,
+          preExpansionValue: stackedInput?.preExpansionValue ?? prompt.stackedOriginalInput,
         });
-        if (!Go) {
-          Go = true;
+        if (!finished) {
+          finished = true;
           logEvent("tengu_concurrent_onquery_enqueued", {});
         }
       }
       return;
     }
-    if (rt !== undefined) this._turnEchoes.set(x, rt);
+    if (promptUuid !== undefined) this._turnEchoes.set(abortController, promptUuid);
     this._startToolUseCount();
     this._turnModelOverride =
-      ee === mainLoopModelFromState
+      mainLoopModel === mainLoopModelFromState
         ? null
         : {
-            model: ee,
+            model: mainLoopModel,
             sessionModel: mainLoopModelFromState,
             pickAsWritten: getMainLoopModelOverride(),
-            generation: mn,
+            generation: guardHandle,
           };
-    It.dialogStore.dismissKind(RESUME_RETURN);
-    It.dialogStore.dismissKind(COLD_RESUME_QUOTA);
-    It.dialogStore.dismissKind(NEWER_MODEL_OFFER_2);
+    host.dialogStore.dismissKind(RESUME_RETURN);
+    host.dialogStore.dismissKind(COLD_RESUME_QUOTA);
+    host.dialogStore.dismissKind(NEWER_MODEL_OFFER_2);
     endDrawnOffer();
-    It.dialogStore.dismissKind(COST_THRESHOLD);
-    It.dialogStore.dismissKind(AUTOCOMPACT_OFFER);
-    if (NUDGE_ID_B !== null) It.dialogStore.dismissKind(NUDGE_ID_B);
-    if (D) {
-      It.dialogStore.dismissKind(NUDGE_IDS);
-      if (NUDGE_ID_C !== null) It.dialogStore.dismissKind(NUDGE_ID_C);
-      It.dialogStore.dismissKind(AUTO_DEFAULT_NUDGE);
-      coordinatorContextCache?.retireResponsePair(It.session);
+    host.dialogStore.dismissKind(COST_THRESHOLD);
+    host.dialogStore.dismissKind(AUTOCOMPACT_OFFER);
+    if (NUDGE_ID_B !== null) host.dialogStore.dismissKind(NUDGE_ID_B);
+    if (isNewTurn) {
+      host.dialogStore.dismissKind(EFFORT_MEDIUM_NUDGE);
+      if (NUDGE_ID_C !== null) host.dialogStore.dismissKind(NUDGE_ID_C);
+      host.dialogStore.dismissKind(AUTO_DEFAULT_NUDGE);
+      coordinatorContextCache?.retireResponsePair(host.session);
     }
-    let Cn = false;
-    let No = null;
-    let vo;
+    let abortedEarly = false;
+    let replyToolUse = null;
+    let titleText;
     let threw = false;
-    let kn = false;
-    let Fn = {
+    let titleSettled = false;
+    let span = {
       before: transcript.getSnapshot().at(-1)?.uuid,
       next: undefined,
     };
-    if (D) {
-      for (let _openTurnSpan of this._openTurnSpans) _openTurnSpan.next = Fn;
+    if (isNewTurn) {
+      for (let _openTurnSpan of this._openTurnSpans) _openTurnSpan.next = span;
       this._openTurnSpans.clear();
-      this._openTurnSpans.add(Fn);
+      this._openTurnSpans.add(span);
     }
     let now = Date.now();
     try {
       logPolicyLimitsCacheStateAtFirstPrompt();
       logFirstPromptReady();
-      if (D && At) this.stream.awaitModelFor(h);
-      let Go = lastPromptRestampSlot.peek(It.session);
-      if (Go?.isDue && D && !It.disableQuery && !It.activeRemote.isRemoteMode)
-        Go.turnStarts(h.filter(isLoggableMessage));
-      Ho({
+      if (isNewTurn && waitedInQueue) this.stream.awaitModelFor(newMessages);
+      let restampSlot = lastPromptRestampSlot.peek(host.session);
+      if (restampSlot?.isDue && isNewTurn && !host.disableQuery && !host.activeRemote.isRemoteMode)
+        restampSlot.turnStarts(newMessages.filter(isLoggableMessage));
+      applyTranscript({
         type: "append",
-        messages: h.map(($n) => this._stampSendNowCut($n, x.signal)),
+        messages: newMessages.map((message) => this._stampSendNowCut(message, abortController.signal)),
       });
       if (appendHookableFastPath()) await transcript.settled();
-      messageQueue.noteTurnAppended(h);
+      messageQueue.noteTurnAppended(newMessages);
       this.stream.beginTurn();
-      this._displayTransform(It).newTurn();
+      this._displayTransform(host).newTurn();
       markTurnStart();
-      Cn = true;
+      abortedEarly = true;
       this._publish({
         promptMarks: this._snapshot.promptMarks + 1,
       });
-      if (D) scope.sandboxClassifierVerdicts().clear();
-      let hn = D ? this.awaitSessionStartHooks(x.signal) : undefined;
-      if (hn) {
-        await hn;
+      if (isNewTurn) scope.sandboxClassifierVerdicts().clear();
+      let hooksWait = isNewTurn ? this.awaitSessionStartHooks(abortController.signal) : undefined;
+      if (hooksWait) {
+        await hooksWait;
         if (appendHookableFastPath()) await transcript.settled();
       }
       let snapshot = transcript.getSnapshot();
-      if (ke && Re) {
-        if (!(await ke(Re, snapshot, D || Xe !== undefined))) return;
+      if (onBeforeQuery && inputOrigin) {
+        if (!(await onBeforeQuery(inputOrigin, snapshot, isNewTurn || turnId !== undefined))) return;
       }
-      let isRemoteMode = It.activeRemote.isRemoteMode;
-      if ((It.disableQuery || isRemoteMode) && (D || Xe)) {
-        kn = true;
+      let isRemoteMode = host.activeRemote.isRemoteMode;
+      if ((host.disableQuery || isRemoteMode) && (isNewTurn || turnId)) {
+        titleSettled = true;
         logEvent("tengu_model_turn_refused_by_screen", {
           screen: isRemoteMode ? lit_2("remote_transport") : lit_2("disable_query"),
           turn_origin: fromEnum(
-            getOriginKindLabel(h.find(($n) => $n.type === "user" && $n.turnCompanion !== true)?.origin),
+            getOriginKindLabel(
+              newMessages.find((message) => message.type === "user" && message.turnCompanion !== true)
+                ?.origin,
+            ),
           ),
-          waited_in_queue: At,
-          deferred_slash: Xe !== undefined,
+          waited_in_queue: waitedInQueue,
+          deferred_slash: turnId !== undefined,
         });
         return;
       }
-      let Sn;
-      if (onCaptureSnapshot && D && h.some(($n) => $n.type === "user" && !$n.isMeta)) {
-        Sn = randomUUID();
-        onCaptureSnapshot(snapshot, Sn);
+      let firstHuman;
+      if (
+        onCaptureSnapshot &&
+        isNewTurn &&
+        newMessages.some((message) => message.type === "user" && !message.isMeta)
+      ) {
+        firstHuman = randomUUID();
+        onCaptureSnapshot(snapshot, firstHuman);
       }
-      if (D) {
+      if (isNewTurn) {
         gesture.markQueryLoopStarted();
-        No = buildTurnStartEvent({
+        replyToolUse = buildTurnStartEvent({
           turnEvents,
-          newMessages: h,
-          input: Re,
-          signal: x.signal,
-          abort: () => x.abort(userAbortReason("turn-abort")),
+          newMessages,
+          input: inputOrigin,
+          signal: abortController.signal,
+          abort: () => abortController.abort(userAbortReason("turn-abort")),
         });
       }
-      vo = await this._runImpl(
-        It,
+      titleText = await this._runImpl(
+        host,
         snapshot,
-        h,
-        x,
-        mn,
-        D,
-        L,
-        ee,
-        Be,
-        He,
-        We,
-        ze,
-        Sn,
-        Xe,
-        No ?? undefined,
-        kt,
-        rt,
+        newMessages,
+        abortController,
+        guardHandle,
+        isNewTurn,
+        signal,
+        mainLoopModel,
+        activeSkill,
+        stopHookActive,
+        clientPlatform,
+        spanEnd,
+        firstHuman,
+        turnId,
+        replyToolUse ?? undefined,
+        command,
+        promptUuid,
       );
     } catch (error) {
       threw = true;
@@ -1966,41 +2009,43 @@ class TurnController {
         logEvent("tengu_compact_preserved_unanchored", {
           preservedCount: this.stream.pendingPreservedInsert.preserved.length,
         });
-        Ho({
+        applyTranscript({
           type: "append",
           messages: this.stream.pendingPreservedInsert.preserved,
         });
         this.stream.pendingPreservedInsert = null;
       }
       updateFooterLinks(transcript.getSnapshot(), setAppState);
-      if (Cn) markTurnDone();
-      let Go = false;
-      let hn = Go || this.guard.end(mn);
+      if (abortedEarly) markTurnDone();
+      let endedEarly = false;
+      let guardReleased = endedEarly || this.guard.end(guardHandle);
       this._releaseRowsHeldForTurnEnd();
-      let Mn = hn ? Date.now() - this.turnStartTime - this.totalPausedMs : Date.now() - now;
-      if (hn) {
-        if (!Go) this.markQueryComplete(Date.now());
-        if (D)
+      let durationMs = guardReleased
+        ? Date.now() - this.turnStartTime - this.totalPausedMs
+        : Date.now() - now;
+      if (guardReleased) {
+        if (!endedEarly) this.markQueryComplete(Date.now());
+        if (isNewTurn)
           this._publish({
             lastTurnEnd: classifyTurnEnd({
-              result: vo,
+              result: titleText,
               messages: transcript.getSnapshot(),
-              stopped: kn || x.signal.aborted,
+              stopped: titleSettled || abortController.signal.aborted,
               threw,
             }),
           });
         this.resetLoadingState();
-        if (D && !Go) setLastCancelledAPIMessageId(null);
-        Io().sendBridgeResult(
+        if (isNewTurn && !endedEarly) setLastCancelledAPIMessageId(null);
+        hostOr().sendBridgeResult(
           resolveTurnTerminalReason({
-            userMessageUuid: rt,
-            outcome: vo,
-            aborted: x.signal.aborted
+            userMessageUuid: promptUuid,
+            outcome: titleText,
+            aborted: abortController.signal.aborted
               ? {
                   by:
-                    x.signal === this._sendNowCutSignal
+                    abortController.signal === this._sendNowCutSignal
                       ? "send-now"
-                      : isCancelAbortReason(x.signal.reason)
+                      : isCancelAbortReason(abortController.signal.reason)
                         ? "stop"
                         : "other",
                   sendRunsAgain: false,
@@ -2008,8 +2053,8 @@ class TurnController {
               : undefined,
           }),
         );
-        if (D && !kn && !x.signal.aborted) {
-          if (getAllInProcessTeammateTasks(store.getState().tasks).some((on) => on.status === "running"))
+        if (isNewTurn && !titleSettled && !abortController.signal.aborted) {
+          if (getAllInProcessTeammateTasks(store.getState().tasks).some((task) => task.status === "running"))
             this._deferSwarmDuration(store);
           else if (
             hasPendingTaskResults(
@@ -2023,13 +2068,13 @@ class TurnController {
             let turnDurationInfo = computeTurnDurationInfo({
               tasks: store.getState().tasks,
               queuedCommands: messageQueue.getCommandQueue(),
-              turnDurationMs: Mn,
+              turnDurationMs: durationMs,
               turnStartTime: this.turnStartTime,
               now: Date.now(),
               backgroundWaitStartTime: this._backgroundWaitStartTime,
             });
             this._backgroundWaitStartTime = turnDurationInfo.backgroundWaitStartTime;
-            Ho({
+            applyTranscript({
               type: "append",
               messages: [
                 createTurnDurationMessage(
@@ -2041,26 +2086,26 @@ class TurnController {
               ],
             });
           }
-        } else if (x.signal.aborted && this._durationHeldForDetachedToolCall) {
+        } else if (abortController.signal.aborted && this._durationHeldForDetachedToolCall) {
           this._releaseHeldDetachedToolCalls();
           this._backgroundWaitStartTime = null;
         }
         this.setAbortController(null);
       }
-      this._openTurnSpans.delete(Fn);
-      if (No !== null)
+      this._openTurnSpans.delete(span);
+      if (replyToolUse !== null)
         raiseTurnComplete({
           turnEvents,
-          turnId: No,
+          turnId: replyToolUse,
           transcript,
-          span: Fn,
-          durationMs: Mn,
-          isAborted: x.signal.aborted,
+          span,
+          durationMs,
+          isAborted: abortController.signal.aborted,
         });
-      let Xo = unwrapAbortReason(x.signal.reason);
-      let Sn = Xo === "refusal-fallback-edit";
+      let reason = unwrapAbortReason(abortController.signal.reason);
+      let isRefusalEdit = reason === "refusal-fallback-edit";
       if (
-        (Xo === "user-cancel" || Sn) &&
+        (reason === "user-cancel" || isRefusalEdit) &&
         !this.guard.isActive &&
         draft.value === "" &&
         !hasRefillableMainAgentCommand(messageQueue) &&
@@ -2070,14 +2115,15 @@ class TurnController {
         let messages = transcript.getSnapshot();
         let last = messages.findLast(isRealUserPromptMessage);
         if (last) {
-          let fromIndex = messages.lastIndexOf(last);
-          let batchedPrompts = findBatchedPrompts(messages, fromIndex, h);
-          let Dn = batchedPrompts[0] === undefined ? fromIndex : messages.lastIndexOf(batchedPrompts[0]);
-          if (messagesAfterAreOnlySynthetic(messages, fromIndex) && !hasPollEventsAfter(messages, Dn)) {
+          let index = messages.lastIndexOf(last);
+          let batchedPrompts = findBatchedPrompts(messages, index, newMessages);
+          let batchedIndex =
+            batchedPrompts[0] === undefined ? index : messages.lastIndexOf(batchedPrompts[0]);
+          if (messagesAfterAreOnlySynthetic(messages, index) && !hasPollEventsAfter(messages, batchedIndex)) {
             removeLastHistoryEntry();
-            Io().restoreMessageSync(
+            hostOr().restoreMessageSync(
               last,
-              Sn ? "refusal_fallback_edit" : "auto_restore_cancel",
+              isRefusalEdit ? "refusal_fallback_edit" : "auto_restore_cancel",
               batchedPrompts,
             );
             if (aborted) draft.markCameBack();
@@ -2086,7 +2132,25 @@ class TurnController {
       }
     }
   };
-  async _runImpl(h, x, D, L, ee, ke, command, Be, He, stopHookActive, ze, Xe, rt, kt, At, promptTiming, Ot) {
+  async _runImpl(
+    host,
+    messages,
+    newMessages,
+    signal,
+    guardGeneration,
+    mainLoopModel,
+    command,
+    mainLoopModel_2,
+    turnEffort,
+    stopHookActive,
+    clientPlatform,
+    activeSkill,
+    turnId,
+    engineDeferredSlash,
+    turnHandle,
+    promptTiming,
+    replyToolUseId,
+  ) {
     let {
       scope,
       session,
@@ -2107,9 +2171,9 @@ class TurnController {
       onTurnComplete,
       messageQueue,
       credentials,
-    } = h;
-    let No = transcript.apply;
-    if (ke) {
+    } = host;
+    let applyTranscript = transcript.apply;
+    if (mainLoopModel) {
       let mcpClients = scope.computeMcpClients();
       diagnosticTrackingSlot.of(session).handleQueryStart(mcpClients);
       let ideClient = hasAccessToIDEExtensionDiffFeature(mcpClients);
@@ -2124,76 +2188,79 @@ class TurnController {
       !agentTitle &&
       !this._haikuTitleAttempted
     ) {
-      let dr = new Set(D.map((Ir) => Ir.uuid));
-      let or = firstHumanTurn(x.filter((Ir) => dr.has(Ir.uuid)));
-      let pr = or ? getContentText(or.message.content) : null;
-      let Qn = pr !== null && isAutoContinuationPrompt(pr);
-      let ur = pickTitleFallback({
+      let uuidSet = new Set(newMessages.map((row) => row.uuid));
+      let firstHuman = firstHumanTurn(messages.filter((row) => uuidSet.has(row.uuid)));
+      let promptText = firstHuman ? getContentText(firstHuman.message.content) : null;
+      let isAutoContinuation = promptText !== null && isAutoContinuationPrompt(promptText);
+      let fallback = pickTitleFallback({
         prose:
-          Qn || !or
+          isAutoContinuation || !firstHuman
             ? null
             : getResubmitText({
-                content: or.message.content,
-                origin: or.origin,
-                queueSkipSlashCommands: or.queueSkipSlashCommands,
+                content: firstHuman.message.content,
+                origin: firstHuman.origin,
+                queueSkipSlashCommands: firstHuman.queueSkipSlashCommands,
                 commands: scope.commands,
               }),
         isContinuationTurn:
-          Qn || D.some((Ir) => Ir.type === "user" && Ir.origin?.kind === "auto-continuation"),
+          isAutoContinuation ||
+          newMessages.some((state) => state.type === "user" && state.origin?.kind === "auto-continuation"),
         fallback: this._titleFallback,
       });
-      if (ur) {
+      if (fallback) {
         this._haikuTitleAttempted = true;
-        this._titleFallback = ur;
+        this._titleFallback = fallback;
         let id = session.id;
-        let Pr = this._engine.requestSessionTitle(ur.text, {
+        let titleRequest = this._engine.requestSessionTitle(fallback.text, {
           credentials,
         });
-        this._titleRequest = Pr;
-        Pr.then((ts) => {
-          if (this._titleRequest !== Pr) return;
-          this._titleRequest = null;
-          if (id !== session.id) return;
-          let snapshot = titles.getSnapshot();
-          if (snapshot.sessionTitle || snapshot.aiSessionTitle) return;
-          this._titleFallback = nextTitleFallback(ur, ts);
-          if (ts.kind !== "titled") {
-            this._haikuTitleAttempted = false;
-            return;
-          }
-          setHaikuTitle(ts.title);
-          saveAiGeneratedTitle(id, ts.title, storageV5);
-          getReplBridgeHandle()?.adoptLocalAiTitle?.();
-        }).catch((error) => {
-          if (this._titleRequest === Pr) {
+        this._titleRequest = titleRequest;
+        titleRequest
+          .then((title) => {
+            if (this._titleRequest !== titleRequest) return;
             this._titleRequest = null;
-            this._haikuTitleAttempted = false;
-          }
-          logError(error);
-        });
+            if (id !== session.id) return;
+            let snapshot = titles.getSnapshot();
+            if (snapshot.sessionTitle || snapshot.aiSessionTitle) return;
+            this._titleFallback = nextTitleFallback(fallback, title);
+            if (title.kind !== "titled") {
+              this._haikuTitleAttempted = false;
+              return;
+            }
+            setHaikuTitle(title.title);
+            saveAiGeneratedTitle(id, title.title, storageV5);
+            getReplBridgeHandle()?.adoptLocalAiTitle?.();
+          })
+          .catch((error) => {
+            if (this._titleRequest === titleRequest) {
+              this._titleRequest = null;
+              this._haikuTitleAttempted = false;
+            }
+            logError(error);
+          });
       }
     }
-    setAppState((dr) => {
-      let command_2 = dr.toolPermissionContext.alwaysAllowRules.command;
+    setAppState((state) => {
+      let command_2 = state.toolPermissionContext.alwaysAllowRules.command;
       if (
         (command_2 === command ||
           ((command_2?.length ?? 0) === command.length &&
-            (command_2 ?? []).every((pr, Qn) => pr === command[Qn]))) &&
-        dr.toolPermissionContext.pollEventDeliveryGuard !== true &&
-        dr.toolPermissionContext.strippedDangerousRules?.command === undefined
+            (command_2 ?? []).every((item, index) => item === command[index]))) &&
+        state.toolPermissionContext.pollEventDeliveryGuard !== true &&
+        state.toolPermissionContext.strippedDangerousRules?.command === undefined
       )
-        return dr;
+        return state;
       return {
-        ...dr,
-        toolPermissionContext: setCommandAllowRules(dr.toolPermissionContext, command),
+        ...state,
+        toolPermissionContext: setCommandAllowRules(state.toolPermissionContext, command),
       };
     });
-    if (!ke && !kt) {
+    if (!mainLoopModel && !engineDeferredSlash) {
       this.resetLoadingState();
       this.setAbortController(null);
       return;
     }
-    if (ke)
+    if (mainLoopModel)
       try {
         replayWithoutLaptopMemory();
         kickTurnEndCheckMemCtx(session, {
@@ -2205,201 +2272,205 @@ class TurnController {
           `memory snapshot kick failed: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
-    let modelFacts = ke
+    let modelFacts = mainLoopModel
       ? await awaitMcpSettle(
           getRuntimeMainLoopModel({
             permissionMode: store.getState().toolPermissionContext.mode,
-            mainLoopModel: Be,
+            mainLoopModel: mainLoopModel_2,
           }),
           {
             storageV5,
             credentials,
-            abortController: L,
+            abortController: signal,
           },
         )
       : undefined;
-    let Go = this._buildToolUseContextWith(h, x, D, L, Be);
-    if (ze) Go.options.messageClientPlatform = ze;
-    Go.shouldStopBeforeNextApiCall = () => gesture.stopsLoopForPending();
-    let hn = rt ?? randomUUID();
-    Go.queryTracking = {
-      chainId: hn,
+    let toolUseContext = this._buildToolUseContextWith(host, messages, newMessages, signal, mainLoopModel_2);
+    if (clientPlatform) toolUseContext.options.messageClientPlatform = clientPlatform;
+    toolUseContext.shouldStopBeforeNextApiCall = () => gesture.stopsLoopForPending();
+    let turnId_2 = turnId ?? randomUUID();
+    toolUseContext.queryTracking = {
+      chainId: turnId_2,
       depth: -1,
     };
-    if (Xe) Go.options.activeSkill = Xe;
-    let { tools, mcpClients } = Go.options;
-    if (He !== undefined) {
-      Go.permissionLayers = [
-        ...(Go.permissionLayers ?? []),
+    if (activeSkill) toolUseContext.options.activeSkill = activeSkill;
+    let { tools, mcpClients } = toolUseContext.options;
+    if (turnEffort !== undefined) {
+      toolUseContext.permissionLayers = [
+        ...(toolUseContext.permissionLayers ?? []),
         {
           kind: "effort",
-          effort: He,
+          effort: turnEffort,
         },
       ];
-      spinnerStore.main.setTurnEffort(He);
+      spinnerStore.main.setTurnEffort(turnEffort);
     }
     queryCheckpoint("query_context_loading_start");
     let toolPermissionContext = store.getState().toolPermissionContext;
     let runtimeMainLoopModel = getRuntimeMainLoopModel({
       permissionMode: toolPermissionContext.mode,
-      mainLoopModel: Be,
+      mainLoopModel: mainLoopModel_2,
     });
     applyPendingInvalidations();
     let promptRenderEpoch = getSystemPromptSectionEpoch();
-    let [, systemPrompt, cn, cachedSystemContext] = await Promise.all([
+    let [, systemPrompt, appendedSystem, cachedSystemContext] = await Promise.all([
       checkAndDisableAutoModeIfNeeded(
-        Go.session.host,
+        toolUseContext.session.host,
         toolPermissionContext,
         setAppState,
-        Go.options.fastMode,
+        toolUseContext.options.fastMode,
         addNotification,
       ),
       getSystemPrompt(tools, runtimeMainLoopModel),
-      getOrBuildUserContext(Go.session, Go.storageV5, Go.credentials),
-      getCachedSystemContext(Go.session, Go.options.cacheBreakerPhrase),
+      getOrBuildUserContext(toolUseContext.session, toolUseContext.storageV5, toolUseContext.credentials),
+      getCachedSystemContext(toolUseContext.session, toolUseContext.options.cacheBreakerPhrase),
     ]);
     let userContext = {
-      ...cn,
+      ...appendedSystem,
       ...getCoordinatorUserContext(
         mcpClients,
-        Go.options.toolCatalog.getAllBaseTools,
+        toolUseContext.options.toolCatalog.getAllBaseTools,
         isScratchpadEnabled() ? (getScratchpadDir() ?? undefined) : undefined,
       ),
     };
     queryCheckpoint("query_context_loading_end");
-    let mr = effectiveSystemPromptText({
+    let effectivePrompt = effectiveSystemPromptText({
       mainThreadAgentDefinition: scope.mainThreadAgentDefinition,
-      toolUseContext: Go,
+      toolUseContext,
       customSystemPrompt,
       defaultSystemPrompt: systemPrompt,
       appendSystemPrompt,
     });
-    Go.renderedSystemPrompt = mr;
+    toolUseContext.renderedSystemPrompt = effectivePrompt;
     queryCheckpoint("query_query_start");
     let turnInput = {
-      messages: x,
-      systemPrompt: mr,
+      messages,
+      systemPrompt: effectivePrompt,
       promptRenderEpoch,
       modelFacts,
       userContext,
       systemContext: cachedSystemContext,
       canUseTool,
-      toolUseContext: Go,
+      toolUseContext,
       querySource: getQuerySourceForREPL(),
       stopHookActive,
       fallbackModel,
-      engineDeferredSlash: kt,
+      engineDeferredSlash,
     };
-    this.stream.deferredSlashEchoUuid = kt?.messageUuid ?? null;
-    let Wn = ke
+    this.stream.deferredSlashEchoUuid = engineDeferredSlash?.messageUuid ?? null;
+    let titleFallback = mainLoopModel
       ? createFirstTextTimer({
-          queryChainId: hn,
+          queryChainId: turnId_2,
           observesUserWait: true,
           promptTiming,
           textToolNames: BRIEF_TOOL_NAME_SET,
           schedule: this._scheduleTimeout,
         })
       : null;
-    let Fr = Ot;
-    let Zn;
-    let Un;
+    let spanEnd = replyToolUseId;
+    let replyPromise;
+    let result;
     try {
-      Un = await readEngineTurn({
+      result = await readEngineTurn({
         engine: this._engine,
         feed: this.engineFeed,
         turnInput,
-        newMessages: D,
-        onStatus: (dr) => {
-          if (dr !== "success") this._frameNotifier.deferred(this._releaseCompactEnd);
+        newMessages,
+        onStatus: (status) => {
+          if (status !== "success") this._frameNotifier.deferred(this._releaseCompactEnd);
         },
-        onQueryEvent: (dr) => {
-          this._frameNotifier.deferred(() => this.applyEvent(dr, Wn));
+        onQueryEvent: (event) => {
+          this._frameNotifier.deferred(() => this.applyEvent(event, titleFallback));
           if (
-            Ot !== undefined &&
-            dr.type === "assistant" &&
-            isRealAssistantMessage(dr) &&
-            (Fr !== undefined || (Zn !== undefined && supersedesMessage(dr, Zn)))
+            replyToolUseId !== undefined &&
+            event.type === "assistant" &&
+            isRealAssistantMessage(event) &&
+            (spanEnd !== undefined || (replyPromise !== undefined && supersedesMessage(event, replyPromise)))
           ) {
-            (this._host ?? h).stampBridgeReply({
-              assistantUuid: dr.uuid,
-              userMessageUuid: Ot,
+            (this._host ?? host).stampBridgeReply({
+              assistantUuid: event.uuid,
+              userMessageUuid: replyToolUseId,
             });
-            Zn = dr;
-            Fr = undefined;
-          } else if (dr.type === "tombstone" && Zn !== undefined && dr.message.uuid === Zn.uuid) {
-            Fr = Ot;
-            Zn = undefined;
+            replyPromise = event;
+            spanEnd = undefined;
+          } else if (
+            event.type === "tombstone" &&
+            replyPromise !== undefined &&
+            event.message.uuid === replyPromise.uuid
+          ) {
+            spanEnd = replyToolUseId;
+            replyPromise = undefined;
           }
         },
         addNotification,
         onMainRequestStart: () => {
-          if (!L.signal.aborted) this.stream.noteMainRequestAnnounced();
+          if (!signal.signal.aborted) this.stream.noteMainRequestAnnounced();
         },
         onRead: () => {
-          this._firstText = Wn;
+          this._firstText = titleFallback;
           this._toolUseThisTurn = false;
           this._modelFallbackNotifiedFor = null;
           this._pendingReplyToolUses.clear();
           this._textHeldToTurnEnd = undefined;
-          Wn?.setUserWaiting(this._isWaitingOnUser());
+          titleFallback?.setUserWaiting(this._isWaitingOnUser());
         },
       });
     } finally {
-      let terminalReason = Un?.terminal_reason;
+      let terminalReason = result?.terminal_reason;
       if (
-        this._firstText === Wn &&
+        this._firstText === titleFallback &&
         this._textHeldToTurnEnd !== undefined &&
         terminalReason !== undefined &&
         !isAbortedTerminalReason(terminalReason)
       )
-        Wn?.markFirstTextPainted("turn_end", this._textHeldToTurnEnd);
-      Wn?.end(terminalReason, isAbortedTerminalReason(terminalReason) || L.signal.aborted);
-      if (this._firstText === Wn) this._firstText = null;
+        titleFallback?.markFirstTextPainted("turn_end", this._textHeldToTurnEnd);
+      titleFallback?.end(terminalReason, isAbortedTerminalReason(terminalReason) || signal.signal.aborted);
+      if (this._firstText === titleFallback) this._firstText = null;
     }
-    handleTurnCompletedAtLimit(ke, Un?.terminal_reason, Date.now(), storageV5);
+    handleTurnCompletedAtLimit(mainLoopModel, result?.terminal_reason, Date.now(), storageV5);
     notifyLeaderOfFailedIdle(
       store.getState().teamContext,
       transcript.getSnapshot(),
-      L.signal.aborted,
+      signal.signal.aborted,
       storageV5,
     );
     if (gesture.pending) {
       let pending = gesture.pending;
       gesture.clearPending();
-      if (!L.signal.aborted && !isAbortedTerminalReason(Un?.terminal_reason)) {
-        let or = countAbandonable(store.getState().tasks);
-        let pr = countCarriedSince(store.getState().tasks, pending.carriedAtPress);
-        let Qn = countHeldQueuedCommands(
+      if (!signal.signal.aborted && !isAbortedTerminalReason(result?.terminal_reason)) {
+        let abandonable = countAbandonable(store.getState().tasks);
+        let carried = countCarriedSince(store.getState().tasks, pending.carriedAtPress);
+        let held = countHeldQueuedCommands(
           messageQueue.getCommandQueue(),
-          createHeldScreeningCheck(() => this.buildToolUseContext(D, [], L, Be)),
+          createHeldScreeningCheck(() => this.buildToolUseContext(newMessages, [], signal, mainLoopModel_2)),
         );
-        let ur = draft.value.trim() !== "";
-        if (Qn > 0 || ur || (!pending.confirmedInterstitial && or > 0) || pr > 0) {
-          if (Qn === 0 && ur)
+        let hasText = draft.value.trim() !== "";
+        if (held > 0 || hasText || (!pending.confirmedInterstitial && abandonable > 0) || carried > 0) {
+          if (held === 0 && hasText)
             logEvent("tengu_defer_boundary_cancelled_draft", {
               site: lit_2("after_loop"),
               wait_ms: Date.now() - pending.armedAtMs,
             });
-          let Ir =
-            Qn > 0
+          let carriedPending =
+            held > 0
               ? backgroundBlockedMessage(
-                  `${Qn} queued ${plural(Qn, "command")} would be lost`,
+                  `${held} queued ${plural(held, "command")} would be lost`,
                   "Press \u2190 again once the queue clears.",
                 )
-              : ur
+              : hasText
                 ? UNSENT_INPUT_BLOCK
-                : pr > 0
+                : carried > 0
                   ? backgroundBlockedMessage(
-                      `${pr} Artifact comment ${plural(pr, "monitor")} started after you pressed \u2190`,
+                      `${carried} Artifact comment ${plural(carried, "monitor")} started after you pressed \u2190`,
                       "Press \u2190 again to review and confirm.",
                     )
                   : backgroundBlockedMessage(
-                      `${or} background ${plural(or, "task")} would be abandoned`,
+                      `${abandonable} background ${plural(abandonable, "task")} would be abandoned`,
                       "Press \u2190 again to confirm.",
                     );
-          No({
+          applyTranscript({
             type: "append",
-            messages: [createSystemMessage(Ir, "warning")],
+            messages: [createSystemMessage(carriedPending, "warning")],
           });
           gesture.markIdleForkMidTurn();
         } else {
@@ -2407,31 +2478,31 @@ class TurnController {
           let snapshot = transcript.getSnapshot();
           await recordTranscript(snapshot, undefined, undefined, undefined, storageV5);
           lastPromptRestampSlot.peek(session)?.rowsQueued(snapshot);
-          if (At !== undefined) releaseTurnIfCurrent(At, TURN_ABORTED_FLAG);
-          let Pr = await pending.proceed();
-          No({
+          if (turnHandle !== undefined) releaseTurnIfCurrent(turnHandle, TURN_ABORTED_FLAG);
+          let decision = await pending.proceed();
+          applyTranscript({
             type: "append",
-            messages: [createSystemMessage(Pr, "warning")],
+            messages: [createSystemMessage(decision, "warning")],
           });
           gesture.markIdleForkMidTurn();
         }
       } else {
-        let or = unwrapAbortReason(L.signal.reason);
-        if (this.guard.generation === ee && or !== "background")
-          No({
+        let abortReason = unwrapAbortReason(signal.signal.reason);
+        if (this.guard.generation === guardGeneration && abortReason !== "background")
+          applyTranscript({
             type: "append",
             messages: [createSystemMessage(TURN_STOPPED_BLOCK, "warning")],
           });
       }
     }
-    No({
+    applyTranscript({
       type: "update",
-      updater: (dr) => {
+      updater: (updater) => {
         try {
-          return stripToolResultsForStorage(dr, Go.options.tools);
+          return stripToolResultsForStorage(updater, toolUseContext.options.tools);
         } catch (error) {
           logError(error);
-          return dr;
+          return updater;
         }
       },
     });
@@ -2439,8 +2510,8 @@ class TurnController {
     queryCheckpoint("query_end");
     this.resetLoadingState();
     finishQueryProfile();
-    await onTurnComplete?.(transcript.getSnapshot(), Un?.terminal_reason);
-    return Un;
+    await onTurnComplete?.(transcript.getSnapshot(), result?.terminal_reason);
+    return result;
   }
   get isInitialMessageInFlight() {
     return this._launchPromptPhase !== "idle";
@@ -2462,10 +2533,10 @@ class TurnController {
     if (initialMessage === null) return;
     this.submitInitial(initialMessage);
   }
-  submitInitial(h) {
+  submitInitial(initial) {
     if (this._launchPromptPhase === "taking") return;
     this._launchPromptPhase = "taking";
-    let x = this._requireHost();
+    let host = this._requireHost();
     let {
       store,
       setAppState,
@@ -2481,26 +2552,26 @@ class TurnController {
       scope,
       sessionHooks,
       messageQueue,
-    } = x;
+    } = host;
     let replace = transcript.replace;
-    let Et = async (Dt) => {
-      if ("replay" in Dt) {
-        setAppState((po) =>
-          po.initialMessage === Dt
+    let run = async (params) => {
+      if ("replay" in params) {
+        setAppState((state) =>
+          state.initialMessage === params
             ? {
-                ...po,
+                ...state,
                 initialMessage: null,
               }
-            : po,
+            : state,
         );
-        let Xt = adoptedPrefillRef.current ? await adoptedPrefillRef.current : undefined;
-        let io = isBgSession()
+        let prefill = adoptedPrefillRef.current ? await adoptedPrefillRef.current : undefined;
+        let queue = isBgSession()
           ? await readCarriedPrompts(getBgJobDir(), transcript.getSnapshot(), storageV5)
           : undefined;
-        let so = () => {
-          let po = io?.take() ?? [];
-          for (let ao of po) messageQueue.enqueue(ao);
-          return po.length > 0;
+        let drain = () => {
+          let carried = queue?.take() ?? [];
+          for (let command of carried) messageQueue.enqueue(command);
+          return carried.length > 0;
         };
         if (this._disposed) {
           logForDebugging("[reply-on-resume] unmounted during awaits \u2014 skip");
@@ -2510,40 +2581,43 @@ class TurnController {
           `[reply-on-resume] guard=${this.guard.isActive} len=${transcript.getSnapshot().length} tail=${transcript
             .getSnapshot()
             .slice(-5)
-            .map((po) =>
-              "message" in po && po.message && typeof po.message === "object" && "stop_reason" in po.message
-                ? `${po.type}(${po.message.stop_reason})`
-                : po.type,
+            .map((item) =>
+              "message" in item &&
+              item.message &&
+              typeof item.message === "object" &&
+              "stop_reason" in item.message
+                ? `${item.type}(${item.message.stop_reason})`
+                : item.type,
             )
             .join(",")}`,
         );
         if (!this.guard.isActive) {
           let snapshot = transcript.getSnapshot();
           if (trimIncompleteTail(snapshot) !== snapshot) notePendingConversationEdit("abort_strip");
-          replace((ao) => {
-            let co = trimIncompleteTail(ao);
-            return co === ao ? ao : co;
+          replace((rows) => {
+            let trimmed = trimIncompleteTail(rows);
+            return trimmed === rows ? rows : trimmed;
           });
           if (endsWithUserPrompt(transcript.getSnapshot())) {
-            let ao = lastSettledMessageUuid(transcript.getSnapshot());
-            let co = Xt?.boundaryUuid === undefined || Xt.boundaryUuid === ao;
-            if (Xt?.text && !co) {
+            let lastSettled = lastSettledMessageUuid(transcript.getSnapshot());
+            let plan = prefill?.boundaryUuid === undefined || prefill.boundaryUuid === lastSettled;
+            if (prefill?.text && !plan) {
               logEvent("tengu_prefill_boundary_mismatch", {
-                prefill_chars: Xt.text.length,
+                prefill_chars: prefill.text.length,
               });
               logForDebugging(
-                `[reply-on-resume] prefill boundary mismatch press=${Xt.boundaryUuid} fork=${ao} \u2014 dropping hint`,
+                `[reply-on-resume] prefill boundary mismatch press=${prefill.boundaryUuid} fork=${lastSettled} \u2014 dropping hint`,
               );
             }
-            if (Xt?.text && co) {
-              let Ao = escapeAngleBrackets(Xt.text);
+            if (prefill?.text && plan) {
+              let escaped = escapeAngleBrackets(prefill.text);
               transcript.apply({
                 type: "append",
                 messages: [
                   createSystemMessage(
                     `Continuing an interrupted response. Text before the interruption:
 
-${Xt.text}`,
+${prefill.text}`,
                     "notice",
                   ),
                   createUserMessage({
@@ -2553,32 +2627,32 @@ ${Xt.text}`,
                       ) +
                       `
 <interrupted-output>
-${Ao}
+${escaped}
 </interrupted-output>`,
                     isMeta: true,
                   }),
                 ],
               });
-              logForDebugging(`[reply-on-resume] partial-hint ${Xt.text.length} chars`);
+              logForDebugging(`[reply-on-resume] partial-hint ${prefill.text.length} chars`);
             }
             logForDebugging("[reply-on-resume] \u2192 onQuery");
             let abortController = createAbortController();
             this.setAbortController(abortController);
             this.run([], abortController, true, [], mainLoopModel);
-            so();
+            drain();
             return true;
           } else {
             logForDebugging("[reply-on-resume] \u2192 markReplayNoOp");
             await markReplayNoOp().catch(() => {});
-            return !this._disposed && so();
+            return !this._disposed && drain();
           }
-        } else so();
+        } else drain();
         return false;
       }
-      if (Dt.clearContext) {
-        let Xt = Dt.message.planContent ? peekPlanSlug() : undefined;
-        let { clearConversation } = await import("./chunk-hqhyx2ma.js");
-        for await (let so of clearConversation({
+      if (params.clearContext) {
+        let planSlug = params.message.planContent ? peekPlanSlug() : undefined;
+        let { clearConversation } = await import("../../commands/clear/conversation.js");
+        for await (let clear of clearConversation({
           session,
           setMessages: replace,
           readFileState: scope.readFileState,
@@ -2593,90 +2667,90 @@ ${Ao}
           releaseDeferredSessionStartHooks: releaseDeferredHookMessages,
           storageV5,
           credentials,
-          resetTrigger: Dt.resetTrigger,
+          resetTrigger: params.resetTrigger,
         }))
-          this.applyEvent(so);
-        if (Xt) setPlanSlug(session.id, Xt);
-        if (Dt.clearedNotice) {
-          let systemMessage = createSystemMessage(Dt.clearedNotice, "suggestion");
+          this.applyEvent(clear);
+        if (planSlug) setPlanSlug(session.id, planSlug);
+        if (params.clearedNotice) {
+          let systemMessage = createSystemMessage(params.clearedNotice, "suggestion");
           transcript.apply({
             type: "append",
             messages: [systemMessage],
           });
         }
       }
-      setAppState((Xt) => {
-        let io = Dt.mode
-          ? applyPermissionUpdates(Xt.toolPermissionContext, buildSetCurrentModeUpdates(Dt.mode))
-          : Xt.toolPermissionContext;
-        if (Dt.mode === "auto")
-          io = stripDangerousPermissionsForAutoMode({
-            ...io,
+      setAppState((state) => {
+        let mode = params.mode
+          ? applyPermissionUpdates(state.toolPermissionContext, buildSetCurrentModeUpdates(params.mode))
+          : state.toolPermissionContext;
+        if (params.mode === "auto")
+          mode = stripDangerousPermissionsForAutoMode({
+            ...mode,
             mode: "auto",
             prePlanMode: undefined,
           });
         return {
-          ...Xt,
-          initialMessage: Xt.initialMessage === Dt ? null : Xt.initialMessage,
-          toolPermissionContext: io,
+          ...state,
+          initialMessage: state.initialMessage === params ? null : state.initialMessage,
+          toolPermissionContext: mode,
         };
       });
       let mode = store.getState().toolPermissionContext.mode;
-      if (Dt.mode && mode === Dt.mode)
+      if (params.mode && mode === params.mode)
         announce(`[${permissionModeIndicator(mode)} on]`, {
           hold: true,
         });
       if (fileHistoryEnabled())
         fileHistoryMakeSnapshot(
           () => store.getState().fileHistory,
-          (Xt) =>
-            setAppState((io) => {
-              let so = reduceFileHistoryState(io.fileHistory, Xt, storageV5);
-              if (so === io.fileHistory) return io;
+          (op) =>
+            setAppState((state) => {
+              let next = reduceFileHistoryState(state.fileHistory, op, storageV5);
+              if (next === state.fileHistory) return state;
               return {
-                ...io,
-                fileHistory: so,
+                ...state,
+                fileHistory: next,
               };
             }),
-          Dt.message.uuid,
+          params.message.uuid,
         );
-      let content = Dt.message.message.content;
+      let content = params.message.message.content;
       if (
         typeof content === "string" &&
-        !Dt.message.planContent &&
-        isHumanOrUnset(Dt.message.origin) &&
-        !Dt.skipAttachments &&
-        !shouldSkipQueueAttachments(Dt.message) &&
-        !queueInputFlags(Dt.message) &&
-        Object.keys(relayTurnFlags(Dt.message)).length === 0
+        !params.message.planContent &&
+        isHumanOrUnset(params.message.origin) &&
+        !params.skipAttachments &&
+        !shouldSkipQueueAttachments(params.message) &&
+        !queueInputFlags(params.message) &&
+        Object.keys(relayTurnFlags(params.message)).length === 0
       ) {
-        let Xt = sanitizePromptText_2(content, "prompt");
-        let io = content;
-        if (Xt.removedTotal > 0) {
-          let so = (po) =>
-            x.addNotification({
+        let sanitized = sanitizePromptText_2(content, "prompt");
+        let nextContent = content;
+        if (sanitized.removedTotal > 0) {
+          let fn = (arg) =>
+            host.addNotification({
               key: "prompt-invisible-removed",
               kind: "feedback",
-              text: formatInvisibleCharsRemoved(Xt.removedTotal, po),
+              text: formatInvisibleCharsRemoved(sanitized.removedTotal, arg),
               priority: "immediate",
               timeoutMs: NOTIFICATION_TIMEOUT_MS,
             });
-          if (Xt.text.trim() === "") {
-            so("empty");
+          if (sanitized.text.trim() === "") {
+            fn("empty");
             return false;
           }
-          if (Xt.text.trimStart().startsWith("/")) {
-            restorePromptAfterCancel(x.draft, Xt.text, {
+          if (sanitized.text.trimStart().startsWith("/")) {
+            restorePromptAfterCancel(host.draft, sanitized.text, {
               neverSubmitted: true,
             });
-            so("review");
+            fn("review");
             return false;
           }
-          io = Xt.text;
-          so("sent");
+          nextContent = sanitized.text;
+          fn("sent");
         }
         onSubmit(
-          io,
+          nextContent,
           {
             setCursorOffset: () => {},
             clearBuffer: () => {},
@@ -2686,77 +2760,82 @@ ${Ao}
             inputModeOverride: "prompt",
           },
         );
-      } else if (typeof content === "string" && !Dt.message.planContent)
+      } else if (typeof content === "string" && !params.message.planContent)
         messageQueue.enqueue({
           value: content,
           mode: "prompt",
           agentId: mainAgentId(),
-          origin: Dt.message.origin,
-          uuid: Dt.message.uuid,
-          skipAttachments: Dt.skipAttachments || shouldSkipQueueAttachments(Dt.message),
-          ...queueInputFlags(Dt.message),
-          ...wakeupSourceField(Dt.message),
-          ...relayTurnFlags(Dt.message),
+          origin: params.message.origin,
+          uuid: params.message.uuid,
+          skipAttachments: params.skipAttachments || shouldSkipQueueAttachments(params.message),
+          ...queueInputFlags(params.message),
+          ...wakeupSourceField(params.message),
+          ...relayTurnFlags(params.message),
         });
       else {
         let abortController = createAbortController();
         this.setAbortController(abortController);
-        this.run([this.withDirectRunTurnPosition(Dt.message)], abortController, true, [], mainLoopModel);
+        this.run([this.withDirectRunTurnPosition(params.message)], abortController, true, [], mainLoopModel);
       }
       return true;
     };
-    cliError_2(() => Et(h))
+    cliError_2(() => run(initial))
       .then(
-        (Dt) => {
-          this._launchPromptPhase = Dt && !this._snapshot.isLoading ? "dispatched" : "idle";
+        (state) => {
+          this._launchPromptPhase = state && !this._snapshot.isLoading ? "dispatched" : "idle";
         },
         (error) => {
           this._launchPromptPhase = "idle";
           logError(error);
-          setAppState((Lt) =>
-            Lt.initialMessage === h
+          setAppState((state) =>
+            state.initialMessage === initial
               ? {
-                  ...Lt,
+                  ...state,
                   initialMessage: null,
                 }
-              : Lt,
+              : state,
           );
-          if ("preservePlanOnDrop" in h && h.preservePlanOnDrop)
-            reportUltraplanStartFailure(h.preservePlanOnDrop, storageV5, transcript.apply).catch(logError);
+          if ("preservePlanOnDrop" in initial && initial.preservePlanOnDrop)
+            reportUltraplanStartFailure(initial.preservePlanOnDrop, storageV5, transcript.apply).catch(
+              logError,
+            );
         },
       )
       .then(() => {
-        if (store.getState().initialMessage !== h) this._takeLaunchPrompt();
+        if (store.getState().initialMessage !== initial) this._takeLaunchPrompt();
       });
   }
-  submitIncomingPrompt = (content, x) => {
+  submitIncomingPrompt = (content, options) => {
     if (this.guard.isActive) return false;
     let { mainLoopModel, messageQueue } = this._requireHost();
-    if (messageQueue.getCommandQueue().some((Re) => Re.mode === "prompt" || Re.mode === "bash")) return false;
+    if (
+      messageQueue.getCommandQueue().some((command) => command.mode === "prompt" || command.mode === "bash")
+    )
+      return false;
     let abortController = createAbortController();
     this.setAbortController(abortController);
     let userMessage = createUserMessage({
       content,
-      isMeta: x?.isMeta ? true : undefined,
+      isMeta: options?.isMeta ? true : undefined,
     });
     cliError_2(() =>
       this.run([this.withDirectRunTurnPosition(userMessage)], abortController, true, [], mainLoopModel),
     );
     return true;
   };
-  withDirectRunTurnPosition(h) {
-    if (h.turnOrigin !== undefined || h.turnPosition !== undefined) return h;
+  withDirectRunTurnPosition(position) {
+    if (position.turnOrigin !== undefined || position.turnPosition !== undefined) return position;
     try {
-      let x = nextTurnPosition(this._requireHost().transcript.getSnapshot(), undefined);
-      return x === undefined
-        ? h
+      let turnPosition = nextTurnPosition(this._requireHost().transcript.getSnapshot(), undefined);
+      return turnPosition === undefined
+        ? position
         : {
-            ...h,
-            turnPosition: x,
+            ...position,
+            turnPosition,
           };
     } catch (error) {
       logError(error);
-      return h;
+      return position;
     }
   }
   queuedScreeningStale = () =>
@@ -2769,7 +2848,7 @@ ${Ao}
         getMainLoopModelFromState(store.getState()),
       );
     });
-  executeQueuedInput = async (h) => {
+  executeQueuedInput = async (commands) => {
     let {
       ideSelection,
       consumeIdeSelection,
@@ -2787,7 +2866,7 @@ ${Ao}
       messageQueue,
       activeRemote,
     } = this._requireHost();
-    let filtered = h.filter((po) => po.mode === "bash");
+    let filtered = commands.filter((command) => command.mode === "bash");
     if (activeRemote.isRemoteMode && filtered.length > 0) {
       logFeatureBad("remote_queued_shell_line", "not_run", {
         turn_origin: fromEnum(getOriginKindLabel(filtered[0]?.origin)),
@@ -2801,39 +2880,39 @@ ${Ao}
           ),
         ],
       });
-      let filtered_2 = h.filter((ao) => ao.mode !== "bash");
+      let filtered_2 = commands.filter((command) => command.mode !== "bash");
       return filtered_2.length === 0 ? undefined : this.executeQueuedInput(filtered_2);
     }
-    let found = h.find(isRefillableCommand);
-    let [Dt, ...Lt] = h.flatMap((po) =>
-      isRefillableCommand(po) && po.mode === "prompt" && typeof po.value === "string"
+    let found = commands.find(isRefillableCommand);
+    let [first, ...rest] = commands.flatMap((command) =>
+      isRefillableCommand(command) && command.mode === "prompt" && typeof command.value === "string"
         ? [
             {
-              text: po.value,
-              origin: normalizeTaskNotificationOrigin(po.origin),
+              text: command.value,
+              origin: normalizeTaskNotificationOrigin(command.origin),
             },
           ]
         : [],
     );
-    if (Dt !== undefined && found?.mode === "prompt" && found.value === Dt.text) {
-      this.stream.showDrainedPrompts(Dt, Lt);
+    if (first !== undefined && found?.mode === "prompt" && found.value === first.text) {
+      this.stream.showDrainedPrompts(first, rest);
       this._frameNotifier.flush();
     }
-    let oo =
-      h.length === 1 && found?.mode === "bash" && typeof found.value === "string"
+    let x =
+      commands.length === 1 && found?.mode === "bash" && typeof found.value === "string"
         ? this.stream.showDrainedShellLine(found.value, store.getState().verbose)
         : undefined;
-    if (oo !== undefined) this._frameNotifier.flush();
-    let Xt =
+    if (x !== undefined) this._frameNotifier.flush();
+    let y =
       found !== undefined &&
       found.ideSelection === undefined &&
       (ideSelection?.source !== "diff" ||
         (found.mode !== "bash" && !(typeof found.value === "string" && found.value.trim().startsWith("/"))));
-    if (Xt) consumeIdeSelection(found.uuid);
+    if (y) consumeIdeSelection(found.uuid);
     else if (found?.ideSelection && found.uuid) recordIdeSelectionConsumedBy(found.uuid, found.ideSelection);
     let mainLoopModelFromState = getMainLoopModelFromState(store.getState());
-    let all = h.every((po) =>
-      isUsageLimitDenialStale(po, transcript.getSnapshot(), () => mainLoopModelFromState),
+    let all = commands.every((command) =>
+      isUsageLimitDenialStale(command, transcript.getSnapshot(), () => mainLoopModelFromState),
     );
     if (all) logFeatureOk("usage_limit_denied_notice");
     await handlePromptSubmit({
@@ -2846,35 +2925,35 @@ ${Ao}
       turn: this,
       queue: messageQueue,
       commands: scope.commands,
-      onInputChange: (po) => {
-        if (po === "") return;
+      onInputChange: (value) => {
+        if (value === "") return;
         this.consumeRateLimitAutoContinuePrefill();
-        restorePromptAfterCancel(this._requireHost().draft, po);
+        restorePromptAfterCancel(this._requireHost().draft, value);
       },
       onPromptHandedBack: restoreIdeSelectionConsumedBy,
-      setPastedContents: (po) => this._requireHost().draft.setPastedContents(po),
+      setPastedContents: (pasted) => this._requireHost().draft.setPastedContents(pasted),
       messages: transcript.getSnapshot(),
       mainLoopModel: mainLoopModelFromState,
-      ideSelection: Xt ? ideSelection : undefined,
+      ideSelection: y ? ideSelection : undefined,
       getAppState: () => store.getState(),
       setAppState: setSessionState,
       querySource: getQuerySourceForREPL(),
       onBeforeQuery,
       canUseTool,
       addNotification,
-      queuedCommands: all ? h.map(usageLimitStandInMessage) : h,
+      queuedCommands: all ? commands.map(usageLimitStandInMessage) : commands,
       deferSlashToEngine,
       storageV5,
-    }).finally(oo);
+    }).finally(x);
   };
-  armRateLimitAutoContinue = (h) => {
-    if (h === this._autoContinueResetsAt) return false;
+  armRateLimitAutoContinue = (at) => {
+    if (at === this._autoContinueResetsAt) return false;
     if (isUnattendedInteractiveSession()) return false;
-    if (isEpisodeActiveNow() || isResetKeyArmed(h)) return false;
+    if (isEpisodeActiveNow() || isResetKeyArmed(at)) return false;
     let { store, session, draft } = this._requireHost();
-    this._autoContinueResetsAt = h;
+    this._autoContinueResetsAt = at;
     this._autoContinueLive = true;
-    import("./chunk-89f54s6c.js")
+    import("../../services/rateLimitCheckpoint/performRateLimitCheckpoint.lazy.js")
       .then(({ performRateLimitCheckpoint }) =>
         performRateLimitCheckpoint({
           todos: store.getState().todos[session.id] ?? [],
@@ -2919,13 +2998,13 @@ ${Ao}
     let { draft } = this._requireHost();
     if (this._autoContinueLive && draft.value === "") draft.setValueRaw(CONTINUE_COMMAND);
   };
-  rewriteInputOverAutoContinuePrefill(h, x) {
-    let D = normalizeContinueInput(h, x, this._autoContinueLive);
-    if (D !== h && this._autoContinueLive) {
+  rewriteInputOverAutoContinuePrefill(input, prefill) {
+    let normalized = normalizeContinueInput(input, prefill, this._autoContinueLive);
+    if (normalized !== input && this._autoContinueLive) {
       this._autoContinueLive = false;
       logEvent("tengu_rl_checkpoint_auto_continue_cancelled_by_slash", {});
     }
-    return D;
+    return normalized;
   }
   retractRateLimitAutoContinue = () => {
     if (!this._autoContinueLive) return;
@@ -2984,44 +3063,44 @@ ${Ao}
         envOnboardingOffered: false,
       });
   };
-  _publish(h) {
+  _publish(patch) {
     let _snapshot = this._snapshot;
-    let D = {
+    let next = {
       ..._snapshot,
-      ...h,
+      ...patch,
     };
     if (
-      D.isQueryActive === _snapshot.isQueryActive &&
-      D.isExternalLoading === _snapshot.isExternalLoading &&
-      D.stopWaitPending === _snapshot.stopWaitPending &&
-      D.submitCount === _snapshot.submitCount &&
-      D.lastQueryCompletionTime === _snapshot.lastQueryCompletionTime &&
-      D.lastTurnStopTime === _snapshot.lastTurnStopTime &&
-      D.lastTurnEnd === _snapshot.lastTurnEnd &&
-      D.promptMarks === _snapshot.promptMarks &&
-      D.abortController === _snapshot.abortController &&
-      D.envOnboardingOffered === _snapshot.envOnboardingOffered
+      next.isQueryActive === _snapshot.isQueryActive &&
+      next.isExternalLoading === _snapshot.isExternalLoading &&
+      next.stopWaitPending === _snapshot.stopWaitPending &&
+      next.submitCount === _snapshot.submitCount &&
+      next.lastQueryCompletionTime === _snapshot.lastQueryCompletionTime &&
+      next.lastTurnStopTime === _snapshot.lastTurnStopTime &&
+      next.lastTurnEnd === _snapshot.lastTurnEnd &&
+      next.promptMarks === _snapshot.promptMarks &&
+      next.abortController === _snapshot.abortController &&
+      next.envOnboardingOffered === _snapshot.envOnboardingOffered
     )
       return;
-    let L = D.isQueryActive || D.isExternalLoading;
+    let busy = next.isQueryActive || next.isExternalLoading;
     this._snapshot = {
-      ...D,
-      isLoading: L,
+      ...next,
+      isLoading: busy,
     };
-    if (L && !_snapshot.isLoading) {
+    if (busy && !_snapshot.isLoading) {
       this.resetTiming();
       if (this._launchPromptPhase === "dispatched") this._launchPromptPhase = "idle";
     }
-    if (L !== _snapshot.isLoading) this._syncMainLoopBusy();
+    if (busy !== _snapshot.isLoading) this._syncMainLoopBusy();
     try {
       this._changed.emit();
     } catch (error) {
       logError(error);
     }
   }
-  _mirrorTiming(h) {
+  _mirrorTiming(timing) {
     try {
-      this._onTimingChange(h);
+      this._onTimingChange(timing);
     } catch (error) {
       logError(error);
     }
@@ -3031,13 +3110,13 @@ ${Ao}
 /**
  * 计划会话启动失败时保存计划并追加警告消息。
  */
-async function reportUltraplanStartFailure(preservePlanOnDrop, storageV5, D) {
-  let L = await saveRejectedUltraplan(preservePlanOnDrop, storageV5);
-  D({
+async function reportUltraplanStartFailure(preservePlanOnDrop, storageV5, append) {
+  let planPath = await saveRejectedUltraplan(preservePlanOnDrop, storageV5);
+  append({
     type: "append",
     messages: [
       createSystemMessage(
-        `Could not start the session for this plan \xB7 Plan saved to ${getDisplayPath(L)}`,
+        `Could not start the session for this plan \xB7 Plan saved to ${getDisplayPath(planPath)}`,
         "warning",
       ),
     ],
@@ -3047,28 +3126,35 @@ async function reportUltraplanStartFailure(preservePlanOnDrop, storageV5, D) {
 /**
  * 找出与某条用户提示同一批提交的其他提示。
  */
-function findBatchedPrompts(h, x, D) {
-  let filtered = D.filter(isRealUserPromptMessage);
-  let ee = new Set(filtered.filter(hasStringUuid).map((Be) => Be.uuid));
-  let ke = h[x];
-  if (ee.size <= 1 || ee.size !== filtered.length || !hasStringUuid(ke) || !ee.has(ke.uuid)) return [];
-  let Re = [];
-  for (let idx = x - 1; idx >= 0 && Re.length < ee.size - 1; idx--) {
-    let He = h[idx];
-    if (isRealUserPromptMessage(He) && hasStringUuid(He) && ee.has(He.uuid)) Re.push(He);
-    else if (!messagesAfterAreOnlySynthetic([He], -1)) return [];
+function findBatchedPrompts(messages, index, candidates) {
+  let filtered = candidates.filter(isRealUserPromptMessage);
+  let uuids = new Set(filtered.filter(hasStringUuid).map((message) => message.uuid));
+  let anchor = messages[index];
+  if (uuids.size <= 1 || uuids.size !== filtered.length || !hasStringUuid(anchor) || !uuids.has(anchor.uuid))
+    return [];
+  let missing = [];
+  for (let idx = index - 1; idx >= 0 && missing.length < uuids.size - 1; idx--) {
+    let message = messages[idx];
+    if (isRealUserPromptMessage(message) && hasStringUuid(message) && uuids.has(message.uuid))
+      missing.push(message);
+    else if (!messagesAfterAreOnlySynthetic([message], -1)) return [];
   }
-  return Re.length === ee.size - 1 ? Re.reverse() : [];
+  return missing.length === uuids.size - 1 ? missing.reverse() : [];
 }
 //@ chunk-18hwfzwa.js:1565855-1565961 placement
 /**
  * 某位置之后是否有 poll_events 附件。
  */
-function hasPollEventsAfter(h, x) {
-  return h.slice(x + 1).some((D) => D.type === "attachment" && D.attachment.type === "poll_events");
+function hasPollEventsAfter(messages, index) {
+  return messages
+    .slice(index + 1)
+    .some((message) => message.type === "attachment" && message.attachment.type === "poll_events");
 }
 //@ chunk-18hwfzwa.js:1565961-1565965 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1565961", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1565965-1566458 placement
 /**
  * 后台会话中把输入直接作为 AskUserQuestion 的回答。
@@ -3077,29 +3163,29 @@ function useBackgroundQuestionAnswer() {
   let host = useHost();
   let dialogStore = useDialogStore();
   let dialogSelector = useDialogSelector(topBlockingDialog);
-  let L = dialogSelector?.kind === ASK_USER_QUESTION_PERMISSION_CARD.kind;
-  P(() => {
+  let isAskDialog = dialogSelector?.kind === ASK_USER_QUESTION_PERMISSION_CARD.kind;
+  useEffect(() => {
     if (!isBgSession()) {
       registerRendezvousResolver(host, null);
       return;
     }
-    if (L && dialogSelector) {
+    if (isAskDialog && dialogSelector) {
       let payload = dialogSelector.payload;
-      registerRendezvousResolver(host, (ke) => {
-        let trimmed = ke.trim();
+      registerRendezvousResolver(host, (payload_2) => {
+        let trimmed = payload_2.trim();
         if (!trimmed || trimmed.startsWith("!") || trimmed.startsWith("/")) return false;
-        let Be = payload.questions[0];
-        if (!Be) return false;
+        let question = payload.questions[0];
+        if (!question) return false;
         registerRendezvousResolver(host, null);
         let label =
-          Be.options?.find((option) => option.label.toLowerCase() === trimmed.toLowerCase())?.label ??
+          question.options?.find((option) => option.label.toLowerCase() === trimmed.toLowerCase())?.label ??
           trimmed;
         dialogStore.answer(dialogSelector.id, {
           behavior: "allow",
           updatedInput: {
             ...payload.input,
             answers: {
-              [Be.question]: label,
+              [question.question]: label,
             },
           },
         });
@@ -3108,10 +3194,16 @@ function useBackgroundQuestionAnswer() {
       return () => registerRendezvousResolver(host, null);
     }
     registerRendezvousResolver(host, null);
-  }, [host, dialogStore, dialogSelector, L]);
+  }, [host, dialogStore, dialogSelector, isAskDialog]);
 }
 //@ chunk-18hwfzwa.js:1566458-1566462 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1566458", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1566462-1566466 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1566462", () => {
+  init_react_production();
+});
 export { TurnController, useBackgroundQuestionAnswer };

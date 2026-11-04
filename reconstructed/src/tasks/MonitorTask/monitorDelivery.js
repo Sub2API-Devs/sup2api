@@ -31,94 +31,96 @@ import { sessionLabel } from "../../services/remoteTools/backgroundCommands.js";
 import { identityAgentId2 } from "../../utils/agentId.js";
 import { isClaudeCodeHintLine } from "../../utils/claudeCodeHints.js";
 import { emitTaskNotification } from "../../utils/task/taskNotifications.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-xf84t5b0.js:7647-7661 placement
 var SUSTAINED_SUPPRESSION_KILL_MS = 30000;
 //@ chunk-xf84t5b0.js:7661-9407 placement
-function createMonitorDelivery(e) {
-  let { description, agentId, taskRef } = e;
-  let now = e.now ?? Date.now;
-  let r = now();
-  let s = 0;
-  let a = 0;
-  let h = 0;
-  let p = 0;
-  let u;
-  let y;
-  let S = false;
-  function v(A) {
-    if (S) return;
-    S = true;
+function createMonitorDelivery(options) {
+  let { description, agentId, taskRef } = options;
+  let now = options.now ?? Date.now;
+  let startedAt = now();
+  let eventCount = 0;
+  let suppressedSinceNotice = 0;
+  let suppressedTotal = 0;
+  let noticesQueued = 0;
+  let suppressionStart;
+  let lastSuppressedAt;
+  let isClosed = false;
+  function close(closedBy) {
+    if (isClosed) return;
+    isClosed = true;
     try {
-      let _ = (T) =>
+      let countQueued = (kind) =>
         count(
           getCommandQueue(),
-          ({ monitorEvent }) => monitorEvent?.kind === T && monitorEvent.watchId === taskRef.id,
+          ({ monitorEvent }) => monitorEvent?.kind === kind && monitorEvent.watchId === taskRef.id,
         );
-      let b = {
-        eventsQueued: s,
-        eventsStillQueued: _("output"),
-        eventsSuppressed: h,
-        suppressionNoticesQueued: p,
-        noticesStillQueued: _("notice"),
-        elapsedMs: now() - r,
+      let stats = {
+        eventsQueued: eventCount,
+        eventsStillQueued: countQueued("output"),
+        eventsSuppressed: suppressedTotal,
+        suppressionNoticesQueued: noticesQueued,
+        noticesStillQueued: countQueued("notice"),
+        elapsedMs: now() - startedAt,
       };
-      if (e.arm !== undefined)
+      if (options.arm !== undefined)
         logFeatureOk("monitor_watch_closed", {
-          arm: fromEnum(e.arm),
-          closed_by: fromEnum(A),
-          events_queued: b.eventsQueued,
-          events_still_queued: b.eventsStillQueued,
-          events_suppressed: b.eventsSuppressed,
-          suppression_notices_queued: b.suppressionNoticesQueued,
-          notices_still_queued: b.noticesStillQueued,
-          elapsed_ms: b.elapsedMs,
+          arm: fromEnum(options.arm),
+          closed_by: fromEnum(closedBy),
+          events_queued: stats.eventsQueued,
+          events_still_queued: stats.eventsStillQueued,
+          events_suppressed: stats.eventsSuppressed,
+          suppression_notices_queued: stats.suppressionNoticesQueued,
+          notices_still_queued: stats.noticesStillQueued,
+          elapsed_ms: stats.elapsedMs,
           subagent_owned: agentId !== undefined,
         });
-      e.onClosed?.(b);
+      options.onClosed?.(stats);
     } catch (error) {
       logError(error);
     }
   }
-  let { capacity, refillMs } = e.bucket ?? {
+  let { capacity, refillMs } = options.bucket ?? {
     capacity: BUCKET_CAPACITY,
     refillMs: TOKEN_REFILL_MS,
   };
   let tokenBucket = createTokenBucket(capacity, refillMs, now);
-  function k() {
+  function emitEvent() {
     if (!tokenBucket.tryConsume()) {
-      a++;
-      h++;
-      y = now();
-      if (u === undefined) u = now();
+      suppressedSinceNotice++;
+      suppressedTotal++;
+      lastSuppressedAt = now();
+      if (suppressionStart === undefined) suppressionStart = now();
       return false;
     }
-    if (a > 0) {
-      enqueueMonitorEvent(description, eventsSuppressedNotice(a), taskRef.id, {
+    if (suppressedSinceNotice > 0) {
+      enqueueMonitorEvent(description, eventsSuppressedNotice(suppressedSinceNotice), taskRef.id, {
         isHousekeeping: true,
         agentId,
       });
-      p++;
-      a = 0;
-      if (y !== undefined && now() - y > refillMs * 3) u = undefined;
+      noticesQueued++;
+      suppressedSinceNotice = 0;
+      if (lastSuppressedAt !== undefined && now() - lastSuppressedAt > refillMs * 3)
+        suppressionStart = undefined;
     }
-    s++;
+    eventCount++;
     return true;
   }
-  let D = (A) => {
-    if (S) return;
-    if (k()) {
-      enqueueMonitorEvent(description, A, taskRef.id, {
+  let onBatch = (text) => {
+    if (isClosed) return;
+    if (emitEvent()) {
+      enqueueMonitorEvent(description, text, taskRef.id, {
         agentId,
       });
       return;
     }
-    if (u !== undefined && now() - u > SUSTAINED_SUPPRESSION_KILL_MS) {
-      v("too_much_output");
-      if (e.killTask())
+    if (suppressionStart !== undefined && now() - suppressionStart > SUSTAINED_SUPPRESSION_KILL_MS) {
+      close("too_much_output");
+      if (options.killTask())
         enqueueMonitorEvent(
           description,
-          `[Monitor stopped \u2014 too much output (${a} events suppressed over ${Math.round((now() - u) / 1000)}s). Restart with a more selective source.]`,
+          `[Monitor stopped \u2014 too much output (${suppressedSinceNotice} events suppressed over ${Math.round((now() - suppressionStart) / 1000)}s). Restart with a more selective source.]`,
           taskRef.id,
           {
             isHousekeeping: true,
@@ -127,48 +129,49 @@ function createMonitorDelivery(e) {
         );
     }
   };
-  let streamLineBatcher = createStreamLineBatcher(D, e.schedule);
-  function Y() {
+  let streamLineBatcher = createStreamLineBatcher(onBatch, options.schedule);
+  function flushAndClose() {
     streamLineBatcher.flush(true);
-    v("flushed");
+    close("flushed");
   }
   return {
     onData: streamLineBatcher.onData,
-    onBatch: D,
-    isClosed: () => S,
+    onBatch,
+    isClosed: () => isClosed,
     flush: () => streamLineBatcher.flush(),
-    eventCount: () => s,
-    flushAndClose: Y,
+    eventCount: () => eventCount,
+    flushAndClose,
     dropAndClose: () => {
       streamLineBatcher.drain();
-      v("dropped");
+      close("dropped");
     },
-    reportExit: async (A, _) => {
-      let b = S ? undefined : streamLineBatcher.drain();
-      v("exited");
-      let { terminalNotification } = await A.settled;
-      let R = b !== undefined && k();
+    reportExit: async (task, exitText) => {
+      let pendingText = isClosed ? undefined : streamLineBatcher.drain();
+      close("exited");
+      let { terminalNotification } = await task.settled;
+      let canQueueTerminal = pendingText !== undefined && emitEvent();
       if (terminalNotification !== undefined) {
-        let joined = [R ? b : undefined, _].filter((z) => z !== undefined).join(`
+        let text = [canQueueTerminal ? pendingText : undefined, exitText].filter((part) => part !== undefined)
+          .join(`
 `);
         enqueueShellTerminalNotification(
-          joined !== ""
+          text !== ""
             ? {
                 ...terminalNotification,
-                body: formatMonitorEvent(joined),
+                body: formatMonitorEvent(text),
               }
             : terminalNotification,
         );
-      } else if (R)
-        enqueueMonitorEvent(description, b, taskRef.id, {
+      } else if (canQueueTerminal)
+        enqueueMonitorEvent(description, pendingText, taskRef.id, {
           agentId,
         });
     },
   };
 }
 //@ chunk-xf84t5b0.js:9407-9562 placement
-function eventsSuppressedNotice(e) {
-  return `[${e} events suppressed \u2014 output rate too high. Consider using TaskStop to restart this monitor with a more selective filter.]`;
+function eventsSuppressedNotice(count) {
+  return `[${count} events suppressed \u2014 output rate too high. Consider using TaskStop to restart this monitor with a more selective filter.]`;
 }
 //@ chunk-xf84t5b0.js:9562-9617 placement = resolveAgentModelDisplay (0.752)
 /**
@@ -188,59 +191,65 @@ var MAX_JOINED_LINE_CHARS = 3000;
 var DEBOUNCE_MS = 200;
 var MAX_ACCUMULATED_CHARS = 1048576;
 //@ chunk-xf84t5b0.js:9651-9842 placement
-function formatMonitorEvent(e, isHousekeeping = false) {
-  let t =
+function formatMonitorEvent(text, isHousekeeping = false) {
+  let pushHint =
     !isHousekeeping && isAgentPushNotificationEnabled()
       ? `
 If this event is something the user would act on now, send a ${PUSHNOTIFICATION}. Routine or benign output doesn't need one.`
       : "";
   return `
-<${EVENT}>${escapeXml(e)}</${EVENT}>${t}`;
+<${EVENT}>${escapeXml(text)}</${EVENT}>${pushHint}`;
 }
 //@ chunk-xf84t5b0.js:9842-10024 placement
-var MONITOR_STATUS_LINE_RE =
-  /^\[(?:Monitor (?:stopped|timed out|expired)|WebSocket (?:closed|error|upgrade rejected): |Dropped \d+-byte frame )/;
-var pendingHousekeepingTasks = identity(new Set(), (e) => e.clear());
-var monitorKeptFor = identity(new Map(), (e) => e.clear());
+var MONITOR_STATUS_LINE_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var pendingHousekeepingTasks;
+var monitorKeptFor;
+deferInit("chunk-xf84t5b0.js:9842", () => {
+  MONITOR_STATUS_LINE_RE =
+    /^\[(?:Monitor (?:stopped|timed out|expired)|WebSocket (?:closed|error|upgrade rejected): |Dropped \d+-byte frame )/;
+  pendingHousekeepingTasks = identity(new Set(), (pendingHousekeeping) => pendingHousekeeping.clear());
+  monitorKeptFor = identity(new Map(), (keptFor) => keptFor.clear());
+});
 //@ chunk-xf84t5b0.js:10024-10168 placement
-function recordMonitorPlugin(e, n, taskRegistry) {
-  let hookCallerOrScheduler = getHookCallerOrScheduler(n);
+function recordMonitorPlugin(taskId, taskRegistry, taskRegistry_2) {
+  let hookCallerOrScheduler = getHookCallerOrScheduler(taskRegistry);
   if (hookCallerOrScheduler === undefined) return;
   for (let key of monitorKeptFor.keys()) {
-    let status = taskRegistry.get(key)?.status;
+    let status = taskRegistry_2.get(key)?.status;
     if (status !== undefined && isTerminalTaskStatus(status)) monitorKeptFor.delete(key);
   }
-  monitorKeptFor.set(e, hookCallerOrScheduler);
+  monitorKeptFor.set(taskId, hookCallerOrScheduler);
 }
 //@ chunk-xf84t5b0.js:10168-10850 placement
-function enqueueMonitorEvent(description, n, t, o) {
-  let i = (o?.agentId ?? mainAgentId()) === mainAgentId();
-  let r = o?.keptFor ?? (i && t !== undefined ? monitorKeptFor.get(t) : undefined);
-  if (r !== undefined && isHeldByPlugin()) {
-    runIgnoringAbort(() => toastStoppedOnce(r));
+function enqueueMonitorEvent(description, text, taskId, options) {
+  let isMainAgent = (options?.agentId ?? mainAgentId()) === mainAgentId();
+  let keptFor =
+    options?.keptFor ?? (isMainAgent && taskId !== undefined ? monitorKeptFor.get(taskId) : undefined);
+  if (keptFor !== undefined && isHeldByPlugin()) {
+    runIgnoringAbort(() => toastStoppedOnce(keptFor));
     if (
-      o?.isHousekeeping &&
-      MONITOR_STATUS_LINE_RE.test(n) &&
-      t !== undefined &&
-      !pendingHousekeepingTasks.has(t)
+      options?.isHousekeeping &&
+      MONITOR_STATUS_LINE_RE.test(text) &&
+      taskId !== undefined &&
+      !pendingHousekeepingTasks.has(taskId)
     ) {
-      let a = () => {
-        pendingHousekeepingTasks.delete(t);
+      let releasePending = () => {
+        pendingHousekeepingTasks.delete(taskId);
       };
-      let h = () => {
+      let retry = () => {
         if (isHeldByPlugin()) {
-          holdQueuedInput(h, undefined, a);
+          holdQueuedInput(retry, undefined, releasePending);
           return;
         }
-        pendingHousekeepingTasks.delete(t);
-        enqueueMonitorEvent(description, n, t, {
-          ...o,
-          keptFor: r,
+        pendingHousekeepingTasks.delete(taskId);
+        enqueueMonitorEvent(description, text, taskId, {
+          ...options,
+          keptFor,
         });
       };
       runIgnoringAbort(() => {
-        holdQueuedInput(h, undefined, a);
-        pendingHousekeepingTasks.add(t);
+        holdQueuedInput(retry, undefined, releasePending);
+        pendingHousekeepingTasks.add(taskId);
       });
     }
     return;
@@ -248,39 +257,39 @@ function enqueueMonitorEvent(description, n, t, o) {
   enqueuePendingNotification(
     {
       value: formatTaskNotification({
-        taskId: t ? escapeXml(t) : undefined,
+        taskId: taskId ? escapeXml(taskId) : undefined,
         summary: `${MONITOR_EVENT_QUOTED_PREFIX}${escapeXml(description)}"`,
-        body: formatMonitorEvent(n, o?.isHousekeeping),
+        body: formatMonitorEvent(text, options?.isHousekeeping),
       }),
       mode: "task-notification",
       skipAttachments: true,
       priority: "next",
-      agentId: o?.agentId ?? mainAgentId(),
-      ...(r !== undefined && {
-        scheduledByPlugin: r,
+      agentId: options?.agentId ?? mainAgentId(),
+      ...(keptFor !== undefined && {
+        scheduledByPlugin: keptFor,
       }),
-      ...(t !== undefined && {
+      ...(taskId !== undefined && {
         monitorEvent: {
-          watchId: t,
-          kind: o?.isHousekeeping ? "notice" : "output",
+          watchId: taskId,
+          kind: options?.isHousekeeping ? "notice" : "output",
         },
       }),
     },
     {
-      turnAttribution: o?.turnAttribution ?? "inherit",
+      turnAttribution: options?.turnAttribution ?? "inherit",
     },
   );
 }
 //@ chunk-xf84t5b0.js:10850-11151 placement
-function enqueueForeignStopNotification(e) {
-  let { taskId, toolUseId, description, ownerAgentId, stopperAgentId } = e;
-  let s = `Task "${description}" was stopped by ${sessionLabel(stopperAgentId)}`;
+function enqueueForeignStopNotification(notice) {
+  let { taskId, toolUseId, description, ownerAgentId, stopperAgentId } = notice;
+  let summary = `Task "${description}" was stopped by ${sessionLabel(stopperAgentId)}`;
   enqueuePendingNotification({
     value: formatTaskNotification({
       taskId: escapeXml(taskId),
       toolUseId: toolUseId ? escapeXml(toolUseId) : undefined,
       status: "stopped",
-      summary: escapeXml(s),
+      summary: escapeXml(summary),
     }),
     mode: "task-notification",
     skipAttachments: true,
@@ -290,9 +299,9 @@ function enqueueForeignStopNotification(e) {
   });
 }
 //@ chunk-xf84t5b0.js:11151-11585 placement
-function enqueueUserStopNotification(e) {
-  let { taskId, toolUseId, description, source, outputFile, note } = e;
-  let a =
+function enqueueUserStopNotification(notice) {
+  let { taskId, toolUseId, description, source, outputFile, note } = notice;
+  let baseSummary =
     source === "client"
       ? `Task "${description}" was stopped by the user or by the app connected to this session`
       : `Task "${description}" was stopped by the user`;
@@ -302,7 +311,7 @@ function enqueueUserStopNotification(e) {
       toolUseId: toolUseId ? escapeXml(toolUseId) : undefined,
       outputFile,
       status: "killed",
-      summary: escapeXml(note === undefined ? a : `${a}. ${note}`),
+      summary: escapeXml(note === undefined ? baseSummary : `${baseSummary}. ${note}`),
     }),
     mode: "task-notification",
     skipAttachments: true,
@@ -314,63 +323,63 @@ function enqueueUserStopNotification(e) {
 }
 //@ chunk-xf84t5b0.js:11585-12242 placement
 function createStreamLineBatcher(
-  e,
-  schedule = (t) => {
-    let timer = setTimeout(t, DEBOUNCE_MS);
+  emit,
+  schedule = (callback) => {
+    let timer = setTimeout(callback, DEBOUNCE_MS);
     return () => clearTimeout(timer);
   },
 ) {
-  let t = "";
-  let o = [];
-  let i = null;
-  function r(h) {
-    if (i) {
-      i();
-      i = null;
+  let buffer = "";
+  let lines = [];
+  let cancelPending = null;
+  function drainLines(includePartial) {
+    if (cancelPending) {
+      cancelPending();
+      cancelPending = null;
     }
-    if (h && t.trim() && !isClaudeCodeHintLine(t.trim())) {
-      let trimmed = t.trim();
+    if (includePartial && buffer.trim() && !isClaudeCodeHintLine(buffer.trim())) {
+      let trimmed = buffer.trim();
       if (trimmed.length > MAX_LINE_CHARS) trimmed = trimmed.slice(0, MAX_LINE_CHARS) + "...(truncated)";
-      o.push(trimmed);
-      t = "";
+      lines.push(trimmed);
+      buffer = "";
     }
-    if (o.length === 0) return;
-    let joined = o.join(`
+    if (lines.length === 0) return;
+    let joined = lines.join(`
 `);
     if (joined.length > MAX_JOINED_LINE_CHARS)
       joined =
         joined.slice(0, MAX_JOINED_LINE_CHARS) +
         `
 ...(truncated)`;
-    o = [];
+    lines = [];
     return joined;
   }
-  function s(h) {
-    let p = r(h === true);
-    if (p !== undefined) e(p);
+  function flush(final) {
+    let pendingText = drainLines(final === true);
+    if (pendingText !== undefined) emit(pendingText);
   }
-  function a(h) {
-    t += h;
-    if (t.length > MAX_ACCUMULATED_CHARS) t = t.slice(-MAX_ACCUMULATED_CHARS);
-    let p;
+  function onData(chunk) {
+    buffer += chunk;
+    if (buffer.length > MAX_ACCUMULATED_CHARS) buffer = buffer.slice(-MAX_ACCUMULATED_CHARS);
+    let lineEnd;
     while (
-      (p = t.indexOf(`
+      (lineEnd = buffer.indexOf(`
 `)) !== -1
     ) {
-      let trimmed = t.slice(0, p).trim();
-      t = t.slice(p + 1);
-      if (isClaudeCodeHintLine(trimmed)) continue;
-      if (trimmed) {
-        if (trimmed.length > MAX_LINE_CHARS) trimmed = trimmed.slice(0, MAX_LINE_CHARS) + "...(truncated)";
-        o.push(trimmed);
+      let line = buffer.slice(0, lineEnd).trim();
+      buffer = buffer.slice(lineEnd + 1);
+      if (isClaudeCodeHintLine(line)) continue;
+      if (line) {
+        if (line.length > MAX_LINE_CHARS) line = line.slice(0, MAX_LINE_CHARS) + "...(truncated)";
+        lines.push(line);
       }
     }
-    if (o.length > 0 && !i) i = schedule(s);
+    if (lines.length > 0 && !cancelPending) cancelPending = schedule(flush);
   }
   return {
-    onData: a,
-    flush: s,
-    drain: () => r(true),
+    onData,
+    flush,
+    drain: () => drainLines(true),
   };
 }
 //@ chunk-xf84t5b0.js:12242-12774 placement
@@ -421,4 +430,5 @@ export {
   stopMonitorTask,
   enqueueForeignStopNotification,
   enqueueUserStopNotification,
+  SUSTAINED_SUPPRESSION_KILL_MS,
 };

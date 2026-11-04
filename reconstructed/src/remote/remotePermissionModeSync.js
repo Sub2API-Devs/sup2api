@@ -9,7 +9,12 @@
  * attribution: placement 37
  */
 import { randomUUID } from "crypto";
-import { init_react_production, R, P, zt } from "../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+} from "../../vendor/react/cjs/react.production.js";
 import { ControlRequestNotDeliveredError, classifyControlRequestError } from "./controlRequestErrors.js";
 import { sleep } from "../utils/sleep.js";
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
@@ -31,9 +36,13 @@ import { logForDebugging } from "../utils/debug.js";
 import { logFeatureOk, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { toError, errorMessage } from "../utils/errors.js";
 import { permissionModeTitle } from "../utils/permissions/PermissionMode.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:238716-238720 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:238716", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:238758-238783 placement
 var MODE_PUSH_RETRY_DELAYS_MS = [1000, 3000, 9000];
 //@ chunk-18hwfzwa.js:238783-239052 placement
@@ -49,24 +58,24 @@ function sendModeWithRetry({
   onTaken,
   delaysMs = MODE_PUSH_RETRY_DELAYS_MS,
 }) {
-  let Be = (He) => {
+  let attempt = (attemptIndex) => {
     send(mode).then(onTaken, (error) => {
       if (!(error instanceof ControlRequestNotDeliveredError)) {
         onNotTaken?.(error);
         return;
       }
       if (superseded()) return;
-      let ze = delaysMs[He];
-      if (ze === undefined) {
+      let delayMs = delaysMs[attemptIndex];
+      if (delayMs === undefined) {
         onGaveUp();
         return;
       }
-      sleep(ze).then(() => {
-        if (!superseded()) Be(He + 1);
+      sleep(delayMs).then(() => {
+        if (!superseded()) attempt(attemptIndex + 1);
       });
     });
   };
-  Be(0);
+  attempt(0);
 }
 //@ chunk-18hwfzwa.js:239052-239183 placement
 class ModePushTimeoutError extends Error {
@@ -78,71 +87,74 @@ class ModePushTimeoutError extends Error {
 //@ chunk-18hwfzwa.js:239183-239565 placement
 class PendingModeAcks {
   pending = [];
-  register(mode, x) {
+  register(mode, timeoutMs) {
     let { promise, resolve, reject } = Promise.withResolvers();
-    let ke = {
+    let entry = {
       mode,
       resolve,
       reject,
       timer: undefined,
     };
-    ke.timer = setTimeout(rejectPendingModePush, x, this, ke);
-    this.pending.push(ke);
+    entry.timer = setTimeout(rejectPendingModePush, timeoutMs, this, entry);
+    this.pending.push(entry);
     return promise;
   }
-  settle(h, x) {
-    let filtered = this.pending.filter((L) => L.mode === h);
-    this.pending = this.pending.filter((L) => L.mode !== h);
-    for (let L of filtered) {
-      clearTimeout(L.timer);
-      if (x) L.reject(x);
-      else L.resolve();
+  settle(mode, error) {
+    let filtered = this.pending.filter((entry) => entry.mode === mode);
+    this.pending = this.pending.filter((entry) => entry.mode !== mode);
+    for (let entry of filtered) {
+      clearTimeout(entry.timer);
+      if (error) entry.reject(error);
+      else entry.resolve();
     }
   }
 }
 //@ chunk-18hwfzwa.js:239565-239593 placement
-var pendingModeAcksBySession = new SessionRootSlot(() => new PendingModeAcks());
+var pendingModeAcksBySession; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:239565", () => {
+  pendingModeAcksBySession = new SessionRootSlot(() => new PendingModeAcks());
+});
 //@ chunk-18hwfzwa.js:239593-239634 placement
-function settlePendingModeAck(session, x, error) {
-  pendingModeAcksBySession.of(session).settle(x, error);
+function settlePendingModeAck(session, mode, error) {
+  pendingModeAcksBySession.of(session).settle(mode, error);
 }
 //@ chunk-18hwfzwa.js:239634-239685 placement
 /**
  * 导出函数 `registerPendingModeAck`：参数 h, x, D，返回 cUe.of(h).register(x, D)。
  */
-function registerPendingModeAck(session, x, D) {
-  return pendingModeAcksBySession.of(session).register(x, D);
+function registerPendingModeAck(session, mode, timeoutMs) {
+  return pendingModeAcksBySession.of(session).register(mode, timeoutMs);
 }
 //@ chunk-18hwfzwa.js:239685-239760 placement
-function rejectPendingModePush(h, x) {
-  h.pending = h.pending.filter((D) => D !== x);
-  x.reject(new ModePushTimeoutError());
+function rejectPendingModePush(acks, entry) {
+  acks.pending = acks.pending.filter((pendingEntry) => pendingEntry !== entry);
+  entry.reject(new ModePushTimeoutError());
 }
 //@ chunk-18hwfzwa.js:239760-239936 placement
 /**
  * 更新 remoteModeSessions 中某会话的记录并把它移到末尾，同时按上限裁剪旧记录（优先删除无未决请求的）；值未变返回原对象。
  */
-function updateSessionEntry(remoteModeSessions, x, D) {
-  let L = remoteModeSessions[x];
-  let ee = D(L);
-  if (ee === undefined || ee === L) return remoteModeSessions;
-  let filtered = Object.entries(remoteModeSessions).filter(([key]) => key !== x);
-  let Re = [x, ee];
-  return Object.fromEntries(trimSessionEntries(filtered).concat([Re]));
+function updateSessionEntry(remoteModeSessions, sessionId, update) {
+  let previous = remoteModeSessions[sessionId];
+  let next = update(previous);
+  if (next === undefined || next === previous) return remoteModeSessions;
+  let entries = Object.entries(remoteModeSessions).filter(([key]) => key !== sessionId);
+  let sessionEntry = [sessionId, next];
+  return Object.fromEntries(trimSessionEntries(entries).concat([sessionEntry]));
 }
 //@ chunk-18hwfzwa.js:239936-240164 placement
-function trimSessionEntries(h) {
-  let x = h.length - 3;
-  if (x <= 0) return h;
-  let filtered = h.filter(([, ke]) => ke.outstanding === null);
-  let filtered_2 = h.filter(([, ke]) => ke.outstanding !== null);
-  let ee = new Set(
+function trimSessionEntries(entries) {
+  let overflow = entries.length - 3;
+  if (overflow <= 0) return entries;
+  let filtered = entries.filter(([, entry]) => entry.outstanding === null);
+  let filtered_2 = entries.filter(([, entry]) => entry.outstanding !== null);
+  let dropped = new Set(
     filtered
       .concat(filtered_2)
-      .slice(0, x)
-      .map(([ke]) => ke),
+      .slice(0, overflow)
+      .map(([sessionId]) => sessionId),
   );
-  return h.filter(([ke]) => !ee.has(ke));
+  return entries.filter(([sessionId]) => !dropped.has(sessionId));
 }
 //@ chunk-18hwfzwa.js:240164-240320 placement
 /**
@@ -172,21 +184,21 @@ var PERMISSION_MODE_RANKS = {
   bypassPermissions: 4,
 };
 //@ chunk-18hwfzwa.js:240407-240490 placement
-function isModeMorePermissiveThan(mode, x) {
+function isModeMorePermissiveThan(mode, otherMode) {
   return (
-    PERMISSION_MODE_RANKS[mode] > PERMISSION_MODE_RANKS[x] ||
-    (mode === "acceptEdits" && (x === "auto" || x === "plan"))
+    PERMISSION_MODE_RANKS[mode] > PERMISSION_MODE_RANKS[otherMode] ||
+    (mode === "acceptEdits" && (otherMode === "auto" || otherMode === "plan"))
   );
 }
 //@ chunk-18hwfzwa.js:240490-240707 placement
-function resolveOutgoingMode(h, mode, modeOrigin, L) {
-  if (!L)
+function resolveOutgoingMode(chipMode, mode, modeOrigin, inCloudSession) {
+  if (!inCloudSession)
     return {
       mode,
       origin: modeOrigin,
       push: true,
     };
-  if (!isModeMorePermissiveThan(h, mode))
+  if (!isModeMorePermissiveThan(chipMode, mode))
     return {
       mode,
       origin: modeOrigin,
@@ -209,23 +221,27 @@ function resolveOutgoingMode(h, mode, modeOrigin, L) {
 /**
  * 记录一次权限模式广播，更新序号与最近变化序号。
  */
-function recordModeBroadcast(modeWire, x) {
+function recordModeBroadcast(modeWire, broadcastMode) {
   let lastBroadcast = modeWire.lastBroadcast;
-  let L = modeWire.lastSeq + 1;
-  modeWire.lastSeq = L;
-  if (x === null || lastBroadcast?.mode !== x || modeWire.lastChangeSeq > lastBroadcast.seq)
-    modeWire.lastChangeSeq = L;
-  if (x !== null)
+  let nextSeq = modeWire.lastSeq + 1;
+  modeWire.lastSeq = nextSeq;
+  if (
+    broadcastMode === null ||
+    lastBroadcast?.mode !== broadcastMode ||
+    modeWire.lastChangeSeq > lastBroadcast.seq
+  )
+    modeWire.lastChangeSeq = nextSeq;
+  if (broadcastMode !== null)
     modeWire.lastBroadcast = {
-      mode: x,
-      seq: L,
+      mode: broadcastMode,
+      seq: nextSeq,
     };
 }
 //@ chunk-18hwfzwa.js:240882-240960 placement
-function recordAppliedMode(modeWire, x, own = false) {
-  modeWire.applied = x;
+function recordAppliedMode(modeWire, mode, own = false) {
+  modeWire.applied = mode;
   modeWire.lastApplied = {
-    mode: x,
+    mode,
     seq: modeWire.lastSeq,
     own,
   };
@@ -241,16 +257,16 @@ function noteOwnModeAnswerPending(modeWire, mode) {
 /**
  * 若收到的模式与自己等待确认的答复一致，则消费该等待并记录确认。
  */
-function consumeOwnAnswer(modeWire, x) {
+function consumeOwnAnswer(modeWire, mode) {
   let ownAnswerPending = modeWire.ownAnswerPending;
   if (ownAnswerPending === null) return false;
-  if (ownAnswerPending.mode !== x) {
+  if (ownAnswerPending.mode !== mode) {
     if (modeWire.lastChangeSeq === modeWire.lastSeq) modeWire.ownAnswerPending = null;
     return false;
   }
   modeWire.ownAnswerPending = null;
   recordOwnAck(modeWire, {
-    mode: x,
+    mode,
     origin: "person",
     sent: ownAnswerPending.sent,
   });
@@ -288,10 +304,10 @@ function getLatestOwnSend(modeWire) {
 /**
  * 记录本端发送得到的确认（忽略比已有确认更旧的）。
  */
-function recordOwnAck(modeWire, x) {
-  if (modeWire.ownAck !== null && x.sent < modeWire.ownAck.sent) return;
+function recordOwnAck(modeWire, ack) {
+  if (modeWire.ownAck !== null && ack.sent < modeWire.ownAck.sent) return;
   modeWire.ownAck = {
-    ...x,
+    ...ack,
     afterBroadcastSeq: modeWire.lastSeq,
   };
 }
@@ -299,25 +315,25 @@ function recordOwnAck(modeWire, x) {
 /**
  * 用 updater 更新某远程会话的模式记录（不存在时以默认记录起步），可选择忽略来自旧屏幕的更新。
  */
-function updateRemoteModeSession(setAppState, x, D, L = false) {
-  if (x === null) return;
-  setAppState((ee) => {
-    let ke = updateSessionEntry(ee.remoteModeSessions, x.id, (Re) => {
-      if (!L && Re !== undefined && Re.screen > x.screen) return;
-      let Be = Re ?? {
-        screen: x.screen,
+function updateRemoteModeSession(setAppState, sessionRef, update, force = false) {
+  if (sessionRef === null) return;
+  setAppState((appState) => {
+    let sessions = updateSessionEntry(appState.remoteModeSessions, sessionRef.id, (entry) => {
+      if (!force && entry !== undefined && entry.screen > sessionRef.screen) return;
+      let base = entry ?? {
+        screen: sessionRef.screen,
         label: null,
         outstanding: null,
         applied: null,
       };
-      let He = D(Be);
-      return Re === undefined && He === Be ? undefined : He;
+      let next = update(base);
+      return entry === undefined && next === base ? undefined : next;
     });
-    return ke === ee.remoteModeSessions
-      ? ee
+    return sessions === appState.remoteModeSessions
+      ? appState
       : {
-          ...ee,
-          remoteModeSessions: ke,
+          ...appState,
+          remoteModeSessions: sessions,
         };
   });
 }
@@ -334,12 +350,12 @@ function resolveModeOrigin({ fallback, label, acked, confirmedByAck, sentBefore,
   return label;
 }
 //@ chunk-18hwfzwa.js:242170-242281 placement
-function setSessionModeLabel(setAppState, x, mode, origin) {
-  updateRemoteModeSession(setAppState, x, (ee) =>
-    ee.label?.mode === mode && ee.label.origin === origin
-      ? ee
+function setSessionModeLabel(setAppState, sessionRef, mode, origin) {
+  updateRemoteModeSession(setAppState, sessionRef, (entry) =>
+    entry.label?.mode === mode && entry.label.origin === origin
+      ? entry
       : {
-          ...ee,
+          ...entry,
           label: {
             mode,
             origin,
@@ -351,42 +367,42 @@ function setSessionModeLabel(setAppState, x, mode, origin) {
 /**
  * 远端确认新模式时，把未决请求改为 landing 状态（来源为本人），已与目标一致则清除。
  */
-function landOutstandingMode(setAppState, sessionId, D) {
-  setAppState((L) => {
-    let ee = updateSessionEntry(L.remoteModeSessions, sessionId, (ke) => {
-      let outstanding = ke?.outstanding;
-      if (ke === undefined || outstanding === null || outstanding === undefined) return ke;
-      let Be = outstanding.kind === "landing" ? outstanding.from : outstanding.mode;
-      let He = outstanding.kind === "landing" ? (outstanding.was ?? outstanding.mode) : outstanding.mode;
+function landOutstandingMode(setAppState, sessionId, mode) {
+  setAppState((appState) => {
+    let sessions = updateSessionEntry(appState.remoteModeSessions, sessionId, (entry) => {
+      let outstanding = entry?.outstanding;
+      if (entry === undefined || outstanding === null || outstanding === undefined) return entry;
+      let fromMode = outstanding.kind === "landing" ? outstanding.from : outstanding.mode;
+      let wasMode = outstanding.kind === "landing" ? (outstanding.was ?? outstanding.mode) : outstanding.mode;
       if (
         outstanding.kind === "landing" &&
-        outstanding.mode === D &&
+        outstanding.mode === mode &&
         outstanding.origin === "person" &&
-        outstanding.was === He &&
+        outstanding.was === wasMode &&
         outstanding.workerHolds === undefined
       )
-        return ke;
+        return entry;
       return {
-        ...ke,
+        ...entry,
         outstanding:
-          Be === D
+          fromMode === mode
             ? null
             : {
                 id: outstanding.id,
                 kind: "landing",
-                mode: D,
+                mode,
                 origin: "person",
-                from: Be,
+                from: fromMode,
                 workerHolds: undefined,
-                was: He,
+                was: wasMode,
               },
       };
     });
-    return ee === L.remoteModeSessions
-      ? L
+    return sessions === appState.remoteModeSessions
+      ? appState
       : {
-          ...L,
-          remoteModeSessions: ee,
+          ...appState,
+          remoteModeSessions: sessions,
         };
   });
 }
@@ -410,26 +426,26 @@ function retargetToDefault(outstanding) {
  */
 function handleUnrecordedAnswer(modeWire, store, setAppState, sessionId) {
   let outstanding = store.getSnapshot().remoteModeSessions[sessionId]?.outstanding;
-  let ke = outstanding != null && retargetToDefault(outstanding) !== outstanding;
+  let retargeted = outstanding != null && retargetToDefault(outstanding) !== outstanding;
   logEvent("tengu_remote_mode_unrecorded_answer", {
     made_stale: fromEnumOpt(modeWire.ownSent?.mode) ?? lit_2("none"),
-    retargeted: ke ? fromEnum(outstanding.kind) : lit_2("none"),
+    retargeted: retargeted ? fromEnum(outstanding.kind) : lit_2("none"),
   });
-  if (!ke) return;
-  setAppState((Re) => {
-    let Be = updateSessionEntry(Re.remoteModeSessions, sessionId, (He) =>
-      He?.outstanding == null
-        ? He
+  if (!retargeted) return;
+  setAppState((appState) => {
+    let sessions = updateSessionEntry(appState.remoteModeSessions, sessionId, (entry) =>
+      entry?.outstanding == null
+        ? entry
         : {
-            ...He,
-            outstanding: retargetToDefault(He.outstanding),
+            ...entry,
+            outstanding: retargetToDefault(entry.outstanding),
           },
     );
-    return Be === Re.remoteModeSessions
-      ? Re
+    return sessions === appState.remoteModeSessions
+      ? appState
       : {
-          ...Re,
-          remoteModeSessions: Be,
+          ...appState,
+          remoteModeSessions: sessions,
         };
   });
 }
@@ -437,40 +453,40 @@ function handleUnrecordedAnswer(modeWire, store, setAppState, sessionId) {
 /**
  * 远端已应用某模式时更新会话记录的 applied，并清除已完成的 landing 未决请求。
  */
-function applyRemoteMode(setAppState, sessionId, D, L) {
-  setAppState((ee) => {
-    let ke = updateSessionEntry(ee.remoteModeSessions, sessionId, (Re) => {
-      if (Re === undefined) return Re;
-      let outstanding = Re.outstanding;
-      let He =
+function applyRemoteMode(setAppState, sessionId, mode, origin) {
+  setAppState((appState) => {
+    let sessions = updateSessionEntry(appState.remoteModeSessions, sessionId, (entry) => {
+      if (entry === undefined) return entry;
+      let outstanding = entry.outstanding;
+      let nextOutstanding =
         outstanding?.kind === "landing" && outstanding.was !== undefined
-          ? L === "person" && outstanding.mode === D
+          ? origin === "person" && outstanding.mode === mode
             ? null
             : {
                 ...outstanding,
                 was: undefined,
               }
           : outstanding;
-      let We =
-        Re.applied?.mode === D && Re.applied.origin === L
-          ? Re.applied
+      let applied =
+        entry.applied?.mode === mode && entry.applied.origin === origin
+          ? entry.applied
           : {
-              mode: D,
-              origin: L,
+              mode,
+              origin,
             };
-      return He === Re.outstanding && We === Re.applied
-        ? Re
+      return nextOutstanding === entry.outstanding && applied === entry.applied
+        ? entry
         : {
-            ...Re,
-            outstanding: He,
-            applied: We,
+            ...entry,
+            outstanding: nextOutstanding,
+            applied,
           };
     });
-    return ke === ee.remoteModeSessions
-      ? ee
+    return sessions === appState.remoteModeSessions
+      ? appState
       : {
-          ...ee,
-          remoteModeSessions: ke,
+          ...appState,
+          remoteModeSessions: sessions,
         };
   });
 }
@@ -478,16 +494,16 @@ function applyRemoteMode(setAppState, sessionId, D, L) {
 /**
  * 开始在远程会话中落地一次模式切换：生成 id 并记为该会话的待处理切换。
  */
-function beginModeLanding(h, sessionId, mode, from) {
-  let ee = randomUUID();
-  h((ke) => {
-    let Re = updateSessionEntry(ke.remoteModeSessions, sessionId, (Be) =>
-      Be === undefined
+function beginModeLanding(setAppState, sessionId, mode, from) {
+  let landingId = randomUUID();
+  setAppState((appState) => {
+    let sessions = updateSessionEntry(appState.remoteModeSessions, sessionId, (entry) =>
+      entry === undefined
         ? undefined
         : {
-            ...Be,
+            ...entry,
             outstanding: {
-              id: ee,
+              id: landingId,
               kind: "landing",
               mode,
               origin: "person",
@@ -496,179 +512,186 @@ function beginModeLanding(h, sessionId, mode, from) {
             },
           },
     );
-    return Re === ke.remoteModeSessions
-      ? ke
+    return sessions === appState.remoteModeSessions
+      ? appState
       : {
-          ...ke,
-          remoteModeSessions: Re,
+          ...appState,
+          remoteModeSessions: sessions,
         };
   });
-  return ee;
+  return landingId;
 }
 //@ chunk-18hwfzwa.js:244123-244308 placement
 /**
  * 清除远程会话中指定 id 的待处理模式切换。
  */
-function clearOutstandingMode(h, sessionId, convergeEntry) {
-  h((L) => {
-    let ee = updateSessionEntry(L.remoteModeSessions, sessionId, (ke) =>
-      ke?.outstanding?.id === convergeEntry
+function clearOutstandingMode(setAppState, sessionId, convergeEntry) {
+  setAppState((appState) => {
+    let sessions = updateSessionEntry(appState.remoteModeSessions, sessionId, (entry) =>
+      entry?.outstanding?.id === convergeEntry
         ? {
-            ...ke,
+            ...entry,
             outstanding: null,
           }
-        : ke,
+        : entry,
     );
-    return ee === L.remoteModeSessions
-      ? L
+    return sessions === appState.remoteModeSessions
+      ? appState
       : {
-          ...L,
-          remoteModeSessions: ee,
+          ...appState,
+          remoteModeSessions: sessions,
         };
   });
 }
 //@ chunk-18hwfzwa.js:244308-244448 placement
-function setOutstandingMode(setAppState, x, D, L) {
+function setOutstandingMode(setAppState, sessionRef, outstanding, previous) {
   updateRemoteModeSession(
     setAppState,
-    x,
-    (ee) =>
-      ee.outstanding === D || (L !== undefined && ee.outstanding?.id !== L.id)
-        ? ee
+    sessionRef,
+    (entry) =>
+      entry.outstanding === outstanding || (previous !== undefined && entry.outstanding?.id !== previous.id)
+        ? entry
         : {
-            ...ee,
-            outstanding: D,
+            ...entry,
+            outstanding,
           },
-    D === null && L !== undefined,
+    outstanding === null && previous !== undefined,
   );
 }
 //@ chunk-18hwfzwa.js:244448-254618 placement
 /**
  * 云会话权限模式同步：本地按 shift+tab 改模式时推送 set_permission_mode 并等待 ack，远端广播模式变化时落地到本地，冲突/超时时回退并通知（remote-permission-mode-unsynced/rejected）。
  */
-function useRemotePermissionModeSync(h, x = MODE_PUSH_RETRY_DELAYS_MS) {
-  let D = useStoreSelector(h, (bo) => bo.activeRemote);
-  let modeWire = h.modeWire;
+function useRemotePermissionModeSync(store, retryDelaysMs = MODE_PUSH_RETRY_DELAYS_MS) {
+  let activeRemote = useStoreSelector(store, (state) => state.activeRemote);
+  let modeWire = store.modeWire;
   let session = useSession();
-  let ke = useAppState((bo) => bo.toolPermissionContext);
-  let mode = ke.mode;
+  let toolPermissionContext = useAppState((appState) => appState.toolPermissionContext);
+  let mode = toolPermissionContext.mode;
   let lastApplied = modeWire.lastApplied;
   let setAppState = useSetAppState();
   let appStoreDirect = useAppStoreDirect();
   let { addNotification } = useNotifications();
-  let Xe = R(false);
-  let rt = R({
+  let initializedRef = useRef(false);
+  let chipRef = useRef({
     mode,
-    context: ke,
+    context: toolPermissionContext,
     origin: "person",
     autoModeActive: isAutoModeActive(),
   });
-  let kt = R(false);
-  let At = R(null);
-  let It = R(null);
-  let Ot = It.current;
-  let Et = R(null);
-  let lastAppliedRef = R(null);
-  let Lt = R(0);
-  let oo = R(0);
-  let labelRef = R(null);
-  let io = R(false);
-  let so = R(true);
-  P(
+  let sawLabelRef = useRef(false);
+  let pendingPushRef = useRef(null);
+  let queuedPushRef = useRef(null);
+  let queuedPush = queuedPushRef.current;
+  let convergeTimerRef = useRef(null);
+  let lastAppliedRef = useRef(null);
+  let sendSeqRef = useRef(0);
+  let chipSeqRef = useRef(0);
+  let labelRef = useRef(null);
+  let wasBubbleRef = useRef(false);
+  let mountedRef = useRef(true);
+  useEffect(
     () => () => {
-      so.current = false;
-      Et.current = null;
+      mountedRef.current = false;
+      convergeTimerRef.current = null;
     },
     [],
   );
-  let po = R(0);
-  let sessionIdRef = R(undefined);
-  let sessionId = D.isRemoteMode ? D.sessionId : undefined;
-  zt(() => {
-    let activeRemote = h.getSnapshot().activeRemote;
+  let screenRef = useRef(0);
+  let sessionIdRef = useRef(undefined);
+  let sessionId = activeRemote.isRemoteMode ? activeRemote.sessionId : undefined;
+  useLayoutEffect(() => {
+    let activeRemote = store.getSnapshot().activeRemote;
     let sessionId = activeRemote.isRemoteMode ? activeRemote.sessionId : undefined;
     if (sessionId === undefined || sessionId === sessionIdRef.current) return;
     sessionIdRef.current = sessionId;
-    let Bo = (appStoreDirect.getState().remoteModeSessions[sessionId]?.screen ?? 0) + 1;
-    po.current = Bo;
+    let nextScreen = (appStoreDirect.getState().remoteModeSessions[sessionId]?.screen ?? 0) + 1;
+    screenRef.current = nextScreen;
     updateRemoteModeSession(
       setAppState,
       {
         id: sessionId,
-        screen: Bo,
+        screen: nextScreen,
       },
-      (Ro) => ({
-        ...Ro,
-        screen: Bo,
+      (entry) => ({
+        ...entry,
+        screen: nextScreen,
       }),
     );
-  }, [h, sessionId, appStoreDirect, setAppState]);
-  P(() => {
-    if (!D.isRemoteMode || !D.caps.controlChannel || D.viewerOnly) {
-      Et.current = null;
+  }, [store, sessionId, appStoreDirect, setAppState]);
+  useEffect(() => {
+    if (!activeRemote.isRemoteMode || !activeRemote.caps.controlChannel || activeRemote.viewerOnly) {
+      convergeTimerRef.current = null;
       return;
     }
-    let bo = () => isDeviceIdentityEnabledCached() && D.caps.sessionRecord;
-    let Ao = bo();
-    let Bo =
-      D.sessionId === undefined
+    let canSync = () => isDeviceIdentityEnabledCached() && activeRemote.caps.sessionRecord;
+    let deviceSync = canSync();
+    let sessionRef =
+      activeRemote.sessionId === undefined
         ? null
         : {
-            id: D.sessionId,
-            screen: po.current,
+            id: activeRemote.sessionId,
+            screen: screenRef.current,
           };
-    let Ro = () =>
-      bo() &&
-      (!so.current ||
-        (Bo !== null &&
-          (appStoreDirect.getState().remoteModeSessions[Bo.id]?.screen ?? Bo.screen) !== Bo.screen));
-    if (!Xe.current) {
-      Xe.current = true;
-      let Wn = Bo === null ? undefined : appStoreDirect.getState().remoteModeSessions[Bo.id];
-      if (Wn?.label) {
-        kt.current = true;
-        let mode = rt.current.mode;
-        rt.current = {
-          ...rt.current,
-          origin: Wn.label.mode === mode ? Wn.label.origin : "wire",
+    let isStale = () =>
+      canSync() &&
+      (!mountedRef.current ||
+        (sessionRef !== null &&
+          (appStoreDirect.getState().remoteModeSessions[sessionRef.id]?.screen ?? sessionRef.screen) !==
+            sessionRef.screen));
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      let entry =
+        sessionRef === null ? undefined : appStoreDirect.getState().remoteModeSessions[sessionRef.id];
+      if (entry?.label) {
+        sawLabelRef.current = true;
+        let mode = chipRef.current.mode;
+        chipRef.current = {
+          ...chipRef.current,
+          origin: entry.label.mode === mode ? entry.label.origin : "wire",
         };
-        if (mode === "bubble" && Wn.label.mode !== "bubble") labelRef.current = Wn.label;
-        let outstanding = Wn.outstanding;
-        if (outstanding !== null) setOutstandingMode(setAppState, Bo, null);
-        let Un = (mode_2) =>
+        if (mode === "bubble" && entry.label.mode !== "bubble") labelRef.current = entry.label;
+        let outstanding = entry.outstanding;
+        if (outstanding !== null) setOutstandingMode(setAppState, sessionRef, null);
+        let isCurrentMode = (mode_2) =>
           mode_2 === mode && appStoreDirect.getState().toolPermissionContext.mode === mode_2;
-        let dr =
+        let landedElsewhere =
           outstanding?.kind === "landing" &&
-          Ao &&
+          deviceSync &&
           outstanding.from !== outstanding.mode &&
-          (Wn.applied === null || Wn.applied.mode === outstanding.mode) &&
-          (Wn.label.mode === outstanding.mode ||
-            (outstanding.was !== undefined && Wn.label.mode === outstanding.was));
-        if (outstanding?.kind === "press" && Ao && Un(outstanding.mode) && mode !== "bubble")
-          rt.current = {
+          (entry.applied === null || entry.applied.mode === outstanding.mode) &&
+          (entry.label.mode === outstanding.mode ||
+            (outstanding.was !== undefined && entry.label.mode === outstanding.was));
+        if (
+          outstanding?.kind === "press" &&
+          deviceSync &&
+          isCurrentMode(outstanding.mode) &&
+          mode !== "bubble"
+        )
+          chipRef.current = {
             mode: outstanding.fallback,
             origin: outstanding.fallbackOrigin,
             context: {
-              ...rt.current.context,
+              ...chipRef.current.context,
               mode: outstanding.fallback,
             },
             autoModeActive: isAutoModeActive(),
             carried: true,
           };
-        else if (outstanding?.kind === "landing" && dr && Un(outstanding.mode)) {
-          rt.current = {
-            ...rt.current,
+        else if (outstanding?.kind === "landing" && landedElsewhere && isCurrentMode(outstanding.mode)) {
+          chipRef.current = {
+            ...chipRef.current,
             mode: outstanding.from,
             origin: "wire",
           };
-          At.current = {
+          pendingPushRef.current = {
             mode: outstanding.mode,
             origin: outstanding.origin,
             push: true,
             workerHolds: outstanding.workerHolds,
           };
-        } else if (outstanding?.kind === "landing" && dr && mode !== "bubble") {
-          let or = {
+        } else if (outstanding?.kind === "landing" && landedElsewhere && mode !== "bubble") {
+          let adoptedPush = {
             mode: outstanding.mode,
             origin: outstanding.origin,
             push: true,
@@ -678,275 +701,312 @@ function useRemotePermissionModeSync(h, x = MODE_PUSH_RETRY_DELAYS_MS) {
           setPermissionModeWithGuards(
             outstanding.mode,
             appStoreDirect.getState().toolPermissionContext,
-            (pr) => {
-              setAppState((Qn) => {
-                if (Qn.toolPermissionContext.mode !== mode) return Qn;
-                At.current = or;
-                It.current = or;
+            (applyContext) => {
+              setAppState((appState) => {
+                if (appState.toolPermissionContext.mode !== mode) return appState;
+                pendingPushRef.current = adoptedPush;
+                queuedPushRef.current = adoptedPush;
                 return {
-                  ...Qn,
-                  toolPermissionContext: pr(Qn.toolPermissionContext),
+                  ...appState,
+                  toolPermissionContext: applyContext(appState.toolPermissionContext),
                 };
               });
             },
           );
         }
       } else {
-        rt.current = {
-          ...rt.current,
+        chipRef.current = {
+          ...chipRef.current,
           origin: "wire",
         };
-        io.current = rt.current.mode === "bubble";
+        wasBubbleRef.current = chipRef.current.mode === "bubble";
       }
     }
-    let Ho = rt.current;
+    let chipBefore = chipRef.current;
     let applied = modeWire.applied;
     modeWire.applied = null;
-    let Wo = lastApplied !== lastAppliedRef.current ? lastApplied : undefined;
+    let newApplied = lastApplied !== lastAppliedRef.current ? lastApplied : undefined;
     lastAppliedRef.current = lastApplied;
-    let mn = Ao ? Wo?.mode === mode : applied === mode;
-    let Cn =
-      Ao && Bo !== null ? (appStoreDirect.getState().remoteModeSessions[Bo.id]?.applied ?? null) : null;
-    let No = !mn && Cn?.mode === mode ? Cn : null;
-    if (Cn !== null && (Cn.mode === mode || Cn.mode !== appStoreDirect.getState().toolPermissionContext.mode))
-      updateRemoteModeSession(setAppState, Bo, (Wn) =>
-        Wn.applied === null
-          ? Wn
+    let appliedMatches = deviceSync ? newApplied?.mode === mode : applied === mode;
+    let workerApplied =
+      deviceSync && sessionRef !== null
+        ? (appStoreDirect.getState().remoteModeSessions[sessionRef.id]?.applied ?? null)
+        : null;
+    let confirmedMode = !appliedMatches && workerApplied?.mode === mode ? workerApplied : null;
+    if (
+      workerApplied !== null &&
+      (workerApplied.mode === mode ||
+        workerApplied.mode !== appStoreDirect.getState().toolPermissionContext.mode)
+    )
+      updateRemoteModeSession(setAppState, sessionRef, (entry) =>
+        entry.applied === null
+          ? entry
           : {
-              ...Wn,
+              ...entry,
               applied: null,
             },
       );
-    let vo = mn || No !== null;
-    let Yo = No !== null ? No.origin : Ao && Wo?.own === true ? "person" : "wire";
-    if (vo && Yo === "person")
-      updateRemoteModeSession(setAppState, Bo, (Wn) =>
-        Wn.outstanding?.kind === "landing" && Wn.outstanding.was !== undefined && Wn.outstanding.mode === mode
+    let landedConfirmed = appliedMatches || confirmedMode !== null;
+    let origin =
+      confirmedMode !== null
+        ? confirmedMode.origin
+        : deviceSync && newApplied?.own === true
+          ? "person"
+          : "wire";
+    if (landedConfirmed && origin === "person")
+      updateRemoteModeSession(setAppState, sessionRef, (entry) =>
+        entry.outstanding?.kind === "landing" &&
+        entry.outstanding.was !== undefined &&
+        entry.outstanding.mode === mode
           ? {
-              ...Wn,
+              ...entry,
               outstanding: null,
             }
-          : Wn,
+          : entry,
       );
-    if (Ho.mode === mode || mode === "bubble") {
-      if (mode === "bubble" && Ho.mode !== "bubble")
+    if (chipBefore.mode === mode || mode === "bubble") {
+      if (mode === "bubble" && chipBefore.mode !== "bubble")
         labelRef.current =
-          Ao && Wo
+          deviceSync && newApplied
             ? {
-                mode: Wo.mode,
-                origin: Yo,
+                mode: newApplied.mode,
+                origin,
               }
             : {
-                mode: Ho.mode,
-                origin: Ho.origin,
+                mode: chipBefore.mode,
+                origin: chipBefore.origin,
               };
-      if (Ao && mode !== "bubble" && Ot && At.current === Ot) At.current = null;
-      rt.current = {
+      if (deviceSync && mode !== "bubble" && queuedPush && pendingPushRef.current === queuedPush)
+        pendingPushRef.current = null;
+      chipRef.current = {
         mode,
-        context: ke,
-        origin: Ao && vo ? Yo : Ho.origin,
+        context: toolPermissionContext,
+        origin: deviceSync && landedConfirmed ? origin : chipBefore.origin,
         autoModeActive: isAutoModeActive(),
       };
-      if (mode !== "bubble") setSessionModeLabel(setAppState, Bo, mode, rt.current.origin);
+      if (mode !== "bubble") setSessionModeLabel(setAppState, sessionRef, mode, chipRef.current.origin);
       return;
     }
-    let kn = At.current;
-    At.current = null;
-    let Fn = labelRef.current;
+    let pendingPush = pendingPushRef.current;
+    pendingPushRef.current = null;
+    let savedLabel = labelRef.current;
     labelRef.current = null;
-    let bn = io.current;
-    io.current = false;
-    let Go =
-      Ho.mode !== "bubble"
+    let wasBubble = wasBubbleRef.current;
+    wasBubbleRef.current = false;
+    let bubbleOrigin =
+      chipBefore.mode !== "bubble"
         ? undefined
-        : Fn?.mode === mode
-          ? Fn.origin
-          : bn && isModeMorePermissiveThan(mode, "default")
+        : savedLabel?.mode === mode
+          ? savedLabel.origin
+          : wasBubble && isModeMorePermissiveThan(mode, "default")
             ? "wire"
             : undefined;
-    let hn = kn?.mode === mode;
-    let Mn = !(Ao && hn) && (vo || (Ao && Go === "wire"));
-    oo.current += 1;
-    let Xo = oo.current;
-    rt.current = {
+    let pushMatchesMode = pendingPush?.mode === mode;
+    let adoptLocal =
+      !(deviceSync && pushMatchesMode) && (landedConfirmed || (deviceSync && bubbleOrigin === "wire"));
+    chipSeqRef.current += 1;
+    let chipSeq = chipSeqRef.current;
+    chipRef.current = {
       mode,
-      context: ke,
-      origin: Mn ? (vo ? Yo : "wire") : kn?.mode === mode ? kn.origin : (Go ?? "person"),
+      context: toolPermissionContext,
+      origin: adoptLocal
+        ? landedConfirmed
+          ? origin
+          : "wire"
+        : pendingPush?.mode === mode
+          ? pendingPush.origin
+          : (bubbleOrigin ?? "person"),
       autoModeActive: isAutoModeActive(),
     };
-    setSessionModeLabel(setAppState, Bo, mode, rt.current.origin);
-    if (Et.current !== null)
-      updateRemoteModeSession(setAppState, Bo, (Wn) =>
-        Wn.outstanding?.kind === "landing"
+    setSessionModeLabel(setAppState, sessionRef, mode, chipRef.current.origin);
+    if (convergeTimerRef.current !== null)
+      updateRemoteModeSession(setAppState, sessionRef, (entry) =>
+        entry.outstanding?.kind === "landing"
           ? {
-              ...Wn,
+              ...entry,
               outstanding: null,
             }
-          : Wn,
+          : entry,
       );
-    Et.current = null;
-    if (Mn) {
+    convergeTimerRef.current = null;
+    if (adoptLocal) {
       settlePendingModeAck(session, mode);
       return;
     }
-    let mode_2 = mode;
-    let origin = Ao ? rt.current.origin : "wire";
-    if (Ao && hn && kn?.push === false) {
-      logForDebugging(`[remote] reverted to ${mode_2}; nothing re-sent`);
+    let revertedMode = mode;
+    let origin_2 = deviceSync ? chipRef.current.origin : "wire";
+    if (deviceSync && pushMatchesMode && pendingPush?.push === false) {
+      logForDebugging(`[remote] reverted to ${revertedMode}; nothing re-sent`);
       return;
     }
-    let workerHolds = Ao && hn ? kn?.workerHolds : undefined;
-    let from = Ao && hn ? (kn?.from ?? Ho.mode) : Ho.mode;
-    let cn = (Wn) => {
-      At.current = Wn;
-      It.current = Wn;
+    let workerHolds = deviceSync && pushMatchesMode ? pendingPush?.workerHolds : undefined;
+    let from = deviceSync && pushMatchesMode ? (pendingPush?.from ?? chipBefore.mode) : chipBefore.mode;
+    let rememberPush = (push) => {
+      pendingPushRef.current = push;
+      queuedPushRef.current = push;
     };
     let seq = modeWire.lastBroadcast?.seq ?? 0;
-    let wn = (Wn, Fr = false) => {
+    let revertChip = (notification, silent = false) => {
       if (
-        Ro() ||
+        isStale() ||
         workerHolds === undefined ||
-        oo.current !== Xo ||
-        appStoreDirect.getState().toolPermissionContext.mode !== mode_2
+        chipSeqRef.current !== chipSeq ||
+        appStoreDirect.getState().toolPermissionContext.mode !== revertedMode
       )
         return;
       if ((modeWire.lastBroadcast?.seq ?? 0) !== seq) {
-        if (!Fr && modeWire.lastBroadcast?.mode !== mode_2) addNotification(Wn);
+        if (!silent && modeWire.lastBroadcast?.mode !== revertedMode) addNotification(notification);
         return;
       }
-      if (!Fr) addNotification(Wn);
+      if (!silent) addNotification(notification);
       if (
-        setPermissionModeWithGuards(workerHolds, appStoreDirect.getState().toolPermissionContext, (Un) => {
-          setAppState((dr) => {
-            if (dr.toolPermissionContext.mode !== mode_2) return dr;
-            let toolPermissionContext = Un(dr.toolPermissionContext);
-            cn({
-              mode: workerHolds,
-              origin: "wire",
-              push: false,
+        setPermissionModeWithGuards(
+          workerHolds,
+          appStoreDirect.getState().toolPermissionContext,
+          (applyContext) => {
+            setAppState((appState) => {
+              if (appState.toolPermissionContext.mode !== revertedMode) return appState;
+              let toolPermissionContext = applyContext(appState.toolPermissionContext);
+              rememberPush({
+                mode: workerHolds,
+                origin: "wire",
+                push: false,
+              });
+              return {
+                ...appState,
+                toolPermissionContext,
+              };
             });
-            return {
-              ...dr,
-              toolPermissionContext,
-            };
-          });
-        }).ok
+          },
+        ).ok
       )
         logForDebugging(
-          `[remote] the cloud session did not take ${mode_2} after the landing; chip back on ${workerHolds}, which it still holds`,
+          `[remote] the cloud session did not take ${revertedMode} after the landing; chip back on ${workerHolds}, which it still holds`,
         );
     };
-    let mr = (Wn, Fr) => {
+    let pushMode = (delayIndex, landing) => {
       let lastSeq = modeWire.lastSeq;
       let latestOwnSend = getLatestOwnSend(modeWire);
-      let dr = latestOwnSend !== modeWire.ownSent;
-      let or = recordOwnSend(modeWire, mode_2, origin);
-      if (!Fr) Lt.current += 1;
-      let pr = Lt.current;
-      let Qn = !Ao
+      let ownSendAdvanced = latestOwnSend !== modeWire.ownSent;
+      let ownSend = recordOwnSend(modeWire, revertedMode, origin_2);
+      if (!landing) sendSeqRef.current += 1;
+      let sendSeq = sendSeqRef.current;
+      let outstanding = !deviceSync
         ? null
-        : Fr
+        : landing
           ? {
               id: randomUUID(),
               kind: "landing",
-              mode: mode_2,
-              origin,
+              mode: revertedMode,
+              origin: origin_2,
               from,
               workerHolds,
             }
           : {
               id: randomUUID(),
               kind: "press",
-              mode: mode_2,
-              fallback: Ho.mode,
-              fallbackOrigin: Ho.origin,
+              mode: revertedMode,
+              fallback: chipBefore.mode,
+              fallbackOrigin: chipBefore.origin,
             };
-      let ur = () => {
-        if (Qn !== null) setOutstandingMode(setAppState, Bo, null, Qn);
+      let clearOutstanding = () => {
+        if (outstanding !== null) setOutstandingMode(setAppState, sessionRef, null, outstanding);
       };
-      if (Qn !== null) setOutstandingMode(setAppState, Bo, Qn);
-      D.sendControlRequest({
-        subtype: "set_permission_mode",
-        mode: mode_2,
-      })
+      if (outstanding !== null) setOutstandingMode(setAppState, sessionRef, outstanding);
+      activeRemote
+        .sendControlRequest({
+          subtype: "set_permission_mode",
+          mode: revertedMode,
+        })
         .then(() => {
-          ur();
+          clearOutstanding();
           recordOwnAck(modeWire, {
-            mode: mode_2,
-            origin,
-            sent: Ao ? or : modeWire.ownSends,
+            mode: revertedMode,
+            origin: origin_2,
+            sent: deviceSync ? ownSend : modeWire.ownSends,
           });
-          settlePendingModeAck(session, mode_2);
-          if (!Fr) logFeatureOk("mode_switch");
+          settlePendingModeAck(session, revertedMode);
+          if (!landing) logFeatureOk("mode_switch");
         })
         .catch((error) => {
-          settlePendingModeAck(session, mode_2, toError(error));
+          settlePendingModeAck(session, revertedMode, toError(error));
           logForDebugging(`[remote] set_permission_mode rejected: ${errorMessage(error)}`);
-          let Pr = error instanceof ControlRequestNotDeliveredError;
-          let ts = classifyControlRequestError(error);
-          if (Ro()) {
-            if (!Fr) logFeatureBad("mode_switch", ts);
+          let undelivered = error instanceof ControlRequestNotDeliveredError;
+          let errorKind = classifyControlRequestError(error);
+          if (isStale()) {
+            if (!landing) logFeatureBad("mode_switch", errorKind);
             return;
           }
-          if (!(Fr && Pr)) ur();
-          let Gn =
-            (ts === "disconnected" || ts === "not_connected") &&
+          if (!(landing && undelivered)) clearOutstanding();
+          let disconnected =
+            (errorKind === "disconnected" || errorKind === "not_connected") &&
             appStoreDirect.getState().remoteConnectionStatus !== "connected";
-          if (Fr) {
-            if (Pr) Kn(Wn, pr, or, ur);
-            else wn(notifyRemoteModeRejected(mode_2), Gn);
+          if (landing) {
+            if (undelivered) retryConvergence(delayIndex, sendSeq, ownSend, clearOutstanding);
+            else revertChip(notifyRemoteModeRejected(revertedMode), disconnected);
             return;
           }
-          let Ur = bo();
+          let inCloudSession = canSync();
           let mode = appStoreDirect.getState().toolPermissionContext.mode;
-          let wr = mode !== mode_2;
+          let chipMoved = mode !== revertedMode;
           let lastBroadcast = modeWire.lastBroadcast;
-          let _r = lastBroadcast?.mode === mode_2 && lastBroadcast.seq > lastSeq;
-          let fr = Ur ? getLatestOwnSend(modeWire) : null;
-          let $r = fr !== null && fr === modeWire.ownSent && fr.mode === mode_2 && fr.sent > or;
-          let Yr =
-            Ur &&
-            wr &&
-            (mode === rt.current.mode ||
+          let workerReportedMode = lastBroadcast?.mode === revertedMode && lastBroadcast.seq > lastSeq;
+          let latestOwn = inCloudSession ? getLatestOwnSend(modeWire) : null;
+          let ownSendSuperseded =
+            latestOwn !== null &&
+            latestOwn === modeWire.ownSent &&
+            latestOwn.mode === revertedMode &&
+            latestOwn.sent > ownSend;
+          let chipMovedUnexpectedly =
+            inCloudSession &&
+            chipMoved &&
+            (mode === chipRef.current.mode ||
               (modeWire.lastApplied !== lastAppliedRef.current && modeWire.lastApplied?.mode === mode)) &&
-            pr === Lt.current &&
-            !Gn &&
-            !_r &&
-            !$r;
-          let Er =
-            dr || getLatestOwnSend(modeWire) !== modeWire.ownSent ? `${ts}_after_unrecorded_answer` : ts;
-          if (Yr) {
-            let oi = !Pr && isModeMorePermissiveThan(modeWire.ownSent?.mode ?? mode_2, mode);
-            logFeatureBad("mode_switch", `${Er}_chip_moved${oi ? "_sent_wider" : ""}`, {
-              pressed: fromEnum(mode_2),
+            sendSeq === sendSeqRef.current &&
+            !disconnected &&
+            !workerReportedMode &&
+            !ownSendSuperseded;
+          let failureReason =
+            ownSendAdvanced || getLatestOwnSend(modeWire) !== modeWire.ownSent
+              ? `${errorKind}_after_unrecorded_answer`
+              : errorKind;
+          if (chipMovedUnexpectedly) {
+            let sentWider =
+              !undelivered && isModeMorePermissiveThan(modeWire.ownSent?.mode ?? revertedMode, mode);
+            logFeatureBad("mode_switch", `${failureReason}_chip_moved${sentWider ? "_sent_wider" : ""}`, {
+              pressed: fromEnum(revertedMode),
               chip: fromEnum(mode),
             });
-          } else logFeatureBad("mode_switch", Er);
-          let Vr = () => {
-            if (Gn && Ur) return;
-            addNotification(Pr ? notifyRemoteModeUnreachable(mode_2) : notifyRemoteModeRejected(mode_2));
+          } else logFeatureBad("mode_switch", failureReason);
+          let notifyFailure = () => {
+            if (disconnected && inCloudSession) return;
+            addNotification(
+              undelivered
+                ? notifyRemoteModeUnreachable(revertedMode)
+                : notifyRemoteModeRejected(revertedMode),
+            );
           };
-          if (wr || (Ur && pr !== Lt.current)) {
-            if (Yr && ts !== "timeout") Vr();
+          if (chipMoved || (inCloudSession && sendSeq !== sendSeqRef.current)) {
+            if (chipMovedUnexpectedly && errorKind !== "timeout") notifyFailure();
             return;
           }
-          let ms = (outgoingMode) => {
-            if (!Ur) return outgoingMode;
-            let Oi = outgoingMode.workerHolds ?? outgoingMode.mode;
+          let retargetPush = (outgoingMode) => {
+            if (!inCloudSession) return outgoingMode;
+            let heldMode = outgoingMode.workerHolds ?? outgoingMode.mode;
             if (!outgoingMode.push) return outgoingMode;
             if (latestOwnSend === null)
-              return kt.current && isModeMorePermissiveThan(outgoingMode.mode, "default")
+              return sawLabelRef.current && isModeMorePermissiveThan(outgoingMode.mode, "default")
                 ? {
                     mode: "default",
                     origin: "person",
                     push: true,
-                    workerHolds: Oi,
+                    workerHolds: heldMode,
                   }
                 : outgoingMode;
             if (!isModeMorePermissiveThan(outgoingMode.mode, latestOwnSend.mode)) return outgoingMode;
-            if (latestOwnSend.mode === mode_2)
+            if (latestOwnSend.mode === revertedMode)
               return {
-                mode: Oi,
+                mode: heldMode,
                 origin: "wire",
                 push: false,
               };
@@ -958,188 +1018,207 @@ function useRemotePermissionModeSync(h, x = MODE_PUSH_RETRY_DELAYS_MS) {
                   mode: latestOwnSend.mode,
                   origin: latestOwnSend.origin,
                   push: true,
-                  workerHolds: Oi,
+                  workerHolds: heldMode,
                 }
               : {
                   mode: "default",
                   origin: "person",
                   push: true,
-                  workerHolds: Oi,
+                  workerHolds: heldMode,
                 };
           };
-          if (_r) {
+          if (workerReportedMode) {
             logForDebugging(
-              `[remote] set_permission_mode ${mode_2} failed, but the worker has since reported ${mode_2} itself \u2014 keeping it`,
+              `[remote] set_permission_mode ${revertedMode} failed, but the worker has since reported ${revertedMode} itself \u2014 keeping it`,
             );
             return;
           }
-          if (fr !== null && fr.sent > or && (fr === modeWire.ownSent || fr.mode !== mode_2)) {
-            if ($r) return;
-            let mode = guardPermissionModeChange(fr.mode, appStoreDirect.getState().toolPermissionContext).ok
-              ? fr.mode
+          if (
+            latestOwn !== null &&
+            latestOwn.sent > ownSend &&
+            (latestOwn === modeWire.ownSent || latestOwn.mode !== revertedMode)
+          ) {
+            if (ownSendSuperseded) return;
+            let mode = guardPermissionModeChange(
+              latestOwn.mode,
+              appStoreDirect.getState().toolPermissionContext,
+            ).ok
+              ? latestOwn.mode
               : "default";
-            let Oi = {
+            let outgoing = {
               mode,
               origin: "person",
               push: true,
-              workerHolds: lastBroadcast?.mode ?? Ho.mode,
+              workerHolds: lastBroadcast?.mode ?? chipBefore.mode,
             };
-            setPermissionModeWithGuards(mode, appStoreDirect.getState().toolPermissionContext, (Hi) => {
-              setAppState((Zi) => {
-                if (Zi.toolPermissionContext.mode !== mode_2) return Zi;
-                cn(Oi);
-                return {
-                  ...Zi,
-                  toolPermissionContext: Hi(Zi.toolPermissionContext),
-                };
-              });
-            });
-            Vr();
+            setPermissionModeWithGuards(
+              mode,
+              appStoreDirect.getState().toolPermissionContext,
+              (applyContext) => {
+                setAppState((appState) => {
+                  if (appState.toolPermissionContext.mode !== revertedMode) return appState;
+                  rememberPush(outgoing);
+                  return {
+                    ...appState,
+                    toolPermissionContext: applyContext(appState.toolPermissionContext),
+                  };
+                });
+              },
+            );
+            notifyFailure();
             return;
           }
           let ownAck = modeWire.ownAck;
-          let Ls =
+          let ownAckConfirmed =
             ownAck !== null &&
             (!lastBroadcast ||
               lastBroadcast.seq <= ownAck.afterBroadcastSeq ||
               (lastBroadcast.mode === ownAck.mode && modeWire.lastChangeSeq <= ownAck.afterBroadcastSeq + 1));
-          let mode_3 = Ls ? ownAck.mode : lastBroadcast?.mode;
-          if (mode_3 !== undefined && mode_3 !== Ho.mode) {
-            if (mode_3 === mode_2) {
+          let mode_2 = ownAckConfirmed ? ownAck.mode : lastBroadcast?.mode;
+          if (mode_2 !== undefined && mode_2 !== chipBefore.mode) {
+            if (mode_2 === revertedMode) {
               logForDebugging(
-                `[remote] set_permission_mode ${mode_2} failed; ${mode_2} is the worker's last confirmed mode \u2014 keeping it and re-sending`,
+                `[remote] set_permission_mode ${revertedMode} failed; ${revertedMode} is the worker's last confirmed mode \u2014 keeping it and re-sending`,
               );
-              mr(0, true);
+              pushMode(0, true);
               return;
             }
-            let oi = ms(
+            let outgoing = retargetPush(
               resolveOutgoingMode(
+                revertedMode,
                 mode_2,
-                mode_3,
                 resolveModeOrigin({
-                  fallback: mode_3,
+                  fallback: mode_2,
                   label: "wire",
                   acked: ownAck,
-                  confirmedByAck: Ls,
+                  confirmedByAck: ownAckConfirmed,
                   sentBefore: latestOwnSend,
-                  inCloudSession: Ur,
+                  inCloudSession,
                 }),
-                Ur,
+                inCloudSession,
               ),
             );
-            let mode = oi.mode;
+            let mode = outgoing.mode;
             if (
-              setPermissionModeWithGuards(mode, appStoreDirect.getState().toolPermissionContext, (Zi) => {
-                setAppState((da) => {
-                  if (da.toolPermissionContext.mode !== mode_2) return da;
-                  let toolPermissionContext = Zi(da.toolPermissionContext);
-                  cn(oi);
-                  return {
-                    ...da,
-                    toolPermissionContext,
-                  };
-                });
-              }).ok
+              setPermissionModeWithGuards(
+                mode,
+                appStoreDirect.getState().toolPermissionContext,
+                (applyContext) => {
+                  setAppState((appState) => {
+                    if (appState.toolPermissionContext.mode !== revertedMode) return appState;
+                    let toolPermissionContext = applyContext(appState.toolPermissionContext);
+                    rememberPush(outgoing);
+                    return {
+                      ...appState,
+                      toolPermissionContext,
+                    };
+                  });
+                },
+              ).ok
             ) {
               logForDebugging(
-                `[remote] set_permission_mode ${mode_2} failed; going to ${mode} (the worker's last confirmed mode is ${mode_3}; the chip was on ${Ho.mode}, never confirmed)`,
+                `[remote] set_permission_mode ${revertedMode} failed; going to ${mode} (the worker's last confirmed mode is ${mode_2}; the chip was on ${chipBefore.mode}, never confirmed)`,
               );
-              Vr();
+              notifyFailure();
               return;
             }
           }
-          let ws = ms(
+          let outgoing = retargetPush(
             resolveOutgoingMode(
-              mode_2,
-              Ho.mode,
+              revertedMode,
+              chipBefore.mode,
               resolveModeOrigin({
-                fallback: Ho.mode,
-                label: Ho.origin,
+                fallback: chipBefore.mode,
+                label: chipBefore.origin,
                 acked: ownAck,
-                confirmedByAck: Ls,
+                confirmedByAck: ownAckConfirmed,
                 sentBefore: latestOwnSend,
-                inCloudSession: Ur,
+                inCloudSession,
               }),
-              Ur,
+              inCloudSession,
             ),
           );
-          let Ci = (mode, Oi) =>
-            setPermissionModeWithGuards(mode, appStoreDirect.getState().toolPermissionContext, (Hi) => {
-              setAppState((Zi) => {
-                if (Zi.toolPermissionContext.mode !== mode_2) return Zi;
-                let toolPermissionContext = Hi(Zi.toolPermissionContext);
-                cn(Oi);
-                return {
-                  ...Zi,
-                  toolPermissionContext,
-                };
-              });
-            });
-          if (ws.mode !== Ho.mode || Ho.carried) {
-            if (Ci(ws.mode, ws).ok) {
+          let applyMode = (mode, push) =>
+            setPermissionModeWithGuards(
+              mode,
+              appStoreDirect.getState().toolPermissionContext,
+              (applyContext) => {
+                setAppState((appState) => {
+                  if (appState.toolPermissionContext.mode !== revertedMode) return appState;
+                  let toolPermissionContext = applyContext(appState.toolPermissionContext);
+                  rememberPush(push);
+                  return {
+                    ...appState,
+                    toolPermissionContext,
+                  };
+                });
+              },
+            );
+          if (outgoing.mode !== chipBefore.mode || chipBefore.carried) {
+            if (applyMode(outgoing.mode, outgoing).ok) {
               logForDebugging(
-                `[remote] set_permission_mode ${mode_2} failed; going to ${ws.mode}${ws.mode === Ho.mode ? " (the mode before a press carried from an earlier screen)" : ` \u2014 ${Ho.mode} is not re-posted as the person's`}`,
+                `[remote] set_permission_mode ${revertedMode} failed; going to ${outgoing.mode}${outgoing.mode === chipBefore.mode ? " (the mode before a press carried from an earlier screen)" : ` \u2014 ${chipBefore.mode} is not re-posted as the person's`}`,
               );
-              Vr();
+              notifyFailure();
               return;
             }
           }
           if (
-            Ho.carried ||
-            !guardPermissionModeChange(Ho.mode, appStoreDirect.getState().toolPermissionContext).ok
+            chipBefore.carried ||
+            !guardPermissionModeChange(chipBefore.mode, appStoreDirect.getState().toolPermissionContext).ok
           ) {
-            if (mode_2 !== "default")
-              Ci("default", {
+            if (revertedMode !== "default")
+              applyMode("default", {
                 mode: "default",
                 origin: "person",
                 push: true,
-                workerHolds: ws.workerHolds ?? ws.mode,
+                workerHolds: outgoing.workerHolds ?? outgoing.mode,
               });
-            else mr(0, true);
+            else pushMode(0, true);
             logForDebugging(
-              `[remote] set_permission_mode ${mode_2} failed; ${Ho.mode} can no longer be entered here, so the chip is on default`,
+              `[remote] set_permission_mode ${revertedMode} failed; ${chipBefore.mode} can no longer be entered here, so the chip is on default`,
             );
-            Vr();
-            if (Gn && Ur) addNotification(notifyRemoteModeUnsynced());
+            notifyFailure();
+            if (disconnected && inCloudSession) addNotification(notifyRemoteModeUnsynced());
             return;
           }
-          setAppState((oi) => {
-            if (oi.toolPermissionContext.mode !== mode_2) return oi;
-            let Oi = {
-              ...Ho,
-              context: undonePermissionContext(Ho.context, oi.toolPermissionContext),
+          setAppState((appState) => {
+            if (appState.toolPermissionContext.mode !== revertedMode) return appState;
+            let restoredChip = {
+              ...chipBefore,
+              context: undonePermissionContext(chipBefore.context, appState.toolPermissionContext),
             };
             let toolPermissionContext = isDeviceIdentityEnabledCached()
-              ? applyPermissionModeRevertEffects(oi.toolPermissionContext, Oi)
-              : Oi.context;
-            cn(ws);
+              ? applyPermissionModeRevertEffects(appState.toolPermissionContext, restoredChip)
+              : restoredChip.context;
+            rememberPush(outgoing);
             return {
-              ...oi,
+              ...appState,
               toolPermissionContext,
             };
           });
-          Vr();
+          notifyFailure();
         });
     };
-    let Kn = (Wn, Fr, Zn, Un) => {
-      let dr = () => bo() && Lt.current !== Fr;
-      let or = () => {
+    let retryConvergence = (delayIndex, sendSeq, ownSendSeq, clearOutstanding) => {
+      let chipMovedSince = () => canSync() && sendSeqRef.current !== sendSeq;
+      let workerSettled = () => {
         let latestOwnSend = getLatestOwnSend(modeWire);
         if (
-          !bo() ||
-          Ro() ||
+          !canSync() ||
+          isStale() ||
           latestOwnSend === null ||
-          latestOwnSend.sent <= Zn ||
-          latestOwnSend.mode === mode_2
+          latestOwnSend.sent <= ownSendSeq ||
+          latestOwnSend.mode === revertedMode
         )
           return false;
         setPermissionModeWithGuards(
           latestOwnSend.mode,
           appStoreDirect.getState().toolPermissionContext,
-          (Ir) => {
-            setAppState((Pr) => {
-              if (Pr.toolPermissionContext.mode !== mode_2) return Pr;
-              cn({
+          (applyContext) => {
+            setAppState((appState) => {
+              if (appState.toolPermissionContext.mode !== revertedMode) return appState;
+              rememberPush({
                 mode: latestOwnSend.mode,
                 origin: "person",
                 push: true,
@@ -1147,64 +1226,76 @@ function useRemotePermissionModeSync(h, x = MODE_PUSH_RETRY_DELAYS_MS) {
                 from,
               });
               return {
-                ...Pr,
-                toolPermissionContext: Ir(Pr.toolPermissionContext),
+                ...appState,
+                toolPermissionContext: applyContext(appState.toolPermissionContext),
               };
             });
           },
         );
         return true;
       };
-      if (dr()) {
-        Un();
-        wn(notifyRemoteModeUnreachable(mode_2), true);
+      if (chipMovedSince()) {
+        clearOutstanding();
+        revertChip(notifyRemoteModeUnreachable(revertedMode), true);
         return;
       }
-      if (or()) {
-        Un();
+      if (workerSettled()) {
+        clearOutstanding();
         return;
       }
-      let pr = x[Wn];
-      if (pr === undefined) {
+      let delayMs = retryDelaysMs[delayIndex];
+      if (delayMs === undefined) {
         logForDebugging(
-          `[remote] convergence push of ${mode_2} mode still undelivered after ${Wn + 1} attempts \u2014 giving up`,
+          `[remote] convergence push of ${revertedMode} mode still undelivered after ${delayIndex + 1} attempts \u2014 giving up`,
           {
             level: "warn",
           },
         );
         if (workerHolds !== undefined) {
-          Un();
-          wn(notifyRemoteModeUnreachable(mode_2));
+          clearOutstanding();
+          revertChip(notifyRemoteModeUnreachable(revertedMode));
           return;
         }
         addNotification(notifyRemoteModeUnsynced());
         return;
       }
-      let Qn = {
+      let timerToken = {
         broadcastSeq: modeWire.lastBroadcast?.seq ?? 0,
       };
-      Et.current = Qn;
-      sleep(pr).then(() => {
-        if (Et.current !== Qn || Ro()) return;
-        Et.current = null;
+      convergeTimerRef.current = timerToken;
+      sleep(delayMs).then(() => {
+        if (convergeTimerRef.current !== timerToken || isStale()) return;
+        convergeTimerRef.current = null;
         if (
-          (modeWire.lastBroadcast?.seq ?? 0) !== Qn.broadcastSeq ||
-          appStoreDirect.getState().toolPermissionContext.mode !== mode_2 ||
-          dr()
+          (modeWire.lastBroadcast?.seq ?? 0) !== timerToken.broadcastSeq ||
+          appStoreDirect.getState().toolPermissionContext.mode !== revertedMode ||
+          chipMovedSince()
         ) {
-          Un();
-          wn(notifyRemoteModeUnreachable(mode_2));
+          clearOutstanding();
+          revertChip(notifyRemoteModeUnreachable(revertedMode));
           return;
         }
-        if (or()) {
-          Un();
+        if (workerSettled()) {
+          clearOutstanding();
           return;
         }
-        mr(Wn + 1, true);
+        pushMode(delayIndex + 1, true);
       });
     };
-    mr(0, hn);
-  }, [session, mode, ke, lastApplied, Ot, D, setAppState, addNotification, appStoreDirect, modeWire, x]);
+    pushMode(0, pushMatchesMode);
+  }, [
+    session,
+    mode,
+    toolPermissionContext,
+    lastApplied,
+    queuedPush,
+    activeRemote,
+    setAppState,
+    addNotification,
+    appStoreDirect,
+    modeWire,
+    retryDelaysMs,
+  ]);
 }
 //@ chunk-18hwfzwa.js:254618-254837 placement
 function notifyRemoteModeUnsynced() {
@@ -1217,21 +1308,21 @@ function notifyRemoteModeUnsynced() {
   };
 }
 //@ chunk-18hwfzwa.js:254837-255014 placement
-function notifyRemoteModeUnreachable(h) {
+function notifyRemoteModeUnreachable(mode) {
   return {
     key: "remote-permission-mode-rejected",
     kind: "feedback",
-    text: `Couldn't reach the cloud session to switch to ${h} mode`,
+    text: `Couldn't reach the cloud session to switch to ${mode} mode`,
     color: "warning",
     priority: "immediate",
   };
 }
 //@ chunk-18hwfzwa.js:255014-255183 placement
-function notifyRemoteModeRejected(h) {
+function notifyRemoteModeRejected(mode) {
   return {
     key: "remote-permission-mode-rejected",
     kind: "feedback",
-    text: `Remote session couldn't switch to ${permissionModeTitle(h)} mode`,
+    text: `Remote session couldn't switch to ${permissionModeTitle(mode)} mode`,
     color: "warning",
     priority: "immediate",
   };

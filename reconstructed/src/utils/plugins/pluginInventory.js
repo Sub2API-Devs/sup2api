@@ -34,8 +34,8 @@ import { errorMessage, isSyscallError, toError } from "../errors.js";
 import { logError } from "../log.js";
 
 //@ chunk-k9mgeeff.js:726-1795 placement = PluginComponentsDisplay (0.822)
-async function getPluginInventory(plugin, marketplace) {
-  if (marketplace === "builtin") {
+async function getPluginInventory(plugin, name) {
+  if (name === "builtin") {
     let builtinDef = getBuiltinPlugin(plugin.name);
     if (!builtinDef) throw Error(`Built-in plugin ${plugin.name} not found`);
     return {
@@ -50,32 +50,34 @@ async function getPluginInventory(plugin, marketplace) {
       lspServers: [],
     };
   }
-  let r = isOfficialMarketplace(marketplace) || marketplace === pluginManifestPathSchemas;
-  let s = parsePluginIdentifier(plugin.source).name || plugin.name;
-  let m =
-    marketplace === OFFICIAL_MARKETPLACE_NAME
-      ? ((await getPluginByIdAnySource(`${s}@${marketplace}`, undefined, "load"))?.entry ??
-        (await findMissedListingEntry(s, undefined, true))?.entry)
+  let isBuiltinLike = isOfficialMarketplace(name) || name === pluginManifestPathSchemas;
+  let pluginName = parsePluginIdentifier(plugin.source).name || plugin.name;
+  let listing =
+    name === OFFICIAL_MARKETPLACE_NAME
+      ? ((await getPluginByIdAnySource(`${pluginName}@${name}`, undefined, "load"))?.entry ??
+        (await findMissedListingEntry(pluginName, undefined, true))?.entry)
       : undefined;
-  let o = r
+  let catalogEntry = isBuiltinLike
     ? undefined
-    : (m ??
-      (await getMarketplaceOrDirectoryCatalog(marketplace, undefined)).plugins.find(
-        (plugin) => plugin.name === s,
+    : (listing ??
+      (await getMarketplaceOrDirectoryCatalog(name, undefined)).plugins.find(
+        (plugin) => plugin.name === pluginName,
       ));
-  if (!o && !r) throw Error(`Plugin ${s} not found in marketplace ${marketplace}`);
+  if (!catalogEntry && !isBuiltinLike) throw Error(`Plugin ${pluginName} not found in marketplace ${name}`);
   let [baseFileNames, baseFileNames_2, skillDirNames] = await Promise.all([
     getBaseFileNames([plugin.commandsPath, ...(plugin.commandsPaths ?? [])]),
     getBaseFileNames([plugin.agentsPath, ...(plugin.agentsPaths ?? [])]),
     getSkillDirNames([plugin.skillsPath, ...(plugin.skillsPaths ?? [])], plugin.name),
   ]);
-  let hooks = plugin.hooksConfig ? Object.keys(plugin.hooksConfig) : objectKeysOf(o?.hooks);
-  let i = plugin.mcpServers ? Object.keys(plugin.mcpServers) : uniq(await loadPluginMcpServers(plugin));
-  let mcpServers = i.length > 0 ? i : objectKeysOf(o?.mcpServers);
-  let g = plugin.lspServers
+  let hooks = plugin.hooksConfig ? Object.keys(plugin.hooksConfig) : objectKeysOf(catalogEntry?.hooks);
+  let mcpFromPlugin = plugin.mcpServers
+    ? Object.keys(plugin.mcpServers)
+    : uniq(await loadPluginMcpServers(plugin));
+  let mcpServers = mcpFromPlugin.length > 0 ? mcpFromPlugin : objectKeysOf(catalogEntry?.mcpServers);
+  let lspFromPlugin = plugin.lspServers
     ? Object.keys(plugin.lspServers)
     : (await readLspServerNames(plugin)).concat(objectKeysOf(plugin.manifest.lspServers));
-  let lspServers = g.length > 0 ? uniq(g) : objectKeysOf(o?.lspServers);
+  let lspServers = lspFromPlugin.length > 0 ? uniq(lspFromPlugin) : objectKeysOf(catalogEntry?.lspServers);
   return {
     commands: baseFileNames,
     agents: baseFileNames_2,
@@ -86,52 +88,55 @@ async function getPluginInventory(plugin, marketplace) {
   };
 }
 //@ chunk-k9mgeeff.js:1795-2384 placement
-async function computePluginTokenCost(n, e, r) {
-  let [s, m, o] = await Promise.all([
+async function computePluginTokenCost(inventory, modelIds, pluginName) {
+  let [skillCosts, agentCosts, commandCosts] = await Promise.all([
     Promise.all(
-      n.skills.map((skill) =>
+      inventory.skills.map((skill) =>
         measurePluginComponentCost(
           skill.path ? pathModule.join(skill.path, "SKILL.md") : undefined,
-          qualifiedComponentName(skill, r),
+          qualifiedComponentName(skill, pluginName),
         ),
       ),
     ),
-    Promise.all(n.agents.map((agent) => measurePluginComponentCost(agent.path, agent.name, "agent"))),
+    Promise.all(inventory.agents.map((agent) => measurePluginComponentCost(agent.path, agent.name, "agent"))),
     Promise.all(
-      n.commands.map((command) =>
-        measurePluginComponentCost(command.path, qualifiedComponentName(command, r)),
+      inventory.commands.map((command) =>
+        measurePluginComponentCost(command.path, qualifiedComponentName(command, pluginName)),
       ),
     ),
   ]);
-  let c = [...s, ...m, ...o];
-  let joined = c.map((i) => i.alwaysOn).filter(Boolean).join(`
+  let costs = [...skillCosts, ...agentCosts, ...commandCosts];
+  let text = costs.map((cost) => cost.alwaysOn).filter(Boolean).join(`
 `);
-  let joined_2 = c.map((i) => i.onInvoke).filter(Boolean).join(`
+  let text_2 = costs.map((cost) => cost.onInvoke).filter(Boolean).join(`
 
 `);
-  let y = {};
-  for (let i of e) {
-    let [P, g] = await Promise.all([countTextTokens(joined, i), countTextTokens(joined_2, i)]);
-    if (P !== null && g !== null)
-      y[i] = {
-        always_on: P,
-        on_invoke: g,
+  let tokensByModel = {};
+  for (let modelId of modelIds) {
+    let [alwaysOnTokens, onInvokeTokens] = await Promise.all([
+      countTextTokens(text, modelId),
+      countTextTokens(text_2, modelId),
+    ]);
+    if (alwaysOnTokens !== null && onInvokeTokens !== null)
+      tokensByModel[modelId] = {
+        always_on: alwaysOnTokens,
+        on_invoke: onInvokeTokens,
       };
   }
   return {
-    tokens: y,
+    tokens: tokensByModel,
     inventory: {
-      ...n,
-      skills: attachComponentChars(n.skills, s),
-      agents: attachComponentChars(n.agents, m),
-      commands: attachComponentChars(n.commands, o),
+      ...inventory,
+      skills: attachComponentChars(inventory.skills, skillCosts),
+      agents: attachComponentChars(inventory.agents, agentCosts),
+      commands: attachComponentChars(inventory.commands, commandCosts),
     },
   };
 }
 //@ chunk-k9mgeeff.js:2384-2479 placement
-function scaleCharsToTokens(n, e, r, s = 4) {
-  if (r !== undefined && e > 0) return Math.round((n / e) * r);
-  return roughTokenCountEstimation(" ".repeat(n), s);
+function scaleCharsToTokens(chars, contentLength, measured, base = 4) {
+  if (measured !== undefined && contentLength > 0) return Math.round((chars / contentLength) * measured);
+  return roughTokenCountEstimation(" ".repeat(chars), base);
 }
 //@ chunk-k9mgeeff.js:2479-2493 placement
 /**
@@ -139,23 +144,23 @@ function scaleCharsToTokens(n, e, r, s = 4) {
  */
 var MAX_PLUGIN_INVENTORY_FILE_BYTES = 1048576;
 //@ chunk-k9mgeeff.js:2493-2583 placement
-function qualifiedComponentName(n, e) {
-  if (!e) return n.name;
-  return `${e}:${n.name.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+function qualifiedComponentName(component, pluginName) {
+  if (!pluginName) return component.name;
+  return `${pluginName}:${component.name.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 }
 //@ chunk-k9mgeeff.js:2583-3061 placement
 /**
  * 测算插件组件常驻和调用时的令牌开销。
  */
-async function measurePluginComponentCost(path, e, r = "skill") {
+async function measurePluginComponentCost(path, qualifiedName, kind = "skill") {
   if (!path)
     return {
       alwaysOn: "",
       onInvoke: "",
     };
-  let s;
+  let text;
   try {
-    s = await readFileHead(path, MAX_PLUGIN_INVENTORY_FILE_BYTES);
+    text = await readFileHead(path, MAX_PLUGIN_INVENTORY_FILE_BYTES);
   } catch (error) {
     logComponentReadError(path, error);
     return {
@@ -163,26 +168,26 @@ async function measurePluginComponentCost(path, e, r = "skill") {
       onInvoke: "",
     };
   }
-  let { frontmatter, content } = parseFrontmatter(s, path, {
+  let { frontmatter, content } = parseFrontmatter(text, path, {
     normalizeKeys: true,
   });
-  let c = {
+  let fields = {
     description:
-      coerceDescriptionToString(frontmatter.description, e) ??
+      coerceDescriptionToString(frontmatter.description, qualifiedName) ??
       extractDescriptionFromMarkdown(content, "Skill"),
     whenToUse: frontmatter.when_to_use != null ? String(frontmatter.when_to_use) : undefined,
   };
   let { description, whenToUse } =
-    r === "agent"
-      ? c
+    kind === "agent"
+      ? fields
       : displaySkillFields({
-          ...c,
+          ...fields,
           argumentHint: undefined,
           argumentNames: [],
         });
   return {
     alwaysOn: getSkillListingText({
-      name: e,
+      name: qualifiedName,
       description,
       whenToUse,
     }),
@@ -190,77 +195,78 @@ async function measurePluginComponentCost(path, e, r = "skill") {
   };
 }
 //@ chunk-k9mgeeff.js:3061-3265 placement
-async function readFileHead(n, e) {
-  let r = await fsPromisesModule.open(n, "r");
+async function readFileHead(path, maxBytes) {
+  let handle = await fsPromisesModule.open(path, "r");
   try {
-    let { size } = await r.stat();
-    let min = Math.min(size, e);
-    let o = Buffer.alloc(min);
-    let { bytesRead } = await r.read(o, 0, min, 0);
-    return o.toString("utf8", 0, bytesRead);
+    let { size } = await handle.stat();
+    let min = Math.min(size, maxBytes);
+    let buffer = Buffer.alloc(min);
+    let { bytesRead } = await handle.read(buffer, 0, min, 0);
+    return buffer.toString("utf8", 0, bytesRead);
   } finally {
-    await r.close();
+    await handle.close();
   }
 }
 //@ chunk-k9mgeeff.js:3265-3407 placement
-function attachComponentChars(n, e) {
-  return n.map((r, s) => {
-    let m = e[s];
-    if (!m) return r;
+function attachComponentChars(components, costs) {
+  return components.map((component, index) => {
+    let cost = costs[index];
+    if (!cost) return component;
     return {
-      ...r,
+      ...component,
       chars: {
-        always_on: m.alwaysOn.length,
-        on_invoke: m.onInvoke.length,
+        always_on: cost.alwaysOn.length,
+        on_invoke: cost.onInvoke.length,
       },
     };
   });
 }
 //@ chunk-k9mgeeff.js:3407-3487 placement
-async function countTextTokens(n, e) {
-  if (!n) return 0;
+async function countTextTokens(text, model) {
+  if (!text) return 0;
   return countMessagesTokensWithAPI(
     [
       {
         role: "user",
-        content: n,
+        content: text,
       },
     ],
     [],
-    e,
+    model,
   );
 }
 //@ chunk-k9mgeeff.js:3487-3581 placement
 /**
  * objectKeysOf：汇总对象键。
  */
-function objectKeysOf(n) {
-  return [n]
+function objectKeysOf(value) {
+  return [value]
     .flat()
-    .filter((e) => e != null && typeof e === "object")
+    .filter((item) => item != null && typeof item === "object")
     .flatMap(Object.keys);
 }
 //@ chunk-k9mgeeff.js:3828-4056 placement
-async function readMcpServerNames(n) {
-  if (n === null) return [];
+async function readMcpServerNames(filePath) {
+  if (filePath === null) return [];
   try {
-    let e = jsonParse(await readFileHead(n, MAX_PLUGIN_INVENTORY_FILE_BYTES));
-    if (e == null || typeof e !== "object") return [];
-    let r = "mcpServers" in e && typeof e.mcpServers === "object" ? e.mcpServers : e;
-    return r == null ? [] : Object.keys(r);
+    let parsed = jsonParse(await readFileHead(filePath, MAX_PLUGIN_INVENTORY_FILE_BYTES));
+    if (parsed == null || typeof parsed !== "object") return [];
+    let servers =
+      "mcpServers" in parsed && typeof parsed.mcpServers === "object" ? parsed.mcpServers : parsed;
+    return servers == null ? [] : Object.keys(servers);
   } catch {
     return [];
   }
 }
 //@ chunk-k9mgeeff.js:4056-4251 placement
-async function readLspServerNames(n) {
+async function readLspServerNames(plugin) {
   try {
-    let componentPath = await resolveComponentPath(n, ".lsp.json");
+    let componentPath = await resolveComponentPath(plugin, ".lsp.json");
     if (componentPath === null) return [];
     let content = await fsPromisesModule.readFile(componentPath, "utf-8");
-    let s = jsonParse(content);
-    if (s == null || typeof s !== "object") return [];
-    return Object.keys(s);
+    let parsed = jsonParse(content);
+    if (parsed == null || typeof parsed !== "object") return [];
+    return Object.keys(parsed);
   } catch {
     return [];
   }
@@ -269,23 +275,27 @@ async function readLspServerNames(n) {
 /**
  * resolveComponentPath：解析组件绝对路径。
  */
-async function resolveComponentPath(n, e) {
-  return isProjectLocalPlugin(n) ? resolvePluginDirComponentPath(n, e) : pathModule.join(n.path, e);
+async function resolveComponentPath(plugin, fileName) {
+  return isProjectLocalPlugin(plugin)
+    ? resolvePluginDirComponentPath(plugin, fileName)
+    : pathModule.join(plugin.path, fileName);
 }
 //@ chunk-k9mgeeff.js:5291-5404 placement
-function logComponentReadError(n, error) {
-  logForDebugging(`Failed to read plugin components from ${n}: ${errorMessage(error)}`, {
+function logComponentReadError(filePath, error) {
+  logForDebugging(`Failed to read plugin components from ${filePath}: ${errorMessage(error)}`, {
     level: "error",
   });
   if (isSyscallError(error)) return;
   logError(toError(error));
 }
 export {
-  getPluginInventory,
   logComponentReadError,
   readFileHead,
   MAX_PLUGIN_INVENTORY_FILE_BYTES,
+  getPluginInventory,
   readMcpServerNames,
   resolveComponentPath,
   objectKeysOf,
+  computePluginTokenCost,
+  scaleCharsToTokens,
 };

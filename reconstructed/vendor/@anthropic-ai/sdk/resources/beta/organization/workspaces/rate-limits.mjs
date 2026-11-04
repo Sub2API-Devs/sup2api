@@ -6,14 +6,14 @@
  * attribution: esm-fingerprint 1
  */
 import { APIResource } from "../../../../core/resource.mjs";
-import { I } from "../../../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../../../internal/utils/path.mjs";
 import { TokenPage } from "../../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:126969-127113 esm-fingerprint
 class RateLimits_2 extends APIResource {
   list(workspaceID, query = {}, options) {
     return this._client.getAPIList(
-      I`/v1/organizations/workspaces/${workspaceID}/rate_limits?beta=true`,
+      parseUrl_2`/v1/organizations/workspaces/${workspaceID}/rate_limits?beta=true`,
       TokenPage,
       {
         query,

@@ -13,13 +13,13 @@
  * /extra-usage 改名为 /usage-credits 的提示。
  */
 var RENAME_NOTICE = "/extra-usage is now /usage-credits";
-var call = async (a, t) => {
-  let { call: e } = await import("./chunk-g49d7j62.js");
+var call = async (onDone, context) => {
+  let { call } = await import("../extra-usage/call.lazy.js");
   return {
     type: "text",
     value: `/extra-usage is now /usage-credits
 
-${(await e(a, t)).value}`,
+${(await call(onDone, context)).value}`,
   };
 };
-export { RENAME_NOTICE };
+export { RENAME_NOTICE, call };

@@ -12,13 +12,13 @@ import { randomUUID } from "crypto";
 import { DoctorLazy } from "../cli/handlers/util.js";
 import {
   record,
-  string,
+  stringSchema,
   unknown,
   looseObject,
   literal,
-  E,
+  numberSchema,
   array,
-  M,
+  booleanSchema,
 } from "../../vendor/zod/v4/classic/schemas.js";
 import { jsonStringify } from "../utils/slowOperations.js";
 import { logForDebugging } from "../utils/debug.js";
@@ -30,6 +30,7 @@ import {
 } from "../plugins/functionHooks/sites/classicHookIds.js";
 import { isConfirmRepositoryTrustTool, isRequestComputerFolderTool } from "./tools/protocolConstants.js";
 import { permissionUpdateSchema } from "../utils/hooks/hookSpecificOutput.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-c8ynteey.js:438-483 placement
 /**
@@ -37,92 +38,95 @@ import { permissionUpdateSchema } from "../utils/hooks/hookSpecificOutput.js";
  */
 var UNSUPPORTED_CONTROL_SUBTYPE_TEXT = "Unsupported control request subtype";
 //@ chunk-c8ynteey.js:519-1345 placement
-var CONTENT_BLOCK_TYPES = DoctorLazy(() => {
-  let input = record(string(), unknown());
-  let text = looseObject({
-    type: literal("text"),
-    text: string(),
+var CONTENT_BLOCK_TYPES; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-c8ynteey.js:519", () => {
+  CONTENT_BLOCK_TYPES = DoctorLazy(() => {
+    let input = record(stringSchema(), unknown());
+    let text = looseObject({
+      type: literal("text"),
+      text: stringSchema(),
+    });
+    let byType = new Map();
+    let schemas = {
+      text,
+      tool_use: looseObject({
+        type: literal("tool_use"),
+        id: stringSchema(),
+        name: stringSchema(),
+        input,
+      }),
+      thinking: looseObject({
+        type: literal("thinking"),
+        thinking: stringSchema(),
+        signature: stringSchema().optional(),
+      }),
+      redacted_thinking: looseObject({
+        type: literal("redacted_thinking"),
+        data: stringSchema(),
+      }),
+      server_tool_use: looseObject({
+        type: literal("server_tool_use"),
+        id: stringSchema(),
+        name: stringSchema(),
+        input,
+      }),
+      mcp_tool_use: looseObject({
+        type: literal("mcp_tool_use"),
+        id: stringSchema(),
+        name: stringSchema(),
+        server_name: stringSchema(),
+        input,
+      }),
+    };
+    for (let [key, value] of Object.entries(schemas)) byType.set(key, value);
+    let pctSchema = numberSchema().finite();
+    return {
+      text,
+      assistantByType: byType,
+      usage: looseObject({
+        input_tokens: pctSchema,
+        output_tokens: pctSchema,
+        cache_creation_input_tokens: pctSchema.nullish(),
+        cache_read_input_tokens: pctSchema.nullish(),
+        iterations: array(looseObject({})).nullish(),
+      }),
+      generic: looseObject({
+        type: stringSchema(),
+      }),
+      toolResultLike: looseObject({
+        type: stringSchema(),
+        tool_use_id: stringSchema(),
+      }),
+      toolResult: looseObject({
+        type: literal("tool_result"),
+        tool_use_id: stringSchema(),
+        is_error: booleanSchema().optional(),
+      }),
+    };
   });
-  let n = new Map();
-  let s = {
-    text,
-    tool_use: looseObject({
-      type: literal("tool_use"),
-      id: string(),
-      name: string(),
-      input,
-    }),
-    thinking: looseObject({
-      type: literal("thinking"),
-      thinking: string(),
-      signature: string().optional(),
-    }),
-    redacted_thinking: looseObject({
-      type: literal("redacted_thinking"),
-      data: string(),
-    }),
-    server_tool_use: looseObject({
-      type: literal("server_tool_use"),
-      id: string(),
-      name: string(),
-      input,
-    }),
-    mcp_tool_use: looseObject({
-      type: literal("mcp_tool_use"),
-      id: string(),
-      name: string(),
-      server_name: string(),
-      input,
-    }),
-  };
-  for (let [key, value] of Object.entries(s)) n.set(key, value);
-  let i = E().finite();
-  return {
-    text,
-    assistantByType: n,
-    usage: looseObject({
-      input_tokens: i,
-      output_tokens: i,
-      cache_creation_input_tokens: i.nullish(),
-      cache_read_input_tokens: i.nullish(),
-      iterations: array(looseObject({})).nullish(),
-    }),
-    generic: looseObject({
-      type: string(),
-    }),
-    toolResultLike: looseObject({
-      type: string(),
-      tool_use_id: string(),
-    }),
-    toolResult: looseObject({
-      type: literal("tool_result"),
-      tool_use_id: string(),
-      is_error: M().optional(),
-    }),
-  };
 });
 //@ chunk-c8ynteey.js:1345-1415 placement
-function isPlainObject(e) {
-  return typeof e === "object" && e !== null && !Array.isArray(e);
+function isPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 //@ chunk-c8ynteey.js:1415-1451 placement
 var MAX_FRAME_DEPTH = 256;
 var TRUNCATED_DEPTH_TEXT = "[truncated: too deep]";
 //@ chunk-c8ynteey.js:1451-1696 placement
-function exceedsFrameDepth(e) {
-  let r = [];
-  if (typeof e === "object" && e !== null)
-    r.push({
-      value: e,
+function exceedsFrameDepth(value) {
+  let stack = [];
+  if (typeof value === "object" && value !== null)
+    stack.push({
+      value,
       depth: 1,
     });
-  while (r.length > 0) {
-    let { value: n, depth } = r.pop();
+  while (stack.length > 0) {
+    let { value, depth } = stack.pop();
     if (depth > MAX_FRAME_DEPTH) return true;
-    for (let i of Object.values(n))
-      if (typeof i === "object" && i !== null)
-        r.push({
-          value: i,
+    for (let child of Object.values(value))
+      if (typeof child === "object" && child !== null)
+        stack.push({
+          value: child,
           depth: depth + 1,
         });
   }
@@ -133,35 +137,35 @@ function exceedsFrameDepth(e) {
  * 遍历对象，把超过最大深度的嵌套值替换为占位符，返回替换次数。
  */
 function capNestedDepth(value) {
-  let r = 0;
-  let n = [
+  let cappedCount = 0;
+  let stack = [
     {
       value,
       depth: 1,
     },
   ];
-  while (n.length > 0) {
-    let { value: s, depth } = n.pop();
-    let a = Array.isArray(s) ? s : isPlainObject(s) ? s : null;
-    if (a === null) continue;
-    for (let key of Object.keys(a)) {
-      let f = Reflect.get(a, key);
-      if (typeof f !== "object" || f === null) continue;
+  while (stack.length > 0) {
+    let { value, depth } = stack.pop();
+    let record = Array.isArray(value) ? value : isPlainObject(value) ? value : null;
+    if (record === null) continue;
+    for (let key of Object.keys(record)) {
+      let child = Reflect.get(record, key);
+      if (typeof child !== "object" || child === null) continue;
       if (depth + 1 > MAX_FRAME_DEPTH) {
-        Reflect.set(a, key, TRUNCATED_DEPTH_TEXT);
-        r++;
+        Reflect.set(record, key, TRUNCATED_DEPTH_TEXT);
+        cappedCount++;
       } else
-        n.push({
-          value: f,
+        stack.push({
+          value: child,
           depth: depth + 1,
         });
     }
   }
-  return r;
+  return cappedCount;
 }
 //@ chunk-c8ynteey.js:2010-2074 placement
-function getTypeField(e) {
-  return isPlainObject(e) && typeof e.type === "string" ? e.type : null;
+function getTypeField(value) {
+  return isPlainObject(value) && typeof value.type === "string" ? value.type : null;
 }
 //@ chunk-c8ynteey.js:2074-2177 placement = getReceivedType (0.776)
 function getReceivedType(value) {
@@ -170,13 +174,14 @@ function getReceivedType(value) {
   return value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
 }
 //@ chunk-c8ynteey.js:2177-2344 placement
-function isValidAssistantBlock(e) {
-  let typeField = getTypeField(e);
+function isValidAssistantBlock(block) {
+  let typeField = getTypeField(block);
   if (typeField === null) return false;
-  let n = CONTENT_BLOCK_TYPES();
+  let types = CONTENT_BLOCK_TYPES();
   return (
-    n.assistantByType.get(typeField) ?? (typeField.endsWith("_tool_result") ? n.toolResultLike : n.generic)
-  ).safeParse(e).success;
+    types.assistantByType.get(typeField) ??
+    (typeField.endsWith("_tool_result") ? types.toolResultLike : types.generic)
+  ).safeParse(block).success;
 }
 //@ chunk-c8ynteey.js:2344-2703 placement
 /**
@@ -186,12 +191,12 @@ function normalizeToolResultContent(block) {
   let content = block.content;
   if (content === undefined || typeof content === "string") return true;
   if (Array.isArray(content)) {
-    let filtered = content.filter((s) => {
-      let typeField = getTypeField(s);
+    let filtered = content.filter((block) => {
+      let typeField = getTypeField(block);
       if (typeField === null) return false;
       return typeField === "text"
-        ? CONTENT_BLOCK_TYPES().text.safeParse(s).success
-        : CONTENT_BLOCK_TYPES().generic.safeParse(s).success;
+        ? CONTENT_BLOCK_TYPES().text.safeParse(block).success
+        : CONTENT_BLOCK_TYPES().generic.safeParse(block).success;
     });
     if (filtered.length !== content.length) block.content = filtered;
     return true;
@@ -211,54 +216,62 @@ function normalizeToolResultContent(block) {
 function isValidUserBlock(block) {
   let typeField = getTypeField(block);
   if (typeField === null || !isPlainObject(block)) return false;
-  let n = CONTENT_BLOCK_TYPES();
-  if (typeField === "text") return n.text.safeParse(block).success;
+  let types = CONTENT_BLOCK_TYPES();
+  if (typeField === "text") return types.text.safeParse(block).success;
   if (typeField === "tool_result") {
-    if (!n.toolResult.safeParse(block).success) return false;
+    if (!types.toolResult.safeParse(block).success) return false;
     return normalizeToolResultContent(block);
   }
-  return n.generic.safeParse(block).success;
+  return types.generic.safeParse(block).success;
 }
 //@ chunk-c8ynteey.js:2934-3044 placement
-function logFrameProblem(e, uuid, n) {
-  logForDebugging(`[wireFrameShape] ${e} frame ${typeof uuid === "string" ? uuid : "(no uuid)"}: ${n}`, {
-    level: "error",
-  });
+function logFrameProblem(role, uuid, problem) {
+  logForDebugging(
+    `[wireFrameShape] ${role} frame ${typeof uuid === "string" ? uuid : "(no uuid)"}: ${problem}`,
+    {
+      level: "error",
+    },
+  );
 }
 //@ chunk-c8ynteey.js:3044-3299 placement
 function dropMalformedBlocks(blocks, isValid, role, uuid) {
-  let i = [];
+  let problems = [];
   let filtered = blocks.filter((block) => {
     try {
       if (isValid(block)) return true;
     } catch (error) {
-      i.push(`unreadable block (${errorMessage(error)})`);
+      problems.push(`unreadable block (${errorMessage(error)})`);
       return false;
     }
-    i.push(getReceivedType(block));
+    problems.push(getReceivedType(block));
     return false;
   });
-  if (i.length === 0) return blocks;
-  logFrameProblem(role, uuid, `dropped ${i.length} malformed content block(s): ${i.join(", ")}`);
+  if (problems.length === 0) return blocks;
+  logFrameProblem(
+    role,
+    uuid,
+    `dropped ${problems.length} malformed content block(s): ${problems.join(", ")}`,
+  );
   return filtered;
 }
 //@ chunk-c8ynteey.js:3299-4105 placement
-function normalizeAssistantFrame(e) {
+function normalizeAssistantFrame(frame) {
   let uuid;
-  if (typeof e.uuid === "string" && e.uuid !== "") uuid = e.uuid;
+  if (typeof frame.uuid === "string" && frame.uuid !== "") uuid = frame.uuid;
   else {
-    logFrameProblem("assistant", e.uuid, "minted a uuid \u2014 original was not a non-empty string");
+    logFrameProblem("assistant", frame.uuid, "minted a uuid \u2014 original was not a non-empty string");
     uuid = randomUUID();
-    e.uuid = uuid;
+    frame.uuid = uuid;
   }
-  let message = e.message;
+  let message = frame.message;
   if (!isPlainObject(message)) {
-    logFrameProblem("assistant", e.uuid, "dropped \u2014 message is not an object");
+    logFrameProblem("assistant", frame.uuid, "dropped \u2014 message is not an object");
     return false;
   }
   if (message.id !== undefined && typeof message.id !== "string") {
-    message.id = typeof message.id === "number" && Number.isFinite(message.id) ? String(message.id) : e.uuid;
-    logFrameProblem("assistant", e.uuid, "coerced a non-string message.id");
+    message.id =
+      typeof message.id === "number" && Number.isFinite(message.id) ? String(message.id) : frame.uuid;
+    logFrameProblem("assistant", frame.uuid, "coerced a non-string message.id");
   }
   if (typeof message.content === "string")
     message.content = [
@@ -269,15 +282,15 @@ function normalizeAssistantFrame(e) {
     ];
   let content = message.content;
   if (!Array.isArray(content)) {
-    logFrameProblem("assistant", e.uuid, "dropped \u2014 message.content is not an array");
+    logFrameProblem("assistant", frame.uuid, "dropped \u2014 message.content is not an array");
     return false;
   }
-  let i = dropMalformedBlocks(content, isValidAssistantBlock, "assistant", e.uuid);
-  if (i.length === 0 && content.length > 0) {
-    logFrameProblem("assistant", e.uuid, "dropped \u2014 no valid content blocks remain");
+  let validBlocks = dropMalformedBlocks(content, isValidAssistantBlock, "assistant", frame.uuid);
+  if (validBlocks.length === 0 && content.length > 0) {
+    logFrameProblem("assistant", frame.uuid, "dropped \u2014 no valid content blocks remain");
     return false;
   }
-  if (i !== content) message.content = i;
+  if (validBlocks !== content) message.content = validBlocks;
   stripMalformedEnvelopeFields(message, uuid);
   return true;
 }
@@ -286,10 +299,10 @@ function normalizeAssistantFrame(e) {
  * 移除助手帧中格式错误的信封字段（model、stop_reason、usage）并记录。
  */
 function stripMalformedEnvelopeFields(message, uuid) {
-  let n = [];
+  let stripped = [];
   if (message.model !== undefined && typeof message.model !== "string") {
     delete message.model;
-    n.push("model");
+    stripped.push("model");
   }
   if (
     message.stop_reason !== undefined &&
@@ -297,38 +310,38 @@ function stripMalformedEnvelopeFields(message, uuid) {
     typeof message.stop_reason !== "string"
   ) {
     message.stop_reason = null;
-    n.push("stop_reason");
+    stripped.push("stop_reason");
   }
   if (message.usage !== undefined && !CONTENT_BLOCK_TYPES().usage.safeParse(message.usage).success) {
     delete message.usage;
-    n.push("usage");
+    stripped.push("usage");
   }
-  if (n.length > 0)
-    logFrameProblem("assistant", uuid, `removed malformed envelope field(s): ${n.join(", ")}`);
+  if (stripped.length > 0)
+    logFrameProblem("assistant", uuid, `removed malformed envelope field(s): ${stripped.join(", ")}`);
 }
 //@ chunk-c8ynteey.js:4506-5078 placement
-function normalizeUserFrame(e) {
-  if (e.uuid !== undefined && (typeof e.uuid !== "string" || e.uuid === "")) {
-    logFrameProblem("user", e.uuid, "minted a uuid \u2014 original was not a non-empty string");
-    e.uuid = randomUUID();
+function normalizeUserFrame(frame) {
+  if (frame.uuid !== undefined && (typeof frame.uuid !== "string" || frame.uuid === "")) {
+    logFrameProblem("user", frame.uuid, "minted a uuid \u2014 original was not a non-empty string");
+    frame.uuid = randomUUID();
   }
-  let message = e.message;
+  let message = frame.message;
   if (!isPlainObject(message)) {
-    logFrameProblem("user", e.uuid, "dropped \u2014 message is not an object");
+    logFrameProblem("user", frame.uuid, "dropped \u2014 message is not an object");
     return false;
   }
   let content = message.content;
   if (typeof content === "string") return true;
   if (!Array.isArray(content)) {
-    logFrameProblem("user", e.uuid, "dropped \u2014 message.content is neither string nor array");
+    logFrameProblem("user", frame.uuid, "dropped \u2014 message.content is neither string nor array");
     return false;
   }
-  let s = dropMalformedBlocks(content, isValidUserBlock, "user", e.uuid);
-  if (s.length === 0 && content.length > 0) {
-    logFrameProblem("user", e.uuid, "dropped \u2014 no valid content blocks remain");
+  let validBlocks = dropMalformedBlocks(content, isValidUserBlock, "user", frame.uuid);
+  if (validBlocks.length === 0 && content.length > 0) {
+    logFrameProblem("user", frame.uuid, "dropped \u2014 no valid content blocks remain");
     return false;
   }
-  if (s !== content) message.content = s;
+  if (validBlocks !== content) message.content = validBlocks;
   return true;
 }
 //@ chunk-c8ynteey.js:5078-5850 placement
@@ -373,50 +386,50 @@ function normalizeStreamEvent(event) {
   }
 }
 //@ chunk-c8ynteey.js:5850-6510 placement
-function capFrameDepth(e) {
-  if (!isPlainObject(e)) return true;
+function capFrameDepth(frame) {
+  if (!isPlainObject(frame)) return true;
   try {
-    let r = true;
+    let ok = true;
     try {
-      let s = capNestedDepth(e);
-      if (s > 0)
+      let capped = capNestedDepth(frame);
+      if (capped > 0)
         logFrameProblem(
-          typeof e.type === "string" ? e.type : "unknown",
-          e.uuid,
-          `replaced ${s} subtree(s) nested deeper than ${MAX_FRAME_DEPTH} levels with a marker`,
+          typeof frame.type === "string" ? frame.type : "unknown",
+          frame.uuid,
+          `replaced ${capped} subtree(s) nested deeper than ${MAX_FRAME_DEPTH} levels with a marker`,
         );
     } catch {
-      r = false;
+      ok = false;
     }
-    let n;
-    switch (e.type) {
+    let kept;
+    switch (frame.type) {
       case "assistant":
-        n = normalizeAssistantFrame(e);
+        kept = normalizeAssistantFrame(frame);
         break;
       case "user":
-        n = normalizeUserFrame(e);
+        kept = normalizeUserFrame(frame);
         break;
       case "stream_event":
-        n = normalizeStreamEvent(e.event);
-        if (!n) logFrameProblem("stream_event", e.uuid, "dropped \u2014 inner event is malformed");
+        kept = normalizeStreamEvent(frame.event);
+        if (!kept) logFrameProblem("stream_event", frame.uuid, "dropped \u2014 inner event is malformed");
         break;
       default:
-        n = true;
+        kept = true;
         break;
     }
-    if (n && !r && exceedsFrameDepth(e)) {
+    if (kept && !ok && exceedsFrameDepth(frame)) {
       logFrameProblem(
-        typeof e.type === "string" ? e.type : "unknown",
-        e.uuid,
+        typeof frame.type === "string" ? frame.type : "unknown",
+        frame.uuid,
         `dropped \u2014 nested deeper than ${MAX_FRAME_DEPTH} levels`,
       );
       return false;
     }
-    return n;
+    return kept;
   } catch (error) {
     logFrameProblem(
-      typeof e.type === "string" ? e.type : "unknown",
-      e.uuid,
+      typeof frame.type === "string" ? frame.type : "unknown",
+      frame.uuid,
       `dropped \u2014 conformance threw: ${errorMessage(error)}`,
     );
     return false;
@@ -456,24 +469,24 @@ var CAN_USE_TOOL_BOOLEAN_FIELDS = [
 /**
  * 判断工具请求来自子代理（有 agent_id 且不是特殊工具）。
  */
-function isSubagentToolRequest(e) {
+function isSubagentToolRequest(request) {
   return (
-    typeof e.agent_id === "string" &&
-    e.agent_id !== "" &&
-    typeof e.tool_name === "string" &&
-    !isConfirmRepositoryTrustTool(e.tool_name) &&
-    !isRequestComputerFolderTool(e.tool_name)
+    typeof request.agent_id === "string" &&
+    request.agent_id !== "" &&
+    typeof request.tool_name === "string" &&
+    !isConfirmRepositoryTrustTool(request.tool_name) &&
+    !isRequestComputerFolderTool(request.tool_name)
   );
 }
 //@ chunk-c8ynteey.js:7104-9093 placement
-function normalizeCanUseToolRequest(e) {
-  if (!isPlainObject(e)) return false;
+function normalizeCanUseToolRequest(request) {
+  if (!isPlainObject(request)) return false;
   try {
     if (
-      typeof e.tool_name !== "string" ||
-      typeof e.tool_use_id !== "string" ||
-      !isPlainObject(e.input) ||
-      exceedsFrameDepth(e)
+      typeof request.tool_name !== "string" ||
+      typeof request.tool_use_id !== "string" ||
+      !isPlainObject(request.input) ||
+      exceedsFrameDepth(request)
     ) {
       logForDebugging(
         "[wireFrameShape] can_use_tool request dropped \u2014 tool_name/tool_use_id not strings, input not an object, or nested too deep",
@@ -483,87 +496,90 @@ function normalizeCanUseToolRequest(e) {
       );
       return false;
     }
-    let r = [];
-    for (let n of CAN_USE_TOOL_STRING_FIELDS)
-      if (e[n] !== undefined && typeof e[n] !== "string") {
-        delete e[n];
-        r.push(n);
+    let issues = [];
+    for (let field of CAN_USE_TOOL_STRING_FIELDS)
+      if (request[field] !== undefined && typeof request[field] !== "string") {
+        delete request[field];
+        issues.push(field);
       }
-    for (let [n, s] of CAN_USE_TOOL_ENUM_FIELDS)
-      if (e[n] !== undefined && s(e[n]) === undefined) {
-        delete e[n];
-        r.push(n);
+    for (let [field, allowed] of CAN_USE_TOOL_ENUM_FIELDS)
+      if (request[field] !== undefined && allowed(request[field]) === undefined) {
+        delete request[field];
+        issues.push(field);
       }
-    for (let n of CAN_USE_TOOL_BOOLEAN_FIELDS)
-      if (e[n] !== undefined && typeof e[n] !== "boolean") {
-        delete e[n];
-        r.push(n);
+    for (let field of CAN_USE_TOOL_BOOLEAN_FIELDS)
+      if (request[field] !== undefined && typeof request[field] !== "boolean") {
+        delete request[field];
+        issues.push(field);
       }
-    if (e.permission_suggestions !== undefined) {
-      let permissionSuggestions = e.permission_suggestions;
-      let s = Array.isArray(permissionSuggestions)
+    if (request.permission_suggestions !== undefined) {
+      let permissionSuggestions = request.permission_suggestions;
+      let suggestionsAreArray = Array.isArray(permissionSuggestions)
         ? permissionSuggestions.filter(
             (permissionSuggestion) => permissionUpdateSchema().safeParse(permissionSuggestion).success,
           )
         : [];
-      if (!Array.isArray(permissionSuggestions) || s.length !== permissionSuggestions.length) {
-        r.push(
-          `permission_suggestions (${Array.isArray(permissionSuggestions) ? `${permissionSuggestions.length - s.length} of ${permissionSuggestions.length} entries` : "not an array"})`,
+      if (
+        !Array.isArray(permissionSuggestions) ||
+        suggestionsAreArray.length !== permissionSuggestions.length
+      ) {
+        issues.push(
+          `permission_suggestions (${Array.isArray(permissionSuggestions) ? `${permissionSuggestions.length - suggestionsAreArray.length} of ${permissionSuggestions.length} entries` : "not an array"})`,
         );
-        if (s.length > 0) e.permission_suggestions = s;
-        else delete e.permission_suggestions;
+        if (suggestionsAreArray.length > 0) request.permission_suggestions = suggestionsAreArray;
+        else delete request.permission_suggestions;
       }
     }
-    if (e.matched_ask_rule !== undefined) {
-      let matchedAskRule = e.matched_ask_rule;
+    if (request.matched_ask_rule !== undefined) {
+      let matchedAskRule = request.matched_ask_rule;
       if (
         !isPlainObject(matchedAskRule) ||
         typeof matchedAskRule.source !== "string" ||
         typeof matchedAskRule.tool_name !== "string" ||
         (matchedAskRule.rule_content !== undefined && typeof matchedAskRule.rule_content !== "string")
       ) {
-        delete e.matched_ask_rule;
-        r.push("matched_ask_rule");
+        delete request.matched_ask_rule;
+        issues.push("matched_ask_rule");
       }
     }
-    if (e.mcp_server !== undefined) {
-      let mcpServer = e.mcp_server;
+    if (request.mcp_server !== undefined) {
+      let mcpServer = request.mcp_server;
       if (
         !isPlainObject(mcpServer) ||
         typeof mcpServer.name !== "string" ||
         typeof mcpServer.source !== "string"
       ) {
-        delete e.mcp_server;
-        r.push("mcp_server");
+        delete request.mcp_server;
+        issues.push("mcp_server");
       }
     }
-    if (e.mcp_skill !== undefined) {
-      let mcpSkill = e.mcp_skill;
+    if (request.mcp_skill !== undefined) {
+      let mcpSkill = request.mcp_skill;
       if (
         !isPlainObject(mcpSkill) ||
         typeof mcpSkill.name !== "string" ||
         typeof mcpSkill.version !== "string" ||
         (mcpSkill.server_description !== undefined && typeof mcpSkill.server_description !== "string")
       ) {
-        delete e.mcp_skill;
-        e.tool_kind = "mcp_skill";
-        r.push("mcp_skill (tool_kind set to 'mcp_skill')");
+        delete request.mcp_skill;
+        request.tool_kind = "mcp_skill";
+        issues.push("mcp_skill (tool_kind set to 'mcp_skill')");
       }
     }
-    if (e.computer_folder !== undefined) {
-      let computerFolder = e.computer_folder;
+    if (request.computer_folder !== undefined) {
+      let computerFolder = request.computer_folder;
       if (
         !isPlainObject(computerFolder) ||
         typeof computerFolder.path !== "string" ||
         typeof computerFolder.computer_name !== "string"
       ) {
-        delete e.computer_folder;
-        r.push("computer_folder");
+        delete request.computer_folder;
+        issues.push("computer_folder");
       }
     }
-    if (r.length > 0)
+    if (issues.length > 0)
       logForDebugging(
-        `[wireFrameShape] can_use_tool request ${e.tool_use_id}: removed malformed field(s): ${r.join(", ")}`,
+        `[wireFrameShape] can_use_tool request ${request.tool_use_id}: removed malformed field(s): ${issues.join(", ")}`,
         {
           level: "error",
         },
@@ -594,8 +610,8 @@ function parsePermissionRequest(request) {
 /**
  * 读取有效的 worker_epoch（正整数）。
  */
-function readWorkerEpoch(e) {
-  let workerEpoch = e.worker_epoch;
+function readWorkerEpoch(request) {
+  let workerEpoch = request.worker_epoch;
   return typeof workerEpoch === "number" && Number.isSafeInteger(workerEpoch) && workerEpoch > 0
     ? workerEpoch
     : undefined;

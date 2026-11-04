@@ -11,6 +11,7 @@
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { getInitialSettings_2 } from "../../utils/settings/settings.js";
 import { HostScoped } from "../../utils/hostScoped.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-rsht1tdj.js:1080-1128 fingerprint = isAutoDreamEnabled (0.799)
 /**
@@ -48,5 +49,8 @@ class AutoDreamHostState {
 /**
  * 按宿主划分的 autoDream 状态单例（HostScoped），DOs 与 MOs 都从这里取 runner。
  */
-var autoDreamHostState = new HostScoped(() => new AutoDreamHostState());
+var autoDreamHostState; // deferred: uses AutoDreamHostState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-rsht1tdj.js:1325", () => {
+  autoDreamHostState = new HostScoped(() => new AutoDreamHostState());
+});
 export { isAutoDreamEnabled, isAutoDreamFeatureOn, autoDreamHostState };

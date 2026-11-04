@@ -5,60 +5,60 @@
  * pieces: chunk-bjd2sxgw.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-bjd2sxgw.js:226-1497 cjs-fingerprint
-var require_property_provider = x(function (cjsExports) {
+var require_property_provider = __commonJS(function (cjsExports) {
   class ProviderError extends Error {
     name = "ProviderError";
     tryNextLink;
-    constructor(message, t = true) {
-      let n;
-      let e = true;
-      if (typeof t === "boolean") {
-        n = undefined;
-        e = t;
-      } else if (t != null && typeof t === "object") {
-        n = t.logger;
-        e = t.tryNextLink ?? true;
+    constructor(message, options = true) {
+      let logger;
+      let tryNextLink = true;
+      if (typeof options === "boolean") {
+        logger = undefined;
+        tryNextLink = options;
+      } else if (options != null && typeof options === "object") {
+        logger = options.logger;
+        tryNextLink = options.tryNextLink ?? true;
       }
       super(message);
-      this.tryNextLink = e;
+      this.tryNextLink = tryNextLink;
       Object.setPrototypeOf(this, ProviderError.prototype);
-      n?.debug?.(`@smithy/property-provider ${e ? "->" : "(!)"} ${message}`);
+      logger?.debug?.(`@smithy/property-provider ${tryNextLink ? "->" : "(!)"} ${message}`);
     }
-    static from(r, tryNextLink = true) {
-      return Object.assign(new this(r.message, tryNextLink), r);
+    static from(error, tryNextLink = true) {
+      return Object.assign(new this(error.message, tryNextLink), error);
     }
   }
-  class f extends ProviderError {
+  class CredentialsProviderError extends ProviderError {
     name = "CredentialsProviderError";
     constructor(message, tryNextLink = true) {
       super(message, tryNextLink);
-      Object.setPrototypeOf(this, f.prototype);
+      Object.setPrototypeOf(this, CredentialsProviderError.prototype);
     }
   }
-  class l extends ProviderError {
+  class TokenProviderError extends ProviderError {
     name = "TokenProviderError";
     constructor(message, tryNextLink = true) {
       super(message, tryNextLink);
-      Object.setPrototypeOf(this, l.prototype);
+      Object.setPrototypeOf(this, TokenProviderError.prototype);
     }
   }
   var chain =
     (...providers) =>
     async () => {
       if (providers.length === 0) throw new ProviderError("No providers in chain");
-      let t;
+      let lastProviderError;
       for (let provider of providers)
         try {
           return await provider();
         } catch (error) {
-          t = error;
+          lastProviderError = error;
           if (error?.tryNextLink) continue;
           throw error;
         }
-      throw t;
+      throw lastProviderError;
     };
   var fromStatic = (staticValue) => () => Promise.resolve(staticValue);
   var memoize = (provider, isExpired, requiresRefresh) => {
@@ -96,9 +96,9 @@ var require_property_provider = x(function (cjsExports) {
       return resolved;
     };
   };
-  cjsExports.CredentialsProviderError = f;
+  cjsExports.CredentialsProviderError = CredentialsProviderError;
   cjsExports.ProviderError = ProviderError;
-  cjsExports.TokenProviderError = l;
+  cjsExports.TokenProviderError = TokenProviderError;
   cjsExports.chain = chain;
   cjsExports.fromStatic = fromStatic;
   cjsExports.memoize = memoize;

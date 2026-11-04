@@ -5,14 +5,14 @@
  * pieces: chunk-mrx6y2r5.js (1)
  * attribution: esm-fingerprint 1
  */
-import { qn } from "../../../../@typespec/ts-http-runtime/dist/esm/policies/agentPolicy.js";
+import { createEmptyHttpPipeline } from "../../../../@typespec/ts-http-runtime/dist/esm/policies/agentPolicy.js";
 import { bearerTokenAuthenticationPolicy } from "../../../core-rest-pipeline/dist/esm/policies/bearerTokenAuthenticationPolicy.js";
-import { je } from "../../../core-rest-pipeline/dist/esm/policies/retryPolicy.js";
+import { isExponentialBackoff } from "../../../core-rest-pipeline/dist/esm/policies/retryPolicy.js";
 
 //@ chunk-mrx6y2r5.js:331737-332181 esm-fingerprint
 function getBearerTokenProvider(credential, scopes, options) {
   let { abortSignal, tracingOptions } = options || {};
-  let pipeline = qn();
+  let pipeline = createEmptyHttpPipeline();
   pipeline.addPolicy(
     bearerTokenAuthenticationPolicy({
       credential,
@@ -32,7 +32,7 @@ function getBearerTokenProvider(credential, scopes, options) {
                 headers: request.headers,
               }),
           },
-          je({
+          isExponentialBackoff({
             url: "https://example.com",
             abortSignal,
             tracingOptions,
@@ -46,3 +46,4 @@ function getBearerTokenProvider(credential, scopes, options) {
   }
   return getRefreshedToken;
 }
+export { getBearerTokenProvider };

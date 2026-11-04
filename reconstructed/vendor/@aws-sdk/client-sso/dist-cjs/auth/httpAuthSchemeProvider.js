@@ -5,7 +5,7 @@
  * pieces: chunk-kejz1rpb.js (5)
  * attribution: esm-layout 2, esm-fingerprint 3
  */
-import { Re } from "../../../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../../../runtime/bun-runtime.js";
 import {
   require_middleware_host_header,
   require_middleware_host_header_2,
@@ -19,24 +19,24 @@ import { require_schema } from "../../../../@smithy/core/dist-cjs/submodules/sch
 import { require_middleware_endpoint } from "../../../../@smithy/middleware-endpoint/dist-cjs/index.js";
 import { require_retry } from "../../../../@smithy/core/dist-cjs/submodules/retry/index.js";
 import { require_client } from "../../../../@smithy/core/dist-cjs/submodules/client/index.js";
-import { require_core as require_core_2 } from "../../../core/dist-cjs/index.js";
+import { require_core_2 } from "../../../core/dist-cjs/index.js";
 import { require_util_middleware } from "../../../../@smithy/util-middleware/dist-cjs/index.js";
 
 //@ chunk-kejz1rpb.js:654-791 esm-layout
-var import_middleware_host_header = Re(require_middleware_host_header());
-var import_middleware_logger = Re(require_middleware_logger());
-var import_middleware_recursion_detection = Re(require_middleware_recursion_detection());
-var import_middleware_user_agent = Re(require_middleware_user_agent());
-var import_index_native = Re(require_index_native());
-var import_core = Re(require_core());
-var import_schema = Re(require_schema());
-var import_middleware_host_header_2 = Re(require_middleware_host_header_2());
-var import_middleware_endpoint = Re(require_middleware_endpoint());
-var import_retry = Re(require_retry());
-var import_client = Re(require_client());
+var import_middleware_host_header = __toESM(require_middleware_host_header());
+var import_middleware_logger = __toESM(require_middleware_logger());
+var import_middleware_recursion_detection = __toESM(require_middleware_recursion_detection());
+var import_middleware_user_agent = __toESM(require_middleware_user_agent());
+var import_index_native_2 = __toESM(require_index_native());
+var import_core_3 = __toESM(require_core());
+var import_schema = __toESM(require_schema());
+var import_middleware_host_header_2 = __toESM(require_middleware_host_header_2());
+var import_middleware_endpoint = __toESM(require_middleware_endpoint());
+var import_retry_2 = __toESM(require_retry());
+var import_client_2 = __toESM(require_client());
 //@ chunk-kejz1rpb.js:791-1006 esm-layout
-var import_core_2 = Re(require_core_2());
-var import_util_middleware = Re(require_util_middleware());
+var import_core_4 = __toESM(require_core_2());
+var import_util_middleware = __toESM(require_util_middleware());
 var defaultSSOHttpAuthSchemeParametersProvider = async (config, context, input) => ({
   operation: import_util_middleware.getSmithyContext(context).operation,
   region:
@@ -93,17 +93,17 @@ var defaultSSOHttpAuthSchemeProvider = (authParameters) => {
   return options;
 };
 var resolveHttpAuthSchemeConfig = (config) => {
-  let config_0 = import_core_2.resolveAwsSdkSigV4Config(config);
+  let config_0 = import_core_4.resolveAwsSdkSigV4Config(config);
   return Object.assign(config_0, {
     authSchemePreference: import_util_middleware.normalizeProvider(config.authSchemePreference ?? []),
   });
 };
 export {
   defaultSSOHttpAuthSchemeProvider,
-  import_client,
+  import_client_2,
   import_middleware_user_agent,
-  import_retry,
-  import_index_native,
+  import_retry_2,
+  import_index_native_2,
   import_middleware_host_header,
   import_middleware_endpoint,
   resolveHttpAuthSchemeConfig,
@@ -111,6 +111,6 @@ export {
   import_middleware_host_header_2,
   import_middleware_logger,
   import_middleware_recursion_detection,
-  import_core,
+  import_core_3,
   defaultSSOHttpAuthSchemeParametersProvider,
 };

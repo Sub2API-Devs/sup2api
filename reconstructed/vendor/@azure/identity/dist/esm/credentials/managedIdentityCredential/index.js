@@ -9,9 +9,9 @@ import { credentialLogger, formatSuccess, formatError } from "../../util/logging
 import { IdentityClient } from "../../client/identityClient.js";
 import { imdsRetryPolicy } from "./imdsRetryPolicy.js";
 import { ManagedIdentityApplication } from "../../../../../msal-node/lib/msal-node.cjs";
-import { getMSALLogLevel, Is } from "../../msal/utils.js";
+import { getMSALLogLevel, getAuthCapabilities } from "../../msal/utils.js";
 import { getLogLevel } from "../../../../../logger/dist/esm/index.js";
-import { CredentialUnavailableError, vc, AuthenticationRequiredError } from "../../../index.js";
+import { CredentialUnavailableError, tokenExchangeMsi, AuthenticationRequiredError } from "../../../index.js";
 import { serviceFabricErrorMessage, mapScopesToResource } from "./utils.js";
 import { tracingClient } from "../../util/tracing.js";
 import { imdsMsi } from "./imdsMsi.js";
@@ -93,7 +93,7 @@ class ManagedIdentityCredential {
             (_b = _options.loggingOptions) === null || _b === undefined
               ? undefined
               : _b.enableUnsafeSupportLogging,
-          loggerCallback: Is(logger_6),
+          loggerCallback: getAuthCapabilities(logger_6),
         },
       },
     });
@@ -147,13 +147,13 @@ class ManagedIdentityCredential {
     return tracingClient.withSpan("ManagedIdentityCredential.getToken", options, async () => {
       var _a;
       try {
-        let isTokenExchangeMsi = await vc.isAvailable(this.clientId);
+        let isTokenExchangeMsi = await tokenExchangeMsi.isAvailable(this.clientId);
         let identitySource = this.managedIdentityApp.getManagedIdentitySource();
         let isImdsMsi = identitySource === "DefaultToImds" || identitySource === "Imds";
         logger_6.getToken.info(`MSAL Identity source: ${identitySource}`);
         if (isTokenExchangeMsi) {
           logger_6.getToken.info("Using the token exchange managed identity.");
-          let result = await vc.getToken({
+          let result = await tokenExchangeMsi.getToken({
             scopes,
             clientId: this.clientId,
             identityClient: this.identityClient,

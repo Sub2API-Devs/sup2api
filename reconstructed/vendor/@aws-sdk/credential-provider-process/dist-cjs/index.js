@@ -7,18 +7,18 @@
  */
 import { promisify } from "util";
 import { exec } from "child_process";
-import { Re } from "../../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_shared_ini_file_loader } from "../../../@smithy/shared-ini-file-loader/dist-cjs/index.js";
 import { require_property_provider } from "../../../@smithy/property-provider/dist-cjs/index.js";
 import { require_client } from "../../core/dist-cjs/submodules/client/index.js";
 
 //@ chunk-skhq176t.js:335-350 esm-layout
-var import_shared_ini_file_loader = Re(require_shared_ini_file_loader());
+var import_shared_ini_file_loader = __toESM(require_shared_ini_file_loader());
 //@ chunk-skhq176t.js:350-376 esm-layout
-var import_property_provider = Re(require_property_provider());
-var import_shared_ini_file_loader_2 = Re(require_shared_ini_file_loader());
+var import_property_provider = __toESM(require_property_provider());
+var import_shared_ini_file_loader_2 = __toESM(require_shared_ini_file_loader());
 //@ chunk-skhq176t.js:446-1211 esm-layout
-var client = Re(require_client());
+var client = __toESM(require_client());
 var getValidatedProcessCredentials = (profileName, data, profiles) => {
   if (data.Version !== 1) throw Error(`Profile ${profileName} credential_process did not return Version 1.`);
   if (data.AccessKeyId === undefined || data.SecretAccessKey === undefined)
@@ -101,3 +101,4 @@ var fromProcess =
       init.logger,
     );
   };
+export { fromProcess };

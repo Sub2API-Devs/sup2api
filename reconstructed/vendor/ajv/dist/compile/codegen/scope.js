@@ -5,11 +5,11 @@
  * pieces: chunk-s82q9s4x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_code } from "./code.js";
 
 //@ chunk-s82q9s4x.js:2859-5426 cjs-fingerprint
-var require_scope = x(function (cjsExports) {
+var require_scope = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

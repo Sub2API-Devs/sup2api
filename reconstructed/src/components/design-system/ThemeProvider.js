@@ -8,9 +8,16 @@
  * pieces: chunk-v9w831vx.js (16)
  * attribution: placement 15, fingerprint 1
  */
-import { init_react_production, Se, qt, y, yt, P } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useContext,
+  createContext,
+  useState,
+  useSyncExternalStore,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
 import { StdinContextAlias } from "../../ink/terminalModes.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { getTheme, mergeThemeOverrides } from "../../utils/theme.js";
 import { resolveSetting, saveUserIntentSetting } from "../../utils/settings/userIntentSettings.js";
@@ -23,70 +30,88 @@ import {
 } from "../../utils/customThemes.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { getSystemThemeName, onSystemThemeChange } from "../../utils/systemTheme.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-v9w831vx.js:557-561 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-v9w831vx.js:557", () => {
+  init_react_production();
+});
 //@ chunk-v9w831vx.js:561-565 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-v9w831vx.js:561", () => {
+  init_react_production();
+});
 //@ chunk-v9w831vx.js:565-590 placement
-var useStdin_2 = () => Se(StdinContextAlias);
+var useStdin_2 = () => useContext(StdinContextAlias);
 var useStdin = useStdin_2;
 //@ chunk-v9w831vx.js:590-594 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-v9w831vx.js:590", () => {
+  init_react_production();
+});
 //@ chunk-v9w831vx.js:594-626 placement
-var M = Object.freeze({});
-var THEME_CONTEXT = qt(M);
+var EMPTY_THEME; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var THEME_CONTEXT;
+deferInit("chunk-v9w831vx.js:594", () => {
+  EMPTY_THEME = Object.freeze({});
+  THEME_CONTEXT = createContext(EMPTY_THEME);
+});
 //@ chunk-v9w831vx.js:626-917 placement
 function StorageCredentialsProvider(props) {
-  let a = w(6);
+  let $ = useMemoCache(6);
   let { storageV5, credentials, children } = props;
-  let t;
-  if (a[0] !== credentials || a[1] !== storageV5) {
-    t =
+  let value;
+  if ($[0] !== credentials || $[1] !== storageV5) {
+    value =
       storageV5 === undefined && credentials === undefined
-        ? M
+        ? EMPTY_THEME
         : {
             storageV5,
             credentials,
           };
-    a[0] = credentials;
-    a[1] = storageV5;
-    a[2] = t;
-  } else t = a[2];
-  let value = t;
-  let q;
-  if (a[3] !== children || a[4] !== value) {
-    q = jsxProd_default(THEME_CONTEXT.Provider, {
-      value,
+    $[0] = credentials;
+    $[1] = storageV5;
+    $[2] = value;
+  } else value = $[2];
+  let value_2 = value;
+  let provider;
+  if ($[3] !== children || $[4] !== value_2) {
+    provider = jsxProd_default(THEME_CONTEXT.Provider, {
+      value: value_2,
       children,
     });
-    a[3] = children;
-    a[4] = value;
-    a[5] = q;
-  } else q = a[5];
-  return q;
+    $[3] = children;
+    $[4] = value_2;
+    $[5] = provider;
+  } else provider = $[5];
+  return provider;
 }
 //@ chunk-v9w831vx.js:917-944 placement
 /**
  * 读主题 context 的 hook（useTheme），全站 160 多处使用。
  */
 function useTheme_2() {
-  return Se(THEME_CONTEXT);
+  return useContext(THEME_CONTEXT);
 }
 //@ chunk-v9w831vx.js:944-1219 fingerprint = ThemeContext (0.572)
-var DARK = "dark";
-var ThemeContext = qt({
-  themeSetting: DARK,
-  setThemeSetting: () => {},
-  setPreviewTheme: () => {},
-  cancelPreview: () => {},
-  currentTheme: DARK,
-  resolvedTheme: getTheme(DARK),
-  activeThemeOverrides: undefined,
-  customThemes: [],
-  activeCustomTheme: undefined,
-  reloadCustomThemes: () => Promise.resolve(),
-  setPreviewOverrides: () => {},
+var DARK; // deferred: uses getTheme (../../utils/theme.js) of its import cycle while loading; runs once the cycle is complete
+var ThemeContext;
+deferInit("chunk-v9w831vx.js:944", () => {
+  DARK = "dark";
+  ThemeContext = createContext({
+    themeSetting: DARK,
+    setThemeSetting: () => {},
+    setPreviewTheme: () => {},
+    cancelPreview: () => {},
+    currentTheme: DARK,
+    resolvedTheme: getTheme(DARK),
+    activeThemeOverrides: undefined,
+    customThemes: [],
+    activeCustomTheme: undefined,
+    reloadCustomThemes: () => Promise.resolve(),
+    setPreviewOverrides: () => {},
+  });
 });
 //@ chunk-v9w831vx.js:1219-1266 placement
 function getConfiguredTheme() {
@@ -97,223 +122,232 @@ function getConfiguredTheme() {
  * 主题 Provider：从全局配置读 theme（默认 dark），auto 时跟随系统明暗；支持临时预览（setPreviewTheme/cancelPreview）、自定义主题（用户 + 插件）与覆盖色；保存时写入 theme 设置。
  */
 function ThemeProvider(props) {
-  let $ = w(46);
+  let $ = useMemoCache(46);
   let { children, initialState, onThemeSave } = props;
   let { storageV5 } = useTheme_2();
-  let C;
+  let saveThemeSetting;
   if ($[0] !== onThemeSave || $[1] !== storageV5) {
-    C = (q) => (onThemeSave ? onThemeSave(q) : saveUserIntentSetting("theme", q, storageV5));
+    saveThemeSetting = (nextValue) =>
+      onThemeSave ? onThemeSave(nextValue) : saveUserIntentSetting("theme", nextValue, storageV5);
     $[0] = onThemeSave;
     $[1] = storageV5;
-    $[2] = C;
-  } else C = $[2];
-  let I = C;
-  let [T, rt] = y(initialState ?? getConfiguredTheme);
-  let [it, J] = y(null);
-  let [nt, st] = y(null);
-  let [K, mt] = y(getCachedCustomThemes);
-  let ve;
+    $[2] = saveThemeSetting;
+  } else saveThemeSetting = $[2];
+  let persistTheme = saveThemeSetting;
+  let [themeSetting, setThemeSettingState] = useState(initialState ?? getConfiguredTheme);
+  let [previewSetting, setPreviewSetting] = useState(null);
+  let [previewOverrides, setPreviewOverrides] = useState(null);
+  let [storedCustomThemes, setStoredCustomThemes] = useState(getCachedCustomThemes);
+  let customThemeRegistry;
   if ($[3] === MEMO_CACHE_SENTINEL) {
-    ve = getCustomThemeRegistry();
-    $[3] = ve;
-  } else ve = $[3];
-  let pluginThemes = ve.pluginThemes;
-  let W = yt(pluginThemes.subscribe, pluginThemes.getState);
-  let de;
-  if ($[4] !== W || $[5] !== K) {
-    de = [...K, ...W];
-    $[4] = W;
-    $[5] = K;
-    $[6] = de;
-  } else de = $[6];
-  let u = de;
-  let ge;
-  if ($[7] !== initialState || $[8] !== T) {
-    ge = () => ((initialState ?? T) === "auto" ? getSystemThemeName() : "dark");
+    customThemeRegistry = getCustomThemeRegistry();
+    $[3] = customThemeRegistry;
+  } else customThemeRegistry = $[3];
+  let pluginThemes = customThemeRegistry.pluginThemes;
+  let pluginThemesState = useSyncExternalStore(pluginThemes.subscribe, pluginThemes.getState);
+  let customThemesCached;
+  if ($[4] !== pluginThemesState || $[5] !== storedCustomThemes) {
+    customThemesCached = [...storedCustomThemes, ...pluginThemesState];
+    $[4] = pluginThemesState;
+    $[5] = storedCustomThemes;
+    $[6] = customThemesCached;
+  } else customThemesCached = $[6];
+  let customThemes = customThemesCached;
+  let initialSystemTheme;
+  if ($[7] !== initialState || $[8] !== themeSetting) {
+    initialSystemTheme = () => ((initialState ?? themeSetting) === "auto" ? getSystemThemeName() : "dark");
     $[7] = initialState;
-    $[8] = T;
-    $[9] = ge;
-  } else ge = $[9];
-  let [ot, O] = y(ge);
-  let m = it ?? T;
-  let pe;
+    $[8] = themeSetting;
+    $[9] = initialSystemTheme;
+  } else initialSystemTheme = $[9];
+  let [systemTheme, setSystemTheme] = useState(initialSystemTheme);
+  let effectiveSetting = previewSetting ?? themeSetting;
+  let reloadCustomThemesCached;
   if ($[10] !== storageV5) {
-    pe = () => loadCustomThemes(storageV5).then(mt);
+    reloadCustomThemesCached = () => loadCustomThemes(storageV5).then(setStoredCustomThemes);
     $[10] = storageV5;
-    $[11] = pe;
-  } else pe = $[11];
-  let h = pe;
-  let fe;
-  let Pe;
-  if ($[12] !== h) {
-    fe = () => {
-      h();
-      return watchCustomThemes(() => void h());
+    $[11] = reloadCustomThemesCached;
+  } else reloadCustomThemesCached = $[11];
+  let reloadCustomThemes = reloadCustomThemesCached;
+  let watchThemesEffect;
+  let watchThemesDeps;
+  if ($[12] !== reloadCustomThemes) {
+    watchThemesEffect = () => {
+      reloadCustomThemes();
+      return watchCustomThemes(() => void reloadCustomThemes());
     };
-    Pe = [h];
-    $[12] = h;
-    $[13] = fe;
-    $[14] = Pe;
+    watchThemesDeps = [reloadCustomThemes];
+    $[12] = reloadCustomThemes;
+    $[13] = watchThemesEffect;
+    $[14] = watchThemesDeps;
   } else {
-    fe = $[13];
-    Pe = $[14];
+    watchThemesEffect = $[13];
+    watchThemesDeps = $[14];
   }
-  P(fe, Pe);
+  useEffect(watchThemesEffect, watchThemesDeps);
   let { internal_querier } = useStdin();
-  let we;
-  let Ce;
-  if ($[15] !== m) {
-    we = () => {
-      if (m !== "auto") {
+  let systemThemeEffect;
+  let systemThemeDeps;
+  if ($[15] !== effectiveSetting) {
+    systemThemeEffect = () => {
+      if (effectiveSetting !== "auto") {
         return;
       }
-      O(getSystemThemeName());
-      return onSystemThemeChange(() => O(getSystemThemeName()));
+      setSystemTheme(getSystemThemeName());
+      return onSystemThemeChange(() => setSystemTheme(getSystemThemeName()));
     };
-    Ce = [m];
-    $[15] = m;
-    $[16] = we;
-    $[17] = Ce;
+    systemThemeDeps = [effectiveSetting];
+    $[15] = effectiveSetting;
+    $[16] = systemThemeEffect;
+    $[17] = systemThemeDeps;
   } else {
-    we = $[16];
-    Ce = $[17];
+    systemThemeEffect = $[16];
+    systemThemeDeps = $[17];
   }
-  P(we, Ce);
-  let ye;
-  let Oe;
-  if ($[18] !== m || $[19] !== internal_querier) {
-    ye = () => {
-      if (m !== "auto" || !internal_querier) {
+  useEffect(systemThemeEffect, systemThemeDeps);
+  let watcherEffect;
+  let watcherDeps;
+  if ($[18] !== effectiveSetting || $[19] !== internal_querier) {
+    watcherEffect = () => {
+      if (effectiveSetting !== "auto" || !internal_querier) {
         return;
       }
       let cleanup;
       let cancelled = false;
-      import("./chunk-xfhnxaa2.js").then((H) => {
-        let { watchSystemTheme } = H;
+      import("../../utils/systemThemeQuery.js").then((themeWatcherModule) => {
+        let { watchSystemTheme } = themeWatcherModule;
         if (cancelled) {
           return;
         }
-        cleanup = watchSystemTheme(internal_querier, O);
+        cleanup = watchSystemTheme(internal_querier, setSystemTheme);
       });
       return () => {
         cancelled = true;
         cleanup?.();
       };
     };
-    Oe = [m, internal_querier];
-    $[18] = m;
+    watcherDeps = [effectiveSetting, internal_querier];
+    $[18] = effectiveSetting;
     $[19] = internal_querier;
-    $[20] = ye;
-    $[21] = Oe;
+    $[20] = watcherEffect;
+    $[21] = watcherDeps;
   } else {
-    ye = $[20];
-    Oe = $[21];
+    watcherEffect = $[20];
+    watcherDeps = $[21];
   }
-  P(ye, Oe);
-  let H;
-  if ($[22] !== m) {
-    H = parseCustomThemeRef(m);
-    $[22] = m;
-    $[23] = H;
-  } else H = $[23];
-  let R = H;
-  let ke;
-  if ($[24] !== R || $[25] !== u) {
-    ke = R ? u.find((ht) => ht.slug === R) : undefined;
-    $[24] = R;
-    $[25] = u;
-    $[26] = ke;
-  } else ke = $[26];
-  let v = ke;
-  let currentTheme = v ? v.base : m === "auto" ? ot : R ? "dark" : m;
-  let d = nt ?? v?.overrides;
-  let xe;
-  if ($[27] !== d || $[28] !== currentTheme) {
-    xe = mergeThemeOverrides(getTheme(currentTheme), d);
-    $[27] = d;
+  useEffect(watcherEffect, watcherDeps);
+  let customSlugCached;
+  if ($[22] !== effectiveSetting) {
+    customSlugCached = parseCustomThemeRef(effectiveSetting);
+    $[22] = effectiveSetting;
+    $[23] = customSlugCached;
+  } else customSlugCached = $[23];
+  let customSlug = customSlugCached;
+  let activeCustomThemeCached;
+  if ($[24] !== customSlug || $[25] !== customThemes) {
+    activeCustomThemeCached = customSlug
+      ? customThemes.find((candidate) => candidate.slug === customSlug)
+      : undefined;
+    $[24] = customSlug;
+    $[25] = customThemes;
+    $[26] = activeCustomThemeCached;
+  } else activeCustomThemeCached = $[26];
+  let activeCustomTheme = activeCustomThemeCached;
+  let currentTheme = activeCustomTheme
+    ? activeCustomTheme.base
+    : effectiveSetting === "auto"
+      ? systemTheme
+      : customSlug
+        ? "dark"
+        : effectiveSetting;
+  let activeThemeOverrides = previewOverrides ?? activeCustomTheme?.overrides;
+  let resolvedThemeCached;
+  if ($[27] !== activeThemeOverrides || $[28] !== currentTheme) {
+    resolvedThemeCached = mergeThemeOverrides(getTheme(currentTheme), activeThemeOverrides);
+    $[27] = activeThemeOverrides;
     $[28] = currentTheme;
-    $[29] = xe;
-  } else xe = $[29];
-  let resolvedTheme = xe;
-  let _e;
+    $[29] = resolvedThemeCached;
+  } else resolvedThemeCached = $[29];
+  let resolvedTheme = resolvedThemeCached;
+  let cancelPreview;
   if ($[30] === MEMO_CACHE_SENTINEL) {
-    _e = () => J(null);
-    $[30] = _e;
-  } else _e = $[30];
-  let cancelPreview = _e;
+    cancelPreview = () => setPreviewSetting(null);
+    $[30] = cancelPreview;
+  } else cancelPreview = $[30];
+  let cancelPreview_2 = cancelPreview;
   let setThemeSetting;
-  if ($[31] !== I) {
+  if ($[31] !== persistTheme) {
     setThemeSetting = (newSetting) => {
-      rt(newSetting);
-      J(null);
-      if (newSetting === "auto") O(getSystemThemeName());
-      I(newSetting);
+      setThemeSettingState(newSetting);
+      setPreviewSetting(null);
+      if (newSetting === "auto") setSystemTheme(getSystemThemeName());
+      persistTheme(newSetting);
     };
-    $[31] = I;
+    $[31] = persistTheme;
     $[32] = setThemeSetting;
   } else setThemeSetting = $[32];
   let setPreviewTheme;
   if ($[33] === MEMO_CACHE_SENTINEL) {
     setPreviewTheme = (newSetting_0) => {
-      J(newSetting_0);
-      if (newSetting_0 === "auto") O(getSystemThemeName());
+      setPreviewSetting(newSetting_0);
+      if (newSetting_0 === "auto") setSystemTheme(getSystemThemeName());
     };
     $[33] = setPreviewTheme;
   } else setPreviewTheme = $[33];
-  let qe;
+  let contextValueCached;
   if (
-    $[34] !== v ||
-    $[35] !== d ||
+    $[34] !== activeCustomTheme ||
+    $[35] !== activeThemeOverrides ||
     $[36] !== currentTheme ||
-    $[37] !== u ||
-    $[38] !== h ||
+    $[37] !== customThemes ||
+    $[38] !== reloadCustomThemes ||
     $[39] !== resolvedTheme ||
     $[40] !== setThemeSetting ||
-    $[41] !== T
+    $[41] !== themeSetting
   ) {
-    qe = {
-      themeSetting: T,
+    contextValueCached = {
+      themeSetting,
       setThemeSetting,
       setPreviewTheme,
-      cancelPreview,
+      cancelPreview: cancelPreview_2,
       currentTheme,
       resolvedTheme,
-      activeThemeOverrides: d,
-      customThemes: u,
-      activeCustomTheme: v,
-      reloadCustomThemes: h,
-      setPreviewOverrides: st,
+      activeThemeOverrides,
+      customThemes,
+      activeCustomTheme,
+      reloadCustomThemes,
+      setPreviewOverrides,
     };
-    $[34] = v;
-    $[35] = d;
+    $[34] = activeCustomTheme;
+    $[35] = activeThemeOverrides;
     $[36] = currentTheme;
-    $[37] = u;
-    $[38] = h;
+    $[37] = customThemes;
+    $[38] = reloadCustomThemes;
     $[39] = resolvedTheme;
     $[40] = setThemeSetting;
-    $[41] = T;
-    $[42] = qe;
-  } else qe = $[42];
-  let value = qe;
-  let He;
+    $[41] = themeSetting;
+    $[42] = contextValueCached;
+  } else contextValueCached = $[42];
+  let value = contextValueCached;
+  let providerElement;
   if ($[43] !== children || $[44] !== value) {
-    He = jsxProd_default(ThemeContext.Provider, {
+    providerElement = jsxProd_default(ThemeContext.Provider, {
       value,
       children,
     });
     $[43] = children;
     $[44] = value;
-    $[45] = He;
-  } else He = $[45];
-  return He;
+    $[45] = providerElement;
+  } else providerElement = $[45];
+  return providerElement;
 }
 //@ chunk-v9w831vx.js:3554-3694 placement = useTheme (1)
 /**
  * 返回 [currentTheme, setThemeSetting]（被 44 处使用）。
  */
 function useTheme() {
-  let $ = w(3);
-  let { currentTheme, setThemeSetting } = Se(ThemeContext);
+  let $ = useMemoCache(3);
+  let { currentTheme, setThemeSetting } = useContext(ThemeContext);
   let t0;
   if ($[0] !== currentTheme || $[1] !== setThemeSetting) {
     t0 = [currentTheme, setThemeSetting];
@@ -325,12 +359,12 @@ function useTheme() {
 }
 //@ chunk-v9w831vx.js:3694-3735 placement = useThemeSetting (1)
 function useThemeSetting() {
-  return Se(ThemeContext).themeSetting;
+  return useContext(ThemeContext).themeSetting;
 }
 //@ chunk-v9w831vx.js:3735-3907 placement = usePreviewTheme (1)
 function usePreviewTheme() {
-  let $ = w(3);
-  let { setPreviewTheme, cancelPreview } = Se(ThemeContext);
+  let $ = useMemoCache(3);
+  let { setPreviewTheme, cancelPreview } = useContext(ThemeContext);
   let t0;
   if ($[0] !== cancelPreview || $[1] !== setPreviewTheme) {
     t0 = {
@@ -345,36 +379,36 @@ function usePreviewTheme() {
 }
 //@ chunk-v9w831vx.js:3907-3948 placement
 function useResolvedTheme() {
-  return Se(ThemeContext).resolvedTheme;
+  return useContext(ThemeContext).resolvedTheme;
 }
 //@ chunk-v9w831vx.js:3948-3997 placement
 function useActiveThemeOverrides() {
-  return Se(ThemeContext).activeThemeOverrides;
+  return useContext(ThemeContext).activeThemeOverrides;
 }
 //@ chunk-v9w831vx.js:3997-4291 placement
 function useCustomThemes() {
-  let a = w(5);
-  let { customThemes, activeCustomTheme, reloadCustomThemes, setPreviewOverrides } = Se(ThemeContext);
-  let t;
+  let $ = useMemoCache(5);
+  let { customThemes, activeCustomTheme, reloadCustomThemes, setPreviewOverrides } = useContext(ThemeContext);
+  let to;
   if (
-    a[0] !== activeCustomTheme ||
-    a[1] !== customThemes ||
-    a[2] !== reloadCustomThemes ||
-    a[3] !== setPreviewOverrides
+    $[0] !== activeCustomTheme ||
+    $[1] !== customThemes ||
+    $[2] !== reloadCustomThemes ||
+    $[3] !== setPreviewOverrides
   ) {
-    t = {
+    to = {
       customThemes,
       activeCustomTheme,
       reloadCustomThemes,
       setPreviewOverrides,
     };
-    a[0] = activeCustomTheme;
-    a[1] = customThemes;
-    a[2] = reloadCustomThemes;
-    a[3] = setPreviewOverrides;
-    a[4] = t;
-  } else t = a[4];
-  return t;
+    $[0] = activeCustomTheme;
+    $[1] = customThemes;
+    $[2] = reloadCustomThemes;
+    $[3] = setPreviewOverrides;
+    $[4] = to;
+  } else to = $[4];
+  return to;
 }
 export {
   useTheme_2,

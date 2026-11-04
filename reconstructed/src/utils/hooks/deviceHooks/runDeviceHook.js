@@ -73,6 +73,7 @@ import {
   toolPathFieldInput,
 } from "../hookInputPaths.js";
 import { isObjectLike } from "./hookInputPaths.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-mthxbav8.js:6715-6852 placement
 function createReachState() {
@@ -89,89 +90,92 @@ function createReachState() {
 /**
  * 创建设备钩子执行器：准备可达性基线、依赖，执行钩子并归纳结果。
  */
-function createDeviceHookRunner(e) {
-  let n = {
-    ...defaultReachDeps(e.launchDir),
-    ...e.deps,
+function createDeviceHookRunner(options) {
+  let deps = {
+    ...defaultReachDeps(options.launchDir),
+    ...options.deps,
   };
-  let { memory } = e;
-  memory.reachBaseline ??= new Map(SETTING_SOURCES.map((y) => [y, n.scopeWriteEntries(y)]));
-  memory.commonRoots ??= n.commonWriteRoots();
+  let { memory } = options;
+  memory.reachBaseline ??= new Map(SETTING_SOURCES.map((source) => [source, deps.scopeWriteEntries(source)]));
+  memory.commonRoots ??= deps.commonWriteRoots();
   let { reachBaseline, commonRoots, syncRoots, stickyRoots } = memory;
-  let noteSyncRoot = (y) => {
-    syncRoots.add(y);
-    n.realpath(y).then(
-      (C) => syncRoots.add(C),
+  let noteSyncRoot = (root) => {
+    syncRoots.add(root);
+    deps.realpath(root).then(
+      (realRoot) => syncRoots.add(realRoot),
       () => {},
     );
   };
-  let v = async () => {
-    let flattened = n.addedDirectories().flatMap((C) => {
+  let addedRoots = async () => {
+    let flattened = deps.addedDirectories().flatMap((directory) => {
       try {
-        return [expandPath(C, e.launchDir)];
+        return [expandPath(directory, options.launchDir)];
       } catch {
         return [];
       }
     });
-    return [...flattened, ...(await Promise.all(flattened.map((C) => n.realpath(C).catch(() => C))))];
+    return [
+      ...flattened,
+      ...(await Promise.all(flattened.map((directory) => deps.realpath(directory).catch(() => directory)))),
+    ];
   };
   return {
     noteSyncRoot,
     async current() {
-      let y = false;
-      let C = (T) =>
-        n.realpath(T).then(
-          (P) => (isAbsolutePlatformPath(P) ? P : T),
+      let unresolved = false;
+      let realpathOrSelf = (path) =>
+        deps.realpath(path).then(
+          (realPath) => (isAbsolutePlatformPath(realPath) ? realPath : path),
           () => {
-            y = true;
-            return T;
+            unresolved = true;
+            return path;
           },
         );
-      let launchDirReal = await C(e.launchDir);
-      let projectDirReal = await C(e.projectDir);
-      let R = null;
+      let launchDirReal = await realpathOrSelf(options.launchDir);
+      let projectDirReal = await realpathOrSelf(options.projectDir);
+      let syncRoot = null;
       try {
-        R = e.syncRoot();
+        syncRoot = options.syncRoot();
       } catch {
-        y = true;
+        unresolved = true;
       }
-      if (R !== null) {
-        syncRoots.add(R);
-        syncRoots.add(await C(R));
+      if (syncRoot !== null) {
+        syncRoots.add(syncRoot);
+        syncRoots.add(await realpathOrSelf(syncRoot));
       }
-      let j =
-        R === null
+      let sync =
+        syncRoot === null
           ? undefined
           : {
-              rootReal: await C(R),
-              root: R,
+              rootReal: await realpathOrSelf(syncRoot),
+              root: syncRoot,
             };
-      let M = uniq([
-        ...(e.repoRoot !== null ? [e.repoRoot, await C(e.repoRoot)] : []),
+      let extra = uniq([
+        ...(options.repoRoot !== null ? [options.repoRoot, await realpathOrSelf(options.repoRoot)] : []),
         ...syncRoots,
-        ...(await v()),
+        ...(await addedRoots()),
       ]);
-      let configHomeReal = await C(e.configHome);
+      let configHomeReal = await realpathOrSelf(options.configHome);
       await collectStickyRoots({
         stickyRoots,
         pinnedScopes: memory.pinnedScopes,
         pinnedRoots: memory.pinnedRoots,
         baseRoots: [
           ...stickyRootsFor({
-            launchDir: e.launchDir,
+            launchDir: options.launchDir,
             launchDirReal,
           }),
-          ...M,
+          ...extra,
         ],
         reachBaseline,
-        scopeSettingsFile: n.scopeSettingsFile,
-        realpath: n.realpath,
+        scopeSettingsFile: deps.scopeSettingsFile,
+        realpath: deps.realpath,
         commonRoots: () => commonRoots,
-        scopeRoots: n.scopeWriteRoots,
+        scopeRoots: deps.scopeWriteRoots,
       }).catch(() => {
-        y = true;
+        unresolved = true;
       });
-      if (y)
+      if (unresolved)
         logForDebugging(
           "cloud session reach: a base root did not resolve (or sync state could not be read); every hook is treated as in reach for this answer",
           {
@@ -179,15 +183,15 @@ function createDeviceHookRunner(e) {
           },
         );
       return {
-        launchDir: e.launchDir,
+        launchDir: options.launchDir,
         launchDirReal,
         configHomeReal,
-        projectDir: e.projectDir,
+        projectDir: options.projectDir,
         projectDirReal,
-        ...(j !== undefined && {
-          sync: j,
+        ...(sync !== undefined && {
+          sync,
         }),
-        extraReach: y ? ["/"] : uniq([...M, ...stickyRoots]),
+        extraReach: unresolved ? ["/"] : uniq([...extra, ...stickyRoots]),
       };
     },
   };
@@ -197,20 +201,20 @@ function defaultReachDeps(launchDir) {
   return {
     realpath: scriptFileReaderDeps().realpath,
     commonWriteRoots: () => collectBaseReachRoots(launchDir),
-    scopeWriteRoots: (n, r) => settingsReachRootsForSource(launchDir, n, r),
-    scopeWriteEntries: (n) => {
-      let settingsWriteRoots = collectSettingsWriteRoots(n, launchDir);
-      let settingsFilePathForSource = getSettingsFilePathForSource(n);
-      if (n === "policySettings" || !settingsFilePathForSource) return settingsWriteRoots;
+    scopeWriteRoots: (source, scope) => settingsReachRootsForSource(launchDir, source, scope),
+    scopeWriteEntries: (source) => {
+      let settingsWriteRoots = collectSettingsWriteRoots(source, launchDir);
+      let settingsFilePathForSource = getSettingsFilePathForSource(source);
+      if (source === "policySettings" || !settingsFilePathForSource) return settingsWriteRoots;
       let settingsFileUncached = parseSettingsFileUncached(
         settingsFilePathForSource,
-        n === "flagSettings"
+        source === "flagSettings"
           ? (getFlagSettingsExpectedContent() ?? getFlagSettingsFilePinnedContent())
           : undefined,
       );
       if (settingsFileUncached.errors.some((error) => (error.severity ?? "fatal") === "fatal")) {
         logForDebugging(
-          `cloud session reach: the ${n} settings file could not be read or parsed at attach; its write grants are unknown, so every hook counts as in the session's reach`,
+          `cloud session reach: the ${source} settings file could not be read or parsed at attach; its write grants are unknown, so every hook counts as in the session's reach`,
           {
             level: "warn",
           },
@@ -218,64 +222,66 @@ function defaultReachDeps(launchDir) {
         return [POSIX_SEP_2];
       }
       return uniq([
-        ...collectSettingsWriteRoots(n, launchDir, settingsFileUncached.settings),
+        ...collectSettingsWriteRoots(source, launchDir, settingsFileUncached.settings),
         ...settingsWriteRoots,
       ]);
     },
-    scopeSettingsFile: (n) => getSettingsFilePathForSource(n) ?? null,
+    scopeSettingsFile: (source) => getSettingsFilePathForSource(source) ?? null,
     addedDirectories: () => getAdditionalDirectoriesForClaudeMd(),
   };
 }
 //@ chunk-mthxbav8.js:8900-9927 placement
-function createDeviceHookDecider(e) {
-  let n = {
+function createDeviceHookDecider(options) {
+  let deps = {
     realpath,
     repoRootOf: findGitRootUncached,
     consentPath: cloudPluginsConsentFilePath,
     configHome: getClaudeConfigDir,
-    ...e.deps,
+    ...options.deps,
   };
-  let { launchDir, memory } = e;
-  let u = null;
-  let S = () =>
-    (u ??= (async () => {
-      let w = (launchDir) => n.realpath(launchDir).catch(() => launchDir);
-      let h = await w(launchDir);
-      let v = uniq([launchDir, h].map((x) => n.repoRootOf(x)).filter((x) => x !== null));
-      let y = uniq((await Promise.all(v.map(w))).concat(v));
-      let [C = null] = v;
+  let { launchDir, memory } = options;
+  let prepared = null;
+  let getPrepared = () =>
+    (prepared ??= (async () => {
+      let realpathOrSelf = (launchDir) => deps.realpath(launchDir).catch(() => launchDir);
+      let launchDirReal = await realpathOrSelf(launchDir);
+      let repoRoots = uniq(
+        [launchDir, launchDirReal].map((root) => deps.repoRootOf(root)).filter((root) => root !== null),
+      );
+      let extraRoots = uniq((await Promise.all(repoRoots.map(realpathOrSelf))).concat(repoRoots));
+      let [repoRoot = null] = repoRoots;
       return {
         tracker: createDeviceHookRunner({
           launchDir,
           projectDir: launchDir,
-          repoRoot: C,
-          configHome: n.configHome(),
-          syncRoot: e.syncRoot,
+          repoRoot,
+          configHome: deps.configHome(),
+          syncRoot: options.syncRoot,
           memory,
-          ...(n.tracker !== undefined && {
-            deps: n.tracker,
+          ...(deps.tracker !== undefined && {
+            deps: deps.tracker,
           }),
         }),
-        launchRoots: uniq([launchDir, h, ...y]),
-        repoRoots: y,
+        launchRoots: uniq([launchDir, launchDirReal, ...extraRoots]),
+        repoRoots: extraRoots,
       };
     })());
   return {
     async judge() {
       try {
-        let { tracker, launchRoots, repoRoots } = await S();
-        let y = await tracker.current();
-        if (e.syncElsewhere !== false) return "unknown";
-        let C = [...commandReachRoots(y), ...repoRoots];
-        if (C.some((j) => j === POSIX_SEP_2 || !isAbsolutePlatformPath(j))) return "unknown";
-        let O = n.consentPath();
-        if (!O.startsWith("/")) return "unknown";
-        let x = await probeWritability(O, C, n.realpath);
-        if (x === false) return "outside";
-        if (x === "unresolvable") return "unknown";
-        let R = [O, await n.realpath(O).catch(() => O)];
-        if (anyPairMatches(R, launchRoots)) return "in_launch_dir";
-        return anyPairMatches(R, [...memory.syncRoots]) ? "in_sync_root" : "in_other_root";
+        let { tracker, launchRoots, repoRoots } = await getPrepared();
+        let reach = await tracker.current();
+        if (options.syncElsewhere !== false) return "unknown";
+        let roots = [...commandReachRoots(reach), ...repoRoots];
+        if (roots.some((root) => root === POSIX_SEP_2 || !isAbsolutePlatformPath(root))) return "unknown";
+        let consentPath = deps.consentPath();
+        if (!consentPath.startsWith("/")) return "unknown";
+        let probe = await probeWritability(consentPath, roots, deps.realpath);
+        if (probe === false) return "outside";
+        if (probe === "unresolvable") return "unknown";
+        let pairs = [consentPath, await deps.realpath(consentPath).catch(() => consentPath)];
+        if (anyPairMatches(pairs, launchRoots)) return "in_launch_dir";
+        return anyPairMatches(pairs, [...memory.syncRoots]) ? "in_sync_root" : "in_other_root";
       } catch {
         return "unknown";
       }
@@ -284,13 +290,13 @@ function createDeviceHookDecider(e) {
 }
 //@ chunk-mthxbav8.js:9927-10045 placement
 function createReachStateRegistry() {
-  let e = new Map();
+  let byLaunchDir = new Map();
   return {
-    reachFor(n) {
-      let r = e.get(n);
-      if (r !== undefined) return r;
+    reachFor(launchDir) {
+      let existing = byLaunchDir.get(launchDir);
+      if (existing !== undefined) return existing;
       let reachState = createReachState();
-      e.set(n, reachState);
+      byLaunchDir.set(launchDir, reachState);
       return reachState;
     },
   };
@@ -299,38 +305,53 @@ function createReachStateRegistry() {
 /**
  * 宿主隔离的可达范围状态注册表。
  */
-var reachStateRegistry = new HostScoped(createReachStateRegistry);
+var reachStateRegistry; // deferred: uses createReachStateRegistry of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-mthxbav8.js:10045", () => {
+  reachStateRegistry = new HostScoped(createReachStateRegistry);
+});
 //@ chunk-mthxbav8.js:10170-10616 placement
 /**
  * 设备钩子执行器映射、缺失项目目录标记、传给钩子 git 的安全配置与替代 ref 命令参数。
  */
-var DEVICE_HOOK_EXECUTORS = {
-  execCommand: execCommandHookForDevice,
-  execHttp: execHttpHook,
-};
-var MISSING_PROJECT_DIR_MARKER = `${EMPTY_PATH_DIR}/project-folder-not-given-to-this-hook`;
-var SAFE_GIT_CONFIG_FOR_HOOKS = [
-  ["safe.bareRepository", "explicit"],
-  ["core.hooksPath", "/dev/null"],
-  ["core.fsmonitor", "false"],
-  ["protocol.ext.allow", "never"],
-  ["submodule.recurse", "false"],
-  ["diff.ignoreSubmodules", "all"],
-  ["status.submoduleSummary", "false"],
-  ["fetch.recurseSubmodules", "false"],
-  ["push.recurseSubmodules", "no"],
-];
-var TENGU_TRANQUIL_CROWN = "tengu_tranquil_crown";
-var ALTERNATE_REFS_CONFIG_ARG = ["core.alternateRefsCommand", ALTERNATE_REFS_COMMAND];
+var DEVICE_HOOK_EXECUTORS; // deferred: uses ALTERNATE_REFS_COMMAND (../../gitSafeExec.js) of its import cycle while loading; runs once the cycle is complete
+var MISSING_PROJECT_DIR_MARKER;
+var SAFE_GIT_CONFIG_FOR_HOOKS;
+var TENGU_TRANQUIL_CROWN;
+var ALTERNATE_REFS_CONFIG_ARG;
+deferInit("chunk-mthxbav8.js:10170", () => {
+  DEVICE_HOOK_EXECUTORS = {
+    execCommand: execCommandHookForDevice,
+    execHttp: execHttpHook,
+  };
+  MISSING_PROJECT_DIR_MARKER = `${EMPTY_PATH_DIR}/project-folder-not-given-to-this-hook`;
+  SAFE_GIT_CONFIG_FOR_HOOKS = [
+    ["safe.bareRepository", "explicit"],
+    ["core.hooksPath", "/dev/null"],
+    ["core.fsmonitor", "false"],
+    ["protocol.ext.allow", "never"],
+    ["submodule.recurse", "false"],
+    ["diff.ignoreSubmodules", "all"],
+    ["status.submoduleSummary", "false"],
+    ["fetch.recurseSubmodules", "false"],
+    ["push.recurseSubmodules", "no"],
+  ];
+  TENGU_TRANQUIL_CROWN = "tengu_tranquil_crown";
+  ALTERNATE_REFS_CONFIG_ARG = ["core.alternateRefsCommand", ALTERNATE_REFS_COMMAND];
+});
 //@ chunk-mthxbav8.js:10616-10785 placement
-function withShellPrefix(e) {
-  if (e.omit.includes("CLAUDE_CODE_SHELL_PREFIX")) return;
-  let n = e.base.CLAUDE_CODE_SHELL_PREFIX?.trim() || undefined;
-  return n !== undefined && n.startsWith("/") ? n : undefined;
+function withShellPrefix(env) {
+  if (env.omit.includes("CLAUDE_CODE_SHELL_PREFIX")) return;
+  let trimmed = env.base.CLAUDE_CODE_SHELL_PREFIX?.trim() || undefined;
+  return trimmed !== undefined && trimmed.startsWith("/") ? trimmed : undefined;
 }
 //@ chunk-mthxbav8.js:10785-11892 placement
-async function runDeviceHook({ hook, event, input, timeoutMs, env, startDirectory }, w, h, v) {
-  if (v.aborted)
+async function runDeviceHook(
+  { hook, event, input, timeoutMs, env, startDirectory },
+  context,
+  executors,
+  signal,
+) {
+  if (signal.aborted)
     return hook.type === "http"
       ? {
           kind: "http",
@@ -345,19 +366,19 @@ async function runDeviceHook({ hook, event, input, timeoutMs, env, startDirector
           status: 1,
           aborted: true,
         };
-  let y = jsonStringify(input);
+  let jsonInput = jsonStringify(input);
   if (hook.type === "http")
     try {
       return {
         kind: "http",
-        ...(await h.execHttp(
+        ...(await executors.execHttp(
           {
             ...hook,
             timeout: undefined,
           },
           event,
-          y,
-          v,
+          jsonInput,
+          signal,
           timeoutMs,
           mergeHookEnv(env),
         )),
@@ -370,25 +391,25 @@ async function runDeviceHook({ hook, event, input, timeoutMs, env, startDirector
         error: error instanceof Error ? error.message : String(error),
       };
     }
-  let { signal, cleanup } = createCombinedAbortSignal(v, {
+  let { signal: signal_2, cleanup } = createCombinedAbortSignal(signal, {
     timeoutMs,
   });
   try {
     return {
       kind: "command",
-      ...(await h.execCommand({
+      ...(await executors.execCommand({
         hook: {
           ...hook,
           timeout: Math.ceil(timeoutMs / 1000) + 30,
         },
         hookEvent: event,
-        jsonInput: y,
+        jsonInput,
         envContext: claudeEnvContextFrom(input),
         project:
           startDirectory === undefined
             ? {
-                originalCwd: w.launchDir,
-                projectRoot: w.projectRoot,
+                originalCwd: context.launchDir,
+                projectRoot: context.projectRoot,
               }
             : {
                 originalCwd: startDirectory,
@@ -396,13 +417,13 @@ async function runDeviceHook({ hook, event, input, timeoutMs, env, startDirector
               },
         cwd: startDirectory ?? input.cwd,
         startsOutsideProject: startDirectory !== undefined,
-        signal,
+        signal: signal_2,
         envBase: env.base,
         envOmit: env.omit,
         shellPrefix: withShellPrefix(env),
         envExtra: {
           ...env.extra,
-          CLAUDE_CODE_CLOUD_SESSION_ID: w.cloudSessionId,
+          CLAUDE_CODE_CLOUD_SESSION_ID: context.cloudSessionId,
           ...buildGitConfigEnv(
             undefined,
             readFlagWithOverride(TENGU_TRANQUIL_CROWN, {
@@ -436,31 +457,31 @@ async function runDeviceHook({ hook, event, input, timeoutMs, env, startDirector
   }
 }
 //@ chunk-mthxbav8.js:11892-11944 placement
-function sanitizeOrFallback(stderr, n) {
+function sanitizeOrFallback(stderr, fallback) {
   return (
     sanitizeDisplayText(stderr, {
       maxCodeUnits: 400,
-    }) || n
+    }) || fallback
   );
 }
 //@ chunk-mthxbav8.js:11944-12319 placement
-function blockDecision(event, n, r = {}) {
-  let s = "async" in r ? {} : r;
+function blockDecision(event, reason, answer = {}) {
+  let base = "async" in answer ? {} : answer;
   if (event !== "PreToolUse")
     return {
-      ...s,
+      ...base,
       decision: "block",
-      reason: n,
+      reason,
     };
-  let hookSpecificOutput = "hookSpecificOutput" in s ? s.hookSpecificOutput : undefined;
+  let hookSpecificOutput = "hookSpecificOutput" in base ? base.hookSpecificOutput : undefined;
   let additionalContext =
     hookSpecificOutput?.hookEventName === "PreToolUse" ? hookSpecificOutput.additionalContext : undefined;
   return {
-    ...s,
+    ...base,
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
-      permissionDecisionReason: n,
+      permissionDecisionReason: reason,
       ...(additionalContext !== undefined && {
         additionalContext,
       }),
@@ -468,21 +489,30 @@ function blockDecision(event, n, r = {}) {
   };
 }
 //@ chunk-mthxbav8.js:12319-12647 placement
-function interpretHookResult(e, n) {
-  let r = classifyHookOutput(e, n);
-  if (r.answer === null) return r;
-  let { answer } = parseHookJsonOutput(r.answer, n.event);
-  if (r.exitClass === "2" && r.blocked && !isDenyingHookOutput(answer) && e.kind === "command") {
-    let u = blockDecision(n.event, `[${n.label}]: ${e.stderr || "No stderr output"}`, answer);
+function interpretHookResult(result, context) {
+  let classified = classifyHookOutput(result, context);
+  if (classified.answer === null) return classified;
+  let { answer } = parseHookJsonOutput(classified.answer, context.event);
+  if (
+    classified.exitClass === "2" &&
+    classified.blocked &&
+    !isDenyingHookOutput(answer) &&
+    result.kind === "command"
+  ) {
+    let decision = blockDecision(
+      context.event,
+      `[${context.label}]: ${result.stderr || "No stderr output"}`,
+      answer,
+    );
     return {
-      ...r,
-      answer: parseHookJsonOutput(u, n.event).answer,
+      ...classified,
+      answer: parseHookJsonOutput(decision, context.event).answer,
       exitClass: "2",
       blocked: true,
     };
   }
   return {
-    ...r,
+    ...classified,
     answer,
     blocked: isBlockingHookOutput(answer),
   };
@@ -491,22 +521,22 @@ function interpretHookResult(e, n) {
 /**
  * 把钩子执行结果（退出码、超时、输出 JSON）归类为答复，处理超时是否默认拒绝。
  */
-function classifyHookOutput(e, { event, label, timedOut, timeoutMs, timeoutFailsClosed = false }) {
-  if (e.aborted && !timedOut)
+function classifyHookOutput(result, { event, label, timedOut, timeoutMs, timeoutFailsClosed = false }) {
+  if (result.aborted && !timedOut)
     return {
       answer: null,
       exitClass: "cancelled",
       blocked: false,
     };
-  if (e.aborted) {
+  if (result.aborted) {
     let rounded = Math.round(timeoutMs / 1000);
-    let j = `[${label}]: timed out after ${rounded}s on the attached machine`;
+    let timeoutText = `[${label}]: timed out after ${rounded}s on the attached machine`;
     if (
       timeoutFailsClosed &&
       (event === "PreToolUse" || event === "UserPromptSubmit" || event === "UserPromptExpansion")
     )
       return {
-        answer: blockDecision(event, j, buildPromptBlockOutput(event, j) ?? {}),
+        answer: blockDecision(event, timeoutText, buildPromptBlockOutput(event, timeoutText) ?? {}),
         exitClass: "timeout",
         blocked: true,
       };
@@ -517,22 +547,25 @@ function classifyHookOutput(e, { event, label, timedOut, timeoutMs, timeoutFails
       blocked: false,
     };
   }
-  if (e.kind === "http") {
-    if (e.error !== undefined || !e.ok) {
-      let M = sanitizeOrFallback(e.error ?? `HTTP ${e.statusCode ?? "request failed"}`, "request failed");
-      let q =
-        e.error !== undefined
+  if (result.kind === "http") {
+    if (result.error !== undefined || !result.ok) {
+      let reasonText = sanitizeOrFallback(
+        result.error ?? `HTTP ${result.statusCode ?? "request failed"}`,
+        "request failed",
+      );
+      let why =
+        result.error !== undefined
           ? "the request to it could not be made from this machine"
-          : `it answered HTTP ${e.statusCode ?? "with an error"}`;
-      let T = denyPreToolUseOutput(event, `[${label}]: not run \u2014 ${q}; retry`);
+          : `it answered HTTP ${result.statusCode ?? "with an error"}`;
+      let answer = denyPreToolUseOutput(event, `[${label}]: not run \u2014 ${why}; retry`);
       return {
-        answer: T,
+        answer,
         exitClass: "other",
-        localWarning: `[${label}]: ${M}`,
-        blocked: isBlockingHookOutput(T),
+        localWarning: `[${label}]: ${reasonText}`,
+        blocked: isBlockingHookOutput(answer),
       };
     }
-    let { json, validationError } = parseHttpHookOutput(e.body);
+    let { json, validationError } = parseHttpHookOutput(result.body);
     if (validationError !== undefined || json === undefined)
       return {
         answer: {},
@@ -546,29 +579,32 @@ function classifyHookOutput(e, { event, label, timedOut, timeoutMs, timeoutFails
       blocked: isBlockingHookOutput(json),
     };
   }
-  if (e.spawnFailed) {
-    let R = denyPreToolUseOutput(
+  if (result.spawnFailed) {
+    let answer = denyPreToolUseOutput(
       event,
       `[${label}]: not run \u2014 it could not be started on this machine; retry`,
     );
     return {
-      answer: R,
+      answer,
       exitClass: "spawn_failed",
-      localWarning: `[${label}]: ${sanitizeOrFallback(e.stderr, "failed to start")}`,
-      blocked: isBlockingHookOutput(R),
+      localWarning: `[${label}]: ${sanitizeOrFallback(result.stderr, "failed to start")}`,
+      blocked: isBlockingHookOutput(answer),
     };
   }
-  let w =
-    e.status === 2 &&
+  let scriptMissing =
+    result.status === 2 &&
     exitTwoMeansMissingScript({
       hookEvent: event,
-      stdout: e.stdout,
-      stderr: e.stderr,
-      stdioIncomplete: e.stdioIncomplete,
-      stdioClosedWithoutEnd: e.stdioClosedWithoutEnd,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      stdioIncomplete: result.stdioIncomplete,
+      stdioClosedWithoutEnd: result.stdioClosedWithoutEnd,
     });
-  if (e.status === 2 && (e.stdioIncomplete === true || e.stdioClosedWithoutEnd === true)) {
-    let promptBlockOutput = buildPromptBlockOutput(event, `[${label}]: ${e.stderr || "No stderr output"}`);
+  if (result.status === 2 && (result.stdioIncomplete === true || result.stdioClosedWithoutEnd === true)) {
+    let promptBlockOutput = buildPromptBlockOutput(
+      event,
+      `[${label}]: ${result.stderr || "No stderr output"}`,
+    );
     if (promptBlockOutput !== undefined)
       return {
         answer: promptBlockOutput,
@@ -576,15 +612,15 @@ function classifyHookOutput(e, { event, label, timedOut, timeoutMs, timeoutFails
         blocked: true,
       };
   }
-  let h = event !== "Stop" && event !== "SubagentStop" && event !== "StopFailure";
-  if (announcedAsync(e.stdout)) {
-    if (e.status === 2 && !w && h)
+  let canBlock = event !== "Stop" && event !== "SubagentStop" && event !== "StopFailure";
+  if (announcedAsync(result.stdout)) {
+    if (result.status === 2 && !scriptMissing && canBlock)
       return {
-        answer: blockDecision(event, `[${label}]: ${e.stderr || "No stderr output"}`),
+        answer: blockDecision(event, `[${label}]: ${result.stderr || "No stderr output"}`),
         exitClass: "2",
         blocked: true,
       };
-    return e.status === 0
+    return result.status === 0
       ? {
           answer: {},
           exitClass: "0",
@@ -592,48 +628,48 @@ function classifyHookOutput(e, { event, label, timedOut, timeoutMs, timeoutFails
         }
       : {
           answer: {},
-          exitClass: e.status === 2 ? "2" : "other",
-          localWarning: `[${label}]: announced async, then failed with status code ${e.status}: ${sanitizeOrFallback(e.stderr, "No stderr output")}`,
+          exitClass: result.status === 2 ? "2" : "other",
+          localWarning: `[${label}]: announced async, then failed with status code ${result.status}: ${sanitizeOrFallback(result.stderr, "No stderr output")}`,
           blocked: false,
         };
   }
-  let { json, plainText, validationError } = parseHookOutput(e.stdout);
-  let O = dropSuspectCaptureJson(e, event, json);
+  let { json, plainText, validationError } = parseHookOutput(result.stdout);
+  let json_2 = dropSuspectCaptureJson(result, event, json);
   let untrustedCaptureReason = getUntrustedCaptureReason(
-    e,
+    result,
     event,
-    e.stdout,
-    O,
-    (R) => parseHookOutput(R).json,
+    result.stdout,
+    json_2,
+    (text) => parseHookOutput(text).json,
   );
   if (untrustedCaptureReason !== undefined) {
-    let R = `[${label}]: output incomplete \u2014 its stdio was cut before end-of-stream on this machine; retry`;
-    let j = PROMPT_GUARD_EVENTS.has(event)
-      ? blockDecision(event, R, buildPromptBlockOutput(event, R) ?? {})
+    let text = `[${label}]: output incomplete \u2014 its stdio was cut before end-of-stream on this machine; retry`;
+    let answer = PROMPT_GUARD_EVENTS.has(event)
+      ? blockDecision(event, text, buildPromptBlockOutput(event, text) ?? {})
       : {};
     return {
-      answer: j,
+      answer,
       exitClass: "0",
       localWarning: `[${label}]: ${sanitizeOrFallback(untrustedCaptureReason, "stdio incomplete")}`,
-      blocked: isBlockingHookOutput(j),
+      blocked: isBlockingHookOutput(answer),
     };
   }
-  if (validationError !== undefined && e.status !== 2)
+  if (validationError !== undefined && result.status !== 2)
     return {
       answer: {},
-      exitClass: e.status === 0 ? "0" : "other",
-      localWarning: `[${label}]: ${sanitizeOrFallback(withHookStderr(validationError, e.status, e.stderr), "hook JSON output failed validation")}`,
+      exitClass: result.status === 0 ? "0" : "other",
+      localWarning: `[${label}]: ${sanitizeOrFallback(withHookStderr(validationError, result.status, result.stderr), "hook JSON output failed validation")}`,
       blocked: false,
     };
-  if (O !== undefined) {
-    if ("async" in O)
-      return e.status === 2 && !w && h
+  if (json_2 !== undefined) {
+    if ("async" in json_2)
+      return result.status === 2 && !scriptMissing && canBlock
         ? {
-            answer: blockDecision(event, `[${label}]: ${e.stderr || "No stderr output"}`),
+            answer: blockDecision(event, `[${label}]: ${result.stderr || "No stderr output"}`),
             exitClass: "2",
             blocked: true,
           }
-        : e.status === 0
+        : result.status === 0
           ? {
               answer: {},
               exitClass: "0",
@@ -641,24 +677,24 @@ function classifyHookOutput(e, { event, label, timedOut, timeoutMs, timeoutFails
             }
           : {
               answer: {},
-              exitClass: e.status === 2 ? "2" : "other",
-              localWarning: `[${label}]: announced async, then failed with status code ${e.status}: ${sanitizeOrFallback(e.stderr, "No stderr output")}`,
+              exitClass: result.status === 2 ? "2" : "other",
+              localWarning: `[${label}]: announced async, then failed with status code ${result.status}: ${sanitizeOrFallback(result.stderr, "No stderr output")}`,
               blocked: false,
             };
-    let R = O;
-    if (e.status === 2 && !isDenyingHookOutput(R))
+    let captured = json_2;
+    if (result.status === 2 && !isDenyingHookOutput(captured))
       return {
-        answer: blockDecision(event, `[${label}]: ${e.stderr || "No stderr output"}`, R),
+        answer: blockDecision(event, `[${label}]: ${result.stderr || "No stderr output"}`, captured),
         exitClass: "2",
         blocked: true,
       };
     return {
-      answer: R,
-      exitClass: e.status === 0 ? "0" : e.status === 2 ? "2" : "other",
-      blocked: isBlockingHookOutput(R),
+      answer: captured,
+      exitClass: result.status === 0 ? "0" : result.status === 2 ? "2" : "other",
+      blocked: isBlockingHookOutput(captured),
     };
   }
-  if (e.status === 0) {
+  if (result.status === 0) {
     let trimmed = (plainText ?? "").trim();
     return (event === "UserPromptSubmit" || event === "UserPromptExpansion") && trimmed !== ""
       ? {
@@ -677,16 +713,16 @@ function classifyHookOutput(e, { event, label, timedOut, timeoutMs, timeoutFails
           blocked: false,
         };
   }
-  if (e.status === 2) {
-    if (w)
+  if (result.status === 2) {
+    if (scriptMissing)
       return {
         answer: {},
         exitClass: "2",
-        localWarning: `[${label}]: the hook script appears to be missing (${sanitizeOrFallback(e.stderr, "no such file")})`,
+        localWarning: `[${label}]: the hook script appears to be missing (${sanitizeOrFallback(result.stderr, "no such file")})`,
         blocked: false,
       };
     return {
-      answer: blockDecision(event, `[${label}]: ${e.stderr || "No stderr output"}`),
+      answer: blockDecision(event, `[${label}]: ${result.stderr || "No stderr output"}`),
       exitClass: "2",
       blocked: true,
     };
@@ -694,7 +730,7 @@ function classifyHookOutput(e, { event, label, timedOut, timeoutMs, timeoutFails
   return {
     answer: {},
     exitClass: "other",
-    localWarning: `[${label}]: failed with non-blocking status code ${e.status}: ${sanitizeOrFallback(e.stderr, "No stderr output")}`,
+    localWarning: `[${label}]: failed with non-blocking status code ${result.status}: ${sanitizeOrFallback(result.stderr, "No stderr output")}`,
     blocked: false,
   };
 }
@@ -719,12 +755,12 @@ var answeredOnDeps = {
     }) !== undefined,
 };
 //@ chunk-mthxbav8.js:16739-16877 placement
-function createAnsweredOnLatch(e = answeredOnDeps) {
-  let n = false;
+function createAnsweredOnLatch(deps = answeredOnDeps) {
+  let latched = false;
   return () => {
-    if (e.isAnsweredOff()) return "answered_off";
-    n ||= e.isAnsweredOn();
-    return n ? "answered_on" : "unanswered";
+    if (deps.isAnsweredOff()) return "answered_off";
+    latched ||= deps.isAnsweredOn();
+    return latched ? "answered_on" : "unanswered";
   };
 }
 //@ chunk-mthxbav8.js:17001-17424 placement
@@ -749,9 +785,10 @@ var EFFORT_LEVEL_RE = /^[a-z]{1,16}$/;
 var SENDER_UNVOUCHED_TEXT =
   "Not running your hooks for the cloud session: the service could not vouch for the sender of its hook requests under your organization's trusted-device policy. The session goes on without them.";
 //@ chunk-mthxbav8.js:17424-17513 placement
-function isPastDeadline(e) {
+function isPastDeadline(result) {
   return (
-    e.deadlineMs !== undefined && (e.ageMs === undefined || e.ageMs > e.deadlineMs + DEVICE_HOOK_GRACE_MS)
+    result.deadlineMs !== undefined &&
+    (result.ageMs === undefined || result.ageMs > result.deadlineMs + DEVICE_HOOK_GRACE_MS)
   );
 }
 //@ chunk-mthxbav8.js:17513-17572 placement
@@ -763,81 +800,88 @@ function safeLabel(requestId) {
       });
 }
 //@ chunk-mthxbav8.js:17572-17734 placement
-function permissionDecisionOutput(event, wire, r) {
+function permissionDecisionOutput(event, wire, detail) {
   return event === "PreToolUse"
     ? {
         hookSpecificOutput: {
           hookEventName: "PreToolUse",
           permissionDecision: "deny",
-          permissionDecisionReason: `[${wire}]: ${r}`,
+          permissionDecisionReason: `[${wire}]: ${detail}`,
         },
       }
     : {};
 }
 //@ chunk-mthxbav8.js:17734-17792 placement
-function rewritePathInInput(e, n, r) {
-  return n.rawPath === r ? e : replaceCommandProgram(e, n.site, r);
+function rewritePathInInput(command, analysis, rawPath) {
+  return analysis.rawPath === rawPath ? command : replaceCommandProgram(command, analysis.site, rawPath);
 }
 //@ chunk-mthxbav8.js:17792-18056 placement
-function isPlausibleAbsolutePath(atPath, roots) {
-  if (typeof atPath !== "string" || roots === null || !atPath.startsWith("/")) return false;
-  if (atPath.trim() !== atPath || /^\/(?:proc|dev|net|network)(?:\/|$)/i.test(atPath)) return false;
+function isPlausibleAbsolutePath(path, roots) {
+  if (typeof path !== "string" || roots === null || !path.startsWith("/")) return false;
+  if (path.trim() !== path || /^\/(?:proc|dev|net|network)(?:\/|$)/i.test(path)) return false;
   if (
-    atPath
+    path
       .split("/")
       .slice(1)
-      .some((s) => s === "" || s === "." || s === "..")
+      .some((segment) => segment === "" || segment === "." || segment === "..")
   )
     return false;
-  return !isPosixPathUnder(atPath, stripTrailingSlashes(roots.containerProjectDir));
+  return !isPosixPathUnder(path, stripTrailingSlashes(roots.containerProjectDir));
 }
 //@ chunk-mthxbav8.js:18056-18067 placement
 var isHookInputTopField = HOOK_INPUT_TOP_FIELDS;
 //@ chunk-mthxbav8.js:18067-18317 placement
-function isRewritablePath(e, n) {
-  if (isHookInputTopField(e)) return true;
-  let r = unescapeJsonPointerPath(e);
-  let s = r[0] === "tool_calls" ? 2 : 0;
-  if (r[s] !== "tool_response") return false;
-  let reduced = r.slice(0, s + 1).reduce((acc, w) => (isObjectLike(acc) ? acc[w] : undefined), n);
-  for (let S of r.slice(s + 1)) {
+function isRewritablePath(pointer, input) {
+  if (isHookInputTopField(pointer)) return true;
+  let segments = unescapeJsonPointerPath(pointer);
+  let baseIndex = segments[0] === "tool_calls" ? 2 : 0;
+  if (segments[baseIndex] !== "tool_response") return false;
+  let reduced = segments
+    .slice(0, baseIndex + 1)
+    .reduce((acc, segment) => (isObjectLike(acc) ? acc[segment] : undefined), input);
+  for (let segment of segments.slice(baseIndex + 1)) {
     if (Array.isArray(reduced)) return false;
-    reduced = isObjectLike(reduced) ? reduced[S] : undefined;
+    reduced = isObjectLike(reduced) ? reduced[segment] : undefined;
   }
   return true;
 }
 //@ chunk-mthxbav8.js:18317-18620 placement
-function isToolResponsePath(e, n, r) {
-  let s = unescapeJsonPointerPath(e);
-  let u = s[0] === "tool_calls";
-  let S = u ? s.slice(2) : s;
-  if (S[0] === "tool_response") return true;
-  if (S[0] !== "tool_input" || S.length !== 2 || !isObjectLike(n)) return false;
-  let toolCalls = n.tool_calls;
-  let h = u ? (isObjectLike(toolCalls) ? toolCalls[s[1] ?? ""] : undefined) : n;
-  let toolName = isObjectLike(h) ? h.tool_name : undefined;
-  let y = typeof toolName === "string" ? toolPathFieldInput(toolName, r) : undefined;
-  return y !== undefined && S[1] === y;
+function isToolResponsePath(pointer, input, toolPathFields) {
+  let segments = unescapeJsonPointerPath(pointer);
+  let isNested = segments[0] === "tool_calls";
+  let rest = isNested ? segments.slice(2) : segments;
+  if (rest[0] === "tool_response") return true;
+  if (rest[0] !== "tool_input" || rest.length !== 2 || !isObjectLike(input)) return false;
+  let toolCalls = input.tool_calls;
+  let toolCall = isNested ? (isObjectLike(toolCalls) ? toolCalls[segments[1] ?? ""] : undefined) : input;
+  let toolName = isObjectLike(toolCall) ? toolCall.tool_name : undefined;
+  let pathField = typeof toolName === "string" ? toolPathFieldInput(toolName, toolPathFields) : undefined;
+  return pathField !== undefined && rest[1] === pathField;
 }
 //@ chunk-mthxbav8.js:18620-18729 layout
-var PERMISSION_MODE_ID_RE = /^[A-Za-z][A-Za-z0-9_-]{0,40}$/;
-var DEVICE_HOOKS_DISCONNECT = Symbol("deviceHooks.disconnect");
-var DEVICE_HOOKS_DEADLINE = Symbol("deviceHooks.deadline");
+var PERMISSION_MODE_ID_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DEVICE_HOOKS_DISCONNECT;
+var DEVICE_HOOKS_DEADLINE;
+deferInit("chunk-mthxbav8.js:18620", () => {
+  PERMISSION_MODE_ID_RE = /^[A-Za-z][A-Za-z0-9_-]{0,40}$/;
+  DEVICE_HOOKS_DISCONNECT = Symbol("deviceHooks.disconnect");
+  DEVICE_HOOKS_DEADLINE = Symbol("deviceHooks.deadline");
+});
 //@ chunk-mthxbav8.js:18729-19107 placement = createBaseHookInput (0.526)
 /**
  * 校验钩子输入里的 session_id/agent_id/prompt_id/tool_use_id 不含路径穿越、permission_mode/effort/agent_type 合法，用于设备钩子转发。旧版名 createBaseHookInput 配错。
  */
-function isSafeHookInputIds(e) {
-  let n = [e.session_id, e.agent_id, e.prompt_id];
-  if ("tool_use_id" in e && typeof e.tool_use_id === "string") n.push(e.tool_use_id);
+function isSafeHookInputIds(input) {
+  let ids = [input.session_id, input.agent_id, input.prompt_id];
+  if ("tool_use_id" in input && typeof input.tool_use_id === "string") ids.push(input.tool_use_id);
   return (
-    n.every((r) => r === undefined || (SAFE_IDENTIFIER_RE.test(r) && !r.includes(".."))) &&
-    (e.permission_mode === undefined || PERMISSION_MODE_ID_RE.test(e.permission_mode)) &&
-    (e.effort === undefined || EFFORT_LEVEL_RE.test(e.effort.level)) &&
-    (e.agent_type === undefined ||
-      sanitizeDisplayText(e.agent_type, {
+    ids.every((id) => id === undefined || (SAFE_IDENTIFIER_RE.test(id) && !id.includes(".."))) &&
+    (input.permission_mode === undefined || PERMISSION_MODE_ID_RE.test(input.permission_mode)) &&
+    (input.effort === undefined || EFFORT_LEVEL_RE.test(input.effort.level)) &&
+    (input.agent_type === undefined ||
+      sanitizeDisplayText(input.agent_type, {
         maxCodeUnits: 64,
-      }) === e.agent_type)
+      }) === input.agent_type)
   );
 }
 export {

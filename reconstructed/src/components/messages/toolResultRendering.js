@@ -22,83 +22,85 @@ import { isReplToolName } from "../../tools/REPLTool/constants.js";
 import { formatSecondsShort } from "../../utils/format.js";
 
 //@ chunk-ah34pb7m.js:156010-156210 placement
-function toolNameForAnalytics(name) {
-  if (isInferredMcpToolName(name)) return sanitizeToolNameForAnalytics(name);
-  if (name.startsWith("mcp__")) return "mcp_tool";
-  if (name.startsWith("eval_registered__")) return "eval_registered_tool";
-  if (name.includes("__")) return "dynamic_tool";
-  return sanitizeToolNameForAnalytics(name);
+function toolNameForAnalytics(toolName) {
+  if (isInferredMcpToolName(toolName)) return sanitizeToolNameForAnalytics(toolName);
+  if (toolName.startsWith("mcp__")) return "mcp_tool";
+  if (toolName.startsWith("eval_registered__")) return "eval_registered_tool";
+  if (toolName.includes("__")) return "dynamic_tool";
+  return sanitizeToolNameForAnalytics(toolName);
 }
 //@ chunk-ah34pb7m.js:156210-156626 placement
 /**
  * renderToolResultMessage 返回原始值时上报一次并包成 Text。
  */
-function guardPrimitiveToolResult(m, d, c) {
-  if (typeof d !== "string" && typeof d !== "number" && typeof d !== "bigint") return d;
-  if (claimOnceStore.of(m).claim(`primitive_tool_result_reported:${c.name}`)) {
-    let g = typeof d;
+function guardPrimitiveToolResult(host, result, tool) {
+  if (typeof result !== "string" && typeof result !== "number" && typeof result !== "bigint") return result;
+  if (claimOnceStore.of(host).claim(`primitive_tool_result_reported:${tool.name}`)) {
+    let claimKey = typeof result;
     queueMicrotask(() => {
       logError(
         withTelemetryMessage(
-          Error(`renderToolResultMessage returned a bare ${g} (tool: ${c.name}) \u2014 wrapped in <Text>`),
-          `renderToolResultMessage returned a bare ${g} (tool: ${toolNameForAnalytics(c.name)}) \u2014 wrapped in <Text>`,
+          Error(
+            `renderToolResultMessage returned a bare ${claimKey} (tool: ${tool.name}) \u2014 wrapped in <Text>`,
+          ),
+          `renderToolResultMessage returned a bare ${claimKey} (tool: ${toolNameForAnalytics(tool.name)}) \u2014 wrapped in <Text>`,
         ),
       );
     });
   }
   return jsxProd_default(Text, {
-    children: d,
+    children: result,
   });
 }
 //@ chunk-ah34pb7m.js:156626-156682 placement
-function selectActiveAgents_2(Ke) {
-  return Ke.agentDefinitions.activeAgents;
+function selectActiveAgents_2(state) {
+  return state.agentDefinitions.activeAgents;
 }
 //@ chunk-ah34pb7m.js:156682-156737 placement
-function hasNoErrorOrInterrupt(te) {
-  return !te.isErrored && !te.isInterrupted;
+function hasNoErrorOrInterrupt(result) {
+  return !result.isErrored && !result.isInterrupted;
 }
 //@ chunk-ah34pb7m.js:156737-156955 placement = hasContentAfterIndex (0.833)
-function hasContentAfterIndex(de) {
-  if (de.type === "grouped_tool_use") {
+function hasContentAfterIndex(message) {
+  if (message.type === "grouped_tool_use") {
     return true;
   }
-  let firstInput = de.message.content[0]?.type;
-  return de.type === "assistant"
+  let firstInput = message.message.content[0]?.type;
+  return message.type === "assistant"
     ? firstInput === "tool_use" || firstInput === "thinking" || firstInput === "redacted_thinking"
-    : de.type === "user" && firstInput === "tool_result";
+    : message.type === "user" && firstInput === "tool_result";
 }
 //@ chunk-ah34pb7m.js:156955-157045 placement
-function isNoAgentViewInAutoMode(qv) {
-  return qv.viewingAgentTaskId === undefined && alwaysFalseRefresh(qv.toolPermissionContext.mode);
+function isNoAgentViewInAutoMode(state) {
+  return state.viewingAgentTaskId === undefined && alwaysFalseRefresh(state.toolPermissionContext.mode);
 }
 //@ chunk-ah34pb7m.js:157045-157074 placement
-function toolResultId(A1) {
-  return A1.id;
+function toolResultId(result) {
+  return result.id;
 }
 //@ chunk-ah34pb7m.js:157074-157113 placement
-function isHookToolResult(D1) {
-  return isReplToolName(D1.name) && true;
+function isHookToolResult(result) {
+  return isReplToolName(result.name) && true;
 }
 //@ chunk-ah34pb7m.js:157113-157142 placement
-function toolUseId(N1) {
-  return N1.id;
+function toolUseId(block) {
+  return block.id;
 }
 //@ chunk-ah34pb7m.js:157142-157171 placement
-function toolUseId_2(L1) {
-  return L1.id;
+function toolUseId_2(block) {
+  return block.id;
 }
 //@ chunk-ah34pb7m.js:157171-157189 placement
-function noopRenderHook(vle) {}
+function noopRenderHook(deps) {}
 //@ chunk-ah34pb7m.js:157189-157215 placement
-function returnFalseHook(Ple) {
+function returnFalseHook(deps) {
   return false;
 }
 //@ chunk-ah34pb7m.js:157215-157374 placement
 /**
  * 折叠读取/搜索内容里的一行钩子记录："命令 (耗时)"。
  */
-function renderHookDurationLine(Kv, O1) {
+function renderHookDurationLine(hook, index) {
   return jsxProd_default_2(
     Text,
     {
@@ -108,22 +110,22 @@ function renderHookDurationLine(Kv, O1) {
           "aria-hidden": true,
           children: "     \u23BF ",
         }),
-        Kv.command,
+        hook.command,
         " (",
-        formatSecondsShort(Kv.durationMs ?? 0),
+        formatSecondsShort(hook.durationMs ?? 0),
         ")",
       ],
     },
-    `hook-${O1}`,
+    `hook-${index}`,
   );
 }
 //@ chunk-ah34pb7m.js:157374-157404 placement
-function commitSha(B1) {
-  return B1.sha;
+function commitSha(result) {
+  return result.sha;
 }
 //@ chunk-ah34pb7m.js:157404-157437 placement
-function gitBranch(F1) {
-  return F1.branch;
+function gitBranch(result) {
+  return result.branch;
 }
 export {
   selectActiveAgents_2,

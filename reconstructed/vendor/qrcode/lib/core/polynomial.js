@@ -5,16 +5,16 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_galois_field } from "./galois-field.js";
 
 //@ chunk-spjgqa4y.js:6966-7479 cjs-fingerprint
-var require_polynomial = x(function (cjsExports) {
+var require_polynomial = __commonJS(function (cjsExports) {
   var GF = require_galois_field();
   cjsExports.mul = function (p1, p2) {
     let coeff = new Uint8Array(p1.length + p2.length - 1);
-    for (let i = 0; i < p1.length; i++)
-      for (let j = 0; j < p2.length; j++) coeff[i + j] ^= GF.mul(p1[i], p2[j]);
+    for (let coeffIndex = 0; coeffIndex < p1.length; coeffIndex++)
+      for (let j = 0; j < p2.length; j++) coeff[coeffIndex + j] ^= GF.mul(p1[coeffIndex], p2[j]);
     return coeff;
   };
   cjsExports.mod = function (divident, divisor) {

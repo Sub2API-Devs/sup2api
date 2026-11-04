@@ -76,24 +76,24 @@ function defaultBedrockOpusTier() {
 async function findBedrockUpgradeCandidates() {
   if (getAPIProvider() !== "bedrock") return [];
   if (env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST) return [];
-  let stalePins = collectStalePins(defaultBedrockOpusTier(), (u) =>
-    u.includes("application-inference-profile"),
+  let stalePins = collectStalePins(defaultBedrockOpusTier(), (key) =>
+    key.includes("application-inference-profile"),
   );
   if (stalePins.length === 0) return [];
   logEvent("tengu_bedrock_upgrade_check", {
     stale_tiers: fromNumber(stalePins.length),
   });
-  let o;
+  let profiles;
   try {
-    o = await getBedrockInferenceProfiles();
+    profiles = await getBedrockInferenceProfiles();
   } catch {
     return [];
   }
   let bedrockRegionPrefix = getBedrockRegionPrefix(await resolveAwsRegion());
-  let r = [];
+  let candidates = [];
   for (let stalePin of stalePins) {
     let firstParty = catalogEntriesByFirstPartyId[stalePin.defaultKey].firstParty;
-    let firstMatch = findFirstMatch(o, firstParty, bedrockRegionPrefix);
+    let firstMatch = findFirstMatch(profiles, firstParty, bedrockRegionPrefix);
     if (!firstMatch) continue;
     if (enforcedAllowlistLeavesOut(firstMatch)) {
       logForDebugging(`[bedrock-upgrade] ${leftOutDebugLine(stalePin.tier, "upgrade", [firstMatch])}`);
@@ -106,7 +106,7 @@ async function findBedrockUpgradeCandidates() {
       catalogEntriesByFirstPartyId[stalePin.defaultKey].firstParty,
     );
     if (!marketingNameForModel || !marketingNameForModel_2) continue;
-    r.push({
+    candidates.push({
       tier: stalePin.tier,
       envVar: stalePin.envVar,
       fromKey: stalePin.pinnedKey,
@@ -118,26 +118,26 @@ async function findBedrockUpgradeCandidates() {
   }
   let filtered = (
     await Promise.all(
-      r.map(async (u) => {
-        let k = await probeBedrockModel(u.toBedrockId, u.tier, {
+      candidates.map(async (candidate) => {
+        let accessible = await probeBedrockModel(candidate.toBedrockId, candidate.tier, {
           isDefault: true,
           versionTooOld: "unavailable",
         });
         logEvent("tengu_bedrock_probe_result", {
-          tier: fromEnum(u.tier),
-          model_id: telemetrySafeModelName(u.toBedrockId),
-          accessible: k,
+          tier: fromEnum(candidate.tier),
+          model_id: telemetrySafeModelName(candidate.toBedrockId),
+          accessible,
         });
-        return k ? u : null;
+        return accessible ? candidate : null;
       }),
     )
-  ).filter((u) => u !== null);
+  ).filter((candidate) => candidate !== null);
   logForDebugging(`[bedrock-upgrade] tiersWithPin=${stalePins.length} candidates=${filtered.length}`);
   return filtered;
 }
 //@ chunk-cnamfjf8.js:1829-1863 placement
-function seedEnvDefaultForUserPin(e) {
-  return seedEnvDefaultForUserPin_2(e, defaultBedrockOpusTier());
+function seedEnvDefaultForUserPin(value) {
+  return seedEnvDefaultForUserPin_2(value, defaultBedrockOpusTier());
 }
 //@ chunk-cnamfjf8.js:1863-3580 placement
 /**
@@ -146,80 +146,85 @@ function seedEnvDefaultForUserPin(e) {
 async function checkBedrockDefaultAvailability() {
   if (getAPIProvider() !== "bedrock") return [];
   if (env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST) return [];
-  let e = lastLiveRoundStart(Date.now());
+  let roundStart = lastLiveRoundStart(Date.now());
   let modelOverrides = getInitialSettings_2().modelOverrides;
-  let l = documentMayMoveTiers() ? await resolveAwsRegion() : undefined;
-  let r = defaultBedrockOpusTier();
-  let unpinnedTiers = collectUnpinnedTiers(r, modelOverrides);
+  let region = documentMayMoveTiers() ? await resolveAwsRegion() : undefined;
+  let documentTiers = defaultBedrockOpusTier();
+  let unpinnedTiers = collectUnpinnedTiers(documentTiers, modelOverrides);
   if (unpinnedTiers.length === 0) return [];
   logEvent("tengu_bedrock_default_check", {
     unpinned_tiers: fromNumber(unpinnedTiers.length),
   });
-  let m;
+  let profiles;
   try {
-    m = await getBedrockInferenceProfiles();
+    profiles = await getBedrockInferenceProfiles();
   } catch {
-    m = [];
+    profiles = [];
   }
-  let u = l ?? (await resolveAwsRegion());
-  let bedrockRegionPrefix = getBedrockRegionPrefix(u);
-  let any = unpinnedTiers.some((unpinnedTier) => unpinnedTier.tier === "sonnet");
+  let resolvedRegion = region ?? (await resolveAwsRegion());
+  let bedrockRegionPrefix = getBedrockRegionPrefix(resolvedRegion);
+  let sonnetInvolved = unpinnedTiers.some((unpinnedTier) => unpinnedTier.tier === "sonnet");
   let results = await Promise.all(
     unpinnedTiers.map(async (unpinnedTier) => {
-      let h = catalogEntriesByFirstPartyId[unpinnedTier.defaultKey];
-      let documentTarget = r[unpinnedTier.tier].documentTarget;
-      let E = r[unpinnedTier.tier].fromDocument === true;
-      let T =
+      let catalogEntry = catalogEntriesByFirstPartyId[unpinnedTier.defaultKey];
+      let documentTarget = documentTiers[unpinnedTier.tier].documentTarget;
+      let fromDocument = documentTiers[unpinnedTier.tier].fromDocument === true;
+      let documentModelId =
         documentTarget === undefined
           ? undefined
-          : tailorBedrockModelId(documentTarget.modelId, m, bedrockRegionPrefix);
-      let n = T ?? resolveBedrockModelId(unpinnedTier.defaultKey, m, bedrockRegionPrefix);
-      if (!n) return null;
-      if (enforcedAllowlistLeavesOut(n)) {
-        logForDebugging(`[bedrock-fallback] ${leftOutDebugLine(unpinnedTier.tier, "check", [n])}`);
+          : tailorBedrockModelId(documentTarget.modelId, profiles, bedrockRegionPrefix);
+      let modelId =
+        documentModelId ?? resolveBedrockModelId(unpinnedTier.defaultKey, profiles, bedrockRegionPrefix);
+      if (!modelId) return null;
+      if (enforcedAllowlistLeavesOut(modelId)) {
+        logForDebugging(`[bedrock-fallback] ${leftOutDebugLine(unpinnedTier.tier, "check", [modelId])}`);
         return null;
       }
       await checkDefaultsUnchecked(
         unpinnedTier,
-        n,
-        m,
+        modelId,
+        profiles,
         bedrockRegionPrefix,
         modelOverrides,
         documentTarget,
-        E,
-        any,
+        fromDocument,
+        sonnetInvolved,
       );
-      let p = {};
-      let y = await probeBedrockModel(n, unpinnedTier.tier, {
+      let probeState = {};
+      let accessible = await probeBedrockModel(modelId, unpinnedTier.tier, {
         isDefault: true,
-        ...(r[unpinnedTier.tier].fromDocument && {
+        ...(documentTiers[unpinnedTier.tier].fromDocument && {
           versionTooOld: "unavailable",
         }),
         onVerdict: (verdict, at) => {
-          p.verdict = verdict;
-          p.at = at;
+          probeState.verdict = verdict;
+          probeState.at = at;
         },
       });
       logEvent("tengu_bedrock_probe_result", {
         tier: fromEnum(unpinnedTier.tier),
-        model_id: telemetrySafeModelName(n),
-        accessible: y,
+        model_id: telemetrySafeModelName(modelId),
+        accessible,
       });
-      if (y || p.verdict === "temporary") return null;
-      if (p.verdict === "refused")
-        markModelRefused(n, modelNotAvailableError(n), (p.at ?? Date.now()) + REFUSED_TTL_MS);
+      if (accessible || probeState.verdict === "temporary") return null;
+      if (probeState.verdict === "refused")
+        markModelRefused(
+          modelId,
+          modelNotAvailableError(modelId),
+          (probeState.at ?? Date.now()) + REFUSED_TTL_MS,
+        );
       let upgradeCandidatesUnchecked = await findUpgradeCandidatesUnchecked(
         unpinnedTier.defaultKey,
         unpinnedTier.tier,
-        m,
+        profiles,
         bedrockRegionPrefix,
         modelOverrides,
-        e,
+        roundStart,
         documentTarget !== undefined,
-        E,
+        fromDocument,
       );
       if (!upgradeCandidatesUnchecked) return null;
-      if (p.verdict !== "refused") {
+      if (probeState.verdict !== "refused") {
         if (!(
           upgradeCandidatesUnchecked.answeredLive === true ||
           upgradeCandidatesUnchecked.adminMapped === true ||
@@ -232,23 +237,23 @@ async function checkBedrockDefaultAvailability() {
           ))
         ))
           return null;
-        if (p.verdict === "denied" && upgradeCandidatesUnchecked.adminMapped !== true) {
-          markModelRefused(n, modelNotAvailableError(n), Date.now() + REFUSED_TTL_MS);
-          rememberBedrockModelAccess(n, unpinnedTier.tier, "refused");
+        if (probeState.verdict === "denied" && upgradeCandidatesUnchecked.adminMapped !== true) {
+          markModelRefused(modelId, modelNotAvailableError(modelId), Date.now() + REFUSED_TTL_MS);
+          rememberBedrockModelAccess(modelId, unpinnedTier.tier, "refused");
         }
       }
-      let D = documentTarget?.name ?? getMarketingNameForModel(h.firstParty);
+      let defaultName = documentTarget?.name ?? getMarketingNameForModel(catalogEntry.firstParty);
       let marketingNameForModel = getMarketingNameForModel(
         catalogEntriesByFirstPartyId[upgradeCandidatesUnchecked.key].firstParty,
       );
-      if (!D || !marketingNameForModel) return null;
+      if (!defaultName || !marketingNameForModel) return null;
       return {
         tier: unpinnedTier.tier,
         envVar: unpinnedTier.envVar,
         defaultKey: unpinnedTier.defaultKey,
-        defaultName: D,
-        ...(T !== undefined && {
-          documentTargetId: T,
+        defaultName,
+        ...(documentModelId !== undefined && {
+          documentTargetId: documentModelId,
         }),
         fallbackKey: upgradeCandidatesUnchecked.key,
         fallbackName: marketingNameForModel,
@@ -259,10 +264,10 @@ async function checkBedrockDefaultAvailability() {
       };
     }),
   );
-  let _ = [];
-  for (let s of results) if (s !== null) _.push(s);
-  logForDebugging(`[bedrock-fallback] unpinnedTiers=${unpinnedTiers.length} fallbacks=${_.length}`);
-  return _;
+  let fallbacks = [];
+  for (let fallback of results) if (fallback !== null) fallbacks.push(fallback);
+  logForDebugging(`[bedrock-fallback] unpinnedTiers=${unpinnedTiers.length} fallbacks=${fallbacks.length}`);
+  return fallbacks;
 }
 //@ chunk-cnamfjf8.js:3580-4056 placement
 async function checkBedrockDocumentDefaults() {
@@ -276,24 +281,24 @@ async function checkBedrockDocumentDefaults() {
   await getBedrockInferenceProfiles().catch(() => {
     return;
   });
-  let e = await refuteUnavailableDocumentDefaults(async (o, l) => {
-    let r = {};
-    let f = await probeBedrockModel(o, l, {
+  let refuted = await refuteUnavailableDocumentDefaults(async (modelId, tier) => {
+    let probeState = {};
+    let accessible = await probeBedrockModel(modelId, tier, {
       isDefault: true,
       versionTooOld: "unavailable",
       onVerdict: (verdict) => {
-        r.verdict = verdict;
+        probeState.verdict = verdict;
       },
     });
     logEvent("tengu_bedrock_probe_result", {
-      tier: fromEnum(l ?? "default"),
-      model_id: telemetrySafeModelName(o),
-      accessible: f,
+      tier: fromEnum(tier ?? "default"),
+      model_id: telemetrySafeModelName(modelId),
+      accessible,
     });
-    return f || r.verdict === "temporary";
+    return accessible || probeState.verdict === "temporary";
   }, getInitialSettings_2().modelOverrides);
-  logForDebugging(`[bedrock-fallback] refutedDocumentDefaults=${e.length}`);
-  return e;
+  logForDebugging(`[bedrock-fallback] refutedDocumentDefaults=${refuted.length}`);
+  return refuted;
 }
 //@ chunk-cnamfjf8.js:4056-4884 placement
 /**
@@ -301,80 +306,95 @@ async function checkBedrockDocumentDefaults() {
  */
 async function checkDefaultsUnchecked(
   unpinnedTier,
-  o,
-  l,
+  modelId,
+  profiles,
   bedrockRegionPrefix,
   modelOverrides,
   documentTarget,
-  u,
-  k,
+  fromDocument,
+  sonnetInvolved,
 ) {
-  let g = (n, id) => ({
+  let makeCandidate = (key, id) => ({
     id,
     name:
-      getMarketingNameForModel(catalogEntriesByFirstPartyId[n].firstParty) ??
-      catalogEntriesByFirstPartyId[n].firstParty,
+      getMarketingNameForModel(catalogEntriesByFirstPartyId[key].firstParty) ??
+      catalogEntriesByFirstPartyId[key].firstParty,
   });
-  let A = (n) => Boolean(modelOverrides?.[catalogEntriesByFirstPartyId[n].firstParty]);
-  let _ = (n) => A(n) && !enforcedAllowlistLeavesOut(String(getModelStrings()[n]));
-  let s = (n) =>
-    n.flatMap((p) => {
-      let bedrockModelId = resolveBedrockModelId(p, l, bedrockRegionPrefix);
-      return bedrockModelId && !enforcedAllowlistLeavesOut(bedrockModelId) ? [g(p, bedrockModelId)] : [];
+  let hasOverride = (key) => Boolean(modelOverrides?.[catalogEntriesByFirstPartyId[key].firstParty]);
+  let isAllowedOverride = (key) =>
+    hasOverride(key) && !enforcedAllowlistLeavesOut(String(getModelStrings()[key]));
+  let resolveAll = (keys) =>
+    keys.flatMap((key) => {
+      let bedrockModelId = resolveBedrockModelId(key, profiles, bedrockRegionPrefix);
+      return bedrockModelId && !enforcedAllowlistLeavesOut(bedrockModelId)
+        ? [makeCandidate(key, bedrockModelId)]
+        : [];
     });
-  let h = (n, p) => s(predecessorsInTier(n, p).filter((y) => !A(y)));
-  let b = predecessorsInTier(unpinnedTier.defaultKey, unpinnedTier.tier, documentTarget !== undefined);
-  let E = u ? b.find(_) : undefined;
-  let T = [
+  let crossTierPreds = (key, crossTier) =>
+    resolveAll(predecessorsInTier(key, crossTier).filter((predKey) => !hasOverride(predKey)));
+  let predecessors = predecessorsInTier(
+    unpinnedTier.defaultKey,
+    unpinnedTier.tier,
+    documentTarget !== undefined,
+  );
+  let adminPinned = fromDocument ? predecessors.find(isAllowedOverride) : undefined;
+  let ladder = [
     documentTarget === undefined
-      ? g(unpinnedTier.defaultKey, o)
+      ? makeCandidate(unpinnedTier.defaultKey, modelId)
       : {
-          id: o,
+          id: modelId,
           name: documentTarget.name,
         },
-    ...s((E === undefined ? b : b.slice(0, b.indexOf(E))).filter((n) => !A(n))),
+    ...resolveAll(
+      (adminPinned === undefined
+        ? predecessors
+        : predecessors.slice(0, predecessors.indexOf(adminPinned))
+      ).filter((key) => !hasOverride(key)),
+    ),
   ];
-  if (E !== undefined) T.push(g(E, String(getModelStrings()[E])));
+  if (adminPinned !== undefined)
+    ladder.push(makeCandidate(adminPinned, String(getModelStrings()[adminPinned])));
   else if (unpinnedTier.tier === "opus") {
-    let bedrockModelId = resolveBedrockModelId(DEFAULT_3P_SONNET_KEY, l, bedrockRegionPrefix);
-    let p = !bedrockModelId
+    let bedrockModelId = resolveBedrockModelId(DEFAULT_3P_SONNET_KEY, profiles, bedrockRegionPrefix);
+    let sonnetModelId = !bedrockModelId
       ? []
       : !enforcedAllowlistLeavesOut(bedrockModelId)
-        ? [g(DEFAULT_3P_SONNET_KEY, bedrockModelId)]
-        : k
-          ? h(DEFAULT_3P_SONNET_KEY, "sonnet")
+        ? [makeCandidate(DEFAULT_3P_SONNET_KEY, bedrockModelId)]
+        : sonnetInvolved
+          ? crossTierPreds(DEFAULT_3P_SONNET_KEY, "sonnet")
           : [];
-    T.push(
-      ...p.map((y) => ({
-        ...y,
+    ladder.push(
+      ...sonnetModelId.map((candidate) => ({
+        ...candidate,
         crossTier: true,
       })),
     );
   }
-  registerFallbackLadder("bedrock", unpinnedTier.tier, unpinnedTier.envVar, T);
+  registerFallbackLadder("bedrock", unpinnedTier.tier, unpinnedTier.envVar, ladder);
   await Promise.all(
-    T.slice(1).map(async (n) => {
-      let tier = n.crossTier ? "sonnet" : unpinnedTier.tier;
-      let y = await rememberedBedrockAccess(n.id, tier);
-      if (y?.state === "refused") markModelRefused(n.id, modelNotAvailableError(n.id), y.at + REFUSED_TTL_MS);
+    ladder.slice(1).map(async (candidate) => {
+      let tier = candidate.crossTier ? "sonnet" : unpinnedTier.tier;
+      let remembered = await rememberedBedrockAccess(candidate.id, tier);
+      if (remembered?.state === "refused")
+        markModelRefused(candidate.id, modelNotAvailableError(candidate.id), remembered.at + REFUSED_TTL_MS);
     }),
   ).catch(() => {});
 }
 //@ chunk-cnamfjf8.js:4884-5002 placement
-function resolveBedrockModelId(e, o, l) {
-  let r = catalogEntriesByFirstPartyId[e];
-  let firstMatch = findFirstMatch(o, r.firstParty, l);
+function resolveBedrockModelId(key, profiles, regionPrefix) {
+  let catalogEntry = catalogEntriesByFirstPartyId[key];
+  let firstMatch = findFirstMatch(profiles, catalogEntry.firstParty, regionPrefix);
   if (firstMatch) return firstMatch;
-  if (!r.bedrock) return null;
-  return withBedrockRegionPrefix(r.bedrock, l);
+  if (!catalogEntry.bedrock) return null;
+  return withBedrockRegionPrefix(catalogEntry.bedrock, regionPrefix);
 }
 //@ chunk-cnamfjf8.js:5002-5073 placement
-function tailorBedrockModelId(modelId, o, bedrockRegionPrefix) {
-  let bedrockFoundationModelId = toBedrockFoundationModelId(modelId);
+function tailorBedrockModelId(modelId, profiles, regionPrefix) {
+  let foundationModelId = toBedrockFoundationModelId(modelId);
   return (
-    (bedrockFoundationModelId === undefined
+    (foundationModelId === undefined
       ? undefined
-      : pickProfileForFoundationModel(bedrockFoundationModelId, o, bedrockRegionPrefix)) ?? modelId
+      : pickProfileForFoundationModel(foundationModelId, profiles, regionPrefix)) ?? modelId
   );
 }
 //@ chunk-cnamfjf8.js:5073-6206 placement
@@ -383,125 +403,133 @@ function tailorBedrockModelId(modelId, o, bedrockRegionPrefix) {
  */
 async function findUpgradeCandidatesUnchecked(
   defaultKey,
-  tier,
-  l,
+  probeTier,
+  profiles,
   bedrockRegionPrefix,
   modelOverrides,
-  m,
-  u = false,
-  k = false,
+  overrideMap,
+  documentTiered = false,
+  versionTooOld = false,
 ) {
-  let g = [];
-  function A(d, D) {
-    return d.flatMap((R) => {
-      let bedrockModelId = resolveBedrockModelId(R, l, bedrockRegionPrefix);
+  let leftOut = [];
+  function resolveCandidates(keys, probeTier_2) {
+    return keys.flatMap((key) => {
+      let bedrockModelId = resolveBedrockModelId(key, profiles, bedrockRegionPrefix);
       if (!bedrockModelId) return [];
       if (enforcedAllowlistLeavesOut(bedrockModelId)) {
-        g.push(D === tier ? bedrockModelId : `${bedrockModelId} (the cross-tier Sonnet default)`);
+        leftOut.push(
+          probeTier_2 === probeTier ? bedrockModelId : `${bedrockModelId} (the cross-tier Sonnet default)`,
+        );
         return [];
       }
       return [
         {
-          key: R,
+          key,
           regionalId: bedrockModelId,
-          probeTier: D,
+          probeTier: probeTier_2,
         },
       ];
     });
   }
-  let _ = (d) => Boolean(modelOverrides?.[catalogEntriesByFirstPartyId[d].firstParty]);
-  let s = (d) => _(d) && !enforcedAllowlistLeavesOut(String(getModelStrings()[d]));
-  let h = predecessorsInTier(defaultKey, tier, u);
-  let b = k ? h.find(s) : undefined;
-  let filtered = (b === undefined ? h : h.slice(0, h.indexOf(b))).filter((d) => !_(d));
-  let T = [A(filtered, tier)];
-  if (tier === "opus" && b === undefined) T.push(A([DEFAULT_3P_SONNET_KEY], "sonnet"));
-  if (g.length > 0) logForDebugging(`[bedrock-fallback] ${leftOutDebugLine(tier, "fallback", g)}`);
-  let n = new Set();
-  let p = (d) => ({
-    onVerdict: (D, R) => {
-      if (D === "refused")
+  let hasOverride = (key) => Boolean(modelOverrides?.[catalogEntriesByFirstPartyId[key].firstParty]);
+  let isAllowedOverride = (key) =>
+    hasOverride(key) && !enforcedAllowlistLeavesOut(String(getModelStrings()[key]));
+  let predecessors = predecessorsInTier(defaultKey, probeTier, documentTiered);
+  let adminPinned = versionTooOld ? predecessors.find(isAllowedOverride) : undefined;
+  let keys = (
+    adminPinned === undefined ? predecessors : predecessors.slice(0, predecessors.indexOf(adminPinned))
+  ).filter((key) => !hasOverride(key));
+  let groups = [resolveCandidates(keys, probeTier)];
+  if (probeTier === "opus" && adminPinned === undefined)
+    groups.push(resolveCandidates([DEFAULT_3P_SONNET_KEY], "sonnet"));
+  if (leftOut.length > 0)
+    logForDebugging(`[bedrock-fallback] ${leftOutDebugLine(probeTier, "fallback", leftOut)}`);
+  let liveAnswered = new Set();
+  let onVerdict = (candidate) => ({
+    onVerdict: (verdict, at) => {
+      if (verdict === "refused")
         markModelRefused(
-          d.regionalId,
-          modelNotAvailableError(d.regionalId),
-          (R ?? Date.now()) + REFUSED_TTL_MS,
+          candidate.regionalId,
+          modelNotAvailableError(candidate.regionalId),
+          (at ?? Date.now()) + REFUSED_TTL_MS,
         );
-      else if (D === "accessible") {
-        clearModelRefusal(d.regionalId);
-        if (R === undefined) n.add(d.regionalId);
+      else if (verdict === "accessible") {
+        clearModelRefusal(candidate.regionalId);
+        if (at === undefined) liveAnswered.add(candidate.regionalId);
       }
     },
   });
   let firstAccessibleModel = await findFirstAccessibleModel(
-    T,
-    (d, D) =>
-      probeBedrockModel(d.regionalId, d.probeTier, {
-        ...(D && {
-          live: D,
+    groups,
+    (candidate, live) =>
+      probeBedrockModel(candidate.regionalId, candidate.probeTier, {
+        ...(live && {
+          live,
         }),
-        ...(u &&
-          d.key === defaultKey && {
+        ...(documentTiered &&
+          candidate.key === defaultKey && {
             isDefault: true,
           }),
-        ...(k && {
+        ...(versionTooOld && {
           versionTooOld: "unavailable",
         }),
-        ...p(d),
+        ...onVerdict(candidate),
       }),
-    async (d) => (await rememberedBedrockAccess(d.regionalId, d.probeTier))?.state === "refused",
-    m,
+    async (candidate) =>
+      (await rememberedBedrockAccess(candidate.regionalId, candidate.probeTier))?.state === "refused",
+    overrideMap,
   );
   if (!firstAccessibleModel)
-    return b === undefined
+    return adminPinned === undefined
       ? null
       : {
-          key: b,
-          regionalId: String(getModelStrings()[b]),
+          key: adminPinned,
+          regionalId: String(getModelStrings()[adminPinned]),
           adminMapped: true,
         };
   return {
     key: firstAccessibleModel.key,
     regionalId: firstAccessibleModel.regionalId,
-    ...(firstAccessibleModel.probeTier !== tier && {
+    ...(firstAccessibleModel.probeTier !== probeTier && {
       crossTier: true,
     }),
-    ...(n.has(firstAccessibleModel.regionalId) && {
+    ...(liveAnswered.has(firstAccessibleModel.regionalId) && {
       answeredLive: true,
     }),
   };
 }
 //@ chunk-cnamfjf8.js:6206-6370 placement
-async function probeBedrockModel(e, o, l) {
-  let bedrockRegionForTier = await getBedrockRegionForTier(o);
+async function probeBedrockModel(modelId, tier, options) {
+  let bedrockRegionForTier = await getBedrockRegionForTier(tier);
   if (bedrockRegionForTier === undefined) {
-    l?.onVerdict?.("temporary");
+    options?.onVerdict?.("temporary");
     return false;
   }
   return (
     (await checkRememberedModelAccess(
       "bedrock",
       await getBedrockClientCacheKey(bedrockRegionForTier),
-      e,
-      () => probeBedrockModelUnchecked(e, bedrockRegionForTier),
-      l,
+      modelId,
+      () => probeBedrockModelUnchecked(modelId, bedrockRegionForTier),
+      options,
     )) === "accessible"
   );
 }
 //@ chunk-cnamfjf8.js:6370-6516 placement
-async function rememberBedrockModelAccess(e, tier, l) {
+async function rememberBedrockModelAccess(modelId, tier, verdict) {
   try {
     let bedrockRegionForTier = await getBedrockRegionForTier(tier);
-    let f = bedrockRegionForTier && (await getBedrockClientCacheKey(bedrockRegionForTier));
-    if (f) await recordAccessVerdict(f, e, l);
+    let cacheKey = bedrockRegionForTier && (await getBedrockClientCacheKey(bedrockRegionForTier));
+    if (cacheKey) await recordAccessVerdict(cacheKey, modelId, verdict);
   } catch (error) {
     logForDebugging(`[3p-model-memory] bedrock record failed: ${error}`);
   }
 }
 //@ chunk-cnamfjf8.js:6516-6631 placement
-async function getBedrockRegionForTier(e) {
+async function getBedrockRegionForTier(tier) {
   try {
     return (
-      (e === "haiku" && nonEmptyOrUndefined(env.ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION)) ||
+      (tier === "haiku" && nonEmptyOrUndefined(env.ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION)) ||
       (await resolveAwsRegion())
     );
   } catch {
@@ -519,10 +547,10 @@ function getBedrockClientCacheKey(bedrockRegionForTier) {
   ]);
 }
 //@ chunk-cnamfjf8.js:6770-6850 placement
-async function rememberedBedrockAccess(e, o) {
-  let bedrockRegionForTier = await getBedrockRegionForTier(o);
-  let r = bedrockRegionForTier && (await getBedrockClientCacheKey(bedrockRegionForTier));
-  return r ? rememberedAccess(r, e) : undefined;
+async function rememberedBedrockAccess(modelId, tier) {
+  let bedrockRegionForTier = await getBedrockRegionForTier(tier);
+  let cacheKey = bedrockRegionForTier && (await getBedrockClientCacheKey(bedrockRegionForTier));
+  return cacheKey ? rememberedAccess(cacheKey, modelId) : undefined;
 }
 //@ chunk-cnamfjf8.js:6850-7128 placement
 function awsCredentialSelectors() {
@@ -544,27 +572,27 @@ function awsCredentialSelectors() {
 /**
  * 用 Bedrock 客户端探测模型
  */
-async function probeBedrockModelUnchecked(e, bedrockRegionForTier) {
+async function probeBedrockModelUnchecked(modelId, bedrockRegionForTier) {
   try {
-    let [{ AnthropicBedrock: l }, { getProxyFetchOptions: r }] = await Promise.all([
-      import("./chunk-h87x8cg3.js"),
-      import("./chunk-amdegp7s.js"),
+    let [{ AnthropicBedrock }, { getProxyFetchOptions }] = await Promise.all([
+      import("../../../vendor/@anthropic-ai/bedrock-sdk/AnthropicBedrock.lazy.js"),
+      import("../proxy.js"),
     ]);
-    let f = {
+    let clientOptions = {
       awsRegion: bedrockRegionForTier,
       maxRetries: 0,
       timeout: 8000,
-      fetchOptions: r({
+      fetchOptions: getProxyFetchOptions({
         url:
           env.ANTHROPIC_BEDROCK_BASE_URL || `https://bedrock-runtime.${bedrockRegionForTier}.amazonaws.com`,
       }),
     };
-    let m;
+    let client;
     let forwardableEnvHeaders = getForwardableEnvHeaders();
     let AWS_BEARER_TOKEN_BEDROCK = env.AWS_BEARER_TOKEN_BEDROCK;
     if (AWS_BEARER_TOKEN_BEDROCK)
-      m = new l({
-        ...f,
+      client = new AnthropicBedrock({
+        ...clientOptions,
         apiKey: AWS_BEARER_TOKEN_BEDROCK,
         defaultHeaders: {
           ...forwardableEnvHeaders,
@@ -578,8 +606,8 @@ async function probeBedrockModelUnchecked(e, bedrockRegionForTier) {
       });
     else {
       let CLAUDE_CODE_SKIP_BEDROCK_AUTH = env.CLAUDE_CODE_SKIP_BEDROCK_AUTH;
-      let A = isHostManagedProviderAuth();
-      let _ = {
+      let hostManagedAuth = isHostManagedProviderAuth();
+      let managedAuthOptions = {
         authToken: null,
         defaultHeaders: {
           ...forwardableEnvHeaders,
@@ -592,20 +620,21 @@ async function probeBedrockModelUnchecked(e, bedrockRegionForTier) {
         },
         ...CLOUD_AUTH_SLOT,
       };
-      let s = CLAUDE_CODE_SKIP_BEDROCK_AUTH ? bearerFromEnvOrHeaders() : undefined;
-      let h = CLAUDE_CODE_SKIP_BEDROCK_AUTH || A ? null : await refreshAndGetAwsCredentials();
-      m = h
-        ? new l({
-            ...f,
-            ..._,
-            awsAccessKey: h.accessKeyId,
-            awsSecretKey: h.secretAccessKey,
-            awsSessionToken: h.sessionToken,
+      let bearerToken = CLAUDE_CODE_SKIP_BEDROCK_AUTH ? bearerFromEnvOrHeaders() : undefined;
+      let awsCredentials =
+        CLAUDE_CODE_SKIP_BEDROCK_AUTH || hostManagedAuth ? null : await refreshAndGetAwsCredentials();
+      client = awsCredentials
+        ? new AnthropicBedrock({
+            ...clientOptions,
+            ...managedAuthOptions,
+            awsAccessKey: awsCredentials.accessKeyId,
+            awsSecretKey: awsCredentials.secretAccessKey,
+            awsSessionToken: awsCredentials.sessionToken,
           })
-        : new l({
-            ...f,
+        : new AnthropicBedrock({
+            ...clientOptions,
             ...(CLAUDE_CODE_SKIP_BEDROCK_AUTH &&
-              !s && {
+              !bearerToken && {
                 skipAuth: true,
                 authToken: null,
                 defaultHeaders: {
@@ -615,27 +644,27 @@ async function probeBedrockModelUnchecked(e, bedrockRegionForTier) {
                 ...CLOUD_AUTH_SLOT,
               }),
             ...(CLAUDE_CODE_SKIP_BEDROCK_AUTH &&
-              s && {
-                apiKey: s.match(/^Bearer (.+)$/i)?.[1] ?? s,
+              bearerToken && {
+                apiKey: bearerToken.match(/^Bearer (.+)$/i)?.[1] ?? bearerToken,
                 defaultHeaders: {
                   ...forwardableEnvHeaders,
                   ...filteredCustomBetaHeaders(),
-                  Authorization: s,
+                  Authorization: bearerToken,
                   ...apiKeyHeaderFromEnv(),
                 },
               }),
-            ...(!CLAUDE_CODE_SKIP_BEDROCK_AUTH && _),
+            ...(!CLAUDE_CODE_SKIP_BEDROCK_AUTH && managedAuthOptions),
             ...(!CLAUDE_CODE_SKIP_BEDROCK_AUTH &&
-              A && {
+              hostManagedAuth && {
                 providerChainResolver: hostManagedAwsSdkCredentials("Bedrock").providerChainResolver,
               }),
             ...(!CLAUDE_CODE_SKIP_BEDROCK_AUTH &&
-              !A && {
+              !hostManagedAuth && {
                 providerChainResolver: defaultAwsProviderChainResolver(bedrockRegionForTier),
               }),
           });
     }
-    await m.messages.create(sendStartupModelCheck(e));
+    await client.messages.create(sendStartupModelCheck(modelId));
     return {
       accessible: true,
     };
@@ -650,4 +679,12 @@ async function probeBedrockModelUnchecked(e, bedrockRegionForTier) {
     };
   }
 }
-export { awsCredentialSelectors };
+export {
+  awsCredentialSelectors,
+  checkBedrockDefaultAvailability,
+  checkBedrockDocumentDefaults,
+  findBedrockUpgradeCandidates,
+  probeBedrockModel,
+  rememberBedrockModelAccess,
+  seedEnvDefaultForUserPin,
+};

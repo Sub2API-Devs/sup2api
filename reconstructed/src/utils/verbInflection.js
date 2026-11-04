@@ -151,33 +151,33 @@ var PAST_FORMS = new Set([
   "written",
 ]);
 //@ chunk-sddr5zxg.js:2050-2104 placement
-function countVowels(e) {
-  return (e.match(/[aeiou]/gi) ?? []).length;
+function countVowels(text) {
+  return (text.match(/[aeiou]/gi) ?? []).length;
 }
 //@ chunk-sddr5zxg.js:2104-2368 placement
-function toProgressive(verb) {
-  let lower = verb.toLowerCase();
+function toProgressive(text) {
+  let lower = text.toLowerCase();
   if (Object.hasOwn(DOUBLED_PROGRESSIVE, lower)) return DOUBLED_PROGRESSIVE[lower];
-  if (/ie$/i.test(verb)) return verb.slice(0, -2) + "ying";
-  if (/[^eoy]e$/i.test(verb)) return verb.slice(0, -1) + "ing";
-  if (CVC_ENDING_REGEX.test(verb) && countVowels(verb) === 1) return verb + verb.slice(-1) + "ing";
-  if (/c$/i.test(verb)) return verb + "king";
-  return verb + "ing";
+  if (/ie$/i.test(text)) return text.slice(0, -2) + "ying";
+  if (/[^eoy]e$/i.test(text)) return text.slice(0, -1) + "ing";
+  if (CVC_ENDING_REGEX.test(text) && countVowels(text) === 1) return text + text.slice(-1) + "ing";
+  if (/c$/i.test(text)) return text + "king";
+  return text + "ing";
 }
 //@ chunk-sddr5zxg.js:2368-2666 placement
-function toPastTense(verb) {
-  let lower = verb.toLowerCase();
+function toPastTense(text) {
+  let lower = text.toLowerCase();
   if (Object.hasOwn(IRREGULAR_PAST, lower)) return IRREGULAR_PAST[lower];
-  if (/e$/i.test(verb)) return verb + "d";
-  if (/[^aeiou]y$/i.test(verb)) return verb.slice(0, -1) + "ied";
-  if (CVC_ENDING_REGEX.test(verb) && countVowels(verb) === 1) return verb + verb.slice(-1) + "ed";
-  if (/c$/i.test(verb)) return verb + "ked";
+  if (/e$/i.test(text)) return text + "d";
+  if (/[^aeiou]y$/i.test(text)) return text.slice(0, -1) + "ied";
+  if (CVC_ENDING_REGEX.test(text) && countVowels(text) === 1) return text + text.slice(-1) + "ed";
+  if (/c$/i.test(text)) return text + "ked";
   if (Object.hasOwn(DOUBLED_PROGRESSIVE, lower)) return DOUBLED_PROGRESSIVE[lower].slice(0, -3) + "ed";
-  return verb + "ed";
+  return text + "ed";
 }
 //@ chunk-sddr5zxg.js:2666-2744 placement = capitalize (1)
-function capitalize(str, t) {
-  return /^[A-Z]/.test(str) ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+function capitalize(str, text) {
+  return /^[A-Z]/.test(str) ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }
 //@ chunk-sddr5zxg.js:2744-3123 placement
 /**
@@ -412,11 +412,11 @@ var VERB_CHAIN_REGEX =
 var NOT_IMPERATIVE_FOLLOW_REGEX =
   /^(?:\s+\w+){0,2}\s+(?:is|are|was|were|has|have|do|does|did|will|would|should|can|could|passes|passed|fails|failed|exists|works|worked|succeeds|succeeded|stays|remains|looks|runs|ran|not|if|when|unless|whether)(?:n['\u2019]t)?\b/;
 //@ chunk-sddr5zxg.js:5321-5427 placement
-function inflectChainedVerbs(e, t) {
-  return e.replace(VERB_CHAIN_REGEX, (n, u, i, r, s) =>
-    CHAINABLE_VERBS.has(r) && !NOT_IMPERATIVE_FOLLOW_REGEX.test(e.slice(s + n.length))
-      ? (u ?? i ?? "") + t(r)
-      : n,
+function inflectChainedVerbs(text, inflectVerb) {
+  return text.replace(VERB_CHAIN_REGEX, (verb, leadingGroup, middleGroup, verbGroup, offset) =>
+    CHAINABLE_VERBS.has(verbGroup) && !NOT_IMPERATIVE_FOLLOW_REGEX.test(text.slice(offset + verb.length))
+      ? (leadingGroup ?? middleGroup ?? "") + inflectVerb(verbGroup)
+      : verb,
   );
 }
 //@ chunk-sddr5zxg.js:5427-5488 placement
@@ -434,15 +434,24 @@ function inflectStatusText(text) {
   let rest = match[2] ?? "";
   let prefixed = HYPHENATED_VERB_RE.exec(verb);
   if (prefixed && prefixed[2] !== undefined && looksLikeBaseVerb(prefixed[2])) {
-    let p = prefixed[1];
-    let c = prefixed[2];
-    let lower = (p + c).toLowerCase();
-    let lower_2 = c.toLowerCase();
+    let prefix = prefixed[1];
+    let baseVerb = prefixed[2];
+    let lower = (prefix + baseVerb).toLowerCase();
+    let lower_2 = baseVerb.toLowerCase();
     if (PAST_FORMS.has(lower) || PAST_FORMS.has(lower_2)) return;
-    let m = (k, j) => p + "-" + capitalize(c, Object.hasOwn(k, lower) ? k[lower].slice(p.length) : j(c));
+    let buildPrefixed = (irregularForms, inflect) =>
+      prefix +
+      "-" +
+      capitalize(
+        baseVerb,
+        Object.hasOwn(irregularForms, lower) ? irregularForms[lower].slice(prefix.length) : inflect(baseVerb),
+      );
     return {
-      running: leading + m(DOUBLED_PROGRESSIVE, toProgressive) + inflectChainedVerbs(rest, toProgressive),
-      done: leading + m(IRREGULAR_PAST, toPastTense) + inflectChainedVerbs(rest, toPastTense),
+      running:
+        leading +
+        buildPrefixed(DOUBLED_PROGRESSIVE, toProgressive) +
+        inflectChainedVerbs(rest, toProgressive),
+      done: leading + buildPrefixed(IRREGULAR_PAST, toPastTense) + inflectChainedVerbs(rest, toPastTense),
       infinitive: leading + verb.toLowerCase() + rest,
     };
   }
@@ -458,9 +467,9 @@ function inflectStatusText(text) {
  * 仅当首词是已知动词时，把状态文案变形为进行时与完成时。
  */
 function inflectKnownVerbText(text) {
-  let t = /^\s*(\S+)/.exec(text)?.[1];
-  if (t === undefined) return;
-  let lower = (HYPHENATED_VERB_RE.exec(t)?.[2] ?? t).toLowerCase();
+  let verb = /^\s*(\S+)/.exec(text)?.[1];
+  if (verb === undefined) return;
+  let lower = (HYPHENATED_VERB_RE.exec(verb)?.[2] ?? verb).toLowerCase();
   return CHAINABLE_VERBS.has(lower) ||
     Object.hasOwn(IRREGULAR_PAST, lower) ||
     Object.hasOwn(DOUBLED_PROGRESSIVE, lower)

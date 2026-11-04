@@ -20,18 +20,18 @@ import { fromEnum } from "../services/analytics/safeMetadata.js";
 /**
  * 迁移：把 userSettings.model 里的 claude-fable-5 改为 fable 别名（保留 [1m]）。
  */
-async function migrateFable5ToFableAlias(e) {
+async function migrateFable5ToFableAlias(context) {
   if (!isFirstPartyApiBackend()) return true;
   let model = getSettingsForSourceForUpkeep("userSettings")?.model;
   if (model !== "claude-fable-5" && model !== "claude-fable-5[1m]") return true;
-  let n = model.endsWith("[1m]");
+  let has1m = model.endsWith("[1m]");
   let { error } = await updateSettingsForSource(
     "userSettings",
     {
-      model: n ? "fable[1m]" : "fable",
+      model: has1m ? "fable[1m]" : "fable",
     },
     undefined,
-    e,
+    context,
   );
   if (error) {
     logForDebugging(`Failed to migrate Fable 5 model setting: ${error}`, {
@@ -42,15 +42,15 @@ async function migrateFable5ToFableAlias(e) {
   }
   if (getGlobalConfig().numStartups > 1)
     saveGlobalConfig(
-      (y) => ({
-        ...y,
+      (current) => ({
+        ...current,
         fable5ToFableAliasMigrationTimestamp: Date.now(),
       }),
-      e,
+      context,
     );
   logEvent("tengu_fable5_to_fable_alias_migration", {
     from_model: fromEnum(model),
-    has_1m: n,
+    has_1m: has1m,
   });
   logFeatureOk("migration_fable5_to_fable_alias");
   return true;

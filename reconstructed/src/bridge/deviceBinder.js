@@ -34,44 +34,49 @@ import {
 import { withFeatureTelemetry, logFeatureOk, logFeatureSad } from "../services/analytics/featureTelemetry.js";
 import { logForDebugging } from "../utils/debug.js";
 import { launchLocationFacts } from "../services/remoteTools/launchLocation.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ehqcegwt.js:703-780 placement
-var DEVICE_REGISTRY_KID_PREFIX = "creg_";
-var buffer = Buffer.from("anthropic.ccr.create_session_bind.v1", "utf8");
+var DEVICE_REGISTRY_KID_PREFIX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var buffer;
+deferInit("chunk-ehqcegwt.js:703", () => {
+  DEVICE_REGISTRY_KID_PREFIX = "creg_";
+  buffer = Buffer.from("anthropic.ccr.create_session_bind.v1", "utf8");
+});
 //@ chunk-ehqcegwt.js:780-928 placement
-function uuidToBytes(e) {
-  if (!normalizeUuidOrNull(e))
+function uuidToBytes(uuid) {
+  if (!normalizeUuidOrNull(uuid))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `deviceBind: malformed UUID '${e}'`,
+      `deviceBind: malformed UUID '${uuid}'`,
       "deviceBind: malformed UUID",
     );
-  return Buffer.from(e.replace(/-/g, ""), "hex");
+  return Buffer.from(uuid.replace(/-/g, ""), "hex");
 }
 //@ chunk-ehqcegwt.js:928-1099 placement
 /**
  * session_bind 签名载荷编码
  */
-function encodeSessionBindPayload(e, n, i, r) {
-  let s = Buffer.alloc(buffer.length + 48 + 8);
-  let o = 0;
-  o += buffer.copy(s, o);
-  o += uuidToBytes(e).copy(s, o);
-  o += uuidToBytes(n).copy(s, o);
-  o += uuidToBytes(i).copy(s, o);
-  s.writeBigUInt64BE(BigInt(r), o);
-  return s;
+function encodeSessionBindPayload(orgUuid, accountUuid, deviceUuid, issuedAtMs) {
+  let payload = Buffer.alloc(buffer.length + 48 + 8);
+  let offset = 0;
+  offset += buffer.copy(payload, offset);
+  offset += uuidToBytes(orgUuid).copy(payload, offset);
+  offset += uuidToBytes(accountUuid).copy(payload, offset);
+  offset += uuidToBytes(deviceUuid).copy(payload, offset);
+  payload.writeBigUInt64BE(BigInt(issuedAtMs), offset);
+  return payload;
 }
 //@ chunk-ehqcegwt.js:1099-1316 placement
 /**
  * 用设备密钥签 session_bind，返回 kid/签名/时间
  */
-async function signSessionBind(orgUuid, accountUuid, deviceUUID, key) {
+async function signSessionBind(orgUuid, accountUuid, deviceUuid, key) {
   let now = Date.now();
-  let o = await key.sign(encodeSessionBindPayload(orgUuid, accountUuid, deviceUUID, now));
+  let signature = await key.sign(encodeSessionBindPayload(orgUuid, accountUuid, deviceUuid, now));
   return {
-    deviceUUID,
-    kid: DEVICE_REGISTRY_KID_PREFIX + deviceUUID,
-    signature: o.toString("base64"),
+    deviceUUID: deviceUuid,
+    kid: DEVICE_REGISTRY_KID_PREFIX + deviceUuid,
+    signature: signature.toString("base64"),
     issuedAt: new Date(now).toISOString(),
     signedOver: {
       orgUuid,
@@ -81,8 +86,12 @@ async function signSessionBind(orgUuid, accountUuid, deviceUUID, key) {
   };
 }
 //@ chunk-ehqcegwt.js:1316-1415 placement
-var buffer_2 = Buffer.from("anthropic.ccr.session_bind.v1", "utf8");
-var DEVICE_UUID_BIND_PLACEHOLDER = "00000000-0000-0000-0000-000000000000";
+var buffer_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DEVICE_UUID_BIND_PLACEHOLDER;
+deferInit("chunk-ehqcegwt.js:1316", () => {
+  buffer_2 = Buffer.from("anthropic.ccr.session_bind.v1", "utf8");
+  DEVICE_UUID_BIND_PLACEHOLDER = "00000000-0000-0000-0000-000000000000";
+});
 //@ chunk-ehqcegwt.js:1415-1716 placement
 /**
  * create_session_bind 签名载荷的二进制编码
@@ -95,54 +104,60 @@ function encodeCreateSessionBindPayload({
   newDeviceUuid,
   issuedAtMs,
 }) {
-  let u = Buffer.alloc(buffer_2.length + 80 + 8);
-  let l = 0;
-  l += buffer_2.copy(u, l);
-  l += uuidToBytes(orgUuid).copy(u, l);
-  l += uuidToBytes(accountUuid).copy(u, l);
-  l += uuidToBytes(sessionUuid).copy(u, l);
-  l += uuidToBytes(expectedCurrentDeviceUuid ?? DEVICE_UUID_BIND_PLACEHOLDER).copy(u, l);
-  l += uuidToBytes(newDeviceUuid).copy(u, l);
-  u.writeBigUInt64BE(BigInt(issuedAtMs), l);
-  return u;
+  let payload = Buffer.alloc(buffer_2.length + 80 + 8);
+  let offset = 0;
+  offset += buffer_2.copy(payload, offset);
+  offset += uuidToBytes(orgUuid).copy(payload, offset);
+  offset += uuidToBytes(accountUuid).copy(payload, offset);
+  offset += uuidToBytes(sessionUuid).copy(payload, offset);
+  offset += uuidToBytes(expectedCurrentDeviceUuid ?? DEVICE_UUID_BIND_PLACEHOLDER).copy(payload, offset);
+  offset += uuidToBytes(newDeviceUuid).copy(payload, offset);
+  payload.writeBigUInt64BE(BigInt(issuedAtMs), offset);
+  return payload;
 }
 //@ chunk-ehqcegwt.js:1716-2038 placement
 async function signSessionLateLink({ orgUuid, accountUuid, sessionUuid, deviceUUID, key, now = Date.now }) {
-  let u = now();
-  let l = await key.sign(
+  let issuedAtMs = now();
+  let signature = await key.sign(
     encodeCreateSessionBindPayload({
       orgUuid,
       accountUuid,
       sessionUuid,
       expectedCurrentDeviceUuid: undefined,
       newDeviceUuid: deviceUUID,
-      issuedAtMs: u,
+      issuedAtMs,
     }),
   );
   return {
     deviceUUID,
     kid: DEVICE_REGISTRY_KID_PREFIX + deviceUUID,
-    signature: l.toString("base64"),
-    issuedAt: new Date(u).toISOString(),
+    signature: signature.toString("base64"),
+    issuedAt: new Date(issuedAtMs).toISOString(),
   };
 }
 //@ chunk-ehqcegwt.js:2038-2181 placement
-var buffer_3 = Buffer.from("anthropic.ccr.tool_host_link.v1", "utf8");
-var buffer_4 = Buffer.from("anthropic.ccr.tool_host_link.v2", "utf8");
-var TOOL_HOST_NAME_PATTERN = /^[a-z0-9_.]{1,48}$/;
-var MAX_TOOL_HOST_LINKS = 8;
+var buffer_3; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var buffer_4;
+var TOOL_HOST_NAME_PATTERN;
+var MAX_TOOL_HOST_LINKS;
+deferInit("chunk-ehqcegwt.js:2038", () => {
+  buffer_3 = Buffer.from("anthropic.ccr.tool_host_link.v1", "utf8");
+  buffer_4 = Buffer.from("anthropic.ccr.tool_host_link.v2", "utf8");
+  TOOL_HOST_NAME_PATTERN = /^[a-z0-9_.]{1,48}$/;
+  MAX_TOOL_HOST_LINKS = 8;
+});
 //@ chunk-ehqcegwt.js:2181-2245 placement
-function encodeToolHostLinkPayloadV1(e) {
-  return Buffer.concat([buffer_3, ...encodeToolHostLinkHeader(e), u64be(e.issuedAtMs)]);
+function encodeToolHostLinkPayloadV1(header) {
+  return Buffer.concat([buffer_3, ...encodeToolHostLinkHeader(header), u64be(header.issuedAtMs)]);
 }
 //@ chunk-ehqcegwt.js:2245-2392 placement
-function canonicalLinkCapabilities(e) {
-  let sorted = uniq(e).sort();
-  return e.length >= 1 &&
-    e.length <= MAX_TOOL_HOST_LINKS &&
-    e.every((i) => TOOL_HOST_NAME_PATTERN.test(i)) &&
-    sorted.length === e.length &&
-    sorted.every((i, r) => i === e[r])
+function canonicalLinkCapabilities(names) {
+  let sorted = uniq(names).sort();
+  return names.length >= 1 &&
+    names.length <= MAX_TOOL_HOST_LINKS &&
+    names.every((name) => TOOL_HOST_NAME_PATTERN.test(name)) &&
+    sorted.length === names.length &&
+    sorted.every((name, index) => name === names[index])
     ? sorted
     : undefined;
 }
@@ -150,21 +165,21 @@ function canonicalLinkCapabilities(e) {
 /**
  * tool_host_link 签名载荷编码（能力名 1-8 个）
  */
-function encodeToolHostLinkPayload(e, capabilities) {
-  if (canonicalLinkCapabilities(capabilities) === undefined)
+function encodeToolHostLinkPayload(header, names) {
+  if (canonicalLinkCapabilities(names) === undefined)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "deviceBind: tool-host link capabilities must be 1 to 8 sorted, distinct names of a-z, 0-9, _ and .",
       "deviceBind: malformed link capabilities",
     );
   return Buffer.concat([
     buffer_4,
-    ...encodeToolHostLinkHeader(e),
-    _(capabilities.length),
-    ...capabilities.flatMap((i) => {
-      let buffer = Buffer.from(i, "ascii");
+    ...encodeToolHostLinkHeader(header),
+    _(names.length),
+    ...names.flatMap((capability) => {
+      let buffer = Buffer.from(capability, "ascii");
       return [_(buffer.length), buffer];
     }),
-    u64be(e.issuedAtMs),
+    u64be(header.issuedAtMs),
   ]);
 }
 //@ chunk-ehqcegwt.js:2717-3060 placement
@@ -178,32 +193,37 @@ async function signToolHostLink({
   key,
   now = Date.now,
 }) {
-  let h = now();
-  let p = {
+  let issuedAtMs = now();
+  let header = {
     orgUuid,
     accountUuid,
     sessionUuid,
     deviceUuid: deviceUUID,
     request,
-    issuedAtMs: h,
+    issuedAtMs,
   };
-  let m = await key.sign(
-    capabilities === undefined ? encodeToolHostLinkPayloadV1(p) : encodeToolHostLinkPayload(p, capabilities),
+  let signature = await key.sign(
+    capabilities === undefined
+      ? encodeToolHostLinkPayloadV1(header)
+      : encodeToolHostLinkPayload(header, capabilities),
   );
   return {
     deviceUUID,
     kid: DEVICE_REGISTRY_KID_PREFIX + deviceUUID,
-    signature: m.toString("base64"),
-    issuedAt: new Date(h).toISOString(),
+    signature: signature.toString("base64"),
+    issuedAt: new Date(issuedAtMs).toISOString(),
   };
 }
 //@ chunk-ehqcegwt.js:3060-3122 placement
-var buffer_5 = Buffer.from("anthropic.ccr.tool_host_resume.v1", "utf8");
+var buffer_5; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ehqcegwt.js:3060", () => {
+  buffer_5 = Buffer.from("anthropic.ccr.tool_host_resume.v1", "utf8");
+});
 //@ chunk-ehqcegwt.js:3122-3374 placement
 /**
  * tool_host_resume 签名载荷编码（nonce 1-65535 字节）
  */
-function encodeToolHostResumePayload(e, nonce) {
+function encodeToolHostResumePayload(header, nonce) {
   let buffer = Buffer.from(nonce, "utf8");
   if (buffer.length === 0 || buffer.length > 65535)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -212,21 +232,21 @@ function encodeToolHostResumePayload(e, nonce) {
     );
   return Buffer.concat([
     buffer_5,
-    ...encodeToolHostLinkHeader(e),
+    ...encodeToolHostLinkHeader(header),
     _(buffer.length),
     buffer,
-    u64be(e.issuedAtMs),
+    u64be(header.issuedAtMs),
   ]);
 }
 //@ chunk-ehqcegwt.js:3374-3604 placement
-async function signToolHostResume({ deviceUUID, nonce, key, now = Date.now, ...s }) {
-  let o = now();
-  let u = await key.sign(
+async function signToolHostResume({ deviceUUID, nonce, key, now = Date.now, ...linkFields }) {
+  let issuedAtMs = now();
+  let signature = await key.sign(
     encodeToolHostResumePayload(
       {
-        ...s,
+        ...linkFields,
         deviceUuid: deviceUUID,
-        issuedAtMs: o,
+        issuedAtMs,
       },
       nonce,
     ),
@@ -234,8 +254,8 @@ async function signToolHostResume({ deviceUUID, nonce, key, now = Date.now, ...s
   return {
     deviceUUID,
     kid: DEVICE_REGISTRY_KID_PREFIX + deviceUUID,
-    signature: u.toString("base64"),
-    issuedAt: new Date(o).toISOString(),
+    signature: signature.toString("base64"),
+    issuedAt: new Date(issuedAtMs).toISOString(),
   };
 }
 //@ chunk-ehqcegwt.js:3604-3644 placement
@@ -244,29 +264,29 @@ async function hasTrustedDeviceToken() {
 }
 //@ chunk-ehqcegwt.js:3644-3749 placement
 async function trustedDeviceToken() {
-  let { trustedDeviceTokenForBind } = await import("./chunk-3kb57csj.js");
+  let { trustedDeviceTokenForBind } = await import("./trustedDevice.js");
   return trustedDeviceTokenForBind(undefined);
 }
 //@ chunk-ehqcegwt.js:3749-4304 placement
-async function localBindIdentity(e) {
-  if (e.launchedFromHome === undefined) await primeWindowsProfileDirs();
-  if ((e.launchedFromHome ?? launchedFromHome)()) return err("launched_from_home");
-  let n;
+async function localBindIdentity(options) {
+  if (options.launchedFromHome === undefined) await primeWindowsProfileDirs();
+  if ((options.launchedFromHome ?? launchedFromHome)()) return err("launched_from_home");
+  let egressAllowed;
   try {
-    n = (e.isEgressAllowed ?? isDeviceBindingAllowed)();
+    egressAllowed = (options.isEgressAllowed ?? isDeviceBindingAllowed)();
   } catch {
-    n = false;
+    egressAllowed = false;
   }
-  if (!n) return err("egress");
+  if (!egressAllowed) return err("egress");
   let deviceBindingRecord = resolveDeviceBindingRecord({
-    storedAccountUuid: e.accountUuid,
-    hostAccountUuid: await (e.getHostAccountUuid
-      ? e.getHostAccountUuid()
-      : getHostAccountUuid(e.credentials)),
+    storedAccountUuid: options.accountUuid,
+    hostAccountUuid: await (options.getHostAccountUuid
+      ? options.getHostAccountUuid()
+      : getHostAccountUuid(options.credentials)),
   });
   if (deviceBindingRecord.status === "missing") return err("account");
   if (deviceBindingRecord.status === "mismatch") return err("account_mismatch");
-  return (await (e.hasDeviceProof ?? hasTrustedDeviceToken)().catch(() => false))
+  return (await (options.hasDeviceProof ?? hasTrustedDeviceToken)().catch(() => false))
     ? ok({
         accountUuid: deviceBindingRecord.accountUuid,
         source: deviceBindingRecord.source,
@@ -277,56 +297,56 @@ async function localBindIdentity(e) {
 /**
  * 准备设备绑定器：签 session_bind、tool_host_link、tool_host_resume 等载荷，失败时以未绑定继续。
  */
-async function prepareDeviceBinder(e) {
-  let isEnabled = e.isEnabled ?? isViolinWoodEnabled;
+async function prepareDeviceBinder(options) {
+  let isEnabled = options.isEnabled ?? isViolinWoodEnabled;
   try {
     if (!(await isEnabled())) return err("gate");
   } catch (error) {
     return err(continueUnboundAfterBindFailure("gate", error));
   }
-  let i = "no_device_proof";
-  let r = await localBindIdentity({
-    ...e,
+  let deviceProofError = "no_device_proof";
+  let identity = await localBindIdentity({
+    ...options,
     hasDeviceProof:
-      e.hasDeviceProof ??
+      options.hasDeviceProof ??
       (async () => {
-        let m = await trustedDeviceToken();
-        if (!m.ok && m.error !== "not_given") i = m.error;
-        return m.ok;
+        let token = await trustedDeviceToken();
+        if (!token.ok && token.error !== "not_given") deviceProofError = token.error;
+        return token.ok;
       }),
   });
-  if (!r.ok) {
-    let m = skipDeviceBindWithTelemetry(r.error);
-    return r.error === "no_device_proof" ? err(i) : m;
+  if (!identity.ok) {
+    let skipResult = skipDeviceBindWithTelemetry(identity.error);
+    return identity.error === "no_device_proof" ? err(deviceProofError) : skipResult;
   }
   logEvent("tengu_device_bind_account", {
-    source: fromEnum(r.value.source),
+    source: fromEnum(identity.value.source),
   });
-  let { accountUuid } = r.value;
-  let o = e.displayName ?? deviceDisplayName();
-  let u = false;
-  let l = async (relearn) => {
+  let { accountUuid } = identity.value;
+  let displayName = options.displayName ?? deviceDisplayName();
+  let reenrollTried = false;
+  let registerOnce = async (relearn) => {
     try {
       return ok(
-        await registerDeviceCached(accountUuid, o, e.credentials, {
+        await registerDeviceCached(accountUuid, displayName, options.credentials, {
           relearn,
         }),
       );
     } catch (error) {
-      if (!(error instanceof DeviceKeyRefusedError) || e.confirmReenroll === undefined || u)
+      if (!(error instanceof DeviceKeyRefusedError) || options.confirmReenroll === undefined || reenrollTried)
         return err(continueUnboundAfterBindFailure("register", error));
-      u = true;
-      return (await askReenrollDevice(e.confirmReenroll))
-        ? h(error.refusedPublicKey)
+      reenrollTried = true;
+      return (await askReenrollDevice(options.confirmReenroll))
+        ? reenrollThen(error.refusedPublicKey)
         : err(continueUnboundAfterBindFailure("register", error));
     }
   };
-  let h = async (refusedPublicKey) => {
+  let reenrollThen = async (refusedPublicKey) => {
     try {
       return ok(
         await withFeatureTelemetry(
           "device_reenroll",
-          () => reregisterDevice(accountUuid, o, refusedPublicKey, e.credentials),
+          () => reregisterDevice(accountUuid, displayName, refusedPublicKey, options.credentials),
           deviceBindErrorClass,
         ),
       );
@@ -334,10 +354,10 @@ async function prepareDeviceBinder(e) {
       return err(continueUnboundAfterBindFailure("register", error));
     }
   };
-  let p = async (relearn) => {
-    let v = await l(relearn);
-    if (!v.ok) return v;
-    let { deviceUUID, key } = v.value;
+  let bindWith = async (relearn) => {
+    let registered = await registerOnce(relearn);
+    if (!registered.ok) return registered;
+    let { deviceUUID, key } = registered.value;
     return ok({
       deviceUUID,
       held: {
@@ -347,25 +367,25 @@ async function prepareDeviceBinder(e) {
       },
       sign: async () => {
         try {
-          let B = await signSessionBind(e.orgUuid, accountUuid, deviceUUID, key);
+          let signature = await signSessionBind(options.orgUuid, accountUuid, deviceUUID, key);
           logFeatureOk("device_bind");
-          return B;
+          return signature;
         } catch (error) {
           continueUnboundAfterBindFailure("sign", error);
           return;
         }
       },
       reregister: async () => {
-        await forgetRegisteredRow(accountUuid, e.credentials).catch((error) => {
+        await forgetRegisteredRow(accountUuid, options.credentials).catch((error) => {
           logForDebugging(
             `[deviceBind] could not forget the cached device id: ${error instanceof Error ? error.message : String(error)}`,
           );
         });
-        return p(true);
+        return bindWith(true);
       },
     });
   };
-  return p(false);
+  return bindWith(false);
 }
 //@ chunk-ehqcegwt.js:5555-5941 placement
 /**
@@ -391,16 +411,16 @@ function encodeToolHostLinkHeader({ orgUuid, accountUuid, sessionUuid, deviceUui
   ];
 }
 //@ chunk-ehqcegwt.js:5941-6005 placement
-function _(e) {
-  let n = Buffer.alloc(2);
-  n.writeUInt16BE(e);
-  return n;
+function _(value) {
+  let buffer = Buffer.alloc(2);
+  buffer.writeUInt16BE(value);
+  return buffer;
 }
 //@ chunk-ehqcegwt.js:6005-6080 placement
 function u64be(issuedAtMs) {
-  let n = Buffer.alloc(8);
-  n.writeBigUInt64BE(BigInt(issuedAtMs));
-  return n;
+  let buffer = Buffer.alloc(8);
+  buffer.writeBigUInt64BE(BigInt(issuedAtMs));
+  return buffer;
 }
 //@ chunk-ehqcegwt.js:6080-6162 placement
 function skipDeviceBindWithTelemetry(error) {
@@ -416,12 +436,12 @@ function skipDeviceBindWithTelemetry(error) {
  */
 async function askReenrollDevice(confirmReenroll) {
   try {
-    let n = await confirmReenroll();
+    let confirmed = await confirmReenroll();
     logEvent("tengu_device_reenroll", {
-      confirmed: n,
+      confirmed,
       prompt_failed: false,
     });
-    return n;
+    return confirmed;
   } catch (error) {
     logForDebugging(
       `[deviceBind] could not ask whether to register this machine again: ${errorMessage(error)}`,
@@ -434,9 +454,9 @@ async function askReenrollDevice(confirmReenroll) {
   }
 }
 //@ chunk-ehqcegwt.js:6428-6498 placement
-function deviceBindErrorClass(e) {
+function deviceBindErrorClass(error) {
   return (
-    (e instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS && e.errorClass) ||
+    (error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS && error.errorClass) ||
     "unexpected_error"
   );
 }
@@ -444,16 +464,17 @@ function deviceBindErrorClass(e) {
 /**
  * 设备绑定失败时记遥测并以未绑定继续
  */
-function continueUnboundAfterBindFailure(e, error) {
+function continueUnboundAfterBindFailure(phase, error) {
   logEvent("tengu_device_bind_failed", {
-    phase: fromEnum(e),
+    phase: fromEnum(phase),
     limit_reached: error instanceof DeviceLimitReachedError,
     registration_unavailable: error instanceof DeviceRegistrationUnavailableError,
     revoked: error instanceof DeviceKeyRefusedError,
   });
   logFeatureSad(
     "device_bind",
-    (error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS && error.errorClass) || e,
+    (error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS && error.errorClass) ||
+      phase,
   );
   logForDebugging(
     `[deviceBind] continuing unbound: ${error instanceof Error ? error.message : String(error)}`,
@@ -467,7 +488,7 @@ function continueUnboundAfterBindFailure(e, error) {
         : error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS &&
             error.errorClass === "no_keychain"
           ? "no_keychain"
-          : e;
+          : phase;
 }
 export {
   DEVICE_REGISTRY_KID_PREFIX,
@@ -477,4 +498,5 @@ export {
   signToolHostLink,
   signToolHostResume,
   uuidToBytes,
+  prepareDeviceBinder,
 };

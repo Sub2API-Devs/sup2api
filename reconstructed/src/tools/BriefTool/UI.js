@@ -19,15 +19,15 @@ import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/inde
 import { FilePathLink } from "../../components/FilePathLink.js";
 import { getDisplayPath } from "../../utils/file.js";
 import { formatFileSize } from "../../utils/format.js";
-import { BLACK_CIRCLE } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { BLACK_CIRCLE } from "../../constants/figures.js";
 import { MarkdownText_2 } from "../../components/pluginUi/render/MarkdownBlock.js";
 import { formatBriefTimestamp } from "../../utils/formatBriefTimestamp.js";
 import { NoSelect } from "../../ink/components/Input.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 
 //@ chunk-ah34pb7m.js:23792-24125 fingerprint = _temp (0.855)
 function renderAttachmentRow(att) {
-  let M = isAbsolute(att.path) && att.pathValidated && !isUntouchableSpelling(att.path);
+  let canLink = isAbsolute(att.path) && att.pathValidated && !isUntouchableSpelling(att.path);
   return jsxProd_default_2(
     Box,
     {
@@ -37,7 +37,7 @@ function renderAttachmentRow(att) {
           dimColor: true,
           children: [figures_default.pointerSmall, " ", att.isImage ? "[image]" : "[file]", " "],
         }),
-        M
+        canLink
           ? jsxProd_default(FilePathLink, {
               filePath: att.path,
               children: getDisplayPath(att.path),
@@ -159,7 +159,7 @@ function renderToolResultMessage_6(output, _progressMessages, options) {
  * 附件列表组件：每行显示 [image]/[file]、可点击路径与大小。
  */
 function AttachmentList(props) {
-  let $ = w(4);
+  let $ = useMemoCache(4);
   let { attachments } = props;
   if (!attachments || attachments.length === 0) {
     return null;

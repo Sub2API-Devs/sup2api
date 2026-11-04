@@ -9,6 +9,7 @@
  * attribution: placement 23
  */
 import { getLiveState } from "../liveReplica/liveReplica.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-4xpk3fhh.js:2846-2893 placement
 var CLASSIFIER = "classifier";
@@ -93,26 +94,26 @@ var ALWAYS_ASK_CONSENT = true;
 /**
  * 判断修改 artifact 公开状态是否需要询问：功能关闭或设为非公开时不问；设为公开或公开状态未知时按分类器规则询问。
  */
-function classifyPublicWriteConsent(e) {
-  if (!ALWAYS_ASK_CONSENT || e.public === false)
+function classifyPublicWriteConsent(intent) {
+  if (!ALWAYS_ASK_CONSENT || intent.public === false)
     return {
       ask: false,
       foreignRead: false,
     };
-  return e.public === true
+  return intent.public === true
     ? askConsent("public_change", "classifier", "this_call", "known")
     : askConsent("public_change", "classifier", "this_call", "facts_missing", "public");
 }
 //@ chunk-4xpk3fhh.js:4470-4574 placement
-function askConsent(e, answeredBy, remember, basis, s) {
+function askConsent(request, answeredBy, remember, basis, options) {
   return {
     ask: true,
-    class: e,
+    class: request,
     answeredBy,
     remember,
     basis,
-    ...(s !== undefined && {
-      missing: s,
+    ...(options !== undefined && {
+      missing: options,
     }),
   };
 }
@@ -120,43 +121,43 @@ function askConsent(e, answeredBy, remember, basis, s) {
 /**
  * 导出函数 `isRememberedArtifactConsent`：参数 e，返回 e.ask && e.remember === "artifact"。
  */
-function isRememberedArtifactConsent(e) {
-  return e.ask && e.remember === "artifact";
+function isRememberedArtifactConsent(entry) {
+  return entry.ask && entry.remember === "artifact";
 }
 //@ chunk-4xpk3fhh.js:4628-4692 placement
 /**
  * 导出函数 `consentClassKey`：参数 e，返回 e.endpoint ? `${e.class}:endpoint` : e.class。
  */
-function consentClassKey(e) {
-  return e.endpoint ? `${e.class}:endpoint` : e.class;
+function consentClassKey(consentClass) {
+  return consentClass.endpoint ? `${consentClass.class}:endpoint` : consentClass.class;
 }
 //@ chunk-4xpk3fhh.js:4692-4749 placement
 /**
  * 导出函数 `hasClassConsent`：参数 e, n，返回 getLiveState().askClassConsent.has(g(e, n))。
  */
-function hasClassConsent(e, slug) {
-  return getLiveState().askClassConsent.has(classConsentKey(e, slug));
+function hasClassConsent(consentClass, slug) {
+  return getLiveState().askClassConsent.has(classConsentKey(consentClass, slug));
 }
 //@ chunk-4xpk3fhh.js:4749-4854 placement
 /**
  * 记录本会话已对某类询问给出同意（可选同时记为本人同意）。
  */
-function recordAskClassConsent(e, slug, r = false) {
+function recordAskClassConsent(consentClass, slug, byUser = false) {
   let liveState = getLiveState();
-  liveState.askClassConsent.add(classConsentKey(e, slug));
-  if (r) liveState.askClassPersonConsent.add(classConsentKey(e, slug));
+  liveState.askClassConsent.add(classConsentKey(consentClass, slug));
+  if (byUser) liveState.askClassPersonConsent.add(classConsentKey(consentClass, slug));
 }
 //@ chunk-4xpk3fhh.js:4854-4963 placement
 /**
  * 按询问结果记住同意：仅告知的走告知记录；本人回答或强制时记为本人同意，否则记为一般同意。
  */
-function rememberConsentForAsk(e, slug, r = false) {
-  let o = consentClassKey(e);
-  return e.informedOnly
+function rememberConsentForAsk(consentClass, slug, byUser = false) {
+  let key = consentClassKey(consentClass);
+  return consentClass.informedOnly
     ? hasOutsideOrgConsent(slug)
-    : e.answeredBy === "person" || r
-      ? hasClassPersonConsent(o, slug)
-      : hasClassConsent(o, slug);
+    : consentClass.answeredBy === "person" || byUser
+      ? hasClassPersonConsent(key, slug)
+      : hasClassConsent(key, slug);
 }
 //@ chunk-4xpk3fhh.js:4963-5035 placement
 /**
@@ -169,8 +170,8 @@ function rememberOutsideOrgConsent(slug) {
 /**
  * 导出函数 `hasOutsideOrgConsent`：参数 e，返回 getLiveState().askClassOutsideOrgConsent.has(g("foreign_read", e))。
  */
-function hasOutsideOrgConsent(e) {
-  return getLiveState().askClassOutsideOrgConsent.has(classConsentKey("foreign_read", e));
+function hasOutsideOrgConsent(slug) {
+  return getLiveState().askClassOutsideOrgConsent.has(classConsentKey("foreign_read", slug));
 }
 //@ chunk-4xpk3fhh.js:5114-5125 placement
 var MAX_NAMED_OTHER_ORG = 512;
@@ -178,80 +179,89 @@ var MAX_NAMED_OTHER_ORG = 512;
 /**
  * 记录一次询问中被点名的其他组织（与此前记录取交集），按工具调用 id 保存，超出容量时淘汰最旧的。
  */
-function recordNamedOtherOrgs(e, n, r) {
-  if (e.toolUseId === undefined) return;
+function recordNamedOtherOrgs(request, orgNames, confirmed) {
+  if (request.toolUseId === undefined) return;
   let askNamedOtherOrg = getLiveState().askNamedOtherOrg;
-  let s = askNamedOtherOrg.get(e.toolUseId);
-  let f = r ? n : [];
-  let l = s === undefined ? f : f.filter((u) => s.includes(u));
-  askNamedOtherOrg.delete(e.toolUseId);
-  askNamedOtherOrg.set(e.toolUseId, l);
+  let existing = askNamedOtherOrg.get(request.toolUseId);
+  let candidates = confirmed ? orgNames : [];
+  let namedOrgs =
+    existing === undefined ? candidates : candidates.filter((orgName) => existing.includes(orgName));
+  askNamedOtherOrg.delete(request.toolUseId);
+  askNamedOtherOrg.set(request.toolUseId, namedOrgs);
   if (askNamedOtherOrg.size > MAX_NAMED_OTHER_ORG) {
-    let u = askNamedOtherOrg.keys().next().value;
-    if (u !== undefined) askNamedOtherOrg.delete(u);
+    let oldestKey = askNamedOtherOrg.keys().next().value;
+    if (oldestKey !== undefined) askNamedOtherOrg.delete(oldestKey);
   }
 }
 //@ chunk-4xpk3fhh.js:5390-5472 placement
 /**
  * 导出函数 `forgetNamedOtherOrg`：参数 e。
  */
-function forgetNamedOtherOrg(e) {
-  if (e.toolUseId !== undefined) getLiveState().askNamedOtherOrg.delete(e.toolUseId);
+function forgetNamedOtherOrg(key) {
+  if (key.toolUseId !== undefined) getLiveState().askNamedOtherOrg.delete(key.toolUseId);
 }
 //@ chunk-4xpk3fhh.js:5472-5576 placement
 /**
  * 判断某次工具调用的询问中是否点名了指定的其他组织。
  */
-function wasOtherOrgNamed(e, slug) {
-  return e.toolUseId !== undefined && (getLiveState().askNamedOtherOrg.get(e.toolUseId) ?? []).includes(slug);
+function wasOtherOrgNamed(slug, orgName) {
+  return (
+    slug.toolUseId !== undefined &&
+    (getLiveState().askNamedOtherOrg.get(slug.toolUseId) ?? []).includes(orgName)
+  );
 }
 //@ chunk-4xpk3fhh.js:5576-5640 placement
 /**
  * 导出函数 `hasClassPersonConsent`：参数 e, n，返回 getLiveState().askClassPersonConsent.has(g(e, n))。
  */
-function hasClassPersonConsent(e, slug) {
-  return getLiveState().askClassPersonConsent.has(classConsentKey(e, slug));
+function hasClassPersonConsent(slug, slug_2) {
+  return getLiveState().askClassPersonConsent.has(classConsentKey(slug, slug_2));
 }
 //@ chunk-4xpk3fhh.js:5640-6245 placement
 /**
  * 会话里记录 artifact 同意的键名：读取/资源/外组织/处理器读写等按 slug 记的同意，以及房间加入、计划发布路径、监听与数据库写入批准；freeze 为共享空对象。
  */
-var READ_CONSENT_SLUG_KEYS = [
-  "artifactDbReadConsentSlugs",
-  "artifactDbReadHumanConsentSlugs",
-  "artifactReadConsentSlugs",
-  "artifactAssetUploadConsentSlugs",
-  "artifactAssetUploadHumanConsentSlugs",
-  "artifactAssetReadConsentSlugs",
-  "artifactAssetReadHumanConsentSlugs",
-  "artifactOutsideOrgConsentSlugs",
-  "artifactHandlersReadConsentSlugs",
-  "artifactHandlersReadHumanConsentSlugs",
-  "artifactHandlersWriteConsentSlugs",
-  "artifactHandlersWriteHumanConsentSlugs",
-];
-var ALL_CONSENT_KEYS = [
-  ...READ_CONSENT_SLUG_KEYS,
-  "artifactRoomJoinConsentSlugs",
-  "artifactPlanPublishConsentPaths",
-  "artifactWatchApproved",
-  "artifactDbWriteApproved",
-  "artifactDbWriteHumanApproved",
-];
-var re = Object.freeze({});
+var READ_CONSENT_SLUG_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ALL_CONSENT_KEYS;
+var NO_CONSENT_STATE;
+deferInit("chunk-4xpk3fhh.js:5640", () => {
+  READ_CONSENT_SLUG_KEYS = [
+    "artifactDbReadConsentSlugs",
+    "artifactDbReadHumanConsentSlugs",
+    "artifactReadConsentSlugs",
+    "artifactAssetUploadConsentSlugs",
+    "artifactAssetUploadHumanConsentSlugs",
+    "artifactAssetReadConsentSlugs",
+    "artifactAssetReadHumanConsentSlugs",
+    "artifactOutsideOrgConsentSlugs",
+    "artifactHandlersReadConsentSlugs",
+    "artifactHandlersReadHumanConsentSlugs",
+    "artifactHandlersWriteConsentSlugs",
+    "artifactHandlersWriteHumanConsentSlugs",
+  ];
+  ALL_CONSENT_KEYS = [
+    ...READ_CONSENT_SLUG_KEYS,
+    "artifactRoomJoinConsentSlugs",
+    "artifactPlanPublishConsentPaths",
+    "artifactWatchApproved",
+    "artifactDbWriteApproved",
+    "artifactDbWriteHumanApproved",
+  ];
+  NO_CONSENT_STATE = Object.freeze({});
+});
 //@ chunk-4xpk3fhh.js:6245-6320 placement
 /**
  * 导出函数 `consentEpochGuard`：参数 e，返回 (e.artifactConsentEpoch ?? 0) === getLiveState().accountEpoch ? e : freeze。
  */
 function consentEpochGuard(appState) {
-  return (appState.artifactConsentEpoch ?? 0) === getLiveState().accountEpoch ? appState : re;
+  return (appState.artifactConsentEpoch ?? 0) === getLiveState().accountEpoch ? appState : NO_CONSENT_STATE;
 }
 //@ chunk-4xpk3fhh.js:6320-6367 placement
 /**
  * 导出函数 `hasSharedReadConsentClasses`：参数 e, n, r，返回 i5e(e)[n]?.[r] === !0。
  */
-function hasSharedReadConsentClasses(e, n, slug) {
-  return consentEpochGuard(e)[n]?.[slug] === true;
+function hasSharedReadConsentClasses(consentClasses, slug, slug_2) {
+  return consentEpochGuard(consentClasses)[slug]?.[slug_2] === true;
 }
 //@ chunk-4xpk3fhh.js:6367-6521 placement
 /**
@@ -276,8 +286,8 @@ function consentEpochKey() {
   return `${accountEpoch}:${conversationEpoch}`;
 }
 //@ chunk-4xpk3fhh.js:6599-6642 placement
-function classConsentKey(e, n) {
-  return `${consentEpochKey()}:${e}:${n}`;
+function classConsentKey(slug, consentClass) {
+  return `${consentEpochKey()}:${slug}:${consentClass}`;
 }
 export {
   PERSON,

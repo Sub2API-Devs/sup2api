@@ -11,7 +11,7 @@
 import { isIP } from "net";
 import { checkServerIdentity } from "tls";
 import { homedir } from "os";
-import { Re, importMetaRequire } from "../../runtime/bun-runtime.js";
+import { __toESM, importMetaRequire } from "../../runtime/bun-runtime.js";
 import { require_https_proxy_agent } from "../../vendor/https-proxy-agent/dist/index.js";
 import { HostScoped } from "./hostScoped.js";
 import { getRootSession, getIsNonInteractiveSession, getProjectConfigRoot } from "../bootstrap/state.js";
@@ -26,44 +26,51 @@ import { safeExecShell } from "./safeSpawn.js";
 import { isEnvTruthy, isEnvDefinedFalsy } from "./envUtils.js";
 import { axios_default } from "../../vendor/axios/dist/esm/axios.js";
 import { anthropicHostOf, withoutSensitiveHeaders, nodeModuleInterop } from "./anthropicHosts.js";
-import { io } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { memoizeAlias } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { hasAxiosProxyInterceptor, axiosTestEgressInterceptor } from "./testNetworkGuard.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-hq88884p.js:60361-60380 placement
-var tlsModule = Re(require_https_proxy_agent(), 1);
+var tlsModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hq88884p.js:60361", () => {
+  tlsModule = __toESM(require_https_proxy_agent(), 1);
+});
 //@ chunk-hq88884p.js:60451-60549 placement
 /**
  * 代理 TLS 的 servername 与主机身份检查选项。
  */
-function proxyTlsOptions(e) {
-  return !e || isIP(e)
+function proxyTlsOptions(hostname) {
+  return !hostname || isIP(hostname)
     ? {
         servername: "",
-        checkServerIdentity: (r, n) => checkServerIdentity(e, n),
+        checkServerIdentity: (left, right) => checkServerIdentity(hostname, right),
       }
     : {
-        servername: e,
+        servername: hostname,
       };
 }
 //@ chunk-hq88884p.js:60549-60786 placement
 /**
  * HTTPS 代理 agent：对 TLS 目标沿用调用方的证书身份检查（按 servername），否则套用代理 TLS 选项。
  */
-class TlsCheckingProxyAgent extends tlsModule.HttpsProxyAgent {
-  connect(...[e, r]) {
-    if (!r.secureEndpoint) return super.connect(e, r);
-    let n = r.servername || r.host || "";
-    let checkServerIdentity = r.checkServerIdentity;
-    return super.connect(e, {
-      ...r,
-      ...(checkServerIdentity
-        ? {
-            checkServerIdentity: (s, c) => checkServerIdentity(n, c),
-          }
-        : proxyTlsOptions(n)),
-    });
-  }
-}
+let TlsCheckingProxyAgent; // deferred: uses tlsModule of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hq88884p.js:60549", () => {
+  TlsCheckingProxyAgent = class TlsCheckingProxyAgent extends tlsModule.HttpsProxyAgent {
+    connect(...[socket, options]) {
+      if (!options.secureEndpoint) return super.connect(socket, options);
+      let servername = options.servername || options.host || "";
+      let checkServerIdentity = options.checkServerIdentity;
+      return super.connect(socket, {
+        ...options,
+        ...(checkServerIdentity
+          ? {
+              checkServerIdentity: (name, cert) => checkServerIdentity(servername, cert),
+            }
+          : proxyTlsOptions(servername)),
+      });
+    }
+  };
+});
 //@ chunk-hq88884p.js:60786-60984 placement
 class ProxyConnectRefusedError extends Error {
   connectStatus;
@@ -88,10 +95,10 @@ function describeHttpStatus(connectStatus) {
  * 沿 cause 链查找代理错误。
  */
 function findProxyError(error) {
-  for (let r = error, n = 0; n < 4; n++) {
-    if (r instanceof ProxyConnectRefusedError) return r;
-    if (typeof r !== "object" || r === null || !("cause" in r)) return;
-    r = r.cause;
+  for (let current = error, depth = 0; depth < 4; depth++) {
+    if (current instanceof ProxyConnectRefusedError) return current;
+    if (typeof current !== "object" || current === null || !("cause" in current)) return;
+    current = current.cause;
   }
   return;
 }
@@ -99,28 +106,31 @@ function findProxyError(error) {
 /**
  * CONNECT 代理 agent：代理对 CONNECT 返回非 200 时销毁连接并抛出 ProxyConnectRefusedError（带状态码与响应头）。
  */
-class ConnectProxyAgent extends TlsCheckingProxyAgent {
-  async connect(...[e, r]) {
-    let n;
-    let o = (a) => {
-      if (a.statusCode !== 200) n = a;
-    };
-    e.once("proxyConnect", o);
-    let s;
-    try {
-      s = await super.connect(e, r);
-    } finally {
-      e.removeListener("proxyConnect", o);
+let ConnectProxyAgent; // deferred: uses TlsCheckingProxyAgent of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hq88884p.js:61184", () => {
+  ConnectProxyAgent = class ConnectProxyAgent extends TlsCheckingProxyAgent {
+    async connect(...[socket, options]) {
+      let refusal;
+      let onProxyConnect = (response) => {
+        if (response.statusCode !== 200) refusal = response;
+      };
+      socket.once("proxyConnect", onProxyConnect);
+      let rawSocket;
+      try {
+        rawSocket = await super.connect(socket, options);
+      } finally {
+        socket.removeListener("proxyConnect", onProxyConnect);
+      }
+      if (refusal === undefined) return rawSocket;
+      rawSocket.destroy();
+      let statusCode = refusal.statusCode;
+      throw new ProxyConnectRefusedError(
+        Number.isInteger(statusCode) && statusCode >= 100 && statusCode <= 599 ? statusCode : 0,
+        refusal.headers,
+      );
     }
-    if (n === undefined) return s;
-    s.destroy();
-    let statusCode = n.statusCode;
-    throw new ProxyConnectRefusedError(
-      Number.isInteger(statusCode) && statusCode >= 100 && statusCode <= 599 ? statusCode : 0,
-      n.headers,
-    );
-  }
-}
+  };
+});
 //@ chunk-hq88884p.js:61495-61731 layout
 class ProxyState {
   keepAliveDisabled = false;
@@ -129,14 +139,17 @@ class ProxyState {
     helper: undefined,
     fromProjectOrLocal: false,
     trustAccepted: () => false,
-    startHelper: (e, r, n) => n(),
-    readAsHelperStarts: (e, r, n) => n(),
+    startHelper: (name, helperPath, read) => read(),
+    readAsHelperStarts: (name, helperPath, read) => read(),
   };
   proxyAuthCache = null;
   proxyAuthPendingChallenge = undefined;
 }
 //@ chunk-hq88884p.js:61731-61756 layout
-var proxyStateSlot = new HostScoped(() => new ProxyState());
+var proxyStateSlot; // deferred: uses ProxyState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hq88884p.js:61731", () => {
+  proxyStateSlot = new HostScoped(() => new ProxyState());
+});
 //@ chunk-hq88884p.js:61756-61792 layout
 function proxyState() {
   return proxyStateSlot.of(getRootSession().host);
@@ -164,12 +177,12 @@ function getAddressFamily(options) {
 //@ chunk-hq88884p.js:62017-62080 layout
 var PROXY_ENV_VARS = ["https_proxy", "HTTPS_PROXY", "http_proxy", "HTTP_PROXY"];
 //@ chunk-hq88884p.js:62080-62186 facade-exports
-function getProxyUrlWithSource(e = process.env) {
-  let found = PROXY_ENV_VARS.find((o) => e[o]);
-  let n = found ? e[found] : undefined;
-  return found && n
+function getProxyUrlWithSource(env = process.env) {
+  let found = PROXY_ENV_VARS.find((name) => env[name]);
+  let value = found ? env[found] : undefined;
+  return found && value
     ? {
-        value: n,
+        value,
         source: found,
       }
     : undefined;
@@ -179,34 +192,37 @@ function getProxyUrl(env = process.env) {
   return getProxyUrlWithSource(env)?.value;
 }
 //@ chunk-hq88884p.js:62233-62306 facade-exports
-function parseProxyUrl(e) {
+function parseProxyUrl(rawUrl) {
   try {
-    let r = new URL(e);
-    return r.host ? r : undefined;
+    let parsed = new URL(rawUrl);
+    return parsed.host ? parsed : undefined;
   } catch {
     return;
   }
 }
 //@ chunk-hq88884p.js:62306-62565 facade-exports
-function describeInvalidProxyUrl(source, r) {
-  let replaced = r.replace(/\p{Cc}/gu, "");
+function describeInvalidProxyUrl(source, value) {
+  let replaced = value.replace(/\p{Cc}/gu, "");
   return `Invalid proxy URL in ${source}: "${replaced}" cannot be parsed as a URL.
 Proxy settings must be a complete URL including the scheme, e.g. "http://proxy.example.com:8080".
 Fix or unset ${source} and restart Claude Code.`;
 }
 //@ chunk-hq88884p.js:62565-62599 layout
-var reportedInvalidProxyUrls = identity(new Set(), (e) => e.clear());
+var reportedInvalidProxyUrls; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hq88884p.js:62565", () => {
+  reportedInvalidProxyUrls = identity(new Set(), (set) => set.clear());
+});
 //@ chunk-hq88884p.js:62599-62782 facade-exports
 /**
  * 读代理 URL（https_proxy、HTTPS_PROXY、http_proxy、HTTP_PROXY 依次），无法解析时打印一次错误并忽略。
  */
-function getUsableProxyUrl(e = process.env) {
-  let proxyUrlWithSource = getProxyUrlWithSource(e);
+function getUsableProxyUrl(env = process.env) {
+  let proxyUrlWithSource = getProxyUrlWithSource(env);
   if (!proxyUrlWithSource) return;
   if (!parseProxyUrl(proxyUrlWithSource.value)) {
-    let n = `${proxyUrlWithSource.source}=${proxyUrlWithSource.value}`;
-    if (!reportedInvalidProxyUrls.has(n)) {
-      reportedInvalidProxyUrls.add(n);
+    let label = `${proxyUrlWithSource.source}=${proxyUrlWithSource.value}`;
+    if (!reportedInvalidProxyUrls.has(label)) {
+      reportedInvalidProxyUrls.add(label);
       console.error(describeInvalidProxyUrl(proxyUrlWithSource.source, proxyUrlWithSource.value));
     }
     return;
@@ -234,9 +250,9 @@ function shouldBypassProxy(urlString, noProxy = getNoProxy()) {
   try {
     let url = new URL(urlString);
     let hostname = url.hostname.toLowerCase();
-    let s = url.protocol === "https:" || url.protocol === "wss:";
-    let c = url.port || (s ? "443" : "80");
-    let hostWithPort = `${hostname}:${c}`;
+    let isHttps = url.protocol === "https:" || url.protocol === "wss:";
+    let port = url.port || (isHttps ? "443" : "80");
+    let hostWithPort = `${hostname}:${port}`;
     return noProxy
       .split(/[,\s]+/)
       .filter(Boolean)
@@ -257,21 +273,21 @@ function shouldBypassProxy(urlString, noProxy = getNoProxy()) {
 function shouldBypassProxyForHost(url, noProxy) {
   if (shouldBypassProxy(url, noProxy)) return true;
   if (!noProxy) return false;
-  let n;
+  let hostname;
   try {
-    n = new URL(url).hostname.replace(/^\[|\]$/g, "");
+    hostname = new URL(url).hostname.replace(/^\[|\]$/g, "");
   } catch {
     return false;
   }
-  if (isIP(n) === 0) return false;
+  if (isIP(hostname) === 0) return false;
   return noProxy
     .split(/[,\s]+/)
     .filter(Boolean)
-    .some((o) => {
-      if (o.includes("/")) return ipInCidr(n, o);
-      let s = isIP(o);
-      if (s === 0) return false;
-      return ipInCidr(n, `${o}/${s === 4 ? 32 : 128}`);
+    .some((entry) => {
+      if (entry.includes("/")) return ipInCidr(hostname, entry);
+      let family = isIP(entry);
+      if (family === 0) return false;
+      return ipInCidr(hostname, `${entry}/${family === 4 ? 32 : 128}`);
     });
 }
 //@ chunk-hq88884p.js:63661-63830 fingerprint = createHttpsProxyAgent (0.738)
@@ -291,19 +307,19 @@ function createHttpsProxyAgent(proxyUrl, extra) {
       ca: caCerts,
     }),
   });
-  let c = caListFor(extra);
+  let caList = caListFor(extra);
   agentOptions.options = {
     ...agentOptions.options,
-    ...(c && {
-      ca: c,
+    ...(caList && {
+      ca: caList,
     }),
   };
   return agentOptions;
 }
 //@ chunk-hq88884p.js:63830-64056 facade-exports
-function createConnectProxyAgent(proxyUrl, r) {
-  let n = {
-    ...r,
+function createConnectProxyAgent(proxyUrl, options) {
+  let agentOptions = {
+    ...options,
     headers: () => {
       let cachedProxyAuthorization = getCachedProxyAuthorization();
       return cachedProxyAuthorization
@@ -314,25 +330,25 @@ function createConnectProxyAgent(proxyUrl, r) {
     },
   };
   if (env.CLAUDE_CODE_PROXY_RESOLVES_HOSTS)
-    n.lookup = (hostname, options, callback) => {
+    agentOptions.lookup = (hostname, options, callback) => {
       callback(null, hostname, getAddressFamily(options));
     };
-  let o = new ConnectProxyAgent(proxyUrl, n);
-  o.options = {
-    ...o.options,
-    ...r,
+  let agent = new ConnectProxyAgent(proxyUrl, agentOptions);
+  agent.options = {
+    ...agent.options,
+    ...options,
   };
-  return o;
+  return agent;
 }
 //@ chunk-hq88884p.js:64056-64134 layout
 function getCachedProxyAgent(uri) {
   let { agents } = proxyState();
-  let n = agents.get(uri);
-  if (!n) {
-    n = getProxyAgent(uri);
-    agents.set(uri, n);
+  let agent = agents.get(uri);
+  if (!agent) {
+    agent = getProxyAgent(uri);
+    agents.set(uri, agent);
   }
-  return n;
+  return agent;
 }
 //@ chunk-hq88884p.js:64134-64411 fingerprint = getProxyAgent (1)
 /**
@@ -367,13 +383,13 @@ function getProxyAgent(uri) {
   return new undiciMod.EnvHttpProxyAgent(proxyOptions);
 }
 //@ chunk-hq88884p.js:64411-64520 facade-exports
-function getWebSocketProxyUrl(url) {
+function getWebSocketProxyUrl(wsUrl) {
   let usableProxyUrl = getUsableProxyUrl();
   if (!usableProxyUrl) return;
   try {
-    if (isLoopbackHost(new URL(url).hostname)) return;
+    if (isLoopbackHost(new URL(wsUrl).hostname)) return;
   } catch {}
-  if (shouldBypassProxy(url)) return;
+  if (shouldBypassProxy(wsUrl)) return;
   return usableProxyUrl;
 }
 //@ chunk-hq88884p.js:64520-64534 layout
@@ -391,8 +407,8 @@ function getConfiguredProxyAuthHelper() {
   return proxyState().proxyAuthHelperConfig.helper;
 }
 //@ chunk-hq88884p.js:64683-64764 layout
-function isProxyAuthHelperFromRepo(e) {
-  return getConfiguredProxyAuthHelper() !== undefined && e.proxyAuthHelperConfig.fromProjectOrLocal;
+function isProxyAuthHelperFromRepo(state) {
+  return getConfiguredProxyAuthHelper() !== undefined && state.proxyAuthHelperConfig.fromProjectOrLocal;
 }
 //@ chunk-hq88884p.js:64764-64862 layout
 function getProxyAuthHelperTtl() {
@@ -408,13 +424,13 @@ function getProxyAuthHelperTtl() {
 async function getProxyAuthFromHelper() {
   let configuredProxyAuthHelper = getConfiguredProxyAuthHelper();
   if (!configuredProxyAuthHelper) return null;
-  let r = proxyState();
-  let n = r.proxyAuthHelperConfig.sources === "personAndPolicy";
-  if (n && isProxyAuthHelperFromRepo(r)) return null;
+  let state = proxyState();
+  let personAndPolicy = state.proxyAuthHelperConfig.sources === "personAndPolicy";
+  if (personAndPolicy && isProxyAuthHelperFromRepo(state)) return null;
   if (
-    isProxyAuthHelperFromRepo(r) &&
+    isProxyAuthHelperFromRepo(state) &&
     !getIsNonInteractiveSession() &&
-    !r.proxyAuthHelperConfig.trustAccepted()
+    !state.proxyAuthHelperConfig.trustAccepted()
   ) {
     logForDebugging(
       "proxyAuthHelper configured in project/local settings but workspace trust not yet accepted \u2014 skipping",
@@ -424,7 +440,7 @@ async function getProxyAuthFromHelper() {
     );
     return null;
   }
-  let asHelperStarts = r.proxyAuthHelperConfig.readAsHelperStarts(
+  let asHelperStarts = state.proxyAuthHelperConfig.readAsHelperStarts(
     "proxyAuthHelper",
     configuredProxyAuthHelper,
     () => getProxyUrl(),
@@ -438,51 +454,58 @@ async function getProxyAuthFromHelper() {
     );
     return null;
   }
-  let proxyAuthPendingChallenge = r.proxyAuthPendingChallenge;
+  let proxyAuthPendingChallenge = state.proxyAuthPendingChallenge;
   if (
     !proxyAuthPendingChallenge &&
-    r.proxyAuthCache &&
-    Date.now() - r.proxyAuthCache.timestamp < getProxyAuthHelperTtl()
+    state.proxyAuthCache &&
+    Date.now() - state.proxyAuthCache.timestamp < getProxyAuthHelperTtl()
   )
-    return r.proxyAuthCache.value;
-  r.proxyAuthPendingChallenge = undefined;
-  let c;
+    return state.proxyAuthCache.value;
+  state.proxyAuthPendingChallenge = undefined;
+  let proxyHost;
   try {
-    c = asHelperStarts ? new URL(asHelperStarts).hostname : undefined;
+    proxyHost = asHelperStarts ? new URL(asHelperStarts).hostname : undefined;
   } catch {
-    c = undefined;
+    proxyHost = undefined;
   }
-  let a = n ? homedir() : getProjectConfigRoot();
-  let u = await r.proxyAuthHelperConfig.startHelper("proxyAuthHelper", configuredProxyAuthHelper, () =>
-    safeExecShell(configuredProxyAuthHelper, {
-      ...(a !== null && {
-        cwd: a,
+  let cwd = personAndPolicy ? homedir() : getProjectConfigRoot();
+  let runResult = await state.proxyAuthHelperConfig.startHelper(
+    "proxyAuthHelper",
+    configuredProxyAuthHelper,
+    () =>
+      safeExecShell(configuredProxyAuthHelper, {
+        ...(cwd !== null && {
+          cwd,
+        }),
+        timeout: 30000,
+        reject: false,
+        useToolMemoryCgroup: false,
+        env: {
+          ...process.env,
+          ...(asHelperStarts && {
+            CLAUDE_CODE_PROXY_URL: asHelperStarts,
+          }),
+          ...(proxyHost && {
+            CLAUDE_CODE_PROXY_HOST: proxyHost,
+          }),
+          ...(proxyAuthPendingChallenge && {
+            CLAUDE_CODE_PROXY_AUTHENTICATE: proxyAuthPendingChallenge,
+          }),
+        },
       }),
-      timeout: 30000,
-      reject: false,
-      useToolMemoryCgroup: false,
-      env: {
-        ...process.env,
-        ...(asHelperStarts && {
-          CLAUDE_CODE_PROXY_URL: asHelperStarts,
-        }),
-        ...(c && {
-          CLAUDE_CODE_PROXY_HOST: c,
-        }),
-        ...(proxyAuthPendingChallenge && {
-          CLAUDE_CODE_PROXY_AUTHENTICATE: proxyAuthPendingChallenge,
-        }),
-      },
-    }),
   );
-  if (u.failed || !u.stdout?.trim()) {
-    let b = u.timedOut ? "timed out" : u.failed ? `exited ${u.exitCode}` : "did not return a value";
-    let trimmed = u.stderr?.trim();
-    console.error(`proxyAuthHelper failed: ${trimmed ? `${b}: ${trimmed}` : b}`);
-    return r.proxyAuthCache?.value ?? null;
+  if (runResult.failed || !runResult.stdout?.trim()) {
+    let failureReason = runResult.timedOut
+      ? "timed out"
+      : runResult.failed
+        ? `exited ${runResult.exitCode}`
+        : "did not return a value";
+    let trimmed = runResult.stderr?.trim();
+    console.error(`proxyAuthHelper failed: ${trimmed ? `${failureReason}: ${trimmed}` : failureReason}`);
+    return state.proxyAuthCache?.value ?? null;
   }
-  let trimmed = u.stdout.trim();
-  r.proxyAuthCache = {
+  let trimmed = runResult.stdout.trim();
+  state.proxyAuthCache = {
     value: trimmed,
     timestamp: Date.now(),
   };
@@ -490,26 +513,26 @@ async function getProxyAuthFromHelper() {
 }
 //@ chunk-hq88884p.js:66260-66443 layout
 function getCachedProxyAuthorization() {
-  let e = proxyState();
-  let { helper, readAsHelperStarts } = e.proxyAuthHelperConfig;
+  let state = proxyState();
+  let { helper, readAsHelperStarts } = state.proxyAuthHelperConfig;
   if (
     helper !== undefined &&
     readAsHelperStarts("proxyAuthHelper", helper, () => getProxyUrl()) !== getProxyUrl()
   )
     return null;
-  return e.proxyAuthCache?.value ?? null;
+  return state.proxyAuthCache?.value ?? null;
 }
 //@ chunk-hq88884p.js:66443-66521 facade-exports
 function clearProxyAuthHelperCache(proxyAuthPendingChallenge) {
-  let r = proxyState();
-  r.proxyAuthCache = null;
-  r.proxyAuthPendingChallenge = proxyAuthPendingChallenge;
+  let state = proxyState();
+  state.proxyAuthCache = null;
+  state.proxyAuthPendingChallenge = proxyAuthPendingChallenge;
 }
 //@ chunk-hq88884p.js:66521-66627 facade-exports
 function prefetchProxyAuthFromHelperIfSafe() {
   if (!getConfiguredProxyAuthHelper()) return;
-  let e = proxyState();
-  if (isProxyAuthHelperFromRepo(e) && !e.proxyAuthHelperConfig.trustAccepted()) return;
+  let state = proxyState();
+  if (isProxyAuthHelperFromRepo(state) && !state.proxyAuthHelperConfig.trustAccepted()) return;
   getProxyAuthFromHelper();
 }
 //@ chunk-hq88884p.js:66627-67328 facade-exports = getProxyFetchOptions (0.434)
@@ -523,12 +546,12 @@ function getProxyFetchOptions(opts) {
     : isEnvDefinedFalsy(envApiForceIdleTimeout)
       ? false
       : opts.bodyIdleTimeout;
-  let o = opts.forAnthropicAPI && base !== true && (opts.hasBodyIdleWatchdog || base === false);
-  let s = {
+  let useBodyTimeout = opts.forAnthropicAPI && base !== true && (opts.hasBodyIdleWatchdog || base === false);
+  let options = {
     ...(proxyState().keepAliveDisabled && {
       keepalive: false,
     }),
-    ...(o && {
+    ...(useBodyTimeout && {
       timeout: false,
     }),
   };
@@ -536,7 +559,7 @@ function getProxyFetchOptions(opts) {
     let unixSocket = env.ANTHROPIC_UNIX_SOCKET;
     if (unixSocket)
       return {
-        ...s,
+        ...options,
         unix: unixSocket,
       };
   }
@@ -544,12 +567,12 @@ function getProxyFetchOptions(opts) {
   if (proxyUrl) {
     if (opts.url && shouldBypassProxy(opts.url))
       return {
-        ...s,
+        ...options,
         ...getTLSFetchOptions(opts.url),
       };
     let cachedProxyAuthorization = getCachedProxyAuthorization();
     return {
-      ...s,
+      ...options,
       proxy: cachedProxyAuthorization
         ? {
             url: proxyUrl,
@@ -568,12 +591,12 @@ function getProxyFetchOptions(opts) {
         shouldBypassProxyForHost(opts.url, getNoProxy()))
     )
       return {
-        ...s,
+        ...options,
         ...getTLSFetchOptions(opts.url),
       };
     let tlsFetchOptions = getTLSFetchOptions(opts.url);
     return {
-      ...s,
+      ...options,
       proxy: opts.fallbackProxy.url,
       ...(opts.fallbackProxy.ca
         ? {
@@ -586,19 +609,22 @@ function getProxyFetchOptions(opts) {
     };
   }
   return {
-    ...s,
+    ...options,
     ...getTLSFetchOptions(opts.url),
   };
 }
 //@ chunk-hq88884p.js:67328-67376 layout
-var globalAgentsInstallState = identity(
-  {
-    installed: false,
-  },
-  (e) => {
-    e.installed = false;
-  },
-);
+var globalAgentsInstallState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hq88884p.js:67328", () => {
+  globalAgentsInstallState = identity(
+    {
+      installed: false,
+    },
+    (state) => {
+      state.installed = false;
+    },
+  );
+});
 //@ chunk-hq88884p.js:67376-67456 layout
 function ejectAxiosProxyInterceptor(axiosProxyInterceptorRef) {
   if (axiosProxyInterceptorRef.id !== undefined) {
@@ -607,30 +633,33 @@ function ejectAxiosProxyInterceptor(axiosProxyInterceptorRef) {
   }
 }
 //@ chunk-hq88884p.js:67456-67482 layout
-var axiosProxyInterceptorRef = identity(
-  {
-    id: undefined,
-  },
-  ejectAxiosProxyInterceptor,
-);
+var axiosProxyInterceptorRef; // deferred: uses ejectAxiosProxyInterceptor of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hq88884p.js:67456", () => {
+  axiosProxyInterceptorRef = identity(
+    {
+      id: undefined,
+    },
+    ejectAxiosProxyInterceptor,
+  );
+});
 //@ chunk-hq88884p.js:67482-67519 facade-exports
 function hasConfiguredGlobalAgents() {
   return axiosProxyInterceptorRef.id !== undefined;
 }
 //@ chunk-hq88884p.js:67519-67743 layout
-function applyAxiosAgents(config, r) {
+function applyAxiosAgents(config, agentFor) {
   if (config.socketPath) return config;
   let uri = axios_default.getUri(config);
-  let o = anthropicHostOf(withoutSensitiveHeaders(uri, config.headers));
-  if (r && !(uri && shouldBypassProxy(uri))) {
-    let s = r(o);
+  let host = anthropicHostOf(withoutSensitiveHeaders(uri, config.headers));
+  if (agentFor && !(uri && shouldBypassProxy(uri))) {
+    let agent = agentFor(host);
     return Object.assign(config, {
-      httpsAgent: s,
-      httpAgent: s,
+      httpsAgent: agent,
+      httpAgent: agent,
     });
   }
   return Object.assign(config, {
-    httpsAgent: config.httpsAgent ?? getMTLSAgent(o),
+    httpsAgent: config.httpsAgent ?? getMTLSAgent(host),
   });
 }
 //@ chunk-hq88884p.js:67743-68094 facade-exports = configureGlobalAgents (0.752)
@@ -645,21 +674,21 @@ function configureGlobalAgents() {
   ejectAxiosProxyInterceptor(axiosProxyInterceptorRef);
   axios_default.defaults.proxy = undefined;
   if (proxyUrl) axios_default.defaults.proxy = false;
-  let n = mtlsAgent
-    ? io(
+  let mtlsProxyAgent = mtlsAgent
+    ? memoizeAlias(
         (extra) => createHttpsProxyAgent(mtlsAgent, extra),
-        (o) => o !== undefined,
+        (agent) => agent !== undefined,
       )
     : undefined;
   axiosProxyInterceptorRef.id = axios_default.interceptors.request.use((config) =>
-    applyAxiosAgents(config, n),
+    applyAxiosAgents(config, mtlsProxyAgent),
   );
   if (mtlsAgent) {
     importMetaRequire("undici").setGlobalDispatcher(getCachedProxyAgent(mtlsAgent));
     globalAgentsInstallState.installed = true;
   } else if (globalAgentsInstallState.installed) {
-    let o = importMetaRequire("undici");
-    o.setGlobalDispatcher(new o.Agent());
+    let undici = importMetaRequire("undici");
+    undici.setGlobalDispatcher(new undici.Agent());
     globalAgentsInstallState.installed = false;
   }
 }
@@ -667,17 +696,17 @@ function configureGlobalAgents() {
 /**
  * AWS STS 端点：AWS_ENDPOINT_URL_STS、AWS_ENDPOINT_URL 或 https://sts.<region>.amazonaws.com。
  */
-function resolveStsEndpointForProxyUrl(awsRegion) {
-  return env.AWS_ENDPOINT_URL_STS || env.AWS_ENDPOINT_URL || `https://sts.${awsRegion}.amazonaws.com`;
+function resolveStsEndpointForProxyUrl(region) {
+  return env.AWS_ENDPOINT_URL_STS || env.AWS_ENDPOINT_URL || `https://sts.${region}.amazonaws.com`;
 }
 //@ chunk-hq88884p.js:68194-68461 facade-exports
 /**
  * 为 AWS SDK 客户端生成走代理的 requestHandler。
  */
-async function getAWSClientProxyConfig(e) {
-  let awsProxyRequestHandler = await getAWSProxyRequestHandler(e);
+async function getAWSClientProxyConfig(options) {
+  let awsProxyRequestHandler = await getAWSProxyRequestHandler(options);
   if (!awsProxyRequestHandler) return {};
-  let { defaultProvider } = await import("./chunk-w799qcah.js");
+  let { defaultProvider } = await import("../../vendor/@aws-sdk/credential-provider-node/dist-cjs/index.js");
   return {
     requestHandler: awsProxyRequestHandler,
     credentials: defaultProvider({
@@ -686,33 +715,33 @@ async function getAWSClientProxyConfig(e) {
       },
       parentClientConfig: {
         requestHandler: awsProxyRequestHandler,
-        ...(e.region !== undefined && {
-          region: e.region,
+        ...(options.region !== undefined && {
+          region: options.region,
         }),
       },
     }),
   };
 }
 //@ chunk-hq88884p.js:68461-68767 facade-exports = getAWSClientProxyConfig (0.369)
-async function getAWSProxyRequestHandler(e) {
+async function getAWSProxyRequestHandler(options) {
   let proxyUrl = getUsableProxyUrl();
-  let n = e.requestTimeoutMs !== undefined && {
-    requestTimeout: e.requestTimeoutMs,
+  let timeoutOptions = options.requestTimeoutMs !== undefined && {
+    requestTimeout: options.requestTimeoutMs,
     throwOnRequestTimeout: true,
   };
-  if (!proxyUrl || (e.url && shouldBypassProxy(e.url))) {
+  if (!proxyUrl || (options.url && shouldBypassProxy(options.url))) {
     let mtlsAgent = getMTLSAgent();
     if (!mtlsAgent) return null;
     return new nodeModuleInterop.NodeHttpHandler({
       httpsAgent: mtlsAgent,
-      ...n,
+      ...timeoutOptions,
     });
   }
   let agent = createHttpsProxyAgent(proxyUrl);
   return new nodeModuleInterop.NodeHttpHandler({
     httpAgent: agent,
     httpsAgent: agent,
-    ...n,
+    ...timeoutOptions,
   });
 }
 //@ chunk-hq88884p.js:68767-68831 facade-exports = clearProxyCache (0.766)
@@ -720,13 +749,13 @@ function clearProxyCache() {
   proxyState().agents.clear();
   logForDebugging("Cleared proxy agent cache");
 }
-//@ chunk-1ny7cxrt.js:1312506-1312578 fingerprint = getNoProxy (1)
-function getNoProxy_2() {
-  return process.env.NO_PROXY || process.env.no_proxy || undefined;
-}
 //@ chunk-bwbq4xvm.js:161605-161660 fingerprint = createAxiosInstance (0.565)
 function createAxiosInstance() {
   if (!hasAxiosProxyInterceptor()) axios_default.interceptors.request.use(axiosTestEgressInterceptor);
+}
+//@ chunk-1ny7cxrt.js:1312506-1312578 fingerprint = getNoProxy (1)
+function getNoProxy_2() {
+  return process.env.NO_PROXY || process.env.no_proxy || undefined;
 }
 export {
   getProxyUrl,

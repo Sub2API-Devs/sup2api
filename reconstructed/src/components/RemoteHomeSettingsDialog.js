@@ -8,7 +8,7 @@
  * pieces: chunk-jz14stsh.js (2)
  * attribution: placement 2
  */
-import { init_react_production, P } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { useSelfOpenedDialog } from "../hooks/useSelfOpenedDialog.js";
 import { logFeatureSad, logFeatureBad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { useKeybinding } from "../keybindings/useKeybinding.js";
@@ -32,21 +32,22 @@ import { ModelSelector } from "./agents/ModelSelector.js";
 init_react_production();
 //@ chunk-jz14stsh.js:775-3534 placement
 function RemoteHomeSettingsDialog({ configHome, storageV5, origin, onDone }) {
-  let i = origin === "first_run";
+  let isFirstRun = origin === "first_run";
   let selfOpenedDialog = useSelfOpenedDialog(onDone, {
-    selfOpened: i,
-    onCancelled: (t) => logFeatureSad("ccr_home_seed_mode_prompt", t ? "cancelled_saving" : "cancelled"),
+    selfOpened: isFirstRun,
+    onCancelled: (result) =>
+      logFeatureSad("ccr_home_seed_mode_prompt", result ? "cancelled_saving" : "cancelled"),
   });
-  useKeybinding("confirm:no", () => p("not_now"), {
+  useKeybinding("confirm:no", () => answer("not_now"), {
     context: "Confirmation",
-    isActive: i && !selfOpenedDialog.decided,
+    isActive: isFirstRun && !selfOpenedDialog.decided,
   });
-  P(() => {
+  useEffect(() => {
     logEvent("tengu_home_settings_mode_prompt_shown", {
       origin: fromEnum(origin),
     });
   }, [origin]);
-  function p(mode) {
+  function answer(mode) {
     if (!selfOpenedDialog.take()) return;
     logEvent("tengu_home_settings_mode_prompt", {
       choice: fromEnum(mode),
@@ -58,9 +59,9 @@ function RemoteHomeSettingsDialog({ configHome, storageV5, origin, onDone }) {
       return;
     }
     saveHomeSettingsMode(mode, storageV5).then(
-      (u) => {
+      (choice) => {
         if (selfOpenedDialog.settled()) return;
-        switch (u) {
+        switch (choice) {
           case "refused":
             logFeatureBad("ccr_home_seed_mode_prompt", "not_written");
             selfOpenedDialog.handBack("not_saved");
@@ -97,8 +98,8 @@ function RemoteHomeSettingsDialog({ configHome, storageV5, origin, onDone }) {
       : null;
   return jsxProd_default_2(Dialog, {
     title: "Use this machine's settings in cloud sessions?",
-    onCancel: () => p("not_now"),
-    isCancelActive: !i,
+    onCancel: () => answer("not_now"),
+    isCancelActive: !isFirstRun,
     inputGuide: selfOpenedDialog.exit.pending
       ? jsxProd_default_2(Text, {
           children: ["Press ", selfOpenedDialog.exit.keyName, " again to exit"],
@@ -153,12 +154,12 @@ function RemoteHomeSettingsDialog({ configHome, storageV5, origin, onDone }) {
           },
         ],
         defaultFocusValue: "not_now",
-        hideIndexes: i,
-        disablePrintableKeybindings: i,
+        hideIndexes: isFirstRun,
+        disablePrintableKeybindings: isFirstRun,
         isDisabled: selfOpenedDialog.choicesDisabled,
         refuseInput: selfOpenedDialog.refuseInput,
-        onChange: p,
-        onCancel: () => p("not_now"),
+        onChange: answer,
+        onCancel: () => answer("not_now"),
       }),
     ],
   });

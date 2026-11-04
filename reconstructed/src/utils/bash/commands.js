@@ -33,7 +33,17 @@ import {
   ARGUMENT_TYPES_2,
 } from "./parser.js";
 import { dedupeMapKeys } from "../../tools/BashTool/bashCommandHelpers.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-r01896cg.js:23179-23263 fingerprint = isCommandList (0.464)
+/**
+ * 递归判断语法树中是否含 comment 节点。
+ */
+function hasCommentNode(command) {
+  return command.children.some(
+    (varName) => varName !== undefined && (varName.type === "comment" || hasCommentNode(varName)),
+  );
+}
 //@ chunk-38axkkfw.js:312-355 placement
 function hasParserLexingDifferential(str) {
   return BACKSLASH_ESCAPED_SPACE_RE.test(str) || hasStatementLexingDifferential(str);
@@ -42,14 +52,14 @@ function hasParserLexingDifferential(str) {
 /**
  * 用一组正则粗查命令文本是否有语句级的词法分歧形态（bash 与 zsh 断句不同），命中即不信任按语句拆分的结果。
  */
-function hasStatementLexingDifferential(e) {
+function hasStatementLexingDifferential(text) {
   return (
-    CONTROL_CHAR_RE.test(e) ||
-    LONE_SURROGATE_RE.test(e) ||
-    BACKSLASH_LINE_CONTINUATION_RE.test(e) ||
-    ZSH_TILDE_BRACKET_RE.test(e) ||
-    ZSH_EQUALS_EXPANSION_RE.test(e) ||
-    ZSH_NUMERIC_GLOB_RE.test(e)
+    CONTROL_CHAR_RE.test(text) ||
+    LONE_SURROGATE_RE.test(text) ||
+    BACKSLASH_LINE_CONTINUATION_RE.test(text) ||
+    ZSH_TILDE_BRACKET_RE.test(text) ||
+    ZSH_EQUALS_EXPANSION_RE.test(text) ||
+    ZSH_NUMERIC_GLOB_RE.test(text)
   );
 }
 //@ chunk-38axkkfw.js:455-517 placement = nodeTypeId (1)
@@ -63,61 +73,68 @@ function parseHasErrorNode(nodeType) {
 /**
  * 拆分子命令时的字符上限（65536）。
  */
-var COMPOUND_TYPES = new Set(["program", "list", "pipeline"]);
-var SEPARATOR_TYPES = new Set([
-  "&&",
-  "||",
-  "|",
-  ";",
-  "&",
-  "|&",
-  `
+var COMPOUND_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SEPARATOR_TYPES;
+var SPLIT_MAX_LEN;
+var MAX_SPLIT_CHARS;
+var MAX_SPLIT_DEPTH;
+deferInit("chunk-38axkkfw.js:517", () => {
+  COMPOUND_TYPES = new Set(["program", "list", "pipeline"]);
+  SEPARATOR_TYPES = new Set([
+    "&&",
+    "||",
+    "|",
+    ";",
+    "&",
+    "|&",
+    `
 `,
-]);
-var SPLIT_MAX_LEN = 1e4;
-var MAX_SPLIT_CHARS = 65536;
-var MAX_SPLIT_DEPTH = 16;
+  ]);
+  SPLIT_MAX_LEN = 1e4;
+  MAX_SPLIT_CHARS = 65536;
+  MAX_SPLIT_DEPTH = 16;
+});
 //@ chunk-38axkkfw.js:626-1031 placement
 /**
  * 把复合命令拆成子命令文本：超长则整体返回，解析失败返回原文；递归 program、list、pipeline，跳过分隔符、注释和重定向，叶子命令按原文收集。
  */
-function splitCommand(e) {
-  if (!e) return [];
-  if (e.length > SPLIT_MAX_LEN) return [e];
-  let t = getParserModule().parse(e);
-  if (!t) return [e];
-  let r = [];
-  let s = (child) => {
+function splitCommand(command) {
+  if (!command) return [];
+  if (command.length > SPLIT_MAX_LEN) return [command];
+  let root = getParserModule().parse(command);
+  if (!root) return [command];
+  let texts = [];
+  let walk = (child) => {
     if (SEPARATOR_TYPES.has(child.type) || child.type === "comment") return;
     if (child.type === "redirected_statement") {
-      for (let child_2 of child.children) if (!child_2.type.endsWith("_redirect")) s(child_2);
+      for (let child_2 of child.children) if (!child_2.type.endsWith("_redirect")) walk(child_2);
       return;
     }
     if (COMPOUND_TYPES.has(child.type)) {
-      for (let child_2 of child.children) s(child_2);
+      for (let child_2 of child.children) walk(child_2);
       return;
     }
-    r.push(child.text);
+    texts.push(child.text);
   };
-  s(t.type === "ERROR" && t.children[0]?.type === "program" ? t.children[0] : t);
-  return r;
+  walk(root.type === "ERROR" && root.children[0]?.type === "program" ? root.children[0] : root);
+  return texts;
 }
 //@ chunk-38axkkfw.js:1031-1385 placement
 /**
  * 判断最后一个子命令是否以 && 接在前一条之后（会因前一条失败而不执行）；超长或解析失败时保守返回 true。
  */
-function lastCommandIsAndGated(e) {
-  if (e.length > SPLIT_MAX_LEN) return true;
-  let t = getParserModule().parse(e);
-  if (t?.type !== "program") return true;
-  let r = t;
-  while (r !== undefined && (COMPOUND_TYPES.has(r.type) || r.type === "redirected_statement")) {
-    let lastIndex = r.children.findLastIndex(
+function lastCommandIsAndGated(command) {
+  if (command.length > SPLIT_MAX_LEN) return true;
+  let root = getParserModule().parse(command);
+  if (root?.type !== "program") return true;
+  let node = root;
+  while (node !== undefined && (COMPOUND_TYPES.has(node.type) || node.type === "redirected_statement")) {
+    let lastIndex = node.children.findLastIndex(
       (child) =>
         !SEPARATOR_TYPES.has(child.type) && child.type !== "comment" && !child.type.endsWith("_redirect"),
     );
-    if (r.type === "list" && r.children[lastIndex - 1]?.type === "&&") return true;
-    r = r.children[lastIndex];
+    if (node.type === "list" && node.children[lastIndex - 1]?.type === "&&") return true;
+    node = node.children[lastIndex];
   }
   return false;
 }
@@ -125,60 +142,60 @@ function lastCommandIsAndGated(e) {
 /**
  * 解析命令并返回其中所有嵌套 command 节点的文本，超长或解析失败返回空数组。
  */
-function nestedCommandSpans(e) {
-  if (!e || e.length > SPLIT_MAX_LEN) return [];
-  let t = getParserModule().parse(e);
-  return t ? nestedCommandSpansFromAst(t) : [];
+function nestedCommandSpans(command) {
+  if (!command || command.length > SPLIT_MAX_LEN) return [];
+  let root = getParserModule().parse(command);
+  return root ? nestedCommandSpansFromAst(root) : [];
 }
 //@ chunk-38axkkfw.js:1468-1502 placement
-function nestedCommandSpansFromAst(e) {
-  return nestedCommandSpansOrOverrun(e) ?? [];
+function nestedCommandSpansFromAst(root) {
+  return nestedCommandSpansOrOverrun(root) ?? [];
 }
 //@ chunk-38axkkfw.js:1502-1829 placement
 /**
  * 收集语法树里所有 command 节点文本，并展开 ${ …; } 函数替换体再解析；累计长度或嵌套层数超出预算（或严格模式下函数体无法解析）时返回 null。
  */
-function nestedCommandSpansOrOverrun(e, { unparsedBodyOverruns: t = false } = {}) {
-  let r = [];
-  let s = MAX_SPLIT_CHARS;
-  let i = MAX_SPLIT_DEPTH;
-  let n = false;
-  let o = (l) => {
-    if (n) return;
-    if (l.type === "command") {
-      r.push(l.text);
-      s -= l.text.length;
+function nestedCommandSpansOrOverrun(node, { unparsedBodyOverruns = false } = {}) {
+  let spans = [];
+  let charsLeft = MAX_SPLIT_CHARS;
+  let depthLeft = MAX_SPLIT_DEPTH;
+  let overrun = false;
+  let walk = (current) => {
+    if (overrun) return;
+    if (current.type === "command") {
+      spans.push(current.text);
+      charsLeft -= current.text.length;
     }
-    let f = funsubBodyFromNode(l);
-    if (f !== null) {
-      i -= 1;
-      s -= f.length;
+    let funsubBody = funsubBodyFromNode(current);
+    if (funsubBody !== null) {
+      depthLeft -= 1;
+      charsLeft -= funsubBody.length;
     }
-    if (s < 0 || i < 0) {
-      n = true;
+    if (charsLeft < 0 || depthLeft < 0) {
+      overrun = true;
       return;
     }
-    if (f !== null) {
-      let u = getParserModule()?.parse(f);
-      if (u) o(u);
-      else if (t) n = true;
+    if (funsubBody !== null) {
+      let innerRoot = getParserModule()?.parse(funsubBody);
+      if (innerRoot) walk(innerRoot);
+      else if (unparsedBodyOverruns) overrun = true;
       return;
     }
-    for (let child of l.children) o(child);
+    for (let child of current.children) walk(child);
   };
-  o(e);
-  return n ? null : r;
+  walk(node);
+  return overrun ? null : spans;
 }
 //@ chunk-38axkkfw.js:1829-2063 placement
 /**
  * 从 expansion/ERROR 节点中取出 ${ …} 或 ${| …} 函数替换（funsub）的命令体，去掉前导 | 与尾部分号；不是函数替换返回 null。
  */
-function funsubBodyFromNode(e) {
-  if (e.type !== "expansion" && e.type !== "ERROR") return null;
-  let text = e.text;
+function funsubBodyFromNode(node) {
+  if (node.type !== "expansion" && node.type !== "ERROR") return null;
+  let text = node.text;
   if (!/^\$\{[ \t\n|]/.test(text)) return null;
-  let r = text.endsWith("}") ? text.length - 1 : text.length;
-  return text.slice(2, r).trim().replace(/^\|/, "").replace(/;$/, "").trim();
+  let bodyEnd = text.endsWith("}") ? text.length - 1 : text.length;
+  return text.slice(2, bodyEnd).trim().replace(/^\|/, "").replace(/;$/, "").trim();
 }
 //@ chunk-38axkkfw.js:2063-2160 placement
 /**
@@ -186,9 +203,9 @@ function funsubBodyFromNode(e) {
  */
 function splitCommandStrict(command) {
   if (!command || command.length > SPLIT_MAX_LEN) return null;
-  let t = getParserModule().parse(command);
-  if (!t) return null;
-  return collectStatementTexts(t);
+  let root = getParserModule().parse(command);
+  if (!root) return null;
+  return collectStatementTexts(root);
 }
 //@ chunk-38axkkfw.js:2160-2392 placement
 /**
@@ -196,18 +213,18 @@ function splitCommandStrict(command) {
  */
 function splitCommandForExemptionMatch(target) {
   if (!target || target.length > SPLIT_MAX_LEN) return null;
-  let t = getParserModule().parse(target);
-  if (!t) return null;
+  let root = getParserModule().parse(target);
+  if (!root) return null;
   if (
-    parseHasErrorNode(t) ||
-    scanSameLineStatementSplits(t) !== null ||
-    containsSubstitution(t) ||
-    hasComplexRedirect(t) ||
+    parseHasErrorNode(root) ||
+    scanSameLineStatementSplits(root) !== null ||
+    containsSubstitution(root) ||
+    hasComplexRedirect(root) ||
     hasZshExecutableParenInBraceExpansion(target)
   )
     return null;
   if (target.includes("`")) return null;
-  let statementTexts = collectStatementTexts(t);
+  let statementTexts = collectStatementTexts(root);
   if (statementTexts === null) return null;
   return statementTexts.some(isUnsafeRedirectTarget) ? null : statementTexts;
 }
@@ -223,23 +240,23 @@ var PAREN_CHARS_RE = /[()]/;
 /**
  * 判断花括号之后是否紧跟引号或反斜杠。
  */
-function braceFollowedByQuote(e) {
-  let t = e.search(/(?<!\$)\{|(?<=[$\\]\$)\{/);
-  return t === -1 || /['"\\]/.test(e.slice(t));
+function braceFollowedByQuote(text) {
+  let braceIndex = text.search(/(?<!\$)\{|(?<=[$\\]\$)\{/);
+  return braceIndex === -1 || /['"\\]/.test(text.slice(braceIndex));
 }
 //@ chunk-38axkkfw.js:2574-2741 placement
-function isUnsafeRedirectTarget(e) {
-  if (BRACE_OR_DOLLAR_QUOTE_RE.test(e) && hasShellExpansion(e)) return true;
-  let t = stripQuotedRegions(e);
-  let replaced = e.replace(/['"\\]/g, "");
+function isUnsafeRedirectTarget(target) {
+  if (BRACE_OR_DOLLAR_QUOTE_RE.test(target) && hasShellExpansion(target)) return true;
+  let unquoted = stripQuotedRegions(target);
+  let replaced = target.replace(/['"\\]/g, "");
   if (
-    BRACE_OR_DOLLAR_QUOTE_RE.test(t) &&
-    (SHELL_SEPARATOR_CHARS_RE.test(t) ||
-      PAREN_CHARS_RE.test(t) ||
-      (LEADING_DASH_OR_SLASH_RE.test(replaced) && braceFollowedByQuote(e)))
+    BRACE_OR_DOLLAR_QUOTE_RE.test(unquoted) &&
+    (SHELL_SEPARATOR_CHARS_RE.test(unquoted) ||
+      PAREN_CHARS_RE.test(unquoted) ||
+      (LEADING_DASH_OR_SLASH_RE.test(replaced) && braceFollowedByQuote(target)))
   )
     return true;
-  return SUBSTITUTION_OR_PROCESS_SUB_RE.test(e) || isSimpleTarget(e);
+  return SUBSTITUTION_OR_PROCESS_SUB_RE.test(target) || isSimpleTarget(target);
 }
 //@ chunk-38axkkfw.js:2741-2782 placement
 /**
@@ -248,23 +265,23 @@ function isUnsafeRedirectTarget(e) {
 var SUBSTITUTION_OR_PROCESS_SUB_RE = /\$\(|`|<\(|>\(|\$\[|\$\{[ \t\n|]/;
 //@ chunk-38axkkfw.js:2782-3016 placement
 function isSimpleTarget(target) {
-  let t;
+  let quote;
   for (let i = 0; i < target.length; i++) {
-    let s = target[i];
-    if (t !== undefined) {
-      if (t === '"' && s === "\\") i++;
-      else if (s === t) t = undefined;
+    let char = target[i];
+    if (quote !== undefined) {
+      if (quote === '"' && char === "\\") i++;
+      else if (char === quote) quote = undefined;
       continue;
     }
-    if (s === "\\") {
+    if (char === "\\") {
       i++;
       continue;
     }
-    if (s === "'" || s === '"') {
-      t = s;
+    if (char === "'" || char === '"') {
+      quote = char;
       continue;
     }
-    if (s === "$" && target[i + 1] === '"') return true;
+    if (char === "$" && target[i + 1] === '"') return true;
   }
   return false;
 }
@@ -272,29 +289,32 @@ function isSimpleTarget(target) {
 /**
  * 简单文件描述符重定向的节点类型（file_descriptor、number、>&、<&）。
  */
-var SIMPLE_FD_REDIRECT_TYPES = new Set(["file_descriptor", "number", ">&", "<&"]);
+var SIMPLE_FD_REDIRECT_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-38axkkfw.js:3016", () => {
+  SIMPLE_FD_REDIRECT_TYPES = new Set(["file_descriptor", "number", ">&", "<&"]);
+});
 //@ chunk-38axkkfw.js:3070-3161 placement
 /**
  * 判断重定向节点是否结构复杂（递归检查子节点）。
  */
-function hasComplexRedirect(e) {
-  if (e.type.endsWith("_redirect")) {
-    if (!isSimpleFdRedirect(e)) return true;
+function hasComplexRedirect(node) {
+  if (node.type.endsWith("_redirect")) {
+    if (!isSimpleFdRedirect(node)) return true;
   }
-  return e.children.some(hasComplexRedirect);
+  return node.children.some(hasComplexRedirect);
 }
 //@ chunk-38axkkfw.js:3161-3462 placement
 /**
  * 判断重定向节点是否只由简单的文件描述符/数字/单词组成（2 或 3 个子节点、无嵌套）。
  */
-function isSimpleFdRedirect(e) {
-  let mapped = e.children.map((child) => child.type);
+function isSimpleFdRedirect(node) {
+  let mapped = node.children.map((child) => child.type);
   if (!(
     (mapped.length === 2 && mapped[0] !== "file_descriptor") ||
     (mapped.length === 3 && mapped[0] === "file_descriptor")
   ))
     return false;
-  return e.children.every((child) => {
+  return node.children.every((child) => {
     if (!SIMPLE_FD_REDIRECT_TYPES.has(child.type) || child.children.length !== 0) return false;
     return child.type === "number" || child.type === "file_descriptor" ? /^\d+$/.test(child.text) : true;
   });
@@ -303,51 +323,51 @@ function isSimpleFdRedirect(e) {
 /**
  * 遍历语法树收集各简单命令/赋值的文本（穿过复合语句、否定、重定向语句）；遇到子 shell 或无法识别的节点返回 null。
  */
-function collectStatementTexts(e) {
-  let t = [];
-  let r = true;
-  let s = (child) => {
-    if (!r) return;
+function collectStatementTexts(root) {
+  let texts = [];
+  let ok = true;
+  let walk = (child) => {
+    if (!ok) return;
     if (SEPARATOR_TYPES.has(child.type) || child.type === "comment") return;
     if (child.type === "redirected_statement") {
       for (let child_2 of child.children) {
         if (child_2.type.endsWith("_redirect")) {
           if (containsCommandSubshell(child_2)) {
-            r = false;
+            ok = false;
             return;
           }
           continue;
         }
-        s(child_2);
+        walk(child_2);
       }
       return;
     }
     if (COMPOUND_TYPES.has(child.type)) {
-      for (let child_2 of child.children) s(child_2);
+      for (let child_2 of child.children) walk(child_2);
       return;
     }
     if (child.type === "negated_command") {
-      for (let child_2 of child.children) if (child_2.type !== "!") s(child_2);
+      for (let child_2 of child.children) if (child_2.type !== "!") walk(child_2);
       return;
     }
     if (child.type === "command" || child.type === "variable_assignment") {
       if (containsCommandSubshell(child)) {
-        r = false;
+        ok = false;
         return;
       }
-      t.push(child.text);
+      texts.push(child.text);
       return;
     }
-    r = false;
+    ok = false;
   };
-  s(e);
-  return r ? t : null;
+  walk(root);
+  return ok ? texts : null;
 }
 //@ chunk-38axkkfw.js:3953-4110 placement
 function containsCommandSubshell(child) {
-  let t = child.type === "command" || child.type === "variable_assignment";
+  let isCommandLike = child.type === "command" || child.type === "variable_assignment";
   for (let child_2 of child.children) {
-    if (child_2.type === "subshell" && t) return true;
+    if (child_2.type === "subshell" && isCommandLike) return true;
     if (containsCommandSubshell(child_2)) return true;
   }
   return false;
@@ -356,43 +376,46 @@ function containsCommandSubshell(child) {
 /**
  * 是否有带 ( 的 expansion 节点（zsh 会在花括号展开里执行括号内容）；超长或解析失败保守返回 true。
  */
-function hasZshExecutableParenInBraceExpansion(e) {
-  if (!e) return false;
-  if (e.length > SPLIT_MAX_LEN) return true;
-  let t = getParserModule()?.parse(e);
-  if (!t) return true;
-  let r = false;
-  let s = (i) => {
-    if (r) return;
-    if (i.type === "expansion" && i.text.includes("(")) {
-      r = true;
+function hasZshExecutableParenInBraceExpansion(command) {
+  if (!command) return false;
+  if (command.length > SPLIT_MAX_LEN) return true;
+  let root = getParserModule()?.parse(command);
+  if (!root) return true;
+  let found = false;
+  let walk = (node) => {
+    if (found) return;
+    if (node.type === "expansion" && node.text.includes("(")) {
+      found = true;
       return;
     }
-    for (let child of i.children) s(child);
+    for (let child of node.children) walk(child);
   };
-  s(t);
-  return r;
+  walk(root);
+  return found;
 }
 //@ chunk-38axkkfw.js:4333-4458 placement = tryParseShellCommand (0)
 /**
  * shell-quote 风格回退：解析命令并返回第一条命令的去引号参数列表；超长或失败返回空数组。
  */
-function getCommandArgv(e) {
-  if (!e || e.length > SPLIT_MAX_LEN) return [];
-  let t = getParserModule().parse(e);
-  if (!t) return [];
-  let commandNode = findCommandNode(t, null);
+function getCommandArgv(command) {
+  if (!command || command.length > SPLIT_MAX_LEN) return [];
+  let root = getParserModule().parse(command);
+  if (!root) return [];
+  let commandNode = findCommandNode(root, null);
   if (!commandNode) return [];
   return extractCommandArguments(commandNode);
 }
 //@ chunk-38axkkfw.js:4458-4575 placement
-var EXPANSION_NODE_TYPES = new Set([
-  "command_substitution",
-  "process_substitution",
-  "expansion",
-  "simple_expansion",
-  "arithmetic_expansion",
-]);
+var EXPANSION_NODE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-38axkkfw.js:4458", () => {
+  EXPANSION_NODE_TYPES = new Set([
+    "command_substitution",
+    "process_substitution",
+    "expansion",
+    "simple_expansion",
+    "arithmetic_expansion",
+  ]);
+});
 //@ chunk-38axkkfw.js:4575-4641 placement
 function filterControlOperators(commandsAndOperators) {
   if (EXPANSION_NODE_TYPES.has(commandsAndOperators.type)) return true;
@@ -402,23 +425,23 @@ function filterControlOperators(commandsAndOperators) {
 /**
  * 子树中是否有重定向节点在运算符后跟了多于一个词（多余的词会变成命令的隐藏参数）。
  */
-function hasRedirectWithExtraWords(e) {
-  if (e.type.endsWith("_redirect")) {
-    let filtered = e.children.filter((child) => !REDIRECT_OPERATOR_TOKENS.has(child.type));
-    let any = e.children.some((child) => child.type === ">&-" || child.type === "<&-");
-    let s =
+function hasRedirectWithExtraWords(node) {
+  if (node.type.endsWith("_redirect")) {
+    let filtered = node.children.filter((child) => !REDIRECT_OPERATOR_TOKENS.has(child.type));
+    let any = node.children.some((child) => child.type === ">&-" || child.type === "<&-");
+    let dashTarget =
       !any &&
-      e.children.some((child) => child.type === ">&" || child.type === "<&") &&
-      filtered.some((n) => unquoteNodeText(n).startsWith("-"));
-    let i = e.type === "heredoc_redirect" || any || s ? 0 : 1;
-    if (filtered.length > i) return true;
+      node.children.some((child) => child.type === ">&" || child.type === "<&") &&
+      filtered.some((child) => unquoteNodeText(child).startsWith("-"));
+    let allowedExtra = node.type === "heredoc_redirect" || any || dashTarget ? 0 : 1;
+    if (filtered.length > allowedExtra) return true;
   }
-  return e.children.some(hasRedirectWithExtraWords);
+  return node.children.some(hasRedirectWithExtraWords);
 }
 //@ chunk-38axkkfw.js:5417-5671 placement
-function hasUnquotedHeredoc(e) {
-  if (e.type === "heredoc_redirect") {
-    let text = e.children.find((child) => child.type === "heredoc_start")?.text ?? "";
+function hasUnquotedHeredoc(node) {
+  if (node.type === "heredoc_redirect") {
+    let text = node.children.find((child) => child.type === "heredoc_start")?.text ?? "";
     if (
       !(
         text.length >= 2 &&
@@ -428,79 +451,80 @@ function hasUnquotedHeredoc(e) {
     )
       return true;
   }
-  return e.children.some(hasUnquotedHeredoc);
+  return node.children.some(hasUnquotedHeredoc);
 }
 //@ chunk-38axkkfw.js:5671-6680 placement
 /**
  * 判断命令的重定向目标是否要到运行时才能确定（含变量、展开、额外单词、= 开头的词等）；只检查调用方判定为相关的命令；超长、存在词法分歧或解析出错时返回 true。
  */
-function commandRedirectsAreRuntimeDetermined(command, t) {
+function commandRedirectsAreRuntimeDetermined(command, classify) {
   if (!command) return false;
   if (command.length > SPLIT_MAX_LEN || hasParserLexingDifferential(command)) return true;
-  let r = getParserModule().parse(command);
-  if (!r || parseHasErrorNode(r)) return true;
-  let s = (commandsAndOperators) =>
-    hasRedirectWithExtraWords(commandsAndOperators) ||
-    hasUnquotedHeredoc(commandsAndOperators) ||
-    filterControlOperators(commandsAndOperators) ||
-    nodeContainsSubstitution(commandsAndOperators) ||
-    (commandsAndOperators.type !== "heredoc_redirect" && hasShellExpansion(commandsAndOperators.text)) ||
-    (commandsAndOperators.type !== "heredoc_redirect" &&
-      !commandsAndOperators.children.every(
+  let root = getParserModule().parse(command);
+  if (!root || parseHasErrorNode(root)) return true;
+  let isRedirectUnsafe = (child) =>
+    hasRedirectWithExtraWords(child) ||
+    hasUnquotedHeredoc(child) ||
+    filterControlOperators(child) ||
+    nodeContainsSubstitution(child) ||
+    (child.type !== "heredoc_redirect" && hasShellExpansion(child.text)) ||
+    (child.type !== "heredoc_redirect" &&
+      !child.children.every(
         (child) => REDIRECT_OPERATOR_TOKENS.has(child.type) || isStaticWordNode(child, /\s/.test(child.text)),
       )) ||
-    (commandsAndOperators.type !== "heredoc_redirect" &&
-      commandsAndOperators.children.some((child) => child.type === "word" && child.text.startsWith("=")));
-  let i = (o) => {
-    if (EXPANSION_NODE_TYPES.has(o.type)) return;
-    if (o.type === "command") return o;
-    let l;
-    for (let child of o.children) {
+    (child.type !== "heredoc_redirect" &&
+      child.children.some((child) => child.type === "word" && child.text.startsWith("=")));
+  let findCommand = (node) => {
+    if (EXPANSION_NODE_TYPES.has(node.type)) return;
+    if (node.type === "command") return node;
+    let found;
+    for (let child of node.children) {
       if (child.type.endsWith("_redirect")) continue;
-      let u = i(child);
-      if (u) l = u;
+      let result = findCommand(child);
+      if (result) found = result;
     }
-    return l;
+    return found;
   };
-  let n = (child) => {
-    if (EXPANSION_NODE_TYPES.has(child.type)) return false;
-    if (child.type === "redirected_statement") {
-      let l = child.children.find((child) => child.type === "command") ?? i(child);
-      let f = l ? t(l.text) : true;
-      for (let child_2 of child.children)
-        if (child_2.type.endsWith("_redirect")) {
-          if (f && s(child_2)) return true;
-        } else if (n(child_2)) return true;
+  let visit = (node) => {
+    if (EXPANSION_NODE_TYPES.has(node.type)) return false;
+    if (node.type === "redirected_statement") {
+      let commandNode = node.children.find((child) => child.type === "command") ?? findCommand(node);
+      let isCommandUnsafe = commandNode ? classify(commandNode.text) : true;
+      for (let child of node.children)
+        if (child.type.endsWith("_redirect")) {
+          if (isCommandUnsafe && isRedirectUnsafe(child)) return true;
+        } else if (visit(child)) return true;
       return false;
     }
-    if (child.type === "command") {
-      let l = t(child.text);
-      for (let child_2 of child.children)
-        if (child_2.type.endsWith("_redirect")) {
-          if (l && s(child_2)) return true;
-        } else if (n(child_2)) return true;
+    if (node.type === "command") {
+      let isCommandUnsafe = classify(node.text);
+      for (let child of node.children)
+        if (child.type.endsWith("_redirect")) {
+          if (isCommandUnsafe && isRedirectUnsafe(child)) return true;
+        } else if (visit(child)) return true;
       return false;
     }
-    if (child.type.endsWith("_redirect")) return s(child);
-    return child.children.some(n);
+    if (node.type.endsWith("_redirect")) return isRedirectUnsafe(node);
+    return node.children.some(visit);
   };
-  return n(r);
+  return visit(root);
 }
 //@ chunk-38axkkfw.js:6795-7180 placement
 /**
  * 判断参数节点是否为静态文本：拼接节点逐个检查；word 不含展开、未转义操作符、结尾反斜杠（可选不含引号）；字符串引号完整。
  */
-function isStaticWordNode(child, t = false) {
-  if (child.type === "concatenation") return child.children.every((child) => isStaticWordNode(child, t));
+function isStaticWordNode(child, rejectQuotes = false) {
+  if (child.type === "concatenation")
+    return child.children.every((child) => isStaticWordNode(child, rejectQuotes));
   if (child.type === "word") {
     if (WORD_LEAF_EXPANSION_RE.test(child.text)) return false;
     if (UNESCAPED_SHELL_OPERATOR_RE.test(child.text) || TRAILING_BACKSLASH_RE.test(child.text)) return false;
-    if (t && WORD_LEAF_QUOTE_RE.test(child.text)) return false;
+    if (rejectQuotes && WORD_LEAF_QUOTE_RE.test(child.text)) return false;
     return true;
   }
   if (child.type === "string" || child.type === "raw_string") {
-    let r = child.type === "raw_string" ? "'" : '"';
-    return child.text.length >= 2 && child.text.startsWith(r) && child.text.endsWith(r);
+    let quoteChar = child.type === "raw_string" ? "'" : '"';
+    return child.text.length >= 2 && child.text.startsWith(quoteChar) && child.text.endsWith(quoteChar);
   }
   return ARGUMENT_TYPES_2.has(child.type);
 }
@@ -572,9 +596,9 @@ function commandArgvIsRuntimeDetermined(text) {
   if (!text || text.length > SPLIT_MAX_LEN) return true;
   if (hasParserLexingDifferential(text)) return true;
   if (hasShellExpansion(text)) return true;
-  let commandsAndOperators = getParserModule().parse(text);
-  if (!commandsAndOperators || parseHasErrorNode(commandsAndOperators)) return true;
-  let filtered = commandsAndOperators.children.filter((child) => child.type !== "comment");
+  let node = getParserModule().parse(text);
+  if (!node || parseHasErrorNode(node)) return true;
+  let filtered = node.children.filter((child) => child.type !== "comment");
   if (
     filtered.length !== 1 ||
     (filtered[0].type !== "command" &&
@@ -585,13 +609,13 @@ function commandArgvIsRuntimeDetermined(text) {
   )
     return true;
   if (
-    filterControlOperators(commandsAndOperators) ||
-    nodeContainsSubstitution(commandsAndOperators) ||
-    hasRedirectWithExtraWords(commandsAndOperators) ||
-    hasUnquotedHeredoc(commandsAndOperators)
+    filterControlOperators(node) ||
+    nodeContainsSubstitution(node) ||
+    hasRedirectWithExtraWords(node) ||
+    hasUnquotedHeredoc(node)
   )
     return true;
-  let commandNode = findCommandNode(commandsAndOperators, null);
+  let commandNode = findCommandNode(node, null);
   if (!commandNode) return true;
   for (let child of commandNode.children) {
     if (child.type === "command_name" || child.type === "variable_assignment") continue;
@@ -601,28 +625,28 @@ function commandArgvIsRuntimeDetermined(text) {
   return false;
 }
 //@ chunk-38axkkfw.js:8478-8726 placement
-function unquoteNodeText(e) {
-  switch (e.type) {
+function unquoteNodeText(node) {
+  switch (node.type) {
     case "raw_string":
-      return e.text.slice(1, -1);
+      return node.text.slice(1, -1);
     case "string":
-      return e.text.slice(1, -1).replace(/\\([$`"\\\n])/g, (t, r) =>
-        r ===
+      return node.text.slice(1, -1).replace(/\\([$`"\\\n])/g, (matchText, escaped) =>
+        escaped ===
         `
 `
           ? ""
-          : r,
+          : escaped,
       );
     case "word":
-      return e.text.replace(/\\([\s\S])/g, (t, r) =>
-        r ===
+      return node.text.replace(/\\([\s\S])/g, (matchText, escaped) =>
+        escaped ===
         `
 `
           ? ""
-          : r,
+          : escaped,
       );
     default:
-      return e.text;
+      return node.text;
   }
 }
 //@ chunk-38axkkfw.js:8726-11128 placement = extractOutputRedirections (0.149)
@@ -637,49 +661,51 @@ function extractOutputRedirections(cmd) {
     dangerousRedirectionReason: undefined,
   };
   if (!cmd || cmd.length > SPLIT_MAX_LEN) return emptyResult;
-  let r = getParserModule().parse(cmd);
-  if (!r) return emptyResult;
+  let root = getParserModule().parse(cmd);
+  if (!root) return emptyResult;
   let redirections = [];
   let hasDangerous = false;
   let dangerReason;
-  let visitRedirects = (u) => {
-    if (u.type === "file_redirect") {
+  let visitRedirects = (node) => {
+    if (node.type === "file_redirect") {
       let operator = null;
       let isFdDup = false;
       let targetNode = null;
-      let L = 0;
-      for (let child of u.children)
+      let targetCount = 0;
+      for (let child of node.children)
         if (child.type === ">" || child.type === "&>" || child.type === ">|") operator = ">";
         else if (child.type === ">>" || child.type === "&>>" || child.type === ">>|") operator = ">>";
         else if (child.type === ">&") {
           operator = ">";
           isFdDup = true;
         } else if (child.type === "<&") {
-          let filtered = u.children.filter(
+          let filtered = node.children.filter(
             (child_2) => child_2 !== child && child_2.type !== "file_descriptor",
           );
-          if (filtered.length > 1 || filtered.some((p) => unquoteNodeText(p).startsWith("-"))) {
+          if (filtered.length > 1 || filtered.some((child) => unquoteNodeText(child).startsWith("-"))) {
             hasDangerous = true;
             if (dangerReason !== "network_device") dangerReason = "shell_expansion";
           }
           return;
         } else if (child.type === ">&-" || child.type === "<&-") {
-          if (u.children.filter((match) => match !== child && match.type !== "file_descriptor").length > 0) {
+          if (
+            node.children.filter((match) => match !== child && match.type !== "file_descriptor").length > 0
+          ) {
             hasDangerous = true;
             if (dangerReason !== "network_device") dangerReason = "shell_expansion";
           }
           return;
         } else if (child.type === "<") {
-          let filtered = u.children.filter((env) => env !== child && env.type !== "file_descriptor");
+          let filtered = node.children.filter((env) => env !== child && env.type !== "file_descriptor");
           if (filtered.length > 1) {
             hasDangerous = true;
             if (dangerReason !== "network_device") dangerReason = "shell_expansion";
             return;
           }
-          let p = filtered[0];
-          if (p) {
-            let m = unquoteNodeText(p);
-            if (/^\/dev\/(tcp|udp)\//.test(m)) {
+          let targetNode = filtered[0];
+          if (targetNode) {
+            let targetText = unquoteNodeText(targetNode);
+            if (/^\/dev\/(tcp|udp)\//.test(targetText)) {
               hasDangerous = true;
               dangerReason = "network_device";
             }
@@ -687,10 +713,10 @@ function extractOutputRedirections(cmd) {
           return;
         } else if (child.type !== "file_descriptor") {
           targetNode = child;
-          L++;
+          targetCount++;
         }
       if (!operator || !targetNode) return;
-      if (L > 1) {
+      if (targetCount > 1) {
         hasDangerous = true;
         if (dangerReason !== "network_device") dangerReason = "shell_expansion";
         return;
@@ -739,9 +765,9 @@ function extractOutputRedirections(cmd) {
       });
       return;
     }
-    for (let child of u.children) visitRedirects(child);
+    for (let child of node.children) visitRedirects(child);
   };
-  visitRedirects(r);
+  visitRedirects(root);
   let keptParts = [];
   let collectNonRedirect = (child) => {
     if (child.type === "comment") return;
@@ -756,7 +782,7 @@ function extractOutputRedirections(cmd) {
     }
     keptParts.push(child.text);
   };
-  collectNonRedirect(r.type === "ERROR" && r.children[0]?.type === "program" ? r.children[0] : r);
+  collectNonRedirect(root.type === "ERROR" && root.children[0]?.type === "program" ? root.children[0] : root);
   return {
     commandWithoutRedirections: keptParts.length > 0 ? keptParts.join(" ") : cmd,
     redirections,
@@ -830,8 +856,8 @@ function classifyDangerousExpansion(target) {
     }
     if (inSingleQuote) continue;
     if (ch === "$") {
-      let q = target[idx + 1];
-      if (q && /[A-Za-z_@*#?!$0-9-]/.test(q)) return "variable";
+      let nextChar = target[idx + 1];
+      if (nextChar && /[A-Za-z_@*#?!$0-9-]/.test(nextChar)) return "variable";
     }
     if (inDoubleQuote) continue;
     if (
@@ -873,29 +899,21 @@ function labelSubcommandResults(subcommands, astCommands, decisions) {
   let occurrences = new Map();
   for (let subcommand of subcommands) occurrences.set(subcommand, (occurrences.get(subcommand) ?? 0) + 1);
   return dedupeMapKeys(
-    decisions.map((decision, y) => {
-      let S = subcommands[y];
+    decisions.map((decision, inSingleQuote) => {
+      let inDoubleQuote = subcommands[inSingleQuote];
       return [
-        (occurrences.get(S) ?? 0) > 1
+        (occurrences.get(inDoubleQuote) ?? 0) > 1
           ? [
-              S,
-              ...(astCommands[y]?.redirects ?? []).map(
-                (L) => `${L.fd ?? ""}${L.op}${L.op === ">&" || L.op === "<&" ? "" : " "}${L.target}`,
+              inDoubleQuote,
+              ...(astCommands[inSingleQuote]?.redirects ?? []).map(
+                (target) =>
+                  `${target.fd ?? ""}${target.op}${target.op === ">&" || target.op === "<&" ? "" : " "}${target.target}`,
               ),
             ].join(" ")
-          : S,
+          : inDoubleQuote,
         decision,
       ];
     }),
-  );
-}
-//@ chunk-r01896cg.js:23179-23263 fingerprint = isCommandList (0.464)
-/**
- * 递归判断语法树中是否含 comment 节点。
- */
-function hasCommentNode(command) {
-  return command.children.some(
-    (varName) => varName !== undefined && (varName.type === "comment" || hasCommentNode(varName)),
   );
 }
 export {

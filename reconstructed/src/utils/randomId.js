@@ -10,14 +10,18 @@
  */
 import { randomBytes } from "crypto";
 import { hopIdHmac } from "./peerMessageHeaders.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-41fxb5qj.js:265-277 placement
-var randomIdSecret = randomBytes(32);
+var randomIdSecret; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-41fxb5qj.js:265", () => {
+  randomIdSecret = randomBytes(32);
+});
 //@ chunk-41fxb5qj.js:277-309 placement
 /**
  * hmacRandomId：用密钥做 HMAC 生成 id。
  */
-function hmacRandomId(o) {
-  return hopIdHmac(o, randomIdSecret);
+function hmacRandomId(input) {
+  return hopIdHmac(input, randomIdSecret);
 }
 export { hmacRandomId };

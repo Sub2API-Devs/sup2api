@@ -30,11 +30,11 @@ var focusCommandDefinition = {
   terminalOriented: true,
   load: () =>
     Promise.resolve({
-      async call(e, n) {
+      async call(args, context) {
         setViewMode(null);
-        if (n.presentation !== "fullscreen") {
+        if (context.presentation !== "fullscreen") {
           if (getInitialSettings_2().viewMode === "focus") {
-            e(
+            args(
               `Focus view is set by "viewMode": "focus" in settings.json \u2014 remove it there and restart Claude Code to turn it off. ${"Focus view needs the fullscreen renderer. Run /tui fullscreen to switch (this restarts and resumes your session), or set CLAUDE_CODE_NO_FLICKER=1 and restart."}`,
               {
                 display: "system",
@@ -42,8 +42,8 @@ var focusCommandDefinition = {
             );
             return null;
           }
-          if (n.getAppState().briefTranscript || getGlobalConfig().briefTranscript) {
-            n.onQueryEvent?.({
+          if (context.getAppState().briefTranscript || getGlobalConfig().briefTranscript) {
+            context.onQueryEvent?.({
               type: "apply_flag_settings",
               settings: {
                 briefTranscript: false,
@@ -51,23 +51,23 @@ var focusCommandDefinition = {
             });
             if (getGlobalConfig().briefTranscript)
               await saveGlobalConfig(
-                (w) => ({
-                  ...w,
+                (state) => ({
+                  ...state,
                   briefTranscript: false,
                 }),
-                n.storageV5,
+                context.storageV5,
               );
             invalidateFocusModeSection();
-            let S = applyFocusViewToRemote(false);
-            e(
-              `Focus view disabled.${S ?? ""} Focus view needs the fullscreen renderer. Run /tui fullscreen to switch (this restarts and resumes your session), or set CLAUDE_CODE_NO_FLICKER=1 and restart.`,
+            let cleared = applyFocusViewToRemote(false);
+            args(
+              `Focus view disabled.${cleared ?? ""} Focus view needs the fullscreen renderer. Run /tui fullscreen to switch (this restarts and resumes your session), or set CLAUDE_CODE_NO_FLICKER=1 and restart.`,
               {
                 display: "system",
               },
             );
             return null;
           }
-          e(
+          args(
             "Focus view needs the fullscreen renderer. Run /tui fullscreen to switch (this restarts and resumes your session), or set CLAUDE_CODE_NO_FLICKER=1 and restart.",
             {
               display: "system",
@@ -75,25 +75,25 @@ var focusCommandDefinition = {
           );
           return null;
         }
-        let s = !n.getAppState().briefTranscript;
-        n.onQueryEvent?.({
+        let nextMode = !context.getAppState().briefTranscript;
+        context.onQueryEvent?.({
           type: "apply_flag_settings",
           settings: {
-            briefTranscript: s,
+            briefTranscript: nextMode,
           },
         });
-        if (getGlobalConfig().briefTranscript !== s)
+        if (getGlobalConfig().briefTranscript !== nextMode)
           await saveGlobalConfig(
-            (S) => ({
-              ...S,
-              briefTranscript: s,
+            (state) => ({
+              ...state,
+              briefTranscript: nextMode,
             }),
-            n.storageV5,
+            context.storageV5,
           );
         invalidateFocusModeSection();
         let viewMode = getInitialSettings_2().viewMode;
-        let y = applyFocusViewToRemote(viewMode ? viewMode === "focus" : s);
-        e(`${s ? "Focus view enabled" : "Focus view disabled"}${y ?? ""}`, {
+        let synced = applyFocusViewToRemote(viewMode ? viewMode === "focus" : nextMode);
+        args(`${nextMode ? "Focus view enabled" : "Focus view disabled"}${synced ?? ""}`, {
           display: "system",
         });
         return null;
@@ -112,14 +112,14 @@ var focusNonInteractiveCommand = {
   get isHidden() {
     return !getIsNonInteractiveSession();
   },
-  load: () => import("./chunk-fv21ck8e.js"),
+  load: () => import("./focus.js"),
 };
 var focusCommand = focusCommandDefinition;
 //@ chunk-e6aww6q8.js:2052746-2053003 placement
 /**
  * applyFocusViewToRemote：远程会话时通过 control request 下发 viewMode。
  */
-function applyFocusViewToRemote(e) {
+function applyFocusViewToRemote(viewMode) {
   let remoteCaps = getRemoteCaps();
   if (!remoteCaps) return null;
   if (!isRemoteControlChannelAvailable())
@@ -128,7 +128,7 @@ function applyFocusViewToRemote(e) {
     .sendControlRequest({
       subtype: "apply_flag_settings",
       settings: {
-        viewMode: e ? "focus" : null,
+        viewMode: viewMode ? "focus" : null,
       },
     })
     .catch(logError);

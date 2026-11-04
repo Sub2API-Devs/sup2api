@@ -27,59 +27,60 @@ import { chokidar_default } from "../../../vendor/chokidar/index.js";
 import { errorMessage } from "../errors.js";
 import { executeFileChangedHooks, executeCwdChangedHooks } from "../hooks.js";
 import { clearCwdEnvFiles } from "../sessionEnvironment.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:2072396-2075384 callgraph-witnessed = onCwdChangedForHooks (0.263)
 /**
  * CwdChanged/FileChanged 钩子的监听器：按 FileChanged 的 matcher（| 分隔文件名）和钩子返回的 watchPaths 用 chokidar 监听，变化时执行 FileChanged 钩子；cwd 变化时清 env 文件并执行 CwdChanged 钩子；HTTP MCP serve 模式不监听。
  */
 function onCwdChangedForHooks() {
-  let e = null;
-  let n;
-  let r = [];
-  let s = [];
-  let h = false;
-  let y;
-  let S;
-  let w = false;
-  let L = null;
-  let G = null;
-  function q(ze) {
-    L = ze;
+  let watcher = null;
+  let cwd;
+  let watchPaths = [];
+  let sortedPaths = [];
+  let running = false;
+  let storageV5;
+  let credentials;
+  let hasHookWatchers = false;
+  let notify = null;
+  let cleanupRegistration = null;
+  function setEnvHookNotifier(notifier) {
+    notify = notifier;
   }
-  function Z(ze, lt, Je) {
-    if (h || isDiskless()) return;
-    h = true;
-    n = ze;
-    y = lt;
-    S = Je;
+  function initialize(cwd_2, storageV5_2, credentials_2) {
+    if (running || isDiskless()) return;
+    running = true;
+    cwd = cwd_2;
+    storageV5 = storageV5_2;
+    credentials = credentials_2;
     let config = getHooksConfigFromSnapshot();
-    w = (config?.CwdChanged?.length ?? 0) > 0 || (config?.FileChanged?.length ?? 0) > 0;
-    if (w) G = registerCleanup(We);
-    let paths = Se(config);
+    hasHookWatchers = (config?.CwdChanged?.length ?? 0) > 0 || (config?.FileChanged?.length ?? 0) > 0;
+    if (hasHookWatchers) cleanupRegistration = registerCleanup(dispose);
+    let paths = config_2(config);
     if (paths.length === 0) return;
-    ke(paths);
+    startWatching(paths);
   }
-  function Se(config) {
+  function config_2(config) {
     let currentHasEnvHooks = (config ?? getHooksConfigFromSnapshot())?.FileChanged ?? [];
-    let Je = shouldAllowManagedHooksOnly() ? [] : (getMainThreadAgentHooks()?.FileChanged ?? []);
-    let nt = [...currentHasEnvHooks, ...Je];
+    let agentHooks = shouldAllowManagedHooksOnly() ? [] : (getMainThreadAgentHooks()?.FileChanged ?? []);
+    let entries = [...currentHasEnvHooks, ...agentHooks];
     let staticPaths = [];
-    for (let m of nt) {
+    for (let m of entries) {
       if (!m.matcher) continue;
-      for (let name of m.matcher.split("|").map((It) => It.trim())) {
+      for (let name of m.matcher.split("|").map((name) => name.trim())) {
         if (!name) continue;
-        staticPaths.push(isAbsolute(name) ? name : join(n, name));
+        staticPaths.push(isAbsolute(name) ? name : join(cwd, name));
       }
     }
-    let Et = uniq([...staticPaths, ...r]);
-    let filtered = Et.filter((gt) => !isWindowsDevicePath(gt));
-    if (filtered.length !== Et.length)
+    let allPaths = uniq([...staticPaths, ...watchPaths]);
+    let filtered = allPaths.filter((path) => !isWindowsDevicePath(path));
+    if (filtered.length !== allPaths.length)
       logForDebugging("FileChanged: dropped remote UNC watch path(s)", {
         level: "warn",
       });
     return filtered;
   }
-  function ke(paths) {
+  function startWatching(paths) {
     if (isHttpMcpServeInvocation()) {
       logForDebugging(
         `FileChanged hooks never run under claude mcp serve --transport http: not watching ${paths.length} paths`,
@@ -91,7 +92,7 @@ function onCwdChangedForHooks() {
       return;
     }
     logForDebugging(`FileChanged: watching ${paths.length} paths`);
-    e = chokidar_default.watch(paths, {
+    watcher = chokidar_default.watch(paths, {
       persistent: true,
       ignoreInitial: true,
       awaitWriteFinish: {
@@ -100,27 +101,27 @@ function onCwdChangedForHooks() {
       },
       ignorePermissionErrors: true,
     });
-    e.on("change", (path) => we(path, "change"));
-    e.on("add", (path) => we(path, "add"));
-    e.on("unlink", (path) => we(path, "unlink"));
-    let lt = false;
-    e.on("error", (Je) => {
-      if (!lt) {
-        lt = true;
+    watcher.on("change", (path) => onFsEvent(path, "change"));
+    watcher.on("add", (path) => onFsEvent(path, "add"));
+    watcher.on("unlink", (path) => onFsEvent(path, "unlink"));
+    let errorLogged = false;
+    watcher.on("error", (error) => {
+      if (!errorLogged) {
+        errorLogged = true;
         logFeatureBad("file_watcher_start", "fs_error");
       }
-      logForDebugging(`FileChanged: watcher error: ${errorMessage(Je)}`, {
+      logForDebugging(`FileChanged: watcher error: ${errorMessage(error)}`, {
         level: "warn",
       });
     });
-    e.on("ready", () => {
-      if (!lt) {
-        lt = true;
+    watcher.on("ready", () => {
+      if (!errorLogged) {
+        errorLogged = true;
         logFeatureOk("file_watcher_start");
       }
     });
   }
-  function we(path, event) {
+  function onFsEvent(path, event) {
     logForDebugging(`FileChanged: ${event} ${path}`);
     executeFileChangedHooks(
       {
@@ -133,15 +134,15 @@ function onCwdChangedForHooks() {
       path,
       event,
       {
-        storageV5: y,
-        credentials: S,
+        storageV5,
+        credentials,
       },
     )
       .then(({ results, watchPaths, systemMessages }) => {
         logFeatureOk("file_watcher_change_detected");
-        if (watchPaths.length > 0) Ee(watchPaths);
-        for (let msg of systemMessages) L?.(msg, false);
-        for (let result of results) if (!result.succeeded && result.output) L?.(result.output, true);
+        if (watchPaths.length > 0) updateWatchPaths(watchPaths);
+        for (let msg of systemMessages) notify?.(msg, false);
+        for (let result of results) if (!result.succeeded && result.output) notify?.(result.output, true);
       })
       .catch((e) => {
         logFeatureBad("file_watcher_change_detected", "hook_exec_failed");
@@ -149,29 +150,29 @@ function onCwdChangedForHooks() {
         logForDebugging(`FileChanged hook failed: ${msg}`, {
           level: "error",
         });
-        L?.(msg, true);
+        notify?.(msg, true);
       });
   }
-  function Ee(paths) {
-    if (!h) return;
+  function updateWatchPaths(paths) {
+    if (!running) return;
     let sorted = paths.slice().sort();
-    if (sorted.length === s.length && sorted.every((Je, i) => Je === s[i])) return;
-    r = paths;
-    s = sorted;
-    Ie();
+    if (sorted.length === sortedPaths.length && sorted.every((path, i) => path === sortedPaths[i])) return;
+    watchPaths = paths;
+    sortedPaths = sorted;
+    restartWatcher();
   }
-  function Ae(ze) {
-    Ee([...r, ...uniq(ze).filter((lt) => !r.includes(lt))]);
+  function addWatchPaths(paths) {
+    updateWatchPaths([...watchPaths, ...uniq(paths).filter((path) => !watchPaths.includes(path))]);
   }
-  function Ie() {
-    if (e) {
-      e.close();
-      e = null;
+  function restartWatcher() {
+    if (watcher) {
+      watcher.close();
+      watcher = null;
     }
-    let paths = Se();
-    if (paths.length > 0) ke(paths);
+    let paths = config_2();
+    if (paths.length > 0) startWatching(paths);
   }
-  async function Me(oldCwd, newCwd) {
+  async function onCwdChanged(oldCwd, newCwd) {
     if (oldCwd === newCwd) return;
     let config = getHooksConfigFromSnapshot();
     let currentHasEnvHooks = shouldAllowManagedHooksOnly() ? undefined : getMainThreadAgentHooks();
@@ -182,8 +183,8 @@ function onCwdChangedForHooks() {
       (currentHasEnvHooks?.FileChanged?.length ?? 0) > 0
     ))
       return;
-    n = newCwd;
-    await clearCwdEnvFiles(y);
+    cwd = newCwd;
+    await clearCwdEnvFiles(storageV5);
     let hookResult = await executeCwdChangedHooks(
       {
         id: getSessionId(),
@@ -195,55 +196,64 @@ function onCwdChangedForHooks() {
       oldCwd,
       newCwd,
       {
-        storageV5: y,
-        credentials: S,
+        storageV5,
+        credentials,
       },
     ).catch((e) => {
       let msg = errorMessage(e);
       logForDebugging(`CwdChanged hook failed: ${msg}`, {
         level: "error",
       });
-      L?.(msg, true);
+      notify?.(msg, true);
       return {
         results: [],
         watchPaths: [],
         systemMessages: [],
       };
     });
-    r = hookResult.watchPaths;
-    s = hookResult.watchPaths.slice().sort();
-    for (let msg of hookResult.systemMessages) L?.(msg, false);
-    for (let yt of hookResult.results) if (!yt.succeeded && yt.output) L?.(yt.output, true);
-    if (h) Ie();
+    watchPaths = hookResult.watchPaths;
+    sortedPaths = hookResult.watchPaths.slice().sort();
+    for (let msg of hookResult.systemMessages) notify?.(msg, false);
+    for (let result of hookResult.results)
+      if (!result.succeeded && result.output) notify?.(result.output, true);
+    if (running) restartWatcher();
   }
-  function We() {
-    if (G) {
-      G();
-      G = null;
+  function dispose() {
+    if (cleanupRegistration) {
+      cleanupRegistration();
+      cleanupRegistration = null;
     }
-    if (e) {
-      e.close();
-      e = null;
+    if (watcher) {
+      watcher.close();
+      watcher = null;
     }
-    r = [];
-    s = [];
-    h = false;
-    y = undefined;
-    S = undefined;
-    w = false;
-    L = null;
+    watchPaths = [];
+    sortedPaths = [];
+    running = false;
+    storageV5 = undefined;
+    credentials = undefined;
+    hasHookWatchers = false;
+    notify = null;
   }
   return {
-    initialize: Z,
-    setEnvHookNotifier: q,
-    updateWatchPaths: Ee,
-    addWatchPaths: Ae,
-    onCwdChanged: Me,
-    dispose: We,
-    [Symbol.dispose]: We,
+    initialize,
+    setEnvHookNotifier,
+    updateWatchPaths,
+    addWatchPaths,
+    onCwdChanged,
+    dispose,
+    [Symbol.dispose]: dispose,
   };
 }
 //@ chunk-e6aww6q8.js:2075384-2075498 placement
-var fileChangedWatcherApi = onCwdChangedForHooks();
-var { initialize, setEnvHookNotifier, updateWatchPaths, addWatchPaths, onCwdChanged } = fileChangedWatcherApi;
+var fileChangedWatcherApi; // deferred: uses onCwdChangedForHooks of its import cycle while loading; runs once the cycle is complete
+var initialize;
+var setEnvHookNotifier;
+var updateWatchPaths;
+var addWatchPaths;
+var onCwdChanged;
+deferInit("chunk-e6aww6q8.js:2075384", () => {
+  fileChangedWatcherApi = onCwdChangedForHooks();
+  ({ initialize, setEnvHookNotifier, updateWatchPaths, addWatchPaths, onCwdChanged } = fileChangedWatcherApi);
+});
 export { setEnvHookNotifier, onCwdChanged, addWatchPaths, updateWatchPaths, initialize };

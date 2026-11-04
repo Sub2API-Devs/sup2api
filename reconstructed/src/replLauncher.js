@@ -8,7 +8,13 @@
  * pieces: chunk-19arrzdw.js (3)
  * attribution: placement 1, facade-exports 2
  */
-import { init_react_production, R, ce, y, P } from "../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useRef,
+  useCallback,
+  useState,
+  useEffect,
+} from "../vendor/react/cjs/react.production.js";
 import { syncSessionPermissionMode } from "./services/api/sessionFlags.js";
 import { useAppStoreDirect } from "./state/AppState.js";
 import { noopTrialEffect, persistFullscreenTrial } from "./components/FullscreenUpsellTrial.js";
@@ -31,36 +37,40 @@ import { createReplMessageQueue } from "./replSessionSeat.js";
 import { armFullscreenBootCanary, recordFullscreenRenderFailure } from "./utils/fullscreenBootGuard.js";
 import { adoptEngineForLauncher } from "./dialogLaunchers.js";
 import { onChangeAppState } from "./state/onChangeAppState.js";
+import { deferInit } from "../runtime/deferred-init.js";
 
 //@ chunk-19arrzdw.js:855-859 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-19arrzdw.js:855", () => {
+  init_react_production();
+});
 //@ chunk-19arrzdw.js:859-954 facade-exports
-function launchSessionRepl(...n) {
-  let { mode } = n[1].initialState.toolPermissionContext;
+function launchSessionRepl(...args) {
+  let { mode } = args[1].initialState.toolPermissionContext;
   syncSessionPermissionMode(mode);
-  return launchRepl(...n);
+  return launchRepl(...args);
 }
 //@ chunk-19arrzdw.js:954-2312 facade-exports
-async function launchRepl(n, t, p, l) {
-  let { AppRoot } = await import("./chunk-f6d8289b.js");
-  let { REPL } = await import("./chunk-3e2f3btj.js");
-  function S(r) {
+async function launchRepl(args, options, renderer, extra) {
+  let { AppRoot } = await import("./components/AppRoot.js");
+  let { REPL } = await import("./screens/REPL.js");
+  function ReplRoot(initial) {
     let appStoreDirect = useAppStoreDirect();
     noopTrialEffect();
-    let commandsRef = R(r.commands);
-    let onCommandsChange = ce((s) => {
-      commandsRef.current = s;
+    let commandsRef = useRef(initial.commands);
+    let onCommandsChange = useCallback((commands) => {
+      commandsRef.current = commands;
     }, []);
-    let g = R(() => {
+    let queryParamsBuilder = useRef(() => {
       throw Error("engine: queryParams called before REPL registered builder");
     });
-    let onQueryParamsChange = ce((s) => {
-      g.current = s;
+    let onQueryParamsChange = useCallback((params) => {
+      queryParamsBuilder.current = params;
     }, []);
-    let [m] = y(() =>
+    let [engine] = useState(() =>
       createQueryEngine({
         run: query,
-        queryParams: async (s) => g.current(),
+        queryParams: async (params) => queryParamsBuilder.current(),
         commands: () => toSlashCommands(commandsRef.current),
         models: () => toSdkModelInfos(getEnabledModelOptions()),
         unavailableModels: () => toSdkModelInfos(getUnavailableModelOptions()),
@@ -81,10 +91,10 @@ async function launchRepl(n, t, p, l) {
         hostOwnsModel: true,
       }),
     );
-    P(() => () => m.close(), [m]);
+    useEffect(() => () => engine.close(), [engine]);
     return jsxProd_default(REPL, {
-      ...r,
-      engine: m,
+      ...initial,
+      engine,
       onCommandsChange,
       onQueryParamsChange,
     });
@@ -96,31 +106,31 @@ async function launchRepl(n, t, p, l) {
     fleetNudgeStore = new FleetNudgeStore({
       storageV5,
     }),
-  } = t;
+  } = options;
   let messageQueue = createReplMessageQueue(storageV5);
   await armFullscreenBootCanary({
     onHealthy: () => persistFullscreenTrial(storageV5),
     storageV5,
   });
-  let store = adoptEngineForLauncher(session, t.initialState, (r) =>
-    onChangeAppState(r, session, storageV5, credentials),
+  let store = adoptEngineForLauncher(session, options.initialState, (nextState) =>
+    onChangeAppState(nextState, session, storageV5, credentials),
   );
   try {
-    await l(
-      n,
+    await extra(
+      args,
       jsxProd_default(AppRoot, {
         session,
         storageV5,
         messageQueue,
         store,
         fleetNudgeStore,
-        sessionHooks: t.sessionHooks,
+        sessionHooks: options.sessionHooks,
         writesExitHandoff: true,
-        getFpsMetrics: t.getFpsMetrics,
-        stats: t.stats,
+        getFpsMetrics: options.getFpsMetrics,
+        stats: options.stats,
         keybindings: false,
-        children: jsxProd_default(S, {
-          ...p,
+        children: jsxProd_default(ReplRoot, {
+          ...renderer,
         }),
       }),
       session,
@@ -132,4 +142,4 @@ async function launchRepl(n, t, p, l) {
     throw error;
   }
 }
-export { launchSessionRepl };
+export { launchSessionRepl, launchRepl };

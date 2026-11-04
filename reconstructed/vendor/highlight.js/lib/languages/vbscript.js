@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:510589-512446 cjs-fingerprint
-var require_vbscript = x(function (cjsExports, cjsModule) {
+var require_vbscript = __commonJS(function (cjsExports, cjsModule) {
   function vbscript(hljs) {
     let regex = hljs.regex;
     let BUILT_IN_FUNCTIONS = [

@@ -20,6 +20,7 @@ import { isPolicyVerdictAbsentOrHipaa } from "../../utils/messages/systemInit.js
 import { hasComplianceTaint } from "../../services/policyLimits/complianceTaints.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { logForDebugging } from "../../utils/debug.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-tyg7f3ek.js:32339-32639 placement
 /**
@@ -44,20 +45,20 @@ function refreshAuthDependentSettings(storageV5, credentials) {
   );
 }
 //@ chunk-tyg7f3ek.js:32639-32676 placement
-function isReadFileAsWrittenServed(session) {
-  return readFileAsWrittenUnservedReason(session) === undefined;
+function isReadFileAsWrittenServed(params) {
+  return readFileAsWrittenUnservedReason(params) === undefined;
 }
 //@ chunk-tyg7f3ek.js:32676-32781 placement
 /**
  * 判断 read_file as_written 是否可用：lane 会话恒可用，否则受 HIPAA/策略应答与开关限制。
  */
-function readFileAsWrittenUnservedReason(e) {
-  if (isTransportBacked(e)) return "lane";
-  let n =
+function readFileAsWrittenUnservedReason(params) {
+  if (isTransportBacked(params)) return "lane";
+  let reason =
     policyReasonForAsWritten() ??
     (getFeatureValue_CACHED_MAY_BE_STALE(TENGU_PROUD_PEARL, false) === true ? undefined : "switched_off");
-  logAsWrittenServingChange(e, n);
-  return n;
+  logAsWrittenServingChange(params, reason);
+  return reason;
 }
 //@ chunk-tyg7f3ek.js:32781-32890 placement
 function policyReasonForAsWritten() {
@@ -72,27 +73,31 @@ function policyReasonForAsWritten() {
   }
 }
 //@ chunk-tyg7f3ek.js:32890-33040 placement
-var AS_WRITTEN_UNSERVED_TEXT = {
-  hipaa: "the organization is marked hipaa",
-  no_policy_answer: "no answer yet from /api/claude_code/policy_limits",
-};
-var FILE_AS_WRITTEN_SERVED_SLOT = new SessionRootSlot(() => ({
-  last: undefined,
-}));
+var AS_WRITTEN_UNSERVED_TEXT; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+var FILE_AS_WRITTEN_SERVED_SLOT;
+deferInit("chunk-tyg7f3ek.js:32890", () => {
+  AS_WRITTEN_UNSERVED_TEXT = {
+    hipaa: "the organization is marked hipaa",
+    no_policy_answer: "no answer yet from /api/claude_code/policy_limits",
+  };
+  FILE_AS_WRITTEN_SERVED_SLOT = new SessionRootSlot(() => ({
+    last: undefined,
+  }));
+});
 //@ chunk-tyg7f3ek.js:33040-33333 placement
-function logAsWrittenServingChange(e, n) {
-  let r = FILE_AS_WRITTEN_SERVED_SLOT.of(e);
-  let s;
-  if (n === "hipaa" || n === "no_policy_answer") {
-    if (n === r.last) return;
-    r.last = n;
-    s = `read_file as_written is not served: ${AS_WRITTEN_UNSERVED_TEXT[n]} (${n})`;
-  } else if (n === undefined && r.last !== undefined) {
-    r.last = undefined;
-    s = "read_file as_written is served now";
+function logAsWrittenServingChange(params, reason) {
+  let slot = FILE_AS_WRITTEN_SERVED_SLOT.of(params);
+  let message;
+  if (reason === "hipaa" || reason === "no_policy_answer") {
+    if (reason === slot.last) return;
+    slot.last = reason;
+    message = `read_file as_written is not served: ${AS_WRITTEN_UNSERVED_TEXT[reason]} (${reason})`;
+  } else if (reason === undefined && slot.last !== undefined) {
+    slot.last = undefined;
+    message = "read_file as_written is served now";
   } else return;
   try {
-    logForDebugging(s, {
+    logForDebugging(message, {
       level: "warn",
     });
   } catch {}

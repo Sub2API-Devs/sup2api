@@ -10,7 +10,7 @@
  */
 import { posix, resolve } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { MAX_REGISTER_DIRECTORY_CHARS } from "../../services/repoRoots/registerRepoRootTool.js";
 import { toolServerEnvAccessor } from "../../utils/subprocessEnvLoader.js";
 import {
@@ -27,7 +27,7 @@ import { pathInWorkingPath } from "../../utils/permissions/filesystem.js";
 
 //@ chunk-hegc6e59.js:12056-12130 placement
 var AbsolutePathSchema = DoctorLazy(() =>
-  string().max(MAX_REGISTER_DIRECTORY_CHARS).refine(posix.isAbsolute, "must be an absolute path"),
+  stringSchema().max(MAX_REGISTER_DIRECTORY_CHARS).refine(posix.isAbsolute, "must be an absolute path"),
 );
 //@ chunk-hegc6e59.js:12130-12801 placement
 /**
@@ -45,40 +45,43 @@ async function readServeWorkspaceRoot() {
       kind: "invalid",
       fault: "bad_path",
     };
-  let t;
-  let n;
+  let realRoot;
+  let stageRoot;
   try {
-    t = await resolveRepoRootCandidate(CLAUDE_CODE_MCP_SERVE_WORKSPACE_ROOT, getEmptyToolPermissionContext);
-    n = getStageFileRoot();
+    realRoot = await resolveRepoRootCandidate(
+      CLAUDE_CODE_MCP_SERVE_WORKSPACE_ROOT,
+      getEmptyToolPermissionContext,
+    );
+    stageRoot = getStageFileRoot();
   } catch (error) {
     return {
       kind: "invalid",
       fault: registerRepoRootErrorClass(error) ?? "error",
     };
   }
-  let a = resolve(CLAUDE_CODE_MCP_SERVE_WORKSPACE_ROOT);
-  let s = checkRepoRootScope(a, getOriginalCwd(), [], []);
-  if (s.allowed || s.code === "is_cwd")
+  let root = resolve(CLAUDE_CODE_MCP_SERVE_WORKSPACE_ROOT);
+  let scope = checkRepoRootScope(root, getOriginalCwd(), [], []);
+  if (scope.allowed || scope.code === "is_cwd")
     return {
       kind: "absent",
     };
   let claudeConfigDirOrNull = getClaudeConfigDirOrNull();
   let any = (
     await Promise.all(
-      (claudeConfigDirOrNull === null ? [] : [claudeConfigDirOrNull, n]).map((e) =>
-        walkPermissionCheckPathsAsync(e),
+      (claudeConfigDirOrNull === null ? [] : [claudeConfigDirOrNull, stageRoot]).map((dir) =>
+        walkPermissionCheckPathsAsync(dir),
       ),
     )
   ).some(
-    (e) =>
-      e.unresolved ||
-      e.spellings.some((spelling) =>
-        [a, t].some(
-          (d) =>
-            pathInWorkingPath(spelling, d, {
+    (result) =>
+      result.unresolved ||
+      result.spellings.some((spelling) =>
+        [root, realRoot].some(
+          (spelling_2) =>
+            pathInWorkingPath(spelling, spelling_2, {
               caseFold: true,
             }) ||
-            pathInWorkingPath(d, spelling, {
+            pathInWorkingPath(spelling_2, spelling, {
               caseFold: true,
             }),
         ),
@@ -91,7 +94,8 @@ async function readServeWorkspaceRoot() {
     };
   return {
     kind: "valid",
-    root: a,
-    real: t,
+    root,
+    real: realRoot,
   };
 }
+export { readServeWorkspaceRoot };

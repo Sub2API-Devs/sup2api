@@ -18,3 +18,4 @@ var docsPath = __cc_resource_0;
  * docs 技能附带的脚本资源文本。
  */
 var docs = readEmbeddedTextSync(docsPath, import.meta.dirname);
+export { docs };

@@ -9,8 +9,9 @@
  * attribution: fingerprint 6, file-local 3, layout 6, sole-consumer 1
  */
 import { lstat, stat, realpath, readdir, readFile } from "fs/promises";
-import { sep, resolve as resolve_2, join, dirname } from "path";
+import { dirname, sep, resolve as resolve_2, join } from "path";
 import { homedir } from "os";
+import { isSentinelInode } from "./slowOperations.js";
 import { splitRuleList } from "./permissions/disallowedToolsFlag.js";
 import {
   isDiskless,
@@ -43,8 +44,31 @@ import { readSmallFileChecked } from "./readSmallFile.js";
 import { parseFrontmatter } from "./frontmatterParser.js";
 import { readAllPages, DEFAULT_MAX_PAGES } from "./pagedRead.js";
 import { formatStorageError } from "./storage/storageErrors.js";
-import { isSentinelInode } from "./slowOperations.js";
 
+//@ chunk-2xm1rxms.js:37944-38224 fingerprint = getFileIdentity (1)
+async function getFileIdentity_2(pathA, pathB) {
+  let [statsA, statsB, parentStatsB] = await Promise.all([
+    lstat(pathA, {
+      bigint: true,
+    }).catch(() => null),
+    lstat(pathB, {
+      bigint: true,
+    }).catch(() => null),
+    lstat(dirname(pathB), {
+      bigint: true,
+    }).catch(() => null),
+  ]);
+  return (
+    statsA !== null &&
+    statsB !== null &&
+    parentStatsB !== null &&
+    statsA.dev !== 0n &&
+    !isSentinelInode(statsA.ino) &&
+    statsA.dev === statsB.dev &&
+    statsA.ino === statsB.ino &&
+    !(parentStatsB.dev === statsB.dev && parentStatsB.ino === statsB.ino)
+  );
+}
 //@ chunk-e6aww6q8.js:797747-797837 fingerprint = CLAUDE_CONFIG_DIRECTORIES (0.71)
 /**
  * markdown 配置文件单文件上限 1 MiB，及配置子目录清单 CLAUDE_CONFIG_DIRECTORIES：commands、agents、output-styles、skills、workflows、routines。
@@ -120,8 +144,8 @@ async function getFileIdentity(filePath) {
 //@ chunk-e6aww6q8.js:798574-798761 file-local
 function resolveStopBoundary(cwd) {
   let cwdGitRoot = nearestNonHomeRoot(cwd);
-  let projectRootOrNull = getProjectRootOrNull();
-  let sessionGitRoot = projectRootOrNull === null ? null : nearestNonHomeRoot(projectRootOrNull);
+  let startPath = getProjectRootOrNull();
+  let sessionGitRoot = startPath === null ? null : nearestNonHomeRoot(startPath);
   if (!cwdGitRoot || !sessionGitRoot) return cwdGitRoot;
   let cwdCanonical = storageRootFor(cwd);
   if (cwdCanonical && normalizePathForCompare(cwdCanonical) === normalizePathForCompare(sessionGitRoot))
@@ -135,52 +159,52 @@ function resolveStopBoundary(cwd) {
 /**
  * 按 baseDir 路径深度排序。
  */
-function compareByBaseDirDepth(e, n) {
-  let r = (baseDir) => (baseDir === undefined ? 1 / 0 : (baseDir.match(/[/\\]/g)?.length ?? 0));
-  return r(e.baseDir) - r(n.baseDir);
+function compareByBaseDirDepth(entryA, entryB) {
+  let depthOf = (baseDir) => (baseDir === undefined ? 1 / 0 : (baseDir.match(/[/\\]/g)?.length ?? 0));
+  return depthOf(entryA.baseDir) - depthOf(entryB.baseDir);
 }
 //@ chunk-e6aww6q8.js:798867-799474 layout
 /**
  * 从 cwd 向上到家目录收集存在的 .claude/<子目录>。
  */
-async function getProjectDirsUpToHome(e, n) {
-  let cwd = getProjectConfigRoot() ?? n;
-  if (cwd === null || isDiskless()) return [];
+async function getProjectDirsUpToHome(subdir, cwd) {
+  let cwd_2 = getProjectConfigRoot() ?? cwd;
+  if (cwd_2 === null || isDiskless()) return [];
   let normalized = resolve_2(homedir()).normalize("NFC");
-  let stopBoundary = resolveStopBoundary(cwd);
-  let y = resolve_2(cwd);
-  let S = [];
+  let stopBoundary = resolveStopBoundary(cwd_2);
+  let currentDir = resolve_2(cwd_2);
+  let claudeDirs = [];
   while (true) {
-    if (normalizePathForCompare(y) === normalizePathForCompare(normalized)) break;
-    S.push(join(y, ".claude", e));
-    if (stopBoundary && normalizePathForCompare(y) === normalizePathForCompare(stopBoundary)) break;
-    let G = dirname(y);
-    if (G === y) break;
-    y = G;
+    if (normalizePathForCompare(currentDir) === normalizePathForCompare(normalized)) break;
+    claudeDirs.push(join(currentDir, ".claude", subdir));
+    if (stopBoundary && normalizePathForCompare(currentDir) === normalizePathForCompare(stopBoundary)) break;
+    let parentDir = dirname(currentDir);
+    if (parentDir === currentDir) break;
+    currentDir = parentDir;
   }
   let results = await Promise.all(
-    S.map((G) =>
-      stat(G).then(
+    claudeDirs.map((claudeSubdir) =>
+      stat(claudeSubdir).then(
         () => ({
-          claudeSubdir: G,
+          claudeSubdir,
           exists: true,
         }),
         (error) => ({
-          claudeSubdir: G,
+          claudeSubdir,
           exists: false,
           error,
         }),
       ),
     ),
   );
-  let L = [];
-  for (let G of results) {
-    let { claudeSubdir } = G;
-    if (G.exists) {
-      L.push(claudeSubdir);
+  let existingDirs = [];
+  for (let result of results) {
+    let { claudeSubdir } = result;
+    if (result.exists) {
+      existingDirs.push(claudeSubdir);
       continue;
     }
-    let error = G.error;
+    let error = result.error;
     if (isFsInaccessible(error));
     else if (getErrnoCode(error) === "ENFILE")
       logForDebugging(
@@ -191,47 +215,47 @@ async function getProjectDirsUpToHome(e, n) {
       );
     else throw error;
   }
-  return L;
+  return existingDirs;
 }
 //@ chunk-e6aww6q8.js:799474-799688 layout = isInGlobalClaudeFolder (1)
-function isInGlobalClaudeFolder(e, n, r) {
-  if (r === null || isDiskless() || getProjectConfigRoot() !== null) return;
-  let absolutePath = findGitRoot(r);
-  let normalizedAbsolutePath = findCanonicalGitRoot(r);
+function isInGlobalClaudeFolder(projectDirs, subdir, cwd) {
+  if (cwd === null || isDiskless() || getProjectConfigRoot() !== null) return;
+  let absolutePath = findGitRoot(cwd);
+  let normalizedAbsolutePath = findCanonicalGitRoot(cwd);
   if (!absolutePath || !normalizedAbsolutePath || normalizedAbsolutePath === absolutePath) return;
-  let normalizedGlobalClaudeFolderPath = normalizePathForCompare(join(absolutePath, ".claude", n));
-  if (e.some((L) => normalizePathForCompare(L) === normalizedGlobalClaudeFolderPath)) return;
-  let w = join(normalizedAbsolutePath, ".claude", n);
-  if (!e.includes(w)) e.push(w);
+  let normalizedGlobalClaudeFolderPath = normalizePathForCompare(join(absolutePath, ".claude", subdir));
+  if (projectDirs.some((dir) => normalizePathForCompare(dir) === normalizedGlobalClaudeFolderPath)) return;
+  let canonicalClaudeDir = join(normalizedAbsolutePath, ".claude", subdir);
+  if (!projectDirs.includes(canonicalClaudeDir)) projectDirs.push(canonicalClaudeDir);
 }
 //@ chunk-e6aww6q8.js:799688-799791 layout
 /**
  * 缓存某配置子目录的 markdown 加载结果。
  */
-function loadMarkdownFilesCached(subdir, cwd, r) {
-  let s = isManagedFolderWritable();
+function loadMarkdownFilesCached(subdir, cwd, storage) {
+  let managedFolderWritable = isManagedFolderWritable();
   return getOrCreate(
     getHostState().markdownFiles,
     `${subdir}:${managedFolderCondition()}${keyOrNull(cwd)}`,
-    () => loadMarkdownFilesForSubdir(subdir, cwd, r, s),
+    () => loadMarkdownFilesForSubdir(subdir, cwd, storage, managedFolderWritable),
   );
 }
 //@ chunk-e6aww6q8.js:799791-801646 fingerprint = loadMarkdownFilesForSubdir (0.951)
 /**
  * 加载某个配置子目录（agents/commands/skills/output-styles…）的全部 markdown：managed、用户（可走 storageV5）、项目各级、--add-dir（仅 agents）四路并行，按 inode 去重，记 tengu_dir_search。
  */
-async function loadMarkdownFilesForSubdir(subdir, n, r, s) {
+async function loadMarkdownFilesForSubdir(subdir, cwd, storage, managedSettingsFromHost) {
   let searchStartTime = Date.now();
   let claudeConfigDirOrNull = getClaudeConfigDirOrNull();
-  let S = claudeConfigDirOrNull === null ? null : join(claudeConfigDirOrNull, subdir);
+  let userSubdir = claudeConfigDirOrNull === null ? null : join(claudeConfigDirOrNull, subdir);
   let managedDir = join(getManagedFilePath(), ".claude", subdir);
-  let projectDirsUpToHome = await getProjectDirsUpToHome(subdir, n);
-  let G = new Set(
+  let projectDirs = await getProjectDirsUpToHome(subdir, cwd);
+  let visitedDirs = new Set(
     await Promise.all(
-      projectDirsUpToHome.map(async (Et) => normalizePathForCompare(await realpath(Et).catch(() => Et))),
+      projectDirs.map(async (dir) => normalizePathForCompare(await realpath(dir).catch(() => dir))),
     ),
   );
-  let q =
+  let additionalProjectDirs =
     subdir === "agents"
       ? uniq(
           await Promise.all(
@@ -240,37 +264,39 @@ async function loadMarkdownFilesForSubdir(subdir, n, r, s) {
               return await realpath(mainClaudeSubdir).catch(() => mainClaudeSubdir);
             }),
           ),
-        ).filter((dir) => !G.has(normalizePathForCompare(dir)))
+        ).filter((dir) => !visitedDirs.has(normalizePathForCompare(dir)))
       : [];
-  isInGlobalClaudeFolder(projectDirsUpToHome, subdir, n);
-  let Z = subdir === "agents" && isRestrictedToPluginOnly("agents");
-  let Se = isSettingSourceEnabled("projectSettings") && !Z;
-  let ke = s || isManagedFolderWritable();
-  if (ke && !isDiskless())
+  isInGlobalClaudeFolder(projectDirs, subdir, cwd);
+  let restrictedToPlugin = subdir === "agents" && isRestrictedToPluginOnly("agents");
+  let projectSourcesEnabled = isSettingSourceEnabled("projectSettings") && !restrictedToPlugin;
+  let skipManagedFolder = managedSettingsFromHost || isManagedFolderWritable();
+  if (skipManagedFolder && !isDiskless())
     logForDebugging(
       `${managedDir}: not read: this session takes its managed settings from its organization, and its own account could have written the managed folder`,
     );
-  let [managedFiles, userFiles, Ae, Ie] = await Promise.all([
-    (isDiskless() || ke ? Promise.resolve([]) : loadMarkdownFiles(managedDir, r)).then((file) =>
-      file.map((file) => ({
-        ...file,
-        baseDir: managedDir,
-        source: "policySettings",
-      })),
+  let [managedFiles, userFiles, projectFileGroups, additionalFileGroups] = await Promise.all([
+    (isDiskless() || skipManagedFolder ? Promise.resolve([]) : loadMarkdownFiles(managedDir, storage)).then(
+      (file) =>
+        file.map((file) => ({
+          ...file,
+          baseDir: managedDir,
+          source: "policySettings",
+        })),
     ),
-    S !== null && isSettingSourceEnabled("userSettings") && !Z
-      ? (r ? loadMarkdownFilesV5(subdir, S, r) : loadMarkdownFiles(S)).then((file) =>
-          file.map((file) => ({
-            ...file,
-            baseDir: S,
-            source: "userSettings",
-          })),
+    userSubdir !== null && isSettingSourceEnabled("userSettings") && !restrictedToPlugin
+      ? (storage ? loadMarkdownFilesV5(subdir, userSubdir, storage) : loadMarkdownFiles(userSubdir)).then(
+          (file) =>
+            file.map((file) => ({
+              ...file,
+              baseDir: userSubdir,
+              source: "userSettings",
+            })),
         )
       : Promise.resolve([]),
-    Se
+    projectSourcesEnabled
       ? Promise.all(
-          projectDirsUpToHome.map((projectDir) =>
-            loadMarkdownFiles(projectDir, r).then((file) =>
+          projectDirs.map((projectDir) =>
+            loadMarkdownFiles(projectDir, storage).then((file) =>
               file.map((file) => ({
                 ...file,
                 baseDir: projectDir,
@@ -280,10 +306,10 @@ async function loadMarkdownFilesForSubdir(subdir, n, r, s) {
           ),
         )
       : Promise.resolve([]),
-    Se
+    projectSourcesEnabled
       ? Promise.all(
-          q.map((projectDir) =>
-            loadMarkdownFiles(projectDir, r).then((markdownFiles) =>
+          additionalProjectDirs.map((projectDir) =>
+            loadMarkdownFiles(projectDir, storage).then((markdownFiles) =>
               markdownFiles.map((file) => ({
                 ...file,
                 baseDir: projectDir,
@@ -295,8 +321,8 @@ async function loadMarkdownFilesForSubdir(subdir, n, r, s) {
         )
       : Promise.resolve([]),
   ]);
-  let projectFiles = Ae.flat();
-  let projectFiles_2 = Ie.flat();
+  let projectFiles = projectFileGroups.flat();
+  let projectFiles_2 = additionalFileGroups.flat();
   let allFiles = [...filterUntrustedSkills(managedFiles), ...userFiles, ...projectFiles_2, ...projectFiles];
   let fileIdentities = await Promise.all(allFiles.map((file) => getFileIdentity(file.filePath)));
   let seenFileIds = new Map();
@@ -327,7 +353,7 @@ async function loadMarkdownFilesForSubdir(subdir, n, r, s) {
     managedFilesFound: managedFiles.length,
     userFilesFound: userFiles.length,
     projectFilesFound: projectFiles.length,
-    projectDirsSearched: projectDirsUpToHome.length,
+    projectDirsSearched: projectDirs.length,
     subdir: fromEnum(subdir),
   });
   return deduplicatedFiles;
@@ -339,22 +365,22 @@ async function loadMarkdownFilesForSubdir(subdir, n, r, s) {
 async function findMarkdownFilesNative(dir, signal) {
   let files = [];
   let visitedDirs = new Set();
-  async function h(w, name, currentDir) {
-    if (w.isDirectory()) await walk(currentDir);
-    else if (w.isFile() && name.endsWith(".md")) files.push(currentDir);
+  async function handleEntry(entry, name, currentDir) {
+    if (entry.isDirectory()) await walk(currentDir);
+    else if (entry.isFile() && name.endsWith(".md")) files.push(currentDir);
   }
-  async function y(entry, fullPath) {
+  async function visitDirent(entry, fullPath) {
     if (entry.isSymbolicLink()) {
       try {
-        let G = await stat(fullPath);
-        await h(G, entry.name, fullPath);
+        let targetStats = await stat(fullPath);
+        await handleEntry(targetStats, entry.name, fullPath);
       } catch (error) {
-        let q = error instanceof Error ? error.message : String(error);
-        logForDebugging(`Failed to follow symlink ${fullPath}: ${q}`);
+        let message = error instanceof Error ? error.message : String(error);
+        logForDebugging(`Failed to follow symlink ${fullPath}: ${message}`);
       }
       return;
     }
-    await h(entry, entry.name, fullPath);
+    await handleEntry(entry, entry.name, fullPath);
   }
   async function walk(currentDir) {
     if (signal.aborted) return;
@@ -386,7 +412,7 @@ async function findMarkdownFilesNative(dir, signal) {
         if (signal.aborted) break;
         let fullPath = join(currentDir, entry.name);
         try {
-          await y(entry, fullPath);
+          await visitDirent(entry, fullPath);
         } catch (error) {
           let errorMessage = error instanceof Error ? error.message : String(error);
           logForDebugging(`Failed to access ${fullPath}: ${errorMessage}`);
@@ -404,16 +430,16 @@ async function findMarkdownFilesNative(dir, signal) {
 /**
  * 列出目录下全部 .md（ripgrep --files --follow 或原生遍历，3 秒超时），逐个读取并解析 frontmatter；超限或非常规文件跳过。
  */
-async function loadMarkdownFiles(dir, n) {
+async function loadMarkdownFiles(dir, storage) {
   let useNative = isEnvTruthy("true") || isDisklessSession_2();
   let signal = AbortSignal.timeout(3000);
-  let h = null;
+  let scanner = null;
   let files;
   try {
     files = useNative
       ? await findMarkdownFilesNative(dir, signal)
       : await ripGrep_2(["--files", "--hidden", "--follow", "--no-ignore", "--glob", "*.md"], dir, signal, {
-          cwd: ripgrepStorageOverride(n),
+          cwd: ripgrepStorageOverride(storage),
         });
   } catch (error) {
     if (isFsInaccessible(error)) {
@@ -478,17 +504,17 @@ async function loadMarkdownFiles(dir, n) {
         }
       }),
     )
-  ).filter((w) => w !== null);
+  ).filter((file) => file !== null);
 }
 //@ chunk-e6aww6q8.js:803802-805209 sole-consumer
 /**
  * storageV5 模式下列出 userConfigDir/<subdir> 的 .md 并读取解析；列举失败回退到原始扫描。
  */
-async function loadMarkdownFilesV5(subdir, n, r) {
-  let s = [];
+async function loadMarkdownFilesV5(subdir, userDir, storage) {
+  let listedFiles = [];
   let allPages = await readAllPages(
-    (S) =>
-      r.listRecursive(
+    (cursor) =>
+      storage.listRecursive(
         {
           namespace: "userConfigDir",
           dir: subdir,
@@ -496,21 +522,21 @@ async function loadMarkdownFilesV5(subdir, n, r) {
         {
           suffix: ".md",
           skipKeyStats: true,
-          ...(S !== undefined && {
-            cursor: S,
+          ...(cursor !== undefined && {
+            cursor,
           }),
         },
       ),
-    (S) => {
-      for (let w of S)
+    (entries) => {
+      for (let entry of entries)
         if (
-          w.key.namespace === "userConfigDir" &&
-          w.key.dir === subdir &&
-          w.key.relPath.at(-1)?.endsWith(".md") === true
+          entry.key.namespace === "userConfigDir" &&
+          entry.key.dir === subdir &&
+          entry.key.relPath.at(-1)?.endsWith(".md") === true
         )
-          s.push({
-            key: w.key,
-            filePath: join(n, ...w.key.relPath),
+          listedFiles.push({
+            key: entry.key,
+            filePath: join(userDir, ...entry.key.relPath),
           });
     },
   );
@@ -519,15 +545,15 @@ async function loadMarkdownFilesV5(subdir, n, r) {
       break;
     case "error":
       logForDebugging(
-        `Listing of ${n} failed (${formatStorageError(allPages.error)}); falling back to the raw scan`,
+        `Listing of ${userDir} failed (${formatStorageError(allPages.error)}); falling back to the raw scan`,
         {
           level: "warn",
         },
       );
-      return loadMarkdownFiles(n, r);
+      return loadMarkdownFiles(userDir, storage);
     case "capped":
       logForDebugging(
-        `Listing of ${n} truncated after ${DEFAULT_MAX_PAGES} pages; keeping the entries seen`,
+        `Listing of ${userDir} truncated after ${DEFAULT_MAX_PAGES} pages; keeping the entries seen`,
         {
           level: "warn",
         },
@@ -536,31 +562,31 @@ async function loadMarkdownFilesV5(subdir, n, r) {
   }
   return (
     await Promise.all(
-      s.map(async ({ key, filePath }) => {
+      listedFiles.map(async ({ key, filePath }) => {
         try {
-          let L = await r.read([
+          let readResult = await storage.read([
             {
               key,
               offset: 0,
               length: MAX_MARKDOWN_FILE_BYTES + 1,
             },
           ]);
-          if (!L.ok || !L.value.items[0].found) {
+          if (!readResult.ok || !readResult.value.items[0].found) {
             logForDebugging(
-              `Failed to read/parse markdown file:  ${filePath}: ${L.ok ? "absent" : L.error.code}`,
+              `Failed to read/parse markdown file:  ${filePath}: ${readResult.ok ? "absent" : readResult.error.code}`,
             );
             return null;
           }
-          let G = L.value.items[0];
-          if (G.totalBytes > MAX_MARKDOWN_FILE_BYTES) {
+          let item = readResult.value.items[0];
+          if (item.totalBytes > MAX_MARKDOWN_FILE_BYTES) {
             logForDebugging(
               `loadMarkdownFilesFromDir: skipping ${filePath}: not a regular file or exceeds ${MAX_MARKDOWN_FILE_BYTES} byte limit`,
             );
             return null;
           }
-          let { value: q } = G;
+          let { value: bytes } = item;
           let { frontmatter, frontmatterAsWritten, asWrittenProblem, content } = parseFrontmatter(
-            Buffer.from(q.buffer, q.byteOffset, q.byteLength).toString("utf-8"),
+            Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString("utf-8"),
             filePath,
             {
               normalizeKeys: true,
@@ -576,37 +602,13 @@ async function loadMarkdownFilesV5(subdir, n, r) {
             content,
           };
         } catch (error) {
-          let G = error instanceof Error ? error.message : String(error);
-          logForDebugging(`Failed to read/parse markdown file:  ${filePath}: ${G}`);
+          let message = error instanceof Error ? error.message : String(error);
+          logForDebugging(`Failed to read/parse markdown file:  ${filePath}: ${message}`);
           return null;
         }
       }),
     )
-  ).filter((S) => S !== null);
-}
-//@ chunk-2xm1rxms.js:37944-38224 fingerprint = getFileIdentity (1)
-async function getFileIdentity_2(e, n) {
-  let [o, r, s] = await Promise.all([
-    lstat(e, {
-      bigint: true,
-    }).catch(() => null),
-    lstat(n, {
-      bigint: true,
-    }).catch(() => null),
-    lstat(dirname(n), {
-      bigint: true,
-    }).catch(() => null),
-  ]);
-  return (
-    o !== null &&
-    r !== null &&
-    s !== null &&
-    o.dev !== 0n &&
-    !isSentinelInode(o.ino) &&
-    o.dev === r.dev &&
-    o.ino === r.ino &&
-    !(s.dev === r.dev && s.ino === r.ino)
-  );
+  ).filter((loadedFile) => loadedFile !== null);
 }
 export {
   compareByBaseDirDepth,

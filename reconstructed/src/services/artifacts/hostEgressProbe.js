@@ -27,52 +27,52 @@ var PROBE_TIMEOUT_MS = 3000;
 var PROBE_CACHE_MS = 600000;
 var MAX_PROBE_RESPONSE_BYTES = 262144;
 //@ chunk-4xpk3fhh.js:1130-1244 placement
-function artifactHostUnreachable(e) {
+function artifactHostUnreachable(host) {
   let liveState = getLiveState();
   return (
-    liveState.contentHostEgressDenied.has(e.env) ||
-    liveState.contentHostEgressUnanswered.has(artifactContentOriginUrlFor(e))
+    liveState.contentHostEgressDenied.has(host.env) ||
+    liveState.contentHostEgressUnanswered.has(artifactContentOriginUrlFor(host))
   );
 }
 //@ chunk-4xpk3fhh.js:1244-1334 placement
-function wasProbedRecently(e) {
-  let n = getLiveState().contentHostEgressProbed.get(e);
-  return n !== undefined && Date.now() - n < PROBE_CACHE_MS;
+function wasProbedRecently(host) {
+  let probed = getLiveState().contentHostEgressProbed.get(host);
+  return probed !== undefined && Date.now() - probed < PROBE_CACHE_MS;
 }
 //@ chunk-4xpk3fhh.js:1334-1413 placement
-function artifactHostAnswerAtHand(e) {
+function artifactHostAnswerAtHand(at) {
   return (
     isDiskless() ||
-    getLiveState().contentHostEgressDenied.has(e.env) ||
-    wasProbedRecently(artifactContentOriginUrlFor(e))
+    getLiveState().contentHostEgressDenied.has(at.env) ||
+    wasProbedRecently(artifactContentOriginUrlFor(at))
   );
 }
 //@ chunk-4xpk3fhh.js:1413-1910 placement
 async function probeArtifactHostEgress(target, signal) {
   let liveState = getLiveState();
-  let hostUrl = artifactContentOriginUrlFor(target);
+  let contentOriginUrl = artifactContentOriginUrlFor(target);
   if (isDiskless()) {
-    liveState.contentHostEgressProbed.delete(hostUrl);
-    liveState.contentHostEgressUnanswered.add(hostUrl);
+    liveState.contentHostEgressProbed.delete(contentOriginUrl);
+    liveState.contentHostEgressUnanswered.add(contentOriginUrl);
     return;
   }
   if (liveState.contentHostEgressDenied.has(target.env)) {
-    liveState.contentHostEgressProbed.delete(hostUrl);
-    liveState.contentHostEgressUnanswered.add(hostUrl);
+    liveState.contentHostEgressProbed.delete(contentOriginUrl);
+    liveState.contentHostEgressUnanswered.add(contentOriginUrl);
     return;
   }
-  if (wasProbedRecently(hostUrl)) return;
-  let s = liveState.contentHostEgressInFlight.get(hostUrl);
-  if (s !== undefined)
-    return s.catch((error) => {
+  if (wasProbedRecently(contentOriginUrl)) return;
+  let inFlight = liveState.contentHostEgressInFlight.get(contentOriginUrl);
+  if (inFlight !== undefined)
+    return inFlight.catch((error) => {
       if (signal.aborted) throw error;
       return probeArtifactHostEgress(target, signal);
     });
-  let f = probeContentHostEgress(target, hostUrl, signal).finally(() => {
-    liveState.contentHostEgressInFlight.delete(hostUrl);
+  let probe = probeContentHostEgress(target, contentOriginUrl, signal).finally(() => {
+    liveState.contentHostEgressInFlight.delete(contentOriginUrl);
   });
-  liveState.contentHostEgressInFlight.set(hostUrl, f);
-  return f;
+  liveState.contentHostEgressInFlight.set(contentOriginUrl, probe);
+  return probe;
 }
 //@ chunk-4xpk3fhh.js:1910-2846 placement
 /**
@@ -80,18 +80,18 @@ async function probeArtifactHostEgress(target, signal) {
  */
 async function probeContentHostEgress(target, hostUrl, signal) {
   let liveState = getLiveState();
-  let s = () => {
+  let done = () => {
     liveState.contentHostEgressUnanswered.delete(hostUrl);
     liveState.contentHostEgressProbed.set(hostUrl, Date.now());
   };
-  let f = (p) => {
+  let compare = (body) => {
     logForDebugging(
-      `[artifact] egress probe of ${hostUrl}: ${p}; reading the host as unreachable for this check`,
+      `[artifact] egress probe of ${hostUrl}: ${body}; reading the host as unreachable for this check`,
     );
     liveState.contentHostEgressProbed.delete(hostUrl);
     liveState.contentHostEgressUnanswered.add(hostUrl);
   };
-  let l = () => {
+  let detail = () => {
     liveState.contentHostEgressProbed.delete(hostUrl);
     liveState.contentHostEgressUnanswered.add(hostUrl);
     liveState.contentHostEgressDenied.add(target.env);
@@ -108,17 +108,17 @@ async function probeContentHostEgress(target, hostUrl, signal) {
     });
   } catch (error) {
     if (signal.aborted) throw error;
-    if (isBlockedByProxyAllowlist(error)) return l();
-    return f(isMaxContentLengthError(error) ? "an answer larger than the cap" : "no answer");
+    if (isBlockedByProxyAllowlist(error)) return detail();
+    return compare(isMaxContentLengthError(error) ? "an answer larger than the cap" : "no answer");
   }
-  if (isAllowlistBlockedResponse(response.status, response.headers)) return l();
-  let h = () => proxyDenialResult(response.headers, response.data, (p) => p);
+  if (isAllowlistBlockedResponse(response.status, response.headers)) return detail();
+  let denial = () => proxyDenialResult(response.headers, response.data, (line) => line);
   if (!(
     (response.status >= 200 && response.status < 300) ||
-    (response.status === 403 && isForbiddenProxy(response.headers, h())) ||
-    (response.status === 404 && isNotFoundProxy(response.headers, h()))
+    (response.status === 403 && isForbiddenProxy(response.headers, denial())) ||
+    (response.status === 404 && isNotFoundProxy(response.headers, denial()))
   ))
-    return f(`unrecognised HTTP ${response.status}`);
-  return s();
+    return compare(`unrecognised HTTP ${response.status}`);
+  return done();
 }
 export { artifactHostUnreachable, probeArtifactHostEgress, artifactHostAnswerAtHand };

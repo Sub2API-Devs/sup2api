@@ -5,14 +5,14 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../../../../runtime/bun-runtime.js";
 import { require_file } from "../../../../../cjs/codegenv2/file.js";
 import { require_descriptor_pb } from "../../../gen/google/protobuf/descriptor_pb.js";
 import { require_message } from "../../../../../cjs/codegenv2/message.js";
 import { require_enum } from "../../../../../cjs/codegenv2/enum.js";
 
 //@ chunk-fq0cr76a.js:438286-440563 cjs-fingerprint
-var require_plugin_pb = x(function (cjsExports) {
+var require_plugin_pb = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

@@ -13,28 +13,32 @@ import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from "../entrypoints/sdk/coreSchemas.j
 //@ chunk-w5ndchqs.js:1829-1874 placement
 var STATIC_BREAKPOINT_MARKER = "__SYSTEM_PROMPT_STATIC_BREAKPOINT__";
 //@ chunk-w5ndchqs.js:1874-2077 placement
-function splitSystemPromptAtBoundary(e, n = SYSTEM_PROMPT_DYNAMIC_BOUNDARY) {
-  let lines = e.split(`
+function splitSystemPromptAtBoundary(prompt, boundaryToken = SYSTEM_PROMPT_DYNAMIC_BOUNDARY) {
+  let lines = prompt.split(`
 `);
-  let index = lines.findIndex((line) => line.trim() === n);
-  if (index === -1) return [e];
-  let d =
+  let index = lines.findIndex((line) => line.trim() === boundaryToken);
+  if (index === -1) return [prompt];
+  let beforePart =
     lines.slice(0, index).join(`
 `) +
     `
 `;
-  let m =
+  let afterPart =
     `
 ` +
     lines.slice(index + 1).join(`
 `);
-  return [...(d.trim() ? [d] : []), n, ...(m.trim() ? [m] : [])];
+  return [
+    ...(beforePart.trim() ? [beforePart] : []),
+    boundaryToken,
+    ...(afterPart.trim() ? [afterPart] : []),
+  ];
 }
 //@ chunk-w5ndchqs.js:2077-2159 placement
-function splitAtStaticBreakpoint(e) {
-  if (!e.includes(STATIC_BREAKPOINT_MARKER)) return [e];
-  return splitSystemPromptAtBoundary(e, STATIC_BREAKPOINT_MARKER).filter(
-    (n) => n !== STATIC_BREAKPOINT_MARKER,
+function splitAtStaticBreakpoint(prompt) {
+  if (!prompt.includes(STATIC_BREAKPOINT_MARKER)) return [prompt];
+  return splitSystemPromptAtBoundary(prompt, STATIC_BREAKPOINT_MARKER).filter(
+    (part) => part !== STATIC_BREAKPOINT_MARKER,
   );
 }
 //@ chunk-w5ndchqs.js:2159-2232 placement
@@ -46,18 +50,18 @@ function baseSystemPromptOf(customSystemPrompt, defaultSystemPrompt) {
       : defaultSystemPrompt;
 }
 //@ chunk-w5ndchqs.js:2232-2422 placement
-function withAddedSections(e, n, r) {
-  let s = r ? e.indexOf(SYSTEM_PROMPT_DYNAMIC_BOUNDARY) : -1;
-  if (s === -1) return [...e, ...nonEmptyPrompts(n)];
+function withAddedSections(sections, newSections, middleMarker) {
+  let boundaryIndex = middleMarker ? sections.indexOf(SYSTEM_PROMPT_DYNAMIC_BOUNDARY) : -1;
+  if (boundaryIndex === -1) return [...sections, ...nonEmptyPrompts(newSections)];
   return [
-    ...e.slice(0, s),
-    ...nonEmptyPrompts(n.filter(([d]) => d === "shared")),
-    ...e.slice(s),
-    ...nonEmptyPrompts(n.filter(([d]) => d === "session")),
+    ...sections.slice(0, boundaryIndex),
+    ...nonEmptyPrompts(newSections.filter(([section]) => section === "shared")),
+    ...sections.slice(boundaryIndex),
+    ...nonEmptyPrompts(newSections.filter(([section_2]) => section_2 === "session")),
   ];
 }
 //@ chunk-w5ndchqs.js:2422-2472 placement
-function nonEmptyPrompts(e) {
-  return e.flatMap(([, n]) => (n ? [n] : []));
+function nonEmptyPrompts(sections) {
+  return sections.flatMap(([, text]) => (text ? [text] : []));
 }
 export { baseSystemPromptOf, withAddedSections, splitSystemPromptAtBoundary, splitAtStaticBreakpoint };

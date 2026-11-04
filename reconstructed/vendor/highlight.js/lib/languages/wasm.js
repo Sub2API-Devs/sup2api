@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:529224-530928 cjs-fingerprint
-var require_wasm = x(function (cjsExports, cjsModule) {
+var require_wasm = __commonJS(function (cjsExports, cjsModule) {
   function wasm(hljs) {
     hljs.regex;
     let BLOCK_COMMENT = hljs.COMMENT(/\(;/, /;\)/);

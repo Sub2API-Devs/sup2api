@@ -15,8 +15,7 @@ import {
   DESIGN_SYNC_POLICY,
   STANDALONE_DESIGN_CLOSING_NOTICE,
 } from "../../tools/DesignSyncTool/DesignSyncTool.js";
-import { getFilesForLanguage } from "./claudeApi.js";
-import { loadSkillFilesModule } from "../../_unattributed/chunk-hantmvxa/part-001.js";
+import { getFilesForLanguage, loadSkillFilesModule } from "./claudeApi.js";
 import { parseFrontmatter } from "../../utils/frontmatterParser.js";
 
 //@ chunk-hantmvxa.js:111927-112180 placement
@@ -37,25 +36,25 @@ function registerDesignSyncSkill() {
     disableModelInvocation: true,
     userInvocable: true,
     files: getFilesForLanguage,
-    async getPromptForCommand(e, n) {
-      let s = [];
-      if (s.length === 0) {
+    async getPromptForCommand(args, context) {
+      let sections = [];
+      if (sections.length === 0) {
         let { SKILL_MD } = await loadSkillFilesModule();
-        s.push(
+        sections.push(
           `Before anything else, tell the user this, as written: "${STANDALONE_DESIGN_CLOSING_NOTICE}" Then carry on.`,
           parseFrontmatter(SKILL_MD).content.trimStart(),
         );
       }
-      if (e?.trim())
-        s.push(`## Hint
+      if (args?.trim())
+        sections.push(`## Hint
 
 \`\`\`
-${e.trim()}
+${args.trim()}
 \`\`\``);
       return [
         {
           type: "text",
-          text: s.join(`
+          text: sections.join(`
 
 `),
         },

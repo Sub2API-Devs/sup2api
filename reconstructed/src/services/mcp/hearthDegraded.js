@@ -12,14 +12,18 @@ import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { HEARTHBOT } from "./ccrMetaMcp.js";
 import { classifyMcpErrorSourceCategory } from "./mcpResultErrors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-st7cjqc5.js:333-366 placement
 /**
  * 按宿主保存的 hearthbot 降级状态。
  */
-var hearthDegradedState = new HostScoped(() => ({
-  degraded: false,
-}));
+var hearthDegradedState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-st7cjqc5.js:333", () => {
+  hearthDegradedState = new HostScoped(() => ({
+    degraded: false,
+  }));
+});
 //@ chunk-st7cjqc5.js:366-401 placement
 /**
  * 取当前宿主的降级状态。
@@ -31,16 +35,16 @@ function getHearthDegradedState() {
 /**
  * 根据 hearthbot 工具调用的错误更新其降级状态（下游不可达时降级，下游错误或成功时恢复）。
  */
-function noteHearthDegraded(n, r) {
-  if (n !== HEARTHBOT) return;
+function noteHearthDegraded(serverName, error) {
+  if (serverName !== HEARTHBOT) return;
   let hearthDegradedState = getHearthDegradedState();
-  if (r === undefined) {
+  if (error === undefined) {
     hearthDegradedState.degraded = false;
     return;
   }
-  let o = classifyMcpErrorSourceCategory(r);
-  if (o === "downstream_unreachable") hearthDegradedState.degraded = true;
-  else if (o === "downstream_error") hearthDegradedState.degraded = false;
+  let sourceCategory = classifyMcpErrorSourceCategory(error);
+  if (sourceCategory === "downstream_unreachable") hearthDegradedState.degraded = true;
+  else if (sourceCategory === "downstream_error") hearthDegradedState.degraded = false;
 }
 //@ chunk-st7cjqc5.js:585-620 placement
 /**

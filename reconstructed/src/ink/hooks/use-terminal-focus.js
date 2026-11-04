@@ -9,7 +9,7 @@
  * attribution: placement 3
  */
 import { TerminalFocusContext_2 } from "../components/TerminalFocusContext.js";
-import { Se } from "../../../vendor/react/cjs/react.production.js";
+import { useContext } from "../../../vendor/react/cjs/react.production.js";
 
 //@ chunk-cg10fy59.js:784-792 placement
 /**
@@ -21,7 +21,7 @@ var TerminalFocusContext = TerminalFocusContext_2;
  * 读取终端窗口当前是否有焦点。
  */
 function useTerminalFocus() {
-  let { isTerminalFocused } = Se(TerminalFocusContext);
+  let { isTerminalFocused } = useContext(TerminalFocusContext);
   return isTerminalFocused;
 }
 //@ chunk-cg10fy59.js:846-902 placement
@@ -29,7 +29,7 @@ function useTerminalFocus() {
  * 从终端焦点上下文取出焦点状态（是否聚焦、最近一次变化）。
  */
 function useTerminalFocusState() {
-  let { terminalFocusState } = Se(TerminalFocusContext);
+  let { terminalFocusState } = useContext(TerminalFocusContext);
   return terminalFocusState;
 }
 export { useTerminalFocus, useTerminalFocusState };

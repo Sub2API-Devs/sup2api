@@ -31,34 +31,34 @@ async function runFastCommand(args, context) {
       value: getFastModeUnavailableMessage() ?? "Fast mode is not available",
     };
   let lower = args.trim().toLowerCase();
-  let t;
-  if (lower === "on") t = true;
-  else if (lower === "off") t = false;
-  else if (lower === "") t = !context.options.fastMode || isMainModelFastRejected(getMainLoopModel());
+  let body;
+  if (lower === "on") body = true;
+  else if (lower === "off") body = false;
+  else if (lower === "") body = !context.options.fastMode || isMainModelFastRejected(getMainLoopModel());
   else
     return {
       type: "text",
       value: `Unknown argument "${lower}". Use: /fast [on|off]`,
     };
-  let i =
+  let ready =
     !context.options.isNonInteractiveSession ||
     (isVsCodeTopSession() && !isBridgeOrVerifiedSlackTurn(context));
   return {
     type: "text",
     value: await toggleFastMode(
       context.session,
-      t,
+      body,
       context.getAppState,
       context.setAppState,
       "bridge",
-      i,
+      ready,
       context.storageV5,
       () => prefetchFastModeStatus(context.storageV5, context.credentials),
       undefined,
       undefined,
-      (r, a) =>
+      (result, callArgs) =>
         context.rowCommit.savedFastModeToggle(
-          r,
+          result,
           {
             getAppState: context.getAppState,
             setAppState: context.setAppState,
@@ -70,10 +70,11 @@ async function runFastCommand(args, context) {
               mcpClients: [],
             },
           },
-          a,
+          callArgs,
           () => isBridgeOrTransport(context.session),
         ),
       context.onQueryEvent,
     ),
   };
 }
+export { runFastCommand };

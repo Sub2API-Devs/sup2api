@@ -27,14 +27,16 @@ function getMaxSubagentSpawnDepth() {
   if (CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH !== undefined) return CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH;
   let sessionFeatureValues = getSessionFeatureValues();
   if (sessionFeatureValues.maxSubagentSpawnDepthFromGrowthBook === undefined) {
-    let { getFeatureValue_CACHED_MAY_BE_STALE } = require("./chunk-6df1d6re.js");
-    let { getCachedClientData } = require("./chunk-eesswvbz.js");
-    let o = getCachedClientData()?.[TENGU_HAZEL_TRELLIS];
-    let r = isPositiveInteger(o)
-      ? o
+    let {
+      getFeatureValue_CACHED_MAY_BE_STALE,
+    } = require("../../services/analytics/ATIS_REQUEST_HEADER.lazy.js");
+    let { getCachedClientData } = require("../../utils/config.js");
+    let clientValue = getCachedClientData()?.[TENGU_HAZEL_TRELLIS];
+    let featureValue = isPositiveInteger(clientValue)
+      ? clientValue
       : getFeatureValue_CACHED_MAY_BE_STALE(TENGU_HAZEL_TRELLIS, DEFAULT_SUBAGENT_SPAWN_DEPTH);
-    sessionFeatureValues.maxSubagentSpawnDepthFromGrowthBook = isPositiveInteger(r)
-      ? r
+    sessionFeatureValues.maxSubagentSpawnDepthFromGrowthBook = isPositiveInteger(featureValue)
+      ? featureValue
       : DEFAULT_SUBAGENT_SPAWN_DEPTH;
   }
   return sessionFeatureValues.maxSubagentSpawnDepthFromGrowthBook;
@@ -43,7 +45,7 @@ function getMaxSubagentSpawnDepth() {
 /**
  * 判断值是否为正整数。
  */
-function isPositiveInteger(e) {
-  return typeof e === "number" && Number.isInteger(e) && e >= 1;
+function isPositiveInteger(value) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1;
 }
 export { getMaxSubagentSpawnDepth };

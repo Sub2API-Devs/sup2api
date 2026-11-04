@@ -123,10 +123,10 @@ function parseEndConversationConfig(featureValue_CACHED_MAY_BE_STALE) {
   };
 }
 //@ chunk-4y7fknwa.js:6211-6366 placement
-function isEndConversationToolEnabled(e) {
+function isEndConversationToolEnabled(model) {
   let sessionEntrypoint = getSessionEntrypoint();
   if (sessionEntrypoint === undefined) return false;
-  if (!isModelSupportsEndConversation(e)) return false;
+  if (!isModelSupportsEndConversation(model)) return false;
   let { enabled, allowedEntrypoints } = parseEndConversationConfig(
     getFeatureValue_CACHED_MAY_BE_STALE(END_CONVERSATION_GB_FLAG, false),
   );
@@ -134,8 +134,8 @@ function isEndConversationToolEnabled(e) {
   return enabled && allowedEntrypoints.test(sessionEntrypoint);
 }
 //@ chunk-4y7fknwa.js:6366-6646 placement
-function getDeferredHintSection(e) {
-  if (!isEndConversationToolEnabled(e)) return null;
+function getDeferredHintSection(model) {
+  if (!isEndConversationToolEnabled(model)) return null;
   if (!isToolSearchEnabledOptimistic()) return null;
   return `${END_CONVERSATION_TOOL_NAME} (deferred tool): use only for sustained user abuse directed at the assistant, or when the user explicitly asks to see it demonstrated. Load the full guidance via ToolSearch("select:${END_CONVERSATION_TOOL_NAME}") before using it.`;
 }
@@ -146,4 +146,5 @@ export {
   END_CONVERSATION_REFLECTION_PROMPT,
   END_CONVERSATION_FINAL_MESSAGE,
   END_CONVERSATION_TOOL_RESULT,
+  getDeferredHintSection,
 };

@@ -10,20 +10,20 @@
  */
 import {
   init_react_production,
-  R,
-  ce,
-  y,
-  Kc,
-  P,
+  useRef,
+  useCallback,
+  useState,
+  fragmentTypeExport,
+  useEffect,
   isValidElement_default,
-  qt,
-  Fy,
-  Se,
+  createContext,
+  childrenExport,
+  useContext,
 } from "../../../vendor/react/cjs/react.production.js";
 import { RECENT_INPUT_GUARD_MS_2, isWithinRecentInput } from "../../hooks/useRecentInputGuard.js";
 import { useInputClock } from "../../ink/components/Input.js";
 import { useTimeout } from "../../ink/hooks/useTerminalHooks.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
   truncateCodePoints,
@@ -42,33 +42,43 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { sequential } from "../../utils/sequential.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ey2qag4x.js:1685-1689 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ey2qag4x.js:1685", () => {
+  init_react_production();
+});
 //@ chunk-ey2qag4x.js:1689-1693 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ey2qag4x.js:1689", () => {
+  init_react_production();
+});
 //@ chunk-ey2qag4x.js:1693-1777 placement
 /**
  * 打开后一段时间内拒绝输入的判断（防止误触）。
  */
-function useInputRefusalWindow(t = RECENT_INPUT_GUARD_MS_2) {
+function useInputRefusalWindow(windowMs = RECENT_INPUT_GUARD_MS_2) {
   let inputClock = useInputClock();
-  let i = R(Date.now());
-  return ce(() => isWithinRecentInput(inputClock, i.current, t), [inputClock, t]);
+  let openedAtRef = useRef(Date.now());
+  return useCallback(
+    () => isWithinRecentInput(inputClock, openedAtRef.current, windowMs),
+    [inputClock, windowMs],
+  );
 }
 //@ chunk-ey2qag4x.js:1777-1820 placement
 /**
  * 组件挂载时间。
  */
 function useMountTime() {
-  return R(Date.now()).current;
+  return useRef(Date.now()).current;
 }
 //@ chunk-ey2qag4x.js:1820-1902 placement
 /**
  * 根据是否已过冷静期返回 remountKey（settled/held）。
  */
-function settleKey(epoch, o = RECENT_INPUT_GUARD_MS_2) {
-  let timeout = useTimeout(o, epoch);
+function settleKey(epoch, windowMs = RECENT_INPUT_GUARD_MS_2) {
+  let timeout = useTimeout(windowMs, epoch);
   return {
     remountKey: timeout ? "settled" : "held",
     settled: timeout,
@@ -79,10 +89,10 @@ function settleKey(epoch, o = RECENT_INPUT_GUARD_MS_2) {
  * typeahead 的 epoch 追踪器：返回 {epoch, noteAttempt}，值变化时用它重置内部状态。
  */
 function typeaheadEpochTracker() {
-  let [t, o] = y(0);
-  let noteAttempt = ce(() => o((a) => a + 1), []);
+  let [epoch, setEpoch] = useState(0);
+  let noteAttempt = useCallback(() => setEpoch((previous) => previous + 1), []);
   return {
-    epoch: t,
+    epoch,
     noteAttempt,
   };
 }
@@ -92,14 +102,15 @@ function typeaheadEpochTracker() {
  */
 function useRefusalTracker() {
   let inputClock = useInputClock();
-  let o = R(null);
+  let refusedAtRef = useRef(null);
   let { epoch, noteAttempt } = typeaheadEpochTracker();
-  let refusedWithin = ce(
-    (d = RECENT_INPUT_GUARD_MS_2) => o.current !== null && isWithinRecentInput(inputClock, o.current, d),
+  let refusedWithin = useCallback(
+    (windowMs = RECENT_INPUT_GUARD_MS_2) =>
+      refusedAtRef.current !== null && isWithinRecentInput(inputClock, refusedAtRef.current, windowMs),
     [inputClock],
   );
-  let noteRefused = ce(() => {
-    o.current = Date.now();
+  let noteRefused = useCallback(() => {
+    refusedAtRef.current = Date.now();
     noteAttempt();
   }, [noteAttempt]);
   return {
@@ -109,8 +120,8 @@ function useRefusalTracker() {
   };
 }
 //@ chunk-ey2qag4x.js:2192-2232 placement
-function optionValueString(kt) {
-  return String(kt.value);
+function optionValueString(option) {
+  return String(option.value);
 }
 //@ chunk-ey2qag4x.js:2232-2258 placement
 function nullPlaceholder1() {
@@ -177,8 +188,8 @@ function nullPlaceholder8() {
   return null;
 }
 //@ chunk-ey2qag4x.js:2639-2679 placement
-function optionValueString_2(Ql) {
-  return String(Ql.value);
+function optionValueString_2(option) {
+  return String(option.value);
 }
 //@ chunk-ey2qag4x.js:2679-2705 placement
 function nullPlaceholder9() {
@@ -253,12 +264,12 @@ function emptyPlaceholder16() {
   return "";
 }
 //@ chunk-ey2qag4x.js:3138-3170 placement
-function subtract(ea, ls) {
-  return ea - ls;
+function subtract(left, right) {
+  return left - right;
 }
 //@ chunk-ey2qag4x.js:3170-3206 placement
-function nextIndexString(na) {
-  return String(na + 1);
+function nextIndexString(index) {
+  return String(index + 1);
 }
 //@ chunk-ey2qag4x.js:3206-3232 placement
 function nullPlaceholder16() {
@@ -285,125 +296,128 @@ function emptyPlaceholder19() {
   return "";
 }
 //@ chunk-ey2qag4x.js:3353-3391 placement
-function dropLastChar(Ve) {
-  return Ve.slice(0, -1);
+function dropLastChar(text) {
+  return text.slice(0, -1);
 }
 //@ chunk-ey2qag4x.js:3391-3580 placement
-function useStateWithRef(t) {
-  let l = w(3);
-  let [o, i] = y(t);
-  let a = R(t);
-  let f;
-  if (l[0] === MEMO_CACHE_SENTINEL) {
-    f = (d) => {
-      a.current = d(a.current);
-      i(a.current);
+function useStateWithRef(initial) {
+  let $ = useMemoCache(3);
+  let [value, setValue] = useState(initial);
+  let ref = useRef(initial);
+  let update;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    update = (next) => {
+      ref.current = next(ref.current);
+      setValue(ref.current);
     };
-    l[0] = f;
-  } else f = l[0];
-  let u = f;
-  let g;
-  if (l[1] !== o) {
-    g = [o, a, u];
-    l[1] = o;
-    l[2] = g;
-  } else g = l[2];
-  return g;
+    $[0] = update;
+  } else update = $[0];
+  let update_ = update;
+  let tuple;
+  if ($[1] !== value) {
+    tuple = [value, ref, update_];
+    $[1] = value;
+    $[2] = tuple;
+  } else tuple = $[2];
+  return tuple;
 }
 //@ chunk-ey2qag4x.js:3580-3608 placement
 function useStringStateWithRef() {
   return useStateWithRef("");
 }
 //@ chunk-ey2qag4x.js:3608-3749 placement
-function formatOrList(t) {
-  if (t.length <= 1) return t[0] ?? "";
-  if (t.length === 2) return `${t[0]} or ${t[1]}`;
-  return `${t.slice(0, -1).join(", ")}, or ${t.at(-1)}`;
+function formatOrList(items) {
+  if (items.length <= 1) return items[0] ?? "";
+  if (items.length === 2) return `${items[0]} or ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")}, or ${items.at(-1)}`;
 }
 //@ chunk-ey2qag4x.js:3749-3760 placement
 var MAX_OPTION_LABEL_CHARS = 300;
 //@ chunk-ey2qag4x.js:3760-3813 placement
-function moreCharactersSuffix(t) {
-  return ` \u2026 +${t} more characters`;
+function moreCharactersSuffix(remaining) {
+  return ` \u2026 +${remaining} more characters`;
 }
 //@ chunk-ey2qag4x.js:3813-3924 placement
-function truncateOptionLabel(t) {
-  if (t.length <= MAX_OPTION_LABEL_CHARS) return t;
-  let o = truncateCodePoints(t, MAX_OPTION_LABEL_CHARS);
-  if (o === t) return t;
-  let i = [...t].length - MAX_OPTION_LABEL_CHARS;
-  return o + moreCharactersSuffix(i);
+function truncateOptionLabel(text) {
+  if (text.length <= MAX_OPTION_LABEL_CHARS) return text;
+  let truncated = truncateCodePoints(text, MAX_OPTION_LABEL_CHARS);
+  if (truncated === text) return text;
+  let droppedChars = [...text].length - MAX_OPTION_LABEL_CHARS;
+  return truncated + moreCharactersSuffix(droppedChars);
 }
 //@ chunk-ey2qag4x.js:3924-4554 placement
 /**
  * 组合打开时间与拒绝记录，给出 refuse/refuseCharacter 判断。
  */
 function useRefuseInput(openedAt, windowMs) {
-  let f = w(18);
-  let i = windowMs === undefined ? RECENT_INPUT_GUARD_MS_2 : windowMs;
+  let $ = useMemoCache(18);
+  let windowMs_ = windowMs === undefined ? RECENT_INPUT_GUARD_MS_2 : windowMs;
   let inputClock = useInputClock();
-  let inputRefusalWindow = useInputRefusalWindow(i);
-  let d;
-  if (f[0] !== openedAt || f[1] !== inputClock || f[2] !== inputRefusalWindow || f[3] !== i) {
-    d = openedAt === undefined ? inputRefusalWindow : () => isWithinRecentInput(inputClock, openedAt, i);
-    f[0] = openedAt;
-    f[1] = inputClock;
-    f[2] = inputRefusalWindow;
-    f[3] = i;
-    f[4] = d;
-  } else d = f[4];
-  let u = d;
+  let inputRefusalWindow = useInputRefusalWindow(windowMs_);
+  let refuseBase;
+  if ($[0] !== openedAt || $[1] !== inputClock || $[2] !== inputRefusalWindow || $[3] !== windowMs_) {
+    refuseBase =
+      openedAt === undefined
+        ? inputRefusalWindow
+        : () => isWithinRecentInput(inputClock, openedAt, windowMs_);
+    $[0] = openedAt;
+    $[1] = inputClock;
+    $[2] = inputRefusalWindow;
+    $[3] = windowMs_;
+    $[4] = refuseBase;
+  } else refuseBase = $[4];
+  let baseRefuse = refuseBase;
   let { refusedWithin, noteRefused } = useRefusalTracker();
-  let b;
-  if (f[5] !== u || f[6] !== noteRefused || f[7] !== refusedWithin || f[8] !== i) {
-    b = () => {
-      if (u() || refusedWithin(i)) {
+  let refuse;
+  if ($[5] !== baseRefuse || $[6] !== noteRefused || $[7] !== refusedWithin || $[8] !== windowMs_) {
+    refuse = () => {
+      if (baseRefuse() || refusedWithin(windowMs_)) {
         noteRefused();
         return true;
       }
       return false;
     };
-    f[5] = u;
-    f[6] = noteRefused;
-    f[7] = refusedWithin;
-    f[8] = i;
-    f[9] = b;
-  } else b = f[9];
-  let refuse = b;
-  let x;
-  if (f[10] !== u || f[11] !== noteRefused || f[12] !== refusedWithin || f[13] !== i) {
-    x = () => {
-      if (!u() && !refusedWithin(i)) {
+    $[5] = baseRefuse;
+    $[6] = noteRefused;
+    $[7] = refusedWithin;
+    $[8] = windowMs_;
+    $[9] = refuse;
+  } else refuse = $[9];
+  let refuse_2 = refuse;
+  let refuseCharacter;
+  if ($[10] !== baseRefuse || $[11] !== noteRefused || $[12] !== refusedWithin || $[13] !== windowMs_) {
+    refuseCharacter = () => {
+      if (!baseRefuse() && !refusedWithin(windowMs_)) {
         return false;
       }
       noteRefused();
       return true;
     };
-    f[10] = u;
-    f[11] = noteRefused;
-    f[12] = refusedWithin;
-    f[13] = i;
-    f[14] = x;
-  } else x = f[14];
-  let refuseCharacter = x;
-  let B;
-  if (f[15] !== refuse || f[16] !== refuseCharacter) {
-    B = {
-      refuse,
-      refuseCharacter,
+    $[10] = baseRefuse;
+    $[11] = noteRefused;
+    $[12] = refusedWithin;
+    $[13] = windowMs_;
+    $[14] = refuseCharacter;
+  } else refuseCharacter = $[14];
+  let refuseCharacter_2 = refuseCharacter;
+  let result;
+  if ($[15] !== refuse_2 || $[16] !== refuseCharacter_2) {
+    result = {
+      refuse: refuse_2,
+      refuseCharacter: refuseCharacter_2,
     };
-    f[15] = refuse;
-    f[16] = refuseCharacter;
-    f[17] = B;
-  } else B = f[17];
-  return B;
+    $[15] = refuse_2;
+    $[16] = refuseCharacter_2;
+    $[17] = result;
+  } else result = $[17];
+  return result;
 }
 //@ chunk-ey2qag4x.js:4554-9171 placement
 /**
  * 通用单选列表组件（标题、标签、禁用、默认值、输入拒绝）。
  */
 function Select(props) {
-  let D = w(73);
+  let $ = useMemoCache(73);
   let {
     options,
     onChange,
@@ -417,147 +431,150 @@ function Select(props) {
     drawLabels,
     hidePromptWhileDisabled,
   } = props;
-  let x = isDisabled === undefined ? false : isDisabled;
-  let C = disableSelection === undefined ? false : disableSelection;
+  let isDisabledFlag = isDisabled === undefined ? false : isDisabled;
+  let selectionDisabled = disableSelection === undefined ? false : disableSelection;
   let drawLabel = drawLabels === undefined ? false : drawLabels;
-  let N = hidePromptWhileDisabled === undefined ? false : hidePromptWhileDisabled;
-  let [h, K, m] = useStringStateWithRef();
-  let [W, T] = y(null);
-  let L;
-  if (D[0] === MEMO_CACHE_SENTINEL) {
-    L = isArrowNavEnabled();
-    D[0] = L;
-  } else L = D[0];
-  let M = L;
-  let [E, H, v] = useStateWithRef(null);
-  let ue;
-  if (D[1] !== options) {
-    ue = options.map(optionValueString).join("\x00");
-    D[1] = options;
-    D[2] = ue;
-  } else ue = D[2];
-  let ve = ue;
-  let [Y, J] = y(ve);
-  if (Y !== ve) {
-    J(ve);
-    v(nullPlaceholder1);
-    m(emptyPlaceholder1);
+  let hidePrompt = hidePromptWhileDisabled === undefined ? false : hidePromptWhileDisabled;
+  let [typedText, typedRef, setTyped] = useStringStateWithRef();
+  let [errorMessage, setErrorMessage] = useState(null);
+  let arrowNavCached;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    arrowNavCached = isArrowNavEnabled();
+    $[0] = arrowNavCached;
+  } else arrowNavCached = $[0];
+  let arrowNavEnabled = arrowNavCached;
+  let [focusIndex, focusRef, setFocusIndex] = useStateWithRef(null);
+  let optionsKeyCached;
+  if ($[1] !== options) {
+    optionsKeyCached = options.map(optionValueString).join("\x00");
+    $[1] = options;
+    $[2] = optionsKeyCached;
+  } else optionsKeyCached = $[2];
+  let optionsKey = optionsKeyCached;
+  let [lastOptionsKey, setLastOptionsKey] = useState(optionsKey);
+  if (lastOptionsKey !== optionsKey) {
+    setLastOptionsKey(optionsKey);
+    setFocusIndex(nullPlaceholder1);
+    setTyped(emptyPlaceholder1);
   }
-  let [ye, fe, ee] = useStateWithRef(null);
-  if (Y !== ve && ye !== null) {
-    ee(nullPlaceholder2);
-    m(emptyPlaceholder2);
+  let [inputOptionIndex, inputOptionIndexRef, setInputOptionIndex] = useStateWithRef(null);
+  if (lastOptionsKey !== optionsKey && inputOptionIndex !== null) {
+    setInputOptionIndex(nullPlaceholder2);
+    setTyped(emptyPlaceholder2);
   }
-  let O = ye !== null && options[ye - 1]?.type === "input" ? options[ye - 1] : null;
-  let xe = R(null);
-  useFocusOnMount(xe, !x);
-  useRegisterOverlay("select", !!onCancel && !x);
-  let U;
+  let inputOption =
+    inputOptionIndex !== null && options[inputOptionIndex - 1]?.type === "input"
+      ? options[inputOptionIndex - 1]
+      : null;
+  let containerRef = useRef(null);
+  useFocusOnMount(containerRef, !isDisabledFlag);
+  useRegisterOverlay("select", !!onCancel && !isDisabledFlag);
+  let commitCached;
   if (
-    D[3] !== C ||
-    D[4] !== O ||
-    D[5] !== onChange ||
-    D[6] !== onFocus ||
-    D[7] !== options ||
-    D[8] !== m ||
-    D[9] !== v ||
-    D[10] !== ee
+    $[3] !== selectionDisabled ||
+    $[4] !== inputOption ||
+    $[5] !== onChange ||
+    $[6] !== onFocus ||
+    $[7] !== options ||
+    $[8] !== setTyped ||
+    $[9] !== setFocusIndex ||
+    $[10] !== setInputOptionIndex
   ) {
-    U = (me) => {
-      if (C) {
+    commitCached = (rawInput) => {
+      if (selectionDisabled) {
         return;
       }
-      if (O) {
-        if (me === "" && !O.screenReaderEmptySubmit) {
-          T("Enter some text, or Escape for the list.");
+      if (inputOption) {
+        if (rawInput === "" && !inputOption.screenReaderEmptySubmit) {
+          setErrorMessage("Enter some text, or Escape for the list.");
           return;
         }
-        if (onChange?.(O.value) === false) {
+        if (onChange?.(inputOption.value) === false) {
           return;
         }
-        m(emptyPlaceholder3);
-        ee(nullPlaceholder3);
+        setTyped(emptyPlaceholder3);
+        setInputOptionIndex(nullPlaceholder3);
         return;
       }
-      let X = Number.parseInt(me, 10);
-      if (!Number.isFinite(X) || X < 1 || X > options.length) {
-        T(
+      let selectedNumber = Number.parseInt(rawInput, 10);
+      if (!Number.isFinite(selectedNumber) || selectedNumber < 1 || selectedNumber > options.length) {
+        setErrorMessage(
           options.length === 0
-            ? `Invalid selection "${me}". Nothing to select.`
-            : `Invalid selection "${me}". Enter a number between 1 and ${options.length}.`,
+            ? `Invalid selection "${rawInput}". Nothing to select.`
+            : `Invalid selection "${rawInput}". Enter a number between 1 and ${options.length}.`,
         );
-        m(emptyPlaceholder4);
+        setTyped(emptyPlaceholder4);
         return;
       }
-      let le = options[X - 1];
-      if (le.disabled) {
-        T(`Option ${X} is disabled.`);
-        m(emptyPlaceholder5);
+      let option = options[selectedNumber - 1];
+      if (option.disabled) {
+        setErrorMessage(`Option ${selectedNumber} is disabled.`);
+        setTyped(emptyPlaceholder5);
         return;
       }
-      if (le.type === "input") {
-        ee(() => X);
-        v(nullPlaceholder4);
-        let initialValue = le.initialValue ?? "";
-        m(() => initialValue);
-        le.onChange(initialValue);
-        onFocus?.(le.value);
+      if (option.type === "input") {
+        setInputOptionIndex(() => selectedNumber);
+        setFocusIndex(nullPlaceholder4);
+        let initialValue = option.initialValue ?? "";
+        setTyped(() => initialValue);
+        option.onChange(initialValue);
+        onFocus?.(option.value);
         return;
       }
-      if (onChange?.(le.value) === false) {
+      if (onChange?.(option.value) === false) {
         return;
       }
-      m(emptyPlaceholder6);
-      v(nullPlaceholder5);
+      setTyped(emptyPlaceholder6);
+      setFocusIndex(nullPlaceholder5);
     };
-    D[3] = C;
-    D[4] = O;
-    D[5] = onChange;
-    D[6] = onFocus;
-    D[7] = options;
-    D[8] = m;
-    D[9] = v;
-    D[10] = ee;
-    D[11] = U;
-  } else U = D[11];
-  let Ve = U;
-  let ne;
+    $[3] = selectionDisabled;
+    $[4] = inputOption;
+    $[5] = onChange;
+    $[6] = onFocus;
+    $[7] = options;
+    $[8] = setTyped;
+    $[9] = setFocusIndex;
+    $[10] = setInputOptionIndex;
+    $[11] = commitCached;
+  } else commitCached = $[11];
+  let commit = commitCached;
+  let keyHandlerCached;
   if (
-    D[12] !== K ||
-    D[13] !== C ||
-    D[14] !== H ||
-    D[15] !== O ||
-    D[16] !== fe ||
-    D[17] !== x ||
-    D[18] !== onCancel ||
-    D[19] !== onFocus ||
-    D[20] !== options ||
-    D[21] !== refuseInput ||
-    D[22] !== m ||
-    D[23] !== v ||
-    D[24] !== ee ||
-    D[25] !== Ve
+    $[12] !== typedRef ||
+    $[13] !== selectionDisabled ||
+    $[14] !== focusRef ||
+    $[15] !== inputOption ||
+    $[16] !== inputOptionIndexRef ||
+    $[17] !== isDisabledFlag ||
+    $[18] !== onCancel ||
+    $[19] !== onFocus ||
+    $[20] !== options ||
+    $[21] !== refuseInput ||
+    $[22] !== setTyped ||
+    $[23] !== setFocusIndex ||
+    $[24] !== setInputOptionIndex ||
+    $[25] !== commit
   ) {
-    ne = (event) => {
-      if (x) {
+    keyHandlerCached = (event) => {
+      if (isDisabledFlag) {
         return;
       }
       if (event.key === "escape" && event.name === "escape") {
         event.preventDefault();
-        if (O) {
-          if (O.onChange(O.initialValue ?? "") === false) {
+        if (inputOption) {
+          if (inputOption.onChange(inputOption.initialValue ?? "") === false) {
             return;
           }
-          ee(nullPlaceholder6);
-          m(emptyPlaceholder7);
-          let we = options.find(isNotInputOption) ?? options[0];
-          if (we) onFocus?.(we.value);
+          setInputOptionIndex(nullPlaceholder6);
+          setTyped(emptyPlaceholder7);
+          let defaultOption = options.find(isNotInputOption) ?? options[0];
+          if (defaultOption) onFocus?.(defaultOption.value);
           return;
         }
         onCancel?.();
         return;
       }
-      if (C) {
+      if (selectionDisabled) {
         return;
       }
       if (event.key === "return" && event.name === "return") {
@@ -565,243 +582,266 @@ function Select(props) {
         if (refuseInput?.()) {
           return;
         }
-        if (O || K.current.length > 0) {
-          Ve(K.current);
+        if (inputOption || typedRef.current.length > 0) {
+          commit(typedRef.current);
           return;
         }
-        if (M && H.current !== null) Ve(String(H.current + 1));
+        if (arrowNavEnabled && focusRef.current !== null) commit(String(focusRef.current + 1));
         return;
       }
       if (event.key === "backspace" || event.key === "delete") {
         event.preventDefault();
-        let sliced = K.current.slice(0, -1);
-        if (O && O.onChange(sliced) === false) {
+        let sliced = typedRef.current.slice(0, -1);
+        if (inputOption && inputOption.onChange(sliced) === false) {
           return;
         }
-        m(() => sliced);
+        setTyped(() => sliced);
         return;
       }
-      if (M && !O && fe.current === null && (event.name === "up" || event.name === "down")) {
+      if (
+        arrowNavEnabled &&
+        !inputOption &&
+        inputOptionIndexRef.current === null &&
+        (event.name === "up" || event.name === "down")
+      ) {
         event.preventDefault();
         if (refuseInput?.()) {
           return;
         }
-        T(null);
-        m(emptyPlaceholder8);
-        let ze = options.length;
-        if (ze === 0) {
+        setErrorMessage(null);
+        setTyped(emptyPlaceholder8);
+        let optionCount = options.length;
+        if (optionCount === 0) {
           return;
         }
-        let Ce = H.current;
-        let mt =
-          Ce === null
+        let currentFocus = focusRef.current;
+        let nextFocus =
+          currentFocus === null
             ? event.name === "down"
               ? 0
-              : ze - 1
-            : (Ce + (event.name === "down" ? 1 : -1) + ze) % ze;
-        v(() => mt);
-        let Be = options[mt];
-        if (Be) onFocus?.(Be.value);
+              : optionCount - 1
+            : (currentFocus + (event.name === "down" ? 1 : -1) + optionCount) % optionCount;
+        setFocusIndex(() => nextFocus);
+        let focusedOption = options[nextFocus];
+        if (focusedOption) onFocus?.(focusedOption.value);
         return;
       }
-      if (O) {
+      if (inputOption) {
         if (event.key.length === 1 && !event.ctrl && !event.meta) {
           event.preventDefault();
-          let Bt = K.current + event.key;
-          if (O.onChange(Bt) === false) {
+          let nextTyped = typedRef.current + event.key;
+          if (inputOption.onChange(nextTyped) === false) {
             return;
           }
-          m(() => Bt);
+          setTyped(() => nextTyped);
         }
         return;
       }
-      let Vt = normalizeFullWidthDigits_2(event.key);
-      if (/^[0-9]$/.test(Vt)) {
+      let normalizedKey = normalizeFullWidthDigits_2(event.key);
+      if (/^[0-9]$/.test(normalizedKey)) {
         event.preventDefault();
         if (refuseInput?.()) {
           return;
         }
-        T(null);
-        m((Nt) => Nt + Vt);
-        v(nullPlaceholder8);
+        setErrorMessage(null);
+        setTyped((previous) => previous + normalizedKey);
+        setFocusIndex(nullPlaceholder8);
       }
     };
-    D[12] = K;
-    D[13] = C;
-    D[14] = H;
-    D[15] = O;
-    D[16] = fe;
-    D[17] = x;
-    D[18] = onCancel;
-    D[19] = onFocus;
-    D[20] = options;
-    D[21] = refuseInput;
-    D[22] = m;
-    D[23] = v;
-    D[24] = ee;
-    D[25] = Ve;
-    D[26] = ne;
-  } else ne = D[26];
-  let onKeyDown = ne;
-  let yt;
-  if (D[27] !== h || D[28] !== O || D[29] !== ye || D[30] !== onCancel || D[31] !== options.length) {
-    yt = O
-      ? `Enter text for option ${ye} (${reactNodeText(O.label)}), or Escape for the list: ${h}`
+    $[12] = typedRef;
+    $[13] = selectionDisabled;
+    $[14] = focusRef;
+    $[15] = inputOption;
+    $[16] = inputOptionIndexRef;
+    $[17] = isDisabledFlag;
+    $[18] = onCancel;
+    $[19] = onFocus;
+    $[20] = options;
+    $[21] = refuseInput;
+    $[22] = setTyped;
+    $[23] = setFocusIndex;
+    $[24] = setInputOptionIndex;
+    $[25] = commit;
+    $[26] = keyHandlerCached;
+  } else keyHandlerCached = $[26];
+  let onKeyDown = keyHandlerCached;
+  let announcement;
+  if (
+    $[27] !== typedText ||
+    $[28] !== inputOption ||
+    $[29] !== inputOptionIndex ||
+    $[30] !== onCancel ||
+    $[31] !== options.length
+  ) {
+    announcement = inputOption
+      ? `Enter text for option ${inputOptionIndex} (${reactNodeText(inputOption.label)}), or Escape for the list: ${typedText}`
       : options.length === 0
-        ? `Nothing to select${onCancel ? ". Escape to cancel" : ""}: ${h}`
-        : `Select with numbers [1-${options.length}]${M ? " or up / down arrow keys" : ""}. Then ${formatOrList(["Enter to submit", ...(onCancel ? ["Escape to cancel"] : [])])}: ${h}`;
-    D[27] = h;
-    D[28] = O;
-    D[29] = ye;
-    D[30] = onCancel;
-    D[31] = options.length;
-    D[32] = yt;
-  } else yt = D[32];
-  let _e = yt;
+        ? `Nothing to select${onCancel ? ". Escape to cancel" : ""}: ${typedText}`
+        : `Select with numbers [1-${options.length}]${arrowNavEnabled ? " or up / down arrow keys" : ""}. Then ${formatOrList(["Enter to submit", ...(onCancel ? ["Escape to cancel"] : [])])}: ${typedText}`;
+    $[27] = typedText;
+    $[28] = inputOption;
+    $[29] = inputOptionIndex;
+    $[30] = onCancel;
+    $[31] = options.length;
+    $[32] = announcement;
+  } else announcement = $[32];
+  let announcementText = announcement;
   let column;
-  if (D[33] !== _e) {
-    column = bunStringWidth(_e);
-    D[33] = _e;
-    D[34] = column;
-  } else column = D[34];
-  const active = !x && !C && E === null;
-  let Qe;
-  if (D[35] !== column || D[36] !== active) {
-    Qe = {
+  if ($[33] !== announcementText) {
+    column = bunStringWidth(announcementText);
+    $[33] = announcementText;
+    $[34] = column;
+  } else column = $[34];
+  const active = !isDisabledFlag && !selectionDisabled && focusIndex === null;
+  let cursorOptions;
+  if ($[35] !== column || $[36] !== active) {
+    cursorOptions = {
       line: 0,
       column,
       active,
       visible: true,
     };
-    D[35] = column;
-    D[36] = active;
-    D[37] = Qe;
-  } else Qe = D[37];
-  let ref = useDeclaredCursor(Qe);
-  let ht;
-  if (D[38] !== onKeyDown || D[39] !== x) {
-    ht = x
+    $[35] = column;
+    $[36] = active;
+    $[37] = cursorOptions;
+  } else cursorOptions = $[37];
+  let ref = useDeclaredCursor(cursorOptions);
+  let containerProps;
+  if ($[38] !== onKeyDown || $[39] !== isDisabledFlag) {
+    containerProps = isDisabledFlag
       ? {}
       : {
           tabIndex: 0,
           onKeyDown,
         };
-    D[38] = onKeyDown;
-    D[39] = x;
-    D[40] = ht;
-  } else ht = D[40];
-  let De;
+    $[38] = onKeyDown;
+    $[39] = isDisabledFlag;
+    $[40] = containerProps;
+  } else containerProps = $[40];
+  let optionElements;
   if (
-    D[41] !== defaultValue ||
-    D[42] !== C ||
-    D[43] !== drawLabel ||
-    D[44] !== E ||
-    D[45] !== headings ||
-    D[46] !== x ||
-    D[47] !== options
+    $[41] !== defaultValue ||
+    $[42] !== selectionDisabled ||
+    $[43] !== drawLabel ||
+    $[44] !== focusIndex ||
+    $[45] !== headings ||
+    $[46] !== isDisabledFlag ||
+    $[47] !== options
   ) {
-    let Ne;
+    let renderOption;
     if (
-      D[49] !== defaultValue ||
-      D[50] !== C ||
-      D[51] !== drawLabel ||
-      D[52] !== E ||
-      D[53] !== headings ||
-      D[54] !== x
+      $[49] !== defaultValue ||
+      $[50] !== selectionDisabled ||
+      $[51] !== drawLabel ||
+      $[52] !== focusIndex ||
+      $[53] !== headings ||
+      $[54] !== isDisabledFlag
     ) {
-      Ne = (p, Ft) =>
+      renderOption = (option, index) =>
         jsxProd_default_2(
-          Kc,
+          fragmentTypeExport,
           {
             children: [
-              headings?.get(Ft),
+              headings?.get(index),
               jsxProd_default(SelectOptionLabel, {
-                index: Ft + 1,
-                option: p,
-                selected: defaultValue !== undefined && p.value === defaultValue,
-                focused: E === Ft && !x && !C,
+                index: index + 1,
+                option,
+                selected: defaultValue !== undefined && option.value === defaultValue,
+                focused: focusIndex === index && !isDisabledFlag && !selectionDisabled,
                 drawLabel,
               }),
             ],
           },
-          String(p.value),
+          String(option.value),
         );
-      D[49] = defaultValue;
-      D[50] = C;
-      D[51] = drawLabel;
-      D[52] = E;
-      D[53] = headings;
-      D[54] = x;
-      D[55] = Ne;
-    } else Ne = D[55];
-    De = options.map(Ne);
-    D[41] = defaultValue;
-    D[42] = C;
-    D[43] = drawLabel;
-    D[44] = E;
-    D[45] = headings;
-    D[46] = x;
-    D[47] = options;
-    D[48] = De;
-  } else De = D[48];
-  let Ne;
-  if (D[56] !== headings || D[57] !== options.length) {
-    Ne = headings?.get(options.length);
-    D[56] = headings;
-    D[57] = options.length;
-    D[58] = Ne;
-  } else Ne = D[58];
-  let St;
-  if (D[59] !== W) {
-    St =
-      W &&
+      $[49] = defaultValue;
+      $[50] = selectionDisabled;
+      $[51] = drawLabel;
+      $[52] = focusIndex;
+      $[53] = headings;
+      $[54] = isDisabledFlag;
+      $[55] = renderOption;
+    } else renderOption = $[55];
+    optionElements = options.map(renderOption);
+    $[41] = defaultValue;
+    $[42] = selectionDisabled;
+    $[43] = drawLabel;
+    $[44] = focusIndex;
+    $[45] = headings;
+    $[46] = isDisabledFlag;
+    $[47] = options;
+    $[48] = optionElements;
+  } else optionElements = $[48];
+  let trailingHeading;
+  if ($[56] !== headings || $[57] !== options.length) {
+    trailingHeading = headings?.get(options.length);
+    $[56] = headings;
+    $[57] = options.length;
+    $[58] = trailingHeading;
+  } else trailingHeading = $[58];
+  let errorElement;
+  if ($[59] !== errorMessage) {
+    errorElement =
+      errorMessage &&
       jsxProd_default(Text, {
-        children: W,
+        children: errorMessage,
       });
-    D[59] = W;
-    D[60] = St;
-  } else St = D[60];
-  let Le;
-  if (D[61] !== ref || D[62] !== C || D[63] !== N || D[64] !== x || D[65] !== _e) {
-    Le =
-      !C &&
-      !(x && N) &&
+    $[59] = errorMessage;
+    $[60] = errorElement;
+  } else errorElement = $[60];
+  let promptElement;
+  if (
+    $[61] !== ref ||
+    $[62] !== selectionDisabled ||
+    $[63] !== hidePrompt ||
+    $[64] !== isDisabledFlag ||
+    $[65] !== announcementText
+  ) {
+    promptElement =
+      !selectionDisabled &&
+      !(isDisabledFlag && hidePrompt) &&
       jsxProd_default(Box, {
         ref,
         children: jsxProd_default(Text, {
-          children: _e,
+          children: announcementText,
         }),
       });
-    D[61] = ref;
-    D[62] = C;
-    D[63] = N;
-    D[64] = x;
-    D[65] = _e;
-    D[66] = Le;
-  } else Le = D[66];
-  let wt;
-  if (D[67] !== ht || D[68] !== De || D[69] !== Ne || D[70] !== St || D[71] !== Le) {
-    wt = jsxProd_default_2(Box, {
-      ref: xe,
+    $[61] = ref;
+    $[62] = selectionDisabled;
+    $[63] = hidePrompt;
+    $[64] = isDisabledFlag;
+    $[65] = announcementText;
+    $[66] = promptElement;
+  } else promptElement = $[66];
+  let selectElement;
+  if (
+    $[67] !== containerProps ||
+    $[68] !== optionElements ||
+    $[69] !== trailingHeading ||
+    $[70] !== errorElement ||
+    $[71] !== promptElement
+  ) {
+    selectElement = jsxProd_default_2(Box, {
+      ref: containerRef,
       flexDirection: "column",
-      ...ht,
-      children: [De, Ne, St, Le],
+      ...containerProps,
+      children: [optionElements, trailingHeading, errorElement, promptElement],
     });
-    D[67] = ht;
-    D[68] = De;
-    D[69] = Ne;
-    D[70] = St;
-    D[71] = Le;
-    D[72] = wt;
-  } else wt = D[72];
-  return wt;
+    $[67] = containerProps;
+    $[68] = optionElements;
+    $[69] = trailingHeading;
+    $[70] = errorElement;
+    $[71] = promptElement;
+    $[72] = selectElement;
+  } else selectElement = $[72];
+  return selectElement;
 }
 //@ chunk-ey2qag4x.js:9171-15553 placement
 /**
  * 多选列表组件（提交按钮、默认值、输入拒绝）。
  */
 function MultiSelect(props) {
-  let b = w(91);
+  let $ = useMemoCache(91);
   let {
     options,
     defaultValue,
@@ -813,239 +853,250 @@ function MultiSelect(props) {
     submitButtonText,
     refuseInput,
   } = props;
-  let V;
-  if (b[0] !== defaultValue) {
-    V = defaultValue === undefined ? [] : defaultValue;
-    b[0] = defaultValue;
-    b[1] = V;
-  } else V = b[1];
-  let x = V;
-  let C = isDisabled === undefined ? false : isDisabled;
-  let [B, N, h] = useStringStateWithRef();
-  let [K, m] = y(null);
-  let W;
-  if (b[2] === MEMO_CACHE_SENTINEL) {
-    W = isArrowNavEnabled();
-    b[2] = W;
-  } else W = b[2];
-  let T = W;
-  let [D, L, M] = useStateWithRef(null);
-  let [E, H, v] = useStateWithRef(null);
-  let ue;
-  if (b[3] !== options) {
-    ue = options.map(optionValueString_2).join("\x00");
-    b[3] = options;
-    b[4] = ue;
-  } else ue = b[4];
-  let ve = ue;
-  let [Y, J] = y(ve);
-  if (Y !== ve) {
-    J(ve);
-    M(nullPlaceholder9);
-    v(nullPlaceholder10);
-    h(emptyPlaceholder9);
+  let defaultValuesCached;
+  if ($[0] !== defaultValue) {
+    defaultValuesCached = defaultValue === undefined ? [] : defaultValue;
+    $[0] = defaultValue;
+    $[1] = defaultValuesCached;
+  } else defaultValuesCached = $[1];
+  let defaultValues = defaultValuesCached;
+  let isDisabledFlag = isDisabled === undefined ? false : isDisabled;
+  let [typedText, typedRef, setTyped] = useStringStateWithRef();
+  let [errorMessage, setErrorMessage] = useState(null);
+  let arrowNavCached;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    arrowNavCached = isArrowNavEnabled();
+    $[2] = arrowNavCached;
+  } else arrowNavCached = $[2];
+  let arrowNavEnabled = arrowNavCached;
+  let [focusIndex, focusRef, setFocusIndex] = useStateWithRef(null);
+  let [selectedSet, selectedRef, setSelectedSet] = useStateWithRef(null);
+  let optionsKeyCached;
+  if ($[3] !== options) {
+    optionsKeyCached = options.map(optionValueString_2).join("\x00");
+    $[3] = options;
+    $[4] = optionsKeyCached;
+  } else optionsKeyCached = $[4];
+  let optionsKey = optionsKeyCached;
+  let [lastOptionsKey, setLastOptionsKey] = useState(optionsKey);
+  if (lastOptionsKey !== optionsKey) {
+    setLastOptionsKey(optionsKey);
+    setFocusIndex(nullPlaceholder9);
+    setSelectedSet(nullPlaceholder10);
+    setTyped(emptyPlaceholder9);
   }
-  let ye;
-  if (b[5] !== x || b[6] !== options) {
-    ye = () =>
-      new Set(options.flatMap((option, ee) => (!option.disabled && x.includes(option.value) ? [ee] : [])));
-    b[5] = x;
-    b[6] = options;
-    b[7] = ye;
-  } else ye = b[7];
-  let O = ye;
-  let [xe, U] = y(null);
-  let me = R(false);
-  let X = R(false);
-  let le;
-  if (b[8] !== onSubmit || b[9] !== xe) {
-    le = () => {
-      if (xe !== null) {
-        let Te = [...xe];
-        U(null);
-        me.current = false;
-        onSubmit?.(Te);
+  let initialSelectedCached;
+  if ($[5] !== defaultValues || $[6] !== options) {
+    initialSelectedCached = () =>
+      new Set(
+        options.flatMap((option, candidateOption) =>
+          !option.disabled && defaultValues.includes(option.value) ? [candidateOption] : [],
+        ),
+      );
+    $[5] = defaultValues;
+    $[6] = options;
+    $[7] = initialSelectedCached;
+  } else initialSelectedCached = $[7];
+  let initialSelected = initialSelectedCached;
+  let [pendingSubmit, setPendingSubmit] = useState(null);
+  let submittedRef = useRef(false);
+  let inputArrivingRef = useRef(false);
+  let submitCached;
+  if ($[8] !== onSubmit || $[9] !== pendingSubmit) {
+    submitCached = () => {
+      if (pendingSubmit !== null) {
+        let values = [...pendingSubmit];
+        setPendingSubmit(null);
+        submittedRef.current = false;
+        onSubmit?.(values);
       }
     };
-    b[8] = onSubmit;
-    b[9] = xe;
-    b[10] = le;
-  } else le = b[10];
-  let Ve;
-  if (b[11] !== xe) {
-    Ve = [xe];
-    b[11] = xe;
-    b[12] = Ve;
-  } else Ve = b[12];
-  P(le, Ve);
-  let [ne, A, we] = useStateWithRef(null);
-  if (Y !== ve && ne !== null) {
-    we(nullPlaceholder7);
-    h(emptyPlaceholder10);
+    $[8] = onSubmit;
+    $[9] = pendingSubmit;
+    $[10] = submitCached;
+  } else submitCached = $[10];
+  let submitDeps;
+  if ($[11] !== pendingSubmit) {
+    submitDeps = [pendingSubmit];
+    $[11] = pendingSubmit;
+    $[12] = submitDeps;
+  } else submitDeps = $[12];
+  useEffect(submitCached, submitDeps);
+  let [inputClaim, inputClaimRef, setInputClaim] = useStateWithRef(null);
+  if (lastOptionsKey !== optionsKey && inputClaim !== null) {
+    setInputClaim(nullPlaceholder7);
+    setTyped(emptyPlaceholder10);
   }
-  let te = ne && options[ne.index - 1]?.type === "input" ? options[ne.index - 1] : null;
-  let ze = R(null);
-  useFocusOnMount(ze, !C);
-  useRegisterOverlay("multi-select", !!onCancel && !C);
-  let Ce;
-  if (b[13] !== onChange || b[14] !== h || b[15] !== M || b[16] !== we || b[17] !== v) {
-    Ce = (mt) => {
-      me.current = true;
-      if (onChange?.([...mt]) === false) {
-        me.current = false;
+  let inputOption =
+    inputClaim && options[inputClaim.index - 1]?.type === "input" ? options[inputClaim.index - 1] : null;
+  let containerRef = useRef(null);
+  useFocusOnMount(containerRef, !isDisabledFlag);
+  useRegisterOverlay("multi-select", !!onCancel && !isDisabledFlag);
+  let changeCached;
+  if (
+    $[13] !== onChange ||
+    $[14] !== setTyped ||
+    $[15] !== setFocusIndex ||
+    $[16] !== setInputClaim ||
+    $[17] !== setSelectedSet
+  ) {
+    changeCached = (nextValues) => {
+      submittedRef.current = true;
+      if (onChange?.([...nextValues]) === false) {
+        submittedRef.current = false;
         return;
       }
-      U(mt);
-      h(emptyPlaceholder11);
-      we(nullPlaceholder11);
-      M(nullPlaceholder12);
-      v(nullPlaceholder13);
+      setPendingSubmit(nextValues);
+      setTyped(emptyPlaceholder11);
+      setInputClaim(nullPlaceholder11);
+      setFocusIndex(nullPlaceholder12);
+      setSelectedSet(nullPlaceholder13);
     };
-    b[13] = onChange;
-    b[14] = h;
-    b[15] = M;
-    b[16] = we;
-    b[17] = v;
-    b[18] = Ce;
-  } else Ce = b[18];
-  let Be = Ce;
-  let Bt;
+    $[13] = onChange;
+    $[14] = setTyped;
+    $[15] = setFocusIndex;
+    $[16] = setInputClaim;
+    $[17] = setSelectedSet;
+    $[18] = changeCached;
+  } else changeCached = $[18];
+  let changeSelection = changeCached;
+  let applyInputCached;
   if (
-    b[19] !== x ||
-    b[20] !== Be ||
-    b[21] !== te ||
-    b[22] !== ne ||
-    b[23] !== onFocus ||
-    b[24] !== options ||
-    b[25] !== h ||
-    b[26] !== M ||
-    b[27] !== we ||
-    b[28] !== v
+    $[19] !== defaultValues ||
+    $[20] !== changeSelection ||
+    $[21] !== inputOption ||
+    $[22] !== inputClaim ||
+    $[23] !== onFocus ||
+    $[24] !== options ||
+    $[25] !== setTyped ||
+    $[26] !== setFocusIndex ||
+    $[27] !== setInputClaim ||
+    $[28] !== setSelectedSet
   ) {
-    Bt = (Vt) => {
-      if (te && ne) {
-        if (Vt === "") {
-          m("Enter some text, or Escape for the list.");
+    applyInputCached = (rawInput) => {
+      if (inputOption && inputClaim) {
+        if (rawInput === "") {
+          setErrorMessage("Enter some text, or Escape for the list.");
           return;
         }
-        Be([...ne.stashed, te.value]);
+        changeSelection([...inputClaim.stashed, inputOption.value]);
         return;
       }
-      let trimmed = Vt.trim();
+      let trimmed = rawInput.trim();
       if (trimmed === "") {
-        Be(x);
+        changeSelection(defaultValues);
         return;
       }
       let filtered = trimmed.split(/[\s,]+/).filter(Boolean);
       if (filtered.length === 0) {
-        Be(x);
+        changeSelection(defaultValues);
         return;
       }
-      let yt = new Set();
-      let _e = [];
-      let ke = null;
-      for (const dt of filtered) {
-        if (!/^\d+$/.test(dt)) {
-          m(
-            `Invalid selection "${dt}". Enter numbers between 1 and ${options.length}, comma- or space-separated.`,
+      let seenIndexes = new Set();
+      let pickedValues = [];
+      let inputPick = null;
+      for (const part of filtered) {
+        if (!/^\d+$/.test(part)) {
+          setErrorMessage(
+            `Invalid selection "${part}". Enter numbers between 1 and ${options.length}, comma- or space-separated.`,
           );
-          h(emptyPlaceholder12);
+          setTyped(emptyPlaceholder12);
           return;
         }
-        let Qe = Number.parseInt(dt, 10);
-        if (yt.has(Qe)) {
+        let optionIndex = Number.parseInt(part, 10);
+        if (seenIndexes.has(optionIndex)) {
           continue;
         }
-        yt.add(Qe);
-        if (Qe < 1 || Qe > options.length) {
-          m(
-            `Invalid selection "${dt}". Enter numbers between 1 and ${options.length}, comma- or space-separated.`,
+        seenIndexes.add(optionIndex);
+        if (optionIndex < 1 || optionIndex > options.length) {
+          setErrorMessage(
+            `Invalid selection "${part}". Enter numbers between 1 and ${options.length}, comma- or space-separated.`,
           );
-          h(emptyPlaceholder13);
+          setTyped(emptyPlaceholder13);
           return;
         }
-        let ct = options[Qe - 1];
-        if (ct.disabled) {
-          m(`Option ${Qe} is disabled.`);
-          h(emptyPlaceholder14);
+        let option = options[optionIndex - 1];
+        if (option.disabled) {
+          setErrorMessage(`Option ${optionIndex} is disabled.`);
+          setTyped(emptyPlaceholder14);
           return;
         }
-        if (ct.type === "input") {
-          if (ke) {
-            m("Only one free-text option can be included per selection.");
-            h(emptyPlaceholder15);
+        if (option.type === "input") {
+          if (inputPick) {
+            setErrorMessage("Only one free-text option can be included per selection.");
+            setTyped(emptyPlaceholder15);
             return;
           }
-          ke = {
-            index: Qe,
-            opt: ct,
+          inputPick = {
+            index: optionIndex,
+            opt: option,
           };
           continue;
         }
-        _e.push(ct.value);
+        pickedValues.push(option.value);
       }
-      if (ke?.opt) {
-        we(() => ({
-          index: ke.index,
-          stashed: _e,
+      if (inputPick?.opt) {
+        setInputClaim(() => ({
+          index: inputPick.index,
+          stashed: pickedValues,
           raw: trimmed,
         }));
-        M(nullPlaceholder14);
-        v(nullPlaceholder15);
-        let initialValue = ke.opt.initialValue ?? "";
-        h(() => initialValue);
-        ke.opt.onChange(initialValue);
-        onFocus?.(ke.opt.value);
+        setFocusIndex(nullPlaceholder14);
+        setSelectedSet(nullPlaceholder15);
+        let initialValue = inputPick.opt.initialValue ?? "";
+        setTyped(() => initialValue);
+        inputPick.opt.onChange(initialValue);
+        onFocus?.(inputPick.opt.value);
         return;
       }
-      Be(_e);
+      changeSelection(pickedValues);
     };
-    b[19] = x;
-    b[20] = Be;
-    b[21] = te;
-    b[22] = ne;
-    b[23] = onFocus;
-    b[24] = options;
-    b[25] = h;
-    b[26] = M;
-    b[27] = we;
-    b[28] = v;
-    b[29] = Bt;
-  } else Bt = b[29];
-  let De = Bt;
-  let Ne;
+    $[19] = defaultValues;
+    $[20] = changeSelection;
+    $[21] = inputOption;
+    $[22] = inputClaim;
+    $[23] = onFocus;
+    $[24] = options;
+    $[25] = setTyped;
+    $[26] = setFocusIndex;
+    $[27] = setInputClaim;
+    $[28] = setSelectedSet;
+    $[29] = applyInputCached;
+  } else applyInputCached = $[29];
+  let applyInput = applyInputCached;
+  let keyHandlerCached;
   if (
-    b[30] !== N ||
-    b[31] !== O ||
-    b[32] !== Be ||
-    b[33] !== L ||
-    b[34] !== te ||
-    b[35] !== ne ||
-    b[36] !== A ||
-    b[37] !== C ||
-    b[38] !== onCancel ||
-    b[39] !== onFocus ||
-    b[40] !== options ||
-    b[41] !== refuseInput ||
-    b[42] !== h ||
-    b[43] !== M ||
-    b[44] !== we ||
-    b[45] !== v ||
-    b[46] !== De ||
-    b[47] !== H
+    $[30] !== typedRef ||
+    $[31] !== initialSelected ||
+    $[32] !== changeSelection ||
+    $[33] !== focusRef ||
+    $[34] !== inputOption ||
+    $[35] !== inputClaim ||
+    $[36] !== inputClaimRef ||
+    $[37] !== isDisabledFlag ||
+    $[38] !== onCancel ||
+    $[39] !== onFocus ||
+    $[40] !== options ||
+    $[41] !== refuseInput ||
+    $[42] !== setTyped ||
+    $[43] !== setFocusIndex ||
+    $[44] !== setInputClaim ||
+    $[45] !== setSelectedSet ||
+    $[46] !== applyInput ||
+    $[47] !== selectedRef
   ) {
-    Ne = (event) => {
-      if (C) {
+    keyHandlerCached = (event) => {
+      if (isDisabledFlag) {
         return;
       }
       if (event.key === "escape" && event.name === "escape") {
         event.preventDefault();
-        if (ne) {
-          let { raw } = ne;
-          we(nullPlaceholder19);
-          h(() => raw);
-          let St = options.find(isNotInputOption_2) ?? options[0];
-          if (St) onFocus?.(St.value);
+        if (inputClaim) {
+          let { raw } = inputClaim;
+          setInputClaim(nullPlaceholder19);
+          setTyped(() => raw);
+          let defaultOption = options.find(isNotInputOption_2) ?? options[0];
+          if (defaultOption) onFocus?.(defaultOption.value);
           return;
         }
         onCancel?.();
@@ -1053,100 +1104,112 @@ function MultiSelect(props) {
       }
       if (event.key === "return" && event.name === "return") {
         event.preventDefault();
-        if (X.current) {
+        if (inputArrivingRef.current) {
           refuseInput?.();
-          X.current = false;
-          h(emptyPlaceholder16);
-          m("Part of that entry arrived before the list was ready \u2014 enter your selection again.");
+          inputArrivingRef.current = false;
+          setTyped(emptyPlaceholder16);
+          setErrorMessage(
+            "Part of that entry arrived before the list was ready \u2014 enter your selection again.",
+          );
           return;
         }
         if (refuseInput?.()) {
           return;
         }
-        if (me.current) {
+        if (submittedRef.current) {
           return;
         }
-        if (T && !te && N.current.length === 0 && H.current !== null) {
-          let sorted = [...H.current].sort(subtract);
-          if (sorted.length === 0) Be([]);
-          else De(sorted.map(nextIndexString).join(" "));
+        if (
+          arrowNavEnabled &&
+          !inputOption &&
+          typedRef.current.length === 0 &&
+          selectedRef.current !== null
+        ) {
+          let sorted = [...selectedRef.current].sort(subtract);
+          if (sorted.length === 0) changeSelection([]);
+          else applyInput(sorted.map(nextIndexString).join(" "));
           return;
         }
-        De(N.current);
+        applyInput(typedRef.current);
         return;
       }
       if (event.key === "backspace" || event.key === "delete") {
         event.preventDefault();
-        let wt = N.current;
-        let sliced = wt.slice(0, -1);
-        if (te && te.onChange(sliced) === false) {
+        let typedValue = typedRef.current;
+        let sliced = typedValue.slice(0, -1);
+        if (inputOption && inputOption.onChange(sliced) === false) {
           return;
         }
-        h(() => sliced);
-        if (!te && wt !== sliced) v(nullPlaceholder16);
+        setTyped(() => sliced);
+        if (!inputOption && typedValue !== sliced) setSelectedSet(nullPlaceholder16);
         return;
       }
-      if (T && !te && A.current === null && (event.name === "up" || event.name === "down")) {
+      if (
+        arrowNavEnabled &&
+        !inputOption &&
+        inputClaimRef.current === null &&
+        (event.name === "up" || event.name === "down")
+      ) {
         event.preventDefault();
         if (refuseInput?.()) {
           return;
         }
-        m(null);
-        h(emptyPlaceholder17);
-        X.current = false;
-        let bt = options.length;
-        if (bt === 0) {
+        setErrorMessage(null);
+        setTyped(emptyPlaceholder17);
+        inputArrivingRef.current = false;
+        let optionCount = options.length;
+        if (optionCount === 0) {
           return;
         }
-        let on = L.current;
-        let Ge =
-          on === null
+        let currentFocus = focusRef.current;
+        let nextFocus =
+          currentFocus === null
             ? event.name === "down"
               ? 0
-              : bt - 1
-            : (on + (event.name === "down" ? 1 : -1) + bt) % bt;
-        M(() => Ge);
-        let Lt = options[Ge];
-        if (Lt) onFocus?.(Lt.value);
+              : optionCount - 1
+            : (currentFocus + (event.name === "down" ? 1 : -1) + optionCount) % optionCount;
+        setFocusIndex(() => nextFocus);
+        let focusedOption = options[nextFocus];
+        if (focusedOption) onFocus?.(focusedOption.value);
         return;
       }
       if (
-        T &&
-        !te &&
-        A.current === null &&
-        L.current !== null &&
+        arrowNavEnabled &&
+        !inputOption &&
+        inputClaimRef.current === null &&
+        focusRef.current !== null &&
         replaceIdeographicSpace(event.key) === " "
       ) {
         event.preventDefault();
         if (refuseInput?.()) {
           return;
         }
-        let Ze = L.current;
-        let sn = options[Ze];
-        if (!sn) {
+        let focusIndexValue = focusRef.current;
+        let option = options[focusIndexValue];
+        if (!option) {
           return;
         }
-        if (sn.disabled) {
-          m(`Option ${Ze + 1} is disabled.`);
+        if (option.disabled) {
+          setErrorMessage(`Option ${focusIndexValue + 1} is disabled.`);
           return;
         }
-        m(null);
-        v((_n) => {
-          let Rt = new Set(_n ?? O());
-          if (Rt.has(Ze)) Rt.delete(Ze);
-          else Rt.add(Ze);
-          return Rt;
+        setErrorMessage(null);
+        setSelectedSet((previous) => {
+          let nextSet = new Set(previous ?? initialSelected());
+          if (nextSet.has(focusIndexValue)) nextSet.delete(focusIndexValue);
+          else nextSet.add(focusIndexValue);
+          return nextSet;
         });
         return;
       }
-      if (te) {
+      if (inputOption) {
         if (event.key.length === 1 && !event.ctrl && !event.meta) {
           event.preventDefault();
-          let Gn = N.current + event.key;
-          if (te.onChange(Gn) === false) {
+          let nextTyped = typedRef.current + event.key;
+          if (inputOption.onChange(nextTyped) === false) {
             return;
           }
-          h(() => Gn);
+          setTyped(() => nextTyped);
         }
         return;
       }
@@ -1155,321 +1218,337 @@ function MultiSelect(props) {
         .replace("\u3001", ",");
       if (/^[0-9, ]$/.test(replaced)) {
         event.preventDefault();
-        if (X.current) {
+        if (inputArrivingRef.current) {
           refuseInput?.();
           return;
         }
         if (refuseInput?.()) {
-          X.current = true;
+          inputArrivingRef.current = true;
           return;
         }
-        m(null);
-        h((Xo) => Xo + replaced);
-        M(nullPlaceholder17);
-        v(nullPlaceholder18);
+        setErrorMessage(null);
+        setTyped((previous) => previous + replaced);
+        setFocusIndex(nullPlaceholder17);
+        setSelectedSet(nullPlaceholder18);
       }
     };
-    b[30] = N;
-    b[31] = O;
-    b[32] = Be;
-    b[33] = L;
-    b[34] = te;
-    b[35] = ne;
-    b[36] = A;
-    b[37] = C;
-    b[38] = onCancel;
-    b[39] = onFocus;
-    b[40] = options;
-    b[41] = refuseInput;
-    b[42] = h;
-    b[43] = M;
-    b[44] = we;
-    b[45] = v;
-    b[46] = De;
-    b[47] = H;
-    b[48] = Ne;
-  } else Ne = b[48];
-  let onKeyDown = Ne;
-  let et;
+    $[30] = typedRef;
+    $[31] = initialSelected;
+    $[32] = changeSelection;
+    $[33] = focusRef;
+    $[34] = inputOption;
+    $[35] = inputClaim;
+    $[36] = inputClaimRef;
+    $[37] = isDisabledFlag;
+    $[38] = onCancel;
+    $[39] = onFocus;
+    $[40] = options;
+    $[41] = refuseInput;
+    $[42] = setTyped;
+    $[43] = setFocusIndex;
+    $[44] = setInputClaim;
+    $[45] = setSelectedSet;
+    $[46] = applyInput;
+    $[47] = selectedRef;
+    $[48] = keyHandlerCached;
+  } else keyHandlerCached = $[48];
+  let onKeyDown = keyHandlerCached;
+  let announcement;
   if (
-    b[49] !== B ||
-    b[50] !== x ||
-    b[51] !== te ||
-    b[52] !== ne?.index ||
-    b[53] !== onCancel ||
-    b[54] !== options.length ||
-    b[55] !== submitButtonText ||
-    b[56] !== E
+    $[49] !== typedText ||
+    $[50] !== defaultValues ||
+    $[51] !== inputOption ||
+    $[52] !== inputClaim?.index ||
+    $[53] !== onCancel ||
+    $[54] !== options.length ||
+    $[55] !== submitButtonText ||
+    $[56] !== selectedSet
   ) {
-    et = te
-      ? `Enter text for option ${ne?.index} (${reactNodeText(te.label)}), or Escape for the list: ${B}`
-      : `Select with numbers [1-${options.length}] (comma- or space-separated for several)${T ? " or up / down arrow keys" : ""}. Then ${formatOrList([...(T ? ["Space to toggle"] : []), `Enter to ${submitButtonText ?? "submit"}`, ...(x.length > 0 && E === null ? ["bare Enter for defaults"] : []), ...(onCancel ? ["Escape to cancel"] : [])])}: ${B}`;
-    b[49] = B;
-    b[50] = x;
-    b[51] = te;
-    b[52] = ne?.index;
-    b[53] = onCancel;
-    b[54] = options.length;
-    b[55] = submitButtonText;
-    b[56] = E;
-    b[57] = et;
-  } else et = b[57];
-  let Ct = et;
+    announcement = inputOption
+      ? `Enter text for option ${inputClaim?.index} (${reactNodeText(inputOption.label)}), or Escape for the list: ${typedText}`
+      : `Select with numbers [1-${options.length}] (comma- or space-separated for several)${arrowNavEnabled ? " or up / down arrow keys" : ""}. Then ${formatOrList([...(arrowNavEnabled ? ["Space to toggle"] : []), `Enter to ${submitButtonText ?? "submit"}`, ...(defaultValues.length > 0 && selectedSet === null ? ["bare Enter for defaults"] : []), ...(onCancel ? ["Escape to cancel"] : [])])}: ${typedText}`;
+    $[49] = typedText;
+    $[50] = defaultValues;
+    $[51] = inputOption;
+    $[52] = inputClaim?.index;
+    $[53] = onCancel;
+    $[54] = options.length;
+    $[55] = submitButtonText;
+    $[56] = selectedSet;
+    $[57] = announcement;
+  } else announcement = $[57];
+  let announcementText = announcement;
   let column;
-  if (b[58] !== Ct) {
-    column = bunStringWidth(Ct);
-    b[58] = Ct;
-    b[59] = column;
-  } else column = b[59];
-  const active = !C && D === null;
-  let ft;
-  if (b[60] !== column || b[61] !== active) {
-    ft = {
+  if ($[58] !== announcementText) {
+    column = bunStringWidth(announcementText);
+    $[58] = announcementText;
+    $[59] = column;
+  } else column = $[59];
+  const active = !isDisabledFlag && focusIndex === null;
+  let cursorOptions;
+  if ($[60] !== column || $[61] !== active) {
+    cursorOptions = {
       line: 0,
       column,
       active,
       visible: true,
     };
-    b[60] = column;
-    b[61] = active;
-    b[62] = ft;
-  } else ft = b[62];
-  let ref = useDeclaredCursor(ft);
-  let an;
-  if (b[63] !== x) {
-    an = new Set(x);
-    b[63] = x;
-    b[64] = an;
-  } else an = b[64];
-  let z = an;
-  let dn;
-  if (b[65] !== onKeyDown || b[66] !== C) {
-    dn = C
+    $[60] = column;
+    $[61] = active;
+    $[62] = cursorOptions;
+  } else cursorOptions = $[62];
+  let ref = useDeclaredCursor(cursorOptions);
+  let selectedValuesCached;
+  if ($[63] !== defaultValues) {
+    selectedValuesCached = new Set(defaultValues);
+    $[63] = defaultValues;
+    $[64] = selectedValuesCached;
+  } else selectedValuesCached = $[64];
+  let selectedValues = selectedValuesCached;
+  let containerProps;
+  if ($[65] !== onKeyDown || $[66] !== isDisabledFlag) {
+    containerProps = isDisabledFlag
       ? {}
       : {
           tabIndex: 0,
           onKeyDown,
         };
-    b[65] = onKeyDown;
-    b[66] = C;
-    b[67] = dn;
-  } else dn = b[67];
-  let cn;
-  if (b[68] !== z || b[69] !== D || b[70] !== C || b[71] !== options || b[72] !== E) {
-    let tt;
-    if (b[74] !== z || b[75] !== D || b[76] !== C || b[77] !== E) {
-      tt = (pn, On) =>
+    $[65] = onKeyDown;
+    $[66] = isDisabledFlag;
+    $[67] = containerProps;
+  } else containerProps = $[67];
+  let optionElements;
+  if (
+    $[68] !== selectedValues ||
+    $[69] !== focusIndex ||
+    $[70] !== isDisabledFlag ||
+    $[71] !== options ||
+    $[72] !== selectedSet
+  ) {
+    let renderOption;
+    if (
+      $[74] !== selectedValues ||
+      $[75] !== focusIndex ||
+      $[76] !== isDisabledFlag ||
+      $[77] !== selectedSet
+    ) {
+      renderOption = (option, index) =>
         jsxProd_default(
           SelectOptionLabel,
           {
-            index: On + 1,
-            option: pn,
-            selected: E ? E.has(On) : z.has(pn.value),
-            focused: D === On && !C,
+            index: index + 1,
+            option,
+            selected: selectedSet ? selectedSet.has(index) : selectedValues.has(option.value),
+            focused: focusIndex === index && !isDisabledFlag,
           },
-          String(pn.value),
+          String(option.value),
         );
-      b[74] = z;
-      b[75] = D;
-      b[76] = C;
-      b[77] = E;
-      b[78] = tt;
-    } else tt = b[78];
-    cn = options.map(tt);
-    b[68] = z;
-    b[69] = D;
-    b[70] = C;
-    b[71] = options;
-    b[72] = E;
-    b[73] = cn;
-  } else cn = b[73];
-  let tt;
-  if (b[79] !== K) {
-    tt =
-      K &&
+      $[74] = selectedValues;
+      $[75] = focusIndex;
+      $[76] = isDisabledFlag;
+      $[77] = selectedSet;
+      $[78] = renderOption;
+    } else renderOption = $[78];
+    optionElements = options.map(renderOption);
+    $[68] = selectedValues;
+    $[69] = focusIndex;
+    $[70] = isDisabledFlag;
+    $[71] = options;
+    $[72] = selectedSet;
+    $[73] = optionElements;
+  } else optionElements = $[73];
+  let errorElement;
+  if ($[79] !== errorMessage) {
+    errorElement =
+      errorMessage &&
       jsxProd_default(Text, {
-        children: K,
+        children: errorMessage,
       });
-    b[79] = K;
-    b[80] = tt;
-  } else tt = b[80];
+    $[79] = errorMessage;
+    $[80] = errorElement;
+  } else errorElement = $[80];
   let children;
-  if (b[81] !== Ct) {
+  if ($[81] !== announcementText) {
     children = jsxProd_default(Text, {
-      children: Ct,
+      children: announcementText,
     });
-    b[81] = Ct;
-    b[82] = children;
-  } else children = b[82];
-  let fn;
-  if (b[83] !== ref || b[84] !== children) {
-    fn = jsxProd_default(Box, {
+    $[81] = announcementText;
+    $[82] = children;
+  } else children = $[82];
+  let announcementElement;
+  if ($[83] !== ref || $[84] !== children) {
+    announcementElement = jsxProd_default(Box, {
       ref,
       children,
     });
-    b[83] = ref;
-    b[84] = children;
-    b[85] = fn;
-  } else fn = b[85];
-  let Jn;
-  if (b[86] !== dn || b[87] !== cn || b[88] !== tt || b[89] !== fn) {
-    Jn = jsxProd_default_2(Box, {
-      ref: ze,
+    $[83] = ref;
+    $[84] = children;
+    $[85] = announcementElement;
+  } else announcementElement = $[85];
+  let multiSelectElement;
+  if (
+    $[86] !== containerProps ||
+    $[87] !== optionElements ||
+    $[88] !== errorElement ||
+    $[89] !== announcementElement
+  ) {
+    multiSelectElement = jsxProd_default_2(Box, {
+      ref: containerRef,
       flexDirection: "column",
-      ...dn,
-      children: [cn, tt, fn],
+      ...containerProps,
+      children: [optionElements, errorElement, announcementElement],
     });
-    b[86] = dn;
-    b[87] = cn;
-    b[88] = tt;
-    b[89] = fn;
-    b[90] = Jn;
-  } else Jn = b[90];
-  return Jn;
+    $[86] = containerProps;
+    $[87] = optionElements;
+    $[88] = errorElement;
+    $[89] = announcementElement;
+    $[90] = multiSelectElement;
+  } else multiSelectElement = $[90];
+  return multiSelectElement;
 }
 //@ chunk-ey2qag4x.js:15553-16760 placement
 /**
  * 选项标签渲染（选中/焦点标记）。
  */
 function SelectOptionLabel(props) {
-  let u = w(26);
+  let $ = useMemoCache(26);
   let { index, option, selected, focused, drawLabel } = props;
-  let d = drawLabel === undefined ? false : drawLabel;
-  let g;
-  if (u[0] !== focused) {
-    g = {
+  let drawLabel_ = drawLabel === undefined ? false : drawLabel;
+  let cursor;
+  if ($[0] !== focused) {
+    cursor = {
       line: 0,
       column: 0,
       active: focused,
       visible: true,
     };
-    u[0] = focused;
-    u[1] = g;
-  } else g = u[1];
-  let ref = useDeclaredCursor(g);
-  let b;
-  if (u[2] !== option.label) {
-    b = reactNodeText(option.label);
-    u[2] = option.label;
-    u[3] = b;
-  } else b = u[3];
-  let V = b;
-  let x = option.description ? ` \u2014 ${option.description}` : "";
-  const C = `${V}${x}`;
-  let B;
-  if (u[4] !== C) {
-    B = truncateOptionLabel(C);
-    u[4] = C;
-    u[5] = B;
-  } else B = u[5];
-  let N = B;
-  const h = option.disabled ? "(disabled)" : null;
-  const K = selected ? "(selected)" : null;
-  let m;
-  if (u[6] !== h || u[7] !== K) {
-    m = [h, K].filter(Boolean);
-    u[6] = h;
-    u[7] = K;
-    u[8] = m;
-  } else m = u[8];
-  let joined = m.join(" ");
-  if (d) {
-    const T = joined ? ` ${joined}` : "";
-    let D;
-    if (u[9] !== index || u[10] !== T) {
-      D = jsxProd_default_2(Text, {
-        children: [index, ".", T],
+    $[0] = focused;
+    $[1] = cursor;
+  } else cursor = $[1];
+  let ref = useDeclaredCursor(cursor);
+  let labelText;
+  if ($[2] !== option.label) {
+    labelText = reactNodeText(option.label);
+    $[2] = option.label;
+    $[3] = labelText;
+  } else labelText = $[3];
+  let labelPlain = labelText;
+  let descriptionSuffix = option.description ? ` \u2014 ${option.description}` : "";
+  const combinedLabel = `${labelPlain}${descriptionSuffix}`;
+  let truncated;
+  if ($[4] !== combinedLabel) {
+    truncated = truncateOptionLabel(combinedLabel);
+    $[4] = combinedLabel;
+    $[5] = truncated;
+  } else truncated = $[5];
+  let plainLabel = truncated;
+  const disabledTag = option.disabled ? "(disabled)" : null;
+  const selectedTag = selected ? "(selected)" : null;
+  let tags;
+  if ($[6] !== disabledTag || $[7] !== selectedTag) {
+    tags = [disabledTag, selectedTag].filter(Boolean);
+    $[6] = disabledTag;
+    $[7] = selectedTag;
+    $[8] = tags;
+  } else tags = $[8];
+  let joined = tags.join(" ");
+  if (drawLabel_) {
+    const joinedSuffix = joined ? ` ${joined}` : "";
+    let indexLine;
+    if ($[9] !== index || $[10] !== joinedSuffix) {
+      indexLine = jsxProd_default_2(Text, {
+        children: [index, ".", joinedSuffix],
       });
-      u[9] = index;
-      u[10] = T;
-      u[11] = D;
-    } else D = u[11];
-    let L;
-    if (u[12] !== option.description) {
-      L =
+      $[9] = index;
+      $[10] = joinedSuffix;
+      $[11] = indexLine;
+    } else indexLine = $[11];
+    let descriptionText;
+    if ($[12] !== option.description) {
+      descriptionText =
         option.description &&
         jsxProd_default_2(Text, {
           children: ["\u2014 ", option.description],
         });
-      u[12] = option.description;
-      u[13] = L;
-    } else L = u[13];
-    let M;
-    if (u[14] !== ref || u[15] !== option.label || u[16] !== D || u[17] !== L) {
-      M = jsxProd_default_2(Box, {
+      $[12] = option.description;
+      $[13] = descriptionText;
+    } else descriptionText = $[13];
+    let boxedCursor;
+    if ($[14] !== ref || $[15] !== option.label || $[16] !== indexLine || $[17] !== descriptionText) {
+      boxedCursor = jsxProd_default_2(Box, {
         ref,
-        children: [D, option.label, L],
+        children: [indexLine, option.label, descriptionText],
       });
-      u[14] = ref;
-      u[15] = option.label;
-      u[16] = D;
-      u[17] = L;
-      u[18] = M;
-    } else M = u[18];
-    return M;
+      $[14] = ref;
+      $[15] = option.label;
+      $[16] = indexLine;
+      $[17] = descriptionText;
+      $[18] = boxedCursor;
+    } else boxedCursor = $[18];
+    return boxedCursor;
   }
-  const T = joined ? `${joined} ` : "";
+  const joinedPrefix = joined ? `${joined} ` : "";
   let children;
-  if (u[19] !== N || u[20] !== index || u[21] !== T) {
+  if ($[19] !== plainLabel || $[20] !== index || $[21] !== joinedPrefix) {
     children = jsxProd_default_2(Text, {
-      children: [index, ". ", T, N],
+      children: [index, ". ", joinedPrefix, plainLabel],
     });
-    u[19] = N;
-    u[20] = index;
-    u[21] = T;
-    u[22] = children;
-  } else children = u[22];
-  let L;
-  if (u[23] !== ref || u[24] !== children) {
-    L = jsxProd_default(Box, {
+    $[19] = plainLabel;
+    $[20] = index;
+    $[21] = joinedPrefix;
+    $[22] = children;
+  } else children = $[22];
+  let row;
+  if ($[23] !== ref || $[24] !== children) {
+    row = jsxProd_default(Box, {
       ref,
       children,
     });
-    u[23] = ref;
-    u[24] = children;
-    u[25] = L;
-  } else L = u[25];
-  return L;
+    $[23] = ref;
+    $[24] = children;
+    $[25] = row;
+  } else row = $[25];
+  return row;
 }
 //@ chunk-ey2qag4x.js:16760-18909 placement
 /**
  * 确认/取消按钮对，带打开后输入拒绝窗口。
  */
 function ConfirmButtons(props) {
-  let h = w(43);
+  let $ = useMemoCache(43);
   let { confirmLabel, cancelLabel, onConfirm, onCancel, refuseInput, openedAt, windowMs } = props;
-  let [g, c, b] = useStringStateWithRef();
-  let [V, x] = y(null);
-  let C = R(null);
-  useFocusOnMount(C, true);
+  let [typedText, typedRef, setTyped] = useStringStateWithRef();
+  let [errorMessage, setErrorMessage] = useState(null);
+  let containerRef = useRef(null);
+  useFocusOnMount(containerRef, true);
   useRegisterOverlay("select", true);
   let { refuse, refuseCharacter } = useRefuseInput(openedAt, windowMs);
-  let K;
-  if (h[0] !== refuseInput || h[1] !== refuse) {
-    K = function m() {
+  let shouldRefuseCached;
+  if ($[0] !== refuseInput || $[1] !== refuse) {
+    shouldRefuseCached = function shouldRefuse() {
       return (refuseInput?.() ?? false) || refuse();
     };
-    h[0] = refuseInput;
-    h[1] = refuse;
-    h[2] = K;
-  } else K = h[2];
-  let m = K;
-  let W;
-  if (h[3] !== refuseInput || h[4] !== refuseCharacter) {
-    W = function T() {
+    $[0] = refuseInput;
+    $[1] = refuse;
+    $[2] = shouldRefuseCached;
+  } else shouldRefuseCached = $[2];
+  let shouldRefuseKey = shouldRefuseCached;
+  let shouldRefuseCharCached;
+  if ($[3] !== refuseInput || $[4] !== refuseCharacter) {
+    shouldRefuseCharCached = function shouldRefuseChar() {
       return (refuseInput?.() ?? false) || refuseCharacter();
     };
-    h[3] = refuseInput;
-    h[4] = refuseCharacter;
-    h[5] = W;
-  } else W = h[5];
-  let T = W;
-  let D;
-  if (h[6] !== onCancel || h[7] !== onConfirm || h[8] !== m || h[9] !== b) {
-    D = (L) => {
-      let lower = L.trim().toLowerCase();
-      if ((lower === "y" || lower === "yes" || lower === "n" || lower === "no") && m()) {
-        b(emptyPlaceholder18);
+    $[3] = refuseInput;
+    $[4] = refuseCharacter;
+    $[5] = shouldRefuseCharCached;
+  } else shouldRefuseCharCached = $[5];
+  let refuseThisCharacter = shouldRefuseCharCached;
+  let submitTypedCached;
+  if ($[6] !== onCancel || $[7] !== onConfirm || $[8] !== shouldRefuseKey || $[9] !== setTyped) {
+    submitTypedCached = (rawTyped) => {
+      let lower = rawTyped.trim().toLowerCase();
+      if ((lower === "y" || lower === "yes" || lower === "n" || lower === "no") && shouldRefuseKey()) {
+        setTyped(emptyPlaceholder18);
         return;
       }
       if (lower === "y" || lower === "yes") {
@@ -1478,153 +1557,172 @@ function ConfirmButtons(props) {
       if (lower === "n" || lower === "no") {
         return onCancel();
       }
-      x("Please answer y or n.");
-      b(emptyPlaceholder19);
+      setErrorMessage("Please answer y or n.");
+      setTyped(emptyPlaceholder19);
     };
-    h[6] = onCancel;
-    h[7] = onConfirm;
-    h[8] = m;
-    h[9] = b;
-    h[10] = D;
-  } else D = h[10];
-  let E = D;
-  let H;
-  if (h[11] !== c || h[12] !== onCancel || h[13] !== m || h[14] !== T || h[15] !== b || h[16] !== E) {
-    H = (event) => {
+    $[6] = onCancel;
+    $[7] = onConfirm;
+    $[8] = shouldRefuseKey;
+    $[9] = setTyped;
+    $[10] = submitTypedCached;
+  } else submitTypedCached = $[10];
+  let submitTyped = submitTypedCached;
+  let keyHandlerCached;
+  if (
+    $[11] !== typedRef ||
+    $[12] !== onCancel ||
+    $[13] !== shouldRefuseKey ||
+    $[14] !== refuseThisCharacter ||
+    $[15] !== setTyped ||
+    $[16] !== submitTyped
+  ) {
+    keyHandlerCached = (event) => {
       if (event.key === "escape" && event.name === "escape") {
         event.preventDefault();
-        if (m()) {
+        if (shouldRefuseKey()) {
           return;
         }
         return onCancel();
       }
       if (event.key === "return" && event.name === "return") {
         event.preventDefault();
-        return E(c.current);
+        return submitTyped(typedRef.current);
       }
       if (event.key === "backspace" || event.key === "delete") {
         event.preventDefault();
-        b(dropLastChar);
+        setTyped(dropLastChar);
         return;
       }
       if (event.key.length === 1 && !event.ctrl && !event.meta) {
         event.preventDefault();
-        if (T()) {
+        if (refuseThisCharacter()) {
           return;
         }
-        x(null);
-        b((ue) => ue + event.key);
+        setErrorMessage(null);
+        setTyped((previous) => previous + event.key);
       }
     };
-    h[11] = c;
-    h[12] = onCancel;
-    h[13] = m;
-    h[14] = T;
-    h[15] = b;
-    h[16] = E;
-    h[17] = H;
-  } else H = h[17];
-  let onKeyDown = H;
-  let Y = `Enter y/n: ${g}`;
+    $[11] = typedRef;
+    $[12] = onCancel;
+    $[13] = shouldRefuseKey;
+    $[14] = refuseThisCharacter;
+    $[15] = setTyped;
+    $[16] = submitTyped;
+    $[17] = keyHandlerCached;
+  } else keyHandlerCached = $[17];
+  let onKeyDown = keyHandlerCached;
+  let promptText = `Enter y/n: ${typedText}`;
   let column;
-  if (h[18] !== Y) {
-    column = bunStringWidth(Y);
-    h[18] = Y;
-    h[19] = column;
-  } else column = h[19];
-  let ye;
-  if (h[20] !== column) {
-    ye = {
+  if ($[18] !== promptText) {
+    column = bunStringWidth(promptText);
+    $[18] = promptText;
+    $[19] = column;
+  } else column = $[19];
+  let cursorOptions;
+  if ($[20] !== column) {
+    cursorOptions = {
       line: 0,
       column,
       active: true,
       visible: true,
     };
-    h[20] = column;
-    h[21] = ye;
-  } else ye = h[21];
-  let ref = useDeclaredCursor(ye);
-  let ee;
-  if (h[22] !== confirmLabel) {
-    ee = reactNodeText(confirmLabel);
-    h[22] = confirmLabel;
-    h[23] = ee;
-  } else ee = h[23];
-  let O;
-  if (h[24] !== ee) {
-    O = jsxProd_default_2(Text, {
-      children: ["y. ", ee],
+    $[20] = column;
+    $[21] = cursorOptions;
+  } else cursorOptions = $[21];
+  let ref = useDeclaredCursor(cursorOptions);
+  let confirmText;
+  if ($[22] !== confirmLabel) {
+    confirmText = reactNodeText(confirmLabel);
+    $[22] = confirmLabel;
+    $[23] = confirmText;
+  } else confirmText = $[23];
+  let confirmLine;
+  if ($[24] !== confirmText) {
+    confirmLine = jsxProd_default_2(Text, {
+      children: ["y. ", confirmText],
     });
-    h[24] = ee;
-    h[25] = O;
-  } else O = h[25];
-  let xe;
-  if (h[26] !== cancelLabel) {
-    xe = reactNodeText(cancelLabel);
-    h[26] = cancelLabel;
-    h[27] = xe;
-  } else xe = h[27];
-  let U;
-  if (h[28] !== xe) {
-    U = jsxProd_default_2(Text, {
-      children: ["n. ", xe],
+    $[24] = confirmText;
+    $[25] = confirmLine;
+  } else confirmLine = $[25];
+  let cancelText;
+  if ($[26] !== cancelLabel) {
+    cancelText = reactNodeText(cancelLabel);
+    $[26] = cancelLabel;
+    $[27] = cancelText;
+  } else cancelText = $[27];
+  let cancelLine;
+  if ($[28] !== cancelText) {
+    cancelLine = jsxProd_default_2(Text, {
+      children: ["n. ", cancelText],
     });
-    h[28] = xe;
-    h[29] = U;
-  } else U = h[29];
-  let me;
-  if (h[30] !== V) {
-    me =
-      V &&
+    $[28] = cancelText;
+    $[29] = cancelLine;
+  } else cancelLine = $[29];
+  let errorLine;
+  if ($[30] !== errorMessage) {
+    errorLine =
+      errorMessage &&
       jsxProd_default(Text, {
-        children: V,
+        children: errorMessage,
       });
-    h[30] = V;
-    h[31] = me;
-  } else me = h[31];
+    $[30] = errorMessage;
+    $[31] = errorLine;
+  } else errorLine = $[31];
   let children;
-  if (h[32] !== Y) {
+  if ($[32] !== promptText) {
     children = jsxProd_default(Text, {
-      children: Y,
+      children: promptText,
     });
-    h[32] = Y;
-    h[33] = children;
-  } else children = h[33];
-  let le;
-  if (h[34] !== ref || h[35] !== children) {
-    le = jsxProd_default(Box, {
+    $[32] = promptText;
+    $[33] = children;
+  } else children = $[33];
+  let promptElement;
+  if ($[34] !== ref || $[35] !== children) {
+    promptElement = jsxProd_default(Box, {
       ref,
       children,
     });
-    h[34] = ref;
-    h[35] = children;
-    h[36] = le;
-  } else le = h[36];
-  let Te;
-  if (h[37] !== onKeyDown || h[38] !== U || h[39] !== me || h[40] !== le || h[41] !== O) {
-    Te = jsxProd_default_2(Box, {
-      ref: C,
+    $[34] = ref;
+    $[35] = children;
+    $[36] = promptElement;
+  } else promptElement = $[36];
+  let buttonsElement;
+  if (
+    $[37] !== onKeyDown ||
+    $[38] !== cancelLine ||
+    $[39] !== errorLine ||
+    $[40] !== promptElement ||
+    $[41] !== confirmLine
+  ) {
+    buttonsElement = jsxProd_default_2(Box, {
+      ref: containerRef,
       flexDirection: "column",
       tabIndex: 0,
       onKeyDown,
-      children: [O, U, me, le],
+      children: [confirmLine, cancelLine, errorLine, promptElement],
     });
-    h[37] = onKeyDown;
-    h[38] = U;
-    h[39] = me;
-    h[40] = le;
-    h[41] = O;
-    h[42] = Te;
-  } else Te = h[42];
-  return Te;
+    $[37] = onKeyDown;
+    $[38] = cancelLine;
+    $[39] = errorLine;
+    $[40] = promptElement;
+    $[41] = confirmLine;
+    $[42] = buttonsElement;
+  } else buttonsElement = $[42];
+  return buttonsElement;
 }
 //@ chunk-ey2qag4x.js:18909-18913 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ey2qag4x.js:18909", () => {
+  init_react_production();
+});
 //@ chunk-ey2qag4x.js:18913-18917 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ey2qag4x.js:18913", () => {
+  init_react_production();
+});
 //@ chunk-ey2qag4x.js:18917-18954 placement
-function elementKeyOrEmpty(x) {
-  return isValidElement_default(x) ? x.key : "";
+function elementKeyOrEmpty(child) {
+  return isValidElement_default(child) ? child.key : "";
 }
 //@ chunk-ey2qag4x.js:18954-18985 placement
 /**
@@ -1635,94 +1733,97 @@ var USER_MESSAGE_BACKGROUND = "userMessageBackground";
 /**
  * 用户消息背景色模式：无色（level 0）时用 inverse，否则用传入值。
  */
-function userMessageBackgroundMode(t = "tint") {
-  return sequential.level === 0 ? "inverse" : t;
+function userMessageBackgroundMode(defaultMode = "tint") {
+  return sequential.level === 0 ? "inverse" : defaultMode;
 }
 //@ chunk-ey2qag4x.js:19040-19054 placement
-var WINDOWED_TEXT_CONTEXT = qt("");
+var WINDOWED_TEXT_CONTEXT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ey2qag4x.js:19040", () => {
+  WINDOWED_TEXT_CONTEXT = createContext("");
+});
 //@ chunk-ey2qag4x.js:19054-19582 placement
 /**
  * 按窗口起点切片渲染子元素文本。
  */
-function WindowedText(t) {
-  let o = w(14);
-  let i;
-  let a;
-  if (o[0] !== t) {
-    ({ windowStart: a, ...i } = t);
-    o[0] = t;
-    o[1] = i;
-    o[2] = a;
+function WindowedText(props) {
+  let $ = useMemoCache(14);
+  let restProps;
+  let windowStartProp;
+  if ($[0] !== props) {
+    ({ windowStart: windowStartProp, ...restProps } = props);
+    $[0] = props;
+    $[1] = restProps;
+    $[2] = windowStartProp;
   } else {
-    i = o[1];
-    a = o[2];
+    restProps = $[1];
+    windowStartProp = $[2];
   }
-  let l = a === undefined ? 0 : a;
-  let f;
-  let d;
-  let u;
-  if (o[3] !== i.children || o[4] !== l) {
-    let mapped = Fy.toArray(i.children).map(elementKeyOrEmpty);
-    f = WINDOWED_TEXT_CONTEXT.Provider;
-    d = l;
-    u = mapped.join();
-    o[3] = i.children;
-    o[4] = l;
-    o[5] = f;
-    o[6] = d;
-    o[7] = u;
+  let windowStart = windowStartProp === undefined ? 0 : windowStartProp;
+  let ProviderComponent;
+  let startValue;
+  let childKeys;
+  if ($[3] !== restProps.children || $[4] !== windowStart) {
+    let mapped = childrenExport.toArray(restProps.children).map(elementKeyOrEmpty);
+    ProviderComponent = WINDOWED_TEXT_CONTEXT.Provider;
+    startValue = windowStart;
+    childKeys = mapped.join();
+    $[3] = restProps.children;
+    $[4] = windowStart;
+    $[5] = ProviderComponent;
+    $[6] = startValue;
+    $[7] = childKeys;
   } else {
-    f = o[5];
-    d = o[6];
-    u = o[7];
+    ProviderComponent = $[5];
+    startValue = $[6];
+    childKeys = $[7];
   }
-  const value = `${d} ${u}`;
+  const value = `${startValue} ${childKeys}`;
   let children;
-  if (o[8] !== i) {
+  if ($[8] !== restProps) {
     children = jsxProd_default(Box, {
       flexDirection: "column",
-      ...i,
+      ...restProps,
     });
-    o[8] = i;
-    o[9] = children;
-  } else children = o[9];
-  let V;
-  if (o[10] !== f || o[11] !== value || o[12] !== children) {
-    V = jsxProd_default(f, {
+    $[8] = restProps;
+    $[9] = children;
+  } else children = $[9];
+  let windowedElement;
+  if ($[10] !== ProviderComponent || $[11] !== value || $[12] !== children) {
+    windowedElement = jsxProd_default(ProviderComponent, {
       value,
       children,
     });
-    o[10] = f;
-    o[11] = value;
-    o[12] = children;
-    o[13] = V;
-  } else V = o[13];
-  return V;
+    $[10] = ProviderComponent;
+    $[11] = value;
+    $[12] = children;
+    $[13] = windowedElement;
+  } else windowedElement = $[13];
+  return windowedElement;
 }
 //@ chunk-ey2qag4x.js:19582-19808 placement
 /**
  * 行悬停高亮：返回 [是否高亮, 设置悬停]，同一上下文里只有一行处于悬停态。
  */
-function useHoverHighlight(t) {
-  let $ = w(5);
-  let o = Se(WINDOWED_TEXT_CONTEXT);
-  let [i, a] = y(null);
-  let l = t && i === o;
-  if (i !== null && !l) a(null);
-  let d;
-  if ($[0] !== o) {
-    d = (u) => a(u ? o : null);
-    $[0] = o;
-    $[1] = d;
-  } else d = $[1];
-  let g;
-  if ($[2] !== l || $[3] !== d) {
-    g = [l, d];
-    $[2] = l;
-    $[3] = d;
-    $[4] = g;
-  } else g = $[4];
-  return g;
+function useHoverHighlight(enabled) {
+  let $ = useMemoCache(5);
+  let contextValue = useContext(WINDOWED_TEXT_CONTEXT);
+  let [hoveredValue, setHoveredValue] = useState(null);
+  let isHovered = enabled && hoveredValue === contextValue;
+  if (hoveredValue !== null && !isHovered) setHoveredValue(null);
+  let setter;
+  if ($[0] !== contextValue) {
+    setter = (value) => setHoveredValue(value ? contextValue : null);
+    $[0] = contextValue;
+    $[1] = setter;
+  } else setter = $[1];
+  let result;
+  if ($[2] !== isHovered || $[3] !== setter) {
+    result = [isHovered, setter];
+    $[2] = isHovered;
+    $[3] = setter;
+    $[4] = result;
+  } else result = $[4];
+  return result;
 }
 export {
   useInputRefusalWindow,
@@ -1732,9 +1833,9 @@ export {
   USER_MESSAGE_BACKGROUND,
   typeaheadEpochTracker,
   Select,
-  userMessageBackgroundMode,
   WindowedText,
   useHoverHighlight,
+  userMessageBackgroundMode,
   MultiSelect,
   ConfirmButtons,
 };

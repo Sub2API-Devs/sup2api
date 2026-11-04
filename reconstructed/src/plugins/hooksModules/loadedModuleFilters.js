@@ -8,13 +8,26 @@
  * pieces: chunk-57kgd85y.js (1), chunk-hde26vvz.js (2), chunk-jahwkg2g.js (2)
  * attribution: placement 5
  */
-import { SEC_DEFAULT_PLUGIN_NAME } from "../../utils/plugins/securityDefaultPlugin.js";
-import { hasLink } from "../../utils/hasLink.js";
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
 import { isModuleAdmitted } from "../../utils/plugins/functionHooks/admission.js";
+import { SEC_DEFAULT_PLUGIN_NAME } from "../../utils/plugins/securityDefaultPlugin.js";
+import { hasLink } from "../../utils/hasLink.js";
 import { lookupPathTable } from "../../utils/pathTable.js";
 import { matchesFields } from "../../utils/hooks/functionHookMatchers.js";
 
+//@ chunk-jahwkg2g.js:263-324 placement
+/**
+ * 按名字找已加载模块
+ */
+var findLoadedModule = (moduleName) =>
+  getPluginRegistry().loadedModules.find(
+    (loadedModule) => loadedModule.name === moduleName && isModuleAdmitted(loadedModule),
+  );
+//@ chunk-jahwkg2g.js:324-349 placement
+/**
+ * 取模块参数
+ */
+var loadedModuleArgs = (moduleName) => findLoadedModule(moduleName)?.args;
 //@ chunk-hde26vvz.js:300-333 placement
 /**
  * 是否 sec-default 模块
@@ -25,31 +38,27 @@ var isSecDefaultModule = (loadedModule) =>
 /**
  * 返回给定钩子位置可用的已加载模块；classic.* 与 tool.describe/call/check 位置会排除特定类别的模块。
  */
-var getLoadedModulesForSite = (o) => {
-  let e = o.startsWith("classic.") || o === "tool.describe" || o === "tool.call" || o === "tool.check";
-  return getPluginRegistry().loadedModules.filter((loadedModule) => !(e && isSecDefaultModule(loadedModule)));
-};
-//@ chunk-jahwkg2g.js:263-324 placement
-/**
- * 按名字找已加载模块
- */
-var findLoadedModule = (o) =>
-  getPluginRegistry().loadedModules.find(
-    (loadedModule) => loadedModule.name === o && isModuleAdmitted(loadedModule),
+var getLoadedModulesForSite = (hookSite) => {
+  let excludeSecDefault =
+    hookSite.startsWith("classic.") ||
+    hookSite === "tool.describe" ||
+    hookSite === "tool.call" ||
+    hookSite === "tool.check";
+  return getPluginRegistry().loadedModules.filter(
+    (loadedModule) => !(excludeSecDefault && isSecDefaultModule(loadedModule)),
   );
-//@ chunk-jahwkg2g.js:324-349 placement
-/**
- * 取模块参数
- */
-var loadedModuleArgs = (o) => findLoadedModule(o)?.args;
+};
 //@ chunk-57kgd85y.js:337-471 placement
 /**
  * 判断是否有已加载的函数钩子模块挂接了指定位置（且模块处于启用状态）；给出匹配目标时还需该模块的匹配器命中。被大量钩子点用作快速短路检查。
  */
-function hasModuleHookingSite(o, e, loadedModulesForSite) {
-  let t = e && lookupPathTable(o);
+function hasModuleHookingSite(hookSite, matchTarget, loadedModulesForSite) {
+  let pathTable = matchTarget && lookupPathTable(hookSite);
   return (loadedModulesForSite ?? getPluginRegistry().loadedModules).some(
-    (r) => r.hooks(o) && isModuleAdmitted(r) && (e === undefined || matchesFields(r.matcherFor(o), e, t)),
+    (loadedModule) =>
+      loadedModule.hooks(hookSite) &&
+      isModuleAdmitted(loadedModule) &&
+      (matchTarget === undefined || matchesFields(loadedModule.matcherFor(hookSite), matchTarget, pathTable)),
   );
 }
 export {

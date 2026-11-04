@@ -10,16 +10,16 @@
  */
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { string, array, zodStrictObject } from "../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema, array, zodStrictObject } from "../../vendor/zod/v4/classic/schemas.js";
 import { ANTHROPIC_FILEINPUTS } from "../services/mcpServe/fileInputs.js";
 
 //@ chunk-gwvwj681.js:6507-6530 placement
 var offscreenFreezeSlot = new SessionRootSlot(() => ({}));
 //@ chunk-gwvwj681.js:6530-6678 placement
 var identifierNameSchema = DoctorLazy(() =>
-  string()
+  stringSchema()
     .regex(/^[A-Za-z_][A-Za-z0-9_]{0,31}$/)
-    .refine((e) => !(e in Object.prototype)),
+    .refine((name) => !(name in Object.prototype)),
 );
 var bindingSpecSchema = DoctorLazy(() =>
   array(
@@ -32,9 +32,9 @@ var bindingSpecSchema = DoctorLazy(() =>
 );
 //@ chunk-gwvwj681.js:6678-6801 fingerprint = OffscreenFreeze (0.408)
 function OffscreenFreeze(meta) {
-  let n = bindingSpecSchema().safeParse(meta?.[ANTHROPIC_FILEINPUTS]);
-  if (!n.success) return;
-  let [i] = n.data;
-  return i !== undefined && i.local !== i.ref ? i : undefined;
+  let parsed = bindingSpecSchema().safeParse(meta?.[ANTHROPIC_FILEINPUTS]);
+  if (!parsed.success) return;
+  let [binding] = parsed.data;
+  return binding !== undefined && binding.local !== binding.ref ? binding : undefined;
 }
 export { OffscreenFreeze, offscreenFreezeSlot };

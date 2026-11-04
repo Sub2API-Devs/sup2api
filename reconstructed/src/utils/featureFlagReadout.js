@@ -20,11 +20,14 @@ import {
  */
 function readRadiantHeron() {
   try {
-    let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_radiant_heron", false);
+    let { value: flagValue, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
+      "tengu_radiant_heron",
+      false,
+    );
     switch (source) {
       case "payload":
       case "override":
-        return e === true;
+        return flagValue === true;
       case "disabled":
         return false;
       case "fallback":

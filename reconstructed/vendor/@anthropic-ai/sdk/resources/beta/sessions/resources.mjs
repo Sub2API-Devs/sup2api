@@ -6,7 +6,7 @@
  * attribution: esm-fingerprint 1
  */
 import { APIResource } from "../../../core/resource.mjs";
-import { I } from "../../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../../internal/utils/path.mjs";
 import { buildHeaders } from "../../../internal/headers.mjs";
 import { TokenPage } from "../../../core/pagination.mjs";
 
@@ -14,7 +14,7 @@ import { TokenPage } from "../../../core/pagination.mjs";
 class Resources extends APIResource {
   retrieve(resourceID, params, options) {
     let { session_id, betas, workspace_id } = params;
-    return this._client.get(I`/v1/sessions/${session_id}/resources/${resourceID}?beta=true`, {
+    return this._client.get(parseUrl_2`/v1/sessions/${session_id}/resources/${resourceID}?beta=true`, {
       ...options,
       headers: buildHeaders([
         {
@@ -31,7 +31,7 @@ class Resources extends APIResource {
   }
   update(resourceID, params, options) {
     let { session_id, betas, workspace_id, ...body } = params;
-    return this._client.post(I`/v1/sessions/${session_id}/resources/${resourceID}?beta=true`, {
+    return this._client.post(parseUrl_2`/v1/sessions/${session_id}/resources/${resourceID}?beta=true`, {
       body,
       ...options,
       headers: buildHeaders([
@@ -49,7 +49,7 @@ class Resources extends APIResource {
   }
   list(sessionID, params = {}, options) {
     let { betas, workspace_id, ...query } = params ?? {};
-    return this._client.getAPIList(I`/v1/sessions/${sessionID}/resources?beta=true`, TokenPage, {
+    return this._client.getAPIList(parseUrl_2`/v1/sessions/${sessionID}/resources?beta=true`, TokenPage, {
       query,
       ...options,
       headers: buildHeaders([
@@ -67,7 +67,7 @@ class Resources extends APIResource {
   }
   delete(resourceID, params, options) {
     let { session_id, betas, workspace_id } = params;
-    return this._client.delete(I`/v1/sessions/${session_id}/resources/${resourceID}?beta=true`, {
+    return this._client.delete(parseUrl_2`/v1/sessions/${session_id}/resources/${resourceID}?beta=true`, {
       ...options,
       headers: buildHeaders([
         {
@@ -84,7 +84,7 @@ class Resources extends APIResource {
   }
   add(sessionID, params, options) {
     let { betas, workspace_id, ...body } = params;
-    return this._client.post(I`/v1/sessions/${sessionID}/resources?beta=true`, {
+    return this._client.post(parseUrl_2`/v1/sessions/${sessionID}/resources?beta=true`, {
       body,
       ...options,
       headers: buildHeaders([

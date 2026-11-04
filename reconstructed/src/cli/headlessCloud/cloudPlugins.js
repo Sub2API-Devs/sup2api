@@ -11,7 +11,14 @@
 import { join, dirname } from "path";
 import { hostname } from "os";
 import { DoctorLazy } from "../handlers/util.js";
-import { u, literal, _enum, string, array, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  literal,
+  _enum,
+  stringSchema,
+  array,
+  numberSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 import { getClaudeConfigDir } from "../../utils/envUtils.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -90,17 +97,22 @@ import {
   isRemoteCoworkLet,
   isContainerSyncEnvironment,
 } from "../../utils/teleport/containerSync.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-z7wtv7tg.js:1599-1719 placement
-var cloudPluginsConsentSchema = DoctorLazy(() =>
-  u({
-    version: literal(1),
-    choice: _enum(["accepted", "declined"]),
-    decidedAt: string(),
-    hostname: string(),
-  }),
-);
-var CLOUD_PLUGINS_CONSENT = "cloud-plugins-consent";
+var cloudPluginsConsentSchema; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var CLOUD_PLUGINS_CONSENT;
+deferInit("chunk-z7wtv7tg.js:1599", () => {
+  cloudPluginsConsentSchema = DoctorLazy(() =>
+    objectSchema({
+      version: literal(1),
+      choice: _enum(["accepted", "declined"]),
+      decidedAt: stringSchema(),
+      hostname: stringSchema(),
+    }),
+  );
+  CLOUD_PLUGINS_CONSENT = "cloud-plugins-consent";
+});
 //@ chunk-z7wtv7tg.js:1719-1753 placement
 function cloudPluginsConsentStateKey() {
   return STORAGE_SPACES.state(CLOUD_PLUGINS_CONSENT);
@@ -116,27 +128,27 @@ function cloudPluginsConsentFilePath() {
 /**
  * 读取云插件同意文件：不可读返回 unreadable，不存在或主机名不符返回 unset，否则返回 accepted/declined。
  */
-async function readCloudPluginsConsentChoice(e) {
-  let n;
+async function readCloudPluginsConsentChoice(storage) {
+  let text;
   try {
-    n = await e.readText();
+    text = await storage.readText();
   } catch (error) {
     logForDebugging(`cloud-plugins consent: store unreadable (${errorMessage(error)})`, {
       level: "warn",
     });
     return "unreadable";
   }
-  if (n === undefined) return "unset";
+  if (text === undefined) return "unset";
   try {
-    let r = cloudPluginsConsentSchema().safeParse(jsonParse(n));
-    return r.success && r.data.hostname === e.hostname() ? r.data.choice : "unset";
+    let parsed = cloudPluginsConsentSchema().safeParse(jsonParse(text));
+    return parsed.success && parsed.data.hostname === storage.hostname() ? parsed.data.choice : "unset";
   } catch {
     return "unset";
   }
 }
 //@ chunk-z7wtv7tg.js:2108-2181 placement
-async function readConsentChoiceAsUnset(e) {
-  let cloudPluginsConsentChoice = await readCloudPluginsConsentChoice(e);
+async function readConsentChoiceAsUnset(storage) {
+  let cloudPluginsConsentChoice = await readCloudPluginsConsentChoice(storage);
   return cloudPluginsConsentChoice === "unreadable" ? "unset" : cloudPluginsConsentChoice;
 }
 //@ chunk-z7wtv7tg.js:2181-2258 placement
@@ -183,8 +195,8 @@ function readCloudPluginsConsent(storageV5) {
       if (storageV5) {
         let text = await storageV5.readText([cloudPluginsConsentStateKey()]);
         if (!text.ok) throw Error("cloud-plugins consent read failed");
-        let r = text.value.items[0];
-        return r.found ? r.value : undefined;
+        let item = text.value.items[0];
+        return item.found ? item.value : undefined;
       }
       try {
         return await getFileReader().read(cloudPluginsConsentFilePath());
@@ -193,11 +205,11 @@ function readCloudPluginsConsent(storageV5) {
         throw error;
       }
     },
-    writeText: async (n) => {
+    writeText: async (text) => {
       if (storageV5) {
         if (
           !(
-            await storageV5.write(cloudPluginsConsentStateKey(), n, {
+            await storageV5.write(cloudPluginsConsentStateKey(), text, {
               mode: 384,
             })
           ).ok
@@ -205,9 +217,9 @@ function readCloudPluginsConsent(storageV5) {
           throw Error("cloud-plugins consent write failed");
         return;
       }
-      let r = cloudPluginsConsentFilePath();
-      await getFileReader().mkdir(dirname(r), 448);
-      await getFileReader().atomicWrite(r, n, 384);
+      let consentPath = cloudPluginsConsentFilePath();
+      await getFileReader().mkdir(dirname(consentPath), 448);
+      await getFileReader().atomicWrite(consentPath, text, 384);
     },
     now: () => new Date(),
     hostname,
@@ -228,50 +240,55 @@ function emptyConsentState() {
 /**
  * 解析云插件同意：已接受但存储位置不可信时触发回调并视为未设置。
  */
-async function resolveCloudPluginsConsent(consentPin, n, r) {
-  let { answer, given } = await cloudPluginsConsentState(consentPin, n);
-  if (answer !== "accepted" || given || r === undefined || !(await r.storeUntrusted().catch(() => true)))
+async function resolveCloudPluginsConsent(consentPin, state, untrusted) {
+  let { answer, given } = await cloudPluginsConsentState(consentPin, state);
+  if (
+    answer !== "accepted" ||
+    given ||
+    untrusted === undefined ||
+    !(await untrusted.storeUntrusted().catch(() => true))
+  )
     return answer;
-  safeInvokeCallback(r.onUntrusted);
+  safeInvokeCallback(untrusted.onUntrusted);
   return "unset";
 }
 //@ chunk-z7wtv7tg.js:3215-3666 placement
-async function cloudPluginsConsentState(e, n) {
-  let r = false;
-  if (e.value === null) {
-    r = true;
-    e.value = readConsentChoiceAsUnset(n).then((consentChoiceAsUnset) => {
-      e.persisted = consentChoiceAsUnset !== "unset";
+async function cloudPluginsConsentState(pin, storage) {
+  let didStart = false;
+  if (pin.value === null) {
+    didStart = true;
+    pin.value = readConsentChoiceAsUnset(storage).then((consentChoiceAsUnset) => {
+      pin.persisted = consentChoiceAsUnset !== "unset";
       return consentChoiceAsUnset;
     });
-    e.given = false;
+    pin.given = false;
   }
-  let { value: s, given } = e;
-  let k = await s;
-  if (k !== "accepted" || r)
+  let { value: pending, given } = pin;
+  let answer = await pending;
+  if (answer !== "accepted" || didStart)
     return {
-      answer: k,
+      answer,
       given,
     };
-  let cloudPluginsConsentChoice = await readCloudPluginsConsentChoice(n);
-  let { value: S, given: given_2 } = e;
-  if (S !== null && S !== s)
+  let cloudPluginsConsentChoice = await readCloudPluginsConsentChoice(storage);
+  let { value: current, given: given_2 } = pin;
+  if (current !== null && current !== pending)
     return {
-      answer: await S,
+      answer: await current,
       given: given_2,
     };
-  if (cloudPluginsConsentChoice === "accepted") e.persisted = true;
-  let N = effectiveConsentChoice(e.persisted, cloudPluginsConsentChoice);
-  if (N === "declined") {
-    e.value = Promise.resolve(N);
-    e.given = false;
+  if (cloudPluginsConsentChoice === "accepted") pin.persisted = true;
+  let effective = effectiveConsentChoice(pin.persisted, cloudPluginsConsentChoice);
+  if (effective === "declined") {
+    pin.value = Promise.resolve(effective);
+    pin.given = false;
     return {
-      answer: N,
+      answer: effective,
       given: false,
     };
   }
   return {
-    answer: N,
+    answer: effective,
     given,
   };
 }
@@ -289,162 +306,211 @@ function safeInvokeCallback(onUntrusted) {
 /**
  * 转发插件到云会话时的层级、数量与长度上限，允许的 git 协议，市场来源校验正则，以及插件被丢弃的原因列表。
  */
-var FORWARDED_PLUGIN_TIERS = ["userSettings", "projectSettings", "localSettings", "flagSettings"];
-var OWN_CHOICE_TIERS = new Set(["userSettings", "flagSettings"]);
-var vn = SETTING_SOURCES.toReversed();
-var MAX_FORWARDED_PLUGINS = 200;
-var MAX_DECLARED_MARKETPLACES = 32;
-var MAX_PLUGINS_PER_TIER = 2000;
-var MAX_MARKETPLACE_NAME_LENGTH = 256;
-var MAX_MARKETPLACE_URL_LENGTH = 1024;
-var MAX_GITHUB_REPO_LENGTH = 140;
-var MAX_REF_LENGTH = 128;
-var MAX_PATH_LENGTH = 256;
-var MAX_SPARSE_PATHS = 16;
-var MAX_SPARSE_PATH_LENGTH = 128;
-var MAX_DECLARATIONS_BYTES = 262144;
-var OFFICIAL_MARKETPLACES = new Set([CLAUDE_PLUGINS_OFFICIAL, "claude-code-marketplace"]);
-var NETWORK_GIT_PROTOCOLS = new Set(["https:", "ssh:", "git+ssh:", "git+https:"]);
-var INSECURE_GIT_PROTOCOLS = new Set(["http:", "git:", "git+http:"]);
-var SSH_PROTOCOLS = new Set(["ssh:", "git+ssh:"]);
-var URL_MARKETPLACE_PROTOCOLS = new Set(["https:"]);
-var PRINTABLE_ASCII_RE = /^[\x21-\x7e]+$/;
-var GITHUB_REPO_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\/[A-Za-z0-9._-]+$/;
-var SCP_LIKE_GIT_RE =
-  /^(?:([A-Za-z0-9][A-Za-z0-9._-]*)@)?(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9][A-Za-z0-9._-]*):(.*)$/;
-var GIT_TRANSPORT_HELPER_RE = /^[A-Za-z0-9][A-Za-z0-9+.-]*::/;
-var SAFE_REF_RE = /^[A-Za-z0-9._/@+][A-Za-z0-9._/@+-]*$/;
-var SAFE_PATH_RE = /^[A-Za-z0-9._/@+][A-Za-z0-9._/@+ -]*$/;
-var DOT_DOT_SEGMENT_RE = /(?:^|[/:])\.\.(?:$|[/?#;])/;
-var ENCODED_SEPARATOR_RE = /%2e|%2f|%5c|%3b|%3f|%23|\\/i;
-var PERCENT_IN_AUTHORITY_RE = /^[^:]*:\/\/[^/?#]*%/;
-var PLUGIN_DROP_REASONS = [
-  "invalid_id",
-  "invalid_value",
-  "directory_loaded",
-  "unknown_builtin",
-  "ambiguous_marketplace",
-  "blocked_by_policy",
-  "not_installed_here",
-  "unknown_marketplace",
-  "untrusted_for_folder",
-  "reserved_name_conflict",
-  "not_provided_by_container",
-  "local_marketplace",
-  "needs_credentials",
-  "insecure_transport",
-  "invalid_marketplace",
-  "over_cap",
-  "guard_builtin_not_own_choice",
-];
+var FORWARDED_PLUGIN_TIERS; // deferred: uses SETTING_SOURCES (../../utils/settings/constants.js) of its import cycle while loading; runs once the cycle is complete
+var OWN_CHOICE_TIERS;
+var REVERSED_SETTING_SOURCES;
+var MAX_FORWARDED_PLUGINS;
+var MAX_DECLARED_MARKETPLACES;
+var MAX_PLUGINS_PER_TIER;
+var MAX_MARKETPLACE_NAME_LENGTH;
+var MAX_MARKETPLACE_URL_LENGTH;
+var MAX_GITHUB_REPO_LENGTH;
+var MAX_REF_LENGTH;
+var MAX_PATH_LENGTH;
+var MAX_SPARSE_PATHS;
+var MAX_SPARSE_PATH_LENGTH;
+var MAX_DECLARATIONS_BYTES;
+var OFFICIAL_MARKETPLACES;
+var NETWORK_GIT_PROTOCOLS;
+var INSECURE_GIT_PROTOCOLS;
+var SSH_PROTOCOLS;
+var URL_MARKETPLACE_PROTOCOLS;
+var PRINTABLE_ASCII_RE;
+var GITHUB_REPO_RE;
+var SCP_LIKE_GIT_RE;
+var GIT_TRANSPORT_HELPER_RE;
+var SAFE_REF_RE;
+var SAFE_PATH_RE;
+var DOT_DOT_SEGMENT_RE;
+var ENCODED_SEPARATOR_RE;
+var PERCENT_IN_AUTHORITY_RE;
+var PLUGIN_DROP_REASONS;
+deferInit("chunk-z7wtv7tg.js:3770", () => {
+  FORWARDED_PLUGIN_TIERS = ["userSettings", "projectSettings", "localSettings", "flagSettings"];
+  OWN_CHOICE_TIERS = new Set(["userSettings", "flagSettings"]);
+  REVERSED_SETTING_SOURCES = SETTING_SOURCES.toReversed();
+  MAX_FORWARDED_PLUGINS = 200;
+  MAX_DECLARED_MARKETPLACES = 32;
+  MAX_PLUGINS_PER_TIER = 2000;
+  MAX_MARKETPLACE_NAME_LENGTH = 256;
+  MAX_MARKETPLACE_URL_LENGTH = 1024;
+  MAX_GITHUB_REPO_LENGTH = 140;
+  MAX_REF_LENGTH = 128;
+  MAX_PATH_LENGTH = 256;
+  MAX_SPARSE_PATHS = 16;
+  MAX_SPARSE_PATH_LENGTH = 128;
+  MAX_DECLARATIONS_BYTES = 262144;
+  OFFICIAL_MARKETPLACES = new Set([CLAUDE_PLUGINS_OFFICIAL, "claude-code-marketplace"]);
+  NETWORK_GIT_PROTOCOLS = new Set(["https:", "ssh:", "git+ssh:", "git+https:"]);
+  INSECURE_GIT_PROTOCOLS = new Set(["http:", "git:", "git+http:"]);
+  SSH_PROTOCOLS = new Set(["ssh:", "git+ssh:"]);
+  URL_MARKETPLACE_PROTOCOLS = new Set(["https:"]);
+  PRINTABLE_ASCII_RE = /^[\x21-\x7e]+$/;
+  GITHUB_REPO_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\/[A-Za-z0-9._-]+$/;
+  SCP_LIKE_GIT_RE =
+    /^(?:([A-Za-z0-9][A-Za-z0-9._-]*)@)?(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9][A-Za-z0-9._-]*):(.*)$/;
+  GIT_TRANSPORT_HELPER_RE = /^[A-Za-z0-9][A-Za-z0-9+.-]*::/;
+  SAFE_REF_RE = /^[A-Za-z0-9._/@+][A-Za-z0-9._/@+-]*$/;
+  SAFE_PATH_RE = /^[A-Za-z0-9._/@+][A-Za-z0-9._/@+ -]*$/;
+  DOT_DOT_SEGMENT_RE = /(?:^|[/:])\.\.(?:$|[/?#;])/;
+  ENCODED_SEPARATOR_RE = /%2e|%2f|%5c|%3b|%3f|%23|\\/i;
+  PERCENT_IN_AUTHORITY_RE = /^[^:]*:\/\/[^/?#]*%/;
+  PLUGIN_DROP_REASONS = [
+    "invalid_id",
+    "invalid_value",
+    "directory_loaded",
+    "unknown_builtin",
+    "ambiguous_marketplace",
+    "blocked_by_policy",
+    "not_installed_here",
+    "unknown_marketplace",
+    "untrusted_for_folder",
+    "reserved_name_conflict",
+    "not_provided_by_container",
+    "local_marketplace",
+    "needs_credentials",
+    "insecure_transport",
+    "invalid_marketplace",
+    "over_cap",
+    "guard_builtin_not_own_choice",
+  ];
+});
 //@ chunk-z7wtv7tg.js:4927-6310 placement
 /**
  * 从设置目录读取云端插件声明，处理超读上限与 schema 拒绝
  */
-function loadCloudPluginsDeclaration(e) {
-  let n = emptyDropCounts();
-  let r = [];
-  let s = new Map();
-  let i = [];
-  let policyDisabledPlugins = getPolicyDisabledPlugins(e);
-  let R = {
-    byPolicy: lowercaseSet(e.policyRefusedMarketplaces),
-    asReserved: lowercaseSet(e.reservedNameConflicts),
+function loadCloudPluginsDeclaration(snapshot) {
+  let dropCounts = emptyDropCounts();
+  let dropped = [];
+  let marketplaceChecks = new Map();
+  let forwarded = [];
+  let policyDisabledPlugins = getPolicyDisabledPlugins(snapshot);
+  let reservedContext = {
+    byPolicy: lowercaseSet(snapshot.policyRefusedMarketplaces),
+    asReserved: lowercaseSet(snapshot.reservedNameConflicts),
   };
-  for (let [v, P] of [...collectEnabledPluginChoices(e, n)].sort(([V], [q]) => compareStrings(V, q))) {
-    let V = marketplaceSuffix(v) ?? "";
-    let q = s.get(V) ?? classifyReservedPluginName(V, e, R);
-    s.set(V, q);
-    let pluginDropReason = getPluginDropReason(v, P, V, q, policyDisabledPlugins, e);
+  for (let [id, choice] of [...collectEnabledPluginChoices(snapshot, dropCounts)].sort(([a], [b]) =>
+    compareStrings(a, b),
+  )) {
+    let marketplace = marketplaceSuffix(id) ?? "";
+    let reservedCheck =
+      marketplaceChecks.get(marketplace) ??
+      classifyReservedPluginName(marketplace, snapshot, reservedContext);
+    marketplaceChecks.set(marketplace, reservedCheck);
+    let pluginDropReason = getPluginDropReason(
+      id,
+      choice,
+      marketplace,
+      reservedCheck,
+      policyDisabledPlugins,
+      snapshot,
+    );
     if (pluginDropReason !== undefined) {
-      n[pluginDropReason]++;
+      dropCounts[pluginDropReason]++;
       if (pluginDropReason !== "directory_loaded")
-        r.push({
-          id: v,
+        dropped.push({
+          id,
           reason: pluginDropReason,
         });
       continue;
     }
-    let ee = {
-      id: v,
-      value: P.value === true,
-      ownMention: P.ownMention,
-      marketplace: V,
-      declaration: q.kind === "declare" && P.value === true ? q.source : undefined,
+    let entry = {
+      id,
+      value: choice.value === true,
+      ownMention: choice.ownMention,
+      marketplace,
+      declaration:
+        reservedCheck.kind === "declare" && choice.value === true ? reservedCheck.source : undefined,
     };
-    i.push(ee);
-    i.push(
-      ...legacyPluginIds(v).map((id) => ({
-        ...ee,
+    forwarded.push(entry);
+    forwarded.push(
+      ...legacyPluginIds(id).map((id) => ({
+        ...entry,
         id,
       })),
     );
   }
-  let S = capForwardedPlugins(dropAmbiguousMarketplaces(i, n, r), n, r);
-  let h = {
-    enabledPlugins: Object.fromEntries(S.map(({ id, value: P }) => [id, P])),
+  let capped = capForwardedPlugins(
+    dropAmbiguousMarketplaces(forwarded, dropCounts, dropped),
+    dropCounts,
+    dropped,
+  );
+  let patch = {
+    enabledPlugins: Object.fromEntries(capped.map(({ id, value }) => [id, value])),
     extraKnownMarketplaces: Object.fromEntries(
-      S.flatMap(({ marketplace, declaration }) =>
-        declaration === undefined
-          ? []
-          : [
-              [
-                marketplace,
-                {
-                  source: declaration,
-                },
+      capped
+        .flatMap(({ marketplace, declaration }) =>
+          declaration === undefined
+            ? []
+            : [
+                [
+                  marketplace,
+                  {
+                    source: declaration,
+                  },
+                ],
               ],
-            ],
-      ).sort(([v], [P]) => compareStrings(v, P)),
+        )
+        .sort(([a], [b]) => compareStrings(a, b)),
     ),
   };
   let counts = {
-    forwarded: S.length,
-    forwardedDisabled: count(S, ({ value: v }) => !v),
-    marketplacesDeclared: Object.keys(h.extraKnownMarketplaces).length,
-    dropped: n,
+    forwarded: capped.length,
+    forwardedDisabled: count(capped, ({ value: entry }) => !entry),
+    marketplacesDeclared: Object.keys(patch.extraKnownMarketplaces).length,
+    dropped: dropCounts,
   };
-  r.sort((v, P) => compareStrings(v.id, P.id));
-  let I = hasOverCapTier(e)
+  dropped.sort((a, b) => compareStrings(a.id, b.id));
+  let refusedWhole = hasOverCapTier(snapshot)
     ? "over_read_cap"
-    : !getSettingsSchemaForDocument(h).safeParse(h).success
+    : !getSettingsSchemaForDocument(patch).safeParse(patch).success
       ? "schema_rejected"
-      : Buffer.byteLength(canonicalJsonString(h), "utf8") > MAX_DECLARATIONS_BYTES
+      : Buffer.byteLength(canonicalJsonString(patch), "utf8") > MAX_DECLARATIONS_BYTES
         ? "too_large"
         : undefined;
-  if (I !== undefined)
+  if (refusedWhole !== undefined)
     return {
       patch: {
         enabledPlugins: {},
         extraKnownMarketplaces: {},
       },
       dropped: [
-        ...r,
-        ...S.map(({ id }) => ({
+        ...dropped,
+        ...capped.map(({ id }) => ({
           id,
           reason: "over_cap",
         })),
-      ].sort((v, P) => compareStrings(v.id, P.id)),
+      ].sort((a, b) => compareStrings(a.id, b.id)),
       counts: {
         forwarded: 0,
         forwardedDisabled: 0,
         marketplacesDeclared: 0,
         dropped: {
-          ...n,
-          over_cap: n.over_cap + S.length,
+          ...dropCounts,
+          over_cap: dropCounts.over_cap + capped.length,
         },
       },
-      refusedWhole: I,
+      refusedWhole,
     };
   return {
-    patch: h,
-    dropped: r,
+    patch,
+    dropped,
     counts,
   };
 }
 //@ chunk-z7wtv7tg.js:6310-6341 placement
-function canonicalJsonString(e) {
-  return jsonStringify(sortKeysDeep(e));
+function canonicalJsonString(value) {
+  return jsonStringify(sortKeysDeep(value));
 }
 //@ chunk-z7wtv7tg.js:6341-6536 placement
 function toPluginAdmissionTelemetry(counts) {
@@ -452,26 +518,26 @@ function toPluginAdmissionTelemetry(counts) {
     forwarded: counts.forwarded,
     forwarded_disabled: counts.forwardedDisabled,
     marketplaces_declared: counts.marketplacesDeclared,
-    ...Object.fromEntries(PLUGIN_DROP_REASONS.map((n) => [`dropped_${n}`, counts.dropped[n]])),
+    ...Object.fromEntries(PLUGIN_DROP_REASONS.map((reason) => [`dropped_${reason}`, counts.dropped[reason]])),
   };
 }
 //@ chunk-z7wtv7tg.js:6536-6868 placement
 /**
  * 校验插件市场声明：github/git/url 来源分别校验，目录、文件、npm、settings 等本地来源丢弃为 local_marketplace，其余非法。
  */
-function validateMarketplaceDeclaration(e, marketplaceSource) {
-  if (!isPlainObject(marketplaceSource))
+function validateMarketplaceDeclaration(declaration, source) {
+  if (!isPlainObject(source))
     return {
       kind: "drop",
       reason: "invalid_marketplace",
     };
-  switch (ownFieldOrUndefined(marketplaceSource, "source")) {
+  switch (ownFieldOrUndefined(source, "source")) {
     case "github":
-      return validateGithubMarketplace(e, marketplaceSource);
+      return validateGithubMarketplace(declaration, source);
     case "git":
-      return validateGitMarketplace(e, marketplaceSource);
+      return validateGitMarketplace(declaration, source);
     case "url":
-      return validateUrlMarketplace(e, marketplaceSource);
+      return validateUrlMarketplace(declaration, source);
     case "directory":
     case "file":
     case "npm":
@@ -491,21 +557,25 @@ function validateMarketplaceDeclaration(e, marketplaceSource) {
 /**
  * 合并各设置层的 enabledPlugins：超过每层上限计 over_cap；非可信层不得启用仅限可信层的内置插件；非法 ID 计数；记录是否为用户本人的选择/提及。
  */
-function collectEnabledPluginChoices(e, n) {
+function collectEnabledPluginChoices(snapshot, dropCounts) {
   let choices = new Map();
   let invalidIds = new Set();
   for (let tier of FORWARDED_PLUGIN_TIERS) {
-    let entries = e.enabledPluginsByTier[tier];
+    let entries = snapshot.enabledPluginsByTier[tier];
     if (!isPlainObject(entries)) continue;
-    let isOwnTier = OWN_CHOICE_TIERS.has(tier) || (tier === "localSettings" && e.localSettingsAreOwnChoice);
+    let isOwnTier =
+      OWN_CHOICE_TIERS.has(tier) || (tier === "localSettings" && snapshot.localSettingsAreOwnChoice);
     let keys = Object.keys(entries);
-    n.over_cap += Math.max(0, keys.length - MAX_PLUGINS_PER_TIER);
+    dropCounts.over_cap += Math.max(0, keys.length - MAX_PLUGINS_PER_TIER);
     for (let rawId of keys.slice(0, MAX_PLUGINS_PER_TIER)) {
       let value = entries[rawId];
       let pluginId = canonicalizePluginKey(entries, rawId);
       if (value === undefined || pluginId === undefined) continue;
-      if (!TRUSTED_SETTING_SOURCES.includes(tier) && e.trustedOnlyBuiltinIds.has(pluginId.toLowerCase())) {
-        n.guard_builtin_not_own_choice++;
+      if (
+        !TRUSTED_SETTING_SOURCES.includes(tier) &&
+        snapshot.trustedOnlyBuiltinIds.has(pluginId.toLowerCase())
+      ) {
+        dropCounts.guard_builtin_not_own_choice++;
         continue;
       }
       if (!isValidPluginIdForForwarding(pluginId)) {
@@ -520,14 +590,14 @@ function collectEnabledPluginChoices(e, n) {
       });
     }
   }
-  n.invalid_id += invalidIds.size;
+  dropCounts.invalid_id += invalidIds.size;
   return choices;
 }
 //@ chunk-z7wtv7tg.js:7477-7585 placement
-function hasOverCapTier(e) {
-  return FORWARDED_PLUGIN_TIERS.some((n) => {
-    let r = e.enabledPluginsByTier[n];
-    return isPlainObject(r) && Object.keys(r).length > MAX_PLUGINS_PER_TIER;
+function hasOverCapTier(snapshot) {
+  return FORWARDED_PLUGIN_TIERS.some((tier) => {
+    let entries = snapshot.enabledPluginsByTier[tier];
+    return isPlainObject(entries) && Object.keys(entries).length > MAX_PLUGINS_PER_TIER;
   });
 }
 //@ chunk-z7wtv7tg.js:7585-7647 placement
@@ -539,21 +609,27 @@ function isValidPluginIdForForwarding(pluginId) {
  * 判断某插件选择为何不能转发：目录加载、值非布尔、策略阻止、未知内置、市场被丢弃、本机未安装等；可转发返回 undefined。
  */
 function getPluginDropReason(
-  e,
-  n,
-  r,
-  s,
+  pluginId,
+  choice,
+  marketplace,
+  reservedCheck,
   policyDisabledPlugins,
   { installedPluginIds, builtinPluginIds, directoryPluginsAllowedByPolicy },
 ) {
-  let lower = r.toLowerCase();
+  let lower = marketplace.toLowerCase();
   if (lower === INLINE_PLUGIN_MARKETPLACE) return "directory_loaded";
-  if (typeof n.value !== "boolean") return "invalid_value";
+  if (typeof choice.value !== "boolean") return "invalid_value";
   if (lower === SKILLS_DIR && !directoryPluginsAllowedByPolicy) return "blocked_by_policy";
-  if (lower === BUILTIN && !builtinPluginIds.has(e)) return "unknown_builtin";
-  if (n.value && policyDisabledPlugins.has(e.toLowerCase())) return "blocked_by_policy";
-  if (s.kind === "drop" && n.value) return s.reason;
-  if (n.value && !n.ownChoice && !installedPluginIds.has(e) && lower !== BUILTIN && lower !== SKILLS_DIR)
+  if (lower === BUILTIN && !builtinPluginIds.has(pluginId)) return "unknown_builtin";
+  if (choice.value && policyDisabledPlugins.has(pluginId.toLowerCase())) return "blocked_by_policy";
+  if (reservedCheck.kind === "drop" && choice.value) return reservedCheck.reason;
+  if (
+    choice.value &&
+    !choice.ownChoice &&
+    !installedPluginIds.has(pluginId) &&
+    lower !== BUILTIN &&
+    lower !== SKILLS_DIR
+  )
     return "not_installed_here";
   return;
 }
@@ -565,48 +641,50 @@ function getPolicyDisabledPlugins({ enabledPluginsByTier }) {
       ? Object.keys(policySettings)
           .filter((key) => policySettings[key] === false)
           .flatMap((key) => canonicalizePluginKey(policySettings, key) ?? [])
-          .map((r) => r.toLowerCase())
+          .map((id) => id.toLowerCase())
       : [],
   );
 }
 //@ chunk-z7wtv7tg.js:8306-8455 placement
-function canonicalizePluginKey(e, n) {
-  let r = canonicalPluginId(n);
-  let s = [r, ...legacyPluginIds(r)];
-  let index = s.indexOf(n);
-  return s.slice(0, index === -1 ? s.length : index).some((R) => Object.hasOwn(e, R) && e[R] !== undefined)
+function canonicalizePluginKey(entries, key) {
+  let canonicalId = canonicalPluginId(key);
+  let aliases = [canonicalId, ...legacyPluginIds(canonicalId)];
+  let index = aliases.indexOf(key);
+  return aliases
+    .slice(0, index === -1 ? aliases.length : index)
+    .some((alias) => Object.hasOwn(entries, alias) && entries[alias] !== undefined)
     ? undefined
-    : r;
+    : canonicalId;
 }
 //@ chunk-z7wtv7tg.js:8455-8519 placement
-function lowercaseSet(e) {
-  return new Set([...e].map((n) => n.toLowerCase()));
+function lowercaseSet(values) {
+  return new Set([...values].map((value) => value.toLowerCase()));
 }
 //@ chunk-z7wtv7tg.js:8519-9095 placement
-function classifyReservedPluginName(e, n, r) {
-  let lower = e.toLowerCase();
+function classifyReservedPluginName(marketplace, snapshot, reservedContext) {
+  let lower = marketplace.toLowerCase();
   if (lower === BUILTIN || lower === SKILLS_DIR)
     return {
       kind: "reserved",
     };
-  if (r.byPolicy.has(lower))
+  if (reservedContext.byPolicy.has(lower))
     return {
       kind: "drop",
       reason: "blocked_by_policy",
     };
-  let marketplaceSource = findMarketplaceSource(e, n);
-  let k = RESERVED_MARKETPLACE_NAMES.has(lower);
+  let marketplaceSource = findMarketplaceSource(marketplace, snapshot);
+  let isReservedName = RESERVED_MARKETPLACE_NAMES.has(lower);
   if (
     marketplaceSource === undefined &&
-    n.marketplaceRestrictionPolicyActive &&
+    snapshot.marketplaceRestrictionPolicyActive &&
     lower !== CLAUDE_PLUGINS_OFFICIAL
   )
     return {
       kind: "drop",
-      reason: k ? "blocked_by_policy" : marketplaceDropReason(e, n),
+      reason: isReservedName ? "blocked_by_policy" : marketplaceDropReason(marketplace, snapshot),
     };
-  if (k)
-    return r.asReserved.has(lower)
+  if (isReservedName)
+    return reservedContext.asReserved.has(lower)
       ? {
           kind: "drop",
           reason: "reserved_name_conflict",
@@ -619,7 +697,7 @@ function classifyReservedPluginName(e, n, r) {
             kind: "drop",
             reason: "not_provided_by_container",
           };
-  if (isImpersonatingOfficialName(e))
+  if (isImpersonatingOfficialName(marketplace))
     return {
       kind: "drop",
       reason: "reserved_name_conflict",
@@ -627,209 +705,221 @@ function classifyReservedPluginName(e, n, r) {
   if (marketplaceSource === undefined)
     return {
       kind: "drop",
-      reason: marketplaceDropReason(e, n),
+      reason: marketplaceDropReason(marketplace, snapshot),
     };
-  return validateMarketplaceDeclaration(e, marketplaceSource);
+  return validateMarketplaceDeclaration(marketplace, marketplaceSource);
 }
 //@ chunk-z7wtv7tg.js:9095-9172 placement
-function marketplaceDropReason(e, n) {
-  return isMarketplaceUntrustedForFolder(e, n) ? "untrusted_for_folder" : "unknown_marketplace";
+function marketplaceDropReason(marketplace, snapshot) {
+  return isMarketplaceUntrustedForFolder(marketplace, snapshot)
+    ? "untrusted_for_folder"
+    : "unknown_marketplace";
 }
 //@ chunk-z7wtv7tg.js:9172-9459 placement
-function findMarketplaceSource(e, n) {
-  let r = isPlainObject(n.registeredMarketplaces)
-    ? ownFieldOrUndefined(n.registeredMarketplaces, e)
+function findMarketplaceSource(marketplace, snapshot) {
+  let registered = isPlainObject(snapshot.registeredMarketplaces)
+    ? ownFieldOrUndefined(snapshot.registeredMarketplaces, marketplace)
     : undefined;
-  if (r !== undefined) return isPlainObject(r) ? (ownFieldOrUndefined(r, "source") ?? null) : null;
-  for (let s of vn) {
-    if (REPO_DIR_SETTING_SOURCES.has(s) && !n.folderTrustedForProjectPlugins) continue;
-    let i = declaredMarketplaceAtTier(n, s, e);
-    if (i !== undefined) return isPlainObject(i) ? (ownFieldOrUndefined(i, "source") ?? null) : null;
+  if (registered !== undefined)
+    return isPlainObject(registered) ? (ownFieldOrUndefined(registered, "source") ?? null) : null;
+  for (let tier of REVERSED_SETTING_SOURCES) {
+    if (REPO_DIR_SETTING_SOURCES.has(tier) && !snapshot.folderTrustedForProjectPlugins) continue;
+    let declared = declaredMarketplaceAtTier(snapshot, tier, marketplace);
+    if (declared !== undefined)
+      return isPlainObject(declared) ? (ownFieldOrUndefined(declared, "source") ?? null) : null;
   }
   return;
 }
 //@ chunk-z7wtv7tg.js:9459-9555 placement
-function isMarketplaceUntrustedForFolder(e, n) {
+function isMarketplaceUntrustedForFolder(marketplace, snapshot) {
   return (
-    !n.folderTrustedForProjectPlugins &&
-    [...REPO_DIR_SETTING_SOURCES].some((r) => declaredMarketplaceAtTier(n, r, e) !== undefined)
+    !snapshot.folderTrustedForProjectPlugins &&
+    [...REPO_DIR_SETTING_SOURCES].some(
+      (tier) => declaredMarketplaceAtTier(snapshot, tier, marketplace) !== undefined,
+    )
   );
 }
 //@ chunk-z7wtv7tg.js:9555-9638 placement
-function declaredMarketplaceAtTier(e, n, r) {
-  let s = e.declaredMarketplacesByTier[n];
-  return isPlainObject(s) ? ownFieldOrUndefined(s, r) : undefined;
+function declaredMarketplaceAtTier(snapshot, tier, marketplace) {
+  let declared = snapshot.declaredMarketplacesByTier[tier];
+  return isPlainObject(declared) ? ownFieldOrUndefined(declared, marketplace) : undefined;
 }
 //@ chunk-z7wtv7tg.js:9638-9903 placement
-function validateGithubMarketplace(e, n) {
-  let r = ownFieldOrUndefined(n, "repo");
+function validateGithubMarketplace(marketplace, source) {
+  let repo = ownFieldOrUndefined(source, "repo");
   if (
-    typeof r !== "string" ||
-    r.length > MAX_GITHUB_REPO_LENGTH ||
-    !GITHUB_REPO_RE.test(r) ||
-    r.split("/").some(isDotSegment)
+    typeof repo !== "string" ||
+    repo.length > MAX_GITHUB_REPO_LENGTH ||
+    !GITHUB_REPO_RE.test(repo) ||
+    repo.split("/").some(isDotSegment)
   )
     return {
       kind: "drop",
       reason: "invalid_marketplace",
     };
-  let s = validateGitRefFields(n);
-  return s === undefined
+  let refFields = validateGitRefFields(source);
+  return refFields === undefined
     ? {
         kind: "drop",
         reason: "invalid_marketplace",
       }
-    : toMarketplaceDecision(e, {
+    : toMarketplaceDecision(marketplace, {
         source: "github",
-        repo: r,
-        ...s,
+        repo,
+        ...refFields,
       });
 }
 //@ chunk-z7wtv7tg.js:9903-10231 placement
 /**
  * 校验并规整 git 类型插件市场声明：URL 合法、必须走网络、格式有效，再校验 ref/path 等字段；否则返回丢弃原因。
  */
-function validateGitMarketplace(e, n) {
-  let r = ownFieldOrUndefined(n, "url");
-  let s = safeMarketplaceUrl(r);
-  if (s === undefined)
+function validateGitMarketplace(marketplace, source) {
+  let url = ownFieldOrUndefined(source, "url");
+  let safeUrl = safeMarketplaceUrl(url);
+  if (safeUrl === undefined)
     return {
       kind: "drop",
       reason: "invalid_marketplace",
     };
-  let i = classifyGitMarketplaceUrl(s);
-  if (i !== "network")
+  let urlKind = classifyGitMarketplaceUrl(safeUrl);
+  if (urlKind !== "network")
     return {
       kind: "drop",
-      reason: i,
+      reason: urlKind,
     };
-  if (!isPluginGitUrlValid(s))
+  if (!isPluginGitUrlValid(safeUrl))
     return {
       kind: "drop",
       reason: "invalid_marketplace",
     };
-  let k = validateGitRefFields(n);
-  return k === undefined
+  let refFields = validateGitRefFields(source);
+  return refFields === undefined
     ? {
         kind: "drop",
         reason: "invalid_marketplace",
       }
-    : toMarketplaceDecision(e, {
+    : toMarketplaceDecision(marketplace, {
         source: "git",
-        url: s,
-        ...k,
+        url: safeUrl,
+        ...refFields,
       });
 }
 //@ chunk-z7wtv7tg.js:10231-10567 placement
 /**
  * 校验 URL 型市场：URL 非法为 invalid_marketplace，带 headers/headersHelper 为 needs_credentials，协议须为 https。
  */
-function validateUrlMarketplace(e, n) {
-  let r = safeMarketplaceUrl(ownFieldOrUndefined(n, "url"));
-  if (r === undefined)
+function validateUrlMarketplace(marketplace, source) {
+  let safeUrl = safeMarketplaceUrl(ownFieldOrUndefined(source, "url"));
+  if (safeUrl === undefined)
     return {
       kind: "drop",
       reason: "invalid_marketplace",
     };
-  let s = ownFieldOrUndefined(n, "headers");
+  let headers = ownFieldOrUndefined(source, "headers");
   if (
-    ownFieldOrUndefined(n, "headersHelper") !== undefined ||
-    (s !== undefined && !(isPlainObject(s) && Object.keys(s).length === 0))
+    ownFieldOrUndefined(source, "headersHelper") !== undefined ||
+    (headers !== undefined && !(isPlainObject(headers) && Object.keys(headers).length === 0))
   )
     return {
       kind: "drop",
       reason: "needs_credentials",
     };
-  let i = classifyMarketplaceSource(r, URL_MARKETPLACE_PROTOCOLS);
-  return i === "network"
-    ? toMarketplaceDecision(e, {
+  let sourceKind = classifyMarketplaceSource(safeUrl, URL_MARKETPLACE_PROTOCOLS);
+  return sourceKind === "network"
+    ? toMarketplaceDecision(marketplace, {
         source: "url",
-        url: r,
+        url: safeUrl,
       })
     : {
         kind: "drop",
-        reason: i,
+        reason: sourceKind,
       };
 }
 //@ chunk-z7wtv7tg.js:10567-10656 placement
-function safeMarketplaceUrl(e) {
-  return typeof e === "string" &&
-    e.length > 0 &&
-    e.length <= MAX_MARKETPLACE_URL_LENGTH &&
-    PRINTABLE_ASCII_RE.test(e)
-    ? e
+function safeMarketplaceUrl(url) {
+  return typeof url === "string" &&
+    url.length > 0 &&
+    url.length <= MAX_MARKETPLACE_URL_LENGTH &&
+    PRINTABLE_ASCII_RE.test(url)
+    ? url
     : undefined;
 }
 //@ chunk-z7wtv7tg.js:10656-10956 placement
 /**
  * 校验 git 市场声明的可选字段（ref、path、sparsePaths、skipLfs），全部合法时返回只含已给字段的对象。
  */
-function validateGitRefFields(e) {
-  let n = ownFieldOrUndefined(e, "ref");
-  let r = ownFieldOrUndefined(e, "path");
-  let s = ownFieldOrUndefined(e, "sparsePaths");
-  let i = ownFieldOrUndefined(e, "skipLfs");
+function validateGitRefFields(source) {
+  let ref = ownFieldOrUndefined(source, "ref");
+  let path = ownFieldOrUndefined(source, "path");
+  let sparsePaths = ownFieldOrUndefined(source, "sparsePaths");
+  let skipLfs = ownFieldOrUndefined(source, "skipLfs");
   if (
-    (n !== undefined && !isSafeGitRef(n)) ||
-    (r !== undefined && !isSafeMarketplacePath(r)) ||
-    (s !== undefined && !isValidSparsePaths(s)) ||
-    (i !== undefined && typeof i !== "boolean")
+    (ref !== undefined && !isSafeGitRef(ref)) ||
+    (path !== undefined && !isSafeMarketplacePath(path)) ||
+    (sparsePaths !== undefined && !isValidSparsePaths(sparsePaths)) ||
+    (skipLfs !== undefined && typeof skipLfs !== "boolean")
   )
     return;
   return {
-    ...(n !== undefined && {
-      ref: n,
+    ...(ref !== undefined && {
+      ref,
     }),
-    ...(r !== undefined && {
-      path: r,
+    ...(path !== undefined && {
+      path,
     }),
-    ...(s !== undefined && {
-      sparsePaths: s,
+    ...(sparsePaths !== undefined && {
+      sparsePaths,
     }),
-    ...(i !== undefined && {
-      skipLfs: i,
+    ...(skipLfs !== undefined && {
+      skipLfs,
     }),
   };
 }
 //@ chunk-z7wtv7tg.js:10956-11048 placement
-function isSafeGitRef(e) {
+function isSafeGitRef(oid) {
   return (
-    typeof e === "string" &&
-    e.length <= MAX_REF_LENGTH &&
-    SAFE_REF_RE.test(e) &&
-    !e.split("/").some(isDotSegment)
+    typeof oid === "string" &&
+    oid.length <= MAX_REF_LENGTH &&
+    SAFE_REF_RE.test(oid) &&
+    !oid.split("/").some(isDotSegment)
   );
 }
 //@ chunk-z7wtv7tg.js:11048-11111 placement
-function isSafeMarketplacePath(e) {
-  return typeof e === "string" && e.length <= MAX_PATH_LENGTH && isSafeRelativePath(e);
+function isSafeMarketplacePath(value) {
+  return typeof value === "string" && value.length <= MAX_PATH_LENGTH && isSafeRelativePath(value);
 }
 //@ chunk-z7wtv7tg.js:11111-11220 placement
-function isValidSparsePaths(e) {
+function isValidSparsePaths(path) {
   return (
-    Array.isArray(e) &&
-    e.length <= MAX_SPARSE_PATHS &&
-    e.every((n) => typeof n === "string" && n.length <= MAX_SPARSE_PATH_LENGTH && isSafeRelativePath(n))
+    Array.isArray(path) &&
+    path.length <= MAX_SPARSE_PATHS &&
+    path.every(
+      (path) => typeof path === "string" && path.length <= MAX_SPARSE_PATH_LENGTH && isSafeRelativePath(path),
+    )
   );
 }
 //@ chunk-z7wtv7tg.js:11220-11308 placement
-function isSafeRelativePath(e) {
-  return SAFE_PATH_RE.test(e) && !e.startsWith("/") && !e.split("/").some((n) => n === "..");
+function isSafeRelativePath(value) {
+  return (
+    SAFE_PATH_RE.test(value) &&
+    !value.startsWith("/") &&
+    !value.split("/").some((segment) => segment === "..")
+  );
 }
 //@ chunk-z7wtv7tg.js:11308-11348 placement
-function isDotSegment(e) {
-  return e === "." || e === "..";
+function isDotSegment(segment) {
+  return segment === "." || segment === "..";
 }
 //@ chunk-z7wtv7tg.js:11348-11506 placement
-function toMarketplaceDecision(e, source) {
+function toMarketplaceDecision(source, source_2) {
   return getSettingsFieldSchema("extraKnownMarketplaces").safeParse({
-    [e]: {
-      source,
+    [source]: {
+      source: source_2,
     },
   }).success
     ? {
         kind: "declare",
-        source,
+        source: source_2,
       }
     : {
         kind: "drop",
@@ -840,73 +930,79 @@ function toMarketplaceDecision(e, source) {
 /**
  * 判断 git 市场地址：以 - 开头、传输助手或不安全 URL 为非法；带协议按允许协议判断；本地路径为 local_marketplace；scp 式地址校验路径，带查询为 needs_credentials，本地主机为本地。
  */
-function classifyGitMarketplaceUrl(e) {
-  if (e.startsWith("-") || GIT_TRANSPORT_HELPER_RE.test(e) || isUnsafeRemoteUrl(e))
+function classifyGitMarketplaceUrl(url) {
+  if (url.startsWith("-") || GIT_TRANSPORT_HELPER_RE.test(url) || isUnsafeRemoteUrl(url))
     return "invalid_marketplace";
-  if (e.includes("://")) return classifyMarketplaceSource(e, NETWORK_GIT_PROTOCOLS);
-  if (/^[A-Za-z]:[\\/]/.test(e) || /^[./~]/.test(e)) return "local_marketplace";
-  let match = SCP_LIKE_GIT_RE.exec(e);
+  if (url.includes("://")) return classifyMarketplaceSource(url, NETWORK_GIT_PROTOCOLS);
+  if (/^[A-Za-z]:[\\/]/.test(url) || /^[./~]/.test(url)) return "local_marketplace";
+  let match = SCP_LIKE_GIT_RE.exec(url);
   if (match === null) return "invalid_marketplace";
-  let [, , r = "", s = ""] = match;
-  if (s.length === 0 || /^[-:]/.test(s) || DOT_DOT_SEGMENT_RE.test(s) || ENCODED_SEPARATOR_RE.test(s))
+  let [, , urlMatch = "", host = ""] = match;
+  if (
+    host.length === 0 ||
+    /^[-:]/.test(host) ||
+    DOT_DOT_SEGMENT_RE.test(host) ||
+    ENCODED_SEPARATOR_RE.test(host)
+  )
     return "invalid_marketplace";
-  if (/[?#]/.test(s)) return "needs_credentials";
-  return isLocalHostnameOrAddress(r) ? "local_marketplace" : "network";
+  if (/[?#]/.test(host)) return "needs_credentials";
+  return isLocalHostnameOrAddress(urlMatch) ? "local_marketplace" : "network";
 }
 //@ chunk-z7wtv7tg.js:11947-12526 placement
 /**
  * 判断插件市场来源：非法、本地市场、需要凭据等
  */
-function classifyMarketplaceSource(e, n) {
-  let r;
+function classifyMarketplaceSource(url, protocols) {
+  let parsed;
   try {
-    r = new URL(e);
+    parsed = new URL(url);
   } catch {
     return "invalid_marketplace";
   }
-  if (r.protocol === "file:") return "local_marketplace";
+  if (parsed.protocol === "file:") return "local_marketplace";
   if (
-    !(n.has(r.protocol) || INSECURE_GIT_PROTOCOLS.has(r.protocol)) ||
-    PERCENT_IN_AUTHORITY_RE.test(e) ||
-    r.hostname === "" ||
-    /^\[?-/.test(r.hostname) ||
-    r.username.startsWith("-")
+    !(protocols.has(parsed.protocol) || INSECURE_GIT_PROTOCOLS.has(parsed.protocol)) ||
+    PERCENT_IN_AUTHORITY_RE.test(url) ||
+    parsed.hostname === "" ||
+    /^\[?-/.test(parsed.hostname) ||
+    parsed.username.startsWith("-")
   )
     return "invalid_marketplace";
   if (
-    r.password !== "" ||
-    (r.username !== "" && !SSH_PROTOCOLS.has(r.protocol)) ||
-    r.search !== "" ||
-    r.hash !== "" ||
-    e.includes("?") ||
-    e.includes("#")
+    parsed.password !== "" ||
+    (parsed.username !== "" && !SSH_PROTOCOLS.has(parsed.protocol)) ||
+    parsed.search !== "" ||
+    parsed.hash !== "" ||
+    url.includes("?") ||
+    url.includes("#")
   )
     return "needs_credentials";
-  if (isLocalHostnameOrAddress(r.hostname)) return "local_marketplace";
-  if (DOT_DOT_SEGMENT_RE.test(e) || ENCODED_SEPARATOR_RE.test(e)) return "invalid_marketplace";
-  return INSECURE_GIT_PROTOCOLS.has(r.protocol) ? "insecure_transport" : "network";
+  if (isLocalHostnameOrAddress(parsed.hostname)) return "local_marketplace";
+  if (DOT_DOT_SEGMENT_RE.test(url) || ENCODED_SEPARATOR_RE.test(url)) return "invalid_marketplace";
+  return INSECURE_GIT_PROTOCOLS.has(parsed.protocol) ? "insecure_transport" : "network";
 }
 //@ chunk-z7wtv7tg.js:12526-12609 placement
-function isLocalHostnameOrAddress(e) {
-  return isLocalAddress(e, "address") || isLocalHostname(e) || !/[.:]/.test(e.replace(/\.+$/, ""));
+function isLocalHostnameOrAddress(host) {
+  return isLocalAddress(host, "address") || isLocalHostname(host) || !/[.:]/.test(host.replace(/\.+$/, ""));
 }
 //@ chunk-z7wtv7tg.js:12609-12968 placement
 /**
  * 剔除名称相同（不区分大小写）但声明不同的插件市场项，计入 ambiguous_marketplace 丢弃统计。
  */
-function dropAmbiguousMarketplaces(e, n, r) {
-  let s = new Map();
-  for (let { marketplace, declaration } of e)
+function dropAmbiguousMarketplaces(entries, dropCounts, dropped) {
+  let declarations = new Map();
+  for (let { marketplace, declaration } of entries)
     if (declaration !== undefined) {
       let lower = marketplace.toLowerCase();
-      let S = s.get(lower) ?? new Set();
-      S.add(jsonStringifyRaw(sortKeysDeep(declaration)));
-      s.set(lower, S);
+      let marketplaceName = declarations.get(lower) ?? new Set();
+      marketplaceName.add(jsonStringifyRaw(sortKeysDeep(declaration)));
+      declarations.set(lower, marketplaceName);
     }
-  return e.filter(({ id, marketplace, declaration }) => {
-    if (declaration === undefined || (s.get(marketplace.toLowerCase())?.size ?? 0) <= 1) return true;
-    n.ambiguous_marketplace++;
-    r.push({
+  return entries.filter(({ id, marketplace, declaration }) => {
+    if (declaration === undefined || (declarations.get(marketplace.toLowerCase())?.size ?? 0) <= 1)
+      return true;
+    dropCounts.ambiguous_marketplace++;
+    dropped.push({
       id,
       reason: "ambiguous_marketplace",
     });
@@ -917,22 +1013,24 @@ function dropAmbiguousMarketplaces(e, n, r) {
 /**
  * 限制转发的插件：只保留前若干个声明市场的插件，按"本人提及且禁用、本人提及且启用、非本人启用、非本人禁用"优先级截断到上限并排序，其余计 over_cap。
  */
-function capForwardedPlugins(e, n, r) {
-  let s = new Set(orderDeclaredMarketplaces(e).slice(0, MAX_DECLARED_MARKETPLACES));
-  let filtered = e.filter(({ declaration, marketplace }) => declaration === undefined || s.has(marketplace));
+function capForwardedPlugins(entries, dropCounts, dropped) {
+  let declared = new Set(orderDeclaredMarketplaces(entries).slice(0, MAX_DECLARED_MARKETPLACES));
+  let filtered = entries.filter(
+    ({ declaration, marketplace }) => declaration === undefined || declared.has(marketplace),
+  );
   let sorted = [
-    ...filtered.filter(({ value: S, ownMention }) => ownMention && !S),
-    ...filtered.filter(({ value: S, ownMention }) => ownMention && S),
-    ...filtered.filter(({ value: S, ownMention }) => !ownMention && S),
-    ...filtered.filter(({ value: S, ownMention }) => !ownMention && !S),
+    ...filtered.filter(({ value: entry, ownMention }) => ownMention && !entry),
+    ...filtered.filter(({ value: entry, ownMention }) => ownMention && entry),
+    ...filtered.filter(({ value: entry, ownMention }) => !ownMention && entry),
+    ...filtered.filter(({ value: kept, ownMention }) => !ownMention && !kept),
   ]
     .slice(0, MAX_FORWARDED_PLUGINS)
-    .sort((S, h) => compareStrings(S.id, h.id));
-  let R = new Set(sorted.map(({ id }) => id));
-  for (let { id } of e)
-    if (!R.has(id)) {
-      n.over_cap++;
-      r.push({
+    .sort((keptIds, entry) => compareStrings(keptIds.id, entry.id));
+  let entry = new Set(sorted.map(({ id }) => id));
+  for (let { id } of entries)
+    if (!entry.has(id)) {
+      dropCounts.over_cap++;
+      dropped.push({
         id,
         reason: "over_cap",
       });
@@ -940,16 +1038,16 @@ function capForwardedPlugins(e, n, r) {
   return sorted;
 }
 //@ chunk-z7wtv7tg.js:13425-13644 placement
-function orderDeclaredMarketplaces(e) {
-  let filtered = e.filter(({ declaration }) => declaration !== undefined);
+function orderDeclaredMarketplaces(declaring) {
+  let filtered = declaring.filter(({ declaration }) => declaration !== undefined);
   let sorted = uniq(
     filtered.filter(({ ownMention }) => ownMention).map(({ marketplace }) => marketplace),
   ).sort();
-  let s = new Set(sorted);
+  let ownMarketplaces = new Set(sorted);
   return [
     ...sorted,
     ...uniq(filtered.map(({ marketplace }) => marketplace))
-      .filter((i) => !s.has(i))
+      .filter((rest) => !ownMarketplaces.has(rest))
       .sort(),
   ];
 }
@@ -983,8 +1081,8 @@ function emptyDropCounts() {
   };
 }
 //@ chunk-z7wtv7tg.js:14059-14113 placement
-function ownFieldOrUndefined(e, n) {
-  return Object.hasOwn(e, n) ? e[n] : undefined;
+function ownFieldOrUndefined(object, key) {
+  return Object.hasOwn(object, key) ? object[key] : undefined;
 }
 //@ chunk-z7wtv7tg.js:14113-19143 placement
 /**
@@ -1000,113 +1098,113 @@ function runCloudPluginsSync({
   onOutcome,
   onState,
 }) {
-  let h =
+  let extraFields =
     bound === undefined
       ? {}
       : {
           bound,
         };
-  let N = "idle";
-  let I = null;
-  let v = (y) => {
-    N = y;
-    if (y !== "skipped") I = null;
-    runCallbackSafely(() => onState?.(y), noopErrorHandler);
+  let state = "idle";
+  let skipReason = null;
+  let setState = (nextState) => {
+    state = nextState;
+    if (nextState !== "skipped") skipReason = null;
+    runCallbackSafely(() => onState?.(nextState), noopErrorHandler);
   };
-  let P = null;
-  let V = null;
-  let q = false;
-  let M = null;
-  let ee = false;
-  let j = null;
-  let G = null;
-  let ge = false;
-  function ne(y, b) {
-    if (b === "read_failed" || b === "internal_error" || b === "refused_whole")
-      logFeatureBad("ccr_cloud_plugins_forward", b, h);
-    I = b;
-    v("skipped");
+  let currentCycle = null;
+  let workerGeneration = null;
+  let didApply = false;
+  let lastNoticeKey = null;
+  let noticedMessageFirst = false;
+  let workerRefusal = null;
+  let settledGeneration = null;
+  let sawMessageBeforeConnect = false;
+  function skip(cycle, reason) {
+    if (reason === "read_failed" || reason === "internal_error" || reason === "refused_whole")
+      logFeatureBad("ccr_cloud_plugins_forward", reason, extraFields);
+    skipReason = reason;
+    setState("skipped");
     logEvent("tengu_cloud_plugins_skipped", {
-      reason: fromEnum(b),
-      ...h,
-      reattach: y.reattach,
+      reason: fromEnum(reason),
+      ...extraFields,
+      reattach: cycle.reattach,
     });
   }
-  function ue(y) {
-    runCallbackSafely(() => onOutcome?.(y), noopErrorHandler);
-    let b = jsonStringify(
-      y.refusedByWorker === undefined
-        ? [y.forwarded, y.forwardedDisabled, y.loaded, y.notApplied, y.stayed]
-        : ["refused", y.refusedByWorker, y.stayed],
+  function settleOutcome(outcome) {
+    runCallbackSafely(() => onOutcome?.(outcome), noopErrorHandler);
+    let noticeKey = jsonStringify(
+      outcome.refusedByWorker === undefined
+        ? [outcome.forwarded, outcome.forwardedDisabled, outcome.loaded, outcome.notApplied, outcome.stayed]
+        : ["refused", outcome.refusedByWorker, outcome.stayed],
     );
-    if (b !== M || (y.messageWentFirst && !ee))
+    if (noticeKey !== lastNoticeKey || (outcome.messageWentFirst && !noticedMessageFirst))
       runCallbackSafely(() => {
-        onNotice(y);
-        M = b;
-        ee = y.messageWentFirst;
+        onNotice(outcome);
+        lastNoticeKey = noticeKey;
+        noticedMessageFirst = outcome.messageWentFirst;
       }, noopErrorHandler);
   }
-  function pe(y, b, C, K) {
-    let Y = j !== null;
+  function buildOutcome(cycle, plan, loaded, isNotApplied) {
+    let isRefused = workerRefusal !== null;
     return {
-      forwarded: b.forwarded,
-      forwardedDisabled: b.forwardedDisabled,
-      loaded: Y ? null : C,
-      stayed: b.stayed,
-      notApplied: K || Y,
-      messageWentFirst: !Y && !K && y.messageWentFirst,
-      ...(j !== null && {
-        refusedByWorker: j.reason,
+      forwarded: plan.forwarded,
+      forwardedDisabled: plan.forwardedDisabled,
+      loaded: isRefused ? null : loaded,
+      stayed: plan.stayed,
+      notApplied: isNotApplied || isRefused,
+      messageWentFirst: !isRefused && !isNotApplied && cycle.messageWentFirst,
+      ...(workerRefusal !== null && {
+        refusedByWorker: workerRefusal.reason,
       }),
     };
   }
-  function ie(y) {
-    return runCallbackSafely(() => transport.post(y), rejectedPost);
+  function post(message) {
+    return runCallbackSafely(() => transport.post(message), rejectedPost);
   }
-  function oe(y, b, C, K) {
-    q = true;
-    let Y = ie({
+  function applyPlan(cycle, plan, stage, generation) {
+    didApply = true;
+    let posted = post({
       subtype: "apply_flag_settings",
       settings: {
-        [CLOUD_PLUGINS_FORWARDED_KEY]: b.patch,
+        [CLOUD_PLUGINS_FORWARDED_KEY]: plan.patch,
       },
     });
-    let de = () => forwardingStanding(y, K) === "current";
-    Y.response.then(
+    let stillCurrent = () => forwardingStanding(cycle, generation) === "current";
+    posted.response.then(
       () => {
-        if (de()) j = null;
+        if (stillCurrent()) workerRefusal = null;
       },
       (error) => {
         let pluginForwardingDisabled = parsePluginForwardingDisabled(error);
         logEvent("tengu_cloud_plugins_apply_unconfirmed", {
-          at: fromEnum(C),
-          ...h,
-          standing: fromEnum(forwardingStanding(y, K)),
+          at: fromEnum(stage),
+          ...extraFields,
+          standing: fromEnum(forwardingStanding(cycle, generation)),
           ...(pluginForwardingDisabled !== null && {
             refused_by_worker: fromEnum(pluginForwardingDisabled),
           }),
         });
-        if (pluginForwardingDisabled !== null && de()) {
-          j = {
+        if (pluginForwardingDisabled !== null && stillCurrent()) {
+          workerRefusal = {
             reason: pluginForwardingDisabled,
-            generation: K,
+            generation,
           };
-          ue(pe(y, b, null, true));
+          settleOutcome(buildOutcome(cycle, plan, null, true));
         }
       },
     );
-    return Y;
+    return posted;
   }
-  function he(y, b) {
-    let cloudPluginsDeclaration = loadCloudPluginsDeclaration(b);
+  function forwardFor(cycle, snapshot) {
+    let cloudPluginsDeclaration = loadCloudPluginsDeclaration(snapshot);
     logEvent("tengu_cloud_plugins_forwarded", {
       ...toPluginAdmissionTelemetry(cloudPluginsDeclaration.counts),
       refused_whole: cloudPluginsDeclaration.refusedWhole !== undefined,
-      ...h,
-      reattach: y.reattach,
+      ...extraFields,
+      reattach: cycle.reattach,
     });
     if (cloudPluginsDeclaration.refusedWhole !== undefined) {
-      ue({
+      settleOutcome({
         forwarded: 0,
         forwardedDisabled: 0,
         loaded: null,
@@ -1114,18 +1212,18 @@ function runCloudPluginsSync({
         notApplied: true,
         messageWentFirst: false,
       });
-      ne(y, "refused_whole");
+      skip(cycle, "refused_whole");
       return;
     }
     if (
       cloudPluginsDeclaration.counts.forwarded === 0 &&
       cloudPluginsDeclaration.counts.marketplacesDeclared === 0 &&
-      !y.reattach &&
-      !y.workerKnownAtConnect &&
-      !q
+      !cycle.reattach &&
+      !cycle.workerKnownAtConnect &&
+      !didApply
     ) {
       if (cloudPluginsDeclaration.dropped.length > 0)
-        ue({
+        settleOutcome({
           forwarded: 0,
           forwardedDisabled: 0,
           loaded: null,
@@ -1133,10 +1231,10 @@ function runCloudPluginsSync({
           notApplied: false,
           messageWentFirst: false,
         });
-      ne(y, "nothing_to_forward");
+      skip(cycle, "nothing_to_forward");
       return;
     }
-    let K = {
+    let plan = {
       patch: cloudPluginsDeclaration.patch,
       patchKey: jsonStringify(cloudPluginsDeclaration.patch),
       forwardedEnabledIds: new Set(
@@ -1148,126 +1246,132 @@ function runCloudPluginsSync({
       forwardedDisabled: cloudPluginsDeclaration.counts.forwardedDisabled,
       stayed: cloudPluginsDeclaration.dropped,
     };
-    y.plan = K;
-    v("waiting_for_worker");
-    if (y.generation !== null) {
-      y.earlyApply = "skipped";
-      W(y, K, y.generation, "connect");
+    cycle.plan = plan;
+    setState("waiting_for_worker");
+    if (cycle.generation !== null) {
+      cycle.earlyApply = "skipped";
+      applyForGeneration(cycle, plan, cycle.generation, "connect");
     } else
-      settlePostedResult(oe(y, K, "connect", null)).then((earlyApply) => {
-        y.earlyApply = earlyApply;
+      settlePostedResult(applyPlan(cycle, plan, "connect", null)).then((earlyApply) => {
+        cycle.earlyApply = earlyApply;
       });
   }
-  function W(y, b, C, K) {
-    if (y.handledGeneration !== null && C <= y.handledGeneration) return;
-    let generationChanged = y.handledGeneration !== null;
-    y.handledGeneration = C;
-    y.reloadTaken = false;
-    j = reconcileWorkerGeneration(C, y, j);
-    ee = false;
-    let de = () => forwardingStanding(y, C);
-    let _e = (Z) => {
+  function applyForGeneration(cycle, plan, generation, stage) {
+    if (cycle.handledGeneration !== null && generation <= cycle.handledGeneration) return;
+    let generationChanged = cycle.handledGeneration !== null;
+    cycle.handledGeneration = generation;
+    cycle.reloadTaken = false;
+    workerRefusal = reconcileWorkerGeneration(generation, cycle, workerRefusal);
+    noticedMessageFirst = false;
+    let isCurrent = () => forwardingStanding(cycle, generation);
+    let logReload = (fields) => {
       logEvent("tengu_cloud_plugins_reload", {
-        early_apply: fromEnum(y.earlyApply),
+        early_apply: fromEnum(cycle.earlyApply),
         generation_changed: generationChanged,
-        install_frames_seen: y.installFrames,
-        forwarded_enabled: b.forwardedEnabledIds.size,
-        ...h,
-        reattach: y.reattach,
-        ...Z,
+        install_frames_seen: cycle.installFrames,
+        forwarded_enabled: plan.forwardedEnabledIds.size,
+        ...extraFields,
+        reattach: cycle.reattach,
+        ...fields,
       });
     };
-    v("posted");
-    let se = null;
-    let ye = (Z, w, B) => {
-      let x = Z === "accepted" && w === "accepted";
-      if (de() === "current") {
-        y.reloadTaken = x;
-        if (x && j === null)
-          G = {
-            generation: C,
-            patchKey: b.patchKey,
+    setState("posted");
+    let reloadStartedAt = null;
+    let finishReload = (applyOutcome, reloadOutcome, loadedPromise) => {
+      let isAccepted = applyOutcome === "accepted" && reloadOutcome === "accepted";
+      if (isCurrent() === "current") {
+        cycle.reloadTaken = isAccepted;
+        if (isAccepted && workerRefusal === null)
+          settledGeneration = {
+            generation,
+            patchKey: plan.patchKey,
           };
-        let X = Z === "session_inactive" || w === "session_inactive";
-        if (!x) {
-          if (X)
+        let isSessionInactive = applyOutcome === "session_inactive" || reloadOutcome === "session_inactive";
+        if (!isAccepted) {
+          if (isSessionInactive)
             logFeatureSad("ccr_cloud_plugins_forward", "session_inactive", {
-              ...h,
+              ...extraFields,
             });
           else
             logFeatureBad("ccr_cloud_plugins_forward", "posts_refused", {
-              ...h,
+              ...extraFields,
             });
-          ue(pe(y, b, null, true));
-        } else if (j !== null)
+          settleOutcome(buildOutcome(cycle, plan, null, true));
+        } else if (workerRefusal !== null)
           logFeatureSad("ccr_cloud_plugins_forward", "refused_by_worker", {
-            ...h,
+            ...extraFields,
           });
         else
           logFeatureOk("ccr_cloud_plugins_forward", {
-            ...h,
-            message_went_first: y.messageWentFirst,
+            ...extraFields,
+            message_went_first: cycle.messageWentFirst,
           });
-        v(x ? "settled" : "failed");
+        setState(isAccepted ? "settled" : "failed");
       }
-      B.then((X) => {
-        _e({
-          apply_outcome: fromEnum(Z),
-          reload_outcome: fromEnum(w),
-          standing: fromEnum(de()),
-          message_went_first: y.messageWentFirst,
-          reload_rtt_ms: se === null ? -1 : clock.now() - se,
-          answered: X !== null,
-          loaded_of_forwarded: X?.loaded ?? -1,
-          worker_error_count: X?.workerErrors ?? -1,
+      loadedPromise.then((loadedInfo) => {
+        logReload({
+          apply_outcome: fromEnum(applyOutcome),
+          reload_outcome: fromEnum(reloadOutcome),
+          standing: fromEnum(isCurrent()),
+          message_went_first: cycle.messageWentFirst,
+          reload_rtt_ms: reloadStartedAt === null ? -1 : clock.now() - reloadStartedAt,
+          answered: loadedInfo !== null,
+          loaded_of_forwarded: loadedInfo?.loaded ?? -1,
+          worker_error_count: loadedInfo?.workerErrors ?? -1,
         });
-        if (de() === "current" && (x || X !== null)) {
-          ue(pe(y, b, X?.loaded ?? null, false));
-          y.messageWentFirst = false;
-          if (X !== null) {
-            y.reloadTaken = true;
-            if (j === null)
-              G = {
-                generation: C,
-                patchKey: b.patchKey,
+        if (isCurrent() === "current" && (isAccepted || loadedInfo !== null)) {
+          settleOutcome(buildOutcome(cycle, plan, loadedInfo?.loaded ?? null, false));
+          cycle.messageWentFirst = false;
+          if (loadedInfo !== null) {
+            cycle.reloadTaken = true;
+            if (workerRefusal === null)
+              settledGeneration = {
+                generation,
+                patchKey: plan.patchKey,
               };
-            v("settled");
+            setState("settled");
           }
         }
       });
     };
-    settlePostedResult(oe(y, b, K, C)).then((Z) => {
-      if (Z !== "accepted" || de() !== "current") {
-        ye(Z, "not_posted", Promise.resolve(null));
+    settlePostedResult(applyPlan(cycle, plan, stage, generation)).then((applyResult) => {
+      if (applyResult !== "accepted" || isCurrent() !== "current") {
+        finishReload(applyResult, "not_posted", Promise.resolve(null));
         return;
       }
-      se = clock.now();
-      let w = ie({
+      reloadStartedAt = clock.now();
+      let reloadPosted = post({
         subtype: "reload_plugins",
       });
-      let B = w.response.then(
-        (x) => countLoadedPlugins(b, x),
+      let loadedPromise = reloadPosted.response.then(
+        (response) => countLoadedPlugins(plan, response),
         () => null,
       );
-      settlePostedResult(w).then((x) => {
-        ye(Z, x, B);
+      settlePostedResult(reloadPosted).then((reloadResult) => {
+        finishReload(applyResult, reloadResult, loadedPromise);
       });
     });
   }
-  function ce(y) {
-    return G !== null && y.generation === G.generation && (y.plan === null || y.plan.patchKey === G.patchKey);
+  function isSettledFor(cycle) {
+    return (
+      settledGeneration !== null &&
+      cycle.generation === settledGeneration.generation &&
+      (cycle.plan === null || cycle.plan.patchKey === settledGeneration.patchKey)
+    );
   }
-  function ae(reattach) {
-    let messageWentFirst = ge && !(G !== null && V === G.generation);
-    ge = false;
+  function newCycle(reattach) {
+    let messageWentFirst =
+      sawMessageBeforeConnect &&
+      !(settledGeneration !== null && workerGeneration === settledGeneration.generation);
+    sawMessageBeforeConnect = false;
     return {
       reattach,
-      workerKnownAtConnect: V !== null,
+      workerKnownAtConnect: workerGeneration !== null,
       reloadTaken: false,
       messageWentFirst,
       closed: false,
       plan: null,
-      generation: V,
+      generation: workerGeneration,
       handledGeneration: null,
       earlyApply: "pending",
       installFrames: 0,
@@ -1275,82 +1379,87 @@ function runCloudPluginsSync({
   }
   return {
     connected({ reattach }) {
-      if (P !== null) P.closed = true;
-      let b = ae(reattach);
-      P = b;
-      let C = runCallbackSafely(admission, () => "internal_error");
-      if (C !== "admitted") {
-        ne(b, C);
+      if (currentCycle !== null) currentCycle.closed = true;
+      let cycle = newCycle(reattach);
+      currentCycle = cycle;
+      let admitted = runCallbackSafely(admission, () => "internal_error");
+      if (admitted !== "admitted") {
+        skip(cycle, admitted);
         return;
       }
-      v("reading");
+      setState("reading");
       Promise.resolve()
         .then(readChoices)
         .then(
-          (K) => {
-            if (!b.closed)
+          (snapshot) => {
+            if (!cycle.closed)
               runCallbackSafely(
-                () => he(b, K),
-                () => ne(b, "internal_error"),
+                () => forwardFor(cycle, snapshot),
+                () => skip(cycle, "internal_error"),
               );
           },
           () => {
-            if (!b.closed) ne(b, "read_failed");
+            if (!cycle.closed) skip(cycle, "read_failed");
           },
         );
     },
-    workerUp(y) {
-      if (V !== null && y < V) return;
-      V = y;
-      if (P === null || (P.generation !== null && y <= P.generation)) return;
-      P.generation = y;
-      let b = P;
-      let plan = b.plan;
+    workerUp(generation) {
+      if (workerGeneration !== null && generation < workerGeneration) return;
+      workerGeneration = generation;
+      if (
+        currentCycle === null ||
+        (currentCycle.generation !== null && generation <= currentCycle.generation)
+      )
+        return;
+      currentCycle.generation = generation;
+      let cycle = currentCycle;
+      let plan = cycle.plan;
       if (plan !== null)
         runCallbackSafely(
-          () => W(b, plan, y, "worker_up"),
-          () => ne(b, "internal_error"),
+          () => applyForGeneration(cycle, plan, generation, "worker_up"),
+          () => skip(cycle, "internal_error"),
         );
     },
     pluginInstallFrame() {
-      if (P !== null) P.installFrames++;
+      if (currentCycle !== null) currentCycle.installFrames++;
     },
     messageSent() {
-      if (P === null) {
-        ge = true;
+      if (currentCycle === null) {
+        sawMessageBeforeConnect = true;
         return;
       }
-      if (!P.reloadTaken && N !== "skipped" && !ce(P)) P.messageWentFirst = true;
+      if (!currentCycle.reloadTaken && state !== "skipped" && !isSettledFor(currentCycle))
+        currentCycle.messageWentFirst = true;
     },
     disconnected() {
-      if (P !== null) {
-        P.closed = true;
-        P = null;
+      if (currentCycle !== null) {
+        currentCycle.closed = true;
+        currentCycle = null;
       }
-      v("idle");
+      setState("idle");
     },
-    state: () => N,
-    skipped: () => (N === "skipped" ? I : null),
+    state: () => state,
+    skipped: () => (state === "skipped" ? skipReason : null),
   };
 }
 //@ chunk-z7wtv7tg.js:19143-19238 placement
-function forwardingStanding(e, n) {
-  return e.closed ? "disconnected" : e.handledGeneration === n ? "current" : "superseded";
+function forwardingStanding(cycle, generation) {
+  return cycle.closed ? "disconnected" : cycle.handledGeneration === generation ? "current" : "superseded";
 }
 //@ chunk-z7wtv7tg.js:19238-19373 placement
-function reconcileWorkerGeneration(e, n, r) {
-  if (r === null || r.generation === e) return r;
-  return r.generation === null && !n.workerKnownAtConnect
+function reconcileWorkerGeneration(generation, cycle, previous) {
+  if (previous === null || previous.generation === generation) return previous;
+  return previous.generation === null && !cycle.workerKnownAtConnect
     ? {
-        ...r,
-        generation: e,
+        ...previous,
+        generation,
       }
     : null;
 }
 //@ chunk-z7wtv7tg.js:19373-19432 placement
-function runCallbackSafely(e, noopErrorHandler) {
+function runCallbackSafely(fn, noopErrorHandler) {
   try {
-    return e();
+    return fn();
   } catch (error) {
     logError(error);
     return noopErrorHandler(error);
@@ -1372,79 +1481,89 @@ var PLUGIN_FORWARDING_DISABLED_REASONS = [
 ];
 //@ chunk-z7wtv7tg.js:19581-19797 placement
 function parsePluginForwardingDisabled(error) {
-  let n = error instanceof Error ? error.message : typeof error === "string" ? error : "";
-  if (n === PLUGIN_FORWARDING_DISABLED) return "other";
-  let r = `${PLUGIN_FORWARDING_DISABLED}: `;
-  if (!n.startsWith(r)) return null;
-  let trimmed = n.slice(r.length).trim();
-  return PLUGIN_FORWARDING_DISABLED_REASONS.find((i) => i === trimmed) ?? "other";
+  let message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  if (message === PLUGIN_FORWARDING_DISABLED) return "other";
+  let prefix = `${PLUGIN_FORWARDING_DISABLED}: `;
+  if (!message.startsWith(prefix)) return null;
+  let trimmed = message.slice(prefix.length).trim();
+  return PLUGIN_FORWARDING_DISABLED_REASONS.find((cause) => cause === trimmed) ?? "other";
 }
 //@ chunk-z7wtv7tg.js:19797-19901 placement
-function rejectedPost(e) {
-  let n = Promise.reject(e);
-  n.catch(noopErrorHandler);
+function rejectedPost(reason) {
+  let rejected = Promise.reject(reason);
+  rejected.catch(noopErrorHandler);
   return {
     posted: Promise.resolve("failed"),
-    response: n,
+    response: rejected,
   };
 }
 //@ chunk-z7wtv7tg.js:19901-19952 placement
-function settlePostedResult(e) {
-  return e.posted.catch(() => "failed");
+function settlePostedResult(posted) {
+  return posted.posted.catch(() => "failed");
 }
 //@ chunk-z7wtv7tg.js:19952-20031 placement
-var cloudPluginsAdmissionReplySchema = DoctorLazy(() =>
-  u({
-    plugins: array(
-      u({
-        source: string().optional(),
-      }),
-    ),
-    error_count: E().int(),
-  }),
-);
+var cloudPluginsAdmissionReplySchema; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-z7wtv7tg.js:19952", () => {
+  cloudPluginsAdmissionReplySchema = DoctorLazy(() =>
+    objectSchema({
+      plugins: array(
+        objectSchema({
+          source: stringSchema().optional(),
+        }),
+      ),
+      error_count: numberSchema().int(),
+    }),
+  );
+});
 //@ chunk-z7wtv7tg.js:20031-20297 placement
-function countLoadedPlugins(e, n) {
-  let r = cloudPluginsAdmissionReplySchema().safeParse(n);
-  if (!r.success)
+function countLoadedPlugins(plan, response) {
+  let parsed = cloudPluginsAdmissionReplySchema().safeParse(response);
+  if (!parsed.success)
     return {
       loaded: null,
       workerErrors: -1,
     };
   return {
     loaded: new Set(
-      r.data.plugins.flatMap(({ source }) =>
-        source !== undefined && e.forwardedEnabledIds.has(source.toLowerCase()) ? [source.toLowerCase()] : [],
+      parsed.data.plugins.flatMap(({ source }) =>
+        source !== undefined && plan.forwardedEnabledIds.has(source.toLowerCase())
+          ? [source.toLowerCase()]
+          : [],
       ),
     ).size,
-    workerErrors: r.data.error_count,
+    workerErrors: parsed.data.error_count,
   };
 }
 //@ chunk-z7wtv7tg.js:20297-21601 placement
 /**
  * 收集插件转发判定所需的数据：各层 enabledPlugins 与市场声明、已注册市场、目录信任、localSettings 是否本人选择、内置与仅可信内置插件、本项目已安装插件、策略拒绝的市场与保留名冲突。
  */
-async function collectPluginForwardingInputs(e) {
-  let mapped = getEnabledSettingSources().map((h) => [h, getSettingsForSource(h)]);
+async function collectPluginForwardingInputs(storage) {
+  let mapped = getEnabledSettingSources().map((sourceName) => [sourceName, getSettingsForSource(sourceName)]);
   let [registeredMarketplaces, installed] = await Promise.all([
-    loadKnownMarketplacesSafe(e),
-    getInstalledPluginsAsync(e),
+    loadKnownMarketplacesSafe(storage),
+    getInstalledPluginsAsync(storage),
   ]);
   let folderTrusted = isWorkspaceTrustedForMarketplace();
   let flattened = mapped
-    .filter(([h]) => folderTrusted || !REPO_DIR_SETTING_SOURCES.has(h))
-    .flatMap(([, h]) =>
-      Object.entries(h?.extraKnownMarketplaces ?? {}).map(([key, { source: I }]) => [key, I]),
+    .filter(([sourceName]) => folderTrusted || !REPO_DIR_SETTING_SOURCES.has(sourceName))
+    .flatMap(([, settings]) =>
+      Object.entries(settings?.extraKnownMarketplaces ?? {}).map(([key, { source }]) => [key, source]),
     );
   let allMarketplaces = [
     ...flattened,
-    ...Object.entries(registeredMarketplaces).map(([key, { source: N }]) => [key, N]),
+    ...Object.entries(registeredMarketplaces).map(([key, { source }]) => [key, source]),
     [CLAUDE_PLUGINS_OFFICIAL, OFFICIAL_MARKETPLACE_SOURCE],
   ];
-  let localEnabledPlugins = mapped.find(([h]) => h === "localSettings")?.[1]?.enabledPlugins;
+  let localEnabledPlugins = mapped.find(([sourceName]) => sourceName === "localSettings")?.[1]
+    ?.enabledPlugins;
   return {
-    enabledPluginsByTier: Object.fromEntries(mapped.map(([h, N]) => [h, N?.enabledPlugins])),
-    declaredMarketplacesByTier: Object.fromEntries(mapped.map(([h, N]) => [h, N?.extraKnownMarketplaces])),
+    enabledPluginsByTier: Object.fromEntries(
+      mapped.map(([sourceName, settings]) => [sourceName, settings?.enabledPlugins]),
+    ),
+    declaredMarketplacesByTier: Object.fromEntries(
+      mapped.map(([sourceName, settings]) => [sourceName, settings?.extraKnownMarketplaces]),
+    ),
     registeredMarketplaces,
     folderTrustedForProjectPlugins: folderTrusted,
     localSettingsAreOwnChoice:
@@ -1458,7 +1577,7 @@ async function collectPluginForwardingInputs(e) {
       [...getHostState().builtinPlugins.keys()]
         .map((key) => `${key}@${BUILTIN}`)
         .filter(hasTrustedOnlyBuiltinPlugin)
-        .map((h) => h.toLowerCase()),
+        .map((id) => id.toLowerCase()),
     ),
     installedPluginIds: new Set(
       Object.entries(installed.plugins)
@@ -1466,7 +1585,9 @@ async function collectPluginForwardingInputs(e) {
         .map(([key]) => key),
     ),
     policyRefusedMarketplaces: new Set(
-      allMarketplaces.filter(([, h]) => !isSourceAllowedByPolicy(h)).map(([h]) => h),
+      allMarketplaces
+        .filter(([, source]) => !isSourceAllowedByPolicy(source))
+        .map(([marketplace]) => marketplace),
     ),
     marketplaceRestrictionPolicyActive: isMarketplaceRestrictionPolicyActive(),
     reservedNameConflicts: new Set([
@@ -1475,9 +1596,11 @@ async function collectPluginForwardingInputs(e) {
         .map(([key]) => key),
       ...flattened
         .filter(
-          ([h, N]) => !Object.hasOwn(registeredMarketplaces, h) && validateOfficialNameSource(h, N) !== null,
+          ([marketplace, source]) =>
+            !Object.hasOwn(registeredMarketplaces, marketplace) &&
+            validateOfficialNameSource(marketplace, source) !== null,
         )
-        .map(([h]) => h),
+        .map(([marketplace]) => marketplace),
     ]),
   };
 }
@@ -1492,24 +1615,24 @@ function classifyCloudPluginsWorkerReply(notice) {
   if (notice === undefined) return;
   if (notice.refusedByWorker !== undefined) return "refused_by_worker";
   if (notice.notApplied) return "not_applied";
-  let n = notice.forwarded - notice.forwardedDisabled;
+  let outcome = notice.forwarded - notice.forwardedDisabled;
   if (notice.forwarded === 0) return notice.stayed.length > 0 ? "none_to_send" : undefined;
-  if (n === 0) return;
+  if (outcome === 0) return;
   if (notice.loaded === null) return "not_confirmed";
-  if (notice.loaded < n) return notice.loaded === 0 ? "not_installed" : "some_not_installed";
+  if (notice.loaded < outcome) return notice.loaded === 0 ? "not_installed" : "some_not_installed";
   return;
 }
 //@ chunk-z7wtv7tg.js:21987-22037 placement
-function isSkippedOrFailed(e) {
-  return e === "skipped" || e === "failed";
+function isSkippedOrFailed(state) {
+  return state === "skipped" || state === "failed";
 }
 //@ chunk-z7wtv7tg.js:22037-22087 placement
-function isReadingOrPosted(e) {
-  return e === "reading" || e === "posted";
+function isReadingOrPosted(state) {
+  return state === "reading" || state === "posted";
 }
 //@ chunk-z7wtv7tg.js:22087-22158 placement
-function gaveUpReason(e) {
-  return e === "read_failed" || e === "internal_error" ? e : undefined;
+function gaveUpReason(state) {
+  return state === "read_failed" || state === "internal_error" ? state : undefined;
 }
 //@ chunk-z7wtv7tg.js:22158-22252 placement
 /**
@@ -1517,8 +1640,8 @@ function gaveUpReason(e) {
  */
 var REAL_PLUGIN_FORWARD_CLOCK = {
   now: () => Date.now(),
-  setTimeout(e, n) {
-    let timer = setTimeout(e, n);
+  setTimeout(callback, timerCallback) {
+    let timer = setTimeout(callback, timerCallback);
     return () => clearTimeout(timer);
   },
 };
@@ -1526,68 +1649,69 @@ var REAL_PLUGIN_FORWARD_CLOCK = {
 /**
  * 把本机插件选择转发到云会话：检查同意、超时、上报 tengu_cloud_plugins_admission
  */
-function forwardCloudPlugins(e) {
-  let { sessionId, reattach, manager, memory } = e;
-  let k = (w) => {
+function forwardCloudPlugins(options) {
+  let { sessionId, reattach, manager, memory } = options;
+  let say = (message) => {
     try {
-      e.say(w);
+      options.say(message);
     } catch (error) {
       logError(error);
     }
   };
-  let R = e.readChoices ?? (() => collectPluginForwardingInputs(e.storageV5));
-  let clock = e.clock ?? REAL_PLUGIN_FORWARD_CLOCK;
-  let muted = e.muted ?? isRemoteToolServingMuted;
-  let N = (w) =>
+  let readChoices = options.readChoices ?? (() => collectPluginForwardingInputs(options.storageV5));
+  let clock = options.clock ?? REAL_PLUGIN_FORWARD_CLOCK;
+  let muted = options.muted ?? isRemoteToolServingMuted;
+  let withTimeout = (fn) =>
     new Promise((resolve, reject) => {
-      let X = clock.setTimeout(
+      let cancelTimer = clock.setTimeout(
         () => reject(Error("a local read for plugin forwarding timed out")),
         LOCAL_READ_TIMEOUT_MS,
       );
-      Promise.resolve().then(w).then(resolve, reject).finally(X);
+      Promise.resolve().then(fn).then(resolve, reject).finally(cancelTimer);
     });
-  let I = () => N(R);
-  let v = e.consentDeps ?? readCloudPluginsConsent(e.storageV5);
-  let P = e.distrust ?? createUntrustedStoreJudge(e.reach);
-  let V = () => N(() => resolveCloudPluginsConsent(memory.consentPin, v, P));
+  let readChoicesTimed = () => withTimeout(readChoices);
+  let consentDeps = options.consentDeps ?? readCloudPluginsConsent(options.storageV5);
+  let distrust = options.distrust ?? createUntrustedStoreJudge(options.reach);
+  let resolveConsent = () =>
+    withTimeout(() => resolveCloudPluginsConsent(memory.consentPin, consentDeps, distrust));
   let abortController = new AbortController();
-  let M = "no_consent";
-  let ee;
-  let j;
-  let G = () => {
+  let admission = "no_consent";
+  let admissionSource;
+  let outcome;
+  let notifyChange = () => {
     try {
-      e.onChange?.();
+      options.onChange?.();
     } catch (error) {
       logError(error);
     }
   };
-  let ge = (w) => {
-    j = w;
-    forEachLine(w, k);
-    G();
+  let applyOutcome = (nextOutcome) => {
+    outcome = nextOutcome;
+    forEachLine(nextOutcome, say);
+    notifyChange();
   };
-  let ne = false;
-  let ue = false;
-  let pe = false;
-  let ie = muted();
-  let oe = false;
-  let he = false;
-  let W = runCloudPluginsSync({
-    admission: () => M,
+  let readFailed = false;
+  let sawLoaded = false;
+  let toldRestarted = false;
+  let isMuted = muted();
+  let isMutedOff = false;
+  let toldMuted = false;
+  let sync = runCloudPluginsSync({
+    admission: () => admission,
     readChoices: () =>
-      I().then(
-        (w) => {
-          ne = false;
-          return w;
+      readChoicesTimed().then(
+        (choices) => {
+          readFailed = false;
+          return choices;
         },
         (error) => {
-          ne = true;
+          readFailed = true;
           throw error;
         },
       ),
     transport: {
-      post(w) {
-        let { posted, response } = manager.postControlRequest(w, {
+      post(message) {
+        let { posted, response } = manager.postControlRequest(message, {
           answerExpected: false,
         });
         return {
@@ -1597,133 +1721,133 @@ function forwardCloudPlugins(e) {
       },
     },
     clock,
-    ...(e.bound !== undefined && {
-      bound: e.bound,
+    ...(options.bound !== undefined && {
+      bound: options.bound,
     }),
-    onNotice: (w) => {
+    onNotice: (notice) => {
       if (
-        w.forwarded > w.forwardedDisabled &&
-        w.loaded !== 0 &&
-        !w.notApplied &&
-        w.refusedByWorker === undefined
+        notice.forwarded > notice.forwardedDisabled &&
+        notice.loaded !== 0 &&
+        !notice.notApplied &&
+        notice.refusedByWorker === undefined
       )
-        ue = true;
-      forEachLine(w, k);
+        sawLoaded = true;
+      forEachLine(notice, say);
     },
-    onOutcome: (w) => {
-      j = w;
-      G();
+    onOutcome: (finalOutcome) => {
+      outcome = finalOutcome;
+      notifyChange();
     },
-    onState: () => G(),
+    onState: () => notifyChange(),
   });
-  let ce = false;
-  let ae = null;
-  let y = () => {
-    if (!he) {
-      he = true;
-      k({
+  let isSettled = false;
+  let heldDecision = null;
+  let tellMuted = () => {
+    if (!toldMuted) {
+      toldMuted = true;
+      say({
         line: CLOUD_PLUGINS_NOTICE_TEXTS,
         level: "notice",
       });
     }
   };
-  let b = () => {
-    if (oe) return;
-    oe = true;
-    j = undefined;
-    W.disconnected();
-    y();
+  let goMuted = () => {
+    if (isMutedOff) return;
+    isMutedOff = true;
+    outcome = undefined;
+    sync.disconnected();
+    tellMuted();
     logEvent("tengu_cloud_plugins_admission", {
       admission: fromEnum("flag_off"),
       source: fromEnum("muted"),
       reattach,
     });
-    G();
+    notifyChange();
   };
-  let C = () => {
-    oe = false;
-    j = undefined;
-    k({
+  let comeBackFromMuted = () => {
+    isMutedOff = false;
+    outcome = undefined;
+    say({
       line: PLUGINS_RESTORED_NOTICE,
       level: "notice",
     });
-    W.connected({
+    sync.connected({
       reattach,
     });
-    if (Y) W.messageSent();
-    G();
+    if (sawMessage) sync.messageSent();
+    notifyChange();
   };
-  let K = (w) => {
+  let decide = (answer) => {
     if (abortController.signal.aborted) return;
     memory.setAsideSessions.delete(sessionId);
-    if (!ce) {
-      ae = w;
+    if (!isSettled) {
+      heldDecision = answer;
       return;
     }
-    let B = w === "accepted" ? "admitted" : "opted_out";
-    if (B === M && !ne) return;
-    let x = "decided";
-    M = B;
-    ee = x;
-    j = undefined;
-    G();
+    let nextAdmission = answer === "accepted" ? "admitted" : "opted_out";
+    if (nextAdmission === admission && !readFailed) return;
+    let source = "decided";
+    admission = nextAdmission;
+    admissionSource = source;
+    outcome = undefined;
+    notifyChange();
     logEvent("tengu_cloud_plugins_admission", {
-      admission: fromEnum(B),
-      source: fromEnum(x),
+      admission: fromEnum(nextAdmission),
+      source: fromEnum(source),
       reattach,
     });
-    if (B === "admitted" && ie) {
-      b();
+    if (nextAdmission === "admitted" && isMuted) {
+      goMuted();
       return;
     }
-    oe = false;
-    W.disconnected();
-    W.connected({
+    isMutedOff = false;
+    sync.disconnected();
+    sync.connected({
       reattach,
     });
-    if (Y) W.messageSent();
+    if (sawMessage) sync.messageSent();
   };
-  let Y = false;
-  let de = memory.decided.subscribe((w) => {
+  let sawMessage = false;
+  let unsubscribe = memory.decided.subscribe((answer) => {
     try {
-      K(w);
+      decide(answer);
     } catch (error) {
       logError(error);
     }
   });
-  let _e = (e.onMuteRecheck ?? onServingMuteRecheck)(() => {
+  let unsubscribeMute = (options.onMuteRecheck ?? onServingMuteRecheck)(() => {
     try {
-      let w = muted();
-      if (abortController.signal.aborted || w === ie) return;
-      ie = w;
-      if (w) {
-        if (M === "admitted" && ce && isReadingOrPosted(W.state())) {
-          b();
+      let nextMuted = muted();
+      if (abortController.signal.aborted || nextMuted === isMuted) return;
+      isMuted = nextMuted;
+      if (nextMuted) {
+        if (admission === "admitted" && isSettled && isReadingOrPosted(sync.state())) {
+          goMuted();
           return;
         }
-        G();
+        notifyChange();
         return;
       }
-      he = false;
-      if (oe) {
-        C();
+      toldMuted = false;
+      if (isMutedOff) {
+        comeBackFromMuted();
         return;
       }
-      G();
+      notifyChange();
     } catch (error) {
       logError(error);
     }
   });
-  let se = () => {
-    if (M !== "admitted") return;
-    resolveCloudPluginsConsent(memory.consentPin, v, P).then(
+  let recheckConsent = () => {
+    if (admission !== "admitted") return;
+    resolveCloudPluginsConsent(memory.consentPin, consentDeps, distrust).then(
       (cloudPluginsConsent) => {
-        if (cloudPluginsConsent !== "accepted") K("declined");
+        if (cloudPluginsConsent !== "accepted") decide("declined");
       },
       () => {},
     );
   };
-  ye()
+  readAdmission()
     .catch((error) => {
       logError(error);
       return {
@@ -1732,62 +1856,62 @@ function forwardCloudPlugins(e) {
         unsent: [],
       };
     })
-    .then((w) => {
+    .then((admissionResult) => {
       logEvent("tengu_cloud_plugins_admission", {
-        admission: fromEnum(w.admission),
-        source: fromEnum(w.source),
+        admission: fromEnum(admissionResult.admission),
+        source: fromEnum(admissionResult.source),
         reattach,
       });
       if (abortController.signal.aborted) return;
-      if (w.source === "read_failed" || w.source === "internal_error") {
-        logFeatureBad("ccr_cloud_plugins_forward", w.source);
-        ee = w.source;
-        ce = true;
-        G();
-        if (ae !== null) K(ae);
+      if (admissionResult.source === "read_failed" || admissionResult.source === "internal_error") {
+        logFeatureBad("ccr_cloud_plugins_forward", admissionResult.source);
+        admissionSource = admissionResult.source;
+        isSettled = true;
+        notifyChange();
+        if (heldDecision !== null) decide(heldDecision);
         return;
       }
-      M = w.admission;
-      ee = w.source;
-      ce = true;
-      if (M === "admitted" && ie) b();
+      admission = admissionResult.admission;
+      admissionSource = admissionResult.source;
+      isSettled = true;
+      if (admission === "admitted" && isMuted) goMuted();
       else {
-        W.connected({
+        sync.connected({
           reattach,
         });
-        G();
+        notifyChange();
       }
-      if (w.unsent.length > 0) ge(emptyPluginsStatus(w.unsent));
-      if (ae !== null) K(ae);
+      if (admissionResult.unsent.length > 0) applyOutcome(emptyPluginsStatus(admissionResult.unsent));
+      if (heldDecision !== null) decide(heldDecision);
     })
     .catch((error) => {
       logError(error);
     });
-  async function ye() {
-    let w = await V().catch(() => null);
-    if (w === null)
+  async function readAdmission() {
+    let storedChoice = await resolveConsent().catch(() => null);
+    if (storedChoice === null)
       return {
         admission: "no_consent",
         source: "read_failed",
         unsent: [],
       };
-    if (w !== "unset")
+    if (storedChoice !== "unset")
       return {
-        admission: w === "accepted" ? "admitted" : "opted_out",
+        admission: storedChoice === "accepted" ? "admitted" : "opted_out",
         source: "stored",
         unsent: [],
       };
-    let B = await I().then(
-      (hn) => hn,
+    let inputs = await readChoicesTimed().then(
+      (value) => value,
       () => null,
     );
-    if (B === null)
+    if (inputs === null)
       return {
         admission: "no_consent",
         source: "read_failed",
         unsent: [],
       };
-    let cloudPluginsDeclaration = loadCloudPluginsDeclaration(B);
+    let cloudPluginsDeclaration = loadCloudPluginsDeclaration(inputs);
     if (
       cloudPluginsDeclaration.counts.forwarded === 0 &&
       cloudPluginsDeclaration.counts.marketplacesDeclared === 0
@@ -1803,12 +1927,12 @@ function forwardCloudPlugins(e) {
         source: "detached",
         unsent: [],
       };
-    let X = P.withheld();
-    if (X !== null) {
+    let withheld = distrust.withheld();
+    if (withheld !== null) {
       memory.setAsideSessions.add(sessionId);
-      if (ae === null)
-        k({
-          line: classifyPluginSourceRoot(X),
+      if (heldDecision === null)
+        say({
+          line: classifyPluginSourceRoot(withheld),
           level: "warning",
         });
       return {
@@ -1817,9 +1941,9 @@ function forwardCloudPlugins(e) {
         unsent: [],
       };
     }
-    if (!memory.pointedToCommand.shown && ae === null) {
+    if (!memory.pointedToCommand.shown && heldDecision === null) {
       memory.pointedToCommand.shown = true;
-      k({
+      say({
         line: buildCloudPluginsPrompt(
           cloudPluginsDeclaration.counts.forwarded - cloudPluginsDeclaration.counts.forwardedDisabled,
           cloudPluginsDeclaration.counts.forwarded,
@@ -1833,60 +1957,61 @@ function forwardCloudPlugins(e) {
       unsent: [],
     };
   }
-  let Z = (w) => () => {
+  let guard = (fn) => () => {
     try {
-      w();
+      fn();
     } catch (error) {
       logError(error);
     }
   };
   return {
-    workerKnownUp: Z(() => {
-      if (M === "admitted" && ie) b();
-      W.workerUp(memory.generations.known(sessionId));
+    workerKnownUp: guard(() => {
+      if (admission === "admitted" && isMuted) goMuted();
+      sync.workerUp(memory.generations.known(sessionId));
     }),
-    workerCameUp: Z(() => {
-      if (M === "opted_out" && ue && !pe) {
-        pe = true;
-        k({
+    workerCameUp: guard(() => {
+      if (admission === "opted_out" && sawLoaded && !toldRestarted) {
+        toldRestarted = true;
+        say({
           line: PLUGINS_RESTARTED_WITHOUT_NOTICE,
           level: "notice",
         });
       }
-      se();
-      let w = memory.generations.next(sessionId);
-      if (M === "admitted" && ie) b();
-      else if (M === "admitted" && ce && ne) {
-        j = undefined;
-        W.disconnected();
-        W.connected({
+      recheckConsent();
+      let generation = memory.generations.next(sessionId);
+      if (admission === "admitted" && isMuted) goMuted();
+      else if (admission === "admitted" && isSettled && readFailed) {
+        outcome = undefined;
+        sync.disconnected();
+        sync.connected({
           reattach,
         });
-        if (Y) W.messageSent();
+        if (sawMessage) sync.messageSent();
       }
-      W.workerUp(w);
+      sync.workerUp(generation);
     }),
-    pluginInstallFrame: Z(() => W.pluginInstallFrame()),
-    messageSent: Z(() => {
-      Y = true;
-      W.messageSent();
+    pluginInstallFrame: guard(() => sync.pluginInstallFrame()),
+    messageSent: guard(() => {
+      sawMessage = true;
+      sync.messageSent();
     }),
-    teardown: Z(() => {
+    teardown: guard(() => {
       if (abortController.signal.aborted) return;
       memory.setAsideSessions.delete(sessionId);
       abortController.abort();
-      _e();
-      de();
-      W.disconnected();
+      unsubscribeMute();
+      unsubscribe();
+      sync.disconnected();
     }),
     state: () => ({
-      settled: ce,
-      admission: M,
-      source: ee,
-      notice: j,
-      muted: oe,
-      answerPending: M === "admitted" && !oe && j === undefined && !isSkippedOrFailed(W.state()),
-      gaveUp: gaveUpReason(W.skipped()),
+      settled: isSettled,
+      admission,
+      source: admissionSource,
+      notice: outcome,
+      muted: isMutedOff,
+      answerPending:
+        admission === "admitted" && !isMutedOff && outcome === undefined && !isSkippedOrFailed(sync.state()),
+      gaveUp: gaveUpReason(sync.skipped()),
     }),
   };
 }
@@ -1904,34 +2029,34 @@ var PLUGINS_RESTARTED_WITHOUT_NOTICE =
 /**
  * 惰性判定同意存储是否可信（只判定一次）：提供 storeUntrusted、onUntrusted 与 withheld。
  */
-function createUntrustedStoreJudge(e) {
-  let n = null;
-  let r = null;
-  let s = null;
-  let i = () =>
-    (n ??= Promise.resolve()
-      .then(() => e.judge())
+function createUntrustedStoreJudge(reach) {
+  let pendingJudge = null;
+  let verdict = null;
+  let withheldReason = null;
+  let judgeOnce = () =>
+    (pendingJudge ??= Promise.resolve()
+      .then(() => reach.judge())
       .catch(() => "unknown")
-      .then((k) => {
-        r = k;
-        return k;
+      .then((result) => {
+        verdict = result;
+        return result;
       }));
   return {
-    storeUntrusted: () => i().then((k) => k !== "outside"),
+    storeUntrusted: () => judgeOnce().then((result) => result !== "outside"),
     onUntrusted: () => {
-      s = r === null || r === "outside" ? "unknown" : r;
+      withheldReason = verdict === null || verdict === "outside" ? "unknown" : verdict;
     },
-    withheld: () => s,
+    withheld: () => withheldReason,
   };
 }
 //@ chunk-z7wtv7tg.js:27330-27810 placement
-function classifyPluginSourceRoot(e) {
-  let n = stripInvisibleChars(cloudPluginsConsentFilePath());
-  return `The saved answer about your plugins is not used for this cloud session, because ${e === "in_launch_dir" ? `the session itself can change ${n} from the folder or repository it runs in` : e === "in_other_root" ? `the session itself can change ${n} through a folder it may write on this machine (an added directory or a settings write grant)` : `it could not be checked that the session cannot change ${n}`}; run /cloud-plugins to decide for this session.`;
+function classifyPluginSourceRoot(reason) {
+  let path = stripInvisibleChars(cloudPluginsConsentFilePath());
+  return `The saved answer about your plugins is not used for this cloud session, because ${reason === "in_launch_dir" ? `the session itself can change ${path} from the folder or repository it runs in` : reason === "in_other_root" ? `the session itself can change ${path} through a folder it may write on this machine (an added directory or a settings write grant)` : `it could not be checked that the session cannot change ${path}`}; run /cloud-plugins to decide for this session.`;
 }
 //@ chunk-z7wtv7tg.js:27810-28049 placement
-function buildCloudPluginsPrompt(e, forwarded) {
-  return `${e > 0 ? `Your ${e} enabled ${plural(e, "plugin")} can be used in` : `Your ${forwarded} plugin ${plural(forwarded, "choice")} can apply to`} your cloud sessions from this machine \u2014 run /cloud-plugins to decide (nothing is sent until you do).`;
+function buildCloudPluginsPrompt(enabledCount, forwarded) {
+  return `${enabledCount > 0 ? `Your ${enabledCount} enabled ${plural(enabledCount, "plugin")} can be used in` : `Your ${forwarded} plugin ${plural(forwarded, "choice")} can apply to`} your cloud sessions from this machine \u2014 run /cloud-plugins to decide (nothing is sent until you do).`;
 }
 //@ chunk-z7wtv7tg.js:28049-28159 placement
 function emptyPluginsStatus(stayed) {
@@ -1945,65 +2070,68 @@ function emptyPluginsStatus(stayed) {
   };
 }
 //@ chunk-z7wtv7tg.js:28159-28193 placement
-function forEachLine(e, n) {
-  notTakenNoticeLines(e).forEach(n);
+function forEachLine(outcome, emit) {
+  notTakenNoticeLines(outcome).forEach(emit);
 }
 //@ chunk-z7wtv7tg.js:28193-28257 placement
-function notTakenNoticeLines(e) {
-  return [...formatCloudPluginsNotTakenNotice(e), ...formatPluginRejections(e.stayed, e.forwarded === 0)];
+function notTakenNoticeLines(outcome) {
+  return [
+    ...formatCloudPluginsNotTakenNotice(outcome),
+    ...formatPluginRejections(outcome.stayed, outcome.forwarded === 0),
+  ];
 }
 //@ chunk-z7wtv7tg.js:28257-30261 placement
 /**
  * 云会话没有采用本机插件时的提示文本
  */
-function formatCloudPluginsNotTakenNotice(e) {
-  if (e.forwarded === 0 && e.refusedByWorker === undefined && !e.notApplied) return [];
-  if (e.refusedByWorker !== undefined)
+function formatCloudPluginsNotTakenNotice(outcome) {
+  if (outcome.forwarded === 0 && outcome.refusedByWorker === undefined && !outcome.notApplied) return [];
+  if (outcome.refusedByWorker !== undefined)
     return [
       {
-        line: `This cloud session did not take your plugins: ${CONTAINER_REFUSAL_TEXTS[e.refusedByWorker]}. Your plugins on this machine are unchanged.`,
+        line: `This cloud session did not take your plugins: ${CONTAINER_REFUSAL_TEXTS[outcome.refusedByWorker]}. Your plugins on this machine are unchanged.`,
         level: "warning",
       },
     ];
-  if (e.notApplied)
+  if (outcome.notApplied)
     return [
       {
         line: "Your plugins may not have reached this cloud session: it did not accept the request. They will be sent again if the session restarts or you reconnect to it; /reload-plugins shows what is loaded there now.",
         level: "warning",
       },
     ];
-  let n = e.forwarded - e.forwardedDisabled;
-  let forwardedDisabled = e.forwardedDisabled;
-  let s =
+  let enabledCount = outcome.forwarded - outcome.forwardedDisabled;
+  let forwardedDisabled = outcome.forwardedDisabled;
+  let disabledNote =
     forwardedDisabled > 0
       ? ` (${forwardedDisabled} you turned off here ${plural(forwardedDisabled, "stays", "stay")} off there)`
       : "";
-  if (n === 0)
+  if (enabledCount === 0)
     return [
       {
         line: `The ${forwardedDisabled} ${plural(forwardedDisabled, "plugin")} you turned off here ${plural(forwardedDisabled, "is", "are")} off in this cloud session too.`,
         level: "debug",
       },
     ];
-  let i = e.loaded !== null && e.loaded >= n;
-  let k = plural(n, "it", "them");
-  let R =
-    e.loaded === null
-      ? `Sent your ${n} enabled ${plural(n, "plugin")} to this cloud session${s}; it has not confirmed ${k} \u2014 /reload-plugins shows what loaded.`
-      : e.loaded >= n
-        ? `Using your ${n} ${plural(n, "plugin")} in this cloud session${s}.`
-        : e.loaded === 0
-          ? `${n === 1 ? "Your enabled plugin could not" : `None of your ${n} enabled plugins could`} be installed in this cloud session yet${s} \u2014 the session is still fetching ${n === 1 ? "it" : "them"} or cannot reach ${n === 1 ? "its" : "their"} marketplace; /reload-plugins shows what loaded.`
-          : `Using ${e.loaded} of your ${n} plugins in this cloud session${s}; the other ${n - e.loaded} could not be installed there yet \u2014 the session is still fetching ${n - e.loaded === 1 ? "it" : "them"} or cannot reach ${n - e.loaded === 1 ? "its" : "their"} marketplace; /reload-plugins shows what loaded.`;
-  let S = !e.messageWentFirst
+  let isQuiet = outcome.loaded !== null && outcome.loaded >= enabledCount;
+  let them = plural(enabledCount, "it", "them");
+  let mainLine =
+    outcome.loaded === null
+      ? `Sent your ${enabledCount} enabled ${plural(enabledCount, "plugin")} to this cloud session${disabledNote}; it has not confirmed ${them} \u2014 /reload-plugins shows what loaded.`
+      : outcome.loaded >= enabledCount
+        ? `Using your ${enabledCount} ${plural(enabledCount, "plugin")} in this cloud session${disabledNote}.`
+        : outcome.loaded === 0
+          ? `${enabledCount === 1 ? "Your enabled plugin could not" : `None of your ${enabledCount} enabled plugins could`} be installed in this cloud session yet${disabledNote} \u2014 the session is still fetching ${enabledCount === 1 ? "it" : "them"} or cannot reach ${enabledCount === 1 ? "its" : "their"} marketplace; /reload-plugins shows what loaded.`
+          : `Using ${outcome.loaded} of your ${enabledCount} plugins in this cloud session${disabledNote}; the other ${enabledCount - outcome.loaded} could not be installed there yet \u2014 the session is still fetching ${enabledCount - outcome.loaded === 1 ? "it" : "them"} or cannot reach ${enabledCount - outcome.loaded === 1 ? "its" : "their"} marketplace; /reload-plugins shows what loaded.`;
+  let timingNote = !outcome.messageWentFirst
     ? ""
-    : e.loaded === null
-      ? ` If ${plural(n, "it", "they")} loaded, ${plural(n, "it applies", "they apply")} from your next prompt; the one already sent may have run without ${k}.`
-      : ` ${plural(n, "It applies", "They apply")} from your next prompt; the one already sent may have run without ${k}.`;
+    : outcome.loaded === null
+      ? ` If ${plural(enabledCount, "it", "they")} loaded, ${plural(enabledCount, "it applies", "they apply")} from your next prompt; the one already sent may have run without ${them}.`
+      : ` ${plural(enabledCount, "It applies", "They apply")} from your next prompt; the one already sent may have run without ${them}.`;
   return [
     {
-      line: `${R}${S}`,
-      level: i && !e.messageWentFirst ? "debug" : "notice",
+      line: `${mainLine}${timingNote}`,
+      level: isQuiet && !outcome.messageWentFirst ? "debug" : "notice",
     },
   ];
 }
@@ -2011,7 +2139,7 @@ function formatCloudPluginsNotTakenNotice(e) {
 /**
  * 生成插件未转发的调试说明行：列出前若干个插件及原因，其余计数。
  */
-function formatPluginRejections(stayed, n) {
+function formatPluginRejections(stayed, isNoneForwarded) {
   if (stayed.length === 0) return [];
   let joined = stayed
     .slice(0, MAX_LISTED_LONG_PLUGIN_REASONS)
@@ -2022,13 +2150,13 @@ function formatPluginRejections(stayed, n) {
         })} (${PLUGIN_REJECT_REASON_TEXTS[reason]})`,
     )
     .join("; ");
-  let s =
+  let moreSuffix =
     stayed.length > MAX_LISTED_LONG_PLUGIN_REASONS
       ? `; and ${stayed.length - MAX_LISTED_LONG_PLUGIN_REASONS} more`
       : "";
   return [
     {
-      line: `${n ? `Not using your plugins in this cloud session; ${stayed.length} ${plural(stayed.length, "stays", "stay")} on this machine` : `${stayed.length} of your plugin choices ${plural(stayed.length, "stays", "stay")} on this machine`}: ${joined}${s}.`,
+      line: `${isNoneForwarded ? `Not using your plugins in this cloud session; ${stayed.length} ${plural(stayed.length, "stays", "stay")} on this machine` : `${stayed.length} of your plugin choices ${plural(stayed.length, "stays", "stay")} on this machine`}: ${joined}${moreSuffix}.`,
       level: "debug",
     },
   ];
@@ -2071,10 +2199,10 @@ var CONTAINER_REFUSAL_TEXTS = {
   other: "it did not accept the request",
 };
 //@ chunk-fe6rs39h.js:125430-125645 placement
-function cloudPluginsAdmissionReport(reason, n, s, reattach, h, y) {
+function cloudPluginsAdmissionReport(reason, admission, source, reattach, extraSource, message) {
   logEvent("tengu_cloud_plugins_admission", {
-    admission: fromEnum(n),
-    source: fromEnum(s),
+    admission: fromEnum(admission),
+    source: fromEnum(source),
     reattach,
   });
   return {
@@ -2082,18 +2210,18 @@ function cloudPluginsAdmissionReport(reason, n, s, reattach, h, y) {
     report: () => ({
       state: "off",
       reason,
-      ...(h && {
-        source: h,
+      ...(extraSource && {
+        source: extraSource,
       }),
-      ...(y !== undefined && {
-        message: truncateToLength(y, 200),
+      ...(message !== undefined && {
+        message: truncateToLength(message, 200),
       }),
     }),
   };
 }
 //@ chunk-fe6rs39h.js:125645-126351 placement
-function cloudPluginsOffMessage(e) {
-  switch (e) {
+function cloudPluginsOffMessage(reason) {
+  switch (reason) {
     case "in_launch_dir":
       return "Your plugins are not used in this cloud session: the folder or repository it runs in holds your Claude settings, where that choice is saved, so it could change it. Start it from a folder outside them.";
     case "in_other_root":
@@ -2107,103 +2235,103 @@ function cloudPluginsOffMessage(e) {
 var CLOUD_PLUGINS_UNDECIDED_MESSAGE =
   "Your plugins are not used in cloud sessions from this machine yet: run /cloud-plugins in claude on this machine to decide.";
 //@ chunk-fe6rs39h.js:126483-126627 placement
-function homeSettingsFeature(e, source) {
+function homeSettingsFeature(homeSeed, source) {
   return {
     feature: "settings",
-    status: e.status,
-    homeSeed: e,
-    report: () => homeSettingsReport(e.outcome(), source),
-    onSettled: (s) => {
-      e.completion.then(() => s());
+    status: homeSeed.status,
+    homeSeed,
+    report: () => homeSettingsReport(homeSeed.outcome(), source),
+    onSettled: (source) => {
+      homeSeed.completion.then(() => source());
     },
   };
 }
 //@ chunk-fe6rs39h.js:126627-126724 placement
-function homeSettingsOffFeature(reason, n) {
+function homeSettingsOffFeature(reason, offReason) {
   return {
     feature: "settings",
     report: () => ({
       state: "off",
       reason,
-      ...(n && {
-        source: n,
+      ...(offReason && {
+        source: offReason,
       }),
     }),
   };
 }
 //@ chunk-fe6rs39h.js:126724-128051 placement
 function createHomeSettingsFeature({ forwardHomeSettings, hostConsent }) {
-  return async (s) => {
-    if (s.homeSeed !== undefined)
-      return homeSettingsFeature(s.homeSeed, hostConsent === "forward" ? "host" : "stored");
+  return async (session) => {
+    if (session.homeSeed !== undefined)
+      return homeSettingsFeature(session.homeSeed, hostConsent === "forward" ? "host" : "stored");
     if (!forwardHomeSettings) return homeSettingsOffFeature("launch_flag");
-    let r = s.settingsToCloud === true;
-    let h = s.isProjectSynced === true;
-    let homeSettingsForwardingBlocker = getHomeSettingsForwardingBlocker(r);
+    let ownFlagsOn = session.settingsToCloud === true;
+    let projectSynced = session.isProjectSynced === true;
+    let homeSettingsForwardingBlocker = getHomeSettingsForwardingBlocker(ownFlagsOn);
     if (homeSettingsForwardingBlocker !== null) return homeSettingsOffFeature(homeSettingsForwardingBlocker);
-    let S = h ? storedHomeSettingsMode() : storedForwardMode();
+    let storedMode = projectSynced ? storedHomeSettingsMode() : storedForwardMode();
     let hostConsentMode = resolveHostConsentMode({
       hostConsent,
-      areOwnFlagsOn: r,
-      stored: S,
-      isProjectSynced: h,
+      areOwnFlagsOn: ownFlagsOn,
+      stored: storedMode,
+      isProjectSynced: projectSynced,
     });
-    let R =
+    let source =
       hostConsent === "forward"
         ? "host"
-        : hostConsentMode === undefined && S === undefined
+        : hostConsentMode === undefined && storedMode === undefined
           ? "default"
           : "stored";
-    if (s.trigger === "attach")
+    if (session.trigger === "attach")
       noteHomeSettingsPrompt({
         launchConsent: hostConsentMode,
-        isProjectSynced: h,
+        isProjectSynced: projectSynced,
         launchMayForward: true,
         surface: "sdk_host",
         trigger: "attach",
       });
-    if (hostConsentMode === undefined && S !== "forward")
-      return homeSettingsOffFeature(S === "keep_local" ? "declined" : "no_consent", R);
-    if (!s.bound) return homeSettingsOffFeature("unbound", R);
-    if (s.trigger === "create") return homeSettingsOffFeature("not_seeded", R);
-    let { logSelfHostedRunnerPlan, planHomeSeed } = await import("./chunk-cx5g5sgv.js");
-    if (s.isOnSelfHostedRunner === true) {
+    if (hostConsentMode === undefined && storedMode !== "forward")
+      return homeSettingsOffFeature(storedMode === "keep_local" ? "declined" : "no_consent", source);
+    if (!session.bound) return homeSettingsOffFeature("unbound", source);
+    if (session.trigger === "create") return homeSettingsOffFeature("not_seeded", source);
+    let { logSelfHostedRunnerPlan, planHomeSeed } = await import("../../services/homeSeed/planHomeSeed.js");
+    if (session.isOnSelfHostedRunner === true) {
       logSelfHostedRunnerPlan();
-      return homeSettingsOffFeature("self_hosted_runner", R);
+      return homeSettingsOffFeature("self_hosted_runner", source);
     }
-    let { runHomeSeed } = await import("./chunk-6qze3ysr.js");
-    let P = () =>
+    let { runHomeSeed } = await import("../../services/homeSeed/runHomeSeed.js");
+    let seed = () =>
       planHomeSeed({
-        signal: s.signal,
-        storageV5: s.storageV5,
+        signal: session.signal,
+        storageV5: session.storageV5,
         launchConsent: hostConsentMode,
       });
     return homeSettingsFeature(
       runHomeSeed({
-        sessionId: s.sessionId,
+        sessionId: session.sessionId,
         plan: isLaunchConsentBlocked(hostConsentMode)
-          ? isContainerSyncDisabled(s.dirSync).then((N) =>
-              N
-                ? P()
+          ? isContainerSyncDisabled(session.dirSync).then((plan) =>
+              plan
+                ? seed()
                 : {
                     kind: "none",
                     reason: "no_project_files",
                   },
             )
-          : P(),
+          : seed(),
         ...(isLaunchConsentBlocked(hostConsentMode) && {
           isProjectStillSynced: async () =>
-            isRemoteCoworkLet(s.dirSync) && isContainerSyncEnvironment(true, s.dirSync?.gitRoot),
+            isRemoteCoworkLet(session.dirSync) && isContainerSyncEnvironment(true, session.dirSync?.gitRoot),
         }),
         bound: true,
-        boundDeviceUuid: s.boundDeviceUuid,
+        boundDeviceUuid: session.boundDeviceUuid,
         trigger: "attach",
         launchConsent: hostConsentMode,
-        signal: s.signal,
-        credentials: s.credentials,
-        storageV5: s.storageV5,
+        signal: session.signal,
+        credentials: session.credentials,
+        storageV5: session.storageV5,
       }),
-      R,
+      source,
     );
   };
 }
@@ -2226,31 +2354,31 @@ function isSettingsSent(outcome) {
   }
 }
 //@ chunk-fe6rs39h.js:128283-128747 placement
-function homeSettingsReport(e, source) {
-  let s = {
+function homeSettingsReport(outcome, source) {
+  let base = {
     state: "forwarded",
     source,
   };
-  if (e === undefined)
+  if (outcome === undefined)
     return {
-      ...s,
+      ...base,
       pending: true,
     };
-  if (e.kind === "uploaded")
-    return !isSettingsSent(e.outcome)
+  if (outcome.kind === "uploaded")
+    return !isSettingsSent(outcome.outcome)
       ? {
           state: "off",
           source,
-          reason: e.outcome,
+          reason: outcome.outcome,
         }
-      : e.settingsRefused !== undefined
+      : outcome.settingsRefused !== undefined
         ? {
             state: "off",
             source,
-            reason: e.settingsRefused,
+            reason: outcome.settingsRefused,
           }
-        : s;
-  switch (e.reason) {
+        : base;
+  switch (outcome.reason) {
     case "nothing_to_send":
       return {
         state: "off",
@@ -2267,7 +2395,7 @@ function homeSettingsReport(e, source) {
       return {
         state: "off",
         source,
-        reason: e.reason,
+        reason: outcome.reason,
       };
   }
 }

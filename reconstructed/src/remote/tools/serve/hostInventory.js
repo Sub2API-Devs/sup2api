@@ -36,10 +36,10 @@ function isHostInventoryShared() {
 /**
  * 远程工具服务启动时收集主机工具清单（gcloud、brew、sqlite3、ffmpeg 等）。
  */
-async function gatherHostInventory(t) {
+async function gatherHostInventory(cwd) {
   try {
     if (!isHostInventoryShared()) return;
-    let [hostProfile, r] = await Promise.all([
+    let [hostProfile, diskStats] = await Promise.all([
       gatherHostProfile({
         includeMcpServers: false,
         signal: AbortSignal.timeout(INVENTORY_PROBE_TIMEOUT_MS),
@@ -47,7 +47,7 @@ async function gatherHostInventory(t) {
         maxTools: MAX_INVENTORY_TOOLS,
       }),
       withDeadline(
-        statfs(t, {
+        statfs(cwd, {
           bigint: true,
         }),
         INVENTORY_PROBE_TIMEOUT_MS,
@@ -59,18 +59,18 @@ async function gatherHostInventory(t) {
       logFeatureBad("remote_tools_host_inventory", "unsupported_platform");
       return;
     }
-    let n = r === undefined ? -1n : r.bavail * r.bsize;
+    let diskFreeBytes = diskStats === undefined ? -1n : diskStats.bavail * diskStats.bsize;
     if (!hostProfile.complete) logFeatureSad("remote_tools_host_inventory", "deadline");
-    else if (n < 0n) logFeatureSad("remote_tools_host_inventory", "disk_unread");
+    else if (diskFreeBytes < 0n) logFeatureSad("remote_tools_host_inventory", "disk_unread");
     else logFeatureOk("remote_tools_host_inventory");
-    let i = {
+    let hostFacts = {
       ...(!hostProfile.complete && {
         incomplete: true,
       }),
       cpus: availableParallelism(),
       memory_gb: Math.round(totalmem() / Number(BYTES_PER_GIB)),
-      ...(n >= 0n && {
-        disk_free_gb: Math.min(Number(n / BYTES_PER_GIB), MAX_NONNEGATIVE_INT),
+      ...(diskFreeBytes >= 0n && {
+        disk_free_gb: Math.min(Number(diskFreeBytes / BYTES_PER_GIB), MAX_NONNEGATIVE_INT),
       }),
     };
     let tools = hostProfile.profile.tools;
@@ -78,13 +78,13 @@ async function gatherHostInventory(t) {
       tools.length > 0 &&
       jsonStringify({
         tools,
-        ...i,
+        ...hostFacts,
       }).length > MAX_INVENTORY_JSON_BYTES
     )
       tools = tools.slice(0, -1);
     return {
       tools,
-      ...i,
+      ...hostFacts,
     };
   } catch (error) {
     logError(toError(error));
@@ -92,4 +92,4 @@ async function gatherHostInventory(t) {
     return;
   }
 }
-export { isHostInventoryShared };
+export { isHostInventoryShared, gatherHostInventory };

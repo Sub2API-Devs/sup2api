@@ -29,9 +29,9 @@ var MAX_META_KEYS = 64;
 /**
  * 判断 MCP 连接是否是 Claude Code 远程服务器（名称匹配，且为 CCR 配置或指向 CCR 地址的动态 http 配置）。
  */
-function isClaudeCodeRemoteServer(r) {
-  let { name: e, config } = r;
-  if (e !== CLAUDE_CODE_REMOTE) return false;
+function isClaudeCodeRemoteServer(info) {
+  let { name, config } = info;
+  if (name !== CLAUDE_CODE_REMOTE) return false;
   return (
     isCliOwnedConfig(config) ||
     (config.scope === "dynamic" &&
@@ -44,16 +44,16 @@ function isClaudeCodeRemoteServer(r) {
 /**
  * 生成发给 Claude Code 远程服务器的代理元数据：代理 id、代理类型与是否为观察者代理链。
  */
-function agentRequestMeta(r, e) {
-  let n = excludeMainSessionAgentId(e.agentId, e.agentContext);
-  if (n === undefined || !isClaudeCodeRemoteServer(r)) return {};
-  let t = truncateToLength(stripIgnorables(e.agentType ?? ""), MAX_AGENT_TYPE_CHARS);
+function agentRequestMeta(info, context) {
+  let agentId = excludeMainSessionAgentId(context.agentId, context.agentContext);
+  if (agentId === undefined || !isClaudeCodeRemoteServer(info)) return {};
+  let agentType = truncateToLength(stripIgnorables(context.agentType ?? ""), MAX_AGENT_TYPE_CHARS);
   return {
-    [CLAUDECODE_AGENTID]: n,
-    ...(t !== "" && {
-      [CLAUDECODE_AGENTTYPE]: t,
+    [CLAUDECODE_AGENTID]: agentId,
+    ...(agentType !== "" && {
+      [CLAUDECODE_AGENTTYPE]: agentType,
     }),
-    ...(isObserverLineage(n, e) && {
+    ...(isObserverLineage(agentId, context) && {
       [CLAUDECODE_ISOBSERVER]: true,
     }),
   };
@@ -62,21 +62,25 @@ function agentRequestMeta(r, e) {
 /**
  * 沿任务注册表与代理上下文向上追溯父代理，判断是否属于观察者代理（追溯次数超限时视为是）。
  */
-function isObserverLineage(r, { agentContext, taskRegistry }) {
-  let t = [r];
-  let s = new Set();
-  for (let i = t.pop(); i !== undefined; i = t.pop()) {
-    if (s.has(i)) continue;
-    if (s.size >= MAX_META_KEYS) return true;
-    s.add(i);
-    let o = taskRegistry.get(i);
-    if (o !== undefined && isObserverAgentTask(o)) return true;
-    if (o !== undefined && "parentAgentId" in o && typeof o.parentAgentId === "string")
-      t.push(o.parentAgentId);
+function isObserverLineage(agentId, { agentContext, taskRegistry }) {
+  let stack = [agentId];
+  let seen = new Set();
+  for (let current = stack.pop(); current !== undefined; current = stack.pop()) {
+    if (seen.has(current)) continue;
+    if (seen.size >= MAX_META_KEYS) return true;
+    seen.add(current);
+    let task = taskRegistry.get(current);
+    if (task !== undefined && isObserverAgentTask(task)) return true;
+    if (task !== undefined && "parentAgentId" in task && typeof task.parentAgentId === "string")
+      stack.push(task.parentAgentId);
     if (!isMainAgent(agentContext)) {
-      let a =
-        i === agentContext.agentId ? agentContext.parentAgentId : i === r ? agentContext.agentId : undefined;
-      if (a !== undefined) t.push(a);
+      let parentId =
+        current === agentContext.agentId
+          ? agentContext.parentAgentId
+          : current === agentId
+            ? agentContext.agentId
+            : undefined;
+      if (parentId !== undefined) stack.push(parentId);
     }
   }
   return false;

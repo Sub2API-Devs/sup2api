@@ -27,9 +27,9 @@ var MEMORY_FILE_PATH = "/MEMORY.md";
 var MEMORY_WRITE_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 12000];
 var MEMORY_WRITE_MAX_ATTEMPTS = 10;
 //@ chunk-dz3q485w.js:30946-31122 placement
-function channelMemoriesPath(channelId, n) {
+function channelMemoriesPath(channelId, action) {
   if (!CHANNEL_ID_REGEX.test(channelId))
-    throw new ChannelApiError(n, null, "the project id has an unexpected shape", "invalid_input");
+    throw new ChannelApiError(action, null, "the project id has an unexpected shape", "invalid_input");
   return `/v1/code/memory/channel/${encodeURIComponent(channelId)}/memories`;
 }
 //@ chunk-dz3q485w.js:31122-31667 placement
@@ -84,26 +84,26 @@ async function saveMemoryFileIfAbsent(
   file,
   signal,
   credentials,
-  a = MEMORY_WRITE_RETRY_DELAYS_MS,
-  l = true,
+  retryDelaysMs = MEMORY_WRITE_RETRY_DELAYS_MS,
+  logSuccess = true,
 ) {
   try {
     for (let j = 0; ; j++) {
       let { status } = await createMemoryFile(channelId, file, signal, credentials);
       if (status === 409) {
-        if (l) logFeatureOk("projects_memory_write");
+        if (logSuccess) logFeatureOk("projects_memory_write");
         return "kept-existing";
       }
       if (status !== 404) {
         logFeatureOk("projects_memory_write");
         return "created";
       }
-      let b = a[j];
-      if (b === undefined) {
+      let retryDelayMs = retryDelaysMs[j];
+      if (retryDelayMs === undefined) {
         logFeatureSad("projects_memory_write", "store_unavailable");
         return null;
       }
-      await sleep(b, signal);
+      await sleep(retryDelayMs, signal);
       if (signal?.aborted === true) throw new AbortError();
     }
   } catch (error) {
@@ -116,20 +116,20 @@ async function saveMemoryFileIfAbsent(
   }
 }
 //@ chunk-dz3q485w.js:32122-32381 placement
-function parseMemoryFileList(e) {
-  let n = e?.data;
-  if (!Array.isArray(n)) return [];
-  return n.flatMap((s) => {
-    let r = s;
-    return typeof r?.id === "string" &&
-      MEMORY_ID_PATTERN.test(r.id) &&
-      typeof r.path === "string" &&
-      typeof r.content_sha256 === "string"
+function parseMemoryFileList(payload) {
+  let rawEntries = payload?.data;
+  if (!Array.isArray(rawEntries)) return [];
+  return rawEntries.flatMap((rawEntry) => {
+    let entry = rawEntry;
+    return typeof entry?.id === "string" &&
+      MEMORY_ID_PATTERN.test(entry.id) &&
+      typeof entry.path === "string" &&
+      typeof entry.content_sha256 === "string"
       ? [
           {
-            id: r.id,
-            path: r.path,
-            contentSha256: r.content_sha256,
+            id: entry.id,
+            path: entry.path,
+            contentSha256: entry.content_sha256,
           },
         ]
       : [];
@@ -146,7 +146,7 @@ async function findMemoryFileByPath(channelId, path, signal, credentials) {
       limit: "100",
     });
     if (page !== null) uRLSearchParams.set("page", page);
-    let h = await apiClient.get(
+    let response = await apiClient.get(
       `${channelMemoriesPath(channelId, "read project memory")}?${uRLSearchParams}`,
       {
         auth: "teleport-org",
@@ -157,11 +157,11 @@ async function findMemoryFileByPath(channelId, path, signal, credentials) {
         credentials,
       },
     );
-    if (page === null && h.ok && h.status === 404) return;
-    let b = checkChannelResponse(h, "read project memory").data;
-    let found = parseMemoryFileList(b).find((j) => j.path === path);
+    if (page === null && response.ok && response.status === 404) return;
+    let payload = checkChannelResponse(response, "read project memory").data;
+    let found = parseMemoryFileList(payload).find((memoryFile) => memoryFile.path === path);
     if (found !== undefined) return found;
-    let nextPage = b?.next_page;
+    let nextPage = payload?.next_page;
     if (typeof nextPage !== "string" || nextPage === "") return;
     page = nextPage;
   }
@@ -183,7 +183,7 @@ async function readMemoryFile(channelId, path, signal, credentials) {
       logFeatureOk("projects_memory_read");
       return null;
     }
-    let l = await apiClient.get(
+    let response = await apiClient.get(
       `${channelMemoriesPath(channelId, "read project memory")}/${encodeURIComponent(memoryFileByPath.id)}`,
       {
         auth: "teleport-org",
@@ -194,8 +194,8 @@ async function readMemoryFile(channelId, path, signal, credentials) {
         credentials,
       },
     );
-    let c = checkChannelResponse(l, "read project memory").data;
-    if (typeof c?.content !== "string")
+    let payload = checkChannelResponse(response, "read project memory").data;
+    if (typeof payload?.content !== "string")
       throw new ChannelApiError(
         "read project memory",
         null,
@@ -205,8 +205,9 @@ async function readMemoryFile(channelId, path, signal, credentials) {
     logFeatureOk("projects_memory_read");
     return {
       id: memoryFileByPath.id,
-      content: c.content,
-      contentSha256: typeof c.content_sha256 === "string" ? c.content_sha256 : memoryFileByPath.contentSha256,
+      content: payload.content,
+      contentSha256:
+        typeof payload.content_sha256 === "string" ? payload.content_sha256 : memoryFileByPath.contentSha256,
     };
   } catch (error) {
     if (signal?.aborted !== true)
@@ -230,7 +231,7 @@ async function replaceMemoryFile(channelId, update, signal, credentials) {
       "invalid_input",
     );
   try {
-    let a = await apiClient.post(
+    let response = await apiClient.post(
       `${channelMemoriesPath(channelId, "save to project memory")}/${encodeURIComponent(update.id)}`,
       {
         content: update.content,
@@ -248,7 +249,7 @@ async function replaceMemoryFile(channelId, update, signal, credentials) {
         credentials,
       },
     );
-    checkChannelResponse(a, "save to project memory");
+    checkChannelResponse(response, "save to project memory");
     logFeatureOk("projects_memory_write");
   } catch (error) {
     if (signal?.aborted !== true)
@@ -265,17 +266,17 @@ async function replaceMemoryFile(channelId, update, signal, credentials) {
  */
 async function saveOrReplaceMemoryFile(
   channelId,
-  n,
+  file,
   signal,
   credentials,
-  memoryRetryDelaysMs = MEMORY_WRITE_RETRY_DELAYS_MS,
+  retryDelaysMs = MEMORY_WRITE_RETRY_DELAYS_MS,
 ) {
-  let l = await saveMemoryFileIfAbsent(channelId, n, signal, credentials, memoryRetryDelaysMs, false);
-  if (l !== "kept-existing") return l;
-  let c;
+  let saveOutcome = await saveMemoryFileIfAbsent(channelId, file, signal, credentials, retryDelaysMs, false);
+  if (saveOutcome !== "kept-existing") return saveOutcome;
+  let existingFile;
   try {
-    c = await findMemoryFileByPath(channelId, n.path, signal, credentials);
-    if (c === undefined)
+    existingFile = await findMemoryFileByPath(channelId, file.path, signal, credentials);
+    if (existingFile === undefined)
       throw new ChannelApiError(
         "save to project memory",
         null,
@@ -293,9 +294,9 @@ async function saveOrReplaceMemoryFile(
   await replaceMemoryFile(
     channelId,
     {
-      id: c.id,
-      content: n.content,
-      expectedSha256: c.contentSha256,
+      id: existingFile.id,
+      content: file.content,
+      expectedSha256: existingFile.contentSha256,
     },
     signal,
     credentials,

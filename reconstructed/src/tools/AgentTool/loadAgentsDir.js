@@ -33,14 +33,14 @@ import { CLAUDE_CODE_GUIDE_AGENT } from "./built-in/claudeCodeGuideAgent.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   union,
-  string,
+  stringSchema,
   record,
   _enum,
-  u,
+  objectSchema,
   array,
-  E,
+  numberSchema,
   preprocess,
-  M,
+  booleanSchema,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { McpServerConfigSchema } from "../../services/mcp/types.js";
 import { EFFORT_LEVELS, parseEffortValue } from "../../utils/effort.js";
@@ -93,6 +93,7 @@ import {
 } from "../../utils/frontmatterParser.js";
 import { uniq } from "../../utils/collections.js";
 import { getMcpServerNameOfTool } from "../../services/mcp/utils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:2207198-2207321 placement
 function getBuiltInAgentsMode() {
@@ -109,7 +110,10 @@ class WebFetchAgentFlagState {
   policyAllowed = undefined;
 }
 //@ chunk-e6aww6q8.js:2207367-2207394 placement
-var webFetchAgentFlagSlots = new HostScoped(() => new WebFetchAgentFlagState());
+var webFetchAgentFlagSlots; // deferred: uses WebFetchAgentFlagState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2207367", () => {
+  webFetchAgentFlagSlots = new HostScoped(() => new WebFetchAgentFlagState());
+});
 //@ chunk-e6aww6q8.js:2207394-2207433 placement
 /**
  * 取当前 host 的 WebFetch 代理开关状态。
@@ -119,30 +123,30 @@ function webFetchAgentFlagState() {
 }
 //@ chunk-e6aww6q8.js:2207433-2207547 placement
 function isWebFetchAgentFlagOn() {
-  let e = webFetchAgentFlagState();
-  e.enabled ??=
+  let state = webFetchAgentFlagState();
+  state.enabled ??=
     env.CLAUDE_CODE_WEB_FETCH_AGENT ?? getFeatureValue_CACHED_MAY_BE_STALE("tengu_clever_orbit", false);
-  return e.enabled;
+  return state.enabled;
 }
 //@ chunk-e6aww6q8.js:2207547-2207751 placement
 function isWebFetchAgentEnabled() {
   if (!isWebFetchAgentFlagOn() || env.CLAUDE_CODE_SIMPLE || env.CLAUDE_CODE_DISABLE_WEB_FETCH) return false;
-  let e = webFetchAgentFlagState();
-  let policyAllowed = e.policyAllowed;
+  let state = webFetchAgentFlagState();
+  let policyAllowed = state.policyAllowed;
   if (policyAllowed === undefined) {
     policyAllowed = isPolicyAllowed_3(ALLOW_WEB_FETCH);
-    if (getResponseFromCache() !== null) e.policyAllowed = policyAllowed;
+    if (getResponseFromCache() !== null) state.policyAllowed = policyAllowed;
   }
   return policyAllowed && getBuiltInAgentsMode() === "default";
 }
 //@ chunk-e6aww6q8.js:2209386-2209627 facade-exports
-async function loadListedAgentDefinition(e, signal) {
-  if (e.source !== "plugin" || e.loadDefinition === undefined) return e;
-  let r = await (signal === undefined
-    ? e.loadDefinition()
-    : raceWithAbortSignalPastInterrupt(e.loadDefinition(), signal, () => new AbortError_2()));
-  if (r === undefined || r.agentType !== e.agentType || r.source !== "plugin") return;
-  return r;
+async function loadListedAgentDefinition(agent, signal) {
+  if (agent.source !== "plugin" || agent.loadDefinition === undefined) return agent;
+  let loaded = await (signal === undefined
+    ? agent.loadDefinition()
+    : raceWithAbortSignalPastInterrupt(agent.loadDefinition(), signal, () => new AbortError_2()));
+  if (loaded === undefined || loaded.agentType !== agent.agentType || loaded.source !== "plugin") return;
+  return loaded;
 }
 //@ chunk-e6aww6q8.js:2357250-2357674 facade-exports = getBuiltInAgents (0.599)
 /**
@@ -152,156 +156,177 @@ function getBuiltInAgents() {
   let builtInAgentsMode = getBuiltInAgentsMode();
   if (builtInAgentsMode === "none") return [];
   if (builtInAgentsMode === "coordinator") {
-    let { getCoordinatorAgents } = require("./chunk-ncsga3m8.js");
+    let { getCoordinatorAgents } = require("../../coordinator/workerAgent.js");
     return getCoordinatorAgents();
   }
-  let n = [GENERAL_PURPOSE_AGENT];
-  if (!isSafeMode()) n.push(STATUSLINE_SETUP_AGENT);
+  let agents = [GENERAL_PURPOSE_AGENT];
+  if (!isSafeMode()) agents.push(STATUSLINE_SETUP_AGENT);
   if (!isAgentViewDisabled()) {
-    let { CLAUDE_AGENT } = require("./chunk-57rpad5y.js");
-    n.push(CLAUDE_AGENT);
+    let { CLAUDE_AGENT } = require("./built-in/claudeAgent.js");
+    agents.push(CLAUDE_AGENT);
   }
-  if (isExplorePlanAgentsEnabled()) n.push(EXPLORE_AGENT, PLAN_AGENT);
-  if (isWebFetchAgentEnabled()) n.push(WEB_FETCH_BUILTIN_AGENT);
+  if (isExplorePlanAgentsEnabled()) agents.push(EXPLORE_AGENT, PLAN_AGENT);
+  if (isWebFetchAgentEnabled()) agents.push(WEB_FETCH_BUILTIN_AGENT);
   if (
     env.CLAUDE_CODE_ENTRYPOINT !== "sdk-ts" &&
     env.CLAUDE_CODE_ENTRYPOINT !== "sdk-py" &&
     env.CLAUDE_CODE_ENTRYPOINT !== "sdk-cli"
   )
-    n.push(CLAUDE_CODE_GUIDE_AGENT);
-  return n;
+    agents.push(CLAUDE_CODE_GUIDE_AGENT);
+  return agents;
 }
 //@ chunk-e6aww6q8.js:2357674-2357713 layout
 /**
  * 代理定义的 mcpServers 字段 schema。
  */
-var mcpServerConfigListSchema = DoctorLazy(() =>
-  union([string(), record(string(), McpServerConfigSchema())]),
-);
+var mcpServerConfigListSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2357674", () => {
+  mcpServerConfigListSchema = DoctorLazy(() =>
+    union([stringSchema(), record(stringSchema(), McpServerConfigSchema())]),
+  );
+});
 //@ chunk-e6aww6q8.js:2357713-2357764 placement = WORKTREE_TAG (0.703)
 /**
  * 代理定义 isolation 字段 schema：worktree/remote。旧版名 WORKTREE_TAG 为错配。
  */
-var agentIsolationSchema = DoctorLazy(() => _enum(["worktree", "remote"]).optional());
+var agentIsolationSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2357713", () => {
+  agentIsolationSchema = DoctorLazy(() => _enum(["worktree", "remote"]).optional());
+});
 //@ chunk-e6aww6q8.js:2357764-2357828 layout
 /**
  * 可选字符串 schema：去空白后为空视为未设置。
  */
-var optionalTrimmedStringSchema = DoctorLazy(() =>
-  string()
-    .optional()
-    .transform((e) => e?.trim() || undefined),
-);
+var optionalTrimmedStringSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2357764", () => {
+  optionalTrimmedStringSchema = DoctorLazy(() =>
+    stringSchema()
+      .optional()
+      .transform((value) => value?.trim() || undefined),
+  );
+});
 //@ chunk-e6aww6q8.js:2357828-2357893 layout
 /**
  * 可选字符串 schema：空串视为未设置。
  */
-var optionalNonEmptyStringSchema = DoctorLazy(() =>
-  string()
-    .optional()
-    .transform((e) => (e?.trim() ? e : undefined)),
-);
+var optionalNonEmptyStringSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2357828", () => {
+  optionalNonEmptyStringSchema = DoctorLazy(() =>
+    stringSchema()
+      .optional()
+      .transform((value) => (value?.trim() ? value : undefined)),
+  );
+});
 //@ chunk-e6aww6q8.js:2357893-2358619 fingerprint = AgentJsonSchema (0.704)
 /**
  * --agents JSON 里单个代理的 schema（description/prompt/tools/disallowedTools/model/effort/permissionMode/mcpServers/hooks/maxTurns/autoCompactWindow/skills/initialPrompt/memory/background/omitClaudeMd/isolation/observer…）。
  */
-var AgentJsonSchema = DoctorLazy(() =>
-  u({
-    description: string().min(1, "Description cannot be empty"),
-    tools: array(string()).optional(),
-    disallowedTools: array(string()).optional(),
-    prompt: string(),
-    model: string()
-      .trim()
-      .min(1, "Model cannot be empty")
-      .transform((m) => (m.toLowerCase() === "inherit" ? "inherit" : m))
-      .optional(),
-    effort: union([_enum(EFFORT_LEVELS), E().int()]).optional(),
-    permissionMode: preprocess(normalizePermissionModeAlias, _enum(PERMISSION_MODES)).optional(),
-    mcpServers: array(mcpServerConfigListSchema()).optional(),
-    hooks: HooksSchema().optional(),
-    maxTurns: E().int().positive().optional(),
-    autoCompactWindow: E().int().min(TRANSPORT_LABELS).max(GLOBAL_CONFIG_FIELD_KINDS).optional(),
-    skills: array(string()).optional(),
-    initialPrompt: string().optional(),
-    memory: _enum(["user", "project", "local"]).optional(),
-    background: M().optional(),
-    omitClaudeMd: M().optional(),
-    isolation: agentIsolationSchema(),
-    observer: optionalTrimmedStringSchema(),
-    observerMessage: optionalNonEmptyStringSchema(),
-    observeSubagents: M().optional(),
-  }),
-);
+var AgentJsonSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2357893", () => {
+  AgentJsonSchema = DoctorLazy(() =>
+    objectSchema({
+      description: stringSchema().min(1, "Description cannot be empty"),
+      tools: array(stringSchema()).optional(),
+      disallowedTools: array(stringSchema()).optional(),
+      prompt: stringSchema(),
+      model: stringSchema()
+        .trim()
+        .min(1, "Model cannot be empty")
+        .transform((m) => (m.toLowerCase() === "inherit" ? "inherit" : m))
+        .optional(),
+      effort: union([_enum(EFFORT_LEVELS), numberSchema().int()]).optional(),
+      permissionMode: preprocess(normalizePermissionModeAlias, _enum(PERMISSION_MODES)).optional(),
+      mcpServers: array(mcpServerConfigListSchema()).optional(),
+      hooks: HooksSchema().optional(),
+      maxTurns: numberSchema().int().positive().optional(),
+      autoCompactWindow: numberSchema().int().min(TRANSPORT_LABELS).max(GLOBAL_CONFIG_FIELD_KINDS).optional(),
+      skills: array(stringSchema()).optional(),
+      initialPrompt: stringSchema().optional(),
+      memory: _enum(["user", "project", "local"]).optional(),
+      background: booleanSchema().optional(),
+      omitClaudeMd: booleanSchema().optional(),
+      isolation: agentIsolationSchema(),
+      observer: optionalTrimmedStringSchema(),
+      observerMessage: optionalNonEmptyStringSchema(),
+      observeSubagents: booleanSchema().optional(),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:2358619-2358699 facade-exports
-function agentMcpSource(e) {
-  return e.fromAdditionalDirectory ? "additionalDirectory" : e.source;
+function agentMcpSource(agent) {
+  return agent.fromAdditionalDirectory ? "additionalDirectory" : agent.source;
 }
 //@ chunk-e6aww6q8.js:2358699-2359725 facade-exports
-function agentMcpSpecsToScopedConfigs(e) {
-  if (!e.mcpServers?.length) return {};
-  if (hasUntrustedMcpServerEntries(e)) {
-    checkAgentOriginTrust(e, "mainThread", "mcpServers");
+function agentMcpSpecsToScopedConfigs(agent) {
+  if (!agent.mcpServers?.length) return {};
+  if (hasUntrustedMcpServerEntries(agent)) {
+    checkAgentOriginTrust(agent, "mainThread", "mcpServers");
     return {};
   }
-  if (isRestrictedPersonalAgent(e)) {
+  if (isRestrictedPersonalAgent(agent)) {
     logForDebugging(
-      `[Agent: ${e.agentType}] Skipping frontmatter MCP servers: your own agents can't define their own MCP servers in this session (CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG)`,
+      `[Agent: ${agent.agentType}] Skipping frontmatter MCP servers: your own agents can't define their own MCP servers in this session (CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG)`,
     );
     return {};
   }
-  if (isRestrictedToPluginOnly("mcp") && !isSourceAdminTrusted(e.source)) {
+  if (isRestrictedToPluginOnly("mcp") && !isSourceAdminTrusted(agent.source)) {
     logForDebugging(
-      `[Agent: ${e.agentType}] Skipping frontmatter MCP servers: strictPluginOnlyCustomization locks MCP to plugin-only (agent source: ${e.source})`,
+      `[Agent: ${agent.agentType}] Skipping frontmatter MCP servers: strictPluginOnlyCustomization locks MCP to plugin-only (agent source: ${agent.source})`,
     );
     return {};
   }
-  let n = {};
-  for (let mcpServer of e.mcpServers) {
+  let configs = {};
+  for (let mcpServer of agent.mcpServers) {
     if (typeof mcpServer === "string") continue;
     let entries = Object.entries(mcpServer);
     if (entries.length !== 1) {
-      logForDebugging(`[Agent: ${e.agentType}] Invalid MCP server spec: expected exactly one key`, {
+      logForDebugging(`[Agent: ${agent.agentType}] Invalid MCP server spec: expected exactly one key`, {
         level: "warn",
       });
       continue;
     }
-    let [h, y] = entries[0];
-    if (isBuiltinMcpServerName(h)) {
-      logForDebugging(`[Agent: ${e.agentType}] Skipping reserved MCP server name '${h}' in frontmatter`, {
-        level: "warn",
-      });
-      continue;
-    }
-    let S = unaddableTransportReason(y.type);
-    if (S !== null) {
+    let [serverName, serverConfig] = entries[0];
+    if (isBuiltinMcpServerName(serverName)) {
       logForDebugging(
-        `[Agent: ${e.agentType}] Skipping ${S} MCP transport '${y.type}' for '${h}' in frontmatter`,
+        `[Agent: ${agent.agentType}] Skipping reserved MCP server name '${serverName}' in frontmatter`,
         {
           level: "warn",
         },
       );
       continue;
     }
-    n[h] = {
-      ...y,
+    let unsupportedTransport = unaddableTransportReason(serverConfig.type);
+    if (unsupportedTransport !== null) {
+      logForDebugging(
+        `[Agent: ${agent.agentType}] Skipping ${unsupportedTransport} MCP transport '${serverConfig.type}' for '${serverName}' in frontmatter`,
+        {
+          level: "warn",
+        },
+      );
+      continue;
+    }
+    configs[serverName] = {
+      ...serverConfig,
       scope: "agent",
-      agentSource: agentMcpSource(e),
+      agentSource: agentMcpSource(agent),
     };
   }
-  return n;
+  return configs;
 }
 //@ chunk-e6aww6q8.js:2359725-2359754 layout
-var agentDefinitionsRecordSchema = DoctorLazy(() => record(string(), AgentJsonSchema()));
+var agentDefinitionsRecordSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2359725", () => {
+  agentDefinitionsRecordSchema = DoctorLazy(() => record(stringSchema(), AgentJsonSchema()));
+});
 //@ chunk-e6aww6q8.js:2359754-2359848 facade-exports = estimateSkillFrontmatterTokens (0.714)
 /**
  * 把代理定义列表映射为 {name: agentType, description: whenToUse, model}；旧版名 estimateSkillFrontmatterTokens 配错。
  */
 function toAgentInfos(skill) {
-  return skill.map((n) => ({
-    name: n.agentType,
-    description: n.whenToUse,
-    model: n.model,
+  return skill.map((agent) => ({
+    name: agent.agentType,
+    description: agent.whenToUse,
+    model: agent.model,
   }));
 }
 //@ chunk-e6aww6q8.js:2359848-2359892 facade-exports = _temp1 (1)
@@ -331,7 +356,9 @@ function getActiveAgentsFromList(allAgents) {
   let agentGroups = [builtInAgents, pluginAgents, userAgents, projectAgents, flagAgents, managedAgents];
   let agentMap = new Map();
   for (let agents of agentGroups) for (let agent of agents) agentMap.set(agent.agentType, agent);
-  return Array.from(agentMap.values()).sort((q, Z) => compareStringsGrouped(q.agentType, Z.agentType));
+  return Array.from(agentMap.values()).sort((left, right) =>
+    compareStringsGrouped(left.agentType, right.agentType),
+  );
 }
 //@ chunk-e6aww6q8.js:2360473-2360569 layout
 /**
@@ -345,48 +372,48 @@ function sanitizeAgentDiagnostic(text) {
     .slice(0, 200);
 }
 //@ chunk-e6aww6q8.js:2360569-2360735 layout
-function describeAgentDefinitionLocation(e) {
-  if (e.filePath) return e.filePath;
-  if (isPluginAgent(e)) return `plugin '${e.plugin}'`;
-  if (e.baseDir && e.filename) return `${e.baseDir}/${e.filename}.md`;
-  return e.source;
+function describeAgentDefinitionLocation(agent) {
+  if (agent.filePath) return agent.filePath;
+  if (isPluginAgent(agent)) return `plugin '${agent.plugin}'`;
+  if (agent.baseDir && agent.filename) return `${agent.baseDir}/${agent.filename}.md`;
+  return agent.source;
 }
 //@ chunk-e6aww6q8.js:2360735-2361204 file-local
 /**
  * 找出重复的代理定义：同来源、同 baseDir、同 agentType 出现两次以上（内建除外），返回 [{agentType, source, locations, oneIsActive}]，用于 /agents 与诊断提示。
  */
-function findDuplicateAgentDefinitions(e, activeAgents) {
-  let r = new Set(activeAgents);
-  let s = new Map();
-  for (let y of e) {
-    if (y.source === "built-in") continue;
-    let S = `${y.source}\x00${y.baseDir ?? ""}\x00${y.agentType}`;
-    let w = s.get(S);
-    if (w) w.push(y);
-    else s.set(S, [y]);
+function findDuplicateAgentDefinitions(allAgents, activeAgents) {
+  let activeSet = new Set(activeAgents);
+  let groupsByName = new Map();
+  for (let agent of allAgents) {
+    if (agent.source === "built-in") continue;
+    let groupKey = `${agent.source}\x00${agent.baseDir ?? ""}\x00${agent.agentType}`;
+    let group = groupsByName.get(groupKey);
+    if (group) group.push(agent);
+    else groupsByName.set(groupKey, [agent]);
   }
-  let h = [];
-  for (let y of s.values()) {
-    if (y.length < 2) continue;
-    y.sort((S, w) => Number(r.has(w)) - Number(r.has(S)));
-    h.push({
-      agentType: sanitizeAgentDiagnostic(y[0].agentType),
-      source: y[0].source,
-      locations: y.map((S) => sanitizeAgentDiagnostic(describeAgentDefinitionLocation(S))),
-      oneIsActive: r.has(y[0]),
+  let duplicates = [];
+  for (let group of groupsByName.values()) {
+    if (group.length < 2) continue;
+    group.sort((left, right) => Number(activeSet.has(right)) - Number(activeSet.has(left)));
+    duplicates.push({
+      agentType: sanitizeAgentDiagnostic(group[0].agentType),
+      source: group[0].source,
+      locations: group.map((agent) => sanitizeAgentDiagnostic(describeAgentDefinitionLocation(agent))),
+      oneIsActive: activeSet.has(group[0]),
     });
   }
-  return h.sort((y, S) => compareStringsGrouped(y.agentType, S.agentType));
+  return duplicates.sort((left, right) => compareStringsGrouped(left.agentType, right.agentType));
 }
 //@ chunk-e6aww6q8.js:2361204-2361266 facade-exports = getDeferredToolTokenCount (1)
 /**
  * 在上下文对象上补 allAgents 与 activeAgents（由代理定义列表计算）。
  */
-function rebuildAgentDefinitions(e, n) {
+function rebuildAgentDefinitions(definitions, allAgents) {
   return {
-    ...e,
-    allAgents: n,
-    activeAgents: getActiveAgentsFromList(n),
+    ...definitions,
+    allAgents,
+    activeAgents: getActiveAgentsFromList(allAgents),
   };
 }
 //@ chunk-e6aww6q8.js:2361266-2361446 facade-exports = hasRequiredMcpServers (1)
@@ -410,32 +437,32 @@ function filterAgentsByMcpRequirements(agents, availableServers) {
 /**
  * 按 cwd 等参数缓存 getAgentDefinitionsWithOverrides 的结果（Promise）。
  */
-function getAgentDefinitionsWithOverrides(cwd, n) {
+function getAgentDefinitionsWithOverrides(cwd, overrides) {
   let agentDefinitions = getHostState().agentDefinitions;
-  let s = `${managedFolderCondition()}${keyOrNull(cwd)}`;
-  let h = agentDefinitions.get(s);
-  if (h !== undefined) return h;
-  let agentDefinitionsWithOverrides = getAgentDefinitionsWithOverrides_2(cwd, n);
-  agentDefinitions.set(s, agentDefinitionsWithOverrides);
+  let cacheKey = `${managedFolderCondition()}${keyOrNull(cwd)}`;
+  let cached = agentDefinitions.get(cacheKey);
+  if (cached !== undefined) return cached;
+  let agentDefinitionsWithOverrides = getAgentDefinitionsWithOverrides_2(cwd, overrides);
+  agentDefinitions.set(cacheKey, agentDefinitionsWithOverrides);
   return agentDefinitionsWithOverrides;
 }
 //@ chunk-e6aww6q8.js:2361630-2361693 facade-exports
 /**
  * getAgentDefinitionsCached 出错时记录错误并返回给定回退值。
  */
-function agentReadForTheSeat(e, n, r) {
+function agentReadForTheSeat(fallback, cwd, overrides) {
   try {
-    return getAgentDefinitionsWithOverrides(n, r);
+    return getAgentDefinitionsWithOverrides(cwd, overrides);
   } catch (error) {
     logError(error);
-    return e;
+    return fallback;
   }
 }
 //@ chunk-e6aww6q8.js:2361693-2362792 fingerprint = getAgentDefinitionsWithOverrides (0.639)
 /**
  * 加载全部代理定义：--bare 等限制下只给内建代理；否则读取 .claude/agents 等 markdown、其他目录项目代理、插件代理、运行时注册代理，合并去重、报告重名并登记颜色。
  */
-async function getAgentDefinitionsWithOverrides_2(cwd, n) {
+async function getAgentDefinitionsWithOverrides_2(cwd, overrides) {
   if (isCustomizationDisabled("agents")) {
     let builtInAgents = getBuiltInAgents();
     return {
@@ -444,9 +471,9 @@ async function getAgentDefinitionsWithOverrides_2(cwd, n) {
     };
   }
   try {
-    let markdownFiles = (await loadMarkdownFilesCached("agents", cwd, n))
-      .map((G) => {
-        let { filePath, baseDir, frontmatter, content, source } = G;
+    let markdownFiles = (await loadMarkdownFilesCached("agents", cwd, overrides))
+      .map((fileEntry) => {
+        let { filePath, baseDir, frontmatter, content, source } = fileEntry;
         let agent = parseAgentFromMarkdown(filePath, baseDir, frontmatter, content, source);
         if (!agent) {
           if (!frontmatter.name) return null;
@@ -458,26 +485,31 @@ async function getAgentDefinitionsWithOverrides_2(cwd, n) {
           });
           return null;
         }
-        if (G.fromAdditionalDirectory) agent.fromAdditionalDirectory = true;
+        if (fileEntry.fromAdditionalDirectory) agent.fromAdditionalDirectory = true;
         return agent;
       })
       .filter((agent) => agent !== null);
     if (!isRestrictedToPluginOnly("agents")) markdownFiles.push(...getHostState().projectAgentsElsewhere);
-    let y = await loadPluginAgents(n).catch((error) => {
+    let pluginAgents = await loadPluginAgents(overrides).catch((error) => {
       logError(error);
       return [];
     });
-    let w = [...getBuiltInAgents(), ...y, ...getRuntimeRegisteredPluginAgents(), ...markdownFiles];
-    let activeAgents = getActiveAgentsFromList(w);
-    for (let G of findDuplicateAgentDefinitions(w, activeAgents))
+    let allAgents = [
+      ...getBuiltInAgents(),
+      ...pluginAgents,
+      ...getRuntimeRegisteredPluginAgents(),
+      ...markdownFiles,
+    ];
+    let activeAgents = getActiveAgentsFromList(allAgents);
+    for (let duplicate of findDuplicateAgentDefinitions(allAgents, activeAgents))
       logForDebugging(
-        `[agents] Duplicate agent name '${G.agentType}' (${G.source}): ${G.locations.join(", ")}${G.oneIsActive ? ` \u2014 active: ${G.locations[0]}` : ""}`,
+        `[agents] Duplicate agent name '${duplicate.agentType}' (${duplicate.source}): ${duplicate.locations.join(", ")}${duplicate.oneIsActive ? ` \u2014 active: ${duplicate.locations[0]}` : ""}`,
       );
     groupPluginSourcesByName(
       "agent",
-      [...w, ...activeAgents].map((G) => ({
-        name: G.agentType,
-        source: G.source,
+      [...allAgents, ...activeAgents].map((agent) => ({
+        name: agent.agentType,
+        source: agent.source,
       })),
       {
         resolves: true,
@@ -486,7 +518,7 @@ async function getAgentDefinitionsWithOverrides_2(cwd, n) {
     for (let agent of activeAgents) if (agent.color) setAgentColor(agent.agentType, agent.color);
     return {
       activeAgents,
-      allAgents: w,
+      allAgents,
     };
   } catch (error) {
     let errorMessage = error instanceof Error ? error.message : String(error);
@@ -506,20 +538,20 @@ async function getAgentDefinitionsWithOverrides_2(cwd, n) {
 function getRuntimeRegisteredPluginAgents() {
   return [...getPluginRegistry().registeredAgents.values()].flatMap(
     ({ plugin, pluginId, pluginRoot, spec }) => {
-      let { name: h, ...definition } = spec;
+      let { name, ...definition } = spec;
       let agentFromJson = parseAgentFromJson(
-        `${pluginDisplayKey(plugin, pluginId)}:${h}`,
+        `${pluginDisplayKey(plugin, pluginId)}:${name}`,
         definition,
         "userSettings",
       );
       if (agentFromJson === null) return [];
-      let { source, baseDir, fromAdditionalDirectory, ...q } = agentFromJson;
+      let { source, baseDir, fromAdditionalDirectory, ...rest } = agentFromJson;
       return [
         {
-          ...q,
+          ...rest,
           source: "plugin",
           plugin: pluginId,
-          filename: h,
+          filename: name,
           registeredAtRunTime: true,
           registeringPluginRoot: pluginRoot,
         },
@@ -542,7 +574,7 @@ function withLiveRegisteredAgents(agents) {
   let filtered = agents.filter((agent) => !isRunTimeRegisteredAgent(agent));
   let runtimeRegisteredPluginAgents = getRuntimeRegisteredPluginAgents();
   if (runtimeRegisteredPluginAgents.length === 0) return filtered;
-  let lastIndex = filtered.findLastIndex((h) => h.source === "plugin" || h.source === "built-in");
+  let lastIndex = filtered.findLastIndex((agent) => agent.source === "plugin" || agent.source === "built-in");
   return [
     ...filtered.slice(0, lastIndex + 1),
     ...runtimeRegisteredPluginAgents,
@@ -563,12 +595,12 @@ function clearAgentDefinitionsCache() {
  * 代理 frontmatter 解析失败的原因文本（缺 name/description、name 以 - 开头、过长、含 ":"）。
  */
 function getParseError(frontmatter) {
-  let { name: n, description } = frontmatter;
-  if (!n || typeof n !== "string") return lit_2('Missing required "name" field in frontmatter');
-  if (n.startsWith("-")) return lit_2('Invalid "name": names must not start with "-"');
-  if (n.length > MAX_CLEAN_IDENTIFIER_LENGTH)
+  let { name, description } = frontmatter;
+  if (!name || typeof name !== "string") return lit_2('Missing required "name" field in frontmatter');
+  if (name.startsWith("-")) return lit_2('Invalid "name": names must not start with "-"');
+  if (name.length > MAX_CLEAN_IDENTIFIER_LENGTH)
     return lit_2(`Invalid "name": names must be at most ${MAX_CLEAN_IDENTIFIER_LENGTH} characters`);
-  if (n.normalize("NFKC").includes(":"))
+  if (name.normalize("NFKC").includes(":"))
     return lit_2('Invalid "name": names must not contain ":" (reserved for plugin namespacing)');
   if (!description || typeof description !== "string")
     return lit_2('Missing required "description" field in frontmatter');
@@ -596,14 +628,14 @@ function parseHooksFromFrontmatter(frontmatter, agentType) {
       hooks: undefined,
       unloadableGuard: false,
     };
-  let r = validateHooksSetting(frontmatter.hooks);
-  for (let note of r.notes)
+  let validation = validateHooksSetting(frontmatter.hooks);
+  for (let note of validation.notes)
     logForDebugging(`Agent '${sanitizeAgentDiagnostic(agentType)}': ${note}`, {
       level: "warn",
     });
-  if (r.unloadableGuards.length > 0) {
+  if (validation.unloadableGuards.length > 0) {
     logForDebugging(
-      `Agent '${sanitizeAgentDiagnostic(agentType)}' not loaded: ${r.unloadableGuards.join("; ")} \u2014 ${UNLOADABLE_GUARD_NOTE}`,
+      `Agent '${sanitizeAgentDiagnostic(agentType)}' not loaded: ${validation.unloadableGuards.join("; ")} \u2014 ${UNLOADABLE_GUARD_NOTE}`,
       {
         level: "error",
       },
@@ -664,14 +696,19 @@ function parseAgentFromJson(name, definition, source = "flagSettings") {
       ...(disallowedTools !== undefined && {
         disallowedTools,
       }),
-      getSystemPrompt: (L) => {
+      getSystemPrompt: (promptOptions) => {
         if (isAutoMemoryEnabled() && parsed.memory)
           return (
             systemPrompt +
             `
 
 ` +
-            loadAgentMemoryPrompt(name, parsed.memory, L?.toolUseContext?.storageV5, L?.primedAgentMemory)
+            loadAgentMemoryPrompt(
+              name,
+              parsed.memory,
+              promptOptions?.toolUseContext?.storageV5,
+              promptOptions?.primedAgentMemory,
+            )
           );
         return systemPrompt;
       },
@@ -768,25 +805,25 @@ function formatIssueList(issues) {
  * 校验 --agents JSON 并返回人可读的问题列表（最多 20 条），无问题返回 null。
  */
 function validateAgentsJson(agentsJson) {
-  let n;
+  let parsed;
   try {
-    n = jsonParse(stripBom(agentsJson));
+    parsed = jsonParse(stripBom(agentsJson));
   } catch (error) {
     return `invalid JSON: ${sanitizeAgentDiagnostic(error instanceof Error ? error.message : String(error))}`;
   }
-  let r = agentDefinitionsRecordSchema().safeParse(n);
-  if (!r.success)
+  let validated = agentDefinitionsRecordSchema().safeParse(parsed);
+  if (!validated.success)
     return formatIssueList(
-      r.error.issues.map((issue) =>
+      validated.error.issues.map((issue) =>
         issue.path.length > 0
           ? `${sanitizeAgentDiagnostic(issue.path.join("."))}: ${issue.message}`
           : issue.message,
       ),
     );
-  let filtered = Object.keys(r.data).filter((key) => key.startsWith("-"));
+  let filtered = Object.keys(validated.data).filter((key) => key.startsWith("-"));
   if (filtered.length > 0)
     return formatIssueList(
-      filtered.map((h) => `${sanitizeAgentDiagnostic(h)}: agent names must not start with '-'`),
+      filtered.map((name) => `${sanitizeAgentDiagnostic(name)}: agent names must not start with '-'`),
     );
   return null;
 }
@@ -800,7 +837,7 @@ function parseAgentFromMarkdown(
   frontmatter,
   content,
   source,
-  { parsedElsewhere: y = false } = {},
+  { parsedElsewhere: options = false } = {},
 ) {
   try {
     let { name: agentType, description: whenToUse } = frontmatter;
@@ -832,7 +869,7 @@ function parseAgentFromMarkdown(
       );
       return null;
     }
-    if (!y) checkFrontmatterShadow("agent", frontmatter);
+    if (!options) checkFrontmatterShadow("agent", frontmatter);
     validatePluginAgentFrontmatter({
       subject: "Agent file",
       filePath,
@@ -866,7 +903,7 @@ function parseAgentFromMarkdown(
       );
     let background = backgroundRaw === "true" || backgroundRaw === true ? true : undefined;
     let omitClaudeMd = frontmatter.omitClaudeMd;
-    let we = omitClaudeMd === "true" || omitClaudeMd === true ? true : undefined;
+    let omitClaudeMdFlag = omitClaudeMd === "true" || omitClaudeMd === true ? true : undefined;
     let VALID_MEMORY_SCOPES = ["user", "project", "local"];
     let memoryRaw = frontmatter.memory;
     let memory;
@@ -925,13 +962,15 @@ function parseAgentFromMarkdown(
       disallowedToolsRaw !== undefined ? parseAgentToolsFromFrontmatter(disallowedToolsRaw) : undefined;
     let skills = parseSlashCommandToolsFromFrontmatter(frontmatter.skills);
     let initialPrompt = frontmatter.initialPrompt;
-    let hn = typeof initialPrompt === "string" && initialPrompt.trim() ? initialPrompt : undefined;
+    let initialPromptText =
+      typeof initialPrompt === "string" && initialPrompt.trim() ? initialPrompt : undefined;
     let observer = frontmatter.observer;
-    let yn = typeof observer === "string" && observer.trim() ? observer.trim() : undefined;
+    let observerText = typeof observer === "string" && observer.trim() ? observer.trim() : undefined;
     let observerMessage = frontmatter.observerMessage;
-    let Xn = typeof observerMessage === "string" && observerMessage.trim() ? observerMessage : undefined;
+    let observerMessageText =
+      typeof observerMessage === "string" && observerMessage.trim() ? observerMessage : undefined;
     let observeSubagents = frontmatter.observeSubagents;
-    let To = observeSubagents === "false" || observeSubagents === false ? false : undefined;
+    let observeSubagentsFlag = observeSubagents === "false" || observeSubagents === false ? false : undefined;
     let mcpServersRaw = frontmatter.mcpServers;
     let mcpServers;
     if (Array.isArray(mcpServersRaw))
@@ -961,8 +1000,8 @@ function parseAgentFromMarkdown(
       ...(skills !== undefined && {
         skills,
       }),
-      ...(hn !== undefined && {
-        initialPrompt: hn,
+      ...(initialPromptText !== undefined && {
+        initialPrompt: initialPromptText,
       }),
       ...(mcpServers !== undefined &&
         mcpServers.length > 0 && {
@@ -971,13 +1010,13 @@ function parseAgentFromMarkdown(
       ...(hooks !== undefined && {
         hooks,
       }),
-      getSystemPrompt: (ao) => {
+      getSystemPrompt: (promptOptions) => {
         if (isAutoMemoryEnabled() && memory) {
           let memoryPrompt = loadAgentMemoryPrompt(
             agentType,
             memory,
-            ao?.toolUseContext?.storageV5,
-            ao?.primedAgentMemory,
+            promptOptions?.toolUseContext?.storageV5,
+            promptOptions?.primedAgentMemory,
           );
           return (
             systemPrompt +
@@ -1018,8 +1057,8 @@ function parseAgentFromMarkdown(
       ...(background && {
         background,
       }),
-      ...(we && {
-        omitClaudeMd: we,
+      ...(omitClaudeMdFlag && {
+        omitClaudeMd: omitClaudeMdFlag,
       }),
       ...(memory && {
         memory,
@@ -1027,14 +1066,14 @@ function parseAgentFromMarkdown(
       ...(isolation && {
         isolation,
       }),
-      ...(yn !== undefined && {
-        observer: yn,
+      ...(observerText !== undefined && {
+        observer: observerText,
       }),
-      ...(Xn !== undefined && {
-        observerMessage: Xn,
+      ...(observerMessageText !== undefined && {
+        observerMessage: observerMessageText,
       }),
-      ...(To !== undefined && {
-        observeSubagents: To,
+      ...(observeSubagentsFlag !== undefined && {
+        observeSubagents: observeSubagentsFlag,
       }),
     };
   } catch (error) {
@@ -1050,7 +1089,7 @@ function parseAgentFromMarkdown(
  * 从一组工具中取出去重后的 MCP 服务器名。
  */
 var getMcpServerNamesOfTools = (availableServers) =>
-  uniq(availableServers.flatMap((e) => getMcpServerNameOfTool(e) ?? []));
+  uniq(availableServers.flatMap((tool) => getMcpServerNameOfTool(tool) ?? []));
 //@ chunk-0tkmvwy0.js:5940-6083 fingerprint = hasRequiredMcpServers (1)
 /**
  * 返回代理 requiredMcpServers 中没有任何可用 MCP 服务器匹配（子串、大小写不敏感）的项。

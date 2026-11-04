@@ -41,36 +41,36 @@ var ISO_TIME_RE = /^\d{4}-\d\d-\d\dT.*(?:Z|[+-]\d\d:\d\d)$/;
 /**
  * 记录一次宿主技能挂载未命中（按原因计数并写诊断日志）。
  */
-function recordMountMiss(kind, n, s) {
-  s.set(n.reason, (s.get(n.reason) ?? 0) + 1);
+function recordMountMiss(kind, miss, counts) {
+  counts.set(miss.reason, (counts.get(miss.reason) ?? 0) + 1);
   logForDiagnosticsNoPII("info", "skills_sync_host_mount_miss", {
     kind,
-    ...n,
+    ...miss,
   });
 }
 //@ chunk-f9asxqh1.js:23927-24015 placement
 /**
  * 把挂载失败原因计数转成 mount_miss_* 字段。
  */
-function flattenMountMissCounts(e) {
-  return Object.fromEntries(Array.from(e, ([n, s]) => [`mount_miss_${n}`, s]));
+function flattenMountMissCounts(counts) {
+  return Object.fromEntries(Array.from(counts, ([reason, count]) => [`mount_miss_${reason}`, count]));
 }
 //@ chunk-f9asxqh1.js:24015-24215 placement
-function getHostMountKind(e) {
-  if (e.creator_type !== "anthropic" || e.id !== e.name || !isSafeSkillName(e.name)) return;
-  if (e.source === MOUNT_SOURCES.public) return "public";
-  return e.source === MOUNT_SOURCES.examples && e.is_public_provisioned === true ? "examples" : undefined;
+function getHostMountKind(row) {
+  if (row.creator_type !== "anthropic" || row.id !== row.name || !isSafeSkillName(row.name)) return;
+  if (row.source === MOUNT_SOURCES.public) return "public";
+  return row.source === MOUNT_SOURCES.examples && row.is_public_provisioned === true ? "examples" : undefined;
 }
 //@ chunk-f9asxqh1.js:24215-24325 placement
 /**
  * 为宿主挂载的技能建立 id→挂载类型的索引。
  */
-function indexHostMountKinds(e) {
+function indexHostMountKinds(skills) {
   let { hostMountKinds } = remoteToolsState();
   hostMountKinds.clear();
-  for (let s of e) {
-    let hostMountKind = getHostMountKind(s);
-    if (hostMountKind !== undefined) hostMountKinds.set(s.id, hostMountKind);
+  for (let skill of skills) {
+    let hostMountKind = getHostMountKind(skill);
+    if (hostMountKind !== undefined) hostMountKinds.set(skill.id, hostMountKind);
   }
 }
 //@ chunk-f9asxqh1.js:24325-24401 placement
@@ -86,40 +86,48 @@ function isHostSkillMountActive() {
 /**
  * 行匹配到挂载类型且挂载在当前会话生效时返回该类型。
  */
-function hostMountKindForRow(e) {
-  let n = matchHostMountKind(e);
-  return n !== undefined && isHostSkillMountActive() ? n : undefined;
+function hostMountKindForRow(row) {
+  let kind = matchHostMountKind(row);
+  return kind !== undefined && isHostSkillMountActive() ? kind : undefined;
 }
 //@ chunk-f9asxqh1.js:24462-24612 placement
-function matchHostMountKind(e) {
-  let n = remoteToolsState().hostMountKinds.get(e.skillId);
-  return n !== undefined &&
-    e.name === e.skillId &&
-    e.source === MOUNT_SOURCES[n] &&
-    e.requestedVersion === undefined
-    ? n
+function matchHostMountKind(row) {
+  let kind = remoteToolsState().hostMountKinds.get(row.skillId);
+  return kind !== undefined &&
+    row.name === row.skillId &&
+    row.source === MOUNT_SOURCES[kind] &&
+    row.requestedVersion === undefined
+    ? kind
     : undefined;
 }
 //@ chunk-f9asxqh1.js:24612-25026 placement
 /**
  * 在时间预算内探测宿主技能挂载（各类目录是否为独立挂载设备），返回按 kind 读取技能 zip 的读取器（文件须比服务端记录新且为 zip），并记录花费/等待时间；不适用时返回 null。
  */
-async function createHostSkillReader(e, n) {
+async function createHostSkillReader(skills, missCounts) {
   if (!isHostSkillMountActive()) return null;
   let budget = {
     deadline: performance.now() + HOST_MOUNT_BUDGET_MS,
     spentMs: 0,
     waitedMs: 0,
   };
-  let r = await runHostMountWork(budget, () => probeMountKinds(e));
-  let f = limitConcurrency(1, (y, S, h) => runHostMountWork(budget, () => readMountedSkillZip(y, S, h)));
+  let probes = await runHostMountWork(budget, () => probeMountKinds(skills));
+  let readLimited = limitConcurrency(1, (zipPath, updatedAt, device) =>
+    runHostMountWork(budget, () => readMountedSkillZip(zipPath, updatedAt, device)),
+  );
   return {
-    async readZip(kind, S) {
-      let h = "reason" in r ? r : (r.get(kind) ?? NOT_A_MOUNT_PROBE);
-      let w =
-        "reason" in h ? h : await f(join(HOST_SKILLS_MOUNT, kind, `${S.name}.skill`), S.updatedAt, h.device);
-      if ("zip" in w) return w.zip;
-      recordMountMiss(kind, w, n);
+    async readZip(kind, row) {
+      let probe = "reason" in probes ? probes : (probes.get(kind) ?? NOT_A_MOUNT_PROBE);
+      let readResult =
+        "reason" in probe
+          ? probe
+          : await readLimited(
+              join(HOST_SKILLS_MOUNT, kind, `${row.name}.skill`),
+              row.updatedAt,
+              probe.device,
+            );
+      if ("zip" in readResult) return readResult.zip;
+      recordMountMiss(kind, readResult, missCounts);
       return;
     },
     spentMs: () => Math.round(budget.spentMs),
@@ -167,69 +175,69 @@ async function runHostMountWork(budget, work) {
 /**
  * 等待其他宿主挂载工作完成后独占执行本次工作。
  */
-async function runHostMountWorkExclusive(e) {
-  let n = remoteToolsState();
-  while (n.hostMountWorkOutstanding !== null) {
-    let hostMountWorkOutstanding = n.hostMountWorkOutstanding;
+async function runHostMountWorkExclusive(work) {
+  let state = remoteToolsState();
+  while (state.hostMountWorkOutstanding !== null) {
+    let hostMountWorkOutstanding = state.hostMountWorkOutstanding;
     await hostMountWorkOutstanding.catch(() => {});
-    if (n.hostMountWorkOutstanding === hostMountWorkOutstanding) n.hostMountWorkOutstanding = null;
+    if (state.hostMountWorkOutstanding === hostMountWorkOutstanding) state.hostMountWorkOutstanding = null;
   }
-  return trackHostMountWork(n, e, performance.now(), true);
+  return trackHostMountWork(state, work, performance.now(), true);
 }
 //@ chunk-f9asxqh1.js:25830-25945 placement
 /**
  * 判断进行中的宿主挂载工作是否已超时。
  */
 function isHostMountWorkStale() {
-  let e = remoteToolsState();
+  let state = remoteToolsState();
   return (
-    e.hostMountWorkOutstanding !== null &&
-    performance.now() - e.hostMountWorkStartedAt >= HOST_MOUNT_BUDGET_MS
+    state.hostMountWorkOutstanding !== null &&
+    performance.now() - state.hostMountWorkStartedAt >= HOST_MOUNT_BUDGET_MS
   );
 }
 //@ chunk-f9asxqh1.js:25945-26159 placement
-function trackHostMountWork(e, n, hostMountWorkStartedAt, hostMountWorkIsCatalogs) {
-  let f = n();
-  e.hostMountWorkOutstanding = f;
-  e.hostMountWorkStartedAt = hostMountWorkStartedAt;
-  e.hostMountWorkIsCatalogs = hostMountWorkIsCatalogs;
-  let y = () => {
-    if (e.hostMountWorkOutstanding === f) e.hostMountWorkOutstanding = null;
+function trackHostMountWork(state, startWork, hostMountWorkStartedAt, hostMountWorkIsCatalogs) {
+  let work = startWork();
+  state.hostMountWorkOutstanding = work;
+  state.hostMountWorkStartedAt = hostMountWorkStartedAt;
+  state.hostMountWorkIsCatalogs = hostMountWorkIsCatalogs;
+  let clear = () => {
+    if (state.hostMountWorkOutstanding === work) state.hostMountWorkOutstanding = null;
   };
-  f.then(y, y);
-  return f;
+  work.then(clear, clear);
+  return work;
 }
 //@ chunk-f9asxqh1.js:26159-26188 placement
 var NOT_A_MOUNT_PROBE = {
   reason: "not_a_mount",
 };
 //@ chunk-f9asxqh1.js:26188-26454 placement
-async function probeMountKinds(e) {
-  let n = await lstat(HOST_SKILLS_MOUNT).catch(toProbeFailure);
-  let s = "reason" in n || n.isDirectory() ? n : NOT_A_MOUNT_PROBE;
-  let r = new Map();
-  for (let f of e) {
-    if ("reason" in s) {
-      r.set(f, s);
+async function probeMountKinds(kinds) {
+  let rootStat = await lstat(HOST_SKILLS_MOUNT).catch(toProbeFailure);
+  let rootProbe = "reason" in rootStat || rootStat.isDirectory() ? rootStat : NOT_A_MOUNT_PROBE;
+  let probes = new Map();
+  for (let kind of kinds) {
+    if ("reason" in rootProbe) {
+      probes.set(kind, rootProbe);
       continue;
     }
-    let y = await lstat(join(HOST_SKILLS_MOUNT, f)).catch(toProbeFailure);
-    r.set(
-      f,
-      "reason" in y
-        ? y
-        : y.isDirectory() && y.dev !== s.dev
+    let kindStat = await lstat(join(HOST_SKILLS_MOUNT, kind)).catch(toProbeFailure);
+    probes.set(
+      kind,
+      "reason" in kindStat
+        ? kindStat
+        : kindStat.isDirectory() && kindStat.dev !== rootProbe.dev
           ? {
-              device: y.dev,
+              device: kindStat.dev,
             }
           : NOT_A_MOUNT_PROBE,
     );
   }
-  return r;
+  return probes;
 }
 //@ chunk-f9asxqh1.js:26454-26562 placement
-function toProbeFailure(e) {
-  let errnoCode = getErrnoCode(e);
+function toProbeFailure(error) {
+  let errnoCode = getErrnoCode(error);
   return errnoCode === "ENOENT"
     ? {
         reason: "no_mount",
@@ -240,21 +248,21 @@ function toProbeFailure(e) {
       };
 }
 //@ chunk-f9asxqh1.js:26562-26842 placement
-function readMountedSkillZip(e, n, s) {
-  return withOpenedRegularFile(e, s, MAX_SKILL_ZIP_BYTES, async (r, f) => {
-    let y = n !== null && ISO_TIME_RE.test(n) ? Date.parse(n) : Number.NaN;
-    if (Number.isNaN(y))
+function readMountedSkillZip(zipPath, updatedAt, device) {
+  return withOpenedRegularFile(zipPath, device, MAX_SKILL_ZIP_BYTES, async (handle, stats) => {
+    let rowUpdatedMs = updatedAt !== null && ISO_TIME_RE.test(updatedAt) ? Date.parse(updatedAt) : Number.NaN;
+    if (Number.isNaN(rowUpdatedMs))
       return {
         reason: "row_date_unreadable",
       };
-    if (f.mtimeMs <= y + MOUNT_FRESHNESS_SLACK_MS)
+    if (stats.mtimeMs <= rowUpdatedMs + MOUNT_FRESHNESS_SLACK_MS)
       return {
         reason: "not_newer_than_row",
       };
-    let content = await r.readFile();
-    return isZipMagic(content)
+    let bytes = await handle.readFile();
+    return isZipMagic(bytes)
       ? {
-          zip: content,
+          zip: bytes,
         }
       : {
           reason: "not_zip",
@@ -265,46 +273,48 @@ function readMountedSkillZip(e, n, s) {
 /**
  * 探测单个技能 id 的宿主挂载情况（失败时返回原因）。
  */
-async function probeOneMountKind(e) {
-  return (await probeMountKinds(new Set([e]))).get(e) ?? NOT_A_MOUNT_PROBE;
+async function probeOneMountKind(kind) {
+  return (await probeMountKinds(new Set([kind]))).get(kind) ?? NOT_A_MOUNT_PROBE;
 }
 //@ chunk-f9asxqh1.js:26905-27093 placement
 /**
  * 解析公共技能目录的根（设备与真实路径），失败时写诊断日志并返回原因。
  */
 async function resolvePublicCatalogRoot() {
-  let e = await probeOneMountKind(PUBLIC);
-  let n =
-    "reason" in e
-      ? e
+  let probe = await probeOneMountKind(PUBLIC);
+  let result =
+    "reason" in probe
+      ? probe
       : await realpath(join(HOST_SKILLS_MOUNT, PUBLIC)).then(
           (root) => ({
-            device: e.device,
+            device: probe.device,
             root,
           }),
           toProbeFailure,
         );
-  if ("reason" in n) logForDiagnosticsNoPII("warn", "skill_host_catalog_not_read", n);
-  return n;
+  if ("reason" in result) logForDiagnosticsNoPII("warn", "skill_host_catalog_not_read", result);
+  return result;
 }
 //@ chunk-f9asxqh1.js:27093-27235 placement
 /**
  * 读取挂载技能目录中的 SKILL.md（优先缓存/特殊读取，否则作为普通文件读取），返回文本与路径或失败原因。
  */
 async function readMountedSkillMd(root, skillName, device) {
-  let r = join(root, skillName, "SKILL.md");
-  let f = (await checkNotSymlink(r)) ?? (await readRegularFileText(r, device, MAX_SCOPE_RESPONSE_BYTES));
-  return "reason" in f
-    ? f
-    : ((await checkNotSymlink(r)) ?? {
-        text: f.text,
-        filePath: r,
+  let skillPath = join(root, skillName, "SKILL.md");
+  let readResult =
+    (await checkNotSymlink(skillPath)) ??
+    (await readRegularFileText(skillPath, device, MAX_SCOPE_RESPONSE_BYTES));
+  return "reason" in readResult
+    ? readResult
+    : ((await checkNotSymlink(skillPath)) ?? {
+        text: readResult.text,
+        filePath: skillPath,
       });
 }
 //@ chunk-f9asxqh1.js:27235-27337 placement
-async function checkNotSymlink(e) {
+async function checkNotSymlink(filePath) {
   try {
-    return (await realpath(e)) === e
+    return (await realpath(filePath)) === filePath
       ? undefined
       : {
           reason: "file_is_link",
@@ -317,9 +327,9 @@ async function checkNotSymlink(e) {
 /**
  * 安全读取文本文件：同一设备、普通文件、大小不超过上限，否则返回原因。
  */
-function readRegularFileText(e, n, s) {
-  return withOpenedRegularFile(e, n, s, async (r) => ({
-    text: await r.readFile({
+function readRegularFileText(filePath, device, maxBytes) {
+  return withOpenedRegularFile(filePath, device, maxBytes, async (handle) => ({
+    text: await handle.readFile({
       encoding: "utf-8",
     }),
   }));
@@ -328,12 +338,12 @@ function readRegularFileText(e, n, s) {
 /**
  * 打开文件并做 dev/isFile/size 检查后交给回调，最后关闭。
  */
-async function withOpenedRegularFile(e, n, s, r) {
-  let f;
+async function withOpenedRegularFile(filePath, expectedDevice, maxBytes, useFile) {
+  let handle;
   try {
-    f = await open(e, readOnlyNoFollowFlags());
-    let stats = await f.stat();
-    if (stats.dev !== n)
+    handle = await open(filePath, readOnlyNoFollowFlags());
+    let stats = await handle.stat();
+    if (stats.dev !== expectedDevice)
       return {
         reason: "file_on_other_device",
       };
@@ -341,15 +351,15 @@ async function withOpenedRegularFile(e, n, s, r) {
       return {
         reason: "not_a_file",
       };
-    if (stats.size > s)
+    if (stats.size > maxBytes)
       return {
         reason: "too_large",
       };
-    return await r(f, stats);
+    return await useFile(handle, stats);
   } catch (error) {
     return toReadFailure(error);
   } finally {
-    await f?.close().catch(() => {});
+    await handle?.close().catch(() => {});
   }
 }
 //@ chunk-f9asxqh1.js:27722-27898 placement
@@ -375,22 +385,22 @@ function toReadFailure(error) {
 /**
  * 把服务端技能记录转成内部行：id、名称、描述、来源、更新时间，以及可选的背后插件 id、是否用户可调用、是否禁用模型调用。
  */
-function toSkillRow(e) {
+function toSkillRow(skill) {
   return {
-    skillId: e.id,
-    name: e.name,
-    description: e.description ?? "",
-    source: e.source ?? "custom",
-    updatedAt: e.updated_at ?? null,
-    ...(typeof e.backing_plugin_id === "string" &&
-      isServerPluginId(e.backing_plugin_id) && {
-        backingPluginId: e.backing_plugin_id,
+    skillId: skill.id,
+    name: skill.name,
+    description: skill.description ?? "",
+    source: skill.source ?? "custom",
+    updatedAt: skill.updated_at ?? null,
+    ...(typeof skill.backing_plugin_id === "string" &&
+      isServerPluginId(skill.backing_plugin_id) && {
+        backingPluginId: skill.backing_plugin_id,
       }),
-    ...(e.user_invocable != null && {
-      userInvocable: e.user_invocable === true,
+    ...(skill.user_invocable != null && {
+      userInvocable: skill.user_invocable === true,
     }),
-    ...(e.disable_model_invocation != null && {
-      disableModelInvocation: e.disable_model_invocation !== false,
+    ...(skill.disable_model_invocation != null && {
+      disableModelInvocation: skill.disable_model_invocation !== false,
     }),
   };
 }
@@ -398,21 +408,21 @@ function toSkillRow(e) {
 /**
  * 根据技能元数据判断归属：anthropic、共享、组织、自己或他人。
  */
-function getSkillOwnership(e) {
-  if (typeof e.creator_type !== "string") return;
-  if (e.creator_type === "anthropic") return "anthropic";
-  if (e.is_shared === true) return "shared";
-  if (e.partition_by === "organization") return "org";
-  let n = e.partition_by === "account";
-  if (typeof e.backing_plugin_id === "string") return n ? "own" : "other";
-  return n || e.partition_by == null ? "own" : "other";
+function getSkillOwnership(skill) {
+  if (typeof skill.creator_type !== "string") return;
+  if (skill.creator_type === "anthropic") return "anthropic";
+  if (skill.is_shared === true) return "shared";
+  if (skill.partition_by === "organization") return "org";
+  let isAccountPartitioned = skill.partition_by === "account";
+  if (typeof skill.backing_plugin_id === "string") return isAccountPartitioned ? "own" : "other";
+  return isAccountPartitioned || skill.partition_by == null ? "own" : "other";
 }
 //@ chunk-f9asxqh1.js:28630-28668 placement
 /**
  * 判断技能行是否启用（enabled 不为 false）。
  */
-function isSkillEnabled(e) {
-  return e.enabled !== false;
+function isSkillEnabled(skill) {
+  return skill.enabled !== false;
 }
 //@ chunk-f9asxqh1.js:28668-28694 placement
 var COLLISION_LOSER = "collision-loser";

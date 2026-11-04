@@ -40,7 +40,7 @@ var MAX_REMOTE_PATH_CHARS = 1024;
 /**
  * 为远端列目录：逐段打开、不跟随符号链接、按读权限规则过滤。
  */
-async function listDirectoryForRemote(path, projectRoot, r, s) {
+async function listDirectoryForRemote(path, projectRoot, getPermissions, isWorkspaceMoved) {
   try {
     if (
       typeof path !== "string" ||
@@ -53,13 +53,13 @@ async function listDirectoryForRemote(path, projectRoot, r, s) {
     )
       throw repoRootError("invalid_path");
     if (!isAbsolute(projectRoot) || getPlatform() !== "linux") throw repoRootError("unexpected_error");
-    let o = resolve(projectRoot, path);
-    if (!isSubpathOf(projectRoot, o, true)) throw repoRootError("invalid_path");
-    let a = r();
-    if (pathVettingReason(o, a.trustedNetworkDirectories) !== undefined)
+    let absPath = resolve(projectRoot, path);
+    if (!isSubpathOf(projectRoot, absPath, true)) throw repoRootError("invalid_path");
+    let permissions = getPermissions();
+    if (pathVettingReason(absPath, permissions.trustedNetworkDirectories) !== undefined)
       throw repoRootError("unsupported_name");
-    if (isListingDenied(projectRoot, o, a)) throw repoRootError("read_rule");
-    await using directoryNoFollow = await openDirectoryNoFollow(projectRoot, o);
+    if (isListingDenied(projectRoot, absPath, permissions)) throw repoRootError("read_rule");
+    await using directoryNoFollow = await openDirectoryNoFollow(projectRoot, absPath);
     if (
       !(
         await readlink(`/proc/self/fd/${directoryNoFollow.fd}`, {
@@ -67,32 +67,39 @@ async function listDirectoryForRemote(path, projectRoot, r, s) {
         }).catch((error) => {
           throw getErrnoCode(error) === "ENOENT" ? repoRootError("unexpected_error") : error;
         })
-      ).equals(Buffer.from(o))
+      ).equals(Buffer.from(absPath))
     )
       throw repoRootError("path_not_canonical");
     let dirEntriesBounded = await readDirEntriesBounded(directoryNoFollow);
-    if (s()) throw repoRootError("workspace_moved");
-    let c = r();
-    if (c !== a && isListingDenied(projectRoot, o, c)) throw repoRootError("read_rule");
-    let d = dirEntriesBounded.length > MAX_LISTED_ENTRIES_RAW;
+    if (isWorkspaceMoved()) throw repoRootError("workspace_moved");
+    let latestPermissions = getPermissions();
+    if (latestPermissions !== permissions && isListingDenied(projectRoot, absPath, latestPermissions))
+      throw repoRootError("read_rule");
+    let hitRawLimit = dirEntriesBounded.length > MAX_LISTED_ENTRIES_RAW;
     dirEntriesBounded.length = Math.min(dirEntriesBounded.length, MAX_LISTED_ENTRIES_RAW);
-    dirEntriesBounded.sort((i, f) => (i.name < f.name ? -1 : i.name > f.name ? 1 : 0));
-    let u = [];
-    let T = runInRemoteCallFrameMain(projectRoot, () => {
-      for (let i of dirEntriesBounded) {
-        let f = join(o, i.name);
-        if (isFileReadDenied(f, c, !i.isFile())) continue;
-        if (i.name.trimEnd() !== i.name && isFileReadDenied(`${f}${sep}`, c, !i.isFile())) continue;
-        if (u.length === REMOTE_LIST_DIRECTORY_MAX_ENTRIES) return true;
-        u.push(i);
+    dirEntriesBounded.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    let allowedEntries = [];
+    let hitEntryLimit = runInRemoteCallFrameMain(projectRoot, () => {
+      for (let entry of dirEntriesBounded) {
+        let entryPath = join(absPath, entry.name);
+        if (isFileReadDenied(entryPath, latestPermissions, !entry.isFile())) continue;
+        if (
+          entry.name.trimEnd() !== entry.name &&
+          isFileReadDenied(`${entryPath}${sep}`, latestPermissions, !entry.isFile())
+        )
+          continue;
+        if (allowedEntries.length === REMOTE_LIST_DIRECTORY_MAX_ENTRIES) return true;
+        allowedEntries.push(entry);
       }
       return false;
     });
-    let results = await Promise.all(u.map((i) => describeDirEntry(directoryNoFollow, i)));
+    let results = await Promise.all(
+      allowedEntries.map((entry) => describeDirEntry(directoryNoFollow, entry)),
+    );
     return {
-      absPath: o,
-      entries: results.filter((i) => i !== null),
-      truncated: T || (d && u.length > 0),
+      absPath,
+      entries: results.filter((described) => described !== null),
+      truncated: hitEntryLimit || (hitRawLimit && allowedEntries.length > 0),
     };
   } catch (error) {
     throw repoRootErrorClass(error) !== undefined ? error : listErrorFromErrno(error);
@@ -104,81 +111,83 @@ var DIRECTORY_OPEN_FLAGS = O_NOFOLLOW_ANY | constants.O_DIRECTORY | constants.O_
 /**
  * 逐段打开目录，不跟随符号链接
  */
-async function openDirectoryNoFollow(n, e) {
-  let filtered = e.split(sep).filter((a) => a !== "");
-  let s = count(resolve(n).split(sep), (a) => a !== "") - 1;
-  let o = await open(sep, DIRECTORY_OPEN_FLAGS);
-  for (let [a, m] of filtered.entries()) {
-    await using y = o;
-    let l = `/proc/self/fd/${y.fd}/${m}`;
-    o = await open(l, DIRECTORY_OPEN_FLAGS).catch(async (error) => {
+async function openDirectoryNoFollow(projectRoot, targetPath) {
+  let filtered = targetPath.split(sep).filter((segment) => segment !== "");
+  let rootDepth = count(resolve(projectRoot).split(sep), (segment) => segment !== "") - 1;
+  let dirHandle = await open(sep, DIRECTORY_OPEN_FLAGS);
+  for (let [index, segment] of filtered.entries()) {
+    await using parentHandle = dirHandle;
+    let childPath = `/proc/self/fd/${parentHandle.fd}/${segment}`;
+    dirHandle = await open(childPath, DIRECTORY_OPEN_FLAGS).catch(async (error) => {
       let errnoCode = getErrnoCode(error);
       if (errnoCode === "ENOENT")
-        await lstat(`/proc/self/fd/${y.fd}`).catch(() => {
+        await lstat(`/proc/self/fd/${parentHandle.fd}`).catch(() => {
           throw repoRootError("unexpected_error");
         });
-      if (errnoCode === "ENOTDIR" && (await lstat(l)).isSymbolicLink())
-        throw repoRootError(a < s ? "path_not_canonical" : "symlink_in_path");
+      if (errnoCode === "ENOTDIR" && (await lstat(childPath)).isSymbolicLink())
+        throw repoRootError(index < rootDepth ? "path_not_canonical" : "symlink_in_path");
       throw error;
     });
   }
-  return o;
+  return dirHandle;
 }
 //@ chunk-htc3qf7e.js:2512-2697 placement
 /**
  * 有界读取目录条目
  */
 async function readDirEntriesBounded(directoryNoFollow) {
-  let e = await opendir(`/proc/self/fd/${directoryNoFollow.fd}`).catch((error) => {
+  let dir = await opendir(`/proc/self/fd/${directoryNoFollow.fd}`).catch((error) => {
     throw getErrnoCode(error) === "ENOENT" ? repoRootError("unexpected_error") : error;
   });
-  let r = [];
-  for await (let s of e) {
-    r.push(s);
-    if (r.length > MAX_LISTED_ENTRIES_RAW) break;
+  let entries = [];
+  for await (let entry of dir) {
+    entries.push(entry);
+    if (entries.length > MAX_LISTED_ENTRIES_RAW) break;
   }
-  return r;
+  return entries;
 }
 //@ chunk-htc3qf7e.js:2697-2980 placement
 /**
  * 描述目录条目
  */
-async function describeDirEntry(directoryNoFollow, e) {
-  let fileKind = await getFileKind(e, `/proc/self/fd/${directoryNoFollow.fd}/${e.name}`, "unknown");
+async function describeDirEntry(directoryNoFollow, entry) {
+  let fileKind = await getFileKind(entry, `/proc/self/fd/${directoryNoFollow.fd}/${entry.name}`, "unknown");
   if (fileKind === "unknown") return null;
   if (fileKind === "symlink")
     return {
-      name: e.name,
+      name: entry.name,
       isDirectory: false,
       isSymlink: true,
     };
   if (fileKind === "other")
     return {
-      name: e.name,
+      name: entry.name,
       isDirectory: false,
       isSpecial: true,
     };
   return {
-    name: e.name,
+    name: entry.name,
     isDirectory: fileKind === "dir",
   };
 }
 //@ chunk-htc3qf7e.js:2980-3104 placement
-function isListingDenied(n, e, r) {
+function isListingDenied(projectRoot, absPath, permissions) {
   return (
-    layeredReadVerdictForPaths([], r).layer !== "allow" ||
+    layeredReadVerdictForPaths([], permissions).layer !== "allow" ||
     runInRemoteCallFrameMain(
-      n,
+      projectRoot,
       () =>
-        isFileReadDenied(e, r, true) ||
-        ["deny", "ask"].some((s) => matchingDenyRuleForDirectoryContents(e, r, "read", s) !== null),
+        isFileReadDenied(absPath, permissions, true) ||
+        ["deny", "ask"].some(
+          (behavior) => matchingDenyRuleForDirectoryContents(absPath, permissions, "read", behavior) !== null,
+        ),
     )
   );
 }
 //@ chunk-htc3qf7e.js:3104-3222 placement = isFileReadDenied (1)
-function isFileReadDenied(n, e, r) {
+function isFileReadDenied(absPath, permissions, alsoAsDir) {
   return (
-    r
+    alsoAsDir
       ? [
           {},
           {
@@ -186,7 +195,11 @@ function isFileReadDenied(n, e, r) {
           },
         ]
       : [{}]
-  ).some((o) => ["deny", "ask"].some((a) => matchingRuleForInput(n, e, "read", a, o) !== null));
+  ).some((extra) =>
+    ["deny", "ask"].some(
+      (behavior) => matchingRuleForInput(absPath, permissions, "read", behavior, extra) !== null,
+    ),
+  );
 }
 //@ chunk-htc3qf7e.js:3222-3601 placement
 /**
@@ -206,11 +219,11 @@ function listErrorFromErrno(error) {
     case "EPERM":
       return repoRootError("os_permission_denied");
     default:
-      let e = `list_directory failed: ${sanitizedErrCodeForTelemetry(error) ?? "not a filesystem error"}`;
-      logForDebugging(e, {
+      let message = `list_directory failed: ${sanitizedErrCodeForTelemetry(error) ?? "not a filesystem error"}`;
+      logForDebugging(message, {
         level: "error",
       });
-      return repoRootError("unexpected_error", e);
+      return repoRootError("unexpected_error", message);
   }
 }
 export { REMOTE_LIST_DIRECTORY_MAX_ENTRIES, listDirectoryForRemote };

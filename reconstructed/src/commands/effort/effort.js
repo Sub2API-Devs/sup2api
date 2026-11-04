@@ -27,6 +27,7 @@ import {
   noEffortHint,
   getEffortEnvOverride_2,
   parseEffortLevel,
+  releaseCarriedEffortForEffortChange,
   toEffortSettingOrDefault,
   isSameEffortSetting,
 } from "../../utils/effort.js";
@@ -36,16 +37,15 @@ import { logError } from "../../utils/log.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum, fromEnumOpt, lit } from "../../services/analytics/safeMetadata.js";
 import { env } from "../../utils/env.js";
-import { releaseCarriedEffortForEffortChange } from "../../utils/permissions/permissionSetup.js";
+import { parseUserSpecifiedModel } from "../../utils/model/modelDisplay.js";
+import { getDefaultMainLoopModelSetting } from "../../utils/model/planModeModel.js";
+import { COMMON_HELP_ARGS } from "../../constants/xml.js";
+import { getEffortValue } from "../../utils/permissions/toolPermissionContext.js";
 import { useQueuedMessageText } from "../../context/QueuedMessageContext.js";
 import { useAppState } from "../../state/AppState.js";
 import { selectUltracode, EffortCommand } from "../../components/EffortSlider.js";
 import { useMainLoopModel } from "../../hooks/useMainLoopModel.js";
-import { COMMON_HELP_ARGS } from "../../constants/xml.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { parseUserSpecifiedModel } from "../../utils/model/modelDisplay.js";
-import { getDefaultMainLoopModelSetting } from "../../utils/model/planModeModel.js";
-import { getEffortValue } from "../../utils/permissions/toolPermissionContext.js";
 
 //@ chunk-kcvmr83c.js:518-858 placement
 /**
@@ -66,10 +66,10 @@ function AUTO_EFFORT_DESCRIPTION() {
 //@ chunk-kcvmr83c.js:931-1198 placement
 function getEffortUsage() {
   let mainLoopModel = getMainLoopModel();
-  let t = isUltracodeAvailable(mainLoopModel);
+  let ultracodeAvailable = isUltracodeAvailable(mainLoopModel);
   let allowedEffortLevels = getAllowedEffortLevels(mainLoopModel);
   return (
-    `Usage: /effort [${allowedEffortLevels.join("|")}|auto${t ? "|ultracode [on|off]" : ""}]
+    `Usage: /effort [${allowedEffortLevels.join("|")}|auto${ultracodeAvailable ? "|ultracode [on|off]" : ""}]
 
 Effort levels:
 ` +
@@ -80,7 +80,7 @@ Effort levels:
       )
       .join("") +
     AUTO_EFFORT_DESCRIPTION() +
-    (t
+    (ultracodeAvailable
       ? `
 
 Ultracode (any effort level, this session only):
@@ -89,10 +89,10 @@ Ultracode (any effort level, this session only):
   );
 }
 //@ chunk-kcvmr83c.js:1198-1293 layout
-function formatValidEffortOptions(mainLoopModel) {
-  let allowedEffortLevels = getAllowedEffortLevels(mainLoopModel);
-  let n = isUltracodeAvailable(mainLoopModel) ? ", ultracode [on|off]" : "";
-  return `${allowedEffortLevels.join(", ")}, auto${n}`;
+function formatValidEffortOptions(model) {
+  let allowedEffortLevels = getAllowedEffortLevels(model);
+  let ultracodeHint = isUltracodeAvailable(model) ? ", ultracode [on|off]" : "";
+  return `${allowedEffortLevels.join(", ")}, auto${ultracodeHint}`;
 }
 //@ chunk-kcvmr83c.js:1293-1382 fingerprint = ApplyEffortAndClose (0.364)
 function ApplyEffortAndClose({ effortUpdate }) {
@@ -108,8 +108,8 @@ function isUltracodeToggleAvailable() {
   return getRemoteCaps() !== null && isRemoteControlChannelAvailable();
 }
 //@ chunk-kcvmr83c.js:1821-1880 placement
-function readUltracodeConfirmed(e) {
-  return isUltracodeToggleAvailable() ? (e.ultracodeConfirmed ?? false) : undefined;
+function readUltracodeConfirmed(config) {
+  return isUltracodeToggleAvailable() ? (config.ultracodeConfirmed ?? false) : undefined;
 }
 //@ chunk-kcvmr83c.js:1880-2188 placement
 /**
@@ -145,81 +145,81 @@ function forwardEffortToRemote(effortLevel, ultracodeConfirmed) {
   return null;
 }
 //@ chunk-kcvmr83c.js:2188-3672 fingerprint = setEffortValue (0.66)
-async function setEffortValue(effortLevel, t, n, r, f) {
-  let mainLoopModel = getMainLoopModel();
-  let o = typeof effortLevel === "string" ? clampEffortToCap(effortLevel, mainLoopModel) : effortLevel;
-  let E = o !== effortLevel;
-  let d = n && !E;
-  let persistable = toPersistableEffort(o);
+async function setEffortValue(effortLevel, state, shouldPersist, ultracodeConfirmed, options) {
+  let model = getMainLoopModel();
+  let level = typeof effortLevel === "string" ? clampEffortToCap(effortLevel, model) : effortLevel;
+  let clamped = level !== effortLevel;
+  let persist = shouldPersist && !clamped;
+  let persistable = toPersistableEffort(level);
   if (isRemoteControlChannelAvailable() && persistable === undefined)
     return {
-      message: `${o} is session-scoped and won't reach the remote process. Use low, medium, high, or xhigh instead.`,
+      message: `${level} is session-scoped and won't reach the remote process. Use low, medium, high, or xhigh instead.`,
     };
-  let p = persistEffortSetting(o, mainLoopModel, d, f);
-  r?.({
-    value: o,
+  let saved = persistEffortSetting(level, model, persist, options);
+  ultracodeConfirmed?.({
+    value: level,
   });
-  let ultracodeConfirmed = readUltracodeConfirmed(t);
-  let v = ultracodeConfirmed === false && t.ultracode === true;
-  if (ultracodeConfirmed !== undefined && ultracodeConfirmed !== (t.ultracode === true))
-    r?.({
-      ultracode: ultracodeConfirmed,
+  let ultracodeConfirmed_2 = readUltracodeConfirmed(state);
+  let ultracodeTurnedOff = ultracodeConfirmed_2 === false && state.ultracode === true;
+  if (ultracodeConfirmed_2 !== undefined && ultracodeConfirmed_2 !== (state.ultracode === true))
+    ultracodeConfirmed?.({
+      ultracode: ultracodeConfirmed_2,
     });
-  let y = forwardEffortToRemote(persistable ?? null, ultracodeConfirmed);
-  let C = await p;
-  if (C)
+  let remoteApplied = forwardEffortToRemote(persistable ?? null, ultracodeConfirmed_2);
+  let persisted = await saved;
+  if (persisted)
     return {
-      message: `Failed to set effort level: ${C.message}`,
+      message: `Failed to set effort level: ${persisted.message}`,
     };
   logEvent("tengu_effort_command", {
-    effort: typeof o === "number" ? o : fromEnum(o),
-    from_level: fromEnumOpt(getEffortLevelIfSupported(mainLoopModel, t.effort)),
-    route: fromEnum(t.route),
+    effort: typeof level === "number" ? level : fromEnum(level),
+    from_level: fromEnumOpt(getEffortLevelIfSupported(model, state.effort)),
+    route: fromEnum(state.route),
     is_remote: getRemoteCaps() !== null,
   });
   let envOverride = getRemoteCaps() ? undefined : getEffortEnvOverride();
-  if (envOverride !== undefined && envOverride !== o) {
+  if (envOverride !== undefined && envOverride !== level) {
     let envRaw = env.CLAUDE_CODE_EFFORT_LEVEL;
     if (persistable === undefined)
       return {
-        message: `Not applied: CLAUDE_CODE_EFFORT_LEVEL=${envRaw} overrides effort this session, and ${effortValueToString(o)} is session-only (nothing saved)`,
+        message: `Not applied: CLAUDE_CODE_EFFORT_LEVEL=${envRaw} overrides effort this session, and ${effortValueToString(level)} is session-only (nothing saved)`,
         effortUpdate: {
-          value: o,
+          value: level,
         },
       };
     return {
-      message: `CLAUDE_CODE_EFFORT_LEVEL=${envRaw} overrides this session \u2014 clear it and ${effortValueToString(o)} takes over`,
+      message: `CLAUDE_CODE_EFFORT_LEVEL=${envRaw} overrides this session \u2014 clear it and ${effortValueToString(level)} takes over`,
       effortUpdate: {
-        value: o,
+        value: level,
       },
     };
   }
-  let description = getEffortValueDescription(o);
-  let orgOverriddenEffort = getOrgOverriddenEffort(mainLoopModel);
-  let U =
-    persistable !== undefined && d && !getRemoteCaps()
+  let description = getEffortValueDescription(level);
+  let orgOverriddenEffort = getOrgOverriddenEffort(model);
+  let result =
+    persistable !== undefined && persist && !getRemoteCaps()
       ? orgOverriddenEffort !== null
-        ? ` (saved, though your organization starts new sessions on ${mainLoopModel} at ${orgOverriddenEffort} effort)`
+        ? ` (saved, though your organization starts new sessions on ${model} at ${orgOverriddenEffort} effort)`
         : " (saved as your default for new sessions)"
       : " (this session only)";
-  if (E)
+  if (clamped)
     return {
-      message: `Effort '${effortLevel}' exceeds the cap for ${mainLoopModel} set by your settings or organization; set to '${o}' instead${U}: ${description}${v ? " \xB7 Ultracode off" : ""}${y ?? ""}`,
+      message: `Effort '${effortLevel}' exceeds the cap for ${model} set by your settings or organization; set to '${level}' instead${result}: ${description}${ultracodeTurnedOff ? " \xB7 Ultracode off" : ""}${remoteApplied ?? ""}`,
       effortUpdate: {
-        value: o,
+        value: level,
       },
     };
   return {
-    message: `Set effort level to ${effortValueToString(o)}${U}: ${description}${v ? " \xB7 Ultracode off" : ""}${y ?? ""}`,
+    message: `Set effort level to ${effortValueToString(level)}${result}: ${description}${ultracodeTurnedOff ? " \xB7 Ultracode off" : ""}${remoteApplied ?? ""}`,
     effortUpdate: {
-      value: o,
+      value: level,
     },
   };
 }
 //@ chunk-kcvmr83c.js:3672-3737 layout
-function effectiveEffortOverride(e) {
-  let t = getRemoteCaps() ? undefined : getEffortEnvOverride();
-  return t === null ? undefined : (t ?? e);
+function effectiveEffortOverride(model) {
+  let envOverride = getRemoteCaps() ? undefined : getEffortEnvOverride();
+  return envOverride === null ? undefined : (envOverride ?? model);
 }
 //@ chunk-kcvmr83c.js:3737-3843 layout
 /**
@@ -232,71 +232,71 @@ function shouldSaveEffortDefault({ asDefault, levelChanged, chosen, model }) {
   );
 }
 //@ chunk-kcvmr83c.js:3843-4201 fingerprint = showCurrentEffort (0.571)
-function showCurrentEffort(e, t, n) {
-  let r = isUltracodeActive(n, t) ? " \xB7 Ultracode on" : "";
-  let effectiveValue = effectiveEffortOverride(e);
+function showCurrentEffort(currentLevel, model, ultracode) {
+  let ultracodeSuffix = isUltracodeActive(ultracode, model) ? " \xB7 Ultracode on" : "";
+  let effectiveValue = effectiveEffortOverride(currentLevel);
   if (effectiveValue === undefined) {
-    let level = getAppliedEffortLevel(t, e);
+    let level = getAppliedEffortLevel(model, currentLevel);
     if (level === undefined)
       return {
-        message: `Effort level: auto${r}`,
+        message: `Effort level: auto${ultracodeSuffix}`,
       };
-    let E =
-      getOrgDefaultEffort(t) !== null && carriedEffortOnly(t) === undefined
+    let lines =
+      getOrgDefaultEffort(model) !== null && carriedEffortOnly(model) === undefined
         ? ", set by your organization"
         : "";
     return {
-      message: `Effort level: auto (currently ${effortValueToString(level)}${E})${r}`,
+      message: `Effort level: auto (currently ${effortValueToString(level)}${lines})${ultracodeSuffix}`,
     };
   }
   let description = getEffortValueDescription(effectiveValue);
   return {
-    message: `Current effort level: ${effortValueToString(effectiveValue)} (${description})${r}`,
+    message: `Current effort level: ${effortValueToString(effectiveValue)} (${description})${ultracodeSuffix}`,
   };
 }
 //@ chunk-kcvmr83c.js:4201-4979 fingerprint = unsetEffortLevel (0.605)
-async function unsetEffortLevel(e, t, n, r) {
-  n?.({
+async function unsetEffortLevel(state, shouldPersist, ultracodeConfirmed, options) {
+  ultracodeConfirmed?.({
     value: undefined,
   });
-  let ultracodeConfirmed = readUltracodeConfirmed(e);
-  let s = ultracodeConfirmed === false && e.ultracode === true;
-  if (ultracodeConfirmed !== undefined && ultracodeConfirmed !== (e.ultracode === true))
-    n?.({
-      ultracode: ultracodeConfirmed,
+  let ultracodeConfirmed_2 = readUltracodeConfirmed(state);
+  let ultracodeTurnedOff = ultracodeConfirmed_2 === false && state.ultracode === true;
+  if (ultracodeConfirmed_2 !== undefined && ultracodeConfirmed_2 !== (state.ultracode === true))
+    ultracodeConfirmed?.({
+      ultracode: ultracodeConfirmed_2,
     });
-  let o = forwardEffortToRemote(null, ultracodeConfirmed);
-  let E = await persistEffortSetting(undefined, getMainLoopModel(), t, r);
-  if (E)
+  let remoteApplied = forwardEffortToRemote(null, ultracodeConfirmed_2);
+  let persisted = await persistEffortSetting(undefined, getMainLoopModel(), shouldPersist, options);
+  if (persisted)
     return {
-      message: `Failed to set effort level: ${E.message}`,
+      message: `Failed to set effort level: ${persisted.message}`,
     };
   logEvent("tengu_effort_command", {
     effort: lit("auto"),
-    from_level: fromEnumOpt(getEffortLevelIfSupported(getMainLoopModel(), e.effort)),
-    route: fromEnum(e.route),
+    from_level: fromEnumOpt(getEffortLevelIfSupported(getMainLoopModel(), state.effort)),
+    route: fromEnum(state.route),
     is_remote: getRemoteCaps() !== null,
   });
-  let d = t ? "" : " (this session only)";
-  let u = getRemoteCaps() ? undefined : getEffortEnvOverride();
-  if (u !== undefined && u !== null) {
+  let sessionSuffix = shouldPersist ? "" : " (this session only)";
+  let envOverride = getRemoteCaps() ? undefined : getEffortEnvOverride();
+  if (envOverride !== undefined && envOverride !== null) {
     let envRaw = env.CLAUDE_CODE_EFFORT_LEVEL;
     return {
-      message: `${t ? "Cleared effort from settings, but" : "Effort set to auto for this session, but"} CLAUDE_CODE_EFFORT_LEVEL=${envRaw} still controls this session`,
+      message: `${shouldPersist ? "Cleared effort from settings, but" : "Effort set to auto for this session, but"} CLAUDE_CODE_EFFORT_LEVEL=${envRaw} still controls this session`,
       effortUpdate: {
         value: undefined,
       },
     };
   }
   return {
-    message: `Effort level set to auto${d}${s ? " \xB7 Ultracode off" : ""}${o ?? ""}`,
+    message: `Effort level set to auto${sessionSuffix}${ultracodeTurnedOff ? " \xB7 Ultracode off" : ""}${remoteApplied ?? ""}`,
     effortUpdate: {
       value: undefined,
     },
   };
 }
 //@ chunk-kcvmr83c.js:4979-5617 layout
-function setUltracode(ultracodeArg, t, n) {
+function setUltracode(ultracodeArg, state, options) {
   let mainLoopModel = getMainLoopModel();
   if (ultracodeArg && !isUltracodeAvailable())
     return {
@@ -306,27 +306,27 @@ function setUltracode(ultracodeArg, t, n) {
     return {
       message: `Ultracode isn't available on ${mainLoopModel}. Valid options are: ${formatValidEffortOptions(mainLoopModel)}`,
     };
-  n?.({
+  options?.({
     ultracode: ultracodeArg,
   });
-  let f = forwardApplyFlagSettings({
+  let applied = forwardApplyFlagSettings({
     ultracode: ultracodeArg,
   });
   logEvent("tengu_effort_command", {
     effort: ultracodeArg ? lit("ultracode") : lit("ultracode_off"),
-    from_level: fromEnumOpt(getEffortLevelIfSupported(mainLoopModel, t.effort)),
-    route: fromEnum(t.route),
+    from_level: fromEnumOpt(getEffortLevelIfSupported(mainLoopModel, state.effort)),
+    route: fromEnum(state.route),
     is_remote: getRemoteCaps() !== null,
   });
-  let s =
-    noEffortHint(t.effort, mainLoopModel) ??
-    effectiveEffortOverride(t.effort) ??
-    getAppliedEffortLevel(mainLoopModel, t.effort) ??
+  let result =
+    noEffortHint(state.effort, mainLoopModel) ??
+    effectiveEffortOverride(state.effort) ??
+    getAppliedEffortLevel(mainLoopModel, state.effort) ??
     "auto";
   return {
     message: ultracodeArg
-      ? `Ultracode on (this session only): ${ULTRACODE_DESCRIPTION}. Effort stays ${s}.${f ?? ""}`
-      : `Ultracode off. Effort stays ${s}.${f ?? ""}`,
+      ? `Ultracode on (this session only): ${ULTRACODE_DESCRIPTION}. Effort stays ${result}.${applied ?? ""}`
+      : `Ultracode off. Effort stays ${result}.${applied ?? ""}`,
     effortUpdate: {
       ultracode: ultracodeArg,
     },
@@ -334,72 +334,122 @@ function setUltracode(ultracodeArg, t, n) {
 }
 //@ chunk-kcvmr83c.js:5617-5758 layout
 function parseUltracodeArg(normalized) {
-  let [t, n, ...r] = normalized.split(/\s+/);
-  if (t !== "ultracode" || r.length > 0) return;
-  if (n === undefined || n === "on") return true;
-  return n === "off" ? false : undefined;
+  let [first, second, ...rest] = normalized.split(/\s+/);
+  if (first !== "ultracode" || rest.length > 0) return;
+  if (second === undefined || second === "on") return true;
+  return second === "off" ? false : undefined;
 }
 //@ chunk-kcvmr83c.js:5758-5988 fingerprint = executeEffort (0.503)
-async function executeEffort(e, t, n = true, r, f) {
-  let normalized = e.toLowerCase();
-  if (getEffortEnvOverride_2(e)) return unsetEffortLevel(t, n, r, f);
+async function executeEffort(state, shouldPersist, ultracodeConfirmed = true, options, appState) {
+  let normalized = state.toLowerCase();
+  if (getEffortEnvOverride_2(state))
+    return unsetEffortLevel(shouldPersist, ultracodeConfirmed, options, appState);
   let ultracodeArg = parseUltracodeArg(normalized);
-  if (ultracodeArg !== undefined) return setUltracode(ultracodeArg, t, r);
-  let effortLevel = parseEffortLevel(e);
+  if (ultracodeArg !== undefined) return setUltracode(ultracodeArg, shouldPersist, options);
+  let effortLevel = parseEffortLevel(state);
   if (!effortLevel)
     return {
-      message: `Invalid argument: ${e}. Valid options are: ${formatValidEffortOptions(getMainLoopModel())}`,
+      message: `Invalid argument: ${state}. Valid options are: ${formatValidEffortOptions(getMainLoopModel())}`,
     };
-  return setEffortValue(effortLevel, t, n, r, f);
+  return setEffortValue(effortLevel, shouldPersist, ultracodeConfirmed, options, appState);
 }
 //@ chunk-kcvmr83c.js:5988-6565 placement
-async function applyEffortCommand(e, t, setAppState, r = true, f) {
-  let s = false;
-  let o = null;
-  let E = await executeEffort(
-    e,
-    t,
-    r,
-    (d) => {
-      s = true;
-      if (d.ultracode === undefined) releaseCarriedEffortForEffortChange();
-      setAppState((u) => {
-        o ??= {
-          sessionEffort: u.sessionEffort,
-          ultracode: u.ultracode ?? false,
+async function applyEffortCommand(state, shouldPersist, setAppState, ultracodeConfirmed = true, appState) {
+  let succeeded = false;
+  let result = null;
+  let outcome = await executeEffort(
+    state,
+    shouldPersist,
+    ultracodeConfirmed,
+    (outcome) => {
+      succeeded = true;
+      if (outcome.ultracode === undefined) releaseCarriedEffortForEffortChange();
+      setAppState((prev) => {
+        result ??= {
+          sessionEffort: prev.sessionEffort,
+          ultracode: prev.ultracode ?? false,
         };
-        let p = d.ultracode === undefined ? toEffortSettingOrDefault(d.value) : u.sessionEffort;
-        let m = d.ultracode ?? u.ultracode ?? false;
-        if (isSameEffortSetting(u.sessionEffort, p) && (u.ultracode ?? false) === m) return u;
+        let nextEffort =
+          outcome.ultracode === undefined ? toEffortSettingOrDefault(outcome.value) : prev.sessionEffort;
+        let ultracode = outcome.ultracode ?? prev.ultracode ?? false;
+        if (isSameEffortSetting(prev.sessionEffort, nextEffort) && (prev.ultracode ?? false) === ultracode)
+          return prev;
         return {
-          ...u,
-          sessionEffort: p,
-          ultracode: m,
+          ...prev,
+          sessionEffort: nextEffort,
+          ultracode,
         };
       });
     },
-    f,
+    appState,
   );
-  if (s && !E.effortUpdate)
-    setAppState((d) => {
-      if (o === null) return d;
-      if (isSameEffortSetting(d.sessionEffort, o.sessionEffort) && (d.ultracode ?? false) === o.ultracode)
-        return d;
+  if (succeeded && !outcome.effortUpdate)
+    setAppState((prev) => {
+      if (result === null) return prev;
+      if (
+        isSameEffortSetting(prev.sessionEffort, result.sessionEffort) &&
+        (prev.ultracode ?? false) === result.ultracode
+      )
+        return prev;
       return {
-        ...d,
-        sessionEffort: o.sessionEffort,
-        ultracode: o.ultracode,
+        ...prev,
+        sessionEffort: result.sessionEffort,
+        ultracode: result.ultracode,
       };
     });
-  return E;
+  return outcome;
+}
+//@ chunk-mtkg11k6.js:3663-4202 placement
+/**
+ * /effort 命令：help 显示用法，current/status 显示当前等级，无参数显示可选等级，否则解析等级（含 auto、ultracode on/off）并应用。
+ */
+async function effortCommandCall(args, context) {
+  let trimmed = args.trim();
+  let appState = context.getAppState();
+  let model = parseUserSpecifiedModel(
+    appState.mainLoopModelForSession ?? appState.mainLoopModel ?? getDefaultMainLoopModelSetting(),
+  );
+  if (COMMON_HELP_ARGS.includes(trimmed))
+    return {
+      type: "text",
+      value: getEffortUsage(),
+    };
+  if (trimmed === "current" || trimmed === "status") {
+    let { message } = showCurrentEffort(getEffortValue(context), model, appState.ultracode);
+    return {
+      type: "text",
+      value: message,
+    };
+  }
+  if (!trimmed)
+    return {
+      type: "text",
+      value: `Usage: /effort <${getAllowedEffortLevels(model).join("|")}|auto${isUltracodeAvailable(model) ? "|ultracode [on|off]" : ""}>`,
+    };
+  return {
+    type: "text",
+    value: (
+      await applyEffortCommand(
+        trimmed,
+        {
+          effort: getEffortValue(context),
+          ultracode: appState.ultracode,
+          route: "noninteractive",
+        },
+        context.setAppState,
+        !context.options.isNonInteractiveSession,
+        context.storageV5,
+      )
+    ).message,
+  };
 }
 //@ chunk-3rwvzn82.js:14905-14998 callgraph-witnessed = ShowCurrentEffort (1)
 function ShowCurrentEffort(t0) {
   let { onDone } = t0;
-  let queuedMessageText = useQueuedMessageText();
+  let currentLevel = useQueuedMessageText();
   let effortValue = useAppState(selectUltracode);
   let model = useMainLoopModel();
-  let { message } = showCurrentEffort(queuedMessageText, model, effortValue);
+  let { message } = showCurrentEffort(currentLevel, model, effortValue);
   onDone(message);
   return null;
 }
@@ -419,54 +469,10 @@ async function call(onDone, context, args) {
     });
   return jsxProd_default(EffortCommand, {
     args,
-    onDone: (a) => onDone(a),
+    onDone: (result) => onDone(result),
     getMessages: () => context.getMessages?.() ?? context.messages,
     storageV5: context.storageV5,
   });
-}
-//@ chunk-mtkg11k6.js:3663-4202 placement
-/**
- * /effort 命令：help 显示用法，current/status 显示当前等级，无参数显示可选等级，否则解析等级（含 auto、ultracode on/off）并应用。
- */
-async function effortCommandCall(args, context) {
-  let trimmed = args.trim();
-  let appState = context.getAppState();
-  let userSpecifiedModel = parseUserSpecifiedModel(
-    appState.mainLoopModelForSession ?? appState.mainLoopModel ?? getDefaultMainLoopModelSetting(),
-  );
-  if (COMMON_HELP_ARGS.includes(trimmed))
-    return {
-      type: "text",
-      value: getEffortUsage(),
-    };
-  if (trimmed === "current" || trimmed === "status") {
-    let { message } = showCurrentEffort(getEffortValue(context), userSpecifiedModel, appState.ultracode);
-    return {
-      type: "text",
-      value: message,
-    };
-  }
-  if (!trimmed)
-    return {
-      type: "text",
-      value: `Usage: /effort <${getAllowedEffortLevels(userSpecifiedModel).join("|")}|auto${isUltracodeAvailable(userSpecifiedModel) ? "|ultracode [on|off]" : ""}>`,
-    };
-  return {
-    type: "text",
-    value: (
-      await applyEffortCommand(
-        trimmed,
-        {
-          effort: getEffortValue(context),
-          ultracode: appState.ultracode,
-          route: "noninteractive",
-        },
-        context.setAppState,
-        !context.options.isNonInteractiveSession,
-        context.storageV5,
-      )
-    ).message,
-  };
 }
 export {
   applyEffortCommand,
@@ -474,4 +480,6 @@ export {
   isUltracodeToggleAvailable,
   shouldSaveEffortDefault,
   ULTRACODE_DESCRIPTION,
+  call,
+  effortCommandCall,
 };

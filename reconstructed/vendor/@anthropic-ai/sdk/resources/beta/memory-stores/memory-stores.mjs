@@ -9,7 +9,7 @@ import { APIResource } from "../../../core/resource.mjs";
 import { Memories } from "./memories.mjs";
 import { MemoryVersions } from "./memory-versions.mjs";
 import { buildHeaders } from "../../../internal/headers.mjs";
-import { I } from "../../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../../internal/utils/path.mjs";
 import { TokenPage } from "../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:86357-88120 esm-fingerprint
@@ -40,7 +40,7 @@ var MemoryStores = (() => {
     }
     retrieve(memoryStoreID, params = {}, options) {
       let { betas, workspace_id } = params ?? {};
-      return this._client.get(I`/v1/memory_stores/${memoryStoreID}?beta=true`, {
+      return this._client.get(parseUrl_2`/v1/memory_stores/${memoryStoreID}?beta=true`, {
         ...options,
         headers: buildHeaders([
           {
@@ -57,7 +57,7 @@ var MemoryStores = (() => {
     }
     update(memoryStoreID, params, options) {
       let { betas, workspace_id, ...body } = params;
-      return this._client.post(I`/v1/memory_stores/${memoryStoreID}?beta=true`, {
+      return this._client.post(parseUrl_2`/v1/memory_stores/${memoryStoreID}?beta=true`, {
         body,
         ...options,
         headers: buildHeaders([
@@ -93,7 +93,7 @@ var MemoryStores = (() => {
     }
     delete(memoryStoreID, params = {}, options) {
       let { betas, workspace_id } = params ?? {};
-      return this._client.delete(I`/v1/memory_stores/${memoryStoreID}?beta=true`, {
+      return this._client.delete(parseUrl_2`/v1/memory_stores/${memoryStoreID}?beta=true`, {
         ...options,
         headers: buildHeaders([
           {
@@ -110,7 +110,7 @@ var MemoryStores = (() => {
     }
     archive(memoryStoreID, params = {}, options) {
       let { betas, workspace_id } = params ?? {};
-      return this._client.post(I`/v1/memory_stores/${memoryStoreID}/archive?beta=true`, {
+      return this._client.post(parseUrl_2`/v1/memory_stores/${memoryStoreID}/archive?beta=true`, {
         ...options,
         headers: buildHeaders([
           {

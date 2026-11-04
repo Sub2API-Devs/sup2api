@@ -14,13 +14,13 @@ import { getSessionIdentity } from "../shutdown/pendingWrites.js";
 import { HOOK_PROGRESS_INTERVAL_MS } from "../hooks/hookEvents.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
-  u,
-  string,
+  objectSchema,
+  stringSchema,
   record,
   unknown,
   _enum,
   literal,
-  M,
+  booleanSchema,
   union,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
@@ -51,20 +51,21 @@ import { setAccountSetPermissionMode } from "./autoModeState.js";
 import { getGrantScopeField } from "../../services/pushNotifications/permissionPush.js";
 import { logForDebugging } from "../debug.js";
 import { turnAbortControllerOf } from "../abortController.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-6j594vm1.js:2340-2658 placement
 /**
  * 权限等待一段时间后发送通知。
  */
-function schedulePermissionNotify(n, e, d) {
+function schedulePermissionNotify(toolName, storageV5, credentials) {
   if (env.CLAUDE_CODE_DISABLE_PERMISSION_PROMPT_NOTIFY_HOOKS) return () => {};
   let timer = setTimeout(
-    (m, storageV5, credentials) => {
+    (toolName, storageV5, credentials) => {
       try {
         executeNotificationHooks(
           getSessionIdentity(),
           {
-            message: `Claude needs your permission to use ${m}`,
+            message: `Claude needs your permission to use ${toolName}`,
             notificationType: "permission_prompt",
           },
           {
@@ -75,9 +76,9 @@ function schedulePermissionNotify(n, e, d) {
       } catch {}
     },
     HOOK_PROGRESS_INTERVAL_MS,
-    n,
-    e,
-    d,
+    toolName,
+    storageV5,
+    credentials,
   );
   timer.unref();
   return () => clearTimeout(timer);
@@ -86,39 +87,47 @@ function schedulePermissionNotify(n, e, d) {
 /**
  * --permission-prompt-tool（SDK 宿主）协议：输入 {tool_name, input, tool_use_id?}；输出 allow {updatedInput?, updatedPermissions?, toolUseID?, decisionClassification?} 或 deny {message, interrupt?}；decisionClassification 为 user_temporary/user_permanent/user_reject。
  */
-var permissionPromptToolInputSchema = DoctorLazy(() =>
-  u({
-    tool_name: string().describe("The name of the tool requesting permission"),
-    input: record(string(), unknown()).describe("The input for the tool"),
-    tool_use_id: string().optional().describe("The unique tool use request ID"),
-  }),
-);
-var decisionClassificationSchema = DoctorLazy(() =>
-  _enum(["user_temporary", "user_permanent", "user_reject"]).optional().catch(undefined),
-);
-var allowResultSchema = (n) =>
-  u({
-    behavior: literal("allow"),
-    updatedInput: record(string(), unknown()).optional(),
-    updatedPermissions: capPermissionUpdates_2(n, "SDK host"),
-    toolUseID: string().optional(),
-    decisionClassification: decisionClassificationSchema(),
-  });
-var denyResultSchema = DoctorLazy(() =>
-  u({
-    behavior: literal("deny"),
-    message: string(),
-    interrupt: M().optional(),
-    toolUseID: string().optional(),
-    decisionClassification: decisionClassificationSchema(),
-  }),
-);
-var permissionPromptResultSchemaRefusing = DoctorLazy(() =>
-  union([allowResultSchema("refused"), denyResultSchema()]),
-);
-var permissionPromptResultSchemaCutting = DoctorLazy(() =>
-  union([allowResultSchema("cut"), denyResultSchema()]),
-);
+var permissionPromptToolInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var decisionClassificationSchema;
+var allowResultSchema;
+var denyResultSchema;
+var permissionPromptResultSchemaRefusing;
+var permissionPromptResultSchemaCutting;
+deferInit("chunk-6j594vm1.js:2658", () => {
+  permissionPromptToolInputSchema = DoctorLazy(() =>
+    objectSchema({
+      tool_name: stringSchema().describe("The name of the tool requesting permission"),
+      input: record(stringSchema(), unknown()).describe("The input for the tool"),
+      tool_use_id: stringSchema().optional().describe("The unique tool use request ID"),
+    }),
+  );
+  decisionClassificationSchema = DoctorLazy(() =>
+    _enum(["user_temporary", "user_permanent", "user_reject"]).optional().catch(undefined),
+  );
+  allowResultSchema = (overflowMode) =>
+    objectSchema({
+      behavior: literal("allow"),
+      updatedInput: record(stringSchema(), unknown()).optional(),
+      updatedPermissions: capPermissionUpdates_2(overflowMode, "SDK host"),
+      toolUseID: stringSchema().optional(),
+      decisionClassification: decisionClassificationSchema(),
+    });
+  denyResultSchema = DoctorLazy(() =>
+    objectSchema({
+      behavior: literal("deny"),
+      message: stringSchema(),
+      interrupt: booleanSchema().optional(),
+      toolUseID: stringSchema().optional(),
+      decisionClassification: decisionClassificationSchema(),
+    }),
+  );
+  permissionPromptResultSchemaRefusing = DoctorLazy(() =>
+    union([allowResultSchema("refused"), denyResultSchema()]),
+  );
+  permissionPromptResultSchemaCutting = DoctorLazy(() =>
+    union([allowResultSchema("cut"), denyResultSchema()]),
+  );
+});
 //@ chunk-6j594vm1.js:3356-3465 placement
 /**
  * 权限提示工具返回格式不对时的提示文字。
@@ -128,55 +137,68 @@ var PERMISSION_PROMPT_RESULT_FORMAT_HINT = `Expected {behavior: 'allow', updated
 /**
  * 计算"始终允许"规则建议。
  */
-function alwaysAllowRulesFor(n, e, d, r, m, s) {
-  if (r.forRemoteExecution === true || isHookOrPluginSteered(r)) return;
+function alwaysAllowRulesFor(updates, tool, input, callContext, suppressSuggestions, skillAsk) {
+  if (callContext.forRemoteExecution === true || isHookOrPluginSteered(callContext)) return;
   let mode =
-    n &&
+    updates &&
     normalizePermissionUpdate(
-      n,
-      e.suppressesAlwaysAllowRule?.(d) === true || m ? undefined : suggestWebToolRule(e, d),
-      getToolPermissionContext(r),
+      updates,
+      tool.suppressesAlwaysAllowRule?.(input) === true || suppressSuggestions
+        ? undefined
+        : suggestWebToolRule(tool, input),
+      getToolPermissionContext(callContext),
     );
-  if (mode && s !== undefined) {
-    let f = answerUpdatesForMcpSkillAsk(mode, s.rule);
-    return f.length > 0 ? f : undefined;
+  if (mode && skillAsk !== undefined) {
+    let skillUpdates = answerUpdatesForMcpSkillAsk(mode, skillAsk.rule);
+    return skillUpdates.length > 0 ? skillUpdates : undefined;
   }
-  if (mode && e.suppressesAllPermissionUpdates?.(d) === true) {
-    let f = withoutGrantsForRemoteScope(mode);
-    return f.length > 0 ? f : undefined;
+  if (mode && tool.suppressesAllPermissionUpdates?.(input) === true) {
+    let remoteScoped = withoutGrantsForRemoteScope(mode);
+    return remoteScoped.length > 0 ? remoteScoped : undefined;
   }
-  return mode && (e.suppressesAlwaysAllowRule?.(d) === true || m)
-    ? stripWholeToolGrantsForAsk(mode, e, getToolPermissionContext(r))
+  return mode && (tool.suppressesAlwaysAllowRule?.(input) === true || suppressSuggestions)
+    ? stripWholeToolGrantsForAsk(mode, tool, getToolPermissionContext(callContext))
     : mode;
 }
 //@ chunk-6j594vm1.js:3833-4269 placement
 /**
  * 应用权限提示工具结果（launcher/allow/deny）。
  */
-function applyPermissionPromptResult(hostPolicy, updatedPermissions, tool, r, m, s, y = false, f) {
-  switch (hostPolicy.kind) {
+function applyPermissionPromptResult(
+  answerPolicy,
+  updates,
+  tool,
+  input,
+  callContext,
+  suppressSuggestions,
+  requireSuggestions = false,
+  skillAsk,
+) {
+  switch (answerPolicy.kind) {
     case "launcher": {
-      let k = alwaysAllowRulesFor(updatedPermissions, tool, r, m, s, f);
-      if (k?.length) {
-        m.setSessionToolPermissionContext((R) => applyPermissionUpdates(R, k));
+      let applied = alwaysAllowRulesFor(updates, tool, input, callContext, suppressSuggestions, skillAsk);
+      if (applied?.length) {
+        callContext.setSessionToolPermissionContext((context) => applyPermissionUpdates(context, applied));
         setImmediate(() => {
           permissionModeSignal.emit();
         });
-        persistPermissionUpdates(k, m.storageV5).catch(logError);
+        persistPermissionUpdates(applied, callContext.storageV5).catch(logError);
       }
       return {
-        applied: k ?? [],
+        applied: applied ?? [],
         lostTightenings: 0,
       };
     }
     case "strict":
-      return applyAnswerPermissionUpdates(hostPolicy, updatedPermissions, {
+      return applyAnswerPermissionUpdates(answerPolicy, updates, {
         vetoed: () => false,
-        strip: (k) => alwaysAllowRulesFor(k, tool, r, m, s, f) ?? [],
+        strip: (updates) =>
+          alwaysAllowRulesFor(updates, tool, input, callContext, suppressSuggestions, skillAsk) ?? [],
         toolName: getToolNameForPermissionCheck(tool),
-        input: r,
-        suggested: (k) => y && tool.suggestedAllowRule?.(k, r) === true,
-        setContext: m.setSessionToolPermissionContext,
+        input,
+        suggested: (callbackInput) =>
+          requireSuggestions && tool.suggestedAllowRule?.(callbackInput, input) === true,
+        setContext: callContext.setSessionToolPermissionContext,
       });
   }
 }
@@ -184,10 +206,10 @@ function applyPermissionPromptResult(hostPolicy, updatedPermissions, tool, r, m,
 function wrapSessionContextSetter(context, tool) {
   return {
     ...context,
-    setSessionToolPermissionContext: (d) =>
-      context.setSessionToolPermissionContext((r) => {
-        let m = typeof d === "function" ? d(r) : d;
-        return recordRemoteBrowserCardAnswers(tool, r, m);
+    setSessionToolPermissionContext: (updater) =>
+      context.setSessionToolPermissionContext((context) => {
+        let next = typeof updater === "function" ? updater(context) : updater;
+        return recordRemoteBrowserCardAnswers(tool, context, next);
       }),
   };
 }
@@ -202,9 +224,9 @@ function permissionPromptToolResultToPermissionDecision(
   input,
   context,
   tool = promptTool,
-  y = false,
-  f = false,
-  k,
+  requireSuggestions = false,
+  wrapSession = false,
+  toolFilter,
 ) {
   let decisionReason = {
     type: "permissionPromptTool",
@@ -213,7 +235,8 @@ function permissionPromptToolResultToPermissionDecision(
   };
   if (result.behavior === "allow") {
     let mode = result.updatedPermissions?.findLast((prev) => prev.type === "setMode")?.mode;
-    if (k === undefined && (mode === "default" || mode === "acceptEdits")) setAccountSetPermissionMode(mode);
+    if (toolFilter === undefined && (mode === "default" || mode === "acceptEdits"))
+      setAccountSetPermissionMode(mode);
     switch (hostPolicy.kind) {
       case "launcher": {
         let { applied } = applyPermissionPromptResult(
@@ -221,10 +244,10 @@ function permissionPromptToolResultToPermissionDecision(
           result.updatedPermissions,
           tool,
           input,
-          f ? wrapSessionContextSetter(context, tool) : context,
-          y,
+          wrapSession ? wrapSessionContextSetter(context, tool) : context,
+          requireSuggestions,
           false,
-          k,
+          toolFilter,
         );
         let updatedInput =
           result.updatedInput && Object.keys(result.updatedInput).length > 0
@@ -238,29 +261,34 @@ function permissionPromptToolResultToPermissionDecision(
         };
       }
       case "strict": {
-        let h = admitCardAnswer(result.updatedInput, input, tool);
-        let A =
-          h === undefined ? matchCardFormAnswer(hostPolicy, result.updatedInput, input, tool) : undefined;
-        let b = h ?? A?.input;
-        if (b === undefined) return denyChangedAnswerInput(tool.name, result.toolUseID);
-        if (b !== input && matchToolRule(getToolPermissionContext(context), tool, b, "deny") !== null) {
-          A?.onRefused("deny_rule");
+        let admitted = admitCardAnswer(result.updatedInput, input, tool);
+        let formMatch =
+          admitted === undefined
+            ? matchCardFormAnswer(hostPolicy, result.updatedInput, input, tool)
+            : undefined;
+        let answerInput = admitted ?? formMatch?.input;
+        if (answerInput === undefined) return denyChangedAnswerInput(tool.name, result.toolUseID);
+        if (
+          answerInput !== input &&
+          matchToolRule(getToolPermissionContext(context), tool, answerInput, "deny") !== null
+        ) {
+          formMatch?.onRefused("deny_rule");
           return denyChangedAnswerInput(tool.name, result.toolUseID);
         }
         let { applied, lostTightenings } = applyPermissionPromptResult(
           hostPolicy,
           result.updatedPermissions,
           tool,
-          A?.input ?? input,
-          f ? wrapSessionContextSetter(context, tool) : context,
-          y,
+          formMatch?.input ?? input,
+          wrapSession ? wrapSessionContextSetter(context, tool) : context,
+          requireSuggestions,
           true,
-          k,
+          toolFilter,
         );
         if (lostTightenings > 0) return denyLostTightening(tool.name, result.toolUseID);
         return {
           ...result,
-          updatedInput: b,
+          updatedInput: answerInput,
           decisionReason,
           ...getGrantScopeField(hostPolicy, applied),
         };

@@ -10,6 +10,11 @@
  */
 import { join } from "path";
 import { mkdir } from "fs/promises";
+import {
+  isMemoryRecallEnabled,
+  isAutoMemoryEnabledIgnoringPause,
+  isAutoMemoryDisabledForCurrentMainLoopModel,
+} from "../../memdir/paths.js";
 import { SessionRootSlot, getSessionProject } from "../../bootstrap/sessionSlices.js";
 import { discoverOrgMemoryStores, getOrgMemoryPickerData } from "../../services/orgMemory/discovery.js";
 import {
@@ -29,13 +34,14 @@ import {
 import { getMemoryDirNfc } from "../../memdir/teamMemPaths.js";
 import { packageManagerAutoUpdaterSlot } from "../PackageManagerAutoUpdater.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
-import { Qr, y, R, P, h5r } from "../../../vendor/react/cjs/react.production.js";
-import { getMemoryFilesCached } from "../../utils/claudemd.js";
 import {
-  isAutoMemoryEnabledIgnoringPause,
-  isAutoMemoryDisabledForCurrentMainLoopModel,
-  isMemoryRecallEnabled,
-} from "../../memdir/paths.js";
+  use,
+  useState,
+  useRef,
+  useEffect,
+  startTransition,
+} from "../../../vendor/react/cjs/react.production.js";
+import { getMemoryFilesCached } from "../../utils/claudemd.js";
 import { isSafeMode } from "../../utils/envUtils.js";
 import { useLatestState } from "../CustomSelect/option-map.js";
 import {
@@ -88,12 +94,22 @@ import { clearOrgMemoryCredential } from "../../services/orgMemory/credential.js
 import { OrderedListWithItem } from "../CustomSelect/selectTable.js";
 import { openPath } from "../../utils/browser.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-e6aww6q8.js:1350609-1350685 fingerprint = _temp (1)
+function filterAutoMemWhenDisabled(f_1) {
+  if (!isMemoryRecallEnabled()) return f_1;
+  return f_1.filter((entry) => entry.type !== "AutoMem");
+}
+//@ chunk-18hwfzwa.js:728716-728758 fingerprint = _temp5 (0.75)
+function isDreamTask(t) {
+  return t.type === "dream";
+}
 //@ chunk-c55mbvfz.js:31716-31816 placement
 class RowsOnce {
   promise = null;
-  rowsOnce(b) {
-    this.promise ??= b();
+  rowsOnce(loader) {
+    this.promise ??= loader();
     return this.promise;
   }
   reset() {
@@ -101,7 +117,10 @@ class RowsOnce {
   }
 }
 //@ chunk-c55mbvfz.js:31816-31842 placement
-var memoryRowsCache = new SessionRootSlot(() => new RowsOnce());
+var memoryRowsCache; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-c55mbvfz.js:31816", () => {
+  memoryRowsCache = new SessionRootSlot(() => new RowsOnce());
+});
 //@ chunk-c55mbvfz.js:31842-31854 layout
 var OPEN_FOLDER_API = null;
 //@ chunk-c55mbvfz.js:31854-31901 fingerprint = OPEN_FOLDER_PREFIX (1)
@@ -115,50 +134,55 @@ var MAX_VISIBLE_MEMORY_ROWS = 30;
  */
 function loadOrgMemoryRows(cache, storageV5, signal) {
   return cache.rowsOnce(async () => {
-    let v = await discoverOrgMemoryStores(storageV5, signal).catch(() => null);
+    let discoveredStores = await discoverOrgMemoryStores(storageV5, signal).catch(() => null);
     let picker = getOrgMemoryPickerData();
-    if (v === null)
+    if (discoveredStores === null)
       return {
         mounts: [],
         picker,
       };
-    let x = isLastAskDowngraded();
+    let isWritesDowngraded = isLastAskDowngraded();
     let orgMemoryDecision = getOrgMemoryDecision();
-    let N =
+    let publicGroupingRoot =
       orgMemoryDecision.state === "on"
         ? orgMemoryDecision.initialGrant.find(
-            (L) =>
-              classifyStorePath(L.path) === "grouping_root" ||
-              (L.kind === "grouping_root" && classifyStorePath(L.path) === "unknown"),
+            (groupingRootGrant) =>
+              classifyStorePath(groupingRootGrant.path) === "grouping_root" ||
+              (groupingRootGrant.kind === "grouping_root" &&
+                classifyStorePath(groupingRootGrant.path) === "unknown"),
           )
         : undefined;
-    let B =
+    let privateGrouping =
       orgMemoryDecision.state === "on"
         ? orgMemoryDecision.initialGrant.find(
-            (L) => L.kind === "grouping" || classifyStorePath(L.path) === "grouping",
+            (groupingGrant) =>
+              groupingGrant.kind === "grouping" || classifyStorePath(groupingGrant.path) === "grouping",
           )
         : undefined;
-    let I = orgMemoryDecision.state === "on" && hasPrivateGrouping(orgMemoryDecision.initialGrant);
+    let hasPrivateGroupingStore =
+      orgMemoryDecision.state === "on" && hasPrivateGrouping(orgMemoryDecision.initialGrant);
     return {
-      mounts: v
-        .filter((L) => L.scope === "team")
-        .map((L) => ({
-          mount: L.mount,
-          dir: join(getMemoryDirNfc(), L.mount),
+      mounts: discoveredStores
+        .filter((store) => store.scope === "team")
+        .map((store) => ({
+          mount: store.mount,
+          dir: join(getMemoryDirNfc(), store.mount),
           description:
-            N !== undefined && stripTrailingSlashes(L.path) === stripTrailingSlashes(N.path)
-              ? L.mode === "rw" && grantedModeFor(L.path) === "rw" && isOrgMemoryWriteOptedIn()
+            publicGroupingRoot !== undefined &&
+            stripTrailingSlashes(store.path) === stripTrailingSlashes(publicGroupingRoot.path)
+              ? store.mode === "rw" && grantedModeFor(store.path) === "rw" && isOrgMemoryWriteOptedIn()
                 ? "public project memory, read-write"
                 : "public project memory, read-only"
-              : B !== undefined && stripTrailingSlashes(L.path) === stripTrailingSlashes(B.path)
-                ? I
+              : privateGrouping !== undefined &&
+                  stripTrailingSlashes(store.path) === stripTrailingSlashes(privateGrouping.path)
+                ? hasPrivateGroupingStore
                   ? "private project, read-only"
                   : "project memory, read-only"
-                : L.mode === "rw" && grantedModeFor(L.path) === "rw" && isOrgMemoryWriteOptedIn()
+                : store.mode === "rw" && grantedModeFor(store.path) === "rw" && isOrgMemoryWriteOptedIn()
                   ? "read-write"
-                  : I
+                  : hasPrivateGroupingStore
                     ? "read-only \u2014 private project selected"
-                    : x
+                    : isWritesDowngraded
                       ? "writes requested \u2014 granted read-only"
                       : "read-only",
         })),
@@ -182,37 +206,37 @@ function MemoryFileSelector({
   onProjectSwitch,
 }) {
   let originalCwd = getSessionProject(session).originalCwd;
-  let N = packageManagerAutoUpdaterSlot.of(session.host);
+  let updaterSlot = packageManagerAutoUpdaterSlot.of(session.host);
   let cache = memoryRowsCache.of(session);
   let { storageV5, credentials } = useTheme_2();
-  let U = Qr(getMemoryFilesCached(session, false, storageV5, credentials));
-  let V = isAutoMemoryEnabledIgnoringPause() || isSafeMode();
-  let ee = isAutoMemoryEnabledIgnoringPause() && !isSafeMode();
-  let { mounts, picker } = ee
-    ? Qr(loadOrgMemoryRows(cache, storageV5, credentials))
+  let memoryFiles = use(getMemoryFilesCached(session, false, storageV5, credentials));
+  let autoMemoryAvailable = isAutoMemoryEnabledIgnoringPause() || isSafeMode();
+  let autoMemoryEnabled = isAutoMemoryEnabledIgnoringPause() && !isSafeMode();
+  let { mounts, picker } = autoMemoryEnabled
+    ? use(loadOrgMemoryRows(cache, storageV5, credentials))
     : {
         mounts: [],
         picker: null,
       };
-  let [X, H, ae] = useLatestState(false);
-  let [ve, oo] = y(false);
-  let [J, go] = y(getEffectiveSelection);
-  let to = J !== null && isPublicProjects(J);
-  let [Xo] = y(isOrgMemoryReadEnabled);
-  let [no] = y(() => getCurrentProjectConfig().orgMemoryRead ?? true);
-  let [Jo, ye] = y(null);
-  let [Qo, Zo] = y(false);
-  let existingMemoryFiles = R(false);
-  let ro = onProjectSwitch !== undefined && isOrgMemoryReadEnabled();
+  let [isProjectPickerOpen, setProjectPickerOpen, getProjectPickerOpen] = useLatestState(false);
+  let [isPickerRequested, setIsPickerRequested] = useState(false);
+  let [selectedPickId, setSelectedPickId] = useState(getEffectiveSelection);
+  let isPublicProjectPick = selectedPickId !== null && isPublicProjects(selectedPickId);
+  let [isOrgReadFeatureEnabled] = useState(isOrgMemoryReadEnabled);
+  let [orgMemoryReadConfigured] = useState(() => getCurrentProjectConfig().orgMemoryRead ?? true);
+  let [noticeText, setNoticeText] = useState(null);
+  let [isSwitching, setIsSwitching] = useState(false);
+  let existingMemoryFiles = useRef(false);
+  let canSwitchProjects = onProjectSwitch !== undefined && isOrgMemoryReadEnabled();
   let orgMemoryDecision = getOrgMemoryDecision();
-  let [wo] = y(() => (OPEN_FOLDER_API === null ? "closed" : getMemorySyncState()));
-  let et = wo !== "closed";
-  let On = wo === "pending";
-  let [xe] = y(autoMemoryToggleState);
-  let [Cn, Rn] = y(() => null);
-  let [ot, _n] = y(getMemoryToggledOff);
-  let [vn] = y(() => null);
-  let io = !ee
+  let [memorySyncState] = useState(() => (OPEN_FOLDER_API === null ? "closed" : getMemorySyncState()));
+  let hasMemorySync = memorySyncState !== "closed";
+  let isSyncPending = memorySyncState === "pending";
+  let [isAutoMemoryToggleAllowed] = useState(autoMemoryToggleState);
+  let [orgMemoryWriteState, setOrgMemoryWriteState] = useState(() => null);
+  let [isMemoryToggledOff, setMemoryToggledOff] = useState(getMemoryToggledOff);
+  let [orgMemorySyncState] = useState(() => null);
+  let syncStatusBadge = !autoMemoryEnabled
     ? null
     : orgMemoryDecision.state === "on"
       ? {
@@ -222,7 +246,7 @@ function MemoryFileSelector({
       : orgMemoryDecision.state === "parked"
         ? {
             label: "parked",
-            note: ro
+            note: canSwitchProjects
               ? "paused for this session \u2014 pick a project to reconnect"
               : "paused for this session \u2014 a new pick still applies next session",
           }
@@ -235,265 +259,289 @@ function MemoryFileSelector({
                   : "signed out \u2014 next session decides fresh",
             }
           : null;
-  let memoryOptions = buildMemoryFileChoices(mergeByPath(U, addedInstructionFiles), originalCwd, "\xB7 ").map(
-    (file) => ({
-      label: file.label,
-      value: file.path,
-      description: file.description,
-    }),
-  );
-  let Mo = [];
-  let De = [];
-  let agentDefinitions = useAppState((h) => h.agentDefinitions);
-  let [ge] = y(() => ({
+  let memoryOptions = buildMemoryFileChoices(
+    mergeByPath(memoryFiles, addedInstructionFiles),
+    originalCwd,
+    "\xB7 ",
+  ).map((file) => ({
+    label: file.label,
+    value: file.path,
+    description: file.description,
+  }));
+  let orgMemoryRows = [];
+  let fileChoiceRows = [];
+  let agentDefinitions = useAppState((appState) => appState.agentDefinitions);
+  let [orgMemoryUiState] = useState(() => ({
     write: false,
     picker: false,
     pickerData: null,
   }));
-  if (picker !== null) ge.pickerData = picker;
-  let z = picker ?? ge.pickerData;
-  let So = z !== null && to;
-  P(() => {
-    if (So) logEvent("tengu_org_memory_legacy_pick_nudged", {});
-  }, [So]);
-  let st = orgMemoryDecision.state === "on" && J === orgMemoryDecision.request.selection;
-  let bo =
-    J !== null &&
-    (st
+  if (picker !== null) orgMemoryUiState.pickerData = picker;
+  let activePicker = picker ?? orgMemoryUiState.pickerData;
+  let isLegacyPickNudged = activePicker !== null && isPublicProjectPick;
+  useEffect(() => {
+    if (isLegacyPickNudged) logEvent("tengu_org_memory_legacy_pick_nudged", {});
+  }, [isLegacyPickNudged]);
+  let isPickApplied =
+    orgMemoryDecision.state === "on" && selectedPickId === orgMemoryDecision.request.selection;
+  let isPrivatePick =
+    selectedPickId !== null &&
+    (isPickApplied
       ? hasPrivateGrouping(orgMemoryDecision.initialGrant)
-      : z?.candidates.find((candidate) => candidate.id === J)?.visibility === "private");
+      : activePicker?.candidates.find((candidate) => candidate.id === selectedPickId)?.visibility ===
+        "private");
   let defaultFocusValue =
-    J === null || z === null
+    selectedPickId === null || activePicker === null
       ? ORG_MEMORY_OFF_VALUE
-      : (z.candidates.find((candidate) => candidate.id === J)?.id ??
-        z.candidates.find((candidate) => candidate.isDefault)?.id ??
-        z.candidates[0]?.id ??
+      : (activePicker.candidates.find((candidate) => candidate.id === selectedPickId)?.id ??
+        activePicker.candidates.find((candidate) => candidate.isDefault)?.id ??
+        activePicker.candidates[0]?.id ??
         ORG_MEMORY_OFF_VALUE);
-  if (V) {
-    for (let h of getAutoMemoryChoices())
-      De.push({
-        label: h.label,
-        value: `${OPEN_FOLDER_VALUE}${h.path}`,
-        description: h.description,
+  if (autoMemoryAvailable) {
+    for (let autoMemoryChoice of getAutoMemoryChoices())
+      fileChoiceRows.push({
+        label: autoMemoryChoice.label,
+        value: `${OPEN_FOLDER_VALUE}${autoMemoryChoice.path}`,
+        description: autoMemoryChoice.description,
       });
-    if (!Xo)
+    if (!isOrgReadFeatureEnabled)
       for (let mount of mounts)
-        De.push({
+        fileChoiceRows.push({
           label: `Open synced project memory: ${mount.mount}`,
           value: `${OPEN_FOLDER_VALUE}${mount.dir}`,
           description: mount.description,
         });
-    ge.picker ||= z !== null;
-    if (z !== null && ge.picker) {
-      let h = J === null ? undefined : z.candidates.find((candidate) => candidate.id === J);
-      let W = J === null ? null : (h?.name ?? (to ? "all public projects" : J));
-      let Q = W === null ? "off" : no ? (bo ? `${W} (private)` : W) : "off \u2014 disabled in settings";
-      Mo.push({
-        label: `Sync memories from: ${Q}`,
+    orgMemoryUiState.picker ||= activePicker !== null;
+    if (activePicker !== null && orgMemoryUiState.picker) {
+      let selectedCandidate =
+        selectedPickId === null
+          ? undefined
+          : activePicker.candidates.find((candidate) => candidate.id === selectedPickId);
+      let selectedPickName =
+        selectedPickId === null
+          ? null
+          : (selectedCandidate?.name ?? (isPublicProjectPick ? "all public projects" : selectedPickId));
+      let pickerValueLabel =
+        selectedPickName === null
+          ? "off"
+          : orgMemoryReadConfigured
+            ? isPrivatePick
+              ? `${selectedPickName} (private)`
+              : selectedPickName
+            : "off \u2014 disabled in settings";
+      orgMemoryRows.push({
+        label: `Sync memories from: ${pickerValueLabel}`,
         value: ORG_PICKER_VALUE,
         description:
-          Jo ||
-          (to
+          noticeText ||
+          (isPublicProjectPick
             ? "set automatically \u2014 pick a project to choose where saves go"
-            : z.writeOptInAvailable && canWriteOrgMemory() && !isOrgMemoryWritesEnabledForAccount()
+            : activePicker.writeOptInAvailable && canWriteOrgMemory() && !isOrgMemoryWritesEnabledForAccount()
               ? "change \xB7 org allows write opt-in (/config)"
               : "change"),
       });
     }
-    for (let h of getAgentMemoryChoices(agentDefinitions.activeAgents))
-      De.push({
-        label: h.label,
-        value: `${OPEN_FOLDER_VALUE}${h.path}`,
-        description: h.description,
+    for (let agentMemoryChoice of getAgentMemoryChoices(agentDefinitions.activeAgents))
+      fileChoiceRows.push({
+        label: agentMemoryChoice.label,
+        value: `${OPEN_FOLDER_VALUE}${agentMemoryChoice.path}`,
+        description: agentMemoryChoice.description,
       });
   }
-  let Pe = [...Mo, ...memoryOptions, ...De];
-  let memorySelectorLastPath = N.memorySelectorLastPath;
-  let at =
-    memorySelectorLastPath && Pe.some((h) => h.value === memorySelectorLastPath)
+  let allChoices = [...orgMemoryRows, ...memoryOptions, ...fileChoiceRows];
+  let memorySelectorLastPath = updaterSlot.memorySelectorLastPath;
+  let initialSelectorValue =
+    memorySelectorLastPath && allChoices.some((choiceOption) => choiceOption.value === memorySelectorLastPath)
       ? memorySelectorLastPath
-      : Pe[0]?.value || "";
-  let [he, ko] = y(isAutoMemoryEnabledIgnoringPause);
-  let [Oo, dt] = y(isAutoDreamEnabled);
-  let [mt] = y(() => MEMORY_DIALOG_API !== null && alwaysFalse());
-  let [An, ut] = y(getAutoMemoryOffThisSession);
-  let [Le, pt] = y(isAutoMemoryDisabledForCurrentMainLoopModel);
-  P(
+      : allChoices[0]?.value || "";
+  let [isAutoMemoryEnabled, setIsAutoMemoryEnabled] = useState(isAutoMemoryEnabledIgnoringPause);
+  let [isAutoDreamToggleOn, setIsAutoDreamEnabled] = useState(isAutoDreamEnabled);
+  let [canShowSessionRow] = useState(() => MEMORY_DIALOG_API !== null && alwaysFalse());
+  let [isAutoMemoryOffThisSession, setAutoMemoryOffThisSession] = useState(getAutoMemoryOffThisSession);
+  let [isModelAutoMemoryDisabled, setModelAutoMemoryDisabled] = useState(
+    isAutoMemoryDisabledForCurrentMainLoopModel,
+  );
+  useEffect(
     () =>
       onGrowthBookRefresh(() => {
-        let h = isAutoMemoryDisabledForCurrentMainLoopModel();
-        if (h !== Le) {
-          pt(h);
-          ko(isAutoMemoryEnabledIgnoringPause());
+        let nextModelDisabled = isAutoMemoryDisabledForCurrentMainLoopModel();
+        if (nextModelDisabled !== isModelAutoMemoryDisabled) {
+          setModelAutoMemoryDisabled(nextModelDisabled);
+          setIsAutoMemoryEnabled(isAutoMemoryEnabledIgnoringPause());
         }
       }),
-    [Le],
+    [isModelAutoMemoryDisabled],
   );
-  let Ne = describeAutoMemoryToggle({
-    enabled: he,
-    modelDisabled: Le,
+  let autoMemoryStatus = describeAutoMemoryToggle({
+    enabled: isAutoMemoryEnabled,
+    modelDisabled: isModelAutoMemoryDisabled,
     safeMode: isSafeMode(),
-    raiseAllowed: xe,
+    raiseAllowed: isAutoMemoryToggleAllowed,
   });
-  let ne = null;
-  let [Ve] = y(() => he && isAutoDreamFeatureOn());
-  let isGit = useAppState((h) =>
-    Object.values(h.tasks).some((task) => task.type === "dream" && task.status === "running"),
+  let sessionToggleStatus = null;
+  let [isAutoDreamAvailable] = useState(() => isAutoMemoryEnabled && isAutoDreamFeatureOn());
+  let isGit = useAppState((appStateSnapshot) =>
+    Object.values(appStateSnapshot.tasks).some((task) => task.type === "dream" && task.status === "running"),
   );
-  let [yt, gt] = y(null);
-  P(() => {
-    if (!Ve) return;
-    readLastConsolidatedAt(undefined, storageV5).then(gt);
-  }, [Ve, isGit, storageV5]);
+  let [lastDreamAt, setLastDreamAt] = useState(null);
+  useEffect(() => {
+    if (!isAutoDreamAvailable) return;
+    readLastConsolidatedAt(undefined, storageV5).then(setLastDreamAt);
+  }, [isAutoDreamAvailable, isGit, storageV5]);
   let agentDefinitions_2 = describeAutoDreamToggle({
-    autoMemoryOn: he,
-    enabled: Oo,
+    autoMemoryOn: isAutoMemoryEnabled,
+    enabled: isAutoDreamToggleOn,
     running: isGit,
-    lastDreamAt: yt,
-    raiseAllowed: xe,
+    lastDreamAt,
+    raiseAllowed: isAutoMemoryToggleAllowed,
     heldDetail: undefined,
   });
-  let [, se, We] = useLatestState("list");
-  let [Ro, ht] = y({
+  let [, setFocusPane, getFocusPane] = useLatestState("list");
+  let [listFocusHint, setListFocusHint] = useState({
     count: 0,
     first: false,
   });
-  let [be, _o] = y(isOrgMemoryWritesEnabledForAccount);
-  let [wt, ce] = y(null);
-  ge.write ||= !isMonorepoWriteBlocked() && (be || (mounts.length > 0 && canWriteOrgMemory()));
-  let write = no && J !== null && ge.write;
-  function Mt(h) {
+  let [areOrgWritesEnabled, setOrgWritesEnabled] = useState(isOrgMemoryWritesEnabledForAccount);
+  let [orgWritesError, setOrgWritesError] = useState(null);
+  orgMemoryUiState.write ||=
+    !isMonorepoWriteBlocked() && (areOrgWritesEnabled || (mounts.length > 0 && canWriteOrgMemory()));
+  let write = orgMemoryReadConfigured && selectedPickId !== null && orgMemoryUiState.write;
+  function toggleOrgWrites(enabled) {
     if (!write) return;
-    if (h && !autoMemoryToggleState()) return;
-    h5r(() => {
-      let agentDir = applyOrgMemoryDecision(h, storageV5);
+    if (enabled && !autoMemoryToggleState()) return;
+    startTransition(() => {
+      let agentDir = applyOrgMemoryDecision(enabled, storageV5);
       if (agentDir === "granted" || agentDir === "withdrawn") {
         cache.reset();
-        _o(h);
-        ce(null);
+        setOrgWritesEnabled(enabled);
+        setOrgWritesError(null);
       } else if (agentDir === "noop") {
-        _o(isOrgMemoryWritesEnabledForAccount());
-        ce(null);
-      } else if (agentDir === "refused_gates") ce("unavailable right now");
-      else if (agentDir === "refused_identity") ce("requires an OAuth login");
-      else if (agentDir === "refused_read_off") ce("enable reads first");
-      else if (agentDir === "refused_session_kind") ce(CANNOT_ENABLE_HERE_DETAIL);
+        setOrgWritesEnabled(isOrgMemoryWritesEnabledForAccount());
+        setOrgWritesError(null);
+      } else if (agentDir === "refused_gates") setOrgWritesError("unavailable right now");
+      else if (agentDir === "refused_identity") setOrgWritesError("requires an OAuth login");
+      else if (agentDir === "refused_read_off") setOrgWritesError("enable reads first");
+      else if (agentDir === "refused_session_kind") setOrgWritesError(CANNOT_ENABLE_HERE_DETAIL);
     });
   }
-  function St(h) {
+  function setAutoMemory(autoMemoryOn) {
     if (isSafeMode()) return;
-    if (Le) return;
-    if (h && !autoMemoryToggleState()) return;
+    if (isModelAutoMemoryDisabled) return;
+    if (autoMemoryOn && !autoMemoryToggleState()) return;
     updateSettingsForSourceWithTransform(
       "userSettings",
-      (W) => ({
-        autoMemoryEnabled: h,
-        ...ORG_PICKER_API?.accountKeyKeptWithAutoMemory(W, h),
+      (settings) => ({
+        autoMemoryEnabled: autoMemoryOn,
+        ...ORG_PICKER_API?.accountKeyKeptWithAutoMemory(settings, autoMemoryOn),
       }),
       undefined,
       storageV5,
     );
-    ko(h);
+    setIsAutoMemoryEnabled(autoMemoryOn);
     logEvent("tengu_auto_memory_toggled", {
-      enabled: h,
+      enabled: autoMemoryOn,
     });
   }
-  function bt(h) {
-    if (ne === null || !he || ot) return;
-    if (h && !autoMemoryToggleState()) return;
-    toggleAutoMemoryForSession(h, "memory_dialog", saveAutoMemorySessionSwitch);
-    ut(!h);
+  function setSessionAutoMemory(sessionAutoMemoryOn) {
+    if (sessionToggleStatus === null || !isAutoMemoryEnabled || isMemoryToggledOff) return;
+    if (sessionAutoMemoryOn && !autoMemoryToggleState()) return;
+    toggleAutoMemoryForSession(sessionAutoMemoryOn, "memory_dialog", saveAutoMemorySessionSwitch);
+    setAutoMemoryOffThisSession(!sessionAutoMemoryOn);
   }
-  function kt(h) {
-    if (!Ve || !agentDefinitions_2.toggleable) return;
-    if (h && !autoMemoryToggleState()) return;
-    let isFirstEnable = h && getInitialSettings_2().autoDreamEnabled === undefined;
+  function setAutoDream(autoDreamOn) {
+    if (!isAutoDreamAvailable || !agentDefinitions_2.toggleable) return;
+    if (autoDreamOn && !autoMemoryToggleState()) return;
+    let isFirstEnable = autoDreamOn && getInitialSettings_2().autoDreamEnabled === undefined;
     updateSettingsForSource(
       "userSettings",
       {
-        autoDreamEnabled: h,
+        autoDreamEnabled: autoDreamOn,
       },
       undefined,
       storageV5,
     );
-    dt(h);
+    setIsAutoDreamEnabled(autoDreamOn);
     logEvent("tengu_auto_dream_toggled", {
-      enabled: h,
+      enabled: autoDreamOn,
       is_first_enable: isFirstEnable,
     });
   }
-  let de = [
+  let toggleRows = [
     {
       key: "auto-memory",
       label: "Auto-memory",
-      value: he,
-      description: Ne.dim ? [Ne.status, Ne.detail].filter(Boolean).join(" \xB7 ") : undefined,
-      disabled: !Ne.toggleable,
-      onChange: St,
+      value: isAutoMemoryEnabled,
+      description: autoMemoryStatus.dim
+        ? [autoMemoryStatus.status, autoMemoryStatus.detail].filter(Boolean).join(" \xB7 ")
+        : undefined,
+      disabled: !autoMemoryStatus.toggleable,
+      onChange: setAutoMemory,
     },
   ];
-  if (mt && ne !== null && MEMORY_DIALOG_API !== null)
-    de.push({
+  if (canShowSessionRow && sessionToggleStatus !== null && MEMORY_DIALOG_API !== null)
+    toggleRows.push({
       key: "session-auto-memory",
       label: MEMORY_DIALOG_API.AUTO_MEMORY_SESSION_ROW_LABEL,
-      value: ne.on,
-      description: ne.dim ? [ne.status, ne.detail].filter(Boolean).join(" \xB7 ") : ne.detail,
-      disabled: !ne.toggleable,
-      onChange: bt,
+      value: sessionToggleStatus.on,
+      description: sessionToggleStatus.dim
+        ? [sessionToggleStatus.status, sessionToggleStatus.detail].filter(Boolean).join(" \xB7 ")
+        : sessionToggleStatus.detail,
+      disabled: !sessionToggleStatus.toggleable,
+      onChange: setSessionAutoMemory,
     });
-  if (Ve)
-    de.push({
+  if (isAutoDreamAvailable)
+    toggleRows.push({
       key: "auto-dream",
       label: "Auto-dream",
-      value: he && Oo,
+      value: isAutoMemoryEnabled && isAutoDreamToggleOn,
       description: agentDefinitions_2.dim
         ? [agentDefinitions_2.status, agentDefinitions_2.detail].filter(Boolean).join(" \xB7 ")
         : agentDefinitions_2.detail || "\u2026",
       disabled: !agentDefinitions_2.toggleable,
-      onChange: kt,
+      onChange: setAutoDream,
     });
   if (write)
-    de.push({
+    toggleRows.push({
       key: "org-writes",
       label: "Write to synced project memory",
-      value: be,
+      value: areOrgWritesEnabled,
       description:
-        wt ??
-        (!be && !xe
+        orgWritesError ??
+        (!areOrgWritesEnabled && !isAutoMemoryToggleAllowed
           ? `off \xB7 ${CANNOT_ENABLE_HERE_DETAIL}`
-          : bo
+          : isPrivatePick
             ? "no effect under a private project pick"
             : "this directory, applies next session"),
-      disabled: !be && !xe,
-      onChange: Mt,
+      disabled: !areOrgWritesEnabled && !isAutoMemoryToggleAllowed,
+      onChange: toggleOrgWrites,
     });
-  let visibleCount = de.reduce((acc, W) => acc + a11yValueWidth(W.description), 0);
+  let visibleCount = toggleRows.reduce((acc, row) => acc + a11yValueWidth(row.description), 0);
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let Ue = isScreenReaderEnabled ? de : [];
-  let [Ao, Ct, Ye] = useLatestState(false);
-  let [Rt, _t, me] = useLatestState(null);
-  let display = Rt === null ? "flex" : "none";
-  function vt() {
-    me()?.abort();
-    _t(null);
+  let screenReaderRows = isScreenReaderEnabled ? toggleRows : [];
+  let [isConfirmDialogOpen, setConfirmDialogOpen, getConfirmDialogOpen] = useLatestState(false);
+  let [switchAbortController, setSwitchAbortController, getSwitchAbortController] = useLatestState(null);
+  let display = switchAbortController === null ? "flex" : "none";
+  function abortProjectSwitch() {
+    getSwitchAbortController()?.abort();
+    setSwitchAbortController(null);
   }
-  P(() => () => me()?.abort(), [me]);
-  let Pn = null;
+  useEffect(() => () => getSwitchAbortController()?.abort(), [getSwitchAbortController]);
+  let unusedValue = null;
   useGlobalExitKeybindings();
   useKeybinding(
     "confirm:no",
     () => {
-      if (X) {
-        H(false);
+      if (isProjectPickerOpen) {
+        setProjectPickerOpen(false);
         return;
       }
-      if (Ye()) {
-        Ct(false);
-        if (isScreenReaderEnabled) se("list");
+      if (getConfirmDialogOpen()) {
+        setConfirmDialogOpen(false);
+        if (isScreenReaderEnabled) setFocusPane("list");
         return;
       }
-      if (me() !== null) {
-        vt();
+      if (getSwitchAbortController() !== null) {
+        abortProjectSwitch();
         return;
       }
       onCancel();
@@ -517,60 +565,67 @@ function MemoryFileSelector({
             jsxProd_default(Box, {
               flexDirection: "column",
               onFocus: () => {
-                if (!ae() && !Ye() && me() === null && We() !== "toggles") se("toggles");
+                if (
+                  !getProjectPickerOpen() &&
+                  !getConfirmDialogOpen() &&
+                  getSwitchAbortController() === null &&
+                  getFocusPane() !== "toggles"
+                )
+                  setFocusPane("toggles");
               },
               children: jsxProd_default(
                 merged,
                 {
                   visibleCount,
-                  defaultFocusIndex: Ro.first ? 0 : de.length - 1,
-                  isDisabled: () => We() !== "toggles",
-                  onDownFromLastItem: () => se("list"),
-                  onDisabledRowClick: X || Ao ? undefined : () => se("toggles"),
-                  children: de.map((h) =>
+                  defaultFocusIndex: listFocusHint.first ? 0 : toggleRows.length - 1,
+                  isDisabled: () => getFocusPane() !== "toggles",
+                  onDownFromLastItem: () => setFocusPane("list"),
+                  onDisabledRowClick:
+                    isProjectPickerOpen || isConfirmDialogOpen ? undefined : () => setFocusPane("toggles"),
+                  children: toggleRows.map((row) =>
                     jsxProd_default(
                       merged.Field,
                       {
-                        label: h.label,
-                        description: h.description,
+                        label: row.label,
+                        description: row.description,
                         children: jsxProd_default(merged.Toggle, {
-                          value: h.value,
-                          onChange: h.onChange,
-                          disabled: h.disabled,
+                          value: row.value,
+                          onChange: row.onChange,
+                          disabled: row.disabled,
                         }),
                       },
-                      h.key,
+                      row.key,
                     ),
                   ),
                 },
-                Ro.count,
+                listFocusHint.count,
               ),
             }),
-          io !== null &&
+          syncStatusBadge !== null &&
             jsxProd_default(ListItem, {
               isFocused: false,
               styled: false,
               children: jsxProd_default_2(Text, {
                 children: [
                   "Synced project memory: ",
-                  io.label,
+                  syncStatusBadge.label,
                   jsxProd_default_2(Text, {
                     dimColor: true,
-                    children: [" \xB7 ", io.note],
+                    children: [" \xB7 ", syncStatusBadge.note],
                   }),
                 ],
               }),
             }),
         ],
       }),
-      X && z !== null
+      isProjectPickerOpen && activePicker !== null
         ? jsxProd_default(useDialogKeybindings, {
             scope: "Confirmation",
             claimFocus: true,
             bindings: [
               {
                 action: "confirm:no",
-                run: () => H(false),
+                run: () => setProjectPickerOpen(false),
               },
             ],
             children: jsxProd_default(ModelSelector, {
@@ -580,13 +635,13 @@ function MemoryFileSelector({
                   label: "off",
                   value: ORG_MEMORY_OFF_VALUE,
                   description:
-                    z.candidates.length === 0
+                    activePicker.candidates.length === 0
                       ? "no projects to pick yet"
-                      : J === null
+                      : selectedPickId === null
                         ? ""
                         : "clear the saved pick",
                 },
-                ...z.candidates.map((candidate) => ({
+                ...activePicker.candidates.map((candidate) => ({
                   label: candidate.name,
                   value: candidate.id,
                   description:
@@ -597,111 +652,127 @@ function MemoryFileSelector({
                         : "",
                 })),
               ],
-              onChange: (h) => {
+              onChange: (selectedValue) => {
                 if (existingMemoryFiles.current) return;
-                h5r(() => {
-                  let W = h === ORG_MEMORY_OFF_VALUE;
-                  let Q = W ? undefined : z.candidates.find((prev) => prev.id === h);
-                  let ke = W ? EXPLICIT_OFF_SELECTION : h;
-                  let oe = W ? null : h;
-                  let Oe = saveOrgMemorySelection(ke, storageV5);
-                  let Eo = Oe === "saved" || Oe === "cleared";
+                startTransition(() => {
+                  let isOffSelection = selectedValue === ORG_MEMORY_OFF_VALUE;
+                  let chosenCandidate = isOffSelection
+                    ? undefined
+                    : activePicker.candidates.find((prev) => prev.id === selectedValue);
+                  let savedSelection = isOffSelection ? EXPLICIT_OFF_SELECTION : selectedValue;
+                  let nextSelection = isOffSelection ? null : selectedValue;
+                  let saveResult = saveOrgMemorySelection(savedSelection, storageV5);
+                  let isSaveApplied = saveResult === "saved" || saveResult === "cleared";
                   let orgMemoryDecision = getOrgMemoryDecision();
-                  let At =
-                    Oe === "noop" &&
-                    (oe === null
+                  let isStaleNoop =
+                    saveResult === "noop" &&
+                    (nextSelection === null
                       ? orgMemoryDecision.state === "on" || orgMemoryDecision.state === "parked"
-                      : !(orgMemoryDecision.state === "on" && orgMemoryDecision.request.selection === oe));
-                  let Fo =
-                    ro &&
-                    oe === null &&
+                      : !(
+                          orgMemoryDecision.state === "on" &&
+                          orgMemoryDecision.request.selection === nextSelection
+                        ));
+                  let isClearedForDirectory =
+                    canSwitchProjects &&
+                    nextSelection === null &&
                     (orgMemoryDecision.state === "off" || orgMemoryDecision.state === "ended");
-                  let To =
-                    (Eo || At) &&
-                    !Fo &&
-                    ro &&
-                    onProjectSwitch(() => switchOrgMemoryProject(session, oe === null ? "off" : "project"));
-                  if (Oe === "saved" && Q !== undefined)
+                  let willReconnect =
+                    (isSaveApplied || isStaleNoop) &&
+                    !isClearedForDirectory &&
+                    canSwitchProjects &&
+                    onProjectSwitch(() =>
+                      switchOrgMemoryProject(session, nextSelection === null ? "off" : "project"),
+                    );
+                  if (saveResult === "saved" && chosenCandidate !== undefined)
                     logEvent("tengu_org_memory_project_selected", {
-                      is_default: Q.isDefault === true,
-                      kind: fromEnum(Q.kind),
-                      private: Q.visibility === "private",
-                      reconnects_now: To,
+                      is_default: chosenCandidate.isDefault === true,
+                      kind: fromEnum(chosenCandidate.kind),
+                      private: chosenCandidate.visibility === "private",
+                      reconnects_now: willReconnect,
                     });
-                  if (To) {
+                  if (willReconnect) {
                     existingMemoryFiles.current = true;
-                    go(oe);
-                    ce(null);
-                    ye(oe === null ? "disconnecting\u2026" : "connecting\u2026");
-                    Zo(true);
-                  } else if (Eo) {
+                    setSelectedPickId(nextSelection);
+                    setOrgWritesError(null);
+                    setNoticeText(nextSelection === null ? "disconnecting\u2026" : "connecting\u2026");
+                    setIsSwitching(true);
+                  } else if (isSaveApplied) {
                     let orgMemoryDecision = getOrgMemoryDecision();
-                    let co =
+                    let shouldShrinkWriteAsk =
                       orgMemoryDecision.state === "on" &&
                       orgMemoryDecision.request.writeAccess &&
-                      (oe === null || orgMemoryDecision.request.selection !== oe) &&
+                      (nextSelection === null || orgMemoryDecision.request.selection !== nextSelection) &&
                       shrinkOrgMemoryDecisionWriteAsk();
-                    if (co || orgMemoryDecision.state === "undecided") clearOrgMemoryCredential();
-                    go(oe);
-                    if (oe === null) {
-                      ce(null);
-                      ye(
-                        co && be
+                    if (shouldShrinkWriteAsk || orgMemoryDecision.state === "undecided")
+                      clearOrgMemoryCredential();
+                    setSelectedPickId(nextSelection);
+                    if (nextSelection === null) {
+                      setOrgWritesError(null);
+                      setNoticeText(
+                        shouldShrinkWriteAsk && areOrgWritesEnabled
                           ? "off \u2014 writes stop now; unsync next session"
-                          : Fo
+                          : isClearedForDirectory
                             ? "off \u2014 saved for this directory"
                             : "off \u2014 applies next session",
                       );
                     } else
-                      ye(
-                        !no
+                      setNoticeText(
+                        !orgMemoryReadConfigured
                           ? "saved \u2014 enable reads in /config (orgMemoryRead) to apply"
-                          : co && be
+                          : shouldShrinkWriteAsk && areOrgWritesEnabled
                             ? "saved \u2014 previous workspace writes stop now; applies next session"
                             : "saved \u2014 applies next session",
                       );
                     cache.reset();
-                  } else if (Oe === "refused") ye("requires an OAuth login");
-                  else if (Oe === "refused_arms_writes")
-                    ye("not saved \u2014 can't pick a project here while writes are on");
-                  else ye(null);
-                  H(false);
+                  } else if (saveResult === "refused") setNoticeText("requires an OAuth login");
+                  else if (saveResult === "refused_arms_writes")
+                    setNoticeText("not saved \u2014 can't pick a project here while writes are on");
+                  else setNoticeText(null);
+                  setProjectPickerOpen(false);
                 });
               },
-              onCancel: () => H(false),
+              onCancel: () => setProjectPickerOpen(false),
             }),
           })
         : jsxProd_default(Box, {
             flexDirection: "column",
             display,
             onFocus: () => {
-              if (!Ye() && me() === null && We() !== "list") se("list");
+              if (!getConfirmDialogOpen() && getSwitchAbortController() === null && getFocusPane() !== "list")
+                setFocusPane("list");
             },
             children: jsxProd_default_2(OrderedListWithItem, {
               defaultFocusIndex:
-                Ue.length +
+                screenReaderRows.length +
                 Math.max(
                   0,
-                  Pe.findIndex((h) => h.value === (ve ? ORG_PICKER_VALUE : at)),
+                  allChoices.findIndex(
+                    (choiceItem) =>
+                      choiceItem.value === (isPickerRequested ? ORG_PICKER_VALUE : initialSelectorValue),
+                  ),
                 ),
-              isDisabled: () => We() !== "list" || Qo || Ye() || me() !== null,
-              onDisabledRowClick: Ao ? undefined : () => se("list"),
+              isDisabled: () =>
+                getFocusPane() !== "list" ||
+                isSwitching ||
+                getConfirmDialogOpen() ||
+                getSwitchAbortController() !== null,
+              onDisabledRowClick: isConfirmDialogOpen ? undefined : () => setFocusPane("list"),
               wrap: true,
               onSelect: (value) => {
-                let W = Ue[value];
-                if (W !== undefined) {
-                  if (!W.disabled) W.onChange(!W.value);
+                let toggleRow = screenReaderRows[value];
+                if (toggleRow !== undefined) {
+                  if (!toggleRow.disabled) toggleRow.onChange(!toggleRow.value);
                   return;
                 }
-                let Q = Pe[value - Ue.length]?.value;
-                if (Q === undefined) return;
-                if (Q === ORG_PICKER_VALUE) {
-                  H(true);
-                  oo(true);
+                let choiceValue = allChoices[value - screenReaderRows.length]?.value;
+                if (choiceValue === undefined) return;
+                if (choiceValue === ORG_PICKER_VALUE) {
+                  setProjectPickerOpen(true);
+                  setIsPickerRequested(true);
                   return;
                 }
-                if (Q.startsWith(OPEN_FOLDER_VALUE)) {
-                  let folderPath = Q.slice(OPEN_FOLDER_VALUE.length);
+                if (choiceValue.startsWith(OPEN_FOLDER_VALUE)) {
+                  let folderPath = choiceValue.slice(OPEN_FOLDER_VALUE.length);
                   mkdir(folderPath, {
                     recursive: true,
                   })
@@ -710,46 +781,47 @@ function MemoryFileSelector({
                     .catch(() => {});
                   return;
                 }
-                N.rememberMemorySelectorPath(Q);
-                onSelect(Q);
+                updaterSlot.rememberMemorySelectorPath(choiceValue);
+                onSelect(choiceValue);
               },
               onUpFromFirstItem: () => {
-                ht((h) => ({
-                  count: h.count + 1,
+                setListFocusHint((prevHint) => ({
+                  count: prevHint.count + 1,
                   first: false,
                 }));
-                se("toggles");
+                setFocusPane("toggles");
               },
-              onDownFromLastItem: et && !isScreenReaderEnabled ? () => se("account") : undefined,
+              onDownFromLastItem:
+                hasMemorySync && !isScreenReaderEnabled ? () => setFocusPane("account") : undefined,
               children: [
-                Ue.map((h) =>
+                screenReaderRows.map((row) =>
                   jsxProd_default(
                     OrderedListWithItem.Item,
                     {
-                      label: h.label,
-                      meta: [String(h.value)],
-                      description: h.description,
+                      label: row.label,
+                      meta: [String(row.value)],
+                      description: row.description,
                     },
-                    h.key,
+                    row.key,
                   ),
                 ),
-                Pe.map((h) =>
-                  bunStringWidth(h.description) <= MAX_VISIBLE_MEMORY_ROWS
+                allChoices.map((choice) =>
+                  bunStringWidth(choice.description) <= MAX_VISIBLE_MEMORY_ROWS
                     ? jsxProd_default(
                         OrderedListWithItem.Item,
                         {
-                          label: h.label,
-                          meta: [h.description],
+                          label: choice.label,
+                          meta: [choice.description],
                         },
-                        h.value,
+                        choice.value,
                       )
                     : jsxProd_default(
                         OrderedListWithItem.Item,
                         {
-                          label: h.label,
-                          description: h.description,
+                          label: choice.label,
+                          description: choice.description,
                         },
-                        h.value,
+                        choice.value,
                       ),
                 ),
                 null,
@@ -759,14 +831,5 @@ function MemoryFileSelector({
       null,
     ],
   });
-}
-//@ chunk-18hwfzwa.js:728716-728758 fingerprint = _temp5 (0.75)
-function isDreamTask(t) {
-  return t.type === "dream";
-}
-//@ chunk-e6aww6q8.js:1350609-1350685 fingerprint = _temp (1)
-function filterAutoMemWhenDisabled(f_1) {
-  if (!isMemoryRecallEnabled()) return f_1;
-  return f_1.filter((n) => n.type !== "AutoMem");
 }
 export { isDreamTask, memoryRowsCache, MemoryFileSelector, filterAutoMemWhenDisabled };

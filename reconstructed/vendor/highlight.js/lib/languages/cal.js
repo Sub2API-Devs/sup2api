@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:61419-62603 cjs-fingerprint
-var require_cal = x(function (cjsExports, cjsModule) {
+var require_cal = __commonJS(function (cjsExports, cjsModule) {
   function cal(hljs) {
     let regex = hljs.regex;
     let KEYWORDS = [

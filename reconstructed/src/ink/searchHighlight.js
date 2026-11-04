@@ -19,7 +19,7 @@ function applySearchHighlight(screen, query, stylePool) {
   let lq = query.toLowerCase();
   let qlen = lq.length;
   let { width, noSelect, height } = screen;
-  let A = false;
+  let found = false;
   for (let row = 0; row < height; row++) {
     let rowOff = row * width;
     let text = "";
@@ -37,7 +37,7 @@ function applySearchHighlight(screen, query, stylePool) {
     }
     let pos = text.indexOf(lq);
     while (pos >= 0) {
-      A = true;
+      found = true;
       let startCi = codeUnitToCell[pos];
       let endCi = codeUnitToCell[pos + qlen - 1];
       for (let ci = startCi; ci <= endCi; ci++) {
@@ -48,6 +48,6 @@ function applySearchHighlight(screen, query, stylePool) {
       pos = text.indexOf(lq, pos + qlen);
     }
   }
-  return A;
+  return found;
 }
 export { applySearchHighlight };

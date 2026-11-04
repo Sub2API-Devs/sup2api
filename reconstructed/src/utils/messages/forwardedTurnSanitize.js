@@ -15,15 +15,16 @@ import {
   foldLookalikeChars,
 } from "../confusables.js";
 import { urlPatternToRegex } from "../stringUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-03eraja6.js:273-342 placement
 /**
  * 把转发文本换行统一并每行缩进两格。
  */
-function indentForwardedText(t) {
+function indentForwardedText(text) {
   return (
     "  " +
-    t.replace(
+    text.replace(
       LINE_BREAK_RE,
       `
 `,
@@ -42,8 +43,8 @@ var LINE_BREAK_RE = /\r\n?|[\u001c-\u001e\u2028\u2029\u0085\v\f]/g;
 /**
  * 把各种换行与分页符统一为 \n。
  */
-function normalizeLineBreaks(t) {
-  return t.replace(
+function normalizeLineBreaks(text) {
+  return text.replace(
     LINE_BREAK_RE,
     `
 `,
@@ -53,21 +54,27 @@ function normalizeLineBreaks(t) {
 /**
  * 不可见格式字符正则（Cf 与 Default_Ignorable）。
  */
-var INVISIBLE_FORMAT_CHARS_RE = /[\p{Cf}\p{Default_Ignorable_Code_Point}]/gu;
-var { open, close, slash } = TAG_BRACKET_CLASSES;
+var INVISIBLE_FORMAT_CHARS_RE; // deferred: uses INVISIBLE_CHAR_CLASSES (../confusables.js) of its import cycle while loading; runs once the cycle is complete
+var open;
+var close;
+var slash;
+deferInit("chunk-03eraja6.js:446", () => {
+  INVISIBLE_FORMAT_CHARS_RE = /[\p{Cf}\p{Default_Ignorable_Code_Point}]/gu;
+  ({ open, close, slash } = TAG_BRACKET_CLASSES);
+});
 //@ chunk-03eraja6.js:527-674 placement
 /**
  * 中和转发回合中的链接：去掉特殊字符，并把指向指定地址的括号链接改写为普通方括号，避免被当成可点击链接。
  */
-function neutralizeForwardedLinks_2(t, r) {
-  return r
+function neutralizeForwardedLinks_2(pathPrefix, text) {
+  return text
     .replace(INVISIBLE_FORMAT_CHARS_RE, "")
     .replace(
       new RegExp(
-        `[${open}]([\\s${slash}]*${urlPatternToRegex(t)}\\b(?:${lookaheadCapture(`^${open}${close}`, 2)}[${close}])?)`,
+        `[${open}]([\\s${slash}]*${urlPatternToRegex(pathPrefix)}\\b(?:${lookaheadCapture(`^${open}${close}`, 2)}[${close}])?)`,
         "giu",
       ),
-      (n, o) => "[" + o,
+      (match, captured) => "[" + captured,
     );
 }
 //@ chunk-03eraja6.js:674-751 placement
@@ -78,19 +85,19 @@ var FORWARDED_TRANSCRIPT_PATH = ["transcript", FORWARDED_USER_TURNS, FORWARDED_T
 /**
  * 逐层中和转发内容中的链接（避免被渲染为可点击）。
  */
-function neutralizeForwardedLinks(t) {
-  let r = t;
-  for (let n of FORWARDED_TRANSCRIPT_PATH) r = neutralizeForwardedLinks_2(n, r);
-  return r;
+function neutralizeForwardedLinks(text) {
+  let result = text;
+  for (let prefix of FORWARDED_TRANSCRIPT_PATH) result = neutralizeForwardedLinks_2(prefix, result);
+  return result;
 }
 //@ chunk-03eraja6.js:810-871 placement
 /**
  * 统一换行、去链接后每行缩进两格。
  */
-function indentTurn(t) {
+function indentTurn(text) {
   return (
     "  " +
-    neutralizeForwardedLinks(normalizeLineBreaks(t)).split(`
+    neutralizeForwardedLinks(normalizeLineBreaks(text)).split(`
 `).join(`
   `)
   );

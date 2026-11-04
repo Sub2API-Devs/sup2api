@@ -13,12 +13,13 @@ import { default as E } from "process";
 import { Buffer as R } from "buffer";
 import fsPromises, { constants } from "fs/promises";
 import { powerShellPath } from "../wsl-utils/index.js";
-import { is_wsl_default, p } from "../is-wsl/index.js";
+import { is_wsl_default } from "../is-wsl/index.js";
 import { defaultBrowser } from "../default-browser/index.js";
-import { m } from "../default-browser-id/index.js";
+import { isInsideContainer } from "../is-inside-container/index.js";
+import { defineLazyProperty } from "../default-browser-id/index.js";
 
 //@ chunk-20ppca50.js:4541-4641 esm-fingerprint
-var execFileAsync = promisify(child_process.execFile);
+var execFileAsync_2 = promisify(child_process.execFile);
 var dir = path.dirname(fileURLToPath(import.meta.url));
 var localXdgOpenPath = path.join(dir, "xdg-open");
 var { platform, arch } = E;
@@ -27,7 +28,7 @@ async function getWindowsDefaultBrowserFromWsl() {
   let powershellPath = await powerShellPath();
   let rawCommand = String.raw`(Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice").ProgId`;
   let encodedCommand = R.from(rawCommand, "utf16le").toString("base64");
-  let { stdout } = await execFileAsync(
+  let { stdout } = await execFileAsync_2(
     powershellPath,
     ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encodedCommand],
     {
@@ -126,7 +127,7 @@ var baseOpen = async (options) => {
     if (options.background) cliArguments.push("--background");
     if (options.newInstance) cliArguments.push("--new");
     if (app) cliArguments.push("-a", app);
-  } else if (platform === "win32" || (is_wsl_default && !p() && !app)) {
+  } else if (platform === "win32" || (is_wsl_default && !isInsideContainer() && !app)) {
     command = await powerShellPath();
     cliArguments.push("-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand");
     if (!is_wsl_default) childProcessOptions.windowsVerbatimArguments = true;
@@ -201,7 +202,7 @@ function detectPlatformBinary({ [platform]: platformBinary }, { wsl }) {
 //@ chunk-20ppca50.js:7526-7535 esm-layout
 var apps = {};
 //@ chunk-20ppca50.js:7535-7865 esm-fingerprint
-m(apps, "chrome", () =>
+defineLazyProperty(apps, "chrome", () =>
   detectPlatformBinary(
     {
       darwin: "google chrome",
@@ -220,7 +221,7 @@ m(apps, "chrome", () =>
   ),
 );
 //@ chunk-20ppca50.js:7865-8206 esm-fingerprint
-m(apps, "brave", () =>
+defineLazyProperty(apps, "brave", () =>
   detectPlatformBinary(
     {
       darwin: "brave browser",
@@ -239,7 +240,7 @@ m(apps, "brave", () =>
   ),
 );
 //@ chunk-20ppca50.js:8206-8383 esm-fingerprint
-m(apps, "firefox", () =>
+defineLazyProperty(apps, "firefox", () =>
   detectPlatformBinary(
     {
       darwin: "firefox",
@@ -252,7 +253,7 @@ m(apps, "firefox", () =>
   ),
 );
 //@ chunk-20ppca50.js:8383-8562 esm-fingerprint
-m(apps, "edge", () =>
+defineLazyProperty(apps, "edge", () =>
   detectPlatformBinary(
     {
       darwin: "microsoft edge",
@@ -265,8 +266,9 @@ m(apps, "edge", () =>
   ),
 );
 //@ chunk-20ppca50.js:8562-8591 esm-fingerprint
-m(apps, "browser", () => "browser");
+defineLazyProperty(apps, "browser", () => "browser");
 //@ chunk-20ppca50.js:8591-8634 esm-fingerprint
-m(apps, "browserPrivate", () => "browserPrivate");
+defineLazyProperty(apps, "browserPrivate", () => "browserPrivate");
 //@ chunk-20ppca50.js:8634-8644 esm-layout
 var open_default = open;
+export { open_default };

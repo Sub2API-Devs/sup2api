@@ -38,19 +38,19 @@ import { errorMessage } from "../../utils/errors.js";
 import { isPluginServerConfig } from "./types.js";
 import { isBuiltinMcpServerName } from "./builtinServerNames.js";
 import { normalizeNameForMCP } from "./normalization.js";
-import { Ji } from "../../../vendor/lodash-es/uniqBy.js";
+import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 
 //@ chunk-a76knw89.js:16692-16898 placement
-async function describeStandardKeyOutcome(e, n, o = false) {
-  let r;
+async function describeStandardKeyOutcome(serverKey, owner, overwrite = false) {
+  let chosenOwner;
   if (
-    !(await saveGlobalConfigDurably((s) => {
-      r = o ? n : (ownField(s.mcpLegacyKeyOwners, e) ?? n);
+    !(await saveGlobalConfigDurably((config) => {
+      chosenOwner = overwrite ? owner : (ownField(config.mcpLegacyKeyOwners, serverKey) ?? owner);
       return {
-        ...s,
+        ...config,
         mcpLegacyKeyOwners: {
-          ...s.mcpLegacyKeyOwners,
-          [e]: r,
+          ...config.mcpLegacyKeyOwners,
+          [serverKey]: chosenOwner,
         },
       };
     }))
@@ -58,28 +58,29 @@ async function describeStandardKeyOutcome(e, n, o = false) {
     logFeatureSad("mcp_standard_key", "owner_not_saved");
     return;
   }
-  return r;
+  return chosenOwner;
 }
 //@ chunk-a76knw89.js:16898-17060 placement
 /**
  * 判断服务器身份标准键是否启用，首次调用时按开关注册旧键归属的读取与认领函数。
  */
 function isStandardKeyActive() {
-  let e = ideReadSlot.of(getRootSession());
-  if (!e.read) {
-    e.read = true;
+  let slot = ideReadSlot.of(getRootSession());
+  if (!slot.read) {
+    slot.read = true;
     if (getFeatureValue_CACHED_MAY_BE_STALE(TENGU_MARLIN_THICKET, false))
       activateServerIdentity({
-        read: (n) => (isDiskless() ? undefined : ownField(getGlobalConfig().mcpLegacyKeyOwners, n)),
-        claim: isDiskless() ? async (n, o) => o : describeStandardKeyOutcome,
+        read: (serverKey) =>
+          isDiskless() ? undefined : ownField(getGlobalConfig().mcpLegacyKeyOwners, serverKey),
+        claim: isDiskless() ? async (serverKey, owner) => owner : describeStandardKeyOutcome,
       });
   }
   return isServerIdentityActive();
 }
 //@ chunk-a76knw89.js:17060-17160 placement
-function isProxyHost(e) {
+function isProxyHost(url) {
   try {
-    return isSameOriginAsCcr(e) || new URL(e).host === new URL(getOauthConfig().MCP_PROXY_URL).host;
+    return isSameOriginAsCcr(url) || new URL(url).host === new URL(getOauthConfig().MCP_PROXY_URL).host;
   } catch {
     return true;
   }
@@ -89,11 +90,11 @@ function isProxyHost(e) {
  * 由服务器地址推出标准身份键（代理主机或危险回调地址给不出键时 undefined）。
  */
 function configuredStandardKey(url) {
-  let n = isProxyHost(url) ? undefined : ghIsDangerousCallback(url);
-  return n === undefined
+  let serverKey = isProxyHost(url) ? undefined : ghIsDangerousCallback(url);
+  return serverKey === undefined
     ? undefined
     : {
-        key: n,
+        key: serverKey,
         pinned: false,
       };
 }
@@ -105,15 +106,15 @@ function isRemoteTransport(config) {
     isProxyHost(config.url)
   )
     return;
-  let n = ghIsDangerousCallback(new URL(config.url).origin);
-  return n === ghIsDangerousCallback(config.url) ? undefined : n;
+  let originKey = ghIsDangerousCallback(new URL(config.url).origin);
+  return originKey === ghIsDangerousCallback(config.url) ? undefined : originKey;
 }
 //@ chunk-a76knw89.js:17426-17555 placement
 /**
  * 判断旧授权能否改绑到标准键：允许改绑、身份受跟踪、无逐次授权要求且未被其他服务器拥有。
  */
-function isRebindableLegacyGrant(e) {
-  let mcpInfo = e.mcpInfo;
+function isRebindableLegacyGrant(tool) {
+  let mcpInfo = tool.mcpInfo;
   return (
     mcpInfo?.legacyGrantRebindable === true &&
     isIdentityTrackedServer(mcpInfo.serverName, mcpInfo) &&
@@ -123,18 +124,23 @@ function isRebindableLegacyGrant(e) {
   );
 }
 //@ chunk-a76knw89.js:17555-17971 placement
-function applyMcpServerAllowRule(tool, n, o) {
+function applyMcpServerAllowRule(tool, suggestions, options) {
   let { mcpInfo } = tool;
   if (mcpInfo === undefined || !isRebindableLegacyGrant(tool)) return;
-  let c = (s) => s.toolName === getToolNameForPermissionCheck_2(tool) && s.ruleContent === undefined;
-  for (let s of n)
-    if (s.type === "addRules" && s.behavior === "allow" && s.rules.some(c)) {
+  let isWholeToolRule = (rule) =>
+    rule.toolName === getToolNameForPermissionCheck_2(tool) && rule.ruleContent === undefined;
+  for (let suggestion of suggestions)
+    if (
+      suggestion.type === "addRules" &&
+      suggestion.behavior === "allow" &&
+      suggestion.rules.some(isWholeToolRule)
+    ) {
       claimLegacyKey(mcpInfo)
-        .then((u) => {
-          if (u)
-            o({
-              ...s,
-              rules: s.rules.filter(c),
+        .then((allowed) => {
+          if (allowed)
+            options({
+              ...suggestion,
+              rules: suggestion.rules.filter(isWholeToolRule),
             });
           else
             logForDebugging(
@@ -149,11 +155,11 @@ function applyMcpServerAllowRule(tool, n, o) {
 /**
  * 把配置的 MCP 服务器（含标准键）注册给策略模块，失败时稍后重试。
  */
-function registerConfiguredMcpServers(e) {
+function registerConfiguredMcpServers(configs) {
   try {
     if (isStandardKeyActive())
       registerToolIdentities(
-        Object.entries(e).map(([key, value]) => ({
+        Object.entries(configs).map(([key, value]) => ({
           server: {
             serverName: key,
             serverType: value.type ?? "stdio",
@@ -177,21 +183,21 @@ function registerConfiguredMcpServers(e) {
 /**
  * 判断服务器是否参与身份跟踪（非项目、代理、插件作用域；动态作用域需满足条件）。
  */
-function isIdentityTrackedServer(e, n) {
+function isIdentityTrackedServer(serverName, mcpInfo) {
   return (
-    n.scope !== "project" &&
-    n.scope !== "agent" &&
-    n.source !== "plugin" &&
-    !isPluginServerConfig(n) &&
-    (n.scope !== "dynamic" || isMintedDynamicServer(e, n))
+    mcpInfo.scope !== "project" &&
+    mcpInfo.scope !== "agent" &&
+    mcpInfo.source !== "plugin" &&
+    !isPluginServerConfig(mcpInfo) &&
+    (mcpInfo.scope !== "dynamic" || isMintedDynamicServer(serverName, mcpInfo))
   );
 }
 //@ chunk-a76knw89.js:18411-18781 placement = expandEnvVars (0.771)
 /**
  * getServerIdentityKey：按 URL、命令行或 IDE 生成服务器身份键 {key, pinned}，保留名与 claude.ai 连接器固定为规范化名。
  */
-function getServerIdentityKey(name, config, o) {
-  if (o || isBuiltinMcpServerName(name))
+function getServerIdentityKey(name, config, forcePinned) {
+  if (forcePinned || isBuiltinMcpServerName(name))
     return {
       key: normalizeNameForMCP(name),
       pinned: true,
@@ -211,11 +217,11 @@ function getServerIdentityKey(name, config, o) {
     case "stdio":
     case undefined: {
       let { command, args } = config.configuredCommand ?? config;
-      let s = stdioLocalIdentity(command, args ?? []);
-      return s === undefined
+      let localIdentity = stdioLocalIdentity(command, args ?? []);
+      return localIdentity === undefined
         ? undefined
         : {
-            key: s,
+            key: localIdentity,
             pinned: false,
           };
     }
@@ -224,32 +230,33 @@ function getServerIdentityKey(name, config, o) {
   }
 }
 //@ chunk-a76knw89.js:18828-19129 placement
-function compareByName(e) {
-  return Ji(e, "name").flatMap((n) =>
-    n.mcpInfo !== undefined && n.name === buildMcpToolName(n.mcpInfo.serverName, n.mcpInfo.toolName)
+function compareByName(tools) {
+  return uniqByExport(tools, "name").flatMap((tool) =>
+    tool.mcpInfo !== undefined &&
+    tool.name === buildMcpToolName(tool.mcpInfo.serverName, tool.mcpInfo.toolName)
       ? [
           {
-            name: n.name,
-            server: n.mcpInfo,
-            standardKey: n.mcpInfo.standardKey,
-            denyKey: n.mcpInfo.denyKey,
+            name: tool.name,
+            server: tool.mcpInfo,
+            standardKey: tool.mcpInfo.standardKey,
+            denyKey: tool.mcpInfo.denyKey,
             mayRecordOwner:
-              n.mcpInfo.scope === undefined
+              tool.mcpInfo.scope === undefined
                 ? undefined
-                : isIdentityTrackedServer(n.mcpInfo.serverName, n.mcpInfo),
+                : isIdentityTrackedServer(tool.mcpInfo.serverName, tool.mcpInfo),
           },
         ]
       : [],
   );
 }
 //@ chunk-a76knw89.js:19129-19213 placement = mergeClients (1)
-function mergeClients(e) {
-  return "name" in e && typeof e.name === "string"
+function mergeClients(client) {
+  return "name" in client && typeof client.name === "string"
     ? {
-        ...e,
-        name: wireName(e.name),
+        ...client,
+        name: wireName(client.name),
       }
-    : e;
+    : client;
 }
 export {
   isStandardKeyActive,

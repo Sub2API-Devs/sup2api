@@ -17,18 +17,16 @@ import { isProviderManagedByHost } from "../entrypointKinds.js";
 import { MANAGED_RESTRICTION_KEYS, getAtPath, asArray, setAtPath } from "./managedRestrictionKeys.js";
 import { normalizeCarveOutFlag, PATH_RULE_CARVE_OUT_RE } from "./permissionRuleCarveOut.js";
 import { MERGEABLE_POLICY_KEYS, policyTierSettings } from "./policySettings.js";
-import { wS } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { pickAlias } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { logForDebugging } from "../debug.js";
-import {
-  mergeWithAssigner_2,
-  credentialRuleExtractSchema,
-  credentialRuleMaskClaimsSchema,
-} from "./settingsSourceTrust.js";
+import { mergeWithAssigner_2 } from "../../../vendor/lodash-es/_mergeWithFamily.js";
+import { AWS_CREDENTIAL_ENV_NAMES, PARENT_PAIR_SUPPRESSOR_SENTINEL } from "./settingsSourceTrust.js";
 import { uniq } from "../collections.js";
 import { isPlainObject as isPlainObject_2 } from "../isPlainObject.js";
 import { MODEL_SELECTION_ENV_VARS, CUSTOM_MODEL_OPTION_VARS } from "../managedEnvConstants.js";
 import { parseDeniedModelEntry, availableModelsEntryWarning } from "../model/deniedModels.js";
 import { parseParentManagedSettings } from "./managedFileSettings.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-dcmhvw5a.js:422494-422731 placement
 function commitTrailersMode(attribution, includeCoAuthoredBy) {
@@ -40,39 +38,40 @@ function commitTrailersMode(attribution, includeCoAuthoredBy) {
   return;
 }
 //@ chunk-dcmhvw5a.js:477482-477663 placement
-function getLegacyLocalSettingsFilePath_3(settingsContext) {
-  if (settingsContext.diskless) return;
+function getLegacyLocalSettingsFilePath_3(context) {
+  if (context.diskless) return;
   if (
-    settingsContext.cwd === null ||
-    resolveLocalSettingsStoreRoot(settingsContext.cwd, settingsContext.canonicalGitRoot) ===
-      resolve(settingsContext.cwd)
+    context.cwd === null ||
+    resolveLocalSettingsStoreRoot(context.cwd, context.canonicalGitRoot) === resolve(context.cwd)
   )
     return;
-  if (settingsContext.projectConfigDir !== undefined) return;
-  return join(resolve(settingsContext.cwd), getRelativeSettingsFilePathForSource("localSettings"));
+  if (context.projectConfigDir !== undefined) return;
+  return join(resolve(context.cwd), getRelativeSettingsFilePathForSource("localSettings"));
 }
 //@ chunk-dcmhvw5a.js:477663-477770 placement
-function getSettingsForSourceIfRead(e, n) {
-  let r = n.repoTierFreeze.tier(e);
-  if (r !== undefined) return r.settings;
-  return n.perSource.get(e);
+function getSettingsForSourceIfRead(source, store) {
+  let frozenTier = store.repoTierFreeze.tier(source);
+  if (frozenTier !== undefined) return frozenTier.settings;
+  return store.perSource.get(source);
 }
 //@ chunk-dcmhvw5a.js:477770-477898 placement
-function getSettingsForSource_3(e, n) {
-  let settingsForSourceIfRead = getSettingsForSourceIfRead(e, n.store);
+function getSettingsForSource_3(source, context) {
+  let settingsForSourceIfRead = getSettingsForSourceIfRead(source, context.store);
   if (settingsForSourceIfRead !== undefined) return settingsForSourceIfRead;
-  let settingsForSourceUncached = getSettingsForSourceUncached(e, n);
-  let a = settingsForSourceUncached && trimmedPolicyTier(e, settingsForSourceUncached, n);
-  n.store.perSource.set(e, a);
-  return a;
+  let settingsForSourceUncached = getSettingsForSourceUncached(source, context);
+  let settings = settingsForSourceUncached && trimmedPolicyTier(source, settingsForSourceUncached, context);
+  context.store.perSource.set(source, settings);
+  return settings;
 }
 //@ chunk-dcmhvw5a.js:477898-477986 placement
-function adminTierComposesParent(e) {
-  return (e.parentSettingsBehavior ?? (isProviderManagedByHost() ? "merge" : "first-wins")) === "merge";
+function adminTierComposesParent(settings) {
+  return (
+    (settings.parentSettingsBehavior ?? (isProviderManagedByHost() ? "merge" : "first-wins")) === "merge"
+  );
 }
 //@ chunk-dcmhvw5a.js:477986-478027 placement
-function shouldIncludeParentTier(e, n = false) {
-  return !e || adminTierComposesParent(e) || n;
+function shouldIncludeParentTier(settings, forceInclude = false) {
+  return !settings || adminTierComposesParent(settings) || forceInclude;
 }
 //@ chunk-dcmhvw5a.js:478027-478107 placement
 var WINNER_ONLY_NESTED_UNDER_MERGE = [
@@ -80,21 +79,22 @@ var WINNER_ONLY_NESTED_UNDER_MERGE = [
   ["modelPicker", "replaceBuiltInOptions"],
 ];
 //@ chunk-dcmhvw5a.js:478107-478254 placement
-function pickRestrictiveSandboxSettings(e) {
-  let n = {};
-  for (let { path, restrictive } of MANAGED_RESTRICTION_KEYS()) {
-    let atPath = getAtPath(e, path);
-    if (path[0] === "sandbox" && asArray(restrictive).includes(atPath)) setAtPath(n, path, atPath);
+function pickRestrictiveSandboxSettings(settings) {
+  let restrictive = {};
+  for (let { path, restrictive: restrictive_2 } of MANAGED_RESTRICTION_KEYS()) {
+    let atPath = getAtPath(settings, path);
+    if (path[0] === "sandbox" && asArray(restrictive_2).includes(atPath))
+      setAtPath(restrictive, path, atPath);
   }
-  return n.sandbox ?? {};
+  return restrictive.sandbox ?? {};
 }
 //@ chunk-dcmhvw5a.js:478254-478287 placement
-function readSettingsPath(sandbox, n) {
-  return getAtPath(sandbox, n);
+function readSettingsPath(sandbox, path) {
+  return getAtPath(sandbox, path);
 }
 //@ chunk-dcmhvw5a.js:478287-478376 placement
-function isDisableAllHooksSet(e) {
-  let disableAllHooks = e?.disableAllHooks;
+function isDisableAllHooksSet(settings) {
+  let disableAllHooks = settings?.disableAllHooks;
   return (
     disableAllHooks !== undefined &&
     disableAllHooks !== null &&
@@ -103,74 +103,84 @@ function isDisableAllHooksSet(e) {
   );
 }
 //@ chunk-dcmhvw5a.js:478376-482405 placement
-function keepRestrictiveFromParent(e, n, parentManaged, s) {
-  let a = {};
-  if (e.allowManagedHooksOnly === true || e.disableAllHooks === true || isDisableAllHooksSet(parentManaged))
-    a.allowManagedHooksOnly = true;
-  if (e.disableSkillShellExecution === true) a.disableSkillShellExecution = true;
+function keepRestrictiveFromParent(parentSettings, currentSettings, settings, context) {
+  let kept = {};
   if (
-    n.hooks === undefined &&
-    !Object.values(n.enabledPlugins ?? {}).some((m) => m !== false && m !== undefined)
+    parentSettings.allowManagedHooksOnly === true ||
+    parentSettings.disableAllHooks === true ||
+    isDisableAllHooksSet(settings)
+  )
+    kept.allowManagedHooksOnly = true;
+  if (parentSettings.disableSkillShellExecution === true) kept.disableSkillShellExecution = true;
+  if (
+    currentSettings.hooks === undefined &&
+    !Object.values(currentSettings.enabledPlugins ?? {}).some(
+      (enabled) => enabled !== false && enabled !== undefined,
+    )
   ) {
-    if (e.allowedHttpHookUrls?.length === 0) a.allowedHttpHookUrls = [];
-    if (e.httpHookAllowedEnvVars?.length === 0) a.httpHookAllowedEnvVars = [];
+    if (parentSettings.allowedHttpHookUrls?.length === 0) kept.allowedHttpHookUrls = [];
+    if (parentSettings.httpHookAllowedEnvVars?.length === 0) kept.httpHookAllowedEnvVars = [];
   }
-  if (e.disableCommandPluginSources === true) a.disableCommandPluginSources = true;
-  if (e.disableSideloadFlags === true) a.disableSideloadFlags = true;
-  if (e.allowManagedMcpServersOnly === true) a.allowManagedMcpServersOnly = true;
-  if (e.disableClaudeAiConnectors === true) a.disableClaudeAiConnectors = true;
-  if (e.syncClaudeAiSkills === false) a.syncClaudeAiSkills = false;
-  if (e.syncClaudeAiPlugins === false) a.syncClaudeAiPlugins = false;
-  if (e.remoteTools?.allowUnattendedServing === false)
-    a.remoteTools = {
-      ...a.remoteTools,
+  if (parentSettings.disableCommandPluginSources === true) kept.disableCommandPluginSources = true;
+  if (parentSettings.disableSideloadFlags === true) kept.disableSideloadFlags = true;
+  if (parentSettings.allowManagedMcpServersOnly === true) kept.allowManagedMcpServersOnly = true;
+  if (parentSettings.disableClaudeAiConnectors === true) kept.disableClaudeAiConnectors = true;
+  if (parentSettings.syncClaudeAiSkills === false) kept.syncClaudeAiSkills = false;
+  if (parentSettings.syncClaudeAiPlugins === false) kept.syncClaudeAiPlugins = false;
+  if (parentSettings.remoteTools?.allowUnattendedServing === false)
+    kept.remoteTools = {
+      ...kept.remoteTools,
       allowUnattendedServing: false,
     };
-  if (normalizeCarveOutFlag(e.disablePluginDirectory) === true) a.disablePluginDirectory = true;
-  if (e.allowManagedPermissionRulesOnly === true) a.allowManagedPermissionRulesOnly = true;
-  if (e.disableAutoMode === "disable") a.disableAutoMode = "disable";
-  let shareHostProfile = e.remoteControl?.shareHostProfile;
+  if (normalizeCarveOutFlag(parentSettings.disablePluginDirectory) === true)
+    kept.disablePluginDirectory = true;
+  if (parentSettings.allowManagedPermissionRulesOnly === true) kept.allowManagedPermissionRulesOnly = true;
+  if (parentSettings.disableAutoMode === "disable") kept.disableAutoMode = "disable";
+  let shareHostProfile = parentSettings.remoteControl?.shareHostProfile;
   if (shareHostProfile === "off" || shareHostProfile === "basic")
-    a.remoteControl = {
-      ...a.remoteControl,
+    kept.remoteControl = {
+      ...kept.remoteControl,
       shareHostProfile,
     };
-  if (commitTrailersMode(e.attribution, e.includeCoAuthoredBy) === "disabled")
-    a.attribution = {
-      ...a.attribution,
+  if (commitTrailersMode(parentSettings.attribution, parentSettings.includeCoAuthoredBy) === "disabled")
+    kept.attribution = {
+      ...kept.attribution,
       commitTrailers: false,
     };
-  if (e.attribution?.sessionUrl === false)
-    a.attribution = {
-      ...a.attribution,
+  if (parentSettings.attribution?.sessionUrl === false)
+    kept.attribution = {
+      ...kept.attribution,
       sessionUrl: false,
     };
-  let strictPluginOnlyCustomization = e.strictPluginOnlyCustomization;
+  let strictPluginOnlyCustomization = parentSettings.strictPluginOnlyCustomization;
   if (
     strictPluginOnlyCustomization === true ||
     (Array.isArray(strictPluginOnlyCustomization) && strictPluginOnlyCustomization.length > 0)
   )
-    a.strictPluginOnlyCustomization = strictPluginOnlyCustomization;
-  if (e.deniedMcpServers) a.deniedMcpServers = e.deniedMcpServers;
-  if (e.blockedMarketplaces?.length) a.blockedMarketplaces = e.blockedMarketplaces;
-  if (e.deniedModels && e.deniedModels.length > 0) a.deniedModels = e.deniedModels;
-  if (n.forceLoginOrgUUID === undefined && e.forceLoginOrgUUID) a.forceLoginOrgUUID = e.forceLoginOrgUUID;
-  for (let m of MERGEABLE_POLICY_KEYS)
-    if (n[m] === undefined && e[m])
-      Object.assign(a, {
-        [m]: e[m],
+    kept.strictPluginOnlyCustomization = strictPluginOnlyCustomization;
+  if (parentSettings.deniedMcpServers) kept.deniedMcpServers = parentSettings.deniedMcpServers;
+  if (parentSettings.blockedMarketplaces?.length)
+    kept.blockedMarketplaces = parentSettings.blockedMarketplaces;
+  if (parentSettings.deniedModels && parentSettings.deniedModels.length > 0)
+    kept.deniedModels = parentSettings.deniedModels;
+  if (currentSettings.forceLoginOrgUUID === undefined && parentSettings.forceLoginOrgUUID)
+    kept.forceLoginOrgUUID = parentSettings.forceLoginOrgUUID;
+  for (let key of MERGEABLE_POLICY_KEYS)
+    if (currentSettings[key] === undefined && parentSettings[key])
+      Object.assign(kept, {
+        [key]: parentSettings[key],
       });
-  if (e.enforceAvailableModels === true) a.enforceAvailableModels = true;
-  if (e.availableModelsMatch === "exact") a.availableModelsMatch = "exact";
-  if (e.permissions) {
-    let m = wS(e.permissions, ["deny", "ask"]);
-    for (let f of ["deny", "ask"]) {
-      let h = m[f];
-      if (h !== undefined)
-        m[f] = h.filter((y) => {
-          if (!PATH_RULE_CARVE_OUT_RE.test(y)) return true;
+  if (parentSettings.enforceAvailableModels === true) kept.enforceAvailableModels = true;
+  if (parentSettings.availableModelsMatch === "exact") kept.availableModelsMatch = "exact";
+  if (parentSettings.permissions) {
+    let permissions = pickAlias(parentSettings.permissions, ["deny", "ask"]);
+    for (let ruleKind of ["deny", "ask"]) {
+      let rules = permissions[ruleKind];
+      if (rules !== undefined)
+        permissions[ruleKind] = rules.filter((rule) => {
+          if (!PATH_RULE_CARVE_OUT_RE.test(rule)) return true;
           logForDebugging(
-            `Ignoring ${f} rule "${y}" from the parent process's managed settings: a rule starting with "!" removes paths from the rules listed before it instead of restricting anything, so it is not merged into the policy rules. Spell the deny without the exception instead.`,
+            `Ignoring ${ruleKind} rule "${rule}" from the parent process's managed settings: a rule starting with "!" removes paths from the rules listed before it instead of restricting anything, so it is not merged into the policy rules. Spell the deny without the exception instead.`,
             {
               level: "warn",
             },
@@ -178,54 +188,56 @@ function keepRestrictiveFromParent(e, n, parentManaged, s) {
           return false;
         });
     }
-    if (e.permissions.disableBypassPermissionsMode === "disable") m.disableBypassPermissionsMode = "disable";
-    if (e.permissions.disableAutoMode === "disable") m.disableAutoMode = "disable";
-    if (e.permissions.blockReadsOutsideWorkingDirectories === true)
-      m.blockReadsOutsideWorkingDirectories = true;
-    if (e.permissions.blockWritesOutsideWorkingDirectories === true)
-      m.blockWritesOutsideWorkingDirectories = true;
-    if (n.allowManagedPermissionRulesOnly !== true) {
-      let { allow, additionalDirectories } = e.permissions;
-      if (allow && n.sandbox?.network?.allowManagedDomainsOnly !== true) m.allow = allow;
-      if (additionalDirectories) m.additionalDirectories = additionalDirectories;
+    if (parentSettings.permissions.disableBypassPermissionsMode === "disable")
+      permissions.disableBypassPermissionsMode = "disable";
+    if (parentSettings.permissions.disableAutoMode === "disable") permissions.disableAutoMode = "disable";
+    if (parentSettings.permissions.blockReadsOutsideWorkingDirectories === true)
+      permissions.blockReadsOutsideWorkingDirectories = true;
+    if (parentSettings.permissions.blockWritesOutsideWorkingDirectories === true)
+      permissions.blockWritesOutsideWorkingDirectories = true;
+    if (currentSettings.allowManagedPermissionRulesOnly !== true) {
+      let { allow, additionalDirectories } = parentSettings.permissions;
+      if (allow && currentSettings.sandbox?.network?.allowManagedDomainsOnly !== true)
+        permissions.allow = allow;
+      if (additionalDirectories) permissions.additionalDirectories = additionalDirectories;
     }
-    if (Object.keys(m).length > 0) a.permissions = m;
+    if (Object.keys(permissions).length > 0) kept.permissions = permissions;
   }
-  if (e.sandbox) {
-    let { network, filesystem, credentials } = e.sandbox;
-    let y = {};
-    let b = network ? wS(network, ["deniedDomains"]) : {};
-    let S = filesystem ? wS(filesystem, ["denyRead", "denyWrite"]) : {};
+  if (parentSettings.sandbox) {
+    let { network, filesystem, credentials } = parentSettings.sandbox;
+    let sandbox = {};
+    let keptNetwork = network ? pickAlias(network, ["deniedDomains"]) : {};
+    let keptFilesystem = filesystem ? pickAlias(filesystem, ["denyRead", "denyWrite"]) : {};
     if (network) {
-      if (n.sandbox?.network?.allowManagedDomainsOnly !== true && network.allowedDomains)
-        b.allowedDomains = network.allowedDomains;
+      if (currentSettings.sandbox?.network?.allowManagedDomainsOnly !== true && network.allowedDomains)
+        keptNetwork.allowedDomains = network.allowedDomains;
     }
-    if (Object.keys(b).length > 0) y.network = b;
+    if (Object.keys(keptNetwork).length > 0) sandbox.network = keptNetwork;
     if (filesystem) {
-      if (n.sandbox?.filesystem?.allowManagedReadPathsOnly !== true && filesystem.allowRead)
-        S.allowRead = filesystem.allowRead;
+      if (currentSettings.sandbox?.filesystem?.allowManagedReadPathsOnly !== true && filesystem.allowRead)
+        keptFilesystem.allowRead = filesystem.allowRead;
     }
-    if (Object.keys(S).length > 0) y.filesystem = S;
+    if (Object.keys(keptFilesystem).length > 0) sandbox.filesystem = keptFilesystem;
     if (credentials) {
-      let mapped = (credentials.files ?? []).map((v) =>
-        v.mode === "deny"
+      let mapped = (credentials.files ?? []).map((fileRule) =>
+        fileRule.mode === "deny"
           ? {
-              path: v.path,
+              path: fileRule.path,
               mode: "deny",
             }
           : {
-              path: v.path,
+              path: fileRule.path,
               mode: "mask",
               injectHosts: [],
             },
       );
       let mapped_2 = (credentials.envVars ?? [])
-        .filter((v) => v.mode === "deny")
-        .map((v) => ({
-          name: v.name,
+        .filter((envRule) => envRule.mode === "deny")
+        .map((envRule) => ({
+          name: envRule.name,
           mode: "deny",
         }));
-      let L = {
+      let keptCredentials = {
         ...(mapped.length > 0 && {
           files: mapped,
         }),
@@ -234,70 +246,77 @@ function keepRestrictiveFromParent(e, n, parentManaged, s) {
         }),
       };
       if (credentials.sigv4) {
-        let v = {};
-        for (let j of ["streaming", "presigned", "sigv4a"])
-          if (credentials.sigv4[j] === "deny") v[j] = "deny";
-        L.sigv4 = v;
+        let sigv4 = {};
+        for (let field of ["streaming", "presigned", "sigv4a"])
+          if (credentials.sigv4[field] === "deny") sigv4[field] = "deny";
+        keptCredentials.sigv4 = sigv4;
       }
       {
-        let v = missingAwsPairs(credentials.awsPairs ?? [], []);
-        if (v.length > 0) L.awsPairs = v;
+        let awsPairs = missingAwsPairs(credentials.awsPairs ?? [], []);
+        if (awsPairs.length > 0) keptCredentials.awsPairs = awsPairs;
       }
-      if (Object.keys(L).length > 0) y.credentials = L;
+      if (Object.keys(keptCredentials).length > 0) sandbox.credentials = keptCredentials;
     }
-    mergeWithAssigner_2(y, pickRestrictiveSandboxSettings(e));
-    if (Object.keys(y).length > 0) a.sandbox = y;
+    mergeWithAssigner_2(sandbox, pickRestrictiveSandboxSettings(parentSettings));
+    if (Object.keys(sandbox).length > 0) kept.sandbox = sandbox;
   }
-  return a;
+  return kept;
 }
 //@ chunk-dcmhvw5a.js:482405-482586 placement
-function missingAwsPairs(e, n) {
-  let r = credentialRuleExtractSchema;
-  let s = new Set(n.flatMap(awsPairVars));
-  return uniq(e.flatMap(awsPairVars))
-    .filter((a) => r.includes(a) && !s.has(a))
-    .map((accessKeyIdVar, c) => ({
+function missingAwsPairs(pairs, outerPairs) {
+  let allowedVarNames = AWS_CREDENTIAL_ENV_NAMES;
+  let claimedVars = new Set(outerPairs.flatMap(awsPairVars));
+  return uniq(pairs.flatMap(awsPairVars))
+    .filter((varName) => allowedVarNames.includes(varName) && !claimedVars.has(varName))
+    .map((accessKeyIdVar, pairIndex) => ({
       accessKeyIdVar,
-      secretAccessKeyVar: `${credentialRuleMaskClaimsSchema}${c + 1}_`,
+      secretAccessKeyVar: `${PARENT_PAIR_SUPPRESSOR_SENTINEL}${pairIndex + 1}_`,
     }));
 }
 //@ chunk-dcmhvw5a.js:482586-482716 placement
-function awsPairVars(e) {
-  if (!isPlainObject_2(e)) return [];
-  return [e.accessKeyIdVar, e.secretAccessKeyVar, e.sessionTokenVar].filter((n) => typeof n === "string");
+function awsPairVars(pair) {
+  if (!isPlainObject_2(pair)) return [];
+  return [pair.accessKeyIdVar, pair.secretAccessKeyVar, pair.sessionTokenVar].filter(
+    (varName) => typeof varName === "string",
+  );
 }
 //@ chunk-dcmhvw5a.js:482716-482910 placement
-var HOST_MANAGED_MODEL_ENV_KEYS = new Set([
-  ...[...MODEL_SELECTION_ENV_VARS].filter((e) => e !== "ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION"),
-  ...CUSTOM_MODEL_OPTION_VARS,
-  "CLAUDE_CODE_AUTO_MODE_MODEL",
-  "CLAUDE_CODE_BG_CLASSIFIER_MODEL",
-  "CLAUDE_CODE_SUBAGENT_MODEL_FORCE",
-]);
+var HOST_MANAGED_MODEL_ENV_KEYS; // deferred: uses ARTIFACT_PROVIDER_ENV_VARS (../managedEnvConstants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:482716", () => {
+  HOST_MANAGED_MODEL_ENV_KEYS = new Set([
+    ...[...MODEL_SELECTION_ENV_VARS].filter((envVar) => envVar !== "ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION"),
+    ...CUSTOM_MODEL_OPTION_VARS,
+    "CLAUDE_CODE_AUTO_MODE_MODEL",
+    "CLAUDE_CODE_BG_CLASSIFIER_MODEL",
+    "CLAUDE_CODE_SUBAGENT_MODEL_FORCE",
+  ]);
+});
 //@ chunk-dcmhvw5a.js:482910-483525 placement
-function hostManagedModelOverlay(e, hostManagedProvider) {
-  if (!hostManagedProvider || !e) return null;
-  let r = {};
-  if (e.model !== undefined) r.model = e.model;
-  if (e.availableModels !== undefined) r.availableModels = e.availableModels;
+function hostManagedModelOverlay(settings, hostManagedProvider) {
+  if (!hostManagedProvider || !settings) return null;
+  let overlay = {};
+  if (settings.model !== undefined) overlay.model = settings.model;
+  if (settings.availableModels !== undefined) overlay.availableModels = settings.availableModels;
   if (
-    e.availableModelsMatch === "exact" ||
-    (e.availableModelsMatch !== undefined && e.availableModels !== undefined)
+    settings.availableModelsMatch === "exact" ||
+    (settings.availableModelsMatch !== undefined && settings.availableModels !== undefined)
   )
-    r.availableModelsMatch = e.availableModelsMatch;
-  if (e.enforceAvailableModels !== undefined) r.enforceAvailableModels = e.enforceAvailableModels;
-  if (e.deniedModels !== undefined && e.deniedModels.length > 0) r.deniedModels = e.deniedModels;
-  if (e.fallbackModel !== undefined) r.fallbackModel = e.fallbackModel;
-  if (e.modelPicker !== undefined) r.modelPicker = e.modelPicker;
-  return Object.keys(r).length > 0 ? r : null;
+    overlay.availableModelsMatch = settings.availableModelsMatch;
+  if (settings.enforceAvailableModels !== undefined)
+    overlay.enforceAvailableModels = settings.enforceAvailableModels;
+  if (settings.deniedModels !== undefined && settings.deniedModels.length > 0)
+    overlay.deniedModels = settings.deniedModels;
+  if (settings.fallbackModel !== undefined) overlay.fallbackModel = settings.fallbackModel;
+  if (settings.modelPicker !== undefined) overlay.modelPicker = settings.modelPicker;
+  return Object.keys(overlay).length > 0 ? overlay : null;
 }
 //@ chunk-dcmhvw5a.js:483525-483726 placement
-function deniedModelsEntryWarnings(e) {
-  let n = [];
-  for (let r of e?.deniedModels ?? []) {
-    let { warning } = parseDeniedModelEntry(r);
+function deniedModelsEntryWarnings(settings) {
+  let warnings = [];
+  for (let entry of settings?.deniedModels ?? []) {
+    let { warning } = parseDeniedModelEntry(entry);
     if (warning !== undefined)
-      n.push({
+      warnings.push({
         file: "managed settings",
         path: "deniedModels",
         message: warning,
@@ -305,21 +324,21 @@ function deniedModelsEntryWarnings(e) {
         statusOnly: true,
       });
   }
-  return n;
+  return warnings;
 }
 //@ chunk-dcmhvw5a.js:483726-483970 placement
-function availableModelsExactEntryWarnings(e) {
-  if (e?.availableModelsMatch !== "exact") return [];
-  let availableModels = e.availableModels ?? [];
+function availableModelsExactEntryWarnings(settings) {
+  if (settings?.availableModelsMatch !== "exact") return [];
+  let availableModels = settings.availableModels ?? [];
   return availableModels.flatMap((availableModel) => {
-    let s = availableModelsEntryWarning(availableModel, availableModels);
-    return s === undefined
+    let warning = availableModelsEntryWarning(availableModel, availableModels);
+    return warning === undefined
       ? []
       : [
           {
             file: "managed settings",
             path: "availableModels",
-            message: s,
+            message: warning,
             severity: "warning",
             statusOnly: true,
           },
@@ -327,23 +346,23 @@ function availableModelsExactEntryWarnings(e) {
   });
 }
 //@ chunk-dcmhvw5a.js:483970-484109 placement
-function assignWithDeniedModels(e, hostModelOverlay) {
-  let deniedModels = e.deniedModels;
-  Object.assign(e, hostModelOverlay);
+function assignWithDeniedModels(settings, hostModelOverlay) {
+  let deniedModels = settings.deniedModels;
+  Object.assign(settings, hostModelOverlay);
   if (deniedModels !== undefined && hostModelOverlay.deniedModels !== undefined)
-    e.deniedModels = uniq([...deniedModels, ...hostModelOverlay.deniedModels]);
+    settings.deniedModels = uniq([...deniedModels, ...hostModelOverlay.deniedModels]);
 }
 //@ chunk-dcmhvw5a.js:484109-484309 placement
-function stripHostManagedModelKeys(e) {
-  delete e.model;
-  delete e.fallbackModel;
-  delete e.modelPicker;
-  delete e.modelOverrides;
-  if (e.env) {
-    let n = {};
-    for (let [key, value] of Object.entries(e.env))
-      if (!HOST_MANAGED_MODEL_ENV_KEYS.has(key.toUpperCase())) n[key] = value;
-    e.env = n;
+function stripHostManagedModelKeys(settings) {
+  delete settings.model;
+  delete settings.fallbackModel;
+  delete settings.modelPicker;
+  delete settings.modelOverrides;
+  if (settings.env) {
+    let filteredEnv = {};
+    for (let [key, value] of Object.entries(settings.env))
+      if (!HOST_MANAGED_MODEL_ENV_KEYS.has(key.toUpperCase())) filteredEnv[key] = value;
+    settings.env = filteredEnv;
   }
 }
 //@ chunk-dcmhvw5a.js:484309-484481 placement
@@ -367,7 +386,7 @@ function getDeniedModelsPolicyOverrides(settingsContext) {
 function getHostManagedModelPricing(settingsContext) {
   if (
     !settingsContext.hostManagedProvider ||
-    getAllPolicyTierSettings_3(settingsContext).some((n) => n.modelPricing !== undefined)
+    getAllPolicyTierSettings_3(settingsContext).some((tier) => tier.modelPricing !== undefined)
   )
     return;
   return parseParentManagedSettings(settingsContext).settings?.modelPricing;
@@ -376,41 +395,41 @@ function getHostManagedModelPricing(settingsContext) {
 function getHostManagedToolSearchEnv(settingsContext) {
   let hostToolSearchEnv = settingsContext.store.policy.hostToolSearchEnv;
   if (hostToolSearchEnv !== undefined) return hostToolSearchEnv.value;
-  let r;
+  let value;
   if (settingsContext.hostManagedProvider) {
     let env = parseParentManagedSettings(settingsContext).settings?.env ?? {};
-    for (let [key, value] of Object.entries(env)) {
+    for (let [key, value_2] of Object.entries(env)) {
       if (key === "ENABLE_TOOL_SEARCH") {
-        r = value;
+        value = value_2;
         break;
       }
-      if (r === undefined && key.toUpperCase() === "ENABLE_TOOL_SEARCH") r = value;
+      if (value === undefined && key.toUpperCase() === "ENABLE_TOOL_SEARCH") value = value_2;
     }
   }
   settingsContext.store.policy.hostToolSearchEnv = {
-    value: r,
+    value,
   };
-  return r;
+  return value;
 }
 //@ chunk-dcmhvw5a.js:485092-485208 placement
-function getAllPolicyTierSettings_3(e) {
-  let allTiers = e.store.policy.allTiers;
+function getAllPolicyTierSettings_3(context) {
+  let allTiers = context.store.policy.allTiers;
   if (allTiers !== undefined) return allTiers;
-  let r = policyTierSettings(e);
-  e.store.policy.allTiers = r;
-  return r;
+  let tierSettings = policyTierSettings(context);
+  context.store.policy.allTiers = tierSettings;
+  return tierSettings;
 }
 export {
+  deniedModelsEntryWarnings,
+  availableModelsExactEntryWarnings,
   getLegacyLocalSettingsFilePath_3,
-  getSettingsForSourceIfRead,
+  getAllPolicyTierSettings_3,
   getSettingsForSource_3,
+  getSettingsForSourceIfRead,
   getPairedPolicyModelOverrides,
   getDeniedModelsPolicyOverrides,
   getHostManagedModelPricing,
   getHostManagedToolSearchEnv,
-  getAllPolicyTierSettings_3,
-  deniedModelsEntryWarnings,
-  availableModelsExactEntryWarnings,
   adminTierComposesParent,
   shouldIncludeParentTier,
   isDisableAllHooksSet,
@@ -421,4 +440,5 @@ export {
   stripHostManagedModelKeys,
   assignWithDeniedModels,
   readSettingsPath,
+  HOST_MANAGED_MODEL_ENV_KEYS,
 };

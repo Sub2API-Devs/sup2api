@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:49793-51450 cjs-fingerprint
-var require_axapta = x(function (cjsExports, cjsModule) {
+var require_axapta = __commonJS(function (cjsExports, cjsModule) {
   function axapta(hljs) {
     let IDENT_RE = hljs.UNDERSCORE_IDENT_RE;
     let KEYWORDS = {

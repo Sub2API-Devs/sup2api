@@ -11,13 +11,13 @@
 import { BROWSER_ACTION_SETTLE_MS } from "./browserToolSchemas.js";
 
 //@ chunk-p7xf186d.js:232-682 placement
-function pickBrowserDevice(e, t, n) {
-  if (e.length === 0)
+function pickBrowserDevice(extensions, persistedDeviceId, localDeviceIds) {
+  if (extensions.length === 0)
     return {
       kind: "none",
     };
-  if (t) {
-    let found = e.find((c) => c.deviceId === t);
+  if (persistedDeviceId) {
+    let found = extensions.find((extension) => extension.deviceId === persistedDeviceId);
     if (found)
       return {
         kind: "select",
@@ -25,41 +25,46 @@ function pickBrowserDevice(e, t, n) {
         reason: "persisted",
       };
   }
-  if (e.length === 1)
+  if (extensions.length === 1)
     return {
       kind: "select",
-      extension: e[0],
+      extension: extensions[0],
       reason: "only",
     };
-  let r = n ? e.filter((o) => n.has(o.deviceId)) : [];
-  let [i, s] = r;
-  if (i && !s && n?.get(i.deviceId) === "live")
+  let localExtensions = localDeviceIds
+    ? extensions.filter((extension) => localDeviceIds.has(extension.deviceId))
+    : [];
+  let [firstLocal, secondLocal] = localExtensions;
+  if (firstLocal && !secondLocal && localDeviceIds?.get(firstLocal.deviceId) === "live")
     return {
       kind: "select",
-      extension: i,
+      extension: firstLocal,
       reason: "local",
     };
   return {
     kind: "ask",
-    candidates: [...r, ...e.filter((o) => !r.includes(o))],
-    localCount: r.length,
+    candidates: [
+      ...localExtensions,
+      ...extensions.filter((extension) => !localExtensions.includes(extension)),
+    ],
+    localCount: localExtensions.length,
   };
 }
 //@ chunk-p7xf186d.js:682-921 placement
 function safeCallPromise(getLocalDeviceIds) {
-  let t;
+  let idsPromise;
   try {
-    t = getLocalDeviceIds?.();
+    idsPromise = getLocalDeviceIds?.();
   } catch {
     return Promise.resolve(undefined);
   }
-  if (!t) return Promise.resolve(undefined);
+  if (!idsPromise) return Promise.resolve(undefined);
   return new Promise((resolve) => {
     let timer = setTimeout(() => resolve(undefined), BROWSER_ACTION_SETTLE_MS);
-    t.then(
-      (i) => {
+    idsPromise.then(
+      (ids) => {
         clearTimeout(timer);
-        resolve(i);
+        resolve(ids);
       },
       () => {
         clearTimeout(timer);
@@ -219,12 +224,12 @@ var ERROR_TYPE_BY_CODE = new Map([
   ["get_page_text", PAGE_ERROR_RULES],
 ]);
 //@ chunk-p7xf186d.js:4508-4695 placement
-function classifyToolError(e, t) {
-  let n = ERROR_TYPE_BY_CODE.get(e);
-  if (n) {
-    for (let { pattern, errorType } of n) if (pattern.test(t)) return errorType;
+function classifyToolError(toolName, errorText) {
+  let rules = ERROR_TYPE_BY_CODE.get(toolName);
+  if (rules) {
+    for (let { pattern, errorType } of rules) if (pattern.test(errorText)) return errorType;
   }
-  for (let { pattern, errorType } of ALL_TOOL_ERROR_RULES) if (pattern.test(t)) return errorType;
+  for (let { pattern, errorType } of ALL_TOOL_ERROR_RULES) if (pattern.test(errorText)) return errorType;
   return "unclassified_tool_error";
 }
 //@ chunk-p7xf186d.js:4695-4870 placement
@@ -232,8 +237,8 @@ function firstTextContent(error) {
   let content = error?.content;
   if (typeof content === "string" && content) return content;
   if (Array.isArray(content))
-    for (let n of content) {
-      let text = n?.text;
+    for (let block of content) {
+      let text = block?.text;
       if (typeof text === "string" && text) return text;
     }
   return "Unknown error";

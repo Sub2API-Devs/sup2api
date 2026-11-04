@@ -13,8 +13,8 @@
 /**
  * 构造内置 teammate 的代理身份 {agentType, source}。
  */
-var teammateAgentIdentity = (e) => ({
-  agentType: e || "teammate",
+var teammateAgentIdentity = (agentType) => ({
+  agentType: agentType || "teammate",
   source: "built-in",
 });
 export { teammateAgentIdentity };

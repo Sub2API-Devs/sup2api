@@ -6,7 +6,7 @@
  * attribution: esm-layout 1, esm-fingerprint 2
  */
 import { inspect } from "util";
-import { zn } from "./error.js";
+import { isErrorLike } from "./error.js";
 
 //@ chunk-mrx6y2r5.js:34990-35007 esm-layout
 var custom = inspect.custom;
@@ -81,7 +81,7 @@ class Sanitizer {
         else if (key === "body") return;
         else if (key === "response") return;
         else if (key === "operationSpec") return;
-        else if (Array.isArray(value) || zn(value)) {
+        else if (Array.isArray(value) || isErrorLike(value)) {
           if (seen.has(value)) return "[Circular]";
           seen.add(value);
         }

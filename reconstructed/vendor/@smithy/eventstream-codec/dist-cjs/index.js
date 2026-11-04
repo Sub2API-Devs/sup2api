@@ -5,13 +5,13 @@
  * pieces: chunk-3cddmtk7.js (12)
  * attribution: esm-layout 5, esm-fingerprint 7
  */
-import { Re } from "../../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_util_hex_encoding } from "../../util-hex-encoding/dist-cjs/index.js";
 
 //@ chunk-3cddmtk7.js:4598-4614 esm-layout
-var utilHexEncoding = Re(require_util_hex_encoding());
+var utilHexEncoding = __toESM(require_util_hex_encoding());
 //@ chunk-3cddmtk7.js:4614-4631 esm-layout
-var import_util_hex_encoding = Re(require_util_hex_encoding());
+var import_util_hex_encoding = __toESM(require_util_hex_encoding());
 //@ chunk-3cddmtk7.js:4631-5163 esm-fingerprint
 class Int64 {
   bytes;
@@ -232,7 +232,7 @@ var TIMESTAMP_TAG = "timestamp";
 var UUID_TAG = "uuid";
 var UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 //@ chunk-3cddmtk7.js:10073-10276 esm-fingerprint
-class Q {
+class MessageDecoderStream {
   options;
   constructor(options) {
     this.options = options;
@@ -241,7 +241,7 @@ class Q {
     return this.asyncIterator();
   }
   async *asyncIterator() {
-    for await (let e of this.options.inputStream) yield this.options.decoder.decode(e);
+    for await (let bytes of this.options.inputStream) yield this.options.decoder.decode(bytes);
   }
 }
 //@ chunk-3cddmtk7.js:10276-10537 esm-fingerprint
@@ -254,7 +254,7 @@ class MessageEncoderStream {
     return this.asyncIterator();
   }
   async *asyncIterator() {
-    for await (let e of this.options.messageStream) yield this.options.encoder.encode(e);
+    for await (let msg of this.options.messageStream) yield this.options.encoder.encode(msg);
     if (this.options.includeEndFrame) yield new Uint8Array(0);
   }
 }
@@ -288,4 +288,10 @@ class SmithyMessageEncoderStream {
     for await (let chunk of this.options.inputStream) yield this.options.serializer(chunk);
   }
 }
-export { HeaderMarshaller, SmithyMessageDecoderStream, Q, MessageEncoderStream, SmithyMessageEncoderStream };
+export {
+  HeaderMarshaller,
+  SmithyMessageDecoderStream,
+  MessageDecoderStream,
+  MessageEncoderStream,
+  SmithyMessageEncoderStream,
+};

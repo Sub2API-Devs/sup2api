@@ -20,9 +20,9 @@ var AGENTS_FLAG_FILE_REQUIRES_PRINT =
   "Error: --agents takes a JSON object, or a file path only with --print (-p). Pass the agents as inline JSON, or run with -p to read them from a file.";
 var MAX_AGENTS_FLAG_FILE_BYTES = 268435456;
 //@ chunk-r6sb8a4p.js:606-688 placement
-function looksLikeAgentsJson(t) {
-  let e = stripBom(t).trimStart();
-  return e.startsWith("{") || safeParseJSON(e, false) !== null;
+function looksLikeAgentsJson(text) {
+  let trimmed = stripBom(text).trimStart();
+  return trimmed.startsWith("{") || safeParseJSON(trimmed, false) !== null;
 }
 //@ chunk-r6sb8a4p.js:688-1532 placement
 /**
@@ -31,26 +31,26 @@ function looksLikeAgentsJson(t) {
 async function readAgentsFlagFile(agents) {
   let path = resolve(agents);
   try {
-    await using r = await open(path, nonblockingReadFlags());
-    let stats = await r.stat({
+    await using handle = await open(path, nonblockingReadFlags());
+    let stats = await handle.stat({
       bigint: true,
     });
     assertSingleLink(stats, path);
-    let o = await realpath(path).catch(() => path);
-    let n = await stat(o, {
+    let realPath = await realpath(path).catch(() => path);
+    let realStats = await stat(realPath, {
       bigint: true,
     });
-    if (n.dev !== stats.dev || n.ino !== stats.ino)
+    if (realStats.dev !== stats.dev || realStats.ino !== stats.ino)
       return {
         ok: false,
         error: `Error: --agents file changed while it was read: ${path}`,
       };
-    let { content } = await readFileHandleChecked(r, path, MAX_AGENTS_FLAG_FILE_BYTES);
+    let { content } = await readFileHandleChecked(handle, path, MAX_AGENTS_FLAG_FILE_BYTES);
     return {
       ok: true,
       json: content,
       filePath: path,
-      realPath: o,
+      realPath,
     };
   } catch (error) {
     switch (getErrnoCode(error)) {

@@ -18,7 +18,7 @@ var OTEL_DIAG_ERROR_PREFIX = "[3P telemetry] OTEL diag error:";
  * OTel 诊断 logger：把 OTel 内部 error/warn 写到调试日志（[3P telemetry] 前缀）。
  */
 class ClaudeCodeDiagLogger {
-  error(message, ...e) {
+  error(message, ...restArgs) {
     if (env.CLAUDE_CODE_OTEL_DIAG_STDERR)
       process.stderr.write(`${OTEL_DIAG_ERROR_PREFIX} ${message}
 `);
@@ -26,7 +26,7 @@ class ClaudeCodeDiagLogger {
       level: "error",
     });
   }
-  warn(message, ...e) {
+  warn(message, ...restArgs_2) {
     logForDebugging(`[3P telemetry] OTEL diag warn: ${message}`, {
       level: "warn",
     });

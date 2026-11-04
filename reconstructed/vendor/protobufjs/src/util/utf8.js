@@ -5,21 +5,21 @@
  * pieces: chunk-798ashq9.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-798ashq9.js:24520-25666 cjs-fingerprint
-var require_utf8 = x(function (cjsExports) {
+var require_utf8 = __commonJS(function (cjsExports) {
   var utf8 = cjsExports;
   var replacementChar = "\uFFFD";
   utf8.length = function (string) {
     var len = 0;
     var c = 0;
-    for (var i = 0; i < string.length; ++i) {
-      c = string.charCodeAt(i);
+    for (var idx = 0; idx < string.length; ++idx) {
+      c = string.charCodeAt(idx);
       if (c < 128) len += 1;
       else if (c < 2048) len += 2;
-      else if ((c & 64512) === 55296 && (string.charCodeAt(i + 1) & 64512) === 56320) {
-        ++i;
+      else if ((c & 64512) === 55296 && (string.charCodeAt(idx + 1) & 64512) === 56320) {
+        ++idx;
         len += 4;
       } else len += 3;
     }

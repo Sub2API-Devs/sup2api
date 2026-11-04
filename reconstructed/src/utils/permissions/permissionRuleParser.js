@@ -28,8 +28,8 @@ var LEGACY_TOOL_ALIASES = LEGACY_TOOL_NAME_ALIASES;
 /**
  * 把旧工具名映射为当前名。
  */
-function canonicalToolName(e) {
-  return Object.hasOwn(LEGACY_TOOL_ALIASES, e) ? LEGACY_TOOL_ALIASES[e] : e;
+function canonicalToolName(toolName) {
+  return Object.hasOwn(LEGACY_TOOL_ALIASES, toolName) ? LEGACY_TOOL_ALIASES[toolName] : toolName;
 }
 //@ chunk-gda5w2fs.js:514-600 placement
 /**
@@ -52,19 +52,19 @@ var WORKSPACE_WEB_FETCH_TOOL = `mcp__${WORKSPACE}__web_fetch`;
 /**
  * 工具名及其别名。
  */
-function toolNameVariants(e, n) {
-  let t = n && Object.hasOwn(n, e) ? n[e] : undefined;
-  return t !== undefined && t !== e ? [e, t] : [e];
+function toolNameVariants(toolName, toolAliases) {
+  let alias = toolAliases && Object.hasOwn(toolAliases, toolName) ? toolAliases[toolName] : undefined;
+  return alias !== undefined && alias !== toolName ? [toolName, alias] : [toolName];
 }
 //@ chunk-gda5w2fs.js:766-868 placement
 /**
  * 映射到指定名的别名列表。
  */
-function aliasesFor(e, n) {
-  if (!n) return [];
-  let t = [];
-  for (let [key, value] of Object.entries(n)) if (value === e) t.push(key);
-  return t;
+function aliasesFor(toolName, toolAliases) {
+  if (!toolAliases) return [];
+  let aliases = [];
+  for (let [key, value] of Object.entries(toolAliases)) if (value === toolName) aliases.push(key);
+  return aliases;
 }
 //@ chunk-gda5w2fs.js:868-906 placement
 /**
@@ -77,29 +77,29 @@ function hasWildcard(toolName) {
 /**
  * 通配符匹配。
  */
-function matchWildcard(e, n) {
-  return compileWildcard(e)(n);
+function matchWildcard(pattern, text) {
+  return compileWildcard(pattern)(text);
 }
 //@ chunk-gda5w2fs.js:938-1284 placement
 /**
  * 编译通配符模式为匹配函数。
  */
-function compileWildcard(e) {
-  let parts = e.split("*");
-  let t = parts[0] ?? "";
-  if (parts.length === 1) return (i) => t === i;
-  let r = parts.at(-1) ?? "";
-  let o;
-  let s = [];
-  return (i) => {
-    let c = i.length - r.length;
-    if (c < t.length || !i.startsWith(t) || !i.endsWith(r)) return false;
-    o ??= parts.slice(1, -1).filter((a) => a !== "");
-    let u = t.length;
-    for (let [a, f] of o.entries()) {
-      let d = (s[a] ??= truncateTag(f))(i, u, c);
-      if (d === -1) return false;
-      u = d + f.length;
+function compileWildcard(pattern) {
+  let parts = pattern.split("*");
+  let prefix = parts[0] ?? "";
+  if (parts.length === 1) return (text) => prefix === text;
+  let suffix = parts.at(-1) ?? "";
+  let middles;
+  let finders = [];
+  return (text) => {
+    let end = text.length - suffix.length;
+    if (end < prefix.length || !text.startsWith(prefix) || !text.endsWith(suffix)) return false;
+    middles ??= parts.slice(1, -1).filter((middle) => middle !== "");
+    let position = prefix.length;
+    for (let [index, middle] of middles.entries()) {
+      let next = (finders[index] ??= truncateTag(middle))(text, position, end);
+      if (next === -1) return false;
+      position = next + middle.length;
     }
     return true;
   };
@@ -108,37 +108,44 @@ function compileWildcard(e) {
 /**
  * 按分隔符逐段比较两个规则串，每段用通配匹配，全部匹配才返回 true。
  */
-function matchRuleSegments(e, n, t) {
-  let r = 0;
-  let o = 0;
+function matchRuleSegments(pattern, text, separators) {
+  let patternIndex = 0;
+  let textIndex = 0;
   for (;;) {
-    let s = indexOfFirstCharIn(e, t, r);
-    let i = indexOfFirstCharIn(n, t, o);
-    if (e.charAt(s) !== n.charAt(i) || !matchWildcard(e.slice(r, s), n.slice(o, i))) return false;
-    if (s === e.length) return true;
-    r = s + 1;
-    o = i + 1;
+    let patternSeparatorIndex = indexOfFirstCharIn(pattern, separators, patternIndex);
+    let textSeparatorIndex = indexOfFirstCharIn(text, separators, textIndex);
+    if (
+      pattern.charAt(patternSeparatorIndex) !== text.charAt(textSeparatorIndex) ||
+      !matchWildcard(
+        pattern.slice(patternIndex, patternSeparatorIndex),
+        text.slice(textIndex, textSeparatorIndex),
+      )
+    )
+      return false;
+    if (patternSeparatorIndex === pattern.length) return true;
+    patternIndex = patternSeparatorIndex + 1;
+    textIndex = textSeparatorIndex + 1;
   }
 }
 //@ chunk-gda5w2fs.js:1458-1540 placement
-function indexOfFirstCharIn(e, n, t) {
-  let r = t;
-  while (r < e.length && !n.includes(e.charAt(r))) r++;
-  return r;
+function indexOfFirstCharIn(text, chars, fromIndex) {
+  let index = fromIndex;
+  while (index < text.length && !chars.includes(text.charAt(index))) index++;
+  return index;
 }
 //@ chunk-gda5w2fs.js:1540-1573 placement
 /**
  * 规则模式匹配。
  */
-function matchRulePattern(e, n) {
-  return matchWildcard(e, n);
+function matchRulePattern(pattern, text) {
+  return matchWildcard(pattern, text);
 }
 //@ chunk-gda5w2fs.js:1573-1601 placement
 /**
  * wildcardRuleRegex：把通配规则编译成正则。
  */
-function wildcardRuleRegex(toolName) {
-  return compileWildcard(toolName);
+function wildcardRuleRegex(pattern) {
+  return compileWildcard(pattern);
 }
 //@ chunk-gda5w2fs.js:1601-1692 placement
 /**
@@ -151,11 +158,11 @@ function escapeRuleText(ruleContent) {
 /**
  * 转义规则内容中的特殊字符。
  */
-function escapeRuleContent(e, n) {
-  let replaced = e.replaceAll("\\", "\\\\").replace(/[[\]()|+^$]/g, (r) => `\\${r}`);
-  if (n?.escapeGlobs) replaced = replaced.replaceAll("*", "\\*");
+function escapeRuleContent(content, options) {
+  let replaced = content.replaceAll("\\", "\\\\").replace(/[[\]()|+^$]/g, (char) => `\\${char}`);
+  if (options?.escapeGlobs) replaced = replaced.replaceAll("*", "\\*");
   if (replaced.startsWith("!") || replaced.startsWith("#")) replaced = `\\${replaced}`;
-  replaced = replaced.replace(/\s+$/, (r) => Array.from(r, (o) => `\\${o}`).join(""));
+  replaced = replaced.replace(/\s+$/, (trailing) => Array.from(trailing, (char) => `\\${char}`).join(""));
   return replaced;
 }
 //@ chunk-gda5w2fs.js:1946-2009 placement
@@ -163,7 +170,7 @@ function escapeRuleContent(e, n) {
  * 反转义规则内容。
  */
 function unescapeRuleContent_2(content) {
-  return content.replace(/\\([^])/g, (n, t) => (isEscapableRuleChar(t) ? t : n));
+  return content.replace(/\\([^])/g, (match, char) => (isEscapableRuleChar(char) ? char : match));
 }
 //@ chunk-gda5w2fs.js:2009-2039 placement
 var RULE_ESCAPED_CHAR_RE = /^[\\[\]!#()|+^$*?\s]$/;
@@ -171,8 +178,8 @@ var RULE_ESCAPED_CHAR_RE = /^[\\[\]!#()|+^$*?\s]$/;
 /**
  * isEscapableRuleChar：该字符在规则里保留转义。
  */
-function isEscapableRuleChar(e) {
-  return RULE_ESCAPED_CHAR_RE.test(e);
+function isEscapableRuleChar(char) {
+  return RULE_ESCAPED_CHAR_RE.test(char);
 }
 //@ chunk-gda5w2fs.js:2072-2114 placement
 var WINDOWS_ABSOLUTE_RULE_RE = /^(?:[A-Za-z]:\\|~\\|\\(?![()!#]))/;
@@ -180,47 +187,47 @@ var WINDOWS_ABSOLUTE_RULE_RE = /^(?:[A-Za-z]:\\|~\\|\\(?![()!#]))/;
 /**
  * isWindowsAbsoluteRule：规则是否以 Windows 绝对路径开头。
  */
-function isWindowsAbsoluteRule(e) {
-  return WINDOWS_ABSOLUTE_RULE_RE.test(e);
+function isWindowsAbsoluteRule(text) {
+  return WINDOWS_ABSOLUTE_RULE_RE.test(text);
 }
 //@ chunk-gda5w2fs.js:2147-2201 placement
 /**
  * unescapeRuleContent：规则内容反转义。
  */
-function unescapeRuleContent(rawContent) {
-  return unescapeParens(rawContent).replaceAll("\\\\", "\\");
+function unescapeRuleContent(text) {
+  return unescapeParens(text).replaceAll("\\\\", "\\");
 }
 //@ chunk-gda5w2fs.js:2201-2270 placement
 /**
  * unescapeParens：去掉括号前的反斜杠。
  */
-function unescapeParens(e) {
-  return e.replaceAll("\\(", "(").replaceAll("\\)", ")");
+function unescapeParens(text) {
+  return text.replaceAll("\\(", "(").replaceAll("\\)", ")");
 }
 //@ chunk-gda5w2fs.js:2270-2585 placement
 /**
  * 判断规则字符串的括号形式（裸名、带内容、畸形）。
  */
-function classifyRuleParens(e) {
-  if (typeof e === "string" && !e.includes("(") && !e.includes(")"))
+function classifyRuleParens(input) {
+  if (typeof input === "string" && !input.includes("(") && !input.includes(")"))
     return {
       kind: "bare",
     };
-  let n = indexOfUnescaped(e, "(");
-  let t = lastIndexOfUnescaped(e, ")");
-  if (n === -1 && t === -1)
+  let openIndex = indexOfUnescaped(input, "(");
+  let closeIndex = lastIndexOfUnescaped(input, ")");
+  if (openIndex === -1 && closeIndex === -1)
     return {
       kind: "bare",
     };
-  let r = e.substring(0, n);
-  if (n === -1 || t <= n || t !== e.length - 1 || /[()]/.test(r))
+  let toolName = input.substring(0, openIndex);
+  if (openIndex === -1 || closeIndex <= openIndex || closeIndex !== input.length - 1 || /[()]/.test(toolName))
     return {
       kind: "malformed",
     };
   return {
     kind: "call",
-    toolName: r,
-    rawContent: e.substring(n + 1, t),
+    toolName,
+    rawContent: input.substring(openIndex + 1, closeIndex),
   };
 }
 //@ chunk-gda5w2fs.js:2585-2810 callgraph-witnessed = permissionRuleValueFromString (0.305)

@@ -208,8 +208,8 @@ data:
         cancel: () => {},
       });
       let replayedStreamId = await this._eventStore.replayEventsAfter(lastEventId, {
-        send: async (a, message) => {
-          if (!this.writeSSEEvent(streamController, encoder, message, a)) {
+        send: async (eventId, message) => {
+          if (!this.writeSSEEvent(streamController, encoder, message, eventId)) {
             this.onerror?.(Error("Failed replay events"));
             try {
               streamController.close();
@@ -521,7 +521,7 @@ data:
       this._requestResponseMap.set(requestId, message);
       let relatedIds = Array.from(this._requestToStreamMapping.entries())
         .filter(([_, sid]) => sid === streamId)
-        .map(([a]) => a);
+        .map(([messageId]) => messageId);
       if (relatedIds.every((relatedId) => this._requestResponseMap.has(relatedId))) {
         if (!stream) throw Error(`No connection established for request ID: ${String(requestId)}`);
         if (this._enableJsonResponse && stream.resolveJson) {

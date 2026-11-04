@@ -9,7 +9,13 @@
  * attribution: placement 2
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { string, u, literal, array, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  stringSchema,
+  objectSchema,
+  literal,
+  array,
+  unknown,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { GIT_SHA_RE, hasNonZeroHash } from "../../remote/tools/servedOwnerSettings.js";
 import { MAX_GIT_REF_CHARS, isValidGitRefName } from "../git/refNames.js";
 
@@ -17,12 +23,12 @@ import { MAX_GIT_REF_CHARS, isValidGitRefName } from "../git/refNames.js";
 var BRANCH_OFFER_VERSION = 1;
 var MAX_OFFER_ANCESTORS = 64;
 var OFFER = "offer";
-var commitShaSchema = DoctorLazy(() => string().regex(GIT_SHA_RE).refine(hasNonZeroHash));
+var commitShaSchema = DoctorLazy(() => stringSchema().regex(GIT_SHA_RE).refine(hasNonZeroHash));
 var branchOfferSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     v: literal(BRANCH_OFFER_VERSION),
     head: commitShaSchema(),
-    branch: string().min(1).max(MAX_GIT_REF_CHARS).refine(isValidGitRefName),
+    branch: stringSchema().min(1).max(MAX_GIT_REF_CHARS).refine(isValidGitRefName),
     ancestors: array(unknown()).max(MAX_OFFER_ANCESTORS).pipe(array(commitShaSchema())),
   }),
 );
@@ -30,8 +36,8 @@ var branchOfferSchema = DoctorLazy(() =>
 /**
  * 解析分支提议负载，非法返回 null。
  */
-function branchOfferPayload(e) {
-  let r = branchOfferSchema().safeParse(e[OFFER]);
-  return r.success ? r.data : null;
+function branchOfferPayload(payload) {
+  let parsed = branchOfferSchema().safeParse(payload[OFFER]);
+  return parsed.success ? parsed.data : null;
 }
 export { branchOfferPayload };

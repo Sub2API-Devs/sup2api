@@ -34,50 +34,51 @@ var MAX_ACTIVITY_NAME_LENGTH = 200;
 /**
  * formatActivityLabel：生成活动标签。
  */
-function formatActivityLabel(e, n) {
-  let r = stripCombiningRepeated(printablePluginName(e));
-  let s = truncateToLength(r, MAX_ACTIVITY_NAME_LENGTH);
-  return truncateToWidth(s, Math.max(LABEL_RESERVED_WIDTH - n, 1));
+function formatActivityLabel(pluginId, reservedWidth) {
+  let printableName = stripCombiningRepeated(printablePluginName(pluginId));
+  let truncatedName = truncateToLength(printableName, MAX_ACTIVITY_NAME_LENGTH);
+  return truncateToWidth(truncatedName, Math.max(LABEL_RESERVED_WIDTH - reservedWidth, 1));
 }
 //@ chunk-e6aww6q8.js:877093-877537 placement
 /**
  * 插件活动标签（技能、命令、工作流、代理、钩子）。
  */
-function activityLabel({ kind, name: n }) {
+function activityLabel({ kind, name }) {
   switch (kind) {
     case "skill":
-      return `${formatActivityLabel(n, bunStringWidth(" skill"))} skill`;
+      return `${formatActivityLabel(name, bunStringWidth(" skill"))} skill`;
     case "command": {
-      let h = bunStringWidth("/") + bunStringWidth(" command");
-      return `/${formatActivityLabel(n, h)} command`;
+      let reservedWidth = bunStringWidth("/") + bunStringWidth(" command");
+      return `/${formatActivityLabel(name, reservedWidth)} command`;
     }
     case "workflow": {
-      let h = bunStringWidth("/") + bunStringWidth(" workflow");
-      return `/${formatActivityLabel(n, h)} workflow`;
+      let reservedWidth = bunStringWidth("/") + bunStringWidth(" workflow");
+      return `/${formatActivityLabel(name, reservedWidth)} workflow`;
     }
     case "agent":
-      return `${formatActivityLabel(n, bunStringWidth(" agent"))} agent`;
+      return `${formatActivityLabel(name, bunStringWidth(" agent"))} agent`;
     case "hook":
-      return `${formatActivityLabel(n, bunStringWidth(" hook"))} hook`;
+      return `${formatActivityLabel(name, bunStringWidth(" hook"))} hook`;
     case "mcp-server": {
-      let serverName = parsePluginServerName(n)?.serverName ?? n;
-      let s = " MCP server";
+      let serverName = parsePluginServerName(name)?.serverName ?? name;
+      let mcpServerName = " MCP server";
       return `${formatActivityLabel(serverName, bunStringWidth(" MCP server"))} MCP server`;
     }
   }
 }
 //@ chunk-e6aww6q8.js:877537-877601 placement
-function stripActivityPrefix(e, n) {
-  return n && e.startsWith(n) ? e.slice(n.length) : e;
+function stripActivityPrefix(text, prefix) {
+  return prefix && text.startsWith(prefix) ? text.slice(prefix.length) : text;
 }
 //@ chunk-e6aww6q8.js:877601-877830 placement
 /**
  * 命令或技能的活动描述。
  */
 function commandActivity(command, name) {
-  let r = command.kind === "workflow" ? `${name}:` : command.name.slice(0, command.name.lastIndexOf(":") + 1);
-  let s = command.userFacingName?.() ?? command.name;
-  let name_2 = stripActivityPrefix(s, r);
+  let prefix =
+    command.kind === "workflow" ? `${name}:` : command.name.slice(0, command.name.lastIndexOf(":") + 1);
+  let displayedName = command.userFacingName?.() ?? command.name;
+  let name_2 = stripActivityPrefix(displayedName, prefix);
   return {
     kind: command.kind === "workflow" ? "workflow" : command.loadedFrom === "plugin" ? "skill" : "command",
     name: name_2,
@@ -90,39 +91,41 @@ function commandActivity(command, name) {
 var MAX_ACTIVITY_FEATURE_KEYS = 64;
 var MAX_RECENT_ACTIVITY = 6;
 //@ chunk-e6aww6q8.js:877847-877906 placement
-function activityKey(e, n) {
-  return `${e}\x00${(n ?? "").toLowerCase()}`;
+function activityKey(pluginName, marketplace) {
+  return `${pluginName}\x00${(marketplace ?? "").toLowerCase()}`;
 }
 //@ chunk-e6aww6q8.js:877906-878450 placement
 /**
  * 记录插件活动（钩子、MCP）。
  */
-function recordPluginActivity(e, n, r) {
+function recordPluginActivity(pluginId, trigger, activity) {
   let pluginRegistry = getPluginRegistry();
-  let { name: h, marketplace } = parsePluginIdentifier(e);
-  if (r.kind !== "hook" && !isOfficialOrBuiltinMarketplace(marketplace)) {
-    let S = activityLabel(r);
-    let w = activityKey(h, marketplace);
-    let filtered = (pluginRegistry.pluginActivityFeatures.get(w) ?? []).filter((q) => q !== S);
-    filtered.push(S);
-    pluginRegistry.pluginActivityFeatures.set(w, filtered.slice(-MAX_RECENT_ACTIVITY));
+  let { name: pluginName, marketplace } = parsePluginIdentifier(pluginId);
+  if (activity.kind !== "hook" && !isOfficialOrBuiltinMarketplace(marketplace)) {
+    let label = activityLabel(activity);
+    let featureKey = activityKey(pluginName, marketplace);
+    let filtered = (pluginRegistry.pluginActivityFeatures.get(featureKey) ?? []).filter(
+      (candidateLabel) => candidateLabel !== label,
+    );
+    filtered.push(label);
+    pluginRegistry.pluginActivityFeatures.set(featureKey, filtered.slice(-MAX_RECENT_ACTIVITY));
   }
   if (
-    (n === "hook" || n === "mcp") &&
+    (trigger === "hook" || trigger === "mcp") &&
     pluginRegistry.recentActivity.some(
-      (S) => S.trigger === n && S.name === h && S.marketplace === marketplace,
+      (entry) => entry.trigger === trigger && entry.name === pluginName && entry.marketplace === marketplace,
     )
   )
     return;
   pluginRegistry.recentActivity.push({
-    name: h,
+    name: pluginName,
     marketplace,
-    trigger: n,
+    trigger,
     ts: Date.now(),
   });
   if (pluginRegistry.recentActivity.length > MAX_ACTIVITY_FEATURE_KEYS)
     pluginRegistry.recentActivity = pluginRegistry.recentActivity.slice(-MAX_ACTIVITY_FEATURE_KEYS);
-  logForDebugging(`pluginActivity: recorded ${n} for ${h}`, {
+  logForDebugging(`pluginActivity: recorded ${trigger} for ${pluginName}`, {
     level: "verbose",
   });
 }
@@ -130,16 +133,16 @@ function recordPluginActivity(e, n, r) {
 /**
  * activityFeaturesFor：取某活动的特性列表。
  */
-function activityFeaturesFor(name, marketplace) {
-  return getPluginRegistry().pluginActivityFeatures.get(activityKey(name, marketplace)) ?? [];
+function activityFeaturesFor(pluginName, marketplace) {
+  return getPluginRegistry().pluginActivityFeatures.get(activityKey(pluginName, marketplace)) ?? [];
 }
 //@ chunk-e6aww6q8.js:878521-878616 placement
 /**
  * drainRecentActivity：取出并清空最近活动。
  */
-function drainRecentActivity(e) {
+function drainRecentActivity(since) {
   let pluginRegistry = getPluginRegistry();
-  let filtered = pluginRegistry.recentActivity.filter((s) => s.ts > e);
+  let filtered = pluginRegistry.recentActivity.filter((entry) => entry.ts > since);
   pluginRegistry.recentActivity = [];
   return filtered;
 }

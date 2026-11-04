@@ -5,11 +5,11 @@
  * pieces: chunk-edce4vxq.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_shared_ini_file_loader } from "../../../shared-ini-file-loader/dist-cjs/index.js";
 
 //@ chunk-edce4vxq.js:115651-116280 cjs-fingerprint
-var require_getEndpointUrlConfig = x(function (cjsExports) {
+var require_getEndpointUrlConfig = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

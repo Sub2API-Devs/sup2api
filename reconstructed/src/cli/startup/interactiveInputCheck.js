@@ -43,14 +43,14 @@ var NO_TTY_GUIDANCE_BY_PLATFORM = {
   },
 };
 //@ chunk-3wek6r2k.js:14161-14206 placement
-function noTtyMessage(e) {
-  return NO_TTY_GUIDANCE_BY_PLATFORM[e].lines.join(`
+function noTtyMessage(platform) {
+  return NO_TTY_GUIDANCE_BY_PLATFORM[platform].lines.join(`
 `);
 }
 //@ chunk-3wek6r2k.js:14206-14307 placement
-async function logInteractiveInputFailure(e) {
+async function logInteractiveInputFailure(reason) {
   try {
-    await logFeatureSadAsync("startup_interactive_input", e, {
+    await logFeatureSadAsync("startup_interactive_input", reason, {
       stdin_kind: fromEnum(await detectStdinKind()),
     });
   } catch {}
@@ -59,13 +59,13 @@ async function logInteractiveInputFailure(e) {
 /**
  * 交互模式下 stdin 不是终端（且无法回退 /dev/tty 或控制台）时打印说明并退出。
  */
-async function exitWithoutInteractiveInput(e) {
-  let { lines, reader } = NO_TTY_GUIDANCE_BY_PLATFORM[e];
+async function exitWithoutInteractiveInput(platform) {
+  let { lines, reader } = NO_TTY_GUIDANCE_BY_PLATFORM[platform];
   printCliError(
     [...lines, printModeHint(reader)].join(`
 `),
   );
-  await logInteractiveInputFailure(e);
+  await logInteractiveInputFailure(platform);
   return cliErrorAfterAnalyticsFlush();
 }
 //@ chunk-3wek6r2k.js:14408-14602 placement
@@ -75,7 +75,7 @@ function printModeHint(example) {
 //@ chunk-3wek6r2k.js:14602-14860 placement
 async function detectStdinKind() {
   let promise = await new Promise((resolve) => {
-    fstat(0, (n, r) => resolve(n ? undefined : r));
+    fstat(0, (error, stats) => resolve(error ? undefined : stats));
   });
   if (promise === undefined) return "unknown";
   if (promise.isFIFO()) return "pipe";

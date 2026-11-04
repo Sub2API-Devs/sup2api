@@ -30,22 +30,22 @@ async function handleSwarmWorkerPermission(params) {
   if (!isAgentSwarmsEnabled() || !isTeammateContextReady()) return null;
   let { ctx, description, updatedInput, suggestions } = params;
   let { askSuppressesAlwaysAllowRule, matchedAskRule } = params;
-  let Be = updatedInput ?? ctx.input;
+  let effectiveInput = updatedInput ?? ctx.input;
   try {
     let clearPendingRequest = () =>
       ctx.toolUseContext.setAppState((prev) => ({
         ...prev,
         pendingWorkerRequest: null,
       }));
-    let We = false;
-    let ze = null;
-    let Xe = false;
+    let mailboxFailed = false;
+    let bindingMismatch = null;
+    let verdictUnbound = false;
     let decision = await new Promise((resolve) => {
       let { resolve: resolveOnce, claim, isResolved } = createResolveOnce(resolve);
       let request = createPermissionRequest({
         toolName: ctx.tool.name,
         toolUseId: ctx.toolUseID,
-        input: Be,
+        input: effectiveInput,
         description,
         permissionSuggestions: suggestions,
       });
@@ -53,11 +53,12 @@ async function handleSwarmWorkerPermission(params) {
         requestId: request.id,
         toolUseId: ctx.toolUseID,
         toolName: request.toolName,
-        inputDigest: stableHashOfJson(request.toolName, Be),
+        inputDigest: stableHashOfJson(request.toolName, effectiveInput),
         onAllow(allowedInput, permissionUpdates, feedback, contentBlocks) {
           if (!claim()) return;
           clearPendingRequest();
-          let finalInput = allowedInput && Object.keys(allowedInput).length > 0 ? allowedInput : Be;
+          let finalInput =
+            allowedInput && Object.keys(allowedInput).length > 0 ? allowedInput : effectiveInput;
           resolveOnce(
             ctx.handleUserAllow(finalInput, permissionUpdates, {
               feedback,
@@ -79,10 +80,10 @@ async function handleSwarmWorkerPermission(params) {
           });
           resolveOnce(ctx.cancelAndAbort(feedback, undefined, contentBlocks));
         },
-        onRefuse(message, Lt) {
+        onRefuse(message, mismatchKind) {
           if (!claim()) return;
           clearPendingRequest();
-          ze = Lt;
+          bindingMismatch = mismatchKind;
           resolveOnce({
             behavior: "ask",
             message,
@@ -90,13 +91,13 @@ async function handleSwarmWorkerPermission(params) {
         },
         onUnboundVerdict() {
           if (isResolved()) return;
-          Xe = true;
+          verdictUnbound = true;
         },
       });
       sendPermissionRequestViaMailbox(request, ctx.toolUseContext.storageV5).then((prev) => {
         if (prev || !claim()) return;
         unregisterPermissionCallback(request.id);
-        We = true;
+        mailboxFailed = true;
         clearPendingRequest();
         resolveOnce({
           behavior: "ask",
@@ -126,13 +127,13 @@ async function handleSwarmWorkerPermission(params) {
         },
       );
     });
-    if (We) logFeatureBad("permission_swarm_forward", "mailbox_write_failed");
-    else if (ze !== null)
+    if (mailboxFailed) logFeatureBad("permission_swarm_forward", "mailbox_write_failed");
+    else if (bindingMismatch !== null)
       logFeatureSad(
         "permission_swarm_forward",
-        ze === "denial" ? "denial_binding_mismatch" : "approval_binding_mismatch",
+        bindingMismatch === "denial" ? "denial_binding_mismatch" : "approval_binding_mismatch",
       );
-    else if (Xe) logFeatureSad("permission_swarm_forward", "verdict_unbound");
+    else if (verdictUnbound) logFeatureSad("permission_swarm_forward", "verdict_unbound");
     else logFeatureOk("permission_swarm_forward");
     return decision;
   } catch (error) {

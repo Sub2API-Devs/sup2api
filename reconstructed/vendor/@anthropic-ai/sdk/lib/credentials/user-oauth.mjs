@@ -8,8 +8,8 @@
 import {
   checkCredentialsFileSafety,
   WorkloadIdentityError,
-  hMt,
-  Jao,
+  MAX_FEDERATION_TOKEN_TTL_SECONDS,
+  requireSecureTokenEndpoint,
   GRANT_TYPE_REFRESH_TOKEN,
   TOKEN_ENDPOINT,
   OAUTH_API_BETA_HEADER,
@@ -17,14 +17,14 @@ import {
   parseTokenResponse,
   writeCredentialsFileAtomic,
 } from "./types.mjs";
-import { y } from "./token-cache.mjs";
+import { nowSeconds } from "./token-cache.mjs";
 import { VERSION } from "../../version.mjs";
-import { gAn } from "../../core/credentials.mjs";
+import { CREDENTIALS_FILE_VERSION } from "../../core/credentials.mjs";
 
 //@ chunk-3wydcdvj.js:10007-11752 esm-fingerprint
 function userOAuthProvider(config) {
   return async (opts) => {
-    let { fs } = await import("./chunk-a60jm9e8.js");
+    let { fs } = await import("../../../../../src/child_process.lazy.js");
     await checkCredentialsFileSafety(config.credentialsPath, config.onSafetyWarning);
     let raw;
     try {
@@ -46,7 +46,10 @@ function userOAuthProvider(config) {
         `Credentials file at ${config.credentialsPath} must include 'access_token'`,
       );
     let expiresAt = creds.expires_at;
-    if (!opts?.forceRefresh && (expiresAt == null || y() < expiresAt - hMt))
+    if (
+      !opts?.forceRefresh &&
+      (expiresAt == null || nowSeconds() < expiresAt - MAX_FEDERATION_TOKEN_TTL_SECONDS)
+    )
       return {
         token: accessToken,
         expiresAt: expiresAt ?? null,
@@ -56,7 +59,7 @@ function userOAuthProvider(config) {
       throw new WorkloadIdentityError(
         `Access token at ${config.credentialsPath} has expired and no refresh is available (client_id ${config.clientId ? "set" : "empty"}, refresh_token ${refreshToken ? "set" : "empty"})`,
       );
-    Jao(config.baseURL);
+    requireSecureTokenEndpoint(config.baseURL);
     let body = {
       grant_type: GRANT_TYPE_REFRESH_TOKEN,
       refresh_token: refreshToken,
@@ -96,11 +99,11 @@ function userOAuthProvider(config) {
         redactSensitive(data),
         requestId,
       );
-    let newExpiresAt = y() + expiresIn;
+    let newExpiresAt = nowSeconds() + expiresIn;
     let newRefreshToken = data.refresh_token || refreshToken;
     await writeCredentialsFileAtomic(config.credentialsPath, {
       ...creds,
-      version: gAn,
+      version: CREDENTIALS_FILE_VERSION,
       type: "oauth_token",
       access_token: data.access_token,
       expires_at: newExpiresAt,

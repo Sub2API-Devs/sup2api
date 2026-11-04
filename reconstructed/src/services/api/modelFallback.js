@@ -39,7 +39,8 @@ import {
 } from "./safeguardMessages.js";
 import { MODEL_NAME_ALLOWED_CHARS } from "../../utils/model/validateModel.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, string, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import { zodStrictObject, stringSchema, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:2398030-2398072 placement
 var HTTPS_WWW_ANTHROPIC_COM_NEWS = "https://www.anthropic.com/news/";
@@ -47,9 +48,10 @@ var HTTPS_WWW_ANTHROPIC_COM_NEWS = "https://www.anthropic.com/news/";
 /**
  * 模型不可用时的提示文字（优先使用服务端给出的说明）。
  */
-function modelUnavailableMessage(e, n) {
+function modelUnavailableMessage(model, reason) {
   return (
-    e.blockMessage?.trim() || `${n} is currently unavailable. Learn more: ${HTTPS_WWW_ANTHROPIC_COM_NEWS}`
+    model.blockMessage?.trim() ||
+    `${reason} is currently unavailable. Learn more: ${HTTPS_WWW_ANTHROPIC_COM_NEWS}`
   );
 }
 //@ chunk-e6aww6q8.js:2398173-2398224 placement
@@ -64,30 +66,30 @@ function asFallbackReason(reason) {
 /**
  * 若服务端回退车道适用于当前模型，锁定对应 beta（默认回退或显式回退），返回请求体里的 fallbacks 字段；否则返回空对象。
  */
-function serverFallbackPlan(lane, model, betas, sticky, h = false, y = false) {
-  let S =
+function serverFallbackPlan(lane, model, betas, sticky, refused = false, useCategory = false) {
+  let laneArmed =
     lane !== undefined &&
-    !y &&
+    !useCategory &&
     model === lane.forModel &&
     isFirstPartyApiBackend() &&
     !isBetaRejected_2(sticky, BETA_SERVER_SIDE_FALLBACK);
-  let w =
-    S &&
+  let inLineup =
+    laneArmed &&
     BETA_SERVER_SIDE_FALLBACK_CATEGORY !== null &&
     lane.mode === "default" &&
     !isBetaRejected_2(sticky, BETA_SERVER_SIDE_FALLBACK_CATEGORY);
-  let L = S && (w || isInRefusalLineup(model, lane.model));
-  if (L)
+  let fallbackOn = laneArmed && (inLineup || isInRefusalLineup(model, lane.model));
+  if (fallbackOn)
     markBetaSent(
       sticky,
-      w && BETA_SERVER_SIDE_FALLBACK_CATEGORY !== null
+      inLineup && BETA_SERVER_SIDE_FALLBACK_CATEGORY !== null
         ? BETA_SERVER_SIDE_FALLBACK_CATEGORY
         : BETA_SERVER_SIDE_FALLBACK,
     );
-  for (let G of [BETA_SERVER_SIDE_FALLBACK, BETA_SERVER_SIDE_FALLBACK_CATEGORY])
-    if (G !== null && isBetaSent(sticky, G) && !h && !betas.includes(G)) betas.push(G);
-  if (!L) return {};
-  return w
+  for (let beta of [BETA_SERVER_SIDE_FALLBACK, BETA_SERVER_SIDE_FALLBACK_CATEGORY])
+    if (beta !== null && isBetaSent(sticky, beta) && !refused && !betas.includes(beta)) betas.push(beta);
+  if (!fallbackOn) return {};
+  return inLineup
     ? {
         fallbacks: "default",
       }
@@ -100,23 +102,23 @@ function serverFallbackPlan(lane, model, betas, sticky, h = false, y = false) {
       };
 }
 //@ chunk-e6aww6q8.js:2398623-2398691 placement
-function hasNonTextContent(e) {
-  return e.message.content.some((n) => n.type !== "text");
+function hasNonTextContent(message) {
+  return message.message.content.some((block) => block.type !== "text");
 }
 //@ chunk-e6aww6q8.js:2398691-2398923 placement
-function applyRefusalFallbackBeta(e, n, conversation, s = false, h) {
-  if (e && !isBetaRejected_2(conversation, BETA_FALLBACK_CREDIT))
+function applyRefusalFallbackBeta(armed, betas, conversation, silentArm = false, extraBodyParams) {
+  if (armed && !isBetaRejected_2(conversation, BETA_FALLBACK_CREDIT))
     markBetaSent(conversation, BETA_FALLBACK_CREDIT);
-  if (isBetaSent(conversation, BETA_FALLBACK_CREDIT) && !s && !n.includes(BETA_FALLBACK_CREDIT))
-    n.push(BETA_FALLBACK_CREDIT);
-  if (h && n.includes(BETA_FALLBACK_CREDIT)) {
-    let anthropicBeta = h.anthropic_beta;
+  if (isBetaSent(conversation, BETA_FALLBACK_CREDIT) && !silentArm && !betas.includes(BETA_FALLBACK_CREDIT))
+    betas.push(BETA_FALLBACK_CREDIT);
+  if (extraBodyParams && betas.includes(BETA_FALLBACK_CREDIT)) {
+    let anthropicBeta = extraBodyParams.anthropic_beta;
     if (
       Array.isArray(anthropicBeta) &&
       anthropicBeta.length > 0 &&
       !anthropicBeta.includes(BETA_FALLBACK_CREDIT.header)
     )
-      h.anthropic_beta = [...anthropicBeta, BETA_FALLBACK_CREDIT.header];
+      extraBodyParams.anthropic_beta = [...anthropicBeta, BETA_FALLBACK_CREDIT.header];
   }
 }
 //@ chunk-e6aww6q8.js:2398923-2399073 placement
@@ -130,14 +132,14 @@ function readFallbackCreditToken(stopDetails) {
     : undefined;
 }
 //@ chunk-e6aww6q8.js:2399073-2399157 placement
-function fallbackNotification(e) {
+function fallbackNotification(block) {
   return {
     type: "fallback",
     from: {
-      model: e.fromModel,
+      model: block.fromModel,
     },
     to: {
-      model: e.model,
+      model: block.model,
     },
   };
 }
@@ -150,75 +152,79 @@ function readModelField(from) {
 //@ chunk-e6aww6q8.js:2399275-2399455 placement
 function readRefusalCategory(trigger) {
   if (typeof trigger !== "object" || trigger === null) return null;
-  let n = trigger;
-  if (n.type !== "refusal") return null;
-  let category = n.category;
+  let fallbackTrigger = trigger;
+  if (fallbackTrigger.type !== "refusal") return null;
+  let category = fallbackTrigger.category;
   return typeof category === "string" && category.length > 0 && category.length <= 64 ? category : null;
 }
 //@ chunk-e6aww6q8.js:2399455-2399831 placement
 /**
  * 解析流中的 fallback 内容块开始事件，得到索引、原模型、回退模型、原因与类别。
  */
-function parseFallbackBlockStart(e) {
-  if (typeof e !== "object" || e === null) return;
-  let n = e;
-  if (n.type !== "content_block_start" || typeof n.index !== "number") return;
-  let contentBlock = n.content_block;
+function parseFallbackBlockStart(block) {
+  if (typeof block !== "object" || block === null) return;
+  let start = block;
+  if (start.type !== "content_block_start" || typeof start.index !== "number") return;
+  let contentBlock = start.content_block;
   if (typeof contentBlock !== "object" || contentBlock === null) return;
-  let s = contentBlock;
-  if (s.type !== "fallback") return;
-  let modelField = readModelField(s.from);
-  let modelField_2 = readModelField(s.to);
+  let blockStart = contentBlock;
+  if (blockStart.type !== "fallback") return;
+  let modelField = readModelField(blockStart.from);
+  let modelField_2 = readModelField(blockStart.to);
   return modelField !== undefined && modelField_2 !== undefined
     ? {
-        index: n.index,
+        index: start.index,
         fromModel: modelField,
         model: modelField_2,
         reason: "refusal",
-        category: readRefusalCategory(s.trigger),
+        category: readRefusalCategory(blockStart.trigger),
       }
     : undefined;
 }
 //@ chunk-e6aww6q8.js:2399831-2399999 placement
-function parseFallbackMessage(e) {
-  if (!isFallbackNotification(e)) return;
-  let n = e;
-  let modelField = readModelField(n.from);
-  let modelField_2 = readModelField(n.to);
+function parseFallbackMessage(block) {
+  if (!isFallbackNotification(block)) return;
+  let fallbackBlock = block;
+  let modelField = readModelField(fallbackBlock.from);
+  let modelField_2 = readModelField(fallbackBlock.to);
   return modelField !== undefined && modelField_2 !== undefined
     ? {
         fromModel: modelField,
         model: modelField_2,
         reason: "refusal",
-        category: readRefusalCategory(n.trigger),
+        category: readRefusalCategory(fallbackBlock.trigger),
       }
     : undefined;
 }
 //@ chunk-e6aww6q8.js:2399999-2400073 placement
-function isFallbackNotification(e) {
-  return typeof e === "object" && e !== null && e.type === "fallback";
+function isFallbackNotification(block) {
+  return typeof block === "object" && block !== null && block.type === "fallback";
 }
 //@ chunk-e6aww6q8.js:2400073-2400317 placement
-function isUnreadableFallbackBlock(e) {
-  if (typeof e !== "object" || e === null) return false;
-  let n = e;
-  if (n.type !== "content_block_start" || typeof n.index !== "number") return false;
-  let contentBlock = n.content_block;
+function isUnreadableFallbackBlock(event) {
+  if (typeof event !== "object" || event === null) return false;
+  let fallbackEvent = event;
+  if (fallbackEvent.type !== "content_block_start" || typeof fallbackEvent.index !== "number") return false;
+  let contentBlock = fallbackEvent.content_block;
   if (typeof contentBlock !== "object" || contentBlock === null) return false;
-  return contentBlock.type === "fallback" && parseFallbackBlockStart(e) === undefined;
+  return contentBlock.type === "fallback" && parseFallbackBlockStart(event) === undefined;
 }
 //@ chunk-e6aww6q8.js:2400317-2400380 placement
-var finiteNonNegative = (e) => (typeof e === "number" && Number.isFinite(e) && e >= 0 ? e : 0);
+var finiteNonNegative = (value) =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
 //@ chunk-e6aww6q8.js:2400380-2400901 placement
 /**
  * 计算回退过程中各条 fallback 消息的费用（拒绝回退时排除最后一条）以及回退模型的固定附加费用。
  */
 function fallbackMessagesCost(messages, pricing, reason) {
-  let reduced = messages.reduce((acc, message, Z) => (message.type === "fallback_message" ? Z : acc), -1);
-  let h = reason === "refusal" ? reduced : -1;
+  let reduced = messages.reduce(
+    (acc, message, index) => (message.type === "fallback_message" ? index : acc),
+    -1,
+  );
+  let fromIndex = reason === "refusal" ? reduced : -1;
   let reduced_2 = messages.reduce(
-    (acc, message, Z) =>
-      message.type === "fallback_message" && message.model !== undefined && Z !== h
+    (acc, message, index) =>
+      message.type === "fallback_message" && message.model !== undefined && index !== fromIndex
         ? acc +
           calculateCostFromTokenCounts(message.model, message, {
             speed: pricing.speed,
@@ -230,7 +236,7 @@ function fallbackMessagesCost(messages, pricing, reason) {
   let model = messages.find(
     (message) => message.type === "fallback_message" && message.model !== undefined,
   )?.model;
-  let w =
+  let dropped =
     model !== undefined
       ? calculateCostFromTokenCounts(
           model,
@@ -247,27 +253,29 @@ function fallbackMessagesCost(messages, pricing, reason) {
           },
         )
       : 0;
-  let L = reduced_2 + w;
-  return Number.isFinite(L) ? L : 0;
+  let limitIndex = reduced_2 + dropped;
+  return Number.isFinite(limitIndex) ? limitIndex : 0;
 }
 //@ chunk-e6aww6q8.js:2401522-2401577 placement
 /**
  * 导出函数 `preferSameModel`：参数 e, n，返回 e !== void 0 && Bn(e) === Bn(n) ? e : n。
  */
-function preferSameModel(model, n) {
-  return model !== undefined && stripAnyVersatileSuffix(model) === stripAnyVersatileSuffix(n) ? model : n;
+function preferSameModel(model, otherModel) {
+  return model !== undefined && stripAnyVersatileSuffix(model) === stripAnyVersatileSuffix(otherModel)
+    ? model
+    : otherModel;
 }
 //@ chunk-e6aww6q8.js:2401577-2401806 placement
-function canUseDefaultFallback(e) {
+function canUseDefaultFallback(reason) {
   if (BETA_SERVER_SIDE_FALLBACK_CATEGORY !== null) {
-    let n = walkDownOpusLineup(e.primaryModel);
+    let walked = walkDownOpusLineup(reason.primaryModel);
     return (
-      n !== undefined &&
-      !isBetaRejected_2(e.sticky, BETA_SERVER_SIDE_FALLBACK_CATEGORY) &&
+      walked !== undefined &&
+      !isBetaRejected_2(reason.sticky, BETA_SERVER_SIDE_FALLBACK_CATEGORY) &&
       noRefusalFallbackOpusModel() &&
-      (!isSameModel(e.primaryModel, n) ||
-        (everyLineupModelAdmitted(e.primaryModel) && e.selfTargetDefaultFallbacksEnabled())) &&
-      e.serverDefaultFallbacksEnabled()
+      (!isSameModel(reason.primaryModel, walked) ||
+        (everyLineupModelAdmitted(reason.primaryModel) && reason.selfTargetDefaultFallbacksEnabled())) &&
+      reason.serverDefaultFallbacksEnabled()
     );
   }
   return false;
@@ -279,16 +287,17 @@ var TENGU_ELEGANT_POSSUM = "tengu_elegant_possum";
 /**
  * 选择回退使用的 beta 头：已粘滞的优先，否则按是否允许服务端默认回退决定。
  */
-function pickFallbackBeta(e) {
+function pickFallbackBeta(options) {
   if (BETA_SERVER_SIDE_FALLBACK_CATEGORY !== null) {
-    if (isBetaSent(e.sticky, BETA_SERVER_SIDE_FALLBACK_CATEGORY)) return BETA_SERVER_SIDE_FALLBACK_CATEGORY;
-    if (isBetaSent(e.sticky, BETA_SERVER_SIDE_FALLBACK)) return BETA_SERVER_SIDE_FALLBACK;
-    return e.fromModel !== undefined &&
+    if (isBetaSent(options.sticky, BETA_SERVER_SIDE_FALLBACK_CATEGORY))
+      return BETA_SERVER_SIDE_FALLBACK_CATEGORY;
+    if (isBetaSent(options.sticky, BETA_SERVER_SIDE_FALLBACK)) return BETA_SERVER_SIDE_FALLBACK;
+    return options.fromModel !== undefined &&
       canUseDefaultFallback({
-        primaryModel: e.fromModel,
-        sticky: e.sticky,
-        serverDefaultFallbacksEnabled: e.serverDefaultFallbacksEnabled,
-        selfTargetDefaultFallbacksEnabled: e.selfTargetDefaultFallbacksEnabled,
+        primaryModel: options.fromModel,
+        sticky: options.sticky,
+        serverDefaultFallbacksEnabled: options.serverDefaultFallbacksEnabled,
+        selfTargetDefaultFallbacksEnabled: options.selfTargetDefaultFallbacksEnabled,
       })
       ? BETA_SERVER_SIDE_FALLBACK_CATEGORY
       : BETA_SERVER_SIDE_FALLBACK;
@@ -296,10 +305,13 @@ function pickFallbackBeta(e) {
   return BETA_SERVER_SIDE_FALLBACK;
 }
 //@ chunk-e6aww6q8.js:2402173-2402260 placement
-var l8s = Object.freeze({
-  visibleModel: undefined,
-  serverLane: undefined,
-  shouldLogSuppression: false,
+var NO_SUPPRESSION; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:2402173", () => {
+  NO_SUPPRESSION = Object.freeze({
+    visibleModel: undefined,
+    serverLane: undefined,
+    shouldLogSuppression: false,
+  });
 });
 //@ chunk-e6aww6q8.js:2402260-2403191 placement
 /**
@@ -313,27 +325,27 @@ function resolveRefusalFallback(options) {
         compiledTablesOnly: false,
       }),
     );
-  let n = isRefusalFallbackEnabled();
-  let r = shouldSilentlyDeclineFallback({
+  let enabled = isRefusalFallbackEnabled();
+  let shouldDecline = shouldSilentlyDeclineFallback({
     requestDialog: options.requestDialog,
     isMainThread: options.isMainThread,
     consumerLacksDialogCapability: options.consumerLacksDialogCapability,
   });
-  let s = options.inCascadeEpisode ? undefined : walkDownOpusLineup(options.currentModel);
-  let h = options.inCascadeEpisode
+  let walked = options.inCascadeEpisode ? undefined : walkDownOpusLineup(options.currentModel);
+  let candidate = options.inCascadeEpisode
     ? options.cascadeNext
-    : (s ?? (canFallBackFrom(options.currentModel) ? options.currentModel : undefined));
-  let y = !options.alreadyUsed && !options.declined && n && !r ? h : undefined;
-  let S =
-    y !== undefined &&
-    s !== undefined &&
+    : (walked ?? (canFallBackFrom(options.currentModel) ? options.currentModel : undefined));
+  let chosen = !options.alreadyUsed && !options.declined && enabled && !shouldDecline ? candidate : undefined;
+  let out =
+    chosen !== undefined &&
+    walked !== undefined &&
     !options.inCascadeEpisode &&
     !options.threadedRequest &&
     !options.preferenceQuestionPending &&
     isAutoSwitchOnFlagEnabled() &&
     !isBetaRejected_2(options.sticky, BETA_SERVER_SIDE_FALLBACK);
-  let w =
-    S &&
+  let tail =
+    out &&
     canUseDefaultFallback({
       primaryModel: options.currentModel,
       sticky: options.sticky,
@@ -343,17 +355,18 @@ function resolveRefusalFallback(options) {
       ? "default"
       : "explicit";
   let serverLane =
-    S && (w === "default" || !isSameModel(options.currentModel, y))
+    out && (tail === "default" || !isSameModel(options.currentModel, chosen))
       ? {
           forModel: options.currentModel,
-          model: y,
-          mode: w,
+          model: chosen,
+          mode: tail,
         }
       : undefined;
   return {
-    visibleModel: y,
+    visibleModel: chosen,
     serverLane,
-    shouldLogSuppression: !options.suppressionAlreadyLogged && n && r && h !== undefined,
+    shouldLogSuppression:
+      !options.suppressionAlreadyLogged && enabled && shouldDecline && candidate !== undefined,
   };
 }
 //@ chunk-e6aww6q8.js:2403191-2403771 placement
@@ -362,11 +375,11 @@ function resolveRefusalFallback(options) {
  */
 function describeServerFallback(event, context) {
   let any = event.discardedMessages.some((discardedMessage) =>
-    discardedMessage.message.content.some((w) => w.type === "tool_use"),
+    discardedMessage.message.content.some((block) => block.type === "tool_use"),
   );
-  let s = isFallbackReason(event.reason);
-  let isMainThread = s && context.isMainThread;
-  let emitsLocalScope = s && !context.isMainThread && context.emitsLocalScope;
+  let reason = isFallbackReason(event.reason);
+  let isMainThread = reason && context.isMainThread;
+  let emitsLocalScope = reason && !context.isMainThread && context.emitsLocalScope;
   return {
     telemetry: {
       reason: asFallbackReason(event.reason),
@@ -379,7 +392,7 @@ function describeServerFallback(event, context) {
       apiRefusalCategory:
         event.apiRefusalCategory != null ? normalizeRefusalCategory(event.apiRefusalCategory) : undefined,
     },
-    userVisible: s,
+    userVisible: reason,
     tombstonedToolUse: any,
     swapSession: isMainThread,
     showBanner: isMainThread || emitsLocalScope,
@@ -420,32 +433,39 @@ function buildRefusalFallbackSystemMessage(event, ids, scope) {
 /**
  * accessFallbackModels 客户端数据结构：for（最多 256 字符）与 models（1–3 个安全模型名）的 schema。
  */
-var ACCESSFALLBACKMODELS = "accessFallbackModels";
-var MAX_FALLBACK_MODELS = 3;
-var MAX_FALLBACK_FOR_CHARS = 256;
-var regExp_12 = new RegExp(`^[A-Za-z0-9][${MODEL_NAME_ALLOWED_CHARS}]{0,255}$`);
-var accessFallbackModelsSchema = DoctorLazy(() =>
-  zodStrictObject({
-    for: string().min(1).max(MAX_FALLBACK_FOR_CHARS),
-    models: array(string().regex(regExp_12)).min(1).max(MAX_FALLBACK_MODELS),
-  }),
-);
+var ACCESSFALLBACKMODELS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_FALLBACK_MODELS;
+var MAX_FALLBACK_FOR_CHARS;
+var regExp_12;
+var accessFallbackModelsSchema;
+deferInit("chunk-e6aww6q8.js:2404352", () => {
+  ACCESSFALLBACKMODELS = "accessFallbackModels";
+  MAX_FALLBACK_MODELS = 3;
+  MAX_FALLBACK_FOR_CHARS = 256;
+  regExp_12 = new RegExp(`^[A-Za-z0-9][${MODEL_NAME_ALLOWED_CHARS}]{0,255}$`);
+  accessFallbackModelsSchema = DoctorLazy(() =>
+    zodStrictObject({
+      for: stringSchema().min(1).max(MAX_FALLBACK_FOR_CHARS),
+      models: array(stringSchema().regex(regExp_12)).min(1).max(MAX_FALLBACK_MODELS),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:2404526-2404565 placement
 /**
  * 是否合法 accessFallbackModels 客户端数据。
  */
-function isAccessFallbackModelsData(e) {
-  return parseAccessFallbackModels(e) !== undefined;
+function isAccessFallbackModelsData(data) {
+  return parseAccessFallbackModels(data) !== undefined;
 }
 //@ chunk-e6aww6q8.js:2404565-2404750 placement
 /**
  * 解析客户端数据 accessFallbackModels：{for, models[≤3]} 经 schema 校验。
  */
-function parseAccessFallbackModels(e) {
-  if (typeof e !== "object" || e === null || !("models" in e)) return;
-  if (!Array.isArray(e.models) || e.models.length > MAX_FALLBACK_MODELS) return;
-  let n = accessFallbackModelsSchema().safeParse(e);
-  return n.success ? n.data : undefined;
+function parseAccessFallbackModels(data) {
+  if (typeof data !== "object" || data === null || !("models" in data)) return;
+  if (!Array.isArray(data.models) || data.models.length > MAX_FALLBACK_MODELS) return;
+  let parsed = accessFallbackModelsSchema().safeParse(data);
+  return parsed.success ? parsed.data : undefined;
 }
 export {
   finiteNonNegative,
@@ -465,7 +485,7 @@ export {
   fallbackMessagesCost,
   preferSameModel,
   resolveRefusalFallback,
-  l8s,
+  NO_SUPPRESSION,
   describeServerFallback,
   buildRefusalFallbackSystemMessage,
   modelUnavailableMessage,

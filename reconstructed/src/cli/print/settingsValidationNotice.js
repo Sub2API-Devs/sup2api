@@ -22,53 +22,55 @@ import { sanitizeDisplayText } from "../../utils/resultError.js";
  * headless 启动时把配置文件校验错误（被跳过的设置项）输出给 stream-json 宿主。
  */
 function reportSettingsValidationErrors(outputFormat) {
-  let n = isReportableDiagnostic(getSettingsWithErrors_2().errors);
-  if (n.length === 0) return;
-  let r = new Set([...getPolicySettingsLoadErrors(), ...helperSelectionWarnings()].map(settingsErrorKey));
-  let filtered = n.filter((w) => !r.has(settingsErrorKey(w)));
-  if (filtered.length === 0) return;
-  let filtered_2 = filtered.filter((w) => w.severity !== "warning");
-  let y = new Set(filtered_2.map((w) => w.file));
-  let filtered_3 = filtered.filter((w) => !y.has(w.file));
-  logSkippedInvalidSetting(filtered);
+  let reportable = isReportableDiagnostic(getSettingsWithErrors_2().errors);
+  if (reportable.length === 0) return;
+  let knownKeys = new Set(
+    [...getPolicySettingsLoadErrors(), ...helperSelectionWarnings()].map(settingsErrorKey),
+  );
+  let errors = reportable.filter((error) => !knownKeys.has(settingsErrorKey(error)));
+  if (errors.length === 0) return;
+  let errors_2 = errors.filter((error) => error.severity !== "warning");
+  let errorFiles = new Set(errors_2.map((error) => error.file));
+  let errors_3 = errors.filter((error) => !errorFiles.has(error.file));
+  logSkippedInvalidSetting(errors);
   logEvent("tengu_own_settings_validation_errors", {
-    not_loaded_file_count: y.size,
-    skipped_entry_count: filtered_3.length,
+    not_loaded_file_count: errorFiles.size,
+    skipped_entry_count: errors_3.length,
   });
   if (outputFormat === "json" || outputFormat === "stream-json") return;
-  let R = [];
-  if (filtered_2.length > 0)
-    R.push(`These settings files did not load, so nothing in them is in effect, including hooks and permission rules. Each loads again once the problem listed for it is fixed:
-${formatSettingsErrors(filtered_2)}`);
-  if (filtered_3.length > 0)
-    R.push(`These settings entries were skipped; the rest of each file is in effect:
-${formatSettingsErrors(filtered_3)}`);
-  process.stderr.write(`${R.join(`
+  let lines = [];
+  if (errors_2.length > 0)
+    lines.push(`These settings files did not load, so nothing in them is in effect, including hooks and permission rules. Each loads again once the problem listed for it is fixed:
+${formatSettingsErrors(errors_2)}`);
+  if (errors_3.length > 0)
+    lines.push(`These settings entries were skipped; the rest of each file is in effect:
+${formatSettingsErrors(errors_3)}`);
+  process.stderr.write(`${lines.join(`
 `)}
 `);
 }
 //@ chunk-tyg7f3ek.js:509459-509515 placement
-function settingsErrorKey(e) {
-  return `${e.file}:${e.path}:${e.message}`;
+function settingsErrorKey(error) {
+  return `${error.file}:${error.path}:${error.message}`;
 }
 //@ chunk-tyg7f3ek.js:509515-509781 placement
-function formatSettingsErrors(e) {
-  let n = [];
-  for (let [r, s] of Map.groupBy(e, (h) => h.file)) {
-    let h = sanitizeNoticeText(settingsSourceLabel(r));
-    for (let y of s.slice(0, SETTINGS_ERROR_NOTICE_LIMITS)) {
-      let S = sanitizeNoticeText(y.path);
-      n.push(`  ${h}${S ? ` (${S})` : ""}: ${sanitizeNoticeText(y.message)}`);
+function formatSettingsErrors(errors) {
+  let lines = [];
+  for (let [file, fileErrors] of Map.groupBy(errors, (error) => error.file)) {
+    let label = sanitizeNoticeText(settingsSourceLabel(file));
+    for (let error of fileErrors.slice(0, SETTINGS_ERROR_NOTICE_LIMITS)) {
+      let path = sanitizeNoticeText(error.path);
+      lines.push(`  ${label}${path ? ` (${path})` : ""}: ${sanitizeNoticeText(error.message)}`);
     }
-    if (s.length > SETTINGS_ERROR_NOTICE_LIMITS)
-      n.push(`  \u2026 and ${s.length - SETTINGS_ERROR_NOTICE_LIMITS} more in ${h}`);
+    if (fileErrors.length > SETTINGS_ERROR_NOTICE_LIMITS)
+      lines.push(`  \u2026 and ${fileErrors.length - SETTINGS_ERROR_NOTICE_LIMITS} more in ${label}`);
   }
-  return n.join(`
+  return lines.join(`
 `);
 }
 //@ chunk-tyg7f3ek.js:509781-509827 placement
-function sanitizeNoticeText(e) {
-  return sanitizeDisplayText(e, {
+function sanitizeNoticeText(text) {
+  return sanitizeDisplayText(text, {
     maxCodeUnits: SETTINGS_NOTICE_MAX_CHARS,
   });
 }

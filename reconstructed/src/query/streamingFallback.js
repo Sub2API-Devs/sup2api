@@ -17,32 +17,32 @@ import { discardInFlightTools } from "../services/tools/StreamingToolExecutor.js
  * 在回退链中找下一个可用模型（支持替换）。
  */
 function nextFallbackModel({ chain, from, failedModel, reason, substituteFor }) {
-  let y = from;
-  let S = false;
+  let index = from;
+  let sawFailed = false;
   let anySubstituted = false;
-  while (y < chain.length) {
-    let T = chain[y];
-    let w = substituteFor(T);
-    let P = w !== undefined;
-    anySubstituted ||= P;
-    let Q = P ? w : T;
-    if (Q === failedModel) S = true;
-    else if (Q !== null)
+  while (index < chain.length) {
+    let chainModel = chain[index];
+    let substitute = substituteFor(chainModel);
+    let wasSubstituted = substitute !== undefined;
+    anySubstituted ||= wasSubstituted;
+    let candidate = wasSubstituted ? substitute : chainModel;
+    if (candidate === failedModel) sawFailed = true;
+    else if (candidate !== null)
       return {
-        chainIndex: y,
-        target: Q,
-        substituted: P,
+        chainIndex: index,
+        target: candidate,
+        substituted: wasSubstituted,
         inPlace: false,
         anySubstituted,
       };
-    y++;
+    index++;
   }
-  let R = S && (reason === "overloaded" || reason === "server_error");
+  let retryInPlace = sawFailed && (reason === "overloaded" || reason === "server_error");
   return {
-    chainIndex: y,
-    target: R ? failedModel : null,
+    chainIndex: index,
+    target: retryInPlace ? failedModel : null,
     substituted: false,
-    inPlace: R,
+    inPlace: retryInPlace,
     anySubstituted,
   };
 }
@@ -54,11 +54,11 @@ function adoptFallbackResponse(attemptState, keptFirstResponse) {
   if (keptFirstResponse === undefined) return false;
   try {
     attemptState.needsFollowUp = true;
-    for (let r of keptFirstResponse) {
-      let filtered = r.message.content.filter((h) => h.type === "tool_use");
-      attemptState.assistantMessages.push(r);
+    for (let message of keptFirstResponse) {
+      let filtered = message.message.content.filter((block) => block.type === "tool_use");
+      attemptState.assistantMessages.push(message);
       attemptState.toolUseBlocks.push(...filtered);
-      for (let h of filtered) attemptState.streamingToolExecutor.addTool(h, r);
+      for (let block of filtered) attemptState.streamingToolExecutor.addTool(block, message);
     }
     return true;
   } catch (error) {
@@ -78,9 +78,9 @@ function clearInProgressToolUses(keptFirstResponse) {
     type: "set_in_progress_tool_use_ids",
     op: {
       action: "remove",
-      ids: keptFirstResponse.flatMap((n) =>
-        Array.isArray(n.message.content)
-          ? n.message.content.flatMap((r) => (r.type === "tool_use" ? [r.id] : []))
+      ids: keptFirstResponse.flatMap((message) =>
+        Array.isArray(message.message.content)
+          ? message.message.content.flatMap((block) => (block.type === "tool_use" ? [block.id] : []))
           : [],
       ),
     },
@@ -91,7 +91,7 @@ function clearInProgressToolUses(keptFirstResponse) {
  * 创建流式查询状态（助手消息、工具结果、执行器）。
  */
 function createStreamingState({ createStreamingToolExecutor, onReset }) {
-  let r = {
+  let state = {
     assistantMessages: [],
     toolResults: [],
     toolUseBlocks: [],
@@ -102,38 +102,38 @@ function createStreamingState({ createStreamingToolExecutor, onReset }) {
     toolWasDeferred: false,
     streamingToolExecutor: createStreamingToolExecutor(),
     reset({ clearAssistantMessages }) {
-      if (clearAssistantMessages) r.assistantMessages.length = 0;
-      r.toolResults.length = 0;
-      r.toolUseBlocks.length = 0;
-      r.toolDurations.length = 0;
-      r.needsFollowUp = false;
-      r.toolRequestedEndTurn = false;
-      r.shouldPreventContinuation = false;
-      r.toolWasDeferred = false;
+      if (clearAssistantMessages) state.assistantMessages.length = 0;
+      state.toolResults.length = 0;
+      state.toolUseBlocks.length = 0;
+      state.toolDurations.length = 0;
+      state.needsFollowUp = false;
+      state.toolRequestedEndTurn = false;
+      state.shouldPreventContinuation = false;
+      state.toolWasDeferred = false;
       onReset?.();
     },
     rebuildStreamingToolExecutor() {
-      r.streamingToolExecutor = createStreamingToolExecutor();
+      state.streamingToolExecutor = createStreamingToolExecutor();
     },
-    *abandonAttempt(s, h) {
-      for (let message of r.assistantMessages)
+    *abandonAttempt(reason, details) {
+      for (let message of state.assistantMessages)
         yield {
           type: "tombstone",
           message,
         };
-      for (let message of r.toolResults)
+      for (let message of state.toolResults)
         yield {
           type: "tombstone",
           message,
         };
-      r.reset({
+      state.reset({
         clearAssistantMessages: true,
       });
-      let { removes } = discardInFlightTools(r.streamingToolExecutor, s, h);
-      r.rebuildStreamingToolExecutor();
+      let { removes } = discardInFlightTools(state.streamingToolExecutor, reason, details);
+      state.rebuildStreamingToolExecutor();
       if (removes) yield removes;
     },
   };
-  return r;
+  return state;
 }
 export { createStreamingState, adoptFallbackResponse, clearInProgressToolUses, nextFallbackModel };

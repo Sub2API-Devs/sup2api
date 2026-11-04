@@ -188,40 +188,41 @@ var teamOnboardingCommandDefinition = {
       "tengu_flint_harbor_prompt",
       {},
     );
-    let s =
+    let promptTemplate =
       typeof featureValue_CACHED_MAY_BE_STALE?.prompt === "string"
         ? featureValue_CACHED_MAY_BE_STALE.prompt
         : TEAM_ONBOARDING_PROMPT;
-    let h =
+    let guideTemplate =
       typeof featureValue_CACHED_MAY_BE_STALE?.guideTemplate === "string"
         ? featureValue_CACHED_MAY_BE_STALE.guideTemplate
         : TEAM_ONBOARDING_GUIDE_TEMPLATE;
-    let y =
+    let windowDays =
       typeof featureValue_CACHED_MAY_BE_STALE?.windowDays === "number"
         ? Math.min(Math.max(Math.floor(featureValue_CACHED_MAY_BE_STALE.windowDays), 1), 365)
         : TEAM_ONBOARDING_DEFAULT_WINDOW_DAYS;
     logEvent("tengu_team_onboarding_invoked", {
-      window_days: y,
+      window_days: windowDays,
     });
     await saveGlobalConfig(
-      (Z) => ({
-        ...Z,
+      (config) => ({
+        ...config,
         teamOnboardingLastUsedAt: Date.now(),
       }),
       context.storageV5,
     );
-    let { usageData, sessionCount, slashCommandCount, mcpServerCount } = await collectTeamOnboardingUsage(y);
+    let { usageData, sessionCount, slashCommandCount, mcpServerCount } =
+      await collectTeamOnboardingUsage(windowDays);
     let text =
-      s
-        .replaceAll("{{WINDOW_DAYS}}", String(y))
-        .replaceAll("{{GUIDE_TEMPLATE}}", h)
+      promptTemplate
+        .replaceAll("{{WINDOW_DAYS}}", String(windowDays))
+        .replaceAll("{{GUIDE_TEMPLATE}}", guideTemplate)
         .replaceAll("{{USAGE_DATA}}", usageData) +
       (isTeamOnboardingShareEnabled() ? getTeamOnboardingSharingInstructions() : "");
     logEvent("tengu_team_onboarding_generated", {
       session_count: sessionCount,
       slash_command_count: slashCommandCount,
       mcp_server_count: mcpServerCount,
-      window_days: y,
+      window_days: windowDays,
     });
     return [
       {

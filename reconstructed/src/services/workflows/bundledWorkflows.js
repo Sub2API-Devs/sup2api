@@ -8,14 +8,37 @@
  * pieces: chunk-k2dqfxa4.js (2), chunk-p9mapmve.js (5)
  * attribution: placement 7
  */
-import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { getHostState } from "../../utils/hostEnvironment.js";
 import {
   isBundledSkillsDisabled,
   isBundledSkillsPolicyDenied,
   isSkillOutsideCorePolicy,
 } from "../../skills/bundledSkillsGate.js";
+import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 
+//@ chunk-k2dqfxa4.js:270-401 placement
+/**
+ * 注册一个内置工作流（脚本与元数据）到宿主状态。
+ */
+function registerBundledWorkflow(script, fields, options) {
+  getHostState().bundledWorkflows.push({
+    source: "built-in",
+    ...fields,
+    script,
+    disableModelInvocation: options?.disableModelInvocation,
+  });
+}
+//@ chunk-k2dqfxa4.js:401-513 placement
+/**
+ * 获取可用的内置工作流列表（工作流关闭时为空，部分情况下过滤被禁用的）。
+ */
+function getBundledWorkflows() {
+  if (isBundledSkillsDisabled()) return [];
+  let bundledWorkflows = getHostState().bundledWorkflows;
+  if (isBundledSkillsPolicyDenied())
+    return bundledWorkflows.filter((workflow) => !isSkillOutsideCorePolicy(workflow.name));
+  return bundledWorkflows;
+}
 //@ chunk-p9mapmve.js:3371-4299 placement
 /**
  * deep-research 内置工作流的适用场景、阶段表与脚本常量。
@@ -517,26 +540,4 @@ return {
 function initBundledWorkflows() {
   registerDeepResearchWorkflow();
 }
-//@ chunk-k2dqfxa4.js:270-401 placement
-/**
- * 注册一个内置工作流（脚本与元数据）到宿主状态。
- */
-function registerBundledWorkflow(script, e, r) {
-  getHostState().bundledWorkflows.push({
-    source: "built-in",
-    ...e,
-    script,
-    disableModelInvocation: r?.disableModelInvocation,
-  });
-}
-//@ chunk-k2dqfxa4.js:401-513 placement
-/**
- * 获取可用的内置工作流列表（工作流关闭时为空，部分情况下过滤被禁用的）。
- */
-function getBundledWorkflows() {
-  if (isBundledSkillsDisabled()) return [];
-  let bundledWorkflows = getHostState().bundledWorkflows;
-  if (isBundledSkillsPolicyDenied()) return bundledWorkflows.filter((e) => !isSkillOutsideCorePolicy(e.name));
-  return bundledWorkflows;
-}
-export { getBundledWorkflows };
+export { getBundledWorkflows, initBundledWorkflows };

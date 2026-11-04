@@ -95,10 +95,10 @@ function getToolsDescription(agent) {
 /**
  * 格式化一行代理说明："- 类型: whenToUse (Tools: …)"。
  */
-function formatAgentLine(agent, n) {
+function formatAgentLine(agent, lean) {
   let toolsDescription = getToolsDescription(agent);
-  let s = (n && agent.whenToUseLean) || agent.whenToUse;
-  return `- ${agent.agentType}: ${s} (Tools: ${toolsDescription})`;
+  let description = (lean && agent.whenToUseLean) || agent.whenToUse;
+  return `- ${agent.agentType}: ${description} (Tools: ${toolsDescription})`;
 }
 //@ chunk-e6aww6q8.js:3265697-3265791 layout
 /**
@@ -121,22 +121,22 @@ async function getPrompt({
   subagentBudgetNote,
   modelMix,
 }) {
-  let G = isForkSubagentEnabled();
-  let q = leanRewriteOf({
+  let forkEnabled = isForkSubagentEnabled();
+  let leanRewriteText = leanRewriteOf({
     model,
     leanRewrite,
   });
-  let Z = G && forkAvailable;
-  let Se = forkGateForcesBackground();
-  let ke = isRelativeEffortDisabled()
+  let canFork = forkEnabled && forkAvailable;
+  let forkForcesBackground = forkGateForcesBackground();
+  let effortHint = isRelativeEffortDisabled()
     ? '\n- When you fan work out in parallel, give each independent lookup `effort: "lower"` \u2014 that is where the step cheaper pays most. More generally, pass `"lower"` for any mechanical, self-checking brief (find-and-report, grep across named files, a pattern you spelled out); pass `"higher"` for a well-specified piece that needs more reasoning than the work around it.'
     : "";
-  let we = `${SUBAGENT_TYPE_REQUIRED}, so choose ${Z ? '`"fork"` or ' : ""}one of the listed agent types.`;
-  let Ee =
+  let typeRequired = `${SUBAGENT_TYPE_REQUIRED}, so choose ${canFork ? '`"fork"` or ' : ""}one of the listed agent types.`;
+  let worktreeParallelNote =
     isTwinklingBooleOn() && canRunAgentInWorktree()
       ? 'When dispatching two or more agents that will write or edit files in the same repository, give EACH `isolation: "worktree"` \u2014 parallel agents sharing a working directory overwrite each other\'s work.'
       : "";
-  let Ae = Z
+  let whenToFork = canFork
     ? `
 
 ## When to fork
@@ -145,9 +145,9 @@ Fork yourself (pass \`subagent_type: "fork"\`) when the intermediate tool output
 
 Forks are cheap because they share your prompt cache.
 
-**Don't peek.** ${Se ? "The tool result includes an `output_file` path \u2014 do not Read or tail it. You get a completion notification" : "A background fork's tool result includes an `output_file` path \u2014 do not Read or tail it. It sends a completion notification"}; trust it. Reading the transcript mid-flight pulls the fork's tool noise into your context, which defeats the point of forking.
+**Don't peek.** ${forkForcesBackground ? "The tool result includes an `output_file` path \u2014 do not Read or tail it. You get a completion notification" : "A background fork's tool result includes an `output_file` path \u2014 do not Read or tail it. It sends a completion notification"}; trust it. Reading the transcript mid-flight pulls the fork's tool noise into your context, which defeats the point of forking.
 
-**Don't race.** ${Se ? "After launching, you know nothing about what the fork found." : "After launching a background fork, you know nothing about what it found."} Never fabricate or predict fork results in any format \u2014 not as prose, summary, or structured output. The notification arrives as a user-role message in a later turn; it is never something you write yourself. If the user asks a follow-up before the notification lands, tell them the fork is still running \u2014 give status, not a guess.
+**Don't race.** ${forkForcesBackground ? "After launching, you know nothing about what the fork found." : "After launching a background fork, you know nothing about what it found."} Never fabricate or predict fork results in any format \u2014 not as prose, summary, or structured output. The notification arrives as a user-role message in a later turn; it is never something you write yourself. If the user asks a follow-up before the notification lands, tell them the fork is still running \u2014 give status, not a guess.
 
 **Writing a fork prompt.** Since the fork inherits your context, the prompt is a *directive* \u2014 what to do, not what the situation is. Be specific about scope: what's in, what's out, what another agent is handling. Don't re-explain background.
 `
@@ -156,14 +156,14 @@ Forks are cheap because they share your prompt cache.
 
 ## Writing the prompt
 
-${Z ? "Any agent other than a fork starts with zero context. " : ""}Brief the agent like a smart colleague who just walked into the room \u2014 it hasn't seen this conversation, doesn't know what you've tried, doesn't understand why this task matters.
+${canFork ? "Any agent other than a fork starts with zero context. " : ""}Brief the agent like a smart colleague who just walked into the room \u2014 it hasn't seen this conversation, doesn't know what you've tried, doesn't understand why this task matters.
 - Explain what you're trying to accomplish and why.
 - Describe what you've already learned or ruled out.
 - Give enough context about the surrounding problem that the agent can make judgment calls rather than just following a narrow instruction.
 - If you need a short response, say so ("report in under 200 words").
 - Lookups: hand over the exact command. Investigations: hand over the question \u2014 prescribed steps become dead weight when the premise is wrong.
 
-${Z ? "For fresh agents, terse" : "Terse"} command-style prompts produce shallow, generic work.
+${canFork ? "For fresh agents, terse" : "Terse"} command-style prompts produce shallow, generic work.
 
 **Never delegate understanding.** Don't write "based on your findings, fix the bug" or "based on the research, implement it." Those phrases push synthesis onto the agent instead of doing it yourself. Write prompts that prove you understood: include file paths, line numbers, what specifically to change.`;
   let forkExamples = `Example usage:
@@ -207,10 +207,11 @@ ${AGENT}({
 })
 </example>
 `;
-  let We = isBackgroundLaunchOptIn() && !Se && !isInProcessTeammate();
-  let ze = (!isForegroundAgentMoveOff() || isBackgroundLaunchByDefault()) && !isInProcessTeammate();
-  let lt =
-    (ze || We) && canLaunchBackgroundAgent()
+  let backgroundOptIn = isBackgroundLaunchOptIn() && !forkForcesBackground && !isInProcessTeammate();
+  let backgroundByDefault =
+    (!isForegroundAgentMoveOff() || isBackgroundLaunchByDefault()) && !isInProcessTeammate();
+  let backgroundNote =
+    (backgroundByDefault || backgroundOptIn) && canLaunchBackgroundAgent()
       ? `
 - Work that must go on after your reply can run in a background agent. After your reply, this session keeps running only while a background agent is waiting for a model response or running a foreground tool call; a few minutes after no agent is doing either, the session is likely stopped, with every agent and background command in it. An agent waiting on the user (a permission answer, or a connector's link or approval) or on a background command does not count. So tell the agent not to use ${BASH_TOOL_NAME}'s \`run_in_background\`, and to give each command a \`timeout\` long enough for it, at most ${getMaxBashTimeoutMs()} ms, since a command still running at its timeout is moved to the background. It should split work longer than that into such commands, and wait for a condition with a foreground \`until <check>; do sleep 5; done\` loop, bounded so it ends within its timeout, not with ${MONITOR} or a leading \`sleep\`. A background agent's MCP tool calls always run in the foreground, so each keeps the session running until it returns, unless it waits on the user. If you are yourself a background agent, do such work here in the foreground instead of starting another agent.`
       : "";
@@ -227,12 +228,12 @@ The agent starts with no context from this conversation, so the prompt briefs it
 </commentary>
 </example>
 `;
-  let pt = `Example usage:
+  let freshExamples = `Example usage:
 
 ${
   !generalPurposeAvailable
     ? ""
-    : ze
+    : backgroundByDefault
       ? `<example>
 user: "What's left on this branch before we can ship?"
 assistant: <thinking>A survey question across git state, tests, and config. I'll delegate it and ask for a short report so the raw command output stays out of my context.</thinking>
@@ -271,18 +272,18 @@ The prompt is self-contained: it states the goal, lists what to check, and caps 
 
 `
 }${currentExamples}`;
-  let Et = leanPromptOf({
+  let leanPromptText = leanPromptOf({
     model,
     leanPrompt,
   });
-  let yt = getSubagentSteer() === "default";
-  let gt = shouldSteerCostToHost()
+  let steerDefault = getSubagentSteer() === "default";
+  let steerCostToHost = shouldSteerCostToHost()
     ? `
 
 **Do not spawn agents unless the user asks.** Each spawn starts cold and re-derives context you already have \u2014 it's the expensive path on this plan. A task with "multiple angles," "thorough," or several parts is not a request to spawn; handle it inline with your own tools. Only use this tool when the user explicitly says to use a subagent, or names one of the available agent types.${isWebFetchAgentEnabled() ? ` This does not cover the \`${WEB_FETCH_AGENT}\` agent type where it is listed and you have no ${WEBFETCH} tool of your own: it stands in for that tool, so calling it to read a page is ordinary tool use.` : ""}`
     : "";
-  let At = q
-    ? `${agentTypesParagraph(gt, Z, generalPurposeAvailable, we)}${
+  let basePrompt = leanRewriteText
+    ? `${agentTypesParagraph(steerCostToHost, canFork, generalPurposeAvailable, typeRequired)}${
         subagentBudgetNote === undefined
           ? ""
           : `
@@ -291,78 +292,81 @@ ${subagentBudgetNote}`
       }`
     : `${AGENT_TOOL_DESCRIPTION}. Each agent type has specific capabilities and tools available to it.
 
-${AGENT_LIST_IN_REMINDER_NOTE}${gt}
+${AGENT_LIST_IN_REMINDER_NOTE}${steerCostToHost}
 
-${Z ? `When using the ${AGENT} tool, specify a subagent_type to select an agent: \`"fork"\` forks yourself (the fork inherits your full conversation context and always runs on your model \u2014 a \`model\` override is ignored); ${generalPurposeAvailable ? "any other type \u2014 or omitting it \u2014 starts a fresh agent (general-purpose by default)." : `any other type starts a fresh agent. ${we}`}` : `When using the ${AGENT} tool, specify a subagent_type parameter to select which agent type to use. ${generalPurposeAvailable ? "If omitted, the general-purpose agent is used." : we}`}${
+${canFork ? `When using the ${AGENT} tool, specify a subagent_type to select an agent: \`"fork"\` forks yourself (the fork inherits your full conversation context and always runs on your model \u2014 a \`model\` override is ignored); ${generalPurposeAvailable ? "any other type \u2014 or omitting it \u2014 starts a fresh agent (general-purpose by default)." : `any other type starts a fresh agent. ${typeRequired}`}` : `When using the ${AGENT} tool, specify a subagent_type parameter to select which agent type to use. ${generalPurposeAvailable ? "If omitted, the general-purpose agent is used." : typeRequired}`}${
         subagentBudgetNote === undefined
           ? ""
           : `
 
 ${subagentBudgetNote}`
       }`;
-  if (isCoordinator) return At;
-  let It =
+  if (isCoordinator) return basePrompt;
+  let searchToolName =
     hasEmbeddedSearchTools() && isBashAvailable() ? "`grep` via the Bash tool" : `the ${GREP_TOOL_NAME} tool`;
-  let Yt = Z
+  let whenNotToUse = canFork
     ? ""
     : `
 ## When not to use
 
-If the target is already known, use the direct tool: ${FILE_READ_TOOL_NAME} for a known path, ${It} for a specific symbol or string. Reserve this tool for open-ended questions that span the codebase, or tasks that match an available agent type.
+If the target is already known, use the direct tool: ${FILE_READ_TOOL_NAME} for a known path, ${searchToolName} for a specific symbol or string. Reserve this tool for open-ended questions that span the codebase, or tasks that match an available agent type.
 `;
-  if (Et) {
-    let qt =
-      ze && !Se
+  if (leanPromptText) {
+    let backgroundBullet =
+      backgroundByDefault && !forkForcesBackground
         ? "\n- Subagents run in the background by default; you'll be notified when one completes. Pass `run_in_background: false` only when your very next action depends on the result and nothing else could usefully happen while it runs \u2014 otherwise background it so the user can interject. Never fabricate or predict a pending agent's results \u2014 the notification is never something you write yourself; if the user asks before it arrives, say it's still running."
-        : ze && !Z
+        : backgroundByDefault && !canFork
           ? `
 - Subagents run in the background; you'll be notified when one completes. Never fabricate or predict a pending agent's results \u2014 the notification is never something you write yourself; if the user asks before it arrives, say it's still running.`
-          : We
+          : backgroundOptIn
             ? "\n- A subagent runs in the background only if you pass `run_in_background: true`; even then it may run in the foreground or be refused. When one does run in the background, you'll be notified when it completes. Never fabricate or predict a pending agent's results \u2014 the notification is never something you write yourself; if the user asks before it arrives, say it's still running."
             : "";
-    let Zt = isInProcessTeammate()
+    let teammateNote = isInProcessTeammate()
       ? "\n- `run_in_background` and `name` are unavailable here \u2014 only synchronous subagents."
       : isTeammate()
         ? "\n- `name` is unavailable here \u2014 teammates cannot spawn teammates."
         : "";
-    let rn = shouldInjectAgentListViaReminder()
+    let reminderAgentList = shouldInjectAgentListViaReminder()
       ? '\n- `isolation: "remote"` runs the agent in a remote CCR sandbox (always background).'
       : "";
     let shared = `A previously spawned agent cannot be continued from here; every ${AGENT} call starts fresh`;
-    let no = Z ? ' (except subagent_type: "fork", which inherits your context)' : "";
-    let hn = Ee ? ` ${Ee} Each result comes back with a branch and worktree path to merge.` : "";
-    if (q) {
-      let Xn = ze && Z && Se ? BACKGROUND_SUBAGENTS_NOTE : "";
-      let fo = modelMix?.whenToUse ?? delegatingToSubagentsSection(Z);
-      let To =
-        gt || fo === ""
+    let forkExceptionNote = canFork ? ' (except subagent_type: "fork", which inherits your context)' : "";
+    let worktreeNote = worktreeParallelNote
+      ? ` ${worktreeParallelNote} Each result comes back with a branch and worktree path to merge.`
+      : "";
+    if (leanRewriteText) {
+      let backgroundForkNote =
+        backgroundByDefault && canFork && forkForcesBackground ? BACKGROUND_SUBAGENTS_NOTE : "";
+      let whenToUse = modelMix?.whenToUse ?? delegatingToSubagentsSection(canFork);
+      let whenToUseSection =
+        steerCostToHost || whenToUse === ""
           ? ""
           : `
 
-${fo}`;
-      let bo =
-        gt || modelMix?.whenToUse !== undefined
+${whenToUse}`;
+      let conclusionSection =
+        steerCostToHost || modelMix?.whenToUse !== undefined
           ? ""
           : `
 
 ${SUBAGENT_CONCLUSION_TEXT}`;
-      let vn = continueAvailable ? continueAgentHint(Z) : `${shared}${no}.`;
-      let co = `${ke}${rn}${qt}${lt}${Zt}`;
-      return `${At}${To}
+      let continueHint = continueAvailable ? continueAgentHint(canFork) : `${shared}${forkExceptionNote}.`;
+      let effortNotes = `${effortHint}${reminderAgentList}${backgroundBullet}${backgroundNote}${teammateNote}`;
+      return `${basePrompt}${whenToUseSection}
 
-${subagentObservabilityParagraph(Xn)}
+${subagentObservabilityParagraph(backgroundForkNote)}
 
-${vn}
+${continueHint}
 
-${AGENT_TOOL_USAGE_TEXT}${hn}${bo}${
-        co
+${AGENT_TOOL_USAGE_TEXT}${worktreeNote}${conclusionSection}${
+        effortNotes
           ? `
-${co}`
+${effortNotes}`
           : ""
       }`;
     }
-    let ho = Z
-      ? Se
+    let tailNote = canFork
+      ? forkForcesBackground
         ? `
 
 A fork runs in the background and keeps its tool output out of your context. If you are the fork, execute directly \u2014 don't re-delegate. Subagents run in the background; you'll be notified when one completes. Never fabricate or predict a pending agent's results \u2014 the notification is never something you write yourself; if the user asks before it arrives, say it's still running.`
@@ -370,58 +374,58 @@ A fork runs in the background and keeps its tool output out of your context. If 
 
 A fork keeps its tool output out of your context. If you are the fork, execute directly \u2014 don't re-delegate.`
       : "";
-    let yn =
+    let whenToUseText =
       modelMix?.whenToUse ??
       WHEN_TO_USE_AGENT_GUIDANCE +
         (isRelativeEffortDisabled()
           ? ' Several at once is also where `effort: "lower"` pays: if you have decomposed to independent lookups, run each one step cheaper.'
           : "");
-    let Kn =
-      gt || yn === ""
+    let whenToUseBlock =
+      steerCostToHost || whenToUseText === ""
         ? ""
         : `
 
 ## When to use
 
-${yn}`;
-    return `${At}${Kn}${ho}
+${whenToUseText}`;
+    return `${basePrompt}${whenToUseBlock}${tailNote}
 
-- ${ze || We ? "The agent's final report is not shown to the user \u2014 relay what matters." : "The agent's final message is returned to you as the tool result; it is not shown to the user \u2014 relay what matters."}
-- ${continueAvailable ? `Use ${SENDMESSAGE} with the agent's ID or name to continue a previously spawned agent with its context intact; a new ${AGENT} call starts fresh` : shared}${no}.
-- Each agent type's model, reasoning effort, and tools come from its definition (\`.claude/agents/*.md\` frontmatter or SDK \`agents\`).${ke}
-- \`isolation: "worktree"\` gives the agent its own git worktree (auto-cleaned if unchanged).${hn}${rn}${qt}${lt}${Zt}`;
+- ${backgroundByDefault || backgroundOptIn ? "The agent's final report is not shown to the user \u2014 relay what matters." : "The agent's final message is returned to you as the tool result; it is not shown to the user \u2014 relay what matters."}
+- ${continueAvailable ? `Use ${SENDMESSAGE} with the agent's ID or name to continue a previously spawned agent with its context intact; a new ${AGENT} call starts fresh` : shared}${forkExceptionNote}.
+- Each agent type's model, reasoning effort, and tools come from its definition (\`.claude/agents/*.md\` frontmatter or SDK \`agents\`).${effortHint}
+- \`isolation: "worktree"\` gives the agent its own git worktree (auto-cleaned if unchanged).${worktreeNote}${reminderAgentList}${backgroundBullet}${backgroundNote}${teammateNote}`;
   }
-  return `${At}
-${Yt}
+  return `${basePrompt}
+${whenNotToUse}
 ## Usage notes
 
 - Always include a short description summarizing what the agent will do
-- ${ze || We ? "When the agent is done, its final report is not visible to the user. To show the user the result, you should send a text message back to the user with a concise summary of the result." : "When the agent is done, it will return a single message back to you. The result returned by the agent is not visible to the user. To show the user the result, you should send a text message back to the user with a concise summary of the result."}
+- ${backgroundByDefault || backgroundOptIn ? "When the agent is done, its final report is not visible to the user. To show the user the result, you should send a text message back to the user with a concise summary of the result." : "When the agent is done, it will return a single message back to you. The result returned by the agent is not visible to the user. To show the user the result, you should send a text message back to the user with a concise summary of the result."}
 - Trust but verify: an agent's summary describes what it intended to do, not necessarily what it did. When an agent writes or edits code, check the actual changes before reporting the work as done.${
-    ze && !Se
+    backgroundByDefault && !forkForcesBackground
       ? `
 - Agents run in the background by default. When an agent runs in the background, you will be automatically notified when it completes \u2014 do NOT sleep, poll, or proactively check on its progress. Continue with other work or respond to the user instead.
 - **Foreground vs background**: Pass \`run_in_background: false\` only when your very next action depends on the agent's result and nothing else could usefully happen while it runs \u2014 e.g., a research agent whose finding gates the edit you're about to make. Otherwise let it run in the background (the default) \u2014 this includes fire-and-forget work, independent investigations, and anything where the user might hand you something else in the meantime. Wanting the result "next" is not enough on its own.`
       : ""
   }${
-    ze && !(Z && Se)
+    backgroundByDefault && !(canFork && forkForcesBackground)
       ? `
 - **Don't race**: after launching a background agent, you know nothing about its results. Never fabricate or predict them in any format \u2014 not as prose, summary, or structured output. The completion notification arrives in a later turn; it is never something you write yourself. If the user asks before it lands, say the agent is still running \u2014 give status, not a guess.`
       : ""
-  }${We ? "\n- **Background agents**: an agent runs in the background only if you pass `run_in_background: true`, and a call that passes it may still run in the foreground or be refused. When an agent does run in the background, the call returns at once without its report, and you will be automatically notified when it completes \u2014 do NOT sleep, poll, or proactively check on its progress. Continue with other work or respond to the user instead. After launching a background agent, you know nothing about its results. Never fabricate or predict them in any format \u2014 not as prose, summary, or structured output. The completion notification arrives in a later turn; it is never something you write yourself. If the user asks before it lands, say the agent is still running \u2014 give status, not a guess." : ""}${lt}
-- ${continueAvailable ? `To continue a previously spawned agent, use ${SENDMESSAGE} with the agent's ID or name as the \`to\` field \u2014 that resumes it with full context. A new ${AGENT} call` : `A previously spawned agent cannot be continued from here. Every ${AGENT} call`} starts a fresh agent with no memory of prior runs${Z ? ' (except subagent_type: "fork")' : ""}, so the prompt must be self-contained.
-- Each agent type's model, reasoning effort, and tool access are set in its definition (\`.claude/agents/*.md\` frontmatter, or the SDK \`agents\` option)${env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE ? "" : "; the `model` parameter here overrides the definition for this one call"}.${ke}
+  }${backgroundOptIn ? "\n- **Background agents**: an agent runs in the background only if you pass `run_in_background: true`, and a call that passes it may still run in the foreground or be refused. When an agent does run in the background, the call returns at once without its report, and you will be automatically notified when it completes \u2014 do NOT sleep, poll, or proactively check on its progress. Continue with other work or respond to the user instead. After launching a background agent, you know nothing about its results. Never fabricate or predict them in any format \u2014 not as prose, summary, or structured output. The completion notification arrives in a later turn; it is never something you write yourself. If the user asks before it lands, say the agent is still running \u2014 give status, not a guess." : ""}${backgroundNote}
+- ${continueAvailable ? `To continue a previously spawned agent, use ${SENDMESSAGE} with the agent's ID or name as the \`to\` field \u2014 that resumes it with full context. A new ${AGENT} call` : `A previously spawned agent cannot be continued from here. Every ${AGENT} call`} starts a fresh agent with no memory of prior runs${canFork ? ' (except subagent_type: "fork")' : ""}, so the prompt must be self-contained.
+- Each agent type's model, reasoning effort, and tool access are set in its definition (\`.claude/agents/*.md\` frontmatter, or the SDK \`agents\` option)${env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE ? "" : "; the `model` parameter here overrides the definition for this one call"}.${effortHint}
 - Clearly tell the agent whether you expect it to write code or just to do research (search, file reads, web fetches, etc.), since a fresh agent is not aware of the user's intent${
-    yt
+    steerDefault
       ? `
 - If the agent description mentions that it should be used proactively, then you should try your best to use it without the user having to ask for it first.
 - If the user specifies that they want you to run agents "in parallel", you MUST send a single message with multiple ${AGENT} tool use content blocks. For example, if you need to launch both a build-validator agent and a test-runner agent in parallel, send a single message with both tool calls.`
       : ""
   }
 - With \`isolation: "worktree"\`, the worktree is automatically cleaned up if the agent makes no changes; otherwise the path and branch are returned in the result.${
-    Ee
+    worktreeParallelNote
       ? `
-- ${Ee}`
+- ${worktreeParallelNote}`
       : ""
   }${shouldInjectAgentListViaReminder() ? '\n- You can set `isolation: "remote"` to run the agent in a remote CCR environment. This is always a background task; you\'ll be notified when it completes. Use for long-running tasks that need a fresh sandbox.' : ""}${
     isInProcessTeammate()
@@ -431,8 +435,8 @@ ${Yt}
         ? `
 - The name parameter is not available in this context \u2014 teammates cannot spawn other teammates. Omit it to spawn a subagent.`
         : ""
-  }${Ae}${writingThePromptSection}
+  }${whenToFork}${writingThePromptSection}
 
-${Z ? forkExamples : pt}`;
+${canFork ? forkExamples : freshExamples}`;
 }
 export { getPrompt, formatAgentLine, AGENT_LIST_IN_REMINDER_NOTE, shouldSteerCostToHost };

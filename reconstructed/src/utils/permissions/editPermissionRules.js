@@ -14,7 +14,7 @@ import {
   zodStrictObject,
   literal,
   array,
-  string,
+  stringSchema,
   discriminatedUnion,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
@@ -55,7 +55,7 @@ var editableSourceSchema = DoctorLazy(() => _enum(EDITABLE_SETTING_SOURCES));
 var addRulesEditSchema = DoctorLazy(() =>
   zodStrictObject({
     op: literal("add"),
-    rules: array(string().max(MAX_RULE_LENGTH, "each rule must be at most 10000 characters"))
+    rules: array(stringSchema().max(MAX_RULE_LENGTH, "each rule must be at most 10000 characters"))
       .min(1, "rules must be an array of 1 to 100 strings")
       .max(MAX_RULES_PER_EDIT, "rules must be an array of 1 to 100 strings"),
     behavior: ruleBehaviorSchema(),
@@ -65,7 +65,7 @@ var addRulesEditSchema = DoctorLazy(() =>
 var removeRuleEditSchema = DoctorLazy(() =>
   zodStrictObject({
     op: literal("remove"),
-    rule: string()
+    rule: stringSchema()
       .min(1, "rule must be a non-empty string of at most 10000 characters")
       .max(MAX_RULE_LENGTH, "rule must be a non-empty string of at most 10000 characters"),
     behavior: ruleBehaviorSchema(),
@@ -92,8 +92,8 @@ function formatRuleEditIssue(zodError) {
     return "rules must be an array of 1 to 100 strings";
   if (joined === "rule" && issue.code === "invalid_type")
     return "rule must be a non-empty string of at most 10000 characters";
-  let u = issue.path[0] === undefined ? "" : String(issue.path[0]);
-  return joined && !issue.message.startsWith(u) ? `${joined}: ${issue.message}` : issue.message;
+  let pathRoot = issue.path[0] === undefined ? "" : String(issue.path[0]);
+  return joined && !issue.message.startsWith(pathRoot) ? `${joined}: ${issue.message}` : issue.message;
 }
 //@ chunk-cgsbs2dj.js:6498-6737 placement
 function getRuleEditBlockedReason() {
@@ -104,17 +104,17 @@ function getRuleEditBlockedReason() {
   return null;
 }
 //@ chunk-cgsbs2dj.js:6737-6833 placement
-function settingSourceNotLoadedReason(s) {
-  return isSettingSourceEnabled(s)
+function settingSourceNotLoadedReason(source) {
+  return isSettingSourceEnabled(source)
     ? null
-    : `${getSettingSourceDisplayNameLowercase(s)} are not loaded here, so their rules cannot be edited`;
+    : `${getSettingSourceDisplayNameLowercase(source)} are not loaded here, so their rules cannot be edited`;
 }
 //@ chunk-cgsbs2dj.js:6833-7501 placement
 /**
  * 校验 add 操作的每条规则：去空白、validatePermissionRule 校验并收集警告；Tool(*) 写法提示会保存为整工具规则。返回解析后的规则值。
  */
-function validateAddRulesEdit(s) {
-  let { rules, behavior, destination } = s;
+function validateAddRulesEdit(edit) {
+  let { rules, behavior, destination } = edit;
   let ruleValues = [];
   let warnings = [];
   for (let rawRule of rules) {
@@ -141,9 +141,9 @@ function validateAddRulesEdit(s) {
       !/\s/.test(parens.toolName) &&
       parens.rawContent === "*"
     ) {
-      let f = formatPermissionRule(ruleValue);
+      let toolWideRule = formatPermissionRule(ruleValue);
       warnings.push(
-        `"${trimmed}" was saved as the tool-wide rule "${f}", which matches every use of the tool. To limit it, put a specific pattern inside the parentheses.`,
+        `"${trimmed}" was saved as the tool-wide rule "${toolWideRule}", which matches every use of the tool. To limit it, put a specific pattern inside the parentheses.`,
       );
     }
     ruleValues.push(ruleValue);
@@ -160,8 +160,8 @@ function validateAddRulesEdit(s) {
 /**
  * 在来源的存储规则中按原样查找要删除的规则；找不到或同一文件有等价拼写时报错，否则返回规则对象与原文。
  */
-function resolveRemoveRuleEdit(s, storedRules) {
-  let { rule, behavior, source } = s;
+function resolveRemoveRuleEdit(edit, storedRules) {
+  let { rule, behavior, source } = edit;
   let found = storedRules.find((storedRule) => storedRule === rule);
   if (found === undefined)
     return {
@@ -188,45 +188,47 @@ function resolveRemoveRuleEdit(s, storedRules) {
   };
 }
 //@ chunk-cgsbs2dj.js:8108-8139 placement
-function canonicalRuleString(s) {
-  return formatPermissionRule(permissionRuleValueFromString(s));
+function canonicalRuleString(rule) {
+  return formatPermissionRule(permissionRuleValueFromString(rule));
 }
 //@ chunk-cgsbs2dj.js:8139-8186 placement
-function rulesOfBehavior(s, behavior) {
-  return s?.permissions?.[behavior] ?? [];
+function rulesOfBehavior(settings, behavior) {
+  return settings?.permissions?.[behavior] ?? [];
 }
 //@ chunk-cgsbs2dj.js:8186-10256 placement
-async function editPermissionRules(s, t) {
-  let e = (error) => ({
+async function editPermissionRules(input, storage) {
+  let fail = (error) => ({
     ok: false,
     error,
   });
   let ruleEditBlockedReason = getRuleEditBlockedReason();
-  if (ruleEditBlockedReason !== null) return e(ruleEditBlockedReason);
-  let d = permissionRuleEditSchema().safeParse(s);
-  if (!d.success) return e(formatRuleEditIssue(d.error));
-  let n = d.data;
-  if (n.op === "add") {
-    let i = validateAddRulesEdit(n);
-    if (!i.ok) return e(i.error);
-    let { destination, behavior, ruleValues } = i;
-    let w = settingSourceNotLoadedReason(destination);
-    if (w !== null) return e(w);
+  if (ruleEditBlockedReason !== null) return fail(ruleEditBlockedReason);
+  let parsed = permissionRuleEditSchema().safeParse(input);
+  if (!parsed.success) return fail(formatRuleEditIssue(parsed.error));
+  let edit = parsed.data;
+  if (edit.op === "add") {
+    let validated = validateAddRulesEdit(edit);
+    if (!validated.ok) return fail(validated.error);
+    let { destination, behavior, ruleValues } = validated;
+    let notLoadedReason = settingSourceNotLoadedReason(destination);
+    if (notLoadedReason !== null) return fail(notLoadedReason);
     let settingsFileLoadError = getSettingsFileLoadError(destination);
-    if (settingsFileLoadError !== null) return e(settingsFileLoadError);
-    let F = new Set(
+    if (settingsFileLoadError !== null) return fail(settingsFileLoadError);
+    let existingKeys = new Set(
       rulesOfBehavior(getSettingsForSourceWriteSeed(destination), behavior).map(canonicalRuleString),
     );
-    let found = ruleValues.find((ruleValue) => F.has(formatPermissionRule(ruleValue)));
+    let found = ruleValues.find((ruleValue) => existingKeys.has(formatPermissionRule(ruleValue)));
     if (found !== undefined)
-      return e(
+      return fail(
         `"${formatPermissionRule(found)}" is already in the ${behavior} rules in ${getSettingSourceDisplayNameLowercase(destination)}`,
       );
     if (destination === "localSettings") {
-      let y = new Set(rulesOfBehavior(getSettingsForSource(destination), behavior).map(canonicalRuleString));
-      let found = ruleValues.find((ruleValue) => y.has(formatPermissionRule(ruleValue)));
+      let launchDirKeys = new Set(
+        rulesOfBehavior(getSettingsForSource(destination), behavior).map(canonicalRuleString),
+      );
+      let found = ruleValues.find((ruleValue) => launchDirKeys.has(formatPermissionRule(ruleValue)));
       if (found !== undefined)
-        return e(
+        return fail(
           `"${formatPermissionRule(found)}" is already in effect from the launch directory\u2019s own .claude/settings.local.json`,
         );
     }
@@ -237,59 +239,59 @@ async function editPermissionRules(s, t) {
         behavior,
         destination,
       },
-      t,
+      storage,
     );
     await settleBackgroundSettingsWork();
-    let D = new Set(
+    let writtenKeys = new Set(
       rulesOfBehavior(getSettingsForSourceWriteSeed(destination), behavior).map(canonicalRuleString),
     );
-    let filtered = ruleValues.filter((ruleValue) => !D.has(formatPermissionRule(ruleValue)));
+    let filtered = ruleValues.filter((ruleValue) => !writtenKeys.has(formatPermissionRule(ruleValue)));
     if (filtered.length > 0)
-      return e(
+      return fail(
         filtered.length === ruleValues.length
           ? `the rules could not be written to ${getSettingSourceDisplayNameLowercase(destination)}: the settings write was refused or failed`
           : `${filtered.length} of ${ruleValues.length} rules could not be written to ${getSettingSourceDisplayNameLowercase(destination)}: the settings write was refused or failed for those`,
       );
     return {
       ok: true,
-      warnings: i.warnings,
+      warnings: validated.warnings,
       stored: ruleValues.map(formatPermissionRule),
     };
   }
-  let { behavior, source } = n;
-  let a = settingSourceNotLoadedReason(source);
-  if (a !== null) return e(a);
+  let { behavior, source } = edit;
+  let notLoadedReason = settingSourceNotLoadedReason(source);
+  if (notLoadedReason !== null) return fail(notLoadedReason);
   let settingsFileLoadError = getSettingsFileLoadError(source);
-  if (settingsFileLoadError !== null) return e(settingsFileLoadError);
+  if (settingsFileLoadError !== null) return fail(settingsFileLoadError);
   let storedRules = rulesOfBehavior(getSettingsForSourceWriteSeed(source), behavior);
   if (
     source === "localSettings" &&
-    !storedRules.includes(n.rule) &&
-    rulesOfBehavior(getSettingsForSource(source), behavior).includes(n.rule)
+    !storedRules.includes(edit.rule) &&
+    rulesOfBehavior(getSettingsForSource(source), behavior).includes(edit.rule)
   )
-    return e(
+    return fail(
       "that rule is defined in the launch directory\u2019s own .claude/settings.local.json, which is not edited here; edit that file directly",
     );
-  let removeRuleEdit = resolveRemoveRuleEdit(n, storedRules);
-  if (!removeRuleEdit.ok) return e(removeRuleEdit.error);
+  let removeRuleEdit = resolveRemoveRuleEdit(edit, storedRules);
+  if (!removeRuleEdit.ok) return fail(removeRuleEdit.error);
   if (
     source === "localSettings" &&
     rulesOfBehavior(getSettingsForSource(source), behavior).some(
-      (i) =>
-        i !== removeRuleEdit.storedRaw &&
-        canonicalRuleString(i) === canonicalRuleString(removeRuleEdit.storedRaw),
+      (siblingRule) =>
+        siblingRule !== removeRuleEdit.storedRaw &&
+        canonicalRuleString(siblingRule) === canonicalRuleString(removeRuleEdit.storedRaw),
     )
   )
-    return e(
+    return fail(
       "this rule cannot be removed here: the launch directory\u2019s own .claude/settings.local.json holds another spelling of the same rule, and removing one would silently remove both \u2014 edit that file by hand to clean these up",
     );
-  let j = await deletePermissionRuleFromSettings(removeRuleEdit.rule, t);
+  let removed = await deletePermissionRuleFromSettings(removeRuleEdit.rule, storage);
   await settleBackgroundSettingsWork();
   let any = rulesOfBehavior(getSettingsForSourceWriteSeed(source), behavior).some(
-    (i) => canonicalRuleString(i) === canonicalRuleString(removeRuleEdit.storedRaw),
+    (rule) => canonicalRuleString(rule) === canonicalRuleString(removeRuleEdit.storedRaw),
   );
-  if (!j || any)
-    return e(
+  if (!removed || any)
+    return fail(
       `the rule could not be removed from ${getSettingSourceDisplayNameLowercase(source)}: the settings write was refused or failed, so it is still in its settings file`,
     );
   return {
@@ -299,11 +301,12 @@ async function editPermissionRules(s, t) {
   };
 }
 //@ chunk-cgsbs2dj.js:10256-10472 placement
-function getSettingsFileLoadError(s) {
-  if (getSettingsForSourceWriteSeed(s) !== null) return null;
-  let settingsFilePathForSource = getSettingsFilePathForSource(s);
+function getSettingsFileLoadError(source) {
+  if (getSettingsForSourceWriteSeed(source) !== null) return null;
+  let settingsFilePathForSource = getSettingsFilePathForSource(source);
   if (settingsFilePathForSource === undefined) return null;
   return parseSettingsFile(settingsFilePathForSource).errors.some((error) => error.severity !== "warning")
-    ? `the ${getSettingSourceDisplayNameLowercase(s)} file has errors and could not be loaded; fix it by hand first`
+    ? `the ${getSettingSourceDisplayNameLowercase(source)} file has errors and could not be loaded; fix it by hand first`
     : null;
 }
+export { editPermissionRules };

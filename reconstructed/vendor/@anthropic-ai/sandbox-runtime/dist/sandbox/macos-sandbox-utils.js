@@ -16,24 +16,25 @@ import {
   DANGEROUS_FILES,
   getDangerousDirectories,
   encodeSandboxedCommand,
-  Cwn,
+  denyGlobRegex,
   containsGlobChars,
-  zot,
-  Dqt,
+  coversChildPath,
+  pathSpellingVariants,
   nameLocation,
   isAtOrUnder,
-  ITt,
+  orDefault,
   generateProxyEnvVars,
   buildPosixGitSafeDirEnv,
   decodeSandboxedCommand,
 } from "./sandbox-utils.js";
-import { escapeRegexLiteral, xTt } from "./glob-pattern.js";
+import { escapeRegexLiteral, globToRegex } from "./glob-pattern.js";
 import { literalReadings } from "./path-entries.js";
 import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
 import { buildJavaToolOptions } from "./java-proxy-agent.js";
 import { whichSync } from "../utils/which.js";
 import { quote } from "../utils/shell-quote.js";
 import { shouldIgnoreViolation } from "./sandbox-violation-store.js";
+import { deferInit } from "../../../../../runtime/deferred-init.js";
 
 //@ chunk-fq0cr76a.js:758526-758857 esm-fingerprint
 function macGetMandatoryDenyEntries(allowGitConfig = false) {
@@ -60,7 +61,10 @@ function macGetMandatoryDenyEntries(allowGitConfig = false) {
   return entries;
 }
 //@ chunk-fq0cr76a.js:758857-758913 esm-fingerprint
-var sessionSuffix = `_${Math.random().toString(36).slice(2, 11)}_SBX`;
+var sessionSuffix; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fq0cr76a.js:758857", () => {
+  sessionSuffix = `_${Math.random().toString(36).slice(2, 11)}_SBX`;
+});
 //@ chunk-fq0cr76a.js:758913-758962 esm-fingerprint
 function generateLogTag(attributionCommand) {
   return `CMD64_${encodeSandboxedCommand(attributionCommand)}_END_${sessionSuffix}`;
@@ -77,11 +81,11 @@ function anchorRegex(entry, compile) {
 }
 //@ chunk-fq0cr76a.js:759173-759205 esm-layout
 function globRegex(entry) {
-  return anchorRegex(entry, xTt);
+  return anchorRegex(entry, globToRegex);
 }
 //@ chunk-fq0cr76a.js:759205-759237 esm-layout
 function denyGlobEntryRegex(entry) {
-  return anchorRegex(entry, Cwn);
+  return anchorRegex(entry, denyGlobRegex);
 }
 //@ chunk-fq0cr76a.js:759237-759315 esm-fingerprint
 function denyPathFilter(entry) {
@@ -151,11 +155,11 @@ function denyGlobCovers(denyRegex, entry) {
 }
 //@ chunk-fq0cr76a.js:759949-759986 esm-layout
 function isStrictlyUnder(entry, dir) {
-  return zot(entrySamplePath(entry), dir);
+  return coversChildPath(entrySamplePath(entry), dir);
 }
 //@ chunk-fq0cr76a.js:759986-760195 esm-fingerprint
 function inBothSpellings(kind, entry) {
-  let resolved = (p) => Dqt(p)[1] ?? p;
+  let resolved = (p) => pathSpellingVariants(p)[1] ?? p;
   let base = entryBaseDir(entry);
   let canonical = kind === "deny" || entry.glob ? resolved(base) : nameLocation(base, resolved);
   if (canonical === base || canonical === "/" || isAtOrUnder(canonical, "/dev")) return [entry];
@@ -815,7 +819,7 @@ function wrapCommandWithSandboxMacOS(params) {
     !hasGitConfig
   )
     return command;
-  let attributionCommand = ITt(command, commandId);
+  let attributionCommand = orDefault(command, commandId);
   let logTag = generateLogTag(attributionCommand);
   let profile = generateSandboxProfile({
     readConfig,
@@ -885,7 +889,7 @@ function wrapCommandWithSandboxMacOS(params) {
 }
 //@ chunk-fq0cr76a.js:774892-775857 esm-fingerprint
 function startMacOSSandboxLogMonitor(callback, ignoreViolations, resolveCommandText) {
-  let s = /CMD64_(.+?)_END/;
+  let cmdExtractRegex = /CMD64_(.+?)_END/;
   let sandboxExtractRegex = /Sandbox:\s+(.+)$/;
   let logProcess = spawn("log", [
     "stream",
@@ -906,7 +910,7 @@ function startMacOSSandboxLogMonitor(callback, ignoreViolations, resolveCommandT
     let command;
     let encodedCommand;
     if (commandLine) {
-      encodedCommand = commandLine.match(s)?.[1];
+      encodedCommand = commandLine.match(cmdExtractRegex)?.[1];
       if (encodedCommand)
         try {
           command = resolveCommandText(decodeSandboxedCommand(encodedCommand));

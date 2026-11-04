@@ -5,19 +5,19 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-vwj6ccer.js:226-1261 cjs-fingerprint
-var require_Event = x(function (cjsExports, cjsModule) {
-  cjsModule.exports = _t;
-  _t.CAPTURING_PHASE = 1;
-  _t.AT_TARGET = 2;
-  _t.BUBBLING_PHASE = 3;
-  function _t(type, dictionary) {
+var require_Event = __commonJS(function (cjsExports, cjsModule) {
+  cjsModule.exports = EventClass;
+  EventClass.CAPTURING_PHASE = 1;
+  EventClass.AT_TARGET = 2;
+  EventClass.BUBBLING_PHASE = 3;
+  function EventClass(type, dictionary) {
     this.type = "";
     this.target = null;
     this.currentTarget = null;
-    this.eventPhase = _t.AT_TARGET;
+    this.eventPhase = EventClass.AT_TARGET;
     this.bubbles = false;
     this.cancelable = false;
     this.isTrusted = false;
@@ -30,9 +30,9 @@ var require_Event = x(function (cjsExports, cjsModule) {
     if (type) this.type = type;
     if (dictionary) for (var p in dictionary) this[p] = dictionary[p];
   }
-  _t.prototype = Object.create(Object.prototype, {
+  EventClass.prototype = Object.create(Object.prototype, {
     constructor: {
-      value: _t,
+      value: EventClass,
     },
     stopPropagation: {
       value: function () {

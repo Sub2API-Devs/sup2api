@@ -21,8 +21,8 @@ import { buildSkillDoctorContext } from "../skill-doctor/skillDoctor.js";
  */
 var callStatsCommand = async (onDone, context) => {
   if (isUnattendedBgSession()) {
-    let t = await call("", context);
-    onDone(t.type === "text" ? t.value : undefined, {
+    let result = await call("", context);
+    onDone(result.type === "text" ? result.value : undefined, {
       display: "system",
     });
     return null;
@@ -40,3 +40,4 @@ var callStatsCommand = async (onDone, context) => {
     }),
   });
 };
+export { callStatsCommand };

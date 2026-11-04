@@ -9,6 +9,7 @@
  * attribution: placement 2
  */
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../../utils/errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-7c9mpntp.js:226-523 placement
 var HELD_BACK_REASON_TEXT = {
@@ -19,10 +20,15 @@ var HELD_BACK_REASON_TEXT = {
   restart_needed: "Restart Claude Code to finish signing in.",
 };
 //@ chunk-7c9mpntp.js:523-660 placement
-class StoredLoginHeldBackError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  constructor(e) {
-    super(HELD_BACK_REASON_TEXT[e], "Stored login held back", `stored_login_refused_${e}`);
-    this.name = "StoredLoginHeldBackError";
-  }
-}
+let StoredLoginHeldBackError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-7c9mpntp.js:523", () => {
+  StoredLoginHeldBackError = class StoredLoginHeldBackError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    constructor(reason) {
+      super(HELD_BACK_REASON_TEXT[reason], "Stored login held back", `stored_login_refused_${reason}`);
+      this.name = "StoredLoginHeldBackError";
+    }
+  };
+});
 export { StoredLoginHeldBackError };

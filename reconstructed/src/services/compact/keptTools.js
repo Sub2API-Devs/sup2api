@@ -22,11 +22,11 @@ import { isGmailAttachmentTool } from "../../bootstrap/stateSlices.js";
 /**
  * 记录一次工具使用（工具名 + 输入），供清理/压缩时保留相关工具；开关关闭或出错时静默。
  */
-function recordToolUsePair(e, name) {
+function recordToolUsePair(name, name_2) {
   try {
     if (isSillyShoreGateOn()) {
-      let r = canonicalToolName(e.trim());
-      getConversationToolsUsed().record([r, name]);
+      let canonical = canonicalToolName(name.trim());
+      getConversationToolsUsed().record([canonical, name_2]);
     }
   } catch (error) {
     logError(error);
@@ -36,13 +36,14 @@ function recordToolUsePair(e, name) {
 /**
  * 记录助手消息中用到的服务端/MCP 工具（用于清理时保留）。
  */
-function recordServerToolsUsed(e) {
+function recordServerToolsUsed(message) {
   try {
     if (!isSillyShoreGateOn()) return;
-    let n = [];
-    for (let r of e.message.content)
-      if (r.type === "server_tool_use" || r.type === "mcp_tool_use") n.push(getToolUseName(r));
-    if (n.length > 0) getConversationToolsUsed().record(n);
+    let names = [];
+    for (let block of message.message.content)
+      if (block.type === "server_tool_use" || block.type === "mcp_tool_use")
+        names.push(getToolUseName(block));
+    if (names.length > 0) getConversationToolsUsed().record(names);
   } catch (error) {
     logError(error);
   }
@@ -51,9 +52,9 @@ function recordServerToolsUsed(e) {
 /**
  * 记录一个用过的工具名。
  */
-function recordToolUsed(e) {
+function recordToolUsed(name) {
   try {
-    if (isSillyShoreGateOn()) getConversationToolsUsed().record([e]);
+    if (isSillyShoreGateOn()) getConversationToolsUsed().record([name]);
   } catch (error) {
     logError(error);
   }
@@ -62,10 +63,10 @@ function recordToolUsed(e) {
 /**
  * 记录经标签处理的工具输入（artifact 内容加不可信标记）。
  */
-function recordToolUseTagged(e) {
+function recordToolUseTagged(name) {
   try {
     if (isSillyShoreGateOn())
-      getConversationToolsUsed().record(tagUntrustedArtifactContent(e, undefined, false));
+      getConversationToolsUsed().record(tagUntrustedArtifactContent(name, undefined, false));
   } catch (error) {
     logError(error);
   }

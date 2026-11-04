@@ -15,30 +15,31 @@ import { getPlatform } from "../platform.js";
 import { logForDebugging } from "../debug.js";
 import { errorMessage } from "../errors.js";
 import { RESTOREADDITIONALPROJECTFALLBACKFOLDERS } from "../shell/shellEnvironment.js";
-import { io } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { memoizeAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { getWindowsProfileReadStatusAsync } from "../../../vendor/@anthropic-ai/sandbox-runtime/dist/sandbox/windows-sandbox-utils.js";
 import { rgRunner } from "./windowsSandbox.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3047991-3048559 placement
 /**
  * Windows 下判断沙箱命令能否读取 ~/.nuget/packages：环境变量已指定 NuGet 目录、路径含特殊字符或目录不存在时跳过；目录（或其父目录）在原生沙箱已授权路径中才返回该路径。
  */
-async function findReadableNugetPackagesDir(e) {
+async function findReadableNugetPackagesDir(env) {
   try {
-    if (getPlatform() !== "windows" || Object.keys(e).some((key) => NUGET_ENV_KEYS.has(key.toUpperCase())))
+    if (getPlatform() !== "windows" || Object.keys(env).some((key) => NUGET_ENV_KEYS.has(key.toUpperCase())))
       return;
     let packagesDir = win32.join(homedir(), ".nuget", "packages");
     if (
       !/^[A-Za-z]:\\/.test(packagesDir) ||
       UNSAFE_MSBUILD_PATH_RE.test(packagesDir) ||
       !(await lstat(packagesDir).then(
-        (s) => s.isDirectory(),
+        (stats) => stats.isDirectory(),
         () => false,
       ))
     )
       return;
     let grantedPaths = await getGrantedSandboxPaths();
-    return [packagesDir, win32.dirname(packagesDir)].some((s) => grantedPaths.has(s.toLowerCase()))
+    return [packagesDir, win32.dirname(packagesDir)].some((path) => grantedPaths.has(path.toLowerCase()))
       ? packagesDir
       : undefined;
   } catch (error) {
@@ -52,19 +53,24 @@ async function findReadableNugetPackagesDir(e) {
   }
 }
 //@ chunk-e6aww6q8.js:3048559-3048857 placement
-var NUGET_ENV_KEYS = new Set(["NUGET_PACKAGES", RESTOREADDITIONALPROJECTFALLBACKFOLDERS.toUpperCase()]);
-var UNSAFE_MSBUILD_PATH_RE = /[';]|[$%@]\(|%[0-9A-Fa-f]{2}/;
-var getGrantedSandboxPaths = io(async () => {
-  let { state, paths = [] } = await getWindowsProfileReadStatusAsync({
-    paths: true,
-    srtWin: rgRunner(),
+var NUGET_ENV_KEYS; // deferred: uses INJECTABLE_ENV_VARS (../shell/shellEnvironment.js) of its import cycle while loading; runs once the cycle is complete
+var UNSAFE_MSBUILD_PATH_RE;
+var getGrantedSandboxPaths;
+deferInit("chunk-e6aww6q8.js:3048559", () => {
+  NUGET_ENV_KEYS = new Set(["NUGET_PACKAGES", RESTOREADDITIONALPROJECTFALLBACKFOLDERS.toUpperCase()]);
+  UNSAFE_MSBUILD_PATH_RE = /[';]|[$%@]\(|%[0-9A-Fa-f]{2}/;
+  getGrantedSandboxPaths = memoizeAlias(async () => {
+    let { state, paths = [] } = await getWindowsProfileReadStatusAsync({
+      paths: true,
+      srtWin: rgRunner(),
+    });
+    return new Set(
+      state === "current"
+        ? paths
+            .filter(({ kind }) => kind === "granted")
+            .map(({ path }) => path.replace(/^\\\\\?\\|\\+$/g, "").toLowerCase())
+        : [],
+    );
   });
-  return new Set(
-    state === "current"
-      ? paths
-          .filter(({ kind }) => kind === "granted")
-          .map(({ path }) => path.replace(/^\\\\\?\\|\\+$/g, "").toLowerCase())
-      : [],
-  );
 });
 export { findReadableNugetPackagesDir };

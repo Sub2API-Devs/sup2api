@@ -30,27 +30,27 @@ function isHumanOrigin(origin) {
 /**
  * 是否可视为用户自己输入的回合。
  */
-function isOwnWordTurn(e) {
-  return e.ownWord === true || (isHumanOrigin(e.origin) && e.verifiedSlackHumanTurn !== true);
+function isOwnWordTurn(msg) {
+  return msg.ownWord === true || (isHumanOrigin(msg.origin) && msg.verifiedSlackHumanTurn !== true);
 }
 //@ chunk-aepeg2w5.js:601114-601404 placement
 /**
  * 消息是否为人输入的回合。
  */
-function isHumanTurn(e) {
+function isHumanTurn(msg) {
   try {
-    if (e.type === "user")
+    if (msg.type === "user")
       return (
-        isHumanOrigin(e.origin) &&
-        e.toolUseResult === undefined &&
-        e.isCompactSummary !== true &&
-        e.verifiedSlackHumanTurn !== true
+        isHumanOrigin(msg.origin) &&
+        msg.toolUseResult === undefined &&
+        msg.isCompactSummary !== true &&
+        msg.verifiedSlackHumanTurn !== true
       );
     return (
-      e.type === "attachment" &&
-      e.attachment.type === "queued_command" &&
-      isHumanOrigin(e.attachment.origin) &&
-      e.attachment.verifiedSlackHumanTurn !== true
+      msg.type === "attachment" &&
+      msg.attachment.type === "queued_command" &&
+      isHumanOrigin(msg.attachment.origin) &&
+      msg.attachment.verifiedSlackHumanTurn !== true
     );
   } catch {
     return false;
@@ -60,13 +60,13 @@ function isHumanTurn(e) {
 /**
  * 是否为非用户亲手输入（meta、交接、跳过附件等）。
  */
-function isNonTypedInput(e) {
+function isNonTypedInput(msg) {
   return (
-    e.isMeta === true ||
-    e.textNotTyped === true ||
-    e.handedOff === true ||
-    e.queueSkipAttachments === true ||
-    e.queueTranscriptOnly === true
+    msg.isMeta === true ||
+    msg.textNotTyped === true ||
+    msg.handedOff === true ||
+    msg.queueSkipAttachments === true ||
+    msg.queueTranscriptOnly === true
   );
 }
 //@ chunk-aepeg2w5.js:601537-601629 placement
@@ -83,11 +83,11 @@ function isStrictHumanTurn(messages) {
 /**
  * 若回合尾部的决定者是严格意义上的人工回合，返回该消息。
  */
-function strictHumanDeciderTurn(e) {
-  let decider = analyzeTurnTail(e).decider;
+function strictHumanDeciderTurn(msg) {
+  let decider = analyzeTurnTail(msg).decider;
   if (decider == null || !decider.strictHuman) return;
-  let r = e[decider.index];
-  return r !== undefined && isHumanTurn(r) ? r : undefined;
+  let deciderMessage = msg[decider.index];
+  return deciderMessage !== undefined && isHumanTurn(deciderMessage) ? deciderMessage : undefined;
 }
 //@ chunk-aepeg2w5.js:601750-601822 placement
 /**
@@ -112,13 +112,13 @@ function isUserDrivenHere(messages) {
   let { decider, replacedTurnStart } = analyzeTurnTail(messages);
   if (decider === null) return replacedTurnStart?.byHumanHere === true;
   if (!decider.userDriven) return false;
-  let s = messages[decider.index];
-  if (s === undefined) return false;
-  if (s.type === "user") return s.verifiedSlackHumanTurn !== true;
+  let deciderMessage = messages[decider.index];
+  if (deciderMessage === undefined) return false;
+  if (deciderMessage.type === "user") return deciderMessage.verifiedSlackHumanTurn !== true;
   return (
-    s.type === "attachment" &&
-    s.attachment.type === "queued_command" &&
-    s.attachment.verifiedSlackHumanTurn !== true
+    deciderMessage.type === "attachment" &&
+    deciderMessage.attachment.type === "queued_command" &&
+    deciderMessage.attachment.verifiedSlackHumanTurn !== true
   );
 }
 //@ chunk-aepeg2w5.js:602251-602313 placement
@@ -179,23 +179,23 @@ function isScheduledTriggerTurn(messages) {
  * 从后往前找最近一条“决定性”人类回合（user 消息或人类 queued_command），返回 {decider:{index,origin,text,userDriven,strictHuman,scheduledTrigger}, referentTail: 其前一条 assistant 文本, scheduledTrigger}。
  */
 function analyzeTurnTailUnsafe(messages) {
-  let n = null;
-  let r = -1;
-  let s = false;
-  let h;
-  let y = () => ({
+  let decider = null;
+  let deciderIndex = -1;
+  let sawScheduledTrigger = false;
+  let compactSummaryMessage;
+  let fallbackTail = () => ({
     ...LAST_TURN_TAIL,
-    scheduledTrigger: s || isScheduledTriggerTurn(messages),
+    scheduledTrigger: sawScheduledTrigger || isScheduledTriggerTurn(messages),
   });
   for (let j = messages.length - 1; j >= 0; j--) {
     let message = messages[j];
-    if (message == null) return y();
+    if (message == null) return fallbackTail();
     try {
       if (message.type === "attachment" && message.attachment.type === "queued_command") {
-        if (isScheduledTriggerOrigin(message.attachment.origin)) s = true;
+        if (isScheduledTriggerOrigin(message.attachment.origin)) sawScheduledTrigger = true;
         if (isHumanQueuedCommand(message.attachment)) {
           let origin = message.attachment.origin;
-          n = {
+          decider = {
             index: j,
             origin,
             text: nonEmptyPromptText(extractPromptText(message.attachment.prompt)),
@@ -203,7 +203,7 @@ function analyzeTurnTailUnsafe(messages) {
             strictHuman: isHumanOrigin(origin),
             scheduledTrigger: isScheduledTriggerOrigin(origin),
           };
-          r = j;
+          deciderIndex = j;
           break;
         }
         continue;
@@ -213,39 +213,40 @@ function analyzeTurnTailUnsafe(messages) {
         isToolResultOrCompactSummary(message) ||
         isToolResultContinuation(messages, j)
       ) {
-        if (message.type === "user" && isScheduledTriggerOrigin(message.origin)) s = true;
-        if (message.type === "user" && message.isCompactSummary === true) h ??= message;
+        if (message.type === "user" && isScheduledTriggerOrigin(message.origin)) sawScheduledTrigger = true;
+        if (message.type === "user" && message.isCompactSummary === true) compactSummaryMessage ??= message;
         continue;
       }
       let origin = message.origin;
-      let F = message.isMeta === true && isHumanOrigin(origin);
-      n = {
+      let isMetaHuman = message.isMeta === true && isHumanOrigin(origin);
+      decider = {
         index: j,
         origin,
         text: nonEmptyPromptText(getUserMessageText(message)),
-        userDriven: F || (message.isMeta !== true && isHumanDrivenOrigin(origin)),
-        strictHuman: F || (message.isMeta !== true && isHumanOrigin(origin)),
+        userDriven: isMetaHuman || (message.isMeta !== true && isHumanDrivenOrigin(origin)),
+        strictHuman: isMetaHuman || (message.isMeta !== true && isHumanOrigin(origin)),
         scheduledTrigger: isScheduledTriggerOrigin(origin),
       };
-      r = j;
+      deciderIndex = j;
       break;
     } catch {
       logDegradedTurnTail();
-      return y();
+      return fallbackTail();
     }
   }
-  if (n === null) {
-    let R = h?.[replacedTurnStartSymbol];
+  if (decider === null) {
+    let replacedStart = compactSummaryMessage?.[replacedTurnStartSymbol];
     return {
       ...LAST_TURN_TAIL,
-      scheduledTrigger: s,
-      replacedTurnStart: R?.summaryUuid === h?.uuid ? R?.turnStart : undefined,
+      scheduledTrigger: sawScheduledTrigger,
+      replacedTurnStart:
+        replacedStart?.summaryUuid === compactSummaryMessage?.uuid ? replacedStart?.turnStart : undefined,
     };
   }
-  let scheduledTrigger = s || n.scheduledTrigger;
-  let w;
+  let scheduledTrigger = sawScheduledTrigger || decider.scheduledTrigger;
+  let referentText;
   try {
-    for (let j = r - 1; j >= 0; j--) {
+    for (let j = deciderIndex - 1; j >= 0; j--) {
       let message = messages[j];
       if (message == null) break;
       if (message.type !== "assistant") break;
@@ -257,17 +258,17 @@ function analyzeTurnTailUnsafe(messages) {
         continue;
       let assistantText = getAssistantText(message);
       if (assistantText !== null) {
-        w = assistantText;
+        referentText = assistantText;
         break;
       }
     }
   } catch {
     logDegradedTurnTail();
-    w = undefined;
+    referentText = undefined;
   }
   return {
-    decider: n,
-    referentTail: w,
+    decider,
+    referentTail: referentText,
     scheduledTrigger,
   };
 }
@@ -278,25 +279,25 @@ function analyzeTurnTailUnsafe(messages) {
 function allUserTurnsSatisfy(messages, predicate) {
   try {
     for (let j = 0; j < messages.length; j++) {
-      let s = messages[j];
-      if (s == null) return false;
-      if (s.type === "system") {
-        if (s.subtype === "compact_boundary" || s.subtype === "microcompact_boundary") return false;
+      let row = messages[j];
+      if (row == null) return false;
+      if (row.type === "system") {
+        if (row.subtype === "compact_boundary" || row.subtype === "microcompact_boundary") return false;
         continue;
       }
-      if (s.type === "attachment") {
+      if (row.type === "attachment") {
         if (
-          s.attachment.type === "poll_events" ||
-          s.attachment.type === "teammate_mailbox" ||
-          (s.attachment.type === "queued_command" && !predicate(s.attachment.origin, s))
+          row.attachment.type === "poll_events" ||
+          row.attachment.type === "teammate_mailbox" ||
+          (row.attachment.type === "queued_command" && !predicate(row.attachment.origin, row))
         )
           return false;
         continue;
       }
-      if (s.type !== "user") continue;
-      if (s.isCompactSummary === true || s.replacesSpan === true) return false;
-      if (isToolResultMessage(s) || isToolResultContinuation(messages, j)) continue;
-      if (!predicate(s.origin, s)) return false;
+      if (row.type !== "user") continue;
+      if (row.isCompactSummary === true || row.replacesSpan === true) return false;
+      if (isToolResultMessage(row) || isToolResultContinuation(messages, j)) continue;
+      if (!predicate(row.origin, row)) return false;
     }
     return true;
   } catch {
@@ -316,11 +317,16 @@ function nonEmptyPromptText(text) {
 function getAssistantText(message) {
   let content = message.message?.content;
   if (!Array.isArray(content)) return null;
-  let r = [];
-  for (let h of content)
-    if (typeof h === "object" && h !== null && h.type === "text" && typeof h.text === "string")
-      r.push(h.text);
-  let joined = r.join(`
+  let textParts = [];
+  for (let block of content)
+    if (
+      typeof block === "object" &&
+      block !== null &&
+      block.type === "text" &&
+      typeof block.text === "string"
+    )
+      textParts.push(block.text);
+  let joined = textParts.join(`
 `);
   return joined.trim() !== "" ? joined : null;
 }
@@ -329,12 +335,17 @@ function getUserMessageText(message) {
   let content = message.message?.content;
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return null;
-  let r = [];
-  for (let s of content)
-    if (typeof s === "object" && s !== null && s.type === "text" && typeof s.text === "string")
-      r.push(s.text);
-  return r.length > 0
-    ? r.join(`
+  let textParts = [];
+  for (let block of content)
+    if (
+      typeof block === "object" &&
+      block !== null &&
+      block.type === "text" &&
+      typeof block.text === "string"
+    )
+      textParts.push(block.text);
+  return textParts.length > 0
+    ? textParts.join(`
 `)
     : null;
 }

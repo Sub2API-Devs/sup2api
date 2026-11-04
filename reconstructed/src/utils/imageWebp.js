@@ -29,20 +29,22 @@ import { logFeatureOk, logFeatureSad } from "../services/analytics/featureTeleme
 //@ chunk-mvvq2nx1.js:15548-15650 placement
 function getWebpMode() {
   if (isDiskless()) return "off";
-  let e = isFirstPartyApiBackend() ? getFeatureValue_CACHED_MAY_BE_STALE(TENGU_PARSED_EAGLE, "off") : "off";
-  return e === "lossless" || e === "all" ? e : "off";
+  let mode = isFirstPartyApiBackend()
+    ? getFeatureValue_CACHED_MAY_BE_STALE(TENGU_PARSED_EAGLE, "off")
+    : "off";
+  return mode === "lossless" || mode === "all" ? mode : "off";
 }
 //@ chunk-mvvq2nx1.js:15650-15694 placement
 /**
  * WebP 模式关闭时返回 undefined，否则返回原值。
  */
-function webpMaxBytesIfOn(e) {
-  return getWebpMode() === "off" ? undefined : e;
+function webpMaxBytesIfOn(maxBytes) {
+  return getWebpMode() === "off" ? undefined : maxBytes;
 }
 //@ chunk-mvvq2nx1.js:15694-15835 placement
-async function tryImageEncode(e) {
+async function tryImageEncode(run) {
   try {
-    return await e();
+    return await run();
   } catch (error) {
     if (isUnknownImageErrorType(classifyImageErrorCode(error))) logError(error);
     else
@@ -53,37 +55,37 @@ async function tryImageEncode(e) {
   }
 }
 //@ chunk-mvvq2nx1.js:15835-16018 placement
-function encodeWebp(e, n) {
+function encodeWebp(getImage, options) {
   return tryImageEncode(async () => {
-    let r = await (await e()).webp(n).toBuffer();
-    if (n.lossless && !isLosslessWebp(r))
+    let encoded = await (await getImage()).webp(options).toBuffer();
+    if (options.lossless && !isLosslessWebp(encoded))
       throw Error("a lossless WebP encode wrote a file that is not lossless");
-    return r;
+    return encoded;
   });
 }
 //@ chunk-mvvq2nx1.js:16018-16325 placement
 /**
  * 无损编码 WebP，并在可疑情况下把原图与 WebP 解码结果都转 PNG 逐字节比较，不一致返回 not_exact。
  */
-async function encodeExactLosslessWebp(e) {
-  let n = await encodeWebp(e, {
+async function encodeExactLosslessWebp(getImage) {
+  let encoded = await encodeWebp(getImage, {
     lossless: true,
   });
-  if (n === undefined || !webpHasAlpha(n)) return n;
-  let r = await e();
-  let o =
-    r === (await e())
+  if (encoded === undefined || !webpHasAlpha(encoded)) return encoded;
+  let pipeline = await getImage();
+  let pngOptions =
+    pipeline === (await getImage())
       ? undefined
       : {
           compressionLevel: 0,
         };
   let imageDecoder = await loadImageDecoder();
-  let [s, i] = await Promise.all([
-    tryImageEncode(() => r.png(o).toBuffer()),
-    tryImageEncode(() => imageDecoder(n).png(o).toBuffer()),
+  let [originalPng, roundtripPng] = await Promise.all([
+    tryImageEncode(() => pipeline.png(pngOptions).toBuffer()),
+    tryImageEncode(() => imageDecoder(encoded).png(pngOptions).toBuffer()),
   ]);
-  if (s === undefined || i === undefined) return;
-  return i.equals(s) ? n : "not_exact";
+  if (originalPng === undefined || roundtripPng === undefined) return;
+  return roundtripPng.equals(originalPng) ? encoded : "not_exact";
 }
 //@ chunk-mvvq2nx1.js:16325-16826 placement
 /**
@@ -149,7 +151,7 @@ async function tryWebpEncoding(getImage, maxBytes) {
   if (maxBytes === undefined || mode === "off") return {};
   let startTime = performance.now();
   let losslessWebp = await encodeExactLosslessWebp(getImage);
-  let { result: s, webp } =
+  let { result, webp } =
     losslessWebp === undefined
       ? {
           result: "failed",
@@ -163,7 +165,7 @@ async function tryWebpEncoding(getImage, maxBytes) {
         : await chooseWebpVariant(getImage, losslessWebp, maxBytes, mode);
   logEvent("tengu_image_webp_direct", {
     mode: fromEnum(mode),
-    result: fromEnum(s),
+    result: fromEnum(result),
     ...(webp !== undefined && {
       sent_size_bytes: webp.length,
     }),
@@ -179,46 +181,49 @@ async function tryWebpEncoding(getImage, maxBytes) {
   };
 }
 //@ chunk-mvvq2nx1.js:17255-18060 placement
-async function chooseImageEncoding(e, buffer, buffer_2, o, u, losslessWebp) {
+async function chooseImageEncoding(originalBuffer, bytes, buffer, maxBytes, allowWebp, losslessWebp) {
   let webpMode = getWebpMode();
-  let imageFormatFromBuffer = detectImageFormatFromBuffer(buffer);
-  let h = imageFormatFromBuffer === "image/webp" && detectImageFormatFromBuffer(e) !== "image/webp";
-  let y = buffer.length > o;
-  let p =
-    u &&
+  let imageFormatFromBuffer = detectImageFormatFromBuffer(bytes);
+  let inputWasWebp =
+    imageFormatFromBuffer === "image/webp" && detectImageFormatFromBuffer(originalBuffer) !== "image/webp";
+  let overBudget = bytes.length > maxBytes;
+  let shouldTryWebp =
+    allowWebp &&
     imageFormatFromBuffer === "image/png" &&
-    (y ? webpMode === "all" : webpMode !== "off") &&
-    !pngHasExifOrientation(buffer);
+    (overBudget ? webpMode === "all" : webpMode !== "off") &&
+    !pngHasExifOrientation(bytes);
   let startTime = performance.now();
-  let E = async () => (await loadImageDecoder())(buffer);
-  let _ = !p
+  let getImage = async () => (await loadImageDecoder())(bytes);
+  let webpEncoded = !shouldTryWebp
     ? undefined
-    : y
-      ? await encodeWebp(E, {
+    : overBudget
+      ? await encodeWebp(getImage, {
           lossless: false,
           quality: 90,
         })
-      : (losslessWebp ?? (await encodeExactLosslessWebp(E)));
-  let w = _ === "not_exact" ? undefined : _;
-  let x = w !== undefined && w.length < buffer_2.length ? w : buffer_2;
-  let R = _ === "not_exact" ? _ : w === undefined ? "failed" : "not_smaller";
-  if (x === w) logFeatureOk("input_image_webp");
-  else if (p) logFeatureSad("input_image_webp", R === "failed" ? "encode_failed" : R);
+      : (losslessWebp ?? (await encodeExactLosslessWebp(getImage)));
+  let webpBuffer = webpEncoded === "not_exact" ? undefined : webpEncoded;
+  let chosen = webpBuffer !== undefined && webpBuffer.length < buffer.length ? webpBuffer : buffer;
+  let webpResult =
+    webpEncoded === "not_exact" ? webpEncoded : webpBuffer === undefined ? "failed" : "not_smaller";
+  if (chosen === webpBuffer) logFeatureOk("input_image_webp");
+  else if (shouldTryWebp)
+    logFeatureSad("input_image_webp", webpResult === "failed" ? "encode_failed" : webpResult);
   logEvent("tengu_image_output", {
     mode: fromEnum(webpMode),
-    webp_try: fromEnum(h ? "direct" : !p ? "none" : y ? "lossy" : "lossless"),
-    ...(!h && {
+    webp_try: fromEnum(inputWasWebp ? "direct" : !shouldTryWebp ? "none" : overBudget ? "lossy" : "lossless"),
+    ...(!inputWasWebp && {
       resized_format: fromEnum(imageFormatFromBuffer),
-      resized_size_bytes: buffer.length,
-      without_webp_size_bytes: buffer_2.length,
+      resized_size_bytes: bytes.length,
+      without_webp_size_bytes: buffer.length,
     }),
-    sent_format: fromEnum(detectImageFormatFromBuffer(x)),
-    sent_size_bytes: x.length,
-    ...(p && {
-      webp_result: fromEnum(x === w ? "sent" : R),
+    sent_format: fromEnum(detectImageFormatFromBuffer(chosen)),
+    sent_size_bytes: chosen.length,
+    ...(shouldTryWebp && {
+      webp_result: fromEnum(chosen === webpBuffer ? "sent" : webpResult),
       webp_encode_ms: Math.round(performance.now() - startTime),
     }),
   });
-  return x;
+  return chosen;
 }
 export { webpMaxBytesIfOn, chooseImageEncoding, tryWebpEncoding };

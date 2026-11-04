@@ -18,28 +18,30 @@ import { getToolPermissionContext } from "../../utils/permissions/toolPermission
 /**
  * Bash 后台运行判定（与 Agent 无关，切分误归）：返回 foreground / moves_at_timeout / kept / under_a_rule。
  */
-function classifyBashBackgrounding(e, n, version, r, i) {
-  if (e.name !== BASH_TOOL_NAME) return "foreground";
-  if (n?.run_in_background !== true)
-    return i && !hasBackgroundRunRule(e, r) ? "moves_at_timeout" : "foreground";
+function classifyBashBackgrounding(toolCall, input, version, permissionContext, isAtTimeout) {
+  if (toolCall.name !== BASH_TOOL_NAME) return "foreground";
+  if (input?.run_in_background !== true)
+    return isAtTimeout && !hasBackgroundRunRule(toolCall, permissionContext)
+      ? "moves_at_timeout"
+      : "foreground";
   if (version < TOOL_HOST_INTERFACE_FEATURES.keptBackgroundCommands || isBackgroundTasksDisabled())
     return "foreground";
-  return hasBackgroundRunRule(e, r) ? "under_a_rule" : "kept";
+  return hasBackgroundRunRule(toolCall, permissionContext) ? "under_a_rule" : "kept";
 }
 //@ chunk-dz36xfxg.js:37035-37128 placement = inputSchema (0.67)
 /**
  * deny/ask 规则是否对该工具的 run_in_background:true 生效。
  */
-function hasBackgroundRunRule(e, n) {
+function hasBackgroundRunRule(toolCall, permissionContext) {
   return ["deny", "ask"].some(
-    (t) =>
+    (behavior) =>
       matchToolRule(
-        getToolPermissionContext(n),
-        e,
+        getToolPermissionContext(permissionContext),
+        toolCall,
         {
           run_in_background: true,
         },
-        t,
+        behavior,
       ) !== null,
   );
 }

@@ -7,7 +7,7 @@
  */
 
 //@ chunk-heg39xxp.js:2144-5178 placement
-var Y = {
+var packageJson = {
   name: "@aws-sdk/client-sts",
   description: "AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native",
   version: "3.936.0",
@@ -104,4 +104,4 @@ var Y = {
     directory: "clients/client-sts",
   },
 };
-export { Y };
+export { packageJson };

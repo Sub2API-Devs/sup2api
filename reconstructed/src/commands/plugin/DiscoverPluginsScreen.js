@@ -8,9 +8,15 @@
  * pieces: chunk-vrb44rx7.js (10)
  * attribution: placement 10
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
-import { y, P, init_react_production, Q, R } from "../../../vendor/react/cjs/react.production.js";
+import {
+  useState,
+  useEffect,
+  init_react_production,
+  useMemo,
+  useRef,
+} from "../../../vendor/react/cjs/react.production.js";
 import {
   estimatePluginTokenCost,
   ESTIMATED_TOKENS_PER_COMPONENT,
@@ -108,118 +114,122 @@ import { isNonInstallableClaudeAiPlugin } from "../../utils/plugins/claudeAiMark
 import { CLAUDE_PLUGINS_OFFICIAL } from "../../utils/plugins/officialMarketplace.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { getDisplayPath } from "../../utils/file.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-vrb44rx7.js:83483-84659 placement
 /**
  * 显示插件的上下文成本估计（每轮、调用时的 token）。
  */
 function renderContextCost(props) {
-  let T = w(22);
+  let $ = useMemoCache(22);
   let { pluginId } = props;
   let { storageV5 } = useTheme_2();
-  let [C, x] = y(null);
-  let D;
-  let U;
-  if (T[0] !== pluginId || T[1] !== storageV5) {
-    D = () => {
-      x(null);
-      let L = false;
+  let [details, setDetails] = useState(null);
+  let content;
+  let footer;
+  if ($[0] !== pluginId || $[1] !== storageV5) {
+    content = () => {
+      setDetails(null);
+      let loading = false;
       estimatePluginTokenCost(pluginId, getCanonicalName(getMainLoopModel()), storageV5)
-        .then((A) => {
-          if (!L) x(A);
+        .then((loaded) => {
+          if (!loading) setDetails(loaded);
         })
         .catch(noopBrowseMarketplaceHandler);
       return () => {
-        L = true;
+        loading = true;
       };
     };
-    U = [pluginId, storageV5];
-    T[0] = pluginId;
-    T[1] = storageV5;
-    T[2] = D;
-    T[3] = U;
+    footer = [pluginId, storageV5];
+    $[0] = pluginId;
+    $[1] = storageV5;
+    $[2] = content;
+    $[3] = footer;
   } else {
-    D = T[2];
-    U = T[3];
+    content = $[2];
+    footer = $[3];
   }
-  P(D, U);
-  if (C === null) {
+  useEffect(content, footer);
+  if (details === null) {
     return null;
   }
-  let K = C.alwaysOn >= ESTIMATED_TOKENS_PER_COMPONENT;
-  let V;
-  if (T[4] !== C.isEstimate) {
-    V =
-      C.isEstimate &&
+  let isHeavy = details.alwaysOn >= ESTIMATED_TOKENS_PER_COMPONENT;
+  let detailsBox;
+  if ($[4] !== details.isEstimate) {
+    detailsBox =
+      details.isEstimate &&
       jsxProd_default(Text, {
         dimColor: true,
         children: " (estimated)",
       });
-    T[4] = C.isEstimate;
-    T[5] = V;
-  } else V = T[5];
-  let B;
-  if (T[6] !== V) {
-    B = jsxProd_default_2(Text, {
+    $[4] = details.isEstimate;
+    $[5] = detailsBox;
+  } else detailsBox = $[5];
+  let contentBox;
+  if ($[6] !== detailsBox) {
+    contentBox = jsxProd_default_2(Text, {
       bold: true,
-      children: ["Context cost", V, ":"],
+      children: ["Context cost", detailsBox, ":"],
     });
-    T[6] = V;
-    T[7] = B;
-  } else B = T[7];
-  const color = K ? "warning" : undefined;
-  const dimColor = !K;
-  let pe;
-  if (T[8] !== C.alwaysOn) {
-    pe = formatTokenEstimate(C.alwaysOn);
-    T[8] = C.alwaysOn;
-    T[9] = pe;
-  } else pe = T[9];
-  let fe;
-  if (T[10] !== color || T[11] !== dimColor || T[12] !== pe) {
-    fe = jsxProd_default_2(Text, {
+    $[6] = detailsBox;
+    $[7] = contentBox;
+  } else contentBox = $[7];
+  const color = isHeavy ? "warning" : undefined;
+  const dimColor = !isHeavy;
+  let statusLine;
+  if ($[8] !== details.alwaysOn) {
+    statusLine = formatTokenEstimate(details.alwaysOn);
+    $[8] = details.alwaysOn;
+    $[9] = statusLine;
+  } else statusLine = $[9];
+  let hintLine;
+  if ($[10] !== color || $[11] !== dimColor || $[12] !== statusLine) {
+    hintLine = jsxProd_default_2(Text, {
       color,
       dimColor,
-      children: ["\xB7 Every turn: ", pe, " tokens"],
+      children: ["\xB7 Every turn: ", statusLine, " tokens"],
     });
-    T[10] = color;
-    T[11] = dimColor;
-    T[12] = pe;
-    T[13] = fe;
-  } else fe = T[13];
-  let me;
-  if (T[14] !== C.onInvoke) {
-    me = formatTokenEstimate(C.onInvoke);
-    T[14] = C.onInvoke;
-    T[15] = me;
-  } else me = T[15];
-  let ne;
-  if (T[16] !== me) {
-    ne = jsxProd_default_2(Text, {
+    $[10] = color;
+    $[11] = dimColor;
+    $[12] = statusLine;
+    $[13] = hintLine;
+  } else hintLine = $[13];
+  let footerBox;
+  if ($[14] !== details.onInvoke) {
+    footerBox = formatTokenEstimate(details.onInvoke);
+    $[14] = details.onInvoke;
+    $[15] = footerBox;
+  } else footerBox = $[15];
+  let panelFooter;
+  if ($[16] !== footerBox) {
+    panelFooter = jsxProd_default_2(Text, {
       dimColor: true,
-      children: ["\xB7 When invoked: ", me, " tokens"],
+      children: ["\xB7 When invoked: ", footerBox, " tokens"],
     });
-    T[16] = me;
-    T[17] = ne;
-  } else ne = T[17];
-  let he;
-  if (T[18] !== ne || T[19] !== B || T[20] !== fe) {
-    he = jsxProd_default_2(Box, {
+    $[16] = footerBox;
+    $[17] = panelFooter;
+  } else panelFooter = $[17];
+  let detailRows;
+  if ($[18] !== panelFooter || $[19] !== contentBox || $[20] !== hintLine) {
+    detailRows = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginBottom: 1,
-      children: [B, fe, ne],
+      children: [contentBox, hintLine, panelFooter],
     });
-    T[18] = ne;
-    T[19] = B;
-    T[20] = fe;
-    T[21] = he;
-  } else he = T[21];
-  return he;
+    $[18] = panelFooter;
+    $[19] = contentBox;
+    $[20] = hintLine;
+    $[21] = detailRows;
+  } else detailRows = $[21];
+  return detailRows;
 }
 //@ chunk-vrb44rx7.js:84659-84663 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vrb44rx7.js:84659", () => {
+  init_react_production();
+});
 //@ chunk-vrb44rx7.js:84663-84684 placement
-var selectResult = (i) => i.result;
+var selectResult = (entry) => entry.result;
 //@ chunk-vrb44rx7.js:84684-94560 placement
 /**
  * 发现页主组件：加载市场与安装量、计算推荐、搜索与安装（约 10 KB）。
@@ -239,13 +249,13 @@ function DiscoverPluginsScreen({
   let storeSelector_2 = useStoreSelector(screen, selectResult);
   let { setError, setResult, markDiscoverLoaded } = screen;
   let setViewState = screen.setViewState;
-  let [fe, me] = y([]);
-  let [ne, he] = y(true);
-  let [W, Oe] = y("Loading\u2026");
-  let [rt, et] = y(null);
-  let [je, ae] = y(new Map());
-  let [Se, kt] = y(initialMarketplace ?? null);
-  let Tt = Q(() => ALL_TAB_LABEL(fe), [fe]);
+  let [allItems, setAllItems] = useState([]);
+  let [loading, setLoading] = useState(true);
+  let [statusText, setStatusText] = useState("Loading\u2026");
+  let [error, setLoadError] = useState(null);
+  let [suggestionLog, setSuggestionLog] = useState(new Map());
+  let [activeMarketplace, setActiveMarketplace] = useState(initialMarketplace ?? null);
+  let marketplaceTabs = useMemo(() => ALL_TAB_LABEL(allItems), [allItems]);
   let {
     viewState,
     setViewState: setViewState_2,
@@ -273,46 +283,51 @@ function DiscoverPluginsScreen({
     screen,
     surface: "discover",
     initialViewState: "plugin-list",
-    availablePlugins: fe,
-    loading: ne,
+    availablePlugins: allItems,
+    loading,
     searchMarketplaceName: true,
-    marketplaceFilter: Se,
+    marketplaceFilter: activeMarketplace,
     onInstallComplete,
     onSearchModeChange,
   });
-  let mn = R(false);
-  P(() => {
-    if (ne || mn.current || !initialSearchQuery || fe.length === 0) return;
-    mn.current = true;
+  let showSourceLink = useRef(false);
+  useEffect(() => {
+    if (loading || showSourceLink.current || !initialSearchQuery || allItems.length === 0) return;
+    showSourceLink.current = true;
     setSearchQuery(initialSearchQuery);
     setIsSearchMode(true);
-  }, [ne, initialSearchQuery, fe.length, setSearchQuery, setIsSearchMode]);
-  P(() => {
-    if (!ne && Se !== null && !Tt.some((Ce) => Ce.marketplace === Se)) kt(null);
-  }, [ne, Se, Tt]);
-  let [xn, Ln] = y(false);
-  let Mn = xn && Tt.length > 2;
+  }, [loading, initialSearchQuery, allItems.length, setSearchQuery, setIsSearchMode]);
+  useEffect(() => {
+    if (
+      !loading &&
+      activeMarketplace !== null &&
+      !marketplaceTabs.some((tab) => tab.marketplace === activeMarketplace)
+    )
+      setActiveMarketplace(null);
+  }, [loading, activeMarketplace, marketplaceTabs]);
+  let [showSources, setShowSources] = useState(false);
+  let showTabBar = showSources && marketplaceTabs.length > 2;
   MessageActionsKeybindings(
     {
       "plugin:cycleMarketplace": () => {
-        kt((Ce) => {
-          let index = Tt.findIndex((ke) => ke.marketplace === Ce);
-          return Tt[(index + 1) % Tt.length]?.marketplace ?? null;
+        setActiveMarketplace((marketplace) => {
+          let index = marketplaceTabs.findIndex((tab) => tab.marketplace === marketplace);
+          return marketplaceTabs[(index + 1) % marketplaceTabs.length]?.marketplace ?? null;
         });
       },
     },
     {
       context: "Plugin",
-      isActive: viewState === "plugin-list" && !ne && Mn,
+      isActive: viewState === "plugin-list" && !loading && showTabBar,
     },
   );
-  let [fn, Be] = y(null);
-  let [jt, le] = y(null);
-  let [Te, Ue] = y(false);
-  let [dt, Dt] = y(undefined);
-  P(() => {
-    let Ce = false;
-    async function Ve() {
+  let [pendingInstall, setPendingInstall] = useState(null);
+  let [installFailure, setInstallError] = useState(null);
+  let [installing, setInstalling] = useState(false);
+  let [installResult, setInstallResult] = useState(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPlugins() {
       let now = Date.now();
       try {
         let knownMarketplacesWithDeclared = await loadKnownMarketplacesWithDeclared(storageV5);
@@ -322,49 +337,51 @@ function DiscoverPluginsScreen({
           "discover",
         );
         let pluginDirectoryState = await getPluginDirectoryState();
-        let _t = pluginDirectoryState === "blocked";
-        if (Ce) return;
-        Ue(_t);
-        Ln(pluginDirectoryState !== "unavailable");
-        Dt(pluginDirectoryState === "on" ? commandSourceSession().staleCatalogFetchedAt : undefined);
-        let Mt = [];
+        let directoryBlocked = pluginDirectoryState === "blocked";
+        if (cancelled) return;
+        setInstalling(directoryBlocked);
+        setShowSources(pluginDirectoryState !== "unavailable");
+        setInstallResult(
+          pluginDirectoryState === "on" ? commandSourceSession().staleCatalogFetchedAt : undefined,
+        );
+        let rows = [];
         let results = await Promise.all(
-          marketplaces.map(async ({ name: de, data: Ge }) => ({
-            name: de,
-            entries: Ge
-              ? await pluginInstallPath(de, Ge.plugins, knownMarketplacesWithDeclared, storageV5)
+          marketplaces.map(async ({ name, data }) => ({
+            name,
+            entries: data
+              ? await pluginInstallPath(name, data.plugins, knownMarketplacesWithDeclared, storageV5)
               : [],
           })),
         );
-        if (Ce) return;
-        for (let { name: de, entries } of results)
+        if (cancelled) return;
+        for (let { name, entries } of results)
           for (let entry of entries) {
-            let mt = formatPluginId(entry.name, de);
-            Mt.push({
+            let pluginId = formatPluginId(entry.name, name);
+            rows.push({
               entry,
-              marketplaceName: de,
-              pluginId: mt,
-              isInstalled: isPluginInstalled(mt),
+              marketplaceName: name,
+              pluginId,
+              isInstalled: isPluginInstalled(pluginId),
             });
           }
-        let Nt = Mt;
+        let allRows = rows;
         if (pluginDirectoryState !== "unavailable") {
-          let de = await allowlistedInstalledPlugins(knownMarketplacesWithDeclared, storageV5);
-          if (Ce) return;
-          Nt = dedupeListedPlugins(
+          let allowlisted = await allowlistedInstalledPlugins(knownMarketplacesWithDeclared, storageV5);
+          if (cancelled) return;
+          allRows = dedupeListedPlugins(
             groupBySource(
-              markFromPluginDirectory(Mt, knownMarketplacesWithDeclared),
+              markFromPluginDirectory(rows, knownMarketplacesWithDeclared),
               knownMarketplacesWithDeclared,
-              de,
+              allowlisted,
             ),
             knownMarketplacesWithDeclared,
           );
         }
-        let filtered = Nt.filter((de) => !de.isInstalled);
+        let filtered = allRows.filter((row) => !row.isInstalled);
         let filtered_2 = filtered.filter(
-          (de) =>
-            !isPluginBlockedByPolicy(de.pluginId) &&
-            !(de.installCountIds ?? []).some(isPluginBlockedByPolicy),
+          (row) =>
+            !isPluginBlockedByPolicy(row.pluginId) &&
+            !(row.installCountIds ?? []).some(isPluginBlockedByPolicy),
         );
         let found = marketplaces.find(
           (marketplace) =>
@@ -372,7 +389,7 @@ function DiscoverPluginsScreen({
             marketplace.config.source !== undefined &&
             isPluginDirectorySource(marketplace.config.source),
         );
-        let Un =
+        let installedCount =
           filtered.length -
           filtered_2.length +
           (found?.data
@@ -380,132 +397,138 @@ function DiscoverPluginsScreen({
             : 0);
         try {
           let uniqueInstallCounts = await getUniqueInstallCounts(storageV5);
-          if (Ce) return;
-          et(uniqueInstallCounts);
+          if (cancelled) return;
+          setLoadError(uniqueInstallCounts);
           sortPluginsByPopularity(filtered_2, uniqueInstallCounts);
         } catch (error) {
           logForDebugging(`Failed to fetch install counts: ${errorMessage(error)}`);
           sortPluginsByPopularity(filtered_2, null);
         }
-        let An = new Map();
+        let relevanceByPlugin = new Map();
         try {
-          let de = getSessionContext?.();
-          let Ge = new Set(getPluginSuggestionMarketplaces());
-          for (let Ne of filtered_2) {
-            if (!isListedInKnownMarketplace(Ne, Ge, knownMarketplacesWithDeclared)) continue;
-            let mt = hasRelevanceSignals(Ne.entry.name, Ne.entry.relevance);
-            if (!mt) continue;
+          let sessionContext = getSessionContext?.();
+          let suggestionMarketplaces = new Set(getPluginSuggestionMarketplaces());
+          for (let row of filtered_2) {
+            if (!isListedInKnownMarketplace(row, suggestionMarketplaces, knownMarketplacesWithDeclared))
+              continue;
+            let signalResult = hasRelevanceSignals(row.entry.name, row.entry.relevance);
+            if (!signalResult) continue;
             if (
-              [Ne.pluginId, ...(Ne.installCountIds ?? [])].some(
-                (Pt) => pluginSuggestionDiscoverShownCount(Pt) > 0,
+              [row.pluginId, ...(row.installCountIds ?? [])].some(
+                (pluginId) => pluginSuggestionDiscoverShownCount(pluginId) > 0,
               ) &&
-              !grantedSuggestions?.has(Ne.pluginId)
+              !grantedSuggestions?.has(row.pluginId)
             )
               continue;
-            let en = await matchRelevanceSignal(mt, de);
-            if (en) An.set(Ne.pluginId, en);
+            let matched = await matchRelevanceSignal(signalResult, sessionContext);
+            if (matched) relevanceByPlugin.set(row.pluginId, matched);
           }
         } catch (error) {
           logForDebugging(`Failed to compute plugin suggestions: ${errorMessage(error)}`);
         }
-        if (Ce) return;
-        ae(An);
-        let Bn =
-          An.size > 0
+        if (cancelled) return;
+        setSuggestionLog(relevanceByPlugin);
+        let sortedRows =
+          relevanceByPlugin.size > 0
             ? [
-                ...filtered_2.filter((de) => An.has(de.pluginId)),
-                ...filtered_2.filter((de) => !An.has(de.pluginId)),
+                ...filtered_2.filter((row) => relevanceByPlugin.has(row.pluginId)),
+                ...filtered_2.filter((row) => !relevanceByPlugin.has(row.pluginId)),
               ]
             : filtered_2;
-        me(Bn);
+        setAllItems(sortedRows);
         let configuredMarketplaceCount = count(
           Object.values(knownMarketplacesWithDeclared),
-          (de) => !(_t && de.source !== undefined && isPluginDirectorySource(de.source)),
+          (row) => !(directoryBlocked && row.source !== undefined && isPluginDirectorySource(row.source)),
         );
         if (filtered_2.length === 0) {
           let emptyMarketplaceReason = await detectEmptyMarketplaceReason({
             configuredMarketplaceCount,
             failedMarketplaceCount: filterSuccessfulMarketplaces(failures).length,
           });
-          if (Ce) return;
+          if (cancelled) return;
           if (
             emptyMarketplaceReason === "all-plugins-installed" &&
-            Mt.length > 0 &&
-            Mt.every((Ge) => Ge.isInstalled && !isPluginGloballyInstalled(Ge.pluginId)) &&
-            !Mt.some((Ge) => isPluginBlockedByPolicy(Ge.pluginId))
+            rows.length > 0 &&
+            rows.every((row) => row.isInstalled && !isPluginGloballyInstalled(row.pluginId)) &&
+            !rows.some((row) => isPluginBlockedByPolicy(row.pluginId))
           )
             emptyMarketplaceReason = "all-plugins-project-installed";
-          le(
+          setInstallError(
             pluginDirectoryState !== "unavailable" &&
               emptyMarketplaceReason === "all-plugins-installed" &&
-              Un > 0
+              installedCount > 0
               ? "all-hidden-by-policy"
               : emptyMarketplaceReason === "all-marketplaces-failed" && onlyPluginDirectoryFailed(failures)
                 ? "directory-failed"
                 : emptyMarketplaceReason,
           );
         }
-        let successCount = count(marketplaces, (de) => de.data !== null);
-        let At = formatMarketplaceLoadingErrors(failures, successCount);
-        if (At)
-          if (At.type === "warning")
-            Be(
+        let successCount = count(marketplaces, (marketplace) => marketplace.data !== null);
+        let loadError = formatMarketplaceLoadingErrors(failures, successCount);
+        if (loadError)
+          if (loadError.type === "warning")
+            setPendingInstall(
               filterSuccessfulMarketplaces(failures).length === 0
-                ? At.message
-                : At.message + (filtered_2.length > 0 ? ". Showing available plugins." : "."),
+                ? loadError.message
+                : loadError.message + (filtered_2.length > 0 ? ". Showing available plugins." : "."),
             );
-          else throw Error(At.message);
+          else throw Error(loadError.message);
         if (targetPlugin === undefined) {
-          let de = markDiscoverLoaded();
+          let stamp = markDiscoverLoaded();
           logDiscoverShown({
-            directoryRows: count(filtered_2, (Ge) => Ge.fromPluginDirectory === true),
+            directoryRows: count(filtered_2, (row) => row.fromPluginDirectory === true),
             totalRows: filtered_2.length,
-            foldedRows: count(filtered_2, (Ge) => Ge.installCountIds !== undefined),
+            foldedRows: count(filtered_2, (row) => row.installCountIds !== undefined),
             loadMs: Date.now() - now,
-            entry: de ? "tab_return" : initialMarketplace === undefined ? "menu" : "directory_command",
+            entry: stamp ? "tab_return" : initialMarketplace === undefined ? "menu" : "directory_command",
             directoryState:
               pluginDirectoryState === "on" && !found?.data ? "unavailable" : pluginDirectoryState,
             knownMarketplaceCount: count(
               Object.values(knownMarketplacesWithDeclared),
-              (Ge) => Ge.source === undefined || !isPluginDirectorySource(Ge.source),
+              (entry) => entry.source === undefined || !isPluginDirectorySource(entry.source),
             ),
           });
         }
         if (targetPlugin) {
-          let de =
-            Nt.find((Pt) => Pt.entry.name === targetPlugin) ??
-            Mt.find((Pt) => Pt.entry.name === targetPlugin);
-          let Ge = false;
-          let Ne = false;
-          let mt = false;
-          let en = false;
-          if (!de) {
+          let targetRow =
+            allRows.find((row) => row.entry.name === targetPlugin) ??
+            rows.find((row) => row.entry.name === targetPlugin);
+          let failed = false;
+          let skipped = false;
+          let depsFailed = false;
+          let optionsFailed = false;
+          if (!targetRow) {
             for (let [key, value] of Object.entries(knownMarketplacesWithDeclared)) {
-              Oe(`Checking ${displayTextOrRaw(key)} for new plugins\u2026`);
-              let bn = await refreshMarketplaceOnCatalogMiss(key, value, storageV5);
-              if (Ce) return;
-              if (bn === "refresh-failed") Ne = true;
-              else if (bn === "refreshed") en = true;
-              if (bn !== "refreshed") continue;
+              setStatusText(`Checking ${displayTextOrRaw(key)} for new plugins\u2026`);
+              let refreshed = await refreshMarketplaceOnCatalogMiss(key, value, storageV5);
+              if (cancelled) return;
+              if (refreshed === "refresh-failed") skipped = true;
+              else if (refreshed === "refreshed") optionsFailed = true;
+              if (refreshed !== "refreshed") continue;
               try {
                 let found = (await getMarketplace(key, storageV5)).plugins.find(
                   (plugin) => plugin.name === targetPlugin,
                 );
                 if (found) {
-                  let Ft = formatPluginId(found.name, key);
-                  let [po] = await pluginInstallPath(key, [found], knownMarketplacesWithDeclared, storageV5);
-                  de = {
-                    entry: po ?? found,
+                  let targetId = formatPluginId(found.name, key);
+                  let [installedEntry] = await pluginInstallPath(
+                    key,
+                    [found],
+                    knownMarketplacesWithDeclared,
+                    storageV5,
+                  );
+                  targetRow = {
+                    entry: installedEntry ?? found,
                     marketplaceName: key,
-                    pluginId: Ft,
-                    isInstalled: isPluginInstalled(Ft),
+                    pluginId: targetId,
+                    isInstalled: isPluginInstalled(targetId),
                   };
-                  Ge = true;
+                  failed = true;
                   logFeatureOk("plugin_install_catalog_refresh");
                   break;
                 }
               } catch (error) {
-                mt = true;
+                depsFailed = true;
                 logForDebugging(
                   `Post-refresh reload of marketplace '${key}' failed: ${errorMessage(error)}`,
                   {
@@ -513,51 +536,54 @@ function DiscoverPluginsScreen({
                   },
                 );
               }
-              if (Ce) return;
+              if (cancelled) return;
             }
-            if (!Ge)
-              if (Ne) logFeatureBad("plugin_install_catalog_refresh", "refresh_failed");
-              else if (mt) logFeatureBad("plugin_install_catalog_refresh", "reload_failed");
-              else if (en) logFeatureSad("plugin_install_catalog_refresh", "not_found_after_refresh");
+            if (!failed)
+              if (skipped) logFeatureBad("plugin_install_catalog_refresh", "refresh_failed");
+              else if (depsFailed) logFeatureBad("plugin_install_catalog_refresh", "reload_failed");
+              else if (optionsFailed)
+                logFeatureSad("plugin_install_catalog_refresh", "not_found_after_refresh");
               else logFeatureSad("plugin_install_catalog_refresh", "ineligible");
           }
-          if (Ce) return;
-          if (de && pluginDirectoryState !== "unavailable")
-            de = markFromPluginDirectory([de], knownMarketplacesWithDeclared)[0] ?? de;
-          if (Ge && de && !de.isInstalled && !isPluginBlockedByPolicy(de.pluginId)) {
-            let Pt = de;
-            me((kn) => (kn.some((bn) => bn.pluginId === Pt.pluginId) ? kn : [...kn, Pt]));
+          if (cancelled) return;
+          if (targetRow && pluginDirectoryState !== "unavailable")
+            targetRow = markFromPluginDirectory([targetRow], knownMarketplacesWithDeclared)[0] ?? targetRow;
+          if (failed && targetRow && !targetRow.isInstalled && !isPluginBlockedByPolicy(targetRow.pluginId)) {
+            let target = targetRow;
+            setAllItems((rows) =>
+              rows.some((row) => row.pluginId === target.pluginId) ? rows : [...rows, target],
+            );
           }
-          if (de) {
-            if (isPluginGloballyInstalled(de.pluginId)) {
-              let Pt = await installMissingDependencies(de.pluginId, storageV5);
-              let kn = await savePluginOptions(de.pluginId, Pt, storageV5, credentials);
-              if (Ce) return;
-              if (kn) setViewState_2(kn);
-              else if (Pt === null)
+          if (targetRow) {
+            if (isPluginGloballyInstalled(targetRow.pluginId)) {
+              let deps = await installMissingDependencies(targetRow.pluginId, storageV5);
+              let saved = await savePluginOptions(targetRow.pluginId, deps, storageV5, credentials);
+              if (cancelled) return;
+              if (saved) setViewState_2(saved);
+              else if (deps === null)
                 setError(
-                  `Plugin '${de.pluginId}' is already installed. Use '/plugin' to manage existing plugins.`,
+                  `Plugin '${targetRow.pluginId}' is already installed. Use '/plugin' to manage existing plugins.`,
                 );
-              else if (Pt.changed) {
-                let bn = await onInstallComplete?.([de.pluginId]);
-                if (Ce) return;
+              else if (deps.changed) {
+                let completion = await onInstallComplete?.([targetRow.pluginId]);
+                if (cancelled) return;
                 setResult(
-                  `Plugin "${de.pluginId}" is already installed${Pt.suffix}${bn === "load-failed" ? ". The plugin couldn't be loaded \u2014 see /plugin for details." : ""}`,
+                  `Plugin "${targetRow.pluginId}" is already installed${deps.suffix}${completion === "load-failed" ? ". The plugin couldn't be loaded \u2014 see /plugin for details." : ""}`,
                 );
-              } else setResult(`Plugin "${de.pluginId}" is already installed${Pt.suffix}`);
-            } else openDetails(de);
+              } else setResult(`Plugin "${targetRow.pluginId}" is already installed${deps.suffix}`);
+            } else openDetails(targetRow);
           } else setError(`Plugin "${targetPlugin}" not found in any marketplace`);
         }
       } catch (error) {
-        if (Ce) return;
+        if (cancelled) return;
         setError(error instanceof Error ? error.message : "Failed to load plugins");
       } finally {
-        if (!Ce) he(false);
+        if (!cancelled) setLoading(false);
       }
     }
-    Ve();
+    loadPlugins();
     return () => {
-      Ce = true;
+      cancelled = true;
     };
   }, [
     setError,
@@ -573,25 +599,37 @@ function DiscoverPluginsScreen({
     credentials,
     markDiscoverLoaded,
   ]);
-  let wt = R(false);
-  P(() => {
+  let granting = useRef(false);
+  useEffect(() => {
     if (
-      wt.current ||
-      ne ||
+      granting.current ||
+      loading ||
       storeSelector !== null ||
       storeSelector_2 !== null ||
       viewState !== "plugin-list" ||
-      je.size === 0
+      suggestionLog.size === 0
     )
       return;
-    wt.current = true;
-    let Ce = [...je.keys()];
-    for (let Ve of Ce) grantedSuggestions?.add(Ve);
+    granting.current = true;
+    let grantIds = [...suggestionLog.keys()];
+    for (let pluginId of grantIds) grantedSuggestions?.add(pluginId);
     recordPluginSuggestionShown(
-      Ce.flatMap((Ve) => [Ve, ...(fe.find((ke) => ke.pluginId === Ve)?.installCountIds ?? [])]),
+      grantIds.flatMap((pluginId) => [
+        pluginId,
+        ...(allItems.find((row) => row.pluginId === pluginId)?.installCountIds ?? []),
+      ]),
       storageV5,
     );
-  }, [fe, ne, storeSelector, storeSelector_2, viewState, je, grantedSuggestions, storageV5]);
+  }, [
+    allItems,
+    loading,
+    storeSelector,
+    storeSelector_2,
+    viewState,
+    suggestionLog,
+    grantedSuggestions,
+    storageV5,
+  ]);
   useKeybinding("confirm:no", closeDetails, {
     context: "Settings",
     isActive: viewState === "plugin-details",
@@ -612,16 +650,16 @@ function DiscoverPluginsScreen({
     return jsxProd_default(formatInstallOutcome, {
       viewState,
       onInstallComplete,
-      onFinish: (Ce) => {
-        setResult(Ce);
+      onFinish: (result) => {
+        setResult(result);
         setViewState({
           type: "menu",
         });
       },
     });
-  if (ne)
+  if (loading)
     return jsxProd_default(WorkerBadge, {
-      message: W,
+      message: statusText,
     });
   if (storeSelector)
     return jsxProd_default(ErrorText, {
@@ -638,7 +676,7 @@ function DiscoverPluginsScreen({
       onInstall: installPlugin,
       onBack: closeDetails,
     });
-  if (fe.length === 0)
+  if (allItems.length === 0)
     return jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
@@ -649,18 +687,18 @@ function DiscoverPluginsScreen({
             children: "Discover plugins",
           }),
         }),
-        fn &&
+        pendingInstall &&
           jsxProd_default(Box, {
             marginBottom: 1,
             children: jsxProd_default(StatusRow, {
               status: "warning",
-              children: fn,
+              children: pendingInstall,
             }),
           }),
         jsxProd_default(renderEmptyDiscoverState, {
-          reason: jt,
+          reason: installFailure,
         }),
-        Te
+        installing
           ? jsxProd_default(Box, {
               marginTop: 1,
               children: jsxProd_default(formatBlockedByOrg, {}),
@@ -711,44 +749,44 @@ function DiscoverPluginsScreen({
         ],
       }),
       jsxProd_default(Box, {
-        marginBottom: Mn || Te ? 0 : 1,
+        marginBottom: showTabBar || installing ? 0 : 1,
         flexDirection: "column",
         children: jsxProd_default(SearchBox, {
           ...searchBoxProps,
         }),
       }),
-      Mn
+      showTabBar
         ? jsxProd_default(Box, {
-            marginBottom: Te ? 0 : 1,
+            marginBottom: installing ? 0 : 1,
             marginLeft: 1,
             children: jsxProd_default_2(Text, {
               children: [
-                pickShownMarketplaces(Tt, Se).map((Ce, Ve) => {
-                  let ke = Ce.marketplace === Se;
+                pickShownMarketplaces(marketplaceTabs, activeMarketplace).map((tab, tabIndex) => {
+                  let isActiveTab = tab.marketplace === activeMarketplace;
                   return jsxProd_default_2(
                     Text,
                     {
                       children: [
-                        Ve > 0 &&
+                        tabIndex > 0 &&
                           jsxProd_default(Text, {
                             dimColor: true,
                             children: " \xB7 ",
                           }),
                         jsxProd_default_2(Text, {
-                          bold: ke,
-                          color: ke ? "suggestion" : undefined,
-                          dimColor: !ke,
-                          children: [stripInvisibleKeepEmoji(Ce.label), " ", Ce.count],
+                          bold: isActiveTab,
+                          color: isActiveTab ? "suggestion" : undefined,
+                          dimColor: !isActiveTab,
+                          children: [stripInvisibleKeepEmoji(tab.label), " ", tab.count],
                         }),
                       ],
                     },
-                    Ce.marketplace ?? "",
+                    tab.marketplace ?? "",
                   );
                 }),
-                Tt.length > MAX_SHOWN_MARKETPLACES &&
+                marketplaceTabs.length > MAX_SHOWN_MARKETPLACES &&
                   jsxProd_default_2(Text, {
                     dimColor: true,
-                    children: [" ", "\xB7 +", Tt.length - MAX_SHOWN_MARKETPLACES, " more"],
+                    children: [" ", "\xB7 +", marketplaceTabs.length - MAX_SHOWN_MARKETPLACES, " more"],
                   }),
                 jsxProd_default_2(Text, {
                   dimColor: true,
@@ -767,14 +805,14 @@ function DiscoverPluginsScreen({
             }),
           })
         : null,
-      Te
+      installing
         ? jsxProd_default(Box, {
             marginBottom: 1,
             marginLeft: 1,
             children: jsxProd_default(formatBlockedByOrg, {}),
           })
         : null,
-      dt !== undefined
+      installResult !== undefined
         ? jsxProd_default(Box, {
             marginBottom: 1,
             marginLeft: 1,
@@ -785,9 +823,9 @@ function DiscoverPluginsScreen({
                 OFFICIAL_MARKETPLACE_DISPLAY,
                 " could not be reached; showing the list from",
                 " ",
-                Number.isNaN(Date.parse(dt))
+                Number.isNaN(Date.parse(installResult))
                   ? "an earlier session"
-                  : formatRelativeTimeAgo(new Date(dt), {
+                  : formatRelativeTimeAgo(new Date(installResult), {
                       style: "long",
                     }),
                 ".",
@@ -795,12 +833,12 @@ function DiscoverPluginsScreen({
             }),
           })
         : null,
-      fn &&
+      pendingInstall &&
         jsxProd_default(Box, {
           marginBottom: 1,
           children: jsxProd_default(StatusRow, {
             status: "warning",
-            children: fn,
+            children: pendingInstall,
           }),
         }),
       filteredPlugins.length === 0 &&
@@ -818,57 +856,61 @@ function DiscoverPluginsScreen({
             children: [" ", figures_default.arrowUp, " more above"],
           }),
         }),
-      visibleItems.map((Ce, Ve) => {
-        let ke = pagination.toActualIndex(Ve);
-        let ht = selectedIndex === ke;
-        let Jt = selectedForInstall.has(Ce.pluginId);
-        let qt = installingPlugins.has(Ce.pluginId);
-        let count = getPluginInstallCount(Ce, rt);
-        let _t = Ce.entry.description || (xn ? pluginSourceLink(Ce) : undefined);
-        let Mt = je.get(Ce.pluginId);
-        let hn = Ve === visibleItems.length - 1;
+      visibleItems.map((row, visibleIndex) => {
+        let actualIndex = pagination.toActualIndex(visibleIndex);
+        let isSelected = selectedIndex === actualIndex;
+        let markedForInstall = selectedForInstall.has(row.pluginId);
+        let isInstalling = installingPlugins.has(row.pluginId);
+        let count = getPluginInstallCount(row, error);
+        let description = row.entry.description || (showSources ? pluginSourceLink(row) : undefined);
+        let suggestionEntry = suggestionLog.get(row.pluginId);
+        let isLast = visibleIndex === visibleItems.length - 1;
         return jsxProd_default_2(
           TwoColumnRow,
           {
-            active: ht && !isSearchMode,
+            active: isSelected && !isSearchMode,
             flexDirection: "column",
-            marginBottom: hn ? 0 : 1,
+            marginBottom: isLast ? 0 : 1,
             children: [
               jsxProd_default_2(Box, {
                 children: [
                   jsxProd_default_2(Text, {
                     "aria-hidden": true,
-                    color: ht && !isSearchMode ? "suggestion" : undefined,
-                    children: [ht && !isSearchMode ? figures_default.pointer : " ", " "],
+                    color: isSelected && !isSearchMode ? "suggestion" : undefined,
+                    children: [isSelected && !isSearchMode ? figures_default.pointer : " ", " "],
                   }),
                   jsxProd_default_2(Text, {
                     children: [
-                      qt ? figures_default.ellipsis : Jt ? figures_default.radioOn : figures_default.radioOff,
+                      isInstalling
+                        ? figures_default.ellipsis
+                        : markedForInstall
+                          ? figures_default.radioOn
+                          : figures_default.radioOff,
                       " ",
-                      getPluginDisplayName(Ce.entry),
+                      getPluginDisplayName(row.entry),
                       jsxProd_default_2(Text, {
                         dimColor: true,
-                        children: [" ", "\xB7 ", stripInvisibleKeepEmoji(marketplaceLabel_2(Ce))],
+                        children: [" ", "\xB7 ", stripInvisibleKeepEmoji(marketplaceLabel_2(row))],
                       }),
-                      Mt &&
+                      suggestionEntry &&
                         jsxProd_default_2(Text, {
                           dimColor: true,
-                          children: [" ", "\xB7 ", formatSuggestedFor(Mt)],
+                          children: [" ", "\xB7 ", formatSuggestedFor(suggestionEntry)],
                         }),
-                      Ce.entry.tags?.includes("community-managed") &&
-                        Ce.marketplaceName !== OFFICIAL_MARKETPLACE_NAME &&
+                      row.entry.tags?.includes("community-managed") &&
+                        row.marketplaceName !== OFFICIAL_MARKETPLACE_NAME &&
                         jsxProd_default(Text, {
                           dimColor: true,
                           children: " [Community Managed]",
                         }),
-                      isNonInstallableClaudeAiPlugin(Ce.entry) &&
+                      isNonInstallableClaudeAiPlugin(row.entry) &&
                         jsxProd_default(Text, {
                           dimColor: true,
                           children: " [not installable on claude.ai yet]",
                         }),
                       count !== undefined &&
-                        (Ce.marketplaceName === CLAUDE_PLUGINS_OFFICIAL ||
-                          Ce.alsoListedIn?.includes(CLAUDE_PLUGINS_OFFICIAL)) &&
+                        (row.marketplaceName === CLAUDE_PLUGINS_OFFICIAL ||
+                          row.alsoListedIn?.includes(CLAUDE_PLUGINS_OFFICIAL)) &&
                         jsxProd_default_2(Text, {
                           dimColor: true,
                           children: [" \xB7 ", formatInstallCount(count), " installs"],
@@ -877,17 +919,17 @@ function DiscoverPluginsScreen({
                   }),
                 ],
               }),
-              _t &&
+              description &&
                 jsxProd_default(Box, {
                   marginLeft: 4,
                   children: jsxProd_default(Text, {
                     dimColor: true,
-                    children: truncateToWidth(stripInvisibleKeepEmoji(_t), 60),
+                    children: truncateToWidth(stripInvisibleKeepEmoji(description), 60),
                   }),
                 }),
             ],
           },
-          `${pagination.startIndex}-${Ce.pluginId}`,
+          `${pagination.startIndex}-${row.pluginId}`,
         );
       }),
       pagination.scrollPosition.canScrollDown &&
@@ -905,57 +947,61 @@ function DiscoverPluginsScreen({
 }
 //@ chunk-vrb44rx7.js:94560-94764 placement
 function formatBlockedByOrg() {
-  let i = w(2);
-  let h;
-  if (i[0] === MEMO_CACHE_SENTINEL) {
-    h = pluginDirectoryPolicyBlockHint();
-    i[0] = h;
-  } else h = i[0];
-  let k = h;
-  let C;
-  if (i[1] === MEMO_CACHE_SENTINEL) {
-    C = jsxProd_default_2(Text, {
+  let $ = useMemoCache(2);
+  let content;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    content = pluginDirectoryPolicyBlockHint();
+    $[0] = content;
+  } else content = $[0];
+  let memoContent = content;
+  let footer;
+  if ($[1] === MEMO_CACHE_SENTINEL) {
+    footer = jsxProd_default_2(Text, {
       dimColor: true,
-      children: [OFFICIAL_MARKETPLACE_DISPLAY, " is blocked by your organization.", k === "" ? "" : ` ${k}`],
+      children: [
+        OFFICIAL_MARKETPLACE_DISPLAY,
+        " is blocked by your organization.",
+        memoContent === "" ? "" : ` ${memoContent}`,
+      ],
     });
-    i[1] = C;
-  } else C = i[1];
-  return C;
+    $[1] = footer;
+  } else footer = $[1];
+  return footer;
 }
 //@ chunk-vrb44rx7.js:94764-96832 placement
 /**
  * 发现页空状态（目录未加载、全部已安装、被策略隐藏、市场加载失败）。
  */
 function renderEmptyDiscoverState(props) {
-  let k = w(9);
+  let $ = useMemoCache(9);
   let { reason } = props;
   switch (reason) {
     case "directory-failed": {
-      let C;
-      if (k[0] === MEMO_CACHE_SENTINEL) {
-        C = jsxProd_default_2(Text, {
+      let content;
+      if ($[0] === MEMO_CACHE_SENTINEL) {
+        content = jsxProd_default_2(Text, {
           dimColor: true,
           children: ["No plugins to show until the", " ", OFFICIAL_MARKETPLACE_DISPLAY, " loads."],
         });
-        k[0] = C;
-      } else C = k[0];
-      return C;
+        $[0] = content;
+      } else content = $[0];
+      return content;
     }
     case "all-hidden-by-policy": {
-      let C;
-      if (k[1] === MEMO_CACHE_SENTINEL) {
-        C = jsxProd_default(Text, {
+      let reasonLine;
+      if ($[1] === MEMO_CACHE_SENTINEL) {
+        reasonLine = jsxProd_default(Text, {
           dimColor: true,
           children: "Your organization's policy hides every plugin that would be listed here.",
         });
-        k[1] = C;
-      } else C = k[1];
-      return C;
+        $[1] = reasonLine;
+      } else reasonLine = $[1];
+      return reasonLine;
     }
     case "git-not-installed": {
-      let C;
-      if (k[2] === MEMO_CACHE_SENTINEL) {
-        C = jsxProd_default_2(Fragment, {
+      let hintLine;
+      if ($[2] === MEMO_CACHE_SENTINEL) {
+        hintLine = jsxProd_default_2(Fragment, {
           children: [
             jsxProd_default(Text, {
               dimColor: true,
@@ -967,14 +1013,14 @@ function renderEmptyDiscoverState(props) {
             }),
           ],
         });
-        k[2] = C;
-      } else C = k[2];
-      return C;
+        $[2] = hintLine;
+      } else hintLine = $[2];
+      return hintLine;
     }
     case "all-blocked-by-policy": {
-      let C;
-      if (k[3] === MEMO_CACHE_SENTINEL) {
-        C = jsxProd_default_2(Fragment, {
+      let footerLine;
+      if ($[3] === MEMO_CACHE_SENTINEL) {
+        footerLine = jsxProd_default_2(Fragment, {
           children: [
             jsxProd_default(Text, {
               dimColor: true,
@@ -986,14 +1032,14 @@ function renderEmptyDiscoverState(props) {
             }),
           ],
         });
-        k[3] = C;
-      } else C = k[3];
-      return C;
+        $[3] = footerLine;
+      } else footerLine = $[3];
+      return footerLine;
     }
     case "policy-restricts-sources": {
-      let C;
-      if (k[4] === MEMO_CACHE_SENTINEL) {
-        C = jsxProd_default_2(Fragment, {
+      let statusLine;
+      if ($[4] === MEMO_CACHE_SENTINEL) {
+        statusLine = jsxProd_default_2(Fragment, {
           children: [
             jsxProd_default(Text, {
               dimColor: true,
@@ -1005,14 +1051,14 @@ function renderEmptyDiscoverState(props) {
             }),
           ],
         });
-        k[4] = C;
-      } else C = k[4];
-      return C;
+        $[4] = statusLine;
+      } else statusLine = $[4];
+      return statusLine;
     }
     case "all-marketplaces-failed": {
-      let C;
-      if (k[5] === MEMO_CACHE_SENTINEL) {
-        C = jsxProd_default_2(Fragment, {
+      let actionLine;
+      if ($[5] === MEMO_CACHE_SENTINEL) {
+        actionLine = jsxProd_default_2(Fragment, {
           children: [
             jsxProd_default(Text, {
               dimColor: true,
@@ -1024,14 +1070,14 @@ function renderEmptyDiscoverState(props) {
             }),
           ],
         });
-        k[5] = C;
-      } else C = k[5];
-      return C;
+        $[5] = actionLine;
+      } else actionLine = $[5];
+      return actionLine;
     }
     case "all-plugins-installed": {
-      let C;
-      if (k[6] === MEMO_CACHE_SENTINEL) {
-        C = jsxProd_default_2(Fragment, {
+      let detailLine;
+      if ($[6] === MEMO_CACHE_SENTINEL) {
+        detailLine = jsxProd_default_2(Fragment, {
           children: [
             jsxProd_default(Text, {
               dimColor: true,
@@ -1043,14 +1089,14 @@ function renderEmptyDiscoverState(props) {
             }),
           ],
         });
-        k[6] = C;
-      } else C = k[6];
-      return C;
+        $[6] = detailLine;
+      } else detailLine = $[6];
+      return detailLine;
     }
     case "all-plugins-project-installed": {
-      let C;
-      if (k[7] === MEMO_CACHE_SENTINEL) {
-        C = jsxProd_default_2(Fragment, {
+      let detailRows;
+      if ($[7] === MEMO_CACHE_SENTINEL) {
+        detailRows = jsxProd_default_2(Fragment, {
           children: [
             jsxProd_default(Text, {
               dimColor: true,
@@ -1062,39 +1108,39 @@ function renderEmptyDiscoverState(props) {
             }),
           ],
         });
-        k[7] = C;
-      } else C = k[7];
-      return C;
+        $[7] = detailRows;
+      } else detailRows = $[7];
+      return detailRows;
     }
     case "no-marketplaces-configured":
     default: {
-      let C;
-      if (k[8] === MEMO_CACHE_SENTINEL) {
-        C = jsxProd_default(HintText, {
+      let footer;
+      if ($[8] === MEMO_CACHE_SENTINEL) {
+        footer = jsxProd_default(HintText, {
           hint: "Add a marketplace first using the Marketplaces tab.",
           children: "No plugins available.",
         });
-        k[8] = C;
-      } else C = k[8];
-      return C;
+        $[8] = footer;
+      } else footer = $[8];
+      return footer;
     }
   }
 }
 //@ chunk-vrb44rx7.js:96832-96842 placement
 var MAX_SUGGESTION_LABEL_WIDTH = 32;
 //@ chunk-vrb44rx7.js:96842-97141 placement
-function formatSuggestedFor(i) {
-  switch (i.signal) {
+function formatSuggestedFor(entry) {
+  switch (entry.signal) {
     case "cwd":
       return "suggested for this directory";
     case "cli":
-      return `suggested for ${truncateToWidth(i.command, MAX_SUGGESTION_LABEL_WIDTH)} commands`;
+      return `suggested for ${truncateToWidth(entry.command, MAX_SUGGESTION_LABEL_WIDTH)} commands`;
     case "hosts":
-      return `suggested for ${truncateToWidth(i.host, MAX_SUGGESTION_LABEL_WIDTH)}`;
+      return `suggested for ${truncateToWidth(entry.host, MAX_SUGGESTION_LABEL_WIDTH)}`;
     case "filesRead":
-      return `suggested for ${displayPathForSuggestion(i.file)}`;
+      return `suggested for ${displayPathForSuggestion(entry.file)}`;
     case "manifestDep":
-      return `suggested from ${displayPathForSuggestion(i.file)}`;
+      return `suggested from ${displayPathForSuggestion(entry.file)}`;
   }
 }
 //@ chunk-vrb44rx7.js:97141-97197 placement
@@ -1102,5 +1148,8 @@ function displayPathForSuggestion(file) {
   return truncatePathMiddle(getDisplayPath(file).replaceAll("\\", "/"), MAX_SUGGESTION_LABEL_WIDTH);
 }
 //@ chunk-vrb44rx7.js:97197-97201 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vrb44rx7.js:97197", () => {
+  init_react_production();
+});
 export { DiscoverPluginsScreen, renderContextCost };

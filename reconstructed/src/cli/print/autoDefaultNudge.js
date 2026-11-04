@@ -17,17 +17,17 @@ import { logEvent } from "../../services/analytics/index.js";
 import { fromEnumOpt, lit } from "../../services/analytics/safeMetadata.js";
 
 //@ chunk-2b4rzray.js:416-782 placement
-function shouldShowAutoDefaultNudge(toolPermissionContext, { requireOnboarding: n = true } = {}) {
+function shouldShowAutoDefaultNudge(toolPermissionContext, { requireOnboarding = true } = {}) {
   let globalConfig = getGlobalConfig();
   if (
-    (n && !globalConfig.hasCompletedOnboarding) ||
+    (requireOnboarding && !globalConfig.hasCompletedOnboarding) ||
     globalConfig.hasSeenAutoDefaultNudge ||
     !getFeatureValue_CACHED_MAY_BE_STALE("tengu_maple_pier", true)
   )
     return null;
   let defaultMode = getSettingsForSource("userSettings")?.permissions?.defaultMode;
   let any = ["projectSettings", "localSettings", "flagSettings", "policySettings"].some(
-    (r) => getSettingsForSource(r)?.permissions?.defaultMode,
+    (settingsSource) => getSettingsForSource(settingsSource)?.permissions?.defaultMode,
   );
   if (defaultMode && defaultMode !== "auto" && !any && canCycleToAuto(toolPermissionContext))
     return defaultMode;

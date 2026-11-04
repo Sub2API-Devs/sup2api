@@ -50,6 +50,7 @@ import { abortErrorFor } from "../../plugins/functionHooks/dispatch/chain.js";
 import { withHeldMedia, promptMediaSources } from "../attachmentMedia.js";
 import { createEventCallersRef } from "../../plugins/functionHooks/eventCatalog.js";
 import { resolveMessageOrigin } from "../messageOrigin.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-8fqgaf3a.js:1017-1099 placement
 var hookSubmitResult = (text, blocked) =>
@@ -64,10 +65,10 @@ var hookSubmitResult = (text, blocked) =>
 /**
  * 创建 UserPromptSubmit 的附加上下文附件消息。
  */
-var createHookContextAttachment = (e, hookName = "UserPromptSubmit") =>
+var createHookContextAttachment = (contexts, hookName = "UserPromptSubmit") =>
   createAttachmentMessage({
     type: "hook_additional_context",
-    content: [...e],
+    content: [...contexts],
     hookName,
     toolUseID: `hook-${randomUUID()}`,
     hookEvent: "UserPromptSubmit",
@@ -75,10 +76,10 @@ var createHookContextAttachment = (e, hookName = "UserPromptSubmit") =>
 //@ chunk-8fqgaf3a.js:1287-1296 placement
 var IS_META_MESSAGE = true;
 //@ chunk-8fqgaf3a.js:1296-1426 placement
-var blockedPromptResult = (e, ending) => ({
+var blockedPromptResult = (message, ending) => ({
   messages: [
     {
-      ...createSystemMessage(e, "warning", undefined, IS_META_MESSAGE),
+      ...createSystemMessage(message, "warning", undefined, IS_META_MESSAGE),
       promptSubmitEnding: {
         ending,
         promptKept: false,
@@ -86,11 +87,11 @@ var blockedPromptResult = (e, ending) => ({
     },
   ],
   shouldQuery: false,
-  resultText: e,
+  resultText: message,
 });
 //@ chunk-8fqgaf3a.js:1426-1490 placement
-function appendOriginalPrompt(userPromptSubmitHookBlockingMessage, text, r) {
-  return r === true
+function appendOriginalPrompt(userPromptSubmitHookBlockingMessage, text, suppressOriginal) {
+  return suppressOriginal === true
     ? userPromptSubmitHookBlockingMessage
     : `${userPromptSubmitHookBlockingMessage}
 
@@ -104,17 +105,17 @@ var CANCELLED_RESULT = {
   wasCancelled: true,
 };
 //@ chunk-8fqgaf3a.js:1516-1589 placement
-var wasCancelledAndStopped = (e) =>
-  e.wasCancelled === true && (e.blocked === undefined || e.stopped !== undefined);
+var wasCancelledAndStopped = (result) =>
+  result.wasCancelled === true && (result.blocked === undefined || result.stopped !== undefined);
 //@ chunk-8fqgaf3a.js:1589-1676 placement
-var cancelledSubmitOutcome = (e, ended, text) =>
-  wasCancelledAndStopped(e)
+var cancelledSubmitOutcome = (result, ended, text) =>
+  wasCancelledAndStopped(result)
     ? CANCELLED_RESULT
     : {
         ended,
-        stopped: e.stopped,
+        stopped: result.stopped,
         text,
-        wasCancelled: e.wasCancelled,
+        wasCancelled: result.wasCancelled,
       };
 //@ chunk-8fqgaf3a.js:1676-1823 placement
 var hooksNeverRanResult = () =>
@@ -123,13 +124,13 @@ var hooksNeverRanResult = () =>
     noVerdictKind: "hooks_never_ran",
   });
 //@ chunk-8fqgaf3a.js:1823-1932 placement
-function promptTextForHooks(e) {
-  let origin = e.origin;
+function promptTextForHooks(submission) {
+  let origin = submission.origin;
   return origin?.kind === "plugin" && origin.asUser !== true
-    ? wrapPluginPrompt(e.text, origin.name, {
+    ? wrapPluginPrompt(submission.text, origin.name, {
         midTurn: false,
       })
-    : e.text;
+    : submission.text;
 }
 //@ chunk-8fqgaf3a.js:1932-2023 placement
 var proceedsResult = (text, sessionTitle, context) => ({
@@ -143,26 +144,26 @@ var proceedsResult = (text, sessionTitle, context) => ({
   },
 });
 //@ chunk-8fqgaf3a.js:2023-2071 placement
-var withContext = (e, o) => ({
-  ...e,
-  ...(o?.length && {
-    context: o,
+var withContext = (outcome, context) => ({
+  ...outcome,
+  ...(context?.length && {
+    context,
   }),
 });
 //@ chunk-8fqgaf3a.js:2071-2200 placement
-var submitOutcome_2 = (e, arrived, sessionTitle) =>
-  !e
+var submitOutcome_2 = (result, submission, sessionTitle) =>
+  !result
     ? {
         ended: hooksNeverRanResult(),
       }
-    : e.blocked
-      ? withContext(cancelledSubmitOutcome(e, e.blocked, arrived.text), arrived.context)
+    : result.blocked
+      ? withContext(cancelledSubmitOutcome(result, result.blocked, submission.text), submission.context)
       : {
-          ...proceedsResult(promptTextForHooks(arrived), sessionTitle, arrived.context),
-          wasCancelled: e.wasCancelled,
+          ...proceedsResult(promptTextForHooks(submission), sessionTitle, submission.context),
+          wasCancelled: result.wasCancelled,
         };
 //@ chunk-8fqgaf3a.js:2200-2222 placement
-var isAborted = (e) => e.aborted;
+var isAborted = (state) => state.aborted;
 //@ chunk-8fqgaf3a.js:2222-2315 placement
 function keepUsefulHookAttachment(message) {
   return message && (message.attachment.type !== "hook_success" || message.attachment.content)
@@ -174,7 +175,8 @@ var INTERRUPTED_DURING_CHECK_MESSAGE = "the turn was interrupted while the promp
 //@ chunk-8fqgaf3a.js:2378-2406 placement
 var isStreamClosedAbort = (error) => error instanceof StreamClosedAbortError;
 //@ chunk-8fqgaf3a.js:2406-2440 placement
-var isSameMade = (answered, o) => stableStringifySafe(answered) === stableStringifySafe(o?.made);
+var isSameMade = (answered, recording) =>
+  stableStringifySafe(answered) === stableStringifySafe(recording?.made);
 //@ chunk-8fqgaf3a.js:2440-2462 placement
 var isBlockedOrAborted = (aborted, signal) => aborted || isAborted(signal);
 //@ chunk-8fqgaf3a.js:2462-2585 placement
@@ -184,25 +186,28 @@ var NOT_THROUGH_PROMPT_SUBMIT =
 /**
  * pluginsChanged：插件列表是否变化。
  */
-var pluginsChanged = (under, o) => under.plugins !== o.plugins;
+var pluginsChanged = (under, snapshot) => under.plugins !== snapshot.plugins;
 //@ chunk-8fqgaf3a.js:2622-2734 placement
 function createObjectIds() {
   let weakMap = new WeakMap();
-  let o = 0;
+  let nextId = 0;
   return {
-    of: (r) => {
-      let n = weakMap.get(r);
-      if (n === undefined) {
-        o += 1;
-        n = o;
-        weakMap.set(r, n);
+    of: (object) => {
+      let id = weakMap.get(object);
+      if (id === undefined) {
+        nextId += 1;
+        id = nextId;
+        weakMap.set(object, id);
       }
-      return n;
+      return id;
     },
   };
 }
 //@ chunk-8fqgaf3a.js:2734-2746 placement
-var objectIds = createObjectIds();
+var objectIds; // deferred: uses createObjectIds of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-8fqgaf3a.js:2734", () => {
+  objectIds = createObjectIds();
+});
 //@ chunk-8fqgaf3a.js:2746-2884 placement
 function promptSubmitRenderKey() {
   let pluginRenderHooks = findPluginRenderHooks("prompt.submit");
@@ -217,8 +222,8 @@ function promptSubmitRenderKey() {
 /**
  * hookStopWarningMessage：钩子停止时保留提示词的警告消息。
  */
-var hookStopWarningMessage = (e, ending) => ({
-  ...createSystemMessage(e, "warning", undefined, IS_META_MESSAGE),
+var hookStopWarningMessage = (text, ending) => ({
+  ...createSystemMessage(text, "warning", undefined, IS_META_MESSAGE),
   promptSubmitEnding: {
     ending,
     promptKept: true,
@@ -237,10 +242,10 @@ var makeMetaUserMessage = (content) =>
     isMeta: true,
   });
 //@ chunk-8fqgaf3a.js:3056-3120 placement
-var submitOutcome = (blocked, stopped, r) => ({
+var submitOutcome = (blocked, stopped, cancelled) => ({
   blocked,
   stopped,
-  ...(r && {
+  ...(cancelled && {
     wasCancelled: true,
   }),
 });
@@ -251,11 +256,11 @@ var promptOriginFromSource = (promptSource, wakeupSource) =>
     wakeupSource,
   });
 //@ chunk-8fqgaf3a.js:3178-3326 placement
-function isHookCancelledByAbort(e, signal) {
+function isHookCancelledByAbort(result, signal) {
   return (
-    e.message?.type === "attachment" &&
-    e.message.attachment.type === "hook_cancelled" &&
-    e.message.attachment.timedOut !== true &&
+    result.message?.type === "attachment" &&
+    result.message.attachment.type === "hook_cancelled" &&
+    result.message.attachment.timedOut !== true &&
     signal.aborted
   );
 }
@@ -274,30 +279,34 @@ async function runUserPromptSubmitHooks({
 }) {
   let sessionTitle;
   let aborted = context.abortController.signal.aborted;
-  let h = snapshotHookRegistration();
+  let snapshot = snapshotHookRegistration();
   try {
-    for await (let i of executeUserPromptSubmitHooks(
+    for await (let event of executeUserPromptSubmitHooks(
       text,
       getToolPermissionContext(context).mode,
       context,
       promptOriginFromSource(promptSource, wakeupSource),
       tiers,
     )) {
-      if (i.message?.type === "progress") continue;
-      if (isHookCancelledByAbort(i, context.abortController.signal)) aborted = true;
-      if (i.blockingError) {
-        let a = isBlockedOrAborted(aborted, context.abortController.signal);
-        let p =
-          i.suppressOriginalPrompt === true ||
+      if (event.message?.type === "progress") continue;
+      if (isHookCancelledByAbort(event, context.abortController.signal)) aborted = true;
+      if (event.blockingError) {
+        let cancelledNow = isBlockedOrAborted(aborted, context.abortController.signal);
+        let suppressOriginal =
+          event.suppressOriginalPrompt === true ||
           typed !== text ||
-          hasHookRegistrationChanged(h) ||
+          hasHookRegistrationChanged(snapshot) ||
           hasPromptSubmitHooks_2({
             isRunReached: false,
           });
-        let promptEnding = i.blockingError.promptEnding;
+        let promptEnding = event.blockingError.promptEnding;
         return {
           blocked: blockedPromptResult(
-            appendOriginalPrompt(getUserPromptSubmitHookBlockingMessage(i.blockingError), text, p),
+            appendOriginalPrompt(
+              getUserPromptSubmitHookBlockingMessage(event.blockingError),
+              text,
+              suppressOriginal,
+            ),
             promptEnding !== undefined && "noVerdict" in promptEnding
               ? {
                   kind: "no_verdict",
@@ -308,39 +317,39 @@ async function runUserPromptSubmitHooks({
                   ...reasonFromText(promptEnding?.reason),
                 },
           ),
-          ...(a && {
+          ...(cancelledNow && {
             wasCancelled: true,
           }),
         };
       }
-      if (i.preventContinuation) {
-        let a = hookStoppedText(i.stopReason);
+      if (event.preventContinuation) {
+        let stopText = hookStoppedText(event.stopReason);
         blocked.messages = [
           ...blocked.messages,
-          makeMetaUserMessage(a),
-          hookStopWarningMessage(a, {
+          makeMetaUserMessage(stopText),
+          hookStopWarningMessage(stopText, {
             kind: "stopped_by_hook",
-            ...reasonFromText(i.stopReason),
+            ...reasonFromText(event.stopReason),
           }),
         ];
         blocked.shouldQuery = false;
-        blocked.resultText = a;
+        blocked.resultText = stopText;
         blocked.allowedTools = undefined;
-        return submitOutcome(blocked, a, isBlockedOrAborted(aborted, context.abortController.signal));
+        return submitOutcome(blocked, stopText, isBlockedOrAborted(aborted, context.abortController.signal));
       }
-      if (i.sessionTitle) sessionTitle = i.sessionTitle;
-      let additionalContexts = i.additionalContexts;
+      if (event.sessionTitle) sessionTitle = event.sessionTitle;
+      let additionalContexts = event.additionalContexts;
       if (additionalContexts !== undefined && additionalContexts.length > 0)
         blocked.messages = [...blocked.messages, createHookContextAttachment(additionalContexts)];
-      let y = keepUsefulHookAttachment(i.message);
-      if (y) blocked.messages = [...blocked.messages, y];
+      let attachment = keepUsefulHookAttachment(event.message);
+      if (attachment) blocked.messages = [...blocked.messages, attachment];
     }
   } catch (error) {
-    let P = isStreamClosedOrAbortError(error, context.abortController.signal);
-    let b = !isStreamClosedAbort(error);
-    if (!P) throw error;
+    let cancelled = isStreamClosedOrAbortError(error, context.abortController.signal);
+    let interrupted = !isStreamClosedAbort(error);
+    if (!cancelled) throw error;
     logForDebugging(
-      b
+      interrupted
         ? "UserPromptSubmit hooks cancelled (interrupted while a hook ran)"
         : "UserPromptSubmit hooks cancelled (control stream closed)",
     );
@@ -355,16 +364,17 @@ async function runUserPromptSubmitHooks({
       };
 }
 //@ chunk-8fqgaf3a.js:4646-4741 placement
-var cloneInputSnapshot = (e) => ({
-  ...e,
-  messages: [...e.messages],
-  allowedTools: e.allowedTools && [...e.allowedTools],
+var cloneInputSnapshot = (input) => ({
+  ...input,
+  messages: [...input.messages],
+  allowedTools: input.allowedTools && [...input.allowedTools],
 });
 //@ chunk-8fqgaf3a.js:4741-4776 placement
 /**
  * hasPromptSubmitHooks：存在 UserPromptSubmit 钩子或渲染键。
  */
-var hasPromptSubmitHooks = (e) => userPromptSubmitHooksKey(e) !== "" || promptSubmitRenderKey() !== "";
+var hasPromptSubmitHooks = (context) =>
+  userPromptSubmitHooksKey(context) !== "" || promptSubmitRenderKey() !== "";
 //@ chunk-8fqgaf3a.js:4776-4918 placement
 /**
  * 是否有非官方市场插件挂了 prompt.submit 或 classic.UserPromptSubmit。
@@ -377,19 +387,19 @@ var hasThirdPartyPromptHooks = () =>
       (loadedModule.hooks("prompt.submit") || loadedModule.hooks("classic.UserPromptSubmit")),
   );
 //@ chunk-8fqgaf3a.js:4918-5049 placement
-var needsPromptScreening = (e) =>
-  e === undefined ||
-  e.hooks !== "" ||
-  ["prompt.submit", "classic.UserPromptSubmit"].some((o) =>
-    findPluginRenderHooks(o).some((r) => r.tier !== "builtin"),
+var needsPromptScreening = (snapshot) =>
+  snapshot === undefined ||
+  snapshot.hooks !== "" ||
+  ["prompt.submit", "classic.UserPromptSubmit"].some((eventName) =>
+    findPluginRenderHooks(eventName).some((hook) => hook.tier !== "builtin"),
   );
 //@ chunk-8fqgaf3a.js:5049-5142 placement
 /**
  * hooksSnapshotKey：钩子与插件快照键。
  */
-var hooksSnapshotKey = (e) => ({
-  permissionMode: getToolPermissionContext(e).mode,
-  hooks: userPromptSubmitHooksKey(e),
+var hooksSnapshotKey = (context) => ({
+  permissionMode: getToolPermissionContext(context).mode,
+  hooks: userPromptSubmitHooksKey(context),
   plugins: promptSubmitRenderKey(),
   hooksSkippedByTrust: shouldSkipHookDueToTrust(),
 });
@@ -397,104 +407,104 @@ var hooksSnapshotKey = (e) => ({
 /**
  * 创建读取当前提示筛查配置的函数（可在出错后锁定为 undefined）。
  */
-function createScreensReader(e, { latch }) {
-  let r;
-  let n = false;
+function createScreensReader(context, { latch }) {
+  let key;
+  let latched = false;
   return () => {
-    if (n || (latch && r)) return r;
+    if (latched || (latch && key)) return key;
     try {
-      r = hooksSnapshotKey(e());
+      key = hooksSnapshotKey(context());
     } catch (error) {
-      r = undefined;
-      n = latch;
+      key = undefined;
+      latched = latch;
       logForDebugging(`could not read what screens a prompt now: ${error}`, {
         level: "error",
       });
     }
-    return r;
+    return key;
   };
 }
 //@ chunk-8fqgaf3a.js:5325-5479 placement
 /**
  * 比较两份提示筛查配置是否变化（钩子、信任跳过、插件、权限模式）。
  */
-var screensChanged = (under, o) =>
-  under.hooks !== o.hooks ||
-  under.hooksSkippedByTrust !== o.hooksSkippedByTrust ||
-  under.plugins !== o.plugins ||
-  (under.permissionMode !== o.permissionMode && o.hooks !== "");
+var screensChanged = (under, current) =>
+  under.hooks !== current.hooks ||
+  under.hooksSkippedByTrust !== current.hooksSkippedByTrust ||
+  under.plugins !== current.plugins ||
+  (under.permissionMode !== current.permissionMode && current.hooks !== "");
 //@ chunk-8fqgaf3a.js:5479-5599 placement
-var passResult = (scratch, o) => ({
+var passResult = (scratch, result) => ({
   scratch,
-  blocked: o.blocked,
-  sessionTitle: o.sessionTitle,
-  stopped: o.stopped,
-  wasCancelled: o.wasCancelled,
+  blocked: result.blocked,
+  sessionTitle: result.sessionTitle,
+  stopped: result.stopped,
+  wasCancelled: result.wasCancelled,
 });
 //@ chunk-8fqgaf3a.js:5599-6516 placement
 /**
  * 为提示提交创建钩子执行器：按文本缓存每次执行结果，提供托管层执行、提交结果与查询阻止文本等方法。
  */
-function createHookPassRunner({ typed, result: o, context, promptSource, wakeupSource }) {
-  let m;
-  let u;
-  let g = new Map();
-  let d = new Set();
-  async function h(a, p) {
-    let f = p.managedHooksExcluded === true;
-    let scratch = cloneInputSnapshot(f ? (u?.scratch ?? o) : o);
-    let c = passResult(
+function createHookPassRunner({ typed, result, context, promptSource, wakeupSource }) {
+  let sessionTitle;
+  let managedResult;
+  let passesByText = new Map();
+  let inFlight = new Set();
+  async function text(tiers, passTiers) {
+    let manageOnly = passTiers.managedHooksExcluded === true;
+    let scratch = cloneInputSnapshot(manageOnly ? (managedResult?.scratch ?? result) : result);
+    let passOutcome = passResult(
       scratch,
       await runUserPromptSubmitHooks({
-        text: a,
+        text: tiers,
         typed,
         context,
         result: scratch,
         promptSource,
         wakeupSource,
-        tiers: p,
+        tiers: passTiers,
       }),
     );
-    g.delete(a);
-    g.set(a, c);
-    return c;
+    passesByText.delete(tiers);
+    passesByText.set(tiers, passOutcome);
+    return passOutcome;
   }
-  function i(a, p) {
-    let f = h(a, p);
-    d.add(f);
-    return f.finally(() => d.delete(f));
+  function hookText(tiers, promise) {
+    let passPromise = text(tiers, promise);
+    inFlight.add(passPromise);
+    return passPromise.finally(() => inFlight.delete(passPromise));
   }
-  async function P() {
-    while (d.size > 0) await Promise.allSettled([...d]);
+  async function runManaged() {
+    while (inFlight.size > 0) await Promise.allSettled([...inFlight]);
   }
-  function b() {
-    let [a, p] = [...g].at(-1) ?? [];
-    return p?.blocked !== undefined && p.stopped === undefined ? a : undefined;
+  function blockedText() {
+    let [text, outcome] = [...passesByText].at(-1) ?? [];
+    return outcome?.blocked !== undefined && outcome.stopped === undefined ? text : undefined;
   }
-  async function _(a) {
-    let p = await i(a, MANAGED_HOOKS_TIER);
-    u = p;
-    m = p.sessionTitle ?? m;
-    return p;
+  async function runPass(text) {
+    let outcome = await hookText(text, MANAGED_HOOKS_TIER);
+    managedResult = outcome;
+    sessionTitle = outcome.sessionTitle ?? sessionTitle;
+    return outcome;
   }
-  function y(a) {
-    let p = g.get(a);
-    if (!p) return;
-    o.messages = p.scratch.messages;
-    o.allowedTools = p.scratch.allowedTools;
-    o.shouldQuery = p.scratch.shouldQuery;
-    o.resultText = p.scratch.resultText;
-    m = p.sessionTitle ?? m;
-    return p;
+  function commitPass(text) {
+    let outcome = passesByText.get(text);
+    if (!outcome) return;
+    result.messages = outcome.scratch.messages;
+    result.allowedTools = outcome.scratch.allowedTools;
+    result.shouldQuery = outcome.scratch.shouldQuery;
+    result.resultText = outcome.scratch.resultText;
+    sessionTitle = outcome.sessionTitle ?? sessionTitle;
+    return outcome;
   }
   return {
-    managed: _,
-    pass: i,
-    commit: y,
-    settled: P,
-    blockedText: b,
-    managedRun: () => u,
-    sessionTitle: () => m,
+    managed: runPass,
+    pass: hookText,
+    commit: commitPass,
+    settled: runManaged,
+    blockedText,
+    managedRun: () => managedResult,
+    sessionTitle: () => sessionTitle,
   };
 }
 //@ chunk-8fqgaf3a.js:6516-6754 placement
@@ -519,28 +529,28 @@ var toPromptSubmitEvent = ({ submission, attachments, origin, turnId, shouldWait
 /**
  * 包装排队提交的结算句柄：确保只结算一次，未结算即释放时按"未经 prompt.submit"丢弃。
  */
-function createQueuedSettler(e) {
-  let o = false;
+function createQueuedSettler(waiter) {
+  let settled = false;
   return {
-    origin: e?.origin,
-    settle(r) {
-      o = true;
-      e?.settle(r);
+    origin: waiter?.origin,
+    settle(result) {
+      settled = true;
+      waiter?.settle(result);
     },
-    settleWhen(r) {
-      o = true;
-      r.then(
-        (n) => e?.settle(n),
+    settleWhen(promise) {
+      settled = true;
+      promise.then(
+        (result) => waiter?.settle(result),
         () =>
-          e?.settle({
+          waiter?.settle({
             drop: NOT_THROUGH_PROMPT_SUBMIT,
           }),
       );
     },
     [Symbol.dispose]() {
-      if (!o) {
-        o = true;
-        e?.settle({
+      if (!settled) {
+        settled = true;
+        waiter?.settle({
           drop: NOT_THROUGH_PROMPT_SUBMIT,
         });
       }
@@ -548,25 +558,25 @@ function createQueuedSettler(e) {
   };
 }
 //@ chunk-8fqgaf3a.js:6956-7035 placement
-function maybeRunModuleHook(enter, o) {
-  let r = hasModuleHookingSite("prompt.submit");
-  return !enter || !r ? Promise.resolve() : enter(o);
+function maybeRunModuleHook(enter, run) {
+  let hasHookSite = hasModuleHookingSite("prompt.submit");
+  return !enter || !hasHookSite ? Promise.resolve() : enter(run);
 }
 //@ chunk-8fqgaf3a.js:7035-7474 placement
 /**
  * 警告插件在 next() 之后才加入的 context（未附加）。
  */
-function warnLateContext(e, context) {
-  let r = new Set(context ?? []);
-  for (let n of e.toSorted((s, m) => m.index - s.index)) {
-    let returned = n.returned;
+function warnLateContext(results, context) {
+  let knownContext = new Set(context ?? []);
+  for (let result of results.toSorted((left, right) => right.index - left.index)) {
+    let returned = result.returned;
     let context = isPlainObject(returned) ? returned.context : undefined;
-    let filtered = (asStringList(context) ?? []).filter((d) => !r.has(d));
+    let filtered = (asStringList(context) ?? []).filter((entry) => !knownContext.has(entry));
     if (filtered.length === 0) continue;
-    for (let d of filtered) r.add(d);
-    let reduced = filtered.reduce((acc, h) => acc + h.length, 0);
+    for (let entry of filtered) knownContext.add(entry);
+    let reduced = filtered.reduce((acc, entry) => acc + entry.length, 0);
     logForDebugging(
-      `prompt.submit: ${n.plugin} put ${filtered.length} context ${filtered.length === 1 ? "entry" : "entries"} (${reduced} characters) on its result after next(); not attached, the prompt had entered`,
+      `prompt.submit: ${result.plugin} put ${filtered.length} context ${filtered.length === 1 ? "entry" : "entries"} (${reduced} characters) on its result after next(); not attached, the prompt had entered`,
       {
         level: "warn",
       },
@@ -585,7 +595,7 @@ async function submitPromptWithHooks({
   turnId,
   shouldWait,
   context,
-  result: g,
+  result,
   promptSource,
   wakeupSource,
   queued,
@@ -599,10 +609,10 @@ async function submitPromptWithHooks({
   let screensReader = createScreensReader(() => context, {
     latch: false,
   });
-  let p = () => needsPromptScreening(screensReader()) || hasThirdPartyPromptHooks();
-  let f = p();
-  let R = () => f || p();
-  if (f && signal.aborted) {
+  let needsScreening = () => needsPromptScreening(screensReader()) || hasThirdPartyPromptHooks();
+  let screenedAtStart = needsScreening();
+  let screensNow = () => screenedAtStart || needsScreening();
+  if (screenedAtStart && signal.aborted) {
     queued?.settle({
       drop: INTERRUPTED_DURING_CHECK_MESSAGE,
     });
@@ -610,23 +620,23 @@ async function submitPromptWithHooks({
   }
   let hookPasses = createHookPassRunner({
     typed: submission.text,
-    result: g,
+    result,
     context,
     promptSource,
     wakeupSource,
   });
   let coreHandoff = createCoreHandoff(PROMPT_NOT_PASSED);
   let { unplaceable } = submission;
-  let submitChain = createSubmitChainEnds(async (text, x) => {
+  let submitChain = createSubmitChainEnds(async (text, tiers) => {
     if (unplaceable !== undefined && text !== submission.text)
       return {
         drop: unplaceable,
       };
-    let k = await (x.managedHooksOnly ? hookPasses.managed(text) : hookPasses.pass(text, x));
-    if (wasCancelledAndStopped(k) && R()) throw abortErrorFor(signal);
-    return hookSubmitResult(text, k.blocked);
+    let outcome = await (tiers.managedHooksOnly ? hookPasses.managed(text) : hookPasses.pass(text, tiers));
+    if (wasCancelledAndStopped(outcome) && screensNow()) throw abortErrorFor(signal);
+    return hookSubmitResult(text, outcome.blocked);
   }, coreHandoff.perform);
-  let L;
+  let arrived;
   let chainOutcome = await swallowAbortError(
     awaitArrivalOrAnswer(
       coreHandoff,
@@ -643,8 +653,8 @@ async function submitPromptWithHooks({
             managed: {
               "prompt.submit": submitChain.managed,
             },
-            trace: (x) => {
-              if (L) warnLateContext(x, L.context);
+            trace: (results) => {
+              if (arrived) warnLateContext(results, arrived.context);
             },
           }).prompt.submit(
             toPromptSubmitEvent({
@@ -668,73 +678,78 @@ async function submitPromptWithHooks({
   if (chainOutcome === undefined) {
     await hookPasses.settled();
     let text = hookPasses.blockedText();
-    let x = text === undefined ? undefined : hookPasses.commit(text);
-    let blocked = x?.blocked;
-    let k = text !== undefined && x !== undefined && blocked !== undefined;
+    let committed = text === undefined ? undefined : hookPasses.commit(text);
+    let blocked = committed?.blocked;
+    let blockedStands = text !== undefined && committed !== undefined && blocked !== undefined;
     logForDebugging(
       "prompt.submit: interrupted while a hook checked the prompt: " +
-        (k ? "the block given beneath it stands" : "no verdict"),
+        (blockedStands ? "the block given beneath it stands" : "no verdict"),
     );
     queued?.settle(
-      k
+      blockedStands
         ? hookSubmitResult(text, blocked)
         : {
             drop: INTERRUPTED_DURING_CHECK_MESSAGE,
           },
     );
-    return k
-      ? withContext(cancelledSubmitOutcome(x, blocked, text), submitChain.arrivedContext())
+    return blockedStands
+      ? withContext(cancelledSubmitOutcome(committed, blocked, text), submitChain.arrivedContext())
       : CANCELLED_RESULT;
   }
   if (chainOutcome.arrived) {
-    let arrived = chainOutcome.arrived;
-    L = arrived;
-    if (arrived.text !== submission.text)
+    let arrived_2 = chainOutcome.arrived;
+    arrived = arrived_2;
+    if (arrived_2.text !== submission.text)
       logForDebugging(
-        `prompt.submit: text rewritten by a hook (${submission.text.length} -> ${arrived.text.length} chars)`,
+        `prompt.submit: text rewritten by a hook (${submission.text.length} -> ${arrived_2.text.length} chars)`,
       );
-    let x = submitOutcome_2(hookPasses.commit(arrived.text), arrived, hookPasses.sessionTitle());
-    let k = x.wasCancelled === true && R() && x.proceeds ? CANCELLED_RESULT : x;
-    let J = maybeRunModuleHook(enter, k);
-    queued?.settleWhen(J.then(() => arrived));
-    J.then(
-      () => coreHandoff.done(arrived),
+    let outcome = submitOutcome_2(hookPasses.commit(arrived_2.text), arrived_2, hookPasses.sessionTitle());
+    let finalOutcome =
+      outcome.wasCancelled === true && screensNow() && outcome.proceeds ? CANCELLED_RESULT : outcome;
+    let enterPromise = maybeRunModuleHook(enter, finalOutcome);
+    queued?.settleWhen(enterPromise.then(() => arrived_2));
+    enterPromise.then(
+      () => coreHandoff.done(arrived_2),
       (error) => coreHandoff.failed(error),
     );
-    return k;
+    return finalOutcome;
   }
   let answered = chainOutcome.answered;
-  let S = submitChain.runs.last();
-  let drop = ensureDrop(answered, S?.made);
+  let lastRun = submitChain.runs.last();
+  let drop = ensureDrop(answered, lastRun?.made);
   logForDebugging(`prompt.submit: dropped (${drop.drop})`);
   queued?.settle(drop);
-  let V = hookPasses.managedRun();
-  if (V?.blocked) {
+  let managedOutcome = hookPasses.managedRun();
+  if (managedOutcome?.blocked) {
     hookPasses.commit(submission.text);
-    return cancelledSubmitOutcome(V, V.blocked, submission.text);
+    return cancelledSubmitOutcome(managedOutcome, managedOutcome.blocked, submission.text);
   }
-  if (unplaceable !== undefined && S?.made.drop === unplaceable)
+  if (unplaceable !== undefined && lastRun?.made.drop === unplaceable)
     return {
       ended: blockedPromptResult(unplaceable, {
         kind: "no_verdict",
         noVerdictKind: "rewrite_unplaceable",
       }),
     };
-  let w = S ? hookPasses.commit(S.input) : undefined;
-  let blocked = w?.blocked;
-  let he = answered.drop !== undefined && S !== undefined && !isSameMade(answered, S);
-  let Se = submitChain.arrivedContext();
-  if (S !== undefined && w !== undefined && blocked !== undefined && !he)
-    return withContext(cancelledSubmitOutcome(w, blocked, S.input), Se);
-  if (signal.aborted && (w?.blocked === undefined || wasCancelledAndStopped(w)) && R())
+  let committed = lastRun ? hookPasses.commit(lastRun.input) : undefined;
+  let blocked = committed?.blocked;
+  let madeChanged = answered.drop !== undefined && lastRun !== undefined && !isSameMade(answered, lastRun);
+  let arrivedContext = submitChain.arrivedContext();
+  if (lastRun !== undefined && committed !== undefined && blocked !== undefined && !madeChanged)
+    return withContext(cancelledSubmitOutcome(committed, blocked, lastRun.input), arrivedContext);
+  if (
+    signal.aborted &&
+    (committed?.blocked === undefined || wasCancelledAndStopped(committed)) &&
+    screensNow()
+  )
     return CANCELLED_RESULT;
-  let z = answered.drop !== undefined;
+  let dropped = answered.drop !== undefined;
   return {
     ended: blockedPromptResult(
-      z
+      dropped
         ? `Prompt dropped by a hook: ${singleLineFieldText(answered.drop)}`
         : `Prompt not submitted: ${PROMPT_NOT_PASSED}`,
-      z
+      dropped
         ? {
             kind: "dropped_by_hook",
             ...reasonFromText(answered.drop),

@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:492016-493931 cjs-fingerprint
-var require_tcl = x(function (cjsExports, cjsModule) {
+var require_tcl = __commonJS(function (cjsExports, cjsModule) {
   function tcl(hljs) {
     let regex = hljs.regex;
     let TCL_IDENT = /[a-zA-Z_][a-zA-Z0-9_]*/;

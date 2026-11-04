@@ -13,6 +13,7 @@ import { getRootSession, flushInteractionTime, getLastInteractionTime } from "..
 import { eagerHasCliFlag } from "./cliArgs.js";
 import { lastGrapheme } from "./intl.js";
 import { sleep } from "./sleep.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-wphjdnre.js:375-386 placement
 var EARLY_INPUT_REST_MS = 1500;
@@ -27,7 +28,10 @@ class EarlyInputState {
   fieldClosedAt = null;
 }
 //@ chunk-wphjdnre.js:492-515 placement
-var earlyInputSlot = new HostScoped(() => new EarlyInputState());
+var earlyInputSlot; // deferred: uses EarlyInputState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-wphjdnre.js:492", () => {
+  earlyInputSlot = new HostScoped(() => new EarlyInputState());
+});
 //@ chunk-wphjdnre.js:515-550 placement
 function getEarlyInputState() {
   return earlyInputSlot.of(getRootSession().host);
@@ -72,9 +76,9 @@ function startCapturingEarlyInput() {
  */
 function processChunk(str) {
   let earlyInputState = getEarlyInputState();
-  let n = 0;
-  while (n < str.length) {
-    let char = str[n];
+  let offset = 0;
+  while (offset < str.length) {
+    let char = str[offset];
     let code = char.charCodeAt(0);
     if (code === 3) {
       stopCapturingEarlyInput();
@@ -90,46 +94,52 @@ function processChunk(str) {
         let last = lastGrapheme(earlyInputState.buffer);
         earlyInputState.buffer = earlyInputState.buffer.slice(0, -(last.length || 1));
       }
-      n++;
+      offset++;
       continue;
     }
     if (code === 27) {
-      n++;
-      let i = n < str.length ? str.charCodeAt(n) : -1;
-      if (i === 91) {
-        n++;
-        while (n < str.length && str.charCodeAt(n) < 64) n++;
-        if (n < str.length) n++;
-      } else if (i === 93 || i === 80 || i === 88 || i === 94 || i === 95) {
-        n++;
-        while (n < str.length) {
-          let code = str.charCodeAt(n);
+      offset++;
+      let nextCode = offset < str.length ? str.charCodeAt(offset) : -1;
+      if (nextCode === 91) {
+        offset++;
+        while (offset < str.length && str.charCodeAt(offset) < 64) offset++;
+        if (offset < str.length) offset++;
+      } else if (
+        nextCode === 93 ||
+        nextCode === 80 ||
+        nextCode === 88 ||
+        nextCode === 94 ||
+        nextCode === 95
+      ) {
+        offset++;
+        while (offset < str.length) {
+          let code = str.charCodeAt(offset);
           if (code === 7) {
-            n++;
+            offset++;
             break;
           }
-          if (code === 27 && n + 1 < str.length && str.charCodeAt(n + 1) === 92) {
-            n += 2;
+          if (code === 27 && offset + 1 < str.length && str.charCodeAt(offset + 1) === 92) {
+            offset += 2;
             break;
           }
-          n++;
+          offset++;
         }
-      } else if (i === 79) n += 2;
-      else if (i !== -1 && i !== 27) n++;
+      } else if (nextCode === 79) offset += 2;
+      else if (nextCode !== -1 && nextCode !== 27) offset++;
       continue;
     }
     if (code < 32 && code !== 9 && code !== 10 && code !== 13) {
-      n++;
+      offset++;
       continue;
     }
     if (code === 13) {
       earlyInputState.buffer += `
 `;
-      n++;
+      offset++;
       continue;
     }
     earlyInputState.buffer += char;
-    n++;
+    offset++;
   }
 }
 //@ chunk-wphjdnre.js:1697-1862 placement = stopCapturingEarlyInput (0.741)
@@ -171,10 +181,10 @@ function hasEarlyInput() {
 /**
  * 预置早期输入（例如 --prefill）。
  */
-function seedEarlyInput(e) {
+function seedEarlyInput(buffer) {
   let earlyInputState = getEarlyInputState();
-  earlyInputState.buffer = e;
-  earlyInputState.seeded = e;
+  earlyInputState.buffer = buffer;
+  earlyInputState.seeded = buffer;
 }
 //@ chunk-wphjdnre.js:2110-2165 placement
 function hasTypedEarlyInput() {
@@ -223,28 +233,28 @@ function msSinceEarlyInputFieldClosed() {
 }
 //@ chunk-wphjdnre.js:2619-2695 placement
 function msUntilEarlyInputFieldRests() {
-  let e = Date.now() - getEarlyInputState().fieldKeyAt;
-  return e < 0 ? 0 : Math.max(0, EARLY_INPUT_REST_MS - e);
+  let idleMs = Date.now() - getEarlyInputState().fieldKeyAt;
+  return idleMs < 0 ? 0 : Math.max(0, EARLY_INPUT_REST_MS - idleMs);
 }
 //@ chunk-wphjdnre.js:2695-2778 placement
-async function untilEarlyInputFieldRests(e) {
+async function untilEarlyInputFieldRests(signal) {
   for (;;) {
-    let t = msUntilEarlyInputFieldRests();
-    if (t === 0 || e.aborted) return;
-    await sleep(t, e);
+    let waitMs = msUntilEarlyInputFieldRests();
+    if (waitMs === 0 || signal.aborted) return;
+    await sleep(waitMs, signal);
   }
 }
 //@ chunk-wphjdnre.js:2778-2890 placement
 async function untilKeyboardRests() {
   for (;;) {
     flushInteractionTime();
-    let e = Date.now() - getLastInteractionTime();
-    if (e >= EARLY_INPUT_REST_MS) return;
-    if (e < 0) {
+    let idleMs = Date.now() - getLastInteractionTime();
+    if (idleMs >= EARLY_INPUT_REST_MS) return;
+    if (idleMs < 0) {
       await sleep(EARLY_INPUT_REST_MS);
       return;
     }
-    await sleep(EARLY_INPUT_REST_MS - e);
+    await sleep(EARLY_INPUT_REST_MS - idleMs);
   }
 }
 export {
@@ -263,4 +273,5 @@ export {
   openEarlyInputField,
   editEarlyInputField,
   noteEarlyInputFieldKey,
+  startCapturingEarlyInput,
 };

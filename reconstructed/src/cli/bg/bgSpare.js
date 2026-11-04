@@ -94,8 +94,9 @@ import { stripEnvironmentFlags } from "../cloudSessionArgs.js";
 import { withoutReplyOnResume, withReplyOnResume } from "../forwardedFlags.js";
 import { attachCarriedPromptHash, dropCarriedPromptHash } from "../../utils/background/envCarry.js";
 import { decodeHostLineage } from "../../services/daemon/ensureDaemon.js";
-import { hostManagedEntry } from "../../utils/sandbox/userNamespace.js";
+import { hostManagedEntry } from "../../services/daemon/paths.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-bg51yd13.js:77499-77535 placement = addSlowOperation (0.33)
 var addSlowOperation = {
@@ -113,10 +114,10 @@ function isFleetDispatchEnabled() {
 /**
  * Fleet 视图中派发任务：创建作业状态、启动会话。
  */
-function dispatchFromFleetView(e, n, cwd, storageV5) {
-  let s = n ?? randomUUID();
-  let sliced = s.slice(0, 8);
-  let u = cwd ?? getCwd();
+function dispatchFromFleetView(intent, requestedSessionId, cwd, storageV5) {
+  let sessionId = requestedSessionId ?? randomUUID();
+  let sliced = sessionId.slice(0, 8);
+  let workingDir = cwd ?? getCwd();
   let jobDir = getJobDir(sliced);
   return trackBgDispatch(
     sliced,
@@ -127,11 +128,11 @@ function dispatchFromFleetView(e, n, cwd, storageV5) {
           jobDir,
           makeInitialState({
             template: addSlowOperation,
-            intent: e,
+            intent,
             providerEnv: callerProviderEnv(),
-            sessionId: s,
-            cwd: u,
-            originCwd: u,
+            sessionId,
+            cwd: workingDir,
+            originCwd: workingDir,
           }),
           storageV5,
         );
@@ -151,12 +152,12 @@ function dispatchFromFleetView(e, n, cwd, storageV5) {
       }
       let bgSession = await spawnBgSession(
         [],
-        s,
+        sessionId,
         "fleet",
-        u,
+        workingDir,
         {
-          intent: e,
-          exec: e,
+          intent,
+          exec: intent,
         },
         undefined,
         undefined,
@@ -191,7 +192,7 @@ function dispatchFromFleetView(e, n, cwd, storageV5) {
       return {
         ok: true,
         jobId: bgSession.short,
-        sessionId: s,
+        sessionId,
       };
     })(),
   );
@@ -200,13 +201,13 @@ function dispatchFromFleetView(e, n, cwd, storageV5) {
 /**
  * 浅比较两个对象：同引用为真；任一为空为假；否则比较两边全部键的值是否严格相等。
  */
-function shallowEqualRecords(defaults, n) {
-  if (defaults === n) return true;
-  if (!defaults || !n) return false;
-  let o = new Set([...Object.keys(defaults), ...Object.keys(n)]);
-  for (let r of o) {
-    let s = r;
-    if (defaults[s] !== n[s]) return false;
+function shallowEqualRecords(defaults, other) {
+  if (defaults === other) return true;
+  if (!defaults || !other) return false;
+  let keys = new Set([...Object.keys(defaults), ...Object.keys(other)]);
+  for (let key of keys) {
+    let name = key;
+    if (defaults[name] !== other[name]) return false;
   }
   return true;
 }
@@ -224,41 +225,41 @@ class BgSparePool {
   get extraArgs() {
     return isRestrictedSession() ? this.#t : this.#e;
   }
-  setExtraArgs(e) {
-    this.#e = e;
-    this.#t = e.includes("--restricted") ? e : ["--restricted", ...e];
+  setExtraArgs(args) {
+    this.#e = args;
+    this.#t = args.includes("--restricted") ? args : ["--restricted", ...args];
   }
-  markReady(e) {
-    if (this.spare?.sessionId === e) this.spare.ready = true;
+  markReady(sessionId) {
+    if (this.spare?.sessionId === sessionId) this.spare.ready = true;
   }
   take() {
     let spare = this.spare;
     this.spare = null;
     return spare;
   }
-  async ensure(e, n, o, r, s) {
+  async ensure(rootDir, unDiscard, dispatchDefaults, agentTemplates, storage) {
     if (isTerminalShutdown()) return;
-    if (n) this.discarded = false;
+    if (unDiscard) this.discarded = false;
     if (!this.spare && this.ensuring) {
       await this.ensuring.catch(() => {});
       if (!this.spare) return;
     }
-    let l;
+    let rebootReason;
     if (this.spare) {
-      if (!arraysEqual(this.spare.extraArgs, this.extraArgs)) l = "extra_args_mismatch_reboot";
-      else if (o !== undefined && !shallowEqualRecords(this.spare.defaults, o))
-        l = "defaults_mismatch_reboot";
+      if (!arraysEqual(this.spare.extraArgs, this.extraArgs)) rebootReason = "extra_args_mismatch_reboot";
+      else if (dispatchDefaults !== undefined && !shallowEqualRecords(this.spare.defaults, dispatchDefaults))
+        rebootReason = "defaults_mismatch_reboot";
     }
-    if (l !== undefined) {
-      logFeatureSad("job_spare_ensure", l);
-      let w = this.take();
-      if (w)
+    if (rebootReason !== undefined) {
+      logFeatureSad("job_spare_ensure", rebootReason);
+      let stale = this.take();
+      if (stale)
         await deleteJob(
-          w.jobId,
+          stale.jobId,
           {
             internal: true,
           },
-          s,
+          storage,
         ).catch(() => {});
     }
     if (this.spare || this.ensuring || this.discarded) return;
@@ -266,29 +267,29 @@ class BgSparePool {
       logFeatureSad("job_spare_ensure", "low_mem");
       return;
     }
-    let u = randomUUID();
-    let sliced = u.slice(0, 8);
+    let sessionId = randomUUID();
+    let sliced = sessionId.slice(0, 8);
     let generation = this.generation;
     logForDebugging(`[PERF:bg-spare-start] ${sliced}`);
     this.ensuring = (async () => {
       try {
-        let w = await canonicalizePath(e, getRealPathOptions(s));
-        let A = r;
-        if (A === undefined && o?.agent) {
+        let realRoot = await canonicalizePath(rootDir, getRealPathOptions(storage));
+        let templates = agentTemplates;
+        if (templates === undefined && dispatchDefaults?.agent) {
           clearAgentDefinitionsCache();
-          A = await listUserAgentTemplates(w, s).catch(() => []);
+          templates = await listUserAgentTemplates(realRoot, storage).catch(() => []);
         }
-        let R = resolveBgAgentTemplate(o, A).name;
+        let agentName = resolveBgAgentTemplate(dispatchDefaults, templates).name;
         let extraArgs = this.extraArgs;
         let bgSession = await spawnBgSession(
-          [...extraArgs, ...flagArgs("--agent", R), ...buildDispatchArgs(o)],
-          u,
+          [...extraArgs, ...flagArgs("--agent", agentName), ...buildDispatchArgs(dispatchDefaults)],
+          sessionId,
           "spare",
-          w,
+          realRoot,
           undefined,
           undefined,
           undefined,
-          s,
+          storage,
         );
         if (!bgSession.ok) {
           await deleteJob(
@@ -296,7 +297,7 @@ class BgSparePool {
             {
               internal: true,
             },
-            s,
+            storage,
           ).catch(() => {});
           if (isTerminalShutdown()) {
             logFeatureSad("job_spare_ensure", "exiting");
@@ -315,7 +316,7 @@ class BgSparePool {
             {
               internal: true,
             },
-            s,
+            storage,
           );
           logFeatureSad("job_spare_ensure", this.discarded ? "discarded_after_spawn" : "exiting");
           return;
@@ -326,17 +327,17 @@ class BgSparePool {
             {
               internal: true,
             },
-            s,
+            storage,
           ).catch(() => {});
           logFeatureSad("job_spare_ensure", "retired_after_spawn");
           return;
         }
         this.spare = {
           jobId: sliced,
-          sessionId: u,
-          cwd: w,
+          sessionId,
+          cwd: realRoot,
           ready: false,
-          defaults: o,
+          defaults: dispatchDefaults,
           extraArgs,
         };
         logForDebugging(`[PERF:bg-spare-spawned] ${sliced}`);
@@ -347,7 +348,7 @@ class BgSparePool {
           {
             internal: true,
           },
-          s,
+          storage,
         ).catch(() => {});
         logFeatureBad("job_spare_ensure", "threw");
       }
@@ -358,34 +359,37 @@ class BgSparePool {
       this.ensuring = null;
     }
   }
-  retire(e) {
+  retire(storage) {
     this.generation++;
-    let n = this.take();
-    if (n)
+    let spare = this.take();
+    if (spare)
       deleteJob(
-        n.jobId,
+        spare.jobId,
         {
           internal: true,
         },
-        e,
+        storage,
       ).catch(() => {});
   }
-  async discard(e) {
+  async discard(storage) {
     this.discarded = true;
     if (this.ensuring) await this.ensuring.catch(() => {});
-    let n = this.take();
-    if (n)
+    let spare = this.take();
+    if (spare)
       await deleteJob(
-        n.jobId,
+        spare.jobId,
         {
           internal: true,
         },
-        e,
+        storage,
       );
   }
 }
 //@ chunk-bg51yd13.js:80725-80750 placement
-var BG_SPARE_POOL_SLOT = new HostScoped(() => new BgSparePool());
+var BG_SPARE_POOL_SLOT; // deferred: uses BgSparePool of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-bg51yd13.js:80725", () => {
+  BG_SPARE_POOL_SLOT = new HostScoped(() => new BgSparePool());
+});
 //@ chunk-bg51yd13.js:80750-80787 placement
 function bgSparePool() {
   return BG_SPARE_POOL_SLOT.of(getRootSession().host);
@@ -408,84 +412,85 @@ function markSpareReady(sessionId) {
 /**
  * 从 spare 池认领一个进程来启动会话，未命中时返回未命中结果。
  */
-function claimSpareFromPool(scopedFallbackOrigin, n = false, dispatchDefaults, r, storageV5) {
-  return bgSparePool().ensure(scopedFallbackOrigin, n, dispatchDefaults, r, storageV5);
+function claimSpareFromPool(rootDir, immediate = false, dispatchDefaults, agentTemplates, storageV5) {
+  return bgSparePool().ensure(rootDir, immediate, dispatchDefaults, agentTemplates, storageV5);
 }
 //@ chunk-bg51yd13.js:80911-82083 placement
 /**
  * 认领备用进程启动会话，未命中时记录原因并回退。
  */
-async function claimSpare(e, n, storageV5) {
+async function claimSpare(intent, templateOverride, storage) {
   logForDebugging("[PERF:bg-claim-start]");
-  let r = bgSparePool();
-  let s = r.take();
-  let l = n ?? resolveBgAgentTemplate(s?.defaults);
-  let u = async (p, w) => {
-    logForDebugging(`[bg-spare] claim miss (${p})${w ? `: ${w}` : ""}`);
+  let pool = bgSparePool();
+  let spare = pool.take();
+  let template = templateOverride ?? resolveBgAgentTemplate(spare?.defaults);
+  let miss = async (reason, detail) => {
+    logForDebugging(`[bg-spare] claim miss (${reason})${detail ? `: ${detail}` : ""}`);
     logEvent("tengu_bg_spare_claim_fail", {
-      reason: fromEnum(p),
+      reason: fromEnum(reason),
     });
-    if (s) {
-      let A = await deleteJob(
-        s.jobId,
+    if (spare) {
+      let deleteResult = await deleteJob(
+        spare.jobId,
         {
           internal: true,
-          knownGone: p === "enojob",
+          knownGone: reason === "enojob",
         },
-        storageV5,
+        storage,
       );
-      if (!A.removed) {
+      if (!deleteResult.removed) {
         logFeatureBad("job_claim_spare", "job_claim_spare_delete_failed");
         logForDebugging(
-          `[bg-spare] deleteJob unconfirmed (${A.error ?? "unknown"}) \u2014 cold-dispatching with fresh sessionId; spare ${s.jobId} dir preserved`,
+          `[bg-spare] deleteJob unconfirmed (${deleteResult.error ?? "unknown"}) \u2014 cold-dispatching with fresh sessionId; spare ${spare.jobId} dir preserved`,
           {
             level: "warn",
           },
         );
-      } else logFeatureSad("job_claim_spare", p);
-    } else logFeatureSad("job_claim_spare", p);
+      } else logFeatureSad("job_claim_spare", reason);
+    } else logFeatureSad("job_claim_spare", reason);
     return dispatchBgSessionTracked(
-      l,
-      e,
+      template,
+      intent,
       {
-        targetCwd: s?.cwd,
-        defaults: s?.defaults,
+        targetCwd: spare?.cwd,
+        defaults: spare?.defaults,
       },
-      storageV5,
+      storage,
     );
   };
-  if (!s) return u("no-spare");
-  if (!arraysEqual(s.extraArgs, r.extraArgs)) return u("stale-argv");
-  let y = applyReplyPatch(
+  if (!spare) return miss("no-spare");
+  if (!arraysEqual(spare.extraArgs, pool.extraArgs)) return miss("stale-argv");
+  let state = applyReplyPatch(
     makeInitialState({
-      template: l,
+      template,
       respawnFlags: [
         ...bgSparePool().extraArgs,
-        ...flagArgs("--agent", l.name),
-        ...buildDispatchArgs(s.defaults),
+        ...flagArgs("--agent", template.name),
+        ...buildDispatchArgs(spare.defaults),
       ],
-      intent: e,
+      intent,
       providerEnv: callerProviderEnv(),
-      sessionId: s.sessionId,
-      cwd: s.cwd,
-      originCwd: s.cwd,
+      sessionId: spare.sessionId,
+      cwd: spare.cwd,
+      originCwd: spare.cwd,
     }),
-    e,
+    intent,
   );
   try {
-    let p = await replyToJob(s.jobId, e, undefined, y, undefined, storageV5);
-    if (p) return u(p.err === REPLY_ENOJOB_MSG ? "enojob" : "reply", p.err);
+    let replyFailure = await replyToJob(spare.jobId, intent, undefined, state, undefined, storage);
+    if (replyFailure)
+      return miss(replyFailure.err === REPLY_ENOJOB_MSG ? "enojob" : "reply", replyFailure.err);
   } catch (error) {
-    return u("reply-throw", errorMessage(error));
+    return miss("reply-throw", errorMessage(error));
   }
-  await writeStateAtomic(getJobDir(s.jobId), y, storageV5).catch(logJobWriteError);
+  await writeStateAtomic(getJobDir(spare.jobId), state, storage).catch(logJobWriteError);
   logForDebugging("[PERF:bg-claim-end]");
   logFeatureOk("job_claim_spare");
   logFeatureOk("fleet_view_dispatch");
   return {
     ok: true,
-    jobId: s.jobId,
-    sessionId: s.sessionId,
+    jobId: spare.jobId,
+    sessionId: spare.sessionId,
   };
 }
 //@ chunk-bg51yd13.js:82083-82122 placement
@@ -499,40 +504,40 @@ function discardSpare(storageV5) {
 /**
  * 退役某个 spare（不再复用）。
  */
-function retireSpare(e) {
-  bgSparePool().retire(e);
+function retireSpare(storage) {
+  bgSparePool().retire(storage);
 }
 //@ chunk-bg51yd13.js:82153-93057 placement
 /**
  * 重启后台会话（等待进行中的启动、迁移到可附着 PTY 等，约 11 KB）。
  */
-async function respawnBgSession(e, n, o) {
-  let jobDir = getJobDir(e);
-  let knownState = n?.knownState;
-  let inFlightDispatch = getInFlightDispatch(e);
+async function respawnBgSession(jobId, options, storage) {
+  let jobDir = getJobDir(jobId);
+  let knownState = options?.knownState;
+  let inFlightDispatch = getInFlightDispatch(jobId);
   if (inFlightDispatch) {
-    logForDebugging(`bg: respawn of ${e} waiting on its in-flight spawn`);
-    let M = await inFlightDispatch;
+    logForDebugging(`bg: respawn of ${jobId} waiting on its in-flight spawn`);
+    let inFlightResult = await inFlightDispatch;
     invalidateJobStateCache(jobDir);
     knownState = undefined;
-    if (!M.ok && !M.alive) {
+    if (!inFlightResult.ok && !inFlightResult.alive) {
       logFeatureSad("job_respawn", "in_flight_spawn_failed");
-      let jobState = await readJobState(jobDir, o);
+      let jobState = await readJobState(jobDir, storage);
       let queued =
-        !!n?.initialPrompt &&
+        !!options?.initialPrompt &&
         jobState !== null &&
-        (await queuePromptForJob(jobDir, jobState, n.initialPrompt, o, n.keepQueuedPrompt));
+        (await queuePromptForJob(jobDir, jobState, options.initialPrompt, storage, options.keepQueuedPrompt));
       return {
         ok: false,
         alive: false,
-        state: jobState ?? n?.knownState,
+        state: jobState ?? options?.knownState,
         queued,
-        error: M.error,
+        error: inFlightResult.error,
       };
     }
   }
-  let u = knownState ?? (await readJobState(jobDir, o));
-  if (!u) {
+  let originalState = knownState ?? (await readJobState(jobDir, storage));
+  if (!originalState) {
     logFeatureBad("job_respawn", "job_respawn_state_missing");
     return {
       ok: false,
@@ -540,173 +545,202 @@ async function respawnBgSession(e, n, o) {
       alive: false,
     };
   }
-  let daemonShort = u.daemonShort ?? e;
+  let daemonShort = originalState.daemonShort ?? jobId;
   let now = Date.now();
-  let w = await probeDaemonJob(daemonShort, o);
-  let A = Date.now() - now;
-  let alive = w.alive;
-  if (!n?.force && !n?.forceUnresponsive && alive)
+  let probe = await probeDaemonJob(daemonShort, storage);
+  let probeMs = Date.now() - now;
+  let alive = probe.alive;
+  if (!options?.force && !options?.forceUnresponsive && alive)
     return {
       ok: false,
       alive: true,
       short: daemonShort,
-      state: u,
-      error: `Session ${e} is already running`,
+      state: originalState,
+      error: `Session ${jobId} is already running`,
     };
-  if (!n?.force && isExecLaunch(u)) {
-    if (w.daemonUp && w.present)
+  if (!options?.force && isExecLaunch(originalState)) {
+    if (probe.daemonUp && probe.present)
       return {
         ok: false,
         alive: true,
         short: daemonShort,
-        state: u,
-        error: `Session ${e} has exited; attach shows the captured output`,
+        state: originalState,
+        error: `Session ${jobId} has exited; attach shows the captured output`,
       };
     logFeatureSad("job_respawn", "exec_output_expired");
     return {
       ok: false,
       alive: false,
-      state: u,
+      state: originalState,
       error: "Output no longer available \u2014 this shell command has exited",
     };
   }
   if (knownState) invalidateJobStateCache(jobDir);
-  let h = knownState ? await readJobState(jobDir, o) : u;
-  let D = h === null ? await probeJobState(jobDir, o) : undefined;
-  let S = h ?? u;
-  let daemonShort_2 = S.daemonShort ?? e;
-  let x = checkWorkspaceTrust(S.cwd);
-  if (x.verdict === "untrusted") {
-    logFeatureSad("job_respawn", "workspace_untrusted", ...gateCauseExtra(workspaceGateCause(x)));
+  let freshState = knownState ? await readJobState(jobDir, storage) : originalState;
+  let probedState = freshState === null ? await probeJobState(jobDir, storage) : undefined;
+  let state = freshState ?? originalState;
+  let daemonShort_2 = state.daemonShort ?? jobId;
+  let trust = checkWorkspaceTrust(state.cwd);
+  if (trust.verdict === "untrusted") {
+    logFeatureSad("job_respawn", "workspace_untrusted", ...gateCauseExtra(workspaceGateCause(trust)));
     let queued =
-      !!n?.initialPrompt && (await queuePromptForJob(jobDir, S, n.initialPrompt, o, n.keepQueuedPrompt));
+      !!options?.initialPrompt &&
+      (await queuePromptForJob(jobDir, state, options.initialPrompt, storage, options.keepQueuedPrompt));
     return {
       ok: false,
       alive: false,
-      state: S,
+      state,
       queued,
       errorCode: "workspace_untrusted",
-      error: formatWorkspaceUntrusted(x),
+      error: formatWorkspaceUntrusted(trust),
     };
   }
-  let P = S.resumeSessionId !== undefined && S.resumeSessionId !== S.sessionId;
-  let T = S.cliVersion !== undefined || P;
-  let N = S.sessionIdTaken === true && !T;
-  let L = N
+  let isResumingOtherSession =
+    state.resumeSessionId !== undefined && state.resumeSessionId !== state.sessionId;
+  let isUpgraded = state.cliVersion !== undefined || isResumingOtherSession;
+  let isSessionIdTaken = state.sessionIdTaken === true && !isUpgraded;
+  let resumeSessionId = isSessionIdTaken
     ? randomUUID()
-    : (S.resumeSessionId ?? (normalizeUuidOrNull(S.sessionId) !== null ? S.sessionId : randomUUID()));
-  if (N)
+    : (state.resumeSessionId ??
+      (normalizeUuidOrNull(state.sessionId) !== null ? state.sessionId : randomUUID()));
+  if (isSessionIdTaken)
     logForDebugging(
-      `bg: respawn of ${e} \u2014 session id was taken by another conversation; starting under a fresh id`,
+      `bg: respawn of ${jobId} \u2014 session id was taken by another conversation; starting under a fresh id`,
       {
         level: "warn",
       },
     );
   let now_2 = Date.now();
-  let j = 0;
-  let K = 0;
-  let ne = null;
-  let ie = null;
-  let ke = wrapStorageSource(getTranscriptStorageContext(o));
-  let Te = w.daemonUp && !w.alive && !w.present && daemonShort_2 === daemonShort;
-  if (Te) {
-    ne = killOrphanedWorker(daemonShort_2, o);
-    ie = resolveJobTranscript(L, S.cwd, S.linkScanPath, undefined, ke);
+  let killMs = 0;
+  let waitMs = 0;
+  let orphanKill = null;
+  let transcript = null;
+  let storageSource = wrapStorageSource(getTranscriptStorageContext(storage));
+  let canSkipCeremony = probe.daemonUp && !probe.alive && !probe.present && daemonShort_2 === daemonShort;
+  if (canSkipCeremony) {
+    orphanKill = killOrphanedWorker(daemonShort_2, storage);
+    transcript = resolveJobTranscript(
+      resumeSessionId,
+      state.cwd,
+      state.linkScanPath,
+      undefined,
+      storageSource,
+    );
   } else {
-    let M = await killJob(daemonShort_2, u, undefined, o);
-    j = Date.now() - now_2;
-    if (alive && !M.confirmed) {
+    let killResult = await killJob(daemonShort_2, originalState, undefined, storage);
+    killMs = Date.now() - now_2;
+    if (alive && !killResult.confirmed) {
       logEvent("tengu_bg_respawn_unconfirmed_bail", {});
       logFeatureSad("job_respawn", "job_respawn_kill_unconfirmed");
       return {
         ok: false,
         alive,
         short: daemonShort_2,
-        state: u,
+        state: originalState,
         error:
-          M.error ?? "Couldn't stop the previous worker \u2014 supervisor may be starting, retry in a moment",
+          killResult.error ??
+          "Couldn't stop the previous worker \u2014 supervisor may be starting, retry in a moment",
         errorCode: "kill_unconfirmed",
       };
     }
     let now = Date.now();
-    let se = now + 3000;
-    while (Date.now() < se) {
+    let deadline = now + 3000;
+    while (Date.now() < deadline) {
       if (!(await isDaemonJobPresent(daemonShort_2))) break;
       await sleep(100);
     }
-    K = Date.now() - now;
+    waitMs = Date.now() - now;
   }
   let now_3 = Date.now();
-  let te = await (ie ?? resolveJobTranscript(L, S.cwd, S.linkScanPath, undefined, ke));
-  let $e = Date.now() - now_3;
-  if (ne) {
+  let resolvedTranscript = await (transcript ??
+    resolveJobTranscript(resumeSessionId, state.cwd, state.linkScanPath, undefined, storageSource));
+  let transcriptMs = Date.now() - now_3;
+  if (orphanKill) {
     let now = Date.now();
-    let V = await ne;
-    j = Date.now() - now;
-    if (V.anyMatch) te = await resolveJobTranscript(L, S.cwd, S.linkScanPath, undefined, ke);
+    let orphanResult = await orphanKill;
+    killMs = Date.now() - now;
+    if (orphanResult.anyMatch)
+      resolvedTranscript = await resolveJobTranscript(
+        resumeSessionId,
+        state.cwd,
+        state.linkScanPath,
+        undefined,
+        storageSource,
+      );
   }
-  let oe;
-  if (!te.hasMessages && S.bgIsolation === "none" && !T && S.linkScanPath === undefined) {
-    oe = await readCandidate(dirname(te.path), S.sessionId, o);
+  let heldBackSessionId;
+  if (
+    !resolvedTranscript.hasMessages &&
+    state.bgIsolation === "none" &&
+    !isUpgraded &&
+    state.linkScanPath === undefined
+  ) {
+    heldBackSessionId = await readCandidate(dirname(resolvedTranscript.path), state.sessionId, storage);
     let jobTranscript = await resolveJobTranscript(
-      L,
-      S.cwd,
-      S.linkScanPath,
+      resumeSessionId,
+      state.cwd,
+      state.linkScanPath,
       {
         crossWorktree: false,
       },
-      ke,
+      storageSource,
     );
     if (jobTranscript.hasMessages) {
-      te = jobTranscript;
-      oe = undefined;
+      resolvedTranscript = jobTranscript;
+      heldBackSessionId = undefined;
     }
   }
-  let hasMessages = te.hasMessages;
-  if (te.via === "projectsScan")
+  let hasMessages = resolvedTranscript.hasMessages;
+  if (resolvedTranscript.via === "projectsScan")
     logEvent("tengu_bg_respawn_probe_rescue", {
-      via: fromEnum(te.via),
+      via: fromEnum(resolvedTranscript.via),
     });
-  let Se = hasMessages || oe !== undefined;
+  let hasReplaySource = hasMessages || heldBackSessionId !== undefined;
   if (!hasMessages) {
     if (
-      oe === undefined &&
-      S.bgIsolation === "none" &&
-      L === S.sessionId &&
-      !n?.force &&
-      !n?.forceRefusalRetry
+      heldBackSessionId === undefined &&
+      state.bgIsolation === "none" &&
+      resumeSessionId === state.sessionId &&
+      !options?.force &&
+      !options?.forceRefusalRetry
     ) {
       logForDebugging(
-        `bg: respawn of ${e} refused \u2014 fork handoff whose own transcript never materialized`,
+        `bg: respawn of ${jobId} refused \u2014 fork handoff whose own transcript never materialized`,
         {
           level: "warn",
         },
       );
       logEvent("tengu_bg_respawn_no_transcript", {
-        via: fromEnum(te.via),
-        had_link_scan_path: S.linkScanPath !== undefined,
+        via: fromEnum(resolvedTranscript.via),
+        had_link_scan_path: state.linkScanPath !== undefined,
         quarantined: false,
         refused: true,
       });
       logFeatureSad("job_respawn", "fork_transcript_never_materialized");
       let queued =
-        !!n?.initialPrompt && (await queuePromptForJob(jobDir, S, n.initialPrompt, o, n.keepQueuedPrompt));
+        !!options?.initialPrompt &&
+        (await queuePromptForJob(jobDir, state, options.initialPrompt, storage, options.keepQueuedPrompt));
       return {
         ok: false,
         alive: false,
-        state: S,
+        state,
         queued,
         errorCode: "fork_transcript_never_materialized",
-        error: `This session has no saved transcript \u2014 it was stopped before its first response finished. If it was backgrounded from another conversation, that one is still intact; \`claude respawn ${e}\` starts this one fresh.`,
+        error: `This session has no saved transcript \u2014 it was stopped before its first response finished. If it was backgrounded from another conversation, that one is still intact; \`claude respawn ${jobId}\` starts this one fresh.`,
       };
     }
-    if (oe === undefined && S.deadEpochReapedAt !== undefined && !n?.force && !P) {
-      logForDebugging(`bg: respawn of ${e} refused \u2014 dead-epoch row whose transcript is gone`, {
+    if (
+      heldBackSessionId === undefined &&
+      state.deadEpochReapedAt !== undefined &&
+      !options?.force &&
+      !isResumingOtherSession
+    ) {
+      logForDebugging(`bg: respawn of ${jobId} refused \u2014 dead-epoch row whose transcript is gone`, {
         level: "warn",
       });
       logEvent("tengu_bg_respawn_no_transcript", {
-        via: fromEnum(te.via),
-        had_link_scan_path: S.linkScanPath !== undefined,
+        via: fromEnum(resolvedTranscript.via),
+        had_link_scan_path: state.linkScanPath !== undefined,
         quarantined: false,
         refused: true,
       });
@@ -714,254 +748,297 @@ async function respawnBgSession(e, n, o) {
       return {
         ok: false,
         alive: false,
-        state: S,
+        state,
         errorCode: "dead_epoch_transcript_gone",
-        error: `This session's saved conversation is no longer on disk (it ended while the background service was off, and old transcripts are cleaned up), so there is nothing to resume. \`claude rm ${e}\` deletes the row; \`claude respawn ${e}\` runs its original prompt again instead.`,
+        error: `This session's saved conversation is no longer on disk (it ended while the background service was off, and old transcripts are cleaned up), so there is nothing to resume. \`claude rm ${jobId}\` deletes the row; \`claude respawn ${jobId}\` runs its original prompt again instead.`,
       };
     }
-    let quarantined = await quarantineJobTranscript(te.path, ke);
+    let quarantined = await quarantineJobTranscript(resolvedTranscript.path, storageSource);
     logEvent("tengu_bg_respawn_no_transcript", {
-      via: fromEnum(te.via),
-      had_link_scan_path: S.linkScanPath !== undefined,
+      via: fromEnum(resolvedTranscript.via),
+      had_link_scan_path: state.linkScanPath !== undefined,
       quarantined,
       refused: false,
-      parked_source: oe !== undefined,
+      parked_source: heldBackSessionId !== undefined,
     });
   }
-  let intent = u.template === "exec" && u.respawnFlags.length === 0 ? u.intent : undefined;
-  let Je =
-    S.name && (S.nameSource === "user" || S.nameSource === "collision")
-      ? rewriteDispatchFlagValue(S.respawnFlags, "--name", "-n", S.name)
+  let intent =
+    originalState.template === "exec" && originalState.respawnFlags.length === 0
+      ? originalState.intent
       : undefined;
-  let xe = hasMessages && !intent;
-  if (xe) {
-    let filtered = (await listLiveSessionHolders(L)).filter(
-      (se) => !(se.jobId !== undefined && (se.jobId === e || se.jobId === daemonShort_2)),
+  let nameFlags =
+    state.name && (state.nameSource === "user" || state.nameSource === "collision")
+      ? rewriteDispatchFlagValue(state.respawnFlags, "--name", "-n", state.name)
+      : undefined;
+  let willResume = hasMessages && !intent;
+  if (willResume) {
+    let filtered = (await listLiveSessionHolders(resumeSessionId)).filter(
+      (holder) => !(holder.jobId !== undefined && (holder.jobId === jobId || holder.jobId === daemonShort_2)),
     );
-    let V = filtered.find((se) => se.kind === "interactive") ?? filtered[0];
-    if (V) {
+    let conflictHolder = filtered.find((holder) => holder.kind === "interactive") ?? filtered[0];
+    if (conflictHolder) {
       logEvent("tengu_bg_respawn_resume_conflict", {
-        holder_kind: fromEnum(V.kind),
+        holder_kind: fromEnum(conflictHolder.kind),
       });
       logFeatureSad("job_respawn", "resume_session_live_elsewhere");
       return {
         ok: false,
         alive: false,
-        state: S,
+        state,
         queued:
-          !!n?.initialPrompt && (await queuePromptForJob(jobDir, S, n.initialPrompt, o, n.keepQueuedPrompt)),
+          !!options?.initialPrompt &&
+          (await queuePromptForJob(jobDir, state, options.initialPrompt, storage, options.keepQueuedPrompt)),
         error:
-          V.kind === "interactive"
+          conflictHolder.kind === "interactive"
             ? SESSION_BUSY_ELSEWHERE_MESSAGE
             : "This conversation is already open in another running Claude session \u2014 use that one, or close it and try again",
         errorCode: "resume_session_live_elsewhere",
       };
     }
   }
-  let me = stripEnvironmentFlags(Je ?? S.respawnFlags);
-  let Z = intent
+  let respawnArgs = stripEnvironmentFlags(nameFlags ?? state.respawnFlags);
+  let flagArgsList = intent
     ? []
-    : me.length > 0
-      ? me
-      : u.routine
-        ? flagArgs("--routine", u.routine)
-        : u.template !== "bg"
-          ? flagArgs("--agent", u.template)
+    : respawnArgs.length > 0
+      ? respawnArgs
+      : originalState.routine
+        ? flagArgs("--routine", originalState.routine)
+        : originalState.template !== "bg"
+          ? flagArgs("--agent", originalState.template)
           : [];
-  let index = Z.findIndex((M) => M === "--agent" || M.startsWith("--agent="));
-  let be = index !== -1 && Z[index] === "--agent";
-  let Ye = index === -1 ? undefined : be ? Z[index + 1] : Z[index].slice(8);
-  if (!Se && Ye) {
-    let M = Ye;
+  let index = flagArgsList.findIndex((arg) => arg === "--agent" || arg.startsWith("--agent="));
+  let isAgentValueSeparate = index !== -1 && flagArgsList[index] === "--agent";
+  let agentName =
+    index === -1 ? undefined : isAgentValueSeparate ? flagArgsList[index + 1] : flagArgsList[index].slice(8);
+  if (!hasReplaySource && agentName) {
+    let requestedAgent = agentName;
     clearAgentDefinitionsCache();
-    let V = await listUserAgentTemplates(S.cwd, o).catch(() => {
+    let templates = await listUserAgentTemplates(state.cwd, storage).catch(() => {
       return;
     });
-    let se = resolveBgAgentTemplate(
+    let resolvedAgent = resolveBgAgentTemplate(
       {
-        agent: M,
+        agent: requestedAgent,
       },
-      V,
+      templates,
     ).name;
-    if (se !== M)
-      Z = be
-        ? Z.toSpliced(index, 2, ...flagArgs("--agent", se))
-        : Z.toSpliced(index, 1, ...flagArgs("--agent", se));
+    if (resolvedAgent !== requestedAgent)
+      flagArgsList = isAgentValueSeparate
+        ? flagArgsList.toSpliced(index, 2, ...flagArgs("--agent", resolvedAgent))
+        : flagArgsList.toSpliced(index, 1, ...flagArgs("--agent", resolvedAgent));
   }
-  let qe = P;
-  let Ee = !Se && (n?.forceRefusalRetry === true || (!intent && S.bgIsolation === "none" && !P));
-  let Ie = Ee ? randomUUID() : L;
-  let we = queuedPromptOrUndefined(S);
-  if (we !== S.queuedPrompt)
-    logForDebugging(`bg: respawn of ${e} \u2014 the saved reply starts with / or !, so no restart sends it`, {
-      level: "warn",
-    });
-  let ce = intent
+  let isOtherSessionResume = isResumingOtherSession;
+  let isFreshStart =
+    !hasReplaySource &&
+    (options?.forceRefusalRetry === true ||
+      (!intent && state.bgIsolation === "none" && !isResumingOtherSession));
+  let newSessionId = isFreshStart ? randomUUID() : resumeSessionId;
+  let queuedPrompt = queuedPromptOrUndefined(state);
+  if (queuedPrompt !== state.queuedPrompt)
+    logForDebugging(
+      `bg: respawn of ${jobId} \u2014 the saved reply starts with / or !, so no restart sends it`,
+      {
+        level: "warn",
+      },
+    );
+  let prompt = intent
     ? undefined
-    : n?.keepQueuedPrompt && n.initialPrompt && we
-      ? promptMatchesQueued(we, n.initialPrompt)
-        ? we
-        : `${we}
+    : options?.keepQueuedPrompt && options.initialPrompt && queuedPrompt
+      ? promptMatchesQueued(queuedPrompt, options.initialPrompt)
+        ? queuedPrompt
+        : `${queuedPrompt}
 
-${n.initialPrompt}`
-      : (n?.initialPrompt ?? we ?? (Se || qe || Ee ? undefined : u.intent));
-  if (!intent && ce !== undefined && n?.initialPrompt === undefined && we === undefined)
+${options.initialPrompt}`
+      : (options?.initialPrompt ??
+        queuedPrompt ??
+        (hasReplaySource || isOtherSessionResume || isFreshStart ? undefined : originalState.intent));
+  if (!intent && prompt !== undefined && options?.initialPrompt === undefined && queuedPrompt === undefined)
     logEvent("tengu_resume_interrupted_turn", {
       surface: lit("respawn_job"),
       kind: lit("intent_replay"),
     });
-  let Ke = oe === undefined && Boolean(n?.replyOnResume) && xe && !ce;
-  let Ne = [
-    ...(xe ? ["--resume", L] : []),
-    ...(oe !== undefined ? ["--resume", oe, "--fork-session"] : []),
-    ...(oe !== undefined ? withoutReplyOnResume(Z) : Ke ? withReplyOnResume(Z) : Z),
-    ...(ce ? ["--", ce] : []),
+  let shouldReplyOnResume =
+    heldBackSessionId === undefined && Boolean(options?.replyOnResume) && willResume && !prompt;
+  let childArgs = [
+    ...(willResume ? ["--resume", resumeSessionId] : []),
+    ...(heldBackSessionId !== undefined ? ["--resume", heldBackSessionId, "--fork-session"] : []),
+    ...(heldBackSessionId !== undefined
+      ? withoutReplyOnResume(flagArgsList)
+      : shouldReplyOnResume
+        ? withReplyOnResume(flagArgsList)
+        : flagArgsList),
+    ...(prompt ? ["--", prompt] : []),
   ];
   let bridgeReattachEnv = buildBridgeReattachEnv(
-    S.bridgeSessionId,
-    S.bridgeSessionSeq,
-    S.bridgeOutboundOnly,
-    S.bridgeSessionGroupingId,
+    state.bridgeSessionId,
+    state.bridgeSessionSeq,
+    state.bridgeOutboundOnly,
+    state.bridgeSessionGroupingId,
     {
-      ownerAccountUuid: S.bridgeOwnerAccountUuid,
-      ownerOrganizationUuid: S.bridgeOwnerOrganizationUuid,
-      noHistoryBackfill: S.bridgeNoHistoryBackfill,
+      ownerAccountUuid: state.bridgeOwnerAccountUuid,
+      ownerOrganizationUuid: state.bridgeOwnerOrganizationUuid,
+      noHistoryBackfill: state.bridgeNoHistoryBackfill,
     },
   );
-  let U = T ? bridgeReattachEnv : attachCarriedPromptHash(getJobDir(e), bridgeReattachEnv);
-  if (!n?.force && !n?.forceUnresponsive && u.state !== "stopped") {
+  let reattachEnv = isUpgraded
+    ? bridgeReattachEnv
+    : attachCarriedPromptHash(getJobDir(jobId), bridgeReattachEnv);
+  if (!options?.force && !options?.forceUnresponsive && originalState.state !== "stopped") {
     invalidateJobStateCache(jobDir);
-    let jobState = await readJobState(jobDir, o);
+    let jobState = await readJobState(jobDir, storage);
     if (jobState?.state === "stopped") {
-      logForDebugging(`bg: respawn of ${e} bailed \u2014 job was stopped while the respawn was in flight`, {
-        level: "warn",
-      });
+      logForDebugging(
+        `bg: respawn of ${jobId} bailed \u2014 job was stopped while the respawn was in flight`,
+        {
+          level: "warn",
+        },
+      );
       logFeatureSad("job_respawn", "stopped_during_respawn");
       return {
         ok: false,
         alive: false,
         state: jobState,
-        error: `Session ${e} was stopped while the respawn was in flight`,
+        error: `Session ${jobId} was stopped while the respawn was in flight`,
       };
     }
   }
   let now_4 = Date.now();
-  let Le;
-  let G = {
+  let hasTombstone;
+  let lineage = {
     gateway: false,
     lineage: false,
   };
   try {
-    G = decodeHostLineage(await readFile(hostManagedEntry(e), "utf8"));
-    Le = true;
+    lineage = decodeHostLineage(await readFile(hostManagedEntry(jobId), "utf8"));
+    hasTombstone = true;
   } catch (error) {
     if (!isENOENT(error))
       return {
         ok: false,
         alive: false,
-        state: u,
+        state: originalState,
         error: `host-managed tombstone unreadable: ${errorMessage(error)}`,
       };
-    Le = false;
+    hasTombstone = false;
   }
-  let { CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST, ...Be } = u.providerEnv ?? {};
-  if (Le) for (let M of PASSTHROUGH_ENV_VARS) delete Be[M];
-  let providerEnv = Le
+  let { CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST, ...passthroughEnv } = originalState.providerEnv ?? {};
+  if (hasTombstone) for (let name of PASSTHROUGH_ENV_VARS) delete passthroughEnv[name];
+  let providerEnv = hasTombstone
     ? {
-        ...Be,
+        ...passthroughEnv,
         CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST: "1",
-        ...(G.gateway && {
+        ...(lineage.gateway && {
           CLAUDE_CODE_USE_GATEWAY: "1",
         }),
-        ...(G.lineage && {
+        ...(lineage.lineage && {
           CLAUDE_CODE_HOST_GATEWAY_LINEAGE: "1",
         }),
       }
-    : Be;
-  let Ze = {
+    : passthroughEnv;
+  let launchOptions = {
     ...(intent && {
       intent,
       exec: intent,
     }),
-    ...(xe && {
-      resumeTranscriptPath: te.path,
+    ...(willResume && {
+      resumeTranscriptPath: resolvedTranscript.path,
     }),
-    ...(S.name && {
-      name: S.name,
-      nameSource: S.nameSource,
+    ...(state.name && {
+      name: state.name,
+      nameSource: state.nameSource,
     }),
-    ...(u.bgIsolation === "none" && {
+    ...(originalState.bgIsolation === "none" && {
       bgIsolation: "none",
     }),
     providerEnv,
-    ...(u.sessionPermissionRules && {
-      sessionPermissionRules: u.sessionPermissionRules,
+    ...(originalState.sessionPermissionRules && {
+      sessionPermissionRules: originalState.sessionPermissionRules,
     }),
-    ...(u.memoryToggledOff && {
+    ...(originalState.memoryToggledOff && {
       memoryToggledOff: true,
     }),
-    ...(u.autoMemoryOffThisSession && {
+    ...(originalState.autoMemoryOffThisSession && {
       autoMemoryOffThisSession: true,
     }),
-    ...(u.forkSourceAlive && {
+    ...(originalState.forkSourceAlive && {
       forkSourceAlive: true,
-      ...(u.forkBoundaryAt && {
-        forkBoundaryAt: u.forkBoundaryAt,
+      ...(originalState.forkBoundaryAt && {
+        forkBoundaryAt: originalState.forkBoundaryAt,
       }),
-      ...(u.forkSessionId && {
-        forkSessionId: u.forkSessionId,
+      ...(originalState.forkSessionId && {
+        forkSessionId: originalState.forkSessionId,
       }),
-      ...(u.forkParentSessionId && {
-        forkParentSessionId: u.forkParentSessionId,
+      ...(originalState.forkParentSessionId && {
+        forkParentSessionId: originalState.forkParentSessionId,
       }),
     }),
   };
-  let pt =
-    Ke &&
+  let shouldReplayOwed =
+    shouldReplyOnResume &&
     !intent &&
-    S.state !== "failed" &&
-    S.state !== "stopped" &&
-    isTerminal(S.state) &&
-    !S.routine &&
-    (n?.replyOnResume === "turn-owed" || (n?.replyOnResume === "kick-kept" && S.tempo === "active"));
-  if (pt) {
+    state.state !== "failed" &&
+    state.state !== "stopped" &&
+    isTerminal(state.state) &&
+    !state.routine &&
+    (options?.replyOnResume === "turn-owed" ||
+      (options?.replyOnResume === "kick-kept" && state.tempo === "active"));
+  if (shouldReplayOwed) {
     invalidateJobStateCache(jobDir);
     await writeStateAtomic(
       jobDir,
       {
-        ...((await readJobState(jobDir, o)) ?? S),
+        ...((await readJobState(jobDir, storage)) ?? state),
         tempo: "active",
         replayOwed: true,
         updatedAt: new Date().toISOString(),
       },
-      o,
+      storage,
     ).catch(logJobWriteError);
   }
-  let bgSession = await spawnBgSession(Ne, Ie, "fleet", S.cwd, Ze, U, e, o);
+  let bgSession = await spawnBgSession(
+    childArgs,
+    newSessionId,
+    "fleet",
+    state.cwd,
+    launchOptions,
+    reattachEnv,
+    jobId,
+    storage,
+  );
   if (!bgSession.ok && !bgSession.alive && bgSession.reason === "ack_timeout" && Date.now() - now_4 < 2000) {
     logForDebugging(`bg: respawn dispatch fast-failed (${Date.now() - now_4}ms) \u2014 retrying once`, {
       level: "warn",
     });
     await sleep(500);
-    bgSession = await spawnBgSession(Ne, Ie, "fleet", S.cwd, Ze, U, e, o);
+    bgSession = await spawnBgSession(
+      childArgs,
+      newSessionId,
+      "fleet",
+      state.cwd,
+      launchOptions,
+      reattachEnv,
+      jobId,
+      storage,
+    );
   }
-  if (bgSession.ok) dropCarriedPromptHash(getJobDir(e));
-  let mt = Date.now() - now_4;
-  let ht = Date.now() - now;
+  if (bgSession.ok) dropCarriedPromptHash(getJobDir(jobId));
+  let dispatchMs = Date.now() - now_4;
+  let totalMs = Date.now() - now;
   logForDebugging(
-    `[PERF:respawn] ${e}: total=${ht}ms probe=${A}ms kill=${j}ms${Te ? " (ceremony skipped)" : ""} wait=${K}ms transcript=${$e}ms dispatch=${mt}ms ok=${bgSession.ok}`,
+    `[PERF:respawn] ${jobId}: total=${totalMs}ms probe=${probeMs}ms kill=${killMs}ms${canSkipCeremony ? " (ceremony skipped)" : ""} wait=${waitMs}ms transcript=${transcriptMs}ms dispatch=${dispatchMs}ms ok=${bgSession.ok}`,
   );
   logEvent("tengu_bg_respawn", {
-    total_ms: ht,
-    probe_ms: A,
-    kill_ms: j,
-    wait_ms: K,
-    transcript_ms: $e,
-    dispatch_ms: mt,
-    skipped_kill: Te,
-    daemon_up: w.daemonUp,
-    was_present: w.present,
-    forced: n?.force === true || n?.forceRefusalRetry === true || n?.forceUnresponsive === true,
+    total_ms: totalMs,
+    probe_ms: probeMs,
+    kill_ms: killMs,
+    wait_ms: waitMs,
+    transcript_ms: transcriptMs,
+    dispatch_ms: dispatchMs,
+    skipped_kill: canSkipCeremony,
+    daemon_up: probe.daemonUp,
+    was_present: probe.present,
+    forced:
+      options?.force === true || options?.forceRefusalRetry === true || options?.forceUnresponsive === true,
     ok: bgSession.ok,
   });
   if (!bgSession.ok) {
@@ -969,93 +1046,94 @@ ${n.initialPrompt}`
     else if (bgSession.reason === "cwd_gone") logFeatureSad("job_respawn", "cwd_gone");
     else logFeatureBad("job_respawn", "job_respawn_spawn_failed");
     let queued =
-      !bgSession.alive && n?.initialPrompt
-        ? await queuePromptForJob(jobDir, S, n.initialPrompt, o, n.keepQueuedPrompt)
+      !bgSession.alive && options?.initialPrompt
+        ? await queuePromptForJob(jobDir, state, options.initialPrompt, storage, options.keepQueuedPrompt)
         : false;
     return {
       ok: false,
       error: bgSession.error,
       alive: bgSession.alive ?? false,
       short: bgSession.short,
-      state: u,
+      state: originalState,
       queued,
     };
   }
-  if (D && !intent) logRestartWithoutSavedState("wake", D);
+  if (probedState && !intent) logRestartWithoutSavedState("wake", probedState);
   logEvent("tengu_bg_agent_action", {
     action: lit("respawn"),
-    wasSettled: isSettled(u),
-    jobSessionId: sanitizeMarkName(S.sessionId),
+    wasSettled: isSettled(originalState),
+    jobSessionId: sanitizeMarkName(state.sessionId),
   });
   invalidateJobStateCache(jobDir);
-  let ae = (await readJobState(jobDir, o)) ?? S;
-  if (ae.state === "failed" && ae.updatedAt > S.updatedAt) {
+  let latestState = (await readJobState(jobDir, storage)) ?? state;
+  if (latestState.state === "failed" && latestState.updatedAt > state.updatedAt) {
     logFeatureSad("job_respawn", "crashed_during_spawn");
     if (
-      ae.reapedMidWorkAt !== undefined ||
-      ae.reapedUnsettledAt !== undefined ||
-      ae.deadEpochReapedAt !== undefined
+      latestState.reapedMidWorkAt !== undefined ||
+      latestState.reapedUnsettledAt !== undefined ||
+      latestState.deadEpochReapedAt !== undefined
     ) {
-      let M = {
-        ...ae,
+      let clearedState = {
+        ...latestState,
         reapedMidWorkAt: undefined,
         reapedUnsettledAt: undefined,
         deadEpochReapedAt: undefined,
       };
-      await writeStateAtomic(jobDir, M, o).catch(logJobWriteError);
+      await writeStateAtomic(jobDir, clearedState, storage).catch(logJobWriteError);
       return {
         ok: true,
         short: bgSession.short,
-        state: M,
+        state: clearedState,
       };
     }
     return {
       ok: true,
       short: bgSession.short,
-      state: ae,
+      state: latestState,
     };
   }
-  let en = ce
+  let patchedState = prompt
     ? {
-        ...applyReplyPatch(ae, ce),
+        ...applyReplyPatch(latestState, prompt),
         tempo: "active",
         needs: undefined,
         block: undefined,
       }
-    : ae;
-  let gt =
-    Je && S.name
-      ? (rewriteDispatchFlagValue(ae.respawnFlags, "--name", "-n", S.name) ?? ae.respawnFlags)
+    : latestState;
+  let renamedFlags =
+    nameFlags && state.name
+      ? (rewriteDispatchFlagValue(latestState.respawnFlags, "--name", "-n", state.name) ??
+        latestState.respawnFlags)
       : undefined;
-  let Ve = S.state === "failed" || S.state === "stopped" || !!intent;
-  let wt = {
-    ...en,
-    state: Ve ? "starting" : ce && hasOutstandingAsk(S) ? "working" : S.state,
+  let isRestarting = state.state === "failed" || state.state === "stopped" || !!intent;
+  let nextState = {
+    ...patchedState,
+    state: isRestarting ? "starting" : prompt && hasOutstandingAsk(state) ? "working" : state.state,
     reapedMidWorkAt: undefined,
     reapedUnsettledAt: undefined,
     deadEpochReapedAt: undefined,
-    ...(ce
+    ...(prompt
       ? {
           inFlight: undefined,
         }
       : {
-          ...(!Ve && S.tempo === "active"
-            ? isTerminal(S.state) || S.routine
+          ...(!isRestarting && state.tempo === "active"
+            ? isTerminal(state.state) || state.routine
               ? {
                   tempo: "idle",
                 }
               : {
                   tempo: "blocked",
                   needs: IDLE_NEEDS,
-                  ...(PRE_BOOT_STATES.includes(S.state) && {
+                  ...(PRE_BOOT_STATES.includes(state.state) && {
                     state: "working",
                   }),
                 }
             : {
-                tempo: Ve ? "idle" : S.tempo,
+                tempo: isRestarting ? "idle" : state.tempo,
               }),
-          detail: Ve || Ee ? "" : S.detail,
-          ...(Ee && {
+          detail: isRestarting || isFreshStart ? "" : state.detail,
+          ...(isFreshStart && {
             output: null,
           }),
           inFlight: {
@@ -1064,41 +1142,41 @@ ${n.initialPrompt}`
             kinds: [],
           },
         }),
-    ...(Se
+    ...(hasReplaySource
       ? {}
       : {
           firstTerminalAt: null,
         }),
     daemonShort: bgSession.short,
-    ...(gt && {
-      respawnFlags: gt,
+    ...(renamedFlags && {
+      respawnFlags: renamedFlags,
     }),
     queuedPrompt: undefined,
-    ...(N && {
-      sessionId: L,
-      resumeSessionId: L,
+    ...(isSessionIdTaken && {
+      sessionId: resumeSessionId,
+      resumeSessionId,
     }),
-    ...(Ee && {
-      resumeSessionId: Ie,
+    ...(isFreshStart && {
+      resumeSessionId: newSessionId,
       linkScanPath: undefined,
       linkScanOffset: 0,
     }),
     sessionIdTaken: undefined,
     replayOwed: undefined,
-    ...(pt &&
-      ae.replayOwed === true && {
+    ...(shouldReplayOwed &&
+      latestState.replayOwed === true && {
         tempo: "active",
         replayOwed: true,
       }),
     updatedAt: new Date().toISOString(),
     backend: "daemon",
   };
-  await writeStateAtomic(jobDir, wt, o).catch(logJobWriteError);
+  await writeStateAtomic(jobDir, nextState, storage).catch(logJobWriteError);
   logFeatureOk("job_respawn");
   return {
     ok: true,
     short: bgSession.short,
-    state: wt,
+    state: nextState,
   };
 }
 //@ chunk-bg51yd13.js:93057-93114 placement
@@ -1116,12 +1194,12 @@ var COPY_ON_CREATE_WRITE_OPTIONS = {
 /**
  * 用存储后端算某键的 sha256 摘要（最多读 expected 长度字节），判断是否等于给定摘要。
  */
-async function storageDigestMatches(e, n, bytes, digest) {
-  let s = await e.digest(n, {
+async function storageDigestMatches(storage, key, bytes, digest) {
+  let result = await storage.digest(key, {
     algorithm: "sha256",
     maxBytes: bytes.length,
   });
-  return s.ok && s.value.digest === digest;
+  return result.ok && result.value.digest === digest;
 }
 export {
   isFleetDispatchEnabled,

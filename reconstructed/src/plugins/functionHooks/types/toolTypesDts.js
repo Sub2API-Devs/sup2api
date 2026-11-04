@@ -16,12 +16,12 @@ import { logForDebugging } from "../../../utils/debug.js";
 //@ chunk-s61vbvea.js:624308-624372 placement
 var sanitizeJsDocText = (description) => description.replace(/\s+/g, " ").trim().replace(/\*\//g, "* /");
 //@ chunk-s61vbvea.js:624372-624477 placement = parseSkillPaths (0.822)
-function formatJsDocLine(e, n) {
-  let { description } = e;
-  let h = typeof description === "string" ? sanitizeJsDocText(description) : "";
-  return h === ""
+function formatJsDocLine(schema, indent) {
+  let { description } = schema;
+  let docText = typeof description === "string" ? sanitizeJsDocText(description) : "";
+  return docText === ""
     ? ""
-    : `${n}/** ${h} */
+    : `${indent}/** ${docText} */
 `;
 }
 //@ chunk-s61vbvea.js:624477-624505 placement
@@ -33,11 +33,14 @@ var TS_IDENTIFIER_RE = /^[A-Za-z_$][\w$]*$/;
 /**
  * 非标识符则加引号
  */
-var quoteIfNotIdentifier = (e) => (TS_IDENTIFIER_RE.test(e) ? e : jsonStringify(e));
+var quoteIfNotIdentifier = (name) => (TS_IDENTIFIER_RE.test(name) ? name : jsonStringify(name));
 //@ chunk-s61vbvea.js:624535-624645 placement
-function literalTsType(e) {
-  return typeof e === "string" || typeof e === "number" || typeof e === "boolean" || e === null
-    ? jsonStringify(e)
+function literalTsType(value) {
+  return typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    value === null
+    ? jsonStringify(value)
     : "unknown";
 }
 //@ chunk-s61vbvea.js:624645-624655 placement
@@ -49,38 +52,38 @@ var MAX_TS_TYPE_DEPTH = 32;
 /**
  * 把 JSON Schema 转成 TypeScript 类型文本（用于生成工具输入 d.ts）
  */
-function jsonSchemaToTs(e, n = "", r = 0) {
-  if (e === true || r > MAX_TS_TYPE_DEPTH) return "unknown";
-  if (e === false) return "never";
-  if (!isPlainObject(e)) return "unknown";
-  if ("const" in e) return literalTsType(e.const);
-  if (Array.isArray(e.enum)) return e.enum.map(literalTsType).join(" | ") || "never";
-  if (Array.isArray(e.anyOf) || Array.isArray(e.oneOf)) {
-    let mapped = (e.anyOf ?? e.oneOf).map((h) => jsonSchemaToTs(h, n, r + 1));
+function jsonSchemaToTs(schema, indent = "", depth = 0) {
+  if (schema === true || depth > MAX_TS_TYPE_DEPTH) return "unknown";
+  if (schema === false) return "never";
+  if (!isPlainObject(schema)) return "unknown";
+  if ("const" in schema) return literalTsType(schema.const);
+  if (Array.isArray(schema.enum)) return schema.enum.map(literalTsType).join(" | ") || "never";
+  if (Array.isArray(schema.anyOf) || Array.isArray(schema.oneOf)) {
+    let mapped = (schema.anyOf ?? schema.oneOf).map((branch) => jsonSchemaToTs(branch, indent, depth + 1));
     return mapped.length === 0 ? "unknown" : uniq(mapped).join(" | ");
   }
-  if (Array.isArray(e.allOf)) {
-    let mapped = e.allOf.map((y) => jsonSchemaToTs(y, n, r + 1));
+  if (Array.isArray(schema.allOf)) {
+    let mapped = schema.allOf.map((branch) => jsonSchemaToTs(branch, indent, depth + 1));
     return mapped.length === 0
       ? "unknown"
-      : mapped.map((y) => (y.includes(" | ") ? `(${y})` : y)).join(" & ");
+      : mapped.map((text) => (text.includes(" | ") ? `(${text})` : text)).join(" & ");
   }
-  if (Array.isArray(e.type))
+  if (Array.isArray(schema.type))
     return (
       uniq(
-        e.type.map((type) =>
+        schema.type.map((type) =>
           jsonSchemaToTs(
             {
-              ...e,
+              ...schema,
               type,
             },
-            n,
-            r + 1,
+            indent,
+            depth + 1,
           ),
         ),
       ).join(" | ") || "unknown"
     );
-  switch (e.type) {
+  switch (schema.type) {
     case "string":
       return "string";
     case "number":
@@ -91,32 +94,38 @@ function jsonSchemaToTs(e, n = "", r = 0) {
     case "null":
       return "null";
     case "array": {
-      if (Array.isArray(e.items))
-        return `[${e.items.map((item) => jsonSchemaToTs(item, n, r + 1)).join(", ")}]`;
-      let s = jsonSchemaToTs(e.items, n, r + 1);
-      return s.includes(" | ") || s.includes(" & ") || s.includes("/*") ? `Array<${s}>` : `${s}[]`;
+      if (Array.isArray(schema.items))
+        return `[${schema.items.map((item) => jsonSchemaToTs(item, indent, depth + 1)).join(", ")}]`;
+      let itemType = jsonSchemaToTs(schema.items, indent, depth + 1);
+      return itemType.includes(" | ") || itemType.includes(" & ") || itemType.includes("/*")
+        ? `Array<${itemType}>`
+        : `${itemType}[]`;
     }
     case "object":
     case undefined: {
-      if (!isPlainObject(e.properties)) {
-        let w = e.type === "object";
-        let R = "$ref" in e;
-        return w ? "{}" : R ? `unknown /* $ref ${sanitizeJsDocText(String(e.$ref))} */` : "unknown";
+      if (!isPlainObject(schema.properties)) {
+        let isObject = schema.type === "object";
+        let hasRef = "$ref" in schema;
+        return isObject
+          ? "{}"
+          : hasRef
+            ? `unknown /* $ref ${sanitizeJsDocText(String(schema.$ref))} */`
+            : "unknown";
       }
-      let s = new Set(Array.isArray(e.required) ? e.required.map(String) : []);
-      let h = `${n}  `;
-      let mapped = Object.entries(e.properties).map(([key, value]) => {
-        let x = isPlainObject(value) ? formatJsDocLine(value, h) : "";
-        let P = s.has(key) ? "" : "?";
-        let j = jsonSchemaToTs(value, h, r + 1);
-        return `${x}${h}${quoteIfNotIdentifier(key)}${P}: ${j}`;
+      let required = new Set(Array.isArray(schema.required) ? schema.required.map(String) : []);
+      let fieldIndent = `${indent}  `;
+      let mapped = Object.entries(schema.properties).map(([key, value]) => {
+        let docLine = isPlainObject(value) ? formatJsDocLine(value, fieldIndent) : "";
+        let optionalMark = required.has(key) ? "" : "?";
+        let fieldType = jsonSchemaToTs(value, fieldIndent, depth + 1);
+        return `${docLine}${fieldIndent}${quoteIfNotIdentifier(key)}${optionalMark}: ${fieldType}`;
       });
       return mapped.length === 0
         ? "{}"
         : `{
 ${mapped.join(`
 `)}
-${n}}`;
+${indent}}`;
     }
     default:
       return "unknown";
@@ -126,46 +135,50 @@ ${n}}`;
 /**
  * 生成 declare module 'claude-code' 中某工具输入接口的声明行（按名排序，带 JSDoc 描述）。
  */
-var declareToolInputsInterface = (e, n, r = (s) => jsonSchemaToTs(s.inputSchema, "    ")) => [
+var declareToolInputsInterface = (
+  interfaceName,
+  tools,
+  typeOf = (tool) => jsonSchemaToTs(tool.inputSchema, "    "),
+) => [
   "declare module 'claude-code' {",
-  `  interface ${e} {`,
-  ...[...n]
-    .sort((s, h) => s.name.localeCompare(h.name))
-    .map((s) => {
-      let y =
-        s.description === undefined
+  `  interface ${interfaceName} {`,
+  ...[...tools]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((tool) => {
+      let docLine =
+        tool.description === undefined
           ? ""
           : formatJsDocLine(
               {
-                description: s.description,
+                description: tool.description,
               },
               "    ",
             );
-      let S = quoteIfNotIdentifier(s.name);
-      return `${y}    ${S}: ${r(s)}`;
+      let name = quoteIfNotIdentifier(tool.name);
+      return `${docLine}    ${name}: ${typeOf(tool)}`;
     }),
   "  }",
   "}",
 ];
 //@ chunk-s61vbvea.js:626325-626893 placement
-var BUILTIN_TOOL_INPUTS_HEADER = (e) =>
+var BUILTIN_TOOL_INPUTS_HEADER = (tools) =>
   [
     "// The inputs of the built-in tools this build has, from each tool's",
     "// input schema. Merges into ToolCallInput (BuiltinToolInputs) so",
     '// `e.tool === "Bash"` narrows to the tool\'s arguments.',
-    ...declareToolInputsInterface("BuiltinToolInputs", e),
+    ...declareToolInputsInterface("BuiltinToolInputs", tools),
     "",
     "// The structured results of the same tools, from each tool's output",
     "// schema. Merges into ToolCallResult (BuiltinToolResults) so after",
     '// `e.tool === "Bash"` the `result` of `next(e)` is the tool\'s record.',
-    ...declareToolInputsInterface("BuiltinToolResults", e, (n) =>
-      n.outputSchema !== undefined ? jsonSchemaToTs(n.outputSchema, "    ") : "unknown",
+    ...declareToolInputsInterface("BuiltinToolResults", tools, (tool) =>
+      tool.outputSchema !== undefined ? jsonSchemaToTs(tool.outputSchema, "    ") : "unknown",
     ),
     "",
   ].join(`
 `);
 //@ chunk-s61vbvea.js:627203-627616 placement
-var MCP_TOOL_INPUTS_HEADER = (e) =>
+var MCP_TOOL_INPUTS_HEADER = (tools) =>
   [
     "// The inputs of the MCP tools the session had connected when this mod",
     "// was last saved, from each server's tools/list inputSchema.",
@@ -173,27 +186,27 @@ var MCP_TOOL_INPUTS_HEADER = (e) =>
     '// `e.tool === "mcp__<server>__<tool>"` narrows to the tool\'s arguments.',
     "// Written again at a save of the mod with a server connected.",
     "export {}",
-    ...declareToolInputsInterface("McpToolInputs", e),
+    ...declareToolInputsInterface("McpToolInputs", tools),
     "",
   ].join(`
 `);
 //@ chunk-s61vbvea.js:627616-627912 placement
-function buildMcpToolInputTypes(e) {
-  let n = [];
-  for (let r of e) {
-    if (!r.name.startsWith("mcp__")) continue;
-    if (r.inputJSONSchema === undefined) {
-      logForDebugging(`tool types: ${r.name} has no inputJSONSchema; skipped`);
+function buildMcpToolInputTypes(tools) {
+  let entries = [];
+  for (let tool of tools) {
+    if (!tool.name.startsWith("mcp__")) continue;
+    if (tool.inputJSONSchema === undefined) {
+      logForDebugging(`tool types: ${tool.name} has no inputJSONSchema; skipped`);
       continue;
     }
-    n.push({
-      name: r.name,
-      inputSchema: r.inputJSONSchema,
-      ...(r.description !== undefined && {
-        description: r.description,
+    entries.push({
+      name: tool.name,
+      inputSchema: tool.inputJSONSchema,
+      ...(tool.description !== undefined && {
+        description: tool.description,
       }),
     });
   }
-  return n;
+  return entries;
 }
 export { BUILTIN_TOOL_INPUTS_HEADER, buildMcpToolInputTypes, MCP_TOOL_INPUTS_HEADER };

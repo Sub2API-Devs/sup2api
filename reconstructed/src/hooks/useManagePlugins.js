@@ -9,7 +9,7 @@
  * attribution: sole-consumer 4, fingerprint 1
  */
 import { isDeepStrictEqual } from "util";
-import { init_react_production, ce, P } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, useCallback, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { readThemesFromPathAsync, getCustomThemeRegistry } from "../utils/customThemes.js";
 import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { isCustomizationDisabled } from "../utils/settings/customizationDisabled.js";
@@ -37,36 +37,42 @@ import { logEvent } from "../services/analytics/index.js";
 import { logForDiagnosticsNoPII } from "../utils/diagLogs.js";
 import { reresolveCommandSourcesOnce } from "../utils/plugins/pluginAutoupdate.js";
 import { marketplaceOf } from "../utils/plugins/pluginIdentifier.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:208743-208747 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:208743", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:208790-209096 sole-consumer
 /**
  * 从插件声明的主题路径读取主题，并加上插件名前缀。
  */
-async function loadPluginThemes(h) {
-  let x = [];
-  for (let D of h) {
-    let L = {
-      plugin: D.name,
+async function loadPluginThemes(plugins) {
+  let themes = [];
+  for (let plugin of plugins) {
+    let themeContext = {
+      plugin: plugin.name,
     };
-    let ee = `${D.name}:`;
-    if (D.themesPath) x.push(...(await readThemesFromPathAsync(D.themesPath, L, ee)));
-    for (let ke of D.themesPaths ?? []) x.push(...(await readThemesFromPathAsync(ke, L, ee)));
+    let themePrefix = `${plugin.name}:`;
+    if (plugin.themesPath)
+      themes.push(...(await readThemesFromPathAsync(plugin.themesPath, themeContext, themePrefix)));
+    for (let themesPath of plugin.themesPaths ?? [])
+      themes.push(...(await readThemesFromPathAsync(themesPath, themeContext, themePrefix)));
   }
-  getCustomThemeRegistry().addCustomThemeBases(x);
+  getCustomThemeRegistry().addCustomThemeBases(themes);
   logFeatureOk("plugin_load_themes");
-  return x.sort((D, L) => D.name.localeCompare(L.name));
+  return themes.sort((left, right) => left.name.localeCompare(right.name));
 }
 //@ chunk-18hwfzwa.js:209096-209253 sole-consumer
-async function refreshPluginThemes(enabled) {
+async function refreshPluginThemes(plugins) {
   if (isCustomizationDisabled("themes")) {
     getCustomThemeRegistry().pluginThemes.setState(() => []);
     return [];
   }
-  let pluginThemes = await loadPluginThemes(enabled);
-  getCustomThemeRegistry().pluginThemes.setState((D) =>
-    isDeepStrictEqual(D, pluginThemes) ? D : pluginThemes,
+  let pluginThemes = await loadPluginThemes(plugins);
+  getCustomThemeRegistry().pluginThemes.setState((currentThemes) =>
+    isDeepStrictEqual(currentThemes, pluginThemes) ? currentThemes : pluginThemes,
   );
   return pluginThemes;
 }
@@ -76,27 +82,27 @@ async function refreshPluginThemes(enabled) {
  */
 function useManagePlugins({ enabled = true } = {}) {
   let setAppState = useSetAppState();
-  let needsRefresh = useAppState((We) => We.plugins.needsRefresh);
-  let L = useAppState((We) => We.plugins.needsRefreshToLoad === true);
+  let needsRefresh = useAppState((state) => state.plugins.needsRefresh);
+  let needsRefreshToLoad = useAppState((state) => state.plugins.needsRefreshToLoad === true);
   let { addNotification, removeNotification } = useNotifications();
   let { storageV5 } = useTheme_2();
-  let pluginsSync = useSession((We) => We.pluginsSync);
-  let initialPluginLoad = ce(async () => {
+  let pluginsSync = useSession((session) => session.pluginsSync);
+  let initialPluginLoad = useCallback(async () => {
     try {
       let { enabled, disabled, errors, warnings } = await loadAllPluginsCacheOnly(storageV5);
-      let kt = [...errors];
-      let At = [...warnings];
+      let errors_2 = [...errors];
+      let warnings_2 = [...warnings];
       if ((await detectAndUninstallDelistedPlugins(storageV5)).length > 0)
         reinitializeLspServerManager(storageV5);
-      let Ot = Object.keys(getFlaggedPlugins()).length;
-      logSetupIssues("plugins", Ot);
-      setAppState((bo) => {
-        if (bo.setupIssues.flaggedPluginCount === Ot) return bo;
+      let flaggedCount = Object.keys(getFlaggedPlugins()).length;
+      logSetupIssues("plugins", flaggedCount);
+      setAppState((state) => {
+        if (state.setupIssues.flaggedPluginCount === flaggedCount) return state;
         return {
-          ...bo,
+          ...state,
           setupIssues: {
-            ...bo.setupIssues,
-            flaggedPluginCount: Ot,
+            ...state.setupIssues,
+            flaggedPluginCount: flaggedCount,
           },
         };
       });
@@ -105,7 +111,7 @@ function useManagePlugins({ enabled = true } = {}) {
       try {
         commands = await getPluginCommands(storageV5);
       } catch (error) {
-        kt.push({
+        errors_2.push({
           type: "generic-error",
           source: "plugin-commands",
           error: `Failed to load plugin commands: ${printableMessage(error)}`,
@@ -114,7 +120,7 @@ function useManagePlugins({ enabled = true } = {}) {
       try {
         agents = await loadPluginAgents(storageV5);
       } catch (error) {
-        kt.push({
+        errors_2.push({
           type: "generic-error",
           source: "plugin-agents",
           error: `Failed to load plugin agents: ${printableMessage(error)}`,
@@ -123,7 +129,7 @@ function useManagePlugins({ enabled = true } = {}) {
       try {
         await loadPluginHooks(storageV5);
       } catch (error) {
-        kt.push({
+        errors_2.push({
           type: "generic-error",
           source: "plugin-hooks",
           error: `Failed to load plugin hooks: ${printableMessage(error)}`,
@@ -131,9 +137,9 @@ function useManagePlugins({ enabled = true } = {}) {
       }
       let mcpCount = (
         await Promise.all(
-          enabled.map(async (bo) => {
-            let servers = await extractMcpServersFromPlugins(bo, kt, storageV5, {
-              warnings: At,
+          enabled.map(async (plugin) => {
+            let servers = await extractMcpServersFromPlugins(plugin, errors_2, storageV5, {
+              warnings: warnings_2,
             });
             return servers ? Object.keys(servers).length : 0;
           }),
@@ -141,24 +147,24 @@ function useManagePlugins({ enabled = true } = {}) {
       ).reduce((sum, n) => sum + n, 0);
       let lspCount = (
         await Promise.all(
-          enabled.map(async (bo) => {
-            if (bo.lspServers) return Object.keys(bo.lspServers).length;
-            let servers = await loadPluginLspServers(bo, kt, storageV5);
-            if (servers) bo.lspServers = servers;
+          enabled.map(async (plugin) => {
+            if (plugin.lspServers) return Object.keys(plugin.lspServers).length;
+            let servers = await loadPluginLspServers(plugin, errors_2, storageV5);
+            if (servers) plugin.lspServers = servers;
             return servers ? Object.keys(servers).length : 0;
           }),
         )
       ).reduce((sum, n) => sum + n, 0);
       let lspExtensionConflicts = findLspExtensionConflicts(enabled);
-      let po = [...At, ...lspExtensionConflicts];
+      let mergedWarnings = [...warnings_2, ...lspExtensionConflicts];
       let themeCount = (await refreshPluginThemes(enabled)).length;
-      await noReloadPlugins(enabled, kt);
+      await noReloadPlugins(enabled, errors_2);
       setAppState((prevState) => {
         let existingLspErrors = prevState.plugins.errors.filter(
           (e) => e.source === "lsp-manager" || e.source.startsWith("plugin:"),
         );
         let newErrorKeys = new Set(
-          kt.map((e) =>
+          errors_2.map((e) =>
             e.type === "generic-error" ? `generic-error:${e.source}:${e.error}` : `${e.type}:${e.source}`,
           ),
         );
@@ -168,13 +174,16 @@ function useManagePlugins({ enabled = true } = {}) {
               e.type === "generic-error" ? `generic-error:${e.source}:${e.error}` : `${e.type}:${e.source}`;
             return !newErrorKeys.has(key);
           }),
-          ...kt,
+          ...errors_2,
         ];
         let filteredExisting = prevState.plugins.warnings.filter((warning) =>
           warning.source.startsWith("plugin:"),
         );
-        let Wo = new Set(po.map((No) => `${No.type}:${No.source}`));
-        let mergedErrors = [...filteredExisting.filter((No) => !Wo.has(`${No.type}:${No.source}`)), ...po];
+        let warningKeys = new Set(mergedWarnings.map((warning) => `${warning.type}:${warning.source}`));
+        let mergedErrors = [
+          ...filteredExisting.filter((warning) => !warningKeys.has(`${warning.type}:${warning.source}`)),
+          ...mergedWarnings,
+        ];
         return {
           ...prevState,
           plugins: {
@@ -188,13 +197,13 @@ function useManagePlugins({ enabled = true } = {}) {
         };
       });
       logForDebugging(
-        `Loaded plugins - Enabled: ${enabled.length}, Disabled: ${disabled.length}, Commands: ${commands.length}, Agents: ${agents.length}, Errors: ${kt.length}`,
+        `Loaded plugins - Enabled: ${enabled.length}, Disabled: ${disabled.length}, Commands: ${commands.length}, Agents: ${agents.length}, Errors: ${errors_2.length}`,
       );
-      let hook_count = enabled.reduce((sum, Ao) => {
-        if (!Ao.hooksConfig) return sum;
+      let hook_count = enabled.reduce((sum, plugin) => {
+        if (!plugin.hooksConfig) return sum;
         return (
           sum +
-          Object.values(Ao.hooksConfig).reduce(
+          Object.values(plugin.hooksConfig).reduce(
             (acc, matchers) => acc + (matchers?.reduce((acc, m) => acc + m.hooks.length, 0) ?? 0),
             0,
           )
@@ -204,7 +213,7 @@ function useManagePlugins({ enabled = true } = {}) {
         enabled_count: enabled.length,
         disabled_count: disabled.length,
         ...countPluginsByMarketplaceKind(enabled),
-        error_count: kt.length,
+        error_count: errors_2.length,
         skill_count: commands.length,
         agent_count: agents.length,
         hook_count,
@@ -255,7 +264,7 @@ function useManagePlugins({ enabled = true } = {}) {
       };
     }
   }, [setAppState, storageV5]);
-  P(() => {
+  useEffect(() => {
     if (!enabled) return;
     initialPluginLoad().then((metrics) => {
       let { ant_enabled_names, ant_disabled_names: antDisabledNames, ...baseMetrics } = metrics;
@@ -276,19 +285,19 @@ function useManagePlugins({ enabled = true } = {}) {
       reresolveCommandSourcesOnce(storageV5);
     });
   }, [initialPluginLoad, enabled, storageV5]);
-  P(() => {
+  useEffect(() => {
     if (!enabled) return;
-    let We = true;
+    let isMounted = true;
     pluginsSync.firstSyncPromise?.then(
-      (ze) => {
-        if (ze && We)
-          setAppState((Xe) =>
-            Xe.plugins.needsRefresh
-              ? Xe
+      (syncResult) => {
+        if (syncResult && isMounted)
+          setAppState((state) =>
+            state.plugins.needsRefresh
+              ? state
               : {
-                  ...Xe,
+                  ...state,
                   plugins: {
-                    ...Xe.plugins,
+                    ...state.plugins,
                     needsRefresh: true,
                   },
                 },
@@ -297,45 +306,45 @@ function useManagePlugins({ enabled = true } = {}) {
       () => {},
     );
     return () => {
-      We = false;
+      isMounted = false;
     };
   }, [enabled, setAppState, pluginsSync]);
-  P(() => {
+  useEffect(() => {
     if (!enabled) return;
     if (!needsRefresh) {
       removeNotification("plugin-reload-pending");
       removeNotification("plugin-load-pending");
       return;
     }
-    if (L) removeNotification("plugin-reload-pending");
+    if (needsRefreshToLoad) removeNotification("plugin-reload-pending");
     addNotification({
-      key: L ? "plugin-load-pending" : "plugin-reload-pending",
+      key: needsRefreshToLoad ? "plugin-load-pending" : "plugin-reload-pending",
       text: "Plugins changed. Run /reload-plugins to activate.",
       color: "suggestion",
       priority: "low",
     });
-  }, [enabled, needsRefresh, L, addNotification, removeNotification]);
+  }, [enabled, needsRefresh, needsRefreshToLoad, addNotification, removeNotification]);
 }
 //@ chunk-18hwfzwa.js:213242-213490 sole-consumer
 function countPluginsByMarketplaceKind(enabled) {
-  let x = {
+  let counts = {
     inline_count: 0,
     synced_count: 0,
     marketplace_count: 0,
   };
-  for (let D of enabled)
-    switch (marketplaceOf(D.source)) {
+  for (let plugin of enabled)
+    switch (marketplaceOf(plugin.source)) {
       case "inline":
-        x.inline_count++;
+        counts.inline_count++;
         break;
       case "synced":
-        x.synced_count++;
+        counts.synced_count++;
         break;
       case "skills-dir":
       case undefined:
-        x.marketplace_count++;
+        counts.marketplace_count++;
         break;
     }
-  return x;
+  return counts;
 }
 export { useManagePlugins };

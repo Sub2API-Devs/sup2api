@@ -17,97 +17,99 @@ import { isPlainDataObject } from "../../utils/hooks/functionHookMatchers.js";
 /**
  * 规整 skill.prompt 的事件负载：frontmatter 转纯数据，来源字段必须是字符串。
  */
-function normalizeSkillPromptPayload(e) {
-  let n = checkPlainObject(e.frontmatter ?? {});
-  let r = e;
+function normalizeSkillPromptPayload(payload) {
+  let frontmatter = checkPlainObject(payload.frontmatter ?? {});
+  let secondPayload = payload;
   let found = ["source", "pluginName", "path", "frontmatterProblem"].find(
-    (S) => r[S] !== undefined && typeof r[S] !== "string",
+    (field) => secondPayload[field] !== undefined && typeof secondPayload[field] !== "string",
   );
-  let h = typeof n === "string" ? n : checkPlainData(n);
-  let y = found === undefined ? h && `a frontmatter that ${h}` : `a ${found} that is no text`;
-  if (typeof n === "string" || y !== undefined) throw new HooksError(`$.skill.prompt: called with ${y}`);
+  let problem = typeof frontmatter === "string" ? frontmatter : checkPlainData(frontmatter);
+  let result =
+    found === undefined ? problem && `a frontmatter that ${problem}` : `a ${found} that is no text`;
+  if (typeof frontmatter === "string" || result !== undefined)
+    throw new HooksError(`$.skill.prompt: called with ${result}`);
   return {
-    ...e,
-    frontmatter: n,
-    source: e.source ?? "built-in",
+    ...payload,
+    frontmatter,
+    source: payload.source ?? "built-in",
   };
 }
 //@ chunk-e6aww6q8.js:44581-44643 placement
 /**
  * to 默认 anthropic
  */
-var defaultRoute = (e) =>
-  e.to === "collector"
-    ? e
+var defaultRoute = (entry) =>
+  entry.to === "collector"
+    ? entry
     : {
-        ...e,
-        to: e.to ?? "anthropic",
+        ...entry,
+        to: entry.to ?? "anthropic",
       };
 //@ chunk-e6aww6q8.js:44643-45582 placement
 var EVENT_PAYLOAD_SHAPES = {
-  "tool.call": (e) => ({
-    ...e,
-    tool_use_id: e.tool_use_id ?? `toolu_${randomUUID().replace(/-/g, "")}`,
+  "tool.call": (payload) => ({
+    ...payload,
+    tool_use_id: payload.tool_use_id ?? `toolu_${randomUUID().replace(/-/g, "")}`,
   }),
-  "tool.check": (e) => e,
-  "tool.describe": (e) => e,
-  "command.run": (e) => e,
-  "command.describe": (e) => e,
-  "config.set": (e) => e,
-  "config.describe": (e) => e,
+  "tool.check": (payload) => payload,
+  "tool.describe": (payload) => payload,
+  "command.run": (payload) => payload,
+  "command.describe": (payload) => payload,
+  "config.set": (payload) => payload,
+  "config.describe": (payload) => payload,
   "telemetry.log": defaultRoute,
-  "telemetry.mark": (e) => e,
-  "prompt.submit": (e) => e,
-  "prompt.fill": (e) => e,
-  "prompt.edit": (e) => e,
-  "prompt.change": (e) => e,
-  "prompt.autocomplete": (e) => e,
-  "prompt.suggest": (e) => e,
-  "prompt.section": (e) => e,
-  "prompt.context": (e) => e,
-  "prompt.attachment": (e) => e,
-  "prompt.mention": (e) => e,
-  "prompt.compose": (e) => e,
-  "agent.offer": (e) => e,
-  "agent.spawn": (e) => e,
+  "telemetry.mark": (payload) => payload,
+  "prompt.submit": (payload) => payload,
+  "prompt.fill": (payload) => payload,
+  "prompt.edit": (payload) => payload,
+  "prompt.change": (payload) => payload,
+  "prompt.autocomplete": (payload) => payload,
+  "prompt.suggest": (payload) => payload,
+  "prompt.section": (payload) => payload,
+  "prompt.context": (payload) => payload,
+  "prompt.attachment": (payload) => payload,
+  "prompt.mention": (payload) => payload,
+  "prompt.compose": (payload) => payload,
+  "agent.offer": (payload) => payload,
+  "agent.spawn": (payload) => payload,
   "skill.prompt": normalizeSkillPromptPayload,
-  "attribution.text": (e) => e,
-  "session.start": (e) => e,
-  "session.receive": (e) => e,
-  "session.append": (e) => e,
-  "session.send": (e) => e,
-  "session.compact": (e) => e,
-  "session.attach": (e) => e,
-  "session.detach": (e) => e,
-  "session.measure": (e) => e,
-  "session.end": (e) => e,
-  "turn.start": (e) => e,
-  "turn.step": (e) => e,
-  "turn.complete": (e) => e,
-  "ui.scroll": (e) => e,
-  "ui.focus": (e) => e,
+  "attribution.text": (payload) => payload,
+  "session.start": (payload) => payload,
+  "session.receive": (payload) => payload,
+  "session.append": (payload) => payload,
+  "session.send": (payload) => payload,
+  "session.compact": (payload) => payload,
+  "session.attach": (payload) => payload,
+  "session.detach": (payload) => payload,
+  "session.measure": (payload) => payload,
+  "session.end": (payload) => payload,
+  "turn.start": (payload) => payload,
+  "turn.step": (payload) => payload,
+  "turn.complete": (payload) => payload,
+  "ui.scroll": (payload) => payload,
+  "ui.focus": (payload) => payload,
 };
 //@ chunk-e6aww6q8.js:75595-76168 placement
-function isPlainDataValue(e, n = new Map(), r = new Set()) {
-  if (typeof e === "string" || typeof e === "boolean") return e;
-  if (typeof e === "number") return Number.isFinite(e) ? e : null;
-  if (typeof e !== "object" || e === null) return null;
-  if (e instanceof Date) return Number.isFinite(e.getTime()) ? e.toISOString() : null;
-  if (n.has(e)) return n.get(e) ?? null;
-  if (!Array.isArray(e) && !isPlainDataObject(e)) return null;
-  n.set(e, undefined);
-  let s = Array.isArray(e)
-    ? Array.from(e, (h) => isPlainDataValue(h, n, r))
+function isPlainDataValue(value, seen = new Map(), stack = new Set()) {
+  if (typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "object" || value === null) return null;
+  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.toISOString() : null;
+  if (seen.has(value)) return seen.get(value) ?? null;
+  if (!Array.isArray(value) && !isPlainDataObject(value)) return null;
+  seen.set(value, undefined);
+  let entry = Array.isArray(value)
+    ? Array.from(value, (value) => isPlainDataValue(value, seen, stack))
     : Object.fromEntries(
-        Object.keys(e)
+        Object.keys(value)
           .filter((key) => {
             let included = FORBIDDEN_OBJECT_KEYS.includes(key);
-            if (included && key !== "__proto__") r.add(key);
+            if (included && key !== "__proto__") stack.add(key);
             return !included;
           })
-          .map((key) => [key, isPlainDataValue(e[key], n, r)]),
+          .map((key) => [key, isPlainDataValue(value[key], seen, stack)]),
       );
-  n.set(e, s);
-  return s;
+  seen.set(value, entry);
+  return entry;
 }
 export { isPlainDataValue, EVENT_PAYLOAD_SHAPES, defaultRoute };

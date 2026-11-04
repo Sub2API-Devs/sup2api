@@ -48,7 +48,14 @@ import {
   markedForBracketFold,
 } from "../artifactUrls.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
-import { u, string, _enum, M, union, literal } from "../../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  stringSchema,
+  _enum,
+  booleanSchema,
+  union,
+  literal,
+} from "../../../../vendor/zod/v4/classic/schemas.js";
 import { COMMENT_TARGET_KEY } from "../../../services/artifacts/comments/commentConsent.js";
 import { derivePublishContextFrom } from "../../../services/artifacts/readObservation.js";
 import {
@@ -57,13 +64,14 @@ import {
 } from "../../../services/artifacts/comments/repliesConsent.js";
 import { isHumanTurn_2 } from "../../../utils/messagePredicates.js";
 import { isInterruptionOnlyMessage } from "../../../utils/messages.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-v8nq54bj.js:967-1045 placement
 /**
  * 比较两个作用域值（字符串直接比，数组逐项比）。
  */
-function scopesEqual(e, t) {
-  return typeof e === "string" || typeof t === "string" ? e === t : arraysEqual(e, t);
+function scopesEqual(left, right) {
+  return typeof left === "string" || typeof right === "string" ? left === right : arraysEqual(left, right);
 }
 //@ chunk-v8nq54bj.js:1045-1054 placement
 var MAX_TYPE_CAPABILITY_READS = 64;
@@ -71,58 +79,59 @@ var MAX_TYPE_CAPABILITY_READS = 64;
 /**
  * 从输入里解析 artifact URL，非法返回 undefined。
  */
-function artifactUrlOf(e) {
-  let url = e.url;
+function artifactUrlOf(input) {
+  let url = input.url;
   return typeof url === "string" ? (parseArtifactUrl(url) ?? undefined) : undefined;
 }
 //@ chunk-v8nq54bj.js:1128-1703 placement
 /**
  * 预热 artifact 类型能力；本模块记录各类 artifact 同意（读写数据库、资源、外部组织等）。
  */
-async function warmTypeCapabilities(e, t) {
+async function warmTypeCapabilities(slug, context) {
   let typeCapabilityReads = getLiveState().typeCapabilityReads;
-  let r = typeCapabilityReads.get(e);
-  if (r !== undefined && (!t.toolUseId || r.toolUseId === t.toolUseId)) return r.capabilities;
+  let cached = typeCapabilityReads.get(slug);
+  if (cached !== undefined && (!context.toolUseId || cached.toolUseId === context.toolUseId))
+    return cached.capabilities;
   let now = Date.now();
-  let d = await describeArtifactType(e, {
-    signal: t.abortController.signal,
-    credentials: t.credentials,
+  let described = await describeArtifactType(slug, {
+    signal: context.abortController.signal,
+    credentials: context.credentials,
   });
-  let detail = d.err === null ? d.detail : null;
+  let detail = described.err === null ? described.detail : null;
   let capabilities = detail === null || detail.declaration === "malformed" ? null : detail.capabilities;
   let whole =
     capabilities !== null &&
     (detail?.declaration === undefined || Object.keys(detail.declaration).length === capabilities.length);
   if (issuedUnderDepartedAccount(now)) return null;
-  if (!typeCapabilityReads.has(e) && typeCapabilityReads.size >= MAX_TYPE_CAPABILITY_READS) {
-    let m = typeCapabilityReads.keys().next().value;
-    if (m !== undefined) typeCapabilityReads.delete(m);
+  if (!typeCapabilityReads.has(slug) && typeCapabilityReads.size >= MAX_TYPE_CAPABILITY_READS) {
+    let oldest = typeCapabilityReads.keys().next().value;
+    if (oldest !== undefined) typeCapabilityReads.delete(oldest);
   }
-  typeCapabilityReads.set(e, {
-    toolUseId: t.toolUseId,
+  typeCapabilityReads.set(slug, {
+    toolUseId: context.toolUseId,
     capabilities,
     whole,
   });
   return capabilities;
 }
 //@ chunk-v8nq54bj.js:1703-1770 placement
-function typeReadWhole(e) {
-  return getLiveState().typeCapabilityReads.get(e)?.whole === true;
+function typeReadWhole(slug) {
+  return getLiveState().typeCapabilityReads.get(slug)?.whole === true;
 }
 //@ chunk-v8nq54bj.js:1770-1862 placement
 function typeReadDeclaresRoom(slug) {
   return getLiveState().typeCapabilityReads.get(slug)?.capabilities?.includes("room") === true;
 }
 //@ chunk-v8nq54bj.js:1862-2010 placement
-function stampArtifactWatchConsent(e, t) {
-  if (isDelegatedObservationContext(t.agentContext)) return;
-  if (consentAskReachedUser(e, t))
-    t.setAppState((n) =>
-      withCurrentConsentEpoch(n, t, (r) =>
-        r.artifactWatchApproved
-          ? r
+function stampArtifactWatchConsent(input, context) {
+  if (isDelegatedObservationContext(context.agentContext)) return;
+  if (consentAskReachedUser(input, context))
+    context.setAppState((state) =>
+      withCurrentConsentEpoch(state, context, (scoped) =>
+        scoped.artifactWatchApproved
+          ? scoped
           : {
-              ...r,
+              ...scoped,
               artifactWatchApproved: true,
             },
       ),
@@ -152,69 +161,73 @@ var READ_OP_COPY = {
   },
 };
 //@ chunk-v8nq54bj.js:2295-2358 placement
-function consentAskReachedUser(e, t) {
-  return Reflect.get(e, CONSENT_ASK_TAG) === true && consentAskCanReachUser(t) && !consentCheckScopeStale(t);
+function consentAskReachedUser(input, context) {
+  return (
+    Reflect.get(input, CONSENT_ASK_TAG) === true &&
+    consentAskCanReachUser(context) &&
+    !consentCheckScopeStale(context)
+  );
 }
 //@ chunk-v8nq54bj.js:2358-2587 placement
-function noteConsentCheckScope(e) {
-  if (e.toolUseId === undefined) return;
+function noteConsentCheckScope(context) {
+  if (context.toolUseId === undefined) return;
   let liveState = getLiveState();
   let { consentCheckScopes } = liveState;
-  consentCheckScopes.delete(e.toolUseId);
+  consentCheckScopes.delete(context.toolUseId);
   if (consentCheckScopes.size >= MAX_CONSENT_CHECK_SCOPES) {
-    let r = consentCheckScopes.keys().next().value;
-    if (r !== undefined) {
-      consentCheckScopes.delete(r);
+    let oldest = consentCheckScopes.keys().next().value;
+    if (oldest !== undefined) {
+      consentCheckScopes.delete(oldest);
       liveState.consentCheckScopesEvicted = true;
     }
   }
-  consentCheckScopes.set(e.toolUseId, consentEpochKey());
+  consentCheckScopes.set(context.toolUseId, consentEpochKey());
 }
 //@ chunk-v8nq54bj.js:2587-2597 placement
 var MAX_CONSENT_CHECK_SCOPES = 256;
 //@ chunk-v8nq54bj.js:2597-2753 placement
-function consentCheckScopeStale(e) {
-  if (e.toolUseId === undefined) return false;
+function consentCheckScopeStale(context) {
+  if (context.toolUseId === undefined) return false;
   let liveState = getLiveState();
-  let n = liveState.consentCheckScopes.get(e.toolUseId);
-  return n === undefined ? liveState.consentCheckScopesEvicted : n !== consentEpochKey();
+  let scope = liveState.consentCheckScopes.get(context.toolUseId);
+  return scope === undefined ? liveState.consentCheckScopesEvicted : scope !== consentEpochKey();
 }
 //@ chunk-v8nq54bj.js:2753-2799 placement
-function firstWatchAskReachesHuman(e) {
-  return consentAskCanReachUser(e) && !isAutoClassifierActive(getToolPermissionContext(e).mode);
+function firstWatchAskReachesHuman(context) {
+  return consentAskCanReachUser(context) && !isAutoClassifierActive(getToolPermissionContext(context).mode);
 }
 //@ chunk-v8nq54bj.js:2799-2864 placement
-function consentWasHumanEarned(e, t) {
+function consentWasHumanEarned(input, context) {
   return (
-    ((e[PLAN_CONSENT_ASK_TAG] ?? false) && getToolPermissionContext(t).mode === "plan") ||
-    consentAskWasUserOnly(e)
+    ((input[PLAN_CONSENT_ASK_TAG] ?? false) && getToolPermissionContext(context).mode === "plan") ||
+    consentAskWasUserOnly(input)
   );
 }
 //@ chunk-v8nq54bj.js:2864-2910 placement
-function consentAskWasUserOnly(e) {
-  return Reflect.get(e, USER_ONLY_CONSENT_ASK_TAG) === true;
+function consentAskWasUserOnly(input) {
+  return Reflect.get(input, USER_ONLY_CONSENT_ASK_TAG) === true;
 }
 //@ chunk-v8nq54bj.js:2910-3107 placement
 /**
  * 账号变化时重置同意字段
  */
-function withCurrentConsentEpoch(e, t, n) {
-  if (consentCheckScopeStale(t)) return e;
+function withCurrentConsentEpoch(state, context, apply) {
+  if (consentCheckScopeStale(context)) return state;
   let { accountEpoch } = getLiveState();
-  if ((e.artifactConsentEpoch ?? 0) === accountEpoch) return n(e);
-  return n({
-    ...e,
-    ...Object.fromEntries(ALL_CONSENT_KEYS.map((s) => [s, INITIAL_SLICE_STATE[s]])),
+  if ((state.artifactConsentEpoch ?? 0) === accountEpoch) return apply(state);
+  return apply({
+    ...state,
+    ...Object.fromEntries(ALL_CONSENT_KEYS.map((key) => [key, INITIAL_SLICE_STATE[key]])),
     artifactConsentEpoch: accountEpoch,
   });
 }
 //@ chunk-v8nq54bj.js:3107-3241 placement
-function withPlanPublishConsent(e, t, n, slug) {
-  return withCurrentConsentEpoch(e, t, (s) => ({
-    ...s,
+function withPlanPublishConsent(state, context, path, slug) {
+  return withCurrentConsentEpoch(state, context, (current) => ({
+    ...current,
     artifactPlanPublishConsentPaths: {
-      ...s.artifactPlanPublishConsentPaths,
-      [n]: {
+      ...current.artifactPlanPublishConsentPaths,
+      [path]: {
         slug,
       },
     },
@@ -224,20 +237,25 @@ function withPlanPublishConsent(e, t, n, slug) {
 /**
  * 按需更新同意字段
  */
-function stampConsentFields(e, t, n, r, s = () => true) {
-  return withCurrentConsentEpoch(e, t, (d) => {
-    if (n.every((l) => consentValueMatches(d[l]?.[r], s(d[l]?.[r])))) return d;
-    let c = {
-      ...d,
+function stampConsentFields(state, context, fieldNames, slug, normalize = () => true) {
+  return withCurrentConsentEpoch(state, context, (current) => {
+    if (
+      fieldNames.every((fieldName) =>
+        consentValueMatches(current[fieldName]?.[slug], normalize(current[fieldName]?.[slug])),
+      )
+    )
+      return current;
+    let updated = {
+      ...current,
     };
-    for (let l of n)
-      c[l] = {
-        ...c[l],
-        [r]: s(d[l]?.[r]),
+    for (let fieldName of fieldNames)
+      updated[fieldName] = {
+        ...updated[fieldName],
+        [slug]: normalize(current[fieldName]?.[slug]),
       };
     return {
-      ...d,
-      ...c,
+      ...current,
+      ...updated,
     };
   });
 }
@@ -245,39 +263,48 @@ function stampConsentFields(e, t, n, r, s = () => true) {
 /**
  * 比较同意值：真值与 script 特判，其余逐项比较。
  */
-function consentValueMatches(e, t) {
-  return e === undefined || e === true || e === "script" || t === true || t === "script"
-    ? e === t
-    : scopesEqual(e, t);
+function consentValueMatches(existing, next) {
+  return existing === undefined ||
+    existing === true ||
+    existing === "script" ||
+    next === true ||
+    next === "script"
+    ? existing === next
+    : scopesEqual(existing, next);
 }
 //@ chunk-v8nq54bj.js:3512-3603 placement
 /**
  * 拼出同意记录的字段名（需要人类同意时再加一项）。
  */
-function consentFieldNames(e, t) {
-  return t ? [`${e}ConsentSlugs`, `${e}HumanConsentSlugs`] : [`${e}ConsentSlugs`];
+function consentFieldNames(prefix, includeHuman) {
+  return includeHuman ? [`${prefix}ConsentSlugs`, `${prefix}HumanConsentSlugs`] : [`${prefix}ConsentSlugs`];
 }
 //@ chunk-v8nq54bj.js:3603-3740 placement
-function stampArtifactDbReadConsent(e, t, slug) {
-  if (isDelegatedObservationContext(t.agentContext)) return;
-  if (!consentAskReachedUser(e, t) || ownedByUser(getShareEntry(slug))) return;
-  t.setAppState((r) =>
-    stampConsentFields(r, t, consentFieldNames("artifactDbRead", consentWasHumanEarned(e, t)), slug),
+function stampArtifactDbReadConsent(input, context, slug) {
+  if (isDelegatedObservationContext(context.agentContext)) return;
+  if (!consentAskReachedUser(input, context) || ownedByUser(getShareEntry(slug))) return;
+  context.setAppState((state) =>
+    stampConsentFields(
+      state,
+      context,
+      consentFieldNames("artifactDbRead", consentWasHumanEarned(input, context)),
+      slug,
+    ),
   );
 }
 //@ chunk-v8nq54bj.js:3740-4025 placement
-function stampArtifactDbWriteConsent(e, t) {
-  if (isDelegatedObservationContext(t.agentContext) || getLiveState().routineSourceWriteRefused) return;
-  if (!consentAskReachedUser(e, t)) return;
-  let n = consentWasHumanEarned(e, t);
-  t.setAppState((r) =>
-    withCurrentConsentEpoch(r, t, (s) =>
-      s.artifactDbWriteApproved && (!n || s.artifactDbWriteHumanApproved)
-        ? s
+function stampArtifactDbWriteConsent(input, context) {
+  if (isDelegatedObservationContext(context.agentContext) || getLiveState().routineSourceWriteRefused) return;
+  if (!consentAskReachedUser(input, context)) return;
+  let humanEarned = consentWasHumanEarned(input, context);
+  context.setAppState((state) =>
+    withCurrentConsentEpoch(state, context, (current) =>
+      current.artifactDbWriteApproved && (!humanEarned || current.artifactDbWriteHumanApproved)
+        ? current
         : {
-            ...s,
+            ...current,
             artifactDbWriteApproved: true,
-            ...(n && {
+            ...(humanEarned && {
               artifactDbWriteHumanApproved: true,
             }),
           },
@@ -285,33 +312,37 @@ function stampArtifactDbWriteConsent(e, t) {
   );
 }
 //@ chunk-v8nq54bj.js:4025-4087 placement
-function filesCowritten(e) {
-  return e?.cowritten === true || e?.artifactKind === LIVE_DOC;
+function filesCowritten(shareEntry) {
+  return shareEntry?.cowritten === true || shareEntry?.artifactKind === LIVE_DOC;
 }
 //@ chunk-v8nq54bj.js:4087-4147 placement
-function filesFromType(e) {
-  return e?.typeLocked === true || e?.typeLock != null;
+function filesFromType(shareEntry) {
+  return shareEntry?.typeLocked === true || shareEntry?.typeLock != null;
 }
 //@ chunk-v8nq54bj.js:4147-4208 placement
-function ownTypeInstance(e, t = ownedByUser(e)) {
-  return t && filesFromType(e) && e?.artifactKind !== LIVE_DOC;
+function ownTypeInstance(shareEntry, owned = ownedByUser(shareEntry)) {
+  return owned && filesFromType(shareEntry) && shareEntry?.artifactKind !== LIVE_DOC;
 }
 //@ chunk-v8nq54bj.js:4208-4299 placement
-function ownFirstPartyTypeInstance(shareEntry, t = ownedByUser(shareEntry)) {
-  let n = typeSlugOf(shareEntry);
-  return ownTypeInstance(shareEntry, t) && n !== undefined && getAttestationKind(n) === "first_party_type";
+function ownFirstPartyTypeInstance(shareEntry, owned = ownedByUser(shareEntry)) {
+  let typeSlug = typeSlugOf(shareEntry);
+  return (
+    ownTypeInstance(shareEntry, owned) &&
+    typeSlug !== undefined &&
+    getAttestationKind(typeSlug) === "first_party_type"
+  );
 }
 //@ chunk-v8nq54bj.js:4299-4449 placement
-function inheritsFirstPartyTypeDeclaration(e) {
+function inheritsFirstPartyTypeDeclaration(shareEntry) {
   return (
-    e !== undefined &&
-    e.typeLock != null &&
-    ownFirstPartyTypeInstance(e) &&
-    !entryOutsideOrgContent(e) &&
-    e.capabilitiesUnknown !== true &&
-    e.capsReadNotFound !== true &&
-    storedGrantObserved(e) &&
-    isNonEmptyObject(e.capabilities)
+    shareEntry !== undefined &&
+    shareEntry.typeLock != null &&
+    ownFirstPartyTypeInstance(shareEntry) &&
+    !entryOutsideOrgContent(shareEntry) &&
+    shareEntry.capabilitiesUnknown !== true &&
+    shareEntry.capsReadNotFound !== true &&
+    storedGrantObserved(shareEntry) &&
+    isNonEmptyObject(shareEntry.capabilities)
   );
 }
 //@ chunk-v8nq54bj.js:4449-4722 placement
@@ -328,91 +359,105 @@ function isInheritedTypeGrantEnabled() {
   return liveState.inheritedTypeGrantLatch;
 }
 //@ chunk-v8nq54bj.js:4722-5117 placement
-function stampArtifactAssetReadConsent(e, t, slug, r = false) {
-  if (isDelegatedObservationContext(t.agentContext)) return;
+function stampArtifactAssetReadConsent(input, context, slug, copied = false) {
+  if (isDelegatedObservationContext(context.agentContext)) return;
   let shareEntry = getShareEntry(slug);
-  let d = Reflect.get(e, ASSET_TARGET_PIN_TAG);
-  let c = (S) => typeof d === "object" && d !== null && Reflect.get(d, S) === true;
-  let l = c("classifier") || (getToolPermissionContext(t).mode === "auto" && !c("userOnly"));
+  let targetPin = Reflect.get(input, ASSET_TARGET_PIN_TAG);
+  let pinHas = (key) =>
+    typeof targetPin === "object" && targetPin !== null && Reflect.get(targetPin, key) === true;
+  let classifierApproved =
+    pinHas("classifier") || (getToolPermissionContext(context).mode === "auto" && !pinHas("userOnly"));
   if (
-    !reachedUserWithoutDeny(e, t) ||
-    c("once") ||
-    l ||
+    !reachedUserWithoutDeny(input, context) ||
+    pinHas("once") ||
+    classifierApproved ||
     (ownedByUser(shareEntry) && !filesCowritten(shareEntry) && !filesFromType(shareEntry))
   )
     return;
-  let _ = humanEarnedWithoutReply(e, t) || (r && repliesAskAnsweredByHuman(t));
-  let m = r && !repliesAskAnsweredByOther(t);
-  t.setAppState((S) =>
+  let humanEarned = humanEarnedWithoutReply(input, context) || (copied && repliesAskAnsweredByHuman(context));
+  let outsideOrgByHuman = copied && !repliesAskAnsweredByOther(context);
+  context.setAppState((state) =>
     stampConsentFields(
-      S,
-      t,
-      [...consentFieldNames("artifactAssetRead", _), ...(m ? ["artifactOutsideOrgConsentSlugs"] : [])],
+      state,
+      context,
+      [
+        ...consentFieldNames("artifactAssetRead", humanEarned),
+        ...(outsideOrgByHuman ? ["artifactOutsideOrgConsentSlugs"] : []),
+      ],
       slug,
     ),
   );
 }
 //@ chunk-v8nq54bj.js:5117-5261 placement
-function stampArtifactOutsideOrgConsent(e, t) {
-  if (t.length === 0 || isDelegatedObservationContext(e.agentContext)) return;
-  e.setAppState((n) =>
-    t.reduce((acc, s) => stampConsentFields(acc, e, ["artifactOutsideOrgConsentSlugs"], s), n),
+function stampArtifactOutsideOrgConsent(context, slugs) {
+  if (slugs.length === 0 || isDelegatedObservationContext(context.agentContext)) return;
+  context.setAppState((state) =>
+    slugs.reduce(
+      (acc, slug) => stampConsentFields(acc, context, ["artifactOutsideOrgConsentSlugs"], slug),
+      state,
+    ),
   );
 }
 //@ chunk-v8nq54bj.js:5261-5446 placement
-function stampArtifactSharedReadConsent(e, t, slug) {
-  if (isDelegatedObservationContext(t.agentContext)) return;
+function stampArtifactSharedReadConsent(input, context, slug) {
+  if (isDelegatedObservationContext(context.agentContext)) return;
   if (
-    !reachedUserWithoutDeny(e, t) ||
-    repliesAskAnsweredByOther(t) ||
-    (getToolPermissionContext(t).mode === "auto" &&
-      !othersArtifactReadIsUserOnly(artifactUrlOf(e)) &&
+    !reachedUserWithoutDeny(input, context) ||
+    repliesAskAnsweredByOther(context) ||
+    (getToolPermissionContext(context).mode === "auto" &&
+      !othersArtifactReadIsUserOnly(artifactUrlOf(input)) &&
       !outsideOrgReadIsUserOnly(slug)) ||
     ownedByUser(getShareEntry(slug))
   )
     return;
-  t.setAppState((r) => stampConsentFields(r, t, ["artifactReadConsentSlugs"], slug));
+  context.setAppState((state) => stampConsentFields(state, context, ["artifactReadConsentSlugs"], slug));
 }
 //@ chunk-v8nq54bj.js:5446-5609 placement
-function stampArtifactAssetUploadConsent(e, t, slug, r) {
-  if (isDelegatedObservationContext(t.agentContext)) return;
-  if (!consentAskReachedUser(e, t) || getToolPermissionContext(t).mode === "auto") return;
-  settleOtherCommentPending(slug, r);
-  t.setAppState((s) =>
-    stampConsentFields(s, t, consentFieldNames("artifactAssetUpload", consentWasHumanEarned(e, t)), slug),
+function stampArtifactAssetUploadConsent(input, context, slug, otherSeq) {
+  if (isDelegatedObservationContext(context.agentContext)) return;
+  if (!consentAskReachedUser(input, context) || getToolPermissionContext(context).mode === "auto") return;
+  settleOtherCommentPending(slug, otherSeq);
+  context.setAppState((state) =>
+    stampConsentFields(
+      state,
+      context,
+      consentFieldNames("artifactAssetUpload", consentWasHumanEarned(input, context)),
+      slug,
+    ),
   );
 }
 //@ chunk-v8nq54bj.js:5609-5671 placement
-function roomJoinDecidedByClassifier(e, t) {
-  return Reflect.get(e, ROOM_CONSENT_DISCLOSED_TAG) === "auto" && !repliesAskAnsweredByHuman(t);
+function roomJoinDecidedByClassifier(input, context) {
+  return Reflect.get(input, ROOM_CONSENT_DISCLOSED_TAG) === "auto" && !repliesAskAnsweredByHuman(context);
 }
 //@ chunk-v8nq54bj.js:5671-5739 placement
-function classifierRoomConsentStands(mode, t) {
-  return mode === "auto" && !getLiveState().roomStoppedByUser.has(t);
+function classifierRoomConsentStands(mode, slug) {
+  return mode === "auto" && !getLiveState().roomStoppedByUser.has(slug);
 }
 //@ chunk-v8nq54bj.js:5739-5826 placement
 /**
  * 由查询追踪拼出 chainId:depth 键。
  */
-function queryKeyOf(e) {
-  let queryTracking = e.queryTracking;
+function queryKeyOf(context) {
+  let queryTracking = context.queryTracking;
   return queryTracking === undefined ? undefined : `${queryTracking.chainId}:${queryTracking.depth}`;
 }
 //@ chunk-v8nq54bj.js:5826-5926 placement
-function noteRoomArmAsk(context, keyedCheckId, n) {
+function noteRoomArmAsk(context, keyedCheckId, entry) {
   let { roomArmAsked } = getLiveState();
-  if (n === undefined) roomArmAsked.delete(keyedCheckId);
+  if (entry === undefined) roomArmAsked.delete(keyedCheckId);
   else
     roomArmAsked.set(keyedCheckId, {
-      ...n,
+      ...entry,
       at: queryKeyOf(context),
     });
 }
 //@ chunk-v8nq54bj.js:5926-6074 placement
-function roomArmAskBookedFor(e, keyedCheckId) {
-  for (let [n, r] of getLiveState().roomArmAsked) {
-    if (n === keyedCheckId) continue;
-    if (e.keys.includes(r.key) || (e.slug !== undefined && r.slug === e.slug)) return true;
+function roomArmAskBookedFor(request, keyedCheckId) {
+  for (let [checkId, ask] of getLiveState().roomArmAsked) {
+    if (checkId === keyedCheckId) continue;
+    if (request.keys.includes(ask.key) || (request.slug !== undefined && ask.slug === request.slug))
+      return true;
   }
   return false;
 }
@@ -423,23 +468,23 @@ function takeRoomArmAsk(toolUseId) {
 //@ chunk-v8nq54bj.js:6132-6149 placement
 var NEW_PAGE_ARM_REFUSED_KEY = "path:*";
 //@ chunk-v8nq54bj.js:6149-6539 placement
-function settleRoomArmAsks(e) {
+function settleRoomArmAsks(context) {
   let liveState = getLiveState();
-  let keyOf = queryKeyOf(e);
-  for (let [r, s] of liveState.roomArmAsked) {
-    if (r === e.toolUseId) continue;
-    let toolResultMessage = findToolResultMessage(e.messages, r);
-    if (toolResultMessage === undefined && s.at !== undefined && s.at === keyOf) continue;
-    liveState.roomArmAsked.delete(r);
+  let keyOf = queryKeyOf(context);
+  for (let [checkId, ask] of liveState.roomArmAsked) {
+    if (checkId === context.toolUseId) continue;
+    let toolResultMessage = findToolResultMessage(context.messages, checkId);
+    if (toolResultMessage === undefined && ask.at !== undefined && ask.at === keyOf) continue;
+    liveState.roomArmAsked.delete(checkId);
     let toolDenialKind = toolResultMessage?.toolDenialKind;
     if (
       toolResultMessage === undefined ||
       toolDenialKind === "user-rejected" ||
       toolDenialKind === "permission-rule"
     ) {
-      liveState.roomArmRefusedByUser.add(s.key);
+      liveState.roomArmRefusedByUser.add(ask.key);
       liveState.roomArmRefusedByUser.add(NEW_PAGE_ARM_REFUSED_KEY);
-      if (s.slug !== undefined) liveState.roomStoppedByUser.add(s.slug);
+      if (ask.slug !== undefined) liveState.roomStoppedByUser.add(ask.slug);
     }
   }
 }
@@ -447,44 +492,46 @@ function settleRoomArmAsks(e) {
 /**
  * 找含指定 tool_use_id 结果的用户消息
  */
-function findToolResultMessage(messages, t) {
+function findToolResultMessage(messages, toolUseId) {
   for (let idx = messages.length - 1; idx >= 0; idx--) {
-    let r = messages[idx];
+    let message = messages[idx];
     if (
-      r?.type === "user" &&
-      Array.isArray(r.message.content) &&
-      r.message.content.some((s) => s.type === "tool_result" && s.tool_use_id === t)
+      message?.type === "user" &&
+      Array.isArray(message.message.content) &&
+      message.message.content.some((block) => block.type === "tool_result" && block.tool_use_id === toolUseId)
     )
-      return r;
+      return message;
   }
   return;
 }
 //@ chunk-v8nq54bj.js:6739-7121 placement
-function stampArtifactRoomJoinConsent(e, t, slug) {
-  if (isDelegatedObservationContext(t.agentContext)) return;
-  let r = Reflect.get(e, ROOM_CONSENT_DISCLOSED_TAG);
-  if ((r !== true && r !== "auto") || consentMustDeny(t)) return;
-  let s = roomJoinDecidedByClassifier(e, t) ? "classifier" : true;
-  if (s === "classifier" && !classifierRoomConsentStands(getToolPermissionContext(t).mode, slug)) return;
-  t.setAppState((d) =>
-    withCurrentConsentEpoch(d, t, (c) =>
-      c.artifactRoomJoinConsentSlugs?.[slug] === s || c.artifactRoomJoinConsentSlugs?.[slug] === true
-        ? c
+function stampArtifactRoomJoinConsent(input, context, slug) {
+  if (isDelegatedObservationContext(context.agentContext)) return;
+  let consentTag = Reflect.get(input, ROOM_CONSENT_DISCLOSED_TAG);
+  if ((consentTag !== true && consentTag !== "auto") || consentMustDeny(context)) return;
+  let value = roomJoinDecidedByClassifier(input, context) ? "classifier" : true;
+  if (value === "classifier" && !classifierRoomConsentStands(getToolPermissionContext(context).mode, slug))
+    return;
+  context.setAppState((state) =>
+    withCurrentConsentEpoch(state, context, (current) =>
+      current.artifactRoomJoinConsentSlugs?.[slug] === value ||
+      current.artifactRoomJoinConsentSlugs?.[slug] === true
+        ? current
         : {
-            ...c,
+            ...current,
             artifactRoomJoinConsentSlugs: {
-              ...c.artifactRoomJoinConsentSlugs,
-              [slug]: s,
+              ...current.artifactRoomJoinConsentSlugs,
+              [slug]: value,
             },
           },
     ),
   );
 }
 //@ chunk-v8nq54bj.js:7121-7360 placement
-function commentFieldsFrom(e) {
-  let threadId = "thread_id" in e && typeof e.thread_id === "string" ? e.thread_id : undefined;
-  let replyText = "text" in e && typeof e.text === "string" ? e.text : undefined;
-  let cursor = "cursor" in e && typeof e.cursor === "string" ? e.cursor : undefined;
+function commentFieldsFrom(input) {
+  let threadId = "thread_id" in input && typeof input.thread_id === "string" ? input.thread_id : undefined;
+  let replyText = "text" in input && typeof input.text === "string" ? input.text : undefined;
+  let cursor = "cursor" in input && typeof input.cursor === "string" ? input.cursor : undefined;
   return {
     threadId,
     replyText,
@@ -492,11 +539,11 @@ function commentFieldsFrom(e) {
   };
 }
 //@ chunk-v8nq54bj.js:7360-7682 placement
-function commentThreadConsentFields(e, threadId) {
+function commentThreadConsentFields(artifactUrl, threadId) {
   let tid = threadId !== undefined && ARTIFACT_SLUG_RE.test(threadId) ? threadId : "(invalid)";
   let audience = "viewers of this artifact (share status could not be confirmed)";
-  if (e !== null) {
-    let shareEntry = getShareEntry(e.slug);
+  if (artifactUrl !== null) {
+    let shareEntry = getShareEntry(artifactUrl.slug);
     if (shareEntry !== undefined && shareEntry.probeFailed !== true)
       audience =
         shareEntry.mode === "owner"
@@ -509,46 +556,46 @@ function commentThreadConsentFields(e, threadId) {
   };
 }
 //@ chunk-v8nq54bj.js:7682-7825 placement
-function assetFieldsFrom(e) {
-  let t = (n) => {
-    let r = e[n];
-    return typeof r === "string" ? r : undefined;
+function assetFieldsFrom(input) {
+  let readField = (key) => {
+    let value = input[key];
+    return typeof value === "string" ? value : undefined;
   };
   return {
-    assetId: t("asset_id"),
-    outDir: t("out_dir"),
-    after: t("after"),
+    assetId: readField("asset_id"),
+    outDir: readField("out_dir"),
+    after: readField("after"),
   };
 }
 //@ chunk-v8nq54bj.js:7825-7874 placement
-function foldForDecisionSurface(e, max = 1024) {
+function foldForDecisionSurface(text, max = 1024) {
   return foldedForSurface(
-    sanitizeDisplayText(e, {
+    sanitizeDisplayText(text, {
       max,
     }),
   );
 }
 //@ chunk-v8nq54bj.js:7874-7923 placement
-function quoteForDecisionSurface(e, t = 1024) {
-  return `"${spacedFromClosingQuote(foldForDecisionSurface(e, t))}"`;
+function quoteForDecisionSurface(text, max = 1024) {
+  return `"${spacedFromClosingQuote(foldForDecisionSurface(text, max))}"`;
 }
 //@ chunk-v8nq54bj.js:7923-7973 placement
-function quotePathForDecisionSurface(e) {
-  return `"${spacedFromClosingQuote(withEdgeBlanksMarked(foldForDecisionSurface(markedForBracketFold(e))))}"`;
+function quotePathForDecisionSurface(path) {
+  return `"${spacedFromClosingQuote(withEdgeBlanksMarked(foldForDecisionSurface(markedForBracketFold(path))))}"`;
 }
 //@ chunk-v8nq54bj.js:7973-8137 placement = capitalize (0.796)
-function withConsentCoverage(reason, t) {
+function withConsentCoverage(reason, coverage) {
   let replaced = reason.trimEnd().replace(/\.$/, "");
   if (replaced === "") {
-    let replaced = t.replace(/^[\s;,\u2014-]+/, "");
+    let replaced = coverage.replace(/^[\s;,\u2014-]+/, "");
     return replaced.charAt(0).toUpperCase() + replaced.slice(1);
   }
-  return `${replaced}${t}`;
+  return `${replaced}${coverage}`;
 }
 //@ chunk-v8nq54bj.js:8137-8333 placement
-function askStrength(e) {
-  if (e.behavior !== "ask") return -1;
-  let decisionReason = e.decisionReason;
+function askStrength(decision) {
+  if (decision.behavior !== "ask") return -1;
+  let decisionReason = decision.decisionReason;
   switch (decisionReason?.type) {
     case "rule":
       return 4;
@@ -567,57 +614,68 @@ var PLAN_CONSENT_ASK_TAG = "__artifactPlanConsentAsk";
 var USER_ONLY_CONSENT_ASK_TAG = "__artifactUserOnlyConsentAsk";
 var VERIFY_PIN_TAG = "__artifactVerifyTargetPinned";
 //@ chunk-v8nq54bj.js:8511-8598 placement
-function resolveVerifyTarget(e) {
-  return typeof e.url === "string" ? parseArtifactUrl(e.url) : (getLiveState().verify.lastPublish ?? null);
+function resolveVerifyTarget(input) {
+  return typeof input.url === "string"
+    ? parseArtifactUrl(input.url)
+    : (getLiveState().verify.lastPublish ?? null);
 }
 //@ chunk-v8nq54bj.js:8598-8957 placement
 /**
  * 发布来源 pin 的校验 schema。
  */
-var PUBLISH_TARGET_TAG = "__artifactPublishTarget";
-var ROUTINE_UNASKED_FIRST_PUBLISH_TAG = "__artifactRoutineUnaskedFirstPublish";
-var PUBLISH_SOURCE_PIN_TAG = "__artifactPublishSourcePin";
-var publishSourcePinSchema = DoctorLazy(() =>
-  u({
-    path: string(),
-    kind: _enum(["file", "absent", "network"]),
-    redirected: M(),
-    sha256: string().optional(),
-    root: u({
-      spelling: string(),
-      base: string(),
-      redirected: M().optional(),
-    }).optional(),
-    copies: string().optional(),
-    minted: string().optional(),
-    type: union([string(), literal(false)]),
-    shim: M().optional(),
-  }),
-);
+var PUBLISH_TARGET_TAG; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var ROUTINE_UNASKED_FIRST_PUBLISH_TAG;
+var PUBLISH_SOURCE_PIN_TAG;
+var publishSourcePinSchema;
+deferInit("chunk-v8nq54bj.js:8598", () => {
+  PUBLISH_TARGET_TAG = "__artifactPublishTarget";
+  ROUTINE_UNASKED_FIRST_PUBLISH_TAG = "__artifactRoutineUnaskedFirstPublish";
+  PUBLISH_SOURCE_PIN_TAG = "__artifactPublishSourcePin";
+  publishSourcePinSchema = DoctorLazy(() =>
+    objectSchema({
+      path: stringSchema(),
+      kind: _enum(["file", "absent", "network"]),
+      redirected: booleanSchema(),
+      sha256: stringSchema().optional(),
+      root: objectSchema({
+        spelling: stringSchema(),
+        base: stringSchema(),
+        redirected: booleanSchema().optional(),
+      }).optional(),
+      copies: stringSchema().optional(),
+      minted: stringSchema().optional(),
+      type: union([stringSchema(), literal(false)]),
+      shim: booleanSchema().optional(),
+    }),
+  );
+});
 //@ chunk-v8nq54bj.js:8957-9071 placement
-function readPublishSourcePinTag(e) {
-  let t = Reflect.get(e, PUBLISH_SOURCE_PIN_TAG);
-  if (t === undefined) return;
-  let n = publishSourcePinSchema().safeParse(t);
-  return n.success ? n.data : null;
+function readPublishSourcePinTag(input) {
+  let pin = Reflect.get(input, PUBLISH_SOURCE_PIN_TAG);
+  if (pin === undefined) return;
+  let parsed = publishSourcePinSchema().safeParse(pin);
+  return parsed.success ? parsed.data : null;
 }
 //@ chunk-v8nq54bj.js:9071-9104 placement
 /**
  * 去掉 type 字段的发布来源 pin schema。
  */
-var publishSourcePinWithoutTypeSchema = DoctorLazy(() =>
-  publishSourcePinSchema().omit({
-    type: true,
-  }),
-);
+var publishSourcePinWithoutTypeSchema; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-v8nq54bj.js:9071", () => {
+  publishSourcePinWithoutTypeSchema = DoctorLazy(() =>
+    publishSourcePinSchema().omit({
+      type: true,
+    }),
+  );
+});
 //@ chunk-v8nq54bj.js:9104-9330 placement
-function unreadPublishSourcePinReason(e) {
-  let t = Reflect.get(e, PUBLISH_SOURCE_PIN_TAG);
-  if (t === undefined) return "source_pin_missing";
-  return typeof t === "object" &&
-    t !== null &&
-    Reflect.get(t, "type") === undefined &&
-    publishSourcePinWithoutTypeSchema().safeParse(t).success
+function unreadPublishSourcePinReason(input) {
+  let pin = Reflect.get(input, PUBLISH_SOURCE_PIN_TAG);
+  if (pin === undefined) return "source_pin_missing";
+  return typeof pin === "object" &&
+    pin !== null &&
+    Reflect.get(pin, "type") === undefined &&
+    publishSourcePinWithoutTypeSchema().safeParse(pin).success
     ? "source_pin_stale_build"
     : "source_pin_unreadable";
 }
@@ -638,14 +696,14 @@ var ENDPOINT_BODY_FILE_TAG = "__artifactEndpointBodyFile";
 var CONSENT_PIN_TAG = "__artifactConsentPin";
 var SYNC_TARGET_PIN_TAG = "__artifactSyncTargetPin";
 //@ chunk-v8nq54bj.js:9690-9756 placement
-function consentPin(action, t) {
+function consentPin(action, target) {
   return {
     [CONSENT_PIN_TAG]:
-      t === null
+      target === null
         ? null
         : {
             action,
-            slug: t.slug,
+            slug: target.slug,
           },
   };
 }
@@ -653,152 +711,168 @@ function consentPin(action, t) {
 /**
  * 记录各类目标 pin 的标记列表。
  */
-var TARGET_PIN_TAGS = [
-  PUBLISH_TARGET_TAG,
-  ASSET_UPLOAD_PIN_TAG,
-  ROOM_SEND_TARGET_TAG,
-  ASSET_TARGET_PIN_TAG,
-  READ_TARGET_PIN_TAG,
-  ARTIFACT_DELETE_PIN_TAG,
-  CONSENT_PIN_TAG,
-  SYNC_TARGET_PIN_TAG,
-];
+var TARGET_PIN_TAGS; // deferred: uses PUBLISH_TARGET_TAG of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-v8nq54bj.js:9756", () => {
+  TARGET_PIN_TAGS = [
+    PUBLISH_TARGET_TAG,
+    ASSET_UPLOAD_PIN_TAG,
+    ROOM_SEND_TARGET_TAG,
+    ASSET_TARGET_PIN_TAG,
+    READ_TARGET_PIN_TAG,
+    ARTIFACT_DELETE_PIN_TAG,
+    CONSENT_PIN_TAG,
+    SYNC_TARGET_PIN_TAG,
+  ];
+});
 //@ chunk-v8nq54bj.js:9792-9862 placement
-function carriesForeignPin(e, t) {
-  return TARGET_PIN_TAGS.some((n) => n !== t && Reflect.get(e, n) !== undefined);
+function carriesForeignPin(input, ownTag) {
+  return TARGET_PIN_TAGS.some((tag) => tag !== ownTag && Reflect.get(input, tag) !== undefined);
 }
 //@ chunk-v8nq54bj.js:9862-9924 placement
-function carriesAnyDecisionPin(e) {
-  return TARGET_PIN_TAGS.some((t) => Reflect.get(e, t) !== undefined);
+function carriesAnyDecisionPin(input) {
+  return TARGET_PIN_TAGS.some((tag) => Reflect.get(input, tag) !== undefined);
 }
 //@ chunk-v8nq54bj.js:9924-10060 placement
-function consentPinMatches(e, t, slug) {
-  let r = Reflect.get(e, CONSENT_PIN_TAG);
+function consentPinMatches(input, action, slug) {
+  let pin = Reflect.get(input, CONSENT_PIN_TAG);
   return (
-    typeof r === "object" && r !== null && Reflect.get(r, "action") === t && Reflect.get(r, "slug") === slug
+    typeof pin === "object" &&
+    pin !== null &&
+    Reflect.get(pin, "action") === action &&
+    Reflect.get(pin, "slug") === slug
   );
 }
 //@ chunk-v8nq54bj.js:10060-10134 placement
-function consentTargetChanged(e, t, slug) {
+function consentTargetChanged(input, action, slug) {
   return (
-    carriesForeignPin(e, CONSENT_PIN_TAG) ||
-    (Reflect.get(e, CONSENT_PIN_TAG) !== undefined && !consentPinMatches(e, t, slug))
+    carriesForeignPin(input, CONSENT_PIN_TAG) ||
+    (Reflect.get(input, CONSENT_PIN_TAG) !== undefined && !consentPinMatches(input, action, slug))
   );
 }
 //@ chunk-v8nq54bj.js:10134-10349 placement
 /**
  * 其余同意与 pin 标记（handlers、实时文档替身、db 读写来源等）与全部标记汇总。
  */
-var DB_READ_TARGET_PIN_TAG = "__artifactDbReadTargetPin";
-var DB_WRITE_SOURCE_PIN_TAG = "__artifactDbWriteSourcePin";
-var HANDLERS_PIN_TAG = "__artifactHandlersPin";
-var LIVE_DOC_STAND_IN_TAG = "__artifactLiveDocStandIn";
-var ARTIFACT_ASK_TAG = "__artifactAsk";
-var CONSENT_MARKER_TAGS = [
-  CONSENT_ASK_TAG,
-  LIVE_DOC_STAND_IN_TAG,
-  PLAN_CONSENT_ASK_TAG,
-  USER_ONLY_CONSENT_ASK_TAG,
-  WATCH_ARMS_REPLIES_TAG,
-  ...TARGET_PIN_TAGS,
-  ROOM_CONSENT_DISCLOSED_TAG,
-  TYPE_CREATE_PIN_TAG,
-  VERIFY_PIN_TAG,
-  PUBLISH_SOURCE_PIN_TAG,
-  DB_READ_TARGET_PIN_TAG,
-  DB_WRITE_SOURCE_PIN_TAG,
-  HANDLERS_PIN_TAG,
-  ARTIFACT_DELETE_DISPLAY_TAG,
-  ARTIFACT_DISPLAY_TARGET_TAG,
-  ENDPOINT_BODY_FILE_TAG,
-  COMMENT_TARGET_KEY,
-  ARTIFACT_ASK_TAG,
-  ROUTINE_UNASKED_FIRST_PUBLISH_TAG,
-];
+var DB_READ_TARGET_PIN_TAG; // deferred: uses TARGET_PIN_TAGS of its import cycle while loading; runs once the cycle is complete
+var DB_WRITE_SOURCE_PIN_TAG;
+var HANDLERS_PIN_TAG;
+var LIVE_DOC_STAND_IN_TAG;
+var ARTIFACT_ASK_TAG;
+var CONSENT_MARKER_TAGS;
+deferInit("chunk-v8nq54bj.js:10134", () => {
+  DB_READ_TARGET_PIN_TAG = "__artifactDbReadTargetPin";
+  DB_WRITE_SOURCE_PIN_TAG = "__artifactDbWriteSourcePin";
+  HANDLERS_PIN_TAG = "__artifactHandlersPin";
+  LIVE_DOC_STAND_IN_TAG = "__artifactLiveDocStandIn";
+  ARTIFACT_ASK_TAG = "__artifactAsk";
+  CONSENT_MARKER_TAGS = [
+    CONSENT_ASK_TAG,
+    LIVE_DOC_STAND_IN_TAG,
+    PLAN_CONSENT_ASK_TAG,
+    USER_ONLY_CONSENT_ASK_TAG,
+    WATCH_ARMS_REPLIES_TAG,
+    ...TARGET_PIN_TAGS,
+    ROOM_CONSENT_DISCLOSED_TAG,
+    TYPE_CREATE_PIN_TAG,
+    VERIFY_PIN_TAG,
+    PUBLISH_SOURCE_PIN_TAG,
+    DB_READ_TARGET_PIN_TAG,
+    DB_WRITE_SOURCE_PIN_TAG,
+    HANDLERS_PIN_TAG,
+    ARTIFACT_DELETE_DISPLAY_TAG,
+    ARTIFACT_DISPLAY_TARGET_TAG,
+    ENDPOINT_BODY_FILE_TAG,
+    COMMENT_TARGET_KEY,
+    ARTIFACT_ASK_TAG,
+    ROUTINE_UNASKED_FIRST_PUBLISH_TAG,
+  ];
+});
 //@ chunk-v8nq54bj.js:10349-10442 placement
-function carriesCheckMintedMarker(e) {
+function carriesCheckMintedMarker(input) {
   return (
-    typeof e === "object" && e !== null && CONSENT_MARKER_TAGS.some((t) => Reflect.get(e, t) !== undefined)
+    typeof input === "object" &&
+    input !== null &&
+    CONSENT_MARKER_TAGS.some((tag) => Reflect.get(input, tag) !== undefined)
   );
 }
 //@ chunk-v8nq54bj.js:10442-10564 placement
-function noteNoticeRead(e, t, slug, r, s = false) {
-  if (t.toolUseId !== undefined)
-    getLiveState().shareStatus.noticeReadSights[e].note(
-      t.toolUseId,
+function noteNoticeRead(kind, context, slug, read, askRule = false) {
+  if (context.toolUseId !== undefined)
+    getLiveState().shareStatus.noticeReadSights[kind].note(
+      context.toolUseId,
       slug,
-      r && (s || consentAskCanReachUser(t)),
+      read && (askRule || consentAskCanReachUser(context)),
     );
 }
 //@ chunk-v8nq54bj.js:10564-10638 placement
-function noticeReadSight(e, toolUseId, n) {
-  return getLiveState().shareStatus.noticeReadSights[e].take(toolUseId, n);
+function noticeReadSight(kind, toolUseId, slug) {
+  return getLiveState().shareStatus.noticeReadSights[kind].take(toolUseId, slug);
 }
 //@ chunk-v8nq54bj.js:10638-10716 placement
-function noticeReadDisclosed(e, t, slug, r) {
-  return t.toolUseId === undefined ? r : noticeReadSight(e, t.toolUseId, slug) === true;
+function noticeReadDisclosed(kind, context, slug, fallback) {
+  return context.toolUseId === undefined ? fallback : noticeReadSight(kind, context.toolUseId, slug) === true;
 }
 //@ chunk-v8nq54bj.js:10716-10811 placement
-function planPublishConsentEarned(e, t) {
-  if (isDelegatedObservationContext(t.agentContext)) return false;
+function planPublishConsentEarned(input, context) {
+  if (isDelegatedObservationContext(context.agentContext)) return false;
   return (
-    (e[PLAN_CONSENT_ASK_TAG] ?? false) &&
-    getToolPermissionContext(t).mode === "plan" &&
-    consentAskCanReachUser(t)
+    (input[PLAN_CONSENT_ASK_TAG] ?? false) &&
+    getToolPermissionContext(context).mode === "plan" &&
+    consentAskCanReachUser(context)
   );
 }
 //@ chunk-v8nq54bj.js:10811-10952 placement
-function derivePublishContext(e) {
+function derivePublishContext(context) {
   return derivePublishContextFrom({
-    agentId: e.agentId,
-    agentType: e.agentContext?.agentType,
-    isNonInteractiveSession: e.options.isNonInteractiveSession,
+    agentId: context.agentId,
+    agentType: context.agentContext?.agentType,
+    isNonInteractiveSession: context.options.isNonInteractiveSession,
   });
 }
 //@ chunk-v8nq54bj.js:10952-11031 placement
-function canRearmWatchHere(e) {
-  return Boolean(env.CLAUDE_CODE_REMOTE) || isConsentUiKind(derivePublishContext(e).publishContext);
+function canRearmWatchHere(context) {
+  return Boolean(env.CLAUDE_CODE_REMOTE) || isConsentUiKind(derivePublishContext(context).publishContext);
 }
 //@ chunk-v8nq54bj.js:11031-11178 placement
-function repliesAskAnsweredByHuman(e) {
-  if (e.toolUseId === undefined) return false;
-  let source = e.toolDecisions?.get(e.toolUseId)?.source;
+function repliesAskAnsweredByHuman(context) {
+  if (context.toolUseId === undefined) return false;
+  let source = context.toolDecisions?.get(context.toolUseId)?.source;
   return source === "user_temporary" || source === "user_permanent";
 }
 //@ chunk-v8nq54bj.js:11178-11366 placement
-function repliesAskAnsweredByOther(e) {
-  if (e.toolUseId === undefined) return false;
-  let t = e.toolDecisions?.get(e.toolUseId);
+function repliesAskAnsweredByOther(context) {
+  if (context.toolUseId === undefined) return false;
+  let decision = context.toolDecisions?.get(context.toolUseId);
   return (
-    t !== undefined &&
-    t.decision !== "reject" &&
-    t.source !== "user_temporary" &&
-    t.source !== "user_permanent"
+    decision !== undefined &&
+    decision.decision !== "reject" &&
+    decision.source !== "user_temporary" &&
+    decision.source !== "user_permanent"
   );
 }
 //@ chunk-v8nq54bj.js:11366-11405 placement
 /**
  * 同意询问已到用户且不强制拒绝。
  */
-function reachedUserWithoutDeny(e, t) {
-  return consentAskReachedUser(e, t) && !consentMustDeny(t);
+function reachedUserWithoutDeny(input, context) {
+  return consentAskReachedUser(input, context) && !consentMustDeny(context);
 }
 //@ chunk-v8nq54bj.js:11405-11446 placement
 /**
  * 人类同意已获得且回复不是由他人代答。
  */
-function humanEarnedWithoutReply(e, t) {
-  return consentWasHumanEarned(e, t) && !repliesAskAnsweredByOther(t);
+function humanEarnedWithoutReply(input, context) {
+  return consentWasHumanEarned(input, context) && !repliesAskAnsweredByOther(context);
 }
 //@ chunk-v8nq54bj.js:11446-11508 placement
-function repliesConsentWriterFor(e) {
-  return canRearmWatchHere(e) && !isDelegatedObservationContext(e.agentContext)
+function repliesConsentWriterFor(context) {
+  return canRearmWatchHere(context) && !isDelegatedObservationContext(context.agentContext)
     ? REPLIES_CONSENT_WRITER
     : undefined;
 }
 //@ chunk-v8nq54bj.js:11508-11545 placement
-function isNonAbortHumanTurn(e) {
-  return isHumanTurn_2(e) && !isInterruptionOnlyMessage(e);
+function isNonAbortHumanTurn(message) {
+  return isHumanTurn_2(message) && !isInterruptionOnlyMessage(message);
 }
 export {
   ownTypeInstance,

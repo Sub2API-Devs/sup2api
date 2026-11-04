@@ -26,7 +26,7 @@ class FileReadCache {
     this.cache = new LRUCache({
       max,
       maxSize,
-      sizeCalculation: (r) => Math.max(1, r.content.length),
+      sizeCalculation: (entry) => Math.max(1, entry.content.length),
     });
   }
   readFile(filePath) {

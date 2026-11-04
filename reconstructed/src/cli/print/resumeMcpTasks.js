@@ -36,46 +36,49 @@ import { logError } from "../../utils/log.js";
 import { isTaskIdOfType } from "../../Task.js";
 import { BRIEF_TOOL_NAME } from "../../tools/BriefTool/prompt.js";
 import { SYNTHETIC_MODEL } from "../../constants/messages.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-0sfjpx19.js:76977-77132 placement
 /**
  * 判断某条消息是否被另一条声明 supersedesUuids 的消息取代（按 uuid 或规范化后的 uuid）。
  */
-function supersedesMessage(e, n) {
-  let supersedesUuids = e.supersedesUuids;
+function supersedesMessage(message, base) {
+  let supersedesUuids = message.supersedesUuids;
   if (supersedesUuids === undefined || supersedesUuids.length === 0) return false;
-  if (supersedesUuids.includes(n.uuid)) return true;
-  return normalizeMessages([n]).some((s) => supersedesUuids.includes(s.uuid));
+  if (supersedesUuids.includes(base.uuid)) return true;
+  return normalizeMessages([base]).some((message) => supersedesUuids.includes(message.uuid));
 }
 //@ chunk-0sfjpx19.js:77132-77373 placement
-function logBridgeDialogKindsDeclared(e, n, r, s) {
-  let size = e.size;
-  for (let y of n) {
-    if (e.size >= MAX_LIST_ITEMS) break;
-    e.add(y);
+function logBridgeDialogKindsDeclared(kinds, next, source, onChanged) {
+  let size = kinds.size;
+  for (let kind of next) {
+    if (kinds.size >= MAX_LIST_ITEMS) break;
+    kinds.add(kind);
   }
-  if (r === "restored" || e.size === size) return;
+  if (source === "restored" || kinds.size === size) return;
   logEvent("tengu_repl_bridge_dialog_kinds_declared", {
-    kind_count: e.size,
-    has_refusal_fallback: e.has("refusal_fallback_prompt"),
+    kind_count: kinds.size,
+    has_refusal_fallback: kinds.has("refusal_fallback_prompt"),
   });
-  s();
+  onChanged();
 }
 //@ chunk-0sfjpx19.js:77373-77382 placement
 var MAX_RESUME_TASK_NOTIFICATIONS = 8;
 //@ chunk-0sfjpx19.js:77382-77547 placement
-async function loadMcpTaskModule({ sessionId, conversation, ...r }) {
+async function loadMcpTaskModule({ sessionId, conversation, ...options }) {
   if (!isMcpTasksEnabled()) return;
-  await deliverMcpTaskEndings(sessionId, conversation, r);
-  await require("./chunk-asne9cp8.js").mcpTaskWatcherModule().restoreMcpTasks(r);
+  await deliverMcpTaskEndings(sessionId, conversation, options);
+  await require("../../services/mcp/emitTripwireEvent.lazy.js")
+    .mcpTaskWatcherModule()
+    .restoreMcpTasks(options);
 }
 //@ chunk-0sfjpx19.js:77547-79140 placement
 /**
  * 列出并投递上次进程期间结束的 MCP 任务通知（列不出时等下次恢复）。
  */
-async function deliverMcpTaskEndings(sessionId, conversation, { taskRegistry, storageV5 }) {
-  let h = (y) => (_) =>
-    logForDebugging(`MCP task endings: ${y}: ${String(_)}`, {
+async function deliverMcpTaskEndings(sessionId, messages, { taskRegistry, storageV5 }) {
+  let logFailure = (what) => (value) =>
+    logForDebugging(`MCP task endings: ${what}: ${String(value)}`, {
       level: "warn",
     });
   try {
@@ -84,48 +87,49 @@ async function deliverMcpTaskEndings(sessionId, conversation, { taskRegistry, st
     let mcpTaskProjectDir = getMcpTaskProjectDir();
     let filtered = (
       (await listMcpTaskOutcomes(storageV5).catch(
-        h("could not be listed, so they wait for the next resume"),
+        logFailure("could not be listed, so they wait for the next resume"),
       )) ?? []
-    ).filter((N) => N.sessionId === sessionId);
+    ).filter((outcome) => outcome.sessionId === sessionId);
     if (filtered.length === 0) return;
-    let k = taskNotificationRunKeys(conversation);
-    let w = [];
-    let S = 0;
-    for (let N of filtered) {
-      let registryId = N.registryId;
+    let seenKeys = taskNotificationRunKeys(messages);
+    let pending = [];
+    let deletedCount = 0;
+    for (let outcome of filtered) {
+      let registryId = outcome.registryId;
       await deleteMcpTaskMetadata(registryId, storageV5, sessionId, mcpTaskProjectDir).catch(
-        h(`could not delete the resume record of ended task ${registryId}`),
+        logFailure(`could not delete the resume record of ended task ${registryId}`),
       );
-      if (k.has(`${registryId} ${N.runId}`)) {
+      if (seenKeys.has(`${registryId} ${outcome.runId}`)) {
         forgetMcpTaskEnding(registryId);
         await deleteTaskOutcome(registryId, storageV5, sessionId, mcpTaskProjectDir).then(
           () => {
-            logDeliveryOk(N.code);
-            S++;
+            logDeliveryOk(outcome.code);
+            deletedCount++;
           },
-          h(`could not delete the saved ending of task ${registryId}`),
+          logFailure(`could not delete the saved ending of task ${registryId}`),
         );
-      } else if (taskRegistry.get(registryId) === undefined) w.push(N);
+      } else if (taskRegistry.get(registryId) === undefined) pending.push(outcome);
     }
-    w.sort((N, G) => G.endedAt - N.endedAt);
-    let T = [];
+    pending.sort((a, b) => b.endedAt - a.endedAt);
+    let notices = [];
     let maxMcpOutputChars = getMaxMcpOutputChars();
-    let E = w.length;
-    for (let N of w) {
-      let G = formatLateNotificationPreamble(N);
-      if (G !== undefined) {
-        maxMcpOutputChars -= G.length;
-        if (T.length === MAX_RESUME_TASK_NOTIFICATIONS || (T.length > 0 && maxMcpOutputChars < 0)) break;
-        T.push({
-          ending: N,
-          value: G,
+    let remaining = pending.length;
+    for (let outcome of pending) {
+      let value = formatLateNotificationPreamble(outcome);
+      if (value !== undefined) {
+        maxMcpOutputChars -= value.length;
+        if (notices.length === MAX_RESUME_TASK_NOTIFICATIONS || (notices.length > 0 && maxMcpOutputChars < 0))
+          break;
+        notices.push({
+          ending: outcome,
+          value,
         });
       }
-      E--;
+      remaining--;
     }
     if (getSessionId() !== sessionId) return;
-    for (let [N, { ending: G, value: R }] of T.reverse().entries()) {
-      let { registryId, runId, toolUseId, code } = G;
+    for (let [index, { ending, value }] of notices.reverse().entries()) {
+      let { registryId, runId, toolUseId, code } = ending;
       logSavedEnding();
       holdMcpTaskEnding(
         registryId,
@@ -134,24 +138,24 @@ async function deliverMcpTaskEndings(sessionId, conversation, { taskRegistry, st
           runId,
           toolUseId,
         },
-        (Q) =>
+        (ok) =>
           void deleteTaskOutcome(
             registryId,
             storageV5,
             sessionId,
             taskProjectDirFor(sessionId, mcpTaskProjectDir),
           ).then(
-            () => (Q ? logDeliveryOk : logRewindDropOk)(code),
-            h(`could not delete the saved ending of task ${registryId}`),
+            () => (ok ? logDeliveryOk : logRewindDropOk)(code),
+            logFailure(`could not delete the saved ending of task ${registryId}`),
           ),
       );
-      let mcpToolName = buildMcpToolName(G.serverName, G.toolName);
+      let mcpToolName = buildMcpToolName(ending.serverName, ending.toolName);
       recordToolUsed(mcpToolName);
       enqueuePendingNotification({
         value:
-          E > 0 && N === T.length - 1
-            ? `${R} ${E} older saved notification(s) of finished tasks are not shown here; at most ${MAX_RESUME_TASK_NOTIFICATIONS} arrive each time this session is resumed.`
-            : R,
+          remaining > 0 && index === notices.length - 1
+            ? `${value} ${remaining} older saved notification(s) of finished tasks are not shown here; at most ${MAX_RESUME_TASK_NOTIFICATIONS} arrive each time this session is resumed.`
+            : value,
         toolsUsed: [mcpToolName],
         mode: "task-notification",
         skipAttachments: true,
@@ -164,48 +168,52 @@ async function deliverMcpTaskEndings(sessionId, conversation, { taskRegistry, st
       });
     }
     logForDebugging(
-      `MCP task endings: ${filtered.length} saved, ${S} already in the conversation and deleted, ${T.length} queued for the next turn, ${filtered.length - S - T.length} passed over`,
+      `MCP task endings: ${filtered.length} saved, ${deletedCount} already in the conversation and deleted, ${notices.length} queued for the next turn, ${filtered.length - deletedCount - notices.length} passed over`,
     );
   } catch (error) {
     logError(error);
   }
 }
 //@ chunk-0sfjpx19.js:79140-79268 placement
-function isMcpTaskNotification(e) {
+function isMcpTaskNotification(queued) {
   return (
-    e.mode === "task-notification" &&
-    e.passive === true &&
-    e.unlogged === true &&
-    e.taskId !== undefined &&
-    isTaskIdOfType("mcp_task", e.taskId)
+    queued.mode === "task-notification" &&
+    queued.passive === true &&
+    queued.unlogged === true &&
+    queued.taskId !== undefined &&
+    isTaskIdOfType("mcp_task", queued.taskId)
   );
 }
 //@ chunk-0sfjpx19.js:79268-79601 placement
-function formatLateNotificationPreamble(e) {
+function formatLateNotificationPreamble(outcome) {
   try {
-    let { buildSep2663EndingNotice } = require("./chunk-g25jqyhb.js");
-    return `${buildSep2663EndingNotice(e)}
-This notification was written at ${new Date(e.endedAt).toISOString()}. It is delivered now because this session was resumed and its conversation does not contain it. If you have already seen it, ignore this copy.`;
+    let { buildSep2663EndingNotice } = require("../../services/mcp/buildSep2663EndingNotice.lazy.js");
+    return `${buildSep2663EndingNotice(outcome)}
+This notification was written at ${new Date(outcome.endedAt).toISOString()}. It is delivered now because this session was resumed and its conversation does not contain it. If you have already seen it, ignore this copy.`;
   } catch (error) {
     logError(error);
     return;
   }
 }
 //@ chunk-0sfjpx19.js:79601-79706 placement
-function taskNotificationRunKeys(e) {
-  let n = new Set();
-  for (let r of e) {
-    let s = stickyPromptRunId(r);
-    if (s !== undefined) n.add(`${s} ${getTaskNotificationRunId(r)}`);
+function taskNotificationRunKeys(messages) {
+  let keys = new Set();
+  for (let message of messages) {
+    let runId = stickyPromptRunId(message);
+    if (runId !== undefined) keys.add(`${runId} ${getTaskNotificationRunId(message)}`);
   }
-  return n;
+  return keys;
 }
 //@ chunk-0sfjpx19.js:79743-79776 placement
 /**
  * 恢复会话时通知的最大年龄 2 小时，以及仅含 BRIEF_TOOL_NAME 的集合（恢复时特别处理该工具）。
  */
-var RESUME_NOTIFICATION_MAX_AGE_MS = 7200000;
-var BRIEF_TOOL_NAME_SET = new Set([BRIEF_TOOL_NAME]);
+var RESUME_NOTIFICATION_MAX_AGE_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var BRIEF_TOOL_NAME_SET;
+deferInit("chunk-0sfjpx19.js:79743", () => {
+  RESUME_NOTIFICATION_MAX_AGE_MS = 7200000;
+  BRIEF_TOOL_NAME_SET = new Set([BRIEF_TOOL_NAME]);
+});
 //@ chunk-0sfjpx19.js:79776-79810 placement
 function hasNonWhitespace(text) {
   return /\S/.test(text);
@@ -222,8 +230,8 @@ function isMarkerTextDelta(event) {
   );
 }
 //@ chunk-0sfjpx19.js:79911-79975 placement
-function isRealAssistantReply(e) {
-  return !e.isApiErrorMessage && e.message.model !== SYNTHETIC_MODEL;
+function isRealAssistantReply(message) {
+  return !message.isApiErrorMessage && message.message.model !== SYNTHETIC_MODEL;
 }
 export {
   isRealAssistantReply,

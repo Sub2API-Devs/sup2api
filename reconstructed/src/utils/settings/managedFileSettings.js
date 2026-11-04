@@ -15,7 +15,7 @@ import {
   SettingsCacheStore,
   classifyConfigDirOwnership,
 } from "../../bootstrap/stateSlices.js";
-import { wS, En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { pickAlias, import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import {
   restrictiveTopLevelSettings,
   restrictiveNestedSettingsMap,
@@ -38,7 +38,7 @@ import {
   explainedPolicyChange,
   documentHasPolicyContent,
 } from "./policySettings.js";
-import { Uo } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { logForDebugging } from "../debug.js";
 import { logError } from "../log.js";
 import { restrictionsOfUnvouchedDocument } from "../../services/remoteManagedSettings/unvouchedRestrictions.js";
@@ -55,7 +55,7 @@ import {
 } from "./managedPath.js";
 import { getAtPath } from "./managedRestrictionKeys.js";
 import { matchesManagedKey_2 } from "./managedEnvKeys.js";
-import { mergeWithAssigner_2 } from "./settingsSourceTrust.js";
+import { mergeWithAssigner_2 } from "../../../vendor/lodash-es/_mergeWithFamily.js";
 import { settingsMergeCustomizer, parseSettingsFileUncached } from "./settings.js";
 import { resolvePathStepsSync } from "../../services/mcp/managedMcpPolicy.js";
 import { getFsImplementation } from "../fsOperations.js";
@@ -79,99 +79,100 @@ import {
 } from "../../services/remoteManagedSettings/remoteSettingsState.js";
 import { serializeSettingsErrors } from "../fileStateCache.js";
 import { parseCommandOutputAsSettings } from "./mdm/settings.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-dcmhvw5a.js:457142-457489 placement
 /**
  * 描述无效设置值（截断显示）。
  */
 function describeInvalidValues(errors) {
-  return errors.map((n) => {
-    let { invalidValue } = n;
-    let s = invalidValue !== undefined && invalidValue !== null;
-    let a = s ? coerceToPlainString(invalidValue) : undefined;
-    let c = a === undefined ? undefined : cleanForDisplay(a);
+  return errors.map((error) => {
+    let { invalidValue } = error;
+    let hasValue = invalidValue !== undefined && invalidValue !== null;
+    let str = hasValue ? coerceToPlainString(invalidValue) : undefined;
+    let cleaned = str === undefined ? undefined : cleanForDisplay(str);
     return {
-      ...n,
-      path: cleanForDisplay(n.path),
-      message: cleanForDisplay(n.message),
-      ...(n.expected !== undefined && {
-        expected: cleanForDisplay(n.expected),
+      ...error,
+      path: cleanForDisplay(error.path),
+      message: cleanForDisplay(error.message),
+      ...(error.expected !== undefined && {
+        expected: cleanForDisplay(error.expected),
       }),
-      ...(n.suggestion !== undefined && {
-        suggestion: cleanForDisplay(n.suggestion),
+      ...(error.suggestion !== undefined && {
+        suggestion: cleanForDisplay(error.suggestion),
       }),
-      ...(s &&
-        (a === undefined || typeof invalidValue === "string" || c !== a) && {
-          invalidValue: c,
+      ...(hasValue &&
+        (str === undefined || typeof invalidValue === "string" || cleaned !== str) && {
+          invalidValue: cleaned,
         }),
     };
   });
 }
 //@ chunk-dcmhvw5a.js:457489-459256 placement
-function loadManagedFileSettings(e) {
-  if (e.diskless)
+function loadManagedFileSettings(context) {
+  if (context.diskless)
     return {
       settings: null,
       errors: [],
       documentHasPolicyContent: false,
       loadState: "absent",
     };
-  let n;
-  let r = (x) => {
-    if (x === alwaysTrue) return true;
-    n ??= e.asksOrganization?.() === true;
-    return n && x();
+  let asksOrg;
+  let isGateActive = (gate) => {
+    if (gate === alwaysTrue) return true;
+    asksOrg ??= context.asksOrganization?.() === true;
+    return asksOrg && gate();
   };
-  let s = false;
-  let a = {};
-  let c = new Set();
-  let managedFileTiers = loadManagedFileTiers(e, (x, K, q) => {
-    if (x.settings === null) {
-      if (!r(q)) return x;
-      FORCE_LOGIN_SETTING_KEYS.forEach((ee) => c.add(ee));
+  let held = false;
+  let restricted = {};
+  let pins = new Set();
+  let managedFileTiers = loadManagedFileTiers(context, (tier, index, gate) => {
+    if (tier.settings === null) {
+      if (!isGateActive(gate)) return tier;
+      FORCE_LOGIN_SETTING_KEYS.forEach((key) => pins.add(key));
       return {
-        ...x,
-        errors: describeInvalidValues(x.errors),
+        ...tier,
+        errors: describeInvalidValues(tier.errors),
       };
     }
-    if (!r(q)) {
-      Object.assign(a, wS(x.settings, restrictiveTopLevelSettings));
-      return x;
+    if (!isGateActive(gate)) {
+      Object.assign(restricted, pickAlias(tier.settings, restrictiveTopLevelSettings));
+      return tier;
     }
-    s = true;
+    held = true;
     return {
-      ...x,
+      ...tier,
       settings: {},
-      errors: describeInvalidValues(x.errors),
+      errors: describeInvalidValues(tier.errors),
     };
   });
-  if (!s)
-    return c.size === 0
+  if (!held)
+    return pins.size === 0
       ? managedFileTiers
       : {
           ...managedFileTiers,
-          lostSignInPins: [...c],
+          lostSignInPins: [...pins],
         };
-  let m = [];
-  let f = [];
-  let managedFileTiers_2 = loadManagedFileTiers(e, (x, K, q) => {
-    if (x.settings === null || !r(q))
+  let overrides = [];
+  let extraErrors = [];
+  let managedFileTiers_2 = loadManagedFileTiers(context, (tier, index, gate) => {
+    if (tier.settings === null || !isGateActive(gate))
       return {
-        ...x,
-        settings: x.settings && {},
+        ...tier,
+        settings: tier.settings && {},
         errors: [],
       };
-    let ee = applyManagedOverrides(x, x.settings, K);
-    for (let Z of FORCE_LOGIN_SETTING_KEYS)
-      if (x.settings[Z] !== undefined && ee.settings?.[Z] === undefined) c.add(Z);
-    m.push([K, Object.keys(ee.settings ?? {})]);
-    f.push(...ee.errors.slice(x.errors.length));
-    return ee;
+    let overridden = applyManagedOverrides(tier, tier.settings, index);
+    for (let key of FORCE_LOGIN_SETTING_KEYS)
+      if (tier.settings[key] !== undefined && overridden.settings?.[key] === undefined) pins.add(key);
+    overrides.push([index, Object.keys(overridden.settings ?? {})]);
+    extraErrors.push(...overridden.errors.slice(tier.errors.length));
+    return overridden;
   });
-  let y = [...managedFileTiers.errors, ...f];
+  let errors = [...managedFileTiers.errors, ...extraErrors];
   let settings = managedFileTiers.settings ?? {};
   let settings_2 = managedFileTiers_2.settings ?? {};
-  let C = !authoredPolicyContent({
+  let heldOnly = !authoredPolicyContent({
     ...managedFileTiers,
     settings,
   }) && {
@@ -180,37 +181,40 @@ function loadManagedFileSettings(e) {
   if (Object.keys(settings_2).length === 0)
     return {
       ...managedFileTiers,
-      errors: y,
-      ...C,
-      lostSignInPins: [...c],
+      errors,
+      ...heldOnly,
+      lostSignInPins: [...pins],
     };
-  let w = Object.keys(settings).length === 0;
-  let L = {
-    ...(w
+  let noneBefore = Object.keys(settings).length === 0;
+  let merged = {
+    ...(noneBefore
       ? settings_2
-      : Uo(mergeAdminPolicies([settings, settings_2], "merge", false, 0).admin, "parentSettingsBehavior")),
-    ...wS(settings, "parentSettingsBehavior"),
-    ...a,
+      : omitAlias(
+          mergeAdminPolicies([settings, settings_2], "merge", false, 0).admin,
+          "parentSettingsBehavior",
+        )),
+    ...pickAlias(settings, "parentSettingsBehavior"),
+    ...restricted,
   };
-  let v = L;
-  let j = settings;
-  for (let [x, K] of m)
-    for (let q of K)
-      if (q in j && En(v[q], j[q]))
-        y.push({
-          file: x,
-          path: cleanForDisplay(q),
-          message: `In a cloud session that takes its managed settings from your organization, a managed settings file may only restrict: "${cleanForDisplay(q)}" was ignored in ${cleanForDisplay(x)}, since another managed settings document sets it and this one adds nothing to it.`,
+  let mergedRef = merged;
+  let prior = settings;
+  for (let [file, keys] of overrides)
+    for (let key of keys)
+      if (key in prior && import_sortedIndex_2(mergedRef[key], prior[key]))
+        errors.push({
+          file,
+          path: cleanForDisplay(key),
+          message: `In a cloud session that takes its managed settings from your organization, a managed settings file may only restrict: "${cleanForDisplay(key)}" was ignored in ${cleanForDisplay(file)}, since another managed settings document sets it and this one adds nothing to it.`,
           severity: "warning",
           statusOnly: true,
           userWritable: true,
         });
   return {
-    ...(w ? managedFileTiers_2 : managedFileTiers),
-    settings: L,
-    errors: y,
-    ...C,
-    lostSignInPins: [...c],
+    ...(noneBefore ? managedFileTiers_2 : managedFileTiers),
+    settings: merged,
+    errors,
+    ...heldOnly,
+    lostSignInPins: [...pins],
     ...(!hasEffectivePolicyContent(settings) && {
       onlyHeldContent: true,
     }),
@@ -219,7 +223,7 @@ function loadManagedFileSettings(e) {
       (key) => settings.enabledPlugins?.[key] === undefined,
     ),
     heldAllowLists: MERGEABLE_POLICY_KEYS_2.filter(
-      (x) => settings_2[x] !== undefined && settings[x] === undefined,
+      (key) => settings_2[key] !== undefined && settings[key] === undefined,
     ),
   };
 }
@@ -227,33 +231,35 @@ function loadManagedFileSettings(e) {
 function heldOffPluginIds(settingsContext) {
   let heldOffPlugins = settingsContext.store.policy.heldOffPlugins;
   if (heldOffPlugins !== undefined) return heldOffPlugins;
-  let r = [];
+  let heldOff = [];
   if (settingsContext.asksOrganization?.() === true) {
-    let s = settingsContext.file?.() ?? loadManagedFileSettings(settingsContext);
-    let a = [
+    let file = settingsContext.file?.() ?? loadManagedFileSettings(settingsContext);
+    let documents = [
       parseRemoteManagedSettings(settingsContext)?.settings?.enabledPlugins,
       settingsContext.mdm?.()?.settings?.enabledPlugins,
     ];
-    r = (s.heldOffPlugins ?? []).filter((c) => a.every((g) => g?.[c] === undefined));
+    heldOff = (file.heldOffPlugins ?? []).filter((id) => documents.every((map) => map?.[id] === undefined));
   }
-  settingsContext.store.policy.heldOffPlugins = r;
-  return r;
+  settingsContext.store.policy.heldOffPlugins = heldOff;
+  return heldOff;
 }
 //@ chunk-dcmhvw5a.js:459578-459983 placement
-function allowListEntriesThatVouch(settingsContext, n) {
-  if (n === undefined || n.length === 0) return n;
+function allowListEntriesThatVouch(context, entries) {
+  if (entries === undefined || entries.length === 0) return entries;
   try {
-    let { policy } = settingsContext.store;
+    let { policy } = context.store;
     if (policy.vouchingAllowList === undefined) {
-      let value = heldOrganizationDocument(settingsContext);
+      let value = heldOrganizationDocument(context);
       policy.vouchingAllowList = {
         value,
       };
     }
-    let s = policy.vouchingAllowList.value;
-    return s === null ? n : n.filter((a) => s.some((c) => En(c, a)));
+    let vouchers = policy.vouchingAllowList.value;
+    return vouchers === null
+      ? entries
+      : entries.filter((entry) => vouchers.some((voucher) => import_sortedIndex_2(voucher, entry)));
   } catch (error) {
-    settingsContext.store.policy.vouchingAllowList = {
+    context.store.policy.vouchingAllowList = {
       value: [],
     };
     logForDebugging("marketplace allow-list: which entries vouch could not be told; none does", {
@@ -267,17 +273,18 @@ function allowListEntriesThatVouch(settingsContext, n) {
 /**
  * 等待组织确认的托管文件设置。
  */
-function heldOrganizationDocument(e) {
-  if (e.asksOrganization?.() !== true) return null;
-  let n = e.file?.() ?? loadManagedFileSettings(e);
-  if (n.settings === null || n.heldAllowLists?.includes("strictKnownMarketplaces") !== true) return null;
-  let settings = Uo(n.settings, "strictKnownMarketplaces");
+function heldOrganizationDocument(context) {
+  if (context.asksOrganization?.() !== true) return null;
+  let file = context.file?.() ?? loadManagedFileSettings(context);
+  if (file.settings === null || file.heldAllowLists?.includes("strictKnownMarketplaces") !== true)
+    return null;
+  let settings = omitAlias(file.settings, "strictKnownMarketplaces");
   return (
     adminAuthoredPolicy({
-      ...e,
+      ...context,
       store: new SettingsCacheStore(),
       file: () => ({
-        ...n,
+        ...file,
         settings,
       }),
     })?.strictKnownMarketplaces ?? []
@@ -287,17 +294,17 @@ function heldOrganizationDocument(e) {
 /**
  * 应用托管设置覆盖并记录。
  */
-function applyManagedOverrides(e, settings, r) {
-  let s = restrictionsOfUnvouchedDocument(settings);
-  let mapped = describeManagedOverrides(settings, s).map((c) => ({
-    ...c,
-    key: cleanForDisplay(c.key),
+function applyManagedOverrides(tier, settings, file) {
+  let restrictions = restrictionsOfUnvouchedDocument(settings);
+  let mapped = describeManagedOverrides(settings, restrictions).map((override) => ({
+    ...override,
+    key: cleanForDisplay(override.key),
   }));
-  if (mapped.length === 0) return e;
-  if (!managedSettingsReadSeen.has(r)) {
-    managedSettingsReadSeen.add(r);
+  if (mapped.length === 0) return tier;
+  if (!managedSettingsReadSeen.has(file)) {
+    managedSettingsReadSeen.add(file);
     logForDebugging(
-      `${cleanForDisplay(r)}: not taken as written: ${mapped
+      `${cleanForDisplay(file)}: not taken as written: ${mapped
         .map(({ key }) => key)
         .join(
           ", ",
@@ -308,16 +315,16 @@ function applyManagedOverrides(e, settings, r) {
     );
   }
   return {
-    ...e,
-    settings: s,
+    ...tier,
+    settings: restrictions,
     errors: [
-      ...e.errors,
+      ...tier.errors,
       ...mapped
         .filter(({ key }) => !isInertManagedMcpServersNotice(key))
         .map(({ key, became }) => ({
-          file: r,
+          file,
           path: key,
-          message: `In a cloud session that takes its managed settings from your organization, a managed settings file may only restrict: "${key}" ${became} in ${cleanForDisplay(r)}.`,
+          message: `In a cloud session that takes its managed settings from your organization, a managed settings file may only restrict: "${key}" ${became} in ${cleanForDisplay(file)}.`,
           severity: "warning",
           statusOnly: true,
           userWritable: true,
@@ -329,72 +336,79 @@ function applyManagedOverrides(e, settings, r) {
 /**
  * 描述托管设置覆盖产生的变化。
  */
-function describeManagedOverrides(e, n) {
-  let r = (s, a) =>
-    a === "disableAllHooks" && e.disableAllHooks === true && n.allowManagedHooksOnly === true
+function describeManagedOverrides(written, restrictions) {
+  let became = (kept, key) =>
+    key === "disableAllHooks" &&
+    written.disableAllHooks === true &&
+    restrictions.allowManagedHooksOnly === true
       ? 'was taken as "allowManagedHooksOnly"'
-      : a === "allowManagedHooksOnly" && s === true
+      : key === "allowManagedHooksOnly" && kept === true
         ? 'was set by "disableAllHooks"'
-        : s === undefined
+        : kept === undefined
           ? "was ignored"
           : "was kept in part";
-  return Object.keys(e).flatMap((key) => {
-    let a = e[key];
-    let c = n[key];
-    if (En(a, c)) return [];
-    if (!isPlainObject_2(a) || !isPlainObject_2(c))
+  return Object.keys(written).flatMap((key) => {
+    let value = written[key];
+    let restricted = restrictions[key];
+    if (import_sortedIndex_2(value, restricted)) return [];
+    if (!isPlainObject_2(value) || !isPlainObject_2(restricted))
       return [
         {
           key,
-          became: r(c, key),
+          became: became(restricted, key),
         },
       ];
-    return Object.keys(a)
-      .filter((key) => !En(a[key], c[key]))
+    return Object.keys(value)
+      .filter((key) => !import_sortedIndex_2(value[key], restricted[key]))
       .map((key_2) => ({
         key: `${key}.${key_2}`,
-        became: r(c[key_2], key),
+        became: became(restricted[key_2], key),
       }));
   });
 }
 //@ chunk-dcmhvw5a.js:461419-461466 placement = execTmux (1)
-function shouldReadWindowsManagedSettingsFromWsl(e) {
-  return getPlatform() === "wsl" && (!e || isWslEnvironment());
+function shouldReadWindowsManagedSettingsFromWsl(asksOrg) {
+  return getPlatform() === "wsl" && (!asksOrg || isWslEnvironment());
 }
 //@ chunk-dcmhvw5a.js:461466-461500 placement
-var managedSettingsReadSeen = identity_2(new Set(), (e) => e.clear());
+var managedSettingsReadSeen; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-dcmhvw5a.js:461466", () => {
+  managedSettingsReadSeen = identity_2(new Set(), (file) => file.clear());
+});
 //@ chunk-dcmhvw5a.js:461500-461949 placement
 /**
  * 读取 MDM 设置文档（等待组织确认的除外）。
  */
-function loadManagedFileTiers(e, n) {
-  let heldDocuments = e.mdm?.()?.heldDocuments ?? [];
-  if (shouldReadWindowsManagedSettingsFromWsl(e.asksOrganization?.() === true)) {
-    let s = adminDocumentPresent(
+function loadManagedFileTiers(context, prepare) {
+  let heldDocuments = context.mdm?.()?.heldDocuments ?? [];
+  if (shouldReadWindowsManagedSettingsFromWsl(context.asksOrganization?.() === true)) {
+    let present = adminDocumentPresent(
       readMdmSettings({
-        ...e,
+        ...context,
         file: () => ({
           settings: null,
           errors: [],
         }),
       }),
     );
-    if (e.wslInherits?.()) {
-      let a =
+    if (context.wslInherits?.()) {
+      let heldOverride =
         heldDocuments.length === 0
           ? undefined
-          : s || adminDocumentPresent(loadManagedFileSettingsFromDir(WSL_MANAGED_SETTINGS_DIR, e.store));
+          : present ||
+            adminDocumentPresent(loadManagedFileSettingsFromDir(WSL_MANAGED_SETTINGS_DIR, context.store));
       let managedFileSettingsFromDir = loadManagedFileSettingsFromDir(
         WSL_MANAGED_SETTINGS_DIR,
-        e.store,
-        n,
-        a ? heldDocuments : [],
+        context.store,
+        prepare,
+        heldOverride ? heldDocuments : [],
       );
-      if (a ?? (adminDocumentPresent(managedFileSettingsFromDir) || s)) return managedFileSettingsFromDir;
+      if (heldOverride ?? (adminDocumentPresent(managedFileSettingsFromDir) || present))
+        return managedFileSettingsFromDir;
       let managedFileSettingsFromDir_2 = loadManagedFileSettingsFromDir(
         getManagedFilePath(),
-        e.store,
-        n,
+        context.store,
+        prepare,
         heldDocuments,
       );
       return {
@@ -406,9 +420,9 @@ function loadManagedFileTiers(e, n) {
         ),
       };
     }
-    if (s) return loadManagedFileSettingsFromDir(null, e.store, n, heldDocuments);
+    if (present) return loadManagedFileSettingsFromDir(null, context.store, prepare, heldDocuments);
   }
-  return loadManagedFileSettingsFromDir(getManagedFilePath(), e.store, n, heldDocuments);
+  return loadManagedFileSettingsFromDir(getManagedFilePath(), context.store, prepare, heldDocuments);
 }
 //@ chunk-dcmhvw5a.js:461949-461963 placement
 var alwaysTrue = () => true;
@@ -416,48 +430,48 @@ var alwaysTrue = () => true;
 /**
  * 合并托管设置层并收集错误。
  */
-function mergeManagedSettingsLayer(e, n, r) {
-  r.push(...n.errors);
-  let { settings } = n;
+function mergeManagedSettingsLayer(accumulator, tier, issues) {
+  issues.push(...tier.errors);
+  let { settings } = tier;
   if (!settings || Object.keys(settings).length === 0) return;
-  for (let [a, c] of restrictiveNestedSettingsMap) {
-    let parts = a.split(".");
+  for (let [path, rule] of restrictiveNestedSettingsMap) {
+    let parts = path.split(".");
     if (getAtPath(settings, parts) === undefined) continue;
-    let found = n.errors.find((error) => error.substituted && error.path === a);
-    let f = found !== undefined;
-    let atPath = getAtPath(e.merged, parts);
-    if (f && atPath !== undefined && !e.floors.has(a)) {
+    let found = tier.errors.find((error) => error.substituted && error.path === path);
+    let substituted = found !== undefined;
+    let atPath = getAtPath(accumulator.merged, parts);
+    if (substituted && atPath !== undefined && !accumulator.floors.has(path)) {
       let last = parts.at(-1);
-      if (c.inert.has(c.read(atPath))) {
+      if (rule.inert.has(rule.read(atPath))) {
         matchesManagedKey_2(settings, parts);
-        r.push({
+        issues.push({
           file: found.file,
-          path: a,
+          path,
           message: `That substitute is not applied: "${last}" keeps the value an earlier managed-settings document of this folder wrote.`,
           severity: "warning",
           statusOnly: true,
         });
         continue;
       }
-      r.push({
+      issues.push({
         file: found.file,
-        path: a,
+        path,
         message: `That substitute also displaces the wider "${last}" an earlier managed-settings document of this folder wrote, until this document is fixed.`,
         severity: "warning",
         statusOnly: true,
       });
     }
-    if (f) e.floors.add(a);
-    else e.floors.delete(a);
+    if (substituted) accumulator.floors.add(path);
+    else accumulator.floors.delete(path);
   }
-  e.merged = mergeWithAssigner_2(e.merged, settings, settingsMergeCustomizer);
-  e.found = true;
-  if (hasEffectivePolicyContent(settings) && !n.errors.some((error) => error.onlySubstitutes))
-    e.authored = true;
+  accumulator.merged = mergeWithAssigner_2(accumulator.merged, settings, settingsMergeCustomizer);
+  accumulator.found = true;
+  if (hasEffectivePolicyContent(settings) && !tier.errors.some((error) => error.onlySubstitutes))
+    accumulator.authored = true;
 }
 //@ chunk-dcmhvw5a.js:462846-462901 placement = execTmux (1)
-function managedFileSettingsDirs(e) {
-  return getPlatform() === "wsl" && e
+function managedFileSettingsDirs(asksOrg) {
+  return getPlatform() === "wsl" && asksOrg
     ? [WSL_MANAGED_SETTINGS_DIR, getManagedFilePath()]
     : [getManagedFilePath()];
 }
@@ -466,72 +480,84 @@ function isManagedSettingsDropInName(name) {
   return name.endsWith(".json") && !name.startsWith(".");
 }
 //@ chunk-dcmhvw5a.js:462964-463032 placement
-function isManagedSettingsDropInEntry(e) {
-  return (e.isFile() || e.isSymbolicLink()) && isManagedSettingsDropInName(e.name);
+function isManagedSettingsDropInEntry(dirent) {
+  return (dirent.isFile() || dirent.isSymbolicLink()) && isManagedSettingsDropInName(dirent.name);
 }
 //@ chunk-dcmhvw5a.js:463032-463320 placement
-function noteManagedDocumentOwnership(e, n, r, file) {
-  let managedFileProtections = e.managedFileProtections;
-  let c = {
+function noteManagedDocumentOwnership(context, folder, path, file) {
+  let managedFileProtections = context.managedFileProtections;
+  let info = {
     file,
     folder:
-      e.managedDocumentLinks.folderIsLink.get(n) === false
-        ? managedFileProtections.folderOwners.get(n)
+      context.managedDocumentLinks.folderIsLink.get(folder) === false
+        ? managedFileProtections.folderOwners.get(folder)
         : undefined,
-    posix: getPlatform() !== "windows" && !r.startsWith(WSL_MANAGED_SETTINGS_DIR),
+    posix: getPlatform() !== "windows" && !path.startsWith(WSL_MANAGED_SETTINGS_DIR),
   };
   managedFileProtections.note(
-    r,
+    path,
     classifyConfigDirOwnership({
-      ...c,
-      linked: e.managedDocumentLinks.isLinked(r),
+      ...info,
+      linked: context.managedDocumentLinks.isLinked(path),
     }),
   );
-  return () => accountCouldChangeDocument(e, r, c.file, c.folder);
+  return () => accountCouldChangeDocument(context, path, info.file, info.folder);
 }
 //@ chunk-dcmhvw5a.js:463320-463982 placement
-function accountCouldChangeDocument(e, n, file, s) {
-  let a = process.geteuid?.();
-  let c = process.getuid?.();
+function accountCouldChangeDocument(context, path, file, folder) {
+  let euid = process.geteuid?.();
+  let uid = process.getuid?.();
   if (
     shouldReadWindowsManagedSettingsFromWsl(true) &&
-    (n === WSL_REG_EXE_PATH || n.startsWith(`${WSL_MANAGED_SETTINGS_DIR}${sep}`))
+    (path === WSL_REG_EXE_PATH || path.startsWith(`${WSL_MANAGED_SETTINGS_DIR}${sep}`))
   )
     return NEVER_MERGE;
-  if (a === 0 || c === 0) return true;
-  if (getPlatform() === "windows" || a === undefined) return NEVER_MERGE;
-  let m = e.managedDocumentLinks.linkOf(n);
-  let f = {
-    uids: c === undefined || c === a ? [a] : [a, c],
+  if (euid === 0 || uid === 0) return true;
+  if (getPlatform() === "windows" || euid === undefined) return NEVER_MERGE;
+  let link = context.managedDocumentLinks.linkOf(path);
+  let accounts = {
+    uids: uid === undefined || uid === euid ? [euid] : [euid, uid],
     groups: () => [
       ...(process.getgroups?.() ?? []),
       ...(process.getegid ? [process.getegid()] : []),
       ...(process.getgid ? [process.getgid()] : []),
     ],
   };
-  if (anyAccountCouldWrite(f, file, m === null ? s : file) !== false || m?.kind === "unverified") return true;
-  let y = (e.policy.writableNow ??= new Map());
-  let b = y.get(n) ?? probeWritabilitySync(n);
-  y.set(n, b);
-  if (b !== "no") return true;
-  let S = (e.policy.walkedDocuments ??= new Map());
-  let C = S.get(n) ?? resolveManagedPathSafely(n, f, (e.policy.certainDirectories ??= new Map()));
-  S.set(n, C);
-  return C;
+  if (
+    anyAccountCouldWrite(accounts, file, link === null ? folder : file) !== false ||
+    link?.kind === "unverified"
+  )
+    return true;
+  let cache = (context.policy.writableNow ??= new Map());
+  let writable = cache.get(path) ?? probeWritabilitySync(path);
+  cache.set(path, writable);
+  if (writable !== "no") return true;
+  let walked = (context.policy.walkedDocuments ??= new Map());
+  let result =
+    walked.get(path) ??
+    resolveManagedPathSafely(path, accounts, (context.policy.certainDirectories ??= new Map()));
+  walked.set(path, result);
+  return result;
 }
 //@ chunk-dcmhvw5a.js:463982-463992 placement
 var NEVER_MERGE = false;
 //@ chunk-dcmhvw5a.js:463992-464135 placement
-function noteWalkedManagedPath(e, n, r, s) {
-  let managedDocumentLinks = e.managedDocumentLinks;
-  managedDocumentLinks.noteWalked(join(n, ...r), () =>
-    resolvePathStepsSync(n, r, s, managedDocumentLinks.folderIsLink, e.managedFileProtections.folderOwners),
+function noteWalkedManagedPath(context, dir, steps, folder) {
+  let managedDocumentLinks = context.managedDocumentLinks;
+  managedDocumentLinks.noteWalked(join(dir, ...steps), () =>
+    resolvePathStepsSync(
+      dir,
+      steps,
+      folder,
+      managedDocumentLinks.folderIsLink,
+      context.managedFileProtections.folderOwners,
+    ),
   );
 }
 //@ chunk-dcmhvw5a.js:464135-465251 placement
-function loadManagedFileSettingsFromDir(e, store, r = (a) => a, heldDocuments = []) {
+function loadManagedFileSettingsFromDir(dir, store, gate = (tier) => tier, heldDocuments = []) {
   let errors = [];
-  let c = {
+  let accumulator = {
     merged: {},
     found: false,
     authored: false,
@@ -540,45 +566,54 @@ function loadManagedFileSettingsFromDir(e, store, r = (a) => a, heldDocuments = 
   let documentHasPolicyContent = false;
   let loadState = "absent";
   for (let { path, parsed } of heldDocuments) {
-    mergeManagedSettingsLayer(c, r(parsed, path, alwaysTrue), errors);
+    mergeManagedSettingsLayer(accumulator, gate(parsed, path, alwaysTrue), errors);
     documentHasPolicyContent ||= isPolicyTier(parsed);
     loadState = combinedLoadState(loadState, loadStateOf(parsed));
   }
-  if (e === null) return managedLoadResult(c, errors, documentHasPolicyContent, loadState, store);
-  let settingsFile = parseSettingsFile_3(join(e, "managed-settings.json"), store, undefined, true);
-  let h = () => false;
+  if (dir === null) return managedLoadResult(accumulator, errors, documentHasPolicyContent, loadState, store);
+  let settingsFile = parseSettingsFile_3(join(dir, "managed-settings.json"), store, undefined, true);
+  let ownership = () => false;
   if (loadStateOf(settingsFile) !== "absent") {
-    noteWalkedManagedPath(store, e, ["managed-settings.json"]);
-    h = noteManagedDocumentOwnership(
+    noteWalkedManagedPath(store, dir, ["managed-settings.json"]);
+    ownership = noteManagedDocumentOwnership(
       store,
-      resolve(e),
-      join(e, "managed-settings.json"),
+      resolve(dir),
+      join(dir, "managed-settings.json"),
       settingsFile.fileOwner,
     );
   }
-  mergeManagedSettingsLayer(c, r(settingsFile, join(e, "managed-settings.json"), h), errors);
+  mergeManagedSettingsLayer(
+    accumulator,
+    gate(settingsFile, join(dir, "managed-settings.json"), ownership),
+    errors,
+  );
   documentHasPolicyContent ||= isPolicyTier(settingsFile);
   loadState = combinedLoadState(loadState, loadStateOf(settingsFile));
-  let y = join(e, "managed-settings.d");
+  let dropInDir = join(dir, "managed-settings.d");
   try {
-    let b = store.folderListingForPolicyWalk(y);
-    let S;
-    let C;
-    if (b !== undefined) S = b;
+    let cachedListing = store.folderListingForPolicyWalk(dropInDir);
+    let names;
+    let symlinkNames;
+    if (cachedListing !== undefined) names = cachedListing;
     else {
-      let filtered = getFsImplementation().readdirSync(y).filter(isManagedSettingsDropInEntry);
-      S = filtered.map((L) => L.name).sort();
-      C = new Set(filtered.filter((L) => !L.isFile()).map((L) => L.name));
-      store.noteWalkListing(y, S);
+      let filtered = getFsImplementation().readdirSync(dropInDir).filter(isManagedSettingsDropInEntry);
+      names = filtered.map((dirent) => dirent.name).sort();
+      symlinkNames = new Set(filtered.filter((dirent) => !dirent.isFile()).map((dirent) => dirent.name));
+      store.noteWalkListing(dropInDir, names);
     }
-    for (let w of S) {
-      let settingsFile = parseSettingsFile_3(join(y, w), store, undefined, true);
-      let v = () => false;
+    for (let name of names) {
+      let settingsFile = parseSettingsFile_3(join(dropInDir, name), store, undefined, true);
+      let ownership = () => false;
       if (loadStateOf(settingsFile) !== "absent") {
-        noteWalkedManagedPath(store, e, ["managed-settings.d", w], C?.has(w));
-        v = noteManagedDocumentOwnership(store, y, join(y, w), settingsFile.fileOwner);
+        noteWalkedManagedPath(store, dir, ["managed-settings.d", name], symlinkNames?.has(name));
+        ownership = noteManagedDocumentOwnership(
+          store,
+          dropInDir,
+          join(dropInDir, name),
+          settingsFile.fileOwner,
+        );
       }
-      mergeManagedSettingsLayer(c, r(settingsFile, join(y, w), v), errors);
+      mergeManagedSettingsLayer(accumulator, gate(settingsFile, join(dropInDir, name), ownership), errors);
       documentHasPolicyContent ||= isPolicyTier(settingsFile);
       loadState = combinedLoadState(loadState, loadStateOf(settingsFile));
     }
@@ -588,41 +623,41 @@ function loadManagedFileSettingsFromDir(e, store, r = (a) => a, heldDocuments = 
       logForDebugging(`managed-settings.d read failed: ${error}`, {
         level: "error",
       });
-      errors.push(unreadableSettingsFileError(y, error, "directory"));
+      errors.push(unreadableSettingsFileError(dropInDir, error, "directory"));
       loadState = "didNotLoad";
-      r(
+      gate(
         {
           settings: null,
           errors: [],
         },
-        y,
+        dropInDir,
         () => true,
       );
     }
   }
-  return managedLoadResult(c, errors, documentHasPolicyContent, loadState, store);
+  return managedLoadResult(accumulator, errors, documentHasPolicyContent, loadState, store);
 }
 //@ chunk-dcmhvw5a.js:465251-465511 placement
-function managedLoadResult(e, errors, documentHasPolicyContent, loadState, a) {
-  let merged = e.found && hasPolicyContent(e.merged) ? e.merged : null;
-  if (merged?.forceLoginOrgUUID !== undefined) a.managedFileProtections.setsOrgPin = true;
+function managedLoadResult(accumulator, errors, documentHasPolicyContent, loadState, store) {
+  let merged = accumulator.found && hasPolicyContent(accumulator.merged) ? accumulator.merged : null;
+  if (merged?.forceLoginOrgUUID !== undefined) store.managedFileProtections.setsOrgPin = true;
   return {
     settings: merged,
     errors,
     documentHasPolicyContent,
     loadState,
     ...(merged !== null &&
-      !e.authored &&
+      !accumulator.authored &&
       hasEffectivePolicyContent(merged) && {
         onlySubstitutes: true,
       }),
   };
 }
 //@ chunk-dcmhvw5a.js:465511-465614 placement
-function handleFileSystemError(e, n) {
-  if (isENOENT(e)) logMissingSettingsFile(n);
+function handleFileSystemError(error, path) {
+  if (isENOENT(error)) logMissingSettingsFile(path);
   else
-    logForDebugging(cleanForDisplay(`settings file read failed at ${n}: ${e}`), {
+    logForDebugging(cleanForDisplay(`settings file read failed at ${path}: ${error}`), {
       level: "error",
     });
 }
@@ -630,16 +665,16 @@ function handleFileSystemError(e, n) {
 /**
  * 带缓存地解析一个设置文件（pinned 内容按 \0pinned 另存一份），返回 settings 的深拷贝与错误列表。
  */
-function parseSettingsFile_3(e, store, r, s) {
-  let a = r !== undefined ? `${e}\x00pinned` : e;
-  let c = store.parsedFiles.get(a);
-  if (c)
+function parseSettingsFile_3(path, store, pinned, tolerant) {
+  let cacheKey = pinned !== undefined ? `${path}\x00pinned` : path;
+  let cached = store.parsedFiles.get(cacheKey);
+  if (cached)
     return {
-      ...c,
-      settings: c.settings ? clone(c.settings) : null,
+      ...cached,
+      settings: cached.settings ? clone(cached.settings) : null,
     };
-  let result = parseSettingsFileUncached(e, r, s);
-  store.parsedFiles.set(a, result);
+  let result = parseSettingsFileUncached(path, pinned, tolerant);
+  store.parsedFiles.set(cacheKey, result);
   return {
     ...result,
     settings: result.settings ? clone(result.settings) : null,
@@ -649,9 +684,9 @@ function parseSettingsFile_3(e, store, r, s) {
 /**
  * 读取 MDM 设置及加载状态。
  */
-function readMdmSettings(e) {
-  let n = e.mdm?.();
-  if (!n)
+function readMdmSettings(context) {
+  let mdm = context.mdm?.();
+  if (!mdm)
     return {
       settings: null,
       errors: [],
@@ -659,175 +694,186 @@ function readMdmSettings(e) {
       loadState: "absent",
     };
   return {
-    settings: n.settings && Object.keys(n.settings).length > 0 ? n.settings : null,
+    settings: mdm.settings && Object.keys(mdm.settings).length > 0 ? mdm.settings : null,
     errors: mdmPolicyErrors(
-      n,
-      () => parseRemoteManagedSettings(e),
-      () => e.file?.() ?? loadManagedFileSettings(e),
+      mdm,
+      () => parseRemoteManagedSettings(context),
+      () => context.file?.() ?? loadManagedFileSettings(context),
     ),
-    documentHasPolicyContent: isPolicyTier(n),
-    loadState: loadStateOf(n),
-    ...(n.onlySubstitutes && {
-      onlySubstitutes: n.onlySubstitutes,
+    documentHasPolicyContent: isPolicyTier(mdm),
+    loadState: loadStateOf(mdm),
+    ...(mdm.onlySubstitutes && {
+      onlySubstitutes: mdm.onlySubstitutes,
     }),
   };
 }
 //@ chunk-dcmhvw5a.js:466193-466332 placement
-function parsePolicyObjectTolerant(e, n) {
-  let r = weakMap_2.get(e);
-  let s = r?.get(n);
-  if (s) return cloneManagedLoadResult(s);
-  let managedSettingsFile = parseManagedSettingsFile(e, n);
-  if (r) r.set(n, managedSettingsFile);
-  else weakMap_2.set(e, new Map([[n, managedSettingsFile]]));
-  return cloneManagedLoadResult(managedSettingsFile);
+function parsePolicyObjectTolerant(input, label) {
+  let byInput = weakMap_2.get(input);
+  let cached = byInput?.get(label);
+  if (cached) return cloneManagedLoadResult(cached);
+  let result = parseManagedSettingsFile(input, label);
+  if (byInput) byInput.set(label, result);
+  else weakMap_2.set(input, new Map([[label, result]]));
+  return cloneManagedLoadResult(result);
 }
 //@ chunk-dcmhvw5a.js:466332-466576 placement
-function cloneManagedLoadResult(e) {
+function cloneManagedLoadResult(result) {
   return {
-    settings: e.settings && clone(e.settings),
-    errors: e.errors.map((error) => ({
+    settings: result.settings && clone(result.settings),
+    errors: result.errors.map((error) => ({
       ...error,
     })),
-    documentHasPolicyContent: e.documentHasPolicyContent,
-    loadState: e.loadState,
-    removed: e.removed,
-    ...(e.onlySubstitutes && {
-      onlySubstitutes: e.onlySubstitutes,
+    documentHasPolicyContent: result.documentHasPolicyContent,
+    loadState: result.loadState,
+    removed: result.removed,
+    ...(result.onlySubstitutes && {
+      onlySubstitutes: result.onlySubstitutes,
     }),
   };
 }
 //@ chunk-dcmhvw5a.js:466576-466595 placement
-var weakMap_2 = new WeakMap();
+var weakMap_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-dcmhvw5a.js:466576", () => {
+  weakMap_2 = new WeakMap();
+});
 //@ chunk-dcmhvw5a.js:466595-467211 placement
 /**
  * 解析托管设置文件（策略来源校验）。
  */
-function parseManagedSettingsFile(e, n) {
-  let r = clone(e);
-  let s = validateSettingsDocument(r, n, {
+function parseManagedSettingsFile(input, label) {
+  let workingCopy = clone(input);
+  let preIssues = validateSettingsDocument(workingCopy, label, {
     skipMcpServerEntryFilter: true,
     policySource: true,
   });
-  let a = [];
-  let c = buildPolicyTolerantSettingsSchema(collectSettingsIssue(n, a), n, r).safeParse(r);
-  if (!c.success)
+  let issues = [];
+  let parsed = buildPolicyTolerantSettingsSchema(
+    collectSettingsIssue(label, issues),
+    label,
+    workingCopy,
+  ).safeParse(workingCopy);
+  if (!parsed.success)
     return {
       settings: null,
-      errors: [...s, ...formatZodError(c.error, n)],
+      errors: [...preIssues, ...formatZodError(parsed.error, label)],
       documentHasPolicyContent: false,
       loadState: "didNotLoad",
       removed: [],
     };
-  let g = [...explainedPolicyChange(s, c.data, a), ...a];
-  let m = e;
-  let f = Object.keys(c.data).length > 0 ? c.data : null;
+  let errors = [...explainedPolicyChange(preIssues, parsed.data, issues), ...issues];
+  let original = input;
+  let kept = Object.keys(parsed.data).length > 0 ? parsed.data : null;
   return {
-    settings: f,
-    errors: g,
-    documentHasPolicyContent: documentHasPolicyContent(e, c.data),
+    settings: kept,
+    errors,
+    documentHasPolicyContent: documentHasPolicyContent(input, parsed.data),
     loadState: "loaded",
-    removed: Object.keys(m).filter(
+    removed: Object.keys(original).filter(
       (key) =>
-        isPolicyContentKey(key, m[key]) &&
-        c.data[key] === undefined &&
-        g.every((y) => y.statusOnly || (y.path !== key && !y.path.startsWith(`${key}.`))),
+        isPolicyContentKey(key, original[key]) &&
+        parsed.data[key] === undefined &&
+        errors.every(
+          (issue) => issue.statusOnly || (issue.path !== key && !issue.path.startsWith(`${key}.`)),
+        ),
     ),
-    ...(f !== null &&
-      a.some((h) => h.onlySubstitutes) && {
+    ...(kept !== null &&
+      issues.some((issue) => issue.onlySubstitutes) && {
         onlySubstitutes: true,
       }),
   };
 }
 //@ chunk-dcmhvw5a.js:467211-467340 placement
-function isPolicyContentKey(e, n) {
-  let r = RESTRICTIVE_TOP_LEVEL_SETTINGS();
-  return r.includes(e) || SETTING_ALIASES.some(({ alias, canonical }) => alias === e && r.includes(canonical))
-    ? isRestrictiveDisable(e, n)
-    : isRestrictiveNestedPath(e) && isPolicyContentObject(e, n);
+function isPolicyContentKey(key, value) {
+  let restrictive = RESTRICTIVE_TOP_LEVEL_SETTINGS();
+  return restrictive.includes(key) ||
+    SETTING_ALIASES.some(({ alias, canonical }) => alias === key && restrictive.includes(canonical))
+    ? isRestrictiveDisable(key, value)
+    : isRestrictiveNestedPath(key) && isPolicyContentObject(key, value);
 }
 //@ chunk-dcmhvw5a.js:467340-467490 placement
-function isPolicyContentObject(e, n) {
+function isPolicyContentObject(prefix, value) {
   return (
-    n === null ||
-    (isPlainObject_2(n) &&
-      Object.keys(n).length > 0 &&
-      Object.entries(n).every(([key, value]) => {
-        let a = `${e}.${key}`;
+    value === null ||
+    (isPlainObject_2(value) &&
+      Object.keys(value).length > 0 &&
+      Object.entries(value).every(([key, value]) => {
+        let path = `${prefix}.${key}`;
         return (
-          isRestrictiveDisable(a, value) || (isRestrictiveNestedPath(a) && isPolicyContentObject(a, value))
+          isRestrictiveDisable(path, value) ||
+          (isRestrictiveNestedPath(path) && isPolicyContentObject(path, value))
         );
       }))
   );
 }
 //@ chunk-dcmhvw5a.js:467490-467582 placement
-function isInertManagedMcpServersNotice(e) {
-  return isSdkEntrypoint() && (e === "managedMcpServers" || e.startsWith("managedMcpServers."));
+function isInertManagedMcpServersNotice(path) {
+  return isSdkEntrypoint() && (path === "managedMcpServers" || path.startsWith("managedMcpServers."));
 }
 //@ chunk-dcmhvw5a.js:467582-467702 placement
 var MANAGED_ONLY_KEYS = ["managedMcpServers", "isolation", "attributionProjectPolicy"];
 var NON_MANAGED_DROPPED_KEYS = [...MANAGED_ONLY_KEYS, "deniedModels", "availableModelsMatch"];
 //@ chunk-dcmhvw5a.js:467702-467957 placement
-function dropManagedOnlyKeys(e, file) {
-  if (!isPlainObject_2(e)) return [];
-  let r = [];
-  for (let s of NON_MANAGED_DROPPED_KEYS) {
-    if (!(s in e)) continue;
-    delete e[s];
-    if (!isInertManagedMcpServersNotice(s))
-      r.push({
+function dropManagedOnlyKeys(doc, file) {
+  if (!isPlainObject_2(doc)) return [];
+  let issues = [];
+  for (let key of NON_MANAGED_DROPPED_KEYS) {
+    if (!(key in doc)) continue;
+    delete doc[key];
+    if (!isInertManagedMcpServersNotice(key))
+      issues.push({
         file,
-        path: s,
-        message: `"${s}" is only honored from managed settings and was ignored here.`,
+        path: key,
+        message: `"${key}" is only honored from managed settings and was ignored here.`,
         severity: "warning",
         preserveOnWrite: true,
       });
   }
-  return r;
+  return issues;
 }
 //@ chunk-dcmhvw5a.js:467957-468414 placement
 /**
  * 收集设置问题为警告。
  */
-function collectSettingsIssue(e, n) {
-  return (r) => {
-    if (isInertManagedMcpServersNotice(r.path)) return;
-    n.push({
-      file: e,
-      path: r.path,
-      message: r.message,
+function collectSettingsIssue(file, sink) {
+  return (issue) => {
+    if (isInertManagedMcpServersNotice(issue.path)) return;
+    sink.push({
+      file,
+      path: issue.path,
+      message: issue.message,
       severity: "warning",
-      ...(r.statusOnly && {
-        statusOnly: r.statusOnly,
+      ...(issue.statusOnly && {
+        statusOnly: issue.statusOnly,
       }),
-      ...(r.startupFatal && {
-        startupFatal: r.startupFatal,
+      ...(issue.startupFatal && {
+        startupFatal: issue.startupFatal,
       }),
-      ...(r.substituted && {
-        substituted: r.substituted,
+      ...(issue.substituted && {
+        substituted: issue.substituted,
       }),
-      ...(r.onlySubstitutes && {
-        onlySubstitutes: r.onlySubstitutes,
+      ...(issue.onlySubstitutes && {
+        onlySubstitutes: issue.onlySubstitutes,
       }),
-      ...(r.removal && {
-        removal: r.removal,
+      ...(issue.removal && {
+        removal: issue.removal,
       }),
     });
-    if (r.statusOnly || r.startupFatal)
-      logForDebugging(cleanForDisplay(`${e}: ${r.path}: ${r.message}`), {
-        level: r.startupFatal ? "error" : "warn",
+    if (issue.statusOnly || issue.startupFatal)
+      logForDebugging(cleanForDisplay(`${file}: ${issue.path}: ${issue.message}`), {
+        level: issue.startupFatal ? "error" : "warn",
       });
   };
 }
 //@ chunk-dcmhvw5a.js:468414-469299 placement
-function parseRemoteManagedSettings(settingsContext) {
-  let n = settingsContext?.remote
-    ? settingsContext.remote()
+function parseRemoteManagedSettings(context) {
+  let settings = context?.remote
+    ? context.remote()
     : getRemoteManagedSettingsSyncFromCache(
-        (h) => parsePolicyObjectTolerant(h, "remote managed settings").settings,
+        (parser) => parsePolicyObjectTolerant(parser, "remote managed settings").settings,
       );
-  let r =
-    !settingsContext?.remote &&
+  let withheld =
+    !context?.remote &&
     !isInertManagedMcpServersNotice("managedMcpServers") &&
     unverifiedRemoteCacheWithholdsProvisions()
       ? [
@@ -841,26 +887,29 @@ function parseRemoteManagedSettings(settingsContext) {
           },
         ]
       : [];
-  let s = settingsContext?.remote ? undefined : getLastLoadStatus();
-  let a =
-    (s?.state === "stale_cache" || s?.state === "failed") && s.failure.errorKind === "ruled_empty"
-      ? serializeSettingsErrors(s.failure.rulings ?? [])
+  let status = context?.remote ? undefined : getLastLoadStatus();
+  let rulings =
+    (status?.state === "stale_cache" || status?.state === "failed") &&
+    status.failure.errorKind === "ruled_empty"
+      ? serializeSettingsErrors(status.failure.rulings ?? [])
       : [];
-  if (!n || Object.keys(n).length === 0)
+  if (!settings || Object.keys(settings).length === 0)
     return {
       settings: null,
-      errors: [...r, ...a],
+      errors: [...withheld, ...rulings],
       servedSnapshot: false,
       documentHasPolicyContent: false,
     };
-  let { settings, errors, documentHasPolicyContent, onlySubstitutes } = parsePolicyObjectTolerant(
-    n,
-    "remote managed settings",
-  );
+  let {
+    settings: settings_2,
+    errors,
+    documentHasPolicyContent,
+    onlySubstitutes,
+  } = parsePolicyObjectTolerant(settings, "remote managed settings");
   return {
-    settings,
-    errors: [...r, ...a, ...serializeSettingsErrors(errors)],
-    servedSnapshot: isProjectedSnapshot(n),
+    settings: settings_2,
+    errors: [...withheld, ...rulings, ...serializeSettingsErrors(errors)],
+    servedSnapshot: isProjectedSnapshot(settings),
     documentHasPolicyContent,
     ...(onlySubstitutes && {
       onlySubstitutes,
@@ -871,46 +920,46 @@ function parseRemoteManagedSettings(settingsContext) {
 var PARENT_MANAGED_SETTINGS_SOURCE_LABEL = "parent managed settings";
 var RETENTION_POLICY_KEYS = ["cleanupPeriodDays", "desktopSessionCleanupPeriodDays"];
 //@ chunk-dcmhvw5a.js:469393-469828 placement
-function parseParentManagedSettings(e) {
-  let parentManaged = e.parentManaged;
+function parseParentManagedSettings(context) {
+  let parentManaged = context.parentManaged;
   if (!parentManaged || Object.keys(parentManaged).length === 0)
     return {
       settings: null,
       errors: [],
     };
   let policyObjectTolerant = parsePolicyObjectTolerant(parentManaged, PARENT_MANAGED_SETTINGS_SOURCE_LABEL);
-  for (let s of MANAGED_ONLY_KEYS)
-    if (policyObjectTolerant.settings?.[s] !== undefined && !isInertManagedMcpServersNotice(s))
+  for (let key of MANAGED_ONLY_KEYS)
+    if (policyObjectTolerant.settings?.[key] !== undefined && !isInertManagedMcpServersNotice(key))
       policyObjectTolerant.errors.push({
         file: PARENT_MANAGED_SETTINGS_SOURCE_LABEL,
-        path: s,
-        message: `"${s}" is only honored from the organization's managed settings sources (server-managed, MDM, managed-settings.json), not from settings a host passes in, and was ignored here.`,
+        path: key,
+        message: `"${key}" is only honored from the organization's managed settings sources (server-managed, MDM, managed-settings.json), not from settings a host passes in, and was ignored here.`,
         severity: "warning",
         statusOnly: true,
       });
   return policyObjectTolerant;
 }
 //@ chunk-dcmhvw5a.js:469828-469856 placement
-function parseParentTierWithOrganization(e) {
+function parseParentTierWithOrganization(context) {
   return null;
 }
 //@ chunk-dcmhvw5a.js:469856-470165 placement
-function parseInlineFlagSettings(settingsContext) {
-  let flagInline = settingsContext.flagInline;
+function parseInlineFlagSettings(context) {
+  let flagInline = context.flagInline;
   if (!flagInline)
     return {
       settings: null,
       errors: [],
     };
-  let r = isSdkEntrypoint();
-  let inlineFlagParse = settingsContext.store.inlineFlagParse;
-  if (inlineFlagParse?.inline !== flagInline || inlineFlagParse.desktopSupplied !== r) {
+  let desktop = isSdkEntrypoint();
+  let inlineFlagParse = context.store.inlineFlagParse;
+  if (inlineFlagParse?.inline !== flagInline || inlineFlagParse.desktopSupplied !== desktop) {
     inlineFlagParse = {
       inline: flagInline,
-      desktopSupplied: r,
+      desktopSupplied: desktop,
       parsed: parseCommandOutputAsSettings(flagInline),
     };
-    settingsContext.store.inlineFlagParse = inlineFlagParse;
+    context.store.inlineFlagParse = inlineFlagParse;
   }
   let { settings, errors } = inlineFlagParse.parsed;
   return {
@@ -928,18 +977,21 @@ export {
   parsePolicyObjectTolerant,
   parseRemoteManagedSettings,
   parseSettingsFile_3,
+  parseInlineFlagSettings,
   loadManagedFileSettings,
   heldOffPluginIds,
   allowListEntriesThatVouch,
-  parseInlineFlagSettings,
   parseParentManagedSettings,
   parseParentTierWithOrganization,
   managedFileSettingsDirs,
   isInertManagedMcpServersNotice,
   handleFileSystemError,
-  MANAGED_ONLY_KEYS,
   dropManagedOnlyKeys,
+  MANAGED_ONLY_KEYS,
   collectSettingsIssue,
   readMdmSettings,
   isPolicyContentKey,
+  NON_MANAGED_DROPPED_KEYS,
+  isManagedSettingsDropInEntry,
+  loadManagedFileSettingsFromDir,
 };

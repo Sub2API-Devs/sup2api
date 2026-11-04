@@ -35,18 +35,18 @@ import { whichAsync } from "../which.js";
 /**
  * 读取用户的 git ssh 设置，为插件与市场克隆生成临时 ssh 配置。
  */
-async function resolveGitSshConfig(e) {
-  if (e.startsWith("file://")) return {};
+async function resolveGitSshConfig(remoteUrl) {
+  if (remoteUrl.startsWith("file://")) return {};
   let env = process.env;
-  let r = resolve_2(tmpdir());
-  let s = r.includes(delimiter)
+  let tempRoot = resolve_2(tmpdir());
+  let tempDir = tempRoot.includes(delimiter)
     ? undefined
-    : await mkdtemp(join(r, "claude-ssh-config-")).catch(() => {
+    : await mkdtemp(join(tempRoot, "claude-ssh-config-")).catch(() => {
         return;
       });
-  if (s === undefined) {
+  if (tempDir === undefined) {
     logForDebugging(
-      `[plugins] could not read your git ssh settings: no private temporary directory could be made under ${r} (the path must not contain '${delimiter}'). Plugin and marketplace clones ignore your core.sshCommand and ssh.variant and use GIT_SSH_COMMAND, GIT_SSH or plain ssh. Set CLAUDE_CODE_TMPDIR to a usable directory to fix this.`,
+      `[plugins] could not read your git ssh settings: no private temporary directory could be made under ${tempRoot} (the path must not contain '${delimiter}'). Plugin and marketplace clones ignore your core.sshCommand and ssh.variant and use GIT_SSH_COMMAND, GIT_SSH or plain ssh. Set CLAUDE_CODE_TMPDIR to a usable directory to fix this.`,
       {
         level: "error",
       },
@@ -54,10 +54,10 @@ async function resolveGitSshConfig(e) {
     return {};
   }
   try {
-    let gitConfigScoped = await readGitConfigScoped(s, "^(core\\.sshcommand|ssh\\.variant)$", {
+    let gitConfigScoped = await readGitConfigScoped(tempDir, "^(core\\.sshcommand|ssh\\.variant)$", {
       envPins: {
         ...gitConfigEnvOf(env).env,
-        GIT_CEILING_DIRECTORIES: r,
+        GIT_CEILING_DIRECTORIES: tempRoot,
       },
       base: env,
     });
@@ -70,32 +70,35 @@ async function resolveGitSshConfig(e) {
       );
       return {};
     }
-    let y = (Se) => gitConfigScoped.findLast(([ke]) => ke === Se)?.[1];
+    let lookupKey = (key) => gitConfigScoped.findLast(([entryKey]) => entryKey === key)?.[1];
     let envVarCaseInsensitiveOnWindows = getEnvVarCaseInsensitiveOnWindows(env, "GIT_SSH_COMMAND");
-    let w =
+    let sshCommand =
       envVarCaseInsensitiveOnWindows !== undefined && envVarCaseInsensitiveOnWindows.trim() !== ""
         ? undefined
-        : y("core.sshcommand");
-    let G =
-      getEnvVarCaseInsensitiveOnWindows(env, "GIT_SSH_VARIANT") === undefined ? y("ssh.variant") : undefined;
-    let q =
-      getPlatform() === "windows" || (G !== undefined && G !== "auto")
+        : lookupKey("core.sshcommand");
+    let sshVariant =
+      getEnvVarCaseInsensitiveOnWindows(env, "GIT_SSH_VARIANT") === undefined
+        ? lookupKey("ssh.variant")
+        : undefined;
+    let detectedVariant =
+      getPlatform() === "windows" || (sshVariant !== undefined && sshVariant !== "auto")
         ? undefined
-        : unknownSshCommandVariant(env, w);
-    let Z =
-      q !== undefined && (await probeSshCommand(wrapWithCdCommand(homeDirOrDefault(), q), env, s))
+        : unknownSshCommandVariant(env, sshCommand);
+    let variant =
+      detectedVariant !== undefined &&
+      (await probeSshCommand(wrapWithCdCommand(homeDirOrDefault(), detectedVariant), env, tempDir))
         ? "ssh"
-        : G;
+        : sshVariant;
     return {
-      ...(w !== undefined && {
-        command: w,
+      ...(sshCommand !== undefined && {
+        command: sshCommand,
       }),
-      ...(Z !== undefined && {
-        variant: Z,
+      ...(variant !== undefined && {
+        variant,
       }),
     };
   } finally {
-    await rm_2(s, {
+    await rm_2(tempDir, {
       recursive: true,
       force: true,
     }).catch(() => {});
@@ -105,28 +108,32 @@ async function resolveGitSshConfig(e) {
 /**
  * 探测 ssh 命令是否可用：sh -c '<cmd> -G -o SendEnv=GIT_PROTOCOL example.invalid'，超时按进程组 SIGKILL，返回退出码是否为 0。
  */
-async function probeSshCommand(e, env, cwd) {
-  let s;
+async function probeSshCommand(sshCommand, env, cwd) {
+  let child;
   try {
-    s = safeSpawn("sh", ["-c", `${e} "$@"`, e, "-G", "-o", "SendEnv=GIT_PROTOCOL", "example.invalid"], {
-      cwd,
-      env,
-      stdio: "ignore",
-      detached: true,
-      windowsHide: true,
-    });
+    child = safeSpawn(
+      "sh",
+      ["-c", `${sshCommand} "$@"`, sshCommand, "-G", "-o", "SendEnv=GIT_PROTOCOL", "example.invalid"],
+      {
+        cwd,
+        env,
+        stdio: "ignore",
+        detached: true,
+        windowsHide: true,
+      },
+    );
   } catch {
     return false;
   }
-  let timer = setTimeout(killProcessGroup, GIT_PROBE_TIMEOUT_MS, s.pid);
-  let { exitCode } = await s;
+  let timer = setTimeout(killProcessGroup, GIT_PROBE_TIMEOUT_MS, child.pid);
+  let { exitCode } = await child;
   clearTimeout(timer);
   return exitCode === 0;
 }
 //@ chunk-e6aww6q8.js:729785-729854 placement = killCaffeinate (1)
-function killProcessGroup(e) {
+function killProcessGroup(pid) {
   try {
-    if (e !== undefined) process.kill(-e, "SIGKILL");
+    if (pid !== undefined) process.kill(-pid, "SIGKILL");
   } catch {}
 }
 //@ chunk-e6aww6q8.js:729854-729916 placement
@@ -134,88 +141,89 @@ function killProcessGroup(e) {
  * sshCloneFallback：SSH 探测与降级提示。
  */
 function sshCloneFallback(notify) {
-  let n;
+  let probeResult;
   return {
     notify,
-    probeSsh: () => (n ??= isGitHubSshLikelyConfigured()),
+    probeSsh: () => (probeResult ??= isGitHubSshLikelyConfigured()),
   };
 }
 //@ chunk-e6aww6q8.js:729916-729984 placement
 /**
  * sshNotConfiguredMessage：SSH 未配置改走 HTTPS 的说明。
  */
-function sshNotConfiguredMessage(e) {
-  return `SSH not configured, cloning via HTTPS: ${e}`;
+function sshNotConfiguredMessage(url) {
+  return `SSH not configured, cloning via HTTPS: ${url}`;
 }
 //@ chunk-e6aww6q8.js:729984-730052 placement
 /**
  * httpsFailedRetrySshMessage：HTTPS 失败改走 SSH 的说明。
  */
-function httpsFailedRetrySshMessage(e) {
-  return `HTTPS clone failed, retrying with SSH: ${e}`;
+function httpsFailedRetrySshMessage(url) {
+  return `HTTPS clone failed, retrying with SSH: ${url}`;
 }
 //@ chunk-e6aww6q8.js:730052-731019 placement
-async function readGitSshCommand(e, n, r, s) {
-  let h = getPlatform() === "windows";
-  if (h !== s) return false;
-  let y = withGitNoPromptEnv();
+async function readGitSshCommand(fallback, remoteUrl, gitContext, isWindows) {
+  let onWindows = getPlatform() === "windows";
+  if (onWindows !== isWindows) return false;
+  let noPromptEnv = withGitNoPromptEnv();
   if (
-    getEnvVarCaseInsensitiveOnWindows(y, "GIT_SSH_COMMAND") !== undefined ||
-    getEnvVarCaseInsensitiveOnWindows(y, "GIT_SSH") !== undefined
+    getEnvVarCaseInsensitiveOnWindows(noPromptEnv, "GIT_SSH_COMMAND") !== undefined ||
+    getEnvVarCaseInsensitiveOnWindows(noPromptEnv, "GIT_SSH") !== undefined
   )
     return false;
-  let gitSshConfig = await resolveGitSshConfig(n);
+  let gitSshConfig = await resolveGitSshConfig(remoteUrl);
   if (gitSshConfig.command !== undefined) return false;
-  let { pinArgs, env } = runGitWithCeilingDirs(r, gitSshConfig);
-  let G = await execFileNoThrow(gitExe(), ["ls-remote", "--get-url", "--", n], {
-    ...(await prepareGitWorkDir(r, env)),
+  let { pinArgs, env } = runGitWithCeilingDirs(gitContext, gitSshConfig);
+  let urlResult = await execFileNoThrow(gitExe(), ["ls-remote", "--get-url", "--", remoteUrl], {
+    ...(await prepareGitWorkDir(gitContext, env)),
     stdin: "ignore",
     timeout: 5000,
   });
-  if (G.code !== 0 || G.stdout.trim() !== n) {
+  if (urlResult.code !== 0 || urlResult.stdout.trim() !== remoteUrl) {
     logForDebugging(
-      `GitHub SSH URL is rewritten by git config, or git could not say (code=${G.code}): staying on SSH`,
+      `GitHub SSH URL is rewritten by git config, or git could not say (code=${urlResult.code}): staying on SSH`,
     );
     return false;
   }
-  if (h) {
-    let Z = await execFileNoThrow(gitExe(), [...pinArgs, "ls-remote", "--", n], {
-      ...(await prepareGitWorkDir(r, {
+  if (onWindows) {
+    let probeResult = await execFileNoThrow(gitExe(), [...pinArgs, "ls-remote", "--", remoteUrl], {
+      ...(await prepareGitWorkDir(gitContext, {
         ...env,
         GIT_SSH_COMMAND: `${env.GIT_SSH_COMMAND} -G >&2`,
       })),
       stdin: "ignore",
       timeout: 5000,
     });
-    return !Z.timedOut && hasDirectGitHubSshHost(Z.stderr);
+    return !probeResult.timedOut && hasDirectGitHubSshHost(probeResult.stderr);
   }
-  if ((await e.probeSsh()) !== "not-configured") return false;
+  if ((await fallback.probeSsh()) !== "not-configured") return false;
   if ((await whichAsync("ssh")) === null) return true;
-  let q = await execFileNoThrow("ssh", ["-G", "git@github.com"], {
+  let sshProbe = await execFileNoThrow("ssh", ["-G", "git@github.com"], {
     cwd: homeDirOrDefault(),
     timeout: 5000,
   });
-  if (q.code === 0 && hasDirectGitHubSshHost(q.stdout)) return true;
+  if (sshProbe.code === 0 && hasDirectGitHubSshHost(sshProbe.stdout)) return true;
   logForDebugging(
-    `ssh -G does not show git@github.com going straight to github.com (code=${q.code}): staying on SSH`,
+    `ssh -G does not show git@github.com going straight to github.com (code=${sshProbe.code}): staying on SSH`,
   );
   return false;
 }
 //@ chunk-e6aww6q8.js:731019-731184 placement
-function hasDirectGitHubSshHost(e) {
-  let mapped = e
+function hasDirectGitHubSshHost(output) {
+  let mapped = output
     .split(
       `
 `,
     )
     .map((line) => line.trim().toLowerCase());
   return (
-    mapped.includes("hostname github.com") && !mapped.some((r) => /^proxy(command|jump)(?! none$)/.test(r))
+    mapped.includes("hostname github.com") &&
+    !mapped.some((line) => /^proxy(command|jump)(?! none$)/.test(line))
   );
 }
 //@ chunk-e6aww6q8.js:731184-731294 placement
-function isSshAuthFailureOutput(e) {
-  return e.includes("Permission denied (publickey") || e.includes("Host key verification failed");
+function isSshAuthFailureOutput(stderr) {
+  return stderr.includes("Permission denied (publickey") || stderr.includes("Host key verification failed");
 }
 export {
   sshCloneFallback,

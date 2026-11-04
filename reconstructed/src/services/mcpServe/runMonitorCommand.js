@@ -12,14 +12,14 @@ import { readdir, readFile } from "fs/promises";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   zodStrictObject,
-  string,
-  E,
+  stringSchema,
+  numberSchema,
   array,
   record,
   unknown,
   literal,
   union,
-  u,
+  objectSchema,
   _enum,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { isAllPrintable } from "../../utils/truncateGraphemes.js";
@@ -61,13 +61,13 @@ var KILL_WAIT_MS = 1500;
 var MAX_SIGKILL_ROUNDS = 5;
 var runMonitorCommandInputSchema = DoctorLazy(() =>
   zodStrictObject({
-    command: string()
+    command: stringSchema()
       .min(1)
       .max(MAX_COMMAND_CHARS)
       .refine(isAllPrintable, "command contains control characters"),
-    timeout_ms: E().int().min(1000),
-    deny_rules: array(string().max(MAX_DENY_RULE_CHARS)).max(MAX_DENY_RULES).default([]),
-    [MONITOR_INPUT]: record(string(), unknown()).optional(),
+    timeout_ms: numberSchema().int().min(1000),
+    deny_rules: array(stringSchema().max(MAX_DENY_RULE_CHARS)).max(MAX_DENY_RULES).default([]),
+    [MONITOR_INPUT]: record(stringSchema(), unknown()).optional(),
     [REFUSE_UNDER_OTHER_RULES]: literal(true),
   }),
 );
@@ -78,19 +78,19 @@ var monitorEventSchema = DoctorLazy(() =>
         started: literal(true),
       }),
       zodStrictObject({
-        lines: string(),
-        suppressed: E().int().positive().optional(),
+        lines: stringSchema(),
+        suppressed: numberSchema().int().positive().optional(),
       }),
     ]),
   }),
 );
 var monitorResultSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     ended: _enum(["exited", "deadline", "too_much_output", "call_ended"]),
-    exitCode: E(),
-    finalLines: string().optional(),
-    suppressed: E().int().positive().optional(),
-    outputPath: string().optional(),
+    exitCode: numberSchema(),
+    finalLines: stringSchema().optional(),
+    suppressed: numberSchema().int().positive().optional(),
+    outputPath: stringSchema().optional(),
   }),
 );
 //@ chunk-pzkdz9nx.js:1853-2109 placement
@@ -98,33 +98,33 @@ var monitorResultSchema = DoctorLazy(() =>
  * 监控输出节流与洪泛检测
  */
 function createOutputThrottle({ tryConsume, killAfterMs, quietGapMs, now, send, onFlood }) {
-  let n = 0;
-  let h;
-  let g = 0;
-  let y = false;
+  let suppressedCount = 0;
+  let firstFloodAt;
+  let lastFloodAt = 0;
+  let flooded = false;
   return {
     take: (lines) => {
-      if (y) return;
+      if (flooded) return;
       if (tryConsume()) {
         send({
           lines,
-          ...(n > 0 && {
-            suppressed: n,
+          ...(suppressedCount > 0 && {
+            suppressed: suppressedCount,
           }),
         });
-        n = 0;
-        if (now() - g > quietGapMs) h = undefined;
+        suppressedCount = 0;
+        if (now() - lastFloodAt > quietGapMs) firstFloodAt = undefined;
         return;
       }
-      n += 1;
-      g = now();
-      h ??= g;
-      if (g - h > killAfterMs) {
-        y = true;
+      suppressedCount += 1;
+      lastFloodAt = now();
+      firstFloodAt ??= lastFloodAt;
+      if (lastFloodAt - firstFloodAt > killAfterMs) {
+        flooded = true;
         onFlood();
       }
     },
-    unreported: () => n,
+    unreported: () => suppressedCount,
   };
 }
 //@ chunk-pzkdz9nx.js:2109-2141 placement
@@ -139,23 +139,23 @@ var monitorCountByHost = new HostScoped(() => ({
  * 读 /proc 中同进程组的进程
  */
 async function readProcessGroup(pid) {
-  let f = await readdir("/proc").catch(() => []);
-  let t = new Map();
+  let pidEntries = await readdir("/proc").catch(() => []);
+  let pinnedByPid = new Map();
   let alive = 0;
   await Promise.all(
-    f
-      .filter((e) => /^\d+$/.test(e))
-      .map(async (e) => {
-        let a = await readFile(`/proc/${e}/stat`, "utf8").catch(() => "");
-        let n = procStatField(a);
-        if (statSession(a) === pid && n !== undefined) {
-          t.set(Number(e), n);
-          alive += isMinorFaultField(statState(a)) ? 0 : 1;
+    pidEntries
+      .filter((pidText) => /^\d+$/.test(pidText))
+      .map(async (pidText) => {
+        let statText = await readFile(`/proc/${pidText}/stat`, "utf8").catch(() => "");
+        let startToken = procStatField(statText);
+        if (statSession(statText) === pid && startToken !== undefined) {
+          pinnedByPid.set(Number(pidText), startToken);
+          alive += isMinorFaultField(statState(statText)) ? 0 : 1;
         }
       }),
   );
   return {
-    pinned: t,
+    pinned: pinnedByPid,
     alive,
   };
 }
@@ -163,82 +163,82 @@ async function readProcessGroup(pid) {
 /**
  * 结束监控命令的进程组
  */
-async function killMonitorProcessGroup(w) {
-  let pid = w.pid;
+async function killMonitorProcessGroup(target) {
+  let pid = target.pid;
   if (pid <= 1) return;
-  let t = async (e) => {
+  let signalGroup = async (signal) => {
     if (getPlatform() !== "linux" && getPlatform() !== "wsl")
       try {
-        return process.kill(-pid, e);
+        return process.kill(-pid, signal);
       } catch {
         return false;
       }
     let { pinned, alive } = await readProcessGroup(pid);
-    let h = pinned.get(pid);
-    if (h !== undefined && h !== w.startToken) return false;
-    if (e !== 0) await killIfUnchanged(pinned, e);
+    let leaderStartToken = pinned.get(pid);
+    if (leaderStartToken !== undefined && leaderStartToken !== target.startToken) return false;
+    if (signal !== 0) await killIfUnchanged(pinned, signal);
     return alive > 0;
   };
-  let i = await t("SIGTERM");
-  for (let e = Date.now() + KILL_WAIT_MS; i && Date.now() < e;) {
+  let alive = await signalGroup("SIGTERM");
+  for (let deadline = Date.now() + KILL_WAIT_MS; alive && Date.now() < deadline;) {
     await sleep(50);
-    i = await t(0);
+    alive = await signalGroup(0);
   }
-  for (let j = 0; i && j < MAX_SIGKILL_ROUNDS; j++) i = await t("SIGKILL");
+  for (let j = 0; alive && j < MAX_SIGKILL_ROUNDS; j++) alive = await signalGroup("SIGKILL");
 }
 //@ chunk-pzkdz9nx.js:2827-8313 placement
 /**
  * 在本机运行 RunMonitorCommand：检查规则、节流输出、超时与进程组清理。
  */
-async function runMonitorCommandHere(w, f, t) {
+async function runMonitorCommandHere(input, signal, context) {
   let {
     command,
     timeout_ms: timeoutMs,
     deny_rules: denyRules,
-    [MONITOR_INPUT]: n,
-  } = runMonitorCommandInputSchema().parse(w);
-  let h = bringsToolHostPermissionRequest(t.meta);
-  if (n !== undefined && !h)
+    [MONITOR_INPUT]: monitorInput,
+  } = runMonitorCommandInputSchema().parse(input);
+  let toolHostDecides = bringsToolHostPermissionRequest(context.meta);
+  if (monitorInput !== undefined && !toolHostDecides)
     throw Error(
       "RunMonitorCommand was not run: its monitor_input goes with a ToolHost permission request that this server decides, and it brought none, or this server decides none. Retrying won't help.",
     );
-  if (h && (n === undefined || denyRules.length > 0))
+  if (toolHostDecides && (monitorInput === undefined || denyRules.length > 0))
     throw Error(
       "RunMonitorCommand was not run: a ToolHost permission request goes with the monitor_input it judged, and with no rules of its own. Retrying won't help.",
     );
-  let reportProgress = t.reportProgress;
+  let reportProgress = context.reportProgress;
   if (reportProgress === undefined)
     throw Error(
       "RunMonitorCommand was not run: the call sent no progress token, so the command's output would have nowhere to go. Call again with _meta.progressToken set.",
     );
-  let launchPermissionContext = t.launchPermissionContext;
+  let launchPermissionContext = context.launchPermissionContext;
   if (launchPermissionContext === undefined)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `RunMonitorCommand was not run: ${NO_PERMISSION_SETTINGS_TEXT}`,
       "RunMonitorCommand: read no launch settings",
     );
-  let filtered = antBuiltinDenyRules().filter((l) => bashDenyRuleStrings([l]).length === 0);
+  let filtered = antBuiltinDenyRules().filter((rule) => bashDenyRuleStrings([rule]).length === 0);
   if (
-    n === undefined &&
+    monitorInput === undefined &&
     [launchPermissionContext.alwaysDenyRules, launchPermissionContext.alwaysAskRules]
-      .flatMap((l) => Object.values(l).flatMap((c) => c ?? []))
-      .some((l) => !denyRules.includes(l) && !filtered.includes(l))
+      .flatMap((ruleSet) => Object.values(ruleSet).flatMap((rules) => rules ?? []))
+      .some((rule) => !denyRules.includes(rule) && !filtered.includes(rule))
   )
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `RunMonitorCommand was not run: ${UNREPRESENTABLE_RULES_TEXT}`,
       "RunMonitorCommand: holds a rule that the call did not bring",
     );
-  let cwd = getSessionProject(t.session).cwd;
-  let q = false;
-  let lt = t.session.subscribe(() => {
-    q ||= getSessionProject(t.session).cwd !== cwd;
+  let cwd = getSessionProject(context.session).cwd;
+  let cwdMoved = false;
+  let unsubscribe = context.session.subscribe(() => {
+    cwdMoved ||= getSessionProject(context.session).cwd !== cwd;
   });
-  let m;
-  let N;
+  let check;
+  let claim;
   let cwd_2;
   try {
-    if (n === undefined)
-      m = await t.checkAsServedTool(
+    if (monitorInput === undefined)
+      check = await context.checkAsServedTool(
         BASH_TOOL_NAME,
         {
           command,
@@ -246,242 +246,246 @@ async function runMonitorCommandHere(w, f, t) {
         denyRules,
       );
     else {
-      let { checkMonitorRun } = await import("./chunk-dz36xfxg.js");
-      let c = await checkMonitorRun({
+      let { checkMonitorRun } = await import("../../entrypoints/mcpServe/checkMonitorRun.lazy.js");
+      let checked = await checkMonitorRun({
         name: RUN_MONITOR_COMMAND_CALL,
-        meta: t.meta,
-        input: n,
+        meta: context.meta,
+        input: monitorInput,
         command,
-        toolUseContext: t.toolUseContext(),
+        toolUseContext: context.toolUseContext(),
         launchPermissionContext,
       });
-      m = c;
-      if ("claim" in c) N = c;
+      check = checked;
+      if ("claim" in checked) claim = checked;
     }
-    cwd_2 = "toolUseContext" in m ? getSessionProject(m.toolUseContext.session).cwd : cwd;
+    cwd_2 = "toolUseContext" in check ? getSessionProject(check.toolUseContext.session).cwd : cwd;
   } finally {
-    lt();
+    unsubscribe();
   }
-  if ("rejection" in m && n !== undefined)
+  if ("rejection" in check && monitorInput !== undefined)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      m.rejection,
+      check.rejection,
       "RunMonitorCommand: refused by the ToolHost check",
     );
-  if ("rejection" in m)
+  if ("rejection" in check)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      m.rejection,
+      check.rejection,
       "RunMonitorCommand: refused by the served Bash check",
     );
-  let { session, abortController } = m.toolUseContext;
-  if (q || getSessionProject(t.session).cwd !== cwd)
+  let { session, abortController } = check.toolUseContext;
+  if (cwdMoved || getSessionProject(context.session).cwd !== cwd)
     throw Error(
       "RunMonitorCommand was not run: another call changed the working directory while this one was being checked. Send it again to have it checked where it would now start.",
     );
-  let D = monitorCountByHost.of(session.host);
-  if (D.running >= MAX_CONCURRENT_MONITORS)
+  let monitorCount = monitorCountByHost.of(session.host);
+  if (monitorCount.running >= MAX_CONCURRENT_MONITORS)
     throw Error(
       "RunMonitorCommand was not run: this environment already runs as many monitors as it allows at once. Stop one first.",
     );
-  let V = N?.claim();
-  if (V === "barred")
+  let claimResult = claim?.claim();
+  if (claimResult === "barred")
     throw Error(
       "RunMonitorCommand was not run: this session was already told that this call had not started, so it can no longer run. Send a new call.",
     );
-  if (V === "started_before")
+  if (claimResult === "started_before")
     throw Error(
       "RunMonitorCommand was not run again: this very call was already started here once. Check what it did before you send a new call.",
     );
   let abortController_2 = new AbortController();
-  D.running += 1;
+  monitorCount.running += 1;
   abortController_2.signal.addEventListener(
     "abort",
     () => {
-      D.running -= 1;
+      monitorCount.running -= 1;
     },
     {
       once: true,
     },
   );
-  let Z = () => abortController.signal.aborted || t.callerGone?.aborted === true;
-  let x = () => abortController_2.abort();
-  abortController.signal.addEventListener("abort", x, {
+  let isCancelled = () => abortController.signal.aborted || context.callerGone?.aborted === true;
+  let cancelMonitor = () => abortController_2.abort();
+  abortController.signal.addEventListener("abort", cancelMonitor, {
     once: true,
   });
-  t.callerGone?.addEventListener("abort", x, {
+  context.callerGone?.addEventListener("abort", cancelMonitor, {
     once: true,
   });
-  let H = (exitCode) => ({
+  let stoppedWithCall = (exitCode) => ({
     summary: "stopped with its call",
     output: {
       ended: "call_ended",
       exitCode,
     },
   });
-  let j;
-  let F;
+  let deadlineTimer;
+  let outputSizeTimer;
   try {
-    if (Z()) return H(-1);
-    let [{ exec: l }, c, { logFeatureSad: mt }, v, S] = await Promise.all([
-      import("./chunk-gnfg7h3r.js"),
-      import("./chunk-4dsgq5m3.js"),
-      import("./chunk-53at0fec.js"),
-      import("./chunk-sdtmn776.js"),
-      import("./chunk-h19jf4dr.js"),
-    ]);
-    let R = "exited";
-    let O;
-    let k = (r) => {
+    if (isCancelled()) return stoppedWithCall(-1);
+    let [{ exec: execModule }, sandboxModule, { logFeatureSad: logSad }, batcherModule, bucketModule] =
+      await Promise.all([
+        import("../../utils/Shell.js"),
+        import("../../tools/BashTool/shouldUseSandbox.js"),
+        import("../analytics/featureTelemetry.js"),
+        import("../../tasks/MonitorTask/monitorDelivery.js"),
+        import("../../utils/tokenBucket.js"),
+      ]);
+    let endReason = "exited";
+    let finalLines;
+    let stopMonitor = (reason) => {
       if (!abortController_2.signal.aborted) {
-        R = r;
-        O = r === "deadline" ? streamLineBatcher.drain() : undefined;
+        endReason = reason;
+        finalLines = reason === "deadline" ? streamLineBatcher.drain() : undefined;
         abortController_2.abort();
       }
     };
-    let Q = (monitorEvent) => {
+    let sendEvent = (monitorEvent) => {
       reportProgress(
         jsonStringify({
           monitor_event: monitorEvent,
         }),
       ).catch(() => {});
     };
-    let tt = false;
-    let et = () => {
-      if (!tt) {
-        tt = true;
-        Q({
+    let started = false;
+    let ensureStarted = () => {
+      if (!started) {
+        started = true;
+        sendEvent({
           started: true,
         });
       }
     };
     let send = (monitorEvent) => {
-      et();
-      Q(monitorEvent);
+      ensureStarted();
+      sendEvent(monitorEvent);
     };
-    let tokenBucket = S.createTokenBucket(S.BUCKET_CAPACITY, S.TOKEN_REFILL_MS);
+    let tokenBucket = bucketModule.createTokenBucket(
+      bucketModule.BUCKET_CAPACITY,
+      bucketModule.TOKEN_REFILL_MS,
+    );
     let outputThrottle = createOutputThrottle({
       tryConsume: () => tokenBucket.tryConsume(),
-      killAfterMs: v.SUSTAINED_SUPPRESSION_KILL_MS,
-      quietGapMs: S.TOKEN_REFILL_MS * 3,
+      killAfterMs: batcherModule.SUSTAINED_SUPPRESSION_KILL_MS,
+      quietGapMs: bucketModule.TOKEN_REFILL_MS * 3,
       now: Date.now,
       send,
-      onFlood: () => k("too_much_output"),
+      onFlood: () => stopMonitor("too_much_output"),
     });
-    let streamLineBatcher = v.createStreamLineBatcher((r) => {
-      if (!abortController_2.signal.aborted) outputThrottle.take(r);
+    let streamLineBatcher = batcherModule.createStreamLineBatcher((lines) => {
+      if (!abortController_2.signal.aborted) outputThrottle.take(lines);
     });
     let min = Math.min(timeoutMs, MAX_MONITOR_TIMEOUT_MS);
-    let ot = 0;
-    let { storageV5, sessionEnvVars, toolUseId } = m.toolUseContext;
-    let rt = c.shouldUseSandbox({
+    let totalOutputBytes = 0;
+    let { storageV5, sessionEnvVars, toolUseId } = check.toolUseContext;
+    let useSandbox = sandboxModule.shouldUseSandbox({
       command,
     });
-    let it = c.sandboxPolicyRefusal(rt, command, false, "bash");
-    if (it !== null) {
-      mt("sandbox_exec", "sandbox_policy_refusal", {
+    let sandboxRefusal = sandboxModule.sandboxPolicyRefusal(useSandbox, command, false, "bash");
+    if (sandboxRefusal !== null) {
+      logSad("sandbox_exec", "sandbox_policy_refusal", {
         tool: lit("monitor"),
       });
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        it,
+        sandboxRefusal,
         "RunMonitorCommand: refused by the sandbox policy",
       );
     }
-    let s = await l(command, abortController_2.signal, "bash", {
+    let task = await execModule(command, abortController_2.signal, "bash", {
       session,
       cwd: cwd_2,
       storageV5,
       sessionEnvVars,
       sandboxAttributionId: toolUseId,
       preventCwdChanges: true,
-      shouldUseSandbox: rt,
+      shouldUseSandbox: useSandbox,
       timeout: min + 60000,
-      onStdout: (r) => {
+      onStdout: (chunk) => {
         if (abortController_2.signal.aborted) return;
-        ot += r.length;
-        if (ot > MAX_OUTPUT_BYTES) {
-          k("too_much_output");
+        totalOutputBytes += chunk.length;
+        if (totalOutputBytes > MAX_OUTPUT_BYTES) {
+          stopMonitor("too_much_output");
           return;
         }
-        streamLineBatcher.onData(r);
+        streamLineBatcher.onData(chunk);
       },
     });
-    let st =
-      s.pid === undefined
+    let processGroup =
+      task.pid === undefined
         ? undefined
         : {
-            pid: s.pid,
-            startToken: procStatField(await readFile(`/proc/${s.pid}/stat`, "utf8").catch(() => "")),
+            pid: task.pid,
+            startToken: procStatField(await readFile(`/proc/${task.pid}/stat`, "utf8").catch(() => "")),
           };
-    let P;
+    let trailer;
     try {
-      let preSpawnError = s.status === "completed" ? (await s.result).preSpawnError : undefined;
+      let preSpawnError = task.status === "completed" ? (await task.result).preSpawnError : undefined;
       if (preSpawnError !== undefined)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
           preSpawnError,
           "RunMonitorCommand: the shell could not be started",
         );
-      if (s.status === "killed") return H(-1);
-      et();
-      s.taskOutput.spillToDisk();
-      P = "killed";
-      j = setTimeout(k, min, "deadline");
-      F = setInterval(
-        (_t, Ct) => {
-          if (_t.totalBytes > MAX_OUTPUT_BYTES) Ct("too_much_output");
+      if (task.status === "killed") return stoppedWithCall(-1);
+      ensureStarted();
+      task.taskOutput.spillToDisk();
+      trailer = "killed";
+      deadlineTimer = setTimeout(stopMonitor, min, "deadline");
+      outputSizeTimer = setInterval(
+        (taskOutput, stop) => {
+          if (taskOutput.totalBytes > MAX_OUTPUT_BYTES) stop("too_much_output");
         },
         MIN_SIGINT_WAIT_MS,
-        s.taskOutput,
-        k,
+        task.taskOutput,
+        stopMonitor,
       );
-      let L = await s.result;
-      clearTimeout(j);
-      clearInterval(F);
+      let result = await task.result;
+      clearTimeout(deadlineTimer);
+      clearInterval(outputSizeTimer);
       if (!abortController_2.signal.aborted)
-        await Promise.race([s.outputEnded, sleep(SIGTERM_WAIT_MS, abortController_2.signal)]);
-      if (Z()) return H(L.code);
+        await Promise.race([task.outputEnded, sleep(SIGTERM_WAIT_MS, abortController_2.signal)]);
+      if (isCancelled()) return stoppedWithCall(result.code);
       if (!abortController_2.signal.aborted) {
-        O = streamLineBatcher.drain();
+        finalLines = streamLineBatcher.drain();
         abortController_2.abort();
       }
-      if (R === "exited")
-        P = {
-          exitCode: L.code,
+      if (endReason === "exited")
+        trailer = {
+          exitCode: result.code,
         };
       return {
         summary:
-          R === "exited"
-            ? `exit ${L.code}`
-            : R === "deadline"
+          endReason === "exited"
+            ? `exit ${result.code}`
+            : endReason === "deadline"
               ? "stopped at its time limit"
               : "stopped for printing too much",
         output: {
-          ended: R,
-          exitCode: L.code,
-          ...(O !== undefined && {
-            finalLines: O,
+          ended: endReason,
+          exitCode: result.code,
+          ...(finalLines !== undefined && {
+            finalLines,
           }),
           ...(outputThrottle.unreported() > 0 && {
             suppressed: outputThrottle.unreported(),
           }),
-          outputPath: s.taskOutput.path,
+          outputPath: task.taskOutput.path,
         },
       };
     } finally {
-      if (st !== undefined) await killMonitorProcessGroup(st);
-      await s.taskOutput.flush();
-      s.cleanup();
-      if (P !== undefined) {
-        let { taskId } = s.taskOutput;
-        appendTaskOutputTrailer(taskId, P);
+      if (processGroup !== undefined) await killMonitorProcessGroup(processGroup);
+      await task.taskOutput.flush();
+      task.cleanup();
+      if (trailer !== undefined) {
+        let { taskId } = task.taskOutput;
+        appendTaskOutputTrailer(taskId, trailer);
         await evictTaskOutput(taskId);
       }
     }
   } finally {
-    clearTimeout(j);
-    clearInterval(F);
+    clearTimeout(deadlineTimer);
+    clearInterval(outputSizeTimer);
     abortController_2.abort();
-    N?.release();
-    abortController.signal.removeEventListener("abort", x);
-    t.callerGone?.removeEventListener("abort", x);
+    claim?.release();
+    abortController.signal.removeEventListener("abort", cancelMonitor);
+    context.callerGone?.removeEventListener("abort", cancelMonitor);
   }
 }
 export { RUN_MONITOR_COMMAND_CALL, runMonitorCommandHere };

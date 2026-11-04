@@ -5,12 +5,12 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:213926-214804 cjs-fingerprint
-var require_jboss_cli = x(function (cjsExports, cjsModule) {
+var require_jboss_cli = __commonJS(function (cjsExports, cjsModule) {
   function jbossCli(hljs) {
-    let n = {
+    let PARAMS = {
       className: "params",
       begin: /\(/,
       end: /\)/,
@@ -51,7 +51,7 @@ var require_jboss_cli = x(function (cjsExports, cjsModule) {
           "alias batch cd clear command connect connection-factory connection-info data-source deploy deployment-info deployment-overlay echo echo-dmr help history if jdbc-driver-info jms-queue|20 jms-topic|20 ls patch pwd quit read-attribute read-operation reload rollout-plan run-batch set shutdown try unalias undeploy unset version xa-data-source",
         literal: "true false",
       },
-      contains: [hljs.HASH_COMMENT_MODE, hljs.QUOTE_STRING_MODE, COMMAND_PARAMS, OPERATION, PATH, n],
+      contains: [hljs.HASH_COMMENT_MODE, hljs.QUOTE_STRING_MODE, COMMAND_PARAMS, OPERATION, PATH, PARAMS],
     };
   }
   cjsModule.exports = jbossCli;

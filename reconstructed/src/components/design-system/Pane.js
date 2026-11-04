@@ -8,7 +8,7 @@
  * pieces: chunk-gtxctzsd.js (2)
  * attribution: placement 1, fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useHasScrollViewport } from "../ScrollViewportContext.js";
 import {
   jsxProd_default,
@@ -26,7 +26,7 @@ var PANE_PADDING_X = 1;
 var PANE_WIDTH_RESERVE = 2;
 //@ chunk-gtxctzsd.js:389-859 fingerprint = Pane (1)
 function Pane(props) {
-  let $ = w(9);
+  let $ = useMemoCache(9);
   let { children, color } = props;
   if (useHasScrollViewport()) {
     let t1;

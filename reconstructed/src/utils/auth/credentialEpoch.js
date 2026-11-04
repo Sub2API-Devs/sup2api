@@ -12,6 +12,7 @@ import { credentialSignalByHost } from "./oauthRefreshLock.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { HostScoped } from "../hostScoped.js";
 import { createSignal } from "../signal.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:313968-314005 placement
 /**
@@ -31,21 +32,25 @@ function emitCredentialChange() {
 /**
  * 订阅凭据变化事件。
  */
-function onCredentialChange(e) {
-  return credentialEpochEmitter().subscribe(e);
+function onCredentialChange(listener) {
+  return credentialEpochEmitter().subscribe(listener);
 }
 //@ chunk-aepeg2w5.js:314072-314139 placement
 /**
  * 按宿主隔离的凭据代次信号。
  */
-var TUNNEL_CREDENTIAL_EPOCH_HEADER = "x-claude-code-tunnel-credential-epoch";
-var credentialEpochSignalByHost = new HostScoped(() => createSignal());
+var TUNNEL_CREDENTIAL_EPOCH_HEADER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var credentialEpochSignalByHost;
+deferInit("chunk-aepeg2w5.js:314072", () => {
+  TUNNEL_CREDENTIAL_EPOCH_HEADER = "x-claude-code-tunnel-credential-epoch";
+  credentialEpochSignalByHost = new HostScoped(() => createSignal());
+});
 //@ chunk-aepeg2w5.js:314139-314206 placement
 /**
  * 从请求头值发出凭据代次变化（值不合法时忽略）。
  */
-function emitEpochFromHeader(e) {
-  let epochNumber = parseEpochNumber(e);
+function emitEpochFromHeader(headerValue) {
+  let epochNumber = parseEpochNumber(headerValue);
   if (epochNumber !== undefined) credentialEpochSignalByHost.of(getRootSession().host).emit(epochNumber);
 }
 //@ chunk-aepeg2w5.js:314206-314258 placement
@@ -59,9 +64,9 @@ function subscribeCredentialEpoch(onTunnelCredentialEpoch) {
 /**
  * 把请求头值解析成非负整数（格式不符返回 undefined）。
  */
-function parseEpochNumber(e) {
-  if (e == null || !/^\d{1,15}$/.test(e)) return;
-  return Number(e);
+function parseEpochNumber(value) {
+  if (value == null || !/^\d{1,15}$/.test(value)) return;
+  return Number(value);
 }
 export {
   onCredentialChange,

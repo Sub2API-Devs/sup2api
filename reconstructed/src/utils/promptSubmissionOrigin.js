@@ -21,23 +21,23 @@ function submittedMessages(context) {
 /**
  * isBridgeOrVerifiedSlackTurn：桥接提交或已验证的 Slack 人类回合。
  */
-function isBridgeOrVerifiedSlackTurn(e) {
-  return e.dispatchedOverBridge === true || e.submissionVerifiedSlackHumanTurn === true;
+function isBridgeOrVerifiedSlackTurn(submission) {
+  return submission.dispatchedOverBridge === true || submission.submissionVerifiedSlackHumanTurn === true;
 }
 //@ chunk-s61vbvea.js:16933-17042 placement
-function isHumanTypedSubmission(e) {
+function isHumanTypedSubmission(submission) {
   return (
-    isHumanOrigin(e.submissionOrigin) &&
-    !isBridgeOrVerifiedSlackTurn(e) &&
-    (e.promptSource === "typed" || e.promptSource === "queued")
+    isHumanOrigin(submission.submissionOrigin) &&
+    !isBridgeOrVerifiedSlackTurn(submission) &&
+    (submission.promptSource === "typed" || submission.promptSource === "queued")
   );
 }
 //@ chunk-s61vbvea.js:17042-17102 placement
 /**
  * isLocalStdinSubmission：本地 stdin 提交且非桥接。
  */
-function isLocalStdinSubmission(e) {
-  return e.submittedOnLocalStdin === true && !isBridgeOrVerifiedSlackTurn(e);
+function isLocalStdinSubmission(submission) {
+  return submission.submittedOnLocalStdin === true && !isBridgeOrVerifiedSlackTurn(submission);
 }
 //@ chunk-s61vbvea.js:17102-17197 placement
 /**
@@ -53,8 +53,8 @@ function isHumanSubmittedTurn(context) {
 /**
  * isSessionChannelPerson：由会话频道的人提交。
  */
-function isSessionChannelPerson(e) {
-  return e.submittedBySessionChannelPerson === true && !isBridgeOrVerifiedSlackTurn(e);
+function isSessionChannelPerson(submission) {
+  return submission.submittedBySessionChannelPerson === true && !isBridgeOrVerifiedSlackTurn(submission);
 }
 //@ chunk-s61vbvea.js:17267-17338 placement
 /**
@@ -67,8 +67,8 @@ function isMidTurnStreaming(context) {
 /**
  * runsBesideTurns：local-jsx 提交且在回合旁运行。
  */
-function runsBesideTurns(e) {
-  return e?.type === "local-jsx" && e.runsBesideTurns?.() === true;
+function runsBesideTurns(command) {
+  return command?.type === "local-jsx" && command.runsBesideTurns?.() === true;
 }
 export {
   submittedMessages,

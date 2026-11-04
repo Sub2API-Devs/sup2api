@@ -16,7 +16,7 @@ import { submitFeedbackDraft } from "../services/feedback/feedbackDraft.js";
 async function submitDraftFromRequest({
   draftId,
   description,
-  type: r,
+  type: feedbackType,
   title,
   area,
   attachTranscript,
@@ -32,17 +32,18 @@ async function submitDraftFromRequest({
       failure_reason: "drafts_disabled",
     };
   let { queued } = await listFeedbackDrafts(undefined, storageV5);
-  let found = queued.find((k) => k.draft_id === draftId);
+  let found = queued.find((draft) => draft.draft_id === draftId);
   if (!found)
     return {
       feedback_id: null,
       failure_reason: "draft_not_found",
     };
-  let i = r !== undefined && FEEDBACK_TYPES.includes(r) ? r : undefined;
+  let validType =
+    feedbackType !== undefined && FEEDBACK_TYPES.includes(feedbackType) ? feedbackType : undefined;
   let draft = {
     ...found,
-    ...(i !== undefined && {
-      type: i,
+    ...(validType !== undefined && {
+      type: validType,
     }),
     ...(title != null &&
       title !== "" && {
@@ -56,7 +57,7 @@ async function submitDraftFromRequest({
       details: description,
     }),
   };
-  let e = await submitFeedbackDraft({
+  let submitResult = await submitFeedbackDraft({
     draft,
     includeTranscript: attachTranscript == null ? true : attachTranscript === true,
     currentSessionMessages: messages,
@@ -65,15 +66,16 @@ async function submitDraftFromRequest({
     host,
     credentials,
   });
-  if (e.success)
+  if (submitResult.success)
     return {
-      feedback_id: e.feedbackId,
+      feedback_id: submitResult.feedbackId,
     };
   return {
     feedback_id: null,
-    failure_reason: e.error,
-    ...(e.orgRefusalReason !== undefined && {
-      unavailable_reason: e.orgRefusalReason,
+    failure_reason: submitResult.error,
+    ...(submitResult.orgRefusalReason !== undefined && {
+      unavailable_reason: submitResult.orgRefusalReason,
     }),
   };
 }
+export { submitDraftFromRequest };

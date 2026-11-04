@@ -5,14 +5,14 @@
  * pieces: chunk-wr8v03d0.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_util_buffer_from } from "../../util-buffer-from/dist-cjs/index.js";
 
 //@ chunk-wr8v03d0.js:1251-1939 cjs-fingerprint
-var require_util_utf8 = x(function (cjsExports) {
+var require_util_utf8 = __commonJS(function (cjsExports) {
   var import_util_buffer_from = require_util_buffer_from();
-  var fromUtf8 = (e) => {
-    let buf = import_util_buffer_from.fromString(e, "utf8");
+  var fromUtf8 = (input) => {
+    let buf = import_util_buffer_from.fromString(input, "utf8");
     return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength / Uint8Array.BYTES_PER_ELEMENT);
   };
   var toUint8Array = (data) => {

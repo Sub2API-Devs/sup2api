@@ -30,7 +30,7 @@ function isAgentSwarmsEnabled() {
 //@ chunk-t1w43pjj.js:440-552 facade-exports
 async function captureTeammateModeSnapshotIfEnabled() {
   if (!isAgentSwarmsEnabled()) return;
-  let { captureTeammateModeSnapshot } = await import("./chunk-s90rfvdh.js");
+  let { captureTeammateModeSnapshot } = await import("./swarm/backends/teammateModeSnapshot.js");
   captureTeammateModeSnapshot();
 }
 export { isAgentSwarmsEnabled, captureTeammateModeSnapshotIfEnabled };

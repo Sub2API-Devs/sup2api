@@ -9,7 +9,7 @@
  * attribution: placement 19
  */
 import { Agent } from "http";
-import { nz } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { baseIterateeAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { isHostEntrypoint } from "../../utils/entrypointKinds.js";
 import { getSessionId } from "../../bootstrap/state.js";
 import { env } from "../../utils/env.js";
@@ -26,21 +26,21 @@ import { logFeatureSad, logFeatureBad, logFeatureOk } from "../analytics/feature
 import { logForDebugging } from "../../utils/debug.js";
 
 //@ chunk-5nrcp6t7.js:1019-1127 placement
-function sumBy(e, r) {
-  var s;
-  var n = -1;
-  var a = e.length;
-  while (++n < a) {
-    var y = r(e[n]);
-    if (y !== undefined) s = s === undefined ? y : s + y;
+function sumBy(list, iteratee) {
+  var sum;
+  var index = -1;
+  var length = list.length;
+  while (++index < length) {
+    var value = iteratee(list[index]);
+    if (value !== undefined) sum = sum === undefined ? value : sum + value;
   }
-  return s;
+  return sum;
 }
 //@ chunk-5nrcp6t7.js:1127-1137 placement
 var sumByAlias = sumBy;
 //@ chunk-5nrcp6t7.js:1137-1189 placement
-function sumByField(e, r) {
-  return e && e.length ? sumByAlias(e, nz(r, 2)) : 0;
+function sumByField(list, field) {
+  return list && list.length ? sumByAlias(list, baseIterateeAlias(field, 2)) : 0;
 }
 //@ chunk-5nrcp6t7.js:1189-1200 placement
 /**
@@ -81,8 +81,8 @@ var FRAME_SESSION_ID_RE = /^(?:session_|cse_)[A-Za-z0-9_-]{1,184}$/;
  * 导出函数 `frameSessionId`：返回 e && he.test(e) ? e : void 0。
  */
 function frameSessionId() {
-  let e = env.CLAUDE_CODE_REMOTE_SESSION_ID ?? getRemoteControlSessionCompatId();
-  return e && FRAME_SESSION_ID_RE.test(e) ? e : undefined;
+  let sessionId = env.CLAUDE_CODE_REMOTE_SESSION_ID ?? getRemoteControlSessionCompatId();
+  return sessionId && FRAME_SESSION_ID_RE.test(sessionId) ? sessionId : undefined;
 }
 //@ chunk-5nrcp6t7.js:2081-2117 placement
 var REQUEST_ID_RE = /^req_[A-Za-z0-9_-]{4,128}$/;
@@ -108,14 +108,14 @@ var UNKNOWN_FIELD_ERROR_RE = /unknown field|not a recognized|not allowlisted/i;
 /**
  * 把 frame 接口的错误响应体格式化成文字：字符串原样，带 error（附 [reason]）的对象取 error，其他对象转 JSON。
  */
-function formatFrameErrorBody(e) {
-  if (typeof e === "string") return e;
-  if (e && typeof e === "object") {
-    if ("error" in e && typeof e.error === "string") {
-      let r = "reason" in e && typeof e.reason === "string" ? ` [${e.reason}]` : "";
-      return e.error + r;
+function formatFrameErrorBody(body) {
+  if (typeof body === "string") return body;
+  if (body && typeof body === "object") {
+    if ("error" in body && typeof body.error === "string") {
+      let reasonSuffix = "reason" in body && typeof body.reason === "string" ? ` [${body.reason}]` : "";
+      return body.error + reasonSuffix;
     }
-    return jsonStringify(e) ?? "";
+    return jsonStringify(body) ?? "";
   }
   return "";
 }
@@ -123,16 +123,16 @@ function formatFrameErrorBody(e) {
 /**
  * 导出函数 `mentionsField`：参数 e, r，返回 e.includes(`'${r}'`) || new RegExp(`"${r}"(?!\\??:)`).test(e)。
  */
-function mentionsField(e, r) {
-  return e.includes(`'${r}'`) || new RegExp(`"${r}"(?!\\??:)`).test(e);
+function mentionsField(body, field) {
+  return body.includes(`'${field}'`) || new RegExp(`"${field}"(?!\\??:)`).test(body);
 }
 //@ chunk-5nrcp6t7.js:2612-2671 placement
 /**
  * 导出函数 `isUnknownFieldErrorFor`：参数 e, r，返回 UNKNOWN_FIELD_ERROR_RE.test(s) && STt(s, r)。
  */
-function isUnknownFieldErrorFor(e, r) {
-  let s = formatFrameErrorBody(e);
-  return UNKNOWN_FIELD_ERROR_RE.test(s) && mentionsField(s, r);
+function isUnknownFieldErrorFor(body, field) {
+  let text = formatFrameErrorBody(body);
+  return UNKNOWN_FIELD_ERROR_RE.test(text) && mentionsField(text, field);
 }
 //@ chunk-5nrcp6t7.js:2671-2702 placement
 /**
@@ -143,16 +143,16 @@ var SAFE_ERROR_CODE_RE = /^[A-Za-z0-9_-]{1,64}$/;
 /**
  * 构造请求失败的打点字段：是否传输层错误、规范化的错误码、耗时（毫秒）。
  */
-function getTransportErrorProps(error, r) {
-  let s =
+function getTransportErrorProps(error, startTime) {
+  let errCode =
     sanitizedConnectionCodeForTelemetry(extractConnectionErrorDetails(error)?.code) ??
     sanitizedErrCodeForTelemetry(error);
   return {
     transport: isTransportError(error),
-    ...(s !== undefined && {
-      err_code: s,
+    ...(errCode !== undefined && {
+      err_code: errCode,
     }),
-    elapsed_ms: Math.round(performance.now() - r),
+    elapsed_ms: Math.round(performance.now() - startTime),
   };
 }
 //@ chunk-5nrcp6t7.js:2874-3007 placement
@@ -173,12 +173,12 @@ function isStaleSocketError(error) {
 function destroyIdleSockets(error) {
   if (!isAxiosError(error) || !isPlainObject(error.request)) return;
   let { agent } = error.request;
-  let s = URL.parse(error.config?.url ?? "", error.config?.baseURL);
-  if (!(agent instanceof Agent) || s === null) return;
-  let n = s.port || (s.protocol === "https:" ? "443" : "80");
-  let y = `${s.hostname.replace(/^\[(.*)\]$/, "$1")}:${n}:`;
+  let targetUrl = URL.parse(error.config?.url ?? "", error.config?.baseURL);
+  if (!(agent instanceof Agent) || targetUrl === null) return;
+  let port = targetUrl.port || (targetUrl.protocol === "https:" ? "443" : "80");
+  let socketKeyPrefix = `${targetUrl.hostname.replace(/^\[(.*)\]$/, "$1")}:${port}:`;
   for (let [key, value] of Object.entries(agent.freeSockets))
-    if (key.startsWith(y)) for (let w of value?.slice() ?? []) w.destroy();
+    if (key.startsWith(socketKeyPrefix)) for (let socket of value?.slice() ?? []) socket.destroy();
 }
 //@ chunk-5nrcp6t7.js:3369-4144 placement
 async function classifyArtifactSocketError({ isRead, wire, send, signal, timeoutMs }) {
@@ -192,29 +192,29 @@ async function classifyArtifactSocketError({ isRead, wire, send, signal, timeout
     } catch (error) {
       logError(error);
     }
-    let S = {
+    let telemetry = {
       ...getTransportErrorProps(error, startTime),
       wire: fromEnum(wire),
     };
     if (!isRead || signal?.aborted) {
-      logFeatureSad("artifact_stale_socket", isRead ? "read_cancelled" : "write_not_resent", S);
+      logFeatureSad("artifact_stale_socket", isRead ? "read_cancelled" : "write_not_resent", telemetry);
       throw error;
     }
-    let w =
+    let remainingMs =
       timeoutMs === undefined || !Number.isFinite(timeoutMs) || timeoutMs <= 0
         ? undefined
         : timeoutMs - (performance.now() - startTime);
-    if (w !== undefined && w < 1) {
-      logFeatureBad("artifact_stale_socket", "no_time_to_resend", S);
+    if (remainingMs !== undefined && remainingMs < 1) {
+      logFeatureBad("artifact_stale_socket", "no_time_to_resend", telemetry);
       throw error;
     }
     logForDebugging(
       "[artifact] a read-only request failed because the server had already closed its reused connection \u2014 sending it once more on a new connection",
     );
     try {
-      let h = await send(true, w === undefined ? undefined : Math.floor(w));
-      logFeatureOk("artifact_stale_socket", S);
-      return h;
+      let response = await send(true, remainingMs === undefined ? undefined : Math.floor(remainingMs));
+      logFeatureOk("artifact_stale_socket", telemetry);
+      return response;
     } catch (error) {
       if (!isCancel(error))
         logFeatureBad("artifact_stale_socket", "resend_failed", {

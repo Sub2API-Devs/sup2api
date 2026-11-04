@@ -24,8 +24,9 @@ import { formatOperationFailure } from "../services/plugins/pluginOperations.js"
 import { controlErrorResponse, controlSuccessResponse } from "../cli/print.js";
 import { wantsLiveReply } from "./replControlHandler.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, string, literal } from "../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, literal } from "../../vendor/zod/v4/classic/schemas.js";
 import { RELAY_SOURCE_KINDS_2 } from "../services/projectsRelay/relayConfig.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-1qpz7qcd.js:3281-3408 fingerprint = isSDKControlResponse (0.932)
 function isSDKControlResponse(value) {
@@ -175,8 +176,8 @@ function handleIngressMessage(
       return;
     }
     if (isQueuedNotificationFrame(parsed)) {
-      let I = notificationToUserFrame(parsed.notification);
-      if (I === undefined) {
+      let userFrame = notificationToUserFrame(parsed.notification);
+      if (userFrame === undefined) {
         if (onQueuedNotification) {
           logForDebugging("[bridge:repl] Ingress message type=queued_notification");
           onQueuedNotification({
@@ -189,7 +190,7 @@ function handleIngressMessage(
       logForDebugging(
         "[bridge:repl] Ingress queued_notification from another session: delivering as its user frame",
       );
-      parsed = I;
+      parsed = userFrame;
     }
     if (!hasStringType_3(parsed)) return;
     let uuid = "uuid" in parsed && typeof parsed.uuid === "string" ? parsed.uuid : undefined;
@@ -233,18 +234,29 @@ function handleIngressMessage(
 /**
  * 服务端控制请求处理用的常量：可接受的 flag 设置键、超时与提示文本（outbound-only 拒绝、get_workspace_diff 超时、side_question 超时/无答案）。
  */
-var ALLOWED_FLAG_SETTING_KEYS = new Set(["effortLevel", "ultracode"]);
-var MAX_FLAG_SETTING_CHANGE_KEYS = 5;
-var MAX_FLAG_SETTING_VALUE_CHARS = 40;
-var OUTBOUND_ONLY_ERROR =
-  "This session is outbound-only. Enable Remote Control locally to allow inbound control.";
-var WORKSPACE_DIFF_TIMEOUT_MS = 8000;
-var WORKSPACE_DIFF_TIMEOUT_MESSAGE =
-  "get_workspace_diff timed out: the workspace diff is still being computed; retry shortly";
-var SIDE_QUESTION_TIMEOUT_MS = 660000;
-var SIDE_QUESTION_TIMEOUT_MESSAGE = "side_question timed out: the host did not answer in time";
-var SIDE_QUESTION_NO_ANSWER =
-  "(No answer available for this side question. Try again, or ask in the main conversation.)";
+var ALLOWED_FLAG_SETTING_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_FLAG_SETTING_CHANGE_KEYS;
+var MAX_FLAG_SETTING_VALUE_CHARS;
+var OUTBOUND_ONLY_ERROR;
+var WORKSPACE_DIFF_TIMEOUT_MS;
+var WORKSPACE_DIFF_TIMEOUT_MESSAGE;
+var SIDE_QUESTION_TIMEOUT_MS;
+var SIDE_QUESTION_TIMEOUT_MESSAGE;
+var SIDE_QUESTION_NO_ANSWER;
+deferInit("chunk-1qpz7qcd.js:6723", () => {
+  ALLOWED_FLAG_SETTING_KEYS = new Set(["effortLevel", "ultracode"]);
+  MAX_FLAG_SETTING_CHANGE_KEYS = 5;
+  MAX_FLAG_SETTING_VALUE_CHARS = 40;
+  OUTBOUND_ONLY_ERROR =
+    "This session is outbound-only. Enable Remote Control locally to allow inbound control.";
+  WORKSPACE_DIFF_TIMEOUT_MS = 8000;
+  WORKSPACE_DIFF_TIMEOUT_MESSAGE =
+    "get_workspace_diff timed out: the workspace diff is still being computed; retry shortly";
+  SIDE_QUESTION_TIMEOUT_MS = 660000;
+  SIDE_QUESTION_TIMEOUT_MESSAGE = "side_question timed out: the host did not answer in time";
+  SIDE_QUESTION_NO_ANSWER =
+    "(No answer available for this side question. Try again, or ask in the main conversation.)";
+});
 //@ chunk-1qpz7qcd.js:8103-8506 fingerprint = handleServerControlRequest (0.312)
 /**
  * （旧版 handleServerControlRequest 的 316 对应物在 _unattributed 的 chunk-1qpz7qcd.js#__i；本函数只负责回写）等待控制请求的处理结果后写回 control_response（错误映射为 error/error_code，实时回复用专门帧），附 session_id。
@@ -255,18 +267,22 @@ function sendControlResponseWhenSettled(request, writeFrame, sessionId, response
       subtype: "error",
       error: formatOperationFailure(request.request.subtype, error),
     }))
-    .then((i) => {
+    .then((outcome) => {
       let event = {
-        ...(i.subtype === "error"
-          ? controlErrorResponse(request.request_id, i.error, "error_code" in i ? i.error_code : undefined)
-          : wantsLiveReply(request, i.response)
-            ? markLiveOnlyResponse(request.request_id, i.response ?? {})
-            : controlSuccessResponse(request.request_id, i.response ?? {})),
+        ...(outcome.subtype === "error"
+          ? controlErrorResponse(
+              request.request_id,
+              outcome.error,
+              "error_code" in outcome ? outcome.error_code : undefined,
+            )
+          : wantsLiveReply(request, outcome.response)
+            ? markLiveOnlyResponse(request.request_id, outcome.response ?? {})
+            : controlSuccessResponse(request.request_id, outcome.response ?? {})),
         session_id: sessionId,
       };
       writeFrame(event);
       logForDebugging(
-        `[bridge:repl] Sent control_response for ${request.request.subtype} request_id=${request.request_id} result=${i.subtype}`,
+        `[bridge:repl] Sent control_response for ${request.request.subtype} request_id=${request.request_id} result=${outcome.subtype}`,
       );
     });
 }
@@ -301,26 +317,29 @@ class BoundedUUIDSet {
   }
 }
 //@ chunk-1qpz7qcd.js:26034-26106 layout
-var mcpSendMessageNotificationSchema = DoctorLazy(() =>
-  u({
-    notification_id: string().min(1),
-    origin: literal(RELAY_SOURCE_KINDS_2),
-    content: string(),
-  }),
-);
+var mcpSendMessageNotificationSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-1qpz7qcd.js:26034", () => {
+  mcpSendMessageNotificationSchema = DoctorLazy(() =>
+    objectSchema({
+      notification_id: stringSchema().min(1),
+      origin: literal(RELAY_SOURCE_KINDS_2),
+      content: stringSchema(),
+    }),
+  );
+});
 //@ chunk-1qpz7qcd.js:26106-26317 layout
 /**
  * 把 MCP send_message 来源的 queued_notification 转成合成 user 帧（uuid=notification_id）。
  */
 function notificationToUserFrame(notification) {
-  let r = mcpSendMessageNotificationSchema().safeParse(notification);
-  if (!r.success) return;
+  let parsed = mcpSendMessageNotificationSchema().safeParse(notification);
+  if (!parsed.success) return;
   return {
     type: "user",
-    uuid: r.data.notification_id,
+    uuid: parsed.data.notification_id,
     message: {
       role: "user",
-      content: r.data.content,
+      content: parsed.data.content,
     },
     parent_tool_use_id: null,
     isSynthetic: true,

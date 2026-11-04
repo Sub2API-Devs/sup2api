@@ -21,7 +21,7 @@ import { fromEnum } from "../services/analytics/safeMetadata.js";
 /**
  * 迁移（仅 firstParty）：userSettings.model 为 Opus 4/4.1 的全名时改成当前 opus 别名。
  */
-async function migrateLegacyOpusToCurrent(e) {
+async function migrateLegacyOpusToCurrent(context) {
   if (getAPIProvider() !== "firstParty") return true;
   if (!isLegacyModelRemapEnabled()) return true;
   let model = getSettingsForSourceForUpkeep("userSettings")?.model;
@@ -38,7 +38,7 @@ async function migrateLegacyOpusToCurrent(e) {
       model: "opus",
     },
     undefined,
-    e,
+    context,
   );
   if (error) {
     logForDebugging(`Failed to migrate legacy Opus model setting: ${error}`, {
@@ -52,7 +52,7 @@ async function migrateLegacyOpusToCurrent(e) {
       ...current,
       legacyOpusMigrationTimestamp: Date.now(),
     }),
-    e,
+    context,
   );
   logEvent("tengu_legacy_opus_migration", {
     from_model: fromEnum(model),

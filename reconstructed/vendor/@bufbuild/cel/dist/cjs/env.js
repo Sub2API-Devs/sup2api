@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_registry_2 } from "./registry.js";
 import { require_namespace } from "./namespace.js";
 import { require_resolver } from "./resolver.js";
@@ -15,7 +15,7 @@ import { require_logic } from "./std/logic.js";
 import { require_time } from "./std/time.js";
 
 //@ chunk-fq0cr76a.js:510126-510775 cjs-fingerprint
-var require_env = x(function (cjsExports) {
+var require_env = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

@@ -19,7 +19,7 @@ import {
 import {
   TURN_DISPATCH_CONSTANTS,
   TURN_DISPATCH_MAX_AGE_MS,
-  $0,
+  TURN_DISPATCH_WAITS,
   emptyObjectSchema,
   UUID_HEX_PATTERN,
   MAX_BATCHED_PROMPT_ID_CHARS,
@@ -66,16 +66,17 @@ import { managedDenyStartupRefusal, isModelAllowed } from "../../utils/model/mod
 import { classifyFallbackOrigin } from "../../services/api/refusalFallback.js";
 import { isExemptDefaultResolvingPick } from "../../utils/model/defaultModel.js";
 import { parseUserSpecifiedModel } from "../../utils/model/modelDisplay.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-tyg7f3ek.js:266801-267003 placement
 /**
  * 读 tengu_whimsical_otter：服务端下发的正整数为无人值守重启次数上限（不超过 TURN_DISPATCH_CONSTANTS），否则 "off"。
  */
 function getUnattendedRestartLimit() {
-  let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_whimsical_otter", null);
-  let r = typeof e === "string" && /^\d+$/.test(e) ? Number(e) : e;
-  return isServedFeatureSource(source) && typeof r === "number" && Number.isInteger(r) && r >= 1
-    ? Math.min(r, TURN_DISPATCH_CONSTANTS)
+  let { value, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_whimsical_otter", null);
+  let limit = typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value;
+  return isServedFeatureSource(source) && typeof limit === "number" && Number.isInteger(limit) && limit >= 1
+    ? Math.min(limit, TURN_DISPATCH_CONSTANTS)
     : "off";
 }
 //@ chunk-tyg7f3ek.js:267003-267215 placement
@@ -95,17 +96,18 @@ function isRestartedMember(member) {
 function hasHitUnattendedRestartLimit(workerState, now = Date.now()) {
   let unattendedRestartLimit = getUnattendedRestartLimit();
   if (unattendedRestartLimit === "off") return false;
-  let s =
+  let frames =
     workerState === null || workerState.readFailed === true
       ? "malformed"
       : parseHintFrames(workerState.internal?.restart_starts);
   return (
-    s === "malformed" || count(s.starts, (h) => h > now - TURN_DISPATCH_MAX_AGE_MS) >= unattendedRestartLimit
+    frames === "malformed" ||
+    count(frames.starts, (at) => at > now - TURN_DISPATCH_MAX_AGE_MS) >= unattendedRestartLimit
   );
 }
 //@ chunk-tyg7f3ek.js:267404-267441 placement
-function isNonRestPromptBatch(e) {
-  return classifyPromptBatch(e) !== "rest";
+function isNonRestPromptBatch(batch) {
+  return classifyPromptBatch(batch) !== "rest";
 }
 //@ chunk-tyg7f3ek.js:267441-267567 placement
 /**
@@ -139,31 +141,35 @@ class UnattendedStartRecord {
   counted = false;
   letATurnRun = false;
   loggedFreed = false;
-  constructor(io, n, host, timings = $0, now = Date.now) {
+  constructor(io, restored, host, timings = TURN_DISPATCH_WAITS, now = Date.now) {
     this.io = io;
     this.host = host;
     this.timings = timings;
     this.now = now;
     this.readBegunAt = performance.now();
-    this.read(n);
+    this.read(restored);
   }
   get freed() {
     return this.firstPersonWrite > 0 && this.storedThrough >= this.firstPersonWrite;
   }
-  read(e) {
-    if (this.record !== undefined || e === null || e.readFailed === true) return;
-    let restartStarts = e.internal?.restart_starts;
+  read(state) {
+    if (this.record !== undefined || state === null || state.readFailed === true) return;
+    let restartStarts = state.internal?.restart_starts;
     let hintFrames = parseHintFrames(restartStarts);
     if (hintFrames !== "malformed") {
       this.record = hintFrames;
       this.somethingHappened.emit();
       return;
     }
-    let { starts, new_frames: newFrames, ...y } = emptyObjectSchema().safeParse(restartStarts).data ?? {};
+    let {
+      starts,
+      new_frames: newFrames,
+      ...unknown
+    } = emptyObjectSchema().safeParse(restartStarts).data ?? {};
     this.record = {
       starts: [],
       new_frames: [],
-      unknown: y,
+      unknown,
     };
     this.write({
       starts: Array(TURN_DISPATCH_CONSTANTS).fill(this.now()),
@@ -171,101 +177,101 @@ class UnattendedStartRecord {
     this.somethingHappened.emit();
   }
   readIfUnread() {
-    let e = performance.now() - this.readBegunAt;
+    let sinceRead = performance.now() - this.readBegunAt;
     if (
       getUnattendedRestartLimit() === "off" ||
       this.record !== undefined ||
-      e < this.timings.readSpacingMs ||
-      (this.readInFlight && e < this.timings.readLostMs)
+      sinceRead < this.timings.readSpacingMs ||
+      (this.readInFlight && sinceRead < this.timings.readLostMs)
     )
       return;
     let startTime = performance.now();
     this.readBegunAt = startTime;
     this.readInFlight = true;
     (async () => {
-      let r = await (async () => this.io.rereadWorkerState())().catch(() => null);
+      let state = await (async () => this.io.rereadWorkerState())().catch(() => null);
       if (this.readBegunAt === startTime) this.readInFlight = false;
       try {
-        this.read(r);
+        this.read(state);
       } catch (error) {
         logTurnError(error);
       }
     })();
   }
-  takeFrame(e, { reRun, ownLine, person }) {
+  takeFrame(uuid, { reRun, ownLine, person }) {
     try {
       this.readIfUnread();
       if (ownLine) return;
-      let lower = e?.toLowerCase();
+      let lower = uuid?.toLowerCase();
       if (
         reRun ||
         (lower !== undefined && !lower.startsWith(ANSWER) && this.record?.new_frames.includes(lower))
       )
         return "restart";
-      let y = lower !== undefined && UUID_HEX_PATTERN.test(lower) ? lower : undefined;
-      let S = person && y !== undefined ? "person" : "outside";
-      if (this.record !== undefined && y !== undefined)
-        this.writeFrame(S === "person", {
-          ...(S === "person" && {
+      let frameUuid = lower !== undefined && UUID_HEX_PATTERN.test(lower) ? lower : undefined;
+      let kind = person && frameUuid !== undefined ? "person" : "outside";
+      if (this.record !== undefined && frameUuid !== undefined)
+        this.writeFrame(kind === "person", {
+          ...(kind === "person" && {
             starts: [],
           }),
-          new_frames: [y, ...this.record.new_frames].slice(0, MAX_BATCHED_PROMPT_ID_CHARS),
+          new_frames: [frameUuid, ...this.record.new_frames].slice(0, MAX_BATCHED_PROMPT_ID_CHARS),
         });
-      return S;
+      return kind;
     } catch (error) {
       logTurnError(error);
       return;
     }
   }
   answers = {
-    markOf: (e) => {
+    markOf: (uuid) => {
       try {
         this.readIfUnread();
-        return this.record?.new_frames.includes(answerFrameKey(e)) ? "restart" : "outside";
+        return this.record?.new_frames.includes(answerFrameKey(uuid)) ? "restart" : "outside";
       } catch (error) {
         logTurnError(error);
         return;
       }
     },
-    queued: (e) => {
+    queued: (uuid) => {
       try {
-        let n = answerFrameKey(e);
-        if (this.record !== undefined && !this.record.new_frames.includes(n))
+        let key = answerFrameKey(uuid);
+        if (this.record !== undefined && !this.record.new_frames.includes(key))
           this.writeFrame(false, {
-            new_frames: [n, ...this.record.new_frames].slice(0, MAX_BATCHED_PROMPT_ID_CHARS),
+            new_frames: [key, ...this.record.new_frames].slice(0, MAX_BATCHED_PROMPT_ID_CHARS),
           });
       } catch (error) {
         logTurnError(error);
       }
     },
   };
-  writeFrame(e, n) {
+  writeFrame(person, next) {
     if (getUnattendedRestartLimit() === "off") {
-      if (n !== "once more" && this.record !== undefined) {
-        this.change(this.record, n);
-        this.sendOnceFlagsAreFetched(e);
+      if (next !== "once more" && this.record !== undefined) {
+        this.change(this.record, next);
+        this.sendOnceFlagsAreFetched(person);
       }
       return;
     }
-    let r = this.write(n === "once more" ? {} : n);
-    this.latestFrameWrite = r;
-    if (e && this.firstPersonWrite === 0) this.firstPersonWrite = r.number;
-    if (n !== "once more")
-      r.flushed.then((s) => {
-        if (!s) this.writeFrame(e, "once more");
+    let write = this.write(next === "once more" ? {} : next);
+    this.latestFrameWrite = write;
+    if (person && this.firstPersonWrite === 0) this.firstPersonWrite = write.number;
+    if (next !== "once more")
+      write.flushed.then((flushed) => {
+        if (!flushed) this.writeFrame(person, "once more");
       });
   }
-  async sendOnceFlagsAreFetched(e) {
+  async sendOnceFlagsAreFetched(person) {
     try {
       await this.host.flagsFetched();
     } catch {}
     try {
-      if (getUnattendedRestartLimit() !== "off") this.writeFrame(e, {});
+      if (getUnattendedRestartLimit() !== "off") this.writeFrame(person, {});
     } catch (error) {
       logTurnError(error);
     }
   }
-  async refuseStart(batch, n) {
+  async refuseStart(batch, signal) {
     let batchClass;
     try {
       batchClass = classifyPromptBatch(batch);
@@ -273,30 +279,31 @@ class UnattendedStartRecord {
       logTurnError(error);
       return;
     }
-    let s = batchClass === "listed" ? await this.count(n, batch) : await this.letRun(batchClass, n);
-    if (s === undefined && !this.letATurnRun) {
+    let refusal =
+      batchClass === "listed" ? await this.count(signal, batch) : await this.letRun(batchClass, signal);
+    if (refusal === undefined && !this.letATurnRun) {
       this.letATurnRun = true;
       logUnattendedFirstTurn(batch, batchClass);
     }
-    return s;
+    return refusal;
   }
-  async letRun(e, n) {
+  async letRun(batchClass, signal) {
     try {
       this.readIfUnread();
-      if (e === "new" && !this.firstNewBatchSeen && getUnattendedRestartLimit() !== "off") {
+      if (batchClass === "new" && !this.firstNewBatchSeen && getUnattendedRestartLimit() !== "off") {
         this.firstNewBatchSeen = true;
         await Promise.resolve();
         let latestFrameWrite = this.latestFrameWrite;
-        await this.wait(n, () => this.isSettled(latestFrameWrite) || this.host.exiting());
+        await this.wait(signal, () => this.isSettled(latestFrameWrite) || this.host.exiting());
       }
     } catch (error) {
       logTurnError(error);
     }
     return;
   }
-  async count(e, n) {
-    let { members } = n;
-    let s = (reason) =>
+  async count(signal, batch) {
+    let { members } = batch;
+    let refusalMessage = (reason) =>
       members.some((member) => member.wakesForLostTimers === true)
         ? buildUnattendedRefusalMessage(reason, TIMERS_NOT_RESTORED_MESSAGE)
         : members.every((member) => member.mode === "task-notification" && member.startedBy === "restart")
@@ -305,34 +312,34 @@ class UnattendedStartRecord {
             ? buildUnattendedRefusalMessage(reason, UNANSWERED_AFTER_RESTART_MESSAGE)
             : buildUnattendedRefusalMessage(reason);
     let startTime = performance.now();
-    let y;
-    let S = {
+    let written;
+    let compared = {
       inWindow: -1,
       max: -1,
     };
-    let R = (L) => {
+    let report = (outcome) => {
       try {
         logEvent("tengu_unattended_start", {
-          outcome: fromEnum(L),
-          in_window: S.inWindow,
-          max: S.max,
+          outcome: fromEnum(outcome),
+          in_window: compared.inWindow,
+          max: compared.max,
           waited_ms: Math.round(performance.now() - startTime),
         });
-        logUnattendedStartOutcome(L);
+        logUnattendedStartOutcome(outcome);
       } catch (error) {
         logTurnError(error);
       }
     };
-    let w = () => {
-      let L = y === undefined ? -1 : this.starts().indexOf(y);
-      y = undefined;
-      if (L >= 0)
+    let undoStart = () => {
+      let index = written === undefined ? -1 : this.starts().indexOf(written);
+      written = undefined;
+      if (index >= 0)
         this.write({
-          starts: this.starts().toSpliced(L, 1),
+          starts: this.starts().toSpliced(index, 1),
         });
     };
-    let P = () =>
-      e.aborted
+    let state = () =>
+      signal.aborted
         ? "aborted"
         : this.host.exiting()
           ? "exiting"
@@ -342,29 +349,29 @@ class UnattendedStartRecord {
               ? "counted"
               : undefined;
     try {
-      let L = this.steps(e, P, {
-        compared: (x) => {
-          S = x;
+      let steps = this.steps(signal, state, {
+        compared: (reported) => {
+          compared = reported;
         },
-        wrote: (x) => {
-          y = x;
+        wrote: (recorded) => {
+          written = recorded;
         },
       });
-      let q;
+      let stepResult;
       for (;;) {
-        switch (P()) {
+        switch (state()) {
           case "exiting":
-            R("held");
+            report("held");
             return await heldUntilExit();
           case "aborted":
-            w();
-            R("aborted");
+            undoStart();
+            report("aborted");
             return "aborted";
           case "freed":
-            w();
+            undoStart();
             if (!this.loggedFreed) {
               this.loggedFreed = true;
-              R("freed");
+              report("freed");
             }
             return;
           case "counted":
@@ -372,121 +379,121 @@ class UnattendedStartRecord {
           case undefined:
             break;
         }
-        if (q === "off") {
-          R("off");
+        if (stepResult === "off") {
+          report("off");
           return;
         }
-        if (q === "started") {
-          y = undefined;
+        if (stepResult === "started") {
+          written = undefined;
           this.counted = true;
-          R("started");
+          report("started");
           return;
         }
-        if (q !== undefined) {
-          w();
-          R(q);
-          return s(q);
+        if (stepResult !== undefined) {
+          undoStart();
+          report(stepResult);
+          return refusalMessage(stepResult);
         }
-        let x = await L.next();
-        if (x.done) q = x.value;
+        let step = await steps.next();
+        if (step.done) stepResult = step.value;
       }
     } catch (error) {
       logTurnError(error);
       try {
-        w();
+        undoStart();
       } catch (error) {
         logTurnError(error);
       }
-      R("threw");
-      return s("threw");
+      report("threw");
+      return refusalMessage("threw");
     }
   }
-  async *steps(e, n, r) {
-    let s = () => n() !== undefined;
+  async *steps(signal, state, hooks) {
+    let stateChanged = () => state() !== undefined;
     this.readIfUnread();
-    let h = false;
-    let y = () => {
-      h = true;
+    let flagsFetched = false;
+    let onFlags = () => {
+      flagsFetched = true;
       this.somethingHappened.emit();
     };
-    this.host.flagsFetched().then(y, y);
-    await this.wait(e, () => h || s());
+    this.host.flagsFetched().then(onFlags, onFlags);
+    await this.wait(signal, () => flagsFetched || stateChanged());
     let unattendedRestartLimit = getUnattendedRestartLimit();
     if (unattendedRestartLimit === "off") return "off";
-    r.compared({
+    hooks.compared({
       inWindow: -1,
       max: unattendedRestartLimit,
     });
     yield;
-    await this.wait(e, () => this.record !== undefined || s(), this.timings.storeWaitMs);
+    await this.wait(signal, () => this.record !== undefined || stateChanged(), this.timings.storeWaitMs);
     yield;
     if (this.record === undefined) return "record_unread";
-    r.compared({
+    hooks.compared({
       inWindow: this.inWindow(),
       max: unattendedRestartLimit,
     });
     if (this.inWindow() >= unattendedRestartLimit) {
-      await this.wait(e, s, this.timings.spentWaitMs);
+      await this.wait(signal, stateChanged, this.timings.spentWaitMs);
       yield;
-      r.compared({
+      hooks.compared({
         inWindow: this.inWindow(),
         max: unattendedRestartLimit,
       });
       if (this.inWindow() >= unattendedRestartLimit) return "limit";
     }
-    let R = this.now();
-    r.wrote(R);
-    let w = this.write({
-      starts: [R, ...this.starts()],
+    let now = this.now();
+    hooks.wrote(now);
+    let write = this.write({
+      starts: [now, ...this.starts()],
     });
-    await this.wait(e, () => this.isSettled(w) || s(), this.timings.storeWaitMs);
-    return this.storedThrough >= w.number ? "started" : "unconfirmed";
+    await this.wait(signal, () => this.isSettled(write) || stateChanged(), this.timings.storeWaitMs);
+    return this.storedThrough >= write.number ? "started" : "unconfirmed";
   }
   starts() {
     return this.record?.starts ?? [];
   }
   inWindow() {
-    let e = this.now() - TURN_DISPATCH_MAX_AGE_MS;
-    return count(this.starts(), (n) => n > e);
+    let cutoff = this.now() - TURN_DISPATCH_MAX_AGE_MS;
+    return count(this.starts(), (at) => at > cutoff);
   }
-  async wait(e, n, r = this.timings.waitMs) {
-    let s = performance.now() + r;
-    let h = () => {};
-    let y = this.somethingHappened.subscribe(() => h());
+  async wait(signal, done, waitMs = this.timings.waitMs) {
+    let deadline = performance.now() + waitMs;
+    let wake = () => {};
+    let unsubscribe = this.somethingHappened.subscribe(() => wake());
     try {
-      while (!e.aborted && !n()) {
+      while (!signal.aborted && !done()) {
         this.readIfUnread();
-        let S = s - performance.now();
-        if (S <= 0) return;
+        let left = deadline - performance.now();
+        if (left <= 0) return;
         let deferred = Promise.withResolvers();
-        h = deferred.resolve;
-        await Promise.race([deferred.promise, sleep(Math.min(S, this.timings.lookMs), e)]);
+        wake = deferred.resolve;
+        await Promise.race([deferred.promise, sleep(Math.min(left, this.timings.lookMs), signal)]);
       }
     } finally {
-      y();
+      unsubscribe();
     }
   }
-  isSettled(e) {
-    return this.storedThrough >= e.number || e.flushAnswered();
+  isSettled(write) {
+    return this.storedThrough >= write.number || write.flushAnswered();
   }
-  change(e, n) {
+  change(record, patch) {
     this.record = {
-      ...e,
-      ...n,
-      starts: [...(n.starts ?? e.starts)].sort((r, s) => s - r).slice(0, TURN_DISPATCH_CONSTANTS),
+      ...record,
+      ...patch,
+      starts: [...(patch.starts ?? record.starts)].sort((a, b) => b - a).slice(0, TURN_DISPATCH_CONSTANTS),
     };
     return this.record;
   }
-  write(e) {
+  write(patch) {
     if (this.record === undefined) {
       logTurnError(Error("a write of the record before any read of it"));
       return REFUSED_RECORD_WRITE;
     }
-    let n = ++this.writes;
-    let { starts, new_frames: newFrames, unknown } = this.change(this.record, e);
-    let y = false;
+    let number = ++this.writes;
+    let { starts, new_frames: newFrames, unknown } = this.change(this.record, patch);
+    let answered = false;
     let flushed = (async () => {
-      let R = false;
+      let flushed = false;
       try {
         this.io.sessionState.notifyInternalMetadataChanged({
           restart_starts: {
@@ -495,46 +502,50 @@ class UnattendedStartRecord {
             new_frames: newFrames,
           },
         });
-        R = (await this.io.flushSessionState()) === true;
+        flushed = (await this.io.flushSessionState()) === true;
       } catch (error) {
         logTurnError(error);
       }
-      y = true;
-      if (R) this.storedThrough = Math.max(this.storedThrough, n);
+      answered = true;
+      if (flushed) this.storedThrough = Math.max(this.storedThrough, number);
       this.somethingHappened.emit();
-      return R;
+      return flushed;
     })();
     return {
-      number: n,
+      number,
       flushed,
-      flushAnswered: () => y,
+      flushAnswered: () => answered,
     };
   }
 }
 //@ chunk-tyg7f3ek.js:273567-273720 placement
-var INITIAL_RECORD_WRITE = {
-  number: 0,
-  flushed: Promise.resolve(true),
-  flushAnswered: () => true,
-};
-var REFUSED_RECORD_WRITE = {
-  number: Number.POSITIVE_INFINITY,
-  flushed: Promise.resolve(false),
-  flushAnswered: () => true,
-};
+var INITIAL_RECORD_WRITE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var REFUSED_RECORD_WRITE;
+deferInit("chunk-tyg7f3ek.js:273567", () => {
+  INITIAL_RECORD_WRITE = {
+    number: 0,
+    flushed: Promise.resolve(true),
+    flushAnswered: () => true,
+  };
+  REFUSED_RECORD_WRITE = {
+    number: Number.POSITIVE_INFINITY,
+    flushed: Promise.resolve(false),
+    flushAnswered: () => true,
+  };
+});
 //@ chunk-tyg7f3ek.js:273720-273985 placement
-function logUnattendedStartOutcome(e) {
-  switch (e) {
+function logUnattendedStartOutcome(outcome) {
+  switch (outcome) {
     case "started":
     case "freed":
     case "off":
       return logFeatureOk("print_unattended_start");
     case "record_unread":
     case "unconfirmed":
-      return logFeatureSad("print_unattended_start", e);
+      return logFeatureSad("print_unattended_start", outcome);
     case "limit":
     case "threw":
-      return logFeatureBad("print_unattended_start", e);
+      return logFeatureBad("print_unattended_start", outcome);
     case "aborted":
     case "held":
       return;
@@ -543,8 +554,8 @@ function logUnattendedStartOutcome(e) {
 //@ chunk-tyg7f3ek.js:273985-274002 placement
 var ANSWER = "answer:";
 //@ chunk-tyg7f3ek.js:274002-274049 placement
-function answerFrameKey(e) {
-  return `${ANSWER}${e}`.toLowerCase();
+function answerFrameKey(uuid) {
+  return `${ANSWER}${uuid}`.toLowerCase();
 }
 //@ chunk-tyg7f3ek.js:274049-274390 placement
 /**
@@ -552,7 +563,7 @@ function answerFrameKey(e) {
  */
 function logUnattendedFirstTurn(batch, batchClass) {
   try {
-    let r = batch.members[0];
+    let first = batch.members[0];
     logEvent("tengu_unattended_start", {
       outcome: fromEnum("first_turn"),
       class: fromEnum(
@@ -562,10 +573,10 @@ function logUnattendedFirstTurn(batch, batchClass) {
             : "outside"
           : batchClass,
       ),
-      mode: fromEnumOpt(r?.mode),
-      prompt_origin_kind: fromEnumOpt(r?.origin?.kind),
+      mode: fromEnumOpt(first?.mode),
+      prompt_origin_kind: fromEnumOpt(first?.origin?.kind),
       prompt_origin_subkind: fromEnumOpt(
-        r?.origin !== undefined && "subkind" in r.origin ? r.origin.subkind : undefined,
+        first?.origin !== undefined && "subkind" in first.origin ? first.origin.subkind : undefined,
       ),
     });
   } catch (error) {
@@ -609,27 +620,27 @@ var USER_DATA_ROOTS_WAIT_MS = 5000;
  * 回合前置门：确保用户数据根目录已创建，最多等待 waitMs；超时只告警一次（user_data_roots_wait_expired），不阻塞回合。
  */
 function createUserDataRootsTurnGate(waitMs = USER_DATA_ROOTS_WAIT_MS) {
-  let n;
-  let r = false;
+  let createPromise;
+  let gaveUp = false;
   return {
     name: "user_data_roots",
     beforeTurn: async ({ signal }) => {
-      n ??= ensureUserDataRoot()
+      createPromise ??= ensureUserDataRoot()
         .then(() => "created")
         .finally(() => {
-          n = undefined;
-          r = false;
+          createPromise = undefined;
+          gaveUp = false;
         });
-      if (r) return TURN_GATE_READY;
+      if (gaveUp) return TURN_GATE_READY;
       let abortController = new AbortController();
       if (
         (await Promise.race([
-          n,
+          createPromise,
           sleep(waitMs, AbortSignal.any([signal, abortController.signal])).then(() => "gave_up"),
         ]).finally(() => abortController.abort())) === "gave_up" &&
         !signal.aborted
       ) {
-        r = true;
+        gaveUp = true;
         logForDiagnosticsNoPII("warn", "user_data_roots_wait_expired", {
           wait_ms: waitMs,
         });
@@ -641,11 +652,11 @@ function createUserDataRootsTurnGate(waitMs = USER_DATA_ROOTS_WAIT_MS) {
 //@ chunk-tyg7f3ek.js:275488-275501 placement
 var HOME_FILES_FLAG_WAIT_MS = 20000;
 //@ chunk-tyg7f3ek.js:275501-275588 placement
-function isStagedHomeMountPath(e) {
+function isStagedHomeMountPath(path) {
   return (
-    typeof e === "string" &&
+    typeof path === "string" &&
     isClaudeAiChatOrigin() &&
-    posix.normalize(e).startsWith(`${STAGE_FILE_HOME_MOUNT_PREFIX}/`)
+    posix.normalize(path).startsWith(`${STAGE_FILE_HOME_MOUNT_PREFIX}/`)
   );
 }
 //@ chunk-tyg7f3ek.js:275588-275973 placement
@@ -656,25 +667,25 @@ async function waitForHomeFilesFlag(options, timeoutMs = HOME_FILES_FLAG_WAIT_MS
   if (!isStagedHomeMountPath(options)) return "off";
   let startTime = performance.now();
   await withDeadline(ensureFreshGrowthBook(), timeoutMs);
-  let { value: s, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_hazy_nova", false);
-  let y = source === "fallback" && !hasFreshGrowthBookFeatures();
-  let S = y ? "not_loaded" : s ? "on" : "off";
+  let { value, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_hazy_nova", false);
+  let notLoaded = source === "fallback" && !hasFreshGrowthBookFeatures();
+  let state = notLoaded ? "not_loaded" : value ? "on" : "off";
   let waitedMs = Math.round(performance.now() - startTime);
   logEvent("tengu_stage_file_home_flag_wait", {
-    home_files_flag: fromEnum(S),
+    home_files_flag: fromEnum(state),
     waited_ms: waitedMs,
   });
-  logForDiagnosticsNoPII(y ? "warn" : "info", "stage_file_home_flag_wait", {
-    home_files_flag: S,
+  logForDiagnosticsNoPII(notLoaded ? "warn" : "info", "stage_file_home_flag_wait", {
+    home_files_flag: state,
     waited_ms: waitedMs,
   });
-  return S;
+  return state;
 }
 //@ chunk-tyg7f3ek.js:275973-276476 placement
 /**
  * 回合开始时放置上一回合交接带来的写入文件：没有则记 no_files；功能关闭则拒绝；否则动态加载 placeCarriedWrites 执行。
  */
-async function placeCarriedWritesAtTurnStart(turn, n, r) {
+async function placeCarriedWritesAtTurnStart(turn, context, options) {
   if (turn.carriedWrites === undefined) {
     if (isCarriedWritesEnabled())
       logEvent("tengu_turn_handoff_carried_writes", {
@@ -693,8 +704,8 @@ async function placeCarriedWritesAtTurnStart(turn, n, r) {
     return false;
   }
   try {
-    let { placeCarriedWrites } = await import("./chunk-1bmxdqa0.js");
-    return await placeCarriedWrites(turn, n, r);
+    let { placeCarriedWrites } = await import("../../services/turnHandoff/placeCarriedWrites.lazy.js");
+    return await placeCarriedWrites(turn, context, options);
   } catch (error) {
     logFeatureBad("ccr_turn_handoff_carried_writes", "load_failed");
     logError(error);
@@ -708,8 +719,8 @@ var MAX_DIRECTORIES_LISTED = 50;
  * 说明暂存文件可能未送达（路径可能缺失或旧），并按原因提示空间不足或文件名过长。
  */
 function formatStagedFilesNotPlacedNote(paths, failureKinds) {
-  let r = paths.length === 1;
-  return `${paths.length} ${r ? "file" : "files"} may not have arrived here, so ${r ? "this path" : "these paths"} may be missing or hold an older copy: ${formatDirectoryList(paths)}${
+  let one = paths.length === 1;
+  return `${paths.length} ${one ? "file" : "files"} may not have arrived here, so ${one ? "this path" : "these paths"} may be missing or hold an older copy: ${formatDirectoryList(paths)}${
     failureKinds.has("no_space")
       ? `
 At least one of these copies failed with "no space left on device". Make space before the file is sent again. Ask the user before you delete one of their files.`
@@ -727,19 +738,19 @@ At least one of these names is too long for the file system here (the usual limi
  */
 function noteStagedFilesNotPlaced(paths, failureKinds) {
   try {
-    let r = stagedFilesNoticeCounters();
-    let s = {
+    let counters = stagedFilesNoticeCounters();
+    let fields = {
       file_count: paths.length,
       no_space: failureKinds.has("no_space") ? 1 : 0,
       name_too_long: failureKinds.has("name_too_long") ? 1 : 0,
     };
     logForDiagnosticsNoPII("warn", "staged_files_not_placed", {
-      ...s,
-      ...r,
+      ...fields,
+      ...counters,
     });
-    if (r.told === 0) return false;
+    if (counters.told === 0) return false;
     enqueueHiddenNotice(STAGED_FILES_MISSING, formatStagedFilesNotPlacedNote(paths, failureKinds));
-    logFeatureOk("ccr_stage_file_not_placed_note", s);
+    logFeatureOk("ccr_stage_file_not_placed_note", fields);
     return true;
   } catch (error) {
     logFeatureBad("ccr_stage_file_not_placed_note", "threw");
@@ -761,12 +772,12 @@ The copies have not failed. They can take a few more minutes. While they run, do
 //@ chunk-tyg7f3ek.js:278647-278923 placement
 function noteStagedFilesStillCopying(paths) {
   try {
-    let n = stagedFilesNoticeCounters();
+    let counters = stagedFilesNoticeCounters();
     logForDiagnosticsNoPII("info", "staged_files_still_copying", {
       file_count: paths.length,
-      ...n,
+      ...counters,
     });
-    if (n.told === 0) return false;
+    if (counters.told === 0) return false;
     enqueueHiddenNotice(STAGED_FILES_STILL_COPYING, formatStagedFilesStillCopyingNote(paths));
     logFeatureOk("ccr_stage_file_still_copying_note", {
       file_count: paths.length,
@@ -843,16 +854,16 @@ function createModelChangeNotices({ session, messages, appendToConversation, enq
       return;
     }
   }
-  function injectModelSwitchBreadcrumbs(modelArg, x) {
+  function injectModelSwitchBreadcrumbs(modelArg, model) {
     abortPrecomputeOnModelSwitch(session.precompute);
     if (isLaunchModelPick?.()) return;
-    let breadcrumbs = createModelSwitchBreadcrumbs_2(modelArg, modelDisplayString(x));
+    let breadcrumbs = createModelSwitchBreadcrumbs_2(modelArg, modelDisplayString(model));
     appendToConversation(breadcrumbs);
     if (env.CLAUDE_CODE_REMOTE) {
-      let Z = modelDisplayString(x);
+      let modelName = modelDisplayString(model);
       appendToConversation([
         createUserMessage({
-          content: `<system-reminder>The model for this session has been changed to ${Z}. You are now running as ${Z}.</system-reminder>`,
+          content: `<system-reminder>The model for this session has been changed to ${modelName}. You are now running as ${modelName}.</system-reminder>`,
           isMeta: true,
         }),
       ]);
@@ -870,11 +881,11 @@ function createModelChangeNotices({ session, messages, appendToConversation, enq
         });
   }
   let lastRestrictedModel;
-  function noticeRestrictedModel(q, x) {
-    if (q === lastRestrictedModel) return;
-    lastRestrictedModel = q;
+  function noticeRestrictedModel(model, effective) {
+    if (model === lastRestrictedModel) return;
+    lastRestrictedModel = model;
     let systemMessage = createSystemMessage(
-      formatModelRestrictedNotice(q, x ?? getMainLoopModel()),
+      formatModelRestrictedNotice(model, effective ?? getMainLoopModel()),
       "warning",
     );
     appendToConversation([systemMessage]);
@@ -942,17 +953,17 @@ class TurnModelOverrideTracker {
     };
   }
   adoptAtTurnEnd() {
-    let e = this.activeModel();
-    let n = this.modelOverride();
+    let activeModel = this.activeModel();
+    let override = this.modelOverride();
     let decision = resolveTurnEndModelOverride({
-      activeUserSpecifiedModel: e,
+      activeUserSpecifiedModel: activeModel,
       activeAtTurnStart: this.atTurnStart.active,
       overrideAtTurnStart: this.atTurnStart.override,
-      overrideAtTurnEnd: n,
+      overrideAtTurnEnd: override,
     });
-    if (decision.kind !== "keep" && e !== undefined) {
+    if (decision.kind !== "keep" && activeModel !== undefined) {
       logEvent("tengu_print_model_override_adopted", {
-        from_model_scope: fromEnum(classifyFallbackOrigin(e)),
+        from_model_scope: fromEnum(classifyFallbackOrigin(activeModel)),
         ...(decision.kind === "adopt"
           ? {
               to_model_scope: fromEnum(classifyFallbackOrigin(decision.model)),
@@ -960,7 +971,7 @@ class TurnModelOverrideTracker {
           : {
               cleared_to_session_default: true,
             }),
-        override_same_at_both_ends: n === this.atTurnStart.override,
+        override_same_at_both_ends: override === this.atTurnStart.override,
       });
       this.setActiveModel(decision.kind === "adopt" ? decision.model : undefined);
       this.recordAllowedModelApplied();
@@ -969,9 +980,9 @@ class TurnModelOverrideTracker {
     if (
       decision.kind === "keep" &&
       decision.blockedByAllowlist !== undefined &&
-      (e === undefined || isExemptDefaultResolvingPick(e) || isModelAllowed(e))
+      (activeModel === undefined || isExemptDefaultResolvingPick(activeModel) || isModelAllowed(activeModel))
     )
-      this.noticeRestrictedModel(decision.blockedByAllowlist, e);
+      this.noticeRestrictedModel(decision.blockedByAllowlist, activeModel);
   }
 }
 //@ chunk-tyg7f3ek.js:281931-282558 placement

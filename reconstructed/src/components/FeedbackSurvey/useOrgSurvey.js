@@ -10,14 +10,21 @@
  */
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import {
   checkPendingOrgSurvey,
   isSurveyEligible,
   orgSurveyCredentialSource,
 } from "../../services/orgSurvey/orgSurvey.js";
-import { y, R, P, init_react_production, Q, ce } from "../../../vendor/react/cjs/react.production.js";
+import {
+  useState,
+  useRef,
+  useEffect,
+  init_react_production,
+  useMemo,
+  useCallback,
+} from "../../../vendor/react/cjs/react.production.js";
 import { useClock } from "../../ink/components/ClockContext.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
@@ -66,21 +73,22 @@ import { saveGlobalConfig, getGlobalConfig } from "../../utils/config.js";
 import { useSurveyState } from "./useSurveyState.js";
 import { getInstalledPlugins } from "../../utils/plugins/installedPluginsManager.js";
 import { policyEnabledPluginNameSet } from "../../utils/plugins/pluginPolicy.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1070020-1070057 placement
-function selectTurnLoadingSurvey(_r) {
-  return _r.isLoading;
+function selectTurnLoadingSurvey(appState) {
+  return appState.isLoading;
 }
 //@ chunk-18hwfzwa.js:1070057-1070108 placement
-function openIfAnswering(fr) {
-  return fr === "answering" ? "open" : fr;
+function openIfAnswering(status) {
+  return status === "answering" ? "open" : status;
 }
 //@ chunk-18hwfzwa.js:1070108-1070121 placement
 var SURVEY_CLOSE_DELAY_MS = 4000;
 //@ chunk-18hwfzwa.js:1070121-1070182 placement
-function logOrgSurveyEvent(h) {
+function logOrgSurveyEvent(eventType) {
   logEvent("tengu_org_survey_event", {
-    event_type: fromEnum(h),
+    event_type: fromEnum(eventType),
   });
 }
 //@ chunk-18hwfzwa.js:1070182-1074142 placement
@@ -88,268 +96,279 @@ function logOrgSurveyEvent(h) {
  * 组织调查问卷的显示状态：回合结束后拉取待答问卷，满足空闲、无其他提示与问卷、非无人值守等条件时打开；忽略/提交时上报并关闭。
  */
 function useOrgSurvey(props) {
-  let ze = w(61);
+  let $ = useMemoCache(61);
   let { turn, messages, localJsx, hasActivePrompt, enabled, otherSurveyActive, client } = props;
   let { credentials, storageV5 } = useTheme_2();
-  let Xe;
-  if (ze[0] !== credentials || ze[1] !== storageV5) {
-    Xe = () =>
+  let checkPendingCached;
+  if ($[0] !== credentials || $[1] !== storageV5) {
+    checkPendingCached = () =>
       checkPendingOrgSurvey({
         credentials,
         storageV5,
       });
-    ze[0] = credentials;
-    ze[1] = storageV5;
-    ze[2] = Xe;
-  } else Xe = ze[2];
-  let [rt] = y(Xe);
-  let kt = client ?? rt;
+    $[0] = credentials;
+    $[1] = storageV5;
+    $[2] = checkPendingCached;
+  } else checkPendingCached = $[2];
+  let [defaultClient] = useState(checkPendingCached);
+  let surveyClient = client ?? defaultClient;
   let clock = useClock();
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let Ot = enabled && !isScreenReaderEnabled;
-  let storeSelector = useStoreSelector(turn, selectTurnLoadingSurvey);
-  let delayedFlag = useDelayedFlag(storeSelector);
+  let isEnabled = enabled && !isScreenReaderEnabled;
+  let busy = useStoreSelector(turn, selectTurnLoadingSurvey);
+  let delayedFlag = useDelayedFlag(busy);
   let active = useActive();
-  let oo = useShortDraftValue() === "";
-  let Xt;
-  if (ze[3] !== storeSelector || ze[4] !== messages) {
-    Xt = !storeSelector && endsWithNumberedList(messages);
-    ze[3] = storeSelector;
-    ze[4] = messages;
-    ze[5] = Xt;
-  } else Xt = ze[5];
-  let io = Xt;
-  let [so, po] = y("closed");
-  let [ao, co] = y(null);
-  let [bo, Ao] = y(false);
-  let Bo = R(false);
-  let Ro = R(false);
-  let Ho = R(false);
-  let Io = R(false);
-  let Wo = R(false);
-  let mn;
-  if (ze[6] === MEMO_CACHE_SENTINEL) {
-    mn = {};
-    ze[6] = mn;
-  } else mn = ze[6];
-  let Cn = R(mn);
-  let No = R(null);
-  let storeSelectorRef = R(storeSelector);
-  let Yo = R(true);
-  let kn = R(null);
-  let Fn;
-  let bn;
-  if (ze[7] === MEMO_CACHE_SENTINEL) {
-    Fn = () => {
-      Yo.current = true;
+  let isDraftEmpty = useShortDraftValue() === "";
+  let endsWithListCached;
+  if ($[3] !== busy || $[4] !== messages) {
+    endsWithListCached = !busy && endsWithNumberedList(messages);
+    $[3] = busy;
+    $[4] = messages;
+    $[5] = endsWithListCached;
+  } else endsWithListCached = $[5];
+  let endsWithList = endsWithListCached;
+  let [state, setState] = useState("closed");
+  let [survey, setSurvey] = useState(null);
+  let [starting, setStarting] = useState(false);
+  let fetchedRef = useRef(false);
+  let isDoneRef = useRef(false);
+  let shownRef = useRef(false);
+  let startedRef = useRef(false);
+  let startRequestedRef = useRef(false);
+  let initialDraft;
+  if ($[6] === MEMO_CACHE_SENTINEL) {
+    initialDraft = {};
+    $[6] = initialDraft;
+  } else initialDraft = $[6];
+  let draftRef = useRef(initialDraft);
+  let dialogHandleRef = useRef(null);
+  let previousBusyRef = useRef(busy);
+  let isMountedRef = useRef(true);
+  let closeTimerRef = useRef(null);
+  let unmountEffect;
+  let unmountEffectDeps;
+  if ($[7] === MEMO_CACHE_SENTINEL) {
+    unmountEffect = () => {
+      isMountedRef.current = true;
       return () => {
-        Yo.current = false;
-        kn.current?.();
-        No.current?.close();
+        isMountedRef.current = false;
+        closeTimerRef.current?.();
+        dialogHandleRef.current?.close();
       };
     };
-    bn = [];
-    ze[7] = Fn;
-    ze[8] = bn;
+    unmountEffectDeps = [];
+    $[7] = unmountEffect;
+    $[8] = unmountEffectDeps;
   } else {
-    Fn = ze[7];
-    bn = ze[8];
+    unmountEffect = $[7];
+    unmountEffectDeps = $[8];
   }
-  P(Fn, bn);
-  let Go;
-  if (ze[9] === MEMO_CACHE_SENTINEL) {
-    Go = () => {
-      Ro.current = true;
-      po("closed");
+  useEffect(unmountEffect, unmountEffectDeps);
+  let ignore;
+  if ($[9] === MEMO_CACHE_SENTINEL) {
+    ignore = () => {
+      isDoneRef.current = true;
+      setState("closed");
     };
-    ze[9] = Go;
-  } else Go = ze[9];
-  let hn = Go;
-  let Mn;
-  let Xo;
-  if (ze[10] !== Ot || ze[11] !== kt || ze[12] !== storeSelector) {
-    Mn = () => {
-      let Sn = storeSelectorRef.current;
-      storeSelectorRef.current = storeSelector;
-      if (!Sn || storeSelector || !Ot || Bo.current || isUnattendedInteractiveSession()) {
+    $[9] = ignore;
+  } else ignore = $[9];
+  let ignoreSurvey = ignore;
+  let fetchEffect;
+  let fetchEffectDeps;
+  if ($[10] !== isEnabled || $[11] !== surveyClient || $[12] !== busy) {
+    fetchEffect = () => {
+      let previousLoading = previousBusyRef.current;
+      previousBusyRef.current = busy;
+      if (!previousLoading || busy || !isEnabled || fetchedRef.current || isUnattendedInteractiveSession()) {
         return;
       }
-      Bo.current = true;
-      kt.getPendingSurvey().then(($n) => {
-        if ($n !== null) co($n);
+      fetchedRef.current = true;
+      surveyClient.getPendingSurvey().then((pendingSurvey) => {
+        if (pendingSurvey !== null) setSurvey(pendingSurvey);
       });
     };
-    Xo = [storeSelector, Ot, kt];
-    ze[10] = Ot;
-    ze[11] = kt;
-    ze[12] = storeSelector;
-    ze[13] = Mn;
-    ze[14] = Xo;
+    fetchEffectDeps = [busy, isEnabled, surveyClient];
+    $[10] = isEnabled;
+    $[11] = surveyClient;
+    $[12] = busy;
+    $[13] = fetchEffect;
+    $[14] = fetchEffectDeps;
   } else {
-    Mn = ze[13];
-    Xo = ze[14];
+    fetchEffect = $[13];
+    fetchEffectDeps = $[14];
   }
-  P(Mn, Xo);
-  let on;
-  let _o;
+  useEffect(fetchEffect, fetchEffectDeps);
+  let openEffectDeps;
+  let openEffect;
   if (
-    ze[15] !== Ot ||
-    ze[16] !== hasActivePrompt ||
-    ze[17] !== storeSelector ||
-    ze[18] !== active ||
-    ze[19] !== io ||
-    ze[20] !== otherSurveyActive ||
-    ze[21] !== oo ||
-    ze[22] !== so ||
-    ze[23] !== ao ||
-    ze[24] !== delayedFlag
+    $[15] !== isEnabled ||
+    $[16] !== hasActivePrompt ||
+    $[17] !== busy ||
+    $[18] !== active ||
+    $[19] !== endsWithList ||
+    $[20] !== otherSurveyActive ||
+    $[21] !== isDraftEmpty ||
+    $[22] !== state ||
+    $[23] !== survey ||
+    $[24] !== delayedFlag
   ) {
-    _o = () => {
+    openEffect = () => {
       if (
-        ao === null ||
-        so !== "closed" ||
-        Ro.current ||
-        !Ot ||
-        storeSelector ||
+        survey === null ||
+        state !== "closed" ||
+        isDoneRef.current ||
+        !isEnabled ||
+        busy ||
         !delayedFlag ||
         active ||
-        !oo ||
+        !isDraftEmpty ||
         hasActivePrompt ||
         otherSurveyActive ||
-        io ||
+        endsWithList ||
         isUnattendedInteractiveSession()
       ) {
         return;
       }
-      po("open");
+      setState("open");
     };
-    on = [ao, so, Ot, storeSelector, delayedFlag, active, oo, hasActivePrompt, otherSurveyActive, io];
-    ze[15] = Ot;
-    ze[16] = hasActivePrompt;
-    ze[17] = storeSelector;
-    ze[18] = active;
-    ze[19] = io;
-    ze[20] = otherSurveyActive;
-    ze[21] = oo;
-    ze[22] = so;
-    ze[23] = ao;
-    ze[24] = delayedFlag;
-    ze[25] = on;
-    ze[26] = _o;
+    openEffectDeps = [
+      survey,
+      state,
+      isEnabled,
+      busy,
+      delayedFlag,
+      active,
+      isDraftEmpty,
+      hasActivePrompt,
+      otherSurveyActive,
+      endsWithList,
+    ];
+    $[15] = isEnabled;
+    $[16] = hasActivePrompt;
+    $[17] = busy;
+    $[18] = active;
+    $[19] = endsWithList;
+    $[20] = otherSurveyActive;
+    $[21] = isDraftEmpty;
+    $[22] = state;
+    $[23] = survey;
+    $[24] = delayedFlag;
+    $[25] = openEffectDeps;
+    $[26] = openEffect;
   } else {
-    on = ze[25];
-    _o = ze[26];
+    openEffectDeps = $[25];
+    openEffect = $[26];
   }
-  P(_o, on);
-  let cn;
-  if (ze[27] !== so) {
-    cn = () => {
-      if (so !== "open") {
+  useEffect(openEffect, openEffectDeps);
+  let ignoreEffectCached;
+  if ($[27] !== state) {
+    ignoreEffectCached = () => {
+      if (state !== "open") {
         return;
       }
       logOrgSurveyEvent("ignored");
-      hn();
+      ignoreSurvey();
     };
-    ze[27] = so;
-    ze[28] = cn;
-  } else cn = ze[28];
-  let Dn = cn;
-  let wn;
-  let mr;
-  if (ze[29] !== Dn || ze[30] !== storeSelector) {
-    wn = () => {
-      if (storeSelector) Dn();
+    $[27] = state;
+    $[28] = ignoreEffectCached;
+  } else ignoreEffectCached = $[28];
+  let ignoreWhileLoading = ignoreEffectCached;
+  let ignoreLoadingEffect;
+  let ignoreLoadingDeps;
+  if ($[29] !== ignoreWhileLoading || $[30] !== busy) {
+    ignoreLoadingEffect = () => {
+      if (busy) ignoreWhileLoading();
     };
-    mr = [storeSelector, Dn];
-    ze[29] = Dn;
-    ze[30] = storeSelector;
-    ze[31] = wn;
-    ze[32] = mr;
+    ignoreLoadingDeps = [busy, ignoreWhileLoading];
+    $[29] = ignoreWhileLoading;
+    $[30] = busy;
+    $[31] = ignoreLoadingEffect;
+    $[32] = ignoreLoadingDeps;
   } else {
-    wn = ze[31];
-    mr = ze[32];
+    ignoreLoadingEffect = $[31];
+    ignoreLoadingDeps = $[32];
   }
-  P(wn, mr);
-  let Kn;
-  if (ze[33] !== kt || ze[34] !== ao) {
-    Kn = () => {
-      if (Ho.current || ao === null) {
+  useEffect(ignoreLoadingEffect, ignoreLoadingDeps);
+  let onShownCached;
+  if ($[33] !== surveyClient || $[34] !== survey) {
+    onShownCached = () => {
+      if (shownRef.current || survey === null) {
         return;
       }
-      Ho.current = true;
+      shownRef.current = true;
       logOrgSurveyEvent("shown");
-      kt.recordMilestone(ao, "shown");
+      surveyClient.recordMilestone(survey, "shown");
     };
-    ze[33] = kt;
-    ze[34] = ao;
-    ze[35] = Kn;
-  } else Kn = ze[35];
-  let onShown = Kn;
-  let Fr;
-  if (ze[36] !== kt || ze[37] !== so || ze[38] !== ao) {
-    Fr = () => {
-      if (so !== "open" || ao === null || Wo.current) {
+    $[33] = surveyClient;
+    $[34] = survey;
+    $[35] = onShownCached;
+  } else onShownCached = $[35];
+  let onShown = onShownCached;
+  let dismiss;
+  if ($[36] !== surveyClient || $[37] !== state || $[38] !== survey) {
+    dismiss = () => {
+      if (state !== "open" || survey === null || startRequestedRef.current) {
         return;
       }
       logOrgSurveyEvent("dismissed");
-      hn();
-      kt.dismissSurvey(ao);
+      ignoreSurvey();
+      surveyClient.dismissSurvey(survey);
     };
-    ze[36] = kt;
-    ze[37] = so;
-    ze[38] = ao;
-    ze[39] = Fr;
-  } else Fr = ze[39];
-  let dismiss = Fr;
-  let Un;
-  if (ze[40] !== kt || ze[41] !== clock || ze[42] !== ao) {
-    Un = async (dr) => {
-      if (ao === null) {
+    $[36] = surveyClient;
+    $[37] = state;
+    $[38] = survey;
+    $[39] = dismiss;
+  } else dismiss = $[39];
+  let dismiss_2 = dismiss;
+  let submitSurvey;
+  if ($[40] !== surveyClient || $[41] !== clock || $[42] !== survey) {
+    submitSurvey = async (answers) => {
+      if (survey === null) {
         return "failed";
       }
       if (isUnattendedInteractiveSession()) {
         logOrgSurveyEvent("ignored");
-        hn();
-        No.current?.close();
-        No.current = null;
+        ignoreSurvey();
+        dialogHandleRef.current?.close();
+        dialogHandleRef.current = null;
         return "closed";
       }
-      let or = await kt.submitSurvey(ao, dr);
-      if (or === "failed") {
-        return or;
+      let outcome = await surveyClient.submitSurvey(survey, answers);
+      if (outcome === "failed") {
+        return outcome;
       }
-      logOrgSurveyEvent(or === "submitted" ? "submitted" : "unavailable");
-      Ro.current = true;
-      No.current?.close();
-      No.current = null;
-      po(or === "submitted" ? "thanks" : "gone");
-      kn.current = clock.setTimeout(() => po("closed"), SURVEY_CLOSE_DELAY_MS);
-      return or;
+      logOrgSurveyEvent(outcome === "submitted" ? "submitted" : "unavailable");
+      isDoneRef.current = true;
+      dialogHandleRef.current?.close();
+      dialogHandleRef.current = null;
+      setState(outcome === "submitted" ? "thanks" : "gone");
+      closeTimerRef.current = clock.setTimeout(() => setState("closed"), SURVEY_CLOSE_DELAY_MS);
+      return outcome;
     };
-    ze[40] = kt;
-    ze[41] = clock;
-    ze[42] = ao;
-    ze[43] = Un;
-  } else Un = ze[43];
-  let onSubmit = Un;
-  let Qn;
-  if (ze[44] !== kt || ze[45] !== localJsx || ze[46] !== onSubmit) {
-    Qn = (ur) => {
-      if (!Io.current) {
-        Io.current = true;
+    $[40] = surveyClient;
+    $[41] = clock;
+    $[42] = survey;
+    $[43] = submitSurvey;
+  } else submitSurvey = $[43];
+  let onSubmit = submitSurvey;
+  let startCached;
+  if ($[44] !== surveyClient || $[45] !== localJsx || $[46] !== onSubmit) {
+    startCached = (surveyToStart) => {
+      if (!startedRef.current) {
+        startedRef.current = true;
         logOrgSurveyEvent("started");
-        kt.recordMilestone(ur, "started");
+        surveyClient.recordMilestone(surveyToStart, "started");
       }
-      po("answering");
-      let Pr = localJsx.show(
+      setState("answering");
+      let dialogHandle = localJsx.show(
         jsxProd_default(OrgSurveyDialog, {
-          survey: ur,
-          initialDraft: Cn.current,
-          onDraftChange: (Ir) => {
-            Cn.current = Ir;
+          survey: surveyToStart,
+          initialDraft: draftRef.current,
+          onDraftChange: (nextDraft) => {
+            draftRef.current = nextDraft;
           },
           onSubmit,
-          onClose: () => Pr.close(),
+          onClose: () => dialogHandle.close(),
         }),
         {
           commandName: "org-survey",
@@ -358,87 +377,90 @@ function useOrgSurvey(props) {
           retireAtTurnBoundary: false,
         },
       );
-      No.current = Pr;
-      Pr.closed.then(() => {
-        if (No.current === Pr) No.current = null;
-        if (!Ro.current) po(openIfAnswering);
+      dialogHandleRef.current = dialogHandle;
+      dialogHandle.closed.then(() => {
+        if (dialogHandleRef.current === dialogHandle) dialogHandleRef.current = null;
+        if (!isDoneRef.current) setState(openIfAnswering);
       });
     };
-    ze[44] = kt;
-    ze[45] = localJsx;
-    ze[46] = onSubmit;
-    ze[47] = Qn;
-  } else Qn = ze[47];
-  let ts = Qn;
-  let Gn;
-  if (ze[48] !== kt || ze[49] !== ts || ze[50] !== so || ze[51] !== ao) {
-    Gn = () => {
-      if (so !== "open" || ao === null || Wo.current) {
+    $[44] = surveyClient;
+    $[45] = localJsx;
+    $[46] = onSubmit;
+    $[47] = startCached;
+  } else startCached = $[47];
+  let start = startCached;
+  let startSurveyCached;
+  if ($[48] !== surveyClient || $[49] !== start || $[50] !== state || $[51] !== survey) {
+    startSurveyCached = () => {
+      if (state !== "open" || survey === null || startRequestedRef.current) {
         return;
       }
-      Wo.current = true;
-      Ao(true);
-      let Ur = () => {
-        Wo.current = false;
-        Ao(false);
+      startRequestedRef.current = true;
+      setStarting(true);
+      let resetStartRequested = () => {
+        startRequestedRef.current = false;
+        setStarting(false);
       };
-      kt.isStillPending(ao).then((Zr) => {
-        Ur();
-        if (Ro.current || !Yo.current) {
+      surveyClient.isStillPending(survey).then((isPending) => {
+        resetStartRequested();
+        if (isDoneRef.current || !isMountedRef.current) {
           return;
         }
         if (isUnattendedInteractiveSession()) {
           logOrgSurveyEvent("ignored");
-          hn();
+          ignoreSurvey();
           return;
         }
-        if (!Zr) {
+        if (!isPending) {
           logOrgSurveyEvent("unavailable");
-          hn();
+          ignoreSurvey();
           return;
         }
-        ts(ao);
-      }, Ur);
+        start(survey);
+      }, resetStartRequested);
     };
-    ze[48] = kt;
-    ze[49] = ts;
-    ze[50] = so;
-    ze[51] = ao;
-    ze[52] = Gn;
-  } else Gn = ze[52];
-  let start = Gn;
-  let zr;
+    $[48] = surveyClient;
+    $[49] = start;
+    $[50] = state;
+    $[51] = survey;
+    $[52] = startSurveyCached;
+  } else startSurveyCached = $[52];
+  let start_2 = startSurveyCached;
+  let cardProps;
   if (
-    ze[53] !== dismiss ||
-    ze[54] !== Dn ||
-    ze[55] !== onShown ||
-    ze[56] !== start ||
-    ze[57] !== bo ||
-    ze[58] !== so ||
-    ze[59] !== ao
+    $[53] !== dismiss_2 ||
+    $[54] !== ignoreWhileLoading ||
+    $[55] !== onShown ||
+    $[56] !== start_2 ||
+    $[57] !== starting ||
+    $[58] !== state ||
+    $[59] !== survey
   ) {
-    zr = {
-      state: so,
-      survey: ao,
-      starting: bo,
+    cardProps = {
+      state,
+      survey,
+      starting,
       onShown,
-      start,
-      dismiss,
-      ignore: Dn,
+      start: start_2,
+      dismiss: dismiss_2,
+      ignore: ignoreWhileLoading,
     };
-    ze[53] = dismiss;
-    ze[54] = Dn;
-    ze[55] = onShown;
-    ze[56] = start;
-    ze[57] = bo;
-    ze[58] = so;
-    ze[59] = ao;
-    ze[60] = zr;
-  } else zr = ze[60];
-  return zr;
+    $[53] = dismiss_2;
+    $[54] = ignoreWhileLoading;
+    $[55] = onShown;
+    $[56] = start_2;
+    $[57] = starting;
+    $[58] = state;
+    $[59] = survey;
+    $[60] = cardProps;
+  } else cardProps = $[60];
+  return cardProps;
 }
 //@ chunk-18hwfzwa.js:1074142-1074146 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1074142", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1074146-1074281 placement
 /**
  * 插件评分商店的默认配置、请求选项（teleport-org 认证、后台、5xx 才算错误）与每插件串行链的缓存上限。
@@ -450,13 +472,13 @@ var TENGU_PLUGIN_RATINGS_STORE_CONFIG = "tengu_plugin_ratings_store_config";
 var PLUGIN_RATINGS_REQUEST_OPTIONS = {
   auth: "teleport-org",
   isBackground: true,
-  validateStatus: (h) => h < 500,
+  validateStatus: (status) => status < 500,
 };
 var MAX_RATING_CHAINS = 8;
 //@ chunk-18hwfzwa.js:1074281-1074562 placement
-function recordPluginRatingAppearance(h, x, D, credentials) {
-  return chainRatingRequest(h, x, async () => {
-    let pluginRatingTarget = await getPluginRatingTarget(D, credentials);
+function recordPluginRatingAppearance(chains, appearanceId, plugin, credentials) {
+  return chainRatingRequest(chains, appearanceId, async () => {
+    let pluginRatingTarget = await getPluginRatingTarget(plugin, credentials);
     if (!pluginRatingTarget) return;
     await callPluginRatingsApi(
       "appearance",
@@ -466,7 +488,7 @@ function recordPluginRatingAppearance(h, x, D, credentials) {
         marketplace_name: pluginRatingTarget.marketplaceName,
         plugin_name: pluginRatingTarget.pluginName,
         client_surface: "cli",
-        appearance_id: x,
+        appearance_id: appearanceId,
       },
       credentials,
     );
@@ -477,7 +499,7 @@ function recordPluginRatingAppearance(h, x, D, credentials) {
  * 把插件评分提交到商店：bad/fine/good 提交评分，dismissed/not_sure 上报结果并在之前已评分时撤回；同一出现 id 的请求串行执行。
  */
 function submitPluginRating(chains, appearanceId, plugin, response, credentials) {
-  return chainRatingRequest(chains, appearanceId, async (ke) => {
+  return chainRatingRequest(chains, appearanceId, async (entry) => {
     let pluginRatingTarget = await getPluginRatingTarget(plugin, credentials);
     if (!pluginRatingTarget) return;
     switch (response) {
@@ -511,7 +533,7 @@ function submitPluginRating(chains, appearanceId, plugin, response, credentials)
             credentials,
           )
         )
-          ke.ratedInStore = true;
+          entry.ratedInStore = true;
         return;
       }
       case "dismissed":
@@ -527,7 +549,7 @@ function submitPluginRating(chains, appearanceId, plugin, response, credentials)
           },
           credentials,
         );
-        if (ke.ratedInStore) {
+        if (entry.ratedInStore) {
           if (
             await callPluginRatingsApi(
               "withdraw",
@@ -537,7 +559,7 @@ function submitPluginRating(chains, appearanceId, plugin, response, credentials)
               credentials,
             )
           )
-            ke.ratedInStore = false;
+            entry.ratedInStore = false;
         }
         return;
       }
@@ -548,20 +570,20 @@ function submitPluginRating(chains, appearanceId, plugin, response, credentials)
 /**
  * 判断是否可以向商店上报插件评分（未禁用反馈、第一方、非官方市场、组织匹配、动态配置开启），返回 {marketplaceName, pluginName} 或 null。
  */
-async function getPluginRatingTarget(h, x) {
+async function getPluginRatingTarget(plugin, credentials) {
   if (env.CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY) return null;
   if (shouldSkipFeedbackSurvey()) return null;
   if (isFirstPartyTelemetryBlocked()) return null;
   if (!isPolicyAllowed_2("allow_product_feedback")) return null;
   if (isEssentialTrafficOnly()) return null;
   if (getAPIProvider() !== "firstParty") return null;
-  if (h.marketplace === undefined || isOfficialMarketplace(h.marketplace)) return null;
+  if (plugin.marketplace === undefined || isOfficialMarketplace(plugin.marketplace)) return null;
   if (!isSurveyEligible()) {
     if (hasStoredOAuthToken()) logFeatureSad("cli_plugin_rating_store", "skip_auth_org_mismatch");
     return null;
   }
   if (
-    !(await orgSurveyCredentialSource(x, {
+    !(await orgSurveyCredentialSource(credentials, {
       acceptInjectedTokens: true,
     }))
   ) {
@@ -574,51 +596,54 @@ async function getPluginRatingTarget(h, x) {
   )
     return null;
   return {
-    marketplaceName: h.marketplace,
-    pluginName: h.name,
+    marketplaceName: plugin.marketplace,
+    pluginName: plugin.name,
   };
 }
 //@ chunk-18hwfzwa.js:1076474-1076765 placement
-function chainRatingRequest(h, x, D) {
-  let L = h.get(x);
-  if (!L) {
-    L = {
+function chainRatingRequest(chains, appearanceId, task) {
+  let entry = chains.get(appearanceId);
+  if (!entry) {
+    entry = {
       chain: Promise.resolve(),
       ratedInStore: false,
     };
-    h.set(x, L);
-    if (h.size > MAX_RATING_CHAINS) {
-      for (let key of h.keys())
-        if (key !== x) {
-          h.delete(key);
+    chains.set(appearanceId, entry);
+    if (chains.size > MAX_RATING_CHAINS) {
+      for (let key of chains.keys())
+        if (key !== appearanceId) {
+          chains.delete(key);
           break;
         }
     }
   }
-  let ee = L;
-  L.chain = L.chain.then(() =>
-    D(ee).catch((error) => {
+  let chainState = entry;
+  entry.chain = entry.chain.then(() =>
+    task(chainState).catch((error) => {
       logError(error);
       logFeatureBad("cli_plugin_rating_store", "chain_exception");
     }),
   );
-  return L.chain;
+  return entry.chain;
 }
 //@ chunk-18hwfzwa.js:1076765-1077648 placement
 /**
  * 调用插件评分商店 API（post/delete），按网络错误、认证、HTTP 状态分类记录 cli_plugin_rating_store 结果，成功返回 true。
  */
 async function callPluginRatingsApi(step, method, path, body, credentials) {
-  let ke = {
+  let options = {
     ...PLUGIN_RATINGS_REQUEST_OPTIONS,
     credentials,
   };
-  let Re;
+  let response;
   try {
-    Re = method === "post" ? await apiClient.post(path, body, ke) : await apiClient.delete(path, body, ke);
+    response =
+      method === "post"
+        ? await apiClient.post(path, body, options)
+        : await apiClient.delete(path, body, options);
   } catch (error) {
     let { kind, status } = classifyAxiosError(error);
-    let ze =
+    let failureCode =
       status !== undefined
         ? `http_${status}`
         : kind === "other"
@@ -626,28 +651,29 @@ async function callPluginRatingsApi(step, method, path, body, credentials) {
           : kind === "http"
             ? (sanitizedConnectionCodeLowerForTelemetry(getErrnoCode(error)) ?? "no_response")
             : kind;
-    logFeatureBad("cli_plugin_rating_store", `${step}_${ze}`);
-    logForDebugging(`plugin rating store ${step} failed: ${ze}`, {
+    logFeatureBad("cli_plugin_rating_store", `${step}_${failureCode}`);
+    logForDebugging(`plugin rating store ${step} failed: ${failureCode}`, {
       level: "warn",
     });
     return false;
   }
-  if (!Re.ok) {
-    let Be = Re.reason === "no-auth" ? "auth_unavailable" : Re.reason.replaceAll("-", "_");
-    logFeatureSad("cli_plugin_rating_store", `${step}_${Be}`);
+  if (!response.ok) {
+    let reasonCode =
+      response.reason === "no-auth" ? "auth_unavailable" : response.reason.replaceAll("-", "_");
+    logFeatureSad("cli_plugin_rating_store", `${step}_${reasonCode}`);
     return false;
   }
-  if (Re.status >= 200 && Re.status < 300) {
+  if (response.status >= 200 && response.status < 300) {
     logFeatureOk("cli_plugin_rating_store");
     return true;
   }
-  if ([401, 403, 404, 409].includes(Re.status)) {
-    logFeatureSad("cli_plugin_rating_store", `${step}_http_${Re.status}`);
-    logForDebugging(`plugin rating store ${step} skipped: http_${Re.status}`);
+  if ([401, 403, 404, 409].includes(response.status)) {
+    logFeatureSad("cli_plugin_rating_store", `${step}_http_${response.status}`);
+    logForDebugging(`plugin rating store ${step} skipped: http_${response.status}`);
     return false;
   }
-  logFeatureBad("cli_plugin_rating_store", `${step}_http_${Re.status}`);
-  logForDebugging(`plugin rating store ${step} failed: http_${Re.status}`, {
+  logFeatureBad("cli_plugin_rating_store", `${step}_http_${response.status}`);
+  logForDebugging(`plugin rating store ${step} failed: http_${response.status}`, {
     level: "warn",
   });
   return false;
@@ -676,37 +702,38 @@ function mergePendingSurveyActivity(
   activities,
   enabledTriggers = PLUGIN_SURVEY_DEFAULT_CONFIG.enabledTriggers,
 ) {
-  let L = (trigger) => enabledTriggers.includes(trigger);
+  let isEnabled = (trigger) => enabledTriggers.includes(trigger);
   let next = null;
   for (let activity of activities) {
     if (isOfficialOrBuiltinMarketplace(activity.marketplace)) continue;
-    let Re = pluginIdHash(activity.name, activity.marketplace);
-    let Be = (next ?? pending)[Re];
-    let He = Be != null && typeof Be.ts === "number" && typeof Be.trigger === "string";
-    if (He && activity.ts - Be.ts < ACTIVITY_DEDUPE_MS) {
-      if (L(activity.trigger) && !L(Be.trigger)) {
+    let pluginKey = pluginIdHash(activity.name, activity.marketplace);
+    let existing = (next ?? pending)[pluginKey];
+    let hasExisting =
+      existing != null && typeof existing.ts === "number" && typeof existing.trigger === "string";
+    if (hasExisting && activity.ts - existing.ts < ACTIVITY_DEDUPE_MS) {
+      if (isEnabled(activity.trigger) && !isEnabled(existing.trigger)) {
         next = next ?? {
           ...pending,
         };
-        next[Re] = {
-          ts: Be.ts,
+        next[pluginKey] = {
+          ts: existing.ts,
           trigger: activity.trigger,
         };
       }
       continue;
     }
-    let We = He && L(Be.trigger) && !L(activity.trigger);
+    let keepOldTrigger = hasExisting && isEnabled(existing.trigger) && !isEnabled(activity.trigger);
     next = next ?? {
       ...pending,
     };
-    next[Re] = {
+    next[pluginKey] = {
       ts: activity.ts,
-      trigger: We ? Be.trigger : activity.trigger,
+      trigger: keepOldTrigger ? existing.trigger : activity.trigger,
     };
   }
   if (next && Object.keys(next).length > MAX_PENDING_SURVEYS) {
     let sliced = Object.entries(next)
-      .sort((Re, Be) => (Be[1]?.ts ?? 0) - (Re[1]?.ts ?? 0))
+      .sort((left, right) => (right[1]?.ts ?? 0) - (left[1]?.ts ?? 0))
       .slice(0, MAX_PENDING_SURVEYS);
     next = Object.fromEntries(sliced);
   }
@@ -716,93 +743,98 @@ function mergePendingSurveyActivity(
 /**
  * 从插件反馈问卷记录中筛出已到期（距触发超过最小间隔）且仍已安装、触发类型有效的插件，按触发时间倒序返回。
  */
-function listEligibleSurveySubjects(h, minActivityAgeMs, D, L) {
-  let filtered = Object.entries(h).filter(
+function listEligibleSurveySubjects(activity, minActivityAgeMs, listPluginNames, now) {
+  let filtered = Object.entries(activity).filter(
     ([, value]) =>
       value !== null &&
       typeof value === "object" &&
       typeof value.ts === "number" &&
       typeof value.trigger === "string" &&
-      L - value.ts >= minActivityAgeMs,
+      now - value.ts >= minActivityAgeMs,
   );
   if (filtered.length === 0) return [];
-  let ke = new Map();
-  for (let Be of D()) {
-    let pluginIdentifier = parsePluginIdentifier(Be);
-    ke.set(pluginIdHash(pluginIdentifier.name, pluginIdentifier.marketplace), pluginIdentifier);
+  let pluginsByHash = new Map();
+  for (let ref of listPluginNames()) {
+    let pluginIdentifier = parsePluginIdentifier(ref);
+    pluginsByHash.set(pluginIdHash(pluginIdentifier.name, pluginIdentifier.marketplace), pluginIdentifier);
   }
-  let Re = [];
-  for (let [Be, He] of filtered) {
-    let We = ke.get(Be);
-    if (!We || !isPluginActivityKind(He.trigger)) continue;
-    Re.push({
-      name: We.name,
-      marketplace: We.marketplace,
-      trigger: He.trigger,
-      ts: He.ts,
+  let subjects = [];
+  for (let [pluginHash, entry] of filtered) {
+    let plugin = pluginsByHash.get(pluginHash);
+    if (!plugin || !isPluginActivityKind(entry.trigger)) continue;
+    subjects.push({
+      name: plugin.name,
+      marketplace: plugin.marketplace,
+      trigger: entry.trigger,
+      ts: entry.ts,
     });
   }
-  return Re.sort((Be, He) => He.ts - Be.ts);
+  return subjects.sort((a, b) => b.ts - a.ts);
 }
 //@ chunk-18hwfzwa.js:1078963-1079370 placement
 /**
  * 上报插件反馈问卷事件：tengu_plugin_feedback_survey_event 与 OTel feedback_survey（第三方插件名在未开启工具详情日志时隐去）。
  */
-function logPluginSurveyEvent(h, x, D, L) {
+function logPluginSurveyEvent(eventType, appearanceId, subject, response) {
   logEvent("tengu_plugin_feedback_survey_event", {
-    event_type: fromEnum(h),
-    appearance_id: sanitizeMarkName(x),
-    trigger_type: fromEnum(D.trigger),
-    ...(L && {
-      response: fromEnum(L),
+    event_type: fromEnum(eventType),
+    appearance_id: sanitizeMarkName(appearanceId),
+    trigger_type: fromEnum(subject.trigger),
+    ...(response && {
+      response: fromEnum(response),
     }),
-    ...buildPluginEventFields(D.name, D.marketplace),
+    ...buildPluginEventFields(subject.name, subject.marketplace),
   });
-  let ee =
-    isAnthropicPluginSource(getTelemetryPluginScope(D.name, D.marketplace, null)) ||
+  let isFirstPartyPlugin =
+    isAnthropicPluginSource(getTelemetryPluginScope(subject.name, subject.marketplace, null)) ||
     isToolDetailsLoggingEnabled();
   logOTelEvent("feedback_survey", {
-    event_type: h,
-    appearance_id: x,
+    event_type: eventType,
+    appearance_id: appearanceId,
     survey_type: "plugin",
-    trigger_type: D.trigger,
-    ...(L && {
-      response: L,
+    trigger_type: subject.trigger,
+    ...(response && {
+      response,
     }),
-    plugin_id_hash: pluginIdHash(D.name, D.marketplace),
-    "plugin.name": ee ? D.name : THIRD_PARTY,
+    plugin_id_hash: pluginIdHash(subject.name, subject.marketplace),
+    "plugin.name": isFirstPartyPlugin ? subject.name : THIRD_PARTY,
   });
 }
 //@ chunk-18hwfzwa.js:1079370-1079965 placement
 /**
  * 从候选中选出要显示问卷的插件：触发类型与作用域须启用、每个插件只看一次、距上次展示超过最小间隔，取最久未展示者。
  */
-function pickPluginSurveySubject(h, x, D, L, ee) {
-  let ke = new Set(x.enabledTriggers);
-  let Re = x.enabledScopes && x.enabledScopes.length > 0 ? new Set(x.enabledScopes) : null;
-  let Be = null;
-  let He = new Set();
-  for (let idx = h.length - 1; idx >= 0; idx--) {
-    let ze = h[idx];
-    if (!ke.has(ze.trigger)) continue;
-    if (Re && !Re.has(getTelemetryPluginScope(ze.name, ze.marketplace, L))) continue;
-    let Xe = pluginIdHash(ze.name, ze.marketplace);
-    if (He.has(Xe)) continue;
-    He.add(Xe);
-    let rt = D[Xe] ?? 0;
-    if (ee - rt < x.minTimeBetweenPerPluginMs) continue;
-    if (Be === null || rt < Be.lastShown)
-      Be = {
+function pickPluginSurveySubject(subjects, config, lastShownByPlugin, capabilities, now) {
+  let enabledTriggers = new Set(config.enabledTriggers);
+  let enabledScopes =
+    config.enabledScopes && config.enabledScopes.length > 0 ? new Set(config.enabledScopes) : null;
+  let best = null;
+  let seenHashes = new Set();
+  for (let idx = subjects.length - 1; idx >= 0; idx--) {
+    let subject = subjects[idx];
+    if (!enabledTriggers.has(subject.trigger)) continue;
+    if (
+      enabledScopes &&
+      !enabledScopes.has(getTelemetryPluginScope(subject.name, subject.marketplace, capabilities))
+    )
+      continue;
+    let pluginHash = pluginIdHash(subject.name, subject.marketplace);
+    if (seenHashes.has(pluginHash)) continue;
+    seenHashes.add(pluginHash);
+    let lastShown = lastShownByPlugin[pluginHash] ?? 0;
+    if (now - lastShown < config.minTimeBetweenPerPluginMs) continue;
+    if (best === null || lastShown < best.lastShown)
+      best = {
         subject: {
-          name: ze.name,
-          marketplace: ze.marketplace,
-          trigger: ze.trigger,
-          features: activityFeaturesFor(ze.name, ze.marketplace),
+          name: subject.name,
+          marketplace: subject.marketplace,
+          trigger: subject.trigger,
+          features: activityFeaturesFor(subject.name, subject.marketplace),
         },
-        lastShown: rt,
+        lastShown,
       };
   }
-  return Be?.subject ?? null;
+  return best?.subject ?? null;
 }
 //@ chunk-18hwfzwa.js:1079965-1081950 placement
 /**
@@ -815,65 +847,65 @@ function usePluginFeedbackSurvey({
   otherSurveyActive = false,
 }) {
   let { storageV5, credentials } = useTheme_2();
-  let Re = useStoreSelector(turn, (ao) => ao.isLoading);
+  let isLoading = useStoreSelector(turn, (turnState) => turnState.isLoading);
   let dynamicConfigValue = useDynamicConfigValue(
     "tengu_plugin_feedback_survey_config",
     PLUGIN_SURVEY_DEFAULT_CONFIG,
   );
-  let He = Q(
+  let config = useMemo(
     () => ({
       ...PLUGIN_SURVEY_DEFAULT_CONFIG,
       ...dynamicConfigValue,
     }),
     [dynamicConfigValue],
   );
-  let [We, ze] = y(null);
-  let Xe = R(null);
-  let rt = R(new Map());
-  let kt = R(Date.now());
-  let At = R(Re);
-  P(() => {
+  let [subject, setSubject] = useState(null);
+  let subjectRef = useRef(null);
+  let ratingsRef = useRef(new Map());
+  let lastDrainAtRef = useRef(Date.now());
+  let previousLoadingRef = useRef(isLoading);
+  useEffect(() => {
     drainRecentActivity(Number.POSITIVE_INFINITY);
   }, []);
-  let onOpen = ce(
-    (ao) => {
-      let co = Xe.current;
-      if (!co) return;
+  let onOpen = useCallback(
+    (appearanceId) => {
+      let plugin = subjectRef.current;
+      if (!plugin) return;
       let now = Date.now();
-      let Ao = pluginIdHash(co.name, co.marketplace);
-      saveGlobalConfig((Bo) => {
-        let { [Ao]: Ro, ...Ho } = Bo.pluginSurveyState?.pending ?? {};
+      let pluginHash = pluginIdHash(plugin.name, plugin.marketplace);
+      saveGlobalConfig((config) => {
+        let { [pluginHash]: removedTimestamp, ...restPending } = config.pluginSurveyState?.pending ?? {};
         return {
-          ...Bo,
+          ...config,
           pluginSurveyState: {
-            ...Bo.pluginSurveyState,
+            ...config.pluginSurveyState,
             lastShownTime: now,
             perPlugin: {
-              ...Bo.pluginSurveyState?.perPlugin,
-              [Ao]: now,
+              ...config.pluginSurveyState?.perPlugin,
+              [pluginHash]: now,
             },
-            pending: Ho,
+            pending: restPending,
           },
         };
       }, storageV5);
-      logPluginSurveyEvent("appeared", ao, co);
-      recordPluginRatingAppearance(rt.current, ao, co, credentials);
+      logPluginSurveyEvent("appeared", appearanceId, plugin);
+      recordPluginRatingAppearance(ratingsRef.current, appearanceId, plugin, credentials);
     },
     [storageV5, credentials],
   );
-  let onSelect = ce(
+  let onSelect = useCallback(
     (appearanceId, response) => {
-      let plugin = Xe.current;
-      if (!plugin) return;
-      logPluginSurveyEvent("responded", appearanceId, plugin, response);
-      submitPluginRating(rt.current, appearanceId, plugin, response, credentials);
+      let pluginSubject = subjectRef.current;
+      if (!pluginSubject) return;
+      logPluginSurveyEvent("responded", appearanceId, pluginSubject, response);
+      submitPluginRating(ratingsRef.current, appearanceId, pluginSubject, response, credentials);
     },
     [credentials],
   );
-  let onAbandon = ce((ao) => {
-    let co = Xe.current;
-    if (!co) return;
-    logPluginSurveyEvent("abandoned", ao, co);
+  let onAbandon = useCallback((appearanceId) => {
+    let plugin = subjectRef.current;
+    if (!plugin) return;
+    logPluginSurveyEvent("abandoned", appearanceId, plugin);
   }, []);
   let { state, lastResponse, appearanceId, open, abandon, handleSelect, handleUndo } = useSurveyState({
     hideThanksAfterMs: SURVEY_THANKS_MS,
@@ -882,62 +914,65 @@ function usePluginFeedbackSurvey({
     onSelect,
     onAbandon,
   });
-  P(() => {
-    let ao = At.current;
-    At.current = Re;
-    if (!ao || Re) return;
+  useEffect(() => {
+    let wasLoading = previousLoadingRef.current;
+    previousLoadingRef.current = isLoading;
+    if (!wasLoading || isLoading) return;
     if (hasActivePrompt || state !== "closed") return;
     if (otherSurveyActive) return;
-    if (!enabled || He.probability <= 0) return;
+    if (!enabled || config.probability <= 0) return;
     if (env.CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY) return;
     if (shouldSkipFeedbackSurvey()) return;
     if (!isPolicyAllowed_2("allow_product_feedback")) return;
     let now = Date.now();
     let pluginSurveyState = getGlobalConfig().pluginSurveyState;
-    let activities = drainRecentActivity(kt.current);
-    kt.current = now;
+    let activities = drainRecentActivity(lastDrainAtRef.current);
+    lastDrainAtRef.current = now;
     let pending = pluginSurveyState?.pending ?? {};
-    let Ro = mergePendingSurveyActivity(pending, activities, He.enabledTriggers);
-    if (Ro !== pending)
+    let nextPending = mergePendingSurveyActivity(pending, activities, config.enabledTriggers);
+    if (nextPending !== pending)
       saveGlobalConfig(
-        (Wo) => ({
-          ...Wo,
+        (nextConfig) => ({
+          ...nextConfig,
           pluginSurveyState: {
-            ...Wo.pluginSurveyState,
+            ...nextConfig.pluginSurveyState,
             pending: mergePendingSurveyActivity(
-              Wo.pluginSurveyState?.pending ?? {},
+              nextConfig.pluginSurveyState?.pending ?? {},
               activities,
-              He.enabledTriggers,
+              config.enabledTriggers,
             ),
           },
         }),
         storageV5,
       );
-    if (pluginSurveyState?.lastShownTime && now - pluginSurveyState.lastShownTime < He.minTimeBetweenGlobalMs)
+    if (
+      pluginSurveyState?.lastShownTime &&
+      now - pluginSurveyState.lastShownTime < config.minTimeBetweenGlobalMs
+    )
       return;
-    let Ho = listEligibleSurveySubjects(
-      Ro,
-      He.minActivityAgeMs,
+    let subjects = listEligibleSurveySubjects(
+      nextPending,
+      config.minActivityAgeMs,
       () => Object.keys(getInstalledPlugins().plugins),
       now,
     );
-    if (Ho.length === 0) return;
-    let Io = pickPluginSurveySubject(
-      Ho,
-      He,
+    if (subjects.length === 0) return;
+    let picked = pickPluginSurveySubject(
+      subjects,
+      config,
       pluginSurveyState?.perPlugin ?? {},
       policyEnabledPluginNameSet(),
       now,
     );
-    if (!Io) return;
-    if (Math.random() >= He.probability) return;
-    Xe.current = Io;
-    ze(Io);
+    if (!picked) return;
+    if (Math.random() >= config.probability) return;
+    subjectRef.current = picked;
+    setSubject(picked);
     open();
-  }, [enabled, Re, hasActivePrompt, state, He, open, otherSurveyActive, storageV5]);
+  }, [enabled, isLoading, hasActivePrompt, state, config, open, otherSurveyActive, storageV5]);
   return {
     state,
-    subject: We,
+    subject,
     lastResponse,
     appearanceId,
     abandon,
@@ -946,5 +981,8 @@ function usePluginFeedbackSurvey({
   };
 }
 //@ chunk-18hwfzwa.js:1081950-1081954 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1081950", () => {
+  init_react_production();
+});
 export { usePluginFeedbackSurvey, useOrgSurvey };

@@ -8,8 +8,8 @@
  * pieces: chunk-5qm79scx.js (2)
  * attribution: placement 2
  */
-import { init_react_production, y } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { init_react_production, useState } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { logEvent } from "../services/analytics/index.js";
 import { startProTrial, trialDurationDays } from "../services/api/proTrial.js";
 import { isExpectedApiError, errorMessage } from "../utils/errors.js";
@@ -32,21 +32,21 @@ init_react_production();
  * Pro 套餐 Claude Code 试用开通确认界面（开始、出错、上报 tengu_pro_trial_*）。
  */
 function ProTrialStartScreen(props) {
-  let i = w(11);
+  let $ = useMemoCache(11);
   let { onDone, storageV5, credentials } = props;
-  let [o, C] = y("idle");
-  let D;
-  if (i[0] !== credentials || i[1] !== onDone || i[2] !== o || i[3] !== storageV5) {
-    D = {
+  let [status, setStatus] = useState("idle");
+  let keybindings;
+  if ($[0] !== credentials || $[1] !== onDone || $[2] !== status || $[3] !== storageV5) {
+    keybindings = {
       "confirm:yes": () => {
-        if (o === "starting") {
+        if (status === "starting") {
           return;
         }
-        if (o === "error") {
+        if (status === "error") {
           onDone();
           return;
         }
-        C("starting");
+        setStatus("starting");
         logEvent("tengu_pro_trial_start_pressed", {});
         startProTrial(storageV5, credentials)
           .then(() => {
@@ -60,55 +60,55 @@ function ProTrialStartScreen(props) {
               });
             else logError(error);
             logEvent("tengu_pro_trial_start_error", {});
-            C("error");
+            setStatus("error");
           });
       },
     };
-    i[0] = credentials;
-    i[1] = onDone;
-    i[2] = o;
-    i[3] = storageV5;
-    i[4] = D;
-  } else D = i[4];
-  let k;
-  if (i[5] === MEMO_CACHE_SENTINEL) {
-    k = {
+    $[0] = credentials;
+    $[1] = onDone;
+    $[2] = status;
+    $[3] = storageV5;
+    $[4] = keybindings;
+  } else keybindings = $[4];
+  let confirmationKeybindings;
+  if ($[5] === MEMO_CACHE_SENTINEL) {
+    confirmationKeybindings = {
       context: "Confirmation",
     };
-    i[5] = k;
-  } else k = i[5];
-  MessageActionsKeybindings(D, k);
-  let x;
-  if (i[6] === MEMO_CACHE_SENTINEL) {
-    x = trialDurationDays();
-    i[6] = x;
-  } else x = i[6];
-  let B = x;
-  let H;
-  if (i[7] === MEMO_CACHE_SENTINEL) {
-    H = jsxProd_default(WelcomeV2, {});
-    i[7] = H;
-  } else H = i[7];
-  let R;
-  if (i[8] === MEMO_CACHE_SENTINEL) {
-    R = jsxProd_default(Text, {
+    $[5] = confirmationKeybindings;
+  } else confirmationKeybindings = $[5];
+  MessageActionsKeybindings(keybindings, confirmationKeybindings);
+  let trialDays;
+  if ($[6] === MEMO_CACHE_SENTINEL) {
+    trialDays = trialDurationDays();
+    $[6] = trialDays;
+  } else trialDays = $[6];
+  let trialDaysValue = trialDays;
+  let welcomeV2Element;
+  if ($[7] === MEMO_CACHE_SENTINEL) {
+    welcomeV2Element = jsxProd_default(WelcomeV2, {});
+    $[7] = welcomeV2Element;
+  } else welcomeV2Element = $[7];
+  let textElement;
+  if ($[8] === MEMO_CACHE_SENTINEL) {
+    textElement = jsxProd_default(Text, {
       children:
-        B !== null
-          ? `Your Pro plan includes ${B} days of Claude Code.`
+        trialDaysValue !== null
+          ? `Your Pro plan includes ${trialDaysValue} days of Claude Code.`
           : "Your Pro plan includes a Claude Code trial.",
     });
-    i[8] = R;
-  } else R = i[8];
-  let V;
-  if (i[9] !== o) {
-    V = jsxProd_default_2(Box, {
+    $[8] = textElement;
+  } else textElement = $[8];
+  let boxElement;
+  if ($[9] !== status) {
+    boxElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       paddingX: 1,
       gap: 1,
       children: [
-        H,
-        R,
-        o === "starting"
+        welcomeV2Element,
+        textElement,
+        status === "starting"
           ? jsxProd_default_2(Box, {
               children: [
                 jsxProd_default(Spinner, {}),
@@ -117,7 +117,7 @@ function ProTrialStartScreen(props) {
                 }),
               ],
             })
-          : o === "error"
+          : status === "error"
             ? jsxProd_default_2(Text, {
                 color: "error",
                 children: [
@@ -142,8 +142,9 @@ function ProTrialStartScreen(props) {
               }),
       ],
     });
-    i[9] = o;
-    i[10] = V;
-  } else V = i[10];
-  return V;
+    $[9] = status;
+    $[10] = boxElement;
+  } else boxElement = $[10];
+  return boxElement;
 }
+export { ProTrialStartScreen };

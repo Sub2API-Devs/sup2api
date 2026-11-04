@@ -12,18 +12,18 @@ import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { createKeyedQueue } from "../../utils/promiseQueue.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
-  u,
+  objectSchema,
   array,
-  string,
+  stringSchema,
   _enum,
   record,
   unknown,
-  M,
-  E,
+  booleanSchema,
+  numberSchema,
   literal,
   union,
   zodStrictObject,
-  A8e,
+  urlSchema,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { ToolPermissionValueSchema } from "../mcp/types.js";
 import { isConnectedOrCached } from "../../skills/bundled/scheduleRemoteAgents.js";
@@ -95,54 +95,55 @@ var relayStateSlot = new SessionRootSlot(() => {
       orgConnectors: new Map(),
     },
     round: {},
-    list: (r, ...n) => keyedQueue.run(r === "orgConnectors" ? r : "", () => listMcpServers(r, ...n)),
-    setEnabled: (...r) => keyedQueue.run("", () => closeProjectMcpServers(...r)),
+    list: (kind, ...args) =>
+      keyedQueue.run(kind === "orgConnectors" ? kind : "", () => listMcpServers(kind, ...args)),
+    setEnabled: (...args) => keyedQueue.run("", () => closeProjectMcpServers(...args)),
     closed: false,
   };
 });
 var listProjectMcpServersResultSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     servers: array(
-      u({
-        name: string(),
+      objectSchema({
+        name: stringSchema(),
         status: _enum(["connected", "failed", "needs-auth", "pending", "disabled"]),
-        error: string().optional(),
-        initializeResult: record(string(), unknown()).optional(),
-        toolsListResult: record(string(), unknown()).optional(),
-        toolPermissions: record(string(), ToolPermissionValueSchema()).optional(),
+        error: stringSchema().optional(),
+        initializeResult: record(stringSchema(), unknown()).optional(),
+        toolsListResult: record(stringSchema(), unknown()).optional(),
+        toolPermissions: record(stringSchema(), ToolPermissionValueSchema()).optional(),
       }),
     ).max(MAX_SERVERS_PER_LISTING),
-    cut: M(),
-    hooksChecked: M().optional(),
+    cut: booleanSchema(),
+    hooksChecked: booleanSchema().optional(),
   }),
 );
 var relayOptionsSchema = DoctorLazy(() =>
-  u({
-    plugins: M().optional(),
-    waitMs: E().optional(),
-    only: array(string()).optional(),
+  objectSchema({
+    plugins: booleanSchema().optional(),
+    waitMs: numberSchema().optional(),
+    only: array(stringSchema()).optional(),
   }),
 );
 var relayResultSchema = DoctorLazy(() =>
-  u({
-    server: string(),
-    message: u({
+  objectSchema({
+    server: stringSchema(),
+    message: objectSchema({
       jsonrpc: literal("2.0"),
-      id: union([string(), E()]),
-      method: string(),
-      params: record(string(), unknown()).optional(),
+      id: union([stringSchema(), numberSchema()]),
+      method: stringSchema(),
+      params: record(stringSchema(), unknown()).optional(),
     }),
   }),
 );
 var relayMessageResultSchema = DoctorLazy(() =>
-  u({
-    response: u({
+  objectSchema({
+    response: objectSchema({
       jsonrpc: literal("2.0"),
-      id: union([string(), E()]),
-      result: record(string(), unknown()).optional(),
-      error: u({
-        code: E(),
-        message: string(),
+      id: union([stringSchema(), numberSchema()]),
+      result: record(stringSchema(), unknown()).optional(),
+      error: objectSchema({
+        code: numberSchema(),
+        message: stringSchema(),
         data: unknown().optional(),
       }).optional(),
     }),
@@ -150,59 +151,59 @@ var relayMessageResultSchema = DoctorLazy(() =>
 );
 //@ chunk-wy9dbk5f.js:35627-35679 placement
 function mcpClientModule() {
-  return require("./chunk-asne9cp8.js");
+  return require("../mcp/emitTripwireEvent.lazy.js");
 }
 //@ chunk-wy9dbk5f.js:35679-35754 placement
 function toolPermissionsOf({ config }) {
   return ("toolPermissions" in config && config.toolPermissions) || {};
 }
 //@ chunk-wy9dbk5f.js:35754-35901 placement
-function initializeResultOf(e) {
+function initializeResultOf(client) {
   return {
-    protocolVersion: e.negotiatedProtocolVersion,
-    capabilities: e.capabilities,
-    serverInfo: e.serverInfo,
-    instructions: e.instructions,
+    protocolVersion: client.negotiatedProtocolVersion,
+    capabilities: client.capabilities,
+    serverInfo: client.serverInfo,
+    instructions: client.instructions,
   };
 }
 //@ chunk-wy9dbk5f.js:35901-36477 placement
 async function describeProjectMcpServer(client) {
-  let { name: r } = client;
+  let { name } = client;
   if (!isConnectedOrCached(client)) {
     let { error, errorCode } = Object(client);
-    let [y] = HTTP_STATUS_IN_TEXT_RE.exec(`${errorCode} ${error}`) ?? [];
-    let g = y ? `Server answered HTTP ${y}` : "Connection error";
-    let error_2 = error && "url" in client.config ? g : error;
+    let [statusMatch] = HTTP_STATUS_IN_TEXT_RE.exec(`${errorCode} ${error}`) ?? [];
+    let statusText = statusMatch ? `Server answered HTTP ${statusMatch}` : "Connection error";
+    let error_2 = error && "url" in client.config ? statusText : error;
     return {
       server: {
-        name: r,
+        name,
         status: client.type,
         error: error_2,
       },
     };
   }
-  let n;
+  let connected;
   try {
-    n = await mcpClientModule().mcpClientModule().ensureConnectedClient(client);
+    connected = await mcpClientModule().mcpClientModule().ensureConnectedClient(client);
   } catch {
     return {
       server: {
-        name: r,
+        name,
         status: "failed",
         error: "Connection error",
       },
     };
   }
-  let s = {
-    name: r,
+  let description = {
+    name,
     status: "connected",
-    initializeResult: initializeResultOf(n),
-    toolPermissions: toolPermissionsOf(n),
+    initializeResult: initializeResultOf(connected),
+    toolPermissions: toolPermissionsOf(connected),
   };
-  if (n.capabilities.tools)
+  if (connected.capabilities.tools)
     try {
-      s.toolsListResult = await sendMcpRequest(
-        n,
+      description.toolsListResult = await sendMcpRequest(
+        connected,
         {
           method: "tools/list",
         },
@@ -212,86 +213,91 @@ async function describeProjectMcpServer(client) {
       );
     } catch {}
   return {
-    server: s,
-    live: n,
+    server: description,
+    live: connected,
   };
 }
 //@ chunk-wy9dbk5f.js:36477-36722 placement
-async function serveListProjectMcpServers(e, r, n) {
-  let { list, round } = relayStateSlot.of(n.session);
-  let c = relayOptionsSchema().safeParse(e ?? {}).data ?? {};
-  if (c.only) {
-    let g = sleep(c.waitMs ?? 0, r, {
+async function serveListProjectMcpServers(input, signal, context) {
+  let { list, round } = relayStateSlot.of(context.session);
+  let options = relayOptionsSchema().safeParse(input ?? {}).data ?? {};
+  if (options.only) {
+    let wait = sleep(options.waitMs ?? 0, signal, {
       unref: true,
     });
-    await Promise.race([round.project?.ended, g]);
-    c.waitMs = 0;
+    await Promise.race([round.project?.ended, wait]);
+    options.waitMs = 0;
   }
-  let y = c.plugins ? listRelayablePluginServers : listProjectScopedServers;
-  return list("project", y, r, n, false, c);
+  let listServers = options.plugins ? listRelayablePluginServers : listProjectScopedServers;
+  return list("project", listServers, signal, context, false, options);
 }
 //@ chunk-wy9dbk5f.js:36722-36800 placement
-function listProjectMcpServers(e, r, n) {
-  let { list } = relayStateSlot.of(n.session);
-  return list("project", listRelayablePluginServers, r, n, true);
+function listProjectMcpServers(input, signal, context) {
+  let { list } = relayStateSlot.of(context.session);
+  return list("project", listRelayablePluginServers, signal, context, true);
 }
 //@ chunk-wy9dbk5f.js:36875-37139 placement
 /**
  * handleSetMcpServerEnabled：控制协议中 "启用/禁用 MCP 服务器" 请求的处理（校验 {server, enabled, requestId}）。
  */
-function handleSetMcpServerEnabled(e, r, n) {
-  let s = SetMcpServerEnabledInputSchema().safeParse(e);
-  if (!s.success)
+function handleSetMcpServerEnabled(input, signal, context) {
+  let parsed = SetMcpServerEnabledInputSchema().safeParse(input);
+  if (!parsed.success)
     throw Error(
       "Takes a server name, whether it is enabled, and optionally a request id of at most 64 characters",
     );
-  let { server, enabled, requestId } = s.data;
-  let { setEnabled } = relayStateSlot.of(n.session);
-  return setEnabled(server, enabled, requestId, r, n);
+  let { server, enabled, requestId } = parsed.data;
+  let { setEnabled } = relayStateSlot.of(context.session);
+  return setEnabled(server, enabled, requestId, signal, context);
 }
 //@ chunk-wy9dbk5f.js:37139-37911 placement
-async function closeProjectMcpServers(e, r, n, s, a) {
-  let c = relayStateSlot.of(a.session);
-  if (c.closed) throw Error("The repo's MCP servers have been closed");
-  let switched = c.switched;
-  if (n !== undefined && switched?.requestId === n && switched.name === e && switched.enabled === r)
-    return formatEnabledChoiceResult(r, switched.isSaved);
-  let included = Object.keys(await listRelayablePluginServers(s, a))
-    .filter((key) => !isServerDeniedOrInvalid(a, key, "") && !isOrgConnectorName(key))
+async function closeProjectMcpServers(serverName, enabled, requestId, signal, context) {
+  let state = relayStateSlot.of(context.session);
+  if (state.closed) throw Error("The repo's MCP servers have been closed");
+  let switched = state.switched;
+  if (
+    requestId !== undefined &&
+    switched?.requestId === requestId &&
+    switched.name === serverName &&
+    switched.enabled === enabled
+  )
+    return formatEnabledChoiceResult(enabled, switched.isSaved);
+  let included = Object.keys(await listRelayablePluginServers(signal, context))
+    .filter((key) => !isServerDeniedOrInvalid(context, key, "") && !isOrgConnectorName(key))
     .slice(0, MAX_SERVERS_PER_LISTING)
-    .includes(e);
-  let S = c.listed.project.get(e);
-  let project = c.round.project;
-  let b = S ?? project?.rows.find((P) => P.name === e);
-  if (!(included || (!r && b !== undefined))) throw Error("The listing has no server of that name");
-  s.throwIfAborted();
-  let { storageV5 } = a.toolUseContext();
-  let w = await setMcpServerEnabledDurably(e, r, storageV5);
-  c.switched = {
-    requestId: n,
-    name: e,
-    enabled: r,
-    isSaved: w,
+    .includes(serverName);
+  let listedLive = state.listed.project.get(serverName);
+  let project = state.round.project;
+  let row = listedLive ?? project?.rows.find((row) => row.name === serverName);
+  if (!(included || (!enabled && row !== undefined))) throw Error("The listing has no server of that name");
+  signal.throwIfAborted();
+  let { storageV5 } = context.toolUseContext();
+  let saved = await setMcpServerEnabledDurably(serverName, enabled, storageV5);
+  state.switched = {
+    requestId,
+    name: serverName,
+    enabled,
+    isSaved: saved,
   };
-  let O = formatEnabledChoiceResult(r, w);
-  if (!r && b !== undefined) {
-    c.listed.project.delete(e);
-    project?.settled.set(e, {
+  let result = formatEnabledChoiceResult(enabled, saved);
+  if (!enabled && row !== undefined) {
+    state.listed.project.delete(serverName);
+    project?.settled.set(serverName, {
       server: {
-        name: e,
+        name: serverName,
         status: "disabled",
       },
     });
-    await mcpClientModule().mcpClientModule().clearServerCache(e, b.config);
+    await mcpClientModule().mcpClientModule().clearServerCache(serverName, row.config);
   }
-  return O;
+  return result;
 }
 //@ chunk-wy9dbk5f.js:37911-38048 placement
-async function listProjectScopedServers(e, r) {
-  let entries = Object.entries(await loadServableMcpConfigs(r));
+async function listProjectScopedServers(context, callerContext) {
+  let entries = Object.entries(await loadServableMcpConfigs(callerContext));
   return Object.fromEntries(
-    entries.filter(function ([, a]) {
-      return a.scope === "project";
+    entries.filter(function ([, config]) {
+      return config.scope === "project";
     }),
   );
 }
@@ -299,29 +305,29 @@ async function listProjectScopedServers(e, r) {
 /**
  * 列出可中继的 MCP 服务器：项目作用域服务器，以及非内置、非受限的插件服务器。
  */
-async function listRelayablePluginServers(e, r) {
-  let { storageV5, credentials } = r.toolUseContext();
-  let entries = Object.entries(await loadServableMcpConfigs(r));
+async function listRelayablePluginServers(context, callContext) {
+  let { storageV5, credentials } = callContext.toolUseContext();
+  let entries = Object.entries(await loadServableMcpConfigs(callContext));
   let allPluginsCacheOnly = await loadAllPluginsCacheOnly(storageV5, credentials);
   return Object.fromEntries(
-    entries.filter(function ([, g]) {
-      let { scope, pluginSource, pluginPath = "" } = g;
+    entries.filter(function ([, config]) {
+      let { scope, pluginSource, pluginPath = "" } = config;
       if (pluginSource === undefined) return scope === "project";
-      let b = {
+      let ref = {
         sourceName: pluginSource,
         pluginPath,
       };
       return (
         !isSyncedMarketplace(pluginSource) &&
         !isBuiltinPluginId(pluginSource) &&
-        !isPluginHooksMismatched(b, allPluginsCacheOnly, undefined)
+        !isPluginHooksMismatched(ref, allPluginsCacheOnly, undefined)
       );
     }),
   );
 }
 //@ chunk-wy9dbk5f.js:38375-38552 placement
-async function loadServableMcpConfigs(e) {
-  let { storageV5, credentials } = e.toolUseContext();
+async function loadServableMcpConfigs(context) {
+  let { storageV5, credentials } = context.toolUseContext();
   await awaitPolicyColdStartWaiter();
   invalidateCommandNames();
   refreshPluginCaches(storageV5, credentials);
@@ -345,33 +351,35 @@ async function loadServableMcpConfigs(e) {
  */
 function startServerListing(kind, entries, context) {
   let { storageV5, credentials } = context.toolUseContext();
-  let filtered = entries.filter(function ([O]) {
-    return !isServerDeniedOrInvalid(context, O, "") && (kind === "orgConnectors" || !isOrgConnectorName(O));
-  });
-  let y = {
-    launchPermissionContext: undefined,
-  };
-  let unnamed = entries.filter(function ([O]) {
+  let filtered = entries.filter(function ([name]) {
     return (
-      kind === "project" &&
-      !isMcpServerDisabled(O) &&
-      (isServerDeniedOrInvalid(y, O, "") || isOrgConnectorName(O))
+      !isServerDeniedOrInvalid(context, name, "") && (kind === "orgConnectors" || !isOrgConnectorName(name))
     );
   });
-  let h = Object.fromEntries(filtered.slice(0, MAX_SERVERS_PER_LISTING));
-  let S = startedServerKeys.of(context.session.host);
-  for (let [key, value] of Object.entries(h))
+  let listingContext = {
+    launchPermissionContext: undefined,
+  };
+  let unnamed = entries.filter(function ([name]) {
+    return (
+      kind === "project" &&
+      !isMcpServerDisabled(name) &&
+      (isServerDeniedOrInvalid(listingContext, name, "") || isOrgConnectorName(name))
+    );
+  });
+  let servedConfigs = Object.fromEntries(filtered.slice(0, MAX_SERVERS_PER_LISTING));
+  let startedKeys = startedServerKeys.of(context.session.host);
+  for (let [key, value] of Object.entries(servedConfigs))
     if (
-      S.size < MAX_STARTED_SERVER_KEYS &&
+      startedKeys.size < MAX_STARTED_SERVER_KEYS &&
       mcpClientModule().mcpClientModule().isLocalMcpServer(value) &&
       !isMcpServerDisabled(key)
     )
-      S.add(key);
+      startedKeys.add(key);
   let pending = [];
   let settled = new Map();
-  let R = (name) => settled.get(name)?.server.status === "disabled";
+  let isSettledDisabled = (name) => settled.get(name)?.server.status === "disabled";
   let listing = {
-    rows: Object.entries(h).map(function ([key, value]) {
+    rows: Object.entries(servedConfigs).map(function ([key, value]) {
       return {
         name: key,
         type: "pending",
@@ -385,14 +393,14 @@ function startServerListing(kind, entries, context) {
       .mcpClientModule()
       .getMcpToolsCommandsAndResources(
         function ({ client }) {
-          if (R(client.name)) return;
+          if (isSettledDisabled(client.name)) return;
           pending.push(
-            describeProjectMcpServer(client).then((P) => {
-              if (!R(client.name)) settled.set(client.name, P);
+            describeProjectMcpServer(client).then((serverDescription) => {
+              if (!isSettledDisabled(client.name)) settled.set(client.name, serverDescription);
             }),
           );
         },
-        h,
+        servedConfigs,
         storageV5,
         credentials,
         undefined,
@@ -408,30 +416,30 @@ function startServerListing(kind, entries, context) {
   return listing;
 }
 //@ chunk-wy9dbk5f.js:39463-39643 placement
-async function clearRemovedServerCaches(e, r) {
-  let n = new Set();
-  for (let { name: s, config } of e) n.add(serverCacheKey(s, config));
-  for (let { name: s, config } of r)
-    if (!n.has(serverCacheKey(s, config)))
-      await mcpClientModule().mcpClientModule().clearServerCache(s, config);
+async function clearRemovedServerCaches(nextRows, previousRows) {
+  let keptKeys = new Set();
+  for (let { name, config } of nextRows) keptKeys.add(serverCacheKey(name, config));
+  for (let { name, config } of previousRows)
+    if (!keptKeys.has(serverCacheKey(name, config)))
+      await mcpClientModule().mcpClientModule().clearServerCache(name, config);
 }
 //@ chunk-wy9dbk5f.js:39643-41383 placement
-async function listMcpServers(kind, r, n, context, a = false, { waitMs: c, only: y } = {}) {
-  let g = relayStateSlot.of(context.session);
-  let h = g.round[kind];
-  let S =
-    y ||
-    (c !== undefined &&
-      h?.hasEnded === false &&
-      !Array.from(h.settled.values()).some(
-        ({ server: { name: K, status } }) => status === "disabled" && !isMcpServerDisabled(K),
+async function listMcpServers(kind, loadConfigs, signal, context, forceClose = false, { waitMs, only } = {}) {
+  let state = relayStateSlot.of(context.session);
+  let currentRound = state.round[kind];
+  let reuseRound =
+    only ||
+    (waitMs !== undefined &&
+      currentRound?.hasEnded === false &&
+      !Array.from(currentRound.settled.values()).some(
+        ({ server: { name, status } }) => status === "disabled" && !isMcpServerDisabled(name),
       ));
-  if (!S) await h?.ended.catch(() => {});
-  if (!a) n.throwIfAborted();
-  let C = h;
-  if (!C || !S) {
-    await clearRemovedServerCaches(g.listed[kind].values(), h?.rows ?? []);
-    C = g.round[kind] = a
+  if (!reuseRound) await currentRound?.ended.catch(() => {});
+  if (!forceClose) signal.throwIfAborted();
+  let round = currentRound;
+  if (!round || !reuseRound) {
+    await clearRemovedServerCaches(state.listed[kind].values(), currentRound?.rows ?? []);
+    round = state.round[kind] = forceClose
       ? {
           rows: [],
           settled: new Map(),
@@ -440,119 +448,127 @@ async function listMcpServers(kind, r, n, context, a = false, { waitMs: c, only:
           ended: Promise.resolve(),
           hasEnded: true,
         }
-      : startServerListing(kind, Object.entries(await r(n, context)), context);
+      : startServerListing(kind, Object.entries(await loadConfigs(signal, context)), context);
   }
-  let b =
-    c !== undefined &&
-    sleep(c, n, {
+  let wait =
+    waitMs !== undefined &&
+    sleep(waitMs, signal, {
       unref: true,
     });
-  await (b ? Promise.race([C.ended, b]) : C.ended);
-  if (!C.hasEnded) n.throwIfAborted();
-  let { settled, rows } = C;
-  let { cut } = C;
-  let O = [...settled.values()];
-  let P = C.hasEnded ? [] : rows.filter((K) => !settled.has(K.name));
-  let L = [];
-  let j = new Map();
-  let B = 0;
-  let H = 0;
-  for (let { name: K, type: v } of P)
-    O.push({
+  await (wait ? Promise.race([round.ended, wait]) : round.ended);
+  if (!round.hasEnded) signal.throwIfAborted();
+  let { settled, rows } = round;
+  let { cut } = round;
+  let entries = [...settled.values()];
+  let pendingRows = round.hasEnded ? [] : rows.filter((row) => !settled.has(row.name));
+  let servers = [];
+  let liveByName = new Map();
+  let totalBytes = 0;
+  let totalFields = 0;
+  for (let { name, type: status } of pendingRows)
+    entries.push({
       server: {
-        name: K,
-        status: v,
+        name,
+        status,
       },
       live: undefined,
     });
-  for (let [K] of C.unnamed)
-    O.push({
+  for (let [name] of round.unnamed)
+    entries.push({
       server: {
-        name: K,
+        name,
         status: "failed",
       },
       live: undefined,
     });
-  for (let { server, live } of O) {
-    let X = server.toolsListResult && {
+  for (let { server, live } of entries) {
+    let toolsListResult = server.toolsListResult && {
       ...server.toolsListResult,
     };
-    let V = X
+    let serverCopy = toolsListResult
       ? {
           ...server,
-          toolsListResult: X,
+          toolsListResult,
         }
       : server;
-    if (Array.isArray(X?.tools)) {
-      cut ||= X.tools.length > MAX_TOOLS_PER_SERVER;
-      let sliced = X.tools.slice(0, MAX_TOOLS_PER_SERVER);
-      X.tools = sliced.filter(function (on) {
-        let { name: Qe } = Object(on);
-        return !isServerDeniedOrInvalid(context, V.name, Qe) && V.toolPermissions?.[Qe] !== "blocked";
+    if (Array.isArray(toolsListResult?.tools)) {
+      cut ||= toolsListResult.tools.length > MAX_TOOLS_PER_SERVER;
+      let sliced = toolsListResult.tools.slice(0, MAX_TOOLS_PER_SERVER);
+      toolsListResult.tools = sliced.filter(function (tool) {
+        let { name: toolName } = Object(tool);
+        return (
+          !isServerDeniedOrInvalid(context, serverCopy.name, toolName) &&
+          serverCopy.toolPermissions?.[toolName] !== "blocked"
+        );
       });
       if (live?.config.alwaysLoad === false)
-        for (let Ze of sliced) delete Object(Ze)._meta?.["anthropic/alwaysLoad"];
+        for (let tool of sliced) delete Object(tool)._meta?.["anthropic/alwaysLoad"];
     }
-    let { bytes, values, depth } = measureJson(V);
-    let en = H + values <= MAX_RELAY_FIELDS && depth <= MAX_RELAY_DEPTH;
-    if (L.length === MAX_SERVERS_PER_LISTING || !en || B + bytes > MAX_RELAY_LISTING_BYTES) {
+    let { bytes, values, depth } = measureJson(serverCopy);
+    let withinLimits = totalFields + values <= MAX_RELAY_FIELDS && depth <= MAX_RELAY_DEPTH;
+    if (
+      servers.length === MAX_SERVERS_PER_LISTING ||
+      !withinLimits ||
+      totalBytes + bytes > MAX_RELAY_LISTING_BYTES
+    ) {
       cut = true;
       continue;
     }
-    B += bytes;
-    H += values;
-    L.push(V);
-    if (live) j.set(live.name, live);
+    totalBytes += bytes;
+    totalFields += values;
+    servers.push(serverCopy);
+    if (live) liveByName.set(live.name, live);
   }
-  let Y = g.listed[kind];
-  g.listed[kind] = n.aborted && !a ? Y : j;
-  if (kind === "project" && g.listed.project === j && !y) g.closed = a;
-  let Q = [...g.listed[kind].values(), ...P];
-  await clearRemovedServerCaches(Q, [...Y.values(), ...rows]);
-  n.throwIfAborted();
+  let previousLive = state.listed[kind];
+  state.listed[kind] = signal.aborted && !forceClose ? previousLive : liveByName;
+  if (kind === "project" && state.listed.project === liveByName && !only) state.closed = forceClose;
+  let allLive = [...state.listed[kind].values(), ...pendingRows];
+  await clearRemovedServerCaches(allLive, [...previousLive.values(), ...rows]);
+  signal.throwIfAborted();
   return {
-    summary: `${j.size} of ${L.length} servers connected${cut ? ", cut at a limit" : ""}`,
+    summary: `${liveByName.size} of ${servers.length} servers connected${cut ? ", cut at a limit" : ""}`,
     output: {
-      servers: y ? L.filter((K) => y.includes(K.name)) : L,
+      servers: only ? servers.filter((server) => only.includes(server.name)) : servers,
       cut,
     },
   };
 }
 //@ chunk-wy9dbk5f.js:41383-41429 placement
-function relayProjectMcpMessage(e, r, n) {
-  return relayMcpMessage("project", e, r, n);
+function relayProjectMcpMessage(input, rawInput, context) {
+  return relayMcpMessage("project", input, rawInput, context);
 }
 //@ chunk-wy9dbk5f.js:41429-41939 placement
 /**
  * 把调用方的一条 JSON-RPC 请求转发给本机已连接的 MCP 服务器（项目/组织连接器/插件），检查启动权限、限制答复大小。
  */
-async function relayMcpMessage(e, r, n, s) {
-  let a = relayResultSchema().safeParse(r);
-  if (!a.success) throw Error("Takes a server name and one JSON-RPC request with an id");
-  let { server, message } = a.data;
-  let g = relayStateSlot.of(s.session);
-  let h = g.listed[e].get(server);
-  if (h === undefined && e === "project" && g.closed) throw Error("The repo's MCP servers have been closed");
-  if (h === undefined) throw Error("The latest listing has no connected server of that name");
-  let S = await relayJsonRpc(message, h, n, s);
+async function relayMcpMessage(kind, input, signal, context) {
+  let parsed = relayResultSchema().safeParse(input);
+  if (!parsed.success) throw Error("Takes a server name and one JSON-RPC request with an id");
+  let { server, message } = parsed.data;
+  let state = relayStateSlot.of(context.session);
+  let live = state.listed[kind].get(server);
+  if (live === undefined && kind === "project" && state.closed)
+    throw Error("The repo's MCP servers have been closed");
+  if (live === undefined) throw Error("The latest listing has no connected server of that name");
+  let response = await relayJsonRpc(message, live, signal, context);
   return {
-    summary: `${message.method}${S.error ? " failed" : ""}`,
+    summary: `${message.method}${response.error ? " failed" : ""}`,
     output: {
       response: {
         jsonrpc: "2.0",
         id: message.id,
-        ...S,
+        ...response,
       },
     },
   };
 }
 //@ chunk-wy9dbk5f.js:41939-43227 placement
-async function relayJsonRpc({ method, params }, n, s, a) {
+async function relayJsonRpc({ method, params }, live, signal, context) {
   if (method === "initialize") {
     let protocolVersion = params?.protocolVersion;
     return capRelayAnswer(method, {
       result: {
-        ...initializeResultOf(n),
+        ...initializeResultOf(live),
         protocolVersion,
       },
     });
@@ -564,28 +580,28 @@ async function relayJsonRpc({ method, params }, n, s, a) {
         message: `${method} is not relayed`,
       },
     };
-  let c = method === "tools/call";
-  let g =
-    toolPermissionsOf(n)[String(params?.name)] === "blocked" ||
-    isServerDeniedOrInvalid(a, n.name, params?.name);
-  if (c && g)
+  let isToolCall = method === "tools/call";
+  let toolBlocked =
+    toolPermissionsOf(live)[String(params?.name)] === "blocked" ||
+    isServerDeniedOrInvalid(context, live.name, params?.name);
+  if (isToolCall && toolBlocked)
     return {
       error: {
         code: -32602,
         message: "tools/call must name a tool that no launch deny rule names and its entry does not block",
       },
     };
-  let h = mcpClientModule().mcpClientModule();
+  let mcpClient = mcpClientModule().mcpClientModule();
   let _meta = params?._meta;
-  let C;
+  let answer;
   try {
-    let b = await h.ensureConnectedClient(n, {
-      signal: s,
+    let client = await mcpClient.ensureConnectedClient(live, {
+      signal,
     });
-    let mcpToolTimeoutMs = h.getMcpToolTimeoutMs(b.config);
-    C = {
+    let mcpToolTimeoutMs = mcpClient.getMcpToolTimeoutMs(client.config);
+    answer = {
       result: await sendMcpRequest(
-        b,
+        client,
         {
           method,
           params: isPlainObject_2(_meta)
@@ -598,33 +614,33 @@ async function relayJsonRpc({ method, params }, n, s, a) {
               }
             : params,
         },
-        c
+        isToolCall
           ? {
-              signal: s,
-              timeout: h.getMcpToolIdleTimeoutMs(b.config) || mcpToolTimeoutMs,
+              signal,
+              timeout: mcpClient.getMcpToolIdleTimeoutMs(client.config) || mcpToolTimeoutMs,
               maxTotalTimeout: mcpToolTimeoutMs,
               resetTimeoutOnProgress: true,
               onprogress: function () {},
             }
           : {
-              signal: s,
+              signal,
               timeout: getConnectionTimeoutMs(),
             },
       ),
     };
   } catch (error) {
-    s.throwIfAborted();
+    signal.throwIfAborted();
     if (mcpClientModule().mcpIsListAuthErrorModule().isListAuthError(error))
-      await h.clearServerCache(n.name, n.config);
-    let { code, data: x } = Object(error);
+      await mcpClient.clearServerCache(live.name, live.config);
+    let { code, data } = Object(error);
     let { getMcpErrorCode } = mcpClientModule().mcpSdkErrorClassificationModule();
-    let O = code === "REQUEST_TIMEOUT" ? -32001 : getMcpErrorCode(error);
-    let { status = code } = Object(x);
+    let errorCode = code === "REQUEST_TIMEOUT" ? -32001 : getMcpErrorCode(error);
+    let { status = code } = Object(data);
     let replaced = errorMessage(error).replace(/^MCP error -?\d+: /, "");
-    let [j] = HTTP_STATUS_IN_TEXT_RE.exec(`${status} ${replaced}`) ?? [];
-    let message = j ? `Server answered HTTP ${j}` : "Connection error";
-    C =
-      O === undefined
+    let [statusMatch] = HTTP_STATUS_IN_TEXT_RE.exec(`${status} ${replaced}`) ?? [];
+    let message = statusMatch ? `Server answered HTTP ${statusMatch}` : "Connection error";
+    answer =
+      errorCode === undefined
         ? {
             error: {
               code: -32603,
@@ -633,17 +649,17 @@ async function relayJsonRpc({ method, params }, n, s, a) {
           }
         : {
             error: {
-              code: O,
+              code: errorCode,
               message: replaced,
-              data: x,
+              data,
             },
           };
   }
-  return capRelayAnswer(method, C);
+  return capRelayAnswer(method, answer);
 }
 //@ chunk-wy9dbk5f.js:43227-43439 placement
-function capRelayAnswer(method, r) {
-  let { bytes, values, depth } = measureJson(r);
+function capRelayAnswer(method, answer) {
+  let { bytes, values, depth } = measureJson(answer);
   if (bytes > MAX_RELAY_ANSWER_BYTES || values > MAX_RELAY_VALUES || depth > MAX_RELAY_DEPTH)
     return {
       error: {
@@ -651,27 +667,27 @@ function capRelayAnswer(method, r) {
         message: `The answer to ${method} is over ${MAX_RELAY_ANSWER_BYTES} bytes, ${MAX_RELAY_VALUES} fields and list elements or ${MAX_RELAY_DEPTH} levels deep`,
       },
     };
-  return r;
+  return answer;
 }
 //@ chunk-wy9dbk5f.js:43439-43715 placement
-function measureJson(e) {
-  let r = 0;
-  let n = 0;
+function measureJson(value) {
+  let valueCount = 0;
+  let maxDepth = 0;
   let weakMap = new WeakMap();
   try {
-    let a = jsonStringify(e, function (y, g) {
-      r++;
-      if (typeof g === "object" && g !== null) {
-        let h = (weakMap.get(Object(this)) ?? 0) + 1;
-        weakMap.set(g, h);
-        n = Math.max(n, h);
+    let json = jsonStringify(value, function (key, item) {
+      valueCount++;
+      if (typeof item === "object" && item !== null) {
+        let depth = (weakMap.get(Object(this)) ?? 0) + 1;
+        weakMap.set(item, depth);
+        maxDepth = Math.max(maxDepth, depth);
       }
-      return g;
+      return item;
     });
     return {
-      bytes: Buffer.byteLength(a),
-      values: r,
-      depth: n,
+      bytes: Buffer.byteLength(json),
+      values: valueCount,
+      depth: maxDepth,
     };
   } catch {
     return {
@@ -682,28 +698,28 @@ function measureJson(e) {
   }
 }
 //@ chunk-wy9dbk5f.js:43715-43952 placement
-function isServerDeniedOrInvalid({ launchPermissionContext }, r, n) {
-  let serverName = mcpInfoFromString(getMcpPrefix(r))?.serverName;
-  if (typeof n !== "string" || serverName !== normalizeNameForMCP(r)) return true;
+function isServerDeniedOrInvalid({ launchPermissionContext }, serverKey, toolName) {
+  let serverName = mcpInfoFromString(getMcpPrefix(serverKey))?.serverName;
+  if (typeof toolName !== "string" || serverName !== normalizeNameForMCP(serverKey)) return true;
   if (launchPermissionContext === undefined) return false;
-  let a = {
-    name: n,
+  let ruleInput = {
+    name: toolName,
     mcpInfo: {
-      serverName: r,
-      toolName: n,
+      serverName: serverKey,
+      toolName,
     },
   };
-  return getDenyRules(launchPermissionContext).some(function (y) {
-    return toolMatchesRule(launchPermissionContext, a, y);
+  return getDenyRules(launchPermissionContext).some(function (rule) {
+    return toolMatchesRule(launchPermissionContext, ruleInput, rule);
   });
 }
 //@ chunk-wy9dbk5f.js:43952-44086 placement
-function formatEnabledChoiceResult(e, r) {
-  if (!r) throw Error("The choice could not be saved");
+function formatEnabledChoiceResult(enabled, saved) {
+  if (!saved) throw Error("The choice could not be saved");
   return {
-    summary: e ? "Saved as on" : "Switched off",
+    summary: enabled ? "Saved as on" : "Switched off",
     output: {
-      enabled: e,
+      enabled,
     },
   };
 }
@@ -715,26 +731,26 @@ var LISTORGCONNECTORMCPSERVERS = "ListOrgConnectorMcpServers";
 var RELAYORGCONNECTORMCPMESSAGE = "RelayOrgConnectorMcpMessage";
 var orgConnectorServersSchema = DoctorLazy(() =>
   record(
-    string()
+    stringSchema()
       .startsWith(ORG_CONNECTOR)
       .regex(/^(?!.*[._]{2})[A-Za-z0-9._-]+[A-Za-z0-9]$/)
       .max(MAX_SERVER_NAME_CHARS),
     zodStrictObject({
       type: _enum(["http", "sse"]),
-      url: A8e({
+      url: urlSchema({
         protocol: /^https$/,
       }).max(4096),
     }),
-  ).refine((e) => Object.keys(e).length <= MAX_SERVERS_PER_LISTING),
+  ).refine((servers) => Object.keys(servers).length <= MAX_SERVERS_PER_LISTING),
 );
 //@ chunk-wy9dbk5f.js:44357-44967 placement
-function serveListOrgConnectorServers(e, r, n) {
-  let s = orgConnectorServersSchema().safeParse(Object(e).servers);
-  if (!s.success)
+function serveListOrgConnectorServers(input, signal, context) {
+  let parsed = orgConnectorServersSchema().safeParse(Object(input).servers);
+  if (!parsed.success)
     throw Error(
       "Takes `servers`: http or sse entries with an https URL, each under a name that starts with org-connector-, has only letters, digits, . _ and -, has no two of . and _ in a row, ends in a letter or a digit, and has at most 128 characters",
     );
-  let { list } = relayStateSlot.of(n.session);
+  let { list } = relayStateSlot.of(context.session);
   return list(
     "orgConnectors",
     async function () {
@@ -742,27 +758,27 @@ function serveListOrgConnectorServers(e, r, n) {
       invalidateCommandNames();
       let { config } = parseMcpConfig({
         configObject: {
-          mcpServers: s.data,
+          mcpServers: parsed.data,
         },
         expandVars: false,
         scope: "dynamic",
       });
       let { allowed } = filterMcpServersByPolicy(config?.mcpServers ?? {});
-      let h = {};
+      let servable = {};
       for (let [key, value] of Object.entries(allowed))
-        h[key] = {
+        servable[key] = {
           ...value,
           scope: "dynamic",
         };
-      return h;
+      return servable;
     },
-    r,
-    n,
+    signal,
+    context,
   );
 }
 //@ chunk-wy9dbk5f.js:44967-45019 placement
-function relayOrgConnectorMessage(e, r, n) {
-  return relayMcpMessage("orgConnectors", e, r, n);
+function relayOrgConnectorMessage(input, rawInput, context) {
+  return relayMcpMessage("orgConnectors", input, rawInput, context);
 }
 //@ chunk-wy9dbk5f.js:45019-45235 placement
 /**
@@ -771,15 +787,15 @@ function relayOrgConnectorMessage(e, r, n) {
 var LISTPLUGINMCPSERVERS = "ListPluginMcpServers";
 var RELAYPLUGINMCPMESSAGE = "RelayPluginMcpMessage";
 var listPluginServersInputSchema = DoctorLazy(() =>
-  u({
-    waitMs: E().int().positive().optional().catch(undefined),
-    resync: M().optional().catch(undefined),
-    registeredHooks: record(string(), registeredHooksListSchema()).optional().catch(undefined),
+  objectSchema({
+    waitMs: numberSchema().int().positive().optional().catch(undefined),
+    resync: booleanSchema().optional().catch(undefined),
+    registeredHooks: record(stringSchema(), registeredHooksListSchema()).optional().catch(undefined),
   }),
 );
 //@ chunk-wy9dbk5f.js:45235-45319 placement = getServerCommandArray (1)
-function getServerCommandArray({ type: e, command }) {
-  return e === "stdio" || (e === undefined && typeof command === "string");
+function getServerCommandArray({ type, command }) {
+  return type === "stdio" || (type === undefined && typeof command === "string");
 }
 //@ chunk-wy9dbk5f.js:45319-45406 placement
 /**
@@ -790,18 +806,18 @@ function pluginServerKey(folder, serverName) {
   return `plugin:${index === -1 ? folder : folder.slice(0, index)}:${serverName}`;
 }
 //@ chunk-wy9dbk5f.js:45406-45452 placement
-function relayPluginMcpMessage(e, r, n) {
-  return relayMcpMessage("plugins", e, r, n);
+function relayPluginMcpMessage(input, rawInput, context) {
+  return relayMcpMessage("plugins", input, rawInput, context);
 }
 //@ chunk-wy9dbk5f.js:45452-45621 placement
-async function serveListPluginMcpServers(e, r, n) {
-  let s = listPluginServersInputSchema().safeParse(e ?? {}).data;
-  let { list } = relayStateSlot.of(n.session);
-  let c = await list("plugins", createSyncedPluginServerLoader(s ?? {}), r, n);
+async function serveListPluginMcpServers(input, signal, context) {
+  let parsed = listPluginServersInputSchema().safeParse(input ?? {}).data;
+  let { list } = relayStateSlot.of(context.session);
+  let listing = await list("plugins", createSyncedPluginServerLoader(parsed ?? {}), signal, context);
   return {
-    ...c,
+    ...listing,
     output: {
-      ...c.output,
+      ...listing.output,
       hooksChecked: true,
     },
   };
@@ -824,40 +840,41 @@ function createSyncedPluginServerLoader({ waitMs = 1 / 0, resync = false, regist
     refreshPluginCaches(storageV5, credentials);
     let configs = await loadServableMcpConfigs(context);
     let plugins = await loadAllPluginsCacheOnly(storageV5, credentials);
-    let b = new Map(
-      plugins.enabled.map((O) => [
-        O.source,
+    let folderBySource = new Map(
+      plugins.enabled.map((plugin) => [
+        plugin.source,
         {
-          folder: syncedPluginFolderId(O.path),
-          pluginPath: O.path,
+          folder: syncedPluginFolderId(plugin.path),
+          pluginPath: plugin.path,
         },
       ]),
     );
     let result = {};
-    let x = 0;
-    let w = 0;
+    let renamedCount = 0;
+    let hooksDifferCount = 0;
     for (let [key, value] of Object.entries(configs)) {
       let { pluginSource } = value;
-      let j = pluginSource && b.get(pluginSource);
-      if (!j || marketplaceSuffix(pluginSource) !== SYNCED || !getServerCommandArray(value)) continue;
+      let pluginInfo = pluginSource && folderBySource.get(pluginSource);
+      if (!pluginInfo || marketplaceSuffix(pluginSource) !== SYNCED || !getServerCommandArray(value))
+        continue;
       let serverName = parsePluginServerName(key)?.serverName;
-      let H = serverName && pluginServerKey(j.folder, serverName);
-      if (H !== key) {
-        x++;
+      let serverKey = serverName && pluginServerKey(pluginInfo.folder, serverName);
+      if (serverKey !== key) {
+        renamedCount++;
         continue;
       }
-      let Y = {
+      let pluginRef = {
         sourceName: pluginSource,
-        pluginPath: j.pluginPath,
+        pluginPath: pluginInfo.pluginPath,
       };
-      if (isPluginHooksMismatched(Y, plugins, registeredHooks?.[j.folder])) {
-        w++;
+      if (isPluginHooksMismatched(pluginRef, plugins, registeredHooks?.[pluginInfo.folder])) {
+        hooksDifferCount++;
         continue;
       }
-      result[H] = value;
+      result[serverKey] = value;
     }
-    if (x > 0) logFeatureSad("ccs_plugin_mcp", "named_otherwise_by_manifest");
-    if (w > 0) logFeatureSad("ccs_plugin_mcp", "hooks_differ");
+    if (renamedCount > 0) logFeatureSad("ccs_plugin_mcp", "named_otherwise_by_manifest");
+    if (hooksDifferCount > 0) logFeatureSad("ccs_plugin_mcp", "hooks_differ");
     return result;
   };
 }

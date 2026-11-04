@@ -28,11 +28,11 @@ var outputStyleCommand = {
   get isHidden() {
     return !getIsNonInteractiveSession() && isSettingsMovedToConfig() && !isMovedToConfigCommandHidden();
   },
-  load: () => import("./chunk-1ehcpf9z.js"),
+  load: () => import("./CUSTOM_CURRENT_STYLE_PLACEHOLDER.lazy.js"),
 };
 //@ chunk-e6aww6q8.js:2257483-2257565 fingerprint = outputStyle (0.559)
-function outputStyle(e) {
-  switch (e) {
+function outputStyle(arg) {
+  switch (arg) {
     case "output-style":
       return OUTPUT_STYLE_IDENTITY_LINE;
     case "default":

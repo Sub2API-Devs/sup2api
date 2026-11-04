@@ -47,7 +47,7 @@ import {
   sanitizeBracketText,
 } from "../../../services/artifacts/designSystemGuide.js";
 import { readArtifactFileViaWebFetch } from "../../../services/artifacts/webfetchRead.js";
-import { u } from "../../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema } from "../../../../vendor/zod/v4/classic/schemas.js";
 import { initReferencesSchema } from "../startKitSchemas.js";
 import { fileInlineEnvelope } from "../../../services/artifacts/readArtifactForModel.js";
 
@@ -55,12 +55,12 @@ import { fileInlineEnvelope } from "../../../services/artifacts/readArtifactForM
 /**
  * read 一个 Artifact 类型链接（而非实例）时：读取类型自带说明文件（如有），返回 {artifact_type, read_of_type_link}。
  */
-async function readTypeLinkDescription(e, firstPartyTypeDetail, s) {
-  let r = firstPartyTypeDetail.shipsInstructions
+async function readTypeLinkDescription(artifactUrl, firstPartyTypeDetail, context) {
+  let instructions = firstPartyTypeDetail.shipsInstructions
     ? await readTypeOwnInstructions(
-        e,
-        s.abortController.signal,
-        s.credentials,
+        artifactUrl,
+        context.abortController.signal,
+        context.credentials,
         firstPartyTypeDetail.files,
         false,
       )
@@ -69,7 +69,7 @@ async function readTypeLinkDescription(e, firstPartyTypeDetail, s) {
     path: false,
   });
   return {
-    artifact_type: artifactTypeResult(firstPartyTypeDetail, r),
+    artifact_type: artifactTypeResult(firstPartyTypeDetail, instructions),
     read_of_type_link: true,
   };
 }
@@ -78,22 +78,22 @@ async function readTypeLinkDescription(e, firstPartyTypeDetail, s) {
  * 读取类型的单个文件（NFC 规范化路径）：成功返回内容/字数，否则给出 unread 原因（未列出/扣留/非文本/过大/不可用），并标记目录服务是否不可用。
  */
 async function readOneTypeFile(typeRef, typeInfo, path, context) {
-  let normalized = path.normalize("NFC");
-  let artifactTypeFile = await readArtifactTypeFile(typeRef.slug, normalized, {
+  let path_2 = path.normalize("NFC");
+  let artifactTypeFile = await readArtifactTypeFile(typeRef.slug, path_2, {
     signal: context.abortController.signal,
     credentials: context.credentials,
   });
-  let p =
+  let unreadReason =
     artifactTypeFile.kind === "read"
       ? undefined
       : artifactTypeFile.kind === "withheld" &&
           typeInfo.filesOmitted === 0 &&
-          !typeInfo.files.includes(normalized)
+          !typeInfo.files.includes(path_2)
         ? "not_listed"
         : artifactTypeFile.kind;
   return {
     typeFile: {
-      path: normalized,
+      path: path_2,
       ...(artifactTypeFile.kind === "read" && {
         content: artifactTypeFile.text,
         chars: artifactTypeFile.chars,
@@ -101,8 +101,8 @@ async function readOneTypeFile(typeRef, typeInfo, path, context) {
           clipped: true,
         }),
       }),
-      ...(p !== undefined && {
-        unread: p,
+      ...(unreadReason !== undefined && {
+        unread: unreadReason,
       }),
       ...(artifactTypeFile.kind === "unavailable" && {
         why: artifactTypeFile.why,
@@ -136,18 +136,18 @@ async function readTypeLinkFile(typeRef, typeInfo, path, context) {
  * 按 paths 读取类型的多个文件（数量与结果字符预算有上限）：已有目录不可用时后续路径直接标记 unavailable，超出预算的标 result_full，记 artifact_type_link_read 埋点。
  */
 async function readTypeLinkFiles(typeRef, typeInfo, paths, context, renderFile) {
-  let y = {
+  let baseResult = {
     artifact_type: artifactTypeResult(typeInfo, null),
     read_of_type_link: true,
   };
-  let p = (typeFile) =>
+  let renderOneFile = (typeFile) =>
     renderFile({
-      ...y,
+      ...baseResult,
       type_file: typeFile,
     });
   let budgetLeft = TYPE_FILES_RESULT_BUDGET;
   let catalogDownWhy;
-  let S = 0;
+  let skippedCount = 0;
   let results = await Promise.all(
     paths.slice(0, MAX_TYPE_FILES_PER_READ).map(
       limitConcurrency(FILE_READ_CONCURRENCY, async ({ path, setAside }) => {
@@ -165,7 +165,7 @@ async function readTypeLinkFiles(typeRef, typeInfo, paths, context, renderFile) 
             why: setAside,
           };
         else if (catalogDownWhy !== undefined) {
-          S++;
+          skippedCount++;
           typeFile = {
             path,
             unread: "unavailable",
@@ -176,44 +176,44 @@ async function readTypeLinkFiles(typeRef, typeInfo, paths, context, renderFile) 
           typeFile = oneTypeFile.typeFile;
           if (oneTypeFile.catalogDown) catalogDownWhy ??= typeFile.why;
         }
-        budgetLeft -= p(typeFile).length;
+        budgetLeft -= renderOneFile(typeFile).length;
         return typeFile;
       }),
     ),
   );
-  let T = countFittingFiles(results, p);
-  let mapped = paths.map(({ path }, M) =>
-    M < T
-      ? results[M]
+  let fittingCount = countFittingFiles(results, renderOneFile);
+  let mapped = paths.map(({ path }, index) =>
+    index < fittingCount
+      ? results[index]
       : {
           path,
           unread: "result_full",
         },
   );
-  let L = {
+  let stats = {
     path: true,
     paths: mapped.length,
-    read: count(mapped, (V) => V.unread === undefined),
-    skipped_catalog_down: S,
+    read: count(mapped, (typeFile) => typeFile.unread === undefined),
+    skipped_catalog_down: skippedCount,
   };
-  if (L.read > 0) logFeatureOk("artifact_type_link_read", L);
-  else logFeatureSad("artifact_type_link_read", "none_read", L);
+  if (stats.read > 0) logFeatureOk("artifact_type_link_read", stats);
+  else logFeatureSad("artifact_type_link_read", "none_read", stats);
   return {
-    ...y,
+    ...baseResult,
     type_files_read: mapped,
   };
 }
 //@ chunk-8wvtd8sr.js:316694-316827 placement
-function countFittingFiles(e, n) {
-  let s = TYPE_FILES_RESULT_BUDGET;
-  let r = 0;
-  for (let h of e.slice(0, MAX_TYPE_FILES_PER_READ)) {
-    if (h.unread === "result_full") break;
-    s -= n(h).length;
-    if (s < 0) break;
-    r++;
+function countFittingFiles(typeFiles, renderFile) {
+  let budgetLeft = TYPE_FILES_RESULT_BUDGET;
+  let count = 0;
+  for (let typeFile of typeFiles.slice(0, MAX_TYPE_FILES_PER_READ)) {
+    if (typeFile.unread === "result_full") break;
+    budgetLeft -= renderFile(typeFile).length;
+    if (budgetLeft < 0) break;
+    count++;
   }
-  return r;
+  return count;
 }
 //@ chunk-8wvtd8sr.js:316827-317007 placement
 /**
@@ -228,53 +228,54 @@ function typeLinkReadPrefix(title) {
 /**
  * 读取类型文件的结果标题：文件为空或显示了多少字符（不写入磁盘）。
  */
-function typeFileReadHeader(path, n, s, r) {
-  return r
-    ? `Read ${safeJsonQuote(path)} from the ${jsonTitleOrDefault(s)} Artifact type: the file is empty; nothing was saved to disk.`
-    : `Read ${safeJsonQuote(path)} (${n} characters) from the ${jsonTitleOrDefault(s)} Artifact type; shown below, not saved to disk.`;
+function typeFileReadHeader(path, chars, typeTitle, isEmpty) {
+  return isEmpty
+    ? `Read ${safeJsonQuote(path)} from the ${jsonTitleOrDefault(typeTitle)} Artifact type: the file is empty; nothing was saved to disk.`
+    : `Read ${safeJsonQuote(path)} (${chars} characters) from the ${jsonTitleOrDefault(typeTitle)} Artifact type; shown below, not saved to disk.`;
 }
 //@ chunk-8wvtd8sr.js:317231-317358 placement
 /**
  * 渲染读到的多个类型文件：预算内的逐个显示，其余只列路径。
  */
-function renderTypeFilesRead(e, n) {
-  let s = countFittingFiles(e, n);
-  let mapped = e.slice(0, s).map(n);
-  if (s < e.length) mapped.push(notReadPathsNote(e.slice(s).map((h) => h.path)));
+function renderTypeFilesRead(typeFiles, renderFile) {
+  let fittingCount = countFittingFiles(typeFiles, renderFile);
+  let mapped = typeFiles.slice(0, fittingCount).map(renderFile);
+  if (fittingCount < typeFiles.length)
+    mapped.push(notReadPathsNote(typeFiles.slice(fittingCount).map((typeFile) => typeFile.path)));
   return mapped.join(`
 
 `);
 }
 //@ chunk-8wvtd8sr.js:317358-317653 placement
-function notReadPathsNote(e) {
-  let n = safeJsonQuote(truncateToLength(e[0] ?? "", MAX_PUBLISHED_PATH_LENGTH));
-  let [s, r] =
-    e.length === 1
+function notReadPathsNote(typeFiles) {
+  let firstPath = safeJsonQuote(truncateToLength(typeFiles[0] ?? "", MAX_PUBLISHED_PATH_LENGTH));
+  let [restNote, themWord] =
+    typeFiles.length === 1
       ? ["", "it"]
-      : [` and the ${e.length === 2 ? "one" : e.length - 1} after it in \`paths\``, "them"];
-  return `Not read: ${n}${s}. One read of a type's files shows at most ${MAX_TYPE_FILES_PER_READ} files and about ${TYPE_FILES_RESULT_BUDGET} characters; to read ${r}, pass ${r} in another call.`;
+      : [` and the ${typeFiles.length === 2 ? "one" : typeFiles.length - 1} after it in \`paths\``, "them"];
+  return `Not read: ${firstPath}${restNote}. One read of a type's files shows at most ${MAX_TYPE_FILES_PER_READ} files and about ${TYPE_FILES_RESULT_BUDGET} characters; to read ${themWord}, pass ${themWord} in another call.`;
 }
 //@ chunk-8wvtd8sr.js:317653-318756 placement
 /**
  * 类型文件未读时给模型的说明：扣留、不在文件列表、非文本、过大、目录不可用或结果已满；可读时提示用由该类型创建的 Artifact 的 url 去读。
  */
 function typeFileUnreadMessage(file, typeInfo, creatingFromType) {
-  let r = safeJsonQuote(file.path);
-  let h = jsonTitleOrDefault(typeInfo.title);
-  let y = creatingFromType
+  let shownPath = safeJsonQuote(file.path);
+  let shownTitle = jsonTitleOrDefault(typeInfo.title);
+  let createHint = creatingFromType
     ? " Any Artifact made from the type carries the same file: read this path with such an Artifact's url \u2014 one the user already has, or, if you are making one from the type anyway, the one you create first (publish with its `type_url` and no files)."
     : " An Artifact made from the type carries the same file: if the user has one, read this path with that Artifact's url.";
   switch (file.unread) {
     case "withheld":
-      return `${r} of the ${h} Artifact type can't be read from this session yet; nothing was saved.${y}`;
+      return `${shownPath} of the ${shownTitle} Artifact type can't be read from this session yet; nothing was saved.${createHint}`;
     case "not_listed":
-      return `${r} is not one of the ${h} Artifact type's files (${formatPathList(typeInfo.files, typeInfo.files.length + (typeInfo.files_omitted ?? 0))}); nothing was saved.`;
+      return `${shownPath} is not one of the ${shownTitle} Artifact type's files (${formatPathList(typeInfo.files, typeInfo.files.length + (typeInfo.files_omitted ?? 0))}); nothing was saved.`;
     case "not_text":
-      return `${r} of the ${h} Artifact type is not a text file, so it can't be shown here; nothing was saved.${y}`;
+      return `${shownPath} of the ${shownTitle} Artifact type is not a text file, so it can't be shown here; nothing was saved.${createHint}`;
     case "too_large":
-      return `${r} of the ${h} Artifact type is too large to show here; nothing was saved.${y}`;
+      return `${shownPath} of the ${shownTitle} Artifact type is too large to show here; nothing was saved.${createHint}`;
     case "unavailable":
-      return `${r} of the ${h} Artifact type was not read (${file.why ?? "the catalog did not answer"}); nothing was saved.`;
+      return `${shownPath} of the ${shownTitle} Artifact type was not read (${file.why ?? "the catalog did not answer"}); nothing was saved.`;
     case "result_full":
       return notReadPathsNote([file.path]);
   }
@@ -283,8 +284,8 @@ function typeFileUnreadMessage(file, typeInfo, creatingFromType) {
 /**
  * 把标题 JSON 化，空标题回退 Untitled。
  */
-function jsonTitleOrDefault(e) {
-  return jsonStringify(sanitizeDisplayTitle(e) ?? "Untitled");
+function jsonTitleOrDefault(title) {
+  return jsonStringify(sanitizeDisplayTitle(title) ?? "Untitled");
 }
 //@ chunk-8wvtd8sr.js:318799-318868 placement
 /**
@@ -301,18 +302,20 @@ var INIT_REFERENCE_MAX_DOCS = 200;
  */
 async function fetchInitReferences(target, options) {
   let { typeSlug, typeFiles, instructions, context } = options;
-  let p = instructions === undefined ? undefined : instructionsTypeKey(instructions);
-  let w = p === undefined ? undefined : TYPE_REFERENCE_URL_BY_TYPE.get(p);
-  if (w === undefined || getAttestationKind(typeSlug) !== "first_party_type") return {};
-  let A = typeFiles.length > 0 ? w.filter((T) => typeFiles.includes(T)) : w;
-  let filtered = A.filter((T) => options.onDisk?.includes(T) !== true);
+  let instructionsKey = instructions === undefined ? undefined : instructionsTypeKey(instructions);
+  let referenceUrls =
+    instructionsKey === undefined ? undefined : TYPE_REFERENCE_URL_BY_TYPE.get(instructionsKey);
+  if (referenceUrls === undefined || getAttestationKind(typeSlug) !== "first_party_type") return {};
+  let wantedUrls =
+    typeFiles.length > 0 ? referenceUrls.filter((url) => typeFiles.includes(url)) : referenceUrls;
+  let filtered = wantedUrls.filter((url) => options.onDisk?.includes(url) !== true);
   if (filtered.length === 0) {
-    if (A.length > 0)
+    if (wantedUrls.length > 0)
       logFeatureOk("artifact_init_bundle", {
         references: 0,
         unread: 0,
         fetch_failed: 0,
-        on_disk: A.length,
+        on_disk: wantedUrls.length,
       });
     return {};
   }
@@ -321,34 +324,34 @@ async function fetchInitReferences(target, options) {
     refTimer: true,
   });
   try {
-    let T = artifactViewerUrlFor(target);
+    let viewerUrl = artifactViewerUrlFor(target);
     let results = await Promise.all(
-      filtered.map((x) =>
-        hasDesignSystemReadRule(target, T, "read_file", context, {
+      filtered.map((url) =>
+        hasDesignSystemReadRule(target, viewerUrl, "read_file", context, {
           fields: {
-            path: x,
+            path: url,
           },
           pipelineRan: true,
         })
           ? Promise.resolve({
-              path: x,
+              path: url,
               why: "a permission rule governs reading it \u2014 read it yourself and that rule decides",
             })
           : raceWithDeadline(
               readArtifactFileViaWebFetch(
                 target,
-                x,
+                url,
                 combinedAbortSignal.signal,
                 context.credentials,
                 "artifact_type_reference_read",
               ).then((artifactFileViaWebFetch) => {
                 if (artifactFileViaWebFetch.err === null)
                   return {
-                    path: x,
+                    path: url,
                     text: artifactFileViaWebFetch.html,
                   };
                 return {
-                  path: x,
+                  path: url,
                   ...(artifactFileViaWebFetch.missingFile !== true && {
                     fetchFailed: true,
                   }),
@@ -360,35 +363,36 @@ async function fetchInitReferences(target, options) {
               }),
               combinedAbortSignal.signal,
               context,
-              (q) => ({
-                path: x,
-                why: `${READ_FAILURE_REASONS[q]} \u2014 read it yourself`,
+              (failure) => ({
+                path: url,
+                why: `${READ_FAILURE_REASONS[failure]} \u2014 read it yourself`,
               }),
             ),
       ),
     );
-    let flattened = results.flatMap((x) =>
-      "text" in x && x.text.trim() !== ""
-        ? [clipGuideText(x.path, x.text, INIT_REFERENCE_FETCH_TIMEOUT_MS)]
+    let flattened = results.flatMap((result) =>
+      "text" in result && result.text.trim() !== ""
+        ? [clipGuideText(result.path, result.text, INIT_REFERENCE_FETCH_TIMEOUT_MS)]
         : [],
     );
-    let flattened_2 = results.flatMap((x) =>
-      "why" in x
+    let flattened_2 = results.flatMap((result) =>
+      "why" in result
         ? [
             {
-              path: x.path,
-              why: x.why,
+              path: result.path,
+              why: result.why,
             },
           ]
         : [],
     );
-    let M = count(results, (x) => "fetchFailed" in x && x.fetchFailed === true);
-    if (flattened.length === 0 && M > 0) logFeatureSad("artifact_init_bundle", "references_unread");
+    let fetchFailedCount = count(results, (result) => "fetchFailed" in result && result.fetchFailed === true);
+    if (flattened.length === 0 && fetchFailedCount > 0)
+      logFeatureSad("artifact_init_bundle", "references_unread");
     else
       logFeatureOk("artifact_init_bundle", {
         references: flattened.length,
         unread: flattened_2.length,
-        fetch_failed: M,
+        fetch_failed: fetchFailedCount,
       });
     return {
       init_references: {
@@ -411,22 +415,22 @@ var NO_DESIGN_SYSTEM_NOTE = "only of use with a design system, and none is liste
 /**
  * 扣留已在类型文件中的初始参考页：把这些页从 init_references.docs 移到 unavailable（附原因）并记埋点；无重叠时原样返回。
  */
-function withholdInitReferences(e, n, s) {
-  let initReferences = e.init_references;
-  if (!s || initReferences === undefined) return e;
-  let h = inlinedByCreateDesignPaths(n);
-  let filtered = initReferences.docs.filter((doc) => h.includes(doc.path));
-  if (filtered.length === 0) return e;
+function withholdInitReferences(result, typeKey, loadedNone) {
+  let initReferences = result.init_references;
+  if (!loadedNone || initReferences === undefined) return result;
+  let designPaths = inlinedByCreateDesignPaths(typeKey);
+  let filtered = initReferences.docs.filter((doc) => designPaths.includes(doc.path));
+  if (filtered.length === 0) return result;
   logFeatureOk("artifact_init_reference_withheld", {
     pages: filtered.length,
   });
   return {
     init_references: {
-      docs: initReferences.docs.filter((doc) => !h.includes(doc.path)),
+      docs: initReferences.docs.filter((doc) => !designPaths.includes(doc.path)),
       unavailable: [
         ...(initReferences.unavailable ?? []),
-        ...filtered.map((p) => ({
-          path: p.path,
+        ...filtered.map((doc) => ({
+          path: doc.path,
           why: NO_DESIGN_SYSTEM_NOTE,
         })),
       ],
@@ -442,49 +446,49 @@ var ARTIFACT_TYPE_REFERENCE_ID_REGEX = /^artifact-type\/reference\/[A-Za-z0-9_.-
 /**
  * 把 init_references 渲染成结果尾部：附上参考页面内容（注明不要再取），以及未能附上的页面及原因。
  */
-function renderInitReferences(e) {
-  let n = u(initReferencesSchema()).safeParse({
-    init_references: e.init_references,
+function renderInitReferences(result) {
+  let parsed = objectSchema(initReferencesSchema()).safeParse({
+    init_references: result.init_references,
   });
-  let initReferences = n.success ? n.data.init_references : undefined;
+  let initReferences = parsed.success ? parsed.data.init_references : undefined;
   if (initReferences === undefined) return "";
   let mapped = initReferences.docs
     .filter((doc) => ARTIFACT_TYPE_REFERENCE_ID_REGEX.test(doc.path) && doc.text !== "")
     .map((doc) => {
-      let A = clipGuideText(doc.path, doc.text, INIT_REFERENCE_FETCH_TIMEOUT_MS);
+      let initReferences = clipGuideText(doc.path, doc.text, INIT_REFERENCE_FETCH_TIMEOUT_MS);
       return {
-        ...A,
-        chars: Math.max(A.chars, doc.chars),
-        clipped: A.clipped === true || doc.clipped === true,
+        ...initReferences,
+        chars: Math.max(initReferences.chars, doc.chars),
+        clipped: initReferences.clipped === true || doc.clipped === true,
       };
     });
-  let h = new Map();
-  for (let w of initReferences.unavailable ?? [])
-    if (ARTIFACT_TYPE_REFERENCE_ID_REGEX.test(w.path)) {
-      let A = sanitizeBracketText(w.why, INIT_REFERENCE_MAX_DOCS);
-      h.set(A, [...(h.get(A) ?? []), w.path]);
+  let docsMapped = new Map();
+  for (let doc of initReferences.unavailable ?? [])
+    if (ARTIFACT_TYPE_REFERENCE_ID_REGEX.test(doc.path)) {
+      let unavailable = sanitizeBracketText(doc.why, INIT_REFERENCE_MAX_DOCS);
+      docsMapped.set(unavailable, [...(docsMapped.get(unavailable) ?? []), doc.path]);
     }
-  let mapped_2 = [...h].map(([w, A]) => `${A.join(", ")} (${w})`);
+  let mapped_2 = [...docsMapped].map(([item, mapped_2]) => `${mapped_2.join(", ")} (${item})`);
   if (mapped.length === 0)
     return mapped_2.length > 0
       ? `
 
 [Type reference pages not attached: ${mapped_2.join("; ")}.]`
       : "";
-  let any = mapped.some((w) => w.clipped);
+  let any = mapped.some((doc) => doc.clipped);
   return (
     `
 
-The type's reference pages that its instructions above say to read first follow \u2014 ${mapped.map((w) => w.path).join(", ")}, the same files a read of this Artifact returns; do not fetch them again${any ? " unless you need a clipped remainder" : ""}.${mapped_2.length > 0 ? ` Not attached: ${mapped_2.join("; ")}.` : ""}
+The type's reference pages that its instructions above say to read first follow \u2014 ${mapped.map((doc) => doc.path).join(", ")}, the same files a read of this Artifact returns; do not fetch them again${any ? " unless you need a clipped remainder" : ""}.${mapped_2.length > 0 ? ` Not attached: ${mapped_2.join("; ")}.` : ""}
 
 ` +
-    mapped.map((w) => {
-      let A = w.clipped
+    mapped.map((doc) => {
+      let clipNote = doc.clipped
         ? `
-[\u2026clipped at ${Array.from(w.text).length} of ${w.chars} characters; read the whole page if you need the rest]`
+[\u2026clipped at ${Array.from(doc.text).length} of ${doc.chars} characters; read the whole page if you need the rest]`
         : "";
-      return `${w.path}:
-${fileInlineEnvelope(w.text + A)}`;
+      return `${doc.path}:
+${fileInlineEnvelope(doc.text + clipNote)}`;
     }).join(`
 
 `)

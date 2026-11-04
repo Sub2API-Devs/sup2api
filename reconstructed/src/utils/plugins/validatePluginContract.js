@@ -13,18 +13,18 @@ import { errorMessage } from "../errors.js";
 import { getFirstLine, collapseWhitespace } from "../stringUtils.js";
 
 //@ chunk-85kmkm1x.js:1344-1470 placement
-function detectForbiddenComment(e) {
-  let matches = /@ts-/i.test(e);
-  let matches_2 = /\u2500\u2500 from plugin |\/\/\s*Skipped:/.test(e);
+function detectForbiddenComment(source) {
+  let matches = /@ts-/i.test(source);
+  let matches_2 = /\u2500\u2500 from plugin |\/\/\s*Skipped:/.test(source);
   return matches ? "@ts-" : matches_2 ? "framing" : undefined;
 }
 //@ chunk-85kmkm1x.js:1470-1520 placement
-var isPunctToken = (e, n, ...s) => e?.kind === n && s.includes(e.text);
+var isPunctToken = (token, kind, ...texts) => token?.kind === kind && texts.includes(token.text);
 //@ chunk-85kmkm1x.js:1520-1611 placement
-function bracketDelta(e) {
-  let n = isPunctToken(e, "punct", "{", "(", "[");
-  let s = isPunctToken(e, "punct", "}", ")", "]");
-  return n ? 1 : s ? -1 : 0;
+function bracketDelta(token) {
+  let opens = isPunctToken(token, "punct", "{", "(", "[");
+  let closes = isPunctToken(token, "punct", "}", ")", "]");
+  return opens ? 1 : closes ? -1 : 0;
 }
 //@ chunk-85kmkm1x.js:1611-1651 placement
 var makeToken = (kind, text, line) => ({
@@ -33,340 +33,352 @@ var makeToken = (kind, text, line) => ({
   line,
 });
 //@ chunk-85kmkm1x.js:1651-1864 placement
-var lexBlockComment = (e, n, s) => {
-  let index = e.indexOf("*/", n + 2);
-  let a = index !== -1;
-  let i = a ? index + 2 : e.length;
-  let sliced = e.slice(n, i);
-  let match = sliced.match(/\r\n|[\n\r\u2028\u2029]/g);
-  let line = s + (match?.length ?? 0);
-  let p = a ? detectForbiddenComment(sliced) : "/*";
-  let y = {
-    end: i,
-    line,
+var lexBlockComment = (source, start, line) => {
+  let index = source.indexOf("*/", start + 2);
+  let closed = index !== -1;
+  let end = closed ? index + 2 : source.length;
+  let source_2 = source.slice(start, end);
+  let match = source_2.match(/\r\n|[\n\r\u2028\u2029]/g);
+  let line_2 = line + (match?.length ?? 0);
+  let forbidden = closed ? detectForbiddenComment(source_2) : "/*";
+  let result = {
+    end,
+    line: line_2,
   };
-  return p
+  return forbidden
     ? {
-        ...y,
-        token: makeToken("stray", p, s),
+        ...result,
+        token: makeToken("stray", forbidden, line),
       }
-    : y;
+    : result;
 };
 //@ chunk-85kmkm1x.js:1864-2092 placement
-var lexLineComment = (e, n, s) => {
-  let r = e.slice(n).search(/[\n\r\u2028\u2029]/);
-  let a = r === -1 ? e.length : n + r;
-  let trimmed = e.slice(n, a).trim();
-  let forbiddenComment = detectForbiddenComment(trimmed);
-  let m = trimmed.startsWith("///")
-    ? makeToken("reference", trimmed, s)
+var lexLineComment = (source, start, line) => {
+  let newlineIndex = source.slice(start).search(/[\n\r\u2028\u2029]/);
+  let end = newlineIndex === -1 ? source.length : start + newlineIndex;
+  let source_2 = source.slice(start, end).trim();
+  let forbiddenComment = detectForbiddenComment(source_2);
+  let token = source_2.startsWith("///")
+    ? makeToken("reference", source_2, line)
     : forbiddenComment
-      ? makeToken("stray", forbiddenComment, s)
+      ? makeToken("stray", forbiddenComment, line)
       : undefined;
-  return m
+  return token
     ? {
-        end: a,
-        line: s,
-        token: m,
+        end,
+        line,
+        token,
       }
     : {
-        end: a,
-        line: s,
+        end,
+        line,
       };
 };
 //@ chunk-85kmkm1x.js:2092-2346 placement
-var lexStringLiteral = (e, n, s) => {
-  let r = e[n] ?? "";
-  let a = "";
-  let i = n + 1;
-  while (i < e.length) {
-    let c = e[i] ?? "";
-    let m = c === "\\" && i + 1 < e.length;
+var lexStringLiteral = (source, start, line) => {
+  let quote = source[start] ?? "";
+  let text = "";
+  let index = start + 1;
+  while (index < source.length) {
+    let char = source[index] ?? "";
+    let isEscape = char === "\\" && index + 1 < source.length;
     if (
-      c === r ||
-      c ===
+      char === quote ||
+      char ===
         `
 ` ||
-      c === "\r"
+      char === "\r"
     )
       break;
-    a += m ? (e[i + 1] ?? "") : c;
-    i += m ? 2 : 1;
+    text += isEscape ? (source[index + 1] ?? "") : char;
+    index += isEscape ? 2 : 1;
   }
-  return e[i] === r
+  return source[index] === quote
     ? {
-        end: i + 1,
-        line: s,
-        token: makeToken("string", a, s),
+        end: index + 1,
+        line,
+        token: makeToken("string", text, line),
       }
     : {
-        end: i,
-        line: s,
-        token: makeToken("stray", r, s),
+        end: index,
+        line,
+        token: makeToken("stray", quote, line),
       };
 };
 //@ chunk-85kmkm1x.js:2346-2472 placement
-var lexWord = (e, n, s) => {
-  let r = n + 1;
-  while (r < e.length && /[\w$]/.test(e[r] ?? "")) r += 1;
+var lexWord = (source, start, line) => {
+  let end = start + 1;
+  while (end < source.length && /[\w$]/.test(source[end] ?? "")) end += 1;
   return {
-    end: r,
-    line: s,
-    token: makeToken("word", e.slice(n, r), s),
+    end,
+    line,
+    token: makeToken("word", source.slice(start, end), line),
   };
 };
 //@ chunk-85kmkm1x.js:2472-2610 placement
-function pickLexer(e, n) {
-  let s = e[n] ?? "";
-  let sliced = e.slice(n, n + 2);
-  let a = {
+function pickLexer(source, index) {
+  let char = source[index] ?? "";
+  let sliced = source.slice(index, index + 2);
+  let commentLexers = {
     "//": lexLineComment,
     "/*": lexBlockComment,
   };
-  let i = {
+  let stringLexers = {
     "'": lexStringLiteral,
     '"': lexStringLiteral,
   };
-  let matches = /[\w$]/.test(s);
-  return a[sliced] ?? i[s] ?? (matches ? lexWord : undefined);
+  let matches = /[\w$]/.test(char);
+  return commentLexers[sliced] ?? stringLexers[char] ?? (matches ? lexWord : undefined);
 }
 //@ chunk-85kmkm1x.js:2610-3316 placement
-function tokenizeContractSource(e) {
-  let n = [];
-  let s = [];
-  let r = 0;
-  let a = 0;
-  let i = 1;
-  let l = false;
-  let c = 1;
-  while (a < e.length) {
-    let m = e[a] ?? "";
-    let p =
-      m ===
+function tokenizeContractSource(source) {
+  let tokens = [];
+  let templateBraceStack = [];
+  let braceDepth = 0;
+  let index = 0;
+  let line = 1;
+  let inTemplate = false;
+  let templateStartLine = 1;
+  while (index < source.length) {
+    let char = source[index] ?? "";
+    let isLineBreak =
+      char ===
         `
 ` ||
-      m === "\u2028" ||
-      m === "\u2029" ||
-      (m === "\r" &&
-        e[a + 1] !==
+      char === "\u2028" ||
+      char === "\u2029" ||
+      (char === "\r" &&
+        source[index + 1] !==
           `
 `);
-    if (l) {
-      let T = m === "\\";
-      let w = m === "$" && e[a + 1] === "{";
-      let R = m === "`";
-      if (w) s.push(r);
-      l = !w && !R;
-      i += p ? 1 : 0;
-      a += T || w ? 2 : 1;
+    if (inTemplate) {
+      let isEscape = char === "\\";
+      let opensSubstitution = char === "$" && source[index + 1] === "{";
+      let closesTemplate = char === "`";
+      if (opensSubstitution) templateBraceStack.push(braceDepth);
+      inTemplate = !opensSubstitution && !closesTemplate;
+      line += isLineBreak ? 1 : 0;
+      index += isEscape || opensSubstitution ? 2 : 1;
       continue;
     }
-    let y = pickLexer(e, a);
-    let h = m === "`";
-    let v = m === "}" && s.length > 0 && r === s.at(-1);
-    let matches = /[\t\n\v\f\r \u2028\u2029]/.test(m);
-    let C = m === "/" || m === "\\";
-    let S = /[!-~]/.test(m) && !C;
-    let x = !matches && !S;
-    let f = C ? m : "other";
-    if (y) {
-      let T = y(e, a, i);
-      if (T.token) n.push(T.token);
-      a = T.end;
-      i = T.line;
+    let lexer = pickLexer(source, index);
+    let startsTemplate = char === "`";
+    let closesSubstitution =
+      char === "}" && templateBraceStack.length > 0 && braceDepth === templateBraceStack.at(-1);
+    let matches = /[\t\n\v\f\r \u2028\u2029]/.test(char);
+    let isSlash = char === "/" || char === "\\";
+    let isPrintable = /[!-~]/.test(char) && !isSlash;
+    let isStray = !matches && !isPrintable;
+    let strayText = isSlash ? char : "other";
+    if (lexer) {
+      let lexed = lexer(source, index, line);
+      if (lexed.token) tokens.push(lexed.token);
+      index = lexed.end;
+      line = lexed.line;
       continue;
     }
-    if (h) {
-      n.push(makeToken("string", "`", i));
-      c = i;
+    if (startsTemplate) {
+      tokens.push(makeToken("string", "`", line));
+      templateStartLine = line;
     }
-    if (x) n.push(makeToken("stray", f, i));
-    if (v) s.pop();
-    if (!h && !v && !x && !matches) {
-      n.push(makeToken("punct", m, i));
-      r += m === "{" ? 1 : m === "}" ? -1 : 0;
+    if (isStray) tokens.push(makeToken("stray", strayText, line));
+    if (closesSubstitution) templateBraceStack.pop();
+    if (!startsTemplate && !closesSubstitution && !isStray && !matches) {
+      tokens.push(makeToken("punct", char, line));
+      braceDepth += char === "{" ? 1 : char === "}" ? -1 : 0;
     }
-    l = h || v;
-    i += p ? 1 : 0;
-    a += 1;
+    inTemplate = startsTemplate || closesSubstitution;
+    line += isLineBreak ? 1 : 0;
+    index += 1;
   }
-  if (l || s.length > 0) n.push(makeToken("stray", "`", c));
-  return n;
+  if (inTemplate || templateBraceStack.length > 0) tokens.push(makeToken("stray", "`", templateStartLine));
+  return tokens;
 }
 //@ chunk-85kmkm1x.js:3316-3351 placement
-var tokenWindow = (e, n) => [e[n], e[n + 1], e[n + 2]];
+var tokenWindow = (tokens, index) => [tokens[index], tokens[index + 1], tokens[index + 2]];
 //@ chunk-85kmkm1x.js:3351-3950 placement
 /**
  * global/嵌套 module/as namespace 等不允许的声明形式。
  */
-function describeForbiddenAugmentation(e, n) {
-  let [s, r, a] = tokenWindow(e, n);
-  let i = isPunctToken(s, "word", "global") && isPunctToken(r, "punct", "{");
-  let l = isPunctToken(s, "word", "module", "namespace") && r?.kind === "string";
-  let c = isPunctToken(s, "word", "as") && isPunctToken(r, "word", "namespace");
-  let m = isPunctToken(s, "word", "interface") && r?.kind === "word" && r.line !== s?.line;
-  let p =
-    isPunctToken(s, "word", "interface") &&
-    isPunctToken(r, "word", "EngineInterface") &&
-    !isPunctToken(a, "punct", "{");
-  return i
+function describeForbiddenAugmentation(tokens, index) {
+  let [first, second, third] = tokenWindow(tokens, index);
+  let isGlobalBlock = isPunctToken(first, "word", "global") && isPunctToken(second, "punct", "{");
+  let isNestedModule = isPunctToken(first, "word", "module", "namespace") && second?.kind === "string";
+  let isAsNamespace = isPunctToken(first, "word", "as") && isPunctToken(second, "word", "namespace");
+  let isInterfaceBreak =
+    isPunctToken(first, "word", "interface") && second?.kind === "word" && second.line !== first?.line;
+  let isEngineInterfaceBare =
+    isPunctToken(first, "word", "interface") &&
+    isPunctToken(second, "word", "EngineInterface") &&
+    !isPunctToken(third, "punct", "{");
+  return isGlobalBlock
     ? "`global { \u2026 }` augments the global scope"
-    : l
-      ? `a nested \`module '${r.text}'\` augments another module`
-      : c
+    : isNestedModule
+      ? `a nested \`module '${second.text}'\` augments another module`
+      : isAsNamespace
         ? "`as namespace` declares a global"
-        : m
+        : isInterfaceBreak
           ? "`interface` without its name on the same line"
-          : p
+          : isEngineInterfaceBare
             ? "`EngineInterface` takes members only, no `extends` or type parameters"
             : undefined;
 }
 //@ chunk-85kmkm1x.js:3950-4209 placement
-function findForbiddenAugmentations(e) {
-  let n = [];
-  let s = 0;
-  for (let [r, a] of e.entries()) {
-    let l =
-      s === 0 && isPunctToken(e[r - 1], "word", "declare") && isPunctToken(a, "word", "module")
+function findForbiddenAugmentations(tokens) {
+  let problems = [];
+  let depth = 0;
+  for (let [index, token] of tokens.entries()) {
+    let description =
+      depth === 0 &&
+      isPunctToken(tokens[index - 1], "word", "declare") &&
+      isPunctToken(token, "word", "module")
         ? undefined
-        : describeForbiddenAugmentation(e, r);
-    s += bracketDelta(a);
-    if (l !== undefined)
-      n.push(`line ${a.line}: ${l}; the contract may only augment 'claude-code', at its top level`);
+        : describeForbiddenAugmentation(tokens, index);
+    depth += bracketDelta(token);
+    if (description !== undefined)
+      problems.push(
+        `line ${token.line}: ${description}; the contract may only augment 'claude-code', at its top level`,
+      );
   }
-  return n;
+  return problems;
 }
 //@ chunk-85kmkm1x.js:4209-4373 placement
-function isInterfaceOpening(e, n, s) {
-  let [r, a, i] = tokenWindow(e, n);
+function isInterfaceOpening(tokens, index, interfaceName) {
+  let [first, second, third] = tokenWindow(tokens, index);
   return (
-    r?.kind === "word" &&
-    r.text === "interface" &&
-    a?.kind === "word" &&
-    a.text === s &&
-    a.line === r.line &&
-    i?.kind === "punct" &&
-    i.text === "{"
+    first?.kind === "word" &&
+    first.text === "interface" &&
+    second?.kind === "word" &&
+    second.text === interfaceName &&
+    second.line === first.line &&
+    third?.kind === "punct" &&
+    third.text === "{"
   );
 }
 //@ chunk-85kmkm1x.js:4373-4556 placement
-function findMatchingBrace(e, n) {
-  let s = 0;
-  for (let r = n; r < e.length; r += 1) {
-    let a = e[r];
-    if (!(a?.kind === "punct" && (a.text === "{" || a.text === "}"))) continue;
-    s += a.text === "{" ? 1 : -1;
-    if (s === 0) return r;
+function findMatchingBrace(tokens, start) {
+  let depth = 0;
+  for (let index = start; index < tokens.length; index += 1) {
+    let token = tokens[index];
+    if (!(token?.kind === "punct" && (token.text === "{" || token.text === "}"))) continue;
+    depth += token.text === "{" ? 1 : -1;
+    if (depth === 0) return index;
   }
-  return e.length;
+  return tokens.length;
 }
 //@ chunk-85kmkm1x.js:4556-4961 placement
 /**
  * 块内顶层成员名。
  */
-function listMemberNames(e, n) {
-  let s = [];
-  let matchingBrace = findMatchingBrace(e, n);
-  let a = (c, ...m) => e[c]?.kind === "punct" && m.includes(e[c].text);
-  let i = 0;
-  let l = true;
-  for (let c = n + 1; c < matchingBrace; c += 1) {
-    let m = a(c, "{", "(", "[");
-    let p = a(c, "}", ")", "]");
-    let y = i === 0 && a(c, ";", ",");
-    let h = (e[c - 1]?.line ?? 0) < (e[c]?.line ?? 0);
-    let b = e[c]?.text === "readonly" && e[c + 1]?.kind !== "punct" ? c + 1 : c;
-    let C = e[b];
-    let S = i === 0 && (l || h) && C !== undefined && C.kind !== "punct" && a(b + 1, ":", "?", "(", "<");
-    i += m ? 1 : p ? -1 : 0;
-    l = y;
-    if (S) s.push(C.text);
+function listMemberNames(tokens, start) {
+  let names = [];
+  let matchingBrace = findMatchingBrace(tokens, start);
+  let isPunctAt = (index, ...texts) => tokens[index]?.kind === "punct" && texts.includes(tokens[index].text);
+  let nesting = 0;
+  let atMemberStart = true;
+  for (let index = start + 1; index < matchingBrace; index += 1) {
+    let opens = isPunctAt(index, "{", "(", "[");
+    let closes = isPunctAt(index, "}", ")", "]");
+    let isSeparator = nesting === 0 && isPunctAt(index, ";", ",");
+    let lineChanged = (tokens[index - 1]?.line ?? 0) < (tokens[index]?.line ?? 0);
+    let nameIndex =
+      tokens[index]?.text === "readonly" && tokens[index + 1]?.kind !== "punct" ? index + 1 : index;
+    let nameToken = tokens[nameIndex];
+    let isMemberName =
+      nesting === 0 &&
+      (atMemberStart || lineChanged) &&
+      nameToken !== undefined &&
+      nameToken.kind !== "punct" &&
+      isPunctAt(nameIndex + 1, ":", "?", "(", "<");
+    nesting += opens ? 1 : closes ? -1 : 0;
+    atMemberStart = isSeparator;
+    if (isMemberName) names.push(nameToken.text);
   }
-  return s;
+  return names;
 }
 //@ chunk-85kmkm1x.js:4961-5133 placement
-function collectEngineNouns(e, blocks) {
-  let s = new Set();
+function collectEngineNouns(tokens, blocks) {
+  let nouns = new Set();
   for (let { start, end } of blocks)
-    for (let i = start; i < end; i += 1) {
-      if (!isInterfaceOpening(e, i, "EngineInterface")) continue;
-      let l = i + 2;
-      for (let c of listMemberNames(e, l)) s.add(c);
+    for (let index = start; index < end; index += 1) {
+      if (!isInterfaceOpening(tokens, index, "EngineInterface")) continue;
+      let braceIndex = index + 2;
+      for (let name of listMemberNames(tokens, braceIndex)) nouns.add(name);
     }
-  return [...s];
+  return [...nouns];
 }
 //@ chunk-85kmkm1x.js:5133-5436 placement
 /**
  * 契约中像汇总框架或编译指令的行。
  */
-var findFramingLines = (e) =>
-  e
+var findFramingLines = (source) =>
+  source
     .split(/\r\n|[\n\r\u2028\u2029]/)
-    .flatMap((n, s) =>
-      /^\s*(?:\*\s*)?\/\/\s*(?:\u2500\u2500 from plugin |Skipped:)/.test(n) ||
-      /^\s*(?:\/\/\/?|\/?\*)\s*@ts-/i.test(n)
+    .flatMap((line, lineIndex) =>
+      /^\s*(?:\*\s*)?\/\/\s*(?:\u2500\u2500 from plugin |Skipped:)/.test(line) ||
+      /^\s*(?:\/\/\/?|\/?\*)\s*@ts-/i.test(line)
         ? [
-            `line ${s + 1}: a line that would read as the roll-up's framing or a compiler pragma once copied; a contract carries neither`,
+            `line ${lineIndex + 1}: a line that would read as the roll-up's framing or a compiler pragma once copied; a contract carries neither`,
           ]
         : [],
     );
 //@ chunk-85kmkm1x.js:5436-6108 placement
-function outsideReferenceProblems(e) {
-  let n = [];
-  let s =
+function outsideReferenceProblems(tokens) {
+  let problems = [];
+  let reason =
     "reaches outside the file; the contract must be self-contained (no " +
     "import, export \u2026 from, require or reference)";
-  let r = 0;
-  for (let [a, i] of e.entries()) {
-    let l = e[a + 1];
-    let c = e[a + 2];
-    let m = (f) => i.kind === "word" && i.text === f;
-    let p = l?.kind === "punct" && l.text === "(" && c?.kind === "string";
-    let y =
-      l?.kind === "string" ||
-      l?.kind === "word" ||
-      (l?.kind === "punct" && (l.text === "{" || l.text === "*")) ||
-      p;
-    let h = i.line !== r;
-    let v = i.kind === "reference";
-    let b = m("import") && y;
-    let C = m("from") && h && l?.kind === "string";
-    let S = m("require") && h && p;
-    let x = v
+  let lastLine = 0;
+  for (let [index, token] of tokens.entries()) {
+    let next = tokens[index + 1];
+    let nextNext = tokens[index + 2];
+    let isWord = (text) => token.kind === "word" && token.text === text;
+    let isRequireCall = next?.kind === "punct" && next.text === "(" && nextNext?.kind === "string";
+    let hasModuleSpec =
+      next?.kind === "string" ||
+      next?.kind === "word" ||
+      (next?.kind === "punct" && (next.text === "{" || next.text === "*")) ||
+      isRequireCall;
+    let lineChanged = token.line !== lastLine;
+    let isReference = token.kind === "reference";
+    let isImport = isWord("import") && hasModuleSpec;
+    let isFrom = isWord("from") && lineChanged && next?.kind === "string";
+    let isRequire = isWord("require") && lineChanged && isRequireCall;
+    let what = isReference
       ? "a triple-slash reference"
-      : b
+      : isImport
         ? "`import`"
-        : C
-          ? `\`from '${l.text}'\``
-          : S
-            ? `\`require('${c.text}')\``
+        : isFrom
+          ? `\`from '${next.text}'\``
+          : isRequire
+            ? `\`require('${nextNext.text}')\``
             : undefined;
-    if (x === undefined) continue;
-    r = i.line;
-    n.push(`line ${i.line}: ${x} ${s}`);
+    if (what === undefined) continue;
+    lastLine = token.line;
+    problems.push(`line ${token.line}: ${what} ${reason}`);
   }
-  return n;
+  return problems;
 }
 //@ chunk-85kmkm1x.js:6108-6183 placement
 var CONTROL_OR_INVISIBLE_RE = /[\p{Cc}\p{Cf}\p{Cs}\p{Default_Ignorable_Code_Point}\u2028\u2029]/u;
 //@ chunk-85kmkm1x.js:6183-6381 placement
-var findInvisibleCharLines = (e) =>
-  e
+var findInvisibleCharLines = (source) =>
+  source
     .split(
       `
 `,
     )
-    .flatMap((line, s) =>
+    .flatMap((line, lineIndex) =>
       CONTROL_OR_INVISIBLE_RE.test(line.replace(/[\t\r]/g, ""))
         ? [
-            `line ${s + 1}: an invisible or reordering character (control, bidi, zero-width, line separator); a contract holds none`,
+            `line ${lineIndex + 1}: an invisible or reordering character (control, bidi, zero-width, line separator); a contract holds none`,
           ]
         : [],
     );
 //@ chunk-85kmkm1x.js:6381-6486 placement
-function checkParsesAsTypeScript(e) {
+function checkParsesAsTypeScript(source) {
   try {
-    transpileHooksSource("contract.d.ts", e);
+    transpileHooksSource("contract.d.ts", source);
     return;
   } catch (error) {
     return `does not parse as TypeScript: ${errorMessage(error)}`;
@@ -376,43 +388,43 @@ function checkParsesAsTypeScript(e) {
 /**
  * PluginState 中各插件声明的状态键。
  */
-function collectPluginStateKeys(e, blocks) {
-  let s = new Map();
-  let r = (a, i) => e[a]?.kind === "punct" && e[a].text === i;
+function collectPluginStateKeys(tokens, blocks) {
+  let keysByPlugin = new Map();
+  let isPunctAt = (index, text) => tokens[index]?.kind === "punct" && tokens[index].text === text;
   for (let { start, end } of blocks)
-    for (let l = start; l < end; l += 1) {
-      if (!isInterfaceOpening(e, l, "PluginState")) continue;
-      let c = l + 2;
-      let matchingBrace = findMatchingBrace(e, c);
-      let p = new Set(listMemberNames(e, c));
-      let y = 0;
-      for (let h = c + 1; h < matchingBrace; h += 1) {
-        let v = e[h];
+    for (let index = start; index < end; index += 1) {
+      if (!isInterfaceOpening(tokens, index, "PluginState")) continue;
+      let braceIndex = index + 2;
+      let matchingBrace = findMatchingBrace(tokens, braceIndex);
+      let memberNames = new Set(listMemberNames(tokens, braceIndex));
+      let depth = 0;
+      for (let index = braceIndex + 1; index < matchingBrace; index += 1) {
+        let token = tokens[index];
         if (
-          y === 0 &&
-          v !== undefined &&
-          v.kind !== "punct" &&
-          p.has(v.text) &&
-          r(h + 1, ":") &&
-          r(h + 2, "{")
+          depth === 0 &&
+          token !== undefined &&
+          token.kind !== "punct" &&
+          memberNames.has(token.text) &&
+          isPunctAt(index + 1, ":") &&
+          isPunctAt(index + 2, "{")
         ) {
-          let x = s.get(v.text) ?? new Set();
-          for (let f of listMemberNames(e, h + 2)) x.add(f);
-          s.set(v.text, x);
+          let keySet = keysByPlugin.get(token.text) ?? new Set();
+          for (let name of listMemberNames(tokens, index + 2)) keySet.add(name);
+          keysByPlugin.set(token.text, keySet);
         }
-        let C = r(h, "{") || r(h, "(") || r(h, "[");
-        let S = r(h, "}") || r(h, ")") || r(h, "]");
-        y += Number(C) - Number(S);
+        let opens = isPunctAt(index, "{") || isPunctAt(index, "(") || isPunctAt(index, "[");
+        let closes = isPunctAt(index, "}") || isPunctAt(index, ")") || isPunctAt(index, "]");
+        depth += Number(opens) - Number(closes);
       }
     }
-  return [...s].map(([a, i]) => ({
-    plugin: a,
-    keys: [...i],
+  return [...keysByPlugin].map(([plugin, keys]) => ({
+    plugin,
+    keys: [...keys],
   }));
 }
 //@ chunk-85kmkm1x.js:7022-7218 placement
-function findRunnableCode(e) {
-  let trimmed = transpileHooksSource("contract.ts", e)
+function findRunnableCode(source) {
+  let trimmed = transpileHooksSource("contract.ts", source)
     .replace(/^\s*export\s*\{\s*\};?\s*$/m, "")
     .trim();
   let firstLine = getFirstLine(trimmed);
@@ -424,18 +436,27 @@ function findRunnableCode(e) {
 /**
  * class/const/function 等运行时声明。
  */
-var findRuntimeDeclarations = (e) =>
-  e.flatMap((n, s) => {
-    let r = e[s - 1];
-    let a = isPunctToken(n, "word", "class", "const", "enum", "function", "let", "var");
-    let i =
-      r === undefined ||
-      r.line < n.line ||
-      isPunctToken(r, "punct", ";", "{", "}") ||
-      isPunctToken(r, "word", "abstract", "async", "declare", "default", "export");
-    let l = isPunctToken(e[s + 1], "punct", ":", "?", "(", "<");
-    return a && i && !l
-      ? [`line ${n.line}: \`${n.text}\` declares something that runs; a contract holds types only`]
+var findRuntimeDeclarations = (tokens) =>
+  tokens.flatMap((token, index) => {
+    let previous = tokens[index - 1];
+    let isDeclarationKeyword = isPunctToken(
+      token,
+      "word",
+      "class",
+      "const",
+      "enum",
+      "function",
+      "let",
+      "var",
+    );
+    let startsStatement =
+      previous === undefined ||
+      previous.line < token.line ||
+      isPunctToken(previous, "punct", ";", "{", "}") ||
+      isPunctToken(previous, "word", "abstract", "async", "declare", "default", "export");
+    let isMemberPosition = isPunctToken(tokens[index + 1], "punct", ":", "?", "(", "<");
+    return isDeclarationKeyword && startsStatement && !isMemberPosition
+      ? [`line ${token.line}: \`${token.text}\` declares something that runs; a contract holds types only`]
       : [];
   });
 //@ chunk-85kmkm1x.js:7585-8056 placement
@@ -454,13 +475,13 @@ var STRAY_TOKEN_DESCRIPTIONS = {
   other: "a character outside plain ASCII (or a control character) in code",
 };
 //@ chunk-85kmkm1x.js:8056-8245 placement
-var describeStrayTokens = (e) =>
-  e
-    .filter((n) => n.kind === "stray")
+var describeStrayTokens = (tokens) =>
+  tokens
+    .filter((token) => token.kind === "stray")
     .map(
-      (n) =>
-        `line ${n.line}: ` +
-        (STRAY_TOKEN_DESCRIPTIONS[n.text] ?? `\`${n.text}\``) +
+      (token) =>
+        `line ${token.line}: ` +
+        (STRAY_TOKEN_DESCRIPTIONS[token.text] ?? `\`${token.text}\``) +
         ": a type contract never holds one, so the check refuses it rather than read past it",
     );
 //@ chunk-85kmkm1x.js:8245-8266 placement
@@ -469,111 +490,121 @@ var CLAUDE_CODE = "claude-code";
 /**
  * 契约顶层语句的问题（错误的 module、declare、export 等）。
  */
-function describeTopLevelProblem(e, n) {
-  let [s, r, a] = tokenWindow(e, n);
-  let [, , i] = tokenWindow(e, n + 1);
-  let l =
-    isPunctToken(s, "word", "declare") &&
-    isPunctToken(r, "word", "module") &&
-    a?.kind === "string" &&
-    s?.line === r?.line &&
-    r?.line === a.line &&
-    isPunctToken(i, "punct", "{");
-  let c = l && a.text !== CLAUDE_CODE;
-  let m = isPunctToken(s, "word", "declare") && !l;
-  let p = isPunctToken(s, "word", "export") && !isPunctToken(r, "word", "type", "interface");
-  let y = isPunctToken(s, "word", "abstract", "async", "default", "module", "namespace");
-  let h = isPunctToken(s, "word", "type", "interface") && !isPunctToken(e[n - 1], "word", "export", "import");
-  return c
-    ? `augments module '${a.text}'; the contract may only augment '${CLAUDE_CODE}'`
-    : m
+function describeTopLevelProblem(tokens, index) {
+  let [first, second, third] = tokenWindow(tokens, index);
+  let [, , nextThird] = tokenWindow(tokens, index + 1);
+  let isDeclareModule =
+    isPunctToken(first, "word", "declare") &&
+    isPunctToken(second, "word", "module") &&
+    third?.kind === "string" &&
+    first?.line === second?.line &&
+    second?.line === third.line &&
+    isPunctToken(nextThird, "punct", "{");
+  let isForeignModule = isDeclareModule && third.text !== CLAUDE_CODE;
+  let isDeclare = isPunctToken(first, "word", "declare") && !isDeclareModule;
+  let isExport = isPunctToken(first, "word", "export") && !isPunctToken(second, "word", "type", "interface");
+  let isDisallowedKeyword = isPunctToken(
+    first,
+    "word",
+    "abstract",
+    "async",
+    "default",
+    "module",
+    "namespace",
+  );
+  let isUnexportedType =
+    isPunctToken(first, "word", "type", "interface") &&
+    !isPunctToken(tokens[index - 1], "word", "export", "import");
+  return isForeignModule
+    ? `augments module '${third.text}'; the contract may only augment '${CLAUDE_CODE}'`
+    : isDeclare
       ? `\`declare\` at the top level opens only \`declare module '${CLAUDE_CODE}' { \u2026 }\`, its three words on one line`
-      : p
+      : isExport
         ? "`export` at the top level is followed by `type` or `interface`: a contract exports types and nothing else"
-        : y
-          ? `\`${s?.text}\` at the top level: a contract holds type exports and \`declare module '${CLAUDE_CODE}'\` blocks only`
-          : h
-            ? `a top-level \`${s?.text}\` without \`export\` would be global in a dependent's program; export it`
+        : isDisallowedKeyword
+          ? `\`${first?.text}\` at the top level: a contract holds type exports and \`declare module '${CLAUDE_CODE}'\` blocks only`
+          : isUnexportedType
+            ? `a top-level \`${first?.text}\` without \`export\` would be global in a dependent's program; export it`
             : undefined;
 }
 //@ chunk-85kmkm1x.js:9192-9722 placement
 /**
  * 扫描顶层语句，返回问题与 declare module 块范围。
  */
-function scanTopLevel(e) {
-  let n = [];
-  let s = [];
-  let r = 0;
-  let a = 0;
-  while (a < e.length) {
-    let [i, l, c] = tokenWindow(e, a);
-    let p = r === 0 && i?.kind === "word" ? describeTopLevelProblem(e, a) : undefined;
-    let y = p === undefined || p.startsWith("augments");
-    let h =
-      r === 0 &&
-      y &&
-      isPunctToken(i, "word", "declare") &&
-      isPunctToken(l, "word", "module") &&
-      c?.kind === "string";
-    let v = a + 2;
-    r += bracketDelta(i);
-    if (p !== undefined) n.push(`line ${i?.line}: ${p}`);
-    if (!h) {
-      a += 1;
+function scanTopLevel(tokens) {
+  let problems = [];
+  let blocks = [];
+  let depth = 0;
+  let index = 0;
+  while (index < tokens.length) {
+    let [first, second, third] = tokenWindow(tokens, index);
+    let problem = depth === 0 && first?.kind === "word" ? describeTopLevelProblem(tokens, index) : undefined;
+    let acceptable = problem === undefined || problem.startsWith("augments");
+    let isDeclareModule =
+      depth === 0 &&
+      acceptable &&
+      isPunctToken(first, "word", "declare") &&
+      isPunctToken(second, "word", "module") &&
+      third?.kind === "string";
+    let braceIndex = index + 2;
+    depth += bracketDelta(first);
+    if (problem !== undefined) problems.push(`line ${first?.line}: ${problem}`);
+    if (!isDeclareModule) {
+      index += 1;
       continue;
     }
-    let matchingBrace = findMatchingBrace(e, v + 1);
-    if (matchingBrace === e.length)
-      n.push(
-        `line ${i?.line}: \`declare module\` never closes: the text does not lex as a type contract, so the check refuses it`,
+    let matchingBrace = findMatchingBrace(tokens, braceIndex + 1);
+    if (matchingBrace === tokens.length)
+      problems.push(
+        `line ${first?.line}: \`declare module\` never closes: the text does not lex as a type contract, so the check refuses it`,
       );
-    s.push({
-      start: v + 2,
+    blocks.push({
+      start: braceIndex + 2,
       end: matchingBrace,
     });
-    a = matchingBrace + 1;
+    index = matchingBrace + 1;
   }
   return {
-    problems: n,
-    blocks: s,
+    problems,
+    blocks,
   };
 }
 //@ chunk-85kmkm1x.js:9722-9995 placement
 /**
  * 校验插件 contract 文件（2.1.316 新增）：自包含的轻量词法检查，禁止 import/require/外部引用，提取声明的名词与状态。
  */
-function validatePluginContract(e) {
-  let n = checkParsesAsTypeScript(e);
-  if (n !== undefined)
+function validatePluginContract(source) {
+  let parseProblem = checkParsesAsTypeScript(source);
+  if (parseProblem !== undefined)
     return {
-      problems: [n],
+      problems: [parseProblem],
       nouns: [],
       state: [],
     };
-  let s = tokenizeContractSource(e);
-  let filtered = s.filter((l) => l.kind !== "reference");
-  let { problems, blocks } = scanTopLevel(filtered);
+  let tokens = tokenizeContractSource(source);
+  let tokens_2 = tokens.filter((token) => token.kind !== "reference");
+  let { problems, blocks } = scanTopLevel(tokens_2);
   return {
     problems: [
-      ...findInvisibleCharLines(e),
-      ...describeStrayTokens(s),
-      ...findFramingLines(e),
-      ...outsideReferenceProblems(s),
+      ...findInvisibleCharLines(source),
+      ...describeStrayTokens(tokens),
+      ...findFramingLines(source),
+      ...outsideReferenceProblems(tokens),
       ...problems,
-      ...findRuntimeDeclarations(filtered),
-      ...findRunnableCode(e),
-      ...findForbiddenAugmentations(filtered),
+      ...findRuntimeDeclarations(tokens_2),
+      ...findRunnableCode(source),
+      ...findForbiddenAugmentations(tokens_2),
     ],
-    nouns: collectEngineNouns(filtered, blocks),
-    state: collectPluginStateKeys(filtered, blocks),
+    nouns: collectEngineNouns(tokens_2, blocks),
+    state: collectPluginStateKeys(tokens_2, blocks),
   };
 }
 //@ chunk-85kmkm1x.js:10059-10112 placement
 /**
  * refusedContract：构造被拒的契约结果。
  */
-var refusedContract = (...e) => ({
+var refusedContract = (...problems) => ({
   kind: "refused",
-  problems: e.map(collapseWhitespace),
+  problems: problems.map(collapseWhitespace),
 });
 export { refusedContract, validatePluginContract };

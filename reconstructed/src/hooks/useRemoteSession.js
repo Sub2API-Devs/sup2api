@@ -9,7 +9,15 @@
  * attribution: sole-consumer 16, affinity 2, callgraph-witnessed 1
  */
 import { writeSync } from "fs";
-import { init_react_production, R, Oo, P, ce, y, Q } from "../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useRef,
+  useEffectEvent,
+  useEffect,
+  useCallback,
+  useState,
+  useMemo,
+} from "../../vendor/react/cjs/react.production.js";
 import { createSettingsChangeDetector, settingsChangeDetector } from "../utils/settings/changeDetector.js";
 import { logFeatureOk, logFeatureBad, logFeatureSad } from "../services/analytics/featureTelemetry.js";
 import { resetLocalSettingsGitTrackedCache } from "../utils/config.js";
@@ -200,9 +208,13 @@ import {
   storedForwardMode,
   isHomeSettingsForwardConsent,
 } from "../utils/teleport/homeSettingsMode.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:263226-263230 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:263226", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:263263-263795 sole-consumer
 /**
  * 远程会话中监视本机设置变化：已有全局监视器时复用，否则新建一个（不监视 bridge store），变化时清缓存并向远程会话广播 servedSettingsChanged。
@@ -219,7 +231,7 @@ function watchServedSettings(
 ) {
   if (sharedDetector.isWatching())
     return {
-      subscribe: (He) => sharedDetector.subscribe(He),
+      subscribe: (listener) => sharedDetector.subscribe(listener),
       dispose: () => Promise.resolve(),
     };
   let detector = createDetector();
@@ -231,16 +243,16 @@ function watchServedSettings(
       () => logFeatureOk("remote_served_settings_watch"),
       () => logFeatureBad("remote_served_settings_watch", "watch_failed_to_start"),
     );
-  let Re = detector.subscribe(() => resetLocalSettingsGitTrackedCache());
-  let Be = detector.subscribe((He) => signals.servedSettingsChanged.emit(He));
+  let unsubscribeGit = detector.subscribe(() => resetLocalSettingsGitTrackedCache());
+  let unsubscribeEmit = detector.subscribe((change) => signals.servedSettingsChanged.emit(change));
   return {
-    subscribe: (He) => {
-      let We = [detector.subscribe(He), sharedDetector.subscribe(He)];
-      return () => We.forEach((ze) => ze());
+    subscribe: (listener) => {
+      let unsubscribes = [detector.subscribe(listener), sharedDetector.subscribe(listener)];
+      return () => unsubscribes.forEach((unsubscribe) => unsubscribe());
     },
     dispose: () => {
-      Re();
-      Be();
+      unsubscribeGit();
+      unsubscribeEmit();
       return detector.dispose();
     },
   };
@@ -251,46 +263,46 @@ function watchServedSettings(
  */
 class ConversationClearTracker {
   #e = [];
-  noteSend(h) {
-    if (h?.clearsConversation) {
-      if (h.uuid !== undefined && this.#e.some((D) => D.uuid === h.uuid)) return;
+  noteSend(entry) {
+    if (entry?.clearsConversation) {
+      if (entry.uuid !== undefined && this.#e.some((item) => item.uuid === entry.uuid)) return;
       this.#e.push({
-        uuid: h.uuid,
+        uuid: entry.uuid,
         sends: new Set(),
       });
       if (this.#e.length > 20) this.#e.shift();
       return;
     }
     let last = this.#e.at(-1);
-    if (!last || !h?.uuid) return;
+    if (!last || !entry?.uuid) return;
     if (last.sends.size >= 100) last.sends.clear();
-    last.sends.add(h.uuid);
+    last.sends.add(entry.uuid);
   }
-  noteSendFailed(h) {
-    let uuid = h?.uuid;
-    if (h?.clearsConversation) {
-      let D = uuid === undefined ? this.#e.length - 1 : this.#e.findIndex((L) => L.uuid === uuid);
-      if (D !== -1) this.#e.splice(D, 1);
+  noteSendFailed(entry) {
+    let uuid = entry?.uuid;
+    if (entry?.clearsConversation) {
+      let index = uuid === undefined ? this.#e.length - 1 : this.#e.findIndex((item) => item.uuid === uuid);
+      if (index !== -1) this.#e.splice(index, 1);
       return;
     }
     if (uuid === undefined) return;
-    for (let D of this.#e) D.sends.delete(uuid);
+    for (let item of this.#e) item.sends.delete(uuid);
   }
   onResetFrame() {
-    let h = this.#e.shift();
-    if (!h)
+    let first = this.#e.shift();
+    if (!first)
       return {
         ownClear: false,
         preserved: new Set(),
       };
-    let x = new Set(h.sends);
-    for (let D of this.#e) {
-      if (D.uuid !== undefined) x.add(D.uuid);
-      for (let send of D.sends) x.add(send);
+    let sends = new Set(first.sends);
+    for (let item of this.#e) {
+      if (item.uuid !== undefined) sends.add(item.uuid);
+      for (let send of item.sends) sends.add(send);
     }
     return {
       ownClear: true,
-      preserved: x,
+      preserved: sends,
     };
   }
   forget() {
@@ -301,54 +313,57 @@ class ConversationClearTracker {
 /**
  * 远程会话对话框请求的处理表：校验载荷后弹出对应对话框，返回完成结果或取消。
  */
-var REMOTE_DIALOG_HANDLERS = {
-  [REFUSAL_FALLBACK_DIALOG.kind]: async (h, x, D) => {
-    let L = REFUSAL_FALLBACK_DIALOG.payload().safeParse(x);
-    if (!L.success)
-      return {
-        behavior: "cancelled",
-      };
-    let ee = await h(REFUSAL_FALLBACK_DIALOG, L.data, D);
-    return ee === "cancelled"
-      ? {
+var REMOTE_DIALOG_HANDLERS; // deferred: uses REFUSAL_FALLBACK_DIALOG (../services/requestUserDialog.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:264564", () => {
+  REMOTE_DIALOG_HANDLERS = {
+    [REFUSAL_FALLBACK_DIALOG.kind]: async (requestDialog, payload, signal) => {
+      let parsed = REFUSAL_FALLBACK_DIALOG.payload().safeParse(payload);
+      if (!parsed.success)
+        return {
           behavior: "cancelled",
-        }
-      : {
-          behavior: "completed",
-          result: ee,
         };
-  },
-  [serverFallbackNoticeSpec.kind]: async (h, x, D) => {
-    let L = serverFallbackNoticeSpec.payload().safeParse(x);
-    if (!L.success)
-      return {
-        behavior: "cancelled",
-      };
-    let ee =
-      L.data.gatewayHost === undefined || L.data.gatewayHost === ""
-        ? undefined
-        : truncateGatewayHost(L.data.gatewayHost);
-    let ke = await h(
-      serverFallbackNoticeSpec,
-      withGatewayHost(
-        ee === undefined
-          ? {}
-          : {
-              gatewayHost: ee,
-            },
-      ),
-      D,
-    );
-    return ke === "cancelled"
-      ? {
+      let answer = await requestDialog(REFUSAL_FALLBACK_DIALOG, parsed.data, signal);
+      return answer === "cancelled"
+        ? {
+            behavior: "cancelled",
+          }
+        : {
+            behavior: "completed",
+            result: answer,
+          };
+    },
+    [serverFallbackNoticeSpec.kind]: async (requestDialog, payload, signal) => {
+      let parsed = serverFallbackNoticeSpec.payload().safeParse(payload);
+      if (!parsed.success)
+        return {
           behavior: "cancelled",
-        }
-      : {
-          behavior: "completed",
-          result: ke,
         };
-  },
-};
+      let answer =
+        parsed.data.gatewayHost === undefined || parsed.data.gatewayHost === ""
+          ? undefined
+          : truncateGatewayHost(parsed.data.gatewayHost);
+      let result = await requestDialog(
+        serverFallbackNoticeSpec,
+        withGatewayHost(
+          answer === undefined
+            ? {}
+            : {
+                gatewayHost: answer,
+              },
+        ),
+        signal,
+      );
+      return result === "cancelled"
+        ? {
+            behavior: "cancelled",
+          }
+        : {
+            behavior: "completed",
+            result,
+          };
+    },
+  };
+});
 //@ chunk-18hwfzwa.js:265112-265842 sole-consumer
 /**
  * 处理远程会话发来的 request_user_dialog 控制请求：按 dialog_kind 找处理器打开本地对话框并回复结果，在途请求可单独取消或整体中止。
@@ -362,11 +377,11 @@ class RemoteDialogDispatcher {
   setInputs(inputs) {
     this.inputs = inputs;
   }
-  dispatch = (h) => {
-    if (h.request.subtype !== "request_user_dialog") return;
-    let { request, request_id: requestId } = h;
-    let L = REMOTE_DIALOG_HANDLERS[request.dialog_kind];
-    if (!L) {
+  dispatch = (request) => {
+    if (request.request.subtype !== "request_user_dialog") return;
+    let { request: request_2, request_id: requestId } = request;
+    let handler = REMOTE_DIALOG_HANDLERS[request_2.dialog_kind];
+    if (!handler) {
       this.inputs.sendResponse(requestId, {
         behavior: "cancelled",
       });
@@ -375,31 +390,31 @@ class RemoteDialogDispatcher {
     let inFlight = this.inFlight;
     let abortController = new AbortController();
     inFlight.set(requestId, abortController);
-    let Re = () => inFlight.get(requestId) === abortController && inFlight.delete(requestId);
-    L(this.inputs.requestDialog, request.payload, {
+    let remove = () => inFlight.get(requestId) === abortController && inFlight.delete(requestId);
+    handler(this.inputs.requestDialog, request_2.payload, {
       signal: abortController.signal,
     })
-      .then((Be) => {
-        if (!Re()) return;
-        this.inputs.sendResponse(requestId, Be);
+      .then((answer) => {
+        if (!remove()) return;
+        this.inputs.sendResponse(requestId, answer);
       })
       .catch(() => {
-        if (!Re()) return;
+        if (!remove()) return;
         this.inputs.sendResponse(requestId, {
           behavior: "cancelled",
         });
       });
   };
-  cancel = (h) => {
-    let x = this.inFlight.get(h);
-    if (!x) return;
-    this.inFlight.delete(h);
-    x.abort();
+  cancel = (requestId) => {
+    let controller = this.inFlight.get(requestId);
+    if (!controller) return;
+    this.inFlight.delete(requestId);
+    controller.abort();
   };
   drain() {
-    for (let [h, x] of this.inFlight) {
-      this.inFlight.delete(h);
-      x.abort();
+    for (let [requestId, controller] of this.inFlight) {
+      this.inFlight.delete(requestId);
+      controller.abort();
     }
   }
 }
@@ -408,7 +423,10 @@ class InFlightCounter {
   inFlight = 0;
 }
 //@ chunk-18hwfzwa.js:265863-265890 sole-consumer
-var inFlightCounterSlot = new HostScoped(() => new InFlightCounter());
+var inFlightCounterSlot; // deferred: uses InFlightCounter of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:265863", () => {
+  inFlightCounterSlot = new HostScoped(() => new InFlightCounter());
+});
 //@ chunk-18hwfzwa.js:265890-266572 sole-consumer
 /**
  * 云会话发送失败是否因为本机 claude.ai 登录失效：是则给出重新登录（/login 或 claude auth login）的说明，forceLoginMethod 限制时说明需要放开设置。
@@ -461,38 +479,38 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
     retraction,
   } = sink;
   let { credentials, storageV5 } = useTheme_2();
-  let host = useSession((ss) => ss.host);
+  let host = useSession((host) => host.host);
   let setAppState = useSession();
-  let heldServedCallRef = R(undefined);
-  let Ho = Oo(() => tools);
-  let Io = Oo((ss) => Promise.resolve("unanswered"));
-  let Wo = Oo((ss, Gs) => Promise.resolve("unanswered"));
-  let mn = Oo((ss) =>
+  let heldServedCallRef = useRef(undefined);
+  let toolsRef = useEffectEvent(() => tools);
+  let askToolRef = useEffectEvent((request) => Promise.resolve("unanswered"));
+  let askTool = useEffectEvent((tool, context) => Promise.resolve("unanswered"));
+  let questionRef = useEffectEvent((question) =>
     Promise.resolve({
       answer: "unanswered",
     }),
   );
-  P(() => {
+  useEffect(() => {
     return;
   }, [config]);
   let { columns } = useTerminalSize();
-  let No = Oo(() => columns);
-  let setConnStatus = ce(
-    (ss) => {
-      if (ss && getIsLoading()) return;
-      setIsLoading(ss);
+  let columnsRef = useEffectEvent(() => columns);
+  let setConnStatus = useCallback(
+    (input) => {
+      if (input && getIsLoading()) return;
+      setIsLoading(input);
     },
     [getIsLoading, setIsLoading],
   );
-  let Yo = R(false);
-  let [kn] = y(() => new Map());
-  let Fn = R(false);
-  let bn = R(false);
-  let Go = R(0);
-  let hn = R(0);
-  let initialPromptUuidRef = R(undefined);
-  let Xo = R(false);
-  let Sn = ce(() => {
+  let stopped = useRef(false);
+  let [pendingRequests] = useState(() => new Map());
+  let isReconnecting = useRef(false);
+  let isSending = useRef(false);
+  let sentCount = useRef(0);
+  let receivedCount = useRef(0);
+  let initialPromptUuidRef = useRef(undefined);
+  let isFlushing = useRef(false);
+  let resetCounters = useCallback(() => {
     streaming.applyStreamingText(() => null);
     streaming.setStreamingToolUses((prev) => (prev.length > 0 ? [] : prev));
   }, [streaming]);
@@ -501,259 +519,260 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
   let appStoreDirect = useAppStoreDirect();
   let spinnerStore = useSpinnerStore();
   let { addNotification, removeNotification } = useNotifications();
-  let mr = ce(
-    (ss) =>
+  let onTransportEvent = useCallback(
+    (event) =>
       setAppState_2((prev) =>
-        prev.remoteConnectionStatus === ss
+        prev.remoteConnectionStatus === event
           ? prev
           : {
               ...prev,
-              remoteConnectionStatus: ss,
+              remoteConnectionStatus: event,
             },
       ),
     [setAppState_2],
   );
-  let runningTaskIdsRef = R(new Map());
-  let Wn = R(new Map());
-  let Fr = R(new Set());
-  let Zn = R([]);
-  let Un = R(0);
-  let writeTaskCount = ce(() => {
-    let ss = [...runningTaskIdsRef.current.values()];
-    let Gs = Fr.current;
-    let ma = Zn.current.some((xl) => Gs.has(xl)) ? "seeded" : Gs.size > 0 ? "in_turn" : "none";
-    let $a = reconcileRemoteTasks(Wn.current, runningTaskIdsRef.current, Date.now());
-    setAppState_2((xl) => applyRemoteTaskState(xl, ss, $a, ma));
+  let runningTaskIdsRef = useRef(new Map());
+  let remoteTasks = useRef(new Map());
+  let runningTaskIds = useRef(new Set());
+  let heldIds = useRef([]);
+  let pendingCount = useRef(0);
+  let writeTaskCount = useCallback(() => {
+    let runningIds = [...runningTaskIdsRef.current.values()];
+    let held = runningTaskIds.current;
+    let anyHeld = heldIds.current.some((id) => held.has(id)) ? "seeded" : held.size > 0 ? "in_turn" : "none";
+    let reconciled = reconcileRemoteTasks(remoteTasks.current, runningTaskIdsRef.current, Date.now());
+    setAppState_2((prev) => applyRemoteTaskState(prev, runningIds, reconciled, anyHeld));
   }, [setAppState_2]);
-  let [or] = y(() => new ServedCallWatch());
-  let pr = ce(() => {
-    or.clear();
-  }, [or]);
-  let Qn = R(0);
-  let ur = ce(() => {
-    Qn.current++;
-    pr();
-  }, [pr]);
-  let Ir = R(null);
-  let Pr = R(Date.now());
-  let ts = R(false);
-  let Gn = R(null);
-  let Ur = R(null);
-  let Zr = R(null);
-  let wr = ce(
-    (ss) => {
-      Ir.current = ss;
-      setAppState_2((Gs) =>
-        Gs.remoteBootstrap === ss
-          ? Gs
+  let [servedCallWatch] = useState(() => new ServedCallWatch());
+  let onServedCall = useCallback(() => {
+    servedCallWatch.clear();
+  }, [servedCallWatch]);
+  let servedCallCount = useRef(0);
+  let onServedCallEnd = useCallback(() => {
+    servedCallCount.current++;
+    onServedCall();
+  }, [onServedCall]);
+  let activeToolUse = useRef(null);
+  let lastActivityAt = useRef(Date.now());
+  let isStreaming = useRef(false);
+  let pendingElicitation = useRef(null);
+  let pendingPrompt = useRef(null);
+  let pendingDialog = useRef(null);
+  let onMessage = useCallback(
+    (message) => {
+      activeToolUse.current = message;
+      setAppState_2((prev) =>
+        prev.remoteBootstrap === message
+          ? prev
           : {
-              ...Gs,
-              remoteBootstrap: ss,
+              ...prev,
+              remoteBootstrap: message,
             },
       );
     },
     [setAppState_2],
   );
-  let zr = ce(
-    (ss) => {
-      let Gs = Ir.current;
-      wr(ss);
-      if ((Gs === null || !Gs.terminal) && ss.terminal) {
-        Gn.current?.workerCameUp();
-        Ur.current?.onWorkerUp();
-        if (ss.hasStructuredSteps) {
-          let any = ss.steps.some((step) => step.status === "failed");
-          if (!ss.dismissed && !any)
-            setMessages(($a) => [...$a, createSystemMessage(setupReadySummary(ss), "info")]);
+  let onDialogs = useCallback(
+    (dialogs) => {
+      let pending = activeToolUse.current;
+      onMessage(dialogs);
+      if ((pending === null || !pending.terminal) && dialogs.terminal) {
+        pendingElicitation.current?.workerCameUp();
+        pendingPrompt.current?.onWorkerUp();
+        if (dialogs.hasStructuredSteps) {
+          let any = dialogs.steps.some((step) => step.status === "failed");
+          if (!dialogs.dismissed && !any)
+            setMessages((prev) => [...prev, createSystemMessage(setupReadySummary(dialogs), "info")]);
           if (!any) logFeatureOk("remote_bootstrap");
         }
       }
     },
-    [wr, setMessages],
+    [onMessage, setMessages],
   );
-  let _r = R(true);
-  let fr = R([]);
-  let $r = R(false);
-  let Yr = R(() => {});
-  let [Er] = y(() => new ConversationClearTracker());
-  let Vr = R(new Set());
-  let ms = ce(
-    (ss = true, Gs = "disconnected") => {
+  let accepting = useRef(true);
+  let heldMessages = useRef([]);
+  let held = useRef(false);
+  let releaseHeld = useRef(() => {});
+  let [clearTracker] = useState(() => new ConversationClearTracker());
+  let seenUuids = useRef(new Set());
+  let disconnect = useCallback(
+    (flush = true, reason = "disconnected") => {
       landWaitingLines();
-      let ma = fr.current.length;
-      fr.current = [];
-      Er.forget();
-      if (ma > 0) {
-        if (ss) logFeatureSad("remote_bootstrap", "queue_dropped");
-        setMessages(($a) => [
-          ...$a,
+      let heldCount = heldMessages.current.length;
+      heldMessages.current = [];
+      clearTracker.forget();
+      if (heldCount > 0) {
+        if (flush) logFeatureSad("remote_bootstrap", "queue_dropped");
+        setMessages((prev) => [
+          ...prev,
           createSystemMessage(
-            Gs === "start_failed"
-              ? `${ma} queued ${plural(ma, "message")} not sent \u2014 the cloud session didn't start. Send ${ma === 1 ? "it" : "them"} again to retry.`
-              : `${ma} queued ${plural(ma, "message")} not sent \u2014 the session disconnected before the container was ready.`,
+            reason === "start_failed"
+              ? `${heldCount} queued ${plural(heldCount, "message")} not sent \u2014 the cloud session didn't start. Send ${heldCount === 1 ? "it" : "them"} again to retry.`
+              : `${heldCount} queued ${plural(heldCount, "message")} not sent \u2014 the session disconnected before the container was ready.`,
             "warning",
           ),
         ]);
       }
-      if (Ir.current !== null && Ir.current.queuedCount !== 0)
-        wr({
-          ...Ir.current,
+      if (activeToolUse.current !== null && activeToolUse.current.queuedCount !== 0)
+        onMessage({
+          ...activeToolUse.current,
           queuedCount: 0,
         });
     },
-    [setMessages, landWaitingLines, wr, Er],
+    [setMessages, landWaitingLines, onMessage, clearTracker],
   );
-  let Xs = ce(() => {
-    let ss = Ir.current;
-    if (ss !== null && !ss.terminal) zr(completeSetupProgress(ss, Date.now()));
-    if (!_r.current) {
-      bn.current = false;
-      Yo.current = false;
-      Go.current = 0;
-      _r.current = true;
-      qn.current?.endWorkerStart();
-      if (ss === null) {
-        Gn.current?.workerCameUp();
-        Ur.current?.onWorkerUp();
+  let closeDialogs = useCallback(() => {
+    let active = activeToolUse.current;
+    if (active !== null && !active.terminal) onDialogs(completeSetupProgress(active, Date.now()));
+    if (!accepting.current) {
+      isSending.current = false;
+      stopped.current = false;
+      sentCount.current = 0;
+      accepting.current = true;
+      managerRef.current?.endWorkerStart();
+      if (active === null) {
+        pendingElicitation.current?.workerCameUp();
+        pendingPrompt.current?.onWorkerUp();
       }
-      let Gs = fr.current.length === 0;
-      Yr.current();
-      let ma =
+      let noHeld = heldMessages.current.length === 0;
+      releaseHeld.current();
+      let gate =
         config?.initialPromptUuid !== undefined && config.initialPromptUuid !== initialPromptUuidRef.current;
-      if (Gs && getIsLoading() && !ma) setConnStatus(false);
+      if (noHeld && getIsLoading() && !gate) setConnStatus(false);
     }
-  }, [zr, config, getIsLoading, setConnStatus]);
-  let Ls = ce(
-    (ss) => {
+  }, [onDialogs, config, getIsLoading, setConnStatus]);
+  let onReconnect = useCallback(
+    (message) => {
       logFeatureBad("remote_bootstrap", "step_failed");
-      ts.current = false;
-      ms(false, "start_failed");
-      _r.current = true;
-      qn.current?.endWorkerStart();
-      bn.current = false;
-      Yo.current = false;
-      Go.current = 0;
-      hn.current = 0;
-      Xo.current = false;
+      isStreaming.current = false;
+      disconnect(false, "start_failed");
+      accepting.current = true;
+      managerRef.current?.endWorkerStart();
+      isSending.current = false;
+      stopped.current = false;
+      sentCount.current = 0;
+      receivedCount.current = 0;
+      isFlushing.current = false;
       setConnStatus(false);
-      if (ss)
-        setMessages((Gs) => [
-          ...Gs,
+      if (message)
+        setMessages((prev) => [
+          ...prev,
           createSystemMessage(
             "Cloud container provisioning failed \u2014 reconnect or check the session logs",
             "warning",
           ),
         ]);
     },
-    [ms, setConnStatus, setMessages],
+    [disconnect, setConnStatus, setMessages],
   );
-  let is = ce(() => {
-    ur();
-    if (!Yo.current) {
-      Go.current++;
-      hn.current = Math.max(0, hn.current - 1);
+  let onDisconnect = useCallback(() => {
+    onServedCallEnd();
+    if (!stopped.current) {
+      sentCount.current++;
+      receivedCount.current = Math.max(0, receivedCount.current - 1);
     }
-    Xo.current = false;
-    Yo.current = true;
-    bn.current = true;
+    isFlushing.current = false;
+    stopped.current = true;
+    isSending.current = true;
     setConnStatus(false);
-    let ss = Ir.current;
-    if (ss !== null && !ss.terminal && !ss.dismissed)
-      wr({
-        ...ss,
+    let active_ = activeToolUse.current;
+    if (active_ !== null && !active_.terminal && !active_.dismissed)
+      onMessage({
+        ...active_,
         dismissed: true,
       });
-  }, [ur, setConnStatus, wr]);
-  let ws = R(false);
-  let Ci = R(null);
-  let oi = R(false);
-  let Oi = Oo((ss, Gs, ma) => {
-    if (Yo.current) return;
-    if (Gs === "provisioning" && oi.current) return;
+  }, [onServedCallEnd, setConnStatus, onMessage]);
+  let autoFollow = useRef(false);
+  let echoRef = useRef(null);
+  let queued = useRef(false);
+  let sendQueued = useEffectEvent((text, state, index) => {
+    if (stopped.current) return;
+    if (state === "provisioning" && queued.current) return;
     let overrideMessage = spinnerStore.get().overrideMessage;
-    if (overrideMessage === null || overrideMessage === Ci.current) {
-      let replaced = ss.replace(TRAILING_ELLIPSIS_RE, "");
-      let Si = truncateToRemainingWidth(Gs === "held" ? replaced : ss, No());
+    if (overrideMessage === null || overrideMessage === echoRef.current) {
+      let replaced = text.replace(TRAILING_ELLIPSIS_RE, "");
+      let trimmed = truncateToRemainingWidth(state === "held" ? replaced : text, columnsRef());
       spinnerStore.main.setMessage(
-        Si,
-        ma === null
+        trimmed,
+        index === null
           ? null
           : {
-              words: ma,
+              words: index,
               detail:
-                replaced.trim().toLowerCase() === ma.replace(TRAILING_ELLIPSIS_RE, "").trim().toLowerCase()
+                replaced.trim().toLowerCase() === index.replace(TRAILING_ELLIPSIS_RE, "").trim().toLowerCase()
                   ? null
-                  : ss,
+                  : text,
             },
       );
-      Ci.current = Si;
-      oi.current = Gs === "held";
+      echoRef.current = trimmed;
+      queued.current = state === "held";
     }
   });
-  let Hi = R(undefined);
-  let Zi = R(undefined);
-  let textRef = R(undefined);
-  let qn = R(null);
-  let ps = ce(() => {
-    if (!config || config.viewerOnly || !isDeviceIdentityEnabledCached() || qn.current === null) return;
-    let ss = Gn.current;
-    let Gs = dirSyncSessionByHost.of(host);
-    let ma = Gs.silentlyNotArmed(config.sessionId);
-    let $a = {
+  let pendingAttachments = useRef(undefined);
+  let pendingPrompt_ = useRef(undefined);
+  let textRef = useRef(undefined);
+  let managerRef = useRef(null);
+  let onQueueEmpty = useCallback(() => {
+    if (!config || config.viewerOnly || !isDeviceIdentityEnabledCached() || managerRef.current === null)
+      return;
+    let prompt = pendingElicitation.current;
+    let syncState = dirSyncSessionByHost.of(host);
+    let notArmed = syncState.silentlyNotArmed(config.sessionId);
+    let sessionState = {
       state: "absent",
       ...(config.isAttachToExisting
         ? {
             reason: mapRecordWhereToReason(config.sessionRecordLookup),
           }
-        : ma !== undefined
+        : notArmed !== undefined
           ? {
-              reason: ma,
+              reason: notArmed,
             }
-          : (Gs.notOptedIn(config.sessionId) ?? {
+          : (syncState.notOptedIn(config.sessionId) ?? {
               reason: "not_set_up",
             })),
     };
-    let xl = Zi.current;
-    let Si = noop_2_2($a);
+    let promptRef = pendingPrompt_.current;
+    let reportSession = noop_2_2(sessionState);
     if (textRef.current === undefined && !config.isAttachToExisting)
       textRef.current = deviceNotBoundNoticeText(appStoreDirect.getState().notifications);
-    let na = textRef.current;
-    let js = isRepositoryTrustGateEnabled() ? config.repositoryTrust?.current() : undefined;
-    let Ya = reportableRepositoryTrust(js, isTrustedDeviceActiveForOrg());
+    let text = textRef.current;
+    let trustValue = isRepositoryTrustGateEnabled() ? config.repositoryTrust?.current() : undefined;
+    let trust = reportableRepositoryTrust(trustValue, isTrustedDeviceActiveForOrg());
     let localToolsSyncStatus = getLocalToolsSyncStatus(
-      xl,
-      na === undefined ? undefined : formatDeviceNotBoundMessage(na),
-      js === "nothing_to_mark" && isBelowFloorEnforced(attestationFor(undefined)),
+      promptRef,
+      text === undefined ? undefined : formatDeviceNotBoundMessage(text),
+      trustValue === "nothing_to_mark" && isBelowFloorEnforced(attestationFor(undefined)),
     );
-    let ol = directorySyncStatusOrUndefined($a, nullOnError_2(undefined));
+    let syncStatus = directorySyncStatusOrUndefined(sessionState, nullOnError_2(undefined));
     let seedSyncState = toSeedSyncState(
       config.homeSeed,
       homeSettingsForwardingStatus(host.launchOptions.mayForwardHomeSettings(), false),
-      Hi.current,
+      pendingAttachments.current,
     );
-    let _d = {
-      ...(ol !== undefined && {
-        projectFiles: ol,
+    let report = {
+      ...(syncStatus !== undefined && {
+        projectFiles: syncStatus,
       }),
-      ...(Si !== undefined && {
-        whileClosed: Si,
+      ...(reportSession !== undefined && {
+        whileClosed: reportSession,
       }),
-      ...(Ya !== undefined && {
-        repositoryTrust: Ya,
+      ...(trust !== undefined && {
+        repositoryTrust: trust,
       }),
       settings: describeProjectFilesSync(
-        ol === undefined ? normalizeNoProjectFiles(seedSyncState) : seedSyncState,
+        syncStatus === undefined ? normalizeNoProjectFiles(seedSyncState) : seedSyncState,
       ),
       plugins: getPluginsSyncStatus(
-        ss !== null
+        prompt !== null
           ? {
               kind: "attached",
-              state: ss.state(),
+              state: prompt.state(),
             }
-          : Zr.current !== null
+          : pendingDialog.current !== null
             ? {
                 kind: "absent",
-                reason: Zr.current,
+                reason: pendingDialog.current,
               }
             : {
                 kind: "pending",
@@ -763,34 +782,34 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
         localTools: localToolsSyncStatus,
       }),
     };
-    setAppState_2((ga) =>
-      ga.cloudSessionSync !== undefined && isSameSyncStatus(ga.cloudSessionSync, _d)
-        ? ga
+    setAppState_2((prev) =>
+      prev.cloudSessionSync !== undefined && isSameSyncStatus(prev.cloudSessionSync, report)
+        ? prev
         : {
-            ...ga,
-            cloudSessionSync: _d,
+            ...prev,
+            cloudSessionSync: report,
           },
     );
   }, [config, host, setAppState_2, appStoreDirect]);
-  let xs = R(new Map());
-  let kr = R(undefined);
-  let ls = ce(
-    (ss) => {
-      if (!ss) {
-        xs.current.clear();
-        kr.current = undefined;
+  let taskById = useRef(new Map());
+  let heldServedCallRef_2 = useRef(undefined);
+  let onTaskUpdate = useCallback(
+    (isHeld) => {
+      if (!isHeld) {
+        taskById.current.clear();
+        heldServedCallRef_2.current = undefined;
       }
-      let Gs = ss ? kr.current : undefined;
-      setAppState_2((ma) =>
-        (ma.cloudMessageHeld !== undefined) === ss && ma.cloudMessageHeld?.row === Gs
-          ? ma
+      let call = isHeld ? heldServedCallRef_2.current : undefined;
+      setAppState_2((prev) =>
+        (prev.cloudMessageHeld !== undefined) === isHeld && prev.cloudMessageHeld?.row === call
+          ? prev
           : {
-              ...ma,
-              cloudMessageHeld: ss
-                ? Gs === undefined
+              ...prev,
+              cloudMessageHeld: isHeld
+                ? call === undefined
                   ? {}
                   : {
-                      row: Gs,
+                      row: call,
                     }
                 : undefined,
             },
@@ -798,10 +817,10 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
     },
     [setAppState_2],
   );
-  let Ms = ce(() => {
-    Hi.current = undefined;
-    Zi.current = undefined;
-    ls(false);
+  let onTaskRemove = useCallback(() => {
+    pendingAttachments.current = undefined;
+    pendingPrompt_.current = undefined;
+    onTaskUpdate(false);
     setAppState_2((prev) =>
       prev.cloudSessionSync === undefined
         ? prev
@@ -810,128 +829,145 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
             cloudSessionSync: undefined,
           },
     );
-  }, [setAppState_2, ls]);
-  let qs = ce(() => {
-    oi.current = false;
-    let ss = Ci.current;
-    if (ss === null) return;
-    Ci.current = null;
-    if (spinnerStore.get().overrideMessage === ss) spinnerStore.main.setMessage(null);
+  }, [setAppState_2, onTaskUpdate]);
+  let onElicitation = useCallback(() => {
+    queued.current = false;
+    let elicitation = echoRef.current;
+    if (elicitation === null) return;
+    echoRef.current = null;
+    if (spinnerStore.get().overrideMessage === elicitation) spinnerStore.main.setMessage(null);
   }, [spinnerStore]);
-  let gs = ce(() => {
-    if (oi.current) qs();
-  }, [qs]);
-  let es = ce(() => {
-    if (!oi.current) qs();
-  }, [qs]);
-  let ds = ce(() => {
-    mr("connecting");
-    qs();
-    wr(null);
-    Ms();
-    ts.current = false;
+  let onPrompt = useCallback(() => {
+    if (queued.current) onElicitation();
+  }, [onElicitation]);
+  let onPromptClear = useCallback(() => {
+    if (!queued.current) onElicitation();
+  }, [onElicitation]);
+  let onError = useCallback(() => {
+    onTransportEvent("connecting");
+    onElicitation();
+    onMessage(null);
+    onTaskRemove();
+    isStreaming.current = false;
     runningTaskIdsRef.current.clear();
     isCompactingRef.current.clear();
-    Fr.current.clear();
-    Wn.current.clear();
+    runningTaskIds.current.clear();
+    remoteTasks.current.clear();
     writeTaskCount();
-    setAppState_2((ss) =>
-      ss.remoteWorkerReportedGone
+    setAppState_2((prev) =>
+      prev.remoteWorkerReportedGone
         ? {
-            ...ss,
+            ...prev,
             remoteWorkerReportedGone: false,
           }
-        : ss,
+        : prev,
     );
     setInProgressToolUseIDs({
       action: "clear",
     });
-    Fn.current = false;
-    setAppState_2((ss) =>
-      ss.hasRemoteReplyChannel
+    isReconnecting.current = false;
+    setAppState_2((prev) =>
+      prev.hasRemoteReplyChannel
         ? {
-            ...ss,
+            ...prev,
             hasRemoteReplyChannel: false,
           }
-        : ss,
+        : prev,
     );
-    setAppState_2((ss) =>
-      ss.workerInventory === null
-        ? ss
+    setAppState_2((prev) =>
+      prev.workerInventory === null
+        ? prev
         : {
-            ...ss,
+            ...prev,
             workerInventory: null,
           },
     );
-    setAppState_2((ss) =>
-      ss.remoteSessionName === undefined
-        ? ss
+    setAppState_2((prev) =>
+      prev.remoteSessionName === undefined
+        ? prev
         : {
-            ...ss,
+            ...prev,
             remoteSessionName: undefined,
           },
     );
-    setAppState_2((ss) =>
-      ss.activeGoal === undefined
-        ? ss
+    setAppState_2((prev) =>
+      prev.activeGoal === undefined
+        ? prev
         : {
-            ...ss,
+            ...prev,
             activeGoal: undefined,
           },
     );
-    setAppState_2((ss) =>
-      ss.remoteAutocompactState === undefined
-        ? ss
+    setAppState_2((prev) =>
+      prev.remoteAutocompactState === undefined
+        ? prev
         : {
-            ...ss,
+            ...prev,
             remoteAutocompactState: undefined,
           },
     );
-    setAppState_2((ss) => mergeCloudArtifactFrames(ss, null));
-  }, [mr, qs, wr, Ms, writeTaskCount, setInProgressToolUseIDs, setAppState_2]);
-  let Hs = ce(() => {
-    ur();
-    Yo.current = false;
-    bn.current = false;
-    Go.current = 0;
-    hn.current = 0;
-    Xo.current = false;
+    setAppState_2((prev) => mergeCloudArtifactFrames(prev, null));
+  }, [
+    onTransportEvent,
+    onElicitation,
+    onMessage,
+    onTaskRemove,
+    writeTaskCount,
+    setInProgressToolUseIDs,
+    setAppState_2,
+  ]);
+  let onFrames = useCallback(() => {
+    onServedCallEnd();
+    stopped.current = false;
+    isSending.current = false;
+    sentCount.current = 0;
+    receivedCount.current = 0;
+    isFlushing.current = false;
     setConnStatus(false);
-    qs();
+    onElicitation();
     runningTaskIdsRef.current.clear();
-    Fr.current.clear();
-    markTasksUnlisted(Wn.current);
+    runningTaskIds.current.clear();
+    markTasksUnlisted(remoteTasks.current);
     writeTaskCount();
     setInProgressToolUseIDs({
       action: "clear",
     });
     retraction.inProgressToolUses.clear();
-    Sn();
+    resetCounters();
     streaming.resetMetrics();
-  }, [ur, setConnStatus, qs, writeTaskCount, setInProgressToolUseIDs, retraction, Sn, streaming]);
-  let _s = R(null);
-  let fs = R(false);
-  let ii = R(0);
-  let ua = ce(() => {
-    fs.current = false;
-    _s.current = null;
-    ii.current++;
+  }, [
+    onServedCallEnd,
+    setConnStatus,
+    onElicitation,
+    writeTaskCount,
+    setInProgressToolUseIDs,
+    retraction,
+    resetCounters,
+    streaming,
+  ]);
+  let errorRef = useRef(null);
+  let hasError = useRef(false);
+  let retryCount = useRef(0);
+  let onRetry = useCallback(() => {
+    hasError.current = false;
+    errorRef.current = null;
+    retryCount.current++;
   }, []);
-  let La = ce(() => {
-    let ss = qn.current;
-    if (config === undefined || ss === null) return Promise.resolve();
+  let onConnect = useCallback(() => {
+    let watch = managerRef.current;
+    if (config === undefined || watch === null) return Promise.resolve();
     if (isEssentialTrafficOnly()) return Promise.resolve();
-    if (_s.current !== null) return _s.current;
-    let Gs = ii.current;
-    let $a = (async () => {
+    if (errorRef.current !== null) return errorRef.current;
+    let count = retryCount.current;
+    let connect = (async () => {
       try {
         let accessTokenRefreshed = await getAccessTokenRefreshed(config, {
           credentials,
           storageV5,
         });
-        let Si;
+        let result;
         try {
-          Si = (
+          result = (
             await fetchSession(config.sessionId, {
               accessToken: accessTokenRefreshed,
             })
@@ -942,92 +978,92 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
             !(await config.onAuth401?.(accessTokenRefreshed))
           )
             throw error;
-          Si = (
+          result = (
             await fetchSession(config.sessionId, {
               accessToken: config.getAccessToken(),
             })
           ).session_status;
         }
-        if (Si !== "archived" || qn.current !== ss || ii.current !== Gs) return;
-        if (!fs.current) {
-          fs.current = true;
-          setMessages((na) => [
-            ...na,
+        if (result !== "archived" || managerRef.current !== watch || retryCount.current !== count) return;
+        if (!hasError.current) {
+          hasError.current = true;
+          setMessages((prev) => [
+            ...prev,
             createSystemMessage(archivedSessionMessage(config.sessionId), "warning"),
           ]);
         }
-        Hs();
+        onFrames();
       } catch (error) {
         logForDebugging(
           `[useRemoteSession] Could not read whether the session was archived: ${errorMessage(error)}`,
         );
       }
     })();
-    _s.current = $a;
-    $a.finally(() => {
-      if (_s.current === $a) _s.current = null;
+    errorRef.current = connect;
+    connect.finally(() => {
+      if (errorRef.current === connect) errorRef.current = null;
     });
-    return $a;
-  }, [config, credentials, storageV5, setMessages, Hs]);
-  let Xa = ce(
-    (ss, Gs) => {
-      let ma = xs.current.get(ss);
-      if (ma === undefined || Gs === ma) {
-        xs.current.set(ss, Gs);
+    return connect;
+  }, [config, credentials, storageV5, setMessages, onFrames]);
+  let onDialogAnswer = useCallback(
+    (requestId, answer) => {
+      let pending = taskById.current.get(requestId);
+      if (pending === undefined || answer === pending) {
+        taskById.current.set(requestId, answer);
         return;
       }
-      if (kr.current !== undefined) return;
-      kr.current = ss;
-      setAppState_2(($a) =>
-        $a.cloudMessageHeld !== undefined && $a.cloudMessageHeld.row !== ss
+      if (heldServedCallRef_2.current !== undefined) return;
+      heldServedCallRef_2.current = requestId;
+      setAppState_2((prev) =>
+        prev.cloudMessageHeld !== undefined && prev.cloudMessageHeld.row !== requestId
           ? {
-              ...$a,
+              ...prev,
               cloudMessageHeld: {
-                row: ss,
+                row: requestId,
               },
             }
-          : $a,
+          : prev,
       );
     },
     [setAppState_2],
   );
-  let dl = ce(
-    (ss, Gs) => {
-      let ma = qn.current;
+  let onAskAnswer = useCallback(
+    (requestId, answer) => {
+      let watch = managerRef.current;
       queueMicrotask(() => {
-        if (qn.current !== ma || ma?.hasWithholdableHeldSend() !== true) return;
-        Xa(ss, Gs);
+        if (managerRef.current !== watch || watch?.hasWithholdableHeldSend() !== true) return;
+        onDialogAnswer(requestId, answer);
       });
     },
-    [Xa],
+    [onDialogAnswer],
   );
-  let Vl = R(0);
-  let Hd = R(0);
-  let Ss = R(null);
-  let yi = R(false);
-  let Ws = R(false);
-  P(() => {
+  let heartbeatCount = useRef(0);
+  let lastReceivedAt = useRef(0);
+  let timeoutTimer = useRef(null);
+  let isTimedOut = useRef(false);
+  let timedOutNotified = useRef(false);
+  useEffect(() => {
     if (config === undefined) return;
-    let ss = false;
-    let Gs = async (ma) => {
+    let cancelled = false;
+    let onTick = async (now) => {
       try {
         let accessToken = await getAccessTokenRefreshed(config, {
           credentials,
           storageV5,
         });
-        if (ma.aborted) return;
+        if (now.aborted) return;
         let session = await fetchSession(config.sessionId, {
           accessToken,
         });
-        if (!ss) {
-          ss = true;
+        if (!cancelled) {
+          cancelled = true;
           logFeatureOk("ccr_session_name_follow");
         }
         return serviceSessionName(session.title);
       } catch (error) {
         logForDebugging(`[useRemoteSession] Could not re-read the session's name: ${errorMessage(error)}`);
-        if (!ss) {
-          ss = true;
+        if (!cancelled) {
+          cancelled = true;
           logFeatureBad("ccr_session_name_follow", "read_failed");
         }
         return;
@@ -1036,70 +1072,73 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
     return followServiceSessionName(
       clock,
       config.serviceName,
-      isEssentialTrafficOnly() ? undefined : Gs,
-      (ma) =>
+      isEssentialTrafficOnly() ? undefined : onTick,
+      (value) =>
         setAppState_2((prev) =>
-          prev.remoteSessionName === ma
+          prev.remoteSessionName === value
             ? prev
             : {
                 ...prev,
-                remoteSessionName: ma,
+                remoteSessionName: value,
               },
         ),
     );
   }, [config, credentials, storageV5, setAppState_2, clock]);
-  let [za] = y(() => new BoundedUUIDSet(50));
-  let responseTimeoutRef = R(0);
-  let isCompactingRef = R(new Set());
-  let [as] = y(() => new BoundedUUIDSet(256));
-  let pi = ce((ss) => isCompactingRef.current.has(ss) || as.has(ss), [as]);
-  let qa = ce((ss) => isSubagentToolRequest(ss) && pi(String(ss.agent_id)), [pi]);
-  let managerRef = R(new Set());
-  let [$l] = useTheme();
-  let hasUpdatedTitleRef = R(false);
-  let sentUUIDsRef = R(undefined);
-  let toolsRef = R(undefined);
-  P(() => {
+  let [compactingIds] = useState(() => new BoundedUUIDSet(50));
+  let responseTimeoutRef = useRef(0);
+  let isCompactingRef = useRef(new Set());
+  let [retryingIds] = useState(() => new BoundedUUIDSet(256));
+  let isBusy = useCallback((id) => isCompactingRef.current.has(id) || retryingIds.has(id), [retryingIds]);
+  let isHeldToolRequest = useCallback(
+    (request) => isSubagentToolRequest(request) && isBusy(String(request.agent_id)),
+    [isBusy],
+  );
+  let managerRef_2 = useRef(new Set());
+  let [theme] = useTheme();
+  let hasUpdatedTitleRef = useRef(false);
+  let sentUUIDsRef = useRef(undefined);
+  let toolsRef_2 = useRef(undefined);
+  useEffect(() => {
     sentUUIDsRef.current = undefined;
-    toolsRef.current = config?.eventSigner === undefined ? false : undefined;
+    toolsRef_2.current = config?.eventSigner === undefined ? false : undefined;
     hasUpdatedTitleRef.current = false;
-    let ss = true;
+    let mounted = true;
     config?.eventSigner?.then(
-      (Gs) => {
-        if (ss) toolsRef.current = Gs !== undefined;
+      (input_) => {
+        if (mounted) toolsRef_2.current = input_ !== undefined;
       },
       () => {
-        if (ss) toolsRef.current = false;
+        if (mounted) toolsRef_2.current = false;
       },
     );
     config?.boundHere?.then(
       (sdkMessage) => {
-        if (ss) sentUUIDsRef.current = sdkMessage;
+        if (mounted) sentUUIDsRef.current = sdkMessage;
       },
       () => {},
     );
     return () => {
-      ss = false;
+      mounted = false;
     };
   }, [config]);
-  let _c = Q(
+  let watcher = useMemo(
     () =>
       config && isRepositoryTrustGateEnabled()
         ? {
             get answersProveDevice() {
-              return sentUUIDsRef.current === false && toolsRef.current !== false
+              return sentUUIDsRef.current === false && toolsRef_2.current !== false
                 ? undefined
                 : sentUUIDsRef.current;
             },
             onAnswered: () => {
               hasUpdatedTitleRef.current = true;
             },
-            onNotShown: (ss, Gs) => {
-              if (ss === "proves_no_device") or.requestOpened(Gs);
-              setMessages((ma) => [
-                ...ma,
+            onNotShown: (requestId, payload) => {
+              if (requestId === "proves_no_device") servedCallWatch.requestOpened(payload);
+              setMessages((prev) => [
+                ...prev,
                 createSystemMessage(
-                  ss === "proves_no_device"
+                  requestId === "proves_no_device"
                     ? REMOTE_TOOLS_CONSENT_TEXT["repository_trust.prompt.answer_elsewhere"](
                         getRemoteSessionUrl(config.sessionId, undefined, {
                           from: "cli",
@@ -1112,74 +1151,76 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
             },
           }
         : undefined,
-    [config, setMessages, or],
+    [config, setMessages, servedCallWatch],
   );
   let inputs = {
-    sendResponse: (ss, Gs) => {
-      or.requestClosed(ss);
-      let ma = kn.get(ss);
-      kn.delete(ss);
-      let wasCompacting = qn.current;
+    sendResponse: (requestId, answer) => {
+      servedCallWatch.requestClosed(requestId);
+      let pending = pendingRequests.get(requestId);
+      pendingRequests.delete(requestId);
+      let wasCompacting = managerRef.current;
       if (!wasCompacting) return;
-      wasCompacting.respondToPermissionRequest(ss, Gs);
-      if (Gs.behavior === "allow") {
-        let last = Gs.updatedPermissions?.findLast(
+      wasCompacting.respondToPermissionRequest(requestId, answer);
+      if (answer.behavior === "allow") {
+        let last = answer.updatedPermissions?.findLast(
           (updatedPermission) => updatedPermission.type === "setMode",
         );
         let mode = last?.type === "setMode" && last.destination === "session" ? last.mode : undefined;
         if (mode === "default" || mode === "acceptEdits") {
-          if (isDeviceIdentityEnabledCached()) Hd.current++;
+          if (isDeviceIdentityEnabledCached()) lastReceivedAt.current++;
           noteOwnPermissionModeAnswer(mode);
         } else if (mode !== undefined) noteOwnUnrecordedModeAnswer();
-        if (ma === undefined || !pi(ma)) setConnStatus(true);
-      } else if (Gs.interrupt && ma === undefined) {
-        is();
+        if (pending === undefined || !isBusy(pending)) setConnStatus(true);
+      } else if (answer.interrupt && pending === undefined) {
+        onDisconnect();
         onTurnStopped?.();
       }
     },
     requestDialog,
     toolRegistry: tools,
     toolPermissionContext,
-    theme: $l,
+    theme,
     canInterruptTurn: !config?.viewerOnly,
-    askedByBackgroundSubagent: qa,
-    onAskNotShown: (ss) => {
-      setMessages((Gs) => [
-        ...Gs,
+    askedByBackgroundSubagent: isHeldToolRequest,
+    onAskNotShown: (requestId) => {
+      setMessages((prev) => [
+        ...prev,
         createSystemMessage(
-          ss ? REMOTE_PERMISSION_UNSHOWABLE_SHORT : REMOTE_PERMISSION_UNSHOWABLE_TEXTS,
+          requestId ? REMOTE_PERMISSION_UNSHOWABLE_SHORT : REMOTE_PERMISSION_UNSHOWABLE_TEXTS,
           "warning",
         ),
       ]);
     },
     handedOverAtAttach: config?.seedSubagentRequests,
-    heldServedCall: (ss) => {
-      let Gs = heldServedCallRef.current?.(ss);
-      if (Gs?.held) return Gs;
-      let ma = config?.heldServedCall?.(ss);
-      if (ma?.held) return ma;
-      return [Gs, ma].find((prev) => prev?.reason === "other_input") ?? ma ?? Gs ?? NOT_HELD_LEASE;
+    heldServedCall: (call) => {
+      let held = heldServedCallRef.current?.(call);
+      if (held?.held) return held;
+      let held_2 = config?.heldServedCall?.(call);
+      if (held_2?.held) return held_2;
+      return (
+        [held, held_2].find((prev) => prev?.reason === "other_input") ?? held_2 ?? held ?? NOT_HELD_LEASE
+      );
     },
-    ...(_c && {
-      repositoryTrustQuestion: _c,
+    ...(watcher && {
+      repositoryTrustQuestion: watcher,
     }),
     ...(isServedCallWatchEnabled() && {
       computerFolderPrompt: true,
     }),
   };
-  let [Vd] = y(() => new TransportPermissionDispatcher(inputs));
+  let [permissionDispatcher] = useState(() => new TransportPermissionDispatcher(inputs));
   let inputs_2 = {
-    sendResponse: (ss, Gs) => {
-      qn.current?.respondToUserDialogRequest(ss, Gs);
+    sendResponse: (requestId, answer) => {
+      managerRef.current?.respondToUserDialogRequest(requestId, answer);
     },
     requestDialog,
   };
-  let [Ka] = y(() => new RemoteDialogDispatcher(inputs_2));
-  P(() => {
-    Vd.setInputs(inputs);
-    Ka.setInputs(inputs_2);
+  let [dialogDispatcher] = useState(() => new RemoteDialogDispatcher(inputs_2));
+  useEffect(() => {
+    permissionDispatcher.setInputs(inputs);
+    dialogDispatcher.setInputs(inputs_2);
   });
-  P(() => {
+  useEffect(() => {
     let flattened = [
       ...[],
       {
@@ -1187,102 +1228,102 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
         name: "home-settings",
         wait: "settings",
       },
-    ].flatMap(({ feed, name: xl, wait }) =>
+    ].flatMap(({ feed, name, wait }) =>
       feed === undefined
         ? []
         : [
             {
               feed,
-              name: xl,
+              name,
               wait,
             },
           ],
     );
     if (flattened.length === 0) return;
-    let Gs =
-      ($a, wait) =>
+    let handle =
+      (wait, wait_2) =>
       ({ line, level }) => {
-        switch ((ps(), level)) {
+        switch ((onQueueEmpty(), level)) {
           case "progress":
-            logForDebugging(`[useRemoteSession] ${$a}: ${line}`);
-            Oi(line, "held", null);
-            dl(wait, line.replace(TRAILING_ELLIPSIS_RE, ""));
+            logForDebugging(`[useRemoteSession] ${wait}: ${line}`);
+            sendQueued(line, "held", null);
+            onAskAnswer(wait_2, line.replace(TRAILING_ELLIPSIS_RE, ""));
             return;
           case "debug":
-            logForDebugging(`[useRemoteSession] ${$a}: ${line}`);
+            logForDebugging(`[useRemoteSession] ${wait}: ${line}`);
             return;
           case "info":
           case "warning": {
             let converted = createSystemMessage(line, level === "info" ? "notice" : "warning");
-            Vr.current.add(converted.uuid);
+            seenUuids.current.add(converted.uuid);
             setMessages((prev) => [...prev, converted]);
             return;
           }
           default:
         }
       };
-    let toolUseIds = flattened.map(({ feed, name: xl, wait }) => {
-      let na = Gs(xl, wait);
-      let js = feed.subscribe(na);
-      for (let Ya of feed.takeBacklog()) na(Ya);
-      return js;
+    let toolUseIds = flattened.map(({ feed, name, wait }) => {
+      let handler = handle(name, wait);
+      let unsubscribe = feed.subscribe(handler);
+      for (let item of feed.takeBacklog()) handler(item);
+      return unsubscribe;
     });
     return () => toolUseIds.forEach((block) => block());
-  }, [undefined, config?.homeSeed, setMessages, ps, dl]);
-  P(() => {
+  }, [undefined, config?.homeSeed, setMessages, onQueueEmpty, onAskAnswer]);
+  useEffect(() => {
     let deviceNotBoundNotice = config?.deviceNotBoundNotice;
     if (!deviceNotBoundNotice) return;
-    let Gs = true;
+    let seeded = true;
     deviceNotBoundNotice.then((block) => {
-      if (!Gs || block === undefined) return;
+      if (!seeded || block === undefined) return;
       if (block.toast) addNotification(createDeviceNotBoundNotification(block.text));
       textRef.current = block.text;
-      ps();
+      onQueueEmpty();
     });
     return () => {
-      Gs = false;
+      seeded = false;
       textRef.current = undefined;
     };
-  }, [config?.deviceNotBoundNotice, addNotification, ps]);
-  P(() => {
+  }, [config?.deviceNotBoundNotice, addNotification, onQueueEmpty]);
+  useEffect(() => {
     if (!config) {
-      if (yi.current) {
-        yi.current = false;
+      if (isTimedOut.current) {
+        isTimedOut.current = false;
         setConnStatus(false);
-        Ws.current = false;
-        ws.current = false;
-        Yo.current = false;
-        bn.current = false;
-        Go.current = 0;
+        timedOutNotified.current = false;
+        autoFollow.current = false;
+        stopped.current = false;
+        isSending.current = false;
+        sentCount.current = 0;
         responseTimeoutRef.current = 0;
-        hn.current = 0;
-        Xo.current = false;
-        _r.current = true;
-        ms();
-        ds();
+        receivedCount.current = 0;
+        isFlushing.current = false;
+        accepting.current = true;
+        disconnect();
+        onError();
         retraction.inProgressToolUses.clear();
-        Sn();
+        resetCounters();
         streaming.resetMetrics();
       }
       return;
     }
-    yi.current = true;
-    _r.current = Boolean(config.isAttachToExisting || config.viewerOnly);
-    ms();
-    wr(null);
-    ts.current = false;
-    ua();
+    isTimedOut.current = true;
+    accepting.current = Boolean(config.isAttachToExisting || config.viewerOnly);
+    disconnect();
+    onMessage(null);
+    isStreaming.current = false;
+    onRetry();
     responseTimeoutRef.current = 0;
-    hn.current = config.initialPromptUuid !== undefined ? 1 : 0;
-    Xo.current = false;
+    receivedCount.current = config.initialPromptUuid !== undefined ? 1 : 0;
+    isFlushing.current = false;
     let seedBackgroundTasks = config.seedBackgroundTasks;
     isCompactingRef.current = new Set(seedBackgroundTasks?.awaitingFinish);
-    Fr.current = new Set(seedBackgroundTasks?.foreground);
-    Zn.current = seedBackgroundTasks?.foreground ?? [];
-    as.clear();
-    config.seedAskersPastATurn?.forEach((prev) => as.add(prev));
-    runningTaskIdsRef.current = new Map(seedBackgroundTasks?.running.map((Br) => [Br.id, Br]));
-    Wn.current = new Map(
+    runningTaskIds.current = new Set(seedBackgroundTasks?.foreground);
+    heldIds.current = seedBackgroundTasks?.foreground ?? [];
+    retryingIds.clear();
+    config.seedAskersPastATurn?.forEach((prev) => retryingIds.add(prev));
+    runningTaskIdsRef.current = new Map(seedBackgroundTasks?.running.map((task) => [task.id, task]));
+    remoteTasks.current = new Map(
       config.seedWorkflowRuns?.map((seedWorkflowRun) => [seedWorkflowRun.id, seedWorkflowRun]),
     );
     writeTaskCount();
@@ -1292,43 +1333,43 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
         running: seedBackgroundTasks.running.length,
         awaiting_finish: seedBackgroundTasks.awaitingFinish.length,
       });
-    Pr.current = Date.now();
-    if (config.initialPromptUuid) za.add(config.initialPromptUuid);
+    lastActivityAt.current = Date.now();
+    if (config.initialPromptUuid) compactingIds.add(config.initialPromptUuid);
     logForDebugging(`[useRemoteSession] Initializing for session ${config.sessionId}`);
-    let Gs = false;
-    let ma = false;
-    let $a = new Set();
-    let xl = false;
-    let Si = undefined;
-    let na = undefined;
+    let done = false;
+    let needsRefetch = false;
+    let loggedNestedFrames = new Set();
+    let loggedToolResult = false;
+    let admitProjectPersonMessages = undefined;
+    let mapIncomingMessage = undefined;
     let next = new Set(replyChannelConfig !== null ? (config.seedReplyChannelToolUseIds ?? []) : []);
-    Fn.current = replyChannelConfig !== null && appStoreDirect.getState().hasRemoteReplyChannel;
-    let Ya = Fn.current;
-    function tl() {
-      let Br = Ya;
-      Ya = false;
-      if (Fn.current) {
-        if (Br) logEvent("tengu_remote_reply_channel_init", {});
+    isReconnecting.current = replyChannelConfig !== null && appStoreDirect.getState().hasRemoteReplyChannel;
+    let wasReconnecting = isReconnecting.current;
+    function noteReplyChannelInit() {
+      let previouslyReconnecting = wasReconnecting;
+      wasReconnecting = false;
+      if (isReconnecting.current) {
+        if (previouslyReconnecting) logEvent("tengu_remote_reply_channel_init", {});
         return;
       }
-      Fn.current = true;
+      isReconnecting.current = true;
       logEvent("tengu_remote_reply_channel_init", {});
-      setAppState_2((Fi) =>
-        Fi.hasRemoteReplyChannel
-          ? Fi
+      setAppState_2((replyPrev) =>
+        replyPrev.hasRemoteReplyChannel
+          ? replyPrev
           : {
-              ...Fi,
+              ...replyPrev,
               hasRemoteReplyChannel: true,
             },
       );
     }
     if (config.seedActiveGoal !== undefined) {
       let seedActiveGoal = config.seedActiveGoal ?? undefined;
-      setAppState_2((Fi) =>
-        Fi.activeGoal === seedActiveGoal
-          ? Fi
+      setAppState_2((goalPrev) =>
+        goalPrev.activeGoal === seedActiveGoal
+          ? goalPrev
           : {
-              ...Fi,
+              ...goalPrev,
               activeGoal: seedActiveGoal,
             },
       );
@@ -1340,8 +1381,8 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
     }
     if (config.seedAutocompactState !== undefined) {
       let seedAutocompactState = config.seedAutocompactState;
-      setAppState_2((Fi) => ({
-        ...Fi,
+      setAppState_2((autocompactPrev) => ({
+        ...autocompactPrev,
         remoteAutocompactState: seedAutocompactState,
       }));
       logEvent("tengu_remote_autocompact_state_adopted", {
@@ -1351,51 +1392,57 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
         source: fromEnum(seedAutocompactState.source),
       });
     }
-    let ol = config.seedAutocompactState !== undefined;
-    let ed = (Br, Fi) => {
-      let ia = 0;
-      let vl = false;
-      setAppState_2((hl) => {
-        let dd = mergeCloudArtifactFrames(hl, Br);
-        vl = dd !== hl;
-        ia = count(Object.values(dd.frameUrls), (Ra) => Ra.fromCloudSession === true);
-        return dd;
+    let hasAutocompactState = config.seedAutocompactState !== undefined;
+    let adoptArtifacts = (artifacts, via) => {
+      let keptCount = 0;
+      let changed = false;
+      setAppState_2((artifactPrev) => {
+        let mergedArtifacts = mergeCloudArtifactFrames(artifactPrev, artifacts);
+        changed = mergedArtifacts !== artifactPrev;
+        keptCount = count(
+          Object.values(mergedArtifacts.frameUrls),
+          (frameUrl) => frameUrl.fromCloudSession === true,
+        );
+        return mergedArtifacts;
       });
-      if (!vl && ia === (Br?.length ?? 0)) return;
+      if (!changed && keptCount === (artifacts?.length ?? 0)) return;
       logEvent("tengu_remote_cloud_artifacts_adopted", {
-        via: fromEnum(Fi),
-        listed: Br?.length ?? 0,
-        kept: ia,
+        via: fromEnum(via),
+        listed: artifacts?.length ?? 0,
+        kept: keptCount,
       });
     };
-    let _d = config.seedSessionArtifacts !== undefined;
-    if (config.seedSessionArtifacts !== undefined) ed(config.seedSessionArtifacts, "seed");
+    let hasSessionArtifacts = config.seedSessionArtifacts !== undefined;
+    if (config.seedSessionArtifacts !== undefined) adoptArtifacts(config.seedSessionArtifacts, "seed");
     let remoteRateLimitAdopter = createRemoteRateLimitAdopter(
       () => adoptRateLimits && !config.viewerOnly,
       "stream",
     );
     queueMicrotask(() => remoteRateLimitAdopter.adopt(config.seedRateLimitInfos ?? [], "seed"));
-    let du = config.initialSequenceNum === undefined ? "history" : "replay";
-    let rg = () => {
-      remoteRateLimitAdopter.settle(du);
-      du = "replay";
+    let rateLimitPhase = config.initialSequenceNum === undefined ? "history" : "replay";
+    let settleRateLimits = () => {
+      remoteRateLimitAdopter.settle(rateLimitPhase);
+      rateLimitPhase = "replay";
     };
     let replInputAccumulator = undefined;
-    let Wd = 0;
-    let Rl = false;
-    let Yd = null;
-    let Pi = false;
-    let fa = false;
-    let sa = false;
+    let cwdApplySeq = 0;
+    let loggedCwd = false;
+    let manager = null;
+    let announcedLive = false;
+    let loggedListedAtReconnect = false;
+    let sawWorkerFrame = false;
     let onLine = ({ line, level }) => {
       if (level === "debug") {
         logForDebugging(`[useRemoteSession] hooks: ${line}`);
         return;
       }
-      setMessages((ia) => [...ia, createSystemMessage(line, level === "warning" ? "warning" : "notice")]);
+      setMessages((messagesForHookLine) => [
+        ...messagesForHookLine,
+        createSystemMessage(line, level === "warning" ? "warning" : "notice"),
+      ]);
     };
     let syncRoot = () => null;
-    let Ad = (() => {
+    let settingsWatcher = (() => {
       if (config.viewerOnly || !isViolinWoodEnabledCached()) return null;
       try {
         return watchServedSettings(
@@ -1408,19 +1455,19 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
         return null;
       }
     })();
-    let od = (() => {
+    let servedToolsConnection = (() => {
       if (config.servedTools === undefined || config.viewerOnly || !isViolinWoodEnabledCached()) return null;
       try {
         let onAnnounceOutcome = config.servedTools.onAnnounceOutcome;
         let onRevoked = config.servedTools.onRevoked;
         let remoteSessionConnection = createRemoteSessionConnection({
           sessionId: config.sessionId,
-          manager: () => Yd,
+          manager: () => manager,
           ...config.servedTools,
-          onAnnounceOutcome: (hl, dd) => {
-            if (hl.kind === "announced") {
-              Zi.current =
-                hl.status === "announced"
+          onAnnounceOutcome: (announceOutcome, reason) => {
+            if (announceOutcome.kind === "announced") {
+              pendingPrompt_.current =
+                announceOutcome.status === "announced"
                   ? {
                       on: true,
                       name: remoteSessionConnection.servedHost()?.name ?? "",
@@ -1428,37 +1475,37 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
                   : {
                       on: false,
                     };
-              ps();
-            } else if (hl.kind === "refused" || hl.kind === "unsupported") {
-              Zi.current = {
+              onQueueEmpty();
+            } else if (announceOutcome.kind === "refused" || announceOutcome.kind === "unsupported") {
+              pendingPrompt_.current = {
                 on: false,
               };
-              ps();
+              onQueueEmpty();
             }
-            onAnnounceOutcome?.(hl, dd);
+            onAnnounceOutcome?.(announceOutcome, reason);
           },
           onRevoked:
             onRevoked === undefined
               ? undefined
               : (prev) =>
                   onRevoked((message) => {
-                    Zi.current = {
+                    pendingPrompt_.current = {
                       on: false,
                     };
-                    ps();
+                    onQueueEmpty();
                     prev(message);
                   }),
         });
         heldServedCallRef.current = remoteSessionConnection.heldServedCall;
-        let vl = registerCleanup(() => remoteSessionConnection.close());
+        let unregisterCleanup = registerCleanup(() => remoteSessionConnection.close());
         return {
           ...remoteSessionConnection,
           close: () => {
-            vl();
-            let hl = remoteSessionConnection.close();
-            let dd = registerCleanup(() => hl);
-            hl.finally(dd);
-            return hl;
+            unregisterCleanup();
+            let closePromise = remoteSessionConnection.close();
+            let onCloseCleanup = registerCleanup(() => closePromise);
+            closePromise.finally(onCloseCleanup);
+            return closePromise;
           },
         };
       } catch (error) {
@@ -1466,29 +1513,29 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
         return null;
       }
     })();
-    let md = (() => {
-      if (Ad === null || config.viewerOnly || !isHookForwardingEnabled()) return null;
+    let hookForwarding = (() => {
+      if (settingsWatcher === null || config.viewerOnly || !isHookForwardingEnabled()) return null;
       try {
         return startDeviceHookForwarding({
           launchDir: getOriginalCwd(),
           cloudSessionId: config.sessionId,
           memory: deviceHooksProcessMemories.of(host),
-          getTools: () => Ho(),
+          getTools: () => toolsRef(),
           storageV5,
-          manager: () => Yd,
+          manager: () => manager,
           syncRoot,
           onLine,
           registerCleanup,
-          subscribeSettingsChanges: (prev) => Ad.subscribe(prev),
+          subscribeSettingsChanges: (prev) => settingsWatcher.subscribe(prev),
         });
       } catch (error) {
         logError(error);
         return null;
       }
     })();
-    let vp = {
+    let managerConfig = {
       ...config,
-      admitProjectPersonMessages: Si !== undefined,
+      admitProjectPersonMessages: admitProjectPersonMessages !== undefined,
       subagentRequestsOutliveTheTurn: true,
       trackSendsInFlight: true,
       keepUndeliveredResponses: config.keepUndeliveredResponses ?? isDeviceIdentityEnabledCached(),
@@ -1500,124 +1547,139 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
       nameRepositoryTrustAnswers: config.nameRepositoryTrustAnswers ?? isRepositoryTrustGateEnabled(),
       pinComputerFolderAllow: isServedCallWatchEnabled,
     };
-    Ur.current = md;
-    let sg = new Set();
-    let zi = new RemoteSessionManager(vp, {
+    pendingPrompt.current = hookForwarding;
+    let notifiedUndelivered = new Set();
+    let manager_2 = new RemoteSessionManager(managerConfig, {
       onMessage: (request, requestId) => {
-        sa = true;
+        sawWorkerFrame = true;
         if (!capFrameDepth(request)) return;
-        let ia = [`type=${request.type}`];
-        if ("subtype" in request) ia.push(`subtype=${request.subtype}`);
+        let frameTags = [`type=${request.type}`];
+        if ("subtype" in request) frameTags.push(`subtype=${request.subtype}`);
         if (request.type === "user") {
           let content = request.message?.content;
-          ia.push(
-            `content=${Array.isArray(content) ? content.map((rl) => rl.type).join(",") : typeof content}`,
+          frameTags.push(
+            `content=${Array.isArray(content) ? content.map((block) => block.type).join(",") : typeof content}`,
           );
         }
-        logForDebugging(`[useRemoteSession] Received ${ia.join(" ")}`);
-        Ti();
-        if (requestId?.replayed === false && request.type !== "rate_limit_event") rg();
-        let vl = Yo.current || bn.current || Go.current > 0;
-        let hl = hn.current;
-        let dd = {
-          sent: hl > 0,
-          taskWake: Xo.current,
+        logForDebugging(`[useRemoteSession] Received ${frameTags.join(" ")}`);
+        scheduleRefusalRetry();
+        if (requestId?.replayed === false && request.type !== "rate_limit_event") settleRateLimits();
+        let sentThisTurn = stopped.current || isSending.current || sentCount.current > 0;
+        let receivedBefore = receivedCount.current;
+        let turnMarkers = {
+          sent: receivedBefore > 0,
+          taskWake: isFlushing.current,
         };
-        let Ra = requestId?.replayed === true && requestId.resumed !== true;
-        let Dl = isModelRefusalFallback_2(request);
-        if (Dl)
+        let isReplay = requestId?.replayed === true && requestId.resumed !== true;
+        let refusalSignal = isModelRefusalFallback_2(request);
+        if (refusalSignal)
           evictRefusalRetraction({
             index: retraction,
-            signal: Dl,
+            signal: refusalSignal,
             surface: "ccr",
             setMessages,
             setInProgressToolUseIDs,
           });
-        pr();
+        onServedCall();
         if (request.type === "env_manager_log") {
           let now = Date.now();
-          let rl = Ir.current !== null && Ir.current.hasStructuredSteps && !Ir.current.terminal;
-          if (_r.current && !rl && isStaleTimestamp(request, now)) return;
-          let Cl = convertSDKMessage(request);
-          let _a =
-            Ir.current ??
+          let hasOpenSetup =
+            activeToolUse.current !== null &&
+            activeToolUse.current.hasStructuredSteps &&
+            !activeToolUse.current.terminal;
+          if (accepting.current && !hasOpenSetup && isStaleTimestamp(request, now)) return;
+          let converted = convertSDKMessage(request);
+          let setupProgress =
+            activeToolUse.current ??
             createSetupProgress(now, {
               wake: Boolean(config.isAttachToExisting),
             });
-          let Jl = applySetupEvent(_a, request, Cl.type === "env_log" ? Cl.message : "", now, Pr.current);
-          if (!Yo.current && Cl.type === "env_log" && Cl.message !== "") {
-            if (!_r.current) setConnStatus(true);
-            Oi(Cl.message, "provisioning", currentSetupLabel(Jl));
+          let nextProgress = applySetupEvent(
+            setupProgress,
+            request,
+            converted.type === "env_log" ? converted.message : "",
+            now,
+            lastActivityAt.current,
+          );
+          if (!stopped.current && converted.type === "env_log" && converted.message !== "") {
+            if (!accepting.current) setConnStatus(true);
+            sendQueued(converted.message, "provisioning", currentSetupLabel(nextProgress));
           }
-          if (Jl !== Ir.current) {
-            if (_a.terminal && !Jl.terminal && Jl.dismissed && !ts.current) {
-              ts.current = true;
+          if (nextProgress !== activeToolUse.current) {
+            if (
+              setupProgress.terminal &&
+              !nextProgress.terminal &&
+              nextProgress.dismissed &&
+              !isStreaming.current
+            ) {
+              isStreaming.current = true;
               logEvent("tengu_remote_bootstrap_cycle_hidden", {});
             }
-            zr(Jl);
+            onDialogs(nextProgress);
             if (
-              Jl.steps.some((step) => step.status === "failed") &&
-              !_a.steps.some((step) => step.status === "failed")
+              nextProgress.steps.some((step) => step.status === "failed") &&
+              !setupProgress.steps.some((step) => step.status === "failed")
             )
-              Ls(Jl.dismissed);
-            if (Jl.terminal) {
-              ts.current = false;
-              es();
-              Xs();
+              onReconnect(nextProgress.dismissed);
+            if (nextProgress.terminal) {
+              isStreaming.current = false;
+              onPromptClear();
+              closeDialogs();
             }
           }
           return;
         }
-        let Gu = Ir.current;
-        let syntheticMessage = classifySetupFrame(Gu, request);
-        if (syntheticMessage === "failed" && Gu !== null) {
-          let Aa = markCurrentStepFailed(Gu, Date.now());
-          if (Aa !== Gu) {
-            zr(Aa);
-            Ls(false);
-          } else if (!Gu.steps.some((queue) => queue.status === "failed")) syntheticMessage = null;
+        let currentSetup = activeToolUse.current;
+        let syntheticMessage = classifySetupFrame(currentSetup, request);
+        if (syntheticMessage === "failed" && currentSetup !== null) {
+          let failedProgress = markCurrentStepFailed(currentSetup, Date.now());
+          if (failedProgress !== currentSetup) {
+            onDialogs(failedProgress);
+            onReconnect(false);
+          } else if (!currentSetup.steps.some((queue) => queue.status === "failed")) syntheticMessage = null;
         }
-        if (syntheticMessage !== "notice") es();
-        if (request.type !== "user" && syntheticMessage === null) Xs();
+        if (syntheticMessage !== "notice") onPromptClear();
+        if (request.type !== "user" && syntheticMessage === null) closeDialogs();
         if (
-          !Yo.current &&
+          !stopped.current &&
           (request.type === "assistant" ||
             request.type === "stream_event" ||
             (request.type === "system" && request.subtype === "status" && request.status === "requesting"))
         ) {
           setConnStatus(true);
-          md?.onTurnInFlight();
+          hookForwarding?.onTurnInFlight();
         }
         if (request.type === "tool_progress") {
-          md?.onTurnInFlight();
-          if (request.heartbeat === true && requestId?.replayed !== true && !Yo.current) setConnStatus(true);
+          hookForwarding?.onTurnInFlight();
+          if (request.heartbeat === true && requestId?.replayed !== true && !stopped.current)
+            setConnStatus(true);
         }
-        if (request.type === "user" && request.uuid && za.has(request.uuid)) {
+        if (request.type === "user" && request.uuid && compactingIds.has(request.uuid)) {
           let uuid = request.uuid;
           if (uuid === config.initialPromptUuid) {
-            let Cl = convertSDKMessage(request, {
+            let convertedFirst = convertSDKMessage(request, {
               convertUserTextMessages: true,
             });
             setMessages((item) =>
-              Cl.type !== "message" || item.some((queue) => queue.uuid === uuid)
+              convertedFirst.type !== "message" || item.some((queue) => queue.uuid === uuid)
                 ? item
-                : [...item, Cl.message],
+                : [...item, convertedFirst.message],
             );
             return;
           }
-          let rl = managerRef.current.delete(uuid);
+          let wasCompacting = managerRef_2.current.delete(uuid);
           setMessages((item) => {
             let lastIndex = item.findLastIndex((queue) => queue.uuid === uuid);
             if (lastIndex === -1) {
-              if (!rl) return item;
-              let Cu = convertSDKMessage(request, {
+              if (!wasCompacting) return item;
+              let convertedEcho = convertSDKMessage(request, {
                 convertUserTextMessages: true,
               });
-              return Cu.type === "message" ? [...item, Cu.message] : item;
+              return convertedEcho.type === "message" ? [...item, convertedEcho.message] : item;
             }
             if (lastIndex === item.length - 1) return item;
-            let Jl = item[lastIndex];
-            return item.slice(0, lastIndex).concat(item.slice(lastIndex + 1), Jl);
+            let echoedMessage = item[lastIndex];
+            return item.slice(0, lastIndex).concat(item.slice(lastIndex + 1), echoedMessage);
           });
           logForDebugging(`[useRemoteSession] Reconciled echoed user message ${uuid} to canonical position`);
           return;
@@ -1634,10 +1696,10 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
                 tools: initFrame.tools,
               })
             )
-              tl();
-            else if (!Fn.current || Ya) {
-              Fn.current = false;
-              Ya = false;
+              noteReplyChannelInit();
+            else if (!isReconnecting.current || wasReconnecting) {
+              isReconnecting.current = false;
+              wasReconnecting = false;
               setAppState_2((item) =>
                 item.hasRemoteReplyChannel
                   ? {
@@ -1648,8 +1710,8 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
               );
             }
           }
-          if (initFrame.cwd && !Rl) {
-            Rl = true;
+          if (initFrame.cwd && !loggedCwd) {
+            loggedCwd = true;
             logEvent("tengu_remote_reported_cwd", {
               place: fromEnum(classifyLaunchDirPosition(initFrame.cwd, getOriginalCwd())),
               is_following_reports: !isHarpForepillarOn(),
@@ -1657,10 +1719,10 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
           }
           if (initFrame.cwd) {
             let cwd = initFrame.cwd;
-            let Cl = ++Wd;
+            let cwdSeq = ++cwdApplySeq;
             isAdoptableSessionCwd(cwd, "useRemoteSession")
               .then((queue) => {
-                if (queue && Cl === Wd && qn.current === zi)
+                if (queue && cwdSeq === cwdApplySeq && managerRef.current === manager_2)
                   if (isHarpForepillarOn())
                     setCloudCwd({
                       sessionId: config.sessionId,
@@ -1677,36 +1739,37 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
             plugins: initFrame.plugins,
             tools: initFrame.tools,
           });
-          isSystemInitMessage(Fr.current, request);
-          Un.current++;
+          isSystemInitMessage(runningTaskIds.current, request);
+          pendingCount.current++;
           writeTaskCount();
-          md?.onWorkerInit();
-          od?.requestAnnounce("worker_init", {
+          hookForwarding?.onWorkerInit();
+          servedToolsConnection?.requestAnnounce("worker_init", {
             workerEpoch: initFrame.workerEpoch,
           });
         }
         if (request.type === "result") {
-          md?.onTurnEnded();
-          kn.forEach((requestId, toolUseId) => {
-            or.requestClosed(toolUseId);
-            as.add(requestId);
+          hookForwarding?.onTurnEnded();
+          pendingRequests.forEach((requestId, toolUseId) => {
+            servedCallWatch.requestClosed(toolUseId);
+            retryingIds.add(requestId);
           });
           let repositoryTrust = config.repositoryTrust;
           if (repositoryTrust !== undefined) {
-            let rl = hasUpdatedTitleRef.current;
+            let titleUpdated = hasUpdatedTitleRef.current;
             hasUpdatedTitleRef.current = false;
-            let Cl = repositoryTrust.current();
-            if (rl)
+            let currentTrust = repositoryTrust.current();
+            if (titleUpdated)
               repositoryTrust.refresh({
                 force: true,
               });
-            else if (Cl !== "trusted" && Cl !== "no_repository") repositoryTrust.refresh();
+            else if (currentTrust !== "trusted" && currentTrust !== "no_repository")
+              repositoryTrust.refresh();
           }
         }
         if (request.type === "system" && "permissionMode" in request && request.permissionMode) {
-          ns = parsePermissionMode(request.permissionMode) ?? ns;
-          if (ns !== undefined) Fg.add(ns);
-          Mi(request.permissionMode);
+          observedPermissionMode = parsePermissionMode(request.permissionMode) ?? observedPermissionMode;
+          if (observedPermissionMode !== undefined) reportedModes.add(observedPermissionMode);
+          noteObservedMode(request.permissionMode);
           onPermissionModeChange(request.permissionMode);
         }
         if (
@@ -1720,19 +1783,19 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
             });
           else if (fastModeState === "off" && request.fast_mode_disabled_reason === "model_not_allowed");
           else {
-            let rl = fastModeState !== "off";
-            let Cl = false;
-            setAppState_2((_a) => {
-              if (!!_a.fastMode === rl) return _a;
-              Cl = true;
+            let fastOn = fastModeState !== "off";
+            let fastChanged = false;
+            setAppState_2((fastModePrev) => {
+              if (!!fastModePrev.fastMode === fastOn) return fastModePrev;
+              fastChanged = true;
               return {
-                ..._a,
-                fastMode: rl,
+                ...fastModePrev,
+                fastMode: fastOn,
               };
             });
-            if (Cl)
+            if (fastChanged)
               logEvent("tengu_fast_mode_toggled", {
-                enabled: rl,
+                enabled: fastOn,
                 source: lit_2("remote_wire_adopt"),
                 remote: true,
               });
@@ -1740,11 +1803,11 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
         }
         if (request.type === "active_goal") {
           let goalState = parseGoalState(request.value);
-          setAppState_2((rl) =>
-            rl.activeGoal === goalState
-              ? rl
+          setAppState_2((goalPrevStream) =>
+            goalPrevStream.activeGoal === goalState
+              ? goalPrevStream
               : {
-                  ...rl,
+                  ...goalPrevStream,
                   activeGoal: goalState,
                 },
           );
@@ -1755,59 +1818,62 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
           return;
         }
         if (request.type === "autocompact_state") {
-          ol = true;
+          hasAutocompactState = true;
           adoptRemoteAutocompactState(setAppState_2, request.value, lit_2("stream"));
           return;
         }
         if (request.type === "rate_limit_event") {
-          let Aa = dropRemoteRateLimitFrame(request.rate_limit_info);
-          if (Aa === undefined)
+          let rateLimitInfo = dropRemoteRateLimitFrame(request.rate_limit_info);
+          if (rateLimitInfo === undefined)
             logForDebugging("[useRemoteSession] Dropping rate_limit_event with invalid rate_limit_info", {
               level: "warn",
             });
           else if (requestId?.replayed === true) {
-            remoteRateLimitAdopter.hold(Aa);
-            Ti();
+            remoteRateLimitAdopter.hold(rateLimitInfo);
+            scheduleRefusalRetry();
           } else {
-            remoteRateLimitAdopter.push(Aa);
-            du = "replay";
+            remoteRateLimitAdopter.push(rateLimitInfo);
+            rateLimitPhase = "replay";
           }
           return;
         }
         if (request.type === "system") {
-          let Aa = sessionMetadataArtifacts(request);
-          if (Aa !== undefined) {
-            _d = true;
-            ed(Aa, "stream");
+          let sessionArtifacts = sessionMetadataArtifacts(request);
+          if (sessionArtifacts !== undefined) {
+            hasSessionArtifacts = true;
+            adoptArtifacts(sessionArtifacts, "stream");
             return;
           }
-          if (request.subtype === "plugin_install") Gn.current?.pluginInstallFrame();
+          if (request.subtype === "plugin_install") pendingElicitation.current?.pluginInstallFrame();
           let { backgroundTaskEnded, isTaskLifecycleFrame } = trackThinClientFrame(
             {
               running: runningTaskIdsRef.current,
               awaitingFinish: isCompactingRef.current,
-              foreground: Fr.current,
+              foreground: runningTaskIds.current,
             },
             request,
           );
-          applyRemoteTaskEvent(Wn.current, request, Date.now());
+          applyRemoteTaskEvent(remoteTasks.current, request, Date.now());
           if (
             backgroundTaskEnded &&
             request.subtype === "task_notification" &&
-            !Ra &&
+            !isReplay &&
             (request.status !== "stopped" || request.reason === "worker_restart")
           )
-            Xo.current = true;
+            isFlushing.current = true;
           if (isTaskLifecycleFrame) {
             writeTaskCount();
             return;
           }
           if (request.subtype === "notification") {
             if (isValidNotice(request)) {
-              let _a = normalizeSdkNotification(request, "remote");
-              let Jl = pickRemoteNotificationToEvict(appStoreDirect.getState().notifications, _a.key);
-              if (Jl !== null) removeNotification(Jl);
-              addNotification(_a);
+              let notice = normalizeSdkNotification(request, "remote");
+              let evictedKey = pickRemoteNotificationToEvict(
+                appStoreDirect.getState().notifications,
+                notice.key,
+              );
+              if (evictedKey !== null) removeNotification(evictedKey);
+              addNotification(notice);
               logEvent("tengu_remote_notification_routed", {
                 via: lit_2("stream"),
                 priority: fromEnum(request.priority),
@@ -1816,97 +1882,99 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
             return;
           }
           if (request.subtype === "status") {
-            let _a = ws.current;
-            ws.current = request.status === "compacting";
-            if (_a && ws.current) return;
+            let wasAutoFollowing = autoFollow.current;
+            autoFollow.current = request.status === "compacting";
+            if (wasAutoFollowing && autoFollow.current) return;
           }
-          if (request.subtype === "compact_boundary") ws.current = false;
+          if (request.subtype === "compact_boundary") autoFollow.current = false;
         }
         if (isResultEvent(request)) {
-          isSystemInitMessage(Fr.current, request);
-          Un.current++;
+          isSystemInitMessage(runningTaskIds.current, request);
+          pendingCount.current++;
           writeTaskCount();
-          let Aa = !Ra && shouldDeliverEvent(request, za, dd);
-          if (!vl && !Ra) {
-            hn.current = Math.max(0, hn.current - hl);
-            Xo.current = false;
+          let shouldDeliver = !isReplay && shouldDeliverEvent(request, compactingIds, turnMarkers);
+          if (!sentThisTurn && !isReplay) {
+            receivedCount.current = Math.max(0, receivedCount.current - receivedBefore);
+            isFlushing.current = false;
           }
-          ws.current = false;
-          Yo.current = false;
-          bn.current = false;
-          if (vl) {
-            if (Go.current > 0) Go.current--;
-          } else if (Aa) onTurnComplete?.(request);
+          autoFollow.current = false;
+          stopped.current = false;
+          isSending.current = false;
+          if (sentThisTurn) {
+            if (sentCount.current > 0) sentCount.current--;
+          } else if (shouldDeliver) onTurnComplete?.(request);
           else {
             logForDebugging(
               "[useRemoteSession] Result not counted as this client's turn; idle notification not re-armed",
             );
-            if (!Ra) onOtherTurnComplete?.(requestId?.ageMs ?? 0);
+            if (!isReplay) onOtherTurnComplete?.(requestId?.ageMs ?? 0);
           }
           setConnStatus(false);
-          Sn();
+          resetCounters();
           streaming.resetMetrics();
         }
         if (request.type === "user") {
           let content = request.message?.content;
           if (Array.isArray(content)) {
-            let rl = [];
-            for (let Cl of content) if (Cl.type === "tool_result") rl.push(Cl.tool_use_id);
-            if (rl.length > 0) {
+            let toolUseIds = [];
+            for (let block of content) if (block.type === "tool_result") toolUseIds.push(block.tool_use_id);
+            if (toolUseIds.length > 0) {
               setInProgressToolUseIDs({
                 action: "remove",
-                ids: rl,
+                ids: toolUseIds,
               });
-              clearInProgressToolUses(retraction, rl);
+              clearInProgressToolUses(retraction, toolUseIds);
               countOrphanToolResults(
                 retraction,
-                rl,
+                toolUseIds,
                 "ccr",
                 typeof request.uuid === "string" ? request.uuid : null,
               );
-              let filtered = rl.filter((queue) => Fr.current.has(queue));
-              if (zi.workerMovesBash() && filtered.length > 0) {
-                filtered.forEach((item) => Fr.current.delete(item));
+              let filtered = toolUseIds.filter((queue) => runningTaskIds.current.has(queue));
+              if (manager_2.workerMovesBash() && filtered.length > 0) {
+                filtered.forEach((item) => runningTaskIds.current.delete(item));
                 writeTaskCount();
               }
             }
           }
         }
         if (replyChannelConfig !== null && request.type === "assistant" && !request.parent_tool_use_id)
-          for (let Aa of request.message.content) {
-            let rl = replyChannelConfig.replyChannelBlockKind(Aa);
-            if (rl === undefined) continue;
-            if (Aa.type === "tool_use") {
-              if (next.has(Aa.id)) {
-                tl();
+          for (let replyBlock of request.message.content) {
+            let blockKind = replyChannelConfig.replyChannelBlockKind(replyBlock);
+            if (blockKind === undefined) continue;
+            if (replyBlock.type === "tool_use") {
+              if (next.has(replyBlock.id)) {
+                noteReplyChannelInit();
                 continue;
               }
-              next.add(Aa.id);
+              next.add(replyBlock.id);
             }
-            tl();
+            noteReplyChannelInit();
             logEvent("tengu_remote_reply_channel_frame", {
-              kind: fromEnum(rl),
+              kind: fromEnum(blockKind),
             });
           }
-        let qh = null;
-        if (qh !== null) {
+        let nestedFrames = null;
+        if (nestedFrames !== null) {
           if (typeof request.uuid === "string" && dropLateRetracted(retraction, request.uuid, "ccr")) return;
-          if (qh.length > 0) {
+          if (nestedFrames.length > 0) {
             if (typeof request.uuid === "string")
               recordNestedUuidAliases(
                 retraction,
                 request.uuid,
-                qh.map((prev) => prev.uuid),
+                nestedFrames.map((prev) => prev.uuid),
               );
-            let parentToolUseID = qh[0].parentToolUseID;
-            if (!$a.has(parentToolUseID)) {
-              $a.add(parentToolUseID);
+            let parentToolUseID = nestedFrames[0].parentToolUseID;
+            if (!loggedNestedFrames.has(parentToolUseID)) {
+              loggedNestedFrames.add(parentToolUseID);
               logEvent("tengu_remote_subagent_frame_nested", {
                 frame_type: fromEnum(request.type),
               });
             }
             setMessages((prev) => {
-              let filtered = qh.filter((error) => !prev.some((Jl) => Jl.uuid === error.uuid));
+              let filtered = nestedFrames.filter(
+                (error) => !prev.some((existingMessage) => existingMessage.uuid === error.uuid),
+              );
               return filtered.length === 0 ? prev : [...prev, ...filtered];
             });
           }
@@ -1916,20 +1984,24 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
           convertUserTextMessages: true,
         });
         if (sendMessage.type === "conversation_reset") {
-          let { ownClear, preserved } = Er.onResetFrame();
+          let { ownClear, preserved } = clearTracker.onResetFrame();
           landWaitingLines();
-          setMessages((Cl) => {
-            if (managerRef.current.size > 100) managerRef.current.clear();
-            for (let _a of Cl)
-              if (_a.type === "user" && za.has(_a.uuid) && !preserved.has(_a.uuid))
-                managerRef.current.add(_a.uuid);
-            return Cl.filter(
-              (_a) =>
-                (_a.type === "user" && preserved.has(_a.uuid)) ||
-                (_a.type === "system" && (ownClear || Vr.current.has(_a.uuid))),
+          setMessages((messagesOnReset) => {
+            if (managerRef_2.current.size > 100) managerRef_2.current.clear();
+            for (let existingResetMessage of messagesOnReset)
+              if (
+                existingResetMessage.type === "user" &&
+                compactingIds.has(existingResetMessage.uuid) &&
+                !preserved.has(existingResetMessage.uuid)
+              )
+                managerRef_2.current.add(existingResetMessage.uuid);
+            return messagesOnReset.filter(
+              (keptMessage) =>
+                (keptMessage.type === "user" && preserved.has(keptMessage.uuid)) ||
+                (keptMessage.type === "system" && (ownClear || seenUuids.current.has(keptMessage.uuid))),
             );
           });
-          streaming.setStreamingToolUses((Cl) => (Cl.length > 0 ? [] : Cl));
+          streaming.setStreamingToolUses((prevToolUses) => (prevToolUses.length > 0 ? [] : prevToolUses));
           streaming.applyStreamingText(() => null);
           setInProgressToolUseIDs({
             action: "clear",
@@ -1941,37 +2013,44 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
         }
         if (sendMessage.type === "message") {
           if (sendMessage.message.type === "assistant") {
-            let _a = new Set(
-              sendMessage.message.message.content.filter((Jl) => Jl.type === "tool_use").map((Jl) => Jl.id),
+            let newToolUseIds = new Set(
+              sendMessage.message.message.content
+                .filter((block) => block.type === "tool_use")
+                .map((block) => block.id),
             );
-            streaming.setStreamingToolUses((Jl) =>
-              Jl.some((Cu) => _a.has(Cu.contentBlock.id))
-                ? Jl.filter((Cu) => !_a.has(Cu.contentBlock.id))
-                : Jl,
+            streaming.setStreamingToolUses((prevToolUses) =>
+              prevToolUses.some((toolUseEntry) => newToolUseIds.has(toolUseEntry.contentBlock.id))
+                ? prevToolUses.filter((toolUseEntry) => !newToolUseIds.has(toolUseEntry.contentBlock.id))
+                : prevToolUses,
             );
-          } else streaming.setStreamingToolUses((_a) => (_a.length > 0 ? [] : _a));
+          } else
+            streaming.setStreamingToolUses((prevToolUses) => (prevToolUses.length > 0 ? [] : prevToolUses));
           if (
             sendMessage.message.type === "assistant" &&
-            sendMessage.message.message.content.some((_a) => _a.type === "text")
+            sendMessage.message.message.content.some((block) => block.type === "text")
           )
             streaming.applyStreamingText(() => null);
           if (dropLateRetracted(retraction, sendMessage.message.uuid, "ccr")) return;
           if (sendMessage.message.type === "assistant") {
-            let mapped = sendMessage.message.message.content
-              .filter((Jl) => Jl.type === "tool_use")
-              .map((Jl) => Jl.id);
-            if (mapped.length > 0) {
+            let toolUseIds = sendMessage.message.message.content
+              .filter((block) => block.type === "tool_use")
+              .map((block) => block.id);
+            if (toolUseIds.length > 0) {
               setInProgressToolUseIDs({
                 action: "add",
-                ids: mapped,
+                ids: toolUseIds,
               });
-              recordInProgressToolUses(retraction, sendMessage.message.uuid, mapped);
-              if (zi.workerMovesBash()) {
-                let Jl = Un.current;
-                getForegroundBashToolUseIds(request).forEach((Cu) =>
+              recordInProgressToolUses(retraction, sendMessage.message.uuid, toolUseIds);
+              if (manager_2.workerMovesBash()) {
+                let pendingAtSend = pendingCount.current;
+                getForegroundBashToolUseIds(request).forEach((toolUseId) =>
                   clock.setTimeout(() => {
-                    if (qn.current === zi && Un.current === Jl && retraction.inProgressToolUses.has(Cu)) {
-                      Fr.current.add(Cu);
+                    if (
+                      managerRef.current === manager_2 &&
+                      pendingCount.current === pendingAtSend &&
+                      retraction.inProgressToolUses.has(toolUseId)
+                    ) {
+                      runningTaskIds.current.add(toolUseId);
                       writeTaskCount();
                     }
                   }, BASH_TASK_COUNT_DELAY_MS),
@@ -1979,247 +2058,261 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
               }
             }
           }
-          if (!xl && request.type === "user") {
+          if (!loggedToolResult && request.type === "user") {
             let content = request.message?.content;
-            if (Array.isArray(content) && content.some((Jl) => Jl.type === "tool_result")) {
-              xl = true;
+            if (Array.isArray(content) && content.some((block) => block.type === "tool_result")) {
+              loggedToolResult = true;
               logEvent("tengu_remote_tool_result_rendered", {
                 viewer_only: fromEnum(config.viewerOnly ? "true" : "false"),
               });
             }
           }
           let uuid = sendMessage.message.uuid;
-          let rl =
-            Si === undefined ? sendMessage.message : Si(sendMessage.message, request, requestId?.source);
-          let Cl = na === undefined ? rl : na(rl, request, requestId?.source);
+          let baseMessage =
+            admitProjectPersonMessages === undefined
+              ? sendMessage.message
+              : admitProjectPersonMessages(sendMessage.message, request, requestId?.source);
+          let finalMessage =
+            mapIncomingMessage === undefined
+              ? baseMessage
+              : mapIncomingMessage(baseMessage, request, requestId?.source);
           if (
-            isHumanTurn_2(Cl) &&
-            rl === sendMessage.message &&
+            isHumanTurn_2(finalMessage) &&
+            baseMessage === sendMessage.message &&
             requestId?.source?.startsWith("client") === true &&
             requestId.replayed !== true &&
             getIsLoading()
           ) {
-            holdLine(Cl);
+            holdLine(finalMessage);
             return;
           }
-          setMessages((_a) => (uuid && _a.some((Jl) => Jl.uuid === uuid) ? _a : [..._a, Cl]));
+          setMessages((messagesAfterDedupe) =>
+            uuid && messagesAfterDedupe.some((existingMessage) => existingMessage.uuid === uuid)
+              ? messagesAfterDedupe
+              : [...messagesAfterDedupe, finalMessage],
+          );
         } else if (sendMessage.type === "stream_event") {
-          if (bn.current) return;
+          if (isSending.current) return;
           isNonRenderableSystemMessage(sendMessage.event, {
-            onMessage: (Aa) => setMessages((rl) => [...rl, Aa]),
+            onMessage: (systemMessage) =>
+              setMessages((messagesWithSystem) => [...messagesWithSystem, systemMessage]),
             onUpdateLength: streaming.addResponseLength,
             onSetStreamMode: setStreamMode,
             onStreamingToolUses: streaming.setStreamingToolUses,
             replInputAccumulator,
             onApiMetrics: streaming.recordApiMetricsEvent,
-            onStreamingText: (Aa) => {
-              if (!Fn.current) streaming.applyStreamingText(Aa);
+            onStreamingText: (streamingText) => {
+              if (!isReconnecting.current) streaming.applyStreamingText(streamingText);
             },
           });
         }
       },
-      onPermissionRequest: (Br, Fi, ia, vl) => {
-        logForDebugging(`[useRemoteSession] Permission request for tool: ${Br.tool_name}`);
-        let hl = isSubagentToolRequest(Br);
-        if (hl) kn.set(Fi, String(Br.agent_id));
+      onPermissionRequest: (request, requestId, toolName, extra) => {
+        logForDebugging(`[useRemoteSession] Permission request for tool: ${request.tool_name}`);
+        let isSubagent = isSubagentToolRequest(request);
+        if (isSubagent) pendingRequests.set(requestId, String(request.agent_id));
         if (config.viewerOnly) {
-          if (!hl) setConnStatus(false);
+          if (!isSubagent) setConnStatus(false);
           return;
         }
         if (
-          Vd.dispatch(
+          permissionDispatcher.dispatch(
             {
               type: "control_request",
-              request_id: Fi,
-              request: Br,
+              request_id: requestId,
+              request,
             },
             false,
           )
         ) {
-          if (!qa(Br)) or.requestOpened(Fi);
-          if (!hl) setConnStatus(false);
+          if (!isHeldToolRequest(request)) servedCallWatch.requestOpened(requestId);
+          if (!isSubagent) setConnStatus(false);
         }
       },
       onPermissionCancelled: (content, opts) => {
         logForDebugging(`[useRemoteSession] Permission request cancelled: ${content}`);
-        or.requestClosed(content);
-        Vd.cancel(content);
-        if (!kn.delete(content) && !Yo.current) setConnStatus(true);
+        servedCallWatch.requestClosed(content);
+        permissionDispatcher.cancel(content);
+        if (!pendingRequests.delete(content) && !stopped.current) setConnStatus(true);
       },
-      onUserDialogRequest: (Br, requestId) => {
-        logForDebugging(`[useRemoteSession] User dialog request: ${Br.dialog_kind}`);
+      onUserDialogRequest: (request, requestId) => {
+        logForDebugging(`[useRemoteSession] User dialog request: ${request.dialog_kind}`);
         setConnStatus(false);
         if (config.viewerOnly) return;
-        Ka.dispatch({
+        dialogDispatcher.dispatch({
           type: "control_request",
           request_id: requestId,
-          request: Br,
+          request,
         });
       },
-      onUserDialogCancelled: (Br) => {
-        logForDebugging(`[useRemoteSession] User dialog request cancelled: ${Br}`);
-        Ka.cancel(Br);
+      onUserDialogCancelled: (requestId) => {
+        logForDebugging(`[useRemoteSession] User dialog request cancelled: ${requestId}`);
+        dialogDispatcher.cancel(requestId);
       },
-      ...(md !== null && md.callbacks),
-      ...(od !== null && od.callbacks),
+      ...(hookForwarding !== null && hookForwarding.callbacks),
+      ...(servedToolsConnection !== null && servedToolsConnection.callbacks),
       onWorkerLive: () => {
-        sa = true;
-        od?.requestAnnounce(Pi ? "reconnected" : "attached");
-        od?.callbacks.onWorkerLive?.();
-        Pi = true;
-        ua();
+        sawWorkerFrame = true;
+        servedToolsConnection?.requestAnnounce(announcedLive ? "reconnected" : "attached");
+        servedToolsConnection?.callbacks.onWorkerLive?.();
+        announcedLive = true;
+        onRetry();
       },
-      onWorkerConnectionStatus: (Br) => {
-        if (qn.current !== zi) return;
-        let Fi = Br === "disconnected";
-        if (Fi && !sa) {
+      onWorkerConnectionStatus: (status) => {
+        if (managerRef.current !== manager_2) return;
+        let isGone = status === "disconnected";
+        if (isGone && !sawWorkerFrame) {
           if (runningTaskIdsRef.current.size > 0) {
             logEvent("tengu_remote_background_tasks_dropped", {
               count: runningTaskIdsRef.current.size,
             });
             runningTaskIdsRef.current.clear();
           }
-          Fr.current.clear();
-          markTasksUnlisted(Wn.current);
+          runningTaskIds.current.clear();
+          markTasksUnlisted(remoteTasks.current);
           writeTaskCount();
         }
-        sa = true;
-        let ia = false;
-        setAppState_2((hl) => {
-          ia = hl.remoteWorkerReportedGone !== Fi;
-          return ia
+        sawWorkerFrame = true;
+        let goneChanged = false;
+        setAppState_2((workerGonePrev) => {
+          goneChanged = workerGonePrev.remoteWorkerReportedGone !== isGone;
+          return goneChanged
             ? {
-                ...hl,
-                remoteWorkerReportedGone: Fi,
+                ...workerGonePrev,
+                remoteWorkerReportedGone: isGone,
               }
-            : hl;
+            : workerGonePrev;
         });
         let size = runningTaskIdsRef.current.size;
-        if (ia && size > 0)
+        if (goneChanged && size > 0)
           logEvent("tengu_remote_background_tasks_worker_report_changed", {
-            worker_reported_gone: Fi,
+            worker_reported_gone: isGone,
             count: size,
           });
-        if (Fi && getIsLoading() && _r.current) La();
+        if (isGone && getIsLoading() && accepting.current) onConnect();
       },
       onConnected: () => {
         logForDebugging("[useRemoteSession] Connected");
-        mr("connected");
-        md?.onStreamConnected();
-        Hh();
+        onTransportEvent("connected");
+        hookForwarding?.onStreamConnected();
+        adoptSeedPermissionModeOnce();
         landWaitingLines();
-        if (fa && runningTaskIdsRef.current.size > 0)
+        if (loggedListedAtReconnect && runningTaskIdsRef.current.size > 0)
           logEvent("tengu_remote_background_tasks_listed_at_reconnect", {
             count: runningTaskIdsRef.current.size,
           });
-        fa = true;
+        loggedListedAtReconnect = true;
       },
       onLineTaken: lineTaken,
       onReconnecting: () => {
         logForDebugging("[useRemoteSession] Reconnecting");
-        mr("reconnecting");
+        onTransportEvent("reconnecting");
         landWaitingLines();
-        Yo.current = false;
-        bn.current = false;
-        Go.current = 0;
+        stopped.current = false;
+        isSending.current = false;
+        sentCount.current = 0;
         setInProgressToolUseIDs({
           action: "clear",
         });
         retraction.inProgressToolUses.clear();
       },
       onWithheldPromptSent: () => {
-        gs();
-        Gn.current?.messageSent();
+        onPrompt();
+        pendingElicitation.current?.messageSent();
       },
-      onWithholdableHeldChanged: (Br) => {
-        if (qn.current === zi) ls(Br && !config.viewerOnly && isDeviceIdentityEnabledCached());
+      onWithholdableHeldChanged: (isHeld) => {
+        if (managerRef.current === manager_2)
+          onTaskUpdate(isHeld && !config.viewerOnly && isDeviceIdentityEnabledCached());
       },
-      onWithheldPromptFailed: (Br, Fi) => {
-        gs();
+      onWithheldPromptFailed: (reason, mayHaveReached) => {
+        onPrompt();
         initialPromptUuidRef.current = config.initialPromptUuid;
         let content = config.withheldInitialPrompt?.content;
         if (typeof content === "string")
           addHistoryEntry(content, storageV5, {
             armUndo: false,
           });
-        setMessages((vl) => [
-          ...vl,
-          Br === CANCELLED
+        setMessages((messagesOnWithheldFail) => [
+          ...messagesOnWithheldFail,
+          reason === CANCELLED
             ? createSystemMessage(
                 "You took your first message back. It wasn't sent to the cloud session.",
                 "notice",
               )
             : createSystemMessage(
-                Fi
-                  ? `Your first message may not have reached the cloud session${formatReasonSuffix(Br)}. If Claude doesn't respond to it soon, send it again.`
-                  : `Couldn't send your first message${formatReasonSuffix(Br)}.`,
+                mayHaveReached
+                  ? `Your first message may not have reached the cloud session${formatReasonSuffix(reason)}. If Claude doesn't respond to it soon, send it again.`
+                  : `Couldn't send your first message${formatReasonSuffix(reason)}.`,
                 "warning",
               ),
         ]);
         if (responseTimeoutRef.current === 0) {
           setConnStatus(false);
-          if (!Fi) hn.current = 0;
+          if (!mayHaveReached) receivedCount.current = 0;
         }
       },
-      onResponseUndelivered: (Br, Fi, ia) => {
-        if (sg.has(Fi)) return;
-        if (sg.size === 0) queueMicrotask(() => sg.clear());
-        sg.add(Fi);
-        setMessages((vl) => [...vl, createSystemMessage(formatUndeliveredAnswerNotice(Fi, ia), "warning")]);
+      onResponseUndelivered: (reason, answerId, details) => {
+        if (notifiedUndelivered.has(answerId)) return;
+        if (notifiedUndelivered.size === 0) queueMicrotask(() => notifiedUndelivered.clear());
+        notifiedUndelivered.add(answerId);
+        setMessages((messagesOnUndelivered) => [
+          ...messagesOnUndelivered,
+          createSystemMessage(formatUndeliveredAnswerNotice(answerId, details), "warning"),
+        ]);
       },
       onCatchUpTruncated: () => {
         logForDebugging("[useRemoteSession] Catch-up truncated \u2014 transcript gap");
-        Er.forget();
-        setMessages((ia) => [
-          ...ia,
+        clearTracker.forget();
+        setMessages((messagesOnTruncation) => [
+          ...messagesOnTruncation,
           createSystemMessage(
             "Some earlier messages from this session could not be loaded after reconnecting.",
             "warning",
           ),
         ]);
-        ol = true;
-        setAppState_2((ia) =>
-          ia.remoteAutocompactState === undefined
-            ? ia
+        hasAutocompactState = true;
+        setAppState_2((autocompactPrevTrunc) =>
+          autocompactPrevTrunc.remoteAutocompactState === undefined
+            ? autocompactPrevTrunc
             : {
-                ...ia,
+                ...autocompactPrevTrunc,
                 remoteAutocompactState: undefined,
               },
         );
         runningTaskIdsRef.current.clear();
-        markTasksUnlisted(Wn.current);
+        markTasksUnlisted(remoteTasks.current);
         writeTaskCount();
         remoteRateLimitAdopter.flush();
         let { status, isUsingOverage } = getCurrentLimits();
         if (status === "rejected" && !isUsingOverage)
           remoteRateLimitAdopter.adopt([currentLimits], "truncation");
-        if (Gs) ma = true;
+        if (done) needsRefetch = true;
         else {
-          Gs = true;
+          done = true;
           let sessionId = config.sessionId;
           (async () => {
             try {
               do {
-                ma = false;
+                needsRefetch = false;
                 try {
-                  if ((await vl()) === "stale") return;
+                  if ((await harvestTruncated()) === "stale") return;
                 } catch {}
-              } while (ma);
+              } while (needsRefetch);
             } finally {
-              Gs = false;
+              done = false;
             }
           })();
-          async function vl() {
+          async function harvestTruncated() {
             let ctx = await getSessionRequestConfig(sessionId, credentials);
-            if (qn.current !== zi) return "stale";
+            if (managerRef.current !== manager_2) return "stale";
             let latestEvents = await fetchLatestEvents(ctx, undefined, {
               reportFeatureHealth: false,
             });
             let signalCount = 0;
-            let Dl = 0;
-            while (latestEvents && Dl < MAX_REFUSAL_RETRIES) {
-              if (qn.current !== zi) return "stale";
-              Dl++;
+            let pageCount = 0;
+            while (latestEvents && pageCount < MAX_REFUSAL_RETRIES) {
+              if (managerRef.current !== manager_2) return "stale";
+              pageCount++;
               signalCount += checkRefusalRetractionSource({
                 index: retraction,
                 events: latestEvents.events,
@@ -2228,69 +2321,72 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
                 setInProgressToolUseIDs,
               });
               latestEvents =
-                Dl < MAX_REFUSAL_RETRIES && latestEvents.hasMore && latestEvents.firstId
+                pageCount < MAX_REFUSAL_RETRIES && latestEvents.hasMore && latestEvents.firstId
                   ? await fetchOlderEvents(ctx, latestEvents.firstId)
                   : null;
             }
-            if (qn.current !== zi) return "stale";
+            if (managerRef.current !== manager_2) return "stale";
             logEvent("tengu_refusal_retraction_truncation_harvest", {
               signal_count: signalCount,
-              page_count: Dl,
+              page_count: pageCount,
             });
             return "done";
           }
         }
       },
-      onDisconnected: (Br) => {
+      onDisconnected: (reason) => {
         logForDebugging("[useRemoteSession] Disconnected");
         if (
-          Br === "session_stale_relogin" ||
-          (Br === "untrusted_device" && isDeviceIdentityEnabledCached() && isTrustedDeviceGateEnabled())
+          reason === "session_stale_relogin" ||
+          (reason === "untrusted_device" && isDeviceIdentityEnabledCached() && isTrustedDeviceGateEnabled())
         )
-          setMessages((Fi) => [
-            ...Fi,
+          setMessages((messagesOnDisconnect) => [
+            ...messagesOnDisconnect,
             createSystemMessage(
               describeCredentialFailure({
                 terminal: true,
-                reason: Br,
+                reason,
               }),
               "warning",
             ),
           ]);
-        mr("disconnected");
-        Hs();
+        onTransportEvent("disconnected");
+        onFrames();
       },
-      onError: (Br) => {
-        logForDebugging(`[useRemoteSession] Error: ${Br.message}`);
+      onError: (error) => {
+        logForDebugging(`[useRemoteSession] Error: ${error.message}`);
       },
     });
-    let rd = Boolean(config.isAttachToExisting) && !config.viewerOnly;
-    let Qd =
+    let canPushLaunchMode = Boolean(config.isAttachToExisting) && !config.viewerOnly;
+    let usesWithheldCreateMode =
       !config.isAttachToExisting &&
       !config.viewerOnly &&
       config.withheldInitialPrompt?.followsPermissionMode === true;
     let createPermissionMode =
-      !config.isAttachToExisting && !config.viewerOnly && (isDeviceIdentityEnabledCached() || Qd)
+      !config.isAttachToExisting &&
+      !config.viewerOnly &&
+      (isDeviceIdentityEnabledCached() || usesWithheldCreateMode)
         ? config.createPermissionMode
         : undefined;
     let sessionId = config.sessionId;
     let mode = appStoreDirect.getState().toolPermissionContext.mode;
-    let Yc = (config.launchModePush ??= {
+    let launchModePush = (config.launchModePush ??= {
       mode,
       pushed: false,
     });
-    let tc = false;
-    let Cp = () => Hd.current === Rp && Vl.current === manager;
-    let manager = Vl.current;
-    let Rp = Hd.current;
-    function Fh(Br) {
-      Ss.current = Br;
-      let Fi = () => {
-        if (Ss.current === Br) Ss.current = null;
+    let isPushingLaunchMode = false;
+    let isManagerCurrent = () =>
+      lastReceivedAt.current === receivedAtStart && heartbeatCount.current === manager_3;
+    let manager_3 = heartbeatCount.current;
+    let receivedAtStart = lastReceivedAt.current;
+    function trackPendingMode(promise) {
+      timeoutTimer.current = promise;
+      let clearTimer = () => {
+        if (timeoutTimer.current === promise) timeoutTimer.current = null;
       };
-      Br.then(Fi, Fi);
+      promise.then(clearTimer, clearTimer);
     }
-    function cy() {
+    function pushLaunchPermissionMode() {
       if (createPermissionMode !== undefined) {
         if (createPermissionMode.pushed) {
           logForDebugging("[useRemoteSession] Create permission mode already pushed for this session");
@@ -2298,24 +2394,24 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
         }
         createPermissionMode.pushed = true;
         let { mode } = createPermissionMode;
-        let hl = syncRemotePermissionMode({
-          manager: zi,
+        let posted = syncRemotePermissionMode({
+          manager: manager_2,
           mode,
           surface: "terminal",
           sessionId,
           onTaken: noteOwnPermissionModePush(mode),
-          superseded: () => qn.current !== zi || Hd.current !== Rp,
-          observedMode: () => ns,
-          seededModeReported: () => Fg.has(mode),
+          superseded: () => managerRef.current !== manager_2 || lastReceivedAt.current !== receivedAtStart,
+          observedMode: () => observedPermissionMode,
+          seededModeReported: () => reportedModes.has(mode),
           linkDown: () => appStoreDirect.getState().remoteConnectionStatus !== "connected",
-          onRefused: (dd) => {
+          onRefused: (refusal) => {
             noteOwnPermissionModePush("default");
             createPermissionMode.convergeEntry = beginModeLanding(setAppState_2, sessionId, "default", mode);
-            dd.then((Ra) => {
-              if (Ra.outcome === "accepted" && createPermissionMode.convergeEntry !== undefined)
+            refusal.then((outcome) => {
+              if (outcome.outcome === "accepted" && createPermissionMode.convergeEntry !== undefined)
                 clearOutstandingMode(setAppState_2, sessionId, createPermissionMode.convergeEntry);
             });
-            Fh(dd);
+            trackPendingMode(refusal);
             if (appStoreDirect.getState().toolPermissionContext.mode === mode)
               onPermissionModeChange("default", "client");
             addNotification(notifyRemoteModeRejected(mode));
@@ -2333,136 +2429,149 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
             });
           },
         });
-        createPermissionMode.posted = hl;
-        Fh(hl);
+        createPermissionMode.posted = posted;
+        trackPendingMode(posted);
         return;
       }
-      let Br = isDeviceIdentityEnabledCached();
-      let from = Br ? Yc.mode : mode;
-      if (!rd || from !== "plan" || (Br && Yc.pushed)) return;
-      Yc.pushed = true;
-      tc = true;
-      let ia = noteOwnPermissionModePush(from);
-      zi.sendControlRequest({
-        subtype: "set_permission_mode",
-        mode: from,
-      }).then(
-        () => {
-          tc = false;
-          ia();
-          logForDebugging(`[useRemoteSession] Applied launch permission mode: ${from}`);
-          logFeatureOk("mode_switch");
-        },
-        (error) => {
-          tc = false;
-          let hl = classifyControlRequestError(error);
-          logForDebugging(
-            `[useRemoteSession] Launch set_permission_mode rejected (${hl}): ${errorMessage(error)}`,
-          );
-          logFeatureBad("mode_switch", hl);
-          let dd =
-            (hl === "disconnected" || hl === "not_connected") &&
-            appStoreDirect.getState().remoteConnectionStatus !== "connected";
-          if (
-            qn.current !== zi ||
-            dd ||
-            hl === "aborted" ||
-            Vl.current !== manager ||
-            (isDeviceIdentityEnabledCached() && Hd.current !== Rp)
-          ) {
-            if (qn.current === zi && (dd || hl === "aborted") && Cp()) Yc.pushed = false;
-            return;
-          }
-          if (appStoreDirect.getState().toolPermissionContext.mode === from)
-            onPermissionModeChange("default", "client");
-          addNotification(notifyRemoteModeRejected(from));
-          if (isDeviceIdentityEnabledCached()) {
-            let Ra = Hd.current;
-            let Dl = beginModeLanding(setAppState_2, sessionId, "default", from);
-            let Gu = () => clearOutstandingMode(setAppState_2, sessionId, Dl);
-            sendModeWithRetry({
-              mode: "default",
-              send: (zp) => {
-                noteOwnPermissionModePush(zp);
-                return zi.sendControlRequest({
-                  subtype: "set_permission_mode",
-                  mode: zp,
-                });
-              },
-              superseded: () => qn.current !== zi || Hd.current !== Ra,
-              onTaken: Gu,
-              onGaveUp: () => {
-                Gu();
-                addNotification(notifyRemoteModeUnsynced());
-              },
-              onNotTaken: (zp) => {
-                if (qn.current === zi) Gu();
-                logForDebugging(
-                  `[useRemoteSession] The default sent after that refusal was not taken either: ${errorMessage(zp)}`,
-                );
-              },
-            });
-          }
-        },
-      );
+      let deviceIdentity = isDeviceIdentityEnabledCached();
+      let from = deviceIdentity ? launchModePush.mode : mode;
+      if (!canPushLaunchMode || from !== "plan" || (deviceIdentity && launchModePush.pushed)) return;
+      launchModePush.pushed = true;
+      isPushingLaunchMode = true;
+      let revertPush = noteOwnPermissionModePush(from);
+      manager_2
+        .sendControlRequest({
+          subtype: "set_permission_mode",
+          mode: from,
+        })
+        .then(
+          () => {
+            isPushingLaunchMode = false;
+            revertPush();
+            logForDebugging(`[useRemoteSession] Applied launch permission mode: ${from}`);
+            logFeatureOk("mode_switch");
+          },
+          (error) => {
+            isPushingLaunchMode = false;
+            let errorKind = classifyControlRequestError(error);
+            logForDebugging(
+              `[useRemoteSession] Launch set_permission_mode rejected (${errorKind}): ${errorMessage(error)}`,
+            );
+            logFeatureBad("mode_switch", errorKind);
+            let isDisconnected =
+              (errorKind === "disconnected" || errorKind === "not_connected") &&
+              appStoreDirect.getState().remoteConnectionStatus !== "connected";
+            if (
+              managerRef.current !== manager_2 ||
+              isDisconnected ||
+              errorKind === "aborted" ||
+              heartbeatCount.current !== manager_3 ||
+              (isDeviceIdentityEnabledCached() && lastReceivedAt.current !== receivedAtStart)
+            ) {
+              if (
+                managerRef.current === manager_2 &&
+                (isDisconnected || errorKind === "aborted") &&
+                isManagerCurrent()
+              )
+                launchModePush.pushed = false;
+              return;
+            }
+            if (appStoreDirect.getState().toolPermissionContext.mode === from)
+              onPermissionModeChange("default", "client");
+            addNotification(notifyRemoteModeRejected(from));
+            if (isDeviceIdentityEnabledCached()) {
+              let receivedAt = lastReceivedAt.current;
+              let convergeEntry = beginModeLanding(setAppState_2, sessionId, "default", from);
+              let clearConverge = () => clearOutstandingMode(setAppState_2, sessionId, convergeEntry);
+              sendModeWithRetry({
+                mode: "default",
+                send: (modeToSend) => {
+                  noteOwnPermissionModePush(modeToSend);
+                  return manager_2.sendControlRequest({
+                    subtype: "set_permission_mode",
+                    mode: modeToSend,
+                  });
+                },
+                superseded: () => managerRef.current !== manager_2 || lastReceivedAt.current !== receivedAt,
+                onTaken: clearConverge,
+                onGaveUp: () => {
+                  clearConverge();
+                  addNotification(notifyRemoteModeUnsynced());
+                },
+                onNotTaken: (sendError) => {
+                  if (managerRef.current === manager_2) clearConverge();
+                  logForDebugging(
+                    `[useRemoteSession] The default sent after that refusal was not taken either: ${errorMessage(sendError)}`,
+                  );
+                },
+              });
+            }
+          },
+        );
     }
-    let Nd = isDeviceIdentityEnabledCached();
-    let Af = Nd ? Yc.mode : mode;
-    let Du =
-      rd &&
-      !(Nd && Yc.judged) &&
-      Af !== "default" &&
-      Af !== "plan" &&
-      isExternalPermissionMode(Af) &&
-      !(Af === "auto" && Nd && isAutoModeFromFallback());
-    let Va = null;
-    let Fg = new Set();
-    let ns;
-    let ba = null;
-    function Mi(permissionMode) {
-      if (!Du) return;
+    let deviceIdentity = isDeviceIdentityEnabledCached();
+    let launchMode = deviceIdentity ? launchModePush.mode : mode;
+    let mustWarnOnModeMismatch =
+      canPushLaunchMode &&
+      !(deviceIdentity && launchModePush.judged) &&
+      launchMode !== "default" &&
+      launchMode !== "plan" &&
+      isExternalPermissionMode(launchMode) &&
+      !(launchMode === "auto" && deviceIdentity && isAutoModeFromFallback());
+    let observedMode = null;
+    let reportedModes = new Set();
+    let observedPermissionMode;
+    let retryTimer = null;
+    function noteObservedMode(permissionMode) {
+      if (!mustWarnOnModeMismatch) return;
       if (!EXTERNAL_PERMISSION_MODES.includes(permissionMode)) return;
-      Va = permissionMode;
-      Ti();
+      observedMode = permissionMode;
+      scheduleRefusalRetry();
     }
-    function Ti() {
-      if (!(Du && Va !== null) && !remoteRateLimitAdopter.hasHeld()) return;
-      ba?.();
-      ba = clock.setTimeout(Qa, REFUSAL_RETRY_DELAY_MS);
+    function scheduleRefusalRetry() {
+      if (!(mustWarnOnModeMismatch && observedMode !== null) && !remoteRateLimitAdopter.hasHeld()) return;
+      retryTimer?.();
+      retryTimer = clock.setTimeout(runDelayedRetry, REFUSAL_RETRY_DELAY_MS);
     }
-    function Qa() {
-      ba = null;
-      if (qn.current !== zi) return;
-      rg();
-      if (Du && Va !== null) Gp();
+    function runDelayedRetry() {
+      retryTimer = null;
+      if (managerRef.current !== manager_2) return;
+      settleRateLimits();
+      if (mustWarnOnModeMismatch && observedMode !== null) warnModeMismatch();
     }
-    function Gp() {
-      if (!Du || qn.current !== zi) return;
-      Du = false;
-      Yc.judged = true;
-      let Br =
-        Nd &&
-        Va !== null &&
+    function warnModeMismatch() {
+      if (!mustWarnOnModeMismatch || managerRef.current !== manager_2) return;
+      mustWarnOnModeMismatch = false;
+      launchModePush.judged = true;
+      let sessionOwnsMode =
+        deviceIdentity &&
+        observedMode !== null &&
         (() => {
           let label = appStoreDirect.getState().remoteModeSessions[sessionId]?.label;
-          return label?.mode === Va && label.origin === "person";
+          return label?.mode === observedMode && label.origin === "person";
         })();
-      if (Va === null || Va === Af || Vl.current !== manager || Br) return;
+      if (
+        observedMode === null ||
+        observedMode === launchMode ||
+        heartbeatCount.current !== manager_3 ||
+        sessionOwnsMode
+      )
+        return;
       addNotification({
         key: "remote-launch-mode-not-applied",
         kind: "warning",
-        text: `This cloud session is in ${Va} mode; your ${Af} setting wasn't applied.`,
+        text: `This cloud session is in ${observedMode} mode; your ${launchMode} setting wasn't applied.`,
         color: "warning",
         priority: "high",
       });
     }
     let seedPermissionMode = config.seedPermissionMode;
-    let Dc = config.adoptSeedPermissionMode === true;
-    let Bh = seedPermissionMode === undefined;
-    function Hh() {
-      if (Bh || qn.current !== zi) return;
-      Bh = true;
-      if (seedPermissionMode === undefined || !(Dc || isDeviceIdentityEnabledCached())) return;
+    let adoptSeedMode = config.adoptSeedPermissionMode === true;
+    let seedModeAdopted = seedPermissionMode === undefined;
+    function adoptSeedPermissionModeOnce() {
+      if (seedModeAdopted || managerRef.current !== manager_2) return;
+      seedModeAdopted = true;
+      if (seedPermissionMode === undefined || !(adoptSeedMode || isDeviceIdentityEnabledCached())) return;
       try {
         let mode = appStoreDirect.getState().toolPermissionContext.mode;
         onPermissionModeChange(seedPermissionMode);
@@ -2479,24 +2588,27 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
         });
       }
     }
-    qn.current = zi;
-    if (!_r.current) zi.beginWorkerStart();
-    Yd = zi;
-    if (md !== null)
-      zi.addSendGate((Br) => Promise.race([md.beforeSend(), Br.released, Br.withdrawn, Br.decided]), {
-        onRelease: "send",
-      });
-    zi.connect();
-    cy();
-    let posted = Qd ? createPermissionMode?.posted : undefined;
+    managerRef.current = manager_2;
+    if (!accepting.current) manager_2.beginWorkerStart();
+    manager = manager_2;
+    if (hookForwarding !== null)
+      manager_2.addSendGate(
+        (gate) => Promise.race([hookForwarding.beforeSend(), gate.released, gate.withdrawn, gate.decided]),
+        {
+          onRelease: "send",
+        },
+      );
+    manager_2.connect();
+    pushLaunchPermissionMode();
+    let posted = usesWithheldCreateMode ? createPermissionMode?.posted : undefined;
     if (createPermissionMode !== undefined && posted !== undefined) {
-      let Br = () => {};
-      Br = zi.addSendGate(
+      let retireGate = () => {};
+      retireGate = manager_2.addSendGate(
         retirePostedMode({
           posted,
           mode: createPermissionMode.mode,
           latch: createPermissionMode,
-          retire: () => Br(),
+          retire: () => retireGate(),
         }),
         {
           onRelease: "withhold",
@@ -2505,11 +2617,17 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
       );
       posted
         .then(
-          (Fi) => Fi.outcome === "accepted",
+          (postResult) => postResult.outcome === "accepted",
           () => false,
         )
-        .then((Fi) => {
-          if (Fi || createPermissionMode.notTakenTold || qn.current !== zi || Hd.current !== Rp) return;
+        .then((accepted) => {
+          if (
+            accepted ||
+            createPermissionMode.notTakenTold ||
+            managerRef.current !== manager_2 ||
+            lastReceivedAt.current !== receivedAtStart
+          )
+            return;
           createPermissionMode.notTakenTold = true;
           addNotification({
             key: "remote-create-mode-unrecorded",
@@ -2520,8 +2638,8 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
           });
         });
     }
-    let vu = null;
-    Zr.current = config.viewerOnly
+    let pluginForwarding = null;
+    pendingDialog.current = config.viewerOnly
       ? null
       : env.CLAUDE_CODE_DISABLE_PLUGIN_FORWARDING
         ? "switched_off"
@@ -2529,12 +2647,12 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
           ? null
           : "not_enabled";
     try {
-      vu =
-        !config.viewerOnly && Zr.current === null
+      pluginForwarding =
+        !config.viewerOnly && pendingDialog.current === null
           ? forwardCloudPlugins({
               sessionId: config.sessionId,
               reattach: Boolean(config.isAttachToExisting),
-              manager: zi,
+              manager: manager_2,
               memory: deviceProofStateRegistry.of(host),
               storageV5,
               reach: createDeviceHookDecider({
@@ -2550,97 +2668,106 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
                   logForDebugging(`[useRemoteSession] plugins: ${line}`);
                   return;
                 }
-                setMessages((ia) => [...ia, createSystemMessage(line, level)]);
+                setMessages((messagesOnPluginLog) => [
+                  ...messagesOnPluginLog,
+                  createSystemMessage(line, level),
+                ]);
               },
-              onChange: () => ps(),
+              onChange: () => onQueueEmpty(),
             })
           : null;
     } catch (error) {
       logError(error);
-      Zr.current = "attach_failed";
+      pendingDialog.current = "attach_failed";
     }
-    Gn.current = vu;
-    ps();
-    let dm = config.repositoryTrust?.onChanged(() => {
-      if (qn.current === zi) ps();
+    pendingElicitation.current = pluginForwarding;
+    onQueueEmpty();
+    let unsubTrust = config.repositoryTrust?.onChanged(() => {
+      if (managerRef.current === manager_2) onQueueEmpty();
     });
     config.homeSeed?.completion.then(() => {
-      if (qn.current === zi) ps();
+      if (managerRef.current === manager_2) onQueueEmpty();
     });
-    config.homeSeed?.readBack.then((Br) => {
-      if (qn.current === zi) {
-        Hi.current = Br;
-        ps();
+    config.homeSeed?.readBack.then((attachments) => {
+      if (managerRef.current === manager_2) {
+        pendingAttachments.current = attachments;
+        onQueueEmpty();
       }
     });
-    if (config.isAttachToExisting) vu?.workerKnownUp();
+    if (config.isAttachToExisting) pluginForwarding?.workerKnownUp();
     else if (config.initialPromptUuid !== undefined && config.withheldInitialPrompt === undefined)
-      vu?.messageSent();
-    let Uc = config.dirSync?.sync.sendGate?.bind(config.dirSync.sync);
-    if (Uc !== undefined)
-      zi.addSendGate((Br) => Uc(Br), {
+      pluginForwarding?.messageSent();
+    let dirSyncSendGate = config.dirSync?.sync.sendGate?.bind(config.dirSync.sync);
+    if (dirSyncSendGate !== undefined)
+      manager_2.addSendGate((gateArg) => dirSyncSendGate(gateArg), {
         onRelease: "withhold",
       });
-    let uy = undefined;
-    let Wh = null;
-    let my = false;
-    let jh = false;
-    let Jb = undefined;
-    let Im = undefined;
-    let Hg = null;
-    let Zb = (Br) => (Br === 1 ? "Your last message" : `Your last ${Br} messages`);
-    let Dd = (Br) => {
+    let teardownExitWatcher = undefined;
+    let unsentReporter = null;
+    let unusedFlagA = false;
+    let unusedFlagB = false;
+    let unusedRefA = undefined;
+    let unusedTeardown = undefined;
+    let abortController = null;
+    let labelForCount = (count) => (count === 1 ? "Your last message" : `Your last ${count} messages`);
+    let writeStderr = (text) => {
       try {
-        writeSync(2, Br);
+        writeSync(2, text);
       } catch {}
     };
-    let p_ = ({ unsent, refused, unconfirmed }) => {
-      if (unsent > 0 && Wh?.tellsOfUnsent !== true)
-        Dd(`${Zb(unsent)} ${unsent === 1 ? "was" : "were"} not sent: ${unsent === 1 ? "it was" : "they were"} still waiting to be sent when you quit.
+    let reportUnsent = ({ unsent, refused, unconfirmed }) => {
+      if (unsent > 0 && unsentReporter?.tellsOfUnsent !== true)
+        writeStderr(`${labelForCount(unsent)} ${unsent === 1 ? "was" : "were"} not sent: ${unsent === 1 ? "it was" : "they were"} still waiting to be sent when you quit.
 `);
-      let vl = new Map();
-      for (let hl of refused) vl.set(hl, (vl.get(hl) ?? 0) + 1);
-      for (let [hl, dd] of vl)
-        Dd(`${Zb(dd)} ${dd === 1 ? "was" : "were"} not sent \u2014 ${hl}.
+      let refusedCounts = new Map();
+      for (let reason of refused) refusedCounts.set(reason, (refusedCounts.get(reason) ?? 0) + 1);
+      for (let [reason, refusedCount] of refusedCounts)
+        writeStderr(`${labelForCount(refusedCount)} ${refusedCount === 1 ? "was" : "were"} not sent \u2014 ${reason}.
 `);
       if (unconfirmed > 0)
-        Dd(`${Zb(unconfirmed)} may not have reached the cloud session: ${unconfirmed === 1 ? "it was" : "they were"} still being sent when you quit.
+        writeStderr(`${labelForCount(unconfirmed)} may not have reached the cloud session: ${unconfirmed === 1 ? "it was" : "they were"} still being sent when you quit.
 `);
     };
-    let Mf = {
+    let lastReport = {
       unsent: 0,
       refused: [],
       unconfirmed: 0,
     };
-    let Zd = null;
-    let ig = () =>
-      (Zd ?? Promise.resolve())
+    let pendingExit = null;
+    let flushAndReport = () =>
+      (pendingExit ?? Promise.resolve())
         .then(() =>
-          zi.releaseHeldSends(Zd === null ? undefined : 100, {
+          manager_2.releaseHeldSends(pendingExit === null ? undefined : 100, {
             exiting: true,
             final: true,
           }),
         )
-        .then((Br) =>
-          p_({
-            unsent: Mf.unsent + Br.unsent,
-            refused: [...Mf.refused, ...Br.refused],
-            unconfirmed: Mf.unconfirmed + Br.unconfirmed,
+        .then((report) =>
+          reportUnsent({
+            unsent: lastReport.unsent + report.unsent,
+            refused: [...lastReport.refused, ...report.refused],
+            unconfirmed: lastReport.unconfirmed + report.unconfirmed,
           }),
         );
-    let fy = registerCleanup(ig);
-    let Fx = () => {
-      fy();
-      let Br = zi.releaseHeldSends(undefined, {
+    let unregisterFlush = registerCleanup(flushAndReport);
+    let flushOnExit = () => {
+      unregisterFlush();
+      let reportPromise = manager_2.releaseHeldSends(undefined, {
         exiting: true,
         final: isShuttingDown(),
       });
-      Zd = Br.catch(() => {});
-      let Fi = registerCleanup(ig);
-      Br.then((ia) => {
-        Mf = ia;
-        if (ia.unsent === 0 && ia.refused.length === 0 && ia.unconfirmed === 0 && ia.stillHeld === 0) Fi();
-      }, Fi);
+      pendingExit = reportPromise.catch(() => {});
+      let unregister = registerCleanup(flushAndReport);
+      reportPromise.then((report) => {
+        lastReport = report;
+        if (
+          report.unsent === 0 &&
+          report.refused.length === 0 &&
+          report.unconfirmed === 0 &&
+          report.stillHeld === 0
+        )
+          unregister();
+      }, unregister);
     };
     let clientPresencePulse = startClientPresencePulse(
       config.sessionId,
@@ -2651,50 +2778,54 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
           storageV5,
         })}`,
       }),
-      (Br, Fi) => {
-        if (Fi === "resend") return Promise.resolve(false);
-        let Authorization = Br.Authorization;
-        let vl = Authorization?.startsWith("Bearer ") ? Authorization.slice(7) : "";
-        return config.onAuth401?.(vl) ?? Promise.resolve(false);
+      (headers, kind) => {
+        if (kind === "resend") return Promise.resolve(false);
+        let Authorization = headers.Authorization;
+        let token = Authorization?.startsWith("Bearer ") ? Authorization.slice(7) : "";
+        return config.onAuth401?.(token) ?? Promise.resolve(false);
       },
     );
-    let Qp = () => {
-      Vd.drain();
-      kn.clear();
-      Ka.drain();
+    let drainDispatchers = () => {
+      permissionDispatcher.drain();
+      pendingRequests.clear();
+      dialogDispatcher.drain();
     };
-    config.storedSessionArtifacts?.then((Br) => {
-      if (qn.current === zi && !_d && Array.isArray(Br)) ed(Br, "stored");
+    config.storedSessionArtifacts?.then((artifacts) => {
+      if (managerRef.current === manager_2 && !hasSessionArtifacts && Array.isArray(artifacts))
+        adoptArtifacts(artifacts, "stored");
     });
-    config.storedAutocompactState?.then((Br) => {
-      let frame = SDKAutocompactStateMessageSchema().shape.value.safeParse(Br).data;
-      if (qn.current === zi && !ol && frame !== undefined)
+    config.storedAutocompactState?.then((autocompactState) => {
+      let frame = SDKAutocompactStateMessageSchema().shape.value.safeParse(autocompactState).data;
+      if (managerRef.current === manager_2 && !hasAutocompactState && frame !== undefined)
         adoptRemoteAutocompactState(setAppState_2, frame, lit_2("seed"));
     });
     config.preflightCheck?.catch((error) => {
-      if (qn.current !== zi) return;
-      setMessages((Fi) => [...Fi, createSystemMessage(errorMessage(error), "warning")]);
-      Qp();
-      vu?.teardown();
-      Gn.current = null;
-      md?.dispose();
-      Ur.current = null;
+      if (managerRef.current !== manager_2) return;
+      setMessages((messagesOnPreflight) => [
+        ...messagesOnPreflight,
+        createSystemMessage(errorMessage(error), "warning"),
+      ]);
+      drainDispatchers();
+      pluginForwarding?.teardown();
+      pendingElicitation.current = null;
+      hookForwarding?.dispose();
+      pendingPrompt.current = null;
       heldServedCallRef.current = undefined;
-      od?.close();
-      Ad?.dispose();
+      servedToolsConnection?.close();
+      settingsWatcher?.dispose();
       clientPresencePulse.teardown();
-      zi.disconnect();
-      qn.current = null;
-      Ms();
-      mr("disconnected");
-      Hs();
+      manager_2.disconnect();
+      managerRef.current = null;
+      onTaskRemove();
+      onTransportEvent("disconnected");
+      onFrames();
     });
     return () => {
       logForDebugging("[useRemoteSession] Cleanup - disconnecting");
-      Qp();
-      let { count, settled } = zi.sendsInFlight();
+      drainDispatchers();
+      let { count, settled } = manager_2.sendsInFlight();
       if (count > 0) {
-        let ia = registerCleanup(() => {
+        let unregisterExitLog = registerCleanup(() => {
           let startTime = performance.now();
           logEvent("tengu_remote_exit_sends_awaited", {
             count,
@@ -2705,32 +2836,32 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
             }),
           );
         });
-        settled.finally(ia);
+        settled.finally(unregisterExitLog);
       }
-      ur();
-      Du = false;
-      ba?.();
-      ba = null;
+      onServedCallEnd();
+      mustWarnOnModeMismatch = false;
+      retryTimer?.();
+      retryTimer = null;
       clientPresencePulse.teardown();
       markSessionRead(config.sessionId);
-      ds();
-      vu?.teardown();
-      Gn.current = null;
-      dm?.();
+      onError();
+      pluginForwarding?.teardown();
+      pendingElicitation.current = null;
+      unsubTrust?.();
       remoteRateLimitAdopter.dispose();
-      Fx();
-      uy?.();
-      Im?.();
-      Hg?.abort();
-      md?.dispose();
-      Ur.current = null;
+      flushOnExit();
+      teardownExitWatcher?.();
+      unusedTeardown?.();
+      abortController?.abort();
+      hookForwarding?.dispose();
+      pendingPrompt.current = null;
       heldServedCallRef.current = undefined;
-      od?.close();
-      Ad?.dispose();
-      if (tc && Cp()) Yc.pushed = false;
-      zi.disconnect();
-      qn.current = null;
-      Ms();
+      servedToolsConnection?.close();
+      settingsWatcher?.dispose();
+      if (isPushingLaunchMode && isManagerCurrent()) launchModePush.pushed = false;
+      manager_2.disconnect();
+      managerRef.current = null;
+      onTaskRemove();
     };
   }, [
     config,
@@ -2749,43 +2880,43 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
     streaming,
     setStreamMode,
     setInProgressToolUseIDs,
-    mr,
+    onTransportEvent,
     writeTaskCount,
     clock,
     credentials,
     setAppState,
     host,
     storageV5,
-    Vd,
-    Ka,
-    or,
-    kn,
-    as,
-    qa,
-    pr,
-    ur,
-    Hs,
-    La,
-    ua,
+    permissionDispatcher,
+    dialogDispatcher,
+    servedCallWatch,
+    pendingRequests,
+    retryingIds,
+    isHeldToolRequest,
+    onServedCall,
+    onServedCallEnd,
+    onFrames,
+    onConnect,
+    onRetry,
     getIsLoading,
-    Sn,
-    qs,
-    gs,
-    es,
+    resetCounters,
+    onElicitation,
+    onPrompt,
+    onPromptClear,
     spinnerStore,
     setAppState_2,
     appStoreDirect,
     addNotification,
     removeNotification,
-    ps,
-    Ms,
-    ls,
+    onQueueEmpty,
+    onTaskRemove,
+    onTaskUpdate,
     retraction,
   ]);
-  let Gl = ce(
-    (ss) => {
+  let maybeNameSession = useCallback(
+    (input) => {
       if (
-        Ws.current ||
+        timedOutNotified.current ||
         !config ||
         config.initialPromptUuid ||
         config.hasExplicitTitle ||
@@ -2794,254 +2925,297 @@ function useRemoteSession({ config, adoptRateLimits, sink, requestDialog, toolPe
         appStoreDirect.getState().remoteSessionName !== undefined
       )
         return;
-      Ws.current = true;
+      timedOutNotified.current = true;
       let sessionId = config.sessionId;
-      let ma = typeof ss === "string" ? ss : extractTextContent_2(ss, " ");
-      if (ma)
-        checkSessionTitlePolicyTaint(ma, new AbortController().signal, credentials).then((title) => {
+      let text = typeof input === "string" ? input : extractTextContent_2(input, " ");
+      if (text)
+        checkSessionTitlePolicyTaint(text, new AbortController().signal, credentials).then((title) => {
           if (appStoreDirect.getState().remoteSessionName !== undefined) return;
           updateSessionTitle(sessionId, title.title);
         });
     },
     [config, credentials, appStoreDirect],
   );
-  let gd = ce(
-    async (ss, Gs, ma) => {
-      let $a = qn.current;
-      if (!$a) {
+  let sendNow = useCallback(
+    async (content, options, submittedAtMs) => {
+      let manager = managerRef.current;
+      if (!manager) {
         logForDebugging("[useRemoteSession] Cannot send - no manager");
         return false;
       }
-      pr();
-      let xl = Qn.current;
-      let Si = Yo.current;
-      Yo.current = false;
+      onServedCall();
+      let servedBefore = servedCallCount.current;
+      let wasStopped = stopped.current;
+      stopped.current = false;
       setConnStatus(true);
-      let na = Ir.current;
-      if (na !== null && !na.terminal && !na.dismissed && na.steps.some((step) => step.status === "failed"))
-        wr({
-          ...na,
+      let openSetup = activeToolUse.current;
+      if (
+        openSetup !== null &&
+        !openSetup.terminal &&
+        !openSetup.dismissed &&
+        openSetup.steps.some((step) => step.status === "failed")
+      )
+        onMessage({
+          ...openSetup,
           dismissed: true,
         });
-      if (Gs?.uuid) za.add(Gs.uuid);
-      hn.current++;
-      Er.noteSend(Gs);
-      Gn.current?.messageSent();
-      let js = undefined;
-      if (js !== undefined) js.inFlight++;
-      let Ya;
+      if (options?.uuid) compactingIds.add(options.uuid);
+      receivedCount.current++;
+      clearTracker.noteSend(options);
+      pendingElicitation.current?.messageSent();
+      let inFlightSlot = undefined;
+      if (inFlightSlot !== undefined) inFlightSlot.inFlight++;
+      let sendResult;
       try {
-        Ya = await (ma === undefined ? $a.sendMessage(ss, Gs) : $a.sendMessage(ss, Gs, ma));
+        sendResult = await (submittedAtMs === undefined
+          ? manager.sendMessage(content, options)
+          : manager.sendMessage(content, options, submittedAtMs));
       } finally {
-        if (js !== undefined) js.inFlight--;
+        if (inFlightSlot !== undefined) inFlightSlot.inFlight--;
       }
-      gs();
-      if (!Ya.ok) {
-        Yo.current = Yo.current || (Si && bn.current);
-        hn.current = Math.max(0, hn.current - 1);
-        Er.noteSendFailed(Gs);
+      onPrompt();
+      if (!sendResult.ok) {
+        stopped.current = stopped.current || (wasStopped && isSending.current);
+        receivedCount.current = Math.max(0, receivedCount.current - 1);
+        clearTracker.noteSendFailed(options);
         landWaitingLines();
-        setMessages((tl) => [
-          ...tl,
-          Ya.reason === CANCELLED
+        setMessages((messagesOnSendFail) => [
+          ...messagesOnSendFail,
+          sendResult.reason === CANCELLED
             ? createSystemMessage(MESSAGE_WITHDRAWN_TEXT, "notice")
-            : createSystemMessage(sendFailedMessage(Ya), "warning"),
+            : createSystemMessage(sendFailedMessage(sendResult), "warning"),
         ]);
         setConnStatus(false);
-        if (Ya.status === 409) La();
+        if (sendResult.status === 409) onConnect();
         return false;
       }
-      ua();
-      Gl(ss);
-      if (!config?.viewerOnly && Qn.current === xl) {
+      onRetry();
+      maybeNameSession(content);
+      if (!config?.viewerOnly && servedCallCount.current === servedBefore) {
         if (
-          !or.watch(
+          !servedCallWatch.watch(
             () => {
               logForDebugging("[useRemoteSession] Response timeout - attempting reconnect");
               landWaitingLines();
               let warningMessage = createSystemMessage(UNRESPONSIVE_NOTICE, "warning");
               setMessages((prev) => [...prev, warningMessage]);
-              $a.reconnect();
+              manager.reconnect();
             },
-            (ol) => clock.setTimeout(ol, responseTimeoutMs(ws.current)),
+            (scheduleTimeout) => clock.setTimeout(scheduleTimeout, responseTimeoutMs(autoFollow.current)),
           )
         )
-          setMessages((ol) => [...ol, createSystemMessage(WAITING_FOR_ANSWER_NOTICE, "notice")]);
+          setMessages((messagesOnWaitingNotice) => [
+            ...messagesOnWaitingNotice,
+            createSystemMessage(WAITING_FOR_ANSWER_NOTICE, "notice"),
+          ]);
       }
       return true;
     },
-    [config, host, setConnStatus, setMessages, landWaitingLines, clock, or, pr, gs, Gl, Er, La, ua],
+    [
+      config,
+      host,
+      setConnStatus,
+      setMessages,
+      landWaitingLines,
+      clock,
+      servedCallWatch,
+      onServedCall,
+      onPrompt,
+      maybeNameSession,
+      clearTracker,
+      onConnect,
+      onRetry,
+    ],
   );
-  let hd = ce(async () => {
-    if ($r.current) return;
-    $r.current = true;
+  let flushHeld = useCallback(async () => {
+    if (held.current) return;
+    held.current = true;
     try {
-      while (fr.current.length > 0) {
-        let ss = fr.current.shift();
-        if (ss === undefined) break;
-        let Gs = Ir.current;
-        if (Gs !== null && Gs.queuedCount !== fr.current.length)
-          wr({
-            ...Gs,
-            queuedCount: fr.current.length,
+      while (heldMessages.current.length > 0) {
+        let heldMessage = heldMessages.current.shift();
+        if (heldMessage === undefined) break;
+        let openSetup = activeToolUse.current;
+        if (openSetup !== null && openSetup.queuedCount !== heldMessages.current.length)
+          onMessage({
+            ...openSetup,
+            queuedCount: heldMessages.current.length,
           });
-        await gd(ss.content, ss.opts, ss.submittedAtMs);
+        await sendNow(heldMessage.content, heldMessage.opts, heldMessage.submittedAtMs);
       }
     } finally {
-      $r.current = false;
+      held.current = false;
     }
-  }, [gd, wr]);
-  P(() => {
-    Yr.current = () => {
-      hd().catch((error) => logError(error));
+  }, [sendNow, onMessage]);
+  useEffect(() => {
+    releaseHeld.current = () => {
+      flushHeld().catch((error) => logError(error));
     };
-  }, [hd]);
-  let bd = ce(() => !config?.viewerOnly && (!_r.current || $r.current || fr.current.length > 0), [config]);
-  let Od = ce(
-    async (ss, Gs) => {
-      if (!qn.current) {
+  }, [flushHeld]);
+  let holdsSends = useCallback(
+    () => !config?.viewerOnly && (!accepting.current || held.current || heldMessages.current.length > 0),
+    [config],
+  );
+  let sendMessage = useCallback(
+    async (content, options) => {
+      if (!managerRef.current) {
         logForDebugging("[useRemoteSession] Cannot send - no manager");
         return false;
       }
       responseTimeoutRef.current += 1;
-      if (bd()) {
-        if (Gs?.uuid) za.add(Gs.uuid);
-        Er.noteSend(Gs);
-        Yo.current = false;
+      if (holdsSends()) {
+        if (options?.uuid) compactingIds.add(options.uuid);
+        clearTracker.noteSend(options);
+        stopped.current = false;
         setConnStatus(true);
-        fr.current.push({
-          content: ss,
-          opts: Gs,
+        heldMessages.current.push({
+          content,
+          opts: options,
           submittedAtMs: Date.now(),
         });
-        let $a =
-          Ir.current ??
+        let openSetup =
+          activeToolUse.current ??
           createSetupProgress(Date.now(), {
             wake: Boolean(config?.isAttachToExisting),
           });
-        wr({
-          ...$a,
-          queuedCount: fr.current.length,
+        onMessage({
+          ...openSetup,
+          queuedCount: heldMessages.current.length,
         });
-        Gl(ss);
-        logForDebugging(`[useRemoteSession] Queued message during bootstrap (${fr.current.length} queued)`);
+        maybeNameSession(content);
+        logForDebugging(
+          `[useRemoteSession] Queued message during bootstrap (${heldMessages.current.length} queued)`,
+        );
         return true;
       }
-      return gd(ss, Gs);
+      return sendNow(content, options);
     },
-    [bd, setConnStatus, wr, Gl, gd, Er],
+    [holdsSends, setConnStatus, onMessage, maybeNameSession, sendNow, clearTracker],
   );
-  let pc = ce(() => {
-    let ss = !config?.viewerOnly && isDeviceIdentityEnabledCached();
-    let Gs = ss ? (qn.current?.cancelHeldSends() ?? 0) : 0;
-    if (Gs === 0) {
+  let cancelHeldMessages = useCallback(() => {
+    let allowed = !config?.viewerOnly && isDeviceIdentityEnabledCached();
+    let cancelledCount = allowed ? (managerRef.current?.cancelHeldSends() ?? 0) : 0;
+    if (cancelledCount === 0) {
       if (appStoreDirect.getState().cloudMessageHeld !== undefined)
-        logFeatureSad("remote_held_message_cancel", ss ? "nothing_held" : "not_allowed");
-      ls(false);
+        logFeatureSad("remote_held_message_cancel", allowed ? "nothing_held" : "not_allowed");
+      onTaskUpdate(false);
       return false;
     }
-    logForDebugging(`[useRemoteSession] Esc at idle: took back ${Gs} held message(s), no interrupt`);
+    logForDebugging(
+      `[useRemoteSession] Esc at idle: took back ${cancelledCount} held message(s), no interrupt`,
+    );
     logFeatureOk("remote_held_message_cancel", {
-      count: Gs,
+      count: cancelledCount,
     });
     return true;
-  }, [config, appStoreDirect, ls]);
-  let Kd = ce(() => {
-    qs();
+  }, [config, appStoreDirect, onTaskUpdate]);
+  let cancelRequest = useCallback(() => {
+    onElicitation();
     if (!config?.viewerOnly) {
-      qn.current?.cancelSession();
-      is();
+      managerRef.current?.cancelSession();
+      onDisconnect();
       return;
     }
-    ur();
+    onServedCallEnd();
     setConnStatus(false);
-  }, [config, setConnStatus, ur, is, qs]);
-  let ec = ce((setMessages, manager) => {
-    let ma = qn.current;
-    if (!ma)
+  }, [config, setConnStatus, onServedCallEnd, onDisconnect, onElicitation]);
+  let sendControlRequest = useCallback((setMessages, manager) => {
+    let manager_2 = managerRef.current;
+    if (!manager_2)
       return Promise.reject(
         Error("[useRemoteSession] Cannot send control request (no manager): not connected"),
       );
-    let $a = setMessages.subtype === "set_permission_mode" ? Ss.current : null;
-    let xl =
-      $a === null
-        ? ma.sendControlRequest(setMessages, manager)
-        : $a.then(() => {
-            let Si = qn.current;
-            if (!Si)
+    let waitForMode = setMessages.subtype === "set_permission_mode" ? timeoutTimer.current : null;
+    let pending =
+      waitForMode === null
+        ? manager_2.sendControlRequest(setMessages, manager)
+        : waitForMode.then(() => {
+            let manager_2 = managerRef.current;
+            if (!manager_2)
               throw Error("[useRemoteSession] Cannot send control request (no manager): not connected");
-            return Si.sendControlRequest(setMessages, manager);
+            return manager_2.sendControlRequest(setMessages, manager);
           });
     if (setMessages.subtype === "set_permission_mode") {
-      Hd.current++;
-      xl.then(
+      lastReceivedAt.current++;
+      pending.then(
         () => {
-          Vl.current++;
+          heartbeatCount.current++;
         },
         () => {},
       );
     }
-    return xl;
+    return pending;
   }, []);
-  let qu = ce(
-    (ss) => {
-      let Gs = qn.current;
-      if (!Gs || config?.viewerOnly) return Promise.resolve("failed");
-      let ma = Gs.workerSendsNow();
-      if (bd() || ma === false || (ma === undefined && !Gs.hasPostedMessage()))
+  let sendQueuedNow = useCallback(
+    (options) => {
+      let manager = managerRef.current;
+      if (!manager || config?.viewerOnly) return Promise.resolve("failed");
+      let sendsNow = manager.workerSendsNow();
+      if (holdsSends() || sendsNow === false || (sendsNow === undefined && !manager.hasPostedMessage()))
         return Promise.resolve("not_asked");
       return requestSendNow(async (prev) => {
-        await Gs.releaseHeldSends(undefined, {
+        await manager.releaseHeldSends(undefined, {
           keepWithheld: true,
         });
-        if (qn.current !== Gs) throw Error("disconnected before the request was sent");
-        return Gs.sendControlRequest(prev);
-      }, ss);
+        if (managerRef.current !== manager) throw Error("disconnected before the request was sent");
+        return manager.sendControlRequest(prev);
+      }, options);
     },
-    [config, bd],
+    [config, holdsSends],
   );
-  let cancelRequest = ce(() => qn.current?.workerSendsNow(), []);
-  let disconnect = ce(() => qn.current?.serviceTimeMs(), []);
+  let cancelRequest_2 = useCallback(() => managerRef.current?.workerSendsNow(), []);
+  let disconnect_2 = useCallback(() => managerRef.current?.serviceTimeMs(), []);
   let viewerOnly = config?.viewerOnly ?? false;
   let sessionId = config?.sessionId;
-  let Kp = Q(() => {
+  let dynamicFields = useMemo(() => {
     return;
   }, [viewerOnly, sessionId]);
-  let nl = ce(() => {
-    ur();
-    qn.current?.disconnect();
-    qn.current = null;
-    ls(false);
-  }, [ur, ls]);
-  return Q(
+  let disconnect_3 = useCallback(() => {
+    onServedCallEnd();
+    managerRef.current?.disconnect();
+    managerRef.current = null;
+    onTaskUpdate(false);
+  }, [onServedCallEnd, onTaskUpdate]);
+  return useMemo(
     () => ({
       isRemoteMode,
-      sendMessage: Od,
-      cancelRequest: Kd,
-      cancelHeldMessages: pc,
-      sendQueuedNow: qu,
-      workerSendsNow: cancelRequest,
-      serviceTimeMs: disconnect,
-      holdsSends: bd,
-      disconnect: nl,
-      sendControlRequest: ec,
-      ...Kp,
+      sendMessage,
+      cancelRequest,
+      cancelHeldMessages,
+      sendQueuedNow,
+      workerSendsNow: cancelRequest_2,
+      serviceTimeMs: disconnect_2,
+      holdsSends,
+      disconnect: disconnect_3,
+      sendControlRequest,
+      ...dynamicFields,
     }),
-    [isRemoteMode, Od, Kd, pc, qu, cancelRequest, disconnect, bd, nl, ec, Kp],
+    [
+      isRemoteMode,
+      sendMessage,
+      cancelRequest,
+      cancelHeldMessages,
+      sendQueuedNow,
+      cancelRequest_2,
+      disconnect_2,
+      holdsSends,
+      disconnect_3,
+      sendControlRequest,
+      dynamicFields,
+    ],
   );
 }
 //@ chunk-18hwfzwa.js:308155-308479 sole-consumer
 /**
  * 判断用户主目录设置向云会话转发的状态：功能未开、启动时保留、留在本机、未决定或未发送。
  */
-function homeSettingsForwardingStatus(h, x) {
+function homeSettingsForwardingStatus(launchKeepsSettings, useAntiCloudMode) {
   let homeSettingsForwardingBlocker = getHomeSettingsForwardingBlocker(isSettingsToCloudEnabledCached());
   if (homeSettingsForwardingBlocker !== null)
     return homeSettingsForwardingBlocker === "flag_off" ? "not_enabled" : homeSettingsForwardingBlocker;
-  if (!h) return "launch_keeps_them";
-  let L = (x ? storedHomeSettingsMode() : storedForwardMode()) ?? "unspecified";
-  if (!isHomeSettingsForwardConsent() && L !== "keep_local") return "not_sent";
-  switch (L) {
+  if (!launchKeepsSettings) return "launch_keeps_them";
+  let forwardMode = (useAntiCloudMode ? storedHomeSettingsMode() : storedForwardMode()) ?? "unspecified";
+  if (!isHomeSettingsForwardConsent() && forwardMode !== "keep_local") return "not_sent";
+  switch (forwardMode) {
     case "keep_local":
       return "kept_on_this_machine";
     case "unspecified":
@@ -3052,22 +3226,22 @@ function homeSettingsForwardingStatus(h, x) {
 }
 //@ chunk-18hwfzwa.js:308479-308579 sole-consumer
 function deviceNotBoundNoticeText(notifications) {
-  for (let x of [notifications.current, ...notifications.queue])
-    if (x?.key === REMOTE_DEVICE_NOT_BOUND && "text" in x) return x.text;
+  for (let notification of [notifications.current, ...notifications.queue])
+    if (notification?.key === REMOTE_DEVICE_NOT_BOUND && "text" in notification) return notification.text;
   return;
 }
 //@ chunk-18hwfzwa.js:308579-308654 sole-consumer
 var MESSAGE_WITHDRAWN_TEXT = "You took your message back. It wasn't sent to the cloud session.";
 //@ chunk-18hwfzwa.js:308654-308714 sole-consumer
-function formatReasonSuffix(h) {
-  return h === "" ? "" : `: ${h.replace(/\.+$/, "")}`;
+function formatReasonSuffix(reason) {
+  return reason === "" ? "" : `: ${reason.replace(/\.+$/, "")}`;
 }
 //@ chunk-18hwfzwa.js:308714-308930 sole-consumer
 function sendFailedMessage(failure) {
-  let x = sendFailureMessage(failure);
-  return x === undefined
+  let suffix = sendFailureMessage(failure);
+  return suffix === undefined
     ? `Couldn't send your message${formatReasonSuffix(signInNoLongerUsableReason(failure) ?? failure.reason)}.`
-    : `Your message may not have reached the cloud session${formatReasonSuffix(x)}. If Claude doesn't respond to it soon, send it again.`;
+    : `Your message may not have reached the cloud session${formatReasonSuffix(suffix)}. If Claude doesn't respond to it soon, send it again.`;
 }
 //@ chunk-18hwfzwa.js:308930-309142 sole-consumer
 function archivedSessionMessage(sessionId) {
@@ -3081,10 +3255,13 @@ function archivedSessionMessage(sessionId) {
   )}`;
 }
 //@ chunk-18hwfzwa.js:309142-309213 sole-consumer
-async function getAccessTokenRefreshed(config, x) {
-  if (!isConsoleProfileSessionsCredential()) await checkAndRefreshOAuthTokenIfNeeded(x);
+async function getAccessTokenRefreshed(config, options) {
+  if (!isConsoleProfileSessionsCredential()) await checkAndRefreshOAuthTokenIfNeeded(options);
   return config.getAccessToken();
 }
 //@ chunk-18hwfzwa.js:309213-309217 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:309213", () => {
+  init_react_production();
+});
 export { useRemoteSession };

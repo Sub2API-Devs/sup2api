@@ -5,10 +5,10 @@
  * pieces: chunk-bwbq4xvm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-bwbq4xvm.js:5373-5536 cjs-fingerprint
-var require_parse_options = x(function (cjsExports, cjsModule) {
+var require_parse_options = __commonJS(function (cjsExports, cjsModule) {
   var looseOption = Object.freeze({
     loose: true,
   });

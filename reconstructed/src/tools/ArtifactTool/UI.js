@@ -9,14 +9,14 @@
  * attribution: placement 17
  */
 import { basename } from "path";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
   Fragment,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Link, Box } from "../../ink/components/Text.js";
-import { BOXED_DIAMOND_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { BOXED_DIAMOND_GLYPH } from "../../constants/figures.js";
 import {
   ARTIFACT_DISPLAY_TARGET_TAG,
   commentFieldsFrom,
@@ -135,41 +135,41 @@ import {
  * 带图标的 artifact 链接。
  */
 function ArtifactLink(props) {
-  let o = w(8);
-  let { name: l, url, iconColor } = props;
+  let $ = useMemoCache(8);
+  let { name, url, iconColor } = props;
   let color = iconColor === undefined ? "claude" : iconColor;
-  let a;
-  if (o[0] !== color) {
-    a = jsxProd_default(Text, {
+  let icon;
+  if ($[0] !== color) {
+    icon = jsxProd_default(Text, {
       color,
       children: BOXED_DIAMOND_GLYPH,
     });
-    o[0] = color;
-    o[1] = a;
-  } else a = o[1];
-  let m;
-  if (o[2] !== l || o[3] !== url) {
-    m = url
+    $[0] = color;
+    $[1] = icon;
+  } else icon = $[1];
+  let label;
+  if ($[2] !== name || $[3] !== url) {
+    label = url
       ? jsxProd_default(Link, {
           url,
-          fallback: l === url ? undefined : `${l} (${url})`,
-          children: l,
+          fallback: name === url ? undefined : `${name} (${url})`,
+          children: name,
         })
-      : l;
-    o[2] = l;
-    o[3] = url;
-    o[4] = m;
-  } else m = o[4];
-  let g;
-  if (o[5] !== a || o[6] !== m) {
-    g = jsxProd_default_2(Text, {
-      children: [a, " ", m],
+      : name;
+    $[2] = name;
+    $[3] = url;
+    $[4] = label;
+  } else label = $[4];
+  let children;
+  if ($[5] !== icon || $[6] !== label) {
+    children = jsxProd_default_2(Text, {
+      children: [icon, " ", label],
     });
-    o[5] = a;
-    o[6] = m;
-    o[7] = g;
-  } else g = o[7];
-  return g;
+    $[5] = icon;
+    $[6] = label;
+    $[7] = children;
+  } else children = $[7];
+  return children;
 }
 //@ chunk-wc0ezwp2.js:15788-15825 placement
 /**
@@ -181,9 +181,9 @@ var HANDLERS_TOOLUSE_MODULE = null;
 var HANDLERS_RESULT_MODULE = null;
 var MAX_BASELINE_LINES = 8;
 //@ chunk-wc0ezwp2.js:15825-15951 placement
-function artifactTitleForDisplay(t, slug, i = ARTIFACT_DISPLAY_TARGET_TAG) {
-  let T = t[i];
-  let title = isPlainObject(T) ? T.title : undefined;
+function artifactTitleForDisplay(input, slug, tag = ARTIFACT_DISPLAY_TARGET_TAG) {
+  let displayTarget = input[tag];
+  let title = isPlainObject(displayTarget) ? displayTarget.title : undefined;
   return artifactCardTitle(
     (slug !== undefined ? getShareEntry(slug)?.title : undefined) || (typeof title === "string" ? title : ""),
   );
@@ -192,72 +192,78 @@ function artifactTitleForDisplay(t, slug, i = ARTIFACT_DISPLAY_TARGET_TAG) {
 /**
  * 渲染 Artifact 工具调用（live-edit、preview、publish、list 等各动作）。
  */
-function renderArtifactToolUse(t, l) {
-  let i = isArtifactToolsetSplit() ? expandArtifactAction(t) : t;
-  if (i.action === "live-edit")
+function renderArtifactToolUse(toolUse, renderOptions) {
+  let input = isArtifactToolsetSplit() ? expandArtifactAction(toolUse) : toolUse;
+  if (input.action === "live-edit")
     return LIVE_EDIT_TOOLUSE_MODULE
-      ? LIVE_EDIT_TOOLUSE_MODULE.renderLiveEditToolUse(i, l?.verbose === true, artifactLivePathsSchemaOpen())
+      ? LIVE_EDIT_TOOLUSE_MODULE.renderLiveEditToolUse(
+          input,
+          renderOptions?.verbose === true,
+          artifactLivePathsSchemaOpen(),
+        )
       : jsxProd_default(Text, {
           children: "live-edit",
         });
-  if (i.action === "preview") {
-    let d = i;
-    let filePath = typeof d.file_path === "string" ? d.file_path : "";
-    let f = sweptPagePath(filePath) || (filePath === "" ? "(no file)" : "(unprintable path)");
-    if (l?.verbose !== true)
+  if (input.action === "preview") {
+    let previewInput = input;
+    let filePath = typeof previewInput.file_path === "string" ? previewInput.file_path : "";
+    let previewPath = sweptPagePath(filePath) || (filePath === "" ? "(no file)" : "(unprintable path)");
+    if (renderOptions?.verbose !== true)
       return jsxProd_default_2(Text, {
-        children: ["preview ", truncatePathMiddle(basename(f), 60)],
+        children: ["preview ", truncatePathMiddle(basename(previewPath), 60)],
       });
-    let u = previewWidths(d);
-    let p = previewThemes(d);
+    let widths = previewWidths(previewInput);
+    let themes = previewThemes(previewInput);
     return jsxProd_default_2(Text, {
       children: [
         "preview ",
-        truncatePathMiddle(f, 1024),
+        truncatePathMiddle(previewPath, 1024),
         jsxProd_default(Text, {
           dimColor: true,
-          children: ` \xB7 ${u.join("/")} \xB7 ${p.join("+")}`,
+          children: ` \xB7 ${widths.join("/")} \xB7 ${themes.join("+")}`,
         }),
       ],
     });
   }
-  if (i.action === "sync")
+  if (input.action === "sync")
     return jsxProd_default_2(Text, {
       children: [
         "sync working copy",
-        typeof i.file_path === "string"
-          ? ` ${truncatePathMiddle(sweptAskPath(i.file_path) || "(unprintable path)", 256)}`
+        typeof input.file_path === "string"
+          ? ` ${truncatePathMiddle(sweptAskPath(input.file_path) || "(unprintable path)", 256)}`
           : "",
-        typeof i.url === "string"
-          ? ` \u2192 ${canonicalArtifactTargetFor(i.url, "(unrecognized address)")}`
+        typeof input.url === "string"
+          ? ` \u2192 ${canonicalArtifactTargetFor(input.url, "(unrecognized address)")}`
           : "",
       ],
     });
-  if (i.action === "version")
+  if (input.action === "version")
     return jsxProd_default_2(Text, {
       children: [
         "version",
-        typeof i.url === "string" ? ` ${canonicalArtifactTargetFor(i.url, "(unrecognized address)")}` : "",
-        typeof i.label === "string" && i.label.trim() !== ""
+        typeof input.url === "string"
+          ? ` ${canonicalArtifactTargetFor(input.url, "(unrecognized address)")}`
+          : "",
+        typeof input.label === "string" && input.label.trim() !== ""
           ? jsxProd_default(Text, {
               dimColor: true,
-              children: ` \xB7 ${sanitizedDisplayLabel(i.label, 200)}`,
+              children: ` \xB7 ${sanitizedDisplayLabel(input.label, 200)}`,
             })
           : null,
       ],
     });
-  if (i.action === "list") {
-    if (isListActionInput(i)) {
-      let c = listScopeOrDefault(i);
-      let f = typeOf(i);
+  if (input.action === "list") {
+    if (isListActionInput(input)) {
+      let scope = listScopeOrDefault(input);
+      let typeFilter = typeOf(input);
       let children =
-        f !== undefined
-          ? `"${sanitizedDisplayLabel(f, 200)}"`
-          : canonicalArtifactTargetFor(typeUrlOf(i), "(unrecognized address)");
+        typeFilter !== undefined
+          ? `"${sanitizedDisplayLabel(typeFilter, 200)}"`
+          : canonicalArtifactTargetFor(typeUrlOf(input), "(unrecognized address)");
       return jsxProd_default_2(Text, {
         children: [
           "list",
-          c === "shared" ? " (shared)" : c === "all" ? " (mine + shared)" : "",
+          scope === "shared" ? " (shared)" : scope === "all" ? " (mine + shared)" : "",
           " ",
           "of type ",
           jsxProd_default(Text, {
@@ -267,42 +273,42 @@ function renderArtifactToolUse(t, l) {
         ],
       });
     }
-    if (isVersionListCall(i))
+    if (isVersionListCall(input))
       return jsxProd_default_2(Text, {
         children: [
           "list versions of",
           " ",
           jsxProd_default(Text, {
             dimColor: true,
-            children: canonicalArtifactTargetFor(i.url, "(unrecognized address)"),
+            children: canonicalArtifactTargetFor(input.url, "(unrecognized address)"),
           }),
         ],
       });
-    let d = listScopeFrom(i);
+    let scope = listScopeFrom(input);
     return jsxProd_default_2(Text, {
-      children: ["list", d === "shared" ? " (shared)" : d === "all" ? " (mine + shared)" : ""],
+      children: ["list", scope === "shared" ? " (shared)" : scope === "all" ? " (mine + shared)" : ""],
     });
   }
-  if (i.action === "list_types") {
-    let d =
-      typeof i.type_query === "string" && i.type_query.trim() !== ""
-        ? sanitizedDisplayLabel(i.type_query, 200)
+  if (input.action === "list_types") {
+    let query =
+      typeof input.type_query === "string" && input.type_query.trim() !== ""
+        ? sanitizedDisplayLabel(input.type_query, 200)
         : null;
     return jsxProd_default_2(Text, {
       children: [
         "list types",
-        d
+        query
           ? jsxProd_default(Text, {
               dimColor: true,
-              children: ` "${d}"`,
+              children: ` "${query}"`,
             })
           : "",
       ],
     });
   }
-  if (i.action === "quickstart") {
-    let intent = i.intent;
-    let c = intent !== "document" && i.design_systems === false;
+  if (input.action === "quickstart") {
+    let intent = input.intent;
+    let withoutDesignSystems = intent !== "document" && input.design_systems === false;
     return jsxProd_default_2(Text, {
       children: [
         "quickstart",
@@ -312,7 +318,7 @@ function renderArtifactToolUse(t, l) {
               children: ` ${sweepAskCopy(truncateToLength(intent, 20))}`,
             })
           : "",
-        c
+        withoutDesignSystems
           ? jsxProd_default(Text, {
               dimColor: true,
               children: " without design systems",
@@ -321,125 +327,130 @@ function renderArtifactToolUse(t, l) {
       ],
     });
   }
-  if (i.action === "describe_type")
+  if (input.action === "describe_type")
     return jsxProd_default_2(Text, {
       children: [
         "describe type",
         " ",
         jsxProd_default(Text, {
           dimColor: true,
-          children: canonicalArtifactTargetFor(typeUrlOf(i), "(unrecognized address)"),
+          children: canonicalArtifactTargetFor(typeUrlOf(input), "(unrecognized address)"),
         }),
       ],
     });
-  if (i.action === "comments" || i.action === "reply" || i.action === "resolve") {
-    let d = typeof i.url === "string" ? parseArtifactUrl(i.url) : null;
-    let c =
-      i.action === "reply" && l?.verbose === true
-        ? truncateCommentText(commentFieldsFrom(i).replyText)
+  if (input.action === "comments" || input.action === "reply" || input.action === "resolve") {
+    let artifactUrl = typeof input.url === "string" ? parseArtifactUrl(input.url) : null;
+    let replyPreview =
+      input.action === "reply" && renderOptions?.verbose === true
+        ? truncateCommentText(commentFieldsFrom(input).replyText)
         : undefined;
-    let f =
-      (i.action === "reply" || i.action === "resolve") && l?.verbose === true && d !== null
-        ? getShareEntry(d.slug)
+    let shareEntry =
+      (input.action === "reply" || input.action === "resolve") &&
+      renderOptions?.verbose === true &&
+      artifactUrl !== null
+        ? getShareEntry(artifactUrl.slug)
         : undefined;
-    let u = shareAudienceParenthetical(f);
+    let audienceNote = shareAudienceParenthetical(shareEntry);
     return jsxProd_default_2(Text, {
       children: [
-        i.action,
+        input.action,
         jsxProd_default_2(Text, {
           dimColor: true,
-          children: [" ", d !== null ? artifactViewerUrlFor(d) : "(unrecognized address)"],
+          children: [
+            " ",
+            artifactUrl !== null ? artifactViewerUrlFor(artifactUrl) : "(unrecognized address)",
+          ],
         }),
-        u !== "" &&
+        audienceNote !== "" &&
           jsxProd_default(Text, {
             dimColor: true,
-            children: u,
+            children: audienceNote,
           }),
-        c !== undefined &&
-          c !== "" &&
+        replyPreview !== undefined &&
+          replyPreview !== "" &&
           jsxProd_default(Text, {
             dimColor: true,
-            children: ` \u2014 "${c}"`,
+            children: ` \u2014 "${replyPreview}"`,
           }),
       ],
     });
   }
   if (
-    i.action === "read_db" ||
-    i.action === "write_db" ||
-    i.action === "room_send" ||
-    i.action === "watch" ||
-    i.action === "unwatch" ||
-    i.action === "resume_replies" ||
-    i.action === "status" ||
-    i.action === "verify" ||
-    i.action === "open"
+    input.action === "read_db" ||
+    input.action === "write_db" ||
+    input.action === "room_send" ||
+    input.action === "watch" ||
+    input.action === "unwatch" ||
+    input.action === "resume_replies" ||
+    input.action === "status" ||
+    input.action === "verify" ||
+    input.action === "open"
   ) {
-    let d =
-      i.action === "read_db"
+    let verb =
+      input.action === "read_db"
         ? "read database"
-        : i.action === "write_db"
+        : input.action === "write_db"
           ? "write database"
-          : i.action === "room_send"
-            ? `room send ${roomTopicOrInvalid(roomMessageParts(i).topic)}`
-            : i.action === "resume_replies"
+          : input.action === "room_send"
+            ? `room send ${roomTopicOrInvalid(roomMessageParts(input).topic)}`
+            : input.action === "resume_replies"
               ? "resume auto-replies"
-              : i.action;
-    if ((i.action === "status" || i.action === "verify") && i.url === undefined)
+              : input.action;
+    if ((input.action === "status" || input.action === "verify") && input.url === undefined)
       return jsxProd_default(Text, {
-        children: d,
+        children: verb,
       });
-    let c = i.action === "read_db" ? dbOutputTarget(i) : undefined;
-    let f =
-      c?.kind === "dir"
-        ? ` \u2192 ${truncatePathMiddle(sweptAskPath(c.dir) || "(unprintable path)", 1024)}`
-        : c?.kind === "unresolvable"
+    let outputTarget = input.action === "read_db" ? dbOutputTarget(input) : undefined;
+    let outDirSuffix =
+      outputTarget?.kind === "dir"
+        ? ` \u2192 ${truncatePathMiddle(sweptAskPath(outputTarget.dir) || "(unprintable path)", 1024)}`
+        : outputTarget?.kind === "unresolvable"
           ? " \u2192 (unresolvable out_dir)"
           : "";
-    if (i.action === "write_db" && l?.verbose === true) {
-      let u = typeof i.url === "string" ? parseArtifactUrl(i.url) : null;
-      let p = u !== null ? getShareEntry(u.slug) : undefined;
-      let v = shareAudienceParenthetical(p);
-      let { opLabel, docTarget } = describeDbWriteTarget(i);
-      let { data: R, filePath, strReplace, ifVersion } = dbWriteFields(i);
-      let P =
+    if (input.action === "write_db" && renderOptions?.verbose === true) {
+      let artifactUrl = typeof input.url === "string" ? parseArtifactUrl(input.url) : null;
+      let shareEntry = artifactUrl !== null ? getShareEntry(artifactUrl.slug) : undefined;
+      let audienceNote = shareAudienceParenthetical(shareEntry);
+      let { opLabel, docTarget } = describeDbWriteTarget(input);
+      let { data, filePath, strReplace, ifVersion } = dbWriteFields(input);
+      let payloadText =
         opLabel === DB_BATCH_OP
           ? [
-              dbBatchPayloadsForConsent(batchWrites(i)),
-              describeLocalFileSources(dbBatchFileSpellings(batchWrites(i))),
+              dbBatchPayloadsForConsent(batchWrites(input)),
+              describeLocalFileSources(dbBatchFileSpellings(batchWrites(input))),
             ]
-              .filter((I) => I !== "")
+              .filter((part) => part !== "")
               .join(" \u2014 ")
           : filePath !== undefined
             ? `from ${truncatePathMiddle(sweptAskPath(filePath) || "(unprintable path)", 1024)}`
             : opLabel === STR_REPLACE
               ? strReplaceApprovalText(strReplace)
-              : approvalPayloadExcerpt(R);
-      let M = ownershipTag(p);
+              : approvalPayloadExcerpt(data);
+      let ownershipText = ownershipTag(shareEntry);
       return jsxProd_default_2(Text, {
         children: [
-          d,
+          verb,
           " (",
           opLabel,
           ")",
           " ",
           jsxProd_default(Text, {
             dimColor: true,
-            children: canonicalArtifactTargetFor(i.url, "(unrecognized address)"),
+            children: canonicalArtifactTargetFor(input.url, "(unrecognized address)"),
           }),
           jsxProd_default(Text, {
             dimColor: true,
-            children: ` \u2014 ${docTarget}${v}`,
+            children: ` \u2014 ${docTarget}${audienceNote}`,
           }),
-          M !== "" &&
+          ownershipText !== "" &&
             jsxProd_default(Text, {
               color: "warning",
-              children: M,
+              children: ownershipText,
             }),
-          P !== "" &&
+          payloadText !== "" &&
             jsxProd_default(Text, {
               dimColor: true,
-              children: ` \u2014 ${P}`,
+              children: ` \u2014 ${payloadText}`,
             }),
           ifVersion !== undefined &&
             jsxProd_default(Text, {
@@ -449,72 +460,72 @@ function renderArtifactToolUse(t, l) {
         ],
       });
     }
-    if (i.action === "room_send" && l?.verbose === true) {
-      let u = typeof i.url === "string" ? parseArtifactUrl(i.url) : null;
-      let p = u !== null ? getShareEntry(u.slug) : undefined;
-      let v = shareAudienceParenthetical(p);
-      let y = approvalPayloadExcerpt(roomMessageParts(i).data);
-      let x = ownershipTag(p);
+    if (input.action === "room_send" && renderOptions?.verbose === true) {
+      let artifactUrl = typeof input.url === "string" ? parseArtifactUrl(input.url) : null;
+      let shareEntry = artifactUrl !== null ? getShareEntry(artifactUrl.slug) : undefined;
+      let audienceNote = shareAudienceParenthetical(shareEntry);
+      let excerpt = approvalPayloadExcerpt(roomMessageParts(input).data);
+      let ownershipText = ownershipTag(shareEntry);
       return jsxProd_default_2(Text, {
         children: [
-          d,
+          verb,
           " ",
           jsxProd_default(Text, {
             dimColor: true,
-            children: canonicalArtifactTargetFor(i.url, "(unrecognized address)"),
+            children: canonicalArtifactTargetFor(input.url, "(unrecognized address)"),
           }),
-          v !== "" &&
+          audienceNote !== "" &&
             jsxProd_default(Text, {
               dimColor: true,
-              children: v,
+              children: audienceNote,
             }),
-          x !== "" &&
+          ownershipText !== "" &&
             jsxProd_default(Text, {
               color: "warning",
-              children: x,
+              children: ownershipText,
             }),
-          y !== "" &&
+          excerpt !== "" &&
             jsxProd_default(Text, {
               dimColor: true,
-              children: ` \u2014 ${y}`,
+              children: ` \u2014 ${excerpt}`,
             }),
         ],
       });
     }
-    if (i.action === "resume_replies" && l?.verbose === true) {
-      let u = typeof i.url === "string" ? parseArtifactUrl(i.url) : null;
-      let p = u !== null ? getShareEntry(u.slug) : undefined;
+    if (input.action === "resume_replies" && renderOptions?.verbose === true) {
+      let artifactUrl = typeof input.url === "string" ? parseArtifactUrl(input.url) : null;
+      let shareEntry = artifactUrl !== null ? getShareEntry(artifactUrl.slug) : undefined;
       return jsxProd_default_2(Text, {
         children: [
-          d,
+          verb,
           " ",
           jsxProd_default(Text, {
             dimColor: true,
-            children: canonicalArtifactTargetFor(i.url, "(unrecognized address)"),
+            children: canonicalArtifactTargetFor(input.url, "(unrecognized address)"),
           }),
           jsxProd_default(Text, {
             dimColor: true,
-            children: shareAudienceParenthetical(p),
+            children: shareAudienceParenthetical(shareEntry),
           }),
         ],
       });
     }
     return jsxProd_default_2(Text, {
       children: [
-        d,
+        verb,
         " ",
         jsxProd_default_2(Text, {
           dimColor: true,
-          children: [canonicalArtifactTargetFor(i.url, "(unrecognized address)"), f],
+          children: [canonicalArtifactTargetFor(input.url, "(unrecognized address)"), outDirSuffix],
         }),
       ],
     });
   }
-  if (i.action === "get_endpoints" || i.action === "call_endpoint" || i.action === "run_script") {
+  if (input.action === "get_endpoints" || input.action === "call_endpoint" || input.action === "run_script") {
     let { verb, body } = HANDLERS_TOOLUSE_MODULE
-      ? HANDLERS_TOOLUSE_MODULE.handlersToolUseLine(i, l?.verbose === true)
+      ? HANDLERS_TOOLUSE_MODULE.handlersToolUseLine(input, renderOptions?.verbose === true)
       : {
-          verb: String(i.action),
+          verb: String(input.action),
           body: "",
         };
     return jsxProd_default_2(Text, {
@@ -523,7 +534,7 @@ function renderArtifactToolUse(t, l) {
         " ",
         jsxProd_default(Text, {
           dimColor: true,
-          children: canonicalArtifactTargetFor(i.url, "(unrecognized address)"),
+          children: canonicalArtifactTargetFor(input.url, "(unrecognized address)"),
         }),
         body !== "" &&
           jsxProd_default(Text, {
@@ -533,12 +544,13 @@ function renderArtifactToolUse(t, l) {
       ],
     });
   }
-  if (i.action === "read") {
-    let artifactUrlInput = parseArtifactUrlInput(i.url);
-    let c = artifactUrlInput !== null ? getShareEntry(artifactUrlInput.slug) : undefined;
-    let f = l?.verbose === true ? ownershipTag(c) : "";
-    let u = typeof i.version === "string" && VERSIONED_NAME_RE.test(i.version);
-    let p = i.version === undefined ? "" : u ? ` version ${i.version}` : " (an earlier version)";
+  if (input.action === "read") {
+    let artifactUrlInput = parseArtifactUrlInput(input.url);
+    let shareEntry = artifactUrlInput !== null ? getShareEntry(artifactUrlInput.slug) : undefined;
+    let ownershipNote = renderOptions?.verbose === true ? ownershipTag(shareEntry) : "";
+    let isVersioned = typeof input.version === "string" && VERSIONED_NAME_RE.test(input.version);
+    let versionNote =
+      input.version === undefined ? "" : isVersioned ? ` version ${input.version}` : " (an earlier version)";
     return jsxProd_default_2(Text, {
       children: [
         "read",
@@ -548,26 +560,26 @@ function renderArtifactToolUse(t, l) {
           children:
             artifactUrlInput !== null ? artifactViewerUrlFor(artifactUrlInput) : "(unrecognized address)",
         }),
-        p !== "" &&
+        versionNote !== "" &&
           jsxProd_default(Text, {
             dimColor: true,
-            children: p,
+            children: versionNote,
           }),
-        f !== "" &&
+        ownershipNote !== "" &&
           jsxProd_default(Text, {
             color: "warning",
-            children: f,
+            children: ownershipNote,
           }),
       ],
     });
   }
-  if (i.action === "upload_asset") {
-    let d = typeof i.url === "string" ? parseArtifactUrl(i.url) : null;
-    let c = d !== null ? getShareEntry(d.slug) : undefined;
-    let f = l?.verbose === true;
-    let u = f ? ownershipTag(c) : "";
-    let uploadPaths = parseUploadPaths(i);
-    let v =
+  if (input.action === "upload_asset") {
+    let artifactUrl = typeof input.url === "string" ? parseArtifactUrl(input.url) : null;
+    let shareEntry = artifactUrl !== null ? getShareEntry(artifactUrl.slug) : undefined;
+    let verbose = renderOptions?.verbose === true;
+    let ownershipNote = verbose ? ownershipTag(shareEntry) : "";
+    let uploadPaths = parseUploadPaths(input);
+    let uploadLabel =
       uploadPaths.kind === "list"
         ? `${uploadPaths.paths.length} ${plural(uploadPaths.paths.length, "file")}:${uploadPaths.paths
             .map(
@@ -576,157 +588,163 @@ function renderArtifactToolUse(t, l) {
             )
             .join("")}
  `
-        : truncatePathMiddle(sweptAskPath(i.file_path ?? "") || "(unprintable path)", 1024);
+        : truncatePathMiddle(sweptAskPath(input.file_path ?? "") || "(unprintable path)", 1024);
     return jsxProd_default_2(Text, {
       children: [
         "upload ",
-        v,
+        uploadLabel,
         jsxProd_default(Text, {
           dimColor: true,
-          children: ` \u2192 ${canonicalArtifactTargetFor(i.url, "(unrecognized address)")}${f ? shareAudienceParenthetical(c) : ""}`,
+          children: ` \u2192 ${canonicalArtifactTargetFor(input.url, "(unrecognized address)")}${verbose ? shareAudienceParenthetical(shareEntry) : ""}`,
         }),
-        u !== "" &&
+        ownershipNote !== "" &&
           jsxProd_default(Text, {
             color: "warning",
-            children: u,
+            children: ownershipNote,
           }),
       ],
     });
   }
-  if (i.action === "copy_from") {
-    let d = typeof i.url === "string" ? parseArtifactUrl(i.url) : null;
-    let c = d !== null ? getShareEntry(d.slug) : undefined;
-    let f = l?.verbose === true;
-    let u = f ? ownershipTag(c) : "";
-    let assetIds = i.asset_ids;
-    let v = Array.isArray(assetIds) ? assetIds.length : 0;
-    let fromUrl = i.from_url;
-    let x = typeof fromUrl === "string" ? parseArtifactUrl(fromUrl) : null;
-    let R = f ? ownershipSuffix(x !== null ? getShareEntry(x.slug) : undefined, "assets") : "";
+  if (input.action === "copy_from") {
+    let artifactUrl = typeof input.url === "string" ? parseArtifactUrl(input.url) : null;
+    let shareEntry = artifactUrl !== null ? getShareEntry(artifactUrl.slug) : undefined;
+    let verbose = renderOptions?.verbose === true;
+    let ownershipText = verbose ? ownershipTag(shareEntry) : "";
+    let assetIds = input.asset_ids;
+    let assetCount = Array.isArray(assetIds) ? assetIds.length : 0;
+    let fromUrl = input.from_url;
+    let fromArtifactUrl = typeof fromUrl === "string" ? parseArtifactUrl(fromUrl) : null;
+    let sourceOwnership = verbose
+      ? ownershipSuffix(fromArtifactUrl !== null ? getShareEntry(fromArtifactUrl.slug) : undefined, "assets")
+      : "";
     return jsxProd_default_2(Text, {
       children: [
         "copy ",
-        v,
+        assetCount,
         " ",
-        plural(v, "asset"),
+        plural(assetCount, "asset"),
         " from",
         " ",
         canonicalArtifactTargetFor(fromUrl, "(unrecognized address)"),
-        R !== "" &&
+        sourceOwnership !== "" &&
           jsxProd_default(Text, {
             color: "warning",
-            children: R,
+            children: sourceOwnership,
           }),
         jsxProd_default(Text, {
           dimColor: true,
-          children: ` \u2192 ${canonicalArtifactTargetFor(i.url, "(unrecognized address)")}${f ? shareAudienceParenthetical(c) : ""}`,
+          children: ` \u2192 ${canonicalArtifactTargetFor(input.url, "(unrecognized address)")}${verbose ? shareAudienceParenthetical(shareEntry) : ""}`,
         }),
-        u !== "" &&
+        ownershipText !== "" &&
           jsxProd_default(Text, {
             color: "warning",
-            children: u,
+            children: ownershipText,
           }),
       ],
     });
   }
-  if (i.action === "list_files" || i.action === "read_file") {
-    let d = typeof i.url === "string" ? parseArtifactUrl(i.url) : null;
-    let c = d !== null ? getShareEntry(d.slug) : undefined;
-    let f = l?.verbose === true;
-    let u = f ? ownershipTag(c) : "";
-    let p = artifactTitleForDisplay(i, d?.slug);
-    let v = i.action === "read_file";
-    let y = "list files";
-    let x = "";
-    if (v) {
-      let { path, paths } = readFilePathArgs(i);
-      let C = i[ASSET_TARGET_PIN_TAG];
-      let E = isPlainObject(C) && Array.isArray(C.paths) ? C.paths.length : paths?.length;
-      y =
-        paths !== undefined && E !== undefined
-          ? `read ${E} ${plural(E, "file")}`
+  if (input.action === "list_files" || input.action === "read_file") {
+    let artifactUrl = typeof input.url === "string" ? parseArtifactUrl(input.url) : null;
+    let shareEntry = artifactUrl !== null ? getShareEntry(artifactUrl.slug) : undefined;
+    let verbose = renderOptions?.verbose === true;
+    let ownershipText = verbose ? ownershipTag(shareEntry) : "";
+    let title = artifactTitleForDisplay(input, artifactUrl?.slug);
+    let isReadFile = input.action === "read_file";
+    let verb = "list files";
+    let destSuffix = "";
+    if (isReadFile) {
+      let { path, paths } = readFilePathArgs(input);
+      let targetPin = input[ASSET_TARGET_PIN_TAG];
+      let pathCount =
+        isPlainObject(targetPin) && Array.isArray(targetPin.paths) ? targetPin.paths.length : paths?.length;
+      verb =
+        paths !== undefined && pathCount !== undefined
+          ? `read ${pathCount} ${plural(pathCount, "file")}`
           : `read ${path !== undefined ? truncatePathMiddle(sweptAskPath(path) || "(unprintable path)", 256) : "(no path)"}`;
-      let outDirJudged = C != null;
-      let M =
+      let outDirJudged = targetPin != null;
+      let readOutput =
         paths !== undefined
-          ? validateReadFilePathsCached(i, {
+          ? validateReadFilePathsCached(input, {
               outDirJudged,
             })
-          : resolveReadFileOutput(i, {
+          : resolveReadFileOutput(input, {
               outDirJudged,
             });
-      let I = "files" in M ? M.base : "dest" in M ? M.dest : undefined;
-      let K = (isPlainObject(C) && C.defaultDir === true) || (I !== undefined && isScratchpadPath(I));
-      x =
-        I === undefined
+      let destRoot =
+        "files" in readOutput ? readOutput.base : "dest" in readOutput ? readOutput.dest : undefined;
+      let inScratchpad =
+        (isPlainObject(targetPin) && targetPin.defaultDir === true) ||
+        (destRoot !== undefined && isScratchpadPath(destRoot));
+      destSuffix =
+        destRoot === undefined
           ? " \u2192 (no destination)"
-          : K
+          : inScratchpad
             ? ""
-            : ` \u2192 ${truncatePathMiddle(sweptAskPath(I) || "(unprintable path)", 1024)}`;
+            : ` \u2192 ${truncatePathMiddle(sweptAskPath(destRoot) || "(unprintable path)", 1024)}`;
     }
     return jsxProd_default_2(Text, {
       children: [
-        y,
-        p ? ` of "${p}"` : "",
+        verb,
+        title ? ` of "${title}"` : "",
         jsxProd_default(Text, {
           dimColor: true,
-          children: v
-            ? `${p ? "" : ` of ${canonicalArtifactTargetFor(i.url, "(unrecognized address)")}`}${x}`
-            : `${p ? " \xB7 " : " of "}${canonicalArtifactTargetFor(i.url, "(unrecognized address)")}${f ? shareAudienceParenthetical(c) : ""}`,
+          children: isReadFile
+            ? `${title ? "" : ` of ${canonicalArtifactTargetFor(input.url, "(unrecognized address)")}`}${destSuffix}`
+            : `${title ? " \xB7 " : " of "}${canonicalArtifactTargetFor(input.url, "(unrecognized address)")}${verbose ? shareAudienceParenthetical(shareEntry) : ""}`,
         }),
-        !v &&
-          u !== "" &&
+        !isReadFile &&
+          ownershipText !== "" &&
           jsxProd_default(Text, {
             color: "warning",
-            children: u,
+            children: ownershipText,
           }),
       ],
     });
   }
-  if (i.action === "pin" || i.action === "unpin") {
-    let d = typeof i.url === "string" ? parseArtifactUrl(i.url) : null;
-    let c = artifactTitleForDisplay(i, d?.slug);
+  if (input.action === "pin" || input.action === "unpin") {
+    let artifactUrl = typeof input.url === "string" ? parseArtifactUrl(input.url) : null;
+    let title = artifactTitleForDisplay(input, artifactUrl?.slug);
     return jsxProd_default_2(Text, {
       children: [
-        i.action,
-        c ? ` "${c}"` : "",
+        input.action,
+        title ? ` "${title}"` : "",
         jsxProd_default(Text, {
           dimColor: true,
-          children: ` \xB7 ${canonicalArtifactTargetFor(i.url, "(unrecognized address)")}`,
+          children: ` \xB7 ${canonicalArtifactTargetFor(input.url, "(unrecognized address)")}`,
         }),
       ],
     });
   }
-  if (i.action === "delete") {
-    let d = typeof i.url === "string" ? parseArtifactUrl(i.url) : null;
-    let c = d !== null ? getShareEntry(d.slug) : undefined;
-    let f = l?.verbose === true;
-    let u = f ? ownershipTag(c) : "";
-    let p = artifactTitleForDisplay(i, d?.slug, ARTIFACT_DELETE_DISPLAY_TAG);
+  if (input.action === "delete") {
+    let artifactUrl = typeof input.url === "string" ? parseArtifactUrl(input.url) : null;
+    let shareEntry = artifactUrl !== null ? getShareEntry(artifactUrl.slug) : undefined;
+    let verbose = renderOptions?.verbose === true;
+    let ownershipText = verbose ? ownershipTag(shareEntry) : "";
+    let title = artifactTitleForDisplay(input, artifactUrl?.slug, ARTIFACT_DELETE_DISPLAY_TAG);
     return jsxProd_default_2(Text, {
       children: [
         "delete",
-        p ? ` "${p}"` : "",
+        title ? ` "${title}"` : "",
         jsxProd_default(Text, {
           dimColor: true,
-          children: ` \xB7 ${canonicalArtifactTargetFor(i.url, "(unrecognized address)")}${f ? shareAudienceParenthetical(c) : ""}`,
+          children: ` \xB7 ${canonicalArtifactTargetFor(input.url, "(unrecognized address)")}${verbose ? shareAudienceParenthetical(shareEntry) : ""}`,
         }),
-        u !== "" &&
+        ownershipText !== "" &&
           jsxProd_default(Text, {
             color: "warning",
-            children: u,
+            children: ownershipText,
           }),
       ],
     });
   }
-  if (i.action === "share") {
-    let d = typeof i.url === "string" ? parseArtifactUrl(i.url) : null;
-    let c = d !== null ? getShareEntry(d.slug) : undefined;
-    let f = l?.verbose === true;
-    let u = f ? ownershipTag(c) : "";
-    let p = artifactTitleForDisplay(i, d?.slug);
-    let { mode, people, access } = readShareInput(i);
-    let R =
+  if (input.action === "share") {
+    let artifactUrl = typeof input.url === "string" ? parseArtifactUrl(input.url) : null;
+    let shareEntry = artifactUrl !== null ? getShareEntry(artifactUrl.slug) : undefined;
+    let verbose = renderOptions?.verbose === true;
+    let ownershipText = verbose ? ownershipTag(shareEntry) : "";
+    let title = artifactTitleForDisplay(input, artifactUrl?.slug);
+    let { mode, people, access } = readShareInput(input);
+    let audienceText =
       mode === "org"
         ? "the organization"
         : mode === "people"
@@ -735,145 +753,152 @@ function renderArtifactToolUse(t, l) {
     return jsxProd_default_2(Text, {
       children: [
         "share",
-        p ? ` "${p}"` : "",
-        ` with ${R} (${access === "view" ? "view only" : "can comment"})`,
+        title ? ` "${title}"` : "",
+        ` with ${audienceText} (${access === "view" ? "view only" : "can comment"})`,
         jsxProd_default(Text, {
           dimColor: true,
-          children: ` \xB7 ${canonicalArtifactTargetFor(i.url, "(unrecognized address)")}${f ? shareAudienceParenthetical(c) : ""}`,
+          children: ` \xB7 ${canonicalArtifactTargetFor(input.url, "(unrecognized address)")}${verbose ? shareAudienceParenthetical(shareEntry) : ""}`,
         }),
-        u !== "" &&
+        ownershipText !== "" &&
           jsxProd_default(Text, {
             color: "warning",
-            children: u,
+            children: ownershipText,
           }),
       ],
     });
   }
-  if (i.action === "list_assets" || i.action === "read_asset" || i.action === "delete_asset") {
-    let d = typeof i.url === "string" ? parseArtifactUrl(i.url) : null;
-    let c = d !== null ? getShareEntry(d.slug) : undefined;
-    let f = l?.verbose === true;
-    let u = f ? ownershipTag(c) : "";
-    let { assetId } = assetFieldsFrom(i);
-    let v = assetId !== undefined && ASSET_ID_RE.test(assetId) ? assetId : "(no id)";
-    let y = i.action === "read_asset";
-    let x = i.action === "delete_asset" ? `delete asset ${v}` : y ? `read asset ${v}` : "list assets";
-    let R = artifactTitleForDisplay(i, d?.slug);
-    let A = i.action === "delete_asset" ? "from" : "of";
-    let C = "";
-    if (y) {
-      let E = i[ASSET_TARGET_PIN_TAG];
-      let P = assetDownloadTarget(i);
-      let M = (isPlainObject(E) && E.defaultDir === true) || P?.defaultDir === true;
-      C =
-        P === undefined || M
+  if (input.action === "list_assets" || input.action === "read_asset" || input.action === "delete_asset") {
+    let artifactUrl = typeof input.url === "string" ? parseArtifactUrl(input.url) : null;
+    let shareEntry = artifactUrl !== null ? getShareEntry(artifactUrl.slug) : undefined;
+    let verbose = renderOptions?.verbose === true;
+    let ownershipText = verbose ? ownershipTag(shareEntry) : "";
+    let { assetId } = assetFieldsFrom(input);
+    let assetIdText = assetId !== undefined && ASSET_ID_RE.test(assetId) ? assetId : "(no id)";
+    let isReadAsset = input.action === "read_asset";
+    let verb =
+      input.action === "delete_asset"
+        ? `delete asset ${assetIdText}`
+        : isReadAsset
+          ? `read asset ${assetIdText}`
+          : "list assets";
+    let title = artifactTitleForDisplay(input, artifactUrl?.slug);
+    let assetPreposition = input.action === "delete_asset" ? "from" : "of";
+    let fromWord = "";
+    if (isReadAsset) {
+      let targetPin = input[ASSET_TARGET_PIN_TAG];
+      let downloadTarget = assetDownloadTarget(input);
+      let usingDefaultDir =
+        (isPlainObject(targetPin) && targetPin.defaultDir === true) || downloadTarget?.defaultDir === true;
+      fromWord =
+        downloadTarget === undefined || usingDefaultDir
           ? ""
-          : ` \u2192 ${truncatePathMiddle(sweptAskPath(`${P.stem}.*`) || "(unprintable path)", 1024)}`;
+          : ` \u2192 ${truncatePathMiddle(sweptAskPath(`${downloadTarget.stem}.*`) || "(unprintable path)", 1024)}`;
     }
     return jsxProd_default_2(Text, {
       children: [
-        x,
-        R ? ` ${A} "${R}"` : "",
+        verb,
+        title ? ` ${assetPreposition} "${title}"` : "",
         jsxProd_default(Text, {
           dimColor: true,
-          children: y
-            ? `${R ? "" : ` of ${canonicalArtifactTargetFor(i.url, "(unrecognized address)")}`}${C}`
-            : `${R ? " \xB7 " : ` ${A} `}${canonicalArtifactTargetFor(i.url, "(unrecognized address)")}${f ? shareAudienceParenthetical(c) : ""}`,
+          children: isReadAsset
+            ? `${title ? "" : ` of ${canonicalArtifactTargetFor(input.url, "(unrecognized address)")}`}${fromWord}`
+            : `${title ? " \xB7 " : ` ${assetPreposition} `}${canonicalArtifactTargetFor(input.url, "(unrecognized address)")}${verbose ? shareAudienceParenthetical(shareEntry) : ""}`,
         }),
-        !y &&
-          u !== "" &&
+        !isReadAsset &&
+          ownershipText !== "" &&
           jsxProd_default(Text, {
             color: "warning",
-            children: u,
+            children: ownershipText,
           }),
       ],
     });
   }
-  let { file_path: filePath, url } = i;
-  let o = l?.verbose === true;
-  let a =
-    o && isArtifactRoomEnabledStub() && publishInputJoinsRoom(i)
+  let { file_path: filePath, url } = input;
+  let verbose = renderOptions?.verbose === true;
+  let roomClause =
+    verbose && isArtifactRoomEnabledStub() && publishInputJoinsRoom(input)
       ? ROOM_CONSENT_CLAUSE.trimStart()
       : undefined;
-  let m = typeUrlOf(i);
-  if (m !== undefined) {
-    let d = canonicalArtifactTargetFor(m, "(unrecognized address)");
-    let c =
+  let typeUrl = typeUrlOf(input);
+  if (typeUrl !== undefined) {
+    let typeTarget = canonicalArtifactTargetFor(typeUrl, "(unrecognized address)");
+    let pageName =
       filePath !== undefined
         ? maskScratchFolder(sweptPagePath(describeThumbnailPath(filePath).shown) || "(unprintable path)")
         : undefined;
     return jsxProd_default_2(Text, {
       children: [
-        c !== undefined ? `"${c}" ` : "",
+        pageName !== undefined ? `"${pageName}" ` : "",
         jsxProd_default_2(Text, {
           dimColor: true,
-          children: ["\u2192 new artifact from type ", d],
+          children: ["\u2192 new artifact from type ", typeTarget],
         }),
-        a !== undefined &&
+        roomClause !== undefined &&
           jsxProd_default(Text, {
             dimColor: true,
             children: `
-${a}`,
+${roomClause}`,
           }),
       ],
     });
   }
   if (filePath === undefined && url !== undefined) {
-    let d = canonicalArtifactTargetFor(url, "(unrecognized address)");
-    let c = typeof url === "string" ? artifactTitleForDisplay(i, parseArtifactUrl(url)?.slug) : "";
+    let urlTarget = canonicalArtifactTargetFor(url, "(unrecognized address)");
+    let title = typeof url === "string" ? artifactTitleForDisplay(input, parseArtifactUrl(url)?.slug) : "";
     return jsxProd_default_2(Text, {
       children: [
-        c
+        title
           ? jsxProd_default_2(Fragment, {
               children: [
-                `"${c}"`,
+                `"${title}"`,
                 jsxProd_default(Text, {
                   dimColor: true,
-                  children: ` \xB7 ${d}`,
+                  children: ` \xB7 ${urlTarget}`,
                 }),
               ],
             })
-          : d,
-        a !== undefined &&
+          : urlTarget,
+        roomClause !== undefined &&
           jsxProd_default(Text, {
             dimColor: true,
             children: `
-${a}`,
+${roomClause}`,
           }),
       ],
     });
   }
-  let g = o && url !== undefined ? canonicalArtifactTargetFor(url, "(unrecognized address)") : undefined;
-  let h = describeThumbnailPath(filePath ?? "");
-  let b = maskScratchFolder(sweptPagePath(h.shown) || "(unprintable path)");
+  let urlSuffix =
+    verbose && url !== undefined ? canonicalArtifactTargetFor(url, "(unrecognized address)") : undefined;
+  let pagePath = describeThumbnailPath(filePath ?? "");
+  let maskedPath = maskScratchFolder(sweptPagePath(pagePath.shown) || "(unprintable path)");
   return jsxProd_default_2(Text, {
     children: [
-      `"${b}"`,
-      g !== undefined &&
+      `"${maskedPath}"`,
+      urlSuffix !== undefined &&
         jsxProd_default_2(Text, {
           dimColor: true,
-          children: [" \u2192 ", g],
+          children: [" \u2192 ", urlSuffix],
         }),
-      a !== undefined &&
+      roomClause !== undefined &&
         jsxProd_default(Text, {
           dimColor: true,
           children: `
-${a}`,
+${roomClause}`,
         }),
     ],
   });
 }
 //@ chunk-wc0ezwp2.js:25974-26136 placement
-function renderArtifactUseIfMeaningful(t, l) {
-  let i = isArtifactToolsetSplit() ? expandArtifactAction(t) : t;
+function renderArtifactUseIfMeaningful(toolUse, renderOptions) {
+  let input = isArtifactToolsetSplit() ? expandArtifactAction(toolUse) : toolUse;
   if (
-    (i.action === undefined || i.action === "publish") &&
-    i.file_path === undefined &&
-    typeUrlOf(i) === undefined &&
-    canonicalArtifactTargetFor(i.url, "") === ""
+    (input.action === undefined || input.action === "publish") &&
+    input.file_path === undefined &&
+    typeUrlOf(input) === undefined &&
+    canonicalArtifactTargetFor(input.url, "") === ""
   )
     return "";
-  return renderArtifactToolUse(t, l);
+  return renderArtifactToolUse(toolUse, renderOptions);
 }
 //@ chunk-wc0ezwp2.js:26136-26163 placement
 /**
@@ -886,8 +911,9 @@ function getArtifactDisplayModule() {
 /**
  * 为某个动作生成「渲染父级 artifact 工具调用」的函数。
  */
-function makeParentActionRenderer(t) {
-  return (l, i) => renderArtifactToolUse(toParentArtifactInput(t, l), i);
+function makeParentActionRenderer(toolName) {
+  return (input, renderOptions) =>
+    renderArtifactToolUse(toParentArtifactInput(toolName, input), renderOptions);
 }
 //@ chunk-wc0ezwp2.js:26204-26252 placement
 /**
@@ -900,14 +926,14 @@ var renderCheckToolUse = makeParentActionRenderer("check");
 /**
  * Artifact 发布重试中的进度提示。
  */
-function renderArtifactProgress(t) {
-  let l = t.at(-1)?.data;
-  if (!l || l.type !== "artifact_publish_retry" || l.resolved) return RunningLabel();
-  let i = l.status === 503 ? "Publish service temporarily unavailable" : "Publish service busy";
+function renderArtifactProgress(progressMessages) {
+  let last = progressMessages.at(-1)?.data;
+  if (!last || last.type !== "artifact_publish_retry" || last.resolved) return RunningLabel();
+  let label = last.status === 503 ? "Publish service temporarily unavailable" : "Publish service busy";
   return jsxProd_default(MessageResponse, {
     children: jsxProd_default_2(Text, {
       dimColor: true,
-      children: [i, " \u2014 retrying (attempt ", l.attempt, " of ", l.maxAttempts, ")\u2026"],
+      children: [label, " \u2014 retrying (attempt ", last.attempt, " of ", last.maxAttempts, ")\u2026"],
     }),
   });
 }
@@ -915,72 +941,72 @@ function renderArtifactProgress(t) {
 /**
  * 判断结果是否属于 handlers 文档/结果/脚本结果。
  */
-function isHandlersResultKind(t) {
-  let l = firstResultKey(t);
-  return l === "handlers_doc" || l === "handler_result" || l === "script_result";
+function isHandlersResultKind(result) {
+  let key = firstResultKey(result);
+  return key === "handlers_doc" || key === "handler_result" || key === "script_result";
 }
 //@ chunk-wc0ezwp2.js:26663-26745 placement
 /**
  * 清洗并截断文本，超出上限时追加省略号。
  */
-function sweptTruncatedText(t, l) {
-  let i = truncateToLength(t, l);
-  let T = sweepAskCopy(i) ?? "";
-  return i.length < t.length ? `${T}\u2026` : T;
+function sweptTruncatedText(text, max) {
+  let truncated = truncateToLength(text, max);
+  let swept = sweepAskCopy(truncated) ?? "";
+  return truncated.length < text.length ? `${swept}\u2026` : swept;
 }
 //@ chunk-wc0ezwp2.js:26745-26816 placement
 /**
  * 结果是否属于模拟器预览。
  */
-function isEmulatorPreviewResult(t) {
-  return "emulatorPreview" in t && firstResultKey(t) === "emulatorPreview";
+function isEmulatorPreviewResult(result) {
+  return "emulatorPreview" in result && firstResultKey(result) === "emulatorPreview";
 }
 //@ chunk-wc0ezwp2.js:26816-26871 placement
 /**
  * 结果是否属于页面预览。
  */
-function isPreviewResult(t) {
-  return "preview" in t && firstResultKey(t) === "preview";
+function isPreviewResult(result) {
+  return "preview" in result && firstResultKey(result) === "preview";
 }
 //@ chunk-wc0ezwp2.js:26871-41833 placement
 /**
  * 渲染 Artifact 工具结果（预览、发布、读取、评论等）。
  */
-function renderArtifactResult(t, l, i) {
-  if (isEmulatorPreviewResult(t)) {
-    let emulatorPreview = t.emulatorPreview;
-    let a = sweptTruncatedText(basename(emulatorPreview.file), 80);
+function renderArtifactResult(result, options, renderOpts) {
+  if (isEmulatorPreviewResult(result)) {
+    let emulatorPreview = result.emulatorPreview;
+    let previewFileName = sweptTruncatedText(basename(emulatorPreview.file), 80);
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
         children:
           emulatorPreview.outcome === "looked"
-            ? `Looked at ${a} in the artifact viewer`
+            ? `Looked at ${previewFileName} in the artifact viewer`
             : emulatorPreview.outcome === "aborted"
-              ? `Stopped looking at ${a} in the artifact viewer`
-              : `Could not look at ${a} in the artifact viewer`,
+              ? `Stopped looking at ${previewFileName} in the artifact viewer`
+              : `Could not look at ${previewFileName} in the artifact viewer`,
       }),
     });
   }
-  if (isPreviewResult(t)) {
-    let o = {
-      ...t.preview,
-      file: truncateToLength(t.preview.file, 4096),
-      shots: t.preview.shots.slice(0, MAX_PREVIEW_CAPTURES).map((shot) => ({
+  if (isPreviewResult(result)) {
+    let preview = {
+      ...result.preview,
+      file: truncateToLength(result.preview.file, 4096),
+      shots: result.preview.shots.slice(0, MAX_PREVIEW_CAPTURES).map((shot) => ({
         ...shot,
         theme: truncateToLength(shot.theme, 32),
       })),
-      issues: t.preview.issues.slice(0, MAX_PREVIEW_ERRORS),
-      widths: t.preview.widths.slice(0, MAX_PREVIEW_WIDTHS),
-      themes: t.preview.themes.slice(0, 2).map((theme) => truncateToLength(theme, 32)),
+      issues: result.preview.issues.slice(0, MAX_PREVIEW_ERRORS),
+      widths: result.preview.widths.slice(0, MAX_PREVIEW_WIDTHS),
+      themes: result.preview.themes.slice(0, 2).map((theme) => truncateToLength(theme, 32)),
     };
-    let a = count(o.shots, (f) => f.error === undefined);
-    let filtered = o.issues.filter((issue) => issue.kind !== "note");
-    let filtered_2 = o.issues.filter((issue) => issue.kind === "note");
-    let h = filtered.length + (o.issuesDropped ?? 0);
-    let b = sweptTruncatedText;
-    let d = i?.verbose === true ? filtered : filtered.slice(0, MAX_BASELINE_LINES);
-    let c = filtered.length - d.length + (o.issuesDropped ?? 0);
+    let capturedCount = count(preview.shots, (shot) => shot.error === undefined);
+    let filtered = preview.issues.filter((issue) => issue.kind !== "note");
+    let filtered_2 = preview.issues.filter((issue) => issue.kind === "note");
+    let issueTotal = filtered.length + (preview.issuesDropped ?? 0);
+    let sweep = sweptTruncatedText;
+    let shownIssues = renderOpts?.verbose === true ? filtered : filtered.slice(0, MAX_BASELINE_LINES);
+    let moreCount = filtered.length - shownIssues.length + (preview.issuesDropped ?? 0);
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default_2(Box, {
         flexDirection: "column",
@@ -988,33 +1014,33 @@ function renderArtifactResult(t, l, i) {
           jsxProd_default_2(Text, {
             dimColor: true,
             children: [
-              a === 0 ? "Could not preview " : "Previewed ",
-              b(basename(o.file), 80),
+              capturedCount === 0 ? "Could not preview " : "Previewed ",
+              sweep(basename(preview.file), 80),
               " \xB7 ",
-              b(o.widths.join("/"), 24),
+              sweep(preview.widths.join("/"), 24),
               " \xB7",
               " ",
-              b(o.themes.join("+"), 24),
+              sweep(preview.themes.join("+"), 24),
               " \xB7 ",
-              h === 0
-                ? o.renderError !== undefined
+              issueTotal === 0
+                ? preview.renderError !== undefined
                   ? "browser did not start \u2014 static checks only"
                   : "no issues"
-                : `${h}${o.issuesDropped === MAX_PREVIEW_ISSUES_DROPPED ? "+" : ""} ${plural(h, "issue")}`,
-              a < o.shots.length && o.renderError === undefined
-                ? ` \xB7 ${a}/${o.shots.length} captured`
+                : `${issueTotal}${preview.issuesDropped === MAX_PREVIEW_ISSUES_DROPPED ? "+" : ""} ${plural(issueTotal, "issue")}`,
+              capturedCount < preview.shots.length && preview.renderError === undefined
+                ? ` \xB7 ${capturedCount}/${preview.shots.length} captured`
                 : "",
             ],
           }),
-          o.renderError !== undefined &&
+          preview.renderError !== undefined &&
             jsxProd_default(Box, {
               paddingLeft: 2,
               children: jsxProd_default(Text, {
                 color: "warning",
-                children: b(o.renderError, 200),
+                children: sweep(preview.renderError, 200),
               }),
             }),
-          d.map((f, u) =>
+          shownIssues.map((issue, index) =>
             jsxProd_default_2(
               Box,
               {
@@ -1027,22 +1053,27 @@ function renderArtifactResult(t, l, i) {
                   }),
                   jsxProd_default(Text, {
                     dimColor: true,
-                    children: b(f.text, 200),
+                    children: sweep(issue.text, 200),
                   }),
                 ],
               },
-              u,
+              index,
             ),
           ),
-          c > 0 &&
+          moreCount > 0 &&
             jsxProd_default(Box, {
               paddingLeft: 2,
               children: jsxProd_default_2(Text, {
                 dimColor: true,
-                children: ["\xB7 \u2026 ", c, " more", filtered.length > d.length ? " (ctrl+o)" : ""],
+                children: [
+                  "\xB7 \u2026 ",
+                  moreCount,
+                  " more",
+                  filtered.length > shownIssues.length ? " (ctrl+o)" : "",
+                ],
               }),
             }),
-          filtered_2.map((f, u) =>
+          filtered_2.map((note, index) =>
             jsxProd_default_2(
               Box,
               {
@@ -1055,15 +1086,15 @@ function renderArtifactResult(t, l, i) {
                   }),
                   jsxProd_default(Text, {
                     dimColor: true,
-                    children: b(f.text, 200),
+                    children: sweep(note.text, 200),
                   }),
                 ],
               },
-              `n${u}`,
+              `n${index}`,
             ),
           ),
-          i?.verbose === true &&
-            o.shots.map((shot, u) =>
+          renderOpts?.verbose === true &&
+            preview.shots.map((shot, shotEntry) =>
               jsxProd_default(
                 Box,
                 {
@@ -1071,121 +1102,124 @@ function renderArtifactResult(t, l, i) {
                   children: jsxProd_default_2(Text, {
                     dimColor: true,
                     children: [
-                      b(`${shot.width} ${shot.theme}`, 20),
+                      sweep(`${shot.width} ${shot.theme}`, 20),
                       ":",
                       " ",
                       shot.error !== undefined
-                        ? `not captured \u2014 ${b(shot.error, 120)}`
-                        : b(shot.path ?? "(not saved)", 512),
+                        ? `not captured \u2014 ${sweep(shot.error, 120)}`
+                        : sweep(shot.path ?? "(not saved)", 512),
                     ],
                   }),
                 },
-                `s${u}`,
+                `s${shotEntry}`,
               ),
             ),
         ],
       }),
     });
   }
-  if ("read" in t)
+  if ("read" in result)
     return jsxProd_default(renderToolUseProgressMessage, {
-      bytes: t.read.bytes,
-      status: `${t.read.code} ${t.read.codeText}`,
+      bytes: result.read.bytes,
+      status: `${result.read.code} ${result.read.codeText}`,
     });
-  if ("threads" in t) {
-    let o = t.threads_dropped === true;
-    let a = t.thread_filter !== undefined;
+  if ("threads" in result) {
+    let dropped = result.threads_dropped === true;
+    let threadFiltered = result.thread_filter !== undefined;
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
-        children: a
-          ? t.threads.some((thread) => thread.id === t.thread_filter)
+        children: threadFiltered
+          ? result.threads.some((thread) => thread.id === result.thread_filter)
             ? "read 1 comment thread (filtered)"
-            : o
+            : dropped
               ? "requested thread not among the readable threads"
               : "requested thread not in this result"
-          : t.threads.length === 0
-            ? o
+          : result.threads.length === 0
+            ? dropped
               ? "comment threads could not be read"
               : "no comment threads yet"
-            : `read ${t.threads.length} comment ${plural(t.threads.length, "thread")}${o ? " (some could not be read)" : ""}`,
+            : `read ${result.threads.length} comment ${plural(result.threads.length, "thread")}${dropped ? " (some could not be read)" : ""}`,
       }),
     });
   }
-  if ("replied" in t)
+  if ("replied" in result)
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
-        children: t.replied
+        children: result.replied
           ? "replied to comment thread"
-          : t.summon_answered === true
+          : result.summon_answered === true
             ? "reply not posted (summon already answered)"
-            : t.summon_foreign === true
+            : result.summon_foreign === true
               ? "reply not posted (another user's summon or activation)"
-              : t.already_answered === true
+              : result.already_answered === true
                 ? "reply not posted (thread already answered)"
-                : t.page_owns_threads === true
+                : result.page_owns_threads === true
                   ? "reply not posted (the page keeps its own comment threads)"
                   : "reply needs thread activation by the user",
       }),
     });
-  if ("thread_resolved" in t)
+  if ("thread_resolved" in result)
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
-        children: t.thread_resolved
+        children: result.thread_resolved
           ? "resolved comment thread"
-          : t.not_authorized === true
+          : result.not_authorized === true
             ? "not resolved (not the thread starter or a writer)"
-            : t.summon_foreign === true
+            : result.summon_foreign === true
               ? "not resolved (another user's activation)"
-              : t.relayed_credential === true
+              : result.relayed_credential === true
                 ? "not resolved (unavailable from this session)"
-                : t.page_owns_threads === true
+                : result.page_owns_threads === true
                   ? "not resolved (the page keeps its own comment threads)"
                   : "not resolved (thread not activated)",
       }),
     });
-  if ("liveEdit" in t)
+  if ("liveEdit" in result)
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
         children: LIVE_EDIT_RESULT_MODULE
-          ? LIVE_EDIT_RESULT_MODULE.renderLiveEditResultText(t.liveEdit)
+          ? LIVE_EDIT_RESULT_MODULE.renderLiveEditResultText(result.liveEdit)
           : "live edit landed",
       }),
     });
-  if ("sync" in t)
+  if ("sync" in result)
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
-        children: LIVE_EDIT_RESULT_MODULE ? LIVE_EDIT_RESULT_MODULE.renderSyncResultText(t.sync) : "synced",
+        children: LIVE_EDIT_RESULT_MODULE
+          ? LIVE_EDIT_RESULT_MODULE.renderSyncResultText(result.sync)
+          : "synced",
       }),
     });
-  if ("versioned" in t) {
-    let o = typeof t.versioned.url === "string" ? parseArtifactUrl(t.versioned.url) : null;
-    let a = o ? artifactViewerUrlFor(o) : undefined;
+  if ("versioned" in result) {
+    let artifactUrl =
+      typeof result.versioned.url === "string" ? parseArtifactUrl(result.versioned.url) : null;
+    let viewerUrl = artifactUrl ? artifactViewerUrlFor(artifactUrl) : undefined;
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default_2(Text, {
         dimColor: true,
         children: [
           "Versioned",
           " ",
-          a !== undefined
+          viewerUrl !== undefined
             ? jsxProd_default(ArtifactLink, {
-                name: a,
-                url: a,
+                name: viewerUrl,
+                url: viewerUrl,
               })
             : "(unrecognized address)",
         ],
       }),
     });
   }
-  if ("db_read" in t) {
-    let dbRead = t.db_read;
-    let a = dbRead.docs?.length ?? 0;
+  if ("db_read" in result) {
+    let dbRead = result.db_read;
+    let docCount = dbRead.docs?.length ?? 0;
     let saved = dbRead.saved;
-    let g =
+    let dbHeader =
       isPlainObject(saved) &&
       typeof saved.dir === "string" &&
       Array.isArray(saved.files) &&
@@ -1196,60 +1230,68 @@ function renderArtifactResult(t, l, i) {
             skippedCount: saved.skipped.length,
           }
         : undefined;
-    let h =
-      g !== undefined
-        ? `saved ${g.fileCount} ${plural(g.fileCount, "document")} under ${truncatePathMiddle(sweepAskCopy(g.dir) ?? "(unprintable path)", 1024)}${g.skippedCount > 0 ? ` (${g.skippedCount} skipped)` : ""}`
+    let cursorNote =
+      dbHeader !== undefined
+        ? `saved ${dbHeader.fileCount} ${plural(dbHeader.fileCount, "document")} under ${truncatePathMiddle(sweepAskCopy(dbHeader.dir) ?? "(unprintable path)", 1024)}${dbHeader.skippedCount > 0 ? ` (${dbHeader.skippedCount} skipped)` : ""}`
         : undefined;
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
-        children: dbRead.found === false ? "no such document" : (h ?? `read ${a} ${plural(a, "document")}`),
+        children:
+          dbRead.found === false
+            ? "no such document"
+            : (cursorNote ?? `read ${docCount} ${plural(docCount, "document")}`),
       }),
     });
   }
-  if ("db_profiles" in t) {
-    let dbProfiles = t.db_profiles;
-    let a =
+  if ("db_profiles" in result) {
+    let dbProfiles = result.db_profiles;
+    let savedCount =
       isPlainObject(dbProfiles) && isPlainObject(dbProfiles.profiles)
         ? Object.keys(dbProfiles.profiles).length
         : undefined;
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
-        children: a === undefined ? "no names available" : `found ${a} ${plural(a, "person", "people")}`,
+        children:
+          savedCount === undefined
+            ? "no names available"
+            : `found ${savedCount} ${plural(savedCount, "person", "people")}`,
       }),
     });
   }
-  if ("db_write" in t) {
-    let o =
-      "results" in t.db_write && Array.isArray(t.db_write.results) ? t.db_write.results.length : undefined;
+  if ("db_write" in result) {
+    let dbTarget =
+      "results" in result.db_write && Array.isArray(result.db_write.results)
+        ? result.db_write.results.length
+        : undefined;
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
-        children: !t.db_write.committed
+        children: !result.db_write.committed
           ? "database write not committed"
-          : o !== undefined
-            ? `database batch ${"fallback" in t.db_write && t.db_write.fallback === "sequential" ? "written one at a time" : "committed"} (${o} ${plural(o, "write")})`
+          : dbTarget !== undefined
+            ? `database batch ${"fallback" in result.db_write && result.db_write.fallback === "sequential" ? "written one at a time" : "committed"} (${dbTarget} ${plural(dbTarget, "write")})`
             : "database write committed",
       }),
     });
   }
-  if (isHandlersResultKind(t))
+  if (isHandlersResultKind(result))
     return HANDLERS_RESULT_MODULE
-      ? HANDLERS_RESULT_MODULE.renderHandlersResult(t)
+      ? HANDLERS_RESULT_MODULE.renderHandlersResult(result)
       : jsxProd_default(MessageResponse, {
           children: jsxProd_default(Text, {
             dimColor: true,
             children: "This record is unreadable in this build.",
           }),
         });
-  if ("room_send" in t) {
-    let roomSend = t.room_send;
-    let a =
+  if ("room_send" in result) {
+    let roomSend = result.room_send;
+    let uploadCount =
       typeof roomSend.peers === "number" && Number.isSafeInteger(roomSend.peers) && roomSend.peers >= 0
         ? `${roomSend.peers} ${plural(roomSend.peers, "peer")}`
         : "? peers";
-    let m =
+    let uploadedCount =
       typeof roomSend.reason === "string"
         ? sanitizeDisplayText(roomSend.reason, {
             max: 32,
@@ -1259,12 +1301,16 @@ function renderArtifactResult(t, l, i) {
       children: jsxProd_default(Text, {
         dimColor: true,
         children:
-          roomSend.delivered === true ? `sent to ${a}` : m === undefined ? "not sent" : `not sent (${m})`,
+          roomSend.delivered === true
+            ? `sent to ${uploadCount}`
+            : uploadedCount === undefined
+              ? "not sent"
+              : `not sent (${uploadedCount})`,
       }),
     });
   }
-  if ("asset_upload" in t) {
-    let assetUpload = t.asset_upload;
+  if ("asset_upload" in result) {
+    let assetUpload = result.asset_upload;
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default_2(Text, {
         dimColor: true,
@@ -1279,19 +1325,19 @@ function renderArtifactResult(t, l, i) {
       }),
     });
   }
-  if ("asset_uploads" in t) {
-    let assetUploads = isPlainObject(t.asset_uploads) ? t.asset_uploads : {};
+  if ("asset_uploads" in result) {
+    let assetUploads = isPlainObject(result.asset_uploads) ? result.asset_uploads : {};
     let { rows } = capResultRows(assetUploads.results, MAX_UPLOAD_FILE_PATHS);
-    let m = count(rows, (g) => g.status === "uploaded");
+    let uploadedCount = count(rows, (row) => row.status === "uploaded");
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default_2(Box, {
         flexDirection: "column",
         children: [
           jsxProd_default_2(Text, {
             dimColor: true,
-            children: ["uploaded ", m, " of ", rows.length, " ", plural(rows.length, "file")],
+            children: ["uploaded ", uploadedCount, " of ", rows.length, " ", plural(rows.length, "file")],
           }),
-          rows.map((g, h) =>
+          rows.map((row, index) =>
             jsxProd_default_2(
               Text,
               {
@@ -1299,56 +1345,57 @@ function renderArtifactResult(t, l, i) {
                 children: [
                   "  ",
                   truncatePathMiddle(
-                    sweepAskCopy(typeof g.file_path === "string" ? g.file_path : "") || "(unprintable path)",
+                    sweepAskCopy(typeof row.file_path === "string" ? row.file_path : "") ||
+                      "(unprintable path)",
                     MAX_UPLOAD_PATH_LENGTH,
                   ),
                   " ",
-                  g.status === "uploaded"
-                    ? `as ${sweepAskCopy(typeof g.url === "string" ? g.url : "") || "_blob/\u2026"}`
-                    : g.status === "not_attempted"
+                  row.status === "uploaded"
+                    ? `as ${sweepAskCopy(typeof row.url === "string" ? row.url : "") || "_blob/\u2026"}`
+                    : row.status === "not_attempted"
                       ? "not attempted"
                       : "failed",
                 ],
               },
-              h,
+              index,
             ),
           ),
         ],
       }),
     });
   }
-  if ("asset_list" in t) {
-    let assetList = isPlainObject(t.asset_list) ? t.asset_list : {};
-    let a = Array.isArray(assetList.assets) ? assetList.assets.length : undefined;
+  if ("asset_list" in result) {
+    let assetList = isPlainObject(result.asset_list) ? result.asset_list : {};
+    let assetCount = Array.isArray(assetList.assets) ? assetList.assets.length : undefined;
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
         children:
-          a === undefined
+          assetCount === undefined
             ? "listed assets (record unreadable)"
-            : a === 0
+            : assetCount === 0
               ? "no assets listed"
-              : `listed ${a} ${plural(a, "asset")}${typeof assetList.next === "string" && assetList.next !== "" ? " (more follow)" : ""}`,
+              : `listed ${assetCount} ${plural(assetCount, "asset")}${typeof assetList.next === "string" && assetList.next !== "" ? " (more follow)" : ""}`,
       }),
     });
   }
-  if ("file_list" in t) {
-    let fileList = isPlainObject(t.file_list) ? t.file_list : {};
-    let a = Array.isArray(fileList.files) ? fileList.files.length : undefined;
+  if ("file_list" in result) {
+    let fileList = isPlainObject(result.file_list) ? result.file_list : {};
+    let fileCount = Array.isArray(fileList.files) ? fileList.files.length : undefined;
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
         children:
-          a === undefined
+          fileCount === undefined
             ? "listed files (record unreadable)"
-            : a === 0
+            : fileCount === 0
               ? "no files listed"
-              : `listed ${a} ${plural(a, "file")}`,
+              : `listed ${fileCount} ${plural(fileCount, "file")}`,
       }),
     });
   }
-  if ("file_read" in t) {
-    let fileRead = isPlainObject(t.file_read) ? t.file_read : {};
+  if ("file_read" in result) {
+    let fileRead = isPlainObject(result.file_read) ? result.file_read : {};
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default_2(Text, {
         dimColor: true,
@@ -1364,12 +1411,14 @@ function renderArtifactResult(t, l, i) {
       }),
     });
   }
-  if ("files_read" in t) {
-    let files = isPlainObject(t.files_read) ? t.files_read.files : undefined;
-    let a = Array.isArray(files) ? files.length : undefined;
-    let m = Array.isArray(files) ? count(files, (b) => isPlainObject(b) && "saved_to" in b) : 0;
-    let savedDir = isPlainObject(t.files_read) ? t.files_read.saved_dir : undefined;
-    let h =
+  if ("files_read" in result) {
+    let files = isPlainObject(result.files_read) ? result.files_read.files : undefined;
+    let filesCount = Array.isArray(files) ? files.length : undefined;
+    let filesArr = Array.isArray(files)
+      ? count(files, (file) => isPlainObject(file) && "saved_to" in file)
+      : 0;
+    let savedDir = isPlainObject(result.files_read) ? result.files_read.saved_dir : undefined;
+    let savedNote =
       typeof savedDir === "string"
         ? ` under ${truncatePathMiddle(sweepProvenanceMarker(sweepAskCopy(savedDir) ?? "folder"), 1024)}`
         : "";
@@ -1377,14 +1426,14 @@ function renderArtifactResult(t, l, i) {
       children: jsxProd_default(Text, {
         dimColor: true,
         children:
-          a === undefined
+          filesCount === undefined
             ? "saved files (record unreadable)"
-            : `saved ${m === a ? a : `${m} of ${a}`} ${plural(a, "file")}${h}`,
+            : `saved ${filesArr === filesCount ? filesCount : `${filesArr} of ${filesCount}`} ${plural(filesCount, "file")}${savedNote}`,
       }),
     });
   }
-  if ("asset_read" in t) {
-    let assetRead = t.asset_read;
+  if ("asset_read" in result) {
+    let assetRead = result.asset_read;
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default_2(Text, {
         dimColor: true,
@@ -1398,40 +1447,40 @@ function renderArtifactResult(t, l, i) {
       }),
     });
   }
-  if ("asset_delete" in t)
+  if ("asset_delete" in result)
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
-        children: t.asset_delete.deleted ? "asset deleted" : "no such asset",
+        children: result.asset_delete.deleted ? "asset deleted" : "no such asset",
       }),
     });
-  if ("asset_copy" in t) {
-    let o = Array.isArray(t.asset_copy.assets) ? t.asset_copy.assets.length : 0;
+  if ("asset_copy" in result) {
+    let copyCount = Array.isArray(result.asset_copy.assets) ? result.asset_copy.assets.length : 0;
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default_2(Text, {
         dimColor: true,
-        children: ["copied ", o, " ", plural(o, "asset"), " into the artifact"],
+        children: ["copied ", copyCount, " ", plural(copyCount, "asset"), " into the artifact"],
       }),
     });
   }
-  if ("artifact_delete" in t)
+  if ("artifact_delete" in result)
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
         children:
-          t.artifact_delete.already_gone === true ? "Artifact was already deleted" : "Artifact deleted",
+          result.artifact_delete.already_gone === true ? "Artifact was already deleted" : "Artifact deleted",
       }),
     });
-  if ("pin" in t)
+  if ("pin" in result)
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
-        children: t.pin.pinned ? "pinned to the sidebar" : "unpinned",
+        children: result.pin.pinned ? "pinned to the sidebar" : "unpinned",
       }),
     });
-  if ("shared" in t) {
-    let shared = t.shared;
-    let a =
+  if ("shared" in result) {
+    let shared = result.shared;
+    let copyHeader =
       shared.mode === "org"
         ? "the organization"
         : `${typeof shared.added === "number" ? shared.added : 0} ${plural(typeof shared.added === "number" ? shared.added : 0, "person", "people")}`;
@@ -1440,105 +1489,108 @@ function renderArtifactResult(t, l, i) {
         dimColor: true,
         children: [
           shared.unchanged === true ? "already shared with " : "shared with ",
-          a,
+          copyHeader,
           shared.access === "view" ? " (view only)" : " (can comment)",
         ],
       }),
     });
   }
-  if ("watch" in t)
+  if ("watch" in result)
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
-        children: t.watch.watching
-          ? t.watch.events?.includes("comment")
+        children: result.watch.watching
+          ? result.watch.events?.includes("comment")
             ? "watching for republishes and to-Claude comments"
             : "watching for republishes"
-          : t.watch.reason === "stop_latched"
+          : result.watch.reason === "stop_latched"
             ? "not watching (stopped earlier in this session)"
-            : `not watching (${sanitizeArtifactTitle(t.watch.reason ?? t.watch.outcome) ?? "unknown"})`,
+            : `not watching (${sanitizeArtifactTitle(result.watch.reason ?? result.watch.outcome) ?? "unknown"})`,
       }),
     });
-  if ("unwatch" in t)
+  if ("unwatch" in result)
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
-        children: t.unwatch.was_watching ? "stopped watching" : "no watch to stop",
+        children: result.unwatch.was_watching ? "stopped watching" : "no watch to stop",
       }),
     });
-  if ("watches" in t) {
-    let { watching, stopped } = splitWatchRows(t.watches);
-    let arms = t.arms ?? [];
-    let g = count(arms, (p) => p.rail === undefined && (p.state === "arming" || p.state === "backing_off"));
-    let h = count(arms, (p) => p.rail !== undefined && p.state === "arming");
-    let b = count(arms, (p) => p.state === "failed" || p.state === "ended");
+  if ("watches" in result) {
+    let { watching, stopped } = splitWatchRows(result.watches);
+    let arms = result.arms ?? [];
+    let armCount = count(
+      arms,
+      (arm) => arm.rail === undefined && (arm.state === "arming" || arm.state === "backing_off"),
+    );
+    let armingCount = count(arms, (arm) => arm.rail !== undefined && arm.state === "arming");
+    let failedCount = count(arms, (arm) => arm.state === "failed" || arm.state === "ended");
     let joined = [
-      g > 0 ? `${g} connecting` : "",
-      h > 0 ? `${h} registering` : "",
-      b > 0 ? `${b} ended or failed` : "",
+      armCount > 0 ? `${armCount} connecting` : "",
+      armingCount > 0 ? `${armingCount} registering` : "",
+      failedCount > 0 ? `${failedCount} ended or failed` : "",
     ]
-      .filter((p) => p !== "")
+      .filter((line) => line !== "")
       .join(", ");
-    let rooms = Array.isArray(t.rooms) ? t.rooms : [];
-    let f = count(rooms, (p) => p?.connected !== true);
-    let u =
+    let rooms = Array.isArray(result.rooms) ? result.rooms : [];
+    let roomFailCount = count(rooms, (room) => room?.connected !== true);
+    let armLine =
       rooms.length > 0
-        ? ` \xB7 ${rooms.length} artifact ${plural(rooms.length, "room")} joined${f > 0 ? ` (${f} reconnecting)` : ""}`
+        ? ` \xB7 ${rooms.length} artifact ${plural(rooms.length, "room")} joined${roomFailCount > 0 ? ` (${roomFailCount} reconnecting)` : ""}`
         : "";
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
-        children: `${watching} artifact ${plural(watching, "watch", "watches")}${stopped > 0 ? ` \xB7 ${stopped} with auto-replies paused or stopped` : ""}${joined !== "" ? `, ${joined}` : ""}${u}`,
+        children: `${watching} artifact ${plural(watching, "watch", "watches")}${stopped > 0 ? ` \xB7 ${stopped} with auto-replies paused or stopped` : ""}${joined !== "" ? `, ${joined}` : ""}${armLine}`,
       }),
     });
   }
-  if ("resume_replies" in t)
+  if ("resume_replies" in result)
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
-        children: t.resume_replies.resumed
+        children: result.resume_replies.resumed
           ? "auto-replies resumed"
-          : t.resume_replies.reason === "stop_latched"
+          : result.resume_replies.reason === "stop_latched"
             ? "auto-replies not resumed (watch stopped earlier in this session)"
-            : t.resume_replies.reason === "arm_in_flight"
+            : result.resume_replies.reason === "arm_in_flight"
               ? "auto-replies not resumed (an earlier connection is still winding down; the stop stays)"
-              : `auto-replies not resumed (${sanitizeArtifactTitle(t.resume_replies.reason ?? t.resume_replies.outcome) ?? "unknown"})`,
+              : `auto-replies not resumed (${sanitizeArtifactTitle(result.resume_replies.reason ?? result.resume_replies.outcome) ?? "unknown"})`,
       }),
     });
-  if ("verify" in t)
+  if ("verify" in result)
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
         children:
-          t.verify.state === "no_row"
+          result.verify.state === "no_row"
             ? "no diagnostics readable: none captured in 24h, an older page that can't capture them, or not readable for this artifact"
-            : t.verify.state !== "empty" && t.verify.state !== "entries"
+            : result.verify.state !== "empty" && result.verify.state !== "entries"
               ? "unrecognized diagnostics result \u2014 verify again for a current read"
-              : t.verify.entries.length === 0
-                ? (t.verify.dropped ?? 0) > 0 || t.verify.truncated === true
+              : result.verify.entries.length === 0
+                ? (result.verify.dropped ?? 0) > 0 || result.verify.truncated === true
                   ? "diagnostics captured but none readable (size cap) \u2014 not a clean signal"
                   : "loaded clean: zero diagnostics captured"
-                : `read ${t.verify.entries.length} diagnostic ${plural(t.verify.entries.length, "entry", "entries")}`,
+                : `read ${result.verify.entries.length} diagnostic ${plural(result.verify.entries.length, "entry", "entries")}`,
       }),
     });
-  if ("artifact_types" in t)
+  if ("artifact_types" in result)
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
         children:
-          t.artifact_types.length === 0
-            ? t.unavailable === true
+          result.artifact_types.length === 0
+            ? result.unavailable === true
               ? "artifact types not available to this account"
               : "no artifact types listed"
-            : `listed ${t.artifact_types.length} artifact ${plural(t.artifact_types.length, "type")}`,
+            : `listed ${result.artifact_types.length} artifact ${plural(result.artifact_types.length, "type")}`,
       }),
     });
-  if ("artifact_type" in t) {
-    let artifactUrl = parseArtifactUrl(t.artifact_type.type_url);
-    let a = artifactUrl ? artifactViewerUrlFor(artifactUrl) : undefined;
-    let typeFile = isPlainObject(t.type_file) ? t.type_file : null;
+  if ("artifact_type" in result) {
+    let artifactUrl = parseArtifactUrl(result.artifact_type.type_url);
+    let viewerUrl = artifactUrl ? artifactViewerUrlFor(artifactUrl) : undefined;
+    let typeFile = isPlainObject(result.type_file) ? result.type_file : null;
     if (typeFile !== null) {
-      let h = truncatePathMiddle(
+      let pathText = truncatePathMiddle(
         sweptAskPath(typeof typeFile.path === "string" ? typeFile.path : "") || "(unprintable path)",
         256,
       );
@@ -1547,39 +1599,39 @@ function renderArtifactResult(t, l, i) {
           dimColor: true,
           children: [
             typeFile.unread === undefined ? "read " : "did not read ",
-            h,
+            pathText,
             " of artifact type",
             " ",
-            a !== undefined
+            viewerUrl !== undefined
               ? jsxProd_default(ArtifactLink, {
-                  name: a,
-                  url: a,
+                  name: viewerUrl,
+                  url: viewerUrl,
                 })
               : "(unrecognized address)",
           ],
         }),
       });
     }
-    let g = Array.isArray(t.type_files_read)
-      ? t.type_files_read.filter((h) => isPlainObject(h) && typeof h.path === "string")
+    let typeFiles = Array.isArray(result.type_files_read)
+      ? result.type_files_read.filter((entry) => isPlainObject(entry) && typeof entry.path === "string")
       : [];
-    if (g.length > 0) {
-      let h = g.length;
-      let b = count(g, (d) => d.unread === undefined);
+    if (typeFiles.length > 0) {
+      let fileCount = typeFiles.length;
+      let readOkCount = count(typeFiles, (entry) => entry.unread === undefined);
       return jsxProd_default(MessageResponse, {
         children: jsxProd_default_2(Text, {
           dimColor: true,
           children: [
             "read ",
-            b === h ? h : `${b} of ${h}`,
+            readOkCount === fileCount ? fileCount : `${readOkCount} of ${fileCount}`,
             " ",
-            plural(h, "file"),
+            plural(fileCount, "file"),
             " of artifact type",
             " ",
-            a !== undefined
+            viewerUrl !== undefined
               ? jsxProd_default(ArtifactLink, {
-                  name: a,
-                  url: a,
+                  name: viewerUrl,
+                  url: viewerUrl,
                 })
               : "(unrecognized address)",
           ],
@@ -1592,23 +1644,23 @@ function renderArtifactResult(t, l, i) {
         children: [
           "described artifact type",
           " ",
-          a !== undefined
+          viewerUrl !== undefined
             ? jsxProd_default(ArtifactLink, {
-                name: a,
-                url: a,
+                name: viewerUrl,
+                url: viewerUrl,
               })
             : "(unrecognized address)",
-          ` (${t.artifact_type.files.length} ${plural(t.artifact_type.files.length, "file")}${typeof t.artifact_type.files_omitted === "number" && t.artifact_type.files_omitted > 0 ? ` +${t.artifact_type.files_omitted} not shown` : ""}${t.artifact_type.instructions_file ? ", ships instructions" : ""})`,
+          ` (${result.artifact_type.files.length} ${plural(result.artifact_type.files.length, "file")}${typeof result.artifact_type.files_omitted === "number" && result.artifact_type.files_omitted > 0 ? ` +${result.artifact_type.files_omitted} not shown` : ""}${result.artifact_type.instructions_file ? ", ships instructions" : ""})`,
         ],
       }),
     });
   }
-  if ("quickstart" in t) {
-    let quickstart = t.quickstart;
-    let a = Array.isArray(quickstart?.design_systems?.instances)
+  if ("quickstart" in result) {
+    let quickstart = result.quickstart;
+    let systemDocs = Array.isArray(quickstart?.design_systems?.instances)
       ? quickstart.design_systems.instances.length
       : 0;
-    let m = (quickstart?.design_system?.docs ?? []).length > 0;
+    let hasDesignDocs = (quickstart?.design_system?.docs ?? []).length > 0;
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default_2(Text, {
         dimColor: true,
@@ -1624,83 +1676,89 @@ function renderArtifactResult(t, l, i) {
                 : quickstart?.design_guidance === true
                   ? "sent page-design guidance"
                   : "more than one matching type, or the listing was incomplete",
-          a > 0 ? `, listed ${a} design ${plural(a, "system")}` : "",
-          m ? ", read the design system guide" : "",
+          systemDocs > 0 ? `, listed ${systemDocs} design ${plural(systemDocs, "system")}` : "",
+          hasDesignDocs ? ", read the design system guide" : "",
           quickstart?.design_systems_off === true ? ", left design systems out" : "",
         ],
       }),
     });
   }
-  if ("type_instances" in t) {
-    let o = Array.isArray(t.type_instances?.instances) ? t.type_instances.instances.length : 0;
+  if ("type_instances" in result) {
+    let instances = Array.isArray(result.type_instances?.instances)
+      ? result.type_instances.instances.length
+      : 0;
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
         children:
-          o === 0
-            ? t.type_instances?.unavailable === true
+          instances === 0
+            ? result.type_instances?.unavailable === true
               ? "instance listing not available to this account"
               : "no artifacts of this type listed"
-            : `listed ${o} ${plural(o, "artifact")} of this type`,
+            : `listed ${instances} ${plural(instances, "artifact")} of this type`,
       }),
     });
   }
-  if ("page_versions" in t) {
-    let o = Array.isArray(t.page_versions?.rows) ? t.page_versions.rows.length : 0;
+  if ("page_versions" in result) {
+    let versionCount = Array.isArray(result.page_versions?.rows) ? result.page_versions.rows.length : 0;
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
-        children: `listed ${o} ${plural(o, "version")}`,
+        children: `listed ${versionCount} ${plural(versionCount, "version")}`,
       }),
     });
   }
-  if ("artifacts" in t)
+  if ("artifacts" in result)
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
         children:
-          t.artifacts.length === 0
-            ? t.scope === "shared"
+          result.artifacts.length === 0
+            ? result.scope === "shared"
               ? "no shared artifacts listed"
-              : t.scope === "all"
+              : result.scope === "all"
                 ? "no artifacts listed"
                 : "no published artifacts yet"
-            : `listed ${t.artifacts.length} ${plural(t.artifacts.length, t.scope !== undefined ? "artifact" : "published artifact")}`,
+            : `listed ${result.artifacts.length} ${plural(result.artifacts.length, result.scope !== undefined ? "artifact" : "published artifact")}`,
       }),
     });
-  if ("opened" in t) {
-    let o = typeof t.url === "string" ? parseArtifactUrl(t.url) : null;
-    let a = o ? artifactViewerUrlFor(o) : undefined;
+  if ("opened" in result) {
+    let artifactUrl = typeof result.url === "string" ? parseArtifactUrl(result.url) : null;
+    let viewerUrl = artifactUrl ? artifactViewerUrlFor(artifactUrl) : undefined;
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default_2(Text, {
         dimColor: true,
         children: [
           "Opened",
           " ",
-          a !== undefined
+          viewerUrl !== undefined
             ? jsxProd_default(ArtifactLink, {
-                name: (typeof t.title === "string" ? sanitizeDisplayTitle(t.title) : null) ?? a,
-                url: a,
+                name:
+                  (typeof result.title === "string" ? sanitizeDisplayTitle(result.title) : null) ?? viewerUrl,
+                url: viewerUrl,
               })
             : "(unrecognized address)",
         ],
       }),
     });
   }
-  if ("created_from_type" in t) {
-    let o = (url) => {
-      let g = typeof url === "string" ? parseArtifactUrl(url) : null;
-      let h = g ? artifactViewerUrlFor(g) : undefined;
-      return h !== undefined
+  if ("created_from_type" in result) {
+    let toViewerUrl = (url) => {
+      let artifactUrl = typeof url === "string" ? parseArtifactUrl(url) : null;
+      let viewerUrl = artifactUrl ? artifactViewerUrlFor(artifactUrl) : undefined;
+      return viewerUrl !== undefined
         ? jsxProd_default(ArtifactLink, {
-            name: h,
-            url: h,
+            name: viewerUrl,
+            url: viewerUrl,
           })
         : "(unrecognized address)";
     };
-    let a =
-      "files_error" in t && typeof t.files_error === "string"
-        ? sweepResultLineText(t.files_error, i?.verbose === true ? ARTIFACT_MAX_RESULT_SIZE_CHARS / 2 : 200)
+    let urlLine =
+      "files_error" in result && typeof result.files_error === "string"
+        ? sweepResultLineText(
+            result.files_error,
+            renderOpts?.verbose === true ? ARTIFACT_MAX_RESULT_SIZE_CHARS / 2 : 200,
+          )
         : undefined;
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default_2(Box, {
@@ -1710,24 +1768,26 @@ function renderArtifactResult(t, l, i) {
             dimColor: true,
             children: [
               "Created ",
-              o(t.url),
+              toViewerUrl(result.url),
               " from Artifact type",
               " ",
-              o(t.type?.url),
-              "instructions" in t && typeof t.instructions === "string" ? ", read its instructions" : "",
+              toViewerUrl(result.type?.url),
+              "instructions" in result && typeof result.instructions === "string"
+                ? ", read its instructions"
+                : "",
             ],
           }),
-          a !== undefined &&
+          urlLine !== undefined &&
             jsxProd_default_2(Text, {
               color: "error",
-              children: ["Couldn't publish its files \u2014 ", a],
+              children: ["Couldn't publish its files \u2014 ", urlLine],
             }),
         ],
       }),
     });
   }
-  let T = replayedPublishesRemaining(t.publishesRemaining);
-  let _ = replayedPublishesResetAt(t.publishesResetAt);
+  let publishesRemaining = replayedPublishesRemaining(result.publishesRemaining);
+  let publishesResetAt = replayedPublishesResetAt(result.publishesResetAt);
   return jsxProd_default(MessageResponse, {
     children: jsxProd_default_2(Box, {
       flexDirection: "column",
@@ -1735,19 +1795,19 @@ function renderArtifactResult(t, l, i) {
         jsxProd_default_2(Text, {
           dimColor: true,
           children: [
-            t.updated ? "Updated" : "Published",
+            result.updated ? "Updated" : "Published",
             " ",
             jsxProd_default(ArtifactLink, {
-              name: t.url,
-              url: t.url,
+              name: result.url,
+              url: result.url,
             }),
           ],
         }),
-        T !== undefined &&
-          _ !== undefined &&
+        publishesRemaining !== undefined &&
+          publishesResetAt !== undefined &&
           jsxProd_default(Text, {
             dimColor: true,
-            children: publishesRemainingLine(T, _),
+            children: publishesRemainingLine(publishesRemaining, publishesResetAt),
           }),
       ],
     }),
@@ -1784,24 +1844,24 @@ ${ARTIFACT_LOGIN_BEFORE_SHAPE_NOTE}
   },
 ];
 //@ chunk-wc0ezwp2.js:42067-42310 placement
-function policyUnobtainedErrorFor(t) {
-  let l = heldArtifactPolicyFetchAnswer();
-  if (l === null) return null;
+function policyUnobtainedErrorFor(text) {
+  let answer = heldArtifactPolicyFetchAnswer();
+  if (answer === null) return null;
   for (let cause of ["policy_fetch_failed", "policy_route_missing"]) {
-    let T = artifactPolicyUnobtainedRefusal({
+    let refusal = artifactPolicyUnobtainedRefusal({
       cause,
-      outcome: l,
+      outcome: answer,
     });
     if (
-      t === T ||
-      t === `${TOOL_USE_ERROR_OPEN}${T}${TOOL_USE_ERROR_CLOSE}` ||
-      t.startsWith(`${INPUT_VALIDATION_PREFIX}${T}
+      text === refusal ||
+      text === `${TOOL_USE_ERROR_OPEN}${refusal}${TOOL_USE_ERROR_CLOSE}` ||
+      text.startsWith(`${INPUT_VALIDATION_PREFIX}${refusal}
 
 `)
     )
       return artifactPolicyUnobtainedMessage({
         cause,
-        outcome: l,
+        outcome: answer,
       });
   }
   return null;
@@ -1810,92 +1870,94 @@ function policyUnobtainedErrorFor(t) {
 /**
  * 渲染 Artifact 工具错误。
  */
-function renderArtifactError(t, l) {
-  if (typeof t === "string") {
+function renderArtifactError(errorText, options) {
+  if (typeof errorText === "string") {
     if (
-      !l.verbose &&
-      t.startsWith(TOOL_USE_ERROR_OPEN) &&
-      t.endsWith(TOOL_USE_ERROR_CLOSE) &&
+      !options.verbose &&
+      errorText.startsWith(TOOL_USE_ERROR_OPEN) &&
+      errorText.endsWith(TOOL_USE_ERROR_CLOSE) &&
       NO_PAGE_REJECTIONS.includes(
-        stripRejectBreakerNotice(t.slice(TOOL_USE_ERROR_OPEN.length, t.length - TOOL_USE_ERROR_CLOSE.length)),
+        stripRejectBreakerNotice(
+          errorText.slice(TOOL_USE_ERROR_OPEN.length, errorText.length - TOOL_USE_ERROR_CLOSE.length),
+        ),
       )
     )
       return jsxProd_default(FallbackToolUseErrorMessage, {
         result: WRITE_FILE_FIRST_HINT,
-        verbose: l.verbose,
+        verbose: options.verbose,
       });
-    if (!l.verbose) {
-      for (let o of LOGIN_RETRY_ERROR_SHAPES) {
-        if (!t.startsWith(o.open + ARTIFACT_LOGIN_MESSAGE_LEAD)) continue;
+    if (!options.verbose) {
+      for (let shape of LOGIN_RETRY_ERROR_SHAPES) {
+        if (!errorText.startsWith(shape.open + ARTIFACT_LOGIN_MESSAGE_LEAD)) continue;
         let { message } = artifactLoginBlockedReason();
-        let m = o.open.length + message.length;
+        let afterMessage = shape.open.length + message.length;
         if (
-          t.startsWith(message, o.open.length) &&
-          t.startsWith(o.tail, m) &&
-          (!o.ends || m + o.tail.length === t.length)
+          errorText.startsWith(message, shape.open.length) &&
+          errorText.startsWith(shape.tail, afterMessage) &&
+          (!shape.ends || afterMessage + shape.tail.length === errorText.length)
         )
           return jsxProd_default(FallbackToolUseErrorMessage, {
             result: message,
             verbose: false,
           });
       }
-      let _ = policyUnobtainedErrorFor(t);
-      if (_ !== null)
+      let policyMessage = policyUnobtainedErrorFor(errorText);
+      if (policyMessage !== null)
         return jsxProd_default(FallbackToolUseErrorMessage, {
-          result: _,
+          result: policyMessage,
           verbose: false,
         });
     }
-    let i = stripRejectBreakerNotice(t);
-    let T = l.verbose ? undefined : toUserFacingRefusal(i);
-    if (T !== undefined)
+    let stripped = stripRejectBreakerNotice(errorText);
+    let friendly = options.verbose ? undefined : toUserFacingRefusal(stripped);
+    if (friendly !== undefined)
       return jsxProd_default(MessageResponse, {
         children: jsxProd_default(Text, {
           color: "error",
-          children: T,
+          children: friendly,
         }),
       });
     if (
-      i.startsWith(STALE_GUARD_REJECTION_PREFIX) ||
-      i.startsWith(STALE_GUARD_REJECTION_PREFIX_LEGACY) ||
-      i.startsWith(CONFLICT_REJECTION_PREFIX)
+      stripped.startsWith(STALE_GUARD_REJECTION_PREFIX) ||
+      stripped.startsWith(STALE_GUARD_REJECTION_PREFIX_LEGACY) ||
+      stripped.startsWith(CONFLICT_REJECTION_PREFIX)
     ) {
-      let _ = l.verbose ? null : HANDOVER_DETAILS_START_RE.exec(i);
-      if (_ === null) {
-        let m = l.verbose
-          ? t
-          : t.replaceAll(
+      let detailsStart = options.verbose ? null : HANDOVER_DETAILS_START_RE.exec(stripped);
+      if (detailsStart === null) {
+        let shownText = options.verbose
+          ? errorText
+          : errorText.replaceAll(
               `
 ${ARTIFACT_CONTENT_AUTHORED_TAG}`,
               "",
             );
         return jsxProd_default(FallbackToolUseErrorMessage, {
-          result: revealPageInvisibles(m),
-          verbose: l.verbose,
+          result: revealPageInvisibles(shownText),
+          verbose: options.verbose,
           verbatim: true,
         });
       }
-      let sliced = t.slice(0, t.length - i.length);
-      let a = countCharInString(
-        i,
+      let sliced = errorText.slice(0, errorText.length - stripped.length);
+      let elidedLines = countCharInString(
+        stripped,
         `
 `,
-        _.index,
+        detailsStart.index,
       );
       return jsxProd_default(MessageResponse, {
         children: jsxProd_default_2(Box, {
           flexDirection: "column",
           children: [
             jsxProd_default(FallbackToolUseErrorMessage, {
-              result: revealPageInvisibles(`${sliced}${i.slice(0, _.index)}`),
-              verbose: l.verbose,
+              result: revealPageInvisibles(`${sliced}${stripped.slice(0, detailsStart.index)}`),
+              verbose: options.verbose,
               verbatim: true,
             }),
             jsxProd_default_2(Text, {
               dimColor: true,
               children: [
                 "\u2026",
-                a > 1 ? ` +${a} lines` : " the rest is",
+                elidedLines > 1 ? ` +${elidedLines} lines` : " the rest is",
                 " shown to Claude, elided here ",
                 jsxProd_default(CtrlOToExpand, {}),
               ],
@@ -1905,33 +1967,44 @@ ${ARTIFACT_CONTENT_AUTHORED_TAG}`,
       });
     }
   }
-  if (typeof t === "string" && !l.verbose) {
-    let i = stripRejectBreakerNotice(t);
-    let T =
-      parsePathPinRefusal(i) ??
-      parseFileTypeRefusal(i) ??
-      otherOrgReplyNotice(i) ??
-      parseRateLimitedMessage(i) ??
-      parseContractRolloutMessage(i);
-    if (T !== undefined)
+  if (typeof errorText === "string" && !options.verbose) {
+    let stripped = stripRejectBreakerNotice(errorText);
+    let friendly =
+      parsePathPinRefusal(stripped) ??
+      parseFileTypeRefusal(stripped) ??
+      otherOrgReplyNotice(stripped) ??
+      parseRateLimitedMessage(stripped) ??
+      parseContractRolloutMessage(stripped);
+    if (friendly !== undefined)
       return jsxProd_default(MessageResponse, {
         children: jsxProd_default(Text, {
           color: "error",
-          children: T,
+          children: friendly,
         }),
       });
-    if (VERSION_MISMATCH_PREFIXES.some((_) => i.startsWith(_))) {
-      let _ = isPlainObject(l.input) && l.input.db_op === "delete";
+    if (VERSION_MISMATCH_PREFIXES.some((prefix) => stripped.startsWith(prefix))) {
+      let isDeleteOp = isPlainObject(options.input) && options.input.db_op === "delete";
       return jsxProd_default(MessageResponse, {
         children: jsxProd_default(Text, {
           color: "error",
-          children: _ ? VERSION_MISMATCH_TEXTS.delete : VERSION_MISMATCH_TEXTS.write,
+          children: isDeleteOp ? VERSION_MISMATCH_TEXTS.delete : VERSION_MISMATCH_TEXTS.write,
         }),
       });
     }
   }
   return jsxProd_default(FallbackToolUseErrorMessage, {
-    result: t,
-    verbose: l.verbose,
+    result: errorText,
+    verbose: options.verbose,
   });
 }
+export {
+  renderCheckToolUse,
+  renderCommentsToolUse,
+  renderDataToolUse,
+  renderArtifactResult,
+  renderArtifactError,
+  renderArtifactUseIfMeaningful,
+  renderArtifactToolUse,
+  renderArtifactProgress,
+  getArtifactDisplayModule,
+};

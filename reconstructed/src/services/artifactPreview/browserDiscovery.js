@@ -35,13 +35,13 @@ function chromeCandidatePaths() {
         "Chromium.app/Contents/MacOS/Chromium",
         "Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
         "Brave Browser.app/Contents/MacOS/Brave Browser",
-      ].flatMap((r) => [join("/Applications", r), join(homedir(), "Applications", r)]);
+      ].flatMap((app) => [join("/Applications", app), join(homedir(), "Applications", app)]);
     case "win32":
       return ["C:\\Program Files", "C:\\Program Files (x86)", join(homedir(), "AppData", "Local")].flatMap(
-        (r) => [
-          join(r, "Google", "Chrome", "Application", "chrome.exe"),
-          join(r, "Chromium", "Application", "chrome.exe"),
-          join(r, "Microsoft", "Edge", "Application", "msedge.exe"),
+        (app) => [
+          join(app, "Google", "Chrome", "Application", "chrome.exe"),
+          join(app, "Chromium", "Application", "chrome.exe"),
+          join(app, "Microsoft", "Edge", "Application", "msedge.exe"),
         ],
       );
     default:
@@ -56,23 +56,23 @@ function chromeCandidatePaths() {
   }
 }
 //@ chunk-r0perv8y.js:1367-1485 placement
-async function isExecutableFile(e, r) {
+async function isExecutableFile(path, fallback) {
   try {
-    let o = await stat(e);
-    return o.isFile() && (o.mode & 73) !== 0;
+    let fileStat = await stat(path);
+    return fileStat.isFile() && (fileStat.mode & 73) !== 0;
   } catch (error) {
-    if (r && !isPathAbsent(error)) throw error;
+    if (fallback && !isPathAbsent(error)) throw error;
     return false;
   }
 }
 //@ chunk-r0perv8y.js:1485-1598 placement
-async function findChromeCandidates(e) {
-  let r = [];
-  for (let o of chromeCandidatePaths()) {
-    if (isUntouchableSpelling(o)) continue;
-    if (await isExecutableFile(o, e?.strict === true)) r.push(o);
+async function findChromeCandidates(options) {
+  let found = [];
+  for (let path of chromeCandidatePaths()) {
+    if (isUntouchableSpelling(path)) continue;
+    if (await isExecutableFile(path, options?.strict === true)) found.push(path);
   }
-  return r;
+  return found;
 }
 //@ chunk-r0perv8y.js:1696-1829 placement
 /**
@@ -97,24 +97,24 @@ function artifactEmulatorDir() {
 /**
  * 检查路径在挂载目录内且没有链接。
  */
-function checkInsideMount(e) {
-  let r = relative(SKILLS_MOUNT_SPEC.base, e);
-  if (r === "" || r === ".." || r.startsWith(`..${sep}`) || isAbsolute(r)) return "outside_mount";
-  let parts = r.split(sep);
+function checkInsideMount(path) {
+  let rel = relative(SKILLS_MOUNT_SPEC.base, path);
+  if (rel === "" || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return "outside_mount";
+  let parts = rel.split(sep);
   let base = SKILLS_MOUNT_SPEC.base;
   for (let j = 0; j <= parts.length; j++) {
     if (j > 0) base = join(base, parts[j - 1]);
-    let n;
+    let result;
     try {
-      n = lstatSync(base);
+      result = lstatSync(base);
     } catch (error) {
       let errnoCode = getErrnoCode(error);
       return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? "missing" : "unreadable";
     }
-    if (n.isSymbolicLink()) return "link";
-    if (j === parts.length ? !n.isFile() : !n.isDirectory()) return "wrong_type";
-    if (n.uid !== SKILLS_MOUNT_SPEC.ownerUid) return "wrong_owner";
-    if ((n.mode & 18) !== 0) return "writable";
+    if (result.isSymbolicLink()) return "link";
+    if (j === parts.length ? !result.isFile() : !result.isDirectory()) return "wrong_type";
+    if (result.uid !== SKILLS_MOUNT_SPEC.ownerUid) return "wrong_owner";
+    if ((result.mode & 18) !== 0) return "writable";
   }
   return;
 }
@@ -153,19 +153,19 @@ function emulatorAvailability() {
       on: false,
       reason: "pinned_off",
     };
-  let r;
+  let cached;
   try {
-    r = bootstrapScriptMount();
+    cached = bootstrapScriptMount();
   } catch (error) {
     logForDebugging(
       `Artifact preview: could not check the emulator skill's files, so the emulator stays off: ${errorMessage(error)}`,
     );
-    r = "unreadable";
+    cached = "unreadable";
   }
-  if (r !== undefined)
+  if (cached !== undefined)
     return {
       on: false,
-      reason: r,
+      reason: cached,
     };
   if (CLAUDE_CODE_ARTIFACT_PREVIEW_EMULATOR === true)
     return {
@@ -225,13 +225,13 @@ function isArtifactPreviewEnabled_2() {
 function requirePreviewChrome() {
   if (compiledPreviewModule === null) throw Error("artifact preview is not compiled into this build");
   let { findPlaywrightChromes } = compiledPreviewModule;
-  let r = async (o) =>
+  let run = async (opts) =>
     env.BUN_CHROME_PATH
       ? [env.BUN_CHROME_PATH]
-      : uniq([...(await findPlaywrightChromes(o)), ...(await findChromeCandidates(o))]);
+      : uniq([...(await findPlaywrightChromes(opts)), ...(await findChromeCandidates(opts))]);
   return {
-    chromeCandidates: r,
-    resolveChrome: async () => (await r())[0],
+    chromeCandidates: run,
+    resolveChrome: async () => (await run())[0],
     noSandbox: compiledPreviewModule.needsNoSandbox,
     installHint: compiledPreviewModule.chromeInstallHint,
     installDir: compiledPreviewModule.chromeInstallDir,
@@ -244,28 +244,28 @@ ${env.PLAYWRIGHT_BROWSERS_PATH ?? ""}`;
 }
 //@ chunk-r0perv8y.js:4063-4555 placement
 async function startPreviewBrowserDiscovery() {
-  let e;
+  let cached;
   try {
     if (env.CLAUDE_CODE_ARTIFACT_PREVIEW !== undefined || env.CLAUDE_CODE_REMOTE || !hasCompiledPreview())
       return;
     let sessionFeatureValues = getSessionFeatureValues();
     if (sessionFeatureValues.artifactPreviewBrowserSearch !== undefined) return;
-    e = {
+    cached = {
       env: browserEnvKey(),
       state: "pending",
     };
-    sessionFeatureValues.artifactPreviewBrowserSearch = e;
+    sessionFeatureValues.artifactPreviewBrowserSearch = cached;
   } catch (error) {
     logForDebugging(`Artifact preview: could not start the browser search: ${errorMessage(error)}`);
     return;
   }
   try {
-    let r = await requirePreviewChrome().chromeCandidates({
+    let chrome = await requirePreviewChrome().chromeCandidates({
       strict: true,
     });
-    e.state = r.length > 0 ? "found" : "none";
+    cached.state = chrome.length > 0 ? "found" : "none";
   } catch (error) {
-    e.state = "error";
+    cached.state = "error";
     logForDebugging(`Artifact preview: the startup browser search failed: ${errorMessage(error)}`);
   }
 }
@@ -317,4 +317,5 @@ export {
   previewEngineKind,
   isArtifactPreviewEnabled,
   latchedPreviewBrowserVerdict,
+  startPreviewBrowserDiscovery,
 };

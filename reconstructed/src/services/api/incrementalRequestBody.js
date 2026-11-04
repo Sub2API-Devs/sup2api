@@ -17,7 +17,7 @@ import {
 } from "./gzipRequestBody.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { TENGU_PLAID_KETTLE } from "./withRetry.js";
-import { xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { jsonStringifyRaw } from "../../utils/slowOperations.js";
 import { WATERMARK_BITS } from "../analytics/eventSerialization.js";
 import { systemClock } from "../../utils/sleep.js";
@@ -30,15 +30,19 @@ import { logError } from "../../utils/log.js";
 import { toError } from "../../utils/errors.js";
 import { getSessionId } from "../../bootstrap/state.js";
 import { APIError } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:2574793-2574841 placement
-var TAKES_REQUEST_BODY_BYTES = Symbol("takes a request body as bytes");
+var TAKES_REQUEST_BODY_BYTES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:2574793", () => {
+  TAKES_REQUEST_BODY_BYTES = Symbol("takes a request body as bytes");
+});
 //@ chunk-e6aww6q8.js:2574841-2574897 placement
 /**
  * 导出函数 `markTakesRequestBodyBytes`：参数 e。
  */
-function markTakesRequestBodyBytes(e) {
-  Object.defineProperty(e, TAKES_REQUEST_BODY_BYTES, {
+function markTakesRequestBodyBytes(target) {
+  Object.defineProperty(target, TAKES_REQUEST_BODY_BYTES, {
     value: true,
   });
 }
@@ -46,8 +50,10 @@ function markTakesRequestBodyBytes(e) {
 /**
  * 导出函数 `takesRequestBodyBytes`：参数 e，返回 e === void 0 || e === fetchWithRequestBodyCompression || ycn in e。
  */
-function takesRequestBodyBytes(e) {
-  return e === undefined || e === fetchWithRequestBodyCompression || TAKES_REQUEST_BODY_BYTES in e;
+function takesRequestBodyBytes(target) {
+  return (
+    target === undefined || target === fetchWithRequestBodyCompression || TAKES_REQUEST_BODY_BYTES in target
+  );
 }
 //@ chunk-e6aww6q8.js:2574988-2575032 placement
 var TENGU_SOFT_KURZWEIL = "tengu_soft_kurzweil";
@@ -63,22 +69,25 @@ function reuseCheckSampleRate() {
     : 1;
 }
 //@ chunk-e6aww6q8.js:2575107-2575136 placement
-var NOT_COPIED = Symbol("not copied");
+var NOT_COPIED; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:2575107", () => {
+  NOT_COPIED = Symbol("not copied");
+});
 //@ chunk-e6aww6q8.js:2575136-2575203 placement
-function isPlainObjectWithProto(e) {
-  return Object.getPrototypeOf(e) === Object.prototype;
+function isPlainObjectWithProto(value) {
+  return Object.getPrototypeOf(value) === Object.prototype;
 }
 //@ chunk-e6aww6q8.js:2575203-2575362 placement
-function jsonShape(e) {
-  if (typeof e !== "object" || e === null) return e;
-  if ("toJSON" in e) return NOT_COPIED;
-  if (Array.isArray(e)) return e.map(jsonShape);
-  return isPlainObjectWithProto(e) ? xr(e, (n) => jsonShape(n)) : NOT_COPIED;
+function jsonShape(value) {
+  if (typeof value !== "object" || value === null) return value;
+  if ("toJSON" in value) return NOT_COPIED;
+  if (Array.isArray(value)) return value.map(jsonShape);
+  return isPlainObjectWithProto(value) ? import_mapValues(value, (value) => jsonShape(value)) : NOT_COPIED;
 }
 //@ chunk-e6aww6q8.js:2575362-2575460 placement
-function hasNotCopiedMarker(e) {
-  if (typeof e !== "object" || e === null) return e === NOT_COPIED;
-  return Object.values(e).some(hasNotCopiedMarker);
+function hasNotCopiedMarker(value) {
+  if (typeof value !== "object" || value === null) return value === NOT_COPIED;
+  return Object.values(value).some(hasNotCopiedMarker);
 }
 //@ chunk-e6aww6q8.js:2575460-2575907 placement
 /**
@@ -99,16 +108,16 @@ function sameJsonShape(shapes, messages) {
   let keys = Object.keys(shapes);
   let keys_2 = Object.keys(messages);
   if (keys.length !== keys_2.length) return false;
-  for (let [h, y] of keys.entries())
-    if (y !== keys_2[h] || !sameJsonShape(shapes[y], messages[y])) return false;
+  for (let [key, value] of keys.entries())
+    if (value !== keys_2[key] || !sameJsonShape(shapes[value], messages[value])) return false;
   return true;
 }
 //@ chunk-e6aww6q8.js:2575907-2576014 placement
-function serializeKeys(e, n) {
-  return n
-    .flatMap((r) => {
-      let s = jsonStringifyRaw(e[r]);
-      return s === undefined ? [] : [`${jsonStringifyRaw(r)}:${s}`];
+function serializeKeys(source, keys) {
+  return keys
+    .flatMap((key) => {
+      let raw = jsonStringifyRaw(source[key]);
+      return raw === undefined ? [] : [`${jsonStringifyRaw(key)}:${raw}`];
     })
     .join(",");
 }
@@ -116,71 +125,92 @@ function serializeKeys(e, n) {
 /**
  * 增量序列化请求体：复用上次已序列化的消息前缀，只追加新消息。
  */
-function serializeRequestBodyIncrementally(e, n) {
-  let messages = e.messages;
+function serializeRequestBodyIncrementally(body, keptBodyState) {
+  let messages = body.messages;
   if (
     !Array.isArray(messages) ||
-    "toJSON" in e ||
-    [...Object.values(e), ...messages].some((lt) => typeof lt === "object" && lt !== null && "toJSON" in lt)
+    "toJSON" in body ||
+    [...Object.values(body), ...messages].some(
+      (value) => typeof value === "object" && value !== null && "toJSON" in value,
+    )
   )
     return;
-  let keys = Object.keys(e);
-  let h = serializeKeys(e, keys.slice(0, keys.indexOf("messages")));
-  let y = serializeKeys(e, keys.slice(keys.indexOf("messages") + 1));
-  let S = `{${h}${h === "" ? "" : ","}"messages":[`;
-  let w = `]${y === "" ? "" : ","}${y}}`;
-  let L = n?.keptBody?.inUse === true ? undefined : n;
-  let keptBody = L?.keptBody?.opening === S ? L.keptBody : undefined;
-  let q = 0;
+  let keys = Object.keys(body);
+  let keysBeforeMessages = serializeKeys(body, keys.slice(0, keys.indexOf("messages")));
+  let keysAfterMessages = serializeKeys(body, keys.slice(keys.indexOf("messages") + 1));
+  let opening = `{${keysBeforeMessages}${keysBeforeMessages === "" ? "" : ","}"messages":[`;
+  let closing = `]${keysAfterMessages === "" ? "" : ","}${keysAfterMessages}}`;
+  let reusableState = keptBodyState?.keptBody?.inUse === true ? undefined : keptBodyState;
+  let keptBody = reusableState?.keptBody?.opening === opening ? reusableState.keptBody : undefined;
+  let sharedMessageCount = 0;
   if (keptBody !== undefined) {
     let min = Math.min(keptBody.shapes.length, messages.length);
-    while (q < min && sameJsonShape(keptBody.shapes[q], messages[q])) q++;
+    while (
+      sharedMessageCount < min &&
+      sameJsonShape(keptBody.shapes[sharedMessageCount], messages[sharedMessageCount])
+    )
+      sharedMessageCount++;
   }
-  let Z = keptBody === undefined || q === 0 ? Buffer.byteLength(S) : (keptBody.ends[q - 1] ?? 0);
-  let Se = L === undefined ? [] : Array.from(messages.slice(q), jsonShape);
-  let list = Array.from(messages.slice(q), (lt, Je) => {
-    let nt = L === undefined || hasNotCopiedMarker(Se[Je]) ? lt : Se[Je];
-    return jsonStringifyRaw(nt) ?? "null";
+  let startOffset =
+    keptBody === undefined || sharedMessageCount === 0
+      ? Buffer.byteLength(opening)
+      : (keptBody.ends[sharedMessageCount - 1] ?? 0);
+  let previousShapes =
+    reusableState === undefined ? [] : Array.from(messages.slice(sharedMessageCount), jsonShape);
+  let list = Array.from(messages.slice(sharedMessageCount), (message, messageIndex) => {
+    let serializable =
+      reusableState === undefined || hasNotCopiedMarker(previousShapes[messageIndex])
+        ? message
+        : previousShapes[messageIndex];
+    return jsonStringifyRaw(serializable) ?? "null";
   });
-  let we =
-    Z + list.reduce((acc, Je) => acc + 1 + Buffer.byteLength(Je), 0) + Buffer.byteLength(w) + WATERMARK_BITS;
+  let bytesNeeded =
+    startOffset +
+    list.reduce((acc, json) => acc + 1 + Buffer.byteLength(json), 0) +
+    Buffer.byteLength(closing) +
+    WATERMARK_BITS;
   let memory = keptBody?.memory;
-  if (memory === undefined || memory.length < we || memory.length > 2 * we) {
-    memory = Buffer.allocUnsafeSlow(L === undefined ? we : we + (we >> 2));
-    if (keptBody === undefined) memory.write(S, 0);
-    else keptBody.memory.copy(memory, 0, 0, Z);
+  if (memory === undefined || memory.length < bytesNeeded || memory.length > 2 * bytesNeeded) {
+    memory = Buffer.allocUnsafeSlow(
+      reusableState === undefined ? bytesNeeded : bytesNeeded + (bytesNeeded >> 2),
+    );
+    if (keptBody === undefined) memory.write(opening, 0);
+    else keptBody.memory.copy(memory, 0, 0, startOffset);
   }
-  let Ae = keptBody === undefined ? [] : keptBody.ends.slice(0, q);
-  let Ie = keptBody === undefined ? [] : keptBody.charEnds.slice(0, q);
-  let keptChars = Ie.at(-1) ?? 0;
-  let We = Z;
-  let ze = Ie.at(-1) ?? S.length;
-  for (let lt of list) {
-    if (Ae.length > 0) {
-      We += memory.write(",", We);
-      ze++;
+  let ends = keptBody === undefined ? [] : keptBody.ends.slice(0, sharedMessageCount);
+  let charEnds = keptBody === undefined ? [] : keptBody.charEnds.slice(0, sharedMessageCount);
+  let keptChars = charEnds.at(-1) ?? 0;
+  let writeOffset = startOffset;
+  let charCount = charEnds.at(-1) ?? opening.length;
+  for (let json of list) {
+    if (ends.length > 0) {
+      writeOffset += memory.write(",", writeOffset);
+      charCount++;
     }
-    We += memory.write(lt, We);
-    ze += lt.length;
-    Ae.push(We);
-    Ie.push(ze);
+    writeOffset += memory.write(json, writeOffset);
+    charCount += json.length;
+    ends.push(writeOffset);
+    charEnds.push(charCount);
   }
-  We += memory.write(w, We);
-  if (L !== undefined)
-    L.keptBody = {
+  writeOffset += memory.write(closing, writeOffset);
+  if (reusableState !== undefined)
+    reusableState.keptBody = {
       memory,
-      opening: S,
-      shapes: [...(keptBody === undefined ? [] : keptBody.shapes.slice(0, q)), ...Se],
-      ends: Ae,
-      charEnds: Ie,
-      length: We,
+      opening,
+      shapes: [
+        ...(keptBody === undefined ? [] : keptBody.shapes.slice(0, sharedMessageCount)),
+        ...previousShapes,
+      ],
+      ends,
+      charEnds,
+      length: writeOffset,
       blockDigests: keptBody === undefined ? new Map() : keptBody.blockDigests,
-      digestedBytes: keptBody === undefined ? 0 : Math.min(keptBody.digestedBytes, Z),
+      digestedBytes: keptBody === undefined ? 0 : Math.min(keptBody.digestedBytes, startOffset),
       inUse: true,
     };
   return {
-    bytes: memory.subarray(0, We),
-    chars: ze + w.length,
+    bytes: memory.subarray(0, writeOffset),
+    chars: charCount + closing.length,
     keptChars,
   };
 }
@@ -188,19 +218,19 @@ function serializeRequestBodyIncrementally(e, n) {
 /**
  * 发送前校验增量请求体与完整序列化结果字节一致，不一致时回退并记录。
  */
-function checkIncrementalRequestBody(streamRequestBody, n, r = systemClock) {
+function checkIncrementalRequestBody(streamRequestBody, useKeptBody, clock = systemClock) {
   let CLAUDE_CODE_INCREMENTAL_REQUEST_BODY = env.CLAUDE_CODE_INCREMENTAL_REQUEST_BODY ?? 0;
-  let h =
+  let mode =
     CLAUDE_CODE_INCREMENTAL_REQUEST_BODY !== 0 &&
     getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SOFT_KURZWEIL, true) === true
       ? CLAUDE_CODE_INCREMENTAL_REQUEST_BODY
       : 0;
-  let y = streamFallbackWarning();
-  let gzipRequestBody = y.gzipRequestBody;
-  let w = h === 2 && getGzipRequestBodyBlocksMode() !== 0 && !gzipRequestBody.blocksSwitchedOff;
-  if (!w && gzipRequestBody.blockStore.keptBody?.inUse === false)
+  let gzipState = streamFallbackWarning();
+  let gzipRequestBody = gzipState.gzipRequestBody;
+  let blocksModeOn = mode === 2 && getGzipRequestBodyBlocksMode() !== 0 && !gzipRequestBody.blocksSwitchedOff;
+  if (!blocksModeOn && gzipRequestBody.blockStore.keptBody?.inUse === false)
     gzipRequestBody.blockStore.keptBody = undefined;
-  if (h === 0) return;
+  if (mode === 0) return;
   if (
     gzipRequestBody.bodyBytesSwitchedOff ||
     getAPIProvider() !== "firstParty" ||
@@ -209,49 +239,57 @@ function checkIncrementalRequestBody(streamRequestBody, n, r = systemClock) {
   )
     return;
   try {
-    let { betas, user_profile_id: userProfileId, workspace_id: workspaceId, ...Z } = streamRequestBody;
-    let Se = w && n;
-    let ke = serializeRequestBodyIncrementally(Z, Se ? gzipRequestBody.blockStore : undefined);
-    if (ke === undefined) return;
-    if (Se && gzipRequestBody.blockStore.cancelIdleDrop === undefined)
-      scheduleIdleDrop(gzipRequestBody.blockStore, r);
-    let we = false;
-    let Ee = gzipRequestBody.blockStore.keptBody?.memory.buffer === ke.bytes.buffer;
-    let Ae = we || !Ee ? 1 : reuseCheckSampleRate();
-    let Ie =
-      ke.keptChars > 0 &&
-      (gzipRequestBody.firstReusingBodiesDraw ??= randomSample()) < Ae &&
+    let {
+      betas,
+      user_profile_id: userProfileId,
+      workspace_id: workspaceId,
+      ...bodyForSerialization
+    } = streamRequestBody;
+    let keepBodyState = blocksModeOn && useKeptBody;
+    let serialised = serializeRequestBodyIncrementally(
+      bodyForSerialization,
+      keepBodyState ? gzipRequestBody.blockStore : undefined,
+    );
+    if (serialised === undefined) return;
+    if (keepBodyState && gzipRequestBody.blockStore.cancelIdleDrop === undefined)
+      scheduleIdleDrop(gzipRequestBody.blockStore, clock);
+    let forceCheck = false;
+    let reusedBuffer = gzipRequestBody.blockStore.keptBody?.memory.buffer === serialised.bytes.buffer;
+    let sampleRate = forceCheck || !reusedBuffer ? 1 : reuseCheckSampleRate();
+    let checkReuse =
+      serialised.keptChars > 0 &&
+      (gzipRequestBody.firstReusingBodiesDraw ??= randomSample()) < sampleRate &&
       gzipRequestBody.reusingBodiesChecked < MAX_REUSE_MISMATCH_REPORTS;
-    let Me = we || Ie || Math.random() < REUSE_MISMATCH_SAMPLE * Ae;
-    if (Ie) gzipRequestBody.reusingBodiesChecked++;
-    if (Me && !bufferEqualsJson(ke.bytes, Z)) {
+    let checkBytes = forceCheck || checkReuse || Math.random() < REUSE_MISMATCH_SAMPLE * sampleRate;
+    if (checkReuse) gzipRequestBody.reusingBodiesChecked++;
+    if (checkBytes && !bufferEqualsJson(serialised.bytes, bodyForSerialization)) {
       switchOffBodyBytes();
       logFeatureBad("api_incremental_request_body", "wrong_bytes_caught_before_send", {
-        mode: h,
+        mode,
       });
       logForDiagnosticsNoPII("error", "api_incremental_request_body_wrong_bytes_caught_before_send", {
-        mode: h,
+        mode,
       });
       return;
     }
-    if (y.once("incremental_request_body_ok"))
+    if (gzipState.once("incremental_request_body_ok"))
       logFeatureOk("api_incremental_request_body", {
-        mode: h,
+        mode,
       });
-    gzipRequestBody.serialisedBodies.set(ke.bytes.buffer, {
-      chars: ke.chars,
-      keptChars: ke.keptChars,
-      checked: Me,
+    gzipRequestBody.serialisedBodies.set(serialised.bytes.buffer, {
+      chars: serialised.chars,
+      keptChars: serialised.keptChars,
+      checked: checkBytes,
     });
-    return ke.bytes;
+    return serialised.bytes;
   } catch (error) {
     logError(toError(error));
     switchOffBodyBytes();
     logFeatureSad("api_incremental_request_body", "serialising_threw", {
-      mode: h,
+      mode,
     });
     logForDiagnosticsNoPII("warn", "api_incremental_request_body_serialising_threw", {
-      mode: h,
+      mode,
     });
     return;
   }
@@ -264,8 +302,8 @@ function randomSample() {
   );
 }
 //@ chunk-e6aww6q8.js:2578964-2579030 placement = resolveMotion (0.719)
-function bufferEqualsJson(e, n) {
-  return e.equals(Buffer.from(JSON.stringify(n)));
+function bufferEqualsJson(buffer, other) {
+  return buffer.equals(Buffer.from(JSON.stringify(other)));
 }
 //@ chunk-e6aww6q8.js:2579030-2579127 placement
 function switchOffBodyBytes() {
@@ -274,12 +312,14 @@ function switchOffBodyBytes() {
   gzipRequestBody.blockStore.keptBody = undefined;
 }
 //@ chunk-e6aww6q8.js:2579127-2579785 placement
-async function reportIncrementalBodyMismatch(e, streamRequestBody, r) {
+async function reportIncrementalBodyMismatch(plan, streamRequestBody, send) {
   let blockStore = streamFallbackWarning().gzipRequestBody.blockStore;
   let keptBody =
-    e !== undefined && e.buffer === blockStore.keptBody?.memory.buffer ? blockStore.keptBody : undefined;
+    plan !== undefined && plan.buffer === blockStore.keptBody?.memory.buffer
+      ? blockStore.keptBody
+      : undefined;
   try {
-    return await r();
+    return await send();
   } catch (error) {
     if (
       keptBody !== undefined &&
@@ -292,11 +332,11 @@ async function reportIncrementalBodyMismatch(e, streamRequestBody, r) {
     )
       try {
         if (blockStore.keptBody === keptBody) blockStore.keptBody = undefined;
-        let S = Buffer.byteLength(keptBody.opening) - 1;
-        let chunk = keptBody.memory.subarray(S, (keptBody.ends.at(-1) ?? S + 1) + 1);
+        let openingLength = Buffer.byteLength(keptBody.opening) - 1;
+        let buffer = keptBody.memory.subarray(openingLength, (keptBody.ends.at(-1) ?? openingLength + 1) + 1);
         if (
           sameJsonShape(keptBody.shapes, streamRequestBody.messages) &&
-          !bufferEqualsJson(chunk, streamRequestBody.messages)
+          !bufferEqualsJson(buffer, streamRequestBody.messages)
         ) {
           switchOffBodyBytes();
           logFeatureBad("api_incremental_request_body", "wrong_bytes_sent", {

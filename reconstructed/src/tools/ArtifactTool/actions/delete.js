@@ -62,8 +62,8 @@ var RELAY_UNAVAILABLE_DELETE_RESULT = {
   fromFrame: false,
 };
 //@ chunk-pc7vb93h.js:1584-1764 placement
-function deleteUnconfirmedMessage(t) {
-  return `Couldn't confirm the delete (the cloud relay failed: ${t}) \u2014 it may have gone through; check with action "list" before telling the user or trying again.`;
+function deleteUnconfirmedMessage(reason) {
+  return `Couldn't confirm the delete (the cloud relay failed: ${reason}) \u2014 it may have gone through; check with action "list" before telling the user or trying again.`;
 }
 //@ chunk-pc7vb93h.js:1764-1789 placement
 /**
@@ -76,34 +76,34 @@ var DELETE_RETRY_MAX_MS = 1e4;
 /**
  * 字符串去空白，非字符串返回空串。
  */
-function trimmedOrEmpty(t) {
-  return typeof t === "string" ? t.trim() : "";
+function trimmedOrEmpty(value) {
+  return typeof value === "string" ? value.trim() : "";
 }
 //@ chunk-pc7vb93h.js:1842-2156 placement
 /**
  * 删除 Artifact 的埋点字段：来源（工具/对话框）、路径（relay/direct）、是否本会话创建、存在时长、距上次更新时长、是否重试。
  */
-function deleteTelemetryFields(t, o, n) {
+function deleteTelemetryFields(context, retried, route) {
   return {
-    source: t.source === "tool" ? lit("tool") : lit("dialog"),
-    route: n === "relay" ? lit("relay") : lit("direct"),
-    ...(t.sessionMinted !== undefined && {
-      session_minted: t.sessionMinted,
+    source: context.source === "tool" ? lit("tool") : lit("dialog"),
+    route: route === "relay" ? lit("relay") : lit("direct"),
+    ...(context.sessionMinted !== undefined && {
+      session_minted: context.sessionMinted,
     }),
-    ...(t.ageSeconds !== undefined && {
-      age_s: t.ageSeconds,
+    ...(context.ageSeconds !== undefined && {
+      age_s: context.ageSeconds,
     }),
-    ...(t.sinceUpdateSeconds !== undefined && {
-      since_update_s: t.sinceUpdateSeconds,
+    ...(context.sinceUpdateSeconds !== undefined && {
+      since_update_s: context.sinceUpdateSeconds,
     }),
-    ...(o && {
+    ...(retried && {
       retried: true,
     }),
   };
 }
 //@ chunk-pc7vb93h.js:2156-4854 placement
-async function deleteArtifact(slug, credentials, n) {
-  let u = () =>
+async function deleteArtifact(slug, credentials, options) {
+  let sendDelete = () =>
     canDeleteViaDirectRoute()
       ? Promise.resolve(RELAY_UNAVAILABLE_DELETE_RESULT)
       : frameApi.deleteRelayOnly(`/api/frame/${encodeURIComponent(slug)}`, {
@@ -111,70 +111,81 @@ async function deleteArtifact(slug, credentials, n) {
           headers: buildFrameHeaders(),
           timeout: 15000,
           maxContentLength: DELETE_MAX_RESPONSE_BYTES,
-          signal: n.signal,
+          signal: options.signal,
           credentials,
         });
-  let e;
-  let c = false;
+  let response;
+  let retried = false;
   try {
-    e = await u();
-    if (e.ok && e.fromFrame && (e.status === 409 || e.status === 429 || e.status === 503)) {
-      let a = e.response.headers?.["retry-after"];
+    response = await sendDelete();
+    if (
+      response.ok &&
+      response.fromFrame &&
+      (response.status === 409 || response.status === 429 || response.status === 503)
+    ) {
+      let retryAfterHeader = response.response.headers?.["retry-after"];
       let min = Math.min(
-        parseRetryAfterMs(typeof a === "string" ? a : undefined) ?? DELETE_RETRY_DEFAULT_MS,
+        parseRetryAfterMs(typeof retryAfterHeader === "string" ? retryAfterHeader : undefined) ??
+          DELETE_RETRY_DEFAULT_MS,
         DELETE_RETRY_MAX_MS,
       );
-      await sleep(min, n.signal, {
+      await sleep(min, options.signal, {
         abortError: () => new AbortError(),
       });
-      c = true;
-      e = await u();
+      retried = true;
+      response = await sendDelete();
     }
   } catch (error) {
-    if (isCancel(error) || error instanceof AbortError || n.signal?.aborted) throw error;
-    let s = threwOnRelayLeg(error);
-    logFeatureBad("artifact_delete", "request_error", deleteTelemetryFields(n, c, s ? "relay" : "direct"));
+    if (isCancel(error) || error instanceof AbortError || options.signal?.aborted) throw error;
+    let onRelayLeg = threwOnRelayLeg(error);
+    logFeatureBad(
+      "artifact_delete",
+      "request_error",
+      deleteTelemetryFields(options, retried, onRelayLeg ? "relay" : "direct"),
+    );
     return {
-      err: s ? deleteUnconfirmedMessage("no answer") : "Couldn't delete the Artifact (network error)",
+      err: onRelayLeg
+        ? deleteUnconfirmedMessage("no answer")
+        : "Couldn't delete the Artifact (network error)",
       reason: "request_error",
     };
   }
-  let r = deleteTelemetryFields(n, c, e.route);
-  if (!e.ok) {
-    if (e.reason === "relay-unavailable" || e.reason === "relay-not-served") {
-      logFeatureBad("artifact_delete", e.reason.replace(/-/g, "_"), {
-        ...r,
-        status: e.status,
+  let telemetry = deleteTelemetryFields(options, retried, response.route);
+  if (!response.ok) {
+    if (response.reason === "relay-unavailable" || response.reason === "relay-not-served") {
+      logFeatureBad("artifact_delete", response.reason.replace(/-/g, "_"), {
+        ...telemetry,
+        status: response.status,
       });
       return {
         err: deleteUnavailableReason(),
         reason: "unavailable",
       };
     }
-    logFeatureBad("artifact_delete", e.reason, r);
+    logFeatureBad("artifact_delete", response.reason, telemetry);
     return {
       err:
-        e.reason === "no-auth"
-          ? describeArtifactAuthFailure(e.detail)
-          : `Artifact delete unavailable: ${e.reason}`,
+        response.reason === "no-auth"
+          ? describeArtifactAuthFailure(response.detail)
+          : `Artifact delete unavailable: ${response.reason}`,
       reason: "unavailable",
     };
   }
-  if (!e.fromFrame && (e.status < 200 || e.status >= 300)) {
+  if (!response.fromFrame && (response.status < 200 || response.status >= 300)) {
     logFeatureBad("artifact_delete", "relay_error", {
-      ...r,
-      status: e.status,
+      ...telemetry,
+      status: response.status,
     });
     return {
-      err: deleteUnconfirmedMessage(`HTTP ${e.status}`),
+      err: deleteUnconfirmedMessage(`HTTP ${response.status}`),
       reason: "http_failed",
-      status: e.status,
+      status: response.status,
     };
   }
-  if (e.status === 404) {
-    if (!isFrameNotFoundBody(e.data)) {
+  if (response.status === 404) {
+    if (!isFrameNotFoundBody(response.data)) {
       logFeatureBad("artifact_delete", "not_found_foreign", {
-        ...r,
+        ...telemetry,
         status: 404,
       });
       return {
@@ -183,24 +194,24 @@ async function deleteArtifact(slug, credentials, n) {
         status: 404,
       };
     }
-    logFeatureSad("artifact_delete", "not_found", r);
+    logFeatureSad("artifact_delete", "not_found", telemetry);
     return {
       err: null,
       alreadyGone: true,
     };
   }
-  if (e.status === 403) {
-    let a = trimmedOrEmpty(e.data);
-    if (/^not owner\b/.test(a)) {
-      logFeatureSad("artifact_delete", "not_owner", r);
+  if (response.status === 403) {
+    let fields = trimmedOrEmpty(response.data);
+    if (/^not owner\b/.test(fields)) {
+      logFeatureSad("artifact_delete", "not_owner", telemetry);
       return {
         err: "Only the Artifact's owner can delete it.",
         reason: "not_owner",
         status: 403,
       };
     }
-    if (a.startsWith(CCR_CREDENTIAL_REFUSED_PREFIX)) {
-      logFeatureBad("artifact_delete", "ccr_credential_refused", r);
+    if (fields.startsWith(CCR_CREDENTIAL_REFUSED_PREFIX)) {
+      logFeatureBad("artifact_delete", "ccr_credential_refused", telemetry);
       return {
         err: deleteUnavailableReason(),
         reason: "unavailable",
@@ -208,32 +219,32 @@ async function deleteArtifact(slug, credentials, n) {
       };
     }
   }
-  if (e.status < 200 || e.status >= 300) {
+  if (response.status < 200 || response.status >= 300) {
     logFeatureBad("artifact_delete", "http_failed", {
-      ...r,
-      status: e.status,
+      ...telemetry,
+      status: response.status,
     });
     return {
       err:
-        e.status >= 500
-          ? `Couldn't confirm the delete (HTTP ${e.status}) \u2014 the Artifact may already be unreachable; retry once.`
-          : `Couldn't delete the Artifact (HTTP ${e.status})`,
+        response.status >= 500
+          ? `Couldn't confirm the delete (HTTP ${response.status}) \u2014 the Artifact may already be unreachable; retry once.`
+          : `Couldn't delete the Artifact (HTTP ${response.status})`,
       reason: "http_failed",
-      status: e.status,
+      status: response.status,
     };
   }
-  if (e.status !== 204 || (e.route === "relay" && !fromUpstream(e))) {
+  if (response.status !== 204 || (response.route === "relay" && !fromUpstream(response))) {
     logFeatureBad("artifact_delete", "ok_foreign", {
-      ...r,
-      status: e.status,
+      ...telemetry,
+      status: response.status,
     });
     return {
-      err: `Couldn't confirm the delete: the answer (HTTP ${e.status}) was not the Artifact service's own, so the Artifact may still be online \u2014 check the Artifacts list again before treating it as deleted.`,
+      err: `Couldn't confirm the delete: the answer (HTTP ${response.status}) was not the Artifact service's own, so the Artifact may still be online \u2014 check the Artifacts list again before treating it as deleted.`,
       reason: "http_failed",
-      status: e.status,
+      status: response.status,
     };
   }
-  logFeatureOk("artifact_delete", r);
+  logFeatureOk("artifact_delete", telemetry);
   return {
     err: null,
     alreadyGone: false,
@@ -245,25 +256,25 @@ async function deleteArtifact(slug, credentials, n) {
  */
 function forgetSlugInAppState(appState, slug) {
   let keys = Object.keys(appState.frameUrls);
-  let filtered = keys.filter((h) => uuidSlugFromUrl(appState.frameUrls[h].url) !== slug);
+  let filtered = keys.filter((key) => uuidSlugFromUrl(appState.frameUrls[key].url) !== slug);
   let keptRefs = appState.artifactRefs?.filter((artifactRef) => artifactRef.slug !== slug);
   let refsChanged = (keptRefs?.length ?? 0) !== (appState.artifactRefs?.length ?? 0);
   let hadReadVersion = appState.artifactReadVersions !== undefined && slug in appState.artifactReadVersions;
   let hadObservers = appState.artifactReadObservers !== undefined && slug in appState.artifactReadObservers;
   if (filtered.length === keys.length && !refsChanged && !hadReadVersion && !hadObservers) return appState;
-  let { [slug]: s, ...d } = appState.artifactReadVersions ?? {};
-  let { [slug]: D, ..._ } = appState.artifactReadObservers ?? {};
+  let { [slug]: removedVersion, ...remainingVersions } = appState.artifactReadVersions ?? {};
+  let { [slug]: removedObservers, ...remainingObservers } = appState.artifactReadObservers ?? {};
   return {
     ...appState,
-    frameUrls: Object.fromEntries(filtered.map((h) => [h, appState.frameUrls[h]])),
+    frameUrls: Object.fromEntries(filtered.map((key) => [key, appState.frameUrls[key]])),
     ...(refsChanged && {
       artifactRefs: keptRefs,
     }),
     ...(hadReadVersion && {
-      artifactReadVersions: d,
+      artifactReadVersions: remainingVersions,
     }),
     ...(hadObservers && {
-      artifactReadObservers: _,
+      artifactReadObservers: remainingObservers,
     }),
   };
 }
@@ -272,17 +283,17 @@ function forgetSlugInAppState(appState, slug) {
  * Artifact 被删除后清理本地状态：从 AppState 移除 frameUrls/引用/读版本，解除路径链接，清理类型创建、协调编辑者、监视与 live 文档订阅，必要时注销 durable 订阅。
  */
 function forgetDeletedArtifact(slug, options) {
-  let n;
+  let nextFrameUrls;
   options.updateAppState((appState) => {
-    let d = forgetSlugInAppState(appState, slug);
-    n = d === appState ? undefined : d.frameUrls;
-    return d;
+    let nextState = forgetSlugInAppState(appState, slug);
+    nextFrameUrls = nextState === appState ? undefined : nextState.frameUrls;
+    return nextState;
   });
-  if (n !== undefined) persistBridgeArtifactFrames(n);
+  if (nextFrameUrls !== undefined) persistBridgeArtifactFrames(nextFrameUrls);
   let { shareStatus, createdFromType, deferredSurface, remoteControlSkippedSlugs, coordinatorEditors } =
     getLiveState();
-  for (let [s, d] of shareStatus.filePathToSlug) if (d === slug) unlinkPath(s);
-  for (let [s, d] of createdFromType) if (d.slug === slug) createdFromType.delete(s);
+  for (let [filePath, entrySlug] of shareStatus.filePathToSlug) if (entrySlug === slug) unlinkPath(filePath);
+  for (let [key, entry] of createdFromType) if (entry.slug === slug) createdFromType.delete(key);
   deferredSurface.delete(slug);
   remoteControlSkippedSlugs.delete(slug);
   revokeCodeliveredFollowups(slug, "page_gone");
@@ -300,8 +311,8 @@ function forgetDeletedArtifact(slug, options) {
 /**
  * 用户在 /artifacts 删除了 Artifact 的提示：链接对所有人失效、不可恢复、不能再发布到原地址，不要再把该 url 传给 Artifact 工具。
  */
-function userDeletedArtifactNote(t) {
-  return `<${ARTIFACT_DELETED_NOTE_TAG} url="${t}"/> The user deleted this Artifact from /artifacts: its link no longer works for anyone, it cannot be restored, and it cannot be published to again \u2014 publishing the same file creates a new Artifact at a new URL. Do not pass this url to the Artifact tool.`;
+function userDeletedArtifactNote(url) {
+  return `<${ARTIFACT_DELETED_NOTE_TAG} url="${url}"/> The user deleted this Artifact from /artifacts: its link no longer works for anyone, it cannot be restored, and it cannot be published to again \u2014 publishing the same file creates a new Artifact at a new URL. Do not pass this url to the Artifact tool.`;
 }
 export {
   canDeleteViaDirectRoute,

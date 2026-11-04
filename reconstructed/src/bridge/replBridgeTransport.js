@@ -61,7 +61,7 @@ async function createV2ReplTransport(opts) {
     });
   let onCloseCallback;
   let closed = false;
-  function closeOnce(I, G, X) {
+  function closeOnce(code, reason, closeInfo) {
     if (closed) return;
     closed = true;
     try {
@@ -74,7 +74,7 @@ async function createV2ReplTransport(opts) {
       logError(error);
     }
     try {
-      onCloseCallback?.(I, G, X);
+      onCloseCallback?.(code, reason, closeInfo);
     } catch (error) {
       logError(error);
     }
@@ -106,12 +106,12 @@ async function createV2ReplTransport(opts) {
     nonOrigin403Transient,
     internalEventUploader: opts.internalEventUploader,
     stateReadEndsAtRegistration: opts.onConnectNeedsRecord !== true,
-    onEpochMismatch: (I) => {
-      let G = opts.causeTypedCloseCodes ? WORKER_CONFLICT_CLOSE_CODES[I] : 4090;
+    onEpochMismatch: (condition) => {
+      let closeCode = opts.causeTypedCloseCodes ? WORKER_CONFLICT_CLOSE_CODES[condition] : 4090;
       logForDebugging(
-        `[bridge:repl] CCR v2: terminal request-path condition (${I}) \u2014 closing with ${G} for ${G === 4094 ? "auth recovery" : "poll-loop recovery"}`,
+        `[bridge:repl] CCR v2: terminal request-path condition (${condition}) \u2014 closing with ${closeCode} for ${closeCode === 4094 ? "auth recovery" : "poll-loop recovery"}`,
       );
-      closeOnce(G, I);
+      closeOnce(closeCode, condition);
       throw Error("terminal request-path condition");
     },
     onRequestAuthOk: opts.onRequestAuthOk,
@@ -128,11 +128,11 @@ async function createV2ReplTransport(opts) {
       },
     }),
   });
-  sseTransport.setOnEvent((I) => {
-    if (opts.processExiting?.() && isUserPayload(I)) return;
-    ccr.reportDelivery(I.event_id, "received");
-    if (!(reportsReadReceipts() && withholdHeldReceipt(I.event_id)))
-      ccr.reportDelivery(I.event_id, "processed");
+  sseTransport.setOnEvent((event) => {
+    if (opts.processExiting?.() && isUserPayload(event)) return;
+    ccr.reportDelivery(event.event_id, "received");
+    if (!(reportsReadReceipts() && withholdHeldReceipt(event.event_id)))
+      ccr.reportDelivery(event.event_id, "processed");
   });
   sseTransport.setEventFilter((event) => {
     if (evaluateInboundAttestationWithPolicy(event)) return true;
@@ -144,16 +144,16 @@ async function createV2ReplTransport(opts) {
     write(msg) {
       return ccr.writeEvent(msg);
     },
-    writeBatch(I) {
-      return ccr.writeEvents(I);
+    writeBatch(events) {
+      return ccr.writeEvents(events);
     },
-    close(I) {
+    close(options) {
       closed = true;
       ccr.close({
-        goodbye: I?.goodbye,
-        retainUndeliveredClientEvents: I?.retainUndelivered,
+        goodbye: options?.goodbye,
+        retainUndeliveredClientEvents: options?.retainUndelivered,
       });
-      if (!I?.retainUndelivered) ccr.discardUndeliveredClientEvents();
+      if (!options?.retainUndelivered) ccr.discardUndeliveredClientEvents();
       sseTransport.close();
     },
     takeUndeliveredEvents() {
@@ -162,8 +162,8 @@ async function createV2ReplTransport(opts) {
     discardUndeliveredEvents() {
       return ccr.discardUndeliveredClientEvents();
     },
-    adoptUndeliveredEvents(I) {
-      ccr.adoptClientEvents(I);
+    adoptUndeliveredEvents(events) {
+      ccr.adoptClientEvents(events);
     },
     flushGoodbye() {
       return ccr.flushGoodbye();
@@ -181,8 +181,8 @@ async function createV2ReplTransport(opts) {
     },
     setOnClose(cb) {
       onCloseCallback = cb;
-      sseTransport.setOnClose((code, X) => {
-        closeOnce(code ?? 4092, undefined, X);
+      sseTransport.setOnClose((code, info) => {
+        closeOnce(code ?? 4092, undefined, info);
       });
     },
     setOnConnect(cb) {
@@ -200,15 +200,15 @@ async function createV2ReplTransport(opts) {
     getEpoch() {
       return epoch;
     },
-    reportState(state, G) {
-      ccr.reportState(state, G);
+    reportState(state, extra) {
+      ccr.reportState(state, extra);
     },
     reportMetadata(metadata) {
       ccr.reportMetadata(metadata);
     },
-    reportInternalMetadata(I) {
+    reportInternalMetadata(metadata) {
       if (closed) return false;
-      ccr.reportInternalMetadata(I);
+      ccr.reportInternalMetadata(metadata);
       return true;
     },
     droppedDurableBatchCount() {
@@ -223,35 +223,35 @@ async function createV2ReplTransport(opts) {
     reportDelivery(eventId, status) {
       ccr.reportDelivery(eventId, status);
     },
-    setStreamEventFlushIntervalMs(I) {
-      ccr.setStreamEventFlushIntervalMs(I);
+    setStreamEventFlushIntervalMs(ms) {
+      ccr.setStreamEventFlushIntervalMs(ms);
     },
-    setStreamEventFirstFlushMs(I) {
-      ccr.setStreamEventFirstFlushMs(I);
+    setStreamEventFirstFlushMs(ms) {
+      ccr.setStreamEventFirstFlushMs(ms);
     },
-    setNoSubscriberStreamEventFlushIntervalMs(I) {
-      ccr.setNoSubscriberStreamEventFlushIntervalMs(I);
+    setNoSubscriberStreamEventFlushIntervalMs(ms) {
+      ccr.setNoSubscriberStreamEventFlushIntervalMs(ms);
     },
-    setNoSubscriberUploadHoldMs(I) {
-      ccr.setNoSubscriberUploadHoldMs(I);
+    setNoSubscriberUploadHoldMs(ms) {
+      ccr.setNoSubscriberUploadHoldMs(ms);
     },
-    setDropUnwatchedStreamEvents(I) {
-      ccr.setDropUnwatchedStreamEvents(I);
+    setDropUnwatchedStreamEvents(shouldDrop) {
+      ccr.setDropUnwatchedStreamEvents(shouldDrop);
     },
-    setSubscribersReportedListener(I) {
-      ccr.setSubscribersReportedListener(I);
+    setSubscribersReportedListener(listener) {
+      ccr.setSubscribersReportedListener(listener);
     },
     mayHoldUploads() {
       return ccr.mayHoldUploads();
     },
-    flush(I) {
-      return ccr.flush(I);
+    flush(options) {
+      return ccr.flush(options);
     },
-    flushDeliveryAcks(I) {
-      return ccr.flushDeliveryAcks(I);
+    flushDeliveryAcks(options) {
+      return ccr.flushDeliveryAcks(options);
     },
-    flushInternalEvents(I) {
-      return ccr.flushInternalEvents(I);
+    flushInternalEvents(options) {
+      return ccr.flushInternalEvents(options);
     },
     getUploadBacklog() {
       return ccr.uploadBacklog();
@@ -262,24 +262,24 @@ async function createV2ReplTransport(opts) {
         droppedBatches: ccr.droppedInternalBatches,
       };
     },
-    trackFirstFrameUpload(I) {
-      return ccr.trackFirstFrameUpload(I);
+    trackFirstFrameUpload(upload) {
+      return ccr.trackFirstFrameUpload(upload);
     },
     getInternalEventWriter() {
-      return (I, G, X) => ccr.writeInternalEvent(I, G, X);
+      return (kind, agentId, payload) => ccr.writeInternalEvent(kind, agentId, payload);
     },
     getInternalEventReaders() {
       return {
-        readMain: (I) => (I ? ccr.readInternalEventsForCatchUp(I) : ccr.readInternalEvents()),
+        readMain: (since) => (since ? ccr.readInternalEventsForCatchUp(since) : ccr.readInternalEvents()),
         readSubagents: () => ccr.readSubagentInternalEvents(),
-        readSubagent: (I, G) => ccr.readAgentInternalEvents(I, G),
+        readSubagent: (agentId, since) => ccr.readAgentInternalEvents(agentId, since),
       };
     },
     getInternalEventsPort() {
       return {
         epoch: () => ccr.getWorkerEpoch(),
-        postBatch: (I, G) => ccr.postInternalEventsBatch(I, G),
-        listPage: (I, G) => ccr.getInternalEventsPage(I, G),
+        postBatch: (batch, options) => ccr.postInternalEventsBatch(batch, options),
+        listPage: (cursor, options) => ccr.getInternalEventsPage(cursor, options),
       };
     },
     connect() {

@@ -8,6 +8,12 @@
  * pieces: chunk-e6aww6q8.js (37), chunk-s61vbvea.js (1)
  * attribution: placement 30, affinity 1, fingerprint 4, layout 3
  */
+import {
+  EVENT_TOOL_SITE_NAMES,
+  RESULT_TOKEN_BUDGET,
+  isStringListValue,
+} from "../../plugins/functionHooks/sites/siteRules.js";
+import { MAX_PREVIEW_CHARS, truncateAdditionalContext } from "../remoteTools/backgroundCommands.js";
 import { createAttachmentMessage_2, logForDebugging } from "../../utils/debug.js";
 import { stableStringifySafe } from "../../utils/hooks/hookSerialization.js";
 import { markWithheldResult } from "../../plugins/functionHooks/toolCallHooks.js";
@@ -57,11 +63,6 @@ import {
 } from "../../utils/hooks/hookUpdatedInput.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { isMcpTool } from "../mcp/utils.js";
-import {
-  isStringListValue,
-  EVENT_TOOL_SITE_NAMES,
-  RESULT_TOKEN_BUDGET,
-} from "../../plugins/functionHooks/sites/siteRules.js";
 import { logEvent } from "../analytics/index.js";
 import { sanitizeToolNameForAnalytics } from "../analytics/metadata.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
@@ -82,8 +83,34 @@ import { isRemoteBrowserToolUnderModeFloor } from "../../utils/permissions/remot
 import { getRemoteHookRunner } from "../../Tool.js";
 import { setStrictestHookAnswer } from "../../utils/hooks/hookPermissionResult.js";
 import { getRuleBehaviorDescription } from "../../utils/permissions/PermissionResult.js";
-import { MAX_PREVIEW_CHARS, truncateAdditionalContext } from "../remoteTools/backgroundCommands.js";
 
+//@ chunk-s61vbvea.js:610375-610638 placement
+/**
+ * 限制钩子 additionalContext 的总长度：逐条加入，超出时截断剩余条目。
+ */
+async function capAdditionalContext(entries, event, storage) {
+  let kept = [];
+  let usedChars = 0;
+  let index = 0;
+  while (index < entries.length) {
+    let entry = entries[index] ?? "";
+    let remaining = EVENT_TOOL_SITE_NAMES - usedChars;
+    let fits = entry.length <= Math.min(RESULT_TOKEN_BUDGET, remaining);
+    let toTruncate = fits || remaining >= MAX_PREVIEW_CHARS ? [entry] : entries.slice(index);
+    let text = fits
+      ? entry
+      : await truncateAdditionalContext({
+          entries: toTruncate,
+          limit: Math.max(0, Math.min(RESULT_TOKEN_BUDGET, remaining)),
+          event,
+          storageV5: storage,
+        });
+    kept.push(text);
+    usedChars += text.length;
+    index += toTruncate.length;
+  }
+  return kept;
+}
 //@ chunk-e6aww6q8.js:3775878-3775973 placement
 /**
  * 构造 hook 错误的 tool_result。
@@ -103,12 +130,12 @@ var hookErrorToolResult = (toolUseId, text) => ({
 /**
  * 构造 tool.call 钩子的附加上下文消息、PreToolUse 阻止继续的消息，以及判断消息是否为阻止继续。
  */
-var buildToolCallContextMessage = (e, n) => ({
+var buildToolCallContextMessage = (entries, toolUseId) => ({
   message: createAttachmentMessage_2({
     type: "hook_additional_context",
-    content: [...e],
+    content: [...entries],
     hookName: "tool.call",
-    toolUseID: `${n}-context`,
+    toolUseID: `${toolUseId}-context`,
     hookEvent: "PostToolUse",
   }),
 });
@@ -124,9 +151,10 @@ var buildHookStoppedMessage = (message, name, toolUseID) => ({
 var isHookStoppedMessage = ({ message }) =>
   message.type === "attachment" && message.attachment.type === "hook_stopped_continuation";
 //@ chunk-e6aww6q8.js:3776348-3776530 placement
-function findToolResultBlock({ message }, n) {
+function findToolResultBlock({ message }, toolUseId) {
   if (message.type !== "user" || typeof message.message.content === "string") return;
-  for (let r of message.message.content) if (r.type === "tool_result" && r.tool_use_id === n) return r;
+  for (let block of message.message.content)
+    if (block.type === "tool_result" && block.tool_use_id === toolUseId) return block;
   return;
 }
 //@ chunk-e6aww6q8.js:3776530-3776611 placement
@@ -137,18 +165,18 @@ var toolDurationMsOf = (made, toolUseId) =>
   made?.messages.find((message) => findToolResultBlock(message, toolUseId) !== undefined)?.toolDuration
     ?.durationMs;
 //@ chunk-e6aww6q8.js:3776611-3776723 placement
-var buildToolUseErrorBlock = (toolUseId, n) => ({
+var buildToolUseErrorBlock = (toolUseId, message) => ({
   type: "tool_result",
-  content: `<tool_use_error>${n}</tool_use_error>`,
+  content: `<tool_use_error>${message}</tool_use_error>`,
   is_error: true,
   tool_use_id: toolUseId,
 });
 //@ chunk-e6aww6q8.js:3776723-3776825 placement
-var isRunUnchanged = (e, made) =>
-  e.deny === undefined &&
-  (e.result === undefined ||
-    e.result === made.result ||
-    stableStringifySafe(e.result) === stableStringifySafe(made.result));
+var isRunUnchanged = (hookResult, made) =>
+  hookResult.deny === undefined &&
+  (hookResult.result === undefined ||
+    hookResult.result === made.result ||
+    stableStringifySafe(hookResult.result) === stableStringifySafe(made.result));
 //@ chunk-e6aww6q8.js:3776825-3776892 placement
 /**
  * 该工具调用有结果且不是错误。
@@ -161,13 +189,13 @@ function ranWithoutError(message, toolUseId) {
 /**
  * 已存在结果块时先移除该结果再返回消息。
  */
-function stripToolResultBlock(e, toolUseId) {
-  if (findToolResultBlock(e, toolUseId) !== undefined) markWithheldResult(e.message);
-  return e;
+function stripToolResultBlock(result, toolUseId) {
+  if (findToolResultBlock(result, toolUseId) !== undefined) markWithheldResult(result.message);
+  return result;
 }
 //@ chunk-e6aww6q8.js:3776954-3777201 placement
-var rebuildResultMessage = (message, content, r) => ({
-  content: content.map(r),
+var rebuildResultMessage = (message, content, mapContent) => ({
+  content: content.map(mapContent),
   imagePasteIds: message.imagePasteIds,
   mcpMeta: message.mcpMeta,
   toolEndsTurn: message.toolEndsTurn,
@@ -179,19 +207,19 @@ var rebuildResultMessage = (message, content, r) => ({
 /**
  * 在消息列表中找到本次调用的结果消息，把其 tool_result 替换为新块（保留其他元数据）；找不到时只返回新块。
  */
-function replaceToolResult(e, toolUseId, r) {
-  let message = e.find((S) => findToolResultBlock(S, toolUseId) !== undefined)?.message;
+function replaceToolResult(messages, toolUseId, newBlock) {
+  let message = messages.find((message) => findToolResultBlock(message, toolUseId) !== undefined)?.message;
   if (message?.type !== "user")
     return {
-      content: [r],
+      content: [newBlock],
     };
   let content = message.message.content;
   return typeof content === "string"
     ? {
-        content: [r],
+        content: [newBlock],
       }
-    : rebuildResultMessage(message, content, (S) =>
-        S.type === "tool_result" && S.tool_use_id === toolUseId ? r : S,
+    : rebuildResultMessage(message, content, (block) =>
+        block.type === "tool_result" && block.tool_use_id === toolUseId ? newBlock : block,
       );
 }
 //@ chunk-e6aww6q8.js:3777561-3777675 placement
@@ -205,8 +233,8 @@ function findToolUseResult(messages) {
  * 从消息列表里去掉该工具的结果块。
  */
 function withoutToolResultBlock(messages, toolUseId) {
-  let index = messages.findIndex((s) => findToolResultBlock(s, toolUseId) !== undefined);
-  return messages.filter((s, h) => h !== index);
+  let index = messages.findIndex((message) => findToolResultBlock(message, toolUseId) !== undefined);
+  return messages.filter((message, messageIndex) => messageIndex !== index);
 }
 //@ chunk-e6aww6q8.js:3777764-3778510 placement
 /**
@@ -280,15 +308,15 @@ var createCoreToolLink = ({ toolUseContext, runs, state, run, refuse, isMcpTool 
 });
 //@ chunk-e6aww6q8.js:3778510-3778618 placement
 var makeErrorResultAppender =
-  (toolUseId, n, r) =>
-  (s, h, y = buildToolUseErrorBlock) => [
-    ...n,
+  (toolUseId, prefixMessages, messageOrigin) =>
+  (errorText, extraFields, makeBlock = buildToolUseErrorBlock) => [
+    ...prefixMessages,
     {
       message: createUserMessage({
-        content: [y(toolUseId, s)],
-        toolUseResult: `Error: ${s}`,
-        ...h,
-        ...r,
+        content: [makeBlock(toolUseId, errorText)],
+        toolUseResult: `Error: ${errorText}`,
+        ...extraFields,
+        ...messageOrigin,
       }),
     },
   ];
@@ -305,7 +333,8 @@ var createChainState = () => ({
 /**
  * 是否为 bare fork 且未关闭设置钩子（决定是否运行托管钩子）。
  */
-var shouldRunManagedLink = (e, n, r) => e || (n && !r);
+var shouldRunManagedLink = (keepForSubagents, managedRan, runKept) =>
+  keepForSubagents || (managedRan && !runKept);
 //@ chunk-e6aww6q8.js:3778766-3778863 placement
 /**
  * 子代理里是否保留工具结果。
@@ -331,46 +360,46 @@ var createManagedHookLink = (tool, context, state) => ({
   name: MANAGED,
   isManaged: true,
   budgetMs: 0,
-  async run(s, h) {
+  async run(input, next) {
     if (!shouldRunManagedToolHooks(tool, context.options.bareFork, context.options.settingsHooksOff))
-      return h(s);
-    let inputKey = stableStringifySafe(toolInputOf(s));
+      return next(input);
+    let inputKey = stableStringifySafe(toolInputOf(input));
     let hookPass = await collectPreToolHookPass(
       executePreToolHooks(
-        s.tool,
-        s.tool_use_id,
-        toolInputOf(s),
+        input.tool,
+        input.tool_use_id,
+        toolInputOf(input),
         context,
         getToolPermissionContext(context).mode,
-        h.signal,
+        next.signal,
         undefined,
         {
           managedHooksOnly: true,
         },
       ),
-      s.tool,
+      input.tool,
     );
     state.managedMade = hookPass;
     state.managedChangedInPlace =
-      hookPass.result.updatedInput === undefined && stableStringifySafe(toolInputOf(s)) !== inputKey;
-    let { deny, updatedInput, ...q } = hookPass.result;
+      hookPass.result.updatedInput === undefined && stableStringifySafe(toolInputOf(input)) !== inputKey;
+    let { deny, updatedInput, ...rest } = hookPass.result;
     if (deny !== undefined)
       return {
         deny,
       };
-    if (shouldReplaceMemoryInput(tool, toolInputOf(s), updatedInput))
+    if (shouldReplaceMemoryInput(tool, toolInputOf(input), updatedInput))
       return {
         deny: guardAccountMemoryHookRewrite(tool, "PreToolUse", "policySettings").message,
       };
-    let effectiveInput = updatedInput ?? toolInputOf(s);
-    let Se;
+    let effectiveInput = updatedInput ?? toolInputOf(input);
+    let inputKeyCache;
     state.managedRan = true;
     state.managedPass = {
-      toolUseId: s.tool_use_id,
+      toolUseId: input.tool_use_id,
       input: effectiveInput,
-      inputKey: () => (Se ??= stableStringifySafe(effectiveInput)),
+      inputKey: () => (inputKeyCache ??= stableStringifySafe(effectiveInput)),
       pass: {
-        result: q,
+        result: rest,
         yields: hookPass.yields,
         ...(hookPass.rewrites !== undefined && {
           rewrites: hookPass.rewrites,
@@ -378,13 +407,13 @@ var createManagedHookLink = (tool, context, state) => ({
       },
     };
     try {
-      return await h(
+      return await next(
         updatedInput
           ? withRequestMeta(
-              withAgentId(toolCallEvent(s.tool, s.tool_use_id, updatedInput), s.agentId),
-              s.requestMeta,
+              withAgentId(toolCallEvent(input.tool, input.tool_use_id, updatedInput), input.agentId),
+              input.requestMeta,
             )
-          : s,
+          : input,
       );
     } finally {
       state.managedPass = undefined;
@@ -396,17 +425,21 @@ var createManagedHookLink = (tool, context, state) => ({
  * 按对象键排序后序列化，便于稳定比较。
  */
 var sortedJson = (attachment) =>
-  jsonStringify(Object.fromEntries(Object.entries(attachment).toSorted(([n], [r]) => n.localeCompare(r))));
+  jsonStringify(
+    Object.fromEntries(
+      Object.entries(attachment).toSorted(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey)),
+    ),
+  );
 //@ chunk-e6aww6q8.js:3779839-3780845 placement
 /**
  * 运行 PostToolUse 钩子；钩子改写账户记忆服务器结果时拒绝并警告。
  */
 async function runPostToolUseHooksForMemory({ tool, toolUseID, input, output, toolUseContext, durationMs }) {
   let hookName = `PostToolUse:${tool.name}`;
-  let w = [];
+  let messages = [];
   let output_2 = output;
   let rewritten = false;
-  for await (let q of executePostToolHooks(
+  for await (let hookResult of executePostToolHooks(
     tool.name,
     toolUseID,
     input,
@@ -420,9 +453,11 @@ async function runPostToolUseHooksForMemory({ tool, toolUseID, input, output, to
       managedHooksOnly: true,
     },
   )) {
-    let Z =
-      q.updatedToolOutput !== undefined || !isMcpTool(tool) ? q.updatedToolOutput : q.updatedMCPToolOutput;
-    if (Z !== undefined)
+    let newOutput =
+      hookResult.updatedToolOutput !== undefined || !isMcpTool(tool)
+        ? hookResult.updatedToolOutput
+        : hookResult.updatedMCPToolOutput;
+    if (newOutput !== undefined)
       if (isLiveMemoryToolName(tool))
         logForDebugging(
           `PostToolUse hook for ${tool.name} tried to rewrite an account memory server answer; the rewrite was dropped`,
@@ -431,24 +466,24 @@ async function runPostToolUseHooksForMemory({ tool, toolUseID, input, output, to
           },
         );
       else {
-        output_2 = Z;
+        output_2 = newOutput;
         rewritten = true;
       }
-    if (q.blockingError)
-      w.push({
+    if (hookResult.blockingError)
+      messages.push({
         message: createAttachmentMessage_2({
           type: "hook_blocking_error",
-          blockingError: q.blockingError,
+          blockingError: hookResult.blockingError,
           hookName,
           toolUseID,
           hookEvent: "PostToolUse",
         }),
       });
-    if (q.preventContinuation) {
-      w.push({
+    if (hookResult.preventContinuation) {
+      messages.push({
         message: createAttachmentMessage_2({
           type: "hook_stopped_continuation",
-          message: q.stopReason || POST_TOOL_HOOK_STOPPED_MESSAGE,
+          message: hookResult.stopReason || POST_TOOL_HOOK_STOPPED_MESSAGE,
           hookName,
           toolUseID,
           hookEvent: "PostToolUse",
@@ -456,9 +491,9 @@ async function runPostToolUseHooksForMemory({ tool, toolUseID, input, output, to
       });
       break;
     }
-    let { additionalContexts } = q;
+    let { additionalContexts } = hookResult;
     if (additionalContexts !== undefined && additionalContexts.length > 0)
-      w.push({
+      messages.push({
         message: createAttachmentMessage_2({
           type: "hook_additional_context",
           content: additionalContexts,
@@ -471,7 +506,7 @@ async function runPostToolUseHooksForMemory({ tool, toolUseID, input, output, to
   return {
     output: output_2,
     rewritten,
-    messages: w,
+    messages,
   };
 }
 //@ chunk-e6aww6q8.js:3780845-3780918 placement
@@ -479,12 +514,12 @@ async function runPostToolUseHooksForMemory({ tool, toolUseID, input, output, to
  * 过滤空串后的文本列表，全空返回 undefined。
  */
 function nonEmptyTexts(output) {
-  let filtered = output.filter((r) => r !== "");
+  let filtered = output.filter((text) => text !== "");
   return filtered.length === 0 ? undefined : filtered;
 }
 //@ chunk-e6aww6q8.js:3780918-3781155 placement
-function applyManagedContextRewrite(e, hookResult) {
-  if (!hookResult.rewritten) return e;
+function applyManagedContextRewrite(output, hookResult) {
+  if (!hookResult.rewritten) return output;
   if (typeof hookResult.output === "string") return nonEmptyTexts([hookResult.output]);
   if (isStringListValue(hookResult.output)) return nonEmptyTexts(hookResult.output);
   logForDebugging(
@@ -496,28 +531,29 @@ function applyManagedContextRewrite(e, hookResult) {
 /**
  * 运行记忆相关的 PostToolUse 钩子，在未被阻止时附上托管改写后的上下文，并去掉与已有附件重复的消息。
  */
-async function runToolCallPostHooks(e, n, r) {
+async function runToolCallPostHooks(output, callInfo, priorMessages) {
   let hookResult = await runPostToolUseHooksForMemory({
-    ...n,
-    output: e,
+    ...callInfo,
+    output,
   });
-  let contextTexts = [...r, ...hookResult.messages].some(
-    (G) => G.message.type === "attachment" && G.message.attachment.type === "hook_stopped_continuation",
+  let contextTexts = [...priorMessages, ...hookResult.messages].some(
+    (entry) =>
+      entry.message.type === "attachment" && entry.message.attachment.type === "hook_stopped_continuation",
   )
     ? undefined
-    : applyManagedContextRewrite(e, hookResult);
+    : applyManagedContextRewrite(output, hookResult);
   let hasContext = contextTexts !== undefined && contextTexts.length > 0;
   let storedContext = hasContext
-    ? await capAdditionalContext(contextTexts, "tool.call", n.toolUseContext.storageV5)
+    ? await capAdditionalContext(contextTexts, "tool.call", callInfo.toolUseContext.storageV5)
     : [];
   let existingKeys = new Set(
-    r.flatMap((G) => {
-      let message = G.message;
+    priorMessages.flatMap((entry) => {
+      let message = entry.message;
       return message.type === "attachment" ? [sortedJson(message.attachment)] : [];
     }),
   );
   return [
-    ...(hasContext ? [buildToolCallContextMessage(storedContext, n.toolUseID)] : []),
+    ...(hasContext ? [buildToolCallContextMessage(storedContext, callInfo.toolUseID)] : []),
     ...hookResult.messages.filter(
       (message) =>
         !(message.message.type === "attachment" && existingKeys.has(sortedJson(message.message.attachment))),
@@ -525,30 +561,32 @@ async function runToolCallPostHooks(e, n, r) {
   ];
 }
 //@ chunk-e6aww6q8.js:3781663-3781862 placement
-function findRunInputForResult(e, n, r) {
-  let s = toolInputOf(r);
-  let h = stableStringifySafe(e.result);
-  let y = stableStringifySafe(s);
+function findRunInputForResult(hookResult, toolCallChain, input) {
+  let currentInput = toolInputOf(input);
+  let resultKey = stableStringifySafe(hookResult.result);
+  let inputKey = stableStringifySafe(currentInput);
   return (
-    n.runs.last((S) => stableStringifySafe(S.made.result) === h && stableStringifySafe(S.input) === y)
-      ?.input ??
-    n.runs.last((S) => stableStringifySafe(S.made.result) === h)?.input ??
-    n.runs.last()?.input ??
-    s
+    toolCallChain.runs.last(
+      (run) =>
+        stableStringifySafe(run.made.result) === resultKey && stableStringifySafe(run.input) === inputKey,
+    )?.input ??
+    toolCallChain.runs.last((run) => stableStringifySafe(run.made.result) === resultKey)?.input ??
+    toolCallChain.runs.last()?.input ??
+    currentInput
   );
 }
 //@ chunk-e6aww6q8.js:3781862-3782022 placement
-function dropBlockingErrors(e) {
-  let n = [];
-  for (let { message } of e)
+function dropBlockingErrors(messages) {
+  let kept = [];
+  for (let { message } of messages)
     if (
       message !== undefined &&
       !(message.type === "attachment" && message.attachment.type === "hook_blocking_error")
     )
-      n.push({
+      kept.push({
         message,
       });
-  return n;
+  return kept;
 }
 //@ chunk-e6aww6q8.js:3782022-3782687 placement
 /**
@@ -608,7 +646,8 @@ function createToolCallChain(tool, context, run, refuse) {
 /**
  * 未被拦下且托管改写可用时应用改写。
  */
-var shouldApplyManagedRewrite = (tool, n, r) => !r && n.deny === undefined && isLiveMemoryToolName(tool);
+var shouldApplyManagedRewrite = (tool, hookResult, runKept) =>
+  !runKept && hookResult.deny === undefined && isLiveMemoryToolName(tool);
 //@ chunk-e6aww6q8.js:3885866-3886174 affinity
 var PRE_TOOL_HOOK_TIMEOUT_MESSAGE =
   "PreToolUse hook did not respond before its timeout (host client may be unreachable). The tool call was not executed; other configured hooks may not have completed.";
@@ -684,19 +723,22 @@ async function* runPostToolUseHooks(
               blockingError: result.blockingError,
             }),
           };
-        let we = isLiveMemoryToolName(tool);
-        if (we && (result.updatedToolOutput !== undefined || result.updatedMCPToolOutput !== undefined))
+        let isLiveMemoryTool = isLiveMemoryToolName(tool);
+        if (
+          isLiveMemoryTool &&
+          (result.updatedToolOutput !== undefined || result.updatedMCPToolOutput !== undefined)
+        )
           logForDebugging(
             `PostToolUse hook for ${tool.name} tried to rewrite an account memory server answer; the rewrite was dropped`,
             {
               level: "warn",
             },
           );
-        if (result.updatedToolOutput !== undefined && !we)
+        if (result.updatedToolOutput !== undefined && !isLiveMemoryTool)
           yield {
             updatedToolOutput: result.updatedToolOutput,
           };
-        if (result.updatedMCPToolOutput !== undefined && isMcpTool(tool) && !we)
+        if (result.updatedMCPToolOutput !== undefined && isMcpTool(tool) && !isLiveMemoryTool)
           yield {
             updatedToolOutput: result.updatedMCPToolOutput,
           };
@@ -976,10 +1018,10 @@ async function resolveHookPermissionDecision(
       },
       input,
     };
-  let w = settingsProblemDenial();
-  if (w !== null)
+  let settingsDenial = settingsProblemDenial();
+  if (settingsDenial !== null)
     return {
-      decision: w,
+      decision: settingsDenial,
       input,
     };
   let requireCanUseTool = toolUseContext.requireCanUseTool;
@@ -1000,22 +1042,25 @@ async function resolveHookPermissionDecision(
       input,
     };
   let behavior = hookPermissionResult.behavior;
-  let hookUpdatedInput = getHookUpdatedInput(hookPermissionResult, input);
-  let Z =
+  let mode = getHookUpdatedInput(hookPermissionResult, input);
+  let displayDroppedResult =
     hookPermissionResult.behavior === "ask"
-      ? dropStaleHostDisplay(hookPermissionResult, hookUpdatedInput)
+      ? dropStaleHostDisplay(hookPermissionResult, mode)
       : hookPermissionResult;
-  let Se = Z.behavior === "ask" && Z.hostDisplay !== undefined ? Z : undefined;
-  let ke = reservedKeyDenialIfPresent(hookUpdatedInput);
-  if (ke !== null)
+  let hostWordedResult =
+    displayDroppedResult.behavior === "ask" && displayDroppedResult.hostDisplay !== undefined
+      ? displayDroppedResult
+      : undefined;
+  let reservedKeyDenial = reservedKeyDenialIfPresent(mode);
+  if (reservedKeyDenial !== null)
     return {
-      decision: ke,
-      input: hookUpdatedInput,
+      decision: reservedKeyDenial,
+      input: mode,
     };
-  let we =
+  let ruleDecision =
     (await checkRuleBasedPermissions(
       tool,
-      hookUpdatedInput,
+      mode,
       {
         ...toolUseContext,
         toolUseId: toolUseID,
@@ -1024,50 +1069,44 @@ async function resolveHookPermissionDecision(
         hookUpdatedInput: hookPermissionResult.updatedInput,
         planModeWriteFloor: behavior === "allow",
         hookAsked: behavior === "ask",
-        ...(Se !== undefined && {
+        ...(hostWordedResult !== undefined && {
           crashIsObjection: true,
         }),
       },
     )) ??
-    (await checkRuleBasedPermissionsOnToolHost(
-      tool,
-      hookUpdatedInput,
-      toolUseContext,
-      assistantMessage,
-      toolUseID,
-    ));
-  if (we?.behavior === "deny") {
+    (await checkRuleBasedPermissionsOnToolHost(tool, mode, toolUseContext, assistantMessage, toolUseID));
+  if (ruleDecision?.behavior === "deny") {
     logForDebugging(
-      `Hook returned '${behavior}' for ${tool.name}, but deny rule overrides (deny's reason type: ${we.decisionReason?.type ?? "none"})`,
+      `Hook returned '${behavior}' for ${tool.name}, but deny rule overrides (deny's reason type: ${ruleDecision.decisionReason?.type ?? "none"})`,
     );
-    return runPermissionPipeline(appendRuleAnnotation(we), {
+    return runPermissionPipeline(appendRuleAnnotation(ruleDecision), {
       tool,
-      input: hookUpdatedInput,
+      input: mode,
       toolUseContext,
       canUseTool,
       assistantMessage,
       toolUseID,
     });
   }
-  if (we?.behavior === "ask" && Se !== undefined) {
+  if (ruleDecision?.behavior === "ask" && hostWordedResult !== undefined) {
     logFeatureBad("permission_host_worded_ask", "pipeline_also_asks");
     return {
       decision: forwardHostWordedAsk(tool.name, "the plain permission prompt raised for this call", {
         hostWorded: true,
       }),
-      input: hookUpdatedInput,
+      input: mode,
     };
   }
-  if (we?.behavior === "ask") {
-    let Ee = behavior === "ask";
+  if (ruleDecision?.behavior === "ask") {
+    let hookAsked = behavior === "ask";
     logForDebugging(
-      `Hook returned '${behavior}' for ${tool.name}, but an ask rule, a safety check, a ToolHost's person-only ask or plan mode requires the full permission pipeline${Ee ? " (hookAskFloor \u2014 a classifier allow re-surfaces as this ask)" : ""}`,
+      `Hook returned '${behavior}' for ${tool.name}, but an ask rule, a safety check, a ToolHost's person-only ask or plan mode requires the full permission pipeline${hookAsked ? " (hookAskFloor \u2014 a classifier allow re-surfaces as this ask)" : ""}`,
     );
     return {
       decision: await canUseTool(
         tool,
-        hookUpdatedInput,
-        Ee
+        mode,
+        hookAsked
           ? {
               ...toolUseContext,
               hookAskFloor: true,
@@ -1076,49 +1115,62 @@ async function resolveHookPermissionDecision(
         assistantMessage,
         toolUseID,
       ),
-      input: hookUpdatedInput,
+      input: mode,
     };
   }
   if (behavior === "allow") {
     if (requireCanUseTool) {
       logForDebugging(`Hook approved tool use for ${tool.name}, but canUseTool is required`);
       return {
-        decision: await canUseTool(tool, hookUpdatedInput, toolUseContext, assistantMessage, toolUseID),
-        input: hookUpdatedInput,
+        decision: await canUseTool(tool, mode, toolUseContext, assistantMessage, toolUseID),
+        input: mode,
       };
     }
     let toolPermissionContext = getToolPermissionContext(toolUseContext);
-    let Ae = isAutoAllowedInMode(tool, toolPermissionContext);
-    let Ie = isAutoClassifierActive(Ae) && requiresClassifierForHookAllow(tool);
-    let Me = !Ie && Ae === "auto" && getFeatureValue_CACHED_MAY_BE_STALE("tengu_virtual_knuth", false);
-    let We = !Ie && !Me && isClassifierRoutedMcpTool(tool, toolPermissionContext);
-    let ze = !Ie && !Me && isWebToolClassifierRouted(tool, toolPermissionContext);
-    let lt = !Ie && !Me && !We && !ze && isRemoteBrowserToolUnderModeFloor(tool);
-    if (!tool.requiresUserInteraction?.() && (Ie || Me || We || ze || lt)) {
+    let autoAllowance = isAutoAllowedInMode(tool, toolPermissionContext);
+    let needsClassifier = isAutoClassifierActive(autoAllowance) && requiresClassifierForHookAllow(tool);
+    let isAutoModeFunnel =
+      !needsClassifier &&
+      autoAllowance === "auto" &&
+      getFeatureValue_CACHED_MAY_BE_STALE("tengu_virtual_knuth", false);
+    let isRemoteSessionMcp =
+      !needsClassifier && !isAutoModeFunnel && isClassifierRoutedMcpTool(tool, toolPermissionContext);
+    let isCoworkWeb =
+      !needsClassifier && !isAutoModeFunnel && isWebToolClassifierRouted(tool, toolPermissionContext);
+    let isRemoteBrowser =
+      !needsClassifier &&
+      !isAutoModeFunnel &&
+      !isRemoteSessionMcp &&
+      !isCoworkWeb &&
+      isRemoteBrowserToolUnderModeFloor(tool);
+    if (
+      !tool.requiresUserInteraction?.() &&
+      (needsClassifier || isAutoModeFunnel || isRemoteSessionMcp || isCoworkWeb || isRemoteBrowser)
+    ) {
       let decisionReason =
         hookPermissionResult.decisionReason?.type === "hook"
           ? hookPermissionResult.decisionReason
           : undefined;
-      let nt = !lt || isAutoClassifierActive(Ae);
-      if (nt)
+      let shouldFunnel = !isRemoteBrowser || isAutoClassifierActive(autoAllowance);
+      if (shouldFunnel)
         logEvent("tengu_auto_mode_hook_allow_funneled", {
           toolName: sanitizeToolNameForAnalytics(tool.name),
           isMcp: tool.isMcp ?? false,
-          remoteSessionMcp: We,
-          coworkWeb: ze,
+          remoteSessionMcp: isRemoteSessionMcp,
+          coworkWeb: isCoworkWeb,
           hookSource: fromEnumOpt(hookSourceKind(decisionReason?.hookSource)),
           agentMsgId: sanitizeMarkName(assistantMessage.message.id),
           toolUseId: sanitizeMarkName(toolUseID),
         });
       logForDebugging(
-        nt
+        shouldFunnel
           ? `Hook approved tool use for ${tool.name}, but auto mode requires classifier adjudication`
           : `Hook approved tool use for ${tool.name}, but a hook cannot approve a call to CCR's cloud browser; the normal permission check decides`,
       );
       return {
         decision: await canUseTool(
           tool,
-          hookUpdatedInput,
+          mode,
           {
             ...toolUseContext,
             hookAllowVouched: true,
@@ -1126,7 +1178,7 @@ async function resolveHookPermissionDecision(
           assistantMessage,
           toolUseID,
         ),
-        input: hookUpdatedInput,
+        input: mode,
       };
     }
     logForDebugging(
@@ -1134,26 +1186,19 @@ async function resolveHookPermissionDecision(
         ? `Hook satisfied user interaction for ${tool.name} via updatedInput`
         : `Hook approved tool use for ${tool.name}, bypassing permission prompt`,
     );
-    countMcpPolicyRecheckSkipped(
-      "preToolUseHook",
-      tool,
-      hookUpdatedInput,
-      toolUseContext,
-      assistantMessage,
-      toolUseID,
-    );
+    countMcpPolicyRecheckSkipped("preToolUseHook", tool, mode, toolUseContext, assistantMessage, toolUseID);
     return runPermissionPipeline(hookPermissionResult, {
       tool,
-      input: hookUpdatedInput,
+      input: mode,
       toolUseContext,
       canUseTool,
       assistantMessage,
       toolUseID,
     });
   }
-  return runPermissionPipeline(Z, {
+  return runPermissionPipeline(displayDroppedResult, {
     tool,
-    input: hookUpdatedInput,
+    input: mode,
     toolUseContext,
     canUseTool,
     assistantMessage,
@@ -1165,7 +1210,7 @@ async function resolveHookPermissionDecision(
  * 权限评估管线：先规则/模式评估（aWr），再分类器/后处理（nWr）；有输入级硬拒绝直接返回；allow 但上下文要求 requireCanUseTool、或结论为 ask 时调用 canUseTool（必要时禁止"总是允许"）。
  */
 async function runPermissionPipeline(decision, request) {
-  let r = await decideWithToolCheckHooks(
+  let checkedDecision = await decideWithToolCheckHooks(
     {
       tool: request.tool,
       input: request.input,
@@ -1175,12 +1220,12 @@ async function runPermissionPipeline(decision, request) {
     },
     request.assistantMessage.message.id,
   );
-  let s = await personAskAfterHooks(
+  let finalDecision = await personAskAfterHooks(
     enforceClassifierOnlyDecision(
       request.tool,
-      decision.behavior === "ask" && decision.hostDisplay !== undefined && r.behavior !== "deny"
+      decision.behavior === "ask" && decision.hostDisplay !== undefined && checkedDecision.behavior !== "deny"
         ? decision
-        : r,
+        : checkedDecision,
     ),
     {
       tool: request.tool,
@@ -1189,13 +1234,14 @@ async function runPermissionPipeline(decision, request) {
       toolUseID: request.toolUseID,
     },
   );
-  let h = s.behavior === "deny" ? null : reservedKeyDenialIfPresent(request.input);
-  if (h !== null)
+  let reservedKeyDenial =
+    finalDecision.behavior === "deny" ? null : reservedKeyDenialIfPresent(request.input);
+  if (reservedKeyDenial !== null)
     return {
-      decision: h,
+      decision: reservedKeyDenial,
       input: request.input,
     };
-  if (s.behavior === "allow" && request.toolUseContext.requireCanUseTool === true)
+  if (finalDecision.behavior === "allow" && request.toolUseContext.requireCanUseTool === true)
     return {
       decision: await request.canUseTool(
         request.tool,
@@ -1206,9 +1252,9 @@ async function runPermissionPipeline(decision, request) {
       ),
       input: request.input,
     };
-  if (s.behavior !== "ask")
+  if (finalDecision.behavior !== "ask")
     return {
-      decision: s,
+      decision: finalDecision,
       input: request.input,
     };
   return {
@@ -1226,10 +1272,10 @@ async function runPermissionPipeline(decision, request) {
         request.toolUseID,
       ) || isWebSearchClassifierRouted(request.tool, getToolPermissionContext(request.toolUseContext))
         ? {
-            ...s,
+            ...finalDecision,
             suppressAlwaysAllowRule: true,
           }
-        : s,
+        : finalDecision,
     ),
     input: request.input,
   };
@@ -1247,8 +1293,8 @@ async function* runPreToolUseHooks(
   requestId,
   mcpServerType,
   mcpServerBaseUrl,
-  validateInput = (G) =>
-    tool.validateInput?.(G, {
+  validateInput = (hookInput) =>
+    tool.validateInput?.(hookInput, {
       ...toolUseContext,
       toolUseId: toolUseID,
     }),
@@ -1258,16 +1304,16 @@ async function* runPreToolUseHooks(
   )
     return;
   let hookStartTime = Date.now();
-  let q;
-  let Z;
+  let deferredSource;
+  let denyResult;
   let strictestHookAnswer;
-  let ke;
-  function we() {
+  let guardedAnswer;
+  function isRemoteCall() {
     return toolUseContext.remoteCall !== undefined || getRemoteHookRunner(toolUseContext) !== undefined;
   }
-  let Ee;
-  let Ae;
-  let Ie = {};
+  let askResult;
+  let stopReason;
+  let hookExtra = {};
   try {
     for await (let result of executePreToolHooks(
       tool.name,
@@ -1278,7 +1324,7 @@ async function* runPreToolUseHooks(
       toolUseContext.abortController.signal,
       undefined,
       undefined,
-      Ie,
+      hookExtra,
     ))
       try {
         if (
@@ -1293,8 +1339,8 @@ async function* runPreToolUseHooks(
           };
         if (result.blockingError) {
           let denialMessage = getPreToolHookBlockingMessage(`PreToolUse:${tool.name}`, result.blockingError);
-          if (!(result.blockingError.hookDidNotFinish && Z?.behavior === "deny"))
-            Z = {
+          if (!(result.blockingError.hookDidNotFinish && denyResult?.behavior === "deny"))
+            denyResult = {
               behavior: "deny",
               message: denialMessage,
               decisionReason: {
@@ -1308,12 +1354,12 @@ async function* runPreToolUseHooks(
             };
           yield {
             type: "hookPermissionResult",
-            hookPermissionResult: Z,
+            hookPermissionResult: denyResult,
           };
         }
         let updatedInput = result.updatedInput;
         if (updatedInput !== undefined) {
-          let lt = await validateHookUpdatedInput(tool, updatedInput, {
+          let validation = await validateHookUpdatedInput(tool, updatedInput, {
             event: "PreToolUse",
             source: result.hookSource,
             applies: result.permissionBehavior !== "deny" && result.permissionBehavior !== "defer",
@@ -1322,41 +1368,41 @@ async function* runPreToolUseHooks(
             if (isAbortError(error) && toolUseContext.abortController.signal.aborted) return "cancelled";
             throw error;
           });
-          if (lt === "cancelled") {
+          if (validation === "cancelled") {
             yield {
               type: "stop",
             };
             return;
           }
-          if (!lt.ok) {
-            Z = lt.deny;
-            ke = lt.deny;
+          if (!validation.ok) {
+            denyResult = validation.deny;
+            guardedAnswer = validation.deny;
             if (toolUseContext.remoteCall !== undefined)
-              setStrictestHookAnswer(toolUseContext.remoteCall, lt.deny);
+              setStrictestHookAnswer(toolUseContext.remoteCall, validation.deny);
             yield {
               type: "hookPermissionResult",
-              hookPermissionResult: Z,
+              hookPermissionResult: denyResult,
             };
             continue;
           }
-          updatedInput = lt.input;
+          updatedInput = validation.input;
           yield {
             type: "hookRewriterKind",
             kind: result.rewriterKind ?? "remote",
             source: result.rewriteSource ?? result.hookSource,
           };
         }
-        let ze =
+        let isMemoryRewrite =
           result.permissionBehavior !== "deny" &&
           shouldReplaceMemoryInput(tool, toolInput, result.updatedInput);
-        if (ze) {
+        if (isMemoryRewrite) {
           strictestHookAnswer = guardAccountMemoryHookRewrite(tool, "PreToolUse", result.hookSource);
-          Z = strictestHookAnswer;
+          denyResult = strictestHookAnswer;
           if (toolUseContext.remoteCall !== undefined)
             setStrictestHookAnswer(toolUseContext.remoteCall, strictestHookAnswer);
           yield {
             type: "hookPermissionResult",
-            hookPermissionResult: Z,
+            hookPermissionResult: denyResult,
           };
         }
         if (result.preventContinuation) {
@@ -1365,18 +1411,18 @@ async function* runPreToolUseHooks(
             shouldPreventContinuation: true,
           };
           if (result.stopReason) {
-            Ae = result.stopReason;
+            stopReason = result.stopReason;
             yield {
               type: "stopReason",
               stopReason: result.stopReason,
             };
           }
         }
-        if (ze) continue;
+        if (isMemoryRewrite) continue;
         if (result.permissionBehavior !== undefined) {
           logForDebugging(`Hook result has permissionBehavior=${result.permissionBehavior}`);
           if (result.permissionBehavior === "defer") {
-            q = result.hookSource || `PreToolUse:${tool.name}`;
+            deferredSource = result.hookSource || `PreToolUse:${tool.name}`;
             continue;
           }
           let decisionReason = {
@@ -1393,24 +1439,24 @@ async function* runPreToolUseHooks(
             yield {
               type: "hookPermissionResult",
               hookPermissionResult:
-                we() && (Z ?? Ee) !== undefined
-                  ? (Z ?? Ee)
-                  : (ke ?? {
+                isRemoteCall() && (denyResult ?? askResult) !== undefined
+                  ? (denyResult ?? askResult)
+                  : (guardedAnswer ?? {
                       behavior: "allow",
                       updatedInput,
                       decisionReason,
                     }),
             };
           else if (result.permissionBehavior === "ask") {
-            let Je = Ee === undefined;
-            Ee = {
+            let isFirstAsk = askResult === undefined;
+            askResult = {
               behavior: "ask",
               updatedInput,
               message:
                 result.hookPermissionDecisionReason ||
                 `Hook PreToolUse:${tool.name} ${getRuleBehaviorDescription(result.permissionBehavior)} this tool`,
               decisionReason,
-              ...(Je &&
+              ...(isFirstAsk &&
                 result.permissionDisplay && {
                   hostDisplay: result.permissionDisplay,
                   hostDisplayInput: updatedInput ?? toolInput,
@@ -1420,20 +1466,21 @@ async function* runPreToolUseHooks(
             };
             yield {
               type: "hookPermissionResult",
-              hookPermissionResult: we() && Z !== undefined ? Z : (ke ?? Ee),
+              hookPermissionResult:
+                isRemoteCall() && denyResult !== undefined ? denyResult : (guardedAnswer ?? askResult),
             };
           } else {
-            let Je = {
+            let otherResult = {
               behavior: result.permissionBehavior,
               message:
                 result.hookPermissionDecisionReason ||
                 `Hook PreToolUse:${tool.name} ${getRuleBehaviorDescription(result.permissionBehavior)} this tool`,
               decisionReason,
             };
-            Z = Je;
+            denyResult = otherResult;
             yield {
               type: "hookPermissionResult",
-              hookPermissionResult: Je,
+              hookPermissionResult: otherResult,
             };
           }
         }
@@ -1506,29 +1553,29 @@ async function* runPreToolUseHooks(
             }),
           },
         };
-        if (Z) {
+        if (denyResult) {
           yield {
             type: "hookPermissionResult",
-            hookPermissionResult: Z,
+            hookPermissionResult: denyResult,
           };
           return;
         } else {
-          if (q) {
+          if (deferredSource) {
             yield {
               type: "defer",
-              hookName: q,
+              hookName: deferredSource,
             };
-            q = undefined;
+            deferredSource = undefined;
           }
           yield {
             type: "stop",
-            stopReason: Ae ?? PRE_TOOL_HOOK_ERROR_MESSAGE,
+            stopReason: stopReason ?? PRE_TOOL_HOOK_ERROR_MESSAGE,
           };
         }
       }
   } catch (error) {
-    let We = Ie.deniedBefore
-      ? `${Ie.deniedBefore}
+    let deniedPrefix = hookExtra.deniedBefore
+      ? `${hookExtra.deniedBefore}
 
 `
       : "";
@@ -1543,40 +1590,40 @@ async function* runPreToolUseHooks(
           hookEvent: lit_2("PreToolUse"),
           toolName: sanitizeToolNameForAnalytics(tool.name),
         });
-        if (Z)
+        if (denyResult)
           yield {
             type: "hookPermissionResult",
-            hookPermissionResult: Z,
+            hookPermissionResult: denyResult,
           };
         else {
-          if (q)
+          if (deferredSource)
             yield {
               type: "defer",
-              hookName: q,
+              hookName: deferredSource,
             };
           yield {
             type: "stop",
-            stopReason: Ae ?? We + PRE_TOOL_HOOK_TIMEOUT_MESSAGE,
+            stopReason: stopReason ?? deniedPrefix + PRE_TOOL_HOOK_TIMEOUT_MESSAGE,
           };
         }
         return;
       }
     } else {
       logError(withTelemetryMessage(toError(error), "PreToolUse hook dispatch failed"));
-      if (Z)
+      if (denyResult)
         yield {
           type: "hookPermissionResult",
-          hookPermissionResult: Z,
+          hookPermissionResult: denyResult,
         };
       else {
-        if (q)
+        if (deferredSource)
           yield {
             type: "defer",
-            hookName: q,
+            hookName: deferredSource,
           };
         yield {
           type: "stop",
-          stopReason: Ae ?? We + PRE_TOOL_HOOK_ERROR_MESSAGE,
+          stopReason: stopReason ?? deniedPrefix + PRE_TOOL_HOOK_ERROR_MESSAGE,
         };
       }
       return;
@@ -1586,43 +1633,16 @@ async function* runPreToolUseHooks(
     };
     return;
   }
-  if (q && !Z)
+  if (deferredSource && !denyResult)
     yield {
       type: "defer",
-      hookName: q,
+      hookName: deferredSource,
     };
   if (strictestHookAnswer)
     yield {
       type: "hookPermissionResult",
       hookPermissionResult: strictestHookAnswer,
     };
-}
-//@ chunk-s61vbvea.js:610375-610638 placement
-/**
- * 限制钩子 additionalContext 的总长度：逐条加入，超出时截断剩余条目。
- */
-async function capAdditionalContext(entries, event, storage) {
-  let s = [];
-  let h = 0;
-  let y = 0;
-  while (y < entries.length) {
-    let S = entries[y] ?? "";
-    let w = EVENT_TOOL_SITE_NAMES - h;
-    let R = S.length <= Math.min(RESULT_TOKEN_BUDGET, w);
-    let P = R || w >= MAX_PREVIEW_CHARS ? [S] : entries.slice(y);
-    let j = R
-      ? S
-      : await truncateAdditionalContext({
-          entries: P,
-          limit: Math.max(0, Math.min(RESULT_TOKEN_BUDGET, w)),
-          event,
-          storageV5: storage,
-        });
-    s.push(j);
-    h += j.length;
-    y += P.length;
-  }
-  return s;
 }
 export {
   capAdditionalContext,

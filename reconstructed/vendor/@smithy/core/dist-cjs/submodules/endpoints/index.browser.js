@@ -5,11 +5,11 @@
  * pieces: chunk-a3vzsfpr.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_types } from "../../../../types/dist-cjs/index.js";
 
 //@ chunk-a3vzsfpr.js:819-7701 cjs-fingerprint
-var require_index_browser = x(function (cjsExports) {
+var require_index_browser = __commonJS(function (cjsExports) {
   var EndpointURLScheme = require_types();
   class EndpointCache {
     capacity;
@@ -56,13 +56,13 @@ var require_index_browser = x(function (cjsExports) {
   );
   var isIpAddress = (value) => IP_V4_REGEX.test(value) || (value.startsWith("[") && value.endsWith("]"));
   var regExp = new RegExp("^(?!.*-$)(?!-)[a-zA-Z0-9-]{1,63}$");
-  var m = (e, n = false) => {
-    if (!n) return regExp.test(e);
-    let parts = e.split(".");
-    for (let r of parts) if (!m(r)) return false;
+  var isValidHostLabel = (value, allowSubDomains = false) => {
+    if (!allowSubDomains) return regExp.test(value);
+    let parts = value.split(".");
+    for (let label of parts) if (!isValidHostLabel(label)) return false;
     return true;
   };
-  var I = {};
+  var customEndpointFunctions = {};
   var debugId = "endpoints";
   function toDebugString(input) {
     if (typeof input !== "object" || input == null) return input;
@@ -76,7 +76,7 @@ var require_index_browser = x(function (cjsExports) {
       this.name = "EndpointError";
     }
   }
-  var coalesce = (e, args) => e === args;
+  var coalesce = (left, args) => left === args;
   var getAttrPathList = (path) => {
     let parts = path.split(".");
     let pathList = [];
@@ -146,7 +146,7 @@ var require_index_browser = x(function (cjsExports) {
       isIp,
     };
   };
-  var stringEquals = (e, n) => e === n;
+  var stringEquals = (left, right) => left === right;
   var substring = (input, start, stop, reverse) => {
     if (start >= stop || input.length < stop) return null;
     if (!reverse) return input.substring(start, stop);
@@ -154,11 +154,11 @@ var require_index_browser = x(function (cjsExports) {
   };
   var uriEncode = (value) =>
     encodeURIComponent(value).replace(/[!*'()]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
-  var Ne = {
+  var defaultEndpointFunctions = {
     booleanEquals: coalesce,
     getAttr,
     isSet,
-    isValidHostLabel: m,
+    isValidHostLabel,
     not,
     parseURL,
     stringEquals,
@@ -213,15 +213,17 @@ var require_index_browser = x(function (cjsExports) {
       ["boolean", "number"].includes(typeof arg) ? arg : group$2.evaluateExpression(arg, "arg", options),
     );
     let namespaceSeparatorIndex = fn.split(".");
-    if (namespaceSeparatorIndex[0] in I && namespaceSeparatorIndex[1] != null)
-      return I[namespaceSeparatorIndex[0]][namespaceSeparatorIndex[1]](...evaluatedArgs);
-    return Ne[fn](...evaluatedArgs);
+    if (namespaceSeparatorIndex[0] in customEndpointFunctions && namespaceSeparatorIndex[1] != null)
+      return customEndpointFunctions[namespaceSeparatorIndex[0]][namespaceSeparatorIndex[1]](
+        ...evaluatedArgs,
+      );
+    return defaultEndpointFunctions[fn](...evaluatedArgs);
   };
   var group$2 = {
     evaluateExpression,
     callFunction,
   };
-  var _e = ({ assign, ...condition }, options) => {
+  var evaluateCondition = ({ assign, ...condition }, options) => {
     if (assign && assign in options.referenceRecord)
       throw new EndpointError(`'${assign}' is already defined in Reference Record.`);
     let value = callFunction(condition, options);
@@ -239,27 +241,27 @@ var require_index_browser = x(function (cjsExports) {
     };
   };
   var evaluateConditions = (conditions = [], options) => {
-    let t = {};
-    for (let r of conditions) {
-      let { result: s, toAssign } = _e(r, {
+    let referenceRecord = {};
+    for (let condition of conditions) {
+      let { result, toAssign } = evaluateCondition(condition, {
         ...options,
         referenceRecord: {
           ...options.referenceRecord,
-          ...t,
+          ...referenceRecord,
         },
       });
-      if (!s)
+      if (!result)
         return {
-          result: s,
+          result,
         };
       if (toAssign) {
-        t[toAssign.name] = toAssign.value;
+        referenceRecord[toAssign.name] = toAssign.value;
         options.logger?.debug?.(`${debugId} assign: ${toAssign.name} := ${toDebugString(toAssign.value)}`);
       }
     }
     return {
       result: true,
-      referenceRecord: t,
+      referenceRecord,
     };
   };
   var getEndpointHeaders = (headers, options) =>
@@ -275,11 +277,11 @@ var require_index_browser = x(function (cjsExports) {
       }),
       {},
     );
-  var getEndpointProperties = (properties, n) =>
+  var getEndpointProperties = (properties, options) =>
     Object.entries(properties).reduce(
       (acc, [propertyKey, propertyVal]) => ({
         ...acc,
-        [propertyKey]: group$1.getEndpointProperty(propertyVal, n),
+        [propertyKey]: group$1.getEndpointProperty(propertyVal, options),
       }),
       {},
     );
@@ -302,7 +304,7 @@ var require_index_browser = x(function (cjsExports) {
     getEndpointProperty,
     getEndpointProperties,
   };
-  var Se = (endpointUrl, options) => {
+  var parseEndpointUrl = (endpointUrl, options) => {
     let expression = evaluateExpression(endpointUrl, "Endpoint URL", options);
     if (typeof expression === "string")
       try {
@@ -333,7 +335,7 @@ var require_index_browser = x(function (cjsExports) {
       ...(properties != null && {
         properties: getEndpointProperties(properties, options_2),
       }),
-      url: Se(url, options_2),
+      url: parseEndpointUrl(url, options_2),
     };
   };
   var evaluateErrorRule = (errorRule, options) => {
@@ -357,7 +359,7 @@ var require_index_browser = x(function (cjsExports) {
         if (endpointOrUndefined) return endpointOrUndefined;
       } else if (rule.type === "error") evaluateErrorRule(rule, options);
       else if (rule.type === "tree") {
-        let endpointOrUndefined = z.evaluateTreeRule(rule, options);
+        let endpointOrUndefined = exportedRules.evaluateTreeRule(rule, options);
         if (endpointOrUndefined) return endpointOrUndefined;
       } else throw new EndpointError(`Unknown endpoint rule: ${rule}`);
     throw new EndpointError("Rules evaluation failed");
@@ -366,7 +368,7 @@ var require_index_browser = x(function (cjsExports) {
     let { conditions, rules } = treeRule;
     let { result, referenceRecord } = evaluateConditions(conditions, options);
     if (!result) return;
-    return z.evaluateRules(rules, {
+    return exportedRules.evaluateRules(rules, {
       ...options,
       referenceRecord: {
         ...options.referenceRecord,
@@ -374,7 +376,7 @@ var require_index_browser = x(function (cjsExports) {
       },
     });
   };
-  var z = {
+  var exportedRules = {
     evaluateRules,
     evaluateTreeRule,
   };
@@ -385,12 +387,14 @@ var require_index_browser = x(function (cjsExports) {
     let mapped = Object.entries(parameters)
       .filter(([, value]) => value.default != null)
       .map(([key, value]) => [key, value.default]);
-    if (mapped.length > 0) for (let [c, g] of mapped) endpointParams[c] = endpointParams[c] ?? g;
+    if (mapped.length > 0)
+      for (let [key, defaultValue] of mapped) endpointParams[key] = endpointParams[key] ?? defaultValue;
     let mapped_2 = Object.entries(parameters)
       .filter(([, value]) => value.required)
       .map(([key]) => key);
-    for (let c of mapped_2)
-      if (endpointParams[c] == null) throw new EndpointError(`Missing required parameter: '${c}'`);
+    for (let requiredKey of mapped_2)
+      if (endpointParams[requiredKey] == null)
+        throw new EndpointError(`Missing required parameter: '${requiredKey}'`);
     let endpoint = evaluateRules(rules, {
       endpointParams,
       logger,
@@ -401,9 +405,9 @@ var require_index_browser = x(function (cjsExports) {
   };
   cjsExports.EndpointCache = EndpointCache;
   cjsExports.EndpointError = EndpointError;
-  cjsExports.customEndpointFunctions = I;
+  cjsExports.customEndpointFunctions = customEndpointFunctions;
   cjsExports.isIpAddress = isIpAddress;
-  cjsExports.isValidHostLabel = m;
+  cjsExports.isValidHostLabel = isValidHostLabel;
   cjsExports.resolveEndpoint = resolveEndpoint;
 });
 export { require_index_browser };

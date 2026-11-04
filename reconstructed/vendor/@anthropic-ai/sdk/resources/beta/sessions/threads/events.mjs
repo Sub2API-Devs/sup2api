@@ -6,7 +6,7 @@
  * attribution: esm-fingerprint 1
  */
 import { APIResource } from "../../../../core/resource.mjs";
-import { I } from "../../../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../../../internal/utils/path.mjs";
 import { TokenPage } from "../../../../core/pagination.mjs";
 import { buildHeaders } from "../../../../internal/headers.mjs";
 
@@ -15,7 +15,7 @@ class Events_2 extends APIResource {
   list(threadID, params, options) {
     let { session_id, betas, workspace_id, ...query } = params;
     return this._client.getAPIList(
-      I`/v1/sessions/${session_id}/threads/${threadID}/events?beta=true`,
+      parseUrl_2`/v1/sessions/${session_id}/threads/${threadID}/events?beta=true`,
       TokenPage,
       {
         query,
@@ -36,7 +36,7 @@ class Events_2 extends APIResource {
   }
   stream(threadID, params, options) {
     let { session_id, betas, workspace_id, ...query } = params;
-    return this._client.get(I`/v1/sessions/${session_id}/threads/${threadID}/stream?beta=true`, {
+    return this._client.get(parseUrl_2`/v1/sessions/${session_id}/threads/${threadID}/stream?beta=true`, {
       query,
       ...options,
       headers: buildHeaders([

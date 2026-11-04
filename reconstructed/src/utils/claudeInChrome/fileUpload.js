@@ -69,15 +69,15 @@ import { CCR_OAUTH_TOKEN_PATH } from "../authFileDescriptor.js";
 /**
  * --restricted 会话或"禁止读工作目录外"时判断路径是否被拒：受限模式下不在允许工作路径且内部可读检查不放行，或命中外部读阻断。
  */
-function isRestrictedReadBlocked(n, e) {
-  let r = e.restricted && spellingsToJudge(n);
+function isRestrictedReadBlocked(path, permissionContext) {
+  let spellings = permissionContext.restricted && spellingsToJudge(path);
   return (
-    (r &&
-      !pathInAllowedWorkingPath(n, e, r) &&
-      checkReadableInternalPath(n, {}, r, {
+    (spellings &&
+      !pathInAllowedWorkingPath(path, permissionContext, spellings) &&
+      checkReadableInternalPath(path, {}, spellings, {
         restricted: true,
       }).behavior !== "allow") ||
-    outsideReadBlocked(n, e)
+    outsideReadBlocked(path, permissionContext)
   );
 }
 //@ chunk-wn385gmf.js:1631-1717 placement
@@ -109,7 +109,7 @@ var CHROME_FILE_UPLOAD_POLICY = {
  * 列出上传可信的暂存根目录：附件目录，远程模式或设置 CLAUDE_STAGE_FILE_ROOT 时加上暂存根（来自聊天）与输出根。
  */
 async function stagingRoots(permissionContext) {
-  let e = [
+  let roots = [
     {
       path: sessionUploadsDir(),
       kind: "attachments",
@@ -117,13 +117,13 @@ async function stagingRoots(permissionContext) {
   ];
   if (permissionContext.isRemoteMode || env.CLAUDE_STAGE_FILE_ROOT)
     try {
-      e.push({
+      roots.push({
         path: getStageFileRoot(),
         kind: "staging",
         fromChat: true,
       });
       if (isFirstPartyRemoteSession(env.CLAUDE_CODE_REMOTE_SESSION_ID, env.CLAUDE_CODE_ENVIRONMENT_KIND))
-        e.push({
+        roots.push({
           path: getOutputsRoot(),
           kind: "staging",
         });
@@ -132,83 +132,79 @@ async function stagingRoots(permissionContext) {
         `[chrome file_upload] stage root unresolvable, skipping staging roots (${error instanceof Error ? error.message : String(error)})`,
       );
     }
-  return e;
+  return roots;
 }
 //@ chunk-wn385gmf.js:2341-3033 placement
 async function prepareChromeFileUploadInput(
   toolName,
-  e,
+  args,
   permissionContext,
-  {
-    maxTotalBytes: s = FILE_UPLOAD_MAX_TOTAL_BYTES,
-    hosted: o,
-    screen: a = CHROME_FILE_UPLOAD_POLICY.validate,
-  } = {},
+  { maxTotalBytes = FILE_UPLOAD_MAX_TOTAL_BYTES, hosted, screen = CHROME_FILE_UPLOAD_POLICY.validate } = {},
 ) {
   let budget = {
-    remaining: s,
-    total: s,
+    remaining: maxTotalBytes,
+    total: maxTotalBytes,
   };
-  let l = () =>
-    routeFileUploadCalls(toolName, e, (h) =>
-      prepareFileUploadInput(h, permissionContext, budget, {
+  let runThroughRoute = () =>
+    routeFileUploadCalls(toolName, args, (input) =>
+      prepareFileUploadInput(input, permissionContext, budget, {
         ...CHROME_FILE_UPLOAD_POLICY,
-        validate: a,
+        validate: screen,
       }),
     );
-  if (o === undefined) return l();
+  if (hosted === undefined) return runThroughRoute();
   if (toolName !== "file_upload") {
-    let h = {
+    let unavailable = {
       error: UPLOAD_IN_BATCH_UNAVAILABLE,
     };
     return routeFileUploadCalls(
       toolName,
-      e,
-      async () => h,
-      disklessHostState.peek(o.session)?.host ? h : UPLOAD_UNAVAILABLE_RESULT,
+      args,
+      async () => unavailable,
+      disklessHostState.peek(hosted.session)?.host ? unavailable : UPLOAD_UNAVAILABLE_RESULT,
     );
   }
-  if ("files" in e)
+  if ("files" in args)
     return {
       error: "file_upload takes `paths`, not `files`. Nothing was uploaded. Call it again without `files`.",
     };
-  let host = isDiskless() ? disklessHostState.peek(o.session)?.host : undefined;
-  let f;
+  let host = isDiskless() ? disklessHostState.peek(hosted.session)?.host : undefined;
+  let files;
   if (host) {
-    let { paths } = e;
+    let { paths } = args;
     if (!Array.isArray(paths) || paths.length === 0)
       return {
         error: CHROME_FILE_UPLOAD_POLICY.noPaths,
       };
-    f = await host.read(paths, permissionContext, s, o.signal, false);
+    files = await host.read(paths, permissionContext, maxTotalBytes, hosted.signal, false);
   } else {
-    let h = await l();
-    f = {
-      files: h.input?.files,
-      error: h.error,
+    let routed = await runThroughRoute();
+    files = {
+      files: routed.input?.files,
+      error: routed.error,
     };
   }
-  return f.error !== undefined
+  return files.error !== undefined
     ? {
-        error: f.error,
+        error: files.error,
       }
     : {
-        input: e,
+        input: args,
         callMeta: {
-          [ANTHROPIC_CHROMEUPLOADFILES]: f.files,
+          [ANTHROPIC_CHROMEUPLOADFILES]: files.files,
         },
       };
 }
 //@ chunk-wn385gmf.js:3033-3474 placement
-async function preparePaneFileUploadInput(n, permissionContext, { hostAsksPerFile }) {
+async function preparePaneFileUploadInput(input, permissionContext, { hostAsksPerFile }) {
   if (isDiskless()) return UPLOAD_UNAVAILABLE_RESULT;
-  if (Array.isArray(n.paths) && n.paths.length > 1)
+  if (Array.isArray(input.paths) && input.paths.length > 1)
     return {
       error:
         "file_upload takes one file per call in this browser pane. Nothing was uploaded. Call it once for each file.",
     };
   return prepareFileUploadInput(
-    n,
+    input,
     permissionContext,
     {
       remaining: FILE_UPLOAD_MAX_TOTAL_BYTES,
@@ -225,22 +221,22 @@ async function preparePaneFileUploadInput(n, permissionContext, { hostAsksPerFil
   );
 }
 //@ chunk-wn385gmf.js:3474-4057 placement
-async function passThroughChromeFileUploadInput(toolName, e, r) {
-  return routeFileUploadCalls(toolName, e, async (s) => {
-    let paths = s.paths;
+async function passThroughChromeFileUploadInput(toolName, args, screen) {
+  return routeFileUploadCalls(toolName, args, async (input) => {
+    let paths = input.paths;
     if (!Array.isArray(paths) || paths.length === 0)
       return {
         error:
           "file_upload requires a non-empty `paths` array of files the user has shared with this session.",
       };
-    let a = [];
+    let screenedPaths = [];
     for (let path of paths) {
       if (typeof path !== "string")
         return {
           error: "file_upload `paths` entries must be strings.",
         };
       try {
-        a.push(await screenUploadPath(path, r));
+        screenedPaths.push(await screenUploadPath(path, screen));
       } catch (error) {
         logForDebugging(
           `[chrome file_upload] rejected path (pass-through): ${path} (${error instanceof Error ? error.message : String(error)})`,
@@ -255,11 +251,11 @@ async function passThroughChromeFileUploadInput(toolName, e, r) {
         };
       }
     }
-    let { files, paths: paths_2, ...c } = s;
+    let { files, paths: paths_2, ...rest } = input;
     return {
       input: {
-        ...c,
-        paths: a,
+        ...rest,
+        paths: screenedPaths,
       },
     };
   });
@@ -281,51 +277,52 @@ async function routeFileUploadCalls(
       return {
         error: "browser_batch requires an `actions` array.",
       };
-    let o = [...args.actions];
-    let a = false;
-    for (let idx = 0; idx < o.length; idx++) {
-      let l = o[idx];
-      if (typeof l !== "object" || l === null || typeof l.name !== "string")
+    let actions = [...args.actions];
+    let changed = false;
+    for (let idx = 0; idx < actions.length; idx++) {
+      let action = actions[idx];
+      if (typeof action !== "object" || action === null || typeof action.name !== "string")
         return {
           error:
             "browser_batch sub-actions must be objects with a string name, and browser_batch cannot be nested.",
         };
-      let c = l.name;
-      if (!/^[\x20-\x7E]+$/.test(c))
+      let actionName = action.name;
+      if (!/^[\x20-\x7E]+$/.test(actionName))
         return {
-          error: invalidSubActionName(c),
+          error: invalidSubActionName(actionName),
         };
-      let lower = c.trim().toLowerCase();
+      let lower = actionName.trim().toLowerCase();
       if (lower === "browser_batch")
         return {
           error:
             "browser_batch sub-actions must be objects with a string name, and browser_batch cannot be nested.",
         };
-      if (lower === "file_upload" && c !== "file_upload")
+      if (lower === "file_upload" && actionName !== "file_upload")
         return {
-          error: invalidSubActionName(c),
+          error: invalidSubActionName(actionName),
         };
-      if (c !== "file_upload") continue;
-      let h = l;
-      let input = typeof h.input === "object" && h.input !== null ? h.input : {};
-      let p = isDiskless() ? disklessResult : await prepareInput(input);
-      if (p.error)
+      if (actionName !== "file_upload") continue;
+      let uploadAction = action;
+      let input =
+        typeof uploadAction.input === "object" && uploadAction.input !== null ? uploadAction.input : {};
+      let prepared = isDiskless() ? disklessResult : await prepareInput(input);
+      if (prepared.error)
         return {
-          error: p.error,
+          error: prepared.error,
         };
-      if (p.input !== h.input) {
-        o[idx] = {
-          ...h,
-          input: p.input,
+      if (prepared.input !== uploadAction.input) {
+        actions[idx] = {
+          ...uploadAction,
+          input: prepared.input,
         };
-        a = true;
+        changed = true;
       }
     }
-    return a
+    return changed
       ? {
           input: {
             ...args,
-            actions: o,
+            actions,
           },
         }
       : {
@@ -347,12 +344,12 @@ var UPLOAD_UNAVAILABLE_RESULT = {
 /**
  * 把引号与控制字符替换成 U+FFFD，避免提示文本被伪造。
  */
-function sanitizeForMessage(n) {
-  return n.replace(/["\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, "\uFFFD");
+function sanitizeForMessage(text) {
+  return text.replace(/["\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, "\uFFFD");
 }
 //@ chunk-wn385gmf.js:5121-5315 placement
-function notReadableUploadMessage(n) {
-  return `Cannot upload "${sanitizeForMessage(n)}": only files this session is allowed to read can be uploaded. Ask the user to share the file with this session, or to add its folder with /add-dir.`;
+function notReadableUploadMessage(path) {
+  return `Cannot upload "${sanitizeForMessage(path)}": only files this session is allowed to read can be uploaded. Ask the user to share the file with this session, or to add its folder with /add-dir.`;
 }
 //@ chunk-wn385gmf.js:5315-5548 placement
 function credentialPathUploadMessage(path) {
@@ -370,8 +367,8 @@ function relativeUploadPathMessage(path) {
 /**
  * 构造 browser_batch 子动作名非法的错误文本。
  */
-function invalidSubActionName(n) {
-  return `browser_batch sub-action name "${sanitizeForMessage(n)}" is not a valid tool name.`;
+function invalidSubActionName(name) {
+  return `browser_batch sub-action name "${sanitizeForMessage(name)}" is not a valid tool name.`;
 }
 //@ chunk-wn385gmf.js:6009-7081 placement
 /**
@@ -384,23 +381,21 @@ async function prepareFileUploadInput(input, permissionContext, budget, options)
     return {
       error: options.noPaths,
     };
-  let a = [];
+  let files = [];
   for (let path of paths) {
     if (typeof path !== "string")
       return {
         error: "file_upload `paths` entries must be strings.",
       };
-    let filename;
-    let b;
-    let R;
-    let _;
+    let realPath;
+    let requiredDigest;
+    let outsideWorkingFolders;
+    let needsHostAsk;
     try {
-      ({
-        realPath: filename,
-        requiredDigest: b,
-        outsideWorkingFolders: R,
-        needsHostAsk: _,
-      } = await options.validate(path, permissionContext));
+      ({ realPath, requiredDigest, outsideWorkingFolders, needsHostAsk } = await options.validate(
+        path,
+        permissionContext,
+      ));
     } catch (error) {
       logForDebugging(
         `[${options.tag} file_upload] rejected path: ${path} (${error instanceof Error ? error.message : String(error)})`,
@@ -412,57 +407,57 @@ async function prepareFileUploadInput(input, permissionContext, budget, options)
     }
     let uploadFile = await readUploadFile(
       path,
-      filename,
+      realPath,
       budget,
       options.tag,
-      R ? options.rejection : undefined,
+      outsideWorkingFolders ? options.rejection : undefined,
     );
     if ("error" in uploadFile)
       return {
         error: uploadFile.error,
       };
-    if (b !== undefined && computeContentHash(uploadFile.buf) !== b) {
+    if (requiredDigest !== undefined && computeContentHash(uploadFile.buf) !== requiredDigest) {
       logForDebugging(`[${options.tag} file_upload] registered attachment digest mismatch: ${path}`);
       return {
         error: options.rejection(path),
       };
     }
-    a.push({
+    files.push({
       data: uploadFile.buf.toString("base64"),
-      name: await uploadDisplayName(filename),
-      mimeType: guessMimeType(filename),
+      name: await uploadDisplayName(realPath),
+      mimeType: guessMimeType(realPath),
       ...(options.namesSource && {
-        sourcePath: filename,
+        sourcePath: realPath,
         requestedPath: sanitizeForMessage(path).replace(
           /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g,
           "\uFFFD",
         ),
-        needsHostAsk: _ !== false,
+        needsHostAsk: needsHostAsk !== false,
       }),
     });
   }
-  let { paths: paths_2, ...l } = input;
+  let { paths: paths_2, ...rest } = input;
   if (!options.namesSource)
     return {
       input: {
-        ...l,
-        files: a,
+        ...rest,
+        files,
       },
     };
-  let { needsHostAsk, sourcePath, requestedPath, hostAsksPerFile, ...p } = l;
+  let { needsHostAsk, sourcePath, requestedPath, hostAsksPerFile, ...restPaths } = rest;
   return {
     input: {
-      ...p,
-      files: a,
+      ...restPaths,
+      files,
     },
   };
 }
 //@ chunk-wn385gmf.js:7081-7186 placement
 async function uploadDisplayName(realPath) {
-  let e = await realpath(sessionUploadsDir()).catch(() => {
+  let sessionDirReal = await realpath(sessionUploadsDir()).catch(() => {
     return;
   });
-  return e !== undefined && dirname(realPath) === e
+  return sessionDirReal !== undefined && dirname(realPath) === sessionDirReal
     ? uploadDisplayName_2(basename(realPath))
     : basename(realPath);
 }
@@ -470,54 +465,55 @@ async function uploadDisplayName(realPath) {
 /**
  * 访问文件系统前拒绝网络路径（UNC、自动挂载）与无法核验祖先链的路径，返回绝对路径及其链。
  */
-function screenNetworkPath(n, e) {
-  let r = expandPath(n);
-  let trimmed = n.trim();
-  if (isDevicePrefixPath(trimmed) || isDevicePrefixPath(r))
+function screenNetworkPath(rawPath, permissionContext) {
+  let absPath = expandPath(rawPath);
+  let trimmed = rawPath.trim();
+  if (isDevicePrefixPath(trimmed) || isDevicePrefixPath(absPath))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `network path not allowed: ${isDevicePrefixPath(trimmed) ? trimmed : r}`,
+      `network path not allowed: ${isDevicePrefixPath(trimmed) ? trimmed : absPath}`,
       "claudeInChrome/fileUpload: network path rejected before filesystem access",
     );
-  let { paths, vetted } = getPathsForNetworkScreen(r);
+  let { paths, vetted } = getPathsForNetworkScreen(absPath);
   if (!vetted)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "path could not be vetted (symbolic link chain or unreadable component)",
       "claudeInChrome/fileUpload: unvettable path ancestry rejected before filesystem access",
     );
-  let trustedNetworkDirectories = e.trustedNetworkDirectories;
-  for (let l of [trimmed, ...paths]) assertNotNetworkOrSuspicious(l, trustedNetworkDirectories);
+  let trustedNetworkDirectories = permissionContext.trustedNetworkDirectories;
+  for (let candidatePath of [trimmed, ...paths])
+    assertNotNetworkOrSuspicious(candidatePath, trustedNetworkDirectories);
   return {
-    absPath: r,
+    absPath,
     absChain: paths,
   };
 }
 //@ chunk-wn385gmf.js:7671-7933 placement
-function assertNotNetworkOrSuspicious(n, trustedNetworkDirectories) {
+function assertNotNetworkOrSuspicious(path, trustedNetworkDirectories) {
   if (
-    isUntrustedUncPath(n, trustedNetworkDirectories) ||
-    isUntrustedAutomountPath(n, trustedNetworkDirectories)
+    isUntrustedUncPath(path, trustedNetworkDirectories) ||
+    isUntrustedAutomountPath(path, trustedNetworkDirectories)
   )
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `network path not allowed: ${n}`,
+      `network path not allowed: ${path}`,
       "claudeInChrome/fileUpload: network path rejected",
     );
-  if (hasSuspiciousWindowsPathPattern(n, trustedNetworkDirectories))
+  if (hasSuspiciousWindowsPathPattern(path, trustedNetworkDirectories))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `suspicious path spelling: ${n}`,
+      `suspicious path spelling: ${path}`,
       "claudeInChrome/fileUpload: suspicious Windows path pattern rejected",
     );
 }
 //@ chunk-wn385gmf.js:7933-8218 placement
-function assertNoReadRule(n, e, r = {}) {
-  for (let s of n) {
-    if (matchingRuleForInput(s, e, "read", "deny", r))
+function assertNoReadRule(paths, permissionContext, options = {}) {
+  for (let checkPath of paths) {
+    if (matchingRuleForInput(checkPath, permissionContext, "read", "deny", options))
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `read denied: ${s}`,
+        `read denied: ${checkPath}`,
         "claudeInChrome/fileUpload: path matches a read deny rule",
       );
-    if (matchingRuleForInput(s, e, "read", "ask", r))
+    if (matchingRuleForInput(checkPath, permissionContext, "read", "ask", options))
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `read requires approval: ${s}`,
+        `read requires approval: ${checkPath}`,
         "claudeInChrome/fileUpload: path matches a read ask rule",
       );
   }
@@ -533,16 +529,16 @@ var MAX_SCREENED_PATHS = 64;
 /**
  * 审查单个上传路径并返回其判定结果。
  */
-async function screenUploadPath(n, e, r = MAX_PATH_ALIAS_DEPTH, s = new Set()) {
-  return (await screenUnreadUpload(n, e, r, s)).judged;
+async function screenUploadPath(path, permissionContext, depth = MAX_PATH_ALIAS_DEPTH, seen = new Set()) {
+  return (await screenUnreadUpload(path, permissionContext, depth, seen)).judged;
 }
 //@ chunk-wn385gmf.js:8312-10450 placement
 /**
  * 审查要上传的文件路径（空白填充、过长、网络路径、别名命名空间、读权限、凭据目录），返回拒绝原因或可读句柄。
  */
-async function screenUnreadUpload(n, e, r = MAX_PATH_ALIAS_DEPTH, s = new Set()) {
-  let trimmed = n.trim();
-  if (trimmed !== n)
+async function screenUnreadUpload(path, permissionContext, depth = MAX_PATH_ALIAS_DEPTH, seen = new Set()) {
+  let trimmed = path.trim();
+  if (trimmed !== path)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "surrounding whitespace",
       "claudeInChrome/fileUpload: whitespace-padded path rejected on the pass-through",
@@ -552,19 +548,19 @@ async function screenUnreadUpload(n, e, r = MAX_PATH_ALIAS_DEPTH, s = new Set())
       "path too long",
       "claudeInChrome/fileUpload: over-long path rejected on the pass-through",
     );
-  if (r < 0)
+  if (depth < 0)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `nested percent-encoding: ${trimmed}`,
       "claudeInChrome/fileUpload: multiply percent-encoded path rejected on the pass-through",
     );
-  if (trimmed.split(/[/\\]/).some((p) => p === ".."))
+  if (trimmed.split(/[/\\]/).some((segment) => segment === ".."))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `parent-segment spelling not allowed: ${trimmed}`,
       "claudeInChrome/fileUpload: dot-dot segment rejected on the pass-through",
     );
   assertNotAliasNamespace(trimmed);
-  let a = expandPath(trimmed);
-  if (!isAbsoluteAsSeen(trimmed, a)) throw new NotAnchoredAbsolutePathError();
+  let judgedPath = expandPath(trimmed);
+  if (!isAbsoluteAsSeen(trimmed, judgedPath)) throw new NotAnchoredAbsolutePathError();
   if (getPlatform() !== "windows" && trimmed.includes("\\"))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `backslash in a POSIX spelling: ${trimmed}`,
@@ -576,10 +572,10 @@ async function screenUnreadUpload(n, e, r = MAX_PATH_ALIAS_DEPTH, s = new Set())
       "claudeInChrome/fileUpload: trailing-separator path rejected on the pass-through",
     );
   if (
-    getDenyRuleForTool(e, {
+    getDenyRuleForTool(permissionContext, {
       name: FILE_READ_TOOL_NAME,
     }) !== null ||
-    getAskRuleForTool(e, {
+    getAskRuleForTool(permissionContext, {
       name: FILE_READ_TOOL_NAME,
     }) !== null
   )
@@ -587,58 +583,63 @@ async function screenUnreadUpload(n, e, r = MAX_PATH_ALIAS_DEPTH, s = new Set())
       "Read tool is restricted for this session",
       "claudeInChrome/fileUpload: Read tool denied or ask-gated for this session (pass-through)",
     );
-  for (let p of [trimmed, a]) {
-    let m = await isCredentialPath(p);
-    if (m !== undefined)
-      throw m === "credential_name"
+  for (let candidate of [trimmed, judgedPath]) {
+    let refusal = await isCredentialPath(candidate);
+    if (refusal !== undefined)
+      throw refusal === "credential_name"
         ? new CredentialPathError()
         : passThroughRefusal("a kernel or device path, or one of Claude Code's own credentials");
   }
-  let joined = trimmed
+  let path_2 = trimmed
     .split(/([/\\])/)
-    .map((p) => {
-      if (p === "/" || p === "\\" || !p.includes("%")) return p;
+    .map((part) => {
+      if (part === "/" || part === "\\" || !part.includes("%")) return part;
       try {
-        return decodeURIComponent(p);
+        return decodeURIComponent(part);
       } catch {
-        return p;
+        return part;
       }
     })
     .join("");
-  if (joined !== trimmed) await screenUploadPath(joined, e, r - 1, s);
-  let { absChain } = screenNetworkPath(trimmed, e);
-  for (let p of absChain) assertNotAliasNamespace(p);
-  let { realPath, looped, spellings } = await realpathWithSpellings(a);
+  if (path_2 !== trimmed) await screenUploadPath(path_2, permissionContext, depth - 1, seen);
+  let { absChain } = screenNetworkPath(trimmed, permissionContext);
+  for (let linkPath of absChain) assertNotAliasNamespace(linkPath);
+  let { realPath, looped, spellings } = await realpathWithSpellings(judgedPath);
   for (let spelling of spellings) {
-    assertNotNetworkOrSuspicious(spelling, e.trustedNetworkDirectories);
+    assertNotNetworkOrSuspicious(spelling, permissionContext.trustedNetworkDirectories);
     assertNotAliasNamespace(spelling);
   }
-  let g = new Set();
-  for (let p of new Set([trimmed, ...absChain, ...spellings])) {
-    let m = stripStreamSuffix(p);
-    if (m !== null && !s.has(m)) {
-      if (s.size >= MAX_SCREENED_PATHS)
+  let foldedPaths = new Set();
+  for (let spelling of new Set([trimmed, ...absChain, ...spellings])) {
+    let strippedPath = stripStreamSuffix(spelling);
+    if (strippedPath !== null && !seen.has(strippedPath)) {
+      if (seen.size >= MAX_SCREENED_PATHS)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
           "too many stream-base spellings",
           "claudeInChrome/fileUpload: stream-base fan-out rejected on the pass-through",
         );
-      s.add(m);
+      seen.add(strippedPath);
       try {
-        await screenUploadPath(m, e, r, s);
+        await screenUploadPath(strippedPath, permissionContext, depth, seen);
       } catch (error) {
         throw error instanceof CredentialPathError ? passThroughRefusal(PASS_THROUGH_REFUSAL_NOTE) : error;
       }
     }
-    for (let w of [p, foldCase_2(p)]) g.add(w).add(w.normalize("NFC")).add(w.normalize("NFD"));
+    for (let spellingVariant of [spelling, foldCase_2(spelling)])
+      foldedPaths
+        .add(spellingVariant)
+        .add(spellingVariant.normalize("NFC"))
+        .add(spellingVariant.normalize("NFD"));
   }
-  assertNoReadRule(g, e);
-  assertNoReadRule(g, e, {
+  assertNoReadRule(foldedPaths, permissionContext);
+  assertNoReadRule(foldedPaths, permissionContext, {
     caseInsensitiveTarget: true,
   });
-  for (let p of g)
-    if ((await isCredentialPath(p)) !== undefined) throw passThroughRefusal(PASS_THROUGH_REFUSAL_NOTE);
+  for (let foldedPath of foldedPaths)
+    if ((await isCredentialPath(foldedPath)) !== undefined)
+      throw passThroughRefusal(PASS_THROUGH_REFUSAL_NOTE);
   return {
-    judged: a,
+    judged: judgedPath,
     resolved: realPath,
     linked: absChain.length > 1 || looped,
   };
@@ -647,8 +648,8 @@ async function screenUnreadUpload(n, e, r = MAX_PATH_ALIAS_DEPTH, s = new Set())
 /**
  * 判断路径是否命中凭据名称或目录。
  */
-function isCredentialPath(n) {
-  return classifyCredentialPath(n, n, {
+function isCredentialPath(path) {
+  return classifyCredentialPath(path, path, {
     readable: true,
   });
 }
@@ -656,43 +657,43 @@ function isCredentialPath(n) {
 var PASS_THROUGH_REFUSAL_NOTE =
   "a name or place reached through a link, a case- or Unicode-folded spelling, or the file before a ':stream'";
 //@ chunk-wn385gmf.js:10609-10722 placement
-function passThroughRefusal(n) {
+function passThroughRefusal(note) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-    n,
+    note,
     "claudeInChrome/fileUpload: path refused by its name or place on the pass-through",
   );
 }
 //@ chunk-wn385gmf.js:10722-10831 placement
-function isAbsoluteAsSeen(n, e) {
-  if (isUncOrDevicePath(n) || isUncOrDevicePath(e)) return true;
-  if (!isAbsolute(n)) return false;
-  return getPlatform() !== "windows" || /^[a-z]:[\\/]/i.test(e);
+function isAbsoluteAsSeen(judgedPath, resolvedPath) {
+  if (isUncOrDevicePath(judgedPath) || isUncOrDevicePath(resolvedPath)) return true;
+  if (!isAbsolute(judgedPath)) return false;
+  return getPlatform() !== "windows" || /^[a-z]:[\\/]/i.test(resolvedPath);
 }
 //@ chunk-wn385gmf.js:10831-11173 placement
 /**
  * 若路径末段带 NTFS 备用数据流（name:stream），返回去掉 ":stream" 的部分（先去掉尾部的 / 和 /.）；否则返回 null。
  */
-function stripStreamSuffix(n) {
-  let e = n.length;
+function stripStreamSuffix(path) {
+  let end = path.length;
   for (;;) {
-    let u = n[e - 1];
-    if (u === "/" || u === "\\") {
-      e -= 1;
+    let char = path[end - 1];
+    if (char === "/" || char === "\\") {
+      end -= 1;
       continue;
     }
-    if (u === "." && e >= 2 && (n[e - 2] === "/" || n[e - 2] === "\\")) {
-      e -= 2;
+    if (char === "." && end >= 2 && (path[end - 2] === "/" || path[end - 2] === "\\")) {
+      end -= 2;
       continue;
     }
     break;
   }
-  let sliced = n.slice(0, e);
-  let s = Math.max(sliced.lastIndexOf("/"), sliced.lastIndexOf("\\")) + 1;
-  let index = sliced.indexOf(":", s + 1);
-  if (index === -1 || (s === 0 && index === 1)) return null;
-  let a = index;
-  while (a > s && sliced[a - 1] === " ") a -= 1;
-  return sliced.slice(0, a);
+  let sliced = path.slice(0, end);
+  let lastSeparator = Math.max(sliced.lastIndexOf("/"), sliced.lastIndexOf("\\")) + 1;
+  let index = sliced.indexOf(":", lastSeparator + 1);
+  if (index === -1 || (lastSeparator === 0 && index === 1)) return null;
+  let cursor = index;
+  while (cursor > lastSeparator && sliced[cursor - 1] === " ") cursor -= 1;
+  return sliced.slice(0, cursor);
 }
 //@ chunk-wn385gmf.js:11173-11249 placement
 /**
@@ -704,10 +705,10 @@ class NotAnchoredAbsolutePathError extends Error {
   }
 }
 //@ chunk-wn385gmf.js:11249-11406 placement
-async function realpathWithSpellings(n) {
-  let e;
+async function realpathWithSpellings(path) {
+  let resolved;
   try {
-    e = await realpath(n);
+    resolved = await realpath(path);
   } catch (error) {
     return {
       realPath: undefined,
@@ -716,17 +717,17 @@ async function realpathWithSpellings(n) {
     };
   }
   return {
-    realPath: e,
+    realPath: resolved,
     looped: false,
-    spellings: getPathsForPermissionCheck(e),
+    spellings: getPathsForPermissionCheck(resolved),
   };
 }
 //@ chunk-wn385gmf.js:11406-11726 placement
 /**
  * 拒绝内核别名命名空间路径：/dev、/proc、..namedfork、:$ 类 NTFS 属性、及其他别名拼写。
  */
-function assertNotAliasNamespace(n) {
-  let replaced = n.replace(/\\/g, "/");
+function assertNotAliasNamespace(path) {
+  let replaced = path.replace(/\\/g, "/");
   if (
     /^\/(?:dev|proc)(?:\/|$)/i.test(replaced) ||
     isMacSpecialPath(replaced) ||
@@ -736,7 +737,7 @@ function assertNotAliasNamespace(n) {
     replaced.split("/").some(isReservedDeviceName)
   )
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `alias namespace path not allowed: ${n}`,
+      `alias namespace path not allowed: ${path}`,
       "claudeInChrome/fileUpload: kernel alias namespace path rejected on the pass-through",
     );
 }
@@ -773,48 +774,53 @@ async function vetUploadPath(path, permissionContext) {
     await assertUploadPathAllowed(absPath, absPath);
   let { absPath: absPath_2, absChain } = screenNetworkPath(path, permissionContext);
   let trustedNetworkDirectories = permissionContext.trustedNetworkDirectories;
-  let l = await realpath(absPath_2);
-  let c = new Set([...absChain, ...getPathsForPermissionCheck(l)]);
-  for (let f of c) assertNotNetworkOrSuspicious(f, trustedNetworkDirectories);
-  assertNoReadRule(c, permissionContext);
+  let realPath = await realpath(absPath_2);
+  let pathsToCheck = new Set([...absChain, ...getPathsForPermissionCheck(realPath)]);
+  for (let checkPath of pathsToCheck) assertNotNetworkOrSuspicious(checkPath, trustedNetworkDirectories);
+  assertNoReadRule(pathsToCheck, permissionContext);
   if (
-    (await classifyCredentialPath(absPath_2, l, {
+    (await classifyCredentialPath(absPath_2, realPath, {
       readable: true,
       attached: true,
     })) !== undefined
   )
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `kernel or device path, or one of Claude Code's credentials: ${l}`,
+      `kernel or device path, or one of Claude Code's credentials: ${realPath}`,
       "claudeInChrome/fileUpload: kernel or device path, or one of Claude Code's own credentials",
     );
   for (let root of roots) {
-    let h = await lstat(root.path).catch(() => null);
-    if (h === null || h.isSymbolicLink() || !h.isDirectory()) continue;
-    let g = await open(root.path, constants.O_RDONLY | O_DIRECTORY | O_NOFOLLOW).catch(() => null);
-    if (g === null) continue;
-    let p;
+    let rootStat = await lstat(root.path).catch(() => null);
+    if (rootStat === null || rootStat.isSymbolicLink() || !rootStat.isDirectory()) continue;
+    let rootHandle = await open(root.path, constants.O_RDONLY | O_DIRECTORY | O_NOFOLLOW).catch(() => null);
+    if (rootHandle === null) continue;
+    let rootReal;
     try {
-      let stats = await g.stat();
+      let stats = await rootHandle.stat();
       if (!stats.isDirectory()) continue;
-      let w = await realpath(root.path).catch(() => {
+      let realFromRoot = await realpath(root.path).catch(() => {
         return;
       });
-      if (w === undefined) continue;
-      let b = await stat(w).catch(() => null);
-      if (b === null || b.ino !== stats.ino || b.dev !== stats.dev) continue;
-      p = w;
+      if (realFromRoot === undefined) continue;
+      let restat = await stat(realFromRoot).catch(() => null);
+      if (restat === null || restat.ino !== stats.ino || restat.dev !== stats.dev) continue;
+      rootReal = realFromRoot;
     } finally {
-      await g.close();
+      await rootHandle.close();
     }
-    if (l === p || l.startsWith(p + sep)) {
+    if (realPath === rootReal || realPath.startsWith(rootReal + sep)) {
       if (root.kind === "staging") {
-        let w = await realpath(getClaudeConfigDir()).catch(() => getClaudeConfigDir());
-        if (p === w || p.startsWith(w + sep) || w.startsWith(p + sep)) continue;
-        if (!root.fromChat) await assertUploadPathAllowed(absPath_2, l);
+        let configDirReal = await realpath(getClaudeConfigDir()).catch(() => getClaudeConfigDir());
+        if (
+          rootReal === configDirReal ||
+          rootReal.startsWith(configDirReal + sep) ||
+          configDirReal.startsWith(rootReal + sep)
+        )
+          continue;
+        if (!root.fromChat) await assertUploadPathAllowed(absPath_2, realPath);
         return {
           absPath: absPath_2,
-          realPath: l,
-          pathsToCheck: c,
+          realPath,
+          pathsToCheck,
           sharedWithSession: root.fromChat
             ? {
                 fromChat: true,
@@ -822,14 +828,14 @@ async function vetUploadPath(path, permissionContext) {
             : {},
         };
       }
-      let m = attachmentDigestOf(l);
-      if (m !== undefined)
+      let sharedDigest = attachmentDigestOf(realPath);
+      if (sharedDigest !== undefined)
         return {
           absPath: absPath_2,
-          realPath: l,
-          pathsToCheck: c,
+          realPath,
+          pathsToCheck,
           sharedWithSession: {
-            requiredDigest: m,
+            requiredDigest: sharedDigest,
           },
         };
       break;
@@ -848,22 +854,22 @@ async function vetUploadPath(path, permissionContext) {
       "claudeInChrome/fileUpload: Read tool denied or ask-gated for this session",
     );
   if (permissionContext.blockReadsOutsideWorkingDirectories)
-    for (let f of c) {
-      let h = isPathAllowed(f, permissionContext, "read");
+    for (let checkedPath of pathsToCheck) {
+      let allowedResult = isPathAllowed(checkedPath, permissionContext, "read");
       if (
-        !h.allowed &&
-        h.decisionReason?.type === "safetyCheck" &&
-        h.decisionReason.reason === OUTSIDE_READS_BLOCKED_DENY_REASON
+        !allowedResult.allowed &&
+        allowedResult.decisionReason?.type === "safetyCheck" &&
+        allowedResult.decisionReason.reason === OUTSIDE_READS_BLOCKED_DENY_REASON
       )
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `read not allowed: ${f}`,
+          `read not allowed: ${checkedPath}`,
           "claudeInChrome/fileUpload: path outside the working directories under the read block",
         );
     }
   return {
     absPath: absPath_2,
-    realPath: l,
-    pathsToCheck: c,
+    realPath,
+    pathsToCheck,
   };
 }
 //@ chunk-wn385gmf.js:13725-14297 placement
@@ -880,15 +886,15 @@ async function validateUploadPath(path, permissionContext) {
       realPath,
     };
   }
-  for (let u of pathsToCheck) {
-    if (!isPathAllowed(u, permissionContext, "read").allowed)
+  for (let checkPath of pathsToCheck) {
+    if (!isPathAllowed(checkPath, permissionContext, "read").allowed)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `read not allowed: ${u}`,
+        `read not allowed: ${checkPath}`,
         "claudeInChrome/fileUpload: path read not allowed by session permissions",
       );
-    if (permissionContext.restricted && isRestrictedReadBlocked(u, permissionContext))
+    if (permissionContext.restricted && isRestrictedReadBlocked(checkPath, permissionContext))
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `read not allowed under --restricted: ${u}`,
+        `read not allowed under --restricted: ${checkPath}`,
         "claudeInChrome/fileUpload: restricted mode refused a file only an allow rule opens",
       );
   }
@@ -910,40 +916,40 @@ async function validatePaneUploadPath(path, permissionContext, hostAsksPerFile) 
       needsHostAsk: true,
     };
   let { restricted } = permissionContext;
-  let c = isInWorkingDirectory(realPath, permissionContext);
-  let f = false;
-  let h = false;
-  for (let p of pathsToCheck) {
-    let m = isPathAllowed(p, permissionContext, "read");
+  let inWorkingDir = isInWorkingDirectory(realPath, permissionContext);
+  let sawAllowed = false;
+  let sawRule = false;
+  for (let checkPath of pathsToCheck) {
+    let allowedResult = isPathAllowed(checkPath, permissionContext, "read");
     if (
-      m.allowed &&
-      !(restricted && m.decisionReason?.type === "rule") &&
-      (m.decisionReason !== undefined || c)
+      allowedResult.allowed &&
+      !(restricted && allowedResult.decisionReason?.type === "rule") &&
+      (allowedResult.decisionReason !== undefined || inWorkingDir)
     ) {
-      h ||= m.decisionReason !== undefined;
+      sawRule ||= allowedResult.decisionReason !== undefined;
       continue;
     }
-    let w =
-      !m.allowed && !isOnlyOutsideWorkingFoldersRefusal(m)
-        ? `refused by isPathAllowed (${m.decisionReason?.type ?? "no reason given"})`
+    let refusalNote =
+      !allowedResult.allowed && !isOnlyOutsideWorkingFoldersRefusal(allowedResult)
+        ? `refused by isPathAllowed (${allowedResult.decisionReason?.type ?? "no reason given"})`
         : restricted
           ? "--restricted session: no rule or host question reaches outside the working folders"
           : !hostAsksPerFile
             ? "outside the working folders, and the host does not ask per file"
             : undefined;
-    if (w !== undefined)
+    if (refusalNote !== undefined)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `read not allowed (${w}): ${p}`,
+        `read not allowed (${refusalNote}): ${checkPath}`,
         "claudeInChrome/fileUpload: pane path read not allowed by session permissions",
       );
-    f = true;
+    sawAllowed = true;
   }
-  if (!f) {
+  if (!sawAllowed) {
     await assertUploadPathAllowed(absPath, realPath);
     return {
       realPath,
       needsHostAsk:
-        h ||
+        sawRule ||
         (await isInClaudeConfigDir(realPath, realpathOrUndefined).catch((error) => {
           logForDebugging(
             `[pane file_upload] own-files check failed, so the host asks: ${errorMessage(error)}`,
@@ -952,12 +958,12 @@ async function validatePaneUploadPath(path, permissionContext, hostAsksPerFile) 
         })),
     };
   }
-  let g = await classifyCredentialPath(absPath, realPath, {
+  let credentialRefusal = await classifyCredentialPath(absPath, realPath, {
     realDirectory: realpathOrUndefined,
   });
-  if (g !== undefined)
+  if (credentialRefusal !== undefined)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `refused by its name or place (${g}): ${realPath}`,
+      `refused by its name or place (${credentialRefusal}): ${realPath}`,
       "claudeInChrome/fileUpload: pane path outside the working folders is one of Claude Code's own files or is named like a credential",
     );
   return {
@@ -969,9 +975,9 @@ async function validatePaneUploadPath(path, permissionContext, hostAsksPerFile) 
 //@ chunk-wn385gmf.js:15520-15654 placement
 function isInWorkingDirectory(realPath, permissionContext) {
   return Array.from(allWorkingDirectories(permissionContext))
-    .flatMap((r) => getResolvedWorkingDirPaths(r))
-    .some((r) =>
-      pathInWorkingPath(realPath, r, {
+    .flatMap((workingDir) => getResolvedWorkingDirPaths(workingDir))
+    .some((workingPath) =>
+      pathInWorkingPath(realPath, workingPath, {
         caseFold: false,
         skipPrivateAlias: true,
         uncShapeParity: true,
@@ -982,11 +988,11 @@ function isInWorkingDirectory(realPath, permissionContext) {
 /**
  * 取路径的真实值，缺失或凭据目录无权限时返回 undefined。
  */
-async function realpathOrUndefined(n) {
+async function realpathOrUndefined(path) {
   try {
-    return await realpath(n);
+    return await realpath(path);
   } catch (error) {
-    if (isIgnorableRealpathError(n, error)) return;
+    if (isIgnorableRealpathError(path, error)) return;
     throw error;
   }
 }
@@ -994,24 +1000,24 @@ async function realpathOrUndefined(n) {
 /**
  * 判断取真实路径时的错误是否可忽略（不存在，或 CCR 凭据目录的 EACCES/EPERM）。
  */
-function isIgnorableRealpathError(n, error) {
+function isIgnorableRealpathError(path, error) {
   if (isPathAbsent(error)) return true;
   let errnoCode = getErrnoCode(error);
-  return n === dirname(CCR_OAUTH_TOKEN_PATH) && (errnoCode === "EACCES" || errnoCode === "EPERM");
+  return path === dirname(CCR_OAUTH_TOKEN_PATH) && (errnoCode === "EACCES" || errnoCode === "EPERM");
 }
 //@ chunk-wn385gmf.js:15824-16005 placement
-async function readAtMost(n, e) {
-  let r = e + 1;
-  let s = Buffer.allocUnsafe(r);
-  let o = 0;
-  while (o < r) {
-    let { bytesRead } = await n.read(s, o, r - o, o);
+async function readAtMost(handle, limit) {
+  let capacity = limit + 1;
+  let buf = Buffer.allocUnsafe(capacity);
+  let total = 0;
+  while (total < capacity) {
+    let { bytesRead } = await handle.read(buf, total, capacity - total, total);
     if (bytesRead === 0) break;
-    o += bytesRead;
+    total += bytesRead;
   }
-  if (o > e) return "grew";
+  if (total > limit) return "grew";
   return {
-    buf: s.subarray(0, o),
+    buf: buf.subarray(0, total),
   };
 }
 //@ chunk-wn385gmf.js:16005-16102 placement
@@ -1022,36 +1028,36 @@ function classifyRenameFailure(error) {
   return error instanceof Error && "code" in error && error.code === "ENAMETOOLONG" ? "moved" : "fallback";
 }
 //@ chunk-wn385gmf.js:16102-16572 placement
-async function verifyHandleBinding(n, e, r) {
+async function verifyHandleBinding(handle, path, stats) {
   {
-    let a = null;
+    let linkedPath = null;
     try {
-      a = await readlink(`/proc/self/fd/${n.fd}`);
+      linkedPath = await readlink(`/proc/self/fd/${handle.fd}`);
     } catch (error) {
       if (classifyRenameFailure(error) === "moved") return "moved";
       logForDebugging(
         `verifyHandleBinding: /proc handle-path read unavailable, using two-sample fallback (${error instanceof Error ? error.message : String(error)})`,
       );
     }
-    if (a !== null) {
-      if (a.endsWith(" (deleted)")) return "moved";
-      return a === e ? "ok" : "moved";
+    if (linkedPath !== null) {
+      if (linkedPath.endsWith(" (deleted)")) return "moved";
+      return linkedPath === path ? "ok" : "moved";
     }
   }
-  let o = (await realpath(e).catch(() => null)) === e ? await stat(e).catch(() => null) : null;
-  if (o === null || o.ino !== r.ino || o.dev !== r.dev) return "moved";
+  let restat = (await realpath(path).catch(() => null)) === path ? await stat(path).catch(() => null) : null;
+  if (restat === null || restat.ino !== stats.ino || restat.dev !== stats.dev) return "moved";
   return "ok";
 }
 //@ chunk-wn385gmf.js:16572-17270 placement
-async function readValidatedFileWithin(n, e) {
-  let r = await lstat(n).catch(() => null);
-  if (r === null || !r.isFile())
+async function readValidatedFileWithin(path, maxBytes) {
+  let pathStat = await lstat(path).catch(() => null);
+  if (pathStat === null || !pathStat.isFile())
     return {
       refusal: "not_regular",
     };
-  let s;
+  let handle;
   try {
-    s = await open(n, constants.O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
+    handle = await open(path, constants.O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
   } catch (error) {
     logForDebugging(`readValidatedFileWithin: open failed: ${errorMessage(error)}`);
     return {
@@ -1060,7 +1066,7 @@ async function readValidatedFileWithin(n, e) {
     };
   }
   try {
-    let stats = await s.stat();
+    let stats = await handle.stat();
     if (stats.nlink > 1)
       return {
         refusal: "hard_links",
@@ -1069,15 +1075,15 @@ async function readValidatedFileWithin(n, e) {
       return {
         refusal: "moved",
       };
-    if ((await verifyHandleBinding(s, n, stats)) === "moved")
+    if ((await verifyHandleBinding(handle, path, stats)) === "moved")
       return {
         refusal: "moved",
       };
-    if (stats.size > e)
+    if (stats.size > maxBytes)
       return {
         refusal: "too_large",
       };
-    let atMost = await readAtMost(s, stats.size);
+    let atMost = await readAtMost(handle, stats.size);
     if (atMost === "grew")
       return {
         refusal: "grew",
@@ -1092,21 +1098,21 @@ async function readValidatedFileWithin(n, e) {
       detail: sanitizeErrnoForTelemetry(error) ?? "unknown error",
     };
   } finally {
-    await s.close();
+    await handle.close();
   }
 }
 //@ chunk-wn385gmf.js:17270-17543 placement
-async function readUploadFile(path, e, budget, tag, o) {
-  let refusal = await readValidatedFileWithin(e, budget.remaining);
+async function readUploadFile(path, realPath, budget, tag, errorFor) {
+  let refusal = await readValidatedFileWithin(realPath, budget.remaining);
   if ("buf" in refusal) {
     budget.remaining -= refusal.buf.length;
     return refusal;
   }
-  if (o !== undefined) {
-    let u = "detail" in refusal ? `: ${refusal.detail}` : "";
-    logForDebugging(`[${tag} file_upload] read refused (${refusal.refusal}${u}): ${path}`);
+  if (errorFor !== undefined) {
+    let detailSuffix = "detail" in refusal ? `: ${refusal.detail}` : "";
+    logForDebugging(`[${tag} file_upload] read refused (${refusal.refusal}${detailSuffix}): ${path}`);
     return {
-      error: o(path),
+      error: errorFor(path),
     };
   }
   return {
@@ -1118,22 +1124,22 @@ async function readUploadFile(path, e, budget, tag, o) {
  * 把文件读取拒绝原因（非普通文件、打开失败、多硬链接、路径移动、超总量等）映射成给模型的文案。
  */
 function uploadReadRefusalMessage(path, refusal, totalLimit = FILE_UPLOAD_MAX_TOTAL_BYTES) {
-  let s = sanitizeForMessage(path);
+  let displayPath = sanitizeForMessage(path);
   switch (refusal.refusal) {
     case "not_regular":
-      return `Cannot upload "${s}": not a regular file.`;
+      return `Cannot upload "${displayPath}": not a regular file.`;
     case "open_failed":
-      return `Cannot upload "${s}": failed to open file (${refusal.detail}).`;
+      return `Cannot upload "${displayPath}": failed to open file (${refusal.detail}).`;
     case "hard_links":
-      return `Cannot upload "${s}": the file has multiple hard links, which can alias a file outside the session's allowed directories. This commonly triggers for files inside package-manager stores like node_modules (Bun and pnpm hard-link packages). Copy the file (e.g. with cp) and upload the copy.`;
+      return `Cannot upload "${displayPath}": the file has multiple hard links, which can alias a file outside the session's allowed directories. This commonly triggers for files inside package-manager stores like node_modules (Bun and pnpm hard-link packages). Copy the file (e.g. with cp) and upload the copy.`;
     case "moved":
-      return `Cannot upload "${s}": path moved during validation.`;
+      return `Cannot upload "${displayPath}": path moved during validation.`;
     case "too_large":
-      return `Cannot upload "${s}": total upload size would exceed ${totalLimit >= 1048576 ? `${Math.floor((totalLimit * 10) / 1048576) / 10} MB` : totalLimit >= 1024 ? `${Math.floor(totalLimit / 1024)} KB` : `${totalLimit} bytes`}. file_upload sends file contents over the browser bridge in a single message; use a smaller file, or split across multiple file_upload calls if the page accepts files one at a time.`;
+      return `Cannot upload "${displayPath}": total upload size would exceed ${totalLimit >= 1048576 ? `${Math.floor((totalLimit * 10) / 1048576) / 10} MB` : totalLimit >= 1024 ? `${Math.floor(totalLimit / 1024)} KB` : `${totalLimit} bytes`}. file_upload sends file contents over the browser bridge in a single message; use a smaller file, or split across multiple file_upload calls if the page accepts files one at a time.`;
     case "grew":
-      return `Cannot upload "${s}": file grew during read.`;
+      return `Cannot upload "${displayPath}": file grew during read.`;
     case "read_failed":
-      return `Cannot upload "${s}": failed to read file (${refusal.detail}).`;
+      return `Cannot upload "${displayPath}": failed to read file (${refusal.detail}).`;
   }
 }
 //@ chunk-wn385gmf.js:18636-19426 placement
@@ -1191,4 +1197,5 @@ export {
   verifyHandleBinding,
   preparePaneFileUploadInput,
   MAX_PANE_UPLOAD_BYTES,
+  passThroughChromeFileUploadInput,
 };

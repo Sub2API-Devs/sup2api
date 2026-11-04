@@ -13,6 +13,7 @@ import { getAPIProvider } from "./model/providers.js";
 import { getAdminTierEnvValue, getHostManagedToolSearchEnv } from "./settings/settings.js";
 import { isEnvTruthy, parseIntLoose, isEnvDefinedFalsy } from "./envUtils.js";
 import { logForDebugging } from "./debug.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-mp7v59a0.js:613-627 placement
 var TOOL_SEARCH_FORCE_VALUE = "force";
@@ -52,14 +53,17 @@ function isToolSearchDisabledByBetas() {
   return areExperimentalBetasDisabled() && !isToolSearchForceOverride();
 }
 //@ chunk-mp7v59a0.js:1082-1390 placement
-var CHROME_SELECT_QUERY_WITH_BATCH =
-  'ToolSearch with query "select:mcp__claude-in-chrome__tabs_context_mcp,mcp__claude-in-chrome__navigate,mcp__claude-in-chrome__computer,mcp__claude-in-chrome__read_page,mcp__claude-in-chrome__tabs_create_mcp,mcp__claude-in-chrome__tabs_close_mcp"'.replace(
-    /"$/,
-    ',mcp__claude-in-chrome__browser_batch"',
-  );
+var CHROME_SELECT_QUERY_WITH_BATCH; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-mp7v59a0.js:1082", () => {
+  CHROME_SELECT_QUERY_WITH_BATCH =
+    'ToolSearch with query "select:mcp__claude-in-chrome__tabs_context_mcp,mcp__claude-in-chrome__navigate,mcp__claude-in-chrome__computer,mcp__claude-in-chrome__read_page,mcp__claude-in-chrome__tabs_create_mcp,mcp__claude-in-chrome__tabs_close_mcp"'.replace(
+      /"$/,
+      ',mcp__claude-in-chrome__browser_batch"',
+    );
+});
 //@ chunk-mp7v59a0.js:1390-1671 placement
-function addBrowserBatchToChromeSelect(e) {
-  return e.replace(
+function addBrowserBatchToChromeSelect(prompt) {
+  return prompt.replace(
     'ToolSearch with query "select:mcp__claude-in-chrome__tabs_context_mcp,mcp__claude-in-chrome__navigate,mcp__claude-in-chrome__computer,mcp__claude-in-chrome__read_page,mcp__claude-in-chrome__tabs_create_mcp,mcp__claude-in-chrome__tabs_close_mcp"',
     CHROME_SELECT_QUERY_WITH_BATCH,
   );
@@ -141,27 +145,27 @@ ${CHROME_TASK_TOOLS_HINT} Only issue a second ToolSearch if the task later needs
 /**
  * Claude in Chrome 的系统提示词片段：工具搜索开启时带"一次 ToolSearch 批量加载"段落。
  */
-function getChromeSystemPrompt(e) {
-  return e ? CHROME_PROMPT_WITH_TOOL_SEARCH : CHROME_PROMPT_WITHOUT_TOOL_SEARCH;
+function getChromeSystemPrompt(enabled) {
+  return enabled ? CHROME_PROMPT_WITH_TOOL_SEARCH : CHROME_PROMPT_WITHOUT_TOOL_SEARCH;
 }
 //@ chunk-mp7v59a0.js:6672-6956 placement
 function isModelVersionAtLeast(model, minVersions) {
   let match = /^claude-([a-z]+)-(\d+(?:-\d+)*)$/.exec(model);
-  let n = match?.[1];
-  let l = match?.[2];
-  if (!n || !l) return false;
-  let a = minVersions.find(([s]) => s === n)?.[1];
-  if (!a) return false;
-  let mapped = l.split("-").map(Number);
-  for (let j = 0; j < Math.max(mapped.length, a.length); j++) {
-    let u = (mapped[j] ?? 0) - (a[j] ?? 0);
-    if (u !== 0) return u > 0;
+  let versionParts = match?.[1];
+  let versionText = match?.[2];
+  if (!versionParts || !versionText) return false;
+  let minVersion = minVersions.find(([family]) => family === versionParts)?.[1];
+  if (!minVersion) return false;
+  let mapped = versionText.split("-").map(Number);
+  for (let j = 0; j < Math.max(mapped.length, minVersion.length); j++) {
+    let diff = (mapped[j] ?? 0) - (minVersion[j] ?? 0);
+    if (diff !== 0) return diff > 0;
   }
   return true;
 }
 export {
-  isToolSearchForceOverride,
   isToolSearchDisabledByBetas,
+  isToolSearchForceOverride,
   isModelVersionAtLeast,
   addBrowserBatchToChromeSelect,
   CHROME_TOOL_SEARCH_REMINDER,

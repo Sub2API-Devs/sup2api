@@ -42,288 +42,302 @@ var SESSION_TRANSPORT_LIMITS = {
 var HOST_SILENCE_MS = 60000;
 var PROBE_DEADLINE_MS = 1e4;
 //@ chunk-25sm7c4g.js:10578-12284 placement
-function createSessionEventTransport(e) {
-  let n = {
+function createSessionEventTransport(options) {
+  let state = {
     stale: false,
     quietMisses: [],
   };
-  let limits = e.limits ?? SESSION_TRANSPORT_LIMITS;
+  let limits = options.limits ?? SESSION_TRANSPORT_LIMITS;
   return {
     kind: "session",
     limits,
-    call: (o, u, s, m) => callOverSessionChannel(e, n, limits, o, u, s, m),
+    call: (name, args, callMeta, opts) =>
+      callOverSessionChannel(options, state, limits, name, args, callMeta, opts),
     markUnresponsive: () => {
-      n.stale = true;
+      state.stale = true;
     },
     checkLive: async ({ signal, hold }) => {
-      let s = e.host();
-      let m = s?.live();
-      let now = e.now ?? Date.now;
+      let host = options.host();
+      let live = host?.live();
+      let now = options.now ?? Date.now;
       if (
-        s === undefined ||
-        m === undefined ||
+        host === undefined ||
+        live === undefined ||
         signal.aborted ||
-        !(m.status === "offline" || n.stale || now() - m.lastHeardAt > HOST_SILENCE_MS)
+        !(live.status === "offline" || state.stale || now() - live.lastHeardAt > HOST_SILENCE_MS)
       )
         return;
-      if (isHostAsleep(s, now())) return unreachableOutcome(s);
-      let f = await probeMachine(e, n, s, signal);
-      if (f === "missed" && hold !== undefined && s.live()?.status === "online" && !n.stale) {
+      if (isHostAsleep(host, now())) return unreachableOutcome(host);
+      let probeResult = await probeMachine(options, state, host, signal);
+      if (
+        probeResult === "missed" &&
+        hold !== undefined &&
+        host.live()?.status === "online" &&
+        !state.stale
+      ) {
         hold.notify("waiting");
-        f = await holdForLiveness(e, n, s, signal, hold.ms);
-        if (f === "there") hold.notify("back");
+        probeResult = await holdForLiveness(options, state, host, signal, hold.ms);
+        if (probeResult === "there") hold.notify("back");
       }
-      if (f !== "missed") return;
-      s.markAway("probe_missed");
-      return unreachableOutcome(s);
+      if (probeResult !== "missed") return;
+      host.markAway("probe_missed");
+      return unreachableOutcome(host);
     },
-    saidAsleep: () => e.host()?.live()?.asleepSince !== undefined,
+    saidAsleep: () => options.host()?.live()?.asleepSince !== undefined,
     probeLive: async ({ signal }) => {
-      let u = e.host();
-      if (u === undefined || u.live() === undefined || signal.aborted) return;
-      let s = (e.now ?? Date.now)();
-      let m = await sendLivenessProbe(e, u, signal);
-      let p = (u.live()?.lastHeardAt ?? -1 / 0) > s;
-      if (m === "answered" || p) {
-        n.stale = false;
+      let host = options.host();
+      if (host === undefined || host.live() === undefined || signal.aborted) return;
+      let startedAtMs = (options.now ?? Date.now)();
+      let probeResult = await sendLivenessProbe(options, host, signal);
+      let heardSinceProbe = (host.live()?.lastHeardAt ?? -1 / 0) > startedAtMs;
+      if (probeResult === "answered" || heardSinceProbe) {
+        state.stale = false;
         return true;
       }
-      if (m !== "missed") return;
-      u.markAway("probe_missed");
+      if (probeResult !== "missed") return;
+      host.markAway("probe_missed");
       return false;
     },
-    isAway: () => e.host()?.live()?.status === "offline",
+    isAway: () => options.host()?.live()?.status === "offline",
     silence: {
       quietForMs: () => {
-        let o = e.host()?.live();
-        return o === undefined || o.status === "offline" || o.asleepSince !== undefined
+        let live = options.host()?.live();
+        return live === undefined || live.status === "offline" || live.asleepSince !== undefined
           ? undefined
-          : (e.now ?? Date.now)() - o.lastHeardAt;
+          : (options.now ?? Date.now)() - live.lastHeardAt;
       },
-      probe: (o) => quietProbe(e, n, o),
-      missed: () => currentQuietMisses(e, n),
-      ownStreamFrameAt: () => e.sender.readStreamFrameAt?.(),
+      probe: (signal) => quietProbe(options, state, signal),
+      missed: () => currentQuietMisses(options, state),
+      ownStreamFrameAt: () => options.sender.readStreamFrameAt?.(),
       giveUp: () => {
-        e.host()?.markAway("probe_missed");
+        options.host()?.markAway("probe_missed");
       },
     },
-    isRechecked: () => e.rechecked?.() === true,
-    ...(e.sender.withdrawStandingServedCall !== undefined && {
-      withdrawStanding: (o) => {
-        e.sender.withdrawStandingServedCall?.(o);
+    isRechecked: () => options.rechecked?.() === true,
+    ...(options.sender.withdrawStandingServedCall !== undefined && {
+      withdrawStanding: (callId) => {
+        options.sender.withdrawStandingServedCall?.(callId);
       },
     }),
-    callPlumbing: async (o, u, s) => {
-      let m = e.host();
-      if (m === undefined)
+    callPlumbing: async (name, input, callMeta) => {
+      let host = options.host();
+      if (host === undefined)
         return {
           kind: "unreachable",
           detail: "the machine is no longer announced on this session",
         };
-      let p = await callPlumbingOverSession(
-        e.sender,
+      let result = await callPlumbingOverSession(
+        options.sender,
         {
-          instanceId: m.instanceId,
-          host: m.hostName,
+          instanceId: host.instanceId,
+          host: host.hostName,
         },
-        o,
-        u,
-        s,
+        name,
+        input,
+        callMeta,
       );
-      if (p.kind === "result") m.heard((e.now ?? Date.now)());
-      return p;
+      if (result.kind === "result") host.heard((options.now ?? Date.now)());
+      return result;
     },
   };
 }
 //@ chunk-25sm7c4g.js:12284-12751 placement
-function unreachableOutcome(e) {
-  let n = e.live();
-  return n?.asleepSince !== undefined
+function unreachableOutcome(channel) {
+  let live = channel.live();
+  return live?.asleepSince !== undefined
     ? {
         kind: "unreachable",
         detail: "it said it was going to sleep",
         machineNotAnswering: true,
         saidAsleep: true,
-        lastHeardAt: n.asleepSince,
+        lastHeardAt: live.asleepSince,
       }
     : {
         kind: "unreachable",
         detail: "the machine did not answer a liveness check on this session; nothing was sent",
         machineNotAnswering: true,
-        ...(n !== undefined && {
-          lastHeardAt: Math.max(n.lastHeardAt, n.lastStillHereAt ?? 0),
+        ...(live !== undefined && {
+          lastHeardAt: Math.max(live.lastHeardAt, live.lastStillHereAt ?? 0),
         }),
-        ...(n?.lastStillHereAt !== undefined &&
-          n.lastStillHereAt > n.lastHeardAt && {
+        ...(live?.lastStillHereAt !== undefined &&
+          live.lastStillHereAt > live.lastHeardAt && {
             saidBusy: true,
           }),
       };
 }
 //@ chunk-25sm7c4g.js:12751-12829 placement
-function isHostAsleep(e, n) {
-  let asleepSince = e.live()?.asleepSince;
-  return asleepSince !== undefined && n >= asleepSince && n - asleepSince < SLEEPING_GRACE_MS;
+function isHostAsleep(channel, at) {
+  let asleepSince = channel.live()?.asleepSince;
+  return asleepSince !== undefined && at >= asleepSince && at - asleepSince < SLEEPING_GRACE_MS;
 }
 //@ chunk-25sm7c4g.js:12829-16676 placement
 /**
  * 经会话事件流把调用发给附着机器：检查在线/睡眠、发送、等待回复或截止、活性探测。
  */
-async function callOverSessionChannel(e, n, limits, o, input, s, m) {
-  let now = e.now ?? Date.now;
-  if (m.signal.aborted)
+async function callOverSessionChannel(channel, state, limits, name, input, callMeta, opts) {
+  let now = channel.now ?? Date.now;
+  if (opts.signal.aborted)
     return {
       kind: "cancelled",
     };
-  let f = e.host();
-  let _ = f?.live();
-  if (f === undefined || _ === undefined)
+  let host = channel.host();
+  let live = host?.live();
+  if (host === undefined || live === undefined)
     return {
       kind: "unreachable",
       detail: "the machine is not announcing on this session",
       machineNotAnswering: true,
-      ...(e.signedOff?.() === true && {
+      ...(channel.signedOff?.() === true && {
         signedOff: true,
-        ...leftForOutcome(e.leftFor?.()),
+        ...leftForOutcome(channel.leftFor?.()),
       }),
     };
-  let g = "op" in s && s.op === "outcome_of";
-  if (!g && (_.status === "offline" || n.stale || now() - _.lastHeardAt > HOST_SILENCE_MS)) {
-    if (isHostAsleep(f, now())) return unreachableOutcome(f);
-    let C = now();
-    let E = await sendLivenessProbe(e, f, m.signal);
-    if (E === "cancelled")
+  let isOutcomeQuery = "op" in callMeta && callMeta.op === "outcome_of";
+  if (
+    !isOutcomeQuery &&
+    (live.status === "offline" || state.stale || now() - live.lastHeardAt > HOST_SILENCE_MS)
+  ) {
+    if (isHostAsleep(host, now())) return unreachableOutcome(host);
+    let probeStartedAt = now();
+    let probeResult = await sendLivenessProbe(channel, host, opts.signal);
+    if (probeResult === "cancelled")
       return {
         kind: "cancelled",
       };
-    if (E === "unsent")
+    if (probeResult === "unsent")
       return {
         kind: "unreachable",
         detail: "this session's event stream is not accepting requests; nothing was sent",
       };
-    if (E === "stalled" || E === "taken_back")
+    if (probeResult === "stalled" || probeResult === "taken_back")
       return {
         kind: "stalled",
-        capMs: e.probeDeadlineMs ?? PROBE_DEADLINE_MS,
+        capMs: channel.probeDeadlineMs ?? PROBE_DEADLINE_MS,
         request: "probe",
-        takenBack: E === "taken_back",
+        takenBack: probeResult === "taken_back",
       };
-    if (E === "stream_lost")
+    if (probeResult === "stream_lost")
       return {
         kind: "unreachable",
         detail:
           "this session could not complete the liveness check for a reason on its own side (its event stream closed, the service refused the write that carried it, or that write had not completed in time); the machine was not reached and nothing was sent",
       };
-    let B = E === "missed" && (f.live()?.lastHeardAt ?? -1 / 0) > C;
-    if (E !== "answered" && !B) {
-      if (E === "missed") f.markAway("probe_missed");
-      let D = e.host();
-      let ne = D?.live();
-      if (D === undefined || D.instanceId === f.instanceId || ne === undefined || ne.status === "offline")
-        return E === "gone"
+    let heardDuringProbe = probeResult === "missed" && (host.live()?.lastHeardAt ?? -1 / 0) > probeStartedAt;
+    if (probeResult !== "answered" && !heardDuringProbe) {
+      if (probeResult === "missed") host.markAway("probe_missed");
+      let otherHost = channel.host();
+      let otherLive = otherHost?.live();
+      if (
+        otherHost === undefined ||
+        otherHost.instanceId === host.instanceId ||
+        otherLive === undefined ||
+        otherLive.status === "offline"
+      )
+        return probeResult === "gone"
           ? {
               kind: "unreachable",
               detail:
                 "the machine withdrew from this session while it was being asked whether it is still there; nothing was sent",
               machineNotAnswering: true,
               signedOff: true,
-              ...leftForOutcome(e.leftFor?.()),
+              ...leftForOutcome(channel.leftFor?.()),
             }
-          : unreachableOutcome(f);
-      f = D;
+          : unreachableOutcome(host);
+      host = otherHost;
     }
-    n.stale = false;
+    state.stale = false;
   }
-  let w = clampToMaxPageSize(m.deadlineMs);
-  let S = now();
-  let R = f.epoch();
+  let deadlineMs = clampToMaxPageSize(opts.deadlineMs);
+  let startedAt = now();
+  let hostEpoch = host.epoch();
   let sentUnderEpoch =
-    R === undefined
+    hostEpoch === undefined
       ? {}
       : {
-          sentUnderEpoch: R,
+          sentUnderEpoch: hostEpoch,
         };
-  let A = "op" in s ? s.op : s.approval ? 2 : 1;
-  let M = remoteToolsLogLevel(A);
-  let y = {
+  let leg = "op" in callMeta ? callMeta.op : callMeta.approval ? 2 : 1;
+  let logLevel = remoteToolsLogLevel(leg);
+  let transit = {
     posts: 0,
   };
-  let onUpload = (C) => {
-    switch (C) {
+  let onUpload = (outcome) => {
+    switch (outcome) {
       case "sending":
-        y.posts += 1;
-        y.startedAt ??= now();
+        transit.posts += 1;
+        transit.startedAt ??= now();
         logRemoteTools(
-          s.call_id,
+          callMeta.call_id,
           "post started",
           {
-            leg: A,
-            queue_ms: y.startedAt - S,
-            attempt: y.posts,
+            leg,
+            queue_ms: transit.startedAt - startedAt,
+            attempt: transit.posts,
           },
-          M,
+          logLevel,
         );
         return;
       case "accepted":
-        if (y.acceptedAt === undefined) {
-          y.acceptedAt = now();
+        if (transit.acceptedAt === undefined) {
+          transit.acceptedAt = now();
           try {
-            m.onAccepted?.();
+            opts.onAccepted?.();
           } catch (error) {
             logForDebugging(`[remote-tools] a leg's acceptance was not reported: ${errorMessage(error)}`);
           }
         }
         logRemoteTools(
-          s.call_id,
+          callMeta.call_id,
           "post accepted",
           {
-            leg: A,
-            post_ms: y.startedAt === undefined ? undefined : y.acceptedAt - y.startedAt,
-            attempt: y.posts,
+            leg,
+            post_ms: transit.startedAt === undefined ? undefined : transit.acceptedAt - transit.startedAt,
+            attempt: transit.posts,
           },
-          M,
+          logLevel,
         );
         return;
       case "not_accepted":
       case "indeterminate":
         logRemoteTools(
-          s.call_id,
+          callMeta.call_id,
           "post not accepted",
           {
-            leg: A,
-            phase: C,
-            attempt: y.posts,
+            leg,
+            phase: outcome,
+            attempt: transit.posts,
           },
-          M,
+          logLevel,
         );
     }
   };
-  let q;
-  let P;
+  let belowFloorAnswer;
+  let sent;
   try {
-    P = e.sender.sendServedCallRequest({
+    sent = channel.sender.sendServedCallRequest({
       onUpload,
       request: {
         subtype: "remote_tool_call",
         ...buildServedCallRequest({
-          instanceId: f.instanceId,
-          host: f.hostName,
-          name: o,
+          instanceId: host.instanceId,
+          host: host.hostName,
+          name,
           input,
-          envelope: s,
-          toolUseId: m.toolUseId,
-          issuedAt: S,
-          deadlineMs: w,
+          envelope: callMeta,
+          toolUseId: opts.toolUseId,
+          issuedAt: startedAt,
+          deadlineMs,
         }),
       },
-      accepts: (C) => {
-        if (!isReplyForCallSafe(C, s.call_id)) return false;
-        if (g && isRemoteToolCallMeta(C)) {
-          q = C;
+      accepts: (deliveryState) => {
+        if (!isReplyForCallSafe(deliveryState, callMeta.call_id)) return false;
+        if (isOutcomeQuery && isRemoteToolCallMeta(deliveryState)) {
+          belowFloorAnswer = deliveryState;
           return false;
         }
         return true;
       },
-      signal: m.signal,
+      signal: opts.signal,
     });
   } catch (error) {
     return {
@@ -331,97 +345,97 @@ async function callOverSessionChannel(e, n, limits, o, input, s, m) {
       detail: `send failed: ${errorMessage(error)}`,
     };
   }
-  if (!P.sent)
+  if (!sent.sent)
     return {
       kind: "unreachable",
       detail: "this session's event stream is closed; nothing was sent",
     };
-  logRemoteTools(s.call_id, "sent", {
-    leg: A,
-    host_inst: f.instanceId,
-    host_epoch: R,
-    deadline_ms: w,
+  logRemoteTools(callMeta.call_id, "sent", {
+    leg,
+    host_inst: host.instanceId,
+    host_epoch: hostEpoch,
+    deadline_ms: deadlineMs,
   });
-  m.onSent?.({
-    instanceId: f.instanceId,
-    epoch: R,
-    requestId: P.requestId,
+  opts.onSent?.({
+    instanceId: host.instanceId,
+    epoch: hostEpoch,
+    requestId: sent.requestId,
   });
-  let U = !g && !("approval" in s && s.approval?.decision === "deny");
-  let { settled, late } = await awaitCallReply(P, w, m.signal, {
-    holdAtDeadline: m.onHeldAtDeadline !== undefined,
-    withdrawable: U,
+  let withdrawable = !isOutcomeQuery && !("approval" in callMeta && callMeta.approval?.decision === "deny");
+  let { settled, late } = await awaitCallReply(sent, deadlineMs, opts.signal, {
+    holdAtDeadline: opts.onHeldAtDeadline !== undefined,
+    withdrawable,
   });
-  let O = (settled) => {
-    let callAtDeadline = resolveCallAtDeadline(settled, {
-      state: n,
+  let settle = (entry) => {
+    let callAtDeadline = resolveCallAtDeadline(entry, {
+      state,
       limits,
-      entry: f,
-      sent: P,
-      toolName: o,
-      callId: s.call_id,
-      capMs: w,
+      entry: host,
+      sent,
+      toolName: name,
+      callId: callMeta.call_id,
+      capMs: deadlineMs,
       held: late !== undefined,
       sentUnderEpoch,
-      elapsedMs: () => now() - S,
+      elapsedMs: () => now() - startedAt,
       heardNow: () => now(),
-      heldBelowFloorAnswer: () => q,
+      heldBelowFloorAnswer: () => belowFloorAnswer,
     });
     if (callAtDeadline.kind === "result")
       try {
-        let B = now();
-        let D = {
-          ...(y.startedAt !== undefined && {
-            queueMs: y.startedAt - S,
+        let settledAt = now();
+        let transitTiming = {
+          ...(transit.startedAt !== undefined && {
+            queueMs: transit.startedAt - startedAt,
           }),
-          ...(y.startedAt !== undefined &&
-            y.acceptedAt !== undefined && {
-              postMs: y.acceptedAt - y.startedAt,
+          ...(transit.startedAt !== undefined &&
+            transit.acceptedAt !== undefined && {
+              postMs: transit.acceptedAt - transit.startedAt,
             }),
-          ...(y.acceptedAt !== undefined && {
-            replyWaitMs: B - y.acceptedAt,
+          ...(transit.acceptedAt !== undefined && {
+            replyWaitMs: settledAt - transit.acceptedAt,
           }),
-          totalMs: B - S,
-          posts: y.posts,
+          totalMs: settledAt - startedAt,
+          posts: transit.posts,
         };
         logRemoteTools(
-          s.call_id,
+          callMeta.call_id,
           "answered",
           {
-            leg: A,
-            total_ms: D.totalMs,
-            queue_ms: D.queueMs,
-            post_ms: D.postMs,
-            reply_wait_ms: D.replyWaitMs,
-            posts: D.posts,
+            leg,
+            total_ms: transitTiming.totalMs,
+            queue_ms: transitTiming.queueMs,
+            post_ms: transitTiming.postMs,
+            reply_wait_ms: transitTiming.replyWaitMs,
+            posts: transitTiming.posts,
           },
-          M,
+          logLevel,
         );
-        m.onTransit?.(D);
+        opts.onTransit?.(transitTiming);
       } catch (error) {
         logForDebugging(`[remote-tools] a leg's transit was not reported: ${errorMessage(error)}`);
       }
     return callAtDeadline;
   };
   if (late !== undefined)
-    m.onHeldAtDeadline?.({
-      late: late.then(O),
-      withdraw: () => P.cancel(),
-      takeBack: () => U && P.withdraw(),
+    opts.onHeldAtDeadline?.({
+      late: late.then(settle),
+      withdraw: () => sent.cancel(),
+      takeBack: () => withdrawable && sent.withdraw(),
       accepted: () => {
-        let C = P.delivery();
-        return C === "delivered" || C === "untracked";
+        let deliveryState = sent.delivery();
+        return deliveryState === "delivered" || deliveryState === "untracked";
       },
     });
-  return O(settled);
+  return settle(settled);
 }
 //@ chunk-25sm7c4g.js:16676-18944 placement
 function resolveCallAtDeadline(
-  e,
+  entry,
   {
     state,
     limits,
-    entry,
+    entry: entry_2,
     sent,
     toolName,
     callId,
@@ -433,14 +447,14 @@ function resolveCallAtDeadline(
     heldBelowFloorAnswer,
   },
 ) {
-  let R = () => {
-    let T = heldBelowFloorAnswer();
-    if (T === undefined) return;
+  let takeHeldAnswer = () => {
+    let heldReply = heldBelowFloorAnswer();
+    if (heldReply === undefined) return;
     logRemoteTools(callId, "query deadline; taking the below-floor answer held for it", {
       deadline_ms: capMs,
-      host_inst: entry.instanceId,
+      host_inst: entry_2.instanceId,
     });
-    let callReply = readCallReply(T, elapsedMs());
+    let callReply = readCallReply(heldReply, elapsedMs());
     return callReply.kind === "dropped"
       ? {
           ...callReply,
@@ -448,12 +462,12 @@ function resolveCallAtDeadline(
         }
       : callReply;
   };
-  switch (e.kind) {
+  switch (entry.kind) {
     case "answered": {
-      let callReply = readCallReply(e.payload, elapsedMs());
+      let callReply = readCallReply(entry.payload, elapsedMs());
       if (isFreshReply(callReply)) {
         state.stale = false;
-        entry.heard(heardNow());
+        entry_2.heard(heardNow());
       }
       return callReply.kind === "dropped"
         ? {
@@ -463,12 +477,12 @@ function resolveCallAtDeadline(
         : callReply;
     }
     case "deadline": {
-      let T = R();
-      if (T !== undefined) return T;
+      let held_2 = takeHeldAnswer();
+      if (held_2 !== undefined) return held_2;
       if (held) {
         logRemoteTools(callId, "no answer by the deadline; request left standing, checking on it", {
           deadline_ms: capMs,
-          host_inst: entry.instanceId,
+          host_inst: entry_2.instanceId,
         });
         return {
           kind: "timed_out",
@@ -478,7 +492,7 @@ function resolveCallAtDeadline(
       }
       logRemoteTools(callId, "no answer by the deadline; request withdrawn", {
         deadline_ms: capMs,
-        host_inst: entry.instanceId,
+        host_inst: entry_2.instanceId,
         error_replies_ignored: sent.errorRepliesIgnored(),
       });
       if (capMs >= limits.defaultDeadlineMs) state.stale = true;
@@ -491,30 +505,30 @@ function resolveCallAtDeadline(
     case "stalled":
       logRemoteTools(
         callId,
-        e.takenBack
+        entry.takenBack
           ? "still queued here at the deadline; taken back before any write carried it"
           : "still queued here at the deadline; cancelled behind it",
         {
           deadline_ms: capMs,
-          host_inst: entry.instanceId,
+          host_inst: entry_2.instanceId,
         },
       );
       return {
         kind: "stalled",
         capMs,
         request: "call",
-        takenBack: e.takenBack,
+        takenBack: entry.takenBack,
       };
     case "unconfirmed": {
-      let T = R();
-      if (T !== undefined) return T;
+      let held = takeHeldAnswer();
+      if (held !== undefined) return held;
       logRemoteTools(
         callId,
         "deadline reached with the write carrying the request unresolved; withdrawn, delivery unknown",
         {
           deadline_ms: capMs,
-          host_inst: entry.instanceId,
-          delivery: e.delivery,
+          host_inst: entry_2.instanceId,
+          delivery: entry.delivery,
         },
       );
       return {
@@ -538,36 +552,36 @@ function resolveCallAtDeadline(
     case "undelivered":
       return {
         kind: "unreachable",
-        detail: `the session service refused the request${e.status !== undefined ? ` (HTTP ${e.status})` : ""}; nothing was delivered`,
+        detail: `the session service refused the request${entry.status !== undefined ? ` (HTTP ${entry.status})` : ""}; nothing was delivered`,
       };
     case "delivery_unknown":
       return {
         kind: "dropped",
-        detail: `an upload of the request ended without an answer and a later attempt was refused${e.status !== undefined ? ` (HTTP ${e.status})` : ""}; whether the machine received it is unknown`,
+        detail: `an upload of the request ended without an answer and a later attempt was refused${entry.status !== undefined ? ` (HTTP ${entry.status})` : ""}; whether the machine received it is unknown`,
         ...sentUnderEpoch,
       };
     case "gone":
       return {
         kind: "host_gone",
-        why: e.why,
-        unsent: e.unsent,
+        why: entry.why,
+        unsent: entry.unsent,
       };
     case "failed":
       return {
         kind: "transport_error",
-        detail: e.detail,
+        detail: entry.detail,
       };
   }
 }
 //@ chunk-25sm7c4g.js:18944-19807 placement
-async function awaitCallReply(e, n, r, { holdAtDeadline, withdrawable }) {
-  let s = e.reply.then(
+async function awaitCallReply(call, state, signal, { holdAtDeadline, withdrawable }) {
+  let answerPromise = call.reply.then(
     (payload) => ({
       kind: "answered",
       payload,
     }),
     (error) => {
-      if (r.aborted)
+      if (signal.aborted)
         return {
           kind: "cancelled",
         };
@@ -589,7 +603,7 @@ async function awaitCallReply(e, n, r, { holdAtDeadline, withdrawable }) {
         return {
           kind: "gone",
           why: error.why,
-          unsent: e.delivery() === "queued",
+          unsent: call.delivery() === "queued",
         };
       return {
         kind: "failed",
@@ -597,15 +611,15 @@ async function awaitCallReply(e, n, r, { holdAtDeadline, withdrawable }) {
       };
     },
   );
-  let m = await withDeadline(s, n);
-  if (m !== undefined)
+  let settled = await withDeadline(answerPromise, state);
+  if (settled !== undefined)
     return {
-      settled: m,
+      settled,
       late: undefined,
     };
-  let p = e.delivery();
-  if (p === "queued") {
-    if (withdrawable && e.withdraw())
+  let deliveryState = call.delivery();
+  if (deliveryState === "queued") {
+    if (withdrawable && call.withdraw())
       return {
         settled: {
           kind: "stalled",
@@ -613,7 +627,7 @@ async function awaitCallReply(e, n, r, { holdAtDeadline, withdrawable }) {
         },
         late: undefined,
       };
-    e.cancel();
+    call.cancel();
     return {
       settled: {
         kind: "stalled",
@@ -627,15 +641,15 @@ async function awaitCallReply(e, n, r, { holdAtDeadline, withdrawable }) {
       settled: {
         kind: "deadline",
       },
-      late: s,
+      late: answerPromise,
     };
-  e.cancel();
+  call.cancel();
   return {
     settled:
-      p === "in_flight" || p === "indeterminate"
+      deliveryState === "in_flight" || deliveryState === "indeterminate"
         ? {
             kind: "unconfirmed",
-            delivery: p,
+            delivery: deliveryState,
           }
         : {
             kind: "deadline",
@@ -644,48 +658,50 @@ async function awaitCallReply(e, n, r, { holdAtDeadline, withdrawable }) {
   };
 }
 //@ chunk-25sm7c4g.js:19807-19912 placement
-function isRefusalReply(e) {
-  return e.kind === "approval_unverified" || (e.kind === "result" && e.envelope?.outcome === "refused");
+function isRefusalReply(reply) {
+  return (
+    reply.kind === "approval_unverified" || (reply.kind === "result" && reply.envelope?.outcome === "refused")
+  );
 }
 //@ chunk-25sm7c4g.js:19912-19960 placement
-function isFreshReply(callReply) {
-  return !isRefusalReply(callReply) && callReply.kind !== "dropped";
+function isFreshReply(reply) {
+  return !isRefusalReply(reply) && reply.kind !== "dropped";
 }
 //@ chunk-25sm7c4g.js:19960-20092 placement
-function isReplyForCallSafe(e, callId) {
+function isReplyForCallSafe(reply, callId) {
   try {
-    return isReplyForCall(e, callId);
+    return isReplyForCall(reply, callId);
   } catch (error) {
     logForDebugging(`[remote-tools] an unreadable reply was not taken as an answer: ${errorMessage(error)}`);
     return false;
   }
 }
 //@ chunk-25sm7c4g.js:20092-20279 placement
-function isReplyForCall(e, n) {
-  let r = isPlainObject(e) ? e.result : undefined;
-  let callResult = readCallResult(r);
+function isReplyForCall(reply, callId) {
+  let result = isPlainObject(reply) ? reply.result : undefined;
+  let callResult = readCallResult(result);
   switch (callResult.envelope.status) {
     case "present":
-      return callResult.envelope.envelope.call_id === n;
+      return callResult.envelope.envelope.call_id === callId;
     case "malformed":
-      return readMalformedReplyCallId(r) === n;
+      return readMalformedReplyCallId(result) === callId;
     case "absent":
       return false;
   }
 }
 //@ chunk-25sm7c4g.js:20279-20389 placement
-function readMalformedReplyCallId(e) {
-  if (!isPlainObject(e)) return;
-  return [e.structuredContent, e._meta]
+function readMalformedReplyCallId(reply) {
+  if (!isPlainObject(reply)) return;
+  return [reply.structuredContent, reply._meta]
     .filter(isPlainObject)
-    .map((r) => r[ANTHROPIC_REMOTETOOLEXECUTION])
+    .map((meta) => meta[ANTHROPIC_REMOTETOOLEXECUTION])
     .find(isPlainObject)?.call_id;
 }
 //@ chunk-25sm7c4g.js:20389-21466 placement
-function readCallReply(e, n) {
-  if (isRemoteToolCallMeta(e)) {
-    let { [SENDER_BELOW_FLOOR]: s, ...m } = e;
-    let callReply = readCallReply(m, n);
+function readCallReply(reply, callId) {
+  if (isRemoteToolCallMeta(reply)) {
+    let { [SENDER_BELOW_FLOOR]: belowFloor, ...rest } = reply;
+    let callReply = readCallReply(rest, callId);
     let envelope =
       callReply.kind === "result" && callReply.envelope?.outcome === "refused"
         ? callReply.envelope
@@ -723,8 +739,8 @@ function readCallReply(e, n) {
         }),
     };
   }
-  let r = isPlainObject(e) ? e.result : undefined;
-  let callResult = readCallResult(r);
+  let result = isPlainObject(reply) ? reply.result : undefined;
+  let callResult = readCallResult(result);
   if (callResult.envelope.status === "malformed")
     return {
       kind: "transport_error",
@@ -746,37 +762,42 @@ function readCallReply(e, n) {
     content: callResult.content,
     isError: callResult.isError,
     envelope,
-    elapsedMs: n,
-    responseBytes: byteLengthOf(r),
+    elapsedMs: callId,
+    responseBytes: byteLengthOf(result),
     ...{},
   };
 }
 //@ chunk-25sm7c4g.js:21466-21787 placement
-async function probeMachine(e, n, r, o) {
-  let u = (e.now ?? Date.now)();
-  let s = await sendLivenessProbe(e, r, o);
-  let m = (r.live()?.lastHeardAt ?? -1 / 0) > u;
-  let p = e.host();
-  let f = p?.instanceId !== r.instanceId;
-  if (s === "answered" || (s === "missed" && (m || f))) n.stale = false;
-  if (s === "answered" || (s === "missed" && m) || (s !== "cancelled" && f && p !== undefined))
+async function probeMachine(channel, state, entry, signal) {
+  let startedAt = (channel.now ?? Date.now)();
+  let probeResult = await sendLivenessProbe(channel, entry, signal);
+  let heardSince = (entry.live()?.lastHeardAt ?? -1 / 0) > startedAt;
+  let host = channel.host();
+  let instanceChanged = host?.instanceId !== entry.instanceId;
+  if (probeResult === "answered" || (probeResult === "missed" && (heardSince || instanceChanged)))
+    state.stale = false;
+  if (
+    probeResult === "answered" ||
+    (probeResult === "missed" && heardSince) ||
+    (probeResult !== "cancelled" && instanceChanged && host !== undefined)
+  )
     return "there";
-  return s === "missed" && !f ? "missed" : "unknown";
+  return probeResult === "missed" && !instanceChanged ? "missed" : "unknown";
 }
 //@ chunk-25sm7c4g.js:21787-22092 placement
-async function holdForLiveness(e, n, r, signal, ms) {
-  if (n.hold === undefined) {
+async function holdForLiveness(channel, state, entry, signal, budgetMs) {
+  if (state.hold === undefined) {
     let abortController = new AbortController();
-    let p = probeUntilAnswered(e, n, r, abortController.signal, ms);
-    n.hold = {
-      ended: p.finally(() => {
-        n.hold = undefined;
+    let ended = probeUntilAnswered(channel, state, entry, abortController.signal, budgetMs);
+    state.hold = {
+      ended: ended.finally(() => {
+        state.hold = undefined;
       }),
       stop: abortController,
       waiting: 0,
     };
   }
-  let hold = n.hold;
+  let hold = state.hold;
   hold.waiting += 1;
   try {
     return await raceWithAbortSignal(hold.ended, signal, () => new AbortError());
@@ -788,50 +809,55 @@ async function holdForLiveness(e, n, r, signal, ms) {
   }
 }
 //@ chunk-25sm7c4g.js:22092-22236 placement
-async function probeUntilAnswered(e, n, r, signal, u) {
-  let probeDeadlineMs = e.probeDeadlineMs ?? PROBE_DEADLINE_MS;
-  for (let m = u; m > 0; m -= probeDeadlineMs) {
-    let p = await probeMachine(e, n, r, signal);
-    if (p !== "missed") return p;
+async function probeUntilAnswered(channel, state, entry, signal, budgetMs) {
+  let probeDeadlineMs = channel.probeDeadlineMs ?? PROBE_DEADLINE_MS;
+  for (let remainingMs = budgetMs; remainingMs > 0; remainingMs -= probeDeadlineMs) {
+    let result = await probeMachine(channel, state, entry, signal);
+    if (result !== "missed") return result;
   }
   return "missed";
 }
 //@ chunk-25sm7c4g.js:22236-22380 placement
-function currentQuietMisses(e, n) {
-  let r = n.quietMisses[0];
-  let o = e.host()?.live();
-  if (r !== undefined && (o === undefined || wasHeardAfter(o, r.writtenAt))) n.quietMisses = [];
-  return n.quietMisses;
+function currentQuietMisses(channel, state) {
+  let miss = state.quietMisses[0];
+  let live = channel.host()?.live();
+  if (miss !== undefined && (live === undefined || wasHeardAfter(live, miss.writtenAt)))
+    state.quietMisses = [];
+  return state.quietMisses;
 }
 //@ chunk-25sm7c4g.js:22380-22469 placement
-function wasHeardAfter(e, n) {
-  return e.lastHeardAt > n || (e.lastStillHereAt !== undefined && e.lastStillHereAt > n);
+function wasHeardAfter(live, at) {
+  return live.lastHeardAt > at || (live.lastStillHereAt !== undefined && live.lastStillHereAt > at);
 }
 //@ chunk-25sm7c4g.js:22469-23201 placement
-function quietProbe(e, n, r) {
-  if (n.quietProbe !== undefined) return n.quietProbe;
-  let o = e.host();
-  let u = o?.live();
-  if (o === undefined || u === undefined || u.asleepSince !== undefined) return Promise.resolve(undefined);
-  let s = (e.now ?? Date.now)();
-  let m = r ?? e.probeDeadlineMs ?? PROBE_DEADLINE_MS;
-  let p = sendLivenessProbe(e, o, new AbortController().signal, {
+function quietProbe(channel, state, deadlineMs) {
+  if (state.quietProbe !== undefined) return state.quietProbe;
+  let host = channel.host();
+  let live = host?.live();
+  if (host === undefined || live === undefined || live.asleepSince !== undefined)
+    return Promise.resolve(undefined);
+  let nowMs = (channel.now ?? Date.now)();
+  let deadline = deadlineMs ?? channel.probeDeadlineMs ?? PROBE_DEADLINE_MS;
+  let probe = sendLivenessProbe(channel, host, new AbortController().signal, {
     putWithinMs: LIVENESS_PROBE_TIMEOUT_MS,
-    deadlineMs: m,
+    deadlineMs: deadline,
   })
-    .then((f) => {
-      let _ = o.live();
-      if (f === "answered" || (f === "missed" && _ !== undefined && wasHeardAfter(_, s))) {
-        if (f === "answered" || (_?.lastHeardAt ?? -1 / 0) > s) n.stale = false;
-        n.quietMisses = [];
+    .then((result) => {
+      let after = host.live();
+      if (
+        result === "answered" ||
+        (result === "missed" && after !== undefined && wasHeardAfter(after, nowMs))
+      ) {
+        if (result === "answered" || (after?.lastHeardAt ?? -1 / 0) > nowMs) state.stale = false;
+        state.quietMisses = [];
         return true;
       }
-      if (f !== "missed" || _ === undefined || _.asleepSince !== undefined) return;
-      n.quietMisses = [
-        ...currentQuietMisses(e, n),
+      if (result !== "missed" || after === undefined || after.asleepSince !== undefined) return;
+      state.quietMisses = [
+        ...currentQuietMisses(channel, state),
         {
-          writtenAt: s,
-          waitedMs: m,
+          writtenAt: nowMs,
+          waitedMs: deadline,
         },
       ];
       return false;
@@ -841,48 +867,48 @@ function quietProbe(e, n, r) {
       return;
     })
     .finally(() => {
-      n.quietProbe = undefined;
+      state.quietProbe = undefined;
     });
-  n.quietProbe = p;
-  return p;
+  state.quietProbe = probe;
+  return probe;
 }
 //@ chunk-25sm7c4g.js:23201-24195 placement
-async function sendLivenessProbe(e, n, signal, o) {
-  let now = e.now ?? Date.now;
-  let s = o?.deadlineMs ?? e.probeDeadlineMs ?? PROBE_DEADLINE_MS;
-  let m = now();
-  let p;
-  let f;
+async function sendLivenessProbe(channel, entry, signal, opts) {
+  let now = channel.now ?? Date.now;
+  let deadlineMs = opts?.deadlineMs ?? channel.probeDeadlineMs ?? PROBE_DEADLINE_MS;
+  let issuedAt = now();
+  let timer;
+  let sent;
   try {
-    f = e.sender.sendServedCallRequest({
+    sent = channel.sender.sendServedCallRequest({
       request: {
         subtype: "remote_tools_probe",
-        instance_id: n.instanceId,
-        issued_at: m,
-        deadline_ms: s,
+        instance_id: entry.instanceId,
+        issued_at: issuedAt,
+        deadline_ms: deadlineMs,
       },
       accepts: acceptsAnnounceResult,
       signal,
-      ...(o !== undefined && {
-        onUpload: (g) => {
-          if (g === "accepted") p ??= now();
+      ...(opts !== undefined && {
+        onUpload: (outcome) => {
+          if (outcome === "accepted") timer ??= now();
         },
       }),
     });
   } catch (error) {
     logForDebugging(
-      `[remote-tools] liveness probe to ${n.hostName} could not be sent: ${errorMessage(error)}`,
+      `[remote-tools] liveness probe to ${entry.hostName} could not be sent: ${errorMessage(error)}`,
     );
     return "unsent";
   }
-  if (!f.sent) return "unsent";
-  let { settled } = await awaitCallReply(f, s, signal, {
+  if (!sent.sent) return "unsent";
+  let { settled } = await awaitCallReply(sent, deadlineMs, signal, {
     holdAtDeadline: false,
     withdrawable: true,
   });
   if (settled.kind === "answered") {
-    let g = isPlainObject(settled.payload) ? settled.payload.result : undefined;
-    n.heard(now(), isPlainObject(g) ? parseAnnounce(g.epoch) : undefined);
+    let result = isPlainObject(settled.payload) ? settled.payload.result : undefined;
+    entry.heard(now(), isPlainObject(result) ? parseAnnounce(result.epoch) : undefined);
     return "answered";
   }
   switch (settled.kind) {
@@ -896,8 +922,9 @@ async function sendLivenessProbe(e, n, signal, o) {
     case "gone":
       return "gone";
     case "deadline":
-      return o !== undefined &&
-        (p === undefined || m + s - p < (e.probeDeadlineMs ?? PROBE_DEADLINE_MS) - o.putWithinMs)
+      return opts !== undefined &&
+        (timer === undefined ||
+          issuedAt + deadlineMs - timer < (channel.probeDeadlineMs ?? PROBE_DEADLINE_MS) - opts.putWithinMs)
         ? "stream_lost"
         : "missed";
     case "dropped":
@@ -907,28 +934,28 @@ async function sendLivenessProbe(e, n, signal, o) {
   }
 }
 //@ chunk-25sm7c4g.js:24195-24272 placement
-function acceptsAnnounceResult(e) {
-  let n = isPlainObject(e) ? e.result : undefined;
-  return isPlainObject(n) && parseAnnounce(n.epoch) !== undefined;
+function acceptsAnnounceResult(reply) {
+  let result = isPlainObject(reply) ? reply.result : undefined;
+  return isPlainObject(result) && parseAnnounce(result.epoch) !== undefined;
 }
 //@ chunk-25sm7c4g.js:24272-24320 placement
-function leftForOutcome(e) {
-  return e === undefined
+function leftForOutcome(leftFor) {
+  return leftFor === undefined
     ? {}
     : {
-        leftFor: e,
+        leftFor,
       };
 }
 //@ chunk-25sm7c4g.js:24320-24390 placement
-function isPlainObject(e) {
-  return typeof e === "object" && e !== null && !Array.isArray(e);
+function isPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 //@ chunk-25sm7c4g.js:24390-24485 placement
-function remoteToolsContext(e) {
+function remoteToolsContext(context) {
   return {
-    toolState: e.toolState,
-    agentContext: e.agentContext,
-    mcpClients: () => currentMcpClients(e),
+    toolState: context.toolState,
+    agentContext: context.agentContext,
+    mcpClients: () => currentMcpClients(context),
   };
 }
 //@ chunk-25sm7c4g.js:24485-24537 placement
@@ -959,33 +986,34 @@ class RemoteToolTargetsState {
   inFlight = undefined;
 }
 //@ chunk-25sm7c4g.js:24796-25197 placement
-function nextListingInterval(e) {
-  let n = e.toolState.get(RemoteToolTargetsState);
+function nextListingInterval(context) {
+  let state = context.toolState.get(RemoteToolTargetsState);
   let now = Date.now();
-  let o =
-    n.provisional !== undefined && (n.provisional.stub || now - n.provisional.since < PROVISIONAL_FRESH_MS)
+  let minInterval =
+    state.provisional !== undefined &&
+    (state.provisional.stub || now - state.provisional.since < PROVISIONAL_FRESH_MS)
       ? MIN_RELIST_INTERVAL_MS
       : MAX_RELIST_INTERVAL_MS;
   if (
-    (n.lastForcedRelistAt !== undefined && now - n.lastForcedRelistAt < o) ||
-    (n.lastListedAt !== undefined && now - n.lastListedAt < MIN_RELIST_INTERVAL_MS)
+    (state.lastForcedRelistAt !== undefined && now - state.lastForcedRelistAt < minInterval) ||
+    (state.lastListedAt !== undefined && now - state.lastListedAt < MIN_RELIST_INTERVAL_MS)
   )
     return false;
-  n.lastForcedRelistAt = now;
-  let connection = n.connection;
+  state.lastForcedRelistAt = now;
+  let connection = state.connection;
   if (connection !== undefined)
     mcpClientModule().fetchToolsForClient.cache.delete(serverCacheKey(connection.name, connection.config));
-  n.synced = false;
-  n.listingMemo = undefined;
+  state.synced = false;
+  state.listingMemo = undefined;
   return true;
 }
 //@ chunk-25sm7c4g.js:25197-25210 placement
 var MAX_RELIST_INTERVAL_MS = 30000;
 //@ chunk-25sm7c4g.js:25210-25274 placement
-async function refreshRemoteToolTargets(e, n, r) {
-  syncRemoteToolTargets(e, n, r);
-  await refreshDeviceBridgeTargets(e, n, r);
-  syncRemoteToolTargets(e, n, r);
+async function refreshRemoteToolTargets(context, hosts, trigger) {
+  syncRemoteToolTargets(context, hosts, trigger);
+  await refreshDeviceBridgeTargets(context, hosts, trigger);
+  syncRemoteToolTargets(context, hosts, trigger);
 }
 export {
   RemoteToolTargetsState,
@@ -1000,4 +1028,5 @@ export {
   remoteToolsContext,
   nextListingInterval,
   PROBE_DEADLINE_MS,
+  createSessionEventTransport,
 };

@@ -40,9 +40,9 @@ class installStreamJsonStdoutGuard {
   install() {
     if (this.originalWrite !== null) return;
     let textDecoder = new TextDecoder("utf-8");
-    let n = process.stdout.write.bind(process.stdout);
-    this.originalWrite = n;
-    let r = this;
+    let originalWrite = process.stdout.write.bind(process.stdout);
+    this.originalWrite = originalWrite;
+    let guard = this;
     process.stdout.write = function (chunk, encodingOrCb, cb) {
       let text =
         typeof chunk === "string"
@@ -50,17 +50,17 @@ class installStreamJsonStdoutGuard {
           : textDecoder.decode(chunk, {
               stream: true,
             });
-      r.buffer += text;
+      guard.buffer += text;
       let newlineIdx;
-      let w = "";
+      let jsonText = "";
       while (
-        (newlineIdx = r.buffer.indexOf(`
+        (newlineIdx = guard.buffer.indexOf(`
 `)) !== -1
       ) {
-        let line = r.buffer.slice(0, newlineIdx);
-        r.buffer = r.buffer.slice(newlineIdx + 1);
+        let line = guard.buffer.slice(0, newlineIdx);
+        guard.buffer = guard.buffer.slice(newlineIdx + 1);
         if (isJsonLine(line))
-          w +=
+          jsonText +=
             line +
             `
 `;
@@ -70,9 +70,9 @@ class installStreamJsonStdoutGuard {
           logForDebugging(`streamJsonStdoutGuard diverted non-JSON stdout line: ${line.slice(0, 200)}`);
         }
       }
-      let P = typeof encodingOrCb === "function" ? encodingOrCb : cb;
-      if (w.length > 0) return P ? n(w, P) : n(w);
-      if (P) queueMicrotask(() => P());
+      let callback = typeof encodingOrCb === "function" ? encodingOrCb : cb;
+      if (jsonText.length > 0) return callback ? originalWrite(jsonText, callback) : originalWrite(jsonText);
+      if (callback) queueMicrotask(() => callback());
       return true;
     };
     registerCleanup(async () => {

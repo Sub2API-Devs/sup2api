@@ -17,13 +17,9 @@ import { getOriginalCwd } from "../bootstrap/state.js";
 import { findGitRoot } from "./git.js";
 import { hasBackslash, cwdHasBackslash } from "./pathClassification.js";
 import { isStorageV5Enabled } from "./hoverRest.js";
-import {
-  locateTranscriptPath,
-  dirSyncRecordFileName,
-  resolveTranscriptLocation,
-  dirSyncRecordKey,
-} from "./transcriptIds.js";
+import { locateTranscriptPath, resolveTranscriptLocation } from "./transcriptIds.js";
 import { getProjectsDir } from "./sessionStoragePortable.js";
+import { dirSyncRecordFileName, dirSyncRecordKey } from "./teleport/dirSync.js";
 import { getFileKind } from "./fileKind.js";
 import { logForDebugging } from "./debug.js";
 import { formatStorageError } from "./storage/storageErrors.js";
@@ -42,9 +38,9 @@ var NOWHERE_WITH_RECORD_RESULT = {
   hasOwnSessionRecord: true,
 };
 //@ chunk-dmh8arxx.js:3825-3983 placement
-async function pathKindExists(n, r) {
-  return lstat(n).then(
-    (o) => ((r === "file" ? o.isFile() : o.isDirectory()) ? true : undefined),
+async function pathKindExists(path, kind) {
+  return lstat(path).then(
+    (stats) => ((kind === "file" ? stats.isFile() : stats.isDirectory()) ? true : undefined),
     (error) => {
       let errnoCode = getErrnoCode(error);
       return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? false : undefined;
@@ -52,55 +48,60 @@ async function pathKindExists(n, r) {
   );
 }
 //@ chunk-dmh8arxx.js:3983-4016 placement
-function isFilePath(n) {
-  return pathKindExists(n, "file");
+function isFilePath(path) {
+  return pathKindExists(path, "file");
 }
 //@ chunk-dmh8arxx.js:4016-4083 placement
-async function isFileUnderExistingDir(n) {
-  let r = await pathKindExists(dirname(n), "dir");
-  return r === true ? isFilePath(n) : r;
+async function isFileUnderExistingDir(path) {
+  let parentKind = await pathKindExists(dirname(path), "dir");
+  return parentKind === true ? isFilePath(path) : parentKind;
 }
 //@ chunk-dmh8arxx.js:4083-5065 placement
 /**
  * 查找会话记录文件位置（本地或 v5 存储），返回未知原因或路径。
  */
-async function locateSessionTranscript(n, r, o = TRANSCRIPT_LOCATE_TIMEOUT_MS) {
+async function locateSessionTranscript(sessionId, storage, cap = TRANSCRIPT_LOCATE_TIMEOUT_MS) {
   if (!isSessionRecordLookupEnabled())
     return {
       kind: "unknown",
       why: "not_looked",
     };
-  let infraSessionId = toInfraSessionId(n);
+  let infraSessionId = toInfraSessionId(sessionId);
   let originalCwd = getOriginalCwd();
-  let l = findGitRoot(originalCwd) ?? resolve(originalCwd);
-  if (hasBackslash(l) || cwdHasBackslash() || hasBackslash(await realpath(l).catch(() => l)))
+  let root = findGitRoot(originalCwd) ?? resolve(originalCwd);
+  if (hasBackslash(root) || cwdHasBackslash() || hasBackslash(await realpath(root).catch(() => root)))
     return {
       kind: "unknown",
       why: "path_misread",
     };
-  if (isStorageV5Enabled() && r !== undefined) return findTranscriptPathSafe(r, l, infraSessionId, o);
-  let h = await locateTranscriptPath(l, infraSessionId, r);
+  if (isStorageV5Enabled() && storage !== undefined)
+    return findTranscriptPathSafe(storage, root, infraSessionId, cap);
+  let path = await locateTranscriptPath(root, infraSessionId, storage);
   let projectsDir = getProjectsDir();
-  let m = dirSyncRecordFileName(infraSessionId);
+  let fileName = dirSyncRecordFileName(infraSessionId);
   try {
-    let e = await isFileUnderExistingDir(h);
-    if (e !== false)
-      return e
+    let here = await isFileUnderExistingDir(path);
+    if (here !== false)
+      return here
         ? NOWHERE_WITH_RECORD_RESULT
         : {
             kind: "unknown",
             why: "here_unreadable",
           };
-    let i = await readdir(projectsDir, {
+    let dirents = await readdir(projectsDir, {
       withFileTypes: true,
     });
-    let results = await Promise.all(i.map((a) => getFileKind(a, join(projectsDir, a.name), "unknown")));
-    let filtered = i.filter((a, R) => results[R] === "dir");
-    let sliced = filtered.slice(0, o);
-    let any = results.some((a) => a === "symlink" || a === "unknown");
-    for (let a = 0; a < sliced.length; a += MAX_TRANSCRIPT_CANDIDATES) {
+    let results = await Promise.all(
+      dirents.map((dirent) => getFileKind(dirent, join(projectsDir, dirent.name), "unknown")),
+    );
+    let filtered = dirents.filter((dirent, index) => results[index] === "dir");
+    let sliced = filtered.slice(0, cap);
+    let any = results.some((kind) => kind === "symlink" || kind === "unknown");
+    for (let offset = 0; offset < sliced.length; offset += MAX_TRANSCRIPT_CANDIDATES) {
       let results = await Promise.all(
-        sliced.slice(a, a + MAX_TRANSCRIPT_CANDIDATES).map((F) => isFilePath(join(projectsDir, F.name, m))),
+        sliced
+          .slice(offset, offset + MAX_TRANSCRIPT_CANDIDATES)
+          .map((dirent) => isFilePath(join(projectsDir, dirent.name, fileName))),
       );
       if (results.includes(true)) return ELSEWHERE_RESULT;
       any ||= results.includes(undefined);
@@ -131,9 +132,9 @@ async function locateSessionTranscript(n, r, o = TRANSCRIPT_LOCATE_TIMEOUT_MS) {
   }
 }
 //@ chunk-dmh8arxx.js:5065-5293 placement
-async function findTranscriptPathSafe(n, r, infraSessionId, s) {
+async function findTranscriptPathSafe(storage, root, infraSessionId, cap) {
   try {
-    return await findTranscriptPath(n, r, infraSessionId, s);
+    return await findTranscriptPath(storage, root, infraSessionId, cap);
   } catch (error) {
     logForDebugging(
       `[sessionRecord] could not tell whether another project folder holds this session's record: ${errorMessage(error)}`,
@@ -148,53 +149,53 @@ async function findTranscriptPathSafe(n, r, infraSessionId, s) {
   }
 }
 //@ chunk-dmh8arxx.js:5293-6635 placement
-async function findTranscriptPath(n, r, o, s) {
-  let transcriptLocation = await resolveTranscriptLocation(r, o, n);
+async function findTranscriptPath(storage, root, infraSessionId, cap) {
+  let transcriptLocation = await resolveTranscriptLocation(root, infraSessionId, storage);
   if (transcriptLocation.v5 === undefined) {
-    let e = await isFileUnderExistingDir(transcriptLocation.path);
-    if (e !== false)
-      return e
+    let here = await isFileUnderExistingDir(transcriptLocation.path);
+    if (here !== false)
+      return here
         ? NOWHERE_WITH_RECORD_RESULT
         : {
             kind: "unknown",
             why: "here_unreadable",
           };
   } else {
-    let e = await n.scopeKind({
+    let scope = await storage.scopeKind({
       namespace: "transcript",
       projectKey: transcriptLocation.projectKey,
     });
-    if (!e.ok || e.value.kind === "link" || e.value.kind === "other")
+    if (!scope.ok || scope.value.kind === "link" || scope.value.kind === "other")
       return {
         kind: "unknown",
         why: "here_unreadable",
       };
-    if (e.value.kind === "directory") {
-      let i = await n.statMeta(transcriptLocation.v5.key);
-      if (i.ok) return NOWHERE_WITH_RECORD_RESULT;
-      if (i.error.code !== "NotFound")
+    if (scope.value.kind === "directory") {
+      let meta = await storage.statMeta(transcriptLocation.v5.key);
+      if (meta.ok) return NOWHERE_WITH_RECORD_RESULT;
+      if (meta.error.code !== "NotFound")
         return {
           kind: "unknown",
           why: "here_unreadable",
         };
     }
   }
-  let l = [];
-  let h;
+  let projectKeys = [];
+  let cursor;
   do {
-    let e = await n.listEntries(
+    let page = await storage.listEntries(
       {
         namespace: "transcript",
       },
       {
-        cursor: h,
+        cursor,
         skipScopeStats: true,
         skipKeyStats: true,
       },
     );
-    if (!e.ok) {
+    if (!page.ok) {
       logForDebugging(
-        `[sessionRecord] could not tell whether another project folder holds this session's record: ${formatStorageError(e.error)}`,
+        `[sessionRecord] could not tell whether another project folder holds this session's record: ${formatStorageError(page.error)}`,
         {
           level: "warn",
         },
@@ -204,36 +205,37 @@ async function findTranscriptPath(n, r, o, s) {
         why: "listing_failed",
       };
     }
-    for (let item of e.value.items)
+    for (let item of page.value.items)
       if (item.kind === "scope" && item.scope.namespace === "transcript") {
         let projectKey = item.scope.projectKey;
-        if (projectKey !== undefined) l.push(projectKey);
+        if (projectKey !== undefined) projectKeys.push(projectKey);
       }
-    h = e.value.cursor;
-  } while (h !== undefined && l.length < s);
-  let sliced = l.slice(0, s);
-  let m = false;
-  for (let e = 0; e < sliced.length; e += MAX_TRANSCRIPT_CANDIDATES) {
+    cursor = page.value.cursor;
+  } while (cursor !== undefined && projectKeys.length < cap);
+  let sliced = projectKeys.slice(0, cap);
+  let anyUnknown = false;
+  for (let offset = 0; offset < sliced.length; offset += MAX_TRANSCRIPT_CANDIDATES) {
     let results = await Promise.all(
-      sliced.slice(e, e + MAX_TRANSCRIPT_CANDIDATES).map(async (f) => {
-        let p = dirSyncRecordKey(f, o);
-        if (p === undefined) return;
-        let w = await n.statMeta(p);
-        return w.ok ? true : w.error.code === "NotFound" ? false : undefined;
+      sliced.slice(offset, offset + MAX_TRANSCRIPT_CANDIDATES).map(async (projectKey) => {
+        let key = dirSyncRecordKey(projectKey, infraSessionId);
+        if (key === undefined) return;
+        let meta = await storage.statMeta(key);
+        return meta.ok ? true : meta.error.code === "NotFound" ? false : undefined;
       }),
     );
     if (results.includes(true)) return ELSEWHERE_RESULT;
-    m ||= results.includes(undefined);
+    anyUnknown ||= results.includes(undefined);
   }
-  return m
+  return anyUnknown
     ? {
         kind: "unknown",
         why: "probe_failed",
       }
-    : h !== undefined || l.length > sliced.length
+    : cursor !== undefined || projectKeys.length > sliced.length
       ? {
           kind: "unknown",
           why: "listing_capped",
         }
       : NOWHERE_RESULT;
 }
+export { locateSessionTranscript };

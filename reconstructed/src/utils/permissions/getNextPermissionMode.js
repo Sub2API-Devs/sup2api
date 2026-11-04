@@ -17,6 +17,29 @@ import {
 import { logForDebugging } from "../debug.js";
 import { getNextPermissionMode_2 } from "../../types/permissions.js";
 
+//@ chunk-kswt4qha.js:2557-2947 fingerprint = getNextPermissionMode (0.536)
+/**
+ * 主动性档位 → 启动权限模式：ask→auto（可用时）否则 default；default→auto（可用时）否则沿用基线模式（基线为 auto 或不可用的 bypass 时回 default）；proactive→bypassPermissions（可用时）→auto→acceptEdits。
+ */
+function permissionModeForProactivityLevel(level, availability, baselineMode) {
+  switch (level) {
+    case "ask":
+      return availability.isAutoModeAvailable ? "auto" : "default";
+    case "default": {
+      if (availability.isAutoModeAvailable) return "auto";
+      let effectiveBaselineMode = baselineMode ?? "default";
+      if (
+        effectiveBaselineMode === "auto" ||
+        (effectiveBaselineMode === "bypassPermissions" && !availability.isBypassPermissionsModeAvailable)
+      )
+        return "default";
+      return effectiveBaselineMode;
+    }
+    case "proactive":
+      if (availability.isBypassPermissionsModeAvailable) return "bypassPermissions";
+      return availability.isAutoModeAvailable ? "auto" : "acceptEdits";
+  }
+}
 //@ chunk-n4pvm0gt.js:337-537 fingerprint = canCycleToAuto (1)
 /**
  * Shift+Tab 能否循环到 auto：context.isAutoModeAvailable 与实时闸门 isAutoModeGateEnabled（d_）都为真；否则打调试日志说明原因。
@@ -53,40 +76,20 @@ function cyclePermissionMode(context, teamContext, trigger) {
  * 可循环切换的权限模式列表：plan、default、acceptEdits，按条件加入 auto 与 bypassPermissions。
  */
 function cyclePermissionModes(context) {
-  let x = ["plan", "default", "acceptEdits"];
-  if (canCycleToAuto(context)) x.push("auto");
-  if (canCycleToBypassPermissions(context)) x.push("bypassPermissions");
-  return x;
+  let modes = ["plan", "default", "acceptEdits"];
+  if (canCycleToAuto(context)) modes.push("auto");
+  if (canCycleToBypassPermissions(context)) modes.push("bypassPermissions");
+  return modes;
 }
 //@ chunk-18hwfzwa.js:643382-643509 placement = peek (0.809)
 /**
  * 按可用权限模式列表（plan/default/acceptEdits，可加 auto、bypassPermissions）循环取下一个或上一个。旧版名 peek 为错配。
  */
-function getNextPermissionMode(h, x) {
-  let D = cyclePermissionModes(h);
-  let index = D.indexOf(h.mode);
+function getNextPermissionMode(context, direction) {
+  let modes = cyclePermissionModes(context);
+  let index = modes.indexOf(context.mode);
   if (index === -1) return "default";
-  return D[(index + (x === "next" ? 1 : -1) + D.length) % D.length];
-}
-//@ chunk-kswt4qha.js:2557-2947 fingerprint = getNextPermissionMode (0.536)
-/**
- * 主动性档位 → 启动权限模式：ask→auto（可用时）否则 default；default→auto（可用时）否则沿用基线模式（基线为 auto 或不可用的 bypass 时回 default）；proactive→bypassPermissions（可用时）→auto→acceptEdits。
- */
-function permissionModeForProactivityLevel(level, availability, baselineMode) {
-  switch (level) {
-    case "ask":
-      return availability.isAutoModeAvailable ? "auto" : "default";
-    case "default": {
-      if (availability.isAutoModeAvailable) return "auto";
-      let s = baselineMode ?? "default";
-      if (s === "auto" || (s === "bypassPermissions" && !availability.isBypassPermissionsModeAvailable))
-        return "default";
-      return s;
-    }
-    case "proactive":
-      if (availability.isBypassPermissionsModeAvailable) return "bypassPermissions";
-      return availability.isAutoModeAvailable ? "auto" : "acceptEdits";
-  }
+  return modes[(index + (direction === "next" ? 1 : -1) + modes.length) % modes.length];
 }
 export {
   canCycleToAuto,

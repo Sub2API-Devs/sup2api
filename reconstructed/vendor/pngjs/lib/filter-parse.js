@@ -5,12 +5,12 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_interlace } from "./interlace.js";
 import { require_paeth_predictor } from "./paeth-predictor.js";
 
 //@ chunk-spjgqa4y.js:23978-25954 cjs-fingerprint
-var require_filter_parse = x(function (cjsExports, cjsModule) {
+var require_filter_parse = __commonJS(function (cjsExports, cjsModule) {
   var interlaceUtils = require_interlace();
   var paethPredictor = require_paeth_predictor();
   function getByteWidth(width, bpp, depth) {
@@ -18,8 +18,8 @@ var require_filter_parse = x(function (cjsExports, cjsModule) {
     if (depth !== 8) byteWidth = Math.ceil(byteWidth / (8 / depth));
     return byteWidth;
   }
-  var Filter = (cjsModule.exports = function (t, dependencies) {
-    let { width, height, interlace, bpp, depth } = t;
+  var Filter = (cjsModule.exports = function (frame, dependencies) {
+    let { width, height, interlace, bpp, depth } = frame;
     this.read = dependencies.read;
     this.write = dependencies.write;
     this.complete = dependencies.complete;

@@ -55,50 +55,55 @@ ${MODEL_USAGE_TEXT}`,
     args_hash: shortHash(trimmed),
     args_length: trimmed.length,
   });
-  let r = async () => {
-    let e = await withDeadline(
+  let runSwitch = async () => {
+    let outcome = await withDeadline(
       switchMainLoopModelSafe(trimmed, context.storageV5, context.credentials),
       MODEL_LIST_REFRESH_TIMEOUT_MS,
     );
-    if (e === undefined)
+    if (outcome === undefined)
       return {
         type: "text",
         value: `Couldn't confirm model '${displayModelName(trimmed)}' is available (the check timed out) \xB7 try again`,
       };
-    if (!e.ok)
+    if (!outcome.ok)
       return {
         type: "text",
-        value: e.message,
+        value: outcome.message,
       };
-    if (e.model !== null && hasLadderForSetting(e.model)) {
+    if (outcome.model !== null && hasLadderForSetting(outcome.model)) {
       logFeatureSad("model_fable_consent", "noninteractive_set_blocked");
-      let o = renderUsageCreditsOnlyModelName(parseUserSpecifiedModel(e.model));
+      let modelLabel = renderUsageCreditsOnlyModelName(parseUserSpecifiedModel(outcome.model));
       return {
         type: "text",
-        value: `${o} uses usage credits and needs a one-time consent \xB7 pick ${firstWord(o)} from /model in an interactive session to set it up`,
+        value: `${modelLabel} uses usage credits and needs a one-time consent \xB7 pick ${firstWord(modelLabel)} from /model in an interactive session to set it up`,
       };
     }
     return {
-      validation: e,
+      validation: outcome,
     };
   };
-  let m = async (validation) => {
-    let o = await runPreModelSwitchHooks(context.session, context.getAppState, validation.model, "command");
-    if (o.decision === "block" || o.decision === "ask") {
+  let applyValidation = async (validation) => {
+    let hookResult = await runPreModelSwitchHooks(
+      context.session,
+      context.getAppState,
+      validation.model,
+      "command",
+    );
+    if (hookResult.decision === "block" || hookResult.decision === "ask") {
       logFeatureSad("model_switch", "blocked_by_hook");
       return {
         type: "text",
         value: preModelSwitchBlockedMessage(
           validation.model,
-          o.decision === "ask"
-            ? `${o.reason ?? "confirmation required"} (run /model interactively to confirm)`
-            : o.reason,
-          o.messages,
+          hookResult.decision === "ask"
+            ? `${hookResult.reason ?? "confirmation required"} (run /model interactively to confirm)`
+            : hookResult.reason,
+          hookResult.messages,
         ),
       };
     }
-    let i = false;
-    let s = saveModelSwitch(
+    let success = false;
+    let noticePromise = saveModelSwitch(
       context.session,
       validation.model,
       context.getAppState,
@@ -107,47 +112,49 @@ ${MODEL_USAGE_TEXT}`,
       "command",
       validation.substitutedFrom,
       context.storageV5,
-      (d) => {
-        i = d?.kind === "failed";
+      (text) => {
+        success = text?.kind === "failed";
       },
     );
-    let p =
+    let substitutedPrefix =
       validation.substitutedFrom !== undefined && validation.model !== null
         ? `${formatModelRestrictedNotice(validation.substitutedFrom, validation.model)}
 `
         : "";
-    let g =
-      o.messages.length > 0
+    let suffix =
+      hookResult.messages.length > 0
         ? `
-${o.messages.map(sanitizeHookText).join(`
+${hookResult.messages.map(sanitizeHookText).join(`
 `)}`
         : "";
     return {
-      notice: s.then((d) => `${p}${d}${g}`),
-      hasDefaultSaveFailed: () => i,
+      notice: noticePromise.then((savedText) => `${substitutedPrefix}${savedText}${suffix}`),
+      hasDefaultSaveFailed: () => success,
     };
   };
   if (!context.options.isNonInteractiveSession && context.rowCommit.isHooked()) {
-    let e = await serializeModelSwitch(context.session, r);
-    if (!("validation" in e)) return e;
+    let result = await serializeModelSwitch(context.session, runSwitch);
+    if (!("validation" in result)) return result;
     return {
       type: "text",
       value: (
         await context.rowCommit.savedModelPickReply(
-          e.validation.model,
+          result.validation.model,
           context,
           async () => {
-            let i = await serializeModelSwitch(context.session, () => m(e.validation));
-            if ("notice" in i) {
-              let notice = await i.notice;
-              return i.hasDefaultSaveFailed()
+            let applied = await serializeModelSwitch(context.session, () =>
+              applyValidation(result.validation),
+            );
+            if ("notice" in applied) {
+              let notice = await applied.notice;
+              return applied.hasDefaultSaveFailed()
                 ? {
                     unsaved: notice,
                   }
                 : notice;
             }
             return {
-              refused: i.type === "text" ? i.value : "The model was not changed",
+              refused: applied.type === "text" ? applied.value : "The model was not changed",
             };
           },
           {
@@ -157,14 +164,15 @@ ${o.messages.map(sanitizeHookText).join(`
       ).text,
     };
   }
-  let l = await serializeModelSwitch(context.session, async () => {
-    let e = await r();
-    return "validation" in e ? m(e.validation) : e;
+  let finalized = await serializeModelSwitch(context.session, async () => {
+    let outcome = await runSwitch();
+    return "validation" in outcome ? applyValidation(outcome.validation) : outcome;
   });
-  if ("notice" in l)
+  if ("notice" in finalized)
     return {
       type: "text",
-      value: await l.notice,
+      value: await finalized.notice,
     };
-  return l;
+  return finalized;
 }
+export { runModelCommandNonInteractive };

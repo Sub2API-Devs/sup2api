@@ -11,7 +11,7 @@
 import { join, dirname } from "path";
 import { hostname } from "os";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
-import { u, literal, _enum, string } from "../../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, literal, _enum, stringSchema } from "../../../../vendor/zod/v4/classic/schemas.js";
 import { STORAGE_SPACES } from "../../storage/storageSpaces.js";
 import { getClaudeConfigDir } from "../../envUtils.js";
 import { jsonParse, jsonStringify } from "../../slowOperations.js";
@@ -20,17 +20,22 @@ import { isENOENT } from "../../errors.js";
 import { createSignal } from "../../signal.js";
 import { logForDebugging } from "../../debug.js";
 import { anyPairMatches } from "../../settings/stickyRoots.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:336423-336542 placement
-var deviceHooksConsentSchema = DoctorLazy(() =>
-  u({
-    version: literal(1),
-    choice: _enum(["accepted", "declined"]),
-    decidedAt: string(),
-    hostname: string(),
-  }),
-);
-var DEVICE_HOOKS_CONSENT = "device-hooks-consent";
+var deviceHooksConsentSchema; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var DEVICE_HOOKS_CONSENT;
+deferInit("chunk-s61vbvea.js:336423", () => {
+  deviceHooksConsentSchema = DoctorLazy(() =>
+    objectSchema({
+      version: literal(1),
+      choice: _enum(["accepted", "declined"]),
+      decidedAt: stringSchema(),
+      hostname: stringSchema(),
+    }),
+  );
+  DEVICE_HOOKS_CONSENT = "device-hooks-consent";
+});
 //@ chunk-s61vbvea.js:336542-336576 placement
 function deviceHooksConsentSpace() {
   return STORAGE_SPACES.state(DEVICE_HOOKS_CONSENT);
@@ -43,12 +48,12 @@ function deviceHooksConsentPath() {
   return join(getClaudeConfigDir(), "state", `${DEVICE_HOOKS_CONSENT}.json`);
 }
 //@ chunk-s61vbvea.js:336628-336827 placement
-async function readDeviceHooksConsentChoice(e) {
+async function readDeviceHooksConsentChoice(deps) {
   try {
-    let text = await e.readText();
+    let text = await deps.readText();
     if (text === undefined) return "unset";
-    let r = deviceHooksConsentSchema().safeParse(jsonParse(text));
-    return r.success && r.data.hostname === e.hostname() ? r.data.choice : "unset";
+    let parsed = deviceHooksConsentSchema().safeParse(jsonParse(text));
+    return parsed.success && parsed.data.hostname === deps.hostname() ? parsed.data.choice : "unset";
   } catch {
     return "unset";
   }
@@ -82,16 +87,16 @@ function readDeviceHooksConsent(storageV5) {
       if (storageV5) {
         let text = await storageV5.readText([deviceHooksConsentSpace()]);
         if (!text.ok) throw Error("device-hooks consent read failed");
-        let r = text.value.items[0];
-        return r.found ? r.value : undefined;
+        let item = text.value.items[0];
+        return item.found ? item.value : undefined;
       }
       return getFileReader().read(deviceHooksConsentPath());
     },
-    writeText: async (n) => {
+    writeText: async (text) => {
       if (storageV5) {
         if (
           !(
-            await storageV5.write(deviceHooksConsentSpace(), n, {
+            await storageV5.write(deviceHooksConsentSpace(), text, {
               mode: 384,
             })
           ).ok
@@ -99,9 +104,9 @@ function readDeviceHooksConsent(storageV5) {
           throw Error("device-hooks consent write failed");
         return;
       }
-      let r = deviceHooksConsentPath();
-      await getFileReader().mkdir(dirname(r));
-      await getFileReader().atomicWrite(r, n, 384);
+      let path = deviceHooksConsentPath();
+      await getFileReader().mkdir(dirname(path));
+      await getFileReader().atomicWrite(path, text, 384);
     },
     now: () => new Date(),
     hostname,
@@ -121,9 +126,9 @@ function emptyConsentState() {
 /**
  * 把同意值设为"已给定"（包装为 Promise）。
  */
-function setConsentFromGiven(consentPin, n) {
+function setConsentFromGiven(consentPin, choice) {
   consentPin.current = {
-    value: Promise.resolve(n),
+    value: Promise.resolve(choice),
     origin: "given",
   };
 }
@@ -137,13 +142,13 @@ function isFileReadDenied(filePath, toolPermissionContext) {
   return filePath.current;
 }
 //@ chunk-s61vbvea.js:337636-337901 placement
-async function resolveStoredConsent(e, n) {
-  let pinnedConsent = await readPinnedConsent(e, n);
+async function resolveStoredConsent(pin, deps) {
+  let pinnedConsent = await readPinnedConsent(pin, deps);
   if (pinnedConsent.stored !== "accepted" || pinnedConsent.origin !== "read") return pinnedConsent;
-  let declinedConsent = await readDeclinedConsent(n);
-  if (e.current?.origin === "given") return readPinnedConsent(e, n);
+  let declinedConsent = await readDeclinedConsent(deps);
+  if (pin.current?.origin === "given") return readPinnedConsent(pin, deps);
   if (declinedConsent === null) return pinnedConsent;
-  e.current = {
+  pin.current = {
     value: Promise.resolve(declinedConsent),
     origin: "read",
   };
@@ -153,24 +158,26 @@ async function resolveStoredConsent(e, n) {
   };
 }
 //@ chunk-s61vbvea.js:337901-338135 placement
-async function readDeclinedConsent(e) {
+async function readDeclinedConsent(deps) {
   try {
-    let text = await e.readText();
+    let text = await deps.readText();
     if (text === undefined) return "unset";
-    let r = deviceHooksConsentSchema().safeParse(jsonParse(text));
-    return r.success && r.data.hostname === e.hostname() && r.data.choice === "declined" ? "declined" : null;
+    let parsed = deviceHooksConsentSchema().safeParse(jsonParse(text));
+    return parsed.success && parsed.data.hostname === deps.hostname() && parsed.data.choice === "declined"
+      ? "declined"
+      : null;
   } catch (error) {
     return isENOENT(error) ? "unset" : null;
   }
 }
 //@ chunk-s61vbvea.js:338135-338263 placement
 async function readPinnedConsent(filePath, toolPermissionContext) {
-  let r = isFileReadDenied(filePath, toolPermissionContext);
-  let stored = await r.value.catch(() => "unset");
-  return filePath.current === r
+  let pinned = isFileReadDenied(filePath, toolPermissionContext);
+  let stored = await pinned.value.catch(() => "unset");
+  return filePath.current === pinned
     ? {
         stored,
-        origin: r.origin,
+        origin: pinned.origin,
       }
     : readPinnedConsent(filePath, toolPermissionContext);
 }
@@ -182,9 +189,9 @@ function createConsentSignal() {
   return createSignal();
 }
 //@ chunk-s61vbvea.js:338289-338434 placement
-function emitConsentChangedSafe(consentAnnounced, n) {
+function emitConsentChangedSafe(consentAnnounced, choice) {
   try {
-    consentAnnounced.emit(n);
+    consentAnnounced.emit(choice);
   } catch (error) {
     logForDebugging(
       `[deviceHooks] a consent listener failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -198,36 +205,37 @@ function emitConsentChangedSafe(consentAnnounced, n) {
 /**
  * 订阅同意变更。
  */
-function subscribeConsent(consentAnnounced, n) {
-  return consentAnnounced.subscribe(n);
+function subscribeConsent(consentAnnounced, listener) {
+  return consentAnnounced.subscribe(listener);
 }
 //@ chunk-s61vbvea.js:338474-339022 placement
 function resolveDeviceHooksConsent({ deps, pin, onNotAsked, isStoreInReach, onUntrustedStore }) {
-  let y = false;
-  return async (S, w, R) => {
-    let x = S === null && pin.current === null ? await readDeviceHooksConsentChoice(deps) : null;
+  let untrustedNoted = false;
+  return async (offered, signal, roots) => {
+    let orderChoice =
+      offered === null && pin.current === null ? await readDeviceHooksConsentChoice(deps) : null;
     let { stored, origin } =
-      x !== null && pin.current === null
+      orderChoice !== null && pin.current === null
         ? {
-            stored: x,
+            stored: orderChoice,
             origin: "read",
           }
         : await resolveStoredConsent(pin, deps);
     if (stored !== "unset" && origin === "read") {
-      let G = await Promise.resolve()
-        .then(() => isStoreInReach?.(R) ?? false)
+      let reach = await Promise.resolve()
+        .then(() => isStoreInReach?.(roots) ?? false)
         .catch(() => "unresolvable");
-      if (G !== false) {
-        if (S !== null && !y) {
-          y = true;
-          onUntrustedStore?.(G);
+      if (reach !== false) {
+        if (offered !== null && !untrustedNoted) {
+          untrustedNoted = true;
+          onUntrustedStore?.(reach);
         }
-        if (G === "unresolvable") return "distrusted";
+        if (reach === "unresolvable") return "distrusted";
       } else return stored;
     } else if (stored !== "unset") return stored;
-    if (S !== null && !w.aborted && !pin.noticed) {
+    if (offered !== null && !signal.aborted && !pin.noticed) {
       pin.noticed = true;
-      onNotAsked?.(S);
+      onNotAsked?.(offered);
     }
     return "not_now";
   };
@@ -236,10 +244,10 @@ function resolveDeviceHooksConsent({ deps, pin, onNotAsked, isStoreInReach, onUn
 /**
  * 探测某路径对云会话是否可写（可写 / false / unresolvable）。
  */
-async function probeWritability(e, n, realpath) {
+async function probeWritability(path, roots, realpath) {
   try {
-    let s = await realpath(e);
-    return anyPairMatches([e, s], n) ? "writable" : false;
+    let realPath = await realpath(path);
+    return anyPairMatches([path, realPath], roots) ? "writable" : false;
   } catch {
     return "unresolvable";
   }

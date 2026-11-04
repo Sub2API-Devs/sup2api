@@ -15,9 +15,9 @@ class CircularBuffer {
   buffer;
   head = 0;
   size = 0;
-  constructor(e) {
-    this.capacity = e;
-    this.buffer = Array(e);
+  constructor(capacity) {
+    this.capacity = capacity;
+    this.buffer = Array(capacity);
   }
   add(item) {
     this.buffer[this.head] = item;

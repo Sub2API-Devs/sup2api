@@ -212,8 +212,12 @@ import { isArtifactsAvailable } from "./artifactAvailability.js";
 import { QUERY } from "../mcp/firstPartyServerIds.js";
 
 //@ chunk-aqdf5t3e.js:7727-7806 placement = listAllCronTasks (0.609)
-function claimArmFailureAnnouncement(e, n) {
-  return addWithLimit(getLiveState().durable.announcedArmFailures, `${e}:${n}`, MAX_CRON_OWNERSHIP_KEYS);
+function claimArmFailureAnnouncement(announce, reason) {
+  return addWithLimit(
+    getLiveState().durable.announcedArmFailures,
+    `${announce}:${reason}`,
+    MAX_CRON_OWNERSHIP_KEYS,
+  );
 }
 //@ chunk-aqdf5t3e.js:38633-38869 placement = splitCommandWithOperators (0.316)
 /**
@@ -222,18 +226,18 @@ function claimArmFailureAnnouncement(e, n) {
 function makeLiveVersionLineHandler(command) {
   return (match) => {
     if (!match.startsWith("{")) return null;
-    let r;
+    let out;
     try {
-      r = jsonParseRaw(match);
+      out = jsonParseRaw(match);
     } catch {
       return null;
     }
-    if (r.kind === "comment") {
+    if (out.kind === "comment") {
       command.comment();
       return null;
     }
-    if (r.kind === "summon") return null;
-    if (typeof r.ver === "string") command.ver(r.ver, "live");
+    if (out.kind === "summon") return null;
+    if (typeof out.ver === "string") command.ver(out.ver, "live");
     return null;
   };
 }
@@ -250,54 +254,63 @@ function liveDocHeadSink(slug) {
 /**
  * 更新实时订阅监督器的最近活动时间（已停止、经 MCP 写入布防或订阅进行中时不更新）。
  */
-function touchSupervisorActivity(e) {
+function touchSupervisorActivity(slug) {
   let live = getLiveState().live;
-  let r = live.supervisors.get(e);
-  if (r !== undefined && !r.stopped && r.armedVia !== "mcp_write" && !live.inFlightSubscribes.has(e))
-    r.lastActivityAt = Date.now();
+  let supervisor = live.supervisors.get(slug);
+  if (
+    supervisor !== undefined &&
+    !supervisor.stopped &&
+    supervisor.armedVia !== "mcp_write" &&
+    !live.inFlightSubscribes.has(slug)
+  )
+    supervisor.lastActivityAt = Date.now();
 }
 //@ chunk-aqdf5t3e.js:39110-40054 placement
-function handleFrameLiveControl(e, slug, r) {
-  return (s) => {
-    if (s.charCodeAt(0) !== 123) return null;
-    let h;
+function handleFrameLiveControl(sink, slug, handlers) {
+  return (line) => {
+    if (line.charCodeAt(0) !== 123) return null;
+    let parsed;
     try {
-      h = jsonParseRaw(s);
+      parsed = jsonParseRaw(line);
     } catch {
       return null;
     }
-    let a = PRESENCE_EVENT_SCHEMA().safeParse(h);
-    if (!a.success) return null;
-    let { kind, actor, payload } = a.data;
-    if (actor !== undefined || (a.data.slug !== undefined && a.data.slug !== slug)) return null;
+    let event = PRESENCE_EVENT_SCHEMA().safeParse(parsed);
+    if (!event.success) return null;
+    let { kind, actor, payload } = event.data;
+    if (actor !== undefined || (event.data.slug !== undefined && event.data.slug !== slug)) return null;
     switch (kind) {
       case "ctrl:comment":
-        e.comment();
+        sink.comment();
         return null;
       case "ctrl:invalidate": {
-        let S = INVALIDATION_EVENT_SCHEMA().safeParse(payload);
-        if (!S.success) return null;
-        if (S.data.tag === INVALIDATE_TAG_LIVE || S.data.tag === INVALIDATE_TAG_SHARED)
-          e.ver(S.data.ver, "sync");
-        else if (S.data.tag === INVALIDATE_TAG_HEAD && VERSION_NUMBER_RE.test(S.data.ver)) {
+        let invalidation = INVALIDATION_EVENT_SCHEMA().safeParse(payload);
+        if (!invalidation.success) return null;
+        if (invalidation.data.tag === INVALIDATE_TAG_LIVE || invalidation.data.tag === INVALIDATE_TAG_SHARED)
+          sink.ver(invalidation.data.ver, "sync");
+        else if (
+          invalidation.data.tag === INVALIDATE_TAG_HEAD &&
+          VERSION_NUMBER_RE.test(invalidation.data.ver)
+        ) {
           touchSupervisorActivity(slug);
-          liveDocHeadSink(slug)?.seq(Number(S.data.ver));
+          liveDocHeadSink(slug)?.seq(Number(invalidation.data.ver));
         }
         return null;
       }
       case "ctrl:token_refresh": {
-        let S = TOKEN_REFRESH_SCHEMA().safeParse(payload);
-        if (S.success && isAgentCapToken(S.data.cap)) r.onTokenRefresh(S.data.cap, S.data.exp);
+        let tokenRefresh = TOKEN_REFRESH_SCHEMA().safeParse(payload);
+        if (tokenRefresh.success && isAgentCapToken(tokenRefresh.data.cap))
+          handlers.onTokenRefresh(tokenRefresh.data.cap, tokenRefresh.data.exp);
         return null;
       }
       case "ctrl:token_refresh_declined": {
-        let S = DECLINE_REASON_SCHEMA().safeParse(payload);
-        if (S.success && S.data.reason === TOKEN_LINEAGE_EXPIRED) r.onExpiryAnnounced();
+        let decline = DECLINE_REASON_SCHEMA().safeParse(payload);
+        if (decline.success && decline.data.reason === TOKEN_LINEAGE_EXPIRED) handlers.onExpiryAnnounced();
         return null;
       }
       case "ctrl:comment_hint": {
-        let S = COMMENTS_READ_STATE_SCHEMA().safeParse(payload);
-        if (S.success) r.onCommentHint(S.data.commentsEmpty, S.data.readAtMs);
+        let readState = COMMENTS_READ_STATE_SCHEMA().safeParse(payload);
+        if (readState.success) handlers.onCommentHint(readState.data.commentsEmpty, readState.data.readAtMs);
         return null;
       }
       default:
@@ -306,141 +319,151 @@ function handleFrameLiveControl(e, slug, r) {
   };
 }
 //@ chunk-aqdf5t3e.js:40054-40203 placement
-function classifyMonitorTask(e, n, r, s, h, a) {
-  if (!a(e, r)) return "dead";
-  return s &&
-    (isSlugStopped(n)
-      ? h && (e.autoReactArmed !== true || !isSlugSwept(n) || isSlugOrphaned(n))
-      : e.autoReactArmed !== true)
+function classifyMonitorTask(task, slug, commentVerbsInSchema, humanTurnWiring, supervisor, explicit) {
+  if (!explicit(task, commentVerbsInSchema)) return "dead";
+  return humanTurnWiring &&
+    (isSlugStopped(slug)
+      ? supervisor && (task.autoReactArmed !== true || !isSlugSwept(slug) || isSlugOrphaned(slug))
+      : task.autoReactArmed !== true)
     ? "replace"
     : "keep";
 }
 //@ chunk-aqdf5t3e.js:40203-40247 placement
-function isMonitorTaskLive(e, n) {
-  return isMonitorSocketOpenNow(e.id) && isMonitorWsTaskLive(e, n);
+function isMonitorTaskLive(task, slug) {
+  return isMonitorSocketOpenNow(task.id) && isMonitorWsTaskLive(task, slug);
 }
 //@ chunk-aqdf5t3e.js:40247-40585 placement
 /**
  * 整理某 slug 正在运行的监听任务：已失联的停掉（标记连接丢失），需要替换的安静停掉，返回保留下来的任务 id。
  */
-function reconcileMonitorTasks(context, slug, commentVerbsInSchema, s) {
+function reconcileMonitorTasks(context, slug, humanTurnWiring, humanTurnWiring_2) {
   let now = Date.now();
-  let a = null;
-  for (let d of Object.values(context.taskRegistry.all())) {
-    if (!isMonitorWsTask(d) || d.status !== "running" || d.frameLive?.slug !== slug) continue;
-    let b = classifyMonitorTask(d, slug, now, commentVerbsInSchema, s, isMonitorWsTaskLive);
-    if (b !== "dead") {
-      if (b === "replace") {
-        stopMonitorWsTasks(d.id, context.taskRegistry, {
+  let foundId = null;
+  for (let task of Object.values(context.taskRegistry.all())) {
+    if (!isMonitorWsTask(task) || task.status !== "running" || task.frameLive?.slug !== slug) continue;
+    let verdict = classifyMonitorTask(
+      task,
+      slug,
+      now,
+      humanTurnWiring,
+      humanTurnWiring_2,
+      isMonitorWsTaskLive,
+    );
+    if (verdict !== "dead") {
+      if (verdict === "replace") {
+        stopMonitorWsTasks(task.id, context.taskRegistry, {
           quiet: true,
         });
         continue;
       }
-      a = d.id;
+      foundId = task.id;
       continue;
     }
-    stopMonitorWsTasks(d.id, context.taskRegistry, {
+    stopMonitorWsTasks(task.id, context.taskRegistry, {
       quiet: true,
       connectionLost: true,
     });
   }
-  return a;
+  return foundId;
 }
 //@ chunk-aqdf5t3e.js:40585-40694 placement
-function hasRunningMonitor(e, n) {
-  return Object.values(e.all()).some(
-    (r) => isMonitorWsTask(r) && r.status === "running" && r.frameLive?.slug === n,
+function hasRunningMonitor(registry, slug) {
+  return Object.values(registry.all()).some(
+    (task) => isMonitorWsTask(task) && task.status === "running" && task.frameLive?.slug === slug,
   );
 }
 //@ chunk-aqdf5t3e.js:40694-40750 placement
-function isAutoreactTaskArmed(e) {
-  return isAutoReactArmedTask(e, isAutoreactArmed, {
+function isAutoreactTaskArmed(task) {
+  return isAutoReactArmedTask(task, isAutoreactArmed, {
     includeStopLatched: true,
   });
 }
 //@ chunk-aqdf5t3e.js:40750-40783 placement
-function isClaimableAutoReactSubscription(e) {
-  return isAutoReactArmedTask(e, isAutoreactArmed);
+function isClaimableAutoReactSubscription(task) {
+  return isAutoReactArmedTask(task, isAutoreactArmed);
 }
 //@ chunk-aqdf5t3e.js:40783-41789 placement
-function killAutoReactSubscriptions(taskRegistry, n) {
-  setLedgerStorage(n?.storageV5);
+function killAutoReactSubscriptions(registry, options) {
+  setLedgerStorage(options?.storageV5);
   clearSummonWakeTimers();
   bumpScanGeneration();
   let live = getLiveState().live;
-  let s = n?.durable !== false;
-  let h = 0;
-  let a = new Set();
-  for (let d of Object.values(taskRegistry.all()))
-    if (isAutoreactTaskArmed(d)) {
-      let b =
-        d.autoReactSlug !== undefined &&
-        isSlugStopped(d.autoReactSlug) &&
-        (!isSlugSwept(d.autoReactSlug) || isSlugYielded(d.autoReactSlug));
-      if (s) {
-        stopMonitorWsTasks(d.id, taskRegistry, {
+  let durable = options?.durable !== false;
+  let killed = 0;
+  let slugs = new Set();
+  for (let task of Object.values(registry.all()))
+    if (isAutoreactTaskArmed(task)) {
+      let supervisor =
+        task.autoReactSlug !== undefined &&
+        isSlugStopped(task.autoReactSlug) &&
+        (!isSlugSwept(task.autoReactSlug) || isSlugYielded(task.autoReactSlug));
+      if (durable) {
+        stopMonitorWsTasks(task.id, registry, {
           quiet: true,
           userStop: true,
         });
-        if (d.autoReactSlug !== undefined) {
-          resetAutoReactForSlug(d.autoReactSlug);
-          a.add(d.autoReactSlug);
+        if (task.autoReactSlug !== undefined) {
+          resetAutoReactForSlug(task.autoReactSlug);
+          slugs.add(task.autoReactSlug);
         }
-      } else if (d.autoReactSlug !== undefined) a.add(d.autoReactSlug);
-      if (!b && !(d.autoReactSlug !== undefined && !s && isSlugStopped(d.autoReactSlug))) {
-        h++;
-        if (!s && d.autoReactSlug !== undefined) {
-          sweepSlug(d.autoReactSlug);
-          emitSummonArm(live, d.autoReactSlug);
+      } else if (task.autoReactSlug !== undefined) slugs.add(task.autoReactSlug);
+      if (
+        !supervisor &&
+        !(task.autoReactSlug !== undefined && !durable && isSlugStopped(task.autoReactSlug))
+      ) {
+        killed++;
+        if (!durable && task.autoReactSlug !== undefined) {
+          sweepSlug(task.autoReactSlug);
+          emitSummonArm(live, task.autoReactSlug);
         }
       }
     }
   for (let supervisor of live.supervisors.values()) {
     if (supervisor.autoReactWiring === undefined) continue;
-    if (s) delete supervisor.autoReactWiring;
-    if (s && isAutoreactArmed() && (!isSlugStopped(supervisor.slug) || a.has(supervisor.slug)))
-      if (hasRunningMonitor(taskRegistry, supervisor.slug) || live.inFlightSubscribes.has(supervisor.slug))
-        demoteExplicitWatch(live, supervisor.slug, taskRegistry);
+    if (durable) delete supervisor.autoReactWiring;
+    if (durable && isAutoreactArmed() && (!isSlugStopped(supervisor.slug) || slugs.has(supervisor.slug)))
+      if (hasRunningMonitor(registry, supervisor.slug) || live.inFlightSubscribes.has(supervisor.slug))
+        demoteExplicitWatch(live, supervisor.slug, registry);
       else {
         removeSupervisor(live, supervisor.slug);
         hasWatchArtifactArg(supervisor.slug, supervisor.context.storageV5);
       }
-    if (!a.has(supervisor.slug) && isAutoreactArmed() && !isSlugStopped(supervisor.slug)) {
-      a.add(supervisor.slug);
-      h++;
-      if (s) {
+    if (!slugs.has(supervisor.slug) && isAutoreactArmed() && !isSlugStopped(supervisor.slug)) {
+      slugs.add(supervisor.slug);
+      killed++;
+      if (durable) {
         resetAutoReactForSlug(supervisor.slug);
         stopSummonWakes(supervisor.slug);
       } else sweepSlug(supervisor.slug);
     }
   }
-  if (s)
+  if (durable)
     disarmAutoreact({
-      storageV5: n?.storageV5,
+      storageV5: options?.storageV5,
     });
-  else if (h > 0)
+  else if (killed > 0)
     flushAutoreactLedger({
       flush: true,
-      storageV5: n?.storageV5,
+      storageV5: options?.storageV5,
     });
-  return h;
+  return killed;
 }
 //@ chunk-aqdf5t3e.js:41789-42204 placement
 /**
  * 解除某 slug 被清扫暂停的自动回复：仍有活跃自动回复监听任务时恢复召唤唤醒并广播；若有上次唤醒参数则重新安排扫描（返回 lifted），否则返回 cleared；不满足条件返回 null。
  */
-function liftSweptPause(taskRegistry, n, r, s) {
-  if (!isSlugSwept(n) || isSlugOrphaned(n) || !isAutoreactArmed()) return null;
-  let armedAutoReactMonitor = findArmedAutoReactMonitor(taskRegistry, n);
+function liftSweptPause(registry, registry_2, slug, outcome) {
+  if (!isSlugSwept(registry_2) || isSlugOrphaned(registry_2) || !isAutoreactArmed()) return null;
+  let armedAutoReactMonitor = findArmedAutoReactMonitor(registry, registry_2);
   if (armedAutoReactMonitor === undefined) return null;
-  s?.();
+  outcome?.();
   let { live, wakes } = getLiveState();
-  resumeSummonWakes(n);
-  wakes.liftedAtScanGeneration.set(n, wakes.scanGeneration);
-  emitSummonArm(live, n);
-  let lastWakeArgs = getSummonWakeState(n).lastWakeArgs;
+  resumeSummonWakes(registry_2);
+  wakes.liftedAtScanGeneration.set(registry_2, wakes.scanGeneration);
+  emitSummonArm(live, registry_2);
+  let lastWakeArgs = getSummonWakeState(registry_2).lastWakeArgs;
   if (!isMonitorSocketOpenNow(armedAutoReactMonitor.id) || lastWakeArgs === null) return "cleared";
-  r?.(lastWakeArgs);
+  slug?.(lastWakeArgs);
   scheduleThreadScan({
     ...lastWakeArgs,
     seed: false,
@@ -457,64 +480,64 @@ function liftSweptPause(taskRegistry, n, r, s) {
 /**
  * 找到为指定 slug 布防自动响应且正在运行的监视任务。
  */
-function findArmedAutoReactMonitor(e, n) {
-  return Object.values(e.all()).find(
-    (r) =>
-      isMonitorWsTask(r) &&
-      r.status === "running" &&
-      r.autoReactArmed === true &&
-      r.autoReactSlug === n &&
-      isMonitorWsTaskLive(r),
+function findArmedAutoReactMonitor(registry, slug) {
+  return Object.values(registry.all()).find(
+    (task) =>
+      isMonitorWsTask(task) &&
+      task.status === "running" &&
+      task.autoReactArmed === true &&
+      task.autoReactSlug === slug &&
+      isMonitorWsTaskLive(task),
   );
 }
 //@ chunk-aqdf5t3e.js:42342-42486 placement
-function releaseNoticeLatchesOnTurn(taskRegistry, n) {
-  if (n.ownWords) {
-    let r = clearOrphanedAutoReactNotices(
-      (s) => hasThreadAgentForSlugPost(s) || hasActivitySince(taskRegistry, autoReactNoticeLatchedAt(s)),
+function releaseNoticeLatchesOnTurn(registry, registry_2) {
+  if (registry_2.ownWords) {
+    let cleared = clearOrphanedAutoReactNotices(
+      (task) => hasThreadAgentForSlugPost(task) || hasActivitySince(registry, autoReactNoticeLatchedAt(task)),
     );
-    if (r > 0)
+    if (cleared > 0)
       logFeatureOk("artifact_live_subscribe", {
-        notice_latch_released: r,
+        notice_latch_released: cleared,
       });
   }
-  return unpauseSweptOnHumanTurn(taskRegistry);
+  return unpauseSweptOnHumanTurn(registry);
 }
 //@ chunk-aqdf5t3e.js:42486-42589 placement
-function hasActivitySince(e, n) {
-  if (n === undefined) return false;
-  return Object.values(e.all()).some((r) => r.startTime >= n && isTaskActive(r));
+function hasActivitySince(registry, since) {
+  if (since === undefined) return false;
+  return Object.values(registry.all()).some((task) => task.startTime >= since && isTaskActive(task));
 }
 //@ chunk-aqdf5t3e.js:42589-42952 placement
 /**
  * 判断任务是否仍处于活跃状态：shell/监视任务看运行或等待；agent 任务另外包括因非空闲原因保活的已完成任务与正在恢复的任务。
  */
-function isTaskActive(e) {
-  let n = e.status === "running" || e.status === "pending";
-  if (e.type === "local_bash" || isMonitorShellTask(e)) return n;
-  if (!AGENT_TASK_TYPES.has(e.type) || e.type === "in_process_teammate") return false;
-  let r =
-    e.status === "completed" &&
-    "keepaliveReasons" in e &&
-    e.keepaliveReasons instanceof Set &&
-    [...e.keepaliveReasons].some((keepaliveReason) => keepaliveReason !== "flag:idle-window");
-  let s = "resuming" in e && e.resuming === true;
-  return n || r || s;
+function isTaskActive(task) {
+  let active = task.status === "running" || task.status === "pending";
+  if (task.type === "local_bash" || isMonitorShellTask(task)) return active;
+  if (!AGENT_TASK_TYPES.has(task.type) || task.type === "in_process_teammate") return false;
+  let resuming =
+    task.status === "completed" &&
+    "keepaliveReasons" in task &&
+    task.keepaliveReasons instanceof Set &&
+    [...task.keepaliveReasons].some((keepaliveReason) => keepaliveReason !== "flag:idle-window");
+  let resumeState = "resuming" in task && task.resuming === true;
+  return active || resuming || resumeState;
 }
 //@ chunk-aqdf5t3e.js:42952-43156 placement
 /**
  * 人类发起新回合时记下扫描代次，并尝试解除所有被清扫暂停的 slug，打点解除数量。
  */
-function unpauseSweptOnHumanTurn(e) {
+function unpauseSweptOnHumanTurn(registry) {
   let { wakes } = getLiveState();
   wakes.humanTurnAtScanGeneration = wakes.scanGeneration;
-  let r = 0;
-  for (let sweptSlug of [...wakes.sweptSlugs]) if (liftSweptPause(e, sweptSlug) !== null) r++;
-  if (r > 0)
+  let count = 0;
+  for (let sweptSlug of [...wakes.sweptSlugs]) if (liftSweptPause(registry, sweptSlug) !== null) count++;
+  if (count > 0)
     logFeatureOk("artifact_live_subscribe", {
-      unpaused_on_turn: r,
+      unpaused_on_turn: count,
     });
-  return r;
+  return count;
 }
 //@ chunk-aqdf5t3e.js:43156-43235 placement
 function hasStoppableAutoReactSupervision() {
@@ -523,122 +546,123 @@ function hasStoppableAutoReactSupervision() {
     : isAutoreactArmed() && hasActiveAutoReactWatch();
 }
 //@ chunk-aqdf5t3e.js:43235-44062 placement
-function frameLiveWatchRows(context, slug) {
-  let r = [];
-  let s;
-  let h = () => (s ??= isAutoReactEnabled());
+function frameLiveWatchRows(context, onlySlug) {
+  let rows = [];
+  let autoReact;
+  let getAutoReact = () => (autoReact ??= isAutoReactEnabled());
   let liveState = getLiveState();
   let userDisarmed = liveState.autoReact.userDisarmed;
-  for (let b of Object.values(context.taskRegistry.all())) {
+  for (let task of Object.values(context.taskRegistry.all())) {
     if (
-      !isMonitorWsTask(b) ||
-      b.status !== "running" ||
-      b.frameLive === undefined ||
-      (slug !== undefined && b.frameLive.slug !== slug)
+      !isMonitorWsTask(task) ||
+      task.status !== "running" ||
+      task.frameLive === undefined ||
+      (onlySlug !== undefined && task.frameLive.slug !== onlySlug)
     )
       continue;
-    let w = liveState.live.supervisors.get(b.frameLive.slug);
-    r.push({
-      slug: b.frameLive.slug,
-      taskId: b.id,
-      since: b.frameLive.watchedSince,
-      explicit: w?.explicit ?? b.frameLive.explicit,
-      connected: isMonitorWsTaskLive(b),
+    let supervisor = liveState.live.supervisors.get(task.frameLive.slug);
+    rows.push({
+      slug: task.frameLive.slug,
+      taskId: task.id,
+      since: task.frameLive.watchedSince,
+      explicit: supervisor?.explicit ?? task.frameLive.explicit,
+      connected: isMonitorWsTaskLive(task),
       tokenExpiresAt:
-        w?.lease?.expMs ??
-        b.frameLive.armedAt + (w?.transport === "sync" ? ROUTE_ABSENT_GRACE_MS : SUMMON_STATE_TTL_MS),
-      armedVia: w?.armedVia ?? b.frameLive.armedVia,
+        supervisor?.lease?.expMs ??
+        task.frameLive.armedAt +
+          (supervisor?.transport === "sync" ? ROUTE_ABSENT_GRACE_MS : SUMMON_STATE_TTL_MS),
+      armedVia: supervisor?.armedVia ?? task.frameLive.armedVia,
       autoReply:
-        b.autoReactArmed !== true
-          ? isSlugStoppedAnywhere(b.frameLive.slug)
+        task.autoReactArmed !== true
+          ? isSlugStoppedAnywhere(task.frameLive.slug)
             ? userDisarmed
               ? "disarmed"
-              : h()
+              : getAutoReact()
                 ? "stopped"
                 : "none"
             : "none"
           : userDisarmed
             ? "disarmed"
-            : !h()
+            : !getAutoReact()
               ? "none"
-              : b.autoReactSlug !== undefined && isSlugStoppedAnywhere(b.autoReactSlug)
-                ? isSlugSwept(b.autoReactSlug)
-                  ? isSlugYielded(b.autoReactSlug)
+              : task.autoReactSlug !== undefined && isSlugStoppedAnywhere(task.autoReactSlug)
+                ? isSlugSwept(task.autoReactSlug)
+                  ? isSlugYielded(task.autoReactSlug)
                     ? "yielded"
                     : "paused"
                   : "stopped"
-                : getAutoReactArmState(b.frameLive.slug),
+                : getAutoReactArmState(task.frameLive.slug),
     });
   }
-  return r.sort((b, w) => b.since - w.since);
+  return rows.sort((a, b) => a.since - b.since);
 }
 //@ chunk-aqdf5t3e.js:44062-44271 placement
 function getAutoReactArmState(slug) {
-  let n = getLiveState().autoReact.artifacts.get(slug);
-  let lastProbeDeniedBy = n?.lastProbeDeniedBy ?? null;
+  let state = getLiveState().autoReact.artifacts.get(slug);
+  let lastProbeDeniedBy = state?.lastProbeDeniedBy ?? null;
   if (lastProbeDeniedBy !== null) return lastProbeDeniedBy === "denied_by_auto_mode" ? "declined" : "denied";
-  return n?.lastReplyDeclinedByAutoMode === true ? "declined" : "armed";
+  return state?.lastReplyDeclinedByAutoMode === true ? "declined" : "armed";
 }
 //@ chunk-aqdf5t3e.js:44271-44838 placement
-function frameLiveStoppedRows(e, n) {
+function frameLiveStoppedRows(request, options) {
   let { live, autoReact, wakes } = getLiveState();
-  let a = [];
-  let d;
-  let b = () => (d ??= isAutoReactEnabled());
+  let rows = [];
+  let autoReactOn;
+  let getAutoReact = () => (autoReactOn ??= isAutoReactEnabled());
   for (let stoppedSlug of wakes.stoppedSlugs) {
-    if (n !== undefined && stoppedSlug !== n) continue;
+    if (options !== undefined && stoppedSlug !== options) continue;
     if (
-      hasRunningMonitor(e.taskRegistry, stoppedSlug) ||
+      hasRunningMonitor(request.taskRegistry, stoppedSlug) ||
       live.inFlightSubscribes.has(stoppedSlug) ||
-      (!autoReact.userDisarmed && !b())
+      (!autoReact.userDisarmed && !getAutoReact())
     )
       continue;
-    let S = live.supervisors.get(stoppedSlug);
-    let R = S !== undefined && !S.stopped ? S : undefined;
-    a.push({
+    let supervisor = live.supervisors.get(stoppedSlug);
+    let liveSupervisor = supervisor !== undefined && !supervisor.stopped ? supervisor : undefined;
+    rows.push({
       slug: stoppedSlug,
-      ...(R !== undefined && {
-        since: R.watchedSince,
-        explicit: R.explicit,
-        armedVia: R.armedVia,
+      ...(liveSupervisor !== undefined && {
+        since: liveSupervisor.watchedSince,
+        explicit: liveSupervisor.explicit,
+        armedVia: liveSupervisor.armedVia,
       }),
       stopKind: isSlugSwept(stoppedSlug) ? (isSlugYielded(stoppedSlug) ? "yielded" : "interrupt") : "user",
       autoReply: autoReact.userDisarmed ? "disarmed" : "stopped",
     });
   }
-  return a.sort((w, S) => (w.since ?? Number.POSITIVE_INFINITY) - (S.since ?? Number.POSITIVE_INFINITY));
+  return rows.sort((a, b) => (a.since ?? Number.POSITIVE_INFINITY) - (b.since ?? Number.POSITIVE_INFINITY));
 }
 //@ chunk-aqdf5t3e.js:44838-45394 placement
-function classifyWatchReason(e, context, { forPublish: r = false } = {}) {
-  let { supervisors } = e;
-  let h = [];
-  for (let a of frameLiveWatchRows(context)) {
-    let d = supervisors.get(a.slug);
-    let watchProtectionForRow = getWatchProtectionForRow(e, a, context);
+function classifyWatchReason(liveState, context, { forPublish = false } = {}) {
+  let { supervisors } = liveState;
+  let ranked = [];
+  for (let row of frameLiveWatchRows(context)) {
+    let supervisor = supervisors.get(row.slug);
+    let watchProtectionForRow = getWatchProtectionForRow(liveState, row, context);
     if (watchProtectionForRow === "explicit" || watchProtectionForRow === "most_recent_publish") continue;
     if (watchProtectionForRow === "auto_reply") {
-      if (!r || isArtifactScanBusy(a.slug)) continue;
-      h.push({
-        row: a,
+      if (!forPublish || isArtifactScanBusy(row.slug)) continue;
+      ranked.push({
+        row,
         tier: 3,
       });
       continue;
     }
-    h.push({
-      row: a,
-      tier: d === undefined || d.stopped ? 0 : d.armedVia === "mcp_write" ? 1 : 2,
+    ranked.push({
+      row,
+      tier: supervisor === undefined || supervisor.stopped ? 0 : supervisor.armedVia === "mcp_write" ? 1 : 2,
     });
   }
-  return h
-    .sort((a, d) => {
-      if (a.tier !== d.tier) return a.tier - d.tier;
-      let b = supervisors.get(a.row.slug);
-      let w = supervisors.get(d.row.slug);
-      let lastActivityAt = b && !b.stopped ? b.lastActivityAt : 0;
-      let lastActivityAt_2 = w && !w.stopped ? w.lastActivityAt : 0;
-      return lastActivityAt - lastActivityAt_2 || a.row.since - d.row.since;
+  return ranked
+    .sort((leftRow, rowA) => {
+      if (leftRow.tier !== rowA.tier) return leftRow.tier - rowA.tier;
+      let supervisorA = supervisors.get(leftRow.row.slug);
+      let supervisorB = supervisors.get(rowA.row.slug);
+      let lastActivityAt = supervisorA && !supervisorA.stopped ? supervisorA.lastActivityAt : 0;
+      let lastActivityAt_2 = supervisorB && !supervisorB.stopped ? supervisorB.lastActivityAt : 0;
+      return lastActivityAt - lastActivityAt_2 || leftRow.row.since - rowA.row.since;
     })
-    .map((a) => a.row);
+    .map((entry) => entry.row);
 }
 //@ chunk-aqdf5t3e.js:45394-46047 placement
 /**
@@ -681,31 +705,33 @@ function evictWatch(live, candidate, context, options) {
   });
 }
 //@ chunk-aqdf5t3e.js:46047-46273 placement
-function getWatchProtection(e, n) {
-  let r = e.supervisors.get(n);
-  if (r === undefined || r.stopped) return null;
-  if (r.explicit) return "explicit";
-  if (isRecentOwnPublish(e, r)) return "most_recent_publish";
-  return r.autoReactWiring !== undefined && isAutoreactArmed() && (!isSlugStopped(n) || isSlugSwept(n))
+function getWatchProtection(state, slug) {
+  let supervisor = state.supervisors.get(slug);
+  if (supervisor === undefined || supervisor.stopped) return null;
+  if (supervisor.explicit) return "explicit";
+  if (isRecentOwnPublish(state, supervisor)) return "most_recent_publish";
+  return supervisor.autoReactWiring !== undefined &&
+    isAutoreactArmed() &&
+    (!isSlugStopped(slug) || isSlugSwept(slug))
     ? "auto_reply"
     : null;
 }
 //@ chunk-aqdf5t3e.js:46273-46312 placement
-function hasWatchProtection(e, slug) {
-  return getWatchProtection(e, slug) !== null;
+function hasWatchProtection(state, slug) {
+  return getWatchProtection(state, slug) !== null;
 }
 //@ chunk-aqdf5t3e.js:46312-46500 placement
-function getWatchProtectionForRow(e, n, r) {
-  let s = e.supervisors.get(n.slug);
-  if (s !== undefined && !s.stopped) return getWatchProtection(e, n.slug);
-  let h = r.taskRegistry.all()[n.taskId];
-  return n.explicit ? "explicit" : isClaimableAutoReactSubscription(h) ? "auto_reply" : null;
+function getWatchProtectionForRow(state, row, options) {
+  let supervisor = state.supervisors.get(row.slug);
+  if (supervisor !== undefined && !supervisor.stopped) return getWatchProtection(state, row.slug);
+  let task = options.taskRegistry.all()[row.taskId];
+  return row.explicit ? "explicit" : isClaimableAutoReactSubscription(task) ? "auto_reply" : null;
 }
 //@ chunk-aqdf5t3e.js:46500-46708 placement
 function evictForProtectedReconnect(live, context) {
-  let r = classifyWatchReason(live, context);
-  if (r.length === 0) return false;
-  evictWatch(live, r[0], context, {
+  let reasons = classifyWatchReason(live, context);
+  if (reasons.length === 0) return false;
+  evictWatch(live, reasons[0], context, {
     why: `this session reached its limit of ${REFUSED_CAPACITY_HINT} artifact watches and made room for a protected watch to reconnect`,
     shortReason: MADE_ROOM_PHRASE,
   });
@@ -729,43 +755,44 @@ function teardownFrameLiveForProcessHandoff() {
   closeAllMonitorSockets();
 }
 //@ chunk-aqdf5t3e.js:46943-48480 placement
-function startFrameLiveWatch(e) {
+function startFrameLiveWatch(options) {
   let live = getLiveState().live;
   live.handoffGeneration += 1;
   clearSummonWakeTimers();
   bumpScanGeneration();
-  let r = 0;
+  let total = 0;
   for (let supervisor of [...live.supervisors.values()]) {
-    if (!supervisor.stopped) r++;
+    if (!supervisor.stopped) total++;
     if (supervisor.autoReactWiring !== undefined) {
       let { slug } = supervisor;
-      import("./chunk-4te7h8m1.js").then((b) => b.handBackTakenOverSlug(slug));
+      import("./replyYieldHolder.js").then((mod) => mod.handBackTakenOverSlug(slug));
     }
     delete supervisor.autoReactWiring;
     removeSupervisor(live, supervisor.slug);
-    for (let d of Object.values(supervisor.context.taskRegistry.all())) {
-      if (!isMonitorWsTask(d) || d.status !== "running" || d.frameLive?.slug !== supervisor.slug) continue;
-      stopMonitorWsTasks(d.id, supervisor.context.taskRegistry, {
+    for (let task of Object.values(supervisor.context.taskRegistry.all())) {
+      if (!isMonitorWsTask(task) || task.status !== "running" || task.frameLive?.slug !== supervisor.slug)
+        continue;
+      stopMonitorWsTasks(task.id, supervisor.context.taskRegistry, {
         quiet: true,
       });
     }
   }
   live.armOutcomes.clear();
   live.announcedArmFailures.clear();
-  if (r === 0) return r;
-  let s = `${r} artifact ${r === 1 ? "watch" : "watches"}`;
-  let h =
-    e === "signed_out"
+  if (total === 0) return total;
+  let watchText = `${total} artifact ${total === 1 ? "watch" : "watches"}`;
+  let detail =
+    options === "signed_out"
       ? "Those watches were opened as the account that signed out: this session no longer keeps track of new versions of those artifacts or hears comments on them, and their comment auto-replies are off. A publish or watch of yours once someone is signed in opens a fresh watch; do not re-watch just to resume listening unless the user asks."
       : "Those watches were opened as the previous account: this session no longer keeps track of new versions of those artifacts or hears comments on them, and their comment auto-replies are off. A publish or watch of yours opens a fresh watch as the current account; do not re-watch just to resume listening unless the user asks.";
   enqueuePendingNotification({
     value: formatTaskNotification({
       taskType: ARTIFACT_WATCH_LIFECYCLE,
       summary: escapeXml(
-        `Stopped watching ${s} (${e === "signed_out" ? "signed out" : "the signed-in account changed"})`,
+        `Stopped watching ${watchText} (${options === "signed_out" ? "signed out" : "the signed-in account changed"})`,
       ),
       body: `
-<event>${escapeXml(h)}</event>`,
+<event>${escapeXml(detail)}</event>`,
     }),
     mode: "task-notification",
     passive: true,
@@ -776,20 +803,20 @@ function startFrameLiveWatch(e) {
     },
     agentId: mainAgentId(),
   });
-  return r;
+  return total;
 }
 //@ chunk-aqdf5t3e.js:48480-48827 placement
-function unwatchFrameLive(slug, n, consentWriter) {
-  let { wasWatching } = stopLiveWatch(slug, n);
+function unwatchFrameLive(slug, options, consentWriter) {
+  let { wasWatching } = stopLiveWatch(slug, options);
   getLiveState().live.nonEditorSlugs.delete(slug);
   if (consentWriter !== undefined) {
     let repliesConsent = getLiveState().live.repliesConsent;
-    let a = repliesConsent.outstanding.get(slug);
-    if (a !== undefined) {
+    let outstanding = repliesConsent.outstanding.get(slug);
+    if (outstanding !== undefined) {
       repliesConsent.outstanding.delete(slug);
-      if (a.allowed !== true)
+      if (outstanding.allowed !== true)
         repliesConsent.declined.set(slug, {
-          namingMessages: a.namingMessages,
+          namingMessages: outstanding.namingMessages,
         });
     }
     repliesConsent.approved.delete(slug);
@@ -802,9 +829,9 @@ function unwatchFrameLive(slug, n, consentWriter) {
   };
 }
 //@ chunk-aqdf5t3e.js:48827-48960 placement
-function endFrameLiveWatchOfDeletedArtifact(slug, context) {
-  hasWatchArtifactArg(slug, context.storageV5);
-  let { wasWatching } = stopLiveWatch(slug, context);
+function endFrameLiveWatchOfDeletedArtifact(slug, reason) {
+  hasWatchArtifactArg(slug, reason.storageV5);
+  let { wasWatching } = stopLiveWatch(slug, reason);
   if (wasWatching)
     logFeatureOk("artifact_live_subscribe", {
       unwatched: true,
@@ -815,23 +842,23 @@ function endFrameLiveWatchOfDeletedArtifact(slug, context) {
 /**
  * 停止某 slug 的实时监听：清除布防结果与召唤状态，停掉对应任务（自动回复任务按用户停止处理并重置台账），返回之前是否在监听。
  */
-function stopLiveWatch(e, n) {
+function stopLiveWatch(slug, reason) {
   let live = getLiveState().live;
-  setLedgerStorage(n.storageV5);
-  live.armOutcomes.delete(e);
-  forgetArmOutcomeAndNotices(live, e);
-  forgetCensus(e);
-  let s = live.supervisors.get(e)?.autoReactWiring !== undefined;
+  setLedgerStorage(reason.storageV5);
+  live.armOutcomes.delete(slug);
+  forgetArmOutcomeAndNotices(live, slug);
+  forgetCensus(slug);
+  let hasWiring = live.supervisors.get(slug)?.autoReactWiring !== undefined;
   let { wasWatching } = stopWatchesForSlug({
-    slug: e,
-    taskRegistry: n.taskRegistry,
+    slug,
+    taskRegistry: reason.taskRegistry,
     announce: false,
-    killRow: (a) => {
-      let d = a.autoReactArmed === true;
+    killRow: (row) => {
+      let autoReactArmed = row.autoReactArmed === true;
       stopMonitorWsTasks(
-        a.id,
-        n.taskRegistry,
-        d
+        row.id,
+        reason.taskRegistry,
+        autoReactArmed
           ? {
               quiet: true,
               userStop: true,
@@ -841,25 +868,25 @@ function stopLiveWatch(e, n) {
               quiet: true,
             },
       );
-      if (d && a.autoReactSlug !== undefined) resetAutoReactForSlug(a.autoReactSlug);
+      if (autoReactArmed && row.autoReactSlug !== undefined) resetAutoReactForSlug(row.autoReactSlug);
     },
   });
-  if (s) resetAutoReactForSlug(e);
+  if (hasWiring) resetAutoReactForSlug(slug);
   return {
     wasWatching,
   };
 }
 //@ chunk-aqdf5t3e.js:49375-50486 placement
-async function watchFrameLive(e) {
-  let { slug, url, publishContext, getKnownVer, context, tool, commentVerbsInSchema } = e;
+async function watchFrameLive(options) {
+  let { slug, url, publishContext, getKnownVer, context, tool, commentVerbsInSchema } = options;
   if (!isConsentUiKind(publishContext))
     return {
       outcome: "skipped",
       reason: "publish_context",
     };
   let live = getLiveState().live;
-  let S = tool !== undefined && commentVerbsInSchema === true && isAutoReactEnabled();
-  let R = !S
+  let wantsAutoReact = tool !== undefined && commentVerbsInSchema === true && isAutoReactEnabled();
+  let plainWatch = !wantsAutoReact
     ? undefined
     : !isUserDrivenTurn(context.messages)
       ? "unattended_turn"
@@ -869,36 +896,36 @@ async function watchFrameLive(e) {
           ? "declined"
           : live.nonEditorSlugs.has(slug)
             ? "not_editor"
-            : e.repliesApproved !== true
+            : options.repliesApproved !== true
               ? "not_approved"
               : undefined;
-  let C = explicitWatchOptions({
-    tool: S && R === undefined ? tool : undefined,
+  let watchOptions = explicitWatchOptions({
+    tool: wantsAutoReact && plainWatch === undefined ? tool : undefined,
     commentVerbsInSchema,
     context,
   });
-  let G = C.autoReactWiring !== undefined;
+  let wiringOn = watchOptions.autoReactWiring !== undefined;
   let title = live.supervisors.get(slug)?.autoReactWiring?.title;
-  let y = await FrameLiveWatchManager(live, {
+  let outcome = await FrameLiveWatchManager(live, {
     slug,
     url,
     getKnownVer,
     ownPublishes: context.artifactRegistries.ownPublishes,
     ...monitorContextAndSignal(context),
-    ...C,
-    pickUpRecentSummons: G,
-    ...(C.autoReactWiring !== undefined && {
+    ...watchOptions,
+    pickUpRecentSummons: wiringOn,
+    ...(watchOptions.autoReactWiring !== undefined && {
       autoReactWiring: {
-        ...C.autoReactWiring,
+        ...watchOptions.autoReactWiring,
         title,
       },
       editorGatedWiring: true,
     }),
   });
   if (
-    G &&
-    y.outcome === "armed" &&
-    y.degraded === undefined &&
+    wiringOn &&
+    outcome.outcome === "armed" &&
+    outcome.degraded === undefined &&
     !(isSlugStopped(slug) && !isSlugSwept(slug)) &&
     isAutoReactActive()
   )
@@ -906,47 +933,47 @@ async function watchFrameLive(e) {
       title: live.supervisors.get(slug)?.autoReactWiring?.title ?? title,
       storageV5: context.storageV5,
     });
-  if (R !== undefined && y.outcome === "armed")
+  if (plainWatch !== undefined && outcome.outcome === "armed")
     return {
-      ...y,
-      degraded: R,
+      ...outcome,
+      degraded: plainWatch,
     };
-  if (R !== undefined && y.outcome === "already_watching")
+  if (plainWatch !== undefined && outcome.outcome === "already_watching")
     return {
-      ...y,
-      degraded: R,
+      ...outcome,
+      degraded: plainWatch,
     };
-  return y;
+  return outcome;
 }
 //@ chunk-aqdf5t3e.js:50486-50541 placement
 function knownNonEditor(slug) {
   return getLiveState().live.nonEditorSlugs.has(slug);
 }
 //@ chunk-aqdf5t3e.js:54609-54762 placement
-function onArmSettled(e, n) {
+function onArmSettled(slug, waiter) {
   let { live } = getLiveState();
-  if (!live.inFlightSubscribes.has(e)) {
-    n();
+  if (!live.inFlightSubscribes.has(slug)) {
+    waiter();
     return;
   }
-  let s = live.armSettleWaiters.get(e) ?? [];
-  s.push(n);
-  live.armSettleWaiters.set(e, s);
+  let waiters = live.armSettleWaiters.get(slug) ?? [];
+  waiters.push(waiter);
+  live.armSettleWaiters.set(slug, waiters);
 }
 //@ chunk-aqdf5t3e.js:54762-54871 placement
-function slugRepliesWiredHere(e) {
-  let n = getLiveState().live.supervisors.get(e);
-  return n !== undefined && !n.stopped && n.autoReactWiring !== undefined;
+function slugRepliesWiredHere(slug) {
+  let supervisor = getLiveState().live.supervisors.get(slug);
+  return supervisor !== undefined && !supervisor.stopped && supervisor.autoReactWiring !== undefined;
 }
 //@ chunk-aqdf5t3e.js:54871-55323 placement
-async function watchArtifactFromStartup(e) {
-  let { slug, url, getKnownVer, tool, commentVerbsInSchema, context } = e;
+async function watchArtifactFromStartup(options) {
+  let { slug, url, getKnownVer, tool, commentVerbsInSchema, context } = options;
   if (tool !== undefined && isActingAsBgJob())
     ownProcStart().catch(() => {
       return;
     });
   let liveState = getLiveState();
-  let w = await FrameLiveWatchManager(liveState.live, {
+  let outcome = await FrameLiveWatchManager(liveState.live, {
     slug,
     url,
     getKnownVer,
@@ -958,16 +985,21 @@ async function watchArtifactFromStartup(e) {
       context,
     }),
   });
-  if (tool !== undefined && commentVerbsInSchema === true && w.outcome !== "skipped" && isAutoReactActive())
+  if (
+    tool !== undefined &&
+    commentVerbsInSchema === true &&
+    outcome.outcome !== "skipped" &&
+    isAutoReactActive()
+  )
     armMonitorIntent(slug, {
       title: liveState.live.supervisors.get(slug)?.autoReactWiring?.title,
       storageV5: context.storageV5,
     });
-  return w;
+  return outcome;
 }
 //@ chunk-aqdf5t3e.js:55323-55535 placement
-function explicitWatchOptions(e) {
-  let { tool, commentVerbsInSchema, context } = e;
+function explicitWatchOptions(options) {
+  let { tool, commentVerbsInSchema, context } = options;
   return {
     seedKnownVerFromBoot: true,
     explicit: true,
@@ -983,8 +1015,9 @@ function explicitWatchOptions(e) {
   };
 }
 //@ chunk-aqdf5t3e.js:55535-57521 placement
-async function maybeSubscribeFrameLive(e) {
-  let { slug, url, version, publishContext, getKnownVer, tool, commentVerbsInSchema, title, context } = e;
+async function maybeSubscribeFrameLive(options) {
+  let { slug, url, version, publishContext, getKnownVer, tool, commentVerbsInSchema, title, context } =
+    options;
   if (tool !== undefined && isActingAsBgJob())
     ownProcStart().catch(() => {
       return;
@@ -995,8 +1028,8 @@ async function maybeSubscribeFrameLive(e) {
     recordOwnPublish(ownPublishes, slug, version, {
       merged: !isVouchedOwnVer(ownPublishes, slug, version),
     });
-    let T = live.supervisors.get(slug);
-    if (T !== undefined && !T.stopped) T.lastActivityAt = Date.now();
+    let existing = live.supervisors.get(slug);
+    if (existing !== undefined && !existing.stopped) existing.lastActivityAt = Date.now();
     if (isConsentUiKind(publishContext)) live.mostRecentPublishSlug = slug;
   }
   if (!isConsentUiKind(publishContext)) {
@@ -1008,69 +1041,69 @@ async function maybeSubscribeFrameLive(e) {
       reason: "publish_context",
     };
   }
-  let G = tool !== undefined && commentVerbsInSchema === true;
-  let L =
-    e.carriedPublishConsent !== true &&
-    e.resumedPublishConsent !== true &&
-    e.chainPublish !== true &&
-    e.adoptedPublish !== true &&
+  let wantsAutoReact = tool !== undefined && commentVerbsInSchema === true;
+  let plainWatch =
+    options.carriedPublishConsent !== true &&
+    options.resumedPublishConsent !== true &&
+    options.chainPublish !== true &&
+    options.adoptedPublish !== true &&
     isUserDrivenTurn(context.messages);
-  let y = await FrameLiveWatchManager(live, {
+  let outcome = await FrameLiveWatchManager(live, {
     slug,
     url,
     getKnownVer,
     ownPublishes,
     ...monitorContextAndSignal(context),
-    ...(e.onOpen !== undefined &&
-      e.onGiveUp !== undefined && {
-        onOpen: e.onOpen,
-        onGiveUp: e.onGiveUp,
+    ...(options.onOpen !== undefined &&
+      options.onGiveUp !== undefined && {
+        onOpen: options.onOpen,
+        onGiveUp: options.onGiveUp,
       }),
-    ...(e.seedKnownVerFromBoot === true && {
+    ...(options.seedKnownVerFromBoot === true && {
       seedKnownVerFromBoot: true,
     }),
-    ...((e.resumedPublishConsent === true || e.carriedPublishConsent === true) && {
+    ...((options.resumedPublishConsent === true || options.carriedPublishConsent === true) && {
       requireEditor: true,
     }),
-    ...(e.sessionResume === true && {
+    ...(options.sessionResume === true && {
       sessionResume: true,
     }),
-    ...(L &&
+    ...(plainWatch &&
       version !== undefined && {
         freshPublish: true,
       }),
-    ...(e.announceArmlessEnd === true && {
+    ...(options.announceArmlessEnd === true && {
       announceArmlessEnd: true,
     }),
-    ...(e.resumedPublishConsent === true &&
-      G && {
+    ...(options.resumedPublishConsent === true &&
+      wantsAutoReact && {
         pickUpRecentSummons: true,
       }),
-    ...(G && {
+    ...(wantsAutoReact && {
       autoReactWiring: {
         tool,
         commentVerbsInSchema,
         context,
         title,
-        ...(e.publishTranscript !== undefined && {
-          publishTranscript: e.publishTranscript,
+        ...(options.publishTranscript !== undefined && {
+          publishTranscript: options.publishTranscript,
         }),
       },
-      ...(L && {
+      ...(plainWatch && {
         freshPublishWiring: true,
       }),
     }),
   });
-  if ((version !== undefined || e.adoptedPublish === true) && y.outcome !== "skipped") {
+  if ((version !== undefined || options.adoptedPublish === true) && outcome.outcome !== "skipped") {
     let { autoReact, wakes } = getLiveState();
-    let ie = !G
+    let plainWatch2 = !wantsAutoReact
       ? "bare_watch_comments_off"
       : autoReact.userDisarmed
         ? "bare_watch_session_disarmed"
         : !isCommentAutoreactOptedIn()
           ? "bare_watch_autoreact_off"
           : isSlugStopped(slug) &&
-              !L &&
+              !plainWatch &&
               !(
                 isSlugSwept(slug) &&
                 !isSlugOrphaned(slug) &&
@@ -1078,44 +1111,44 @@ async function maybeSubscribeFrameLive(e) {
               )
             ? "bare_watch_slug_stopped"
             : undefined;
-    if (ie !== undefined)
-      logFeatureSad("artifact_live_subscribe", ie, {
+    if (plainWatch2 !== undefined)
+      logFeatureSad("artifact_live_subscribe", plainWatch2, {
         publish_context: fromEnum(publishContext),
       });
   }
   if (
-    G &&
-    y.outcome !== "skipped" &&
+    wantsAutoReact &&
+    outcome.outcome !== "skipped" &&
     !(
-      y.outcome === "already_watching" &&
-      (e.resumedPublishConsent === true || e.carriedPublishConsent === true)
+      outcome.outcome === "already_watching" &&
+      (options.resumedPublishConsent === true || options.carriedPublishConsent === true)
     ) &&
-    !(y.outcome === "armed" && y.degraded !== undefined) &&
+    !(outcome.outcome === "armed" && outcome.degraded !== undefined) &&
     isAutoReactActive()
   )
     armMonitorIntent(slug, {
       title: live.supervisors.get(slug)?.autoReactWiring?.title ?? title,
       storageV5: context.storageV5,
     });
-  return y;
+  return outcome;
 }
 //@ chunk-aqdf5t3e.js:57521-57577 placement
 function isAutoReactActive() {
   return !getLiveState().autoReact.userDisarmed && isCommentAutoreactOptedIn();
 }
 //@ chunk-aqdf5t3e.js:57577-57678 placement
-function armMonitorIntent(slug, n) {
+function armMonitorIntent(slug, options) {
   if (getLiveState().builtInArtifactHiddenForMcp) {
     markSlugTravelling(slug, {
-      storageV5: n.storageV5,
+      storageV5: options.storageV5,
     });
     return;
   }
-  armCommentMonitorIntent(slug, n);
+  armCommentMonitorIntent(slug, options);
 }
 //@ chunk-aqdf5t3e.js:57678-57760 placement
-function liveUpdatesTaskLabel(url, n, armedVia) {
-  return `live updates for artifact ${url} (${armedViaWording(labelledArmedVia(n, armedVia)).task})`;
+function liveUpdatesTaskLabel(url, explicit, armedVia) {
+  return `live updates for artifact ${url} (${armedViaWording(labelledArmedVia(explicit, armedVia)).task})`;
 }
 //@ chunk-aqdf5t3e.js:57760-57830 placement
 function monitorContextAndSignal(context) {
@@ -1148,42 +1181,42 @@ function canArmFrameLive(slug) {
   return isFrameLiveSubscribeEnabled() && presenceSkipReason(slug) === null && !isPresenceDeclined(slug);
 }
 //@ chunk-aqdf5t3e.js:58036-58175 placement
-function getEgressSkipReason(e) {
+function getEgressSkipReason(state) {
   if (isClaudeAiCpOverride())
     return {
       reason: "cp_override",
     };
-  let n = wsEgressDenyReason(e);
-  if (n !== null)
+  let denyReason = wsEgressDenyReason(state);
+  if (denyReason !== null)
     return {
       reason: "egress_denied",
-      egressKind: n.kind,
+      egressKind: denyReason.kind,
     };
   return null;
 }
 //@ chunk-aqdf5t3e.js:58175-58405 placement
-function frameLivePublishFindsConnected(e) {
-  let { context, slug, wantWiring, canClearLatch } = e;
+function frameLivePublishFindsConnected(context) {
+  let { context: context_2, slug, wantWiring, canClearLatch } = context;
   let now = Date.now();
-  for (let d of Object.values(context.taskRegistry.all()))
+  for (let task of Object.values(context_2.taskRegistry.all()))
     if (
-      isMonitorWsTask(d) &&
-      d.status === "running" &&
-      d.frameLive?.slug === slug &&
-      classifyMonitorTask(d, slug, now, wantWiring, canClearLatch, isMonitorTaskLive) === "keep"
+      isMonitorWsTask(task) &&
+      task.status === "running" &&
+      task.frameLive?.slug === slug &&
+      classifyMonitorTask(task, slug, now, wantWiring, canClearLatch, isMonitorTaskLive) === "keep"
     )
       return true;
   return false;
 }
 //@ chunk-aqdf5t3e.js:58405-58569 placement
-function frameLivePublishSkipReason(e) {
-  if (getLiveState().durable.stopLatches.isStopped(e.slug)) return "stop_latched";
-  if (!isConsentUiKind(e.publishContext)) return "publish_context";
-  return getLiveSubscribeSkipReason(e.slug)?.reason ?? null;
+function frameLivePublishSkipReason(context) {
+  if (getLiveState().durable.stopLatches.isStopped(context.slug)) return "stop_latched";
+  if (!isConsentUiKind(context.publishContext)) return "publish_context";
+  return getLiveSubscribeSkipReason(context.slug)?.reason ?? null;
 }
 //@ chunk-aqdf5t3e.js:64164-64360 placement
-async function subscribeFrameLiveOnAttach(e) {
-  let { slug, url, getKnownVer, context } = e;
+async function subscribeFrameLiveOnAttach(options) {
+  let { slug, url, getKnownVer, context } = options;
   return FrameLiveWatchManager(getLiveState().live, {
     slug,
     url,
@@ -1197,7 +1230,7 @@ async function subscribeFrameLiveOnAttach(e) {
 /**
  * 管理 Artifact 实时订阅：恢复、监听、mcp_write、自动回复
  */
-async function FrameLiveWatchManager(live, n) {
+async function FrameLiveWatchManager(live, opts) {
   let {
     slug,
     url,
@@ -1208,19 +1241,19 @@ async function FrameLiveWatchManager(live, n) {
     seedSurfacedVer,
     explicit = false,
     signal,
-  } = n;
+  } = opts;
   initAutoreactLedger();
   let carriedVer = live.supervisors.get(slug)?.carriedVer;
   live.endAll ??= startFrameLiveWatch;
-  let commentVerbsInSchema = n.autoReactWiring !== undefined && n.autoReactWiring.commentVerbsInSchema;
-  let L =
-    n.userResumeWiring === true
+  let commentVerbsInSchema = opts.autoReactWiring !== undefined && opts.autoReactWiring.commentVerbsInSchema;
+  let armedVia =
+    opts.userResumeWiring === true
       ? "resume"
       : explicit
         ? "watch"
-        : n.sessionResume === true
+        : opts.sessionResume === true
           ? "session_resume"
-          : n.mcpWrite === true
+          : opts.mcpWrite === true
             ? "mcp_write"
             : seedKnownVerFromBoot
               ? "attach"
@@ -1235,11 +1268,11 @@ async function FrameLiveWatchManager(live, n) {
   runCommentMonitorWithIntent({
     storageV5: context.storageV5,
   });
-  let approvedRelatchGen = n.userResumeWiring === true ? n.approvedRelatchGen : undefined;
-  let P = () =>
+  let approvedRelatchGen = opts.userResumeWiring === true ? opts.approvedRelatchGen : undefined;
+  let isStopLatched = () =>
     stopLatches.isStopped(slug) &&
     (approvedRelatchGen === undefined || stopLatches.latchGeneration(slug) !== approvedRelatchGen);
-  if (P()) {
+  if (isStopLatched()) {
     logFeatureSad("artifact_live_subscribe", "stop_latched");
     return {
       outcome: "skipped",
@@ -1261,19 +1294,20 @@ async function FrameLiveWatchManager(live, n) {
     };
   }
   let url_2 = frameLiveWsUrl(slug);
-  let pt = canArmFrameLive(slug);
-  let Ee = (n.freshPublishWiring === true || n.userResumeWiring === true) && !n.signal.aborted;
+  let canSync = canArmFrameLive(slug);
+  let humanTurnWiring =
+    (opts.freshPublishWiring === true || opts.userResumeWiring === true) && !opts.signal.aborted;
   let autoReactWiring = live.supervisors.get(slug)?.autoReactWiring;
-  let ae = reconcileMonitorTasks(context, slug, commentVerbsInSchema, Ee);
-  if (ae !== null || live.inFlightSubscribes.has(slug)) {
-    if (ae === null && approvedRelatchGen !== undefined && stopLatches.isStopped(slug)) {
+  let existingTaskId = reconcileMonitorTasks(context, slug, commentVerbsInSchema, humanTurnWiring);
+  if (existingTaskId !== null || live.inFlightSubscribes.has(slug)) {
+    if (existingTaskId === null && approvedRelatchGen !== undefined && stopLatches.isStopped(slug)) {
       logFeatureSad("artifact_live_subscribe", "arm_in_flight");
       return {
         outcome: "skipped",
         reason: "arm_in_flight",
       };
     }
-    if (!(L === "resume" && ae === null && !live.supervisors.has(slug)))
+    if (!(armedVia === "resume" && existingTaskId === null && !live.supervisors.has(slug)))
       upsertSupervisor(live, {
         slug,
         url,
@@ -1281,91 +1315,91 @@ async function FrameLiveWatchManager(live, n) {
         ownPublishes,
         context,
         explicit,
-        machineArm: n.machineArm,
-        armedVia: L,
-        ...(n.requireEditor !== true &&
-          n.editorGatedWiring !== true && {
-            autoReactWiring: n.autoReactWiring,
-            humanTurnWiring: Ee,
+        machineArm: opts.machineArm,
+        armedVia,
+        ...(opts.requireEditor !== true &&
+          opts.editorGatedWiring !== true && {
+            autoReactWiring: opts.autoReactWiring,
+            humanTurnWiring,
           }),
       });
-    if (ae !== null) {
-      let x = live.supervisors.get(slug);
-      if (x !== undefined) {
-        let J = liveUpdatesTaskLabel(url, x.explicit, x.armedVia);
-        context.taskRegistry.update(ae, (D) => {
-          if (!isMonitorWsTask(D) || D.frameLive === undefined) return D;
+    if (existingTaskId !== null) {
+      let supervisor = live.supervisors.get(slug);
+      if (supervisor !== undefined) {
+        let taskLabel = liveUpdatesTaskLabel(url, supervisor.explicit, supervisor.armedVia);
+        context.taskRegistry.update(existingTaskId, (task) => {
+          if (!isMonitorWsTask(task) || task.frameLive === undefined) return task;
           if (
-            D.description === J &&
-            D.frameLive.explicit === x.explicit &&
-            D.frameLive.armedVia === x.armedVia
+            task.description === taskLabel &&
+            task.frameLive.explicit === supervisor.explicit &&
+            task.frameLive.armedVia === supervisor.armedVia
           )
-            return D;
+            return task;
           return {
-            ...D,
-            description: J,
+            ...task,
+            description: taskLabel,
             frameLive: {
-              ...D.frameLive,
-              explicit: x.explicit,
-              armedVia: x.armedVia,
+              ...task.frameLive,
+              explicit: supervisor.explicit,
+              armedVia: supervisor.armedVia,
             },
           };
         });
       }
     }
-    if (ae !== null && n.freshPublishWiring === true && !n.signal.aborted)
+    if (existingTaskId !== null && opts.freshPublishWiring === true && !opts.signal.aborted)
       liftSweptPause(context.taskRegistry, slug);
     if (
-      ae === null &&
-      n.autoReactWiring !== undefined &&
-      n.autoReactWiring.commentVerbsInSchema &&
-      n.requireEditor !== true &&
-      n.editorGatedWiring !== true
+      existingTaskId === null &&
+      opts.autoReactWiring !== undefined &&
+      opts.autoReactWiring.commentVerbsInSchema &&
+      opts.requireEditor !== true &&
+      opts.editorGatedWiring !== true
     ) {
-      let x = live.pendingInFlightWiring.get(slug);
-      let J = n.freshPublishWiring === true && !n.signal.aborted;
-      let D =
-        J || x === undefined
+      let pendingWiring = live.pendingInFlightWiring.get(slug);
+      let isFreshPublish = opts.freshPublishWiring === true && !opts.signal.aborted;
+      let generations =
+        isFreshPublish || pendingWiring === undefined
           ? {
               scanGeneration: getLiveState().wakes.scanGeneration,
               stopGeneration: stopGeneration(slug),
             }
           : {
-              scanGeneration: x.scanGeneration,
-              stopGeneration: x.stopGeneration,
+              scanGeneration: pendingWiring.scanGeneration,
+              stopGeneration: pendingWiring.stopGeneration,
             };
       live.pendingInFlightWiring.set(slug, {
-        wiring: mergeAutoReactWiring(x?.wiring, n.autoReactWiring, Ee),
-        freshPublishWiring: J || x?.freshPublishWiring === true,
-        ...D,
+        wiring: mergeAutoReactWiring(pendingWiring?.wiring, opts.autoReactWiring, humanTurnWiring),
+        freshPublishWiring: isFreshPublish || pendingWiring?.freshPublishWiring === true,
+        ...generations,
       });
       live.inFlightWiredIntent.add(slug);
       if (isAutoReactActive())
         markSlugTravelling(slug, {
           storageV5: context.storageV5,
         });
-      if (J && isCommentAutoreactOptedIn())
+      if (isFreshPublish && isCommentAutoreactOptedIn())
         live.bootingWiredArms.set(slug, {
-          title: n.autoReactWiring.title,
+          title: opts.autoReactWiring.title,
           freshPublish: true,
-          ...D,
+          ...generations,
         });
     }
     return {
       outcome: "already_watching",
-      ...(ae !== null && {
-        taskId: ae,
+      ...(existingTaskId !== null && {
+        taskId: existingTaskId,
       }),
     };
   }
-  let Y = {
+  let announceOpts = {
     url,
-    announce: n.announceArmlessEnd === true && !n.machineArm,
+    announce: opts.announceArmlessEnd === true && !opts.machineArm,
     handoffGen: live.handoffGeneration,
-    getTitle: () => live.supervisors.get(slug)?.autoReactWiring?.title ?? n.autoReactWiring?.title,
+    getTitle: () => live.supervisors.get(slug)?.autoReactWiring?.title ?? opts.autoReactWiring?.title,
   };
-  let sn = frameLiveWatchRows(context).length + live.inFlightSubscribes.size;
-  if (n.machineArm && frameLiveWatchRows(context).length >= REFUSED_CAPACITY_HINT) {
+  let watchCount = frameLiveWatchRows(context).length + live.inFlightSubscribes.size;
+  if (opts.machineArm && frameLiveWatchRows(context).length >= REFUSED_CAPACITY_HINT) {
     if (!hasWatchProtection(live, slug) || classifyWatchReason(live, context).length === 0) {
       logFeatureSad("artifact_live_subscribe", "watch_cap_reconnect");
       return {
@@ -1374,197 +1408,218 @@ async function FrameLiveWatchManager(live, n) {
       };
     }
   }
-  if (n.mcpWrite && sn >= REFUSED_CAPACITY_HINT) {
+  if (opts.mcpWrite && watchCount >= REFUSED_CAPACITY_HINT) {
     logFeatureSad("artifact_live_subscribe", "watch_cap");
-    return skipArm(live, slug, n.machineArm, "watch_cap", Y);
+    return skipArm(live, slug, opts.machineArm, "watch_cap", announceOpts);
   }
-  let forPublish = !n.machineArm && n.freshPublish === true;
+  let forPublish = !opts.machineArm && opts.freshPublish === true;
   if (
-    !n.machineArm &&
-    sn >= REFUSED_CAPACITY_HINT &&
+    !opts.machineArm &&
+    watchCount >= REFUSED_CAPACITY_HINT &&
     classifyWatchReason(live, context, {
       forPublish,
     }).length === 0
   ) {
     logFeatureSad("artifact_live_subscribe", "watch_cap");
-    return skipArm(live, slug, n.machineArm, "watch_cap", Y);
+    return skipArm(live, slug, opts.machineArm, "watch_cap", announceOpts);
   }
   let scanGeneration = getLiveState().wakes.scanGeneration;
-  let Ue = stopGeneration(slug);
-  let lastActivityAt = n.machineArm ? live.supervisors.get(slug)?.lastActivityAt : undefined;
+  let stopGen = stopGeneration(slug);
+  let lastActivityAt = opts.machineArm ? live.supervisors.get(slug)?.lastActivityAt : undefined;
   let handoffGeneration = live.handoffGeneration;
   setFrameLiveUserStopObserver(stopWatchFromTask);
   setAutoReactDeliberateStopObserver(forgetArtifactAndFlush);
-  setAutoReactHumanTurnObserver((x) => releaseNoticeLatchesOnTurn(context.taskRegistry, x));
+  setAutoReactHumanTurnObserver((turnInfo) => releaseNoticeLatchesOnTurn(context.taskRegistry, turnInfo));
   live.inFlightSubscribes.add(slug);
   live.inFlightGenerations.set(slug, handoffGeneration);
-  if (n.autoReactWiring !== undefined) live.inFlightWiredIntent.add(slug);
-  let Ce;
-  let xe = false;
+  if (opts.autoReactWiring !== undefined) live.inFlightWiredIntent.add(slug);
+  let latePark;
+  let registrationCounted = false;
   try {
     if (
-      n.autoReactWiring?.commentVerbsInSchema === true &&
-      n.requireEditor !== true &&
-      n.machineArm !== true &&
-      n.userResumeWiring !== true &&
+      opts.autoReactWiring?.commentVerbsInSchema === true &&
+      opts.requireEditor !== true &&
+      opts.machineArm !== true &&
+      opts.userResumeWiring !== true &&
       isCommentAutoreactOptedIn()
     )
       live.bootingWiredArms.set(slug, {
-        title: n.autoReactWiring.title,
-        freshPublish: n.freshPublishWiring === true && !n.signal.aborted,
+        title: opts.autoReactWiring.title,
+        freshPublish: opts.freshPublishWiring === true && !opts.signal.aborted,
         scanGeneration,
-        stopGeneration: Ue,
+        stopGeneration: stopGen,
       });
-    let x = () => live.handoffGeneration !== handoffGeneration || live.retiredInFlightArms.has(slug);
-    let J = isFrameLiveTokenLeaseEnabled();
-    if (!J) {
-      let A = live.supervisors.get(slug);
-      if (A !== undefined) {
-        delete A.lease;
-        delete A.renewable;
+    let wasRetired = () => live.handoffGeneration !== handoffGeneration || live.retiredInFlightArms.has(slug);
+    let leasesEnabled = isFrameLiveTokenLeaseEnabled();
+    if (!leasesEnabled) {
+      let prevSupervisor = live.supervisors.get(slug);
+      if (prevSupervisor !== undefined) {
+        delete prevSupervisor.lease;
+        delete prevSupervisor.renewable;
       }
     }
     let accountEpoch = getLiveState().accountEpoch;
-    let lease = J && n.machineArm === true ? live.supervisors.get(slug)?.lease : undefined;
-    let F =
+    let lease = leasesEnabled && opts.machineArm === true ? live.supervisors.get(slug)?.lease : undefined;
+    let cachedLease =
       lease !== undefined &&
-      (lease.transport === "live" || pt) &&
+      (lease.transport === "live" || canSync) &&
       isLiveTokenFresh(lease, live.rewatchTiming, accountEpoch)
         ? lease
         : undefined;
-    if (F !== undefined && F.transport === "sync") {
-      let A = await readFreshOauthAccountFromDisk(context.storageV5).catch(() => {
+    if (cachedLease !== undefined && cachedLease.transport === "sync") {
+      let diskAccount = await readFreshOauthAccountFromDisk(context.storageV5).catch(() => {
         return;
       });
-      if (!sameOwnerAccount(parseCapTokenOwner(F.token), A)) F = undefined;
-      if (signal.aborted || x()) return skipArm(live, slug, n.machineArm, "cancelled", Y);
+      if (!sameOwnerAccount(parseCapTokenOwner(cachedLease.token), diskAccount)) cachedLease = undefined;
+      if (signal.aborted || wasRetired())
+        return skipArm(live, slug, opts.machineArm, "cancelled", announceOpts);
     }
-    let W;
-    let ht = false;
-    let dn = 0;
-    if (F !== undefined)
-      W = {
+    let subscription;
+    let renewed = false;
+    let requestStartAt = 0;
+    if (cachedLease !== undefined)
+      subscription = {
         err: null,
-        token: F.token,
-        transport: F.transport,
-        ver: F.ver,
+        token: cachedLease.token,
+        transport: cachedLease.transport,
+        ver: cachedLease.ver,
         editor: undefined,
         tokenExp: undefined,
         renewable: false,
       };
     else {
-      let A = J && !pt && n.machineArm === true && live.supervisors.get(slug)?.renewable === true;
+      let shouldRenew =
+        leasesEnabled &&
+        !canSync &&
+        opts.machineArm === true &&
+        live.supervisors.get(slug)?.renewable === true;
       try {
-        let j;
-        if (A) {
-          let be = await renewWatchToken(slug, signal, context.credentials);
-          if (be.err === null) {
-            j = be;
-            ht = true;
+        let renewedSub;
+        if (shouldRenew) {
+          let renewal = await renewWatchToken(slug, signal, context.credentials);
+          if (renewal.err === null) {
+            renewedSub = renewal;
+            renewed = true;
           } else {
-            logFeatureSad("artifact_live_subscribe", `renew_miss_${be.status ?? "no_response"}`);
-            let ue = live.supervisors.get(slug);
-            if (ue !== undefined) delete ue.renewable;
-            if (signal.aborted || x()) return skipArm(live, slug, true, "cancelled", Y);
+            logFeatureSad("artifact_live_subscribe", `renew_miss_${renewal.status ?? "no_response"}`);
+            let supervisor = live.supervisors.get(slug);
+            if (supervisor !== undefined) delete supervisor.renewable;
+            if (signal.aborted || wasRetired()) return skipArm(live, slug, true, "cancelled", announceOpts);
           }
         }
-        dn = Date.now();
-        W =
-          j ??
+        requestStartAt = Date.now();
+        subscription =
+          renewedSub ??
           (await fetchLiveSubscription(slug, signal, context.credentials, {
-            syncLive: pt,
-            ...(n.machineArm === true && {
+            syncLive: canSync,
+            ...(opts.machineArm === true && {
               lean: live.supervisors.get(slug)?.bootedVersion,
             }),
           }));
       } catch {
-        return skipArm(live, slug, n.machineArm, signal.aborted || x() ? "cancelled" : "boot_failed", Y);
+        return skipArm(
+          live,
+          slug,
+          opts.machineArm,
+          signal.aborted || wasRetired() ? "cancelled" : "boot_failed",
+          announceOpts,
+        );
       }
     }
     let receivedAtMs = Date.now();
-    if (x()) return skipArm(live, slug, n.machineArm, "cancelled", Y);
-    if (W.err !== null) {
-      let A = signal.aborted
+    if (wasRetired()) return skipArm(live, slug, opts.machineArm, "cancelled", announceOpts);
+    if (subscription.err !== null) {
+      let failureReason = signal.aborted
         ? "cancelled"
-        : W.status === 404
+        : subscription.status === 404
           ? "not_found"
-          : isOtherOrg(W)
+          : isOtherOrg(subscription)
             ? "other_org"
-            : W.publicOutsideOrg === true
+            : subscription.publicOutsideOrg === true
               ? "public_outside_org"
               : "boot_failed";
       let unavailable =
-        A === "boot_failed" &&
-        (W.unavailable === true ||
-          (W.noAnswer === true && Date.now() - dn >= live.rewatchTiming.stallThresholdMs));
-      return skipArm(live, slug, n.machineArm, A, Y, {
+        failureReason === "boot_failed" &&
+        (subscription.unavailable === true ||
+          (subscription.noAnswer === true &&
+            Date.now() - requestStartAt >= live.rewatchTiming.stallThresholdMs));
+      return skipArm(live, slug, opts.machineArm, failureReason, announceOpts, {
         unavailable,
-        httpStatus: W.status,
+        httpStatus: subscription.status,
       });
     }
-    let $e = n.requireEditor === true && !W.editor;
-    let se = $e || (n.editorGatedWiring === true && n.autoReactWiring !== undefined && W.editor !== true);
-    let fn = $e ? "restored_consent_not_editor" : "watch_not_editor";
-    if (W.editor === true) live.nonEditorSlugs.delete(slug);
-    if (se) {
+    let missingEditor = opts.requireEditor === true && !subscription.editor;
+    let notEditor =
+      missingEditor ||
+      (opts.editorGatedWiring === true && opts.autoReactWiring !== undefined && subscription.editor !== true);
+    let notEditorReason = missingEditor ? "restored_consent_not_editor" : "watch_not_editor";
+    if (subscription.editor === true) live.nonEditorSlugs.delete(slug);
+    if (notEditor) {
       live.inFlightWiredIntent.delete(slug);
       live.bootingWiredArms.delete(slug);
-      if (!$e && getLiveState().accountEpoch === accountEpoch) live.nonEditorSlugs.add(slug);
+      if (!missingEditor && getLiveState().accountEpoch === accountEpoch) live.nonEditorSlugs.add(slug);
     }
-    let pn = W.title === undefined ? null : sanitizeArtifactTitle(W.title);
-    let le =
-      se || n.autoReactWiring === undefined
+    let title = subscription.title === undefined ? null : sanitizeArtifactTitle(subscription.title);
+    let wiring =
+      notEditor || opts.autoReactWiring === undefined
         ? undefined
-        : pn === null
-          ? n.autoReactWiring
+        : title === null
+          ? opts.autoReactWiring
           : {
-              ...n.autoReactWiring,
-              title: pn,
+              ...opts.autoReactWiring,
+              title,
             };
-    let onOpen = se ? undefined : n.onOpen;
-    let onGiveUp = se ? undefined : n.onGiveUp;
-    let transport = W.transport;
+    let onOpen = notEditor ? undefined : opts.onOpen;
+    let onGiveUp = notEditor ? undefined : opts.onGiveUp;
+    let transport = subscription.transport;
     if (
       transport === "sync" &&
-      (!canArmFrameLive(slug) || W.token === undefined || !isAgentCapToken(W.token))
+      (!canArmFrameLive(slug) || subscription.token === undefined || !isAgentCapToken(subscription.token))
     ) {
       logFeatureSad("artifact_live_subscribe", "sync_unavailable");
-      return skipArm(live, slug, n.machineArm, "sync_unavailable", Y, {
+      return skipArm(live, slug, opts.machineArm, "sync_unavailable", announceOpts, {
         unavailable: true,
       });
     }
-    let token = W.token;
+    let token = subscription.token;
     if (!token) {
-      logFeatureSad("artifact_live_subscribe", se ? fn : "no_subscription_token");
-      return skipArm(live, slug, n.machineArm, $e ? "not_editor" : "no_subscription_token", Y);
+      logFeatureSad("artifact_live_subscribe", notEditor ? notEditorReason : "no_subscription_token");
+      return skipArm(
+        live,
+        slug,
+        opts.machineArm,
+        missingEditor ? "not_editor" : "no_subscription_token",
+        announceOpts,
+      );
     }
-    if (se) logFeatureSad("artifact_live_subscribe", fn);
-    let ver = W.ver;
+    if (notEditor) logFeatureSad("artifact_live_subscribe", notEditorReason);
+    let ver = subscription.ver;
     let getKnownVer_2 = seedKnownVerFromBoot ? () => getKnownVer() ?? ver : getKnownVer;
-    let O =
-      F ??
-      (J
+    let tokenState =
+      cachedLease ??
+      (leasesEnabled
         ? createLiveTokenState({
             transport,
             token,
             ver,
             accountEpoch,
-            expUnixSeconds: transport === "sync" ? getCapTokenSeq(token) : W.tokenExp,
+            expUnixSeconds: transport === "sync" ? getCapTokenSeq(token) : subscription.tokenExp,
             receivedAtMs,
           })
         : undefined);
-    if (signal.aborted || x()) return skipArm(live, slug, n.machineArm, "cancelled", Y);
-    let He = frameLiveWatchRows(context).length + live.inFlightSubscribes.size - 1;
-    let bt = live.supervisors.get(slug);
-    let jr =
-      n.machineArm === true &&
+    if (signal.aborted || wasRetired())
+      return skipArm(live, slug, opts.machineArm, "cancelled", announceOpts);
+    let slotCount = frameLiveWatchRows(context).length + live.inFlightSubscribes.size - 1;
+    let priorSupervisor = live.supervisors.get(slug);
+    let hadActivitySince =
+      opts.machineArm === true &&
       lastActivityAt !== undefined &&
-      bt !== undefined &&
-      !bt.stopped &&
-      bt.lastActivityAt > lastActivityAt;
-    let hn = frameLiveWatchRows(context).length + live.pendingRegistrations;
-    if (n.machineArm && !jr && He >= REFUSED_CAPACITY_HINT) {
-      if (hn >= REFUSED_CAPACITY_HINT) {
+      priorSupervisor !== undefined &&
+      !priorSupervisor.stopped &&
+      priorSupervisor.lastActivityAt > lastActivityAt;
+    let pendingCount = frameLiveWatchRows(context).length + live.pendingRegistrations;
+    if (opts.machineArm && !hadActivitySince && slotCount >= REFUSED_CAPACITY_HINT) {
+      if (pendingCount >= REFUSED_CAPACITY_HINT) {
         if (!hasWatchProtection(live, slug) || !evictForProtectedReconnect(live, context)) {
           logFeatureSad("artifact_live_subscribe", "watch_cap_reconnect");
           return {
@@ -1573,16 +1628,16 @@ async function FrameLiveWatchManager(live, n) {
           };
         }
       }
-    } else if (n.mcpWrite && He >= REFUSED_CAPACITY_HINT) {
+    } else if (opts.mcpWrite && slotCount >= REFUSED_CAPACITY_HINT) {
       logFeatureSad("artifact_live_subscribe", "watch_cap");
-      return skipArm(live, slug, n.machineArm, "watch_cap", Y);
-    } else if (He >= REFUSED_CAPACITY_HINT) {
-      let A = He - REFUSED_CAPACITY_HINT + 1;
-      let j = classifyWatchReason(live, context, {
+      return skipArm(live, slug, opts.machineArm, "watch_cap", announceOpts);
+    } else if (slotCount >= REFUSED_CAPACITY_HINT) {
+      let shortBy = slotCount - REFUSED_CAPACITY_HINT + 1;
+      let evictable = classifyWatchReason(live, context, {
         forPublish,
       });
-      if (j.length < A) {
-        if (n.machineArm) {
+      if (evictable.length < shortBy) {
+        if (opts.machineArm) {
           logFeatureSad("artifact_live_subscribe", "watch_cap_reconnect");
           return {
             outcome: "skipped",
@@ -1590,14 +1645,14 @@ async function FrameLiveWatchManager(live, n) {
           };
         }
         logFeatureSad("artifact_live_subscribe", "watch_cap");
-        return skipArm(live, slug, n.machineArm, "watch_cap", Y);
+        return skipArm(live, slug, opts.machineArm, "watch_cap", announceOpts);
       }
-      if (hn >= REFUSED_CAPACITY_HINT)
+      if (pendingCount >= REFUSED_CAPACITY_HINT)
         evictWatch(
           live,
-          j[0],
+          evictable[0],
           context,
-          n.machineArm
+          opts.machineArm
             ? {
                 why: `this session reached its limit of ${REFUSED_CAPACITY_HINT} artifact watches and made room for an already-held watch to reconnect`,
                 shortReason: MADE_ROOM_PHRASE,
@@ -1606,180 +1661,198 @@ async function FrameLiveWatchManager(live, n) {
         );
     }
     live.pendingRegistrations++;
-    xe = true;
-    let q = live.supervisors.get(slug);
-    let explicit_2 = q !== undefined && !q.stopped && q.explicit;
-    let _t = explicit || explicit_2;
-    let St = q !== undefined && !q.stopped;
-    let taskId = St ? q.taskId : undefined;
-    let zr = q === undefined;
-    let Yr = explicit && q !== undefined && !q.explicit;
-    let bn =
-      !n.machineArm && q !== undefined && q.armedVia === "mcp_write" && L !== "publish" && L !== "mcp_write";
-    let autoReactWiring_2 = bn ? q.autoReactWiring : undefined;
-    let Sn = le !== undefined && !isHumanTurnWiringStale(live, slug, autoReactWiring);
-    let vn = n.userResumeWiring === true && Sn && St && q.autoReactWiring?.humanTurnSnapshot === true;
+    registrationCounted = true;
+    let prev = live.supervisors.get(slug);
+    let explicit_2 = prev !== undefined && !prev.stopped && prev.explicit;
+    let isExplicit = explicit || explicit_2;
+    let wasWatching = prev !== undefined && !prev.stopped;
+    let taskId = wasWatching ? prev.taskId : undefined;
+    let isNewSupervisor = prev === undefined;
+    let explicitUpgrade = explicit && prev !== undefined && !prev.explicit;
+    let keepMcpWiring =
+      !opts.machineArm &&
+      prev !== undefined &&
+      prev.armedVia === "mcp_write" &&
+      armedVia !== "publish" &&
+      armedVia !== "mcp_write";
+    let autoReactWiring_2 = keepMcpWiring ? prev.autoReactWiring : undefined;
+    let wiringOk = wiring !== undefined && !isHumanTurnWiringStale(live, slug, autoReactWiring);
+    let keepHumanTurn =
+      opts.userResumeWiring === true &&
+      wiringOk &&
+      wasWatching &&
+      prev.autoReactWiring?.humanTurnSnapshot === true;
     let carriedVer_2 = live.supervisors.get(slug)?.carriedVer;
-    let wt = carriedVer_2 !== undefined && carriedVer_2 !== carriedVer ? carriedVer_2 : seedSurfacedVer;
-    let k = upsertSupervisor(live, {
+    let carriedVersion =
+      carriedVer_2 !== undefined && carriedVer_2 !== carriedVer ? carriedVer_2 : seedSurfacedVer;
+    let supervisor = upsertSupervisor(live, {
       slug,
       url,
       getKnownVer,
       ownPublishes,
       context,
       explicit,
-      machineArm: n.machineArm,
-      armedVia: L,
-      carriedVer: wt ?? W.ver,
-      ...(Sn && {
-        autoReactWiring: le,
+      machineArm: opts.machineArm,
+      armedVia,
+      carriedVer: carriedVersion ?? subscription.ver,
+      ...(wiringOk && {
+        autoReactWiring: wiring,
       }),
-      humanTurnWiring: Ee && !vn,
+      humanTurnWiring: humanTurnWiring && !keepHumanTurn,
     });
-    if (F === undefined && k.armedVia !== "mcp_write") recordHeardVersion(slug, ver);
-    if (F === undefined && !ht) k.bootedVersion = ver;
-    let autoReactWiring_3 = k.autoReactWiring;
-    if (O !== undefined && O.accountEpoch === getLiveState().accountEpoch) {
-      k.lease = O;
-      if (F === undefined && W.renewable) k.renewable = true;
-      else if (F === undefined) delete k.renewable;
+    if (cachedLease === undefined && supervisor.armedVia !== "mcp_write") recordHeardVersion(slug, ver);
+    if (cachedLease === undefined && !renewed) supervisor.bootedVersion = ver;
+    let autoReactWiring_3 = supervisor.autoReactWiring;
+    if (tokenState !== undefined && tokenState.accountEpoch === getLiveState().accountEpoch) {
+      supervisor.lease = tokenState;
+      if (cachedLease === undefined && subscription.renewable) supervisor.renewable = true;
+      else if (cachedLease === undefined) delete supervisor.renewable;
     } else {
-      delete k.lease;
-      delete k.renewable;
+      delete supervisor.lease;
+      delete supervisor.renewable;
     }
-    let lastActivityAt_2 = k.lastActivityAt;
+    let lastActivityAt_2 = supervisor.lastActivityAt;
     if (onOpen !== undefined && onGiveUp !== undefined)
-      k.resumeAnnounce = {
+      supervisor.resumeAnnounce = {
         onOpen,
         onGiveUp,
-        wired: le !== undefined,
+        wired: wiring !== undefined,
       };
-    let armedVia =
-      L === "resume" && k.armedVia !== "watch" && k.armedVia !== "resume" ? k.armedVia : undefined;
-    if (armedVia !== undefined) k.armedVia = "resume";
-    k.transport = transport;
-    let ne = false;
+    let armedVia_2 =
+      armedVia === "resume" && supervisor.armedVia !== "watch" && supervisor.armedVia !== "resume"
+        ? supervisor.armedVia
+        : undefined;
+    if (armedVia_2 !== undefined) supervisor.armedVia = "resume";
+    supervisor.transport = transport;
+    let wasOpen = false;
     let sessionId = getSessionId();
-    let An = false;
-    let Rt;
-    let Be;
-    let Rn = false;
-    let We;
+    let sharedCheckStarted = false;
+    let activitySender;
+    let activitySink;
+    let expiryAnnounced = false;
+    let stalledBeforeOpen;
     let abort = new AbortController();
-    let Q = se ? undefined : live.pendingInFlightWiring.get(slug);
-    if (!se) live.pendingInFlightWiring.delete(slug);
-    let fe = le ?? Q?.wiring;
-    let Zr =
-      Q?.wiring.humanTurnSnapshot === true &&
-      (autoReactWiring?.humanTurnSnapshot !== true || Q.wiring.context !== autoReactWiring.context);
-    if (Q !== undefined && (le === undefined || Zr) && Q.stopGeneration === stopGeneration(slug)) {
-      let A = live.supervisors.get(slug);
-      if (A !== undefined && !A.stopped)
-        A.autoReactWiring = mergeAutoReactWiring(
-          A.autoReactWiring,
+    let pendingWiring = notEditor ? undefined : live.pendingInFlightWiring.get(slug);
+    if (!notEditor) live.pendingInFlightWiring.delete(slug);
+    let activeWiring = wiring ?? pendingWiring?.wiring;
+    let wiringReplaced =
+      pendingWiring?.wiring.humanTurnSnapshot === true &&
+      (autoReactWiring?.humanTurnSnapshot !== true ||
+        pendingWiring.wiring.context !== autoReactWiring.context);
+    if (
+      pendingWiring !== undefined &&
+      (wiring === undefined || wiringReplaced) &&
+      pendingWiring.stopGeneration === stopGeneration(slug)
+    ) {
+      let prev = live.supervisors.get(slug);
+      if (prev !== undefined && !prev.stopped)
+        prev.autoReactWiring = mergeAutoReactWiring(
+          prev.autoReactWiring,
           {
-            ...Q.wiring,
-            title: Q.wiring.title ?? A.autoReactWiring?.title,
+            ...pendingWiring.wiring,
+            title: pendingWiring.wiring.title ?? prev.autoReactWiring?.title,
           },
-          Q.wiring.humanTurnSnapshot === true,
+          pendingWiring.wiring.humanTurnSnapshot === true,
         );
     }
-    let yn = n.freshPublishWiring === true || Q?.freshPublishWiring === true;
-    if (Q?.freshPublishWiring === true) {
-      scanGeneration = Q.scanGeneration;
-      Ue = Q.stopGeneration;
+    let isFreshPublish = opts.freshPublishWiring === true || pendingWiring?.freshPublishWiring === true;
+    if (pendingWiring?.freshPublishWiring === true) {
+      scanGeneration = pendingWiring.scanGeneration;
+      stopGen = pendingWiring.stopGeneration;
     }
-    let Z = n.userResumeWiring === true;
-    let ei = Ee || fe?.humanTurnSnapshot === true;
-    let yt = () => live.supervisors.get(slug)?.autoReactWiring?.title ?? fe?.title;
-    let I =
-      fe === undefined || !fe.commentVerbsInSchema
+    let isUserResume = opts.userResumeWiring === true;
+    let wiringActive = humanTurnWiring || activeWiring?.humanTurnSnapshot === true;
+    let getTitle = () => live.supervisors.get(slug)?.autoReactWiring?.title ?? activeWiring?.title;
+    let autoReact =
+      activeWiring === undefined || !activeWiring.commentVerbsInSchema
         ? undefined
         : {
             env: claudeAiEnvironment(),
-            tool: fe.tool,
-            context: fe.context,
-            ...(fe.publishTranscript !== undefined && {
-              publishTranscript: fe.publishTranscript,
+            tool: activeWiring.tool,
+            context: activeWiring.context,
+            ...(activeWiring.publishTranscript !== undefined && {
+              publishTranscript: activeWiring.publishTranscript,
             }),
             getWiring: () => {
               let autoReactWiring = live.supervisors.get(slug)?.autoReactWiring;
-              return autoReactWiring?.humanTurnSnapshot === true || !ei ? autoReactWiring : undefined;
+              return autoReactWiring?.humanTurnSnapshot === true || !wiringActive
+                ? autoReactWiring
+                : undefined;
             },
             abort,
-            getTitle: yt,
+            getTitle,
             onReadRefused: () => {
               describeSubscribeFailure(live, slug);
             },
-            notify: (A) => {
-              if ("coalesce" in A) {
+            notify: (notice) => {
+              if ("coalesce" in notice) {
                 enqueueArtifactChanged({
                   queue: liveNotificationEnqueuer,
                   slug,
-                  family: A.coalesce.family,
-                  artifactName: A.coalesce.artifactName,
-                  threadId: A.coalesce.threadId,
-                  detail: A.detail,
+                  family: notice.coalesce.family,
+                  artifactName: notice.coalesce.artifactName,
+                  threadId: notice.coalesce.threadId,
+                  detail: notice.detail,
                   mergeDetails: "append",
-                  ownGesture: A.ownGesture === true,
+                  ownGesture: notice.ownGesture === true,
                 });
                 return;
               }
               enqueuePendingNotification({
                 value: formatTaskNotification({
                   taskType: "artifact-auto-react",
-                  summary: escapeXml(A.summary),
+                  summary: escapeXml(notice.summary),
                   body: `
-${escapeXml(A.detail)}`,
+${escapeXml(notice.detail)}`,
                 }),
                 mode: "task-notification",
                 origin: {
                   kind: "task-notification",
                   source: "artifact-auto-react",
                   slug,
-                  displayName: quoteArtifactName(yt, url),
+                  displayName: quoteArtifactName(getTitle, url),
                 },
-                uuid: newLaneNoticeId(A.handOff, A.ownGesture === true ? slug : undefined),
-                ...(A.handOff !== undefined && {
+                uuid: newLaneNoticeId(notice.handOff, notice.ownGesture === true ? slug : undefined),
+                ...(notice.handOff !== undefined && {
                   artifactCommentTurn: "handoff",
                 }),
                 agentId: mainAgentId(),
               });
             },
           };
-    k.surfacedVers ??= [];
-    let wake = k.wake;
-    let command = createLiveEventHandlers({
+    supervisor.surfacedVers ??= [];
+    let wake = supervisor.wake;
+    let liveEventHandlers = createLiveEventHandlers({
       slug,
       url,
       ownPublishes,
       presenceOnly: () => live.supervisors.get(slug)?.armedVia === "mcp_write",
       getKnownVer: getKnownVer_2,
-      surfacedVers: k.surfacedVers,
-      ...(wt !== undefined && {
-        seedSurfacedVer: wt,
+      surfacedVers: supervisor.surfacedVers,
+      ...(carriedVersion !== undefined && {
+        seedSurfacedVer: carriedVersion,
       }),
       onSurfaced: (carriedVer) => {
-        let j = live.supervisors.get(slug);
-        if (j && !j.stopped) {
-          j.carriedVer = carriedVer;
-          j.lastActivityAt = Date.now();
+        let supervisor = live.supervisors.get(slug);
+        if (supervisor && !supervisor.stopped) {
+          supervisor.carriedVer = carriedVer;
+          supervisor.lastActivityAt = Date.now();
         }
       },
-      autoReact: I,
+      autoReact,
     });
-    k.wake = command;
-    let kt = 0;
-    let Et;
-    let ti = F?.opened === true ? F : undefined;
+    supervisor.wake = liveEventHandlers;
+    let openedAt = 0;
+    let summonSeed;
+    let reusableLease = cachedLease?.opened === true ? cachedLease : undefined;
     try {
-      let A = await runWebSocketMonitor(
+      let monitorRun = await runWebSocketMonitor(
         {
           ws:
             transport === "sync"
               ? {
                   url: getSyncSocketUrl(slug, {
-                    commentHint: I !== undefined && isAutoreactArmed() && !isSlugStopped(slug),
+                    commentHint: autoReact !== undefined && isAutoreactArmed() && !isSlugStopped(slug),
                     versionNotices: true,
                   }),
                   protocols: [FRAME_SYNC_V1, token],
@@ -1793,7 +1866,7 @@ ${escapeXml(A.detail)}`,
               "User-Agent": getUserAgent(),
             },
           }),
-          description: liveUpdatesTaskLabel(url, _t, k.armedVia),
+          description: liveUpdatesTaskLabel(url, isExplicit, supervisor.armedVia),
           timeout_ms: 0,
           persistent: true,
           quietLifecycle: true,
@@ -1802,46 +1875,48 @@ ${escapeXml(A.detail)}`,
           }),
           ambient: true,
           handshakeDeadlineMs: live.rewatchTiming.handshakeDeadlineMs,
-          autoReactArmed: I !== undefined,
-          autoReactSlug: I !== undefined ? slug : undefined,
+          autoReactArmed: autoReact !== undefined,
+          autoReactSlug: autoReact !== undefined ? slug : undefined,
           frameLive: {
             slug,
-            explicit: _t,
-            watchedSince: k.watchedSince,
-            armedVia: k.armedVia,
+            explicit: isExplicit,
+            watchedSince: supervisor.watchedSince,
+            armedVia: supervisor.armedVia,
           },
           transform:
             transport === "sync"
-              ? handleFrameLiveControl(command, slug, {
-                  onTokenRefresh: (U, expUnixSeconds) => {
+              ? handleFrameLiveControl(liveEventHandlers, slug, {
+                  onTokenRefresh: (freshToken, expUnixSeconds) => {
                     if (
-                      O !== undefined &&
-                      sameOwnerAccount(parseCapTokenOwner(O.token), parseCapTokenOwner(U))
+                      tokenState !== undefined &&
+                      sameOwnerAccount(parseCapTokenOwner(tokenState.token), parseCapTokenOwner(freshToken))
                     )
-                      refreshLiveTokenState(O, {
-                        token: U,
+                      refreshLiveTokenState(tokenState, {
+                        token: freshToken,
                         expUnixSeconds,
                         receivedAtMs: Date.now(),
                       });
                   },
                   onExpiryAnnounced: () => {
-                    Rn = true;
+                    expiryAnnounced = true;
                   },
-                  onCommentHint: (U, readAt) => {
-                    let wakeSnapshot = Et;
-                    Et = undefined;
+                  onCommentHint: (commentsEmpty, readAt) => {
+                    let wakeSnapshot = summonSeed;
+                    summonSeed = undefined;
                     let seedSkipped =
-                      U && wakeSnapshot !== undefined && settleEmptyArtifact(slug, wakeSnapshot, readAt);
+                      commentsEmpty &&
+                      wakeSnapshot !== undefined &&
+                      settleEmptyArtifact(slug, wakeSnapshot, readAt);
                     logFeatureOk("artifact_live_subscribe", {
                       comment_hint: true,
-                      comments_empty: U,
+                      comments_empty: commentsEmpty,
                       seed_parked: wakeSnapshot !== undefined,
                       seed_skipped: seedSkipped,
                       sync_transport: true,
                     });
                   },
                 })
-              : makeLiveVersionLineHandler(command),
+              : makeLiveVersionLineHandler(liveEventHandlers),
           keepalive:
             transport === "sync"
               ? {
@@ -1861,50 +1936,50 @@ ${escapeXml(A.detail)}`,
                   frame: "ping",
                   intervalMs: ARM_RETRY_DELAY_WORDING_MS,
                 },
-          onSender: (U) => {
+          onSender: (sender) => {
             if (transport === "sync") {
-              Be = (busyS) => U(activityFrame(slug, busyS));
-              addAgentActivitySink(live, `watch:${slug}`, Be);
+              activitySink = (busyS) => sender(activityFrame(slug, busyS));
+              addAgentActivitySink(live, `watch:${slug}`, activitySink);
               return;
             }
-            Rt = U;
-            addActivitySender(live, slug, U);
+            activitySender = sender;
+            addActivitySender(live, slug, sender);
           },
           onSenderClosed: () => {
-            if (Be !== undefined) removeAgentActivitySink(live, `watch:${slug}`, Be);
-            if (Rt !== undefined) removeActivitySender(live, slug, Rt);
+            if (activitySink !== undefined) removeAgentActivitySink(live, `watch:${slug}`, activitySink);
+            if (activitySender !== undefined) removeActivitySender(live, slug, activitySender);
           },
-          onLifecycle: (U, V, Ie) => {
-            if (U === "open") {
-              ne = true;
-              k.lastFailure = undefined;
-              We = {
-                stalledSince: k.stalledSince,
-                lastStalledAt: k.lastStalledAt,
-                stallOutAfterMs: k.stallOutAfterMs,
+          onLifecycle: (phase, closeCode, upgradeInfo) => {
+            if (phase === "open") {
+              wasOpen = true;
+              supervisor.lastFailure = undefined;
+              stalledBeforeOpen = {
+                stalledSince: supervisor.stalledSince,
+                lastStalledAt: supervisor.lastStalledAt,
+                stallOutAfterMs: supervisor.stallOutAfterMs,
               };
-              k.stalledSince = undefined;
-              k.lastStalledAt = undefined;
-              k.stallOutAfterMs = undefined;
-              let Oe = k.spreadReconnect === true;
-              k.spreadReconnect = undefined;
-              kt = Date.now();
-              if (O !== undefined) O.opened = true;
+              supervisor.stalledSince = undefined;
+              supervisor.lastStalledAt = undefined;
+              supervisor.stallOutAfterMs = undefined;
+              let wasSpread = supervisor.spreadReconnect === true;
+              supervisor.spreadReconnect = undefined;
+              openedAt = Date.now();
+              if (tokenState !== undefined) tokenState.opened = true;
               if (
                 approvedRelatchGen !== undefined &&
                 signal.aborted &&
                 stopLatches.isStopped(slug) &&
-                k.taskId !== undefined
+                supervisor.taskId !== undefined
               ) {
-                stopMonitorWsTasks(k.taskId, context.taskRegistry, {
+                stopMonitorWsTasks(supervisor.taskId, context.taskRegistry, {
                   quiet: true,
                 });
                 removeSupervisor(live, slug);
                 logFeatureSad("artifact_live_subscribe", "stop_latched");
                 return;
               }
-              let Me = live.supervisors.get(slug);
-              if (Me !== undefined && !Me.stopped)
+              let liveSupervisor = live.supervisors.get(slug);
+              if (liveSupervisor !== undefined && !liveSupervisor.stopped)
                 if (transport === "sync") {
                   retirePresenceSlug(slug);
                   liveDocHeadSink(slug)?.reopened();
@@ -1921,24 +1996,25 @@ ${escapeXml(A.detail)}`,
                 ...(transport === "sync" && {
                   sync_transport: true,
                 }),
-                ...(_t && {
+                ...(isExplicit && {
                   explicit: true,
                 }),
-                ...(F !== undefined && {
+                ...(cachedLease !== undefined && {
                   token_reused: true,
-                  lease_remaining_min: Math.max(0, Math.floor((F.expMs - kt) / 60000)),
+                  lease_remaining_min: Math.max(0, Math.floor((cachedLease.expMs - openedAt) / 60000)),
                 }),
-                ...(ht && {
+                ...(renewed && {
                   token_renewed: true,
                 }),
               });
-              let Cn = I !== undefined && getLiveState().wakes.scanGeneration !== scanGeneration;
-              let ri = stopGeneration(slug) !== Ue;
+              let scanAdvanced =
+                autoReact !== undefined && getLiveState().wakes.scanGeneration !== scanGeneration;
+              let stopAdvanced = stopGeneration(slug) !== stopGen;
               let { wakes } = getLiveState();
-              let ii =
+              let wakesLifted =
                 wakes.liftedAtScanGeneration.get(slug) === wakes.scanGeneration ||
                 wakes.humanTurnAtScanGeneration === wakes.scanGeneration;
-              if (Cn && !ii && !isSlugStopped(slug) && isAutoreactArmed()) {
+              if (scanAdvanced && !wakesLifted && !isSlugStopped(slug) && isAutoreactArmed()) {
                 sweepSlug(slug);
                 artifactWatchStopNotice(1, [], {
                   catchUp: false,
@@ -1951,24 +2027,30 @@ ${escapeXml(A.detail)}`,
               }
               if (approvedRelatchGen !== undefined && !signal.aborted)
                 stopLatches.clearByApprovedRewatch(slug, approvedRelatchGen);
-              if (I !== undefined)
+              if (autoReact !== undefined)
                 getSummonWakeState(slug).lastWakeArgs = {
                   slug,
                   url,
-                  ...I,
+                  ...autoReact,
                 };
-              let xn = Z && P();
-              if (Z && I !== undefined && !signal.aborted && !xn && isAutoReactActive()) {
+              let stopLatchedNow = isUserResume && isStopLatched();
+              if (
+                isUserResume &&
+                autoReact !== undefined &&
+                !signal.aborted &&
+                !stopLatchedNow &&
+                isAutoReactActive()
+              ) {
                 let autoReactWiring = live.supervisors.get(slug)?.autoReactWiring;
                 armMonitorIntent(slug, {
                   title: autoReactWiring?.title,
                   storageV5: autoReactWiring?.context.storageV5,
                 });
               }
-              if (I !== undefined && signal.aborted);
-              else if (I !== undefined)
+              if (autoReact !== undefined && signal.aborted);
+              else if (autoReact !== undefined)
                 if (
-                  !Z &&
+                  !isUserResume &&
                   isSlugSwept(slug) &&
                   !isSlugOrphaned(slug) &&
                   wakes.humanTurnAtScanGeneration === wakes.scanGeneration
@@ -1979,24 +2061,27 @@ ${escapeXml(A.detail)}`,
                   scheduleThreadScan({
                     slug,
                     url,
-                    ...I,
+                    ...autoReact,
                     seed: false,
                   });
-                } else if (isSlugStopped(slug) && (Cn || ri || xn || !(yn || Z)));
+                } else if (
+                  isSlugStopped(slug) &&
+                  (scanAdvanced || stopAdvanced || stopLatchedNow || !(isFreshPublish || isUserResume))
+                );
                 else if (isSlugStopped(slug)) {
-                  let N = isSlugSwept(slug);
-                  let de = isSlugYielded(slug);
-                  if (isAutoreactArmed() && (Z || !N || de)) {
+                  let wasSwept = isSlugSwept(slug);
+                  let wasYielded = isSlugYielded(slug);
+                  if (isAutoreactArmed() && (isUserResume || !wasSwept || wasYielded)) {
                     markAutoReactNoticePending(slug);
                     recordUnaccountedComments(slug);
-                    I.notify({
-                      summary: (Z ? autoRepliesResumedNotice : autoRepliesReenabledNotice)(
-                        quoteArtifactName(I.getTitle, url),
+                    autoReact.notify({
+                      summary: (isUserResume ? autoRepliesResumedNotice : autoRepliesReenabledNotice)(
+                        quoteArtifactName(autoReact.getTitle, url),
                       ),
-                      detail: `Auto-replies on artifact ${url} were ${Z ? "resumed by a resume_replies request" : "re-enabled by this publish"} \u2014 they had been ${de ? "handed to another session of this conversation that resumed it or published there" : N ? "paused when the user interrupted the session (Ctrl+C or Stop) and the watch had since dropped" : "stopped when their live-updates task was killed"}. ${N && !de ? PAUSE_AUTO_REPLIES_HINT : UNINTENDED_RESUME_HINT}`,
+                      detail: `Auto-replies on artifact ${url} were ${isUserResume ? "resumed by a resume_replies request" : "re-enabled by this publish"} \u2014 they had been ${wasYielded ? "handed to another session of this conversation that resumed it or published there" : wasSwept ? "paused when the user interrupted the session (Ctrl+C or Stop) and the watch had since dropped" : "stopped when their live-updates task was killed"}. ${wasSwept && !wasYielded ? PAUSE_AUTO_REPLIES_HINT : UNINTENDED_RESUME_HINT}`,
                     });
                   }
-                  if (!N || de) resetAutoReactForSlug(slug);
+                  if (!wasSwept || wasYielded) resetAutoReactForSlug(slug);
                   forgetYieldedSlug(slug);
                   forgetDeliveredSlug(slug);
                   resumeSummonWakes(slug);
@@ -2004,87 +2089,88 @@ ${escapeXml(A.detail)}`,
                   scheduleThreadScan({
                     slug,
                     url,
-                    ...I,
+                    ...autoReact,
                     seed: true,
                   });
                 } else {
                   if (wakes.pendingResumeDisclosure.delete(slug)) {
                     markAutoReactNoticePending(slug);
                     recordUnaccountedComments(slug);
-                    I.notify({
-                      summary: autoRepliesResumedNotice(quoteArtifactName(I.getTitle, url)),
+                    autoReact.notify({
+                      summary: autoRepliesResumedNotice(quoteArtifactName(autoReact.getTitle, url)),
                       detail: `Auto-replies on artifact ${url} were resumed by a resume_replies request \u2014 they had been paused when the user interrupted the session (Ctrl+C or Stop); the watch has now connected. ${PAUSE_AUTO_REPLIES_HINT}`,
                     });
                   }
                   scheduleThreadScan({
                     slug,
                     url,
-                    ...I,
+                    ...autoReact,
                     seed: true,
-                    ...(n.pickUpRecentSummons === true &&
-                      n.machineArm !== true && {
+                    ...(opts.pickUpRecentSummons === true &&
+                      opts.machineArm !== true && {
                         pickUpRecentSummons: true,
                       }),
-                    ...(n.machineArm === true &&
-                      Oe &&
+                    ...(opts.machineArm === true &&
+                      wasSpread &&
                       isFrameLiveTokenLeaseEnabled() && {
                         deferMs: seedJitter(live.rewatchTiming),
                       }),
                   });
                   if (transport === "sync") {
                     let summonWakeState = getSummonWakeState(slug);
-                    Et = {
+                    summonSeed = {
                       kickCount: summonWakeState.kickCount,
                       cancelGeneration: summonWakeState.cancelGeneration,
                     };
                   }
                 }
-              let qe = live.supervisors.get(slug);
-              let resumeAnnounce = qe?.resumeAnnounce;
-              if (qe !== undefined && resumeAnnounce !== undefined) {
-                qe.resumeAnnounce = undefined;
-                let { autoReact } = getLiveState();
-                let de =
-                  I !== undefined &&
+              let resumedSupervisor = live.supervisors.get(slug);
+              let resumeAnnounce = resumedSupervisor?.resumeAnnounce;
+              if (resumedSupervisor !== undefined && resumeAnnounce !== undefined) {
+                resumedSupervisor.resumeAnnounce = undefined;
+                let { autoReact: autoReact_2 } = getLiveState();
+                let resumeAllowed =
+                  autoReact !== undefined &&
                   !isSlugStoppedAnywhere(slug) &&
-                  !autoReact.userDisarmed &&
-                  autoReact.enabledMemo === true;
+                  !autoReact_2.userDisarmed &&
+                  autoReact_2.enabledMemo === true;
                 if (
                   !signal.aborted &&
-                  !qe.stopped &&
+                  !resumedSupervisor.stopped &&
                   !stopLatches.isStopped(slug) &&
-                  (de || (!resumeAnnounce.wired && I === undefined))
+                  (resumeAllowed || (!resumeAnnounce.wired && autoReact === undefined))
                 )
                   resumeAnnounce.onOpen();
               }
               if (
-                I !== undefined &&
-                (yn || Z || explicit) &&
-                !An &&
+                autoReact !== undefined &&
+                (isFreshPublish || isUserResume || explicit) &&
+                !sharedCheckStarted &&
                 !signal.aborted &&
                 !stopLatches.isStopped(slug) &&
                 !isSlugStoppedAnywhere(slug) &&
                 !getLiveState().autoReact.userDisarmed &&
                 getLiveState().autoReact.wakeEnabledMemo === true
               ) {
-                An = true;
+                sharedCheckStarted = true;
                 let yieldClaim = startYieldClaim([slug], Date.now());
                 (async () => {
-                  let de = await import("./chunk-ewxn4535.js");
-                  let ze = await import("./chunk-v19g02mx.js");
+                  let sessionRecords =
+                    await import("../../utils/udsMessaging/SessionRecordsUnreadableError.lazy.js");
+                  let processHelpers = await import("../../utils/captureProcessStartTimeAsync.lazy.js");
                   let liveReplyHolder = await findLiveReplyHolder({
-                    records: await de.listRegisteredSessionRecords(),
+                    records: await sessionRecords.listRegisteredSessionRecords(),
                     sessionId,
                     selfPid: process.pid,
-                    isRunning: ze.isProcessRunning,
-                    isSameProcess: ze.provenSameProcessAsync,
+                    isRunning: processHelpers.isProcessRunning,
+                    isSameProcess: processHelpers.provenSameProcessAsync,
                   });
                   if (liveReplyHolder.verdict !== "live") {
                     yieldClaim.end();
                     return;
                   }
-                  let { requestReplyTakeover } = await import("./chunk-4te7h8m1.js");
-                  let Ot = (
+                  let { requestReplyTakeover } = await import("./replyYieldHolder.js");
+                  let handedToUs = (
                     await requestReplyTakeover({
                       holders: [liveReplyHolder.holder, ...liveReplyHolder.otherHolders],
                       holdersIncomplete: liveReplyHolder.unproven === true,
@@ -2095,20 +2181,20 @@ ${escapeXml(A.detail)}`,
                       claim: yieldClaim,
                     })
                   ).yielded.has(slug);
-                  let Wn = !Ot && yieldClaim.lost.has(slug);
-                  let Je = quoteArtifactName(() => yt(), url);
+                  let handedAway = !handedToUs && yieldClaim.lost.has(slug);
+                  let displayName = quoteArtifactName(() => getTitle(), url);
                   enqueuePendingNotification({
                     value: formatTaskNotification({
                       taskType: ARTIFACT_WATCH_LIFECYCLE,
                       summary: escapeXml(
-                        Ot
-                          ? `Another session of this conversation handed its replies on ${Je} to this one`
-                          : Wn
-                            ? `This session handed its replies on ${Je} to another session of this conversation`
-                            : `Another session of this conversation is open while replies are armed on ${Je}`,
+                        handedToUs
+                          ? `Another session of this conversation handed its replies on ${displayName} to this one`
+                          : handedAway
+                            ? `This session handed its replies on ${displayName} to another session of this conversation`
+                            : `Another session of this conversation is open while replies are armed on ${displayName}`,
                       ),
                       body: `
-<event>${escapeXml(Ot ? `Another live session of this same conversation was also armed to reply to comments on ${url}; it paused its replies at this session's request, so only this session answers them now. Nothing to do; do not stop a watch on your own.` : Wn ? `Another live session of this same conversation claimed the replies to comments on ${url} a moment after this one; this session paused its own at that session's request, so only that session answers them now. Nothing to do \u2014 a publish the user asks for here takes them back; do not republish or stop a watch on your own.` : `Another live session of this same conversation is running. If it is also replying to comments on ${url}, every comment will get a reply from both sessions until one stops. Tell the user; they can end either session's live-updates task in /tasks. Do not stop a watch on your own.`)}</event>`,
+<event>${escapeXml(handedToUs ? `Another live session of this same conversation was also armed to reply to comments on ${url}; it paused its replies at this session's request, so only this session answers them now. Nothing to do; do not stop a watch on your own.` : handedAway ? `Another live session of this same conversation claimed the replies to comments on ${url} a moment after this one; this session paused its own at that session's request, so only that session answers them now. Nothing to do \u2014 a publish the user asks for here takes them back; do not republish or stop a watch on your own.` : `Another live session of this same conversation is running. If it is also replying to comments on ${url}, every comment will get a reply from both sessions until one stops. Tell the user; they can end either session's live-updates task in /tasks. Do not stop a watch on your own.`)}</event>`,
                     }),
                     mode: "task-notification",
                     passive: true,
@@ -2117,7 +2203,7 @@ ${escapeXml(A.detail)}`,
                       kind: "task-notification",
                       source: ARTIFACT_WATCH_LIFECYCLE,
                       slug,
-                      displayName: Je,
+                      displayName,
                     },
                     agentId: mainAgentId(),
                   });
@@ -2127,66 +2213,72 @@ ${escapeXml(A.detail)}`,
               }
               return;
             }
-            let Se = ne ? Date.now() - kt : 0;
-            let Tt = !ne && isRetryableUpgradeRejection(V);
-            let Ct =
+            let uptimeMs = wasOpen ? Date.now() - openedAt : 0;
+            let shed = !wasOpen && isRetryableUpgradeRejection(closeCode);
+            let leaseExpired =
               transport === "sync"
-                ? V === ROUTE_ABSENT_4503 &&
-                  (Rn || (O !== undefined && Date.now() >= O.expMs - AUTO_REPLY_RESUMED_WINDOW_MS))
-                : V === ROUTE_ABSENT_4001;
-            let je =
+                ? closeCode === ROUTE_ABSENT_4503 &&
+                  (expiryAnnounced ||
+                    (tokenState !== undefined &&
+                      Date.now() >= tokenState.expMs - AUTO_REPLY_RESUMED_WINDOW_MS))
+                : closeCode === ROUTE_ABSENT_4001;
+            let resumeRefused =
               transport === "sync" &&
-              ((ne && V === ROUTE_ABSENT_4503 && !Ct) || (!ne && parseUpgradeRejection(V)?.status === 404));
-            let xt = je || (!ne && (Tt || isHandshakeStall(V, Ie, live.rewatchTiming)));
-            let Lt = ne || xt ? undefined : ti;
-            let z = live.supervisors.get(slug);
+              ((wasOpen && closeCode === ROUTE_ABSENT_4503 && !leaseExpired) ||
+                (!wasOpen && parseUpgradeRejection(closeCode)?.status === 404));
+            let stalled =
+              resumeRefused ||
+              (!wasOpen && (shed || isHandshakeStall(closeCode, upgradeInfo, live.rewatchTiming)));
+            let reuseRefused = wasOpen || stalled ? undefined : reusableLease;
+            let exitSupervisor = live.supervisors.get(slug);
             if (
-              je &&
-              ne &&
-              Se < live.rewatchTiming.minUptimeMs &&
-              z !== undefined &&
-              z.stalledSince === undefined &&
-              We?.stalledSince !== undefined
+              resumeRefused &&
+              wasOpen &&
+              uptimeMs < live.rewatchTiming.minUptimeMs &&
+              exitSupervisor !== undefined &&
+              exitSupervisor.stalledSince === undefined &&
+              stalledBeforeOpen?.stalledSince !== undefined
             ) {
-              z.stalledSince = We.stalledSince;
-              z.lastStalledAt = We.lastStalledAt;
-              z.stallOutAfterMs = We.stallOutAfterMs;
+              exitSupervisor.stalledSince = stalledBeforeOpen.stalledSince;
+              exitSupervisor.lastStalledAt = stalledBeforeOpen.lastStalledAt;
+              exitSupervisor.stallOutAfterMs = stalledBeforeOpen.stallOutAfterMs;
             }
             if (
-              z !== undefined &&
+              exitSupervisor !== undefined &&
               transport === "sync" &&
-              V === ROUTE_ABSENT_4403 &&
-              O !== undefined &&
-              z.lease === O
+              closeCode === ROUTE_ABSENT_4403 &&
+              tokenState !== undefined &&
+              exitSupervisor.lease === tokenState
             )
-              delete z.lease;
+              delete exitSupervisor.lease;
             if (
-              O !== undefined &&
-              z?.lease === O &&
+              tokenState !== undefined &&
+              exitSupervisor?.lease === tokenState &&
               (!isFrameLiveTokenLeaseEnabled() ||
-                (!Tt &&
-                  !je &&
-                  !shouldRetryDial(O, {
-                    expired: Ct,
-                    refused: Lt !== undefined,
-                    healthy: ne && Se >= live.rewatchTiming.minUptimeMs,
+                (!shed &&
+                  !resumeRefused &&
+                  !shouldRetryDial(tokenState, {
+                    expired: leaseExpired,
+                    refused: reuseRefused !== undefined,
+                    healthy: wasOpen && uptimeMs >= live.rewatchTiming.minUptimeMs,
                   })))
             ) {
-              delete z.lease;
-              if (!O.opened) delete z.renewable;
+              delete exitSupervisor.lease;
+              if (!tokenState.opened) delete exitSupervisor.renewable;
             }
-            if (ne)
-              logFeatureSad("artifact_live_subscribe", `socket_closed_${V ?? "unknown"}`, {
+            if (wasOpen)
+              logFeatureSad("artifact_live_subscribe", `socket_closed_${closeCode ?? "unknown"}`, {
                 chain_spared: getLiveState().autoReact.artifacts.get(slug)?.scanning === true,
               });
-            else if (Lt !== undefined) logFeatureSad("artifact_live_subscribe", "reuse_connect_failed");
+            else if (reuseRefused !== undefined)
+              logFeatureSad("artifact_live_subscribe", "reuse_connect_failed");
             else {
-              let upgradeRejection = parseUpgradeRejection(V);
-              let Me = {
-                ...(xt && {
+              let upgradeRejection = parseUpgradeRejection(closeCode);
+              let failFacts = {
+                ...(stalled && {
                   stalled: true,
                 }),
-                ...(Tt && {
+                ...(shed && {
                   shed: true,
                 }),
                 ...(upgradeRejection !== null && {
@@ -2194,43 +2286,45 @@ ${escapeXml(A.detail)}`,
                   cf_mitigated: upgradeRejection.cfMitigated,
                 }),
               };
-              if (Object.keys(Me).length > 0) logFeatureBad("artifact_live_subscribe", "connect_failed", Me);
+              if (Object.keys(failFacts).length > 0)
+                logFeatureBad("artifact_live_subscribe", "connect_failed", failFacts);
               else logFeatureBad("artifact_live_subscribe", "connect_failed");
             }
-            if (z !== undefined && !z.stopped)
-              z.lastFailure = Se < live.rewatchTiming.minUptimeMs ? (V ?? "unknown") : undefined;
+            if (exitSupervisor !== undefined && !exitSupervisor.stopped)
+              exitSupervisor.lastFailure =
+                uptimeMs < live.rewatchTiming.minUptimeMs ? (closeCode ?? "unknown") : undefined;
             describeResumedWatchFailure(live, slug, {
-              uptimeMs: je ? 0 : Se,
-              ...(V !== undefined && {
-                closeCode: V,
+              uptimeMs: resumeRefused ? 0 : uptimeMs,
+              ...(closeCode !== undefined && {
+                closeCode,
               }),
-              resumeNeverOpened: Z && !ne,
-              reuseRefused: Lt !== undefined,
-              stalled: xt,
-              expired: Ct,
+              resumeNeverOpened: isUserResume && !wasOpen,
+              reuseRefused: reuseRefused !== undefined,
+              stalled,
+              expired: leaseExpired,
             });
           },
         },
         context,
       );
-      getTaskAssignmentSummary(live, k, slug, A.data.taskId);
-      if (xe) {
+      getTaskAssignmentSummary(live, supervisor, slug, monitorRun.data.taskId);
+      if (registrationCounted) {
         live.pendingRegistrations--;
-        xe = false;
+        registrationCounted = false;
       }
-      let j = live.supervisors.get(slug);
-      if (j === undefined || j !== k) {
-        stopMonitorWsTasks(A.data.taskId, context.taskRegistry, {
+      let armedSupervisor = live.supervisors.get(slug);
+      if (armedSupervisor === undefined || armedSupervisor !== supervisor) {
+        stopMonitorWsTasks(monitorRun.data.taskId, context.taskRegistry, {
           quiet: true,
         });
-        describeSkippedResume(live, slug, n.machineArm);
+        describeSkippedResume(live, slug, opts.machineArm);
         return {
           outcome: "skipped",
           reason: "cancelled",
         };
       }
-      if (x()) {
-        stopMonitorWsTasks(A.data.taskId, context.taskRegistry, {
+      if (wasRetired()) {
+        stopMonitorWsTasks(monitorRun.data.taskId, context.taskRegistry, {
           quiet: true,
         });
         removeSupervisor(live, slug);
@@ -2239,23 +2333,23 @@ ${escapeXml(A.detail)}`,
           reason: "cancelled",
         };
       }
-      if (P()) {
-        stopMonitorWsTasks(A.data.taskId, context.taskRegistry, {
+      if (isStopLatched()) {
+        stopMonitorWsTasks(monitorRun.data.taskId, context.taskRegistry, {
           quiet: true,
         });
         logFeatureSad("artifact_live_subscribe", "stop_latched");
         live.armOutcomes.delete(slug);
         forgetArmOutcomeAndNotices(live, slug);
-        if (St || k.lastActivityAt !== lastActivityAt_2) endStoppedWatch(live, k);
+        if (wasWatching || supervisor.lastActivityAt !== lastActivityAt_2) endStoppedWatch(live, supervisor);
         else removeSupervisor(live, slug);
         return {
           outcome: "skipped",
           reason: "stop_latched",
         };
       }
-      let aborted = Z && signal.aborted;
+      let aborted = isUserResume && signal.aborted;
       if (aborted && approvedRelatchGen !== undefined && stopLatches.isStopped(slug)) {
-        stopMonitorWsTasks(A.data.taskId, context.taskRegistry, {
+        stopMonitorWsTasks(monitorRun.data.taskId, context.taskRegistry, {
           quiet: true,
         });
         removeSupervisor(live, slug);
@@ -2271,73 +2365,110 @@ ${escapeXml(A.detail)}`,
           outcome: "skipped",
           reason: "cancelled",
         };
-      if (Z && (getLiveState().wakes.scanGeneration !== scanGeneration || stopGeneration(slug) !== Ue))
+      if (
+        isUserResume &&
+        (getLiveState().wakes.scanGeneration !== scanGeneration || stopGeneration(slug) !== stopGen)
+      )
         return {
           outcome: "skipped",
           reason: "stopped_again",
         };
-      if (vn && le !== undefined) {
-        let U = live.supervisors.get(slug);
-        if (U === k && !U.stopped && !isHumanTurnWiringStale(live, slug, autoReactWiring_3))
-          U.autoReactWiring = mergeAutoReactWiring(
-            U.autoReactWiring,
+      if (keepHumanTurn && wiring !== undefined) {
+        let mergedSupervisor = live.supervisors.get(slug);
+        if (
+          mergedSupervisor === supervisor &&
+          !mergedSupervisor.stopped &&
+          !isHumanTurnWiringStale(live, slug, autoReactWiring_3)
+        )
+          mergedSupervisor.autoReactWiring = mergeAutoReactWiring(
+            mergedSupervisor.autoReactWiring,
             {
-              ...le,
-              title: U.autoReactWiring?.title ?? le.title,
+              ...wiring,
+              title: mergedSupervisor.autoReactWiring?.title ?? wiring.title,
             },
             true,
           );
       }
-      let ue = se ? undefined : live.pendingInFlightWiring.get(slug);
-      let En = isSlugStopped(slug);
-      let ni = En || (I !== undefined && getLiveState().wakes.scanGeneration !== scanGeneration);
-      let Tn =
-        ue !== undefined &&
-        ue.freshPublishWiring &&
-        ue.scanGeneration === getLiveState().wakes.scanGeneration &&
-        ue.stopGeneration === stopGeneration(slug);
-      if (ue === undefined || signal.aborted || !(I === undefined ? !En || Tn : !Z && ni && Tn))
+      let pendingWiring = notEditor ? undefined : live.pendingInFlightWiring.get(slug);
+      let stoppedNow = isSlugStopped(slug);
+      let staleWakes =
+        stoppedNow || (autoReact !== undefined && getLiveState().wakes.scanGeneration !== scanGeneration);
+      let wiringStillFresh =
+        pendingWiring !== undefined &&
+        pendingWiring.freshPublishWiring &&
+        pendingWiring.scanGeneration === getLiveState().wakes.scanGeneration &&
+        pendingWiring.stopGeneration === stopGeneration(slug);
+      if (
+        pendingWiring === undefined ||
+        signal.aborted ||
+        !(autoReact === undefined
+          ? !stoppedNow || wiringStillFresh
+          : !isUserResume && staleWakes && wiringStillFresh)
+      )
         return {
           outcome: "armed",
-          taskId: A.data.taskId,
-          ...(se && {
+          taskId: monitorRun.data.taskId,
+          ...(notEditor && {
             degraded: "not_editor",
           }),
         };
       live.pendingInFlightWiring.delete(slug);
-      Ce = ue;
-      stopMonitorWsTasks(A.data.taskId, context.taskRegistry, {
+      latePark = pendingWiring;
+      stopMonitorWsTasks(monitorRun.data.taskId, context.taskRegistry, {
         quiet: true,
       });
     } catch {
-      let A = live.supervisors.get(slug);
-      if (zr && A === k && !(A !== undefined && A.explicit && !explicit)) removeSupervisor(live, slug);
-      else if (Yr && A !== undefined && A === q) A.explicit = false;
-      if (armedVia !== undefined && A === k && A.armedVia === "resume") A.armedVia = armedVia;
-      else if (bn && A === k && A.armedVia === L && !A.explicit) {
-        A.armedVia = "mcp_write";
-        if (autoReactWiring_2 === undefined) delete A.autoReactWiring;
-        else A.autoReactWiring = autoReactWiring_2;
+      let failedSupervisor = live.supervisors.get(slug);
+      if (
+        isNewSupervisor &&
+        failedSupervisor === supervisor &&
+        !(failedSupervisor !== undefined && failedSupervisor.explicit && !explicit)
+      )
+        removeSupervisor(live, slug);
+      else if (explicitUpgrade && failedSupervisor !== undefined && failedSupervisor === prev)
+        failedSupervisor.explicit = false;
+      if (
+        armedVia_2 !== undefined &&
+        failedSupervisor === supervisor &&
+        failedSupervisor.armedVia === "resume"
+      )
+        failedSupervisor.armedVia = armedVia_2;
+      else if (
+        keepMcpWiring &&
+        failedSupervisor === supervisor &&
+        failedSupervisor.armedVia === armedVia &&
+        !failedSupervisor.explicit
+      ) {
+        failedSupervisor.armedVia = "mcp_write";
+        if (autoReactWiring_2 === undefined) delete failedSupervisor.autoReactWiring;
+        else failedSupervisor.autoReactWiring = autoReactWiring_2;
         emitSummonArm(live, slug);
       }
-      if (A !== undefined && A === k && A.wake === command)
-        if (wake === undefined) delete A.wake;
-        else A.wake = wake;
-      if (A !== undefined && onOpen !== undefined) A.resumeAnnounce = undefined;
       if (
-        O !== undefined &&
-        A?.lease === O &&
-        !shouldRetryDial(O, {
+        failedSupervisor !== undefined &&
+        failedSupervisor === supervisor &&
+        failedSupervisor.wake === liveEventHandlers
+      )
+        if (wake === undefined) delete failedSupervisor.wake;
+        else failedSupervisor.wake = wake;
+      if (failedSupervisor !== undefined && onOpen !== undefined) failedSupervisor.resumeAnnounce = undefined;
+      if (
+        tokenState !== undefined &&
+        failedSupervisor?.lease === tokenState &&
+        !shouldRetryDial(tokenState, {
           expired: false,
           refused: false,
           healthy: false,
         })
       ) {
-        delete A.lease;
-        if (!O.opened) delete A.renewable;
+        delete failedSupervisor.lease;
+        if (!tokenState.opened) delete failedSupervisor.renewable;
       }
-      logFeatureBad("artifact_live_subscribe", F !== undefined ? "reuse_ws_open_error" : "ws_open_error");
-      return skipArm(live, slug, n.machineArm, "ws_open_error", Y);
+      logFeatureBad(
+        "artifact_live_subscribe",
+        cachedLease !== undefined ? "reuse_ws_open_error" : "ws_open_error",
+      );
+      return skipArm(live, slug, opts.machineArm, "ws_open_error", announceOpts);
     }
   } finally {
     live.inFlightSubscribes.delete(slug);
@@ -2345,41 +2476,41 @@ ${escapeXml(A.detail)}`,
     live.retiredInFlightArms.delete(slug);
     live.inFlightGenerations.delete(slug);
     live.bootingWiredArms.delete(slug);
-    let x = live.supervisors.get(slug);
-    if (x === undefined || x.stopped) liveDocHeadSink(slug)?.sourceEnded();
-    let J = live.armSettleWaiters.get(slug) ?? [];
+    let supervisor = live.supervisors.get(slug);
+    if (supervisor === undefined || supervisor.stopped) liveDocHeadSink(slug)?.sourceEnded();
+    let waiters = live.armSettleWaiters.get(slug) ?? [];
     live.armSettleWaiters.delete(slug);
-    for (let D of J)
+    for (let resolve of waiters)
       try {
-        D();
+        resolve();
       } catch (error) {
         logError(error);
       }
     live.pendingInFlightWiring.delete(slug);
-    if (xe) {
+    if (registrationCounted) {
       live.pendingRegistrations--;
-      xe = false;
+      registrationCounted = false;
     }
   }
-  if (Ce === undefined) throw Error("armLiveSubscription: late-park fall-through lost its park");
+  if (latePark === undefined) throw Error("armLiveSubscription: late-park fall-through lost its park");
   return FrameLiveWatchManager(live, {
-    ...n,
+    ...opts,
     machineArm: undefined,
     userResumeWiring: undefined,
     approvedRelatchGen: undefined,
     sessionResume: undefined,
     pickUpRecentSummons: undefined,
     editorGatedWiring: undefined,
-    autoReactWiring: Ce.wiring,
-    freshPublishWiring: Ce.freshPublishWiring,
-    freshPublish: n.freshPublish === true || Ce.freshPublishWiring,
+    autoReactWiring: latePark.wiring,
+    freshPublishWiring: latePark.freshPublishWiring,
+    freshPublish: opts.freshPublish === true || latePark.freshPublishWiring,
   });
 }
 //@ chunk-aqdf5t3e.js:86204-86285 placement
-function recordArmFailureLive(e, n, outcome, reason) {
+function recordArmFailureLive(state, slug, outcome, reason) {
   setWithLimit(
-    e.armOutcomes,
-    n,
+    state.armOutcomes,
+    slug,
     {
       outcome,
       reason,
@@ -2392,80 +2523,80 @@ function recordArmFailureLive(e, n, outcome, reason) {
 /**
  * 记录一次监听布防失败（忽略过期的交接代次与已撤销的布防）；已有定时器重试的只记最近失败；未被停止时登记失败结果，需要时向主会话通知。
  */
-function recordArmFailure(e, n, r, reason, h) {
-  if (r || e.handoffGeneration !== h.handoffGen || e.retiredInFlightArms.has(n)) return;
-  let a = e.supervisors.get(n);
-  if (a !== undefined && !a.stopped && a.timer !== undefined) {
-    if (reason !== "cancelled") a.lastFailure = reason;
+function recordArmFailure(state, slug, outcome, reason, extra) {
+  if (outcome || state.handoffGeneration !== extra.handoffGen || state.retiredInFlightArms.has(slug)) return;
+  let supervisor = state.supervisors.get(slug);
+  if (supervisor !== undefined && !supervisor.stopped && supervisor.timer !== undefined) {
+    if (reason !== "cancelled") supervisor.lastFailure = reason;
     return;
   }
-  if (e.armOutcomes.has(n)) return;
-  let d = getLiveState().durable.stopLatches.isStopped(n);
-  if (!d) recordArmFailureLive(e, n, "failed", reason);
-  if (h.announce && reason !== "cancelled" && !d) announceArmFailure(e, n, h, reason);
+  if (state.armOutcomes.has(slug)) return;
+  let stopped = getLiveState().durable.stopLatches.isStopped(slug);
+  if (!stopped) recordArmFailureLive(state, slug, "failed", reason);
+  if (extra.announce && reason !== "cancelled" && !stopped) announceArmFailure(state, slug, extra, reason);
 }
 //@ chunk-aqdf5t3e.js:87895-87949 placement
-function forgetArmOutcomeAndNotices(e, slug) {
-  removeCronOwnedKeys(e.announcedArmFailures, slug);
+function forgetArmOutcomeAndNotices(state, slug) {
+  removeCronOwnedKeys(state.announcedArmFailures, slug);
   pullStaleWatchLifecycleNotices(slug);
 }
 //@ chunk-aqdf5t3e.js:87949-88105 placement
 function pullStaleWatchLifecycleNotices(slug) {
   removeQueuedByFilter(
-    (n) =>
-      n.origin?.kind === "task-notification" &&
-      n.origin.source === ARTIFACT_WATCH_LIFECYCLE &&
-      n.origin.slug === slug &&
-      (n.origin.armFailed === true || n.origin.watchEnded === true),
+    (reason) =>
+      reason.origin?.kind === "task-notification" &&
+      reason.origin.source === ARTIFACT_WATCH_LIFECYCLE &&
+      reason.origin.slug === slug &&
+      (reason.origin.armFailed === true || reason.origin.watchEnded === true),
   );
 }
 //@ chunk-aqdf5t3e.js:88105-88580 placement
 /**
  * 实时订阅布防失败时向模型发一次通知（同一 slug 与原因只发一次），说明原因与不会再追踪新版本。
  */
-function announceArmFailure(e, n, r, s) {
-  if (!addWithLimit(e.announcedArmFailures, `${n}:${s}`, MAX_CRON_OWNERSHIP_KEYS)) return;
-  let h = frameLiveSkipReasonPhrase(s) ?? s;
-  let a =
-    noRewatchAdvice(s) ??
+function announceArmFailure(state, slug, outcome, reason) {
+  if (!addWithLimit(state.announcedArmFailures, `${slug}:${reason}`, MAX_CRON_OWNERSHIP_KEYS)) return;
+  let phrase = frameLiveSkipReasonPhrase(reason) ?? reason;
+  let detail =
+    noRewatchAdvice(reason) ??
     (getLiveState().builtInArtifactHiddenForMcp ? undefined : MISSED_WATCH_RELAUNCH_ADVICE);
   enqueueWatchLifecycleNotice({
-    slug: n,
-    artifactName: quoteArtifactName(r.getTitle, r.url),
-    shortReason: SKIP_REASON_PHRASES[s] ?? "not armed",
-    event: `The live subscription for ${r.url} did not arm \u2014 ${h}. This session is NOT watching it and does not keep track of new versions of it; ${a === undefined ? "do not claim to be watching it" : `${a}, and do not claim to be watching it meanwhile`}.`,
+    slug,
+    artifactName: quoteArtifactName(outcome.getTitle, outcome.url),
+    shortReason: SKIP_REASON_PHRASES[reason] ?? "not armed",
+    event: `The live subscription for ${outcome.url} did not arm \u2014 ${phrase}. This session is NOT watching it and does not keep track of new versions of it; ${detail === undefined ? "do not claim to be watching it" : `${detail}, and do not claim to be watching it meanwhile`}.`,
   });
 }
 //@ chunk-aqdf5t3e.js:88580-88886 placement
 /**
  * 把 artifact 监听生命周期事件作为任务通知排进下一条消息（可被动），附带 slug 与名称。
  */
-function enqueueWatchLifecycleNotice(e) {
+function enqueueWatchLifecycleNotice(notice) {
   enqueuePendingNotification({
     value: formatTaskNotification({
       taskType: ARTIFACT_WATCH_LIFECYCLE,
-      summary: escapeXml(notWatchingNotice(e.artifactName, e.shortReason)),
+      summary: escapeXml(notWatchingNotice(notice.artifactName, notice.shortReason)),
       body: `
-<event>${escapeXml(e.event)}</event>`,
+<event>${escapeXml(notice.event)}</event>`,
     }),
     mode: "task-notification",
     priority: "next",
-    ...(e.passive && {
+    ...(notice.passive && {
       passive: true,
     }),
     origin: {
       kind: "task-notification",
       source: ARTIFACT_WATCH_LIFECYCLE,
-      slug: e.slug,
-      displayName: e.artifactName,
+      slug: notice.slug,
+      displayName: notice.artifactName,
       armFailed: true,
     },
     agentId: mainAgentId(),
   });
 }
 //@ chunk-aqdf5t3e.js:88886-89797 placement
-function onDurablePublishArmSettled(e) {
-  let { slug, url, liveDocLoss, claudeDoc, settlement } = e;
+function onDurablePublishArmSettled(outcome) {
+  let { slug, url, liveDocLoss, claudeDoc, settlement } = outcome;
   if (settlement.settled === "registered") {
     pullStaleWatchLifecycleNotices(slug);
     if (claudeDoc && getLiveState().durable.rows.get(slug)?.events.includes("comment") === false)
@@ -2474,7 +2605,7 @@ function onDurablePublishArmSettled(e) {
   }
   if (settlement.settled !== "unregistered") return;
   let { reason, detail, serverMessage, refusedByFrame } = settlement;
-  let R = getLiveState().builtInArtifactHiddenForMcp ? null : unexpectedWatchFailure(reason);
+  let failure = getLiveState().builtInArtifactHiddenForMcp ? null : unexpectedWatchFailure(reason);
   if (claudeDoc) {
     noteClaudeDocWakeMissing(
       slug,
@@ -2482,74 +2613,81 @@ function onDurablePublishArmSettled(e) {
       detail === undefined ? reason : `${reason}: ${detail}`,
       refusedByFrame
         ? undefined
-        : `${describeWatchError(reason, serverMessage)}${R === null ? "" : ` To try again, ${R}.`}`,
+        : `${describeWatchError(reason, serverMessage)}${failure === null ? "" : ` To try again, ${failure}.`}`,
     );
     return;
   }
   if (!claimArmFailureAnnouncement(slug, reason)) return;
-  let C =
+  let detailText =
     liveDocLoss ??
     `This session will NOT be woken when ${isArtifactsAvailable() ? "it is republished or a comment on it is sent to Claude" : "it is republished"}`;
   enqueueWatchLifecycleNotice({
     slug,
-    artifactName: quoteArtifactName(e.getTitle, url),
+    artifactName: quoteArtifactName(outcome.getTitle, url),
     shortReason: "wake subscription not registered",
-    event: `The durable wake subscription for ${url} was not registered (${reason}${detail !== undefined ? `: ${detail}` : ""}) \u2014 ${describeWatchError(reason, serverMessage)} ${C}${R === null ? "" : `; ${R}`} \u2014 do not claim to be subscribed to it meanwhile.`,
+    event: `The durable wake subscription for ${url} was not registered (${reason}${detail !== undefined ? `: ${detail}` : ""}) \u2014 ${describeWatchError(reason, serverMessage)} ${detailText}${failure === null ? "" : `; ${failure}`} \u2014 do not claim to be subscribed to it meanwhile.`,
   });
 }
 //@ chunk-aqdf5t3e.js:89797-90232 placement
-function noteClaudeDocWakeMissing(slug, url, r, s) {
+function noteClaudeDocWakeMissing(slug, url, slugValue, urlValue) {
   if (!claimArmFailureAnnouncement(slug, "claude_doc")) return;
   enqueueWatchLifecycleNotice({
     slug,
     artifactName: url,
     shortReason: "comment wake not registered",
-    event: `@Claude comments on the Claude Doc ${url} go to another Claude and will not reach this session: its comment wake was not registered (${r}).${s === undefined ? "" : ` ${s}`} To see them, read the doc's comments yourself with the Claude Docs connector's \`${QUERY}\`, and do not claim to be subscribed to it.`,
+    event: `@Claude comments on the Claude Doc ${url} go to another Claude and will not reach this session: its comment wake was not registered (${slugValue}).${urlValue === undefined ? "" : ` ${urlValue}`} To see them, read the doc's comments yourself with the Claude Docs connector's \`${QUERY}\`, and do not claim to be subscribed to it.`,
     passive: true,
   });
 }
 //@ chunk-aqdf5t3e.js:90232-90283 placement
-function isFrameLiveRowConnecting(e) {
-  return e.connected && !isMonitorSocketOpenNow(e.taskId);
+function isFrameLiveRowConnecting(row) {
+  return row.connected && !isMonitorSocketOpenNow(row.taskId);
 }
 //@ chunk-aqdf5t3e.js:90283-91453 placement
-function frameLiveArmRows(appState, sessionId) {
+function frameLiveArmRows(request, options) {
   let live = getLiveState().live;
-  let s = new Set();
-  for (let S of Object.values(appState.taskRegistry.all()))
-    if (isMonitorWsTask(S) && S.status === "running" && S.frameLive !== undefined) s.add(S.frameLive.slug);
+  let runningSlugs = new Set();
+  for (let task of Object.values(request.taskRegistry.all()))
+    if (isMonitorWsTask(task) && task.status === "running" && task.frameLive !== undefined)
+      runningSlugs.add(task.frameLive.slug);
   let stopLatches = getLiveState().durable.stopLatches;
-  let a = (S) => (sessionId === undefined || S === sessionId) && !s.has(S) && !stopLatches.isStopped(S);
-  let d = new Set(frameLiveStoppedRows(appState, sessionId).map((S) => S.slug));
-  let b = [];
-  let w = new Set();
+  let isEligible = (slug) =>
+    (options === undefined || slug === options) && !runningSlugs.has(slug) && !stopLatches.isStopped(slug);
+  let stoppedSlugs = new Set(frameLiveStoppedRows(request, options).map((row) => row.slug));
+  let rows = [];
+  let seenSlugs = new Set();
   for (let inFlightSubscribe of live.inFlightSubscribes) {
     if (
-      !a(inFlightSubscribe) ||
+      !isEligible(inFlightSubscribe) ||
       (live.inFlightGenerations.get(inFlightSubscribe) ?? live.handoffGeneration) !==
         live.handoffGeneration ||
       live.retiredInFlightArms.has(inFlightSubscribe)
     )
       continue;
-    w.add(inFlightSubscribe);
-    let R = live.supervisors.get(inFlightSubscribe);
-    let C = R !== undefined && !R.stopped ? R : undefined;
-    b.push({
+    seenSlugs.add(inFlightSubscribe);
+    let supervisor = live.supervisors.get(inFlightSubscribe);
+    let liveSupervisor = supervisor !== undefined && !supervisor.stopped ? supervisor : undefined;
+    rows.push({
       slug: inFlightSubscribe,
       state: "arming",
-      reconnect: C?.taskId !== undefined,
-      failures: C?.consecutiveFailures ?? 0,
-      ...(C?.lastFailure !== undefined && {
-        lastFailure: C.lastFailure,
+      reconnect: liveSupervisor?.taskId !== undefined,
+      failures: liveSupervisor?.consecutiveFailures ?? 0,
+      ...(liveSupervisor?.lastFailure !== undefined && {
+        lastFailure: liveSupervisor.lastFailure,
       }),
     });
   }
   for (let supervisor of live.supervisors.values()) {
-    if (!a(supervisor.slug) || w.has(supervisor.slug) || supervisor.stopped || supervisor.timer === undefined)
+    if (
+      !isEligible(supervisor.slug) ||
+      seenSlugs.has(supervisor.slug) ||
+      supervisor.stopped ||
+      supervisor.timer === undefined
+    )
       continue;
-    w.add(supervisor.slug);
-    if (d.has(supervisor.slug)) continue;
-    b.push({
+    seenSlugs.add(supervisor.slug);
+    if (stoppedSlugs.has(supervisor.slug)) continue;
+    rows.push({
       slug: supervisor.slug,
       state: "backing_off",
       failures: supervisor.consecutiveFailures,
@@ -2560,16 +2698,16 @@ function frameLiveArmRows(appState, sessionId) {
       }),
     });
   }
-  for (let [S, R] of live.armOutcomes) {
-    if (!a(S) || w.has(S)) continue;
-    b.push({
-      slug: S,
-      state: R.outcome,
-      reason: R.reason,
-      at: R.at,
+  for (let [slug, outcome] of live.armOutcomes) {
+    if (!isEligible(slug) || seenSlugs.has(slug)) continue;
+    rows.push({
+      slug,
+      state: outcome.outcome,
+      reason: outcome.reason,
+      at: outcome.at,
     });
   }
-  return b;
+  return rows;
 }
 export {
   maybeSubscribeFrameLive,

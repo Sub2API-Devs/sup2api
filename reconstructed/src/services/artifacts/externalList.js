@@ -16,34 +16,42 @@ import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { createCombinedAbortSignal } from "../../utils/combinedAbortSignal.js";
 import { frameApi } from "./frameRelay.js";
 import { buildFrameHeaders } from "./frameApi.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-06y4szbn.js:40305-40483 placement
 /**
  * 外部 artifact 列表接口的常量（响应大小、条数、超时）与响应/行 schema（slug、标题、共享角色）。
  */
-var MAX_EXTERNAL_LIST_BYTES = 1048576;
-var EXTERNAL_LIST_LIMIT = 50;
-var EXTERNAL_LIST_TIMEOUT_MS = 5000;
-var EXTERNAL_LIST_SCHEMA = DoctorLazy(() =>
-  create({
-    frames: create_15(create_12()).nullable(),
-  }),
-);
-var EXTERNAL_ROW_SCHEMA = DoctorLazy(() =>
-  create({
-    slug: create_2().regex(ARTIFACT_SLUG_RE),
-    title: create_2().max(4000).optional(),
-    role: create_26(SHARE_ROLES).optional().catch(undefined),
-  }),
-);
+var MAX_EXTERNAL_LIST_BYTES; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var EXTERNAL_LIST_LIMIT;
+var EXTERNAL_LIST_TIMEOUT_MS;
+var EXTERNAL_LIST_SCHEMA;
+var EXTERNAL_ROW_SCHEMA;
+deferInit("chunk-06y4szbn.js:40305", () => {
+  MAX_EXTERNAL_LIST_BYTES = 1048576;
+  EXTERNAL_LIST_LIMIT = 50;
+  EXTERNAL_LIST_TIMEOUT_MS = 5000;
+  EXTERNAL_LIST_SCHEMA = DoctorLazy(() =>
+    create({
+      frames: create_15(create_12()).nullable(),
+    }),
+  );
+  EXTERNAL_ROW_SCHEMA = DoctorLazy(() =>
+    create({
+      slug: create_2().regex(ARTIFACT_SLUG_RE),
+      title: create_2().max(4000).optional(),
+      role: create_26(SHARE_ROLES).optional().catch(undefined),
+    }),
+  );
+});
 //@ chunk-06y4szbn.js:40483-41496 placement
 /**
  * 列出外部组织共享给用户的 artifact（/api/frame/frames/external）。
  */
-async function listExternalArtifacts(e) {
-  let n = (x, status) => {
-    if (!e.signal?.aborted)
-      logFeatureSad("artifact_list_external", x, {
+async function listExternalArtifacts(request) {
+  let fail = (reason, status) => {
+    if (!request.signal?.aborted)
+      logFeatureSad("artifact_list_external", reason, {
         ...(status !== undefined && {
           status,
         }),
@@ -52,55 +60,55 @@ async function listExternalArtifacts(e) {
       listed: false,
     };
   };
-  let combinedAbortSignal = createCombinedAbortSignal(e.signal, {
+  let combinedAbortSignal = createCombinedAbortSignal(request.signal, {
     timeoutMs: EXTERNAL_LIST_TIMEOUT_MS,
   });
-  let s;
+  let response;
   try {
-    s = await frameApi.getRelayBound("/api/frame/frames/external", {
+    response = await frameApi.getRelayBound("/api/frame/frames/external", {
       refreshOAuth: true,
-      credentials: e.credentials,
+      credentials: request.credentials,
       headers: buildFrameHeaders(),
       timeout: EXTERNAL_LIST_TIMEOUT_MS,
       maxContentLength: MAX_EXTERNAL_LIST_BYTES,
       signal: combinedAbortSignal.signal,
     });
   } catch {
-    return n("request_error");
+    return fail("request_error");
   } finally {
     combinedAbortSignal.cleanup();
   }
-  if (!s.ok)
-    return n(
-      s.reason === "relay-unavailable" || s.reason === "relay-not-served" ? "unsent" : "not_ok",
-      "status" in s ? s.status : undefined,
+  if (!response.ok)
+    return fail(
+      response.reason === "relay-unavailable" || response.reason === "relay-not-served" ? "unsent" : "not_ok",
+      "status" in response ? response.status : undefined,
     );
-  if (!s.fromFrame) return n("relay_error", s.status);
-  if (s.status < 200 || s.status >= 300) return n("refused", s.status);
-  let h = EXTERNAL_LIST_SCHEMA().safeParse(s.data);
-  if (!h.success) return n("malformed_body");
-  let b = [];
-  let frames = h.data.frames ?? [];
+  if (!response.fromFrame) return fail("relay_error", response.status);
+  if (response.status < 200 || response.status >= 300) return fail("refused", response.status);
+  let parsed = EXTERNAL_LIST_SCHEMA().safeParse(response.data);
+  if (!parsed.success) return fail("malformed_body");
+  let rows = [];
+  let frames = parsed.data.frames ?? [];
   for (let frame of frames) {
-    let w = EXTERNAL_ROW_SCHEMA().safeParse(frame);
-    if (!w.success) continue;
-    b.push({
-      slug: w.data.slug,
-      ...(w.data.title !== undefined && {
-        title: w.data.title,
+    let rowParsed = EXTERNAL_ROW_SCHEMA().safeParse(frame);
+    if (!rowParsed.success) continue;
+    rows.push({
+      slug: rowParsed.data.slug,
+      ...(rowParsed.data.title !== undefined && {
+        title: rowParsed.data.title,
       }),
-      ...(w.data.role !== undefined && {
-        role: w.data.role,
+      ...(rowParsed.data.role !== undefined && {
+        role: rowParsed.data.role,
       }),
     });
   }
   logFeatureOk("artifact_list_external", {
-    rows: b.length,
+    rows: rows.length,
   });
   return {
     listed: true,
-    rows: b,
-    mayHaveMore: frames.length >= EXTERNAL_LIST_LIMIT || b.length < frames.length,
+    rows,
+    mayHaveMore: frames.length >= EXTERNAL_LIST_LIMIT || rows.length < frames.length,
   };
 }
 export { listExternalArtifacts };

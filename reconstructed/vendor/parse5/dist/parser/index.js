@@ -5,12 +5,12 @@
  * pieces: chunk-6ja29j2n.js (133)
  * attribution: esm-fingerprint 133
  */
-import { TAG_ID, getTagID, SPECIAL_ELEMENTS, H } from "../common/html.js";
+import { TAG_ID, getTagID, SPECIAL_ELEMENTS, HEADING_ELEMENTS } from "../common/html.js";
 import { defaultTreeAdapter } from "../tree-adapters/default.js";
 import { Tokenizer, TokenizerMode } from "../tokenizer/index.js";
 import { FormattingElementList, EntryType } from "./formatting-element-list.js";
 import { OpenElementStack } from "./open-element-stack.js";
-import { c, E, O, g } from "../../lib/common/html.js";
+import { TAG_NAMES, NAMESPACES, DOCUMENT_MODE, ATTRS } from "../../lib/common/html.js";
 import { TokenType, getTokenAttr } from "../common/token.js";
 import {
   isIntegrationPoint,
@@ -20,8 +20,8 @@ import {
   causesExit,
   adjustTokenSVGTagName,
 } from "../common/foreign-content.js";
-import { o } from "../../lib/common/error-codes.js";
-import { CODE_POINTS, m } from "../common/unicode.js";
+import { errors } from "../../lib/common/error-codes.js";
+import { CODE_POINTS, REPLACEMENT_CHARACTER } from "../common/unicode.js";
 import { getDocumentMode, isConforming } from "../common/doctype.js";
 
 //@ chunk-6ja29j2n.js:132780-132808 esm-fingerprint
@@ -73,7 +73,7 @@ var defaultParserOptions = {
 };
 //@ chunk-6ja29j2n.js:133827-150244 esm-fingerprint
 class Parser {
-  constructor(options, t, fragmentContext = null, scriptHandler = null) {
+  constructor(options, documentNode, fragmentContext = null, scriptHandler = null) {
     this.fragmentContext = fragmentContext;
     this.scriptHandler = scriptHandler;
     this.currentToken = null;
@@ -96,7 +96,8 @@ class Parser {
     this.treeAdapter = this.options.treeAdapter;
     this.onParseError = this.options.onParseError;
     if (this.onParseError) this.options.sourceCodeLocationInfo = true;
-    this.document = t !== null && t !== undefined ? t : this.treeAdapter.createDocument();
+    this.document =
+      documentNode !== null && documentNode !== undefined ? documentNode : this.treeAdapter.createDocument();
     this.tokenizer = new Tokenizer(this.options, this);
     this.activeFormattingElements = new FormattingElementList(this.treeAdapter);
     this.fragmentContextID = fragmentContext
@@ -119,8 +120,8 @@ class Parser {
       ...options,
     };
     if (!(fragmentContext !== null && fragmentContext !== undefined))
-      fragmentContext = opts.treeAdapter.createElement(c.TEMPLATE, E.HTML, []);
-    let documentMock = opts.treeAdapter.createElement("documentmock", E.HTML, []);
+      fragmentContext = opts.treeAdapter.createElement(TAG_NAMES.TEMPLATE, NAMESPACES.HTML, []);
+    let documentMock = opts.treeAdapter.createElement("documentmock", NAMESPACES.HTML, []);
     let parser = new this(opts, documentMock, fragmentContext);
     if (parser.fragmentContextID === TAG_ID.TEMPLATE)
       parser.tmplInsertionModeStack.unshift(InsertionMode.IN_TEMPLATE);
@@ -174,12 +175,12 @@ class Parser {
     }
   }
   _setContextModes(current, tid) {
-    let isHTML = current === this.document || this.treeAdapter.getNamespaceURI(current) === E.HTML;
+    let isHTML = current === this.document || this.treeAdapter.getNamespaceURI(current) === NAMESPACES.HTML;
     this.currentNotInHTML = !isHTML;
     this.tokenizer.inForeignNode = !isHTML && !this._isIntegrationPoint(tid, current);
   }
   _switchToTextParsing(currentToken, nextTokenizerState) {
-    this._insertElement(currentToken, E.HTML);
+    this._insertElement(currentToken, NAMESPACES.HTML);
     this.tokenizer.state = nextTokenizerState;
     this.originalInsertionMode = this.insertionMode;
     this.insertionMode = InsertionMode.TEXT;
@@ -197,7 +198,7 @@ class Parser {
   _findFormInFragmentContext() {
     let node = this.fragmentContext;
     while (node) {
-      if (this.treeAdapter.getTagName(node) === c.FORM) {
+      if (this.treeAdapter.getTagName(node) === TAG_NAMES.FORM) {
         this.formElement = node;
         break;
       }
@@ -205,7 +206,8 @@ class Parser {
     }
   }
   _initTokenizerForFragmentParsing() {
-    if (!this.fragmentContext || this.treeAdapter.getNamespaceURI(this.fragmentContext) !== E.HTML) return;
+    if (!this.fragmentContext || this.treeAdapter.getNamespaceURI(this.fragmentContext) !== NAMESPACES.HTML)
+      return;
     switch (this.fragmentContextID) {
       case TAG_ID.TITLE:
       case TAG_ID.TEXTAREA: {
@@ -268,12 +270,12 @@ class Parser {
     this.openElements.push(element, token.tagID);
   }
   _insertFakeElement(tagName, tagID) {
-    let element = this.treeAdapter.createElement(tagName, E.HTML, []);
+    let element = this.treeAdapter.createElement(tagName, NAMESPACES.HTML, []);
     this._attachElementToTree(element, null);
     this.openElements.push(element, tagID);
   }
   _insertTemplate(token) {
-    let tmpl = this.treeAdapter.createElement(token.tagName, E.HTML, token.attrs);
+    let tmpl = this.treeAdapter.createElement(token.tagName, NAMESPACES.HTML, token.attrs);
     let content = this.treeAdapter.createDocumentFragment();
     this.treeAdapter.setTemplateContent(tmpl, content);
     this._attachElementToTree(tmpl, token.location);
@@ -281,7 +283,7 @@ class Parser {
     if (this.options.sourceCodeLocationInfo) this.treeAdapter.setNodeSourceCodeLocation(content, null);
   }
   _insertFakeRootElement() {
-    let element = this.treeAdapter.createElement(c.HTML, E.HTML, []);
+    let element = this.treeAdapter.createElement(TAG_NAMES.HTML, NAMESPACES.HTML, []);
     if (this.options.sourceCodeLocationInfo) this.treeAdapter.setNodeSourceCodeLocation(element, null);
     this.treeAdapter.appendChild(this.openElements.current, element);
     this.openElements.push(element, TAG_ID.HTML);
@@ -359,14 +361,14 @@ class Parser {
     } else ({ current, currentTagId } = this.openElements);
     if (
       token.tagID === TAG_ID.SVG &&
-      this.treeAdapter.getTagName(current) === c.ANNOTATION_XML &&
-      this.treeAdapter.getNamespaceURI(current) === E.MATHML
+      this.treeAdapter.getTagName(current) === TAG_NAMES.ANNOTATION_XML &&
+      this.treeAdapter.getNamespaceURI(current) === NAMESPACES.MATHML
     )
       return false;
     return (
       this.tokenizer.inForeignNode ||
       ((token.tagID === TAG_ID.MGLYPH || token.tagID === TAG_ID.MALIGNMARK) &&
-        !this._isIntegrationPoint(currentTagId, current, E.HTML))
+        !this._isIntegrationPoint(currentTagId, current, NAMESPACES.HTML))
     );
   }
   _processToken(token) {
@@ -522,7 +524,7 @@ class Parser {
       let openElement = this.openElements.items[i];
       switch (this.openElements.tagIDs[i]) {
         case TAG_ID.TEMPLATE: {
-          if (this.treeAdapter.getNamespaceURI(openElement) === E.HTML)
+          if (this.treeAdapter.getNamespaceURI(openElement) === NAMESPACES.HTML)
             return {
               parent: this.treeAdapter.getTemplateContent(openElement),
               beforeElement: null,
@@ -738,7 +740,7 @@ class Parser {
       case InsertionMode.IN_HEAD:
       case InsertionMode.IN_HEAD_NO_SCRIPT:
       case InsertionMode.AFTER_HEAD: {
-        this._err(token, o.misplacedDoctype);
+        this._err(token, errors.misplacedDoctype);
         break;
       }
       case InsertionMode.IN_TABLE_TEXT: {
@@ -753,7 +755,7 @@ class Parser {
     this.currentToken = token;
     this._processStartTag(token);
     if (token.selfClosing && !token.ackSelfClosing)
-      this._err(token, o.nonVoidHtmlElementStartTagWithTrailingSolidus);
+      this._err(token, errors.nonVoidHtmlElementStartTagWithTrailingSolidus);
   }
   _processStartTag(token) {
     if (this.shouldProcessStartTagTokenInForeignContent(token)) startTagInForeignContent(this, token);
@@ -1123,7 +1125,7 @@ function aaInsertLastNodeInCommonAncestor(p, commonAncestor, lastElement) {
   if (p._isElementCausesFosterParenting(tid)) p._fosterParentElement(lastElement);
   else {
     let ns = p.treeAdapter.getNamespaceURI(commonAncestor);
-    if (tid === TAG_ID.TEMPLATE && ns === E.HTML)
+    if (tid === TAG_ID.TEMPLATE && ns === NAMESPACES.HTML)
       commonAncestor = p.treeAdapter.getTemplateContent(commonAncestor);
     p.treeAdapter.appendChild(commonAncestor, lastElement);
   }
@@ -1190,22 +1192,22 @@ function stopParsing(p, token) {
 //@ chunk-6ja29j2n.js:152928-153119 esm-fingerprint
 function doctypeInInitialMode(p, token) {
   p._setDocumentType(token);
-  let mode = token.forceQuirks ? O.QUIRKS : getDocumentMode(token);
-  if (!isConforming(token)) p._err(token, o.nonConformingDoctype);
+  let mode = token.forceQuirks ? DOCUMENT_MODE.QUIRKS : getDocumentMode(token);
+  if (!isConforming(token)) p._err(token, errors.nonConformingDoctype);
   p.treeAdapter.setDocumentMode(p.document, mode);
   p.insertionMode = InsertionMode.BEFORE_HTML;
 }
 //@ chunk-6ja29j2n.js:153119-153265 esm-fingerprint
 function tokenInInitialMode(p, token) {
-  p._err(token, o.missingDoctype, true);
-  p.treeAdapter.setDocumentMode(p.document, O.QUIRKS);
+  p._err(token, errors.missingDoctype, true);
+  p.treeAdapter.setDocumentMode(p.document, DOCUMENT_MODE.QUIRKS);
   p.insertionMode = InsertionMode.BEFORE_HTML;
   p._processToken(token);
 }
 //@ chunk-6ja29j2n.js:153265-153371 esm-fingerprint
 function startTagBeforeHtml(p, token) {
   if (token.tagID === TAG_ID.HTML) {
-    p._insertElement(token, E.HTML);
+    p._insertElement(token, NAMESPACES.HTML);
     p.insertionMode = InsertionMode.BEFORE_HEAD;
   } else tokenBeforeHtml(p, token);
 }
@@ -1229,7 +1231,7 @@ function startTagBeforeHead(p, token) {
       break;
     }
     case TAG_ID.HEAD: {
-      p._insertElement(token, E.HTML);
+      p._insertElement(token, NAMESPACES.HTML);
       p.headElement = p.openElements.current;
       p.insertionMode = InsertionMode.IN_HEAD;
       break;
@@ -1243,11 +1245,11 @@ function endTagBeforeHead(p, token) {
   let tn = token.tagID;
   if (tn === TAG_ID.HEAD || tn === TAG_ID.BODY || tn === TAG_ID.HTML || tn === TAG_ID.BR)
     tokenBeforeHead(p, token);
-  else p._err(token, o.endTagWithoutMatchingOpenElement);
+  else p._err(token, errors.endTagWithoutMatchingOpenElement);
 }
 //@ chunk-6ja29j2n.js:153869-154003 esm-fingerprint
 function tokenBeforeHead(p, token) {
-  p._insertFakeElement(c.HEAD, TAG_ID.HEAD);
+  p._insertFakeElement(TAG_NAMES.HEAD, TAG_ID.HEAD);
   p.headElement = p.openElements.current;
   p.insertionMode = InsertionMode.IN_HEAD;
   p._processToken(token);
@@ -1264,7 +1266,7 @@ function startTagInHead(p, token) {
     case TAG_ID.BGSOUND:
     case TAG_ID.LINK:
     case TAG_ID.META: {
-      p._appendElement(token, E.HTML);
+      p._appendElement(token, NAMESPACES.HTML);
       token.ackSelfClosing = true;
       break;
     }
@@ -1275,7 +1277,7 @@ function startTagInHead(p, token) {
     case TAG_ID.NOSCRIPT: {
       if (p.options.scriptingEnabled) p._switchToTextParsing(token, TokenizerMode.RAWTEXT);
       else {
-        p._insertElement(token, E.HTML);
+        p._insertElement(token, NAMESPACES.HTML);
         p.insertionMode = InsertionMode.IN_HEAD_NO_SCRIPT;
       }
       break;
@@ -1298,7 +1300,7 @@ function startTagInHead(p, token) {
       break;
     }
     case TAG_ID.HEAD: {
-      p._err(token, o.misplacedStartTagForHeadElement);
+      p._err(token, errors.misplacedStartTagForHeadElement);
       break;
     }
     default:
@@ -1324,7 +1326,7 @@ function endTagInHead(p, token) {
       break;
     }
     default:
-      p._err(token, o.endTagWithoutMatchingOpenElement);
+      p._err(token, errors.endTagWithoutMatchingOpenElement);
   }
 }
 //@ chunk-6ja29j2n.js:155024-155418 esm-fingerprint
@@ -1332,12 +1334,12 @@ function templateEndTagInHead(p, token) {
   if (p.openElements.tmplCount > 0) {
     p.openElements.generateImpliedEndTagsThoroughly();
     if (p.openElements.currentTagId !== TAG_ID.TEMPLATE)
-      p._err(token, o.closingOfElementWithOpenChildElements);
+      p._err(token, errors.closingOfElementWithOpenChildElements);
     p.openElements.popUntilTagNamePopped(TAG_ID.TEMPLATE);
     p.activeFormattingElements.clearToLastMarker();
     p.tmplInsertionModeStack.shift();
     p._resetInsertionMode();
-  } else p._err(token, o.endTagWithoutMatchingOpenElement);
+  } else p._err(token, errors.endTagWithoutMatchingOpenElement);
 }
 //@ chunk-6ja29j2n.js:155418-155503 esm-fingerprint
 function tokenInHead(p, token) {
@@ -1363,7 +1365,7 @@ function startTagInHeadNoScript(p, token) {
       break;
     }
     case TAG_ID.NOSCRIPT: {
-      p._err(token, o.nestedNoscriptInHead);
+      p._err(token, errors.nestedNoscriptInHead);
       break;
     }
     default:
@@ -1383,13 +1385,13 @@ function endTagInHeadNoScript(p, token) {
       break;
     }
     default:
-      p._err(token, o.endTagWithoutMatchingOpenElement);
+      p._err(token, errors.endTagWithoutMatchingOpenElement);
   }
 }
 //@ chunk-6ja29j2n.js:155925-156103 esm-fingerprint
 function tokenInHeadNoScript(p, token) {
   let errCode =
-    token.type === TokenType.EOF ? o.openElementsLeftAfterEof : o.disallowedContentInNoscriptInHead;
+    token.type === TokenType.EOF ? errors.openElementsLeftAfterEof : errors.disallowedContentInNoscriptInHead;
   p._err(token, errCode);
   p.openElements.pop();
   p.insertionMode = InsertionMode.IN_HEAD;
@@ -1403,13 +1405,13 @@ function startTagAfterHead(p, token) {
       break;
     }
     case TAG_ID.BODY: {
-      p._insertElement(token, E.HTML);
+      p._insertElement(token, NAMESPACES.HTML);
       p.framesetOk = false;
       p.insertionMode = InsertionMode.IN_BODY;
       break;
     }
     case TAG_ID.FRAMESET: {
-      p._insertElement(token, E.HTML);
+      p._insertElement(token, NAMESPACES.HTML);
       p.insertionMode = InsertionMode.IN_FRAMESET;
       break;
     }
@@ -1423,14 +1425,14 @@ function startTagAfterHead(p, token) {
     case TAG_ID.STYLE:
     case TAG_ID.TEMPLATE:
     case TAG_ID.TITLE: {
-      p._err(token, o.abandonedHeadElementChild);
+      p._err(token, errors.abandonedHeadElementChild);
       p.openElements.push(p.headElement, TAG_ID.HEAD);
       startTagInHead(p, token);
       p.openElements.remove(p.headElement);
       break;
     }
     case TAG_ID.HEAD: {
-      p._err(token, o.misplacedStartTagForHeadElement);
+      p._err(token, errors.misplacedStartTagForHeadElement);
       break;
     }
     default:
@@ -1451,12 +1453,12 @@ function endTagAfterHead(p, token) {
       break;
     }
     default:
-      p._err(token, o.endTagWithoutMatchingOpenElement);
+      p._err(token, errors.endTagWithoutMatchingOpenElement);
   }
 }
 //@ chunk-6ja29j2n.js:156844-156930 esm-fingerprint
 function tokenAfterHead(p, token) {
-  p._insertFakeElement(c.BODY, TAG_ID.BODY);
+  p._insertFakeElement(TAG_NAMES.BODY, TAG_ID.BODY);
   p.insertionMode = InsertionMode.IN_BODY;
   modeInBody(p, token);
 }
@@ -1519,25 +1521,25 @@ function framesetStartTagInBody(p, token) {
   if (p.framesetOk && bodyElement) {
     p.treeAdapter.detachNode(bodyElement);
     p.openElements.popAllUpToHtmlElement();
-    p._insertElement(token, E.HTML);
+    p._insertElement(token, NAMESPACES.HTML);
     p.insertionMode = InsertionMode.IN_FRAMESET;
   }
 }
 //@ chunk-6ja29j2n.js:157835-157938 esm-fingerprint
 function addressStartTagInBody(p, token) {
   if (p.openElements.hasInButtonScope(TAG_ID.P)) p._closePElement();
-  p._insertElement(token, E.HTML);
+  p._insertElement(token, NAMESPACES.HTML);
 }
 //@ chunk-6ja29j2n.js:157938-158100 esm-fingerprint
 function numberedHeaderStartTagInBody(p, token) {
   if (p.openElements.hasInButtonScope(TAG_ID.P)) p._closePElement();
-  if (H.has(p.openElements.currentTagId)) p.openElements.pop();
-  p._insertElement(token, E.HTML);
+  if (HEADING_ELEMENTS.has(p.openElements.currentTagId)) p.openElements.pop();
+  p._insertElement(token, NAMESPACES.HTML);
 }
 //@ chunk-6ja29j2n.js:158100-158240 esm-fingerprint
 function preStartTagInBody(p, token) {
   if (p.openElements.hasInButtonScope(TAG_ID.P)) p._closePElement();
-  p._insertElement(token, E.HTML);
+  p._insertElement(token, NAMESPACES.HTML);
   p.skipNextNewLine = true;
   p.framesetOk = false;
 }
@@ -1546,7 +1548,7 @@ function formStartTagInBody(p, token) {
   let inTemplate = p.openElements.tmplCount > 0;
   if (!p.formElement || inTemplate) {
     if (p.openElements.hasInButtonScope(TAG_ID.P)) p._closePElement();
-    p._insertElement(token, E.HTML);
+    p._insertElement(token, NAMESPACES.HTML);
     if (!inTemplate) p.formElement = p.openElements.current;
   }
 }
@@ -1573,12 +1575,12 @@ function listItemStartTagInBody(p, token) {
       break;
   }
   if (p.openElements.hasInButtonScope(TAG_ID.P)) p._closePElement();
-  p._insertElement(token, E.HTML);
+  p._insertElement(token, NAMESPACES.HTML);
 }
 //@ chunk-6ja29j2n.js:158908-159042 esm-fingerprint
 function plaintextStartTagInBody(p, token) {
   if (p.openElements.hasInButtonScope(TAG_ID.P)) p._closePElement();
-  p._insertElement(token, E.HTML);
+  p._insertElement(token, NAMESPACES.HTML);
   p.tokenizer.state = TokenizerMode.PLAINTEXT;
 }
 //@ chunk-6ja29j2n.js:159042-159269 esm-fingerprint
@@ -1588,25 +1590,25 @@ function buttonStartTagInBody(p, token) {
     p.openElements.popUntilTagNamePopped(TAG_ID.BUTTON);
   }
   p._reconstructActiveFormattingElements();
-  p._insertElement(token, E.HTML);
+  p._insertElement(token, NAMESPACES.HTML);
   p.framesetOk = false;
 }
 //@ chunk-6ja29j2n.js:159269-159579 esm-fingerprint
 function aStartTagInBody(p, token) {
-  let activeElementEntry = p.activeFormattingElements.getElementEntryInScopeWithTagName(c.A);
+  let activeElementEntry = p.activeFormattingElements.getElementEntryInScopeWithTagName(TAG_NAMES.A);
   if (activeElementEntry) {
     callAdoptionAgency(p, token);
     p.openElements.remove(activeElementEntry.element);
     p.activeFormattingElements.removeEntry(activeElementEntry);
   }
   p._reconstructActiveFormattingElements();
-  p._insertElement(token, E.HTML);
+  p._insertElement(token, NAMESPACES.HTML);
   p.activeFormattingElements.pushElement(p.openElements.current, token);
 }
 //@ chunk-6ja29j2n.js:159579-159729 esm-fingerprint
 function bStartTagInBody(p, token) {
   p._reconstructActiveFormattingElements();
-  p._insertElement(token, E.HTML);
+  p._insertElement(token, NAMESPACES.HTML);
   p.activeFormattingElements.pushElement(p.openElements.current, token);
 }
 //@ chunk-6ja29j2n.js:159729-159965 esm-fingerprint
@@ -1616,64 +1618,67 @@ function nobrStartTagInBody(p, token) {
     callAdoptionAgency(p, token);
     p._reconstructActiveFormattingElements();
   }
-  p._insertElement(token, E.HTML);
+  p._insertElement(token, NAMESPACES.HTML);
   p.activeFormattingElements.pushElement(p.openElements.current, token);
 }
 //@ chunk-6ja29j2n.js:159965-160108 esm-fingerprint
 function appletStartTagInBody(p, token) {
   p._reconstructActiveFormattingElements();
-  p._insertElement(token, E.HTML);
+  p._insertElement(token, NAMESPACES.HTML);
   p.activeFormattingElements.insertMarker();
   p.framesetOk = false;
 }
 //@ chunk-6ja29j2n.js:160108-160308 esm-fingerprint
 function tableStartTagInBody(p, token) {
-  if (p.treeAdapter.getDocumentMode(p.document) !== O.QUIRKS && p.openElements.hasInButtonScope(TAG_ID.P))
+  if (
+    p.treeAdapter.getDocumentMode(p.document) !== DOCUMENT_MODE.QUIRKS &&
+    p.openElements.hasInButtonScope(TAG_ID.P)
+  )
     p._closePElement();
-  p._insertElement(token, E.HTML);
+  p._insertElement(token, NAMESPACES.HTML);
   p.framesetOk = false;
   p.insertionMode = InsertionMode.IN_TABLE;
 }
 //@ chunk-6ja29j2n.js:160308-160429 esm-fingerprint
 function areaStartTagInBody(p, token) {
   p._reconstructActiveFormattingElements();
-  p._appendElement(token, E.HTML);
+  p._appendElement(token, NAMESPACES.HTML);
   p.framesetOk = false;
   token.ackSelfClosing = true;
 }
 //@ chunk-6ja29j2n.js:160429-160499 esm-fingerprint
 function isHiddenInput(token) {
-  let inputType = getTokenAttr(token, g.TYPE);
+  let inputType = getTokenAttr(token, ATTRS.TYPE);
   return inputType != null && inputType.toLowerCase() === HIDDEN_INPUT_TYPE;
 }
 //@ chunk-6ja29j2n.js:160499-160630 esm-fingerprint
 function inputStartTagInBody(p, token) {
   p._reconstructActiveFormattingElements();
-  p._appendElement(token, E.HTML);
+  p._appendElement(token, NAMESPACES.HTML);
   if (!isHiddenInput(token)) p.framesetOk = false;
   token.ackSelfClosing = true;
 }
 //@ chunk-6ja29j2n.js:160630-160694 esm-fingerprint
 function paramStartTagInBody(p, token) {
-  p._appendElement(token, E.HTML);
+  p._appendElement(token, NAMESPACES.HTML);
   token.ackSelfClosing = true;
 }
 //@ chunk-6ja29j2n.js:160694-160833 esm-fingerprint
 function hrStartTagInBody(p, token) {
   if (p.openElements.hasInButtonScope(TAG_ID.P)) p._closePElement();
-  p._appendElement(token, E.HTML);
+  p._appendElement(token, NAMESPACES.HTML);
   p.framesetOk = false;
   token.ackSelfClosing = true;
 }
 //@ chunk-6ja29j2n.js:160833-160888 esm-fingerprint
 function imageStartTagInBody(p, token) {
-  token.tagName = c.IMG;
+  token.tagName = TAG_NAMES.IMG;
   token.tagID = TAG_ID.IMG;
   areaStartTagInBody(p, token);
 }
 //@ chunk-6ja29j2n.js:160888-161060 esm-fingerprint
 function textareaStartTagInBody(p, token) {
-  p._insertElement(token, E.HTML);
+  p._insertElement(token, NAMESPACES.HTML);
   p.skipNextNewLine = true;
   p.tokenizer.state = TokenizerMode.RCDATA;
   p.originalInsertionMode = p.insertionMode;
@@ -1699,7 +1704,7 @@ function rawTextStartTagInBody(p, token) {
 //@ chunk-6ja29j2n.js:161354-161657 esm-fingerprint
 function selectStartTagInBody(p, token) {
   p._reconstructActiveFormattingElements();
-  p._insertElement(token, E.HTML);
+  p._insertElement(token, NAMESPACES.HTML);
   p.framesetOk = false;
   p.insertionMode =
     p.insertionMode === InsertionMode.IN_TABLE ||
@@ -1714,25 +1719,25 @@ function selectStartTagInBody(p, token) {
 function optgroupStartTagInBody(p, token) {
   if (p.openElements.currentTagId === TAG_ID.OPTION) p.openElements.pop();
   p._reconstructActiveFormattingElements();
-  p._insertElement(token, E.HTML);
+  p._insertElement(token, NAMESPACES.HTML);
 }
 //@ chunk-6ja29j2n.js:161805-161926 esm-fingerprint
 function rbStartTagInBody(p, token) {
   if (p.openElements.hasInScope(TAG_ID.RUBY)) p.openElements.generateImpliedEndTags();
-  p._insertElement(token, E.HTML);
+  p._insertElement(token, NAMESPACES.HTML);
 }
 //@ chunk-6ja29j2n.js:161926-162065 esm-fingerprint
 function rtStartTagInBody(p, token) {
   if (p.openElements.hasInScope(TAG_ID.RUBY)) p.openElements.generateImpliedEndTagsWithExclusion(TAG_ID.RTC);
-  p._insertElement(token, E.HTML);
+  p._insertElement(token, NAMESPACES.HTML);
 }
 //@ chunk-6ja29j2n.js:162065-162235 esm-fingerprint
 function mathStartTagInBody(p, token) {
   p._reconstructActiveFormattingElements();
   adjustTokenMathMLAttrs(token);
   adjustTokenXMLAttrs(token);
-  if (token.selfClosing) p._appendElement(token, E.MATHML);
-  else p._insertElement(token, E.MATHML);
+  if (token.selfClosing) p._appendElement(token, NAMESPACES.MATHML);
+  else p._insertElement(token, NAMESPACES.MATHML);
   token.ackSelfClosing = true;
 }
 //@ chunk-6ja29j2n.js:162235-162399 esm-fingerprint
@@ -1740,14 +1745,14 @@ function svgStartTagInBody(p, token) {
   p._reconstructActiveFormattingElements();
   adjustTokenSVGAttrs(token);
   adjustTokenXMLAttrs(token);
-  if (token.selfClosing) p._appendElement(token, E.SVG);
-  else p._insertElement(token, E.SVG);
+  if (token.selfClosing) p._appendElement(token, NAMESPACES.SVG);
+  else p._insertElement(token, NAMESPACES.SVG);
   token.ackSelfClosing = true;
 }
 //@ chunk-6ja29j2n.js:162399-162484 esm-fingerprint
 function genericStartTagInBody(p, token) {
   p._reconstructActiveFormattingElements();
-  p._insertElement(token, E.HTML);
+  p._insertElement(token, NAMESPACES.HTML);
 }
 //@ chunk-6ja29j2n.js:162484-164405 esm-fingerprint
 function startTagInBody(p, token) {
@@ -1999,7 +2004,7 @@ function formEndTagInBody(p) {
 }
 //@ chunk-6ja29j2n.js:165109-165214 esm-fingerprint
 function pEndTagInBody(p) {
-  if (!p.openElements.hasInButtonScope(TAG_ID.P)) p._insertFakeElement(c.P, TAG_ID.P);
+  if (!p.openElements.hasInButtonScope(TAG_ID.P)) p._insertFakeElement(TAG_NAMES.P, TAG_ID.P);
   p._closePElement();
 }
 //@ chunk-6ja29j2n.js:165214-165372 esm-fingerprint
@@ -2036,7 +2041,7 @@ function appletEndTagInBody(p, token) {
 //@ chunk-6ja29j2n.js:165865-165990 esm-fingerprint
 function brEndTagInBody(p) {
   p._reconstructActiveFormattingElements();
-  p._insertFakeElement(c.BR, TAG_ID.BR);
+  p._insertFakeElement(TAG_NAMES.BR, TAG_ID.BR);
   p.openElements.pop();
   p.framesetOk = false;
 }
@@ -2172,7 +2177,7 @@ function endTagInText(p, token) {
 }
 //@ chunk-6ja29j2n.js:167546-167682 esm-fingerprint
 function eofInText(p, token) {
-  p._err(token, o.eofInElementThatCanContainOnlyText);
+  p._err(token, errors.eofInElementThatCanContainOnlyText);
   p.openElements.pop();
   p.insertionMode = p.originalInsertionMode;
   p.onEof(token);
@@ -2202,32 +2207,32 @@ function characterInTable(p, token) {
 function captionStartTagInTable(p, token) {
   p.openElements.clearBackToTableContext();
   p.activeFormattingElements.insertMarker();
-  p._insertElement(token, E.HTML);
+  p._insertElement(token, NAMESPACES.HTML);
   p.insertionMode = InsertionMode.IN_CAPTION;
 }
 //@ chunk-6ja29j2n.js:168146-168265 esm-fingerprint
 function colgroupStartTagInTable(p, token) {
   p.openElements.clearBackToTableContext();
-  p._insertElement(token, E.HTML);
+  p._insertElement(token, NAMESPACES.HTML);
   p.insertionMode = InsertionMode.IN_COLUMN_GROUP;
 }
 //@ chunk-6ja29j2n.js:168265-168409 esm-fingerprint
 function colStartTagInTable(p, token) {
   p.openElements.clearBackToTableContext();
-  p._insertFakeElement(c.COLGROUP, TAG_ID.COLGROUP);
+  p._insertFakeElement(TAG_NAMES.COLGROUP, TAG_ID.COLGROUP);
   p.insertionMode = InsertionMode.IN_COLUMN_GROUP;
   startTagInColumnGroup(p, token);
 }
 //@ chunk-6ja29j2n.js:168409-168526 esm-fingerprint
 function tbodyStartTagInTable(p, token) {
   p.openElements.clearBackToTableContext();
-  p._insertElement(token, E.HTML);
+  p._insertElement(token, NAMESPACES.HTML);
   p.insertionMode = InsertionMode.IN_TABLE_BODY;
 }
 //@ chunk-6ja29j2n.js:168526-168662 esm-fingerprint
 function tdStartTagInTable(p, token) {
   p.openElements.clearBackToTableContext();
-  p._insertFakeElement(c.TBODY, TAG_ID.TBODY);
+  p._insertFakeElement(TAG_NAMES.TBODY, TAG_ID.TBODY);
   p.insertionMode = InsertionMode.IN_TABLE_BODY;
   startTagInTableBody(p, token);
 }
@@ -2241,14 +2246,14 @@ function tableStartTagInTable(p, token) {
 }
 //@ chunk-6ja29j2n.js:168814-168899 esm-fingerprint
 function inputStartTagInTable(p, token) {
-  if (isHiddenInput(token)) p._appendElement(token, E.HTML);
+  if (isHiddenInput(token)) p._appendElement(token, NAMESPACES.HTML);
   else tokenInTable(p, token);
   token.ackSelfClosing = true;
 }
 //@ chunk-6ja29j2n.js:168899-169049 esm-fingerprint
 function formStartTagInTable(p, token) {
   if (!p.formElement && p.openElements.tmplCount === 0) {
-    p._insertElement(token, E.HTML);
+    p._insertElement(token, NAMESPACES.HTML);
     p.formElement = p.openElements.current;
     p.openElements.pop();
   }
@@ -2420,7 +2425,7 @@ function startTagInColumnGroup(p, token) {
       break;
     }
     case TAG_ID.COL: {
-      p._appendElement(token, E.HTML);
+      p._appendElement(token, NAMESPACES.HTML);
       token.ackSelfClosing = true;
       break;
     }
@@ -2465,14 +2470,14 @@ function startTagInTableBody(p, token) {
   switch (token.tagID) {
     case TAG_ID.TR: {
       p.openElements.clearBackToTableBodyContext();
-      p._insertElement(token, E.HTML);
+      p._insertElement(token, NAMESPACES.HTML);
       p.insertionMode = InsertionMode.IN_ROW;
       break;
     }
     case TAG_ID.TH:
     case TAG_ID.TD: {
       p.openElements.clearBackToTableBodyContext();
-      p._insertFakeElement(c.TR, TAG_ID.TR);
+      p._insertFakeElement(TAG_NAMES.TR, TAG_ID.TR);
       p.insertionMode = InsertionMode.IN_ROW;
       startTagInRow(p, token);
       break;
@@ -2537,7 +2542,7 @@ function startTagInRow(p, token) {
     case TAG_ID.TH:
     case TAG_ID.TD: {
       p.openElements.clearBackToTableRowContext();
-      p._insertElement(token, E.HTML);
+      p._insertElement(token, NAMESPACES.HTML);
       p.insertionMode = InsertionMode.IN_CELL;
       p.activeFormattingElements.insertMarker();
       break;
@@ -2658,19 +2663,19 @@ function startTagInSelect(p, token) {
     }
     case TAG_ID.OPTION: {
       if (p.openElements.currentTagId === TAG_ID.OPTION) p.openElements.pop();
-      p._insertElement(token, E.HTML);
+      p._insertElement(token, NAMESPACES.HTML);
       break;
     }
     case TAG_ID.OPTGROUP: {
       if (p.openElements.currentTagId === TAG_ID.OPTION) p.openElements.pop();
       if (p.openElements.currentTagId === TAG_ID.OPTGROUP) p.openElements.pop();
-      p._insertElement(token, E.HTML);
+      p._insertElement(token, NAMESPACES.HTML);
       break;
     }
     case TAG_ID.HR: {
       if (p.openElements.currentTagId === TAG_ID.OPTION) p.openElements.pop();
       if (p.openElements.currentTagId === TAG_ID.OPTGROUP) p.openElements.pop();
-      p._appendElement(token, E.HTML);
+      p._appendElement(token, NAMESPACES.HTML);
       token.ackSelfClosing = true;
       break;
     }
@@ -2863,11 +2868,11 @@ function startTagInFrameset(p, token) {
       break;
     }
     case TAG_ID.FRAMESET: {
-      p._insertElement(token, E.HTML);
+      p._insertElement(token, NAMESPACES.HTML);
       break;
     }
     case TAG_ID.FRAME: {
-      p._appendElement(token, E.HTML);
+      p._appendElement(token, NAMESPACES.HTML);
       token.ackSelfClosing = true;
       break;
     }
@@ -2930,7 +2935,7 @@ function startTagAfterAfterFrameset(p, token) {
 }
 //@ chunk-6ja29j2n.js:178623-178673 esm-fingerprint
 function nullCharacterInForeignContent(p, token) {
-  token.chars = m;
+  token.chars = REPLACEMENT_CHARACTER;
   p._insertCharacters(token);
 }
 //@ chunk-6ja29j2n.js:178673-178729 esm-fingerprint
@@ -2941,7 +2946,7 @@ function characterInForeignContent(p, token) {
 //@ chunk-6ja29j2n.js:178729-178910 esm-fingerprint
 function popUntilHtmlOrIntegrationPoint(p) {
   while (
-    p.treeAdapter.getNamespaceURI(p.openElements.current) !== E.HTML &&
+    p.treeAdapter.getNamespaceURI(p.openElements.current) !== NAMESPACES.HTML &&
     !p._isIntegrationPoint(p.openElements.currentTagId, p.openElements.current)
   )
     p.openElements.pop();
@@ -2954,8 +2959,8 @@ function startTagInForeignContent(p, token) {
   } else {
     let current = p._getAdjustedCurrentElement();
     let currentNs = p.treeAdapter.getNamespaceURI(current);
-    if (currentNs === E.MATHML) adjustTokenMathMLAttrs(token);
-    else if (currentNs === E.SVG) {
+    if (currentNs === NAMESPACES.MATHML) adjustTokenMathMLAttrs(token);
+    else if (currentNs === NAMESPACES.SVG) {
       adjustTokenSVGTagName(token);
       adjustTokenSVGAttrs(token);
     }
@@ -2974,7 +2979,7 @@ function endTagInForeignContent(p, token) {
   }
   for (let i = p.openElements.stackTop; i > 0; i--) {
     let element = p.openElements.items[i];
-    if (p.treeAdapter.getNamespaceURI(element) === E.HTML) {
+    if (p.treeAdapter.getNamespaceURI(element) === NAMESPACES.HTML) {
       p._endTagOutsideForeignContent(token);
       break;
     }

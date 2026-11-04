@@ -38,3 +38,4 @@ async function call(onDone, context) {
     onDone,
   });
 }
+export { call };

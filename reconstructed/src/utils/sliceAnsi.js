@@ -10,7 +10,7 @@
  */
 
 //@ chunk-bc20zedk.js:19099-19133 fingerprint = sliceAnsi (0.566)
-function sliceAnsi(Z) {
-  return Z.fullWidth;
+function sliceAnsi(node) {
+  return node.fullWidth;
 }
 export { sliceAnsi };

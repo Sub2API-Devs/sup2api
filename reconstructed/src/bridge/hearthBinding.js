@@ -25,21 +25,21 @@ var HEARTH_BINDING_CHANGED_HINT = "hearth_binding_changed";
 /**
  * 解析 hearth 工作者绑定（项目线程回复的 MCP 挂载信息），校验 id、服务名与地址来源。
  */
-function decodeHearthWorkerBinding(e, n) {
-  if (e === null || typeof e !== "object" || !("hearth" in e))
+function decodeHearthWorkerBinding(record, options) {
+  if (record === null || typeof record !== "object" || !("hearth" in record))
     return {
       binding: null,
       reason: "not_joined",
     };
-  let hearth = e.hearth;
+  let hearth = record.hearth;
   if (hearth === null || typeof hearth !== "object")
     return {
       binding: null,
       reason: "not_joined",
     };
-  let i = hearth;
-  let channelId = typeof i.channel_id === "string" ? i.channel_id : "";
-  let threadId = typeof i.thread_id === "string" ? i.thread_id : "";
+  let hearthObject = hearth;
+  let channelId = typeof hearthObject.channel_id === "string" ? hearthObject.channel_id : "";
+  let threadId = typeof hearthObject.thread_id === "string" ? hearthObject.thread_id : "";
   if (!TOOL_OR_SERVER_NAME_RE.test(channelId) || !TOOL_OR_SERVER_NAME_RE.test(threadId)) {
     logForDebugging("[bridge:projects] binding ids are malformed \u2014 no mount", {
       level: "warn",
@@ -49,14 +49,14 @@ function decodeHearthWorkerBinding(e, n) {
       reason: "bad_ids",
     };
   }
-  let mcpServer = i.mcp_server;
+  let mcpServer = hearthObject.mcp_server;
   if (mcpServer === null || typeof mcpServer !== "object")
     return {
       binding: null,
       reason: "bad_server_name",
     };
-  let o = mcpServer;
-  if (o.name !== HEARTHBOT) {
+  let server = mcpServer;
+  if (server.name !== HEARTHBOT) {
     logForDebugging("[bridge:projects] binding names an unexpected MCP server \u2014 no mount", {
       level: "warn",
     });
@@ -65,13 +65,13 @@ function decodeHearthWorkerBinding(e, n) {
       reason: "bad_server_name",
     };
   }
-  if (o.type !== "http" || typeof o.url !== "string")
+  if (server.type !== "http" || typeof server.url !== "string")
     return {
       binding: null,
       reason: "not_http",
     };
-  let d = originIfValid(n.apiBaseUrl);
-  if (d === null) {
+  let origin = originIfValid(options.apiBaseUrl);
+  if (origin === null) {
     logForDebugging("[bridge:projects] api base is not an approved ingress origin \u2014 no mount", {
       level: "warn",
     });
@@ -80,10 +80,10 @@ function decodeHearthWorkerBinding(e, n) {
       reason: "untrusted_origin",
     };
   }
-  let mountUrl = `${d}${hearthMcpPath(n.sessionId)}`;
-  let r;
+  let mountUrl = `${origin}${hearthMcpPath(options.sessionId)}`;
+  let url;
   try {
-    r = new URL(o.url);
+    url = new URL(server.url);
   } catch {
     return {
       binding: null,
@@ -91,12 +91,12 @@ function decodeHearthWorkerBinding(e, n) {
     };
   }
   if (
-    r.origin !== d ||
-    r.pathname !== hearthMcpPath(n.sessionId) ||
-    r.search !== "" ||
-    r.hash !== "" ||
-    r.username !== "" ||
-    r.password !== ""
+    url.origin !== origin ||
+    url.pathname !== hearthMcpPath(options.sessionId) ||
+    url.search !== "" ||
+    url.hash !== "" ||
+    url.username !== "" ||
+    url.password !== ""
   ) {
     logForDebugging(
       "[bridge:projects] binding url is not this session\u2019s hearthbot mount on our own api base \u2014 no mount",
@@ -109,7 +109,7 @@ function decodeHearthWorkerBinding(e, n) {
       reason: "url_mismatch",
     };
   }
-  let metaMcpTools = parseMetaMcpTools(o, HEARTHBOT);
+  let metaMcpTools = parseMetaMcpTools(server, HEARTHBOT);
   if (!metaMcpTools)
     return {
       binding: null,
@@ -128,9 +128,9 @@ function decodeHearthWorkerBinding(e, n) {
 //@ chunk-9wab212f.js:1942-1988 placement
 var HEARTH_SESSION_URL_PATTERN = /^(.*)\/v1\/code\/sessions\/([^/?#]+)$/;
 //@ chunk-9wab212f.js:1988-2150 placement
-function parseBridgeSdkUrl(e) {
-  if (!e) return null;
-  let match = HEARTH_SESSION_URL_PATTERN.exec(e);
+function parseBridgeSdkUrl(sdkUrl) {
+  if (!sdkUrl) return null;
+  let match = HEARTH_SESSION_URL_PATTERN.exec(sdkUrl);
   if (!match?.[1] || !match[2]) return null;
   try {
     validateBridgeId(match[2], "sessionId");
@@ -142,4 +142,4 @@ function parseBridgeSdkUrl(e) {
     sessionId: match[2],
   };
 }
-export { decodeHearthWorkerBinding };
+export { decodeHearthWorkerBinding, HEARTH_BINDING_CHANGED_HINT, parseBridgeSdkUrl };

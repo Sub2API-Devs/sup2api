@@ -60,3 +60,4 @@ var remoteControlCommandDefinition = {
   immediate: true,
 };
 var remoteControlCommand = remoteControlCommandDefinition;
+export { remoteControlCommand };

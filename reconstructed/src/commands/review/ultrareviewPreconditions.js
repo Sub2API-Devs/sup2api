@@ -14,7 +14,7 @@ import {
   hasFreshGrowthBookFeatures,
   initializeGrowthBook,
 } from "../../services/analytics/growthbook.js";
-import { isUltrareviewEnabled } from "./ultrareviewEnabled.js";
+import { ULTRA_REVIEW_CONFIG_FLAG } from "./ultrareviewEnabled.js";
 import { hasBridgeEntitlement, isBridgeFirstParty } from "../../bridge/bridgeEnabled.js";
 import { isFirstPartyProvider } from "../../utils/model/providers.js";
 import { isRunningInRemoteEnvironment } from "../../bridge/bridgeGates.js";
@@ -39,7 +39,7 @@ import { isStorageV5Enabled } from "../../utils/hoverRest.js";
  * 读取 ultrareview 的 GrowthBook 配置（model、cost_note、duration_note、client_wait_minutes 等）。
  */
 function ultrareviewConfig() {
-  return getFeatureValue_CACHED_MAY_BE_STALE(isUltrareviewEnabled, null);
+  return getFeatureValue_CACHED_MAY_BE_STALE(ULTRA_REVIEW_CONFIG_FLAG, null);
 }
 //@ chunk-s61vbvea.js:461214-461303 placement
 function getReviewCostNote() {
@@ -91,11 +91,12 @@ function clientWaitMinutes() {
  * diff 文件数与行数上限。
  */
 function diffSizeLimits() {
-  let e = ultrareviewConfig();
-  let n = (r, s) => (typeof r === "number" && Number.isFinite(r) && r > 0 ? Math.floor(r) : s);
+  let config = ultrareviewConfig();
+  let normalize = (value, fallback) =>
+    typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
   return {
-    maxFiles: n(e?.max_diff_files, 500),
-    maxLines: n(e?.max_diff_lines, 8000),
+    maxFiles: normalize(config?.max_diff_files, 500),
+    maxLines: normalize(config?.max_diff_lines, 8000),
   };
 }
 //@ chunk-s61vbvea.js:461913-461975 placement
@@ -132,9 +133,9 @@ function isUltrareviewWithBridge() {
  */
 function ultrareviewUnavailableReason() {
   if (isUltrareviewWithBridge()) return null;
-  let e = getFeatureValueWithSource_CACHED_MAY_BE_STALE(isUltrareviewEnabled, null);
-  if (e.source === "fallback" && !hasFreshGrowthBookFeatures()) return "config_unavailable";
-  if (e.value?.enabled !== true) return "kill_switch";
+  let featureValue = getFeatureValueWithSource_CACHED_MAY_BE_STALE(ULTRA_REVIEW_CONFIG_FLAG, null);
+  if (featureValue.source === "fallback" && !hasFreshGrowthBookFeatures()) return "config_unavailable";
+  if (featureValue.value?.enabled !== true) return "kill_switch";
   if (!isFirstPartyProvider()) return "third_party_provider";
   if (isRunningInRemoteEnvironment()) return "remote_environment";
   if (!isBridgeFirstParty()) return "non_first_party_base_url";
@@ -156,8 +157,8 @@ function isUltrareviewPostEnabled() {
 }
 //@ chunk-s61vbvea.js:462542-462794 placement
 async function checkUltrareviewWorkspaceTrust() {
-  let e = env.CLAUDE_CODE_DISABLE_ULTRAREVIEW_TRUST_CHECK;
-  if (!e) {
+  let disabledByEnv = env.CLAUDE_CODE_DISABLE_ULTRAREVIEW_TRUST_CHECK;
+  if (!disabledByEnv) {
     await initializeGrowthBook().catch(() => {});
     if (
       readFlagWithOverride("tengu_twinkly_breeze", {
@@ -166,7 +167,10 @@ async function checkUltrareviewWorkspaceTrust() {
     )
       return true;
   }
-  logFeatureSad("cli_ultrareview_workspace_trust", e ? "check_switched_off_by_env" : "check_switched_off");
+  logFeatureSad(
+    "cli_ultrareview_workspace_trust",
+    disabledByEnv ? "check_switched_off_by_env" : "check_switched_off",
+  );
   return false;
 }
 //@ chunk-s61vbvea.js:462794-463768 placement
@@ -202,11 +206,11 @@ var CLOUD_UNAVAILABLE_IN_EVAL_TEXT = "Cloud sessions are unavailable in an evalu
 /**
  * 是 claude.ai 订阅者且令牌已刷新。
  */
-async function hasFreshSubscriberToken(e) {
-  if (isStorageV5Enabled() && e !== undefined) {
-    if (!(await isClaudeAISubscriberAsync(e))) return false;
+async function hasFreshSubscriberToken(credentials) {
+  if (isStorageV5Enabled() && credentials !== undefined) {
+    if (!(await isClaudeAISubscriberAsync(credentials))) return false;
     return checkAndRefreshOAuthTokenIfNeeded({
-      credentials: e,
+      credentials,
     });
   }
   if (!isClaudeAISubscriber()) return false;

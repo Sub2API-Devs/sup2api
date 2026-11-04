@@ -58,19 +58,19 @@ function nativeCaBlocks() {
  * 取系统原生 CA 证书块；一块都没有时报错（不能静默跳过校验）。
  */
 function getNativeCaBlocks() {
-  let e = nativeCaBlocks();
-  if (e.length === 0) throw noCaCertificatesError();
-  return e;
+  let blocks = nativeCaBlocks();
+  if (blocks.length === 0) throw noCaCertificatesError();
+  return blocks;
 }
 //@ chunk-1ny7cxrt.js:1312854-1312918 placement
 /**
  * 带系统 CA 的 fetch 封装（透传 tls 选项）。
  */
-function fetchWithCa(e, t) {
-  return fetch(e, {
-    ...t,
+function fetchWithCa(url, init) {
+  return fetch(url, {
+    ...init,
     tls: {
-      ...t?.tls,
+      ...init?.tls,
       ca: getNativeCaBlocks(),
     },
   });
@@ -92,15 +92,15 @@ function createCaTransporterOptions() {
  * 设置默认 CA；CLAUDE_GATEWAY_PROXY_IS_EGRESS_BOUNDARY 时在条件满足（有代理、无回环、NO_PROXY 为空）后启用代理作为出口边界。
  */
 function configureGatewayNetwork() {
-  let e = splitPemBlocks(getCACertificates());
-  let filtered = e.filter(setDefaultCaFor);
+  let caBlocks = splitPemBlocks(getCACertificates());
+  let filtered = caBlocks.filter(setDefaultCaFor);
   if (filtered.length === 0) throw noCaCertificatesError();
   tlsModule.setDefaultCACertificates(filtered);
-  let n = e.length - nativeCaBlocks().length;
-  if (n > 0)
+  let unreadableCount = caBlocks.length - nativeCaBlocks().length;
+  if (unreadableCount > 0)
     gatewayLog(
       "warn",
-      `network: ${n} certificate block(s) in the CA list cannot be read and are skipped. Check the NODE_EXTRA_CA_CERTS file, or the OS certificate store, for a damaged or cut-off certificate`,
+      `network: ${unreadableCount} certificate block(s) in the CA list cannot be read and are skipped. Check the NODE_EXTRA_CA_CERTS file, or the OS certificate store, for a damaged or cut-off certificate`,
     );
   nativeCaState.enabled = false;
   if (!env.CLAUDE_GATEWAY_PROXY_IS_EGRESS_BOUNDARY) return;
@@ -146,18 +146,18 @@ function isEgressBoundaryActive() {
 /**
  * 带代理选项与超时的 fetch。
  */
-function fetchWithTimeout(e, t, n, o) {
+function fetchWithTimeout(url, init, timeoutMs, extra) {
   return withTimeout(
-    ssrfSafeFetch(e, {
-      ...t,
+    ssrfSafeFetch(url, {
+      ...init,
       ...getProxyFetchOptions({
-        url: e,
+        url,
       }),
       timeout: false,
-      signal: AbortSignal.timeout(n),
+      signal: AbortSignal.timeout(timeoutMs),
     }),
-    n + 500,
-    o,
+    timeoutMs + 500,
+    extra,
   );
 }
 export {

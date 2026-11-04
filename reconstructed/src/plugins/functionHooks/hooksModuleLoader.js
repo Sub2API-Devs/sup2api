@@ -84,8 +84,8 @@ import {
 } from "../../utils/plugins/functionHooks/admission.js";
 import { getVouchedPolicyPluginIds, resolveManagedPluginOrder } from "../../utils/plugins/managedPlugins.js";
 import { resolveManagedPluginDigests } from "../../utils/plugins/managedPluginSeating.js";
-import { pluginTier, createWithheldElementWarner, Y6t } from "./dispatch/chain.js";
-import { copsSimilar } from "../../utils/permissions/permissions.js";
+import { pluginTier, createWithheldElementWarner, NO_FLOORS } from "./dispatch/chain.js";
+import { hasSimilarMarketplaceRef } from "../../utils/plugins/marketplaceNames.js";
 import { getHostState } from "../../utils/hostEnvironment.js";
 import { currentSurfaceBinding, surfaceComposer } from "./surfaceBinding.js";
 import { isModuleAdmittedByName } from "../../services/mcp/mcpClientCapabilities.js";
@@ -142,7 +142,7 @@ import {
 import { providerRank } from "./providerTiers.js";
 import { dependencyRefMatches, qualifyDependency } from "../../utils/plugins/dependencyResolver.js";
 import { SLOW_HOOK_REPORT_INTERVAL_MS_2 } from "./dispatch/slowHookReports.js";
-import { TUi } from "./ui/renderSites.js";
+import { RENDER_SITE_PAIRS } from "./ui/renderSites.js";
 import { forgetMcpServerFor } from "./mcpServerHooks.js";
 import { forgetMcpConnectsFor } from "./mcpApi.js";
 import { noteWorkersLoaded, workerSlots, storageIdOf } from "./apiDispatch.js";
@@ -151,18 +151,25 @@ import { invalidateAll } from "./ui/renderInstances.js";
 import { forgetSessionStartCall } from "./promptApi.js";
 import { isStoredLoginPinned } from "../../cli/headlessCloud/attachServe.js";
 import { loadedModuleArgs } from "../hooksModules/loadedModuleFilters.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:733946-733981 placement
 /**
  * 内联问题去重集
  */
-var inlineProblemsSeen = identity_2(new Set(), (e) => e.clear());
+var inlineProblemsSeen; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:733946", () => {
+  inlineProblemsSeen = identity_2(new Set(), (set) => set.clear());
+});
 //@ chunk-e6aww6q8.js:733981-734014 placement
 /**
  * 延迟输出的问题行
  */
-var deferredProblemLines = identity_2([], (e) => {
-  e.length = 0;
+var deferredProblemLines; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:733981", () => {
+  deferredProblemLines = identity_2([], (lines) => {
+    lines.length = 0;
+  });
 });
 //@ chunk-e6aww6q8.js:734014-734086 placement
 /**
@@ -176,47 +183,52 @@ function isPlainTextSession() {
  * 输出延迟的问题
  */
 function flushDeferredProblems() {
-  let e = deferredProblemLines.splice(0);
+  let lines = deferredProblemLines.splice(0);
   if (!isPlainTextSession()) return;
-  for (let n of e)
-    writeToStderr(`${n}
+  for (let line of lines)
+    writeToStderr(`${line}
 `);
 }
 //@ chunk-e6aww6q8.js:734165-734200 placement
 /**
  * 已报告的内联问题
  */
-var reportedInlineProblems = identity_2(new Set(), (e) => e.clear());
+var reportedInlineProblems; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:734165", () => {
+  reportedInlineProblems = identity_2(new Set(), (set) => set.clear());
+});
 //@ chunk-e6aww6q8.js:734200-734378 placement
 /**
  * 非交互会话里，内联插件的问题输出到 stderr（去重；格式化输出时先缓存）。
  */
-function reportInlinePluginNotice(e, n) {
-  let r = marketplaceOf(e.source) === INLINE_PLUGIN_MARKETPLACE;
-  if (!getIsNonInteractiveSession() || !r) return;
-  let s = stripControlChars_3(`${e.name}: ${n}`);
-  if (reportedInlineProblems.has(s)) return;
-  reportedInlineProblems.add(s);
+function reportInlinePluginNotice(notice, text) {
+  let isInline = marketplaceOf(notice.source) === INLINE_PLUGIN_MARKETPLACE;
+  if (!getIsNonInteractiveSession() || !isInline) return;
+  let line = stripControlChars_3(`${notice.name}: ${text}`);
+  if (reportedInlineProblems.has(line)) return;
+  reportedInlineProblems.add(line);
   if (getPrintOutputFormat() === null) {
-    deferredProblemLines.push(s);
+    deferredProblemLines.push(line);
     return;
   }
   if (isPlainTextSession())
-    writeToStderr(`${s}
+    writeToStderr(`${line}
 `);
 }
 //@ chunk-e6aww6q8.js:734378-734603 placement
 /**
  * 在所有宿主的进行中分发上执行回调。
  */
-function withInFlightDispatches(e, n, r) {
-  let filtered = [e.state.environmentHost, e.state.nativeHost].filter((h) => h !== undefined);
-  return r(
-    n,
+function withInFlightDispatches(runtime, e, fn) {
+  let filtered = [runtime.state.environmentHost, runtime.state.nativeHost].filter(
+    (host) => host !== undefined,
+  );
+  return fn(
+    e,
     {
-      [Symbol.iterator]: () => filtered.flatMap((h) => [...h.inFlight()]).values(),
+      [Symbol.iterator]: () => filtered.flatMap((host) => [...host.inFlight()]).values(),
     },
-    (h) => filtered.map((y) => y.nameOf(h)).find((y) => y !== undefined),
+    (id) => filtered.map((secondHost) => secondHost.nameOf(id)).find((thirdName) => thirdName !== undefined),
   );
 }
 //@ chunk-e6aww6q8.js:734603-734705 placement
@@ -231,93 +243,97 @@ function toolNameOfCall(event, payload) {
 /**
  * 绑定 async 资源
  */
-var bindAsyncResource = () => AsyncResource.bind((e) => e());
+var bindAsyncResource = () => AsyncResource.bind((value) => value());
 //@ chunk-e6aww6q8.js:734782-734823 placement
 /**
  * 合并出带 options 的对象
  */
-var withOptions = (e, n, options) => ({
-  ...e,
-  ...n,
+var withOptions = (a, b, options) => ({
+  ...a,
+  ...b,
   options,
 });
 //@ chunk-e6aww6q8.js:734823-734891 placement
 /**
  * 以 ! 或内部前缀开头
  */
-var isPrivateEventName = (e) => (e.startsWith("!") ? e.slice(1) : e).startsWith(`${PROTO_KEY}.`);
+var isPrivateEventName = (event) =>
+  (event.startsWith("!") ? event.slice(1) : event).startsWith(`${PROTO_KEY}.`);
 //@ chunk-e6aww6q8.js:734891-735062 placement
 function warnProtoPatterns(pluginName, registered) {
-  for (let r of new Set(registered.map((s) => s.pattern)))
-    if (isPrivateEventName(r) && !r.startsWith("!"))
+  for (let pattern of new Set(registered.map((registration) => registration.pattern)))
+    if (isPrivateEventName(pattern) && !pattern.startsWith("!"))
       reportPluginProblem(
         pluginName,
-        `registered ${r}; that name cannot be a noun, so this hook is never run`,
+        `registered ${pattern}; that name cannot be a noun, so this hook is never run`,
       );
 }
 //@ chunk-e6aww6q8.js:735062-735333 placement
-function adviseUiRenderMatchers(e, registered) {
+function adviseUiRenderMatchers(pluginName, registered) {
   for (let { pattern, matcher } of registered) {
     if (!(pattern === "ui.render" && matcher !== undefined)) continue;
     try {
-      let y = adviseUiRenderMatcher(matcher);
-      if (y !== undefined)
-        logForDebugging(`hooks module ${e}: on("ui.render", ${describeMatcher(matcher)}) ${y}`, {
+      let item = adviseUiRenderMatcher(matcher);
+      if (item !== undefined)
+        logForDebugging(`hooks module ${pluginName}: on("ui.render", ${describeMatcher(matcher)}) ${item}`, {
           level: "warn",
         });
     } catch (error) {
-      logForDebugging(`hooks module ${e}: ui.render matcher advice failed: ` + errorMessage(error));
+      logForDebugging(`hooks module ${pluginName}: ui.render matcher advice failed: ` + errorMessage(error));
     }
   }
 }
 //@ chunk-e6aww6q8.js:735333-736099 placement
-function reportUnmatchedHookRegistrations(e, n, r) {
-  let s = [
+function reportUnmatchedHookRegistrations(pluginName, patterns, table) {
+  let known = [
     ...HOOK_EVENTS_2_2,
-    ...Object.entries(r).flatMap(([key, value]) =>
+    ...Object.entries(table).flatMap(([key, value]) =>
       value.owner !== CORE_ORIGIN ? value.methods.map((method) => `${key}.${method}`) : [],
     ),
   ];
-  for (let h of n) {
-    if (isPrivateEventName(h)) continue;
-    if (isEventPattern(h)) {
-      let G = h.startsWith("!");
-      let q = G ? h.slice(1) : h;
-      if (!s.some((Se) => matchesEventPattern(q, Se)))
+  for (let pattern of patterns) {
+    if (isPrivateEventName(pattern)) continue;
+    if (isEventPattern(pattern)) {
+      let isNegated = pattern.startsWith("!");
+      let body = isNegated ? pattern.slice(1) : pattern;
+      if (!known.some((name) => matchesEventPattern(body, name)))
         throw new HooksError(
-          `${e}: registered on("${h}"), ` +
-            (G ? "whose negated pattern selects no event" : "which selects no event"),
+          `${pluginName}: registered on("${pattern}"), ` +
+            (isNegated ? "whose negated pattern selects no event" : "which selects no event"),
         );
       continue;
     }
-    if (isHookEvent(h)) continue;
-    let index = h.indexOf(".");
-    let sliced = h.slice(0, index);
-    let sliced_2 = h.slice(index + 1);
-    let L = Object.hasOwn(r, sliced) ? r[sliced] : undefined;
-    if (!L) throw new HooksError(`${e}: registered ${h}, but no loaded plugin provides $.${sliced}`);
-    if (L.owner === CORE_ORIGIN)
+    if (isHookEvent(pattern)) continue;
+    let index = pattern.indexOf(".");
+    let sliced = pattern.slice(0, index);
+    let sliced_2 = pattern.slice(index + 1);
+    let entry = Object.hasOwn(table, sliced) ? table[sliced] : undefined;
+    if (!entry)
+      throw new HooksError(`${pluginName}: registered ${pattern}, but no loaded plugin provides $.${sliced}`);
+    if (entry.owner === CORE_ORIGIN)
       throw new HooksError(
-        `${e}: registered ${h}, which is a call on core's $.${sliced} that is not an event`,
+        `${pluginName}: registered ${pattern}, which is a call on core's $.${sliced} that is not an event`,
       );
-    if (!L.methods.includes(sliced_2))
-      throw new HooksError(`${e}: registered ${h}, but $.${sliced} (${L.owner}) has no method ${sliced_2}`);
+    if (!entry.methods.includes(sliced_2))
+      throw new HooksError(
+        `${pluginName}: registered ${pattern}, but $.${sliced} (${entry.owner}) has no method ${sliced_2}`,
+      );
   }
 }
 //@ chunk-e6aww6q8.js:736099-736506 placement
 /**
  * 校验扫描到的 next.to 目标：只有托管插件可用，且目标须在该层允许的下层之中。
  */
-function checkNextToAllowed(e, scan, r) {
-  let s = tiersBeneath(r);
-  for (let h of scan.nextTo ?? []) {
-    if (s.length === 0)
+function checkNextToAllowed(options, scan, tier) {
+  let allowed = tiersBeneath(tier);
+  for (let to of scan.nextTo ?? []) {
+    if (allowed.length === 0)
       throw new HooksError(
-        `${e}: hooks module not loaded; next.to is available to managed plugins (prependPlugins / appendPlugins) only, and this plugin is ${r} (policy/scan)`,
+        `${options}: hooks module not loaded; next.to is available to managed plugins (prependPlugins / appendPlugins) only, and this plugin is ${tier} (policy/scan)`,
       );
-    if (!s.includes(h))
+    if (!allowed.includes(to))
       throw new HooksError(
-        `${e}: hooks module not loaded; next.to("${h}") skips nothing from ${r}; a ${r} plugin may continue at ${s.join(", ")} (policy/scan)`,
+        `${options}: hooks module not loaded; next.to("${to}") skips nothing from ${tier}; a ${tier} plugin may continue at ${allowed.join(", ")} (policy/scan)`,
       );
   }
 }
@@ -325,67 +341,74 @@ function checkNextToAllowed(e, scan, r) {
 /**
  * 校验注册的事件：必须是已知事件或插件自定义事件，且出现在模块扫描结果里。
  */
-function checkRegisteredEvents(pluginName, scan, r) {
-  for (let s of r) {
-    let h = eventPatternError(s);
-    if (h !== undefined) throw new HooksError(`${pluginName}: registered ${h}`);
-    let y = isHookEvent(s);
-    let S = nameOfEventPattern(s);
-    if (S !== undefined && !isHookEvent(S) && !isPluginDefinedEvent(S))
-      throw new HooksError(`${pluginName}: registered "${s}", which is not an event`);
+function checkRegisteredEvents(pluginName, scan, secondPluginName) {
+  for (let pattern of secondPluginName) {
+    let problem = eventPatternError(pattern);
+    if (problem !== undefined) throw new HooksError(`${pluginName}: registered ${problem}`);
+    let secondProblem = isHookEvent(pattern);
+    let event = nameOfEventPattern(pattern);
+    if (event !== undefined && !isHookEvent(event) && !isPluginDefinedEvent(event))
+      throw new HooksError(`${pluginName}: registered "${pattern}", which is not an event`);
     if (
       !scan.hooks.some(
         (hook) =>
-          hook === s ||
-          (y &&
+          hook === pattern ||
+          (secondProblem &&
             isEventPattern(hook) &&
-            matchesEventForPlugin(hook, s, {
+            matchesEventForPlugin(hook, pattern, {
               isBuiltin: false,
             })),
       )
     )
       throw new HooksError(
-        `${pluginName}: registered ${s}, which the scan of its hooks module did not see (host check)`,
+        `${pluginName}: registered ${pattern}, which the scan of its hooks module did not see (host check)`,
       );
   }
 }
 //@ chunk-e6aww6q8.js:743601-743796 placement
-function checkScanPolicy(e, scan, r) {
-  let s = telemetryStreamRefusal(scan, {
-    isBuiltin: isOfficialMarketplacePlugin(r),
+function checkScanPolicy(pluginName, scan, args) {
+  let refusal = telemetryStreamRefusal(scan, {
+    isBuiltin: isOfficialMarketplacePlugin(args),
   });
-  if (s !== undefined) throw new HooksError(`${e}: hooks module not loaded; ${s} (policy/scan)`);
-  let h = telemetryRefSummary(scan);
-  if (h !== undefined) logForDebugging(`${e}: hooks telemetry for: ${h}`);
+  if (refusal !== undefined)
+    throw new HooksError(`${pluginName}: hooks module not loaded; ${refusal} (policy/scan)`);
+  let item = telemetryRefSummary(scan);
+  if (item !== undefined) logForDebugging(`${pluginName}: hooks telemetry for: ${item}`);
 }
 //@ chunk-e6aww6q8.js:762691-762704 placement
 /**
  * 宿主状态
  */
-var hostStateRef = createMemoMap();
+var hostStateRef; // deferred: uses createMemoMap (./moduleLoader.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:762691", () => {
+  hostStateRef = createMemoMap();
+});
 //@ chunk-e6aww6q8.js:762704-762740 placement
 /**
  * 已加载插件的选项
  */
-var loadedPluginOptions = identity_2(createValueSlot(), (e) => e.set(undefined));
+var loadedPluginOptions; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:762704", () => {
+  loadedPluginOptions = identity_2(createValueSlot(), (slot) => slot.set(undefined));
+});
 //@ chunk-e6aww6q8.js:762740-762812 placement
 /**
  * 取某插件的选项
  */
-function pluginOptionsFor(e) {
-  let n = loadedPluginOptions.get();
-  return n?.pluginId === e ? n.options : undefined;
+function pluginOptionsFor(pluginId) {
+  let current = loadedPluginOptions.get();
+  return current?.pluginId === pluginId ? current.options : undefined;
 }
 //@ chunk-e6aww6q8.js:762812-763072 placement
-function warnOptionsOutsideChoices(name, n, userConfig) {
-  for (let [key, value] of Object.entries(n)) {
-    let options = userConfig[key]?.options;
-    if (options !== undefined && isOutsideOptions(userConfig[key], value)) {
-      let w = userConfig[key]?.default;
-      let L = w === undefined ? "unset" : `the default, ${String(w)}`;
+function warnOptionsOutsideChoices(name, userConfig, userConfig_2) {
+  for (let [key, value] of Object.entries(userConfig)) {
+    let options = userConfig_2[key]?.options;
+    if (options !== undefined && isOutsideOptions(userConfig_2[key], value)) {
+      let field = userConfig_2[key]?.default;
+      let entry = field === undefined ? "unset" : `the default, ${String(field)}`;
       reportPluginProblem(
         name,
-        `option ${key} in settings is not one of ${options.join(", ")}; it reads as ${L}`,
+        `option ${key} in settings is not one of ${options.join(", ")}; it reads as ${entry}`,
         "once",
       );
     }
@@ -395,45 +418,46 @@ function warnOptionsOutsideChoices(name, n, userConfig) {
 /**
  * 读取并校验插件 userConfig 选项：取设置中的值（项目设置不读）、补默认值并校验；不合法时内置插件抛错，其他回退为默认值。
  */
-async function resolvePluginOptions(e) {
-  let userConfig = e.manifest.userConfig ?? {};
+async function resolvePluginOptions(plugin) {
+  let userConfig = plugin.manifest.userConfig ?? {};
   if (Object.keys(userConfig).length === 0) return {};
   clearPluginOptionsCache();
-  hostStateRef.set(marketplaceSource(e), {
-    before: hostStateRef.get(marketplaceSource(e))?.now,
-    now: pluginOptionsFingerprint(marketplaceSource(e)),
+  hostStateRef.set(marketplaceSource(plugin), {
+    before: hostStateRef.get(marketplaceSource(plugin))?.now,
+    now: pluginOptionsFingerprint(marketplaceSource(plugin)),
   });
-  let r = pluginOptionsFor(marketplaceSource(e)) ?? (await loadPluginOptions(marketplaceSource(e)));
-  let s =
+  let entries =
+    pluginOptionsFor(marketplaceSource(plugin)) ?? (await loadPluginOptions(marketplaceSource(plugin)));
+  let opts =
     "pluginConfigs[" +
-    pluginIdAliases(marketplaceSource(e))
-      .map((S) => JSON.stringify(S))
+    pluginIdAliases(marketplaceSource(plugin))
+      .map((entry) => JSON.stringify(entry))
       .join(" or ") +
     "].options";
-  if (Object.keys(r).length === 0)
+  if (Object.keys(entries).length === 0)
     logForDebugging(
-      `plugin ${e.name}: no ${s} in user, --settings or managed settings (project settings are not read); every option is its default`,
+      `plugin ${plugin.name}: no ${opts} in user, --settings or managed settings (project settings are not read); every option is its default`,
     );
-  warnOptionsOutsideChoices(e.name, r, userConfig);
-  let h = applyUserConfigDefaults(r, userConfig);
-  let y = validateUserConfig(h, userConfig);
-  if (!y.valid) {
-    let S = hasTrustedOnlyBuiltinPlugin(marketplaceSource(e));
-    let w = `${e.name}: options do not fit plugin.json userConfig: ${y.errors.join("; ")} (settings.json ${s})`;
-    if (!S) throw new HooksError(w);
-    logForDebugging(`${w} \u2014 loading on its defaults instead`, {
+  warnOptionsOutsideChoices(plugin.name, entries, userConfig);
+  let key = applyUserConfigDefaults(entries, userConfig);
+  let value = validateUserConfig(key, userConfig);
+  if (!value.valid) {
+    let secondOptions = hasTrustedOnlyBuiltinPlugin(marketplaceSource(plugin));
+    let merged = `${plugin.name}: options do not fit plugin.json userConfig: ${value.errors.join("; ")} (settings.json ${opts})`;
+    if (!secondOptions) throw new HooksError(merged);
+    logForDebugging(`${merged} \u2014 loading on its defaults instead`, {
       level: "error",
     });
     return applyUserConfigDefaults({}, userConfig);
   }
-  return h;
+  return key;
 }
 //@ chunk-e6aww6q8.js:763791-763978 placement
 /**
  * 插件当前非敏感选项及其稳定 JSON 文本（用于比较是否变化）。
  */
 function pluginOptionsSnapshot(serverName) {
-  let n = pickNonSensitiveOptions(
+  let name = pickNonSensitiveOptions(
     applyUserConfigDefaults(
       trustedPluginSetting(marketplaceSource(serverName)).options ?? {},
       serverName.manifest.userConfig ?? {},
@@ -441,8 +465,12 @@ function pluginOptionsSnapshot(serverName) {
     serverName,
   );
   return {
-    options: n,
-    text: jsonStringify(Object.fromEntries(Object.entries(n).toSorted(([r], [s]) => r.localeCompare(s)))),
+    options: name,
+    text: jsonStringify(
+      Object.fromEntries(
+        Object.entries(name).toSorted(([snapshot], [broken]) => snapshot.localeCompare(broken)),
+      ),
+    ),
   };
 }
 //@ chunk-e6aww6q8.js:763978-764059 placement
@@ -451,88 +479,91 @@ function pluginOptionsSnapshot(serverName) {
  */
 var findBrokenTrustedSetting = () =>
   TRUSTED_SETTING_SOURCES.find(
-    (e) =>
-      getSettingsForSource(e) === null &&
-      getSettingsParseErrorsForSource(e).some((n) => n.severity !== "warning"),
+    (source) =>
+      getSettingsForSource(source) === null &&
+      getSettingsParseErrorsForSource(source).some((broken) => broken.severity !== "warning"),
   );
 //@ chunk-e6aww6q8.js:764103-764429 placement
 /**
  * 加载插件的一个界面模块：读取、链接、检查导出，返回模块或问题。
  */
-async function loadSurfaceModule(e, n, r) {
-  let s = resolve_2(n, ...e.split("/"));
-  let { source, graph } = await loadHooksModuleGraph(s, n, r);
-  let S = graph.files.get(s);
-  let w = S
-    ? findSurfaceComponent(S.scanned.program)
+async function loadSurfaceModule(clientPath, pluginRoot, pluginName) {
+  let resolved = resolve_2(pluginRoot, ...clientPath.split("/"));
+  let { source, graph } = await loadHooksModuleGraph(resolved, pluginRoot, pluginName);
+  let entry = graph.files.get(resolved);
+  let secondEntry = entry
+    ? findSurfaceComponent(entry.scanned.program)
     : {
         problem: "was not linked",
       };
-  if ("problem" in w) throw new HooksError(`${r}: surface module ${e.split("/").join(sep)} ` + w.problem);
+  if ("problem" in secondEntry)
+    throw new HooksError(
+      `${pluginName}: surface module ${clientPath.split("/").join(sep)} ` + secondEntry.problem,
+    );
   return {
-    module: e,
-    modulePath: s,
-    component: w.component,
+    module: clientPath,
+    modulePath: resolved,
+    component: secondEntry.component,
     source,
-    ...listLinkedFiles(graph, s),
+    ...listLinkedFiles(graph, resolved),
   };
 }
 //@ chunk-e6aww6q8.js:764429-764540 placement
 /**
  * 依次加载插件的所有界面模块。
  */
-async function loadSurfaceModules(clients, n, r) {
+async function loadSurfaceModules(clients, pluginRoot, pluginName) {
   if (!clients || clients.length === 0) return;
-  let s = [];
-  for (let h of clients) s.push(await loadSurfaceModule(h, n, r));
-  return s;
+  let loaded = [];
+  for (let client of clients) loaded.push(await loadSurfaceModule(client, pluginRoot, pluginName));
+  return loaded;
 }
 //@ chunk-e6aww6q8.js:764540-765457 placement
 /**
  * 为插件的 hooks 模块准备加载参数：检查准入与命名冲突、读取选项、扫描（或使用密封文本）、加载界面模块、确定层级并校验 next.to 与策略。
  */
-async function prepareHooksModuleArgs(state, n, modulePath) {
-  let s = hooksModulesRefusalReason();
-  if (s !== undefined) throw new HookAdmissionError(n.name, s);
+async function prepareHooksModuleArgs(loaderContext, plugin, modulePath) {
+  let refusal = hooksModulesRefusalReason();
+  if (refusal !== undefined) throw new HookAdmissionError(plugin.name, refusal);
   moduleAdmissionCache.set(() => getVouchedPolicyPluginIds());
-  moduleAdmissionCacheB.set((Se) => (resolveManagedPluginDigests(Se) ?? []).length > 0);
-  if (getPreToolStageOrder().includes(n.name))
+  moduleAdmissionCacheB.set((id) => (resolveManagedPluginDigests(id) ?? []).length > 0);
+  if (getPreToolStageOrder().includes(plugin.name))
     throw new HooksError(
-      `${n.name}: hooks module not loaded; the name is the engine's own chain member (plugin.json name)`,
+      `${plugin.name}: hooks module not loaded; the name is the engine's own chain member (plugin.json name)`,
     );
-  let sealedPluginTexts = await readSealedPluginTexts(state, n, modulePath);
-  let options = await resolvePluginOptions(n);
-  let S =
+  let sealedPluginTexts = await readSealedPluginTexts(loaderContext, plugin, modulePath);
+  let options = await resolvePluginOptions(plugin);
+  let scan =
     sealedPluginTexts === undefined
-      ? await scanHooksModule(modulePath, n.path, n.name)
+      ? await scanHooksModule(modulePath, plugin.path, plugin.name)
       : await scanSealedHooksModule({
           modulePath,
-          pluginRoot: n.path,
-          pluginName: n.name,
+          pluginRoot: plugin.path,
+          pluginName: plugin.name,
           texts: sealedPluginTexts,
         });
-  if (sealedPluginTexts !== undefined && (S.scan.clients ?? []).length > 0)
-    throw new NotOrganizationPluginError(n.name, "it names surface modules");
-  let surfaceModules = await loadSurfaceModules(S.scan.clients, n.path, n.name);
-  let G = marketplaceSource(n);
-  let q =
+  if (sealedPluginTexts !== undefined && (scan.scan.clients ?? []).length > 0)
+    throw new NotOrganizationPluginError(plugin.name, "it names surface modules");
+  let surfaceModules = await loadSurfaceModules(scan.scan.clients, plugin.path, plugin.name);
+  let storageId = marketplaceSource(plugin);
+  let vouched =
     sealedPluginTexts === undefined
       ? getVouchedPolicyPluginIds()
-      : withSealedPlugin(G, getVouchedPolicyPluginIds());
-  let Z = pluginTier(G, q, resolveManagedPluginOrder());
-  checkNextToAllowed(n.name, S.scan, Z);
-  checkScanPolicy(n.name, S.scan, G);
+      : withSealedPlugin(storageId, getVouchedPolicyPluginIds());
+  let tier = pluginTier(storageId, vouched, resolveManagedPluginOrder());
+  checkNextToAllowed(plugin.name, scan.scan, tier);
+  checkScanPolicy(plugin.name, scan.scan, storageId);
   return {
     modulePath,
-    pluginName: n.name,
-    pluginRoot: n.path,
-    pluginStorageId: G,
-    tier: Z,
-    isPersons: copsSimilar(G, q),
-    scan: S.scan,
-    source: S.source,
-    linked: S.linked,
-    links: S.links,
+    pluginName: plugin.name,
+    pluginRoot: plugin.path,
+    pluginStorageId: storageId,
+    tier,
+    isPersons: hasSimilarMarketplaceRef(storageId, vouched),
+    scan: scan.scan,
+    source: scan.source,
+    linked: scan.linked,
+    links: scan.links,
     options,
     ...(surfaceModules !== undefined && {
       surfaceModules,
@@ -549,15 +580,16 @@ async function prepareHooksModuleArgs(state, n, modulePath) {
 /**
  * 未在 N 毫秒内加载
  */
-var notLoadedWithinText = (pluginName, n) => `${pluginName}: not loaded within ${n}ms`;
+var notLoadedWithinText = (pluginName, thirdPluginName) =>
+  `${pluginName}: not loaded within ${thirdPluginName}ms`;
 //@ chunk-e6aww6q8.js:765505-765583 placement
 /**
  * 错误文本加 cause
  */
 function errorWithCause(error) {
-  let n = causeString(error);
-  if (n === undefined) return errorMessage(error);
-  return `${errorMessage(error)} (${n})`;
+  let cause = causeString(error);
+  if (cause === undefined) return errorMessage(error);
+  return `${errorMessage(error)} (${cause})`;
 }
 //@ chunk-e6aww6q8.js:765583-765662 placement
 /**
@@ -571,25 +603,25 @@ async function refreshAgentsAndDefinitions() {
 /**
  * 插件代理的唯一键
  */
-var agentRegistrationKey = (e) => `${pluginDisplayKey(e.plugin, e.pluginId)}:` + e.spec.name;
+var agentRegistrationKey = (spec) => `${pluginDisplayKey(spec.plugin, spec.pluginId)}:` + spec.spec.name;
 //@ chunk-e6aww6q8.js:765717-766018 placement
 /**
  * 插件登记的代理表：只列出可用插件的代理，支持登记与查询。
  */
-function createRegisteredAgentsTable(e) {
+function createRegisteredAgentsTable(getTable) {
   return {
-    list: () => [...e().values()].filter((n) => isModuleAdmittedByName(n.plugin)),
-    held: (n) => {
-      let r = e().get(n);
-      return r !== undefined && isModuleAdmittedByName(r.plugin) ? r : undefined;
+    list: () => [...getTable().values()].filter((entry) => isModuleAdmittedByName(entry.plugin)),
+    held: (key) => {
+      let entry = getTable().get(key);
+      return entry !== undefined && isModuleAdmittedByName(entry.plugin) ? entry : undefined;
     },
-    register: (n) => {
-      e().set(agentRegistrationKey(n), n);
+    register: (spec) => {
+      getTable().set(agentRegistrationKey(spec), spec);
     },
-    forget: (n) => {
-      let r = e();
-      let filtered = [...r.values()].filter((h) => h.plugin === n);
-      for (let h of filtered) r.delete(agentRegistrationKey(h));
+    forget: (plugin) => {
+      let table = getTable();
+      let filtered = [...table.values()].filter((entry) => entry.plugin === plugin);
+      for (let entry of filtered) table.delete(agentRegistrationKey(entry));
       return filtered.length > 0;
     },
   };
@@ -598,23 +630,26 @@ function createRegisteredAgentsTable(e) {
 /**
  * 插件登记的代理表
  */
-var registeredAgentsTable = createRegisteredAgentsTable(() => getPluginRegistry().registeredAgents);
+var registeredAgentsTable; // deferred: uses createRegisteredAgentsTable of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:766018", () => {
+  registeredAgentsTable = createRegisteredAgentsTable(() => getPluginRegistry().registeredAgents);
+});
 //@ chunk-e6aww6q8.js:766057-766112 placement
 /**
  * 忘掉登记的代理并刷新
  */
-function forgetRegisteredAgent(e) {
-  if (registeredAgentsTable.forget(e)) refreshAgentsAndDefinitions().catch((error) => logError(error));
+function forgetRegisteredAgent(plugin) {
+  if (registeredAgentsTable.forget(plugin)) refreshAgentsAndDefinitions().catch((error) => logError(error));
 }
 //@ chunk-e6aww6q8.js:3701193-3701373 placement
 function installJsxGlobals() {
-  let e = globalThis;
+  let target = globalThis;
   for (let [key, value] of Object.entries({
     h: vmCreateElement,
     Fragment: vmFragment,
   }))
-    if (e[key] === undefined)
-      Object.defineProperty(e, key, {
+    if (target[key] === undefined)
+      Object.defineProperty(target, key, {
         value,
         writable: true,
         configurable: true,
@@ -625,135 +660,141 @@ function installJsxGlobals() {
 /**
  * 若是内置插件，返回其内嵌的 hooks 模块对象。
  */
-function builtinModuleOf(e) {
-  if (!isBuiltinPluginId(e.pluginStorageId)) return;
-  let hooksModule = getBuiltinPlugin(e.pluginName)?.hooksModule;
+function builtinModuleOf(args) {
+  if (!isBuiltinPluginId(args.pluginStorageId)) return;
+  let hooksModule = getBuiltinPlugin(args.pluginName)?.hooksModule;
   return hooksModule !== undefined && "module" in hooksModule ? hooksModule.module : undefined;
 }
 //@ chunk-e6aww6q8.js:3701505-3701623 placement
-function createUiResolveCopier(pluginName) {
-  let withheldElementWarner = createWithheldElementWarner(pluginName);
-  return (r, s) =>
-    isPlainObject_5(r)
+function createUiResolveCopier(name) {
+  let withheldElementWarner = createWithheldElementWarner(name);
+  return (value, kind) =>
+    isPlainObject_5(value)
       ? Object.freeze(
           Object.assign(
             Object.create(null),
-            buildElementTable(r, (h) => h, withheldElementWarner(s)),
+            buildElementTable(value, (problem) => problem, withheldElementWarner(kind)),
           ),
         )
-      : r;
+      : value;
 }
 //@ chunk-e6aww6q8.js:3701623-3703563 placement
 /**
- * 校验 hooks 模块导出：必须是二进制内置的模块或函数形式，next 等字段类型正确。
+ * 组装 hooks 模块运行期：host 代理、流式 hook 校验（必须返回 async generator）、参数/返回值直通、卸载信号处理；返回 activation 与 store/dispose。
  */
-var validateHooksModuleExports = async (e, n, r = {}) => {
-  let { pluginName } = n;
-  let h = builtinModuleOf(n);
-  if (!h)
+var assembleHooksModuleRuntime = async (invokeHost, args, options = {}) => {
+  let { pluginName } = args;
+  let builtin = builtinModuleOf(args);
+  if (!builtin)
     throw new HooksError(
       `${pluginName}: not a hooks module the binary carries; it loads in the plugin sandbox, not natively`,
     );
   installJsxGlobals();
-  let framed = r.framed ?? ((Me, We) => We());
-  let S = false;
+  let framed = options.framed ?? ((params, body) => body());
+  let isUnloaded = false;
   let weakMap = new WeakMap();
   let surfaceAnswerCache = createSurfaceAnswerCache(createUiResolveCopier(pluginName));
-  function G(Me) {
-    if (S) throw envUnloadedError(pluginName);
-    if (typeof Me !== "function") throw new HooksError(`${pluginName}: not a function`);
-    return Me;
+  function requireFn(fn) {
+    if (isUnloaded) throw envUnloadedError(pluginName);
+    if (typeof fn !== "function") throw new HooksError(`${pluginName}: not a function`);
+    return fn;
   }
-  let invoke = async (Me, We, ze) => await Reflect.apply(G(Me), ze, We);
-  let iterate = (Me) => {
-    if (!(typeof Me === "object" && Me !== null && "next" in Me && typeof Me.next === "function"))
+  let invoke = async (fn, args, thisArg) => await Reflect.apply(requireFn(fn), thisArg, args);
+  let iterate = (stream) => {
+    if (!(
+      typeof stream === "object" &&
+      stream !== null &&
+      "next" in stream &&
+      typeof stream.next === "function"
+    ))
       throw new HooksError(
-        `${pluginName}: a hook on a streaming event returns its async generator; got ${Me === null ? "null" : typeof Me}`,
+        `${pluginName}: a hook on a streaming event returns its async generator; got ${stream === null ? "null" : typeof stream}`,
       );
-    return Me;
+    return stream;
   };
-  let isGeneratorHook = (Me) =>
-    typeof Me === "function" && Object.prototype.toString.call(Me) === "[object AsyncGeneratorFunction]";
-  async function ke(...Me) {
-    let [We, ze, lt] = Me;
+  let isGeneratorHook = (fn) =>
+    typeof fn === "function" && Object.prototype.toString.call(fn) === "[object AsyncGeneratorFunction]";
+  async function host(...args) {
+    let [op, payload, extra] = args;
     try {
-      return await e(We, ze, lt);
+      return await invokeHost(op, payload, extra);
     } catch (error) {
       if (typeof error === "object" && error)
         weakMap.set(error, {
           plugin: pluginName,
-          op: We,
+          op,
           message: errorMessage(error),
         });
-      throw S ? tagError(error, cachedResolveAnswer(weakMap, error)) : error;
+      throw isUnloaded ? tagError(error, cachedResolveAnswer(weakMap, error)) : error;
     }
   }
-  function we(Me, We, ze) {
-    let lt = (r.hostStream ?? noStreamingOps)(Me, We, ze);
-    lt.result.catch((error) =>
-      S ? tagError(error, tagPayload(pluginName, Me, errorMessage(error))) : error,
+  function hostStream(op, payload, extra) {
+    let streamed = (options.hostStream ?? noStreamingOps)(op, payload, extra);
+    streamed.result.catch((error) =>
+      isUnloaded ? tagError(error, tagPayload(pluginName, op, errorMessage(error))) : error,
     );
-    return lt;
+    return streamed;
   }
-  let Ee = () => void (S = true);
-  function Ae(Me) {
-    return Me instanceof AbortSignal
+  let markUnloaded = () => void (isUnloaded = true);
+  function signalFrom(value) {
+    return value instanceof AbortSignal
       ? {
-          signal: Me,
+          signal: value,
           unlink: () => {},
         }
       : undefined;
   }
-  r.signal?.addEventListener("abort", Ee, {
+  options.signal?.addEventListener("abort", markUnloaded, {
     once: true,
   });
-  let Ie;
+  let activation;
   try {
-    Ie = await registerHooksModule({
-      loaded: h,
-      args: n,
-      host: ke,
-      hostStream: we,
+    activation = await registerHooksModule({
+      loaded: builtin,
+      args,
+      host,
+      hostStream,
       resolvedTable: surfaceAnswerCache.read,
       invoke,
       iterate,
-      streamIn: (Me) => Me,
+      streamIn: (stream) => stream,
       isGeneratorHook,
-      wrapMethod: (Me) => Me,
-      signalFrom: Ae,
+      wrapMethod: (fn) => fn,
+      signalFrom,
       makeSignal: () => {
         let abortController = new AbortController();
         return {
           signal: abortController.signal,
-          abort: (We) => abortController.abort(We),
+          abort: (reason) => abortController.abort(reason),
         };
       },
-      copyMatcher: (Me) => Me,
-      stamped: (Me) => Me(),
+      copyMatcher: (matcher) => matcher,
+      stamped: (fn) => fn(),
       framed,
     });
-    if (r.signal?.aborted === true) throw new HooksError(`${pluginName}: unloaded while its module loaded`);
+    if (options.signal?.aborted === true)
+      throw new HooksError(`${pluginName}: unloaded while its module loaded`);
   } catch (error) {
-    Ee();
+    markUnloaded();
     throw error;
   }
   return {
-    activation: Ie,
+    activation,
     invoke,
-    invokeSync: (Me, We) => G(Me)(We),
-    applyIn: (Me, We, ...ze) => Reflect.apply(G(We), Me, ze),
-    cloneIn: (Me) => Me,
-    argumentFor: (Me) => Me,
-    freezeForNext: (Me) => Object.freeze(Me),
-    leaving: (Me) => Me,
-    nextFor: (Me) => Me,
-    streamNextFor: (Me) => Me,
+    invokeSync: (fn, arg) => requireFn(fn)(arg),
+    applyIn: (thisArg, fn, ...args) => Reflect.apply(requireFn(fn), thisArg, args),
+    cloneIn: (value) => value,
+    argumentFor: (arg) => arg,
+    freezeForNext: (value) => Object.freeze(value),
+    leaving: (value) => value,
+    nextFor: (value) => value,
+    streamNextFor: (value) => value,
     storeResolved: surfaceAnswerCache.store,
     dispose: () => {
-      Ee();
-      Ie.dispose();
+      markUnloaded();
+      activation.dispose();
     },
-    opFailureOf: (Me) => cachedResolveAnswer(weakMap, Me),
+    opFailureOf: (error) => cachedResolveAnswer(weakMap, error),
     ownsValue: () => false,
   };
 };
@@ -761,41 +802,47 @@ var validateHooksModuleExports = async (e, n, r = {}) => {
 /**
  * 原样返回
  */
-var identityOf = (e) => e;
+var identityOf = (value) => value;
 //@ chunk-e6aww6q8.js:3703578-3704164 placement
 /**
  * 为模块注册表建立按事件的索引：匹配的注册项、是否监听、是否有 catch、组合 matcher。
  */
-function createRegistrationIndex(registered, n) {
-  let r = new Map();
-  function s(y) {
-    let S = r.get(y);
-    if (S === undefined) {
-      S = registered.flatMap((w, L) => (matchesEventForPlugin(w.pattern, y, n) ? [L] : []));
-      r.set(y, S);
+function createRegistrationIndex(registered, options) {
+  let cache = new Map();
+  function registrationsFor(event) {
+    let indices = cache.get(event);
+    if (indices === undefined) {
+      indices = registered.flatMap((registration, index) =>
+        matchesEventForPlugin(registration.pattern, event, options) ? [index] : [],
+      );
+      cache.set(event, indices);
     }
-    return S;
+    return indices;
   }
-  let h = (y, S = []) =>
-    s(y).flatMap((w) => {
-      let L = registered[w];
-      return L === undefined || S.includes(w) ? [] : [L];
+  let standingFor = (event, leftOut = []) =>
+    registrationsFor(event).flatMap((index) => {
+      let registration = registered[index];
+      return registration === undefined || leftOut.includes(index) ? [] : [registration];
     });
   return {
-    patterns: uniq(registered.map((y) => y.pattern)),
-    registrationsFor: s,
-    standingFor: h,
-    hooks: (y, S) => h(y, S).length > 0,
-    catches: (y, S, w) =>
-      h(y, S).some((L) => L.caught === true && (L.matcher === undefined || w?.(L.matcher) !== false)),
-    hasCatch: (y) => registered[y]?.caught === true,
-    matcherFor: (y, S) => {
-      let w;
-      for (let [L, G] of h(y, S).entries()) {
-        if (G.matcher === undefined) return;
-        w = L === 0 ? G.matcher : [w, G.matcher];
+    patterns: uniq(registered.map((registration) => registration.pattern)),
+    registrationsFor,
+    standingFor,
+    hooks: (event, leftOut) => standingFor(event, leftOut).length > 0,
+    catches: (event, leftOut, matcherCheck) =>
+      standingFor(event, leftOut).some(
+        (registration) =>
+          registration.caught === true &&
+          (registration.matcher === undefined || matcherCheck?.(registration.matcher) !== false),
+      ),
+    hasCatch: (index) => registered[index]?.caught === true,
+    matcherFor: (event, leftOut) => {
+      let matcher;
+      for (let [index, registration] of standingFor(event, leftOut).entries()) {
+        if (registration.matcher === undefined) return;
+        matcher = index === 0 ? registration.matcher : [matcher, registration.matcher];
       }
-      return w;
+      return matcher;
     },
   };
 }
@@ -803,145 +850,145 @@ function createRegistrationIndex(registered, n) {
 /**
  * 未加载则拒绝
  */
-function rejectIfUnloaded(e, n, r) {
-  return e().kind === "unloaded" ? Promise.reject(new HooksError(n)) : r();
+function rejectIfUnloaded(statusOf, message, fn) {
+  return statusOf().kind === "unloaded" ? Promise.reject(new HooksError(message)) : fn();
 }
 //@ chunk-e6aww6q8.js:3704243-3705997 placement
 /**
- * 描述 hooks 模块的当前状态（live、unloaded、retiring、dead、error）。
+ * 加载并登记一个 hooks 模块：查 environment 上限、建 environment、登记 moduleSeats/environmentArgs，返回带 enter/leave/dispatch/discard/retire/resolveTables/build/press 的模块记录。
  */
-async function describeHooksModuleState(e, n) {
-  let r = hooksModulesRefusalReason();
-  if (r !== undefined) throw new HookAdmissionError(n.pluginName, r);
-  let h = builtinModuleOf(n) !== undefined ? ensureNativeHost(e) : undefined;
-  let y = h ?? ensureEnvironmentHost(e);
-  let S = ++e.state.environmentCounter;
-  let w = await y.load(S, n);
+async function loadAndRegisterHooksModule(runtime, args) {
+  let refusal = hooksModulesRefusalReason();
+  if (refusal !== undefined) throw new HookAdmissionError(args.pluginName, refusal);
+  let nativeHost = builtinModuleOf(args) !== undefined ? ensureNativeHost(runtime) : undefined;
+  let host = nativeHost ?? ensureEnvironmentHost(runtime);
+  let envId = ++runtime.state.environmentCounter;
+  let loaded = await host.load(envId, args);
   try {
     checkRegisteredEvents(
-      n.pluginName,
-      n.scan,
-      w.registered.map((Ee) => Ee.pattern),
+      args.pluginName,
+      args.scan,
+      loaded.registered.map((registration) => registration.pattern),
     );
   } catch (error) {
-    y.unload(S);
+    host.unload(envId);
     throw error;
   }
-  let L = pluginStorageKey(n);
-  adviseUiRenderMatchers(L, w.registered);
-  warnProtoPatterns(n.pluginName, w.registered);
-  getPluginRegistry().moduleSeats.set(n.pluginName, n.tier);
-  e.state.environmentArgs.set(S, n);
-  let G = {
+  let label = pluginStorageKey(args);
+  adviseUiRenderMatchers(label, loaded.registered);
+  warnProtoPatterns(args.pluginName, loaded.registered);
+  getPluginRegistry().moduleSeats.set(args.pluginName, args.tier);
+  runtime.state.environmentArgs.set(envId, args);
+  let lifecycle = {
     kind: "live",
   };
-  let q = 0;
-  let Z = `hooks module ${L} unloaded`;
-  function Se() {
-    if (G.kind === "live" || G.kind === "retiring") {
-      G = {
+  let activeCalls = 0;
+  let unloadText = `hooks module ${label} unloaded`;
+  function discard() {
+    if (lifecycle.kind === "live" || lifecycle.kind === "retiring") {
+      lifecycle = {
         kind: "unloaded",
-        retired: G.kind === "retiring",
+        retired: lifecycle.kind === "retiring",
       };
-      e.state.environmentArgs.delete(S);
+      runtime.state.environmentArgs.delete(envId);
       try {
-        y.unload(S);
+        host.unload(envId);
       } finally {
-        releaseWaitingCalls(e.state.sentCalls, S);
+        releaseWaitingCalls(runtime.state.sentCalls, envId);
       }
     }
   }
-  function ke() {
-    let died = y.died;
-    return died !== undefined && G.kind !== "unloaded"
+  function status() {
+    let died = host.died;
+    return died !== undefined && lifecycle.kind !== "unloaded"
       ? {
           kind: "dead",
           reason: died,
         }
-      : G;
+      : lifecycle;
   }
-  let we = identityOf({
-    name: n.pluginName,
-    label: L,
-    tier: n.tier,
-    ...createRegistrationIndex(w.registered, {
-      isBuiltin: isOfficialMarketplacePlugin(n.pluginStorageId),
+  let secondModule = identityOf({
+    name: args.pluginName,
+    label,
+    tier: args.tier,
+    ...createRegistrationIndex(loaded.registered, {
+      isBuiltin: isOfficialMarketplacePlugin(args.pluginStorageId),
     }),
-    args: n,
-    environmentId: S,
-    hopKey: y,
-    ...(h !== undefined && {
-      link: (Ee) => h.link(S, Ee),
-      streamLinks: (Ee) => h.linkStreams(S, Ee),
+    args,
+    environmentId: envId,
+    hopKey: host,
+    ...(nativeHost !== undefined && {
+      link: (readOn) => nativeHost.link(envId, readOn),
+      streamLinks: (readStream) => nativeHost.linkStreams(envId, readStream),
     }),
-    status: ke,
+    status,
     enter: () => {
-      q += 1;
-      countModLoadEvent(n.pluginStorageId);
+      activeCalls += 1;
+      countModLoadEvent(args.pluginStorageId);
     },
     leave() {
-      q -= 1;
-      if (G.kind === "retiring" && q === 0) Se();
+      activeCalls -= 1;
+      if (lifecycle.kind === "retiring" && activeCalls === 0) discard();
     },
-    dispatch: (event, Ae, Ie) =>
+    dispatch: (event, payload, ctx) =>
       dispatchHookCall({
-        members: [we],
+        members: [secondModule],
         event,
-        e: Ae,
-        call: Ie,
-        signal: Ie.signal,
+        e: payload,
+        call: ctx,
+        signal: ctx.signal,
         hookOrigin: undefined,
-        origin: Ie.origin,
-        floors: Y6t,
+        origin: ctx.origin,
+        floors: NO_FLOORS,
       }),
-    discard: Se,
+    discard,
     retire() {
-      forgetCachedDescribe(n.pluginName);
-      forgetRegisteredAgent(n.pluginName);
-      e.state.environmentArgs.delete(S);
-      moveToCloudTrash.forgetPresses(n.pluginName);
+      forgetCachedDescribe(args.pluginName);
+      forgetRegisteredAgent(args.pluginName);
+      runtime.state.environmentArgs.delete(envId);
+      moveToCloudTrash.forgetPresses(args.pluginName);
       try {
-        surfaceComposer()?.forget(n.pluginName);
+        surfaceComposer()?.forget(args.pluginName);
       } catch (error) {
-        logForDebugging(`${n.pluginName}: ${errorMessage(error)}`, {
+        logForDebugging(`${args.pluginName}: ${errorMessage(error)}`, {
           level: "error",
         });
       }
-      if (G.kind === "live")
-        G = {
+      if (lifecycle.kind === "live")
+        lifecycle = {
           kind: "retiring",
         };
-      if (q === 0) Se();
+      if (activeCalls === 0) discard();
     },
-    resolveTables: (Ee) =>
+    resolveTables: (entry) =>
       rejectIfUnloaded(
-        () => G,
-        Z,
-        () => y.resolveTables(S, Ee),
+        () => lifecycle,
+        unloadText,
+        () => host.resolveTables(envId, entry),
       ),
-    build: (Ee, Ae) =>
+    build: (payload, ctx) =>
       rejectIfUnloaded(
-        () => G,
-        Z,
-        () => y.build(S, Ee, Ae),
+        () => lifecycle,
+        unloadText,
+        () => host.build(envId, payload, ctx),
       ),
-    callInterface: (Ee, Ae) =>
+    callInterface: (payload, ctx) =>
       rejectIfUnloaded(
-        () => G,
-        Z,
-        () => y.callInterface(S, Ee, Ae),
+        () => lifecycle,
+        unloadText,
+        () => host.callInterface(envId, payload, ctx),
       ),
-    press: (Ee, Ae) =>
+    press: (payload, ctx) =>
       rejectIfUnloaded(
-        () => G,
-        Z,
-        () => y.press(S, Ee, Ae),
+        () => lifecycle,
+        unloadText,
+        () => host.press(envId, payload, ctx),
       ),
-    releasePresses: (Ee) => {
-      if (G.kind !== "unloaded") y.releasePresses(S, Ee);
+    releasePresses: (payload) => {
+      if (lifecycle.kind !== "unloaded") host.releasePresses(envId, payload);
     },
   });
-  return we;
+  return secondModule;
 }
 //@ chunk-e6aww6q8.js:3705997-3706009 placement
 /**
@@ -952,11 +999,11 @@ var HOOKS_READY_TIMEOUT_MS = 1e4;
 /**
  * 复制注册子句（模式、matcher 与 caught）。
  */
-var copyRegistrations = (e, n) =>
-  e.map(({ pattern, matcher, caught }) => ({
+var copyRegistrations = (registrations, options) =>
+  registrations.map(({ pattern, matcher, caught }) => ({
     pattern,
     ...(matcher !== undefined && {
-      matcher: reviveMatcherDefault(matcher, `${n}: on("${pattern}", matcher)`),
+      matcher: reviveMatcherDefault(matcher, `${options}: on("${pattern}", matcher)`),
     }),
     ...(caught === true && {
       caught,
@@ -966,144 +1013,155 @@ var copyRegistrations = (e, n) =>
 /**
  * 重载前重新扫描插件的 hooks 模块并重算层级；组织插件与密封插件有额外限制。
  */
-async function rescanHooksModuleArgs(state, n, r) {
-  if (r) invalidateCommandNames();
-  let pluginStorageId = n.pluginStorageId;
+async function rescanHooksModuleArgs(state, args, reread) {
+  if (reread) invalidateCommandNames();
+  let pluginStorageId = args.pluginStorageId;
   if (resolveManagedPluginDigests(pluginStorageId) !== undefined) {
-    if (r?.modulePath === undefined)
-      throw new NotOrganizationPluginError(n.pluginName, "no entry the host holds can be proved");
-    return prepareHooksModuleArgs(state, r, r.modulePath);
+    if (reread?.modulePath === undefined)
+      throw new NotOrganizationPluginError(args.pluginName, "no entry the host holds can be proved");
+    return prepareHooksModuleArgs(state, reread, reread.modulePath);
   }
-  if (n.sealed === true)
+  if (args.sealed === true)
     throw new NotOrganizationPluginError(
-      n.pluginName,
+      args.pluginName,
       "a proved module of this name may not come back from disk",
     );
   assertPluginHooksAdmitted(state, {
-    pluginName: n.pluginName,
+    pluginName: args.pluginName,
     pluginId: pluginStorageId,
-    plugin: r,
+    plugin: reread,
   });
-  let modulePath = r?.modulePath ?? n.modulePath;
-  let S = r?.path ?? n.pluginRoot;
-  let w = r?.name ?? n.pluginName;
-  let L = await scanHooksModule(modulePath, S, w);
-  let { surfaceModules, ...q } = n;
-  let surfaceModules_2 = await loadSurfaceModules(L.scan.clients, S, w);
-  let Se = {
-    ...q,
+  let modulePath = reread?.modulePath ?? args.modulePath;
+  let secondArgs = reread?.path ?? args.pluginRoot;
+  let secondSecondArgs = reread?.name ?? args.pluginName;
+  let nextArgs = await scanHooksModule(modulePath, secondArgs, secondSecondArgs);
+  let { surfaceModules, ...fresh } = args;
+  let surfaceModules_2 = await loadSurfaceModules(nextArgs.scan.clients, secondArgs, secondSecondArgs);
+  let secondFresh = {
+    ...fresh,
     ...(surfaceModules_2 !== undefined && {
       surfaceModules: surfaceModules_2,
     }),
   };
-  let ke = pluginTier(n.pluginStorageId, getVouchedPolicyPluginIds(), resolveManagedPluginOrder());
-  let isPersons = copsSimilar(n.pluginStorageId, getVouchedPolicyPluginIds());
-  checkNextToAllowed(w, L.scan, ke);
-  checkScanPolicy(w, L.scan, n.pluginStorageId);
-  if (!r)
+  let thirdFresh = pluginTier(args.pluginStorageId, getVouchedPolicyPluginIds(), resolveManagedPluginOrder());
+  let isPersons = hasSimilarMarketplaceRef(args.pluginStorageId, getVouchedPolicyPluginIds());
+  checkNextToAllowed(secondSecondArgs, nextArgs.scan, thirdFresh);
+  checkScanPolicy(secondSecondArgs, nextArgs.scan, args.pluginStorageId);
+  if (!reread)
     return {
-      ...Se,
-      ...L,
-      tier: ke,
+      ...secondFresh,
+      ...nextArgs,
+      tier: thirdFresh,
       isPersons,
     };
   return withOptions(
     {
-      ...Se,
+      ...secondFresh,
       modulePath,
-      tier: ke,
+      tier: thirdFresh,
       isPersons,
     },
-    L,
-    await resolvePluginOptions(r),
+    nextArgs,
+    await resolvePluginOptions(reread),
   );
 }
 //@ chunk-e6aww6q8.js:3706953-3706989 placement
 /**
  * worker 加载上报器
  */
-var workersLoadedReporter = identity_2(createValueSlot(), (e) => e.set(undefined));
+var workersLoadedReporter; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3706953", () => {
+  workersLoadedReporter = identity_2(createValueSlot(), (slot) => slot.set(undefined));
+});
 //@ chunk-e6aww6q8.js:4053009-4053100 placement
 /**
  * 记录加载失败
  */
-function logHookLoadFailure(e, n, r) {
-  if (!(e instanceof HookAdmissionError)) {
-    logFeatureBad("plugin_function_hooks_load", n, classifyPluginOrigin(r));
-    logModLoadFailed(r, n);
+function logHookLoadFailure(error, feature, args) {
+  if (!(error instanceof HookAdmissionError)) {
+    logFeatureBad("plugin_function_hooks_load", feature, classifyPluginOrigin(args));
+    logModLoadFailed(args, feature);
   }
 }
 //@ chunk-e6aww6q8.js:4053100-4053221 placement
-async function reprepareFromPlugin(e, n) {
-  if (n?.modulePath === undefined) return;
-  let hooksModuleArgs = await prepareHooksModuleArgs(e.state, n, n.modulePath);
-  setKnownArgs(e.state, hooksModuleArgs);
+async function reprepareFromPlugin(runtime, plugin) {
+  if (plugin?.modulePath === undefined) return;
+  let hooksModuleArgs = await prepareHooksModuleArgs(runtime.state, plugin, plugin.modulePath);
+  setKnownArgs(runtime.state, hooksModuleArgs);
   return hooksModuleArgs;
 }
 //@ chunk-e6aww6q8.js:4053221-4053303 placement
 /**
  * 去掉 “插件名: ” 前缀
  */
-function stripPluginPrefix(e, n) {
-  let r = errorMessage(n);
-  let s = `${e}: `;
-  return r.startsWith(s) ? r.slice(s.length) : r;
+function stripPluginPrefix(pluginName, error) {
+  let message = errorMessage(error);
+  let prefix = `${pluginName}: `;
+  return message.startsWith(prefix) ? message.slice(prefix.length) : message;
 }
 //@ chunk-e6aww6q8.js:4053303-4053389 placement
 /**
  * 上报模块加载失败
  */
-function reportHookLoadFailure(e, error, r) {
-  let s = `hooks module did not load: ${stripPluginPrefix(e, error)}`;
-  reportPluginProblem(e, s);
-  if (r) reportInlinePluginNotice(r, s);
+function reportHookLoadFailure(pluginName, error, notice) {
+  let message = `hooks module did not load: ${stripPluginPrefix(pluginName, error)}`;
+  reportPluginProblem(pluginName, message);
+  if (notice) reportInlinePluginNotice(notice, message);
 }
 //@ chunk-e6aww6q8.js:4053389-4053425 placement
 /**
  * 上报重载失败
  */
-function reportReloadFailure(name, error, r) {
-  reportHookLoadFailure(name, errorMessage(error) + PREVIOUS_VERSION_UNLOADED, r);
+function reportReloadFailure(name, error, notice) {
+  reportHookLoadFailure(name, errorMessage(error) + PREVIOUS_VERSION_UNLOADED, notice);
 }
 //@ chunk-e6aww6q8.js:4053425-4053473 placement
 /**
  * 按名字找钩子成员
  */
-var findHookMemberByName = (e, n) => e.find((r) => r.name === n[0]?.hook);
+var findHookMemberByName = (modules, failed) =>
+  modules.find((loadedModule) => loadedModule.name === failed[0]?.hook);
 //@ chunk-e6aww6q8.js:4062208-4063156 placement
 /**
  * 判断加载这组模块时是否需要整组重新折叠 engine.create，返回原因文字（无需则 undefined）。
  */
-function describeRefoldReason(e, { live, declaring, kept, leaving, unloaded }) {
-  let S = new Map(live.map((ke) => [ke.name, ke]));
-  let w = new Map(declaring.map((ke) => [ke.pluginName, ke]));
-  let L = new Set([...S.keys(), ...e.state.knownArgs.keys(), ...w.keys()]);
-  for (let ke of L) {
-    if (kept.has(ke) || unloaded.has(ke)) continue;
-    let we = e.state.knownArgs.get(ke);
-    let Ee = w.get(ke);
-    let scans = [we, Ee].flatMap((ze) => (ze ? [ze.scan] : []));
+function describeRefoldReason(runtime, { live, declaring, kept, leaving, unloaded }) {
+  let liveByName = new Map(live.map((loadedModule) => [loadedModule.name, loadedModule]));
+  let declaringByName = new Map(declaring.map((args) => [args.pluginName, args]));
+  let names = new Set([...liveByName.keys(), ...runtime.state.knownArgs.keys(), ...declaringByName.keys()]);
+  for (let name of names) {
+    if (kept.has(name) || unloaded.has(name)) continue;
+    let known = runtime.state.knownArgs.get(name);
+    let declared = declaringByName.get(name);
+    let scans = [known, declared].flatMap((scanArgs) => (scanArgs ? [scanArgs.scan] : []));
     let reloadTriggerEvent = findReloadTriggerEvent({
-      live: S.get(ke),
+      live: liveByName.get(name),
       scans,
     });
     if (!reloadTriggerEvent) continue;
-    let Me = S.has(ke) || we !== undefined;
-    return `${ke} hooks ${reloadTriggerEvent} and ${!Ee ? "leaves" : Me ? "loads afresh" : "joins"}`;
+    let wasLive = liveByName.has(name) || known !== undefined;
+    return `${name} hooks ${reloadTriggerEvent} and ${!declared ? "leaves" : wasLive ? "loads afresh" : "joins"}`;
   }
-  let G = leaving[0] ?? e.state.crashedWithholders.keys().next().value;
-  if (G !== undefined) return `${G} crashed with its withholdings standing`;
-  if (e.state.lastEndedBy !== undefined) return `${e.state.lastEndedBy} ended the last fold without next`;
-  if (!e.state.isSetRecord) return PARTIAL_REFOLD_TEXT;
-  let flattened = live.flatMap((ke) => (kept.get(ke.name) === ke ? [ke.name] : []));
-  let flattened_2 = declaring.flatMap((ke) => (kept.has(ke.pluginName) ? [ke.pluginName] : []));
-  return flattened.some((ke, we) => flattened_2[we] !== ke) ? "the kept modules change order" : undefined;
+  let crashedWithholder = leaving[0] ?? runtime.state.crashedWithholders.keys().next().value;
+  if (crashedWithholder !== undefined) return `${crashedWithholder} crashed with its withholdings standing`;
+  if (runtime.state.lastEndedBy !== undefined)
+    return `${runtime.state.lastEndedBy} ended the last fold without next`;
+  if (!runtime.state.isSetRecord) return PARTIAL_REFOLD_TEXT;
+  let flattened = live.flatMap((thirdModule) =>
+    kept.get(thirdModule.name) === thirdModule ? [thirdModule.name] : [],
+  );
+  let flattened_2 = declaring.flatMap((thirdArgs) =>
+    kept.has(thirdArgs.pluginName) ? [thirdArgs.pluginName] : [],
+  );
+  return flattened.some((name, index) => flattened_2[index] !== name)
+    ? "the kept modules change order"
+    : undefined;
 }
 //@ chunk-e6aww6q8.js:4063156-4063273 placement
-function handlesCommandRun(scan, n) {
+function handlesCommandRun(scan, command) {
   return (
     scan.hooks.some((hook) => matchesEventPattern(hook, "command.run")) &&
-    (scan.runCommands === undefined || scan.runCommands.includes(n))
+    (scan.runCommands === undefined || scan.runCommands.includes(command))
   );
 }
 //@ chunk-e6aww6q8.js:4063273-4063333 placement
@@ -1117,16 +1175,18 @@ function needsRefoldScan(scan) {
 /**
  * 取插件适用的准入文本。
  */
-function admissionTextFor(e) {
+function admissionTextFor(loadedModule) {
   let admissionText = getPluginRegistry().admissionText;
   if (admissionText === null) return admissionText;
-  return e !== undefined && isModuleAdmitted(e) ? admissionText : e?.judgedUnder;
+  return loadedModule !== undefined && isModuleAdmitted(loadedModule)
+    ? admissionText
+    : loadedModule?.judgedUnder;
 }
 //@ chunk-e6aww6q8.js:4063479-4063613 placement
-function recordOptionsReloadFailure(e, n, error) {
-  e.state.optionsReloadFailures.set(n.name, {
-    generation: e.state.generations.get(n.name),
-    wanted: pluginOptionsSnapshot(n).text,
+function recordOptionsReloadFailure(runtime, args, error) {
+  runtime.state.optionsReloadFailures.set(args.name, {
+    generation: runtime.state.generations.get(args.name),
+    wanted: pluginOptionsSnapshot(args).text,
     error,
   });
 }
@@ -1134,17 +1194,17 @@ function recordOptionsReloadFailure(e, n, error) {
 /**
  * 插件提供者层级
  */
-var pluginProviderRank = (pluginStorageId) =>
-  providerRank(pluginStorageId, getVouchedPolicyPluginIds(), resolveManagedPluginOrder());
+var pluginProviderRank = (plugin) =>
+  providerRank(plugin, getVouchedPolicyPluginIds(), resolveManagedPluginOrder());
 //@ chunk-e6aww6q8.js:4063643-4063758 placement
-function providerRankOf(e) {
-  return e.sealed === true
+function providerRankOf(loadedModule) {
+  return loadedModule.sealed === true
     ? providerRank(
-        e.pluginStorageId,
-        withSealedPlugin(e.pluginStorageId, getVouchedPolicyPluginIds()),
+        loadedModule.pluginStorageId,
+        withSealedPlugin(loadedModule.pluginStorageId, getVouchedPolicyPluginIds()),
         resolveManagedPluginOrder(),
       )
-    : pluginProviderRank(e.pluginStorageId);
+    : pluginProviderRank(loadedModule.pluginStorageId);
 }
 //@ chunk-e6aww6q8.js:4063758-4063869 placement = findReverseDependents (0.826)
 /**
@@ -1153,8 +1213,8 @@ function providerRankOf(e) {
 function findReverseDependents(pluginId, plugins) {
   return (
     plugins !== pluginId &&
-    (pluginId.manifest.dependencies ?? []).some((r) =>
-      dependencyRefMatches(qualifyDependency(r, pluginId.source), plugins.source, pluginId.source),
+    (pluginId.manifest.dependencies ?? []).some((dependency) =>
+      dependencyRefMatches(qualifyDependency(dependency, pluginId.source), plugins.source, pluginId.source),
     )
   );
 }
@@ -1162,123 +1222,133 @@ function findReverseDependents(pluginId, plugins) {
 /**
  * 按依赖关系对插件做拓扑排序（同层保持原顺序），并找出依赖环。
  */
-function orderByDependencies(e, n) {
-  let r = new Set(e);
-  let s = new Map(e.map((ke) => [ke, uniq(n(ke)).filter((we) => we !== ke && r.has(we))]));
-  let h = new Map();
-  for (let ke of e) {
-    let we = new Set();
-    let Ee = [...(s.get(ke) ?? [])];
-    for (let Ae = Ee.pop(); Ae; Ae = Ee.pop())
-      if (!we.has(Ae)) {
-        we.add(Ae);
-        Ee.push(...(s.get(Ae) ?? []));
+function orderByDependencies(items, getDeps) {
+  let known = new Set(items);
+  let depsByName = new Map(
+    items.map((item) => [item, uniq(getDeps(item)).filter((dep) => dep !== item && known.has(dep))]),
+  );
+  let closure = new Map();
+  for (let item of items) {
+    let seen = new Set();
+    let stack = [...(depsByName.get(item) ?? [])];
+    for (let dep = stack.pop(); dep; dep = stack.pop())
+      if (!seen.has(dep)) {
+        seen.add(dep);
+        stack.push(...(depsByName.get(dep) ?? []));
       }
-    h.set(ke, we);
+    closure.set(item, seen);
   }
-  let y = (ke, we) => h.get(ke)?.has(we) === true && h.get(we)?.has(ke) === true;
-  let S = [];
-  for (let ke of e) {
-    let filtered = e.filter((Ae) => Ae === ke || y(ke, Ae));
-    if (filtered.length > 1 && filtered[0] === ke) S.push(filtered);
+  let areMutual = (a, b) => closure.get(a)?.has(b) === true && closure.get(b)?.has(a) === true;
+  let cycles = [];
+  for (let item of items) {
+    let filtered = items.filter((other) => other === item || areMutual(item, other));
+    if (filtered.length > 1 && filtered[0] === item) cycles.push(filtered);
   }
-  let w = new Map(
-    e.map((ke, we) => [
-      ke,
-      [...(s.get(ke) ?? []).filter((Ee) => !y(ke, Ee)), ...e.slice(we + 1).filter((Ee) => y(ke, Ee))],
+  let successors = new Map(
+    items.map((item, index) => [
+      item,
+      [
+        ...(depsByName.get(item) ?? []).filter((dep) => !areMutual(item, dep)),
+        ...items.slice(index + 1).filter((other) => areMutual(item, other)),
+      ],
     ]),
   );
-  let L = Map.groupBy([...w.values()].flat(), (ke) => ke);
-  let G = new Map(e.map((ke) => [ke, L.get(ke)?.length ?? 0]));
-  let q = (ke) => G.get(ke) === 0;
-  let Z = [];
-  let Se = e;
-  while (Se.length > 0) {
-    let max = Math.max(Se.findIndex(q), 0);
-    for (let we of Se.slice(max, max + 1)) {
-      Z.push(we);
-      for (let Ee of w.get(we) ?? []) G.set(Ee, (G.get(Ee) ?? 0) - 1);
+  let reverse = Map.groupBy([...successors.values()].flat(), (successor) => successor);
+  let pending = new Map(items.map((item) => [item, reverse.get(item)?.length ?? 0]));
+  let isFree = (item) => pending.get(item) === 0;
+  let order = [];
+  let remaining = items;
+  while (remaining.length > 0) {
+    let max = Math.max(remaining.findIndex(isFree), 0);
+    for (let item of remaining.slice(max, max + 1)) {
+      order.push(item);
+      for (let successor of successors.get(item) ?? [])
+        pending.set(successor, (pending.get(successor) ?? 0) - 1);
     }
-    Se = Se.toSpliced(max, 1);
+    remaining = remaining.toSpliced(max, 1);
   }
   return {
-    order: Z,
-    cycles: S,
+    order,
+    cycles,
   };
 }
 //@ chunk-e6aww6q8.js:4064754-4065681 placement
 /**
  * 按提供者层级与依赖关系排列 hooks 模块顺序，并说明冲突时谁优先。
  */
-function orderHooksModules(e, n) {
-  let mapped = e.map((S) => ({
-    plugin: S,
-    ...n(S),
+function orderHooksModules(plugins, infoOf) {
+  let mapped = plugins.map((plugin) => ({
+    plugin,
+    ...infoOf(plugin),
   }));
-  let s = new Map(
-    mapped.map((S) => {
-      let filtered = mapped.filter((L) => findReverseDependents(S.plugin, L.plugin));
-      for (let L of filtered) {
-        let G = L.rank < S.rank;
-        let Z =
-          L.tier === S.tier
-            ? `placed outside it in the ${L.tier} tier; that place wins`
-            : `in the ${L.tier} tier, outside the ${S.tier} tier; tier order wins`;
-        if (G)
+  let dependentsByName = new Map(
+    mapped.map((entry) => {
+      let filtered = mapped.filter((other) => findReverseDependents(entry.plugin, other.plugin));
+      for (let dependent of filtered) {
+        let isInner = dependent.rank < entry.rank;
+        let why =
+          dependent.tier === entry.tier
+            ? `placed outside it in the ${dependent.tier} tier; that place wins`
+            : `in the ${dependent.tier} tier, outside the ${entry.tier} tier; tier order wins`;
+        if (isInner)
           logForDebugging(
-            `hooks module order: ${S.plugin.source} depends on ${L.plugin.source}, which is ${Z}, so ${L.plugin.source} stays outer`,
+            `hooks module order: ${entry.plugin.source} depends on ${dependent.plugin.source}, which is ${why}, so ${dependent.plugin.source} stays outer`,
             {
               level: "warn",
             },
           );
       }
-      return [S, filtered];
+      return [entry, filtered];
     }),
   );
-  let h = [];
-  for (let S of Map.groupBy(mapped, (w) => w.rank).values()) {
-    let w = orderByDependencies(S, (L) => s.get(L) ?? []);
-    for (let cycle of w.cycles)
+  let order = [];
+  for (let rankGroup of Map.groupBy(mapped, (rank) => rank.rank).values()) {
+    let inner = orderByDependencies(rankGroup, (entry) => dependentsByName.get(entry) ?? []);
+    for (let cycle of inner.cycles)
       logForDebugging(
-        `hooks module order: ${cycle.map((G) => G.plugin.source).join(", ")} depend on one another in a cycle; that dependency order is refused and they register in the order they were chosen in`,
+        `hooks module order: ${cycle.map((entry) => entry.plugin.source).join(", ")} depend on one another in a cycle; that dependency order is refused and they register in the order they were chosen in`,
         {
           level: "error",
         },
       );
-    h.push(...w.order.map((L) => L.plugin));
+    order.push(...inner.order.map((entry) => entry.plugin));
   }
-  if (h.some((S, w) => S !== e[w]))
-    logForDebugging("hooks module order: dependencies register " + h.map((S) => S.source).join(", "));
-  return h;
+  if (order.some((plugin, index) => plugin !== plugins[index]))
+    logForDebugging(
+      "hooks module order: dependencies register " + order.map((plugin) => plugin.source).join(", "),
+    );
+  return order;
 }
 //@ chunk-e6aww6q8.js:4065681-4066023 placement
 /**
  * 让密封插件按指定顺序排在其他插件前面。
  */
-function orderSealedModules(e, n) {
-  if (!e.some((h) => h.sealed === true)) return e;
-  let s = new Map(e.map((h) => [h.pluginName, h]));
+function orderSealedModules(args, infoByName) {
+  if (!args.some((args) => args.sealed === true)) return args;
+  let byName = new Map(args.map((args) => [args.pluginName, args]));
   return orderHooksModules(
-    e.toSorted((h, y) => providerRankOf(h) - providerRankOf(y)).flatMap((h) => n.get(h.pluginName) ?? []),
-    (h) => {
-      let y = s.get(h.name);
-      if (y === undefined) throw Error("a plugin was placed with no declaration");
+    args
+      .toSorted((fourthArgs, order) => providerRankOf(fourthArgs) - providerRankOf(order))
+      .flatMap((fifthArgs) => infoByName.get(fifthArgs.pluginName) ?? []),
+    (n6Args) => {
+      let secondByName = byName.get(n6Args.name);
+      if (secondByName === undefined) throw Error("a plugin was placed with no declaration");
       return {
-        rank: providerRankOf(y),
-        tier: y.tier,
+        rank: providerRankOf(secondByName),
+        tier: secondByName.tier,
       };
     },
-  ).flatMap((h) => s.get(h.name) ?? []);
+  ).flatMap((args) => byName.get(args.name) ?? []);
 }
 //@ chunk-e6aww6q8.js:4066023-4066254 placement
-function logModsBackOn(e, n) {
-  let { modsOffAt } = e.state;
-  let s = count(n, (h) => builtinModuleOf(h.args) === undefined);
-  if (modsOffAt === undefined || s === 0) return;
-  e.state.modsOffAt = undefined;
+function logModsBackOn(runtime, admitted) {
+  let { modsOffAt } = runtime.state;
+  let nonBuiltinCount = count(admitted, (fourthModule) => builtinModuleOf(fourthModule.args) === undefined);
+  if (modsOffAt === undefined || nonBuiltinCount === 0) return;
+  runtime.state.modsOffAt = undefined;
   logFeatureOk("plugin_function_hooks_worker_mods", {
     off_s: Math.max(0, Math.floor((Date.now() - modsOffAt) / SLOW_HOOK_REPORT_INTERVAL_MS_2)),
-    worker_mods: s,
+    worker_mods: nonBuiltinCount,
   });
 }
 //@ chunk-e6aww6q8.js:4066254-4066278 placement
@@ -1290,12 +1360,12 @@ var DYNAMIC_IMPORT_RE = /\bimport\s*\(/;
 /**
  * 判断已加载模块的参数与展示是否与新的完全一致（且源码不含动态 import），可复用。
  */
-function isModuleUnchanged(e, n, r) {
+function isModuleUnchanged(args, next, info) {
   return (
-    !DYNAMIC_IMPORT_RE.test(n.source) &&
-    !n.linked.some((s) => DYNAMIC_IMPORT_RE.test(s.source)) &&
-    isDeepStrictEqual(e.args, n) &&
-    isDeepStrictEqual(e.shown, shownPluginInfo(n, r))
+    !DYNAMIC_IMPORT_RE.test(next.source) &&
+    !next.linked.some((link) => DYNAMIC_IMPORT_RE.test(link.source)) &&
+    isDeepStrictEqual(args.args, next) &&
+    isDeepStrictEqual(args.shown, shownPluginInfo(next, info))
   );
 }
 //@ chunk-e6aww6q8.js:4066445-4066512 placement
@@ -1304,57 +1374,57 @@ function isModuleUnchanged(e, n, r) {
  */
 var hookHostKind = () => (env.CLAUDE_CODE_HOOKS_SAME_THREAD ? "same-thread" : "worker");
 //@ chunk-e6aww6q8.js:4066512-4066751 placement
-function reusableLoadedModule(e, hooksModuleArgs, r) {
+function reusableLoadedModule(runtime, hooksModuleArgs, plugin) {
   let found = getPluginRegistry().loadedModules.find(
     (loadedModule) => loadedModule.name === hooksModuleArgs.pluginName,
   );
-  let environmentHost = e.state.environmentHost;
+  let environmentHost = runtime.state.environmentHost;
   return found !== undefined &&
     found.status().kind === "live" &&
-    (found.hopKey === e.state.nativeHost ||
+    (found.hopKey === runtime.state.nativeHost ||
       (found.hopKey === environmentHost && environmentHost.kind === hookHostKind())) &&
-    isModuleUnchanged(found, hooksModuleArgs, r) &&
+    isModuleUnchanged(found, hooksModuleArgs, plugin) &&
     isModuleAdmitted(found)
     ? found
     : undefined;
 }
 //@ chunk-e6aww6q8.js:4066751-4066961 placement
-function uiResolveEnvironments(e, n, r) {
-  let s = [];
-  for (let h of e) {
+function uiResolveEnvironments(admitted, pluginName, resolvedTable) {
+  let out = [];
+  for (let fifthModule of admitted) {
     if (
-      h === n ||
-      !h.hooks("ui.resolve") ||
-      !isModuleAdmitted(h) ||
-      h.status().kind !== "live" ||
-      h.hopKey !== n.hopKey
+      fifthModule === pluginName ||
+      !fifthModule.hooks("ui.resolve") ||
+      !isModuleAdmitted(fifthModule) ||
+      fifthModule.status().kind !== "live" ||
+      fifthModule.hopKey !== pluginName.hopKey
     )
       continue;
-    if (!moduleMatcherAdmits(h, "ui.resolve", r)) continue;
-    s.push(h.environmentId);
+    if (!moduleMatcherAdmits(fifthModule, "ui.resolve", resolvedTable)) continue;
+    out.push(fifthModule.environmentId);
   }
-  return s;
+  return out;
 }
 //@ chunk-e6aww6q8.js:4066961-4067284 placement
 /**
  * 让每个活动模块重新解析各 UI 组件的元素表（考虑其他模块的 ui.resolve 钩子），失败时保留旧表。
  */
-async function resolveElementTables(e) {
+async function resolveElementTables(admitted) {
   await Promise.all(
-    e
-      .filter((n) => n.status().kind === "live")
-      .map((n) =>
-        n
+    admitted
+      .filter((n6Module) => n6Module.status().kind === "live")
+      .map((entry) =>
+        entry
           .resolveTables(
-            TUi.map((r) => ({
-              surface: r.surface,
-              component: r.component,
-              environments: uiResolveEnvironments(e, n, r),
+            RENDER_SITE_PAIRS.map((resolved) => ({
+              surface: resolved.surface,
+              component: resolved.component,
+              environments: uiResolveEnvironments(admitted, entry, resolved),
             })),
           )
           .catch((error) => {
             logForDebugging(
-              `hooks module ${n.label}: its element tables were not resolved (${errorMessage(error)}); it keeps the ones it had`,
+              `hooks module ${entry.label}: its element tables were not resolved (${errorMessage(error)}); it keeps the ones it had`,
               {
                 level: "error",
               },
@@ -1367,320 +1437,336 @@ async function resolveElementTables(e) {
 /**
  * 加载声明的整组 hooks 模块：未变的保留、变化的全量重载，并记录失败与遥测。
  */
-async function loadHooksModuleSet(e, n, r) {
+async function loadHooksModuleSet(runtime, plugins, options) {
   let pluginRegistry = getPluginRegistry();
   let loadedModules = pluginRegistry.loadedModules;
-  let y = (pluginName) =>
-    r.judgedUnder === undefined
+  let judgedUnderOf = (pluginName) =>
+    options.judgedUnder === undefined
       ? admissionTextFor(loadedModules.find((loadedModule) => loadedModule.name === pluginName))
-      : r.judgedUnder;
-  let S = new Set(loadedModules.map((loadedModule) => loadedModule.name));
+      : options.judgedUnder;
+  let servingNames = new Set(loadedModules.map((loadedModule) => loadedModule.name));
   admissionChangedListener.set(() => {
     invalidateAllHookedCaches();
-    publishRenderPlugins(e);
+    publishRenderPlugins(runtime);
   });
-  let w = new Map();
-  let L = [];
-  let G = new Map();
-  let q = new Set(e.state.knownArgs.keys());
-  let Z = new Set();
-  e.state.unattributedCrashes = 0;
-  let Se = new Set(n.map((rn) => rn.name));
-  for (let rn of n) {
-    if (rn.modulePath === undefined) continue;
-    w.set(rn.name, rn);
+  let declaringByName = new Map();
+  let argsList = [];
+  let reusableByName = new Map();
+  let knownNames = new Set(runtime.state.knownArgs.keys());
+  let refusedNames = new Set();
+  runtime.state.unattributedCrashes = 0;
+  let declaredNames = new Set(plugins.map((plugin) => plugin.name));
+  for (let plugin of plugins) {
+    if (plugin.modulePath === undefined) continue;
+    declaringByName.set(plugin.name, plugin);
     try {
-      let hooksModuleArgs = await prepareHooksModuleArgs(e.state, rn, rn.modulePath);
-      let no = reusableLoadedModule(e, hooksModuleArgs, rn);
-      if (no !== undefined) G.set(no.name, no);
-      L.push(no?.args ?? hooksModuleArgs);
+      let hooksModuleArgs = await prepareHooksModuleArgs(runtime.state, plugin, plugin.modulePath);
+      let reusable = reusableLoadedModule(runtime, hooksModuleArgs, plugin);
+      if (reusable !== undefined) reusableByName.set(reusable.name, reusable);
+      argsList.push(reusable?.args ?? hooksModuleArgs);
     } catch (error) {
-      let no = error instanceof NotOrganizationPluginError || error instanceof HookAdmissionRefusal;
-      if (no) w.delete(rn.name);
+      let isAdmissionError =
+        error instanceof NotOrganizationPluginError || error instanceof HookAdmissionRefusal;
+      if (isAdmissionError) declaringByName.delete(plugin.name);
       if (error instanceof HookAdmissionRefusal) {
         logForDebugging(errorWithCause(error));
         continue;
       }
       logHookLoadFailure(error, "declaration_failed", {
-        pluginStorageId: marketplaceSource(rn),
-        pluginRoot: rn.path,
+        pluginStorageId: marketplaceSource(plugin),
+        pluginRoot: plugin.path,
       });
-      logForDebugging(`hooks module ${hookPluginLabel(rn)} failed to load: ` + errorWithCause(error), {
+      logForDebugging(`hooks module ${hookPluginLabel(plugin)} failed to load: ` + errorWithCause(error), {
         level: "error",
       });
-      if (!no) recordOptionsReloadFailure(e, rn, error);
-      if (S.has(rn.name)) reportReloadFailure(rn.name, error, rn);
-      else reportHookLoadFailure(rn.name, error, rn);
+      if (!isAdmissionError) recordOptionsReloadFailure(runtime, plugin, error);
+      if (servingNames.has(plugin.name)) reportReloadFailure(plugin.name, error, plugin);
+      else reportHookLoadFailure(plugin.name, error, plugin);
     }
   }
-  L.splice(0, 1 / 0, ...orderSealedModules(L, w));
-  r.scans = L.map((rn) => rn.scan);
-  r.read.resolve();
-  e.state.loadingRead.emit();
-  let order = L.map((rn) => rn.pluginName);
-  let we = new Set(order);
-  let Ee = new Set(
-    L.flatMap((rn) => {
-      let pn = e.state.unloadedSteps.get(rn.pluginName);
-      return pn !== undefined &&
-        isModuleUnchanged(pn, rn, w.get(rn.pluginName)) &&
+  argsList.splice(0, 1 / 0, ...orderSealedModules(argsList, declaringByName));
+  options.scans = argsList.map((nextArgs) => nextArgs.scan);
+  options.read.resolve();
+  runtime.state.loadingRead.emit();
+  let order = argsList.map((args) => args.pluginName);
+  let orderSet = new Set(order);
+  let unloadedNames = new Set(
+    argsList.flatMap((args) => {
+      let step = runtime.state.unloadedSteps.get(args.pluginName);
+      return step !== undefined &&
+        isModuleUnchanged(step, args, declaringByName.get(args.pluginName)) &&
         isDeepStrictEqual(
-          pn.order,
-          order.filter((hn) => pn.order.includes(hn)),
+          step.order,
+          order.filter((name) => step.order.includes(name)),
         )
-        ? [rn.pluginName]
+        ? [args.pluginName]
         : [];
     }),
   );
-  let Ae = (rn) => G.get(rn.name) === rn;
-  let filtered = [...e.state.crashedWithholders.keys()].filter((key) => !Se.has(key));
-  for (let rn of filtered) {
-    e.state.crashedWithholders.delete(rn);
-    e.state.withholdings.delete(rn);
+  let isReusable = (n7Module) => reusableByName.get(n7Module.name) === n7Module;
+  let filtered = [...runtime.state.crashedWithholders.keys()].filter((key) => !declaredNames.has(key));
+  for (let name of filtered) {
+    runtime.state.crashedWithholders.delete(name);
+    runtime.state.withholdings.delete(name);
   }
-  function Me() {
-    let rn = new Set([...q].filter((no) => !e.state.knownArgs.has(no)));
-    e.state.knownPlugins.clear();
-    for (let [no, hn] of w) e.state.knownPlugins.set(no, hn);
-    for (let no of L) if (!rn.has(no.pluginName) && !Z.has(no.pluginName)) setKnownArgs(e.state, no);
-    let pn = new Set([
-      ...[...e.state.crashedWithholders.keys()].filter((key) => !Se.has(key)),
-      ...[...e.state.knownArgs.keys()].filter((key) => Z.has(key) || !we.has(key)),
+  function forgetDeparted() {
+    let departed = new Set([...knownNames].filter((name) => !runtime.state.knownArgs.has(name)));
+    runtime.state.knownPlugins.clear();
+    for (let [name, args] of declaringByName) runtime.state.knownPlugins.set(name, args);
+    for (let args of argsList)
+      if (!departed.has(args.pluginName) && !refusedNames.has(args.pluginName))
+        setKnownArgs(runtime.state, args);
+    let orphans = new Set([
+      ...[...runtime.state.crashedWithholders.keys()].filter((key) => !declaredNames.has(key)),
+      ...[...runtime.state.knownArgs.keys()].filter((key) => refusedNames.has(key) || !orderSet.has(key)),
     ]);
-    for (let no of pn) forgetPlugin(no, e);
-    if (pn.size > 0) liftWithholdings(e.state, pn);
+    for (let name of orphans) forgetPlugin(name, runtime);
+    if (orphans.size > 0) liftWithholdings(runtime.state, orphans);
   }
-  function We(admitted) {
-    for (let pn of admitted) if (!Ae(pn)) pn.discard();
-    Me();
+  function discardUnadmitted(admitted) {
+    for (let n8Module of admitted) if (!isReusable(n8Module)) n8Module.discard();
+    forgetDeparted();
   }
-  function ze(admitted) {
+  function commitAdmitted(admitted) {
     let loadedModules = pluginRegistry.loadedModules;
-    let no = new Set(admitted);
-    let hn = new Set(admitted.map((ho) => ho.name));
+    let admittedSet = new Set(admitted);
+    let admittedNames = new Set(admitted.map((n9Module) => n9Module.name));
     pluginRegistry.loadedModules = admitted;
-    for (let ho of admitted) e.state.crashedWithholders.delete(ho.name);
-    Me();
+    for (let n10Module of admitted) runtime.state.crashedWithholders.delete(n10Module.name);
+    forgetDeparted();
     for (let loadedModule of loadedModules) {
-      if (!no.has(loadedModule)) loadedModule.retire();
-      if (!hn.has(loadedModule.name)) {
+      if (!admittedSet.has(loadedModule)) loadedModule.retire();
+      if (!admittedNames.has(loadedModule.name)) {
         forgetMcpServerFor(loadedModule.name);
         forgetMcpConnectsFor(loadedModule.name);
         forgetCachedDescribe(loadedModule.name);
         forgetRegisteredAgent(loadedModule.name);
-        let yn = e.state.unloadedSteps.get(loadedModule.name);
-        if (yn !== undefined && Ee.has(loadedModule.name))
+        let step = runtime.state.unloadedSteps.get(loadedModule.name);
+        if (step !== undefined && unloadedNames.has(loadedModule.name))
           reportReloadFailure(
             loadedModule.name,
             engineCreateFailedError(loadedModule.name, {
               stage: "engine.create",
-              reason: yn.reason,
+              reason: step.reason,
             }),
-            w.get(loadedModule.name),
+            declaringByName.get(loadedModule.name),
           );
       }
     }
-    publishRenderPlugins(e);
-    logModsBackOn(e, admitted);
+    publishRenderPlugins(runtime);
+    logModsBackOn(runtime, admitted);
     if (loadedModules.length !== 0 || admitted.length !== 0) invalidateAllHookedCaches();
     noteWorkersLoaded(admitted);
-    e.state.isSetRecord = true;
+    runtime.state.isSetRecord = true;
   }
-  if (w.size === 0) {
-    resetWithholdings(e.state);
-    ze([]);
+  if (declaringByName.size === 0) {
+    resetWithholdings(runtime.state);
+    commitAdmitted([]);
     return;
   }
-  let filtered_2 = L.filter((rn) => !Ee.has(rn.pluginName));
-  let filtered_3 = loadedModules.filter((loadedModule) => !Ee.has(loadedModule.name));
-  let nt =
+  let filtered_2 = argsList.filter((args) => !unloadedNames.has(args.pluginName));
+  let filtered_3 = loadedModules.filter((loadedModule) => !unloadedNames.has(loadedModule.name));
+  let isUnchanged =
     filtered.length === 0 &&
-    [...e.state.knownArgs.keys()].every((key) => we.has(key)) &&
+    [...runtime.state.knownArgs.keys()].every((key) => orderSet.has(key)) &&
     filtered_2.length === filtered_3.length &&
-    filtered_2.every((rn, pn) => G.get(rn.pluginName) === filtered_3[pn]);
-  if (!nt) Ee.clear();
-  if (e.state.isSetRecord && nt && filtered_3.length === loadedModules.length) {
-    Me();
+    filtered_2.every((args, index) => reusableByName.get(args.pluginName) === filtered_3[index]);
+  if (!isUnchanged) unloadedNames.clear();
+  if (runtime.state.isSetRecord && isUnchanged && filtered_3.length === loadedModules.length) {
+    forgetDeparted();
     let joined = loadedModules.map((loadedModule) => loadedModule.name).join(", ");
     logForDebugging(`hooks modules unchanged, kept as loaded: ${joined}`);
     return;
   }
-  let yt =
-    G.size === 0
+  let reason =
+    reusableByName.size === 0
       ? undefined
-      : describeRefoldReason(e, {
+      : describeRefoldReason(runtime, {
           live: loadedModules,
-          declaring: L,
-          kept: G,
+          declaring: argsList,
+          kept: reusableByName,
           leaving: filtered,
-          unloaded: Ee,
+          unloaded: unloadedNames,
         });
-  if (yt !== undefined) {
-    G.clear();
-    logForDebugging(`hooks modules reloaded in full: ${yt}`);
+  if (reason !== undefined) {
+    reusableByName.clear();
+    logForDebugging(`hooks modules reloaded in full: ${reason}`);
   }
-  let flattened = L.flatMap((rn) => G.get(rn.pluginName) ?? []);
-  let At = new Set(flattened.map((rn) => rn.name));
-  let It = new Set(
-    [...loadedModules.map((loadedModule) => loadedModule.name), ...q, ...order].filter((rn) => !At.has(rn)),
+  let flattened = argsList.flatMap((args) => reusableByName.get(args.pluginName) ?? []);
+  let keptNames = new Set(flattened.map((n11Module) => n11Module.name));
+  let goneNames = new Set(
+    [...loadedModules.map((loadedModule) => loadedModule.name), ...knownNames, ...order].filter(
+      (name) => !keptNames.has(name),
+    ),
   );
-  let Yt = new Set();
-  let qt = new Set(At);
-  let Zt = new Map();
-  e.state.isSetRecord = false;
+  let attemptedNames = new Set();
+  let seated = new Set(keptNames);
+  let loads = new Map();
+  runtime.state.isSetRecord = false;
   try {
     for (;;) {
-      let rn = [];
-      for (let Xn of L) {
-        if (At.has(Xn.pluginName) || Z.has(Xn.pluginName) || Yt.has(Xn.pluginName) || Ee.has(Xn.pluginName))
+      let loadedNow = [];
+      for (let args of argsList) {
+        if (
+          keptNames.has(args.pluginName) ||
+          refusedNames.has(args.pluginName) ||
+          attemptedNames.has(args.pluginName) ||
+          unloadedNames.has(args.pluginName)
+        )
           continue;
-        q.add(Xn.pluginName);
-        setKnownArgs(e.state, Xn);
+        knownNames.add(args.pluginName);
+        setKnownArgs(runtime.state, args);
         try {
-          let To = await describeHooksModuleState(e, Xn);
-          To.shown = shownPluginInfo(Xn, w.get(Xn.pluginName));
-          To.judgedUnder = y(Xn.pluginName);
-          rn.push(To);
-          e.state.unadmitted.add(To.environmentId);
-          Zt.set(To.environmentId, To);
-          bumpGeneration(Xn.pluginName, e);
-          logFeatureOk("plugin_function_hooks_load", classifyPluginOrigin(Xn));
+          let n12Module = await loadAndRegisterHooksModule(runtime, args);
+          n12Module.shown = shownPluginInfo(args, declaringByName.get(args.pluginName));
+          n12Module.judgedUnder = judgedUnderOf(args.pluginName);
+          loadedNow.push(n12Module);
+          runtime.state.unadmitted.add(n12Module.environmentId);
+          loads.set(n12Module.environmentId, n12Module);
+          bumpGeneration(args.pluginName, runtime);
+          logFeatureOk("plugin_function_hooks_load", classifyPluginOrigin(args));
           logForDebugging(
-            `hooks module ${To.label} loaded (${To.hopKey.kind}, environment ${To.environmentId}, tier ${To.tier}); events: ` +
-              joinedKeys(To.patterns),
+            `hooks module ${n12Module.label} loaded (${n12Module.hopKey.kind}, environment ${n12Module.environmentId}, tier ${n12Module.tier}); events: ` +
+              joinedKeys(n12Module.patterns),
           );
         } catch (error) {
-          Yt.add(Xn.pluginName);
-          logHookLoadFailure(error, "module_load_failed", Xn);
-          logForDebugging(`hooks module ${pluginStorageKey(Xn)} failed to load: ` + errorWithCause(error), {
+          attemptedNames.add(args.pluginName);
+          logHookLoadFailure(error, "module_load_failed", args);
+          logForDebugging(`hooks module ${pluginStorageKey(args)} failed to load: ` + errorWithCause(error), {
             level: "error",
           });
-          if (abandonIfWorkerDied(e, rn, "the load")) {
-            Me();
+          if (abandonIfWorkerDied(runtime, loadedNow, "the load")) {
+            forgetDeparted();
             return;
           }
-          let bo = w.get(Xn.pluginName);
-          if (S.has(Xn.pluginName)) reportReloadFailure(Xn.pluginName, error, bo);
-          else reportHookLoadFailure(Xn.pluginName, error, bo);
+          let plugin = declaringByName.get(args.pluginName);
+          if (servingNames.has(args.pluginName)) reportReloadFailure(args.pluginName, error, plugin);
+          else reportHookLoadFailure(args.pluginName, error, plugin);
         }
       }
-      if (At.size > 0) {
-        let joined = [...At].join(", ");
+      if (keptNames.size > 0) {
+        let joined = [...keptNames].join(", ");
         logForDebugging(`hooks modules kept as loaded, unchanged: ${joined}`);
       }
-      let pn = At.size === 0;
+      let isFirstFold = keptNames.size === 0;
       let engineApi = await buildEngineApi(
-        e,
-        rn,
-        pn
+        runtime,
+        loadedNow,
+        isFirstFold
           ? foldBaseForRespawn(
-              e,
-              rn.map((Xn) => Xn.name),
+              runtime,
+              loadedNow.map((n13Module) => n13Module.name),
             )
-          : foldBaseWithout_2(e.state, It, order),
+          : foldBaseWithout_2(runtime.state, goneNames, order),
       );
-      if (e.state.environmentHost?.died !== undefined) {
-        We(engineApi);
+      if (runtime.state.environmentHost?.died !== undefined) {
+        discardUnadmitted(engineApi);
         return;
       }
-      let hn = new Map([...engineApi, ...flattened].map((Xn) => [Xn.name, Xn]));
-      let { admitted, refused } = await admitBuiltModules(e, {
-        built: order.flatMap((Xn) => hn.get(Xn) ?? []),
-        plugins: w,
-        seated: qt,
-        serving: S,
+      let builtByName = new Map([...engineApi, ...flattened].map((n14Module) => [n14Module.name, n14Module]));
+      let { admitted, refused } = await admitBuiltModules(runtime, {
+        built: order.flatMap((name) => builtByName.get(name) ?? []),
+        plugins: declaringByName,
+        seated,
+        serving: servingNames,
       });
-      for (let Xn of refused) Z.add(Xn.name);
-      if (e.state.environmentHost?.died !== undefined) {
-        We(admitted);
+      for (let n15Module of refused) refusedNames.add(n15Module.name);
+      if (runtime.state.environmentHost?.died !== undefined) {
+        discardUnadmitted(admitted);
         return;
       }
-      let filtered = refused.filter((Xn) => Xn.hooks("engine.create"));
+      let filtered = refused.filter((n16Module) => n16Module.hooks("engine.create"));
       if (filtered.length !== 0) {
         logForDebugging(
           `hooks modules ${joinLabels(filtered)} refused after the engine.create fold ran with them; the set folds again without`,
         );
-        for (let Xn of admitted) {
-          qt.add(Xn.name);
-          if (!Ae(Xn)) Xn.discard();
+        for (let n17Module of admitted) {
+          seated.add(n17Module.name);
+          if (!isReusable(n17Module)) n17Module.discard();
         }
         continue;
       }
-      for (let Xn of rn)
-        if (!engineApi.includes(Xn)) {
-          let fo = engineCreateFailedError(Xn.name, e.state.buildFailures.get(Xn.name));
-          if (S.has(Xn.name)) reportReloadFailure(Xn.name, fo, w.get(Xn.name));
-          else reportHookLoadFailure(Xn.name, fo, w.get(Xn.name));
-          logModLoadFailed(Xn.args, "fold_failed");
+      for (let n18Module of loadedNow)
+        if (!engineApi.includes(n18Module)) {
+          let error = engineCreateFailedError(
+            n18Module.name,
+            runtime.state.buildFailures.get(n18Module.name),
+          );
+          if (servingNames.has(n18Module.name))
+            reportReloadFailure(n18Module.name, error, declaringByName.get(n18Module.name));
+          else reportHookLoadFailure(n18Module.name, error, declaringByName.get(n18Module.name));
+          logModLoadFailed(n18Module.args, "fold_failed");
         }
-      await runWhileAdmitting(e, admitted, () => resolveElementTables(admitted));
-      if (e.state.environmentHost?.died !== undefined) {
-        We(admitted);
+      await runWhileAdmitting(runtime, admitted, () => resolveElementTables(admitted));
+      if (runtime.state.environmentHost?.died !== undefined) {
+        discardUnadmitted(admitted);
         return;
       }
-      ze(admitted);
+      commitAdmitted(admitted);
       return;
     }
   } finally {
-    e.state.admitting = undefined;
-    for (let [rn, pn] of Zt) if (e.state.unadmitted.has(rn)) pn.discard();
+    runtime.state.admitting = undefined;
+    for (let [envId, n19Module] of loads) if (runtime.state.unadmitted.has(envId)) n19Module.discard();
   }
 }
 //@ chunk-e6aww6q8.js:4072469-4072580 placement
-function isLaterPlugin(e, n) {
-  let r = [...n.state.knownPlugins.keys()];
-  let index = r.indexOf(e);
-  return (h) => index !== -1 && r.indexOf(h.name) > index;
+function isLaterPlugin(name, runtime) {
+  let names = [...runtime.state.knownPlugins.keys()];
+  let index = names.indexOf(name);
+  return (other) => index !== -1 && names.indexOf(other.name) > index;
 }
 //@ chunk-e6aww6q8.js:4072580-4072604 placement
 /**
  * 取参数的层级
  */
-var providerRankOfArgs = (e) => providerRankOf(e.args);
+var providerRankOfArgs = (args) => providerRankOf(args.args);
 //@ chunk-e6aww6q8.js:4072604-4072714 placement
-function needsFullReload(e, n, live) {
-  let s = n.state.knownArgs.get(e);
+function needsFullReload(pluginName, runtime, live) {
+  let args = runtime.state.knownArgs.get(pluginName);
   return (
     findReloadTriggerEvent({
       live,
-      scans: s ? [s.scan] : [],
-    }) !== undefined || isCrashedOrWithholding(e, n)
+      scans: args ? [args.scan] : [],
+    }) !== undefined || isCrashedOrWithholding(pluginName, runtime)
   );
 }
 //@ chunk-e6aww6q8.js:4072714-4072797 placement
 /**
  * 逐个退役模块并收集错误
  */
-function retireModules(e) {
-  let n = [];
-  for (let r of e)
+function retireModules(modules) {
+  let errors = [];
+  for (let n20Module of modules)
     try {
-      r.retire();
+      n20Module.retire();
     } catch (error) {
-      n.push(error);
+      errors.push(error);
     }
-  return n;
+  return errors;
 }
 //@ chunk-e6aww6q8.js:4072797-4073208 placement
 /**
  * 某插件使 hooks worker 崩溃时：记遥测、报告插件问题（列出仍保持扣留的 $ 名称）并发出失败事件。
  */
-function reportWorkerCrash({ state }, n, { reason, fields }) {
-  let h = state.knownArgs.get(n);
-  if (h === undefined) return;
+function reportWorkerCrash({ state }, name, { reason, fields }) {
+  let args = state.knownArgs.get(name);
+  if (args === undefined) return;
   logFeatureBad("plugin_function_hooks_load", "crashed_worker", {
-    ...classifyPluginOrigin(h),
+    ...classifyPluginOrigin(args),
     ...fields,
   });
-  let mapped = withheldNounsOf(state, n).map((w) => `$.${w}`);
-  let S = mapped.length > 0;
+  let mapped = withheldNounsOf(state, name).map((host) => `$.${host}`);
+  let line = mapped.length > 0;
   reportPluginProblem(
-    n,
-    `${n} was unloaded: it crashed the hooks worker` +
-      (S ? `; what it withheld (${mapped.join(", ")}) stays withheld until it reloads or is disabled` : ""),
+    name,
+    `${name} was unloaded: it crashed the hooks worker` +
+      (line
+        ? `; what it withheld (${mapped.join(", ")}) stays withheld until it reloads or is disabled`
+        : ""),
   );
   emit({
-    plugin: n,
+    plugin: name,
     event: "*",
     reason,
     effect: PLUGIN_UNLOADED_TEXT,
@@ -1691,229 +1777,243 @@ function reportWorkerCrash({ state }, n, { reason, fields }) {
 /**
  * 卸载一组 hooks 模块，记录退役时抛出的错误。
  */
-async function unloadHooksModules(e, n, r) {
-  let s = typeof r === "string" ? undefined : r;
+async function unloadHooksModules(runtime, names, reason) {
+  let crash = typeof reason === "string" ? undefined : reason;
   let pluginRegistry = getPluginRegistry();
-  let filtered = pluginRegistry.loadedModules.filter((loadedModule) => n.has(loadedModule.name));
-  let filtered_2 = pluginRegistry.loadedModules.filter((loadedModule) => !n.has(loadedModule.name));
-  let any = [...n].some((q) =>
+  let modules = pluginRegistry.loadedModules.filter((loadedModule) => names.has(loadedModule.name));
+  let filtered = pluginRegistry.loadedModules.filter((loadedModule) => !names.has(loadedModule.name));
+  let any = [...names].some((name) =>
     needsFullReload(
-      q,
-      e,
-      filtered.find((Z) => Z.name === q),
+      name,
+      runtime,
+      modules.find((n21Module) => n21Module.name === name),
     ),
   );
-  pluginRegistry.loadedModules = filtered_2;
-  if (any) e.state.isSetRecord = false;
-  for (let q of n) {
-    if (s !== undefined) reportWorkerCrash(e, q, s);
-    forgetPlugin(q, e);
+  pluginRegistry.loadedModules = filtered;
+  if (any) runtime.state.isSetRecord = false;
+  for (let name of names) {
+    if (crash !== undefined) reportWorkerCrash(runtime, name, crash);
+    forgetPlugin(name, runtime);
   }
-  if (s !== undefined) reportWorkerCrashWithholdings(e.state, n);
-  else liftWithholdings(e.state, n);
-  let G = retireModules(filtered);
-  publishRenderPlugins(e);
+  if (crash !== undefined) reportWorkerCrashWithholdings(runtime.state, names);
+  else liftWithholdings(runtime.state, names);
+  let retired = retireModules(modules);
+  publishRenderPlugins(runtime);
   invalidateAllHookedCaches();
   noteWorkersLoaded(pluginRegistry.loadedModules);
   logForDebugging(
-    `hooks modules unloaded: ${[...n].map((q) => filtered.find((Z) => Z.name === q)?.label ?? q).join(", ")} (${s?.reason ?? r})`,
+    `hooks modules unloaded: ${[...names].map((name) => modules.find((n22Module) => n22Module.name === name)?.label ?? name).join(", ")} (${crash?.reason ?? reason})`,
   );
-  await resolveElementTables(filtered_2);
+  await resolveElementTables(filtered);
   invalidateAll();
-  if (G.length > 0)
-    throw AggregateError(G, "a hooks module threw as it retired: " + G.map(errorMessage).join("; "));
+  if (retired.length > 0)
+    throw AggregateError(
+      retired,
+      "a hooks module threw as it retired: " + retired.map(errorMessage).join("; "),
+    );
 }
 //@ chunk-e6aww6q8.js:4073829-4073968 placement
-async function withUnadmitted(e, n, r) {
-  e.state.unadmitted.add(n.environmentId);
+async function withUnadmitted(runtime, n23Module, fn) {
+  runtime.state.unadmitted.add(n23Module.environmentId);
   try {
-    return await r();
+    return await fn();
   } finally {
-    e.state.unadmitted.delete(n.environmentId);
+    runtime.state.unadmitted.delete(n23Module.environmentId);
   }
 }
 //@ chunk-e6aww6q8.js:4073968-4074080 placement
-function insertionIndex(e, n, r) {
-  let index = e.findIndex((h) => r.rank(h) > n || (r.rank(h) === n && r.isBeneath(h)));
-  return index === -1 ? e.length : index;
+function insertionIndex(modules, rank, order) {
+  let index = modules.findIndex(
+    (n24Module) =>
+      order.rank(n24Module) > rank || (order.rank(n24Module) === rank && order.isBeneath(n24Module)),
+  );
+  return index === -1 ? modules.length : index;
 }
 //@ chunk-e6aww6q8.js:4074080-4074165 placement
 /**
  * 按层级插入模块
  */
-function insertByRank(loadedModules, n, r) {
-  let s = insertionIndex(loadedModules, r.rank(n), r);
-  return [...loadedModules.slice(0, s), n, ...loadedModules.slice(s)];
+function insertByRank(modules, n25Module, order) {
+  let index = insertionIndex(modules, order.rank(n25Module), order);
+  return [...modules.slice(0, index), n25Module, ...modules.slice(index)];
 }
 //@ chunk-e6aww6q8.js:4074165-4076943 placement
 /**
  * 按名字重载一个 hooks 模块；worker 中途死亡、模块被移出声明集等情况都给出原因。
  */
-async function reloadHooksModuleByName(e, n) {
+async function reloadHooksModuleByName(name, runtime) {
   let pluginRegistry = getPluginRegistry();
-  let live = pluginRegistry.loadedModules.find((loadedModule) => loadedModule.name === e);
-  let h = n.state.knownPlugins.get(e);
-  let y = live?.args ?? n.state.knownArgs.get(e) ?? (await reprepareFromPlugin(n, h));
-  if (!y) throw new HooksError(`no hooks module named ${e} is loaded or declared`);
-  let S = y;
-  let w = (died) =>
-    `${e}: the hooks worker died during the reload (${died}); the respawn reloads the declared set`;
-  function L(Et) {
-    if (!n.state.knownArgs.has(e))
+  let live = pluginRegistry.loadedModules.find((loadedModule) => loadedModule.name === name);
+  let plugin = runtime.state.knownPlugins.get(name);
+  let args = live?.args ?? runtime.state.knownArgs.get(name) ?? (await reprepareFromPlugin(runtime, plugin));
+  if (!args) throw new HooksError(`no hooks module named ${name} is loaded or declared`);
+  let previousArgs = args;
+  let diedText = (died) =>
+    `${name}: the hooks worker died during the reload (${died}); the respawn reloads the declared set`;
+  function ensureStillDeclared(stage) {
+    if (!runtime.state.knownArgs.has(name))
       throw new HooksError(
-        `${e}: unloaded while its reload ${Et} (` +
-          (n.state.environmentHost?.died ?? "it left the declared set") +
+        `${name}: unloaded while its reload ${stage} (` +
+          (runtime.state.environmentHost?.died ?? "it left the declared set") +
           "); not reloaded",
       );
   }
-  let G = await rescanHooksModuleArgs(n.state, y, h);
-  L("read its args");
+  let rescanned = await rescanHooksModuleArgs(runtime.state, args, plugin);
+  ensureStillDeclared("read its args");
   let startTime = performance.now();
   let loadedModules = pluginRegistry.loadedModules;
-  let Se =
-    needsFullReload(e, n, live) ||
+  let secondStartTime =
+    needsFullReload(name, runtime, live) ||
     findReloadTriggerEvent({
       live: undefined,
-      scans: [G.scan],
+      scans: [rescanned.scan],
     }) !== undefined;
-  n.state.isSetRecord = n.state.isSetRecord && !Se;
-  let ke = {
+  runtime.state.isSetRecord = runtime.state.isSetRecord && !secondStartTime;
+  let order = {
     rank: providerRankOfArgs,
-    isBeneath: isLaterPlugin(e, n),
+    isBeneath: isLaterPlugin(name, runtime),
   };
-  let we = live ? loadedModules.indexOf(live) : insertionIndex(loadedModules, providerRankOf(G), ke);
-  let Ee = await judgePluginRegister({
-    args: G,
-    plugin: h,
+  let insertAt = live
+    ? loadedModules.indexOf(live)
+    : insertionIndex(loadedModules, providerRankOf(rescanned), order);
+  let refusal = await judgePluginRegister({
+    args: rescanned,
+    plugin,
     judges: registerJudges({
-      before: loadedModules.slice(0, we),
-      after: loadedModules.slice(live ? we + 1 : we),
-      isNative: Boolean(builtinModuleOf(G)),
-      tier: G.tier,
+      before: loadedModules.slice(0, insertAt),
+      after: loadedModules.slice(live ? insertAt + 1 : insertAt),
+      isNative: Boolean(builtinModuleOf(rescanned)),
+      tier: rescanned.tier,
     }),
   });
-  if (Ee) {
-    let Et = describeRegisterRefusal(Ee) + (live ? PREVIOUS_VERSION_UNLOADED : "");
-    let yt = new Set([e]);
-    if (live) await unloadHooksModules(n, yt, Et);
+  if (refusal) {
+    let reason = describeRegisterRefusal(refusal) + (live ? PREVIOUS_VERSION_UNLOADED : "");
+    let secondNames = new Set([name]);
+    if (live) await unloadHooksModules(runtime, secondNames, reason);
     else {
-      forgetPlugin(e, n);
-      liftWithholdings(n.state, yt);
+      forgetPlugin(name, runtime);
+      liftWithholdings(runtime.state, secondNames);
     }
     return {
-      refused: Et,
+      refused: reason,
       ms: performance.now() - startTime,
     };
   }
-  L("was admitted");
-  n.state.knownArgs.set(e, G);
-  let Ae;
-  let Ie;
-  let Me = foldBaseWithout(n.state, e);
-  let We = lastFoldSummary(n.state);
-  let ze = n.state.withholdings.get(e);
-  function lt() {
-    if (n.state.knownArgs.has(e)) n.state.knownArgs.set(e, S);
-    if (ze) n.state.withholdings.set(e, ze);
-    else n.state.withholdings.delete(e);
-    recordRefoldResult(n.state, We);
+  ensureStillDeclared("was admitted");
+  runtime.state.knownArgs.set(name, rescanned);
+  let n26Module;
+  let thirdNext;
+  let foldBase = foldBaseWithout(runtime.state, name);
+  let summary = lastFoldSummary(runtime.state);
+  let withholdings = runtime.state.withholdings.get(name);
+  function restore() {
+    if (runtime.state.knownArgs.has(name)) runtime.state.knownArgs.set(name, previousArgs);
+    if (withholdings) runtime.state.withholdings.set(name, withholdings);
+    else runtime.state.withholdings.delete(name);
+    recordRefoldResult(runtime.state, summary);
   }
   try {
-    Ae = await describeHooksModuleState(n, G);
-    Ae.shown = shownPluginInfo(G, h);
-    Ae.judgedUnder = admissionTextFor(live);
-    [Ie] = await withUnadmitted(n, Ae, () => buildEngineApi(n, [Ae], Me));
+    n26Module = await loadAndRegisterHooksModule(runtime, rescanned);
+    n26Module.shown = shownPluginInfo(rescanned, plugin);
+    n26Module.judgedUnder = admissionTextFor(live);
+    [thirdNext] = await withUnadmitted(runtime, n26Module, () =>
+      buildEngineApi(runtime, [n26Module], foldBase),
+    );
   } catch (error) {
-    lt();
+    restore();
     throw error;
   }
-  if (!Ie) {
-    lt();
-    let any = [...n.state.buildFailures.keys()].some((key) => key !== e);
+  if (!thirdNext) {
+    restore();
+    let any = [...runtime.state.buildFailures.keys()].some((key) => key !== name);
     if (any) {
-      let qt = {
+      let secondLoad = {
         scans: undefined,
         read: Promise.withResolvers(),
         judgedUnder: undefined,
       };
-      n.state.loading.add(qt);
-      await loadHooksModuleSet(n, [...n.state.knownPlugins.values()], qt).finally(() => {
-        n.state.loading.delete(qt);
-        qt.read.resolve();
-        n.state.loadingRead.emit();
+      runtime.state.loading.add(secondLoad);
+      await loadHooksModuleSet(runtime, [...runtime.state.knownPlugins.values()], secondLoad).finally(() => {
+        runtime.state.loading.delete(secondLoad);
+        secondLoad.read.resolve();
+        runtime.state.loadingRead.emit();
       });
     }
-    let died = n.state.environmentHost?.died;
+    let died = runtime.state.environmentHost?.died;
     let found = pluginRegistry.loadedModules.find(
-      (loadedModule) => any && died === undefined && loadedModule.name === e,
+      (loadedModule) => any && died === undefined && loadedModule.name === name,
     );
     if (found !== undefined) {
-      let qt = performance.now() - startTime;
+      let ms = performance.now() - startTime;
       logForDebugging(
-        `hooks module ${found.label} reloaded with the whole set in ${qt.toFixed(1)}ms; events: ` +
+        `hooks module ${found.label} reloaded with the whole set in ${ms.toFixed(1)}ms; events: ` +
           joinedKeys(found.patterns),
       );
       return {
         events: [...found.patterns],
-        ms: qt,
+        ms,
       };
     }
-    let At = n.state.buildFailures.get(e);
-    let It = any && At === undefined;
-    let Yt = any && live !== undefined;
+    let failure = runtime.state.buildFailures.get(name);
+    let missedFold = any && failure === undefined;
+    let hadPrevious = any && live !== undefined;
     throw new HooksError(
       died === undefined
-        ? `${e}: ` +
-            (It
+        ? `${name}: ` +
+            (missedFold
               ? "not loaded by the fold of the whole set"
-              : `${At?.stage ?? "engine.create"} failed on reload` +
-                (At === undefined ? "" : ` (${At.reason})`)) +
-            (Yt ? PREVIOUS_VERSION_UNLOADED : "")
-        : w(died),
+              : `${failure?.stage ?? "engine.create"} failed on reload` +
+                (failure === undefined ? "" : ` (${failure.reason})`)) +
+            (hadPrevious ? PREVIOUS_VERSION_UNLOADED : "")
+        : diedText(died),
     );
   }
-  let Je = live
-    ? pluginRegistry.loadedModules.map((loadedModule) => (loadedModule === live ? Ae : loadedModule))
-    : insertByRank(pluginRegistry.loadedModules, Ae, ke);
-  await resolveElementTables(Je);
-  let died = n.state.environmentHost?.died;
+  let modules = live
+    ? pluginRegistry.loadedModules.map((loadedModule) => (loadedModule === live ? n26Module : loadedModule))
+    : insertByRank(pluginRegistry.loadedModules, n26Module, order);
+  await resolveElementTables(modules);
+  let died = runtime.state.environmentHost?.died;
   if (died !== undefined) {
-    lt();
-    throw new HooksError(w(died));
+    restore();
+    throw new HooksError(diedText(died));
   }
-  pluginRegistry.loadedModules = Je;
-  n.state.unloadedSteps.clear();
+  pluginRegistry.loadedModules = modules;
+  runtime.state.unloadedSteps.clear();
   live?.retire();
-  n.state.crashedWithholders.delete(e);
-  bumpGeneration(e, n);
-  publishRenderPlugins(n);
-  logModsBackOn(n, [Ae]);
+  runtime.state.crashedWithholders.delete(name);
+  bumpGeneration(name, runtime);
+  publishRenderPlugins(runtime);
+  logModsBackOn(runtime, [n26Module]);
   invalidateAllHookedCaches();
-  forgetSessionStartCall(e);
+  forgetSessionStartCall(name);
   noteWorkersLoaded(pluginRegistry.loadedModules);
-  let pt = performance.now() - startTime;
+  let ms = performance.now() - startTime;
   logForDebugging(
-    `hooks module ${Ae.label} reloaded in ${pt.toFixed(1)}ms; events: ` + joinedKeys(Ae.patterns),
+    `hooks module ${n26Module.label} reloaded in ${ms.toFixed(1)}ms; events: ` +
+      joinedKeys(n26Module.patterns),
   );
   return {
-    events: [...Ae.patterns],
-    ms: pt,
+    events: [...n26Module.patterns],
+    ms,
   };
 }
 //@ chunk-e6aww6q8.js:4076943-4076964 placement
 /**
  * 重载失败错误类
  */
-class ReloadFailedError extends HooksError {}
+let ReloadFailedError; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4076943", () => {
+  ReloadFailedError = class ReloadFailedError extends HooksError {};
+});
 //@ chunk-e6aww6q8.js:4076964-4077156 placement
 /**
  * 执行重载，失败时包装为说明插件仍在旧版本运行的错误。
  */
-async function wrapReloadError(e, n) {
+async function wrapReloadError(name, fn) {
   let pluginRegistry = getPluginRegistry();
-  let found = pluginRegistry.loadedModules.find((loadedModule) => loadedModule.name === e);
+  let found = pluginRegistry.loadedModules.find((loadedModule) => loadedModule.name === name);
   try {
-    return await n();
+    return await fn();
   } catch (error) {
     throw found?.status().kind === "live" && pluginRegistry.loadedModules.includes(found)
       ? new ReloadFailedError(errorMessage(error), {
@@ -1926,26 +2026,27 @@ async function wrapReloadError(e, n) {
 /**
  * 排队重载模块
  */
-var queueReload = (e, n) => n.state.queue(() => wrapReloadError(e, () => reloadHooksModuleByName(e, n)));
+var queueReload = (name, runtime) =>
+  runtime.state.queue(() => wrapReloadError(name, () => reloadHooksModuleByName(name, runtime)));
 //@ chunk-e6aww6q8.js:4077210-4077474 placement
 /**
  * 开始加载一批模块：设置重载器并登记加载状态。
  */
-function startLoadingModules(hooksHost, n, judgedUnder) {
-  workerSlots.setReloader((h) => queueReload(h, hooksHost));
+function startLoadingModules(runtime, plugins, judgedUnder) {
+  workerSlots.setReloader((name) => queueReload(name, runtime));
   isStoredLoginPinned();
-  let s = {
+  let load = {
     scans: undefined,
     read: Promise.withResolvers(),
     judgedUnder,
   };
-  hooksHost.state.loading.add(s);
-  return hooksHost.state
-    .queue(() => loadHooksModuleSet(hooksHost, n, s))
+  runtime.state.loading.add(load);
+  return runtime.state
+    .queue(() => loadHooksModuleSet(runtime, plugins, load))
     .finally(() => {
-      hooksHost.state.loading.delete(s);
-      s.read.resolve();
-      hooksHost.state.loadingRead.emit();
+      runtime.state.loading.delete(load);
+      load.read.resolve();
+      runtime.state.loadingRead.emit();
     });
 }
 //@ chunk-e6aww6q8.js:4077474-4077561 placement
@@ -1953,15 +2054,16 @@ function startLoadingModules(hooksHost, n, judgedUnder) {
  * 等待所有模块读取
  */
 async function waitForModuleReads(hooksHost) {
-  await Promise.all([...hooksHost.state.loading].map((n) => n.read.promise));
+  await Promise.all([...hooksHost.state.loading].map((thirdLoad) => thirdLoad.read.promise));
 }
 //@ chunk-e6aww6q8.js:4077561-4077663 placement
 /**
  * 判断正在加载的模块中是否有处理某 command.run 的。
  */
-function isLoadingCommandRun(hooksHost, n) {
+function isLoadingCommandRun(hooksHost, command) {
   return [...hooksHost.state.loading].some(
-    (r) => r.scans === undefined || r.scans.some((scan) => handlesCommandRun(scan, n)),
+    (fourthLoad) =>
+      fourthLoad.scans === undefined || fourthLoad.scans.some((scan) => handlesCommandRun(scan, command)),
   );
 }
 //@ chunk-e6aww6q8.js:4077663-4077809 placement
@@ -1970,102 +2072,110 @@ function isLoadingCommandRun(hooksHost, n) {
  */
 function isLoadingAnyCommandRun(hooksHost) {
   return (
-    [...hooksHost.state.loading].some((n) => n.scans === undefined || n.scans.some(needsRefoldScan)) ||
-    [...hooksHost.state.knownArgs.values()].some((knownArg) => needsRefoldScan(knownArg.scan))
+    [...hooksHost.state.loading].some(
+      (fifthLoad) => fifthLoad.scans === undefined || fifthLoad.scans.some(needsRefoldScan),
+    ) || [...hooksHost.state.knownArgs.values()].some((knownArg) => needsRefoldScan(knownArg.scan))
   );
 }
 //@ chunk-e6aww6q8.js:4077809-4077986 placement
 /**
  * 列出插件 hooks 模块的文件。
  */
-function hooksModuleFilesOf(e, hooksHost) {
-  let r = loadedModuleArgs(e) ?? hooksHost.state.knownArgs.get(e);
-  if (r) return hooksModuleFiles(r).map((y) => y.file);
-  let s = hooksHost.state.knownPlugins.get(e);
-  return s !== undefined && s.modulePath === undefined ? [] : undefined;
+function hooksModuleFilesOf(name, hooksHost) {
+  let args = loadedModuleArgs(name) ?? hooksHost.state.knownArgs.get(name);
+  if (args) return hooksModuleFiles(args).map((file) => file.file);
+  let plugin = hooksHost.state.knownPlugins.get(name);
+  return plugin !== undefined && plugin.modulePath === undefined ? [] : undefined;
 }
 //@ chunk-e6aww6q8.js:4077986-4078339 placement
 /**
  * 卸载已被禁用或卸载的插件的 hooks 模块（排队执行）。
  */
-var unloadDisabledPlugins = (hooksHost, n) =>
+var unloadDisabledPlugins = (hooksHost, mode) =>
   hooksHost.state.queue(async () => {
-    function r(h) {
-      let y = hooksHost.state.knownPlugins.get(h);
-      if (y === undefined) return storageIdOf(hooksHost.state, h);
-      return marketplaceSource(y);
+    function storageOf(name) {
+      let plugin = hooksHost.state.knownPlugins.get(name);
+      if (plugin === undefined) return storageIdOf(hooksHost.state, name);
+      return marketplaceSource(plugin);
     }
-    let s = new Set(
+    let disabled = new Set(
       [...hooksHost.state.knownArgs.keys(), ...hooksHost.state.knownPlugins.keys()].filter(
-        (h) => !n.has(r(h)),
+        (name) => !mode.has(storageOf(name)),
       ),
     );
-    if (s.size === 0) return;
-    for (let h of s) hooksHost.state.knownPlugins.delete(h);
-    await unloadHooksModules(hooksHost, s, "plugin disabled or uninstalled");
+    if (disabled.size === 0) return;
+    for (let fourthName of disabled) hooksHost.state.knownPlugins.delete(fourthName);
+    await unloadHooksModules(hooksHost, disabled, "plugin disabled or uninstalled");
   });
 //@ chunk-e6aww6q8.js:4078382-4079470 placement
 /**
  * 插件选项（options）状态文案：不能解析、被扣留、失败、已重载、被拒绝。
  */
-var HOOKS_OPTIONS_STATUS_TEXT = (hooksHost, n) =>
+var HOOKS_OPTIONS_STATUS_TEXT = (hooksHost, attemptLoad) =>
   hooksHost.state.queue(async () => {
     let optionsReloadFailures = hooksHost.state.optionsReloadFailures;
     let brokenTrustedSetting = findBrokenTrustedSetting();
     let reason = `${brokenTrustedSetting} does not parse; options not read`;
-    async function y(w, serverName) {
+    async function statusOf(name, serverName) {
       if (!(Object.keys(serverName.manifest.userConfig ?? {}).length > 0)) return;
       if (brokenTrustedSetting !== undefined)
         return {
-          name: w,
+          name,
           kind: "held",
           reason,
         };
-      let q = pluginOptionsSnapshot(serverName);
-      let Z =
-        getPluginRegistry().loadedModules.find((loadedModule) => loadedModule.name === w)?.args ??
-        hooksHost.state.knownArgs.get(w);
-      if (Z !== undefined && isDeepStrictEqual(q.options, pickNonSensitiveOptions(Z.options, serverName))) {
-        optionsReloadFailures.delete(w);
+      let secondReason = pluginOptionsSnapshot(serverName);
+      let brokenSource =
+        getPluginRegistry().loadedModules.find((loadedModule) => loadedModule.name === name)?.args ??
+        hooksHost.state.knownArgs.get(name);
+      if (
+        brokenSource !== undefined &&
+        isDeepStrictEqual(secondReason.options, pickNonSensitiveOptions(brokenSource.options, serverName))
+      ) {
+        optionsReloadFailures.delete(name);
         return;
       }
-      let ke = optionsReloadFailures.get(w);
-      let we = hooksHost.state.generations.get(w);
-      if (ke !== undefined && ke.wanted === q.text && (Z === undefined || ke.generation === we))
+      let outputs = optionsReloadFailures.get(name);
+      let plugin = hooksHost.state.generations.get(name);
+      if (
+        outputs !== undefined &&
+        outputs.wanted === secondReason.text &&
+        (brokenSource === undefined || outputs.generation === plugin)
+      )
         return {
-          name: w,
+          name,
           kind: "failing",
-          error: ke.error,
+          error: outputs.error,
         };
       try {
-        let Ae = await n(w);
-        if (Ae.refused === undefined) {
-          optionsReloadFailures.delete(w);
+        let failure = await attemptLoad(name);
+        if (failure.refused === undefined) {
+          optionsReloadFailures.delete(name);
           return {
-            name: w,
+            name,
             kind: "reloaded",
-            result: Ae,
-            recovers: ke !== undefined,
+            result: failure,
+            recovers: outputs !== undefined,
           };
         }
-        optionsReloadFailures.set(w, {
-          generation: hooksHost.state.generations.get(w),
-          wanted: q.text,
-          error: new HooksError(Ae.refused),
+        optionsReloadFailures.set(name, {
+          generation: hooksHost.state.generations.get(name),
+          wanted: secondReason.text,
+          error: new HooksError(failure.refused),
         });
         return {
-          name: w,
+          name,
           kind: "refused",
-          result: Ae,
+          result: failure,
         };
       } catch (error) {
-        optionsReloadFailures.set(w, {
-          generation: we,
-          wanted: q.text,
+        optionsReloadFailures.set(name, {
+          generation: plugin,
+          wanted: secondReason.text,
           error,
         });
         return {
-          name: w,
+          name,
           kind: "failed",
           error,
         };
@@ -2073,86 +2183,106 @@ var HOOKS_OPTIONS_STATUS_TEXT = (hooksHost, n) =>
     }
     for (let key of optionsReloadFailures.keys())
       if (!hooksHost.state.knownPlugins.has(key)) optionsReloadFailures.delete(key);
-    let S = [];
-    for (let [w, L] of hooksHost.state.knownPlugins) {
-      let G = await y(w, L);
-      if (G !== undefined) S.push(G);
+    let options = [];
+    for (let [want, secondWant] of hooksHost.state.knownPlugins) {
+      let have = await statusOf(want, secondWant);
+      if (have !== undefined) options.push(have);
     }
-    return S;
+    return options;
   });
 //@ chunk-e6aww6q8.js:4079513-4079732 placement
 /**
  * 合并插件记录：清单与 hooks 配置未变时保留原记录。
  */
-function mergePluginRecord(e, n) {
-  let r = {
-    ...n.manifest,
-    name: e.manifest.name,
+function mergePluginRecord(record, next) {
+  let manifest = {
+    ...next.manifest,
+    name: record.manifest.name,
   };
-  return e.modulePath === n.modulePath &&
-    isDeepStrictEqual(e.manifest, r) &&
-    isDeepStrictEqual(e.hooksConfig, n.hooksConfig)
-    ? e
+  return record.modulePath === next.modulePath &&
+    isDeepStrictEqual(record.manifest, manifest) &&
+    isDeepStrictEqual(record.hooksConfig, next.hooksConfig)
+    ? record
     : {
-        ...e,
-        manifest: r,
-        hooksConfig: n.hooksConfig,
-        modulePath: n.modulePath,
+        ...record,
+        manifest,
+        hooksConfig: next.hooksConfig,
+        modulePath: next.modulePath,
       };
 }
 //@ chunk-e6aww6q8.js:4079732-4080103 placement
 /**
  * 重新读取已知插件记录（排队执行），manifest 不再指定 hooks 模块时卸载；返回前后的模块路径。
  */
-var retargetKnownPlugin = (e, hooksHost, r) =>
+var retargetKnownPlugin = (name, hooksHost, fn) =>
   hooksHost.state.queue(async () => {
-    let s = hooksHost.state.knownPlugins.get(e);
-    if (s === undefined) return;
-    let h = await wrapReloadError(e, () => r(s));
-    let y =
-      getPluginRegistry().loadedModules.some((loadedModule) => loadedModule.name === e) ||
-      hooksHost.state.knownArgs.has(e);
-    hooksHost.state.knownPlugins.set(e, mergePluginRecord(s, h));
-    if (h.modulePath === undefined && y)
-      await unloadHooksModules(hooksHost, new Set([e]), "its manifest names no hooks module now");
+    let plugin = hooksHost.state.knownPlugins.get(name);
+    if (plugin === undefined) return;
+    let next = await wrapReloadError(name, () => fn(plugin));
+    let hasLive =
+      getPluginRegistry().loadedModules.some((loadedModule) => loadedModule.name === name) ||
+      hooksHost.state.knownArgs.has(name);
+    hooksHost.state.knownPlugins.set(name, mergePluginRecord(plugin, next));
+    if (next.modulePath === undefined && hasLive)
+      await unloadHooksModules(hooksHost, new Set([name]), "its manifest names no hooks module now");
     return {
-      before: s.modulePath,
-      now: h.modulePath,
+      before: plugin.modulePath,
+      now: next.modulePath,
     };
   });
 //@ chunk-e6aww6q8.js:4080103-4080272 placement
 /**
  * 记录 worker 中 mods 被关闭（数量与时间）。
  */
-function logModsTurnedOff(e, n) {
-  let r = count(n, (s) => builtinModuleOf(s) !== undefined);
-  e.state.modsOffAt = Date.now();
+function logModsTurnedOff(runtime, modules) {
+  let builtinCount = count(modules, (n27Module) => builtinModuleOf(n27Module) !== undefined);
+  runtime.state.modsOffAt = Date.now();
   logFeatureBad("plugin_function_hooks_worker_mods", "turned_off", {
-    worker_mods: n.length - r,
-    native_mods: r,
+    worker_mods: modules.length - builtinCount,
+    native_mods: builtinCount,
   });
 }
 //@ chunk-e6aww6q8.js:4116682-4117078 placement
-var {
-  loadHooksModules,
-  mayHookCommand,
-  mayRegisterCommands,
-  loadingScansRead,
-  onLoadingScansRead,
-  pruneHooksModules,
-  reloadHooksModule,
-  retryUnloadedModules,
-  refreshOptions,
-  retargetHooksModule,
-  loadedFilesOf,
-  buildInterfaces,
-  routeInterfaceCall,
-  runHostOp,
-  retireEnvironmentHost,
-  opsDelivered,
-  workInFlight,
-  applyPendingInvalidations,
-} = initHooksHost();
+var loadHooksModules; // deferred: uses initHooksHost (./hooksWorkerHost.js) of its import cycle while loading; runs once the cycle is complete
+var mayHookCommand;
+var mayRegisterCommands;
+var loadingScansRead;
+var onLoadingScansRead;
+var pruneHooksModules;
+var reloadHooksModule;
+var retryUnloadedModules;
+var refreshOptions;
+var retargetHooksModule;
+var loadedFilesOf;
+var buildInterfaces;
+var routeInterfaceCall;
+var runHostOp;
+var retireEnvironmentHost;
+var opsDelivered;
+var workInFlight;
+var applyPendingInvalidations;
+deferInit("chunk-e6aww6q8.js:4116682", () => {
+  ({
+    loadHooksModules,
+    mayHookCommand,
+    mayRegisterCommands,
+    loadingScansRead,
+    onLoadingScansRead,
+    pruneHooksModules,
+    reloadHooksModule,
+    retryUnloadedModules,
+    refreshOptions,
+    retargetHooksModule,
+    loadedFilesOf,
+    buildInterfaces,
+    routeInterfaceCall,
+    runHostOp,
+    retireEnvironmentHost,
+    opsDelivered,
+    workInFlight,
+    applyPendingInvalidations,
+  } = initHooksHost());
+});
 export {
   workersLoadedReporter,
   flushDeferredProblems,
@@ -2187,7 +2317,7 @@ export {
   builtinModuleOf,
   logModsTurnedOff,
   isModuleUnchanged,
-  describeHooksModuleState,
+  loadAndRegisterHooksModule,
   admissionTextFor,
   errorWithCause,
   resolveElementTables,
@@ -2195,7 +2325,7 @@ export {
   bindAsyncResource,
   unloadHooksModules,
   hookHostKind,
-  validateHooksModuleExports,
+  assembleHooksModuleRuntime,
   withInFlightDispatches,
   waitForModuleReads,
   isLoadingAnyCommandRun,

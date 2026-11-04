@@ -16,9 +16,9 @@ import { startNodeRelay } from "../../upstreamproxy/relay.js";
 /**
  * 取数组第一项或原值，空值返回 undefined。
  */
-function firstOf(n) {
-  let r = Array.isArray(n) ? n[0] : n;
-  return r ? r : undefined;
+function firstOf(value) {
+  let first = Array.isArray(value) ? value[0] : value;
+  return first ? first : undefined;
 }
 //@ chunk-3tvkk9nn.js:361-372 layout
 /**
@@ -63,18 +63,18 @@ function getMcpOAuthCallbackPort() {
 /**
  * findAvailablePort：OAuth 回调端口选择：环境变量 > 指定端口 > 在随机区间（Windows 39152–49151，其他 49152–65535）最多试 100 次 > 3118 > 由中继分配，都不行抛错。
  */
-async function findAvailablePort(registeredLoopbackPort, r = defaultPortPolicy()) {
+async function findAvailablePort(port, policy = defaultPortPolicy()) {
   let configuredPort = getMcpOAuthCallbackPort();
   if (configuredPort) return configuredPort;
-  if (registeredLoopbackPort && (await canRelayOnPort(registeredLoopbackPort))) return registeredLoopbackPort;
-  let { min, max } = r.range;
+  if (port && (await canRelayOnPort(port))) return port;
+  let { min, max } = policy.range;
   let range = max - min + 1;
   let maxAttempts = Math.min(range, 100);
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    let c = min + Math.floor(Math.random() * range);
-    if (await canRelayOnPort(c)) return c;
+    let candidate = min + Math.floor(Math.random() * range);
+    if (await canRelayOnPort(candidate)) return candidate;
   }
-  if (await canRelayOnPort(r.fallback)) return r.fallback;
+  if (await canRelayOnPort(policy.fallback)) return policy.fallback;
   let nodeRelay = await startNodeRelay(0);
   if (nodeRelay !== undefined) return nodeRelay;
   throw Error("No available ports for OAuth redirect");
@@ -83,7 +83,7 @@ async function findAvailablePort(registeredLoopbackPort, r = defaultPortPolicy()
 /**
  * 判断能否在该端口启动中继。
  */
-async function canRelayOnPort(n) {
-  return (await startNodeRelay(n)) !== undefined;
+async function canRelayOnPort(port) {
+  return (await startNodeRelay(port)) !== undefined;
 }
 export { buildRedirectUri, findAvailablePort, firstOf };

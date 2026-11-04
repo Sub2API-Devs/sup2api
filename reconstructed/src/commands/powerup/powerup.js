@@ -8,7 +8,7 @@
  * pieces: chunk-19dk83fw.js (1), chunk-fxpvgzqn.js (1)
  * attribution: placement 2
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { MessageActionsKeybindings } from "../../components/messageActions.js";
 import {
@@ -22,75 +22,75 @@ import { Pane } from "../../components/design-system/Pane.js";
 
 //@ chunk-19dk83fw.js:18639-19401 placement = MobileQRCode (0.23)
 function MobileQRCode(props) {
-  let i = w(15);
+  let $ = useMemoCache(15);
   let { lesson, isUnlocked, onDone, onBack } = props;
-  let x;
-  if (i[0] !== onBack || i[1] !== onDone) {
-    x = {
+  let confirmActions;
+  if ($[0] !== onBack || $[1] !== onDone) {
+    confirmActions = {
       "confirm:yes": onDone,
       "confirm:no": onBack,
     };
-    i[0] = onBack;
-    i[1] = onDone;
-    i[2] = x;
-  } else x = i[2];
-  let g;
-  if (i[3] === MEMO_CACHE_SENTINEL) {
-    g = {
+    $[0] = onBack;
+    $[1] = onDone;
+    $[2] = confirmActions;
+  } else confirmActions = $[2];
+  let keybindingsContext;
+  if ($[3] === MEMO_CACHE_SENTINEL) {
+    keybindingsContext = {
       context: "Confirmation",
     };
-    i[3] = g;
-  } else g = i[3];
-  MessageActionsKeybindings(x, g);
+    $[3] = keybindingsContext;
+  } else keybindingsContext = $[3];
+  MessageActionsKeybindings(confirmActions, keybindingsContext);
   const status = isUnlocked ? "success" : "pending";
-  let f;
-  if (i[4] !== status) {
-    f = jsxProd_default(StatusIcon, {
+  let statusIcon;
+  if ($[4] !== status) {
+    statusIcon = jsxProd_default(StatusIcon, {
       status,
       withSpace: true,
     });
-    i[4] = status;
-    i[5] = f;
-  } else f = i[5];
-  let b;
-  if (i[6] !== lesson.title) {
-    b = jsxProd_default(Text, {
+    $[4] = status;
+    $[5] = statusIcon;
+  } else statusIcon = $[5];
+  let titleText;
+  if ($[6] !== lesson.title) {
+    titleText = jsxProd_default(Text, {
       bold: true,
       color: "claude",
       children: lesson.title,
     });
-    i[6] = lesson.title;
-    i[7] = b;
-  } else b = i[7];
-  let d;
-  if (i[8] !== f || i[9] !== b) {
-    d = jsxProd_default_2(Box, {
-      children: [f, b],
+    $[6] = lesson.title;
+    $[7] = titleText;
+  } else titleText = $[7];
+  let headerRow;
+  if ($[8] !== statusIcon || $[9] !== titleText) {
+    headerRow = jsxProd_default_2(Box, {
+      children: [statusIcon, titleText],
     });
-    i[8] = f;
-    i[9] = b;
-    i[10] = d;
-  } else d = i[10];
-  let R;
-  if (i[11] === MEMO_CACHE_SENTINEL) {
-    R = jsxProd_default(LessonFooter, {});
-    i[11] = R;
-  } else R = i[11];
-  let C;
-  if (i[12] !== lesson.body || i[13] !== d) {
-    C = jsxProd_default(Pane, {
+    $[8] = statusIcon;
+    $[9] = titleText;
+    $[10] = headerRow;
+  } else headerRow = $[10];
+  let footer;
+  if ($[11] === MEMO_CACHE_SENTINEL) {
+    footer = jsxProd_default(LessonFooter, {});
+    $[11] = footer;
+  } else footer = $[11];
+  let pane;
+  if ($[12] !== lesson.body || $[13] !== headerRow) {
+    pane = jsxProd_default(Pane, {
       color: "claude",
       children: jsxProd_default_2(Box, {
         flexDirection: "column",
         gap: 1,
-        children: [d, lesson.body, R],
+        children: [headerRow, lesson.body, footer],
       }),
     });
-    i[12] = lesson.body;
-    i[13] = d;
-    i[14] = C;
-  } else C = i[14];
-  return C;
+    $[12] = lesson.body;
+    $[13] = headerRow;
+    $[14] = pane;
+  } else pane = $[14];
+  return pane;
 }
 //@ chunk-fxpvgzqn.js:13703-13764 placement = call (0.635)
 /**
@@ -98,9 +98,9 @@ function MobileQRCode(props) {
  */
 var call = async (onDone) =>
   jsxProd_default(PowerupLessons, {
-    onExit: (m) =>
-      onDone(m, {
+    onExit: (result) =>
+      onDone(result, {
         display: "system",
       }),
   });
-export { MobileQRCode };
+export { MobileQRCode, call };

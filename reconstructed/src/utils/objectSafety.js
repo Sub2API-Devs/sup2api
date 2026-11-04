@@ -13,8 +13,8 @@
 /**
  * 定义可枚举可写属性。
  */
-function defineOwnProperty(e, trackingPath, value) {
-  Object.defineProperty(e, trackingPath, {
+function defineOwnProperty(object, trackingPath, value) {
+  Object.defineProperty(object, trackingPath, {
     value,
     enumerable: true,
     writable: true,
@@ -25,16 +25,16 @@ function defineOwnProperty(e, trackingPath, value) {
 /**
  * 对象图中是否含 __proto__ 等危险键。
  */
-function hasProtoKeys(e) {
-  if (typeof e !== "object" || e === null) return false;
-  let n = new Set([e]);
-  let r = [e];
-  for (let s = r.pop(); s !== undefined; s = r.pop()) {
-    if (Object.hasOwn(s, "__proto__")) return true;
-    for (let a of Array.isArray(s) ? s : Object.values(s))
-      if (typeof a === "object" && a !== null && !n.has(a)) {
-        n.add(a);
-        r.push(a);
+function hasProtoKeys(value) {
+  if (typeof value !== "object" || value === null) return false;
+  let seen = new Set([value]);
+  let stack = [value];
+  for (let current = stack.pop(); current !== undefined; current = stack.pop()) {
+    if (Object.hasOwn(current, "__proto__")) return true;
+    for (let child of Array.isArray(current) ? current : Object.values(current))
+      if (typeof child === "object" && child !== null && !seen.has(child)) {
+        seen.add(child);
+        stack.push(child);
       }
   }
   return false;
@@ -43,46 +43,46 @@ function hasProtoKeys(e) {
 /**
  * 去掉危险键并返回数量。
  */
-function stripProtoKeys(e) {
-  if (!hasProtoKeys(e))
+function stripProtoKeys(value) {
+  if (!hasProtoKeys(value))
     return {
-      stripped: e,
+      stripped: value,
       count: 0,
     };
-  let n = 0;
-  let r = new Map();
-  let s = [];
-  let a = (g) => {
-    if (typeof g !== "object" || g === null) return g;
-    let m = r.get(g);
-    if (m === undefined) {
-      m = Array.isArray(g) ? [] : {};
-      r.set(g, m);
-      s.push([g, m]);
+  let count = 0;
+  let clones = new Map();
+  let pending = [];
+  let clone = (input) => {
+    if (typeof input !== "object" || input === null) return input;
+    let clone = clones.get(input);
+    if (clone === undefined) {
+      clone = Array.isArray(input) ? [] : {};
+      clones.set(input, clone);
+      pending.push([input, clone]);
     }
-    return m;
+    return clone;
   };
-  let stripped = a(e);
-  for (let g = s.pop(); g !== undefined; g = s.pop()) {
-    let [m, f] = g;
-    if (Array.isArray(m) && Array.isArray(f)) {
-      for (let h of m) f.push(a(h));
+  let stripped = clone(value);
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    let [source, target] = next;
+    if (Array.isArray(source) && Array.isArray(target)) {
+      for (let item of source) target.push(clone(item));
       continue;
     }
-    for (let [key, value] of Object.entries(m))
-      if (key === "__proto__") n++;
-      else Reflect.set(f, key, a(value));
+    for (let [key, value] of Object.entries(source))
+      if (key === "__proto__") count++;
+      else Reflect.set(target, key, clone(value));
   }
   return {
     stripped,
-    count: n,
+    count,
   };
 }
 //@ chunk-dcmhvw5a.js:204705-204760 placement
 /**
  * 仅取自有属性。
  */
-function getOwn(e, n) {
-  return Object.hasOwn(e, n) ? e[n] : undefined;
+function getOwn(object, key) {
+  return Object.hasOwn(object, key) ? object[key] : undefined;
 }
 export { getOwn, defineOwnProperty, hasProtoKeys, stripProtoKeys };

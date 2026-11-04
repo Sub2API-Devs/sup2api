@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_base64_encoding } from "../wire/base64-encoding.js";
 import { require_descriptor_pb } from "../../commonjs/wkt/gen/google/protobuf/descriptor_pb.js";
 import { require_registry } from "../registry.js";
@@ -13,7 +13,7 @@ import { require_restore_json_names } from "./restore-json-names.js";
 import { require_from_binary } from "../../commonjs/from-binary.js";
 
 //@ chunk-fq0cr76a.js:413424-413898 cjs-require-graph
-var require_file = x(function (cjsExports) {
+var require_file = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -36,8 +36,8 @@ var require_file = x(function (cjsExports) {
         ? _a
         : [];
     return registry_js_1
-      .createFileRegistry(root, (y) =>
-        imports === null || imports === undefined ? undefined : imports.find((f) => f.proto.name === y),
+      .createFileRegistry(root, (name) =>
+        imports === null || imports === undefined ? undefined : imports.find((f) => f.proto.name === name),
       )
       .getFile(root.name);
   }

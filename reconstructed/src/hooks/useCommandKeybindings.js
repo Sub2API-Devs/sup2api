@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (2)
  * attribution: fingerprint 2
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useKeybindingContext } from "../keybindings/KeybindingContext.js";
 import { useThirdOverlayKeys } from "../context/overlayContext.js";
 import { useDialogOfKind } from "../state/dialogQueue.js";
@@ -30,7 +30,7 @@ var NOOP_HELPERS = {
  * 读取 keybinding 配置中 "command:<name>" 动作并绑定为提交 "/<name>"。
  */
 function CommandKeybindingHandlers(props) {
-  let $ = w(8);
+  let $ = useMemoCache(8);
   let { onSubmit } = props;
   let keybindingContext = useKeybindingContext();
   let isModalOverlayActive = useThirdOverlayKeys();

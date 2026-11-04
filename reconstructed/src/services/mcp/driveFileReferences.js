@@ -32,14 +32,14 @@ import {
 /**
  * 判断文件引用是否是 Windows 盘符形式（sha256:<哈希>:X:...）。
  */
-function isWindowsForm(e) {
-  let buffer = Buffer.from(e.slice(0, 80), "utf8");
-  let i = 72;
-  let r = buffer[72] ?? 0;
+function isWindowsForm(value) {
+  let buffer = Buffer.from(value.slice(0, 80), "utf8");
+  let colonIndex = 72;
+  let driveLetterCode = buffer[72] ?? 0;
   return (
-    e.startsWith("sha256:") &&
+    value.startsWith("sha256:") &&
     buffer[71] === 58 &&
-    ((r >= 65 && r <= 90) || (r >= 97 && r <= 122)) &&
+    ((driveLetterCode >= 65 && driveLetterCode <= 90) || (driveLetterCode >= 97 && driveLetterCode <= 122)) &&
     buffer[73] === 58
   );
 }
@@ -70,16 +70,16 @@ function pathKindMeta(path) {
 /**
  * 解析文件引用 sha256:<64 位哈希>:<绝对路径>，返回哈希、路径与路径形式，或 not_a_reference / ref_malformed。
  */
-function parseFileReference(e) {
-  if (!e.startsWith("sha256:")) return "not_a_reference";
-  let match = /^sha256:([0-9a-f]{64}):([^]*)$/.exec(e);
+function parseFileReference(value) {
+  if (!value.startsWith("sha256:")) return "not_a_reference";
+  let match = /^sha256:([0-9a-f]{64}):([^]*)$/.exec(value);
   if (match === null) return "ref_malformed";
-  let [, i = "", r = ""] = match;
-  let matches = /^[A-Za-z]:\//.test(r);
-  return isWellFormedReferencePath(r, matches ? r.slice(2) : r)
+  let [, hash = "", path = ""] = match;
+  let matches = /^[A-Za-z]:\//.test(path);
+  return isWellFormedReferencePath(path, matches ? path.slice(2) : path)
     ? {
-        sha256: i,
-        path: r,
+        sha256: hash,
+        path,
         form: matches ? "windows" : "posix",
       }
     : "ref_malformed";
@@ -107,9 +107,9 @@ function checkCall(args, toolSpec) {
       field: found,
     };
   let references = [];
-  for (let { entry, value: u } of fileReferenceValues(args, toolSpec)) {
-    if (typeof u !== "string") continue;
-    let fileReference = parseFileReference(u);
+  for (let { entry, value } of fileReferenceValues(args, toolSpec)) {
+    if (typeof value !== "string") continue;
+    let fileReference = parseFileReference(value);
     if (fileReference === "ref_malformed")
       return {
         error: "ref_malformed",
@@ -118,7 +118,7 @@ function checkCall(args, toolSpec) {
     if (fileReference !== "not_a_reference")
       references.push({
         entry,
-        reference: u,
+        reference: value,
         sha256: fileReference.sha256,
         path: fileReference.path,
       });
@@ -133,13 +133,13 @@ function checkCall(args, toolSpec) {
     };
   let argumentValue = args[toolSpec.argument];
   for (let { entry } of references) {
-    let u = entry !== undefined && Array.isArray(argumentValue) ? argumentValue[entry] : undefined;
-    let c = isPlainObject(u) ? findCaseFoldDuplicateKey(u) : undefined;
-    if (c !== undefined)
+    let entryValue = entry !== undefined && Array.isArray(argumentValue) ? argumentValue[entry] : undefined;
+    let duplicateKey = isPlainObject(entryValue) ? findCaseFoldDuplicateKey(entryValue) : undefined;
+    if (duplicateKey !== undefined)
       return {
         error: "fields_missing",
         case: "duplicate",
-        ...c,
+        ...duplicateKey,
         ...wrapEntry(entry),
       };
   }
@@ -151,38 +151,39 @@ function checkCall(args, toolSpec) {
 /**
  * 找出对象中大小写折叠后重复的键（按字节序取最先出现的一对）。
  */
-function findCaseFoldDuplicateKey(e) {
-  let mapped = Object.keys(e)
+function findCaseFoldDuplicateKey(input) {
+  let mapped = Object.keys(input)
     .map((key) => ({
       key,
       bytes: Buffer.from(key, "utf8"),
     }))
-    .sort((d, a) => Buffer.compare(d.bytes, a.bytes))
-    .map((d) => d.key);
-  let i = new Map();
-  let r = new Map();
-  for (let [d, a] of mapped.entries()) {
-    let u = foldKeyName(a);
-    let c = i.get(u);
-    if (c === undefined) i.set(u, d);
-    else if (!r.has(c)) r.set(c, d);
+    .sort((entryA, entryB) => Buffer.compare(entryA.bytes, entryB.bytes))
+    .map((entry) => entry.key);
+  let firstIndexByName = new Map();
+  let duplicateIndexByName = new Map();
+  for (let [index, key] of mapped.entries()) {
+    let foldedName = foldKeyName(key);
+    let firstIndex = firstIndexByName.get(foldedName);
+    if (firstIndex === undefined) firstIndexByName.set(foldedName, index);
+    else if (!duplicateIndexByName.has(firstIndex)) duplicateIndexByName.set(firstIndex, index);
   }
-  let h;
-  for (let key of r.keys()) if (h === undefined || key < h) h = key;
-  return h === undefined
+  let lowestIndex;
+  for (let key of duplicateIndexByName.keys())
+    if (lowestIndex === undefined || key < lowestIndex) lowestIndex = key;
+  return lowestIndex === undefined
     ? undefined
     : {
-        key: mapped[h] ?? "",
-        also: mapped[r.get(h) ?? 0] ?? "",
+        key: mapped[lowestIndex] ?? "",
+        also: mapped[duplicateIndexByName.get(lowestIndex) ?? 0] ?? "",
       };
 }
 //@ chunk-0p9fd9na.js:7900-8074 placement
-function foldKeyName(e) {
-  return [...e]
-    .map((n) => {
-      if (n === "_" || n === "-") return "";
-      if (/^[\uD800-\uDFFF]$/.test(n)) return "\uFFFD";
-      return LEXICAL_CASE_FOLD[n] ?? (/^[A-Z]$/.test(n) ? n.toLowerCase() : n);
+function foldKeyName(key) {
+  return [...key]
+    .map((char) => {
+      if (char === "_" || char === "-") return "";
+      if (/^[\uD800-\uDFFF]$/.test(char)) return "\uFFFD";
+      return LEXICAL_CASE_FOLD[char] ?? (/^[A-Z]$/.test(char) ? char.toLowerCase() : char);
     })
     .join("");
 }
@@ -200,168 +201,173 @@ var LEXICAL_CASE_FOLD = {
 /**
  * 解析 MCP 工具参数里的 Drive 文件引用：检查读取限制、读取文件并替换参数。
  */
-async function resolveDriveFileReference(e, n, i, toolSpec, h, d) {
-  let a = (s, k = {}) =>
-    formatFileReferenceError(toolSpec, s, {
-      ...k,
+async function resolveDriveFileReference(args, context, phase, toolSpec, toolContext, checkedReferences) {
+  let formatError = (reason, extra = {}) =>
+    formatFileReferenceError(toolSpec, reason, {
+      ...extra,
       readsBlocked:
-        !toolSpec.hostFills && (n.blockReadsOutsideWorkingDirectories === true || n.restricted === true),
+        !toolSpec.hostFills &&
+        (context.blockReadsOutsideWorkingDirectories === true || context.restricted === true),
     });
-  let u = (s) => ({
-    ...fileReferenceRefusal("not_available", a("not_available"), s, true),
+  let notAvailable = (detail) => ({
+    ...fileReferenceRefusal("not_available", formatError("not_available"), detail, true),
     beforeRead: true,
   });
-  let c = (s, k, A) => ({
-    ...fileReferenceRefusal(s, k, A),
+  let refuse = (reason, message, detail) => ({
+    ...fileReferenceRefusal(reason, message, detail),
     beforeRead: true,
   });
-  let S = fileReferenceUnavailableReason(toolSpec);
-  if (S !== undefined) return u(S);
-  if (toolSpec.stillHeld?.() === false) return u("entry_not_held");
-  let F = getPlatform() === "windows";
-  let T = fileReferenceValues(e, toolSpec);
+  let unavailableReason = fileReferenceUnavailableReason(toolSpec);
+  if (unavailableReason !== undefined) return notAvailable(unavailableReason);
+  if (toolSpec.stillHeld?.() === false) return notAvailable("entry_not_held");
+  let isWindows = getPlatform() === "windows";
+  let values = fileReferenceValues(args, toolSpec);
   if (
-    !F &&
-    [...T.map((s) => s.value), ...toolSpec.wrongArguments.map((wrongArgument) => e[wrongArgument])].some(
-      (s) => typeof s === "string" && isWindowsForm(s),
-    )
+    !isWindows &&
+    [
+      ...values.map((entry) => entry.value),
+      ...toolSpec.wrongArguments.map((wrongArgument) => args[wrongArgument]),
+    ].some((value) => typeof value === "string" && isWindowsForm(value))
   )
-    return u("windows_path");
-  if (i === "send") {
-    let s;
-    if (d === undefined) {
-      let k = T.find((A) => isSha256Value(A.value)) ?? T[0];
-      s = {
-        now: k?.value,
-        ...wrapEntry(k?.entry),
+    return notAvailable("windows_path");
+  if (phase === "send") {
+    let change;
+    if (checkedReferences === undefined) {
+      let entry = values.find((candidate) => isSha256Value(candidate.value)) ?? values[0];
+      change = {
+        now: entry?.value,
+        ...wrapEntry(entry?.entry),
         detail: "not_checked",
       };
     } else {
-      let k = new Map(d.map(({ entry, reference }) => [entry, reference]));
-      for (let l of T) {
-        let b = k.get(l.entry);
-        if (b === undefined ? isSha256Value(l.value) : l.value !== b) {
-          s = {
-            was: b,
-            now: l.value,
-            ...wrapEntry(l.entry),
+      let checkedByEntry = new Map(checkedReferences.map(({ entry, reference }) => [entry, reference]));
+      for (let value of values) {
+        let checkedReference = checkedByEntry.get(value.entry);
+        if (checkedReference === undefined ? isSha256Value(value.value) : value.value !== checkedReference) {
+          change = {
+            was: checkedReference,
+            now: value.value,
+            ...wrapEntry(value.entry),
             detail:
-              b === undefined
+              checkedReference === undefined
                 ? "reference_added"
-                : isSha256Value(l.value)
+                : isSha256Value(value.value)
                   ? "reference_changed"
                   : "reference_removed",
           };
           break;
         }
       }
-      let A = new Set(T.map((l) => l.entry));
-      let found = d.find((l) => !A.has(l.entry));
-      if (s === undefined && found !== undefined)
-        s = {
+      let presentEntries = new Set(values.map((value) => value.entry));
+      let found = checkedReferences.find((checkedReference) => !presentEntries.has(checkedReference.entry));
+      if (change === undefined && found !== undefined)
+        change = {
           was: found.reference,
           now: undefined,
           ...wrapEntry(found.entry),
           detail: "reference_gone",
         };
     }
-    if (s !== undefined)
-      return c(
+    if (change !== undefined)
+      return refuse(
         "changed_after_check",
-        a("changed_after_check", {
-          name: referencedFileName(s.was) ?? referencedFileName(s.now) ?? "The file",
-          entry: s.entry,
+        formatError("changed_after_check", {
+          name: referencedFileName(change.was) ?? referencedFileName(change.now) ?? "The file",
+          entry: change.entry,
         }),
-        s.detail,
+        change.detail,
       );
   }
-  let y = checkCall(e, toolSpec);
-  if (y === "not_a_reference")
-    return c(
+  let check = checkCall(args, toolSpec);
+  if (check === "not_a_reference")
+    return refuse(
       "wrong_field",
-      a("wrong_field", {
+      formatError("wrong_field", {
         field: toolSpec.wrongArguments[0],
       }),
     );
-  if ("error" in y)
-    return c(
-      y.error,
-      a(y.error, {
-        field: y.field,
-        key: y.key,
-        also: y.also,
-        entry: y.entry,
+  if ("error" in check)
+    return refuse(
+      check.error,
+      formatError(check.error, {
+        field: check.field,
+        key: check.key,
+        also: check.also,
+        entry: check.entry,
       }),
-      y.case,
+      check.case,
     );
-  let D = F ? y.references.find(({ path }) => !/^[A-Za-z]:\//.test(path)) : undefined;
-  if (D !== undefined)
+  let posixOnWindows = isWindows
+    ? check.references.find(({ path }) => !/^[A-Za-z]:\//.test(path))
+    : undefined;
+  if (posixOnWindows !== undefined)
     return {
-      ...c(
+      ...refuse(
         "ref_malformed",
-        a("ref_malformed", {
-          entry: D.entry,
+        formatError("ref_malformed", {
+          entry: posixOnWindows.entry,
         }),
         "posix_on_windows",
       ),
-      ...pathKindMeta(D.path),
+      ...pathKindMeta(posixOnWindows.path),
     };
-  let P = [];
-  for (let { entry, reference, sha256, path } of y.references) {
+  let files = [];
+  for (let { entry, reference, sha256, path } of check.references) {
     if (toolSpec.hostFills) {
-      let o;
+      let pathRejection;
       try {
-        let w = await screenUnreadUpload(path, n);
-        if (w.judged.split(sep).join("/") !== path)
-          o = {
+        let screened = await screenUnreadUpload(path, context);
+        if (screened.judged.split(sep).join("/") !== path)
+          pathRejection = {
             reason: "outside_roots",
             detail: "spelling_changed",
           };
-        else if (w.resolved === undefined && w.linked)
-          o = {
+        else if (screened.resolved === undefined && screened.linked)
+          pathRejection = {
             reason: "outside_roots",
             detail: "link_unresolved",
           };
-        else if (await isUploadAllowedPath(path, w.resolved ?? path))
-          o = {
+        else if (await isUploadAllowedPath(path, screened.resolved ?? path))
+          pathRejection = {
             reason: "refused_kind",
             detail: "credential_or_own_file",
           };
       } catch (error) {
-        o = classifyReadFailure(error);
+        pathRejection = classifyReadFailure(error);
       }
-      let p = fileReferenceUnavailableReason(toolSpec);
-      if (o === undefined && p !== undefined) return u(p);
-      if (o === undefined) continue;
-      logForDebugging(`[file reference] a path was rejected: ${o.detail}`);
+      let unavailableReason = fileReferenceUnavailableReason(toolSpec);
+      if (pathRejection === undefined && unavailableReason !== undefined)
+        return notAvailable(unavailableReason);
+      if (pathRejection === undefined) continue;
+      logForDebugging(`[file reference] a path was rejected: ${pathRejection.detail}`);
       return {
         ...fileReferenceRefusal(
-          o.reason,
-          a("cannot_upload", {
+          pathRejection.reason,
+          formatError("cannot_upload", {
             entry,
             path,
           }),
-          o.detail,
+          pathRejection.detail,
           true,
         ),
         beforeRead: true,
       };
     }
     let name = basename(path);
-    let b;
-    let R;
+    let readFailure;
+    let uploadCandidate;
     if (isDiskless()) {
-      let host = disklessHostState.peek(h.session)?.host;
-      if (host === undefined) return u("diskless");
-      let p = await host.read([path], n, toolSpec.maxFileBytes, h.signal, true);
-      if ("error" in p) {
-        if (p.error === FILE_UPLOAD_UNAVAILABLE)
-          return fileReferenceRefusal("not_available", a("not_available"), p.reason, true);
-        if (p.reason === "daemon_refused")
-          return i === "send"
+      let host = disklessHostState.peek(toolContext.session)?.host;
+      if (host === undefined) return notAvailable("diskless");
+      let readResult = await host.read([path], context, toolSpec.maxFileBytes, toolContext.signal, true);
+      if ("error" in readResult) {
+        if (readResult.error === FILE_UPLOAD_UNAVAILABLE)
+          return fileReferenceRefusal("not_available", formatError("not_available"), readResult.reason, true);
+        if (readResult.reason === "daemon_refused")
+          return phase === "send"
             ? fileReferenceRefusal(
                 "changed_after_check",
-                a("changed_after_check", {
+                formatError("changed_after_check", {
                   entry,
                   name,
                 }),
@@ -369,7 +375,7 @@ async function resolveDriveFileReference(e, n, i, toolSpec, h, d) {
               )
             : fileReferenceRefusal(
                 "outside_roots",
-                a("cannot_upload", {
+                formatError("cannot_upload", {
                   entry,
                   path,
                 }),
@@ -378,149 +384,153 @@ async function resolveDriveFileReference(e, n, i, toolSpec, h, d) {
               );
         return fileReferenceRefusal(
           "read_failed",
-          a("read_failed", {
+          formatError("read_failed", {
             entry,
             name,
           }),
-          p.reason,
+          readResult.reason,
         );
       }
-      let w = p.files[0]?.data;
-      if (w === undefined)
+      let fileData = readResult.files[0]?.data;
+      if (fileData === undefined)
         return fileReferenceRefusal(
           "read_failed",
-          a("read_failed", {
+          formatError("read_failed", {
             entry,
             name,
           }),
           "no_file",
         );
       if (toolSpec.stillHeld?.() === false)
-        return fileReferenceRefusal("not_available", a("not_available"), "entry_not_held", true);
-      let buffer = Buffer.from(w, "base64");
-      R = {
+        return fileReferenceRefusal("not_available", formatError("not_available"), "entry_not_held", true);
+      let buffer = Buffer.from(fileData, "base64");
+      uploadCandidate = {
         buf: buffer,
         name,
         sha256: computeContentHash(buffer),
       };
     } else
-      R = await statUploadCandidate(
+      uploadCandidate = await statUploadCandidate(
         path,
-        async (o) => {
-          let p;
+        async (resolvedPath) => {
+          let screened;
           try {
-            p = await screenUploadPath(o, n);
-            assertPathNotBlocked(o, p, n);
+            screened = await screenUploadPath(resolvedPath, context);
+            assertPathNotBlocked(resolvedPath, screened, context);
           } catch (error) {
-            b = classifyReadFailure(error);
-            logForDebugging(`[file reference] a path was rejected: ${b.detail}`);
+            readFailure = classifyReadFailure(error);
+            logForDebugging(`[file reference] a path was rejected: ${readFailure.detail}`);
             return;
           }
-          return p;
+          return screened;
         },
         toolSpec.maxFileBytes,
         {
           followsLinks: true,
         },
       );
-    if ("code" in R) {
-      let o = classifyGuardedReadFailure(R.code, b);
-      if (i === "send" && (o.reason === "not_found" || o.reason === "too_large"))
+    if ("code" in uploadCandidate) {
+      let readError = classifyGuardedReadFailure(uploadCandidate.code, readFailure);
+      if (phase === "send" && (readError.reason === "not_found" || readError.reason === "too_large"))
         return fileReferenceRefusal(
           "changed_after_check",
-          a("changed_after_check", {
+          formatError("changed_after_check", {
             entry,
             name,
           }),
-          o.reason,
+          readError.reason,
         );
-      if (R.code !== "path_rejected" && (o.reason === "too_large" || o.reason === "read_failed"))
+      if (
+        uploadCandidate.code !== "path_rejected" &&
+        (readError.reason === "too_large" || readError.reason === "read_failed")
+      )
         return fileReferenceRefusal(
-          o.reason,
-          a(o.reason, {
+          readError.reason,
+          formatError(readError.reason, {
             entry,
             name,
           }),
-          o.detail,
+          readError.detail,
         );
       return {
         ...fileReferenceRefusal(
-          o.reason,
-          a("cannot_upload", {
+          readError.reason,
+          formatError("cannot_upload", {
             entry,
             path,
           }),
-          o.detail,
+          readError.detail,
           true,
         ),
-        ...(o.reason === "not_found" && pathKindMeta(path)),
+        ...(readError.reason === "not_found" && pathKindMeta(path)),
       };
     }
-    if (R.buf.length === 0)
-      return i === "check"
+    if (uploadCandidate.buf.length === 0)
+      return phase === "check"
         ? fileReferenceRefusal(
             "empty_file",
-            a("empty_file", {
+            formatError("empty_file", {
               entry,
               name,
             }),
           )
         : fileReferenceRefusal(
             "changed_after_check",
-            a("changed_after_check", {
+            formatError("changed_after_check", {
               entry,
               name,
             }),
             "empty_file",
           );
-    if (R.sha256 !== sha256)
-      return i === "check"
+    if (uploadCandidate.sha256 !== sha256)
+      return phase === "check"
         ? fileReferenceRefusal(
             "checksum_mismatch",
-            a("checksum_mismatch", {
+            formatError("checksum_mismatch", {
               entry,
               name,
             }),
           )
         : fileReferenceRefusal(
             "changed_after_check",
-            a("changed_after_check", {
+            formatError("changed_after_check", {
               entry,
               name,
             }),
           );
-    P.push({
+    files.push({
       entry,
       reference,
-      buf: R.buf,
+      buf: uploadCandidate.buf,
     });
   }
-  let H = toolSpec.hostFills ? undefined : fileReferenceUnavailableReason(toolSpec);
-  if (H !== undefined) return fileReferenceRefusal("not_available", a("not_available"), H, true);
+  let laterUnavailableReason = toolSpec.hostFills ? undefined : fileReferenceUnavailableReason(toolSpec);
+  if (laterUnavailableReason !== undefined)
+    return fileReferenceRefusal("not_available", formatError("not_available"), laterUnavailableReason, true);
   return toolSpec.hostFills
     ? {
         hostReads: true,
-        references: y.references.map(({ entry, reference }) => ({
+        references: check.references.map(({ entry, reference }) => ({
           entry,
           reference,
         })),
       }
     : {
-        files: P,
+        files,
       };
 }
 //@ chunk-0p9fd9na.js:12313-12489 placement
-function fileReferenceRefusal(e, message, i, r) {
-  if (EXPECTED_REFUSALS.has(e)) logFeatureSad("mcp_drive_file_reference", e);
-  else logFeatureBad("mcp_drive_file_reference", e);
+function fileReferenceRefusal(reason, message, detail, notAnError) {
+  if (EXPECTED_REFUSALS.has(reason)) logFeatureSad("mcp_drive_file_reference", reason);
+  else logFeatureBad("mcp_drive_file_reference", reason);
   return {
-    refusal: e,
+    refusal: reason,
     message,
-    ...(i !== undefined && {
-      detail: i,
+    ...(detail !== undefined && {
+      detail,
     }),
-    ...(r && {
-      notAnError: r,
+    ...(notAnError && {
+      notAnError,
     }),
   };
 }
@@ -539,76 +549,79 @@ function hashCommand() {
     : "sha256sum, or shasum -a 256 on macOS";
 }
 //@ chunk-0p9fd9na.js:12741-15357 placement
-function formatFileReferenceError(e, n, i) {
-  let argument = e.argument;
-  let h = displaySafeText(i.path ?? "");
-  let d = displaySafeText(i.name ?? basename(i.path ?? ""));
-  let a = i.field ?? e.wrongArguments[0] ?? "content";
-  switch (n) {
+function formatFileReferenceError(toolSpec, reason, details) {
+  let argument = toolSpec.argument;
+  let pathText = displaySafeText(details.path ?? "");
+  let nameText = displaySafeText(details.name ?? basename(details.path ?? ""));
+  let fieldName = details.field ?? toolSpec.wrongArguments[0] ?? "content";
+  switch (reason) {
     case "not_available":
       return `File references can't be used here, so nothing was uploaded. Put the file's content in ${argument} as base64 instead.`;
     case "ref_malformed":
       return `The file reference in ${argument} is not valid, so nothing was uploaded. Write it as sha256:<64 lowercase hex digits>:<absolute path>, with / between folders, also on Windows (C:/Users/...). No folder or file name in the path may be empty, be made only of dots and spaces (such as . or ..), or contain ':'. The path may not end in '/', contain backslashes, escapes like %20, or unusual characters, be over 1,024 bytes, or have more than 32 parts. Fix it, or put the file's base64 in ${argument}.`;
     case "wrong_field":
-      return `The ${a} field holds a file reference, so nothing was uploaded. Put the reference in ${argument} instead and leave ${a} out.`;
+      return `The ${fieldName} field holds a file reference, so nothing was uploaded. Put the reference in ${argument} instead and leave ${fieldName} out.`;
     case "fields_missing": {
-      let u = (F) => (F === "" ? "an empty name" : displaySafeText(F));
-      let key = i.key ?? "";
-      if (i.also) {
-        let F = foldKeyName(key) === foldKeyName(argument) ? argument : "one of them";
-        return `This ${e.toolName} call names a file by reference but has one argument under two spellings, ${u(key)} and ${u(i.also)}, so nothing was uploaded. Keep only ${F} and make the call again.`;
+      let quoteName = (name) => (name === "" ? "an empty name" : displaySafeText(name));
+      let key = details.key ?? "";
+      if (details.also) {
+        let keepLabel = foldKeyName(key) === foldKeyName(argument) ? argument : "one of them";
+        return `This ${toolSpec.toolName} call names a file by reference but has one argument under two spellings, ${quoteName(key)} and ${quoteName(details.also)}, so nothing was uploaded. Keep only ${keepLabel} and make the call again.`;
       }
-      let S =
+      let duplicateText =
         key === ""
           ? "has an argument with an empty name twice"
           : `has the argument ${displaySafeText(key)} twice`;
-      return `This ${e.toolName} call names a file by reference but ${S}, so nothing was uploaded. Fix that and make the call again.`;
+      return `This ${toolSpec.toolName} call names a file by reference but ${duplicateText}, so nothing was uploaded. Fix that and make the call again.`;
     }
     case "cannot_upload":
-      return `Nothing was uploaded: ${h} either does not exist or can't be sent by reference from here (this message doesn't say which). Check the path. If it is right, a reference won't work for this file${i.readsBlocked ? UPLOAD_FAILURE_HINT : `, but ${argument} still accepts a file's base64.`}`;
+      return `Nothing was uploaded: ${pathText} either does not exist or can't be sent by reference from here (this message doesn't say which). Check the path. If it is right, a reference won't work for this file${details.readsBlocked ? UPLOAD_FAILURE_HINT : `, but ${argument} still accepts a file's base64.`}`;
     case "empty_file":
-      return `${d} is empty, so nothing was uploaded. If it was just written, make sure it is saved and make the call once more; if it really is empty, tell the user.`;
+      return `${nameText} is empty, so nothing was uploaded. If it was just written, make sure it is saved and make the call once more; if it really is empty, tell the user.`;
     case "too_large":
-      return `${d} is over the ${e.maxFileText} limit for uploads from here, so nothing was uploaded. Tell the user the file is too large to upload from here.`;
+      return `${nameText} is over the ${toolSpec.maxFileText} limit for uploads from here, so nothing was uploaded. Tell the user the file is too large to upload from here.`;
     case "checksum_mismatch":
-      return `${d} doesn't match the SHA-256 in the reference, so nothing was uploaded. Compute its SHA-256 again (${hashCommand()}) and make the call again. A SHA-256 that wasn't computed from the file won't match.`;
+      return `${nameText} doesn't match the SHA-256 in the reference, so nothing was uploaded. Compute its SHA-256 again (${hashCommand()}) and make the call again. A SHA-256 that wasn't computed from the file won't match.`;
     case "changed_after_check":
-      return `${d} changed after it was checked, so nothing was uploaded. Compute its SHA-256 again and make the call again. If it changes again, tell the user.`;
+      return `${nameText} changed after it was checked, so nothing was uploaded. Compute its SHA-256 again and make the call again. If it changes again, tell the user.`;
     default:
-      return `${d} couldn't be read just now, so nothing was uploaded. Make the call once more; if it fails again, tell the user.`;
+      return `${nameText} couldn't be read just now, so nothing was uploaded. Make the call once more; if it fails again, tell the user.`;
   }
 }
 //@ chunk-0p9fd9na.js:15357-15464 placement
-function referencedFileName(e) {
-  let n = typeof e === "string" ? parseFileReference(e) : "not_a_reference";
-  return typeof n === "string" ? undefined : basename(n.path);
+function referencedFileName(reference) {
+  let parsed = typeof reference === "string" ? parseFileReference(reference) : "not_a_reference";
+  return typeof parsed === "string" ? undefined : basename(parsed.path);
 }
 //@ chunk-0p9fd9na.js:15464-15623 placement
-function displaySafeText(e) {
-  let mapped = [...e].map((i) => (/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\uFFFD]/u.test(i) ? "?" : i));
+function displaySafeText(text) {
+  let mapped = [...text].map((char) => (/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\uFFFD]/u.test(char) ? "?" : char));
   return mapped.length > 200 ? `${mapped.slice(0, 200).join("")}\u2026` : mapped.join("");
 }
 //@ chunk-0p9fd9na.js:15623-15942 placement
 /**
  * 判断引用路径是否格式良好：绝对路径、长度与层数受限、没有空段或冒号、不含反斜杠、百分号编码与控制/格式字符。
  */
-function isWellFormedReferencePath(e, n) {
+function isWellFormedReferencePath(reference, path) {
   if (
-    !n.startsWith("/") ||
-    !isWellFormedString(e) ||
-    Buffer.byteLength(e, "utf8") > MAX_REFERENCE_PATH_BYTES ||
-    countCharInString(e, "/") > MAX_REFERENCE_PATH_DEPTH
+    !path.startsWith("/") ||
+    !isWellFormedString(reference) ||
+    Buffer.byteLength(reference, "utf8") > MAX_REFERENCE_PATH_BYTES ||
+    countCharInString(reference, "/") > MAX_REFERENCE_PATH_DEPTH
   )
     return false;
   if (
-    n
+    path
       .slice(1)
       .split("/")
-      .some((i) => /^[.\p{Zs}]*$/u.test(i) || /(?! )\p{Zs}+$/u.test(i) || i.includes(":"))
+      .some(
+        (segment) => /^[.\p{Zs}]*$/u.test(segment) || /(?! )\p{Zs}+$/u.test(segment) || segment.includes(":"),
+      )
   )
     return false;
   return !(
-    /[\\]|%[0-9a-f]{2}/i.test(e) || /[\p{Cc}\p{Cf}\p{Co}\p{Cs}\p{Zl}\p{Zp}\uFFFD\u2000\u2001]/u.test(e)
+    /[\\]|%[0-9a-f]{2}/i.test(reference) ||
+    /[\p{Cc}\p{Cf}\p{Co}\p{Cs}\p{Zl}\p{Zp}\uFFFD\u2000\u2001]/u.test(reference)
   );
 }
 //@ chunk-0p9fd9na.js:15942-16437 placement
@@ -643,11 +656,11 @@ function classifyReadFailure(error) {
   };
 }
 //@ chunk-0p9fd9na.js:16437-16735 placement
-function classifyGuardedReadFailure(code, n) {
+function classifyGuardedReadFailure(code, fallback) {
   switch (code) {
     case "path_rejected":
       return (
-        n ?? {
+        fallback ?? {
           reason: "refused_kind",
           detail: "credential_or_own_file",
         }
@@ -670,3 +683,11 @@ function classifyGuardedReadFailure(code, n) {
       };
   }
 }
+export {
+  checkCall,
+  hashCommand,
+  isWindowsForm,
+  parseFileReference,
+  resolveDriveFileReference,
+  formatFileReferenceError,
+};

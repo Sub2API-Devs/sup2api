@@ -167,7 +167,7 @@ var CredentialFileConfigSchema = create({
         'injected at every reachable host. Only meaningful when mode is "mask"; accepted but ignored for "deny".',
     ),
 });
-var j = create({
+var environmentSchema = create({
   name: envVarNameSchema.describe("Environment variable name"),
   mode: credentialModeSchema.describe("Access mode for this environment variable"),
   extract: extractPatternSchema
@@ -232,7 +232,7 @@ var CredentialsConfigSchema = create({
   files: create_15(CredentialFileConfigSchema)
     .optional()
     .describe("Credential files or directories to protect"),
-  envVars: create_15(j).optional().describe("Environment variables to protect"),
+  envVars: create_15(environmentSchema).optional().describe("Environment variables to protect"),
   allowPlaintextInject: create_6()
     .optional()
     .describe(
@@ -392,7 +392,7 @@ var NetworkConfigSchema = create({
     "Upstream HTTP proxy for outbound connections. When set, SRT's proxy tunnels non-mitmProxy traffic through this parent instead of connecting directly. Falls back to HTTP_PROXY/HTTPS_PROXY/NO_PROXY env vars if unset.",
   ),
 });
-var V = create({
+var filesystemSchema = create({
   disabled: create_6()
     .optional()
     .describe(
@@ -493,7 +493,7 @@ function addInertSlashedDenyGlobIssue(value, path, ctx) {
 //@ chunk-ymy42xbh.js:24244-32390 esm-fingerprint
 var SandboxRuntimeConfigSchema = create({
   network: NetworkConfigSchema.describe("Network restrictions configuration"),
-  filesystem: V.describe("Filesystem restrictions configuration"),
+  filesystem: filesystemSchema.describe("Filesystem restrictions configuration"),
   credentials: CredentialsConfigSchema.optional().describe(
     "Credential handling configuration. Only the explicitly declared files and environment variables are restricted.",
   ),
@@ -707,3 +707,4 @@ var SandboxRuntimeConfigSchema = create({
         "Credential masking requires network.tlsTerminate so substitution runs only over a verified TLS connection. Enable tlsTerminate, or set credentials.allowPlaintextInject to opt out (not recommended).",
     });
 });
+export { NetworkConfigSchema };

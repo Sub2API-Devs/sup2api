@@ -57,28 +57,29 @@ async function startMcpHttpServer({
   authToken = randomBytes(32).toString("hex"),
 }) {
   if (authToken.length < 32) throw Error("auth token must be at least 32 characters");
-  let p = `Bearer ${authToken}`;
-  let m;
-  let server = createServer((h, y) => {
-    if (!isLoopbackHostHeader(h.headers.host) || h.headers.origin !== undefined) {
-      y.writeHead(403).end();
+  let expectedAuth = `Bearer ${authToken}`;
+  let current;
+  let server = createServer((req, res) => {
+    if (!isLoopbackHostHeader(req.headers.host) || req.headers.origin !== undefined) {
+      res.writeHead(403).end();
       return;
     }
-    if (h.method === "GET" && h.url === "/health") {
-      y.writeHead(200, {
+    if (req.method === "GET" && req.url === "/health") {
+      res.writeHead(200, {
         "Content-Type": "application/json",
       });
-      y.end('{"status":"ok"}');
+      res.end('{"status":"ok"}');
       return;
     }
-    if (!timingSafeEqualStrings(h.headers.authorization, p)) {
-      y.writeHead(401).end();
+    if (!timingSafeEqualStrings(req.headers.authorization, expectedAuth)) {
+      res.writeHead(401).end();
       return;
     }
     (async () => {
-      if (h.method === "POST" && h.headers["mcp-session-id"] === undefined) await m?.transport.close();
-      if (m === undefined) {
-        let g = {
+      if (req.method === "POST" && req.headers["mcp-session-id"] === undefined)
+        await current?.transport.close();
+      if (current === undefined) {
+        let session_ = {
           server: createMCPServer(
             debug,
             verbose,
@@ -93,20 +94,20 @@ async function startMcpHttpServer({
             sessionIdGenerator: () => randomUUID(),
           }),
         };
-        g.transport.onclose = () => {
-          if (m === g) {
-            m = undefined;
+        session_.transport.onclose = () => {
+          if (current === session_) {
+            current = undefined;
             setMcpServeSession(session.host, EMPTY_SESSION_NAME);
           }
         };
-        m = g;
-        await g.server.connect(g.transport);
+        current = session_;
+        await session_.server.connect(session_.transport);
       }
       let abortController = new AbortController();
-      y.once("close", () => {
-        if (!y.writableFinished) abortController.abort();
+      res.once("close", () => {
+        if (!res.writableFinished) abortController.abort();
       });
-      Object.assign(h, {
+      Object.assign(req, {
         auth: {
           token: "",
           clientId: "",
@@ -116,26 +117,26 @@ async function startMcpHttpServer({
           },
         },
       });
-      await m.transport.handleRequest(h, y);
+      await current.transport.handleRequest(req, res);
     })().catch((error) => {
       logForDebugging(`mcp serve http: handleRequest failed: ${error}`, {
         level: "error",
       });
-      if (!y.headersSent) y.writeHead(500);
-      y.end();
+      if (!res.headersSent) res.writeHead(500);
+      res.end();
     });
   });
-  let L = new Set();
-  server.on("connection", (h) => {
-    L.add(h);
-    h.once("close", () => L.delete(h));
+  let sockets = new Set();
+  server.on("connection", (socket) => {
+    sockets.add(socket);
+    socket.once("close", () => sockets.delete(socket));
   });
   let promise = await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(port, LOOPBACK_HOST, () => {
       server.removeListener("error", reject);
-      let S = server.address();
-      resolve(typeof S === "object" && S !== null ? S.port : port);
+      let address = server.address();
+      resolve(typeof address === "object" && address !== null ? address.port : port);
     });
   });
   server.on("error", logError);
@@ -144,39 +145,39 @@ async function startMcpHttpServer({
     url: `http://${LOOPBACK_HOST}:${promise}/`,
     authToken,
     close: async () => {
-      await m?.server.close();
-      for (let h of L) h.destroy();
+      await current?.server.close();
+      for (let socket of sockets) socket.destroy();
       await new Promise((resolve) => server.close(() => resolve()));
     },
   };
 }
 //@ chunk-k26nnqnx.js:27736-28834 placement
-async function runMcpServe(e, r) {
-  let { launcher } = r;
+async function runMcpServe(cwd, options) {
+  let { launcher } = options;
   startServedCpuMeter(getRootSession().host, launcher.kind);
-  setCwd(e);
+  setCwd(cwd);
   getRepoCheckouts();
   env.unset("CLAUDE_CODE_SYNC_PLUGIN_INSTALL");
   let { authToken, tunnel } = handedOverBy(launcher);
-  let a = tunnel === undefined ? undefined : await import("./chunk-e6a6pbbv.js");
+  let tunnelModule = tunnel === undefined ? undefined : await import("../cli/handlers/EX_CONFIG.lazy.js");
   keepBackgroundCommandRecords(getRootSession().host, launcher.kind);
-  let c = await startMcpHttpServer({
-    ...r,
+  let server = await startMcpHttpServer({
+    ...options,
     session: getRootSession(),
     authToken,
   }).catch((error) => {
-    throw a && getErrnoCode(error) === "EADDRINUSE"
-      ? new a.ToolServerPortTakenError(errorMessage(error))
+    throw tunnelModule && getErrnoCode(error) === "EADDRINUSE"
+      ? new tunnelModule.ToolServerPortTakenError(errorMessage(error))
       : error;
   });
   switch (
-    (registerCleanup(c.close),
-    process.stdout.write(`MCP server listening on ${c.url}
+    (registerCleanup(server.close),
+    process.stdout.write(`MCP server listening on ${server.url}
 `),
     launcher.kind)
   ) {
     case "stdout-reader":
-      process.stdout.write(`MCP server auth token: ${c.authToken}
+      process.stdout.write(`MCP server auth token: ${server.authToken}
 `);
       break;
     case "bearer-minter":
@@ -187,31 +188,32 @@ async function runMcpServe(e, r) {
           url: launcher.tunnel.api_base_url + launcher.tunnel.file_upload_path,
           token: launcher.tunnel.session_token,
         };
-      await startTunnelWithCleanup(c, launcher.tunnel);
+      await startTunnelWithCleanup(server, launcher.tunnel);
       break;
     case "runner": {
-      await startTunnelWithCleanup(c, launcher.tunnel);
-      let { exitWhenRunnerIsGone, tellRunnerStartupIsDone } = await import("./chunk-66nm9g6r.js");
+      await startTunnelWithCleanup(server, launcher.tunnel);
+      let { exitWhenRunnerIsGone, tellRunnerStartupIsDone } =
+        await import("../selfHostedRunner/exitWhenRunnerIsGone.lazy.js");
       exitWhenRunnerIsGone(launcher.runner);
       tellRunnerStartupIsDone();
       break;
     }
   }
-  logForDebugging(`mcp serve --transport http listening on ${c.url}`);
+  logForDebugging(`mcp serve --transport http listening on ${server.url}`);
   let rootSession = getRootSession();
-  let f = credentialsStoreFor(r.storageV5);
+  let credentials = credentialsStoreFor(options.storageV5);
   refreshSkillsSyncVeto();
-  if (isSkillsSyncActive(rootSession)) startSkillSyncAndResync(rootSession, r.storageV5, f);
+  if (isSkillsSyncActive(rootSession)) startSkillSyncAndResync(rootSession, options.storageV5, credentials);
   refreshSyncVeto();
-  if (isPluginsSyncActive(rootSession)) startFirstPluginsSync(rootSession, f);
-  ensureSettingsInstall(rootSession, r.storageV5, f)
-    .then(() => setupPluginHookHotReload(r.storageV5, f))
+  if (isPluginsSyncActive(rootSession)) startFirstPluginsSync(rootSession, credentials);
+  ensureSettingsInstall(rootSession, options.storageV5, credentials)
+    .then(() => setupPluginHookHotReload(options.storageV5, credentials))
     .catch(logError);
 }
 //@ chunk-k26nnqnx.js:28834-28950 placement
-async function startTunnelWithCleanup(e, tunnel) {
-  let { startSessionTunnel } = await import("./chunk-e6a6pbbv.js");
-  let sessionTunnel = startSessionTunnel(e, tunnel);
+async function startTunnelWithCleanup(server, tunnel) {
+  let { startSessionTunnel } = await import("../cli/handlers/EX_CONFIG.lazy.js");
+  let sessionTunnel = startSessionTunnel(server, tunnel);
   registerCleanup(async () => sessionTunnel.stop());
 }
 //@ chunk-k26nnqnx.js:28950-29073 placement
@@ -223,3 +225,4 @@ function isLoopbackHostHeader(host) {
     return false;
   }
 }
+export { runMcpServe };

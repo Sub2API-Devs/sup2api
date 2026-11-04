@@ -11,7 +11,13 @@
 import { rm } from "fs/promises";
 import { join } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, E, array, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  stringSchema,
+  numberSchema,
+  array,
+  _enum,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
 import { stripInvisibleChars } from "../../utils/sanitization.js";
 import { writeIfMissing, retryFsOp } from "../../utils/atomicPublishWrite.js";
@@ -23,42 +29,49 @@ import { isENOENT } from "../../utils/errors.js";
 import { readSmallFileOrNull } from "../../utils/readSmallFile.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { env } from "../../utils/env.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-nfave34y.js:665-905 placement
-var PROMPT_STASH_NAME = ".prompt-stash";
-var MAX_PROMPT_STASH_BYTES = 262144;
-var MAX_STASHED_PASTES = 256;
-var promptStashSchema = DoctorLazy(() =>
-  u({
-    text: string(),
-    cursorOffset: E().int().nonnegative(),
-    pasteIds: array(E().int().nonnegative()).max(MAX_STASHED_PASTES),
-    launchWarning: u({
-      type: _enum(["deep-link", "prefill"]),
-      prefillLength: E().int().nonnegative(),
-    }).optional(),
-  }),
-);
+var PROMPT_STASH_NAME; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_PROMPT_STASH_BYTES;
+var MAX_STASHED_PASTES;
+var promptStashSchema;
+deferInit("chunk-nfave34y.js:665", () => {
+  PROMPT_STASH_NAME = ".prompt-stash";
+  MAX_PROMPT_STASH_BYTES = 262144;
+  MAX_STASHED_PASTES = 256;
+  promptStashSchema = DoctorLazy(() =>
+    objectSchema({
+      text: stringSchema(),
+      cursorOffset: numberSchema().int().nonnegative(),
+      pasteIds: array(numberSchema().int().nonnegative()).max(MAX_STASHED_PASTES),
+      launchWarning: objectSchema({
+        type: _enum(["deep-link", "prefill"]),
+        prefillLength: numberSchema().int().nonnegative(),
+      }).optional(),
+    }),
+  );
+});
 //@ chunk-nfave34y.js:905-1091 placement
-function serializePromptStash(e) {
+function serializePromptStash(stash) {
   return jsonStringify({
-    text: e.text,
-    cursorOffset: e.cursorOffset,
-    pasteIds: Object.values(e.pastedContents)
+    text: stash.text,
+    cursorOffset: stash.cursorOffset,
+    pasteIds: Object.values(stash.pastedContents)
       .filter((pastedContent) => !pastedContent.inline)
       .slice(0, MAX_STASHED_PASTES)
       .map((pastedContent) => pastedContent.id),
-    launchWarning: e.launchWarning,
+    launchWarning: stash.launchWarning,
   });
 }
 //@ chunk-nfave34y.js:1091-1343 placement
 /**
  * 规整暂存文本：统一换行、制表符换空格、去掉不可见字符（以 ZWNJ 分段并在必要处保留分隔）。
  */
-function normalizeStashText(e) {
-  let r = [];
-  let s = "";
-  for (let a of e
+function normalizeStashText(text) {
+  let parts = [];
+  let prev = "";
+  for (let chunk of text
     .replace(
       /\r\n|\r/g,
       `
@@ -66,29 +79,29 @@ function normalizeStashText(e) {
     )
     .replaceAll("\t", "    ")
     .split(/\u200C+/)) {
-    let n = stripInvisibleChars(a, "", {
+    let cleaned = stripInvisibleChars(chunk, "", {
       keepNewlines: true,
     });
-    if (n === "") continue;
-    if (s !== "" && /\S$/.test(s) && /^\S/.test(n)) r.push("\u200C");
-    r.push(n);
-    s = n;
+    if (cleaned === "") continue;
+    if (prev !== "" && /\S$/.test(prev) && /^\S/.test(cleaned)) parts.push("\u200C");
+    parts.push(cleaned);
+    prev = cleaned;
   }
-  return r.join("");
+  return parts.join("");
 }
 //@ chunk-nfave34y.js:1343-1485 placement
 /**
  * 删除旧文件后以独占方式写新文件（权限 600），再按重试规则落位，失败时清理临时文件。
  */
-async function replaceFileExclusive(e, r) {
-  await rm(e, {
+async function replaceFileExclusive(path, content) {
+  await rm(path, {
     force: true,
   });
-  let s = await writeIfMissing(e, r, 384);
+  let tmpPath = await writeIfMissing(path, content, 384);
   try {
-    await retryFsOp(s, e);
+    await retryFsOp(tmpPath, path);
   } catch (error) {
-    await rm(s, {
+    await rm(tmpPath, {
       force: true,
     }).catch(() => {});
     throw error;
@@ -99,30 +112,30 @@ async function replaceFileExclusive(e, r) {
  * 解析暂存的输入：校验 schema，去掉已不存在的粘贴占位，空文本返回 null，返回可恢复的输入状态。
  */
 function parsePromptStash(smallFileOrNull) {
-  let r;
+  let parsed;
   try {
-    r = jsonParse(smallFileOrNull);
+    parsed = jsonParse(smallFileOrNull);
   } catch {
     return null;
   }
-  let s = promptStashSchema().safeParse(r);
-  if (!s.success) return null;
-  let { cursorOffset, pasteIds, launchWarning } = s.data;
-  let d = normalizeStashText(s.data.text);
-  let O = new Set(pasteIds);
-  let l = "";
-  let S = 0;
-  for (let c of parsePastedRefs(d))
-    if (O.has(c.id)) {
-      l += d.slice(S, c.index);
-      S = c.index + c.match.length;
+  let result = promptStashSchema().safeParse(parsed);
+  if (!result.success) return null;
+  let { cursorOffset, pasteIds, launchWarning } = result.data;
+  let text = normalizeStashText(result.data.text);
+  let ids = new Set(pasteIds);
+  let out = "";
+  let cursor = 0;
+  for (let ref of parsePastedRefs(text))
+    if (ids.has(ref.id)) {
+      out += text.slice(cursor, ref.index);
+      cursor = ref.index + ref.match.length;
     }
-  l += d.slice(S);
-  if (l.trim() === "") return null;
+  out += text.slice(cursor);
+  if (out.trim() === "") return null;
   return {
-    text: l,
+    text: out,
     mode: "prompt",
-    cursorOffset: truncateToLength(l, Math.min(cursorOffset, l.length)).length,
+    cursorOffset: truncateToLength(out, Math.min(cursorOffset, out.length)).length,
     pastedContents: {},
     launchWarning,
   };
@@ -131,17 +144,17 @@ function parsePromptStash(smallFileOrNull) {
 /**
  * 把输入框状态暂存到作业目录的 .prompt-stash（超过上限只保留在内存）；为空时删除文件。
  */
-async function writePromptStash(e, r) {
-  let s = join(e, PROMPT_STASH_NAME);
-  let a = r === null ? "" : serializePromptStash(r);
-  if (Buffer.byteLength(a) > MAX_PROMPT_STASH_BYTES) {
+async function writePromptStash(jobDir, stash) {
+  let path = join(jobDir, PROMPT_STASH_NAME);
+  let content = stash === null ? "" : serializePromptStash(stash);
+  if (Buffer.byteLength(content) > MAX_PROMPT_STASH_BYTES) {
     logForDebugging("[bg] prompt stash too large to persist; kept in memory only", {
       level: "warn",
     });
-    a = "";
+    content = "";
   }
   try {
-    let n = await rm(s, {
+    let removed = await rm(path, {
       force: true,
     }).then(
       () => true,
@@ -150,15 +163,15 @@ async function writePromptStash(e, r) {
         return false;
       },
     );
-    if (a === "" && n) return;
-    await replaceFileExclusive(s, a);
+    if (content === "" && removed) return;
+    await replaceFileExclusive(path, content);
   } catch (error) {
     if (!isENOENT(error)) logJobWriteError(error);
   }
 }
 //@ chunk-nfave34y.js:2199-2413 placement
-async function readPromptStash(e) {
-  let smallFileOrNull = await readSmallFileOrNull(join(e, PROMPT_STASH_NAME), MAX_PROMPT_STASH_BYTES);
+async function readPromptStash(jobDir) {
+  let smallFileOrNull = await readSmallFileOrNull(join(jobDir, PROMPT_STASH_NAME), MAX_PROMPT_STASH_BYTES);
   if (!smallFileOrNull) return null;
   let promptStash = parsePromptStash(smallFileOrNull);
   if (promptStash === null) {
@@ -182,12 +195,12 @@ class PromptStash {
     this.#o = promptInput.subscribe(this.#n);
   }
   #n = () => {
-    let e = visibleStash(this.#t.getState().stash);
-    if (e === this.#e) return;
-    this.#e = e;
+    let next = visibleStash(this.#t.getState().stash);
+    if (next === this.#e) return;
+    this.#e = next;
     let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
     if (!CLAUDE_JOB_DIR) return;
-    this.#r = this.#r.then(() => writePromptStash(CLAUDE_JOB_DIR, e));
+    this.#r = this.#r.then(() => writePromptStash(CLAUDE_JOB_DIR, next));
   };
   async restore() {
     let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
@@ -200,8 +213,8 @@ class PromptStash {
       return false;
     }
     this.#e = promptStash;
-    this.#t.setState((s) => ({
-      ...s,
+    this.#t.setState((stash) => ({
+      ...stash,
       stash: promptStash,
     }));
     logFeatureOk("bg_prompt_stash_restore");

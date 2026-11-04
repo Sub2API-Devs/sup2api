@@ -24,26 +24,27 @@ function checkProductFeedbackAllowed(command = "/feedback") {
 //@ chunk-hwmsct5x.js:197606-197679 placement
 var FEEDBACK_DISABLED_BY_POLICY = "Feedback submission is disabled by your organization's policy.";
 //@ chunk-hwmsct5x.js:197679-197889 placement
-function appendBugReportHint(e, n) {
-  let r = /[.!?\u2026]$/.test(e) ? e : `${e}.`;
-  if (n === FEEDBACK_DISABLED_BY_POLICY || hipaaTaintsOnly(getCurrentTaints()).length > 0) return r;
-  return `${r} To report a bug, open an issue at ${GITHUB_ISSUES_REPO_URL()}. Issues are public, so leave out anything confidential.`;
+function appendBugReportHint(text, context) {
+  let sentence = /[.!?\u2026]$/.test(text) ? text : `${text}.`;
+  if (context === FEEDBACK_DISABLED_BY_POLICY || hipaaTaintsOnly(getCurrentTaints()).length > 0)
+    return sentence;
+  return `${sentence} To report a bug, open an issue at ${GITHUB_ISSUES_REPO_URL()}. Issues are public, so leave out anything confidential.`;
 }
 //@ chunk-hwmsct5x.js:197889-197966 placement
-function feedbackPolicyDisabledText(e) {
-  return appendBugReportHint(`${e} is disabled by your organization's policy.`);
+function feedbackPolicyDisabledText(reason) {
+  return appendBugReportHint(`${reason} is disabled by your organization's policy.`);
 }
 //@ chunk-hwmsct5x.js:197966-198322 placement
 /**
  * 按 DISABLE_FEEDBACK_COMMAND / DISABLE_BUG_COMMAND / 非必要流量开关 返回 /feedback 被禁用的原因。
  */
-function getFeedbackDisabledReason(e) {
+function getFeedbackDisabledReason(context) {
   if (env.DISABLE_FEEDBACK_COMMAND)
-    return `${e} has been disabled via the DISABLE_FEEDBACK_COMMAND environment variable`;
+    return `${context} has been disabled via the DISABLE_FEEDBACK_COMMAND environment variable`;
   if (env.DISABLE_BUG_COMMAND)
-    return `${e} has been disabled via the DISABLE_BUG_COMMAND environment variable`;
+    return `${context} has been disabled via the DISABLE_BUG_COMMAND environment variable`;
   if (isEssentialTrafficOnly())
-    return `${e} has been disabled via the CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC environment variable`;
+    return `${context} has been disabled via the CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC environment variable`;
   return null;
 }
 //@ chunk-hwmsct5x.js:198322-198367 placement

@@ -28,24 +28,24 @@ function canPurchaseExtraUsage() {
   if (isBgSession()) return false;
   let tier = getSubscriptionType();
   let hasOverride = getLspManager() !== null;
-  let n = getFeatureValue_CACHED_MAY_BE_STALE("tengu_ember_latch", false) || hasOverride;
-  let o =
+  let gateOn = getFeatureValue_CACHED_MAY_BE_STALE("tengu_ember_latch", false) || hasOverride;
+  let allowed =
     isExtraUsageAllowed() &&
     (hasOverride || ((tier === "pro" || tier === "max") && !isEssentialTrafficOnly()));
-  return n && o;
+  return gateOn && allowed;
 }
 //@ chunk-vbks4x4e.js:4901-6713 fingerprint = runExtraUsage (0.345)
-async function runExtraUsage(r, credentials) {
+async function runExtraUsage(context, credentials) {
   let subscriptionType = getSubscriptionType();
   let isTeamOrEnterprise = subscriptionType === "team" || subscriptionType === "enterprise";
   if (!isConsumerPlan() && isTeamOrEnterprise) {
     let extraUsage;
-    let p = true;
+    let hasExtraUsage = true;
     try {
       extraUsage = (await fetchUtilization(credentials))?.extra_usage;
-      p &&= extraUsage !== undefined;
+      hasExtraUsage &&= extraUsage !== undefined;
     } catch (error) {
-      p = false;
+      hasExtraUsage = false;
       logForDebugging(`extra-usage: fetchUtilization failed, falling through to ask user: ${error}`, {
         level: "error",
       });
@@ -86,9 +86,9 @@ async function runExtraUsage(r, credentials) {
           value: "Usage credit requests are turned off for your organization.",
           reason: "requests_off",
         };
-      p &&= eligibility?.is_allowed === true;
+      hasExtraUsage &&= eligibility?.is_allowed === true;
     } catch (error) {
-      p = false;
+      hasExtraUsage = false;
       logForDebugging(`Extra usage eligibility check failed: ${error}`, {
         level: "error",
       });
@@ -101,9 +101,9 @@ async function runExtraUsage(r, credentials) {
           value: "You've already sent a usage credit request to your admin.",
           reason: "pending",
         };
-      p &&= pendingOrDismissedRequests !== null;
+      hasExtraUsage &&= pendingOrDismissedRequests !== null;
     } catch (error) {
-      p = false;
+      hasExtraUsage = false;
       logForDebugging(`Failed to fetch pending admin requests: ${error}`, {
         level: "error",
       });
@@ -111,11 +111,11 @@ async function runExtraUsage(r, credentials) {
     return {
       type: "confirm-admin-request",
       extraUsage,
-      checked: p,
+      checked: hasExtraUsage,
     };
   }
   let url = isTeamOrEnterprise ? HTTPS_CLAUDE_AI_ADMIN_SETTINGS_USAGE : USAGE_SETTINGS_URL;
-  if (!r.openInBrowser || isBgSession())
+  if (!context.openInBrowser || isBgSession())
     return {
       type: "browser-opened",
       url,

@@ -10,6 +10,14 @@
  */
 import { normalizeStep } from "./reservedShortcuts.js";
 
+//@ chunk-6qssfmzs.js:8872-8959 fingerprint = parseChord (1)
+/**
+ * 把按键串规范化成比较用字符串：每步修饰键归一（control→ctrl；opt/option/meta→alt；cmd/command/super/win→cmd）并排序，键名查别名表。
+ */
+function normalizeKeyForComparison(input) {
+  if (input === " ") return "space";
+  return input.trim().split(/\s+/).map(normalizeStep).join(" ");
+}
 //@ chunk-x1mwqya5.js:1154-1779 fingerprint = parseKeystroke (0.956)
 /**
  * 把单个按键串（如 "ctrl+shift+k"）解析成 Keystroke {key, ctrl, alt, shift, meta, super}。修饰键别名：control→ctrl；opt/option→alt；cmd/command/super/win→super；键名别名：esc→escape、return→enter、del→delete、space→" "、箭头符号→up/down/left/right；其他部分小写后当主键。
@@ -182,14 +190,6 @@ function parseBindings(blocks) {
         context: block.context,
       });
   return bindings;
-}
-//@ chunk-6qssfmzs.js:8872-8959 fingerprint = parseChord (1)
-/**
- * 把按键串规范化成比较用字符串：每步修饰键归一（control→ctrl；opt/option/meta→alt；cmd/command/super/win→cmd）并排序，键名查别名表。
- */
-function normalizeKeyForComparison(input) {
-  if (input === " ") return "space";
-  return input.trim().split(/\s+/).map(normalizeStep).join(" ");
 }
 export {
   parseKeystroke,

@@ -27,13 +27,14 @@ import { logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { getPlatform } from "../platform.js";
 import { perCommandDenyUnenforcedSaid } from "../Shell.js";
 import { logForDebugging } from "../debug.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3049007-3049380 placement
 /**
  * 为以 / 结尾的按命令拒绝路径预先创建目录（权限 700），以便沙箱可以挂载遮罩；父目录不存在或路径被文件占用时跳过，其他失败抛出带原因的错误。
  */
-async function materializeDenyDirectories(e) {
-  for (let denyPath of uniq(e)) {
+async function materializeDenyDirectories(denyPaths) {
+  for (let denyPath of uniq(denyPaths)) {
     if (denyPath.length < 2 || !denyPath.endsWith("/")) continue;
     let dirPath = stripTrailingSlashIfLong(denyPath);
     let parentExists = false;
@@ -59,12 +60,16 @@ async function materializeDenyDirectories(e) {
 /**
  * 判断命令路径是否需要做网络位置筛查：含通配、路径未经审核，或任一路径是网络形式的授权根/被拒绝条目覆盖。
  */
-function needsNetworkScreen(e, n, r) {
-  if (containsGlobChars(e)) return true;
-  let { paths, vetted } = getPathsForNetworkScreen(e);
+function needsNetworkScreen(path, denyEntries, context) {
+  if (containsGlobChars(path)) return true;
+  let { paths, vetted } = getPathsForNetworkScreen(path);
   return (
     !vetted ||
-    paths.some((path) => isNetworkSpelledGrantRoot(path) || n.some((S) => denyEntryCoversFolded(S, path, r)))
+    paths.some(
+      (path) =>
+        isNetworkSpelledGrantRoot(path) ||
+        denyEntries.some((denyEntry) => denyEntryCoversFolded(denyEntry, path, context)),
+    )
   );
 }
 //@ chunk-e6aww6q8.js:3049501-3049868 placement
@@ -74,7 +79,7 @@ function needsNetworkScreen(e, n, r) {
 function applyFsPolicyOverrides(baseConfig, overrides) {
   let allowWrite = uniq([
     ...(overrides.addAllowWrite ?? []),
-    ...baseConfig.allowWrite.filter((y) => y !== "/" && y.length > 0),
+    ...baseConfig.allowWrite.filter((writePath) => writePath !== "/" && writePath.length > 0),
   ]);
   let keepDenyWrite = overrides.keepBaseDenyWrite ?? (() => true);
   let dropAllowRead = overrides.dropAllowRead ?? (() => false);
@@ -82,23 +87,26 @@ function applyFsPolicyOverrides(baseConfig, overrides) {
     ...baseConfig,
     allowWrite,
     denyWrite: uniq([
-      ...baseConfig.denyWrite.filter((y) => keepDenyWrite(y, allowWrite)),
+      ...baseConfig.denyWrite.filter((denyPath) => keepDenyWrite(denyPath, allowWrite)),
       ...(overrides.addDenyWrite ?? []),
     ]),
     denyRead: uniq([...baseConfig.denyRead, ...(overrides.addDenyRead ?? [])]),
     ...(baseConfig.allowRead && {
-      allowRead: baseConfig.allowRead.filter((y) => !dropAllowRead(y)),
+      allowRead: baseConfig.allowRead.filter((readPath) => !dropAllowRead(readPath)),
     }),
   };
 }
 //@ chunk-e6aww6q8.js:3049868-3049944 placement
-var PER_COMMAND_DENY_ERRORS = {
-  per_command_deny_materialize_failed: REMOTE_TOOLS_CONSENT_TEXT["refused.sandbox_custody"],
-};
+var PER_COMMAND_DENY_ERRORS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3049868", () => {
+  PER_COMMAND_DENY_ERRORS = {
+    per_command_deny_materialize_failed: REMOTE_TOOLS_CONSENT_TEXT["refused.sandbox_custody"],
+  };
+});
 //@ chunk-e6aww6q8.js:3049944-3050004 placement
-function sandboxPolicyRefusal_2(e) {
-  logFeatureSad("sandbox_exec", e);
-  return new SandboxPolicyRefusalError(PER_COMMAND_DENY_ERRORS[e], e);
+function sandboxPolicyRefusal_2(reason) {
+  logFeatureSad("sandbox_exec", reason);
+  return new SandboxPolicyRefusalError(PER_COMMAND_DENY_ERRORS[reason], reason);
 }
 //@ chunk-e6aww6q8.js:3050004-3050017 placement
 var MAX_PER_COMMAND_DENY_ENTRIES = 3128;
@@ -107,10 +115,10 @@ function getProxyCredentialHelperConfig() {
   if (isScrubOnlySandboxMode()) return;
   if (SandboxManager.getProxyAuthToken() === undefined) return;
   let platform = getPlatform();
-  let n =
+  let portOrLimit =
     platform === "linux" || platform === "wsl" ? MAX_PER_COMMAND_DENY_ENTRIES : SandboxManager.getProxyPort();
-  if (n === undefined) return;
-  return [`credential.http://127.0.0.1:${n}.helper`, ""];
+  if (portOrLimit === undefined) return;
+  return [`credential.http://127.0.0.1:${portOrLimit}.helper`, ""];
 }
 //@ chunk-e6aww6q8.js:3050221-3050245 placement
 function noExtraDenyEntries() {
@@ -131,13 +139,13 @@ function proxyCredentialHelpers() {
 /**
  * 按命令拒绝遮罩没有生效时打点，并对每个上下文每种原因只记一次调试日志（无沙箱配置或本机沙箱不可用）。
  */
-function warnPerCommandDenyUnenforced(host, n) {
-  logFeatureSad("sandbox_exec", `per_command_deny_unenforced_${n}`);
+function warnPerCommandDenyUnenforced(host, reason) {
+  logFeatureSad("sandbox_exec", `per_command_deny_unenforced_${reason}`);
   let saidReasons = perCommandDenyUnenforcedSaid.of(host);
-  if (saidReasons.has(n)) return;
-  saidReasons.add(n);
+  if (saidReasons.has(reason)) return;
+  saidReasons.add(reason);
   logForDebugging(
-    `[remote-tools] served command runs without the credential-file sandbox mask (${n === "no_config" ? "no sandbox filesystem configuration here" : "this machine's sandbox filesystem policy is relaxed"}): credential files are protected by permission rules only on this machine; enable strict sandbox filesystem isolation for the additional mask`,
+    `[remote-tools] served command runs without the credential-file sandbox mask (${reason === "no_config" ? "no sandbox filesystem configuration here" : "this machine's sandbox filesystem policy is relaxed"}): credential files are protected by permission rules only on this machine; enable strict sandbox filesystem isolation for the additional mask`,
   );
 }
 export {

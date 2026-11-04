@@ -8,57 +8,61 @@
 import { sequential } from "../../../src/utils/sequential.js";
 import { plainWithReset } from "../../../src/utils/cliHighlight.js";
 import { stripPrefix } from "../../../src/utils/stringUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-85hd307w.js:457-1009 esm-fingerprint
-var DEFAULT_CLI_HIGHLIGHT_THEME = new Map(
-  Object.entries({
-    keyword: sequential.blue,
-    built_in: sequential.cyan,
-    type: sequential.cyan.dim,
-    literal: sequential.blue,
-    number: sequential.green,
-    regexp: sequential.red,
-    string: sequential.red,
-    subst: plainWithReset,
-    symbol: plainWithReset,
-    class: sequential.blue,
-    function: sequential.yellow,
-    title: plainWithReset,
-    "title.function": sequential.yellow,
-    "title.class": sequential.blue,
-    params: plainWithReset,
-    comment: sequential.green,
-    doctag: sequential.green,
-    meta: sequential.grey,
-    "meta-keyword": plainWithReset,
-    "meta-string": plainWithReset,
-    "meta.keyword": plainWithReset,
-    "meta.string": plainWithReset,
-    section: plainWithReset,
-    tag: sequential.grey,
-    name: sequential.blue,
-    attr: sequential.cyan,
-    attribute: plainWithReset,
-    variable: plainWithReset,
-    bullet: plainWithReset,
-    code: plainWithReset,
-    emphasis: sequential.italic,
-    strong: sequential.bold,
-    link: sequential.underline,
-    quote: plainWithReset,
-    addition: sequential.green,
-    deletion: sequential.red,
-  }),
-);
+var DEFAULT_CLI_HIGHLIGHT_THEME; // deferred: uses sequential (../../../src/utils/sequential.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-85hd307w.js:457", () => {
+  DEFAULT_CLI_HIGHLIGHT_THEME = new Map(
+    Object.entries({
+      keyword: sequential.blue,
+      built_in: sequential.cyan,
+      type: sequential.cyan.dim,
+      literal: sequential.blue,
+      number: sequential.green,
+      regexp: sequential.red,
+      string: sequential.red,
+      subst: plainWithReset,
+      symbol: plainWithReset,
+      class: sequential.blue,
+      function: sequential.yellow,
+      title: plainWithReset,
+      "title.function": sequential.yellow,
+      "title.class": sequential.blue,
+      params: plainWithReset,
+      comment: sequential.green,
+      doctag: sequential.green,
+      meta: sequential.grey,
+      "meta-keyword": plainWithReset,
+      "meta-string": plainWithReset,
+      "meta.keyword": plainWithReset,
+      "meta.string": plainWithReset,
+      section: plainWithReset,
+      tag: sequential.grey,
+      name: sequential.blue,
+      attr: sequential.cyan,
+      attribute: plainWithReset,
+      variable: plainWithReset,
+      bullet: plainWithReset,
+      code: plainWithReset,
+      emphasis: sequential.italic,
+      strong: sequential.bold,
+      link: sequential.underline,
+      quote: plainWithReset,
+      addition: sequential.green,
+      deletion: sequential.red,
+    }),
+  );
+});
 //@ chunk-85hd307w.js:1009-1135 affinity
-function h(e) {
-  let t = stripPrefix(e, "hljs-");
+function getThemeStyle(hljsName) {
+  let tokenName = stripPrefix(hljsName, "hljs-");
   for (;;) {
-    let r = DEFAULT_CLI_HIGHLIGHT_THEME.get(t);
-    if (r) return r;
-    let index = t.lastIndexOf(".");
+    let style = DEFAULT_CLI_HIGHLIGHT_THEME.get(tokenName);
+    if (style) return style;
+    let index = tokenName.lastIndexOf(".");
     if (index < 0) return;
-    t = t.slice(0, index);
+    tokenName = tokenName.slice(0, index);
   }
 }
-export { h };
+export { getThemeStyle };

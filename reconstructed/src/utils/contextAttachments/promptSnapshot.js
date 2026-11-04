@@ -10,7 +10,16 @@
  */
 import { isFoamySpringEnabled } from "../../services/analytics/growthbookGates.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, array, string, record, unknown, M, _enum, hu } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  array,
+  stringSchema,
+  record,
+  unknown,
+  booleanSchema,
+  _enum,
+  custom,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { asSystemPrompt } from "../systemPromptType.js";
 import { isPlainToolDefinition } from "../../services/api/toolDefinitionShape.js";
 import { isCliSyspromptPrefix } from "../../constants/system.js";
@@ -20,6 +29,7 @@ import { env } from "../env.js";
 import { simpleModeEnv } from "../model/promptBundles.js";
 import { shortHash } from "../shortHash.js";
 import { isPlainObject as isPlainObject_5 } from "../isPlainObject.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:117385-117416 placement
 /**
@@ -37,52 +47,55 @@ function isPromptSnapshotFeatureOn() {
 /**
  * 提示词快照附件 schema：系统提示词、工具（名称、描述、schema、服务器）、CLI 前缀，以及提醒折叠、system 轮次、工具变更头、内联工具等线上形态开关。
  */
-var promptSnapshotSchema = DoctorLazy(() =>
-  u({
-    systemPrompt: array(string()),
-    tools: array(
-      u({
-        name: string(),
-        description: string(),
-        schema: record(string(), unknown()).optional(),
-        server: string().optional(),
-      }),
-    ).optional(),
-    cliPrefix: string().optional(),
-    reminderFold: M().optional().catch(undefined),
-    systemTurns: M().optional().catch(undefined),
-    toolChangeHeader: M().optional().catch(undefined),
-    inlineTools: M().optional().catch(undefined),
-    keptReminders: M().optional().catch(undefined),
-    toolResultSafeguards: M().optional().catch(undefined),
-    systemTurnsAnsweredBy: string().optional().catch(undefined),
-    echoWireToolInputs: M().optional().catch(undefined),
-    contextRendering: _enum(CONTEXT_RENDERING_MODES).optional().catch(undefined),
-  }),
-);
+var promptSnapshotSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:117443", () => {
+  promptSnapshotSchema = DoctorLazy(() =>
+    objectSchema({
+      systemPrompt: array(stringSchema()),
+      tools: array(
+        objectSchema({
+          name: stringSchema(),
+          description: stringSchema(),
+          schema: record(stringSchema(), unknown()).optional(),
+          server: stringSchema().optional(),
+        }),
+      ).optional(),
+      cliPrefix: stringSchema().optional(),
+      reminderFold: booleanSchema().optional().catch(undefined),
+      systemTurns: booleanSchema().optional().catch(undefined),
+      toolChangeHeader: booleanSchema().optional().catch(undefined),
+      inlineTools: booleanSchema().optional().catch(undefined),
+      keptReminders: booleanSchema().optional().catch(undefined),
+      toolResultSafeguards: booleanSchema().optional().catch(undefined),
+      systemTurnsAnsweredBy: stringSchema().optional().catch(undefined),
+      echoWireToolInputs: booleanSchema().optional().catch(undefined),
+      contextRendering: _enum(CONTEXT_RENDERING_MODES).optional().catch(undefined),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:118022-118460 placement
 /**
  * 从提示词快照中挑出线上形态相关字段（systemTurns、toolChangeHeader、inlineTools、keptReminders、toolResultSafeguards、systemTurnsAnsweredBy）。
  */
-function pickWireShape(e) {
+function pickWireShape(shape) {
   return {
-    ...(e?.systemTurns !== undefined && {
-      systemTurns: e.systemTurns,
+    ...(shape?.systemTurns !== undefined && {
+      systemTurns: shape.systemTurns,
     }),
-    ...(e?.toolChangeHeader !== undefined && {
-      toolChangeHeader: e.toolChangeHeader,
+    ...(shape?.toolChangeHeader !== undefined && {
+      toolChangeHeader: shape.toolChangeHeader,
     }),
-    ...(e?.inlineTools !== undefined && {
-      inlineTools: e.inlineTools,
+    ...(shape?.inlineTools !== undefined && {
+      inlineTools: shape.inlineTools,
     }),
-    ...(e?.keptReminders !== undefined && {
-      keptReminders: e.keptReminders,
+    ...(shape?.keptReminders !== undefined && {
+      keptReminders: shape.keptReminders,
     }),
-    ...(e?.toolResultSafeguards !== undefined && {
-      toolResultSafeguards: e.toolResultSafeguards,
+    ...(shape?.toolResultSafeguards !== undefined && {
+      toolResultSafeguards: shape.toolResultSafeguards,
     }),
-    ...(e?.systemTurnsAnsweredBy !== undefined && {
-      systemTurnsAnsweredBy: e.systemTurnsAnsweredBy,
+    ...(shape?.systemTurnsAnsweredBy !== undefined && {
+      systemTurnsAnsweredBy: shape.systemTurnsAnsweredBy,
     }),
   };
 }
@@ -90,11 +103,11 @@ function pickWireShape(e) {
 /**
  * 去掉线上的 systemTurnsAnsweredBy 字段。
  */
-function dropSystemTurnsAnsweredBy(e) {
-  return e?.systemTurnsAnsweredBy === undefined
-    ? e
+function dropSystemTurnsAnsweredBy(messages) {
+  return messages?.systemTurnsAnsweredBy === undefined
+    ? messages
     : {
-        ...e,
+        ...messages,
         systemTurnsAnsweredBy: undefined,
       };
 }
@@ -102,31 +115,40 @@ function dropSystemTurnsAnsweredBy(e) {
 /**
  * 属于提示词记录的附件类型（快照、渲染点、延迟工具记录）。
  */
-var PROMPT_RECORD_ATTACHMENT_TYPES = new Set([
-  "prompt_snapshot",
-  "prompt_render_point",
-  "deferred_tools_record",
-]);
+var PROMPT_RECORD_ATTACHMENT_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:118555", () => {
+  PROMPT_RECORD_ATTACHMENT_TYPES = new Set([
+    "prompt_snapshot",
+    "prompt_render_point",
+    "deferred_tools_record",
+  ]);
+});
 //@ chunk-e6aww6q8.js:118638-118727 placement = isNullRenderingAttachment (1)
 function isNullRenderingAttachment(msg) {
-  return msg.filter((n) => n.type !== "attachment" || !PROMPT_RECORD_ATTACHMENT_TYPES.has(n.attachment.type));
+  return msg.filter(
+    (message) =>
+      message.type !== "attachment" || !PROMPT_RECORD_ATTACHMENT_TYPES.has(message.attachment.type),
+  );
 }
 //@ chunk-e6aww6q8.js:118727-118811 placement
 /**
  * 判断消息是否为提示词快照附件。
  */
-function isPromptSnapshotAttachment(e) {
-  return e.type === "attachment" && e.attachment.type === "prompt_snapshot";
+function isPromptSnapshotAttachment(attachment) {
+  return attachment.type === "attachment" && attachment.attachment.type === "prompt_snapshot";
 }
 //@ chunk-e6aww6q8.js:118811-118899 placement
 /**
  * 判断消息是否为提示词渲染点附件。
  */
-function isPromptRenderPointAttachment(e) {
-  return e.type === "attachment" && e.attachment.type === "prompt_render_point";
+function isPromptRenderPointAttachment(attachment) {
+  return attachment.type === "attachment" && attachment.attachment.type === "prompt_render_point";
 }
 //@ chunk-e6aww6q8.js:118899-118919 placement
-var weakMap = new WeakMap();
+var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:118899", () => {
+  weakMap = new WeakMap();
+});
 //@ chunk-e6aww6q8.js:118919-119597 placement
 /**
  * 取消息中最新的 prompt_snapshot 附件并解析（WeakMap 缓存）：系统提示词及哈希、工具描述/schema/所属服务器、CLI 前缀、提醒折叠与线上形状等。
@@ -169,34 +191,36 @@ function latestPromptSnapshot(messages) {
 /**
  * 快照开启且没有更新的渲染点时，返回最新提示词快照。
  */
-function promptSnapshotUnlessRenderPoint(e, options) {
-  return shouldSnapshotSystemPrompt(options) && !isRenderPointNewer(e) ? latestPromptSnapshot(e) : undefined;
+function promptSnapshotUnlessRenderPoint(messages, options) {
+  return shouldSnapshotSystemPrompt(options) && !isRenderPointNewer(messages)
+    ? latestPromptSnapshot(messages)
+    : undefined;
 }
 //@ chunk-e6aww6q8.js:119651-119696 placement
 /**
  * 快照开启时返回最新提示词快照。
  */
-function snapshotIfEnabled(e, options) {
-  return shouldSnapshotSystemPrompt(options) ? latestPromptSnapshot(e) : undefined;
+function snapshotIfEnabled(messages, options) {
+  return shouldSnapshotSystemPrompt(options) ? latestPromptSnapshot(messages) : undefined;
 }
 //@ chunk-e6aww6q8.js:119696-119910 placement
 /**
  * 把提示词快照中的工具转换成条目列表（名称、描述、schema、服务器），跳过指定的工具。
  */
-function snapshotToolEntries(e, n) {
-  return [...e.toolDescriptions].flatMap(([r, s]) => {
-    if (n?.has(r)) return [];
-    let h = e.toolEntries.get(r);
-    let y = e.toolServers.get(r);
+function snapshotToolEntries(snapshot, toolNames) {
+  return [...snapshot.toolDescriptions].flatMap(([toolName, description]) => {
+    if (toolNames?.has(toolName)) return [];
+    let entry = snapshot.toolEntries.get(toolName);
+    let server = snapshot.toolServers.get(toolName);
     return [
       {
-        name: r,
-        description: s,
-        ...(h && {
-          schema: h,
+        name: toolName,
+        description,
+        ...(entry && {
+          schema: entry,
         }),
-        ...(y !== undefined && {
-          server: y,
+        ...(server !== undefined && {
+          server,
         }),
       },
     ];
@@ -206,25 +230,26 @@ function snapshotToolEntries(e, n) {
 /**
  * 压缩后若保留的消息涉及快照中的工具，生成新的 prompt_snapshot 附件（系统提示词、仍需要的工具、CLI 前缀与线上形状）。
  */
-function buildPromptSnapshotAttachment(messagesToKeep, n, options) {
-  let s = snapshotIfEnabled(messagesToKeep, options);
-  if (s === undefined || ![...n].some((h) => s.toolDescriptions.has(h))) return;
+function buildPromptSnapshotAttachment(messagesToKeep, toolNames, options) {
+  let snapshot = snapshotIfEnabled(messagesToKeep, options);
+  if (snapshot === undefined || ![...toolNames].some((toolName) => snapshot.toolDescriptions.has(toolName)))
+    return;
   return {
     type: "prompt_snapshot",
-    systemPrompt: [...s.systemPrompt],
-    tools: snapshotToolEntries(s, n),
-    ...(s.cliPrefix !== undefined && {
-      cliPrefix: s.cliPrefix,
+    systemPrompt: [...snapshot.systemPrompt],
+    tools: snapshotToolEntries(snapshot, toolNames),
+    ...(snapshot.cliPrefix !== undefined && {
+      cliPrefix: snapshot.cliPrefix,
     }),
-    ...(s.reminderFold !== undefined && {
-      reminderFold: s.reminderFold,
+    ...(snapshot.reminderFold !== undefined && {
+      reminderFold: snapshot.reminderFold,
     }),
-    ...pickWireShape(dropSystemTurnsAnsweredBy(s.wireShape)),
-    ...(s.echoWireToolInputs !== undefined && {
-      echoWireToolInputs: s.echoWireToolInputs,
+    ...pickWireShape(dropSystemTurnsAnsweredBy(snapshot.wireShape)),
+    ...(snapshot.echoWireToolInputs !== undefined && {
+      echoWireToolInputs: snapshot.echoWireToolInputs,
     }),
-    ...(s.contextRendering !== undefined && {
-      contextRendering: s.contextRendering,
+    ...(snapshot.contextRendering !== undefined && {
+      contextRendering: snapshot.contextRendering,
     }),
   };
 }
@@ -249,19 +274,22 @@ function renderPointIfStale(messagesToKeep) {
 /**
  * 判断最近的渲染点是否晚于最近的快照。
  */
-function isRenderPointNewer(e) {
-  return e.findLastIndex(isPromptRenderPointAttachment) > e.findLastIndex(isPromptSnapshotAttachment);
+function isRenderPointNewer(attachment) {
+  return (
+    attachment.findLastIndex(isPromptRenderPointAttachment) >
+    attachment.findLastIndex(isPromptSnapshotAttachment)
+  );
 }
 //@ chunk-e6aww6q8.js:120559-120746 placement
 /**
  * 判断最近的提示词快照是否包含给定系统提示词的全部分段。
  */
-function snapshotContainsPrompt(e, n) {
+function snapshotContainsPrompt(messages, prompt) {
   try {
-    let r = latestPromptSnapshot(e);
-    let s = typeof n === "string" ? splitSystemPromptAtBoundary(n) : n;
-    if (r === undefined || s === undefined || s.length === 0) return false;
-    return s.every((h) => r.systemPrompt.includes(h));
+    let snapshot = latestPromptSnapshot(messages);
+    let parts = typeof prompt === "string" ? splitSystemPromptAtBoundary(prompt) : prompt;
+    if (snapshot === undefined || parts === undefined || parts.length === 0) return false;
+    return parts.every((part) => snapshot.systemPrompt.includes(part));
   } catch (error) {
     logError(error);
     return false;
@@ -271,29 +299,33 @@ function snapshotContainsPrompt(e, n) {
 /**
  * 取出所有提示词快照消息的 uuid。
  */
-function snapshotUuids(e) {
-  return e.filter(isPromptSnapshotAttachment).map((n) => n.uuid);
+function snapshotUuids(messages) {
+  return messages.filter(isPromptSnapshotAttachment).map((attachment) => attachment.uuid);
 }
 //@ chunk-e6aww6q8.js:120800-121010 placement
-function extractTaggedBlock(e, n) {
-  let r = `</${n}>`;
-  let filtered = [`<${n}>`, `<${n} `].map((S) => e?.indexOf(S) ?? -1).filter((S) => S !== -1);
-  let h = filtered.length === 0 ? -1 : Math.min(...filtered);
-  let y = e?.lastIndexOf(r) ?? -1;
-  return h === -1 || y < h ? undefined : e?.slice(h, y + r.length);
+function extractTaggedBlock(text, tagName) {
+  let closingTag = `</${tagName}>`;
+  let filtered = [`<${tagName}>`, `<${tagName} `]
+    .map((openingTag) => text?.indexOf(openingTag) ?? -1)
+    .filter((foundIndex) => foundIndex !== -1);
+  let startIndex = filtered.length === 0 ? -1 : Math.min(...filtered);
+  let endIndex = text?.lastIndexOf(closingTag) ?? -1;
+  return startIndex === -1 || endIndex < startIndex
+    ? undefined
+    : text?.slice(startIndex, endIndex + closingTag.length);
 }
 //@ chunk-e6aww6q8.js:121010-121244 placement
 /**
  * 比较快照中最后一段系统提示词与当前提示词里各标签块的内容，返回出现、消失或变化。
  */
-function tagBlockChange(e, n, liveAppendSections) {
+function tagBlockChange(messages, prompt, liveAppendSections) {
   try {
-    let s = latestPromptSnapshot(e);
-    if (s === undefined || isRenderPointNewer(e)) return;
-    let last = s.systemPrompt.at(-1);
-    for (let y of liveAppendSections) {
-      let taggedBlock = extractTaggedBlock(n, y);
-      let taggedBlock_2 = extractTaggedBlock(last, y);
+    let snapshot = latestPromptSnapshot(messages);
+    if (snapshot === undefined || isRenderPointNewer(messages)) return;
+    let text = snapshot.systemPrompt.at(-1);
+    for (let section of liveAppendSections) {
+      let taggedBlock = extractTaggedBlock(prompt, section);
+      let taggedBlock_2 = extractTaggedBlock(text, section);
       if (taggedBlock !== taggedBlock_2)
         return taggedBlock_2 === undefined ? "appeared" : taggedBlock === undefined ? "vanished" : "changed";
     }
@@ -320,24 +352,28 @@ function shouldSnapshotSystemPrompt(options) {
 /**
  * 计算系统提示各段以 NUL 连接后的哈希。
  */
-function hashSystemPrompt(e) {
-  return shortHash(e.join("\x00"));
+function hashSystemPrompt(systemPrompt) {
+  return shortHash(systemPrompt.join("\x00"));
 }
 //@ chunk-e6aww6q8.js:121442-121674 placement
-var deferredToolsAttachmentSchema = DoctorLazy(() =>
-  u({
-    entries: hu((e) => Array.isArray(e)),
-    nameOnlyAnnouncements: array(string()).optional(),
-    strippedReferences: array(string()).optional(),
-    toolInputCopies: array(unknown()).optional().catch(undefined),
-  }),
-);
-var toolInputCopySchema = DoctorLazy(() =>
-  u({
-    id: string(),
-    copy: _enum(["wire", "displayed"]),
-  }),
-);
+var deferredToolsAttachmentSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var toolInputCopySchema;
+deferInit("chunk-e6aww6q8.js:121442", () => {
+  deferredToolsAttachmentSchema = DoctorLazy(() =>
+    objectSchema({
+      entries: custom((value) => Array.isArray(value)),
+      nameOnlyAnnouncements: array(stringSchema()).optional(),
+      strippedReferences: array(stringSchema()).optional(),
+      toolInputCopies: array(unknown()).optional().catch(undefined),
+    }),
+  );
+  toolInputCopySchema = DoctorLazy(() =>
+    objectSchema({
+      id: stringSchema(),
+      copy: _enum(["wire", "displayed"]),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:121674-121764 placement
 /**
  * 判断消息是否为延迟工具记录附件。
@@ -358,16 +394,16 @@ function recordedDeferredTools(messages) {
     for (let message of messages) {
       if (!isDeferredToolsRecord(message)) continue;
       let parsed = deferredToolsAttachmentSchema().safeParse(message.attachment).data;
-      for (let w of parsed?.entries ?? [])
-        if (isPlainObject_5(w)) {
-          let L = w.name;
-          if (typeof L === "string") entries.set(L, w);
+      for (let entry of parsed?.entries ?? [])
+        if (isPlainObject_5(entry)) {
+          let toolName = entry.name;
+          if (typeof toolName === "string") entries.set(toolName, entry);
         }
-      for (let w of parsed?.nameOnlyAnnouncements ?? []) nameOnlyAnnouncements.add(w);
-      for (let w of parsed?.strippedReferences ?? []) strippedReferences.add(w);
-      for (let w of parsed?.toolInputCopies ?? []) {
-        let L = toolInputCopySchema().safeParse(w).data;
-        if (L !== undefined) toolInputCopies.set(L.id, L.copy);
+      for (let toolName of parsed?.nameOnlyAnnouncements ?? []) nameOnlyAnnouncements.add(toolName);
+      for (let toolName of parsed?.strippedReferences ?? []) strippedReferences.add(toolName);
+      for (let copyEntry of parsed?.toolInputCopies ?? []) {
+        let copy = toolInputCopySchema().safeParse(copyEntry).data;
+        if (copy !== undefined) toolInputCopies.set(copy.id, copy.copy);
       }
     }
   } catch (error) {

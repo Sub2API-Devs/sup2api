@@ -5,7 +5,7 @@
  * pieces: chunk-mrx6y2r5.js (8)
  * attribution: esm-fingerprint 8
  */
-import { ei, MapperTypeNames } from "../index.js";
+import { SEP_SPECIAL, MapperTypeNames } from "../index.js";
 import { getOperationRequestInfo } from "./operationHelpers.js";
 import { RestError_default } from "../../../core-rest-pipeline/dist/esm/policies/tracingPolicy.js";
 
@@ -55,7 +55,7 @@ function deserializationPolicy(options = {}) {
             ? undefined
             : serializerOptions.xml.xmlCharKey) !== null && _g !== undefined
           ? _g
-          : ei,
+          : SEP_SPECIAL,
     },
   };
   return {

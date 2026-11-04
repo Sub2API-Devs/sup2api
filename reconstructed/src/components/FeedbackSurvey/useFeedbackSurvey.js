@@ -14,7 +14,13 @@ import { useHost } from "../../context/session.js";
 import { useAppStoreDirect } from "../../state/AppState.js";
 import { sessionStore, useActive } from "../../screens/repl/storeHooks.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
-import { y, R, ce, Q, P } from "../../../vendor/react/cjs/react.production.js";
+import {
+  useState,
+  useRef,
+  useCallback,
+  useMemo,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
 import { useDynamicConfigValue, useDelayedFlag, endsWithNumberedList } from "./SurveyHost.js";
 import { getInitialSettings_2 } from "../../utils/settings/settings.js";
 import { useClock } from "../../ink/components/ClockContext.js";
@@ -54,6 +60,33 @@ import { getMainLoopModel } from "../../utils/model/model.js";
 import { env } from "../../utils/env.js";
 import { isEnvTruthy } from "../../utils/envUtils.js";
 
+//@ chunk-pzv0vqyf.js:1697-1755 fingerprint = DEFAULT_TRANSCRIPT_ASK_CONFIG (0.481)
+var DEFAULT_TRANSCRIPT_ASK_CONFIG = {
+  afterPromptCount: 5,
+  probability: 0,
+  maxImpressions: 3,
+};
+//@ chunk-0sfjpx19.js:134556-134912 fingerprint = DEFAULT_FEEDBACK_SURVEY_CONFIG (0.728)
+var DEFAULT_FEEDBACK_SURVEY_CONFIG = "tengu_juniper_vale";
+var TENGU_RUSSET_WHIMBREL = "tengu_russet_whimbrel";
+var DEFAULT_SURVEY_TIMING = {
+  minTimeBeforeFeedbackMs: 600000,
+  minTimeBetweenFeedbackMs: 3600000,
+  minTimeBetweenGlobalFeedbackMs: 1e8,
+  minUserTurnsBeforeFeedback: 5,
+  minUserTurnsBetweenFeedback: 10,
+  hideThanksAfterMs: 5000,
+  onForModels: ["*"],
+  probability: 0.005,
+};
+var ZERO_PROBABILITY_CONFIG = {
+  probability: 0,
+};
+var DEFAULT_SURVEY_FOLLOWUP_CONFIG = {
+  enabled: false,
+  maxChars: 500,
+  autoDismissAfterMs: 30000,
+};
 //@ chunk-18hwfzwa.js:1024512-1024535 sole-consumer
 function isShareAlwaysAllowed() {
   return false;
@@ -67,10 +100,10 @@ function getLastAssistantMessageId(snapshot) {
   return getLastAssistantMessage(snapshot)?.message?.id || "unknown";
 }
 //@ chunk-18hwfzwa.js:1024611-1024724 affinity
-function feedbackSurveyKindFor(h) {
-  return h === "good"
+function feedbackSurveyKindFor(response) {
+  return response === "good"
     ? "good_feedback_survey"
-    : h === "fine"
+    : response === "fine"
       ? "fine_feedback_survey"
       : "bad_feedback_survey";
 }
@@ -82,11 +115,11 @@ function useFeedbackSurvey({ turn, transcript, surveyType = "session", otherSurv
   let { storageV5, credentials } = useTheme_2();
   let host = useHost();
   let appStoreDirect = useAppStoreDirect();
-  let He = sessionStore();
-  let isLoading = useStoreSelector(turn, (fr) => fr.isLoading);
-  let submitCount = useStoreSelector(turn, (fr) => fr.submitCount);
-  let storeSelector = useStoreSelector(transcript);
-  let [rt, kt] = y(() => ({
+  let promptStore = sessionStore();
+  let isLoading = useStoreSelector(turn, (turnState) => turnState.isLoading);
+  let submitCount = useStoreSelector(turn, (turnState) => turnState.submitCount);
+  let messages = useStoreSelector(transcript);
+  let [lastShown, setLastShown] = useState(() => ({
     timeLastShown: null,
     timeLastShownAtClock: null,
     submitCountAtLastAppearance: null,
@@ -104,27 +137,27 @@ function useFeedbackSurvey({ turn, transcript, surveyType = "session", otherSurv
     "tengu_good_survey_transcript_ask_config",
     ZERO_PROBABILITY_CONFIG,
   );
-  let [Dt, Lt] = y(DEFAULT_SURVEY_FOLLOWUP_CONFIG);
-  let [oo, Xt] = y(false);
-  let io = R(null);
-  let [so, po] = y(false);
-  let [ao, co] = y(false);
+  let [followupConfig, setFollowupConfig] = useState(DEFAULT_SURVEY_FOLLOWUP_CONFIG);
+  let [followupArmed, setFollowupArmed] = useState(false);
+  let appearanceRef = useRef(null);
+  let [transcriptGatePassed, setTranscriptGatePassed] = useState(false);
+  let [isTypedOver, setIsTypedOver] = useState(false);
   let settingsRate = getInitialSettings_2().feedbackSurveyRate;
   let clock = useClock();
-  let sessionStartTime = R(clock.now());
-  let submitCountAtSessionStart = R(submitCount);
-  let submitCountRef = R(null);
-  let messagesRef = R(null);
-  let Wo = ce(() => {
+  let sessionStartTime = useRef(clock.now());
+  let submitCountAtSessionStart = useRef(submitCount);
+  let submitCountRef = useRef(null);
+  let messagesRef = useRef(null);
+  let snapshotSubmitState = useCallback(() => {
     submitCountRef.current = transcript.getSnapshot();
     messagesRef.current = getLastCancelledAPIMessageId();
   }, [transcript]);
-  let mn = ce(() => {
+  let clearSubmitState = useCallback(() => {
     submitCountRef.current = null;
     messagesRef.current = null;
   }, []);
-  let probabilityPassedRef = R(null);
-  let updateLastShownTime = ce(
+  let probabilityPassedRef = useRef(null);
+  let updateLastShownTime = useCallback(
     (timestamp, submitCountValue) => {
       logEvent("tengu_feedback_survey_event", {
         ...effortLevelForAppState(appStoreDirect),
@@ -140,16 +173,16 @@ function useFeedbackSurvey({ turn, transcript, surveyType = "session", otherSurv
   );
   let dialogStore = useDialogStore();
   let hasOpenDialog = useHasOpenDialog_2();
-  let probabilityPassedRef_2 = R(false);
-  let lastEligibleSubmitCountRef = R(null);
+  let probabilityPassedRef_2 = useRef(false);
+  let lastEligibleSubmitCountRef = useRef(null);
   let delayedFlag = useDelayedFlag(isLoading);
   let active = useActive();
-  let hn = Q(() => endsWithNumberedList(storeSelector), [storeSelector]);
-  let Mn = ce(
+  let endsWithList = useMemo(() => endsWithNumberedList(messages), [messages]);
+  let recordShown = useCallback(
     (prev) => {
       let timestamp = Date.now();
       let timeLastShownAtClock = clock.now();
-      kt((prev_2) => {
+      setLastShown((prev_2) => {
         if (prev_2.timeLastShown === timestamp && prev_2.submitCountAtLastAppearance === prev) return prev_2;
         return {
           timeLastShown: timestamp,
@@ -170,32 +203,32 @@ function useFeedbackSurvey({ turn, transcript, surveyType = "session", otherSurv
     },
     [clock, storageV5],
   );
-  let onOpen = ce(
+  let onOpen = useCallback(
     (appearanceId) => {
-      Lt(DEFAULT_SURVEY_FOLLOWUP_CONFIG);
-      Xt(false);
-      mn();
+      setFollowupConfig(DEFAULT_SURVEY_FOLLOWUP_CONFIG);
+      setFollowupArmed(false);
+      clearSubmitState();
       probabilityPassedRef.current = null;
-      Mn(turn.getSnapshot().submitCount);
-      let $r = surveyType === "session" ? getTranscriptShareGate() : null;
-      io.current =
-        $r === null
+      recordShown(turn.getSnapshot().submitCount);
+      let gate = surveyType === "session" ? getTranscriptShareGate() : null;
+      appearanceRef.current =
+        gate === null
           ? null
           : {
-              stays: $r,
+              stays: gate,
               configProbability: config.probability,
               settingsRate,
               openedAtClock: clock.now(),
               submitCountWhenTypedOver: null,
               answer: null,
             };
-      po($r === true);
-      co(false);
+      setTranscriptGatePassed(gate === true);
+      setIsTypedOver(false);
       logEvent("tengu_feedback_survey_event", {
         ...effortLevelForAppState(appStoreDirect),
-        ...surveyProbability(io.current),
-        ...($r !== null && {
-          draft_at_open: He.getState().value !== "",
+        ...surveyProbability(appearanceRef.current),
+        ...(gate !== null && {
+          draft_at_open: promptStore.getState().value !== "",
         }),
         event_type: lit_2("appeared"),
         appearance_id: sanitizeMarkName(appearanceId),
@@ -210,22 +243,33 @@ function useFeedbackSurvey({ turn, transcript, surveyType = "session", otherSurv
         enabled_via_override: isFeedbackSurveyForOtel(),
       });
     },
-    [Mn, mn, surveyType, appStoreDirect, turn, transcript, clock, He, config.probability, settingsRate],
+    [
+      recordShown,
+      clearSubmitState,
+      surveyType,
+      appStoreDirect,
+      turn,
+      transcript,
+      clock,
+      promptStore,
+      config.probability,
+      settingsRate,
+    ],
   );
-  let onSelect = ce(
+  let onSelect = useCallback(
     (appearanceId, selected) => {
-      let Yr = io.current;
-      if (!answeredAfterTyping(Yr)) Mn(turn.getSnapshot().submitCount);
+      let appearance = appearanceRef.current;
+      if (!answeredAfterTyping(appearance)) recordShown(turn.getSnapshot().submitCount);
       logEvent("tengu_feedback_survey_event", {
         ...effortLevelForAppState(appStoreDirect),
-        ...surveyProbability(Yr),
+        ...surveyProbability(appearance),
         event_type: lit_2("responded"),
         appearance_id: sanitizeMarkName(appearanceId),
         response: fromEnum(selected),
         last_assistant_message_id: sanitizeMarkName(getLastAssistantMessageId(transcript.getSnapshot())),
         survey_type: fromEnum(surveyType),
         prompt_index: getPromptIndex(),
-        ...Yr?.answer?.ratedTurn,
+        ...appearance?.answer?.ratedTurn,
       });
       logOTelEvent("feedback_survey", {
         event_type: "responded",
@@ -235,16 +279,16 @@ function useFeedbackSurvey({ turn, transcript, surveyType = "session", otherSurv
         enabled_via_override: isFeedbackSurveyForOtel(),
       });
     },
-    [Mn, surveyType, appStoreDirect, turn, transcript],
+    [recordShown, surveyType, appStoreDirect, turn, transcript],
   );
-  let shouldShowTranscriptPrompt = ce(
+  let shouldShowTranscriptPrompt = useCallback(
     (selected_0) => {
-      let $r = io.current;
+      let appearance = appearanceRef.current;
       logEvent("tengu_feedback_survey_event", {
         ...effortLevelForAppState(appStoreDirect),
-        ...surveyProbability($r),
-        ...($r && {
-          ms_since_appeared: msSinceAppeared($r, clock.now()),
+        ...surveyProbability(appearance),
+        ...(appearance && {
+          ms_since_appeared: msSinceAppeared(appearance, clock.now()),
         }),
         event_type: lit_2("abandoned"),
         appearance_id: sanitizeMarkName(selected_0),
@@ -261,10 +305,10 @@ function useFeedbackSurvey({ turn, transcript, surveyType = "session", otherSurv
     },
     [surveyType, appStoreDirect, transcript, clock],
   );
-  let shouldShowTranscriptPrompt_2 = ce(
+  let shouldShowTranscriptPrompt_2 = useCallback(
     (selected) => {
       if (selected !== "bad" && selected !== "fine" && selected !== "good") return false;
-      if (answeredAfterTyping(io.current)) return false;
+      if (answeredAfterTyping(appearanceRef.current)) return false;
       if (isEssentialTrafficOnly()) return false;
       if (!isPolicyAllowed_2("allow_product_feedback")) return false;
       if (feedbackMode().kind === "disabled") return false;
@@ -280,7 +324,7 @@ function useFeedbackSurvey({ turn, transcript, surveyType = "session", otherSurv
     },
     [badTranscriptAskConfig.probability, dynamicConfigValue.probability, goodTranscriptAskConfig.probability],
   );
-  let onTranscriptPromptShown = ce(
+  let onTranscriptPromptShown = useCallback(
     (appearanceId, surveyResponse) => {
       let trigger = feedbackSurveyKindFor(surveyResponse);
       logEvent("tengu_feedback_survey_event", {
@@ -300,7 +344,7 @@ function useFeedbackSurvey({ turn, transcript, surveyType = "session", otherSurv
     },
     [surveyType, appStoreDirect, transcript],
   );
-  let onTranscriptSelect = ce(
+  let onTranscriptSelect = useCallback(
     async (appearanceId, selected, surveyResponse) => {
       let trigger = feedbackSurveyKindFor(surveyResponse);
       if (!(selected === "yes" && probabilityPassedRef.current !== null))
@@ -321,10 +365,10 @@ function useFeedbackSurvey({ turn, transcript, surveyType = "session", otherSurv
           storageV5,
         );
       if (selected === "yes") {
-        let ms =
+        let gate =
           probabilityPassedRef.current ?? transcriptSharePolicy(transcript.getSnapshot(), storageV5, host);
         probabilityPassedRef.current = null;
-        let transcriptShare = await collectTranscriptShare(ms, trigger, appearanceId, credentials);
+        let transcriptShare = await collectTranscriptShare(gate, trigger, appearanceId, credentials);
         logEvent("tengu_feedback_survey_event", {
           ...effortLevelForAppState(appStoreDirect),
           event_type: lit_2(
@@ -340,11 +384,11 @@ function useFeedbackSurvey({ turn, transcript, surveyType = "session", otherSurv
     },
     [surveyType, storageV5, credentials, host, appStoreDirect, transcript],
   );
-  let shouldShowFollowupPrompt = ce(
-    (fr) => {
-      if (fr === "dismissed") return false;
+  let shouldShowFollowupPrompt = useCallback(
+    (selected) => {
+      if (selected === "dismissed") return false;
       let state = appStoreDirect.getState();
-      let state_2 = He.getState();
+      let state_2 = promptStore.getState();
       if (
         turn.getSnapshot().isLoading ||
         hasOpenDialogs(dialogStore.getState()) ||
@@ -355,57 +399,60 @@ function useFeedbackSurvey({ turn, transcript, surveyType = "session", otherSurv
         return false;
       if (!logEventTo1P()) return false;
       if (isFollowupAlwaysEnabled()) {
-        Lt({
+        setFollowupConfig({
           ...DEFAULT_SURVEY_FOLLOWUP_CONFIG,
           enabled: true,
         });
-        Xt(true);
-        Wo();
+        setFollowupArmed(true);
+        snapshotSubmitState();
         return true;
       }
-      let Er =
+      let followupFeatureValue =
         getFeatureValue_CACHED_MAY_BE_STALE(DEFAULT_FEEDBACK_SURVEY_CONFIG, DEFAULT_SURVEY_FOLLOWUP_CONFIG) ??
         {};
-      let Vr = (maxChars, maxChars_2) =>
+      let resolveMaxChars = (maxChars, maxChars_2) =>
         typeof maxChars === "number" && Number.isFinite(maxChars) && maxChars > 0 ? maxChars : maxChars_2;
-      let ms = (autoDismissAfterMs, autoDismissAfterMs_2) =>
+      let resolveDismissMs = (autoDismissAfterMs, autoDismissAfterMs_2) =>
         typeof autoDismissAfterMs === "number" &&
         Number.isFinite(autoDismissAfterMs) &&
         autoDismissAfterMs >= FOLLOWUP_RECENT_INPUT_MS
           ? autoDismissAfterMs
           : autoDismissAfterMs_2;
-      let Xs = {
-        enabled: Er.enabled === true,
-        maxChars: Vr(Er.maxChars, DEFAULT_SURVEY_FOLLOWUP_CONFIG.maxChars),
-        autoDismissAfterMs: ms(Er.autoDismissAfterMs, DEFAULT_SURVEY_FOLLOWUP_CONFIG.autoDismissAfterMs),
+      let followupSettings = {
+        enabled: followupFeatureValue.enabled === true,
+        maxChars: resolveMaxChars(followupFeatureValue.maxChars, DEFAULT_SURVEY_FOLLOWUP_CONFIG.maxChars),
+        autoDismissAfterMs: resolveDismissMs(
+          followupFeatureValue.autoDismissAfterMs,
+          DEFAULT_SURVEY_FOLLOWUP_CONFIG.autoDismissAfterMs,
+        ),
       };
-      Lt(Xs);
-      Xt(Xs.enabled === true);
-      if (Xs.enabled === true) Wo();
-      return Xs.enabled === true;
+      setFollowupConfig(followupSettings);
+      setFollowupArmed(followupSettings.enabled === true);
+      if (followupSettings.enabled === true) snapshotSubmitState();
+      return followupSettings.enabled === true;
     },
-    [turn, appStoreDirect, dialogStore, He, Wo],
+    [turn, appStoreDirect, dialogStore, promptStore, snapshotSubmitState],
   );
-  let onFollowupPromptShown = ce(
-    (fr, $r) => {
+  let onFollowupPromptShown = useCallback(
+    (appearanceId, surveyResponse) => {
       logEvent("tengu_feedback_survey_event", {
         ...effortLevelForAppState(appStoreDirect),
         event_type: lit_2("followup_prompt_appeared"),
-        appearance_id: sanitizeMarkName(fr),
+        appearance_id: sanitizeMarkName(appearanceId),
         last_assistant_message_id: sanitizeMarkName(getLastAssistantMessageId(transcript.getSnapshot())),
-        response: fromEnum($r),
+        response: fromEnum(surveyResponse),
         survey_type: fromEnum(surveyType),
       });
       logOTelEvent("feedback_survey", {
         event_type: "followup_prompt_appeared",
-        appearance_id: fr,
+        appearance_id: appearanceId,
         survey_type: surveyType,
         enabled_via_override: isFeedbackSurveyForOtel(),
       });
     },
     [surveyType, appStoreDirect, transcript],
   );
-  let onTranscriptSelect_2 = ce(
+  let onTranscriptSelect_2 = useCallback(
     (appearanceId_2, selected_1, surveyResponse_0) => {
       if (selected_1.text === null) {
         logEvent("tengu_feedback_survey_event", {
@@ -422,7 +469,7 @@ function useFeedbackSurvey({ turn, transcript, surveyType = "session", otherSurv
           survey_type: surveyType,
           enabled_via_override: isFeedbackSurveyForOtel(),
         });
-        mn();
+        clearSubmitState();
         return;
       }
       let text = selected_1.text;
@@ -442,7 +489,7 @@ function useFeedbackSurvey({ turn, transcript, surveyType = "session", otherSurv
       });
       let messages = submitCountRef.current ?? transcript.getSnapshot();
       let lastInterruptedAssistantAPIMessageId = messagesRef.current;
-      mn();
+      clearSubmitState();
       return submitSurveyFollowup({
         description: text,
         appearanceId: appearanceId_2,
@@ -469,7 +516,7 @@ function useFeedbackSurvey({ turn, transcript, surveyType = "session", otherSurv
         })
         .catch(() => {});
     },
-    [surveyType, mn, appStoreDirect, transcript, credentials],
+    [surveyType, clearSubmitState, appStoreDirect, transcript, credentials],
   );
   let {
     state,
@@ -498,83 +545,83 @@ function useFeedbackSurvey({ turn, transcript, surveyType = "session", otherSurv
     onFollowupPromptShown,
     onFollowupResolve: onTranscriptSelect_2,
   });
-  let handleSelect_2 = ce(
-    (fr, $r) => {
-      let Yr = io.current;
-      if (Yr)
-        Yr.answer = {
-          response: fr,
-          method: $r,
-          msSinceAppeared: msSinceAppeared(Yr, clock.now()),
+  let handleSelect_2 = useCallback(
+    (appearanceId, selected) => {
+      let surveyResponse = appearanceRef.current;
+      if (surveyResponse)
+        surveyResponse.answer = {
+          response: appearanceId,
+          method: selected,
+          msSinceAppeared: msSinceAppeared(surveyResponse, clock.now()),
           ratedTurn: {
             effort_level: effortLevelForAppState(appStoreDirect).effort_level,
             last_assistant_message_id: sanitizeMarkName(getLastAssistantMessageId(transcript.getSnapshot())),
             prompt_index: getPromptIndex(),
           },
         };
-      if ($r === "chord") logFeatureOk("feedback_survey_chord_rating");
-      handleSelect(fr);
+      if (selected === "chord") logFeatureOk("feedback_survey_chord_rating");
+      handleSelect(appearanceId);
     },
     [clock, handleSelect, appStoreDirect, transcript],
   );
-  let handleUndo_2 = ce(() => {
+  let handleUndo_2 = useCallback(() => {
     if (!handleUndo()) return;
-    let fr = io.current;
-    if (fr?.answer) {
+    let result = appearanceRef.current;
+    if (result?.answer) {
       logEvent("tengu_feedback_survey_event", {
         ...effortLevelForAppState(appStoreDirect),
-        ...surveyProbability(fr),
+        ...surveyProbability(result),
         event_type: lit_2("undone"),
         appearance_id: sanitizeMarkName(appearanceId),
-        response: fromEnum(fr.answer.response),
+        response: fromEnum(result.answer.response),
         survey_type: fromEnum(surveyType),
       });
-      fr.answer = null;
+      result.answer = null;
     }
   }, [handleUndo, appStoreDirect, appearanceId, surveyType]);
-  let Ur = ce(() => {
-    let fr = io.current;
-    if (!fr || answeredAfterTyping(fr)) return;
-    fr.submitCountWhenTypedOver = turn.getSnapshot().submitCount;
-    co(true);
+  let updated = useCallback(() => {
+    let surveyAppearanceId = appearanceRef.current;
+    if (!surveyAppearanceId || answeredAfterTyping(surveyAppearanceId)) return;
+    surveyAppearanceId.submitCountWhenTypedOver = turn.getSnapshot().submitCount;
+    setIsTypedOver(true);
     logEvent("tengu_feedback_survey_event", {
       ...effortLevelForAppState(appStoreDirect),
-      ...surveyProbability(fr),
-      ms_since_appeared: msSinceAppeared(fr, clock.now()),
+      ...surveyProbability(surveyAppearanceId),
+      ms_since_appeared: msSinceAppeared(surveyAppearanceId, clock.now()),
       event_type: lit_2("typed_over"),
       appearance_id: sanitizeMarkName(appearanceId),
       survey_type: fromEnum(surveyType),
     });
   }, [appStoreDirect, clock, turn, appearanceId, surveyType]);
-  let Zr = ao && (isLoading || submitCount !== io.current?.submitCountWhenTypedOver);
-  P(() => {
-    if (Zr && state === "open") abandon();
-  }, [Zr, state, abandon]);
+  let event = isTypedOver && (isLoading || submitCount !== appearanceRef.current?.submitCountWhenTypedOver);
+  useEffect(() => {
+    if (event && state === "open") abandon();
+  }, [event, state, abandon]);
   let currentModel = getMainLoopModel();
-  let isModelAllowed = Q(() => {
+  let isModelAllowed = useMemo(() => {
     if (config.onForModels.length === 0) return false;
     if (config.onForModels.includes("*")) return true;
     return config.onForModels.includes(currentModel);
   }, [config.onForModels, currentModel]);
-  let shouldOpen = Q(() => {
+  let shouldOpen = useMemo(() => {
     if (state !== "closed") return false;
     if (isLoading) return false;
     if (!delayedFlag) return false;
     if (active) return false;
-    if (hn) return false;
+    if (endsWithList) return false;
     if (hasOpenDialog) return false;
     if (otherSurveyActive) return false;
     if (env.CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY) return false;
     if (shouldSkipFeedbackSurvey()) return false;
     if (!isPolicyAllowed_2("allow_product_feedback")) return false;
-    if (isEnvTruthy(process.env.CLAUDE_FORCE_DISPLAY_SURVEY) && !rt.timeLastShown) return true;
+    if (isEnvTruthy(process.env.CLAUDE_FORCE_DISPLAY_SURVEY) && !lastShown.timeLastShown) return true;
     if (!isModelAllowed) return false;
     let timeSinceLastShown = clock.now();
-    if (rt.timeLastShownAtClock !== null) {
-      if (timeSinceLastShown - rt.timeLastShownAtClock < config.minTimeBetweenFeedbackMs) return false;
+    if (lastShown.timeLastShownAtClock !== null) {
+      if (timeSinceLastShown - lastShown.timeLastShownAtClock < config.minTimeBetweenFeedbackMs) return false;
       if (
-        rt.submitCountAtLastAppearance !== null &&
-        submitCount < rt.submitCountAtLastAppearance + config.minUserTurnsBetweenFeedback
+        lastShown.submitCountAtLastAppearance !== null &&
+        submitCount < lastShown.submitCountAtLastAppearance + config.minUserTurnsBetweenFeedback
       )
         return false;
     } else {
@@ -598,13 +645,13 @@ function useFeedbackSurvey({ turn, transcript, surveyType = "session", otherSurv
     isLoading,
     delayedFlag,
     active,
-    hn,
+    endsWithList,
     hasOpenDialog,
     otherSurveyActive,
     isModelAllowed,
-    rt.timeLastShown,
-    rt.timeLastShownAtClock,
-    rt.submitCountAtLastAppearance,
+    lastShown.timeLastShown,
+    lastShown.timeLastShownAtClock,
+    lastShown.submitCountAtLastAppearance,
     submitCount,
     config.minTimeBetweenFeedbackMs,
     config.minTimeBetweenGlobalFeedbackMs,
@@ -614,7 +661,7 @@ function useFeedbackSurvey({ turn, transcript, surveyType = "session", otherSurv
     config.probability,
     settingsRate,
   ]);
-  P(() => {
+  useEffect(() => {
     if (shouldOpen) open();
   }, [shouldOpen, open]);
   return {
@@ -624,46 +671,19 @@ function useFeedbackSurvey({ turn, transcript, surveyType = "session", otherSurv
     transcriptBundlePath,
     abandon,
     handleSelect: handleSelect_2,
-    handleTypedOver: so ? Ur : undefined,
-    typedOver: ao,
-    turnMovedOn: Zr,
+    handleTypedOver: transcriptGatePassed ? updated : undefined,
+    typedOver: isTypedOver,
+    turnMovedOn: event,
     handleUndo: handleUndo_2,
     handleTranscriptSelect,
     handleFollowupResolve,
-    followupAskConfig: Dt,
+    followupAskConfig: followupConfig,
     turnInProgress: isLoading,
     thanksFromFollowup,
-    followupArmActive: oo,
+    followupArmActive: followupArmed,
     submittingShare,
   };
 }
-//@ chunk-0sfjpx19.js:134556-134912 fingerprint = DEFAULT_FEEDBACK_SURVEY_CONFIG (0.728)
-var DEFAULT_FEEDBACK_SURVEY_CONFIG = "tengu_juniper_vale";
-var TENGU_RUSSET_WHIMBREL = "tengu_russet_whimbrel";
-var DEFAULT_SURVEY_TIMING = {
-  minTimeBeforeFeedbackMs: 600000,
-  minTimeBetweenFeedbackMs: 3600000,
-  minTimeBetweenGlobalFeedbackMs: 1e8,
-  minUserTurnsBeforeFeedback: 5,
-  minUserTurnsBetweenFeedback: 10,
-  hideThanksAfterMs: 5000,
-  onForModels: ["*"],
-  probability: 0.005,
-};
-var ZERO_PROBABILITY_CONFIG = {
-  probability: 0,
-};
-var DEFAULT_SURVEY_FOLLOWUP_CONFIG = {
-  enabled: false,
-  maxChars: 500,
-  autoDismissAfterMs: 30000,
-};
-//@ chunk-pzv0vqyf.js:1697-1755 fingerprint = DEFAULT_TRANSCRIPT_ASK_CONFIG (0.481)
-var DEFAULT_TRANSCRIPT_ASK_CONFIG = {
-  afterPromptCount: 5,
-  probability: 0,
-  maxImpressions: 3,
-};
 export {
   useFeedbackSurvey,
   DEFAULT_SURVEY_FOLLOWUP_CONFIG,

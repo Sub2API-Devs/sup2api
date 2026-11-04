@@ -18,19 +18,19 @@ import { errorMessage } from "../utils/errors.js";
 /**
  * 监听单个配置文件（daemon-config）的增删改。旧版名 initialize 不准确。
  */
-function initialize(r, n) {
-  let i = dirname(r);
-  let s = normalize(i);
-  let f = basename(r);
-  let a = chokidar_default.watch(i, {
+function initialize(configPath, onChange) {
+  let configDir = dirname(configPath);
+  let normalizedDir = normalize(configDir);
+  let configFileName = basename(configPath);
+  let watcher = chokidar_default.watch(configDir, {
     persistent: true,
     ignoreInitial: true,
     depth: 0,
     usePolling: getPlatform() === "macos",
     interval: 100,
-    ignored: (c) => {
-      let e = normalize(c);
-      return e !== s && basename(e) !== f;
+    ignored: (watchPath) => {
+      let normalizedPath = normalize(watchPath);
+      return normalizedPath !== normalizedDir && basename(normalizedPath) !== configFileName;
     },
     awaitWriteFinish: {
       stabilityThreshold: 300,
@@ -39,14 +39,14 @@ function initialize(r, n) {
     atomic: true,
     ignorePermissionErrors: true,
   });
-  a.on("add", n);
-  a.on("change", n);
-  a.on("unlink", n);
-  a.on("error", (dir) =>
+  watcher.on("add", onChange);
+  watcher.on("change", onChange);
+  watcher.on("unlink", onChange);
+  watcher.on("error", (dir) =>
     logForDebugging(`[daemon-config] watcher error: ${errorMessage(dir)}`, {
       level: "warn",
     }),
   );
-  return () => void a.close().catch(() => {});
+  return () => void watcher.close().catch(() => {});
 }
 export { initialize };

@@ -18,7 +18,7 @@ import { byteLengthOf, buildRemoteToolCallResult } from "./callResults.js";
 import { compressImageBuffer } from "../../utils/imageResizer.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage, withTelemetryMessage, toError } from "../../utils/errors.js";
-import { xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { lit, fromEnum, fromEnumOpt } from "../../services/analytics/safeMetadata.js";
 import { shortHash } from "../../utils/shortHash.js";
@@ -86,8 +86,8 @@ function isViolinFinetunerEnabled() {
 }
 //@ chunk-012rhzq5.js:15767-15840 placement = _temp7 (1)
 function backgroundSwitchedOffStub(
-  e = (r, s) => parseSettingsFileUncached(r, undefined, s),
-  o = () => getSettingsForSource("policySettings"),
+  readSettings = (path, options) => parseSettingsFileUncached(path, undefined, options),
+  readPolicy = () => getSettingsForSource("policySettings"),
 ) {
   return false;
 }
@@ -99,27 +99,32 @@ var MAX_IMAGE_REENCODE_ROUNDS = 4;
 var IMAGE_SHRINK_RATIO = 0.9;
 var MIN_IMAGE_BYTES_FOR_REENCODE = 16384;
 //@ chunk-012rhzq5.js:15865-16667 placement
-async function reencodeServedImage(result, o) {
-  let r = byteLengthOf(result);
-  if (r <= o) return result;
-  let s = new Map();
-  countImageCopies(result, s);
-  let f = result;
-  for (let i = 0; i < MAX_IMAGE_REENCODE_ROUNDS && r > o; i++) {
-    let filtered = [...s].filter(([, y]) => base64ByteLength(y.now.data) > MIN_IMAGE_BYTES_FOR_REENCODE);
-    let reduced = filtered.reduce((acc, [, h]) => acc + h.copies * h.now.data.length, 0);
+async function reencodeServedImage(result, limitBytes) {
+  let size = byteLengthOf(result);
+  if (size <= limitBytes) return result;
+  let images = new Map();
+  countImageCopies(result, images);
+  let current = result;
+  for (let i = 0; i < MAX_IMAGE_REENCODE_ROUNDS && size > limitBytes; i++) {
+    let filtered = [...images].filter(
+      ([, entry]) => base64ByteLength(entry.now.data) > MIN_IMAGE_BYTES_FOR_REENCODE,
+    );
+    let reduced = filtered.reduce((acc, [, entry]) => acc + entry.copies * entry.now.data.length, 0);
     if (reduced === 0) break;
-    let p = Math.max(0, 1 - (r - o) / reduced) * IMAGE_SHRINK_RATIO;
-    for (let [y, h] of filtered) {
-      let max = Math.max(MIN_IMAGE_BYTES_FOR_REENCODE, Math.floor(base64ByteLength(h.now.data) * p));
+    let ratio = Math.max(0, 1 - (size - limitBytes) / reduced) * IMAGE_SHRINK_RATIO;
+    for (let [base64, entry] of filtered) {
+      let max = Math.max(MIN_IMAGE_BYTES_FOR_REENCODE, Math.floor(base64ByteLength(entry.now.data) * ratio));
       try {
-        let C = await compressImageBuffer(Buffer.from(y, "base64"), max, h.now.mediaType);
-        if (base64ByteLength(C.base64) >= MIN_IMAGE_BYTES_FOR_REENCODE && C.base64.length < h.now.data.length)
-          s.set(y, {
-            copies: h.copies,
+        let compressed = await compressImageBuffer(Buffer.from(base64, "base64"), max, entry.now.mediaType);
+        if (
+          base64ByteLength(compressed.base64) >= MIN_IMAGE_BYTES_FOR_REENCODE &&
+          compressed.base64.length < entry.now.data.length
+        )
+          images.set(base64, {
+            copies: entry.copies,
             now: {
-              data: C.base64,
-              mediaType: C.mediaType,
+              data: compressed.base64,
+              mediaType: compressed.mediaType,
             },
           });
       } catch (error) {
@@ -131,32 +136,37 @@ async function reencodeServedImage(result, o) {
         );
       }
     }
-    let mcpResultImages = resolveMcpResultImages(result, new Map([...s].map(([y, h]) => [y, h.now])));
-    let M = byteLengthOf(mcpResultImages);
-    if (M >= r) break;
-    f = mcpResultImages;
-    r = M;
+    let mcpResultImages = resolveMcpResultImages(
+      result,
+      new Map([...images].map(([base64, entry]) => [base64, entry.now])),
+    );
+    let nextSize = byteLengthOf(mcpResultImages);
+    if (nextSize >= size) break;
+    current = mcpResultImages;
+    size = nextSize;
   }
-  if (f !== result)
-    logForDebugging(`session serving: served image(s) re-encoded, answer now ${r} bytes (limit ${o})`);
-  return f;
+  if (current !== result)
+    logForDebugging(
+      `session serving: served image(s) re-encoded, answer now ${size} bytes (limit ${limitBytes})`,
+    );
+  return current;
 }
 //@ chunk-012rhzq5.js:16667-16714 placement
-function base64ByteLength(e) {
-  return Math.floor((e.length * 3) / 4);
+function base64ByteLength(base64) {
+  return Math.floor((base64.length * 3) / 4);
 }
 //@ chunk-012rhzq5.js:16714-17006 placement = buildImageToolResult (0.905)
 /**
  * （切分错误）从 image 块（MCP 的 data/mimeType 或 Anthropic 的 base64 source）取 {data, mediaType}。
  */
-function extractImageData(e) {
-  if (e.type !== "image") return;
-  if (typeof e.data === "string" && typeof e.mimeType === "string")
+function extractImageData(block) {
+  if (block.type !== "image") return;
+  if (typeof block.data === "string" && typeof block.mimeType === "string")
     return {
-      data: e.data,
-      mediaType: e.mimeType,
+      data: block.data,
+      mediaType: block.mimeType,
     };
-  let source = e.source;
+  let source = block.source;
   if (
     isObjectLike(source) &&
     source.type === "base64" &&
@@ -173,36 +183,36 @@ function extractImageData(e) {
 /**
  * （切分错误）递归统计对象中每张图片 data 出现的次数。
  */
-function countImageCopies(e, o) {
-  if (Array.isArray(e)) {
-    e.forEach((s) => countImageCopies(s, o));
+function countImageCopies(value, images) {
+  if (Array.isArray(value)) {
+    value.forEach((child) => countImageCopies(child, images));
     return;
   }
-  if (!isObjectLike(e)) return;
-  let imageData = extractImageData(e);
+  if (!isObjectLike(value)) return;
+  let imageData = extractImageData(value);
   if (imageData !== undefined) {
-    o.set(imageData.data, {
-      copies: (o.get(imageData.data)?.copies ?? 0) + 1,
+    images.set(imageData.data, {
+      copies: (images.get(imageData.data)?.copies ?? 0) + 1,
       now: imageData,
     });
     return;
   }
-  Object.values(e).forEach((s) => countImageCopies(s, o));
+  Object.values(value).forEach((child) => countImageCopies(child, images));
 }
 //@ chunk-012rhzq5.js:17223-17535 placement
 /**
  * 把 MCP 工具结果中引用的图片数据按映射表替换为真实数据与 mimeType（含 structuredContent/_meta 深层）。
  */
 function resolveMcpResultImages(result, imagesByRef) {
-  let content = result.content.map((s) => {
-    let f = s.type === "image" ? imagesByRef.get(s.data) : undefined;
-    return s.type === "image" && f !== undefined
+  let content = result.content.map((block) => {
+    let replacement = block.type === "image" ? imagesByRef.get(block.data) : undefined;
+    return block.type === "image" && replacement !== undefined
       ? {
-          ...s,
-          data: f.data,
-          mimeType: f.mediaType,
+          ...block,
+          data: replacement.data,
+          mimeType: replacement.mediaType,
         }
-      : s;
+      : block;
   });
   return {
     ...result,
@@ -216,8 +226,8 @@ function resolveMcpResultImages(result, imagesByRef) {
   };
 }
 //@ chunk-012rhzq5.js:17535-17578 placement
-function resolveImagesDeep(e, imagesByRef) {
-  return xr(e, (r) => resolveImageBlockDeep(r, imagesByRef));
+function resolveImagesDeep(value, imagesByRef) {
+  return import_mapValues(value, (item) => resolveImageBlockDeep(item, imagesByRef));
 }
 //@ chunk-012rhzq5.js:17578-17873 placement = normalizeImageBlocks (0.869)
 function resolveImageBlockDeep(value, imagesByRef) {
@@ -243,8 +253,8 @@ function resolveImageBlockDeep(value, imagesByRef) {
   return resolveImagesDeep(value, imagesByRef);
 }
 //@ chunk-012rhzq5.js:17873-17925 placement
-function isObjectLike(e) {
-  return typeof e === "object" && e !== null;
+function isObjectLike(value) {
+  return typeof value === "object" && value !== null;
 }
 //@ chunk-012rhzq5.js:17925-18000 placement
 var DEFAULT_CALL_AGE_WINDOW_MS = 30000;
@@ -258,22 +268,22 @@ var PLUMBING_CALL_AGE_WINDOW_MS = 5000;
 /**
  * 上报远程 plumbing 调用遥测：结果、名称哈希、请求 id 哈希等。
  */
-function logPlumbingCallTelemetry(e, o, requestId, s) {
+function logPlumbingCallTelemetry(outcome, tool, requestId, attestation) {
   try {
     logEvent("tengu_remote_plumbing_call", {
       transport: lit("session"),
-      outcome: fromEnum(e.outcome),
-      ...(e.outcome === "stale" && {
-        dated: e.dated,
+      outcome: fromEnum(outcome.outcome),
+      ...(outcome.outcome === "stale" && {
+        dated: outcome.dated,
       }),
-      name_hash: shortHash(o.name),
+      name_hash: shortHash(tool.name),
       ...(typeof requestId === "string" && {
         request_id_hash: shortHash(requestId),
       }),
-      ...(s !== undefined && {
-        attestation_mode: fromEnum(s.mode),
-        request_attestation: fromEnum(s.status),
-        attestation_verdict: fromEnum(s.verdict),
+      ...(attestation !== undefined && {
+        attestation_mode: fromEnum(attestation.mode),
+        request_attestation: fromEnum(attestation.status),
+        attestation_verdict: fromEnum(attestation.verdict),
       }),
     });
   } catch (error) {
@@ -292,8 +302,8 @@ function safeJudgeSender(attestationStatus) {
   }
 }
 //@ chunk-012rhzq5.js:18517-18812 placement
-function unattestedConsentText(e) {
-  switch (e) {
+function unattestedConsentText(reason) {
+  switch (reason) {
     case "nothing_to_mark":
     case "not_marked":
       return REMOTE_TOOLS_CONSENT_TEXT["repository_trust.served_calls.unattested_untrusted_repo.not_marked"];
@@ -307,29 +317,29 @@ function unattestedConsentText(e) {
 /**
  * 会话工具服务：在 tengu_remote_tool_serving 开启时为云会话提供本机工具
  */
-var createSessionToolServing = (e) => {
-  let o = () =>
-    "offReason" in e
-      ? typeof e.offReason === "function"
-        ? e.offReason()
-        : e.offReason
-      : remoteToolServingOffReason_2(e.cwd);
-  let r = o();
-  let s = r;
-  let f = false;
-  let S = () => f || s !== undefined;
-  let w = r === "launched_from_home";
-  if (r !== undefined)
+var createSessionToolServing = (options) => {
+  let readOffReason = () =>
+    "offReason" in options
+      ? typeof options.offReason === "function"
+        ? options.offReason()
+        : options.offReason
+      : remoteToolServingOffReason_2(options.cwd);
+  let offReason = readOffReason();
+  let currentOffReason = offReason;
+  let closed = false;
+  let isOff = () => closed || currentOffReason !== undefined;
+  let launchedFromHome = offReason === "launched_from_home";
+  if (offReason !== undefined)
     logEvent("tengu_remote_tool_serving", {
       event: lit("gate_off"),
       served_tool_count: 0,
-      reason: fromEnum(r),
-      ...launchLocationFacts(r, e.cwd),
+      reason: fromEnum(offReason),
+      ...launchLocationFacts(offReason, options.cwd),
       transport: lit("session"),
     });
-  let m = () => {
+  let currentOwner = () => {
     try {
-      return e.owner();
+      return options.owner();
     } catch (error) {
       logForDebugging("session serving: the owner test threw; this client serves as a viewer", {
         level: "error",
@@ -340,100 +350,114 @@ var createSessionToolServing = (e) => {
       };
     }
   };
-  let p = (n, i) => {
+  let emitNotice = (key, text) => {
     try {
-      e.onNotice?.(n, i);
+      options.onNotice?.(key, text);
     } catch (error) {
       logError(toError(error));
     }
   };
-  let E = false;
-  let M = (n) => {
-    if (E || !m().owner) return;
-    E = true;
-    if (isPersonFixableOffReason(n)) p(SERVED_BASH_LAUNCHED_FROM_HOME, SERVED_BASH_FROM_HOME_NOTICE);
-    if (n === "muted") p(SERVING_MUTED_NOTICE_KEY, REMOTE_TOOLS_CONSENT_TEXT["serving_off.muted"]);
+  let noticeShown = false;
+  let showOffNotice = (reason) => {
+    if (noticeShown || !currentOwner().owner) return;
+    noticeShown = true;
+    if (isPersonFixableOffReason(reason))
+      emitNotice(SERVED_BASH_LAUNCHED_FROM_HOME, SERVED_BASH_FROM_HOME_NOTICE);
+    if (reason === "muted")
+      emitNotice(SERVING_MUTED_NOTICE_KEY, REMOTE_TOOLS_CONSENT_TEXT["serving_off.muted"]);
   };
-  M(r);
-  let y = false;
-  let h = (n) => {
-    if (!y && n === "profile_dirs_unreadable" && m().owner) {
-      y = true;
-      p(PROFILE_DIRS_UNREADABLE_NOTICE_KEY, REMOTE_TOOLS_CONSENT_TEXT["serving_off.profile_dirs_unreadable"]);
+  showOffNotice(offReason);
+  let profileNoticeShown = false;
+  let showProfileNotice = (reason) => {
+    if (!profileNoticeShown && reason === "profile_dirs_unreadable" && currentOwner().owner) {
+      profileNoticeShown = true;
+      emitNotice(
+        PROFILE_DIRS_UNREADABLE_NOTICE_KEY,
+        REMOTE_TOOLS_CONSENT_TEXT["serving_off.profile_dirs_unreadable"],
+      );
     }
   };
-  h(r);
-  let x = false;
-  let C = (n) => {
-    if (!x && n === "mount_table_unreadable" && m().owner) {
-      x = true;
-      p(SERVED_MOUNT_TABLE_UNREADABLE, REMOTE_TOOLS_CONSENT_TEXT["serving_off.mount_table_unreadable"]);
+  showProfileNotice(offReason);
+  let mountNoticeShown = false;
+  let showMountNotice = (reason) => {
+    if (!mountNoticeShown && reason === "mount_table_unreadable" && currentOwner().owner) {
+      mountNoticeShown = true;
+      emitNotice(
+        SERVED_MOUNT_TABLE_UNREADABLE,
+        REMOTE_TOOLS_CONSENT_TEXT["serving_off.mount_table_unreadable"],
+      );
     }
   };
-  C(r);
-  let L = () => {
+  showMountNotice(offReason);
+  let createFreshKit = () => {
     let servingKit = createServingKit({
-      sessionId: e.sessionId,
+      sessionId: options.sessionId,
       limiter: createConcurrencyLimiter(DEFAULT_MAX_IN_FLIGHT),
       getDeviceId: () => {
-        let u = m();
-        return u.owner ? u.deviceId : undefined;
+        let ownerInfo = currentOwner();
+        return ownerInfo.owner ? ownerInfo.deviceId : undefined;
       },
-      onNotice: p,
-      ...(e.cwd !== undefined && {
-        launchDir: e.cwd,
+      onNotice: emitNotice,
+      ...(options.cwd !== undefined && {
+        launchDir: options.cwd,
       }),
-      ...(e.tools !== undefined && {
-        tools: e.tools,
+      ...(options.tools !== undefined && {
+        tools: options.tools,
       }),
-      ...(e.policy !== undefined && {
-        policy: e.policy,
+      ...(options.policy !== undefined && {
+        policy: options.policy,
       }),
       sandboxRequiredNow: remoteToolVmRequired,
     });
-    let i = servingKit.onRedescribed(I);
+    let unsubscribeRedescribed = servingKit.onRedescribed(onRedescribed);
     return {
       kit: servingKit,
       source: undefined,
-      nativeTools: servableTools(servingKit.deps).map((u) =>
-        announcedToolFor(u, servingKit.deps, servingKit.description),
+      nativeTools: servableTools(servingKit.deps).map((tool) =>
+        announcedToolFor(tool, servingKit.deps, servingKit.description),
       ),
       release: () => {
-        i();
+        unsubscribeRedescribed();
         servingKit.dispose();
       },
     };
   };
-  let k = (n) => {
-    let i = n.source.subscribe((T) => {
-      if (W() !== Y) H(T);
+  let adoptKit = (adopted) => {
+    let unsubscribeSource = adopted.source.subscribe((change) => {
+      if (snapshotServedTools() !== lastServedSnapshot) emitServedToolsChanged(change);
     });
-    let u = n.kit.onRedescribed(I);
+    let unsubscribeRedescribed = adopted.kit.onRedescribed(onRedescribed);
     return {
-      kit: n.kit,
-      source: n.source,
+      kit: adopted.kit,
+      source: adopted.source,
       nativeTools: [],
       release: () => {
-        u();
-        i();
+        unsubscribeRedescribed();
+        unsubscribeSource();
       },
     };
   };
-  let I = () => {
-    if (!R && P && W() !== Y) H("redescribed");
+  let onRedescribed = () => {
+    if (!disposed && kitSettled && snapshotServedTools() !== lastServedSnapshot)
+      emitServedToolsChanged("redescribed");
   };
-  let P = e.serving === undefined;
-  let g = e.serving === undefined ? L() : undefined;
-  let V = false;
+  let kitSettled = options.serving === undefined;
+  let kit = options.serving === undefined ? createFreshKit() : undefined;
+  let adoptedFromHost = false;
   let answerDeduper = createAnswerDeduper();
-  let R = false;
+  let disposed = false;
   let signal = createSignal();
-  let me = (n) => !R && g !== undefined && !S() && n.instance_id === e.instanceId && m().owner;
-  let pe = new Set();
-  let Fe = async () => {
-    let repositoryTrust = e.repositoryTrust;
+  let isOurRequest = (request) =>
+    !disposed &&
+    kit !== undefined &&
+    !isOff() &&
+    request.instance_id === options.instanceId &&
+    currentOwner().owner;
+  let shownUntrustedNotices = new Set();
+  let resolveRepositoryTrust = async () => {
+    let repositoryTrust = options.repositoryTrust;
     if (repositoryTrust === undefined) return;
-    let i = await withDeadline(
+    let trustResult = await withDeadline(
       Promise.resolve()
         .then(repositoryTrust)
         .catch(() => {
@@ -441,37 +465,40 @@ var createSessionToolServing = (e) => {
         }),
       REPOSITORY_TRUST_WAIT_MS,
     );
-    let u = isRepositoryTrustUnresolved(i) ? i : undefined;
-    let T = u !== undefined ? SERVED_CALLS_UNATTESTED_UNTRUSTED_REPO : SERVED_CALLS_UNATTESTED;
-    if (!pe.has(T)) {
-      pe.add(T);
-      p(T, unattestedConsentText(u));
+    let unresolvedTrust = isRepositoryTrustUnresolved(trustResult) ? trustResult : undefined;
+    let noticeKey =
+      unresolvedTrust !== undefined ? SERVED_CALLS_UNATTESTED_UNTRUSTED_REPO : SERVED_CALLS_UNATTESTED;
+    if (!shownUntrustedNotices.has(noticeKey)) {
+      shownUntrustedNotices.add(noticeKey);
+      emitNotice(noticeKey, unattestedConsentText(unresolvedTrust));
     }
-    return u;
+    return unresolvedTrust;
   };
-  let ve = (n, ageMs, u) => ageMs !== undefined && ageMs <= n.deadline_ms + u;
-  let _e = (n) => n.request.ok && n.request.kind === "call" && n.request.value.approval === undefined;
-  function he() {
-    if (R || g === undefined || !m().owner) return;
-    return !S()
+  let isWithinAgeWindow = (request, ageMs, extraWindowMs) =>
+    ageMs !== undefined && ageMs <= request.deadline_ms + extraWindowMs;
+  let isCallQuery = (request) =>
+    request.request.ok && request.request.kind === "call" && request.request.value.approval === undefined;
+  function describeServedTools() {
+    if (disposed || kit === undefined || !currentOwner().owner) return;
+    return !isOff()
       ? {
-          host: g.kit.description,
-          tools: g.source?.native() ?? g.nativeTools,
-          passthrough: g.source?.passthrough() ?? [],
-          plumbing: e.plumbing?.names() ?? [],
+          host: kit.kit.description,
+          tools: kit.source?.native() ?? kit.nativeTools,
+          passthrough: kit.source?.passthrough() ?? [],
+          plumbing: options.plumbing?.names() ?? [],
         }
       : {
-          host: g.kit.description,
+          host: kit.kit.description,
           tools: [],
           passthrough: [],
           plumbing: [],
         };
   }
-  let W = () => jsonStringify(he() ?? null);
-  function H(n) {
-    Y = W();
+  let snapshotServedTools = () => jsonStringify(describeServedTools() ?? null);
+  function emitServedToolsChanged(eventName) {
+    lastServedSnapshot = snapshotServedTools();
     try {
-      signal.emit(n);
+      signal.emit(eventName);
     } catch (error) {
       logForDebugging("session serving: a served-tools listener threw", {
         level: "error",
@@ -479,270 +506,279 @@ var createSessionToolServing = (e) => {
       logError(toError(error));
     }
   }
-  let Y = W();
-  let Ue = (n) => {
+  let lastServedSnapshot = snapshotServedTools();
+  let onAdoptFailed = (error) => {
     logForDebugging(
       "session serving: the device registration handed over nothing usable; serving without it",
       {
         level: "warn",
       },
     );
-    logError(toError(n));
-    if (!R) {
-      g = L();
-      V = false;
+    logError(toError(error));
+    if (!disposed) {
+      kit = createFreshKit();
+      adoptedFromHost = false;
     }
   };
-  e.serving
-    ?.then((n) => {
-      if (R) return;
-      g = n === undefined ? L() : k(n);
-      V = n !== undefined;
+  options.serving
+    ?.then((hostServing) => {
+      if (disposed) return;
+      kit = hostServing === undefined ? createFreshKit() : adoptKit(hostServing);
+      adoptedFromHost = hostServing !== undefined;
     })
-    .catch(Ue)
+    .catch(onAdoptFailed)
     .then(() => {
-      if (!R) {
-        P = true;
-        H("adopted");
+      if (!disposed) {
+        kitSettled = true;
+        emitServedToolsChanged("adopted");
       }
     })
     .catch((error) => logError(toError(error)));
-  let Z = () => {
-    let n = g?.kit.deps.sessions.peek(
+  let withdrawSessionAsks = () => {
+    let callerSession = kit?.kit.deps.sessions.peek(
       callerKey({
-        sessionId: e.sessionId,
+        sessionId: options.sessionId,
       }),
     );
-    if (g === undefined || n === undefined) return;
-    for (let i of n.pendingAsks.list())
-      if (i.raisedOver === "session")
-        withdrawAskedCall(n, i.askId, {
+    if (kit === undefined || callerSession === undefined) return;
+    for (let ask of callerSession.pendingAsks.list())
+      if (ask.raisedOver === "session")
+        withdrawAskedCall(callerSession, ask.askId, {
           reason: "host_unbound",
           message: withdrawnRequestMessage({
-            targetName: g.kit.description.name,
+            targetName: kit.kit.description.name,
             reason: "host_unbound",
           }),
         });
   };
-  let We = () =>
-    g?.kit.deps.sessions.peek(
+  let callerSession = () =>
+    kit?.kit.deps.sessions.peek(
       callerKey({
-        sessionId: e.sessionId,
+        sessionId: options.sessionId,
       }),
     );
-  let q = () => We()?.backgroundShells;
-  let G = (n) => {
-    q()?.stopAll(n);
+  let backgroundShells = () => callerSession()?.backgroundShells;
+  let stopBackground = (reason) => {
+    backgroundShells()?.stopAll(reason);
   };
-  let ee = (n) => {
+  let safely = (fn) => {
     try {
-      n();
+      fn();
     } catch (error) {
       logError(toError(error));
     }
   };
-  let He = (n, i) =>
-    ee(() =>
+  let logServingChange = (reason, previousReason) =>
+    safely(() =>
       logEvent("tengu_remote_tool_serving", {
-        ...(n === undefined
+        ...(reason === undefined
           ? {
               event: lit("gate_on_reread"),
             }
           : {
               event: lit("gate_off_reread"),
               served_tool_count: 0,
-              reason: fromEnum(n),
-              ...launchLocationFacts(n, e.cwd),
+              reason: fromEnum(reason),
+              ...launchLocationFacts(reason, options.cwd),
             }),
-        previous_reason: fromEnum(i),
-        owner: m().owner,
+        previous_reason: fromEnum(previousReason),
+        owner: currentOwner().owner,
         transport: lit("session"),
       }),
     );
-  let $e = (n) => {
-    f = true;
+  let onCheckFailed = (wasClosed) => {
+    closed = true;
     [
       () => {
-        if (!n)
+        if (!wasClosed)
           logEvent("tengu_remote_tool_serving", {
             event: lit("serving_check_failed"),
           });
       },
-      () => G("serving_check_failed"),
-      Z,
+      () => stopBackground("serving_check_failed"),
+      withdrawSessionAsks,
       () => {
-        if (W() !== Y) H();
+        if (snapshotServedTools() !== lastServedSnapshot) emitServedToolsChanged();
       },
-    ].forEach(ee);
+    ].forEach(safely);
   };
-  let ne = () => !R && (q()?.running ?? 0) > 0;
-  let K = new Set();
-  let oe = () => ne() || (!R && K.size > 0 && isViolinFinetunerEnabled());
-  let Se = () => {
-    if (e.stillBound === undefined || !oe()) return;
-    e.stillBound()
-      .then((n) => {
-        if (n !== false) return;
-        let running = q()?.running ?? 0;
-        G("serving_ended");
+  let hasRunningBackground = () => !disposed && (backgroundShells()?.running ?? 0) > 0;
+  let activeCallControllers = new Set();
+  let needsBackgroundWatch = () =>
+    hasRunningBackground() || (!disposed && activeCallControllers.size > 0 && isViolinFinetunerEnabled());
+  let recheckWorkerBound = () => {
+    if (options.stillBound === undefined || !needsBackgroundWatch()) return;
+    options
+      .stillBound()
+      .then((stillBound) => {
+        if (stillBound !== false) return;
+        let running = backgroundShells()?.running ?? 0;
+        stopBackground("serving_ended");
         if (!isViolinFinetunerEnabled()) return;
-        let u = [...K];
-        K.clear();
-        for (let T of u) T.abort();
-        Z();
-        if (u.length + running > 0)
+        let controllers = [...activeCallControllers];
+        activeCallControllers.clear();
+        for (let controller of controllers) controller.abort();
+        withdrawSessionAsks();
+        if (controllers.length + running > 0)
           logEvent("tengu_remote_tool_serving", {
             event: lit("session_no_longer_served"),
-            running_calls: u.length,
+            running_calls: controllers.length,
             background_commands: running,
           });
       })
       .catch((error) => logError(toError(error)));
   };
-  let j;
-  let te = 0;
-  let backgroundSwitchedOff = e.backgroundSwitchedOff ?? backgroundSwitchedOffStub;
-  let Re = () => {
-    if (j !== undefined || !oe()) return;
-    te = Date.now();
-    j = setInterval(() => {
-      if (!oe()) {
-        clearInterval(j);
-        j = undefined;
+  let watchTimer;
+  let lastBoundCheckMs = 0;
+  let backgroundSwitchedOff = options.backgroundSwitchedOff ?? backgroundSwitchedOffStub;
+  let startBackgroundWatch = () => {
+    if (watchTimer !== undefined || !needsBackgroundWatch()) return;
+    lastBoundCheckMs = Date.now();
+    watchTimer = setInterval(() => {
+      if (!needsBackgroundWatch()) {
+        clearInterval(watchTimer);
+        watchTimer = undefined;
         return;
       }
-      if (ne()) {
-        if (backgroundSwitchedOff()) G("serving_off");
-        we.reevaluate();
+      if (hasRunningBackground()) {
+        if (backgroundSwitchedOff()) stopBackground("serving_off");
+        serving.reevaluate();
       }
-      if (Date.now() - te >= (e.backgroundBoundRecheckMs ?? BACKGROUND_BOUND_RECHECK_MS)) {
-        te = Date.now();
-        Se();
+      if (
+        Date.now() - lastBoundCheckMs >=
+        (options.backgroundBoundRecheckMs ?? BACKGROUND_BOUND_RECHECK_MS)
+      ) {
+        lastBoundCheckMs = Date.now();
+        recheckWorkerBound();
       }
-    }, e.backgroundWatchMs ?? BACKGROUND_WATCH_INTERVAL_MS);
-    j.unref();
+    }, options.backgroundWatchMs ?? BACKGROUND_WATCH_INTERVAL_MS);
+    watchTimer.unref();
   };
-  let je = (n) => {
-    let backgroundShells = n.policy.backgroundShells;
+  let withBackgroundShellPolicy = (deps) => {
+    let backgroundShells = deps.policy.backgroundShells;
     return backgroundShells === undefined
-      ? n
+      ? deps
       : {
-          ...n,
+          ...deps,
           policy: {
-            ...n.policy,
+            ...deps.policy,
             backgroundShells: {
               ...backgroundShells,
               enabled: () =>
-                e.stillBound !== undefined && backgroundShells.enabled() && !backgroundSwitchedOff(),
+                options.stillBound !== undefined && backgroundShells.enabled() && !backgroundSwitchedOff(),
             },
           },
         };
   };
-  let we = {
-    sessionId: e.sessionId,
-    instanceId: e.instanceId,
+  let serving = {
+    sessionId: options.sessionId,
+    instanceId: options.instanceId,
     serveSessionToolCall: async (
-      n,
+      request,
       { signal, requestId, ageMs, workerEpoch, attestationStatus, modeStamp },
     ) => {
-      let D = g;
-      if (D === undefined || !me(n)) return;
-      let { kit } = D;
-      let A = attestationFor(attestationStatus);
-      let X =
-        n.request.ok && n.request.kind === "call"
-          ? kit.deps.sessions
+      let kitRef = kit;
+      if (kitRef === undefined || !isOurRequest(request)) return;
+      let { kit: kit_2 } = kitRef;
+      let attestation = attestationFor(attestationStatus);
+      let knownCall =
+        request.request.ok && request.request.kind === "call"
+          ? kit_2.deps.sessions
               .peek(
                 callerKey({
-                  sessionId: e.sessionId,
+                  sessionId: options.sessionId,
                 }),
               )
-              ?.calls.lookup(n.request.value.call_id)
+              ?.calls.lookup(request.request.value.call_id)
           : undefined;
-      let Ve =
-        n.request.ok &&
-        (n.request.kind === "outcome_query" ||
-          (_e(n) ? X !== undefined : X !== undefined && X.summary.state !== "asked"));
-      let Te = _e(n) ? OUTCOME_QUERY_AGE_WINDOW_MS : DEFAULT_CALL_AGE_WINDOW_MS;
+      let answeredBefore =
+        request.request.ok &&
+        (request.request.kind === "outcome_query" ||
+          (isCallQuery(request)
+            ? knownCall !== undefined
+            : knownCall !== undefined && knownCall.summary.state !== "asked"));
+      let ageWindowMs = isCallQuery(request) ? OUTCOME_QUERY_AGE_WINDOW_MS : DEFAULT_CALL_AGE_WINDOW_MS;
       let stale =
-        Ve || ve(n, ageMs, Te)
+        answeredBefore || isWithinAgeWindow(request, ageMs, ageWindowMs)
           ? undefined
           : {
               ageMs,
-              windowMs: n.deadline_ms + Te,
+              windowMs: request.deadline_ms + ageWindowMs,
             };
-      let ke = isBelowFloorEnforced(A);
-      let untrustedRepositories = ke ? await Fe() : undefined;
-      let Oe = D.source?.localNameFor(n.name);
-      let [Je, Xe] = Oe !== undefined ? [Oe, kit.deps] : [n.name, stripServingDeps(kit.deps)];
-      let Ee = (signal) =>
+      let unattested = isBelowFloorEnforced(attestation);
+      let untrustedRepositories = unattested ? await resolveRepositoryTrust() : undefined;
+      let localName = kitRef.source?.localNameFor(request.name);
+      let [toolName, serveDeps] =
+        localName !== undefined ? [localName, kit_2.deps] : [request.name, stripServingDeps(kit_2.deps)];
+      let serveCall = (signal) =>
         serveRemoteToolCall(
-          Je,
+          toolName,
           {
-            ...n.input,
+            ...request.input,
           },
-          n.request,
+          request.request,
           {
-            sessionId: e.sessionId,
+            sessionId: options.sessionId,
             signal,
             workerEpoch,
           },
-          je(Xe),
+          withBackgroundShellPolicy(serveDeps),
           "session",
           {
             stale,
-            attestation: A,
-            unattested: ke,
+            attestation,
+            unattested,
             untrustedRepositories,
             modeStamp,
           },
         )
-          .then((se) => {
-            Re();
-            return checkReencodedResultSize(kit.description, n.tool_use_id, se);
+          .then((result) => {
+            startBackgroundWatch();
+            return checkReencodedResultSize(kit_2.description, request.tool_use_id, result);
           })
-          .catch((error) => internalErrorCallResult(kit.description, n.tool_use_id, error));
+          .catch((error) => internalErrorCallResult(kit_2.description, request.tool_use_id, error));
       return answerDeduper.answer(requestId, async () => {
         if (!isViolinFinetunerEnabled())
           return {
-            result: await Ee(signal),
+            result: await serveCall(signal),
           };
         let abortController = new AbortController();
-        K.add(abortController);
-        Re();
+        activeCallControllers.add(abortController);
+        startBackgroundWatch();
         try {
           return {
-            result: await Ee(AbortSignal.any([signal, abortController.signal])),
+            result: await serveCall(AbortSignal.any([signal, abortController.signal])),
           };
         } finally {
-          K.delete(abortController);
+          activeCallControllers.delete(abortController);
         }
       });
     },
-    servePlumbingCall: async (n, { signal, requestId, ageMs, attestationStatus }) => {
-      let plumbing = e.plumbing;
-      let re = plumbing !== undefined && plumbing.names().includes(n.name);
-      if (!me(n)) return;
-      let D = (A, X) => logPlumbingCallTelemetry(A, n, requestId, X);
-      if (!re || plumbing === undefined)
+    servePlumbingCall: async (request, { signal, requestId, ageMs, attestationStatus }) => {
+      let plumbing = options.plumbing;
+      let isPlumbingCall = plumbing !== undefined && plumbing.names().includes(request.name);
+      if (!isOurRequest(request)) return;
+      let logPlumbing = (fields, attestation) =>
+        logPlumbingCallTelemetry(fields, request, requestId, attestation);
+      if (!isPlumbingCall || plumbing === undefined)
         return answerDeduper.answer(requestId, async () => {
-          D(
+          logPlumbing(
             {
               outcome: "not_served",
             },
             safeJudgeSender(attestationStatus),
           );
           return {
-            result: errorTextResult(`${n.name}: ${NOT_SERVED_HERE_TEXT}`),
+            result: errorTextResult(`${request.name}: ${NOT_SERVED_HERE_TEXT}`),
           };
         });
-      if (!ve(n, ageMs, PLUMBING_CALL_AGE_WINDOW_MS)) {
+      if (!isWithinAgeWindow(request, ageMs, PLUMBING_CALL_AGE_WINDOW_MS)) {
         logForDebugging(
           ageMs === undefined
-            ? `[remote-tools] a ${n.name} plumbing call could not be dated against the service clock (no Date header on this stream) and was not served`
-            : `[remote-tools] a ${n.name} plumbing call delivered ${ageMs} ms after it was stored, past its ${n.deadline_ms} ms window, was not served`,
+            ? `[remote-tools] a ${request.name} plumbing call could not be dated against the service clock (no Date header on this stream) and was not served`
+            : `[remote-tools] a ${request.name} plumbing call delivered ${ageMs} ms after it was stored, past its ${request.deadline_ms} ms window, was not served`,
         );
-        D(
+        logPlumbing(
           {
             outcome: "stale",
             dated: ageMs !== undefined,
@@ -751,177 +787,186 @@ var createSessionToolServing = (e) => {
         );
         return;
       }
-      let O = attestationFor(attestationStatus);
-      if (O !== undefined && isBelowFloorEnforced(O))
+      let attestation = attestationFor(attestationStatus);
+      if (attestation !== undefined && isBelowFloorEnforced(attestation))
         return answerDeduper.answer(requestId, async () => {
-          D(
+          logPlumbing(
             {
               outcome: "held_back",
             },
-            O,
+            attestation,
           );
-          let text = `${n.name}: ${unattestedSenderMessage({
-            targetName: g?.kit.description.name ?? n.host,
-            status: O.status,
+          let text = `${request.name}: ${unattestedSenderMessage({
+            targetName: kit?.kit.description.name ?? request.host,
+            status: attestation.status,
             subtype: "remote_plumbing_call",
           })}`;
           return {
-            result: plumbing.heldBack(n.name, text) ?? errorTextResult(text),
+            result: plumbing.heldBack(request.name, text) ?? errorTextResult(text),
           };
         });
       return answerDeduper.answer(requestId, () =>
         Promise.resolve()
           .then(() => {
-            g?.kit.ensureSettingsHeld();
-            return plumbing.serve(n, signal);
+            kit?.kit.ensureSettingsHeld();
+            return plumbing.serve(request, signal);
           })
-          .then((A) => {
-            D(
+          .then((result) => {
+            logPlumbing(
               {
                 outcome: "served",
               },
-              O,
+              attestation,
             );
-            return A;
+            return result;
           })
           .catch((error) => {
-            logError(withTelemetryMessage(toError(error), `session serving: plumbing call ${n.name} threw`));
-            D(
+            logError(
+              withTelemetryMessage(toError(error), `session serving: plumbing call ${request.name} threw`),
+            );
+            logPlumbing(
               {
                 outcome: "threw",
               },
-              O,
+              attestation,
             );
             return {
-              result: errorTextResult(`${n.name}: could not be served (internal error)`),
+              result: errorTextResult(`${request.name}: could not be served (internal error)`),
             };
           }),
       );
     },
     answerProbe: () =>
-      g === undefined
+      kit === undefined
         ? undefined
         : {
             result: {
-              epoch: g.kit.deps.sessions.epoch,
+              epoch: kit.kit.deps.sessions.epoch,
             },
           },
-    servedTools: he,
-    onServedToolsChanged: (n) => signal.subscribe(n),
+    servedTools: describeServedTools,
+    onServedToolsChanged: (listener) => signal.subscribe(listener),
     reevaluate: () => {
-      if (R) return;
-      let n = f;
+      if (disposed) return;
+      let wasClosed = closed;
       try {
-        let i = o();
-        f = false;
-        let u = s;
-        w ||= i === "launched_from_home";
-        s = w && i === undefined ? "launched_from_home" : i;
-        if (s !== u) He(s, n ? "serving_check_failed" : (u ?? "none"));
-        h(i);
-        C(i);
-        if (!E) M(s);
-        else if (m().owner) {
-          if (s === "muted" && u !== "muted")
-            p(SERVING_MUTED_NOTICE_KEY, REMOTE_TOOLS_CONSENT_TEXT["serving_off.muted"]);
-          else if (u === "muted" && s === undefined)
-            p(SERVING_UNMUTED_NOTICE_KEY, REMOTE_TOOLS_CONSENT_TEXT["serving_on.unmuted"]);
+        let nextOffReason = readOffReason();
+        closed = false;
+        let previousOffReason = currentOffReason;
+        launchedFromHome ||= nextOffReason === "launched_from_home";
+        currentOffReason =
+          launchedFromHome && nextOffReason === undefined ? "launched_from_home" : nextOffReason;
+        if (currentOffReason !== previousOffReason)
+          logServingChange(
+            currentOffReason,
+            wasClosed ? "serving_check_failed" : (previousOffReason ?? "none"),
+          );
+        showProfileNotice(nextOffReason);
+        showMountNotice(nextOffReason);
+        if (!noticeShown) showOffNotice(currentOffReason);
+        else if (currentOwner().owner) {
+          if (currentOffReason === "muted" && previousOffReason !== "muted")
+            emitNotice(SERVING_MUTED_NOTICE_KEY, REMOTE_TOOLS_CONSENT_TEXT["serving_off.muted"]);
+          else if (previousOffReason === "muted" && currentOffReason === undefined)
+            emitNotice(SERVING_UNMUTED_NOTICE_KEY, REMOTE_TOOLS_CONSENT_TEXT["serving_on.unmuted"]);
           else if (
-            (u === "muted" ||
-              u === "profile_dirs_unread" ||
-              u === "profile_dirs_unreadable" ||
-              u === "mount_table_unreadable") &&
-            isPersonFixableOffReason(s)
+            (previousOffReason === "muted" ||
+              previousOffReason === "profile_dirs_unread" ||
+              previousOffReason === "profile_dirs_unreadable" ||
+              previousOffReason === "mount_table_unreadable") &&
+            isPersonFixableOffReason(currentOffReason)
           )
-            p(SERVED_BASH_LAUNCHED_FROM_HOME, SERVED_BASH_FROM_HOME_NOTICE);
+            emitNotice(SERVED_BASH_LAUNCHED_FROM_HOME, SERVED_BASH_FROM_HOME_NOTICE);
         }
-        if (s !== undefined || !m().owner) {
-          G(s !== undefined ? "serving_off" : "serving_ended");
-          Z();
+        if (currentOffReason !== undefined || !currentOwner().owner) {
+          stopBackground(currentOffReason !== undefined ? "serving_off" : "serving_ended");
+          withdrawSessionAsks();
         }
-        if (W() !== Y) H();
-        if (n)
-          ee(() =>
+        if (snapshotServedTools() !== lastServedSnapshot) emitServedToolsChanged();
+        if (wasClosed)
+          safely(() =>
             logEvent("tengu_remote_tool_serving", {
               event: lit("serving_check_recovered"),
             }),
           );
       } catch (error) {
         logError(toError(error));
-        $e(n);
+        onCheckFailed(wasClosed);
       }
     },
-    heldServedCall: (n) =>
-      R || g === undefined || S() || !m().owner ? NOT_HELD_LEASE : g.kit.heldServedCall(n),
-    noteUnlistedKind: (n) => {
-      if (R || g === undefined || !m().owner) return;
-      g.kit.deps.callLog?.note({
+    heldServedCall: (callId) =>
+      disposed || kit === undefined || isOff() || !currentOwner().owner
+        ? NOT_HELD_LEASE
+        : kit.kit.heldServedCall(callId),
+    noteUnlistedKind: (kindInfo) => {
+      if (disposed || kit === undefined || !currentOwner().owner) return;
+      kit.kit.deps.callLog?.note({
         t: "refused_request",
         caller: callerKey({
-          sessionId: e.sessionId,
+          sessionId: options.sessionId,
         }),
         what: "kind",
-        length: n.length,
-        name_hash: n.hash,
-        variant_of_listed: n.variantOfListed,
+        length: kindInfo.length,
+        name_hash: kindInfo.hash,
+        variant_of_listed: kindInfo.variantOfListed,
       });
     },
-    announcesPassthrough: () => V,
+    announcesPassthrough: () => adoptedFromHost,
     dispose: () => {
-      if (R) return;
-      G("serving_ended");
-      R = true;
-      clearInterval(j);
-      g?.release();
-      H();
+      if (disposed) return;
+      stopBackground("serving_ended");
+      disposed = true;
+      clearInterval(watchTimer);
+      kit?.release();
+      emitServedToolsChanged();
       signal.clear();
     },
-    workerGone: Se,
-    hasBackgroundWork: ne,
+    workerGone: recheckWorkerBound,
+    hasBackgroundWork: hasRunningBackground,
   };
-  return we;
+  return serving;
 };
-var buildAnnouncePayload = (e, instanceId, r) => ({
+var buildAnnouncePayload = (servedTools, instanceId, workerEpoch) => ({
   instance_id: instanceId,
-  ...(r !== undefined && {
-    worker_epoch: r,
+  ...(workerEpoch !== undefined && {
+    worker_epoch: workerEpoch,
   }),
-  host: e.host,
-  tools: e.tools,
-  passthrough: e.passthrough ?? [],
-  plumbing: e.plumbing,
+  host: servedTools.host,
+  tools: servedTools.tools,
+  passthrough: servedTools.passthrough ?? [],
+  plumbing: servedTools.plumbing,
 });
 //@ chunk-012rhzq5.js:26945-27016 placement
-function stripServingDeps({ servedMcpTools, servedMcpWireArguments, ...r }) {
-  return r;
+function stripServingDeps({ servedMcpTools, servedMcpWireArguments, ...rest }) {
+  return rest;
 }
 //@ chunk-012rhzq5.js:27016-27186 placement
 function createAnswerDeduper() {
-  let e = new Map();
+  let inFlight = new Map();
   return {
-    answer: (o, r) => {
-      if (o === undefined) return r();
-      let s = e.get(o);
-      if (s !== undefined) return s;
-      let f = r().finally(() => e.delete(o));
-      e.set(o, f);
-      return f;
+    answer: (key, run) => {
+      if (key === undefined) return run();
+      let existing = inFlight.get(key);
+      if (existing !== undefined) return existing;
+      let promise = run().finally(() => inFlight.delete(key));
+      inFlight.set(key, promise);
+      return promise;
     },
   };
 }
 //@ chunk-012rhzq5.js:27186-27250 placement
-async function checkReencodedResultSize(description, callId, r) {
+async function checkReencodedResultSize(target, callId, result) {
   return checkServedResultSize(
-    description,
+    target,
     callId,
-    await reencodeServedImage(withCallIdInEnvelope(callId, r), servedAnswerLimitBytes()),
+    await reencodeServedImage(withCallIdInEnvelope(callId, result), servedAnswerLimitBytes()),
   );
 }
 //@ chunk-012rhzq5.js:27250-27434 placement
-function withCallIdInEnvelope(callId, o) {
-  let callResult = readCallResult(o);
+function withCallIdInEnvelope(callId, result) {
+  let callResult = readCallResult(result);
   if (callResult.envelope.status !== "present" || callResult.envelope.envelope.call_id !== undefined)
-    return o;
+    return result;
   return buildRemoteToolCallResult({
     envelope: {
       ...callResult.envelope.envelope,
@@ -931,34 +976,34 @@ function withCallIdInEnvelope(callId, o) {
   });
 }
 //@ chunk-012rhzq5.js:27434-28148 placement
-function checkServedResultSize(e, callId, r) {
-  let s = byteLengthOf(r);
-  let f = servedAnswerLimitBytes();
-  if (s <= f) return r;
-  let callResult = readCallResult(r);
+function checkServedResultSize(target, callId, result) {
+  let size = byteLengthOf(result);
+  let limit = servedAnswerLimitBytes();
+  if (size <= limit) return result;
+  let callResult = readCallResult(result);
   let envelope = callResult.envelope.status === "present" ? callResult.envelope.envelope : undefined;
-  let m = `(${formatMegabytes(s)}) is larger than this session can carry back (limit ${formatMegabytes(f)}), so it was not returned.`;
-  let p =
+  let sizeText = `(${formatMegabytes(size)}) is larger than this session can carry back (limit ${formatMegabytes(limit)}), so it was not returned.`;
+  let message =
     envelope?.outcome === "completed"
-      ? `The command ran to completion on ${e.name}, but its result ${m} Its effects stand \u2014 do not re-run it to see the output; run a narrower command instead (head or tail, a filter, or write to a file and read part of it).`
-      : `${e.name} answered this call, but the answer ${m}`;
+      ? `The command ran to completion on ${target.name}, but its result ${sizeText} Its effects stand \u2014 do not re-run it to see the output; run a narrower command instead (head or tail, a filter, or write to a file and read part of it).`
+      : `${target.name} answered this call, but the answer ${sizeText}`;
   return buildRemoteToolCallResult({
     envelope: {
       v: REMOTE_TOOL_PROTOCOL_VERSION,
       outcome: "failed",
       call_id: callId,
       target: {
-        name: e.name,
-        working_dir: e.working_dir,
+        name: target.name,
+        working_dir: target.working_dir,
       },
       code: "tool_error",
-      message: p,
+      message,
       ...(envelope !== undefined && replayedFields(envelope)),
     },
     content: [
       {
         type: "text",
-        text: p,
+        text: message,
       },
     ],
   });
@@ -976,8 +1021,8 @@ function errorTextResult(text) {
   };
 }
 //@ chunk-012rhzq5.js:28213-28265 placement
-function formatMegabytes(e) {
-  return `${(e / 1048576).toFixed(1)} MB`;
+function formatMegabytes(bytes) {
+  return `${(bytes / 1048576).toFixed(1)} MB`;
 }
 //@ chunk-012rhzq5.js:28265-28611 placement
 /**
@@ -988,7 +1033,7 @@ function internalErrorCallResult(description, toolUseId, error) {
     level: "error",
   });
   logError(toError(error));
-  let s = `${description.name} could not serve this call (internal error); nothing is known to have run.`;
+  let message = `${description.name} could not serve this call (internal error); nothing is known to have run.`;
   return buildRemoteToolCallResult({
     envelope: {
       v: REMOTE_TOOL_PROTOCOL_VERSION,
@@ -999,12 +1044,12 @@ function internalErrorCallResult(description, toolUseId, error) {
         working_dir: description.working_dir,
       },
       code: "internal_error",
-      message: s,
+      message,
     },
     content: [
       {
         type: "text",
-        text: s,
+        text: message,
       },
     ],
   });
@@ -1020,9 +1065,9 @@ function remoteToolServingOffReason({
   signals,
   stillBound,
 }) {
-  let p = deviceBindingOffReason() ?? (isViolinWoodEnabledCached() ? undefined : "flag_off");
-  let E = p === undefined && cloudClient && !isViolinWillowEnabledCached();
-  if (E)
+  let bindingOff = deviceBindingOffReason() ?? (isViolinWoodEnabledCached() ? undefined : "flag_off");
+  let cloudOff = bindingOff === undefined && cloudClient && !isViolinWillowEnabledCached();
+  if (cloudOff)
     logEvent("tengu_remote_tool_serving", {
       event: lit("gate_off"),
       served_tool_count: 0,
@@ -1031,32 +1076,32 @@ function remoteToolServingOffReason({
       own_flags_loaded: hasFreshGrowthBookFeatures(),
       transport: lit("session"),
     });
-  if (p !== undefined || E) {
+  if (bindingOff !== undefined || cloudOff) {
     logForDebugging(
-      `[servedTools] not served over the session channel: ${p ?? `flag_off (${VIOLIN_WILLOW_FLAG})`}`,
+      `[servedTools] not served over the session channel: ${bindingOff ?? `flag_off (${VIOLIN_WILLOW_FLAG})`}`,
     );
     return;
   }
-  let M = watchServingRevocation(cloudClient, signals);
-  let y = !cloudClient;
-  let h;
-  let x = () => {
-    if (!y && isCloudClientToolServingAnsweredOn()) {
-      y = true;
-      if (h !== undefined)
+  let watchRevocation = watchServingRevocation(cloudClient, signals);
+  let answered = !cloudClient;
+  let heldSinceMs;
+  let markAnswered = () => {
+    if (!answered && isCloudClientToolServingAnsweredOn()) {
+      answered = true;
+      if (heldSinceMs !== undefined)
         logEvent("tengu_remote_tool_serving", {
           event: lit("own_flag_answered_on"),
-          held_ms: Math.round(performance.now() - h),
+          held_ms: Math.round(performance.now() - heldSinceMs),
           transport: lit("session"),
         });
     }
-    return y;
+    return answered;
   };
-  let C;
-  let L = (k, owner) => {
+  let serving;
+  let buildSessionToolServing = (options, owner) => {
     let sessionToolServing = createSessionToolServing({
-      ...k,
-      owner: ownerUnlessServingOff(owner, cloudClient, x),
+      ...options,
+      owner: ownerUnlessServingOff(owner, cloudClient, markAnswered),
       ...(deviceBridge && {
         serving: deviceBridge.serving,
       }),
@@ -1070,9 +1115,14 @@ function remoteToolServingOffReason({
         stillBound,
       }),
     });
-    C = sessionToolServing;
-    if (!x() && h === undefined && servingOffReasonNow(cloudClient) === undefined && owner().owner) {
-      h = performance.now();
+    serving = sessionToolServing;
+    if (
+      !markAnswered() &&
+      heldSinceMs === undefined &&
+      servingOffReasonNow(cloudClient) === undefined &&
+      owner().owner
+    ) {
+      heldSinceMs = performance.now();
       logForDebugging(
         "[servedTools] held: tool serving's flag is saved on, and the flag service has not answered this process yet",
       );
@@ -1082,20 +1132,20 @@ function remoteToolServingOffReason({
         transport: lit("session"),
       });
     }
-    let g = M((R) => {
+    let stopWatching = watchRevocation((revocation) => {
       let flag = fromEnumOpt(
         getToolServingFlagAnsweredOff({
           cloudClient,
         }),
       );
-      if (h !== undefined && !y && R === "flag_off")
+      if (heldSinceMs !== undefined && !answered && revocation === "flag_off")
         logEvent("tengu_remote_tool_serving", {
           event: lit("own_flag_answered_off"),
           flag,
-          held_ms: Math.round(performance.now() - h),
+          held_ms: Math.round(performance.now() - heldSinceMs),
           transport: lit("session"),
         });
-      else if (cloudClient && y && R === "flag_off" && owner().owner)
+      else if (cloudClient && answered && revocation === "flag_off" && owner().owner)
         logEvent("tengu_remote_tool_serving", {
           event: lit("own_flag_turned_off"),
           flag,
@@ -1103,14 +1153,16 @@ function remoteToolServingOffReason({
         });
       sessionToolServing.reevaluate();
     });
-    let V = (signals?.onMuteRecheck ?? onServingMuteRecheck)(() => sessionToolServing.reevaluate());
-    let F = onWindowsProfileDirsSettled(() => sessionToolServing.reevaluate());
+    let stopMuteRecheck = (signals?.onMuteRecheck ?? onServingMuteRecheck)(() =>
+      sessionToolServing.reevaluate(),
+    );
+    let stopProfileDirsWait = onWindowsProfileDirsSettled(() => sessionToolServing.reevaluate());
     return {
       ...sessionToolServing,
       dispose: () => {
-        F();
-        V();
-        g();
+        stopProfileDirsWait();
+        stopMuteRecheck();
+        stopWatching();
         sessionToolServing.dispose();
       },
     };
@@ -1118,35 +1170,37 @@ function remoteToolServingOffReason({
   return {
     createServingContext:
       owner instanceof Promise
-        ? async (k) => {
+        ? async (resolvedOptions) => {
             await primeWindowsProfileDirs();
             await primeWindowsPlatform();
-            return L(k, await owner);
+            return buildSessionToolServing(resolvedOptions, await owner);
           }
-        : (k) => {
-            let I =
+        : (options) => {
+            let pendingOwner =
               pendingWindowsProfileDirsRead() ??
               (isWindowsOrPowerShellHost() ? undefined : primeWindowsPlatform());
-            return I === undefined
-              ? L(k, owner)
-              : I.then(() => primeWindowsPlatform()).then(() => L(k, owner));
+            return pendingOwner === undefined
+              ? buildSessionToolServing(options, owner)
+              : pendingOwner
+                  .then(() => primeWindowsPlatform())
+                  .then(() => buildSessionToolServing(options, owner));
           },
     buildAnnounce: buildAnnouncePayload,
     ...(deviceBridge && {
-      onAnnounceOutcome: (k) =>
+      onAnnounceOutcome: (outcome) =>
         deviceBridge.announceSettled(
-          k.kind === "announced" && C?.announcesPassthrough?.() !== true
+          outcome.kind === "announced" && serving?.announcesPassthrough?.() !== true
             ? {
-                kind: k.kind,
-                status: k.status,
+                kind: outcome.kind,
+                status: outcome.status,
               }
-            : k,
+            : outcome,
         ),
     }),
     ...(onNotice && {
       onNotice,
     }),
-    onRevoked: M,
+    onRevoked: watchRevocation,
   };
 }
 //@ chunk-012rhzq5.js:30566-30622 placement
@@ -1173,39 +1227,40 @@ function servingOffReasonNow(cloudClient) {
  */
 function watchServingRevocation(
   cloudClient,
-  { onEgressChange: o = onComplianceTaintsChanged, onGateChange: r = onGrowthBookRefresh } = {},
+  { onEgressChange = onComplianceTaintsChanged, onGateChange = onGrowthBookRefresh } = {},
 ) {
-  return (s) => {
-    let f = false;
-    let S = [];
-    let w = () => {
-      f = true;
-      S.splice(0).forEach((p) => p());
+  return (onRevoked) => {
+    let revoked = false;
+    let listeners = [];
+    let fire = () => {
+      revoked = true;
+      listeners.splice(0).forEach((listener) => listener());
     };
-    let m = () => {
-      let p = servingOffReasonNow(cloudClient);
-      if (f || p === undefined) return;
-      w();
+    let check = () => {
+      let reason = servingOffReasonNow(cloudClient);
+      if (revoked || reason === undefined) return;
+      fire();
       try {
-        s(p);
+        onRevoked(reason);
       } catch (error) {
         logForDebugging(`[servedTools] a revocation listener threw: ${errorMessage(error)}`, {
           level: "error",
         });
       }
     };
-    S.push(o(m));
-    S.push(r(m));
-    m();
-    return w;
+    listeners.push(onEgressChange(check));
+    listeners.push(onGateChange(check));
+    check();
+    return fire;
   };
 }
 //@ chunk-012rhzq5.js:31007-31071 placement
-function ownerUnlessServingOff(e, cloudClient, r) {
+function ownerUnlessServingOff(owner, cloudClient, stillBound) {
   return () =>
-    servingOffReasonNow(cloudClient) === undefined && r()
-      ? e()
+    servingOffReasonNow(cloudClient) === undefined && stillBound()
+      ? owner()
       : {
           owner: false,
         };
 }
+export { remoteToolServingOffReason, deviceBindingOffReason };

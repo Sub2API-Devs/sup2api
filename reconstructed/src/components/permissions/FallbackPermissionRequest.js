@@ -8,11 +8,19 @@
  * pieces: chunk-0e8j1zzj.js (5), chunk-qgcqa405.js (2)
  * attribution: placement 4, layout 2, fingerprint 1
  */
+import {
+  init_react_production,
+  useSyncExternalStore,
+  useRef,
+  useState,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
+import { onAttacherCapsChange, getOriginalCwd } from "../../bootstrap/state.js";
+import { supportsHyperlinks } from "../../ink/supports-hyperlinks.js";
 import { findSafetyCheckReason } from "../../utils/permissions/permissions.js";
 import { isRemoteOrPluginAgent } from "../../utils/agentContext.js";
 import { isRuleableToolName, autoModeRow } from "./consentRows.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
-import { R, y, P, init_react_production, yt } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { measureElement } from "../../ink/hooks/useTerminalHooks.js";
@@ -42,7 +50,6 @@ import {
   ToolInputEntries,
 } from "./ToolInputEntries.js";
 import { useSettingsErrors, WORKFLOW_HINT_TEXT } from "../../hooks/notifs/useSettingsErrors.js";
-import { getOriginalCwd, onAttacherCapsChange } from "../../bootstrap/state.js";
 import { useRefusableAnswer } from "../../hooks/useRefusableAnswer.js";
 import { useUnattendedNotice } from "./UnattendedAutoBlockNotice.js";
 import { wrapToMaxLines } from "../../utils/format.js";
@@ -62,27 +69,37 @@ import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { Blockquote } from "../Blockquote.js";
 import { MAX_EXPLANATION_LINES, PermissionRuleExplanation } from "./PermissionRuleExplanation.js";
 import { useDialogKeybindings } from "../../keybindings/dialogKeyHints.js";
-import { supportsHyperlinks } from "../../ink/supports-hyperlinks.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-qgcqa405.js:301-305 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-qgcqa405.js:301", () => {
+  init_react_production();
+});
+//@ chunk-qgcqa405.js:305-337 placement
+/**
+ * 函数 useFallbackPermission（订阅兜底权限请求）；位于「通用工具权限请求（无专用组件的工具/MCP 工具）：工具名 + 参数表格 + 允许/不再询问/拒绝选项」模块。
+ */
+function useFallbackPermission() {
+  return useSyncExternalStore(onAttacherCapsChange, supportsHyperlinks);
+}
 //@ chunk-0e8j1zzj.js:44119-44356 placement
 /**
  * 是否不能提供"总是允许"
  */
-function isAlwaysAllowUnavailable(o) {
-  let decisionReason = o.permissionResult.decisionReason;
+function isAlwaysAllowUnavailable(props) {
+  let decisionReason = props.permissionResult.decisionReason;
   return (
-    findSafetyCheckReason(decisionReason, (c) => !c.classifierApprovable) !== undefined ||
-    o.isAskCappedByOrg ||
-    o.permissionResult.inPlaceOfClassifier === true ||
-    o.permissionResult.oneTimeAnswersOnly === true ||
-    isRemoteOrPluginAgent(o.requestSource)
+    findSafetyCheckReason(decisionReason, (check) => !check.classifierApprovable) !== undefined ||
+    props.isAskCappedByOrg ||
+    props.permissionResult.inPlaceOfClassifier === true ||
+    props.permissionResult.oneTimeAnswersOnly === true ||
+    isRemoteOrPluginAgent(props.requestSource)
   );
 }
 //@ chunk-0e8j1zzj.js:44356-44421 placement
-function shouldOfferAlwaysAllow(payload) {
-  return (
-    payload.showAlwaysAllow && !isAlwaysAllowUnavailable(payload) && isRuleableToolName(payload.toolName)
-  );
+function shouldOfferAlwaysAllow(props) {
+  return props.showAlwaysAllow && !isAlwaysAllowUnavailable(props) && isRuleableToolName(props.toolName);
 }
 //@ chunk-0e8j1zzj.js:44421-44448 layout
 var FALLBACK_MIN_ROWS = 2;
@@ -90,9 +107,9 @@ var FALLBACK_MAX_ROWS = 16;
 var FALLBACK_ROWS_RESERVED = 24;
 var FALLBACK_MIN_COLUMNS = 80;
 //@ chunk-0e8j1zzj.js:44448-44528 layout
-function fallbackDialogRows(o, t) {
-  return o && t.columns >= FALLBACK_MIN_COLUMNS
-    ? Math.max(FALLBACK_MIN_ROWS, Math.min(FALLBACK_MAX_ROWS, t.rows - FALLBACK_ROWS_RESERVED))
+function fallbackDialogRows(isCompact, terminalSize) {
+  return isCompact && terminalSize.columns >= FALLBACK_MIN_COLUMNS
+    ? Math.max(FALLBACK_MIN_ROWS, Math.min(FALLBACK_MAX_ROWS, terminalSize.rows - FALLBACK_ROWS_RESERVED))
     : FALLBACK_MIN_ROWS;
 }
 //@ chunk-0e8j1zzj.js:44528-54584 fingerprint = FallbackPermissionRequest (0.322)
@@ -100,92 +117,92 @@ function fallbackDialogRows(o, t) {
  * 通用权限请求：渲染工具的 renderToolUseMessage 摘要（失败时退回参数表格），显示规则解释；选项允许一次/不再询问（工具级规则）/启用 auto/拒绝并反馈。
  */
 function FallbackPermissionRequest(props) {
-  let $ = w(164);
+  let $ = useMemoCache(164);
   let { payload, answer, wouldTakeAnswer } = props;
-  let m = R(null);
+  let containerRef = useRef(null);
   let terminalSize = useTerminalSize();
-  let h;
+  let defaultWidth;
   if ($[0] !== terminalSize.columns) {
-    h = () => Math.max(20, Math.min(40, terminalSize.columns - 6));
+    defaultWidth = () => Math.max(20, Math.min(40, terminalSize.columns - 6));
     $[0] = terminalSize.columns;
-    $[1] = h;
-  } else h = $[1];
-  let [k, f] = y(h);
-  let g;
+    $[1] = defaultWidth;
+  } else defaultWidth = $[1];
+  let [width, setWidth] = useState(defaultWidth);
+  let measureEffect;
   if ($[2] === MEMO_CACHE_SENTINEL) {
-    g = () => {
-      if (m.current) {
-        let { width } = measureElement(m.current);
-        if (width > 0) f(Math.max(20, width - 2));
+    measureEffect = () => {
+      if (containerRef.current) {
+        let { width } = measureElement(containerRef.current);
+        if (width > 0) setWidth(Math.max(20, width - 2));
       }
     };
-    $[2] = g;
-  } else g = $[2];
-  let N;
+    $[2] = measureEffect;
+  } else measureEffect = $[2];
+  let measureDeps;
   if ($[3] !== terminalSize.columns || $[4] !== terminalSize.rows) {
-    N = [terminalSize.columns, terminalSize.rows];
+    measureDeps = [terminalSize.columns, terminalSize.rows];
     $[3] = terminalSize.columns;
     $[4] = terminalSize.rows;
-    $[5] = N;
-  } else N = $[5];
-  P(g, N);
-  let min = Math.min(k, Math.max(20, terminalSize.columns - 6));
-  let A;
+    $[5] = measureDeps;
+  } else measureDeps = $[5];
+  useEffect(measureEffect, measureDeps);
+  let min = Math.min(width, Math.max(20, terminalSize.columns - 6));
+  let parameterRows;
   if ($[6] !== min || $[7] !== payload.input || $[8] !== payload.isMcp || $[9] !== payload.paramFormatHints) {
-    A = payload.isMcp ? buildParameterRows(payload.input, payload.paramFormatHints, min) : null;
+    parameterRows = payload.isMcp ? buildParameterRows(payload.input, payload.paramFormatHints, min) : null;
     $[6] = min;
     $[7] = payload.input;
     $[8] = payload.isMcp;
     $[9] = payload.paramFormatHints;
-    $[10] = A;
-  } else A = $[10];
-  let T = A;
-  let [v] = useTheme();
-  let I;
+    $[10] = parameterRows;
+  } else parameterRows = $[10];
+  let parameterRows_2 = parameterRows;
+  let [theme] = useTheme();
+  let renderOutcome;
   b: {
     if (payload.renderedToolUseMessage != null) {
-      let L;
+      let renderedResult;
       if ($[11] !== payload.renderedToolUseMessage) {
-        L = {
+        renderedResult = {
           node: payload.renderedToolUseMessage,
           threw: false,
         };
         $[11] = payload.renderedToolUseMessage;
-        $[12] = L;
-      } else L = $[12];
-      I = L;
+        $[12] = renderedResult;
+      } else renderedResult = $[12];
+      renderOutcome = renderedResult;
       break b;
     }
     try {
       let node;
-      if ($[13] !== payload.input || $[14] !== payload.toolName || $[15] !== v) {
+      if ($[13] !== payload.input || $[14] !== payload.toolName || $[15] !== theme) {
         node = renderToolUseByName(payload.toolName, payload.input, {
-          theme: v,
+          theme,
           verbose: true,
         });
         $[13] = payload.input;
         $[14] = payload.toolName;
-        $[15] = v;
+        $[15] = theme;
         $[16] = node;
       } else node = $[16];
-      let W;
+      let renderResult;
       if ($[17] !== node) {
-        W = {
+        renderResult = {
           node,
           threw: false,
         };
         $[17] = node;
-        $[18] = W;
-      } else W = $[18];
-      I = W;
+        $[18] = renderResult;
+      } else renderResult = $[18];
+      renderOutcome = renderResult;
     } catch (error) {
-      let le = error;
-      let E;
+      let caughtError = error;
+      let failedResult;
       if ($[19] !== payload.toolName) {
-        E =
+        failedResult =
           (logError(
             new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `Error rendering tool use line for ${payload.toolName}: ${le}`,
+              `Error rendering tool use line for ${payload.toolName}: ${caughtError}`,
               "Error rendering tool use line (permission dialog table fallback)",
             ),
           ),
@@ -194,138 +211,144 @@ function FallbackPermissionRequest(props) {
             threw: true,
           });
         $[19] = payload.toolName;
-        $[20] = E;
-      } else E = $[20];
-      I = E;
+        $[20] = failedResult;
+      } else failedResult = $[20];
+      renderOutcome = failedResult;
     }
   }
-  let { node, threw } = I;
-  let L;
+  let { node, threw } = renderOutcome;
+  let serializedNode_2;
   if ($[21] !== node) {
-    L = typeof node === "string" ? serializeApprovalPayload(node) : null;
+    serializedNode_2 = typeof node === "string" ? serializeApprovalPayload(node) : null;
     $[21] = node;
-    $[22] = L;
-  } else L = $[22];
-  let Y = L;
-  let E;
-  if ($[23] !== T || $[24] !== Y?.kind || $[25] !== payload.toolUseRenderFailed || $[26] !== threw) {
-    E =
-      (T?.some(isUnrenderableEntry) ?? false) ||
+    $[22] = serializedNode_2;
+  } else serializedNode_2 = $[22];
+  let serializedNode = serializedNode_2;
+  let isUnrenderable;
+  if (
+    $[23] !== parameterRows_2 ||
+    $[24] !== serializedNode?.kind ||
+    $[25] !== payload.toolUseRenderFailed ||
+    $[26] !== threw
+  ) {
+    isUnrenderable =
+      (parameterRows_2?.some(isUnrenderableEntry) ?? false) ||
       payload.toolUseRenderFailed === true ||
       threw ||
-      Y?.kind === "withheld";
-    $[23] = T;
-    $[24] = Y?.kind;
+      serializedNode?.kind === "withheld";
+    $[23] = parameterRows_2;
+    $[24] = serializedNode?.kind;
     $[25] = payload.toolUseRenderFailed;
     $[26] = threw;
-    $[27] = E;
-  } else E = $[27];
-  let z = E;
-  let W;
+    $[27] = isUnrenderable;
+  } else isUnrenderable = $[27];
+  let isUnrenderable_2 = isUnrenderable;
+  let canAlwaysAllow;
   if ($[28] !== payload) {
-    W = shouldOfferAlwaysAllow(payload);
+    canAlwaysAllow = shouldOfferAlwaysAllow(payload);
     $[28] = payload;
-    $[29] = W;
-  } else W = $[29];
-  let F = W;
+    $[29] = canAlwaysAllow;
+  } else canAlwaysAllow = $[29];
+  let canAlwaysAllow_2 = canAlwaysAllow;
   let { offered, enableAutoMode } = useSettingsErrors(payload.requestSource);
-  let de;
+  let cwd;
   if ($[30] === MEMO_CACHE_SENTINEL) {
-    de = getOriginalCwd();
-    $[30] = de;
-  } else de = $[30];
-  let cwd = de;
-  let ue;
-  if ($[31] !== F || $[32] !== min || $[33] !== z || $[34] !== payload) {
-    ue =
-      F && !z
+    cwd = getOriginalCwd();
+    $[30] = cwd;
+  } else cwd = $[30];
+  let cwd_2 = cwd;
+  let dontAskRule;
+  if ($[31] !== canAlwaysAllow_2 || $[32] !== min || $[33] !== isUnrenderable_2 || $[34] !== payload) {
+    dontAskRule =
+      canAlwaysAllow_2 && !isUnrenderable_2
         ? buildToolDontAskAgainRule(payload, {
-            cwd,
+            cwd: cwd_2,
             maxLabelWidth: min - 8,
           })
         : null;
-    $[31] = F;
+    $[31] = canAlwaysAllow_2;
     $[32] = min;
-    $[33] = z;
+    $[33] = isUnrenderable_2;
     $[34] = payload;
-    $[35] = ue;
-  } else ue = $[35];
-  let K = ue;
-  let Ne;
+    $[35] = dontAskRule;
+  } else dontAskRule = $[35];
+  let dontAskRule_2 = dontAskRule;
+  let alwaysAllowUnavailable;
   if ($[36] !== payload) {
-    Ne = isAlwaysAllowUnavailable(payload);
+    alwaysAllowUnavailable = isAlwaysAllowUnavailable(payload);
     $[36] = payload;
-    $[37] = Ne;
-  } else Ne = $[37];
-  let $e = Ne;
-  let We;
-  if ($[38] !== offered || $[39] !== z || $[40] !== $e) {
-    We = offered && !z && !$e ? autoModeRow("workflow") : null;
+    $[37] = alwaysAllowUnavailable;
+  } else alwaysAllowUnavailable = $[37];
+  let alwaysAllowUnavailable_2 = alwaysAllowUnavailable;
+  let autoModeRowValue;
+  if ($[38] !== offered || $[39] !== isUnrenderable_2 || $[40] !== alwaysAllowUnavailable_2) {
+    autoModeRowValue =
+      offered && !isUnrenderable_2 && !alwaysAllowUnavailable_2 ? autoModeRow("workflow") : null;
     $[38] = offered;
-    $[39] = z;
-    $[40] = $e;
-    $[41] = We;
-  } else We = $[41];
-  let ae = We;
-  let J = payload.permissionResult.defaultToNo === true;
-  let Oe;
+    $[39] = isUnrenderable_2;
+    $[40] = alwaysAllowUnavailable_2;
+    $[41] = autoModeRowValue;
+  } else autoModeRowValue = $[41];
+  let autoModeOption = autoModeRowValue;
+  let defaultToNo = payload.permissionResult.defaultToNo === true;
+  let onAnswer;
   if (
-    $[42] !== K ||
+    $[42] !== dontAskRule_2 ||
     $[43] !== answer ||
     $[44] !== enableAutoMode ||
     $[45] !== payload ||
     $[46] !== wouldTakeAnswer
   ) {
-    Oe = (Ye) => {
-      let { value: He, feedback } = Ye;
+    onAnswer = (choice) => {
+      let { value, feedback } = choice;
       if (!wouldTakeAnswer()) {
         return false;
       }
-      if (He === "yes-enable-auto-mode") enableAutoMode();
-      return answer(fallbackChoiceToResult(He, payload, K, feedback));
+      if (value === "yes-enable-auto-mode") enableAutoMode();
+      return answer(fallbackChoiceToResult(value, payload, dontAskRule_2, feedback));
     };
-    $[42] = K;
+    $[42] = dontAskRule_2;
     $[43] = answer;
     $[44] = enableAutoMode;
     $[45] = payload;
     $[46] = wouldTakeAnswer;
-    $[47] = Oe;
-  } else Oe = $[47];
-  let refusableAnswer = useRefusableAnswer(Oe);
+    $[47] = onAnswer;
+  } else onAnswer = $[47];
+  let refusableAnswer = useRefusableAnswer(onAnswer);
   let answer_2 = refusableAnswer.answer;
-  let Ye;
+  let onSelect;
   if ($[48] !== answer_2) {
-    Ye = (value, feedback) =>
+    onSelect = (value, feedback) =>
       answer_2({
         value,
         feedback,
       });
     $[48] = answer_2;
-    $[49] = Ye;
-  } else Ye = $[49];
-  let onSelect = Ye;
+    $[49] = onSelect;
+  } else onSelect = $[49];
+  let onSelect_2 = onSelect;
   let defaultFocusValue =
     refusableAnswer.refused === null
-      ? J
+      ? defaultToNo
         ? "no"
         : undefined
-      : refusableAnswer.refused.value === "yes" && !J
+      : refusableAnswer.refused.value === "yes" && !defaultToNo
         ? "yes"
         : "no";
-  let bt;
+  let onCancel;
   if ($[50] !== answer) {
-    bt = () =>
+    onCancel = () =>
       answer({
         behavior: "cancelled",
       });
     $[50] = answer;
-    $[51] = bt;
-  } else bt = $[51];
-  let onCancel = bt;
+    $[51] = onCancel;
+  } else onCancel = $[51];
+  let onCancel_2 = onCancel;
   const description = typeof payload.description === "string" ? payload.description : "";
-  let kt;
+  let descriptionText;
   if ($[52] !== description) {
-    kt = description
+    descriptionText = description
       .split(
         `
 `,
@@ -337,287 +360,287 @@ function FallbackPermissionRequest(props) {
       )
       .trim();
     $[52] = description;
-    $[53] = kt;
-  } else kt = $[53];
-  let Ie = kt;
-  let Ke;
+    $[53] = descriptionText;
+  } else descriptionText = $[53];
+  let descriptionText_2 = descriptionText;
+  let renderedContent;
   Tn: {
-    if (Y === null) {
-      Ke = node;
+    if (serializedNode === null) {
+      renderedContent = node;
       break Tn;
     }
-    if (Y.kind === "withheld") {
-      Ke = Y.marker;
+    if (serializedNode.kind === "withheld") {
+      renderedContent = serializedNode.marker;
       break Tn;
     }
-    let Re;
-    if ($[54] !== Y.text) {
-      Re = replaceLineBreaks(Y.text).replace(/\s+/g, " ").trim();
-      $[54] = Y.text;
-      $[55] = Re;
-    } else Re = $[55];
-    Ke = Re;
+    let collapsedText;
+    if ($[54] !== serializedNode.text) {
+      collapsedText = replaceLineBreaks(serializedNode.text).replace(/\s+/g, " ").trim();
+      $[54] = serializedNode.text;
+      $[55] = collapsedText;
+    } else collapsedText = $[55];
+    renderedContent = collapsedText;
   }
-  let ye = Ke;
-  let Xe = payload.isMcp ? Math.max(10, min - 2) : min;
+  let renderedContentStable = renderedContent;
+  let contentColumns = payload.isMcp ? Math.max(10, min - 2) : min;
   let unattendedNotice = useUnattendedNotice();
-  const Re = payload.roomyDescription === true;
+  const roomy = payload.roomyDescription === true;
   const rows = terminalSize.rows - unattendedNotice;
-  let jo;
-  if ($[56] !== Re || $[57] !== rows || $[58] !== terminalSize.columns) {
-    jo = fallbackDialogRows(Re, {
+  let maxRows;
+  if ($[56] !== roomy || $[57] !== rows || $[58] !== terminalSize.columns) {
+    maxRows = fallbackDialogRows(roomy, {
       columns: terminalSize.columns,
       rows,
     });
-    $[56] = Re;
+    $[56] = roomy;
     $[57] = rows;
     $[58] = terminalSize.columns;
-    $[59] = jo;
-  } else jo = $[59];
-  let $o = jo;
-  let zi;
-  if ($[60] !== $o || $[61] !== Xe || $[62] !== Ie) {
-    zi = wrapToMaxLines(Ie, Xe, $o);
-    $[60] = $o;
-    $[61] = Xe;
-    $[62] = Ie;
-    $[63] = zi;
-  } else zi = $[63];
-  let ze = zi;
-  let Zi;
-  if ($[64] !== Xe || $[65] !== Ie) {
-    Zi = wrapToMaxLines(Ie, Xe, Number.MAX_SAFE_INTEGER);
-    $[64] = Xe;
-    $[65] = Ie;
-    $[66] = Zi;
-  } else Zi = $[66];
-  let An = Zi;
-  let xt = An !== ze;
-  let [Mn, Ql] = y(false);
+    $[59] = maxRows;
+  } else maxRows = $[59];
+  let maxRows_2 = maxRows;
+  let wrappedLines;
+  if ($[60] !== maxRows_2 || $[61] !== contentColumns || $[62] !== descriptionText_2) {
+    wrappedLines = wrapToMaxLines(descriptionText_2, contentColumns, maxRows_2);
+    $[60] = maxRows_2;
+    $[61] = contentColumns;
+    $[62] = descriptionText_2;
+    $[63] = wrappedLines;
+  } else wrappedLines = $[63];
+  let wrappedText = wrappedLines;
+  let fullLines;
+  if ($[64] !== contentColumns || $[65] !== descriptionText_2) {
+    fullLines = wrapToMaxLines(descriptionText_2, contentColumns, Number.MAX_SAFE_INTEGER);
+    $[64] = contentColumns;
+    $[65] = descriptionText_2;
+    $[66] = fullLines;
+  } else fullLines = $[66];
+  let fullText = fullLines;
+  let isTruncated = fullText !== wrappedText;
+  let [isExpanded, setIsExpanded] = useState(false);
   let chord = useShortcutDisplay("app:toggleTranscript", "Global", "ctrl+o");
-  let Qi;
+  let bindings;
   if ($[67] === MEMO_CACHE_SENTINEL) {
-    Qi = [
+    bindings = [
       {
         action: "app:toggleTranscript",
-        run: () => Ql(isMissingEntry),
+        run: () => setIsExpanded(isMissingEntry),
       },
     ];
-    $[67] = Qi;
-  } else Qi = $[67];
-  let bindings = Qi;
-  let Ji;
+    $[67] = bindings;
+  } else bindings = $[67];
+  let bindings_2 = bindings;
+  let yesOption;
   if ($[68] === MEMO_CACHE_SENTINEL) {
-    Ji = {
+    yesOption = {
       label: "Yes",
       value: "yes",
       feedbackConfig: {
         type: "accept",
       },
     };
-    $[68] = Ji;
-  } else Ji = $[68];
-  let es = Ji;
-  let ts;
+    $[68] = yesOption;
+  } else yesOption = $[68];
+  let yesOption_2 = yesOption;
+  let noOption;
   if ($[69] === MEMO_CACHE_SENTINEL) {
-    ts = {
+    noOption = {
       label: "No",
       value: "no",
       feedbackConfig: {
         type: "reject",
       },
     };
-    $[69] = ts;
-  } else ts = $[69];
-  let ns = ts;
-  let Ft;
-  if ($[70] !== K || $[71] !== ae || $[72] !== J) {
-    Ft = J ? [ns, es] : [es];
-    if (K !== null) {
-      if (typeof K.node === "string") {
-        let we;
-        if ($[74] !== K.node) {
-          we = {
-            label: K.node,
+    $[69] = noOption;
+  } else noOption = $[69];
+  let noOption_2 = noOption;
+  let options;
+  if ($[70] !== dontAskRule_2 || $[71] !== autoModeOption || $[72] !== defaultToNo) {
+    options = defaultToNo ? [noOption_2, yesOption_2] : [yesOption_2];
+    if (dontAskRule_2 !== null) {
+      if (typeof dontAskRule_2.node === "string") {
+        let option;
+        if ($[74] !== dontAskRule_2.node) {
+          option = {
+            label: dontAskRule_2.node,
             value: "yes-dont-ask-again",
           };
-          $[74] = K.node;
-          $[75] = we;
-        } else we = $[75];
-        Ft.push(we);
+          $[74] = dontAskRule_2.node;
+          $[75] = option;
+        } else option = $[75];
+        options.push(option);
       }
     }
-    if (ae !== null) {
-      if (typeof ae.node === "string") {
-        let we;
-        if ($[76] !== ae.node) {
-          we = {
-            label: ae.node,
+    if (autoModeOption !== null) {
+      if (typeof autoModeOption.node === "string") {
+        let option;
+        if ($[76] !== autoModeOption.node) {
+          option = {
+            label: autoModeOption.node,
             description: WORKFLOW_HINT_TEXT,
             value: "yes-enable-auto-mode",
           };
-          $[76] = ae.node;
-          $[77] = we;
-        } else we = $[77];
-        Ft.push(we);
+          $[76] = autoModeOption.node;
+          $[77] = option;
+        } else option = $[77];
+        options.push(option);
       }
     }
-    if (!J) Ft.push(ns);
-    $[70] = K;
-    $[71] = ae;
-    $[72] = J;
-    $[73] = Ft;
-  } else Ft = $[73];
-  let options = Ft;
+    if (!defaultToNo) options.push(noOption_2);
+    $[70] = dontAskRule_2;
+    $[71] = autoModeOption;
+    $[72] = defaultToNo;
+    $[73] = options;
+  } else options = $[73];
+  let options_2 = options;
   let toolName;
   if ($[78] !== payload.toolName) {
     toolName = sanitizeToolNameForAnalytics(payload.toolName);
     $[78] = payload.toolName;
     $[79] = toolName;
   } else toolName = $[79];
-  let os;
+  let toolAnalyticsContext;
   if ($[80] !== payload.isMcp || $[81] !== toolName) {
-    os = {
+    toolAnalyticsContext = {
       toolName,
       isMcp: payload.isMcp,
     };
     $[80] = payload.isMcp;
     $[81] = toolName;
-    $[82] = os;
-  } else os = $[82];
-  let toolAnalyticsContext = os;
+    $[82] = toolAnalyticsContext;
+  } else toolAnalyticsContext = $[82];
+  let toolAnalyticsContext_2 = toolAnalyticsContext;
   let card = payload.toolUseRenderFailed === true ? undefined : payload.card;
   if (
     card !== undefined &&
     [card.question, ...card.lines, ...card.values].reduce(entryDisplayWidth, 0) <= MAX_PARAMETER_VALUE_CHARS
   ) {
-    let is =
+    let isInlineQuestion =
       payload.requestSource === undefined &&
       !card.question.includes(`
 `) &&
       bunStringWidth(card.question) <= Math.min(min, terminalSize.columns - 2);
-    const question = is ? undefined : card.question;
-    let Pn;
-    if ($[83] !== card || $[84] !== k || $[85] !== question || $[86] !== terminalSize.columns) {
-      Pn = cardHeaderRows(
+    const question = isInlineQuestion ? undefined : card.question;
+    let cardRows;
+    if ($[83] !== card || $[84] !== width || $[85] !== question || $[86] !== terminalSize.columns) {
+      cardRows = cardHeaderRows(
         {
           ...card,
           question,
         },
-        Math.min(k, terminalSize.columns - 6) - PARAMETER_VALUE_MAX_LINES,
+        Math.min(width, terminalSize.columns - 6) - PARAMETER_VALUE_MAX_LINES,
       );
       $[83] = card;
-      $[84] = k;
+      $[84] = width;
       $[85] = question;
       $[86] = terminalSize.columns;
-      $[87] = Pn;
-    } else Pn = $[87];
-    let Ut = Pn;
-    const title = is ? card.question : payload.userFacingName;
+      $[87] = cardRows;
+    } else cardRows = $[87];
+    let cardRows_2 = cardRows;
+    const title = isInlineQuestion ? card.question : payload.userFacingName;
     let children;
-    if ($[88] !== Ut) {
+    if ($[88] !== cardRows_2) {
       children =
-        Ut.rows.length > 0 &&
+        cardRows_2.rows.length > 0 &&
         jsxProd_default(DiffFrame, {
           children: jsxProd_default(ParameterCard, {
-            card: Ut,
+            card: cardRows_2,
           }),
         });
-      $[88] = Ut;
+      $[88] = cardRows_2;
       $[89] = children;
     } else children = $[89];
-    let Qe;
+    let cardBox;
     if ($[90] !== children) {
-      Qe = jsxProd_default(Box, {
-        ref: m,
+      cardBox = jsxProd_default(Box, {
+        ref: containerRef,
         width: "100%",
         flexDirection: "column",
         children,
       });
       $[90] = children;
-      $[91] = Qe;
-    } else Qe = $[91];
-    const marginTop = Ut.rows.length === 0 ? 1 : 0;
+      $[91] = cardBox;
+    } else cardBox = $[91];
+    const marginTop = cardRows_2.rows.length === 0 ? 1 : 0;
     let children_2;
     if (
-      $[92] !== onCancel ||
-      $[93] !== onSelect ||
-      $[94] !== J ||
-      $[95] !== options ||
+      $[92] !== onCancel_2 ||
+      $[93] !== onSelect_2 ||
+      $[94] !== defaultToNo ||
+      $[95] !== options_2 ||
       $[96] !== payload.requestSource ||
       $[97] !== refusableAnswer.attempts ||
       $[98] !== defaultFocusValue ||
-      $[99] !== toolAnalyticsContext
+      $[99] !== toolAnalyticsContext_2
     ) {
       children_2 = jsxProd_default(
         PermissionPrompt,
         {
           question: null,
-          options,
+          options: options_2,
           defaultFocusValue,
-          hideIndexes: J,
-          onSelect,
-          onCancel,
-          toolAnalyticsContext,
+          hideIndexes: defaultToNo,
+          onSelect: onSelect_2,
+          onCancel: onCancel_2,
+          toolAnalyticsContext: toolAnalyticsContext_2,
           requestSource: payload.requestSource,
         },
         refusableAnswer.attempts,
       );
-      $[92] = onCancel;
-      $[93] = onSelect;
-      $[94] = J;
-      $[95] = options;
+      $[92] = onCancel_2;
+      $[93] = onSelect_2;
+      $[94] = defaultToNo;
+      $[95] = options_2;
       $[96] = payload.requestSource;
       $[97] = refusableAnswer.attempts;
       $[98] = defaultFocusValue;
-      $[99] = toolAnalyticsContext;
+      $[99] = toolAnalyticsContext_2;
       $[100] = children_2;
     } else children_2 = $[100];
-    let Fe;
+    let promptBox;
     if ($[101] !== marginTop || $[102] !== children_2) {
-      Fe = jsxProd_default(Box, {
+      promptBox = jsxProd_default(Box, {
         paddingX: 1,
         marginTop,
         children: children_2,
       });
       $[101] = marginTop;
       $[102] = children_2;
-      $[103] = Fe;
-    } else Fe = $[103];
-    let ct;
-    if ($[104] !== payload.requestSource || $[105] !== title || $[106] !== Qe || $[107] !== Fe) {
-      ct = jsxProd_default_2(PermissionDialog_2, {
+      $[103] = promptBox;
+    } else promptBox = $[103];
+    let dialog;
+    if ($[104] !== payload.requestSource || $[105] !== title || $[106] !== cardBox || $[107] !== promptBox) {
+      dialog = jsxProd_default_2(PermissionDialog_2, {
         title,
         innerPaddingX: 0,
         requestSource: payload.requestSource,
-        children: [Qe, Fe],
+        children: [cardBox, promptBox],
       });
       $[104] = payload.requestSource;
       $[105] = title;
-      $[106] = Qe;
-      $[107] = Fe;
-      $[108] = ct;
-    } else ct = $[108];
-    return ct;
+      $[106] = cardBox;
+      $[107] = promptBox;
+      $[108] = dialog;
+    } else dialog = $[108];
+    return dialog;
   }
-  let St;
+  let descriptionBox;
   if (
-    $[109] !== ze ||
-    $[110] !== Mn ||
-    $[111] !== xt ||
+    $[109] !== wrappedText ||
+    $[110] !== isExpanded ||
+    $[111] !== isTruncated ||
     $[112] !== chord ||
-    $[113] !== An ||
-    $[114] !== T?.length ||
+    $[113] !== fullText ||
+    $[114] !== parameterRows_2?.length ||
     $[115] !== payload.isMcp ||
     $[116] !== payload.userFacingName
   ) {
-    St =
-      ze !== "" &&
+    descriptionBox =
+      wrappedText !== "" &&
       jsxProd_default_2(Box, {
         width: "100%",
         flexDirection: "column",
         paddingX: 1,
-        marginTop: T?.length === 0 ? 1 : 0,
+        marginTop: parameterRows_2?.length === 0 ? 1 : 0,
         marginBottom: payload.isMcp ? 1 : 0,
         children: [
           payload.isMcp &&
@@ -644,15 +667,15 @@ function FallbackPermissionRequest(props) {
             children: jsxProd_default(Text, {
               dimColor: true,
               italic: payload.isMcp,
-              children: Mn ? An : ze,
+              children: isExpanded ? fullText : wrappedText,
             }),
           }),
-          xt &&
+          isTruncated &&
             jsxProd_default(Text, {
               dimColor: true,
               children: jsxProd_default(KeyboardShortcutHint, {
                 chord,
-                action: Mn ? "collapse description" : "expand description",
+                action: isExpanded ? "collapse description" : "expand description",
                 parens: true,
                 format: {
                   keyCase: "lower",
@@ -661,32 +684,32 @@ function FallbackPermissionRequest(props) {
             }),
         ],
       });
-    $[109] = ze;
-    $[110] = Mn;
-    $[111] = xt;
+    $[109] = wrappedText;
+    $[110] = isExpanded;
+    $[111] = isTruncated;
     $[112] = chord;
-    $[113] = An;
-    $[114] = T?.length;
+    $[113] = fullText;
+    $[114] = parameterRows_2?.length;
     $[115] = payload.isMcp;
     $[116] = payload.userFacingName;
-    $[117] = St;
-  } else St = $[117];
-  let _n = St;
+    $[117] = descriptionBox;
+  } else descriptionBox = $[117];
+  let descriptionBox_2 = descriptionBox;
   const requestSource = payload.requestSource;
-  let Ze;
+  let mcpHeader;
   if (
-    $[118] !== ze ||
-    $[119] !== _n ||
-    $[120] !== T?.length ||
+    $[118] !== wrappedText ||
+    $[119] !== descriptionBox_2 ||
+    $[120] !== parameterRows_2?.length ||
     $[121] !== payload.hasMcpSuffix ||
     $[122] !== payload.isMcp ||
     $[123] !== payload.userFacingName
   ) {
-    Ze = payload.isMcp
+    mcpHeader = payload.isMcp
       ? jsxProd_default_2(Box, {
           flexDirection: "row",
           paddingX: 1,
-          marginBottom: T?.length === 0 && ze === "" ? 1 : 0,
+          marginBottom: parameterRows_2?.length === 0 && wrappedText === "" ? 1 : 0,
           children: [
             jsxProd_default(Text, {
               wrap: "truncate-end",
@@ -706,41 +729,43 @@ function FallbackPermissionRequest(props) {
               : null,
           ],
         })
-      : _n;
-    $[118] = ze;
-    $[119] = _n;
-    $[120] = T?.length;
+      : descriptionBox_2;
+    $[118] = wrappedText;
+    $[119] = descriptionBox_2;
+    $[120] = parameterRows_2?.length;
     $[121] = payload.hasMcpSuffix;
     $[122] = payload.isMcp;
     $[123] = payload.userFacingName;
-    $[124] = Ze;
-  } else Ze = $[124];
-  let Le;
+    $[124] = mcpHeader;
+  } else mcpHeader = $[124];
+  let toolUseBlock;
   if (
-    $[125] !== ye ||
+    $[125] !== renderedContentStable ||
     $[126] !== min ||
-    $[127] !== T ||
+    $[127] !== parameterRows_2 ||
     $[128] !== payload.hasMcpSuffix ||
     $[129] !== payload.userFacingName
   ) {
-    Le =
-      (T === null || T.length > 0) &&
+    toolUseBlock =
+      (parameterRows_2 === null || parameterRows_2.length > 0) &&
       jsxProd_default(DiffFrame, {
         children:
-          T !== null
+          parameterRows_2 !== null
             ? jsxProd_default(ToolInputEntries, {
-                entries: T,
+                entries: parameterRows_2,
                 contentColumns: min,
               })
             : jsxProd_default(Blockquote, {
-                multiline: typeof ye === "string" && needsGutter(`${payload.userFacingName}(${ye})`),
+                multiline:
+                  typeof renderedContentStable === "string" &&
+                  needsGutter(`${payload.userFacingName}(${renderedContentStable})`),
                 children: jsxProd_default_2(Text, {
                   children: [
                     payload.userFacingName,
-                    ye != null &&
-                      ye !== "" &&
+                    renderedContentStable != null &&
+                      renderedContentStable !== "" &&
                       jsxProd_default_2(Fragment, {
-                        children: ["(", ye, ")"],
+                        children: ["(", renderedContentStable, ")"],
                       }),
                     payload.hasMcpSuffix
                       ? jsxProd_default(Text, {
@@ -752,142 +777,138 @@ function FallbackPermissionRequest(props) {
                 }),
               }),
       });
-    $[125] = ye;
+    $[125] = renderedContentStable;
     $[126] = min;
-    $[127] = T;
+    $[127] = parameterRows_2;
     $[128] = payload.hasMcpSuffix;
     $[129] = payload.userFacingName;
-    $[130] = Le;
-  } else Le = $[130];
-  const Qe = payload.isMcp && _n;
-  let et;
-  if ($[131] !== Ze || $[132] !== Le || $[133] !== Qe) {
-    et = jsxProd_default_2(Box, {
-      ref: m,
+    $[130] = toolUseBlock;
+  } else toolUseBlock = $[130];
+  const mcpDescription = payload.isMcp && descriptionBox_2;
+  let headerBox;
+  if ($[131] !== mcpHeader || $[132] !== toolUseBlock || $[133] !== mcpDescription) {
+    headerBox = jsxProd_default_2(Box, {
+      ref: containerRef,
       width: "100%",
       flexDirection: "column",
-      children: [Ze, Le, Qe],
+      children: [mcpHeader, toolUseBlock, mcpDescription],
     });
-    $[131] = Ze;
-    $[132] = Le;
-    $[133] = Qe;
-    $[134] = et;
-  } else et = $[134];
+    $[131] = mcpHeader;
+    $[132] = toolUseBlock;
+    $[133] = mcpDescription;
+    $[134] = headerBox;
+  } else headerBox = $[134];
   const rowBudget = payload.permissionResult.inPlaceOfClassifier === true ? MAX_EXPLANATION_LINES : undefined;
-  let Fe;
+  let ruleExplanation;
   if ($[135] !== payload.permissionResult || $[136] !== rowBudget) {
-    Fe = jsxProd_default(PermissionRuleExplanation, {
+    ruleExplanation = jsxProd_default(PermissionRuleExplanation, {
       permissionResult: payload.permissionResult,
       toolType: "tool",
       rowBudget,
     });
     $[135] = payload.permissionResult;
     $[136] = rowBudget;
-    $[137] = Fe;
-  } else Fe = $[137];
-  let ct;
-  if ($[138] !== K || $[139] !== payload.takesOverServerName) {
-    ct =
+    $[137] = ruleExplanation;
+  } else ruleExplanation = $[137];
+  let takeoverNotice;
+  if ($[138] !== dontAskRule_2 || $[139] !== payload.takesOverServerName) {
+    takeoverNotice =
       payload.takesOverServerName === true &&
-      K !== null &&
+      dontAskRule_2 !== null &&
       jsxProd_default(Text, {
         children: `Another MCP server owns this server's name. "Don't ask again" moves the name to this server on this computer: allow rules for that name, in every project, will apply to this server, not the other one. Plain "Yes" moves nothing.`,
       });
-    $[138] = K;
+    $[138] = dontAskRule_2;
     $[139] = payload.takesOverServerName;
-    $[140] = ct;
-  } else ct = $[140];
-  let En;
+    $[140] = takeoverNotice;
+  } else takeoverNotice = $[140];
+  let noteText;
   if ($[141] !== payload.note) {
-    En =
+    noteText =
       payload.note !== undefined &&
       jsxProd_default(Text, {
         children: payload.note,
       });
     $[141] = payload.note;
-    $[142] = En;
-  } else En = $[142];
-  let Dn;
+    $[142] = noteText;
+  } else noteText = $[142];
+  let permissionPrompt;
   if (
-    $[143] !== onCancel ||
-    $[144] !== onSelect ||
-    $[145] !== J ||
-    $[146] !== options ||
+    $[143] !== onCancel_2 ||
+    $[144] !== onSelect_2 ||
+    $[145] !== defaultToNo ||
+    $[146] !== options_2 ||
     $[147] !== payload.requestSource ||
     $[148] !== refusableAnswer.attempts ||
     $[149] !== defaultFocusValue ||
-    $[150] !== toolAnalyticsContext
+    $[150] !== toolAnalyticsContext_2
   ) {
-    Dn = jsxProd_default(
+    permissionPrompt = jsxProd_default(
       PermissionPrompt,
       {
-        options,
+        options: options_2,
         defaultFocusValue,
-        hideIndexes: J,
-        onSelect,
-        onCancel,
-        toolAnalyticsContext,
+        hideIndexes: defaultToNo,
+        onSelect: onSelect_2,
+        onCancel: onCancel_2,
+        toolAnalyticsContext: toolAnalyticsContext_2,
         requestSource: payload.requestSource,
       },
       refusableAnswer.attempts,
     );
-    $[143] = onCancel;
-    $[144] = onSelect;
-    $[145] = J;
-    $[146] = options;
+    $[143] = onCancel_2;
+    $[144] = onSelect_2;
+    $[145] = defaultToNo;
+    $[146] = options_2;
     $[147] = payload.requestSource;
     $[148] = refusableAnswer.attempts;
     $[149] = defaultFocusValue;
-    $[150] = toolAnalyticsContext;
-    $[151] = Dn;
-  } else Dn = $[151];
-  let Nn;
-  if ($[152] !== Fe || $[153] !== ct || $[154] !== En || $[155] !== Dn) {
-    Nn = jsxProd_default_2(Box, {
+    $[150] = toolAnalyticsContext_2;
+    $[151] = permissionPrompt;
+  } else permissionPrompt = $[151];
+  let bodyBox;
+  if (
+    $[152] !== ruleExplanation ||
+    $[153] !== takeoverNotice ||
+    $[154] !== noteText ||
+    $[155] !== permissionPrompt
+  ) {
+    bodyBox = jsxProd_default_2(Box, {
       flexDirection: "column",
       paddingX: 1,
-      children: [Fe, ct, En, Dn],
+      children: [ruleExplanation, takeoverNotice, noteText, permissionPrompt],
     });
-    $[152] = Fe;
-    $[153] = ct;
-    $[154] = En;
-    $[155] = Dn;
-    $[156] = Nn;
-  } else Nn = $[156];
+    $[152] = ruleExplanation;
+    $[153] = takeoverNotice;
+    $[154] = noteText;
+    $[155] = permissionPrompt;
+    $[156] = bodyBox;
+  } else bodyBox = $[156];
   let children;
-  if ($[157] !== payload.requestSource || $[158] !== et || $[159] !== Nn) {
+  if ($[157] !== payload.requestSource || $[158] !== headerBox || $[159] !== bodyBox) {
     children = jsxProd_default_2(PermissionDialog_2, {
       title: "Tool use",
       innerPaddingX: 0,
       requestSource,
-      children: [et, Nn],
+      children: [headerBox, bodyBox],
     });
     $[157] = payload.requestSource;
-    $[158] = et;
-    $[159] = Nn;
+    $[158] = headerBox;
+    $[159] = bodyBox;
     $[160] = children;
   } else children = $[160];
-  let ss;
-  if ($[161] !== xt || $[162] !== children) {
-    ss = jsxProd_default(useDialogKeybindings, {
-      bindings,
-      active: xt,
+  let dialogElement;
+  if ($[161] !== isTruncated || $[162] !== children) {
+    dialogElement = jsxProd_default(useDialogKeybindings, {
+      bindings: bindings_2,
+      active: isTruncated,
       flexDirection: "column",
       children,
     });
-    $[161] = xt;
+    $[161] = isTruncated;
     $[162] = children;
-    $[163] = ss;
-  } else ss = $[163];
-  return ss;
-}
-//@ chunk-qgcqa405.js:301-305 placement
-init_react_production();
-//@ chunk-qgcqa405.js:305-337 placement
-/**
- * 函数 useFallbackPermission（订阅兜底权限请求）；位于「通用工具权限请求（无专用组件的工具/MCP 工具）：工具名 + 参数表格 + 允许/不再询问/拒绝选项」模块。
- */
-function useFallbackPermission() {
-  return yt(onAttacherCapsChange, supportsHyperlinks);
+    $[163] = dialogElement;
+  } else dialogElement = $[163];
+  return dialogElement;
 }
 export { useFallbackPermission, FallbackPermissionRequest, shouldOfferAlwaysAllow };

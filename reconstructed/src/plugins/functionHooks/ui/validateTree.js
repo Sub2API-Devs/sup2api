@@ -52,37 +52,48 @@ import {
   clientMountKey,
 } from "./treeConstants.js";
 import { computeGutterWidth } from "../../../components/StructuredDiff.js";
-import { xr } from "../../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_mapValues } from "../../../../vendor/lodash-es/_inlinedHelpers.js";
 import { jsonStringify } from "../../../utils/slowOperations.js";
 import { pluginOfElement, UI_ELEMENT_TYPES } from "./elements.js";
 import { isNonNegativeInt } from "../sites/siteRules.js";
 import { plainDataChars } from "../sites/uiSites.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-4121qate.js:143694-143704 placement
 var WELL_FORMED_SLACK = 4;
 //@ chunk-4121qate.js:143704-143731 placement
-var wellFormedText = (e) => (isWellFormedString(e) ? e : normalizeFullWidthSpace(e));
+var wellFormedText = (text) => (isWellFormedString(text) ? text : normalizeFullWidthSpace(text));
 //@ chunk-4121qate.js:143731-144236 placement
-function wellFormedValue(e, o) {
-  if (typeof e === "string") return wellFormedText(e);
-  if (!Array.isArray(e) && !isPlainDataObject(e)) return e;
-  if (o.copies.has(e)) return o.copies.get(e);
-  if (o.depth >= MAX_DEPTH * WELL_FORMED_SLACK || o.nodes >= MAX_NODES * WELL_FORMED_SLACK) return e;
-  let n = Array.isArray(e) ? denseListCopy(e).map((a, m) => [String(m), a]) : Object.entries(e);
-  o.copies.set(e, e);
-  o.nodes += 1;
-  o.depth += 1;
-  let mapped = n.map(([a, m]) => [o.isKeyed ? wellFormedText(a) : a, wellFormedValue(m, o)]);
-  o.depth -= 1;
-  let any = mapped.some(([a, m], c) => a !== n[c]?.[0] || m !== n[c]?.[1]);
-  let p = Array.isArray(e) ? mapped.map(([, a]) => a) : Object.fromEntries(mapped);
-  let f = any ? p : e;
-  o.copies.set(e, f);
-  return f;
+function wellFormedValue(value, state) {
+  if (typeof value === "string") return wellFormedText(value);
+  if (!Array.isArray(value) && !isPlainDataObject(value)) return value;
+  if (state.copies.has(value)) return state.copies.get(value);
+  if (state.depth >= MAX_DEPTH * WELL_FORMED_SLACK || state.nodes >= MAX_NODES * WELL_FORMED_SLACK)
+    return value;
+  let entries = Array.isArray(value)
+    ? denseListCopy(value).map((entry, index) => [String(index), entry])
+    : Object.entries(value);
+  state.copies.set(value, value);
+  state.nodes += 1;
+  state.depth += 1;
+  let mapped = entries.map(([key, entryValue]) => [
+    state.isKeyed ? wellFormedText(key) : key,
+    wellFormedValue(entryValue, state),
+  ]);
+  state.depth -= 1;
+  let any = mapped.some(
+    ([key, entryValue], index) => key !== entries[index]?.[0] || entryValue !== entries[index]?.[1],
+  );
+  let mappedValue = Array.isArray(value)
+    ? mapped.map(([, entryValue]) => entryValue)
+    : Object.fromEntries(mapped);
+  let result = any ? mappedValue : value;
+  state.copies.set(value, result);
+  return result;
 }
 //@ chunk-4121qate.js:144236-144300 placement
-var wellFormed = (e) =>
-  wellFormedValue(e, {
+var wellFormed = (value) =>
+  wellFormedValue(value, {
     copies: new Map(),
     nodes: 0,
     depth: 0,
@@ -95,17 +106,20 @@ function autoFocusProblem(autoFocus) {
 //@ chunk-4121qate.js:144379-144390 placement
 var SHOWN_KEY_CHARS = 40;
 //@ chunk-4121qate.js:144390-144478 placement
-function shownKey(e) {
-  let replaced = String(e).replace(LINE_SCRUB, "?");
+function shownKey(value) {
+  let replaced = String(value).replace(LINE_SCRUB, "?");
   return replaced.length <= SHOWN_KEY_CHARS ? replaced : `${truncateToLength(replaced, SHOWN_KEY_CHARS)}...`;
 }
 //@ chunk-4121qate.js:144478-144569 placement
-var CONTROL_CHARACTER = new RegExp(
-  `[${CHARACTER_CLASSES.escape}${CHARACTER_CLASSES.loneSurrogate}${CHARACTER_CLASSES.placeholder}]|${ITERM_CELL.source}`,
-  "u",
-);
+var CONTROL_CHARACTER; // deferred: uses CHARACTER_CLASSES (./textScrub.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4121qate.js:144478", () => {
+  CONTROL_CHARACTER = new RegExp(
+    `[${CHARACTER_CLASSES.escape}${CHARACTER_CLASSES.loneSurrogate}${CHARACTER_CLASSES.placeholder}]|${ITERM_CELL.source}`,
+    "u",
+  );
+});
 //@ chunk-4121qate.js:144569-144593 placement
-var hasControlCharacter = (e) => CONTROL_CHARACTER.test(e);
+var hasControlCharacter = (text) => CONTROL_CHARACTER.test(text);
 //@ chunk-4121qate.js:144593-144605 placement
 var MAX_TEXT_CHARS = 1e4;
 //@ chunk-4121qate.js:144605-144886 placement
@@ -117,17 +131,17 @@ function unusableKeyProblem(key) {
     : undefined;
 }
 //@ chunk-4121qate.js:144886-145083 placement
-function boxKeyProblem(key, o) {
-  let r = unusableKeyProblem(key);
-  if (r !== undefined || typeof key !== "string") return r;
-  let n = o.has(key);
-  o.add(key);
-  return n
+function boxKeyProblem(key, seenKeys) {
+  let keyProblem = unusableKeyProblem(key);
+  if (keyProblem !== undefined || typeof key !== "string") return keyProblem;
+  let isDuplicate = seenKeys.has(key);
+  seenKeys.add(key);
+  return isDuplicate
     ? `Box "${shownKey(key)}" is drawn twice under one parent; only the first is a hover scope`
     : undefined;
 }
 //@ chunk-4121qate.js:145083-145139 placement
-var hasOnlyKeys = (props, o) => Object.keys(props).every((key) => o.includes(key));
+var hasOnlyKeys = (props, allowed) => Object.keys(props).every((key) => allowed.includes(key));
 //@ chunk-4121qate.js:145139-145328 placement
 function heldProblem(press) {
   return isPlainObject(press) &&
@@ -140,8 +154,8 @@ function heldProblem(press) {
     : "is not held by a plugin of this chain";
 }
 //@ chunk-4121qate.js:145328-146931 placement
-function buttonProblem(e) {
-  let { props, press } = e;
+function buttonProblem(element) {
+  let { props, press } = element;
   if (!(
     isPlainObject(props) &&
     typeof props.key === "string" &&
@@ -167,39 +181,43 @@ function buttonProblem(e) {
   if (variant !== undefined && variant !== "primary" && variant !== "secondary")
     return `Button "${key}" variant is "primary", "secondary" or absent`;
   if (role !== undefined && role !== "dismiss") return `Button "${key}" role is "dismiss" or absent`;
-  let g = autoFocusProblem(autoFocus);
-  if (g !== undefined) return `Button "${key}" ${g}`;
+  let autoFocusIssue = autoFocusProblem(autoFocus);
+  if (autoFocusIssue !== undefined) return `Button "${key}" ${autoFocusIssue}`;
   if (hotkey !== undefined && (typeof hotkey !== "string" || !/^[0-9a-z]$/.test(hotkey)))
     return `Button "${key}" hotkey must be one digit 0-9 or one lowercase letter a-z`;
   if (action !== undefined && (typeof action !== "string" || !isKeybindingAction(action))) {
-    let V = typeof action === "string" ? JSON.stringify(action) : valueKind(action);
-    return `Button "${key}" action ${V} is not one of the engine's keybinding actions (app:cycleDiffBase, app:diffFileListDown)`;
+    let actionText = typeof action === "string" ? JSON.stringify(action) : valueKind(action);
+    return `Button "${key}" action ${actionText} is not one of the engine's keybinding actions (app:cycleDiffBase, app:diffFileListDown)`;
   }
   if (typeof action === "string" && isNonRebindableAction(action))
     return `Button "${key}" action "${action}" is the engine's alone: its key cannot be rebound (ctrl+c, ctrl+d)`;
   if (hasControlCharacter(label)) return `Button "${key}" label holds a control character`;
-  let v = heldProblem(press);
-  if (v !== undefined) return `Button "${key}" ${v}`;
-  let { children } = e;
+  let pressProblem = heldProblem(press);
+  if (pressProblem !== undefined) return `Button "${key}" ${pressProblem}`;
+  let { children } = element;
   return children === undefined || Array.isArray(children)
     ? undefined
     : `Button "${key}" children is ${valueKind(children)}`;
 }
 //@ chunk-4121qate.js:146931-147007 placement
-var isStamped = (e) =>
-  isPlainObject(e) && typeof e.plugin === "string" && e.plugin !== "" && !hasControlCharacter(e.plugin);
+var isStamped = (stamp) =>
+  isPlainObject(stamp) &&
+  typeof stamp.plugin === "string" &&
+  stamp.plugin !== "" &&
+  !hasControlCharacter(stamp.plugin);
 //@ chunk-4121qate.js:147007-147217 placement
-function textPropProblem(e, o) {
-  let r = typeof o === "string";
-  if (o !== undefined && !r) return `${e} must be a string`;
-  if (r && o.length > MAX_TEXT_CHARS) return `${e} longer than ${MAX_TEXT_CHARS} characters`;
-  return r && hasControlCharacter(o) ? `${e} holds a control character` : undefined;
+function textPropProblem(field, value) {
+  let isString = typeof value === "string";
+  if (value !== undefined && !isString) return `${field} must be a string`;
+  if (isString && value.length > MAX_TEXT_CHARS) return `${field} longer than ${MAX_TEXT_CHARS} characters`;
+  return isString && hasControlCharacter(value) ? `${field} holds a control character` : undefined;
 }
 //@ chunk-4121qate.js:147217-147278 placement
-var textPropsProblem = (e, o) => e.map((r) => textPropProblem(r, o[r])).find((r) => r !== undefined);
+var textPropsProblem = (fields, props) =>
+  fields.map((field) => textPropProblem(field, props[field])).find((problem) => problem !== undefined);
 //@ chunk-4121qate.js:147278-148104 placement
-function clientProblem(e) {
-  let { props, client } = e;
+function clientProblem(element) {
+  let { props, client } = element;
   if (!(
     isPlainObject(props) &&
     typeof props.key === "string" &&
@@ -210,21 +228,21 @@ function clientProblem(e) {
   ))
     return "Client props must be { key, module }, both non-empty strings, and any of props, width, height, flexGrow";
   let { key } = props;
-  let i = textPropsProblem(["key", "module"], props);
-  if (i !== undefined) return `Client "${key}" ${i}`;
-  let f = props.props !== undefined ? checkPlainData(props.props) : undefined;
-  if (f !== undefined) return `Client "${key}" props ${f}`;
-  for (let m of ["width", "height", "flexGrow"]) {
-    let c = props[m];
-    if (c === undefined) continue;
-    let l =
-      typeof c === "number" || typeof c === "string"
-        ? propValueProblem(m, c)
+  let textProblem = textPropsProblem(["key", "module"], props);
+  if (textProblem !== undefined) return `Client "${key}" ${textProblem}`;
+  let propsDataProblem = props.props !== undefined ? checkPlainData(props.props) : undefined;
+  if (propsDataProblem !== undefined) return `Client "${key}" props ${propsDataProblem}`;
+  for (let field of ["width", "height", "flexGrow"]) {
+    let value = props[field];
+    if (value === undefined) continue;
+    let problem =
+      typeof value === "number" || typeof value === "string"
+        ? propValueProblem(field, value)
         : "must be a number or a string";
-    if (l !== undefined) return `Client "${key}" ${m} ${l}`;
+    if (problem !== undefined) return `Client "${key}" ${field} ${problem}`;
   }
   if (!isStamped(client)) return `Client "${key}" is not stamped by a plugin of this chain`;
-  return e.children === undefined ? undefined : `Client "${key}" takes no children`;
+  return element.children === undefined ? undefined : `Client "${key}" takes no children`;
 }
 //@ chunk-4121qate.js:148104-148116 placement
 /**
@@ -236,32 +254,32 @@ var MAX_LINE_NUMBER = 1e9;
  * 把统一 diff 文本解析为 hunks（去掉 "\ No newline" 行）；无 hunk 头或行号越界时返回 {kind:"refused", problem}。
  */
 function diffHunksOf(uniDiff) {
-  let o;
+  let patches;
   try {
-    o = parsePatch(uniDiff);
+    patches = parsePatch(uniDiff);
   } catch (error) {
     return {
       kind: "refused",
       problem: errorMessage(error),
     };
   }
-  let mapped = o
-    .flatMap((f) => f.hunks)
-    .map((f) => ({
-      ...f,
-      lines: f.lines.filter((line) => !line.startsWith("\\")),
+  let mapped = patches
+    .flatMap((file) => file.hunks)
+    .map((hunk) => ({
+      ...hunk,
+      lines: hunk.lines.filter((line) => !line.startsWith("\\")),
     }));
   let index = mapped.findIndex(
     ({ oldStart, oldLines, newStart, newLines }) =>
       ![oldStart, oldLines, newStart, newLines].every(
-        (u) => Number.isSafeInteger(u) && u >= 0 && u <= MAX_LINE_NUMBER,
+        (line) => Number.isSafeInteger(line) && line >= 0 && line <= MAX_LINE_NUMBER,
       ),
   );
-  let s = mapped.length === 0;
-  let problem = s
+  let isEmpty = mapped.length === 0;
+  let problem = isEmpty
     ? "no @@ hunk header found"
     : `hunk ${index + 1} header is not @@ -a,b +c,d @@ within ${MAX_LINE_NUMBER} lines`;
-  return s || index !== -1
+  return isEmpty || index !== -1
     ? {
         kind: "refused",
         problem,
@@ -277,25 +295,25 @@ function diffHunksOf(uniDiff) {
  */
 var codeHunks = (source, format) => (format === "diff" ? diffHunksOf(source) : undefined);
 //@ chunk-4121qate.js:148633-148781 placement
-function drawnTextProblem(e, o) {
-  let r = typeof o === "string";
-  if (o !== undefined && !r) return `${e} must be a string`;
-  return r && hasControlCharacter(o) ? `${e} holds a control character` : undefined;
+function drawnTextProblem(field, value) {
+  let isString = typeof value === "string";
+  if (value !== undefined && !isString) return `${field} must be a string`;
+  return isString && hasControlCharacter(value) ? `${field} holds a control character` : undefined;
 }
 //@ chunk-4121qate.js:148781-149563 placement
-function codeProblem(e) {
-  let { props, children } = e;
+function codeProblem(element) {
+  let { props, children } = element;
   if (!isPlainObject(props)) return "Code props must be { source }";
   if (children !== undefined) return "Code takes no children";
-  let { source, language, path, startLine, format, wrap, ...m } = props;
-  let [c] = Object.keys(m);
-  if (c !== undefined) return `Code prop "${c}" is not allowed`;
+  let { source, language, path, startLine, format, wrap, ...rest } = props;
+  let [unknownProp] = Object.keys(rest);
+  if (unknownProp !== undefined) return `Code prop "${unknownProp}" is not allowed`;
   if (typeof source !== "string") return "Code source must be a string";
-  let u =
+  let textProblem =
     drawnTextProblem("source", source) ??
     textPropProblem("language", language) ??
     textPropProblem("path", path);
-  if (u !== undefined) return `Code ${u}`;
+  if (textProblem !== undefined) return `Code ${textProblem}`;
   if (!(
     startLine === undefined ||
     (typeof startLine === "number" && Number.isSafeInteger(startLine) && startLine >= 1)
@@ -312,11 +330,14 @@ function codeProblem(e) {
 //@ chunk-4121qate.js:149563-149653 placement
 var drawnHref = (href) =>
   href
-    .replace(LINE_SCRUB, (o) => encodeURIComponent(normalizeFullWidthSpace(o)))
+    .replace(LINE_SCRUB, (char) => encodeURIComponent(normalizeFullWidthSpace(char)))
     .replace(regExp_2, encodeURIComponent);
 //@ chunk-4121qate.js:149653-149735 placement
-var drawnText = (e) =>
-  expandTabsInText(convertLeadingTabsToSpaces(e)).replace(/[\u061c\u202a-\u202e\u2066-\u2069]/gu, "\uFFFD");
+var drawnText = (text) =>
+  expandTabsInText(convertLeadingTabsToSpaces(text)).replace(
+    /[\u061c\u202a-\u202e\u2066-\u2069]/gu,
+    "\uFFFD",
+  );
 //@ chunk-4121qate.js:149735-149915 placement
 var ELEMENT_KIND = {
   Box: "block",
@@ -333,8 +354,10 @@ var ELEMENT_KIND = {
   Link: "inline",
 };
 //@ chunk-4121qate.js:149915-150003 placement
-function isPlacingRecord(e) {
-  return e !== undefined && Object.keys(e).some((key) => key === "position" || OFFSET_PROPS.has(key));
+function isPlacingRecord(record) {
+  return (
+    record !== undefined && Object.keys(record).some((key) => key === "position" || OFFSET_PROPS.has(key))
+  );
 }
 //@ chunk-4121qate.js:150003-150214 placement
 function hasPlacedBox(drawn) {
@@ -346,70 +369,75 @@ function hasPlacedBox(drawn) {
   );
 }
 //@ chunk-4121qate.js:150214-150330 placement = setAttribute (0.839)
-var heldTexts = (e) =>
-  e.flatMap((o) => {
-    let r = typeof o === "string";
-    let n = !r && "children" in o ? (o.children ?? []) : [];
-    return r ? [o] : heldTexts(n);
+var heldTexts = (nodes) =>
+  nodes.flatMap((node) => {
+    let isString = typeof node === "string";
+    let children = !isString && "children" in node ? (node.children ?? []) : [];
+    return isString ? [node] : heldTexts(children);
   });
 //@ chunk-4121qate.js:150330-150341 placement
 var MAX_SCOPE_CHARS = 64;
 //@ chunk-4121qate.js:150341-150618 placement
-function scopeProblem(scope, o, r) {
-  let n = `${r} hover scope "${shownKey(scope)}"`;
+function scopeProblem(scope, holder, where) {
+  let label = `${where} hover scope "${shownKey(scope)}"`;
   if (!(typeof scope === "string" && scope !== "" && scope.length <= MAX_SCOPE_CHARS))
-    return `${n} is not a string of 1 to ${MAX_SCOPE_CHARS} characters`;
-  let i = hasControlCharacter(scope);
-  let p = isStamped(o);
-  return i ? `${n} holds a control character` : p ? undefined : `${n} is not held by a plugin of this chain`;
+    return `${label} is not a string of 1 to ${MAX_SCOPE_CHARS} characters`;
+  let hasControlChar = hasControlCharacter(scope);
+  let hasStamp = isStamped(holder);
+  return hasControlChar
+    ? `${label} holds a control character`
+    : hasStamp
+      ? undefined
+      : `${label} is not held by a plugin of this chain`;
 }
 //@ chunk-4121qate.js:150618-150685 placement
 var OBJECT_FIELDS = ["props", "hover", "press", "group", "part", "client", "raster"];
 //@ chunk-4121qate.js:150685-150763 placement
-function unplainPartOf(e) {
-  let o = e;
-  return isPlainDataObject(e)
-    ? OBJECT_FIELDS.find((n) => isPlainObject(o[n]) && !isPlainDataObject(o[n]))
+function unplainPartOf(node) {
+  let target = node;
+  return isPlainDataObject(node)
+    ? OBJECT_FIELDS.find((field) => isPlainObject(target[field]) && !isPlainDataObject(target[field]))
     : "node";
 }
 //@ chunk-4121qate.js:150763-152548 placement
-function hoverProblem(e, o, r) {
-  let { hover } = e;
-  let s = e.type;
-  let i = unplainPartOf(e);
-  if (i !== undefined) {
-    let c = i === "node" ? "" : ` ${i}`;
-    return `${o}${c} is not a plain object (a class instance)`;
+function hoverProblem(node, where, scopeState) {
+  let { hover } = node;
+  let typeName = node.type;
+  let unplainField = unplainPartOf(node);
+  if (unplainField !== undefined) {
+    let fieldNote = unplainField === "node" ? "" : ` ${unplainField}`;
+    return `${where}${fieldNote} is not a plain object (a class instance)`;
   }
   if (hover === undefined) return;
-  if (!(s === "Box" || s === "Text" || s === "Button")) return `${o} takes no hover; Box, Text and Button do`;
-  if (!isPlainObject(hover)) return `${o} hover is ${valueKind(hover)}, not an object of style props`;
+  if (!(typeName === "Box" || typeName === "Text" || typeName === "Button"))
+    return `${where} takes no hover; Box, Text and Button do`;
+  if (!isPlainObject(hover)) return `${where} hover is ${valueKind(hover)}, not an object of style props`;
   if (hover.scope !== undefined) {
-    let c = s === "Button" ? e.press : e.group;
-    let u = scopeProblem(hover.scope, c, o);
-    if (u !== undefined) return u;
-  } else if (r === "none")
-    return `${o} hover has no Box with a key around it; the nearest keyed Box is what the pointer hovers, or a scope names its group`;
-  else if (r === "hidden")
-    return `${o} hover is scoped to a keyed Box drawn display "none", which the pointer can never be over; keep the keyed Box visible and put display "none" with hover { display: "flex" } on a Box inside it`;
-  let a = HOVER_PROPS[s === "Box" ? "Box" : "Text"];
-  let props = isPlainObject(e.props) ? e.props : {};
+    let holder = typeName === "Button" ? node.press : node.group;
+    let scopeIssue = scopeProblem(hover.scope, holder, where);
+    if (scopeIssue !== undefined) return scopeIssue;
+  } else if (scopeState === "none")
+    return `${where} hover has no Box with a key around it; the nearest keyed Box is what the pointer hovers, or a scope names its group`;
+  else if (scopeState === "hidden")
+    return `${where} hover is scoped to a keyed Box drawn display "none", which the pointer can never be over; keep the keyed Box visible and put display "none" with hover { display: "flex" } on a Box inside it`;
+  let allowed = HOVER_PROPS[typeName === "Box" ? "Box" : "Text"];
+  let props = isPlainObject(node.props) ? node.props : {};
   for (let [key, value] of Object.entries(hover)) {
     if (key === "scope") continue;
-    let l = `${o} hover prop "${shownKey(key)}"`;
-    if (!a.has(key)) return `${l} is not allowed`;
+    let propLabel = `${where} hover prop "${shownKey(key)}"`;
+    if (!allowed.has(key)) return `${propLabel} is not allowed`;
     if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean")
-      return `${l} is ${valueKind(value)}`;
-    let g = propValueProblem(key, value);
-    if (g !== undefined) return `${l} ${g}`;
+      return `${propLabel} is ${valueKind(value)}`;
+    let propProblem = propValueProblem(key, value);
+    if (propProblem !== undefined) return `${propLabel} ${propProblem}`;
     if (key === "display" && value !== "flex")
-      return `${o} hover display "${String(value)}" would hide it under the pointer; a hover only reveals (display "flex" on a Box drawn display "none")`;
+      return `${where} hover display "${String(value)}" would hide it under the pointer; a hover only reveals (display "flex" on a Box drawn display "none")`;
     if (key === "display" && props.display !== "none")
-      return `${o} hover display "flex" reveals a Box drawn display "none"; this Box is already shown`;
+      return `${where} hover display "flex" reveals a Box drawn display "none"; this Box is already shown`;
     if (key === "borderStyle" && props.borderStyle === undefined)
-      return `${o} hover borderStyle would add a border and move what is around it; give the Box a borderStyle for the hover to restyle`;
+      return `${where} hover borderStyle would add a border and move what is around it; give the Box a borderStyle for the hover to restyle`;
     if (OFFSET_PROPS.has(key) && props.position !== "absolute")
-      return `${l} would shift a Box still in the flow over its siblings; a hover moves only a Box drawn position "absolute"`;
+      return `${propLabel} would shift a Box still in the flow over its siblings; a hover moves only a Box drawn position "absolute"`;
   }
   return;
 }
@@ -425,49 +453,52 @@ var base64BytesPerFour = {
 /**
  * 校验标准 padded base64，返回解码后字节数；不合法返回 undefined。
  */
-function base64DecodedLength(e) {
+function base64DecodedLength(text) {
   if (!(
-    typeof e === "string" &&
-    e !== "" &&
-    e.length % base64BytesPerFour.characters === 0 &&
-    /^[A-Za-z0-9+/]*={0,2}$/.test(e)
+    typeof text === "string" &&
+    text !== "" &&
+    text.length % base64BytesPerFour.characters === 0 &&
+    /^[A-Za-z0-9+/]*={0,2}$/.test(text)
   ))
     return;
-  let r = e.endsWith("==") ? 2 : e.endsWith("=") ? 1 : 0;
-  return (e.length / base64BytesPerFour.characters) * base64BytesPerFour.bytes - r;
+  let padding = text.endsWith("==") ? 2 : text.endsWith("=") ? 1 : 0;
+  return (text.length / base64BytesPerFour.characters) * base64BytesPerFour.bytes - padding;
 }
 //@ chunk-4121qate.js:156899-157596 placement
-function imageProblem(e) {
-  let { props, children, image } = e;
+function imageProblem(element) {
+  let { props, children, image } = element;
   if (!isPlainObject(props)) return "Image props must be { source, columns, rows, alt }";
   if (children !== undefined) return "Image takes no children";
-  let { source, columns, rows, alt, key, ...m } = props;
-  let [c] = Object.keys(m);
-  if (c !== undefined)
-    return `Image prop "${c}" is not allowed (no hover or onPress; a press goes on an enclosing Button)`;
+  let { source, columns, rows, alt, key, ...rest } = props;
+  let [unknownProp] = Object.keys(rest);
+  if (unknownProp !== undefined)
+    return `Image prop "${unknownProp}" is not allowed (no hover or onPress; a press goes on an enclosing Button)`;
   if (typeof alt !== "string") return "Image alt must be a string";
   if (key !== undefined && (typeof key !== "string" || key === ""))
     return "Image key must be a non-empty string when given";
-  let u = key === undefined ? "Image" : `Image "${shownKey(key)}"`;
-  let l =
+  let label = key === undefined ? "Image" : `Image "${shownKey(key)}"`;
+  let problem =
     drawnTextProblem("alt", props.alt) ??
     textPropProblem("key", key) ??
     checkImageCellSize(columns, rows) ??
     checkImageSource(source) ??
     (isStamped(image) ? undefined : "is not stamped by a plugin of this chain");
-  return l === undefined ? undefined : `${u} ${l}`;
+  return problem === undefined ? undefined : `${label} ${problem}`;
 }
 //@ chunk-4121qate.js:157596-157650 placement
 var INPUT_TEXT_PROPS = ["label", "placeholder", "value", "submitLabel"];
 //@ chunk-4121qate.js:157650-158237 placement
-function inputProblem(e) {
-  let { props, press } = e;
+function inputProblem(element) {
+  let { props, press } = element;
   if (
     !(
       isPlainObject(props) &&
       Object.keys(props).every(
         (key) =>
-          key === "key" || key === "rows" || key === "autoFocus" || INPUT_TEXT_PROPS.some((c) => c === key),
+          key === "key" ||
+          key === "rows" ||
+          key === "autoFocus" ||
+          INPUT_TEXT_PROPS.some((allowedProp) => allowedProp === key),
       )
     ) ||
     typeof props.key !== "string" ||
@@ -475,14 +506,16 @@ function inputProblem(e) {
   )
     return "Input props must be { key } and any of label, placeholder, value, submitLabel, rows, autoFocus";
   let { key, rows } = props;
-  let p = rows === undefined || (Number.isSafeInteger(rows) && Number(rows) >= 1);
-  let f =
-    INPUT_TEXT_PROPS.map((m) => drawnTextProblem(m, props[m])).find((m) => m !== undefined) ??
-    (p ? undefined : "rows must be a whole number, 1 or more") ??
+  let isRowsValid = rows === undefined || (Number.isSafeInteger(rows) && Number(rows) >= 1);
+  let problem =
+    INPUT_TEXT_PROPS.map((field) => drawnTextProblem(field, props[field])).find(
+      (found) => found !== undefined,
+    ) ??
+    (isRowsValid ? undefined : "rows must be a whole number, 1 or more") ??
     autoFocusProblem(props.autoFocus) ??
     heldProblem(press);
-  if (f !== undefined) return `Input "${key}" ${f}`;
-  return e.children === undefined ? undefined : `Input "${key}" takes no children`;
+  if (problem !== undefined) return `Input "${key}" ${problem}`;
+  return element.children === undefined ? undefined : `Input "${key}" takes no children`;
 }
 //@ chunk-4121qate.js:158237-158370 placement
 var isBlockLeafType = (type) =>
@@ -502,15 +535,17 @@ var isHref = (href) => typeof href === "string" && href.trim() !== "";
 //@ chunk-4121qate.js:158473-158486 placement
 var MAX_SVG_PIXELS = 4096;
 //@ chunk-4121qate.js:158486-158564 placement
-var isSvgPixels = (e) =>
-  e === undefined || (typeof e === "number" && Number.isFinite(e) && e > 0 && e <= MAX_SVG_PIXELS);
+var isSvgPixels = (pixels) =>
+  pixels === undefined ||
+  (typeof pixels === "number" && Number.isFinite(pixels) && pixels > 0 && pixels <= MAX_SVG_PIXELS);
 //@ chunk-4121qate.js:158564-158633 placement
-var isUnknownBorder = (e, o) => e === "borderStyle" && !(typeof o === "string" && BORDER_STYLES.has(o));
+var isUnknownBorder = (prop, value) =>
+  prop === "borderStyle" && !(typeof value === "string" && BORDER_STYLES.has(value));
 //@ chunk-4121qate.js:158633-158745 placement
-function keyedPropsOf(props, o) {
+function keyedPropsOf(props, allowed) {
   if (!isPlainObject(props)) return;
   let { key } = props;
-  return typeof key === "string" && key !== "" && hasOnlyKeys(props, o)
+  return typeof key === "string" && key !== "" && hasOnlyKeys(props, allowed)
     ? {
         ...props,
         key,
@@ -528,17 +563,18 @@ function pressableLinksProblem(pressableLinks) {
     return `pressableLinks is ${valueKind(pressableLinks)}, not a list of hrefs`;
   if (pressableLinks.length > MAX_PRESSABLE_LINKS)
     return `pressableLinks names more than ${MAX_PRESSABLE_LINKS} links`;
-  for (let o of pressableLinks) {
-    if (typeof o !== "string" || o === "") return `pressableLinks holds ${valueKind(o)}, not an href`;
-    if (o.length > MAX_LINK_HREF_CHARS)
+  for (let href of pressableLinks) {
+    if (typeof href !== "string" || href === "")
+      return `pressableLinks holds ${valueKind(href)}, not an href`;
+    if (href.length > MAX_LINK_HREF_CHARS)
       return `pressableLinks holds an href longer than ${MAX_LINK_HREF_CHARS} characters`;
-    if (hasControlCharacter(o)) return "pressableLinks holds an href with a control character";
+    if (hasControlCharacter(href)) return "pressableLinks holds an href with a control character";
   }
   return;
 }
 //@ chunk-4121qate.js:159211-160366 placement
-function markdownProblem(e) {
-  let { props, press, part, children } = e;
+function markdownProblem(element) {
+  let { props, press, part, children } = element;
   if (!(isPlainObject(props) && hasOnlyKeys(props, ["key", "text", "dimColor", "pressableLinks"])))
     return "Markdown props must be { text }, a string, key a string, dimColor a boolean and pressableLinks a list of hrefs";
   if (children !== undefined) return "Markdown takes no children";
@@ -546,19 +582,20 @@ function markdownProblem(e) {
   if (typeof text !== "string") return "Markdown text must be a string";
   if ((key === undefined ? undefined : unusableKeyProblem(key)) !== undefined)
     return `Markdown key "${shownKey(key)}" is not a usable address`;
-  let u = key === undefined ? "Markdown" : `Markdown "${shownKey(key)}"`;
-  let l = drawnTextProblem("text", text) ?? pressableLinksProblem(pressableLinks);
-  if (l !== undefined) return `${u} ${l}`;
+  let label = key === undefined ? "Markdown" : `Markdown "${shownKey(key)}"`;
+  let problem = drawnTextProblem("text", text) ?? pressableLinksProblem(pressableLinks);
+  if (problem !== undefined) return `${label} ${problem}`;
   if (SPREAD_CELL.test(text))
-    return `${u} text holds U+2800 and a combining mark that image cells use, which could be drawn together as an image cell; remove one of them`;
-  if (dimColor !== undefined && typeof dimColor !== "boolean") return `${u} dimColor is a boolean or absent`;
-  if (part !== undefined && !isStamped(part)) return `${u} is not stamped by a plugin of this chain`;
+    return `${label} text holds U+2800 and a combining mark that image cells use, which could be drawn together as an image cell; remove one of them`;
+  if (dimColor !== undefined && typeof dimColor !== "boolean")
+    return `${label} dimColor is a boolean or absent`;
+  if (part !== undefined && !isStamped(part)) return `${label} is not stamped by a plugin of this chain`;
   if (press === undefined)
     return pressableLinks !== undefined
-      ? `${u} names pressableLinks but answers no press (onLinkPress)`
+      ? `${label} names pressableLinks but answers no press (onLinkPress)`
       : undefined;
-  let y = heldProblem(press);
-  if (y !== undefined) return `${u} ${y}`;
+  let pressProblem = heldProblem(press);
+  if (pressProblem !== undefined) return `${label} ${pressProblem}`;
   return key !== undefined
     ? undefined
     : "Markdown answers its links (onLinkPress) but has no key, its address";
@@ -566,41 +603,41 @@ function markdownProblem(e) {
 //@ chunk-4121qate.js:168819-168860 placement
 var RASTER_PROP_NAMES = ["key", "columns", "rows", "cells"];
 //@ chunk-4121qate.js:168860-169318 placement
-function rasterProblem(e) {
-  let { raster, children } = e;
-  let n = keyedPropsOf(e.props, RASTER_PROP_NAMES);
-  if (n === undefined)
+function rasterProblem(element) {
+  let { raster, children } = element;
+  let props = keyedPropsOf(element.props, RASTER_PROP_NAMES);
+  if (props === undefined)
     return "Raster props must be { key, columns, rows, cells }, key a non-empty string, and nothing else (no hover or onPress yet)";
   if (children !== undefined) return "Raster takes no children";
-  let { key, columns, rows } = n;
-  let f =
-    textPropsProblem(["key"], n) ??
+  let { key, columns, rows } = props;
+  let problem =
+    textPropsProblem(["key"], props) ??
     checkMountCellSize(columns, rows) ??
-    checkRasterCells(n.cells, Number(columns), Number(rows)).problem ??
+    checkRasterCells(props.cells, Number(columns), Number(rows)).problem ??
     (isStamped(raster) ? undefined : "is not stamped by a plugin of this chain");
-  return f === undefined ? undefined : `Raster "${shownKey(key)}" ${f}`;
+  return problem === undefined ? undefined : `Raster "${shownKey(key)}" ${problem}`;
 }
 //@ chunk-4121qate.js:169318-169329 placement
 var MAX_SELECT_OPTIONS = 64;
 //@ chunk-4121qate.js:169329-169654 placement
-function optionProblem(option, o) {
+function optionProblem(option, seenValues) {
   if (!(
     isPlainObject(option) &&
     typeof option.value === "string" &&
     Object.keys(option).every((key) => key === "value" || key === "label")
   ))
     return "options are { value: string, label?: string }";
-  let n = option.value;
-  let s = o.has(n);
-  o.add(n);
-  let i = s
+  let value = option.value;
+  let isDuplicate = seenValues.has(value);
+  seenValues.add(value);
+  let problem = isDuplicate
     ? "is listed twice; values are unique"
-    : (textPropProblem("value", n) ?? drawnTextProblem("label", option.label));
-  return i === undefined ? undefined : `option "${n}" ${i}`;
+    : (textPropProblem("value", value) ?? drawnTextProblem("label", option.label));
+  return problem === undefined ? undefined : `option "${value}" ${problem}`;
 }
 //@ chunk-4121qate.js:169654-170208 placement
-function selectProblem(e) {
-  let { props, press } = e;
+function selectProblem(element) {
+  let { props, press } = element;
   if (!(
     isPlainObject(props) &&
     typeof props.key === "string" &&
@@ -609,29 +646,29 @@ function selectProblem(e) {
   ))
     return "Select props must be { key, options } and any of label, value, autoFocus";
   let { key, options } = props;
-  let p = Array.isArray(options) && options.length > 0 && options.length <= MAX_SELECT_OPTIONS;
-  let f = new Set();
-  let a =
+  let isOptionsValid = Array.isArray(options) && options.length > 0 && options.length <= MAX_SELECT_OPTIONS;
+  let seenValues = new Set();
+  let problem =
     drawnTextProblem("label", props.label) ??
     textPropProblem("value", props.value) ??
-    (p
-      ? options.map((option) => optionProblem(option, f)).find((m) => m !== undefined)
+    (isOptionsValid
+      ? options.map((option) => optionProblem(option, seenValues)).find((found) => found !== undefined)
       : `options must be 1 to ${MAX_SELECT_OPTIONS} entries`) ??
     autoFocusProblem(props.autoFocus) ??
     heldProblem(press) ??
-    (e.children === undefined ? undefined : "takes no children");
-  return a === undefined ? undefined : `Select "${key}" ${a}`;
+    (element.children === undefined ? undefined : "takes no children");
+  return problem === undefined ? undefined : `Select "${key}" ${problem}`;
 }
 //@ chunk-4121qate.js:170208-170223 placement
 var MAX_SVG_SOURCE_CHARS = 131072;
 //@ chunk-4121qate.js:170223-170897 placement
-function svgProblem(e) {
-  let { props, children } = e;
+function svgProblem(element) {
+  let { props, children } = element;
   if (!isPlainObject(props)) return "Svg props must be { source, alt }";
   if (children !== undefined) return "Svg takes no children";
-  let { source, alt, width, height, isInteractive, ...a } = props;
-  let [m] = Object.keys(a);
-  if (m !== undefined) return `Svg prop "${m}" is not allowed`;
+  let { source, alt, width, height, isInteractive, ...rest } = props;
+  let [unknownProp] = Object.keys(rest);
+  if (unknownProp !== undefined) return `Svg prop "${unknownProp}" is not allowed`;
   if (typeof source !== "string" || source === "") return "Svg source must be a non-empty string";
   if (source.length > MAX_SVG_SOURCE_CHARS)
     return `Svg source longer than ${MAX_SVG_SOURCE_CHARS} characters`;
@@ -656,67 +693,70 @@ var LEAF_PROBLEM = {
   Svg: svgProblem,
 };
 //@ chunk-4121qate.js:171001-171149 placement
-function textColumns(e, o) {
-  let r = 0;
-  let n = 0;
-  for (let { index } of e.matchAll(/[\t\n\r]/gu)) {
-    r += index === n ? 0 : bunStringWidth(e.slice(n, index));
-    n = index + 1;
-    if (r > o) return r;
+function textColumns(text, limit) {
+  let columns = 0;
+  let lineStart = 0;
+  for (let { index } of text.matchAll(/[\t\n\r]/gu)) {
+    columns += index === lineStart ? 0 : bunStringWidth(text.slice(lineStart, index));
+    lineStart = index + 1;
+    if (columns > limit) return columns;
   }
-  return r + bunStringWidth(e.slice(n));
+  return columns + bunStringWidth(text.slice(lineStart));
 }
 //@ chunk-4121qate.js:171149-171229 placement
-function wrapRows(e, o, r) {
-  let n = countCharInString(
-    e,
+function wrapRows(text, columns, rowsMax) {
+  let lineCount = countCharInString(
+    text,
     `
 `,
   );
-  return n > r ? n : n + Math.floor(textColumns(e, o * (r + 1)) / o);
+  return lineCount > rowsMax
+    ? lineCount
+    : lineCount + Math.floor(textColumns(text, columns * (rowsMax + 1)) / columns);
 }
 //@ chunk-4121qate.js:171229-171429 placement
-function leafTexts(e) {
-  if (e.type === "Svg") return [e.props.alt];
-  let o = e.type === "Button" ? (e.children ?? []) : [];
-  if (o.length > 0) return [heldTexts(o).join("")];
-  return e.type === "Button" || e.type === "Input" ? [e.props.label ?? ""] : [];
+function leafTexts(node) {
+  if (node.type === "Svg") return [node.props.alt];
+  let buttonChildren = node.type === "Button" ? (node.children ?? []) : [];
+  if (buttonChildren.length > 0) return [heldTexts(buttonChildren).join("")];
+  return node.type === "Button" || node.type === "Input" ? [node.props.label ?? ""] : [];
 }
 //@ chunk-4121qate.js:171429-171982 placement
-function leafRows(e, rowsMax) {
-  if (e.type === "Raster" || e.type === "Image") return e.props.rows;
-  if (e.type === "Markdown") return 1 + wrapRows(e.props.text, DIALOG_FRAME_COLUMNS, rowsMax);
-  if (e.type !== "Code")
+function leafRows(node, rowsMax) {
+  if (node.type === "Raster" || node.type === "Image") return node.props.rows;
+  if (node.type === "Markdown") return 1 + wrapRows(node.props.text, DIALOG_FRAME_COLUMNS, rowsMax);
+  if (node.type !== "Code")
     return (
-      (e.type === "Input" ? (e.props.rows ?? 1) : 1) +
-      wrapRows(leafTexts(e).join(" "), DIALOG_FRAME_COLUMNS, rowsMax)
+      (node.type === "Input" ? (node.props.rows ?? 1) : 1) +
+      wrapRows(leafTexts(node).join(" "), DIALOG_FRAME_COLUMNS, rowsMax)
     );
-  let { source, startLine, format, wrap } = e.props;
-  let p =
+  let { source, startLine, format, wrap } = node.props;
+  let sourceLines =
     countCharInString(
       source,
       `
 `,
     ) + 1;
-  if (p > rowsMax) return p;
-  let f = codeHunks(source, format);
-  let hunks = f?.kind === "hunks" ? f.hunks : [];
+  if (sourceLines > rowsMax) return sourceLines;
+  let parsed = codeHunks(source, format);
+  let hunks = parsed?.kind === "hunks" ? parsed.hunks : [];
   let max = Math.max(0, hunks.length - 1);
-  if (wrap === "truncate-end") return p + max;
-  let u = startLine === undefined || f?.kind === "refused" ? 0 : startLine + p - 1;
-  let l = u === 0 ? 0 : String(u).length + 2;
-  let reduced = hunks.reduce((acc, patch) => Math.max(acc, computeGutterWidth(patch)), l);
+  if (wrap === "truncate-end") return sourceLines + max;
+  let lastLine = startLine === undefined || parsed?.kind === "refused" ? 0 : startLine + sourceLines - 1;
+  let lineNumberWidth = lastLine === 0 ? 0 : String(lastLine).length + 2;
+  let reduced = hunks.reduce((acc, patch) => Math.max(acc, computeGutterWidth(patch)), lineNumberWidth);
   return 1 + max + wrapRows(drawnText(source), DIALOG_FRAME_COLUMNS - reduced, rowsMax);
 }
 //@ chunk-4121qate.js:171982-172048 placement
-var writtenHref = (href) => href.replace(/[^ -~]/gu, (o) => encodeURIComponent(normalizeFullWidthSpace(o)));
+var writtenHref = (href) =>
+  href.replace(/[^ -~]/gu, (char) => encodeURIComponent(normalizeFullWidthSpace(char)));
 //@ chunk-4121qate.js:172048-172717 placement
-function linkProblem(e) {
-  let { props } = e;
+function linkProblem(element) {
+  let { props } = element;
   if (!isPlainObject(props)) return "Link props must be { href }";
-  let { href, label, ...s } = props;
-  let [i] = Object.keys(s);
-  if (i !== undefined) return `Link prop "${i}" is not allowed`;
+  let { href, label, ...rest } = props;
+  let [unknownProp] = Object.keys(rest);
+  if (unknownProp !== undefined) return `Link prop "${unknownProp}" is not allowed`;
   if (isHref(href) && (href.length > MAX_LINK_HREF_CHARS || writtenHref(href).length > MAX_LINK_HREF_CHARS))
     return `Link href longer than ${MAX_LINK_HREF_CHARS} characters as written`;
   if (label !== undefined && typeof label !== "string") return "Link label must be a string";
@@ -727,14 +767,14 @@ function linkProblem(e) {
     : undefined;
 }
 //@ chunk-4121qate.js:172717-172884 placement
-function linkText(e) {
-  let { children } = e;
-  let props = isPlainObject(e.props) ? e.props : {};
-  let n = Array.isArray(children) && children.length > 0;
+function linkText(element) {
+  let { children } = element;
+  let props = isPlainObject(element.props) ? element.props : {};
+  let hasChildren = Array.isArray(children) && children.length > 0;
   let { href, label } = props;
-  let p = typeof label === "string";
-  let f = isHref(href);
-  return n ? "" : p ? label : f ? drawnHref(href) : "";
+  let hasLabel = typeof label === "string";
+  let hasHref = isHref(href);
+  return hasChildren ? "" : hasLabel ? label : hasHref ? drawnHref(href) : "";
 }
 //@ chunk-4121qate.js:172884-172900 placement
 var MAX_TREE_IMAGE_BYTES = 2097152;
@@ -747,45 +787,52 @@ var notOverBudget = () => ({
   isClientAdded: false,
 });
 //@ chunk-4121qate.js:172972-173017 placement
-var plainCodeFinding = (e) => `Code ${e.ordinal} drawn plain`;
+var plainCodeFinding = (finding) => `Code ${finding.ordinal} drawn plain`;
 //@ chunk-4121qate.js:173017-173029 placement
 var MAX_REASON_CHARS = 200;
 //@ chunk-4121qate.js:173029-173242 placement
 function plainCodeNote({ ordinal, path, problem }) {
-  let n = path === undefined ? "" : ` (path "${path}")`;
-  let i = problem.length > MAX_REASON_CHARS ? `${truncateToLength(problem, MAX_REASON_CHARS)}...` : problem;
-  return `Code ${ordinal}${n} is drawn as plain code, its source not a unified diff: ${i}`.replace(
+  let pathNote = path === undefined ? "" : ` (path "${path}")`;
+  let reasonText =
+    problem.length > MAX_REASON_CHARS ? `${truncateToLength(problem, MAX_REASON_CHARS)}...` : problem;
+  return `Code ${ordinal}${pathNote} is drawn as plain code, its source not a unified diff: ${reasonText}`.replace(
     LINE_SCRUB,
     "?",
   );
 }
 //@ chunk-4121qate.js:173242-173289 placement
-var plainLinkFinding = ([e]) => `Link ${e.ordinal} drawn plain`;
+var plainLinkFinding = ([finding]) => `Link ${finding.ordinal} drawn plain`;
 //@ chunk-4121qate.js:173289-173527 placement
-function plainLinkNote(e) {
-  let [{ ordinal: o, problem: r }, ...n] = e;
-  let i = r.length > MAX_REASON_CHARS ? `${truncateToLength(r, MAX_REASON_CHARS)}...` : r;
-  let f = n.length > 0 ? `; ${n.length} more of its tree as well` : "";
-  return `Link ${o} is drawn as plain text, no link made of it: its href ${i}${f}`.replace(LINE_SCRUB, "?");
+function plainLinkNote(findings) {
+  let [{ ordinal, problem }, ...rest] = findings;
+  let problemText =
+    problem.length > MAX_REASON_CHARS ? `${truncateToLength(problem, MAX_REASON_CHARS)}...` : problem;
+  let moreNote = rest.length > 0 ? `; ${rest.length} more of its tree as well` : "";
+  return `Link ${ordinal} is drawn as plain text, no link made of it: its href ${problemText}${moreNote}`.replace(
+    LINE_SCRUB,
+    "?",
+  );
 }
 //@ chunk-4121qate.js:173527-174031 placement
-function wireHrefProblem(e) {
-  if (/[^!-~]/.test(e)) return "holds a character outside printable ASCII";
-  if (!URL.canParse(e)) return "is not a URL";
-  let { protocol, hostname, username, password, href } = new URL(e);
+function wireHrefProblem(href) {
+  if (/[^!-~]/.test(href)) return "holds a character outside printable ASCII";
+  if (!URL.canParse(href)) return "is not a URL";
+  let { protocol, hostname, username, password, href: href_2 } = new URL(href);
   if (!(protocol === "https:" || (protocol === "http:" && hostname === "localhost")))
     return "is not https: (or http://localhost)";
   if (username !== "" || password !== "") return "carries credentials (user@host)";
-  if (e.includes("@")) return "holds a raw @";
-  let replaced = e.replace(/^(https?:\/\/[^/?#]+)(?=[?#]|$)/, "$1/");
-  return href === e || href === replaced ? undefined : `is not in canonical form (${href})`;
+  if (href.includes("@")) return "holds a raw @";
+  let replaced = href.replace(/^(https?:\/\/[^/?#]+)(?=[?#]|$)/, "$1/");
+  return href_2 === href || href_2 === replaced ? undefined : `is not in canonical form (${href_2})`;
 }
 //@ chunk-4121qate.js:174031-174278 placement
-function plainLinkProblem(href, o) {
+function plainLinkProblem(href, surface) {
   if (!isHref(href))
     return `is ${typeof href === "string" ? "blank" : href === undefined ? "absent" : valueKind(href)}, not a string that names where it goes`;
-  let n = o !== "terminal" ? wireHrefProblem(href) : undefined;
-  return n === undefined ? undefined : `${n}, and the ${o} surface is sent no other link`;
+  let wireProblem = surface !== "terminal" ? wireHrefProblem(href) : undefined;
+  return wireProblem === undefined
+    ? undefined
+    : `${wireProblem}, and the ${surface} surface is sent no other link`;
 }
 //@ chunk-4121qate.js:174278-174550 placement
 function spacingInCells(props) {
@@ -794,30 +841,30 @@ function spacingInCells(props) {
     Object.entries(props).some(([key, value]) => SPACE_PROPS.has(key) && isSpaceStep(value))
   ))
     return props;
-  let r = {
+  let copy = {
     ...props,
   };
-  for (let [key, [s, i]] of Object.entries(SPACE_PAIRS)) {
-    let p = r[key];
-    if (isSpaceStep(p)) {
-      delete r[key];
-      r[s] ??= p;
-      r[i] ??= p;
+  for (let [key, [firstProp, secondProp]] of Object.entries(SPACE_PAIRS)) {
+    let step = copy[key];
+    if (isSpaceStep(step)) {
+      delete copy[key];
+      copy[firstProp] ??= step;
+      copy[secondProp] ??= step;
     }
   }
-  return xr(r, (n, s) => {
-    let i = SPACE_AXIS[s];
-    return i !== undefined && isSpaceStep(n) ? SPACE_CELLS[n][i] : n;
+  return import_mapValues(copy, (value, key) => {
+    let axis = SPACE_AXIS[key];
+    return axis !== undefined && isSpaceStep(value) ? SPACE_CELLS[value][axis] : value;
   });
 }
 //@ chunk-4121qate.js:174550-174667 placement
-var stampsByKind = (e) => ({
-  Input: e.press,
-  Select: e.press,
-  Markdown: e.press ?? e.part,
-  Client: e.client,
-  Raster: e.raster,
-  Image: e.image,
+var stampsByKind = (element) => ({
+  Input: element.press,
+  Select: element.press,
+  Markdown: element.press ?? element.part,
+  Client: element.client,
+  Raster: element.raster,
+  Image: element.image,
 });
 //@ chunk-4121qate.js:174667-174739 placement
 /**
@@ -833,67 +880,69 @@ var newNodeIdentities = () => ({
 /**
  * 节点标识
  */
-function nodeIdentity(e, o) {
-  let r = o.ids.get(e) ?? o.ids.size;
-  o.ids.set(e, r);
-  return r;
+function nodeIdentity(node, ids) {
+  let id = ids.ids.get(node) ?? ids.ids.size;
+  ids.ids.set(node, id);
+  return id;
 }
 //@ chunk-4121qate.js:174811-175190 placement
 /**
  * 计算子树的标识（记忆化，处理循环）。
  */
-function subtreeId(e, o, r = 0) {
-  if (typeof e === "string") return nodeIdentity(jsonStringify(e), o);
-  if (!isPlainObject(e)) return;
-  if (o.idOf.has(e)) return o.idOf.get(e);
-  o.idOf.set(e, undefined);
-  let { children = [], ...s } = e;
-  if (r >= MAX_DEPTH * WELL_FORMED_SLACK || !Array.isArray(children) || children.length >= o.unread) return;
-  o.unread -= children.length + 1;
-  let mapped = children.map((child) => subtreeId(child, o, r + 1));
+function subtreeId(node, ids, depth = 0) {
+  if (typeof node === "string") return nodeIdentity(jsonStringify(node), ids);
+  if (!isPlainObject(node)) return;
+  if (ids.idOf.has(node)) return ids.idOf.get(node);
+  ids.idOf.set(node, undefined);
+  let { children = [], ...rest } = node;
+  if (depth >= MAX_DEPTH * WELL_FORMED_SLACK || !Array.isArray(children) || children.length >= ids.unread)
+    return;
+  ids.unread -= children.length + 1;
+  let mapped = children.map((child) => subtreeId(child, ids, depth + 1));
   if (mapped.includes(undefined)) return;
   try {
-    let f = nodeIdentity(`${jsonStringify(s)}${mapped.join()}`, o);
-    o.idOf.set(e, f);
-    return f;
+    let id = nodeIdentity(`${jsonStringify(rest)}${mapped.join()}`, ids);
+    ids.idOf.set(node, id);
+    return id;
   } catch {
     return;
   }
 }
 //@ chunk-4121qate.js:175190-175433 placement
-function handedSubtrees(e) {
+function handedSubtrees(tree) {
   let nodeIdentities = newNodeIdentities();
-  let r = [e];
-  let n = 0;
-  while (r.length > 0 && n < MAX_NODES * WELL_FORMED_SLACK) {
-    let s = r.pop();
-    n += 1;
-    let i = subtreeId(s, nodeIdentities);
-    if (i !== undefined) nodeIdentities.left.set(i, (nodeIdentities.left.get(i) ?? 0) + 1);
-    if (isPlainObject(s) && Array.isArray(s.children)) for (let child of s.children) r.push(child);
+  let stack = [tree];
+  let count = 0;
+  while (stack.length > 0 && count < MAX_NODES * WELL_FORMED_SLACK) {
+    let node = stack.pop();
+    count += 1;
+    let id = subtreeId(node, nodeIdentities);
+    if (id !== undefined) nodeIdentities.left.set(id, (nodeIdentities.left.get(id) ?? 0) + 1);
+    if (isPlainObject(node) && Array.isArray(node.children))
+      for (let child of node.children) stack.push(child);
   }
-  nodeIdentities.unread = n + MAX_NODES + 1;
+  nodeIdentities.unread = count + MAX_NODES + 1;
   return nodeIdentities;
 }
 //@ chunk-4121qate.js:184654-185018 placement
-function twiceProblem(e, o) {
-  let { props } = e;
+function twiceProblem(element, seen) {
+  let { props } = element;
   let key =
-    (e.type === "Input" ||
-      e.type === "Select" ||
-      e.type === "Markdown" ||
-      e.type === "Client" ||
-      e.type === "Raster" ||
-      e.type === "Image") &&
+    (element.type === "Input" ||
+      element.type === "Select" ||
+      element.type === "Markdown" ||
+      element.type === "Client" ||
+      element.type === "Raster" ||
+      element.type === "Image") &&
     isPlainObject(props)
       ? props.key
       : undefined;
-  let i = pluginOfElement(stampsByKind(e)[String(e.type)]);
+  let plugin = pluginOfElement(stampsByKind(element)[String(element.type)]);
   if (typeof key !== "string") return;
-  let p = `${e.type}\x00${String(i)}\x00${key}`;
-  let f = o.has(p);
-  o.add(p);
-  return f ? `${e.type} "${key}" is drawn twice; each takes its own key` : undefined;
+  let keyText = `${element.type}\x00${String(plugin)}\x00${key}`;
+  let isDuplicate = seen.has(keyText);
+  seen.add(keyText);
+  return isDuplicate ? `${element.type} "${key}" is drawn twice; each takes its own key` : undefined;
 }
 //@ chunk-4121qate.js:185018-185132 placement
 var createTreeBudget = ({ handed, budget }, visit) => ({
@@ -910,131 +959,138 @@ var createTreeBudget = ({ handed, budget }, visit) => ({
 /**
  * 标记遍历结束
  */
-function endTraversal(e, budget) {
+function endTraversal(message, budget) {
   if (budget !== undefined) budget.isOver = true;
-  return e;
+  return message;
 }
 //@ chunk-4121qate.js:185184-185482 placement
-function consumeHandedSubtree(e, handed) {
-  let r = new Map();
-  let n = [e];
-  while (n.length > 0) {
-    let s = n.pop();
-    let i = subtreeId(s, handed);
-    if (i === undefined) return false;
-    let p = (r.get(i) ?? 0) + 1;
-    if (p > (handed.left.get(i) ?? 0)) return false;
-    r.set(i, p);
-    if (isPlainObject(s) && Array.isArray(s.children)) for (let child of s.children) n.push(child);
+function consumeHandedSubtree(tree, handed) {
+  let counts = new Map();
+  let stack = [tree];
+  while (stack.length > 0) {
+    let node = stack.pop();
+    let id = subtreeId(node, handed);
+    if (id === undefined) return false;
+    let count = (counts.get(id) ?? 0) + 1;
+    if (count > (handed.left.get(id) ?? 0)) return false;
+    counts.set(id, count);
+    if (isPlainObject(node) && Array.isArray(node.children))
+      for (let child of node.children) stack.push(child);
   }
-  for (let [s, i] of r) handed.left.set(s, (handed.left.get(s) ?? 0) - i);
+  for (let [id, used] of counts) handed.left.set(id, (handed.left.get(id) ?? 0) - used);
   return true;
 }
 //@ chunk-4121qate.js:185482-185711 placement
-function visitWithHanded(e, o, treeBudget) {
+function visitWithHanded(tree, frame, treeBudget) {
   let { visit, handed } = treeBudget;
-  if (treeBudget.isHeld) return visit(e, o);
-  if (o.depth > MAX_DEPTH) return endTraversal(`deeper than ${MAX_DEPTH}`, treeBudget.budget);
-  if (handed === undefined || !consumeHandedSubtree(e, handed)) return visit(e, o);
-  let i = {
+  if (treeBudget.isHeld) return visit(tree, frame);
+  if (frame.depth > MAX_DEPTH) return endTraversal(`deeper than ${MAX_DEPTH}`, treeBudget.budget);
+  if (handed === undefined || !consumeHandedSubtree(tree, handed)) return visit(tree, frame);
+  let saved = {
     ...treeBudget,
   };
   treeBudget.isHeld = true;
-  let p = visit(e, o);
-  Object.assign(treeBudget, i);
-  return p;
+  let result = visit(tree, frame);
+  Object.assign(treeBudget, saved);
+  return result;
 }
 //@ chunk-4121qate.js:185711-190702 placement
 /**
  * 校验 ui.render 树的节点数与深度上限
  */
-function validateTree(e, component, r = {}) {
-  let { surface, note, within, clientRows, measured } = r;
-  let treeBudget = createTreeBudget(r, visit);
-  let m = component === ONE_ENGINE_NODE_COMPONENT;
-  let c = m || within === ONE_ENGINE_NODE_COMPONENT;
-  let u = dialogFrameOf(surface);
-  let l = surface === undefined ? undefined : UI_ELEMENT_TYPES[surface];
-  let y = new Set();
-  let g = 0;
-  let x = false;
+function validateTree(tree, component, options = {}) {
+  let { surface, note, within, clientRows, measured } = options;
+  let treeBudget = createTreeBudget(options, visit);
+  let isEngineNode = component === ONE_ENGINE_NODE_COMPONENT;
+  let bounded = isEngineNode || within === ONE_ENGINE_NODE_COMPONENT;
+  let frame = dialogFrameOf(surface);
+  let surfaceTypes = surface === undefined ? undefined : UI_ELEMENT_TYPES[surface];
+  let seenKeys = new Set();
+  let engineCount = 0;
+  let hasBelowDialog = false;
   let isClientAdded = false;
-  function visit(B, j) {
-    let { depth, inInline, concealedBy, hoverScope, siblingBoxKeys } = j;
-    let { inButton } = j;
+  function visit(node, walkFrame) {
+    let { depth, inInline, concealedBy, hoverScope, siblingBoxKeys } = walkFrame;
+    let { inButton } = walkFrame;
     if (++treeBudget.nodes > MAX_NODES && !treeBudget.isHeld)
       return endTraversal(`more than ${MAX_NODES} nodes`, treeBudget.budget);
-    x ||= m && g > 0;
-    if (typeof B === "string") {
+    hasBelowDialog ||= isEngineNode && engineCount > 0;
+    if (typeof node === "string") {
       if (depth === 0) return "the root must be an element";
-      if (ITERM_CELL.test(B))
+      if (ITERM_CELL.test(node))
         return "a text child holds U+2800 followed by a combining mark that image cells use; remove one of them";
-      if (hasControlCharacter(B)) return "a text child holds a control character (an escape sequence)";
-      if (OPENING_MARK.test(B))
+      if (hasControlCharacter(node)) return "a text child holds a control character (an escape sequence)";
+      if (OPENING_MARK.test(node))
         return "a text child opens with a combining mark that image cells use, which could join the text before it; put a character before the mark";
-      if (c && inButton === undefined)
-        treeBudget.rows += (inInline ? 0 : 1) + wrapRows(B, DIALOG_FRAME_COLUMNS, u.rowsMax);
+      if (bounded && inButton === undefined)
+        treeBudget.rows += (inInline ? 0 : 1) + wrapRows(node, DIALOG_FRAME_COLUMNS, frame.rowsMax);
       return;
     }
-    if (!isPlainObject(B)) return `node is ${valueKind(B)}`;
-    let E = B;
-    let { props, children, ref } = E;
-    let ce = E.type === "engine";
-    if (inButton !== undefined && (ce || (isElementType(E.type) && E.type !== "Text")))
-      return `${ce ? "engine node" : String(E.type)} inside ${inButton} (a Button holds strings and Text)`;
-    if (E.type === "engine") {
-      g += 1;
+    if (!isPlainObject(node)) return `node is ${valueKind(node)}`;
+    let element = node;
+    let { props, children, ref } = element;
+    let isEngine = element.type === "engine";
+    if (inButton !== undefined && (isEngine || (isElementType(element.type) && element.type !== "Text")))
+      return `${isEngine ? "engine node" : String(element.type)} inside ${inButton} (a Button holds strings and Text)`;
+    if (element.type === "engine") {
+      engineCount += 1;
       if (inInline) return "engine node inside an inline element";
       if (concealedBy !== undefined) return `engine node under a ${concealedBy}`;
-      let found = Object.keys(E).find((key) => key !== "type" && key !== "ref" && E[key] !== undefined);
+      let found = Object.keys(element).find(
+        (key) => key !== "type" && key !== "ref" && element[key] !== undefined,
+      );
       if (found !== undefined) return `engine node takes only type and ref, not ${found}`;
       return isNonNegativeInt(ref) ? undefined : "engine node without a ref";
     }
-    if (!isElementType(E.type))
-      return typeof E.type === "string"
-        ? `"${String(E.type)}" is not an element (the elements are ${Object.keys(ELEMENT_KIND).join(", ")}, from $.ui.resolve(e))`
-        : `unknown element type ${valueKind(E.type)}`;
-    if (inInline && ELEMENT_KIND[E.type] === "block") return `${E.type} inside an inline element`;
-    if (l !== undefined && !l.includes(E.type))
-      return `${E.type} is not an element of the ${surface} surface`;
-    if (isBlockLeafType(E.type)) {
-      let k = E.type === "Button" && isPlainObject(props) ? `Button "${shownKey(props.key)}"` : E.type;
-      let C = LEAF_PROBLEM[E.type](E) ?? twiceProblem(E, y) ?? hoverProblem(E, k, hoverScope);
-      if (C !== undefined) return C;
-      let reduced = (E.type === "Button" && Array.isArray(children) ? children : []).reduce(
-        (acc, w) =>
+    if (!isElementType(element.type))
+      return typeof element.type === "string"
+        ? `"${String(element.type)}" is not an element (the elements are ${Object.keys(ELEMENT_KIND).join(", ")}, from $.ui.resolve(e))`
+        : `unknown element type ${valueKind(element.type)}`;
+    if (inInline && ELEMENT_KIND[element.type] === "block") return `${element.type} inside an inline element`;
+    if (surfaceTypes !== undefined && !surfaceTypes.includes(element.type))
+      return `${element.type} is not an element of the ${surface} surface`;
+    if (isBlockLeafType(element.type)) {
+      let label =
+        element.type === "Button" && isPlainObject(props) ? `Button "${shownKey(props.key)}"` : element.type;
+      let problem =
+        LEAF_PROBLEM[element.type](element) ??
+        twiceProblem(element, seenKeys) ??
+        hoverProblem(element, label, hoverScope);
+      if (problem !== undefined) return problem;
+      let reduced = (element.type === "Button" && Array.isArray(children) ? children : []).reduce(
+        (acc, child) =>
           acc ??
           visitWithHanded(
-            w,
+            child,
             {
               depth: depth + 1,
               inInline: true,
               concealedBy,
               hoverScope,
               siblingBoxKeys: new Set(),
-              inButton: k,
+              inButton: label,
             },
             treeBudget,
           ),
         undefined,
       );
       if (reduced !== undefined) return reduced;
-      if (c && !u.isMarkdownDrawn && E.type === "Markdown")
+      if (bounded && !frame.isMarkdownDrawn && element.type === "Markdown")
         return "Markdown around the dialog (its rows are not bounded there)";
-      let Be =
-        c && E.type === "Client"
+      let sizeProp =
+        bounded && element.type === "Client"
           ? Object.keys(isPlainObject(props) ? props : {}).find((key) => SIZE_PROPS.has(key))
           : undefined;
-      if (Be !== undefined) return `${E.type} prop "${Be}" around the dialog`;
-      let le = E;
-      let ye = le.type === "Client" && clientRows !== undefined;
-      let Xe = c ? leafRows(le, u.rowsMax) : 0;
-      treeBudget.rows += ye ? clientRows(le) : Xe;
-      isClientAdded ||= ye && !treeBudget.isHeld;
-      treeBudget.rasterCells += le.type === "Raster" ? le.props.columns * le.props.rows : 0;
+      if (sizeProp !== undefined) return `${element.type} prop "${sizeProp}" around the dialog`;
+      let leaf = element;
+      let measuresClient = leaf.type === "Client" && clientRows !== undefined;
+      let leafRowCount = bounded ? leafRows(leaf, frame.rowsMax) : 0;
+      treeBudget.rows += measuresClient ? clientRows(leaf) : leafRowCount;
+      isClientAdded ||= measuresClient && !treeBudget.isHeld;
+      treeBudget.rasterCells += leaf.type === "Raster" ? leaf.props.columns * leaf.props.rows : 0;
       if (treeBudget.rasterCells > MAX_TREE_RASTER_CELLS && !treeBudget.isHeld)
         return endTraversal(`more than ${MAX_TREE_RASTER_CELLS} Raster cells in one tree`, treeBudget.budget);
-      treeBudget.imageBytes += le.type === "Image" ? imagePayloadBytes(le.props.source) : 0;
+      treeBudget.imageBytes += leaf.type === "Image" ? imagePayloadBytes(leaf.props.source) : 0;
       return treeBudget.imageBytes > MAX_TREE_IMAGE_BYTES && !treeBudget.isHeld
         ? endTraversal(
             `more than ${MAX_TREE_IMAGE_BYTES} bytes of Image source in one tree`,
@@ -1042,82 +1098,83 @@ function validateTree(e, component, r = {}) {
           )
         : undefined;
     }
-    if (!inInline && ELEMENT_KIND[E.type] === "inline") treeBudget.rows += 1;
+    if (!inInline && ELEMENT_KIND[element.type] === "inline") treeBudget.rows += 1;
     let concealedBy_2 = concealedBy;
-    let de = 0;
-    let pe = isPlainObject(props) ? props : {};
-    let key = E.type === "Box" ? pe.key : undefined;
-    let Ee = key === undefined ? undefined : boxKeyProblem(key, siblingBoxKeys);
-    if (Ee !== undefined) note?.(Ee);
-    let { hover } = E;
-    let Pe = isPlainObject(hover) && hover.scope !== undefined && hover.display !== undefined;
-    let Oe = key !== undefined && pe.display === "none" && !Pe;
-    let be = key === undefined ? hoverScope : Oe ? "hidden" : "live";
-    let De = hoverProblem(E, E.type, be);
-    if (De !== undefined) return De;
-    let ft = isPlainObject(hover) ? hover : {};
-    let found = [...OFFSET_PROPS].find((G) => ft[G] !== undefined);
-    let gt = ft.display === undefined ? found : "display";
-    if (c && gt !== undefined) return `${E.type} hover prop "${gt}" around the dialog`;
-    if (E.type === "Link") {
-      let G = linkProblem(E);
-      if (G !== undefined) return G;
+    let gapRows = 0;
+    let elementProps = isPlainObject(props) ? props : {};
+    let key = element.type === "Box" ? elementProps.key : undefined;
+    let boxKeyIssue = key === undefined ? undefined : boxKeyProblem(key, siblingBoxKeys);
+    if (boxKeyIssue !== undefined) note?.(boxKeyIssue);
+    let { hover } = element;
+    let isRevealing = isPlainObject(hover) && hover.scope !== undefined && hover.display !== undefined;
+    let isHidden = key !== undefined && elementProps.display === "none" && !isRevealing;
+    let hoverScopeState = key === undefined ? hoverScope : isHidden ? "hidden" : "live";
+    let hoverIssue = hoverProblem(element, element.type, hoverScopeState);
+    if (hoverIssue !== undefined) return hoverIssue;
+    let hoverProp = isPlainObject(hover) ? hover : {};
+    let found = [...OFFSET_PROPS].find((prop) => hoverProp[prop] !== undefined);
+    let hoverKey = hoverProp.display === undefined ? found : "display";
+    if (bounded && hoverKey !== undefined)
+      return `${element.type} hover prop "${hoverKey}" around the dialog`;
+    if (element.type === "Link") {
+      let linkIssue = linkProblem(element);
+      if (linkIssue !== undefined) return linkIssue;
       let { href, label } = props;
-      let U = isHref(href) ? drawnHref(href) : "";
-      let W = plainLinkProblem(href, surface ?? "terminal") === undefined;
-      let re = !(Array.isArray(children) && children.length > 0) && label === undefined;
-      let oe = linkText(E);
-      let le = re || !W ? oe : `${oe} ${U}`;
-      if (c) treeBudget.rows += wrapRows(le, DIALOG_FRAME_COLUMNS, u.rowsMax);
+      let drawnUrl = isHref(href) ? drawnHref(href) : "";
+      let isPlainLink = plainLinkProblem(href, surface ?? "terminal") === undefined;
+      let drawsUrl = !(Array.isArray(children) && children.length > 0) && label === undefined;
+      let text = linkText(element);
+      let linkTextValue = drawsUrl || !isPlainLink ? text : `${text} ${drawnUrl}`;
+      if (bounded) treeBudget.rows += wrapRows(linkTextValue, DIALOG_FRAME_COLUMNS, frame.rowsMax);
     } else if (props !== undefined) {
-      if (!isPlainObject(props)) return `${E.type} props is ${valueKind(props)}`;
+      if (!isPlainObject(props)) return `${element.type} props is ${valueKind(props)}`;
       for (let [key, value] of Object.entries(props)) {
-        if (E.type === "Box" && key === "key") continue;
-        if (!RENDER_PROPS[E.type].has(key)) return `${E.type} prop "${key}" is not allowed`;
+        if (element.type === "Box" && key === "key") continue;
+        if (!RENDER_PROPS[element.type].has(key)) return `${element.type} prop "${key}" is not allowed`;
         if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean")
-          return `${E.type} prop "${key}" is ${valueKind(value)}`;
+          return `${element.type} prop "${key}" is ${valueKind(value)}`;
         if (isUnknownBorder(key, value)) continue;
-        let U = propValueProblem(key, value);
-        if (U !== undefined) return `${E.type} prop "${key}" ${U}`;
-        let W = key === "position" || SIZE_PROPS.has(key) || OFFSET_PROPS.has(key);
-        if (c && W) return `${E.type} prop "${key}" around the dialog`;
-        if (CONCEALING_PROPS.has(key)) concealedBy_2 ??= `${E.type} with prop "${key}"`;
-        let re =
+        let propProblem = propValueProblem(key, value);
+        if (propProblem !== undefined) return `${element.type} prop "${key}" ${propProblem}`;
+        let isPlacementProp = key === "position" || SIZE_PROPS.has(key) || OFFSET_PROPS.has(key);
+        if (bounded && isPlacementProp) return `${element.type} prop "${key}" around the dialog`;
+        if (CONCEALING_PROPS.has(key)) concealedBy_2 ??= `${element.type} with prop "${key}"`;
+        let rowUnits =
           typeof value === "number"
             ? Math.abs(value)
             : SPACE_PROPS.has(key) && isSpaceStep(value)
               ? SPACE_CELLS[value].down
               : undefined;
-        if (re !== undefined) {
-          treeBudget.rows += re * (ROWS_PER_UNIT[key] ?? 0);
-          de += key === "gap" || key === "rowGap" ? re : 0;
+        if (rowUnits !== undefined) {
+          treeBudget.rows += rowUnits * (ROWS_PER_UNIT[key] ?? 0);
+          gapRows += key === "gap" || key === "rowGap" ? rowUnits : 0;
         } else if (key === "borderStyle") treeBudget.rows += BORDER_ROWS;
       }
     }
     if (children !== undefined) {
-      if (!Array.isArray(children)) return `${E.type} children is ${valueKind(children)}`;
-      treeBudget.rows += de * children.length;
+      if (!Array.isArray(children)) return `${element.type} children is ${valueKind(children)}`;
+      treeBudget.rows += gapRows * children.length;
       let siblingBoxKeys = new Set();
       for (let child of children) {
-        let C = visitWithHanded(
+        let childProblem = visitWithHanded(
           child,
           {
             depth: depth + 1,
-            inInline: inInline || ELEMENT_KIND[E.type] === "inline",
+            inInline: inInline || ELEMENT_KIND[element.type] === "inline",
             concealedBy: concealedBy_2,
-            hoverScope: be,
+            hoverScope: hoverScopeState,
             siblingBoxKeys,
             inButton,
           },
           treeBudget,
         );
-        if (C !== undefined) return C;
+        if (childProblem !== undefined) return childProblem;
       }
     }
     return;
   }
-  let v = visitWithHanded(
-    e,
+  let treeProblem = visitWithHanded(
+    tree,
     {
       depth: 0,
       inInline: false,
@@ -1128,177 +1185,183 @@ function validateTree(e, component, r = {}) {
     },
     treeBudget,
   );
-  let R = c && treeBudget.rows > u.rowsMax;
-  let I = R ? `more than ${u.rowsMax} rows around the dialog` : undefined;
-  let S = !m
-    ? I
-    : g !== 1
-      ? `${g} engine nodes; ${component} is drawn by exactly one`
-      : x
+  let isTooManyRows = bounded && treeBudget.rows > frame.rowsMax;
+  let rowsProblem = isTooManyRows ? `more than ${frame.rowsMax} rows around the dialog` : undefined;
+  let ownProblem = !isEngineNode
+    ? rowsProblem
+    : engineCount !== 1
+      ? `${engineCount} engine nodes; ${component} is drawn by exactly one`
+      : hasBelowDialog
         ? "draws below the dialog"
-        : I;
-  let L = v ?? S;
-  if (L !== undefined && L === I) endTraversal(L, treeBudget.budget);
+        : rowsProblem;
+  let problem = treeProblem ?? ownProblem;
+  if (problem !== undefined && problem === rowsProblem) endTraversal(problem, treeBudget.budget);
   if (treeBudget.budget !== undefined) {
-    treeBudget.budget.isOverRows = R && L === I;
+    treeBudget.budget.isOverRows = isTooManyRows && problem === rowsProblem;
     treeBudget.budget.isClientAdded = isClientAdded;
   }
-  if (L === undefined) measured?.(treeBudget.rows, u.rowsMax);
-  return L;
+  if (problem === undefined) measured?.(treeBudget.rows, frame.rowsMax);
+  return problem;
 }
 //@ chunk-4121qate.js:190702-190909 placement
-function weightAndBold(e) {
-  if (e?.weight === undefined)
-    return e?.bold === true
+function weightAndBold(style) {
+  if (style?.weight === undefined)
+    return style?.bold === true
       ? {
-          ...e,
+          ...style,
           weight: "semibold",
         }
-      : e;
-  let o = e.weight === "semibold" || e.weight === "bold";
-  if (o === (e.bold === true)) return e;
-  let { bold, ...n } = e;
-  return o
+      : style;
+  let isBoldWeight = style.weight === "semibold" || style.weight === "bold";
+  if (isBoldWeight === (style.bold === true)) return style;
+  let { bold, ...rest } = style;
+  return isBoldWeight
     ? {
-        ...n,
+        ...rest,
         bold: true,
       }
-    : n;
+    : rest;
 }
 //@ chunk-4121qate.js:190909-190973 placement
-var wellFormedLeaves = (e) =>
-  wellFormedValue(e, {
+var wellFormedLeaves = (value) =>
+  wellFormedValue(value, {
     copies: new Map(),
     nodes: 0,
     depth: 0,
     isKeyed: false,
   });
 //@ chunk-4121qate.js:190973-191396 placement
-function withKnownBorders(e, o) {
-  if (!(e.type === "Box" || e.type === "Text" || e.type === "Link")) return e;
-  let { children } = e;
-  let mapped = children?.map((child) => (typeof child === "string" ? child : withKnownBorders(child, o)));
-  let p =
-    mapped !== undefined && mapped.some((u, l) => u !== children?.[l])
+function withKnownBorders(element, report) {
+  if (!(element.type === "Box" || element.type === "Text" || element.type === "Link")) return element;
+  let { children } = element;
+  let mapped = children?.map((child) =>
+    typeof child === "string" ? child : withKnownBorders(child, report),
+  );
+  let withMappedChildren =
+    mapped !== undefined && mapped.some((child, index) => child !== children?.[index])
       ? {
-          ...e,
+          ...element,
           children: mapped,
         }
-      : e;
-  if (p.type !== "Box" || p.props?.borderStyle === undefined) return p;
-  let { borderStyle, ...a } = p.props;
-  if (!isUnknownBorder("borderStyle", borderStyle)) return p;
-  o(borderStyle);
-  let { borderStyle: borderStyle_2, ...c } = p.hover ?? {};
+      : element;
+  if (withMappedChildren.type !== "Box" || withMappedChildren.props?.borderStyle === undefined)
+    return withMappedChildren;
+  let { borderStyle, ...rest } = withMappedChildren.props;
+  if (!isUnknownBorder("borderStyle", borderStyle)) return withMappedChildren;
+  report(borderStyle);
+  let { borderStyle: borderStyle_2, ...hoverRest } = withMappedChildren.hover ?? {};
   return {
-    ...p,
-    props: a,
-    ...(p.hover !== undefined && {
-      hover: c,
+    ...withMappedChildren,
+    props: rest,
+    ...(withMappedChildren.hover !== undefined && {
+      hover: hoverRest,
     }),
   };
 }
 //@ chunk-4121qate.js:191396-191845 placement
-function withPlainCode(e, o) {
+function withPlainCode(tree, report) {
   let ordinal = 0;
-  function n(s) {
-    if (s.type === "Code") {
+  function walk(node) {
+    if (node.type === "Code") {
       ordinal += 1;
-      let { format, startLine, ...u } = s.props;
-      let l = codeHunks(u.source, format);
-      if (l?.kind !== "refused") return s;
-      o({
+      let { format, startLine, ...props } = node.props;
+      let parsed = codeHunks(props.source, format);
+      if (parsed?.kind !== "refused") return node;
+      report({
         ordinal,
-        path: u.path === undefined ? undefined : shownKey(u.path),
-        problem: l.problem,
+        path: props.path === undefined ? undefined : shownKey(props.path),
+        problem: parsed.problem,
       });
       return {
-        ...s,
-        props: u,
+        ...node,
+        props,
       };
     }
-    if (!(s.type === "Box" || s.type === "Text" || s.type === "Link")) return s;
-    let { children } = s;
-    let mapped = children?.map((child) => (typeof child === "string" ? child : n(child)));
-    return mapped !== undefined && mapped.some((m, c) => m !== children?.[c])
+    if (!(node.type === "Box" || node.type === "Text" || node.type === "Link")) return node;
+    let { children } = node;
+    let mapped = children?.map((child) => (typeof child === "string" ? child : walk(child)));
+    return mapped !== undefined && mapped.some((child, index) => child !== children?.[index])
       ? {
-          ...s,
+          ...node,
           children: mapped,
         }
-      : s;
+      : node;
   }
-  return n(e);
+  return walk(tree);
 }
 //@ chunk-4121qate.js:191845-192350 placement
-function withPlainLinks(e, surface, r) {
-  let n = 0;
-  let s = [];
-  function i(m) {
-    if (!(m.type === "Box" || m.type === "Text" || m.type === "Link")) return m;
-    if (m.type === "Link") n += 1;
-    let ordinal = n;
-    let { children } = m;
-    let mapped = children?.map((child) => (typeof child === "string" ? child : i(child)));
-    let x =
-      mapped !== undefined && mapped.some((I, V) => I !== children?.[V])
+function withPlainLinks(tree, surface, report) {
+  let linkCount = 0;
+  let problems = [];
+  function convert(node) {
+    if (!(node.type === "Box" || node.type === "Text" || node.type === "Link")) return node;
+    if (node.type === "Link") linkCount += 1;
+    let ordinal = linkCount;
+    let { children } = node;
+    let mapped = children?.map((child) => (typeof child === "string" ? child : convert(child)));
+    let withChildren =
+      mapped !== undefined && mapped.some((child, index) => child !== children?.[index])
         ? {
-            ...m,
+            ...node,
             children: mapped,
           }
-        : m;
-    if (x.type !== "Link") return x;
-    let T = plainLinkProblem(x.props.href, surface);
-    if (T === undefined) return x;
-    s.push({
+        : node;
+    if (withChildren.type !== "Link") return withChildren;
+    let problem = plainLinkProblem(withChildren.props.href, surface);
+    if (problem === undefined) return withChildren;
+    problems.push({
       ordinal,
-      problem: T,
+      problem,
     });
-    let h = linkText(x);
+    let text = linkText(withChildren);
     return {
       type: "Text",
-      children: mapped !== undefined && mapped.length > 0 ? mapped : h === "" ? [] : [h],
+      children: mapped !== undefined && mapped.length > 0 ? mapped : text === "" ? [] : [text],
     };
   }
-  let p = i(e);
-  let [f, ...a] = s;
-  if (f !== undefined) r([f, ...a]);
-  return p;
+  let converted = convert(tree);
+  let [first, ...rest] = problems;
+  if (first !== undefined) report([first, ...rest]);
+  return converted;
 }
 //@ chunk-4121qate.js:192350-192761 placement
-function withRemoteProps(e, o) {
-  let r = e.type === "Box" || e.type === "Text" || e.type === "Link" || e.type === "Button";
-  if (o === "terminal" || !r) return e;
-  let { children } = e;
-  let mapped = children?.map((child) => (typeof child === "string" ? child : withRemoteProps(child, o)));
-  let p =
-    mapped !== undefined && mapped.some((a, m) => a !== children?.[m])
+function withRemoteProps(element, surface) {
+  let isRemoteCapable =
+    element.type === "Box" || element.type === "Text" || element.type === "Link" || element.type === "Button";
+  if (surface === "terminal" || !isRemoteCapable) return element;
+  let { children } = element;
+  let mapped = children?.map((child) =>
+    typeof child === "string" ? child : withRemoteProps(child, surface),
+  );
+  let withChildren =
+    mapped !== undefined && mapped.some((child, index) => child !== children?.[index])
       ? {
-          ...e,
+          ...element,
           children: mapped,
         }
-      : e;
-  if (p.type !== "Box" && p.type !== "Text") return p;
-  let f =
-    p.type === "Text"
-      ? weightAndBold(p.props)
-      : o === "desktop" || o === "mobile"
-        ? p.props
-        : spacingInCells(p.props);
-  return f === p.props
-    ? p
+      : element;
+  if (withChildren.type !== "Box" && withChildren.type !== "Text") return withChildren;
+  let props =
+    withChildren.type === "Text"
+      ? weightAndBold(withChildren.props)
+      : surface === "desktop" || surface === "mobile"
+        ? withChildren.props
+        : spacingInCells(withChildren.props);
+  return props === withChildren.props
+    ? withChildren
     : {
-        ...p,
-        props: f,
+        ...withChildren,
+        props,
       };
 }
 //@ chunk-4121qate.js:192761-192821 placement
-var cutMark = (e, o) => `${o}\u2026 ${e} more characters, not drawn`;
+var cutMark = (count, newline) => `${newline}\u2026 ${count} more characters, not drawn`;
 //@ chunk-4121qate.js:192821-192993 placement
-function cutProps(props, o, r) {
-  let flattened = o.flatMap((s) => {
-    let i = props[s];
-    let p = typeof i === "string" ? r.shown(i, " ") : i;
-    return p === i ? [] : [[s, p]];
+function cutProps(props, fields, room) {
+  let flattened = fields.flatMap((field) => {
+    let value = props[field];
+    let shown = typeof value === "string" ? room.shown(value, " ") : value;
+    return shown === value ? [] : [[field, shown]];
   });
   return flattened.length === 0
     ? props
@@ -1308,140 +1371,142 @@ function cutProps(props, o, r) {
       };
 }
 //@ chunk-4121qate.js:192993-193072 placement
-function cutLeaf(e, o, r) {
-  let n = cutProps(e.props, o, r);
-  return n === e.props
-    ? e
+function cutLeaf(leaf, fields, room) {
+  let props = cutProps(leaf.props, fields, room);
+  return props === leaf.props
+    ? leaf
     : {
-        ...e,
-        props: n,
+        ...leaf,
+        props,
       };
 }
 //@ chunk-4121qate.js:193072-193181 placement
-function keyedBox(e, o) {
-  let { key, ...n } = e.props ?? {};
-  return key === undefined || o.isHeld(String(key).length)
-    ? e
+function keyedBox(box, room) {
+  let { key, ...rest } = box.props ?? {};
+  return key === undefined || room.isHeld(String(key).length)
+    ? box
     : {
-        ...e,
-        props: n,
+        ...box,
+        props: rest,
       };
 }
 //@ chunk-4121qate.js:193181-193322 placement
-function wholeControl(e, o, r) {
-  let reduced = o.reduce((acc, p) => acc + p.length, 0);
-  if (r.isHeld(reduced)) return e;
-  let s = r.markOf(reduced);
+function wholeControl(control, texts, room) {
+  let reduced = texts.reduce((acc, text) => acc + text.length, 0);
+  if (room.isHeld(reduced)) return control;
+  let mark = room.markOf(reduced);
   return {
     type: "Text",
-    children: s === "" ? [] : [s],
+    children: mark === "" ? [] : [mark],
   };
 }
 //@ chunk-4121qate.js:193322-194704 placement
-function shownNode(e, o) {
-  if (e.type === "Code") {
-    let { format, startLine, ...y } = e.props;
-    let g = o.shown(
-      y.source,
+function shownNode(node, room) {
+  if (node.type === "Code") {
+    let { format, startLine, ...props } = node.props;
+    let shownSource = room.shown(
+      props.source,
       `
 `,
     );
-    return g === y.source
-      ? e
+    return shownSource === props.source
+      ? node
       : {
-          ...e,
+          ...node,
           props: {
-            ...y,
-            source: g,
+            ...props,
+            source: shownSource,
           },
         };
   }
-  if (e.type === "Markdown") {
-    let u = o.shown(
-      e.props.text,
+  if (node.type === "Markdown") {
+    let shownText = room.shown(
+      node.props.text,
       `
 `,
     );
-    let l = o.isHeld((e.props.pressableLinks ?? []).reduce((acc, x) => acc + x.length, 0));
-    return u === e.props.text && l
-      ? e
+    let fitsLinks = room.isHeld(
+      (node.props.pressableLinks ?? []).reduce((acc, href) => acc + href.length, 0),
+    );
+    return shownText === node.props.text && fitsLinks
+      ? node
       : {
-          ...e,
+          ...node,
           props: {
-            ...e.props,
-            text: u,
-            ...(!l && {
+            ...node.props,
+            text: shownText,
+            ...(!fitsLinks && {
               pressableLinks: [],
             }),
           },
         };
   }
-  if (e.type === "Client") {
-    let { props } = e;
-    return o.isHeld(props.key.length + props.module.length + plainDataChars(props.props ?? null))
-      ? e
+  if (node.type === "Client") {
+    let { props } = node;
+    return room.isHeld(props.key.length + props.module.length + plainDataChars(props.props ?? null))
+      ? node
       : {
           type: "Text",
           children: [],
         };
   }
-  if (e.type === "Button") {
-    let u = heldTexts(e.children ?? []);
-    let l = e.props.label !== u.join("");
-    return wholeControl(e, l ? [e.props.label, ...u] : u, o);
+  if (node.type === "Button") {
+    let childrenText = heldTexts(node.children ?? []);
+    let includesLabel = node.props.label !== childrenText.join("");
+    return wholeControl(node, includesLabel ? [node.props.label, ...childrenText] : childrenText, room);
   }
-  if (e.type === "Svg" || e.type === "Image") return cutLeaf(e, ["alt"], o);
-  if (e.type === "Input") {
-    let u = cutProps(e.props, ["label", "placeholder", "submitLabel"], o);
-    let l = o.field(u.value ?? "");
-    let g =
-      l === (u.value ?? "")
-        ? u
+  if (node.type === "Svg" || node.type === "Image") return cutLeaf(node, ["alt"], room);
+  if (node.type === "Input") {
+    let props = cutProps(node.props, ["label", "placeholder", "submitLabel"], room);
+    let shownValue = room.field(props.value ?? "");
+    let withValue =
+      shownValue === (props.value ?? "")
+        ? props
         : {
-            ...u,
-            value: l,
+            ...props,
+            value: shownValue,
           };
-    return g === e.props
-      ? e
+    return withValue === node.props
+      ? node
       : {
-          ...e,
-          props: g,
+          ...node,
+          props: withValue,
         };
   }
-  if (e.type === "Select")
+  if (node.type === "Select")
     return wholeControl(
-      e,
-      [e.props.label ?? "", ...e.props.options.map((option) => option.label ?? option.value)],
-      o,
+      node,
+      [node.props.label ?? "", ...node.props.options.map((option) => option.label ?? option.value)],
+      room,
     );
-  if (!(e.type === "Box" || e.type === "Text" || e.type === "Link")) return e;
-  if (e.type === "Link" && isHref(e.props.href) && !o.isHeld(writtenHref(e.props.href).length))
+  if (!(node.type === "Box" || node.type === "Text" || node.type === "Link")) return node;
+  if (node.type === "Link" && isHref(node.props.href) && !room.isHeld(writtenHref(node.props.href).length))
     return {
       type: "Text",
       children: [],
     };
-  let i = e.type === "Box" ? keyedBox(e, o) : e;
-  let f =
-    i.type === "Link"
+  let keyed = node.type === "Box" ? keyedBox(node, room) : node;
+  let withLabel =
+    keyed.type === "Link"
       ? {
-          ...i,
-          props: cutProps(i.props, ["label"], o),
+          ...keyed,
+          props: cutProps(keyed.props, ["label"], room),
         }
-      : i;
-  let { children } = e;
-  let mapped = (children ?? []).map((u) =>
-    typeof u === "string"
-      ? o.shown(
-          u,
+      : keyed;
+  let { children } = node;
+  let mapped = (children ?? []).map((child) =>
+    typeof child === "string"
+      ? room.shown(
+          child,
           `
 `,
         )
-      : shownNode(u, o),
+      : shownNode(child, room),
   );
-  return f.props === e.props && mapped.every((u, l) => u === children?.[l])
-    ? e
+  return withLabel.props === node.props && mapped.every((child, index) => child === children?.[index])
+    ? node
     : {
-        ...f,
+        ...withLabel,
         ...(children !== undefined && {
           children: mapped,
         }),
@@ -1451,131 +1516,131 @@ function shownNode(e, o) {
 var SHOWN_TEXT_MAX = 1e5;
 //@ chunk-4121qate.js:194716-195166 placement
 function textRoom() {
-  let e = SHOWN_TEXT_MAX;
-  let o = SHOWN_TEXT_MAX;
-  let r = 0;
-  let n = 0;
-  let s = false;
-  let i = false;
+  let textLeft = SHOWN_TEXT_MAX;
+  let fieldLeft = SHOWN_TEXT_MAX;
+  let written = 0;
+  let drawn = 0;
+  let hasMarked = false;
+  let isCut = false;
   return {
-    written: () => r,
-    drawn: () => n,
-    isCut: () => i,
-    isHeld: (p) => {
-      let f = p <= e;
-      r += p;
-      n += f ? p : 0;
-      e = f ? e - p : 0;
-      i ||= !f;
-      return f;
+    written: () => written,
+    drawn: () => drawn,
+    isCut: () => isCut,
+    isHeld: (length) => {
+      let fits = length <= textLeft;
+      written += length;
+      drawn += fits ? length : 0;
+      textLeft = fits ? textLeft - length : 0;
+      isCut ||= !fits;
+      return fits;
     },
-    markOf: (p) => {
-      let f = !s;
-      s = true;
-      return f ? cutMark(p, "") : "";
+    markOf: (count) => {
+      let isFirstMark = !hasMarked;
+      hasMarked = true;
+      return isFirstMark ? cutMark(count, "") : "";
     },
-    field: (p) => {
-      let f = truncateToLength(p, o);
-      r += p.length;
-      n += f.length;
-      o -= f.length;
-      i ||= f !== p;
-      return f;
+    field: (text) => {
+      let truncated = truncateToLength(text, fieldLeft);
+      written += text.length;
+      drawn += truncated.length;
+      fieldLeft -= truncated.length;
+      isCut ||= truncated !== text;
+      return truncated;
     },
-    shown: (p, f) => {
-      r += p.length;
-      if (p.length <= e) {
-        e -= p.length;
-        n += p.length;
-        return p;
+    shown: (text, newline) => {
+      written += text.length;
+      if (text.length <= textLeft) {
+        textLeft -= text.length;
+        drawn += text.length;
+        return text;
       }
-      let a = truncateToLength(p, e);
-      let m = !s;
-      n += a.length;
-      e = 0;
-      s = true;
-      i = true;
-      return m ? a + cutMark(p.length - a.length, f) : a;
+      let prefix = truncateToLength(text, textLeft);
+      let isFirstMark = !hasMarked;
+      drawn += prefix.length;
+      textLeft = 0;
+      hasMarked = true;
+      isCut = true;
+      return isFirstMark ? prefix + cutMark(text.length - prefix.length, newline) : prefix;
     },
   };
 }
 //@ chunk-4121qate.js:195166-195270 placement
-function withShownText(e, o) {
-  let r = textRoom();
-  let n = shownNode(e, r);
-  if (r.isCut())
-    o({
-      written: r.written(),
-      drawn: r.drawn(),
+function withShownText(node, report) {
+  let room = textRoom();
+  let drawn = shownNode(node, room);
+  if (room.isCut())
+    report({
+      written: room.written(),
+      drawn: room.drawn(),
     });
-  return n;
+  return drawn;
 }
 //@ chunk-4121qate.js:195270-195635 placement
-function withUsableBoxKeys(e) {
-  if (e.type === "engine") return e;
-  if (!(e.type === "Box" || e.type === "Text" || e.type === "Link")) return e;
-  let { children } = e;
+function withUsableBoxKeys(node) {
+  if (node.type === "engine") return node;
+  if (!(node.type === "Box" || node.type === "Text" || node.type === "Link")) return node;
+  let { children } = node;
   let mapped = children?.map((child) => (typeof child === "string" ? child : withUsableBoxKeys(child)));
-  let i =
-    mapped !== undefined && mapped.some((a, m) => a !== children?.[m])
+  let withChildren =
+    mapped !== undefined && mapped.some((child, index) => child !== children?.[index])
       ? {
-          ...e,
+          ...node,
           children: mapped,
         }
-      : e;
-  if (i.type !== "Box" || i.props?.key === undefined) return i;
-  if (unusableKeyProblem(i.props.key) === undefined) return i;
-  let { key, ...f } = i.props;
+      : node;
+  if (withChildren.type !== "Box" || withChildren.props?.key === undefined) return withChildren;
+  if (unusableKeyProblem(withChildren.props.key) === undefined) return withChildren;
+  let { key, ...rest } = withChildren.props;
   return {
-    ...i,
-    props: f,
+    ...withChildren,
+    props: rest,
   };
 }
 //@ chunk-4121qate.js:195635-196298 placement
 /**
  * 校验 ui.render 钩子返回的树，失败时报出具体原因
  */
-function checkRenderTree(e, o, r) {
-  if (!(isPlainObject(e) && typeof e.type === "string")) return "something that is not a tree element";
-  let { component, surface } = o;
-  let p = wellFormed(e);
-  let f = notOverBudget();
-  let a = component === ONE_ENGINE_NODE_COMPONENT && r !== undefined;
-  let m = {
+function checkRenderTree(tree, input, answers) {
+  if (!(isPlainObject(tree) && typeof tree.type === "string")) return "something that is not a tree element";
+  let { component, surface } = input;
+  let wellFormedTree = wellFormed(tree);
+  let firstBudget = notOverBudget();
+  let measuresClients = component === ONE_ENGINE_NODE_COMPONENT && answers !== undefined;
+  let frame = {
     surface,
-    ...(a && {
-      clientRows: (R) => surfaceRowLedger.clientRows(clientMountKey(o, R)),
+    ...(measuresClients && {
+      clientRows: (client) => surfaceRowLedger.clientRows(clientMountKey(input, client)),
     }),
   };
-  let c = validateTree(p, component, {
-    ...m,
-    budget: f,
+  let problem = validateTree(wellFormedTree, component, {
+    ...frame,
+    budget: firstBudget,
   });
-  if (c === undefined) return;
-  let u = r === undefined ? p : r.at(-1);
-  let l = notOverBudget();
-  let y = f.isOver
-    ? validateTree(p, component, {
-        ...m,
-        budget: l,
-        handed: handedSubtrees(wellFormed(u)),
+  if (problem === undefined) return;
+  let lastAnswer = answers === undefined ? wellFormedTree : answers.at(-1);
+  let retryBudget = notOverBudget();
+  let retried = firstBudget.isOver
+    ? validateTree(wellFormedTree, component, {
+        ...frame,
+        budget: retryBudget,
+        handed: handedSubtrees(wellFormed(lastAnswer)),
       })
-    : c;
-  let isClientAdded = f.isOverRows && l.isClientAdded;
-  let x = notOverBudget();
+    : problem;
+  let isClientAdded = firstBudget.isOverRows && retryBudget.isClientAdded;
+  let clientBudget = notOverBudget();
   if (isClientAdded)
-    validateTree(wellFormed(u), component, {
-      ...m,
-      budget: x,
+    validateTree(wellFormed(lastAnswer), component, {
+      ...frame,
+      budget: clientBudget,
     });
-  let h = isClientAdded && !x.isOverRows ? c : y;
-  let v = l.isOver && r === undefined;
-  if (h === undefined || v) return;
+  let finalProblem = isClientAdded && !clientBudget.isOverRows ? problem : retried;
+  let isFirstPassOnly = retryBudget.isOver && answers === undefined;
+  if (finalProblem === undefined || isFirstPassOnly) return;
   matcherLog().log(
-    `ui.render (${component}): a hook returned a tree that does not validate (${h.replace(LINE_SCRUB, "?")})`,
+    `ui.render (${component}): a hook returned a tree that does not validate (${finalProblem.replace(LINE_SCRUB, "?")})`,
     "warn",
   );
-  return `a tree ${component} refuses: ${h}`;
+  return `a tree ${component} refuses: ${finalProblem}`;
 }
 export {
   hasControlCharacter,

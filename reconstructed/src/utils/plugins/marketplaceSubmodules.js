@@ -48,7 +48,7 @@ async function pickSubmodulesToFetch({
   env,
   deadline,
 }) {
-  let S = await readPluginSourcePaths(checkoutDir, manifestPath).catch((error) => {
+  let pluginPaths = await readPluginSourcePaths(checkoutDir, manifestPath).catch((error) => {
     logForDebugging(
       `Could not read the marketplace clone's plugin paths, fetching every submodule: ${errorMessage(error)}`,
       {
@@ -57,24 +57,24 @@ async function pickSubmodulesToFetch({
     );
     return;
   });
-  let w =
-    S &&
+  let trackedLinks =
+    pluginPaths &&
     (await vetTrackedLinks(checkoutDir, {
       repository: inCheckoutArgs,
       env,
       deadlineMs: msUntilDeadline(deadline),
     }));
-  if (S === undefined || w === undefined) return "all";
-  let L = filterPathsUnder(submodules, [...S.paths, ...w]);
-  if (S.rootPluginFiles === undefined || L.length === submodules.length) return L;
-  return (L.length > 0 ||
+  if (pluginPaths === undefined || trackedLinks === undefined) return "all";
+  let selected = filterPathsUnder(submodules, [...pluginPaths.paths, ...trackedLinks]);
+  if (pluginPaths.rootPluginFiles === undefined || selected.length === submodules.length) return selected;
+  return (selected.length > 0 ||
     (await grepCachedPaths({
       checkoutDir,
       inCheckoutArgs,
       env,
       timeout: Math.min(msUntilDeadline(deadline), MAX_SCANNED_REFS),
       paths: submodules,
-      files: S.rootPluginFiles,
+      files: pluginPaths.rootPluginFiles,
     }))) === false
     ? []
     : "all";
@@ -84,51 +84,64 @@ async function pickSubmodulesToFetch({
  * 读取 marketplace 清单中的插件路径
  */
 async function readPluginSourcePaths(checkoutDir, manifestPath) {
-  let r = uniq([manifestPath || MARKETPLACE_MANIFEST_PATH, MARKETPLACE_MANIFEST_PATH]);
-  let results = await Promise.all(r.map((q) => readCheckoutFile(checkoutDir, q, MAX_PLUGIN_ARCHIVE_BYTES)));
-  let h = new Set();
-  let y = [];
-  for (let [q, Z] of results.entries()) {
-    if (q > 0 && Z.kind === "absent") continue;
-    let Se = MarketplacePluginsSchema().safeParse(
-      Z.kind === "ok" ? applyMarketplacePluginRoot(safeParseJSON(Z.content, false)) : undefined,
+  let manifestPaths = uniq([manifestPath || MARKETPLACE_MANIFEST_PATH, MARKETPLACE_MANIFEST_PATH]);
+  let results = await Promise.all(
+    manifestPaths.map((manifestPath) =>
+      readCheckoutFile(checkoutDir, manifestPath, MAX_PLUGIN_ARCHIVE_BYTES),
+    ),
+  );
+  let paths = new Set();
+  let rootPlugins = [];
+  for (let [index, result] of results.entries()) {
+    if (index > 0 && result.kind === "absent") continue;
+    let parseResult = MarketplacePluginsSchema().safeParse(
+      result.kind === "ok" ? applyMarketplacePluginRoot(safeParseJSON(result.content, false)) : undefined,
     );
-    if (Z.kind !== "ok" || !Se.success) return;
-    for (let plugin of Se.data.plugins) {
-      let we = PluginSourceSchema().safeParse(plugin);
-      if (!we.success) continue;
-      let { source, ...Ae } = we.data;
-      let Ie = source === "." ? "" : source.startsWith("./") ? resolveCwdReentry(source) : undefined;
-      if (Ie === "") y.push(Ae);
-      else if (Ie !== undefined) h.add(Ie);
+    if (result.kind !== "ok" || !parseResult.success) return;
+    for (let plugin of parseResult.data.plugins) {
+      let sourceResult = PluginSourceSchema().safeParse(plugin);
+      if (!sourceResult.success) continue;
+      let { source, ...pluginEntry } = sourceResult.data;
+      let resolvedPath =
+        source === "." ? "" : source.startsWith("./") ? resolveCwdReentry(source) : undefined;
+      if (resolvedPath === "") rootPlugins.push(pluginEntry);
+      else if (resolvedPath !== undefined) paths.add(resolvedPath);
     }
   }
-  if (y.length === 0)
-    return h.size > MAX_SCANNED_FILES
+  if (rootPlugins.length === 0)
+    return paths.size > MAX_SCANNED_FILES
       ? undefined
       : {
-          paths: [...h],
+          paths: [...paths],
           rootPluginFiles: undefined,
         };
-  let S = [...PLUGIN_MANIFEST_PATHS, ...PLUGIN_CONFIG_FILES];
-  let [w, ...L] = await Promise.all(["SKILL.md", ...S].map((q) => readCheckoutFile(checkoutDir, q, ONE_MIB)));
-  if (w.kind !== "absent") return;
-  let G = new Set();
-  for (let q of y) if (!collectManifestPaths(G, q, true)) return;
-  for (let [q, Z] of L.entries()) {
-    if (Z.kind === "absent") continue;
-    let Se = Z.kind === "ok" ? safeParseJSON(Z.content, false) : null;
-    if (Se === null || !collectManifestPaths(G, Se, q < PLUGIN_MANIFEST_PATHS.length)) return;
+  let manifestCandidates = [...PLUGIN_MANIFEST_PATHS, ...PLUGIN_CONFIG_FILES];
+  let [skillFile, ...fileResults] = await Promise.all(
+    ["SKILL.md", ...manifestCandidates].map((path) => readCheckoutFile(checkoutDir, path, ONE_MIB)),
+  );
+  if (skillFile.kind !== "absent") return;
+  let collectedPaths = new Set();
+  for (let plugin of rootPlugins) if (!collectManifestPaths(collectedPaths, plugin, true)) return;
+  for (let [index, result] of fileResults.entries()) {
+    if (result.kind === "absent") continue;
+    let parsed = result.kind === "ok" ? safeParseJSON(result.content, false) : null;
+    if (
+      parsed === null ||
+      !collectManifestPaths(collectedPaths, parsed, index < PLUGIN_MANIFEST_PATHS.length)
+    )
+      return;
   }
-  for (let q of [...PLUGIN_TREE_DIRS, ...G]) h.add(q);
-  if (h.size > MAX_SCANNED_FILES) return;
+  for (let dir of [...PLUGIN_TREE_DIRS, ...collectedPaths]) paths.add(dir);
+  if (paths.size > MAX_SCANNED_FILES) return;
   return {
-    paths: [...h],
+    paths: [...paths],
     rootPluginFiles: uniq(
       [
-        ...[...r, ...S].map((q) => resolveCwdReentry(relative(checkoutDir, resolve_2(checkoutDir, q)))),
-        ...h,
-      ].flatMap((q) => (q ? [firstLineOf(q, "/")] : [])),
+        ...[...manifestPaths, ...manifestCandidates].map((path) =>
+          resolveCwdReentry(relative(checkoutDir, resolve_2(checkoutDir, path))),
+        ),
+        ...paths,
+      ].flatMap((path) => (path ? [firstLineOf(path, "/")] : [])),
     ),
   };
 }
@@ -136,15 +149,15 @@ async function readPluginSourcePaths(checkoutDir, manifestPath) {
 /**
  * 在克隆中安全读取文件
  */
-async function readCheckoutFile(e, n, r) {
-  let s = resolve_2(e, n);
-  if (!isSubpathOf(e, s, false))
+async function readCheckoutFile(checkoutDir, relPath, maxBytes) {
+  let fullPath = resolve_2(checkoutDir, relPath);
+  if (!isSubpathOf(checkoutDir, fullPath, false))
     return {
       kind: "refused",
     };
-  switch (await readPluginFileSafe(e, dirname(s))) {
+  switch (await readPluginFileSafe(checkoutDir, dirname(fullPath))) {
     case "ok":
-      return getMcpAuthCache_2(s, r);
+      return getMcpAuthCache_2(fullPath, maxBytes);
     case "absent":
       return {
         kind: "absent",
@@ -165,21 +178,22 @@ async function readCheckoutFile(e, n, r) {
 /**
  * 从清单值中收集相对路径
  */
-function collectManifestPaths(e, n, r) {
-  let s = [n];
-  while (s.length > 0) {
-    let h = s.pop();
-    if (typeof h === "object" && h !== null) for (let w of Object.values(h)) s.push(w);
-    if (typeof h !== "string") continue;
-    let list = Array.from(h.matchAll(PLUGIN_ROOT_REF_RE), (w) => w[1]);
-    let S = h === "." || /^\.[/\\]/.test(h);
-    for (let w of S ? [...list, h] : list) {
-      let cwdReentry = resolveCwdReentry(w);
+function collectManifestPaths(collectedPaths, manifest, isRootFile) {
+  let pending = [manifest];
+  while (pending.length > 0) {
+    let value = pending.pop();
+    if (typeof value === "object" && value !== null)
+      for (let child of Object.values(value)) pending.push(child);
+    if (typeof value !== "string") continue;
+    let list = Array.from(value.matchAll(PLUGIN_ROOT_REF_RE), (match) => match[1]);
+    let isRelativePath = value === "." || /^\.[/\\]/.test(value);
+    for (let candidate of isRelativePath ? [...list, value] : list) {
+      let cwdReentry = resolveCwdReentry(candidate);
       if (cwdReentry === "") {
-        if (r && w === h) return false;
+        if (isRootFile && candidate === value) return false;
       } else if (cwdReentry !== undefined) {
-        e.add(cwdReentry);
-        if (e.size > MAX_SCANNED_FILES) return false;
+        collectedPaths.add(cwdReentry);
+        if (collectedPaths.size > MAX_SCANNED_FILES) return false;
       }
     }
   }
@@ -189,11 +203,11 @@ function collectManifestPaths(e, n, r) {
 /**
  * 检查克隆中被跟踪的链接
  */
-async function vetTrackedLinks(checkoutDir, n) {
-  let r = await listSymlinkEntries(checkoutDir, n);
-  if (!Array.isArray(r)) return;
-  let s = uniq(r.map((y) => dirname(join(checkoutDir, y))));
-  if ((await Promise.all(s.map((y) => readPluginFileSafe(checkoutDir, y)))).some((y) => y !== "ok")) {
+async function vetTrackedLinks(cwd, options) {
+  let links = await listSymlinkEntries(cwd, options);
+  if (!Array.isArray(links)) return;
+  let dirs = uniq(links.map((link) => dirname(join(cwd, link))));
+  if ((await Promise.all(dirs.map((dir) => readPluginFileSafe(cwd, dir)))).some((check) => check !== "ok")) {
     logForDebugging(
       "A tracked link in the marketplace clone is not under real directories, fetching every submodule",
       {
@@ -203,17 +217,17 @@ async function vetTrackedLinks(checkoutDir, n) {
     return;
   }
   return Promise.all(
-    r.map(async (y) => {
-      let S = await readlink(join(checkoutDir, y)).catch((error) => {
+    links.map(async (link) => {
+      let target = await readlink(join(cwd, link)).catch((error) => {
         if (getErrnoCode(error) === "EINVAL") return;
         throw error;
       });
-      return S === undefined || posix.isAbsolute(S) || win32.isAbsolute(S)
+      return target === undefined || posix.isAbsolute(target) || win32.isAbsolute(target)
         ? undefined
-        : resolveCwdReentry(posix.join(posix.dirname(y), S));
+        : resolveCwdReentry(posix.join(posix.dirname(link), target));
     }),
   ).then(
-    (y) => y.filter((S) => S !== undefined),
+    (targets) => targets.filter((target) => target !== undefined),
     () => {
       return;
     },
@@ -224,9 +238,11 @@ async function vetTrackedLinks(checkoutDir, n) {
  * git grep --cached 查找路径引用
  */
 async function grepCachedPaths({ checkoutDir, inCheckoutArgs, env, timeout, paths, files }) {
-  let S = uniq(paths.flatMap((path) => [path, path.replaceAll("/", "\\"), path.replaceAll("/", "\\\\")]));
-  if ([...S, ...files].join(" ").length > MAX_SCANNED_BYTES) return;
-  let w = await execFileNoThrowWithCwd(
+  let needles = uniq(
+    paths.flatMap((path) => [path, path.replaceAll("/", "\\"), path.replaceAll("/", "\\\\")]),
+  );
+  if ([...needles, ...files].join(" ").length > MAX_SCANNED_BYTES) return;
+  let result = await execFileNoThrowWithCwd(
     gitExe(),
     [
       ...inCheckoutArgs,
@@ -236,7 +252,7 @@ async function grepCachedPaths({ checkoutDir, inCheckoutArgs, env, timeout, path
       "-a",
       "-i",
       "-F",
-      ...S.flatMap((L) => ["-e", L]),
+      ...needles.flatMap((needle) => ["-e", needle]),
       "--",
       ...files.map((file) => `:(literal,icase)${file}`),
     ],
@@ -254,18 +270,18 @@ async function grepCachedPaths({ checkoutDir, inCheckoutArgs, env, timeout, path
       preserveOutputOnError: false,
     },
   );
-  if (w.code === 0) return true;
-  return w.exitCode === 1 && w.error === undefined && !w.timedOut ? false : undefined;
+  if (result.code === 0) return true;
+  return result.exitCode === 1 && result.error === undefined && !result.timedOut ? false : undefined;
 }
 //@ chunk-e6aww6q8.js:4197260-4197419 placement
 /**
  * 过滤位于给定前缀下的路径
  */
-function filterPathsUnder(submodules, n) {
-  let mapped = n.map((s) => (s === "" ? "" : `${s}/`));
-  return submodules.filter((s) => {
-    let h = `${s.toLowerCase()}/`;
-    return mapped.some((y) => h.startsWith(y) || y.startsWith(h));
+function filterPathsUnder(submodules, paths) {
+  let mapped = paths.map((path) => (path === "" ? "" : `${path}/`));
+  return submodules.filter((submodule) => {
+    let lowered = `${submodule.toLowerCase()}/`;
+    return mapped.some((prefix) => lowered.startsWith(prefix) || prefix.startsWith(lowered));
   });
 }
 //@ chunk-e6aww6q8.js:4197419-4197592 placement = resolveCwdReentry (0.844)

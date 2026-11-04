@@ -7,9 +7,12 @@
  */
 import { credentialLogger } from "../../util/logging.js";
 import { mapScopesToResource } from "./utils.js";
-import { rr, je } from "../../../../../core-rest-pipeline/dist/esm/policies/retryPolicy.js";
+import {
+  isCustomRetryPolicy,
+  isExponentialBackoff,
+} from "../../../../../core-rest-pipeline/dist/esm/policies/retryPolicy.js";
 import { tracingClient } from "../../util/tracing.js";
-import { Wo } from "../../../../../core-rest-pipeline/dist/esm/util/file.js";
+import { createFileBody } from "../../../../../core-rest-pipeline/dist/esm/util/file.js";
 
 //@ chunk-mrx6y2r5.js:289108-289224 esm-fingerprint
 var msiName = "ManagedIdentityCredential - IMDS";
@@ -30,7 +33,7 @@ function prepareInvalidRequestOptions(scopes) {
   return {
     url: `${url}`,
     method: "GET",
-    headers: rr(rawHeaders),
+    headers: isCustomRetryPolicy(rawHeaders),
   };
 }
 //@ chunk-mrx6y2r5.js:289480-290526 esm-fingerprint
@@ -53,7 +56,7 @@ var imdsMsi = {
         var _a;
         var _b;
         requestOptions.tracingOptions = updatedOptions.tracingOptions;
-        let request = je(requestOptions);
+        let request = isExponentialBackoff(requestOptions);
         request.timeout =
           ((_a = updatedOptions.requestOptions) === null || _a === undefined ? undefined : _a.timeout) ||
           1000;
@@ -63,7 +66,7 @@ var imdsMsi = {
           logger_5.info(`${msiName}: Pinging the Azure IMDS endpoint`);
           response = await identityClient.sendRequest(request);
         } catch (err) {
-          if (Wo(err)) logger_5.verbose(`${msiName}: Caught error ${err.name}: ${err.message}`);
+          if (createFileBody(err)) logger_5.verbose(`${msiName}: Caught error ${err.name}: ${err.message}`);
           logger_5.info(`${msiName}: The Azure IMDS endpoint is unavailable`);
           return false;
         }

@@ -20,6 +20,7 @@ import { readHandleBounded } from "../fsSafety/boundOpen.js";
 import { stripTrailingDotsSpaces } from "../ignorePatterns.js";
 import { uniq } from "../collections.js";
 import { getFileExtensionsFromBashCommand } from "../../services/analytics/metadata.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-6vnxsn99.js:26111-26191 placement
 var DEV_NULL = "/dev/null";
@@ -28,11 +29,11 @@ var ISOLATED_GIT_CONFIG_ENV = {
   GIT_CONFIG_NOSYSTEM: "1",
 };
 //@ chunk-6vnxsn99.js:26319-26471 placement
-function resolveEolConversion(e, autocrlf) {
-  let eol = e?.eol;
+function resolveEolConversion(attr, autocrlf) {
+  let eol = attr?.eol;
   return (
-    textAttrToConversion(e?.text) ??
-    textAttrToConversion(e?.crlf) ??
+    textAttrToConversion(attr?.text) ??
+    textAttrToConversion(attr?.crlf) ??
     (eol === "lf" || eol === "crlf"
       ? "always"
       : autocrlf?.toLowerCase() === "input" || parseGitBool(autocrlf) === true
@@ -41,8 +42,8 @@ function resolveEolConversion(e, autocrlf) {
   );
 }
 //@ chunk-6vnxsn99.js:26471-26607 placement
-function textAttrToConversion(e) {
-  switch (e) {
+function textAttrToConversion(attr) {
+  switch (attr) {
     case "set":
     case "input":
       return "always";
@@ -55,8 +56,8 @@ function textAttrToConversion(e) {
   }
 }
 //@ chunk-6vnxsn99.js:26607-26850 placement
-function parseGitBool(e) {
-  switch (e?.toLowerCase()) {
+function parseGitBool(value) {
+  switch (value?.toLowerCase()) {
     case "true":
     case "yes":
     case "on":
@@ -67,7 +68,7 @@ function parseGitBool(e) {
     case "":
       return false;
     default: {
-      let match = /^\s*[+-]?(?:0x([0-9a-f]+)|(\d+))[kmg]?$/i.exec(e ?? "");
+      let match = /^\s*[+-]?(?:0x([0-9a-f]+)|(\d+))[kmg]?$/i.exec(value ?? "");
       return match === null ? null : /[^0]/.test(match[1] ?? match[2]);
     }
   }
@@ -76,44 +77,46 @@ function parseGitBool(e) {
 var CARRIAGE_RETURN_CODE = 13;
 var LINE_FEED_CODE = 10;
 //@ chunk-6vnxsn99.js:26866-27118 placement
-function looksBinary(e) {
-  let n = 0;
-  let r = 0;
-  for (let j = 0; j < e.length; j++) {
-    let s = e[j];
-    if (s === CARRIAGE_RETURN_CODE) {
-      if (e[j + 1] !== LINE_FEED_CODE) return true;
+function looksBinary(bytes) {
+  let printableCount = 0;
+  let nonPrintableCount = 0;
+  for (let j = 0; j < bytes.length; j++) {
+    let byte = bytes[j];
+    if (byte === CARRIAGE_RETURN_CODE) {
+      if (bytes[j + 1] !== LINE_FEED_CODE) return true;
       j++;
-    } else if (s === 0) return true;
-    else if (s === LINE_FEED_CODE) continue;
-    else if (s === 127 || (s < 32 && s !== 8 && s !== 9 && s !== 12 && s !== 27)) r++;
-    else n++;
+    } else if (byte === 0) return true;
+    else if (byte === LINE_FEED_CODE) continue;
+    else if (byte === 127 || (byte < 32 && byte !== 8 && byte !== 9 && byte !== 12 && byte !== 27))
+      nonPrintableCount++;
+    else printableCount++;
   }
-  if (e.at(-1) === 26) r--;
-  return n >> 7 < r;
+  if (bytes.at(-1) === 26) nonPrintableCount--;
+  return printableCount >> 7 < nonPrintableCount;
 }
 //@ chunk-6vnxsn99.js:27118-27328 placement
-function normalizeCrlf(e) {
-  let index = e.indexOf(`\r
+function normalizeCrlf(buffer) {
+  let index = buffer.indexOf(`\r
 `);
   if (index === -1) return null;
-  let r = Buffer.allocUnsafe(e.length - 1);
-  e.copy(r, 0, 0, index);
-  let o = index;
-  for (let s = index; s < e.length; s++)
-    if (e[s] !== CARRIAGE_RETURN_CODE || e[s + 1] !== LINE_FEED_CODE) r[o++] = e[s];
-  return r.subarray(0, o);
+  let normalized = Buffer.allocUnsafe(buffer.length - 1);
+  buffer.copy(normalized, 0, 0, index);
+  let writeIndex = index;
+  for (let readIndex = index; readIndex < buffer.length; readIndex++)
+    if (buffer[readIndex] !== CARRIAGE_RETURN_CODE || buffer[readIndex + 1] !== LINE_FEED_CODE)
+      normalized[writeIndex++] = buffer[readIndex];
+  return normalized.subarray(0, writeIndex);
 }
 //@ chunk-6vnxsn99.js:27328-27451 placement
-function normalizeWorktreeBytes(bytes, n, r) {
+function normalizeWorktreeBytes(bytes, conversion, indexText) {
   if (
-    n === "never" ||
-    (n === "if-text" &&
+    conversion === "never" ||
+    (conversion === "if-text" &&
       (looksBinary(bytes) ||
-        (r !== undefined &&
-          r.includes(`\r
+        (indexText !== undefined &&
+          indexText.includes(`\r
 `) &&
-          !looksBinary(r))))
+          !looksBinary(indexText))))
   )
     return null;
   return normalizeCrlf(bytes);
@@ -122,283 +125,342 @@ function normalizeWorktreeBytes(bytes, n, r) {
 function parseCheckAttrOutput(stdout) {
   let parts = stdout.split("\x00");
   if (parts.pop() !== "" || parts.length % 3 !== 0) return null;
-  let r = new Map();
-  for (let o = 0; o < parts.length; o += 3) {
-    let s = parts[o];
-    let a = r.get(s);
-    if (a === undefined) {
-      a = Object.create(null);
-      r.set(s, a);
+  let attrByPath = new Map();
+  for (let index = 0; index < parts.length; index += 3) {
+    let path = parts[index];
+    let attrs = attrByPath.get(path);
+    if (attrs === undefined) {
+      attrs = Object.create(null);
+      attrByPath.set(path, attrs);
     }
-    a[parts[o + 1]] = parts[o + 2];
+    attrs[parts[index + 1]] = parts[index + 2];
   }
-  return r;
+  return attrByPath;
 }
 //@ chunk-6vnxsn99.js:27707-27984 placement
-var MAX_INDEX_ENTRIES_2 = 1e6;
-var MAX_PATH_BYTES = 67108864;
-var MAX_EXTENSIONS = 1024;
-var HASH_LENGTHS = {
-  sha1: 20,
-  sha256: 32,
-};
-var HASH_CHUNK_BYTES = 8388608;
-var INDEX_HEADER_BYTES = 12;
-var MAX_INDEX_ENTRIES = 8;
-var INDEX_CTIME_OFFSET = 20;
-var INDEX_MODE_OFFSET = 24;
-var INDEX_SIZE_OFFSET = 36;
-var INDEX_OID_OFFSET = 40;
-var ASSUME_VALID_FLAG = 32768;
-var EXTENDED_FLAG = 16384;
-var PATH_LENGTH_MASK = 4095;
-var SKIP_WORKTREE_FLAG = 16384;
-var INTENT_TO_ADD_FLAG = 8192;
-var INDEX_MODE_KINDS = new Map([
-  [33188, "file"],
-  [33261, "executable"],
-  [40960, "symlink"],
-  [57344, "gitlink"],
-]);
-var SUPPORTED_INDEX_VERSIONS = [0, 1, 2, 3];
-var EXTENSION_HEADER_BYTES = 8;
-var cr = Buffer.alloc(0);
-var SLASH_CODE = 47;
-var DOT_CODE = 46;
+var MAX_INDEX_ENTRIES_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_PATH_BYTES;
+var MAX_EXTENSIONS;
+var HASH_LENGTHS;
+var HASH_CHUNK_BYTES;
+var INDEX_HEADER_BYTES;
+var MAX_INDEX_ENTRIES;
+var INDEX_CTIME_OFFSET;
+var INDEX_MODE_OFFSET;
+var INDEX_SIZE_OFFSET;
+var INDEX_OID_OFFSET;
+var ASSUME_VALID_FLAG;
+var EXTENDED_FLAG;
+var PATH_LENGTH_MASK;
+var SKIP_WORKTREE_FLAG;
+var INTENT_TO_ADD_FLAG;
+var INDEX_MODE_KINDS;
+var SUPPORTED_INDEX_VERSIONS;
+var EXTENSION_HEADER_BYTES;
+var EMPTY_BUFFER;
+var SLASH_CODE;
+var DOT_CODE;
+deferInit("chunk-6vnxsn99.js:27707", () => {
+  MAX_INDEX_ENTRIES_2 = 1e6;
+  MAX_PATH_BYTES = 67108864;
+  MAX_EXTENSIONS = 1024;
+  HASH_LENGTHS = {
+    sha1: 20,
+    sha256: 32,
+  };
+  HASH_CHUNK_BYTES = 8388608;
+  INDEX_HEADER_BYTES = 12;
+  MAX_INDEX_ENTRIES = 8;
+  INDEX_CTIME_OFFSET = 20;
+  INDEX_MODE_OFFSET = 24;
+  INDEX_SIZE_OFFSET = 36;
+  INDEX_OID_OFFSET = 40;
+  ASSUME_VALID_FLAG = 32768;
+  EXTENDED_FLAG = 16384;
+  PATH_LENGTH_MASK = 4095;
+  SKIP_WORKTREE_FLAG = 16384;
+  INTENT_TO_ADD_FLAG = 8192;
+  INDEX_MODE_KINDS = new Map([
+    [33188, "file"],
+    [33261, "executable"],
+    [40960, "symlink"],
+    [57344, "gitlink"],
+  ]);
+  SUPPORTED_INDEX_VERSIONS = [0, 1, 2, 3];
+  EXTENSION_HEADER_BYTES = 8;
+  EMPTY_BUFFER = Buffer.alloc(0);
+  SLASH_CODE = 47;
+  DOT_CODE = 46;
+});
 //@ chunk-6vnxsn99.js:27984-28903 placement
 /**
  * 解析 .git/index（DIRC）二进制：版本、条目、扩展（EOIE/IEOT），超限或格式不支持时返回 refused。
  */
-async function parseGitIndex(bytes, n, r) {
-  if (r.aborted)
+async function parseGitIndex(buffer, objectFormat, signal) {
+  if (signal.aborted)
     return {
       refused: "aborted",
     };
-  let o = bytes.length - HASH_LENGTHS[n];
-  if (o < INDEX_HEADER_BYTES || bytes.toString("latin1", 0, 4) !== "DIRC")
+  let trailerStart = buffer.length - HASH_LENGTHS[objectFormat];
+  if (trailerStart < INDEX_HEADER_BYTES || buffer.toString("latin1", 0, 4) !== "DIRC")
     return {
       refused: "malformed",
     };
-  let uInt32BE = bytes.readUInt32BE(4);
-  if (uInt32BE !== 2 && uInt32BE !== 3 && uInt32BE !== 4)
+  let version = buffer.readUInt32BE(4);
+  if (version !== 2 && version !== 3 && version !== 4)
     return {
       refused: "unsupported",
     };
-  let uInt32BE_2 = bytes.readUInt32BE(8);
-  if (uInt32BE_2 > MAX_INDEX_ENTRIES_2)
+  let uInt32BE = buffer.readUInt32BE(8);
+  if (uInt32BE > MAX_INDEX_ENTRIES_2)
     return {
       refused: "too-large",
     };
-  let chunk = bytes.subarray(0, o);
+  let buffer_2 = buffer.subarray(0, trailerStart);
   if (
-    !isAllZeroBytes(bytes, o, bytes.length) &&
-    !(await hashBufferChunked(chunk, n)).equals(bytes.subarray(o))
+    !isAllZeroBytes(buffer, trailerStart, buffer.length) &&
+    !(await hashBufferChunked(buffer_2, objectFormat)).equals(buffer.subarray(trailerStart))
   )
     return {
       refused: "wrong-checksum",
     };
-  if (r.aborted)
+  if (signal.aborted)
     return {
       refused: "aborted",
     };
-  let h = [];
-  let p = [];
-  let S = [];
-  let y = INDEX_HEADER_BYTES;
-  let T = 0;
-  while (h.length < uInt32BE_2) {
-    if (h.length % MAX_EXTENSIONS === 0) await yieldToEventLoop();
-    if (r.aborted)
+  let entries = [];
+  let entryOffsets = [];
+  let keptNames = [];
+  let offset = INDEX_HEADER_BYTES;
+  let pathBytesTotal = 0;
+  while (entries.length < uInt32BE) {
+    if (entries.length % MAX_EXTENSIONS === 0) await yieldToEventLoop();
+    if (signal.aborted)
       return {
         refused: "aborted",
       };
-    p.push(y);
-    let indexEntry = parseIndexEntry(chunk, y, uInt32BE, HASH_LENGTHS[n], h.at(-1)?.pathBytes ?? cr);
+    entryOffsets.push(offset);
+    let indexEntry = parseIndexEntry(
+      buffer_2,
+      offset,
+      version,
+      HASH_LENGTHS[objectFormat],
+      entries.at(-1)?.pathBytes ?? EMPTY_BUFFER,
+    );
     if (typeof indexEntry === "string")
       return {
         refused: indexEntry,
       };
-    T += indexEntry.entry.pathBytes.length;
-    if (T > MAX_PATH_BYTES)
+    pathBytesTotal += indexEntry.entry.pathBytes.length;
+    if (pathBytesTotal > MAX_PATH_BYTES)
       return {
         refused: "too-large",
       };
-    h.push(indexEntry.entry);
-    S.push(indexEntry.kept);
-    y = indexEntry.next;
+    entries.push(indexEntry.entry);
+    keptNames.push(indexEntry.kept);
+    offset = indexEntry.next;
   }
-  let b = validateExtensionChain(chunk, y) ?? checkIndexExtensions(chunk, y, p, S, n);
-  if (b !== null)
+  let failure =
+    validateExtensionChain(buffer_2, offset) ??
+    checkIndexExtensions(buffer_2, offset, entryOffsets, keptNames, objectFormat);
+  if (failure !== null)
     return {
-      refused: b,
+      refused: failure,
     };
-  return h.every((w, E) => isSafeIndexPath(w.pathBytes) && (E === 0 || isIndexEntryBefore(h[E - 1], w)))
+  return entries.every(
+    (entry, index) =>
+      isSafeIndexPath(entry.pathBytes) && (index === 0 || isIndexEntryBefore(entries[index - 1], entry)),
+  )
     ? {
-        entries: h,
+        entries,
       }
     : {
         refused: "malformed",
       };
 }
 //@ chunk-6vnxsn99.js:28903-29649 placement
-function parseIndexEntry(e, n, r, o, s) {
-  let a = n + INDEX_OID_OFFSET + o;
-  if (a + 4 > e.length) return "malformed";
-  let uInt16BE = e.readUInt16BE(a);
-  let h = (uInt16BE & EXTENDED_FLAG) !== 0;
-  let p = h ? e.readUInt16BE(a + 2) : 0;
-  if ((p & ~(SKIP_WORKTREE_FLAG | INTENT_TO_ADD_FLAG)) !== 0 || (h && (r === 2 || p === 0)))
+function parseIndexEntry(buffer, entryStart, version, hashLength, previousPath) {
+  let flagsOffset = entryStart + INDEX_OID_OFFSET + hashLength;
+  if (flagsOffset + 4 > buffer.length) return "malformed";
+  let uInt16BE = buffer.readUInt16BE(flagsOffset);
+  let extendsEntry = (uInt16BE & EXTENDED_FLAG) !== 0;
+  let extendedFlags = extendsEntry ? buffer.readUInt16BE(flagsOffset + 2) : 0;
+  if (
+    (extendedFlags & ~(SKIP_WORKTREE_FLAG | INTENT_TO_ADD_FLAG)) !== 0 ||
+    (extendsEntry && (version === 2 || extendedFlags === 0))
+  )
     return "unsupported";
-  let S = INDEX_MODE_KINDS.get(e.readUInt32BE(n + INDEX_MODE_OFFSET));
-  if (S === undefined || isAllZeroBytes(e, n + INDEX_OID_OFFSET, a)) return "unsupported";
-  let y = a + (h ? 4 : 2);
-  let T = uInt16BE & PATH_LENGTH_MASK;
-  let b = r === 4 ? readCompressedEntryPath(e, y, s) : readIndexEntryPath(e, n, y, T);
-  if (typeof b === "string") return b;
-  if (Math.min(b.pathBytes.length, PATH_LENGTH_MASK) !== T) return "malformed";
+  let kind = INDEX_MODE_KINDS.get(buffer.readUInt32BE(entryStart + INDEX_MODE_OFFSET));
+  if (kind === undefined || isAllZeroBytes(buffer, entryStart + INDEX_OID_OFFSET, flagsOffset))
+    return "unsupported";
+  let pathOffset = flagsOffset + (extendsEntry ? 4 : 2);
+  let pathLength = uInt16BE & PATH_LENGTH_MASK;
+  let pathResult =
+    version === 4
+      ? readCompressedEntryPath(buffer, pathOffset, previousPath)
+      : readIndexEntryPath(buffer, entryStart, pathOffset, pathLength);
+  if (typeof pathResult === "string") return pathResult;
+  if (Math.min(pathResult.pathBytes.length, PATH_LENGTH_MASK) !== pathLength) return "malformed";
   return {
     entry: {
-      pathBytes: b.pathBytes,
-      kind: S,
-      id: e.toString("hex", n + INDEX_OID_OFFSET, a),
+      pathBytes: pathResult.pathBytes,
+      kind,
+      id: buffer.toString("hex", entryStart + INDEX_OID_OFFSET, flagsOffset),
       stage: SUPPORTED_INDEX_VERSIONS[(uInt16BE >> 12) & 3],
-      isSkipWorktree: (p & SKIP_WORKTREE_FLAG) !== 0,
-      isIntentToAdd: (p & INTENT_TO_ADD_FLAG) !== 0,
+      isSkipWorktree: (extendedFlags & SKIP_WORKTREE_FLAG) !== 0,
+      isIntentToAdd: (extendedFlags & INTENT_TO_ADD_FLAG) !== 0,
       stat: {
-        changedSeconds: e.readUInt32BE(n),
-        modifiedSeconds: e.readUInt32BE(n + MAX_INDEX_ENTRIES),
-        inode: e.readUInt32BE(n + INDEX_CTIME_OFFSET),
-        size: e.readUInt32BE(n + INDEX_SIZE_OFFSET),
+        changedSeconds: buffer.readUInt32BE(entryStart),
+        modifiedSeconds: buffer.readUInt32BE(entryStart + MAX_INDEX_ENTRIES),
+        inode: buffer.readUInt32BE(entryStart + INDEX_CTIME_OFFSET),
+        size: buffer.readUInt32BE(entryStart + INDEX_SIZE_OFFSET),
         isAssumedUnchanged: (uInt16BE & ASSUME_VALID_FLAG) !== 0,
       },
     },
-    next: b.next,
-    kept: b.kept ?? 0,
+    next: pathResult.next,
+    kept: pathResult.kept ?? 0,
   };
 }
 //@ chunk-6vnxsn99.js:29649-29824 placement
-function readIndexEntryPath(e, n, r, o) {
-  let s = o < PATH_LENGTH_MASK ? r + o : e.indexOf(0, r);
-  if (s === -1) return "malformed";
-  let a = n + ((s - n + 8) & -8);
-  return a <= e.length && isAllZeroBytes(e, s, a)
+function readIndexEntryPath(buffer, entryStart, pathOffset, pathLength) {
+  let pathEnd = pathLength < PATH_LENGTH_MASK ? pathOffset + pathLength : buffer.indexOf(0, pathOffset);
+  if (pathEnd === -1) return "malformed";
+  let nextOffset = entryStart + ((pathEnd - entryStart + 8) & -8);
+  return nextOffset <= buffer.length && isAllZeroBytes(buffer, pathEnd, nextOffset)
     ? {
-        pathBytes: e.subarray(r, s),
-        next: a,
+        pathBytes: buffer.subarray(pathOffset, pathEnd),
+        next: nextOffset,
       }
     : "malformed";
 }
 //@ chunk-6vnxsn99.js:29824-30084 placement
-function readCompressedEntryPath(e, n, r) {
-  let offsetVarint = readOffsetVarint(e, n, r.length);
-  let s = offsetVarint === null ? -1 : e.indexOf(0, offsetVarint.next);
-  if (offsetVarint === null || s === -1) return "malformed";
-  let a = r.length - offsetVarint.value;
-  if (a + s - offsetVarint.next > MAX_PATH_BYTES) return "too-large";
+function readCompressedEntryPath(buffer, pathOffset, previousPath) {
+  let offsetVarint = readOffsetVarint(buffer, pathOffset, previousPath.length);
+  let nulIndex = offsetVarint === null ? -1 : buffer.indexOf(0, offsetVarint.next);
+  if (offsetVarint === null || nulIndex === -1) return "malformed";
+  let keptPrefix = previousPath.length - offsetVarint.value;
+  if (keptPrefix + nulIndex - offsetVarint.next > MAX_PATH_BYTES) return "too-large";
   return {
-    pathBytes: Buffer.concat([r.subarray(0, a), e.subarray(offsetVarint.next, s)]),
-    next: s + 1,
-    kept: a,
+    pathBytes: Buffer.concat([
+      previousPath.subarray(0, keptPrefix),
+      buffer.subarray(offsetVarint.next, nulIndex),
+    ]),
+    next: nulIndex + 1,
+    kept: keptPrefix,
   };
 }
 //@ chunk-6vnxsn99.js:30084-30237 placement
-function readOffsetVarint(e, n, r) {
-  let o = -1;
-  for (let s = n; s < e.length; s++) {
-    o = (o + 1) * 128 + (e[s] & 127);
-    if (o > r) return null;
-    if ((e[s] & 128) === 0)
+function readOffsetVarint(buffer, start, limit) {
+  let value = -1;
+  for (let index = start; index < buffer.length; index++) {
+    value = (value + 1) * 128 + (buffer[index] & 127);
+    if (value > limit) return null;
+    if ((buffer[index] & 128) === 0)
       return {
-        value: o,
-        next: s + 1,
+        value,
+        next: index + 1,
       };
   }
   return null;
 }
 //@ chunk-6vnxsn99.js:30237-30425 placement
 function isSafeIndexPath(pathBytes) {
-  let n = 0;
+  let segmentStart = 0;
   for (let j = 0; j <= pathBytes.length; j++)
     if (j === pathBytes.length || pathBytes[j] === SLASH_CODE) {
-      let o = j - n;
-      if (o === 0 || (pathBytes[n] === DOT_CODE && (o === 1 || (o === 2 && pathBytes[n + 1] === DOT_CODE))))
+      let segmentLength = j - segmentStart;
+      if (
+        segmentLength === 0 ||
+        (pathBytes[segmentStart] === DOT_CODE &&
+          (segmentLength === 1 || (segmentLength === 2 && pathBytes[segmentStart + 1] === DOT_CODE)))
+      )
         return false;
-      n = j + 1;
+      segmentStart = j + 1;
     } else if (pathBytes[j] === 0) return false;
   return true;
 }
 //@ chunk-6vnxsn99.js:30425-30523 placement
-function isIndexEntryBefore(e, n) {
-  let r = Buffer.compare(e.pathBytes, n.pathBytes);
-  return r < 0 || (r === 0 && e.stage < n.stage);
+function isIndexEntryBefore(previous, entry) {
+  let order = Buffer.compare(previous.pathBytes, entry.pathBytes);
+  return order < 0 || (order === 0 && previous.stage < entry.stage);
 }
 //@ chunk-6vnxsn99.js:30523-30702 placement
-function validateExtensionChain(e, n) {
-  let r = n;
-  while (r < e.length) {
-    if (r + EXTENSION_HEADER_BYTES > e.length) return "malformed";
-    if (e[r] < 65 || e[r] > 90) return "unsupported";
-    r += EXTENSION_HEADER_BYTES + e.readUInt32BE(r + 4);
+function validateExtensionChain(buffer, start) {
+  let offset = start;
+  while (offset < buffer.length) {
+    if (offset + EXTENSION_HEADER_BYTES > buffer.length) return "malformed";
+    if (buffer[offset] < 65 || buffer[offset] > 90) return "unsupported";
+    offset += EXTENSION_HEADER_BYTES + buffer.readUInt32BE(offset + 4);
   }
-  return r === e.length ? null : "malformed";
+  return offset === buffer.length ? null : "malformed";
 }
 //@ chunk-6vnxsn99.js:30702-31650 placement
 /**
  * 校验 EOIE/IEOT 扩展（哈希一致）。
  */
-function checkIndexExtensions(e, n, r, o, s) {
-  let a = HASH_LENGTHS[s];
-  let u = (O) => {
-    let R = e.length - EXTENSION_HEADER_BYTES - 4 - O;
+function checkIndexExtensions(buffer, extensionStart, entryOffsets, keptNames, objectFormat) {
+  let hashLength = HASH_LENGTHS[objectFormat];
+  let hasEndOfIndexEntry = (candidateLength) => {
+    let headerOffset = buffer.length - EXTENSION_HEADER_BYTES - 4 - candidateLength;
     return (
-      R >= INDEX_HEADER_BYTES && e.toString("latin1", R, R + 4) === "EOIE" && e.readUInt32BE(R + 4) === 4 + O
+      headerOffset >= INDEX_HEADER_BYTES &&
+      buffer.toString("latin1", headerOffset, headerOffset + 4) === "EOIE" &&
+      buffer.readUInt32BE(headerOffset + 4) === 4 + candidateLength
     );
   };
-  let any = Object.values(HASH_LENGTHS).some((O) => O !== a && u(O));
-  let p = u(a);
+  let any = Object.values(HASH_LENGTHS).some(
+    (candidateLength) => candidateLength !== hashLength && hasEndOfIndexEntry(candidateLength),
+  );
+  let endOfIndexEntry = hasEndOfIndexEntry(hashLength);
   if (any) return "unsupported";
-  let S = [];
-  for (let O = n; O < e.length;) {
-    let uInt32BE = e.readUInt32BE(O + 4);
-    S.push({
-      name: e.toString("latin1", O, O + 4),
-      at: O,
+  let extensions = [];
+  for (let offset = extensionStart; offset < buffer.length;) {
+    let uInt32BE = buffer.readUInt32BE(offset + 4);
+    extensions.push({
+      name: buffer.toString("latin1", offset, offset + 4),
+      at: offset,
       size: uInt32BE,
     });
-    O += EXTENSION_HEADER_BYTES + uInt32BE;
+    offset += EXTENSION_HEADER_BYTES + uInt32BE;
   }
-  let last = S.at(-1);
-  let T = e.length - EXTENSION_HEADER_BYTES - 4 - a;
-  if (p) {
-    if (last?.at !== T || last.name !== "EOIE") return "unsupported";
-    let hash = createHash(s);
-    for (let F of S.slice(0, -1)) hash.update(e.subarray(F.at, F.at + EXTENSION_HEADER_BYTES));
-    let R = T + EXTENSION_HEADER_BYTES;
-    if (e.readUInt32BE(R) !== n || !hash.digest().equals(e.subarray(R + 4, R + 4 + a))) return "unsupported";
+  let last = extensions.at(-1);
+  let expectedExtensionEnd = buffer.length - EXTENSION_HEADER_BYTES - 4 - hashLength;
+  if (endOfIndexEntry) {
+    if (last?.at !== expectedExtensionEnd || last.name !== "EOIE") return "unsupported";
+    let hash = createHash(objectFormat);
+    for (let extension of extensions.slice(0, -1))
+      hash.update(buffer.subarray(extension.at, extension.at + EXTENSION_HEADER_BYTES));
+    let bodyOffset = expectedExtensionEnd + EXTENSION_HEADER_BYTES;
+    if (
+      buffer.readUInt32BE(bodyOffset) !== extensionStart ||
+      !hash.digest().equals(buffer.subarray(bodyOffset + 4, bodyOffset + 4 + hashLength))
+    )
+      return "unsupported";
   }
-  let filtered = S.filter((O) => O.name === "IEOT");
+  let filtered = extensions.filter((extension) => extension.name === "IEOT");
   if (filtered.length === 0) return null;
-  if (!p || filtered.length > 1) return "unsupported";
+  if (!endOfIndexEntry || filtered.length > 1) return "unsupported";
   let { at, size } = filtered[0];
-  let A = at + EXTENSION_HEADER_BYTES;
-  if (size < 4 || (size - 4) % 8 !== 0 || e.readUInt32BE(A) !== 1) return "unsupported";
-  let x = 0;
-  for (let O = A + 4; O < A + size; O += 8) {
-    if (e.readUInt32BE(O) !== r[x] || (o[x] ?? 0) > 0) return "unsupported";
-    x += e.readUInt32BE(O + 4);
+  let bodyStart = at + EXTENSION_HEADER_BYTES;
+  if (size < 4 || (size - 4) % 8 !== 0 || buffer.readUInt32BE(bodyStart) !== 1) return "unsupported";
+  let entryCount = 0;
+  for (let offset = bodyStart + 4; offset < bodyStart + size; offset += 8) {
+    if (buffer.readUInt32BE(offset) !== entryOffsets[entryCount] || (keptNames[entryCount] ?? 0) > 0)
+      return "unsupported";
+    entryCount += buffer.readUInt32BE(offset + 4);
   }
-  return x === r.length ? null : "unsupported";
+  return entryCount === entryOffsets.length ? null : "unsupported";
 }
 //@ chunk-6vnxsn99.js:31650-31719 placement
-function isAllZeroBytes(e, n, r) {
-  for (let o = n; o < r; o++) if (e[o] !== 0) return false;
+function isAllZeroBytes(buffer, start, end) {
+  for (let index = start; index < end; index++) if (buffer[index] !== 0) return false;
   return true;
 }
 //@ chunk-6vnxsn99.js:31719-31841 placement
-async function hashBufferChunked(e, n) {
-  let hash = createHash(n);
-  for (let o = 0; o < e.length; o += HASH_CHUNK_BYTES) {
-    hash.update(e.subarray(o, o + HASH_CHUNK_BYTES));
+async function hashBufferChunked(buffer, objectFormat) {
+  let hash = createHash(objectFormat);
+  for (let offset = 0; offset < buffer.length; offset += HASH_CHUNK_BYTES) {
+    hash.update(buffer.subarray(offset, offset + HASH_CHUNK_BYTES));
     await yieldToEventLoop();
   }
   return hash.digest();
@@ -435,154 +497,176 @@ var MODE_BY_KIND = {
   symlink: MODE_SYMLINK,
   gitlink: MODE_GITLINK,
 };
-var RELEVANT_CONFIG_RE =
+var RELEVANT_CONFIG_PATTERN =
   "^(core\\.(autocrlf|filemode|symlinks|trustctime|checkstat|quotepath|sparsecheckout)|sparse\\.expectfilesoutsideofpatterns|extensions\\.objectformat)$";
 //@ chunk-6vnxsn99.js:32280-34199 placement
 /**
  * 不跑 git diff、直接读索引与工作区文件来计算改动（commit/work-tree/index 三方），供 diff 面板与工作区差异使用。
  */
-async function readWorkTreeDiffViaIndex(repoDir, n, r, o, signal, onWindows = sep === "\\") {
-  let u = {
+async function readWorkTreeDiffViaIndex(repoDir, spawn, range, timeoutMs, signal, onWindows = sep === "\\") {
+  let context = {
     repoDir,
     onWindows,
-    spawn: n,
+    spawn,
     signal,
-    deadline: Date.now() + o,
+    deadline: Date.now() + timeoutMs,
   };
-  let h = weakMap.get(n);
-  if (h === undefined) {
-    h = readIndexWithSettings(u);
-    weakMap.set(n, h);
+  let indexPromise = weakMap.get(spawn);
+  if (indexPromise === undefined) {
+    indexPromise = readIndexWithSettings(context);
+    weakMap.set(spawn, indexPromise);
   }
-  let [p, S] = await Promise.all([h, r.from === "commit" ? lsTree(u, r.revision) : new Map()]);
-  if (!p || !S) return null;
-  let { settings, index } = p;
-  if (r.to === "work-tree") p.workTree ??= statWorktreeEntries(u, settings, index).catch(() => null);
-  let b =
-    r.to === "index"
+  let [indexInfo, treeSides] = await Promise.all([
+    indexPromise,
+    range.from === "commit" ? lsTree(context, range.revision) : new Map(),
+  ]);
+  if (!indexInfo || !treeSides) return null;
+  let { settings, index } = indexInfo;
+  if (range.to === "work-tree")
+    indexInfo.workTree ??= statWorktreeEntries(context, settings, index).catch(() => null);
+  let targetSides =
+    range.to === "index"
       ? {
           sides: index.sides,
           unseen: new Set(),
         }
-      : await p.workTree;
-  if (!b) return null;
-  let { sides, unseen } = b;
-  let A =
-    r.from === "index"
+      : await indexInfo.workTree;
+  if (!targetSides) return null;
+  let { sides, unseen } = targetSides;
+  let fromSides =
+    range.from === "index"
       ? new Map(
-          [...index.sides, ...Array.from(index.intended).filter(([N]) => !sides.has(N))].filter(
-            ([N]) => !unseen.has(N),
+          [...index.sides, ...Array.from(index.intended).filter(([path]) => !sides.has(path))].filter(
+            ([path]) => !unseen.has(path),
           ),
         )
-      : S;
-  let x = [];
-  for (let [N, q] of sides) {
-    let K = A.get(N);
-    if (K?.mode !== q.mode || K?.id !== q.id || q.bytes !== undefined) x.push(N);
+      : treeSides;
+  let candidates = [];
+  for (let [path, entry] of sides) {
+    let other = fromSides.get(path);
+    if (other?.mode !== entry.mode || other?.id !== entry.id || entry.bytes !== undefined)
+      candidates.push(path);
   }
-  for (let key of A.keys()) if (!sides.has(key)) x.push(key);
-  x.sort();
-  let O = new Map();
+  for (let key of fromSides.keys()) if (!sides.has(key)) candidates.push(key);
+  candidates.sort();
+  let symlinkMemo = new Map();
   if (
     (
       await Promise.all(
-        x.map((N) => isUnderSymlink(u.repoDir, dirnamePosix(N), O, u.onWindows).catch(() => true)),
+        candidates.map((path) =>
+          isUnderSymlink(context.repoDir, dirnamePosix(path), symlinkMemo, context.onWindows).catch(
+            () => true,
+          ),
+        ),
       )
     ).includes(true)
   )
     return null;
-  let F = await gitCheckAttr(u, x);
-  if (F === null) return null;
-  let P = gitBlobId(Buffer.alloc(0), settings.objectFormat);
-  let D = [];
-  let M = [];
-  let G = {
+  let attrs = await gitCheckAttr(context, candidates);
+  if (attrs === null) return null;
+  let emptyBlobId = gitBlobId(Buffer.alloc(0), settings.objectFormat);
+  let rawLines = [];
+  let numstatLines = [];
+  let held = {
     bytes: 0,
   };
-  let B = 0;
-  let me = MAX_DIFF_FILE_BYTES;
-  let se = 0;
-  for (let N = 0; N < x.length; N += BATCH_SIZE) {
-    let sliced = x.slice(N, N + BATCH_SIZE);
+  let heldBytes = 0;
+  let diffBudget = MAX_DIFF_FILE_BYTES;
+  let linesSinceYield = 0;
+  for (let batchStart = 0; batchStart < candidates.length; batchStart += BATCH_SIZE) {
+    let sliced = candidates.slice(batchStart, batchStart + BATCH_SIZE);
     await new Promise((resolve) => setImmediate(resolve));
-    if (isCancelledOrExpired(u)) B = BATCH_SIZE;
-    let K =
-      B < BATCH_SIZE
+    if (isCancelledOrExpired(context)) heldBytes = BATCH_SIZE;
+    let blobs =
+      heldBytes < BATCH_SIZE
         ? await catFileBatch(
-            u,
-            sliced.flatMap((U) =>
-              [A.get(U), sides.get(U), index.sides.get(U)].flatMap((j) =>
-                j !== undefined && j.mode !== MODE_GITLINK && !j.bytes && !j.uncounted && j.id !== P
-                  ? [j.id]
+            context,
+            sliced.flatMap((path) =>
+              [fromSides.get(path), sides.get(path), index.sides.get(path)].flatMap((entry) =>
+                entry !== undefined &&
+                entry.mode !== MODE_GITLINK &&
+                !entry.bytes &&
+                !entry.uncounted &&
+                entry.id !== emptyBlobId
+                  ? [entry.id]
                   : [],
               ),
             ),
-            G,
+            held,
           )
         : new Map();
-    if (K === null) return null;
-    K.set(P, "");
-    for (let U of sliced) {
-      let j = F.get(U);
-      let Z = A.get(U);
-      let Q = sides.get(U);
-      let id = index.sides.get(U)?.id ?? "";
-      let L = applyEolToEntry(
-        Q,
-        resolveEolConversion(j, settings.autocrlf),
-        K.get(id) ?? (Q?.id === id ? Q.bytes?.toString("latin1") : undefined),
+    if (blobs === null) return null;
+    blobs.set(emptyBlobId, "");
+    for (let path of sliced) {
+      let pathAttrs = attrs.get(path);
+      let fromEntry = fromSides.get(path);
+      let toEntry = sides.get(path);
+      let id = index.sides.get(path)?.id ?? "";
+      let converted = applyEolToEntry(
+        toEntry,
+        resolveEolConversion(pathAttrs, settings.autocrlf),
+        blobs.get(id) ?? (toEntry?.id === id ? toEntry.bytes?.toString("latin1") : undefined),
         settings.objectFormat,
       );
-      if (Z?.mode === L?.mode && Z?.id === L?.id) continue;
-      let [z, ee] = [entryText(Z, K), entryText(L, K)];
-      let ie = quoteGitPath(U, settings.quotesPaths);
-      D.push(formatRawDiffLine(Z, L, ie));
+      if (fromEntry?.mode === converted?.mode && fromEntry?.id === converted?.id) continue;
+      let [fromText, toText] = [entryText(fromEntry, blobs), entryText(converted, blobs)];
+      let quotedPath = quoteGitPath(path, settings.quotesPaths);
+      rawLines.push(formatRawDiffLine(fromEntry, converted, quotedPath));
       if (
-        B >= BATCH_SIZE ||
-        z === null ||
-        ee === null ||
-        isBinaryEntry(Z, z, j?.diff) ||
-        isBinaryEntry(L, ee, j?.diff)
+        heldBytes >= BATCH_SIZE ||
+        fromText === null ||
+        toText === null ||
+        isBinaryEntry(fromEntry, fromText, pathAttrs?.diff) ||
+        isBinaryEntry(converted, toText, pathAttrs?.diff)
       ) {
-        M.push(`-	-	${ie}`);
+        numstatLines.push(`-	-	${quotedPath}`);
         continue;
       }
-      let min = Math.min(MAX_GIT_OUTPUT_BYTES, me);
-      let Ae = {
+      let min = Math.min(MAX_GIT_OUTPUT_BYTES, diffBudget);
+      let budget = {
         left: min,
       };
-      let { added, removed } = countLineChanges(z, ee, Ae);
-      M.push(`${added}	${removed}	${ie}`);
-      B++;
-      me -= min - Math.max(0, Ae.left);
-      se += min - Math.max(0, Ae.left);
-      if (se > MAX_DIFF_LINES) {
-        se = 0;
+      let { added, removed } = countLineChanges(fromText, toText, budget);
+      numstatLines.push(`${added}	${removed}	${quotedPath}`);
+      heldBytes++;
+      diffBudget -= min - Math.max(0, budget.left);
+      linesSinceYield += min - Math.max(0, budget.left);
+      if (linesSinceYield > MAX_DIFF_LINES) {
+        linesSinceYield = 0;
         await new Promise((resolve) => setImmediate(resolve));
-        if (isCancelledOrExpired(u)) B = BATCH_SIZE;
+        if (isCancelledOrExpired(context)) heldBytes = BATCH_SIZE;
       }
     }
   }
-  return [...D, ...M].join(`
+  return [...rawLines, ...numstatLines].join(`
 `);
 }
 //@ chunk-6vnxsn99.js:34199-34371 placement
-function formatRawDiffLine(e, n, r) {
-  let o = !e ? "A" : !n ? "D" : (e.mode & MODE_TYPE_MASK) !== (n.mode & MODE_TYPE_MASK) ? "T" : "M";
-  let s = (a) => (a?.mode ?? 0).toString(8).padStart(6, "0");
-  return `:${s(e)} ${s(n)} 0000000 0000000 ${o}	${r}`;
+function formatRawDiffLine(fromEntry, toEntry, quotedPath) {
+  let statusCode = !fromEntry
+    ? "A"
+    : !toEntry
+      ? "D"
+      : (fromEntry.mode & MODE_TYPE_MASK) !== (toEntry.mode & MODE_TYPE_MASK)
+        ? "T"
+        : "M";
+  let modeText = (mode) => (mode?.mode ?? 0).toString(8).padStart(6, "0");
+  return `:${modeText(fromEntry)} ${modeText(toEntry)} 0000000 0000000 ${statusCode}	${quotedPath}`;
 }
 //@ chunk-6vnxsn99.js:34371-34390 placement
-var weakMap = new WeakMap();
+var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-6vnxsn99.js:34371", () => {
+  weakMap = new WeakMap();
+});
 //@ chunk-6vnxsn99.js:34390-34495 placement
-async function readIndexWithSettings(e) {
-  let objectFormat = await readObjectFormat(e);
-  let r = objectFormat && (await readIndexFile(e, objectFormat.objectFormat));
+async function readIndexWithSettings(context) {
+  let objectFormat = await readObjectFormat(context);
+  let index = objectFormat && (await readIndexFile(context, objectFormat.objectFormat));
   return (
     objectFormat &&
-    r && {
+    index && {
       settings: objectFormat,
-      index: r,
+      index,
     }
   );
 }
@@ -591,8 +675,8 @@ function isCancelledOrExpired({ signal, deadline }) {
   return signal?.aborted === true || Date.now() > deadline;
 }
 //@ chunk-6vnxsn99.js:34567-34853 placement
-function runGitLiteral({ repoDir, spawn, signal, deadline }, s, a) {
-  return execFileNoThrowWithCwd(gitExe(), ["--literal-pathspecs", ...GIT_SAFE_GLOBAL_ARGS, ...s], {
+function runGitLiteral({ repoDir, spawn, signal, deadline }, args, input) {
+  return execFileNoThrowWithCwd(gitExe(), ["--literal-pathspecs", ...GIT_SAFE_GLOBAL_ARGS, ...args], {
     ...spawn,
     cwd: repoDir,
     timeout: Math.max(1, deadline - Date.now()),
@@ -601,52 +685,57 @@ function runGitLiteral({ repoDir, spawn, signal, deadline }, s, a) {
     maxBuffer: MAX_GIT_BUFFER,
     encoding: "latin1",
     stripFinalNewline: false,
-    ...(a === undefined
+    ...(input === undefined
       ? {
           stdin: "ignore",
         }
       : {
-          input: a,
+          input,
         }),
   });
 }
 //@ chunk-6vnxsn99.js:34853-35546 placement
-async function readObjectFormat(e) {
-  let { stdout, exitCode } = await runGitLiteral(e, ["config", "-z", "--get-regexp", RELEVANT_CONFIG_RE]);
+async function readObjectFormat(context) {
+  let { stdout, exitCode } = await runGitLiteral(context, [
+    "config",
+    "-z",
+    "--get-regexp",
+    RELEVANT_CONFIG_PATTERN,
+  ]);
   if (exitCode !== 0 && exitCode !== 1) return null;
-  let o = new Map();
-  for (let s of stdout.split("\x00")) {
-    let [a = "", u] = s.split(
+  let config = new Map();
+  for (let line of stdout.split("\x00")) {
+    let [key = "", value] = line.split(
       `
 `,
       2,
     );
-    o.set(a, u ?? "true");
+    config.set(key, value ?? "true");
   }
   return {
-    objectFormat: o.get("extensions.objectformat") === "sha256" ? "sha256" : "sha1",
-    autocrlf: o.get("core.autocrlf") ?? null,
-    trustsExecutableBit: configBoolNotFalse(o.get("core.filemode")),
-    hasSymlinks: configBoolNotFalse(o.get("core.symlinks")),
-    trustsChangeTime: configBoolNotFalse(o.get("core.trustctime")),
-    checksWholeStat: o.get("core.checkstat")?.toLowerCase() !== "minimal",
-    quotesPaths: configBoolNotFalse(o.get("core.quotepath")),
+    objectFormat: config.get("extensions.objectformat") === "sha256" ? "sha256" : "sha1",
+    autocrlf: config.get("core.autocrlf") ?? null,
+    trustsExecutableBit: configBoolNotFalse(config.get("core.filemode")),
+    hasSymlinks: configBoolNotFalse(config.get("core.symlinks")),
+    trustsChangeTime: configBoolNotFalse(config.get("core.trustctime")),
+    checksWholeStat: config.get("core.checkstat")?.toLowerCase() !== "minimal",
+    quotesPaths: configBoolNotFalse(config.get("core.quotepath")),
     looksAtSkippedFilesThatAreThere:
-      parseGitBool(o.get("core.sparsecheckout")) === true &&
-      parseGitBool(o.get("sparse.expectfilesoutsideofpatterns")) !== true,
+      parseGitBool(config.get("core.sparsecheckout")) === true &&
+      parseGitBool(config.get("sparse.expectfilesoutsideofpatterns")) !== true,
   };
 }
 //@ chunk-6vnxsn99.js:35546-35579 placement
-function configBoolNotFalse(e) {
-  return parseGitBool(e) !== false;
+function configBoolNotFalse(value) {
+  return parseGitBool(value) !== false;
 }
 //@ chunk-6vnxsn99.js:35579-36465 placement
 async function readIndexFile({ spawn, signal }, objectFormat) {
   let GIT_INDEX_FILE = spawn.env.GIT_INDEX_FILE;
   if (GIT_INDEX_FILE === undefined) return null;
-  let s;
+  let handle;
   try {
-    s = await open(GIT_INDEX_FILE, readOnlyNoFollowFlags());
+    handle = await open(GIT_INDEX_FILE, readOnlyNoFollowFlags());
   } catch (error) {
     return getErrnoCode(error) === "ENOENT"
       ? {
@@ -658,13 +747,13 @@ async function readIndexFile({ spawn, signal }, objectFormat) {
       : null;
   }
   try {
-    let stats = await s.stat();
-    let handleBounded = await readHandleBounded(s, MAX_GIT_OUTPUT_BYTES_2, stats.size);
-    let h = handleBounded.overLimit
+    let stats = await handle.stat();
+    let handleBounded = await readHandleBounded(handle, MAX_GIT_OUTPUT_BYTES_2, stats.size);
+    let parsed = handleBounded.overLimit
       ? null
       : await parseGitIndex(handleBounded.bytes, objectFormat, signal ?? new AbortController().signal);
-    if (h === null || "refused" in h) return null;
-    let mapped = h.entries.map((entry) => ({
+    if (parsed === null || "refused" in parsed) return null;
+    let mapped = parsed.entries.map((entry) => ({
       path: entry.pathBytes.toString("latin1"),
       entry,
       stat: entry.stat,
@@ -684,14 +773,14 @@ async function readIndexFile({ spawn, signal }, objectFormat) {
       }));
     return {
       entries: mapped,
-      sides: new Map(mapped_2.filter((y) => !y.isIntended).map((y) => y.row)),
-      intended: new Map(mapped_2.filter((y) => y.isIntended).map((y) => y.row)),
+      sides: new Map(mapped_2.filter((row) => !row.isIntended).map((row) => row.row)),
+      intended: new Map(mapped_2.filter((row) => row.isIntended).map((row) => row.row)),
       modifiedSeconds: Math.floor(stats.mtimeMs / 1000),
     };
   } catch {
     return null;
   } finally {
-    await s.close().catch(() => {
+    await handle.close().catch(() => {
       return;
     });
   }
@@ -699,148 +788,157 @@ async function readIndexFile({ spawn, signal }, objectFormat) {
 //@ chunk-6vnxsn99.js:36465-36504 placement
 var GIT_METADATA_NAME_RE = /^(?:\.git|git~1)[. ]*(?::|$)/i;
 //@ chunk-6vnxsn99.js:36504-36755 placement
-function isSafeRelativePath(e, n = sep === "\\") {
-  if (/^\/|\/\/|\/$/.test(e)) return false;
-  if (!/\.\.|\.git|git~1|[\\:]/i.test(e)) return true;
-  let parts = e.split(/[/\\]/);
-  if (parts.some((o) => GIT_METADATA_NAME_RE.test(o))) return false;
-  return n
-    ? !/[:\\]/.test(e) && parts.every((o) => stripTrailingDotsSpaces(o) !== "..")
-    : !e.split("/").includes("..");
+function isSafeRelativePath(path, onWindows = sep === "\\") {
+  if (/^\/|\/\/|\/$/.test(path)) return false;
+  if (!/\.\.|\.git|git~1|[\\:]/i.test(path)) return true;
+  let parts = path.split(/[/\\]/);
+  if (parts.some((part) => GIT_METADATA_NAME_RE.test(part))) return false;
+  return onWindows
+    ? !/[:\\]/.test(path) && parts.every((part) => stripTrailingDotsSpaces(part) !== "..")
+    : !path.split("/").includes("..");
 }
 //@ chunk-6vnxsn99.js:36755-37075 placement
-async function lsTree(e, revision) {
-  let { stdout, code } = await runGitLiteral(e, ["ls-tree", "-r", "-z", "--full-tree", revision]);
+async function lsTree(context, revision) {
+  let { stdout, code } = await runGitLiteral(context, ["ls-tree", "-r", "-z", "--full-tree", revision]);
   if (code !== 0) return null;
-  let s = new Map();
-  for (let a of stdout.split("\x00")) {
-    let match = /^(\d{6}) \S+ ([0-9a-f]{40,64})\t(.+)$/s.exec(a);
+  let entries = new Map();
+  for (let line of stdout.split("\x00")) {
+    let match = /^(\d{6}) \S+ ([0-9a-f]{40,64})\t(.+)$/s.exec(line);
     if (match)
-      s.set(match[3], {
+      entries.set(match[3], {
         mode: parseInt(match[1], 8),
         id: match[2],
       });
   }
-  if (![...s.keys()].every((key) => isSafeRelativePath(key))) return null;
-  return s;
+  if (![...entries.keys()].every((key) => isSafeRelativePath(key))) return null;
+  return entries;
 }
 //@ chunk-6vnxsn99.js:37075-38069 placement
 /**
  * 批量检查索引条目对应的工作区文件。
  */
-async function statWorktreeEntries(e, settings, index) {
-  let { repoDir } = e;
-  let s = new Map();
-  let a = new Set();
-  let u = new Map([["", Promise.resolve(true)]]);
+async function statWorktreeEntries(context, settings, index) {
+  let { repoDir } = context;
+  let sides = new Map();
+  let unseen = new Set();
+  let realPathMemo = new Map([["", Promise.resolve(true)]]);
   let held = {
     bytes: 0,
   };
-  let p = [];
-  for (let [S, y] of index.entries.entries()) {
-    let { path, entry, stat } = y;
+  let toStat = [];
+  for (let [index_2, record] of index.entries.entries()) {
+    let { path, entry, stat } = record;
     if (
       entry.stage === 0 &&
       (stat.isAssumedUnchanged || (entry.isSkipWorktree && !settings.looksAtSkippedFilesThatAreThere))
     )
-      s.set(path, {
+      sides.set(path, {
         mode: MODE_BY_KIND[entry.kind],
         id: entry.id,
       });
-    else if (path !== index.entries[S - 1]?.path) p.push(y);
+    else if (path !== index.entries[index_2 - 1]?.path) toStat.push(record);
   }
-  for (let S = 0; S < p.length; S += STAT_BATCH) {
-    if (isCancelledOrExpired(e)) return null;
-    let sliced = p.slice(S, S + STAT_BATCH);
-    let T = new Map(
+  for (let batchStart = 0; batchStart < toStat.length; batchStart += STAT_BATCH) {
+    if (isCancelledOrExpired(context)) return null;
+    let sliced = toStat.slice(batchStart, batchStart + STAT_BATCH);
+    let dirStates = new Map(
       await Promise.all(
-        uniq(sliced.map(({ path }) => dirnamePosix(path))).map(async (E) => [
-          E,
-          await isRealPathWithinTeamDir(repoDir, E, u).catch(() => {
+        uniq(sliced.map(({ path }) => dirnamePosix(path))).map(async (dir) => [
+          dir,
+          await isRealPathWithinTeamDir(repoDir, dir, realPathMemo).catch(() => {
             return;
           }),
         ]),
       ),
     );
-    if (e.onWindows && [...T.values()].includes(undefined)) return null;
+    if (context.onWindows && [...dirStates.values()].includes(undefined)) return null;
     let results = await Promise.all(
       sliced.map(({ path }) =>
-        T.get(dirnamePosix(path)) === false
+        dirStates.get(dirnamePosix(path)) === false
           ? "ENOTDIR"
-          : T.get(dirnamePosix(path)) === undefined
+          : dirStates.get(dirnamePosix(path)) === undefined
             ? "EACCES"
             : lstat(joinPathLatin1(repoDir, path)).catch(getErrnoCode),
       ),
     );
     let results_2 = await Promise.all(
-      sliced.map((E, A) =>
-        resolveWorktreeEntry(E, results[A], {
-          lookup: e,
+      sliced.map((record, statResult) =>
+        resolveWorktreeEntry(record, results[statResult], {
+          lookup: context,
           settings,
           indexModifiedSeconds: index.modifiedSeconds,
           held,
         }),
       ),
     );
-    for (let [E, A] of results_2.entries()) {
-      if (A === "cannot-tell") return null;
-      if (A === "unseen") a.add(sliced[E].path);
-      else if (A !== null) s.set(sliced[E].path, A);
+    for (let [index, result] of results_2.entries()) {
+      if (result === "cannot-tell") return null;
+      if (result === "unseen") unseen.add(sliced[index].path);
+      else if (result !== null) sides.set(sliced[index].path, result);
     }
   }
   return {
-    sides: s,
-    unseen: a,
+    sides,
+    unseen,
   };
 }
 //@ chunk-6vnxsn99.js:38069-38719 placement
 /**
  * 由 stat 结果推断工作区条目（未变用索引 id，否则读文件）。
  */
-function resolveWorktreeEntry({ path, entry, stat }, o, s) {
-  let a = {
+function resolveWorktreeEntry({ path, entry, stat }, statResult, context) {
+  let indexEntry = {
     mode: MODE_BY_KIND[entry.kind],
     id: entry.id,
   };
-  if (o === undefined || typeof o === "string") {
-    if (o !== "ENOENT" && o !== "ENOTDIR") return "unseen";
-    return entry.isSkipWorktree ? a : null;
+  if (statResult === undefined || typeof statResult === "string") {
+    if (statResult !== "ENOENT" && statResult !== "ENOTDIR") return "unseen";
+    return entry.isSkipWorktree ? indexEntry : null;
   }
-  if (o.isDirectory()) return entry.kind === "gitlink" ? a : null;
-  if (!o.isFile() && !o.isSymbolicLink()) return null;
-  let { settings } = s;
-  let h = o.isSymbolicLink() || (!settings.hasSymlinks && entry.kind === "symlink");
-  let p = settings.trustsExecutableBit ? (o.mode & 64) !== 0 : entry.kind === "executable";
-  let S = h ? MODE_SYMLINK : p ? MODE_EXECUTABLE : MODE_FILE;
-  if (entry.stage === 0 && S === a.mode && isStatUnchanged(stat, o, settings, s.indexModifiedSeconds))
-    return a;
-  if (o.isSymbolicLink()) return hashWorktreeFile(path, S, a.id, "link", s);
-  let size = o.size <= MAX_HELD_FILE_BYTES && s.held.bytes + o.size <= MAX_TOTAL_HELD_BYTES ? o.size : 0;
-  s.held.bytes += size;
-  return hashWorktreeFile(path, S, a.id, size, s);
+  if (statResult.isDirectory()) return entry.kind === "gitlink" ? indexEntry : null;
+  if (!statResult.isFile() && !statResult.isSymbolicLink()) return null;
+  let { settings } = context;
+  let isLink = statResult.isSymbolicLink() || (!settings.hasSymlinks && entry.kind === "symlink");
+  let isExecutable = settings.trustsExecutableBit
+    ? (statResult.mode & 64) !== 0
+    : entry.kind === "executable";
+  let mode = isLink ? MODE_SYMLINK : isExecutable ? MODE_EXECUTABLE : MODE_FILE;
+  if (
+    entry.stage === 0 &&
+    mode === indexEntry.mode &&
+    isStatUnchanged(stat, statResult, settings, context.indexModifiedSeconds)
+  )
+    return indexEntry;
+  if (statResult.isSymbolicLink()) return hashWorktreeFile(path, mode, indexEntry.id, "link", context);
+  let size =
+    statResult.size <= MAX_HELD_FILE_BYTES && context.held.bytes + statResult.size <= MAX_TOTAL_HELD_BYTES
+      ? statResult.size
+      : 0;
+  context.held.bytes += size;
+  return hashWorktreeFile(path, mode, indexEntry.id, size, context);
 }
 //@ chunk-6vnxsn99.js:38719-39102 placement
 /**
  * 读工作区文件或链接并计算对象 id。
  */
-async function hashWorktreeFile(path, mode, id, o, { lookup, settings, held }) {
-  let h = joinPathLatin1(lookup.repoDir, path);
+async function hashWorktreeFile(path, mode, expectedId, heldSize, { lookup, settings, held }) {
+  let filePath = joinPathLatin1(lookup.repoDir, path);
   try {
-    if (o === "link") {
-      let S = await readlink(h, {
+    if (heldSize === "link") {
+      let linkBytes = await readlink(filePath, {
         encoding: "buffer",
       });
       return {
         mode,
-        id: gitBlobId(S, settings.objectFormat),
-        bytes: S,
+        id: gitBlobId(linkBytes, settings.objectFormat),
+        bytes: linkBytes,
       };
     }
-    let p = await readAndHashFile(h, mode, id, lookup, settings, o);
-    if (p === null || p === "cannot-tell" || !p.bytes) held.bytes -= o;
-    return p;
+    let result = await readAndHashFile(filePath, mode, expectedId, lookup, settings, heldSize);
+    if (result === null || result === "cannot-tell" || !result.bytes) held.bytes -= heldSize;
+    return result;
   } catch (error) {
-    held.bytes -= o === "link" ? 0 : o;
+    held.bytes -= heldSize === "link" ? 0 : heldSize;
     let errnoCode = getErrnoCode(error);
     return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" || errnoCode === "ELOOP" ? null : "cannot-tell";
   }
@@ -849,58 +947,58 @@ async function hashWorktreeFile(path, mode, id, o, { lookup, settings, held }) {
 /**
  * 读文件内容并计算 blob id（大文件只哈希不保留）。
  */
-async function readAndHashFile(e, mode, r, lookup, { objectFormat }, a) {
-  let u = await open(e, readOnlyNoFollowFlags());
+async function readAndHashFile(filePath, mode, expectedId, lookup, { objectFormat }, heldSize) {
+  let handle = await open(filePath, readOnlyNoFollowFlags());
   try {
-    let stats = await u.stat();
+    let stats = await handle.stat();
     if (!stats.isFile()) return null;
     let { size } = stats;
-    if (size > a) {
-      let T = createHash(objectFormat).update(`blob ${size}\x00`);
-      let b = Buffer.allocUnsafe(READ_CHUNK_BYTES);
-      for (let w = 0; w < size;) {
+    if (size > heldSize) {
+      let hash = createHash(objectFormat).update(`blob ${size}\x00`);
+      let buffer = Buffer.allocUnsafe(READ_CHUNK_BYTES);
+      for (let offset = 0; offset < size;) {
         if (isCancelledOrExpired(lookup)) return "cannot-tell";
-        let { bytesRead } = await u.read(b, 0, b.length, w);
+        let { bytesRead } = await handle.read(buffer, 0, buffer.length, offset);
         if (bytesRead === 0) break;
-        T.update(b.subarray(0, bytesRead));
-        w += bytesRead;
+        hash.update(buffer.subarray(0, bytesRead));
+        offset += bytesRead;
       }
       return {
         mode,
-        id: T.digest("hex"),
+        id: hash.digest("hex"),
         uncounted: true,
       };
     }
-    let { bytes } = await readHandleBounded(u, size, size);
-    let y = gitBlobId(bytes, objectFormat);
-    return y === r &&
+    let { bytes } = await readHandleBounded(handle, size, size);
+    let blobId = gitBlobId(bytes, objectFormat);
+    return blobId === expectedId &&
       !bytes.includes(`\r
 `)
       ? {
           mode,
-          id: y,
+          id: blobId,
         }
       : {
           mode,
-          id: y,
+          id: blobId,
           bytes,
         };
   } finally {
-    await u.close().catch(() => {
+    await handle.close().catch(() => {
       return;
     });
   }
 }
 //@ chunk-6vnxsn99.js:39645-39920 placement
-function isStatUnchanged(stat, n, { trustsChangeTime, checksWholeStat }, indexModifiedSeconds) {
+function isStatUnchanged(stat, stats, { trustsChangeTime, checksWholeStat }, indexModifiedSeconds) {
   return (
     stat.size !== 0 &&
-    stat.size === n.size % 4294967296 &&
-    stat.modifiedSeconds === Math.floor(n.mtimeMs / 1000) &&
+    stat.size === stats.size % 4294967296 &&
+    stat.modifiedSeconds === Math.floor(stats.mtimeMs / 1000) &&
     stat.modifiedSeconds < indexModifiedSeconds &&
     (!checksWholeStat ||
-      ((!trustsChangeTime || stat.changedSeconds === Math.floor(n.ctimeMs / 1000)) &&
-        (stat.inode === 0 || stat.inode === n.ino % 4294967296)))
+      ((!trustsChangeTime || stat.changedSeconds === Math.floor(stats.ctimeMs / 1000)) &&
+        (stat.inode === 0 || stat.inode === stats.ino % 4294967296)))
   );
 }
 //@ chunk-6vnxsn99.js:39920-39984 placement
@@ -908,36 +1006,36 @@ function dirnamePosix(path) {
   return path.slice(0, Math.max(0, path.lastIndexOf("/")));
 }
 //@ chunk-6vnxsn99.js:39984-40249 placement
-function isUnderSymlink(e, n, r, o) {
-  if (n === "") return Promise.resolve(false);
-  let s = r.get(n);
-  if (s === undefined) {
-    s = isUnderSymlink(e, dirnamePosix(n), r, o).then(
-      (a) =>
-        a ||
-        lstat(joinPathLatin1(e, n)).then(
-          (u) => u.isSymbolicLink(),
+function isUnderSymlink(repoDir, dirPath, memo, onWindows) {
+  if (dirPath === "") return Promise.resolve(false);
+  let underSymlink = memo.get(dirPath);
+  if (underSymlink === undefined) {
+    underSymlink = isUnderSymlink(repoDir, dirnamePosix(dirPath), memo, onWindows).then(
+      (parentUnderSymlink) =>
+        parentUnderSymlink ||
+        lstat(joinPathLatin1(repoDir, dirPath)).then(
+          (stats) => stats.isSymbolicLink(),
           (error) => {
             let errnoCode = getErrnoCode(error);
-            if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR" || (errnoCode === "EACCES" && !o))
+            if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR" || (errnoCode === "EACCES" && !onWindows))
               return false;
             throw error;
           },
         ),
     );
-    r.set(n, s);
+    memo.set(dirPath, underSymlink);
   }
-  return s;
+  return underSymlink;
 }
 //@ chunk-6vnxsn99.js:40249-40452 placement = isRealPathWithinTeamDir (1)
-function isRealPathWithinTeamDir(e, n, r) {
-  let o = r.get(n);
-  if (o === undefined) {
-    o = isRealPathWithinTeamDir(e, dirnamePosix(n), r).then(
-      (s) =>
-        s &&
-        lstat(joinPathLatin1(e, n)).then(
-          (a) => a.isDirectory(),
+function isRealPathWithinTeamDir(repoDir, dirPath, memo) {
+  let underRealDir = memo.get(dirPath);
+  if (underRealDir === undefined) {
+    underRealDir = isRealPathWithinTeamDir(repoDir, dirnamePosix(dirPath), memo).then(
+      (parentUnderRealDir) =>
+        parentUnderRealDir &&
+        lstat(joinPathLatin1(repoDir, dirPath)).then(
+          (dirStats) => dirStats.isDirectory(),
           (error) => {
             let code = getErrnoCode(error);
             if (code === "ENOENT" || code === "ENOTDIR") return false;
@@ -945,276 +1043,286 @@ function isRealPathWithinTeamDir(e, n, r) {
           },
         ),
     );
-    r.set(n, o);
+    memo.set(dirPath, underRealDir);
   }
-  return o;
+  return underRealDir;
 }
 //@ chunk-6vnxsn99.js:40452-40574 placement
-function joinPathLatin1(repoDir, n) {
-  return Buffer.byteLength(n) === n.length
-    ? repoDir + sep + n
-    : Buffer.concat([Buffer.from(repoDir + sep), Buffer.from(n, "latin1")]);
+function joinPathLatin1(repoDir, path) {
+  return Buffer.byteLength(path) === path.length
+    ? repoDir + sep + path
+    : Buffer.concat([Buffer.from(repoDir + sep), Buffer.from(path, "latin1")]);
 }
 //@ chunk-6vnxsn99.js:40574-40796 placement
-async function gitCheckAttr(e, n) {
-  if (n.length === 0) return new Map();
+async function gitCheckAttr(context, paths) {
+  if (paths.length === 0) return new Map();
   let { stdout, code } = await runGitLiteral(
-    e,
+    context,
     ["check-attr", "-z", "--stdin", "text", "crlf", "eol", "diff"],
-    Buffer.from(n.map((s) => `${s}\x00`).join(""), "latin1"),
+    Buffer.from(paths.map((path) => `${path}\x00`).join(""), "latin1"),
   );
   return code === 0 ? parseCheckAttrOutput(stdout) : null;
 }
 //@ chunk-6vnxsn99.js:40796-41562 placement
-async function catFileBatch(e, n, r) {
-  let o = uniq(n);
-  if (o.length === 0) return new Map();
-  let s = await runGitLiteral(
-    e,
+async function catFileBatch(context, ids, held) {
+  let uniqueIds = uniq(ids);
+  if (uniqueIds.length === 0) return new Map();
+  let checkResult = await runGitLiteral(
+    context,
     ["cat-file", "--batch-check=%(objectname) %(objecttype) %(objectsize)"],
     Buffer.from(
-      o
+      uniqueIds
         .map(
-          (S) => `${S}
+          (id) => `${id}
 `,
         )
         .join(""),
     ),
   );
-  if (s.code !== 0 || / missing$/m.test(s.stdout)) return null;
-  let flattened = s.stdout
+  if (checkResult.code !== 0 || / missing$/m.test(checkResult.stdout)) return null;
+  let flattened = checkResult.stdout
     .split(
       `
 `,
     )
     .flatMap((line) => {
       let match = /^([0-9a-f]{40,64}) blob (\d+)$/.exec(line);
-      let T = Number(match?.[2]);
-      if (!match || T > MAX_HELD_FILE_BYTES || r.bytes + T > MAX_TOTAL_HELD_BYTES) return [];
-      r.bytes += T;
+      let size = Number(match?.[2]);
+      if (!match || size > MAX_HELD_FILE_BYTES || held.bytes + size > MAX_TOTAL_HELD_BYTES) return [];
+      held.bytes += size;
       return [match[1]];
     });
-  let u = new Map();
-  if (flattened.length === 0) return u;
+  let blobs = new Map();
+  if (flattened.length === 0) return blobs;
   let { stdout, code } = await runGitLiteral(
-    e,
+    context,
     ["cat-file", "--batch"],
     Buffer.from(
       flattened
         .map(
-          (S) => `${S}
+          (id) => `${id}
 `,
         )
         .join(""),
     ),
   );
   if (code !== 0) return null;
-  for (let S = 0; S < stdout.length;) {
+  for (let offset = 0; offset < stdout.length;) {
     let index = stdout.indexOf(
       `
 `,
-      S,
+      offset,
     );
-    let match = /^([0-9a-f]{40,64}) blob (\d+)$/.exec(stdout.slice(S, index));
+    let match = /^([0-9a-f]{40,64}) blob (\d+)$/.exec(stdout.slice(offset, index));
     if (index === -1 || !match) return null;
-    let b = index + 1 + Number(match[2]);
-    u.set(match[1], stdout.slice(index + 1, b));
-    S = b + 1;
+    let contentEnd = index + 1 + Number(match[2]);
+    blobs.set(match[1], stdout.slice(index + 1, contentEnd));
+    offset = contentEnd + 1;
   }
-  return u;
+  return blobs;
 }
 //@ chunk-6vnxsn99.js:41562-41762 placement
-function applyEolToEntry(e, eolConversion, r, objectFormat) {
-  if (e?.bytes === undefined || e.mode === MODE_SYMLINK) return e;
-  let s = normalizeWorktreeBytes(
-    e.bytes,
-    eolConversion,
-    eolConversion === "if-text" &&
-      r?.includes(`\r
+function applyEolToEntry(entry, conversion, indexText, objectFormat) {
+  if (entry?.bytes === undefined || entry.mode === MODE_SYMLINK) return entry;
+  let normalized = normalizeWorktreeBytes(
+    entry.bytes,
+    conversion,
+    conversion === "if-text" &&
+      indexText?.includes(`\r
 `)
-      ? Buffer.from(r, "latin1")
+      ? Buffer.from(indexText, "latin1")
       : undefined,
   );
-  return s === null
-    ? e
+  return normalized === null
+    ? entry
     : {
-        mode: e.mode,
-        id: gitBlobId(s, objectFormat),
-        bytes: s,
+        mode: entry.mode,
+        id: gitBlobId(normalized, objectFormat),
+        bytes: normalized,
       };
 }
 //@ chunk-6vnxsn99.js:41762-41847 placement
-function gitBlobId(e, objectFormat) {
-  return createHash(objectFormat).update(`blob ${e.length}\x00`).update(e).digest("hex");
+function gitBlobId(buffer, objectFormat) {
+  return createHash(objectFormat).update(`blob ${buffer.length}\x00`).update(buffer).digest("hex");
 }
 //@ chunk-6vnxsn99.js:41847-42018 placement
-function entryText(e, n) {
-  if (e === undefined) return "";
-  if (e.mode === MODE_GITLINK)
-    return `Subproject commit ${e.id}
+function entryText(entry, blobs) {
+  if (entry === undefined) return "";
+  if (entry.mode === MODE_GITLINK)
+    return `Subproject commit ${entry.id}
 `;
-  if (e.uncounted) return null;
-  return e.bytes?.toString("latin1") ?? n.get(e.id) ?? null;
+  if (entry.uncounted) return null;
+  return entry.bytes?.toString("latin1") ?? blobs.get(entry.id) ?? null;
 }
 //@ chunk-6vnxsn99.js:42018-42158 placement
-function isBinaryEntry(e, n, diff) {
-  if ((e?.mode === MODE_FILE || e?.mode === MODE_EXECUTABLE) && (diff === "set" || diff === "unset"))
+function isBinaryEntry(entry, text, diff) {
+  if ((entry?.mode === MODE_FILE || entry?.mode === MODE_EXECUTABLE) && (diff === "set" || diff === "unset"))
     return diff === "unset";
-  let index = n.indexOf("\x00");
+  let index = text.indexOf("\x00");
   return index !== -1 && index < BINARY_SNIFF_BYTES;
 }
 //@ chunk-6vnxsn99.js:42158-42850 placement
 /**
  * 统计增删行数（Myers 差分，带预算，超出时按唯一行锚点分治）。
  */
-function countLineChanges(command, simulatedSedEditFilePath, r) {
-  let [o, s] = getFileExtensionsFromBashCommand(command, simulatedSedEditFilePath);
-  let a = {
-    added: countLines(s),
-    removed: countLines(o),
+function countLineChanges(command, simulatedSedEditFilePath, budget) {
+  let [oldText, newText] = getFileExtensionsFromBashCommand(command, simulatedSedEditFilePath);
+  let lineCounts = {
+    added: countLines(newText),
+    removed: countLines(oldText),
   };
-  r.left -= (a.added + a.removed) * DIFF_COST_PER_LINE;
-  if (r.left < 0) return a;
-  let [u, h] = [splitKeepingNewlines(o), splitKeepingNewlines(s)];
-  let p = {
+  budget.left -= (lineCounts.added + lineCounts.removed) * DIFF_COST_PER_LINE;
+  if (budget.left < 0) return lineCounts;
+  let [oldLines, newLines] = [splitKeepingNewlines(oldText), splitKeepingNewlines(newText)];
+  let changes = {
     added: 0,
     removed: 0,
   };
-  let S = [[0, u.length, 0, h.length]];
-  for (let y = S.pop(); y !== undefined; y = S.pop()) {
-    let [T = 0, b = 0, w = 0, E = 0] = y;
-    while (T < b && w < E && u[T] === h[w]) {
-      T++;
-      w++;
+  let pendingRanges = [[0, oldLines.length, 0, newLines.length]];
+  for (let range = pendingRanges.pop(); range !== undefined; range = pendingRanges.pop()) {
+    let [oldStart = 0, oldEnd = 0, newStart = 0, newEnd = 0] = range;
+    while (oldStart < oldEnd && newStart < newEnd && oldLines[oldStart] === newLines[newStart]) {
+      oldStart++;
+      newStart++;
     }
-    while (T < b && w < E && u[b - 1] === h[E - 1]) {
-      b--;
-      E--;
+    while (oldStart < oldEnd && newStart < newEnd && oldLines[oldEnd - 1] === newLines[newEnd - 1]) {
+      oldEnd--;
+      newEnd--;
     }
-    let [A, x] = [b - T, E - w];
-    if (A === 0 || x === 0) {
-      p.removed += A;
-      p.added += x;
+    let [oldLen, newLen] = [oldEnd - oldStart, newEnd - newStart];
+    if (oldLen === 0 || newLen === 0) {
+      changes.removed += oldLen;
+      changes.added += newLen;
       continue;
     }
-    let [O, R] = [u.slice(T, b), h.slice(w, E)];
-    let F = myersDistance(O, R, r, MAX_MYERS_EDIT_DISTANCE);
-    if (F === null) {
-      r.left -= (A + x) * DIFF_COST_PER_LINE;
-      let P = r.left < 0 ? [] : uniqueLineAnchors(O, R);
-      if (P.length > 0) {
-        let [D, M] = [T, w];
-        for (let [G, B] of P) {
-          S.push([D, T + G, M, w + B]);
-          D = T + G + 1;
-          M = w + B + 1;
+    let [oldSlice, newSlice] = [oldLines.slice(oldStart, oldEnd), newLines.slice(newStart, newEnd)];
+    let distance = myersDistance(oldSlice, newSlice, budget, MAX_MYERS_EDIT_DISTANCE);
+    if (distance === null) {
+      budget.left -= (oldLen + newLen) * DIFF_COST_PER_LINE;
+      let anchors = budget.left < 0 ? [] : uniqueLineAnchors(oldSlice, newSlice);
+      if (anchors.length > 0) {
+        let [nextOldStart, nextNewStart] = [oldStart, newStart];
+        for (let [oldAt, newAt] of anchors) {
+          pendingRanges.push([nextOldStart, oldStart + oldAt, nextNewStart, newStart + newAt]);
+          nextOldStart = oldStart + oldAt + 1;
+          nextNewStart = newStart + newAt + 1;
         }
-        S.push([D, b, M, E]);
+        pendingRanges.push([nextOldStart, oldEnd, nextNewStart, newEnd]);
         continue;
       }
-      F = myersDistance(O, R, r, r.left) ?? A + x;
+      distance = myersDistance(oldSlice, newSlice, budget, budget.left) ?? oldLen + newLen;
     }
-    p.added += (F + x - A) / 2;
-    p.removed += (F - x + A) / 2;
+    changes.added += (distance + newLen - oldLen) / 2;
+    changes.removed += (distance - newLen + oldLen) / 2;
   }
-  return p;
+  return changes;
 }
 //@ chunk-6vnxsn99.js:42850-43248 placement
 /**
  * Myers 算法求编辑距离（受预算限制）。
  */
-function myersDistance(e, n, r, o) {
-  let min = Math.min(o, r.left);
-  let a = 0;
-  let min_2 = Math.min(e.length + n.length, Math.ceil(Math.sqrt(2 * Math.max(0, min))));
+function myersDistance(oldLines, newLines, budget, limit) {
+  let min = Math.min(limit, budget.left);
+  let cost = 0;
+  let min_2 = Math.min(oldLines.length + newLines.length, Math.ceil(Math.sqrt(2 * Math.max(0, min))));
   let int32Array = new Int32Array(2 * min_2 + 3);
-  let p = min_2 + 1;
-  for (let j = 0; j <= min_2 && a <= min; j++)
-    for (let y = -j; y <= j; y += 2) {
-      let [T, b] = [int32Array[p + y - 1], int32Array[p + y + 1]];
-      let w = y === -j || (y !== j && T < b) ? b : T + 1;
-      let E = w;
-      while (E < e.length && E - y < n.length && e[E] === n[E - y]) E++;
-      int32Array[p + y] = E;
-      a += 1 + E - w;
-      if (E >= e.length && E - y >= n.length) {
-        r.left -= a;
+  let midIndex = min_2 + 1;
+  for (let j = 0; j <= min_2 && cost <= min; j++)
+    for (let diagonal = -j; diagonal <= j; diagonal += 2) {
+      let [leftValue, rightValue] = [
+        int32Array[midIndex + diagonal - 1],
+        int32Array[midIndex + diagonal + 1],
+      ];
+      let startX = diagonal === -j || (diagonal !== j && leftValue < rightValue) ? rightValue : leftValue + 1;
+      let x = startX;
+      while (x < oldLines.length && x - diagonal < newLines.length && oldLines[x] === newLines[x - diagonal])
+        x++;
+      int32Array[midIndex + diagonal] = x;
+      cost += 1 + x - startX;
+      if (x >= oldLines.length && x - diagonal >= newLines.length) {
+        budget.left -= cost;
         return j;
       }
     }
-  r.left -= a;
+  budget.left -= cost;
   return null;
 }
 //@ chunk-6vnxsn99.js:43248-43721 placement
 /**
  * 两侧唯一行的最长递增匹配（patience 锚点）。
  */
-function uniqueLineAnchors(e, n) {
-  let o = new Map();
-  for (let [p, S] of n.entries()) o.set(S, o.has(S) ? -1 : p);
-  let s = new Map();
-  for (let [p, S] of e.entries()) s.set(S, s.has(S) ? -1 : p);
-  let a = [];
-  let u = [];
-  for (let [p, S] of s) {
-    let y = o.get(p) ?? -1;
-    if (S === -1 || y === -1) continue;
-    let T = 0;
-    let b = u.length;
-    while (T < b) {
-      let w = (T + b) >> 1;
-      if (a[u[w]].newAt < y) T = w + 1;
-      else b = w;
+function uniqueLineAnchors(oldLines, newLines) {
+  let newIndexByLine = new Map();
+  for (let [index, line] of newLines.entries())
+    newIndexByLine.set(line, newIndexByLine.has(line) ? -1 : index);
+  let oldIndexByLine = new Map();
+  for (let [index, line] of oldLines.entries())
+    oldIndexByLine.set(line, oldIndexByLine.has(line) ? -1 : index);
+  let anchors = [];
+  let chainTails = [];
+  for (let [line, oldIndex] of oldIndexByLine) {
+    let newIndex = newIndexByLine.get(line) ?? -1;
+    if (oldIndex === -1 || newIndex === -1) continue;
+    let low = 0;
+    let high = chainTails.length;
+    while (low < high) {
+      let mid = (low + high) >> 1;
+      if (anchors[chainTails[mid]].newAt < newIndex) low = mid + 1;
+      else high = mid;
     }
-    a.push({
-      oldAt: S,
-      newAt: y,
-      previous: T === 0 ? -1 : u[T - 1],
+    anchors.push({
+      oldAt: oldIndex,
+      newAt: newIndex,
+      previous: low === 0 ? -1 : chainTails[low - 1],
     });
-    u[T] = a.length - 1;
+    chainTails[low] = anchors.length - 1;
   }
-  let h = [];
-  for (let p = u.at(-1) ?? -1; p !== -1; p = a[p].previous) h.push([a[p].oldAt, a[p].newAt]);
-  return h.reverse();
+  let pairs = [];
+  for (let chainIndex = chainTails.at(-1) ?? -1; chainIndex !== -1; chainIndex = anchors[chainIndex].previous)
+    pairs.push([anchors[chainIndex].oldAt, anchors[chainIndex].newAt]);
+  return pairs.reverse();
 }
 //@ chunk-6vnxsn99.js:44057-44170 placement
-function countLines(e) {
-  let n =
-    e === "" ||
-    e.endsWith(`
+function countLines(text) {
+  let count =
+    text === "" ||
+    text.endsWith(`
 `)
       ? 0
       : 1;
-  for (let j = 0; j < e.length; j++) if (e.charCodeAt(j) === 10) n++;
-  return n;
+  for (let j = 0; j < text.length; j++) if (text.charCodeAt(j) === 10) count++;
+  return count;
 }
 //@ chunk-6vnxsn99.js:44170-44235 placement
-function splitKeepingNewlines(e) {
-  return e === "" ? [] : (e.match(/[^\n]*\n|[^\n]+$/g) ?? []);
+function splitKeepingNewlines(text) {
+  return text === "" ? [] : (text.match(/[^\n]*\n|[^\n]+$/g) ?? []);
 }
 //@ chunk-6vnxsn99.js:44235-44351 placement
-var C_ESCAPES = new Map([
-  [7, "\\a"],
-  [8, "\\b"],
-  [9, "\\t"],
-  [10, "\\n"],
-  [11, "\\v"],
-  [12, "\\f"],
-  [13, "\\r"],
-  [34, '\\"'],
-  [92, "\\\\"],
-]);
+var C_ESCAPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-6vnxsn99.js:44235", () => {
+  C_ESCAPES = new Map([
+    [7, "\\a"],
+    [8, "\\b"],
+    [9, "\\t"],
+    [10, "\\n"],
+    [11, "\\v"],
+    [12, "\\f"],
+    [13, "\\r"],
+    [34, '\\"'],
+    [92, "\\\\"],
+  ]);
+});
 //@ chunk-6vnxsn99.js:44351-44679 placement
-function quoteGitPath(e, quotesPaths) {
-  if (!(quotesPaths ? /[^\x20-\x7e]|["\\]/ : /[^\x20-\x7e\x80-\xff]|["\\]/).test(e))
-    return Buffer.from(e, "latin1").toString("utf8");
-  let joined = Array.from(e, (s) => {
-    let code = s.charCodeAt(0);
+function quoteGitPath(path, quotesPaths) {
+  if (!(quotesPaths ? /[^\x20-\x7e]|["\\]/ : /[^\x20-\x7e\x80-\xff]|["\\]/).test(path))
+    return Buffer.from(path, "latin1").toString("utf8");
+  let joined = Array.from(path, (char) => {
+    let code = char.charCodeAt(0);
     return (
       C_ESCAPES.get(code) ??
       (code < 32 || code === 127 || (quotesPaths && code >= 128)
         ? `\\${code.toString(8).padStart(3, "0")}`
-        : s)
+        : char)
     );
   }).join("");
   return `"${Buffer.from(joined, "latin1").toString("utf8")}"`;

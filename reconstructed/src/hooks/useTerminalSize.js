@@ -8,14 +8,18 @@
  * pieces: chunk-9ks6yv81.js (2)
  * attribution: placement 1, fingerprint 1
  */
-import { init_react_production, Se } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, useContext } from "../../vendor/react/cjs/react.production.js";
 import { TerminalSizeContext } from "../ink/terminalModes.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-9ks6yv81.js:265-269 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-9ks6yv81.js:265", () => {
+  init_react_production();
+});
 //@ chunk-9ks6yv81.js:269-383 fingerprint = useTerminalSize (1)
 function useTerminalSize() {
-  let size = Se(TerminalSizeContext);
+  let size = useContext(TerminalSizeContext);
   if (!size) throw Error("useTerminalSize must be used within an Ink App component");
   return size;
 }

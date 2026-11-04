@@ -8,7 +8,7 @@
  * pieces: chunk-7p2hc4jn.js (1), chunk-81qqq1aq.js (4)
  * attribution: fingerprint 2, sole-consumer 2, affinity 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTheme } from "./design-system/ThemeProvider.js";
 import { useTerminalFocus } from "../ink/hooks/use-terminal-focus.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
@@ -25,63 +25,68 @@ import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.re
 import { BaseTextInput } from "./BaseTextInput.js";
 import { Box } from "../ink/components/Text.js";
 
+//@ chunk-7p2hc4jn.js:50977-51058 fingerprint = BARS (1)
+var VOICE_LEVEL_BARS = " \u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588";
+var CURSOR_BLINK_ON_RATIO = 0.7;
+var CURSOR_BLINK_PERIOD = 1.8;
+var CURSOR_FADE_RATIO = 0.15;
 //@ chunk-81qqq1aq.js:7027-7064 sole-consumer
-function selectVoiceState(tt) {
-  return tt.voiceState;
+function selectVoiceState(appState) {
+  return appState.voiceState;
 }
 //@ chunk-81qqq1aq.js:7064-7090 sole-consumer
-function identity(ot) {
-  return ot;
+function identity(value) {
+  return value;
 }
 //@ chunk-81qqq1aq.js:7090-7116 affinity
-function identity_2(ce) {
-  return ce;
+function identity_2(value) {
+  return value;
 }
 //@ chunk-81qqq1aq.js:7116-10954 fingerprint = TextInput (0.667)
 /**
  * 普通输入框：调用 useTextInput，渲染 BaseTextInput；语音录音时显示电平条。
  */
 function TextInput(props) {
-  let $ = w(59);
-  let [h] = useTheme();
+  let $ = useMemoCache(59);
+  let [theme] = useTheme();
   let isTerminalFocused = useTerminalFocus();
-  let d;
+  let nativeCursorEnabled;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    d = isNativeCursorEnabled();
-    $[0] = d;
-  } else d = $[0];
-  let m = d;
+    nativeCursorEnabled = isNativeCursorEnabled();
+    $[0] = nativeCursorEnabled;
+  } else nativeCursorEnabled = $[0];
+  let isNativeCursor = nativeCursorEnabled;
   let settings = useIsScreenReaderEnabled();
   let hidePlaceholderText = useAppState_2(selectVoiceState) === "recording";
-  let [u, b] = useVoiceLevelIndicator();
+  let [containerRef, voiceLevelCell] = useVoiceLevelIndicator();
   const canPasteImages = !!props.onImagePaste;
-  let E;
+  let inputEffectOptions;
   if ($[1] !== isTerminalFocused || $[2] !== canPasteImages) {
-    E = {
+    inputEffectOptions = {
       isTerminalFocused,
       canPasteImages,
     };
     $[1] = isTerminalFocused;
     $[2] = canPasteImages;
-    $[3] = E;
-  } else E = $[3];
-  useTextInputEffects(E);
-  let H;
-  if ($[4] !== b || $[5] !== isTerminalFocused) {
-    H = !isTerminalFocused
+    $[3] = inputEffectOptions;
+  } else inputEffectOptions = $[3];
+  useTextInputEffects(inputEffectOptions);
+  let invert;
+  if ($[4] !== voiceLevelCell || $[5] !== isTerminalFocused) {
+    invert = !isTerminalFocused
       ? identity
-      : b
-        ? () => sequential.hex(b.hex)(b.char)
-        : m
+      : voiceLevelCell
+        ? () => sequential.hex(voiceLevelCell.hex)(voiceLevelCell.char)
+        : isNativeCursor
           ? identity_2
           : inverseText;
-    $[4] = b;
+    $[4] = voiceLevelCell;
     $[5] = isTerminalFocused;
-    $[6] = H;
-  } else H = $[6];
-  let invert = H;
+    $[6] = invert;
+  } else invert = $[6];
+  let invert_2 = invert;
   const {
-    value: M,
+    value,
     onChange,
     onSubmit,
     onExit,
@@ -104,15 +109,15 @@ function TextInput(props) {
   const cursorChar = props.showCursor && !settings ? " " : "";
   const highlightPastedText = props.highlightPastedText;
   let themeText;
-  if ($[7] !== h) {
-    themeText = color("text", h);
-    $[7] = h;
+  if ($[7] !== theme) {
+    themeText = color("text", theme);
+    $[7] = theme;
     $[8] = themeText;
   } else themeText = $[8];
   const virtualTexts = settings ? undefined : props.virtualTexts;
-  let ae;
+  let inputOptions;
   if (
-    $[9] !== invert ||
+    $[9] !== invert_2 ||
     $[10] !== settings ||
     $[11] !== props.clearOnSubmit ||
     $[12] !== props.columns ||
@@ -152,8 +157,8 @@ function TextInput(props) {
     $[46] !== themeText ||
     $[47] !== virtualTexts
   ) {
-    ae = {
-      value: M,
+    inputOptions = {
+      value,
       onChange,
       onSubmit,
       onExit,
@@ -175,7 +180,7 @@ function TextInput(props) {
       cursorChar,
       preserveTrailingWhitespace: settings,
       highlightPastedText,
-      invert,
+      invert: invert_2,
       themeText,
       columns: props.columns,
       leadingPill: props.leadingPill,
@@ -194,7 +199,7 @@ function TextInput(props) {
       dim: sequential.dim,
       virtualTexts,
     };
-    $[9] = invert;
+    $[9] = invert_2;
     $[10] = settings;
     $[11] = props.clearOnSubmit;
     $[12] = props.columns;
@@ -233,13 +238,13 @@ function TextInput(props) {
     $[45] = cursorChar;
     $[46] = themeText;
     $[47] = virtualTexts;
-    $[48] = ae;
-  } else ae = $[48];
-  let inputState = useTextInput(ae);
-  const cursorCellPainted = b != null;
+    $[48] = inputOptions;
+  } else inputOptions = $[48];
+  let inputState = useTextInput(inputOptions);
+  const cursorCellPainted = voiceLevelCell != null;
   let children;
   if (
-    $[49] !== invert ||
+    $[49] !== invert_2 ||
     $[50] !== isTerminalFocused ||
     $[51] !== hidePlaceholderText ||
     $[52] !== props ||
@@ -250,12 +255,12 @@ function TextInput(props) {
       inputState,
       terminalFocus: isTerminalFocused,
       highlights: props.highlights,
-      invert,
+      invert: invert_2,
       hidePlaceholderText,
       cursorCellPainted,
       ...props,
     });
-    $[49] = invert;
+    $[49] = invert_2;
     $[50] = isTerminalFocused;
     $[51] = hidePlaceholderText;
     $[52] = props;
@@ -263,21 +268,16 @@ function TextInput(props) {
     $[54] = inputState;
     $[55] = children;
   } else children = $[55];
-  let Y;
-  if ($[56] !== u || $[57] !== children) {
-    Y = jsxProd_default(Box, {
-      ref: u,
+  let boxElement;
+  if ($[56] !== containerRef || $[57] !== children) {
+    boxElement = jsxProd_default(Box, {
+      ref: containerRef,
       children,
     });
-    $[56] = u;
+    $[56] = containerRef;
     $[57] = children;
-    $[58] = Y;
-  } else Y = $[58];
-  return Y;
+    $[58] = boxElement;
+  } else boxElement = $[58];
+  return boxElement;
 }
-//@ chunk-7p2hc4jn.js:50977-51058 fingerprint = BARS (1)
-var VOICE_LEVEL_BARS = " \u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588";
-var CURSOR_BLINK_ON_RATIO = 0.7;
-var CURSOR_BLINK_PERIOD = 1.8;
-var CURSOR_FADE_RATIO = 0.15;
 export { TextInput, CURSOR_BLINK_PERIOD, CURSOR_BLINK_ON_RATIO, VOICE_LEVEL_BARS, CURSOR_FADE_RATIO };

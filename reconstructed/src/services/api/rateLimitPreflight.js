@@ -28,22 +28,24 @@ import { logForDebugging } from "../../utils/debug.js";
 import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { getBareCheckModel } from "../../utils/model/smallFastModel.js";
 import { logError } from "../../utils/log.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:2509323-2509749 placement
 /**
  * 把预检得到的 429 分类：普通 429、超额、其他限额、重置时间不在未来，或真正被拒。
  */
-function classifyPreflight429(headers, n) {
+function classifyPreflight429(headers, now) {
   if (
     maybeMockRateLimitHeaders(headers.headers ?? new globalThis.Headers()).get(
       "anthropic-ratelimit-unified-status",
     ) !== "rejected"
   )
     return "bare_429";
-  let s = applyMockHeaders(headers);
-  if (s.errorCode !== undefined || s.isUsingOverage === true || s.overageInUse === true) return "overage";
-  if (s.rateLimitType !== "five_hour" && s.rateLimitType !== "seven_day") return "other_claim";
-  if (s.resetsAt === undefined || !Number.isFinite(s.resetsAt) || s.resetsAt * 1000 <= n)
+  let mock = applyMockHeaders(headers);
+  if (mock.errorCode !== undefined || mock.isUsingOverage === true || mock.overageInUse === true)
+    return "overage";
+  if (mock.rateLimitType !== "five_hour" && mock.rateLimitType !== "seven_day") return "other_claim";
+  if (mock.resetsAt === undefined || !Number.isFinite(mock.resetsAt) || mock.resetsAt * 1000 <= now)
     return "reset_not_ahead";
   return "refused";
 }
@@ -51,11 +53,11 @@ function classifyPreflight429(headers, n) {
 /**
  * 执行一次额度预检请求，把结果归类为放行、客户端/网络/HTTP 错误或各类 429。
  */
-async function runPreflightProbe(currentModel, credentials, signal) {
+async function runPreflightProbe(model, credentials, signal) {
   try {
-    let s = checkMockRateLimitError(currentModel);
-    if (s !== null) throw s;
-    await runQuotaProbe(currentModel, credentials, signal);
+    let mockError = checkMockRateLimitError(model);
+    if (mockError !== null) throw mockError;
+    await runQuotaProbe(model, credentials, signal);
     return {
       answer: "admitted",
     };
@@ -72,25 +74,25 @@ async function runPreflightProbe(currentModel, credentials, signal) {
       return {
         answer: "http_error",
       };
-    let h = classifyPreflight429(error, Date.now());
-    return h === "refused"
+    let preflight = classifyPreflight429(error, Date.now());
+    return preflight === "refused"
       ? {
-          answer: h,
+          answer: preflight,
           rejection: error,
         }
       : {
-          answer: h,
+          answer: preflight,
         };
   }
 }
 //@ chunk-e6aww6q8.js:2510095-2510278 placement
 function stoppedPromise(stop, signal) {
   return new Promise((resolve) => {
-    let s = () => resolve("stopped");
-    stop.addEventListener("abort", s, {
+    let stopResolve = () => resolve("stopped");
+    stop.addEventListener("abort", stopResolve, {
       once: true,
     });
-    signal.addEventListener("abort", () => stop.removeEventListener("abort", s), {
+    signal.addEventListener("abort", () => stop.removeEventListener("abort", stopResolve), {
       once: true,
     });
   });
@@ -158,50 +160,53 @@ async function preflightRateLimitCore({
   }
 }
 //@ chunk-e6aww6q8.js:2510885-2510905 placement
-var weakMap_9 = new WeakMap();
+var weakMap_9; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:2510885", () => {
+  weakMap_9 = new WeakMap();
+});
 //@ chunk-e6aww6q8.js:2510905-2512232 placement
 /**
  * 请求前的限流预检，按开关、必要流量、账号类型等决定是否跳过。
  */
 async function preflightRateLimit({ rejection, nowMs, credentials, stop }) {
-  let h;
-  if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_bright_wall", true)) h = "skipped_kill_switch_off";
-  else if (isEssentialTrafficOnly()) h = "skipped_essential_traffic_only";
-  else if (!isClaudeAISubscriber() || getAPIProvider() !== "firstParty") h = "skipped_account";
-  else if (isLowPriorityActive()) h = "skipped_low_priority";
+  let applied;
+  if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_bright_wall", true)) applied = "skipped_kill_switch_off";
+  else if (isEssentialTrafficOnly()) applied = "skipped_essential_traffic_only";
+  else if (!isClaudeAISubscriber() || getAPIProvider() !== "firstParty") applied = "skipped_account";
+  else if (isLowPriorityActive()) applied = "skipped_low_priority";
   else {
-    let S = classifyPreflight429(rejection, nowMs);
-    if (S !== "refused") h = `skipped_refusal_${S}`;
+    let classified = classifyPreflight429(rejection, nowMs);
+    if (classified !== "refused") applied = `skipped_refusal_${classified}`;
   }
-  if (h !== undefined) {
-    logForDebugging(`[usage limit recheck] no probe sent (${h}): the request sleeps on`);
-    let S = weakMap_9.get(rejection) ?? new Set();
-    if (!S.has(h)) {
-      weakMap_9.set(rejection, S.add(h));
-      logFeatureSad("usage_limit_wait_recheck", h);
+  if (applied !== undefined) {
+    logForDebugging(`[usage limit recheck] no probe sent (${applied}): the request sleeps on`);
+    let seenSet = weakMap_9.get(rejection) ?? new Set();
+    if (!seenSet.has(applied)) {
+      weakMap_9.set(rejection, seenSet.add(applied));
+      logFeatureSad("usage_limit_wait_recheck", applied);
     }
     return false;
   }
-  let y = await preflightRateLimitCore({
+  let result = await preflightRateLimitCore({
     model: getBareCheckModel(),
     credentials,
     storageV5: undefined,
     stop,
     logFailure: logError,
   });
-  switch (y.answer) {
+  switch (result.answer) {
     case "admitted":
       logForDebugging("[usage limit recheck] probe admitted: the request is sent again now");
       logFeatureOk("usage_limit_wait_recheck", {
         lifted: true,
-        probe_ms: y.waitedMs,
+        probe_ms: result.waitedMs,
       });
       return true;
     case "refused":
       logForDebugging("[usage limit recheck] probe refused: the request sleeps on");
       logFeatureOk("usage_limit_wait_recheck", {
         lifted: false,
-        probe_ms: y.waitedMs,
+        probe_ms: result.waitedMs,
       });
       return false;
     case "stopped":
@@ -217,10 +222,10 @@ async function preflightRateLimit({ rejection, nowMs, credentials, stop }) {
     case "deadline":
     case "threw":
       logForDebugging(
-        `[usage limit recheck] probe gave no clear answer (${y.answer}): the request sleeps on`,
+        `[usage limit recheck] probe gave no clear answer (${result.answer}): the request sleeps on`,
       );
-      logFeatureSad("usage_limit_wait_recheck", `probe_${y.answer}`, {
-        probe_ms: y.waitedMs,
+      logFeatureSad("usage_limit_wait_recheck", `probe_${result.answer}`, {
+        probe_ms: result.waitedMs,
       });
       return false;
   }

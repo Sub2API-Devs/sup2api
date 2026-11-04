@@ -19,16 +19,19 @@ import {
 /**
  * 判断跨会话信封的类型是否未知或不受支持。
  */
-function isUnknownEnvelopeKind(e, n) {
-  let r = Array.isArray(e.kinds) ? e.kinds[n] : undefined;
-  return typeof r !== "string" || mentionsSessionNoticeKind(r);
+function isUnknownEnvelopeKind(group, index) {
+  let kind = Array.isArray(group.kinds) ? group.kinds[index] : undefined;
+  return typeof kind !== "string" || mentionsSessionNoticeKind(kind);
 }
 //@ chunk-e6aww6q8.js:147418-147500 placement
 /**
  * 判断数组里是否含跨会话消息字符串。
  */
-function hasCrossSessionString(e) {
-  return Array.isArray(e) && e.some((n) => typeof n === "string" && mentionsSessionNoticeKind(n));
+function hasCrossSessionString(values) {
+  return (
+    Array.isArray(values) &&
+    values.some((value) => typeof value === "string" && mentionsSessionNoticeKind(value))
+  );
 }
 //@ chunk-e6aww6q8.js:147500-147771 placement
 /**
@@ -42,46 +45,51 @@ var CROSS_SESSION_UNAVAILABLE_NOTE =
 /**
  * 渲染跨会话消息：只保留已知类型的信封，有被过滤的附加"无法显示"说明，仍有剩余唤醒时附说明；返回文本与媒体。
  */
-function renderCrossSessionMessages(e) {
-  let n = filterEnvelopes(e, (h, y) => !isUnknownEnvelopeKind(e, y));
-  let r = n.envelopes.length < e.envelopes.length;
+function renderCrossSessionMessages(attachment) {
+  let filtered = filterEnvelopes(attachment, (envelope, index) => !isUnknownEnvelopeKind(attachment, index));
+  let dropped = filtered.envelopes.length < attachment.envelopes.length;
   return {
     text: [
-      n.envelopes.length > 0 ? buildPollEventDelivery(n.envelopes, 0, e.toolsUsed) : "",
-      r ? CROSS_SESSION_UNAVAILABLE_NOTE : "",
-      e.remainingWakeCount > 0 ? deliveryChunkedNote(e.remainingWakeCount) : "",
-    ].filter((h) => h !== "").join(`
+      filtered.envelopes.length > 0
+        ? buildPollEventDelivery(filtered.envelopes, 0, attachment.toolsUsed)
+        : "",
+      dropped ? CROSS_SESSION_UNAVAILABLE_NOTE : "",
+      attachment.remainingWakeCount > 0 ? deliveryChunkedNote(attachment.remainingWakeCount) : "",
+    ].filter((part) => part !== "").join(`
 `),
-    media: n.media,
+    media: filtered.media,
   };
 }
 //@ chunk-e6aww6q8.js:148032-148175 placement
 /**
  * 按 uuid 过滤跨会话信封（保留已知类型且不在排除集合中的），全部被过滤时返回 undefined。
  */
-function filterEnvelopesByUuid(e, n) {
-  let r = filterEnvelopes(e, (s, h) => !isUnknownEnvelopeKind(e, h) || !n.has(s));
-  if (r.envelopes.length === 0) return;
-  return r.envelopes.length === e.envelopes.length ? e : r;
+function filterEnvelopesByUuid(attachment, knownUuids) {
+  let filtered = filterEnvelopes(
+    attachment,
+    (envelope, index) => !isUnknownEnvelopeKind(attachment, index) || !knownUuids.has(envelope),
+  );
+  if (filtered.envelopes.length === 0) return;
+  return filtered.envelopes.length === attachment.envelopes.length ? attachment : filtered;
 }
 //@ chunk-e6aww6q8.js:148175-148502 placement
 /**
  * 按条件筛选跨会话信封，并同步筛选对应的类型、媒体与来源数组。
  */
-function filterEnvelopes(e, n) {
-  let kinds = e.kinds;
-  let flattened = e.envelopes.flatMap((envelope, y) => (n(envelope, y) ? [y] : []));
+function filterEnvelopes(attachment, keep) {
+  let kinds = attachment.kinds;
+  let flattened = attachment.envelopes.flatMap((envelope, index) => (keep(envelope, index) ? [index] : []));
   return {
-    ...e,
-    envelopes: flattened.map((h) => e.envelopes[h]),
-    kinds: flattened.map((h) =>
-      Array.isArray(kinds) && typeof kinds[h] === "string" ? kinds[h] : SESSION_NOTICE,
+    ...attachment,
+    envelopes: flattened.map((index) => attachment.envelopes[index]),
+    kinds: flattened.map((kindIndex) =>
+      Array.isArray(kinds) && typeof kinds[kindIndex] === "string" ? kinds[kindIndex] : SESSION_NOTICE,
     ),
-    ...(e.media !== undefined && {
-      media: flattened.map((h) => e.media?.[h] ?? []),
+    ...(attachment.media !== undefined && {
+      media: flattened.map((mediaIndex) => attachment.media?.[mediaIndex] ?? []),
     }),
-    ...(e.provenance !== undefined && {
-      provenance: flattened.map((h) => e.provenance?.[h] ?? null),
+    ...(attachment.provenance !== undefined && {
+      provenance: flattened.map((provenanceIndex) => attachment.provenance?.[provenanceIndex] ?? null),
     }),
   };
 }

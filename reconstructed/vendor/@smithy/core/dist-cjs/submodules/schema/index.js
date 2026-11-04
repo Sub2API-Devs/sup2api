@@ -5,12 +5,12 @@
  * pieces: chunk-wjd9n4jx.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_protocol_http } from "../../../../protocol-http/dist-cjs/index.js";
 import { require_util_middleware } from "../../../../util-middleware/dist-cjs/index.js";
 
 //@ chunk-wjd9n4jx.js:12581-22053 cjs-fingerprint
-var require_schema = x(function (cjsExports) {
+var require_schema = __commonJS(function (cjsExports) {
   var HttpResponse = require_protocol_http();
   var getSmithyContext = require_util_middleware();
   var deref = (schemaRef) => {
@@ -125,8 +125,8 @@ var require_schema = x(function (cjsExports) {
     name;
     namespace;
     traits;
-    static assign(instance, t) {
-      return Object.assign(instance, t);
+    static assign(instance, object) {
+      return Object.assign(instance, object);
     }
     static [Symbol.hasInstance](lhs) {
       let isPrototype = this.prototype.isPrototypeOf(lhs);
@@ -256,8 +256,8 @@ var require_schema = x(function (cjsExports) {
       }
       if (traitStack.length > 0) {
         this.memberTraits = {};
-        for (let i = traitStack.length - 1; i >= 0; --i) {
-          let traitSet = traitStack[i];
+        for (let traitIndex = traitStack.length - 1; traitIndex >= 0; --traitIndex) {
+          let traitSet = traitStack[traitIndex];
           Object.assign(this.memberTraits, translateTraits(traitSet));
         }
       } else this.memberTraits = 0;
@@ -368,9 +368,11 @@ var require_schema = x(function (cjsExports) {
       return !!streaming || this.getSchema() === 42;
     }
     isIdempotencyToken() {
-      let e = (n) => (n & 4) === 4 || !!n?.idempotencyToken;
+      let isIdempotencyTrait = (trait) => (trait & 4) === 4 || !!trait?.idempotencyToken;
       let { normalizedTraits, traits, memberTraits } = this;
-      return e(normalizedTraits) || e(traits) || e(memberTraits);
+      return (
+        isIdempotencyTrait(normalizedTraits) || isIdempotencyTrait(traits) || isIdempotencyTrait(memberTraits)
+      );
     }
     getMergedTraits() {
       return (
@@ -518,8 +520,8 @@ var require_schema = x(function (cjsExports) {
       r.schemas.set($error[1] + "#" + $error[2], $error);
       r.exceptions.set($error, ctor);
     }
-    getErrorCtor(e) {
-      let $error = e;
+    getErrorCtor(errorSchema) {
+      let $error = errorSchema;
       return TypeRegistry.for($error[1]).exceptions.get($error);
     }
     getBaseException() {

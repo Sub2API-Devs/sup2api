@@ -1,71 +1,80 @@
 {
  "src": {
   "top": {
-   "bindings": 91572,
-   "minified": 352,
+   "bindings": 91554,
+   "minified": 2,
    "authenticShort": 2,
-   "readable": 99.6,
-   "readableByRefs": 99.6
+   "chosenShort": 43,
+   "readable": 100,
+   "readableByRefs": 100
   },
   "param": {
-   "bindings": 165978,
-   "minified": 98740,
-   "authenticShort": 691,
-   "readable": 40.5,
-   "readableByRefs": 42.3
+   "bindings": 165952,
+   "minified": 60,
+   "authenticShort": 678,
+   "chosenShort": 1276,
+   "readable": 100,
+   "readableByRefs": 100
   },
   "local": {
-   "bindings": 231064,
-   "minified": 122577,
-   "authenticShort": 1549,
-   "readable": 47,
-   "readableByRefs": 47.7
+   "bindings": 231051,
+   "minified": 68,
+   "authenticShort": 1546,
+   "chosenShort": 719,
+   "readable": 100,
+   "readableByRefs": 100
   }
  },
  "vendor": {
   "top": {
-   "bindings": 9247,
-   "minified": 1822,
-   "authenticShort": 72,
-   "readable": 80.3,
-   "readableByRefs": 82
+   "bindings": 9265,
+   "minified": 114,
+   "authenticShort": 57,
+   "chosenShort": 17,
+   "readable": 98.8,
+   "readableByRefs": 98.6
   },
   "param": {
-   "bindings": 40307,
-   "minified": 3329,
-   "authenticShort": 3727,
-   "readable": 91.7,
-   "readableByRefs": 91.2
+   "bindings": 40333,
+   "minified": 1,
+   "authenticShort": 3620,
+   "chosenShort": 54,
+   "readable": 100,
+   "readableByRefs": 100
   },
   "local": {
-   "bindings": 50523,
-   "minified": 4608,
-   "authenticShort": 3516,
-   "readable": 90.9,
-   "readableByRefs": 90.4
+   "bindings": 50536,
+   "minified": 1,
+   "authenticShort": 3464,
+   "chosenShort": 57,
+   "readable": 100,
+   "readableByRefs": 100
   }
  },
  "runtime": {
   "top": {
    "bindings": 18,
-   "minified": 9,
+   "minified": 0,
    "authenticShort": 0,
-   "readable": 50,
-   "readableByRefs": 55
+   "chosenShort": 0,
+   "readable": 100,
+   "readableByRefs": 100
   },
   "param": {
    "bindings": 17,
-   "minified": 17,
+   "minified": 0,
    "authenticShort": 0,
-   "readable": 0,
-   "readableByRefs": 0
+   "chosenShort": 0,
+   "readable": 100,
+   "readableByRefs": 100
   },
   "local": {
    "bindings": 8,
-   "minified": 5,
+   "minified": 0,
    "authenticShort": 0,
-   "readable": 37.5,
-   "readableByRefs": 35.7
+   "chosenShort": 0,
+   "readable": 100,
+   "readableByRefs": 100
   }
  }
 }

@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_protobuf } from "../../../../protobuf/dist/commonjs/index.js";
 import { require_error_4 } from "../../../../../@anthropic-ai/bedrock-sdk/core/error.js";
 import { require_type } from "../type.js";
@@ -16,7 +16,7 @@ import { require_reflect_2 } from "../../../../protobuf/dist/commonjs/reflect/in
 import { require_func } from "../func.js";
 
 //@ chunk-fq0cr76a.js:631450-638468 cjs-fingerprint
-var require_strings = x(function (cjsExports) {
+var require_strings = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

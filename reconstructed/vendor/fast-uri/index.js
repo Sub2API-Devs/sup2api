@@ -5,12 +5,12 @@
  * pieces: chunk-s82q9s4x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_utils } from "./lib/utils.js";
 import { require_schemes } from "./lib/schemes.js";
 
 //@ chunk-s82q9s4x.js:63889-68634 cjs-fingerprint
-var require_fast_uri = x(function (cjsExports, cjsModule) {
+var require_fast_uri = __commonJS(function (cjsExports, cjsModule) {
   var {
     normalizeIPv6,
     removeDotSegments,

@@ -14,7 +14,7 @@ import { randomBytes, timingSafeEqual } from "crypto";
 import { mkdir, unlink, open, readdir } from "fs/promises";
 import { unlinkSync } from "fs";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, literal, E, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, literal, numberSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { ownProcStartAsync, getProcessStartTimeAsync } from "../../utils/processIdentity.js";
 import { writeFileAtomic } from "../../utils/atomicPublishWrite.js";
 import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
@@ -22,18 +22,24 @@ import { computeContentHash } from "../../utils/commitAttribution.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 import { isProcessRunning } from "../../utils/genericProcessUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-karvvxmx.js:720-860 placement
-var RUN_GRANT_NAME_PATTERN = /^([1-9][0-9]{0,9})\.([0-9a-f]{64})$/;
-var MAX_RUN_GRANT_BYTES = 4096;
-var RUN_GRANT_SCHEMA = DoctorLazy(() =>
-  u({
-    version: literal(1),
-    pid: E().int().positive(),
-    procStart: string().min(1),
-    nonceSha256: string(),
-  }),
-);
+var RUN_GRANT_NAME_PATTERN; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_RUN_GRANT_BYTES;
+var RUN_GRANT_SCHEMA;
+deferInit("chunk-karvvxmx.js:720", () => {
+  RUN_GRANT_NAME_PATTERN = /^([1-9][0-9]{0,9})\.([0-9a-f]{64})$/;
+  MAX_RUN_GRANT_BYTES = 4096;
+  RUN_GRANT_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      version: literal(1),
+      pid: numberSchema().int().positive(),
+      procStart: stringSchema().min(1),
+      nonceSha256: stringSchema(),
+    }),
+  );
+});
 //@ chunk-karvvxmx.js:860-931 placement
 /**
  * 无人值守运行授权目录（~/.claude/state/unattended-serving-runs）。
@@ -45,8 +51,8 @@ function unattendedRunsDir() {
 /**
  * 指定 PID 的授权文件路径。
  */
-function runGrantPath(n) {
-  return join(unattendedRunsDir(), `${n}.json`);
+function runGrantPath(pid) {
+  return join(unattendedRunsDir(), `${pid}.json`);
 }
 //@ chunk-karvvxmx.js:971-1414 placement
 /**
@@ -54,20 +60,20 @@ function runGrantPath(n) {
  */
 async function writeUnattendedRunGrant() {
   try {
-    let n = await ownProcStartAsync();
-    if (n === undefined) return;
+    let procStart = await ownProcStartAsync();
+    if (procStart === undefined) return;
     let str = randomBytes(32).toString("hex");
-    let r = runGrantPath(process.pid);
-    await mkdir(dirname(r), {
+    let path = runGrantPath(process.pid);
+    await mkdir(dirname(path), {
       recursive: true,
       mode: 448,
     });
     await writeFileAtomic(
-      r,
+      path,
       `${jsonStringify({
         version: 1,
         pid: process.pid,
-        procStart: n,
+        procStart,
         nonceSha256: computeContentHash(str),
       })}
 `,
@@ -76,14 +82,14 @@ async function writeUnattendedRunGrant() {
     await sweepStaleRunGrants();
     process.once("exit", () => {
       try {
-        unlinkSync(r);
+        unlinkSync(path);
       } catch {}
     });
     return {
       token: `${process.pid}.${str}`,
       remove: async () => {
         try {
-          await unlink(r);
+          await unlink(path);
         } catch {}
       },
     };
@@ -95,21 +101,21 @@ async function writeUnattendedRunGrant() {
   }
 }
 //@ chunk-karvvxmx.js:1414-1656 placement
-async function unattendedRunGrantStands(n) {
+async function unattendedRunGrantStands(token) {
   try {
-    let e = n === undefined ? null : RUN_GRANT_NAME_PATTERN.exec(n);
-    if (!e) return false;
-    let r = Number(e[1]);
-    let runGrant = await readRunGrant(runGrantPath(r));
+    let match = token === undefined ? null : RUN_GRANT_NAME_PATTERN.exec(token);
+    if (!match) return false;
+    let pid = Number(match[1]);
+    let runGrant = await readRunGrant(runGrantPath(pid));
     if (
       runGrant === undefined ||
-      runGrant.pid !== r ||
-      !nonceMatches(runGrant.nonceSha256, computeContentHash(e[2])) ||
-      !isProcessRunning(r)
+      runGrant.pid !== pid ||
+      !nonceMatches(runGrant.nonceSha256, computeContentHash(match[2])) ||
+      !isProcessRunning(pid)
     )
       return false;
     return (
-      (await getProcessStartTimeAsync(r, {
+      (await getProcessStartTimeAsync(pid, {
         skipCache: true,
       })) === runGrant.procStart
     );
@@ -121,27 +127,27 @@ async function unattendedRunGrantStands(n) {
 /**
  * 读运行授权文件
  */
-async function readRunGrant(n) {
-  let e;
+async function readRunGrant(path) {
+  let handle;
   try {
-    e = await open(n, "r");
-    let r = Buffer.alloc(MAX_RUN_GRANT_BYTES + 1);
-    let { bytesRead } = await e.read(r, 0, r.length, 0);
+    handle = await open(path, "r");
+    let buf = Buffer.alloc(MAX_RUN_GRANT_BYTES + 1);
+    let { bytesRead } = await handle.read(buf, 0, buf.length, 0);
     if (bytesRead > MAX_RUN_GRANT_BYTES) return;
-    let s = RUN_GRANT_SCHEMA().safeParse(jsonParse(r.subarray(0, bytesRead).toString("utf8")));
-    return s.success ? s.data : undefined;
+    let parsed = RUN_GRANT_SCHEMA().safeParse(jsonParse(buf.subarray(0, bytesRead).toString("utf8")));
+    return parsed.success ? parsed.data : undefined;
   } catch {
     return;
   } finally {
-    await e?.close().catch(() => {});
+    await handle?.close().catch(() => {});
   }
 }
 //@ chunk-karvvxmx.js:1926-2015 placement
 /**
  * 用恒定时间比较两个 nonce 哈希是否一致。
  */
-function nonceMatches(n, contentHash) {
-  let buffer = Buffer.from(n);
+function nonceMatches(hashHex, contentHash) {
+  let buffer = Buffer.from(hashHex);
   let buffer_2 = Buffer.from(contentHash);
   return buffer.length === buffer_2.length && timingSafeEqual(buffer, buffer_2);
 }
@@ -151,10 +157,10 @@ function nonceMatches(n, contentHash) {
  */
 async function sweepStaleRunGrants() {
   try {
-    for (let n of await readdir(unattendedRunsDir())) {
-      let e = Number(/^([1-9][0-9]{0,9})\.json$/.exec(n)?.[1]);
-      if (Number.isInteger(e) && !isProcessRunning(e)) await unlink(runGrantPath(e)).catch(() => {});
+    for (let name of await readdir(unattendedRunsDir())) {
+      let pid = Number(/^([1-9][0-9]{0,9})\.json$/.exec(name)?.[1]);
+      if (Number.isInteger(pid) && !isProcessRunning(pid)) await unlink(runGrantPath(pid)).catch(() => {});
     }
   } catch {}
 }
-export { unattendedRunGrantStands };
+export { unattendedRunGrantStands, writeUnattendedRunGrant };

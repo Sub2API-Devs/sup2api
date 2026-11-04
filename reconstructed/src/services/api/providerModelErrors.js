@@ -33,33 +33,33 @@ var INVOKE_MODEL_DENIED_RE = /is not authorized to perform: bedrock:InvokeModel/
 var NOT_SERVABLE_IN_REGION_TEXT = "is not servable in region";
 var VPCSC_RESTRICTED_TEXT = "model does not serve requests restricted by vpcsc";
 //@ chunk-s61vbvea.js:515803-516024 placement
-function readProviderErrorFacts(e) {
-  let n = e;
-  let status = typeof n?.status === "number" ? n.status : undefined;
-  let message = typeof n?.message === "string" ? n.message : "";
-  let h;
+function readProviderErrorFacts(error) {
+  let err = error;
+  let status = typeof err?.status === "number" ? err.status : undefined;
+  let message = typeof err?.message === "string" ? err.message : "";
+  let errorText;
   try {
-    h = n?.headers?.get?.("x-amzn-errortype") ?? undefined;
+    errorText = err?.headers?.get?.("x-amzn-errortype") ?? undefined;
   } catch {
-    h = undefined;
+    errorText = undefined;
   }
   return {
     status,
     message,
-    errorType: h,
+    errorType: errorText,
   };
 }
 //@ chunk-s61vbvea.js:516024-516193 placement
-function isBedrockAuthError(e, providerErrorFacts) {
-  let r = String(e?.name ?? "");
+function isBedrockAuthError(error, providerErrorFacts) {
+  let name = String(error?.name ?? "");
   return (
-    isAwsCredentialsProviderError(e) ||
+    isAwsCredentialsProviderError(error) ||
     isAwsCredentialError(providerErrorFacts.errorType, providerErrorFacts.message) ||
     BEDROCK_AUTH_ERROR_NAMES.some(
-      (s) =>
-        r.includes(s) ||
-        providerErrorFacts.message.includes(s) ||
-        (providerErrorFacts.errorType?.includes(s) ?? false),
+      (key) =>
+        name.includes(key) ||
+        providerErrorFacts.message.includes(key) ||
+        (providerErrorFacts.errorType?.includes(key) ?? false),
     )
   );
 }
@@ -67,14 +67,14 @@ function isBedrockAuthError(e, providerErrorFacts) {
 /**
  * Bedrock/Mantle 凭据、令牌过期、时钟偏差等错误的分类与提示
  */
-function classifyProviderModelError(e, error) {
-  let providerErrorFacts = readProviderErrorFacts(error);
-  if ((e === "bedrock" || e === "mantle") && isBedrockAuthError(error, providerErrorFacts))
+function classifyProviderModelError(error, error_2) {
+  let providerErrorFacts = readProviderErrorFacts(error_2);
+  if ((error === "bedrock" || error === "mantle") && isBedrockAuthError(error_2, providerErrorFacts))
     return "credential";
   if (providerErrorFacts.status === 401) return "credential";
-  if (isClientVersionRejected(error)) return "outdated";
+  if (isClientVersionRejected(error_2)) return "outdated";
   let lower = providerErrorFacts.message.toLowerCase();
-  if (e === "bedrock") {
+  if (error === "bedrock") {
     if (
       providerErrorFacts.status === 403 &&
       (lower.includes(NO_MODEL_ACCESS_TEXT) ||
@@ -92,7 +92,7 @@ function classifyProviderModelError(e, error) {
       return "denied";
     return "unknown";
   }
-  if (e === "vertex") {
+  if (error === "vertex") {
     if (providerErrorFacts.status === 404 && lower.includes("publisher model") && lower.includes("not found"))
       return "refused";
     if (
@@ -104,7 +104,7 @@ function classifyProviderModelError(e, error) {
       return "refused";
     return "unknown";
   }
-  if (e === "foundry") return isAzureDeploymentNotFound(error) ? "refused" : "unknown";
+  if (error === "foundry") return isAzureDeploymentNotFound(error_2) ? "refused" : "unknown";
   return "unknown";
 }
 export { classifyProviderModelError };

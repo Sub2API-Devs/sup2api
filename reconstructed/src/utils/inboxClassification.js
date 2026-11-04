@@ -16,18 +16,18 @@ import { logForDebugging } from "./debug.js";
 /**
  * 对话快照：非 progress 消息数与最后一条非 progress 消息的 uuid。
  */
-function conversationSnapshot(e) {
+function conversationSnapshot(messages) {
   return {
-    messageCount: count(e, (n) => n.type !== "progress"),
-    lastMessageUuid: e.findLast((n) => n.type !== "progress")?.uuid,
+    messageCount: count(messages, (message) => message.type !== "progress"),
+    lastMessageUuid: messages.findLast((message) => message.type !== "progress")?.uuid,
   };
 }
 //@ chunk-0sfjpx19.js:130039-130110 placement
 /**
  * 找出最后一条真实用户消息的 uuid。
  */
-function lastRealUserUuid(e) {
-  return e.findLast((n) => n.type === "user" && !isToolResultMessage(n))?.uuid;
+function lastRealUserUuid(messages) {
+  return messages.findLast((message) => message.type === "user" && !isToolResultMessage(message))?.uuid;
 }
 //@ chunk-0sfjpx19.js:130110-130124 placement
 var MAX_VERDICT_TTL_MS = 300000;
@@ -41,56 +41,57 @@ class InboxVerdictCache {
   constructor(now = Date.now) {
     this.now = now;
   }
-  getOrClassify(e, n, r, s) {
-    let h = `${e}:${n ?? "*"}`;
-    let y = this.verdicts.get(h);
-    if (y?.reuse === "until") {
-      let k = y.heldUntil === undefined ? 0 : y.heldUntil - this.now();
-      if (k > 0 && k <= MAX_VERDICT_TTL_MS) return y.promise;
+  getOrClassify(host, port, watermark, classify) {
+    let cacheKey = `${host}:${port ?? "*"}`;
+    let cachedEntry = this.verdicts.get(cacheKey);
+    if (cachedEntry?.reuse === "until") {
+      let holdMs = cachedEntry.heldUntil === undefined ? 0 : cachedEntry.heldUntil - this.now();
+      if (holdMs > 0 && holdMs <= MAX_VERDICT_TTL_MS) return cachedEntry.promise;
     } else if (
-      y &&
-      (y.reuse === "always" ||
-        (y.watermark.messageCount === r.messageCount && y.watermark.lastMessageUuid === r.lastMessageUuid))
+      cachedEntry &&
+      (cachedEntry.reuse === "always" ||
+        (cachedEntry.watermark.messageCount === watermark.messageCount &&
+          cachedEntry.watermark.lastMessageUuid === watermark.lastMessageUuid))
     )
-      return y.promise;
-    let _ = s();
-    let b = {
-      promise: _.then((k) => k.allow),
-      watermark: r,
+      return cachedEntry.promise;
+    let classificationPromise = classify();
+    let entry = {
+      promise: classificationPromise.then((outcome) => outcome.allow),
+      watermark,
       reuse: undefined,
     };
-    this.verdicts.set(h, b);
-    _.then(
-      (k) => {
-        if (k.unavailable && !k.transcriptTooLong) {
+    this.verdicts.set(cacheKey, entry);
+    classificationPromise.then(
+      (result) => {
+        if (result.unavailable && !result.transcriptTooLong) {
           if (
-            !k.allow &&
-            typeof k.retryAfterMs === "number" &&
-            Number.isFinite(k.retryAfterMs) &&
-            k.retryAfterMs > 0
+            !result.allow &&
+            typeof result.retryAfterMs === "number" &&
+            Number.isFinite(result.retryAfterMs) &&
+            result.retryAfterMs > 0
           ) {
-            let min = Math.min(k.retryAfterMs, MAX_VERDICT_TTL_MS);
-            b.reuse = "until";
-            b.heldUntil = this.now() + min;
-            if (this.verdicts.get(h) === b)
+            let min = Math.min(result.retryAfterMs, MAX_VERDICT_TTL_MS);
+            entry.reuse = "until";
+            entry.heldUntil = this.now() + min;
+            if (this.verdicts.get(cacheKey) === entry)
               logForDebugging(
-                `Sandbox network classifier was told to wait by the API; holding the deny of ${h} for ${min} ms`,
+                `Sandbox network classifier was told to wait by the API; holding the deny of ${cacheKey} for ${min} ms`,
                 {
                   level: "warn",
                 },
               );
             return;
           }
-          if (this.verdicts.get(h) === b) this.verdicts.delete(h);
+          if (this.verdicts.get(cacheKey) === entry) this.verdicts.delete(cacheKey);
           return;
         }
-        b.reuse = k.allow || k.transcriptTooLong ? "same-transcript" : "always";
+        entry.reuse = result.allow || result.transcriptTooLong ? "same-transcript" : "always";
       },
       () => {
-        if (this.verdicts.get(h) === b) this.verdicts.delete(h);
+        if (this.verdicts.get(cacheKey) === entry) this.verdicts.delete(cacheKey);
       },
     );
-    return b.promise;
+    return entry.promise;
   }
   clear() {
     this.verdicts.clear();

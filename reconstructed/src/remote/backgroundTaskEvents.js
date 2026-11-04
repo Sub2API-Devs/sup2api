@@ -12,25 +12,29 @@ import { toBackgroundTaskInfo } from "../services/homeSeed/firstSend.js";
 import { isTerminalTaskStatus } from "../tasks/taskStatus.js";
 import { BACKGROUND_TASKS_MOVES_BASH_V1 } from "../utils/messages/systemInit.js";
 import { BASH_TOOL_NAME } from "../tools/BashTool/toolName.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-08945j39.js:1783-2325 placement
-function toBackgroundTaskEvent(e, n) {
-  if (n.type !== "system") return false;
-  switch (n.subtype) {
+function toBackgroundTaskEvent(backgroundTasks, event) {
+  if (event.type !== "system") return false;
+  switch (event.subtype) {
     case "background_tasks_changed":
-      if (Array.isArray(n.tasks)) {
-        e.clear();
-        for (let task of n.tasks)
+      if (Array.isArray(event.tasks)) {
+        backgroundTasks.clear();
+        for (let task of event.tasks)
           if (typeof task?.task_id === "string")
-            e.set(task.task_id, toBackgroundTaskInfo(task.task_id, task, task.subagent_type));
+            backgroundTasks.set(task.task_id, toBackgroundTaskInfo(task.task_id, task, task.subagent_type));
       }
       return true;
     case "task_started":
-      if (typeof n.task_id === "string" && n.is_backgrounded !== false)
-        e.set(n.task_id, toBackgroundTaskInfo(n.task_id, n, e.get(n.task_id)?.subagentType));
+      if (typeof event.task_id === "string" && event.is_backgrounded !== false)
+        backgroundTasks.set(
+          event.task_id,
+          toBackgroundTaskInfo(event.task_id, event, backgroundTasks.get(event.task_id)?.subagentType),
+        );
       return true;
     case "task_notification":
-      if (typeof n.task_id === "string") e.delete(n.task_id);
+      if (typeof event.task_id === "string") backgroundTasks.delete(event.task_id);
       return true;
     case "task_progress":
     case "task_updated":
@@ -40,37 +44,40 @@ function toBackgroundTaskEvent(e, n) {
   }
 }
 //@ chunk-08945j39.js:2325-2370 placement
-var BACKGROUND_TASK_TYPES_WITH_TRACKED_IDS = new Set(["local_bash", "local_agent"]);
+var BACKGROUND_TASK_TYPES_WITH_TRACKED_IDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-08945j39.js:2325", () => {
+  BACKGROUND_TASK_TYPES_WITH_TRACKED_IDS = new Set(["local_bash", "local_agent"]);
+});
 //@ chunk-08945j39.js:2370-2987 placement
-function isSystemInitMessage(e, n) {
-  if (n.type === "result" || (n.type === "system" && n.subtype === "init")) {
-    e.clear();
+function isSystemInitMessage(trackedTaskIds, event) {
+  if (event.type === "result" || (event.type === "system" && event.subtype === "init")) {
+    trackedTaskIds.clear();
     return;
   }
-  if (n.type !== "system") return;
-  switch (n.subtype) {
+  if (event.type !== "system") return;
+  switch (event.subtype) {
     case "task_started":
-      if (typeof n.task_id !== "string") return;
+      if (typeof event.task_id !== "string") return;
       if (
-        n.is_backgrounded === false &&
-        n.skip_transcript !== true &&
-        BACKGROUND_TASK_TYPES_WITH_TRACKED_IDS.has(n.task_type)
+        event.is_backgrounded === false &&
+        event.skip_transcript !== true &&
+        BACKGROUND_TASK_TYPES_WITH_TRACKED_IDS.has(event.task_type)
       )
-        e.add(n.task_id);
-      else e.delete(n.task_id);
+        trackedTaskIds.add(event.task_id);
+      else trackedTaskIds.delete(event.task_id);
       return;
     case "task_updated":
       if (
-        n.patch?.is_backgrounded === true ||
-        (n.patch?.status !== undefined && isTerminalTaskStatus(n.patch.status))
+        event.patch?.is_backgrounded === true ||
+        (event.patch?.status !== undefined && isTerminalTaskStatus(event.patch.status))
       )
-        e.delete(n.task_id);
+        trackedTaskIds.delete(event.task_id);
       return;
     case "task_notification":
-      e.delete(n.task_id);
+      trackedTaskIds.delete(event.task_id);
       return;
     case "background_tasks_changed":
-      if (Array.isArray(n.tasks)) for (let task of n.tasks) e.delete(task?.task_id);
+      if (Array.isArray(event.tasks)) for (let task of event.tasks) trackedTaskIds.delete(task?.task_id);
       return;
     default:
       return;
@@ -85,23 +92,23 @@ var BASH_TASK_COUNT_DELAY_MS = 2000;
 /**
  * 导出函数 `supportsBackgroundTasksMovesBash`：参数 e，返回 Array.isArray(e.capabilities) && e.capabilities.includes(BACKGROUND_TASKS_MOVES_BASH_V1)。
  */
-function supportsBackgroundTasksMovesBash(e) {
-  return Array.isArray(e.capabilities) && e.capabilities.includes(BACKGROUND_TASKS_MOVES_BASH_V1);
+function supportsBackgroundTasksMovesBash(handle) {
+  return Array.isArray(handle.capabilities) && handle.capabilities.includes(BACKGROUND_TASKS_MOVES_BASH_V1);
 }
 //@ chunk-08945j39.js:3083-3323 placement
 /**
  * 取主线程助手消息中非后台运行的 Bash 工具调用 id。
  */
-function getForegroundBashToolUseIds(e) {
-  if (e.type !== "assistant" || e.parent_tool_use_id) return [];
-  let content = e.message?.content;
+function getForegroundBashToolUseIds(message) {
+  if (message.type !== "assistant" || message.parent_tool_use_id) return [];
+  let content = message.message?.content;
   return Array.isArray(content)
-    ? content.flatMap((s) =>
-        s?.type === "tool_use" &&
-        s.name === BASH_TOOL_NAME &&
-        typeof s.id === "string" &&
-        s.input?.run_in_background !== true
-          ? [s.id]
+    ? content.flatMap((block) =>
+        block?.type === "tool_use" &&
+        block.name === BASH_TOOL_NAME &&
+        typeof block.id === "string" &&
+        block.input?.run_in_background !== true
+          ? [block.id]
           : [],
       )
     : [];
@@ -113,8 +120,8 @@ function getForegroundBashToolUseIds(e) {
 function getToolResultIds(payload) {
   let content = payload.type === "user" ? payload.message?.content : undefined;
   return Array.isArray(content)
-    ? content.flatMap((s) =>
-        s?.type === "tool_result" && typeof s.tool_use_id === "string" ? [s.tool_use_id] : [],
+    ? content.flatMap((block) =>
+        block?.type === "tool_result" && typeof block.tool_use_id === "string" ? [block.tool_use_id] : [],
       )
     : [];
 }
@@ -124,34 +131,34 @@ var MAX_TRACKED_BACKGROUND_TASK_IDS = 256;
 /**
  * 根据系统消息（后台任务变化、任务开始、任务更新为后台）记录需要跟踪的后台任务 id。
  */
-function trackBackgroundTask(awaitingFinish, n) {
-  if (n.type !== "system") return;
-  switch (n.subtype) {
+function trackBackgroundTask(taskIds, event) {
+  if (event.type !== "system") return;
+  switch (event.subtype) {
     case "background_tasks_changed":
-      if (Array.isArray(n.tasks)) {
-        for (let task of n.tasks)
-          if (task?.awaited !== true) addBackgroundTaskId(awaitingFinish, task?.task_id, task?.ambient);
+      if (Array.isArray(event.tasks)) {
+        for (let task of event.tasks)
+          if (task?.awaited !== true) addBackgroundTaskId(taskIds, task?.task_id, task?.ambient);
       }
       return;
     case "task_started":
-      if (n.is_backgrounded !== false && n.awaited !== true)
-        addBackgroundTaskId(awaitingFinish, n.task_id, n.ambient);
+      if (event.is_backgrounded !== false && event.awaited !== true)
+        addBackgroundTaskId(taskIds, event.task_id, event.ambient);
       return;
     case "task_updated":
-      if (n.patch?.is_backgrounded === true) addBackgroundTaskId(awaitingFinish, n.task_id);
+      if (event.patch?.is_backgrounded === true) addBackgroundTaskId(taskIds, event.task_id);
       return;
     default:
       return;
   }
 }
 //@ chunk-08945j39.js:3898-4045 placement
-function addBackgroundTaskId(e, taskId, ambient) {
-  if (typeof taskId !== "string" || ambient === true || e.has(taskId)) return;
-  if (e.size >= MAX_TRACKED_BACKGROUND_TASK_IDS) {
-    let i = e.values().next().value;
-    if (i !== undefined) e.delete(i);
+function addBackgroundTaskId(taskIds, taskId, ambient) {
+  if (typeof taskId !== "string" || ambient === true || taskIds.has(taskId)) return;
+  if (taskIds.size >= MAX_TRACKED_BACKGROUND_TASK_IDS) {
+    let oldest = taskIds.values().next().value;
+    if (oldest !== undefined) taskIds.delete(oldest);
   }
-  e.add(taskId);
+  taskIds.add(taskId);
 }
 export {
   trackBackgroundTask,

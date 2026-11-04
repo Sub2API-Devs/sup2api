@@ -5,12 +5,12 @@
  * pieces: chunk-a16kyqj3.js (3)
  * attribution: placement 3
  */
-import { dV } from "./_root.js";
+import { symbolExport } from "./_root.js";
 
 //@ chunk-a16kyqj3.js:391-473 placement = substituteVariables (0.576)
 var objectProto = Object.prototype;
 var { hasOwnProperty, toString: nativeObjectToString } = objectProto;
-var symToStringTag = dV ? dV.toStringTag : undefined;
+var symToStringTag = symbolExport ? symbolExport.toStringTag : undefined;
 //@ chunk-a16kyqj3.js:473-606 placement
 function getRawTag(value) {
   var isOwn = hasOwnProperty.call(value, symToStringTag);

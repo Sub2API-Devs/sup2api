@@ -15,19 +15,40 @@ import { isDiskless } from "./hostScoped.js";
 import { nativeRealpathLong } from "./windowsUncPaths.js";
 import { identity } from "./pathClassification.js";
 import { env } from "./env.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-0777tkjc.js:292-434 fingerprint = isEnvTruthy (1)
+/**
+ * 环境变量真值判断：1/true/yes/on（不区分大小写，布尔原样）。
+ */
+function isEnvTruthy(envVar) {
+  if (!envVar) return false;
+  if (typeof envVar === "boolean") return envVar;
+  let normalizedValue = String(envVar).toLowerCase().trim();
+  return ["1", "true", "yes", "on"].includes(normalizedValue);
+}
+//@ chunk-0777tkjc.js:434-585 fingerprint = isEnvDefinedFalsy (1)
+/**
+ * 环境变量是否明确设为假：0/false/no/off。
+ */
+function isEnvDefinedFalsy(envVar) {
+  if (envVar === undefined) return false;
+  if (typeof envVar === "boolean") return !envVar;
+  let normalizedValue = String(envVar).toLowerCase().trim();
+  return ["0", "false", "no", "off"].includes(normalizedValue);
+}
 //@ chunk-cgcrer2m.js:436-476 placement
 var LANGUAGE_TAG_RE = /^[a-z]{2,}(?:-[a-z0-9]+){0,4}$/i;
 //@ chunk-cgcrer2m.js:476-511 placement
-function isLanguageTag(e) {
-  return !!e && LANGUAGE_TAG_RE.test(e);
+function isLanguageTag(tag) {
+  return !!tag && LANGUAGE_TAG_RE.test(tag);
 }
 //@ chunk-cgcrer2m.js:511-548 placement
 /**
  * 非空字符串原样返回。
  */
-function nonEmptyOrUndefined(e) {
-  return isLanguageTag(e) ? e : undefined;
+function nonEmptyOrUndefined(value) {
+  return isLanguageTag(value) ? value : undefined;
 }
 //@ chunk-cgcrer2m.js:548-673 placement
 var SCIENTIFIC_NUMBER_RE = /^[+-]?(\d+(\.\d*)?|\.\d+)[eE][+-]?\d+$/;
@@ -37,13 +58,13 @@ var THOUSANDS_SEPARATOR_RE = /[_,\u00A0\u202F ]/g;
 /**
  * 宽松解析整数：支持科学计数法与千位分隔符（逗号、下划线、空格等），无法解析返回 undefined。
  */
-function parseLooseInteger(e) {
-  if (e.length <= 32) {
-    if (SCIENTIFIC_NUMBER_RE.test(e)) {
-      let n = Number(e);
-      return Number.isInteger(n) ? n : NaN;
+function parseLooseInteger(text) {
+  if (text.length <= 32) {
+    if (SCIENTIFIC_NUMBER_RE.test(text)) {
+      let number = Number(text);
+      return Number.isInteger(number) ? number : NaN;
     }
-    if (THOUSANDS_GROUPED_INT_RE.test(e)) return parseInt(e.replace(THOUSANDS_SEPARATOR_RE, ""), 10);
+    if (THOUSANDS_GROUPED_INT_RE.test(text)) return parseInt(text.replace(THOUSANDS_SEPARATOR_RE, ""), 10);
   }
   return;
 }
@@ -51,18 +72,18 @@ function parseLooseInteger(e) {
 /**
  * 宽松解析整数（科学计数法）。
  */
-function parseIntLoose(e) {
-  let trimmed = String(e).trim();
-  return parseLooseInteger(trimmed) ?? parseInt(trimmed, 10);
+function parseIntLoose(value) {
+  let text = String(value).trim();
+  return parseLooseInteger(text) ?? parseInt(text, 10);
 }
 //@ chunk-cgcrer2m.js:893-1040 placement
 /**
  * 解析带千位分隔符的数字。
  */
-function parseNumberWithSeparators(e) {
-  let n = Number(e);
-  if (!Number.isNaN(n)) return n;
-  let trimmed = String(e).trim();
+function parseNumberWithSeparators(value) {
+  let number = Number(value);
+  if (!Number.isNaN(number)) return number;
+  let trimmed = String(value).trim();
   return trimmed.length <= 32 && THOUSANDS_GROUPED_INT_RE.test(trimmed)
     ? parseInt(trimmed.replace(THOUSANDS_SEPARATOR_RE, ""), 10)
     : NaN;
@@ -98,41 +119,44 @@ function getClaudeConfigHomeDir() {
 /**
  * 读取环境变量并去掉首尾空白；空串返回 undefined。CLAUDE_CONFIG_DIR 走 getClaudeConfigHomeDir。
  */
-function getTrimmedEnvValue(e) {
-  let n = e === "CLAUDE_CONFIG_DIR" ? getClaudeConfigHomeDir() : process.env[e];
-  if (n === undefined) return;
-  let trimmed = String(n).trim();
+function getTrimmedEnvValue(name) {
+  let value = name === "CLAUDE_CONFIG_DIR" ? getClaudeConfigHomeDir() : process.env[name];
+  if (value === undefined) return;
+  let trimmed = String(value).trim();
   return trimmed ? trimmed : undefined;
 }
 //@ chunk-cgcrer2m.js:2291-2333 layout
-function isEnvVarTruthy(e) {
-  return isEnvTruthy(process.env[e]);
+function isEnvVarTruthy(name) {
+  return isEnvTruthy(process.env[name]);
 }
 //@ chunk-cgcrer2m.js:2333-2508 layout
-function memoizeByKey(e, n) {
-  let r = identity_2(new Map(), (o) => o.clear());
-  function t() {
-    let o = n();
-    let a = r.get(o);
-    if (a) return a.value;
-    let c = e();
-    r.set(o, {
-      value: c,
+function memoizeByKey(compute, keyFn) {
+  let cache = identity_2(new Map(), (map) => map.clear());
+  function memoized() {
+    let key = keyFn();
+    let cached = cache.get(key);
+    if (cached) return cached.value;
+    let value = compute();
+    cache.set(key, {
+      value,
     });
-    return c;
+    return value;
   }
-  return Object.assign(t, {
-    cache: r,
+  return Object.assign(memoized, {
+    cache,
   });
 }
 //@ chunk-cgcrer2m.js:2508-2569 layout
 /**
  * Claude 配置目录：$CLAUDE_CONFIG_DIR 或 ~/.claude，NFC 归一化，按 env 值缓存。
  */
-var getClaudeConfigDir = memoizeByKey(
-  () => (getClaudeConfigHomeDir() ?? join(homedir(), ".claude")).normalize("NFC"),
-  getClaudeConfigHomeDir,
-);
+var getClaudeConfigDir; // deferred: uses memoizeByKey of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-cgcrer2m.js:2508", () => {
+  getClaudeConfigDir = memoizeByKey(
+    () => (getClaudeConfigHomeDir() ?? join(homedir(), ".claude")).normalize("NFC"),
+    getClaudeConfigHomeDir,
+  );
+});
 //@ chunk-cgcrer2m.js:2569-2606 layout
 /**
  * Claude 配置目录；diskless 进程返回 null（表示没有可用的本地配置目录）。
@@ -159,33 +183,36 @@ function getProjectDirNameEnv() {
 var PROJECT_DIR_NAME_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 var RESERVED_WINDOWS_NAMES = /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])$/i;
 //@ chunk-cgcrer2m.js:2851-2912 layout
-function validateProjectDirName(e) {
-  if (!e || !PROJECT_DIR_NAME_PATTERN.test(e) || RESERVED_WINDOWS_NAMES.test(e)) return;
-  return e;
+function validateProjectDirName(name) {
+  if (!name || !PROJECT_DIR_NAME_PATTERN.test(name) || RESERVED_WINDOWS_NAMES.test(name)) return;
+  return name;
 }
 //@ chunk-cgcrer2m.js:2912-2972 layout
 function configDirFingerprint() {
   return `${isDiskless()}\x00${getClaudeConfigHomeDir() ?? ""}\x00${getProjectDirNameEnv() ?? ""}`;
 }
 //@ chunk-cgcrer2m.js:2972-3018 layout
-var getProjectDirNameOverride = memoizeByKey(
-  () =>
-    getClaudeConfigHomeDir() || isDiskless() ? validateProjectDirName(getProjectDirNameEnv()) : undefined,
-  configDirFingerprint,
-);
+var getProjectDirNameOverride; // deferred: uses memoizeByKey of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-cgcrer2m.js:2972", () => {
+  getProjectDirNameOverride = memoizeByKey(
+    () =>
+      getClaudeConfigHomeDir() || isDiskless() ? validateProjectDirName(getProjectDirNameEnv()) : undefined,
+    configDirFingerprint,
+  );
+});
 //@ chunk-cgcrer2m.js:3018-3109 layout
-function isPathConfigDir(e) {
-  let claudeConfigDirOrNull = getClaudeConfigDirOrNull();
-  if (claudeConfigDirOrNull === null) return false;
-  if (resolve(e) === resolve(claudeConfigDirOrNull)) return true;
-  return getPhysicalPath(e) === getPhysicalPath(claudeConfigDirOrNull);
+function isPathConfigDir(path) {
+  let path_2 = getClaudeConfigDirOrNull();
+  if (path_2 === null) return false;
+  if (resolve(path) === resolve(path_2)) return true;
+  return getPhysicalPath(path) === getPhysicalPath(path_2);
 }
 //@ chunk-cgcrer2m.js:3109-3173 layout
-function getPhysicalPath(e) {
-  let n = resolve(e);
-  let r = dirname(n);
-  let t = nativeRealpathLong(r) ?? r;
-  return identity(join(t, basename(n)));
+function getPhysicalPath(path) {
+  let resolvedPath = resolve(path);
+  let parentDir = dirname(resolvedPath);
+  let realParentDir = nativeRealpathLong(parentDir) ?? parentDir;
+  return identity(join(realParentDir, basename(resolvedPath)));
 }
 //@ chunk-cgcrer2m.js:3173-3269 fingerprint = hasNodeOption (1)
 function hasNodeOption(flag) {
@@ -194,10 +221,10 @@ function hasNodeOption(flag) {
   return nodeOptions.split(/\s+/).includes(flag);
 }
 //@ chunk-cgcrer2m.js:3269-3349 layout
-function parseNumberOrDefault(e, n) {
-  if (e === undefined) return n;
-  let intLoose = parseIntLoose(e);
-  return Number.isNaN(intLoose) ? n : intLoose;
+function parseNumberOrDefault(value, fallback) {
+  if (value === undefined) return fallback;
+  let intLoose = parseIntLoose(value);
+  return Number.isNaN(intLoose) ? fallback : intLoose;
 }
 //@ chunk-cgcrer2m.js:3349-3576 layout
 function getMaxTurnsFromEnv(maxTurns) {
@@ -210,14 +237,14 @@ function getMaxTurnsFromEnv(maxTurns) {
   return numberWithSeparators;
 }
 //@ chunk-cgcrer2m.js:3576-3639 layout
-function parsePositiveNumber(e) {
-  let n = Number(e);
-  return isNaN(n) || n <= 0 ? undefined : n;
+function parsePositiveNumber(text) {
+  let number = Number(text);
+  return isNaN(number) || number <= 0 ? undefined : number;
 }
 //@ chunk-cgcrer2m.js:3639-3747 layout
-function hasArgvFlag(e) {
+function hasArgvFlag(flag) {
   let argv = process.argv;
-  let index = argv.indexOf(e);
+  let index = argv.indexOf(flag);
   if (index === -1) return false;
   let index_2 = argv.indexOf("--");
   return index_2 === -1 || index < index_2;
@@ -241,10 +268,10 @@ function isRestrictedMode() {
   return isEnvTruthy(process.env.CLAUDE_CODE_RESTRICTED);
 }
 //@ chunk-cgcrer2m.js:3954-4092 layout
-function getRestartHint(e) {
+function getRestartHint(flag) {
   return process.env.CLAUDE_CODE_SESSION_KIND === "bg"
     ? "run /stop, then claude --resume from your shell"
-    : `restart without ${e}`;
+    : `restart without ${flag}`;
 }
 //@ chunk-cgcrer2m.js:4092-4177 layout
 function getSafeModeExitHint() {
@@ -277,15 +304,15 @@ function getDefaultVertexRegion() {
   return nonEmptyOrUndefined(process.env.CLOUD_ML_REGION?.trim()) || "us-east5";
 }
 //@ chunk-cgcrer2m.js:4633-4839 layout
-function getVertexBaseUrlForRegion(e) {
-  switch (e) {
+function getVertexBaseUrlForRegion(region) {
+  switch (region) {
     case "global":
       return "https://aiplatform.googleapis.com";
     case "us":
     case "eu":
-      return `https://aiplatform.${e}.rep.googleapis.com`;
+      return `https://aiplatform.${region}.rep.googleapis.com`;
     default:
-      return `https://${e}-aiplatform.googleapis.com`;
+      return `https://${region}-aiplatform.googleapis.com`;
   }
 }
 //@ chunk-cgcrer2m.js:4839-4918 fingerprint = shouldMaintainProjectWorkingDir (1)
@@ -327,26 +354,6 @@ function getVertexRegionForModel(model) {
   }
   return getDefaultVertexRegion();
 }
-//@ chunk-0777tkjc.js:292-434 fingerprint = isEnvTruthy (1)
-/**
- * 环境变量真值判断：1/true/yes/on（不区分大小写，布尔原样）。
- */
-function isEnvTruthy(envVar) {
-  if (!envVar) return false;
-  if (typeof envVar === "boolean") return envVar;
-  let normalizedValue = String(envVar).toLowerCase().trim();
-  return ["1", "true", "yes", "on"].includes(normalizedValue);
-}
-//@ chunk-0777tkjc.js:434-585 fingerprint = isEnvDefinedFalsy (1)
-/**
- * 环境变量是否明确设为假：0/false/no/off。
- */
-function isEnvDefinedFalsy(envVar) {
-  if (envVar === undefined) return false;
-  if (typeof envVar === "boolean") return !envVar;
-  let normalizedValue = String(envVar).toLowerCase().trim();
-  return ["0", "false", "no", "off"].includes(normalizedValue);
-}
 //@ chunk-bwbq4xvm.js:151303-151369 fingerprint = getAWSRegion (0.702)
 function getAWSRegion() {
   return nonEmptyOrUndefined(env.AWS_REGION) || nonEmptyOrUndefined(env.AWS_DEFAULT_REGION);
@@ -370,11 +377,11 @@ export {
   isBareMode,
   getProjectDirNameOverride,
   parseIntLoose,
-  hasNodeOption,
+  isRestrictedMode,
   isSupervisedMode,
   parsePositiveNumber,
   parseNumberWithSeparators,
-  isRestrictedMode,
+  hasNodeOption,
   isAntBuild,
   parseNumberOrDefault,
   getClaudeConfigDirOrNull,

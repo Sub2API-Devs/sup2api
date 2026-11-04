@@ -21,21 +21,21 @@ function getSedInPlaceExpression(command) {
   let withoutSed = commandArgv.slice(1);
   let args = [];
   for (let idx = 0; idx < withoutSed.length; idx++) {
-    let w = withoutSed[idx];
-    if (w === "-i" || /^-[Er]+i$/.test(w)) args.push(idx);
+    let arg = withoutSed[idx];
+    if (arg === "-i" || /^-[Er]+i$/.test(arg)) args.push(idx);
   }
   if (args.length === 0) return null;
   if (args.length > 1) return MULTIPLE_INPLACE_MARKER;
-  let h = args[0];
-  let y = withoutSed[h + 1];
-  if (y === undefined) return null;
-  if (y === "" || y.startsWith(".") || y.startsWith("-")) return null;
-  for (let idx = h + 2; idx < withoutSed.length; idx++) {
-    let w = withoutSed[idx];
-    if (w === "-e" || w === "--expression") return withoutSed[idx + 1] ?? null;
-    if (w.startsWith("--expression=")) return w.slice(13);
-    if (w.startsWith("-")) continue;
-    return w;
+  let inPlaceIdx = args[0];
+  let nextArg = withoutSed[inPlaceIdx + 1];
+  if (nextArg === undefined) return null;
+  if (nextArg === "" || nextArg.startsWith(".") || nextArg.startsWith("-")) return null;
+  for (let idx = inPlaceIdx + 2; idx < withoutSed.length; idx++) {
+    let arg = withoutSed[idx];
+    if (arg === "-e" || arg === "--expression") return withoutSed[idx + 1] ?? null;
+    if (arg.startsWith("--expression=")) return arg.slice(13);
+    if (arg.startsWith("-")) continue;
+    return arg;
   }
   return null;
 }

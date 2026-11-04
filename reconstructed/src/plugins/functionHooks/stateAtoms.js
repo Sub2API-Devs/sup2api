@@ -20,23 +20,26 @@ var DERIVED_SYMBOL = Symbol.for("claude-code.state.derived");
 /**
  * 带有某 Symbol 属性
  */
-var hasSymbolProperty = (e, o) => typeof e === "object" && e !== null && e[o] !== undefined;
+var hasSymbolProperty = (value, symbol) =>
+  typeof value === "object" && value !== null && value[symbol] !== undefined;
 //@ chunk-bfnfj4kx.js:4872-4892 placement
 /**
  * 是否状态原子
  */
-var isStateAtom = (e) => hasSymbolProperty(e, STATE_ATOM_SYMBOL);
+var isStateAtom = (value) => hasSymbolProperty(value, STATE_ATOM_SYMBOL);
 //@ chunk-bfnfj4kx.js:4892-4913 placement
 /**
  * 是否派生状态
  */
-var isDerivedState = (e) => hasSymbolProperty(e, DERIVED_SYMBOL);
+var isDerivedState = (value) => hasSymbolProperty(value, DERIVED_SYMBOL);
 //@ chunk-bfnfj4kx.js:4913-5033 placement
-var createDerivedState = (e, compute) => {
-  let t = {};
+var createDerivedState = (sources, compute) => {
+  let memo = {};
   return Object.freeze({
-    [DERIVED_SYMBOL]: t,
-    sources: Object.freeze(e.map((r) => (isStateAtom(r) || isDerivedState(r) ? r : stateRef(r)))),
+    [DERIVED_SYMBOL]: memo,
+    sources: Object.freeze(
+      sources.map((source) => (isStateAtom(source) || isDerivedState(source) ? source : stateRef(source))),
+    ),
     compute,
   });
 };
@@ -44,43 +47,43 @@ var createDerivedState = (e, compute) => {
 /**
  * 生成状态引用
  */
-var asStateRef = (e, o) =>
-  isStateAtom(e)
+var asStateRef = (source, facts) =>
+  isStateAtom(source)
     ? Object.freeze({
-        ...e,
+        ...source,
         [STATE_ATOM_SYMBOL]: true,
-        ref: stateRef(e.ref, o.requestId),
+        ref: stateRef(source.ref, facts.requestId),
       })
-    : stateRef(e, o.requestId);
+    : stateRef(source, facts.requestId);
 //@ chunk-bfnfj4kx.js:5124-5529 placement
 /**
  * 读取状态原子或派生状态的值与版本。
  */
-async function readStateValue(e, o) {
-  if (isStateAtom(o)) {
-    let p = await e.get(o.ref);
+async function readStateValue(reader, source) {
+  if (isStateAtom(source)) {
+    let stored = await reader.get(source.ref);
     return {
-      value: PluginManifestSchema_2(o, p.value),
-      versions: [p.version],
+      value: PluginManifestSchema_2(source, stored.value),
+      versions: [stored.version],
     };
   }
-  if (!isDerivedState(o)) {
-    let p = await e.get(o);
+  if (!isDerivedState(source)) {
+    let stored = await reader.get(source);
     return {
-      value: p.value,
-      versions: [p.version],
+      value: stored.value,
+      versions: [stored.version],
     };
   }
-  let results = await Promise.all(o.sources.map((source) => readStateValue(e, source)));
-  let flattened = results.flatMap((p) => p.versions);
+  let results = await Promise.all(source.sources.map((source) => readStateValue(reader, source)));
+  let flattened = results.flatMap((result) => result.versions);
   let joined = flattened.join(",");
-  let s = o[DERIVED_SYMBOL];
-  if (s?.versions !== joined && s !== undefined) {
-    s.value = o.compute(...results.map((p) => p.value));
-    s.versions = joined;
+  let memo = source[DERIVED_SYMBOL];
+  if (memo?.versions !== joined && memo !== undefined) {
+    memo.value = source.compute(...results.map((result) => result.value));
+    memo.versions = joined;
   }
   return {
-    value: s?.value,
+    value: memo?.value,
     versions: flattened,
   };
 }
@@ -88,17 +91,17 @@ async function readStateValue(e, o) {
 /**
  * 读状态值
  */
-var readStateValueOf = async (e, o) => (await readStateValue(e.state, o)).value;
+var readStateValueOf = async (host, source) => (await readStateValue(host.state, source)).value;
 //@ chunk-bfnfj4kx.js:5576-5633 placement
 /**
  * 附形状
  */
-var withShape = (e, o) =>
-  e.shape === undefined
-    ? o
+var withShape = (atom, value) =>
+  atom.shape === undefined
+    ? value
     : {
-        shape: e.shape,
-        value: o,
+        shape: atom.shape,
+        value,
       };
 //@ chunk-bfnfj4kx.js:5633-5643 placement
 /**
@@ -109,22 +112,22 @@ var MAX_UPDATE_RETRIES = 64;
 /**
  * 乐观并发地更新状态原子（版本不符时重试，有上限）。
  */
-var updateStateAtom = async (e, o, t) => {
-  let state = e.state;
-  let n = isStateAtom(o) ? o.ref : o;
-  for (let s = 0; s < MAX_UPDATE_RETRIES; s += 1) {
-    let p = await state.get(n);
-    let i = isStateAtom(o) ? PluginManifestSchema_2(o, p.value) : p.value;
-    let a = t(i);
-    let f = isStateAtom(o) ? withShape(o, a) : a;
+var updateStateAtom = async (host, target, update) => {
+  let state = host.state;
+  let ref = isStateAtom(target) ? target.ref : target;
+  for (let attempt = 0; attempt < MAX_UPDATE_RETRIES; attempt += 1) {
+    let stored = await state.get(ref);
+    let current = isStateAtom(target) ? PluginManifestSchema_2(target, stored.value) : stored.value;
+    let next = update(current);
+    let written = isStateAtom(target) ? withShape(target, next) : next;
     if (
       (
-        await state.set(n, f, {
-          ifVersion: p.version,
+        await state.set(ref, written, {
+          ifVersion: stored.version,
         })
       ).isSet
     )
-      return a;
+      return next;
   }
   throw Error(
     "update: the value was written by another every time it was read, up to the bound on tries; nothing was written",

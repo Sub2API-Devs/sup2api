@@ -17,7 +17,7 @@ function parseDebugFilter(filterString) {
   if (!filterString || filterString.trim() === "") return null;
   let filters = filterString
     .split(",")
-    .map((o) => o.trim())
+    .map((part) => part.trim())
     .filter(Boolean);
   if (filters.length === 0) return null;
   let hasExclusive = filters.some((filter) => filter.startsWith("!"));

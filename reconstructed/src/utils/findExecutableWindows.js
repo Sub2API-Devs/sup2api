@@ -15,6 +15,7 @@ import { HostScoped } from "./hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { getTrimmedEnvValue } from "./envUtils.js";
 import { classifyProtectedDir } from "./permissions/protectedDirs.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-hvmek2df.js:439-461 placement
 function alwaysFalse() {
@@ -23,24 +24,28 @@ function alwaysFalse() {
 //@ chunk-hvmek2df.js:461-596 placement
 class ExecutableResolutionCache {
   resolved = new Map();
-  lookup(e) {
-    return this.resolved.get(e);
+  lookup(command) {
+    return this.resolved.get(command);
   }
-  remember(e, t) {
-    this.resolved.set(e, t);
+  remember(command, resolvedPath) {
+    this.resolved.set(command, resolvedPath);
   }
-  forget(e) {
-    this.resolved.delete(e);
+  forget(command) {
+    this.resolved.delete(command);
   }
 }
 //@ chunk-hvmek2df.js:596-626 placement
-var executableResolutionCache = new HostScoped(() => new ExecutableResolutionCache());
-var RESOLVE_TIMEOUT_MS = 5000;
+var executableResolutionCache; // deferred: uses ExecutableResolutionCache of its import cycle while loading; runs once the cycle is complete
+var RESOLVE_TIMEOUT_MS;
+deferInit("chunk-hvmek2df.js:596", () => {
+  executableResolutionCache = new HostScoped(() => new ExecutableResolutionCache());
+  RESOLVE_TIMEOUT_MS = 5000;
+});
 //@ chunk-hvmek2df.js:626-701 placement
-function isPathMissing(e) {
+function isPathMissing(filePath) {
   try {
     return (
-      lstatSync(e, {
+      lstatSync(filePath, {
         throwIfNoEntry: false,
       }) === undefined
     );
@@ -49,7 +54,10 @@ function isPathMissing(e) {
   }
 }
 //@ chunk-hvmek2df.js:701-746 placement
-var WINDOWS_EXECUTABLE_EXTS = new Set([".com", ".exe", ".bat", ".cmd"]);
+var WINDOWS_EXECUTABLE_EXTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hvmek2df.js:701", () => {
+  WINDOWS_EXECUTABLE_EXTS = new Set([".com", ".exe", ".bat", ".cmd"]);
+});
 //@ chunk-hvmek2df.js:746-876 placement
 function hasWindowsExecutableExt(candidatePath) {
   let replaced = candidatePath
@@ -63,21 +71,21 @@ function hasWindowsExecutableExt(candidatePath) {
 /**
  * 在 PATH 中查找可执行文件（Windows 处理 PATHEXT 扩展名），结果缓存。
  */
-function findExecutableWindows(e, t = false) {
-  let n = executableResolutionCache.of(getRootSession().host);
-  let o = n.lookup(e);
-  if (o !== undefined)
-    if (o !== null) {
-      if (!isPathMissing(o)) return o;
-      n.forget(e);
+function findExecutableWindows(command, forceRefresh = false) {
+  let cache = executableResolutionCache.of(getRootSession().host);
+  let cachedPath = cache.lookup(command);
+  if (cachedPath !== undefined)
+    if (cachedPath !== null) {
+      if (!isPathMissing(cachedPath)) return cachedPath;
+      cache.forget(command);
     } else {
-      if (!t) return o;
-      n.forget(e);
+      if (!forceRefresh) return cachedPath;
+      cache.forget(command);
     }
-  let c = getTrimmedEnvValue("SYSTEMROOT") || "C:\\Windows";
-  let d = join(c, "System32", "where.exe");
+  let systemRoot = getTrimmedEnvValue("SYSTEMROOT") || "C:\\Windows";
+  let whereExePath = join(systemRoot, "System32", "where.exe");
   try {
-    let paths = execFileSync(d, [e], {
+    let paths = execFileSync(whereExePath, [command], {
       stdio: "pipe",
       encoding: "utf8",
       timeout: RESOLVE_TIMEOUT_MS,
@@ -88,21 +96,21 @@ function findExecutableWindows(e, t = false) {
       .split(/\r?\n/)
       .filter(Boolean);
     let cwd = process.cwd();
-    let l = false;
+    let skippedProtectedPath = false;
     for (let candidatePath of paths) {
       if (isPathMissing(candidatePath)) continue;
       if (classifyProtectedDir(candidatePath, cwd)) {
-        l = true;
+        skippedProtectedPath = true;
         continue;
       }
       if (!hasWindowsExecutableExt(candidatePath)) continue;
-      n.remember(e, candidatePath);
+      cache.remember(command, candidatePath);
       return candidatePath;
     }
-    if (paths.length > 0 && !l) n.remember(e, null);
+    if (paths.length > 0 && !skippedProtectedPath) cache.remember(command, null);
     return null;
   } catch (error) {
-    if (isNotFoundExitError(error)) n.remember(e, null);
+    if (isNotFoundExitError(error)) cache.remember(command, null);
     return null;
   }
 }
@@ -115,9 +123,9 @@ function isNotFoundExitError(error) {
   return status === 1 && !signal && !code;
 }
 //@ chunk-hvmek2df.js:1611-1710 placement
-function resolveExecutableSafely(e, t = false) {
-  if (!alwaysFalse()) return e;
-  if (e.includes("/") || e.includes("\\")) return e;
-  return findExecutableWindows(e, t);
+function resolveExecutableSafely(command, forceRefresh = false) {
+  if (!alwaysFalse()) return command;
+  if (command.includes("/") || command.includes("\\")) return command;
+  return findExecutableWindows(command, forceRefresh);
 }
 export { resolveExecutableSafely, findExecutableWindows };

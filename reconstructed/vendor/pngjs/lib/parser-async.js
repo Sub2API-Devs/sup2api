@@ -5,7 +5,7 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_chunkstream } from "./chunkstream.js";
 import { require_filter_parse_async } from "./filter-parse-async.js";
 import { require_parser } from "./parser.js";
@@ -13,7 +13,7 @@ import { require_bitmapper } from "./bitmapper.js";
 import { require_format_normaliser } from "./format-normaliser.js";
 
 //@ chunk-spjgqa4y.js:34825-37285 cjs-fingerprint
-var require_parser_async = x(function (cjsExports, cjsModule) {
+var require_parser_async = __commonJS(function (cjsExports, cjsModule) {
   var util = importMetaRequire("util");
   var zlib = importMetaRequire("zlib");
   var ChunkStream = require_chunkstream();

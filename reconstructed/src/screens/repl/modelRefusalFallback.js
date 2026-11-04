@@ -13,45 +13,45 @@ import { getCanonicalName } from "../../utils/model/canonicalModelName.js";
 import { lastTranscriptModel } from "../../utils/sessionRestore.js";
 
 //@ chunk-18hwfzwa.js:344830-344909 placement
-function isModelRefusalFallback(h) {
-  return h.type === "system" && h.subtype === "model_refusal_fallback";
+function isModelRefusalFallback(message) {
+  return message.type === "system" && message.subtype === "model_refusal_fallback";
 }
 //@ chunk-18hwfzwa.js:344909-344995 placement
 function isSameModelByIdentity(currentOverride, fallbackModel) {
   if (currentOverride == null) return false;
-  let D = stripAnyVersatileSuffix(currentOverride);
-  let L = stripAnyVersatileSuffix(fallbackModel);
-  return D === L || getCanonicalName(D) === getCanonicalName(L);
+  let overrideBase = stripAnyVersatileSuffix(currentOverride);
+  let fallbackBase = stripAnyVersatileSuffix(fallbackModel);
+  return overrideBase === fallbackBase || getCanonicalName(overrideBase) === getCanonicalName(fallbackBase);
 }
 //@ chunk-18hwfzwa.js:344995-345665 placement
-function decideRefusalFallbackRestore(h) {
-  let filtered = h.slicedMessages.filter(isModelRefusalFallback);
+function decideRefusalFallbackRestore(input) {
+  let filtered = input.slicedMessages.filter(isModelRefusalFallback);
   let last = filtered.at(-1);
   if (!last) return;
   let fallbackModel = last.fallbackModel;
   let model = (() => {
-    if (!h.firstParty)
+    if (!input.firstParty)
       return {
         action: "keep",
         reason: "not_first_party",
       };
-    if (!isSameModelByIdentity(h.currentOverride, fallbackModel))
+    if (!isSameModelByIdentity(input.currentOverride, fallbackModel))
       return {
         action: "keep",
         reason: "writer_mismatch",
       };
-    let ke = lastTranscriptModel(h.keptMessages, h.initialModel);
-    if (ke != null)
+    let transcriptModel = lastTranscriptModel(input.keptMessages, input.initialModel);
+    if (transcriptModel != null)
       return {
         action: "restore",
-        value: ke,
+        value: transcriptModel,
         restoredFrom: "transcript",
       };
-    let Re = h.modelBeforeSwap ?? h.initialModel;
-    if (Re != null)
+    let initialModel = input.modelBeforeSwap ?? input.initialModel;
+    if (initialModel != null)
       return {
         action: "restore",
-        value: Re,
+        value: initialModel,
         restoredFrom: "initial_model",
       };
     return {
@@ -62,7 +62,7 @@ function decideRefusalFallbackRestore(h) {
   })();
   return {
     bannersSliced: filtered.length,
-    clearLatch: h.latchActive && !h.keptMessages.some(isModelRefusalFallback),
+    clearLatch: input.latchActive && !input.keptMessages.some(isModelRefusalFallback),
     model,
     lastSlicedFallbackModel: fallbackModel,
   };

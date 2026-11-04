@@ -10,7 +10,7 @@ import {
   checkTenantId,
   ClientSecretCredential,
   UsernamePasswordCredential,
-  $n,
+  AuthenticationError,
   CredentialUnavailableError,
 } from "../../index.js";
 import { ClientCertificateCredential } from "./clientCertificateCredential.js";
@@ -110,7 +110,7 @@ class EnvironmentCredential {
           logger_9.getToken.info(formatSuccess(scopes));
           return result;
         } catch (err) {
-          let authenticationError = new $n(400, {
+          let authenticationError = new AuthenticationError(400, {
             error: `${credentialName_2} authentication failed. To troubleshoot, visit https://aka.ms/azsdk/js/identity/environmentcredential/troubleshoot.`,
             error_description: err.message.toString().split("More details:").join(""),
           });

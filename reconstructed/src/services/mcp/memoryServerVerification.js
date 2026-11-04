@@ -9,6 +9,7 @@
  * attribution: placement 10
  */
 import { MEMORY_TOOL_PREFIX } from "./firstPartyServerIds.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hf6kt4yn.js:228-241 placement
 /**
@@ -19,81 +20,86 @@ var alternatesServerName = undefined;
 /**
  * 判断工具名是否来自记忆服务器。
  */
-function isMemoryServerToolName(e) {
+function isMemoryServerToolName(toolName) {
   return (
-    (e.startsWith(MEMORY_TOOL_PREFIX) && !e.slice(MEMORY_TOOL_PREFIX.length).includes("__")) ||
-    (alternatesServerName !== undefined && e === alternatesServerName)
+    (toolName.startsWith(MEMORY_TOOL_PREFIX) && !toolName.slice(MEMORY_TOOL_PREFIX.length).includes("__")) ||
+    (alternatesServerName !== undefined && toolName === alternatesServerName)
   );
 }
 //@ chunk-hf6kt4yn.js:336-551 placement
-function memoryPlacementOf(e) {
-  let mcpInfo = e.mcpInfo;
+function memoryPlacementOf(tool) {
+  let mcpInfo = tool.mcpInfo;
   if (mcpInfo === undefined) return "unplaced";
   if (mcpInfo.accountMemoryServer === true) return "verified";
-  let n = mcpInfo.source ?? (mcpInfo.serverType === "sdk" ? "sdk" : undefined);
-  return n === undefined || n === "sdk" ? "unplaced" : "other_server";
+  let source = mcpInfo.source ?? (mcpInfo.serverType === "sdk" ? "sdk" : undefined);
+  return source === undefined || source === "sdk" ? "unplaced" : "other_server";
 }
 //@ chunk-hf6kt4yn.js:551-682 placement
-function mergeMemoryPlacement(e, o) {
-  if (e === "verified" || o === "verified") return "verified";
-  return e === "unplaced" || o === "unplaced" ? "unplaced" : "other_server";
+function mergeMemoryPlacement(a, b) {
+  if (a === "verified" || b === "verified") return "verified";
+  return a === "unplaced" || b === "unplaced" ? "unplaced" : "other_server";
 }
 //@ chunk-hf6kt4yn.js:682-700 placement
-var weakMap = new WeakMap();
+var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hf6kt4yn.js:682", () => {
+  weakMap = new WeakMap();
+});
 //@ chunk-hf6kt4yn.js:700-870 placement
-function memoryPlacementByName(e) {
-  let o = weakMap.get(e);
-  if (o === undefined) {
-    let n = new Map();
-    for (let r of e) {
-      let c = memoryPlacementOf(r);
-      for (let t of [r.name, ...(r.aliases ?? [])]) n.set(t, mergeMemoryPlacement(n.get(t), c));
+function memoryPlacementByName(tools) {
+  let cached = weakMap.get(tools);
+  if (cached === undefined) {
+    let byName = new Map();
+    for (let tool of tools) {
+      let placement = memoryPlacementOf(tool);
+      for (let name of [tool.name, ...(tool.aliases ?? [])])
+        byName.set(name, mergeMemoryPlacement(byName.get(name), placement));
     }
-    o = n;
-    weakMap.set(e, o);
+    cached = byName;
+    weakMap.set(tools, cached);
   }
-  return o;
+  return cached;
 }
 //@ chunk-hf6kt4yn.js:870-1035 placement
 /**
  * 创建账户记忆服务器的验证函数（缓存已验证名）。
  */
-function createMemoryServerVerifier(e) {
-  let o = new Set();
-  return (n) => {
-    if (o.has(n)) return "verified";
-    let r = e();
-    let c = r === undefined ? "unplaced" : (memoryPlacementByName(r).get(n) ?? "unplaced");
-    if (c === "verified") o.add(n);
-    return c;
+function createMemoryServerVerifier(getTools) {
+  let verifiedCache = new Set();
+  return (toolName) => {
+    if (verifiedCache.has(toolName)) return "verified";
+    let tools = getTools();
+    let placement =
+      tools === undefined ? "unplaced" : (memoryPlacementByName(tools).get(toolName) ?? "unplaced");
+    if (placement === "verified") verifiedCache.add(toolName);
+    return placement;
   };
 }
 //@ chunk-hf6kt4yn.js:1035-1093 placement
 /**
  * 返回判断函数：工具是否已登记（verified / unplaced）。
  */
-function classifyPlacedTool(e) {
-  return (o) => (e.has(o) ? "verified" : "unplaced");
+function classifyPlacedTool(verifiedNames) {
+  return (toolName) => (verifiedNames.has(toolName) ? "verified" : "unplaced");
 }
 //@ chunk-hf6kt4yn.js:1093-1219 placement
 /**
  * 判断工具是否来自可信的记忆服务器。
  */
-function isTrustedMemoryTool(e, o, n) {
-  switch (o?.(e)) {
+function isTrustedMemoryTool(toolName, placementOf, caller) {
+  switch (placementOf?.(toolName)) {
     case "verified":
       return true;
     case "other_server":
-      return n === "history" && isMemoryServerToolName(e);
+      return caller === "history" && isMemoryServerToolName(toolName);
     default:
-      return isMemoryServerToolName(e);
+      return isMemoryServerToolName(toolName);
   }
 }
 //@ chunk-hf6kt4yn.js:1219-1270 placement
 /**
  * 当前是否为可信的记忆工具（实时）。
  */
-function isLiveMemoryTool(e) {
-  return isTrustedMemoryTool(e.name, () => memoryPlacementOf(e), "live");
+function isLiveMemoryTool(tool) {
+  return isTrustedMemoryTool(tool.name, () => memoryPlacementOf(tool), "live");
 }
 export { createMemoryServerVerifier, classifyPlacedTool, isLiveMemoryTool, isTrustedMemoryTool };

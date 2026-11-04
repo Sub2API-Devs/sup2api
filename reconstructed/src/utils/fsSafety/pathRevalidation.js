@@ -35,27 +35,27 @@ import { readFileHandleChecked } from "../fileRead.js";
 /**
  * 可中止地打开文件。
  */
-async function openWithAbort(e, n, platform, o, s) {
-  s?.throwIfAborted();
-  let a = o ? openNoFollow(e, n, platform) : open(e, n | READ_LIMITS);
-  if (!s) return a;
-  let c;
+async function openWithAbort(filePath, flags, platform, noFollow, signal) {
+  signal?.throwIfAborted();
+  let openPromise = noFollow ? openNoFollow(filePath, flags, platform) : open(filePath, flags | READ_LIMITS);
+  if (!signal) return openPromise;
+  let onAbort;
   let promise = new Promise((resolve, reject) => {
-    c = () => reject(s.reason ?? Error("aborted"));
-    s.addEventListener("abort", c, {
+    onAbort = () => reject(signal.reason ?? Error("aborted"));
+    signal.addEventListener("abort", onAbort, {
       once: true,
     });
   });
   try {
-    return await Promise.race([a, promise]);
+    return await Promise.race([openPromise, promise]);
   } catch (error) {
-    a.then(
-      (y) => y.close(),
+    openPromise.then(
+      (handle) => handle.close(),
       () => {},
     );
     throw error;
   } finally {
-    if (c) s.removeEventListener("abort", c);
+    if (onAbort) signal.removeEventListener("abort", onAbort);
   }
 }
 //@ chunk-t0gq9gyw.js:9458-9534 placement
@@ -64,18 +64,18 @@ var DESCRIPTOR_PATH_RE = /^(?:\/dev\/(?:stdin|stdout|stderr|fd\/\d+)|\/proc\/sel
 /**
  * 路径是否为本进程的 /proc/<pid>/fd/<n> 或同类描述符路径。
  */
-function isProcFdPath(e) {
+function isProcFdPath(filePath) {
   return (
-    DESCRIPTOR_PATH_RE.test(e) ||
-    (/^\/proc\/\d+\/fd\/\d+$/.test(e) && e.startsWith(`/proc/${process.pid}/fd/`))
+    DESCRIPTOR_PATH_RE.test(filePath) ||
+    (/^\/proc\/\d+\/fd\/\d+$/.test(filePath) && filePath.startsWith(`/proc/${process.pid}/fd/`))
   );
 }
 //@ chunk-t0gq9gyw.js:9643-9686 placement
 /**
  * 拼出 /proc/self/fd/<n> 路径。
  */
-function procFdPath(e) {
-  return `/proc/self/fd/${e}`;
+function procFdPath(fd) {
+  return `/proc/self/fd/${fd}`;
 }
 //@ chunk-t0gq9gyw.js:9686-9701 placement
 var O_NOFOLLOW_ANY = 2097152;
@@ -83,44 +83,47 @@ var O_NOFOLLOW_ANY = 2097152;
 /**
  * macOS 上不跟随链接打开。
  */
-async function openNoFollow(e, n, platform) {
-  if (platform !== "macos" || (await probeNoFollowAny())) return open(e, n | READ_LIMITS);
-  return open(e, (n & ~constants.O_NOFOLLOW) | MAX_BOUND_READ_BYTES | READ_LIMITS);
+async function openNoFollow(filePath, flags, platform) {
+  if (platform !== "macos" || (await probeNoFollowAny())) return open(filePath, flags | READ_LIMITS);
+  return open(filePath, (flags & ~constants.O_NOFOLLOW) | MAX_BOUND_READ_BYTES | READ_LIMITS);
 }
 //@ chunk-t0gq9gyw.js:9808-10177 placement
 /**
  * 路径是否在 macOS 特殊卷上。
  */
-async function isOnMacosVolume(e, n, platform) {
+async function isOnMacosVolume(dirPath, volumeHandle, platform) {
   if (platform !== "macos") return false;
-  for (let s = e; ; s = dirname(s)) {
+  for (let currentPath = dirPath; ; currentPath = dirname(currentPath)) {
     try {
-      if (!(await lstat(s)).isDirectory()) return false;
+      if (!(await lstat(currentPath)).isDirectory()) return false;
     } catch {
       return false;
     }
-    if (dirname(s) === s) break;
+    if (dirname(currentPath) === currentPath) break;
   }
-  let o;
+  let dirHandle;
   try {
-    o = await open(e, constants.O_RDONLY | constants.O_DIRECTORY | MAX_BOUND_READ_BYTES | READ_LIMITS);
+    dirHandle = await open(
+      dirPath,
+      constants.O_RDONLY | constants.O_DIRECTORY | MAX_BOUND_READ_BYTES | READ_LIMITS,
+    );
   } catch {
     return false;
   }
   try {
-    let [s, a] = await Promise.all([
-      o.stat({
+    let [dirStats, volumeStats] = await Promise.all([
+      dirHandle.stat({
         bigint: true,
       }),
-      n.stat({
+      volumeHandle.stat({
         bigint: true,
       }),
     ]);
-    return s.ino === a.ino && s.dev === a.dev;
+    return dirStats.ino === volumeStats.ino && dirStats.dev === volumeStats.dev;
   } catch {
     return false;
   } finally {
-    await o.close();
+    await dirHandle.close();
   }
 }
 //@ chunk-t0gq9gyw.js:10177-10652 placement
@@ -141,9 +144,9 @@ var REVALIDATION_MESSAGES = {
 /**
  * 读取文件描述符实际指向的路径；目标不存在时返回 undefined。
  */
-async function readFdTargetPath(e) {
+async function readFdTargetPath(fd) {
   try {
-    return await readlink(procFdPath(e));
+    return await readlink(procFdPath(fd));
   } catch (error) {
     if (isPathAbsent(error)) return;
     throw error;
@@ -153,13 +156,13 @@ async function readFdTargetPath(e) {
 /**
  * 读取描述符实际打开的路径；失败时按拼写模式放行或拒绝读取。
  */
-async function readOpenedPath(e, n, r) {
+async function readOpenedPath(handle, filePath, mode) {
   try {
-    return await readFdTargetPath(e.fd);
+    return await readFdTargetPath(handle.fd);
   } catch (error) {
-    if (r === "by-spelling") return;
+    if (mode === "by-spelling") return;
     throw new SymlinkReadRefusedError(
-      `Refusing to read ${n}: the system would not say where it was opened (reading /proc/self/fd failed with ${getErrnoCode(error) ?? "an error"}), so it cannot be told apart from a path this session may not read.`,
+      `Refusing to read ${filePath}: the system would not say where it was opened (reading /proc/self/fd failed with ${getErrnoCode(error) ?? "an error"}), so it cannot be told apart from a path this session may not read.`,
     );
   }
 }
@@ -167,9 +170,9 @@ async function readOpenedPath(e, n, r) {
 /**
  * 权限检查后符号链接解析发生变化的拒绝读取错误。
  */
-function resolutionChangedError(e, n) {
+function resolutionChangedError(filePath, reason) {
   return new SymlinkReadRefusedError(
-    `Refusing to read ${e}: its symlink resolution changed after permission was checked (${REVALIDATION_MESSAGES[n]}). If a link in the working directory is being rewritten concurrently, stop that and retry.`,
+    `Refusing to read ${filePath}: its symlink resolution changed after permission was checked (${REVALIDATION_MESSAGES[reason]}). If a link in the working directory is being rewritten concurrently, stop that and retry.`,
   );
 }
 //@ chunk-t0gq9gyw.js:11251-11261 placement
@@ -178,87 +181,100 @@ var SKIP_STAT_CHAIN = false;
 /**
  * 对路径链逐段 lstat。
  */
-async function statChain(e) {
-  let n = [];
-  for (let c = e; ; c = dirname(c)) {
-    n.unshift(c);
-    if (dirname(c) === c) break;
+async function statChain(filePath) {
+  let chainPaths = [];
+  for (let currentPath = filePath; ; currentPath = dirname(currentPath)) {
+    chainPaths.unshift(currentPath);
+    if (dirname(currentPath) === currentPath) break;
   }
   let fsImplementation = getFsImplementation();
-  let o;
-  let s = [];
-  let a = [];
-  for (let c of n) {
+  let launchAncestry;
+  let chainStats = [];
+  let chainKinds = [];
+  for (let chainPath of chainPaths) {
     try {
-      let u = await lstat(c, {
+      let stats = await lstat(chainPath, {
         bigint: true,
       });
-      if (!(c === e ? u.isFile() : u.isDirectory())) return;
-      s.push(u);
-      a.push("lstat");
+      if (!(chainPath === filePath ? stats.isFile() : stats.isDirectory())) return;
+      chainStats.push(stats);
+      chainKinds.push("lstat");
       continue;
     } catch (error) {
       let errnoCode = getErrnoCode(error);
-      if (c === e || (errnoCode !== "EPERM" && errnoCode !== "EACCES")) return;
+      if (chainPath === filePath || (errnoCode !== "EPERM" && errnoCode !== "EACCES")) return;
     }
     {
-      let u = await statDirNoFollow(c);
-      if (u === undefined) return;
-      s.push(u);
-      a.push("open");
+      let dirStats = await statDirNoFollow(chainPath);
+      if (dirStats === undefined) return;
+      chainStats.push(dirStats);
+      chainKinds.push("open");
       continue;
     }
-    o ??= vouchedLaunchAncestry(fsImplementation);
-    if (o !== null && a.slice(1).every((u) => u === "passed") && isSpelledStrictAncestor(c, o)) {
-      s.push(undefined);
-      a.push("passed");
+    launchAncestry ??= vouchedLaunchAncestry(fsImplementation);
+    if (
+      launchAncestry !== null &&
+      chainKinds.slice(1).every((kind) => kind === "passed") &&
+      isSpelledStrictAncestor(chainPath, launchAncestry)
+    ) {
+      chainStats.push(undefined);
+      chainKinds.push("passed");
       continue;
     }
     return;
   }
-  for (let j = 0; j < n.length - 1; j++) {
-    let u = s[j];
-    if (u === undefined) continue;
-    let p;
+  for (let j = 0; j < chainPaths.length - 1; j++) {
+    let recordedStats = chainStats[j];
+    if (recordedStats === undefined) continue;
+    let recheckStats;
     try {
-      p =
-        a[j] === "open"
-          ? await statDirNoFollow(n[j])
-          : await lstat(n[j], {
+      recheckStats =
+        chainKinds[j] === "open"
+          ? await statDirNoFollow(chainPaths[j])
+          : await lstat(chainPaths[j], {
               bigint: true,
             });
     } catch {
       return;
     }
-    if (p === undefined || !p.isDirectory() || p.dev !== u.dev || p.ino !== u.ino) return;
+    if (
+      recheckStats === undefined ||
+      !recheckStats.isDirectory() ||
+      recheckStats.dev !== recordedStats.dev ||
+      recheckStats.ino !== recordedStats.ino
+    )
+      return;
   }
-  return s.at(-1);
+  return chainStats.at(-1);
 }
 //@ chunk-t0gq9gyw.js:11983-12202 placement
 /**
  * 以 O_DIRECTORY|O_NOFOLLOW 打开并 stat 目录（失败返回 undefined）。
  */
-async function statDirNoFollow(e) {
-  let n;
+async function statDirNoFollow(dirPath) {
+  let dirHandle;
   try {
-    n = await open(e, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW | READ_LIMITS);
+    dirHandle = await open(
+      dirPath,
+      constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW | READ_LIMITS,
+    );
   } catch {
     return;
   }
   try {
-    let stats = await n.stat({
+    let stats = await dirHandle.stat({
       bigint: true,
     });
     return stats.isDirectory() ? stats : undefined;
   } catch {
     return;
   } finally {
-    await n.close().catch(() => {});
+    await dirHandle.close().catch(() => {});
   }
 }
 //@ chunk-t0gq9gyw.js:12202-12246 placement
-function isCheckableAbsolutePath(e) {
-  return isAbsolute(e) && !isUntouchableSpelling(e) && !isProcFdPath(e);
+function isCheckableAbsolutePath(filePath) {
+  return isAbsolute(filePath) && !isUntouchableSpelling(filePath) && !isProcFdPath(filePath);
 }
 //@ chunk-t0gq9gyw.js:12246-12393 placement = getFileIdentity (0.794)
 /**
@@ -266,13 +282,13 @@ function isCheckableAbsolutePath(e) {
  */
 async function lastExistingIdentity(filePath) {
   for (let j = filePath.length - 1; j >= 0; j--) {
-    let r = filePath[j];
-    if (!isCheckableAbsolutePath(r)) continue;
-    let o = await statChain(r);
-    if (o)
+    let candidatePath = filePath[j];
+    if (!isCheckableAbsolutePath(candidatePath)) continue;
+    let stats = await statChain(candidatePath);
+    if (stats)
       return {
-        dev: o.dev,
-        ino: o.ino,
+        dev: stats.dev,
+        ino: stats.ino,
       };
   }
   return null;
@@ -281,43 +297,44 @@ async function lastExistingIdentity(filePath) {
 /**
  * 沿路径链重新打开并核对。
  */
-async function reopenThroughChain(e, n, r, o, s) {
-  if (s == null) return;
-  for (let j = n.length - 1; j >= 0; j--) {
-    let c = n[j];
-    if (!isCheckableAbsolutePath(c) || (!SKIP_STAT_CHAIN && !(await statChain(c)))) continue;
-    let u;
+async function reopenThroughChain(filePath, approvedSpellings, flags, signal, identity) {
+  if (identity == null) return;
+  for (let j = approvedSpellings.length - 1; j >= 0; j--) {
+    let candidatePath = approvedSpellings[j];
+    if (!isCheckableAbsolutePath(candidatePath) || (!SKIP_STAT_CHAIN && !(await statChain(candidatePath))))
+      continue;
+    let handle;
     try {
-      u = await openWithAbort(
-        c,
-        (r & ~constants.O_NOFOLLOW) | MAX_BOUND_READ_BYTES | constants.O_NONBLOCK,
+      handle = await openWithAbort(
+        candidatePath,
+        (flags & ~constants.O_NOFOLLOW) | MAX_BOUND_READ_BYTES | constants.O_NONBLOCK,
         "macos",
         false,
-        o,
+        signal,
       );
     } catch (error) {
-      if (o?.aborted) throw o.reason ?? error;
+      if (signal?.aborted) throw signal.reason ?? error;
       continue;
     }
-    let p = await u
+    let stats = await handle
       .stat({
         bigint: true,
       })
       .catch(() => {
         return;
       });
-    if (p?.isFile() && p.dev === s.dev && p.ino === s.ino) {
+    if (stats?.isFile() && stats.dev === identity.dev && stats.ino === identity.ino) {
       logForDebugging(
-        `openReadBoundToApproval: the fresh resolution of ${e} is not verbatim what the check approved (or realpath could not render it); reading approved ${c}, opened link-free`,
+        `openReadBoundToApproval: the fresh resolution of ${filePath} is not verbatim what the check approved (or realpath could not render it); reading approved ${candidatePath}, opened link-free`,
       );
       return {
-        canonicalPath: c,
-        ioPath: c,
-        handle: u,
-        close: () => u.close(),
+        canonicalPath: candidatePath,
+        ioPath: candidatePath,
+        handle,
+        close: () => handle.close(),
       };
     }
-    await u.close().catch(() => {});
+    await handle.close().catch(() => {});
   }
   return;
 }
@@ -325,163 +342,193 @@ async function reopenThroughChain(e, n, r, o, s) {
 /**
  * 打开文件读取，并确认打开的就是权限检查批准的路径。
  */
-async function openReadBoundToApproval(e, n, r, o, s = "by-spelling") {
-  let a = new Set(n);
+async function openReadBoundToApproval(
+  filePath,
+  approvedSpellings,
+  signal,
+  identity,
+  procMode = "by-spelling",
+) {
+  let approvedSet = new Set(approvedSpellings);
   let platform = getPlatform();
-  let u = platform === "windows" ? constants.O_RDONLY : constants.O_RDONLY | constants.O_NOCTTY;
-  let p = platform === "windows" ? u : u | constants.O_NOFOLLOW;
-  let y = safeResolvePath(getFsImplementation(), e);
-  let w = (P) => o != null && P.isFile() && P.dev === o.dev && P.ino === o.ino;
-  let E = async (P = y) => {
-    let resolvedPath = P.resolvedPath;
+  let baseFlags = platform === "windows" ? constants.O_RDONLY : constants.O_RDONLY | constants.O_NOCTTY;
+  let noFollowFlags = platform === "windows" ? baseFlags : baseFlags | constants.O_NOFOLLOW;
+  let resolved = safeResolvePath(getFsImplementation(), filePath);
+  let matchesIdentity = (stats) =>
+    identity != null && stats.isFile() && stats.dev === identity.dev && stats.ino === identity.ino;
+  let approvedPathIntact = async (candidate = resolved) => {
+    let resolvedPath = candidate.resolvedPath;
     if (
-      o == null ||
-      !P.isCanonical ||
+      identity == null ||
+      !candidate.isCanonical ||
       !isCheckableAbsolutePath(resolvedPath) ||
       resolvedPath.startsWith("/dev/")
     )
       return false;
     if (!SKIP_STAT_CHAIN) {
-      let A = await statChain(resolvedPath);
-      return A !== undefined && w(A);
+      let chainStats = await statChain(resolvedPath);
+      return chainStats !== undefined && matchesIdentity(chainStats);
     }
-    let S;
+    let handle;
     try {
-      S = await openWithAbort(
+      handle = await openWithAbort(
         resolvedPath,
-        (p & ~constants.O_NOFOLLOW) | MAX_BOUND_READ_BYTES | constants.O_NONBLOCK,
+        (noFollowFlags & ~constants.O_NOFOLLOW) | MAX_BOUND_READ_BYTES | constants.O_NONBLOCK,
         "macos",
         false,
-        r,
+        signal,
       );
     } catch (error) {
-      if (r?.aborted) throw r.reason ?? error;
+      if (signal?.aborted) throw signal.reason ?? error;
       return false;
     }
     try {
-      return await S.stat({
-        bigint: true,
-      }).then(w, () => false);
+      return await handle
+        .stat({
+          bigint: true,
+        })
+        .then(matchesIdentity, () => false);
     } finally {
-      await S.close().catch(() => {});
+      await handle.close().catch(() => {});
     }
   };
-  let h = async (P) => {
-    if (platform === "macos" && (await E())) {
-      let j = await reopenThroughChain(e, n, p, r, o);
-      if (j) return j;
+  let throwChanged = async (reason) => {
+    if (platform === "macos" && (await approvedPathIntact())) {
+      let reopened = await reopenThroughChain(filePath, approvedSpellings, noFollowFlags, signal, identity);
+      if (reopened) return reopened;
     }
-    throw resolutionChangedError(e, P);
+    throw resolutionChangedError(filePath, reason);
   };
-  let b = walkPermissionCheckPaths(e);
-  if (b.unresolved) throw resolutionChangedError(e, "unrenderable");
-  for (let spelling of b.spellings)
-    if (!a.has(spelling)) return h(y.isCanonical && spelling === y.resolvedPath ? "rendering" : "chain");
-  let v = async (P, j) => {
-    if ((await lstat(P)).isSymbolicLink()) throw resolutionChangedError(e, "networkLink");
-    let S = await openWithAbort(P, p, platform, !j, r);
+  let walkResult = walkPermissionCheckPaths(filePath);
+  if (walkResult.unresolved) throw resolutionChangedError(filePath, "unrenderable");
+  for (let spelling of walkResult.spellings)
+    if (!approvedSet.has(spelling))
+      return throwChanged(resolved.isCanonical && spelling === resolved.resolvedPath ? "rendering" : "chain");
+  let openDevicePath = async (pathToOpen, passedChecks) => {
+    if ((await lstat(pathToOpen)).isSymbolicLink()) throw resolutionChangedError(filePath, "networkLink");
+    let handle = await openWithAbort(pathToOpen, noFollowFlags, platform, !passedChecks, signal);
     if (platform === "linux" || platform === "wsl") {
-      let A = await readOpenedPath(S, e, s).catch(async (error) => {
-        await S.close().catch(() => {});
+      let openedPath = await readOpenedPath(handle, filePath, procMode).catch(async (error) => {
+        await handle.close().catch(() => {});
         throw error;
       });
-      if (A !== undefined && A !== P && !a.has(A)) {
-        await S.close().catch(() => {});
-        throw resolutionChangedError(e, "openedElsewhere");
+      if (openedPath !== undefined && openedPath !== pathToOpen && !approvedSet.has(openedPath)) {
+        await handle.close().catch(() => {});
+        throw resolutionChangedError(filePath, "openedElsewhere");
       }
-      if (A !== undefined)
+      if (openedPath !== undefined)
         return {
-          ioPath: procFdPath(S.fd),
-          canonicalPath: P,
-          handle: S,
-          close: () => S.close(),
+          ioPath: procFdPath(handle.fd),
+          canonicalPath: pathToOpen,
+          handle,
+          close: () => handle.close(),
         };
     }
     return {
-      ioPath: P,
-      canonicalPath: P,
-      handle: S,
-      close: () => S.close(),
+      ioPath: pathToOpen,
+      canonicalPath: pathToOpen,
+      handle,
+      close: () => handle.close(),
     };
   };
-  if (isUncOrDevicePath_2(e, platform)) return v(e, false);
-  let _ =
-    isProcFdPath(e) &&
-    !isAbsolute(y.resolvedPath) &&
-    /^(?:pipe|socket|anon_inode):\[/.test(y.resolvedPath) &&
-    basename(b.landing) === y.resolvedPath;
-  if (!y.isCanonical && !_) {
-    if (y.isSymlink || y.resolvedPath !== e) {
-      if (a.has(y.resolvedPath) && isUncOrDevicePath_2(y.resolvedPath, platform)) {
-        let S = platform === "macos" ? await v(y.resolvedPath, false) : await v(e, true);
-        let A = safeResolvePath(getFsImplementation(), e);
-        if (A.isCanonical || A.resolvedPath !== y.resolvedPath) {
-          await S.close().catch(() => {});
-          throw resolutionChangedError(e, "junction");
+  if (isUncOrDevicePath_2(filePath, platform)) return openDevicePath(filePath, false);
+  let allowAnonProcFd =
+    isProcFdPath(filePath) &&
+    !isAbsolute(resolved.resolvedPath) &&
+    /^(?:pipe|socket|anon_inode):\[/.test(resolved.resolvedPath) &&
+    basename(walkResult.landing) === resolved.resolvedPath;
+  if (!resolved.isCanonical && !allowAnonProcFd) {
+    if (resolved.isSymlink || resolved.resolvedPath !== filePath) {
+      if (approvedSet.has(resolved.resolvedPath) && isUncOrDevicePath_2(resolved.resolvedPath, platform)) {
+        let deviceHandle =
+          platform === "macos"
+            ? await openDevicePath(resolved.resolvedPath, false)
+            : await openDevicePath(filePath, true);
+        let reResolved = safeResolvePath(getFsImplementation(), filePath);
+        if (reResolved.isCanonical || reResolved.resolvedPath !== resolved.resolvedPath) {
+          await deviceHandle.close().catch(() => {});
+          throw resolutionChangedError(filePath, "junction");
         }
-        return S;
+        return deviceHandle;
       }
-      throw resolutionChangedError(e, "junction");
+      throw resolutionChangedError(filePath, "junction");
     }
-    let P = await openWithAbort(e, platform === "macos" ? u | constants.O_NONBLOCK : u, platform, false, r);
-    let j =
-      platform === "macos" && o != null
-        ? await P.stat({
-            bigint: true,
-          }).catch(() => {
-            return;
-          })
+    let probeHandle = await openWithAbort(
+      filePath,
+      platform === "macos" ? baseFlags | constants.O_NONBLOCK : baseFlags,
+      platform,
+      false,
+      signal,
+    );
+    let probeStats =
+      platform === "macos" && identity != null
+        ? await probeHandle
+            .stat({
+              bigint: true,
+            })
+            .catch(() => {
+              return;
+            })
         : undefined;
-    await P.close().catch(() => {});
-    if (j && w(j)) {
-      let S = await reopenThroughChain(e, n, p, r, o);
-      if (S) return S;
+    await probeHandle.close().catch(() => {});
+    if (probeStats && matchesIdentity(probeStats)) {
+      let reopened = await reopenThroughChain(filePath, approvedSpellings, noFollowFlags, signal, identity);
+      if (reopened) return reopened;
     }
-    throw resolutionChangedError(e, "unrenderable");
+    throw resolutionChangedError(filePath, "unrenderable");
   }
-  if (!_ && !a.has(y.resolvedPath)) return h("rendering");
-  let R = _ ? e : y.resolvedPath;
-  let L;
+  if (!allowAnonProcFd && !approvedSet.has(resolved.resolvedPath)) return throwChanged("rendering");
+  let pathToOpen = allowAnonProcFd ? filePath : resolved.resolvedPath;
+  let handle;
   try {
-    L = await openWithAbort(R, _ ? p & ~constants.O_NOFOLLOW : p, platform, !_, r);
+    handle = await openWithAbort(
+      pathToOpen,
+      allowAnonProcFd ? noFollowFlags & ~constants.O_NOFOLLOW : noFollowFlags,
+      platform,
+      !allowAnonProcFd,
+      signal,
+    );
   } catch (error) {
-    if (getErrnoCode(error) === "ELOOP") throw resolutionChangedError(e, "linkOnApproved");
+    if (getErrnoCode(error) === "ELOOP") throw resolutionChangedError(filePath, "linkOnApproved");
     throw error;
   }
   try {
-    let P = R;
+    let ioPath = pathToOpen;
     if (platform === "linux" || platform === "wsl") {
-      let openedPath = await readOpenedPath(L, e, s);
+      let openedPath = await readOpenedPath(handle, filePath, procMode);
       if (openedPath !== undefined) {
-        if (openedPath !== (_ ? y.resolvedPath : R)) throw resolutionChangedError(e, "openedElsewhere");
-        P = procFdPath(L.fd);
+        if (openedPath !== (allowAnonProcFd ? resolved.resolvedPath : pathToOpen))
+          throw resolutionChangedError(filePath, "openedElsewhere");
+        ioPath = procFdPath(handle.fd);
       }
     }
-    if (P === R) {
-      let S = walkPermissionCheckPaths(e);
-      if (S.unresolved) throw resolutionChangedError(e, "afterOpen");
-      for (let spelling of S.spellings)
-        if (!a.has(spelling)) {
+    if (ioPath === pathToOpen) {
+      let recheckWalk = walkPermissionCheckPaths(filePath);
+      if (recheckWalk.unresolved) throw resolutionChangedError(filePath, "afterOpen");
+      for (let spelling of recheckWalk.spellings)
+        if (!approvedSet.has(spelling)) {
           if (
             platform === "macos" &&
-            (await E(safeResolvePath(getFsImplementation(), e))) &&
-            (await L.stat({
-              bigint: true,
-            }).then(w, () => false))
+            (await approvedPathIntact(safeResolvePath(getFsImplementation(), filePath))) &&
+            (await handle
+              .stat({
+                bigint: true,
+              })
+              .then(matchesIdentity, () => false))
           )
             break;
-          throw resolutionChangedError(e, "afterOpen");
+          throw resolutionChangedError(filePath, "afterOpen");
         }
     }
-    let j = L;
+    let finalHandle = handle;
     return {
-      canonicalPath: R,
-      ioPath: P,
-      handle: j,
-      close: () => j.close(),
+      canonicalPath: pathToOpen,
+      ioPath,
+      handle: finalHandle,
+      close: () => finalHandle.close(),
     };
   } catch (error) {
-    await L.close().catch(() => {});
+    await handle.close().catch(() => {});
     throw error;
   }
 }
@@ -504,54 +551,56 @@ var MAX_PIN_ATTEMPTS = 3;
 /**
  * 权限检查后父目录符号链接解析发生变化的拒绝写入错误。
  */
-function parentResolutionChangedError(e) {
+function parentResolutionChangedError(filePath) {
   return new SymlinkWriteRefusedError(
-    `Refusing to write ${e}: its parent-directory symlink resolution changed after permission was checked.`,
+    `Refusing to write ${filePath}: its parent-directory symlink resolution changed after permission was checked.`,
   );
 }
 //@ chunk-t0gq9gyw.js:15922-16465 placement
 /**
  * 拒绝写入符号链接。
  */
-async function refuseSymlinkWrite(e, n, platform, o, s = false) {
-  let a = () =>
+async function refuseSymlinkWrite(filePath, linkedPath, platform, maxBytes, followLink = false) {
+  let symlinkRefusal = () =>
     new SymlinkWriteRefusedError(
-      `Refusing to write ${n}: it is a symbolic link. Write to the link's target path instead.`,
+      `Refusing to write ${linkedPath}: it is a symbolic link. Write to the link's target path instead.`,
     );
   if (platform === "windows")
     try {
-      if ((await lstat(e)).isSymbolicLink()) throw a();
+      if ((await lstat(filePath)).isSymbolicLink()) throw symlinkRefusal();
     } catch (error) {
       if (getErrnoCode(error) === "ENOENT") return null;
       throw error;
     }
-  let c =
+  let openFlags =
     platform === "windows"
       ? constants.O_RDONLY
       : constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK | (constants.O_NOCTTY ?? 0);
-  let u;
+  let handle;
   try {
-    u = s ? await open(e, c | READ_LIMITS) : await openNoFollow(e, c, platform);
+    handle = followLink
+      ? await open(filePath, openFlags | READ_LIMITS)
+      : await openNoFollow(filePath, openFlags, platform);
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "ENOENT") return null;
-    if (errnoCode === "ELOOP" || errnoCode === "EMLINK" || errnoCode === "EFTYPE") throw a();
+    if (errnoCode === "ELOOP" || errnoCode === "EMLINK" || errnoCode === "EFTYPE") throw symlinkRefusal();
     throw error;
   }
   try {
-    return await readFileHandleChecked(u, n, o);
+    return await readFileHandleChecked(handle, linkedPath, maxBytes);
   } finally {
-    await u.close();
+    await handle.close();
   }
 }
 //@ chunk-t0gq9gyw.js:16465-16733 placement
 /**
  * 固定写入目标（目录被删时重试）。
  */
-async function pinWriteTarget(e, n, r) {
+async function pinWriteTarget(filePath, approvedSpellings, options) {
   for (let j = 1; ; j++)
     try {
-      return await pinWriteTargetOnce(e, n, r);
+      return await pinWriteTargetOnce(filePath, approvedSpellings, options);
     } catch (error) {
       if (!(error instanceof HeldDirVanishedError)) throw error;
       logForDebugging(
@@ -560,32 +609,35 @@ async function pinWriteTarget(e, n, r) {
           level: "warn",
         },
       );
-      if (j >= MAX_PIN_ATTEMPTS) throw error.reported ?? parentResolutionChangedError(e);
+      if (j >= MAX_PIN_ATTEMPTS) throw error.reported ?? parentResolutionChangedError(filePath);
     }
 }
 //@ chunk-t0gq9gyw.js:16733-20898 placement
 /**
  * 固定写入目标一次（检查拼写与目录身份）。
  */
-async function pinWriteTargetOnce(e, n, r) {
-  let o = new Set(n);
-  let s = basename(e);
+async function pinWriteTargetOnce(filePath, approvedSpellings, options) {
+  let approvedSet = new Set(approvedSpellings);
+  let leafName = basename(filePath);
   let platform = getPlatform();
-  let c = () => {
-    let S = walkPermissionCheckPaths(r?.leaf === "replace" ? dirname(e) : e);
-    let A = r?.leaf === "replace" ? S.spellings.map((spelling) => join(spelling, s)) : S.spellings;
-    return !S.unresolved && A.every((x) => o.has(x));
+  let stillApproved = () => {
+    let walkResult = walkPermissionCheckPaths(options?.leaf === "replace" ? dirname(filePath) : filePath);
+    let leafSpellings =
+      options?.leaf === "replace"
+        ? walkResult.spellings.map((spelling) => join(spelling, leafName))
+        : walkResult.spellings;
+    return !walkResult.unresolved && leafSpellings.every((spelling) => approvedSet.has(spelling));
   };
-  let u = () => {
-    if (!c()) throw parentResolutionChangedError(e);
+  let assertStillApproved = () => {
+    if (!stillApproved()) throw parentResolutionChangedError(filePath);
   };
-  let p = c();
-  if (!p && !(platform === "macos" && !isUncOrDevicePath_2(e, platform)))
-    throw parentResolutionChangedError(e);
-  let y = async (S, A, x) => {
-    if (!(await isOnMacosVolume(S, x, platform))) {
+  let initiallyApproved = stillApproved();
+  if (!initiallyApproved && !(platform === "macos" && !isUncOrDevicePath_2(filePath, platform)))
+    throw parentResolutionChangedError(filePath);
+  let treatAsAlias = async (spelledPath, resolvedPath, dirHandle) => {
+    if (!(await isOnMacosVolume(spelledPath, dirHandle, platform))) {
       logForDebugging(
-        `pinWriteTarget: ${S} resolves to ${A}: not the same directory by a link-free route; refused`,
+        `pinWriteTarget: ${spelledPath} resolves to ${resolvedPath}: not the same directory by a link-free route; refused`,
         {
           level: "warn",
         },
@@ -593,274 +645,302 @@ async function pinWriteTargetOnce(e, n, r) {
       return false;
     }
     logForDebugging(
-      `pinWriteTarget: ${S} is rendered ${A} by realpath; same directory (device and inode), treated as an alias`,
+      `pinWriteTarget: ${spelledPath} is rendered ${resolvedPath} by realpath; same directory (device and inode), treated as an alias`,
     );
     return true;
   };
-  let w = (resolvedPath) => o.has(join(resolvedPath, s));
-  let E = (S) => {
-    let A = safeResolvePath(getFsImplementation(), S);
-    if (!A.isCanonical) throw parentResolutionChangedError(e);
-    return A.resolvedPath;
+  let isLeafApproved = (resolvedPath) => approvedSet.has(join(resolvedPath, leafName));
+  let resolveCanonical = (path) => {
+    let resolved = safeResolvePath(getFsImplementation(), path);
+    if (!resolved.isCanonical) throw parentResolutionChangedError(filePath);
+    return resolved.resolvedPath;
   };
-  let h = (S) => {
-    let A = safeResolvePath(getFsImplementation(), S);
-    return A.isCanonical ? A.resolvedPath : S;
+  let resolveOrKeep = (path) => {
+    let resolved = safeResolvePath(getFsImplementation(), path);
+    return resolved.isCanonical ? resolved.resolvedPath : path;
   };
-  if (isUncOrDevicePath_2(e, platform) && platform !== "linux" && platform !== "wsl") {
-    let S = async (x) => {
+  if (isUncOrDevicePath_2(filePath, platform) && platform !== "linux" && platform !== "wsl") {
+    let checkLinkFreeAncestors = async (startPath) => {
       if (platform !== "macos") return;
-      for (let T = x; ; T = dirname(T))
+      for (let currentPath = startPath; ; currentPath = dirname(currentPath))
         try {
-          await (await openNoFollow(T, constants.O_RDONLY | constants.O_DIRECTORY, platform)).close();
+          await (
+            await openNoFollow(currentPath, constants.O_RDONLY | constants.O_DIRECTORY, platform)
+          ).close();
           return;
         } catch (error) {
           let errnoCode = getErrnoCode(error);
-          if (errnoCode === "ELOOP") throw parentResolutionChangedError(e);
-          if (errnoCode !== "ENOENT" || dirname(T) === T) throw error;
+          if (errnoCode === "ELOOP") throw parentResolutionChangedError(filePath);
+          if (errnoCode !== "ENOENT" || dirname(currentPath) === currentPath) throw error;
         }
     };
-    await S(dirname(e));
-    if (r?.createParents) {
-      await getFsImplementation().mkdir(dirname(e));
-      await S(dirname(e));
+    await checkLinkFreeAncestors(dirname(filePath));
+    if (options?.createParents) {
+      await getFsImplementation().mkdir(dirname(filePath));
+      await checkLinkFreeAncestors(dirname(filePath));
     }
-    let A = async () => {
-      u();
+    let recheckParent = async () => {
+      assertStillApproved();
       if (platform !== "macos") return;
       try {
-        await (await openNoFollow(dirname(e), constants.O_RDONLY | constants.O_DIRECTORY, platform)).close();
+        await (
+          await openNoFollow(dirname(filePath), constants.O_RDONLY | constants.O_DIRECTORY, platform)
+        ).close();
       } catch (error) {
-        throw getErrnoCode(error) === "ELOOP" ? parentResolutionChangedError(e) : error;
+        throw getErrnoCode(error) === "ELOOP" ? parentResolutionChangedError(filePath) : error;
       }
     };
     return {
-      ioPath: e,
-      canonicalPath: e,
-      readExisting: async (x) => {
-        await A();
-        let T = await refuseSymlinkWrite(e, e, platform, x, false);
-        await A();
-        return T;
+      ioPath: filePath,
+      canonicalPath: filePath,
+      readExisting: async (maxBytes) => {
+        await recheckParent();
+        let handle = await refuseSymlinkWrite(filePath, filePath, platform, maxBytes, false);
+        await recheckParent();
+        return handle;
       },
-      recheckBeforeWrite: A,
+      recheckBeforeWrite: recheckParent,
       close: async () => {},
     };
   }
-  let b = async () => {
-    if (r?.createParents) {
-      await getFsImplementation().mkdir(dirname(e));
-      u();
+  let pinByPath = async () => {
+    if (options?.createParents) {
+      await getFsImplementation().mkdir(dirname(filePath));
+      assertStillApproved();
     }
-    let S = safeResolvePath(getFsImplementation(), dirname(e));
+    let parentResolved = safeResolvePath(getFsImplementation(), dirname(filePath));
     if (
-      !S.isCanonical &&
-      !(S.isSymlink && w(S.resolvedPath) && isUncOrDevicePath_2(join(S.resolvedPath, s), platform))
+      !parentResolved.isCanonical &&
+      !(
+        parentResolved.isSymlink &&
+        isLeafApproved(parentResolved.resolvedPath) &&
+        isUncOrDevicePath_2(join(parentResolved.resolvedPath, leafName), platform)
+      )
     ) {
-      if (!S.isSymlink) await lstat(dirname(e));
-      throw parentResolutionChangedError(e);
+      if (!parentResolved.isSymlink) await lstat(dirname(filePath));
+      throw parentResolutionChangedError(filePath);
     }
-    let A = !S.isCanonical;
-    let resolvedPath = S.resolvedPath;
-    if (!w(resolvedPath)) throw parentResolutionChangedError(e);
+    let parentWasSymlink = !parentResolved.isCanonical;
+    let resolvedPath = parentResolved.resolvedPath;
+    if (!isLeafApproved(resolvedPath)) throw parentResolutionChangedError(filePath);
     return {
-      ioPath: e,
-      canonicalPath: join(resolvedPath, s),
-      readExisting: async (T) => {
-        u();
-        let G = await refuseSymlinkWrite(e, e, platform, T, A);
-        u();
-        if (A && safeResolvePath(getFsImplementation(), dirname(e)).resolvedPath !== resolvedPath)
-          throw parentResolutionChangedError(e);
-        return G;
+      ioPath: filePath,
+      canonicalPath: join(resolvedPath, leafName),
+      readExisting: async (maxBytes) => {
+        assertStillApproved();
+        let handle = await refuseSymlinkWrite(filePath, filePath, platform, maxBytes, parentWasSymlink);
+        assertStillApproved();
+        if (
+          parentWasSymlink &&
+          safeResolvePath(getFsImplementation(), dirname(filePath)).resolvedPath !== resolvedPath
+        )
+          throw parentResolutionChangedError(filePath);
+        return handle;
       },
-      recheckBeforeWrite: u,
+      recheckBeforeWrite: assertStillApproved,
       close: async () => {},
     };
   };
-  if (platform === "windows") return b();
-  let _ =
+  if (platform === "windows") return pinByPath();
+  let dirOpenFlags =
     platform === "linux" || platform === "wsl"
       ? O_NOFOLLOW_ANY | constants.O_DIRECTORY
       : constants.O_RDONLY | constants.O_DIRECTORY;
-  let R = dirname(e);
-  let L = [];
-  let P;
-  let j = "";
+  let currentParent = dirname(filePath);
+  let missingParents = [];
+  let parentHandle;
+  let parentOpenPath = "";
   for (;;)
     try {
-      j = platform === "macos" ? h(R) : R;
-      P = await openNoFollow(j, _, platform);
+      parentOpenPath = platform === "macos" ? resolveOrKeep(currentParent) : currentParent;
+      parentHandle = await openNoFollow(parentOpenPath, dirOpenFlags, platform);
       break;
     } catch (error) {
       let errnoCode = getErrnoCode(error);
-      let x = dirname(R);
-      let T =
+      let parentOfParent = dirname(currentParent);
+      let isMacAliasLoop =
         errnoCode === "ELOOP" &&
         platform === "macos" &&
-        j === R &&
-        !safeResolvePath(getFsImplementation(), R).isCanonical;
-      if (errnoCode === "ELOOP" && !T) {
-        let G = safeResolvePath(getFsImplementation(), dirname(e));
+        parentOpenPath === currentParent &&
+        !safeResolvePath(getFsImplementation(), currentParent).isCanonical;
+      if (errnoCode === "ELOOP" && !isMacAliasLoop) {
+        let leafParentResolved = safeResolvePath(getFsImplementation(), dirname(filePath));
         if (
-          p &&
-          !G.isCanonical &&
-          G.isSymlink &&
-          w(G.resolvedPath) &&
-          isUncOrDevicePath_2(join(G.resolvedPath, s), platform)
+          initiallyApproved &&
+          !leafParentResolved.isCanonical &&
+          leafParentResolved.isSymlink &&
+          isLeafApproved(leafParentResolved.resolvedPath) &&
+          isUncOrDevicePath_2(join(leafParentResolved.resolvedPath, leafName), platform)
         )
-          return b();
-        throw parentResolutionChangedError(e);
+          return pinByPath();
+        throw parentResolutionChangedError(filePath);
       }
-      if (T && !r?.createParents) {
-        let G = [basename(R)];
-        for (let ee = x; ; ee = dirname(ee)) {
-          let D = safeResolvePath(getFsImplementation(), ee);
-          if (D.isCanonical) {
-            await lstat(join(D.resolvedPath, G[0]));
+      if (isMacAliasLoop && !options?.createParents) {
+        let missingNames = [basename(currentParent)];
+        for (let ancestorPath = parentOfParent; ; ancestorPath = dirname(ancestorPath)) {
+          let ancestorResolved = safeResolvePath(getFsImplementation(), ancestorPath);
+          if (ancestorResolved.isCanonical) {
+            await lstat(join(ancestorResolved.resolvedPath, missingNames[0]));
             break;
           }
-          if (dirname(ee) === ee) break;
-          G.unshift(basename(ee));
+          if (dirname(ancestorPath) === ancestorPath) break;
+          missingNames.unshift(basename(ancestorPath));
         }
-        throw parentResolutionChangedError(e);
+        throw parentResolutionChangedError(filePath);
       }
-      if ((errnoCode === "ENOENT" || T) && r?.createParents && x !== R) {
-        L.unshift(basename(R));
-        R = x;
+      if (
+        (errnoCode === "ENOENT" || isMacAliasLoop) &&
+        options?.createParents &&
+        parentOfParent !== currentParent
+      ) {
+        missingParents.unshift(basename(currentParent));
+        currentParent = parentOfParent;
         continue;
       }
       throw error;
     }
   try {
-    let S = false;
-    let A = async (D, dir) => {
-      let Q =
+    let viaProcFd = false;
+    let resolveHeldDir = async (handle, spelledPath) => {
+      let dirPath =
         platform === "linux" || platform === "wsl"
-          ? await readFdTargetPath(D.fd).catch(() => {
+          ? await readFdTargetPath(handle.fd).catch(() => {
               return;
             })
           : undefined;
-      if (Q === undefined) return E(dir);
-      S = true;
-      if (Q.endsWith(" (deleted)")) throw new HeldDirVanishedError(dir);
-      return Q;
+      if (dirPath === undefined) return resolveCanonical(spelledPath);
+      viaProcFd = true;
+      if (dirPath.endsWith(" (deleted)")) throw new HeldDirVanishedError(spelledPath);
+      return dirPath;
     };
-    let dir = await A(P, R);
-    if (!S && dir !== R && !w(join(dir, ...L)) && w(join(R, ...L)) && (await y(R, dir, P))) dir = R;
-    let T = join(dir, ...L);
-    if (!w(T)) {
+    let heldDir = await resolveHeldDir(parentHandle, currentParent);
+    if (
+      !viaProcFd &&
+      heldDir !== currentParent &&
+      !isLeafApproved(join(heldDir, ...missingParents)) &&
+      isLeafApproved(join(currentParent, ...missingParents)) &&
+      (await treatAsAlias(currentParent, heldDir, parentHandle))
+    )
+      heldDir = currentParent;
+    let heldPath = join(heldDir, ...missingParents);
+    if (!isLeafApproved(heldPath)) {
       if (
-        L.length === 0 &&
-        (await lstat(join(S ? `/proc/self/fd/${P.fd}` : dir, s)).then(
-          (J) => J.isSymbolicLink(),
+        missingParents.length === 0 &&
+        (await lstat(join(viaProcFd ? `/proc/self/fd/${parentHandle.fd}` : heldDir, leafName)).then(
+          (leafStats) => leafStats.isSymbolicLink(),
           () => false,
         ))
       )
         throw new SymlinkWriteRefusedError(
-          `Refusing to write ${e}: it is a symbolic link. Write to the link's target path instead.`,
+          `Refusing to write ${filePath}: it is a symbolic link. Write to the link's target path instead.`,
         );
-      throw parentResolutionChangedError(e);
+      throw parentResolutionChangedError(filePath);
     }
-    for (let D of L) {
-      let J = S ? `/proc/self/fd/${P.fd}` : dir;
-      let Q = null;
+    for (let missingName of missingParents) {
+      let basePath = viaProcFd ? `/proc/self/fd/${parentHandle.fd}` : heldDir;
+      let mkdirError = null;
       try {
-        await mkdir(join(J, D));
+        await mkdir(join(basePath, missingName));
       } catch (error) {
-        Q = error;
-        if (getErrnoCode(error) === "ENOENT") throw new HeldDirVanishedError(dir);
+        mkdirError = error;
+        if (getErrnoCode(error) === "ENOENT") throw new HeldDirVanishedError(heldDir);
         if (getErrnoCode(error) !== "EEXIST")
           rethrowWithPath(
             error,
             {
-              ioPath: join(J, D),
-              canonicalPath: join(dir, D),
+              ioPath: join(basePath, missingName),
+              canonicalPath: join(heldDir, missingName),
             },
-            join(dir, D),
+            join(heldDir, missingName),
           );
       }
-      let re;
+      let childHandle;
       try {
-        re = await openNoFollow(join(J, D), _ | constants.O_NOFOLLOW, platform);
+        childHandle = await openNoFollow(
+          join(basePath, missingName),
+          dirOpenFlags | constants.O_NOFOLLOW,
+          platform,
+        );
       } catch (error) {
         if (getErrnoCode(error) === "ELOOP" || getErrnoCode(error) === "ENOTDIR")
-          throw parentResolutionChangedError(e);
+          throw parentResolutionChangedError(filePath);
         if (getErrnoCode(error) === "ENOENT") {
           let reported;
-          if (Q !== null)
+          if (mkdirError !== null)
             try {
               rethrowWithPath(
-                Q,
+                mkdirError,
                 {
-                  ioPath: join(J, D),
-                  canonicalPath: join(dir, D),
+                  ioPath: join(basePath, missingName),
+                  canonicalPath: join(heldDir, missingName),
                 },
-                join(dir, D),
+                join(heldDir, missingName),
               );
             } catch (error) {
               reported = error;
             }
-          throw new HeldDirVanishedError(join(dir, D), reported);
+          throw new HeldDirVanishedError(join(heldDir, missingName), reported);
         }
         rethrowWithPath(
-          Q !== null ? Q : error,
+          mkdirError !== null ? mkdirError : error,
           {
-            ioPath: join(J, D),
-            canonicalPath: join(dir, D),
+            ioPath: join(basePath, missingName),
+            canonicalPath: join(heldDir, missingName),
           },
-          join(dir, D),
+          join(heldDir, missingName),
         );
       }
-      await P.close();
-      P = re;
-      let ue = join(dir, D);
-      dir = await A(P, ue);
-      if (dir !== ue) {
-        if (S || !(await y(ue, dir, P))) throw parentResolutionChangedError(e);
-        dir = ue;
+      await parentHandle.close();
+      parentHandle = childHandle;
+      let childPath = join(heldDir, missingName);
+      heldDir = await resolveHeldDir(parentHandle, childPath);
+      if (heldDir !== childPath) {
+        if (viaProcFd || !(await treatAsAlias(childPath, heldDir, parentHandle)))
+          throw parentResolutionChangedError(filePath);
+        heldDir = childPath;
       }
     }
-    if (!S) {
-      let D = P;
-      let J = async () => {
-        if (c()) return;
-        if (!(await isOnMacosVolume(T, D, platform))) throw parentResolutionChangedError(e);
+    if (!viaProcFd) {
+      let heldHandle = parentHandle;
+      let recheckBeforeWrite = async () => {
+        if (stillApproved()) return;
+        if (!(await isOnMacosVolume(heldPath, heldHandle, platform)))
+          throw parentResolutionChangedError(filePath);
         if (
-          r?.leaf !== "replace" &&
-          (await lstat(join(T, s)).then(
-            (re) => re.isSymbolicLink(),
+          options?.leaf !== "replace" &&
+          (await lstat(join(heldPath, leafName)).then(
+            (stats) => stats.isSymbolicLink(),
             (error) => getErrnoCode(error) !== "ENOENT",
           ))
         )
-          throw parentResolutionChangedError(e);
+          throw parentResolutionChangedError(filePath);
       };
-      await J();
-      let Q = join(T, s);
+      await recheckBeforeWrite();
+      let leafPath = join(heldPath, leafName);
       return {
-        ioPath: Q,
-        canonicalPath: Q,
-        readExisting: async (re) => {
-          await J();
-          let ue = await refuseSymlinkWrite(Q, e, platform, re);
-          await J();
-          return ue;
+        ioPath: leafPath,
+        canonicalPath: leafPath,
+        readExisting: async (maxBytes) => {
+          await recheckBeforeWrite();
+          let handle = await refuseSymlinkWrite(leafPath, filePath, platform, maxBytes);
+          await recheckBeforeWrite();
+          return handle;
         },
-        recheckBeforeWrite: J,
-        close: () => D.close(),
+        recheckBeforeWrite,
+        close: () => heldHandle.close(),
       };
     }
-    let G = P;
-    let ee = `/proc/self/fd/${G.fd}/${s}`;
+    let procHandle = parentHandle;
+    let procLeafPath = `/proc/self/fd/${procHandle.fd}/${leafName}`;
     return {
-      ioPath: ee,
-      canonicalPath: join(T, s),
-      readExisting: (D) => refuseSymlinkWrite(ee, e, platform, D),
+      ioPath: procLeafPath,
+      canonicalPath: join(heldPath, leafName),
+      readExisting: (maxBytes) => refuseSymlinkWrite(procLeafPath, filePath, platform, maxBytes),
       recheckBeforeWrite: () => {},
-      close: () => G.close(),
+      close: () => procHandle.close(),
     };
   } catch (error) {
-    await P.close().catch(() => {});
+    await parentHandle.close().catch(() => {});
     throw error;
   }
 }
@@ -868,10 +948,11 @@ async function pinWriteTargetOnce(e, n, r) {
 /**
  * 把错误信息中的内部路径替换为显示路径后重抛。
  */
-function rethrowWithPath(error, n, r) {
+function rethrowWithPath(error, error_2, canonicalPath) {
   if (error instanceof Error) {
     let message = error.message;
-    for (let s of [n.ioPath, n.canonicalPath]) if (s !== r) message = message.split(s).join(r);
+    for (let fromPath of [error_2.ioPath, error_2.canonicalPath])
+      if (fromPath !== canonicalPath) message = message.split(fromPath).join(canonicalPath);
     if (message !== error.message) error.message = message;
   }
   throw error;

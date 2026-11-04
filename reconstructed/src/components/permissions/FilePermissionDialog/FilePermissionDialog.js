@@ -9,8 +9,14 @@
  * attribution: placement 5, fingerprint 1
  */
 import { resolve } from "path";
-import { init_react_production, y, R, Q, ce } from "../../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useMemo,
+  useCallback,
+} from "../../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { useIsScreenReaderEnabled } from "../../../ink/components/ErrorBoundary.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import { measureElement } from "../../../ink/hooks/useTerminalHooks.js";
@@ -63,97 +69,101 @@ import { ASK_FIRST_REASON_TEXTS } from "../../../utils/permissions/askFirstReaso
 import { ModelSelector } from "../../agents/ModelSelector.js";
 import { NO_COMMITTED_ROW } from "../../CustomSelect/select.js";
 import { Byline } from "../../design-system/Byline.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1377043-1377047 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1377043", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1377047-1378002 placement
 /**
  * 文件权限对话框的 diff 区测量与裁剪：测量高度、生成占位行、计算可见行与展开快捷键，返回 fitted 状态。
  */
-function useFittedDiffBody(content, x) {
-  let ke = w(18);
+function useFittedDiffBody(content, isActive) {
+  let $ = useMemoCache(18);
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let [L, ee] = y(false);
-  let Re;
-  if (ke[0] === MEMO_CACHE_SENTINEL) {
-    Re = () => ee(true);
-    ke[0] = Re;
-  } else Re = ke[0];
-  let noteDrawn = Re;
-  let He = R(null);
-  let We;
-  if (ke[1] === MEMO_CACHE_SENTINEL) {
-    We = () => (He.current === null ? 0 : measureElement(He.current).height);
-    ke[1] = We;
-  } else We = ke[1];
-  let measured = useMeasured(We);
-  let Xe;
-  if (ke[2] !== content || ke[3] !== x) {
-    Xe = x ? jsonStringify(content) : "";
-    ke[2] = content;
-    ke[3] = x;
-    ke[4] = Xe;
-  } else Xe = ke[4];
-  let contentKey = Xe;
-  let kt;
-  if (ke[5] !== measured) {
-    kt = `
+  let [isDrawn, setIsDrawn] = useState(false);
+  let noteDrawn;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    noteDrawn = () => setIsDrawn(true);
+    $[0] = noteDrawn;
+  } else noteDrawn = $[0];
+  let noteDrawn_2 = noteDrawn;
+  let diffBoxRef = useRef(null);
+  let measureHeight;
+  if ($[1] === MEMO_CACHE_SENTINEL) {
+    measureHeight = () => (diffBoxRef.current === null ? 0 : measureElement(diffBoxRef.current).height);
+    $[1] = measureHeight;
+  } else measureHeight = $[1];
+  let measured = useMeasured(measureHeight);
+  let contentKey;
+  if ($[2] !== content || $[3] !== isActive) {
+    contentKey = isActive ? jsonStringify(content) : "";
+    $[2] = content;
+    $[3] = isActive;
+    $[4] = contentKey;
+  } else contentKey = $[4];
+  let contentKey_2 = contentKey;
+  let paddedBody;
+  if ($[5] !== measured) {
+    paddedBody = `
 `.repeat(Math.max(0, measured - 1));
-    ke[5] = measured;
-    ke[6] = kt;
-  } else kt = ke[6];
+    $[5] = measured;
+    $[6] = paddedBody;
+  } else paddedBody = $[6];
   const isCut = !isScreenReaderEnabled;
-  const lateBody = L ? "drawn" : "pending";
-  let Ot;
-  if (ke[7] !== contentKey || ke[8] !== x || ke[9] !== isCut || ke[10] !== lateBody) {
-    Ot = {
-      isActive: x,
+  const lateBody = isDrawn ? "drawn" : "pending";
+  let bodyOptions;
+  if ($[7] !== contentKey_2 || $[8] !== isActive || $[9] !== isCut || $[10] !== lateBody) {
+    bodyOptions = {
+      isActive,
       isCut,
-      contentKey,
+      contentKey: contentKey_2,
       lateBody,
     };
-    ke[7] = contentKey;
-    ke[8] = x;
-    ke[9] = isCut;
-    ke[10] = lateBody;
-    ke[11] = Ot;
-  } else Ot = ke[11];
-  let Et = FittedOfferBody(kt, Ot);
-  let run = Et.showNextRows;
-  let Lt;
-  if (ke[12] !== run) {
-    Lt = [
+    $[7] = contentKey_2;
+    $[8] = isActive;
+    $[9] = isCut;
+    $[10] = lateBody;
+    $[11] = bodyOptions;
+  } else bodyOptions = $[11];
+  let body = FittedOfferBody(paddedBody, bodyOptions);
+  let run = body.showNextRows;
+  let moreBindings;
+  if ($[12] !== run) {
+    moreBindings = [
       {
         action: "app:toggleTranscript",
         run,
       },
     ];
-    ke[12] = run;
-    ke[13] = Lt;
-  } else Lt = ke[13];
-  let moreBindings = Lt;
-  const rows = x
+    $[12] = run;
+    $[13] = moreBindings;
+  } else moreBindings = $[13];
+  let moreBindings_2 = moreBindings;
+  const rows = isActive
     ? countCharInString(
-        Et.text,
+        body.text,
         `
 `,
       ) + 1
     : undefined;
-  let io;
-  if (ke[14] !== Et || ke[15] !== moreBindings || ke[16] !== rows) {
-    io = {
-      body: Et,
+  let fitted;
+  if ($[14] !== body || $[15] !== moreBindings_2 || $[16] !== rows) {
+    fitted = {
+      body,
       rows,
-      diffBox: He,
-      moreBindings,
-      noteDrawn,
+      diffBox: diffBoxRef,
+      moreBindings: moreBindings_2,
+      noteDrawn: noteDrawn_2,
     };
-    ke[14] = Et;
-    ke[15] = moreBindings;
-    ke[16] = rows;
-    ke[17] = io;
-  } else io = ke[17];
-  return io;
+    $[14] = body;
+    $[15] = moreBindings_2;
+    $[16] = rows;
+    $[17] = fitted;
+  } else fitted = $[17];
+  return fitted;
 }
 //@ chunk-18hwfzwa.js:1378002-1378346 placement
 /**
@@ -194,19 +204,19 @@ function emptyQuestionTitle() {
 /**
  * 渲染文件权限对话框的问题文本："Do you want to <动作> <文件名>?"（文件名加粗）或纯文本。
  */
-function FileDialogQuestion(h) {
-  if (h.kind === "plain")
+function FileDialogQuestion(question) {
+  if (question.kind === "plain")
     return jsxProd_default(Text, {
-      children: h.text,
+      children: question.text,
     });
   return jsxProd_default_2(Text, {
     children: [
       "Do you want to ",
-      h.verbPhrase,
+      question.verbPhrase,
       " ",
       jsxProd_default(Text, {
         bold: true,
-        children: h.fileName,
+        children: question.fileName,
       }),
       "?",
     ],
@@ -217,47 +227,47 @@ function FileDialogQuestion(h) {
  * 文件权限对话框：根据工具类型选择 file-edit-diff/file-write-diff/notebook-edit-diff 预览（或 IDE 中显示 diff），选项由 getFilePermissionOptions 生成，处理器表 PERMISSION_HANDLERS。
  */
 function FilePermissionDialog({ payload, answer }) {
-  let toolPermissionContext = useAppState((Kn) => Kn.toolPermissionContext);
+  let toolPermissionContext = useAppState((appState) => appState.toolPermissionContext);
   let [theme] = useTheme();
-  let [ee] = y(currentToolPermissionContext);
-  let languageName = Q(() => {
+  let [isFitted] = useState(currentToolPermissionContext);
+  let languageName = useMemo(() => {
     if (payload.content.kind !== "tool-use-line" || typeof payload.renderedToolUseMessage !== "string")
       return null;
-    let Kn = serializeApprovalPayload(payload.renderedToolUseMessage);
-    return Kn.kind === "withheld" ? String(Kn.marker) : null;
+    let serialized = serializeApprovalPayload(payload.renderedToolUseMessage);
+    return serialized.kind === "withheld" ? String(serialized.marker) : null;
   }, [payload.content.kind, payload.renderedToolUseMessage]);
-  let unaryEvent = Q(
+  let unaryEvent = useMemo(
     () =>
       payload.content.kind === "tool-use-line" &&
       payload.renderedToolUseMessage == null &&
-      Object.values(payload.input).some((Kn) => {
-        if (typeof Kn !== "string") return false;
-        let Wn = stripInvisibleChars_3(Kn);
-        return markBrokenSequences(Wn) !== Wn;
+      Object.values(payload.input).some((value) => {
+        if (typeof value !== "string") return false;
+        let sanitized = stripInvisibleChars_3(value);
+        return markBrokenSequences(sanitized) !== sanitized;
       }),
     [payload.content.kind, payload.renderedToolUseMessage, payload.input],
   );
-  let paddingX = ee ? 0 : 1;
-  let symlinkTarget = Q(
+  let paddingX = isFitted ? 0 : 1;
+  let symlinkTarget = useMemo(
     () => NotebookEditPermissionRequest(payload, theme, languageName, paddingX),
     [payload, theme, languageName, paddingX],
   );
   let fittedDiffBody = useFittedDiffBody(
     payload.content,
-    ee &&
+    isFitted &&
       !payload.showingDiffInIDE &&
       (payload.content.kind === "file-edit-diff" ||
         payload.content.kind === "file-write-diff" ||
         payload.content.kind === "notebook-edit-diff"),
   );
-  let ze = !fittedDiffBody.body.offersStanding;
+  let standingVetoed = !fittedDiffBody.body.offersStanding;
   let isStandingHeld = fittedDiffBody.body.isStandingHeld;
-  let toolName = Q(() => sanitizeToolNameForAnalytics(payload.toolName), [payload.toolName]);
-  let { requestedMachine, runsOnMachine } = Q(
+  let toolName = useMemo(() => sanitizeToolNameForAnalytics(payload.toolName), [payload.toolName]);
+  let { requestedMachine, runsOnMachine } = useMemo(
     () => getRequestedMachineForPrompt(payload.input),
     [payload.input],
   );
-  let It = payload.permissionResult.inPlaceOfClassifier === true;
+  let hideIndexes = payload.permissionResult.inPlaceOfClassifier === true;
   let {
     acceptFeedback,
     rejectFeedback,
@@ -274,7 +284,7 @@ function FilePermissionDialog({ payload, answer }) {
     feedbackTypeOf: ShowInIDEPrompt,
     toolName,
     isMcp: payload.isMcp,
-    initialFocusedType: It ? "reject" : "accept",
+    initialFocusedType: hideIndexes ? "reject" : "accept",
   });
   let {
     acceptFeedback: acceptFeedback_2,
@@ -285,28 +295,28 @@ function FilePermissionDialog({ payload, answer }) {
     logSubmitted: logSubmitted_2,
     hintNode: hintNode_2,
   } = useShellPermissionFeedback({
-    feedbackTypeOf: (Kn) => (Kn === YES_ASK_AGAIN ? "accept" : undefined),
+    feedbackTypeOf: (option) => (option === YES_ASK_AGAIN ? "accept" : undefined),
     toolName,
     isMcp: payload.isMcp,
   });
   let expandedPath = KillAgentsConfirm(payload.requestSource);
   let decisionReason =
     payload.permissionResult.behavior === "ask" ? payload.permissionResult.decisionReason : undefined;
-  let No = decisionReason?.type === "safetyCheck" && !decisionReason.classifierApprovable;
-  let vo =
+  let isSafetyCheck = decisionReason?.type === "safetyCheck" && !decisionReason.classifierApprovable;
+  let noStanding =
     payload.isAskCappedByOrg ||
-    It ||
+    hideIndexes ||
     payload.permissionResult.oneTimeAnswersOnly === true ||
     isRemoteOrPluginAgent(payload.requestSource) ||
     payload.contentWithheld === true ||
     languageName !== null ||
     unaryEvent;
-  let Yo = No || vo;
-  let kn = Yo || requestedMachine !== undefined;
-  let Fn = No && !vo && requestedMachine === undefined;
-  let bn = !Yo && runsOnMachine !== undefined;
-  let Go = payload.permissionResult.offersBlockOutsideReads === true;
-  let hn = Q(
+  let noStanding_2 = isSafetyCheck || noStanding;
+  let veto = noStanding_2 || requestedMachine !== undefined;
+  let directoryGrantOnly = isSafetyCheck && !noStanding && requestedMachine === undefined;
+  let showUnavailableReason = !noStanding_2 && runsOnMachine !== undefined;
+  let offersBlockOutsideReads = payload.permissionResult.offersBlockOutsideReads === true;
+  let optionEntries = useMemo(
     () =>
       getFilePermissionOptions({
         filePath: payload.filePath,
@@ -316,19 +326,19 @@ function FilePermissionDialog({ payload, answer }) {
         onAcceptFeedbackChange: setAcceptFeedback,
         yesInputMode: acceptInputMode,
         noInputMode: rejectInputMode,
-        standingRowVetoed: kn || ze,
-        directoryGrantOnly: Fn && !ze,
-        offerBlockOutsideReads: Go,
+        standingRowVetoed: veto || standingVetoed,
+        directoryGrantOnly: directoryGrantOnly && !standingVetoed,
+        offerBlockOutsideReads: offersBlockOutsideReads,
         onAllowOnceFeedbackChange: setAcceptFeedback_2,
         allowOnceInputMode: acceptInputMode_2,
       }),
     [
       payload.filePath,
       payload.operationType,
-      kn,
-      ze,
-      Fn,
-      Go,
+      veto,
+      standingVetoed,
+      directoryGrantOnly,
+      offersBlockOutsideReads,
       toolPermissionContext,
       acceptInputMode,
       rejectInputMode,
@@ -336,18 +346,18 @@ function FilePermissionDialog({ payload, answer }) {
       acceptInputMode_2,
     ],
   );
-  let options = Q(() => {
-    let mapped = hn.map((Wn) =>
-      isStandingHeld && Wn.option.type === "accept-session"
+  let options = useMemo(() => {
+    let suggestions = optionEntries.map((entry) =>
+      isStandingHeld && entry.option.type === "accept-session"
         ? {
-            ...Wn,
+            ...entry,
             disabled: true,
           }
-        : Wn,
+        : entry,
     );
-    return It ? preferValueFirst(mapped, "no") : mapped;
-  }, [hn, isStandingHeld, It]);
-  let ideDiffConfig = ce(
+    return hideIndexes ? preferValueFirst(suggestions, "no") : suggestions;
+  }, [optionEntries, isStandingHeld, hideIndexes]);
+  let ideDiffConfig = useCallback(
     (option, input) => {
       if (answer(PERMISSION_HANDLERS(option, payload, input)) === false) return false;
       if (option.type === "reject") logSubmitted("reject", input);
@@ -357,7 +367,7 @@ function FilePermissionDialog({ payload, answer }) {
     },
     [answer, payload, logSubmitted, logSubmitted_2],
   );
-  let Sn = ce(() => {
+  let onCycleMode = useCallback(() => {
     if (acceptInputMode) {
       handleInputModeToggle("yes");
       return;
@@ -370,7 +380,7 @@ function FilePermissionDialog({ payload, answer }) {
       handleInputModeToggle_2(YES_ASK_AGAIN);
       return;
     }
-    let found = hn.find((Wn) => Wn.option.type === "accept-session");
+    let found = optionEntries.find((entry) => entry.option.type === "accept-session");
     if (found && !isStandingHeld) ideDiffConfig(found.option);
   }, [
     acceptInputMode,
@@ -378,19 +388,19 @@ function FilePermissionDialog({ payload, answer }) {
     handleInputModeToggle,
     acceptInputMode_2,
     handleInputModeToggle_2,
-    hn,
+    optionEntries,
     isStandingHeld,
     ideDiffConfig,
   ]);
   MessageActionsKeybindings(
     {
-      "confirm:cycleMode": Sn,
+      "confirm:cycleMode": onCycleMode,
     },
     {
       context: "Confirmation",
     },
   );
-  let $n = payload.symlinkTarget
+  let symlinkNotice = payload.symlinkTarget
     ? jsxProd_default(Box, {
         paddingX,
         marginBottom: 1,
@@ -415,17 +425,17 @@ function FilePermissionDialog({ payload, answer }) {
           }),
         })
       : null;
-  let on = !ee || Go || payload.question.kind === "file-action";
-  let _o =
-    ee && payload.question.kind === "file-action"
+  let showQuestion = !isFitted || offersBlockOutsideReads || payload.question.kind === "file-action";
+  let question =
+    isFitted && payload.question.kind === "file-action"
       ? {
           ...payload.question,
           fileName: markBrokenSequences(truncatePathForDisplay_2(payload.question.fileName)),
         }
       : payload.question;
-  let onChange = ce(
+  let onChange = useCallback(
     (value) => {
-      let selected = hn.find((opt) => opt.value === value);
+      let selected = optionEntries.find((opt) => opt.value === value);
       if (!selected || (isStandingHeld && selected.option.type === "accept-session")) return false;
       if (selected.option.type === "reject") {
         let trimmedFeedback = rejectFeedback.trim();
@@ -441,9 +451,9 @@ function FilePermissionDialog({ payload, answer }) {
       }
       return ideDiffConfig(selected.option);
     },
-    [hn, isStandingHeld, rejectFeedback, acceptFeedback, acceptFeedback_2, ideDiffConfig],
+    [optionEntries, isStandingHeld, rejectFeedback, acceptFeedback, acceptFeedback_2, ideDiffConfig],
   );
-  let onCancel = ce(() => {
+  let onCancel = useCallback(() => {
     if (
       ideDiffConfig({
         type: "reject",
@@ -452,21 +462,23 @@ function FilePermissionDialog({ payload, answer }) {
       return;
     logEscape();
   }, [logEscape, ideDiffConfig]);
-  let wn = payload.showingDiffInIDE
+  let ideLabel = payload.showingDiffInIDE
     ? approvalLabelTemplate`Opened changes in ${safeLabel(payload.ideName ?? "IDE")} \u29C9`
     : undefined;
   let children = jsxProd_default_2(Fragment, {
     children: [
       jsxProd_default_2(PermissionDialog_2, {
-        title: ee
+        title: isFitted
           ? payload.title
-          : (wn ??
+          : (ideLabel ??
             (runsOnMachine !== undefined ? `${payload.title} (runs on ${runsOnMachine})` : payload.title)),
         subtitle:
-          ee && payload.subtitle !== undefined ? markBrokenSequences(payload.subtitle) : payload.subtitle,
+          isFitted && payload.subtitle !== undefined
+            ? markBrokenSequences(payload.subtitle)
+            : payload.subtitle,
         innerPaddingX: 0,
         requestSource: payload.requestSource,
-        frame: ee
+        frame: isFitted
           ? {
               onCancel,
               titleSuffix: runsOnMachine === undefined ? undefined : `runs on ${runsOnMachine}`,
@@ -489,7 +501,7 @@ function FilePermissionDialog({ payload, answer }) {
             }
           : undefined,
         children: [
-          $n,
+          symlinkNotice,
           payload.permissionResult.denialLimitFallback !== undefined &&
             jsxProd_default(Box, {
               paddingX,
@@ -499,16 +511,16 @@ function FilePermissionDialog({ payload, answer }) {
               }),
             }),
           payload.showingDiffInIDE
-            ? (ee || getNativeCSIuTerminalDisplayName_2()) &&
+            ? (isFitted || getNativeCSIuTerminalDisplayName_2()) &&
               jsxProd_default_2(Box, {
                 flexDirection: "column",
                 paddingX,
                 marginBottom: 1,
                 children: [
-                  ee &&
+                  isFitted &&
                     jsxProd_default(Text, {
                       dimColor: true,
-                      children: wn,
+                      children: ideLabel,
                     }),
                   getNativeCSIuTerminalDisplayName_2() &&
                     jsxProd_default(Text, {
@@ -517,7 +529,7 @@ function FilePermissionDialog({ payload, answer }) {
                     }),
                 ],
               })
-            : ee
+            : isFitted
               ? jsxProd_default(FittedDiffBody, {
                   fitted: fittedDiffBody,
                   children: symlinkTarget,
@@ -533,7 +545,7 @@ function FilePermissionDialog({ payload, answer }) {
                 children: emptyQuestionTitle(),
               }),
             }),
-          Go &&
+          offersBlockOutsideReads &&
             jsxProd_default(Box, {
               paddingX,
               marginBottom: 1,
@@ -546,7 +558,7 @@ function FilePermissionDialog({ payload, answer }) {
             flexDirection: "column",
             paddingX,
             children: [
-              It &&
+              hideIndexes &&
                 jsxProd_default(PermissionRuleExplanation, {
                   permissionResult: payload.permissionResult,
                   toolType: "edit",
@@ -557,8 +569,8 @@ function FilePermissionDialog({ payload, answer }) {
                 jsxProd_default(DenialLimitFallbackNotice, {
                   permissionResult: payload.permissionResult,
                 }),
-              on && FileDialogQuestion(_o),
-              bn &&
+              showQuestion && FileDialogQuestion(question),
+              showUnavailableReason &&
                 jsxProd_default(Text, {
                   dimColor: true,
                   children: ASK_FIRST_REASON_TEXTS["card.standing_unavailable"]({
@@ -567,7 +579,7 @@ function FilePermissionDialog({ payload, answer }) {
                   }),
                 }),
               jsxProd_default(ModelSelector, {
-                hideIndexes: It,
+                hideIndexes,
                 selectedValue: NO_COMMITTED_ROW,
                 options,
                 inlineDescriptions: true,
@@ -577,16 +589,16 @@ function FilePermissionDialog({ payload, answer }) {
                   handleFocus(value_0);
                   handleFocus_2(value_0);
                 },
-                onInputModeToggle: (Kn) => {
-                  handleInputModeToggle(Kn);
-                  handleInputModeToggle_2(Kn);
+                onInputModeToggle: (mode) => {
+                  handleInputModeToggle(mode);
+                  handleInputModeToggle_2(mode);
                 },
               }),
             ],
           }),
         ],
       }),
-      !ee &&
+      !isFitted &&
         jsxProd_default(Box, {
           paddingX: 1,
           marginTop: 1,
@@ -609,7 +621,7 @@ function FilePermissionDialog({ payload, answer }) {
   });
   return jsxProd_default(FittedBodyKeybindings, {
     fitted: {
-      isFitted: ee,
+      isFitted,
       moreBindings: fittedDiffBody.moreBindings,
       body: fittedDiffBody.body,
     },

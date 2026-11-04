@@ -5,23 +5,23 @@
  * pieces: chunk-mrx6y2r5.js (3)
  * attribution: esm-layout 1, esm-fingerprint 2
  */
-import { Uo } from "../../../../../@azure/logger/dist/esm/index.js";
+import { createClientLogger } from "../../../../../@azure/logger/dist/esm/index.js";
 import { AbortError_2 } from "../restError.js";
-import { delay } from "../util/helpers.js";
+import { delay_2 } from "../util/helpers.js";
 
 //@ chunk-mrx6y2r5.js:45267-45276 esm-layout
-var Vn = 3;
+var DEFAULT_RETRY_POLICY_COUNT = 3;
 //@ chunk-mrx6y2r5.js:45276-45334 esm-fingerprint
-var Bm = Uo("ts-http-runtime retryPolicy");
+var retryPolicyLogger = createClientLogger("ts-http-runtime retryPolicy");
 var retryPolicyName = "retryPolicy";
 //@ chunk-mrx6y2r5.js:45334-46988 esm-fingerprint
 function retryPolicy_2(
   strategies,
   options = {
-    maxRetries: Vn,
+    maxRetries: DEFAULT_RETRY_POLICY_COUNT,
   },
 ) {
-  let logger = options.logger || Bm;
+  let logger = options.logger || retryPolicyLogger;
   return {
     name: retryPolicyName,
     async sendRequest(request, next) {
@@ -48,7 +48,10 @@ function retryPolicy_2(
           logger.error(`Retry ${retryCount}: Request aborted.`);
           throw new AbortError_2();
         }
-        if (retryCount >= ((_b = options.maxRetries) !== null && _b !== undefined ? _b : Vn)) {
+        if (
+          retryCount >=
+          ((_b = options.maxRetries) !== null && _b !== undefined ? _b : DEFAULT_RETRY_POLICY_COUNT)
+        ) {
           logger.info(
             `Retry ${retryCount}: Maximum retries reached. Returning the last received response, or throwing the last received error.`,
           );
@@ -81,7 +84,7 @@ function retryPolicy_2(
             strategyLogger.info(
               `Retry ${retryCount}: Retry strategy ${strategy.name} retries after ${retryAfterInMs}`,
             );
-            await delay(retryAfterInMs, undefined, {
+            await delay_2(retryAfterInMs, undefined, {
               abortSignal: request.abortSignal,
             });
             continue e;
@@ -106,4 +109,4 @@ function retryPolicy_2(
     },
   };
 }
-export { retryPolicy_2, Vn };
+export { retryPolicy_2, DEFAULT_RETRY_POLICY_COUNT };

@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:316476-322813 cjs-fingerprint
-var require_nsis = x(function (cjsExports, cjsModule) {
+var require_nsis = __commonJS(function (cjsExports, cjsModule) {
   function nsis(hljs) {
     let regex = hljs.regex;
     let LANGUAGE_CONSTANTS = [

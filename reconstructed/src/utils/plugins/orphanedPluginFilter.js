@@ -21,7 +21,7 @@ import { ORPHAN_MARKER_FILE } from "./cacheUtils.js";
 /**
  * 为 Grep/Glob 生成排除插件缓存里孤儿版本目录的 glob（避免搜到已废弃的旧版本）。
  */
-async function getGlobExclusionsForPluginCache(searchPath, storageV5) {
+async function getGlobExclusionsForPluginCache(searchPath, target) {
   let pluginRegistry = getPluginRegistry();
   let cachePath = normalize(projectPluginCacheDir());
   if (
@@ -36,8 +36,8 @@ async function getGlobExclusionsForPluginCache(searchPath, storageV5) {
     return pluginRegistry.orphanedVersionGlobExclusions;
   try {
     if (
-      !(isStorageV5Enabled() && storageV5 !== undefined) &&
-      (await readdir(cachePath).then((y) => y.length === 0, isENOENT))
+      !(isStorageV5Enabled() && target !== undefined) &&
+      (await readdir(cachePath).then((entries) => entries.length === 0, isENOENT))
     ) {
       pluginRegistry.orphanedVersionGlobExclusions = [];
       return pluginRegistry.orphanedVersionGlobExclusions;
@@ -47,7 +47,7 @@ async function getGlobExclusionsForPluginCache(searchPath, storageV5) {
       cachePath,
       new AbortController().signal,
       {
-        cwd: ripgrepStorageOverride(storageV5),
+        cwd: ripgrepStorageOverride(target),
       },
     );
     pluginRegistry.orphanedVersionGlobExclusions = markers.map((markerPath) => {
@@ -74,7 +74,7 @@ function pathsOverlap(a, b) {
   return na === nb || na === sep || nb === sep || na.startsWith(nb + sep) || nb.startsWith(na + sep);
 }
 //@ chunk-e6aww6q8.js:1436490-1436520 placement
-function normalizeGlobPath(e) {
-  return normalize(e);
+function normalizeGlobPath(globPath) {
+  return normalize(globPath);
 }
 export { getGlobExclusionsForPluginCache, clearOrphanedGlobExclusions };

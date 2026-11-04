@@ -6,8 +6,15 @@
  * attribution: esm-fingerprint 1
  */
 //@ chunk-aepeg2w5.js:238658-238905 esm-fingerprint
-var rf = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "169.254.0.0/16", "100.64.0.0/10"];
-var PS = ["192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24"];
-var fF = ["198.18.0.0/15", "192.0.0.0/24", ...PS];
-var vS = ["0.0.0.0/8", "192.88.99.0/24", "224.0.0.0/4"];
-export { rf, fF, vS, PS };
+var PRIVATE_NETWORKS = [
+  "10.0.0.0/8",
+  "172.16.0.0/12",
+  "192.168.0.0/16",
+  "127.0.0.0/8",
+  "169.254.0.0/16",
+  "100.64.0.0/10",
+];
+var DOCUMENTATION_NETWORKS = ["192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24"];
+var NON_PUBLIC_NETWORKS = ["198.18.0.0/15", "192.0.0.0/24", ...DOCUMENTATION_NETWORKS];
+var RESERVED_NETWORKS = ["0.0.0.0/8", "192.88.99.0/24", "224.0.0.0/4"];
+export { PRIVATE_NETWORKS, NON_PUBLIC_NETWORKS, RESERVED_NETWORKS, DOCUMENTATION_NETWORKS };

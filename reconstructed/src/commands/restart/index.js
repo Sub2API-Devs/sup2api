@@ -77,9 +77,9 @@ var restartCommandDefinition = {
   name: "restart",
   aliases: ["update"],
   get description() {
-    let e = restartVersionTarget();
-    return (e.kind === "newer" || e.kind === "older") && resolveMaxVersionConfig() === undefined
-      ? `Restart on ${e.version} and keep this session`
+    let target = restartVersionTarget();
+    return (target.kind === "newer" || target.kind === "older") && resolveMaxVersionConfig() === undefined
+      ? `Restart on ${target.version} and keep this session`
       : "Restart Claude Code and keep this session";
   },
   supportsNonInteractive: false,
@@ -90,7 +90,7 @@ var restartCommandDefinition = {
   get fleetHostCall() {
     return;
   },
-  load: () => import("./chunk-egxcxk6h.js"),
+  load: () => import("./restart.js"),
 };
 var restartCommand = restartCommandDefinition;
 export { restartCommand, canRestartCommandRun };

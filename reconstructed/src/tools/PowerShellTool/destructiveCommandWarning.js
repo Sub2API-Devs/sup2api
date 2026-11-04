@@ -94,9 +94,9 @@ var DESTRUCTIVE_PATTERNS = [
 /**
  * 返回 PowerShell 命令（前 10000 字符）命中的第一条破坏性模式。
  */
-function matchDestructivePattern_2(e) {
-  let n = e.length > 1e4 ? e.slice(0, 1e4) : e;
-  for (let r of DESTRUCTIVE_PATTERNS) if (r.pattern.test(n)) return r;
+function matchDestructivePattern_2(command) {
+  let truncatedCommand = command.length > 1e4 ? command.slice(0, 1e4) : command;
+  for (let entry of DESTRUCTIVE_PATTERNS) if (entry.pattern.test(truncatedCommand)) return entry;
   return null;
 }
 //@ chunk-e6aww6q8.js:1270762-1270807 callgraph-fingerprint = getDestructiveCommandWarning (0.68)

@@ -18,7 +18,7 @@ var reloadSkillsCommandDefinition = {
   description: "Pick up skills added or changed on disk during this session",
   supportsNonInteractive: true,
   thinClientDispatch: "post-text",
-  load: () => import("./chunk-9dc848ph.js"),
+  load: () => import("./call.lazy.js"),
 };
 var reloadSkillsCommand = reloadSkillsCommandDefinition;
 export { reloadSkillsCommand };

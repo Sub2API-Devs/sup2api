@@ -57,7 +57,7 @@ import {
   calculatePluginVersion,
 } from "./pluginVersioning.js";
 import {
-  MAX_BINDINGS_FILE_BYTES,
+  MAX_REPOSITORY_KEY_CHARS,
   seedDirectoryBindings,
   findBindingKeysFor,
 } from "./pluginDirectoryBindings.js";
@@ -105,6 +105,7 @@ import { isReviewerMarkedEntry } from "./commandSourceErrors.js";
 import { isOfficialMarketplaceName_3 } from "./pluginIdentifier.js";
 import { plural, capitalize } from "../stringUtils.js";
 import { uniq, count } from "../collections.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:4431671-4432044 placement
 /**
@@ -112,44 +113,47 @@ import { uniq, count } from "../collections.js";
  */
 function formatSharedDataFolderMessage(name, dataDirConflictingRecord) {
   {
-    let r = quotedPrintable(dataDirConflictingRecord.id, 200);
-    return `"${quotedPrintable(name, 120)}" was not installed. It would use the same data folder as "${r}", which ${dataDirConflictingRecord.installed ? "is installed" : "was installed"} from a different repository than the one the ${OFFICIAL_MARKETPLACE_DISPLAY} now lists. To free the name, ${runCommandHint(
+    let conflictRecordId = quotedPrintable(dataDirConflictingRecord.id, 200);
+    return `"${quotedPrintable(name, 120)}" was not installed. It would use the same data folder as "${conflictRecordId}", which ${dataDirConflictingRecord.installed ? "is installed" : "was installed"} from a different repository than the one the ${OFFICIAL_MARKETPLACE_DISPLAY} now lists. To free the name, ${runCommandHint(
       "plugin uninstall",
       dataDirConflictingRecord.id,
       {
-        fallback: `uninstall "${r}" from the command line`,
+        fallback: `uninstall "${conflictRecordId}" from the command line`,
       },
     )}, then install it again.`;
   }
   return "";
 }
 //@ chunk-e6aww6q8.js:4432044-4432083 placement
-function isSameNormalizedPath(e, n) {
-  return normalizePathForPlatform(e) === normalizePathForPlatform(n);
+function isSameNormalizedPath(pathA, pathB) {
+  return normalizePathForPlatform(pathA) === normalizePathForPlatform(pathB);
 }
 //@ chunk-e6aww6q8.js:4432083-4432171 placement
-function sharedPluginStorageKind(e, n) {
-  return isSameNormalizedPath(getPluginCacheDirIn("", e), getPluginCacheDirIn("", n))
+function sharedPluginStorageKind(pluginIdA, pluginIdB) {
+  return isSameNormalizedPath(getPluginCacheDirIn("", pluginIdA), getPluginCacheDirIn("", pluginIdB))
     ? "folder"
-    : isSameNormalizedPath(pluginDataDirPath(e), pluginDataDirPath(n))
+    : isSameNormalizedPath(pluginDataDirPath(pluginIdA), pluginDataDirPath(pluginIdB))
       ? "data"
       : null;
 }
 //@ chunk-e6aww6q8.js:4432171-4432240 placement
-function hasNoOtherMarketplaceInstalls(e, n) {
-  return !n.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`) && (e[n]?.length ?? 0) === 0;
+function hasNoOtherMarketplaceInstalls(plugins, pluginId) {
+  return !pluginId.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`) && (plugins[pluginId]?.length ?? 0) === 0;
 }
 //@ chunk-e6aww6q8.js:4432240-4432515 placement
-function findDataDirHolders(e, n) {
-  if (!hasNoOtherMarketplaceInstalls(e, n)) return [];
-  return Object.entries(e).flatMap(([key, value]) => {
-    let h = key !== n && value !== undefined && value.length > 0 ? sharedPluginStorageKind(key, n) : null;
-    return h === null || value === undefined
+function findDataDirHolders(plugins, pluginId) {
+  if (!hasNoOtherMarketplaceInstalls(plugins, pluginId)) return [];
+  return Object.entries(plugins).flatMap(([key, value]) => {
+    let sharedKind =
+      key !== pluginId && value !== undefined && value.length > 0
+        ? sharedPluginStorageKind(key, pluginId)
+        : null;
+    return sharedKind === null || value === undefined
       ? []
       : [
           {
             id: key,
-            shares: h,
+            shares: sharedKind,
             installations: value.map(({ scope, projectPath }) => ({
               scope,
               ...(projectPath !== undefined && {
@@ -161,24 +165,27 @@ function findDataDirHolders(e, n) {
   });
 }
 //@ chunk-e6aww6q8.js:4432515-4432792 placement
-function findSharedStorageConflict(e, closure, plugins) {
-  for (let s of e) {
-    if (!hasNoOtherMarketplaceInstalls(plugins, s)) continue;
-    let dataDirHolders = findDataDirHolders(plugins, s);
+function findSharedStorageConflict(pluginIds, closure, plugins) {
+  for (let pluginId of pluginIds) {
+    if (!hasNoOtherMarketplaceInstalls(plugins, pluginId)) continue;
+    let dataDirHolders = findDataDirHolders(plugins, pluginId);
     if (dataDirHolders.length > 0)
       return {
-        pluginId: s,
+        pluginId,
         sharedWith: "installed",
         holders: dataDirHolders,
       };
-    for (let y of closure) {
-      let S = y !== s && hasNoOtherMarketplaceInstalls(plugins, y) ? sharedPluginStorageKind(y, s) : null;
-      if (S !== null)
+    for (let twinId of closure) {
+      let sharedKind =
+        twinId !== pluginId && hasNoOtherMarketplaceInstalls(plugins, twinId)
+          ? sharedPluginStorageKind(twinId, pluginId)
+          : null;
+      if (sharedKind !== null)
         return {
-          pluginId: s,
+          pluginId,
           sharedWith: "same-install",
-          twin: y,
-          shares: S,
+          twin: twinId,
+          shares: sharedKind,
         };
     }
   }
@@ -196,412 +203,457 @@ function describeNameCollision(id, refused, shares) {
   };
 }
 //@ chunk-e6aww6q8.js:4436041-4436257 placement
-class PluginFolderHeldError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  pluginCommandErrorCategory = "validation";
-  holders;
-  constructor(pluginNameCollision, holders) {
-    super(pluginNameCollision, "plugin not installed: another installed plugin has one of its folders");
-    this.name = "PluginFolderHeldError";
-    this.holders = holders;
-  }
-}
+let PluginFolderHeldError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:4436041", () => {
+  PluginFolderHeldError = class PluginFolderHeldError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    pluginCommandErrorCategory = "validation";
+    holders;
+    constructor(pluginNameCollision, holders) {
+      super(pluginNameCollision, "plugin not installed: another installed plugin has one of its folders");
+      this.name = "PluginFolderHeldError";
+      this.holders = holders;
+    }
+  };
+});
 //@ chunk-e6aww6q8.js:4436257-4443773 placement
 /**
  * 安装插件并更新安装记录，记录与实际不符时拒绝。
  */
 async function installPluginWithRecords(
-  e,
+  pluginId,
   entry,
-  r = "user",
-  s,
-  h,
-  y,
-  S,
+  scope = "user",
+  projectPath,
+  marketplaceRoot,
+  tagInfo,
+  auto,
   marketplaceInstallLocation,
-  L,
-  G,
-  q,
-  Z = {
+  marketplaceSource,
+  commandSourceConsent,
+  storageV5,
+  installOptions = {
     explicitInstall: false,
   },
   credentials,
-  ke,
+  pinnedVersion,
   gitHubHttpsFallback,
 ) {
-  assertRecordablePluginId(e);
-  let installedListRefusal = await getInstalledListRefusal(q);
+  assertRecordablePluginId(pluginId);
+  let installedListRefusal = await getInstalledListRefusal(storageV5);
   if (installedListRefusal !== undefined)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Plugin "${quotedPrintable(e)}" was not installed: ${readInstalledPluginsFile(installedListRefusal)}`,
+      `Plugin "${quotedPrintable(pluginId)}" was not installed: ${readInstalledPluginsFile(installedListRefusal)}`,
       "plugin not installed: the install records hold what this build cannot read",
     );
   let holders = findDataDirHolders(
-    (isStorageV5Enabled() && q !== undefined ? await loadInstalledPlugins(q) : loadInstalledPluginsSync())
-      .plugins,
-    e,
+    (isStorageV5Enabled() && storageV5 !== undefined
+      ? await loadInstalledPlugins(storageV5)
+      : loadInstalledPluginsSync()
+    ).plugins,
+    pluginId,
   );
   if (holders.length > 0)
     throw new PluginFolderHeldError(
       findPluginNameCollision({
-        refused: e,
-        askedFor: e,
+        refused: pluginId,
+        askedFor: pluginId,
         sharedWith: "installed",
         holders,
         surface: "cli",
       }),
       holders,
     );
-  let Ie = e.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`);
-  let Me = Ie ? samePluginSource(entry.source, undefined) : undefined;
-  let We = verifyReviewedCommit({
-    pluginId: e,
+  let isOfficial = pluginId.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`);
+  let directoryRepoKey = isOfficial ? samePluginSource(entry.source, undefined) : undefined;
+  let reviewCheck = verifyReviewedCommit({
+    pluginId,
     pluginName: entry.name,
     source: entry.source,
     boundByRecord: false,
     action: "installed",
   });
-  if (!We.ok)
+  if (!reviewCheck.ok)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      We.message,
+      reviewCheck.message,
       "plugin directory listing has no reviewed commit",
     );
-  if (Ie) {
-    if (Me === undefined)
+  if (isOfficial) {
+    if (directoryRepoKey === undefined)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `"${printableName(entry.name, 120)}" was not installed: its ${OFFICIAL_MARKETPLACE_DISPLAY} listing names no repository.`,
         "plugin directory listing names no repository",
       );
-    if (Me.length > MAX_BINDINGS_FILE_BYTES)
+    if (directoryRepoKey.length > MAX_REPOSITORY_KEY_CHARS)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `"${printableName(entry.name, 120)}" was not installed: the repository address in its ${OFFICIAL_MARKETPLACE_DISPLAY} listing is too long. Nothing was changed. Only a change to the listing can fix this.`,
         "plugin directory listing repository key too long",
       );
-    let Kn =
-      isStorageV5Enabled() && q !== undefined ? await loadInstalledPlugins(q) : loadInstalledPluginsSync();
-    let Xn = hasFailedInstalledPluginsRead(Kn);
-    let fo = bindingKeysFor(Kn.plugins, e);
-    let To = pluginBindingValues(Kn.plugins, e);
-    let bo = await seedDirectoryBindings(fo.length > 0 ? fo : [[e, []]]);
-    let dataDirConflictingRecord = findDataDirConflictingRecord(Kn.plugins, bo, e, entry.source);
-    if (isUnboundOfficialPlugin(e, To, bo, Xn))
+    let installedPlugins =
+      isStorageV5Enabled() && storageV5 !== undefined
+        ? await loadInstalledPlugins(storageV5)
+        : loadInstalledPluginsSync();
+    let recordsUnreadable = hasFailedInstalledPluginsRead(installedPlugins);
+    let bindingKeys = bindingKeysFor(installedPlugins.plugins, pluginId);
+    let bindingValues = pluginBindingValues(installedPlugins.plugins, pluginId);
+    let bindings = await seedDirectoryBindings(bindingKeys.length > 0 ? bindingKeys : [[pluginId, []]]);
+    let dataDirConflictingRecord = findDataDirConflictingRecord(
+      installedPlugins.plugins,
+      bindings,
+      pluginId,
+      entry.source,
+    );
+    if (isUnboundOfficialPlugin(pluginId, bindingValues, bindings, recordsUnreadable))
       throw new PluginCachePublishError(
         "directory-binding-unreadable",
         `"${printableName(entry.name, 120)}" was not installed: plugin-directory-bindings.json in the plugins folder could not be used (unreadable, a symbolic link or not a file, over 1 MB, damaged, or written by a newer Claude Code), so its ${OFFICIAL_MARKETPLACE_DISPLAY} listing could not be checked against the repository it was installed from. Nothing was changed. Try again; if this repeats, check the file for those causes.`,
         "plugin directory bindings file could not be read",
       );
-    if (Xn) {
-      let flattened = findBindingKeysFor(bo.keys(), e).flatMap((un) => bo.get(un) ?? []);
-      let ko = flattened.find((un) => parseRepoWithRef(un) !== Me) ?? flattened[0];
-      if (ko === undefined || parseRepoWithRef(ko) !== Me)
+    if (recordsUnreadable) {
+      let flattened = findBindingKeysFor(bindings.keys(), pluginId).flatMap(
+        (bindingKey) => bindings.get(bindingKey) ?? [],
+      );
+      let bindingValue =
+        flattened.find((repoKey) => parseRepoWithRef(repoKey) !== directoryRepoKey) ?? flattened[0];
+      if (bindingValue === undefined || parseRepoWithRef(bindingValue) !== directoryRepoKey)
         throw new PluginCachePublishError(
-          ko === undefined ? "directory-binding-unreadable" : "directory-identity-changed",
-          ko === undefined
+          bindingValue === undefined ? "directory-binding-unreadable" : "directory-identity-changed",
+          bindingValue === undefined
             ? `"${printableName(entry.name, 120)}" was not installed: installed_plugins.json in the plugins folder could not be read, so Claude Code cannot tell whether it is already installed from another repository. Nothing was changed. Try again once the file can be read.`
             : `"${printableName(entry.name, 120)}" was not installed: installed_plugins.json in the plugins folder could not be read, and plugin-directory-bindings.json records it as installed from a different repository than the ${OFFICIAL_MARKETPLACE_DISPLAY} now lists. Nothing was changed. Try again once installed_plugins.json can be read.`,
           "plugin directory install records could not be read",
         );
     }
-    let co = Xn ? pluginBindingValues(await readInstalledPluginsLenient(q), e) : To;
-    if (isDirectoryRepositoryChanged(e, co, entry.source, bo))
+    let currentBindings = recordsUnreadable
+      ? pluginBindingValues(await readInstalledPluginsLenient(storageV5), pluginId)
+      : bindingValues;
+    if (isDirectoryRepositoryChanged(pluginId, currentBindings, entry.source, bindings))
       throw new PluginCachePublishError(
         "directory-identity-changed",
         dataDirConflictingRecord !== undefined
           ? formatSharedDataFolderMessage(entry.name, dataDirConflictingRecord)
-          : (co?.length ?? 0) > 0
+          : (currentBindings?.length ?? 0) > 0
             ? `"${quotedPrintable(entry.name, 120)}" is already installed from a different repository than the one the ${OFFICIAL_MARKETPLACE_DISPLAY} now lists under that name. Uninstall it first, then install it again.`
             : `"${quotedPrintable(entry.name, 120)}" was not installed. An earlier install under that name came from a different repository than the one the ${OFFICIAL_MARKETPLACE_DISPLAY} now lists, and what it saved (options, secrets, data) may still be here. To delete that, ${runCommandHint(
                 "plugin uninstall",
-                e,
+                pluginId,
                 {
-                  fallback: `uninstall "${quotedPrintable(e, 200)}" from the command line`,
+                  fallback: `uninstall "${quotedPrintable(pluginId, 200)}" from the command line`,
                 },
               )}, then install it again.`,
         "plugin directory listing now names a different repository",
       );
   }
-  let ze = Ie ? undefined : y;
-  let lt = typeof entry.source === "string" && h ? h : entry.source;
-  let Je =
-    ze &&
-    typeof lt === "object" &&
-    (lt.source === "github" || lt.source === "url" || lt.source === "git-subdir")
+  let pinInfo = isOfficial ? undefined : tagInfo;
+  let effectiveSource = typeof entry.source === "string" && marketplaceRoot ? marketplaceRoot : entry.source;
+  let pluginSource =
+    pinInfo &&
+    typeof effectiveSource === "object" &&
+    (effectiveSource.source === "github" ||
+      effectiveSource.source === "url" ||
+      effectiveSource.source === "git-subdir")
       ? {
-          ...lt,
-          ref: ze.ref,
-          sha: ze.sha,
+          ...effectiveSource,
+          ref: pinInfo.ref,
+          sha: pinInfo.sha,
         }
-      : lt;
-  let trustedSettingsEntryAuth = findSettingsArchiveEntry(marketplaceNameOfId(e), entry.name);
-  if (Z.explicitInstall && typeof Je === "object" && Je.source === "archive") {
-    let entryHelperConsentSubject = getEntryHelperConsentSubject(
+      : effectiveSource;
+  let trustedSettingsEntryAuth = findSettingsArchiveEntry(marketplaceNameOfId(pluginId), entry.name);
+  if (
+    installOptions.explicitInstall &&
+    typeof pluginSource === "object" &&
+    pluginSource.source === "archive"
+  ) {
+    let consent = getEntryHelperConsentSubject(
       headersHelperNotRunReason({
         entry,
-        archiveUrl: Je.url,
-        marketplaceSource: L,
+        archiveUrl: pluginSource.url,
+        marketplaceSource,
         trustedSettingsEntryAuth,
       }),
-      Je.url,
+      pluginSource.url,
     );
-    let Xn =
-      entryHelperConsentSubject === null ? null : headersHelperPolicyRefusal(L, marketplaceNameOfId(e));
-    if (Xn !== null)
-      throw new EntryHelperError(checkHeadersHelperConsent(entry.name, Xn), helperRefusalFailureCode(Xn));
-    let fo = diffEntryHelperConsent(Z.consented, entryHelperConsentSubject);
-    if (fo !== null)
+    let helperRefusal =
+      consent === null ? null : headersHelperPolicyRefusal(marketplaceSource, marketplaceNameOfId(pluginId));
+    if (helperRefusal !== null)
       throw new EntryHelperError(
-        describeHelperReview(fo, entry.name, "install"),
-        HELPER_CONSENT_MISMATCH_CODES[fo],
+        checkHeadersHelperConsent(entry.name, helperRefusal),
+        helperRefusalFailureCode(helperRefusal),
+      );
+    let consentDiff = diffEntryHelperConsent(installOptions.consented, consent);
+    if (consentDiff !== null)
+      throw new EntryHelperError(
+        describeHelperReview(consentDiff, entry.name, "install"),
+        HELPER_CONSENT_MISMATCH_CODES[consentDiff],
       );
   }
-  let pt = await cachePlugin(Je, {
-    commandSourceConsent: G ?? {
+  let cached = await cachePlugin(pluginSource, {
+    commandSourceConsent: commandSourceConsent ?? {
       kind: "none",
-      pluginId: e,
+      pluginId,
     },
     manifest: entry,
-    containmentRoot: typeof entry.source === "string" && h ? marketplaceInstallLocation : undefined,
+    containmentRoot:
+      typeof entry.source === "string" && marketplaceRoot ? marketplaceInstallLocation : undefined,
     archiveAuth: await resolveArchiveDownloadHeaders({
-      pluginSource: Je,
+      pluginSource,
       pluginName: entry.name,
-      marketplaceName: marketplaceNameOfId(e),
-      marketplaceSource: L,
-      trustedMarketplaceAuth: findUrlMarketplaceHeaders(L, marketplaceNameOfId(e)),
+      marketplaceName: marketplaceNameOfId(pluginId),
+      marketplaceSource,
+      trustedMarketplaceAuth: findUrlMarketplaceHeaders(marketplaceSource, marketplaceNameOfId(pluginId)),
       trustedSettingsEntryAuth,
       entry,
-      runEntryHelper: Z.explicitInstall,
+      runEntryHelper: installOptions.explicitInstall,
     }),
     entryDeclaresComponents: entryDeclaresComponents(entry),
     declaredComponentPaths: entryDeclaredComponentPaths(entry),
-    storageV5: q,
+    storageV5,
     ...(isStorageV5Enabled() &&
-      q !== undefined && {
-        pluginId: e,
+      storageV5 !== undefined && {
+        pluginId,
       }),
-    isDirectoryPlugin: isOfficialDirectoryPlugin(e),
-    directoryPin: pinnedSha(e, Je) ?? null,
+    isDirectoryPlugin: isOfficialDirectoryPlugin(pluginId),
+    directoryPin: pinnedSha(pluginId, pluginSource) ?? null,
     credentials,
-    ...(isNpmPluginId(e) && {
+    ...(isNpmPluginId(pluginId) && {
       isNpmMarketplaceLane: true,
     }),
     gitHubHttpsFallback,
   });
-  let Et = h || pt.path;
-  let yt = h && marketplaceInstallLocation ? marketplaceInstallLocation : Et;
-  let gt = typeof lt === "string" || getPluginCloneUrl(lt) !== null;
-  let At;
+  let installPath = marketplaceRoot || cached.path;
+  let containmentRoot =
+    marketplaceRoot && marketplaceInstallLocation ? marketplaceInstallLocation : installPath;
+  let hasCloneUrl = typeof effectiveSource === "string" || getPluginCloneUrl(effectiveSource) !== null;
+  let reviewedCommitSha;
   {
-    let Kn = verifyReviewedCommit({
-      pluginId: e,
+    let postFetchReview = verifyReviewedCommit({
+      pluginId,
       pluginName: entry.name,
       source: entry.source,
       boundByRecord: false,
       fetched: {
-        gitCommitSha: pt.gitCommitSha,
+        gitCommitSha: cached.gitCommitSha,
       },
       action: "installed",
     });
-    if (!Kn.ok) {
-      await removeDirectoryTreeNoFollow_2(pt.path).catch(() => {});
+    if (!postFetchReview.ok) {
+      await removeDirectoryTreeNoFollow_2(cached.path).catch(() => {});
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        Kn.message,
+        postFetchReview.message,
         "plugin directory fetch is not at the reviewed commit",
       );
     }
-    if (ke !== undefined && !versionSatisfies(pt.manifest.version, ke)) {
-      await removeDirectoryTreeNoFollow_2(pt.path).catch(() => {});
-      throw new PinnedVersionMismatchError(pt.manifest.version);
+    if (pinnedVersion !== undefined && !versionSatisfies(cached.manifest.version, pinnedVersion)) {
+      await removeDirectoryTreeNoFollow_2(cached.path).catch(() => {});
+      throw new PinnedVersionMismatchError(cached.manifest.version);
     }
-    At = Kn.reviewedCommit;
+    reviewedCommitSha = postFetchReview.reviewedCommit;
   }
   let gitCommitSha =
-    At ??
-    ze?.sha ??
-    pt.gitCommitSha ??
-    (gt ? await readInstalledPluginsIfAny(Et, yt) : undefined) ??
-    (h &&
+    reviewedCommitSha ??
+    pinInfo?.sha ??
+    cached.gitCommitSha ??
+    (hasCloneUrl ? await readInstalledPluginsIfAny(installPath, containmentRoot) : undefined) ??
+    (marketplaceRoot &&
     marketplaceInstallLocation &&
-    marketplaceNameOfId(e) === CLAUDE_PLUGINS_OFFICIAL &&
-    !(await probePluginGitHead(Et, yt)).repo
-      ? await pluginVersionOrNull(h)
+    marketplaceNameOfId(pluginId) === CLAUDE_PLUGINS_OFFICIAL &&
+    !(await probePluginGitHead(installPath, containmentRoot)).repo
+      ? await pluginVersionOrNull(marketplaceRoot)
       : undefined) ??
     undefined;
   let iso = new Date().toISOString();
-  let npmResolution = isNpmPluginId(e) ? pt.npmResolution : undefined;
-  let Zt =
+  let npmResolution = isNpmPluginId(pluginId) ? cached.npmResolution : undefined;
+  let computedVersion =
     npmResolution?.version ??
     (await calculatePluginVersion(
-      e,
+      pluginId,
       entry.source,
-      pt.manifest,
-      Et,
+      cached.manifest,
+      installPath,
       {
         kind: "catalog",
         version: entry.version,
       },
-      ze?.sha ?? pt.gitCommitSha,
-      pt.contentSha256,
-      yt,
+      pinInfo?.sha ?? cached.gitCommitSha,
+      cached.contentSha256,
+      containmentRoot,
     ));
-  let rn = ze && (pt.manifest.version || entry.version) ? withShaSuffix(Zt, ze.sha) : Zt;
-  let versionedCachePath = getVersionedCachePath(e, rn);
-  let path = pt.path;
-  let hn = orphanMarkerMove(pt.stagingScope, versionedCachePath);
-  let ho = true;
-  if (pt.path !== versionedCachePath) {
-    let Kn = strictCacheAddressable(q);
+  let pluginVersion =
+    pinInfo && (cached.manifest.version || entry.version)
+      ? withShaSuffix(computedVersion, pinInfo.sha)
+      : computedVersion;
+  let versionedCachePath = getVersionedCachePath(pluginId, pluginVersion);
+  let path = cached.path;
+  let orphanMove = orphanMarkerMove(cached.stagingScope, versionedCachePath);
+  let keepStagingPath = true;
+  if (cached.path !== versionedCachePath) {
+    let strictCache = strictCacheAddressable(storageV5);
     try {
-      if (commandSourceSpecOf(Je)) {
-        let Xn = Kn && (await versionParentState(versionedCachePath)) === "refused";
-        let versionedZipCachePath = getVersionedZipCachePath(e, rn);
-        let To =
-          !Xn &&
+      if (commandSourceSpecOf(pluginSource)) {
+        let parentRefused = strictCache && (await versionParentState(versionedCachePath)) === "refused";
+        let archivePath = getVersionedZipCachePath(pluginId, pluginVersion);
+        let zipPresent =
+          !parentRefused &&
           isPluginZipCacheEnabled() &&
-          (Kn
-            ? await strictArchivePresent(versionedZipCachePath, e, rn, () =>
-                requireVersionParentContained(versionedCachePath, e, rn, "cache", "before reuse"),
+          (strictCache
+            ? await strictArchivePresent(archivePath, pluginId, pluginVersion, () =>
+                requireVersionParentContained(
+                  versionedCachePath,
+                  pluginId,
+                  pluginVersion,
+                  "cache",
+                  "before reuse",
+                ),
               )
-            : await pathExists(versionedZipCachePath));
-        if (!Xn && !To && (await adoptStagedPlugin(pt.path, versionedCachePath, Kn, q, hn)))
+            : await pathExists(archivePath));
+        if (
+          !parentRefused &&
+          !zipPresent &&
+          (await adoptStagedPlugin(cached.path, versionedCachePath, strictCache, storageV5, orphanMove))
+        )
           path = versionedCachePath;
         else {
-          path = await copyPluginToVersionedCache(pt.path, e, rn, entry, undefined, {
-            storageV5: q,
+          path = await copyPluginToVersionedCache(cached.path, pluginId, pluginVersion, entry, undefined, {
+            storageV5,
             credentials,
           });
-          await removeDirectoryTreeNoFollow_2(pt.path).catch((error) => {
+          await removeDirectoryTreeNoFollow_2(cached.path).catch((error) => {
             logForDebugging(
-              `Failed to remove the staging tree ${pt.path} after publishing: ${errorMessage(error)}`,
+              `Failed to remove the staging tree ${cached.path} after publishing: ${errorMessage(error)}`,
               {
                 level: "warn",
               },
             );
           });
-          ho = false;
+          keepStagingPath = false;
         }
       } else {
-        let entries = Object.entries(pt.manifest.binaries ?? {});
-        let fo = await publishStagedPlugin(
-          pt.path,
+        let entries = Object.entries(cached.manifest.binaries ?? {});
+        let publishResult = await publishStagedPlugin(
+          cached.path,
           versionedCachePath,
           {
-            pluginId: e,
-            version: rn,
-            strictCache: Kn,
+            pluginId,
+            version: pluginVersion,
+            strictCache,
             ...(entries.length > 0 &&
-              shouldInstallBinaryAssets(e) && {
+              shouldInstallBinaryAssets(pluginId) && {
                 binariesHook: {
-                  declared: new Map(entries.map(([To, bo]) => [To, bo.sha256])),
+                  declared: new Map(
+                    entries.map(([binaryName, binarySpec]) => [binaryName, binarySpec.sha256]),
+                  ),
                 },
               }),
           },
-          q,
-          hn,
+          storageV5,
+          orphanMove,
         );
         path = versionedCachePath;
-        if (fo === "kept") ho = false;
+        if (publishResult === "kept") keepStagingPath = false;
       }
     } catch (error) {
-      await removeDirectoryTreeNoFollow_2(pt.path).catch(() => {});
+      await removeDirectoryTreeNoFollow_2(cached.path).catch(() => {});
       throw error;
     }
   }
-  if (ho && !isLinkModeCommandSource(Je)) {
+  if (keepStagingPath && !isLinkModeCommandSource(pluginSource)) {
     try {
-      await unvouchBeforeDependencyStep(path, q);
-      let Kn = await installPluginDependencies(path);
-      if (Kn.error)
-        logForDebugging(`Plugin dependency install warning for ${e}: ${Kn.error}`, {
+      await unvouchBeforeDependencyStep(path, storageV5);
+      let dependencyResult = await installPluginDependencies(path);
+      if (dependencyResult.error)
+        logForDebugging(`Plugin dependency install warning for ${pluginId}: ${dependencyResult.error}`, {
           level: "warn",
         });
-      await provisionBinaryAssets(path, e, {
-        storageV5: q,
+      await provisionBinaryAssets(path, pluginId, {
+        storageV5,
         credentials,
       });
-      await rescreenCachedPluginTree(path, q);
+      await rescreenCachedPluginTree(path, storageV5);
     } catch (error) {
-      await removeFreshCopyUnlessInUse(path, q);
+      await removeFreshCopyUnlessInUse(path, storageV5);
       throw error;
     }
-    if (isPluginZipCacheEnabled() && (await unmarkBeforeArchiving(path, q))) {
-      let versionedZipCachePath = getVersionedZipCachePath(e, rn);
-      await publishDirectoryAsZip(path, versionedZipCachePath);
-      path = versionedZipCachePath;
+    if (isPluginZipCacheEnabled() && (await unmarkBeforeArchiving(path, storageV5))) {
+      let zipPath = getVersionedZipCachePath(pluginId, pluginVersion);
+      await publishDirectoryAsZip(path, zipPath);
+      path = zipPath;
     }
   }
-  if (ze && pt.manifest.version && ze.version !== pt.manifest.version)
+  if (pinInfo && cached.manifest.version && pinInfo.version !== cached.manifest.version)
     logForDebugging(
-      `Tag ${ze.ref} resolved to a commit whose plugin.json says version ${pt.manifest.version} \u2014 using tag-derived ${ze.version} for constraint checks`,
+      `Tag ${pinInfo.ref} resolved to a commit whose plugin.json says version ${cached.manifest.version} \u2014 using tag-derived ${pinInfo.version} for constraint checks`,
       {
         level: "warn",
       },
     );
   let recordsBefore = await addInstalledPlugin(
-    e,
+    pluginId,
     {
-      version: rn,
+      version: pluginVersion,
       installedAt: iso,
       lastUpdated: iso,
       installPath: path,
       gitCommitSha,
-      ...(ze && {
-        resolvedVersion: ze.version,
+      ...(pinInfo && {
+        resolvedVersion: pinInfo.version,
       }),
-      ...(S && {
+      ...(auto && {
         auto: true,
       }),
-      ...(Me !== undefined && {
-        directoryRepositoryKey: Me,
+      ...(directoryRepoKey !== undefined && {
+        directoryRepositoryKey: directoryRepoKey,
       }),
-      ...(typeof Je === "object" &&
-        Je.source === "claudeai" && {
-          claudeaiPluginId: Je.pluginId,
-          ...(pt.contentSha256 !== undefined && {
-            archiveSha256: pt.contentSha256,
+      ...(typeof pluginSource === "object" &&
+        pluginSource.source === "claudeai" && {
+          claudeaiPluginId: pluginSource.pluginId,
+          ...(cached.contentSha256 !== undefined && {
+            archiveSha256: cached.contentSha256,
           }),
         }),
-      ...(typeof Je === "object" &&
-        Je.source === "command" && {
-          sourceCommand: describeCommandOutputMode(Je),
-          ...(pt.producerPath !== undefined && {
-            sourceProducerPath: pt.producerPath,
+      ...(typeof pluginSource === "object" &&
+        pluginSource.source === "command" && {
+          sourceCommand: describeCommandOutputMode(pluginSource),
+          ...(cached.producerPath !== undefined && {
+            sourceProducerPath: cached.producerPath,
           }),
         }),
       ...(npmResolution !== undefined &&
-        typeof Je === "object" &&
-        Je.source === "npm" && {
-          ...(Je.version !== undefined && {
-            npmVersionSpec: Je.version,
+        typeof pluginSource === "object" &&
+        pluginSource.source === "npm" && {
+          ...(pluginSource.version !== undefined && {
+            npmVersionSpec: pluginSource.version,
           }),
           npmResolved: npmResolution.tarballUrl,
           ...(npmResolution.integrity !== undefined && {
             npmIntegrity: npmResolution.integrity,
           }),
-          ...(Je.registry !== undefined && {
-            npmRegistry: Je.registry,
+          ...(pluginSource.registry !== undefined && {
+            npmRegistry: pluginSource.registry,
           }),
         }),
     },
-    r,
-    s,
-    q,
+    scope,
+    projectPath,
+    storageV5,
   );
-  if (pt.producerPath !== undefined) recordProducerDir(pt.producerPath);
+  if (cached.producerPath !== undefined) recordProducerDir(cached.producerPath);
   return {
     path,
     recordedAt: iso,
     recordsBefore,
-    manifestVersion: pt.manifest.version,
-    depConstraints: pt.depConstraints,
-    dependencies: pt.manifest.dependencies,
-    defaultEnabled: pt.manifest.defaultEnabled,
+    manifestVersion: cached.manifest.version,
+    depConstraints: cached.depConstraints,
+    dependencies: cached.manifest.dependencies,
+    defaultEnabled: cached.manifest.defaultEnabled,
   };
 }
 //@ chunk-e6aww6q8.js:4443773-4443885 placement
 /**
  * 拆分 名@市场，格式不对返回 null。
  */
-function parsePluginAtMarketplace(e) {
-  let parts = e.split("@");
+function parsePluginAtMarketplace(pluginId) {
+  let parts = pluginId.split("@");
   if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
   return {
     name: parts[0],
@@ -612,12 +664,12 @@ function parsePluginAtMarketplace(e) {
 /**
  * qualifiedMarketplaceLabel：市场显示名。
  */
-function qualifiedMarketplaceLabel(pluginId, n) {
+function qualifiedMarketplaceLabel(pluginId, fallbackLabel) {
   {
-    let r = marketplaceNameOfId(pluginId);
-    return r === undefined ? n : truncateMarketplaceLabel(r);
+    let marketplaceName = marketplaceNameOfId(pluginId);
+    return marketplaceName === undefined ? fallbackLabel : truncateMarketplaceLabel(marketplaceName);
   }
-  return n;
+  return fallbackLabel;
 }
 //@ chunk-e6aww6q8.js:4443952-4443990 placement
 /**
@@ -630,21 +682,24 @@ function truncateMarketplaceLabel(marketplace) {
 /**
  * 安装数比展示的多、未做更改。
  */
-function formatMoreInstallsThanShownMessage(e) {
-  return `More installs of "${quotedPrintable(e, 120)}" were found than were shown. Nothing was changed; open the plugin again to see them all`;
+function formatMoreInstallsThanShownMessage(pluginId) {
+  return `More installs of "${quotedPrintable(pluginId, 120)}" were found than were shown. Nothing was changed; open the plugin again to see them all`;
 }
 //@ chunk-e6aww6q8.js:4444133-4444317 placement
 /**
  * 切换会替换的内容已变化、未做更改。
  */
-function formatSwitchTargetChangedMessage(e) {
-  return `What switching "${quotedPrintable(e, 120)}" would replace has changed since it was shown. Nothing was changed; open the plugin again to see whether a switch is still offered`;
+function formatSwitchTargetChangedMessage(pluginId) {
+  return `What switching "${quotedPrintable(pluginId, 120)}" would replace has changed since it was shown. Nothing was changed; open the plugin again to see whether a switch is still offered`;
 }
 //@ chunk-e6aww6q8.js:4444531-4444616 placement
-function isOfficialFamilyEntry(e) {
+function isOfficialFamilyEntry(pluginId) {
   {
-    let n = marketplaceNameOfId(e);
-    return n === OFFICIAL_MARKETPLACE_NAME && isReviewerMarkedEntry(e.slice(0, -`@${n}`.length));
+    let marketplaceName = marketplaceNameOfId(pluginId);
+    return (
+      marketplaceName === OFFICIAL_MARKETPLACE_NAME &&
+      isReviewerMarkedEntry(pluginId.slice(0, -`@${marketplaceName}`.length))
+    );
   }
   return false;
 }
@@ -652,19 +707,19 @@ function isOfficialFamilyEntry(e) {
 /**
  * 其他市场的安装都在官方市场族内，可直接替换。
  */
-function canReplaceOfficialInstalls(e, n, r) {
+function canReplaceOfficialInstalls(pluginId, installs, isOfficialFamily) {
   {
-    if (n.length === 0) return false;
-    let s = marketplaceNameOfId(e);
-    if (n.some((h) => marketplaceNameOfId(h.pluginId) === undefined)) return false;
-    if (s !== OFFICIAL_MARKETPLACE_NAME)
+    if (installs.length === 0) return false;
+    let marketplaceName = marketplaceNameOfId(pluginId);
+    if (installs.some((install) => marketplaceNameOfId(install.pluginId) === undefined)) return false;
+    if (marketplaceName !== OFFICIAL_MARKETPLACE_NAME)
       return (
-        isOfficialMarketplaceName_3(s) &&
-        n.every((h) => marketplaceNameOfId(h.pluginId) === OFFICIAL_MARKETPLACE_NAME)
+        isOfficialMarketplaceName_3(marketplaceName) &&
+        installs.every((install) => marketplaceNameOfId(install.pluginId) === OFFICIAL_MARKETPLACE_NAME)
       );
     return (
-      (r ?? isOfficialFamilyEntry(e)) &&
-      n.every((h) => isOfficialMarketplaceName_3(marketplaceNameOfId(h.pluginId)))
+      (isOfficialFamily ?? isOfficialFamilyEntry(pluginId)) &&
+      installs.every((install) => isOfficialMarketplaceName_3(marketplaceNameOfId(install.pluginId)))
     );
   }
   return false;
@@ -673,193 +728,243 @@ function canReplaceOfficialInstalls(e, n, r) {
 /**
  * 已从其他市场安装时的阻止判定：有不可替换的记录（或不能按官方规则替换）返回 installed-from-other-marketplace； 已安装记录多于展示给用户的返回 more-installed-than-shown；否则 undefined。
  */
-function findOtherMarketplaceInstallBlocker(e, n, r, s) {
+function findOtherMarketplaceInstallBlocker(pluginId, installs, shownPluginIds, isOfficialFamily) {
   {
-    let y = n.find((S) => !S.replaceable) ?? (canReplaceOfficialInstalls(e, n, s) ? undefined : n[0]);
-    if (y)
+    let blocker =
+      installs.find((install) => !install.replaceable) ??
+      (canReplaceOfficialInstalls(pluginId, installs, isOfficialFamily) ? undefined : installs[0]);
+    if (blocker)
       return {
         reason: "installed-from-other-marketplace",
-        blocking: y,
+        blocking: blocker,
       };
-    if (r !== undefined && n.some((S) => !r.includes(S.pluginId)))
+    if (
+      shownPluginIds !== undefined &&
+      installs.some((install) => !shownPluginIds.includes(install.pluginId))
+    )
       return {
         reason: "more-installed-than-shown",
       };
     return;
   }
-  let [h] = n;
-  return h === undefined
+  let [firstInstall] = installs;
+  return firstInstall === undefined
     ? undefined
     : {
         reason: "installed-from-other-marketplace",
-        blocking: h,
+        blocking: firstInstall,
       };
 }
 //@ chunk-e6aww6q8.js:4445182-4445353 placement
-function formatMissingCopiesWarning(e, n) {
-  return `without ${n === "that" ? "that copy" : `the ${plural(n, "copy", "copies")} ${plural(e, "it needs", "they need")}`}, turning ${plural(e, "it", "them")} back on may not work`;
+function formatMissingCopiesWarning(count, dependentCount) {
+  return `without ${dependentCount === "that" ? "that copy" : `the ${plural(dependentCount, "copy", "copies")} ${plural(count, "it needs", "they need")}`}, turning ${plural(count, "it", "them")} back on may not work`;
 }
 //@ chunk-e6aww6q8.js:4445353-4450827 placement
 /**
  * 插件已从其他市场安装时的处理：提示 --replace 或指定作用域。
  */
-function installFromOtherMarketplace(e, n, r, s, scope = "user", y) {
+function installFromOtherMarketplace(
+  pluginId,
+  pluginName,
+  installs,
+  surface,
+  scope = "user",
+  isOfficialFamily,
+) {
   {
-    let S = quotedPrintable(n, 120);
-    let w = qualifiedMarketplaceLabel(e, "this marketplace");
-    let L =
-      s === "cli"
-        ? claudeCommand("plugin install", e, scope === "user" ? "--replace" : `--replace --scope ${scope}`)
+    let displayName = quotedPrintable(pluginName, 120);
+    let marketplaceLabel = qualifiedMarketplaceLabel(pluginId, "this marketplace");
+    let switchCommand =
+      surface === "cli"
+        ? claudeCommand(
+            "plugin install",
+            pluginId,
+            scope === "user" ? "--replace" : `--replace --scope ${scope}`,
+          )
         : null;
-    let [G, ...q] = r;
-    if (G === undefined) return `"${S}" is already installed from another marketplace`;
-    let Z = (lt) =>
+    let [firstInstall, ...otherInstalls] = installs;
+    if (firstInstall === undefined) return `"${displayName}" is already installed from another marketplace`;
+    let formatList = (items) =>
       new Intl.ListFormat("en", {
         type: "conjunction",
-      }).format(lt);
-    let Se = (lt) => Z(uniq(lt.map((Je) => qualifiedMarketplaceLabel(Je.pluginId, "another marketplace"))));
-    let ke = (requiredBy) => requiredBy.map((Je) => `"${quotedPrintable(Je, 120)}"`);
-    let we = (lt) => {
-      let Je = marketplaceNameOfId(lt.pluginId);
-      return Je !== OFFICIAL_MARKETPLACE_NAME && !isOfficialMarketplaceName_3(Je);
+      }).format(items);
+    let marketplaceNamesOf = (install) =>
+      formatList(
+        uniq(install.map((install) => qualifiedMarketplaceLabel(install.pluginId, "another marketplace"))),
+      );
+    let quoteIds = (requiredBy) => requiredBy.map((requiredBy) => `"${quotedPrintable(requiredBy, 120)}"`);
+    let isOtherMarketplace = (install) => {
+      let marketplaceName = marketplaceNameOfId(install.pluginId);
+      return marketplaceName !== OFFICIAL_MARKETPLACE_NAME && !isOfficialMarketplaceName_3(marketplaceName);
     };
-    let filtered = r.filter(we);
-    let filtered_2 = r.filter((lt) => !we(lt));
-    let Ie = (pluginId) => marketplaceNameOfId(pluginId) !== undefined && isSafeCliArg(pluginId);
-    let Me = (lt) => {
-      let Je = filtered.every((pt) => Ie(pt.pluginId))
-        ? ` (${filtered.map((pt) => `"${quotedPrintable(pt.pluginId, 200)}"`).join(", ")})`
+    let filtered = installs.filter(isOtherMarketplace);
+    let filtered_2 = installs.filter((install) => !isOtherMarketplace(install));
+    let isCliSwitchable = (pluginId) => marketplaceNameOfId(pluginId) !== undefined && isSafeCliArg(pluginId);
+    let describeFilteredInstalls = (upper) => {
+      let idList = filtered.every((install) => isCliSwitchable(install.pluginId))
+        ? ` (${filtered.map((install) => `"${quotedPrintable(install.pluginId, 200)}"`).join(", ")})`
         : "";
-      let nt = plural(filtered.length, "a plugin", "plugins");
-      return `${lt ? capitalize(nt) : nt} installed here from ${Se(filtered)}${Je} ${plural(filtered.length, "is", "are")} listed there at the same repository and folder as "${S}"`;
+      let noun = plural(filtered.length, "a plugin", "plugins");
+      return `${upper ? capitalize(noun) : noun} installed here from ${marketplaceNamesOf(filtered)}${idList} ${plural(filtered.length, "is", "are")} listed there at the same repository and folder as "${displayName}"`;
     };
-    let We =
+    let installedSummary =
       filtered.length === 0
-        ? `"${S}" is already installed from ${Se(filtered_2)}`
+        ? `"${displayName}" is already installed from ${marketplaceNamesOf(filtered_2)}`
         : filtered_2.length === 0
-          ? Me(true)
-          : `"${S}" is already installed from ${Se(filtered_2)}, and ${Me(false)}`;
-    if (!canReplaceOfficialInstalls(e, r, y)) {
-      let lt = y ?? isOfficialFamilyEntry(e);
-      let Je =
-        !lt && marketplaceNameOfId(e) === OFFICIAL_MARKETPLACE_NAME
+          ? describeFilteredInstalls(true)
+          : `"${displayName}" is already installed from ${marketplaceNamesOf(filtered_2)}, and ${describeFilteredInstalls(false)}`;
+    if (!canReplaceOfficialInstalls(pluginId, installs, isOfficialFamily)) {
+      let keepSettingsFamily = isOfficialFamily ?? isOfficialFamilyEntry(pluginId);
+      let switchExplanation =
+        !keepSettingsFamily && marketplaceNameOfId(pluginId) === OFFICIAL_MARKETPLACE_NAME
           ? `A switch that keeps plugin settings isn't offered to this ${OFFICIAL_MARKETPLACE_DISPLAY} listing, because Claude Code doesn't count it as Anthropic's or a partner's`
           : `A switch that keeps plugin settings is offered only between ${OFFICIAL_MARKETPLACE_DISPLAY} and Anthropic's official marketplaces`;
-      let nt = qualifiedMarketplaceLabel(e, "");
-      let pt = nt === "" ? "this marketplace's copy" : `the ${nt} copy`;
-      let Et = q.length === 0;
-      let yt = (So) => {
-        let ko = qualifiedMarketplaceLabel(So.pluginId, "");
-        return Et ? "it" : ko === "" ? "the one from another marketplace" : `the ${ko} one`;
+      let copyMarketplaceLabel = qualifiedMarketplaceLabel(pluginId, "");
+      let copyLabel =
+        copyMarketplaceLabel === "" ? "this marketplace's copy" : `the ${copyMarketplaceLabel} copy`;
+      let singleOther = otherInstalls.length === 0;
+      let describeCopy = (install) => {
+        let marketplaceLabel = qualifiedMarketplaceLabel(install.pluginId, "");
+        return singleOther
+          ? "it"
+          : marketplaceLabel === ""
+            ? "the one from another marketplace"
+            : `the ${marketplaceLabel} one`;
       };
-      let filtered = r.filter((So) => So.scopes.includes("managed"));
+      let filtered = installs.filter((install) => install.scopes.includes("managed"));
       if (filtered.length > 0)
-        return `${We}. ${Et ? "That one" : `The ${plural(filtered.length, "copy", "copies")} from ${Se(filtered)}`} ${plural(filtered.length, "was", "were")} installed by your organization (managed) and can't be uninstalled here, so ${pt} can't be installed`;
-      let At = lt
-        ? filtered_2.filter((So) => So.scopes.some((scope) => scope === "user" || scope === "local"))
+        return `${installedSummary}. ${singleOther ? "That one" : `The ${plural(filtered.length, "copy", "copies")} from ${marketplaceNamesOf(filtered)}`} ${plural(filtered.length, "was", "were")} installed by your organization (managed) and can't be uninstalled here, so ${copyLabel} can't be installed`;
+      let switchableInstalls = keepSettingsFamily
+        ? filtered_2.filter((install) =>
+            install.scopes.some((scope) => scope === "user" || scope === "local"),
+          )
         : [];
-      let It = At.length > 0 ? r.filter((So) => !At.includes(So)) : r;
+      let uninstallInstalls =
+        switchableInstalls.length > 0
+          ? installs.filter((install) => !switchableInstalls.includes(install))
+          : installs;
       let mapped = [
-        ...It.flatMap((So) =>
-          So.scopes.map((scope) => ({
-            pluginId: So.pluginId,
+        ...uninstallInstalls.flatMap((install) =>
+          install.scopes.map((scope) => ({
+            pluginId: install.pluginId,
             scope,
           })),
         ),
-        ...At.flatMap((So) =>
-          So.scopes
+        ...switchableInstalls.flatMap((install) =>
+          install.scopes
             .filter((scope) => scope === "project")
             .map((scope) => ({
-              pluginId: So.pluginId,
+              pluginId: install.pluginId,
               scope,
             })),
         ),
       ].map(({ pluginId, scope }) =>
-        Ie(pluginId)
+        isCliSwitchable(pluginId)
           ? claudeCommand("plugin uninstall", pluginId, scope === "user" ? undefined : `--scope ${scope}`)
           : null,
       );
-      let Zt = s === "cli" && mapped.every((So) => So !== null) ? mapped.join(", then ") : null;
-      let rn = It.some((So) => So.scopes.length > 1)
-        ? `at each scope ${plural(It.length, "it is", "they are")} installed at`
+      let uninstallCommandChain =
+        surface === "cli" && mapped.every((command) => command !== null) ? mapped.join(", then ") : null;
+      let scopeNote = uninstallInstalls.some((install) => install.scopes.length > 1)
+        ? `at each scope ${plural(uninstallInstalls.length, "it is", "they are")} installed at`
         : "";
-      let joined = [...It, ...At.filter((So) => So.scopes.includes("project"))]
-        .filter((So) => So.scopes.some((scope) => scope !== "user"))
-        .map((So) => ` ${capitalize(yt(So))} is installed at ${Z(So.scopes)} scope.`)
+      let joined = [
+        ...uninstallInstalls,
+        ...switchableInstalls.filter((install) => install.scopes.includes("project")),
+      ]
+        .filter((install) => install.scopes.some((scope) => scope !== "user"))
+        .map(
+          (install) =>
+            ` ${capitalize(describeCopy(install))} is installed at ${formatList(install.scopes)} scope.`,
+        )
         .concat(
-          r
-            .filter((So) => So.requiredBy.length > 0)
+          installs
+            .filter((install) => install.requiredBy.length > 0)
             .map(
-              (So) => ` ${Z(ke(So.requiredBy))} ${plural(So.requiredBy.length, "needs", "need")} ${yt(So)}.`,
+              (install) =>
+                ` ${formatList(quoteIds(install.requiredBy))} ${plural(install.requiredBy.length, "needs", "need")} ${describeCopy(install)}.`,
             ),
         )
         .join("");
-      let no = (So, ko = []) => {
-        let filtered = uniq(So.flatMap(($o) => $o.requiredBy)).filter(($o) => !ko.includes($o));
-        let ao = count(r, ($o) => $o.requiredBy.some((yo) => filtered.includes(yo)));
+      let disableHint = (allInstalls, exclude = []) => {
+        let filtered = uniq(allInstalls.flatMap((install) => install.requiredBy)).filter(
+          (id) => !exclude.includes(id),
+        );
+        let dependentInstallCount = count(installs, (install) =>
+          install.requiredBy.some((id) => filtered.includes(id)),
+        );
         return filtered.length === 0
           ? ""
-          : `disable ${Z(ke(filtered))} (${formatMissingCopiesWarning(filtered.length, ao)})`;
+          : `disable ${formatList(quoteIds(filtered))} (${formatMissingCopiesWarning(filtered.length, dependentInstallCount)})`;
       };
-      let hn = It.every((So) => marketplaceNameOfId(So.pluginId) === undefined)
-        ? `this message cannot name ${plural(It.length, "it", "them")}; `
+      let unnamedNote = uninstallInstalls.every(
+        (install) => marketplaceNameOfId(install.pluginId) === undefined,
+      )
+        ? `this message cannot name ${plural(uninstallInstalls.length, "it", "them")}; `
         : "";
-      let ho = no(It);
-      if (At.length === 0) {
-        let So = Et ? "the other one" : q.length === 1 ? "both" : "all of them";
-        let ko =
-          ho === ""
-            ? `To use ${pt}, uninstall ${So} first`
-            : `To use ${pt}, first ${ho}. Then uninstall ${So}`;
-        let un = `(${hn}${Et ? "its " : ""}plugin settings are not carried over)`;
-        return `${We}.${joined} ${Je}. ${Zt !== null ? `${ko}${rn === "" ? "" : `, ${rn}`} ${un}: ${Zt}` : `${ko} in /plugin \u2192 Installed${rn === "" ? "" : `, ${rn}`} ${un}`}`;
+      let disableHintText = disableHint(uninstallInstalls);
+      if (switchableInstalls.length === 0) {
+        let otherCopiesLabel = singleOther
+          ? "the other one"
+          : otherInstalls.length === 1
+            ? "both"
+            : "all of them";
+        let uninstallInstruction =
+          disableHintText === ""
+            ? `To use ${copyLabel}, uninstall ${otherCopiesLabel} first`
+            : `To use ${copyLabel}, first ${disableHintText}. Then uninstall ${otherCopiesLabel}`;
+        let settingsNote = `(${unnamedNote}${singleOther ? "its " : ""}plugin settings are not carried over)`;
+        return `${installedSummary}.${joined} ${switchExplanation}. ${uninstallCommandChain !== null ? `${uninstallInstruction}${scopeNote === "" ? "" : `, ${scopeNote}`} ${settingsNote}: ${uninstallCommandChain}` : `${uninstallInstruction} in /plugin \u2192 Installed${scopeNote === "" ? "" : `, ${scopeNote}`} ${settingsNote}`}`;
       }
-      let filtered_3 = At.filter((So) => So.scopes.includes("project"));
-      let Kn = `${ho === "" ? "First" : `First ${ho}. Then`} uninstall the ${plural(It.length, "copy", "copies")} from ${Se(It)}`;
-      let Xn = `(${hn}${plural(It.length, "its", "their")} plugin settings are not carried over)`;
-      let fo =
+      let filtered_3 = switchableInstalls.filter((install) => install.scopes.includes("project"));
+      let uninstallInstruction = `${disableHintText === "" ? "First" : `First ${disableHintText}. Then`} uninstall the ${plural(uninstallInstalls.length, "copy", "copies")} from ${marketplaceNamesOf(uninstallInstalls)}`;
+      let settingsNote = `(${unnamedNote}${plural(uninstallInstalls.length, "its", "their")} plugin settings are not carried over)`;
+      let projectScopeNote =
         filtered_3.length > 0
-          ? `, and the ${Se(filtered_3)} ${plural(filtered_3.length, "one", "ones")} at project scope`
+          ? `, and the ${marketplaceNamesOf(filtered_3)} ${plural(filtered_3.length, "one", "ones")} at project scope`
           : "";
-      let To =
-        Zt !== null
-          ? `${Kn}${rn === "" ? "" : ` ${rn}`} ${Xn}${fo}: ${Zt}`
-          : `${Kn} ${Xn} in /plugin \u2192 Installed${rn === "" ? "" : `, ${rn}`}${fo}`;
-      let bo = no(
-        At,
-        It.flatMap((So) => So.requiredBy),
+      let instructions =
+        uninstallCommandChain !== null
+          ? `${uninstallInstruction}${scopeNote === "" ? "" : ` ${scopeNote}`} ${settingsNote}${projectScopeNote}: ${uninstallCommandChain}`
+          : `${uninstallInstruction} ${settingsNote} in /plugin \u2192 Installed${scopeNote === "" ? "" : `, ${scopeNote}`}${projectScopeNote}`;
+      let thenDisableHint = disableHint(
+        switchableInstalls,
+        uninstallInstalls.flatMap((install) => install.requiredBy),
       );
-      let vn = ho === "" && bo === "" ? "Then" : "After that";
-      let co =
-        L !== null
-          ? At.length === 1
-            ? `${vn}, to switch and keep the settings of the ${Se(At)} copy: ${L}`
-            : `${vn}, to switch the ${Se(At)} copies (keeps one set of plugin settings): ${L}`
-          : `${vn === "Then" ? "Then" : "After that,"} open ${At.length === 1 ? `the ${Se(At)} one` : "one of the others"} ${Zt !== null ? "in /plugin \u2192 Installed" : "there"} and choose "Switch to ${w}"`;
-      return `${We}.${joined} ${Je}. ${To}. ${bo === "" ? "" : `Then ${bo}. `}${co}`;
+      let leadIn = disableHintText === "" && thenDisableHint === "" ? "Then" : "After that";
+      let switchInstruction =
+        switchCommand !== null
+          ? switchableInstalls.length === 1
+            ? `${leadIn}, to switch and keep the settings of the ${marketplaceNamesOf(switchableInstalls)} copy: ${switchCommand}`
+            : `${leadIn}, to switch the ${marketplaceNamesOf(switchableInstalls)} copies (keeps one set of plugin settings): ${switchCommand}`
+          : `${leadIn === "Then" ? "Then" : "After that,"} open ${switchableInstalls.length === 1 ? `the ${marketplaceNamesOf(switchableInstalls)} one` : "one of the others"} ${uninstallCommandChain !== null ? "in /plugin \u2192 Installed" : "there"} and choose "Switch to ${marketplaceLabel}"`;
+      return `${installedSummary}.${joined} ${switchExplanation}. ${instructions}. ${thenDisableHint === "" ? "" : `Then ${thenDisableHint}. `}${switchInstruction}`;
     }
-    if (q.length > 0) {
-      let filtered = r.filter((nt) => !nt.replaceable);
+    if (otherInstalls.length > 0) {
+      let filtered = installs.filter((install) => !install.replaceable);
       if (filtered.length > 0)
-        return `${We}, and not all of them can be switched. ${filtered.map((nt) => installFromOtherMarketplace(e, n, [nt], s, scope, y)).join(". ")}`;
-      let Je = q.length === 1 ? "both" : "all of them";
-      return L !== null
-        ? `${We}. To switch ${Je} to ${w} (keeps one set of plugin settings): ${L}`
-        : `${We}. To switch ${Je}, open one in /plugin \u2192 Installed and choose "Switch to ${w}"`;
+        return `${installedSummary}, and not all of them can be switched. ${filtered.map((install) => installFromOtherMarketplace(pluginId, pluginName, [install], surface, scope, isOfficialFamily)).join(". ")}`;
+      let otherCopiesLabel = otherInstalls.length === 1 ? "both" : "all of them";
+      return switchCommand !== null
+        ? `${installedSummary}. To switch ${otherCopiesLabel} to ${marketplaceLabel} (keeps one set of plugin settings): ${switchCommand}`
+        : `${installedSummary}. To switch ${otherCopiesLabel}, open one in /plugin \u2192 Installed and choose "Switch to ${marketplaceLabel}"`;
     }
-    if (G.scopes.includes("managed")) return `${We} by your organization (managed), so it can't be switched`;
-    let ze = G.requiredBy.length;
-    if (ze > 0)
-      return `${We}, and ${ke(G.requiredBy).join(", ")} ${plural(ze, "needs", "need")} that one. Disable ${plural(ze, "it", "them")} before switching (${formatMissingCopiesWarning(ze, "that")})`;
-    if (!G.replaceable) {
-      let found = G.scopes.find((scope) => scope !== "user" && scope !== "local");
-      let Je = found ? claudeCommand("plugin uninstall", G.pluginId, `--scope ${found}`) : null;
-      let joined = G.scopes.join(" and ");
-      return `${We} at ${joined} scope, which can't be switched from here. Uninstall it first${Je ? `: ${Je}` : ""}`;
+    if (firstInstall.scopes.includes("managed"))
+      return `${installedSummary} by your organization (managed), so it can't be switched`;
+    let dependentCount = firstInstall.requiredBy.length;
+    if (dependentCount > 0)
+      return `${installedSummary}, and ${quoteIds(firstInstall.requiredBy).join(", ")} ${plural(dependentCount, "needs", "need")} that one. Disable ${plural(dependentCount, "it", "them")} before switching (${formatMissingCopiesWarning(dependentCount, "that")})`;
+    if (!firstInstall.replaceable) {
+      let found = firstInstall.scopes.find((scope) => scope !== "user" && scope !== "local");
+      let uninstallCommand = found
+        ? claudeCommand("plugin uninstall", firstInstall.pluginId, `--scope ${found}`)
+        : null;
+      let joined = firstInstall.scopes.join(" and ");
+      return `${installedSummary} at ${joined} scope, which can't be switched from here. Uninstall it first${uninstallCommand ? `: ${uninstallCommand}` : ""}`;
     }
-    return L !== null
-      ? `${We}. To switch to ${w} (keeps your plugin settings): ${L}`
-      : `${We}. To switch, open it in /plugin \u2192 Installed and choose "Switch to ${w}"`;
+    return switchCommand !== null
+      ? `${installedSummary}. To switch to ${marketplaceLabel} (keeps your plugin settings): ${switchCommand}`
+      : `${installedSummary}. To switch, open it in /plugin \u2192 Installed and choose "Switch to ${marketplaceLabel}"`;
   }
   return "";
 }
@@ -867,8 +972,8 @@ function installFromOtherMarketplace(e, n, r, s, scope = "user", y) {
 /**
  * 去掉 12 位哈希后缀，纯哈希/unknown 返回 undefined。
  */
-function displayableGitHeadName(e) {
-  let replaced = e?.replace(/-[0-9a-f]{12}$/, "");
+function displayableGitHeadName(name) {
+  let replaced = name?.replace(/-[0-9a-f]{12}$/, "");
   return replaced === undefined ||
     replaced === "" ||
     replaced === "unknown" ||

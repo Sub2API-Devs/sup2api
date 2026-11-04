@@ -52,25 +52,25 @@ function isFeedbackDraftsEnabled() {
 /**
  * 写入用户设置 feedbackDrafts（可走存储 v5），并上报变更来源。
  */
-function setFeedbackDraftsSetting(e, { storageV5, via }) {
-  let n =
+function setFeedbackDraftsSetting(value, { storageV5, via }) {
+  let result =
     isStorageV5Enabled() && storageV5 !== undefined
       ? updateSettingsForSource(
           "userSettings",
           {
-            feedbackDrafts: e,
+            feedbackDrafts: value,
           },
           undefined,
           storageV5,
         )
       : updateSettingsForSource("userSettings", {
-          feedbackDrafts: e,
+          feedbackDrafts: value,
         });
   logEvent("tengu_feedback_drafts_setting_changed", {
-    value: fromEnum(e),
+    value: fromEnum(value),
     via: fromEnum(via),
   });
-  return n;
+  return result;
 }
 export {
   isFeedbackDraftsEnabled,

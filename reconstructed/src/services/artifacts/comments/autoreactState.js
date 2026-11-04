@@ -49,16 +49,16 @@ function isToClaudeTimestamp(toClaudeAt) {
   return toClaudeAt != null && ISO_SECOND_UTC_RE.test(toClaudeAt);
 }
 //@ chunk-9tgt55am.js:27873-27943 placement
-function summonKey(e, t, n) {
-  return `${e.toLowerCase()}:${t.toLowerCase()}:${n}`;
+function summonKey(slug, threadId, gestureAt) {
+  return `${slug.toLowerCase()}:${threadId.toLowerCase()}:${gestureAt}`;
 }
 //@ chunk-9tgt55am.js:27943-27994 placement
-function summonSlugKey(e, t) {
-  return `${e.toLowerCase()}:*:${t}`;
+function summonSlugKey(slug, key) {
+  return `${slug.toLowerCase()}:*:${key}`;
 }
 //@ chunk-9tgt55am.js:27994-28077 placement
-function isCommentNotificationText(e) {
-  let promptText = getPromptText(e);
+function isCommentNotificationText(text) {
+  let promptText = getPromptText(text);
   return (
     promptText !== null &&
     (promptText.startsWith(COMMENT_NOTICE_HEADER) || promptText.startsWith(COMMENTS_NOTICE_HEADER))
@@ -68,26 +68,26 @@ function isCommentNotificationText(e) {
 /**
  * 解析"[Artifact comment sent to Claude]"格式的通知文本，取出 artifact、线程与发送时间。
  */
-function parseCommentNotification(promptText) {
-  if (!promptText.startsWith(COMMENT_NOTICE_HEADER)) return null;
-  let lines = promptText.split(
+function parseCommentNotification(notificationText) {
+  if (!notificationText.startsWith(COMMENT_NOTICE_HEADER)) return null;
+  let lines = notificationText.split(
     `
 `,
     4,
   );
   if (lines.length < 4 || lines[0] !== COMMENT_NOTICE_HEADER) return null;
-  let n = lines[1];
-  let a = lines[2];
-  let r = lines[3];
+  let line2 = lines[1];
+  let line3 = lines[2];
+  let line4 = lines[3];
   if (
-    !n.startsWith(ARTIFACT_LINE_PREFIX) ||
-    !a.startsWith(THREAD_LINE_PREFIX) ||
-    !r.startsWith(SENT_AT_LINE_PREFIX)
+    !line2.startsWith(ARTIFACT_LINE_PREFIX) ||
+    !line3.startsWith(THREAD_LINE_PREFIX) ||
+    !line4.startsWith(SENT_AT_LINE_PREFIX)
   )
     return null;
-  let slug = parseArtifactUrl(n.slice(ARTIFACT_LINE_PREFIX.length).trim())?.slug;
-  let trimmed = a.slice(THREAD_LINE_PREFIX.length).trim();
-  let sliced = r.slice(SENT_AT_LINE_PREFIX.length);
+  let slug = parseArtifactUrl(line2.slice(ARTIFACT_LINE_PREFIX.length).trim())?.slug;
+  let trimmed = line3.slice(THREAD_LINE_PREFIX.length).trim();
+  let sliced = line4.slice(SENT_AT_LINE_PREFIX.length);
   if (slug === undefined || normalizeUuidOrNull(trimmed) === null || !ISO_SECOND_UTC_RE.test(sliced))
     return null;
   return {
@@ -97,26 +97,26 @@ function parseCommentNotification(promptText) {
   };
 }
 //@ chunk-9tgt55am.js:28464-28847 placement
-function parseMultiCommentNotification(e) {
-  if (!e.startsWith(COMMENTS_NOTICE_HEADER)) return null;
-  let lines = e.split(
+function parseMultiCommentNotification(text) {
+  if (!text.startsWith(COMMENTS_NOTICE_HEADER)) return null;
+  let lines = text.split(
     `
 `,
     4,
   );
   if (lines.length < 4 || lines[0] !== COMMENTS_NOTICE_HEADER) return null;
-  let n = lines[1];
-  let a = lines[2];
-  let r = lines[3];
+  let line2 = lines[1];
+  let line3 = lines[2];
+  let line4 = lines[3];
   if (
-    !n.startsWith(ARTIFACT_LINE_PREFIX) ||
-    !a.startsWith(THREADS_LINE_PREFIX) ||
-    !r.startsWith(SENT_AT_LINE_PREFIX)
+    !line2.startsWith(ARTIFACT_LINE_PREFIX) ||
+    !line3.startsWith(THREADS_LINE_PREFIX) ||
+    !line4.startsWith(SENT_AT_LINE_PREFIX)
   )
     return null;
-  let slug = parseArtifactUrl(n.slice(ARTIFACT_LINE_PREFIX.length).trim())?.slug;
-  let sliced = a.slice(THREADS_LINE_PREFIX.length);
-  let sliced_2 = r.slice(SENT_AT_LINE_PREFIX.length);
+  let slug = parseArtifactUrl(line2.slice(ARTIFACT_LINE_PREFIX.length).trim())?.slug;
+  let sliced = line3.slice(THREADS_LINE_PREFIX.length);
+  let sliced_2 = line4.slice(SENT_AT_LINE_PREFIX.length);
   if (slug === undefined || !NUMBER_STRING_RE.test(sliced) || !ISO_SECOND_UTC_RE.test(sliced_2)) return null;
   return {
     slug,
@@ -125,22 +125,22 @@ function parseMultiCommentNotification(e) {
   };
 }
 //@ chunk-9tgt55am.js:28847-28984 placement
-function summonKeyFromNotification(promptText) {
-  let commentNotification = parseCommentNotification(promptText);
+function summonKeyFromNotification(text) {
+  let commentNotification = parseCommentNotification(text);
   if (commentNotification !== null)
     return summonKey(commentNotification.slug, commentNotification.threadId, commentNotification.gestureAt);
-  let multiCommentNotification = parseMultiCommentNotification(promptText);
+  let multiCommentNotification = parseMultiCommentNotification(text);
   return multiCommentNotification === null
     ? null
     : summonSlugKey(multiCommentNotification.slug, multiCommentNotification.gestureAt);
 }
 //@ chunk-9tgt55am.js:28984-29282 placement
-function consumeSeededSummon(e) {
-  if (e.seededSummon !== true) return null;
-  let promptText = getPromptText(e.value);
-  let n = promptText === null ? null : summonKeyFromNotification(promptText);
-  if (promptText === null || n === null) return null;
-  let commentNotification = parseCommentNotification(promptText);
+function consumeSeededSummon(promptText) {
+  if (promptText.seededSummon !== true) return null;
+  let text = getPromptText(promptText.value);
+  let key = text === null ? null : summonKeyFromNotification(text);
+  if (text === null || key === null) return null;
+  let commentNotification = parseCommentNotification(text);
   if (commentNotification !== null)
     recordCommentHandIn(
       commentNotification.slug,
@@ -148,46 +148,46 @@ function consumeSeededSummon(e) {
       commentNotification.gestureAt,
     );
   else {
-    let multiCommentNotification = parseMultiCommentNotification(promptText);
+    let multiCommentNotification = parseMultiCommentNotification(text);
     if (multiCommentNotification !== null) recordUnaccountedComments(multiCommentNotification.slug);
   }
-  if (e.shouldQuery === false) return null;
-  addSummonClaim([n]);
-  if (commentNotification !== null) rememberOpenSummon(n, commentNotification);
-  return n;
+  if (promptText.shouldQuery === false) return null;
+  addSummonClaim([key]);
+  if (commentNotification !== null) rememberOpenSummon(key, commentNotification);
+  return key;
 }
 //@ chunk-9tgt55am.js:29282-29505 placement
 /**
  * 用户提示词是宿主预置的评论召唤时，解析通知得到召唤键（单条或多条评论），记录评论交入并登记为已认领；不是召唤时返回 null。
  */
-function takeSeededSummon(e) {
-  if (e.seededSummon !== true || e.shouldQuery === false) return null;
-  let promptText = getPromptText(e.value);
-  let n = promptText === null ? null : summonKeyFromNotification(promptText);
-  if (promptText === null || n === null) return null;
-  let commentNotification = parseCommentNotification(promptText);
+function takeSeededSummon(promptText) {
+  if (promptText.seededSummon !== true || promptText.shouldQuery === false) return null;
+  let promptText_2 = getPromptText(promptText.value);
+  let key = promptText_2 === null ? null : summonKeyFromNotification(promptText_2);
+  if (promptText_2 === null || key === null) return null;
+  let commentNotification = parseCommentNotification(promptText_2);
   if (commentNotification !== null)
     recordCommentHandIn(
       commentNotification.slug,
       commentNotification.threadId,
       commentNotification.gestureAt,
     );
-  addSummonClaim([n]);
-  return n;
+  addSummonClaim([key]);
+  return key;
 }
 //@ chunk-9tgt55am.js:29505-29734 placement
-function rememberOpenSummon(e, commentNotification) {
+function rememberOpenSummon(notification, commentNotification) {
   let { open } = getLiveState().summonSeeds;
-  open.delete(e);
-  open.set(e, {
+  open.delete(notification);
+  open.set(notification, {
     slug: commentNotification.slug.toLowerCase(),
     threadId: commentNotification.threadId.toLowerCase(),
     gestureAt: commentNotification.gestureAt,
   });
   while (open.size > MAX_OPEN_SUMMONS) {
-    let a = open.keys().next().value;
-    if (a === undefined) break;
-    open.delete(a);
+    let oldest = open.keys().next().value;
+    if (oldest === undefined) break;
+    open.delete(oldest);
   }
 }
 //@ chunk-9tgt55am.js:29734-30125 placement
@@ -195,16 +195,16 @@ function settleSummonSeed(slug, threadId, text) {
   let { open, settled } = getLiveState().summonSeeds;
   let lower = slug.toLowerCase();
   let lower_2 = threadId.toLowerCase();
-  for (let [y, C] of open) if (C.slug === lower && C.threadId === lower_2) open.delete(y);
-  let h = text == null ? null : parseCommentNotification(text);
-  if (h !== null && h.slug.toLowerCase() === lower && h.threadId.toLowerCase() === lower_2) {
-    let y = summonKey(h.slug, h.threadId, h.gestureAt);
-    settled.delete(y);
-    settled.add(y);
+  for (let [key, entry] of open) if (entry.slug === lower && entry.threadId === lower_2) open.delete(key);
+  let parsed = text == null ? null : parseCommentNotification(text);
+  if (parsed !== null && parsed.slug.toLowerCase() === lower && parsed.threadId.toLowerCase() === lower_2) {
+    let key = summonKey(parsed.slug, parsed.threadId, parsed.gestureAt);
+    settled.delete(key);
+    settled.add(key);
     while (settled.size > MAX_OPEN_SUMMONS) {
-      let C = settled.values().next().value;
-      if (C === undefined) break;
-      settled.delete(C);
+      let oldest = settled.values().next().value;
+      if (oldest === undefined) break;
+      settled.delete(oldest);
     }
   }
 }
@@ -212,295 +212,299 @@ function settleSummonSeed(slug, threadId, text) {
 /**
  * 导出函数 `isSummonSettled`：参数 e，返回 getLiveState().summonSeeds.settled.has(Me(e.slug, e.threadId, e.gestureAt))。
  */
-function isSummonSettled(e) {
-  return getLiveState().summonSeeds.settled.has(summonKey(e.slug, e.threadId, e.gestureAt));
+function isSummonSettled(key) {
+  return getLiveState().summonSeeds.settled.has(summonKey(key.slug, key.threadId, key.gestureAt));
 }
 //@ chunk-9tgt55am.js:30212-30296 placement
 /**
  * 导出函数 `openSummonFor`：参数 e，返回 getLiveState().summonSeeds.open.get(Me(e.slug, e.threadId, e.gestureAt))。
  */
-function openSummonFor(e) {
-  return getLiveState().summonSeeds.open.get(summonKey(e.slug, e.threadId, e.gestureAt));
+function openSummonFor(key) {
+  return getLiveState().summonSeeds.open.get(summonKey(key.slug, key.threadId, key.gestureAt));
 }
 //@ chunk-9tgt55am.js:30296-30466 placement
 /**
  * 判断提示词来自本地真实用户输入：已声明、非远程 IO、非合成、非对等投递、没有入站来源，且客户端平台为空或是桌面应用。
  */
-function isLocalDesktopPrompt(e) {
+function isLocalDesktopPrompt(text) {
   return (
-    e.declared === true &&
-    !e.isRemoteIO &&
-    e.isSynthetic !== true &&
-    !e.peerDelivered &&
-    e.inboundOrigin === undefined &&
-    (e.clientPlatform === undefined || e.clientPlatform === DESKTOP_APP)
+    text.declared === true &&
+    !text.isRemoteIO &&
+    text.isSynthetic !== true &&
+    !text.peerDelivered &&
+    text.inboundOrigin === undefined &&
+    (text.clientPlatform === undefined || text.clientPlatform === DESKTOP_APP)
   );
 }
 //@ chunk-9tgt55am.js:30466-30633 placement
 /**
  * 为线程里等待回复且时间戳有效的评论生成召唤键，登记为已读认领（有上限），返回数量。
  */
-function claimAwaitingReplies(slug, t) {
-  let n = [];
-  for (let a of t)
-    for (let r of getCommentsAwaitingReply(a))
-      if (isToClaudeTimestamp(r.toClaudeAt)) n.push(summonKey(slug, a.id, r.toClaudeAt));
-  addToBoundedSet(getLiveState().summonSeeds.readClaims, n, MAX_READ_CLAIMS);
-  return n.length;
+function claimAwaitingReplies(slug, ids) {
+  let out = [];
+  for (let id of ids)
+    for (let comment of getCommentsAwaitingReply(id))
+      if (isToClaudeTimestamp(comment.toClaudeAt)) out.push(summonKey(slug, id.id, comment.toClaudeAt));
+  addToBoundedSet(getLiveState().summonSeeds.readClaims, out, MAX_READ_CLAIMS);
+  return out.length;
 }
 //@ chunk-9tgt55am.js:30633-30767 placement
 /**
  * 把一组值按最近使用顺序加入集合（已有的移到末尾），超过上限时淘汰最早的。
  */
-function addToBoundedSet(e, t, n) {
-  for (let a of t) {
-    e.delete(a);
-    e.add(a);
+function addToBoundedSet(set, values, max) {
+  for (let value of values) {
+    set.delete(value);
+    set.add(value);
   }
-  while (e.size > n) {
-    let a = e.values().next().value;
-    if (a === undefined) break;
-    e.delete(a);
+  while (set.size > max) {
+    let oldest = set.values().next().value;
+    if (oldest === undefined) break;
+    set.delete(oldest);
   }
 }
 //@ chunk-9tgt55am.js:30767-30815 placement
-function addSummonClaim(e) {
-  addToBoundedSet(getLiveState().summonSeeds.claims, e, MAX_SUMMON_CLAIMS);
+function addSummonClaim(key) {
+  addToBoundedSet(getLiveState().summonSeeds.claims, key, MAX_SUMMON_CLAIMS);
 }
 //@ chunk-9tgt55am.js:30815-30838 placement
 var DEFAULT_SEED_OPTIONS = {
   hostSeeded: true,
 };
 //@ chunk-9tgt55am.js:30838-30937 placement
-function hasSummonClaim(slug, id, n, a = DEFAULT_SEED_OPTIONS) {
+function hasSummonClaim(slug, id, slugArg, options = DEFAULT_SEED_OPTIONS) {
   return (
-    getLiveState().summonSeeds.readClaims.has(summonKey(slug, id, n)) ||
-    (a.hostSeeded && hasHostClaim(slug, id, n))
+    getLiveState().summonSeeds.readClaims.has(summonKey(slug, id, slugArg)) ||
+    (options.hostSeeded && hasHostClaim(slug, id, slugArg))
   );
 }
 //@ chunk-9tgt55am.js:30937-31027 placement
-function hasHostClaim(slug, id, n) {
+function hasHostClaim(slug, id, idArg) {
   let { claims } = getLiveState().summonSeeds;
-  return claims.has(summonKey(slug, id, n)) || claims.has(summonSlugKey(slug, n));
+  return claims.has(summonKey(slug, id, idArg)) || claims.has(summonSlugKey(slug, idArg));
 }
 //@ chunk-9tgt55am.js:31027-31096 placement
-function allSummonsClaimed(e, t, n, a = DEFAULT_SEED_OPTIONS) {
-  return n.length > 0 && n.every((r) => hasSummonClaim(e, t, r, a));
+function allSummonsClaimed(slug, threadId, ids, options = DEFAULT_SEED_OPTIONS) {
+  return ids.length > 0 && ids.every((id) => hasSummonClaim(slug, threadId, id, options));
 }
 //@ chunk-9tgt55am.js:31096-31269 placement
 /**
  * 消费召唤种子的认领记录：校验通过后删除对应的读认领（由宿主预置时一并删除认领）。
  */
-function consumeSummonClaims(slug, id, n, a = DEFAULT_SEED_OPTIONS) {
-  if (!allSummonsClaimed(slug, id, n, a)) return false;
+function consumeSummonClaims(slug, threadId, ids, options = DEFAULT_SEED_OPTIONS) {
+  if (!allSummonsClaimed(slug, threadId, ids, options)) return false;
   let { claims, readClaims } = getLiveState().summonSeeds;
-  for (let d of n) {
-    readClaims.delete(summonKey(slug, id, d));
-    if (a.hostSeeded) claims.delete(summonKey(slug, id, d));
+  for (let claimId of ids) {
+    readClaims.delete(summonKey(slug, threadId, claimId));
+    if (options.hostSeeded) claims.delete(summonKey(slug, threadId, claimId));
   }
   return true;
 }
 //@ chunk-9tgt55am.js:31269-31358 placement
-function consumeReadClaims(slug, id, n) {
+function consumeReadClaims(slug, id, ids) {
   let { readClaims } = getLiveState().summonSeeds;
-  for (let r of n) readClaims.delete(summonKey(slug, id, r));
+  for (let claimId of ids) readClaims.delete(summonKey(slug, id, claimId));
 }
 //@ chunk-9tgt55am.js:31358-31573 placement
 /**
  * 在宽限期内轮询等待某线程的召唤认领出现（可中止），到期后再检查一次。
  */
-async function waitForSummonClaim(slug, id, n, signal) {
+async function waitForSummonClaim(slug, threadId, ids, signal) {
   let graceMsOverride = getLiveState().summonSeeds.graceMsOverride ?? SUMMON_GRACE_MS;
-  let s = Date.now() + graceMsOverride;
-  while (Date.now() < s) {
+  let deadline = Date.now() + graceMsOverride;
+  while (Date.now() < deadline) {
     if (signal.aborted) return false;
-    if (allSummonsClaimed(slug, id, n)) return true;
-    await sleep(Math.min(SUMMON_POLL_MS, Math.max(1, s - Date.now())), signal);
+    if (allSummonsClaimed(slug, threadId, ids)) return true;
+    await sleep(Math.min(SUMMON_POLL_MS, Math.max(1, deadline - Date.now())), signal);
   }
-  return allSummonsClaimed(slug, id, n);
+  return allSummonsClaimed(slug, threadId, ids);
 }
 //@ chunk-9tgt55am.js:31573-31729 placement
 /**
  * 取提示词文本：字符串直接返回；内容块数组取最后一个 text 块的文字；否则 null。
  */
-function getPromptText(e) {
-  if (typeof e === "string") return e;
-  if (Array.isArray(e)) {
-    let last = e.at(-1);
+function getPromptText(prompt) {
+  if (typeof prompt === "string") return prompt;
+  if (Array.isArray(prompt)) {
+    let last = prompt.at(-1);
     if (last?.type === "text" && typeof last.text === "string") return last.text;
   }
   return null;
 }
 //@ chunk-9tgt55am.js:35345-35500 placement
-function getWholeFileAnchor(e) {
-  return e.anchor_path !== undefined &&
-    (e.span_quote === undefined || e.span_quote === "") &&
-    e.anchor_file_degraded !== true &&
-    e.carried !== true
-    ? e.anchor_path
+function getWholeFileAnchor(thread) {
+  return thread.anchor_path !== undefined &&
+    (thread.span_quote === undefined || thread.span_quote === "") &&
+    thread.anchor_file_degraded !== true &&
+    thread.carried !== true
+    ? thread.anchor_path
     : undefined;
 }
 //@ chunk-9tgt55am.js:35500-35618 placement
-function getLatestCommentTime(e) {
-  return e.comments.reduce(
+function getLatestCommentTime(thread) {
+  return thread.comments.reduce(
     (acc, comment) =>
       comment.created_at !== undefined && comment.created_at > acc ? comment.created_at : acc,
-    e.created_at ?? "",
+    thread.created_at ?? "",
   );
 }
 //@ chunk-9tgt55am.js:35618-37679 placement
-async function collectThreadAnchorSnippets(e, t, n = {}) {
-  let { onlyThreadIds, memoKey, regionKids } = n;
+async function collectThreadAnchorSnippets(threads, readAnchorFile, options = {}) {
+  let { onlyThreadIds, memoKey, regionKids } = options;
   let liveState = getLiveState();
   let { anchorSnippets, accountEpoch } = liveState;
-  let C = (anchorFile) =>
+  let readMemo = (anchorFile) =>
     memoKey === undefined ? undefined : anchorSnippets.get(`${memoKey}|${anchorFile ?? ""}`);
-  let R = (P) => {
-    if (onlyThreadIds !== undefined && !onlyThreadIds.has(P.id)) return;
-    let wholeFileAnchor = getWholeFileAnchor(P);
+  let anchorOf = (thread) => {
+    if (onlyThreadIds !== undefined && !onlyThreadIds.has(thread.id)) return;
+    let wholeFileAnchor = getWholeFileAnchor(thread);
     if (wholeFileAnchor === undefined) return;
-    let G = P.anchor_region ? regionKids?.get(P.id) : undefined;
-    return G === undefined || G.length === 0
+    let kids = thread.anchor_region ? regionKids?.get(thread.id) : undefined;
+    return kids === undefined || kids.length === 0
       ? {
           path: wholeFileAnchor,
           key: wholeFileAnchor,
         }
       : {
           path: wholeFileAnchor,
-          kids: G,
-          key: `${wholeFileAnchor}|k${G.join(",")}`,
+          kids,
+          key: `${wholeFileAnchor}|k${kids.join(",")}`,
         };
   };
-  let b = (P) =>
-    (P.comments.some((comment) => comment.sent_to_claude === true) ? 0 : 2) + (P.resolved ? 1 : 0);
-  let sorted = e
-    .filter((P) => R(P) !== undefined)
-    .sort((P, D) => b(P) - b(D) || getLatestCommentTime(D).localeCompare(getLatestCommentTime(P)));
-  let S = new Map();
-  let w = new Map();
-  for (let P of sorted) {
-    let D = R(P);
-    let G = C(P.anchor_file);
-    if (G?.has(D.key)) {
-      let x = w.get(P.anchor_file) ?? new Map();
-      x.set(D.key, G.get(D.key));
-      w.set(P.anchor_file, x);
+  let rankOf = (thread) =>
+    (thread.comments.some((comment) => comment.sent_to_claude === true) ? 0 : 2) + (thread.resolved ? 1 : 0);
+  let sorted = threads
+    .filter((thread) => anchorOf(thread) !== undefined)
+    .sort((a, b) => rankOf(a) - rankOf(b) || getLatestCommentTime(b).localeCompare(getLatestCommentTime(a)));
+  let requestsByFile = new Map();
+  let memoHitsByFile = new Map();
+  for (let thread of sorted) {
+    let anchor = anchorOf(thread);
+    let memo = readMemo(thread.anchor_file);
+    if (memo?.has(anchor.key)) {
+      let perFile = memoHitsByFile.get(thread.anchor_file) ?? new Map();
+      perFile.set(anchor.key, memo.get(anchor.key));
+      memoHitsByFile.set(thread.anchor_file, perFile);
       continue;
     }
-    if (!S.has(P.anchor_file)) {
-      if (S.size >= MAX_ANCHOR_FILES) continue;
-      S.set(P.anchor_file, {
+    if (!requestsByFile.has(thread.anchor_file)) {
+      if (requestsByFile.size >= MAX_ANCHOR_FILES) continue;
+      requestsByFile.set(thread.anchor_file, {
         paths: new Set(),
         requests: new Map(),
       });
     }
-    let { paths, requests } = S.get(P.anchor_file);
-    if (paths.size < MAX_ANCHORS_PER_FILE || paths.has(D.path)) {
-      paths.add(D.path);
-      requests.set(D.key, D);
+    let { paths, requests } = requestsByFile.get(thread.anchor_file);
+    if (paths.size < MAX_ANCHORS_PER_FILE || paths.has(anchor.path)) {
+      paths.add(anchor.path);
+      requests.set(anchor.key, anchor);
     }
   }
   if (memoKey !== undefined)
-    for (let key of w.keys()) {
-      let D = `${memoKey}|${key ?? ""}`;
-      let G = anchorSnippets.get(D);
-      if (G !== undefined) {
-        anchorSnippets.delete(D);
-        anchorSnippets.set(D, G);
+    for (let key of memoHitsByFile.keys()) {
+      let memoKeyWithPath = `${memoKey}|${key ?? ""}`;
+      let cached = anchorSnippets.get(memoKeyWithPath);
+      if (cached !== undefined) {
+        anchorSnippets.delete(memoKeyWithPath);
+        anchorSnippets.set(memoKeyWithPath, cached);
       }
     }
-  let L = new Map();
+  let out = new Map();
   await Promise.all(
-    [...S].map(async ([P, { paths: D, requests: G }]) => {
-      let V = await t(P).catch(() => {
+    [...requestsByFile].map(async ([path, { paths, requests }]) => {
+      let read = await readAnchorFile(path).catch(() => {
         return;
       });
-      if (V === undefined) return;
-      let q = new Map();
-      for (let { path, kids } of G.values())
-        if (kids !== undefined) q.set(path, [...(q.get(path) ?? []), ...kids]);
-      let anchorElements = await resolveAnchorElements(V, [...D], q);
-      let Y = new Set();
-      let z = new Map();
-      for (let { path, kids, key } of G.values()) {
-        let le = anchorElements.get(path);
-        if (le === undefined) {
-          z.set(key, null);
+      if (read === undefined) return;
+      let snippets = new Map();
+      for (let { path, kids } of requests.values())
+        if (kids !== undefined) snippets.set(path, [...(snippets.get(path) ?? []), ...kids]);
+      let anchorElements = await resolveAnchorElements(read, [...paths], snippets);
+      let seenKeys = new Set();
+      let pending = new Map();
+      for (let { path, kids, key } of requests.values()) {
+        let located = anchorElements.get(path);
+        if (located === undefined) {
+          pending.set(key, null);
           continue;
         }
-        let mapped = kids?.map((ue) => le.kids?.get(ue));
-        if (mapped?.includes(undefined)) Y.add(key);
-        let be = Y.has(key) ? [] : mapped?.filter((ue) => typeof ue === "string");
-        z.set(key, {
-          snippet: le.snippet,
-          ...(be !== undefined &&
-            be.length > 0 && {
-              inside: be,
+        let mapped = kids?.map((kid) => located.kids?.get(kid));
+        if (mapped?.includes(undefined)) seenKeys.add(key);
+        let known = seenKeys.has(key) ? [] : mapped?.filter((text) => typeof text === "string");
+        pending.set(key, {
+          snippet: located.snippet,
+          ...(known !== undefined &&
+            known.length > 0 && {
+              inside: known,
             }),
         });
       }
-      L.set(P, z);
+      out.set(path, pending);
       if (memoKey === undefined || liveState.accountEpoch !== accountEpoch) return;
-      let Q = `${memoKey}|${P ?? ""}`;
-      let I = anchorSnippets.get(Q) ?? new Map();
-      for (let [j, Z] of z) if (!Y.has(j)) I.set(j, Z);
-      anchorSnippets.delete(Q);
-      anchorSnippets.set(Q, I);
+      let cacheKey = `${memoKey}|${path ?? ""}`;
+      let perFileOut = anchorSnippets.get(cacheKey) ?? new Map();
+      for (let [key, value] of pending) if (!seenKeys.has(key)) perFileOut.set(key, value);
+      anchorSnippets.delete(cacheKey);
+      anchorSnippets.set(cacheKey, perFileOut);
       while (anchorSnippets.size > ANCHOR_CACHE_MAX_PAGES)
         anchorSnippets.delete(anchorSnippets.keys().next().value);
     }),
   );
-  return e.map((P) => {
-    let D = R(P);
-    if (D === undefined) return P;
-    let G = L.get(P.anchor_file)?.get(D.key) ?? w.get(P.anchor_file)?.get(D.key) ?? undefined;
-    return G === undefined || G === null
-      ? P
+  return threads.map((thread) => {
+    let anchor = anchorOf(thread);
+    if (anchor === undefined) return thread;
+    let snippet =
+      out.get(thread.anchor_file)?.get(anchor.key) ??
+      memoHitsByFile.get(thread.anchor_file)?.get(anchor.key) ??
+      undefined;
+    return snippet === undefined || snippet === null
+      ? thread
       : {
-          ...P,
-          anchor_snippet: G.snippet,
-          ...(G.inside !== undefined && {
-            region_inside: [...G.inside],
+          ...thread,
+          anchor_snippet: snippet.snippet,
+          ...(snippet.inside !== undefined && {
+            region_inside: [...snippet.inside],
           }),
         };
   });
 }
 //@ chunk-9tgt55am.js:37679-37774 placement
-function rememberSummonAnswer(e) {
-  let t = {
-    ...e,
+function rememberSummonAnswer(answer) {
+  let entry = {
+    ...answer,
     consumed: false,
   };
-  getLiveState().summonAnswers.set(e.expectedToolUseId, t);
-  return t;
+  getLiveState().summonAnswers.set(answer.expectedToolUseId, entry);
+  return entry;
 }
 //@ chunk-9tgt55am.js:37774-38046 placement
 /**
  * 某次回复工具调用对应的召唤答复还没用过且属于同一线程时，标记为已用；返回是否算作回应召唤，或需要延续的回复 id。
  */
 function consumeSummonAnswer(slug, threadId, toolUseId) {
-  let a = toolUseId === undefined ? undefined : getLiveState().summonAnswers.get(toolUseId);
-  if (a === undefined || a.consumed || a.slug !== slug || a.threadId !== threadId)
+  let entry = toolUseId === undefined ? undefined : getLiveState().summonAnswers.get(toolUseId);
+  if (entry === undefined || entry.consumed || entry.slug !== slug || entry.threadId !== threadId)
     return {
       answersSummon: false,
     };
-  a.consumed = true;
-  return a.continuesReplyId === undefined
+  entry.consumed = true;
+  return entry.continuesReplyId === undefined
     ? {
         answersSummon: true,
       }
     : {
         answersSummon: false,
-        continuesReplyId: a.continuesReplyId,
+        continuesReplyId: entry.continuesReplyId,
       };
 }
 //@ chunk-9tgt55am.js:38046-38150 placement
 /**
  * 若召唤回答仍是当前记录，则按预期工具调用 id 删除它。
  */
-function clearSummonAnswer(e) {
+function clearSummonAnswer(toolUseId) {
   let summonAnswers = getLiveState().summonAnswers;
-  if (summonAnswers.get(e.expectedToolUseId) === e) summonAnswers.delete(e.expectedToolUseId);
+  if (summonAnswers.get(toolUseId.expectedToolUseId) === toolUseId)
+    summonAnswers.delete(toolUseId.expectedToolUseId);
 }
 export {
   isLocalDesktopPrompt,

@@ -58,34 +58,35 @@ class FileStatWatcher {
     } catch {}
     this.arming = false;
     if (this.closed) return;
-    let n = basename(file);
+    let fileName = basename(file);
     try {
-      let r = (this.options.watch ?? watch)(
+      let watcher = (this.options.watch ?? watch)(
         dirname(file),
         {
           persistent: false,
         },
-        (o, s) => {
-          if (this.watcher === r && (s === null || s === n)) this.statSoon();
+        (eventType, changedFileName) => {
+          if (this.watcher === watcher && (changedFileName === null || changedFileName === fileName))
+            this.statSoon();
         },
       );
-      r.on("error", (o) => this.pollInstead(r, errorMessage(o)));
-      this.watcher = r;
+      watcher.on("error", (error) => this.pollInstead(watcher, errorMessage(error)));
+      this.watcher = watcher;
     } catch (error) {
       this.pollInstead(undefined, errorMessage(error));
       return;
     }
-    logForDebugging(`Watching ${dirname(file)} for changes to ${n}`);
+    logForDebugging(`Watching ${dirname(file)} for changes to ${fileName}`);
     this.poll(this.options.safetyPollMs);
     this.statSoon();
   }
-  poll(e) {
+  poll(intervalMs) {
     this.stopPolling();
-    this.pollMs = e;
+    this.pollMs = intervalMs;
     this.pollListener = watchFileSafe(
       this.file,
       {
-        interval: e,
+        interval: intervalMs,
         persistent: false,
       },
       ({ mtimeMs, size }) => {
@@ -109,13 +110,13 @@ class FileStatWatcher {
       this.pollListener = undefined;
     }
   }
-  pollInstead(e, n) {
-    if (e !== this.watcher) return;
-    this.gaveUpOnEvents ||= e !== undefined;
+  pollInstead(watcherToDrop, reason) {
+    if (watcherToDrop !== this.watcher) return;
+    this.gaveUpOnEvents ||= watcherToDrop !== undefined;
     this.dropWatcher();
     if (this.pollMs !== this.options.fallbackPollMs) {
       logForDebugging(
-        `Cannot watch for changes to ${this.file} (${n}); checking it every ${this.options.fallbackPollMs}ms instead`,
+        `Cannot watch for changes to ${this.file} (${reason}); checking it every ${this.options.fallbackPollMs}ms instead`,
         {
           level: "warn",
         },
@@ -131,25 +132,25 @@ class FileStatWatcher {
     this.settleTimer.unref();
   }
   async statNow() {
-    let e;
+    let stat;
     this.statting = true;
     try {
       let { mtimeMs, size } = await getFsImplementation().stat(this.file);
-      e = {
+      stat = {
         mtimeMs,
         size,
       };
     } catch {
-      e = {
+      stat = {
         mtimeMs: 0,
         size: 0,
       };
     }
     this.statting = false;
     if (this.closed) return;
-    this.lastStatMtimeMs = e.mtimeMs;
+    this.lastStatMtimeMs = stat.mtimeMs;
     try {
-      this.onStat(e);
+      this.onStat(stat);
     } catch (error) {
       logError(error);
     }

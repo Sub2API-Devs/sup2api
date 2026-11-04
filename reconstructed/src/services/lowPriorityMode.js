@@ -5,11 +5,10 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-77a3xzkb.js (12)
- * attribution: placement 12
+ * pieces: chunk-77a3xzkb.js (11)
+ * attribution: placement 11
  */
 import { HostScoped } from "../utils/hostScoped.js";
-import { getRootSession, onSessionSwitch } from "../bootstrap/state.js";
 import {
   isFiveHourAutoResumable,
   isAutoContinueEligible,
@@ -21,6 +20,7 @@ import {
   getCooloffUntil,
   isLowPriorityActive,
   resumableResetAt,
+  getLowPrioritySessionState,
   acceptLowPriorityOffer,
   resumeLowPriority,
   getLowPriorityStateValue,
@@ -38,36 +38,34 @@ import { fromEnum, fromEnumOpt } from "./analytics/safeMetadata.js";
 import { getCurrentLimits } from "./claudeAiLimits.js";
 import { formatResetTimeWithLocale } from "../utils/format.js";
 import { statusLineShouldDisplay } from "../components/StatusLine.js";
+import { onSessionSwitch } from "../bootstrap/state.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-77a3xzkb.js:584-704 placement
 /**
  * 低优先级模式的进程状态（已记录/已显示/已扣留的重置点）。
  */
-var LOW_PRIORITY_STATE = new HostScoped(() => ({
-  notedWallResetsAt: null,
-  shownWallResetsAt: null,
-  withheldWallResetsAt: null,
-  sessionSwitchSubscribed: false,
-}));
-//@ chunk-77a3xzkb.js:704-739 placement
-/**
- * 取当前宿主的低优先级状态。
- */
-function getLowPrioritySessionState() {
-  return LOW_PRIORITY_STATE.of(getRootSession().host);
-}
+var LOW_PRIORITY_STATE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-77a3xzkb.js:584", () => {
+  LOW_PRIORITY_STATE = new HostScoped(() => ({
+    notedWallResetsAt: null,
+    shownWallResetsAt: null,
+    withheldWallResetsAt: null,
+    sessionSwitchSubscribed: false,
+  }));
+});
 //@ chunk-77a3xzkb.js:739-896 placement
 /**
  * 是否可提供低优先级等待（实验组、有重置时间、未冷却、客户端开启）。
  */
-function canOfferLowPriority(t, e = Date.now()) {
+function canOfferLowPriority(limits, nowMs = Date.now()) {
   return (
-    isFiveHourAutoResumable(t) &&
-    t.lowPriorityOffer === "treatment" &&
-    t.resetsAt !== undefined &&
-    t.resetsAt * 1000 > e &&
-    !isBudgetSpent(e) &&
-    getCooloffUntil(e) === undefined &&
+    isFiveHourAutoResumable(limits) &&
+    limits.lowPriorityOffer === "treatment" &&
+    limits.resetsAt !== undefined &&
+    limits.resetsAt * 1000 > nowMs &&
+    !isBudgetSpent(nowMs) &&
+    getCooloffUntil(nowMs) === undefined &&
     !isLowPriorityActive() &&
     isLowPriorityEnabled()
   );
@@ -76,15 +74,15 @@ function canOfferLowPriority(t, e = Date.now()) {
 /**
  * 是否可提供低优先级等待（未被拒、存在重置点且未处于其他等待状态）。旧版名错配；疑似归错文件。
  */
-function shouldOfferLowPriorityResume(currentLimits, e = Date.now()) {
-  let headersToUse = resumableResetAt(e);
+function shouldOfferLowPriorityResume(currentLimits, nowMs = Date.now()) {
+  let headersToUse = resumableResetAt(nowMs);
   return (
     isAutoContinueEligible() &&
     currentLimits.status !== "rejected" &&
     headersToUse !== undefined &&
     !isLowPriorityArmStale(headersToUse) &&
-    !isBudgetSpent(e) &&
-    getCooloffUntil(e) === undefined &&
+    !isBudgetSpent(nowMs) &&
+    getCooloffUntil(nowMs) === undefined &&
     isLowPriorityEnabled()
   );
 }
@@ -93,12 +91,12 @@ function shouldOfferLowPriorityResume(currentLimits, e = Date.now()) {
  * 低优先级等待 arm 状态是否已与当前重置点不符（stale）。
  */
 function isLowPriorityArmStale(headersToUse) {
-  let e = quotaAutoResumeState();
-  switch (e.phase) {
+  let resumeState = quotaAutoResumeState();
+  switch (resumeState.phase) {
     case "idle":
       return false;
     case "armed":
-      return e.resetsAtSeconds !== headersToUse;
+      return resumeState.resetsAtSeconds !== headersToUse;
     case "stale":
       return true;
   }
@@ -141,14 +139,14 @@ function logLowPriorityCapability(quotaLimits) {
 /**
  * 记录低优先级提议已显示。
  */
-function logLowPriorityShown(t, e) {
-  let resetsAt = t.resetsAt ?? null;
+function logLowPriorityShown(limits, surface) {
+  let resetsAt = limits.resetsAt ?? null;
   let lowPrioritySessionState = getLowPrioritySessionState();
   if (resetsAt === null || lowPrioritySessionState.shownWallResetsAt === resetsAt) return;
   lowPrioritySessionState.shownWallResetsAt = resetsAt;
   logEvent("tengu_lowpri_offer_shown", {
-    arm: fromEnumOpt(t.lowPriorityOffer) ?? undefined,
-    surface: fromEnum(e),
+    arm: fromEnumOpt(limits.lowPriorityOffer) ?? undefined,
+    surface: fromEnum(surface),
     config_version: getLowPriorityConfigVersion(),
   });
 }
@@ -175,11 +173,11 @@ function enableLowPriorityMode(entry) {
     return "accepted";
   }
   if (shouldOfferLowPriorityResume(currentLimits)) {
-    let o = isQuotaAutoResumeArmed();
-    if (o) cancelQuotaAutoResume("low_priority");
+    let wasArmed = isQuotaAutoResumeArmed();
+    if (wasArmed) cancelQuotaAutoResume("low_priority");
     subscribeLowPriorityReset();
     if (!resumeLowPriority(entry)) return "unavailable";
-    if (o) enqueueAutoContinuation();
+    if (wasArmed) enqueueAutoContinuation();
     return "resumed";
   }
   return "unavailable";
@@ -188,23 +186,23 @@ function enableLowPriorityMode(entry) {
 /**
  * 低优先级模式开启的提示文本。
  */
-function lowPriorityOnMessage(t) {
+function lowPriorityOnMessage(verb) {
   let lowPriorityStateValue = getLowPriorityStateValue();
-  let o =
+  let resetLabel =
     lowPriorityStateValue.phase === "active"
       ? formatResetTimeWithLocale(lowPriorityStateValue.resetsAtSeconds)
       : undefined;
-  let r = o ? `until your limit resets at ${o}` : "until your limit resets";
-  return `${t === "resumed" ? `Lower-priority mode is back on ${r}` : `Continuing now at lower priority ${r}`}. Your weekly limit still applies, and responses may pause while waiting for spare capacity. Run /${LOW_PRIORITY} to stop.`;
+  let untilPhrase = resetLabel ? `until your limit resets at ${resetLabel}` : "until your limit resets";
+  return `${verb === "resumed" ? `Lower-priority mode is back on ${untilPhrase}` : `Continuing now at lower priority ${untilPhrase}`}. Your weekly limit still applies, and responses may pause while waiting for spare capacity. Run /${LOW_PRIORITY} to stop.`;
 }
 //@ chunk-77a3xzkb.js:2697-3077 placement
 /**
  * 低优先级不可用的原因文本。
  */
-function lowPriorityUnavailableMessage(t = Date.now()) {
-  if (isBudgetSpent(t))
+function lowPriorityUnavailableMessage(nowMs = Date.now()) {
+  if (isBudgetSpent(nowMs))
     return `${statusLineShouldDisplay().budgetExhaustedCopy}. Lower-priority mode is offered again after your weekly limit resets.`;
-  let cooloffUntil = getCooloffUntil(t);
+  let cooloffUntil = getCooloffUntil(nowMs);
   if (cooloffUntil !== undefined)
     return `Lower-priority mode is taking a break until ${formatResetTimeWithLocale(Math.ceil(cooloffUntil / 1000)) ?? "later"}, after waiting too long for spare capacity. Try /${LOW_PRIORITY} again then.`;
   return "Lower-priority mode isn't available right now.";
@@ -225,14 +223,15 @@ function subscribeLowPriorityReset() {
   let lowPrioritySessionState = getLowPrioritySessionState();
   if (lowPrioritySessionState.sessionSwitchSubscribed) return;
   lowPrioritySessionState.sessionSwitchSubscribed = true;
-  onSessionSwitch((e, o) => {
-    if (isConversationResetSwitch(o)) endLowPriority("conversation_reset");
+  onSessionSwitch((previous, next) => {
+    if (isConversationResetSwitch(next)) endLowPriority("conversation_reset");
   });
 }
 export {
   logLowPriorityCapability,
   canOfferLowPriority,
   logLowPriorityShown,
+  LOW_PRIORITY_STATE,
   enableLowPriorityMode,
   lowPriorityUnavailableMessage,
   lowPriorityOnMessage,

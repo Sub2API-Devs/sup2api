@@ -11,7 +11,7 @@
 import { useRegisterOverlay } from "../context/overlayContext.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
-import { y, R, P, Q } from "../../vendor/react/cjs/react.production.js";
+import { useState, useRef, useEffect, useMemo } from "../../vendor/react/cjs/react.production.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { getTimestampedHistory, isTransientHistoryReadError, HISTORY_SCOPES } from "../history.js";
 import { logForDebugging } from "../utils/debug.js";
@@ -43,10 +43,10 @@ var ENTRY_OVERHEAD_BYTES = 256;
 var INITIAL_HISTORY_BATCH = 100;
 var HISTORY_BATCH_GROWTH = 4;
 //@ chunk-18hwfzwa.js:663022-663303 affinity
-function getHistoryScanStatusText(h, x) {
-  if (!h) return "Loading\u2026";
-  let trimmed = x.trim();
-  switch (h.status) {
+function getHistoryScanStatusText(scan, query) {
+  if (!scan) return "Loading\u2026";
+  let trimmed = query.trim();
+  switch (scan.status) {
     case "failed":
       return "Couldn't read prompt history";
     case "scanning":
@@ -64,73 +64,73 @@ function HistorySearchDialog({ initialQuery, onSelect, onCancel }) {
   useRegisterOverlay("history-search");
   let { columns } = useTerminalSize();
   let { storageV5 } = useTheme_2();
-  let [ke, Re] = y("everywhere");
-  let [Be, He] = y(null);
-  let [query, setQuery] = y(initialQuery ?? "");
-  let Xe = R({});
-  P(() => {
+  let [scope, setScope] = useState("everywhere");
+  let [scanState, setScanState] = useState(null);
+  let [query, setQuery] = useState(initialQuery ?? "");
+  let scanCacheRef = useRef({});
+  useEffect(() => {
     logFeatureOk("history_search_open");
   }, []);
-  P(() => {
-    let Dt = Xe.current[ke];
-    if (Dt) {
-      He(Dt);
+  useEffect(() => {
+    let cached = scanCacheRef.current[scope];
+    if (cached) {
+      setScanState(cached);
       return;
     }
-    He(null);
-    let Lt = false;
-    let oo = [];
+    setScanState(null);
+    let cancelled = false;
+    let items = [];
     (async () => {
       try {
-        let reader = getTimestampedHistory(ke, storageV5);
-        let io = 0;
-        let so = INITIAL_HISTORY_BATCH;
-        let po = false;
+        let reader = getTimestampedHistory(scope, storageV5);
+        let totalBytes = 0;
+        let nextBatchSize = INITIAL_HISTORY_BATCH;
+        let hitLimit = false;
         for await (let entry of reader) {
-          if (Lt) return;
+          if (cancelled) return;
           let { display, expandedDisplay } = entry;
           let index = display.indexOf(`
 `);
           let lower = display.toLowerCase();
-          oo.push({
+          items.push({
             entry,
             lower,
             expandedLower: expandedDisplay === display ? lower : expandedDisplay.toLowerCase(),
             firstLine: index === -1 ? display : display.slice(0, index),
           });
-          io += entry.textLength + ENTRY_OVERHEAD_BYTES;
-          if (io >= MAX_SCAN_BYTES) {
-            po = true;
+          totalBytes += entry.textLength + ENTRY_OVERHEAD_BYTES;
+          if (totalBytes >= MAX_SCAN_BYTES) {
+            hitLimit = true;
             break;
           }
-          if (oo.length >= so) {
-            He({
-              items: oo.slice(),
+          if (items.length >= nextBatchSize) {
+            setScanState({
+              items: items.slice(),
               status: "scanning",
             });
-            so *= HISTORY_BATCH_GROWTH;
+            nextBatchSize *= HISTORY_BATCH_GROWTH;
           }
         }
-        if (!Lt) {
-          let ao = {
-            items: oo,
-            status: po ? "truncated" : "complete",
+        if (!cancelled) {
+          let nextState = {
+            items,
+            status: hitLimit ? "truncated" : "complete",
           };
-          Xe.current[ke] = ao;
-          He(ao);
-          if (po) logFeatureSad("history_search_scan", "text_limit_reached");
+          scanCacheRef.current[scope] = nextState;
+          setScanState(nextState);
+          if (hitLimit) logFeatureSad("history_search_scan", "text_limit_reached");
           else logFeatureOk("history_search_scan");
         }
       } catch (error) {
-        if (!Lt)
-          if (oo.length > 0) {
-            He({
-              items: oo,
+        if (!cancelled)
+          if (items.length > 0) {
+            setScanState({
+              items,
               status: "truncated",
             });
             logFeatureSad("history_search_scan", "picker_scan_interrupted");
           } else {
-            He({
+            setScanState({
               items: [],
               status: "failed",
             });
@@ -144,54 +144,54 @@ function HistorySearchDialog({ initialQuery, onSelect, onCancel }) {
       }
     })();
     return () => {
-      Lt = true;
+      cancelled = true;
     };
-  }, [ke, storageV5]);
+  }, [scope, storageV5]);
   let shortcutDisplay = useShortcutDisplay("historySearch:cycleScope", "HistorySearch", "ctrl+s");
   useKeybinding(
     "historySearch:cycleScope",
     () => {
-      let index = HISTORY_SCOPES.indexOf(ke);
-      let Lt = HISTORY_SCOPES[(index + 1) % HISTORY_SCOPES.length];
-      Re(Lt);
+      let index = HISTORY_SCOPES.indexOf(scope);
+      let nextScope = HISTORY_SCOPES[(index + 1) % HISTORY_SCOPES.length];
+      setScope(nextScope);
       logEvent("tengu_history_picker_scope", {
-        from: fromEnum(ke),
-        to: fromEnum(Lt),
+        from: fromEnum(scope),
+        to: fromEnum(nextScope),
       });
     },
     {
       context: "HistorySearch",
     },
   );
-  let filtered = Q(() => {
-    if (!Be) return [];
-    let items = Be.items;
-    let lower = query.trim().toLowerCase();
-    if (!lower) return items;
-    let oo = Be.status === "scanning";
-    let Xt = [];
+  let filtered = useMemo(() => {
+    if (!scanState) return [];
+    let items = scanState.items;
+    let needle = query.trim().toLowerCase();
+    if (!needle) return items;
+    let isScanning = scanState.status === "scanning";
+    let matches = [];
     let fuzzy = [];
     for (let item of items)
-      if (item.lower.includes(lower) || item.expandedLower.includes(lower)) Xt.push(item);
-      else if (!oo && fuzzyMatchScore(item.lower, lower)) fuzzy.push(item);
-    return Xt.concat(fuzzy);
-  }, [Be, query]);
+      if (item.lower.includes(needle) || item.expandedLower.includes(needle)) matches.push(item);
+      else if (!isScanning && fuzzyMatchScore(item.lower, needle)) fuzzy.push(item);
+    return matches.concat(fuzzy);
+  }, [scanState, query]);
   let previewOnRight = columns >= 100;
   let listWidth = previewOnRight ? Math.floor((columns - 6) * 0.5) : columns - 6;
   let rowWidth = Math.max(20, listWidth - PROMPT_ROW_GAP - 1);
-  let Et = previewOnRight ? Math.max(20, columns - listWidth - 12) : Math.max(20, columns - 10);
+  let previewWidth = previewOnRight ? Math.max(20, columns - listWidth - 12) : Math.max(20, columns - 10);
   return jsxProd_default(FuzzyPicker, {
     title: jsxProd_default_2(Text, {
       children: [
         "Search prompts ",
         jsxProd_default_2(Text, {
           color: "suggestion",
-          children: ["\xB7 ", ke],
+          children: ["\xB7 ", scope],
         }),
-        Be?.status === "truncated" &&
+        scanState?.status === "truncated" &&
           jsxProd_default_2(Text, {
             dimColor: true,
-            children: [" ", "\xB7 newest ", Be.items.length.toLocaleString(), " only"],
+            children: [" ", "\xB7 newest ", scanState.items.length.toLocaleString(), " only"],
           }),
       ],
     }),
@@ -217,15 +217,15 @@ function HistorySearchDialog({ initialQuery, onSelect, onCancel }) {
       );
     },
     onCancel,
-    resetKey: ke,
-    extraHints: (Dt) => [
+    resetKey: scope,
+    extraHints: (hintProps) => [
       shortcutDisplay &&
         jsxProd_default(
           KeyboardShortcutHint,
           {
             chord: shortcutDisplay,
             action: "scope",
-            ...Dt,
+            ...hintProps,
           },
           "scope",
         ),
@@ -233,22 +233,22 @@ function HistorySearchDialog({ initialQuery, onSelect, onCancel }) {
         jsxProd_default_2(
           Text,
           {
-            children: [Dt.terse ? "esc" : "Esc", " i / for slash commands"],
+            children: [hintProps.terse ? "esc" : "Esc", " i / for slash commands"],
           },
           "vim",
         ),
     ],
-    emptyMessage: (q_0) => getHistoryScanStatusText(Be, q_0),
+    emptyMessage: (q_0) => getHistoryScanStatusText(scanState, q_0),
     selectAction: "use",
     direction: "up",
     previewPosition: previewOnRight ? "right" : "bottom",
     renderItem: (item, isFocused) => {
-      let oo = formatRelativeTimeAgo(new Date(item.entry.timestamp));
+      let relativeTime = formatRelativeTimeAgo(new Date(item.entry.timestamp));
       return jsxProd_default_2(Text, {
         children: [
           jsxProd_default_2(Text, {
             dimColor: true,
-            children: [oo, " ".repeat(Math.max(0, PROMPT_ROW_GAP - bunStringWidth(oo)))],
+            children: [relativeTime, " ".repeat(Math.max(0, PROMPT_ROW_GAP - bunStringWidth(relativeTime)))],
           }),
           jsxProd_default_2(Text, {
             color: isFocused ? "suggestion" : undefined,
@@ -265,11 +265,11 @@ function HistorySearchDialog({ initialQuery, onSelect, onCancel }) {
         )
         .filter((line) => line.trim() !== "");
       let sliced = wrapped.slice(0, HISTORY_DIALOG_VISIBLE_ROWS);
-      let mapped = sliced.map((Ao) => truncateToLength(Ao, Et * HISTORY_DIALOG_VISIBLE_ROWS));
+      let mapped = sliced.map((line) => truncateToLength(line, previewWidth * HISTORY_DIALOG_VISIBLE_ROWS));
       let filtered = wrapAnsi(
         mapped.join(`
 `),
-        Et,
+        previewWidth,
         {
           hard: true,
         },
@@ -279,11 +279,14 @@ function HistorySearchDialog({ initialQuery, onSelect, onCancel }) {
 `,
         )
         .filter((line) => line.trim() !== "");
-      let reduced = sliced.reduce((acc, Bo, Ro) => acc + Math.ceil((Bo.length - mapped[Ro].length) / Et), 0);
-      let po = wrapped.length - sliced.length + reduced;
-      let overflow = filtered.length > HISTORY_DIALOG_VISIBLE_ROWS || po > 0;
+      let reduced = sliced.reduce(
+        (acc, line, lineIndex) => acc + Math.ceil((line.length - mapped[lineIndex].length) / previewWidth),
+        0,
+      );
+      let hiddenLines = wrapped.length - sliced.length + reduced;
+      let overflow = filtered.length > HISTORY_DIALOG_VISIBLE_ROWS || hiddenLines > 0;
       let shown = filtered.slice(0, overflow ? HISTORY_DIALOG_VISIBLE_ROWS - 1 : HISTORY_DIALOG_VISIBLE_ROWS);
-      let count = filtered.length - shown.length + po;
+      let count = filtered.length - shown.length + hiddenLines;
       return jsxProd_default_2(Box, {
         flexDirection: "column",
         borderStyle: "round",
@@ -310,12 +313,12 @@ function HistorySearchDialog({ initialQuery, onSelect, onCancel }) {
   });
 }
 //@ chunk-18hwfzwa.js:666723-666845 affinity
-function fuzzyMatchScore(lower, x) {
-  let D = 0;
-  for (let idx = 0; idx < x.length; idx++) {
-    let index = lower.indexOf(x.charAt(idx), D);
+function fuzzyMatchScore(lower, needle) {
+  let lastMatchEnd = 0;
+  for (let idx = 0; idx < needle.length; idx++) {
+    let index = lower.indexOf(needle.charAt(idx), lastMatchEnd);
     if (index === -1) return false;
-    D = index + 1;
+    lastMatchEnd = index + 1;
   }
   return true;
 }

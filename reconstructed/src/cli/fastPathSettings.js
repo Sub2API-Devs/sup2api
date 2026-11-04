@@ -14,7 +14,7 @@ import { applySettingSourcesFlagFromArgv } from "../main.js";
 import { isStorageV5Enabled } from "../utils/hoverRest.js";
 import { enableConfigs, getGlobalConfig } from "../utils/config.js";
 import { commandSyncNameState } from "../utils/settings/commandSyncNames.js";
-import { ensureMdmLoaded } from "../utils/settings/managedPluginTiers.js";
+import { ensureMdmLoaded } from "../utils/settings/mdm/mdmLoader.js";
 import {
   ensureKeychainPrefetchCompleted,
   KEYCHAIN_PREFETCH_FASTPATH_BUDGET_MS,
@@ -59,65 +59,67 @@ function fastPathSettings() {
 /**
  * 快速路径命令（daemon、self-hosted runner、Chrome MCP）只加载必要的设置与托管策略助手，不走完整初始化。
  */
-async function ensureFastPathSettingsLoaded(t) {
+async function ensureFastPathSettingsLoaded(options) {
   if (!fastPathSettings().claimSettingsLoad()) return;
   applySettingSourcesFlagFromArgv();
-  let backend = isStorageV5Enabled() ? t?.backend : undefined;
+  let backend = isStorageV5Enabled() ? options?.backend : undefined;
   if (isStorageV5Enabled() && backend !== undefined) {
     let [
-      { seedUserSettings: o },
-      { primeWindowsCredManBackendEnabled: i },
-      { primeRemoteManagedSettingsCache: a },
-      { primeWorkspaceRoots: r },
+      { seedUserSettings },
+      { primeWindowsCredManBackendEnabled },
+      { primeRemoteManagedSettingsCache },
+      { primeWorkspaceRoots },
     ] = await Promise.all([
-      import("./chunk-0yd7prrv.js"),
-      import("./chunk-qfg23ew5.js"),
-      import("./chunk-3h7517tw.js"),
-      import("./chunk-rk4keqdb.js"),
+      import("../utils/settings/settingsPrime.js"),
+      import("../utils/secureStorage/index.js"),
+      import("../services/remoteManagedSettings/HELPER_CONSENT_STATE_ID.lazy.js"),
+      import("../utils/workspaceRoots.js"),
     ]);
-    await r(backend);
-    await Promise.all([enableConfigs(backend), o(backend, commandSyncNameState())]);
-    i(getGlobalConfig().cachedGrowthBookFeatures?.tengu_windows_credman === true);
-    await a(backend);
+    await primeWorkspaceRoots(backend);
+    await Promise.all([enableConfigs(backend), seedUserSettings(backend, commandSyncNameState())]);
+    primeWindowsCredManBackendEnabled(
+      getGlobalConfig().cachedGrowthBookFeatures?.tengu_windows_credman === true,
+    );
+    await primeRemoteManagedSettingsCache(backend);
   } else await enableConfigs();
   await ensureMdmLoaded();
   await ensureKeychainPrefetchCompleted(KEYCHAIN_PREFETCH_FASTPATH_BUDGET_MS);
   if (isStorageV5Enabled() && backend !== undefined) {
-    let [{ credentialsStoreFor: o }, { primeFileDescriptorCredentials: i }, { primeStoredLoginCopy: a }] =
+    let [{ credentialsStoreFor }, { primeFileDescriptorCredentials }, { primeStoredLoginCopy }] =
       await Promise.all([
-        import("./chunk-y36z1q7c.js"),
-        import("./chunk-szwzw7ss.js"),
-        import("./chunk-7v0gj88m.js"),
+        import("../utils/secureStorage/credentialsFileStore.js"),
+        import("../utils/fileDescriptorCredentials.js"),
+        import("../utils/auth.js"),
       ]);
-    let r = o(backend);
-    if (r !== undefined) {
-      await i(r, {
+    let store = credentialsStoreFor(backend);
+    if (store !== undefined) {
+      await primeFileDescriptorCredentials(store, {
         bgAuthSnapshot: "leave",
       });
-      await a(r);
+      await primeStoredLoginCopy(store);
     }
   }
   setGatewayRequiredByHostPolicyReader(withoutHostManagedProviderVars);
   applySafeConfigEnvironmentVariables();
-  let n = checkPolicyVersionBounds();
-  if (n) {
-    process.stderr.write(`${n}
+  let error = checkPolicyVersionBounds();
+  if (error) {
+    process.stderr.write(`${error}
 `);
     process.exit(1);
   }
 }
 //@ chunk-25mxxtgv.js:1787-1953 placement
 async function runFastPathPolicyHelper() {
-  let t = fastPathSettings();
-  if (t.helperResult) return t.helperResult.error;
-  let e = t.beginHelperRun();
-  e.error = await runPolicyHelperPass(
+  let state = fastPathSettings();
+  if (state.helperResult) return state.helperResult.error;
+  let run = state.beginHelperRun();
+  run.error = await runPolicyHelperPass(
     getBasePolicySettings(),
     getBasePolicySettingsOrigin(),
     getPolicyHelperSourceLoadErrors(),
   );
   if (hasRemoteHelperState()) applySafeConfigEnvironmentVariables();
-  return e.error;
+  return run.error;
 }
 //@ chunk-25mxxtgv.js:1953-2001 placement
 async function loadFastPathPolicy(options) {

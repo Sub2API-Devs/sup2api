@@ -173,6 +173,7 @@ import { ARTIFACT_ENDPOINTS_ACTION_HANDLER } from "./endpoints.js";
 import { ARTIFACT_PIN_ACTION_HANDLER } from "./pin.js";
 import { ARTIFACT_QUICKSTART_ACTION_HANDLER } from "./quickstart.js";
 import { ARTIFACT_SHARE_ACTION_HANDLER } from "./share.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-vn5yv2ce.js:1495-1602 placement
 /**
@@ -202,55 +203,63 @@ var MAX_SVG_BYTES = 2097152;
 /**
  * 按 MIME 类型给出上传大小上限（SVG 用较小上限）。
  */
-function maxAssetBytesFor(e) {
-  return e === SVG_MIME_TYPE ? MAX_SVG_BYTES : MAX_FRAME_RESPONSE_BYTES;
+function maxAssetBytesFor(mimeType) {
+  return mimeType === SVG_MIME_TYPE ? MAX_SVG_BYTES : MAX_FRAME_RESPONSE_BYTES;
 }
 //@ chunk-vn5yv2ce.js:1773-2407 placement
-var ASSET_MIME_TYPES = new Map([
-  [".png", "image/png"],
-  [".jpg", "image/jpeg"],
-  [".jpeg", "image/jpeg"],
-  [".gif", "image/gif"],
-  [".webp", "image/webp"],
-  [".svg", SVG_MIME_TYPE],
-  [".mp4", "video/mp4"],
-  [".webm", "video/webm"],
-  [".pdf", "application/pdf"],
-  [".woff2", "font/woff2"],
-  [".woff", "font/woff"],
-  [".ttf", "font/ttf"],
-  [".otf", "font/otf"],
-  [".csv", "text/csv"],
-  [".md", "text/markdown"],
-  [".markdown", "text/markdown"],
-  [".json", "application/json"],
-  [".txt", "text/plain"],
-  [".ts", "text/plain"],
-  [".css", "text/css"],
-  [".js", "text/javascript"],
-  [".mjs", "text/javascript"],
-  [".cjs", "text/javascript"],
-]);
-var flattened = uniq(ASSET_MIME_TYPES.values()).flatMap((e) => extensionForMimeType(e) ?? []);
-var joined = [...ASSET_MIME_TYPES.keys()].map((key) => key.slice(1)).join(", ");
+var ASSET_MIME_TYPES; // deferred: uses extensionForMimeType of its import cycle while loading; runs once the cycle is complete
+var flattened;
+var joined;
+deferInit("chunk-vn5yv2ce.js:1773", () => {
+  ASSET_MIME_TYPES = new Map([
+    [".png", "image/png"],
+    [".jpg", "image/jpeg"],
+    [".jpeg", "image/jpeg"],
+    [".gif", "image/gif"],
+    [".webp", "image/webp"],
+    [".svg", SVG_MIME_TYPE],
+    [".mp4", "video/mp4"],
+    [".webm", "video/webm"],
+    [".pdf", "application/pdf"],
+    [".woff2", "font/woff2"],
+    [".woff", "font/woff"],
+    [".ttf", "font/ttf"],
+    [".otf", "font/otf"],
+    [".csv", "text/csv"],
+    [".md", "text/markdown"],
+    [".markdown", "text/markdown"],
+    [".json", "application/json"],
+    [".txt", "text/plain"],
+    [".ts", "text/plain"],
+    [".css", "text/css"],
+    [".js", "text/javascript"],
+    [".mjs", "text/javascript"],
+    [".cjs", "text/javascript"],
+  ]);
+  flattened = uniq(ASSET_MIME_TYPES.values()).flatMap((mimeType) => extensionForMimeType(mimeType) ?? []);
+  joined = [...ASSET_MIME_TYPES.keys()].map((key) => key.slice(1)).join(", ");
+});
 //@ chunk-vn5yv2ce.js:2407-2457 placement
 /**
  * 由文件扩展名查资源的 MIME 类型。
  */
-function assetMimeTypeForPath(e) {
-  return ASSET_MIME_TYPES.get(extname(e).toLowerCase());
+function assetMimeTypeForPath(filePath) {
+  return ASSET_MIME_TYPES.get(extname(filePath).toLowerCase());
 }
 //@ chunk-vn5yv2ce.js:2457-2534 placement
 /**
  * 可按文本处理的资源 MIME 类型集合。
  */
-var TEXT_ASSET_MIME_TYPES = new Set(["text/csv", "text/markdown", "application/json", "text/plain"]);
+var TEXT_ASSET_MIME_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vn5yv2ce.js:2457", () => {
+  TEXT_ASSET_MIME_TYPES = new Set(["text/csv", "text/markdown", "application/json", "text/plain"]);
+});
 //@ chunk-vn5yv2ce.js:2534-2579 placement
 /**
  * 判断 MIME 类型是否可按文本处理。
  */
-function isTextAssetMimeType(e) {
-  return e !== undefined && TEXT_ASSET_MIME_TYPES.has(e);
+function isTextAssetMimeType(mimeType) {
+  return mimeType !== undefined && TEXT_ASSET_MIME_TYPES.has(mimeType);
 }
 //@ chunk-vn5yv2ce.js:2579-3152 placement
 /**
@@ -268,8 +277,8 @@ var UPLOAD_EMPTY_FILE_MESSAGE = "the file is empty \u2014 nothing to upload";
 /**
  * 上传文件过大的提示（实际 MB 与上限 MB）。
  */
-function uploadTooLargeMessage(e, r) {
-  return `too large: ${Math.ceil((Number(e) * 10) / 1024 / 1024) / 10}MB (max ${r / 1024 / 1024}MB)`;
+function uploadTooLargeMessage(bytes, maxBytes) {
+  return `too large: ${Math.ceil((Number(bytes) * 10) / 1024 / 1024) / 10}MB (max ${maxBytes / 1024 / 1024}MB)`;
 }
 //@ chunk-vn5yv2ce.js:3254-3500 placement
 /**
@@ -295,8 +304,8 @@ function readErrorResult(error) {
 /**
  * 把文件状态拼成「设备:inode:大小:mtime」的身份串，用于确认批准后未被替换。
  */
-function fileIdentityOf(e) {
-  return `${e.dev}:${e.ino}:${e.size}:${e.mtimeNs}`;
+function fileIdentityOf(stats) {
+  return `${stats.dev}:${stats.ino}:${stats.size}:${stats.mtimeNs}`;
 }
 //@ chunk-vn5yv2ce.js:3733-3843 placement
 /**
@@ -304,7 +313,7 @@ function fileIdentityOf(e) {
  */
 function fileIdentityDev(identity) {
   let parts = identity.split(":");
-  if (parts.length !== 4 || !parts.every((s) => /^\d+$/.test(s))) return;
+  if (parts.length !== 4 || !parts.every((part) => /^\d+$/.test(part))) return;
   return Number(parts[2]);
 }
 //@ chunk-vn5yv2ce.js:3843-4153 placement
@@ -335,22 +344,22 @@ function resolveLocalUploadPath(path) {
     return {
       kind: "network",
     };
-  let s;
+  let realPath;
   try {
-    s = realpathSync(path);
+    realPath = realpathSync(path);
   } catch (error) {
     return {
       kind: "unresolved",
       error,
     };
   }
-  return isProtectedPath(s)
+  return isProtectedPath(realPath)
     ? {
         kind: "network",
       }
     : {
         kind: "resolved",
-        real: s,
+        real: realPath,
       };
 }
 //@ chunk-vn5yv2ce.js:4436-4585 placement
@@ -359,14 +368,14 @@ function resolveLocalUploadPath(path) {
  */
 function statFileIdentity(real) {
   try {
-    let r = lstatSync(real, {
+    let stats = lstatSync(real, {
       bigint: true,
     });
     return {
       real,
-      identity: fileIdentityOf(r),
-      ...(r.isFile() &&
-        r.nlink > 1n && {
+      identity: fileIdentityOf(stats),
+      ...(stats.isFile() &&
+        stats.nlink > 1n && {
           linked: true,
         }),
     };
@@ -382,13 +391,13 @@ function statFileIdentity(real) {
  * 判断上传文件是否需要单独批准（路径或其真实路径命中特定规则，或非网络路径满足额外条件）。
  */
 function isSoloApprovalFile(
-  e,
-  r = resolveLocalUploadPath(e),
-  link = r.kind !== "network" && symlinkTargetOf(e),
+  filePath,
+  uploadPath = resolveLocalUploadPath(filePath),
+  link = uploadPath.kind !== "network" && symlinkTargetOf(filePath),
 ) {
   return (
-    isTextAssetMimeType(assetMimeTypeForPath(e)) ||
-    (r.kind === "resolved" && isTextAssetMimeType(assetMimeTypeForPath(r.real))) ||
+    isTextAssetMimeType(assetMimeTypeForPath(filePath)) ||
+    (uploadPath.kind === "resolved" && isTextAssetMimeType(assetMimeTypeForPath(uploadPath.real))) ||
     link
   );
 }
@@ -396,17 +405,17 @@ function isSoloApprovalFile(
 /**
  * 取路径的符号链接目标。
  */
-function symlinkTargetOf(e) {
-  return probeSymlink(e).link;
+function symlinkTargetOf(filePath) {
+  return probeSymlink(filePath).link;
 }
 //@ chunk-vn5yv2ce.js:4732-4865 placement
 /**
  * 检查路径是否为符号链接；无法读取时视为链接并返回错误码。
  */
-function probeSymlink(e) {
+function probeSymlink(filePath) {
   try {
     return {
-      link: lstatSync(e).isSymbolicLink(),
+      link: lstatSync(filePath).isSymbolicLink(),
       unreadable: null,
     };
   } catch (error) {
@@ -417,24 +426,27 @@ function probeSymlink(e) {
   }
 }
 //@ chunk-vn5yv2ce.js:4865-4879 placement
-var readFileHandle = promisify(read);
+var readFileHandle; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vn5yv2ce.js:4865", () => {
+  readFileHandle = promisify(read);
+});
 //@ chunk-vn5yv2ce.js:4879-7280 placement
-function checkUploadFile(e, r, s, d) {
-  let n = r;
-  let l =
-    typeof n === "object" && n !== null && typeof n.real === "string"
+function checkUploadFile(filePath, pinned, checkSpelling, maxBytes) {
+  let pin = pinned;
+  let pinnedFile =
+    typeof pin === "object" && pin !== null && typeof pin.real === "string"
       ? {
-          real: n.real,
+          real: pin.real,
           identity:
-            typeof n.identity === "string" && (n.digest === undefined || typeof n.digest === "string")
-              ? n.identity
+            typeof pin.identity === "string" && (pin.digest === undefined || typeof pin.digest === "string")
+              ? pin.identity
               : null,
-          ...(typeof n.digest === "string" && {
-            digest: n.digest,
+          ...(typeof pin.digest === "string" && {
+            digest: pin.digest,
           }),
         }
       : undefined;
-  let localUploadPath = resolveLocalUploadPath(e);
+  let localUploadPath = resolveLocalUploadPath(filePath);
   if (localUploadPath.kind === "network")
     return {
       kind: "error",
@@ -442,20 +454,20 @@ function checkUploadFile(e, r, s, d) {
       message: UPLOAD_NETWORK_PATH_MESSAGE,
     };
   if (localUploadPath.kind === "unresolved") {
-    if (l !== undefined && l.identity !== null)
+    if (pinnedFile !== undefined && pinnedFile.identity !== null)
       return {
         kind: "error",
         reason: "changed",
         message: UPLOAD_FILE_CHANGED_MESSAGE,
       };
-    let mapped = getPathsForPermissionCheck(e).slice(1).map(s);
+    let mapped = getPathsForPermissionCheck(filePath).slice(1).map(checkSpelling);
     return mapped.includes("deny")
       ? {
           kind: "error",
           reason: "read_denied",
           message: UPLOAD_READ_DENIED_MESSAGE,
         }
-      : mapped.some((b) => b !== "allow")
+      : mapped.some((decision) => decision !== "allow")
         ? {
             kind: "error",
             reason: "via_link",
@@ -464,33 +476,33 @@ function checkUploadFile(e, r, s, d) {
         : readErrorResult(localUploadPath.error);
   }
   let { real } = localUploadPath;
-  let u = real === e ? undefined : s(real);
-  if (u === "deny")
+  let realDecision = real === filePath ? undefined : checkSpelling(real);
+  if (realDecision === "deny")
     return {
       kind: "error",
       reason: "read_denied",
       message: UPLOAD_READ_DENIED_MESSAGE,
     };
-  if (l !== undefined) {
-    if (real !== l.real)
+  if (pinnedFile !== undefined) {
+    if (real !== pinnedFile.real)
       return {
         kind: "error",
         reason: "changed",
         message: UPLOAD_FILE_CHANGED_MESSAGE,
       };
-  } else if (u !== undefined && u !== "allow")
+  } else if (realDecision !== undefined && realDecision !== "allow")
     return {
       kind: "error",
       reason: "via_link",
       message: UPLOAD_SYMLINK_ASK_MESSAGE,
     };
-  let v;
+  let stats;
   try {
-    v = lstatSync(real, {
+    stats = lstatSync(real, {
       bigint: true,
     });
   } catch (error) {
-    return l !== undefined && isENOENT(error)
+    return pinnedFile !== undefined && isENOENT(error)
       ? {
           kind: "error",
           reason: "changed",
@@ -498,29 +510,29 @@ function checkUploadFile(e, r, s, d) {
         }
       : readErrorResult(error);
   }
-  if (v.isSymbolicLink())
+  if (stats.isSymbolicLink())
     return {
       kind: "error",
       reason: "changed",
       message: UPLOAD_FILE_CHANGED_MESSAGE,
     };
-  if (!v.isFile())
+  if (!stats.isFile())
     return {
       kind: "error",
       reason: "not_a_file",
       message: UPLOAD_NOT_REGULAR_FILE_MESSAGE,
     };
-  if (l === undefined && v.nlink > 1n)
+  if (pinnedFile === undefined && stats.nlink > 1n)
     return {
       kind: "error",
       reason: "hard_link",
       message:
         "file_path is one of several hard links to its file, and this approval did not examine that \u2014 copy the file to a fresh path under the working directory and upload the copy",
     };
-  let c = constants.O_NOFOLLOW | constants.O_NONBLOCK;
-  let E;
+  let openFlags = constants.O_NOFOLLOW | constants.O_NONBLOCK;
+  let fd;
   try {
-    E = openSync(real, constants.O_RDONLY | c);
+    fd = openSync(real, constants.O_RDONLY | openFlags);
   } catch (error) {
     if (getErrnoCode(error) === "ELOOP")
       return {
@@ -530,35 +542,35 @@ function checkUploadFile(e, r, s, d) {
       };
     return readErrorResult(error);
   }
-  let R = false;
+  let fdKept = false;
   try {
-    let h = fstatSync(E, {
+    let fdStats = fstatSync(fd, {
       bigint: true,
     });
-    if (!h.isFile())
+    if (!fdStats.isFile())
       return {
         kind: "error",
         reason: "not_a_file",
         message: UPLOAD_NOT_REGULAR_FILE_MESSAGE,
       };
-    if (isSentinelInode(h.ino))
+    if (isSentinelInode(fdStats.ino))
       return {
         kind: "error",
         reason: "no_identity",
         message: UPLOAD_NO_FILE_IDENTITY_MESSAGE,
       };
-    if (fileIdentityOf(h) !== (l !== undefined ? l.identity : fileIdentityOf(v)))
+    if (fileIdentityOf(fdStats) !== (pinnedFile !== undefined ? pinnedFile.identity : fileIdentityOf(stats)))
       return {
         kind: "error",
         reason: "changed",
         message: UPLOAD_FILE_CHANGED_MESSAGE,
       };
     {
-      let O = null;
+      let procPath = null;
       try {
-        O = realpathSync(`/proc/self/fd/${E}`);
+        procPath = realpathSync(`/proc/self/fd/${fd}`);
       } catch {}
-      if (O !== null && O !== real)
+      if (procPath !== null && procPath !== real)
         return {
           kind: "error",
           reason: "changed",
@@ -566,17 +578,17 @@ function checkUploadFile(e, r, s, d) {
         };
     }
     try {
-      let localUploadPath = resolveLocalUploadPath(e);
+      let localUploadPath = resolveLocalUploadPath(filePath);
       if (localUploadPath.kind !== "resolved" || localUploadPath.real !== real)
         return {
           kind: "error",
           reason: "changed",
           message: UPLOAD_FILE_CHANGED_MESSAGE,
         };
-      let L = lstatSync(real, {
+      let recheckStats = lstatSync(real, {
         bigint: true,
       });
-      if (L.dev !== h.dev || L.ino !== h.ino)
+      if (recheckStats.dev !== fdStats.dev || recheckStats.ino !== fdStats.ino)
         return {
           kind: "error",
           reason: "changed",
@@ -589,27 +601,27 @@ function checkUploadFile(e, r, s, d) {
         message: UPLOAD_FILE_CHANGED_MESSAGE,
       };
     }
-    let b = Number(h.size);
-    if (b === 0 || b > d)
+    let size = Number(fdStats.size);
+    if (size === 0 || size > maxBytes)
       return {
         kind: "error",
         reason: "size",
-        message: b === 0 ? UPLOAD_EMPTY_FILE_MESSAGE : uploadTooLargeMessage(b, d),
-        sizeBytes: b,
+        message: size === 0 ? UPLOAD_EMPTY_FILE_MESSAGE : uploadTooLargeMessage(size, maxBytes),
+        sizeBytes: size,
       };
-    R = true;
+    fdKept = true;
     return {
       kind: "opened",
-      fd: E,
-      size: b,
+      fd,
+      size,
       real,
-      identity: fileIdentityOf(h),
-      digest: l?.digest,
+      identity: fileIdentityOf(fdStats),
+      digest: pinnedFile?.digest,
     };
   } catch (error) {
     return readErrorResult(error);
   } finally {
-    if (!R) closeSync(E);
+    if (!fdKept) closeSync(fd);
   }
 }
 //@ chunk-vn5yv2ce.js:7280-7775 placement
@@ -631,21 +643,21 @@ async function readApprovedFileBytes(opened) {
         reason: "changed",
         message: UPLOAD_FILE_CHANGED_MESSAGE,
       };
-    let l = Buffer.allocUnsafe(size);
-    let a = 0;
-    while (a < size) {
-      let { bytesRead } = await readFileHandle(fd, l, a, size - a, a);
+    let buffer = Buffer.allocUnsafe(size);
+    let total = 0;
+    while (total < size) {
+      let { bytesRead } = await readFileHandle(fd, buffer, total, size - total, total);
       if (bytesRead === 0) break;
-      a += bytesRead;
+      total += bytesRead;
     }
     let { bytesRead } = await readFileHandle(fd, Buffer.alloc(1), 0, 1, size);
-    if (a !== size || bytesRead !== 0)
+    if (total !== size || bytesRead !== 0)
       return {
         kind: "error",
         reason: "changed",
         message: UPLOAD_FILE_CHANGED_MESSAGE,
       };
-    if (digest !== undefined && computeContentHash(l) !== digest)
+    if (digest !== undefined && computeContentHash(buffer) !== digest)
       return {
         kind: "error",
         reason: "changed",
@@ -653,7 +665,7 @@ async function readApprovedFileBytes(opened) {
       };
     return {
       kind: "ok",
-      bytes: l,
+      bytes: buffer,
     };
   } catch (error) {
     return readErrorResult(error);
@@ -665,38 +677,42 @@ async function readApprovedFileBytes(opened) {
 /**
  * 静默关闭文件描述符。
  */
-function closeFdQuietly(e) {
+function closeFdQuietly(opened) {
   try {
-    closeSync(e.fd);
+    closeSync(opened.fd);
   } catch {}
 }
 //@ chunk-vn5yv2ce.js:7812-7893 placement
 /**
  * 通过检查后读取已批准的本地文件。
  */
-async function readApprovedUploadFile(e, r, s, d) {
-  let opened = checkUploadFile(e, r, s, d);
+async function readApprovedUploadFile(filePath, pinned, checkSpelling, maxBytes) {
+  let opened = checkUploadFile(filePath, pinned, checkSpelling, maxBytes);
   return opened.kind === "opened" ? readApprovedFileBytes(opened) : opened;
 }
 //@ chunk-vn5yv2ce.js:7893-8149 placement
 /**
  * 资源 API 已知错误码集合，以及 _blob/<32 位十六进制> 形式的资源地址正则。
  */
-var ASSET_API_ERROR_CODES = new Set([
-  "invalid_request",
-  "too_large",
-  "unsupported_type",
-  "quota_or_state",
-  "rate_limited",
-  "capability_disabled",
-  "store_unavailable",
-  "upstream_error",
-  "credential_rejected",
-  "not_found",
-  "asset_not_found",
-  "not_copyable",
-]);
-var ASSET_BLOB_URL_RE = /^\/?_blob\/[0-9a-f]{32}$/;
+var ASSET_API_ERROR_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ASSET_BLOB_URL_RE;
+deferInit("chunk-vn5yv2ce.js:7893", () => {
+  ASSET_API_ERROR_CODES = new Set([
+    "invalid_request",
+    "too_large",
+    "unsupported_type",
+    "quota_or_state",
+    "rate_limited",
+    "capability_disabled",
+    "store_unavailable",
+    "upstream_error",
+    "credential_rejected",
+    "not_found",
+    "asset_not_found",
+    "not_copyable",
+  ]);
+  ASSET_BLOB_URL_RE = /^\/?_blob\/[0-9a-f]{32}$/;
+});
 //@ chunk-vn5yv2ce.js:8149-8225 placement
 /**
  * 规范化资源 blob 地址（_blob/<id> 或 /_blob/<id>）。
@@ -708,73 +724,92 @@ function assetBlobUrl(opaqueId, url) {
 /**
  * 资源 API 的常量与响应 schema：分页上限、id/类型/时间正则、复制上限 yue、批量上传上限 qL、路径长度上限，以及上传/列表/删除/错误响应的 zod schema 与超时。
  */
-var SHA256_HEX_RE = /^[0-9a-f]{64}$/;
-var ASSET_LIST_PAGE_LIMIT = 50;
-var MAX_CONTENT_TYPE_LENGTH = 40;
-var ASSET_CURSOR_RE = /^[A-Za-z0-9_=-]{1,4096}$/;
-var ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;
-var CONTENT_TYPE_RE = /^[a-z0-9]{1,24}\/[a-z0-9.+-]{1,80}$/;
-var MAX_COPY_ASSET_IDS = 10;
-var MAX_UPLOAD_FILE_PATHS = 25;
-var MAX_UPLOAD_PATH_LENGTH = 1024;
-var uploadedAssetSchema = DoctorLazy(() =>
-  create({
-    opaque_id: create_2().regex(ASSET_ID_RE),
-    url: create_2().optional().catch(undefined),
-    size_bytes: create_3().int().nonnegative(),
-    content_type: create_2().regex(CONTENT_TYPE_RE),
-    sha256: create_2().regex(SHA256_HEX_RE).optional(),
-  }),
-);
-var assetListSchema = DoctorLazy(() =>
-  create({
-    assets: create_15(
-      create({
-        opaque_id: create_2().regex(ASSET_ID_RE),
-        url: create_2().optional().catch(undefined),
-        content_type: create_2().regex(CONTENT_TYPE_RE).max(MAX_CONTENT_TYPE_LENGTH),
-        size_bytes: create_3().int().nonnegative().max(MAX_FRAME_RESPONSE_BYTES),
-        sha256: create_2().regex(SHA256_HEX_RE).optional(),
-        created_at: create_2().regex(ISO_TIMESTAMP_RE).max(MAX_CONTENT_TYPE_LENGTH),
+var SHA256_HEX_RE; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var ASSET_LIST_PAGE_LIMIT;
+var MAX_CONTENT_TYPE_LENGTH;
+var ASSET_CURSOR_RE;
+var ISO_TIMESTAMP_RE;
+var CONTENT_TYPE_RE;
+var MAX_COPY_ASSET_IDS;
+var MAX_UPLOAD_FILE_PATHS;
+var MAX_UPLOAD_PATH_LENGTH;
+var uploadedAssetSchema;
+var assetListSchema;
+var assetDeleteSchema;
+var assetErrorSchema;
+var relayErrorSchema;
+var MAX_RETRY_AFTER_MS;
+var ASSET_REQUEST_TIMEOUT_MS;
+var UPLOAD_TAIL_FLOOR_MS;
+deferInit("chunk-vn5yv2ce.js:8225", () => {
+  SHA256_HEX_RE = /^[0-9a-f]{64}$/;
+  ASSET_LIST_PAGE_LIMIT = 50;
+  MAX_CONTENT_TYPE_LENGTH = 40;
+  ASSET_CURSOR_RE = /^[A-Za-z0-9_=-]{1,4096}$/;
+  ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;
+  CONTENT_TYPE_RE = /^[a-z0-9]{1,24}\/[a-z0-9.+-]{1,80}$/;
+  MAX_COPY_ASSET_IDS = 10;
+  MAX_UPLOAD_FILE_PATHS = 25;
+  MAX_UPLOAD_PATH_LENGTH = 1024;
+  uploadedAssetSchema = DoctorLazy(() =>
+    create({
+      opaque_id: create_2().regex(ASSET_ID_RE),
+      url: create_2().optional().catch(undefined),
+      size_bytes: create_3().int().nonnegative(),
+      content_type: create_2().regex(CONTENT_TYPE_RE),
+      sha256: create_2().regex(SHA256_HEX_RE).optional(),
+    }),
+  );
+  assetListSchema = DoctorLazy(() =>
+    create({
+      assets: create_15(
+        create({
+          opaque_id: create_2().regex(ASSET_ID_RE),
+          url: create_2().optional().catch(undefined),
+          content_type: create_2().regex(CONTENT_TYPE_RE).max(MAX_CONTENT_TYPE_LENGTH),
+          size_bytes: create_3().int().nonnegative().max(MAX_FRAME_RESPONSE_BYTES),
+          sha256: create_2().regex(SHA256_HEX_RE).optional(),
+          created_at: create_2().regex(ISO_TIMESTAMP_RE).max(MAX_CONTENT_TYPE_LENGTH),
+        }),
+      ).max(1000),
+      usage: create({
+        files: create_3().int().nonnegative(),
+        bytes: create_3().int().nonnegative(),
+        max_files: create_3().int().nonnegative(),
+        max_bytes: create_3().int().nonnegative(),
       }),
-    ).max(1000),
-    usage: create({
-      files: create_3().int().nonnegative(),
-      bytes: create_3().int().nonnegative(),
-      max_files: create_3().int().nonnegative(),
-      max_bytes: create_3().int().nonnegative(),
+      next: create_2()
+        .regex(ASSET_CURSOR_RE)
+        .or(create_25(""))
+        .nullish()
+        .transform((cursor) => cursor || undefined),
+      cowritten: create_25(true).optional().catch(undefined),
+      outside_writer: create_6().optional().catch(undefined),
     }),
-    next: create_2()
-      .regex(ASSET_CURSOR_RE)
-      .or(create_25(""))
-      .nullish()
-      .transform((cursor) => cursor || undefined),
-    cowritten: create_25(true).optional().catch(undefined),
-    outside_writer: create_6().optional().catch(undefined),
-  }),
-);
-var assetDeleteSchema = DoctorLazy(() =>
-  create({
-    deleted: create_6(),
-  }),
-);
-var assetErrorSchema = DoctorLazy(() =>
-  create({
-    error: create({
-      code: create_2(),
-      message: create_2().optional(),
+  );
+  assetDeleteSchema = DoctorLazy(() =>
+    create({
+      deleted: create_6(),
     }),
-  }),
-);
-var relayErrorSchema = DoctorLazy(() =>
-  create({
-    error: create_2(),
-    reason: create_2(),
-  }),
-);
-var MAX_RETRY_AFTER_MS = 20000;
-var ASSET_REQUEST_TIMEOUT_MS = 30000;
-var UPLOAD_TAIL_FLOOR_MS = 90000;
+  );
+  assetErrorSchema = DoctorLazy(() =>
+    create({
+      error: create({
+        code: create_2(),
+        message: create_2().optional(),
+      }),
+    }),
+  );
+  relayErrorSchema = DoctorLazy(() =>
+    create({
+      error: create_2(),
+      reason: create_2(),
+    }),
+  );
+  MAX_RETRY_AFTER_MS = 20000;
+  ASSET_REQUEST_TIMEOUT_MS = 30000;
+  UPLOAD_TAIL_FLOOR_MS = 90000;
+});
 //@ chunk-vn5yv2ce.js:9311-9368 placement
 /**
  * 资源上传接口路径。
@@ -804,17 +839,17 @@ function agentCopyRoute(slug) {
   return `/api/frame/blob/${slug}/agent-copy`;
 }
 //@ chunk-vn5yv2ce.js:9542-10896 placement
-function classifyAssetApiError(status, r) {
-  let s = assetErrorSchema().safeParse(r);
-  if (s.success) {
-    let code = s.data.error.code;
+function classifyAssetApiError(status, data) {
+  let parsed = assetErrorSchema().safeParse(data);
+  if (parsed.success) {
+    let code = parsed.data.error.code;
     if (ASSET_API_ERROR_CODES.has(code)) {
-      let n = s.data.error.message && sanitizeAssetMessage(s.data.error.message);
+      let detailText = parsed.data.error.message && sanitizeAssetMessage(parsed.data.error.message);
       return {
         code,
         reason: code,
-        ...(n && {
-          detail: n,
+        ...(detailText && {
+          detail: detailText,
         }),
       };
     }
@@ -824,21 +859,21 @@ function classifyAssetApiError(status, r) {
     };
   }
   if (status === 403 || status === 503) {
-    let d = relayErrorSchema().safeParse(r);
-    if (d.success)
+    let relayParsed = relayErrorSchema().safeParse(data);
+    if (relayParsed.success)
       return {
         code: "policy_denied",
         reason: "policy_denied",
-        detail: sanitizeAssetMessage(d.data.error),
+        detail: sanitizeAssetMessage(relayParsed.data.error),
       };
   }
   if (status === 403) {
-    if (typeof r === "string" && r.trim() === "not a writer")
+    if (typeof data === "string" && data.trim() === "not a writer")
       return {
         code: "not_writer",
         reason: "not_writer",
       };
-    if (typeof r === "string" && /^\s*</.test(r))
+    if (typeof data === "string" && /^\s*</.test(data))
       return {
         code: "upstream_error",
         reason: "http_403_page",
@@ -849,7 +884,7 @@ function classifyAssetApiError(status, r) {
     };
   }
   if (status === 404)
-    return typeof r === "string" && r.trim() === "not found"
+    return typeof data === "string" && data.trim() === "not found"
       ? {
           code: "not_found",
           reason: "http_404",
@@ -899,61 +934,61 @@ function classifyAssetApiError(status, r) {
 /**
  * 去掉控制字符并截断的资产消息。
  */
-function sanitizeAssetMessage(e) {
-  return truncateToLength(e.replace(/[\p{Cc}\p{Cf}\p{Co}]/gu, " "), 200);
+function sanitizeAssetMessage(message) {
+  return truncateToLength(message.replace(/[\p{Cc}\p{Cf}\p{Co}]/gu, " "), 200);
 }
 //@ chunk-vn5yv2ce.js:10965-13719 placement
-function describeAssetFailure(e, r, s = "upload", d) {
-  let n = `asset ${s} failed (${e})`;
-  switch (e) {
+function describeAssetFailure(code, detail, verb = "upload", cause) {
+  let lead = `asset ${verb} failed (${code})`;
+  switch (code) {
     case "invalid_request":
-      return `${n}: ${r ?? "the server could not accept the request as shaped"}`;
+      return `${lead}: ${detail ?? "the server could not accept the request as shaped"}`;
     case "too_large":
-      return `${n}: ${r ?? "rejected as too large by the server or an intermediary although under the client limit \u2014 compress or split it"}`;
+      return `${lead}: ${detail ?? "rejected as too large by the server or an intermediary although under the client limit \u2014 compress or split it"}`;
     case "unsupported_type":
-      return `${n}: ${r ?? `only these file types are accepted: ${joined}`}`;
+      return `${lead}: ${detail ?? `only these file types are accepted: ${joined}`}`;
     case "quota_or_state":
-      return `${n}: ${r ?? (s === "upload" || s === "copy" ? "the Artifact cannot take uploads right now \u2014 it is a live document, unpublished, retired, being deleted, or over its asset storage quota" : "the Artifact has no asset store right now \u2014 it is a live document, unpublished, retired, or being deleted")}`;
+      return `${lead}: ${detail ?? (verb === "upload" || verb === "copy" ? "the Artifact cannot take uploads right now \u2014 it is a live document, unpublished, retired, being deleted, or over its asset storage quota" : "the Artifact has no asset store right now \u2014 it is a live document, unpublished, retired, or being deleted")}`;
     case "rate_limited":
-      return `${n}: calling too often \u2014 wait${r ? ` ${r}` : ""} before retrying, and never loop`;
+      return `${lead}: calling too often \u2014 wait${detail ? ` ${detail}` : ""} before retrying, and never loop`;
     case "upstream_auth":
-      return `${n}: could not authenticate \u2014 the session's credential may need a refresh; try again`;
+      return `${lead}: could not authenticate \u2014 the session's credential may need a refresh; try again`;
     case "capability_disabled":
-      return `${n}: the Artifact's published version does not declare the assets capability \u2014 republish it with assets: {} added to its declared capabilities, then retry`;
+      return `${lead}: the Artifact's published version does not declare the assets capability \u2014 republish it with assets: {} added to its declared capabilities, then retry`;
     case "store_unavailable":
-      return `${n}: ${r ?? `the asset store is unavailable right now \u2014 retry once after a short wait${s === "upload" ? " (an upload that timed out upstream may already be stored; a duplicate costs only quota)" : ""}`}`;
+      return `${lead}: ${detail ?? `the asset store is unavailable right now \u2014 retry once after a short wait${verb === "upload" ? " (an upload that timed out upstream may already be stored; a duplicate costs only quota)" : ""}`}`;
     case "upstream_error":
-      return `${n}: unexpected answer from the server${r ? ` (${r})` : ""}`;
+      return `${lead}: unexpected answer from the server${detail ? ` (${detail})` : ""}`;
     case "not_found":
-      return s === "copy" && d === "not_found"
-        ? `${n}: the SOURCE Artifact (from_url) does not exist, is not one this session can open, or cannot be copied from \u2014 the cases are deliberately indistinguishable; check from_url with action "list", scope "shared"`
-        : `${n}: no such Artifact, or artifact assets are not available to this account or Artifact \u2014 the cases are deliberately indistinguishable; check the url with action "list"`;
+      return verb === "copy" && cause === "not_found"
+        ? `${lead}: the SOURCE Artifact (from_url) does not exist, is not one this session can open, or cannot be copied from \u2014 the cases are deliberately indistinguishable; check from_url with action "list", scope "shared"`
+        : `${lead}: no such Artifact, or artifact assets are not available to this account or Artifact \u2014 the cases are deliberately indistinguishable; check the url with action "list"`;
     case "asset_not_found":
-      return `${n}: ${r ?? "the source Artifact holds no asset with one of the given ids"} \u2014 run action "list_assets" on from_url for its current ids; nothing was copied`;
+      return `${lead}: ${detail ?? "the source Artifact holds no asset with one of the given ids"} \u2014 run action "list_assets" on from_url for its current ids; nothing was copied`;
     case "not_copyable":
-      return `${n}: ${r ?? "this source cannot be copied from"}; nothing was copied`;
+      return `${lead}: ${detail ?? "this source cannot be copied from"}; nothing was copied`;
     case "not_writer":
-      return `${n}: this account can open the Artifact but not edit it \u2014 only writers can ${s === "copy" ? "copy assets into it" : `${s} assets`}`;
+      return `${lead}: this account can open the Artifact but not edit it \u2014 only writers can ${verb === "copy" ? "copy assets into it" : `${verb} assets`}`;
     case "credential_rejected":
-      return `${n}: the server refused this session's credential at the asset door \u2014 not an access or existence answer; report this as a client/server integration fault${r ? ` (${r})` : ""}`;
+      return `${lead}: the server refused this session's credential at the asset door \u2014 not an access or existence answer; report this as a client/server integration fault${detail ? ` (${detail})` : ""}`;
     case "policy_denied":
-      return `${n}: ${r ?? "blocked by the organization's artifact policy"}`;
+      return `${lead}: ${detail ?? "blocked by the organization's artifact policy"}`;
     case "unavailable_to_account":
-      return `${n}: artifact assets are not available to this account`;
+      return `${lead}: artifact assets are not available to this account`;
   }
 }
 //@ chunk-vn5yv2ce.js:13719-13808 placement
 /**
  * 生成资产错误：按错误码给出描述并记录遥测。
  */
-function assetErrorFactory(e, r) {
-  return (s, d, n) => {
-    e(d);
+function assetErrorFactory(log, verb) {
+  return (code, reason, detail) => {
+    log(reason);
     return {
       kind: "error",
-      code: s,
-      message: describeAssetFailure(s, n, r, d),
-      reason: d,
+      code,
+      message: describeAssetFailure(code, detail, verb, reason),
+      reason,
     };
   };
 }
@@ -964,28 +999,28 @@ var AGENT_ASSETS_DISABLED_MESSAGE =
 /**
  * Artifact 资源上传/复制/列表/删除只能在中继可用时运行，否则给出原因
  */
-async function assetRelayUnavailableReason(e, r) {
-  let { verb, route, body, contentType, marks, fail } = e;
-  let u = (failure) => ({
+async function assetRelayUnavailableReason(request, signal) {
+  let { verb, route, body, contentType, marks, fail } = request;
+  let replied = (failure) => ({
     replied: false,
     failure,
   });
-  let v = agentSessionMaySendDirect();
-  if (v) marks.agent_direct = true;
-  let c = frameRelayOffered() || (frameRelayBinds() && accountBotMayRelay(BLOBS_RELAY_FAMILY));
-  let E = !v && c && !relayDeclined(BLOBS_RELAY_FAMILY);
-  let R = (!v && !c && frameRelayBinds()) || E;
-  let h = () =>
-    u(
+  let maySendDirect = agentSessionMaySendDirect();
+  if (maySendDirect) marks.agent_direct = true;
+  let relayOffered = frameRelayOffered() || (frameRelayBinds() && accountBotMayRelay(BLOBS_RELAY_FAMILY));
+  let relayEligible = !maySendDirect && relayOffered && !relayDeclined(BLOBS_RELAY_FAMILY);
+  let needsRelay = (!maySendDirect && !relayOffered && frameRelayBinds()) || relayEligible;
+  let relayRefusal = () =>
+    replied(
       fail(
         "store_unavailable",
         "relay_unavailable",
         "asset uploads, copies, listing, and deletes run only from a local session or an Anthropic-hosted cloud session with its gateway relay enabled; retrying from here will not help",
       ),
     );
-  if (!R && !v && env.CLAUDE_CODE_REMOTE) return h();
-  if (R && !frameVerbRelayActive(BLOBS_RELAY_FAMILY))
-    return u(
+  if (!needsRelay && !maySendDirect && env.CLAUDE_CODE_REMOTE) return relayRefusal();
+  if (needsRelay && !frameVerbRelayActive(BLOBS_RELAY_FAMILY))
+    return replied(
       fail(
         "store_unavailable",
         "relay_not_served",
@@ -995,74 +1030,74 @@ async function assetRelayUnavailableReason(e, r) {
   let liveState = getLiveState();
   if (!liveState.assetsOnRoster) {
     let epoch = liveState.accountEpoch;
-    let x = liveState.roster === undefined;
-    let T =
+    let rosterMissing = liveState.roster === undefined;
+    let roster =
       liveState.roster ??
       (await resolveContract({
         timeoutMs: 5000,
-        signal: r,
-        credentials: e.credentials,
+        signal,
+        credentials: request.credentials,
       }));
-    if ("err" in T) marks[`roster_${T.cause}`] = true;
+    if ("err" in roster) marks[`roster_${roster.cause}`] = true;
     else if (
-      x &&
+      rosterMissing &&
       !saveRosterToConfig({
         session: liveState,
         epoch,
-        roster: T,
+        roster,
         storageV5: undefined,
       }).adopted
     )
       marks.roster_outlived = true;
-    else if (!T.capabilities.includes("assets"))
-      if (!R) return u(fail("unavailable_to_account", "roster_no_assets"));
+    else if (!roster.capabilities.includes("assets"))
+      if (!needsRelay) return replied(fail("unavailable_to_account", "roster_no_assets"));
       else marks.roster_no_assets = true;
   }
-  let O = {
+  let fetchOptions = {
     maxRedirects: 0,
     headers: {
       ...buildFrameHeaders(),
       "Content-Type": contentType,
       Accept: "application/json",
     },
-    ...(e.verb === "upload"
+    ...(request.verb === "upload"
       ? {
           streamUpload: {
             tailFloorMs: () => UPLOAD_TAIL_FLOOR_MS,
-            onSettled: (F) => {
-              if (F.stalled) marks.stalled = true;
+            onSettled: (settlement) => {
+              if (settlement.stalled) marks.stalled = true;
             },
           },
         }
       : {
-          timeout: e.timeoutMs,
+          timeout: request.timeoutMs,
         }),
-    ...(e.maxBodyLength !== undefined && {
-      maxBodyLength: e.maxBodyLength,
+    ...(request.maxBodyLength !== undefined && {
+      maxBodyLength: request.maxBodyLength,
     }),
     maxContentLength: 262144,
     validateStatus: () => true,
-    signal: r,
+    signal,
   };
-  let L = async () =>
-    R
-      ? (await sendRelayed("POST", route, body, O, BLOBS_RELAY_FAMILY)).res
+  let send = async () =>
+    needsRelay
+      ? (await sendRelayed("POST", route, body, fetchOptions, BLOBS_RELAY_FAMILY)).res
       : apiClient.post(route, body, {
-          ...O,
+          ...fetchOptions,
           host: "frame",
           auth: "claude-ai-oauth",
           refreshOAuth: true,
-          credentials: e.credentials,
+          credentials: request.credentials,
         });
-  let S;
+  let response;
   try {
-    if (E && e.verb === "upload" && !relayVouched(BLOBS_RELAY_FAMILY)) {
-      let x;
+    if (relayEligible && request.verb === "upload" && !relayVouched(BLOBS_RELAY_FAMILY)) {
+      let probeResponse;
       try {
-        x = (
+        probeResponse = (
           await sendRelayed(
             "POST",
-            e.probeRoute,
+            request.probeRoute,
             jsonStringify({
               limit: 1,
             }),
@@ -1076,7 +1111,7 @@ async function assetRelayUnavailableReason(e, r) {
               timeout: ASSET_REQUEST_TIMEOUT_MS,
               maxContentLength: 262144,
               validateStatus: () => true,
-              signal: r,
+              signal,
             },
             BLOBS_RELAY_FAMILY,
           )
@@ -1084,7 +1119,7 @@ async function assetRelayUnavailableReason(e, r) {
       } catch (error) {
         if (isCancel(error) || error instanceof AbortError) throw error;
         declineRelay(BLOBS_RELAY_FAMILY, true);
-        return u(
+        return replied(
           fail(
             "store_unavailable",
             "probe_request_error",
@@ -1092,14 +1127,15 @@ async function assetRelayUnavailableReason(e, r) {
           ),
         );
       }
-      let T = classifyGatewayAnswer(x);
-      if (T.refused) {
+      let verdict = classifyGatewayAnswer(probeResponse);
+      if (verdict.refused) {
         declineRelay(BLOBS_RELAY_FAMILY);
-        return h();
+        return relayRefusal();
       }
-      if (!T.vouched) {
-        if (!x.ok || x.status >= 500 || x.status === 499) declineRelay(BLOBS_RELAY_FAMILY, true);
-        return u(
+      if (!verdict.vouched) {
+        if (!probeResponse.ok || probeResponse.status >= 500 || probeResponse.status === 499)
+          declineRelay(BLOBS_RELAY_FAMILY, true);
+        return replied(
           fail(
             "store_unavailable",
             "probe_unvouched",
@@ -1109,48 +1145,50 @@ async function assetRelayUnavailableReason(e, r) {
       }
       markRelayServed(BLOBS_RELAY_FAMILY);
     }
-    let F = (x) => {
-      if (!E) return false;
-      let T = classifyGatewayAnswer(x);
-      if (T.refused && !(x.ok && x.status === 413)) {
+    let handleResponse = (res) => {
+      if (!relayEligible) return false;
+      let verdict = classifyGatewayAnswer(res);
+      if (verdict.refused && !(res.ok && res.status === 413)) {
         declineRelay(BLOBS_RELAY_FAMILY);
         clearRelayVouch(BLOBS_RELAY_FAMILY);
         return true;
       }
-      if (T.vouched) markRelayServed(BLOBS_RELAY_FAMILY);
-      else if (!relayVouched(BLOBS_RELAY_FAMILY) && (!x.ok || x.status >= 500 || x.status === 499))
+      if (verdict.vouched) markRelayServed(BLOBS_RELAY_FAMILY);
+      else if (!relayVouched(BLOBS_RELAY_FAMILY) && (!res.ok || res.status >= 500 || res.status === 499))
         declineRelay(BLOBS_RELAY_FAMILY, true);
       return false;
     };
-    S = await L();
-    if (F(S)) return h();
+    response = await send();
+    if (handleResponse(response)) return relayRefusal();
     if (
-      S.ok &&
-      (S.status === 429 || S.status === 503) &&
-      classifyAssetApiError(S.status, S.data).code !== "policy_denied"
+      response.ok &&
+      (response.status === 429 || response.status === 503) &&
+      classifyAssetApiError(response.status, response.data).code !== "policy_denied"
     ) {
-      let x = S.response.headers?.["retry-after"];
-      let retryAfterMs = parseRetryAfterMs(typeof x === "string" ? x : undefined);
+      let retryAfterHeader = response.response.headers?.["retry-after"];
+      let retryAfterMs = parseRetryAfterMs(
+        typeof retryAfterHeader === "string" ? retryAfterHeader : undefined,
+      );
       if (retryAfterMs !== undefined && retryAfterMs <= MAX_RETRY_AFTER_MS) {
-        await sleep(retryAfterMs, r);
-        if (r.aborted) throw new AbortError();
+        await sleep(retryAfterMs, signal);
+        if (signal.aborted) throw new AbortError();
         marks.retried = true;
-        S = await L();
-        if (F(S)) return h();
+        response = await send();
+        if (handleResponse(response)) return relayRefusal();
       }
     }
   } catch (error) {
     if (isCancel(error) || error instanceof AbortError) throw error;
-    if (E && !relayVouched(BLOBS_RELAY_FAMILY)) declineRelay(BLOBS_RELAY_FAMILY, true);
+    if (relayEligible && !relayVouched(BLOBS_RELAY_FAMILY)) declineRelay(BLOBS_RELAY_FAMILY, true);
     if (findProxyError(error) !== undefined)
-      return u(
+      return replied(
         fail(
           "store_unavailable",
           "proxy_refused",
           "a network proxy refused the connection; nothing was sent \u2014 one retry is safe",
         ),
       );
-    return u(
+    return replied(
       fail(
         "store_unavailable",
         "request_error",
@@ -1162,36 +1200,40 @@ async function assetRelayUnavailableReason(e, r) {
       ),
     );
   }
-  if (!S.ok)
-    return u({
-      ...fail("store_unavailable", S.reason.replace(/-/g, "_")),
+  if (!response.ok)
+    return replied({
+      ...fail("store_unavailable", response.reason.replace(/-/g, "_")),
       message:
-        S.reason === "no-auth"
-          ? R
-            ? noGatewayCredentialMessage(S.detail)
-            : describeArtifactAuthFailure(S.detail)
-          : `asset ${verb} unavailable: ${S.reason}`,
+        response.reason === "no-auth"
+          ? needsRelay
+            ? noGatewayCredentialMessage(response.detail)
+            : describeArtifactAuthFailure(response.detail)
+          : `asset ${verb} unavailable: ${response.reason}`,
     });
-  if (v && S.status === 403 && classifyAssetApiError(S.status, S.data).reason === "credential_rejected")
-    return u({
+  if (
+    maySendDirect &&
+    response.status === 403 &&
+    classifyAssetApiError(response.status, response.data).reason === "credential_rejected"
+  )
+    return replied({
       ...fail("credential_rejected", "agent_not_enabled"),
       message: `asset ${verb} failed (credential_rejected): ${AGENT_ASSETS_DISABLED_MESSAGE}`,
     });
   return {
     replied: true,
-    status: S.status,
-    data: S.data,
-    retryAfter: S.response.headers?.["retry-after"],
+    status: response.status,
+    data: response.data,
+    retryAfter: response.response.headers?.["retry-after"],
   };
 }
 //@ chunk-vn5yv2ce.js:17922-18147 placement
 /**
  * 把资源 API 的 HTTP 失败按 classifyAssetApiError 分类，并用回调 r 生成错误（rate_limited 附重试秒数，upstream_error 附 HTTP 状态）。
  */
-function assetApiFailure(e, r) {
-  let { code, reason, detail } = classifyAssetApiError(e.status, e.data);
-  let retryAfterMs = parseRetryAfterMs(e.retryAfter);
-  return r(
+function assetApiFailure(response, makeError) {
+  let { code, reason, detail } = classifyAssetApiError(response.status, response.data);
+  let retryAfterMs = parseRetryAfterMs(response.retryAfter);
+  return makeError(
     code,
     reason,
     code === "rate_limited"
@@ -1199,28 +1241,31 @@ function assetApiFailure(e, r) {
         ? `${Math.max(1, Math.ceil(retryAfterMs / 1000))}s`
         : undefined
       : code === "upstream_error" && detail === undefined
-        ? `HTTP ${e.status}`
+        ? `HTTP ${response.status}`
         : detail,
   );
 }
 //@ chunk-vn5yv2ce.js:18147-19528 placement
-async function uploadArtifactAsset(e, signal) {
-  let { slug, bytes, contentType } = e;
-  let l = {};
-  let a = assetErrorFactory((E) => logFeatureBad("artifact_asset_upload", E, l), "upload");
-  if (!ARTIFACT_SLUG_RE.test(slug)) return a("invalid_request", "invalid_slug", "not a valid artifact id");
-  let o = maxAssetBytesFor(contentType);
-  if (bytes.length === 0 || bytes.length > o)
+async function uploadArtifactAsset(request, signal) {
+  let { slug, bytes, contentType } = request;
+  let telemetry = {};
+  let fail = assetErrorFactory(
+    (reason) => logFeatureBad("artifact_asset_upload", reason, telemetry),
+    "upload",
+  );
+  if (!ARTIFACT_SLUG_RE.test(slug)) return fail("invalid_request", "invalid_slug", "not a valid artifact id");
+  let maxBytes = maxAssetBytesFor(contentType);
+  if (bytes.length === 0 || bytes.length > maxBytes)
     return bytes.length === 0
-      ? a("invalid_request", "size", "the file is empty")
-      : a(
+      ? fail("invalid_request", "size", "the file is empty")
+      : fail(
           "too_large",
           "size",
           contentType === SVG_MIME_TYPE
-            ? `the SVG exceeds the ${o >> 20} MiB limit for SVG assets \u2014 simplify or rasterize it`
-            : `the file exceeds the ${o >> 20} MiB per-asset limit \u2014 compress or split it`,
+            ? `the SVG exceeds the ${maxBytes >> 20} MiB limit for SVG assets \u2014 simplify or rasterize it`
+            : `the file exceeds the ${maxBytes >> 20} MiB per-asset limit \u2014 compress or split it`,
         );
-  let u = await assetRelayUnavailableReason(
+  let relayUnavailable = await assetRelayUnavailableReason(
     {
       verb: "upload",
       route: agentUploadRoute(slug),
@@ -1228,31 +1273,31 @@ async function uploadArtifactAsset(e, signal) {
       body: bytes,
       contentType,
       maxBodyLength: MAX_FRAME_RESPONSE_BYTES + 4096,
-      marks: l,
-      fail: a,
-      credentials: e.credentials,
+      marks: telemetry,
+      fail,
+      credentials: request.credentials,
     },
     signal,
   );
-  let v = (E) =>
-    l.retried === true
+  let withResent = (failure) =>
+    telemetry.retried === true
       ? {
-          ...E,
+          ...failure,
           resent: true,
         }
-      : E;
-  if (!u.replied) return v(u.failure);
-  if (u.status !== 200) return v(assetApiFailure(u, a));
-  let c = uploadedAssetSchema().safeParse(u.data);
+      : failure;
+  if (!relayUnavailable.replied) return withResent(relayUnavailable.failure);
+  if (relayUnavailable.status !== 200) return withResent(assetApiFailure(relayUnavailable, fail));
+  let parsed = uploadedAssetSchema().safeParse(relayUnavailable.data);
   if (
-    !c.success ||
-    c.data.content_type !== contentType ||
+    !parsed.success ||
+    parsed.data.content_type !== contentType ||
     (contentType === SVG_MIME_TYPE
-      ? c.data.size_bytes === 0 || c.data.size_bytes > MAX_FRAME_RESPONSE_BYTES
-      : c.data.size_bytes !== bytes.length)
+      ? parsed.data.size_bytes === 0 || parsed.data.size_bytes > MAX_FRAME_RESPONSE_BYTES
+      : parsed.data.size_bytes !== bytes.length)
   )
-    return v(
-      a(
+    return withResent(
+      fail(
         "upstream_error",
         "malformed_echo",
         "the upload probably succeeded but the reply was unreadable \u2014 retry at most once; if it repeats, stop and report it",
@@ -1260,36 +1305,36 @@ async function uploadArtifactAsset(e, signal) {
     );
   getLiveState().assetsOnRoster = true;
   logFeatureOk("artifact_asset_upload", {
-    ...l,
-    size_bytes: c.data.size_bytes,
+    ...telemetry,
+    size_bytes: parsed.data.size_bytes,
   });
   return {
     kind: "ok",
-    id: c.data.opaque_id,
-    url: assetBlobUrl(c.data.opaque_id, c.data.url),
-    sizeBytes: c.data.size_bytes,
-    contentType: c.data.content_type,
-    ...(c.data.sha256 !== undefined && {
-      sha256: c.data.sha256,
+    id: parsed.data.opaque_id,
+    url: assetBlobUrl(parsed.data.opaque_id, parsed.data.url),
+    sizeBytes: parsed.data.size_bytes,
+    contentType: parsed.data.content_type,
+    ...(parsed.data.sha256 !== undefined && {
+      sha256: parsed.data.sha256,
     }),
-    ...(l.retried === true && {
+    ...(telemetry.retried === true && {
       resent: true,
     }),
   };
 }
 //@ chunk-vn5yv2ce.js:19528-20821 placement
-async function listArtifactAssets(e, signal) {
-  let { slug, after } = e;
-  let n = {};
-  let l = assetErrorFactory((u) => logFeatureBad("artifact_asset_list", u, n), "list");
-  if (!ARTIFACT_SLUG_RE.test(slug)) return l("invalid_request", "invalid_slug", "not a valid artifact id");
+async function listArtifactAssets(request, signal) {
+  let { slug, after } = request;
+  let telemetry = {};
+  let fail = assetErrorFactory((code) => logFeatureBad("artifact_asset_list", code, telemetry), "list");
+  if (!ARTIFACT_SLUG_RE.test(slug)) return fail("invalid_request", "invalid_slug", "not a valid artifact id");
   if (after !== undefined && !ASSET_CURSOR_RE.test(after))
-    return l(
+    return fail(
       "invalid_request",
       "invalid_cursor",
       "after must be the next value from an earlier list_assets result",
     );
-  let a = await assetRelayUnavailableReason(
+  let response = await assetRelayUnavailableReason(
     {
       verb: "list",
       route: agentListRoute(slug),
@@ -1301,26 +1346,26 @@ async function listArtifactAssets(e, signal) {
       }),
       contentType: "application/json",
       timeoutMs: ASSET_REQUEST_TIMEOUT_MS,
-      marks: n,
-      fail: l,
-      credentials: e.credentials,
+      marks: telemetry,
+      fail,
+      credentials: request.credentials,
     },
     signal,
   );
-  if (!a.replied) return a.failure;
-  if (a.status !== 200) return assetApiFailure(a, l);
-  let o = assetListSchema().safeParse(a.data);
-  if (!o.success) return l("upstream_error", "malformed_reply", "the listing was unreadable");
+  if (!response.replied) return response.failure;
+  if (response.status !== 200) return assetApiFailure(response, fail);
+  let parsed = assetListSchema().safeParse(response.data);
+  if (!parsed.success) return fail("upstream_error", "malformed_reply", "the listing was unreadable");
   getLiveState().assetsOnRoster = true;
-  foldBootCowritten(slug, o.data.cowritten);
-  foldBootOutsideWriter(slug, o.data.outside_writer);
+  foldBootCowritten(slug, parsed.data.cowritten);
+  foldBootOutsideWriter(slug, parsed.data.outside_writer);
   logFeatureOk("artifact_asset_list", {
-    ...n,
-    count: o.data.assets.length,
+    ...telemetry,
+    count: parsed.data.assets.length,
   });
   return {
     kind: "ok",
-    assets: o.data.assets.map((asset) => ({
+    assets: parsed.data.assets.map((asset) => ({
       id: asset.opaque_id,
       url: assetBlobUrl(asset.opaque_id, asset.url),
       contentType: asset.content_type,
@@ -1331,85 +1376,89 @@ async function listArtifactAssets(e, signal) {
       createdAt: sanitizeAssetMessage(asset.created_at),
     })),
     usage: {
-      files: o.data.usage.files,
-      bytes: o.data.usage.bytes,
-      maxFiles: o.data.usage.max_files,
-      maxBytes: o.data.usage.max_bytes,
+      files: parsed.data.usage.files,
+      bytes: parsed.data.usage.bytes,
+      maxFiles: parsed.data.usage.max_files,
+      maxBytes: parsed.data.usage.max_bytes,
     },
-    ...(o.data.next !== undefined && {
-      next: o.data.next,
+    ...(parsed.data.next !== undefined && {
+      next: parsed.data.next,
     }),
-    ...(o.data.cowritten && {
+    ...(parsed.data.cowritten && {
       cowritten: true,
     }),
-    ...(o.data.outside_writer !== undefined && {
-      outsideWriter: o.data.outside_writer,
+    ...(parsed.data.outside_writer !== undefined && {
+      outsideWriter: parsed.data.outside_writer,
     }),
   };
 }
 //@ chunk-vn5yv2ce.js:20821-21590 placement
-async function deleteArtifactAsset(e, signal) {
-  let { slug, id } = e;
-  let n = {};
-  let l = assetErrorFactory((u) => logFeatureBad("artifact_asset_delete", u, n), "delete");
-  if (!ARTIFACT_SLUG_RE.test(slug)) return l("invalid_request", "invalid_slug", "not a valid artifact id");
-  if (!ASSET_ID_RE.test(id)) return l("invalid_request", "invalid_id", "not a valid asset id");
-  let a = await assetRelayUnavailableReason(
+async function deleteArtifactAsset(request, signal) {
+  let { slug, id } = request;
+  let telemetry = {};
+  let fail = assetErrorFactory((code) => logFeatureBad("artifact_asset_delete", code, telemetry), "delete");
+  if (!ARTIFACT_SLUG_RE.test(slug)) return fail("invalid_request", "invalid_slug", "not a valid artifact id");
+  if (!ASSET_ID_RE.test(id)) return fail("invalid_request", "invalid_id", "not a valid asset id");
+  let response = await assetRelayUnavailableReason(
     {
       verb: "delete",
       route: agentDeleteRoute(slug, id),
       body: "{}",
       contentType: "application/json",
       timeoutMs: ASSET_REQUEST_TIMEOUT_MS,
-      marks: n,
-      fail: l,
-      credentials: e.credentials,
+      marks: telemetry,
+      fail,
+      credentials: request.credentials,
     },
     signal,
   );
-  if (!a.replied) return a.failure;
-  if (a.status !== 200) return assetApiFailure(a, l);
-  let o = assetDeleteSchema().safeParse(a.data);
-  if (!o.success)
-    return l(
+  if (!response.replied) return response.failure;
+  if (response.status !== 200) return assetApiFailure(response, fail);
+  let parsed = assetDeleteSchema().safeParse(response.data);
+  if (!parsed.success)
+    return fail(
       "upstream_error",
       "malformed_reply",
       "the delete may have succeeded but the reply was unreadable \u2014 list the assets to check",
     );
   getLiveState().assetsOnRoster = true;
   logFeatureOk("artifact_asset_delete", {
-    ...n,
-    deleted: o.data.deleted,
+    ...telemetry,
+    deleted: parsed.data.deleted,
   });
   return {
     kind: "ok",
-    deleted: o.data.deleted,
+    deleted: parsed.data.deleted,
   };
 }
 //@ chunk-vn5yv2ce.js:21590-21678 placement
 /**
  * 复制资源的响应 schema 与请求超时。
  */
-var copyAssetsResponseSchema = DoctorLazy(() =>
-  create({
-    assets: create_15(
-      uploadedAssetSchema().extend({
-        from_id: create_2().regex(ASSET_ID_RE),
-      }),
-    ).max(MAX_COPY_ASSET_IDS),
-  }),
-);
-var COPY_ASSETS_TIMEOUT_MS = 120000;
+var copyAssetsResponseSchema; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var COPY_ASSETS_TIMEOUT_MS;
+deferInit("chunk-vn5yv2ce.js:21590", () => {
+  copyAssetsResponseSchema = DoctorLazy(() =>
+    create({
+      assets: create_15(
+        uploadedAssetSchema().extend({
+          from_id: create_2().regex(ASSET_ID_RE),
+        }),
+      ).max(MAX_COPY_ASSET_IDS),
+    }),
+  );
+  COPY_ASSETS_TIMEOUT_MS = 120000;
+});
 //@ chunk-vn5yv2ce.js:21678-23321 placement
-async function copyArtifactAsset(e, signal) {
-  let { slug, fromSlug, ids } = e;
-  let l = e.crossOrgOk === true;
-  let a = {};
-  let o = assetErrorFactory((c) => logFeatureBad("artifact_asset_copy", c, a), "copy");
+async function copyArtifactAsset(request, signal) {
+  let { slug, fromSlug, ids } = request;
+  let crossOrg = request.crossOrgOk === true;
+  let telemetry = {};
+  let fail = assetErrorFactory((code) => logFeatureBad("artifact_asset_copy", code, telemetry), "copy");
   if (!ARTIFACT_SLUG_RE.test(slug) || !ARTIFACT_SLUG_RE.test(fromSlug))
-    return o("invalid_request", "invalid_slug", "not a valid artifact id");
+    return fail("invalid_request", "invalid_slug", "not a valid artifact id");
   if (slug === fromSlug)
-    return o(
+    return fail(
       "invalid_request",
       "same_artifact",
       "from_url names the destination itself \u2014 its assets are already there",
@@ -1420,58 +1469,60 @@ async function copyArtifactAsset(e, signal) {
     !ids.every((id) => ASSET_ID_RE.test(id)) ||
     new Set(ids).size !== ids.length
   )
-    return o(
+    return fail(
       "invalid_request",
       "invalid_ids",
       `asset_ids must be 1\u2013${MAX_COPY_ASSET_IDS} distinct asset ids`,
     );
-  let u = await assetRelayUnavailableReason(
+  let response = await assetRelayUnavailableReason(
     {
       verb: "copy",
       route: agentCopyRoute(slug),
       body: jsonStringify({
         from: fromSlug,
         ids,
-        ...(l && {
+        ...(crossOrg && {
           cross_org_ok: true,
         }),
       }),
       contentType: "application/json",
       timeoutMs: COPY_ASSETS_TIMEOUT_MS,
-      marks: a,
-      fail: o,
-      credentials: e.credentials,
+      marks: telemetry,
+      fail,
+      credentials: request.credentials,
     },
     signal,
   );
-  if (!u.replied) return u.failure;
-  if (u.status !== 200)
-    return l && u.status === 400 && classifyAssetApiError(400, u.data).detail === "invalid request body"
-      ? o(
+  if (!response.replied) return response.failure;
+  if (response.status !== 200)
+    return crossOrg &&
+      response.status === 400 &&
+      classifyAssetApiError(400, response.data).detail === "invalid request body"
+      ? fail(
           "not_copyable",
           "predates_cross_org",
           "this server doesn't support copying from another organization's artifact yet, so don't retry the copy, and tell the user cross-organization copies aren't supported yet",
         )
-      : assetApiFailure(u, o);
-  let v = copyAssetsResponseSchema().safeParse(u.data);
+      : assetApiFailure(response, fail);
+  let parsed = copyAssetsResponseSchema().safeParse(response.data);
   if (
-    !v.success ||
-    v.data.assets.length !== ids.length ||
-    v.data.assets.some((asset, E) => asset.from_id !== ids[E])
+    !parsed.success ||
+    parsed.data.assets.length !== ids.length ||
+    parsed.data.assets.some((asset, result) => asset.from_id !== ids[result])
   )
-    return o(
+    return fail(
       "upstream_error",
       "malformed_reply",
       'the copy probably succeeded but the reply was unreadable \u2014 run action "list_assets" on the destination before retrying, or the assets may be copied twice',
     );
   getLiveState().assetsOnRoster = true;
   logFeatureOk("artifact_asset_copy", {
-    ...a,
+    ...telemetry,
     count: ids.length,
   });
   return {
     kind: "ok",
-    assets: v.data.assets.map((asset) => ({
+    assets: parsed.data.assets.map((asset) => ({
       fromId: asset.from_id,
       id: asset.opaque_id,
       url: assetBlobUrl(asset.opaque_id, asset.url),
@@ -1489,8 +1540,8 @@ var ASSET_LIST_TIMEOUT_MS = 90000;
 /**
  * 由 MIME 类型反查扩展名。
  */
-function extensionForMimeType(e) {
-  for (let [r, s] of ASSET_MIME_TYPES) if (s === e) return r;
+function extensionForMimeType(mimeType) {
+  for (let [extension, typeForExt] of ASSET_MIME_TYPES) if (typeForExt === mimeType) return extension;
   return;
 }
 //@ chunk-vn5yv2ce.js:23391-23544 placement
@@ -1501,30 +1552,32 @@ var ASSET_READ_UNAVAILABLE_MESSAGE =
  * 读取 Artifact 资源（artifact_asset_read）
  */
 async function readArtifactAsset(
-  e,
+  target,
   assetId,
   signal,
   credentials,
-  { admitPublicRead: n, probeToolUseId: l } = {},
+  { admitPublicRead, probeToolUseId } = {},
 ) {
-  let a = (y, w) => {
-    logFeatureBad("artifact_asset_read", y);
+  let failAssetRead = (reason, detail) => {
+    logFeatureBad("artifact_asset_read", reason);
     return {
       kind: "error",
-      message: `asset read failed: ${w}`,
-      reason: y,
+      message: `asset read failed: ${detail}`,
+      reason,
     };
   };
-  if (!ARTIFACT_SLUG_RE.test(e.slug)) return a("invalid_slug", "not a valid artifact id");
-  if (!ASSET_ID_RE.test(assetId)) return a("invalid_id", "not a valid asset id");
-  let o = runnerAgentMayReadFilesDirect();
+  if (!ARTIFACT_SLUG_RE.test(target.slug)) return failAssetRead("invalid_slug", "not a valid artifact id");
+  if (!ASSET_ID_RE.test(assetId)) return failAssetRead("invalid_id", "not a valid asset id");
+  let runnerDirect = runnerAgentMayReadFilesDirect();
   let agentDirect = agentSessionMaySendDirect();
-  let v = !o && (frameRelayBinds() || (frameRelayOffered() && !relayDeclined(ARTIFACT_MOUNT)));
-  if (!v && !o && env.CLAUDE_CODE_REMOTE) return a("relay_unavailable", ASSET_READ_UNAVAILABLE_MESSAGE);
-  let artifactBootWithProbe = await fetchArtifactBootWithProbe(e, "artifact_asset_read", signal, {
+  let needsRelay =
+    !runnerDirect && (frameRelayBinds() || (frameRelayOffered() && !relayDeclined(ARTIFACT_MOUNT)));
+  if (!needsRelay && !runnerDirect && env.CLAUDE_CODE_REMOTE)
+    return failAssetRead("relay_unavailable", ASSET_READ_UNAVAILABLE_MESSAGE);
+  let artifactBootWithProbe = await fetchArtifactBootWithProbe(target, "artifact_asset_read", signal, {
     gatePublicRead: false,
     credentials,
-    probeToolUseId: l,
+    probeToolUseId,
   });
   if (artifactBootWithProbe.err !== null)
     return {
@@ -1533,13 +1586,13 @@ async function readArtifactAsset(
       reason: artifactBootWithProbe.status === 404 ? "boot_404" : "boot",
     };
   let { ver, assetToken } = artifactBootWithProbe;
-  let h = assetToken === undefined;
-  if (h && !isFramePublicReadEnabled())
-    return a(
+  let tokenless = assetToken === undefined;
+  if (tokenless && !isFramePublicReadEnabled())
+    return failAssetRead(
       "tokenless",
       "this artifact is served to you as a public (non-member) reader, and assets are not readable that way",
     );
-  if (h && n?.() !== true) {
+  if (tokenless && admitPublicRead?.() !== true) {
     logFeatureSad("artifact_asset_read", PUBLIC_READ_UNASKED_REASON);
     return {
       kind: "error",
@@ -1547,36 +1600,36 @@ async function readArtifactAsset(
       message: `asset read failed: ${PUBLIC_READ_UNASKED_WORDS}`,
     };
   }
-  let b = v && !h;
+  let viaMountRelay = needsRelay && !tokenless;
   let path = `/_f/${ver}/_blob/${assetId}`;
-  let L = `frame.${e.env === "staging" ? "staging." : ""}claudeusercontent.com`;
-  let { host, base, headers } = getFrameHost(e);
-  let T = () => {
-    getLiveState().contentHostEgressDenied.add(e.env);
-    return a(
+  let contentHostName = `frame.${target.env === "staging" ? "staging." : ""}claudeusercontent.com`;
+  let { host, base, headers } = getFrameHost(target);
+  let egressBlocked = () => {
+    getLiveState().contentHostEgressDenied.add(target.env);
+    return failAssetRead(
       "egress_blocked",
-      `this environment's network allowlist blocks ${host}, so the asset cannot be fetched (access to the artifact itself is fine). ${h ? `Public artifacts from outside your organization are fetched from that host directly, so it must be on this session's network allowlist. ${describeFrameAllowlistHint(e.env)}` : env.CLAUDE_CODE_REMOTE ? "This is a restriction of where this session runs; retrying from here will not help." : `To allow it, add *.${L} to the network allowlist this session runs behind (the sandbox's allowed domains, or the Claude desktop app's network settings).`}`,
+      `this environment's network allowlist blocks ${host}, so the asset cannot be fetched (access to the artifact itself is fine). ${tokenless ? `Public artifacts from outside your organization are fetched from that host directly, so it must be on this session's network allowlist. ${describeFrameAllowlistHint(target.env)}` : env.CLAUDE_CODE_REMOTE ? "This is a restriction of where this session runs; retrying from here will not help." : `To allow it, add *.${contentHostName} to the network allowlist this session runs behind (the sandbox's allowed domains, or the Claude desktop app's network settings).`}`,
     );
   };
-  let D = (y, w) => {
-    logForDebugging(`[artifact] asset fetch: egress proxy denied (${w})`);
-    return a(
+  let egressProxyDenied = (status, denialReason) => {
+    logForDebugging(`[artifact] asset fetch: egress proxy denied (${denialReason})`);
+    return failAssetRead(
       "egress_denied",
-      `artifact content fetch refused by the environment's egress proxy (${describeHttpStatus(y)})`,
+      `artifact content fetch refused by the environment's egress proxy (${describeHttpStatus(status)})`,
     );
   };
-  let ye = (connectStatus, w) => {
-    if (w !== undefined) logForDebugging(`[artifact] asset fetch: proxy refused, marker ${w}`);
-    return a(
+  let proxyRefused = (connectStatus, marker) => {
+    if (marker !== undefined) logForDebugging(`[artifact] asset fetch: proxy refused, marker ${marker}`);
+    return failAssetRead(
       "proxy_refused",
       `the proxy refused the connection to the artifact's content host (${describeHttpStatus(connectStatus)})`,
     );
   };
-  let B = false;
-  let N;
-  if (!b && assetToken !== undefined && canReadViaFrame(artifactBootWithProbe.data)) {
+  let answeredViaFrame = false;
+  let frameResponse;
+  if (!viaMountRelay && assetToken !== undefined && canReadViaFrame(artifactBootWithProbe.data)) {
     try {
-      N = await getViaFrameContent(e.slug, path, {
+      frameResponse = await getViaFrameContent(target.slug, path, {
         token: assetToken,
         timeout: ASSET_LIST_TIMEOUT_MS,
         maxContentLength: MAX_FRAME_RESPONSE_BYTES + 1,
@@ -1585,23 +1638,23 @@ async function readArtifactAsset(
       });
     } catch (error) {
       if (isCancel(error) || error instanceof AbortError) throw error;
-      return a(
+      return failAssetRead(
         "request_error",
         `the content fetch failed in transit, timed out, or exceeded the ${MAX_FRAME_RESPONSE_BYTES >> 20} MiB limit`,
       );
     }
-    B = N.kind === "answer";
+    answeredViaFrame = frameResponse.kind === "answer";
   }
-  let A;
+  let response;
   try {
-    if (N?.kind === "answer") A = N;
-    else if (b) {
+    if (frameResponse?.kind === "answer") response = frameResponse;
+    else if (viaMountRelay) {
       if (assetToken === undefined)
-        return a(
+        return failAssetRead(
           "internal",
           "internal error: a public artifact read was routed where it cannot be served \u2014 this is a bug in this build; do not retry",
         );
-      let viaMount = await getViaMountOnce(e.slug, path, {
+      let viaMount = await getViaMountOnce(target.slug, path, {
         token: assetToken,
         timeout: ASSET_LIST_TIMEOUT_MS,
         maxContentLength: MAX_FRAME_RESPONSE_BYTES + 1,
@@ -1609,20 +1662,20 @@ async function readArtifactAsset(
         retryBudget: singleReadRetryBudget(),
       });
       if (!viaMount.ok)
-        return a(
+        return failAssetRead(
           viaMount.reason.replace(/-/g, "_"),
           viaMount.reason === "no-auth"
             ? noGatewayCredentialMessage(viaMount.detail)
             : `artifact content is unreachable from this session (${viaMount.reason})`,
         );
-      A = {
+      response = {
         status: viaMount.status,
         headers: viaMount.response.headers,
         data: viaMount.data,
       };
     } else {
-      let y = assetToken === undefined ? "" : `?__frame_t=${encodeURIComponent(assetToken)}`;
-      let w = await externalHttp.get(`${base}${path}${y}`, {
+      let tokenQuery = assetToken === undefined ? "" : `?__frame_t=${encodeURIComponent(assetToken)}`;
+      let httpResponse = await externalHttp.get(`${base}${path}${tokenQuery}`, {
         signal,
         timeout: ASSET_LIST_TIMEOUT_MS,
         responseType: "arraybuffer",
@@ -1633,89 +1686,94 @@ async function readArtifactAsset(
           headers,
         }),
       });
-      if (isAllowlistBlockedResponse(w.status, w.headers)) return T();
-      let M = proxyDenyReason(w.headers);
-      if (M !== undefined && (w.status < 200 || w.status >= 300)) return D(w.status, M);
-      getLiveState().contentHostEgressDenied.delete(e.env);
-      A = {
-        status: w.status,
-        headers: w.headers,
-        data: w.data,
+      if (isAllowlistBlockedResponse(httpResponse.status, httpResponse.headers)) return egressBlocked();
+      let denyReason = proxyDenyReason(httpResponse.headers);
+      if (denyReason !== undefined && (httpResponse.status < 200 || httpResponse.status >= 300))
+        return egressProxyDenied(httpResponse.status, denyReason);
+      getLiveState().contentHostEgressDenied.delete(target.env);
+      response = {
+        status: httpResponse.status,
+        headers: httpResponse.headers,
+        data: httpResponse.data,
       };
     }
   } catch (error) {
     if (isCancel(error) || error instanceof AbortError) throw error;
-    if (b) mountHopFailedForRunner();
-    let w = b ? undefined : findProxyError(error);
-    if (w !== undefined) {
-      if (isAllowlistBlockedResponse(w.connectStatus, w.headers)) return T();
-      let M = proxyDenyReason(w.headers);
-      if (M !== undefined) return D(w.connectStatus, M);
-      return ye(w.connectStatus, proxyErrorCode(w.headers));
+    if (viaMountRelay) mountHopFailedForRunner();
+    let proxyError = viaMountRelay ? undefined : findProxyError(error);
+    if (proxyError !== undefined) {
+      if (isAllowlistBlockedResponse(proxyError.connectStatus, proxyError.headers)) return egressBlocked();
+      let catchDenyReason = proxyDenyReason(proxyError.headers);
+      if (catchDenyReason !== undefined) return egressProxyDenied(proxyError.connectStatus, catchDenyReason);
+      return proxyRefused(proxyError.connectStatus, proxyErrorCode(proxyError.headers));
     }
-    return a(
+    return failAssetRead(
       "request_error",
       `the content fetch failed in transit, timed out, or exceeded the ${MAX_FRAME_RESPONSE_BYTES >> 20} MiB limit`,
     );
   }
-  if (b && mountDeclinedForRunner(A.status)) return a("relay_unavailable", ASSET_READ_UNAVAILABLE_MESSAGE);
-  if (b && isMountNetworkOffRefusal(A.status, A.data))
-    return a("network_off", `${MOUNT_NETWORK_OFF_WORDS}; retrying from here will not help`);
-  if (b && isRetryableStatus(A.status)) return a(`http_${A.status}`, describeGatewayTransient(A.status));
-  if (b) mountHopFailedForRunner(A.status);
-  if (A.status === 404)
-    return a(
+  if (viaMountRelay && mountDeclinedForRunner(response.status))
+    return failAssetRead("relay_unavailable", ASSET_READ_UNAVAILABLE_MESSAGE);
+  if (viaMountRelay && isMountNetworkOffRefusal(response.status, response.data))
+    return failAssetRead("network_off", `${MOUNT_NETWORK_OFF_WORDS}; retrying from here will not help`);
+  if (viaMountRelay && isRetryableStatus(response.status))
+    return failAssetRead(`http_${response.status}`, describeGatewayTransient(response.status));
+  if (viaMountRelay) mountHopFailedForRunner(response.status);
+  if (response.status === 404)
+    return failAssetRead(
       "http_404",
-      b
+      viaMountRelay
         ? `not found through this cloud session's artifact mount \u2014 no asset has that id, or asset reads are not enabled for this session yet; a writer of the artifact can tell which with action "list_assets"`
         : 'no asset with that id in this artifact (it may have been deleted) \u2014 a writer of the artifact can check the id with action "list_assets"',
     );
   if (
-    h &&
-    A.status === 403 &&
+    tokenless &&
+    response.status === 403 &&
     isForbiddenProxy(
-      A.headers,
-      proxyDenialResult(A.headers, A.data, (y) => y),
+      response.headers,
+      proxyDenialResult(response.headers, response.data, (value) => value),
     )
   )
-    return a(
+    return failAssetRead(
       "public_refused",
       "this public artifact serves no asset with that id to readers outside its organization, or it is no longer public",
     );
-  let X = b
+  let denialCode = viaMountRelay
     ? undefined
     : logProxyDenial({
-        status: A.status,
-        headers: A.headers,
-        data: A.data,
-        redact: (y) => redactFrameToken(y, assetToken),
+        status: response.status,
+        headers: response.headers,
+        data: response.data,
+        redact: (text) => redactFrameToken(text, assetToken),
         label: "[artifact] asset fetch",
       });
-  if (X !== undefined) return a(X, ARTIFACT_PROXY_DENIAL_TEXTS[X]);
-  if (A.status === 401 || A.status === 403)
-    return a(
-      `http_${A.status}`,
-      b
+  if (denialCode !== undefined) return failAssetRead(denialCode, ARTIFACT_PROXY_DENIAL_TEXTS[denialCode]);
+  if (response.status === 401 || response.status === 403)
+    return failAssetRead(
+      `http_${response.status}`,
+      viaMountRelay
         ? "the cloud session's artifact mount refused the read \u2014 asset reads may not be enabled for this session, or the artifact was unshared or taken down"
         : "access to the artifact content was refused \u2014 the artifact may have been unshared or taken down since the id was listed",
     );
-  if (A.status !== 200)
-    return a(
-      `http_${A.status}`,
-      `unexpected answer from the ${B ? "artifact service" : "content host"} (HTTP ${A.status})`,
+  if (response.status !== 200)
+    return failAssetRead(
+      `http_${response.status}`,
+      `unexpected answer from the ${answeredViaFrame ? "artifact service" : "content host"} (HTTP ${response.status})`,
     );
-  if (b) markRelayServed(ARTIFACT_MOUNT);
-  let headers_2 = A.headers;
-  let oe = b || B ? contentTypeOfHeaders(headers_2) : headers_2?.["content-type"];
-  let ie = typeof oe === "string" ? firstLineOf(oe, ";").trim().toLowerCase() : "";
-  if (extensionForMimeType(ie) === undefined)
-    return a(
+  if (viaMountRelay) markRelayServed(ARTIFACT_MOUNT);
+  let headers_2 = response.headers;
+  let contentTypeHeader =
+    viaMountRelay || answeredViaFrame ? contentTypeOfHeaders(headers_2) : headers_2?.["content-type"];
+  let contentType =
+    typeof contentTypeHeader === "string" ? firstLineOf(contentTypeHeader, ";").trim().toLowerCase() : "";
+  if (extensionForMimeType(contentType) === undefined)
+    return failAssetRead(
       "unexpected_type",
-      `the ${B ? "artifact service" : "content host"} served a type this tool does not save`,
+      `the ${answeredViaFrame ? "artifact service" : "content host"} served a type this tool does not save`,
     );
-  let buffer = Buffer.from(A.data ?? new ArrayBuffer(0));
+  let buffer = Buffer.from(response.data ?? new ArrayBuffer(0));
   if (buffer.length === 0 || buffer.length > MAX_FRAME_RESPONSE_BYTES)
-    return a(
+    return failAssetRead(
       "size",
       buffer.length === 0
         ? "the asset is empty"
@@ -1724,21 +1782,24 @@ async function readArtifactAsset(
   return {
     kind: "ok",
     bytes: buffer,
-    contentType: ie,
-    relay: b,
+    contentType,
+    relay: viaMountRelay,
     agentDirect,
-    publicRead: h,
+    publicRead: tokenless,
   };
 }
 //@ chunk-8wvtd8sr.js:295557-295627 placement
-var FILE_PATHS_LIST_MESSAGE = `\`file_paths\` must be a list of 1 to ${MAX_UPLOAD_FILE_PATHS} local file paths`;
+var FILE_PATHS_LIST_MESSAGE; // deferred: uses SHA256_HEX_RE of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-8wvtd8sr.js:295557", () => {
+  FILE_PATHS_LIST_MESSAGE = `\`file_paths\` must be a list of 1 to ${MAX_UPLOAD_FILE_PATHS} local file paths`;
+});
 //@ chunk-8wvtd8sr.js:295627-296324 placement
 /**
  * 解析 upload_asset 的 file_path / file_paths：单个、列表或 invalid（缺参数、两者同传、列表为空或超过 qL、元素非字符串）。
  */
-function parseUploadPaths(e) {
-  let n = e;
-  let { file_path: filePath, file_paths: filePaths } = n;
+function parseUploadPaths(input) {
+  let record = input;
+  let { file_path: filePath, file_paths: filePaths } = record;
   if (filePaths === undefined)
     return typeof filePath === "string"
       ? {
@@ -1765,56 +1826,63 @@ function parseUploadPaths(e) {
       kind: "invalid",
       problem: `${FILE_PATHS_LIST_MESSAGE} \u2014 ${untrustedArray.length} were given; send the rest in further calls.`,
     };
-  let y = [];
+  let paths = [];
   for (let untrusted of untrustedArray) {
     if (typeof untrusted !== "string" || untrusted === "")
       return {
         kind: "invalid",
         problem: `${FILE_PATHS_LIST_MESSAGE}.`,
       };
-    y.push(untrusted);
+    paths.push(untrusted);
   }
   return {
     kind: "list",
-    paths: y,
+    paths,
   };
 }
 //@ chunk-8wvtd8sr.js:296324-296755 placement
 /**
  * 资源上传失败分类：单个文件即判定失败的代码、终止整次上传的代码、relay 不可用原因，以及上传结果行的长度与失败行数上限。
  */
-var SINGLE_UPLOAD_FAILURE_CODES = new Set(["invalid_request", "too_large", "unsupported_type"]);
-var FINAL_UPLOAD_FAILURE_CODES = new Set([
-  "invalid_request",
-  "too_large",
-  "unsupported_type",
-  "quota_or_state",
-  "rate_limited",
-  "upstream_auth",
-  "capability_disabled",
-  "not_found",
-  "not_writer",
-  "credential_rejected",
-  "policy_denied",
-  "unavailable_to_account",
-]);
-var RELAY_UNAVAILABLE_REASONS = new Set([
-  "relay_unavailable",
-  "relay_not_served",
-  "probe_request_error",
-  "probe_unvouched",
-  "proxy_refused",
-  "unrouted",
-  "no_auth",
-]);
-var UPLOAD_LINE_MAX = 1300;
-var MAX_UPLOAD_FAILURE_LINES = 6;
+var SINGLE_UPLOAD_FAILURE_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var FINAL_UPLOAD_FAILURE_CODES;
+var RELAY_UNAVAILABLE_REASONS;
+var UPLOAD_LINE_MAX;
+var MAX_UPLOAD_FAILURE_LINES;
+deferInit("chunk-8wvtd8sr.js:296324", () => {
+  SINGLE_UPLOAD_FAILURE_CODES = new Set(["invalid_request", "too_large", "unsupported_type"]);
+  FINAL_UPLOAD_FAILURE_CODES = new Set([
+    "invalid_request",
+    "too_large",
+    "unsupported_type",
+    "quota_or_state",
+    "rate_limited",
+    "upstream_auth",
+    "capability_disabled",
+    "not_found",
+    "not_writer",
+    "credential_rejected",
+    "policy_denied",
+    "unavailable_to_account",
+  ]);
+  RELAY_UNAVAILABLE_REASONS = new Set([
+    "relay_unavailable",
+    "relay_not_served",
+    "probe_request_error",
+    "probe_unvouched",
+    "proxy_refused",
+    "unrouted",
+    "no_auth",
+  ]);
+  UPLOAD_LINE_MAX = 1300;
+  MAX_UPLOAD_FAILURE_LINES = 6;
+});
 //@ chunk-8wvtd8sr.js:296755-296806 placement
 /**
  * 拼出「file_paths[i] "路径"」标签。
  */
-function filePathIndexLabel(e, n) {
-  return `file_paths[${e}] ${safeJsonQuote(n)}`;
+function filePathIndexLabel(index, path) {
+  return `file_paths[${index}] ${safeJsonQuote(path)}`;
 }
 //@ chunk-8wvtd8sr.js:296806-296985 placement
 var UPLOAD_RATE_LIMITED_MESSAGE =
@@ -1831,44 +1899,47 @@ function vetUploadPathList(paths) {
     message,
     errorCode,
   });
-  let s = new Set();
-  let r = [];
-  for (let [h, y] of paths.entries()) {
-    if (y.includes("\x00")) return fail(h, "a path cannot hold a NUL character", 8);
-    let p = assetMimeTypeForPath(y);
-    if (p === undefined) return fail(h, `unsupported asset type: upload_asset takes ${joined}.`, 1);
-    if (isTextAssetMimeType(p))
+  let seenPaths = new Set();
+  let sources = [];
+  for (let [index, path] of paths.entries()) {
+    if (path.includes("\x00")) return fail(index, "a path cannot hold a NUL character", 8);
+    let mimeType = assetMimeTypeForPath(path);
+    if (mimeType === undefined)
+      return fail(index, `unsupported asset type: upload_asset takes ${joined}.`, 1);
+    if (isTextAssetMimeType(mimeType))
       return fail(
-        h,
+        index,
         "a CSV, Markdown, JSON or plain-text file is approved on its own \u2014 upload it in its own call with `file_path`; the other files can go together.",
         8,
       );
-    let w = expandPath(y);
-    if (y.length > MAX_UPLOAD_PATH_LENGTH || w.length > MAX_UPLOAD_PATH_LENGTH)
+    let absolutePath = expandPath(path);
+    if (path.length > MAX_UPLOAD_PATH_LENGTH || absolutePath.length > MAX_UPLOAD_PATH_LENGTH)
       return fail(
-        h,
+        index,
         `this path is longer than ${MAX_UPLOAD_PATH_LENGTH} characters, as written or as an absolute path, which is more than an approval can show in full \u2014 upload that file by itself with \`file_path\`.`,
         8,
       );
-    if (s.has(w)) return fail(h, "names the same file as an earlier entry \u2014 list each file once.", 8);
-    s.add(w);
-    let localUploadPath = resolveLocalUploadPath(w);
-    if (localUploadPath.kind === "network") return fail(h, `${UPLOAD_NETWORK_PATH_MESSAGE}.`, 17);
-    r.push({
-      written: y,
-      sourcePath: w,
+    if (seenPaths.has(absolutePath))
+      return fail(index, "names the same file as an earlier entry \u2014 list each file once.", 8);
+    seenPaths.add(absolutePath);
+    let localUploadPath = resolveLocalUploadPath(absolutePath);
+    if (localUploadPath.kind === "network") return fail(index, `${UPLOAD_NETWORK_PATH_MESSAGE}.`, 17);
+    sources.push({
+      written: path,
+      sourcePath: absolutePath,
       source: localUploadPath,
     });
   }
   return {
-    sources: r,
+    sources,
   };
 }
 //@ chunk-8wvtd8sr.js:297896-297938 placement
 /**
  * 拼出「路径标签: 错误」一行。
  */
-var filePathErrorLine = (paths, n, message) => `${filePathIndexLabel(n, paths[n] ?? "")}: ${message}`;
+var filePathErrorLine = (paths, index, message) =>
+  `${filePathIndexLabel(index, paths[index] ?? "")}: ${message}`;
 //@ chunk-8wvtd8sr.js:297938-298643 placement
 /**
  * upload_asset 的 validateInput：解析路径列表、拒绝脚本里使用 file_paths、逐个校验并用 readPublishFile 预读（大小上限、身份、空文件）。
@@ -1890,26 +1961,26 @@ function validateUploadAssetInput(context, input, options) {
       message: `${FILE_PATHS_FROM_SCRIPT_MESSAGE}.`,
       errorCode: 8,
     };
-  let h = vetUploadPathList(uploadPaths.paths);
-  if (!("sources" in h))
+  let vetResult = vetUploadPathList(uploadPaths.paths);
+  if (!("sources" in vetResult))
     return {
       result: false,
-      message: filePathErrorLine(uploadPaths.paths, h.index, h.message),
-      errorCode: h.errorCode,
+      message: filePathErrorLine(uploadPaths.paths, vetResult.index, vetResult.message),
+      errorCode: vetResult.errorCode,
     };
-  for (let [y, p] of h.sources.entries()) {
-    if (p.source.kind === "network") continue;
+  for (let [index, source] of vetResult.sources.entries()) {
+    if (source.source.kind === "network") continue;
     let publishFile = readPublishFile(
       context,
       {
         ...input,
-        file_path: p.written,
+        file_path: source.written,
       },
-      p.sourcePath,
-      p.source,
+      source.sourcePath,
+      source.source,
       options,
       {
-        maxBytes: maxAssetBytesFor(assetMimeTypeForPath(p.written)),
+        maxBytes: maxAssetBytesFor(assetMimeTypeForPath(source.written)),
         notAFile: UPLOAD_NOT_REGULAR_FILE_MESSAGE,
         empty: UPLOAD_EMPTY_FILE_MESSAGE,
         noIdentity: UPLOAD_NO_FILE_IDENTITY_MESSAGE,
@@ -1919,7 +1990,7 @@ function validateUploadAssetInput(context, input, options) {
     if (publishFile.result === false)
       return {
         ...publishFile,
-        message: filePathErrorLine(uploadPaths.paths, y, publishFile.message),
+        message: filePathErrorLine(uploadPaths.paths, index, publishFile.message),
       };
   }
   return {
@@ -1939,17 +2010,17 @@ var denyDecision = (message, reason) => ({
   },
 });
 //@ chunk-8wvtd8sr.js:298726-299009 placement
-function soloApprovalReason(e, n, s) {
-  if (!needsReadAsk(n, s)) return;
-  if (!n.spelledInside && n.readAsks) return "outside this session\u2019s allowed read paths";
-  let r = "a file that is always approved on its own";
-  if (n.readAsks) return r;
-  let { linkNote } = describePublishPath(e.sourcePath, n);
-  return linkNote !== "" ? linkNote.trim().replace(/^\(|\)$/g, "") : r;
+function soloApprovalReason(source, check, isSolo) {
+  if (!needsReadAsk(check, isSolo)) return;
+  if (!check.spelledInside && check.readAsks) return "outside this session\u2019s allowed read paths";
+  let alwaysReason = "a file that is always approved on its own";
+  if (check.readAsks) return alwaysReason;
+  let { linkNote } = describePublishPath(source.sourcePath, check);
+  return linkNote !== "" ? linkNote.trim().replace(/^\(|\)$/g, "") : alwaysReason;
 }
 //@ chunk-8wvtd8sr.js:299009-303211 placement
-async function checkUploadAssetPermissions(e, n, s, r) {
-  let uploadPaths = parseUploadPaths(n);
+async function checkUploadAssetPermissions(tool, input, context, artifactUrl) {
+  let uploadPaths = parseUploadPaths(input);
   if (uploadPaths.kind !== "list")
     return denyDecision(
       uploadPaths.kind === "invalid"
@@ -1957,114 +2028,116 @@ async function checkUploadAssetPermissions(e, n, s, r) {
         : 'action "upload_asset" takes `file_path` (one file) or `file_paths` (several), not both.',
       "Asset upload input names its files in both fields, or in a list that cannot be read",
     );
-  let y = vetUploadPathList(uploadPaths.paths);
-  if (!("sources" in y))
+  let pathList = vetUploadPathList(uploadPaths.paths);
+  if (!("sources" in pathList))
     return denyDecision(
-      filePathErrorLine(uploadPaths.paths, y.index, y.message),
+      filePathErrorLine(uploadPaths.paths, pathList.index, pathList.message),
       "Asset upload list holds an entry a list may not carry",
     );
-  let { sources } = y;
+  let { sources } = pathList;
   let mapped = sources.map((source) =>
     isSoloApprovalFile(source.sourcePath, source.source, probeSymlink(source.sourcePath).link),
   );
-  let A = (toolPermissionContext, se) => {
-    let B = [];
-    for (let [U, he] of sources.entries()) {
-      let $e = checkPublishReadPermission(
-        e,
+  let checkReads = (toolPermissionContext, pins) => {
+    let checks = [];
+    for (let [index, source] of sources.entries()) {
+      let readCheck = checkPublishReadPermission(
+        tool,
         {
-          ...n,
-          file_path: he.written,
+          ...input,
+          file_path: source.written,
         },
-        he.sourcePath,
-        he.source,
+        source.sourcePath,
+        source.source,
         toolPermissionContext,
-        se?.[U],
+        pins?.[index],
         "Uploading an asset reads file contents",
       );
-      if ($e.refused !== undefined)
+      if (readCheck.refused !== undefined)
         return {
           refused:
-            $e.refused.behavior === "deny"
+            readCheck.refused.behavior === "deny"
               ? {
-                  ...$e.refused,
-                  message: filePathErrorLine(uploadPaths.paths, U, $e.refused.message),
+                  ...readCheck.refused,
+                  message: filePathErrorLine(uploadPaths.paths, index, readCheck.refused.message),
                 }
-              : $e.refused,
+              : readCheck.refused,
         };
-      B.push($e);
+      checks.push(readCheck);
     }
     return {
-      judged: B,
+      judged: checks,
     };
   };
-  let S = (judged) => {
+  let soloDeny = (judged) => {
     let filtered = judged
-      .map((U, he) => {
-        let $e = soloApprovalReason(sources[he], U, mapped[he]);
-        return $e === undefined ? undefined : `${filePathIndexLabel(he, sources[he].written)} (${$e})`;
+      .map((check, index) => {
+        let soloReason = soloApprovalReason(sources[index], check, mapped[index]);
+        return soloReason === undefined
+          ? undefined
+          : `${filePathIndexLabel(index, sources[index].written)} (${soloReason})`;
       })
-      .filter((U) => U !== undefined);
-    let B = filtered.length === 1;
+      .filter((entry) => entry !== undefined);
+    let single = filtered.length === 1;
     return filtered.length === 0
       ? undefined
       : denyDecision(
-          `${B ? "One file" : `${filtered.length} files`} in \`file_paths\` ${B ? "needs" : "need"} an approval of ${B ? "its" : "their"} own, so nothing was uploaded: ${filtered.join("; ")}. Upload ${B ? "it" : "each of those"} in its own call with \`file_path\`; the other files can go together in one \`file_paths\` call.`,
+          `${single ? "One file" : `${filtered.length} files`} in \`file_paths\` ${single ? "needs" : "need"} an approval of ${single ? "its" : "their"} own, so nothing was uploaded: ${filtered.join("; ")}. Upload ${single ? "it" : "each of those"} in its own call with \`file_path\`; the other files can go together in one \`file_paths\` call.`,
           "An upload list carries only files that need no approval of their own",
         );
   };
-  let R = (judged) => {
-    let se = new Set();
-    for (let [B, U] of judged.entries()) {
-      let he = U.sourcePin?.real ?? sources[B].sourcePath;
-      if (se.has(he))
+  let dupDeny = (judged) => {
+    let seenPaths = new Set();
+    for (let [index, check] of judged.entries()) {
+      let realPath = check.sourcePin?.real ?? sources[index].sourcePath;
+      if (seenPaths.has(realPath))
         return denyDecision(
           filePathErrorLine(
             uploadPaths.paths,
-            B,
+            index,
             "names the same file as an earlier entry \u2014 list each file once",
           ),
           "Asset upload list names one file twice",
         );
-      se.add(he);
+      seenPaths.add(realPath);
     }
     return;
   };
-  let T = A(getToolPermissionContext(s));
-  if ("refused" in T) return T.refused;
-  let P = S(T.judged) ?? R(T.judged);
-  if (P !== undefined) return P;
-  let mapped_2 = T.judged.map((He) => He.sourcePin);
-  let V = () => hasOtherCommentPending(r.slug);
-  let M = (He, se) => ({
+  let checksResult = checkReads(getToolPermissionContext(context));
+  if ("refused" in checksResult) return checksResult.refused;
+  let problem = soloDeny(checksResult.judged) ?? dupDeny(checksResult.judged);
+  if (problem !== undefined) return problem;
+  let pins = checksResult.judged.map((check) => check.sourcePin);
+  let hasOtherComment = () => hasOtherCommentPending(artifactUrl.slug);
+  let pinBuilder = (pins, otherSeq) => ({
     [ASSET_UPLOAD_PIN_TAG]: {
-      slug: r.slug,
+      slug: artifactUrl.slug,
       batch: sources.map(
-        (source, U) =>
-          He[U] ?? {
+        (source, index) =>
+          pins[index] ?? {
             real: source.sourcePath,
             identity: null,
           },
       ),
-      ...(se !== undefined && {
-        otherCommentSeq: se,
+      ...(otherSeq !== undefined && {
+        otherCommentSeq: otherSeq,
       }),
     },
   });
   if (
-    getToolPermissionContext(s).mode !== "auto" &&
-    !V() &&
-    (!isStrictHumanTurn(s.messages) ||
-      (PLAN_MODE_KEEPS_FLAG_OFF_WRITE_ASKS && getToolPermissionContext(s).mode === "plan")) &&
-    needsHumanAssetConsent(s, r.slug)
+    getToolPermissionContext(context).mode !== "auto" &&
+    !hasOtherComment() &&
+    (!isStrictHumanTurn(context.messages) ||
+      (PLAN_MODE_KEEPS_FLAG_OFF_WRITE_ASKS && getToolPermissionContext(context).mode === "plan")) &&
+    needsHumanAssetConsent(context, artifactUrl.slug)
   ) {
-    let He = denyOtherOrgArtifact(r, "Nothing was uploaded");
-    if (He !== null) return He;
+    let otherOrgDeny = denyOtherOrgArtifact(artifactUrl, "Nothing was uploaded");
+    if (otherOrgDeny !== null) return otherOrgDeny;
     return {
       behavior: "allow",
       updatedInput: {
-        ...n,
-        ...M(mapped_2),
+        ...input,
+        ...pinBuilder(pins),
         [CONSENT_ASK_TAG]: false,
         [PLAN_CONSENT_ASK_TAG]: false,
       },
@@ -2074,53 +2147,53 @@ async function checkUploadAssetPermissions(e, n, s, r) {
       },
     };
   }
-  await warmShareEntry(r, s, "upload_asset");
-  let x = denyOtherOrgArtifact(r, "Nothing was uploaded");
-  if (x !== null) return x;
-  let q = A(getToolPermissionContext(s), mapped_2);
-  if ("refused" in q) return q.refused;
-  let re = S(q.judged) ?? R(q.judged);
-  if (re !== undefined) return re;
-  let mapped_3 = q.judged.map((He) => He.sourcePin);
-  let mode = q.judged[0].mode;
-  let we = mode !== "auto";
+  await warmShareEntry(artifactUrl, context, "upload_asset");
+  let otherOrgDeny = denyOtherOrgArtifact(artifactUrl, "Nothing was uploaded");
+  if (otherOrgDeny !== null) return otherOrgDeny;
+  let checksResultSecond = checkReads(getToolPermissionContext(context), pins);
+  if ("refused" in checksResultSecond) return checksResultSecond.refused;
+  let problemSecond = soloDeny(checksResultSecond.judged) ?? dupDeny(checksResultSecond.judged);
+  if (problemSecond !== undefined) return problemSecond;
+  let pins_2 = checksResultSecond.judged.map((pins) => pins.sourcePin);
+  let mode = checksResultSecond.judged[0].mode;
+  let coversSession = mode !== "auto";
   let joined = sources
     .map((source) => `"${sweptPagePath(source.sourcePath) || "(unprintable path)"}"`)
     .join(", ");
-  let ie = ` The ${sources.length} ${plural(sources.length, "file")}: ${joined}.`;
-  let _e = classifyArtifactConsent(classFactsFor("write", r, s));
-  if (!writeKeepsFlagOffAsk(_e, s) && !V()) {
-    let He = artifactCardTitleFor(r, s);
-    let se = decideByClass({
-      ruling: _e,
+  let fileListNote = ` The ${sources.length} ${plural(sources.length, "file")}: ${joined}.`;
+  let writeRuling = classifyArtifactConsent(classFactsFor("write", artifactUrl, context));
+  if (!writeKeepsFlagOffAsk(writeRuling, context) && !hasOtherComment()) {
+    let cardTitle = artifactCardTitleFor(artifactUrl, context);
+    let classDecision = decideByClass({
+      ruling: writeRuling,
       input: {
-        ...n,
-        ...M(mapped_3),
+        ...input,
+        ...pinBuilder(pins_2),
         [PLAN_CONSENT_ASK_TAG]: false,
         [USER_ONLY_CONSENT_ASK_TAG]: false,
-        [ARTIFACT_DISPLAY_TARGET_TAG]: He,
+        [ARTIFACT_DISPLAY_TARGET_TAG]: cardTitle,
       },
-      context: s,
-      slug: r.slug,
-      display: He,
+      context,
+      slug: artifactUrl.slug,
+      display: cardTitle,
       action: "write",
     });
-    let decisionReason = se.decisionReason;
-    return se.behavior === "ask" &&
+    let decisionReason = classDecision.decisionReason;
+    return classDecision.behavior === "ask" &&
       decisionReason !== undefined &&
       "reason" in decisionReason &&
       typeof decisionReason.reason === "string"
       ? {
-          ...se,
-          message: `${se.message}${ie}`,
+          ...classDecision,
+          message: `${classDecision.message}${fileListNote}`,
           decisionReason: {
             ...decisionReason,
-            reason: `${decisionReason.reason}${ie}`,
+            reason: `${decisionReason.reason}${fileListNote}`,
           },
         }
-      : se;
+      : classDecision;
   }
-  if (planConsentMustDeny(s))
+  if (planConsentMustDeny(context))
     return {
       behavior: "deny",
       message:
@@ -2131,28 +2204,28 @@ async function checkUploadAssetPermissions(e, n, s, r) {
         classifierApprovable: false,
       },
     };
-  let Oe = mode === "plan";
-  let me = ownershipAskNote(getShareEntry(r.slug), "their artifact");
-  let ge = V() && needsHumanAssetConsent(s, r.slug);
-  let reason = `${ASSET_UPLOAD_LIST_CARD_LEDE}${ie}${Oe ? planModeCardNote(true) : ""}${me}${we && !ge ? (artifactCopyFromFrozen() ? ASSET_UPLOAD_COVERS_SESSION_COPIES_NOTE : ASSET_UPLOAD_COVERS_SESSION_NOTE) : ""}`;
+  let isPlanMode = mode === "plan";
+  let ownershipNote = ownershipAskNote(getShareEntry(artifactUrl.slug), "their artifact");
+  let askedAgain = hasOtherComment() && needsHumanAssetConsent(context, artifactUrl.slug);
+  let reason = `${ASSET_UPLOAD_LIST_CARD_LEDE}${fileListNote}${isPlanMode ? planModeCardNote(true) : ""}${ownershipNote}${coversSession && !askedAgain ? (artifactCopyFromFrozen() ? ASSET_UPLOAD_COVERS_SESSION_COPIES_NOTE : ASSET_UPLOAD_COVERS_SESSION_NOTE) : ""}`;
   return {
     behavior: "ask",
     message:
-      `Claude wants to upload ${sources.length} local ${plural(sources.length, "file")} into the asset store of ${artifactViewerUrlFor(r)}: ${joined} \u2014 everyone who can open the artifact can load them` +
-      (!we
+      `Claude wants to upload ${sources.length} local ${plural(sources.length, "file")} into the asset store of ${artifactViewerUrlFor(artifactUrl)}: ${joined} \u2014 everyone who can open the artifact can load them` +
+      (!coversSession
         ? "; each such upload asks again."
-        : `; approving covers further uploads ${artifactCopyFromFrozen() ? "to (and copies of other artifacts' assets into) " : "to "}this artifact ${ge ? "until someone else comments on it again" : "for the rest of this session"}.`) +
-      me,
+        : `; approving covers further uploads ${artifactCopyFromFrozen() ? "to (and copies of other artifacts' assets into) " : "to "}this artifact ${askedAgain ? "until someone else comments on it again" : "for the rest of this session"}.`) +
+      ownershipNote,
     updatedInput: {
-      ...n,
-      ...M(mapped_3, otherCommentPendingSeq(r.slug)),
-      [CONSENT_ASK_TAG]: we && consentAskCanReachUser(s),
-      [PLAN_CONSENT_ASK_TAG]: Oe,
+      ...input,
+      ...pinBuilder(pins_2, otherCommentPendingSeq(artifactUrl.slug)),
+      [CONSENT_ASK_TAG]: coversSession && consentAskCanReachUser(context),
+      [PLAN_CONSENT_ASK_TAG]: isPlanMode,
       [USER_ONLY_CONSENT_ASK_TAG]: false,
-      [ARTIFACT_DISPLAY_TARGET_TAG]: artifactCardTitleFor(r, s),
+      [ARTIFACT_DISPLAY_TARGET_TAG]: artifactCardTitleFor(artifactUrl, context),
     },
     suppressAlwaysAllowRule: true,
-    decisionReason: Oe
+    decisionReason: isPlanMode
       ? {
           type: "safetyCheck",
           reason,
@@ -2170,57 +2243,57 @@ async function checkUploadAssetPermissions(e, n, s, r) {
  * 生成批量上传权限询问的描述：列出每个 file_paths[i] 及其解析后的绝对路径与链接提示，超出数量时汇总。
  */
 function describeUploadListAsk(input, card) {
-  let s = `upload a list of local files into an artifact's asset store${card.marksBeforeTarget} \u2192 ${card.target}${card.marksAfterTarget}`;
+  let lead = `upload a list of local files into an artifact's asset store${card.marksBeforeTarget} \u2192 ${card.target}${card.marksAfterTarget}`;
   let untrustedArray = readUntrustedArray(input.file_paths);
   if (untrustedArray === undefined || untrustedArray === UNREADABLE_ARRAY)
-    return `${s}: ${UNREADABLE_LIST_TEXT} of paths`;
-  let mapped = untrustedArray.slice(0, MAX_UPLOAD_FILE_PATHS).map((untrusted, S) => {
-    let R = `file_paths[${S}]`;
+    return `${lead}: ${UNREADABLE_LIST_TEXT} of paths`;
+  let mapped = untrustedArray.slice(0, MAX_UPLOAD_FILE_PATHS).map((untrusted, index) => {
+    let label = `file_paths[${index}]`;
     if (typeof untrusted !== "string")
       return {
-        text: `${R} (not a path)`,
+        text: `${label} (not a path)`,
         noted: true,
       };
     try {
-      let T = expandPath(untrusted);
-      let P = describePathAnnotations(T);
+      let absolutePath = expandPath(untrusted);
+      let annotations = describePathAnnotations(absolutePath);
       return {
-        text: `${R} ${T === untrusted ? card.quote(untrusted) : `${card.quote(untrusted)} (at ${card.quote(T)})`}${P}`,
-        noted: P !== "",
+        text: `${label} ${absolutePath === untrusted ? card.quote(untrusted) : `${card.quote(untrusted)} (at ${card.quote(absolutePath)})`}${annotations}`,
+        noted: annotations !== "",
       };
     } catch {
       return {
-        text: `${R} ${card.quote(untrusted)} [could not resolve this path]`,
+        text: `${label} ${card.quote(untrusted)} [could not resolve this path]`,
         noted: true,
       };
     }
   });
-  let filtered = mapped.filter((A) => A.noted);
-  let p = untrustedArray.length - mapped.length;
-  let w =
+  let filtered = mapped.filter((entry) => entry.noted);
+  let hiddenCount = untrustedArray.length - mapped.length;
+  let bothFieldsNote =
     input.file_path !== undefined
       ? `; also names \`file_path\`${typeof input.file_path === "string" ? ` ${card.quote(input.file_path)}` : ""}, and a call naming both is refused`
       : "";
-  return `${s} (${untrustedArray.length} ${plural(untrustedArray.length, "file")}, one approval covers them all${filtered.length > 0 ? `; ${filtered.length} ${filtered.length === 1 ? "has a note in [brackets] and is" : "have a note in [brackets] and are"} listed first` : ""}): ${[...filtered, ...mapped.filter((A) => !A.noted)].map((A) => A.text).join("; ")}${p > 0 ? `; and ${p} more, past the ${MAX_UPLOAD_FILE_PATHS} one call may name, not shown` : ""}${w}`;
+  return `${lead} (${untrustedArray.length} ${plural(untrustedArray.length, "file")}, one approval covers them all${filtered.length > 0 ? `; ${filtered.length} ${filtered.length === 1 ? "has a note in [brackets] and is" : "have a note in [brackets] and are"} listed first` : ""}): ${[...filtered, ...mapped.filter((entry) => !entry.noted)].map((entry) => entry.text).join("; ")}${hiddenCount > 0 ? `; and ${hiddenCount} more, past the ${MAX_UPLOAD_FILE_PATHS} one call may name, not shown` : ""}${bothFieldsNote}`;
 }
 //@ chunk-8wvtd8sr.js:304298-304443 placement
 /**
  * 本地文件列表无法显示时的描述（路径数量或占位）。
  */
-function describeUploadListFallback(e) {
-  let untrustedArray = readUntrustedArray(e.file_paths);
+function describeUploadListFallback(input) {
+  let untrustedArray = readUntrustedArray(input.file_paths);
   return `a list of local files (${untrustedArray === undefined || untrustedArray === UNREADABLE_ARRAY ? UNREADABLE_LIST_TEXT : `${untrustedArray.length} paths`}, none of which could be shown)`;
 }
 //@ chunk-8wvtd8sr.js:304443-304500 placement
 /**
  * 判断上传失败是否可重试（非终态错误码、非中继不可用）。
  */
-function isRetryableUploadFailure(e) {
-  return !(FINAL_UPLOAD_FAILURE_CODES.has(e.code) || RELAY_UNAVAILABLE_REASONS.has(e.reason));
+function isRetryableUploadFailure(failure) {
+  return !(FINAL_UPLOAD_FAILURE_CODES.has(failure.code) || RELAY_UNAVAILABLE_REASONS.has(failure.reason));
 }
 //@ chunk-8wvtd8sr.js:304500-309621 placement
-async function runUploadAsset(e, n, s) {
-  let uploadPaths = parseUploadPaths(e);
+async function runUploadAsset(input, context, artifactUrl) {
+  let uploadPaths = parseUploadPaths(input);
   if (uploadPaths.kind !== "list")
     throw new ArtifactInputError(
       uploadPaths.kind === "invalid"
@@ -2228,154 +2301,162 @@ async function runUploadAsset(e, n, s) {
         : 'action "upload_asset" takes `file_path` (one file) or `file_paths` (several), not both.',
       "asset_upload_missing_field",
     );
-  if (n.publishSourceSha256 !== undefined)
+  if (context.publishSourceSha256 !== undefined)
     throw new ArtifactInputError(FILE_PATHS_FROM_SCRIPT_MESSAGE, "asset_upload_missing_field");
   let { paths } = uploadPaths;
-  let y = vetUploadPathList(paths);
-  if (!("sources" in y))
+  let pathList = vetUploadPathList(paths);
+  if (!("sources" in pathList))
     throw new ArtifactInputError(
-      filePathErrorLine(paths, y.index, y.message),
+      filePathErrorLine(paths, pathList.index, pathList.message),
       "asset_upload_list_entry_refused",
     );
-  let p = e[ASSET_UPLOAD_PIN_TAG];
-  let batch = p?.batch;
-  let A = Array.isArray(batch) ? batch : undefined;
-  if (carriesForeignPin(e, ASSET_UPLOAD_PIN_TAG) || (p !== undefined && p?.slug !== s.slug))
+  let targetPin = input[ASSET_UPLOAD_PIN_TAG];
+  let batch = targetPin?.batch;
+  let approvedBatch = Array.isArray(batch) ? batch : undefined;
+  if (
+    carriesForeignPin(input, ASSET_UPLOAD_PIN_TAG) ||
+    (targetPin !== undefined && targetPin?.slug !== artifactUrl.slug)
+  )
     throw new ArtifactInputError(
       "`action` or `url` no longer names the artifact upload that was approved \u2014 retry so it is checked again",
       "asset_upload_target_changed",
     );
   if (
-    p !== undefined &&
-    p !== null &&
-    (A === undefined ||
-      A.length !== paths.length ||
-      !A.every((re) => {
-        let Z = re;
-        return typeof Z?.real === "string" && typeof Z.identity === "string";
+    targetPin !== undefined &&
+    targetPin !== null &&
+    (approvedBatch === undefined ||
+      approvedBatch.length !== paths.length ||
+      !approvedBatch.every((pinEntry) => {
+        let pin = pinEntry;
+        return typeof pin?.real === "string" && typeof pin.identity === "string";
       }))
   )
     throw new ArtifactInputError(
       "the call no longer names the files that were approved (one file where a list was approved, a list of another length, or a file whose identity was not recorded) \u2014 retry so it is checked again",
       "asset_upload_pin_mismatch",
     );
-  let S = (re) => {
-    let toolPermissionContext = getToolPermissionContext(n);
-    let ue = assetMimeTypeForPath(re);
-    if (ue === undefined)
+  let vetPath = (rawPath) => {
+    let toolPermissionContext = getToolPermissionContext(context);
+    let contentType = assetMimeTypeForPath(rawPath);
+    if (contentType === undefined)
       throw new ArtifactInputError(
         `unsupported asset type: upload_asset takes ${joined}`,
         "asset_upload_unsupported_type",
       );
-    let we = expandPath(re);
+    let absPath = expandPath(rawPath);
     if (
-      readPermissionDecisionForPath(we, toolPermissionContext).behavior === "deny" ||
+      readPermissionDecisionForPath(absPath, toolPermissionContext).behavior === "deny" ||
       getDenyRuleForTool(toolPermissionContext, READ_PATH_PROBE) !== null
     )
       throw new ArtifactInputError(
         "reading this file is blocked by a Read permission rule \u2014 the upload was not attempted",
         "asset_upload_read_denied",
       );
-    let Ie = getAskRuleForTool(toolPermissionContext, READ_PATH_PROBE) !== null;
+    let hasAskRule = getAskRuleForTool(toolPermissionContext, READ_PATH_PROBE) !== null;
     return {
-      contentType: ue,
-      path: we,
-      readVerdict: (ie) => {
-        let behavior = readPermissionDecisionForPath(ie, toolPermissionContext).behavior;
-        return behavior === "allow" && Ie ? "ask" : behavior;
+      contentType,
+      path: absPath,
+      readVerdict: (realPath) => {
+        let behavior = readPermissionDecisionForPath(realPath, toolPermissionContext).behavior;
+        return behavior === "allow" && hasAskRule ? "ask" : behavior;
       },
     };
   };
-  let R = [];
-  let T = () => {
-    for (let [re, Z] of R.entries())
-      if (Z !== undefined) {
-        closeFdQuietly(Z);
-        R[re] = undefined;
+  let opened = [];
+  let closeAll = () => {
+    for (let [index, handle] of opened.entries())
+      if (handle !== undefined) {
+        closeFdQuietly(handle);
+        opened[index] = undefined;
       }
   };
-  let P = [];
+  let contentTypes = [];
   try {
-    for (let [re, Z] of paths.entries()) {
-      let ue = S(Z);
-      let we = checkUploadFile(ue.path, A?.[re], ue.readVerdict, maxAssetBytesFor(ue.contentType));
-      if (we.kind !== "opened")
+    for (let [index, path] of paths.entries()) {
+      let vetted = vetPath(path);
+      let openedFile = checkUploadFile(
+        vetted.path,
+        approvedBatch?.[index],
+        vetted.readVerdict,
+        maxAssetBytesFor(vetted.contentType),
+      );
+      if (openedFile.kind !== "opened")
         throw new ArtifactInputError(
-          `${we.kind === "missing" ? "the file was not found" : we.message.replaceAll("file_path", "this file").replace(/[.\s]+$/, "")}. Nothing was sent.`,
-          we.kind === "missing"
+          `${openedFile.kind === "missing" ? "the file was not found" : openedFile.message.replaceAll("file_path", "this file").replace(/[.\s]+$/, "")}. Nothing was sent.`,
+          openedFile.kind === "missing"
             ? "asset_upload_file_not_found"
-            : we.reason === "network"
+            : openedFile.reason === "network"
               ? "asset_upload_network_path"
-              : `asset_upload_${we.reason}`,
+              : `asset_upload_${openedFile.reason}`,
         );
-      if (R.some((Ie) => Ie?.real === we.real)) {
-        closeFdQuietly(we);
+      if (opened.some((priorFile) => priorFile?.real === openedFile.real)) {
+        closeFdQuietly(openedFile);
         throw new ArtifactInputError(
           "names the same file as an earlier entry \u2014 list each file once. Nothing was sent.",
           "asset_upload_list_entry_refused",
         );
       }
-      R.push(we);
-      P.push(ue.contentType);
+      opened.push(openedFile);
+      contentTypes.push(vetted.contentType);
       await yieldToEventLoop();
-      if (n.abortController.signal.aborted) throw new AbortError();
+      if (context.abortController.signal.aborted) throw new AbortError();
     }
   } catch (error) {
-    T();
+    closeAll();
     throw error instanceof ArtifactInputError
-      ? new ArtifactInputError(filePathErrorLine(paths, R.length, error.message), error.reasonCode)
+      ? new ArtifactInputError(filePathErrorLine(paths, opened.length, error.message), error.reasonCode)
       : error;
   }
-  let L = A === undefined;
-  let V = () => {
-    if (L) return;
-    L = true;
-    let otherCommentSeq = p.otherCommentSeq;
+  let pinConsumed = approvedBatch === undefined;
+  let consumePin = () => {
+    if (pinConsumed) return;
+    pinConsumed = true;
+    let otherCommentSeq = targetPin.otherCommentSeq;
     stampArtifactAssetUploadConsent(
-      e,
-      n,
-      s.slug,
+      input,
+      context,
+      artifactUrl.slug,
       typeof otherCommentSeq === "number" ? otherCommentSeq : undefined,
     );
   };
-  let M = [];
-  let x;
-  let q = 0;
+  let rows = [];
+  let stoppedAt;
+  let resentCount = 0;
   try {
-    for (let [re, Z] of paths.entries()) {
-      if (x !== undefined) {
-        M.push({
-          file_path: Z,
+    for (let [index, path] of paths.entries()) {
+      if (stoppedAt !== undefined) {
+        rows.push({
+          file_path: path,
           status: "not_attempted",
           reason: "stopped",
-          message: `the call stopped at ${x}`,
+          message: `the call stopped at ${stoppedAt}`,
         });
         continue;
       }
-      let ue = false;
-      let we = (Ie) => {
-        M.push({
-          file_path: Z,
+      let done = false;
+      let failRow = (failure) => {
+        rows.push({
+          file_path: path,
           status: "failed",
-          ...Ie,
+          ...failure,
         });
-        x = filePathIndexLabel(re, Z);
+        stoppedAt = filePathIndexLabel(index, path);
       };
       try {
-        if (q > 0)
-          await sleep(UPLOAD_LINE_MAX, n.abortController.signal, {
+        if (resentCount > 0)
+          await sleep(UPLOAD_LINE_MAX, context.abortController.signal, {
             abortError: () => new AbortError(),
           });
-        let opened = R[re];
-        if (S(Z).readVerdict(opened.real) === "deny")
+        let opened_2 = opened[index];
+        if (vetPath(path).readVerdict(opened_2.real) === "deny")
           throw new ArtifactInputError(
             "reading this file is blocked by a Read permission rule \u2014 the upload was not attempted",
             "asset_upload_read_denied",
           );
-        R[re] = undefined;
-        let approvedFileBytes = await readApprovedFileBytes(opened);
+        opened[index] = undefined;
+        let approvedFileBytes = await readApprovedFileBytes(opened_2);
         if (approvedFileBytes.kind !== "ok") {
-          we({
+          failRow({
             reason:
               approvedFileBytes.kind === "missing"
                 ? "asset_upload_file_not_found"
@@ -2387,79 +2468,81 @@ async function runUploadAsset(e, n, s) {
           });
           continue;
         }
-        V();
-        ue = true;
-        let _e = await uploadArtifactAsset(
+        consumePin();
+        done = true;
+        let uploadResult = await uploadArtifactAsset(
           {
-            slug: s.slug,
+            slug: artifactUrl.slug,
             bytes: approvedFileBytes.bytes,
-            contentType: P[re],
-            credentials: n.credentials,
+            contentType: contentTypes[index],
+            credentials: context.credentials,
           },
-          n.abortController.signal,
+          context.abortController.signal,
         );
-        if (n.abortController.signal.aborted) throw new AbortError();
-        if (_e.resent === true) q += 1;
-        if (_e.kind === "error") {
-          let Oe = {
-            reason: `asset_upload_${_e.reason}`,
-            message: _e.message,
-            ...(isRetryableUploadFailure(_e) && {
+        if (context.abortController.signal.aborted) throw new AbortError();
+        if (uploadResult.resent === true) resentCount += 1;
+        if (uploadResult.kind === "error") {
+          let failureRow = {
+            reason: `asset_upload_${uploadResult.reason}`,
+            message: uploadResult.message,
+            ...(isRetryableUploadFailure(uploadResult) && {
               may_be_stored: true,
             }),
           };
-          let me = SINGLE_UPLOAD_FAILURE_CODES.has(_e.code) && _e.reason !== "invalid_slug";
-          if (me && q < MAX_UPLOAD_FAILURE_LINES)
-            M.push({
-              file_path: Z,
+          let rateLimited =
+            SINGLE_UPLOAD_FAILURE_CODES.has(uploadResult.code) && uploadResult.reason !== "invalid_slug";
+          if (rateLimited && resentCount < MAX_UPLOAD_FAILURE_LINES)
+            rows.push({
+              file_path: path,
               status: "failed",
-              ...Oe,
+              ...failureRow,
             });
           else {
-            we(Oe);
-            if (me) x = `${filePathIndexLabel(re, Z)} (${UPLOAD_RATE_LIMITED_MESSAGE})`;
+            failRow(failureRow);
+            if (rateLimited)
+              stoppedAt = `${filePathIndexLabel(index, path)} (${UPLOAD_RATE_LIMITED_MESSAGE})`;
           }
           continue;
         }
-        M.push({
-          file_path: Z,
+        rows.push({
+          file_path: path,
           status: "uploaded",
-          id: _e.id,
-          url: _e.url,
-          size_bytes: _e.sizeBytes,
-          content_type: _e.contentType,
-          ...(_e.sha256 !== undefined && {
-            sha256: _e.sha256,
+          id: uploadResult.id,
+          url: uploadResult.url,
+          size_bytes: uploadResult.sizeBytes,
+          content_type: uploadResult.contentType,
+          ...(uploadResult.sha256 !== undefined && {
+            sha256: uploadResult.sha256,
           }),
-          file_name: basename(expandPath(Z)),
+          file_name: basename(expandPath(path)),
         });
-        if (q >= MAX_UPLOAD_FAILURE_LINES)
-          x = `${filePathIndexLabel(re, Z)} (stored; ${UPLOAD_RATE_LIMITED_MESSAGE})`;
+        if (resentCount >= MAX_UPLOAD_FAILURE_LINES)
+          stoppedAt = `${filePathIndexLabel(index, path)} (stored; ${UPLOAD_RATE_LIMITED_MESSAGE})`;
       } catch (error) {
-        if (n.abortController.signal.aborted) throw isAbortError(error) ? error : new AbortError();
-        let ie = error instanceof ArtifactInputError ? error : undefined;
-        we({
-          reason: ie?.reasonCode ?? "asset_upload_unexpected",
+        if (context.abortController.signal.aborted) throw isAbortError(error) ? error : new AbortError();
+        let inputError = error instanceof ArtifactInputError ? error : undefined;
+        failRow({
+          reason: inputError?.reasonCode ?? "asset_upload_unexpected",
           message:
-            ie?.message ??
-            (ue
+            inputError?.message ??
+            (done
               ? "an unexpected error stopped this upload before the store answered \u2014 whether this file was stored is unknown; list the assets to check"
               : "an unexpected error stopped this upload before anything was sent"),
-          ...(ie === undefined &&
-            ue && {
+          ...(inputError === undefined &&
+            done && {
               may_be_stored: true,
             }),
         });
       }
     }
   } finally {
-    T();
+    closeAll();
   }
-  if (!M.some((re) => re.status === "uploaded")) {
-    let filtered = M.filter((ue) => ue.status !== "uploaded");
-    let filtered_2 = filtered.filter((ue) => ue.may_be_stored !== true);
+  if (!rows.some((row) => row.status === "uploaded")) {
+    let filtered = rows.filter((failedRows) => failedRows.status !== "uploaded");
+    let filtered_2 = filtered.filter((unconfirmedRows) => unconfirmedRows.may_be_stored !== true);
     throw new ArtifactInputError(
-      `No file is confirmed stored. ${filtered.map((ue, we) => `${filePathIndexLabel(we, ue.file_path)}: ${ue.status === "not_attempted" ? "not attempted, " : ue.may_be_stored === true ? "failed, but may be stored, " : ""}${ue.message.slice(0, 300)}`).join("; ")}.${filtered_2.length === filtered.length ? "" : filtered_2.length === 0 ? " Before sending again, list the assets to see what is stored." : ` Before sending again, list the assets to see what is stored; only these are known not to be: [${filtered_2.map((ue) => jsonQuotedSweep(ue.file_path, MAX_UPLOAD_PATH_LENGTH)).join(", ")}].`}`,
+      `No file is confirmed stored. ${filtered.map((row, rowIndex) => `${filePathIndexLabel(rowIndex, row.file_path)}: ${row.status === "not_attempted" ? "not attempted, " : row.may_be_stored === true ? "failed, but may be stored, " : ""}${row.message.slice(0, 300)}`).join("; ")}.${filtered_2.length === filtered.length ? "" : filtered_2.length === 0 ? " Before sending again, list the assets to see what is stored." : ` Before sending again, list the assets to see what is stored; only these are known not to be: [${filtered_2.map((row) => jsonQuotedSweep(row.file_path, MAX_UPLOAD_PATH_LENGTH)).join(", ")}].`}`,
       "asset_upload_none_stored",
       {
         maxErrorChars: MAX_UPLOAD_FILE_PATHS * (2 * MAX_UPLOAD_PATH_LENGTH + 500),
@@ -2468,10 +2551,10 @@ async function runUploadAsset(e, n, s) {
   }
   return {
     data: {
-      ...writtenPage(s, ownedVerdict(getShareEntry(s.slug))),
+      ...writtenPage(artifactUrl, ownedVerdict(getShareEntry(artifactUrl.slug))),
       asset_uploads: {
-        url: artifactViewerUrlFor(s),
-        results: M,
+        url: artifactViewerUrlFor(artifactUrl),
+        results: rows,
       },
     },
   };
@@ -2480,55 +2563,55 @@ async function runUploadAsset(e, n, s) {
 /**
  * 渲染批量上传结果：已上传（大小、类型、url、id）与失败/未尝试（可能已存储）分组列出，附后续操作提示。
  */
-var renderAssetUploadsResult = (e, toolUseId) => {
-  let assetUploads = e.asset_uploads;
-  let r =
+var renderAssetUploadsResult = (toolResult, toolUseId) => {
+  let assetUploads = toolResult.asset_uploads;
+  let record =
     typeof assetUploads === "object" && assetUploads !== null && !Array.isArray(assetUploads)
       ? assetUploads
       : {};
-  let h = capResultRows(r.results, MAX_UPLOAD_FILE_PATHS);
-  let y = [];
-  let p = [];
-  let w = [];
-  for (let R of h.rows) {
-    let T = jsonQuotedSweep(R.file_path, MAX_UPLOAD_PATH_LENGTH);
-    if (R.status === "uploaded") {
-      let P = peerOrFallback(R.url, ASSET_BLOB_URL_RE, "");
-      y.push(
-        `- ${T} (${numberText(R.size_bytes)} bytes, ${peerOrFallback(R.content_type, CONTENT_TYPE_RE, "unrecognized content type")}) \u2192 ${P === "" ? "stored, but this record's copy of its url is unreadable" : `${jsonStringify(P)} (id ${peerOrFallback(R.id, ASSET_ID_RE, "unreadable")})`}`,
+  let capped = capResultRows(record.results, MAX_UPLOAD_FILE_PATHS);
+  let uploadedLines = [];
+  let failedLines = [];
+  let retryPaths = [];
+  for (let row of capped.rows) {
+    let quotedPath = jsonQuotedSweep(row.file_path, MAX_UPLOAD_PATH_LENGTH);
+    if (row.status === "uploaded") {
+      let assetUrl = peerOrFallback(row.url, ASSET_BLOB_URL_RE, "");
+      uploadedLines.push(
+        `- ${quotedPath} (${numberText(row.size_bytes)} bytes, ${peerOrFallback(row.content_type, CONTENT_TYPE_RE, "unrecognized content type")}) \u2192 ${assetUrl === "" ? "stored, but this record's copy of its url is unreadable" : `${jsonStringify(assetUrl)} (id ${peerOrFallback(row.id, ASSET_ID_RE, "unreadable")})`}`,
       );
     } else {
-      p.push(
-        `- ${T}: ${R.status === "not_attempted" ? "not attempted" : R.may_be_stored === true ? "failed, but may be stored" : "failed"} \u2014 ${quoteSweptValue(R.message, 1024)}`,
+      failedLines.push(
+        `- ${quotedPath}: ${row.status === "not_attempted" ? "not attempted" : row.may_be_stored === true ? "failed, but may be stored" : "failed"} \u2014 ${quoteSweptValue(row.message, 1024)}`,
       );
-      if (R.may_be_stored !== true) w.push(T);
+      if (row.may_be_stored !== true) retryPaths.push(quotedPath);
     }
   }
-  let A = h.unreadable + h.pastCap;
-  let S = h.rows.length + A;
+  let unreadCount = capped.unreadable + capped.pastCap;
+  let totalCount = capped.rows.length + unreadCount;
   return {
     tool_use_id: toolUseId,
     type: "tool_result",
     content:
-      `Assets uploaded: ${y.length} of ${S} ${plural(S, "file")} ${y.length === 1 ? "is" : "are"} now stored in the artifact.` +
-      (y.length > 0
+      `Assets uploaded: ${uploadedLines.length} of ${totalCount} ${plural(totalCount, "file")} ${uploadedLines.length === 1 ? "is" : "are"} now stored in the artifact.` +
+      (uploadedLines.length > 0
         ? ` Reference each from the page by its url verbatim \u2014 e.g. <img src="\u2026the url\u2026"> \u2014 which resolves in every view of the artifact; store the id in the artifact's database if rows need to point at it.
-${y.join(`
+${uploadedLines.join(`
 `)}`
         : "") +
-      (p.length > 0
+      (failedLines.length > 0
         ? `
 Not stored, or not known to be (each line says why; do not reference these):
-${p.join(`
+${failedLines.join(`
 `)}`
         : "") +
-      (w.length > 0
+      (retryPaths.length > 0
         ? `
-To upload the rest, fix what stopped them, then call again with only these in \`file_paths\`: [${w.join(", ")}]. None of them is stored, so nothing is stored twice.`
+To upload the rest, fix what stopped them, then call again with only these in \`file_paths\`: [${retryPaths.join(", ")}]. None of them is stored, so nothing is stored twice.`
         : "") +
-      (A > 0
+      (unreadCount > 0
         ? `
-${A} more ${plural(A, "entry", "entries")} of this record could not be read; ${pickByToolset('action "list_assets"', () => 'action "list" with `scope: "assets"`')} shows what the artifact holds.`
+${unreadCount} more ${plural(unreadCount, "entry", "entries")} of this record could not be read; ${pickByToolset('action "list_assets"', () => 'action "list" with `scope: "assets"`')} shows what the artifact holds.`
         : "") +
       `
 Everyone who can open the artifact can load the stored files; each is durable until deleted with action "delete_asset".`,
@@ -2538,24 +2621,28 @@ Everyone who can open the artifact can load the stored files; each is durable un
 /**
  * 全部 Artifact 动作处理器列表，以及动作名 → 处理器的映射表 $b。
  */
-var ARTIFACT_ACTION_HANDLERS = [
-  ARTIFACT_DB_ACTIONS,
-  ARTIFACT_PREVIEW_ACTION_HANDLER,
-  ARTIFACT_COPY_FROM_ACTION_HANDLER,
-  ARTIFACT_WATCH_ACTION_HANDLER,
-  ARTIFACT_COMMENTS_ACTION_HANDLER,
-  ARTIFACT_ROOM_SEND_ACTION_HANDLER,
-  ARTIFACT_LIST_ACTION_HANDLER,
-  ARTIFACT_LIVE_EDIT_ACTION_HANDLER,
-  ARTIFACT_OPEN_ACTION_HANDLER,
-  ARTIFACT_ENDPOINTS_ACTION_HANDLER,
-  ARTIFACT_PIN_ACTION_HANDLER,
-  ARTIFACT_QUICKSTART_ACTION_HANDLER,
-  ARTIFACT_SHARE_ACTION_HANDLER,
-];
-var ACTION_HANDLER_BY_NAME = new Map(
-  ARTIFACT_ACTION_HANDLERS.flatMap((e) => e.actions.map((action) => [action, e])),
-);
+var ARTIFACT_ACTION_HANDLERS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ACTION_HANDLER_BY_NAME;
+deferInit("chunk-8wvtd8sr.js:311311", () => {
+  ARTIFACT_ACTION_HANDLERS = [
+    ARTIFACT_DB_ACTIONS,
+    ARTIFACT_PREVIEW_ACTION_HANDLER,
+    ARTIFACT_COPY_FROM_ACTION_HANDLER,
+    ARTIFACT_WATCH_ACTION_HANDLER,
+    ARTIFACT_COMMENTS_ACTION_HANDLER,
+    ARTIFACT_ROOM_SEND_ACTION_HANDLER,
+    ARTIFACT_LIST_ACTION_HANDLER,
+    ARTIFACT_LIVE_EDIT_ACTION_HANDLER,
+    ARTIFACT_OPEN_ACTION_HANDLER,
+    ARTIFACT_ENDPOINTS_ACTION_HANDLER,
+    ARTIFACT_PIN_ACTION_HANDLER,
+    ARTIFACT_QUICKSTART_ACTION_HANDLER,
+    ARTIFACT_SHARE_ACTION_HANDLER,
+  ];
+  ACTION_HANDLER_BY_NAME = new Map(
+    ARTIFACT_ACTION_HANDLERS.flatMap((handler) => handler.actions.map((action) => [action, handler])),
+  );
+});
 export {
   SHA256_HEX_RE,
   ASSET_BLOB_URL_RE,

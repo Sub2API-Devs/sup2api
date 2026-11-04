@@ -13,8 +13,8 @@
 /**
  * 导出函数 `gitConfigPairs`：参数 e，返回 e.flatMap(([n, t]) => ["-c", `${n}=${t}`])。
  */
-function gitConfigPairs(e) {
-  return e.flatMap(([n, t]) => ["-c", `${n}=${t}`]);
+function gitConfigPairs(pairs) {
+  return pairs.flatMap(([key, value]) => ["-c", `${key}=${value}`]);
 }
 //@ chunk-t3sg9e26.js:1375-1440 placement
 var EMPTY_TLS_TRUST_PLAN = {
@@ -26,30 +26,31 @@ var EMPTY_TLS_TRUST_PLAN = {
 /**
  * 按 git 角色（prep/resume/outcome/child/hook）决定证书文件与 sslVerify 设置如何处理：无路由时保持原样，否则分别交给对应的处理函数，返回环境覆盖、命令级配置和决策记录。
  */
-function planGitTlsTrust(e) {
-  let hasCertificateFile = e.operator.certificateFile.length > 0;
-  let skipsVerification =
-    e.operator.skipVerification.length > 0 || (e.role === "child" && e.serverSetsSkipVerification);
-  if (!e.routing)
+function planGitTlsTrust(input) {
+  let hasCertificateFile = input.operator.certificateFile.length > 0;
+  let skipVerification =
+    input.operator.skipVerification.length > 0 ||
+    (input.role === "child" && input.serverSetsSkipVerification);
+  if (!input.routing)
     return {
       ...EMPTY_TLS_TRUST_PLAN,
       decision: {
-        role: e.role,
+        role: input.role,
         certificateFile: hasCertificateFile ? "left_no_routing" : "left_unset",
-        skipVerification: skipsVerification ? "left" : "unset",
+        skipVerification: skipVerification ? "left" : "unset",
         mountEntries: false,
         mountVerificationPinned: false,
       },
     };
-  switch (e.role) {
+  switch (input.role) {
     case "prep":
     case "resume":
     case "outcome":
-      return planFetchGitTrust(e, hasCertificateFile, skipsVerification);
+      return planFetchGitTrust(input, hasCertificateFile, skipVerification);
     case "child":
-      return armGitSslVerify(e, e.routing, skipsVerification);
+      return armGitSslVerify(input, input.routing, skipVerification);
     case "hook":
-      return planHookGitTrust(e, e.routing, hasCertificateFile, skipsVerification);
+      return planHookGitTrust(input, input.routing, hasCertificateFile, skipVerification);
   }
 }
 //@ chunk-t3sg9e26.js:1908-2462 placement
@@ -87,13 +88,13 @@ function planHookGitTrust(input, routing, hasCertificateFile, skipsVerification)
 }
 //@ chunk-t3sg9e26.js:2462-2557 placement
 function sslCaInfoEntries(url, path) {
-  return ["", `${new URL(url).origin}.`, `${url}.`].map((r) => [`http.${r}sslCAInfo`, path]);
+  return ["", `${new URL(url).origin}.`, `${url}.`].map((scope) => [`http.${scope}sslCAInfo`, path]);
 }
 //@ chunk-t3sg9e26.js:2557-2622 placement
-function unsetEnvOverrides(e) {
-  let n = {};
-  for (let { name: t } of e) n[t] = undefined;
-  return n;
+function unsetEnvOverrides(overrides) {
+  let env = {};
+  for (let { name } of overrides) env[name] = undefined;
+  return env;
 }
 //@ chunk-t3sg9e26.js:2622-3629 placement
 /**
@@ -157,110 +158,117 @@ function planFetchGitTrust(input, hasCertificateFile, skipsVerification) {
   };
 }
 //@ chunk-t3sg9e26.js:3629-3764 placement
-function certificateFileFor(e) {
-  let trimmed = (e.serverCertificateFile ?? e.operator.certificateFile[0]?.value)?.trim();
+function certificateFileFor(config) {
+  let trimmed = (config.serverCertificateFile ?? config.operator.certificateFile[0]?.value)?.trim();
   if (!trimmed || /[\n\r\0]/.test(trimmed)) return;
   return trimmed;
 }
 //@ chunk-t3sg9e26.js:3764-3837 placement
-function quoteGitConfigValue(e) {
-  return `"${e.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+function quoteGitConfigValue(value) {
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 //@ chunk-t3sg9e26.js:3837-4008 placement
-function mountUrlOrigins(e) {
-  let n = new Set();
-  for (let t of [e.mountBaseUrl, e.pushBaseUrl])
-    if (t && URL.canParse(t)) {
-      for (let r of [new URL(t).origin, t]) if (!r.includes("=")) n.add(r);
+function mountUrlOrigins(config) {
+  let origins = new Set();
+  for (let url of [config.mountBaseUrl, config.pushBaseUrl])
+    if (url && URL.canParse(url)) {
+      for (let origin of [new URL(url).origin, url]) if (!origin.includes("=")) origins.add(origin);
     }
-  return [...n];
+  return [...origins];
 }
 //@ chunk-t3sg9e26.js:4008-4110 placement
-function sslVerifyEntries(e, n) {
-  return [...e, ...n.map((t) => `https://${t}/`)].map((t) => [`http.${t}.sslVerify`, "true"]);
+function sslVerifyEntries(urls, hosts) {
+  return [...urls, ...hosts.map((host) => `https://${host}/`)].map((url) => [
+    `http.${url}.sslVerify`,
+    "true",
+  ]);
 }
 //@ chunk-t3sg9e26.js:4110-4231 placement
-function sslVerifyConfigLines(e) {
-  return e
-    .map(([n, t]) => {
-      let sliced = n.slice(5, n.length - 10);
+function sslVerifyConfigLines(entries) {
+  return entries
+    .map(([key, value]) => {
+      let sliced = key.slice(5, key.length - 10);
       return `[http ${quoteGitConfigValue(sliced)}]
-	sslVerify = ${t}
+	sslVerify = ${value}
 `;
     })
     .join("");
 }
 //@ chunk-t3sg9e26.js:4231-5396 placement
-function armGitSslVerify(e, routing, t) {
-  let r = e.serverCertificateFile !== undefined || e.operator.certificateFile.length > 0;
-  let s = certificateFileFor(e);
-  let o = !r
+function armGitSslVerify(input, config, output) {
+  let hasCert = input.serverCertificateFile !== undefined || input.operator.certificateFile.length > 0;
+  let certFile = certificateFileFor(input);
+  let reason = !hasCert
     ? "left_unset"
-    : !e.gitConfigArm
+    : !input.gitConfigArm
       ? "left_git_config_arm_off"
-      : s === undefined
+      : certFile === undefined
         ? "left_unusable_value"
-        : !e.gitReadsEnvironmentConfig
+        : !input.gitReadsEnvironmentConfig
           ? "left_old_git"
           : "moved";
-  let a = mountUrlOrigins(routing);
-  let c = !t ? "unset" : e.gitConfigArm && e.gitReadsEnvironmentConfig && a.length > 0 ? "moved" : "left";
-  let d = [];
-  let u = "";
-  let h = {};
-  if (o === "moved" && s !== undefined) {
-    d.push(["http.sslCAInfo", s]);
-    u += `
+  let mountOrigins = mountUrlOrigins(config);
+  let gitConfigState = !output
+    ? "unset"
+    : input.gitConfigArm && input.gitReadsEnvironmentConfig && mountOrigins.length > 0
+      ? "moved"
+      : "left";
+  let configEntries = [];
+  let configText = "";
+  let envOverrides = {};
+  if (reason === "moved" && certFile !== undefined) {
+    configEntries.push(["http.sslCAInfo", certFile]);
+    configText += `
 [http]
-	sslCAInfo = ${quoteGitConfigValue(s)}
+	sslCAInfo = ${quoteGitConfigValue(certFile)}
 `;
-    if (e.trustBundle.status === "built")
-      for (let f of a) {
-        d.push([`http.${f}.sslCAInfo`, e.trustBundle.path]);
-        u += `[http ${quoteGitConfigValue(f)}]
-	sslCAInfo = ${quoteGitConfigValue(e.trustBundle.path)}
+    if (input.trustBundle.status === "built")
+      for (let origin of mountOrigins) {
+        configEntries.push([`http.${origin}.sslCAInfo`, input.trustBundle.path]);
+        configText += `[http ${quoteGitConfigValue(origin)}]
+	sslCAInfo = ${quoteGitConfigValue(input.trustBundle.path)}
 `;
       }
-    h = {
+    envOverrides = {
       GIT_SSL_CAINFO: undefined,
-      ...unsetEnvOverrides(e.operator.certificateFile),
+      ...unsetEnvOverrides(input.operator.certificateFile),
     };
   }
-  if (c === "moved") {
-    d.push(["http.sslVerify", "false"]);
-    u += `${
-      u === ""
+  if (gitConfigState === "moved") {
+    configEntries.push(["http.sslVerify", "false"]);
+    configText += `${
+      configText === ""
         ? `
 `
         : ""
     }[http]
 	sslVerify = false
 `;
-    h = {
-      ...h,
+    envOverrides = {
+      ...envOverrides,
       GIT_SSL_NO_VERIFY: undefined,
-      ...unsetEnvOverrides(e.operator.skipVerification),
+      ...unsetEnvOverrides(input.operator.skipVerification),
     };
   }
-  let y = sslVerifyEntries(a, e.gitConfigArm ? routing.governedHosts : []);
-  d.push(...y);
-  if (y.length > 0)
-    u += `${
-      u === ""
+  let verifyEntries = sslVerifyEntries(mountOrigins, input.gitConfigArm ? config.governedHosts : []);
+  configEntries.push(...verifyEntries);
+  if (verifyEntries.length > 0)
+    configText += `${
+      configText === ""
         ? `
 `
         : ""
-    }${sslVerifyConfigLines(y)}`;
+    }${sslVerifyConfigLines(verifyEntries)}`;
   return {
-    envOverrides: h,
-    commandScopeEntries: d,
-    fileSeedLines: u,
+    envOverrides,
+    commandScopeEntries: configEntries,
+    fileSeedLines: configText,
     decision: {
       role: "child",
-      certificateFile: o,
-      skipVerification: c,
-      mountEntries: o === "moved" && e.trustBundle.status === "built" && a.length > 0,
-      mountVerificationPinned: a.length > 0,
+      certificateFile: reason,
+      skipVerification: gitConfigState,
+      mountEntries: reason === "moved" && input.trustBundle.status === "built" && mountOrigins.length > 0,
+      mountVerificationPinned: mountOrigins.length > 0,
     },
   };
 }

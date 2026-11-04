@@ -23,19 +23,19 @@ var MAX_STALENESS_COMPARE_BYTES = 67108864;
 /**
  * 当前磁盘内容与读取基线比较（match/mismatch/absent）。
  */
-async function compareWithDisk(absolutePath, readBaseline, r) {
-  let s = readBaseline.bytes * 4 + 4;
+async function compareWithDisk(absolutePath, readBaseline, readAutoAllowed) {
+  let maxExpectedBytes = readBaseline.bytes * 4 + 4;
   try {
-    let h = await refuseSymlinkWrite(
+    let readResult = await refuseSymlinkWrite(
       absolutePath,
       absolutePath,
       getPlatform(),
-      Math.min(s, MAX_STALENESS_COMPARE_BYTES),
+      Math.min(maxExpectedBytes, MAX_STALENESS_COMPARE_BYTES),
       true,
     );
-    return h === null || !r()
+    return readResult === null || !readAutoAllowed()
       ? "absent"
-      : matchesContentDigest(readBaseline, stripBom_2(h.content))
+      : matchesContentDigest(readBaseline, stripBom_2(readResult.content))
         ? "match"
         : "mismatch";
   } catch (error) {
@@ -43,7 +43,9 @@ async function compareWithDisk(absolutePath, readBaseline, r) {
     switch (getErrnoCode(error)) {
       case "ERR_FILE_TOO_LARGE": {
         let size = error.size;
-        return typeof size === "number" && size > s && r() ? "mismatch" : "absent";
+        return typeof size === "number" && size > maxExpectedBytes && readAutoAllowed()
+          ? "mismatch"
+          : "absent";
       }
       case "ERR_NOT_REGULAR_FILE":
       case "EISDIR":

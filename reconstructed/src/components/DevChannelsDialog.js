@@ -9,7 +9,7 @@
  * attribution: file-last-pair 1, layout 1, fingerprint 1
  */
 import { gracefulShutdownSync } from "../utils/gracefulShutdown.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import {
   jsxProd_default,
@@ -29,7 +29,7 @@ function exitZeroToo(c) {
 }
 //@ chunk-jmdd9gvn.js:13744-14784 fingerprint = DevChannelsDialog (0.658)
 function DevChannelsDialog(props) {
-  let $ = w(13);
+  let $ = useMemoCache(13);
   let { channels, onAccept } = props;
   let t1;
   if ($[0] !== onAccept) {
@@ -88,28 +88,29 @@ function DevChannelsDialog(props) {
     $[6] = t4;
     $[7] = t5;
   } else t5 = $[7];
-  let i;
+  let confirmElement;
   if ($[8] !== onChange) {
-    i = jsxProd_default(ConfirmSelect, {
+    confirmElement = jsxProd_default(ConfirmSelect, {
       confirmLabel: "I am using this for local development",
       cancelLabel: "Exit",
       onConfirm: () => onChange("accept"),
       onCancel: () => onChange("exit"),
     });
     $[8] = onChange;
-    $[9] = i;
-  } else i = $[9];
+    $[9] = confirmElement;
+  } else confirmElement = $[9];
   let t8;
-  if ($[10] !== t5 || $[11] !== i) {
+  if ($[10] !== t5 || $[11] !== confirmElement) {
     t8 = jsxProd_default_2(Dialog, {
       title: "WARNING: Loading development channels",
       color: "error",
       onCancel: handleEscape,
-      children: [t5, i],
+      children: [t5, confirmElement],
     });
     $[10] = t5;
-    $[11] = i;
+    $[11] = confirmElement;
     $[12] = t8;
   } else t8 = $[12];
   return t8;
 }
+export { DevChannelsDialog };

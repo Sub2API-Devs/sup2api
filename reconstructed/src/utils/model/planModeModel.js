@@ -99,26 +99,26 @@ function getDefaultHaikuModel() {
 /**
  * 取默认 Haiku 模型（目录档位或内置默认）。
  */
-function defaultHaikuModel(e = getModelStrings()) {
-  return catalogFamilyDefaultKey("haiku", e) ?? e.haiku45;
+function defaultHaikuModel(modelStrings = getModelStrings()) {
+  return catalogFamilyDefaultKey("haiku", modelStrings) ?? modelStrings.haiku45;
 }
 //@ chunk-aepeg2w5.js:438426-438476 placement
-function isModeDependentModelSetting(e) {
-  return e === "opusplan" || e === "haiku";
+function isModeDependentModelSetting(setting) {
+  return setting === "opusplan" || setting === "haiku";
 }
 //@ chunk-aepeg2w5.js:438476-438585 placement
-function planModeConstituentFamily(userSpecifiedModelSetting) {
-  if (userSpecifiedModelSetting === "opusplan" || userSpecifiedModelSetting === "opusplan[1m]") return "opus";
-  if (userSpecifiedModelSetting === "haiku") return "sonnet";
+function planModeConstituentFamily(modelSetting) {
+  if (modelSetting === "opusplan" || modelSetting === "opusplan[1m]") return "opus";
+  if (modelSetting === "haiku") return "sonnet";
   return null;
 }
 //@ chunk-aepeg2w5.js:438585-438610 placement
-function isOpusFableAdvisorSetting(e) {
+function isOpusFableAdvisorSetting(setting) {
   return false;
 }
 //@ chunk-aepeg2w5.js:438610-438923 placement
-function stepDownRestrictedFamilyAliasPick(e) {
-  let lower = e.trim().toLowerCase();
+function stepDownRestrictedFamilyAliasPick(spec) {
+  let lower = spec.trim().toLowerCase();
   let trimmed = strip1mSuffix(lower).trim();
   if (!isBaseModelKey(trimmed) || !usesFirstPartyModelIds()) return null;
   let modelEntitlementDenySet = getModelEntitlementDenySet();
@@ -128,59 +128,59 @@ function stepDownRestrictedFamilyAliasPick(e) {
     !hasManagedModelDenies()
   )
     return null;
-  let h = newestAllowedInFamily(trimmed);
+  let newest = newestAllowedInFamily(trimmed);
   if (
-    h === null ||
-    !(isModelAllowedUnderActiveEnforcement(h) ?? isModelAllowed(h)) ||
-    isModelDenied(h, modelEntitlementDenySet)
+    newest === null ||
+    !(isModelAllowedUnderActiveEnforcement(newest) ?? isModelAllowed(newest)) ||
+    isModelDenied(newest, modelEntitlementDenySet)
   )
     return null;
-  if (trimmed === lower) return h;
+  if (trimmed === lower) return newest;
   return (trimmed === "opus"
     ? shouldProbeThirdPartyDefaults()
     : trimmed === "sonnet"
       ? shouldProbeThirdPartyDefaultsAlt()
-      : true) && eligible1mSuffixTarget(h)
-    ? strip1mTagWhereBuiltIn(`${h}[1m]`)
-    : h;
+      : true) && eligible1mSuffixTarget(newest)
+    ? strip1mTagWhereBuiltIn(`${newest}[1m]`)
+    : newest;
 }
 //@ chunk-aepeg2w5.js:438923-439285 placement
-function planModeConstituentModel(e) {
-  let n = planModeConstituentFamily(e);
-  if (n === null || e === undefined || e === null) return null;
-  let r = e === "opusplan[1m]";
-  let s;
-  if (n === "opus") {
+function planModeConstituentModel(setting) {
+  let family = planModeConstituentFamily(setting);
+  if (family === null || setting === undefined || setting === null) return null;
+  let had1m = setting === "opusplan[1m]";
+  let model;
+  if (family === "opus") {
     let defaultOpusModel = getDefaultOpusModel();
-    s =
-      r || opus1mMergeAddsTagTo(defaultOpusModel)
+    model =
+      had1m || opus1mMergeAddsTagTo(defaultOpusModel)
         ? strip1mTagWhereBuiltIn(append1mSuffixIfMissing(defaultOpusModel))
         : defaultOpusModel;
-  } else s = getDefaultSonnetModel();
+  } else model = getDefaultSonnetModel();
   if (
-    (isModelAllowedUnderActiveEnforcement(s) ?? isModelAllowed(s)) &&
-    !isModelDenied(s, getModelEntitlementDenySet())
+    (isModelAllowedUnderActiveEnforcement(model) ?? isModelAllowed(model)) &&
+    !isModelDenied(model, getModelEntitlementDenySet())
   )
     return {
-      model: s,
+      model,
       clamp: "none",
     };
-  let y = stepDownRestrictedFamilyAliasPick(
-    n === "opus" ? (r || isOpus1mMergeEnabled() ? "opus[1m]" : "opus") : "sonnet",
+  let steppedDown = stepDownRestrictedFamilyAliasPick(
+    family === "opus" ? (had1m || isOpus1mMergeEnabled() ? "opus[1m]" : "opus") : "sonnet",
   );
-  if (y !== null)
+  if (steppedDown !== null)
     return {
-      model: y,
+      model: steppedDown,
       clamp: "stepDown",
     };
   return {
-    model: parseUserSpecifiedModel(e),
+    model: parseUserSpecifiedModel(setting),
     clamp: "resting",
   };
 }
 //@ chunk-aepeg2w5.js:439285-439402 placement
-function getRuntimeMainLoopModel(e) {
-  let { model, clampWarning } = resolveRuntimeMainLoopModel(e);
+function getRuntimeMainLoopModel(input) {
+  let { model, clampWarning } = resolveRuntimeMainLoopModel(input);
   if (clampWarning !== null && !warnedEnforcementMessages().has(clampWarning)) {
     warnedEnforcementMessages().add(clampWarning);
     logForDebugging(clampWarning, {
@@ -190,38 +190,38 @@ function getRuntimeMainLoopModel(e) {
   return model;
 }
 //@ chunk-aepeg2w5.js:439402-440260 placement
-function resolveRuntimeMainLoopModel(e) {
-  let { permissionMode, mainLoopModel, exceeds200kTokens = false } = e;
+function resolveRuntimeMainLoopModel(input) {
+  let { permissionMode, mainLoopModel, exceeds200kTokens = false } = input;
   if (permissionMode !== "plan")
     return {
       model: mainLoopModel,
       clampWarning: null,
     };
-  let h = e.setting === undefined ? getUserSpecifiedModelSetting() : e.setting;
-  let y = planModeConstituentFamily(h);
-  if (y === null || (y === "opus" && exceeds200kTokens))
+  let setting = input.setting === undefined ? getUserSpecifiedModelSetting() : input.setting;
+  let family = planModeConstituentFamily(setting);
+  if (family === null || (family === "opus" && exceeds200kTokens))
     return {
       model: mainLoopModel,
       clampWarning: null,
     };
-  let S = planModeConstituentModel(h);
-  if (S === null)
+  let constituent = planModeConstituentModel(setting);
+  if (constituent === null)
     return {
       model: mainLoopModel,
       clampWarning: null,
     };
-  if (S.clamp === "none")
+  if (constituent.clamp === "none")
     return {
-      model: S.model,
+      model: constituent.model,
       clampWarning: null,
     };
-  let w = y === "opus" ? "opusplan upgrade" : "haiku plan upgrade";
+  let settingLabel = family === "opus" ? "opusplan upgrade" : "haiku plan upgrade";
   let clampWarning =
-    S.clamp === "stepDown"
-      ? `Plan mode: the ${w} model is not permitted by the org model restrictions (availableModels, deniedModels or model_access entitlement); planning uses the newest permitted ${y === "opus" ? "Opus" : "Sonnet"} instead`
-      : `Plan mode: the ${w} model is not permitted by the org model restrictions (availableModels, deniedModels or model_access entitlement); planning uses the resting model instead`;
+    constituent.clamp === "stepDown"
+      ? `Plan mode: the ${settingLabel} model is not permitted by the org model restrictions (availableModels, deniedModels or model_access entitlement); planning uses the newest permitted ${family === "opus" ? "Opus" : "Sonnet"} instead`
+      : `Plan mode: the ${settingLabel} model is not permitted by the org model restrictions (availableModels, deniedModels or model_access entitlement); planning uses the resting model instead`;
   return {
-    model: S.model,
+    model: constituent.model,
     clampWarning,
   };
 }
@@ -237,10 +237,10 @@ function getResolvedOrgDefaultModel() {
   let orgModelDefault = getOrgModelDefault();
   if (!orgModelDefault) return null;
   if (!isRecognizedOrgDefaultName(orgModelDefault.name)) {
-    let n = `Org default model "${orgModelDefault.name}" is not one this build recognizes; using the standard default instead`;
-    if (!warnedEnforcementMessages().has(n)) {
-      warnedEnforcementMessages().add(n);
-      logForDebugging(n, {
+    let warning = `Org default model "${orgModelDefault.name}" is not one this build recognizes; using the standard default instead`;
+    if (!warnedEnforcementMessages().has(warning)) {
+      warnedEnforcementMessages().add(warning);
+      logForDebugging(warning, {
         level: "warn",
       });
     }
@@ -278,10 +278,10 @@ function isDeploymentVouchedModel(modelId) {
     isTierDefaultModelEnv(modelId) ||
     reverseModelOverride(modelId) !== modelId ||
     getAdditionalModelOptionsCache().some(
-      (n) => typeof n.value === "string" && sameModelSpelling(n.value, modelId),
+      (option) => typeof option.value === "string" && sameModelSpelling(option.value, modelId),
     ) ||
     getGatewayModelOptions().some(
-      (n) => typeof n.value === "string" && sameModelSpelling(n.value, modelId),
+      (option) => typeof option.value === "string" && sameModelSpelling(option.value, modelId),
     ) ||
     (getCuratedModelPicker()?.picker.options.some((option) =>
       sameModelSpelling(option.model.trim(), modelId),
@@ -293,19 +293,19 @@ function isDeploymentVouchedModel(modelId) {
 /**
  * 判断模型当前是否不可用（忽略覆盖后仍无）。
  */
-function isUnavailableModel(e) {
+function isUnavailableModel(model) {
   return (
     supportsFamilyOverride() &&
-    getModelUnavailabilityReason(e, {
+    getModelUnavailabilityReason(model, {
       ignoreModelOverrides: true,
     }) !== null
   );
 }
 //@ chunk-aepeg2w5.js:441154-441220 placement
-function availableFamilyDefault(e) {
-  let n = resolveAvailableModels(e, null) ?? e;
-  let r = familyDefaultFor(n) ?? n;
-  return isUnavailableModel(r) ? null : r;
+function availableFamilyDefault(model) {
+  let resolved = resolveAvailableModels(model, null) ?? model;
+  let familyDefault = familyDefaultFor(resolved) ?? resolved;
+  return isUnavailableModel(familyDefault) ? null : familyDefault;
 }
 //@ chunk-aepeg2w5.js:441220-441255 placement = renderToolUseMessage (1)
 /**
@@ -332,33 +332,33 @@ function defaultModelAttributionSuffix(attribution) {
 }
 //@ chunk-aepeg2w5.js:441497-441778 placement
 function resolveDefaultMainLoopModelSetting() {
-  let e = enforcedDefaultModels();
-  if (e !== null && e.enforced)
+  let enforced = enforcedDefaultModels();
+  if (enforced !== null && enforced.enforced)
     return {
-      setting: e.setting,
-      attribution: e.attribution,
+      setting: enforced.setting,
+      attribution: enforced.attribution,
     };
-  let n = isServedCatalogActive();
-  let resolvedOrgDefault = getResolvedOrgDefault();
-  let s;
-  if (n) s = null;
-  else if (resolvedOrgDefault === undefined) {
-    s = getResolvedOrgDefaultModel();
-    if (s !== null) setResolvedOrgDefault(s);
-  } else if (resolvedOrgDefault === null) s = null;
-  else s = availableFamilyDefault(resolvedOrgDefault);
-  if (s !== null)
+  let servedActive = isServedCatalogActive();
+  let model = getResolvedOrgDefault();
+  let orgDefault;
+  if (servedActive) orgDefault = null;
+  else if (model === undefined) {
+    orgDefault = getResolvedOrgDefaultModel();
+    if (orgDefault !== null) setResolvedOrgDefault(orgDefault);
+  } else if (model === null) orgDefault = null;
+  else orgDefault = availableFamilyDefault(model);
+  if (orgDefault !== null)
     return {
-      setting: s,
+      setting: orgDefault,
       attribution: "org",
     };
-  return resolvePlanModeModel(e);
+  return resolvePlanModeModel(enforced);
 }
 //@ chunk-aepeg2w5.js:441778-442245 placement
 /**
  * 计划模式模型设置与来源。
  */
-function resolvePlanModeModel(e) {
+function resolvePlanModeModel(enforced) {
   let envDefaultModel = getEnvDefaultModel();
   if (envDefaultModel !== null)
     return {
@@ -366,34 +366,34 @@ function resolvePlanModeModel(e) {
       attribution: "env",
     };
   let { setting, envFamily, concreteBaseline } = envDefaultModel_2();
-  let y = isPublishedCatalogInUse();
-  let S =
-    e !== null &&
+  let publishedInUse = isPublishedCatalogInUse();
+  let trustEnforced =
+    enforced !== null &&
     !adminSteeringFor(envFamily) &&
     !getToolSearchBetaHeader(envFamily) &&
-    !(y && isClaudeAISubscriber());
-  if (S && !y)
+    !(publishedInUse && isClaudeAISubscriber());
+  if (trustEnforced && !publishedInUse)
     return {
-      setting: e.setting,
-      attribution: e.attribution,
+      setting: enforced.setting,
+      attribution: enforced.attribution,
     };
-  let w = S ? e.setting : setting;
-  let availableModels = resolveAvailableModels(w, envFamily, concreteBaseline);
-  let x = availableModels ?? w;
-  let P = familyDefaultFor(x);
+  let baseSetting = trustEnforced ? enforced.setting : setting;
+  let availableModels = resolveAvailableModels(baseSetting, envFamily, concreteBaseline);
+  let resolvedSetting = availableModels ?? baseSetting;
+  let familyDefault = familyDefaultFor(resolvedSetting);
   if (availableModels !== null)
     return {
-      setting: P ?? availableModels,
+      setting: familyDefault ?? availableModels,
       attribution: "enforced",
     };
-  if (P !== null)
+  if (familyDefault !== null)
     return {
-      setting: P,
-      attribution: isModelEntitled(x) ? "managed_deny" : "entitlement",
+      setting: familyDefault,
+      attribution: isModelEntitled(resolvedSetting) ? "managed_deny" : "entitlement",
     };
   return {
-    setting: x,
-    attribution: S ? e.attribution : "tier",
+    setting: resolvedSetting,
+    attribution: trustEnforced ? enforced.attribution : "tier",
   };
 }
 //@ chunk-aepeg2w5.js:442245-442810 placement
@@ -401,36 +401,36 @@ function resolvePlanModeModel(e) {
  * 强制的默认模型列表。
  */
 function enforcedDefaultModels() {
-  let e = orgDefaultModelState();
-  let n =
+  let orgState = orgDefaultModelState();
+  let providerOverrides =
     getAPIProvider() !== "firstParty"
       ? supportsFamilyOverride()
         ? activeProviderModelOverrides("default")
         : {}
       : null;
-  let r =
-    n !== null
-      ? [n.perProvider, n.everywhere]
-      : e?.enforced === true
-        ? [e.model]
-        : e?.accountResolved === true
-          ? [e.model, ...getDefaultModelOverrides(e.model)]
-          : [...getDefaultModelOverrides(e?.model), e?.model];
-  let s = n !== null ? getProbeRefutedDocumentDefaults() : null;
-  let h = new Set();
-  for (let y of r) {
-    if (y === undefined || h.has(y)) continue;
-    h.add(y);
-    if (s?.has(y)) continue;
-    let S = catalogModelWarning(y);
-    if (S !== undefined) {
-      let w = y === e?.model;
-      let R = isPublishedCatalogInUse() && !has1mSuffix(S) ? entryModelKey(S) : undefined;
-      let x = R === undefined ? S : getModelStrings()[R];
+  let candidates =
+    providerOverrides !== null
+      ? [providerOverrides.perProvider, providerOverrides.everywhere]
+      : orgState?.enforced === true
+        ? [orgState.model]
+        : orgState?.accountResolved === true
+          ? [orgState.model, ...getDefaultModelOverrides(orgState.model)]
+          : [...getDefaultModelOverrides(orgState?.model), orgState?.model];
+  let refuted = providerOverrides !== null ? getProbeRefutedDocumentDefaults() : null;
+  let seen = new Set();
+  for (let candidate of candidates) {
+    if (candidate === undefined || seen.has(candidate)) continue;
+    seen.add(candidate);
+    if (refuted?.has(candidate)) continue;
+    let modelId = catalogModelWarning(candidate);
+    if (modelId !== undefined) {
+      let isOrgModel = candidate === orgState?.model;
+      let key = isPublishedCatalogInUse() && !has1mSuffix(modelId) ? entryModelKey(modelId) : undefined;
+      let value = key === undefined ? modelId : getModelStrings()[key];
       return {
-        setting: R?.startsWith("opus") ? applyOpus1mOptIn(x) : x,
-        attribution: w && e?.orgConfigured ? "org" : "served",
-        enforced: w && e?.enforced === true,
+        setting: key?.startsWith("opus") ? applyOpus1mOptIn(value) : value,
+        attribution: isOrgModel && orgState?.orgConfigured ? "org" : "served",
+        enforced: isOrgModel && orgState?.enforced === true,
       };
     }
   }
@@ -438,88 +438,92 @@ function enforcedDefaultModels() {
 }
 //@ chunk-aepeg2w5.js:442810-443013 placement
 function getDefaultModelOverrides(model) {
-  let n = activeProviderModelOverrides("default");
-  let r = model === undefined ? undefined : findServedModel(model);
-  let s = r === undefined ? undefined : getRowFamily(r);
+  let defaultOverrides = activeProviderModelOverrides("default");
+  let served = model === undefined ? undefined : findServedModel(model);
+  let family = served === undefined ? undefined : getRowFamily(served);
   let perProvider =
-    s === "opus" || s === "sonnet" || s === "haiku" || s === "fable"
-      ? activeProviderModelOverrides(s).perProvider
+    family === "opus" || family === "sonnet" || family === "haiku" || family === "fable"
+      ? activeProviderModelOverrides(family).perProvider
       : undefined;
-  return [n.perProvider, perProvider, n.everywhere];
+  return [defaultOverrides.perProvider, perProvider, defaultOverrides.everywhere];
 }
 //@ chunk-aepeg2w5.js:443013-443433 placement
 function cloudDocumentDefaultCandidates() {
   if (getAPIProvider() === "firstParty" || !supportsFamilyOverride()) return [];
   let { perProvider, everywhere } = activeProviderModelOverrides("default");
-  let r = [];
-  let s = new Set();
-  for (let h of [perProvider, everywhere]) {
-    if (h === undefined || s.has(h)) continue;
-    s.add(h);
-    let y = catalogModelWarning(h);
-    if (y === undefined) continue;
-    let lower = h.toLowerCase();
-    let servedModel = findServedModel(h);
-    let R = Object.hasOwn(MODEL_KEY_BY_FIRST_PARTY_ID, lower)
+  let candidates = [];
+  let seen = new Set();
+  for (let candidate of [perProvider, everywhere]) {
+    if (candidate === undefined || seen.has(candidate)) continue;
+    seen.add(candidate);
+    let modelId = catalogModelWarning(candidate);
+    if (modelId === undefined) continue;
+    let lower = candidate.toLowerCase();
+    let servedModel = findServedModel(candidate);
+    let key = Object.hasOwn(MODEL_KEY_BY_FIRST_PARTY_ID, lower)
       ? MODEL_KEY_BY_FIRST_PARTY_ID[lower]
-      : entryModelKey(servedModel?.id ?? h);
-    r.push({
-      candidate: h,
-      model: y,
-      key: R,
+      : entryModelKey(servedModel?.id ?? candidate);
+    candidates.push({
+      candidate,
+      model: modelId,
+      key,
       ...(servedModel !== undefined &&
-        R === undefined &&
+        key === undefined &&
         hasDescribableCatalogModel(servedModel.id) && {
           overrideKey: servedModel.id,
         }),
       family: getRowFamily(
         servedModel ?? {
-          id: h,
+          id: candidate,
         },
       ),
-      name: displayNameForModel(h, R),
+      name: displayNameForModel(candidate, key),
     });
   }
-  return r;
+  return candidates;
 }
 //@ chunk-aepeg2w5.js:443433-443639 placement
 function documentNamesCloudDefault() {
-  let e = activeServedCatalog();
-  if (e === null || getAPIProvider() === "firstParty" || !supportsFamilyOverride()) return false;
+  let catalog = activeServedCatalog();
+  if (catalog === null || getAPIProvider() === "firstParty" || !supportsFamilyOverride()) return false;
   if (getEnvDefaultModel() !== null || adminSteeringFor(envDefaultModel_2().envFamily)) return false;
-  let providerAliasTargets = getProviderAliasTargets(e, "default", providerCatalogKey(getAPIProvider()));
+  let providerAliasTargets = getProviderAliasTargets(
+    catalog,
+    "default",
+    providerCatalogKey(getAPIProvider()),
+  );
   return providerAliasTargets.perProvider !== undefined || providerAliasTargets.everywhere !== undefined;
 }
 //@ chunk-aepeg2w5.js:443639-444068 placement
 /**
  * 目录模型的警告（未发布、提供商不支持）。
  */
-function catalogModelWarning(e) {
-  if (isModelKeyAlias(strip1mSuffix(e.trim().toLowerCase()).trim())) return;
-  let servedModel = findServedModel(e);
+function catalogModelWarning(setting) {
+  if (isModelKeyAlias(strip1mSuffix(setting.trim().toLowerCase()).trim())) return;
+  let servedModel = findServedModel(setting);
   let providerModelId = resolveProviderModelId({
-    id: e,
+    id: setting,
     provider_ids: servedModel?.provider_ids,
   });
   if (providerModelId === undefined) return;
-  let s = servedModel === undefined ? undefined : getRowFamily(servedModel);
+  let family = servedModel === undefined ? undefined : getRowFamily(servedModel);
   if (
     servedModel !== undefined &&
-    (isModelFamily(s) || s === "fable") &&
+    (isModelFamily(family) || family === "fable") &&
     entryModelKey(servedModel.id) === undefined &&
-    getUltraplanModel(s, servedModel.id)
+    getUltraplanModel(family, servedModel.id)
   )
     return;
-  let h = new Set([e, parseUserSpecifiedModel(e)]);
-  for (let S of h) if (!catalogSupportsPlanMode(S)) return;
-  let y = providerModelId === e ? h : new Set([providerModelId]);
-  for (let S of y)
+  let specs = new Set([setting, parseUserSpecifiedModel(setting)]);
+  for (let spec of specs) if (!catalogSupportsPlanMode(spec)) return;
+  let candidates = providerModelId === setting ? specs : new Set([providerModelId]);
+  for (let candidate of candidates)
     if (
-      !isModelAllowed(S, {
+      !isModelAllowed(candidate, {
         ignoreModelOverrides: true,
         envFreeAliasResolution: true,
       }) ||
-      isUnavailableModel(S)
+      isUnavailableModel(candidate)
     )
       return;
   return providerModelId;
@@ -527,10 +531,10 @@ function catalogModelWarning(e) {
 //@ chunk-aepeg2w5.js:444068-444215 placement
 function getOrgLockedDefaultModel() {
   if (isServedCatalogActive()) {
-    let e = enforcedDefaultModels();
-    return e !== null && e.enforced
+    let enforced = enforcedDefaultModels();
+    return enforced !== null && enforced.enforced
       ? {
-          model: e.setting,
+          model: enforced.setting,
           kind: "org",
         }
       : null;

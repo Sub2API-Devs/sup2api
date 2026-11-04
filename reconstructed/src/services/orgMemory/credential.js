@@ -9,7 +9,7 @@
  * attribution: placement 10
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, E, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, numberSchema, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { isSiloId, isPublicProjects, getEffectiveSelection, dropSavedSelection } from "./selection.js";
 import { memoryApiTarget, memoryApiOverride } from "../../utils/teleport/api.js";
@@ -28,28 +28,35 @@ import {
 import { logEvent } from "../analytics/index.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-82kqcve8.js:39889-40044 placement
-var CREDENTIAL_ENDPOINT = "/v1/code/local/memory/credential";
-var CREDENTIAL_TIMEOUT_MS = 1e4;
-var CREDENTIAL_REFRESH_MARGIN_MS = 120000;
-var credentialResponseSchema = DoctorLazy(() =>
-  u({
-    access_token: string().min(1),
-    expires_in_seconds: E().positive(),
-    stores: unknown().optional(),
-  }),
-);
+var CREDENTIAL_ENDPOINT; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var CREDENTIAL_TIMEOUT_MS;
+var CREDENTIAL_REFRESH_MARGIN_MS;
+var credentialResponseSchema;
+deferInit("chunk-82kqcve8.js:39889", () => {
+  CREDENTIAL_ENDPOINT = "/v1/code/local/memory/credential";
+  CREDENTIAL_TIMEOUT_MS = 1e4;
+  CREDENTIAL_REFRESH_MARGIN_MS = 120000;
+  credentialResponseSchema = DoctorLazy(() =>
+    objectSchema({
+      access_token: stringSchema().min(1),
+      expires_in_seconds: numberSchema().positive(),
+      stores: unknown().optional(),
+    }),
+  );
+});
 //@ chunk-82kqcve8.js:40044-40204 placement
 async function requestCredentialWithRetry(request, credentials) {
-  let r = await requestOrgMemoryCredential(request, credentials);
-  if (r.ok && r.status === 401) {
+  let result = await requestOrgMemoryCredential(request, credentials);
+  if (result.ok && result.status === 401) {
     logForDebugging("org-memory-credential: 401 \u2014 retrying once", {
       level: "debug",
     });
     return requestOrgMemoryCredential(request, credentials);
   }
-  return r;
+  return result;
 }
 //@ chunk-82kqcve8.js:40204-40724 placement
 /**
@@ -58,7 +65,7 @@ async function requestCredentialWithRetry(request, credentials) {
 async function requestOrgMemoryCredential(request, credentials) {
   let deviceHeaders =
     request.selection !== null && isSiloId(request.selection) && memoryApiTarget().auth !== "none"
-      ? await (await import("./chunk-6phxatm7.js")).trustedDeviceHeaders()
+      ? await (await import("../../utils/teleport/api.js")).trustedDeviceHeaders()
       : undefined;
   let target = memoryApiTarget();
   let authOverride = deviceHeaders !== undefined &&
@@ -113,210 +120,229 @@ class OrgMemoryCredential {
   mintEndpoint = undefined;
   credentials = undefined;
   storageV5 = undefined;
-  adoptCredentials(e) {
-    if (e === undefined) return;
-    if (this.credentials !== undefined && this.credentials !== e) {
+  adoptCredentials(credentials) {
+    if (credentials === undefined) return;
+    if (this.credentials !== undefined && this.credentials !== credentials) {
       logForDebugging(
         "org-memory-credential: a credentials store was already handed in; the later one is ignored",
       );
       return;
     }
-    this.credentials = e;
+    this.credentials = credentials;
   }
-  adoptStorageV5(e) {
-    if (e === undefined) return;
-    if (this.storageV5 !== undefined && this.storageV5 !== e) {
+  adoptStorageV5(storageV5) {
+    if (storageV5 === undefined) return;
+    if (this.storageV5 !== undefined && this.storageV5 !== storageV5) {
       logForDebugging(
         "org-memory-credential: a storage backend was already handed in; the later one is ignored",
       );
       return;
     }
-    this.storageV5 = e;
+    this.storageV5 = storageV5;
   }
   discardOnEndpointChange() {
-    let e = memoryApiOverride() ?? null;
-    if (this.mintEndpoint !== undefined && this.mintEndpoint !== e) this.discard();
-    this.mintEndpoint = e;
+    let endpoint = memoryApiOverride() ?? null;
+    if (this.mintEndpoint !== undefined && this.mintEndpoint !== endpoint) this.discard();
+    this.mintEndpoint = endpoint;
   }
-  parseAndCache(e, n, r) {
-    let s = credentialResponseSchema().safeParse(e);
-    if (!s.success) {
-      logFeatureBad("org_memory_credential", r.malformed);
+  parseAndCache(body, generation, labels) {
+    let parsed = credentialResponseSchema().safeParse(body);
+    if (!parsed.success) {
+      logFeatureBad("org_memory_credential", labels.malformed);
       throw new MemoryPermanentError(
-        r.malformed,
-        `org memory credential: malformed response: ${s.error.message}`,
+        labels.malformed,
+        `org memory credential: malformed response: ${parsed.error.message}`,
       );
     }
-    let h = s.data.expires_in_seconds * 1000;
-    if (h <= CREDENTIAL_REFRESH_MARGIN_MS)
+    let lifetimeMs = parsed.data.expires_in_seconds * 1000;
+    if (lifetimeMs <= CREDENTIAL_REFRESH_MARGIN_MS)
       logForDebugging(
-        `org-memory-credential: short token lifetime (${s.data.expires_in_seconds}s) \u2014 clamping the refresh margin`,
+        `org-memory-credential: short token lifetime (${parsed.data.expires_in_seconds}s) \u2014 clamping the refresh margin`,
         {
           level: "warn",
         },
       );
-    let y = {
-      authorization: `Bearer ${s.data.access_token}`,
-      expiresAtMs: Date.now() + h,
-      marginMs: Math.min(CREDENTIAL_REFRESH_MARGIN_MS, Math.floor(h / 2)),
+    let cached = {
+      authorization: `Bearer ${parsed.data.access_token}`,
+      expiresAtMs: Date.now() + lifetimeMs,
+      marginMs: Math.min(CREDENTIAL_REFRESH_MARGIN_MS, Math.floor(lifetimeMs / 2)),
     };
-    if (n === this.generation) this.cached = y;
+    if (generation === this.generation) this.cached = cached;
     return {
-      authorization: y.authorization,
-      stores: s.data.stores,
+      authorization: cached.authorization,
+      stores: parsed.data.stores,
     };
   }
-  async negotiate(e) {
+  async negotiate(options) {
     let generation = this.generation;
-    let r = "org memory credential";
-    let s = e?.skipSelection ? null : getEffectiveSelection();
-    let h = !e?.skipAsk && s !== null && isOrgMemoryWriteOptedIn();
-    if (h) logEvent("tengu_org_memory_write_opt_in_requested", {});
-    let y = false;
-    let w = s;
-    let S = false;
-    let R = await requestCredentialWithRetry(
+    let scopeLabel = "org memory credential";
+    let selection = options?.skipSelection ? null : getEffectiveSelection();
+    let askForWrite = !options?.skipAsk && selection !== null && isOrgMemoryWriteOptedIn();
+    if (askForWrite) logEvent("tengu_org_memory_write_opt_in_requested", {});
+    let selectionDegraded = false;
+    let usedSelection = selection;
+    let askRejected = false;
+    let response = await requestCredentialWithRetry(
       {
-        ask: h,
-        selection: s,
+        ask: askForWrite,
+        selection,
       },
       this.credentials,
     );
-    if (h && R.ok && R.status >= 400 && R.status < 500 && R.status !== 429 && R.status !== 401) {
+    if (
+      askForWrite &&
+      response.ok &&
+      response.status >= 400 &&
+      response.status < 500 &&
+      response.status !== 429 &&
+      response.status !== 401
+    ) {
       logFeatureSad("org_memory_writes", "ask_rejected");
-      S = true;
-      R = await requestCredentialWithRetry(
+      askRejected = true;
+      response = await requestCredentialWithRetry(
         {
           ask: false,
-          selection: s,
+          selection,
         },
         this.credentials,
       );
     }
-    if (R.ok && R.status === 400 && s !== null && generation === this.generation) {
-      logFeatureSad("org_memory_picker", isSiloId(s) ? "silo_selection_degraded" : "selection_degraded");
-      w = null;
-      y = true;
-      R = await requestCredentialWithRetry(
+    if (response.ok && response.status === 400 && selection !== null && generation === this.generation) {
+      logFeatureSad(
+        "org_memory_picker",
+        isSiloId(selection) ? "silo_selection_degraded" : "selection_degraded",
+      );
+      usedSelection = null;
+      selectionDegraded = true;
+      response = await requestCredentialWithRetry(
         {
           ask: false,
           selection: null,
         },
         this.credentials,
       );
-      S = S || h;
+      askRejected = askRejected || askForWrite;
     }
-    if (!R.ok) {
-      if (R.reason === "no-auth") {
-        if (generation !== this.generation) return this.renegotiate(e);
+    if (!response.ok) {
+      if (response.reason === "no-auth") {
+        if (generation !== this.generation) return this.renegotiate(options);
         logFeatureBad("org_memory_credential", "no_oauth");
-        throw new MemoryPermanentError("no_oauth", `org memory credential: ${R.detail}`);
+        throw new MemoryPermanentError("no_oauth", `org memory credential: ${response.detail}`);
       }
       logFeatureSad("org_memory_credential", "gate_skip");
-      throw new MemoryUnavailableError(`org memory credential: ${R.reason}`);
+      throw new MemoryUnavailableError(`org memory credential: ${response.reason}`);
     }
-    if (R.status === 429 || R.status >= 500) {
-      logFeatureSad("org_memory_credential", `http_${R.status}`);
-      throw new MemoryUnavailableError(`org memory credential: HTTP ${R.status}`);
+    if (response.status === 429 || response.status >= 500) {
+      logFeatureSad("org_memory_credential", `http_${response.status}`);
+      throw new MemoryUnavailableError(`org memory credential: HTTP ${response.status}`);
     }
-    if (R.status === 404 && w !== null && generation === this.generation) {
-      let L = await this.negotiate({
-        skipAsk: (e?.skipAsk ?? false) || S || h,
+    if (response.status === 404 && usedSelection !== null && generation === this.generation) {
+      let result = await this.negotiate({
+        skipAsk: (options?.skipAsk ?? false) || askRejected || askForWrite,
         skipSelection: true,
       });
-      if (generation !== this.generation) return this.renegotiate(e);
-      dropSavedSelection(w, this.storageV5);
-      let j = {
-        ...L,
+      if (generation !== this.generation) return this.renegotiate(options);
+      dropSavedSelection(usedSelection, this.storageV5);
+      let degradedResult = {
+        ...result,
         degraded: true,
       };
-      this.lastMintResult = j;
-      return j;
+      this.lastMintResult = degradedResult;
+      return degradedResult;
     }
-    if (R.status >= 400) {
-      if (generation !== this.generation) return this.renegotiate(e);
-      logFeatureBad("org_memory_credential", `http_${R.status}`);
-      throw new MemoryPermanentError(`http_${R.status}`, `org memory credential: HTTP ${R.status}`);
+    if (response.status >= 400) {
+      if (generation !== this.generation) return this.renegotiate(options);
+      logFeatureBad("org_memory_credential", `http_${response.status}`);
+      throw new MemoryPermanentError(
+        `http_${response.status}`,
+        `org memory credential: HTTP ${response.status}`,
+      );
     }
-    let O = this.parseAndCache(R.data, generation, {
+    let parsed = this.parseAndCache(response.data, generation, {
       malformed: "malformed_response",
     });
-    if (generation !== this.generation) return this.renegotiate(e);
-    let P = {
-      authorization: O.authorization,
+    if (generation !== this.generation) return this.renegotiate(options);
+    let result = {
+      authorization: parsed.authorization,
       request: {
-        writeAccess: h && !S,
-        selection: w,
+        writeAccess: askForWrite && !askRejected,
+        selection: usedSelection,
       },
-      degraded: y || S,
+      degraded: selectionDegraded || askRejected,
     };
     if (generation === this.generation) {
-      this.lastMintSelectionDegraded = y;
-      this.lastMintResult = P;
-      recordVerdict(O.stores, h, {
-        clampRo: !h || S,
-        privateCandidate: isSelectionPrivate(w),
+      this.lastMintSelectionDegraded = selectionDegraded;
+      this.lastMintResult = result;
+      recordVerdict(parsed.stores, askForWrite, {
+        clampRo: !askForWrite || askRejected,
+        privateCandidate: isSelectionPrivate(usedSelection),
       });
     }
     logFeatureOk("org_memory_credential");
-    return P;
+    return result;
   }
-  async renew(e) {
+  async renew(request) {
     let generation = this.generation;
-    let r = "org memory credential renewal";
-    let s = e.writeAccess && isOrgMemoryWriteOptedIn();
-    let h = await requestCredentialWithRetry(
+    let scopeLabel = "org memory credential renewal";
+    let writeAccess = request.writeAccess && isOrgMemoryWriteOptedIn();
+    let response = await requestCredentialWithRetry(
       {
-        ask: s,
-        selection: e.selection,
+        ask: writeAccess,
+        selection: request.selection,
       },
       this.credentials,
     );
-    if (!h.ok) {
-      if (h.reason === "no-auth") {
+    if (!response.ok) {
+      if (response.reason === "no-auth") {
         if (generation !== this.generation) {
           logFeatureSad("org_memory_credential", "renewal_superseded");
           throw new MemoryUnavailableError("org memory credential renewal: superseded by a credential clear");
         }
         logFeatureBad("org_memory_credential", "renewal_no_oauth");
-        throw new MemoryPermanentError("renewal_no_oauth", `org memory credential renewal: ${h.detail}`);
+        throw new MemoryPermanentError(
+          "renewal_no_oauth",
+          `org memory credential renewal: ${response.detail}`,
+        );
       }
       logFeatureSad("org_memory_credential", "renewal_gate_skip");
-      throw new MemoryUnavailableError(`org memory credential renewal: ${h.reason}`);
+      throw new MemoryUnavailableError(`org memory credential renewal: ${response.reason}`);
     }
-    if (h.status === 401 || h.status === 429 || h.status >= 500) {
-      logFeatureSad("org_memory_credential", `renewal_http_${h.status}`);
-      throw new MemoryUnavailableError(`org memory credential renewal: HTTP ${h.status}`);
+    if (response.status === 401 || response.status === 429 || response.status >= 500) {
+      logFeatureSad("org_memory_credential", `renewal_http_${response.status}`);
+      throw new MemoryUnavailableError(`org memory credential renewal: HTTP ${response.status}`);
     }
-    if (h.status >= 400) {
+    if (response.status >= 400) {
       if (generation !== this.generation) {
         logFeatureSad("org_memory_credential", "renewal_superseded");
         throw new MemoryUnavailableError("org memory credential renewal: superseded by a credential clear");
       }
       if (generation === this.generation) parkOrgMemoryDecision("renewal_refused");
       logFeatureSad("org_memory_credential", "renewal_refused");
-      throw new MemoryPermanentError("renewal_refused", `org memory credential renewal: HTTP ${h.status}`);
+      throw new MemoryPermanentError(
+        "renewal_refused",
+        `org memory credential renewal: HTTP ${response.status}`,
+      );
     }
-    let y = this.parseAndCache(h.data, generation, {
+    let parsed = this.parseAndCache(response.data, generation, {
       malformed: "renewal_malformed_response",
     });
-    let w = {
-      authorization: y.authorization,
-      request: e,
+    let result = {
+      authorization: parsed.authorization,
+      request,
       degraded: false,
     };
     if (generation === this.generation) {
-      this.lastMintResult = w;
-      recordVerdict(y.stores, s, {
-        clampRo: !s,
-        privateCandidate: isSelectionPrivate(e.selection),
+      this.lastMintResult = result;
+      recordVerdict(parsed.stores, writeAccess, {
+        clampRo: !writeAccess,
+        privateCandidate: isSelectionPrivate(request.selection),
       });
     }
     logFeatureOk("org_memory_credential");
-    return w;
+    return result;
   }
-  renegotiate(e) {
-    return getOrgMemoryDecision().state === "undecided" ? this.negotiate(e) : this.routedMint();
+  renegotiate(options) {
+    return getOrgMemoryDecision().state === "undecided" ? this.negotiate(options) : this.routedMint();
   }
   routedMint() {
     let orgMemoryDecision = getOrgMemoryDecision();
@@ -338,11 +364,11 @@ class OrgMemoryCredential {
   }
   mintSingleFlight() {
     if (this.inflightMint) return this.inflightMint;
-    let e = this.routedMint().finally(() => {
-      if (this.inflightMint === e) this.inflightMint = null;
+    let mint = this.routedMint().finally(() => {
+      if (this.inflightMint === mint) this.inflightMint = null;
     });
-    this.inflightMint = e;
-    return e;
+    this.inflightMint = mint;
+    return mint;
   }
   negotiateSingleFlight() {
     let cached = this.cached;
@@ -350,9 +376,12 @@ class OrgMemoryCredential {
       return Promise.resolve(this.lastMintResult);
     return this.mintSingleFlight();
   }
-  async getAuthorization(e) {
-    if (e?.forceRefresh) {
-      if (e.failedAuthorization === undefined || this.cached?.authorization === e.failedAuthorization)
+  async getAuthorization(options) {
+    if (options?.forceRefresh) {
+      if (
+        options.failedAuthorization === undefined ||
+        this.cached?.authorization === options.failedAuthorization
+      )
         this.cached = null;
     }
     let cached = this.cached;
@@ -360,7 +389,7 @@ class OrgMemoryCredential {
     if (cached !== null && Date.now() < cached.expiresAtMs) {
       let generation = this.generation;
       return this.mintSingleFlight().then(
-        (s) => s.authorization,
+        (result) => result.authorization,
         (error) => {
           if (generation === this.generation) return cached.authorization;
           throw error;
@@ -383,7 +412,10 @@ class OrgMemoryCredential {
 /**
  * 按宿主保存的组织记忆凭据状态。
  */
-var orgMemoryCredentialState = new HostScoped(() => new OrgMemoryCredential());
+var orgMemoryCredentialState; // deferred: uses OrgMemoryCredential of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-82kqcve8.js:46610", () => {
+  orgMemoryCredentialState = new HostScoped(() => new OrgMemoryCredential());
+});
 //@ chunk-82kqcve8.js:46635-46672 placement
 /**
  * 取当前宿主的组织记忆凭据状态。
@@ -404,10 +436,10 @@ function negotiateOrgMemoryCredential(credentials, storageV5) {
   return orgMemoryCredentialState.negotiateSingleFlight();
 }
 //@ chunk-82kqcve8.js:46857-46941 placement
-function getOrgMemoryAuthorization(e) {
+function getOrgMemoryAuthorization(options) {
   let orgMemoryCredentialState = getOrgMemoryCredentialState();
   orgMemoryCredentialState.discardOnEndpointChange();
-  return orgMemoryCredentialState.getAuthorization(e);
+  return orgMemoryCredentialState.getAuthorization(options);
 }
 //@ chunk-82kqcve8.js:46941-46971 placement
 function clearOrgMemoryCredential() {

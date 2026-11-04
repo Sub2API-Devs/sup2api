@@ -19,13 +19,13 @@ var AUTONOMOUS_LOOP_PROMPT = "<<autonomous-loop>>";
 var AUTONOMOUS_LOOP_DYNAMIC_PROMPT = "<<autonomous-loop-dynamic>>";
 //@ chunk-b56wj4av.js:311-963 placement
 function wakeupPreArmParagraph({ preArmStatus, briefMode }) {
-  let o = briefMode
+  let updateRule = briefMode
     ? `This session is in brief mode: plain response text is treated as unread \u2014 send the update via ${BRIEF_TOOL_NAME} with \`status: 'proactive'\`; an update left in plain text or thinking never reaches the user.`
     : "This must be ordinary visible response text \u2014 the user cannot see your thinking/reasoning, so an update written only there is invisible to them.";
-  let s = preArmStatus
+  let timingRule = preArmStatus
     ? ` ${briefMode ? "Send" : "Write"} it immediately BEFORE calling ${SCHEDULE_WAKEUP_TOOL_NAME} \u2014 on this model the turn ends as soon as that tool returns, so an update after the call never goes out.`
     : " Make it the last thing in the turn, then end the turn.";
-  return `${o}${s}`;
+  return `${updateRule}${timingRule}`;
 }
 //@ chunk-b56wj4av.js:963-1212 placement
 function loopOutcomeInstruction({ briefMode }) {
@@ -82,12 +82,12 @@ One short sentence on what you chose and why. Goes to telemetry and is shown bac
 var SCHEDULE_WAKEUP_PROMPT_SUFFIX =
   'Set `noop: true` if nothing changed \u2014 you checked and there\'s nothing to report ("no change", "still waiting", "quiet hold"). Set `noop: false` if something happened worth keeping \u2014 you edited a file, posted a message, advanced state, or surfaced a finding. Consecutive `noop: true` ticks are collapsed in the user\'s terminal view and tracked as a streak, so long quiet holds stay legible to the user without scrolling. Omit `noop` when stopping (`stop: true`).';
 //@ chunk-b56wj4av.js:7267-7333 placement
-function scheduleWakeupPrompt(e) {
+function scheduleWakeupPrompt(loopState) {
   return `${SCHEDULE_WAKEUP_PROMPT_BASE}
 
 ${SCHEDULE_WAKEUP_PROMPT_SUFFIX}
 
-${e === true ? LOOP_ON_INSTRUCTION : e === false ? LOOP_OFF_INSTRUCTION : LOOP_UNSET_INSTRUCTION}
+${loopState === true ? LOOP_ON_INSTRUCTION : loopState === false ? LOOP_OFF_INSTRUCTION : LOOP_UNSET_INSTRUCTION}
 
 ${WAKEUP_PRE_ARM_PARAGRAPH}
 `;

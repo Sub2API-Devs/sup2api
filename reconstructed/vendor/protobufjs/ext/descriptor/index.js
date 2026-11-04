@@ -5,7 +5,7 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS as x } from "../../../../runtime/bun-runtime.js";
 import { qs } from "../../src/index.js";
 import { oo } from "../../google/protobuf/descriptor.json.js";
 
@@ -128,22 +128,26 @@ var uh = x(function (cjsExports, cjsModule) {
     var descriptor = cjsExports.DescriptorProto.create({
       name: this.name,
     });
-    var i;
-    for (i = 0; i < this.fieldsArray.length; ++i) {
+    var idx;
+    for (idx = 0; idx < this.fieldsArray.length; ++idx) {
       var fieldDescriptor;
-      descriptor.field.push((fieldDescriptor = this._fieldsArray[i].toDescriptor(edition)));
-      if (this._fieldsArray[i] instanceof MapField) {
+      descriptor.field.push((fieldDescriptor = this._fieldsArray[idx].toDescriptor(edition)));
+      if (this._fieldsArray[idx] instanceof MapField) {
         var keyType = toDescriptorType(
-          this._fieldsArray[i].keyType,
-          this._fieldsArray[i].resolvedKeyType,
+          this._fieldsArray[idx].keyType,
+          this._fieldsArray[idx].resolvedKeyType,
           false,
         );
-        var valueType = toDescriptorType(this._fieldsArray[i].type, this._fieldsArray[i].resolvedType, false);
+        var valueType = toDescriptorType(
+          this._fieldsArray[idx].type,
+          this._fieldsArray[idx].resolvedType,
+          false,
+        );
         var valueTypeName =
           valueType === 11 || valueType === 14
-            ? (this._fieldsArray[i].resolvedType &&
-                shortname(this.parent, this._fieldsArray[i].resolvedType)) ||
-              this._fieldsArray[i].type
+            ? (this._fieldsArray[idx].resolvedType &&
+                shortname(this.parent, this._fieldsArray[idx].resolvedType)) ||
+              this._fieldsArray[idx].type
             : undefined;
         descriptor.nestedType.push(
           cjsExports.DescriptorProto.create({
@@ -170,31 +174,31 @@ var uh = x(function (cjsExports, cjsModule) {
         );
       }
     }
-    for (i = 0; i < this.oneofsArray.length; ++i)
-      descriptor.oneofDecl.push(this._oneofsArray[i].toDescriptor());
-    for (i = 0; i < this.nestedArray.length; ++i)
-      if (this._nestedArray[i] instanceof Field)
-        descriptor.field.push(this._nestedArray[i].toDescriptor(edition));
-      else if (this._nestedArray[i] instanceof Type)
-        descriptor.nestedType.push(this._nestedArray[i].toDescriptor(edition));
-      else if (this._nestedArray[i] instanceof Enum)
-        descriptor.enumType.push(this._nestedArray[i].toDescriptor());
+    for (idx = 0; idx < this.oneofsArray.length; ++idx)
+      descriptor.oneofDecl.push(this._oneofsArray[idx].toDescriptor());
+    for (idx = 0; idx < this.nestedArray.length; ++idx)
+      if (this._nestedArray[idx] instanceof Field)
+        descriptor.field.push(this._nestedArray[idx].toDescriptor(edition));
+      else if (this._nestedArray[idx] instanceof Type)
+        descriptor.nestedType.push(this._nestedArray[idx].toDescriptor(edition));
+      else if (this._nestedArray[idx] instanceof Enum)
+        descriptor.enumType.push(this._nestedArray[idx].toDescriptor());
     if (this.extensions)
-      for (i = 0; i < this.extensions.length; ++i)
+      for (idx = 0; idx < this.extensions.length; ++idx)
         descriptor.extensionRange.push(
           cjsExports.DescriptorProto.ExtensionRange.create({
-            start: this.extensions[i][0],
-            end: this.extensions[i][1],
+            start: this.extensions[idx][0],
+            end: this.extensions[idx][1],
           }),
         );
     if (this.reserved)
-      for (i = 0; i < this.reserved.length; ++i)
-        if (typeof this.reserved[i] === "string") descriptor.reservedName.push(this.reserved[i]);
+      for (idx = 0; idx < this.reserved.length; ++idx)
+        if (typeof this.reserved[idx] === "string") descriptor.reservedName.push(this.reserved[idx]);
         else
           descriptor.reservedRange.push(
             cjsExports.DescriptorProto.ReservedRange.create({
-              start: this.reserved[i][0],
-              end: this.reserved[i][1],
+              start: this.reserved[idx][0],
+              end: this.reserved[idx][1],
             }),
           );
     descriptor.options = toDescriptorOptions(this.options, cjsExports.MessageOptions);
@@ -500,8 +504,8 @@ var uh = x(function (cjsExports, cjsModule) {
   }
   function fromDescriptorOptionsRecursive(obj, type) {
     var val = {};
-    for (var i = 0, field, key; i < type.fieldsArray.length; ++i) {
-      if ((key = (field = type._fieldsArray[i]).name) === "uninterpretedOption") continue;
+    for (var idx = 0, field, key; idx < type.fieldsArray.length; ++idx) {
+      if ((key = (field = type._fieldsArray[idx]).name) === "uninterpretedOption") continue;
       if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
       var newKey = underScore(key);
       if (field.resolvedType instanceof Type)

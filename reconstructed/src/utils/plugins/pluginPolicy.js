@@ -42,26 +42,26 @@ function computeDependencyClosure(rootId, plugins) {
   let bySource = new Map(plugins.map((plugin) => [plugin.source, plugin]));
   let byName = new Map();
   for (let plugin of plugins) {
-    let d = byName.get(plugin.name);
-    if (!d || (!d.enabled && plugin.enabled)) byName.set(plugin.name, plugin);
+    let plugin_2 = byName.get(plugin.name);
+    if (!plugin_2 || (!plugin_2.enabled && plugin.enabled)) byName.set(plugin.name, plugin);
   }
-  let resolvePlugin = (i, d) => {
-    let g = canonicalPluginId(i);
-    let { name: p, marketplace } = parsePluginIdentifier(g);
+  let resolvePlugin = (id, declaringId) => {
+    let canonical = canonicalPluginId(id);
+    let { name, marketplace } = parsePluginIdentifier(canonical);
     if (!marketplace) {
-      let M = bySource.get(g) ?? byName.get(g);
-      let k = builtinQualifiedId(g);
-      let m = k === undefined ? undefined : bySource.get(k);
-      return M?.enabled || !m?.enabled ? (M ?? m) : m;
+      let byNameHit = bySource.get(canonical) ?? byName.get(canonical);
+      let builtinId = builtinQualifiedId(canonical);
+      let builtinPlugin = builtinId === undefined ? undefined : bySource.get(builtinId);
+      return byNameHit?.enabled || !builtinPlugin?.enabled ? (byNameHit ?? builtinPlugin) : builtinPlugin;
     }
-    let h = bySource.get(g);
-    if (h?.enabled) return h;
-    let S = bySource.get(`${p}@${INLINE_PLUGIN_MARKETPLACE}`);
-    if (S?.enabled) return S;
-    let y = d === undefined ? undefined : toSyncedDependencyId(g, d);
-    let w = y === undefined ? undefined : bySource.get(y);
-    if (w?.enabled) return w;
-    return h ?? S ?? w;
+    let bySourceHit = bySource.get(canonical);
+    if (bySourceHit?.enabled) return bySourceHit;
+    let inlinePlugin = bySource.get(`${name}@${INLINE_PLUGIN_MARKETPLACE}`);
+    if (inlinePlugin?.enabled) return inlinePlugin;
+    let syncedId = declaringId === undefined ? undefined : toSyncedDependencyId(canonical, declaringId);
+    let syncedPlugin = syncedId === undefined ? undefined : bySource.get(syncedId);
+    if (syncedPlugin?.enabled) return syncedPlugin;
+    return bySourceHit ?? inlinePlugin ?? syncedPlugin;
   };
   let closure = [];
   let missing = [];
@@ -75,14 +75,14 @@ function computeDependencyClosure(rootId, plugins) {
       }))
     : [];
   while (queue.length > 0) {
-    let i = queue.shift();
-    if (!i) break;
-    let d = qualifyDependency(i.id, i.declaringId);
-    let plugin = resolvePlugin(d, i.declaringId);
+    let entry = queue.shift();
+    if (!entry) break;
+    let dependencyId = qualifyDependency(entry.id, entry.declaringId);
+    let plugin = resolvePlugin(dependencyId, entry.declaringId);
     if (!plugin) {
-      if (!seen.has(d)) {
-        seen.add(d);
-        missing.push(d);
+      if (!seen.has(dependencyId)) {
+        seen.add(dependencyId);
+        missing.push(dependencyId);
       }
       continue;
     }
@@ -104,9 +104,9 @@ function computeDependencyClosure(rootId, plugins) {
 /**
  * builtinQualifiedId：内置插件的规范 id。
  */
-function builtinQualifiedId(e) {
-  let n = externalSkillToPluginName(e);
-  return n === e ? undefined : `${n}@${BUILTIN}`;
+function builtinQualifiedId(name) {
+  let externalName = externalSkillToPluginName(name);
+  return externalName === name ? undefined : `${externalName}@${BUILTIN}`;
 }
 //@ chunk-czx62zen.js:13284-13352 placement
 /**
@@ -124,10 +124,10 @@ function policyEnabledPluginNameSet() {
  */
 function getPolicyAllowedSet() {
   let settingsForSource = getSettingsForSource("policySettings");
-  let n = assuredPolicySettings();
-  let o = policyEnabledPluginIds(settingsForSource);
-  let s = n === settingsForSource ? null : policyEnabledPluginIds(n);
-  return o && s ? new Set([...o, ...s]) : (o ?? s);
+  let assured = assuredPolicySettings();
+  let fromPolicy = policyEnabledPluginIds(settingsForSource);
+  let fromAssured = assured === settingsForSource ? null : policyEnabledPluginIds(assured);
+  return fromPolicy && fromAssured ? new Set([...fromPolicy, ...fromAssured]) : (fromPolicy ?? fromAssured);
 }
 export {
   getPolicyAllowedSet,

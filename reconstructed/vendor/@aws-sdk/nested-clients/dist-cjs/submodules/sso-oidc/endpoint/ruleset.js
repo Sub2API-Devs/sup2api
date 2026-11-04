@@ -5,10 +5,10 @@
  * pieces: chunk-ddzww9ex.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-ddzww9ex.js:1796-3961 cjs-fingerprint
-var require_ruleset = x(function (cjsExports) {
+var require_ruleset = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

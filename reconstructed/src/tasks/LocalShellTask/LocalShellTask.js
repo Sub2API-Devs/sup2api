@@ -9,6 +9,11 @@
  * attribution: fingerprint 8, placement 6, callgraph-fingerprint 3, layout 13, callgraph-witnessed 2, affinity 2, sole-consumer 1
  */
 import {
+  INTERACTIVE_PROMPT_PATTERNS,
+  classifyBackgroundCommand,
+} from "../../tools/BashTool/bashTelemetry.js";
+import { BACKGROUND_COMMAND_PREFIX } from "../../constants/xml.js";
+import {
   getTaskOutputPath,
   appendTaskOutputTrailer,
   evictTaskOutput,
@@ -47,19 +52,42 @@ import {
 } from "../LocalAgentTask/LocalAgentTask.js";
 import { createTaskStateBase } from "../../Task.js";
 import { getCwd } from "../../utils/cwd.js";
-import { isRunSkillCommand } from "../../services/pluginTest/claudeTestPlugin.js";
+import { isRunSkillCommand } from "../../plugins/bundled/claudeTest/constants.js";
 import { shouldKillShellForMemoryPressure } from "./memoryPressure.js";
 import { identityAgentId2 } from "../../utils/agentId.js";
 import { isLocalAgent } from "../../state/teammateViewHelpers.js";
 import { interpretWithAndGatedRetry } from "../../tools/BashTool/commandSemantics.js";
 import { interpretPowerShellResult } from "../../tools/PowerShellTool/commandTelemetry.js";
-import {
-  classifyBackgroundCommand,
-  INTERACTIVE_PROMPT_PATTERNS,
-} from "../../tools/BashTool/bashTelemetry.js";
 import { UNLIMITED_RATE_LIMITER } from "../taskLoopRegistry.js";
-import { BACKGROUND_COMMAND_PREFIX } from "../../constants/xml.js";
 
+//@ chunk-fym4r1th.js:50436-50521 fingerprint = looksLikePrompt (1)
+/**
+ * 输出最后一行是否像交互式提示（匹配一组提示正则）。
+ */
+function looksLikePrompt(tail) {
+  let lastLine =
+    tail
+      .trimEnd()
+      .split(
+        `
+`,
+      )
+      .pop() ?? "";
+  return INTERACTIVE_PROMPT_PATTERNS.some((pattern) => pattern.test(lastLine));
+}
+//@ chunk-fym4r1th.js:50521-50698 affinity
+/**
+ * 卡住提醒：命令可能停在交互式提示，建议停止并用管道输入或非交互参数重跑。
+ */
+var INTERACTIVE_PROMPT_HINT =
+  "The command is likely blocked on an interactive prompt. Stop this task and re-run with piped input (e.g., `echo y | command`) or a non-interactive flag if one exists.";
+//@ chunk-fym4r1th.js:50698-50778 sole-consumer
+/**
+ * 后台命令疑似等待交互输入时的提示文本。
+ */
+function shellAwaitingInputText(description) {
+  return `${BACKGROUND_COMMAND_PREFIX}"${description}" appears to be waiting for interactive input`;
+}
 //@ chunk-e6aww6q8.js:4745578-4745856 fingerprint = enqueueShellNotification (0.511)
 /**
  * Monitor 任务结束文案：无输出结束 / stream ended / script failed / stopped。
@@ -128,7 +156,7 @@ function finishLocalShellTask({
   let { claimed, task } = claimTaskNotification(taskId, taskRegistry);
   if (!claimed) return;
   let stopExplanation = stopCause === "deadline" ? getBackgroundDeadlineNote() : undefined;
-  let Ee =
+  let snapshot =
     isInputHoldOn() && kind !== "monitor"
       ? buildShellTaskResult({
           taskId,
@@ -142,9 +170,9 @@ function finishLocalShellTask({
           stopExplanation,
         })
       : undefined;
-  if (Ee) {
+  if (snapshot) {
     getTaskRunState().withdrawShellNotification ??= consumeTaskNotifications;
-    getTaskRunState().rememberBashTaskSnapshot(taskId, Ee, agentId);
+    getTaskRunState().rememberBashTaskSnapshot(taskId, snapshot, agentId);
   }
   if (!task?.isAdopted)
     appendTaskOutputTrailer(
@@ -180,7 +208,7 @@ function finishLocalShellTask({
     status,
     summary,
     outputFile,
-    snapshot: Ee,
+    snapshot,
     stopCause,
     stopExplanation,
   };
@@ -189,94 +217,98 @@ function finishLocalShellTask({
 /**
  * 把队列中该任务待送达的通知作为工具结果消费掉（并暂时移除代理保活原因），返回撤销函数（恢复保活并重新入队）。
  */
-function consumeTaskNotifications(e, n, r) {
-  let s = n ?? mainAgentId();
-  let h = commandQueueManager();
-  let filtered = h
+function consumeTaskNotifications(taskId, agentId, taskRegistry) {
+  let recipientId = agentId ?? mainAgentId();
+  let queue = commandQueueManager();
+  let filtered = queue
     .getCommandQueue()
     .filter(
-      (S) =>
-        S.mode === "task-notification" && S.taskId === e && S.agentId === s && S.taskDelivery !== undefined,
+      (queued) =>
+        queued.mode === "task-notification" &&
+        queued.taskId === taskId &&
+        queued.agentId === recipientId &&
+        queued.taskDelivery !== undefined,
     );
   if (filtered.length === 0) return;
-  h.consume(filtered, {
+  queue.consume(filtered, {
     reason: "delivered_as_tool_result",
   });
-  if (n !== undefined) removeKeepaliveReason(n, `bash:${e}`, r);
+  if (agentId !== undefined) removeKeepaliveReason(agentId, `bash:${taskId}`, taskRegistry);
   return () => {
-    if (n !== undefined) addAgentKeepaliveReason(n, `bash:${e}`, r);
-    filtered.forEach((S) => enqueuePendingNotification(S));
+    if (agentId !== undefined) addAgentKeepaliveReason(agentId, `bash:${taskId}`, taskRegistry);
+    filtered.forEach((notification) => enqueuePendingNotification(notification));
   };
 }
 //@ chunk-e6aww6q8.js:4748178-4748443 placement
-function stopShellTaskWithNotice(e, stopCause) {
+function stopShellTaskWithNotice(request, stopCause) {
   try {
-    let r = finishLocalShellTask({
-      ...e,
+    let summary = finishLocalShellTask({
+      ...request,
       status: "killed",
       exitCode: undefined,
       stopCause,
     });
-    if (r) {
-      e.taskRegistry.update(e.taskId, (s) => ({
-        ...s,
+    if (summary) {
+      request.taskRegistry.update(request.taskId, (task) => ({
+        ...task,
         terminal: {
-          summary: r.summary,
-          output_file: r.outputFile,
+          summary: summary.summary,
+          output_file: summary.outputFile,
         },
       }));
-      enqueuePendingNotification(enqueueTaskNotification(r), {
+      enqueuePendingNotification(enqueueTaskNotification(summary), {
         turnAttribution: "inherit",
       });
     }
   } finally {
-    killTask(e.taskId, e.taskRegistry);
+    killTask(request.taskId, request.taskRegistry);
   }
 }
 //@ chunk-e6aww6q8.js:4748443-4748902 placement
 /**
  * 后台 shell 到达截止时间仍在运行时停止它并发通知，记录事件。
  */
-function stopAtBackgroundDeadline(e, n, r) {
+function stopAtBackgroundDeadline(request, deadlineMs, options) {
   try {
     if (!isBackgroundTimeoutPromptEnabled()) return;
-    let s = e.taskRegistry.get(e.taskId);
+    let task = request.taskRegistry.get(request.taskId);
     if (
-      !isLocalShellTask(s) ||
-      s.status !== "running" ||
-      s.notified ||
-      s.shellCommand?.status !== "backgrounded"
+      !isLocalShellTask(task) ||
+      task.status !== "running" ||
+      task.notified ||
+      task.shellCommand?.status !== "backgrounded"
     )
       return;
-    r.cause = "deadline";
-    stopShellTaskWithNotice(e, "deadline");
+    options.cause = "deadline";
+    stopShellTaskWithNotice(request, "deadline");
     logFeatureOk("task_local_shell_background_deadline");
-    logForDebugging(`LocalShellTask ${e.taskId}: stopped at its ${n}ms background deadline`);
+    logForDebugging(`LocalShellTask ${request.taskId}: stopped at its ${deadlineMs}ms background deadline`);
   } catch (error) {
     logFeatureBad("task_local_shell_background_deadline", "threw");
-    logForDebugging(`LocalShellTask ${e.taskId}: stop at the background deadline failed`);
+    logForDebugging(`LocalShellTask ${request.taskId}: stop at the background deadline failed`);
     logError(error);
   }
 }
 //@ chunk-e6aww6q8.js:4750942-4751077 placement
-function releaseShellKeepalive(e, n, r) {
-  let task = n ? r.get(n) : undefined;
+function releaseShellKeepalive(taskId, ownerAgentId, taskRegistry) {
+  let task = ownerAgentId ? taskRegistry.get(ownerAgentId) : undefined;
   if (!(
-    n !== undefined &&
+    ownerAgentId !== undefined &&
     isConcurrentShoreOn() &&
     isBackgroundedSubagent(task) &&
     (task.status === "running" || hasCompletedWithFindings(task)) &&
-    hasQueuedTaskNotification(n, e)
+    hasQueuedTaskNotification(ownerAgentId, taskId)
   ))
-    removeKeepaliveReason(n, `bash:${e}`, r);
+    removeKeepaliveReason(ownerAgentId, `bash:${taskId}`, taskRegistry);
 }
 //@ chunk-e6aww6q8.js:4751077-4751839 placement
 /**
  * 把正在运行的 shell 命令注册为后台 local_bash 任务：创建任务状态、按需注册内存压力终止、转后台并启动卡住检测与后台跟踪，返回任务 ID 与结束 Promise。
  */
-async function backgroundShellCommand(e, n) {
-  let { command, description, shellCommand, toolUseId, agentId, kind, timeout, backgroundTrigger, shell } = e;
-  let { taskRegistry } = n;
+async function backgroundShellCommand(request, context) {
+  let { command, description, shellCommand, toolUseId, agentId, kind, timeout, backgroundTrigger, shell } =
+    request;
+  let { taskRegistry } = context;
   let { taskOutput } = shellCommand;
   let taskId = taskOutput.taskId;
   let taskState = {
@@ -339,7 +371,7 @@ async function backgroundShellCommand(e, n) {
  */
 function spawnShellTask(input, taskRegistry) {
   let { taskId, command, description, toolUseId, kind, agentId } = input;
-  let L = {
+  let taskState = {
     ...createTaskStateBase(taskId, "local_bash", description, toolUseId),
     type: "local_bash",
     status: "running",
@@ -353,7 +385,7 @@ function spawnShellTask(input, taskRegistry) {
     kind,
     isAdopted: true,
   };
-  taskRegistry.register(L);
+  taskRegistry.register(taskState);
   input.shellCommand.result.then(async (result) => {
     await flushAndCleanup(input.shellCommand);
     let status = result.interrupted ? "killed" : "completed";
@@ -463,8 +495,8 @@ function hasForegroundTasks(appState) {
  */
 function backgroundAll(taskRegistry) {
   let filtered = Object.values(taskRegistry.all()).filter(isForegroundTask);
-  for (let r of filtered) if (r.type === "local_bash") backgroundShellTask(r.id, taskRegistry);
-  for (let r of filtered) if (r.type !== "local_bash") moveAgentToBackground(r.id, taskRegistry);
+  for (let task of filtered) if (task.type === "local_bash") backgroundShellTask(task.id, taskRegistry);
+  for (let task of filtered) if (task.type !== "local_bash") moveAgentToBackground(task.id, taskRegistry);
   logFeatureOk("task_local_shell_background_all");
 }
 //@ chunk-e6aww6q8.js:4753659-4753729 layout
@@ -539,8 +571,8 @@ function backgroundExistingForegroundTask(
     })
   )
     return false;
-  let w = taskRegistry.get(taskId);
-  let agentId = w && isLocalShellTask(w) ? w.agentId : undefined;
+  let existing = taskRegistry.get(taskId);
+  let agentId = existing && isLocalShellTask(existing) ? existing.agentId : undefined;
   taskRegistry.update(taskId, (prev) => {
     if (prev.isBackgrounded) return prev;
     return {
@@ -563,7 +595,7 @@ function backgroundExistingForegroundTask(
   backgroundTask({
     shellCommand,
     taskId,
-    bashCommand: isLocalShellTask(w) && w.shell === "bash" ? w.command : undefined,
+    bashCommand: isLocalShellTask(existing) && existing.shell === "bash" ? existing.command : undefined,
     description,
     kind: undefined,
     toolUseId,
@@ -581,7 +613,7 @@ function backgroundExistingForegroundTask(
 async function readShellOutputSoFar(taskId, maxBytes) {
   try {
     let verifiedTaskOutputTail = await getVerifiedTaskOutputTail(taskId, maxBytes);
-    let s =
+    let content =
       verifiedTaskOutputTail.omittedBytes > 0
         ? verifiedTaskOutputTail.content.slice(
             verifiedTaskOutputTail.content.indexOf(`
@@ -591,7 +623,7 @@ async function readShellOutputSoFar(taskId, maxBytes) {
     return formatTaskOutputTail(
       {
         ...verifiedTaskOutputTail,
-        content: s || verifiedTaskOutputTail.content,
+        content: content || verifiedTaskOutputTail.content,
       },
       getTaskOutputPath(taskId),
     );
@@ -607,14 +639,14 @@ async function readShellOutputSoFar(taskId, maxBytes) {
  * 标记 shell 任务已通知并写入最终状态（按退出结果算 completed/failed），记计数；返回是否由本次写入。
  */
 function markTaskNotified(taskId, result, taskRegistry) {
-  let s;
-  taskRegistry.update(taskId, (h) => {
-    if (h.notified) return h;
-    s = getShellExitStatus(result, h).status;
+  let status;
+  taskRegistry.update(taskId, (task) => {
+    if (task.notified) return task;
+    status = getShellExitStatus(result, task).status;
     return {
-      ...h,
+      ...task,
       notified: true,
-      status: s,
+      status,
       result: {
         code: result.code,
         interrupted: result.interrupted,
@@ -623,21 +655,21 @@ function markTaskNotified(taskId, result, taskRegistry) {
       endTime: Date.now(),
     };
   });
-  if (s === "completed") logFeatureOk("task_local_shell");
-  else if (s === "failed") logFeatureBad("task_local_shell", "task_local_shell_failed");
-  return s !== undefined;
+  if (status === "completed") logFeatureOk("task_local_shell");
+  else if (status === "failed") logFeatureBad("task_local_shell", "task_local_shell_failed");
+  return status !== undefined;
 }
 //@ chunk-e6aww6q8.js:4755252-4755400 callgraph-witnessed = unregisterForeground (0.269)
 /**
  * 前台 shell 结束时注销：仍在前台且未通知的任务直接移除并发终止事件。
  */
 function unregisterForeground(taskId, status, taskRegistry) {
-  let s = taskRegistry.get(taskId);
-  if (!isLocalShellTask(s) || s.isBackgrounded || s.notified) return;
+  let task = taskRegistry.get(taskId);
+  if (!isLocalShellTask(task) || task.isBackgrounded || task.notified) return;
   taskRegistry.remove(taskId);
   emitTaskNotification(taskId, status, {
-    toolUseId: s.toolUseId,
-    summary: s.description,
+    toolUseId: task.toolUseId,
+    summary: task.description,
   });
 }
 //@ chunk-e6aww6q8.js:4755400-4755434 layout = resolveProvider (0.84)
@@ -652,14 +684,14 @@ var COMMAND_RESULT_INTERPRETERS = {
 /**
  * 是否是仍有活动（运行中或有存活子工作）的本地代理。
  */
-function isLiveLocalAgent(e) {
-  return isLocalAgent(e) && (e.status === "running" || hasCompletedWithFindings(e));
+function isLiveLocalAgent(task) {
+  return isLocalAgent(task) && (task.status === "running" || hasCompletedWithFindings(task));
 }
 //@ chunk-e6aww6q8.js:4755494-4755860 layout
 /**
  * 由命令结果确定任务状态：中断为 killed，无退出状态为 failed，否则按 shell 的结果解释器判断并附退出说明。
  */
-function getShellExitStatus(result, n) {
+function getShellExitStatus(result, shellCommand) {
   if (result.interrupted)
     return {
       status: "killed",
@@ -670,13 +702,13 @@ function getShellExitStatus(result, n) {
       status: "failed",
       exitNote: undefined,
     };
-  if (n?.shell === undefined)
+  if (shellCommand?.shell === undefined)
     return {
       status: result.code === 0 ? "completed" : "failed",
       exitNote: undefined,
     };
-  let { isError, message } = COMMAND_RESULT_INTERPRETERS[n.shell](
-    n.command,
+  let { isError, message } = COMMAND_RESULT_INTERPRETERS[shellCommand.shell](
+    shellCommand.command,
     result.code,
     result.stdout,
     result.stderr,
@@ -695,8 +727,8 @@ function getShellExitStatus(result, n) {
 /**
  * 把 shell 结束状态转成展示用状态（killed 记为 stopped）。
  */
-function shellStatusForDisplay(e, n) {
-  let { status } = getShellExitStatus(e, n);
+function shellStatusForDisplay(result, shellCommand) {
+  let { status } = getShellExitStatus(result, shellCommand);
   return status === "killed" ? "stopped" : status;
 }
 //@ chunk-e6aww6q8.js:4755933-4757064 callgraph-fingerprint = backgroundTask (0.234)
@@ -732,15 +764,15 @@ function backgroundTask({
     let { taskOutput } = shellCommand;
     let stdoutBytes = taskOutput.stdoutToFile ? undefined : taskOutput.pipedStdoutBytes;
     let outputPath = getTaskOutputPath(taskId);
-    taskRegistry.update(taskId, (We) => {
-      if (We.status === "killed") {
+    taskRegistry.update(taskId, (task) => {
+      if (task.status === "killed") {
         wasKilled = true;
-        return We;
+        return task;
       }
-      outcome = getShellExitStatus(result, We);
-      if (We.notified) return We;
+      outcome = getShellExitStatus(result, task);
+      if (task.notified) return task;
       return {
-        ...We,
+        ...task,
         status: outcome.status,
         result: {
           code: result.code,
@@ -819,34 +851,6 @@ async function flushAndCleanup(shellCommand) {
 function getAtExitBehavior(taskRegistry) {
   return taskRegistry === UNLIMITED_RATE_LIMITER ? "leave" : "kill";
 }
-//@ chunk-fym4r1th.js:50436-50521 fingerprint = looksLikePrompt (1)
-/**
- * 输出最后一行是否像交互式提示（匹配一组提示正则）。
- */
-function looksLikePrompt(tail) {
-  let lastLine =
-    tail
-      .trimEnd()
-      .split(
-        `
-`,
-      )
-      .pop() ?? "";
-  return INTERACTIVE_PROMPT_PATTERNS.some((n) => n.test(lastLine));
-}
-//@ chunk-fym4r1th.js:50521-50698 affinity
-/**
- * 卡住提醒：命令可能停在交互式提示，建议停止并用管道输入或非交互参数重跑。
- */
-var INTERACTIVE_PROMPT_HINT =
-  "The command is likely blocked on an interactive prompt. Stop this task and re-run with piped input (e.g., `echo y | command`) or a non-interactive flag if one exists.";
-//@ chunk-fym4r1th.js:50698-50778 sole-consumer
-/**
- * 后台命令疑似等待交互输入时的提示文本。
- */
-function shellAwaitingInputText(description) {
-  return `${BACKGROUND_COMMAND_PREFIX}"${description}" appears to be waiting for interactive input`;
-}
 //@ chunk-kxyd0g16.js:17376-17488 fingerprint = LocalShellTask (0.794)
 /**
  * LocalShellTask 任务实现：kill → killTask（来源为 client 时记 by=client）。
@@ -854,9 +858,9 @@ function shellAwaitingInputText(description) {
 var LocalShellTask = {
   name: "LocalShellTask",
   type: "local_bash",
-  async kill(taskId, setAppState, n, s, f, h) {
+  async kill(taskId, setAppState, unusedSetter, killedBy, runGuard, actor) {
     killTask(taskId, setAppState, {
-      by: h === "client" ? "client" : s,
+      by: actor === "client" ? "client" : killedBy,
     });
   },
 };

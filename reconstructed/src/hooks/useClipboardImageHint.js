@@ -11,19 +11,28 @@
 import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { isClipboardImageUnsupported } from "../utils/imagePaste.js";
 import { getShortcutDisplay } from "../keybindings/shortcutFormat.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-81qqq1aq.js:899-903 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-81qqq1aq.js:899", () => {
+  init_react_production();
+});
 //@ chunk-81qqq1aq.js:903-1467 fingerprint = useClipboardImageHint (0.747)
 var CLIPBOARD_IMAGE_HINT = "clipboard-image-hint";
 var CLIPBOARD_HINT_DELAY_MS = 1000;
 var CLIPBOARD_HINT_COOLDOWN_MS = 30000;
 var clipboardImageHintNoticeSpec = {
   id: "clipboard-image-hint",
-  deps: (t) => [t.isTerminalFocused, t.canPasteImages, t.addNotification, t.clock],
+  deps: (noticeState) => [
+    noticeState.isTerminalFocused,
+    noticeState.canPasteImages,
+    noticeState.addNotification,
+    noticeState.clock,
+  ],
   setup() {
     let lastFocusedRef = null;
-    let h = 0;
+    let lastHintAt = 0;
     let checkTimeoutRef = null;
     return ({ isTerminalFocused, canPasteImages, addNotification, clock }) => {
       let wasFocused = lastFocusedRef ?? isTerminalFocused;
@@ -33,9 +42,9 @@ var clipboardImageHintNoticeSpec = {
       checkTimeoutRef = clock.setTimeout(async () => {
         checkTimeoutRef = null;
         let now = Date.now();
-        if (now - h < CLIPBOARD_HINT_COOLDOWN_MS) return;
+        if (now - lastHintAt < CLIPBOARD_HINT_COOLDOWN_MS) return;
         if (await isClipboardImageUnsupported()) {
-          h = now;
+          lastHintAt = now;
           addNotification({
             key: CLIPBOARD_IMAGE_HINT,
             kind: "contextual",

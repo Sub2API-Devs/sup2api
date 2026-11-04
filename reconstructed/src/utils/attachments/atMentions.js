@@ -18,8 +18,8 @@ var WORD_BOUNDARY_PATTERN = String.raw`[\s${"\u3002\u3001\uFF1F\uFF01"}]`;
 /**
  * 判断某位置的字符是否为词字符（字母、数字或下划线）。
  */
-function isWordCharCodeAt(e, n) {
-  let code = e.charCodeAt(n);
+function isWordCharCodeAt(text, index) {
+  let code = text.charCodeAt(index);
   return (
     (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || code === 95 || (code >= 97 && code <= 122)
   );

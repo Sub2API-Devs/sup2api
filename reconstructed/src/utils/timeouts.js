@@ -55,8 +55,8 @@ function atLeastDefaultTimeout(backgroundLimitFlag, env) {
 /**
  * 仅当请求超时为正数时才返回它。
  */
-function timeoutWhenPositive(timeout, maxTimeoutMs) {
-  return timeout !== undefined && timeout > 0 ? maxTimeoutMs : undefined;
+function timeoutWhenPositive(timeout, positiveValue) {
+  return timeout !== undefined && timeout > 0 ? positiveValue : undefined;
 }
 //@ chunk-4khf94hy.js:691-702 placement
 var MIN_SHELL_TIMEOUT_MS = 2000;
@@ -72,9 +72,11 @@ function effectiveShellTimeoutMs({
   env = process.env,
 }) {
   if (!canAutoBackground) return requestedTimeoutMs;
-  let r = isMainAgent ? parseIntLoose(env.CLAUDE_CODE_AUTO_BACKGROUND_TIMEOUT_MS) : subagentCapMs;
-  if (isNaN(r) || r <= 0) return requestedTimeoutMs;
-  return Math.min(requestedTimeoutMs, Math.max(r, MIN_SHELL_TIMEOUT_MS));
+  let autoBackgroundMs = isMainAgent
+    ? parseIntLoose(env.CLAUDE_CODE_AUTO_BACKGROUND_TIMEOUT_MS)
+    : subagentCapMs;
+  if (isNaN(autoBackgroundMs) || autoBackgroundMs <= 0) return requestedTimeoutMs;
+  return Math.min(requestedTimeoutMs, Math.max(autoBackgroundMs, MIN_SHELL_TIMEOUT_MS));
 }
 export {
   getMaxBashTimeoutMs,

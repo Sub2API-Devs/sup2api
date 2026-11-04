@@ -44,7 +44,7 @@ import {
   projectScopeNotApprovedText,
 } from "../../services/mcp/mcpToggleMessages.js";
 import { classifyMcpAuthTarget, describeConnectError } from "../../services/mcp/auth.js";
-import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { isMcpIdentityIncomplete, identityEpoch } from "../../services/mcp/identityChange.js";
 import { logMCPDebug, logMCPError } from "../../utils/log.js";
 import { redactMcpErrorDetail } from "../../services/mcp/mcpServerOrigin.js";
@@ -54,35 +54,38 @@ import { errorMessage } from "../../utils/errors.js";
 /**
  * 为需要 OAuth 但未认证的 MCP 服务器生成占位工具 mcp__<服务器>__authenticate：调用时检查托管策略/禁用/项目审批/claude.ai 连接器/不支持的传输，启动（或复用 10 分钟内的）OAuth 流程并返回授权 URL；授权完成后在身份未变、服务器仍启用时重连并让连接接管真实工具。权限直接 allow。
  */
-function createMcpAuthTool(e, r, n) {
-  let transport = r.type ?? "stdio";
-  let location = n && n !== transport ? `${transport} at ${normalizeServerNameLong(n, 256)}` : transport;
+function createMcpAuthTool(serverName, config, locationHint) {
+  let transport = config.type ?? "stdio";
+  let location =
+    locationHint && locationHint !== transport
+      ? `${transport} at ${normalizeServerNameLong(locationHint, 256)}`
+      : transport;
   let description =
-    `The "${normalizeServerNameShort(e)}" MCP server (${location}) is installed but requires authentication. ` +
+    `The "${normalizeServerNameShort(serverName)}" MCP server (${location}) is installed but requires authentication. ` +
     "Call this tool to start the OAuth flow \u2014 you'll receive an authorization URL to share with the user. " +
     `Once the user completes authorization in their browser, the server's real tools will become ${toolsAvailableAutomaticallyText()}.`;
   return {
-    name: buildMcpToolName(e, AUTHENTICATE),
+    name: buildMcpToolName(serverName, AUTHENTICATE),
     isMcp: true,
     mcpInfo: {
-      serverName: e,
+      serverName,
       toolName: AUTHENTICATE,
       serverType: transport,
-      source: mcpServerSource(e, r),
-      ...(r.pluginSource !== undefined && {
-        pluginSource: r.pluginSource,
+      source: mcpServerSource(serverName, config),
+      ...(config.pluginSource !== undefined && {
+        pluginSource: config.pluginSource,
       }),
       isAuthStub: true,
-      serverId: connectorServerId(r),
-      serverIdStamp: dynamicServerConnectorId(e, r),
+      serverId: connectorServerId(config),
+      serverIdStamp: dynamicServerConnectorId(serverName, config),
     },
     isEnabled: () => true,
     isConcurrencySafe: () => false,
     isReadOnly: () => false,
-    toAutoClassifierInput: () => e,
-    userFacingName: () => `${e} - authenticate (MCP)`,
+    toAutoClassifierInput: () => serverName,
+    userFacingName: () => `${serverName} - authenticate (MCP)`,
     maxResultSizeChars: 1e4,
-    renderToolUseMessage: () => `Authenticate ${e} MCP server`,
+    renderToolUseMessage: () => `Authenticate ${serverName} MCP server`,
     async description() {
       return description;
     },
@@ -98,159 +101,196 @@ function createMcpAuthTool(e, r, n) {
         updatedInput: input,
       };
     },
-    async call(s, l) {
-      let m = mcpDialBlockCause(e, r);
-      if (m === "managed-policy")
+    async call(input, callOptions) {
+      let blockCause = mcpDialBlockCause(serverName, config);
+      if (blockCause === "managed-policy")
         return {
           data: {
             status: "error",
             message: mcpRefusalText(
-              e,
-              m,
-              r,
-              `${blockedByPolicyText(e)}. Only an organization admin can change this; do not retry or ask the user to enable it.`,
+              serverName,
+              blockCause,
+              config,
+              `${blockedByPolicyText(serverName)}. Only an organization admin can change this; do not retry or ask the user to enable it.`,
             ),
           },
         };
-      if (isMcpServerDisabled(e))
+      if (isMcpServerDisabled(serverName))
         return {
           data: {
             status: "error",
-            message: `MCP server ${normalizeServerNameShort(e)} is disabled. Ask the user to enable it in /mcp before authenticating.`,
+            message: `MCP server ${normalizeServerNameShort(serverName)} is disabled. Ask the user to enable it in /mcp before authenticating.`,
           },
         };
-      if (m === "project-approval")
+      if (blockCause === "project-approval")
         return {
           data: {
             status: "error",
-            message: `${projectScopeNotApprovedText(e)}. Ask the user to approve it; do not retry until they have.`,
+            message: `${projectScopeNotApprovedText(serverName)}. Ask the user to approve it; do not retry until they have.`,
           },
         };
-      let f = classifyMcpAuthTarget(e, r);
-      if (f.kind === "claudeai-proxy")
+      let target = classifyMcpAuthTarget(serverName, config);
+      if (target.kind === "claudeai-proxy")
         return {
           data: {
             status: "unsupported",
-            message: `This is a claude.ai MCP connector. Ask the user to run /mcp and select "${normalizeServerNameShort(e)}" to authenticate.`,
+            message: `This is a claude.ai MCP connector. Ask the user to run /mcp and select "${normalizeServerNameShort(serverName)}" to authenticate.`,
           },
         };
-      if (f.kind === "unsupported-transport")
+      if (target.kind === "unsupported-transport")
         return {
           data: {
             status: "unsupported",
-            message: `Server "${normalizeServerNameShort(e)}" uses ${transport} transport which does not support OAuth from this tool. Ask the user to run /mcp and authenticate manually.`,
+            message: `Server "${normalizeServerNameShort(serverName)}" uses ${transport} transport which does not support OAuth from this tool. Ask the user to run /mcp and authenticate manually.`,
           },
         };
-      if (f.kind === "anthropic-hosted")
+      if (target.kind === "anthropic-hosted")
         return {
           data: {
             status: "unsupported",
-            message: normalizeMcpServerName(f.message, 1024, "none"),
+            message: normalizeMcpServerName(target.message, 1024, "none"),
           },
         };
-      let g = redirectUrisByHost.of(l.session.host);
-      let y = g.get(e);
+      let redirectUris = redirectUrisByHost.of(callOptions.session.host);
+      let reusableEntry = redirectUris.get(serverName);
       if (
-        y !== undefined &&
-        y.flow === mcpAuthModule().getActiveOAuthPromise(e) &&
-        y.receivesPastedCallbacks() &&
-        En(y.config, f.config) &&
-        y.accountToken !== undefined &&
-        y.accountToken === isMcpIdentityIncomplete() &&
-        y.identityEpoch === identityEpoch() &&
-        Date.now() - y.startedAt < REDIRECT_URI_TTL_MS
+        reusableEntry !== undefined &&
+        reusableEntry.flow === mcpAuthModule().getActiveOAuthPromise(serverName) &&
+        reusableEntry.receivesPastedCallbacks() &&
+        import_sortedIndex_2(reusableEntry.config, target.config) &&
+        reusableEntry.accountToken !== undefined &&
+        reusableEntry.accountToken === isMcpIdentityIncomplete() &&
+        reusableEntry.identityEpoch === identityEpoch() &&
+        Date.now() - reusableEntry.startedAt < REDIRECT_URI_TTL_MS
       )
         return formatAuthUrlResult({
-          serverName: e,
-          config: r,
-          authUrlPromise: y.authUrl,
-          oauthPromise: y.flow,
+          serverName,
+          config,
+          authUrlPromise: reusableEntry.authUrl,
+          oauthPromise: reusableEntry.flow,
           reused: true,
-          tools: l.options.tools,
+          tools: callOptions.options.tools,
         });
-      let M;
+      let resolveAuthUrl;
       let authUrlPromise = new Promise((resolve) => {
-        M = resolve;
+        resolveAuthUrl = resolve;
       });
-      let P;
-      let A = mcpAuthModule().performMCPOAuthFlow(e, f.config, (S) => M?.(S), undefined, {
-        skipBrowserOpen: true,
-        onWaitingForCallback: (prev) => {
-          P = prev;
+      let callbackSubmitter;
+      let oauthFlow = mcpAuthModule().performMCPOAuthFlow(
+        serverName,
+        target.config,
+        (authUrl) => resolveAuthUrl?.(authUrl),
+        undefined,
+        {
+          skipBrowserOpen: true,
+          onWaitingForCallback: (prev) => {
+            callbackSubmitter = prev;
+          },
         },
-      });
-      mcpAuthModule().setActiveOAuthPromise(e, A);
-      let I = {
-        flow: A,
+      );
+      mcpAuthModule().setActiveOAuthPromise(serverName, oauthFlow);
+      let flowEntry = {
+        flow: oauthFlow,
         authUrl: authUrlPromise,
-        receivesPastedCallbacks: () => P !== undefined && mcpAuthModule().getOAuthCallbackSubmitter(e) === P,
-        config: f.config,
+        receivesPastedCallbacks: () =>
+          callbackSubmitter !== undefined &&
+          mcpAuthModule().getOAuthCallbackSubmitter(serverName) === callbackSubmitter,
+        config: target.config,
         accountToken: isMcpIdentityIncomplete(),
         identityEpoch: identityEpoch(),
         startedAt: Date.now(),
       };
-      g.set(e, I);
-      A.catch(() => {}).finally(() => {
-        if (g.get(e) === I) g.delete(e);
-      });
-      let identityEpoch_2 = I.identityEpoch;
-      A.then(async () => {
-        if (identityEpoch() !== identityEpoch_2) {
-          logMCPDebug(e, "OAuth completed after an identity change; discarding without reconnecting");
-          return;
-        }
-        deleteNeedsAuthCache(l.storageV5);
-        if (isMcpServerDisabled(e) || isMcpDialBlockedByPolicy(e, r)) {
-          logMCPDebug(
-            e,
-            "OAuth completed but the server is now disabled or policy-blocked; not reconnecting",
-          );
-          return;
-        }
-        let S = await mcpClientModule().reconnectMcpServerImpl(e, r, l.storageV5, l.credentials);
-        if (identityEpoch() !== identityEpoch_2) {
-          logMCPDebug(e, "OAuth completed after an identity change; discarding the stale reconnect");
-          return;
-        }
-        let any = l.getMcp().clients.some((client) => client.name === e);
-        let _ = l.session.mcpSessionWiring.connections();
-        if (!any || _ === undefined || isMcpServerDisabled(e) || isMcpDialBlockedByPolicy(e, r)) {
-          logMCPDebug(
-            e,
-            "OAuth completed after the server was removed, disabled, or policy-blocked; discarding the fresh connection",
-          );
-          mcpClientModule()
-            .clearServerCache(e, r)
-            .catch((error) =>
-              logMCPDebug(e, `Orphan-connection cleanup failed: ${describeConnectError(error, r)}`),
+      redirectUris.set(serverName, flowEntry);
+      oauthFlow
+        .catch(() => {})
+        .finally(() => {
+          if (redirectUris.get(serverName) === flowEntry) redirectUris.delete(serverName);
+        });
+      let identityEpoch_2 = flowEntry.identityEpoch;
+      oauthFlow
+        .then(async () => {
+          if (identityEpoch() !== identityEpoch_2) {
+            logMCPDebug(
+              serverName,
+              "OAuth completed after an identity change; discarding without reconnecting",
             );
-          _?.markReconnectDiscarded(e, r);
-          return;
-        }
-        let L = _.adoptServer(e, S);
-        if (L !== "adopted") {
-          logMCPDebug(e, `Sign-in finished, but its connection was not adopted (${L}); discarding it`);
-          mcpClientModule()
-            .clearServerCache(e, r)
-            .catch((error) =>
-              logMCPDebug(e, `Orphan-connection cleanup failed: ${describeConnectError(error, r)}`),
+            return;
+          }
+          deleteNeedsAuthCache(callOptions.storageV5);
+          if (isMcpServerDisabled(serverName) || isMcpDialBlockedByPolicy(serverName, config)) {
+            logMCPDebug(
+              serverName,
+              "OAuth completed but the server is now disabled or policy-blocked; not reconnecting",
             );
-          return;
-        }
-        logMCPDebug(e, `OAuth complete, reconnected with ${S.tools.length} tool(s)`);
-      }).catch((err) => {
-        logMCPError(
-          e,
-          `OAuth flow failed after tool-triggered start: ${sanitizeErrorDetail(redactMcpErrorDetail(e, r, errorMessage(err)))}`,
-        );
-      });
+            return;
+          }
+          let reconnected = await mcpClientModule().reconnectMcpServerImpl(
+            serverName,
+            config,
+            callOptions.storageV5,
+            callOptions.credentials,
+          );
+          if (identityEpoch() !== identityEpoch_2) {
+            logMCPDebug(
+              serverName,
+              "OAuth completed after an identity change; discarding the stale reconnect",
+            );
+            return;
+          }
+          let any = callOptions.getMcp().clients.some((client) => client.name === serverName);
+          let sessionWiring = callOptions.session.mcpSessionWiring.connections();
+          if (
+            !any ||
+            sessionWiring === undefined ||
+            isMcpServerDisabled(serverName) ||
+            isMcpDialBlockedByPolicy(serverName, config)
+          ) {
+            logMCPDebug(
+              serverName,
+              "OAuth completed after the server was removed, disabled, or policy-blocked; discarding the fresh connection",
+            );
+            mcpClientModule()
+              .clearServerCache(serverName, config)
+              .catch((error) =>
+                logMCPDebug(
+                  serverName,
+                  `Orphan-connection cleanup failed: ${describeConnectError(error, config)}`,
+                ),
+              );
+            sessionWiring?.markReconnectDiscarded(serverName, config);
+            return;
+          }
+          let adoptResult = sessionWiring.adoptServer(serverName, reconnected);
+          if (adoptResult !== "adopted") {
+            logMCPDebug(
+              serverName,
+              `Sign-in finished, but its connection was not adopted (${adoptResult}); discarding it`,
+            );
+            mcpClientModule()
+              .clearServerCache(serverName, config)
+              .catch((error) =>
+                logMCPDebug(
+                  serverName,
+                  `Orphan-connection cleanup failed: ${describeConnectError(error, config)}`,
+                ),
+              );
+            return;
+          }
+          logMCPDebug(serverName, `OAuth complete, reconnected with ${reconnected.tools.length} tool(s)`);
+        })
+        .catch((err) => {
+          logMCPError(
+            serverName,
+            `OAuth flow failed after tool-triggered start: ${sanitizeErrorDetail(redactMcpErrorDetail(serverName, config, errorMessage(err)))}`,
+          );
+        });
       return formatAuthUrlResult({
-        serverName: e,
-        config: r,
+        serverName,
+        config,
         authUrlPromise,
-        oauthPromise: A,
+        oauthPromise: oauthFlow,
         reused: false,
-        tools: l.options.tools,
+        tools: callOptions.options.tools,
       });
     },
     mapToolResultToToolResultBlockParam(data, toolUseID) {
@@ -267,7 +307,7 @@ function createMcpAuthTool(e, r, n) {
  * 生成 MCP OAuth 授权链接结果（已有进行中的登录、远程会话回调说明）。
  */
 async function formatAuthUrlResult({ serverName, config, authUrlPromise, oauthPromise, reused, tools }) {
-  let s = reused
+  let introText = reused
     ? `A sign-in for ${normalizeServerNameShort(serverName)} that started earlier is still in progress, so the link below is that sign-in's link, not a new one. If the user says the sign-in page showed an error before they could approve access, ask them to run /mcp and sign in there instead.
 
 `
@@ -276,11 +316,11 @@ async function formatAuthUrlResult({ serverName, config, authUrlPromise, oauthPr
     let winner = await Promise.race([authUrlPromise, oauthPromise.then(() => null)]);
     if (winner) {
       let mcpToolName = buildMcpToolName(serverName, COMPLETE_AUTHENTICATION);
-      let f = redirectUriOf(winner);
-      let g = isRemoteEnvironment()
+      let redirectUri = redirectUriOf(winner);
+      let remoteNote = isRemoteEnvironment()
         ? `
 
-This session is remote, so after authorizing the browser will try to load \`${f}?code=...\` and show a connection error \u2014 that's expected. Ask the user to copy the full URL from the browser's address bar and paste it into chat, then call \`${mcpToolName}\` with that URL as \`callback_url\`.`
+This session is remote, so after authorizing the browser will try to load \`${redirectUri}?code=...\` and show a connection error \u2014 that's expected. Ask the user to copy the full URL from the browser's address bar and paste it into chat, then call \`${mcpToolName}\` with that URL as \`callback_url\`.`
         : `
 
 If the browser shows a connection error on the redirect page, ask the user to paste the full URL from the address bar and call \`${mcpToolName}\` with it.`;
@@ -288,11 +328,11 @@ If the browser shows a connection error on the redirect page, ask the user to pa
         data: {
           status: "auth_url",
           authUrl: winner,
-          message: `${s}Ask the user to open this URL in their browser to authorize the ${normalizeServerNameShort(serverName)} MCP server:
+          message: `${introText}Ask the user to open this URL in their browser to authorize the ${normalizeServerNameShort(serverName)} MCP server:
 
 ${winner}
 
-Once they complete the flow, the server's tools will become ${toolsAvailableAutomaticallyText(tools)}.${g}`,
+Once they complete the flow, the server's tools will become ${toolsAvailableAutomaticallyText(tools)}.${remoteNote}`,
         },
       };
     }
@@ -303,11 +343,13 @@ Once they complete the flow, the server's tools will become ${toolsAvailableAuto
       },
     };
   } catch (error) {
-    let m = normalizeMcpServerName(redactMcpErrorDetail(serverName, config, errorMessage(error)));
+    let sanitizedError = normalizeMcpServerName(
+      redactMcpErrorDetail(serverName, config, errorMessage(error)),
+    );
     return {
       data: {
         status: "error",
-        message: `Failed to start OAuth flow for ${normalizeServerNameShort(serverName)}: ${m}. Ask the user to run /mcp and authenticate manually.`,
+        message: `Failed to start OAuth flow for ${normalizeServerNameShort(serverName)}: ${sanitizedError}. Ask the user to run /mcp and authenticate manually.`,
       },
     };
   }
@@ -316,39 +358,39 @@ Once they complete the flow, the server's tools will become ${toolsAvailableAuto
 /**
  * 提交回调 URL 完成进行中的 MCP OAuth 流程的工具定义。
  */
-function COMPLETE_AUTH_TOOL(e, r) {
-  let mcpToolName = buildMcpToolName(e, AUTHENTICATE);
-  let a =
-    `Complete an in-progress OAuth flow for the "${normalizeServerNameShort(e)}" MCP server by submitting the callback URL. Call \`${mcpToolName}\` first to start the flow and get the authorization URL. ` +
+function COMPLETE_AUTH_TOOL(serverName, config) {
+  let mcpToolName = buildMcpToolName(serverName, AUTHENTICATE);
+  let description =
+    `Complete an in-progress OAuth flow for the "${normalizeServerNameShort(serverName)}" MCP server by submitting the callback URL. Call \`${mcpToolName}\` first to start the flow and get the authorization URL. ` +
     "After the user authorizes in their browser, the browser is redirected to a `http://localhost:<port>/callback?code=...&state=...` URL \u2014 " +
     "on remote sessions that page fails to load, but the URL in the address bar is still valid. Pass that full URL here as `callback_url`.";
   return {
-    name: buildMcpToolName(e, COMPLETE_AUTHENTICATION),
+    name: buildMcpToolName(serverName, COMPLETE_AUTHENTICATION),
     isMcp: true,
     mcpInfo: {
-      serverName: e,
+      serverName,
       toolName: COMPLETE_AUTHENTICATION,
-      serverType: r.type ?? "stdio",
-      source: mcpServerSource(e, r),
-      ...(r.pluginSource !== undefined && {
-        pluginSource: r.pluginSource,
+      serverType: config.type ?? "stdio",
+      source: mcpServerSource(serverName, config),
+      ...(config.pluginSource !== undefined && {
+        pluginSource: config.pluginSource,
       }),
       isAuthStub: true,
-      serverId: connectorServerId(r),
-      serverIdStamp: dynamicServerConnectorId(e, r),
+      serverId: connectorServerId(config),
+      serverIdStamp: dynamicServerConnectorId(serverName, config),
     },
     isEnabled: () => true,
     isConcurrencySafe: () => false,
     isReadOnly: () => false,
-    toAutoClassifierInput: () => e,
-    userFacingName: () => `${e} - complete authentication (MCP)`,
+    toAutoClassifierInput: () => serverName,
+    userFacingName: () => `${serverName} - complete authentication (MCP)`,
     maxResultSizeChars: 1e4,
-    renderToolUseMessage: () => `Complete authentication for ${e} MCP server`,
+    renderToolUseMessage: () => `Complete authentication for ${serverName} MCP server`,
     async description() {
-      return a;
+      return description;
     },
     async prompt() {
-      return a;
+      return description;
     },
     get inputSchema() {
       return completeAuthInputSchema();
@@ -359,22 +401,22 @@ function COMPLETE_AUTH_TOOL(e, r) {
         updatedInput,
       };
     },
-    async call(h, c) {
-      let { callback_url: callbackUrl } = h;
-      let oAuthCallbackSubmitter = mcpAuthModule().getOAuthCallbackSubmitter(e);
+    async call(input, callOptions) {
+      let { callback_url: callbackUrl } = input;
+      let oAuthCallbackSubmitter = mcpAuthModule().getOAuthCallbackSubmitter(serverName);
       if (!oAuthCallbackSubmitter)
         return {
           data: {
             status: "error",
-            message: `No OAuth flow is in progress for ${normalizeServerNameShort(e)}. Call \`${mcpToolName}\` first, then retry with the callback URL.`,
+            message: `No OAuth flow is in progress for ${normalizeServerNameShort(serverName)}. Call \`${mcpToolName}\` first, then retry with the callback URL.`,
           },
         };
-      let m = false;
+      let hasCodeOrError = false;
       try {
-        let g = new URL(callbackUrl);
-        m = g.searchParams.has("code") || g.searchParams.has("error");
+        let parsedUrl = new URL(callbackUrl);
+        hasCodeOrError = parsedUrl.searchParams.has("code") || parsedUrl.searchParams.has("error");
       } catch {}
-      if (!m)
+      if (!hasCodeOrError)
         return {
           data: {
             status: "error",
@@ -382,12 +424,12 @@ function COMPLETE_AUTH_TOOL(e, r) {
               "Invalid callback URL: missing authorization code. Ask the user to paste the full redirect URL from their browser's address bar, including the `?code=...&state=...` query string.",
           },
         };
-      let activeOAuthPromise = mcpAuthModule().getActiveOAuthPromise(e);
+      let activeOAuthPromise = mcpAuthModule().getActiveOAuthPromise(serverName);
       if (!oAuthCallbackSubmitter(callbackUrl))
         return {
           data: {
             status: "error",
-            message: `That callback URL belongs to a different sign-in attempt for ${normalizeServerNameShort(e)} (its state does not match the flow in progress), or carries no authorization code. The current flow is still waiting: ask the user for the URL from the page this sign-in opened, then retry.`,
+            message: `That callback URL belongs to a different sign-in attempt for ${normalizeServerNameShort(serverName)} (its state does not match the flow in progress), or carries no authorization code. The current flow is still waiting: ask the user for the URL from the page this sign-in opened, then retry.`,
           },
         };
       try {
@@ -395,7 +437,7 @@ function COMPLETE_AUTH_TOOL(e, r) {
         return {
           data: {
             status: "success",
-            message: `Authentication complete for ${normalizeServerNameShort(e)}. ${toolsAvailableNowText(c.options.tools)}`,
+            message: `Authentication complete for ${normalizeServerNameShort(serverName)}. ${toolsAvailableNowText(callOptions.options.tools)}`,
           },
         };
       } catch (error) {
@@ -403,22 +445,22 @@ function COMPLETE_AUTH_TOOL(e, r) {
           return {
             data: {
               status: "error",
-              message: `The OAuth flow for ${normalizeServerNameShort(e)} was cancelled (a newer attempt may have superseded it). Call \`${mcpToolName}\` again to restart.`,
+              message: `The OAuth flow for ${normalizeServerNameShort(serverName)} was cancelled (a newer attempt may have superseded it). Call \`${mcpToolName}\` again to restart.`,
             },
           };
         return {
           data: {
             status: "error",
-            message: `Authentication failed for ${normalizeServerNameShort(e)}: ${normalizeMcpServerName(redactMcpErrorDetail(e, r, errorMessage(error)))}`,
+            message: `Authentication failed for ${normalizeServerNameShort(serverName)}: ${normalizeMcpServerName(redactMcpErrorDetail(serverName, config, errorMessage(error)))}`,
           },
         };
       }
     },
-    mapToolResultToToolResultBlockParam(h, toolUseId) {
+    mapToolResultToToolResultBlockParam(activeOAuthPromise, toolUseId) {
       return {
         tool_use_id: toolUseId,
         type: "tool_result",
-        content: h.message,
+        content: activeOAuthPromise.message,
       };
     },
   };

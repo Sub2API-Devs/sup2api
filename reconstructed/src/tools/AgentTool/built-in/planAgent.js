@@ -22,12 +22,13 @@ import { FILE_EDIT_TOOL_NAME } from "../../FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../FileWriteTool/prompt.js";
 import { NOTEBOOK_EDIT_TOOL_NAME } from "../../NotebookEditTool/constants.js";
 import { EXPLORE_AGENT } from "./exploreAgent.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:183463-186045 fingerprint = getPlanV2SystemPrompt (0.49)
 function getPlanV2SystemPrompt() {
-  let e = isBashAvailable();
-  let searchToolsHint = e ? BASH_TOOL_NAME : POWERSHELL_TOOL_NAME;
-  let r = hasEmbeddedSearchTools() && e;
+  let bashAvailable = isBashAvailable();
+  let searchToolsHint = bashAvailable ? BASH_TOOL_NAME : POWERSHELL_TOOL_NAME;
+  let useEmbeddedSearch = hasEmbeddedSearchTools() && bashAvailable;
   return `You are a software architect and planning specialist for Claude Code. Your role is to explore the codebase and design implementation plans.
 
 === CRITICAL: READ-ONLY MODE - NO FILE MODIFICATIONS ===
@@ -50,12 +51,12 @@ You will be provided with a set of requirements and optionally a perspective on 
 
 2. **Explore Thoroughly**:
    - Read any files provided to you in the initial prompt
-   - Find existing patterns and conventions using ${r ? `\`find\`, \`grep\`, and ${FILE_READ_TOOL_NAME}` : `${GLOB_TOOL_NAME}, ${GREP_TOOL_NAME}, and ${FILE_READ_TOOL_NAME}`}
+   - Find existing patterns and conventions using ${useEmbeddedSearch ? `\`find\`, \`grep\`, and ${FILE_READ_TOOL_NAME}` : `${GLOB_TOOL_NAME}, ${GREP_TOOL_NAME}, and ${FILE_READ_TOOL_NAME}`}
    - Understand the current architecture
    - Identify similar features as reference
    - Trace through relevant code paths
-   - Use ${searchToolsHint} ONLY for read-only operations (${e ? `ls, git status, git log, git diff, find${r ? ", grep" : ""}, cat, head, tail` : "Get-ChildItem, git status, git log, git diff, Get-Content, Select-Object -First/-Last"})
-   - NEVER use ${searchToolsHint} for: ${e ? "mkdir, touch, rm, cp, mv, git add, git commit, npm install, pip install" : "New-Item, Remove-Item, Copy-Item, Move-Item, git add, git commit, npm install, pip install"}, or any file creation/modification
+   - Use ${searchToolsHint} ONLY for read-only operations (${bashAvailable ? `ls, git status, git log, git diff, find${useEmbeddedSearch ? ", grep" : ""}, cat, head, tail` : "Get-ChildItem, git status, git log, git diff, Get-Content, Select-Object -First/-Last"})
+   - NEVER use ${searchToolsHint} for: ${bashAvailable ? "mkdir, touch, rm, cp, mv, git add, git commit, npm install, pip install" : "New-Item, Remove-Item, Copy-Item, Move-Item, git add, git commit, npm install, pip install"}, or any file creation/modification
 
 3. **Design Solution**:
    - Create implementation approach based on your assigned perspective
@@ -83,23 +84,26 @@ REMEMBER: You can ONLY explore and plan. You CANNOT and MUST NOT write, edit, or
 /**
  * Plan 内建代理：只读规划，禁用 Agent/ExitPlanMode/Edit/Write/NotebookEdit 等写工具，model inherit，omitClaudeMd。
  */
-var PLAN_AGENT = {
-  agentType: "Plan",
-  whenToUse:
-    "Software architect agent for designing implementation plans. Use this when you need to plan the implementation strategy for a task. Returns step-by-step plans, identifies critical files, and considers architectural trade-offs.",
-  disallowedTools: [
-    AGENT,
-    ...ARTIFACT_FAMILY_TOOL_NAMES,
-    EXITPLANMODE,
-    FILE_EDIT_TOOL_NAME,
-    FILE_WRITE_TOOL_NAME,
-    NOTEBOOK_EDIT_TOOL_NAME,
-  ],
-  source: "built-in",
-  tools: EXPLORE_AGENT.tools,
-  baseDir: "built-in",
-  model: "inherit",
-  omitClaudeMd: true,
-  getSystemPrompt: () => getPlanV2SystemPrompt(),
-};
+var PLAN_AGENT; // deferred: uses AGENT (../constants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:186045", () => {
+  PLAN_AGENT = {
+    agentType: "Plan",
+    whenToUse:
+      "Software architect agent for designing implementation plans. Use this when you need to plan the implementation strategy for a task. Returns step-by-step plans, identifies critical files, and considers architectural trade-offs.",
+    disallowedTools: [
+      AGENT,
+      ...ARTIFACT_FAMILY_TOOL_NAMES,
+      EXITPLANMODE,
+      FILE_EDIT_TOOL_NAME,
+      FILE_WRITE_TOOL_NAME,
+      NOTEBOOK_EDIT_TOOL_NAME,
+    ],
+    source: "built-in",
+    tools: EXPLORE_AGENT.tools,
+    baseDir: "built-in",
+    model: "inherit",
+    omitClaudeMd: true,
+    getSystemPrompt: () => getPlanV2SystemPrompt(),
+  };
+});
 export { PLAN_AGENT };

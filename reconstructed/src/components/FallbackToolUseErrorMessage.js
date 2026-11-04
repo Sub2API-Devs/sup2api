@@ -11,7 +11,7 @@
 import { isTextBlock, MAX_LINES_THRESHOLD } from "../utils/messages/textLineCount.js";
 import { stripAnsiPerLine } from "../utils/stripAnsi.js";
 import { unwrapToolUseErrorText } from "../utils/toolUseErrorText.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { extractTag } from "../utils/messages.js";
 import { countCharInString } from "../utils/stringUtils.js";
 import { MessageResponse } from "./MessageResponse.js";
@@ -31,10 +31,10 @@ function stripSandboxViolations(stderr) {
 }
 //@ chunk-t1sz4atx.js:616-749 layout
 function getToolErrorText(result) {
-  let joined = result.flatMap((t) => {
-    if (!isTextBlock(t)) return [];
-    let u = stripAnsiPerLine(t.text);
-    return [unwrapToolUseErrorText(u) ?? u];
+  let joined = result.flatMap((block) => {
+    if (!isTextBlock(block)) return [];
+    let text = stripAnsiPerLine(block.text);
+    return [unwrapToolUseErrorText(text) ?? text];
   }).join(`
 `);
   return joined.trim() === "" ? undefined : joined;
@@ -44,37 +44,36 @@ function getToolErrorText(result) {
  * 工具错误兜底：字符串错误去掉 <tool_use_error> 标签，InputValidationError 显示 "Invalid tool parameters"，非 verbose 截断到若干行并提示 ctrl+o 展开。
  */
 function FallbackToolUseErrorMessage(props) {
-  let $ = w(28);
+  let $ = useMemoCache(28);
   let { result, verbose, verbatim } = props;
-  let V = verbatim === undefined ? false : verbatim;
-  let b;
-  let v;
-  let g;
+  let isVerbatim = verbatim === undefined ? false : verbatim;
+  let TextComponent;
+  let BoxComponent;
+  let ResponseComponent;
   let count;
   let color;
   let children;
   let flexDirection;
-  if ($[0] !== result || $[1] !== V || $[2] !== verbose) {
+  if ($[0] !== result || $[1] !== isVerbatim || $[2] !== verbose) {
     let error;
-    let I = Array.isArray(result);
-    let m;
-    if ($[10] !== I || $[11] !== result) {
-      m = typeof result === "string" ? result : I ? getToolErrorText(result) : undefined;
-      $[10] = I;
+    let isArrayResult = Array.isArray(result);
+    let errorText;
+    if ($[10] !== isArrayResult || $[11] !== result) {
+      errorText = typeof result === "string" ? result : isArrayResult ? getToolErrorText(result) : undefined;
+      $[10] = isArrayResult;
       $[11] = result;
-      $[12] = m;
-    } else m = $[12];
-    let P = m;
-    let extractedError = V || I;
-    if (P === undefined) error = "Tool execution failed";
+      $[12] = errorText;
+    } else errorText = $[12];
+    let rawError = errorText;
+    let extractedError = isVerbatim || isArrayResult;
+    if (rawError === undefined) error = "Tool execution failed";
     else {
       let trimmed = (
         extractedError
-          ? stripAnsiPerLine(P)
-          : stripSandboxViolations(stripAnsiPerLine(extractTag(P, "tool_use_error") ?? P)).replace(
-              /<\/?error>/g,
-              "",
-            )
+          ? stripAnsiPerLine(rawError)
+          : stripSandboxViolations(
+              stripAnsiPerLine(extractTag(rawError, "tool_use_error") ?? rawError),
+            ).replace(/<\/?error>/g, "")
       ).trim();
       if (!verbose && !extractedError && trimmed.startsWith("InputValidationError: "))
         error = "Invalid tool parameters";
@@ -89,10 +88,10 @@ function FallbackToolUseErrorMessage(props) {
       ) +
       1 -
       MAX_LINES_THRESHOLD;
-    g = MessageResponse;
-    v = Box;
+    ResponseComponent = MessageResponse;
+    BoxComponent = Box;
     flexDirection = "column";
-    b = Text;
+    TextComponent = Text;
     color = "error";
     children = verbose
       ? error
@@ -104,38 +103,38 @@ function FallbackToolUseErrorMessage(props) {
           .slice(0, MAX_LINES_THRESHOLD).join(`
 `);
     $[0] = result;
-    $[1] = V;
+    $[1] = isVerbatim;
     $[2] = verbose;
-    $[3] = b;
-    $[4] = v;
-    $[5] = g;
+    $[3] = TextComponent;
+    $[4] = BoxComponent;
+    $[5] = ResponseComponent;
     $[6] = count;
     $[7] = color;
     $[8] = children;
     $[9] = flexDirection;
   } else {
-    b = $[3];
-    v = $[4];
-    g = $[5];
+    TextComponent = $[3];
+    BoxComponent = $[4];
+    ResponseComponent = $[5];
     count = $[6];
     color = $[7];
     children = $[8];
     flexDirection = $[9];
   }
   let t4;
-  if ($[13] !== b || $[14] !== color || $[15] !== children) {
-    t4 = jsxProd_default(b, {
+  if ($[13] !== TextComponent || $[14] !== color || $[15] !== children) {
+    t4 = jsxProd_default(TextComponent, {
       color,
       children,
     });
-    $[13] = b;
+    $[13] = TextComponent;
     $[14] = color;
     $[15] = children;
     $[16] = t4;
   } else t4 = $[16];
-  let B;
+  let overflowElement;
   if ($[17] !== count || $[18] !== verbose) {
-    B =
+    overflowElement =
       !verbose &&
       jsxProd_default(OverflowHint, {
         count,
@@ -143,26 +142,26 @@ function FallbackToolUseErrorMessage(props) {
       });
     $[17] = count;
     $[18] = verbose;
-    $[19] = B;
-  } else B = $[19];
+    $[19] = overflowElement;
+  } else overflowElement = $[19];
   let children_2;
-  if ($[20] !== v || $[21] !== flexDirection || $[22] !== t4 || $[23] !== B) {
-    children_2 = jsxProd_default_2(v, {
+  if ($[20] !== BoxComponent || $[21] !== flexDirection || $[22] !== t4 || $[23] !== overflowElement) {
+    children_2 = jsxProd_default_2(BoxComponent, {
       flexDirection,
-      children: [t4, B],
+      children: [t4, overflowElement],
     });
-    $[20] = v;
+    $[20] = BoxComponent;
     $[21] = flexDirection;
     $[22] = t4;
-    $[23] = B;
+    $[23] = overflowElement;
     $[24] = children_2;
   } else children_2 = $[24];
   let t7;
-  if ($[25] !== g || $[26] !== children_2) {
-    t7 = jsxProd_default(g, {
+  if ($[25] !== ResponseComponent || $[26] !== children_2) {
+    t7 = jsxProd_default(ResponseComponent, {
       children: children_2,
     });
-    $[25] = g;
+    $[25] = ResponseComponent;
     $[26] = children_2;
     $[27] = t7;
   } else t7 = $[27];

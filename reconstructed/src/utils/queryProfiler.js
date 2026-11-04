@@ -18,7 +18,7 @@ import { getPerformance, formatTimelineLine, formatMs } from "./profilerBase.js"
 import { repeatString } from "./stringUtils.js";
 import { logError } from "./log.js";
 import { logForDebugging } from "./debug.js";
-import { string } from "../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { env } from "./env.js";
 import { getPlatform } from "./platform.js";
 import { getCpuacctDirForMetering } from "./shell/processCpuTime.js";
@@ -30,12 +30,16 @@ import { processStartTuning, processStartPurgeDelayMs } from "./processStartTuni
 import { toError } from "./errors.js";
 import { takeGarbageCollectionCount } from "./gcCount.js";
 import { markTurnBegan } from "./startupTiming.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:2477148-2477167 sole-consumer
 /**
  * 构建时固化为 false 的剖析开关。
  */
-var isQueryProfilingEnabled = isEnvTruthy(undefined);
+var isQueryProfilingEnabled; // deferred: uses isEnvTruthy (./envUtils.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2477148", () => {
+  isQueryProfilingEnabled = isEnvTruthy(undefined);
+});
 //@ chunk-e6aww6q8.js:2477167-2477343 sole-consumer
 /**
  * 剖析状态：每个检查点的内存快照与查询计数。
@@ -47,15 +51,18 @@ class QueryProfileState {
     this.memorySnapshots.clear();
     this.queryCount++;
   }
-  snapshotMemory(e) {
-    this.memorySnapshots.set(e, process.memoryUsage());
+  snapshotMemory(uuid) {
+    this.memorySnapshots.set(uuid, process.memoryUsage());
   }
 }
 //@ chunk-e6aww6q8.js:2477343-2477370 sole-consumer
 /**
  * 按 session.host 的剖析状态懒槽。
  */
-var queryProfileStateSlot = new HostScoped(() => new QueryProfileState());
+var queryProfileStateSlot; // deferred: uses QueryProfileState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2477343", () => {
+  queryProfileStateSlot = new HostScoped(() => new QueryProfileState());
+});
 //@ chunk-e6aww6q8.js:2477370-2477409 affinity
 /**
  * 取当前会话的剖析状态。
@@ -231,14 +238,14 @@ function getPhaseSummary(marks, baselineTime) {
  */
 function finishQueryProfile() {
   if (!isQueryProfilingEnabled) return;
-  let e;
+  let report;
   try {
-    e = getQueryProfileReport();
+    report = getQueryProfileReport();
   } catch (error) {
     logError(error);
     return;
   }
-  logForDebugging(e);
+  logForDebugging(report);
 }
 //@ chunk-e6aww6q8.js:2480348-2480517 placement
 var QUERY_PROFILE_PARTS_2 = ["setup", "prompt_producers", "ambient_start", "ambient_wait", "render"];
@@ -258,10 +265,10 @@ class NestedStopwatch {
   begin() {
     this.begun++;
     if (this.#e++ === 0) this.#t = performance.now();
-    let e = false;
+    let stopped = false;
     return () => {
-      if (e) return;
-      e = true;
+      if (stopped) return;
+      stopped = true;
       if (this.#e > 0 && --this.#e === 0) this.ms += performance.now() - this.#t;
     };
   }
@@ -290,30 +297,30 @@ class AttachmentTimingProfile {
   get markedAt() {
     return this.#e;
   }
-  mark(e) {
+  mark(name) {
     if (this.#i) return;
     let startTime = performance.now();
-    this.#n[e] = (this.#n[e] ?? 0) + startTime - this.#e;
+    this.#n[name] = (this.#n[name] ?? 0) + startTime - this.#e;
     this.#e = startTime;
   }
   producerBegan() {
     if (!this.#i) this.#t++;
   }
-  begin(e) {
-    return this.#i ? () => {} : this.#o[e].begin();
+  begin(name) {
+    return this.#i ? () => {} : this.#o[name].begin();
   }
-  noteDiffersFile(e, n) {
+  noteDiffersFile(size, hashOnly) {
     if (this.#i) return;
-    let r =
-      e < 25 * QUERY_PROFILE_PARTS
+    let bucket =
+      size < 25 * QUERY_PROFILE_PARTS
         ? "size_under_25_kb"
-        : e < 50 * QUERY_PROFILE_PARTS
+        : size < 50 * QUERY_PROFILE_PARTS
           ? "size_25_to_50_kb"
-          : e <= 256 * QUERY_PROFILE_PARTS
+          : size <= 256 * QUERY_PROFILE_PARTS
             ? "size_50_to_256_kb"
             : "size_over_256_kb";
-    this.#r[r] = (this.#r[r] ?? 0) + 1;
-    if (n) this.#r.hash_only = (this.#r.hash_only ?? 0) + 1;
+    this.#r[bucket] = (this.#r[bucket] ?? 0) + 1;
+    if (hashOnly) this.#r.hash_only = (this.#r.hash_only ?? 0) + 1;
   }
   finish() {
     if (this.#n.setup !== undefined) this.mark("render");
@@ -335,40 +342,50 @@ class AttachmentTimingProfile {
 /**
  * queryProfileStorage：查询剖析的 AsyncLocalStorage。
  */
-var queryProfileStorage = new AsyncLocalStorage();
+var queryProfileStorage; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:2481723", () => {
+  queryProfileStorage = new AsyncLocalStorage();
+});
 //@ chunk-e6aww6q8.js:2481739-2481777 placement
 /**
  * runWithQueryProfile：在剖析上下文中执行。
  */
-function runWithQueryProfile(e, n) {
-  return queryProfileStorage.run(e, n);
+function runWithQueryProfile(store, fn) {
+  return queryProfileStorage.run(store, fn);
 }
 //@ chunk-e6aww6q8.js:2481952-2482165 placement
-var CHANGED_FILE_OUTCOMES = [
-  "same",
-  "differs",
-  "partial_view",
-  "already_compared",
-  "link_on_path",
-  "leaf_link",
-  "nlink",
-  "not_regular",
-  "oversize",
-  "enoent",
-  "other",
-];
-var CHANGED_FILE_OUTCOMES_WITH_LINK = [...CHANGED_FILE_OUTCOMES, "via_outputs_link"];
-var DIFFERS_FILE_BUCKETS = [...DIFFERS_FILE_SIZE_BUCKETS, "hash_only"];
-var MAX_PROFILE_SAMPLES = 50;
-var PROFILE_WINDOW_MS = 120000;
+var CHANGED_FILE_OUTCOMES; // deferred: uses QUERY_PROFILE_PARTS_2 of its import cycle while loading; runs once the cycle is complete
+var CHANGED_FILE_OUTCOMES_WITH_LINK;
+var DIFFERS_FILE_BUCKETS;
+var MAX_PROFILE_SAMPLES;
+var PROFILE_WINDOW_MS;
+deferInit("chunk-e6aww6q8.js:2481952", () => {
+  CHANGED_FILE_OUTCOMES = [
+    "same",
+    "differs",
+    "partial_view",
+    "already_compared",
+    "link_on_path",
+    "leaf_link",
+    "nlink",
+    "not_regular",
+    "oversize",
+    "enoent",
+    "other",
+  ];
+  CHANGED_FILE_OUTCOMES_WITH_LINK = [...CHANGED_FILE_OUTCOMES, "via_outputs_link"];
+  DIFFERS_FILE_BUCKETS = [...DIFFERS_FILE_SIZE_BUCKETS, "hash_only"];
+  MAX_PROFILE_SAMPLES = 50;
+  PROFILE_WINDOW_MS = 120000;
+});
 //@ chunk-e6aww6q8.js:2482165-2482322 placement
 function processCpuSnapshot() {
   try {
     if (isDiskless()) return;
-    let e = process.resourceUsage();
+    let usage = process.resourceUsage();
     return {
-      cpuMs: (e.userCPUTime + e.systemCPUTime) / 1000,
-      majorFaults: e.majorPageFault,
+      cpuMs: (usage.userCPUTime + usage.systemCPUTime) / 1000,
+      majorFaults: usage.majorPageFault,
     };
   } catch {
     return;
@@ -379,11 +396,11 @@ function procMemorySnapshot() {
   try {
     if (!isProcessTelemetryEnabled() || isDiskless() || getPlatform() !== "linux") return;
     let file = readFileSync("/proc/self/status", "utf8");
-    let n = procStatusMib(file, "VmRSS");
-    return n === undefined
+    let rssMib = procStatusMib(file, "VmRSS");
+    return rssMib === undefined
       ? undefined
       : {
-          rssMib: n,
+          rssMib,
           anonMib: procStatusMib(file, "RssAnon"),
           peakRssMib: procStatusMib(file, "VmHWM"),
         };
@@ -392,17 +409,17 @@ function procMemorySnapshot() {
   }
 }
 //@ chunk-e6aww6q8.js:2482533-2482678 placement
-function procStatusMib(file, n) {
-  let match = new RegExp(`^${n}:\\s+(\\d+) kB$`, "m").exec(file);
+function procStatusMib(file, key) {
+  let match = new RegExp(`^${key}:\\s+(\\d+) kB$`, "m").exec(file);
   let rounded = Math.round(Number(match?.[1]) / 1024);
   return Number.isSafeInteger(rounded) ? rounded : undefined;
 }
 //@ chunk-e6aww6q8.js:2482678-2482767 placement
 function cpuSnapshotForProfile() {
-  let e = processCpuSnapshot();
+  let resources = processCpuSnapshot();
   return (
-    e && {
-      resources: e,
+    resources && {
+      resources,
       atMs: performance.now(),
       shellMs: undefined,
     }
@@ -410,31 +427,31 @@ function cpuSnapshotForProfile() {
 }
 //@ chunk-e6aww6q8.js:2482767-2482933 placement
 function resourceSnapshot() {
-  let e = cpuSnapshotForProfile();
-  if (e === undefined) return;
+  let snapshot = cpuSnapshotForProfile();
+  if (snapshot === undefined) return;
   let cpuacctDirForMetering = getCpuacctDirForMetering();
-  let r =
+  let shellSeconds =
     cpuacctDirForMetering === undefined
       ? undefined
       : readCpuUsageSeconds(posix.join(cpuacctDirForMetering, "cpuacct.usage"));
   return {
-    ...e,
-    shellMs: r === undefined ? undefined : Math.floor(r),
+    ...snapshot,
+    shellMs: shellSeconds === undefined ? undefined : Math.floor(shellSeconds),
   };
 }
 //@ chunk-e6aww6q8.js:2482933-2482981 placement
-function toWholeNonNegative(e) {
-  return Math.max(0, Math.floor(e));
+function toWholeNonNegative(value) {
+  return Math.max(0, Math.floor(value));
 }
 //@ chunk-e6aww6q8.js:2482981-2483046 placement
-function isValidTimingMs(e) {
-  return e !== undefined && e >= 0 && Number.isSafeInteger(e);
+function isValidTimingMs(value) {
+  return value !== undefined && value >= 0 && Number.isSafeInteger(value);
 }
 //@ chunk-e6aww6q8.js:2483046-2483285 placement
-function cpuWallDelta(e, n) {
-  if (e === undefined || n === undefined) return;
-  let max = Math.max(0, Math.round(n.resources.cpuMs - e.resources.cpuMs));
-  let max_2 = Math.max(0, Math.round(n.atMs - e.atMs));
+function cpuWallDelta(from, to) {
+  if (from === undefined || to === undefined) return;
+  let max = Math.max(0, Math.round(to.resources.cpuMs - from.resources.cpuMs));
+  let max_2 = Math.max(0, Math.round(to.atMs - from.atMs));
   return Number.isSafeInteger(max) && Number.isSafeInteger(max_2)
     ? {
         cpuMs: max,
@@ -444,19 +461,27 @@ function cpuWallDelta(e, n) {
 }
 //@ chunk-e6aww6q8.js:2483285-2483485 placement
 function normalizeStreamStats(streaming) {
-  let n = {
+  let normalized = {
     ...streaming,
     cpuMs: Math.max(0, Math.round(streaming.cpuMs)),
     wallMs: Math.max(0, Math.round(streaming.wallMs)),
   };
-  return [n.cpuMs, n.wallMs, n.streams, n.events, n.chunks ?? 0].every(Number.isSafeInteger) ? n : undefined;
+  return [
+    normalized.cpuMs,
+    normalized.wallMs,
+    normalized.streams,
+    normalized.events,
+    normalized.chunks ?? 0,
+  ].every(Number.isSafeInteger)
+    ? normalized
+    : undefined;
 }
 //@ chunk-e6aww6q8.js:2483485-2483726 placement
-function cpuFaultsSince(e) {
-  let n = e && processCpuSnapshot();
-  if (e === undefined || n === undefined) return;
-  let max = Math.max(0, Math.round(n.cpuMs - e.cpuMs));
-  let max_2 = Math.max(0, Math.round(n.majorFaults - e.majorFaults));
+function cpuFaultsSince(since) {
+  let now = since && processCpuSnapshot();
+  if (since === undefined || now === undefined) return;
+  let max = Math.max(0, Math.round(now.cpuMs - since.cpuMs));
+  let max_2 = Math.max(0, Math.round(now.majorFaults - since.majorFaults));
   return Number.isFinite(max) && Number.isFinite(max_2)
     ? {
         cpuMs: max,
@@ -487,13 +512,13 @@ function isProcessTelemetryEnabled() {
  */
 function processStartTuningFields() {
   try {
-    let e = processStartTuning();
-    if (e === undefined || !isProcessTelemetryEnabled() || isDiskless()) return;
-    let n = processStartPurgeDelayMs();
+    let tuning = processStartTuning();
+    if (tuning === undefined || !isProcessTelemetryEnabled() || isDiskless()) return;
+    let purgeDelayMs = processStartPurgeDelayMs();
     return {
-      process_start_tuning: e,
-      ...(n !== undefined && {
-        process_start_purge_delay_ms: n,
+      process_start_tuning: tuning,
+      ...(purgeDelayMs !== undefined && {
+        process_start_purge_delay_ms: purgeDelayMs,
       }),
     };
   } catch (error) {
@@ -507,10 +532,10 @@ function processStartTuningFields() {
  */
 function garbageCollectionFields() {
   try {
-    let e = takeGarbageCollectionCount();
-    return e !== undefined && isProcessTelemetryEnabled() && !isDiskless()
+    let count = takeGarbageCollectionCount();
+    return count !== undefined && isProcessTelemetryEnabled() && !isDiskless()
       ? {
-          process_garbage_collections: e,
+          process_garbage_collections: count,
         }
       : undefined;
   } catch (error) {
@@ -591,7 +616,7 @@ class QueryProfiler {
   }
   startLagProbe() {
     let startTime = performance.now();
-    let n = () => {
+    let tick = () => {
       if (!this.open || this.lagStartedAt !== startTime) return;
       try {
         let startTime_2 = performance.now();
@@ -600,22 +625,22 @@ class QueryProfiler {
           this.lagTimer = undefined;
           return;
         }
-        this.armLagTick(n, startTime_2);
+        this.armLagTick(tick, startTime_2);
       } catch (error) {
         this.lagTimer = undefined;
         logError(error);
       }
     };
     this.lagStartedAt = startTime;
-    this.armLagTick(n, startTime);
+    this.armLagTick(tick, startTime);
   }
-  noteLag(e) {
-    let n = e - this.lagExpectedAt;
-    if (n > this.maxLagMs) this.maxLagMs = n;
+  noteLag(now) {
+    let lag = now - this.lagExpectedAt;
+    if (lag > this.maxLagMs) this.maxLagMs = lag;
   }
-  armLagTick(e, n) {
-    this.lagExpectedAt = n + MAX_PROFILE_SAMPLES;
-    this.lagTimer = setTimeout(e, MAX_PROFILE_SAMPLES);
+  armLagTick(tick, expectedAt) {
+    this.lagExpectedAt = expectedAt + MAX_PROFILE_SAMPLES;
+    this.lagTimer = setTimeout(tick, MAX_PROFILE_SAMPLES);
     this.lagTimer?.unref?.();
   }
   stopLagProbe() {
@@ -624,30 +649,30 @@ class QueryProfiler {
     this.lagTimer = undefined;
     this.noteLag(performance.now());
   }
-  add(e, n) {
+  add(name, ms) {
     if (!this.open) return;
-    this.phases[e] = (this.phases[e] ?? 0) + n;
+    this.phases[name] = (this.phases[name] ?? 0) + ms;
   }
-  startPhase(e) {
+  startPhase(name) {
     if (!this.open) return;
-    this.starts[e] = performance.now();
+    this.starts[name] = performance.now();
   }
-  endPhase(e) {
+  endPhase(name) {
     if (!this.open) return;
-    let n = this.starts[e];
-    if (n === undefined) return;
-    delete this.starts[e];
-    this.add(e, performance.now() - n);
+    let startedAt = this.starts[name];
+    if (startedAt === undefined) return;
+    delete this.starts[name];
+    this.add(name, performance.now() - startedAt);
   }
-  startPhaseWithin(e, n) {
+  startPhaseWithin(fromPhase, toPhase) {
     if (!this.open) return;
-    let r = this.starts[e];
-    if (r === undefined) return;
+    let startedAt = this.starts[fromPhase];
+    if (startedAt === undefined) return;
     let startTime = performance.now();
-    delete this.starts[e];
-    this.add(e, startTime - r);
-    this.starts[n] = startTime;
-    if (n === "input_attachments") {
+    delete this.starts[fromPhase];
+    this.add(fromPhase, startTime - startedAt);
+    this.starts[toPhase] = startTime;
+    if (toPhase === "input_attachments") {
       this.attachments ??= {
         slowest: undefined,
         slowestMs: 0,
@@ -664,45 +689,50 @@ class QueryProfiler {
       if (this.attachments.stretchFrom === undefined) this.attachments.used = undefined;
     }
   }
-  noteAttachmentProducer(slowest, n, r) {
-    let attachments = this.attachments;
-    let inputAttachments = this.starts.input_attachments;
-    if (!this.open || attachments === undefined || inputAttachments === undefined || n < inputAttachments)
-      return;
-    let y = performance.now() - Math.max(n, r ?? n);
-    if (attachments.slowest === undefined || y > attachments.slowestMs) {
-      attachments.slowest = slowest;
-      attachments.slowestMs = y;
-    }
-  }
-  noteChangedFilesReread(e) {
-    let attachments = this.attachments;
-    if (this.open && attachments !== undefined && this.starts.input_attachments !== undefined)
-      attachments.changedFilesReread = (attachments.changedFilesReread ?? 0) + e;
-  }
-  noteChangedFilesCompared(e) {
-    let attachments = this.attachments;
-    if (!this.open || attachments === undefined || this.starts.input_attachments === undefined) return;
-    for (let r of CHANGED_FILE_OUTCOMES_WITH_LINK) {
-      let s = e[r];
-      if (s !== undefined && s > 0) {
-        attachments.touchCompare ??= {};
-        attachments.touchCompare[r] = (attachments.touchCompare[r] ?? 0) + s;
-      }
-    }
-  }
-  noteAttachmentPass(e) {
+  noteAttachmentProducer(slowest, beganAt, markedAt) {
     let attachments = this.attachments;
     let inputAttachments = this.starts.input_attachments;
     if (
       !this.open ||
       attachments === undefined ||
       inputAttachments === undefined ||
-      e.beganAt < inputAttachments ||
-      e.partMs.setup === undefined
+      beganAt < inputAttachments
     )
       return;
-    let s = (attachments.passes ??= {
+    let ms = performance.now() - Math.max(beganAt, markedAt ?? beganAt);
+    if (attachments.slowest === undefined || ms > attachments.slowestMs) {
+      attachments.slowest = slowest;
+      attachments.slowestMs = ms;
+    }
+  }
+  noteChangedFilesReread(count) {
+    let attachments = this.attachments;
+    if (this.open && attachments !== undefined && this.starts.input_attachments !== undefined)
+      attachments.changedFilesReread = (attachments.changedFilesReread ?? 0) + count;
+  }
+  noteChangedFilesCompared(outcomes) {
+    let attachments = this.attachments;
+    if (!this.open || attachments === undefined || this.starts.input_attachments === undefined) return;
+    for (let outcome of CHANGED_FILE_OUTCOMES_WITH_LINK) {
+      let count = outcomes[outcome];
+      if (count !== undefined && count > 0) {
+        attachments.touchCompare ??= {};
+        attachments.touchCompare[outcome] = (attachments.touchCompare[outcome] ?? 0) + count;
+      }
+    }
+  }
+  noteAttachmentPass(pass) {
+    let attachments = this.attachments;
+    let inputAttachments = this.starts.input_attachments;
+    if (
+      !this.open ||
+      attachments === undefined ||
+      inputAttachments === undefined ||
+      pass.beganAt < inputAttachments ||
+      pass.partMs.setup === undefined
+    )
+      return;
+    let agg = (attachments.passes ??= {
       partMs: {},
       producers: 0,
       tokenCounts: 0,
@@ -710,18 +740,19 @@ class QueryProfiler {
       changedFileReadMs: undefined,
       differsFiles: {},
     });
-    for (let h of QUERY_PROFILE_PARTS_2) {
-      let y = e.partMs[h];
-      if (y !== undefined) s.partMs[h] = (s.partMs[h] ?? 0) + y;
+    for (let part of QUERY_PROFILE_PARTS_2) {
+      let ms = pass.partMs[part];
+      if (ms !== undefined) agg.partMs[part] = (agg.partMs[part] ?? 0) + ms;
     }
-    s.producers += e.producers;
-    s.tokenCounts += e.tokenCounts;
-    s.tokenCountMs += e.tokenCountMs;
-    if (e.changedFileReadMs !== undefined)
-      s.changedFileReadMs = (s.changedFileReadMs ?? 0) + e.changedFileReadMs;
-    for (let h of DIFFERS_FILE_BUCKETS) {
-      let y = e.differsFiles[h];
-      if (y !== undefined && y > 0) s.differsFiles[h] = (s.differsFiles[h] ?? 0) + y;
+    agg.producers += pass.producers;
+    agg.tokenCounts += pass.tokenCounts;
+    agg.tokenCountMs += pass.tokenCountMs;
+    if (pass.changedFileReadMs !== undefined)
+      agg.changedFileReadMs = (agg.changedFileReadMs ?? 0) + pass.changedFileReadMs;
+    for (let bucket of DIFFERS_FILE_BUCKETS) {
+      let count = pass.differsFiles[bucket];
+      if (count !== undefined && count > 0)
+        agg.differsFiles[bucket] = (agg.differsFiles[bucket] ?? 0) + count;
     }
   }
   noteStoreConfirmWrite(writeMs) {
@@ -741,30 +772,30 @@ class QueryProfiler {
         posts,
       };
   }
-  endPhaseWithin(e, n) {
+  endPhaseWithin(fromPhase, toPhase) {
     if (!this.open) return;
-    let r = this.starts[n];
-    if (r === undefined) return;
+    let startedAt = this.starts[toPhase];
+    if (startedAt === undefined) return;
     let startTime = performance.now();
-    delete this.starts[n];
-    this.add(n, startTime - r);
-    this.starts[e] = startTime;
+    delete this.starts[toPhase];
+    this.add(toPhase, startTime - startedAt);
+    this.starts[fromPhase] = startTime;
     let attachments = this.attachments;
-    if (n === "input_attachments" && attachments !== undefined) {
-      let y = cpuFaultsSince(attachments.stretchFrom);
+    if (toPhase === "input_attachments" && attachments !== undefined) {
+      let delta = cpuFaultsSince(attachments.stretchFrom);
       attachments.stretchFrom = undefined;
       attachments.used =
-        y === undefined || attachments.used === undefined
+        delta === undefined || attachments.used === undefined
           ? undefined
           : {
-              cpuMs: attachments.used.cpuMs + y.cpuMs,
-              majorFaults: attachments.used.majorFaults + y.majorFaults,
+              cpuMs: attachments.used.cpuMs + delta.cpuMs,
+              majorFaults: attachments.used.majorFaults + delta.majorFaults,
             };
     }
   }
-  noteRedrive(e) {
+  noteRedrive(cause) {
     if (!this.begun || this.open) return;
-    this.redriveCause ??= e;
+    this.redriveCause ??= cause;
   }
   end() {
     this.endedUnconsumed ??= this.unconsumed();
@@ -780,12 +811,12 @@ class QueryProfiler {
         runningPhase: undefined,
       };
     let runningPhase;
-    let n = -1 / 0;
-    for (let r of QUERY_PROFILE_PHASES_2) {
-      let s = this.starts[r];
-      if (s !== undefined && s >= n) {
-        runningPhase = r;
-        n = s;
+    let latest = -1 / 0;
+    for (let phase of QUERY_PROFILE_PHASES_2) {
+      let startedAt = this.starts[phase];
+      if (startedAt !== undefined && startedAt >= latest) {
+        runningPhase = phase;
+        latest = startedAt;
       }
     }
     return {
@@ -796,9 +827,9 @@ class QueryProfiler {
   takeUnconsumed() {
     if (this.unconsumedTaken) return;
     this.unconsumedTaken = true;
-    let e = this.endedUnconsumed ?? this.unconsumed();
+    let unconsumed = this.endedUnconsumed ?? this.unconsumed();
     this.endedUnconsumed = undefined;
-    return e;
+    return unconsumed;
   }
   close(firstDispatchAtMs) {
     if (!this.open) return false;
@@ -820,69 +851,70 @@ class QueryProfiler {
   }
   openStream() {
     if (!this.begun || !isProcessTelemetryEnabled()) return () => {};
-    let e = (this.streaming ??= {
+    let streaming = (this.streaming ??= {
       cpuMs: 0,
       wallMs: 0,
       streams: 0,
       events: 0,
       chunks: 0,
     });
-    e.streams++;
+    streaming.streams++;
     if (this.streamsOpen++ === 0) this.streamsOpenSince = cpuSnapshotForProfile();
-    let n = false;
-    return (r, s) => {
-      if (n || this.streaming !== e) return;
-      n = true;
-      e.events += r;
-      e.chunks = e.chunks === undefined || s === undefined ? undefined : e.chunks + s;
+    let reported = false;
+    return (events, chunks) => {
+      if (reported || this.streaming !== streaming) return;
+      reported = true;
+      streaming.events += events;
+      streaming.chunks =
+        streaming.chunks === undefined || chunks === undefined ? undefined : streaming.chunks + chunks;
       if (--this.streamsOpen === 0) this.endStreamWindow();
     };
   }
   endStreamWindow() {
     let streamsOpenSince = this.streamsOpenSince;
-    let n = streamsOpenSince && cpuSnapshotForProfile();
+    let now = streamsOpenSince && cpuSnapshotForProfile();
     this.streamsOpenSince = undefined;
     if (this.streaming === undefined) return;
-    if (streamsOpenSince === undefined || n === undefined) {
+    if (streamsOpenSince === undefined || now === undefined) {
       this.isStreamingUnmeasured = true;
       return;
     }
-    this.streaming.cpuMs += n.resources.cpuMs - streamsOpenSince.resources.cpuMs;
-    this.streaming.wallMs += n.atMs - streamsOpenSince.atMs;
+    this.streaming.cpuMs += now.resources.cpuMs - streamsOpenSince.resources.cpuMs;
+    this.streaming.wallMs += now.atMs - streamsOpenSince.atMs;
   }
-  consume(e, n) {
+  consume(elapsedMs, endedAt) {
     if (this.streamsOpen > 0) {
       this.endStreamWindow();
       if (this.streaming !== undefined) this.streaming.chunks = undefined;
     }
-    let { phases, begun, window: h, firstDispatchAtMs, redriveCause } = this;
+    let { phases, begun, window: windowOpenedAt, firstDispatchAtMs, redriveCause } = this;
     let { beganAt, betweenTurns, streaming, isStreamingUnmeasured } = this;
-    let memoryAtBegin = h && this.memoryAtBegin;
+    let memoryAtBegin = windowOpenedAt && this.memoryAtBegin;
     let attachments = this.attachments;
     let storeConfirm = this.storeConfirm;
     this.reset();
     if (!begun) return;
-    let we = resourceSnapshot();
-    this.lastTurnEndedAt = we;
-    if (firstDispatchAtMs !== undefined && n > firstDispatchAtMs)
-      phases[`redrive_${redriveCause ?? "other"}`] = n - firstDispatchAtMs;
-    let Ee = {
+    let endResources = resourceSnapshot();
+    this.lastTurnEndedAt = endResources;
+    if (firstDispatchAtMs !== undefined && endedAt > firstDispatchAtMs)
+      phases[`redrive_${redriveCause ?? "other"}`] = endedAt - firstDispatchAtMs;
+    let rounded = {
       other: 0,
     };
-    let Ae = 0;
-    let Ie = 0;
-    for (let Yt of QUERY_PROFILE_PHASES_2) {
-      let qt = phases[Yt];
-      if (qt === undefined) continue;
-      Ae += qt;
-      let Zt = Math.round(Ae) - Ie;
-      Ie += Zt;
-      Ee[Yt] = Zt;
+    let cumulative = 0;
+    let emitted = 0;
+    for (let phase of QUERY_PROFILE_PHASES_2) {
+      let ms = phases[phase];
+      if (ms === undefined) continue;
+      cumulative += ms;
+      let roundedMs = Math.round(cumulative) - emitted;
+      emitted += roundedMs;
+      rounded[phase] = roundedMs;
     }
-    Ee.other = Math.round(e) - Ie;
+    rounded.other = Math.round(elapsedMs) - emitted;
     let used = attachments?.stretchFrom === undefined ? attachments?.used : undefined;
     let passes = attachments?.passes;
-    let ze = attachments && {
+    let attachmentFields = attachments && {
       ...(attachments.slowest !== undefined && {
         slowest_producer: attachments.slowest,
         slowest_producer_ms: Math.round(attachments.slowestMs),
@@ -928,13 +960,14 @@ class QueryProfiler {
           differs_files: passes.differsFiles,
         }),
     };
-    let inputAttachments = ze && Object.keys(ze).length > 0 ? ze : undefined;
-    let resumeStoreConfirm = Ee.resume_store_confirm ?? 0;
+    let inputAttachments =
+      attachmentFields && Object.keys(attachmentFields).length > 0 ? attachmentFields : undefined;
+    let resumeStoreConfirm = rounded.resume_store_confirm ?? 0;
     let min = Math.min(Math.floor(storeConfirm?.writeMs ?? 0), resumeStoreConfirm);
     let min_2 = Math.min(Math.floor(storeConfirm?.posts?.aheadMs ?? 0), resumeStoreConfirm - min);
     let min_3 = Math.min(Math.floor(storeConfirm?.posts?.postMs ?? 0), resumeStoreConfirm - min - min_2);
     let storeConfirm_2 =
-      storeConfirm?.posts === undefined || Ee.resume_store_confirm === undefined
+      storeConfirm?.posts === undefined || rounded.resume_store_confirm === undefined
         ? undefined
         : {
             write_ms: min,
@@ -946,46 +979,48 @@ class QueryProfiler {
             rows_ahead: storeConfirm.posts.rowsAhead,
             rows: storeConfirm.posts.rows,
           };
-    let gt = memoryAtBegin && procMemorySnapshot();
-    let At = h && isProcessTelemetryEnabled() ? cpuWallDelta(beganAt, we) : undefined;
-    let It;
-    if (At === undefined) this.shellCountedTo = undefined;
-    else if (beganAt?.shellMs !== undefined && we?.shellMs !== undefined) {
+    let memoryAtEnd = memoryAtBegin && procMemorySnapshot();
+    let shellDelta =
+      windowOpenedAt && isProcessTelemetryEnabled() ? cpuWallDelta(beganAt, endResources) : undefined;
+    let shellCpu;
+    if (shellDelta === undefined) this.shellCountedTo = undefined;
+    else if (beganAt?.shellMs !== undefined && endResources?.shellMs !== undefined) {
       let shellCountedTo = this.shellCountedTo;
-      let qt = we.shellMs - beganAt.shellMs;
-      let Zt = shellCountedTo && beganAt.shellMs - shellCountedTo.shellMs;
-      let rn = shellCountedTo && Math.round(beganAt.atMs - shellCountedTo.atMs);
-      It = isValidTimingMs(qt)
+      let shellMs = endResources.shellMs - beganAt.shellMs;
+      let sinceLastShellMs = shellCountedTo && beganAt.shellMs - shellCountedTo.shellMs;
+      let sinceLastWallMs = shellCountedTo && Math.round(beganAt.atMs - shellCountedTo.atMs);
+      shellCpu = isValidTimingMs(shellMs)
         ? {
-            turnMs: qt,
+            turnMs: shellMs,
             sinceLastResult:
-              isValidTimingMs(Zt) && isValidTimingMs(rn)
+              isValidTimingMs(sinceLastShellMs) && isValidTimingMs(sinceLastWallMs)
                 ? {
-                    cpuMs: Zt,
-                    wallMs: rn,
+                    cpuMs: sinceLastShellMs,
+                    wallMs: sinceLastWallMs,
                   }
                 : undefined,
           }
         : undefined;
-      this.shellCountedTo = It && {
-        shellMs: we.shellMs,
-        atMs: we.atMs,
+      this.shellCountedTo = shellCpu && {
+        shellMs: endResources.shellMs,
+        atMs: endResources.atMs,
       };
     }
     return {
-      phases: Ee,
-      window: h,
+      phases: rounded,
+      window: windowOpenedAt,
       inputAttachments,
       storeConfirm: storeConfirm_2,
       memory: memoryAtBegin &&
-        gt && {
+        memoryAtEnd && {
           atBegin: memoryAtBegin,
-          atConsume: gt,
+          atConsume: memoryAtEnd,
         },
-      betweenTurns: At && betweenTurns,
-      turn: At,
-      streaming: At && streaming && !isStreamingUnmeasured ? normalizeStreamStats(streaming) : undefined,
-      shellCpu: It,
+      betweenTurns: shellDelta && betweenTurns,
+      turn: shellDelta,
+      streaming:
+        shellDelta && streaming && !isStreamingUnmeasured ? normalizeStreamStats(streaming) : undefined,
+      shellCpu,
     };
   }
 }
@@ -993,49 +1028,53 @@ class QueryProfiler {
 /**
  * QUERY_PROFILE_PHASES：查询剖析的阶段名。
  */
-var QUERY_PROFILE_PHASES_2 = [
-  "system_prompt",
-  "resume_other",
-  "resume_store_confirm",
-  "resume_staged_files_wait",
-  "resume_connector_wait",
-  "turn_start_tool_run",
-  "process_user_input",
-  "input_images",
-  "input_attachments",
-  "input_command",
-  "input_hooks",
-  "conversation_append",
-  "transcript_persist",
-  "tool_pool_refresh",
-  "system_prompt_rebuild",
-  "init_message",
-  "init_frame_send",
-  "engine_pickup",
-  "loop_entry",
-  "memory_recall_wait",
-  "memory_context_wait",
-  "message_prep",
-  "model_config_wait",
-  "autocompact",
-  "request_announcements",
-  "query_setup",
-  "auto_mode_context_wait",
-  "model_gates",
-  "tool_schema_build",
-  "message_normalization",
-  "client_creation",
-  "request_build",
-  "redrive_reactive_compact",
-  "redrive_fallback_model",
-  "redrive_non_streaming",
-  "redrive_other",
-];
-var QUERY_PROFILE_PHASES = new HostScoped(() => new QueryProfiler());
+var QUERY_PROFILE_PHASES_2; // deferred: uses QueryProfiler of its import cycle while loading; runs once the cycle is complete
+var QUERY_PROFILE_PHASES;
+deferInit("chunk-e6aww6q8.js:2493029", () => {
+  QUERY_PROFILE_PHASES_2 = [
+    "system_prompt",
+    "resume_other",
+    "resume_store_confirm",
+    "resume_staged_files_wait",
+    "resume_connector_wait",
+    "turn_start_tool_run",
+    "process_user_input",
+    "input_images",
+    "input_attachments",
+    "input_command",
+    "input_hooks",
+    "conversation_append",
+    "transcript_persist",
+    "tool_pool_refresh",
+    "system_prompt_rebuild",
+    "init_message",
+    "init_frame_send",
+    "engine_pickup",
+    "loop_entry",
+    "memory_recall_wait",
+    "memory_context_wait",
+    "message_prep",
+    "model_config_wait",
+    "autocompact",
+    "request_announcements",
+    "query_setup",
+    "auto_mode_context_wait",
+    "model_gates",
+    "tool_schema_build",
+    "message_normalization",
+    "client_creation",
+    "request_build",
+    "redrive_reactive_compact",
+    "redrive_fallback_model",
+    "redrive_non_streaming",
+    "redrive_other",
+  ];
+  QUERY_PROFILE_PHASES = new HostScoped(() => new QueryProfiler());
+});
 //@ chunk-e6aww6q8.js:2493763-2493831 placement
-function withProfileState(e) {
+function withProfileState(fn) {
   try {
-    return e(QUERY_PROFILE_PHASES.of(getRootSession().host));
+    return fn(QUERY_PROFILE_PHASES.of(getRootSession().host));
   } catch (error) {
     logError(error);
     return;
@@ -1046,94 +1085,94 @@ function withProfileState(e) {
  * beginProfile：开始一次查询剖析。
  */
 function beginProfile() {
-  withProfileState((e) => e.begin());
+  withProfileState((profiler) => profiler.begin());
 }
 //@ chunk-e6aww6q8.js:2493865-2493905 placement
 /**
  * startProfilePhase：开始某阶段。
  */
-function startProfilePhase(e) {
-  withProfileState((n) => n.startPhase(e));
+function startProfilePhase(name) {
+  withProfileState((profiler) => profiler.startPhase(name));
 }
 //@ chunk-e6aww6q8.js:2493905-2493943 placement
 /**
  * endProfilePhase：结束某阶段。
  */
-function endProfilePhase(e) {
-  withProfileState((n) => n.endPhase(e));
+function endProfilePhase(name) {
+  withProfileState((profiler) => profiler.endPhase(name));
 }
 //@ chunk-e6aww6q8.js:2493943-2493994 placement
 /**
  * startPhaseWithin：开始嵌套阶段。
  */
-function startPhaseWithin(e, n) {
-  withProfileState((r) => r.startPhaseWithin(e, n));
+function startPhaseWithin(fromPhase, toPhase) {
+  withProfileState((profiler) => profiler.startPhaseWithin(fromPhase, toPhase));
 }
 //@ chunk-e6aww6q8.js:2493994-2494055 placement
 /**
  * noteAttachmentProducer：记录附件生产者耗时。
  */
-function noteAttachmentProducer(label, n, markedAt) {
-  withProfileState((s) => s.noteAttachmentProducer(label, n, markedAt));
+function noteAttachmentProducer(label, beganAt, markedAt) {
+  withProfileState((profiler) => profiler.noteAttachmentProducer(label, beganAt, markedAt));
 }
 //@ chunk-e6aww6q8.js:2494055-2494104 placement
 /**
  * noteAttachmentPass：记录一次附件处理。
  */
-function noteAttachmentPass(e) {
-  withProfileState((n) => n.noteAttachmentPass(e));
+function noteAttachmentPass(pass) {
+  withProfileState((profiler) => profiler.noteAttachmentPass(pass));
 }
 //@ chunk-e6aww6q8.js:2494104-2494157 placement
 /**
  * noteChangedFilesReread：记录改动文件重读。
  */
-function noteChangedFilesReread(e) {
-  withProfileState((n) => n.noteChangedFilesReread(e));
+function noteChangedFilesReread(count) {
+  withProfileState((profiler) => profiler.noteChangedFilesReread(count));
 }
 //@ chunk-e6aww6q8.js:2494157-2494212 placement
 /**
  * noteChangedFilesCompared：记录改动文件比较。
  */
-function noteChangedFilesCompared(e) {
-  withProfileState((n) => n.noteChangedFilesCompared(e));
+function noteChangedFilesCompared(outcomes) {
+  withProfileState((profiler) => profiler.noteChangedFilesCompared(outcomes));
 }
 //@ chunk-e6aww6q8.js:2494212-2494264 placement
 /**
  * noteStoreConfirmWrite：记录存储确认写。
  */
-function noteStoreConfirmWrite(e) {
-  withProfileState((n) => n.noteStoreConfirmWrite(e));
+function noteStoreConfirmWrite(writeMs) {
+  withProfileState((profiler) => profiler.noteStoreConfirmWrite(writeMs));
 }
 //@ chunk-e6aww6q8.js:2494264-2494316 placement
-function noteStoreConfirmPosts(e) {
-  withProfileState((n) => n.noteStoreConfirmPosts(e));
+function noteStoreConfirmPosts(posts) {
+  withProfileState((profiler) => profiler.noteStoreConfirmPosts(posts));
 }
 //@ chunk-e6aww6q8.js:2494316-2494516 placement
 /**
  * 创建存储确认计时器：只在第一次确认时记录，返回的函数在指定时刻结束计时。
  */
-function makeStoreConfirmTimer(e) {
-  let n = runProfileStepSafely(e);
-  let r = n !== undefined;
-  let s = (h) => {
-    if (n === undefined || !r) return;
-    r = false;
-    return runProfileStepSafely(() => n(h));
+function makeStoreConfirmTimer(report) {
+  let stepped = runProfileStepSafely(report);
+  let armed = stepped !== undefined;
+  let step = (startedAt) => {
+    if (stepped === undefined || !armed) return;
+    armed = false;
+    return runProfileStepSafely(() => stepped(startedAt));
   };
-  withProfileState((h) =>
-    h.holdStoreConfirmWatch(() => {
-      s(performance.now());
+  withProfileState((profiler) =>
+    profiler.holdStoreConfirmWatch(() => {
+      step(performance.now());
     }),
   );
-  return (h) => {
-    let y = s(h);
-    if (y) noteStoreConfirmPosts(y);
+  return (endedAt) => {
+    let posts = step(endedAt);
+    if (posts) noteStoreConfirmPosts(posts);
   };
 }
 //@ chunk-e6aww6q8.js:2494516-2494569 placement
-function runProfileStepSafely(e) {
+function runProfileStepSafely(fn) {
   try {
-    return e();
+    return fn();
   } catch (error) {
     logError(error);
     return;
@@ -1143,39 +1182,39 @@ function runProfileStepSafely(e) {
 /**
  * endPhaseWithin：结束嵌套阶段。
  */
-function endPhaseWithin(e, n) {
-  withProfileState((r) => r.endPhaseWithin(e, n));
+function endPhaseWithin(fromPhase, toPhase) {
+  withProfileState((profiler) => profiler.endPhaseWithin(fromPhase, toPhase));
 }
 //@ chunk-e6aww6q8.js:2494618-2494692 placement
 /**
  * measurePhase：在剖析中执行并计时。
  */
-async function measurePhase(e, n, r) {
-  startPhaseWithin(e, n);
+async function measurePhase(fromPhase, toPhase, fn) {
+  startPhaseWithin(fromPhase, toPhase);
   try {
-    return await r();
+    return await fn();
   } finally {
-    endPhaseWithin(e, n);
+    endPhaseWithin(fromPhase, toPhase);
   }
 }
 //@ chunk-e6aww6q8.js:2494692-2494740 placement
 /**
  * closeProfile：关闭剖析并返回是否已上报。
  */
-function closeProfile(e) {
-  return withProfileState((n) => n.close(e)) === true;
+function closeProfile(firstDispatchAtMs) {
+  return withProfileState((profiler) => profiler.close(firstDispatchAtMs)) === true;
 }
 //@ chunk-e6aww6q8.js:2494740-2494835 placement
 /**
  * openProfileStream：打开剖析流。
  */
 function openProfileStream() {
-  let e = withProfileState((n) => n.openStream());
+  let reportStream = withProfileState((profiler) => profiler.openStream());
   return (
-    e &&
-    ((n, r) => {
+    reportStream &&
+    ((events, chunks) => {
       try {
-        e(n, r);
+        reportStream(events, chunks);
       } catch (error) {
         logError(toError(error));
       }
@@ -1186,29 +1225,29 @@ function openProfileStream() {
 /**
  * noteRedrive：记录重放。
  */
-function noteRedrive(e) {
-  withProfileState((n) => n.noteRedrive(e));
+function noteRedrive(cause) {
+  withProfileState((profiler) => profiler.noteRedrive(cause));
 }
 //@ chunk-e6aww6q8.js:2494877-2494926 placement
 /**
  * consumeProfile：消费剖析数据。
  */
-function consumeProfile(e, n) {
-  return withProfileState((r) => r.consume(e, n));
+function consumeProfile(elapsedMs, endedAt) {
+  return withProfileState((profiler) => profiler.consume(elapsedMs, endedAt));
 }
 //@ chunk-e6aww6q8.js:2494926-2494971 placement
 /**
  * currentTurnIndex：当前回合序号。
  */
 function currentTurnIndex() {
-  return withProfileState((e) => e.turnIndex());
+  return withProfileState((profiler) => profiler.turnIndex());
 }
 //@ chunk-e6aww6q8.js:2494971-2495003 placement
 /**
  * endProfile：结束剖析。
  */
 function endProfile() {
-  withProfileState((e) => e.end());
+  withProfileState((profiler) => profiler.end());
 }
 export {
   startPhaseWithin,

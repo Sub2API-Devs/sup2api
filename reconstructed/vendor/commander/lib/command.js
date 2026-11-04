@@ -5,7 +5,7 @@
  * pieces: chunk-b7dyevzy.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_argument } from "./argument.js";
 import { require_error } from "./error.js";
 import { require_help } from "./help.js";
@@ -13,12 +13,12 @@ import { require_option } from "./option.js";
 import { require_suggestSimilar } from "./suggestSimilar.js";
 
 //@ chunk-b7dyevzy.js:9832-34778 cjs-fingerprint
-var require_command = x(function (cjsExports) {
+var require_command = __commonJS(function (cjsExports) {
   var EventEmitter = importMetaRequire("events").EventEmitter;
   var childProcess = importMetaRequire("child_process");
   var path = importMetaRequire("path");
   var fs = importMetaRequire("fs");
-  var l = importMetaRequire("process");
+  var processModule = importMetaRequire("process");
   var { Argument, humanReadableArgName } = require_argument();
   var { CommanderError } = require_error();
   var { Help } = require_help();
@@ -59,10 +59,10 @@ var require_command = x(function (cjsExports) {
       this._showHelpAfterError = false;
       this._showSuggestionAfterError = true;
       this._outputConfiguration = {
-        writeOut: (str) => l.stdout.write(str),
-        writeErr: (str) => l.stderr.write(str),
-        getOutHelpWidth: () => (l.stdout.isTTY ? l.stdout.columns : undefined),
-        getErrHelpWidth: () => (l.stderr.isTTY ? l.stderr.columns : undefined),
+        writeOut: (str) => processModule.stdout.write(str),
+        writeErr: (str) => processModule.stderr.write(str),
+        getOutHelpWidth: () => (processModule.stdout.isTTY ? processModule.stdout.columns : undefined),
+        getErrHelpWidth: () => (processModule.stderr.isTTY ? processModule.stderr.columns : undefined),
         outputError: (str, write) => write(str),
       };
       this._hidden = false;
@@ -233,7 +233,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
     }
     _exit(exitCode, code, message) {
       if (this._exitCallback) this._exitCallback(new CommanderError(exitCode, code, message));
-      l.exit(exitCode);
+      processModule.exit(exitCode);
     }
     action(fn) {
       let listener = (args) => {
@@ -413,8 +413,8 @@ Expecting one of '${allowedValues.join("', '")}'`);
         throw Error("first parameter to parse must be array or undefined");
       parseOptions = parseOptions || {};
       if (argv === undefined && parseOptions.from === undefined) {
-        if (l.versions?.electron) parseOptions.from = "electron";
-        let execArgv = l.execArgv ?? [];
+        if (processModule.versions?.electron) parseOptions.from = "electron";
+        let execArgv = processModule.execArgv ?? [];
         if (
           execArgv.includes("-e") ||
           execArgv.includes("--eval") ||
@@ -423,7 +423,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
         )
           parseOptions.from = "eval";
       }
-      if (argv === undefined) argv = l.argv;
+      if (argv === undefined) argv = processModule.argv;
       this.rawArgs = argv.slice();
       let userArgs;
       switch (parseOptions.from) {
@@ -433,7 +433,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
           userArgs = argv.slice(2);
           break;
         case "electron":
-          if (l.defaultApp) {
+          if (processModule.defaultApp) {
             this._scriptPath = argv[1];
             userArgs = argv.slice(2);
           } else userArgs = argv.slice(1);
@@ -497,11 +497,11 @@ Expecting one of '${allowedValues.join("', '")}'`);
       }
       launchWithNode = sourceExt.includes(path.extname(executableFile));
       let proc;
-      if (l.platform !== "win32") {
+      if (processModule.platform !== "win32") {
         if (launchWithNode) {
           args.unshift(executableFile);
-          args = incrementNodeInspectorPort(l.execArgv).concat(args);
-          proc = childProcess.spawn(l.argv[0], args, {
+          args = incrementNodeInspectorPort(processModule.execArgv).concat(args);
+          proc = childProcess.spawn(processModule.argv[0], args, {
             stdio: "inherit",
           });
         } else
@@ -510,21 +510,21 @@ Expecting one of '${allowedValues.join("', '")}'`);
           });
       } else {
         args.unshift(executableFile);
-        args = incrementNodeInspectorPort(l.execArgv).concat(args);
-        proc = childProcess.spawn(l.execPath, args, {
+        args = incrementNodeInspectorPort(processModule.execArgv).concat(args);
+        proc = childProcess.spawn(processModule.execPath, args, {
           stdio: "inherit",
         });
       }
       if (!proc.killed)
         ["SIGUSR1", "SIGUSR2", "SIGTERM", "SIGINT", "SIGHUP"].forEach((signal) => {
-          l.on(signal, () => {
+          processModule.on(signal, () => {
             if (proc.killed === false && proc.exitCode === null) proc.kill(signal);
           });
         });
       let exitCallback = this._exitCallback;
       proc.on("close", (code) => {
         code = code ?? 1;
-        if (!exitCallback) l.exit(code);
+        if (!exitCallback) processModule.exit(code);
         else exitCallback(new CommanderError(code, "commander.executeSubCommandAsync", "(close)"));
       });
       proc.on("error", (err) => {
@@ -538,7 +538,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
  - ${executableDirMessage}`;
           throw Error(executableMissing);
         } else if (err.code === "EACCES") throw Error(`'${executableFile}' not executable`);
-        if (!exitCallback) l.exit(1);
+        if (!exitCallback) processModule.exit(1);
         else {
           let wrappedError = new CommanderError(1, "commander.executeSubCommandAsync", "(error)");
           wrappedError.nestedError = err;
@@ -833,8 +833,8 @@ Expecting one of '${allowedValues.join("', '")}'`);
       if (this._storeOptionsAsProperties) {
         let result = {};
         let len = this.options.length;
-        for (let i = 0; i < len; i++) {
-          let key = this.options[i].attributeName();
+        for (let optionIndex = 0; optionIndex < len; optionIndex++) {
+          let key = this.options[optionIndex].attributeName();
           result[key] = key === this._versionOptionName ? this._version : this[key];
         }
         return result;
@@ -870,14 +870,14 @@ Expecting one of '${allowedValues.join("', '")}'`);
     }
     _parseOptionsEnv() {
       this.options.forEach((option) => {
-        if (option.envVar && option.envVar in l.env) {
+        if (option.envVar && option.envVar in processModule.env) {
           let optionKey = option.attributeName();
           if (
             this.getOptionValue(optionKey) === undefined ||
             ["default", "config", "env"].includes(this.getOptionValueSource(optionKey))
           )
             if (option.required || option.optional)
-              this.emit(`optionEnv:${option.name()}`, l.env[option.envVar]);
+              this.emit(`optionEnv:${option.name()}`, processModule.env[option.envVar]);
             else this.emit(`optionEnv:${option.name()}`);
         }
       });
@@ -940,8 +940,9 @@ Expecting one of '${allowedValues.join("', '")}'`);
       };
       let getErrorMessage = (option) => {
         let bestOption = findBestOptionFromValue(option);
-        let o = bestOption.attributeName();
-        if (this.getOptionValueSource(o) === "env") return `environment variable '${bestOption.envVar}'`;
+        let optionKey = bestOption.attributeName();
+        if (this.getOptionValueSource(optionKey) === "env")
+          return `environment variable '${bestOption.envVar}'`;
         return `option '${bestOption.flags}'`;
       };
       let message = `error: ${getErrorMessage(option)} cannot be used with ${getErrorMessage(conflictingOption)}`;
@@ -975,8 +976,8 @@ Expecting one of '${allowedValues.join("', '")}'`);
       if (this._allowExcessArguments) return;
       let expected = this.registeredArguments.length;
       let s_2 = expected === 1 ? "" : "s";
-      let s = `error: too many arguments${this.parent ? ` for '${this.name()}'` : ""}. Expected ${expected} argument${s_2} but got ${receivedArgs.length}.`;
-      this.error(s, {
+      let pluralSuffix = `error: too many arguments${this.parent ? ` for '${this.name()}'` : ""}. Expected ${expected} argument${s_2} but got ${receivedArgs.length}.`;
+      this.error(pluralSuffix, {
         code: "commander.excessArguments",
       });
     }
@@ -1138,7 +1139,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
     }
     help(contextOptions) {
       this.outputHelp(contextOptions);
-      let exitCode = l.exitCode || 0;
+      let exitCode = processModule.exitCode || 0;
       if (exitCode === 0 && contextOptions && typeof contextOptions !== "function" && contextOptions.error)
         exitCode = 1;
       this._exit(exitCode, "commander.help", "(outputHelp)");

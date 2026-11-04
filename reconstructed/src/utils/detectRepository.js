@@ -22,20 +22,30 @@ import { logForDebugging } from "./debug.js";
 import { ghIsDangerousCallback, getGitHostKind } from "./gitHosts.js";
 import { describeUrlScheme } from "./resultError.js";
 import { isSuspiciousUrl } from "./fsBoundRead.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-vkh471k3.js:611-1012 placement
 /**
  * 主机名正则片段（标签由字母数字与连字符组成）。
  */
-var REPO_NAME_PATTERN = String.raw`(?!\.{1,2}(?:/|$))[A-Za-z0-9_.][\w.-]*`;
-var HOSTNAME_PATTERN = String.raw`[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*`;
-var GITLAB_MR_PATH_PATTERN = `(?:${REPO_NAME_PATTERN}/)+${REPO_NAME_PATTERN}/-/merge_requests`;
-var GOOGLESOURCE_HOST_PATTERN = String.raw`[a-z0-9-]+-review\.googlesource\.com`;
-var regExp = new RegExp(
-  String.raw`^https://${GOOGLESOURCE_HOST_PATTERN}/c/(?:${REPO_NAME_PATTERN}/)*${REPO_NAME_PATTERN}/\+/\d{1,9}$`,
-);
-var regExp_2 = new RegExp(`^https?://${HOSTNAME_PATTERN}(?::\\d{1,5})?/${GITLAB_MR_PATH_PATTERN}/\\d+$`);
-var MAX_REPO_URL_CHARS = 2048;
+var REPO_NAME_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var HOSTNAME_PATTERN;
+var GITLAB_MR_PATH_PATTERN;
+var GOOGLESOURCE_HOST_PATTERN;
+var regExp;
+var regExp_2;
+var MAX_REPO_URL_CHARS;
+deferInit("chunk-vkh471k3.js:611", () => {
+  REPO_NAME_PATTERN = String.raw`(?!\.{1,2}(?:/|$))[A-Za-z0-9_.][\w.-]*`;
+  HOSTNAME_PATTERN = String.raw`[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*`;
+  GITLAB_MR_PATH_PATTERN = `(?:${REPO_NAME_PATTERN}/)+${REPO_NAME_PATTERN}/-/merge_requests`;
+  GOOGLESOURCE_HOST_PATTERN = String.raw`[a-z0-9-]+-review\.googlesource\.com`;
+  regExp = new RegExp(
+    String.raw`^https://${GOOGLESOURCE_HOST_PATTERN}/c/(?:${REPO_NAME_PATTERN}/)*${REPO_NAME_PATTERN}/\+/\d{1,9}$`,
+  );
+  regExp_2 = new RegExp(`^https?://${HOSTNAME_PATTERN}(?::\\d{1,5})?/${GITLAB_MR_PATH_PATTERN}/\\d+$`);
+  MAX_REPO_URL_CHARS = 2048;
+});
 //@ chunk-vkh471k3.js:1012-1068 placement
 /**
  * 判断 URL 是否含 “/-/merge_requests/数字” 路径。
@@ -49,10 +59,10 @@ var DEFAULT_INVOCATION_ENCODING = undefined;
 /**
  * 按 {file, args, cwd, env} 执行一次调用（不继承环境、默认编码），属于外部命令调用工具，误归 shellConfig（旧版名 readFileLines 错配）。
  */
-function runInvocation({ file, args, cwd, env }, u) {
+function runInvocation({ file, args, cwd, env }, options) {
   return execFileNoThrowWithCwd(file, args, {
-    ...u,
-    encoding: u.encoding ?? DEFAULT_INVOCATION_ENCODING,
+    ...options,
+    encoding: options.encoding ?? DEFAULT_INVOCATION_ENCODING,
     cwd,
     env,
     extendEnv: false,
@@ -64,8 +74,8 @@ function runInvocation({ file, args, cwd, env }, u) {
  */
 var MAX_REPO_PATH_SEGMENTS = 21;
 //@ chunk-vkh471k3.js:1208-1252 facade-majority
-function isNestedGitLabProject(e) {
-  return e.owner.includes("/");
+function isNestedGitLabProject(repo) {
+  return repo.owner.includes("/");
 }
 //@ chunk-vkh471k3.js:1252-1325 facade-majority
 function clearRepositoryCaches() {
@@ -90,47 +100,47 @@ function repoDetectionGuards() {
   return trustGuardRegistry.of(getRootSession().host);
 }
 //@ chunk-vkh471k3.js:1554-1589 facade-majority
-function setRepoDetectionGuards(e) {
-  repoDetectionGuards().setGuards(e);
+function setRepoDetectionGuards(guards) {
+  repoDetectionGuards().setGuards(guards);
 }
 //@ chunk-vkh471k3.js:1589-2094 facade-majority
-async function resolveRemote(cwd, o) {
+async function resolveRemote(cwd, gitTool) {
   if (repoDetectionGuards().blocked()) return null;
-  let r = o ?? gitExe();
-  let n = (...h) => {
-    let g = [...GIT_SAFE_GLOBAL_ARGS, ...h];
-    let d = {
+  let exe = gitTool ?? gitExe();
+  let run = (...args) => {
+    let fullArgs = [...GIT_SAFE_GLOBAL_ARGS, ...args];
+    let options = {
       preserveOutputOnError: false,
     };
-    return typeof r === "string"
-      ? execFileNoThrowWithCwd(r, g, {
-          ...d,
+    return typeof exe === "string"
+      ? execFileNoThrowWithCwd(exe, fullArgs, {
+          ...options,
           cwd,
         })
-      : runInvocation(r(g), d);
+      : runInvocation(exe(fullArgs), options);
   };
-  let u = await n("remote", "get-url", "origin");
-  if (u.code === 0 && u.stdout.trim())
+  let originResult = await run("remote", "get-url", "origin");
+  if (originResult.code === 0 && originResult.stdout.trim())
     return {
       name: "origin",
-      url: u.stdout.trim(),
+      url: originResult.stdout.trim(),
     };
-  let s = await n("remote");
-  let a =
-    s.code === 0
+  let remotes = await run("remote");
+  let remoteName =
+    remotes.code === 0
       ? firstLineOf(
-          s.stdout.trim(),
+          remotes.stdout.trim(),
           `
 `,
         ).trim()
       : undefined;
-  if (!a) return null;
-  let c = await n("remote", "get-url", a);
-  let l = c.code === 0 ? c.stdout.trim() : "";
-  if (!l) return null;
+  if (!remoteName) return null;
+  let urlResult = await run("remote", "get-url", remoteName);
+  let url = urlResult.code === 0 ? urlResult.stdout.trim() : "";
+  if (!url) return null;
   return {
-    name: printableText(a),
-    url: l,
+    name: printableText(remoteName),
+    url,
   };
 }
 //@ chunk-vkh471k3.js:2094-2148 facade-majority
@@ -156,90 +166,90 @@ async function getOriginPushUrl(cwd) {
       preserveOutputOnError: false,
     },
   );
-  let u = code === 0 ? stdout.trim() || null : null;
+  let url = code === 0 ? stdout.trim() || null : null;
   return {
-    url: u,
-    answered: u !== null || exitCode === 2,
+    url,
+    answered: url !== null || exitCode === 2,
   };
 }
 //@ chunk-vkh471k3.js:2453-3470 facade-majority = detectCurrentRepositoryWithHost (0.702)
 /**
  * 从 origin URL 解析当前仓库 {host, owner, name}，按 cwd 缓存。
  */
-async function detectCurrentRepositoryWithHost(e, o) {
-  let cwd = e ?? getCwd();
+async function detectCurrentRepositoryWithHost(cwd, options) {
+  let cwd_2 = cwd ?? getCwd();
   let repositoryByCwd = getGitRepoCache().repositoryByCwd;
-  if (!o?.skipCache && repositoryByCwd.has(cwd)) {
-    let s = repositoryByCwd.get(cwd) ?? null;
-    if (!s || !isNestedGitLabProject(s)) return s;
+  if (!options?.skipCache && repositoryByCwd.has(cwd_2)) {
+    let cached = repositoryByCwd.get(cwd_2) ?? null;
+    if (!cached || !isNestedGitLabProject(cached)) return cached;
   }
-  let u = () => {
-    let s = repositoryByCwd.get(cwd);
-    if (s && isNestedGitLabProject(s)) repositoryByCwd.delete(cwd);
+  let invalidateNested = () => {
+    let cached = repositoryByCwd.get(cwd_2);
+    if (cached && isNestedGitLabProject(cached)) repositoryByCwd.delete(cwd_2);
   };
   try {
-    let remoteUrl = await resolveRemoteUrl(cwd);
+    let remoteUrl = await resolveRemoteUrl(cwd_2);
     logForDebugging(`Git remote URL: ${redactGitRemoteCredentials(remoteUrl)}`);
     if (!remoteUrl) {
       logForDebugging("No git remote URL found");
-      getGitRepoCache().remoteHostByCwd.delete(cwd);
-      u();
+      getGitRepoCache().remoteHostByCwd.delete(cwd_2);
+      invalidateNested();
       return null;
     }
-    let a = null;
-    let l = ((d) => {
-      let parsed = parseGitRemote(d);
+    let nestedRepo = null;
+    let repo = ((remoteUrl) => {
+      let parsed = parseGitRemote(remoteUrl);
       if (parsed && isNestedGitLabProject(parsed)) {
-        a ??= parsed;
+        nestedRepo ??= parsed;
         return null;
       }
       return parsed;
     })(remoteUrl);
-    let h = false;
-    if (!l) {
+    let pushAnswered = false;
+    if (!repo) {
       let { stdout, code, exitCode } = await execFileNoThrowWithCwd(
         gitExe(),
         [...GIT_SAFE_GLOBAL_ARGS, "config", "--get", "remote.origin.url"],
         {
-          cwd,
+          cwd: cwd_2,
           preserveOutputOnError: false,
         },
       );
-      let m = code === 0 ? stdout.trim() : null;
-      let E = m !== null || exitCode === 1;
-      if (m && m !== remoteUrl) {
-        l = parseGitRemote(m);
-        if (l && isNestedGitLabProject(l)) {
-          a ??= l;
-          l = null;
+      let pushUrl = code === 0 ? stdout.trim() : null;
+      let pushKnown = pushUrl !== null || exitCode === 1;
+      if (pushUrl && pushUrl !== remoteUrl) {
+        repo = parseGitRemote(pushUrl);
+        if (repo && isNestedGitLabProject(repo)) {
+          nestedRepo ??= repo;
+          repo = null;
         }
       }
-      if (!l) {
-        let originPushUrl = await getOriginPushUrl(cwd);
+      if (!repo) {
+        let originPushUrl = await getOriginPushUrl(cwd_2);
         let url = originPushUrl.url;
-        if (url && url !== remoteUrl && url !== m) {
-          l = parseGitRemote(url);
-          if (l && isNestedGitLabProject(l)) {
-            a ??= l;
-            l = null;
+        if (url && url !== remoteUrl && url !== pushUrl) {
+          repo = parseGitRemote(url);
+          if (repo && isNestedGitLabProject(repo)) {
+            nestedRepo ??= repo;
+            repo = null;
           }
         }
-        h = E && originPushUrl.answered;
+        pushAnswered = pushKnown && originPushUrl.answered;
       }
     }
-    l ??= a;
+    repo ??= nestedRepo;
     logForDebugging(
-      `Parsed repository: ${l ? `${l.host}/${l.owner}/${l.name}` : null} from URL: ${redactGitRemoteCredentials(remoteUrl)}`,
+      `Parsed repository: ${repo ? `${repo.host}/${repo.owner}/${repo.name}` : null} from URL: ${redactGitRemoteCredentials(remoteUrl)}`,
     );
-    let g = l?.host ?? ghIsDangerousCallback(remoteUrl);
-    if (g) getGitRepoCache().remoteHostByCwd.set(cwd, g);
-    else getGitRepoCache().remoteHostByCwd.delete(cwd);
-    if (l) repositoryByCwd.set(cwd, l);
-    else if (h) repositoryByCwd.delete(cwd);
-    return l;
+    let host = repo?.host ?? ghIsDangerousCallback(remoteUrl);
+    if (host) getGitRepoCache().remoteHostByCwd.set(cwd_2, host);
+    else getGitRepoCache().remoteHostByCwd.delete(cwd_2);
+    if (repo) repositoryByCwd.set(cwd_2, repo);
+    else if (pushAnswered) repositoryByCwd.delete(cwd_2);
+    return repo;
   } catch (error) {
     logForDebugging(`Error detecting repository: ${error}`);
-    u();
+    invalidateNested();
     return null;
   }
 }
@@ -254,24 +264,27 @@ function getCachedRepositoryHost() {
   return getGitRepoCache().repositoryByCwd.get(getCwd())?.host ?? null;
 }
 //@ chunk-vkh471k3.js:3647-3782 facade-majority
-function isGitLabMrTarget(e) {
-  if (isGitLabMergeRequestUrl(e) || /^!\d+$/.test(e)) return true;
-  if (/^https?:\/\//i.test(e)) return false;
+function isGitLabMrTarget(target) {
+  if (isGitLabMergeRequestUrl(target) || /^!\d+$/.test(target)) return true;
+  if (/^https?:\/\//i.test(target)) return false;
   let cachedRepositoryHost = getCachedRepositoryHost();
   return cachedRepositoryHost !== null && getGitHostKind(cachedRepositoryHost) === "gitlab";
 }
 //@ chunk-vkh471k3.js:3782-3926 facade-majority
-function glabMrId(e) {
-  let r = /\/-\/merge_requests\/(\d+)/.exec(e)?.[1] ?? e.replace(/^!(\d+)$/, "$1");
-  return /^[A-Za-z0-9][A-Za-z0-9._\/-]*$/.test(r) ? r : "";
+function glabMrId(target) {
+  let mrId = /\/-\/merge_requests\/(\d+)/.exec(target)?.[1] ?? target.replace(/^!(\d+)$/, "$1");
+  return /^[A-Za-z0-9][A-Za-z0-9._\/-]*$/.test(mrId) ? mrId : "";
 }
 //@ chunk-vkh471k3.js:3926-4017 layout
-var GITLAB_MR_URL_PATTERN = new RegExp(
-  `^(https?://${HOSTNAME_PATTERN}(?::\\d{1,5})?/(?:${REPO_NAME_PATTERN}/)+${REPO_NAME_PATTERN})/-/merge_requests/\\d`,
-);
+var GITLAB_MR_URL_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vkh471k3.js:3926", () => {
+  GITLAB_MR_URL_PATTERN = new RegExp(
+    `^(https?://${HOSTNAME_PATTERN}(?::\\d{1,5})?/(?:${REPO_NAME_PATTERN}/)+${REPO_NAME_PATTERN})/-/merge_requests/\\d`,
+  );
+});
 //@ chunk-vkh471k3.js:4017-4061 facade-majority
-function glabMrProjectUrl(e) {
-  return GITLAB_MR_URL_PATTERN.exec(e)?.[1] ?? null;
+function glabMrProjectUrl(target) {
+  return GITLAB_MR_URL_PATTERN.exec(target)?.[1] ?? null;
 }
 //@ chunk-vkh471k3.js:4061-4120 facade-majority
 function getCachedRemoteHost() {
@@ -282,8 +295,8 @@ function isCachedGitHubRepo() {
   let cwd = getCwd();
   let repositoryByCwd = getGitRepoCache().repositoryByCwd;
   if (!repositoryByCwd.has(cwd)) return;
-  let r = repositoryByCwd.get(cwd);
-  return !!r && isGithubDotCom(r.host);
+  let cached = repositoryByCwd.get(cwd);
+  return !!cached && isGithubDotCom(cached.host);
 }
 //@ chunk-vkh471k3.js:4226-4771 facade-majority = parseGitRemote (1)
 /**
@@ -322,29 +335,29 @@ function parseGitRemote(input) {
 }
 //@ chunk-vkh471k3.js:4771-5243 layout = parseGitRemote (0.793)
 function parseGitRemote_2(input) {
-  let o;
-  let r;
-  let n;
+  let protocol;
+  let hostPart;
+  let pathPart;
   let sshMatch = input.match(/^git@([^:/@]+):(.+?)(?:\.git)?\/?$/);
   if (sshMatch?.[1] && sshMatch[2]) {
-    r = sshMatch[1];
-    n = sshMatch[2];
+    hostPart = sshMatch[1];
+    pathPart = sshMatch[2];
   } else {
     let urlMatch = input.match(
       /^(https?|ssh|git):\/\/(?:[^@/?#]*@)?([^/:?#@]+(?::\d+)?)\/(.+?)(?:\.git)?\/?$/,
     );
     if (!urlMatch?.[1] || !urlMatch[2] || !urlMatch[3]) return null;
-    o = urlMatch[1];
-    r = urlMatch[2];
-    n = urlMatch[3];
+    protocol = urlMatch[1];
+    hostPart = urlMatch[2];
+    pathPart = urlMatch[3];
   }
-  let hostWithoutPort = firstLineOf(r, ":");
+  let hostWithoutPort = firstLineOf(hostPart, ":");
   if (!looksLikeRealHostname(hostWithoutPort) || getGitHostKind(hostWithoutPort) !== "gitlab") return null;
-  let parts = n.split("/");
+  let parts = pathPart.split("/");
   if (parts.length < 3 || parts.length > MAX_REPO_PATH_SEGMENTS + 1 || !parts.every(isValidRepoSegment))
     return null;
   return {
-    host: o === "https" || o === "http" ? r : hostWithoutPort,
+    host: protocol === "https" || protocol === "http" ? hostPart : hostWithoutPort,
     owner: parts.slice(0, -1).join("/"),
     name: parts.at(-1),
   };
@@ -353,8 +366,8 @@ function parseGitRemote_2(input) {
 /**
  * 从任意远程 URL 末尾提取 owner/name（去掉 .git），校验段名合法。
  */
-function parseRepoSlug(e) {
-  let match = e
+function parseRepoSlug(input) {
+  let match = input
     .trim()
     .replace(/\/+$/, "")
     .replace(/^[a-z][a-z0-9+.-]*:\/\/[^/]*/i, "")

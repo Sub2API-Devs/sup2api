@@ -11,10 +11,10 @@
 import { isArtifacts404Failure } from "../../services/mcp/redactMcpErrors.js";
 import { describeMcpServerOrigin } from "../../services/mcp/mcpServerOrigin.js";
 import { hasValidMcpOAuthToken } from "./CapabilitiesSection.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../../state/AppState.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { y, P } from "../../../vendor/react/cjs/react.production.js";
+import { useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { extractAgentMcpServers, filterToolsByServer } from "../../services/mcp/utils.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { MCPListPanel } from "./MCPListPanel.js";
@@ -36,8 +36,8 @@ function isNotIdeServer(c) {
   return c.name !== "ide";
 }
 //@ chunk-cpqpnzp4.js:32697-32727 layout
-function isNotSelectedServer(Lo) {
-  return !isArtifacts404Failure(Lo);
+function isNotSelectedServer(client) {
+  return !isArtifacts404Failure(client);
 }
 //@ chunk-cpqpnzp4.js:32727-32784 callgraph-fingerprint = _temp4 (1)
 function compareServerNames(a, b) {
@@ -47,57 +47,57 @@ function compareServerNames(a, b) {
 /**
  * MCP 客户端转为设置界面的服务器信息（按传输类型，SSE/HTTP 查询认证状态）。
  */
-async function toServerInfo(I) {
-  let Oe = {
-    name: I.name,
-    client: I,
-    scope: I.config.scope,
-    displayEndpoint: describeMcpServerOrigin(I.name, I.config),
+async function toServerInfo(client) {
+  let serverInfo = {
+    name: client.name,
+    client,
+    scope: client.config.scope,
+    displayEndpoint: describeMcpServerOrigin(client.name, client.config),
   };
-  switch (I.config.type) {
+  switch (client.config.type) {
     case "claudeai-proxy": {
       return {
-        ...Oe,
+        ...serverInfo,
         transport: "claudeai-proxy",
         isAuthenticated: false,
-        config: I.config,
+        config: client.config,
       };
     }
     case "sse": {
       return {
-        ...Oe,
+        ...serverInfo,
         transport: "sse",
-        isAuthenticated: await hasValidMcpOAuthToken(I.name, I.config),
-        config: I.config,
+        isAuthenticated: await hasValidMcpOAuthToken(client.name, client.config),
+        config: client.config,
       };
     }
     case "http": {
       return {
-        ...Oe,
+        ...serverInfo,
         transport: "http",
-        isAuthenticated: await hasValidMcpOAuthToken(I.name, I.config),
-        config: I.config,
+        isAuthenticated: await hasValidMcpOAuthToken(client.name, client.config),
+        config: client.config,
       };
     }
     default: {
       return {
-        ...Oe,
+        ...serverInfo,
         transport: "stdio",
-        config: I.config,
+        config: client.config,
       };
     }
   }
 }
 //@ chunk-cpqpnzp4.js:33273-33299 layout
-function negate(zo) {
-  return !zo;
+function negate(value) {
+  return !value;
 }
 //@ chunk-cpqpnzp4.js:33299-37993 fingerprint = MCPSettings (0.774)
 /**
  * /mcp：服务器列表 → 服务器菜单（stdio/remote/agent）→ 工具列表 → 工具详情；无服务器时提示运行 claude doctor。
  */
 function MCPSettings(props) {
-  let $ = w(78);
+  let $ = useMemoCache(78);
   let { onComplete } = props;
   let mcp = useAppState(selectMcp);
   let agentDefinitions = useAppState(selectAgentDefinitions);
@@ -109,79 +109,80 @@ function MCPSettings(props) {
     };
     $[0] = t1;
   } else t1 = $[0];
-  let [viewState, setViewState] = y(t1);
+  let [viewState, setViewState] = useState(t1);
   let t2;
   if ($[1] === MEMO_CACHE_SENTINEL) {
     t2 = [];
     $[1] = t2;
   } else t2 = $[1];
-  let [_, h] = y(t2);
-  let [U, ne] = y(false);
+  let [serverInfos, setServerInfos] = useState(t2);
+  let [showUnused, setShowUnused] = useState(false);
   let t3;
   if ($[2] !== agentDefinitions.allAgents) {
     t3 = extractAgentMcpServers(agentDefinitions.allAgents);
     $[2] = agentDefinitions.allAgents;
     $[3] = t3;
   } else t3 = $[3];
-  let K = t3;
+  let agentServers = t3;
   let t4;
   if ($[4] !== mcpClients) {
     t4 = mcpClients.filter(isNotIdeServer).filter(isNotSelectedServer).sort(compareServerNames);
     $[4] = mcpClients;
     $[5] = t4;
   } else t4 = $[5];
-  let T = t4;
-  let X;
-  if ($[6] !== T || $[7] !== mcp.tools) {
-    X = {};
-    for (const z of T) X[z.name] = filterToolsByServer(mcp.tools, z.name).length;
-    $[6] = T;
+  let configuredClients = t4;
+  let toolCountsByServer;
+  if ($[6] !== configuredClients || $[7] !== mcp.tools) {
+    toolCountsByServer = {};
+    for (const client of configuredClients)
+      toolCountsByServer[client.name] = filterToolsByServer(mcp.tools, client.name).length;
+    $[6] = configuredClients;
     $[7] = mcp.tools;
-    $[8] = X;
-  } else X = $[8];
-  let toolCountsByServer = X;
-  let me;
-  let le;
-  if ($[9] !== T) {
-    me = () => {
-      let ke = false;
+    $[8] = toolCountsByServer;
+  } else toolCountsByServer = $[8];
+  let toolCountsByServer_2 = toolCountsByServer;
+  let loadServersEffect;
+  let loadServersDeps;
+  if ($[9] !== configuredClients) {
+    loadServersEffect = () => {
+      let cancelled = false;
       let prepareServers = async function prepareServers() {
-        let serverInfos = await Promise.all(T.map(toServerInfo));
-        if (ke) {
+        let serverInfos = await Promise.all(configuredClients.map(toServerInfo));
+        if (cancelled) {
           return;
         }
-        h(serverInfos);
+        setServerInfos(serverInfos);
       };
       prepareServers();
       return () => {
-        ke = true;
+        cancelled = true;
       };
     };
-    le = [T];
-    $[9] = T;
-    $[10] = me;
-    $[11] = le;
+    loadServersDeps = [configuredClients];
+    $[9] = configuredClients;
+    $[10] = loadServersEffect;
+    $[11] = loadServersDeps;
   } else {
-    me = $[10];
-    le = $[11];
+    loadServersEffect = $[10];
+    loadServersDeps = $[11];
   }
-  P(me, le);
-  let xe;
+  useEffect(loadServersEffect, loadServersDeps);
+  let emptyCheckEffect;
   if (
-    $[12] !== K.length ||
-    $[13] !== T.length ||
+    $[12] !== agentServers.length ||
+    $[13] !== configuredClients.length ||
     $[14] !== mcp.reservedNameRefusals?.length ||
     $[15] !== mcp.suppressedClaudeAiConnectors?.length ||
     $[16] !== onComplete ||
-    $[17] !== _.length
+    $[17] !== serverInfos.length
   ) {
-    xe = () => {
-      if (_.length === 0 && T.length > 0) {
+    emptyCheckEffect = () => {
+      if (serverInfos.length === 0 && configuredClients.length > 0) {
         return;
       }
       if (
-        _.length === 0 &&
-        K.length === 0 &&
+        serverInfos.length === 0 &&
+        agentServers.length === 0 &&
         (mcp.suppressedClaudeAiConnectors?.length ?? 0) === 0 &&
         (mcp.reservedNameRefusals?.length ?? 0) === 0
       )
@@ -189,35 +190,42 @@ function MCPSettings(props) {
           "No MCP servers configured. Run `claude doctor` if this is unexpected \u2014 it lists MCP config files that failed validation. Otherwise, run `claude mcp --help` or visit https://code.claude.com/docs/en/mcp to learn more.",
         );
     };
-    $[12] = K.length;
-    $[13] = T.length;
+    $[12] = agentServers.length;
+    $[13] = configuredClients.length;
     $[14] = mcp.reservedNameRefusals?.length;
     $[15] = mcp.suppressedClaudeAiConnectors?.length;
     $[16] = onComplete;
-    $[17] = _.length;
-    $[18] = xe;
-  } else xe = $[18];
-  const te = mcp.suppressedClaudeAiConnectors?.length;
-  const Ie = mcp.reservedNameRefusals?.length;
-  let ye;
+    $[17] = serverInfos.length;
+    $[18] = emptyCheckEffect;
+  } else emptyCheckEffect = $[18];
+  const suppressedCount = mcp.suppressedClaudeAiConnectors?.length;
+  const refusalCount = mcp.reservedNameRefusals?.length;
+  let emptyCheckDeps;
   if (
-    $[19] !== K.length ||
-    $[20] !== T.length ||
+    $[19] !== agentServers.length ||
+    $[20] !== configuredClients.length ||
     $[21] !== onComplete ||
-    $[22] !== _.length ||
-    $[23] !== te ||
-    $[24] !== Ie
+    $[22] !== serverInfos.length ||
+    $[23] !== suppressedCount ||
+    $[24] !== refusalCount
   ) {
-    ye = [_.length, T.length, K.length, te, Ie, onComplete];
-    $[19] = K.length;
-    $[20] = T.length;
+    emptyCheckDeps = [
+      serverInfos.length,
+      configuredClients.length,
+      agentServers.length,
+      suppressedCount,
+      refusalCount,
+      onComplete,
+    ];
+    $[19] = agentServers.length;
+    $[20] = configuredClients.length;
     $[21] = onComplete;
-    $[22] = _.length;
-    $[23] = te;
-    $[24] = Ie;
-    $[25] = ye;
-  } else ye = $[25];
-  switch ((P(xe, ye), viewState.type)) {
+    $[22] = serverInfos.length;
+    $[23] = suppressedCount;
+    $[24] = refusalCount;
+    $[25] = emptyCheckDeps;
+  } else emptyCheckDeps = $[25];
+  switch ((useEffect(emptyCheckEffect, emptyCheckDeps), viewState.type)) {
     case "list": {
       let onSelectServer;
       let onSelectAgentServer;
@@ -240,40 +248,40 @@ function MCPSettings(props) {
       }
       let onToggleUnusedConnectors;
       if ($[28] === MEMO_CACHE_SENTINEL) {
-        onToggleUnusedConnectors = () => ne(negate);
+        onToggleUnusedConnectors = () => setShowUnused(negate);
         $[28] = onToggleUnusedConnectors;
       } else onToggleUnusedConnectors = $[28];
       let t11;
       if (
-        $[29] !== K ||
+        $[29] !== agentServers ||
         $[30] !== mcp.reservedNameRefusals ||
         $[31] !== mcp.suppressedClaudeAiConnectors ||
         $[32] !== onComplete ||
-        $[33] !== _ ||
-        $[34] !== U ||
-        $[35] !== toolCountsByServer ||
+        $[33] !== serverInfos ||
+        $[34] !== showUnused ||
+        $[35] !== toolCountsByServer_2 ||
         $[36] !== viewState.defaultTab
       ) {
         t11 = jsxProd_default(MCPListPanel, {
-          servers: _,
+          servers: serverInfos,
           suppressedClaudeAiConnectors: mcp.suppressedClaudeAiConnectors,
           reservedNameRefusals: mcp.reservedNameRefusals,
-          toolCountsByServer,
-          agentServers: K,
+          toolCountsByServer: toolCountsByServer_2,
+          agentServers,
           onSelectServer,
           onSelectAgentServer,
           onComplete,
           defaultTab: viewState.defaultTab,
-          showUnusedConnectors: U,
+          showUnusedConnectors: showUnused,
           onToggleUnusedConnectors,
         });
-        $[29] = K;
+        $[29] = agentServers;
         $[30] = mcp.reservedNameRefusals;
         $[31] = mcp.suppressedClaudeAiConnectors;
         $[32] = onComplete;
-        $[33] = _;
-        $[34] = U;
-        $[35] = toolCountsByServer;
+        $[33] = serverInfos;
+        $[34] = showUnused;
+        $[35] = toolCountsByServer_2;
         $[36] = viewState.defaultTab;
         $[37] = t11;
       } else t11 = $[37];

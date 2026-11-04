@@ -11,6 +11,7 @@
 import { identity as identity_2 } from "../../utils/identity.js";
 import { createValueSlot } from "../../utils/valueSlot.js";
 import { emptyToolHooksSecond } from "./toolCallHooks.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:84992-85025 placement
 /**
@@ -24,9 +25,12 @@ var RELOAD_BACKOFF = {
 /**
  * 重载控制器槽
  */
-var reloadControllerSlot = identity_2(createValueSlot(), (e) => {
-  e.get()?.dispose();
-  e.set(undefined);
+var reloadControllerSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:85025", () => {
+  reloadControllerSlot = identity_2(createValueSlot(), (slot) => {
+    slot.get()?.dispose();
+    slot.set(undefined);
+  });
 });
 //@ chunk-e6aww6q8.js:85082-85094 placement
 /**
@@ -37,7 +41,10 @@ var RELOAD_SETTLE_MS = 250;
 /**
  * 待处理重载槽
  */
-var pendingReloadSlot = identity_2(createValueSlot(), (e) => e.set(undefined));
+var pendingReloadSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:85094", () => {
+  pendingReloadSlot = identity_2(createValueSlot(), (slot) => slot.set(undefined));
+});
 //@ chunk-e6aww6q8.js:85130-85171 placement
 /**
  * limit 5 / gap 2000 / quiet 10000
@@ -51,34 +58,40 @@ var RELOAD_STORM_LIMITS = {
 /**
  * 重载定时槽
  */
-var reloadTimerSlot = identity_2(createValueSlot(), (e) => {
-  e.set(undefined);
+var reloadTimerSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:85171", () => {
+  reloadTimerSlot = identity_2(createValueSlot(), (slot) => {
+    slot.set(undefined);
+  });
 });
 //@ chunk-e6aww6q8.js:85209-85247 placement
 /**
  * 重载原因槽
  */
-var reloadReasonSlot = identity_2(createValueSlot(), (e) => {
-  e.set(undefined);
+var reloadReasonSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:85209", () => {
+  reloadReasonSlot = identity_2(createValueSlot(), (slot) => {
+    slot.set(undefined);
+  });
 });
 //@ chunk-e6aww6q8.js:85247-85312 placement
 /**
  * 记录原因并清掉定时器
  */
-function noteReloadReason(e) {
-  reloadReasonSlot.set(e);
-  let n = reloadTimerSlot.get();
+function noteReloadReason(reason) {
+  reloadReasonSlot.set(reason);
+  let cancelTimer = reloadTimerSlot.get();
   reloadTimerSlot.set(undefined);
-  n?.();
+  cancelTimer?.();
 }
 //@ chunk-e6aww6q8.js:85312-85429 placement
 /**
  * 释放某插件对 MCP 服务器/命令的暂扣（若有），忽略错误。
  */
-var releaseServerHold = (e) =>
-  e === undefined
+var releaseServerHold = (hold) =>
+  hold === undefined
     ? Promise.resolve()
-    : (reloadControllerSlot.get()?.release(e) ?? Promise.resolve()).then(
+    : (reloadControllerSlot.get()?.release(hold) ?? Promise.resolve()).then(
         () => {
           return;
         },

@@ -24,12 +24,12 @@ import { moveKeeperPid } from "./toolCgroup.js";
  */
 async function copyAnsiToClipboard(ansiText, options) {
   try {
-    let { ansiToPng } = await import("./chunk-t6e3jxy0.js");
+    let { ansiToPng } = await import("./ansiToPng.js");
     let pngPath = ansiToPng(ansiText, options);
     let pngPath_2 = await writeTempFile("screenshot-", ".png", pngPath, "screenshots");
-    let E;
+    let result;
     try {
-      E = await copyPngToClipboard(pngPath_2);
+      result = await copyPngToClipboard(pngPath_2);
     } catch (error) {
       logError(error);
       logFeatureBad("clipboard_write", "copy_failed");
@@ -40,9 +40,9 @@ async function copyAnsiToClipboard(ansiText, options) {
     } finally {
       await unlink(pngPath_2).catch(() => {});
     }
-    if (E.success) logFeatureOk("clipboard_write");
+    if (result.success) logFeatureOk("clipboard_write");
     else logFeatureBad("clipboard_write", "copy_failed");
-    return E;
+    return result;
   } catch (error) {
     logError(error);
     logFeatureBad("clipboard_write", "render_failed");
@@ -114,11 +114,11 @@ async function copyPngToClipboard(pngPath) {
   };
 }
 //@ chunk-9h8dr0qb.js:72357-72690 sole-consumer
-function spawnDetachedWithTimeout(o, u, p = 5000) {
+function spawnDetachedWithTimeout(command, args, timeoutMs = 5000) {
   return new Promise((resolve) => {
-    let D;
+    let child;
     try {
-      D = spawn(o, u, {
+      child = spawn(command, args, {
         cwd: undefined,
         detached: true,
         stdio: "ignore",
@@ -128,21 +128,21 @@ function spawnDetachedWithTimeout(o, u, p = 5000) {
       resolve(null);
       return;
     }
-    moveKeeperPid(D.pid);
-    let E = false;
-    function T(v) {
-      if (E) return;
-      E = true;
+    moveKeeperPid(child.pid);
+    let settled = false;
+    function finish(exitCode) {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
-      resolve(v);
+      resolve(exitCode);
     }
     let timer = setTimeout(() => {
-      D.kill("SIGKILL");
-      T(null);
-    }, p);
-    D.once("exit", (v) => T(v));
-    D.once("error", () => T(null));
-    D.unref();
+      child.kill("SIGKILL");
+      finish(null);
+    }, timeoutMs);
+    child.once("exit", (exitCode) => finish(exitCode));
+    child.once("error", () => finish(null));
+    child.unref();
   });
 }
 export { copyAnsiToClipboard };

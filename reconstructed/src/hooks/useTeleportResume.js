@@ -8,8 +8,8 @@
  * pieces: chunk-0bntfk7p.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
-import { y } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
+import { useState } from "../../vendor/react/cjs/react.production.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { sanitizeMarkName } from "../utils/startupMarks.js";
@@ -21,10 +21,10 @@ import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 
 //@ chunk-0bntfk7p.js:1257-1971 fingerprint = useTeleportResume (0.793)
 function useTeleportResume(source) {
-  let $ = w(8);
-  let [isResuming, setIsResuming] = y(false);
-  let [error, setError] = y(null);
-  let [selectedSession, setSelectedSession] = y(null);
+  let $ = useMemoCache(8);
+  let [isResuming, setIsResuming] = useState(false);
+  let [error, setError] = useState(null);
+  let [selectedSession, setSelectedSession] = useState(null);
   let t0;
   if ($[0] !== source) {
     t0 = async (session) => {

@@ -11,6 +11,7 @@
 import { HostScoped } from "../utils/hostScoped.js";
 import { onProcessRootHost } from "../bootstrap/state.js";
 import { logError } from "../utils/log.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-6vnxsn99.js:3428-3922 placement
 /**
@@ -24,7 +25,8 @@ class TaskLoopRegistryState {
   pendingEscalationsByTaskId = new Map();
   inFlightProcessSweeps = new Set();
   dispose() {
-    for (let e of this.pendingEscalationsByTaskId.values()) for (let timer of e.timers) clearTimeout(timer);
+    for (let escalation of this.pendingEscalationsByTaskId.values())
+      for (let timer of escalation.timers) clearTimeout(timer);
     this.pendingEscalationsByTaskId.clear();
     this.inFlightProcessSweeps.clear();
     this.loopsByTaskId.clear();
@@ -37,46 +39,49 @@ class TaskLoopRegistryState {
 /**
  * 按 host 保存的任务循环注册表。
  */
-var taskLoopRegistrySlots = new HostScoped(() => new TaskLoopRegistryState());
+var taskLoopRegistrySlots; // deferred: uses TaskLoopRegistryState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-6vnxsn99.js:3922", () => {
+  taskLoopRegistrySlots = new HostScoped(() => new TaskLoopRegistryState());
+});
 //@ chunk-6vnxsn99.js:3947-3975 placement
 function getTaskLoopRegistry() {
   return onProcessRootHost(taskLoopRegistrySlots);
 }
 //@ chunk-6vnxsn99.js:3975-4032 placement
-function wasTaskEverRegistered(e) {
-  return getTaskLoopRegistry().everRegisteredTaskIds.has(e);
+function wasTaskEverRegistered(taskId) {
+  return getTaskLoopRegistry().everRegisteredTaskIds.has(taskId);
 }
 //@ chunk-6vnxsn99.js:4032-4494 placement
-function registerTaskLoop(e, killController, r = {}) {
+function registerTaskLoop(taskId, killController, options = {}) {
   let { everRegisteredTaskIds, loopsByTaskId } = getTaskLoopRegistry();
-  everRegisteredTaskIds.add(e);
-  let a = loopsByTaskId.get(e);
-  if (a) {
-    loopsByTaskId.delete(e);
-    runSettleCallbacks(a);
+  everRegisteredTaskIds.add(taskId);
+  let previousLoop = loopsByTaskId.get(taskId);
+  if (previousLoop) {
+    loopsByTaskId.delete(taskId);
+    runSettleCallbacks(previousLoop);
   }
-  let u = {
+  let loop = {
     killController,
     agentControllersByAgentId: new Map(),
     settleCallbacks: [],
-    settleRequiresEmptyAgentAssociations: r.settleRequiresEmptyAgentAssociations ?? false,
+    settleRequiresEmptyAgentAssociations: options.settleRequiresEmptyAgentAssociations ?? false,
     chainSettled: false,
   };
-  loopsByTaskId.set(e, u);
+  loopsByTaskId.set(taskId, loop);
   return () => {
-    if (loopsByTaskId.get(e) !== u) return;
-    u.chainSettled = true;
-    if (u.settleRequiresEmptyAgentAssociations && u.agentControllersByAgentId.size > 0) return;
-    loopsByTaskId.delete(e);
-    runSettleCallbacks(u);
+    if (loopsByTaskId.get(taskId) !== loop) return;
+    loop.chainSettled = true;
+    if (loop.settleRequiresEmptyAgentAssociations && loop.agentControllersByAgentId.size > 0) return;
+    loopsByTaskId.delete(taskId);
+    runSettleCallbacks(loop);
   };
 }
 //@ chunk-6vnxsn99.js:4494-4563 placement
 /**
  * 依次执行注册的结算回调，异常只记录。
  */
-function runSettleCallbacks(e) {
-  for (let settleCallback of e.settleCallbacks)
+function runSettleCallbacks(loop) {
+  for (let settleCallback of loop.settleCallbacks)
     try {
       settleCallback();
     } catch (error) {
@@ -84,57 +89,62 @@ function runSettleCallbacks(e) {
     }
 }
 //@ chunk-6vnxsn99.js:4563-4611 placement
-function isTaskLoopSettled(e) {
-  return !getTaskLoopRegistry().loopsByTaskId.has(e);
+function isTaskLoopSettled(taskId) {
+  return !getTaskLoopRegistry().loopsByTaskId.has(taskId);
 }
 //@ chunk-6vnxsn99.js:4611-4660 placement
-function getTaskLoop(e) {
-  return getTaskLoopRegistry().loopsByTaskId.get(e);
+function getTaskLoop(taskId) {
+  return getTaskLoopRegistry().loopsByTaskId.get(taskId);
 }
 //@ chunk-6vnxsn99.js:4660-4772 placement
-function onTaskLoopSettled(taskId, n) {
-  let r = getTaskLoopRegistry().loopsByTaskId.get(taskId);
-  if (!r) {
+function onTaskLoopSettled(taskId, callback) {
+  let loop = getTaskLoopRegistry().loopsByTaskId.get(taskId);
+  if (!loop) {
     try {
-      n();
+      callback();
     } catch (error) {
       logError(error);
     }
     return;
   }
-  r.settleCallbacks.push(n);
+  loop.settleCallbacks.push(callback);
 }
 //@ chunk-6vnxsn99.js:4772-4837 placement
-function getTaskKillController(e) {
-  return getTaskLoopRegistry().loopsByTaskId.get(e)?.killController;
+function getTaskKillController(taskId) {
+  return getTaskLoopRegistry().loopsByTaskId.get(taskId)?.killController;
 }
 //@ chunk-6vnxsn99.js:4837-4919 placement
-function setAgentController(taskId, n, r) {
-  getTaskLoopRegistry().loopsByTaskId.get(taskId)?.agentControllersByAgentId.set(n, r);
+function setAgentController(taskId, agentId, controller) {
+  getTaskLoopRegistry().loopsByTaskId.get(taskId)?.agentControllersByAgentId.set(agentId, controller);
 }
 //@ chunk-6vnxsn99.js:4919-5139 placement
-function removeAgentController(taskId, n) {
+function removeAgentController(taskId, agentId) {
   let { loopsByTaskId } = getTaskLoopRegistry();
-  let o = loopsByTaskId.get(taskId);
-  if (!o) return;
-  o.agentControllersByAgentId.delete(n);
-  if (o.chainSettled && o.settleRequiresEmptyAgentAssociations && o.agentControllersByAgentId.size === 0) {
+  let loop = loopsByTaskId.get(taskId);
+  if (!loop) return;
+  loop.agentControllersByAgentId.delete(agentId);
+  if (
+    loop.chainSettled &&
+    loop.settleRequiresEmptyAgentAssociations &&
+    loop.agentControllersByAgentId.size === 0
+  ) {
     loopsByTaskId.delete(taskId);
-    runSettleCallbacks(o);
+    runSettleCallbacks(loop);
   }
 }
 //@ chunk-6vnxsn99.js:5139-5239 placement
 function taskAgentIds(taskId) {
-  let n = getTaskLoopRegistry().loopsByTaskId.get(taskId);
-  return n ? [...n.agentControllersByAgentId.keys()] : [];
+  let loop = getTaskLoopRegistry().loopsByTaskId.get(taskId);
+  return loop ? [...loop.agentControllersByAgentId.keys()] : [];
 }
 //@ chunk-6vnxsn99.js:5239-5404 placement
-function liveAgentControllers(e) {
-  let n = getTaskLoopRegistry().loopsByTaskId.get(e);
-  if (!n) return [];
-  let r = [];
-  for (let o of n.agentControllersByAgentId.values()) if (o && !o.signal.aborted) r.push(o);
-  return r;
+function liveAgentControllers(taskId) {
+  let loop = getTaskLoopRegistry().loopsByTaskId.get(taskId);
+  if (!loop) return [];
+  let controllers = [];
+  for (let controller of loop.agentControllersByAgentId.values())
+    if (controller && !controller.signal.aborted) controllers.push(controller);
+  return controllers;
 }
 //@ chunk-6vnxsn99.js:5404-5777 placement
 /**

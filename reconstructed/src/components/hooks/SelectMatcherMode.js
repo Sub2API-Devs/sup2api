@@ -17,15 +17,19 @@ import { OrderedListWithItem } from "../CustomSelect/selectTable.js";
 import { Text } from "../../ink/components/Text.js";
 import { hookSourceInlineDisplayString } from "../../utils/hooks/hooksSettings.js";
 import { escapeControlCharsForDisplay, plural } from "../../utils/stringUtils.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { uniq } from "../../utils/collections.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { HintText } from "../design-system/HintText.js";
 import { Dialog } from "../design-system/Dialog.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-bajxb7bf.js:43222-43226 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bajxb7bf.js:43222", () => {
+  init_react_production();
+});
 //@ chunk-bajxb7bf.js:43226-43257 file-local
 function hookSource(h) {
   return h.source;
@@ -47,7 +51,7 @@ function renderMatcherItem(item) {
 }
 //@ chunk-bajxb7bf.js:43462-44720 fingerprint = SelectMatcherMode (0.657)
 function SelectMatcherMode(props) {
-  let $ = w(26);
+  let $ = useMemoCache(26);
   let {
     selectedEvent,
     matchersForSelectedEvent,
@@ -99,9 +103,9 @@ function SelectMatcherMode(props) {
       inputGuide = $[7];
       children = $[8];
     }
-    let b;
+    let emptyDialog;
     if ($[9] !== eventDescription || $[10] !== onCancel || $[11] !== title) {
-      b = jsxProd_default(Dialog, {
+      emptyDialog = jsxProd_default(Dialog, {
         title,
         subtitle: eventDescription,
         onCancel,
@@ -111,16 +115,16 @@ function SelectMatcherMode(props) {
       $[9] = eventDescription;
       $[10] = onCancel;
       $[11] = title;
-      $[12] = b;
-    } else b = $[12];
-    return b;
+      $[12] = emptyDialog;
+    } else emptyDialog = $[12];
+    return emptyDialog;
   }
   const title = `${selectedEvent} - Matchers`;
   let onSelect_2;
   if ($[13] !== matchersWithSources || $[14] !== onSelect) {
-    onSelect_2 = (E) => {
-      let B = matchersWithSources[E];
-      if (B) onSelect(B.matcher);
+    onSelect_2 = (index) => {
+      let entry = matchersWithSources[index];
+      if (entry) onSelect(entry.matcher);
     };
     $[13] = matchersWithSources;
     $[14] = onSelect;
@@ -142,9 +146,9 @@ function SelectMatcherMode(props) {
     $[19] = children;
     $[20] = children_2;
   } else children_2 = $[20];
-  let N;
+  let dialog;
   if ($[21] !== eventDescription || $[22] !== onCancel || $[23] !== title || $[24] !== children_2) {
-    N = jsxProd_default(Dialog, {
+    dialog = jsxProd_default(Dialog, {
       title,
       subtitle: eventDescription,
       onCancel,
@@ -154,8 +158,8 @@ function SelectMatcherMode(props) {
     $[22] = onCancel;
     $[23] = title;
     $[24] = children_2;
-    $[25] = N;
-  } else N = $[25];
-  return N;
+    $[25] = dialog;
+  } else dialog = $[25];
+  return dialog;
 }
 export { SelectMatcherMode };

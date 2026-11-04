@@ -7,25 +7,25 @@
  */
 
 //@ chunk-8nhse09v.js:337-441 affinity
-function Z(e, r, u, o) {
-  var n = -1;
-  var d = e == null ? 0 : e.length;
-  if (o && d) u = e[++n];
-  while (++n < d) u = r(u, e[n], n, e);
-  return u;
+function baseReduce(array, iteratee, accumulator, initAccum) {
+  var index = -1;
+  var length = array == null ? 0 : array.length;
+  if (initAccum && length) accumulator = array[++index];
+  while (++index < length) accumulator = iteratee(accumulator, array[index], index, array);
+  return accumulator;
 }
 //@ chunk-8nhse09v.js:441-449 esm-layout
-var i = Z;
+var import_baseReduce = baseReduce;
 //@ chunk-8nhse09v.js:449-510 esm-layout
-function I(e) {
-  return function (r) {
-    return e == null ? undefined : e[r];
+function basePropertyOf(object) {
+  return function (key) {
+    return object == null ? undefined : object[key];
   };
 }
 //@ chunk-8nhse09v.js:510-518 esm-layout
-var x = I;
+var import_baseProperty = basePropertyOf;
 //@ chunk-8nhse09v.js:518-2893 esm-fingerprint
-var D = {
+var deburredLetters = {
   "\xC0": "A",
   "\xC1": "A",
   "\xC2": "A",
@@ -217,6 +217,6 @@ var D = {
   "\u0149": "'n",
   "\u017F": "s",
 };
-var P = x(D);
-var s = P;
-export { s, i };
+var deburrLetter = import_baseProperty(deburredLetters);
+var import_deburrLetter = deburrLetter;
+export { import_deburrLetter, import_baseReduce };

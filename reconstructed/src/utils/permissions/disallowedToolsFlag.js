@@ -15,9 +15,9 @@ import { quotedPrintable } from "../printableName.js";
 /**
  * ruleToolNameFromString：从规则串取工具名。
  */
-function ruleToolNameFromString(e) {
-  let n = classifyRuleParens(e);
-  return n.kind === "call" && n.toolName ? n.toolName : e;
+function ruleToolNameFromString(value) {
+  let parsed = classifyRuleParens(value);
+  return parsed.kind === "call" && parsed.toolName ? parsed.toolName : value;
 }
 //@ chunk-gda5w2fs.js:2886-2988 placement
 /**
@@ -25,8 +25,8 @@ function ruleToolNameFromString(e) {
  */
 function formatPermissionRule(ruleValue) {
   if (!ruleValue.ruleContent) return ruleValue.toolName;
-  let n = escapeRuleText(ruleValue.ruleContent);
-  return `${ruleValue.toolName}(${n})`;
+  let escapedContent = escapeRuleText(ruleValue.ruleContent);
+  return `${ruleValue.toolName}(${escapedContent})`;
 }
 //@ chunk-gda5w2fs.js:2988-2999 placement
 /**
@@ -37,27 +37,32 @@ var NEGATION_PREFIX = "!";
 /**
  * 把单独的否定前缀记号与后面的规则合并为一条。
  */
-function joinNegationTokens(e) {
-  let n = [];
-  for (let i = 0; i < e.length; i++) {
-    let r = e[i];
-    if (r === undefined) continue;
-    let o = e[i + 1];
-    if (r === NEGATION_PREFIX && o !== undefined && !o.startsWith(NEGATION_PREFIX) && !o.startsWith("(")) {
-      n.push(NEGATION_PREFIX + o);
+function joinNegationTokens(tokens) {
+  let result = [];
+  for (let i = 0; i < tokens.length; i++) {
+    let token = tokens[i];
+    if (token === undefined) continue;
+    let nextToken = tokens[i + 1];
+    if (
+      token === NEGATION_PREFIX &&
+      nextToken !== undefined &&
+      !nextToken.startsWith(NEGATION_PREFIX) &&
+      !nextToken.startsWith("(")
+    ) {
+      result.push(NEGATION_PREFIX + nextToken);
       i++;
       continue;
     }
-    n.push(r);
+    result.push(token);
   }
-  return n;
+  return result;
 }
 //@ chunk-gda5w2fs.js:3206-3267 placement
 /**
  * hasUnclosedRuleParen：规则括号是否未闭合。
  */
-function hasUnclosedRuleParen(e) {
-  return e.lastIndexOf("(") > e.lastIndexOf(")");
+function hasUnclosedRuleParen(text) {
+  return text.lastIndexOf("(") > text.lastIndexOf(")");
 }
 //@ chunk-gda5w2fs.js:3267-3472 placement
 /**
@@ -70,69 +75,69 @@ function unclosedParenError(rule) {
 /**
  * 拆分逗号/空格分隔的规则列表（括号内不拆）。
  */
-function splitRuleList(e) {
-  if (e.length === 0) return [];
-  let n = [];
-  for (let t of e) {
-    if (!t) continue;
-    let r = "";
-    let o = false;
-    for (let s of t)
-      switch (s) {
+function splitRuleList(parts) {
+  if (parts.length === 0) return [];
+  let rules = [];
+  for (let part of parts) {
+    if (!part) continue;
+    let current = "";
+    let inParens = false;
+    for (let character of part)
+      switch (character) {
         case "(":
-          o = true;
-          r += s;
+          inParens = true;
+          current += character;
           break;
         case ")":
-          o = false;
-          r += s;
+          inParens = false;
+          current += character;
           break;
         case ",":
-          if (o) r += s;
+          if (inParens) current += character;
           else {
-            if (r.trim()) n.push(r.trim());
-            r = "";
+            if (current.trim()) rules.push(current.trim());
+            current = "";
           }
           break;
         case " ":
-          if (o) r += s;
-          else if (r.trim()) {
-            n.push(r.trim());
-            r = "";
+          if (inParens) current += character;
+          else if (current.trim()) {
+            rules.push(current.trim());
+            current = "";
           }
           break;
         default:
-          if (r || s.trim()) r += s;
+          if (current || character.trim()) current += character;
       }
-    if (r.trim()) n.push(r.trim());
+    if (current.trim()) rules.push(current.trim());
   }
-  return n;
+  return rules;
 }
 //@ chunk-gda5w2fs.js:3831-3962 placement
-function indexOfUnescaped(e, n) {
-  for (let i = 0; i < e.length; i++)
-    if (e[i] === n) {
-      let r = 0;
-      let o = i - 1;
-      while (o >= 0 && e[o] === "\\") {
-        r++;
-        o--;
+function indexOfUnescaped(text, char) {
+  for (let i = 0; i < text.length; i++)
+    if (text[i] === char) {
+      let backslashCount = 0;
+      let scanIndex = i - 1;
+      while (scanIndex >= 0 && text[scanIndex] === "\\") {
+        backslashCount++;
+        scanIndex--;
       }
-      if (r % 2 === 0) return i;
+      if (backslashCount % 2 === 0) return i;
     }
   return -1;
 }
 //@ chunk-gda5w2fs.js:3962-4096 placement
-function lastIndexOfUnescaped(e, n) {
-  for (let i = e.length - 1; i >= 0; i--)
-    if (e[i] === n) {
-      let r = 0;
-      let o = i - 1;
-      while (o >= 0 && e[o] === "\\") {
-        r++;
-        o--;
+function lastIndexOfUnescaped(text, char) {
+  for (let i = text.length - 1; i >= 0; i--)
+    if (text[i] === char) {
+      let backslashCount = 0;
+      let scanIndex = i - 1;
+      while (scanIndex >= 0 && text[scanIndex] === "\\") {
+        backslashCount++;
+        scanIndex--;
       }
-      if (r % 2 === 0) return i;
+      if (backslashCount % 2 === 0) return i;
     }
   return -1;
 }

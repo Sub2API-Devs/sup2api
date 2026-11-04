@@ -329,8 +329,8 @@ function wigglyDoveFieldCodeVr() {
   return "vr";
 }
 //@ chunk-hwmsct5x.js:257274-257368 placement
-function isWigglyDoveHeader(e) {
-  let lower = e.toLowerCase();
+function isWigglyDoveHeader(name) {
+  let lower = name.toLowerCase();
   return (
     lower === X_CLAUDE_CODE_WIGGLY_DOVE ||
     createHash("sha256").update(lower).digest("hex") === WIGGLY_DOVE_HASH

@@ -58,8 +58,8 @@ function getBuiltinMcpRenderOverride(tool, slot) {
     if (slot === "renderToolUseTag") return renderChromeViewTabLink;
   }
   if (tool.builtinRenderFamily === "computer-use") {
-    let sliced = tool.name.slice(MCP_TOOL_NAME_PREFIX.length);
-    if (slot === "renderToolResultMessage") return renderToolResultMessage_2(sliced);
+    let toolName = tool.name.slice(MCP_TOOL_NAME_PREFIX.length);
+    if (slot === "renderToolResultMessage") return renderToolResultMessage_2(toolName);
   }
   return;
 }

@@ -9,29 +9,39 @@
  * attribution: placement 4
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, E, M, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  stringSchema,
+  numberSchema,
+  booleanSchema,
+  array,
+} from "../../../vendor/zod/v4/classic/schemas.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-q0w816c5.js:269-351 placement
 /**
  * 初始参考页面条目的 schema（路径、正文、字数、是否截断）。
  */
-var initReferenceDocSchema = DoctorLazy(() =>
-  u({
-    path: string(),
-    text: string(),
-    chars: E().int().min(0),
-    clipped: M().optional(),
-  }),
-);
+var initReferenceDocSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-q0w816c5.js:269", () => {
+  initReferenceDocSchema = DoctorLazy(() =>
+    objectSchema({
+      path: stringSchema(),
+      text: stringSchema(),
+      chars: numberSchema().int().min(0),
+      clipped: booleanSchema().optional(),
+    }),
+  );
+});
 //@ chunk-q0w816c5.js:351-466 placement
 function initReferencesSchema() {
   return {
-    init_references: u({
+    init_references: objectSchema({
       docs: array(initReferenceDocSchema()),
       unavailable: array(
-        u({
-          path: string(),
-          why: string(),
+        objectSchema({
+          path: stringSchema(),
+          why: stringSchema(),
         }),
       ).optional(),
     }).optional(),
@@ -40,13 +50,13 @@ function initReferencesSchema() {
 //@ chunk-q0w816c5.js:466-653 placement
 function designSystemSchema() {
   return {
-    design_system: u({
-      url: string().optional(),
-      default: string().optional(),
-      title: string().optional(),
-      store: M().optional(),
+    design_system: objectSchema({
+      url: stringSchema().optional(),
+      default: stringSchema().optional(),
+      title: stringSchema().optional(),
+      store: booleanSchema().optional(),
       docs: array(initReferenceDocSchema()).optional(),
-      unavailable: string().optional(),
+      unavailable: stringSchema().optional(),
     }).optional(),
   };
 }
@@ -54,31 +64,35 @@ function designSystemSchema() {
 /**
  * 起步套件结构 schema（类型目录、设计系统、技能与 REPL 标记）。
  */
-var startKitDirSchema = DoctorLazy(() =>
-  u({
-    dir: string(),
-    files: array(
-      u({
-        path: string(),
-        bytes: E(),
-      }),
-    ),
-    skipped: array(
-      u({
-        path: string(),
-        reason: string(),
-      }),
-    ),
-  }),
-);
-var startKitSchema = DoctorLazy(() =>
-  u({
-    type: startKitDirSchema().optional(),
-    system_url: string().optional(),
-    system: startKitDirSchema().optional(),
-    skill_in_result: M(),
-    capabilities_skill: M(),
-    repl_tool: M().optional(),
-  }),
-);
+var startKitDirSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var startKitSchema;
+deferInit("chunk-q0w816c5.js:653", () => {
+  startKitDirSchema = DoctorLazy(() =>
+    objectSchema({
+      dir: stringSchema(),
+      files: array(
+        objectSchema({
+          path: stringSchema(),
+          bytes: numberSchema(),
+        }),
+      ),
+      skipped: array(
+        objectSchema({
+          path: stringSchema(),
+          reason: stringSchema(),
+        }),
+      ),
+    }),
+  );
+  startKitSchema = DoctorLazy(() =>
+    objectSchema({
+      type: startKitDirSchema().optional(),
+      system_url: stringSchema().optional(),
+      system: startKitDirSchema().optional(),
+      skill_in_result: booleanSchema(),
+      capabilities_skill: booleanSchema(),
+      repl_tool: booleanSchema().optional(),
+    }),
+  );
+});
 export { initReferencesSchema, designSystemSchema, startKitSchema };

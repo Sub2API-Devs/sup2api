@@ -5,7 +5,7 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_sync_inflate } from "./sync-inflate.js";
 import { require_sync_reader } from "./sync-reader.js";
 import { require_filter_parse_sync } from "./filter-parse-sync.js";
@@ -14,7 +14,7 @@ import { require_bitmapper } from "./bitmapper.js";
 import { require_format_normaliser } from "./format-normaliser.js";
 
 //@ chunk-spjgqa4y.js:46406-47377 cjs-fingerprint
-var require_parser_sync = x(function (cjsExports, cjsModule) {
+var require_parser_sync = __commonJS(function (cjsExports, cjsModule) {
   var hasSyncZlib = true;
   var zlib = importMetaRequire("zlib");
   var inflateSync = require_sync_inflate();
@@ -43,7 +43,7 @@ var require_parser_sync = x(function (cjsExports, cjsModule) {
     function handlePalette(palette) {
       metaData.palette = palette;
     }
-    function u() {
+    function simpleTransparency() {
       metaData.alpha = true;
     }
     let gamma;
@@ -63,7 +63,7 @@ var require_parser_sync = x(function (cjsExports, cjsModule) {
       palette: handlePalette,
       transColor: handleTransColor,
       inflateData: handleInflateData,
-      simpleTransparency: u,
+      simpleTransparency,
     }).start();
     reader.process();
     if (err) throw err;

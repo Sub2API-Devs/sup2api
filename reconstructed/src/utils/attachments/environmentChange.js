@@ -60,9 +60,9 @@ function shouldEmitEnvironmentChanges(options) {
   return !simpleModeEnv() && !options.bareFork && !options.isolatedContext;
 }
 //@ chunk-e6aww6q8.js:3331522-3331687 placement
-function shouldSendEnvironmentAttachments(e) {
-  if (!shouldEmitEnvironmentChanges(e.options)) return false;
-  let { agentContext } = e;
+function shouldSendEnvironmentAttachments(toolUseContext) {
+  if (!shouldEmitEnvironmentChanges(toolUseContext.options)) return false;
+  let { agentContext } = toolUseContext;
   switch (agentContext.agentType) {
     case "main":
     case "teammate":
@@ -89,57 +89,69 @@ var AGENT_PROXY_CHANGE = [
 /**
  * 检测工作目录出现或消失，生成环境变化附件。
  */
-async function detectEnvironmentDirectoryChange(e, n) {
-  if (!shouldEmitEnvironmentChanges(e.options)) return [];
+async function detectEnvironmentDirectoryChange(toolUseContext, messages) {
+  if (!shouldEmitEnvironmentChanges(toolUseContext.options)) return [];
   let environmentFacts = await collectEnvironmentFacts({
     cwd: getCwdOrNull(),
-    additionalWorkingDirectories: Array.from(getToolPermissionContext(e).additionalWorkingDirectories.keys()),
+    additionalWorkingDirectories: Array.from(
+      getToolPermissionContext(toolUseContext).additionalWorkingDirectories.keys(),
+    ),
   });
   let { latest, newestReadable, hasWholeBlock, standing } = summarizeEnvironmentHistory(
-    messagesSinceCompactBoundary(n ?? []),
+    messagesSinceCompactBoundary(messages ?? []),
   );
-  let w = remoteEnvironmentFacts(latest) ?? environmentFacts;
-  let L = w.workingDirectory !== undefined;
-  let G = L ? undefined : standing;
-  let q = newestReadable !== undefined && newestReadable.workingDirectory === undefined;
-  let Z = L && q;
-  if (G || Z)
+  let currentSnapshot = remoteEnvironmentFacts(latest) ?? environmentFacts;
+  let hasWorkingDir = currentSnapshot.workingDirectory !== undefined;
+  let goneDirectory = hasWorkingDir ? undefined : standing;
+  let newestReadableLacksDir = newestReadable !== undefined && newestReadable.workingDirectory === undefined;
+  let directoryAppeared = hasWorkingDir && newestReadableLacksDir;
+  if (goneDirectory || directoryAppeared)
     logEvent("tengu_environment_directory_change", {
-      change: fromEnum(G ? "gone" : "appeared"),
-      resent: G !== undefined && q,
+      change: fromEnum(goneDirectory ? "gone" : "appeared"),
+      resent: goneDirectory !== undefined && newestReadableLacksDir,
     });
-  let Se = G ?? (getGitEmail(w) ? standing : undefined);
-  let ke = newestReadable?.githubCli !== undefined && w.githubCli === undefined;
-  let we = [
-    ...(Se ? missingEnvFields(Se, w) : []),
-    ...(ke ? BUILTIN_GH_CHANGE : []),
-    ...(getGitEmail(w) && newestReadable?.agentProxy && !w.agentProxy ? AGENT_PROXY_CHANGE : []),
+  let referenceFacts = goneDirectory ?? (getGitEmail(currentSnapshot) ? standing : undefined);
+  let ghChanged = newestReadable?.githubCli !== undefined && currentSnapshot.githubCli === undefined;
+  let changes = [
+    ...(referenceFacts ? missingEnvFields(referenceFacts, currentSnapshot) : []),
+    ...(ghChanged ? BUILTIN_GH_CHANGE : []),
+    ...(getGitEmail(currentSnapshot) && newestReadable?.agentProxy && !currentSnapshot.agentProxy
+      ? AGENT_PROXY_CHANGE
+      : []),
   ];
-  if (!latest || !hasWholeBlock || !maybeRemoveApiKeyFromMacOSKeychainThrows(latest, w) || Z)
+  if (
+    !latest ||
+    !hasWholeBlock ||
+    !maybeRemoveApiKeyFromMacOSKeychainThrows(latest, currentSnapshot) ||
+    directoryAppeared
+  )
     return [
       {
         type: "environment",
-        snapshot: w,
+        snapshot: currentSnapshot,
       },
-      ...(we.length > 0
+      ...(changes.length > 0
         ? [
             {
               type: "environment",
-              snapshot: w,
-              changes: we,
+              snapshot: currentSnapshot,
+              changes,
             },
           ]
         : []),
     ];
-  let environmentInfo = buildEnvironmentInfo(latest, w);
-  let Ae = [...environmentInfo, ...we.filter((Ie) => !environmentInfo.some((Me) => Me.field === Ie.field))];
-  return Ae.length === 0
+  let environmentInfo = buildEnvironmentInfo(latest, currentSnapshot);
+  let mergedChanges = [
+    ...environmentInfo,
+    ...changes.filter((change) => !environmentInfo.some((existing) => existing.field === change.field)),
+  ];
+  return mergedChanges.length === 0
     ? []
     : [
         {
           type: "environment",
-          snapshot: w,
-          changes: Ae,
+          snapshot: currentSnapshot,
+          changes: mergedChanges,
         },
       ];
 }
@@ -184,11 +196,11 @@ function getPostCompactEnvironmentAttachments(messages, keptMessages, keepWorkin
   }
   let sourceSnapshot = keepWorkingDirectory ? latest : newestReadable;
   if (!sourceSnapshot) return [];
-  let { workingDirectory, scratchpadDirectory, ...ke } = sourceSnapshot;
+  let { workingDirectory, scratchpadDirectory, ...restSnapshot } = sourceSnapshot;
   let resentSnapshot = keepWorkingDirectory
     ? sourceSnapshot
     : {
-        ...ke,
+        ...restSnapshot,
         isWorktree: false,
         isGitRepo: false,
       };
@@ -227,49 +239,57 @@ function getPostCompactEnvironmentAttachments(messages, keptMessages, keepWorkin
 /**
  * 模型身份变化时返回模型附件（已记录过则不返回）。
  */
-function modelAttachmentIfNew(preCompactMessages, messagesToKeep) {
-  if (getLastModelIdentity(messagesToKeep)) return [];
-  let lastModelAttachment = getLastModelAttachment(preCompactMessages);
+function modelAttachmentIfNew(messages, messages_2) {
+  if (getLastModelIdentity(messages_2)) return [];
+  let lastModelAttachment = getLastModelAttachment(messages);
   return lastModelAttachment ? [lastModelAttachment] : [];
 }
 //@ chunk-e6aww6q8.js:3333747-3334155 placement
 /**
  * 当输出样式或语言偏好相对历史消息中最近一次发送的值发生变化时，生成 output_style_instructions / language 附件。
  */
-async function getOutputStyleAndLanguageAttachments(e, n) {
-  if (!shouldSendEnvironmentAttachments(e)) return [];
-  let r = messagesSinceCompactBoundary(n ?? []);
+async function getOutputStyleAndLanguageAttachments(toolUseContext, messages) {
+  if (!shouldSendEnvironmentAttachments(toolUseContext)) return [];
+  let normalizedMessages = messagesSinceCompactBoundary(messages ?? []);
   let outputStyleConfig = await getOutputStyleConfig();
-  let h = outputStyleConfig
+  let outputStyleValue = outputStyleConfig
     ? {
         name: outputStyleConfig.name,
         prompt: outputStyleConfig.prompt,
       }
     : null;
   let language = getInitialSettings_2().language || null;
-  let S =
+  let styleChange =
     (!outputStyleConfig && (hasCustomOutputStyle() !== DEFAULT || isSkillOverridesUnread())) ||
-    !outputStyleAttachmentSchema().safeParse(h).success
+    !outputStyleAttachmentSchema().safeParse(outputStyleValue).success
       ? undefined
-      : changedSettingValue(lastOutputStyleAttachment(r), h, isSameSettingValue);
-  let w =
+      : changedSettingValue(
+          lastOutputStyleAttachment(normalizedMessages),
+          outputStyleValue,
+          isSameSettingValue,
+        );
+  let languageChange =
     languagePreferenceSchema().safeParse(language).success && !(language === null && isSkillOverridesUnread())
-      ? changedSettingValue(lastLanguageAttachment(r), language, (L, G) => L === G)
+      ? changedSettingValue(
+          lastLanguageAttachment(normalizedMessages),
+          language,
+          (left, right) => left === right,
+        )
       : undefined;
   return [
-    ...(S
+    ...(styleChange
       ? [
           {
             type: "output_style_instructions",
-            style: S.value,
+            style: styleChange.value,
           },
         ]
       : []),
-    ...(w
+    ...(languageChange
       ? [
           {
             type: "language",
-            language: w.value,
+            language: languageChange.value,
           },
         ]
       : []),
@@ -279,14 +299,16 @@ async function getOutputStyleAndLanguageAttachments(e, n) {
 /**
  * 并行生成环境变化相关附件：目录变化、运行时模型切换、输出样式/语言与主动性提示。
  */
-async function getEnvironmentChangeAttachments(e, n) {
+async function getEnvironmentChangeAttachments(toolUseContext, messages) {
   return (
     await Promise.all([
-      detectEnvironmentDirectoryChange(e, n),
-      getRuntimeModelSwitchAnnouncements(e, n),
-      getOutputStyleAndLanguageAttachments(e, n),
-      !e.options.bareFork
-        ? maybe("proactivity", () => proactivityAttachments(messagesSinceCompactBoundary(n ?? []), e))
+      detectEnvironmentDirectoryChange(toolUseContext, messages),
+      getRuntimeModelSwitchAnnouncements(toolUseContext, messages),
+      getOutputStyleAndLanguageAttachments(toolUseContext, messages),
+      !toolUseContext.options.bareFork
+        ? maybe("proactivity", () =>
+            proactivityAttachments(messagesSinceCompactBoundary(messages ?? []), toolUseContext),
+          )
         : [],
     ])
   ).flat();

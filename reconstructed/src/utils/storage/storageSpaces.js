@@ -9,15 +9,15 @@
  * attribution: placement 21
  */
 //@ chunk-3g8vhh6f.js:191-248 placement
-var l = String.fromCharCode(0);
+var KEY_SEPARATOR = String.fromCharCode(0);
 var ASIDE_FILE_RE = /^\.[0-9a-f]{16}\.aside$/;
 //@ chunk-3g8vhh6f.js:248-332 placement
 /**
  * 是否是 `.16位十六进制.aside` 形式的旁路文件名。
  */
-function isAsideFileName(e) {
-  if (e.charCodeAt(0) !== 46) return false;
-  return storageNameSpellings(e).some((n) => ASIDE_FILE_RE.test(n));
+function isAsideFileName(name) {
+  if (name.charCodeAt(0) !== 46) return false;
+  return storageNameSpellings(name).some((spelling) => ASIDE_FILE_RE.test(spelling));
 }
 //@ chunk-3g8vhh6f.js:332-468 placement
 var TEMP_FILE_NAME_RE =
@@ -26,44 +26,44 @@ var TEMP_FILE_NAME_RE =
 /**
  * 是否是临时文件名。
  */
-function isTempFileName(e) {
-  return storageNameSpellings(e).some((n) => TEMP_FILE_NAME_RE.test(n));
+function isTempFileName(name) {
+  return storageNameSpellings(name).some((spelling) => TEMP_FILE_NAME_RE.test(spelling));
 }
 //@ chunk-3g8vhh6f.js:519-579 placement
-function isDotsOrSpacesOnly(e) {
-  return typeof e === "string" && /^[. ]+$/.test(e);
+function isDotsOrSpacesOnly(segment) {
+  return typeof segment === "string" && /^[. ]+$/.test(segment);
 }
 //@ chunk-3g8vhh6f.js:579-701 placement
-function isValidKeySegment(e) {
+function isValidKeySegment(segment) {
   return !(
-    typeof e !== "string" ||
-    e.length === 0 ||
-    isDotsOrSpacesOnly(e) ||
-    e.includes("/") ||
-    e.includes("\\") ||
-    e.includes(l) ||
-    isAsideFileName(e)
+    typeof segment !== "string" ||
+    segment.length === 0 ||
+    isDotsOrSpacesOnly(segment) ||
+    segment.includes("/") ||
+    segment.includes("\\") ||
+    segment.includes(KEY_SEPARATOR) ||
+    isAsideFileName(segment)
   );
 }
 //@ chunk-3g8vhh6f.js:701-747 placement
 /**
  * 所有键片段是否都合法。
  */
-function areValidKeySegments(e) {
-  return e.length > 0 && e.every(isValidKeySegment);
+function areValidKeySegments(segments) {
+  return segments.length > 0 && segments.every(isValidKeySegment);
 }
 //@ chunk-3g8vhh6f.js:824-947 placement
-function storageNameSpellings(e) {
-  let n = nameSpellingsCache.get(e);
-  if (n !== undefined) return n;
-  let a = Object.freeze(nameSpellingsOf(e));
+function storageNameSpellings(name) {
+  let cached = nameSpellingsCache.get(name);
+  if (cached !== undefined) return cached;
+  let spellings = Object.freeze(nameSpellingsOf(name));
   if (nameSpellingsCache.size >= SPELLINGS_CACHE_LIMIT) nameSpellingsCache.clear();
-  nameSpellingsCache.set(e, a);
-  return a;
+  nameSpellingsCache.set(name, spellings);
+  return spellings;
 }
 //@ chunk-3g8vhh6f.js:947-1044 placement
-function nameSpellingsOf(e) {
-  let lower = e.toLowerCase();
+function nameSpellingsOf(name) {
+  let lower = name.toLowerCase();
   let index = lower.indexOf(":");
   return index === -1
     ? [trimTrailingDotsAndSpaces(lower)]
@@ -73,49 +73,49 @@ function nameSpellingsOf(e) {
 var nameSpellingsCache = new Map();
 var SPELLINGS_CACHE_LIMIT = 32768;
 //@ chunk-3g8vhh6f.js:1066-1194 placement
-function trimTrailingDotsAndSpaces(e) {
-  let n = e.length;
-  while (n > 0) {
-    let code = e.charCodeAt(n - 1);
+function trimTrailingDotsAndSpaces(value) {
+  let end = value.length;
+  while (end > 0) {
+    let code = value.charCodeAt(end - 1);
     if (code !== 46 && code !== 32) break;
-    n -= 1;
+    end -= 1;
   }
-  return n === e.length ? e : e.slice(0, n);
+  return end === value.length ? value : value.slice(0, end);
 }
 //@ chunk-3g8vhh6f.js:1194-1245 placement
-function withOptionalField(e, n, a) {
-  return a === undefined
-    ? e
+function withOptionalField(base, field, value) {
+  return value === undefined
+    ? base
     : {
-        ...e,
-        [n]: a,
+        ...base,
+        [field]: value,
       };
 }
 //@ chunk-3g8vhh6f.js:1245-1365 placement
-function transcriptSpace(projectKey, sessionId, a, t) {
-  let o = withOptionalField(
+function transcriptSpace(projectKey, sessionId, agentId, agentRelPath) {
+  let baseSpace = withOptionalField(
     {
       namespace: "transcript",
       projectKey,
       sessionId,
     },
     "agentId",
-    a,
+    agentId,
   );
-  return withOptionalField(o, "agentRelPath", t);
+  return withOptionalField(baseSpace, "agentRelPath", agentRelPath);
 }
 //@ chunk-3g8vhh6f.js:1365-1482 placement
-function logSpace(sessionId, channel, a) {
-  let c = withOptionalField(
+function logSpace(sessionId, channel, logIds) {
+  let baseSpace = withOptionalField(
     {
       namespace: "log",
       sessionId,
       channel,
     },
     "agentId",
-    a?.agentId,
+    logIds?.agentId,
   );
-  return withOptionalField(c, "runId", a?.runId);
+  return withOptionalField(baseSpace, "runId", logIds?.runId);
 }
 //@ chunk-3g8vhh6f.js:1482-4060 placement
 /**
@@ -286,12 +286,12 @@ var STORAGE_SPACES = {
     sessionId,
     stamp,
   }),
-  sessionLog: (projectKey, n, logName) => ({
+  sessionLog: (projectKey, dateParts, logName) => ({
     namespace: "sessionLog",
     projectKey,
-    year: n.year,
-    month: n.month,
-    day: n.day,
+    year: dateParts.year,
+    month: dateParts.month,
+    day: dateParts.day,
     logName,
   }),
   jobPins: () => ({
@@ -336,97 +336,111 @@ function transcriptScope(projectKey, sessionId) {
 /**
  * 存储空间标识（describeStorageSpace 的 JSON）。
  */
-function storageSpaceId(e) {
-  return JSON.stringify(describeStorageSpace(e));
+function storageSpaceId(space) {
+  return JSON.stringify(describeStorageSpace(space));
 }
 //@ chunk-3g8vhh6f.js:4194-4235 placement
 /**
  * 两个存储空间是否相同。
  */
-function isSameStorageSpace(key, n) {
-  return storageSpaceId(key) === storageSpaceId(n);
+function isSameStorageSpace(key, right) {
+  return storageSpaceId(key) === storageSpaceId(right);
 }
 //@ chunk-3g8vhh6f.js:4235-6618 placement
-function describeStorageSpace(e) {
-  switch (e.namespace) {
+function describeStorageSpace(space) {
+  switch (space.namespace) {
     case "transcript":
-      return e.journal === true
-        ? [e.namespace, e.projectKey, e.sessionId, null, e.agentRelPath, "journal"]
-        : e.sessionJournal !== undefined
-          ? [e.namespace, e.projectKey, e.sessionId, null, null, e.sessionJournal]
-          : [e.namespace, e.projectKey, e.sessionId, e.agentId ?? null, e.agentRelPath ?? null];
+      return space.journal === true
+        ? [space.namespace, space.projectKey, space.sessionId, null, space.agentRelPath, "journal"]
+        : space.sessionJournal !== undefined
+          ? [space.namespace, space.projectKey, space.sessionId, null, null, space.sessionJournal]
+          : [
+              space.namespace,
+              space.projectKey,
+              space.sessionId,
+              space.agentId ?? null,
+              space.agentRelPath ?? null,
+            ];
     case "history":
     case "identity":
-      return [e.namespace];
+      return [space.namespace];
     case "globalConfig":
-      return "kind" in e ? [e.namespace, e.kind, e.stamp] : [e.namespace];
+      return "kind" in space ? [space.namespace, space.kind, space.stamp] : [space.namespace];
     case "settings":
-      return e.layer === "user"
-        ? [e.namespace, e.layer]
-        : e.layer === "project"
-          ? [e.namespace, e.layer, e.projectKey]
-          : [e.namespace, e.layer, e.consentRootKey];
+      return space.layer === "user"
+        ? [space.namespace, space.layer]
+        : space.layer === "project"
+          ? [space.namespace, space.layer, space.projectKey]
+          : [space.namespace, space.layer, space.consentRootKey];
     case "task":
-      return "meta" in e
-        ? [e.namespace, e.listId, e.meta]
-        : "highWaterMark" in e
-          ? [e.namespace, e.listId, ["highWaterMark"]]
-          : [e.namespace, e.listId, e.taskId];
+      return "meta" in space
+        ? [space.namespace, space.listId, space.meta]
+        : "highWaterMark" in space
+          ? [space.namespace, space.listId, ["highWaterMark"]]
+          : [space.namespace, space.listId, space.taskId];
     case "memory":
-      return [e.namespace, e.projectKey, e.relPath];
+      return [space.namespace, space.projectKey, space.relPath];
     case "pluginRegistry":
-      return [e.namespace, e.file];
+      return [space.namespace, space.file];
     case "marketplaceCache":
-      return "relPath" in e ? [e.namespace, e.marketplace, e.relPath] : [e.namespace, e.marketplace, e.form];
+      return "relPath" in space
+        ? [space.namespace, space.marketplace, space.relPath]
+        : [space.namespace, space.marketplace, space.form];
     case "pluginCache":
-      return [e.namespace, e.marketplace, e.plugin, e.version, e.relPath];
+      return [space.namespace, space.marketplace, space.plugin, space.version, space.relPath];
     case "cache":
-      return [e.namespace, e.store, e.id];
+      return [space.namespace, space.store, space.id];
     case "paste":
-      return [e.namespace, e.id];
+      return [space.namespace, space.id];
     case "pluginAssetCache":
-      return [e.namespace, e.digest];
+      return [space.namespace, space.digest];
     case "state":
-      return [e.namespace, e.id];
+      return [space.namespace, space.id];
     case "plan":
-      return [e.namespace, e.name];
+      return [space.namespace, space.name];
     case "feedbackDraft":
-      return [e.namespace, e.draftId];
+      return [space.namespace, space.draftId];
     case "agentMemory":
-      return [e.namespace, e.layer, e.layer === "user" ? null : e.projectKey, e.agentType, e.relPath];
+      return [
+        space.namespace,
+        space.layer,
+        space.layer === "user" ? null : space.projectKey,
+        space.agentType,
+        space.relPath,
+      ];
     case "team":
-      return [e.namespace, e.team];
+      return [space.namespace, space.team];
     case "sidecar":
-      return [e.namespace, e.projectKey, e.sessionId, e.relPath];
+      return [space.namespace, space.projectKey, space.sessionId, space.relPath];
     case "scratch":
-      return [e.namespace, e.sessionId, e.relPath];
+      return [space.namespace, space.sessionId, space.relPath];
     case "userConfigDir":
-      return [e.namespace, e.dir, e.relPath];
+      return [space.namespace, space.dir, space.relPath];
     case "fileHistory":
-      return [e.namespace, e.sessionId, e.backupFileName];
+      return [space.namespace, space.sessionId, space.backupFileName];
     case "job":
-      return [e.namespace, e.jobId, e.relPath];
+      return [space.namespace, space.jobId, space.relPath];
     case "daemon":
-      return [e.namespace, e.relPath];
+      return [space.namespace, space.relPath];
     case "jobsRoot":
-      return "file" in e ? [e.namespace, e.file] : [e.namespace, "draft", e.draftKey];
+      return "file" in space ? [space.namespace, space.file] : [space.namespace, "draft", space.draftKey];
     case "session":
-      return [e.namespace, e.file];
+      return [space.namespace, space.file];
     case "bridgePointer":
     case "sessionAliases":
-      return [e.namespace, e.projectKey];
+      return [space.namespace, space.projectKey];
     case "dirSyncRecord":
-      return [e.namespace, e.projectKey, e.sessionId];
+      return [space.namespace, space.projectKey, space.sessionId];
     case "mailbox":
-      return [e.namespace, e.team, e.teammate];
+      return [space.namespace, space.team, space.teammate];
     case "log":
-      return [e.namespace, e.sessionId, e.channel, e.agentId ?? null, e.runId ?? null];
+      return [space.namespace, space.sessionId, space.channel, space.agentId ?? null, space.runId ?? null];
     case "jobTimeline":
-      return [e.namespace, e.jobId];
+      return [space.namespace, space.jobId];
     case "recording":
-      return [e.namespace, e.projectKey, e.sessionId, e.stamp];
+      return [space.namespace, space.projectKey, space.sessionId, space.stamp];
     case "sessionLog":
-      return [e.namespace, e.projectKey, e.year, e.month, e.day, e.logName];
+      return [space.namespace, space.projectKey, space.year, space.month, space.day, space.logName];
   }
 }
 //@ chunk-3g8vhh6f.js:6618-6665 placement
@@ -439,8 +453,8 @@ function bridgeSpawnScope() {
   };
 }
 //@ chunk-3g8vhh6f.js:6665-6815 placement
-function marketplaceCacheKey(marketplace, n) {
-  return n === undefined || n.length === 0
+function marketplaceCacheKey(marketplace, relPath) {
+  return relPath === undefined || relPath.length === 0
     ? {
         namespace: "marketplaceCache",
         marketplace,
@@ -448,7 +462,7 @@ function marketplaceCacheKey(marketplace, n) {
     : {
         namespace: "marketplaceCache",
         marketplace,
-        relPath: n,
+        relPath,
       };
 }
 export {

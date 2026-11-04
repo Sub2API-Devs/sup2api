@@ -19,51 +19,64 @@ import {
 } from "../../bootstrap/state.js";
 import { logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { isDiagLogging, isInDiagScope } from "../diagLogs.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:345356-345820 placement
 /**
  * 任务错误状态表。
  */
-var TASK_ERROR_STATUSES = {
-  stalled: true,
-  error: true,
-  api_error: true,
-  "api_error:authentication_failed": true,
-  "api_error:oauth_org_not_allowed": true,
-  "api_error:account_on_hold": true,
-  "api_error:verification_required": true,
-  "api_error:billing_error": true,
-  "api_error:rate_limit": true,
-  "api_error:overloaded": true,
-  "api_error:invalid_request": true,
-  "api_error:model_not_found": true,
-  "api_error:server_error": true,
-  "api_error:unknown": true,
-  "api_error:max_output_tokens": true,
-  "api_error:cloud_credential_error": true,
-};
-var weakMap_2 = new WeakMap();
+var TASK_ERROR_STATUSES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var weakMap_2;
+deferInit("chunk-aepeg2w5.js:345356", () => {
+  TASK_ERROR_STATUSES = {
+    stalled: true,
+    error: true,
+    api_error: true,
+    "api_error:authentication_failed": true,
+    "api_error:oauth_org_not_allowed": true,
+    "api_error:account_on_hold": true,
+    "api_error:verification_required": true,
+    "api_error:billing_error": true,
+    "api_error:rate_limit": true,
+    "api_error:overloaded": true,
+    "api_error:invalid_request": true,
+    "api_error:model_not_found": true,
+    "api_error:server_error": true,
+    "api_error:unknown": true,
+    "api_error:max_output_tokens": true,
+    "api_error:cloud_credential_error": true,
+  };
+  weakMap_2 = new WeakMap();
+});
 //@ chunk-aepeg2w5.js:345820-345873 placement
 /**
  * 给任务对象挂上失败类型。
  */
-function withFailureKind(e, failureKind) {
-  if (failureKind !== undefined) weakMap_2.set(e, failureKind);
-  return e;
+function withFailureKind(notification, failureKind) {
+  if (failureKind !== undefined) weakMap_2.set(notification, failureKind);
+  return notification;
 }
 //@ chunk-aepeg2w5.js:345873-345971 placement
 /**
  * 取任务挂着的失败类型。
  */
-function failureKindOf(e) {
-  let n = e === undefined ? undefined : weakMap_2.get(e);
-  return n !== undefined && Object.hasOwn(TASK_ERROR_STATUSES, n) ? n : undefined;
+function failureKindOf(notification) {
+  let failureKind = notification === undefined ? undefined : weakMap_2.get(notification);
+  return failureKind !== undefined && Object.hasOwn(TASK_ERROR_STATUSES, failureKind)
+    ? failureKind
+    : undefined;
 }
 //@ chunk-aepeg2w5.js:346009-346068 placement
-var MAX_BASH_TASK_SNAPSHOTS = 200;
-var MAX_BASH_TASK_GETS = 64;
-var MAX_EVICTED_RUN_IDS = 64;
-var LINKS_INHERITED_BEFORE = Date.now() - process.uptime() * 1000;
+var MAX_BASH_TASK_SNAPSHOTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_BASH_TASK_GETS;
+var MAX_EVICTED_RUN_IDS;
+var LINKS_INHERITED_BEFORE;
+deferInit("chunk-aepeg2w5.js:346009", () => {
+  MAX_BASH_TASK_SNAPSHOTS = 200;
+  MAX_BASH_TASK_GETS = 64;
+  MAX_EVICTED_RUN_IDS = 64;
+  LINKS_INHERITED_BEFORE = Date.now() - process.uptime() * 1000;
+});
 //@ chunk-aepeg2w5.js:346068-349666 placement
 /**
  * 任务输出目录与链接记录。
@@ -73,12 +86,12 @@ class TaskOutputLinks {
   linkedOutputs = new Map();
   linksInheritedBefore = LINKS_INHERITED_BEFORE;
   inheritedLinkLines = new Map();
-  inheritPredecessorLinks(e, n) {
-    if (!Number.isFinite(n)) return;
-    this.inheritedLinkLines.set(e, Math.max(LINKS_INHERITED_BEFORE, Math.min(Date.now(), n)));
+  inheritPredecessorLinks(taskId, inheritedAt) {
+    if (!Number.isFinite(inheritedAt)) return;
+    this.inheritedLinkLines.set(taskId, Math.max(LINKS_INHERITED_BEFORE, Math.min(Date.now(), inheritedAt)));
   }
-  linksInheritedBeforeFor(e) {
-    return Math.max(this.linksInheritedBefore, this.inheritedLinkLines.get(e) ?? 0);
+  linksInheritedBeforeFor(taskId_2) {
+    return Math.max(this.linksInheritedBefore, this.inheritedLinkLines.get(taskId_2) ?? 0);
   }
   outputPathBindings = new Map();
   pendingOutputOps = new Set();
@@ -124,65 +137,65 @@ class TaskOutputLinks {
   heldShellReleases = new Map();
   cascadeSpared = createSignal();
   constructor() {
-    this.taskEvicted.subscribe((e) => {
-      this.remoteSessionLogs.delete(e);
-      this.retireRunId(e);
+    this.taskEvicted.subscribe((taskId_3) => {
+      this.remoteSessionLogs.delete(taskId_3);
+      this.retireRunId(taskId_3);
     });
   }
-  retireRunId(e) {
-    let n = this.runIds.get(e);
-    if (n === undefined) return;
-    this.runIds.delete(e);
-    this.evictedRunIds.delete(e);
-    this.evictedRunIds.set(e, n);
+  retireRunId(taskId_4) {
+    let runId = this.runIds.get(taskId_4);
+    if (runId === undefined) return;
+    this.runIds.delete(taskId_4);
+    this.evictedRunIds.delete(taskId_4);
+    this.evictedRunIds.set(taskId_4, runId);
     if (this.evictedRunIds.size > MAX_EVICTED_RUN_IDS) {
-      let r = this.evictedRunIds.keys().next().value;
-      if (r !== undefined) this.evictedRunIds.delete(r);
+      let oldestKey = this.evictedRunIds.keys().next().value;
+      if (oldestKey !== undefined) this.evictedRunIds.delete(oldestKey);
     }
   }
-  rememberBashTaskSnapshot(e, snapshot, agentId) {
-    this.bashTaskSnapshots.delete(e);
-    this.bashTaskSnapshots.set(e, {
+  rememberBashTaskSnapshot(taskId_5, snapshot, agentId) {
+    this.bashTaskSnapshots.delete(taskId_5);
+    this.bashTaskSnapshots.set(taskId_5, {
       snapshot,
       agentId,
       fetched: false,
     });
     if (this.bashTaskSnapshots.size > MAX_BASH_TASK_SNAPSHOTS) {
-      let s = this.bashTaskSnapshots.keys().next().value;
-      if (s !== undefined) this.bashTaskSnapshots.delete(s);
+      let oldestKey_2 = this.bashTaskSnapshots.keys().next().value;
+      if (oldestKey_2 !== undefined) this.bashTaskSnapshots.delete(oldestKey_2);
     }
   }
-  countBashTaskGet(e) {
-    let n = (this.bashTaskGetCounts.get(e) ?? 0) + 1;
-    this.bashTaskGetCounts.delete(e);
-    this.bashTaskGetCounts.set(e, n);
+  countBashTaskGet(taskId_6) {
+    let getCount = (this.bashTaskGetCounts.get(taskId_6) ?? 0) + 1;
+    this.bashTaskGetCounts.delete(taskId_6);
+    this.bashTaskGetCounts.set(taskId_6, getCount);
     if (this.bashTaskGetCounts.size > MAX_BASH_TASK_SNAPSHOTS) {
-      let r = this.bashTaskGetCounts.keys().next().value;
-      if (r !== undefined) this.bashTaskGetCounts.delete(r);
+      let oldestKey_3 = this.bashTaskGetCounts.keys().next().value;
+      if (oldestKey_3 !== undefined) this.bashTaskGetCounts.delete(oldestKey_3);
     }
-    return n;
+    return getCount;
   }
-  countBashTaskGetInResponse(e, n, r) {
-    let s = this.bashTaskGetsByResponse.get(e) ?? new Map();
-    this.bashTaskGetsByResponse.delete(e);
-    this.bashTaskGetsByResponse.set(e, s);
+  countBashTaskGetInResponse(responseId, toolUseId, statusKey) {
+    let countsByStatus = this.bashTaskGetsByResponse.get(responseId) ?? new Map();
+    this.bashTaskGetsByResponse.delete(responseId);
+    this.bashTaskGetsByResponse.set(responseId, countsByStatus);
     if (this.bashTaskGetsByResponse.size > MAX_BASH_TASK_GETS) {
-      let S = this.bashTaskGetsByResponse.keys().next().value;
-      if (S !== undefined) this.bashTaskGetsByResponse.delete(S);
+      let oldestKey_4 = this.bashTaskGetsByResponse.keys().next().value;
+      if (oldestKey_4 !== undefined) this.bashTaskGetsByResponse.delete(oldestKey_4);
     }
-    let h = s.get(n);
-    let y = h?.statusKey === r ? h.count + 1 : 1;
-    s.set(n, {
-      count: y,
-      statusKey: r,
+    let previous = countsByStatus.get(toolUseId);
+    let count = previous?.statusKey === statusKey ? previous.count + 1 : 1;
+    countsByStatus.set(toolUseId, {
+      count,
+      statusKey,
     });
-    return y;
+    return count;
   }
-  markBashTaskSnapshotFetched(e) {
-    let n = this.bashTaskSnapshots.get(e);
-    if (n)
-      this.bashTaskSnapshots.set(e, {
-        ...n,
+  markBashTaskSnapshotFetched(taskId_7) {
+    let snapshot = this.bashTaskSnapshots.get(taskId_7);
+    if (snapshot)
+      this.bashTaskSnapshots.set(taskId_7, {
+        ...snapshot,
         fetched: true,
       });
   }
@@ -211,7 +224,10 @@ class TaskOutputLinks {
   }
 }
 //@ chunk-aepeg2w5.js:349666-349691 placement
-var taskOutputLinksByHost = new HostScoped(() => new TaskOutputLinks());
+var taskOutputLinksByHost; // deferred: uses TaskOutputLinks of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:349666", () => {
+  taskOutputLinksByHost = new HostScoped(() => new TaskOutputLinks());
+});
 //@ chunk-aepeg2w5.js:349691-349728 placement
 /**
  * 任务运行 id 存储（按 host）。
@@ -226,13 +242,13 @@ var RUN_ID_RE = /^([0-9a-z]{9})-[0-9a-f]{8}$/;
 /**
  * 取任务的运行 id。
  */
-function getRunId(e) {
+function getRunId(taskId) {
   let { runIds, evictedRunIds } = getTaskRunState();
-  return runIds.get(e) ?? evictedRunIds.get(e);
+  return runIds.get(taskId) ?? evictedRunIds.get(taskId);
 }
 //@ chunk-aepeg2w5.js:349846-349905 placement
-function previousRunSeq(e) {
-  let runId = getRunId(e);
+function previousRunSeq(taskId) {
+  let runId = getRunId(taskId);
   return runId === undefined ? undefined : runSeqOf(runId);
 }
 //@ chunk-aepeg2w5.js:349905-349983 placement
@@ -240,19 +256,19 @@ function previousRunSeq(e) {
  * 从运行 id 解析出 36 进制的序号。
  */
 function runSeqOf(runId) {
-  let n = RUN_ID_RE.exec(runId)?.[1];
-  return n === undefined ? undefined : parseInt(n, 36);
+  let seq = RUN_ID_RE.exec(runId)?.[1];
+  return seq === undefined ? undefined : parseInt(seq, 36);
 }
 //@ chunk-aepeg2w5.js:349983-350028 placement
 /**
  * 为任务登记运行 id。
  */
-function setTaskRunId(e, runId = makeTimeOrderedId(e)) {
-  getTaskRunState().runIds.set(e, runId);
+function setTaskRunId(taskId, runId = makeTimeOrderedId(taskId)) {
+  getTaskRunState().runIds.set(taskId, runId);
 }
 //@ chunk-aepeg2w5.js:350028-350144 placement = generatePlaceholders (0.758)
-function makeTimeOrderedId(e) {
-  return `${Math.max(Date.now(), (previousRunSeq(e) ?? -1) + 1)
+function makeTimeOrderedId(taskId) {
+  return `${Math.max(Date.now(), (previousRunSeq(taskId) ?? -1) + 1)
     .toString(36)
     .padStart(RUN_ID_SEQ_WIDTH, "0")}-${randomBytes(4).toString("hex")}`;
 }
@@ -260,9 +276,9 @@ function makeTimeOrderedId(e) {
 /**
  * 认领某任务的终态通知发送权（每个任务只能认领一次）。
  */
-function claimTerminalEmit_2(e) {
-  if (getTaskRunState().terminalEmitClaims.has(e)) return false;
-  getTaskRunState().terminalEmitClaims.add(e);
+function claimTerminalEmit_2(taskId) {
+  if (getTaskRunState().terminalEmitClaims.has(taskId)) return false;
+  getTaskRunState().terminalEmitClaims.add(taskId);
   return true;
 }
 //@ chunk-aepeg2w5.js:350244-350301 placement
@@ -315,75 +331,80 @@ class TaskNotificationQueue {
     this.levelHolds = 0;
     this.heldLevels.clear();
   }
-  currentQueueOrCreate(e) {
-    if (this.evictedKeys.has(e)) return null;
-    let n = this.queuesByKey.get(e);
-    if (!n) {
-      n = [];
-      this.queuesByKey.set(e, n);
+  currentQueueOrCreate(queueKey) {
+    if (this.evictedKeys.has(queueKey)) return null;
+    let queue = this.queuesByKey.get(queueKey);
+    if (!queue) {
+      queue = [];
+      this.queuesByKey.set(queueKey, queue);
     }
-    return n;
+    return queue;
   }
   currentQueueOrNull() {
     return this.queuesByKey.get(this.queueKey()) ?? null;
   }
-  evictKey(e) {
-    this.queuesByKey.delete(e);
-    this.evictedKeys.add(e);
+  evictKey(keyToEvict) {
+    this.queuesByKey.delete(keyToEvict);
+    this.evictedKeys.add(keyToEvict);
     if (this.evictedKeys.size > MAX_EVICTED_KEYS) {
-      let n = this.evictedKeys.values().next().value;
-      if (n !== undefined) this.evictedKeys.delete(n);
+      let oldestKey = this.evictedKeys.values().next().value;
+      if (oldestKey !== undefined) this.evictedKeys.delete(oldestKey);
     }
   }
-  enqueue(e, n = this.queueKey()) {
-    if (this.levelHolds > 0 && e.type === "system" && e.subtype === "background_tasks_changed") {
-      this.heldLevels.set(n, e);
+  enqueue(event, queueKey_2 = this.queueKey()) {
+    if (this.levelHolds > 0 && event.type === "system" && event.subtype === "background_tasks_changed") {
+      this.heldLevels.set(queueKey_2, event);
       return;
     }
     if (!getIsNonInteractiveSession() && !isReplBridgeActive()) return;
-    if (e.type === "stream_event" && !getIsNonInteractiveSession() && this.enqueueListener === null) return;
-    let r = this.currentQueueOrCreate(n);
-    if (!r) return;
-    if (r.length >= MAX_QUEUED_NOTIFICATIONS) {
-      if (e.type === "stream_event") return;
-      let index = r.findIndex(
-        (h) =>
-          h.type !== "conversation_reset" &&
-          (h.type !== "system" ||
-            (h.subtype !== "task_started" &&
-              h.subtype !== "task_notification" &&
-              h.subtype !== "dev_intent" &&
-              !(h.subtype === "status" && h.status === null) &&
-              !(h.subtype === "permission_check_status" && h.status === "done"))),
+    if (event.type === "stream_event" && !getIsNonInteractiveSession() && this.enqueueListener === null)
+      return;
+    let queue_2 = this.currentQueueOrCreate(queueKey_2);
+    if (!queue_2) return;
+    if (queue_2.length >= MAX_QUEUED_NOTIFICATIONS) {
+      if (event.type === "stream_event") return;
+      let index = queue_2.findIndex(
+        (queued) =>
+          queued.type !== "conversation_reset" &&
+          (queued.type !== "system" ||
+            (queued.subtype !== "task_started" &&
+              queued.subtype !== "task_notification" &&
+              queued.subtype !== "dev_intent" &&
+              !(queued.subtype === "status" && queued.status === null) &&
+              !(queued.subtype === "permission_check_status" && queued.status === "done"))),
       );
       if (index === -1)
-        index = r.findIndex(
-          (h) => h.type === "system" && h.subtype === "permission_check_status" && h.status === "done",
+        index = queue_2.findIndex(
+          (queued_2) =>
+            queued_2.type === "system" &&
+            queued_2.subtype === "permission_check_status" &&
+            queued_2.status === "done",
         );
       if (index === -1) {
         if (!this.bookendEvictionReported) {
           this.bookendEvictionReported = true;
           logFeatureSad("task_event_queue", "bookend_evicted");
         }
-        let index = r.findIndex(
-          (y) =>
-            y.type !== "conversation_reset" &&
+        let index = queue_2.findIndex(
+          (queued_3) =>
+            queued_3.type !== "conversation_reset" &&
             !(
-              y.type === "system" &&
-              ((y.subtype === "status" && y.status === null) || y.subtype === "dev_intent")
+              queued_3.type === "system" &&
+              ((queued_3.subtype === "status" && queued_3.status === null) ||
+                queued_3.subtype === "dev_intent")
             ),
         );
-        if (index === -1) r.shift();
-        else r.splice(index, 1);
+        if (index === -1) queue_2.shift();
+        else queue_2.splice(index, 1);
       } else {
         if (!this.nonbookendEvictionReported) {
           this.nonbookendEvictionReported = true;
           logFeatureSad("task_event_queue", "nonbookend_evicted");
         }
-        r.splice(index, 1);
+        queue_2.splice(index, 1);
       }
     }
-    r.push(e);
+    queue_2.push(event);
     if (!this.queueUsedReported) {
       this.queueUsedReported = true;
       logFeatureOk("task_event_queue");
@@ -392,71 +413,74 @@ class TaskNotificationQueue {
   }
   holdLevels() {
     this.levelHolds++;
-    let e = false;
-    let n = () => {
-      if (e) return;
-      e = true;
+    let released = false;
+    let release = () => {
+      if (released) return;
+      released = true;
       this.levelHolds--;
       if (this.levelHolds > 0) return;
-      for (let [r, s] of this.heldLevels) {
-        this.heldLevels.delete(r);
-        this.enqueue(s, r);
+      for (let [key, heldEvent] of this.heldLevels) {
+        this.heldLevels.delete(key);
+        this.enqueue(heldEvent, key);
       }
     };
     return {
-      release: n,
-      [Symbol.dispose]: n,
+      release,
+      [Symbol.dispose]: release,
     };
   }
-  hasQueued(e) {
-    let n = this.currentQueueOrNull();
-    return n !== null && n.some(e);
+  hasQueued(predicate) {
+    let currentQueue = this.currentQueueOrNull();
+    return currentQueue !== null && currentQueue.some(predicate);
   }
   drain() {
-    let e = this.currentQueueOrNull();
-    if (!e || e.length === 0) return [];
-    return this.stamp(e.splice(0), getSessionId());
+    let queue_3 = this.currentQueueOrNull();
+    if (!queue_3 || queue_3.length === 0) return [];
+    return this.stamp(queue_3.splice(0), getSessionId());
   }
-  hasQueuedForSession(e) {
-    return (this.queuesByKey.get(e)?.length ?? 0) > 0;
+  hasQueuedForSession(key_2) {
+    return (this.queuesByKey.get(key_2)?.length ?? 0) > 0;
   }
-  drainForSession(e) {
-    let n = this.queuesByKey.get(e);
-    if (!n || n.length === 0) return [];
-    return this.stamp(n.splice(0), e);
+  drainForSession(sessionId) {
+    let queue_4 = this.queuesByKey.get(sessionId);
+    if (!queue_4 || queue_4.length === 0) return [];
+    return this.stamp(queue_4.splice(0), sessionId);
   }
-  stamp(e, sessionId) {
-    let r = this.redactsPersistedLane();
-    return e.map((s) => ({
-      ...(r ? redactTaskEventForSdk(s) : s),
-      uuid: s.type === "conversation_reset" ? s.uuid : randomUUID(),
+  stamp(events, sessionId) {
+    let redacts = this.redactsPersistedLane();
+    return events.map((event_2) => ({
+      ...(redacts ? redactTaskEventForSdk(event_2) : event_2),
+      uuid: event_2.type === "conversation_reset" ? event_2.uuid : randomUUID(),
       session_id: sessionId,
     }));
   }
 }
 //@ chunk-aepeg2w5.js:353341-353616 placement
-function redactTaskEventForSdk(e) {
-  if (e.type !== "system") return e;
-  if (e.subtype === "task_notification")
+function redactTaskEventForSdk(event) {
+  if (event.type !== "system") return event;
+  if (event.subtype === "task_notification")
     return {
-      ...e,
+      ...event,
       output_file: "",
-      ...(e.status === "failed" && {
-        summary: failureKindOf(e) ?? "error",
+      ...(event.status === "failed" && {
+        summary: failureKindOf(event) ?? "error",
       }),
     };
-  if (e.subtype === "task_updated" && e.patch.error !== undefined)
+  if (event.subtype === "task_updated" && event.patch.error !== undefined)
     return {
-      ...e,
+      ...event,
       patch: {
-        ...e.patch,
-        error: failureKindOf(e) ?? "error",
+        ...event.patch,
+        error: failureKindOf(event) ?? "error",
       },
     };
-  return e;
+  return event;
 }
 //@ chunk-aepeg2w5.js:353616-353641 placement
-var taskNotificationQueueByHost = new HostScoped(() => new TaskNotificationQueue());
+var taskNotificationQueueByHost; // deferred: uses TaskNotificationQueue of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:353616", () => {
+  taskNotificationQueueByHost = new HostScoped(() => new TaskNotificationQueue());
+});
 //@ chunk-aepeg2w5.js:353641-353678 placement
 function taskNotificationQueue() {
   return taskNotificationQueueByHost.of(getRootSession().host);
@@ -474,15 +498,15 @@ var currentNotificationKeyAlias = currentNotificationKey;
 /**
  * 设置入队监听。
  */
-function setTaskNotificationListener(e) {
-  taskNotificationQueue().setEnqueueListener(e);
+function setTaskNotificationListener(listener) {
+  taskNotificationQueue().setEnqueueListener(listener);
 }
 //@ chunk-aepeg2w5.js:353771-353802 placement
 /**
  * 入队一条任务通知。
  */
-function enqueueTaskNotification(e) {
-  taskNotificationQueue().enqueue(e);
+function enqueueTaskNotification(notification) {
+  taskNotificationQueue().enqueue(notification);
 }
 //@ chunk-aepeg2w5.js:353802-353910 placement
 /**
@@ -490,10 +514,10 @@ function enqueueTaskNotification(e) {
  */
 function holdDiagLevels() {
   if (isDiagLogging() && !isInDiagScope()) {
-    let e = () => {};
+    let noop = () => {};
     return {
-      release: e,
-      [Symbol.dispose]: e,
+      release: noop,
+      [Symbol.dispose]: noop,
     };
   }
   return taskNotificationQueue().holdLevels();
@@ -502,8 +526,8 @@ function holdDiagLevels() {
 /**
  * 是否有排队的任务通知。
  */
-function hasQueuedTaskNotification(e) {
-  return taskNotificationQueue().hasQueued(e);
+function hasQueuedTaskNotification(predicate) {
+  return taskNotificationQueue().hasQueued(predicate);
 }
 //@ chunk-aepeg2w5.js:353951-353986 placement
 /**
@@ -530,38 +554,38 @@ function hasQueuedNotificationsForSession(sessionId) {
 /**
  * 发出 task_notification 系统事件（状态、摘要、输出文件）。
  */
-function emitTaskNotification(e, status, r) {
-  if (!claimTerminalEmit_2(e)) return;
-  let s = {
+function emitTaskNotification(taskId, status, opts) {
+  if (!claimTerminalEmit_2(taskId)) return;
+  let notification = {
     type: "system",
     subtype: "task_notification",
-    task_id: e,
-    run_id: getRunId(e),
-    tool_use_id: r?.toolUseId,
+    task_id: taskId,
+    run_id: getRunId(taskId),
+    tool_use_id: opts?.toolUseId,
     status,
-    ...(r?.reason !== undefined && {
-      reason: r.reason,
+    ...(opts?.reason !== undefined && {
+      reason: opts.reason,
     }),
-    output_file: r?.outputFile ?? "",
-    summary: r?.summary ?? "",
-    usage: r?.usage,
-    ...(r?.resourceLinks && {
-      resource_links: [...r.resourceLinks],
+    output_file: opts?.outputFile ?? "",
+    summary: opts?.summary ?? "",
+    usage: opts?.usage,
+    ...(opts?.resourceLinks && {
+      resource_links: [...opts.resourceLinks],
     }),
-    ...(r?.handback !== undefined && {
-      handback: r.handback,
+    ...(opts?.handback !== undefined && {
+      handback: opts.handback,
     }),
-    ...(r?.handbackReport && {
-      handback_report: r.handbackReport,
+    ...(opts?.handbackReport && {
+      handback_report: opts.handbackReport,
     }),
-    ...(r?.skipTranscript !== undefined && {
-      skip_transcript: r.skipTranscript,
+    ...(opts?.skipTranscript !== undefined && {
+      skip_transcript: opts.skipTranscript,
     }),
-    ...(r?.ambient && {
+    ...(opts?.ambient && {
       ambient: true,
     }),
   };
-  enqueueTaskNotification(withFailureKind(s, r?.failureKind));
+  enqueueTaskNotification(withFailureKind(notification, opts?.failureKind));
 }
 export {
   getTaskRunState,

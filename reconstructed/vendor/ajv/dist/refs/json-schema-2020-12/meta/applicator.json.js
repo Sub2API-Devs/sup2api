@@ -5,10 +5,10 @@
  * pieces: chunk-1r4fv9mg.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-1r4fv9mg.js:7539-8621 cjs-fingerprint
-var require_applicator = x(function (cjsExports, cjsModule) {
+var require_applicator = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: "https://json-schema.org/draft/2020-12/meta/applicator",

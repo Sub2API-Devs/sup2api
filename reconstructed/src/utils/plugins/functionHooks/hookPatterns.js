@@ -14,62 +14,83 @@ import { isSecDefaultModule } from "../../../plugins/hooksModules/loadedModuleFi
 import { matcherDoors } from "../../../plugins/functionHooks/sites/uiSites.js";
 import { firstLineOf } from "../../stringUtils.js";
 import { uniq } from "../../collections.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-pab450vg.js:380-446 placement
-var aAo = Object.freeze(["attachment", "hook-context", "compaction"]);
+var SESSION_ATTACHMENT_KINDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-pab450vg.js:380", () => {
+  SESSION_ATTACHMENT_KINDS = Object.freeze(["attachment", "hook-context", "compaction"]);
+});
 //@ chunk-pab450vg.js:446-566 placement
 /**
  * 门列表全部可冻结时转成 session.append{door=…} 模式。
  */
-function toSessionAppendDoorPatterns(r) {
-  return r !== undefined && r.length > 0 && r.every((t) => aAo.includes(t))
-    ? r.map((t) => `session.append{door=${t}}`)
+function toSessionAppendDoorPatterns(patterns) {
+  return patterns !== undefined &&
+    patterns.length > 0 &&
+    patterns.every((door) => SESSION_ATTACHMENT_KINDS.includes(door))
+    ? patterns.map((door) => `session.append{door=${door}}`)
     : [];
 }
 //@ chunk-pab450vg.js:566-730 placement
-var dAo = Object.freeze([
-  "prompt.section",
-  "prompt.context",
-  "prompt.attachment",
-  "prompt.compose",
-  "skill.prompt",
-  "attribution.text",
-  "session.compact",
-  "settings.read",
-]);
+var SESSION_APPEND_HOOK_EVENTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-pab450vg.js:566", () => {
+  SESSION_APPEND_HOOK_EVENTS = Object.freeze([
+    "prompt.section",
+    "prompt.context",
+    "prompt.attachment",
+    "prompt.compose",
+    "skill.prompt",
+    "attribution.text",
+    "session.compact",
+    "settings.read",
+  ]);
+});
 //@ chunk-pab450vg.js:730-876 placement
 /**
  * 只匹配 classic.* 或可冻结事件的模式。
  */
 function filterFreezablePatterns(patterns) {
-  return patterns.filter((n) => {
-    let filtered = HOOK_EVENTS_2.filter((e) => matchesEventPattern(n, e));
-    return filtered.length > 0 && filtered.every((e) => e.startsWith("classic.") || dAo.includes(e));
+  return patterns.filter((pattern) => {
+    let filtered = HOOK_EVENTS_2.filter((eventName) => matchesEventPattern(pattern, eventName));
+    return (
+      filtered.length > 0 &&
+      filtered.every(
+        (eventName) => eventName.startsWith("classic.") || SESSION_APPEND_HOOK_EVENTS.includes(eventName),
+      )
+    );
   });
 }
 //@ chunk-pab450vg.js:876-1331 placement
 /**
  * 找出排在前面、会重新打开这些模式的插件。
  */
-var findReopeningPlugins = (r, n) =>
-  r.slice(0, Math.max(r.findIndex(isSecDefaultModule), 0)).flatMap((t) => {
-    let e = matcherDoors(
-      t
+var findReopeningPlugins = (before, candidates) =>
+  before.slice(0, Math.max(before.findIndex(isSecDefaultModule), 0)).flatMap((loadedModule) => {
+    let doors = matcherDoors(
+      loadedModule
         .standingFor("session.append")
-        .filter((o) => t.args.scan.toUserOn?.includes(o.pattern))
-        .map((o) => o.matcher),
+        .filter((registration) => loadedModule.args.scan.toUserOn?.includes(registration.pattern))
+        .map((registration) => registration.matcher),
     );
-    let flattened = n
-      .filter((o) => !o.includes("{") || e === undefined || e.some((s) => o === `session.append{door=${s}}`))
-      .flatMap((o) => {
-        let filtered = HOOK_EVENTS_2.filter((i) => matchesEventPattern(firstLineOf(o, "{"), i));
-        let filtered_2 = filtered.filter((i) => routesToUser(t.args.scan, i));
-        return filtered_2.length === filtered.length ? [o] : filtered_2;
+    let flattened = candidates
+      .filter(
+        (pattern) =>
+          !pattern.includes("{") ||
+          doors === undefined ||
+          doors.some((door) => pattern === `session.append{door=${door}}`),
+      )
+      .flatMap((pattern) => {
+        let filtered = HOOK_EVENTS_2.filter((eventName) =>
+          matchesEventPattern(firstLineOf(pattern, "{"), eventName),
+        );
+        let filtered_2 = filtered.filter((eventName) => routesToUser(loadedModule.args.scan, eventName));
+        return filtered_2.length === filtered.length ? [pattern] : filtered_2;
       });
     return flattened.length > 0
       ? [
           {
-            plugin: t.name,
+            plugin: loadedModule.name,
             patterns: flattened,
           },
         ]
@@ -79,34 +100,34 @@ var findReopeningPlugins = (r, n) =>
 /**
  * 用户级插件中被跳过的钩子模式（hooks-passed-over 诊断）。
  */
-function collectPassedOverHooks(storeSelector) {
+function collectPassedOverHooks(before) {
   return (
-    storeSelector.some(isSecDefaultModule) ? storeSelector.filter((e) => e.tier === "user") : []
-  ).flatMap((e) => {
-    let p = e.registrationsFor("session.append");
-    let o = uniq([
-      ...filterFreezablePatterns(e.patterns),
-      ...p.flatMap((i) =>
+    before.some(isSecDefaultModule) ? before.filter((loadedModule) => loadedModule.tier === "user") : []
+  ).flatMap((loadedModule) => {
+    let registrations = loadedModule.registrationsFor("session.append");
+    let patterns = uniq([
+      ...filterFreezablePatterns(loadedModule.patterns),
+      ...registrations.flatMap((registration) =>
         toSessionAppendDoorPatterns(
           matcherDoors(
-            e.matcherFor(
+            loadedModule.matcherFor(
               "session.append",
-              p.filter((d) => d !== i),
+              registrations.filter((otherRegistration) => otherRegistration !== registration),
             ),
           ),
         ),
       ),
     ]);
-    let s = o.length > 0;
-    let a = s ? findReopeningPlugins(storeSelector, o) : [];
-    return s
+    let hasPatterns = patterns.length > 0;
+    let reopened = hasPatterns ? findReopeningPlugins(before, patterns) : [];
+    return hasPatterns
       ? [
           {
             type: "hooks-passed-over",
-            source: e.args.pluginStorageId,
-            patterns: o,
-            ...(a.length > 0 && {
-              reopened: a,
+            source: loadedModule.args.pluginStorageId,
+            patterns,
+            ...(reopened.length > 0 && {
+              reopened,
             }),
           },
         ]
@@ -115,8 +136,8 @@ function collectPassedOverHooks(storeSelector) {
 }
 export {
   collectPassedOverHooks,
-  aAo,
-  dAo,
+  SESSION_ATTACHMENT_KINDS,
+  SESSION_APPEND_HOOK_EVENTS,
   toSessionAppendDoorPatterns,
   filterFreezablePatterns,
   findReopeningPlugins,

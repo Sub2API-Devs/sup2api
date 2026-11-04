@@ -27,40 +27,40 @@ var RECORD_PR_TIMEOUT_MS = 1500;
 /**
  * 把新建的 GitHub PR 记录到 CCR：优先经桥接句柄调用，否则以会话 JWT POST 到 CCR 会话接口，记录成功、跳过或失败。
  */
-async function recordCreatedPrToCcr(r, e) {
-  let d = hasRemoteSdkUrl();
-  let c = d ? null : (getReplBridgeHandle() ?? getSdkHostedBridgeHandle());
-  if (!d && !c?.recordCreatedPR) return;
-  if (r.provider !== "github") return;
+async function recordCreatedPrToCcr(pr, cwd) {
+  let hasRemote = hasRemoteSdkUrl();
+  let bridge = hasRemote ? null : (getReplBridgeHandle() ?? getSdkHostedBridgeHandle());
+  if (!hasRemote && !bridge?.recordCreatedPR) return;
+  if (pr.provider !== "github") return;
   if (isEssentialTrafficOnly()) return;
-  let index = r.prRepository.indexOf("/");
-  let owner = r.prRepository.slice(0, index);
-  let repo = r.prRepository.slice(index + 1);
-  let branch = await getBranch(e);
-  let l = branch === "HEAD" ? "" : branch;
+  let index = pr.prRepository.indexOf("/");
+  let owner = pr.prRepository.slice(0, index);
+  let repo = pr.prRepository.slice(index + 1);
+  let branch = await getBranch(cwd);
+  let headRef = branch === "HEAD" ? "" : branch;
   try {
-    if (c?.recordCreatedPR) {
-      let o = await c.recordCreatedPR(
+    if (bridge?.recordCreatedPR) {
+      let result = await bridge.recordCreatedPR(
         {
           owner,
           repo,
-          prNumber: r.prNumber,
-          headRef: l,
+          prNumber: pr.prNumber,
+          headRef,
         },
         RECORD_PR_TIMEOUT_MS,
       );
-      if (o.ok) _(o.status);
-      else if ("skipped" in o) logRecordPrSkipped(o.skipped);
-      else logRecordPrFailure(o.kind, o.status);
+      if (result.ok) _(result.status);
+      else if ("skipped" in result) logRecordPrSkipped(result.skipped);
+      else logRecordPrFailure(result.kind, result.status);
       return;
     }
-    let i = await apiClient.post(
+    let response = await apiClient.post(
       RECORD_CREATED_PR_PATH,
       {
         owner,
         repo,
-        pr_number: r.prNumber,
-        head_ref: l,
+        pr_number: pr.prNumber,
+        head_ref: headRef,
       },
       {
         auth: "session-jwt",
@@ -71,11 +71,11 @@ async function recordCreatedPrToCcr(r, e) {
         timeout: RECORD_PR_TIMEOUT_MS,
       },
     );
-    if (!i.ok) {
-      logRecordPrSkipped(i.reason);
+    if (!response.ok) {
+      logRecordPrSkipped(response.reason);
       return;
     }
-    _(i.status);
+    _(response.status);
   } catch (error) {
     let { kind, status } = classifyAxiosError(error);
     logRecordPrFailure(kind, status);
@@ -90,9 +90,9 @@ function _(status) {
 /**
  * 记录 PR 记录被跳过的原因（埋点 + 调试日志）。
  */
-function logRecordPrSkipped(r) {
-  logFeatureSad("ccr_record_created_pr", r);
-  logForDebugging(`recordCreatedPrToCcr: skipped (${r})`);
+function logRecordPrSkipped(reason) {
+  logFeatureSad("ccr_record_created_pr", reason);
+  logForDebugging(`recordCreatedPrToCcr: skipped (${reason})`);
 }
 //@ chunk-fnctemcf.js:4457-4660 placement
 function logRecordPrFailure(kind, status) {
@@ -100,3 +100,4 @@ function logRecordPrFailure(kind, status) {
   else logFeatureBad("ccr_record_created_pr", `${kind}${status ? `_${status}` : ""}`);
   logForDebugging(`recordCreatedPrToCcr: RecordCreatedPR failed: ${kind}${status ? ` ${status}` : ""}`);
 }
+export { recordCreatedPrToCcr };

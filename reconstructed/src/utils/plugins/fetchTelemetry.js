@@ -13,20 +13,24 @@ import { CLAUDE_PLUGINS_OFFICIAL } from "./officialMarketplace.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { normalizeGitRemoteUrl } from "../git.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-v00h76b6.js:333-538 fingerprint = KNOWN_PUBLIC_HOSTS (0.947)
-var KNOWN_PUBLIC_HOSTS = [
-  GITHUB_HOST,
-  "raw.githubusercontent.com",
-  "objects.githubusercontent.com",
-  "gist.githubusercontent.com",
-  "gitlab.com",
-  "bitbucket.org",
-  "codeberg.org",
-  "dev.azure.com",
-  "ssh.dev.azure.com",
-  "storage.googleapis.com",
-];
+var KNOWN_PUBLIC_HOSTS; // deferred: uses GITHUB_HOST (../git/githubUrl.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-v00h76b6.js:333", () => {
+  KNOWN_PUBLIC_HOSTS = [
+    GITHUB_HOST,
+    "raw.githubusercontent.com",
+    "objects.githubusercontent.com",
+    "gist.githubusercontent.com",
+    "gitlab.com",
+    "bitbucket.org",
+    "codeberg.org",
+    "dev.azure.com",
+    "ssh.dev.azure.com",
+    "storage.googleapis.com",
+  ];
+});
 //@ chunk-v00h76b6.js:538-710 layout
 function classifyFetchHost(urlOrSpec) {
   let host;
@@ -39,7 +43,7 @@ function classifyFetchHost(urlOrSpec) {
       return "unknown";
     }
   let normalized = host.toLowerCase();
-  return KNOWN_PUBLIC_HOSTS.find((r) => r === normalized) ?? "other";
+  return KNOWN_PUBLIC_HOSTS.find((host) => host === normalized) ?? "other";
 }
 //@ chunk-v00h76b6.js:710-762 layout = isOfficialRepo (1)
 function isOfficialRepo_2(urlOrSpec) {
@@ -49,7 +53,7 @@ function isOfficialRepo_2(urlOrSpec) {
 /**
  * 记录插件远程获取遥测 tengu_plugin_remote_fetch（来源类型、主机（公共主机才记明文）、结果、耗时、错误类别）。
  */
-function logPluginFetch(source, urlOrSpec, outcome, durationMs, errorKind, u, submodules) {
+function logPluginFetch(source, urlOrSpec, outcome, durationMs, errorKind, isDirectory, submodules) {
   logEvent("tengu_plugin_remote_fetch", {
     source: fromEnum(source),
     host: fromEnum(urlOrSpec ? classifyFetchHost(urlOrSpec) : "unknown"),
@@ -59,9 +63,9 @@ function logPluginFetch(source, urlOrSpec, outcome, durationMs, errorKind, u, su
     ...(errorKind && {
       error_kind: fromEnum(errorKind),
     }),
-    ...(u !== undefined
+    ...(isDirectory !== undefined
       ? {
-          is_directory: u,
+          is_directory: isDirectory,
         }
       : {}),
     ...(submodules && {
@@ -87,14 +91,24 @@ function classifyFetchError(error) {
   if (/Invalid response format|Invalid marketplace schema/i.test(msg)) return "invalid_schema";
   return "other";
 }
+//@ chunk-e6aww6q8.js:770392-770635 fingerprint = isOfficialRepo (1)
+function isOfficialRepo(urlOrSpec) {
+  let [, ...segments] = (normalizeGitRemoteUrl(urlOrSpec.replace(/\/+$/, "")) ?? "")
+    .split("/")
+    .filter((segment) => segment !== "");
+  if (!segments.every((segment) => /^[a-z0-9_][a-z0-9._-]*$/i.test(segment))) return null;
+  let isOwnerRepo = segments.length === 2;
+  let isBareRepo = segments.length === 1;
+  return isOwnerRepo ? `${segments[0]}/${segments[1]}` : isBareRepo ? `anthropics/${segments[0]}` : null;
+}
 //@ chunk-1kaj6e83.js:12100-12189 fingerprint = extractHost (0.664)
 /**
  * URL 取 协议//主机。名字归属可疑（被 MCP auth 引用）。
  */
 function extractHost(urlOrSpec) {
   try {
-    let t = new URL(urlOrSpec);
-    return `${t.protocol}//${t.hostname}`;
+    let parsedUrl = new URL(urlOrSpec);
+    return `${parsedUrl.protocol}//${parsedUrl.hostname}`;
   } catch {
     return urlOrSpec;
   }
@@ -106,15 +120,5 @@ function extractHost(urlOrSpec) {
 function isLoopbackOrigin_2(urlOrSpec) {
   let host = extractHost(urlOrSpec);
   return host === "http://127.0.0.1" || host === "http://localhost";
-}
-//@ chunk-e6aww6q8.js:770392-770635 fingerprint = isOfficialRepo (1)
-function isOfficialRepo(urlOrSpec) {
-  let [, ...n] = (normalizeGitRemoteUrl(urlOrSpec.replace(/\/+$/, "")) ?? "")
-    .split("/")
-    .filter((y) => y !== "");
-  if (!n.every((y) => /^[a-z0-9_][a-z0-9._-]*$/i.test(y))) return null;
-  let s = n.length === 2;
-  let h = n.length === 1;
-  return s ? `${n[0]}/${n[1]}` : h ? `anthropics/${n[0]}` : null;
 }
 export { isLoopbackOrigin_2, extractHost, logPluginFetch, classifyFetchError, isOfficialRepo };

@@ -5,10 +5,10 @@
  * pieces: chunk-a1ttyqdw.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-a1ttyqdw.js:266-666 cjs-fingerprint
-var require_getHomeDir = x(function (cjsExports) {
+var require_getHomeDir = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

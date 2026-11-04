@@ -16,19 +16,19 @@ import { mergePluginDirs } from "../../utils/plugins/pluginDirsEnv.js";
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
 
 //@ chunk-0sfjpx19.js:128792-129161 placement
-async function logPluginDirReload(e, { storageV5, credentials, ...s }) {
+async function logPluginDirReload(host, { storageV5, credentials, ...options }) {
   try {
     let { wouldInvalidateCache } = await computePluginReloadImpact({
-      ...s,
+      ...options,
       storageV5,
       credentials,
     });
     if (wouldInvalidateCache) {
-      e.markNeedsRefresh();
+      host.markNeedsRefresh();
       logFeatureSad("plugin_dir_folder_reload", "cache_impact");
       return "held";
     }
-    await refreshActivePlugins(e, storageV5, credentials, {
+    await refreshActivePlugins(host, storageV5, credentials, {
       applyStagedInstalls: false,
     });
     logFeatureOk("plugin_dir_folder_reload");
@@ -42,12 +42,12 @@ async function logPluginDirReload(e, { storageV5, credentials, ...s }) {
 /**
  * 把插件目录加入内联插件列表并重建沙箱（目录已在列表中则不变），返回可撤销的修改。
  */
-async function addPluginDirAndRebuildSandbox(e) {
+async function addPluginDirAndRebuildSandbox(dir) {
   await rebuildSandboxForPluginDir(() => {
     let inlinePlugins = getInlinePlugins();
-    let r = mergePluginDirs(inlinePlugins, [e]);
-    if (r.length === mergePluginDirs(inlinePlugins).length) return;
-    setInlinePlugins(r);
+    let dirs = mergePluginDirs(inlinePlugins, [dir]);
+    if (dirs.length === mergePluginDirs(inlinePlugins).length) return;
+    setInlinePlugins(dirs);
     return () => setInlinePlugins(inlinePlugins);
   });
 }
@@ -55,29 +55,29 @@ async function addPluginDirAndRebuildSandbox(e) {
 /**
  * 插件目录加入后重建沙箱以把 shell 命令挡在插件根之外。
  */
-async function rebuildSandboxForPluginDir(e) {
+async function rebuildSandboxForPluginDir(apply) {
   let pluginRegistry = getPluginRegistry();
   while (pluginRegistry.sandboxBringUp !== undefined) await pluginRegistry.sandboxBringUp;
-  let r = e();
-  if (r === undefined) return;
-  let s;
+  let rollback = apply();
+  if (rollback === undefined) return;
+  let denyResult;
   try {
-    s = pluginRegistry.denyJoinedPluginRoot?.();
+    denyResult = pluginRegistry.denyJoinedPluginRoot?.();
   } catch (error) {
-    r();
+    rollback();
     throw error;
   }
-  switch (s) {
+  switch (denyResult) {
     case undefined:
     case "installed":
       return;
     case "rebuild_failed":
-      r();
+      rollback();
       throw Error(
         "the sandbox could not be rebuilt to keep shell commands out of this folder, so it was not added to the session; check the sandbox settings with /sandbox, then try again",
       );
     case "stamped_at_start":
-      r();
+      rollback();
       throw Error(
         "on Windows the sandbox cannot keep shell commands out of a folder added after it started, so it was not added to the session; start a new session to load it",
       );

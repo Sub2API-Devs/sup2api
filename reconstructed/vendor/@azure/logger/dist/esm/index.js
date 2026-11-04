@@ -11,8 +11,8 @@ import {
 } from "../../../../@typespec/ts-http-runtime/dist/esm/logger/logger.js";
 
 //@ chunk-mrx6y2r5.js:26638-26685 esm-fingerprint
-function Uo(e) {
-  return context.createClientLogger(e);
+function createClientLogger(namespace) {
+  return context.createClientLogger(namespace);
 }
 //@ chunk-mrx6y2r5.js:26685-26766 esm-fingerprint
 var context_2 = createLoggerContext({
@@ -25,7 +25,7 @@ function getLogLevel() {
   return context_2.getLogLevel();
 }
 //@ chunk-mrx6y2r5.js:26804-26851 esm-fingerprint
-function Pt(e) {
-  return context_2.createClientLogger(e);
+function createClientLogger_2(namespace) {
+  return context_2.createClientLogger(namespace);
 }
-export { Pt, Uo, getLogLevel };
+export { createClientLogger_2, createClientLogger, getLogLevel };

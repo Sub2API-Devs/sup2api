@@ -20,8 +20,8 @@ function color(c, theme, type = "foreground") {
     if (!c) return text;
     if (c.startsWith("rgb(") || c.startsWith("#") || c.startsWith("ansi256(") || c.startsWith("ansi:"))
       return colorize(text, c, type);
-    let i = typeof theme === "string" ? getTheme(theme) : theme;
-    return colorize(text, i[c], type);
+    let resolvedTheme = typeof theme === "string" ? getTheme(theme) : theme;
+    return colorize(text, resolvedTheme[c], type);
   };
 }
 export { color };

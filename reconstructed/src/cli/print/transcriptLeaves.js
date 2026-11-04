@@ -38,26 +38,28 @@ import { isClaudeAiChatOrigin } from "../../utils/entrypointKinds.js";
 import { logError } from "../../utils/log.js";
 
 //@ chunk-tyg7f3ek.js:50620-51236 placement
-function foldedFollowUpEnd(e, n) {
-  let messageIndex = findMessageIndex(e, n);
-  if (e[messageIndex]?.type !== "attachment") return;
-  let s = nextTurnStartIndex(e, messageIndex);
-  let filtered = e
-    .slice(messageIndex + 1, s === -1 ? undefined : s)
-    .filter((w) => !("isSidechain" in w && w.isSidechain === true));
-  let filtered_2 = filtered.filter(
-    (w) =>
-      (w.type === "user" || w.type === "assistant") &&
-      !isSyntheticApiErrorMessage(w) &&
-      !isSyntheticUserMessage(w),
+function foldedFollowUpEnd(entries, uuid) {
+  let messageIndex = findMessageIndex(entries, uuid);
+  if (entries[messageIndex]?.type !== "attachment") return;
+  let nextTurn = nextTurnStartIndex(entries, messageIndex);
+  let filtered = entries
+    .slice(messageIndex + 1, nextTurn === -1 ? undefined : nextTurn)
+    .filter((row) => !("isSidechain" in row && row.isSidechain === true));
+  let rows = filtered.filter(
+    (row) =>
+      (row.type === "user" || row.type === "assistant") &&
+      !isSyntheticApiErrorMessage(row) &&
+      !isSyntheticUserMessage(row),
   );
-  let lastIndex = filtered.findLastIndex((w) => isSyntheticApiErrorMessage(w) || isInterruptMarkerRow(w));
-  let last = filtered_2.at(-1);
+  let lastIndex = filtered.findLastIndex(
+    (row) => isSyntheticApiErrorMessage(row) || isInterruptMarkerRow(row),
+  );
+  let last = rows.at(-1);
   return {
     badEnd:
       last === undefined
         ? undefined
-        : isStopInterruption(filtered_2, filtered_2.length - 1)
+        : isStopInterruption(rows, rows.length - 1)
           ? "stopped"
           : isPartialAssistantRow(last)
             ? "reply_failed"
@@ -68,10 +70,10 @@ function foldedFollowUpEnd(e, n) {
       last?.type === "assistant" &&
       isPartialAssistantRow(last) &&
       (isTransientApiError(last) || last.streamWatchdogGaveUp === true),
-    claudesRowBehind: filtered_2.some(isRealAssistantReply),
+    claudesRowBehind: rows.some(isRealAssistantReply),
     reRunsRowBehind:
       lastIndex !== -1 &&
-      filtered.slice(lastIndex + 1).some((w) => isRealAssistantReply(w) || isToolResultMessage(w)),
+      filtered.slice(lastIndex + 1).some((row) => isRealAssistantReply(row) || isToolResultMessage(row)),
   };
 }
 //@ chunk-tyg7f3ek.js:51236-51413 placement
@@ -82,7 +84,7 @@ async function loadSessionTranscriptRows(sessionId, storageV5) {
     keepAllLeaves:
       !isDiskless() &&
       (await stat(transcriptPathForSession).then(
-        (y) => y.size <= MAX_TRANSCRIPT_READ_BYTES,
+        (stats) => stats.size <= MAX_TRANSCRIPT_READ_BYTES,
         () => false,
       )),
     ...(transcriptStorageKey && {
@@ -95,11 +97,11 @@ async function loadSessionTranscriptRows(sessionId, storageV5) {
 function createPersistenceChecker({ storageV5, heldInMemory }) {
   return () => {
     let sessionId = getSessionId();
-    let s = (S) => doesMessageExistInSession(sessionId, S, storageV5);
-    let h = async (S) => heldInMemory(S) && !(await s(S));
-    let y = async (S) => {
+    let isPersisted = (uuid) => doesMessageExistInSession(sessionId, uuid, storageV5);
+    let isHeldUnpersisted = async (uuid) => heldInMemory(uuid) && !(await isPersisted(uuid));
+    let readTranscript = async (check) => {
       try {
-        return S(await loadSessionTranscriptRows(sessionId, storageV5));
+        return check(await loadSessionTranscriptRows(sessionId, storageV5));
       } catch (error) {
         logForDebugging(
           `could not read the transcript for a message stored inside another row; it reads unanswered: ${error instanceof Error ? error.message : String(error)}`,
@@ -111,14 +113,22 @@ function createPersistenceChecker({ storageV5, heldInMemory }) {
       }
     };
     return {
-      persisted: (S) => (isHeldMessageRecognitionOn() ? s(S).then((R) => R || heldInMemory(S)) : s(S)),
-      turnUnanswered: (S) =>
+      persisted: (uuid) =>
         isHeldMessageRecognitionOn()
-          ? h(S).then((R) =>
-              R ? y((w) => isOpenerUnanswered(w, S)) : isMessageTurnUnanswered(sessionId, S, storageV5),
+          ? isPersisted(uuid).then((persisted) => persisted || heldInMemory(uuid))
+          : isPersisted(uuid),
+      turnUnanswered: (uuid) =>
+        isHeldMessageRecognitionOn()
+          ? isHeldUnpersisted(uuid).then((held) =>
+              held
+                ? readTranscript((rows) => isOpenerUnanswered(rows, uuid))
+                : isMessageTurnUnanswered(sessionId, uuid, storageV5),
             )
-          : isMessageTurnUnanswered(sessionId, S, storageV5),
-      holdersTurnUnanswered: async (S) => ((await h(S)) ? y((R) => isTurnOpen(R, S) ?? true) : undefined),
+          : isMessageTurnUnanswered(sessionId, uuid, storageV5),
+      holdersTurnUnanswered: async (uuid) =>
+        (await isHeldUnpersisted(uuid))
+          ? readTranscript((rows) => isTurnOpen(rows, uuid) ?? true)
+          : undefined,
     };
   };
 }
@@ -131,12 +141,12 @@ function chatOriginField() {
     : {};
 }
 //@ chunk-tyg7f3ek.js:51996-52052 placement
-function tryOr(e, n) {
+function tryOr(fn, fallback) {
   try {
-    return e();
+    return fn();
   } catch (error) {
     logError(error);
-    return n;
+    return fallback;
   }
 }
 export { createPersistenceChecker, loadSessionTranscriptRows, tryOr, chatOriginField, foldedFollowUpEnd };

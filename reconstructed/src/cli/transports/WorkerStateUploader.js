@@ -9,7 +9,7 @@
  * attribution: fingerprint 2, layout 1
  */
 import { isPlainObject } from "../../utils/isPlainObject.js";
-import { Uo } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { sleep } from "../../utils/sleep.js";
 import { pickByHelper } from "../../utils/git/gitSafeEnv.js";
 
@@ -35,23 +35,23 @@ class WorkerStateUploader {
   constructor(config) {
     this.config = config;
   }
-  enqueue(e) {
+  enqueue(patch) {
     if (this.closed || this.isClosedToNewPatches) {
       this.hasDroppedSomething = true;
       return;
     }
-    if (this.pending && "worker_status" in this.pending && "worker_status" in e) this.drain();
-    let n = !("worker_status" in e) && (this.config.waitsForStatus?.(e) ?? false);
-    this.pendingWaits = (this.pending === null || this.pendingWaits) && n !== false;
-    if (this.pendingWaits && typeof n === "number")
-      this.waitTimer ??= setTimeout(() => this.sendWaiting(), n);
+    if (this.pending && "worker_status" in this.pending && "worker_status" in patch) this.drain();
+    let waits = !("worker_status" in patch) && (this.config.waitsForStatus?.(patch) ?? false);
+    this.pendingWaits = (this.pending === null || this.pendingWaits) && waits !== false;
+    if (this.pendingWaits && typeof waits === "number")
+      this.waitTimer ??= setTimeout(() => this.sendWaiting(), waits);
     if (this.pending === null) {
       this.pendingSince = Date.now();
-      this.pending = e;
-    } else this.pending = coalescePatches(this.pending, e);
-    if ("worker_status" in e) this.requeued = null;
-    this.requeuedMetadata &&= diffMetadataAgainst(this.requeuedMetadata, e);
-    this.remember(e);
+      this.pending = patch;
+    } else this.pending = coalescePatches(this.pending, patch);
+    if ("worker_status" in patch) this.requeued = null;
+    this.requeuedMetadata &&= diffMetadataAgainst(this.requeuedMetadata, patch);
+    this.remember(patch);
     if (this.config.mergesSameRun?.()) queueMicrotask(() => void this.drain());
     else this.drain();
   }
@@ -64,25 +64,25 @@ class WorkerStateUploader {
     this.requeued = patch;
     this.drain();
   }
-  requeueMetadata(e) {
+  requeueMetadata(metadata) {
     if (this.closed || this.isClosedToNewPatches) {
       this.hasDroppedSomething = true;
       return;
     }
-    this.putBackMetadata(e);
+    this.putBackMetadata(metadata);
   }
-  putBackMetadata(e) {
+  putBackMetadata(metadata) {
     this.requeuedMetadata = diffMetadataAgainst(
-      coalescePatches(this.requeuedMetadata ?? {}, e),
+      coalescePatches(this.requeuedMetadata ?? {}, metadata),
       this.pending ?? {},
     );
     this.drain();
   }
-  remember(e) {
-    if (this.config.remembers) this.remembered = coalescePatches(this.remembered, e);
+  remember(patch) {
+    if (this.config.remembers) this.remembered = coalescePatches(this.remembered, patch);
   }
-  sendWaiting(e = 0) {
-    if (this.pendingWaits && (e <= 0 || Date.now() - this.pendingSince >= e)) {
+  sendWaiting(minAgeMs = 0) {
+    if (this.pendingWaits && (minAgeMs <= 0 || Date.now() - this.pendingSince >= minAgeMs)) {
       this.pendingWaits = false;
       this.drain();
     }
@@ -115,15 +115,17 @@ class WorkerStateUploader {
         (this.sending !== null && this.withoutStatus(this.sending) !== null))
     );
   }
-  keepsWithoutStatus(e) {
-    return this.withoutStatus(e) !== null;
+  keepsWithoutStatus(patch) {
+    return this.withoutStatus(patch) !== null;
   }
-  withoutStatus(e) {
-    if (!("worker_status" in e)) return e;
-    let n = isPlainObject(e.internal_metadata) ? Uo(e.internal_metadata, this.config.ridesAStatus ?? []) : {};
-    return Object.keys(n).length > 0
+  withoutStatus(patch) {
+    if (!("worker_status" in patch)) return patch;
+    let kept = isPlainObject(patch.internal_metadata)
+      ? omitAlias(patch.internal_metadata, this.config.ridesAStatus ?? [])
+      : {};
+    return Object.keys(kept).length > 0
       ? {
-          internal_metadata: n,
+          internal_metadata: kept,
         }
       : null;
   }
@@ -150,69 +152,75 @@ class WorkerStateUploader {
   async drain() {
     if (this.inflight || this.closed) return;
     let pending = this.pendingWaits ? null : this.pending;
-    let n = pending ?? this.requeued;
-    let s = !pending;
+    let next = pending ?? this.requeued;
+    let statusOnly = !pending;
     if (pending) this.clearPending();
     else if (this.requeued) this.requeued = null;
     else if (this.requeuedMetadata) {
-      let [[r, h] = [], ...w] = Object.entries(this.requeuedMetadata);
-      n =
-        r === undefined
+      let [[key, value] = [], ...rest] = Object.entries(this.requeuedMetadata);
+      next =
+        key === undefined
           ? null
           : {
-              [r]: h,
+              [key]: value,
             };
-      this.requeuedMetadata = w.length > 0 ? Object.fromEntries(w) : null;
+      this.requeuedMetadata = rest.length > 0 ? Object.fromEntries(rest) : null;
     }
-    if (!n) return;
-    this.inflight = this.sendWithRetry(n, s).then(() => {
+    if (!next) return;
+    this.inflight = this.sendWithRetry(next, statusOnly).then(() => {
       this.inflight = null;
       this.sending = null;
       if ((this.pending || this.requeued || this.requeuedMetadata) && !this.closed) this.drain();
     });
   }
-  async sendWithRetry(e, n) {
-    let s = e;
-    let r = 0;
-    let h = false;
+  async sendWithRetry(patch, statusOnly) {
+    let current = patch;
+    let attempts = 0;
+    let cutKept = false;
     while (!this.closed) {
-      this.sending = s;
-      if (await this.config.send(s)) return;
-      if (this.handsBackWithoutStatus(s)) return;
-      if (this.isClosedToNewPatches && n && !("worker_status" in s) && this.pending && !this.closed) {
-        this.putBackMetadata(s);
+      this.sending = current;
+      if (await this.config.send(current)) return;
+      if (this.handsBackWithoutStatus(current)) return;
+      if (
+        this.isClosedToNewPatches &&
+        statusOnly &&
+        !("worker_status" in current) &&
+        this.pending &&
+        !this.closed
+      ) {
+        this.putBackMetadata(current);
         return;
       }
-      if (this.isClosedToNewPatches && !h) {
-        h = true;
-        r = 0;
+      if (this.isClosedToNewPatches && !cutKept) {
+        cutKept = true;
+        attempts = 0;
       }
-      r++;
+      attempts++;
       await sleep(
-        this.retryDelay(r),
+        this.retryDelay(attempts),
         this.isClosedToNewPatches ? undefined : this.closingToNewPatches.signal,
       );
-      if (this.handsBackWithoutStatus(s)) return;
+      if (this.handsBackWithoutStatus(current)) return;
       if (this.pending && !this.closed) {
-        if (n) {
-          if (!("worker_status" in s) && !this.pendingWaits) {
-            this.putBackMetadata(s);
+        if (statusOnly) {
+          if (!("worker_status" in current) && !this.pendingWaits) {
+            this.putBackMetadata(current);
             return;
           }
-          if ("worker_status" in s && "worker_status" in this.pending) return;
+          if ("worker_status" in current && "worker_status" in this.pending) return;
           continue;
         }
-        s = coalescePatches(s, this.pending);
+        current = coalescePatches(current, this.pending);
         this.clearPending();
       }
     }
   }
-  handsBackWithoutStatus(e) {
-    if (!this.isClosedToNewPatches || !("worker_status" in e)) return false;
+  handsBackWithoutStatus(patch) {
+    if (!this.isClosedToNewPatches || !("worker_status" in patch)) return false;
     if (this.closed) return true;
     this.hasDroppedSomething = true;
     this.cutKeptMetadata ||= this.pending !== null && "external_metadata" in this.pending;
-    this.pending = this.withoutStatus(this.pending ? coalescePatches(e, this.pending) : e);
+    this.pending = this.withoutStatus(this.pending ? coalescePatches(patch, this.pending) : patch);
     return true;
   }
   clearPending() {
@@ -232,13 +240,13 @@ class WorkerStateUploader {
   }
 }
 //@ chunk-fp6aqx1j.js:15407-15576 layout
-function diffMetadataAgainst(e, n) {
-  let s = {};
-  for (let [key, value] of Object.entries(e)) {
-    let w = pickByHelper(value, (v, y) => !(y in (n[key] ?? {})));
-    if (Object.keys(w).length > 0) s[key] = w;
+function diffMetadataAgainst(metadata, against) {
+  let out = {};
+  for (let [key, value] of Object.entries(metadata)) {
+    let kept = pickByHelper(value, (value, fieldName) => !(fieldName in (against[key] ?? {})));
+    if (Object.keys(kept).length > 0) out[key] = kept;
   }
-  return Object.keys(s).length > 0 ? s : null;
+  return Object.keys(out).length > 0 ? out : null;
 }
 //@ chunk-fp6aqx1j.js:15576-15795 fingerprint = coalescePatches (1)
 function coalescePatches(base, overlay) {

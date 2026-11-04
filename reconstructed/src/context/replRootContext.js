@@ -8,7 +8,7 @@
  * pieces: chunk-m6sy5dxm.js (4)
  * attribution: placement 4
  */
-import { init_react_production, qt } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, createContext } from "../../vendor/react/cjs/react.production.js";
 
 //@ chunk-m6sy5dxm.js:229-233 placement
 init_react_production();
@@ -25,5 +25,5 @@ function getRootSessionOverride() {
 /**
  * 导出值：rootSessionSlot（根会话槽）；位于「REPL 根上下文（2.1.316 新增）」模块。
  */
-var rootSessionSlot = qt(null);
+var rootSessionSlot = createContext(null);
 export { rootSessionSlot, getRootSessionOverride };

@@ -5,21 +5,21 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_forge } from "./forge.js";
 import { require_hmac } from "./hmac.js";
 import { require_md } from "./md.js";
 import { require_util } from "./util.js";
 
 //@ chunk-fq0cr76a.js:79887-81621 cjs-fingerprint
-var require_pbkdf2 = x(function (cjsExports, cjsModule) {
+var require_pbkdf2 = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_hmac();
   require_md();
   require_util();
   var pkcs5 = (forge.pkcs5 = forge.pkcs5 || {});
-  var da;
-  if (forge.util.isNodejs && !forge.options.usePureJavaScript) da = importMetaRequire("crypto");
+  var nodeCrypto;
+  if (forge.util.isNodejs && !forge.options.usePureJavaScript) nodeCrypto = importMetaRequire("crypto");
   cjsModule.exports =
     forge.pbkdf2 =
     pkcs5.pbkdf2 =
@@ -31,23 +31,24 @@ var require_pbkdf2 = x(function (cjsExports, cjsModule) {
         if (
           forge.util.isNodejs &&
           !forge.options.usePureJavaScript &&
-          da.pbkdf2 &&
+          nodeCrypto.pbkdf2 &&
           (md === null || typeof md !== "object") &&
-          (da.pbkdf2Sync.length > 4 || !md || md === "sha1")
+          (nodeCrypto.pbkdf2Sync.length > 4 || !md || md === "sha1")
         ) {
           if (typeof md !== "string") md = "sha1";
           p = Buffer.from(p, "binary");
           s_2 = Buffer.from(s_2, "binary");
           if (!callback) {
-            if (da.pbkdf2Sync.length === 4) return da.pbkdf2Sync(p, s_2, c, dkLen).toString("binary");
-            return da.pbkdf2Sync(p, s_2, c, dkLen, md).toString("binary");
+            if (nodeCrypto.pbkdf2Sync.length === 4)
+              return nodeCrypto.pbkdf2Sync(p, s_2, c, dkLen).toString("binary");
+            return nodeCrypto.pbkdf2Sync(p, s_2, c, dkLen, md).toString("binary");
           }
-          if (da.pbkdf2Sync.length === 4)
-            return da.pbkdf2(p, s_2, c, dkLen, function (err, key) {
+          if (nodeCrypto.pbkdf2Sync.length === 4)
+            return nodeCrypto.pbkdf2(p, s_2, c, dkLen, function (err, key) {
               if (err) return callback(err);
               callback(null, key.toString("binary"));
             });
-          return da.pbkdf2(p, s_2, c, dkLen, md, function (err, key) {
+          return nodeCrypto.pbkdf2(p, s_2, c, dkLen, md, function (err, key) {
             if (err) return callback(err);
             callback(null, key.toString("binary"));
           });

@@ -51,38 +51,38 @@ function getMcpPrefix(serverName) {
 /**
  * （归属疑误：通用显示）把名字转成安全的引号显示形式，超长截断加省略号。
  */
-function sanitizeConnectorName(e, n) {
-  if (typeof e === "string" && getMcpPrefix(e))
-    return scrubArtifactEnvelopeTags(e.replace(ESCAPE_NEEDED_RE, escapeChar));
-  let max = n?.max ?? MAX_NAME_LENGTH;
-  let r = e;
-  let s = false;
-  if (typeof e === "string") ({ text: r, cut: s } = truncateWithEscapes(e, displaySafetyMasker(e), max));
-  let i = scrubArtifactEnvelopeTags(
+function sanitizeConnectorName(name, options) {
+  if (typeof name === "string" && getMcpPrefix(name))
+    return scrubArtifactEnvelopeTags(name.replace(ESCAPE_NEEDED_RE, escapeChar));
+  let max = options?.max ?? MAX_NAME_LENGTH;
+  let text = name;
+  let cut = false;
+  if (typeof name === "string") ({ text, cut } = truncateWithEscapes(name, displaySafetyMasker(name), max));
+  let cleaned = scrubArtifactEnvelopeTags(
     sweepAskCopy(
-      sanitizeDisplayText(r, {
-        ...n,
+      sanitizeDisplayText(text, {
+        ...options,
         max,
       }).replace(/`/g, "'"),
     )?.replace(/^\p{M}+/u, escapeChar) ?? "?",
   );
-  return s ? `${i}\u2026` : i;
+  return cut ? `${cleaned}\u2026` : cleaned;
 }
 //@ chunk-99h01h55.js:4523-4573 placement
 /**
  * 导出函数 `sanitizeConnectorNameConnectors`：参数 e，返回 scrubArtifactEnvelopeTags( truncateCodePoints(e, MAX_NAME_LENGTH).replace(DISPLAY_UNSAFE_RE, escapeChar), )。
  */
-function sanitizeConnectorNameConnectors(e) {
+function sanitizeConnectorNameConnectors(server) {
   return scrubArtifactEnvelopeTags(
-    truncateCodePoints(e, MAX_NAME_LENGTH).replace(DISPLAY_UNSAFE_RE, escapeChar),
+    truncateCodePoints(server, MAX_NAME_LENGTH).replace(DISPLAY_UNSAFE_RE, escapeChar),
   );
 }
 //@ chunk-99h01h55.js:4573-4629 placement
 /**
  * 导出函数 `isDeclarableServer`：参数 e，返回 e.declarable !== !1 && getMcpPrefix(e.server)。
  */
-function isDeclarableServer(e) {
-  return e.declarable !== false && getMcpPrefix(e.server);
+function isDeclarableServer(server) {
+  return server.declarable !== false && getMcpPrefix(server.server);
 }
 //@ chunk-99h01h55.js:4629-4677 placement
 var CONNECTOR_NAME_FIELDS = ["name", "connector", "id", "display_name"];
@@ -101,8 +101,8 @@ function emptyConnectorResolution() {
 /**
  * 导出函数 `isPlainObjectConnector`：参数 e，返回 e !== null && typeof e === "object" && !Array.isArray(e); } export { sanitizeConnectorName, zit, k4, Vcr, G, Q…。
  */
-function isPlainObjectConnector(e) {
-  return e !== null && typeof e === "object" && !Array.isArray(e);
+function isPlainObjectConnector(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 export {
   sanitizeConnectorName,

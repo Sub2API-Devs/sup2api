@@ -56,24 +56,24 @@ var UNNAMED = "unnamed";
 /**
  * 取来源的展示标签（无标签时 "unnamed"）。
  */
-function sourceLabel(e) {
-  let approvalLabel = toApprovalLabel(e);
+function sourceLabel(origin) {
+  let approvalLabel = toApprovalLabel(origin);
   return approvalLabel === null ? UNNAMED : String(approvalLabel);
 }
 //@ chunk-e6aww6q8.js:5037406-5037444 placement
 /**
  * 取字段文本并去掉换行（单行展示）。
  */
-function singleLineFieldText(e) {
-  return replaceLineBreaks(displayField(e).text);
+function singleLineFieldText(field) {
+  return replaceLineBreaks(displayField(field).text);
 }
 //@ chunk-e6aww6q8.js:5037444-5037541 placement
 /**
  * 把文本清洗成单行作为 reason 对象（空则不返回字段）。
  */
-function reasonFromText(e) {
+function reasonFromText(rawText) {
   let text = displayField(
-    stripAnsi(e ?? "")
+    stripAnsi(rawText ?? "")
       .replace(
         /\r\n/g,
         `
@@ -91,19 +91,19 @@ function reasonFromText(e) {
 /**
  * 生成 "来源: 文本" 格式的一行说明。
  */
-function formatSourceLine(e, n) {
-  return `${sourceLabel(e)}: ${singleLineFieldText(n)}`;
+function formatSourceLine(origin, field) {
+  return `${sourceLabel(origin)}: ${singleLineFieldText(field)}`;
 }
 //@ chunk-e6aww6q8.js:5037587-5037918 placement
 /**
  * 包装插件提交的提示词：非回合中时加插件前缀与固定后缀；回合中时说明"插件在你工作时发来消息"及如何处理。
  */
-function wrapPluginPrompt(e, name, r) {
-  let s = sourceLabel(name);
-  if (!r.midTurn) return pluginMessagePrefix(s) + e + PLUGIN_PROMPT_TEXTS;
+function wrapPluginPrompt(text, name, options) {
+  let label = sourceLabel(name);
+  if (!options.midTurn) return pluginMessagePrefix(label) + text + PLUGIN_PROMPT_TEXTS;
   return (
-    `The ${s} plugin sent a message while you were working:
-${e}
+    `The ${label} plugin sent a message while you were working:
+${text}
 
 This is how Claude Code surfaces prompts a plugin submits mid-turn ` +
     "\u2014 within the running turn, often alongside the next tool result. " +
@@ -114,17 +114,17 @@ This is how Claude Code surfaces prompts a plugin submits mid-turn ` +
 /**
  * 若用户消息是插件（非以用户身份）提交的包装提示，拆出插件名与原始文本。
  */
-function extractPluginPrompt(e) {
-  let { origin } = e;
-  let content = e.message.content;
+function extractPluginPrompt(message) {
+  let { origin } = message;
+  let content = message.message.content;
   if (origin?.kind !== "plugin" || origin.asUser === true || typeof content !== "string") return;
-  let s = pluginMessagePrefix(sourceLabel(origin.name));
-  return content.length > s.length + PLUGIN_PROMPT_TEXTS.length &&
-    content.startsWith(s) &&
+  let prefix = pluginMessagePrefix(sourceLabel(origin.name));
+  return content.length > prefix.length + PLUGIN_PROMPT_TEXTS.length &&
+    content.startsWith(prefix) &&
     content.endsWith(PLUGIN_PROMPT_TEXTS)
     ? {
         name: origin.name,
-        text: content.slice(s.length, -PLUGIN_PROMPT_TEXTS.length),
+        text: content.slice(prefix.length, -PLUGIN_PROMPT_TEXTS.length),
       }
     : undefined;
 }
@@ -140,8 +140,8 @@ var MID_TURN_USER_SUFFIX = `
 
 This is how Claude Code surfaces messages the user sends mid-turn \u2014 within the running turn, often alongside the next tool result, rather than as a separate conversation turn. Address the message above as you continue this turn.`;
 //@ chunk-e6aww6q8.js:5038552-5038593 placement
-function wrapMidTurnUserMessage(e) {
-  return `${USER_SENT_MESSAGE_PREFIX}${e}${MID_TURN_USER_SUFFIX}`;
+function wrapMidTurnUserMessage(text) {
+  return `${USER_SENT_MESSAGE_PREFIX}${text}${MID_TURN_USER_SUFFIX}`;
 }
 //@ chunk-e6aww6q8.js:5038593-5038731 placement
 /**
@@ -158,90 +158,90 @@ function unwrapMidTurnUserMessage(content) {
 /**
  * 为非用户来源文本加上非用户来源标记。
  */
-function markNonUserSource(e) {
-  return e.startsWith(NON_USER_SOURCE_MARKER) ? e : `${NON_USER_SOURCE_MARKER}${e}`;
+function markNonUserSource(text) {
+  return text.startsWith(NON_USER_SOURCE_MARKER) ? text : `${NON_USER_SOURCE_MARKER}${text}`;
 }
 //@ chunk-e6aww6q8.js:5038786-5038901 placement
-function isSlackBotInbound(e, n) {
+function isSlackBotInbound(text, origin) {
   return (
-    n.inbound_origin === SLACK_BOT &&
-    n.activityObservation === undefined &&
-    n.hostInjected !== true &&
+    origin.inbound_origin === SLACK_BOT &&
+    origin.activityObservation === undefined &&
+    origin.hostInjected !== true &&
     isChatHostEntrypoint() &&
-    isWakeEnvelope(e)
+    isWakeEnvelope(text)
   );
 }
 //@ chunk-e6aww6q8.js:5038901-5040066 placement
 /**
  * 判断一条消息的非用户来源（定时触发、项目中继、任务通知、频道、对等会话等）。
  */
-function classifyNonUserMessageSource(e, n, r) {
-  if (r?.verifiedSlackHumanTurn && isHumanOrUnset(n) && r?.isMeta !== true)
-    return `${UNNAMED_SOURCE_LABEL}${e}`;
-  if (n === undefined && r?.isMeta === true) return markNonUserSource(e);
-  switch (n?.kind) {
+function classifyNonUserMessageSource(text, origin, context) {
+  if (context?.verifiedSlackHumanTurn && isHumanOrUnset(origin) && context?.isMeta !== true)
+    return `${UNNAMED_SOURCE_LABEL}${text}`;
+  if (origin === undefined && context?.isMeta === true) return markNonUserSource(text);
+  switch (origin?.kind) {
     case "task-notification":
-      return n.subkind === "scheduled-trigger"
-        ? withScheduledTaskPrefix(e)
-        : n.subkind === "projects-relay" && r?.hearthServerEnvelope === true
-          ? formatCoordinatorRelay(e, {
-              serverEnvelope: r.hearthJoinedTextBlocks !== true,
+      return origin.subkind === "scheduled-trigger"
+        ? withScheduledTaskPrefix(text)
+        : origin.subkind === "projects-relay" && context?.hearthServerEnvelope === true
+          ? formatCoordinatorRelay(text, {
+              serverEnvelope: context.hearthJoinedTextBlocks !== true,
             })
-          : r?.inHumanTurn === true
-            ? withBackgroundTaskPrefix(e)
-            : withSystemNotificationPrefix(e);
+          : context?.inHumanTurn === true
+            ? withBackgroundTaskPrefix(text)
+            : withSystemNotificationPrefix(text);
     case "coordinator":
-      return wrapCoordinatorMessage(e);
+      return wrapCoordinatorMessage(text);
     case "channel":
-      return wrapSourceMessage(e, n.server, {
+      return wrapSourceMessage(text, origin.server, {
         midTurn: true,
       });
     case "peer":
-      if (r?.wholeMessage === true && isSlackBotInbound(e, n))
-        return ensurePeerHeader(e, {
+      if (context?.wholeMessage === true && isSlackBotInbound(text, origin))
+        return ensurePeerHeader(text, {
           midTurn: true,
         });
-      return wrapPeerMessage(tagPeerMessagePlugin(e, n.plugin), {
+      return wrapPeerMessage(tagPeerMessagePlugin(text, origin.plugin), {
         midTurn: true,
-        activityObservation: n.activityObservation,
-        ...(n.activityObservation !== undefined &&
+        activityObservation: origin.activityObservation,
+        ...(origin.activityObservation !== undefined &&
           isIdleObservationFenceOn() && {
             allKindsTail: true,
           }),
-        ...(n.hostInjected &&
-          (!isTopHostSession() || r?.sendMessageToolAbsent === true) && {
+        ...(origin.hostInjected &&
+          (!isTopHostSession() || context?.sendMessageToolAbsent === true) && {
             hostInjected: true,
           }),
-        ...(n.senderTaskId !== undefined && {
+        ...(origin.senderTaskId !== undefined && {
           lineage: "descendant",
         }),
-        ...(r?.sendMessageToolAbsent === true && {
+        ...(context?.sendMessageToolAbsent === true && {
           sendMessageToolAbsent: true,
         }),
       });
     case "slack-ping":
-      return markNonUserSource(e);
+      return markNonUserSource(text);
     case "observer":
-      return wrapObserverReport(e, n.from, {
+      return wrapObserverReport(text, origin.from, {
         midTurn: true,
       });
     case "unclassified":
-      return markNonUserSource(e);
+      return markNonUserSource(text);
     case "observer-activity":
-      return e;
+      return text;
     case "plugin":
-      return n.asUser === true
-        ? wrapMidTurnUserMessage(e)
-        : wrapPluginPrompt(e, n.name, {
+      return origin.asUser === true
+        ? wrapMidTurnUserMessage(text)
+        : wrapPluginPrompt(text, origin.name, {
             midTurn: true,
           });
     case "auto-continuation":
     case "human":
     case undefined:
-      return wrapMidTurnUserMessage(e);
+      return wrapMidTurnUserMessage(text);
     default: {
-      let s = n;
-      return `${NON_USER_SOURCE_MARKER}${e}`;
+      let unknownOrigin = origin;
+      return `${NON_USER_SOURCE_MARKER}${text}`;
     }
   }
 }
@@ -266,21 +266,21 @@ function isExternalOrigin(origin) {
     case undefined:
       return false;
     default: {
-      let n = origin;
+      let otherOrigin = origin;
       return false;
     }
   }
 }
 //@ chunk-e6aww6q8.js:5040347-5040487 placement
-function wrapSourceMessage(e, server, r) {
-  let s = r.midTurn
+function wrapSourceMessage(text, server, options) {
+  let header = options.midTurn
     ? `${EXTERNAL_MESSAGE_PREFIX}${server} while you were working:`
     : `${EXTERNAL_MESSAGE_PREFIX}${server}:`;
-  let h = r.midTurn ? EXTERNAL_RESPONSE_HINT : "";
-  return `${s}
-${e}
+  let responseHint = options.midTurn ? EXTERNAL_RESPONSE_HINT : "";
+  return `${header}
+${text}
 
-${externalSourceWarning(false)}${h}`;
+${externalSourceWarning(false)}${responseHint}`;
 }
 //@ chunk-e6aww6q8.js:5040487-5040768 placement
 /**
@@ -303,7 +303,7 @@ function needsNonUserWrapper(origin) {
     case undefined:
       return false;
     default: {
-      let n = origin;
+      let otherOrigin = origin;
       return false;
     }
   }
@@ -312,99 +312,104 @@ function needsNonUserWrapper(origin) {
 /**
  * 包装非用户来源的消息，标明来源（频道、对等会话、插件等）。
  */
-function wrapNonUserMessage(userMessage, n) {
-  let r;
-  if (n.kind === "channel") return;
-  else if (n.kind === "peer") {
-    let h = typeof userMessage.message.content === "string" || userMessage.message.content.length === 1;
-    r = (y) => {
-      if (h && isSlackBotInbound(y, n))
-        return ensurePeerHeader(y, {
+function wrapNonUserMessage(message, origin) {
+  let wrap;
+  if (origin.kind === "channel") return;
+  else if (origin.kind === "peer") {
+    let singleBlock = typeof message.message.content === "string" || message.message.content.length === 1;
+    wrap = (text) => {
+      if (singleBlock && isSlackBotInbound(text, origin))
+        return ensurePeerHeader(text, {
           midTurn: false,
         });
-      return wrapPeerMessage(tagPeerMessagePlugin(y, n.plugin), {
+      return wrapPeerMessage(tagPeerMessagePlugin(text, origin.plugin), {
         midTurn: false,
-        activityObservation: n.activityObservation,
-        ...(n.activityObservation !== undefined &&
+        activityObservation: origin.activityObservation,
+        ...(origin.activityObservation !== undefined &&
           isIdleObservationFenceOn() && {
             allKindsTail: true,
           }),
-        ...(n.hostInjected &&
+        ...(origin.hostInjected &&
           !isTopHostSession() && {
             hostInjected: true,
           }),
-        ...(n.senderTaskId !== undefined && {
+        ...(origin.senderTaskId !== undefined && {
           lineage: "descendant",
         }),
       });
     };
-  } else if (n.kind === "slack-ping") r = (h) => markNonUserSource(h);
-  else if (n.kind === "observer")
-    r = (h) =>
-      wrapObserverReport(h, n.from, {
+  } else if (origin.kind === "slack-ping") wrap = (text) => markNonUserSource(text);
+  else if (origin.kind === "observer")
+    wrap = (text) =>
+      wrapObserverReport(text, origin.from, {
         midTurn: false,
       });
-  else if (n.kind === "plugin") return;
-  else if (n.kind === "unclassified") r = markNonUserSource;
-  if (!r) return;
-  let content = userMessage.message.content;
-  if (typeof content === "string") userMessage.message.content = r(content);
+  else if (origin.kind === "plugin") return;
+  else if (origin.kind === "unclassified") wrap = markNonUserSource;
+  if (!wrap) return;
+  let content = message.message.content;
+  if (typeof content === "string") message.message.content = wrap(content);
   else if (Array.isArray(content)) {
-    if (n.kind === "peer" || n.kind === "slack-ping" || n.kind === "unclassified")
-      userMessage.message.content = [
+    if (origin.kind === "peer" || origin.kind === "slack-ping" || origin.kind === "unclassified")
+      message.message.content = [
         {
           type: "text",
-          text: r(
-            content.flatMap((h) => (h.type === "text" ? [h.text] : [])).join(`
+          text: wrap(
+            content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join(`
 `),
           ),
         },
-        ...content.filter((h) => h.type !== "text"),
+        ...content.filter((block) => block.type !== "text"),
       ];
-    else for (let h of content) if (h.type === "text") h.text = r(h.text);
+    else for (let block of content) if (block.type === "text") block.text = wrap(block.text);
   }
 }
 //@ chunk-e6aww6q8.js:5041745-5041956 placement
 /**
  * 给没有来源的用户消息补上来源（人类与自动续写除外；部分任务通知去掉 subkind）。
  */
-function stampMissingOrigin(e, n) {
-  if (isHumanOrAutoContinuation(n)) return;
-  let origin =
-    n.kind === "task-notification" && n.subkind !== undefined && RELAY_SOURCE_KINDS.has(n.subkind)
-      ? (({ subkind, ...h }) => h)(n)
-      : n;
-  for (let s of e)
-    if (s.type === "user" && s.origin === undefined && !getAutoModeSparseInstructions(s)) s.origin = origin;
+function stampMissingOrigin(messages, origin) {
+  if (isHumanOrAutoContinuation(origin)) return;
+  let origin_2 =
+    origin.kind === "task-notification" &&
+    origin.subkind !== undefined &&
+    RELAY_SOURCE_KINDS.has(origin.subkind)
+      ? (({ subkind, ...rest }) => rest)(origin)
+      : origin;
+  for (let message of messages)
+    if (message.type === "user" && message.origin === undefined && !getAutoModeSparseInstructions(message))
+      message.origin = origin_2;
 }
 //@ chunk-e6aww6q8.js:5041956-5042032 placement
 /**
  * 把消息列表中的用户消息标记为跳过附件。
  */
-function markSkipAttachments(e) {
-  for (let n of e) if (n.type === "user") n.queueSkipAttachments = true;
+function markSkipAttachments(messages) {
+  for (let message of messages) if (message.type === "user") message.queueSkipAttachments = true;
 }
 //@ chunk-e6aww6q8.js:5042032-5042100 placement
 /**
  * 把消息列表中的用户消息标记为"非键入文本"。
  */
-function markTextNotTyped(e) {
-  for (let n of e) if (n.type === "user") n.textNotTyped = true;
+function markTextNotTyped(messages) {
+  for (let message of messages) if (message.type === "user") message.textNotTyped = true;
 }
 //@ chunk-e6aww6q8.js:5042100-5042175 placement
 /**
  * 把消息列表中的用户消息标记为只进转录。
  */
-function markTranscriptOnly(e) {
-  for (let n of e) if (n.type === "user") n.queueTranscriptOnly = true;
+function markTranscriptOnly(messages) {
+  for (let message of messages) if (message.type === "user") message.queueTranscriptOnly = true;
 }
 //@ chunk-e6aww6q8.js:5042175-5042349 placement
 /**
  * 把任务投递信息附到指定（或第一条）用户消息上（任务输出已被读取时跳过）。
  */
-function attachTaskDelivery(e, taskDelivery, turnId) {
+function attachTaskDelivery(messages, taskDelivery, turnId) {
   if (getTaskRunState().bashTaskSnapshots.get(taskDelivery.taskId)?.fetched) return;
-  let found = e.find((h) => h.type === "user" && (turnId === undefined || h.uuid === turnId));
+  let found = messages.find(
+    (message) => message.type === "user" && (turnId === undefined || message.uuid === turnId),
+  );
   if (found?.type === "user") found.taskDelivery = taskDelivery;
 }
 export {

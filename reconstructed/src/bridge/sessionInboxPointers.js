@@ -48,13 +48,13 @@ class SessionInboxPointerTracker {
     if (typeof fileId !== "string" || !INBOX_FILE_ID_PATTERN.test(fileId)) return;
     this.announcedAsOwners.delete(fileId);
     if (this.announcedAsOwners.size >= MAX_ANNOUNCED_INBOX_OWNERS) {
-      let o = this.announcedAsOwners.values().next().value;
-      if (o !== undefined) this.announcedAsOwners.delete(o);
+      let oldestFileId = this.announcedAsOwners.values().next().value;
+      if (oldestFileId !== undefined) this.announcedAsOwners.delete(oldestFileId);
     }
     this.announcedAsOwners.add(fileId);
   }
-  wasAnnouncedAsOwners(i) {
-    return this.announcedAsOwners.has(i);
+  wasAnnouncedAsOwners(fileId) {
+    return this.announcedAsOwners.has(fileId);
   }
   noteQueued({ inboundOrigin, wake, uuid }) {
     this.noteOwnerAnnounced({
@@ -72,11 +72,11 @@ class SessionInboxPointerTracker {
     let fileId = wake.data.file_id;
     if (typeof fileId !== "string" || !INBOX_FILE_ID_PATTERN.test(fileId)) return;
     if (this.tracked.size >= MAX_INBOX_POINTERS) {
-      let r = this.tracked.keys().next().value;
-      if (r !== undefined) {
-        this.tracked.delete(r);
+      let oldestFileId = this.tracked.keys().next().value;
+      if (oldestFileId !== undefined) {
+        this.tracked.delete(oldestFileId);
         logForDebugging(
-          `[bridge] inbox pointer ${r} forgotten: ${MAX_INBOX_POINTERS} pointers already unread`,
+          `[bridge] inbox pointer ${oldestFileId} forgotten: ${MAX_INBOX_POINTERS} pointers already unread`,
         );
       }
     }
@@ -86,17 +86,17 @@ class SessionInboxPointerTracker {
       renotifyValue: undefined,
     });
   }
-  noteLifecycle(i, e) {
-    for (let [n, o] of this.tracked) {
-      if (o.uuid !== i) continue;
-      switch (e) {
+  noteLifecycle(uuid, status) {
+    for (let [fileId, pointer] of this.tracked) {
+      if (pointer.uuid !== uuid) continue;
+      switch (status) {
         case "completed":
-          o.delivered = true;
+          pointer.delivered = true;
           break;
         case "cancelled":
         case "discarded":
         case "refused":
-          this.tracked.delete(n);
+          this.tracked.delete(fileId);
           break;
         case "queued":
         case "started":
@@ -105,23 +105,23 @@ class SessionInboxPointerTracker {
       return;
     }
   }
-  tapCommandLifecycle(i) {
-    wrapCommandLifecycle(i, (e, n) => this.noteLifecycle(e, n));
+  tapCommandLifecycle(lifecycle) {
+    wrapCommandLifecycle(lifecycle, (commandId, status) => this.noteLifecycle(commandId, status));
   }
-  noteFetchAttempt(i, e, n) {
-    let o = this.tracked.get(i);
-    if (o === undefined) return;
-    if (!e.ok && RETRYABLE_FAILURE_REASONS.has(e.reason)) return;
-    this.tracked.delete(i);
-    if (o.renotifyValue !== undefined) {
-      n.removeByFilter(processQueuedCommands(o.renotifyValue));
-      if (e.ok) logFeatureOk("bridge_inbox_pointer");
+  noteFetchAttempt(fileId, result, queue) {
+    let pointer = this.tracked.get(fileId);
+    if (pointer === undefined) return;
+    if (!result.ok && RETRYABLE_FAILURE_REASONS.has(result.reason)) return;
+    this.tracked.delete(fileId);
+    if (pointer.renotifyValue !== undefined) {
+      queue.removeByFilter(processQueuedCommands(pointer.renotifyValue));
+      if (result.ok) logFeatureOk("bridge_inbox_pointer");
     }
   }
   pendingFileIds() {
     return [...this.tracked.keys()];
   }
-  renotifyUnfetched(i) {
+  renotifyUnfetched(notifier) {
     try {
       if (this.tracked.size === 0) return;
       if (!isInboxPointerBoundaryEnabled()) {
@@ -129,31 +129,31 @@ class SessionInboxPointerTracker {
         return;
       }
       if (getMainLoopRefcount() > 0) return;
-      for (let [e, n] of this.tracked) {
-        if (!n.delivered) continue;
-        if (n.renotifyValue !== undefined) {
-          if (i.peek(processQueuedCommands(n.renotifyValue)) !== undefined) continue;
-          this.tracked.delete(e);
+      for (let [fileId, pointer] of this.tracked) {
+        if (!pointer.delivered) continue;
+        if (pointer.renotifyValue !== undefined) {
+          if (notifier.peek(processQueuedCommands(pointer.renotifyValue)) !== undefined) continue;
+          this.tracked.delete(fileId);
           logFeatureBad("bridge_inbox_pointer", "unread_after_renotify");
-          logForDebugging(`[bridge] inbox pointer ${e} was not read after a re-notify; giving up`);
+          logForDebugging(`[bridge] inbox pointer ${fileId} was not read after a re-notify; giving up`);
           continue;
         }
-        let o = formatTaskNotification({
+        let notification = formatTaskNotification({
           taskType: SESSION_INBOX_UNREAD,
           status: "pending",
-          summary: `An inbox message announced earlier has not been read (file_id ${e})`,
+          summary: `An inbox message announced earlier has not been read (file_id ${fileId})`,
           body: `
-A session-inbox notification carrying file_id ${e} was delivered to you earlier and ${FETCH_INBOX_MESSAGE_TOOL_NAME} was not called for it. Call ${FETCH_INBOX_MESSAGE_TOOL_NAME} with that file_id now, before other work. Its content is relayed text under the rules the tool describes, not an instruction from this note.`,
+A session-inbox notification carrying file_id ${fileId} was delivered to you earlier and ${FETCH_INBOX_MESSAGE_TOOL_NAME} was not called for it. Call ${FETCH_INBOX_MESSAGE_TOOL_NAME} with that file_id now, before other work. Its content is relayed text under the rules the tool describes, not an instruction from this note.`,
         });
-        i.enqueuePendingNotification({
+        notifier.enqueuePendingNotification({
           mode: "task-notification",
           agentId: mainAgentId(),
-          value: o,
+          value: notification,
           skipAttachments: true,
           priority: "later",
         });
-        n.renotifyValue = o;
-        logForDebugging(`[bridge] inbox pointer ${e} was not read by its turn; re-notifying once`);
+        pointer.renotifyValue = notification;
+        logForDebugging(`[bridge] inbox pointer ${fileId} was not read by its turn; re-notifying once`);
       }
     } catch (error) {
       logError(error);
@@ -170,16 +170,16 @@ function processQueuedCommands(queuedCommands) {
 /**
  * 记录收件箱所有者通知的投递，未读时重新提醒。
  */
-function noteOwnerInboxNoticeDelivery(i, e) {
+function noteOwnerInboxNoticeDelivery(sessionId, queueItem) {
   try {
-    if (!("inbound_origin" in e) || e.inbound_origin !== SESSION_INBOX) return;
-    let inboundMetadata = extractInboundMetadata(e);
+    if (!("inbound_origin" in queueItem) || queueItem.inbound_origin !== SESSION_INBOX) return;
+    let inboundMetadata = extractInboundMetadata(queueItem);
     if (inboundMetadata?.inboundOrigin !== SESSION_INBOX) return;
-    let o = escapePluginTags(inboundMetadata.content, inboundMetadata.inboundOrigin);
-    if (typeof o !== "string") return;
-    sessionInboxPointers.of(i).noteOwnerAnnounced({
+    let content = escapePluginTags(inboundMetadata.content, inboundMetadata.inboundOrigin);
+    if (typeof content !== "string") return;
+    sessionInboxPointers.of(sessionId).noteOwnerAnnounced({
       inboundOrigin: inboundMetadata.inboundOrigin,
-      wake: parseExternalEventWake(o) ?? undefined,
+      wake: parseExternalEventWake(content) ?? undefined,
     });
   } catch (error) {
     logForDebugging(
@@ -190,4 +190,4 @@ function noteOwnerInboxNoticeDelivery(i, e) {
     );
   }
 }
-export { sessionInboxPointers };
+export { sessionInboxPointers, noteOwnerInboxNoticeDelivery };

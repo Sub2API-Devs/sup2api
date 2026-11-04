@@ -5,23 +5,25 @@
  * pieces: chunk-83tv5s1x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_types } from "../../types/dist-cjs/index.js";
 import { require_util_middleware } from "../../util-middleware/dist-cjs/index.js";
 import { require_middleware_serde } from "../../middleware-serde/dist-cjs/index.js";
 import { require_protocol_http } from "../../protocol-http/dist-cjs/index.js";
 import { require_protocols } from "./submodules/protocols/index.js";
+import { runDeferredInits } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-83tv5s1x.js:2070-7981 cjs-fingerprint
-var require_core = x(function (cjsExports) {
+var require_core = __commonJS(function (cjsExports) {
   var HttpApiKeyAuthLocation = require_types();
   var getSmithyContext = require_util_middleware();
-  var U = require_middleware_serde();
+  var middlewareSerde = require_middleware_serde();
   var HttpRequest = require_protocol_http();
-  var V = require_protocols();
-  var getSmithyContext_2 = (e) =>
-    e[HttpApiKeyAuthLocation.SMITHY_CONTEXT_KEY] || (e[HttpApiKeyAuthLocation.SMITHY_CONTEXT_KEY] = {});
-  var Z = (candidateAuthOptions, authSchemePreference) => {
+  var protocols = require_protocols();
+  var getSmithyContext_2 = (context) =>
+    context[HttpApiKeyAuthLocation.SMITHY_CONTEXT_KEY] ||
+    (context[HttpApiKeyAuthLocation.SMITHY_CONTEXT_KEY] = {});
+  var resolveAuthOptions = (candidateAuthOptions, authSchemePreference) => {
     if (!authSchemePreference || authSchemePreference.length === 0) return candidateAuthOptions;
     let preferredAuthOptions = [];
     for (let preferredSchemeName of authSchemePreference)
@@ -43,7 +45,7 @@ var require_core = x(function (cjsExports) {
       await mwOptions.httpAuthSchemeParametersProvider(config, context, args.input),
     );
     let authSchemePreference = config.authSchemePreference ? await config.authSchemePreference() : [];
-    let resolvedOptions = Z(options, authSchemePreference);
+    let resolvedOptions = resolveAuthOptions(options, authSchemePreference);
     let authSchemes = convertHttpAuthSchemesToMap(config.httpAuthSchemes);
     let smithyContext = getSmithyContext.getSmithyContext(context);
     let failureReasons = [];
@@ -106,7 +108,7 @@ var require_core = x(function (cjsExports) {
     name: "httpAuthSchemeMiddleware",
     override: true,
     relation: "before",
-    toMiddleware: U.serializerMiddlewareOption.name,
+    toMiddleware: middlewareSerde.serializerMiddlewareOption.name,
   };
   var getHttpAuthSchemePlugin = (
     config,
@@ -126,9 +128,9 @@ var require_core = x(function (cjsExports) {
     throw error;
   };
   var defaultSuccessHandler = (httpResponse, signingProperties) => {};
-  var httpSigningMiddleware = (config) => (next, t) => async (args) => {
+  var httpSigningMiddleware = (config) => (next, context) => async (args) => {
     if (!HttpRequest.HttpRequest.isInstance(args.request)) return next(args);
-    let scheme = getSmithyContext.getSmithyContext(t).selectedHttpAuthScheme;
+    let scheme = getSmithyContext.getSmithyContext(context).selectedHttpAuthScheme;
     if (!scheme) throw Error("No HttpAuthScheme was selected: unable to sign request");
     let {
       httpAuthOption: { signingProperties = {} },
@@ -211,8 +213,9 @@ var require_core = x(function (cjsExports) {
   }
   class DefaultIdentityProviderConfig {
     authSchemes = new Map();
-    constructor(e) {
-      for (let [key, value] of Object.entries(e)) if (value !== undefined) this.authSchemes.set(key, value);
+    constructor(context) {
+      for (let [key, value] of Object.entries(context))
+        if (value !== undefined) this.authSchemes.set(key, value);
     }
     getIdentityProvider(schemeId) {
       return this.authSchemes.get(schemeId);
@@ -310,7 +313,7 @@ var require_core = x(function (cjsExports) {
   Object.defineProperty(cjsExports, "requestBuilder", {
     enumerable: true,
     get: function () {
-      return V.requestBuilder;
+      return protocols.requestBuilder;
     },
   });
   cjsExports.DefaultIdentityProviderConfig = DefaultIdentityProviderConfig;
@@ -335,4 +338,9 @@ var require_core = x(function (cjsExports) {
   cjsExports.normalizeProvider = normalizeProvider;
   cjsExports.setFeature = setFeature;
 });
+
+// The import cycle this module closes (4 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("vendor/@smithy/core/dist-cjs/index.js");
+runDeferredInits("worker:vendor/@smithy/core/dist-cjs/index.js");
 export { require_core };

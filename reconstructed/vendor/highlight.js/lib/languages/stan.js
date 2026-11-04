@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:445203-451391 cjs-fingerprint
-var require_stan = x(function (cjsExports, cjsModule) {
+var require_stan = __commonJS(function (cjsExports, cjsModule) {
   function stan(hljs) {
     let regex = hljs.regex;
     let BLOCKS = ["functions", "model", "data", "parameters", "quantities", "transformed", "generated"];

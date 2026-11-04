@@ -9,10 +9,14 @@
  * attribution: placement 1
  */
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-5vn5bpwt.js:227-255 placement
 /**
  * sessionScopedMapsSlot：按会话根保存的映射表。
  */
-var sessionScopedMapsSlot = new SessionRootSlot(() => new Map());
+var sessionScopedMapsSlot; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-5vn5bpwt.js:227", () => {
+  sessionScopedMapsSlot = new SessionRootSlot(() => new Map());
+});
 export { sessionScopedMapsSlot };

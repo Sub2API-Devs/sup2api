@@ -12,7 +12,7 @@ import { constants } from "fs";
 import { win32, join, dirname, basename } from "path";
 import { mkdtemp, rm, readdir, copyFile, open, mkdir } from "fs/promises";
 import { randomUUID } from "crypto";
-import { MAX_PDF_BYTES, MAX_PERSIST_BYTES, MAX_PDF_PAGES_PER_READ } from "./truncateGraphemes.js";
+import { MAX_PDF_BYTES, MAX_PERSIST_BYTES, MAX_PDF_PAGES_PER_READ } from "./mediaLimits.js";
 import { formatFileSize } from "./format.js";
 import { readHandleBounded } from "./fsSafety/boundOpen.js";
 import {
@@ -40,13 +40,14 @@ import { plural } from "./stringUtils.js";
 import { getProjectKey } from "./sessionStoragePortable.js";
 import { readAllPages } from "./pagedRead.js";
 import { getPreSettingsEnvHonoringLiveDeletions } from "./managedEnvApply.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-t0gq9gyw.js:46537-46713 affinity
 /**
  * 把页区间描述为文本（page n / pages a-b / pages a-）。
  */
-function describePageRange(e) {
-  let { firstPage, lastPage } = e ?? {};
+function describePageRange(range) {
+  let { firstPage, lastPage } = range ?? {};
   if (firstPage === undefined) return "page range";
   if (lastPage === undefined || lastPage === 1 / 0) return `pages ${firstPage}-`;
   if (firstPage === lastPage) return `page ${firstPage}`;
@@ -113,12 +114,12 @@ async function readPDF(handle, ioPath) {
 /**
  * 用 pdfinfo 取 PDF 页数：普通路径直接传；已打开的句柄优先继承 fd，否则（≤上限）读入内存经 stdin 传入；pdfinfo 不存在或文件过大时返回失败原因。
  */
-async function getPdfPageCount(e, n, r = "linux") {
-  if (n === undefined) return runPdfinfo(toNamespacedPathIfLong(e, r), undefined);
-  if (e === procFdPath(n.handle.fd))
+async function getPdfPageCount(inputPath, openFile, platform = "linux") {
+  if (openFile === undefined) return runPdfinfo(toNamespacedPathIfLong(inputPath, platform), undefined);
+  if (inputPath === procFdPath(openFile.handle.fd))
     return runPdfinfo(INHERITED_FD_PATH, {
-      inheritFd: n.handle.fd,
-      abortSignal: n.signal,
+      inheritFd: openFile.handle.fd,
+      abortSignal: openFile.signal,
     });
   if ((await whichAsync("pdfinfo").catch(() => null)) === null)
     return {
@@ -127,7 +128,7 @@ async function getPdfPageCount(e, n, r = "linux") {
         reason: "not_found",
       },
     };
-  if (n.size > MAX_PERSIST_BYTES)
+  if (openFile.size > MAX_PERSIST_BYTES)
     return {
       pageCount: null,
       pdfinfoFailure: {
@@ -137,11 +138,11 @@ async function getPdfPageCount(e, n, r = "linux") {
   try {
     return await runPdfinfo(STDIN_PATH, {
       input: await readJSONLFile(
-        n.handle,
-        n.size,
-        AbortSignal.any([n.signal, AbortSignal.timeout(PDFINFO_TIMEOUT_MS)]),
+        openFile.handle,
+        openFile.size,
+        AbortSignal.any([openFile.signal, AbortSignal.timeout(PDFINFO_TIMEOUT_MS)]),
       ),
-      abortSignal: n.signal,
+      abortSignal: openFile.signal,
     });
   } catch (error) {
     if (error instanceof AbortError || isSadFsErrno(error))
@@ -164,11 +165,11 @@ async function getPdfPageCount(e, n, r = "linux") {
 /**
  * 执行 pdfinfo（10 秒超时），解析 "Pages:" 行；失败返回 pdfinfoFailure.reason（timeout/not_found/nonzero_exit/no_page_count/no_exit_status）。
  */
-async function runPdfinfo(e, n) {
-  let { code, stdout, exitCode, timedOut } = await execFileNoThrow("pdfinfo", [e], {
+async function runPdfinfo(target, options) {
+  let { code, stdout, exitCode, timedOut } = await execFileNoThrow("pdfinfo", [target], {
     timeout: PDFINFO_TIMEOUT_MS,
     useCwd: false,
-    ...n,
+    ...options,
   });
   if (code === 0) {
     let match = /^Pages:\s+(\d+)/m.exec(stdout);
@@ -226,9 +227,9 @@ function describePdfinfoFailure(pdfinfoFailure) {
   }
 }
 //@ chunk-t0gq9gyw.js:48949-49022 layout
-function getPdfOpenFlags(e) {
-  let n = e === "win32" ? 0 : (constants.O_NONBLOCK ?? 0);
-  return constants.O_RDONLY | n;
+function getPdfOpenFlags(platform) {
+  let extraFlags = platform === "win32" ? 0 : (constants.O_NONBLOCK ?? 0);
+  return constants.O_RDONLY | extraFlags;
 }
 //@ chunk-t0gq9gyw.js:49022-49058 layout
 var WINDOWS_MAX_PATH = 259;
@@ -236,39 +237,46 @@ var PDFINFO_TIMEOUT_MS = 1e4;
 var STDIN_PATH = "-";
 var READ_CHUNK_BYTES = 1048576;
 //@ chunk-t0gq9gyw.js:49058-49264 layout = readJSONLFile (1)
-async function readJSONLFile(e, n, r) {
-  let buf = Buffer.allocUnsafe(n);
+async function readJSONLFile(handle, size, signal) {
+  let buf = Buffer.allocUnsafe(size);
   let totalRead = 0;
-  while (totalRead < n) {
-    let a = e.read(buf, totalRead, Math.min(READ_CHUNK_BYTES, n - totalRead), totalRead);
-    let { bytesRead } = r === undefined ? await a : await raceWithAbortSignal(a, r, () => new AbortError());
+  while (totalRead < size) {
+    let readPromise = handle.read(buf, totalRead, Math.min(READ_CHUNK_BYTES, size - totalRead), totalRead);
+    let { bytesRead } =
+      signal === undefined
+        ? await readPromise
+        : await raceWithAbortSignal(readPromise, signal, () => new AbortError());
     if (bytesRead === 0) break;
     totalRead += bytesRead;
   }
   return buf.subarray(0, totalRead);
 }
 //@ chunk-t0gq9gyw.js:49264-49297 layout
-var MAX_PAGE_NUMBER_DIGITS = String(2147483647).length;
+var MAX_PAGE_NUMBER_DIGITS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-t0gq9gyw.js:49264", () => {
+  MAX_PAGE_NUMBER_DIGITS = String(2147483647).length;
+});
 //@ chunk-t0gq9gyw.js:49297-49401 layout
-function toNamespacedPathIfLong(e, n) {
-  if (n !== "win32" || e.length <= WINDOWS_MAX_PATH || !win32.isAbsolute(e)) return e;
-  return win32.toNamespacedPath(e);
+function toNamespacedPathIfLong(inputPath, platform) {
+  if (platform !== "win32" || inputPath.length <= WINDOWS_MAX_PATH || !win32.isAbsolute(inputPath))
+    return inputPath;
+  return win32.toNamespacedPath(inputPath);
 }
 //@ chunk-t0gq9gyw.js:49401-50077 layout
 /**
  * 准备 PDF 页图输出前缀：Windows 上路径可能超过 MAX_PATH 时改在短临时目录渲染，之后 collect 移回、dispose 清理。
  */
 async function createPageImageOutput(outputDir, { platform, scratchRoot }) {
-  let o = {
+  let directOutput = {
     prefix: join(outputDir, "page"),
     collect: () => Promise.resolve(),
     [Symbol.asyncDispose]: () => Promise.resolve(),
   };
-  let s = o.prefix.length + 1 + MAX_PAGE_NUMBER_DIGITS + 4;
-  if (platform !== "win32" || s <= WINDOWS_MAX_PATH) return o;
-  let a;
+  let longestPagePath = directOutput.prefix.length + 1 + MAX_PAGE_NUMBER_DIGITS + 4;
+  if (platform !== "win32" || longestPagePath <= WINDOWS_MAX_PATH) return directOutput;
+  let scratchDir;
   try {
-    a = await mkdtemp(join(scratchRoot(), PDF_SCRATCH_DIR_PREFIX));
+    scratchDir = await mkdtemp(join(scratchRoot(), PDF_SCRATCH_DIR_PREFIX));
   } catch (error) {
     logForDebugging(
       `PDF extraction: could not create a scratch directory under the temp dir (${getErrnoCode(error) ?? errorMessage(error)}); rendering page images directly into the tool-results directory`,
@@ -276,19 +284,19 @@ async function createPageImageOutput(outputDir, { platform, scratchRoot }) {
         level: "warn",
       },
     );
-    return o;
+    return directOutput;
   }
-  let c = () =>
-    rm(a, {
+  let removeScratch = () =>
+    rm(scratchDir, {
       recursive: true,
       force: true,
     });
-  let u = registerCleanup(c);
+  let unregisterCleanup = registerCleanup(removeScratch);
   return {
-    prefix: join(a, "p"),
-    collect: () => movePageImages(a, outputDir),
+    prefix: join(scratchDir, "p"),
+    collect: () => movePageImages(scratchDir, outputDir),
     [Symbol.asyncDispose]: () =>
-      c().then(u, (error) =>
+      removeScratch().then(unregisterCleanup, (error) =>
         logForDebugging(
           `PDF extraction: scratch directory not removed (${getErrnoCode(error) ?? errorMessage(error)}); removal is retried at exit`,
           {
@@ -302,21 +310,23 @@ async function createPageImageOutput(outputDir, { platform, scratchRoot }) {
 /**
  * 把渲染出的 p-N.jpg 移到目标目录并改名为 pageN.jpg。
  */
-async function movePageImages(e, n) {
-  let r = await readdir(e);
+async function movePageImages(scratchDir, outputDir) {
+  let entries = await readdir(scratchDir);
   let found = (
     await Promise.allSettled(
-      r
-        .filter((a) => /^p-\d+\.jpg$/.test(a))
-        .map((a) => moveFileWithCopyFallback(join(e, a), join(n, `page${a.slice(1)}`))),
+      entries
+        .filter((entry) => /^p-\d+\.jpg$/.test(entry))
+        .map((pageFile) =>
+          moveFileWithCopyFallback(join(scratchDir, pageFile), join(outputDir, `page${pageFile.slice(1)}`)),
+        ),
     )
-  ).find((a) => a.status === "rejected");
+  ).find((settled) => settled.status === "rejected");
   if (found !== undefined) throw found.reason;
 }
 //@ chunk-t0gq9gyw.js:50296-50419 layout
-async function moveFileWithCopyFallback(e, n) {
+async function moveFileWithCopyFallback(fromPath, toPath) {
   try {
-    await retryFsOp(e, n);
+    await retryFsOp(fromPath, toPath);
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (
@@ -324,7 +334,7 @@ async function moveFileWithCopyFallback(e, n) {
       !(ATOMIC_WRITE_ERRNOS.has(errnoCode) || TRANSIENT_FS_ERRORS.has(errnoCode))
     )
       throw error;
-    await copyFile(e, n);
+    await copyFile(fromPath, toPath);
   }
 }
 //@ chunk-t0gq9gyw.js:50419-50510 layout
@@ -338,7 +348,10 @@ class PdfToolAvailability {
   }
 }
 //@ chunk-t0gq9gyw.js:50510-50535 layout
-var pdfToolAvailabilityByHost = new HostScoped(() => new PdfToolAvailability());
+var pdfToolAvailabilityByHost; // deferred: uses PdfToolAvailability of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-t0gq9gyw.js:50510", () => {
+  pdfToolAvailabilityByHost = new HostScoped(() => new PdfToolAvailability());
+});
 //@ chunk-t0gq9gyw.js:50535-50572 layout
 function getPdfToolAvailability() {
   return pdfToolAvailabilityByHost.of(getRootSession().host);
@@ -354,43 +367,44 @@ async function isPdftoppmAvailable() {
     timeout: 5000,
     useCwd: false,
   });
-  let o = code === 0 || (code !== 127 && stderr.length > 0);
-  if (o) pdfToolAvailability.markAvailable();
-  return o;
+  let available = code === 0 || (code !== 127 && stderr.length > 0);
+  if (available) pdfToolAvailability.markAvailable();
+  return available;
 }
 //@ chunk-t0gq9gyw.js:50782-55214 fingerprint = extractPDFPages (0.581)
 /**
  * 用 pdftoppm 把指定页区间渲染为 JPEG 到临时目录，返回 parts 结果（页数、输出目录）。
  */
 async function extractPDFPages(
-  ioPath,
-  n,
-  storageV5,
-  o = {
+  inputPath,
+  options,
+  storage,
+  platformOptions = {
     platform: "linux",
     scratchRoot: tmpdir,
   },
 ) {
   try {
-    let held = n?.held !== undefined && ioPath === procFdPath(n.held.fd) ? n.held : undefined;
-    let held_2 = held === undefined ? n?.held : undefined;
-    let c = held_2 ?? (await open(ioPath, getPdfOpenFlags("linux")));
-    let u = await c.stat().finally(() => (c === held_2 ? undefined : c.close()));
-    if (!u.isFile())
+    let held =
+      options?.held !== undefined && inputPath === procFdPath(options.held.fd) ? options.held : undefined;
+    let held_2 = held === undefined ? options?.held : undefined;
+    let handle = held_2 ?? (await open(inputPath, getPdfOpenFlags("linux")));
+    let stats = await handle.stat().finally(() => (handle === held_2 ? undefined : handle.close()));
+    if (!stats.isFile())
       return {
         success: false,
         error: {
           reason: "corrupted",
-          message: `Path is not a regular file: ${ioPath}`,
+          message: `Path is not a regular file: ${inputPath}`,
         },
       };
-    let originalSize = u.size;
+    let originalSize = stats.size;
     if (originalSize === 0)
       return {
         success: false,
         error: {
           reason: "empty",
-          message: `PDF file is empty: ${ioPath}`,
+          message: `PDF file is empty: ${inputPath}`,
         },
       };
     if (originalSize > MAX_PERSIST_BYTES)
@@ -401,7 +415,7 @@ async function extractPDFPages(
           message: `PDF file exceeds maximum allowed size for text extraction (${formatFileSize(MAX_PERSIST_BYTES)}).`,
         },
       };
-    if (n?.signal?.aborted) throw new AbortError();
+    if (options?.signal?.aborted) throw new AbortError();
     if (!(await isPdftoppmAvailable()))
       return {
         success: false,
@@ -411,39 +425,41 @@ async function extractPDFPages(
             "pdftoppm is not installed. Install poppler-utils (e.g. `brew install poppler` or `apt-get install poppler-utils`) to enable PDF page rendering.",
         },
       };
-    let w = held_2 === undefined ? undefined : await readJSONLFile(held_2, originalSize, n?.signal);
+    let inputBytes =
+      held_2 === undefined ? undefined : await readJSONLFile(held_2, originalSize, options?.signal);
     let uuid = randomUUID();
     let outputDir = join(toolResultsDir(), `pdf-${uuid}`);
-    let b = storageV5 === undefined ? undefined : getPdfExtractionKey(outputDir);
+    let sidecarScope = storage === undefined ? undefined : getPdfExtractionKey(outputDir);
     await mkdir(outputDir, {
       recursive: true,
     });
-    await using pageImageOutput = await createPageImageOutput(outputDir, o);
-    let _ = held === undefined ? toNamespacedPathIfLong(ioPath, o.platform) : INHERITED_FD_PATH;
+    await using pageImageOutput = await createPageImageOutput(outputDir, platformOptions);
+    let inputArg =
+      held === undefined ? toNamespacedPathIfLong(inputPath, platformOptions.platform) : INHERITED_FD_PATH;
     let args = ["-jpeg", "-r", "100"];
-    if (n?.firstPage) args.push("-f", String(n.firstPage));
-    if (n?.lastPage && n.lastPage !== 1 / 0) args.push("-l", String(n.lastPage));
-    args.push(w === undefined ? _ : STDIN_PATH, pageImageOutput.prefix);
+    if (options?.firstPage) args.push("-f", String(options.firstPage));
+    if (options?.lastPage && options.lastPage !== 1 / 0) args.push("-l", String(options.lastPage));
+    args.push(inputBytes === undefined ? inputArg : STDIN_PATH, pageImageOutput.prefix);
     let { code, stderr, exitCode } = await execFileNoThrow("pdftoppm", args, {
       timeout: 120000,
-      abortSignal: n?.signal,
+      abortSignal: options?.signal,
       waitForExitAfterKill: true,
       useCwd: false,
-      ...(w !== undefined && {
-        input: w,
+      ...(inputBytes !== undefined && {
+        input: inputBytes,
       }),
       ...(held !== undefined && {
         inheritFd: held.fd,
       }),
     });
     if (code !== 0) {
-      if (n?.signal?.aborted && exitCode === undefined) throw new AbortError();
-      let T = escapeNonPrintableBytes(_);
+      if (options?.signal?.aborted && exitCode === undefined) throw new AbortError();
+      let escapedArg = escapeNonPrintableBytes(inputArg);
       let joined = stderr
-        .split(T)
-        .map((q) => q.replaceAll(_, () => ioPath))
-        .join(ioPath);
-      let ee = (category) => ({
+        .split(escapedArg)
+        .map((stderrPart) => stderrPart.replaceAll(inputArg, () => inputPath))
+        .join(inputPath);
+      let unknownFailure = (category) => ({
         success: false,
         error: {
           reason: "unknown",
@@ -455,13 +471,15 @@ async function extractPDFPages(
       });
       let lines = stderr.split(/\r?\n/);
       if (lines.some((line) => PDFTOPPM_WRITE_FAILED_RE.test(line)))
-        return ee(classifyPdftoppmStderr(stderr));
-      let J = `I/O Error: Couldn't open file '${T}'`;
+        return unknownFailure(classifyPdftoppmStderr(stderr));
+      let unopenableLine = `I/O Error: Couldn't open file '${escapedArg}'`;
       let found = lines.find((line) => {
-        let ke = line.trimEnd();
+        let trimmedLine = line.trimEnd();
         return (
-          ke === J ||
-          (ke.startsWith(`${J}: `) && !ke.endsWith("'") && !ke.slice(J.length + 2).includes("': "))
+          trimmedLine === unopenableLine ||
+          (trimmedLine.startsWith(`${unopenableLine}: `) &&
+            !trimmedLine.endsWith("'") &&
+            !trimmedLine.slice(unopenableLine.length + 2).includes("': "))
         );
       });
       let replaced = lines
@@ -470,8 +488,8 @@ async function extractPDFPages(
           `
 `,
         )
-        .replaceAll(T, " ")
-        .replaceAll(_, " ")
+        .replaceAll(escapedArg, " ")
+        .replaceAll(inputArg, " ")
         .replaceAll(escapeNonPrintableBytes(pageImageOutput.prefix), " ")
         .replaceAll(pageImageOutput.prefix, " ");
       if (/password/i.test(replaced))
@@ -484,8 +502,8 @@ async function extractPDFPages(
         };
       let match = /Wrong page range given.*last page \((\d+)\)/i.exec(replaced);
       if (match) {
-        let q = Number(match[1]);
-        if (q === 0)
+        let pageTotal = Number(match[1]);
+        if (pageTotal === 0)
           return {
             success: false,
             error: {
@@ -493,17 +511,18 @@ async function extractPDFPages(
               message: "PDF reports 0 pages (empty page tree). The PDF may be invalid.",
             },
           };
-        let min = Math.min(q, MAX_PDF_PAGES_PER_READ);
+        let min = Math.min(pageTotal, MAX_PDF_PAGES_PER_READ);
         return {
           success: false,
           error: {
             reason: "page_out_of_range",
-            message: `Requested ${describePageRange(n)} is outside the document (PDF has ${q} ${plural(q, "page")}). Use a range within 1-${q}, maximum ${MAX_PDF_PAGES_PER_READ} pages per request (e.g. pages: "1-${min}").`,
+            message: `Requested ${describePageRange(options)} is outside the document (PDF has ${pageTotal} ${plural(pageTotal, "page")}). Use a range within 1-${pageTotal}, maximum ${MAX_PDF_PAGES_PER_READ} pages per request (e.g. pages: "1-${min}").`,
           },
         };
       }
-      let se = /Syntax Error(?: \(\d+\))?: Couldn't (?:find trailer dictionary|read xref table)/i;
-      if (/damaged|corrupt|invalid/i.test(replaced) || se.test(replaced))
+      let syntaxErrorPattern =
+        /Syntax Error(?: \(\d+\))?: Couldn't (?:find trailer dictionary|read xref table)/i;
+      if (/damaged|corrupt|invalid/i.test(replaced) || syntaxErrorPattern.test(replaced))
         return {
           success: false,
           error: {
@@ -511,27 +530,27 @@ async function extractPDFPages(
             message: "PDF file is corrupted or invalid.",
           },
         };
-      let Te = lines[0] ?? "";
+      let firstLine = lines[0] ?? "";
       let any = lines.some((line) => /^(Command Line Error|Internal Error)(?: \(\d+\))?: /.test(line));
       if (!any && found !== undefined && exitCode === 1) {
-        if (_ !== ioPath) return ee("rewritten_input_unopenable");
+        if (inputArg !== inputPath) return unknownFailure("rewritten_input_unopenable");
         return {
           success: false,
           error: {
             reason: "pdftoppm_input_error",
-            message: `Could not render PDF: ${found.replaceAll(T, () => ioPath)}`,
+            message: `Could not render PDF: ${found.replaceAll(escapedArg, () => inputPath)}`,
           },
         };
       }
-      if (!any && Te.startsWith("Permission Error: "))
+      if (!any && firstLine.startsWith("Permission Error: "))
         return {
           success: false,
           error: {
             reason: "pdftoppm_input_error",
-            message: `Could not render PDF: ${Te}`,
+            message: `Could not render PDF: ${firstLine}`,
           },
         };
-      return ee(classifyPdftoppmStderr(stderr));
+      return unknownFailure(classifyPdftoppmStderr(stderr));
     }
     try {
       await pageImageOutput.collect();
@@ -547,20 +566,20 @@ async function extractPDFPages(
         },
       };
     }
-    let S;
-    if (storageV5 !== undefined) {
-      let T = await listPdfSidecarPages(storageV5, outputDir, b);
-      if (!T.ok)
+    let pageNames;
+    if (storage !== undefined) {
+      let listResult = await listPdfSidecarPages(storage, outputDir, sidecarScope);
+      if (!listResult.ok)
         return {
           success: false,
           error: {
             reason: "unknown",
-            message: `Failed to list extracted PDF pages: ${T.code}`,
-            category: `storage_list_${T.code}`,
+            message: `Failed to list extracted PDF pages: ${listResult.code}`,
+            category: `storage_list_${listResult.code}`,
             site: "extract",
           },
         };
-      if (T.names.length === 0 && !T.directoryExists)
+      if (listResult.names.length === 0 && !listResult.directoryExists)
         return {
           success: false,
           error: {
@@ -572,9 +591,9 @@ async function extractPDFPages(
             site: "extract",
           },
         };
-      S = T.names;
-    } else S = (await readdir(outputDir)).filter((G) => G.endsWith(".jpg")).sort();
-    if (S.length === 0)
+      pageNames = listResult.names;
+    } else pageNames = (await readdir(outputDir)).filter((entry) => entry.endsWith(".jpg")).sort();
+    if (pageNames.length === 0)
       return {
         success: false,
         error: {
@@ -582,28 +601,28 @@ async function extractPDFPages(
           message: "pdftoppm produced no output pages. The PDF may be invalid.",
         },
       };
-    let count = S.length;
+    let count = pageNames.length;
     return {
       success: true,
       data: {
         type: "parts",
         file: {
-          filePath: ioPath,
+          filePath: inputPath,
           originalSize,
           outputDir,
           count,
         },
-        ...(b !== undefined && {
+        ...(sidecarScope !== undefined && {
           v5SidecarScope: {
-            ...b,
-            pageNames: S,
+            ...sidecarScope,
+            pageNames,
           },
         }),
       },
     };
   } catch (error) {
     let path = error && typeof error === "object" && "path" in error ? error.path : undefined;
-    if (error instanceof AbortError || (isSadFsErrno(error) && (path === ioPath || path === undefined)))
+    if (error instanceof AbortError || (isSadFsErrno(error) && (path === inputPath || path === undefined)))
       throw error;
     return {
       success: false,
@@ -634,12 +653,16 @@ var PDFTOPPM_STDERR_CATEGORIES = [
 function classifyPdftoppmStderr(stderr) {
   if (stderr.trim() === "") return "empty_stderr";
   let lines = stderr.split(/\r?\n/);
-  return PDFTOPPM_STDERR_CATEGORIES.find(([o]) => lines.some((line) => o.test(line)))?.[1] ?? "other";
+  return (
+    PDFTOPPM_STDERR_CATEGORIES.find(([categoryPattern]) =>
+      lines.some((line) => categoryPattern.test(line)),
+    )?.[1] ?? "other"
+  );
 }
 //@ chunk-t0gq9gyw.js:55773-55917 layout
-function escapeNonPrintableBytes(e) {
-  return Array.from(Buffer.from(e, "utf8"), (n) =>
-    n < 32 || n >= 127 ? `<${n.toString(16).padStart(2, "0")}>` : String.fromCharCode(n),
+function escapeNonPrintableBytes(text) {
+  return Array.from(Buffer.from(text, "utf8"), (byte) =>
+    byte < 32 || byte >= 127 ? `<${byte.toString(16).padStart(2, "0")}>` : String.fromCharCode(byte),
   ).join("");
 }
 //@ chunk-t0gq9gyw.js:55917-55968 layout
@@ -649,30 +672,30 @@ function fsErrorCategory(error) {
 //@ chunk-t0gq9gyw.js:55968-55993 placement
 var LISTCAPEXCEEDED = "ListCapExceeded";
 //@ chunk-t0gq9gyw.js:55993-56224 placement
-function getPdfExtractionKey(e) {
-  let n = toolResultsDir();
-  if (dirname(e) !== n)
+function getPdfExtractionKey(extractionDir) {
+  let resultsDir = toolResultsDir();
+  if (dirname(extractionDir) !== resultsDir)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `PDF extraction directory is outside the session tool-results store: ${e}`,
+      `PDF extraction directory is outside the session tool-results store: ${extractionDir}`,
       "pdf extraction dir outside tool-results",
     );
   return {
     projectKey: getProjectKey(getOriginalCwd_2()),
     sessionId: getSessionId(),
-    relPath: [TOOL_RESULTS_SUBDIR, basename(e)],
+    relPath: [TOOL_RESULTS_SUBDIR, basename(extractionDir)],
   };
 }
 //@ chunk-t0gq9gyw.js:56224-57275 placement
 /**
  * 列出 PDF 提取的 sidecar 页图。
  */
-async function listPdfSidecarPages(e, n, r) {
-  let o = r ?? getPdfExtractionKey(n);
-  let { projectKey, sessionId, relPath } = o;
-  let u = [];
+async function listPdfSidecarPages(storage, outputDir, scope) {
+  let sidecarScope = scope ?? getPdfExtractionKey(outputDir);
+  let { projectKey, sessionId, relPath } = sidecarScope;
+  let names = [];
   let allPages = await readAllPages(
     (cursor) =>
-      e.listEntries(
+      storage.listEntries(
         {
           namespace: "sidecar",
           projectKey,
@@ -685,13 +708,13 @@ async function listPdfSidecarPages(e, n, r) {
           skipScopeStats: true,
         },
       ),
-    (w) => {
-      for (let E of w) {
-        if (E.kind !== "key" || E.key.namespace !== "sidecar") continue;
-        let last = E.key.relPath.at(-1);
-        if (last === undefined || E.key.relPath.length !== relPath.length + 1) continue;
+    (entries) => {
+      for (let entry of entries) {
+        if (entry.kind !== "key" || entry.key.namespace !== "sidecar") continue;
+        let last = entry.key.relPath.at(-1);
+        if (last === undefined || entry.key.relPath.length !== relPath.length + 1) continue;
         if (!last.endsWith(".jpg")) continue;
-        u.push(last);
+        names.push(last);
       }
     },
   );
@@ -709,14 +732,14 @@ async function listPdfSidecarPages(e, n, r) {
         code: LISTCAPEXCEEDED,
       };
   }
-  u.sort();
-  let y = true;
-  if (u.length === 0) {
-    y = false;
+  names.sort();
+  let directoryExists = true;
+  if (names.length === 0) {
+    directoryExists = false;
     let last = relPath.at(-1);
     let allPages = await readAllPages(
       (cursor) =>
-        e.listEntries(
+        storage.listEntries(
           {
             namespace: "sidecar",
             projectKey,
@@ -729,17 +752,17 @@ async function listPdfSidecarPages(e, n, r) {
             skipScopeStats: true,
           },
         ),
-      (h) => {
-        y ||= h.some(
-          (b) =>
-            b.kind === "scope" &&
-            b.scope.namespace === "sidecar" &&
-            (b.scope.relPath ?? []).length === relPath.length &&
-            b.scope.relPath?.at(-1) === last,
+      (entries) => {
+        directoryExists ||= entries.some(
+          (entry) =>
+            entry.kind === "scope" &&
+            entry.scope.namespace === "sidecar" &&
+            (entry.scope.relPath ?? []).length === relPath.length &&
+            entry.scope.relPath?.at(-1) === last,
         );
       },
       {
-        until: () => y,
+        until: () => directoryExists,
       },
     );
     switch (allPages.status) {
@@ -759,9 +782,9 @@ async function listPdfSidecarPages(e, n, r) {
   }
   return {
     ok: true,
-    names: u,
-    directoryExists: y,
-    scope: o,
+    names,
+    directoryExists,
+    scope: sidecarScope,
   };
 }
 //@ chunk-cne5hsvz.js:19054-19108 fingerprint = getPDFPageCount (0.355)

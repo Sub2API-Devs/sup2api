@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:80981-87064 cjs-fingerprint
-var require_cpp = x(function (cjsExports, cjsModule) {
+var require_cpp = __commonJS(function (cjsExports, cjsModule) {
   function cpp(hljs) {
     let regex = hljs.regex;
     let C_LINE_COMMENT_MODE = hljs.COMMENT("//", "$", {

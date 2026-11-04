@@ -12,7 +12,7 @@ import { env } from "../../utils/env.js";
 import { getTeammateAgentId, getRootSession } from "../../bootstrap/state.js";
 import { isOnClaudeCodeSessionSurface } from "../../utils/teammate.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
 import { count } from "../../utils/collections.js";
 import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { HostScoped } from "../../utils/hostScoped.js";
@@ -26,6 +26,7 @@ import { errorMessage } from "../../utils/errors.js";
 import { createSignal } from "../../utils/signal.js";
 import { sleep } from "../../utils/sleep.js";
 import { lit, fromEnum } from "../analytics/safeMetadata.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-82kqcve8.js:12035-12118 placement
 /**
@@ -38,16 +39,19 @@ function isEligibleDecisionSurface() {
   );
 }
 //@ chunk-82kqcve8.js:12118-12319 placement
-var grantedStoreSchema = DoctorLazy(() =>
-  u({
-    path: string().min(1),
-    mode: _enum(["rw", "ro"]),
-    kind: string().optional(),
-    grouping_id: string().optional(),
-    visibility: string().max(64).optional().catch(undefined),
-    prompt_index: string().max(512).optional().catch(undefined),
-  }),
-);
+var grantedStoreSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-82kqcve8.js:12118", () => {
+  grantedStoreSchema = DoctorLazy(() =>
+    objectSchema({
+      path: stringSchema().min(1),
+      mode: _enum(["rw", "ro"]),
+      kind: stringSchema().optional(),
+      grouping_id: stringSchema().optional(),
+      visibility: stringSchema().max(64).optional().catch(undefined),
+      prompt_index: stringSchema().max(512).optional().catch(undefined),
+    }),
+  );
+});
 //@ chunk-82kqcve8.js:12319-13847 placement
 class OrgMemoryWriteVerdict {
   grantedStores = null;
@@ -74,50 +78,57 @@ class OrgMemoryWriteVerdict {
     this.pickedSelectionPrivateProbe = pickedSelectionPrivateProbe;
   }
   logMonorepoWriteBlockOnce() {}
-  record(e, n, r) {
-    this.mirrorPresent = Array.isArray(e);
-    let s = Array.isArray(e) ? e : [];
-    let h = 0;
-    let flattened = s.flatMap((L) => {
-      let j = grantedStoreSchema().safeParse(L);
-      if (!j.success) {
-        h += 1;
+  record(stores, askedWrite, options) {
+    this.mirrorPresent = Array.isArray(stores);
+    let rawStores = Array.isArray(stores) ? stores : [];
+    let droppedCount = 0;
+    let stores_2 = rawStores.flatMap((entry) => {
+      let parsed = grantedStoreSchema().safeParse(entry);
+      if (!parsed.success) {
+        droppedCount += 1;
         return [];
       }
-      return [j.data];
+      return [parsed.data];
     });
-    let w = hasPrivateGrouping(flattened);
-    let S = r?.privateCandidate === true;
-    this.rootLiftable = !r?.clampRo && !S && isLiftableRootOnly(s.length, flattened, h);
-    this.rootLiftReason = getMirrorVerdict(flattened, h, s.length, w, S);
-    let R = hasDuplicateStorePaths(flattened);
-    let mapped = flattened.map((L) =>
-      r?.clampRo || w || R || (!this.rootLiftable && isGroupingRootStore(L))
+    let hasPrivate = hasPrivateGrouping(stores_2);
+    let privateCandidate = options?.privateCandidate === true;
+    this.rootLiftable =
+      !options?.clampRo && !privateCandidate && isLiftableRootOnly(rawStores.length, stores_2, droppedCount);
+    this.rootLiftReason = getMirrorVerdict(
+      stores_2,
+      droppedCount,
+      rawStores.length,
+      hasPrivate,
+      privateCandidate,
+    );
+    let duplicated = hasDuplicateStorePaths(stores_2);
+    let mapped = stores_2.map((store) =>
+      options?.clampRo || hasPrivate || duplicated || (!this.rootLiftable && isGroupingRootStore(store))
         ? {
-            ...L,
+            ...store,
             mode: "ro",
           }
-        : L,
+        : store,
     );
     this.grantedStores = mapped;
-    this.grantedModes = new Map(mapped.map((L) => [stripTrailingSlashes(L.path), L.mode]));
-    let P = count([...this.grantedModes.values()], (L) => L === "rw");
+    this.grantedModes = new Map(mapped.map((store) => [stripTrailingSlashes(store.path), store.mode]));
+    let writableCount = count([...this.grantedModes.values()], (mode) => mode === "rw");
     this.lastAskDowngraded =
-      n &&
-      P === 0 &&
-      !w &&
-      !R &&
+      askedWrite &&
+      writableCount === 0 &&
+      !hasPrivate &&
+      !duplicated &&
       this.rootLiftReason !== "verdict_failed" &&
       this.rootLiftReason !== "private_candidate";
-    if (n)
-      if (R) logFeatureSad("org_memory_writes", "conflicted_mirror");
-      else if (w) logFeatureSad("org_memory_writes", "private_selection_ro");
+    if (askedWrite)
+      if (duplicated) logFeatureSad("org_memory_writes", "conflicted_mirror");
+      else if (hasPrivate) logFeatureSad("org_memory_writes", "private_selection_ro");
       else if (this.rootLiftReason === "private_candidate")
         logFeatureSad("org_memory_writes", "private_candidate_veto");
       else if (this.rootLiftReason === "verdict_failed") logFeatureSad("org_memory_writes", "verdict_failed");
-      else if (P > 0)
+      else if (writableCount > 0)
         logFeatureOk("org_memory_writes", {
-          granted_rw: P,
+          granted_rw: writableCount,
         });
       else logFeatureSad("org_memory_writes", "downgraded");
   }
@@ -126,7 +137,10 @@ class OrgMemoryWriteVerdict {
 /**
  * 按宿主保存的组织记忆写入判定。
  */
-var orgMemoryWriteVerdict = new HostScoped(() => new OrgMemoryWriteVerdict());
+var orgMemoryWriteVerdict; // deferred: uses OrgMemoryWriteVerdict of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-82kqcve8.js:13847", () => {
+  orgMemoryWriteVerdict = new HostScoped(() => new OrgMemoryWriteVerdict());
+});
 //@ chunk-82kqcve8.js:13872-13909 placement
 /**
  * 取当前宿主的写入判定状态。
@@ -174,15 +188,15 @@ function isOrgMemoryWriteOptedIn() {
 /**
  * 安装“所选存储是否私有”的探测。
  */
-function installPrivateProbe(e) {
-  getOrgMemoryWriteVerdict().installPickedSelectionPrivateProbe(e);
+function installPrivateProbe(probe) {
+  getOrgMemoryWriteVerdict().installPickedSelectionPrivateProbe(probe);
 }
 //@ chunk-82kqcve8.js:14265-14340 placement
 /**
  * 判断所选存储是否被判定为私有。
  */
-function isSelectionPrivate(e) {
-  return e !== null && getOrgMemoryWriteVerdict().pickedSelectionPrivateProbe?.(e) === true;
+function isSelectionPrivate(selection) {
+  return selection !== null && getOrgMemoryWriteVerdict().pickedSelectionPrivateProbe?.(selection) === true;
 }
 //@ chunk-82kqcve8.js:14340-14503 placement
 function getOrgMemoryAccountKey() {
@@ -202,15 +216,15 @@ function orgMemoryAccountKey() {
 /**
  * 记录一次写入判定。
  */
-function recordVerdict(stores, n, r) {
-  getOrgMemoryWriteVerdict().record(stores, n, r);
+function recordVerdict(stores, store, verdict) {
+  getOrgMemoryWriteVerdict().record(stores, store, verdict);
 }
 //@ chunk-82kqcve8.js:14567-14619 placement
 /**
  * 取某路径授权到的模式（rw/ro）。
  */
-function grantedModeFor(e) {
-  return getOrgMemoryWriteVerdict().grantedModes?.get(stripTrailingSlashes(e));
+function grantedModeFor(path) {
+  return getOrgMemoryWriteVerdict().grantedModes?.get(stripTrailingSlashes(path));
 }
 //@ chunk-82kqcve8.js:14619-14660 placement
 /**
@@ -223,17 +237,17 @@ function hasMirror() {
 function hasRwGrantedStore() {
   let grantedModes = getOrgMemoryWriteVerdict().grantedModes;
   if (grantedModes === null) return false;
-  for (let n of grantedModes.values()) if (n === "rw") return true;
+  for (let mode of grantedModes.values()) if (mode === "rw") return true;
   return false;
 }
 //@ chunk-82kqcve8.js:14773-14865 placement
 /**
  * 查找某名字的分组存储。
  */
-function findGroupingStore(e) {
+function findGroupingStore(groupingName) {
   return getOrgMemoryWriteVerdict().grantedStores?.find(
     (grantedStore) =>
-      classifyStorePath(grantedStore.path) === "grouping" && isStoreBasename(grantedStore.path, e),
+      classifyStorePath(grantedStore.path) === "grouping" && isStoreBasename(grantedStore.path, groupingName),
   );
 }
 //@ chunk-82kqcve8.js:14865-14947 placement
@@ -255,14 +269,14 @@ var MEMORY_STORE_PATH_PREFIX = "/v1/code/memory/";
  * 按记忆库路径判定类型：grouping、grouping_root、silo（cagt_ 前缀）或 unknown。
  */
 function classifyStorePath(path) {
-  let n = stripTrailingSlashes(path);
-  if (!n.startsWith(MEMORY_STORE_PATH_PREFIX)) return "unknown";
-  let parts = n.slice(MEMORY_STORE_PATH_PREFIX.length).split("/");
-  let [s, h] = parts;
-  if (s === undefined || s === "") return "unknown";
-  if (parts.length === 2 && s === "grouping" && h !== "") return "grouping";
-  if (parts.length === 1 && s === "grouping-root") return "grouping_root";
-  if (parts.length === 1 && s.startsWith("cagt_")) return "silo";
+  let normalizedPath = stripTrailingSlashes(path);
+  if (!normalizedPath.startsWith(MEMORY_STORE_PATH_PREFIX)) return "unknown";
+  let parts = normalizedPath.slice(MEMORY_STORE_PATH_PREFIX.length).split("/");
+  let [head, tail] = parts;
+  if (head === undefined || head === "") return "unknown";
+  if (parts.length === 2 && head === "grouping" && tail !== "") return "grouping";
+  if (parts.length === 1 && head === "grouping-root") return "grouping_root";
+  if (parts.length === 1 && head.startsWith("cagt_")) return "silo";
   return "unknown";
 }
 //@ chunk-82kqcve8.js:15304-15413 placement
@@ -271,7 +285,9 @@ function classifyStorePath(path) {
  */
 function hasPrivateGrouping(initialGrant) {
   return initialGrant.some(
-    (n) => (n.kind === "grouping" || classifyStorePath(n.path) === "grouping") && n.visibility !== "public",
+    (grant) =>
+      (grant.kind === "grouping" || classifyStorePath(grant.path) === "grouping") &&
+      grant.visibility !== "public",
   );
 }
 //@ chunk-82kqcve8.js:15413-15503 placement
@@ -296,27 +312,28 @@ function isGrantedSiloStore(path) {
   );
 }
 //@ chunk-82kqcve8.js:15604-15902 placement
-function isLiftableRootOnly(e, n, r) {
-  if (r > 0 || n.length !== e) return false;
-  if (hasDuplicateStorePaths(n)) return false;
-  let s;
-  for (let h of n) {
-    let y = classifyStorePath(h.path);
-    if (y === "unknown" || y === "grouping" || h.kind === "grouping") return false;
-    if (y === "grouping_root") {
-      if (s !== undefined || (h.kind !== undefined && h.kind !== "grouping_root")) return false;
-      s = h;
+function isLiftableRootOnly(storeCount, stores, groupingCount) {
+  if (groupingCount > 0 || stores.length !== storeCount) return false;
+  if (hasDuplicateStorePaths(stores)) return false;
+  let rootStore;
+  for (let store of stores) {
+    let storeKind = classifyStorePath(store.path);
+    if (storeKind === "unknown" || storeKind === "grouping" || store.kind === "grouping") return false;
+    if (storeKind === "grouping_root") {
+      if (rootStore !== undefined || (store.kind !== undefined && store.kind !== "grouping_root"))
+        return false;
+      rootStore = store;
     }
   }
-  return s !== undefined && s.mode === "rw";
+  return rootStore !== undefined && rootStore.mode === "rw";
 }
 //@ chunk-82kqcve8.js:15902-16003 placement
-function hasDuplicateStorePaths(e) {
-  let n = new Set();
-  for (let r of e) {
-    let s = stripTrailingSlashes(r.path);
-    if (n.has(s)) return true;
-    n.add(s);
+function hasDuplicateStorePaths(stores) {
+  let seenPaths = new Set();
+  for (let store of stores) {
+    let normalizedPath = stripTrailingSlashes(store.path);
+    if (seenPaths.has(normalizedPath)) return true;
+    seenPaths.add(normalizedPath);
   }
   return false;
 }
@@ -331,14 +348,14 @@ function isRootLiftable() {
 /**
  * 判定组织记忆镜像能否升级：无根、重复镜像、私有分组、根只读、校验失败、私有候选或可升级。
  */
-function getMirrorVerdict(e, n, r, s, h) {
-  let found = e.find((w) => classifyStorePath(w.path) === "grouping_root");
+function getMirrorVerdict(stores, groupingCount, storeCount, privateCandidate, liftable) {
+  let found = stores.find((store) => classifyStorePath(store.path) === "grouping_root");
   if (found === undefined) return "no_root";
-  if (hasDuplicateStorePaths(e)) return "conflicted_mirror";
-  if (s) return "private_grouping";
+  if (hasDuplicateStorePaths(stores)) return "conflicted_mirror";
+  if (privateCandidate) return "private_grouping";
   if (found.mode !== "rw") return "mirror_ro";
-  if (!isLiftableRootOnly(r, e, n)) return "verdict_failed";
-  return h ? "private_candidate" : "liftable";
+  if (!isLiftableRootOnly(storeCount, stores, groupingCount)) return "verdict_failed";
+  return liftable ? "private_candidate" : "liftable";
 }
 //@ chunk-82kqcve8.js:16321-16362 placement
 /**
@@ -351,8 +368,8 @@ function rootLiftReason() {
 /**
  * 判断是否为分组根存储。
  */
-function isGroupingRootStore(e) {
-  return classifyStorePath(e.path) === "grouping_root" || e.kind === "grouping_root";
+function isGroupingRootStore(store) {
+  return classifyStorePath(store.path) === "grouping_root" || store.kind === "grouping_root";
 }
 //@ chunk-82kqcve8.js:16440-16504 placement
 /**
@@ -369,24 +386,24 @@ function isRootStorePath(path) {
 /**
  * 判断路径的最后一段是否等于给定名字。
  */
-function isStoreBasename(path, n) {
-  let r = stripTrailingSlashes(path);
-  return r.slice(r.lastIndexOf("/") + 1) === n;
+function isStoreBasename(path, basename) {
+  let normalizedPath = stripTrailingSlashes(path);
+  return normalizedPath.slice(normalizedPath.lastIndexOf("/") + 1) === basename;
 }
 //@ chunk-82kqcve8.js:16574-16692 placement
-function findGrantedSilo(e) {
+function findGrantedSilo(siloName) {
   let filtered = getOrgMemoryWriteVerdict().grantedStores?.filter(isSiloStore);
-  let found = filtered?.find((s) => isStoreBasename(s.path, e));
+  let found = filtered?.find((store) => isStoreBasename(store.path, siloName));
   if (found !== undefined) return found;
   return filtered?.[0];
 }
 //@ chunk-82kqcve8.js:16692-16885 placement
 function getSingleSiloId() {
-  let e = getOrgMemoryWriteVerdict().grantedStores?.filter(isSiloStore) ?? [];
-  let n = e.length === 1 ? e[0] : undefined;
-  if (n === undefined) return null;
-  let r = stripTrailingSlashes(n.path);
-  let sliced = r.slice(r.lastIndexOf("/") + 1);
+  let siloStores = getOrgMemoryWriteVerdict().grantedStores?.filter(isSiloStore) ?? [];
+  let store = siloStores.length === 1 ? siloStores[0] : undefined;
+  if (store === undefined) return null;
+  let normalizedPath = stripTrailingSlashes(store.path);
+  let sliced = normalizedPath.slice(normalizedPath.lastIndexOf("/") + 1);
   return sliced.startsWith("cagt_") ? sliced : null;
 }
 //@ chunk-82kqcve8.js:16885-16950 placement
@@ -417,33 +434,36 @@ function isOrgMemoryWritesEnabledForAccount() {
   );
 }
 //@ chunk-82kqcve8.js:17119-17710 placement
-function applyOrgMemoryDecision(e, storageV5) {
+function applyOrgMemoryDecision(enabled, storageV5) {
   if (
-    e ? isOrgMemoryWritesEnabledForAccount() : (getCurrentProjectConfig().orgMemoryWrites ?? false) === false
+    enabled
+      ? isOrgMemoryWritesEnabledForAccount()
+      : (getCurrentProjectConfig().orgMemoryWrites ?? false) === false
   )
     return "noop";
-  if (e && !isEligibleDecisionSurface()) return "refused_session_kind";
-  if (e && orgMemoryAccountKey() === null) return "refused_identity";
-  if (e && !canWriteOrgMemory()) return "refused_gates";
-  if (e && getCurrentProjectConfig().orgMemoryRead === false) return "refused_read_off";
-  let r = orgMemoryAccountKey();
+  if (enabled && !isEligibleDecisionSurface()) return "refused_session_kind";
+  if (enabled && orgMemoryAccountKey() === null) return "refused_identity";
+  if (enabled && !canWriteOrgMemory()) return "refused_gates";
+  if (enabled && getCurrentProjectConfig().orgMemoryRead === false) return "refused_read_off";
+  let accountKey = orgMemoryAccountKey();
   saveCurrentProjectConfig(
-    (s) =>
-      (s.orgMemoryWrites ?? false) === e &&
-      (s.orgMemoryWritesAccount ?? undefined) === (e ? (r ?? undefined) : undefined)
-        ? s
+    (config) =>
+      (config.orgMemoryWrites ?? false) === enabled &&
+      (config.orgMemoryWritesAccount ?? undefined) === (enabled ? (accountKey ?? undefined) : undefined)
+        ? config
         : {
-            ...s,
-            orgMemoryWrites: e,
-            orgMemoryWritesAccount: e ? (r ?? undefined) : undefined,
+            ...config,
+            orgMemoryWrites: enabled,
+            orgMemoryWritesAccount: enabled ? (accountKey ?? undefined) : undefined,
           },
     storageV5,
   );
-  if (!e) import("./chunk-7czxkfmk.js").then((s) => s.clearOrgMemoryCredential());
+  if (!enabled)
+    import("./credential.js").then((credentialModule) => credentialModule.clearOrgMemoryCredential());
   logEvent("tengu_org_memory_writes_setting_changed", {
-    enabled: e,
+    enabled,
   });
-  return e ? "granted" : "withdrawn";
+  return enabled ? "granted" : "withdrawn";
 }
 //@ chunk-82kqcve8.js:17710-17762 placement
 /**
@@ -456,35 +476,35 @@ function isProjectReadDisabled() {
 /**
  * 设置项目的组织记忆读取开关；关闭时同时清除写入设置与凭据并记写入关闭事件；记读取设置变化事件。
  */
-function setOrgMemoryRead(e, storageV5) {
-  if ((getCurrentProjectConfig().orgMemoryRead ?? true) === e) return false;
-  let r = getCurrentProjectConfig().orgMemoryWrites === true;
+function setOrgMemoryRead(enabled, storageV5) {
+  if ((getCurrentProjectConfig().orgMemoryRead ?? true) === enabled) return false;
+  let writesWereOn = getCurrentProjectConfig().orgMemoryWrites === true;
   saveCurrentProjectConfig(
-    (s) =>
-      (s.orgMemoryRead ?? true) === e && (e || s.orgMemoryWrites === undefined)
-        ? s
-        : e
+    (config) =>
+      (config.orgMemoryRead ?? true) === enabled && (enabled || config.orgMemoryWrites === undefined)
+        ? config
+        : enabled
           ? {
-              ...s,
+              ...config,
               orgMemoryRead: undefined,
             }
           : {
-              ...s,
+              ...config,
               orgMemoryRead: false,
               orgMemoryWrites: undefined,
               orgMemoryWritesAccount: undefined,
             },
     storageV5,
   );
-  if (!e) {
-    import("./chunk-7czxkfmk.js").then((s) => s.clearOrgMemoryCredential());
-    if (r)
+  if (!enabled) {
+    import("./credential.js").then((credentialModule) => credentialModule.clearOrgMemoryCredential());
+    if (writesWereOn)
       logEvent("tengu_org_memory_writes_setting_changed", {
         enabled: false,
       });
   }
   logEvent("tengu_org_memory_read_setting_changed", {
-    enabled: e,
+    enabled,
   });
   return true;
 }
@@ -496,11 +516,11 @@ function clearGrant() {
   getOrgMemoryWriteVerdict().clearGrant();
 }
 //@ chunk-82kqcve8.js:18269-18380 placement
-function emitDecisionSignal(e, n) {
+function emitDecisionSignal(emitter, eventName) {
   try {
-    e.emit();
+    emitter.emit();
   } catch (error) {
-    logForDebugging(`org-memory decision ${n}: listener threw: ${errorMessage(error)}`, {
+    logForDebugging(`org-memory decision ${eventName}: listener threw: ${errorMessage(error)}`, {
       level: "error",
     });
   }
@@ -521,78 +541,78 @@ class OrgMemoryDecision {
     this.servedIdentity = null;
     this.settleDeadlineConsumed = false;
   }
-  async waitForSettled(e, n, r) {
+  async waitForSettled(timeoutMs, signal, options) {
     if (this.decision.state !== "undecided") return;
-    let s = () => {};
+    let unsubscribe = () => {};
     let promise = new Promise((resolve) => {
-      s = this.settled.subscribe(resolve);
+      unsubscribe = this.settled.subscribe(resolve);
     });
     try {
       if (this.decision.state !== "undecided") return;
-      await Promise.race([promise, sleep(e, n, r)]);
+      await Promise.race([promise, sleep(timeoutMs, signal, options)]);
     } finally {
-      s();
+      unsubscribe();
     }
   }
-  async waitForSettledOnce(e, n) {
+  async waitForSettledOnce(timeoutMs, signal) {
     if (this.settleDeadlineConsumed) return;
-    await this.waitForSettled(e, n);
-    if (this.decision.state === "undecided" && n?.aborted !== true) this.settleDeadlineConsumed = true;
+    await this.waitForSettled(timeoutMs, signal);
+    if (this.decision.state === "undecided" && signal?.aborted !== true) this.settleDeadlineConsumed = true;
   }
   getStores() {
     return this.decision.state === "on" ? this.decision.stores : [];
   }
-  settleOn(e) {
+  settleOn(decision) {
     if (this.decision.state !== "undecided") return false;
-    if (this.servedIdentity !== null && this.servedIdentity !== e.identity) {
+    if (this.servedIdentity !== null && this.servedIdentity !== decision.identity) {
       this.settleOff("superseded");
       return false;
     }
-    this.servedIdentity ??= e.identity;
+    this.servedIdentity ??= decision.identity;
     this.decision = {
       state: "on",
-      identity: e.identity,
-      stores: Object.freeze([...e.stores]),
-      request: e.request,
-      selectionSource: e.selectionSource,
-      initialGrant: Object.freeze([...e.initialGrant]),
-      degraded: e.degraded,
+      identity: decision.identity,
+      stores: Object.freeze([...decision.stores]),
+      request: decision.request,
+      selectionSource: decision.selectionSource,
+      initialGrant: Object.freeze([...decision.initialGrant]),
+      degraded: decision.degraded,
     };
     emitDecisionSignal(this.settled, "settle");
     logEvent("tengu_org_memory_decision", {
       outcome: lit("on"),
-      store_count: e.stores.length,
-      asked_write: e.request.writeAccess,
-      selection_source: fromEnum(e.selectionSource),
-      selection_kind: fromEnum(e.selectionKind),
-      private_selection: hasPrivateGrouping(e.initialGrant),
-      degraded: e.degraded,
+      store_count: decision.stores.length,
+      asked_write: decision.request.writeAccess,
+      selection_source: fromEnum(decision.selectionSource),
+      selection_kind: fromEnum(decision.selectionKind),
+      private_selection: hasPrivateGrouping(decision.initialGrant),
+      degraded: decision.degraded,
     });
     return true;
   }
-  settleOff(e) {
+  settleOff(cause) {
     if (this.decision.state !== "undecided") return false;
     this.decision = {
       state: "off",
-      cause: e,
+      cause,
     };
     emitDecisionSignal(this.settled, "settle");
     logEvent("tengu_org_memory_decision", {
       outcome: lit("off"),
-      cause: fromEnum(e),
+      cause: fromEnum(cause),
     });
     return true;
   }
-  park(e) {
+  park(cause) {
     if (this.decision.state !== "on") return;
     this.decision = {
       state: "parked",
       identity: this.decision.identity,
-      cause: e,
+      cause,
     };
     emitDecisionSignal(this.shrunk, "shrink");
     logEvent("tengu_org_memory_decision_parked", {
-      cause: fromEnum(e),
+      cause: fromEnum(cause),
     });
   }
   shrinkWriteAsk() {
@@ -618,17 +638,17 @@ class OrgMemoryDecision {
     logEvent("tengu_org_memory_decision_write_shrunk", {});
     return true;
   }
-  onAuthCompletion(e) {
+  onAuthCompletion(identity) {
     if (this.decision.state !== "on" && this.decision.state !== "parked") return;
-    if (e === this.decision.identity) return;
-    let n = e === null ? "logout" : "account_switch";
+    if (identity === this.decision.identity) return;
+    let cause = identity === null ? "logout" : "account_switch";
     this.decision = {
       state: "ended",
-      cause: n,
+      cause,
     };
     emitDecisionSignal(this.shrunk, "shrink");
     logEvent("tengu_org_memory_decision_ended", {
-      cause: fromEnum(n),
+      cause: fromEnum(cause),
     });
   }
   reopen() {
@@ -656,7 +676,10 @@ class OrgMemoryDecision {
 /**
  * 按宿主保存的组织记忆决定状态。
  */
-var orgMemoryDecisionState = new HostScoped(() => new OrgMemoryDecision());
+var orgMemoryDecisionState; // deferred: uses OrgMemoryDecision of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-82kqcve8.js:21077", () => {
+  orgMemoryDecisionState = new HostScoped(() => new OrgMemoryDecision());
+});
 //@ chunk-82kqcve8.js:21102-21139 placement
 /**
  * 取当前宿主的决定状态。
@@ -665,20 +688,20 @@ function getOrgMemoryDecisionState() {
   return orgMemoryDecisionState.of(getRootSession().host);
 }
 //@ chunk-82kqcve8.js:21139-21187 placement
-function onOrgMemoryDecisionShrink(e) {
-  return getOrgMemoryDecisionState().shrunk.subscribe(e);
+function onOrgMemoryDecisionShrink(listener) {
+  return getOrgMemoryDecisionState().shrunk.subscribe(listener);
 }
 //@ chunk-82kqcve8.js:21187-21236 placement
-function onOrgMemoryDecisionSettled(e) {
-  return getOrgMemoryDecisionState().settled.subscribe(e);
+function onOrgMemoryDecisionSettled(listener) {
+  return getOrgMemoryDecisionState().settled.subscribe(listener);
 }
 //@ chunk-82kqcve8.js:21236-21290 placement
-function waitForOrgMemoryDecisionSettled(e, n, r) {
-  return getOrgMemoryDecisionState().waitForSettled(e, n, r);
+function waitForOrgMemoryDecisionSettled(timeoutMs, signal, predicate) {
+  return getOrgMemoryDecisionState().waitForSettled(timeoutMs, signal, predicate);
 }
 //@ chunk-82kqcve8.js:21290-21344 placement
-function waitForOrgMemoryDecisionSettledOnce(e, n) {
-  return getOrgMemoryDecisionState().waitForSettledOnce(e, n);
+function waitForOrgMemoryDecisionSettledOnce(predicate, options) {
+  return getOrgMemoryDecisionState().waitForSettledOnce(predicate, options);
 }
 //@ chunk-82kqcve8.js:21344-21379 placement
 function getOrgMemoryDecision() {
@@ -693,24 +716,24 @@ function getOrgMemoryServedIdentity() {
   return getOrgMemoryDecisionState().servedIdentity;
 }
 //@ chunk-82kqcve8.js:21460-21500 placement
-function settleOrgMemoryDecisionOn(e) {
-  return getOrgMemoryDecisionState().settleOn(e);
+function settleOrgMemoryDecisionOn(decision) {
+  return getOrgMemoryDecisionState().settleOn(decision);
 }
 //@ chunk-82kqcve8.js:21500-21540 placement
-function settleOrgMemoryDecisionOff(e) {
-  return getOrgMemoryDecisionState().settleOff(e);
+function settleOrgMemoryDecisionOff(reason) {
+  return getOrgMemoryDecisionState().settleOff(reason);
 }
 //@ chunk-82kqcve8.js:21540-21569 placement
-function parkOrgMemoryDecision(e) {
-  getOrgMemoryDecisionState().park(e);
+function parkOrgMemoryDecision(reason) {
+  getOrgMemoryDecisionState().park(reason);
 }
 //@ chunk-82kqcve8.js:21569-21613 placement
 function shrinkOrgMemoryDecisionWriteAsk() {
   return getOrgMemoryDecisionState().shrinkWriteAsk();
 }
 //@ chunk-82kqcve8.js:21613-21654 placement
-function onOrgMemoryAuthCompletion(e) {
-  getOrgMemoryDecisionState().onAuthCompletion(e);
+function onOrgMemoryAuthCompletion(result) {
+  getOrgMemoryDecisionState().onAuthCompletion(result);
 }
 //@ chunk-82kqcve8.js:21654-21690 placement
 function reopenOrgMemoryDecision() {

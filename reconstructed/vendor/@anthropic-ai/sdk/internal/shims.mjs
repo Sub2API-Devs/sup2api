@@ -15,12 +15,12 @@ function getDefaultFetch() {
 }
 //@ chunk-hwmsct5x.js:18018-18238 esm-fingerprint
 function makeReadableStream(...args) {
-  let n = globalThis.ReadableStream;
-  if (typeof n === "undefined")
+  let ReadableStream_2 = globalThis.ReadableStream;
+  if (typeof ReadableStream_2 === "undefined")
     throw Error(
       "`ReadableStream` is not defined as a global; You will need to polyfill it, `globalThis.ReadableStream = ReadableStream`",
     );
-  return new n(...args);
+  return new ReadableStream_2(...args);
 }
 //@ chunk-hwmsct5x.js:18238-18473 esm-fingerprint
 function ReadableStreamFrom(iterable) {

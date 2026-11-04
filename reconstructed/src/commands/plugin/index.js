@@ -22,8 +22,10 @@ var pluginCommandDefinition = {
     workspace: false,
     ink: true,
   },
-  getArgumentCompletions: (e, n, r) =>
-    import("./chunk-rkhcn3s2.js").then((s) => s.getPluginArgumentCompletions(e, n, r)),
+  getArgumentCompletions: (arg, state, context) =>
+    import("./getPluginArgumentCompletions.lazy.js").then((pluginModule) =>
+      pluginModule.getPluginArgumentCompletions(arg, state, context),
+    ),
 };
 var pluginCommand = pluginCommandDefinition;
 export { pluginCommand };

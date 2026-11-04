@@ -11,21 +11,25 @@
 import { HostScoped } from "./hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { logError } from "./log.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-0g4sycr3.js:296-341 placement
-var reportOnceState = new HostScoped(() => ({
-  alreadyReported: new Set(),
-}));
+var reportOnceState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0g4sycr3.js:296", () => {
+  reportOnceState = new HostScoped(() => ({
+    alreadyReported: new Set(),
+  }));
+});
 //@ chunk-0g4sycr3.js:341-466 placement
 /**
  * 同一事件在根会话中只上报一次（交给已注册的监听器），出错时只记录错误。
  */
-function reportOnce(r) {
+function reportOnce(key) {
   try {
-    let e = reportOnceState.of(getRootSession().host);
-    if (!e.alreadyReported.has(r)) {
-      e.alreadyReported.add(r);
-      e.listener?.(r);
+    let state = reportOnceState.of(getRootSession().host);
+    if (!state.alreadyReported.has(key)) {
+      state.alreadyReported.add(key);
+      state.listener?.(key);
     }
   } catch (error) {
     logError(error);

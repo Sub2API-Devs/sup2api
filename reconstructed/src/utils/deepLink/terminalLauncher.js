@@ -379,9 +379,9 @@ async function launchWindowsTerminal(terminal, claudePath, action) {
   let cwd = action.cwd;
   switch (terminal.name) {
     case "Windows Terminal": {
-      let l = (c) => c.replaceAll(";", "\\;");
-      if (cwd) args.push("-d", l(cwd));
-      args.push("--", l(claudePath), ...claudeArgs);
+      let escapeSemicolons = (value) => value.replaceAll(";", "\\;");
+      if (cwd) args.push("-d", escapeSemicolons(cwd));
+      args.push("--", escapeSemicolons(claudePath), ...claudeArgs);
       break;
     }
     case "PowerShell": {
@@ -389,8 +389,8 @@ async function launchWindowsTerminal(terminal, claudePath, action) {
       break;
     }
     default: {
-      let l = `${cmdQuote(claudePath)} ${claudeArgs.map(cmdQuote).join(" ")}`;
-      args.push("/d", "/v:off", "/s", "/k", `"${l}"`);
+      let commandLine = `${cmdQuote(claudePath)} ${claudeArgs.map(cmdQuote).join(" ")}`;
+      args.push("/d", "/v:off", "/s", "/k", `"${commandLine}"`);
       break;
     }
   }
@@ -406,7 +406,7 @@ async function launchWindowsTerminal(terminal, claudePath, action) {
 async function spawnDetached(command, args, opts = {}) {
   let trySpawn = (resolve) =>
     new Promise((resolve_2) => {
-      let l = (err) => {
+      let onError = (err) => {
         logForDebugging(`Failed to spawn ${command}: ${err.message}`, {
           level: "error",
         });
@@ -422,10 +422,10 @@ async function spawnDetached(command, args, opts = {}) {
           windowsVerbatimArguments: opts.windowsVerbatimArguments,
         });
       } catch (error) {
-        return l(error);
+        return onError(error);
       }
       moveKeeperPid(child.pid);
-      child.once("error", l);
+      child.once("error", onError);
       child.once("spawn", () => {
         child.unref();
         resolve_2(true);
@@ -445,7 +445,7 @@ var SHELL_SAFE_ARGS = /^[A-Za-z0-9 /._=-]+$/;
  * 生成 shell 安全的深链接参数：cwd 与 query 以 base64url 传（--deep-link-cwd-b64、--prefill-b64）。
  */
 function buildShellSafeDeepLinkArgs(action) {
-  let toBase64Url = (a) => Buffer.from(a, "utf8").toString("base64url");
+  let toBase64Url = (text) => Buffer.from(text, "utf8").toString("base64url");
   let args = ["--deep-link-origin"];
   if (action.repo) args.push(`--deep-link-repo=${action.repo}`);
   if (action.lastFetchMs !== undefined) args.push(`--deep-link-last-fetch=${action.lastFetchMs}`);

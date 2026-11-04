@@ -17,31 +17,31 @@ var MAX_SORT_DEPTH = 32;
 /**
  * 稳定哈希：sha256(salt \0 JSON(键排序后的值))。
  */
-function stableHashWithSalt(e, r) {
+function stableHashWithSalt(text, salt) {
   return createHash("sha256")
-    .update(e)
+    .update(text)
     .update("\x00")
-    .update(jsonStringify(sortKeysDeep(r)))
+    .update(jsonStringify(sortKeysDeep(salt)))
     .digest("hex");
 }
 //@ chunk-ay9hyszk.js:608-836 placement
-function sortKeysDeep(e, r = 0) {
-  if (r > MAX_SORT_DEPTH) return e;
-  if (Array.isArray(e)) return e.map((n) => sortKeysDeep(n, r + 1));
-  if (typeof e === "object" && e !== null)
+function sortKeysDeep(value, depth = 0) {
+  if (depth > MAX_SORT_DEPTH) return value;
+  if (Array.isArray(value)) return value.map((item) => sortKeysDeep(item, depth + 1));
+  if (typeof value === "object" && value !== null)
     return Object.fromEntries(
-      Object.entries(e)
-        .sort(([n], [o]) => (n < o ? -1 : n > o ? 1 : 0))
-        .map(([key, value]) => [key, sortKeysDeep(value, r + 1)]),
+      Object.entries(value)
+        .sort(([leftKey], [rightKey]) => (leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0))
+        .map(([key, value]) => [key, sortKeysDeep(value, depth + 1)]),
     );
-  return e;
+  return value;
 }
 //@ chunk-ay9hyszk.js:836-884 placement
 /**
  * 先 JSON 往返再计算稳定哈希。
  */
-function stableHashOfJson(toolName, r) {
-  let n = jsonParse(jsonStringify(r));
-  return stableHashWithSalt(toolName, n);
+function stableHashOfJson(toolName, value) {
+  let normalized = jsonParse(jsonStringify(value));
+  return stableHashWithSalt(toolName, normalized);
 }
 export { stableHashOfJson, stableHashWithSalt };

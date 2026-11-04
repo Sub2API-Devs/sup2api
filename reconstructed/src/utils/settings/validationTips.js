@@ -20,42 +20,55 @@ function hasInternalDocTag(description) {
 /**
  * 收集设置校验提示。
  */
-function collectValidationTips(e, n) {
-  if (Array.isArray(e)) {
-    for (let a of e) collectValidationTips(a, n);
+function collectValidationTips(value, includeInternal) {
+  if (Array.isArray(value)) {
+    for (let entry of value) collectValidationTips(entry, includeInternal);
     return;
   }
-  if (e === null || typeof e !== "object") return;
-  let r = e;
-  if (n && hasInternalDocTag(r.description)) {
-    let trimmed = r.description.replace(/^@internal\s*/, "").trim();
-    if (trimmed) r.description = trimmed;
-    else delete r.description;
+  if (value === null || typeof value !== "object") return;
+  let node = value;
+  if (includeInternal && hasInternalDocTag(node.description)) {
+    let trimmed = node.description.replace(/^@internal\s*/, "").trim();
+    if (trimmed) node.description = trimmed;
+    else delete node.description;
   }
-  let properties = r.properties;
-  if (!n && properties !== null && typeof properties === "object" && !Array.isArray(properties)) {
-    let a = properties;
-    for (let key of Object.keys(a)) {
-      let g = a[key];
-      let description = g !== null && typeof g === "object" && !Array.isArray(g) ? g.description : undefined;
+  let properties = node.properties;
+  if (
+    !includeInternal &&
+    properties !== null &&
+    typeof properties === "object" &&
+    !Array.isArray(properties)
+  ) {
+    let propertyMap = properties;
+    for (let key of Object.keys(propertyMap)) {
+      let propertySchema = propertyMap[key];
+      let description =
+        propertySchema !== null && typeof propertySchema === "object" && !Array.isArray(propertySchema)
+          ? propertySchema.description
+          : undefined;
       if (hasInternalDocTag(description)) {
-        delete a[key];
-        if (Array.isArray(r.required)) r.required = r.required.filter((f) => f !== key);
+        delete propertyMap[key];
+        if (Array.isArray(node.required))
+          node.required = node.required.filter((requiredKey) => requiredKey !== key);
       }
     }
   }
-  if (!n)
-    for (let a of ["anyOf", "oneOf"]) {
-      let c = r[a];
-      if (Array.isArray(c)) {
-        let filtered = c.filter(
-          (m) => m === null || typeof m !== "object" || Array.isArray(m) || !hasInternalDocTag(m.description),
+  if (!includeInternal)
+    for (let combinator of ["anyOf", "oneOf"]) {
+      let variants = node[combinator];
+      if (Array.isArray(variants)) {
+        let filtered = variants.filter(
+          (variant) =>
+            variant === null ||
+            typeof variant !== "object" ||
+            Array.isArray(variant) ||
+            !hasInternalDocTag(variant.description),
         );
-        if (filtered.length === 0) delete r[a];
-        else r[a] = filtered;
+        if (filtered.length === 0) delete node[combinator];
+        else node[combinator] = filtered;
       }
     }
-  for (let a of Object.values(r)) collectValidationTips(a, n);
+  for (let child of Object.values(node)) collectValidationTips(child, includeInternal);
 }
 //@ chunk-dcmhvw5a.js:433495-437157 fingerprint = TIP_MATCHERS (0.876)
 /**
@@ -112,8 +125,10 @@ var SETTINGS_TIP_RULES = [
     },
   },
   {
-    matches: (e) =>
-      /\.hooks\.\d+\.command$/.test(e.path) && e.code === "invalid_type" && e.received === "undefined",
+    matches: (issue) =>
+      /\.hooks\.\d+\.command$/.test(issue.path) &&
+      issue.code === "invalid_type" &&
+      issue.received === "undefined",
     tip: {
       suggestion:
         'Command hooks require `command`. For exec form (no shell), set `command` to the executable and `args` to its arguments: {"type": "command", "command": "echo", "args": ["hi"]}. For shell form, set `command` to the full shell string: {"type": "command", "command": "echo hi"}.',
@@ -121,7 +136,7 @@ var SETTINGS_TIP_RULES = [
     },
   },
   {
-    matches: (e) => e.path.includes("hooks") && e.code === "invalid_type",
+    matches: (issue) => issue.path.includes("hooks") && issue.code === "invalid_type",
     tip: {
       suggestion:
         'Hooks use a matcher + hooks array. The matcher is a string: a tool name ("Bash"), pipe-separated list ("Edit|Write"), or empty to match all. Example: {"PostToolUse": [{"matcher": "Edit|Write", "hooks": [{"type": "command", "command": "echo Done"}]}]}',

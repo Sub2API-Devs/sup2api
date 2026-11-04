@@ -28,52 +28,55 @@ function callDeadlineMs(limits, envelope) {
 }
 //@ chunk-ad2e1aj6.js:13981-14690 placement
 function createCallLifetime({ remainingMs, controller, leg, lifetime }) {
-  let r = false;
-  let i = () => controller.abort(userAbortReason("remote-cancel"));
-  let y = () => controller.abort(userAbortReason("shutdown"));
-  let O = () => {
-    r = true;
-    i();
+  let timedOut = false;
+  let abortOnCancel = () => controller.abort(userAbortReason("remote-cancel"));
+  let abortOnShutdown = () => controller.abort(userAbortReason("shutdown"));
+  let onTimeout = () => {
+    timedOut = true;
+    abortOnCancel();
   };
-  let timer = setTimeout(O, remainingMs);
-  let w = leg;
-  w.addEventListener("abort", i, {
+  let timer = setTimeout(onTimeout, remainingMs);
+  let legSignal = leg;
+  legSignal.addEventListener("abort", abortOnCancel, {
     once: true,
   });
-  lifetime?.addEventListener("abort", y, {
+  lifetime?.addEventListener("abort", abortOnShutdown, {
     once: true,
   });
-  if (w.aborted) i();
-  if (lifetime?.aborted) y();
-  let C = () => {
+  if (legSignal.aborted) abortOnCancel();
+  if (lifetime?.aborted) abortOnShutdown();
+  let detachLeg = () => {
     clearTimeout(timer);
-    w.removeEventListener("abort", i);
+    legSignal.removeEventListener("abort", abortOnCancel);
   };
   return {
     get timedOut() {
-      return r;
+      return timedOut;
     },
     shuttingDown: () => lifetime?.aborted === true,
-    detachLeg: C,
+    detachLeg,
     enterRunning() {
       clearTimeout(timer);
     },
-    resume(P) {
-      C();
-      w = P.signal;
-      w.addEventListener("abort", i, {
+    resume(nextLeg) {
+      detachLeg();
+      legSignal = nextLeg.signal;
+      legSignal.addEventListener("abort", abortOnCancel, {
         once: true,
       });
-      if (w.aborted) i();
-      timer = setTimeout(O, clampToMaxPageSize(Math.max(1, P.expiresInMs - (Date.now() - P.startedAt))));
+      if (legSignal.aborted) abortOnCancel();
+      timer = setTimeout(
+        onTimeout,
+        clampToMaxPageSize(Math.max(1, nextLeg.expiresInMs - (Date.now() - nextLeg.startedAt))),
+      );
     },
     windDown() {
       clearTimeout(timer);
-      timer = setTimeout(i, RESULT_RETENTION_MS);
+      timer = setTimeout(abortOnCancel, RESULT_RETENTION_MS);
     },
     dispose() {
-      C();
-      lifetime?.removeEventListener("abort", y);
+      detachLeg();
+      lifetime?.removeEventListener("abort", abortOnShutdown);
     },
   };
 }
@@ -91,13 +94,13 @@ function joinKnownCall({ known, session, hostEpoch, callId, target, facts }) {
       facts,
     });
   }
-  let O = pendingAskStatus(known, session, {
+  let askStatus = pendingAskStatus(known, session, {
     callId,
     target,
     hostEpoch,
     facts,
   });
-  if (O !== undefined) return O;
+  if (askStatus !== undefined) return askStatus;
   switch (known.summary.state) {
     case "completed":
     case "failed":
@@ -111,36 +114,36 @@ function joinKnownCall({ known, session, hostEpoch, callId, target, facts }) {
 }
 //@ chunk-ad2e1aj6.js:15147-16011 placement
 function lookupCallerCall({ sessions, callLog, callerKey, callId, target, facts }) {
-  let y = sessions.forCaller(callerKey);
-  let O = y?.calls.lookup(callId);
-  if (O === undefined || isDisownedFailure(O)) {
+  let session = sessions.forCaller(callerKey);
+  let call = session?.calls.lookup(callId);
+  if (call === undefined || isDisownedFailure(call)) {
     facts.answeredFromRecord = "unknown_call";
-    facts.fromPriorEpoch = O?.priorEpoch !== undefined;
-    let P = y !== undefined && !y.calls.forgotAny;
-    if (O === undefined && y !== undefined) {
-      y.calls.remember(callId, {
+    facts.fromPriorEpoch = call?.priorEpoch !== undefined;
+    let hasEpoch = session !== undefined && !session.calls.forgotAny;
+    if (call === undefined && session !== undefined) {
+      session.calls.remember(callId, {
         state: "failed",
         code: DISOWNED,
       });
-      if (P)
+      if (hasEpoch)
         callLog?.note({
           t: "disowned",
-          caller: y.callerSessionId,
+          caller: session.callerSessionId,
           call_id: callId,
         });
     }
     return noCallRecordText({
       target,
       callId,
-      hostEpoch: P ? sessions.epoch : undefined,
+      hostEpoch: hasEpoch ? sessions.epoch : undefined,
     });
   }
   let hostEpoch = sessions.epoch;
-  let joinedRetryCall = lookupJoinedRetryCall(O, y);
+  let joinedRetryCall = lookupJoinedRetryCall(call, session);
   if (joinedRetryCall !== undefined) {
-    facts.joinedCallId = O.summary.joinedCallId;
+    facts.joinedCallId = call.summary.joinedCallId;
     return answerJoinedCall({
-      session: y,
+      session,
       joined: joinedRetryCall,
       hostEpoch,
       callId,
@@ -148,22 +151,22 @@ function lookupCallerCall({ sessions, callLog, callerKey, callId, target, facts 
       facts,
     });
   }
-  let C = pendingAskStatus(O, y, {
+  let joined = pendingAskStatus(call, session, {
     callId,
     target,
     hostEpoch,
     facts,
   });
-  if (C !== undefined) return C;
-  switch (O.summary.state) {
+  if (joined !== undefined) return joined;
+  switch (call.summary.state) {
     case "completed":
     case "failed":
-      return replayKnownCall(O, callId, target, facts);
+      return replayKnownCall(call, callId, target, facts);
     case "received":
     case "running":
     case "asked":
       facts.answeredFromRecord = "in_progress";
-      return runningCallStatus(O, {
+      return runningCallStatus(call, {
         callId,
         target,
         hostEpoch,
@@ -197,9 +200,9 @@ function answerJoinedCall({ session, joined, hostEpoch, callId, target, facts })
   switch (joined.summary.state) {
     case "completed":
     case "failed": {
-      let y = replayKnownCall(joined, callId, target, facts);
+      let replayedEnvelope = replayKnownCall(joined, callId, target, facts);
       facts.answeredFromRecord = "joined_retry";
-      return rebindEnvelopeCallId(y, callId);
+      return rebindEnvelopeCallId(replayedEnvelope, callId);
     }
     case "received":
     case "running":
@@ -214,61 +217,65 @@ function answerJoinedCall({ session, joined, hostEpoch, callId, target, facts })
   }
 }
 //@ chunk-ad2e1aj6.js:16692-16894 placement
-function hasAnswerInHand(e, n, facts) {
-  let { summary } = e;
+function hasAnswerInHand(known, session, facts) {
+  let { summary } = known;
   if (summary.state !== "asked" || summary.askId === undefined) return false;
-  let r = n?.pendingAsks.peek(summary.askId);
-  if (r === undefined) return false;
-  let i = facts.redeemsAskId === r.askId ? 1 : 0;
-  return r.redeemingLegs > i;
+  let pendingAsk = session?.pendingAsks.peek(summary.askId);
+  if (pendingAsk === undefined) return false;
+  let answeredLegs = facts.redeemsAskId === pendingAsk.askId ? 1 : 0;
+  return pendingAsk.redeemingLegs > answeredLegs;
 }
 //@ chunk-ad2e1aj6.js:16894-17272 placement
-function runningCallStatus(e, { callId, target, hostEpoch, answerInHand = false }) {
-  let i = violinFholeEnabled() ? e.outputSoFar?.() : undefined;
+function runningCallStatus(known, { callId, target, hostEpoch, answerInHand = false }) {
+  let replayed = violinFholeEnabled() ? known.outputSoFar?.() : undefined;
   return callStillRunningText({
     target,
     callId,
     state:
-      e.summary.state === "asked"
+      known.summary.state === "asked"
         ? answerInHand
           ? "admitting"
           : "awaiting_approval"
-        : e.summary.state === "received" || (e.summary.state === "running" && e.summary.started !== true)
+        : known.summary.state === "received" ||
+            (known.summary.state === "running" && known.summary.started !== true)
           ? "admitting"
           : "running",
-    sinceMs: Date.now() - e.receivedAt,
+    sinceMs: Date.now() - known.receivedAt,
     hostEpoch,
-    ...(i !== undefined && {
-      outputTail: i,
+    ...(replayed !== undefined && {
+      outputTail: replayed,
     }),
   });
 }
 //@ chunk-ad2e1aj6.js:17272-17454 placement
-function replayKnownCall(e, callId, target, facts) {
-  facts.answeredFromRecord = e.result !== undefined ? "replayed" : "duplicate";
-  facts.fromPriorEpoch = e.priorEpoch !== undefined;
-  return markReplayed(e.result ?? envelopeFromRecord(target, callId, e.summary), e.summary.servedAt);
+function replayKnownCall(known, callId, target, facts) {
+  facts.answeredFromRecord = known.result !== undefined ? "replayed" : "duplicate";
+  facts.fromPriorEpoch = known.priorEpoch !== undefined;
+  return markReplayed(
+    known.result ?? envelopeFromRecord(target, callId, known.summary),
+    known.summary.servedAt,
+  );
 }
 //@ chunk-ad2e1aj6.js:17454-17525 placement
-function isDisownedFailure(e) {
-  return e.summary.state === "failed" && e.summary.code === DISOWNED;
+function isDisownedFailure(record) {
+  return record.summary.state === "failed" && record.summary.code === DISOWNED;
 }
 //@ chunk-ad2e1aj6.js:17525-17663 placement
-function lookupJoinedRetryCall(e, n) {
-  let { summary } = e;
+function lookupJoinedRetryCall(record, session) {
+  let { summary } = record;
   return summary.state === "failed" && summary.code === JOINED_RETRY && summary.joinedCallId !== undefined
-    ? n?.calls.lookup(summary.joinedCallId)
+    ? session?.calls.lookup(summary.joinedCallId)
     : undefined;
 }
 //@ chunk-ad2e1aj6.js:17663-18005 placement
-function pendingAskStatus(e, n, { callId, target, hostEpoch, facts }) {
-  let { summary } = e;
+function pendingAskStatus(known, session, { callId, target, hostEpoch, facts }) {
+  let { summary } = known;
   if (summary.state !== "asked" || summary.askId === undefined) return;
-  let O = n?.pendingAsks.peek(summary.askId);
-  if (O === undefined) return;
-  if (hasAnswerInHand(e, n, facts)) {
+  let pendingAsk = session?.pendingAsks.peek(summary.askId);
+  if (pendingAsk === undefined) return;
+  if (hasAnswerInHand(known, session, facts)) {
     facts.answeredFromRecord = "in_progress";
-    return runningCallStatus(e, {
+    return runningCallStatus(known, {
       callId,
       target,
       hostEpoch,
@@ -276,6 +283,6 @@ function pendingAskStatus(e, n, { callId, target, hostEpoch, facts }) {
     });
   }
   facts.answeredFromRecord = "pending_ask";
-  return rebindEnvelopeCallId(O.asked, callId);
+  return rebindEnvelopeCallId(pendingAsk.asked, callId);
 }
 export { joinKnownCall, joinRetry, callDeadlineMs, createCallLifetime, lookupCallerCall };

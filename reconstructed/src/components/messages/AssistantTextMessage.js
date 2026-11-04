@@ -26,8 +26,8 @@ import {
   API_ERROR_MESSAGE_PREFIX,
   API_ERROR_CONST_1000,
 } from "../../services/api/errors.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
-import { Qr, fo } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { use, suspenseTypeExport } from "../../../vendor/react/cjs/react.production.js";
 import { isPlainTextStorageAvailable } from "../../utils/secureStorage/plainTextStorage.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
@@ -56,7 +56,7 @@ import { RejectedToolUseMessage } from "./UserToolResultMessage/RejectedToolUseM
 import { isClaudeAiOriginLink } from "../../services/oauth/oauthErrors.js";
 import { safeVerificationUrl } from "../../services/api/verificationRequired.js";
 import { NoSelect } from "../../ink/components/Input.js";
-import { BLACK_CIRCLE } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { BLACK_CIRCLE } from "../../constants/figures.js";
 import { MarkdownText_2 } from "../pluginUi/render/MarkdownBlock.js";
 import { useMainLoopModel } from "../../hooks/useMainLoopModel.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
@@ -66,161 +66,172 @@ import { CtrlOToExpand } from "../CtrlOToExpand.js";
 import { isQuizzicalShoreModel } from "../../utils/messages/mappers.js";
 import { renderWithForceUpdate } from "../../hooks/useForceRender.js";
 import { SUMMARY_TAG } from "../../constants/xml.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ah34pb7m.js:54747-54803 placement
-function hasRemoteAutocompactState(b) {
-  return b.remoteAutocompactState !== undefined;
+function hasRemoteAutocompactState(state) {
+  return state.remoteAutocompactState !== undefined;
 }
 //@ chunk-ah34pb7m.js:54803-54841 placement
-var API_ERROR_NOTICE_TEXTS = new Set([
-  INVALID_API_KEY_MESSAGE,
-  DISABLED_ORG_API_KEY_MESSAGE,
-  DISABLED_ORG_API_KEY_WITH_SUBSCRIPTION_MESSAGE,
-  GATEWAY_UPSTREAM_AUTH_ERROR_MESSAGE,
-  TOKEN_REVOKED_MESSAGE,
-]);
+var API_ERROR_NOTICE_TEXTS; // deferred: uses AUTH_REQUIRED_MESSAGE (../../services/api/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ah34pb7m.js:54803", () => {
+  API_ERROR_NOTICE_TEXTS = new Set([
+    INVALID_API_KEY_MESSAGE,
+    DISABLED_ORG_API_KEY_MESSAGE,
+    DISABLED_ORG_API_KEY_WITH_SUBSCRIPTION_MESSAGE,
+    GATEWAY_UPSTREAM_AUTH_ERROR_MESSAGE,
+    TOKEN_REVOKED_MESSAGE,
+  ]);
+});
 //@ chunk-ah34pb7m.js:54841-55026 placement
 function KeychainUnlockHint() {
-  let d = w(1);
-  if (!Qr(isPlainTextStorageAvailable())) {
+  let $ = useMemoCache(1);
+  if (!use(isPlainTextStorageAvailable())) {
     return null;
   }
-  let c;
-  if (d[0] === MEMO_CACHE_SENTINEL) {
-    c = jsxProd_default(Text, {
+  let fallbackText;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    fallbackText = jsxProd_default(Text, {
       dimColor: true,
       children: "\xB7 Run in another terminal: security unlock-keychain",
     });
-    d[0] = c;
-  } else c = d[0];
-  return c;
+    $[0] = fallbackText;
+  } else fallbackText = $[0];
+  return fallbackText;
 }
 //@ chunk-ah34pb7m.js:55026-55539 placement
 /**
  * 上下文用尽提示（/compact 或 /clear，自动压缩关闭时提示开启）。
  */
 function ContextLimitHint() {
-  let m = w(6);
-  let d;
-  if (m[0] === MEMO_CACHE_SENTINEL) {
-    d = getUpgradeMessage("warning");
-    m[0] = d;
-  } else d = m[0];
-  let c = d;
-  let g = isEnvTruthy(process.env.DISABLE_COMPACT) ? "/clear to continue" : "/compact or /clear to continue";
+  let $ = useMemoCache(6);
+  let upgradeMessage;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    upgradeMessage = getUpgradeMessage("warning");
+    $[0] = upgradeMessage;
+  } else upgradeMessage = $[0];
+  let upgradeText = upgradeMessage;
+  let slashHint = isEnvTruthy(process.env.DISABLE_COMPACT)
+    ? "/clear to continue"
+    : "/compact or /clear to continue";
   let appState = useAppState(hasRemoteAutocompactState);
   let messageResponseValue = useMessageResponseValue();
-  let M =
+  let compactOffNotice =
     !appState && !messageResponseValue && isAutoCompactTurnedOffByUser()
       ? " \xB7 auto-compact is off \xB7 /config to turn it on"
       : "";
-  const height = M || c ? undefined : 1;
+  const height = compactOffNotice || upgradeText ? undefined : 1;
   let children;
-  if (m[1] !== M) {
+  if ($[1] !== compactOffNotice) {
     children = jsxProd_default_2(Text, {
       color: "error",
-      children: ["Context limit reached \xB7 ", g, M, c ? ` \xB7 ${c}` : ""],
+      children: [
+        "Context limit reached \xB7 ",
+        slashHint,
+        compactOffNotice,
+        upgradeText ? ` \xB7 ${upgradeText}` : "",
+      ],
     });
-    m[1] = M;
-    m[2] = children;
-  } else children = m[2];
-  let k;
-  if (m[3] !== height || m[4] !== children) {
-    k = jsxProd_default(MessageResponse, {
+    $[1] = compactOffNotice;
+    $[2] = children;
+  } else children = $[2];
+  let responseElement;
+  if ($[3] !== height || $[4] !== children) {
+    responseElement = jsxProd_default(MessageResponse, {
       height,
       children,
     });
-    m[3] = height;
-    m[4] = children;
-    m[5] = k;
-  } else k = m[5];
-  return k;
+    $[3] = height;
+    $[4] = children;
+    $[5] = responseElement;
+  } else responseElement = $[5];
+  return responseElement;
 }
 //@ chunk-ah34pb7m.js:55539-55781 placement
 function InvalidApiKeyMessage() {
-  let m = w(2);
-  let d;
-  if (m[0] === MEMO_CACHE_SENTINEL) {
-    d = jsxProd_default(Text, {
+  let $ = useMemoCache(2);
+  let errorText;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    errorText = jsxProd_default(Text, {
       color: "error",
       children: INVALID_API_KEY_ERROR_MESSAGE,
     });
-    m[0] = d;
-  } else d = m[0];
-  let c;
-  if (m[1] === MEMO_CACHE_SENTINEL) {
-    c = jsxProd_default(MessageResponse, {
+    $[0] = errorText;
+  } else errorText = $[0];
+  let messageElement;
+  if ($[1] === MEMO_CACHE_SENTINEL) {
+    messageElement = jsxProd_default(MessageResponse, {
       children: jsxProd_default_2(Box, {
         flexDirection: "column",
         children: [
-          d,
-          jsxProd_default(fo, {
+          errorText,
+          jsxProd_default(suspenseTypeExport, {
             fallback: null,
             children: jsxProd_default(KeychainUnlockHint, {}),
           }),
         ],
       }),
     });
-    m[1] = c;
-  } else c = m[1];
-  return c;
+    $[1] = messageElement;
+  } else messageElement = $[1];
+  return messageElement;
 }
 //@ chunk-ah34pb7m.js:55781-56282 placement
 /**
  * 助手文本块（带首条回复圆点），并向无障碍层报告内容。
  */
 function AssistantTextBlock(props) {
-  let f = w(8);
+  let $ = useMemoCache(8);
   let { text } = props.param;
   let { shouldShowDot, messageId } = props;
-  let h;
-  let M;
-  if (f[0] !== messageId || f[1] !== shouldShowDot || f[2] !== text) {
-    h = () => ({
+  let renderInput;
+  let renderDeps;
+  if ($[0] !== messageId || $[1] !== shouldShowDot || $[2] !== text) {
+    renderInput = () => ({
       requestId: messageId,
       props: {
         text: stripPromptXMLTags(text),
         isFirstOfReply: shouldShowDot,
       },
     });
-    M = [text, shouldShowDot, messageId];
-    f[0] = messageId;
-    f[1] = shouldShowDot;
-    f[2] = text;
-    f[3] = h;
-    f[4] = M;
+    renderDeps = [text, shouldShowDot, messageId];
+    $[0] = messageId;
+    $[1] = shouldShowDot;
+    $[2] = text;
+    $[3] = renderInput;
+    $[4] = renderDeps;
   } else {
-    h = f[3];
-    M = f[4];
+    renderInput = $[3];
+    renderDeps = $[4];
   }
-  let T = actionKeysNamespace.useRenderInput("AssistantMessage", h, M);
-  let text_2 = T.props.text;
-  let k;
-  if (f[5] !== text_2 || f[6] !== props) {
-    k = (b) =>
+  let renderInputHandle = actionKeysNamespace.useRenderInput("AssistantMessage", renderInput, renderDeps);
+  let text_2 = renderInputHandle.props.text;
+  let renderHook;
+  if ($[5] !== text_2 || $[6] !== props) {
+    renderHook = (args) =>
       jsxProd_default(AssistantTextMessage, {
         ...props,
         param:
-          b.props.text === text_2
+          args.props.text === text_2
             ? props.param
             : {
                 ...props.param,
-                text: b.props.text,
+                text: args.props.text,
               },
-        shouldShowDot: b.props.isFirstOfReply,
+        shouldShowDot: args.props.isFirstOfReply,
       });
-    f[5] = text_2;
-    f[6] = props;
-    f[7] = k;
-  } else k = f[7];
-  return actionKeysNamespace.useRenderHook(T, k);
+    $[5] = text_2;
+    $[6] = props;
+    $[7] = renderHook;
+  } else renderHook = $[7];
+  return actionKeysNamespace.useRenderHook(renderInputHandle, renderHook);
 }
 //@ chunk-ah34pb7m.js:56282-60026 fingerprint = AssistantTextMessage (0.412)
 /**
  * 助手文本：空文本/占位不渲染；识别 API 错误文本（余额不足、API_TIMEOUT_MS 超时、Opus 高需求、prompt too long、未登录等）显示为错误提示；否则 Markdown 渲染，前面加 ● 圆点（shouldShowDot）。
  */
 function AssistantTextMessage(props) {
-  let $ = w(55);
+  let $ = useMemoCache(55);
   let {
     param,
     addMargin,
@@ -233,13 +244,13 @@ function AssistantTextMessage(props) {
     onRateLimitAutoQueueContinue,
   } = props;
   let { text } = param;
-  let E = isSessionFailureNotice === undefined ? false : isSessionFailureNotice;
+  let sessionFailureNotice = isSessionFailureNotice === undefined ? false : isSessionFailureNotice;
   let messageResponseValue = useMessageResponseValue();
-  let L = shouldShowNotice(verbose) && !messageResponseValue;
+  let showNotice = shouldShowNotice(verbose) && !messageResponseValue;
   if (isEmptyMessageText(text)) {
     return null;
   }
-  if (L && text === API_REQUEST_ABORTED_MESSAGE) {
+  if (showNotice && text === API_REQUEST_ABORTED_MESSAGE) {
     let row;
     if ($[0] === MEMO_CACHE_SENTINEL) {
       row = interruptedRow({
@@ -247,41 +258,41 @@ function AssistantTextMessage(props) {
       });
       $[0] = row;
     } else row = $[0];
-    let U;
+    let noticeRowElement;
     if ($[1] !== addMargin || $[2] !== row) {
-      U = jsxProd_default(NoticeRowMessage, {
+      noticeRowElement = jsxProd_default(NoticeRowMessage, {
         row,
         addMargin,
       });
       $[1] = addMargin;
       $[2] = row;
-      $[3] = U;
-    } else U = $[3];
-    return U;
+      $[3] = noticeRowElement;
+    } else noticeRowElement = $[3];
+    return noticeRowElement;
   }
-  if (L && API_ERROR_NOTICE_TEXTS.has(text)) {
+  if (showNotice && API_ERROR_NOTICE_TEXTS.has(text)) {
     let row;
     if ($[4] !== text) {
       row = buildApiErrorRow(text);
       $[4] = text;
       $[5] = row;
     } else row = $[5];
-    let U;
+    let errorTextElement;
     if ($[6] !== addMargin || $[7] !== row) {
-      U = jsxProd_default(NoticeRowMessage, {
+      errorTextElement = jsxProd_default(NoticeRowMessage, {
         row,
         addMargin,
       });
       $[6] = addMargin;
       $[7] = row;
-      $[8] = U;
-    } else U = $[8];
-    return U;
+      $[8] = errorTextElement;
+    } else errorTextElement = $[8];
+    return errorTextElement;
   }
   if (isRateLimitText(text)) {
-    let W;
+    let rateLimitMessageElement;
     if ($[9] !== onOpenRateLimitOptions || $[10] !== onRateLimitAutoQueueContinue || $[11] !== text) {
-      W = jsxProd_default(RateLimitMessage, {
+      rateLimitMessageElement = jsxProd_default(RateLimitMessage, {
         text,
         onOpenRateLimitOptions,
         onRateLimitAutoQueueContinue,
@@ -289,21 +300,21 @@ function AssistantTextMessage(props) {
       $[9] = onOpenRateLimitOptions;
       $[10] = onRateLimitAutoQueueContinue;
       $[11] = text;
-      $[12] = W;
-    } else W = $[12];
-    return W;
+      $[12] = rateLimitMessageElement;
+    } else rateLimitMessageElement = $[12];
+    return rateLimitMessageElement;
   }
   switch (text) {
     case NO_RESPONSE_REQUESTED: {
       return null;
     }
     case PROMPT_TOO_LONG_ERROR_MESSAGE: {
-      let W;
+      let contextLimitHintElement;
       if ($[13] === MEMO_CACHE_SENTINEL) {
-        W = jsxProd_default(ContextLimitHint, {});
-        $[13] = W;
-      } else W = $[13];
-      return W;
+        contextLimitHintElement = jsxProd_default(ContextLimitHint, {});
+        $[13] = contextLimitHintElement;
+      } else contextLimitHintElement = $[13];
+      return contextLimitHintElement;
     }
     case CREDIT_BALANCE_TOO_LOW_ERROR_MESSAGE: {
       let t2;
@@ -424,125 +435,131 @@ function AssistantTextMessage(props) {
       return t3;
     }
     case FABLE_HIGH_LOAD_MESSAGE: {
-      let W;
+      let highDemandNoticeElement;
       if ($[23] === MEMO_CACHE_SENTINEL) {
-        W = jsxProd_default(HighDemandNotice, {});
-        $[23] = W;
-      } else W = $[23];
-      return W;
+        highDemandNoticeElement = jsxProd_default(HighDemandNotice, {});
+        $[23] = highDemandNoticeElement;
+      } else highDemandNoticeElement = $[23];
+      return highDemandNoticeElement;
     }
     case API_REQUEST_ABORTED_MESSAGE: {
-      let W;
+      let rejectedToolUseMessageElement;
       if ($[24] === MEMO_CACHE_SENTINEL) {
-        W = jsxProd_default(RejectedToolUseMessage, {});
-        $[24] = W;
-      } else W = $[24];
-      return W;
+        rejectedToolUseMessageElement = jsxProd_default(RejectedToolUseMessage, {});
+        $[24] = rejectedToolUseMessageElement;
+      } else rejectedToolUseMessageElement = $[24];
+      return rejectedToolUseMessageElement;
     }
     default: {
       if (text.startsWith(`${PROMPT_TOO_LONG_ERROR_MESSAGE} \xB7 `)) {
-        let W;
+        let hintElement;
         if ($[25] === MEMO_CACHE_SENTINEL) {
-          W = getUpgradeMessage("warning");
-          $[25] = W;
-        } else W = $[25];
-        let K = W;
-        let U;
+          hintElement = getUpgradeMessage("warning");
+          $[25] = hintElement;
+        } else hintElement = $[25];
+        let statusElement = hintElement;
+        let containerElement;
         if ($[26] !== text) {
-          U = jsxProd_default(MessageResponse, {
+          containerElement = jsxProd_default(MessageResponse, {
             children: jsxProd_default_2(Text, {
               color: "error",
-              children: [text, " \xB7 /clear to start fresh", K ? ` \xB7 ${K}` : ""],
+              children: [text, " \xB7 /clear to start fresh", statusElement ? ` \xB7 ${statusElement}` : ""],
             }),
           });
           $[26] = text;
-          $[27] = U;
-        } else U = $[27];
-        return U;
+          $[27] = containerElement;
+        } else containerElement = $[27];
+        return containerElement;
       }
       if (hasInvalidCredentialPrefix(text) || (isApiError && isNoGatewayHint(text))) {
-        if (L) {
+        if (showNotice) {
           let row;
           if ($[28] !== text) {
             row = buildApiErrorRow(text);
             $[28] = text;
             $[29] = row;
           } else row = $[29];
-          let U;
+          let rowElement;
           if ($[30] !== addMargin || $[31] !== row) {
-            U = jsxProd_default(NoticeRowMessage, {
+            rowElement = jsxProd_default(NoticeRowMessage, {
               row,
               addMargin,
             });
             $[30] = addMargin;
             $[31] = row;
-            $[32] = U;
-          } else U = $[32];
-          return U;
+            $[32] = rowElement;
+          } else rowElement = $[32];
+          return rowElement;
         }
-        let W;
+        let columnElement;
         if ($[33] !== text) {
-          W = jsxProd_default(MessageResponse, {
+          columnElement = jsxProd_default(MessageResponse, {
             children: jsxProd_default(Text, {
               color: "error",
               children: text,
             }),
           });
           $[33] = text;
-          $[34] = W;
-        } else W = $[34];
-        return W;
+          $[34] = columnElement;
+        } else columnElement = $[34];
+        return columnElement;
       }
       if (isApiError || startsWithApiErrorPrefix(text) || isClaudeAiOriginLink(text)) {
-        if (L) {
+        if (showNotice) {
           let row;
-          if ($[35] !== E || $[36] !== text) {
+          if ($[35] !== sessionFailureNotice || $[36] !== text) {
             row = buildApiErrorRow(text, {
-              whole: E,
+              whole: sessionFailureNotice,
             });
-            $[35] = E;
+            $[35] = sessionFailureNotice;
             $[36] = text;
             $[37] = row;
           } else row = $[37];
-          let U;
+          let dialogElement;
           if ($[38] !== addMargin || $[39] !== row) {
-            U = jsxProd_default(NoticeRowMessage, {
+            dialogElement = jsxProd_default(NoticeRowMessage, {
               row,
               addMargin,
             });
             $[38] = addMargin;
             $[39] = row;
-            $[40] = U;
-          } else U = $[40];
-          return U;
+            $[40] = dialogElement;
+          } else dialogElement = $[40];
+          return dialogElement;
         }
-        const linkHref = E
+        const linkHref = sessionFailureNotice
           ? noopLinkHref
           : apiErrorKind === "verification_required"
             ? safeVerificationUrl
             : undefined;
-        let U;
-        if ($[41] !== addMargin || $[42] !== E || $[43] !== linkHref || $[44] !== text || $[45] !== verbose) {
-          U = jsxProd_default(AssistantErrorText, {
+        let assistantErrorTextElement;
+        if (
+          $[41] !== addMargin ||
+          $[42] !== sessionFailureNotice ||
+          $[43] !== linkHref ||
+          $[44] !== text ||
+          $[45] !== verbose
+        ) {
+          assistantErrorTextElement = jsxProd_default(AssistantErrorText, {
             text,
             verbose,
-            whole: E,
+            whole: sessionFailureNotice,
             addMargin,
             linkHref,
           });
           $[41] = addMargin;
-          $[42] = E;
+          $[42] = sessionFailureNotice;
           $[43] = linkHref;
           $[44] = text;
           $[45] = verbose;
-          $[46] = U;
-        } else U = $[46];
-        return U;
+          $[46] = assistantErrorTextElement;
+        } else assistantErrorTextElement = $[46];
+        return assistantErrorTextElement;
       }
       const marginTop = addMargin ? 1 : 0;
-      let U;
+      let noticeElement;
       if ($[47] !== shouldShowDot) {
-        U =
+        noticeElement =
           shouldShowDot &&
           jsxProd_default(NoSelect, {
             fromLeftEdge: true,
@@ -554,11 +571,11 @@ function AssistantTextMessage(props) {
             }),
           });
         $[47] = shouldShowDot;
-        $[48] = U;
-      } else U = $[48];
-      let V;
+        $[48] = noticeElement;
+      } else noticeElement = $[48];
+      let boxElement;
       if ($[49] !== text) {
-        V = jsxProd_default(Box, {
+        boxElement = jsxProd_default(Box, {
           flexDirection: "column",
           children: jsxProd_default(MarkdownText_2, {
             capProseWidth: true,
@@ -566,20 +583,20 @@ function AssistantTextMessage(props) {
           }),
         });
         $[49] = text;
-        $[50] = V;
-      } else V = $[50];
+        $[50] = boxElement;
+      } else boxElement = $[50];
       let t7;
-      if ($[51] !== marginTop || $[52] !== U || $[53] !== V) {
+      if ($[51] !== marginTop || $[52] !== noticeElement || $[53] !== boxElement) {
         t7 = jsxProd_default_2(Box, {
           alignItems: "flex-start",
           flexDirection: "row",
           marginTop,
           width: "100%",
-          children: [U, V],
+          children: [noticeElement, boxElement],
         });
         $[51] = marginTop;
-        $[52] = U;
-        $[53] = V;
+        $[52] = noticeElement;
+        $[53] = boxElement;
         $[54] = t7;
       } else t7 = $[54];
       return t7;
@@ -591,26 +608,28 @@ function AssistantTextMessage(props) {
  * 某模型（如 Fable）高负载时的提示，建议 /model 切换。
  */
 function HighDemandNotice() {
-  let d = w(7);
+  let $ = useMemoCache(7);
   let mainLoopModel = useMainLoopModel();
-  let c;
-  if (d[0] !== mainLoopModel) {
-    c = isFableFamilyOrPinnedModel(mainLoopModel) ? renderUsageCreditsOnlyModelName(mainLoopModel) : "Fable";
-    d[0] = mainLoopModel;
-    d[1] = c;
-  } else c = d[1];
-  let g;
-  if (d[2] !== c) {
-    g = jsxProd_default_2(Text, {
+  let modelLabel;
+  if ($[0] !== mainLoopModel) {
+    modelLabel = isFableFamilyOrPinnedModel(mainLoopModel)
+      ? renderUsageCreditsOnlyModelName(mainLoopModel)
+      : "Fable";
+    $[0] = mainLoopModel;
+    $[1] = modelLabel;
+  } else modelLabel = $[1];
+  let demandText;
+  if ($[2] !== modelLabel) {
+    demandText = jsxProd_default_2(Text, {
       color: "error",
-      children: ["We are experiencing high demand for", " ", c, "."],
+      children: ["We are experiencing high demand for", " ", modelLabel, "."],
     });
-    d[2] = c;
-    d[3] = g;
-  } else g = d[3];
-  let f;
-  if (d[4] === MEMO_CACHE_SENTINEL) {
-    f = jsxProd_default_2(Text, {
+    $[2] = modelLabel;
+    $[3] = demandText;
+  } else demandText = $[3];
+  let modelLine;
+  if ($[4] === MEMO_CACHE_SENTINEL) {
+    modelLine = jsxProd_default_2(Text, {
       children: [
         "To continue immediately, use /model to switch to",
         " ",
@@ -618,21 +637,21 @@ function HighDemandNotice() {
         " and continue coding.",
       ],
     });
-    d[4] = f;
-  } else f = d[4];
-  let h;
-  if (d[5] !== g) {
-    h = jsxProd_default(MessageResponse, {
+    $[4] = modelLine;
+  } else modelLine = $[4];
+  let noticeElement;
+  if ($[5] !== demandText) {
+    noticeElement = jsxProd_default(MessageResponse, {
       children: jsxProd_default_2(Box, {
         flexDirection: "column",
         gap: 1,
-        children: [g, f],
+        children: [demandText, modelLine],
       }),
     });
-    d[5] = g;
-    d[6] = h;
-  } else h = d[6];
-  return h;
+    $[5] = demandText;
+    $[6] = noticeElement;
+  } else noticeElement = $[6];
+  return noticeElement;
 }
 //@ chunk-ah34pb7m.js:60515-60536 placement
 function noopLinkHref() {
@@ -643,64 +662,64 @@ function noopLinkHref() {
  * 助手错误文本（API 错误、请稍后重试），可折叠显示。
  */
 function AssistantErrorText(props) {
-  let k = w(26);
+  let $ = useMemoCache(26);
   let { text, verbose, whole, addMargin, linkHref } = props;
   let { columns } = useTerminalSize();
   let messageResponseValue = useMessageResponseValue();
-  const x =
+  const displayText =
     text === API_ERROR_MESSAGE_PREFIX
       ? `${API_ERROR_MESSAGE_PREFIX}: Please wait a moment and try again.`
       : text;
-  let b;
-  let E;
-  if (k[0] !== x || k[1] !== verbose || k[2] !== whole) {
-    let trimmed = x.trim();
-    E = !verbose && !whole && trimmed.length > API_ERROR_CONST_1000;
-    b = E ? truncateToLength(trimmed, API_ERROR_CONST_1000) + "\u2026" : trimmed;
-    k[0] = x;
-    k[1] = verbose;
-    k[2] = whole;
-    k[3] = b;
-    k[4] = E;
+  let truncatedText;
+  let isTruncated;
+  if ($[0] !== displayText || $[1] !== verbose || $[2] !== whole) {
+    let trimmed = displayText.trim();
+    isTruncated = !verbose && !whole && trimmed.length > API_ERROR_CONST_1000;
+    truncatedText = isTruncated ? truncateToLength(trimmed, API_ERROR_CONST_1000) + "\u2026" : trimmed;
+    $[0] = displayText;
+    $[1] = verbose;
+    $[2] = whole;
+    $[3] = truncatedText;
+    $[4] = isTruncated;
   } else {
-    b = k[3];
-    E = k[4];
+    truncatedText = $[3];
+    isTruncated = $[4];
   }
-  let children = b;
+  let children = truncatedText;
   if (messageResponseValue) {
-    let N;
-    if (k[5] !== linkHref || k[6] !== children) {
-      N = jsxProd_default(LinkifiedText_2, {
+    let prefixText;
+    if ($[5] !== linkHref || $[6] !== children) {
+      prefixText = jsxProd_default(LinkifiedText_2, {
         color: "warning",
         linkHref,
         children,
       });
-      k[5] = linkHref;
-      k[6] = children;
-      k[7] = N;
-    } else N = k[7];
-    let W;
-    if (k[8] !== E) {
-      W = E && jsxProd_default(CtrlOToExpand, {});
-      k[8] = E;
-      k[9] = W;
-    } else W = k[9];
-    let U;
-    if (k[10] !== N || k[11] !== W) {
-      U = jsxProd_default_2(Box, {
+      $[5] = linkHref;
+      $[6] = children;
+      $[7] = prefixText;
+    } else prefixText = $[7];
+    let headerElement;
+    if ($[8] !== isTruncated) {
+      headerElement = isTruncated && jsxProd_default(CtrlOToExpand, {});
+      $[8] = isTruncated;
+      $[9] = headerElement;
+    } else headerElement = $[9];
+    let bodyElement;
+    if ($[10] !== prefixText || $[11] !== headerElement) {
+      bodyElement = jsxProd_default_2(Box, {
         flexDirection: "column",
-        children: [N, W],
+        children: [prefixText, headerElement],
       });
-      k[10] = N;
-      k[11] = W;
-      k[12] = U;
-    } else U = k[12];
-    return U;
+      $[10] = prefixText;
+      $[11] = headerElement;
+      $[12] = bodyElement;
+    } else bodyElement = $[12];
+    return bodyElement;
   }
   const marginTop = addMargin ? 1 : 0;
-  let W;
-  if (k[13] === MEMO_CACHE_SENTINEL) {
-    W = jsxProd_default(Box, {
+  let hintText;
+  if ($[13] === MEMO_CACHE_SENTINEL) {
+    hintText = jsxProd_default(Box, {
       minWidth: 2,
       children: jsxProd_default(Text, {
         "aria-label": "error:",
@@ -708,128 +727,128 @@ function AssistantErrorText(props) {
         children: BLACK_CIRCLE,
       }),
     });
-    k[13] = W;
-  } else W = k[13];
+    $[13] = hintText;
+  } else hintText = $[13];
   const width = columns - 10;
-  let K;
-  if (k[14] !== linkHref || k[15] !== children) {
-    K = jsxProd_default(LinkifiedText_2, {
+  let linkElement;
+  if ($[14] !== linkHref || $[15] !== children) {
+    linkElement = jsxProd_default(LinkifiedText_2, {
       color: "warning",
       linkHref,
       children,
     });
-    k[14] = linkHref;
-    k[15] = children;
-    k[16] = K;
-  } else K = k[16];
-  let V;
-  if (k[17] !== E) {
-    V = E && jsxProd_default(CtrlOToExpand, {});
-    k[17] = E;
-    k[18] = V;
-  } else V = k[18];
-  let Y;
-  if (k[19] !== width || k[20] !== K || k[21] !== V) {
-    Y = jsxProd_default_2(Box, {
+    $[14] = linkHref;
+    $[15] = children;
+    $[16] = linkElement;
+  } else linkElement = $[16];
+  let containerElement;
+  if ($[17] !== isTruncated) {
+    containerElement = isTruncated && jsxProd_default(CtrlOToExpand, {});
+    $[17] = isTruncated;
+    $[18] = containerElement;
+  } else containerElement = $[18];
+  let rowElement;
+  if ($[19] !== width || $[20] !== linkElement || $[21] !== containerElement) {
+    rowElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       width,
-      children: [K, V],
+      children: [linkElement, containerElement],
     });
-    k[19] = width;
-    k[20] = K;
-    k[21] = V;
-    k[22] = Y;
-  } else Y = k[22];
-  let X;
-  if (k[23] !== marginTop || k[24] !== Y) {
-    X = jsxProd_default_2(Box, {
+    $[19] = width;
+    $[20] = linkElement;
+    $[21] = containerElement;
+    $[22] = rowElement;
+  } else rowElement = $[22];
+  let outerElement;
+  if ($[23] !== marginTop || $[24] !== rowElement) {
+    outerElement = jsxProd_default_2(Box, {
       flexDirection: "row",
       marginTop,
       width: "100%",
-      children: [W, Y],
+      children: [hintText, rowElement],
     });
-    k[23] = marginTop;
-    k[24] = Y;
-    k[25] = X;
-  } else X = k[25];
-  return X;
+    $[23] = marginTop;
+    $[24] = rowElement;
+    $[25] = outerElement;
+  } else outerElement = $[25];
+  return outerElement;
 }
 //@ chunk-ah34pb7m.js:61780-62408 placement
 /**
  * 思考内容块的显示。
  */
 function AssistantThinkingBlock(props) {
-  let T = w(12);
+  let $ = useMemoCache(12);
   let { param, model, addMargin, shouldShowDot, messageId } = props;
   let { thinking } = param;
-  let x;
-  if (T[0] !== thinking) {
-    x = thinking.trim();
-    T[0] = thinking;
-    T[1] = x;
-  } else x = T[1];
-  let k = x;
-  let b;
-  let E;
-  if (T[2] !== messageId || T[3] !== shouldShowDot || T[4] !== k) {
-    b = () => ({
+  let trimmedThinking;
+  if ($[0] !== thinking) {
+    trimmedThinking = thinking.trim();
+    $[0] = thinking;
+    $[1] = trimmedThinking;
+  } else trimmedThinking = $[1];
+  let thinkingText = trimmedThinking;
+  let renderInput;
+  let renderDeps;
+  if ($[2] !== messageId || $[3] !== shouldShowDot || $[4] !== thinkingText) {
+    renderInput = () => ({
       requestId: messageId,
       props: {
-        text: stripPromptXMLTags(k),
+        text: stripPromptXMLTags(thinkingText),
         isFirstOfReply: shouldShowDot,
         isSummary: true,
       },
     });
-    E = [k, shouldShowDot, messageId];
-    T[2] = messageId;
-    T[3] = shouldShowDot;
-    T[4] = k;
-    T[5] = b;
-    T[6] = E;
+    renderDeps = [thinkingText, shouldShowDot, messageId];
+    $[2] = messageId;
+    $[3] = shouldShowDot;
+    $[4] = thinkingText;
+    $[5] = renderInput;
+    $[6] = renderDeps;
   } else {
-    b = T[5];
-    E = T[6];
+    renderInput = $[5];
+    renderDeps = $[6];
   }
-  let B = actionKeysNamespace.useRenderInput("AssistantMessage", b, E);
-  let text = B.props.text;
-  let N;
-  if (T[7] !== addMargin || T[8] !== text || T[9] !== model || T[10] !== k) {
-    N = (W) =>
+  let renderInputHandle = actionKeysNamespace.useRenderInput("AssistantMessage", renderInput, renderDeps);
+  let text = renderInputHandle.props.text;
+  let renderHook;
+  if ($[7] !== addMargin || $[8] !== text || $[9] !== model || $[10] !== thinkingText) {
+    renderHook = (args) =>
       jsxProd_default(AssistantTextWithModel, {
-        text: W.props.text === text ? k : W.props.text,
+        text: args.props.text === text ? thinkingText : args.props.text,
         model,
         addMargin,
-        shouldShowDot: W.props.isFirstOfReply,
+        shouldShowDot: args.props.isFirstOfReply,
       });
-    T[7] = addMargin;
-    T[8] = text;
-    T[9] = model;
-    T[10] = k;
-    T[11] = N;
-  } else N = T[11];
-  return actionKeysNamespace.useRenderHook(B, N);
+    $[7] = addMargin;
+    $[8] = text;
+    $[9] = model;
+    $[10] = thinkingText;
+    $[11] = renderHook;
+  } else renderHook = $[11];
+  return actionKeysNamespace.useRenderHook(renderInputHandle, renderHook);
 }
 //@ chunk-ah34pb7m.js:62408-63074 placement
 /**
  * 带模型标识的助手文本显示（空文本不渲染）。
  */
 function AssistantTextWithModel(props) {
-  let h = w(11);
+  let $ = useMemoCache(11);
   let { text, model, addMargin, shouldShowDot } = props;
-  let M;
-  if (h[0] !== model) {
-    M = () => isQuizzicalShoreModel(model);
-    h[0] = model;
-    h[1] = M;
-  } else M = h[1];
-  let T = renderWithForceUpdate(M);
+  let isQuizzicalShores;
+  if ($[0] !== model) {
+    isQuizzicalShores = () => isQuizzicalShoreModel(model);
+    $[0] = model;
+    $[1] = isQuizzicalShores;
+  } else isQuizzicalShores = $[1];
+  let modelNotice = renderWithForceUpdate(isQuizzicalShores);
   if (text.trim() === "") {
     return null;
   }
   const marginTop = addMargin ? 1 : 0;
-  let k;
-  if (h[2] !== shouldShowDot) {
-    k =
+  let dotElement;
+  if ($[2] !== shouldShowDot) {
+    dotElement =
       shouldShowDot &&
       jsxProd_default(NoSelect, {
         fromLeftEdge: true,
@@ -840,13 +859,13 @@ function AssistantTextWithModel(props) {
           children: BLACK_CIRCLE,
         }),
       });
-    h[2] = shouldShowDot;
-    h[3] = k;
-  } else k = h[3];
-  const hint = T ? undefined : SUMMARY_TAG;
-  let E;
-  if (h[4] !== hint || h[5] !== text) {
-    E = jsxProd_default(Box, {
+    $[2] = shouldShowDot;
+    $[3] = dotElement;
+  } else dotElement = $[3];
+  const hint = modelNotice ? undefined : SUMMARY_TAG;
+  let columnBox;
+  if ($[4] !== hint || $[5] !== text) {
+    columnBox = jsxProd_default(Box, {
       flexDirection: "column",
       flexGrow: 1,
       children: jsxProd_default(MarkdownText_2, {
@@ -855,23 +874,23 @@ function AssistantTextWithModel(props) {
         children: text,
       }),
     });
-    h[4] = hint;
-    h[5] = text;
-    h[6] = E;
-  } else E = h[6];
-  let B;
-  if (h[7] !== marginTop || h[8] !== k || h[9] !== E) {
-    B = jsxProd_default_2(Box, {
+    $[4] = hint;
+    $[5] = text;
+    $[6] = columnBox;
+  } else columnBox = $[6];
+  let rowBox;
+  if ($[7] !== marginTop || $[8] !== dotElement || $[9] !== columnBox) {
+    rowBox = jsxProd_default_2(Box, {
       flexDirection: "row",
       marginTop,
       width: "100%",
-      children: [k, E],
+      children: [dotElement, columnBox],
     });
-    h[7] = marginTop;
-    h[8] = k;
-    h[9] = E;
-    h[10] = B;
-  } else B = h[10];
-  return B;
+    $[7] = marginTop;
+    $[8] = dotElement;
+    $[9] = columnBox;
+    $[10] = rowBox;
+  } else rowBox = $[10];
+  return rowBox;
 }
 export { AssistantTextBlock, AssistantThinkingBlock };

@@ -23,11 +23,11 @@ var AGENT_STAMPING = Symbol("uploadWire.stamping");
  */
 function stampAgentSocketFreeTime(agent) {
   if (!(agent instanceof http.Agent)) return;
-  let n = agent;
-  if (n[AGENT_STAMPING]) return;
-  n[AGENT_STAMPING] = true;
-  n.on("free", (r) => {
-    r[SOCKET_FREED_AT] = performance.now();
+  let httpAgent = agent;
+  if (httpAgent[AGENT_STAMPING]) return;
+  httpAgent[AGENT_STAMPING] = true;
+  httpAgent.on("free", (socket) => {
+    socket[SOCKET_FREED_AT] = performance.now();
   });
 }
 //@ chunk-aepeg2w5.js:802128-802859 placement
@@ -40,35 +40,35 @@ function createUploadWireTransport() {
   let bytesWrittenAtStart;
   return {
     transport: {
-      request(options, y) {
-        let S = options.protocol === "http:";
-        let w = (S ? http : https).request(options, y);
-        stampAgentSocketFreeTime(options.agent ?? (S ? http.globalAgent : https.globalAgent));
-        w.once("socket", (socket_2) => {
+      request(options, callback) {
+        let isHttp = options.protocol === "http:";
+        let req = (isHttp ? http : https).request(options, callback);
+        stampAgentSocketFreeTime(options.agent ?? (isHttp ? http.globalAgent : https.globalAgent));
+        req.once("socket", (socket_2) => {
           socket = socket_2;
           bytesWrittenAtStart = typeof socket_2.bytesWritten === "number" ? socket_2.bytesWritten : undefined;
           wireStats.response_started = false;
-          wireStats.socket_reused = w.reusedSocket === true;
-          let x = socket_2[SOCKET_FREED_AT];
-          if (wireStats.socket_reused && x !== undefined)
-            wireStats.socket_idle_ms = Math.round(performance.now() - x);
-          let P = () => {
-            let F = socket_2.localFamily ?? socket_2.remoteFamily;
-            if (F === "IPv4") wireStats.local_af = 4;
-            else if (F === "IPv6") wireStats.local_af = 6;
+          wireStats.socket_reused = req.reusedSocket === true;
+          let freedAt = socket_2[SOCKET_FREED_AT];
+          if (wireStats.socket_reused && freedAt !== undefined)
+            wireStats.socket_idle_ms = Math.round(performance.now() - freedAt);
+          let recordFamily = () => {
+            let family = socket_2.localFamily ?? socket_2.remoteFamily;
+            if (family === "IPv4") wireStats.local_af = 4;
+            else if (family === "IPv6") wireStats.local_af = 6;
           };
-          if (socket_2.connecting) socket_2.once("connect", P);
-          else P();
+          if (socket_2.connecting) socket_2.once("connect", recordFamily);
+          else recordFamily();
         });
-        w.once("response", () => {
+        req.once("response", () => {
           wireStats.response_started = true;
         });
-        return w;
+        return req;
       },
     },
-    seen: (h) => ({
+    seen: (includeFlushed) => ({
       ...wireStats,
-      ...(h &&
+      ...(includeFlushed &&
         socket !== undefined &&
         bytesWrittenAtStart !== undefined &&
         typeof socket.bytesWritten === "number" && {

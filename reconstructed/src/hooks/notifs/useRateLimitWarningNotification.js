@@ -26,44 +26,44 @@ import { fromEnum } from "../../services/analytics/safeMetadata.js";
  */
 var LIMIT_REACHED_NOTICE_SPEC = {
   id: "limit-reached",
-  deps: (h) => {
+  deps: (noticeState) => {
     let { hasBillingAccess, isTeamOrEnterprise } = billingContextForRateLimit();
     return [
-      h.claudeAiLimits.isUsingOverage,
-      h.claudeAiLimits,
-      h.mainLoopModel,
-      h.addNotification,
+      noticeState.claudeAiLimits.isUsingOverage,
+      noticeState.claudeAiLimits,
+      noticeState.mainLoopModel,
+      noticeState.addNotification,
       hasBillingAccess,
       isTeamOrEnterprise,
     ];
   },
   setup() {
-    let h = false;
+    let hasNotified = false;
     return ({ addNotification, claudeAiLimits, mainLoopModel }) => {
       let { hasBillingAccess, isTeamOrEnterprise } = billingContextForRateLimit();
-      if (claudeAiLimits.isUsingOverage && !h && (!isTeamOrEnterprise || hasBillingAccess)) {
+      if (claudeAiLimits.isUsingOverage && !hasNotified && (!isTeamOrEnterprise || hasBillingAccess)) {
         addNotification({
           key: "limit-reached",
           text: getUsingOverageText(claudeAiLimits, mainLoopModel),
           priority: "immediate",
         });
-        h = true;
-      } else if (!claudeAiLimits.isUsingOverage && h) h = false;
+        hasNotified = true;
+      } else if (!claudeAiLimits.isUsingOverage && hasNotified) hasNotified = false;
     };
   },
 };
 var TENGU_COSMIC_LAKE = "tengu_cosmic_lake";
 var RATE_LIMIT_WARNING_NOTICE_SPEC = {
   id: "rate-limit-warning",
-  deps: (h) => [
-    h.claudeAiLimits,
-    h.mainLoopModel,
-    h.effortValue,
-    h.addNotification,
+  deps: (noticeState) => [
+    noticeState.claudeAiLimits,
+    noticeState.mainLoopModel,
+    noticeState.effortValue,
+    noticeState.addNotification,
     hasSurpassedThreshold("overage"),
   ],
   setup() {
-    let h = null;
+    let lastWarning = null;
     return ({ addNotification, claudeAiLimits, mainLoopModel, effortValue }) => {
       if (claudeAiLimits.rateLimitGraceActive) return;
       let rateLimitWarning = getRateLimitWarning(
@@ -71,16 +71,17 @@ var RATE_LIMIT_WARNING_NOTICE_SPEC = {
         mainLoopModel,
         hasSurpassedThreshold("overage"),
       );
-      if (!rateLimitWarning || rateLimitWarning === h) return;
+      if (!rateLimitWarning || rateLimitWarning === lastWarning) return;
       if (
         claudeAiLimits.status === "allowed_warning" &&
         claudeAiLimits.rateLimitType === "five_hour" &&
         getFeatureValue_CACHED_MAY_BE_STALE(TENGU_COSMIC_LAKE, false)
       )
         return;
-      h = rateLimitWarning;
+      lastWarning = rateLimitWarning;
       let proRunwayTip = getProRunwayTip(claudeAiLimits, mainLoopModel, effortValue);
-      let Be = claudeAiLimits.rateLimitType === "overage" ? getModelSwitchUpsell(mainLoopModel) : null;
+      let modelSwitchUpsell =
+        claudeAiLimits.rateLimitType === "overage" ? getModelSwitchUpsell(mainLoopModel) : null;
       addNotification({
         key: "rate-limit-warning",
         segments: [
@@ -96,10 +97,10 @@ var RATE_LIMIT_WARNING_NOTICE_SPEC = {
                 },
               ]
             : []),
-          ...(Be
+          ...(modelSwitchUpsell
             ? [
                 {
-                  text: ` \xB7 ${Be}`,
+                  text: ` \xB7 ${modelSwitchUpsell}`,
                   dim: true,
                 },
               ]

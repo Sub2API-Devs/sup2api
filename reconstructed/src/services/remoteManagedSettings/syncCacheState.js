@@ -19,25 +19,25 @@ import { NOFOLLOW_NONBLOCK_FLAGS } from "../../utils/fsFlags.js";
  */
 async function readRemoteSettingsSyncStamp() {
   let fs = syncStampPath();
-  let n;
+  let text;
   try {
     if (NOFOLLOW_NONBLOCK_FLAGS === 0 && (await isSymlinkPath(fs))) return;
-    let h = await open(fs, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS);
+    let handle = await open(fs, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS);
     try {
-      let stats = await h.stat();
+      let stats = await handle.stat();
       if (!stats.isFile() || stats.size > MAX_SYNC_STAMP_BYTES) return;
-      n = await h.readFile({
+      text = await handle.readFile({
         encoding: "utf-8",
       });
     } finally {
-      await h.close();
+      await handle.close();
     }
   } catch {
     return;
   }
-  let trimmed = n.trim();
+  let trimmed = text.trim();
   if (!/^\d{1,16}$/.test(trimmed)) return;
-  let s = Number(trimmed);
-  return Number.isFinite(s) ? s : undefined;
+  let seconds = Number(trimmed);
+  return Number.isFinite(seconds) ? seconds : undefined;
 }
 export { readRemoteSettingsSyncStamp };

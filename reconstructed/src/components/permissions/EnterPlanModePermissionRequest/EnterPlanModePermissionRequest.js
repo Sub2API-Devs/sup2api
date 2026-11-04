@@ -9,7 +9,7 @@
  * attribution: callgraph-fingerprint 1, layout 1, fingerprint 1
  */
 import { isConsentRow, modeSwitchRow } from "../consentRows.js";
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import {
   useInputRefusalWindow,
   useRefusalTracker,
@@ -34,17 +34,17 @@ function selectToolPermissionContextMode_3(s) {
   return s.toolPermissionContext.mode;
 }
 //@ chunk-18hwfzwa.js:1344141-1344327 layout
-function enterPlanChoiceToResult(h, x) {
-  switch (h) {
+function enterPlanChoiceToResult(choice, selectedRow) {
+  switch (choice) {
     case "yes": {
-      if (x === null || !isConsentRow(x))
+      if (selectedRow === null || !isConsentRow(selectedRow))
         return {
           behavior: "deny",
         };
       return {
         behavior: "allow",
         updatedInput: {},
-        permissionUpdates: x.applies,
+        permissionUpdates: selectedRow.applies,
       };
     }
     case "no":
@@ -58,13 +58,13 @@ function enterPlanChoiceToResult(h, x) {
  * 进入计划模式确认：说明计划模式会做什么，允许/拒绝并记录 tengu_plan_enter。
  */
 function EnterPlanModePermissionRequest(props) {
-  let $ = w(27);
+  let $ = useMemoCache(27);
   let { payload, answer, wouldTakeAnswer } = props;
   let inputRefusalWindow = useInputRefusalWindow();
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
-  let We;
+  let refuseInput;
   if ($[0] !== inputRefusalWindow || $[1] !== noteRefused || $[2] !== refusedWithin) {
-    We = function ze() {
+    refuseInput = function shouldRefuseInput() {
       if (inputRefusalWindow() || refusedWithin()) {
         noteRefused();
         return true;
@@ -74,19 +74,19 @@ function EnterPlanModePermissionRequest(props) {
     $[0] = inputRefusalWindow;
     $[1] = noteRefused;
     $[2] = refusedWithin;
-    $[3] = We;
-  } else We = $[3];
-  let refuseInput = We;
+    $[3] = refuseInput;
+  } else refuseInput = $[3];
+  let refuseInput_2 = refuseInput;
   let openedAt = useMountTime();
-  let rt = settleKey(epoch);
+  let remountKeyValue = settleKey(epoch);
   let toolPermissionContextMode = useAppState(selectToolPermissionContextMode_3);
-  let At;
+  let memoizedModeRow;
   if ($[4] === MEMO_CACHE_SENTINEL) {
-    At = modeSwitchRow("plan");
-    $[4] = At;
-  } else At = $[4];
-  let It = At;
-  let Ot;
+    memoizedModeRow = modeSwitchRow("plan");
+    $[4] = memoizedModeRow;
+  } else memoizedModeRow = $[4];
+  let planModeRow = memoizedModeRow;
+  let onChangeHandler;
   if (
     $[5] !== answer ||
     $[6] !== inputRefusalWindow ||
@@ -95,7 +95,7 @@ function EnterPlanModePermissionRequest(props) {
     $[9] !== toolPermissionContextMode ||
     $[10] !== wouldTakeAnswer
   ) {
-    Ot = (value) => {
+    onChangeHandler = (value) => {
       if (inputRefusalWindow() || refusedWithin()) {
         noteRefused();
         return;
@@ -103,13 +103,13 @@ function EnterPlanModePermissionRequest(props) {
       if (!wouldTakeAnswer()) {
         return;
       }
-      if (value === "yes" && It !== null) {
+      if (value === "yes" && planModeRow !== null) {
         logEvent("tengu_plan_enter", {
           entryMethod: lit_2("tool"),
         });
         handlePlanModeTransition(toolPermissionContextMode, "plan");
       }
-      answer(enterPlanChoiceToResult(value, It));
+      answer(enterPlanChoiceToResult(value, planModeRow));
     };
     $[5] = answer;
     $[6] = inputRefusalWindow;
@@ -117,9 +117,9 @@ function EnterPlanModePermissionRequest(props) {
     $[8] = refusedWithin;
     $[9] = toolPermissionContextMode;
     $[10] = wouldTakeAnswer;
-    $[11] = Ot;
-  } else Ot = $[11];
-  let Dt = Ot;
+    $[11] = onChangeHandler;
+  } else onChangeHandler = $[11];
+  let changeSelection = onChangeHandler;
   let t2;
   if ($[12] === MEMO_CACHE_SENTINEL) {
     t2 = jsxProd_default(Text, {
@@ -170,10 +170,10 @@ function EnterPlanModePermissionRequest(props) {
   } else t4 = $[14];
   let onConfirm;
   let onCancel;
-  if ($[15] !== Dt) {
-    onConfirm = () => Dt("yes");
-    onCancel = () => Dt("no");
-    $[15] = Dt;
+  if ($[15] !== changeSelection) {
+    onConfirm = () => changeSelection("yes");
+    onCancel = () => changeSelection("no");
+    $[15] = changeSelection;
     $[16] = onConfirm;
     $[17] = onCancel;
   } else {
@@ -182,8 +182,8 @@ function EnterPlanModePermissionRequest(props) {
   }
   let children;
   if (
-    $[18] !== rt.remountKey ||
-    $[19] !== refuseInput ||
+    $[18] !== remountKeyValue.remountKey ||
+    $[19] !== refuseInput_2 ||
     $[20] !== openedAt ||
     $[21] !== onConfirm ||
     $[22] !== onCancel
@@ -201,21 +201,21 @@ function EnterPlanModePermissionRequest(props) {
           children: jsxProd_default(
             ConfirmSelect,
             {
-              refuseInput,
+              refuseInput: refuseInput_2,
               openedAt,
               hideIndexes: true,
-              confirmLabel: It !== null ? It.node : "Yes, enter plan mode",
+              confirmLabel: planModeRow !== null ? planModeRow.node : "Yes, enter plan mode",
               cancelLabel: "No, start implementing now",
               onConfirm,
               onCancel,
             },
-            rt.remountKey,
+            remountKeyValue.remountKey,
           ),
         }),
       ],
     });
-    $[18] = rt.remountKey;
-    $[19] = refuseInput;
+    $[18] = remountKeyValue.remountKey;
+    $[19] = refuseInput_2;
     $[20] = openedAt;
     $[21] = onConfirm;
     $[22] = onCancel;

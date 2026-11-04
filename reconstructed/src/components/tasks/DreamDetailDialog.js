@@ -15,7 +15,7 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
 import { plural } from "../../utils/stringUtils.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useElapsedTicker, useConfirmationKeys } from "../ConfirmationPrompt.js";
 import { FocusColumn } from "../design-system/FocusColumn.js";
 import { Dialog } from "../design-system/Dialog.js";
@@ -54,13 +54,13 @@ var MAX_VISIBLE_TURNS = 6;
  * 记忆整理（dream）任务详情：涉及的会话与文件数、当前步骤与工具活动。
  */
 function DreamDetailDialog(props) {
-  let $ = w(59);
+  let $ = useMemoCache(59);
   let { task, onDone, onBack, onKill } = props;
   let elapsedTime = useElapsedTicker(task.startTime, task.status === "running", 1000, 0, task.endTime);
   const onKill_2 = task.status === "running" ? onKill : undefined;
-  let He;
+  let confirmationHandlers;
   if ($[0] !== onBack || $[1] !== onDone || $[2] !== onKill_2) {
-    He = {
+    confirmationHandlers = {
       onClose: onDone,
       onBack,
       onKill: onKill_2,
@@ -68,19 +68,19 @@ function DreamDetailDialog(props) {
     $[0] = onBack;
     $[1] = onDone;
     $[2] = onKill_2;
-    $[3] = He;
-  } else He = $[3];
-  let handleKeyDown = useConfirmationKeys(He);
-  let ze;
-  let Xe;
-  let rt;
+    $[3] = confirmationHandlers;
+  } else confirmationHandlers = $[3];
+  let handleKeyDown = useConfirmationKeys(confirmationHandlers);
+  let BoxComponent;
+  let DialogComponent;
+  let FocusColumnComponent;
   let color;
   let inputGuide;
   let onKeyDown;
   let flexDirection;
   let gap;
-  let Dt;
-  let Lt;
+  let statusElement;
+  let turnsElement;
   let title;
   let subtitle;
   let onCancel;
@@ -98,9 +98,9 @@ function DreamDetailDialog(props) {
     let visibleTurns = task.turns.filter(hasTurnText);
     let shown = visibleTurns.slice(-MAX_VISIBLE_TURNS);
     let hidden = visibleTurns.length - shown.length;
-    rt = FocusColumn;
+    FocusColumnComponent = FocusColumn;
     onKeyDown = handleKeyDown;
-    Xe = Dialog;
+    DialogComponent = Dialog;
     title = "Memory consolidation";
     const sessionsReviewing = task.sessionsReviewing;
     let t18;
@@ -150,7 +150,7 @@ function DreamDetailDialog(props) {
       $[36] = showStop;
       $[37] = inputGuide;
     } else inputGuide = $[37];
-    ze = Box;
+    BoxComponent = Box;
     flexDirection = "column";
     gap = 1;
     let t20;
@@ -162,7 +162,7 @@ function DreamDetailDialog(props) {
       $[38] = t20;
     } else t20 = $[38];
     if ($[39] !== task.status) {
-      Dt = jsxProd_default_2(Text, {
+      statusElement = jsxProd_default_2(Text, {
         children: [
           t20,
           " ",
@@ -183,9 +183,9 @@ function DreamDetailDialog(props) {
         ],
       });
       $[39] = task.status;
-      $[40] = Dt;
-    } else Dt = $[40];
-    Lt =
+      $[40] = statusElement;
+    } else statusElement = $[40];
+    turnsElement =
       shown.length === 0
         ? jsxProd_default(Text, {
             dimColor: true,
@@ -210,51 +210,57 @@ function DreamDetailDialog(props) {
     $[10] = task.sessionsReviewing;
     $[11] = task.status;
     $[12] = task.turns;
-    $[13] = ze;
-    $[14] = Xe;
-    $[15] = rt;
+    $[13] = BoxComponent;
+    $[14] = DialogComponent;
+    $[15] = FocusColumnComponent;
     $[16] = color;
     $[17] = inputGuide;
     $[18] = onKeyDown;
     $[19] = flexDirection;
     $[20] = gap;
-    $[21] = Dt;
-    $[22] = Lt;
+    $[21] = statusElement;
+    $[22] = turnsElement;
     $[23] = title;
     $[24] = subtitle;
     $[25] = onCancel;
   } else {
-    ze = $[13];
-    Xe = $[14];
-    rt = $[15];
+    BoxComponent = $[13];
+    DialogComponent = $[14];
+    FocusColumnComponent = $[15];
     color = $[16];
     inputGuide = $[17];
     onKeyDown = $[18];
     flexDirection = $[19];
     gap = $[20];
-    Dt = $[21];
-    Lt = $[22];
+    statusElement = $[21];
+    turnsElement = $[22];
     title = $[23];
     subtitle = $[24];
     onCancel = $[25];
   }
   let children;
-  if ($[41] !== ze || $[42] !== flexDirection || $[43] !== gap || $[44] !== Dt || $[45] !== Lt) {
-    children = jsxProd_default_2(ze, {
+  if (
+    $[41] !== BoxComponent ||
+    $[42] !== flexDirection ||
+    $[43] !== gap ||
+    $[44] !== statusElement ||
+    $[45] !== turnsElement
+  ) {
+    children = jsxProd_default_2(BoxComponent, {
       flexDirection,
       gap,
-      children: [Dt, Lt],
+      children: [statusElement, turnsElement],
     });
-    $[41] = ze;
+    $[41] = BoxComponent;
     $[42] = flexDirection;
     $[43] = gap;
-    $[44] = Dt;
-    $[45] = Lt;
+    $[44] = statusElement;
+    $[45] = turnsElement;
     $[46] = children;
   } else children = $[46];
   let children_2;
   if (
-    $[47] !== Xe ||
+    $[47] !== DialogComponent ||
     $[48] !== color ||
     $[49] !== inputGuide ||
     $[50] !== children ||
@@ -262,7 +268,7 @@ function DreamDetailDialog(props) {
     $[52] !== subtitle ||
     $[53] !== onCancel
   ) {
-    children_2 = jsxProd_default(Xe, {
+    children_2 = jsxProd_default(DialogComponent, {
       title,
       subtitle,
       onCancel,
@@ -270,7 +276,7 @@ function DreamDetailDialog(props) {
       inputGuide,
       children,
     });
-    $[47] = Xe;
+    $[47] = DialogComponent;
     $[48] = color;
     $[49] = inputGuide;
     $[50] = children;
@@ -279,17 +285,17 @@ function DreamDetailDialog(props) {
     $[53] = onCancel;
     $[54] = children_2;
   } else children_2 = $[54];
-  let Ao;
-  if ($[55] !== rt || $[56] !== onKeyDown || $[57] !== children_2) {
-    Ao = jsxProd_default(rt, {
+  let dialogElement;
+  if ($[55] !== FocusColumnComponent || $[56] !== onKeyDown || $[57] !== children_2) {
+    dialogElement = jsxProd_default(FocusColumnComponent, {
       onKeyDown,
       children: children_2,
     });
-    $[55] = rt;
+    $[55] = FocusColumnComponent;
     $[56] = onKeyDown;
     $[57] = children_2;
-    $[58] = Ao;
-  } else Ao = $[58];
-  return Ao;
+    $[58] = dialogElement;
+  } else dialogElement = $[58];
+  return dialogElement;
 }
 export { DreamDetailDialog };

@@ -9,7 +9,7 @@
  * attribution: placement 2
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import { zodStrictObject, booleanSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { saveGlobalConfigDurably } from "../config.js";
 
 //@ chunk-q3c4ejfd.js:3352-3392 placement
@@ -18,32 +18,32 @@ import { saveGlobalConfigDurably } from "../config.js";
  */
 var chromeSettingsInputSchema = DoctorLazy(() =>
   zodStrictObject({
-    enabledByDefault: M(),
+    enabledByDefault: booleanSchema(),
   }),
 );
 //@ chunk-q3c4ejfd.js:3392-3877 placement
-async function applyChromeSettingsEdit(o, a) {
-  let t = chromeSettingsInputSchema().safeParse(o);
-  if (!t.success) {
-    let e = t.error.issues[0];
+async function applyChromeSettingsEdit(input, storageV5) {
+  let parseResult = chromeSettingsInputSchema().safeParse(input);
+  if (!parseResult.success) {
+    let issue = parseResult.error.issues[0];
     return {
       ok: false,
-      error: e
-        ? `Not a Claude in Chrome settings edit (${e.path.map(String).join(".") || "edit"}: ${e.message}).`
+      error: issue
+        ? `Not a Claude in Chrome settings edit (${issue.path.map(String).join(".") || "edit"}: ${issue.message}).`
         : "Not a Claude in Chrome settings edit.",
     };
   }
-  let r = t.data;
+  let edit = parseResult.data;
   if (
     !(await saveGlobalConfigDurably(
-      (e) =>
-        e.claudeInChromeDefaultEnabled === r.enabledByDefault
-          ? e
+      (config) =>
+        config.claudeInChromeDefaultEnabled === edit.enabledByDefault
+          ? config
           : {
-              ...e,
-              claudeInChromeDefaultEnabled: r.enabledByDefault,
+              ...config,
+              claudeInChromeDefaultEnabled: edit.enabledByDefault,
             },
-      a,
+      storageV5,
     ))
   )
     return {
@@ -52,6 +52,7 @@ async function applyChromeSettingsEdit(o, a) {
     };
   return {
     ok: true,
-    written: r,
+    written: edit,
   };
 }
+export { applyChromeSettingsEdit };

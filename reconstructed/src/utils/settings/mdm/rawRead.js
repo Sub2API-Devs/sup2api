@@ -17,6 +17,7 @@ import {
   REG_QUERY_MAX_BUFFER,
 } from "./wslRegistry.js";
 import { SETTINGS, WINDOWS_REGISTRY_KEY_PATH_HKLM, WINDOWS_REGISTRY_KEY_PATH_HKCU } from "./constants.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-qrhwndg8.js:297-395 sole-consumer
 class RawReadRunner {
@@ -30,26 +31,29 @@ class RawReadRunner {
   }
 }
 //@ chunk-qrhwndg8.js:395-407 sole-consumer
-var rawReadRunner = new RawReadRunner();
+var rawReadRunner; // deferred: uses RawReadRunner of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-qrhwndg8.js:395", () => {
+  rawReadRunner = new RawReadRunner();
+});
 //@ chunk-qrhwndg8.js:407-870 affinity
-function classifyExecResult(e) {
-  if (!e)
+function classifyExecResult(error) {
+  if (!error)
     return {
       status: "ok",
       exitCode: 0,
       errno: null,
       signal: null,
     };
-  let t = e;
-  let signal = typeof t.signal === "string" && t.signal ? t.signal : null;
-  if (typeof t.code === "string")
+  let result = error;
+  let signal = typeof result.signal === "string" && result.signal ? result.signal : null;
+  if (typeof result.code === "string")
     return {
       status: "spawn_error",
       exitCode: null,
-      errno: t.code,
+      errno: result.code,
       signal: null,
     };
-  if (t.killed === true)
+  if (result.killed === true)
     return {
       status: "timeout",
       exitCode: null,
@@ -65,13 +69,13 @@ function classifyExecResult(e) {
     };
   return {
     status: "exited",
-    exitCode: typeof t.code === "number" ? t.code : null,
+    exitCode: typeof result.code === "number" ? result.code : null,
     errno: null,
     signal: null,
   };
 }
 //@ chunk-qrhwndg8.js:870-1244 callgraph-fingerprint = execFilePromise (0.388)
-function execFilePromise(cmd, args, n) {
+function execFilePromise(cmd, args, maxBuffer) {
   let now = Date.now();
   return new Promise((resolve) => {
     try {
@@ -82,15 +86,15 @@ function execFilePromise(cmd, args, n) {
           encoding: "utf-8",
           timeout: REG_QUERY_TIMEOUT_MS,
           windowsHide: true,
-          ...(n !== undefined && {
-            maxBuffer: n,
+          ...(maxBuffer !== undefined && {
+            maxBuffer,
           }),
         },
-        (u, stdout, l) => {
+        (error, stdout, stderr) => {
           resolve({
             stdout: stdout ?? "",
-            stderr: l ?? "",
-            ...classifyExecResult(u),
+            stderr: stderr ?? "",
+            ...classifyExecResult(error),
             durationMs: Date.now() - now,
           });
         },
@@ -110,21 +114,23 @@ function execFilePromise(cmd, args, n) {
   });
 }
 //@ chunk-qrhwndg8.js:1244-1442 layout
-function summarizeRegQueryOutcome(e) {
+function summarizeRegQueryOutcome(outcome) {
   return {
-    status: e.status,
-    exitCode: e.exitCode,
-    errno: e.errno,
-    signal: e.signal,
-    durationMs: e.durationMs,
+    status: outcome.status,
+    exitCode: outcome.exitCode,
+    errno: outcome.errno,
+    signal: outcome.signal,
+    durationMs: outcome.durationMs,
     answered:
-      e.status === "ok" ||
-      (e.status === "exited" && e.exitCode === 1 && e.stderr.includes(REG_KEY_NOT_FOUND_TEXT)),
+      outcome.status === "ok" ||
+      (outcome.status === "exited" &&
+        outcome.exitCode === 1 &&
+        outcome.stderr.includes(REG_KEY_NOT_FOUND_TEXT)),
   };
 }
 //@ chunk-qrhwndg8.js:1442-1535 layout
-function isStdioMaxBufferError(e) {
-  return e.status === "spawn_error" && e.errno === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
+function isStdioMaxBufferError(outcome) {
+  return outcome.status === "spawn_error" && outcome.errno === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
 }
 //@ chunk-qrhwndg8.js:1535-1683 facade-exports = consumeRawReadResult (0.602)
 /**
@@ -146,18 +152,21 @@ function fireRawRead() {
 }
 //@ chunk-qrhwndg8.js:1683-1991 fingerprint = fireRawRead (0.419)
 async function fireRawRead_2(cmd) {
-  let t = (o) => execFilePromise(cmd, ["query", o, "/v", SETTINGS], REG_QUERY_MAX_BUFFER);
-  let [n, s] = await Promise.all([t(WINDOWS_REGISTRY_KEY_PATH_HKLM), t(WINDOWS_REGISTRY_KEY_PATH_HKCU)]);
+  let run = (key) => execFilePromise(cmd, ["query", key, "/v", SETTINGS], REG_QUERY_MAX_BUFFER);
+  let [hklm, hkcu] = await Promise.all([
+    run(WINDOWS_REGISTRY_KEY_PATH_HKLM),
+    run(WINDOWS_REGISTRY_KEY_PATH_HKCU),
+  ]);
   return {
     plistStdouts: null,
-    hklmStdout: n.status === "ok" ? n.stdout : null,
-    ...(isStdioMaxBufferError(n) && {
+    hklmStdout: hklm.status === "ok" ? hklm.stdout : null,
+    ...(isStdioMaxBufferError(hklm) && {
       hklmUnreadReason: `the value exceeds ${REG_QUERY_MAX_BUFFER / 1048576} MiB`,
     }),
-    hkcuStdout: s.status === "ok" ? s.stdout : null,
+    hkcuStdout: hkcu.status === "ok" ? hkcu.stdout : null,
     outcomes: {
-      hklm: summarizeRegQueryOutcome(n),
-      hkcu: summarizeRegQueryOutcome(s),
+      hklm: summarizeRegQueryOutcome(hklm),
+      hkcu: summarizeRegQueryOutcome(hkcu),
     },
   };
 }

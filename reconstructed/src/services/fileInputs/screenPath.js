@@ -20,36 +20,36 @@ import { getStageFileRoot } from "../../utils/stageFileRoots.js";
 //@ chunk-5rtc26v0.js:342-381 placement
 var BIDI_CONTROL_PATTERN = /[\u202a-\u202e\u2066-\u2069]/;
 //@ chunk-5rtc26v0.js:381-484 placement
-function isSafeFileName(e) {
+function isSafeFileName(name) {
   return (
-    e !== "" &&
-    e !== "." &&
-    e !== ".." &&
-    e.length <= 255 &&
-    !/[/\\\p{Cc}]/u.test(e) &&
-    !BIDI_CONTROL_PATTERN.test(e)
+    name !== "" &&
+    name !== "." &&
+    name !== ".." &&
+    name.length <= 255 &&
+    !/[/\\\p{Cc}]/u.test(name) &&
+    !BIDI_CONTROL_PATTERN.test(name)
   );
 }
 //@ chunk-5rtc26v0.js:484-518 placement
-function screenUploadPath(e, r) {
-  return validateUploadPath(e, r);
+function screenUploadPath(filePath, context) {
+  return validateUploadPath(filePath, context);
 }
 //@ chunk-5rtc26v0.js:518-952 placement
-function assertPathNotBlocked(e, r, o) {
-  let t = [expandPath(e), r.realPath];
-  if (t.some((a) => isRestrictedReadBlocked(a, o)))
-    throw t.some((s) =>
-      isRestrictedReadBlocked(s, {
-        ...o,
+function assertPathNotBlocked(path, resolved, permissionContext) {
+  let candidates = [expandPath(path), resolved.realPath];
+  if (candidates.some((candidate) => isRestrictedReadBlocked(candidate, permissionContext)))
+    throw candidates.some((candidate) =>
+      isRestrictedReadBlocked(candidate, {
+        ...permissionContext,
         blockReadsOutsideWorkingDirectories: false,
       }),
     )
       ? new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `read not allowed under --restricted: ${e}`,
+          `read not allowed under --restricted: ${path}`,
           "fileInputs/screenPath: restricted mode refused a file the upload screen passed",
         )
       : new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `read not allowed under permissions.blockReadsOutsideWorkingDirectories: ${e}`,
+          `read not allowed under permissions.blockReadsOutsideWorkingDirectories: ${path}`,
           "fileInputs/screenPath: read block refused a file the upload screen passed",
         );
 }
@@ -58,25 +58,25 @@ function pathRejectionKind(error) {
   return error instanceof CredentialPathError ? "credential_name" : "path_rejected";
 }
 //@ chunk-5rtc26v0.js:1026-1366 placement
-function credentialFileRefusalMessage(e, r, nothingDone) {
-  let t =
-    getIsRemoteMode(r) === undefined
+function credentialFileRefusalMessage(path, context, nothingDone) {
+  let advice =
+    getIsRemoteMode(context) === undefined
       ? "Tell the user it was not attached."
       : "If the user wants it sent, ask them to attach it to the chat themselves.";
-  return `Cannot attach "${e}": its name or folder is one that credentials are kept under (such as .env, a .pem or .key file, or .ssh), so it is not sent on Claude's word alone. ${t} ${nothingDone}`;
+  return `Cannot attach "${path}": its name or folder is one that credentials are kept under (such as .env, a .pem or .key file, or .ssh), so it is not sent on Claude's word alone. ${advice} ${nothingDone}`;
 }
 //@ chunk-5rtc26v0.js:1366-1761 placement
-function fileNotSharedMessage(e, r, nothingDone) {
-  let isRemoteMode = getIsRemoteMode(r);
-  let a =
+function fileNotSharedMessage(path, context, nothingDone) {
+  let isRemoteMode = getIsRemoteMode(context);
+  let advice =
     isRemoteMode === undefined
       ? "Ask the user to share the file with this session, or to add its folder with /add-dir."
       : `Files the user attached to this chat are usually in ${isRemoteMode}; give the full path of one of those. If the file is not there, ask the user to attach it to the chat.`;
-  return `Cannot attach "${e}": only files this session is allowed to read can be attached. ${a} ${nothingDone}`;
+  return `Cannot attach "${path}": only files this session is allowed to read can be attached. ${advice} ${nothingDone}`;
 }
 //@ chunk-5rtc26v0.js:1761-1837 placement = getIsRemoteMode (1)
-function getIsRemoteMode(e) {
-  if (e.isRemoteMode !== true) return;
+function getIsRemoteMode(context) {
+  if (context.isRemoteMode !== true) return;
   try {
     return getStageFileRoot();
   } catch {
@@ -94,25 +94,25 @@ var ATTACH_FAILURE_KINDS = {
   read_failed: true,
 };
 //@ chunk-5rtc26v0.js:1936-1980 placement
-function isAttachFailureKind(e) {
-  return Object.hasOwn(ATTACH_FAILURE_KINDS, e);
+function isAttachFailureKind(kind) {
+  return Object.hasOwn(ATTACH_FAILURE_KINDS, kind);
 }
 //@ chunk-5rtc26v0.js:1980-2615 placement
-function attachFailureMessage(e, r, o, nothingDone) {
-  switch (r) {
+function attachFailureMessage(path, kind, maxBytes, nothingDone) {
+  switch (kind) {
     case "too_large":
       return {
-        error: `Cannot attach "${e}": files over ${o / 1048576} MiB cannot be attached. ${nothingDone}`,
+        error: `Cannot attach "${path}": files over ${maxBytes / 1048576} MiB cannot be attached. ${nothingDone}`,
         code: "too_large",
       };
     case "hard_links":
       return {
-        error: `Cannot attach "${e}": the file has more than one hard link, which can point at a file outside the folders this session may read. Copy the file and attach the copy. ${nothingDone}`,
+        error: `Cannot attach "${path}": the file has more than one hard link, which can point at a file outside the folders this session may read. Copy the file and attach the copy. ${nothingDone}`,
         code: "hard_links",
       };
     case "not_regular":
       return {
-        error: `Cannot attach "${e}": it is not a regular file. Attach files one at a time, not a folder. ${nothingDone}`,
+        error: `Cannot attach "${path}": it is not a regular file. Attach files one at a time, not a folder. ${nothingDone}`,
         code: "not_regular",
       };
     case "moved":
@@ -120,8 +120,8 @@ function attachFailureMessage(e, r, o, nothingDone) {
     case "open_failed":
     case "read_failed":
       return {
-        error: `Could not read "${e}". ${nothingDone}`,
-        code: r,
+        error: `Could not read "${path}". ${nothingDone}`,
+        code: kind,
       };
   }
 }

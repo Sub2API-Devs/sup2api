@@ -7,12 +7,18 @@
  */
 import { createSecureContext } from "tls";
 import { isIP } from "net";
-import { No, randomSerial, daysFromNow, caSubjectKeyId, signCertificateNative } from "./mitm-ca.js";
+import {
+  getRootCertificates,
+  randomSerial,
+  daysFromNow,
+  caSubjectKeyId,
+  signCertificateNative,
+} from "./mitm-ca.js";
 import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
 
 //@ chunk-fq0cr76a.js:665429-666350 esm-fingerprint
 function mintLeafCert(ca, hostname) {
-  let { pki } = No();
+  let { pki } = getRootCertificates();
   let cached = cacheGet(ca.leafCerts, hostname);
   if (cached) return cached;
   let keys = ca.leafKeyPair ?? (ca.leafKeyPair = pki.rsa.generateKeyPair(2048));

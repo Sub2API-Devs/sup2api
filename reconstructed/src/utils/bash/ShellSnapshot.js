@@ -35,33 +35,34 @@ import { getCwd } from "../cwd.js";
 import { registerCleanup } from "../cleanupRegistry.js";
 import { getFsImplementation } from "../fsOperations.js";
 import { reportShellExports } from "../shell/shellEnvSnapshot.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3051940-3052177 placement
-function appendPluginBinPaths(e, n, r) {
-  let s = new Set((e ?? "").split(r));
-  let filtered = n.filter((y) => {
-    if (y.includes(r)) {
-      logForDebugging(`Dropping plugin bin path that holds the PATH delimiter: ${y}`);
+function appendPluginBinPaths(currentPath, extraDirs, delimiter) {
+  let existing = new Set((currentPath ?? "").split(delimiter));
+  let filtered = extraDirs.filter((dir) => {
+    if (dir.includes(delimiter)) {
+      logForDebugging(`Dropping plugin bin path that holds the PATH delimiter: ${dir}`);
       return false;
     }
-    return !s.has(y);
+    return !existing.has(dir);
   });
   return {
     appended: filtered,
-    path: [e, ...filtered].filter(Boolean).join(r),
+    path: [currentPath, ...filtered].filter(Boolean).join(delimiter),
   };
 }
 //@ chunk-e6aww6q8.js:3052177-3052304 placement
 /**
  * 计算追加插件 bin 目录后的 PATH 环境变量（保持原变量名大小写）。
  */
-function getPluginPathEnv(e, spawnEnvPluginBinPaths, delimiter) {
-  if (spawnEnvPluginBinPaths.length === 0) return {};
-  let s = spellingIn(e, "PATH");
-  let { appended, path } = appendPluginBinPaths(e[s], spawnEnvPluginBinPaths, delimiter);
+function getPluginPathEnv(env, extraDirs, delimiter) {
+  if (extraDirs.length === 0) return {};
+  let pathKey = spellingIn(env, "PATH");
+  let { appended, path } = appendPluginBinPaths(env[pathKey], extraDirs, delimiter);
   return appended.length > 0
     ? {
-        [s]: path,
+        [pathKey]: path,
       }
     : {};
 }
@@ -77,11 +78,11 @@ var CLAUDE_CODE_INVOKED_SKILLS = "CLAUDE_CODE_INVOKED_SKILLS";
  * 生成同名 shell 函数，以 ARGV0（zsh/Windows）或 exec -a（bash）把内置二进制伪装成 rg/bfs/ugrep 执行；CLAUDE_CODE_EXECPATH 不可执行时回落到系统命令；可指定遇到某些参数时直接走系统命令。
  */
 function createArgv0ShellFunction(funcName, argv0, binaryPath = [], prependArgs = []) {
-  let h = binaryPath.length > 0 ? `${binaryPath.join(" ")} \${1+"$@"}` : '${1+"$@"}';
-  let y = getPlatform() === "windows";
-  let S = join(getUserBinDir(), y ? "claude.exe" : "claude");
-  let w = y ? windowsPathToPosixPath(S) : S;
-  let L =
+  let argTail = binaryPath.length > 0 ? `${binaryPath.join(" ")} \${1+"$@"}` : '${1+"$@"}';
+  let isWindows = getPlatform() === "windows";
+  let claudePath = join(getUserBinDir(), isWindows ? "claude.exe" : "claude");
+  let quotedClaudePath = isWindows ? windowsPathToPosixPath(claudePath) : claudePath;
+  let prependLines =
     prependArgs.length > 0
       ? [
           "  local _cc_a",
@@ -92,16 +93,16 @@ function createArgv0ShellFunction(funcName, argv0, binaryPath = [], prependArgs 
       : [];
   return [
     `function ${funcName} {`,
-    ...L,
+    ...prependLines,
     `  local _cc_bin="\${${CLAUDE_CODE_EXECPATH}:-}"`,
-    `  [[ -x $_cc_bin ]] || _cc_bin=${shellQuoteArgs([w])}`,
+    `  [[ -x $_cc_bin ]] || _cc_bin=${shellQuoteArgs([quotedClaudePath])}`,
     `  if [[ ! -x $_cc_bin ]]; then command ${funcName} \${1+"$@"}; return; fi`,
     "  if [[ -n ${ZSH_VERSION:-} ]]; then",
-    `    ARGV0=${argv0} "$_cc_bin" ${h}`,
+    `    ARGV0=${argv0} "$_cc_bin" ${argTail}`,
     '  elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ "$OSTYPE" == "win32" ]]; then',
-    `    ARGV0=${argv0} "$_cc_bin" ${h}`,
+    `    ARGV0=${argv0} "$_cc_bin" ${argTail}`,
     "  else",
-    `    (exec -a ${argv0} "$_cc_bin" ${h})`,
+    `    (exec -a ${argv0} "$_cc_bin" ${argTail})`,
     "  fi",
     "}",
   ].join(`
@@ -146,7 +147,7 @@ function createFindGrepShellIntegration() {
         "--ignore-files",
         "--hidden",
         "-I",
-        ...VCS_DIRECTORIES_FOR_UGREP.map((e) => `--exclude-dir=${e}`),
+        ...VCS_DIRECTORIES_FOR_UGREP.map((dirName) => `--exclude-dir=${dirName}`),
       ],
       [
         "-*-filter*",
@@ -199,7 +200,7 @@ function createPkillGuardFunction() {
 `);
 }
 //@ chunk-e6aww6q8.js:3054873-3054898 layout
-function emptySnapshotPath(e) {
+function emptySnapshotPath(arg) {
   return "";
 }
 //@ chunk-e6aww6q8.js:3054898-3054925 layout
@@ -297,12 +298,12 @@ function getUserSnapshotContent(configFile) {
  * Windows 下运行 shell -lc 'echo "$PATH"' 取登录 PATH；输出不可用时记日志并上报 tengu_shell_snapshot_path_probe_failed，返回 undefined。
  */
 async function probeLoginShellPath(shellPath) {
-  let n = await safeExecFile(shellPath, ["-lc", 'echo "$PATH"'], {
+  let result = await safeExecFile(shellPath, ["-lc", 'echo "$PATH"'], {
     reject: false,
     timeout: SNAPSHOT_TIMEOUT_MS,
   });
-  let trimmed = (n.stdout ?? "").trim();
-  let s =
+  let trimmed = (result.stdout ?? "").trim();
+  let lastLine =
     trimmed
       .split(
         `
@@ -310,26 +311,30 @@ async function probeLoginShellPath(shellPath) {
       )
       .at(-1)
       ?.trim() ?? "";
-  if (n.exitCode === 0 && s.startsWith("/") && !s.includes(";")) return s;
-  let stderr = n.stderr ?? "";
+  if (result.exitCode === 0 && lastLine.startsWith("/") && !lastLine.includes(";")) return lastLine;
+  let stderr = result.stderr ?? "";
   logForDebugging(
-    `Shell snapshot: ${shellPath} -lc 'echo "$PATH"' gave no usable PATH (exit code ${n.exitCode ?? "none"}, timed out: ${n.timedOut === true}, output empty: ${trimmed === ""}). The snapshot will take PATH from the shell that creates it.`,
+    `Shell snapshot: ${shellPath} -lc 'echo "$PATH"' gave no usable PATH (exit code ${result.exitCode ?? "none"}, timed out: ${result.timedOut === true}, output empty: ${trimmed === ""}). The snapshot will take PATH from the shell that creates it.`,
     {
       level: "warn",
     },
   );
   logForDebugging(`Shell snapshot: PATH probe stderr (${stderr.length} chars): ${stderr}`);
   logEvent("tengu_shell_snapshot_path_probe_failed", {
-    timed_out: n.timedOut === true,
-    exit_code: n.exitCode,
+    timed_out: result.timedOut === true,
+    exit_code: result.exitCode,
     empty_output: trimmed === "",
   });
   return;
 }
 //@ chunk-e6aww6q8.js:3058748-3059280 layout
-var SHELL_EXPORTS_MARKER = "--- claude-code-shell-exports ---";
-var IGNORED_EXPORT_VARS = new Set("PWD OLDPWD SHLVL _ GIT_EDITOR CLAUDECODE AWKPATH AWKLIBPATH".split(" "));
-var DUMP_ENV_SCRIPT = `
+var SHELL_EXPORTS_MARKER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var IGNORED_EXPORT_VARS;
+var DUMP_ENV_SCRIPT;
+deferInit("chunk-e6aww6q8.js:3058748", () => {
+  SHELL_EXPORTS_MARKER = "--- claude-code-shell-exports ---";
+  IGNORED_EXPORT_VARS = new Set("PWD OLDPWD SHLVL _ GIT_EDITOR CLAUDECODE AWKPATH AWKLIBPATH".split(" "));
+  DUMP_ENV_SCRIPT = `
       printf '\\n%s\\n' '${SHELL_EXPORTS_MARKER}'
       command awk 'BEGIN {
         for (name in ENVIRON) {
@@ -341,60 +346,65 @@ var DUMP_ENV_SCRIPT = `
       }'
       printf '%s\\n' '${SHELL_EXPORTS_MARKER}'
 `;
+});
 //@ chunk-e6aww6q8.js:3059280-3059672 layout
 /**
  * 解析快照 stdout 中两个标记之间的 NAME=value 行，得到环境变量 Map（跳过已在进程环境中的、PWD/SHLVL 等、受保护变量、含 U+FFFD 的；还原 %25/%0A/%0D）。
  */
 function parseShellExports(stdout) {
-  let n = new Map();
-  let r = subprocessEnv();
+  let exportedVars = new Map();
+  let currentEnv = subprocessEnv();
   let lines = stdout.split(`
 `);
-  let [h, y, ...S] = lines.flatMap((line, L) => (line === SHELL_EXPORTS_MARKER ? [L] : []));
-  for (let w of y === undefined || S.length > 0 ? [] : lines.slice(h + 1, y)) {
-    let sliced = w.slice(0, Math.max(w.indexOf("="), 0));
+  let [startMarkerIndex, endMarkerIndex, ...extraMarkers] = lines.flatMap((line, lineIndex) =>
+    line === SHELL_EXPORTS_MARKER ? [lineIndex] : [],
+  );
+  for (let line of endMarkerIndex === undefined || extraMarkers.length > 0
+    ? []
+    : lines.slice(startMarkerIndex + 1, endMarkerIndex)) {
+    let sliced = line.slice(0, Math.max(line.indexOf("="), 0));
     if (
       /^[A-Za-z_][A-Za-z0-9_]*$/.test(sliced) &&
-      r[sliced] === undefined &&
+      currentEnv[sliced] === undefined &&
       !IGNORED_EXPORT_VARS.has(sliced) &&
       !isAssignmentNameUnsafeForSandbox(sliced) &&
-      !w.includes("\uFFFD")
+      !line.includes("\uFFFD")
     )
-      n.set(
+      exportedVars.set(
         sliced,
-        w.slice(sliced.length + 1).replace(/%(25|0A|0D)/g, (G, q) =>
-          q === "25"
+        line.slice(sliced.length + 1).replace(/%(25|0A|0D)/g, (matchText, code) =>
+          code === "25"
             ? "%"
-            : q === "0A"
+            : code === "0A"
               ? `
 `
               : "\r",
         ),
       );
   }
-  return n;
+  return exportedVars;
 }
 //@ chunk-e6aww6q8.js:3059672-3061032 callgraph-witnessed = getClaudeCodeSnapshotContent (0.156)
 /**
  * Claude Code 自带的快照内容：rg 别名或函数（内置 ripgrep）、可选 find/grep 用内置 bfs/ugrep 替换、pkill 防误杀函数、PATH（Windows 下从登录 shell 探测，失败则在运行时追加插件目录）。
  */
 async function getClaudeCodeSnapshotContent(shellPath, extraPathDirs) {
-  let r = settingsPathForChildren() ?? env.PATH;
-  let s = false;
+  let basePath = settingsPathForChildren() ?? env.PATH;
+  let pathProbeFailed = false;
   if (getPlatform() === "windows") {
-    let Z = await probeLoginShellPath(shellPath);
-    if (Z === undefined) s = true;
-    else r = Z;
+    let probedPath = await probeLoginShellPath(shellPath);
+    if (probedPath === undefined) pathProbeFailed = true;
+    else basePath = probedPath;
   }
   let { appended, path } = appendPluginBinPaths(
-    s ? undefined : r,
+    pathProbeFailed ? undefined : basePath,
     getPlatform() === "windows" ? extraPathDirs.map(windowsPathToPosixPath) : extraPathDirs,
     ":",
   );
   let rgIntegration = createRipgrepShellIntegration();
   let content = "";
-  let L = `CLAUDE_CODE_END_${Math.random().toString(36).substring(2, 18)}`;
-  let G = [];
+  let heredocMarker = `CLAUDE_CODE_END_${Math.random().toString(36).substring(2, 18)}`;
+  let functionLines = [];
   switch (rgIntegration.type) {
     case "alias": {
       let replaced = rgIntegration.snippet.replaceAll("'", "'\\''");
@@ -408,7 +418,7 @@ async function getClaudeCodeSnapshotContent(shellPath, extraPathDirs) {
       break;
     }
     case "function":
-      G.push(
+      functionLines.push(
         "# Check for rg availability",
         `if ${RG_NOT_AVAILABLE_TEST}; then`,
         `  ${rgIntegration.snippet}`,
@@ -417,17 +427,21 @@ async function getClaudeCodeSnapshotContent(shellPath, extraPathDirs) {
       break;
   }
   let findGrepIntegration = createFindGrepShellIntegration();
-  if (findGrepIntegration !== null) G.push("# Shadow find/grep with embedded bfs/ugrep", findGrepIntegration);
-  G.push("# Shadow pkill to refuse patterns matching the CLI process", createPkillGuardFunction());
-  if (!s) G.push(`export PATH=${shellQuoteArgs([path])}`);
+  if (findGrepIntegration !== null)
+    functionLines.push("# Shadow find/grep with embedded bfs/ugrep", findGrepIntegration);
+  functionLines.push(
+    "# Shadow pkill to refuse patterns matching the CLI process",
+    createPkillGuardFunction(),
+  );
+  if (!pathProbeFailed) functionLines.push(`export PATH=${shellQuoteArgs([path])}`);
   content += `
-      cat >> "$SNAPSHOT_FILE" << '${L}'
-${G.join(`
+      cat >> "$SNAPSHOT_FILE" << '${heredocMarker}'
+${functionLines.join(`
 `)}
-${L}
+${heredocMarker}
   `;
-  if (s) {
-    let Z =
+  if (pathProbeFailed) {
+    let appendLoop =
       appended.length > 0
         ? `
       for __cc_dir in ${shellQuoteArgs(appended)}; do
@@ -437,7 +451,7 @@ ${L}
     content += `
 
       # Add PATH to the file, as this shell has it, plus missing plugin dirs
-      __cc_path=$PATH${Z}
+      __cc_path=$PATH${appendLoop}
       builtin printf 'export PATH=%q\\n' "$__cc_path" >> "$SNAPSHOT_FILE"
       unset __cc_path __cc_dir
   `;
@@ -502,10 +516,10 @@ var createAndSaveSnapshot = async (shellPath, extraPathDirs = []) => {
       let randomId = Math.random().toString(36).substring(2, 8);
       let snapshotsDir = join(getClaudeConfigDir(), "shell-snapshots");
       logForDebugging(`Snapshots directory: ${snapshotsDir}`);
-      let G = safeSessionIdForSnapshot(getSessionId());
+      let sessionTag = safeSessionIdForSnapshot(getSessionId());
       let shellSnapshotPath = join(
         snapshotsDir,
-        `snapshot-${shellType}-${timestamp}-${randomId}${G !== undefined ? `-${G}` : ""}.sh`,
+        `snapshot-${shellType}-${timestamp}-${randomId}${sessionTag !== undefined ? `-${sessionTag}` : ""}.sh`,
       );
       await mkdir(snapshotsDir, {
         recursive: true,

@@ -5,7 +5,7 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS as x } from "../../../runtime/bun-runtime.js";
 import { Os } from "./message.js";
 
 //@ chunk-pwh5dx3n.js:101568-102455 cjs-fingerprint

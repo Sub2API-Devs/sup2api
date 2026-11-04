@@ -10,7 +10,7 @@
  */
 import { withHideWhile } from "../../components/dialogs/dialogRequests.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, _enum, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, _enum, booleanSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { CLAUDE_IN_CHROME_MCP_SERVER_NAME, openInChrome, detectAvailableBrowser } from "./common.js";
 import { logForDebugging } from "../debug.js";
 import { HTTPS_CLAUDE_AI_CHROME } from "../../commands/chrome/chrome.js";
@@ -51,50 +51,57 @@ import {
   CHROME_POLICY_DENIED_RESULT,
   CHROME_INSTALL_DECLINED_RESULT,
 } from "./skillAvailability.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hantmvxa.js:34162-34314 placement
 /**
  * Chrome 安装推荐对话框的定义（结果：安装 / 暂不 / 不再询问 / 取消）。
  */
-var CHROME_INSTALL_UPSELL_DIALOG = withHideWhile({
-  kind: "chrome_install_upsell",
-  payload: DoctorLazy(() => u({})),
-  result: DoctorLazy(() => _enum(["install", "not_now", "dont_ask_again", "cancelled"])),
-  default: "cancelled",
+var CHROME_INSTALL_UPSELL_DIALOG; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hantmvxa.js:34162", () => {
+  CHROME_INSTALL_UPSELL_DIALOG = withHideWhile({
+    kind: "chrome_install_upsell",
+    payload: DoctorLazy(() => objectSchema({})),
+    result: DoctorLazy(() => _enum(["install", "not_now", "dont_ask_again", "cancelled"])),
+    default: "cancelled",
+  });
 });
 //@ chunk-hantmvxa.js:34314-34568 placement
 /**
  * Chrome 安装设置对话框的定义（阶段：等待安装、连接中、卡住、已连接、失败；结果：继续 / 继续等待 / 跳过 / 取消）。
  */
-var CHROME_INSTALL_SETUP_DIALOG = withHideWhile({
-  kind: "chrome_install_setup",
-  payload: DoctorLazy(() =>
-    u({
-      phase: _enum(["waiting_install", "connecting", "stalled", "connected", "failed"]),
-      installPageOpened: M(),
-    }),
-  ),
-  result: DoctorLazy(() => _enum(["continue", "keep_waiting", "skip", "cancelled"])),
-  default: "cancelled",
-  hideWhile: [],
+var CHROME_INSTALL_SETUP_DIALOG; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hantmvxa.js:34314", () => {
+  CHROME_INSTALL_SETUP_DIALOG = withHideWhile({
+    kind: "chrome_install_setup",
+    payload: DoctorLazy(() =>
+      objectSchema({
+        phase: _enum(["waiting_install", "connecting", "stalled", "connected", "failed"]),
+        installPageOpened: booleanSchema(),
+      }),
+    ),
+    result: DoctorLazy(() => _enum(["continue", "keep_waiting", "skip", "cancelled"])),
+    default: "cancelled",
+    hideWhile: [],
+  });
 });
 //@ chunk-hantmvxa.js:34568-34853 placement
 /**
  * 安装完成后把 claude-in-chrome MCP 服务器接入当前会话：更新动态 MCP 配置，并交给会话的 MCP 连接管理器 adoptServer（无管理器时等下次 reconcile）。
  */
 function adoptChromeMcpServer(context, connection) {
-  context.onChangeDynamicMcpConfig?.((r) => ({
-    ...r,
+  context.onChangeDynamicMcpConfig?.((config) => ({
+    ...config,
     [CLAUDE_IN_CHROME_MCP_SERVER_NAME]: connection.client.config,
   }));
-  let s = context.session.mcpSessionWiring.connections();
-  if (!s) {
+  let connections = context.session.mcpSessionWiring.connections();
+  if (!connections) {
     logForDebugging(
       "[claude-in-chrome] no MCP connections owner on this session; the browser tools land on the next reconcile",
     );
     return;
   }
-  s.adoptServer(CLAUDE_IN_CHROME_MCP_SERVER_NAME, connection, {
+  connections.adoptServer(CLAUDE_IN_CHROME_MCP_SERVER_NAME, connection, {
     asked: true,
   });
 }
@@ -114,7 +121,7 @@ var MAX_CHROME_CONNECT_ATTEMPTS = 5;
  * 惰性加载 MCP 客户端模块（用于重连与清缓存）。
  */
 function mcpClientModule() {
-  return require("./chunk-asne9cp8.js").mcpClientModule();
+  return require("../../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
 }
 //@ chunk-hantmvxa.js:34983-38924 placement
 /**
@@ -129,32 +136,32 @@ async function runChromeInstallSetup(context, requestDialog) {
     return false;
   });
   let abortController = new AbortController();
-  let y = () => abortController.abort();
+  let onAbort = () => abortController.abort();
   if (signal.aborted) abortController.abort();
   else
-    signal.addEventListener("abort", y, {
+    signal.addEventListener("abort", onAbort, {
       once: true,
     });
-  let w = "waiting_install";
+  let phase = "waiting_install";
   let signal_2 = createSignal();
-  function k(P) {
-    if (w === P) return;
-    w = P;
+  function setPhase(nextPhase) {
+    if (phase === nextPhase) return;
+    phase = nextPhase;
     signal_2.emit();
   }
-  let C = false;
-  let S = false;
-  let T = "setup_connect_failed";
+  let didWire = false;
+  let completed = false;
+  let failureReason = "setup_connect_failed";
   let connection;
-  let L;
-  let x = D().catch((error) => {
+  let connectionRef;
+  let driverPromise = runSetupDriver().catch((error) => {
     logForDebugging(`[Claude in Chrome] Install setup driver failed: ${error}`, {
       level: "error",
     });
-    T = "setup_driver_error";
-    k("failed");
+    failureReason = "setup_driver_error";
+    setPhase("failed");
   });
-  async function D() {
+  async function runSetupDriver() {
     let now = Date.now();
     while (!abortController.signal.aborted) {
       if (await isChromeExtensionInstalled().catch(() => false)) break;
@@ -166,13 +173,13 @@ async function runChromeInstallSetup(context, requestDialog) {
       );
     }
     if (abortController.signal.aborted) return;
-    k("connecting");
+    setPhase("connecting");
     saveGlobalConfig(
-      (H) =>
-        H.cachedChromeExtensionInstalled === true
-          ? H
+      (config) =>
+        config.cachedChromeExtensionInstalled === true
+          ? config
           : {
-              ...H,
+              ...config,
               cachedChromeExtensionInstalled: true,
             },
       context.storageV5,
@@ -181,34 +188,34 @@ async function runChromeInstallSetup(context, requestDialog) {
       logForDebugging(
         "[Claude in Chrome] Install setup stopped: managed policy denied the chrome MCP server during the install wait",
       );
-      T = "policy_denied_mid_wait";
-      k("failed");
+      failureReason = "policy_denied_mid_wait";
+      setPhase("failed");
       return;
     }
     if (!isClaudeInChromeAllowed()) {
       logForDebugging(
         "[Claude in Chrome] Install setup stopped: organization policy (allow_claude_browser_extension) denied Claude in Chrome during the install wait",
       );
-      T = "chrome_policy_denied_mid_wait";
-      k("failed");
+      failureReason = "chrome_policy_denied_mid_wait";
+      setPhase("failed");
       return;
     }
-    C = true;
+    didWire = true;
     let { mcpConfig } = setupClaudeInChrome({
       skipReconnectAutoOpen: true,
     });
-    let q = mcpConfig[CLAUDE_IN_CHROME_MCP_SERVER_NAME];
-    if (!q) {
-      T = "setup_no_config";
-      k("failed");
+    let serverConfig = mcpConfig[CLAUDE_IN_CHROME_MCP_SERVER_NAME];
+    if (!serverConfig) {
+      failureReason = "setup_no_config";
+      setPhase("failed");
       return;
     }
     let { reconnectMcpServerImpl } = mcpClientModule();
-    let se;
+    let reconnectResult;
     try {
-      se = await reconnectMcpServerImpl(
+      reconnectResult = await reconnectMcpServerImpl(
         CLAUDE_IN_CHROME_MCP_SERVER_NAME,
-        q,
+        serverConfig,
         context.storageV5,
         context.credentials,
       );
@@ -216,93 +223,93 @@ async function runChromeInstallSetup(context, requestDialog) {
       logForDebugging(`[Claude in Chrome] Install setup MCP connect failed: ${error}`, {
         level: "error",
       });
-      T = "setup_reconnect_error";
-      k("failed");
+      failureReason = "setup_reconnect_error";
+      setPhase("failed");
       return;
     }
-    if (se.client.type === "connected")
-      L = {
-        config: q,
+    if (reconnectResult.client.type === "connected")
+      connectionRef = {
+        config: serverConfig,
       };
-    if (se.client.type !== "connected" || abortController.signal.aborted) {
+    if (reconnectResult.client.type !== "connected" || abortController.signal.aborted) {
       if (!abortController.signal.aborted) {
-        T = "setup_client_not_connected";
-        k("failed");
+        failureReason = "setup_client_not_connected";
+        setPhase("failed");
       }
       return;
     }
     let now_2 = Date.now();
-    let ve = false;
-    let re = 0;
+    let nudged = false;
+    let probeErrors = 0;
     while (!abortController.signal.aborted) {
-      let H = await probeChromeConnection(se.client, abortController.signal);
-      if (H === "connected") {
-        connection = se;
-        k("connected");
+      let probeOutcome = await probeChromeConnection(reconnectResult.client, abortController.signal);
+      if (probeOutcome === "connected") {
+        connection = reconnectResult;
+        setPhase("connected");
         return;
       }
-      if (H === "error") {
-        re++;
-        if (re >= MAX_CHROME_CONNECT_ATTEMPTS) {
-          T = "setup_probe_errors";
-          k("failed");
+      if (probeOutcome === "error") {
+        probeErrors++;
+        if (probeErrors >= MAX_CHROME_CONNECT_ATTEMPTS) {
+          failureReason = "setup_probe_errors";
+          setPhase("failed");
           return;
         }
-      } else re = 0;
-      let be = Date.now() - now_2;
-      if (!ve && be >= CHROME_CONNECT_TIMEOUT_MS) {
-        ve = true;
+      } else probeErrors = 0;
+      let elapsedMs = Date.now() - now_2;
+      if (!nudged && elapsedMs >= CHROME_CONNECT_TIMEOUT_MS) {
+        nudged = true;
         openInChrome(CHROME_EXTENSION_RECONNECT_URL).catch((error) =>
           logForDebugging(`[Claude in Chrome] Install setup reconnect nudge failed: ${error}`),
         );
       }
-      if (w === "connecting" && be >= CHROME_CONNECT_STALL_MS) k("stalled");
+      if (phase === "connecting" && elapsedMs >= CHROME_CONNECT_STALL_MS) setPhase("stalled");
       await sleep(CHROME_INSTALL_POLL_MS, abortController.signal);
     }
   }
-  function B() {
+  function snapshot() {
     return {
-      phase: w,
+      phase,
       installPageOpened,
     };
   }
-  async function* j() {
-    let P = B();
-    yield P;
+  async function* phaseStream() {
+    let lastSnapshot = snapshot();
+    yield lastSnapshot;
     while (!abortController.signal.aborted) {
-      if (B().phase !== P.phase) {
-        P = B();
-        yield P;
+      if (snapshot().phase !== lastSnapshot.phase) {
+        lastSnapshot = snapshot();
+        yield lastSnapshot;
         continue;
       }
-      await W();
+      await waitForChange();
       if (abortController.signal.aborted) return;
     }
   }
-  function W() {
+  function waitForChange() {
     return new Promise((resolve) => {
-      let N = signal_2.subscribe(() => {
-        N();
-        abortController.signal.removeEventListener("abort", q);
+      let unsubscribe = signal_2.subscribe(() => {
+        unsubscribe();
+        abortController.signal.removeEventListener("abort", onAbortSignal);
         resolve();
       });
-      let q = () => {
-        N();
+      let onAbortSignal = () => {
+        unsubscribe();
         resolve();
       };
-      abortController.signal.addEventListener("abort", q, {
+      abortController.signal.addEventListener("abort", onAbortSignal, {
         once: true,
       });
     });
   }
   try {
     while (true) {
-      let P = await requestDialog(CHROME_INSTALL_SETUP_DIALOG, j(), {
+      let dialogResult = await requestDialog(CHROME_INSTALL_SETUP_DIALOG, phaseStream(), {
         signal,
       });
-      if (P === "keep_waiting") continue;
-      let { phase } = B();
-      if (P === "continue" && phase === "connected" && connection) {
+      if (dialogResult === "keep_waiting") continue;
+      let { phase } = snapshot();
+      if (dialogResult === "continue" && phase === "connected" && connection) {
         if (isChromeServerPolicyDenied()) {
           logFeatureSad("chrome_install_upsell", "policy_denied_late", {
             install_page_opened: installPageOpened,
@@ -321,24 +328,24 @@ async function runChromeInstallSetup(context, requestDialog) {
           });
           return SETUP_BYPASS_MODE_RESULT;
         }
-        let q = completeChromeSetup(context, connection, installPageOpened);
-        S = true;
-        L = undefined;
-        return q;
+        let setupResult = completeChromeSetup(context, connection, installPageOpened);
+        completed = true;
+        connectionRef = undefined;
+        return setupResult;
       }
       if (phase === "failed") {
-        if (T === "policy_denied_mid_wait" || T === "chrome_policy_denied_mid_wait") {
-          logFeatureSad("chrome_install_upsell", T, {
+        if (failureReason === "policy_denied_mid_wait" || failureReason === "chrome_policy_denied_mid_wait") {
+          logFeatureSad("chrome_install_upsell", failureReason, {
             install_page_opened: installPageOpened,
           });
           return SETUP_POLICY_DENIED_RESULT;
         }
-        logFeatureBad("chrome_install_upsell", T, {
+        logFeatureBad("chrome_install_upsell", failureReason, {
           install_page_opened: installPageOpened,
         });
         return SETUP_CONNECT_FAILED_RESULT;
       }
-      if (P === "cancelled" && signal.aborted) {
+      if (dialogResult === "cancelled" && signal.aborted) {
         logFeatureSad("chrome_install_upsell", "setup_aborted", {
           install_page_opened: installPageOpened,
         });
@@ -372,20 +379,22 @@ async function runChromeInstallSetup(context, requestDialog) {
     });
     return SETUP_INTERNAL_ERROR_RESULT;
   } finally {
-    signal.removeEventListener("abort", y);
+    signal.removeEventListener("abort", onAbort);
     abortController.abort();
-    if (!S) {
-      if (C) markClaudeInChromeUnwired();
-      x.then(() => {
-        if (!L) return;
-        let { config } = L;
-        L = undefined;
-        return mcpClientModule().clearServerCache(CLAUDE_IN_CHROME_MCP_SERVER_NAME, config);
-      }).catch((error) =>
-        logForDebugging(`[Claude in Chrome] Install setup orphan cleanup failed: ${error}`, {
-          level: "error",
-        }),
-      );
+    if (!completed) {
+      if (didWire) markClaudeInChromeUnwired();
+      driverPromise
+        .then(() => {
+          if (!connectionRef) return;
+          let { config } = connectionRef;
+          connectionRef = undefined;
+          return mcpClientModule().clearServerCache(CLAUDE_IN_CHROME_MCP_SERVER_NAME, config);
+        })
+        .catch((error) =>
+          logForDebugging(`[Claude in Chrome] Install setup orphan cleanup failed: ${error}`, {
+            level: "error",
+          }),
+        );
     }
   }
 }
@@ -410,16 +419,22 @@ async function probeChromeConnection(client, signal) {
       }),
     ]);
     if (!winner) return "not_connected";
-    let r = Array.isArray(winner.content) ? winner.content[0] : undefined;
-    let text = r && typeof r === "object" && "text" in r && typeof r.text === "string" ? r.text : undefined;
+    let firstBlock = Array.isArray(winner.content) ? winner.content[0] : undefined;
+    let text =
+      firstBlock &&
+      typeof firstBlock === "object" &&
+      "text" in firstBlock &&
+      typeof firstBlock.text === "string"
+        ? firstBlock.text
+        : undefined;
     if (!text) return "not_connected";
-    let y;
+    let parsed;
     try {
-      y = jsonParse(text);
+      parsed = jsonParse(text);
     } catch {
       return "not_connected";
     }
-    return Array.isArray(y) && y.length > 0 ? "connected" : "not_connected";
+    return Array.isArray(parsed) && parsed.length > 0 ? "connected" : "not_connected";
   } catch {
     return "error";
   }
@@ -431,13 +446,13 @@ async function probeChromeConnection(client, signal) {
 function completeChromeSetup(context, connection, installPageOpened) {
   adoptChromeMcpServer(context, connection);
   saveGlobalConfig(
-    (r) =>
-      r.claudeInChromeDefaultEnabled === true &&
-      r.hasCompletedClaudeInChromeOnboarding === true &&
-      r.cachedChromeExtensionInstalled === true
-        ? r
+    (chunk) =>
+      chunk.claudeInChromeDefaultEnabled === true &&
+      chunk.hasCompletedClaudeInChromeOnboarding === true &&
+      chunk.cachedChromeExtensionInstalled === true
+        ? chunk
         : {
-            ...r,
+            ...chunk,
             claudeInChromeDefaultEnabled: true,
             hasCompletedClaudeInChromeOnboarding: true,
             cachedChromeExtensionInstalled: true,
@@ -511,16 +526,16 @@ async function resolveChromeInstallUpsell(context) {
     context.abortController.signal.aborted
   )
     return CHROME_NOT_SET_UP_RESULT;
-  let n = claudeInChromeSession();
-  if (n.installUpsellResolution) return n.installUpsellResolution;
+  let session = claudeInChromeSession();
+  if (session.installUpsellResolution) return session.installUpsellResolution;
   let requestDialog = context.requestDialog;
   if (!requestDialog) {
-    n.installUpsellResolution = Promise.resolve(CHROME_NOT_SET_UP_RESULT);
-    return n.installUpsellResolution;
+    session.installUpsellResolution = Promise.resolve(CHROME_NOT_SET_UP_RESULT);
+    return session.installUpsellResolution;
   }
-  n.installUpsellResolution = runChromeInstallUpsell(context, requestDialog).catch((error) => {
+  session.installUpsellResolution = runChromeInstallUpsell(context, requestDialog).catch((error) => {
     if (context.abortController.signal.aborted) {
-      n.installUpsellResolution = undefined;
+      session.installUpsellResolution = undefined;
       return CHROME_NOT_SET_UP_RESULT;
     }
     logForDebugging(`[Claude in Chrome] Install upsell failed: ${error}`, {
@@ -529,7 +544,7 @@ async function resolveChromeInstallUpsell(context) {
     logFeatureBad("chrome_install_upsell", "upsell_error");
     return CHROME_NOT_SET_UP_RESULT;
   });
-  return n.installUpsellResolution;
+  return session.installUpsellResolution;
 }
 //@ chunk-hantmvxa.js:43256-45246 placement
 /**
@@ -552,11 +567,11 @@ async function runChromeInstallUpsell(context, requestDialog) {
   }
   if (await isChromeExtensionInstalled().catch(() => false)) {
     saveGlobalConfig(
-      (y) =>
-        y.cachedChromeExtensionInstalled === true
-          ? y
+      (config) =>
+        config.cachedChromeExtensionInstalled === true
+          ? config
           : {
-              ...y,
+              ...config,
               cachedChromeExtensionInstalled: true,
             },
       context.storageV5,
@@ -593,18 +608,19 @@ async function runChromeInstallUpsell(context, requestDialog) {
     )
   ) {
     case "install": {
-      let y = await runChromeInstallSetup(context, requestDialog);
-      if (y === SETUP_INTERRUPTED_RESULT) claudeInChromeSession().installUpsellResolution = undefined;
-      return y;
+      let setupResult = await runChromeInstallSetup(context, requestDialog);
+      if (setupResult === SETUP_INTERRUPTED_RESULT)
+        claudeInChromeSession().installUpsellResolution = undefined;
+      return setupResult;
     }
     case "dont_ask_again":
       logFeatureSad("chrome_install_upsell", "dont_ask_again");
       saveGlobalConfig(
-        (y) =>
-          y.chromeInstallUpsellDismissed === true
-            ? y
+        (config) =>
+          config.chromeInstallUpsellDismissed === true
+            ? config
             : {
-                ...y,
+                ...config,
                 chromeInstallUpsellDismissed: true,
               },
         context.storageV5,

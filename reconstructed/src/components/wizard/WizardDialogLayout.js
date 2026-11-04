@@ -8,7 +8,7 @@
  * pieces: chunk-095ptjmr.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useWizard } from "./useWizard.js";
 import {
   jsxProd_default,
@@ -23,7 +23,7 @@ import { Box, Text } from "../../ink/components/Text.js";
 
 //@ chunk-095ptjmr.js:3004-3989 fingerprint = WizardDialogLayout (0.585)
 function WizardDialogLayout(props) {
-  let $ = w(15);
+  let $ = useMemoCache(15);
   let { title: titleOverride, color, children, subtitle, footerText } = props;
   let color_2 = color === undefined ? "suggestion" : color;
   let {
@@ -83,9 +83,9 @@ function WizardDialogLayout(props) {
     $[8] = pendingExitHint;
     $[9] = children_2;
   } else children_2 = $[9];
-  let k;
+  let footerElement;
   if ($[10] !== children_2) {
-    k = jsxProd_default(Box, {
+    footerElement = jsxProd_default(Box, {
       marginLeft: 2,
       marginTop: 1,
       children: jsxProd_default(Text, {
@@ -94,15 +94,15 @@ function WizardDialogLayout(props) {
       }),
     });
     $[10] = children_2;
-    $[11] = k;
-  } else k = $[11];
+    $[11] = footerElement;
+  } else footerElement = $[11];
   let t5;
-  if ($[12] !== t3 || $[13] !== k) {
+  if ($[12] !== t3 || $[13] !== footerElement) {
     t5 = jsxProd_default_2(Fragment, {
-      children: [t3, k],
+      children: [t3, footerElement],
     });
     $[12] = t3;
-    $[13] = k;
+    $[13] = footerElement;
     $[14] = t5;
   } else t5 = $[14];
   return t5;

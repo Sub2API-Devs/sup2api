@@ -15,15 +15,18 @@ import { currentMachineLabel } from "../../../bridge/deviceRegistration.js";
 import { getCwd } from "../../../utils/cwd.js";
 
 //@ chunk-9fr8dc9p.js:343-503 placement
-function encodeUnlistedToolResult(o, t) {
-  let e = o.mapToolResultToToolResultBlockParam(t.data, `toolu_serve_${randomBytes(12).toString("hex")}`);
-  return encodeServedOutput(e?.content ?? "", t.data, e?.is_error === true);
+function encodeUnlistedToolResult(tool, update) {
+  let result = tool.mapToolResultToToolResultBlockParam(
+    update.data,
+    `toolu_serve_${randomBytes(12).toString("hex")}`,
+  );
+  return encodeServedOutput(result?.content ?? "", update.data, result?.is_error === true);
 }
 //@ chunk-9fr8dc9p.js:503-663 placement
 /**
  * 把远端服务调用的输出编码为工具结果。
  */
-function encodeServedOutput(content, output, isError = false, r = []) {
+function encodeServedOutput(content, output, isError = false, notes = []) {
   return buildRemoteToolCallResult({
     envelope: {
       v: REMOTE_TOOL_PROTOCOL_VERSION,
@@ -32,8 +35,8 @@ function encodeServedOutput(content, output, isError = false, r = []) {
       is_error: isError,
       content: toRemoteToolContentBlocks(content),
       output,
-      ...(r.length > 0 && {
-        notes: r,
+      ...(notes.length > 0 && {
+        notes,
       }),
     },
     content,
@@ -46,4 +49,4 @@ function servedTarget() {
     working_dir: getCwd(),
   };
 }
-export { servedTarget, encodeServedOutput };
+export { servedTarget, encodeServedOutput, encodeUnlistedToolResult };

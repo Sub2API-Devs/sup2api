@@ -8,7 +8,7 @@
  * pieces: chunk-vztqnp39.js (11)
  * attribution: placement 11
  */
-import { srs } from "../../../vendor/private-unresolved/audio-capture.node.js";
+import { require_audio_capture_node } from "../../../vendor/private-unresolved/audio-capture.node.js";
 import { importMetaRequire } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-vztqnp39.js:264-280 placement
@@ -24,20 +24,22 @@ var audioCaptureLoadAttempted = false;
 function loadAudioCaptureModule() {
   if (audioCaptureLoadAttempted) return audioCaptureModuleCache;
   audioCaptureLoadAttempted = true;
-  let t = "linux";
-  if (t !== "darwin" && t !== "linux" && t !== "win32") return null;
+  let platform = "linux";
+  if (platform !== "darwin" && platform !== "linux" && platform !== "win32") return null;
   try {
-    audioCaptureModuleCache = srs();
+    audioCaptureModuleCache = require_audio_capture_node();
     return audioCaptureModuleCache;
   } catch {}
-  let o = `x64-${t}`;
-  let flattened = (t === "linux" ? [o, `${o}-musl`] : [o]).flatMap((n) => [
-    `./vendor/audio-capture/${n}/audio-capture.node`,
-    `../audio-capture/${n}/audio-capture.node`,
-  ]);
-  for (let n of flattened)
+  let platformDir = `x64-${platform}`;
+  let flattened = (platform === "linux" ? [platformDir, `${platformDir}-musl`] : [platformDir]).flatMap(
+    (variantDir) => [
+      `./vendor/audio-capture/${variantDir}/audio-capture.node`,
+      `../audio-capture/${variantDir}/audio-capture.node`,
+    ],
+  );
+  for (let modulePath of flattened)
     try {
-      audioCaptureModuleCache = importMetaRequire(n);
+      audioCaptureModuleCache = importMetaRequire(modulePath);
       return audioCaptureModuleCache;
     } catch {}
   return null;
@@ -53,10 +55,10 @@ function isAudioCaptureAvailable() {
 /**
  * 开始录音（模块不可用时返回 false）。
  */
-function startAudioRecording(t, o) {
+function startAudioRecording(sampleRate, channels) {
   let audioCaptureModule = loadAudioCaptureModule();
   if (!audioCaptureModule) return false;
-  return audioCaptureModule.startRecording(t, o);
+  return audioCaptureModule.startRecording(sampleRate, channels);
 }
 //@ chunk-vztqnp39.js:725-779 placement
 /**
@@ -80,19 +82,19 @@ function isAudioRecording() {
 /**
  * 开始播放（模块不可用时返回 false）。
  */
-function startAudioPlayback(t, o) {
+function startAudioPlayback(sampleRate, channels) {
   let audioCaptureModule = loadAudioCaptureModule();
   if (!audioCaptureModule) return false;
-  return audioCaptureModule.startPlayback(t, o);
+  return audioCaptureModule.startPlayback(sampleRate, channels);
 }
 //@ chunk-vztqnp39.js:909-969 placement
 /**
  * 写入播放数据。
  */
-function writeAudioPlaybackData(t) {
+function writeAudioPlaybackData(data) {
   let audioCaptureModule = loadAudioCaptureModule();
   if (!audioCaptureModule) return;
-  audioCaptureModule.writePlaybackData(t);
+  audioCaptureModule.writePlaybackData(data);
 }
 //@ chunk-vztqnp39.js:969-1022 placement
 /**
@@ -118,3 +120,14 @@ function microphoneAuthorizationStatus() {
   if (!audioCaptureModule || !audioCaptureModule.microphoneAuthorizationStatus) return 0;
   return audioCaptureModule.microphoneAuthorizationStatus();
 }
+export {
+  isAudioCaptureAvailable,
+  isAudioPlaying,
+  isAudioRecording,
+  microphoneAuthorizationStatus,
+  startAudioPlayback,
+  startAudioRecording,
+  stopAudioPlayback,
+  stopAudioRecording,
+  writeAudioPlaybackData,
+};

@@ -5,11 +5,11 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 
 //@ chunk-1ny7cxrt.js:30880-37631 cjs-fingerprint
-var require_object_hash = x(function (cjsExports, cjsModule) {
-  var vy = importMetaRequire("crypto");
+var require_object_hash = __commonJS(function (cjsExports, cjsModule) {
+  var nodeCrypto = importMetaRequire("crypto");
   cjsExports = cjsModule.exports = objectHash;
   function objectHash(object, options) {
     options = applyDefaults(object, options);
@@ -38,7 +38,7 @@ var require_object_hash = x(function (cjsExports, cjsModule) {
       excludeValues: true,
     });
   };
-  var hashes = vy.getHashes ? vy.getHashes().slice() : ["sha1", "md5"];
+  var hashes = nodeCrypto.getHashes ? nodeCrypto.getHashes().slice() : ["sha1", "md5"];
   hashes.push("passthrough");
   var encodings = ["buffer", "hex", "binary", "base64"];
   function applyDefaults(object, sourceOptions) {
@@ -78,7 +78,7 @@ var require_object_hash = x(function (cjsExports, cjsModule) {
   }
   function hash(object, options) {
     var hashingStream;
-    if (options.algorithm !== "passthrough") hashingStream = vy.createHash(options.algorithm);
+    if (options.algorithm !== "passthrough") hashingStream = nodeCrypto.createHash(options.algorithm);
     else hashingStream = new PassThrough();
     if (typeof hashingStream.write === "undefined") {
       hashingStream.write = hashingStream.update;
@@ -143,22 +143,22 @@ var require_object_hash = x(function (cjsExports, cjsModule) {
               return !options.excludeKeys(key);
             });
           write("object:" + keys.length + ":");
-          var f = this;
+          var hashRef = this;
           return keys.forEach(function (key) {
-            f.dispatch(key);
+            hashRef.dispatch(key);
             write(":");
-            if (!options.excludeValues) f.dispatch(object[key]);
+            if (!options.excludeValues) hashRef.dispatch(object[key]);
             write(",");
           });
         }
       },
       _array: function (arr, unordered) {
         unordered = typeof unordered !== "undefined" ? unordered : options.unorderedArrays !== false;
-        var a = this;
+        var arrayRef = this;
         write("array:" + arr.length + ":");
         if (!unordered || arr.length <= 1)
           return arr.forEach(function (entry) {
-            return a.dispatch(entry);
+            return arrayRef.dispatch(entry);
           });
         var contextAdditions = [];
         var entries = arr.map(function (entry) {

@@ -14,7 +14,7 @@ import { lstat, realpath, readlink } from "fs/promises";
 import { effectiveEnvSnapshot } from "../../../utils/settings/envSources.js";
 import { subprocessEnv, agentProxyEnv, proxyEnvForSubprocess } from "../../../utils/subprocessEnv.js";
 import { TEAMMATE_ENV_VARS } from "../../../utils/swarm/spawnUtils.js";
-import { isEnvOverridden, portPortedFiles } from "./constants.js";
+import { isEnvOverridden, testPluginTexts, testPluginContentId, portPortedFiles } from "./constants.js";
 import { identity as identity_2 } from "../../../utils/identity.js";
 import { getOriginalCwd, getCwdState, getProjectRootOrNull } from "../../../bootstrap/state.js";
 import { getFsImplementation } from "../../../utils/fsOperations.js";
@@ -28,34 +28,38 @@ import { logForDebugging } from "../../../utils/debug.js";
 import { execFileNoThrow } from "../../../utils/execFileNoThrow.js";
 import { pickByHelper } from "../../../utils/git/gitSafeEnv.js";
 import { getEnvCaseInsensitive } from "../../../utils/plugins/securityDefaultPlugin.js";
-import { testPluginTexts, testPluginContentId } from "../../../services/pluginTest/claudeTestPlugin.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-ae5g0zb5.js:30268-30348 placement
 /**
  * 返回需要透传的非空且被改动过的环境变量名。
  */
 function getTeammateEnvVarsToForward() {
-  let e = effectiveEnvSnapshot();
-  let n = subprocessEnv();
-  return TEAMMATE_ENV_VARS.filter((r) => n[r] !== "" && isEnvOverridden(r, n[r], e));
+  let snapshot = effectiveEnvSnapshot();
+  let env = subprocessEnv();
+  return TEAMMATE_ENV_VARS.filter((name) => env[name] !== "" && isEnvOverridden(name, env[name], snapshot));
 }
 //@ chunk-ae5g0zb5.js:30583-30862 placement
 /**
  * 启动被测应用前要拒绝的 node 选项（--import/--loader/--env-file 等），以及其中接受文件参数的子集。
  */
-var UNSAFE_NODE_OPTION_FLAGS = new Set([
-  "--import",
-  "--loader",
-  "--experimental-loader",
-  "--env-file",
-  "--env-file-if-exists",
-  "--experimental-config-file",
-  "--experimental-package-map",
-  "--experimental-policy",
-  "--openssl-config",
-  "--snapshot-blob",
-]);
-var UNSAFE_FILE_OPTION_FLAGS = new Set(["--import", "--loader", "--experimental-loader"]);
+var UNSAFE_NODE_OPTION_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var UNSAFE_FILE_OPTION_FLAGS;
+deferInit("chunk-ae5g0zb5.js:30583", () => {
+  UNSAFE_NODE_OPTION_FLAGS = new Set([
+    "--import",
+    "--loader",
+    "--experimental-loader",
+    "--env-file",
+    "--env-file-if-exists",
+    "--experimental-config-file",
+    "--experimental-package-map",
+    "--experimental-policy",
+    "--openssl-config",
+    "--snapshot-blob",
+  ]);
+  UNSAFE_FILE_OPTION_FLAGS = new Set(["--import", "--loader", "--experimental-loader"]);
+});
 //@ chunk-ae5g0zb5.js:30862-30934 placement
 /**
  * 是否为规范化的绝对路径
@@ -71,18 +75,21 @@ function isAbsoluteFilePath(file) {
 /**
  * 允许带文件的选项
  */
-var SAFE_NODE_FILE_OPTIONS = new Set(["-r", "--require", "--experimental-default-config-file"]);
+var SAFE_NODE_FILE_OPTIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ae5g0zb5.js:30934", () => {
+  SAFE_NODE_FILE_OPTIONS = new Set(["-r", "--require", "--experimental-default-config-file"]);
+});
 //@ chunk-ae5g0zb5.js:31006-31224 placement
 /**
  * 把 NODE_OPTIONS 拆成 {option, file} 列表（--x_y 规范为 --x-y）。
  */
-function parseNodeOptions(e) {
-  let filtered = e.split(" ").filter((r) => r !== "");
-  return filtered.map((r, o) => {
-    let [s = "", ...a] = r.split("=");
+function parseNodeOptions(optionsText) {
+  let filtered = optionsText.split(" ").filter((part) => part !== "");
+  return filtered.map((part, index) => {
+    let [name = "", ...valueParts] = part.split("=");
     return {
-      option: s.startsWith("--") ? `--${s.slice(2).replaceAll("_", "-")}` : s,
-      file: a.length > 0 ? a.join("=") : (filtered[o + 1] ?? ""),
+      option: name.startsWith("--") ? `--${name.slice(2).replaceAll("_", "-")}` : name,
+      file: valueParts.length > 0 ? valueParts.join("=") : (filtered[index + 1] ?? ""),
     };
   });
 }
@@ -90,10 +97,10 @@ function parseNodeOptions(e) {
 /**
  * NODE_OPTIONS 是否安全：无引号、无禁用项，需要文件的选项只能指向安全的绝对路径。
  */
-function isSafeNodeOptions(e) {
+function isSafeNodeOptions(optionsText) {
   return (
-    !e.includes('"') &&
-    parseNodeOptions(e).every(
+    !optionsText.includes('"') &&
+    parseNodeOptions(optionsText).every(
       ({ option, file }) =>
         !SAFE_NODE_FILE_OPTIONS.has(option) &&
         (!UNSAFE_NODE_OPTION_FLAGS.has(option) ||
@@ -107,8 +114,8 @@ function isSafeNodeOptions(e) {
 /**
  * 从 NODE_OPTIONS 里挑出属于“可注入代码”选项的文件参数。
  */
-function filesFromUnsafeNodeOptions(e) {
-  return parseNodeOptions(e).flatMap(({ option, file }) =>
+function filesFromUnsafeNodeOptions(optionsText) {
+  return parseNodeOptions(optionsText).flatMap(({ option, file }) =>
     UNSAFE_NODE_OPTION_FLAGS.has(option) ? [file] : [],
   );
 }
@@ -116,99 +123,115 @@ function filesFromUnsafeNodeOptions(e) {
 /**
  * LD_PRELOAD 等
  */
-var PRELOAD_ENV_VARS = new Set(["LD_PRELOAD", "LD_AUDIT", "DYLD_INSERT_LIBRARIES"]);
+var PRELOAD_ENV_VARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ae5g0zb5.js:31454", () => {
+  PRELOAD_ENV_VARS = new Set(["LD_PRELOAD", "LD_AUDIT", "DYLD_INSERT_LIBRARIES"]);
+});
 //@ chunk-ae5g0zb5.js:31520-31638 placement
 /**
  * 从目录向上找所有含 .git 的祖先目录。
  */
-async function findGitDirsUpward(e) {
-  let n = dirname(e);
+async function findGitDirsUpward(dir) {
+  let parentDir = dirname(dir);
   return [
-    ...((await lstat(join(e, ".git")).then(
+    ...((await lstat(join(dir, ".git")).then(
       () => true,
       () => false,
     ))
-      ? [e]
+      ? [dir]
       : []),
-    ...(n === e ? [] : await findGitDirsUpward(n)),
+    ...(parentDir === dir ? [] : await findGitDirsUpward(parentDir)),
   ];
 }
 //@ chunk-ae5g0zb5.js:31638-31685 placement
 /**
  * 取真实路径，失败原样返回
  */
-async function realpathOrSelf(e) {
-  return realpath(e).catch(() => e);
+async function realpathOrSelf(path) {
+  return realpath(path).catch(() => path);
 }
 //@ chunk-ae5g0zb5.js:31685-31719 placement
 /**
  * 收集原始 cwd、当前 cwd 与文件系统 cwd，作为“项目内”判定的根。
  */
-var projectRoots = identity_2(new Set(), (e) => e.clear());
+var projectRoots; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ae5g0zb5.js:31685", () => {
+  projectRoots = identity_2(new Set(), (roots) => roots.clear());
+});
 //@ chunk-ae5g0zb5.js:31719-32066 placement
 /**
  * 收集项目相关根目录（原始/当前 cwd、项目根、git 根）及其真实路径。
  */
 async function listProjectRoots() {
-  for (let a of [getOriginalCwd(), getCwdState(), getFsImplementation().cwd()]) projectRoots.add(a);
+  for (let cwd of [getOriginalCwd(), getCwdState(), getFsImplementation().cwd()]) projectRoots.add(cwd);
   let projectRootOrNull = getProjectRootOrNull();
-  let n = uniq([...(projectRootOrNull === null ? [] : [projectRootOrNull]), ...projectRoots]);
-  let options = resolveOptions(effectiveEnvSnapshot());
-  let o = isAbsolute(options) ? normalizeCommandForPlatform(await realpathOrSelf(options)) : undefined;
+  let roots = uniq([...(projectRootOrNull === null ? [] : [projectRootOrNull]), ...projectRoots]);
+  let path = resolveOptions(effectiveEnvSnapshot());
+  let commandPath = isAbsolute(path) ? normalizeCommandForPlatform(await realpathOrSelf(path)) : undefined;
   let results = await Promise.all(
     uniq([
-      ...n,
-      ...(await Promise.all(n.map(findGitDirsUpward))).flat(),
-      ...n.flatMap((a) => findCanonicalGitRoot(a) ?? []),
-    ]).map(async (a) => [a, await realpathOrSelf(a)].map(normalizeCommandForPlatform)),
+      ...roots,
+      ...(await Promise.all(roots.map(findGitDirsUpward))).flat(),
+      ...roots.flatMap((root) => findCanonicalGitRoot(root) ?? []),
+    ]).map(async (root) => [root, await realpathOrSelf(root)].map(normalizeCommandForPlatform)),
   );
-  return uniq(results.filter((a) => o === undefined || !anyPairMatches([o], a)).flat());
+  return uniq(
+    results.filter((pair) => commandPath === undefined || !anyPairMatches([commandPath], pair)).flat(),
+  );
 }
 //@ chunk-ae5g0zb5.js:32066-32421 placement
 /**
  * 路径（跟随符号链接，最多 8 层）是否落在项目目录内。
  */
-async function isInsideProject(e, n, r = 0) {
-  let replaced = e.replace(/\/{2,}/g, "/");
-  let s = replaced.length > 1 && replaced.endsWith("/") ? replaced.slice(0, -1) : replaced;
-  let a = await realpathAllowMissing(s);
+async function isInsideProject(filePath, roots, depth = 0) {
+  let replaced = filePath.replace(/\/{2,}/g, "/");
+  let normalizedPath = replaced.length > 1 && replaced.endsWith("/") ? replaced.slice(0, -1) : replaced;
+  let realPath = await realpathAllowMissing(normalizedPath);
   if (
-    a === "unreadable" ||
-    anyPairMatches([s, ...(a === "absent" ? [] : [a])].map(normalizeCommandForPlatform), n)
+    realPath === "unreadable" ||
+    anyPairMatches(
+      [normalizedPath, ...(realPath === "absent" ? [] : [realPath])].map(normalizeCommandForPlatform),
+      roots,
+    )
   )
     return true;
-  let i = await readlink(s).catch(() => {
+  let linkTarget = await readlink(normalizedPath).catch(() => {
     return;
   });
-  let c = i === undefined || isAbsolute(i) ? i : `${dirname(s)}${sep}${i}`;
-  if (c !== undefined && (r > 8 || (await isInsideProject(c, n, r + 1)))) return true;
-  let _ = dirname(s);
-  return _ !== s && isInsideProject(_, n, r);
+  let linkPath =
+    linkTarget === undefined || isAbsolute(linkTarget)
+      ? linkTarget
+      : `${dirname(normalizedPath)}${sep}${linkTarget}`;
+  if (linkPath !== undefined && (depth > 8 || (await isInsideProject(linkPath, roots, depth + 1))))
+    return true;
+  let parentDir = dirname(normalizedPath);
+  return parentDir !== normalizedPath && isInsideProject(parentDir, roots, depth);
 }
 //@ chunk-ae5g0zb5.js:32421-32495 placement
 /**
  * 绝对路径且不含 .. 与 shell 符号
  */
-function isCleanAbsolutePath(e) {
-  return isAbsolute(e) && !e.split(sep).includes("..") && !/[;$]/.test(e);
+function isCleanAbsolutePath(path) {
+  return isAbsolute(path) && !path.split(sep).includes("..") && !/[;$]/.test(path);
 }
 //@ chunk-ae5g0zb5.js:32495-32540 placement
 /**
  * 判断路径是否不属于干净绝对路径，或位于项目目录之外。
  */
-async function isOutsideProject(e, n) {
-  return !isCleanAbsolutePath(e) || isInsideProject(e, n);
+async function isOutsideProject(path, roots) {
+  return !isCleanAbsolutePath(path) || isInsideProject(path, roots);
 }
 //@ chunk-ae5g0zb5.js:32540-32683 placement
 /**
  * 过滤 PATH 类变量：只保留不在项目内的条目。
  */
-async function filterSafePathEntries(e, n, r) {
+async function filterSafePathEntries(entries, roots, allowRelative) {
   return (
     await Promise.all(
-      e.map(async (s) =>
-        (r && s !== "" && !/[/;$]/.test(s)) || (isCleanAbsolutePath(s) && !(await isInsideProject(s, n)))
-          ? [s]
+      entries.map(async (entry) =>
+        (allowRelative && entry !== "" && !/[/;$]/.test(entry)) ||
+        (isCleanAbsolutePath(entry) && !(await isInsideProject(entry, roots)))
+          ? [entry]
           : [],
       ),
     )
@@ -217,21 +240,21 @@ async function filterSafePathEntries(e, n, r) {
     .join(delimiter);
 }
 //@ chunk-ae5g0zb5.js:32683-33079 placement
-async function findUnsafeInheritedEnv(appEnvironment, n) {
+async function findUnsafeInheritedEnv(appEnvironment, roots) {
   return Object.fromEntries(
     await Promise.all(
       Object.entries(appEnvironment).map(async ([key, value]) => {
         if (isBuildToolEnvVar(key))
-          return [key, await filterSafePathEntries(value.split(delimiter), n, false)];
+          return [key, await filterSafePathEntries(value.split(delimiter), roots, false)];
         if (key === "NODE_OPTIONS") {
           let results = await Promise.all(
-            filesFromUnsafeNodeOptions(value).map((a) => isOutsideProject(a, n)),
+            filesFromUnsafeNodeOptions(value).map((file) => isOutsideProject(file, roots)),
           );
           return [key, results.includes(true) ? "" : value];
         }
-        if (key === "CHROME_DEVEL_SANDBOX") return [key, await filterSafePathEntries([value], n, false)];
+        if (key === "CHROME_DEVEL_SANDBOX") return [key, await filterSafePathEntries([value], roots, false)];
         return PRELOAD_ENV_VARS.has(key)
-          ? [key, await filterSafePathEntries(value.split(key === "LD_PRELOAD" ? /[ :]+/ : ":"), n, true)]
+          ? [key, await filterSafePathEntries(value.split(key === "LD_PRELOAD" ? /[ :]+/ : ":"), roots, true)]
           : [key, value];
       }),
     ),
@@ -246,9 +269,9 @@ var RESOLVE_NODE_TIMEOUT_MS = 5000;
 /**
  * 找到 PATH 上第一个 node，拒绝位于项目或其检出目录内的 node。
  */
-async function resolveTrustedNode(unsafeInheritedEnv, n, r = RESOLVE_NODE_TIMEOUT_MS) {
-  let o = whichOnPath("node", unsafeInheritedEnv.PATH ?? "");
-  if (o === null || (await isOutsideProject(o, n))) {
+async function resolveTrustedNode(unsafeInheritedEnv, roots, timeoutMs = RESOLVE_NODE_TIMEOUT_MS) {
+  let nodePath = whichOnPath("node", unsafeInheritedEnv.PATH ?? "");
+  if (nodePath === null || (await isOutsideProject(nodePath, roots))) {
     logForDebugging(
       "Claude Test: the first node on your own PATH is missing, or leads into this project or one of its checkouts (PATH from the shell that started Claude Code, or your user settings; a project's settings are not used)",
       {
@@ -257,7 +280,7 @@ async function resolveTrustedNode(unsafeInheritedEnv, n, r = RESOLVE_NODE_TIMEOU
     );
     return;
   }
-  let { code, stdout, timedOut } = await execFileNoThrow(o, ["-p", "process.execPath"], {
+  let { code, stdout, timedOut } = await execFileNoThrow(nodePath, ["-p", "process.execPath"], {
     cwd: "/",
     env: {
       ...subprocessEnv(),
@@ -265,16 +288,16 @@ async function resolveTrustedNode(unsafeInheritedEnv, n, r = RESOLVE_NODE_TIMEOU
     },
     extendEnv: false,
     stdin: "ignore",
-    timeout: r,
+    timeout: timeoutMs,
     maxBuffer: 65536,
   });
-  let sliced = stdout.slice(
+  let path = stdout.slice(
     stdout.lastIndexOf(`
 `) + 1,
   );
-  if (code === 0 && !(await isOutsideProject(sliced, n))) return sliced;
+  if (code === 0 && !(await isOutsideProject(path, roots))) return path;
   logForDebugging(
-    `Claude Test: ${o} -p process.execPath gave no usable path (${timedOut ? `no answer within ${r} ms` : code === 0 ? "exit 0, but its last line was no plain full path outside this project" : `exit ${code}`})`,
+    `Claude Test: ${nodePath} -p process.execPath gave no usable path (${timedOut ? `no answer within ${timeoutMs} ms` : code === 0 ? "exit 0, but its last line was no plain full path outside this project" : `exit ${code}`})`,
     {
       level: "error",
     },
@@ -317,25 +340,33 @@ var SCRUBBED_APP_ENV_VARS = [
  * 生成被测应用的环境变量：清掉 CLAUDE* 与代理差异项，处理 PATH/NODE_OPTIONS 等可劫持变量。
  */
 function buildAppEnvironment() {
-  let e = effectiveEnvSnapshot();
-  let n = {
-    ...e,
-    ...pickByHelper(agentProxyEnv(), (o, s) => !isDangerousEnvName(s) && !isEnvOverridden(s, o, e)),
+  let effectiveEnv = effectiveEnvSnapshot();
+  let proxyEnv = {
+    ...effectiveEnv,
+    ...pickByHelper(
+      agentProxyEnv(),
+      (value, name) => !isDangerousEnvName(name) && !isEnvOverridden(name, value, effectiveEnv),
+    ),
   };
-  let r = {
-    ...n,
-    ...proxyEnvForSubprocess(n),
+  let withProxyEnv = {
+    ...proxyEnv,
+    ...proxyEnvForSubprocess(proxyEnv),
   };
   return Object.fromEntries([
     ...Object.entries(subprocessEnv()).flatMap(([key, value]) => {
-      if (isBuildToolEnvVar(key)) return [sanitizeEnvEntry(key, getEnvCaseInsensitive(e, key))];
-      return key.startsWith("CLAUDE") || value === getEnvCaseInsensitive(r, key)
+      if (isBuildToolEnvVar(key)) return [sanitizeEnvEntry(key, getEnvCaseInsensitive(effectiveEnv, key))];
+      return key.startsWith("CLAUDE") || value === getEnvCaseInsensitive(withProxyEnv, key)
         ? []
         : [sanitizeEnvEntry(key)];
     }),
-    ...SCRUBBED_APP_ENV_VARS.map((o) => sanitizeEnvEntry(o, getEnvCaseInsensitive(e, o))),
-    ...TEAMMATE_ENV_VARS.map((o) =>
-      sanitizeEnvEntry(o, getEnvCaseInsensitive(r, o) ?? r[o.toUpperCase()] ?? r[o.toLowerCase()]),
+    ...SCRUBBED_APP_ENV_VARS.map((name) => sanitizeEnvEntry(name, getEnvCaseInsensitive(effectiveEnv, name))),
+    ...TEAMMATE_ENV_VARS.map((name) =>
+      sanitizeEnvEntry(
+        name,
+        getEnvCaseInsensitive(withProxyEnv, name) ??
+          withProxyEnv[name.toUpperCase()] ??
+          withProxyEnv[name.toLowerCase()],
+      ),
     ),
   ]);
 }
@@ -343,17 +374,17 @@ function buildAppEnvironment() {
 /**
  * 清理单个环境变量：不安全的 NODE_OPTIONS 置空，PATH 类去掉含分号和 ${ 的条目。
  */
-function sanitizeEnvEntry(e, envCaseInsensitive = "") {
-  if (e === "NODE_OPTIONS" && !isSafeNodeOptions(envCaseInsensitive)) return [e, ""];
+function sanitizeEnvEntry(name, envCaseInsensitive = "") {
+  if (name === "NODE_OPTIONS" && !isSafeNodeOptions(envCaseInsensitive)) return [name, ""];
   return [
-    e,
-    (isBuildToolEnvVar(e)
+    name,
+    (isBuildToolEnvVar(name)
       ? sanitizePathEnv(envCaseInsensitive)
           .split(delimiter)
-          .filter((r) => !r.includes(";"))
+          .filter((entry) => !entry.includes(";"))
       : [envCaseInsensitive]
     )
-      .filter((r) => !r.includes("${"))
+      .filter((part) => !part.includes("${"))
       .join(delimiter),
   ];
 }
@@ -362,9 +393,9 @@ function sanitizeEnvEntry(e, envCaseInsensitive = "") {
  * 动态加载 Claude Test 安装文件模块并缓存名称。
  */
 async function loadInstalledFiles() {
-  let e = await import("./chunk-thddg15d.js");
-  testPluginTexts.name ??= testPluginContentId(portPortedFiles(e.INSTALLED_FILES));
-  return e;
+  let installedFilesModule = await import("../../../skills/bundled/INSTALLED_FILES.lazy.js");
+  testPluginTexts.name ??= testPluginContentId(portPortedFiles(installedFilesModule.INSTALLED_FILES));
+  return installedFilesModule;
 }
 export {
   SCRUBBED_APP_ENV_VARS,

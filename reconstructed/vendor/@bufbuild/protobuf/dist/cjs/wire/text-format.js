@@ -5,12 +5,12 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_descriptors } from "../descriptors.js";
 import { require_proto_int64 } from "../../commonjs/proto-int64.js";
 
 //@ chunk-fq0cr76a.js:361746-364098 cjs-require-graph
-var require_text_format = x(function (cjsExports) {
+var require_text_format = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -116,28 +116,28 @@ var require_text_format = x(function (cjsExports) {
               case "5":
               case "6":
               case "7": {
-                let s = input.c;
+                let digits = input.c;
                 let t = input.take(2);
                 if (t === false) return false;
-                let n = parseInt(s + t, 8);
+                let n = parseInt(digits + t, 8);
                 if (Number.isNaN(n)) return false;
                 b_2.push(n);
                 break;
               }
               case "x": {
-                let s = input.c;
+                let digits = input.c;
                 let t = input.take(2);
                 if (t === false) return false;
-                let n = parseInt(s + t, 16);
+                let n = parseInt(digits + t, 16);
                 if (Number.isNaN(n)) return false;
                 b_2.push(n);
                 break;
               }
               case "u": {
-                let s = input.c;
+                let digits = input.c;
                 let t = input.take(4);
                 if (t === false) return false;
-                let n = parseInt(s + t, 16);
+                let n = parseInt(digits + t, 16);
                 if (Number.isNaN(n)) return false;
                 let chunk = new Uint8Array(4);
                 new DataView(chunk.buffer).setInt32(0, n, true);
@@ -145,10 +145,10 @@ var require_text_format = x(function (cjsExports) {
                 break;
               }
               case "U": {
-                let s = input.c;
+                let digits = input.c;
                 let t = input.take(8);
                 if (t === false) return false;
-                let tc = proto_int64_js_1.protoInt64.uEnc(s + t);
+                let tc = proto_int64_js_1.protoInt64.uEnc(digits + t);
                 let chunk = new Uint8Array(8);
                 let view = new DataView(chunk.buffer);
                 view.setInt32(0, tc.lo, true);

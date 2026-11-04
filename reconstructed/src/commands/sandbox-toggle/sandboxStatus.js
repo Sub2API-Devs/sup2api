@@ -18,8 +18,8 @@ import {
 import { getSettings_DEPRECATED } from "../../utils/settings/settings.js";
 
 //@ chunk-ygsnywrv.js:5410-5567 placement
-function stripSandboxInstallHint(n) {
-  return n.replace(
+function stripSandboxInstallHint(message) {
+  return message.replace(
     "Run /sandbox install, or see https://code.claude.com/docs/en/sandboxing.",
     "See https://code.claude.com/docs/en/sandboxing.",
   );
@@ -28,48 +28,54 @@ function stripSandboxInstallHint(n) {
 async function getSandboxStatus() {
   invalidateCommandNames();
   let platform = getPlatform();
-  let a = SandboxManager.isSupportedPlatform();
-  let b = SandboxManager.isPlatformInEnabledList();
-  let o = a && b;
-  let t = o ? undefined : !a ? (platform === "wsl" ? "wsl1" : "platform") : "excluded_platform";
-  let d = o
+  let isSupported = SandboxManager.isSupportedPlatform();
+  let isListedPlatform = SandboxManager.isPlatformInEnabledList();
+  let isAvailable = isSupported && isListedPlatform;
+  let unsupportedReason = isAvailable
+    ? undefined
+    : !isSupported
+      ? platform === "wsl"
+        ? "wsl1"
+        : "platform"
+      : "excluded_platform";
+  let deps = isAvailable
     ? await SandboxManager.checkDependenciesAsync()
     : {
         errors: [],
         warnings: [],
       };
-  let l = SandboxManager.isSandboxEnabledInSettings();
-  let r = SandboxManager.isSandboxingEnabled();
-  let sandboxUnavailableReason = SandboxManager.getSandboxUnavailableReason();
-  let c = SandboxManager.areSandboxSettingsLockedByPolicy();
+  let enabledInSettings = SandboxManager.isSandboxEnabledInSettings();
+  let enabled = SandboxManager.isSandboxingEnabled();
+  let message = SandboxManager.getSandboxUnavailableReason();
+  let policyLocked = SandboxManager.areSandboxSettingsLockedByPolicy();
   let overridesLocked =
-    c ||
+    policyLocked ||
     SandboxManager.areUnsandboxedCommandsForbiddenByPolicy() ||
     SandboxManager.isUnsandboxedFallbackClosedByTrustedTier();
-  let g = SandboxManager.isAutoAllowBashIfSandboxedEnabled();
-  let mode = !l ? "disabled" : g ? "auto-allow" : "regular";
+  let autoAllow = SandboxManager.isAutoAllowBashIfSandboxedEnabled();
+  let mode = !enabledInSettings ? "disabled" : autoAllow ? "auto-allow" : "regular";
   let sandbox = getSettings_DEPRECATED()?.sandbox;
   let configuredNetworkAllowances = SandboxManager.getConfiguredNetworkAllowances();
   let configuredFilesystemGrants = SandboxManager.getConfiguredFilesystemGrants();
   return {
-    supported: o,
-    ...(t !== undefined && {
-      unsupported_reason: t,
+    supported: isAvailable,
+    ...(unsupportedReason !== undefined && {
+      unsupported_reason: unsupportedReason,
     }),
-    locked: c,
+    locked: policyLocked,
     overrides_locked: overridesLocked,
-    enabled: r,
-    enabled_in_settings: l,
-    ...(sandboxUnavailableReason !== undefined && {
-      unavailable_reason: stripSandboxInstallHint(sandboxUnavailableReason),
+    enabled,
+    enabled_in_settings: enabledInSettings,
+    ...(message !== undefined && {
+      unavailable_reason: stripSandboxInstallHint(message),
     }),
     mode,
     auto_allow_available: SandboxManager.isAutoAllowSupported(),
     no_sandbox_allowed: !shouldForceSandboxOn(),
     unsandboxed_fallback: SandboxManager.areUnsandboxedCommandsAllowed(),
     dependencies: {
-      errors: d.errors.map(stripSandboxInstallHint),
-      warnings: d.warnings.map(stripSandboxInstallHint),
+      errors: deps.errors.map(stripSandboxInstallHint),
+      warnings: deps.warnings.map(stripSandboxInstallHint),
     },
     excluded_commands: SandboxManager.getExcludedCommands(),
     restrictions: {
@@ -82,7 +88,8 @@ async function getSandboxStatus() {
       network_managed: shouldAllowManagedSandboxDomainsOnly(),
       unix_sockets: configuredNetworkAllowances.allowUnixSockets ?? [],
       allow_all_unix_sockets: configuredNetworkAllowances.allowAllUnixSockets === true,
-      ignored_glob_patterns: r ? SandboxManager.getLinuxGlobPatternWarnings() : [],
+      ignored_glob_patterns: enabled ? SandboxManager.getLinuxGlobPatternWarnings() : [],
     },
   };
 }
+export { getSandboxStatus };

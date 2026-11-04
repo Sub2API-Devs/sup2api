@@ -8,12 +8,12 @@
 import { AnthropicError } from "../core/error.mjs";
 
 //@ chunk-hwmsct5x.js:90862-90927 esm-fingerprint
-function getOutputFormat(params) {
+function getOutputFormat_2(params) {
   return params?.output_format ?? params?.output_config?.format;
 }
 //@ chunk-hwmsct5x.js:90927-91355 esm-fingerprint
 function attachParsedOutput(message, params, opts) {
-  let outputFormat = getOutputFormat(params);
+  let outputFormat = getOutputFormat_2(params);
   if (!params || !("parse" in (outputFormat ?? {})))
     return {
       ...message,
@@ -85,7 +85,7 @@ function parseMessageContent(message, params, opts) {
  * 按 output_format=json_schema 解析文本块为结构化输出（Anthropic SDK 代码）。
  */
 function parseStructuredOutput(params, content) {
-  let outputFormat = getOutputFormat(params);
+  let outputFormat = getOutputFormat_2(params);
   if (outputFormat?.type !== "json_schema") return null;
   try {
     if ("parse" in outputFormat) return outputFormat.parse(content);
@@ -95,19 +95,19 @@ function parseStructuredOutput(params, content) {
   }
 }
 //@ chunk-hwmsct5x.js:118856-119155 esm-fingerprint
-function bd(params) {
+function getOutputFormat(params) {
   if (!params.output_format) return params;
   if (params.output_config?.format)
     throw new AnthropicError(
       "Both output_format and output_config.format were provided. Please use only output_config.format (output_format is deprecated).",
     );
-  let { output_format: outputFormat, ...r } = params;
+  let { output_format: outputFormat, ...rest } = params;
   return {
-    ...r,
+    ...rest,
     output_config: {
       ...params.output_config,
       format: outputFormat,
     },
   };
 }
-export { attachParsedOutput, bd, parseMessageContent };
+export { attachParsedOutput, getOutputFormat, parseMessageContent };

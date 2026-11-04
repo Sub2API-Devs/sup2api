@@ -5,12 +5,12 @@
  * pieces: chunk-na3pph4p.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_stringify } from "./lib/stringify.js";
 import { require_parse } from "./lib/parse.js";
 
 //@ chunk-na3pph4p.js:43194-43354 cjs-require-graph
-var require_json_bigint = x(function (cjsExports, cjsModule) {
+var require_json_bigint = __commonJS(function (cjsExports, cjsModule) {
   var json_stringify = require_stringify().stringify;
   var json_parse = require_parse();
   cjsModule.exports = function (options) {

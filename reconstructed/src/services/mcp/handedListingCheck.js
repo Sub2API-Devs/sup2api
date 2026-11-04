@@ -35,8 +35,11 @@ var SAFE_TOOL_NAME_REGEX = /^[A-Za-z0-9_-]+$/;
 /**
  * 判断工具清单是否可交付（名字合法且唯一）。
  */
-function isDeliverableToolsList(n) {
-  return n.every((o) => SAFE_TOOL_NAME_REGEX.test(o.name)) && new Set(n.map((o) => o.name)).size === n.length;
+function isDeliverableToolsList(tools) {
+  return (
+    tools.every((tool) => SAFE_TOOL_NAME_REGEX.test(tool.name)) &&
+    new Set(tools.map((tool) => tool.name)).size === tools.length
+  );
 }
 //@ chunk-zdgk9dc6.js:1658-1825 placement
 function wrapHandedListingChecks(row, tools, tools_2, dialer, isHandshakeHanded) {
@@ -44,11 +47,11 @@ function wrapHandedListingChecks(row, tools, tools_2, dialer, isHandshakeHanded)
     row,
     dialer,
     isHandshakeHanded,
-    handedByName: new Map(isDeliverableToolsList(tools_2) ? tools_2.map((u) => [u.name, u]) : []),
+    handedByName: new Map(isDeliverableToolsList(tools_2) ? tools_2.map((tool) => [tool.name, tool]) : []),
     ask: undefined,
     passed: new Set(),
   };
-  for (let u of tools) wrapToolWithListingCheck(ctx, u);
+  for (let tool of tools) wrapToolWithListingCheck(ctx, tool);
 }
 //@ chunk-zdgk9dc6.js:1825-2513 placement
 /**
@@ -57,50 +60,50 @@ function wrapHandedListingChecks(row, tools, tools_2, dialer, isHandshakeHanded)
 function wrapToolWithListingCheck(ctx, tool) {
   let toolName = tool.mcpInfo?.toolName;
   let { call: originalCall, validateInput, checkPermissions, askInputPreparer } = tool;
-  tool.call = async (m, s, ...h) => {
-    let c = await checkHandedListing(ctx, tool, toolName, s);
-    if (c !== undefined)
+  tool.call = async (input, context, ...rest) => {
+    let refusal = await checkHandedListing(ctx, tool, toolName, context);
+    if (refusal !== undefined)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        c,
+        refusal,
         "MCP tool refused by the check of its handed listing",
       );
-    return originalCall(m, s, ...h);
+    return originalCall(input, context, ...rest);
   };
-  tool.validateInput = async (m, s) => {
-    let h = await checkHandedListing(ctx, tool, toolName, s);
-    if (h !== undefined)
+  tool.validateInput = async (input, context) => {
+    let refusal = await checkHandedListing(ctx, tool, toolName, context);
+    if (refusal !== undefined)
       return {
         result: false,
-        message: h,
+        message: refusal,
         errorCode: 3,
       };
     return (
-      (await validateInput?.(m, s)) ?? {
+      (await validateInput?.(input, context)) ?? {
         result: true,
       }
     );
   };
-  tool.checkPermissions = async (m, s) => {
-    let h = await checkHandedListing(ctx, tool, toolName, s);
-    if (h !== undefined)
+  tool.checkPermissions = async (input, context) => {
+    let refusal = await checkHandedListing(ctx, tool, toolName, context);
+    if (refusal !== undefined)
       return {
         behavior: "deny",
-        message: h,
+        message: refusal,
         decisionReason: {
           type: "other",
-          reason: h,
+          reason: refusal,
         },
       };
-    return checkPermissions(m, s);
+    return checkPermissions(input, context);
   };
   if (askInputPreparer !== undefined)
-    tool.askInputPreparer = async (m, s, h) => {
-      let c = await checkHandedListing(ctx, tool, toolName, s);
-      return c === undefined
-        ? askInputPreparer(m, s, h)
+    tool.askInputPreparer = async (input, context, toolUseId) => {
+      let refusal = await checkHandedListing(ctx, tool, toolName, context);
+      return refusal === undefined
+        ? askInputPreparer(input, context, toolUseId)
         : {
             prepare: async () => ({
-              error: c,
+              error: refusal,
             }),
           };
     };
@@ -109,7 +112,7 @@ function wrapToolWithListingCheck(ctx, tool) {
 /**
  * 把 MCP 工具调用与交给模型的工具列表比对，不一致时拒绝
  */
-async function checkHandedListing(ctx, tool, toolName, y) {
+async function checkHandedListing(ctx, tool, toolName, context) {
   let { row, handedByName, passed } = ctx;
   if (toolName === undefined)
     return listingCheckFailedMessage(
@@ -117,71 +120,71 @@ async function checkHandedListing(ctx, tool, toolName, y) {
       tool.name,
       "Claude Code could not tell which of the server's tools this is",
     );
-  let { signal } = y.abortController;
+  let { signal } = context.abortController;
   if (passed.has(toolName)) return;
-  let s = (ctx.ask ??= startListingCheck(ctx, y.toolUseId));
-  let h;
+  let ask = (ctx.ask ??= startListingCheck(ctx, context.toolUseId));
+  let result;
   try {
-    h = await boundDial(s.answer, {
+    result = await boundDial(ask.answer, {
       signal,
       timeoutMs: 2 * getConnectionTimeoutMs(),
       serverName: row.name,
       context: "MCP tool check",
     });
   } catch (error) {
-    clearPendingAsk(ctx, s);
+    clearPendingAsk(ctx, ask);
     if (isAbortError(error)) throw error;
-    if (!s.hasAnswered || error instanceof ListingCheckAbortError) {
-      let M = s.hasAnswered ? errorMessage(error) : "the server did not answer in time";
+    if (!ask.hasAnswered || error instanceof ListingCheckAbortError) {
+      let failureText = ask.hasAnswered ? errorMessage(error) : "the server did not answer in time";
       return refuseByListingCheck(
         ctx,
-        s,
+        ask,
         "not_compared",
-        `${listingCheckFailedMessage(row, toolName, M)} Try the call again.`,
+        `${listingCheckFailedMessage(row, toolName, failureText)} Try the call again.`,
       );
     }
     return refuseByListingCheck(
       ctx,
-      s,
+      ask,
       "not_compared",
       error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
         ? errorMessage(error)
         : listingCheckFailedMessage(row, toolName, describeListingFailure(error, row)),
     );
   }
-  if (ctx.isHandshakeHanded && h.hasOtherHandshake)
+  if (ctx.isHandshakeHanded && result.hasOtherHandshake)
     return refuseByListingCheck(
       ctx,
-      s,
+      ask,
       "handshake",
       `MCP server "${row.name}" does not match what Claude Code was given at start-up (in its capabilities, name, version or instructions), so the call was not made. ${CALL_AGAIN_HINT}`,
     );
-  let c = h.tools.get(toolName);
-  if (c === undefined && h.mayListMore)
+  let handedTool = result.tools.get(toolName);
+  if (handedTool === undefined && result.mayListMore)
     return refuseByListingCheck(
       ctx,
-      s,
+      ask,
       "not_compared",
       `${listingCheckFailedMessage(row, toolName, "the server's list could not be matched tool by tool")} ${CALL_AGAIN_HINT}`,
     );
   if (!handedByName.has(toolName))
     return refuseByListingCheck(
       ctx,
-      s,
+      ask,
       "not_compared",
       `${listingCheckFailedMessage(row, toolName, "the list given at start-up could not be matched tool by tool")} ${CALL_AGAIN_HINT}`,
     );
-  if (c === undefined)
+  if (handedTool === undefined)
     return refuseByListingCheck(
       ctx,
-      s,
+      ask,
       "tool_gone",
       `MCP server "${row.name}" no longer offers the tool "${toolName}", so the call was not made.`,
     );
-  if (!deepEqualIgnoringUndefined(c, handedByName.get(toolName)))
+  if (!deepEqualIgnoringUndefined(handedTool, handedByName.get(toolName)))
     return refuseByListingCheck(
       ctx,
-      s,
+      ask,
       "tool_differs",
       `MCP server "${row.name}" lists the tool "${toolName}" differently from the definition that Claude Code was given at start-up, so the call was not made. ${CALL_AGAIN_HINT}`,
     );
@@ -190,63 +193,64 @@ async function checkHandedListing(ctx, tool, toolName, y) {
   return;
 }
 //@ chunk-zdgk9dc6.js:3986-4105 placement
-function startListingCheck(n, toolUseId) {
-  let e = {
-    answer: logHandedListingCheck(n, toolUseId),
+function startListingCheck(ctx, toolUseId) {
+  let ask = {
+    answer: logHandedListingCheck(ctx, toolUseId),
     hasAnswered: false,
   };
-  e.answer
+  ask.answer
     .finally(() => {
-      e.hasAnswered = true;
+      ask.hasAnswered = true;
     })
     .catch(() => {});
-  return e;
+  return ask;
 }
 //@ chunk-zdgk9dc6.js:4105-4755 placement
 async function logHandedListingCheck({ row, dialer, isHandshakeHanded }, toolUseId) {
-  let r = await dialer.ensureConnectedClient(row, {
+  let freshConnection = await dialer.ensureConnectedClient(row, {
     context: "MCP tool call",
     toolUseId,
   });
-  let p = r.instructions !== row.instructions;
-  if (isHandshakeHanded && p) logFeatureSad("mcp_handed_listing_check", "instructions_differ");
-  let u =
-    !deepEqualIgnoringUndefined(r.capabilities, row.capabilities) ||
-    r.serverInfo?.name !== row.serverInfo?.name ||
-    r.serverInfo?.version !== row.serverInfo?.version;
-  if (isHandshakeHanded && u) logFeatureSad("mcp_handed_listing_check", "handshake_differs");
-  let m = await dialer
-    .listToolsRaw(r.client, {
+  let instructionsDiffer = freshConnection.instructions !== row.instructions;
+  if (isHandshakeHanded && instructionsDiffer)
+    logFeatureSad("mcp_handed_listing_check", "instructions_differ");
+  let handshakeDiffers =
+    !deepEqualIgnoringUndefined(freshConnection.capabilities, row.capabilities) ||
+    freshConnection.serverInfo?.name !== row.serverInfo?.name ||
+    freshConnection.serverInfo?.version !== row.serverInfo?.version;
+  if (isHandshakeHanded && handshakeDiffers) logFeatureSad("mcp_handed_listing_check", "handshake_differs");
+  let listing = await dialer
+    .listToolsRaw(freshConnection.client, {
       timeout: getConnectionTimeoutMs(),
     })
     .catch((error) => {
       if (isAbortError(error)) throw error;
       throw new ListingCheckAbortError(describeListingFailure(error, row));
     });
-  let s = isDeliverableToolsList(m.tools);
+  let isDeliverable = isDeliverableToolsList(listing.tools);
   return {
-    tools: new Map(s ? m.tools.map((tool) => [tool.name, tool]) : []),
-    mayListMore: m.nextCursor !== undefined || !s,
-    hasOtherHandshake: p || u,
+    tools: new Map(isDeliverable ? listing.tools.map((tool) => [tool.name, tool]) : []),
+    mayListMore: listing.nextCursor !== undefined || !isDeliverable,
+    hasOtherHandshake: instructionsDiffer || handshakeDiffers,
   };
 }
 //@ chunk-zdgk9dc6.js:4755-4797 placement
 /**
  * 若 ask 标记正是给定值就清掉。
  */
-function clearPendingAsk(n, o) {
-  if (n.ask === o) n.ask = undefined;
+function clearPendingAsk(ctx, ask) {
+  if (ctx.ask === ask) ctx.ask = undefined;
 }
 //@ chunk-zdgk9dc6.js:4797-4901 placement
-function refuseByListingCheck(n, o, e, y) {
-  clearPendingAsk(n, o);
-  if (e !== "handshake") logFeatureSad("mcp_handed_listing_check", e);
-  logMCPDebug(n.row.name, y);
-  return y;
+function refuseByListingCheck(ctx, ask, reason, message) {
+  clearPendingAsk(ctx, ask);
+  if (reason !== "handshake") logFeatureSad("mcp_handed_listing_check", reason);
+  logMCPDebug(ctx.row.name, message);
+  return message;
 }
 //@ chunk-zdgk9dc6.js:4901-5040 placement
-function listingCheckFailedMessage(row, o, e) {
-  return `The tool "${o}" could not be checked against what MCP server "${row.name}" lists (${e}), so the call was not made.`;
+function listingCheckFailedMessage(row, toolName, reason) {
+  return `The tool "${toolName}" could not be checked against what MCP server "${row.name}" lists (${reason}), so the call was not made.`;
 }
 //@ chunk-zdgk9dc6.js:5040-5102 placement
 /**

@@ -16,8 +16,8 @@ import { isKnownCcrSessionRef } from "../../services/plugins/accountSync/listPlu
 /**
  * 取会话引用使用的 CCR 会话 id（必要时从环境变量锁存）。
  */
-function ccrSessionIdForRefs(e) {
-  let sessionRefsGate = e.sessionRefsGate;
+function ccrSessionIdForRefs(session) {
+  let sessionRefsGate = session.sessionRefsGate;
   if (sessionRefsGate.ccrSessionID() === undefined) {
     let CLAUDE_CODE_SESSION_ID = env.CLAUDE_CODE_SESSION_ID;
     if (CLAUDE_CODE_SESSION_ID && sessionIdBody(CLAUDE_CODE_SESSION_ID) !== CLAUDE_CODE_SESSION_ID)
@@ -29,9 +29,11 @@ function ccrSessionIdForRefs(e) {
 /**
  * 判断会话引用同步是否启用（环境变量与条件满足时锁存为真）。
  */
-function isSessionRefsSyncEnabled(e) {
-  let n = e.sessionRefsGate.syncEnabled();
-  if (n !== undefined) return n;
-  return e.sessionRefsGate.latchSyncEnabled(!!env.CLAUDE_CODE_SYNC_SESSION_REFS && isKnownCcrSessionRef(e));
+function isSessionRefsSyncEnabled(session) {
+  let latched = session.sessionRefsGate.syncEnabled();
+  if (latched !== undefined) return latched;
+  return session.sessionRefsGate.latchSyncEnabled(
+    !!env.CLAUDE_CODE_SYNC_SESSION_REFS && isKnownCcrSessionRef(session),
+  );
 }
 export { ccrSessionIdForRefs, isSessionRefsSyncEnabled };

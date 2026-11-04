@@ -8,8 +8,13 @@
  * pieces: chunk-07xmkrj2.js (8)
  * attribution: placement 8
  */
-import { init_react_production, y, qt, Se } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import {
+  init_react_production,
+  useState,
+  createContext,
+  useContext,
+} from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { getProcessedQueuedCommands } from "../utils/messageQueueManager.js";
 import { useStrayClickGuard } from "./CustomSelect/strayClickGuard.js";
@@ -21,232 +26,251 @@ import { Text, Box } from "../ink/components/Text.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { LinkifiedText } from "./LinkifiedText.js";
-import { SPINNER_DOTS, PROPORTION } from "../utils/permissions/autoModeRulesPrompt.js";
+import { SPINNER_DOTS, PROPORTION } from "../constants/figures.js";
 import { useTranscriptMode } from "./messages/transcriptModeContext.js";
 import { useQueuedMessageContext } from "../context/QueuedMessageContext.js";
 import { currentToolPermissionContext } from "../utils/permissions/currentPermissionContext.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-07xmkrj2.js:708-712 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-07xmkrj2.js:708", () => {
+  init_react_production();
+});
 //@ chunk-07xmkrj2.js:712-1509 placement
 function SlashCommandLink(props) {
-  let C = w(17);
+  let $ = useMemoCache(17);
   let { command, args, color } = props;
-  let t = args === undefined ? command : `${command} ${args}`;
-  let i;
-  if (C[0] === MEMO_CACHE_SENTINEL) {
-    i = getProcessedQueuedCommands();
-    C[0] = i;
-  } else i = C[0];
-  let U = i;
-  let [x, h] = y(false);
+  let commandText = args === undefined ? command : `${command} ${args}`;
+  let processedCommands;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    processedCommands = getProcessedQueuedCommands();
+    $[0] = processedCommands;
+  } else processedCommands = $[0];
+  let processedCommandsValue = processedCommands;
+  let [hovered, setHovered] = useState(false);
   let strayClickGuard = useStrayClickGuard();
-  if (!U) {
-    let d;
-    if (C[1] !== color || C[2] !== t) {
-      d = jsxProd_default_2(Text, {
+  if (!processedCommandsValue) {
+    let textElement;
+    if ($[1] !== color || $[2] !== commandText) {
+      textElement = jsxProd_default_2(Text, {
         underline: true,
         color,
-        children: ["/", t],
+        children: ["/", commandText],
       });
-      C[1] = color;
-      C[2] = t;
-      C[3] = d;
-    } else d = C[3];
-    return d;
+      $[1] = color;
+      $[2] = commandText;
+      $[3] = textElement;
+    } else textElement = $[3];
+    return textElement;
   }
   let onClick;
-  if (C[4] !== command || C[5] !== t || C[6] !== strayClickGuard) {
-    onClick = (v) => {
-      if (strayClickGuard(v)) {
+  if ($[4] !== command || $[5] !== commandText || $[6] !== strayClickGuard) {
+    onClick = (event) => {
+      if (strayClickGuard(event)) {
         return;
       }
       logEvent("tengu_slash_link_clicked", {
         command: fromEnum(command),
       });
-      U(t, {
+      processedCommandsValue(commandText, {
         kind: "human",
       });
     };
-    C[4] = command;
-    C[5] = t;
-    C[6] = strayClickGuard;
-    C[7] = onClick;
-  } else onClick = C[7];
+    $[4] = command;
+    $[5] = commandText;
+    $[6] = strayClickGuard;
+    $[7] = onClick;
+  } else onClick = $[7];
   let onMouseEnter;
   let onMouseLeave;
-  if (C[8] === MEMO_CACHE_SENTINEL) {
-    onMouseEnter = () => h(true);
-    onMouseLeave = () => h(false);
-    C[8] = onMouseEnter;
-    C[9] = onMouseLeave;
+  if ($[8] === MEMO_CACHE_SENTINEL) {
+    onMouseEnter = () => setHovered(true);
+    onMouseLeave = () => setHovered(false);
+    $[8] = onMouseEnter;
+    $[9] = onMouseLeave;
   } else {
-    onMouseEnter = C[8];
-    onMouseLeave = C[9];
+    onMouseEnter = $[8];
+    onMouseLeave = $[9];
   }
   let children;
-  if (C[10] !== color || C[11] !== x || C[12] !== t) {
+  if ($[10] !== color || $[11] !== hovered || $[12] !== commandText) {
     children = jsxProd_default_2(Text, {
       underline: true,
-      bold: x,
+      bold: hovered,
       color,
-      children: ["/", t],
+      children: ["/", commandText],
     });
-    C[10] = color;
-    C[11] = x;
-    C[12] = t;
-    C[13] = children;
-  } else children = C[13];
-  let T;
-  if (C[14] !== onClick || C[15] !== children) {
-    T = jsxProd_default(Box, {
+    $[10] = color;
+    $[11] = hovered;
+    $[12] = commandText;
+    $[13] = children;
+  } else children = $[13];
+  let boxElement;
+  if ($[14] !== onClick || $[15] !== children) {
+    boxElement = jsxProd_default(Box, {
       onClick,
       onMouseEnter,
       onMouseLeave,
       children,
     });
-    C[14] = onClick;
-    C[15] = children;
-    C[16] = T;
-  } else T = C[16];
-  return T;
+    $[14] = onClick;
+    $[15] = children;
+    $[16] = boxElement;
+  } else boxElement = $[16];
+  return boxElement;
 }
 //@ chunk-07xmkrj2.js:1509-1513 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-07xmkrj2.js:1509", () => {
+  init_react_production();
+});
 //@ chunk-07xmkrj2.js:1513-1517 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-07xmkrj2.js:1513", () => {
+  init_react_production();
+});
 //@ chunk-07xmkrj2.js:1517-1543 placement
 /**
  * 导出值：slashCommandLinkSignal（命令链接标记）。
  */
-var SlashLinkContexts = qt(false);
-var slashCommandLinkSignal = qt(false);
+var SlashLinkContexts; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var slashCommandLinkSignal;
+deferInit("chunk-07xmkrj2.js:1517", () => {
+  SlashLinkContexts = createContext(false);
+  slashCommandLinkSignal = createContext(false);
+});
 //@ chunk-07xmkrj2.js:1543-2829 placement
 function NoticeLine(props) {
-  let u = w(26);
+  let $ = useMemoCache(26);
   let { tone, text, detail, subLines, linkify } = props;
-  let i = linkify ? LinkifiedText : Text;
-  let x = Se(slashCommandLinkSignal)
+  let TextComponent = linkify ? LinkifiedText : Text;
+  let markerSpace = useContext(slashCommandLinkSignal)
     ? " "
     : props.state === "live" && !props.reducedMotion
       ? SPINNER_DOTS[props.frame % SPINNER_DOTS.length]
       : PROPORTION;
   let color = tone === "gold" ? "warning" : tone === "red" ? "error" : undefined;
-  let b = tone === "red";
-  const d = tone === "dim";
-  const v = tone === "red" ? "error:" : tone === "gold" ? "warning:" : undefined;
+  let isRed = tone === "red";
+  const isDim = tone === "dim";
+  const markerLabel = tone === "red" ? "error:" : tone === "gold" ? "warning:" : undefined;
   const dimColor = tone === "dim";
-  let f;
-  if (u[0] !== x || u[1] !== color || u[2] !== d || u[3] !== v || u[4] !== dimColor) {
-    f = jsxProd_default_2(Text, {
-      "aria-hidden": d,
-      "aria-label": v,
+  let markerElement;
+  if ($[0] !== markerSpace || $[1] !== color || $[2] !== isDim || $[3] !== markerLabel || $[4] !== dimColor) {
+    markerElement = jsxProd_default_2(Text, {
+      "aria-hidden": isDim,
+      "aria-label": markerLabel,
       italic: true,
       color,
       dimColor,
-      children: [x, " "],
+      children: [markerSpace, " "],
     });
-    u[0] = x;
-    u[1] = color;
-    u[2] = d;
-    u[3] = v;
-    u[4] = dimColor;
-    u[5] = f;
-  } else f = u[5];
-  const color_2 = b ? "error" : undefined;
-  const dimColor_2 = !b;
-  let L;
-  if (u[6] !== i || u[7] !== text) {
-    L = jsxProd_default(i, {
+    $[0] = markerSpace;
+    $[1] = color;
+    $[2] = isDim;
+    $[3] = markerLabel;
+    $[4] = dimColor;
+    $[5] = markerElement;
+  } else markerElement = $[5];
+  const color_2 = isRed ? "error" : undefined;
+  const dimColor_2 = !isRed;
+  let textComponentElement;
+  if ($[6] !== TextComponent || $[7] !== text) {
+    textComponentElement = jsxProd_default(TextComponent, {
       children: text,
     });
-    u[6] = i;
-    u[7] = text;
-    u[8] = L;
-  } else L = u[8];
-  let R;
-  if (u[9] !== i || u[10] !== detail) {
-    R =
+    $[6] = TextComponent;
+    $[7] = text;
+    $[8] = textComponentElement;
+  } else textComponentElement = $[8];
+  let detailElement;
+  if ($[9] !== TextComponent || $[10] !== detail) {
+    detailElement =
       detail !== undefined &&
       jsxProd_default_2(Text, {
         dimColor: true,
         children: [
           " \xB7 ",
-          jsxProd_default(i, {
+          jsxProd_default(TextComponent, {
             children: detail,
           }),
         ],
       });
-    u[9] = i;
-    u[10] = detail;
-    u[11] = R;
-  } else R = u[11];
-  let H;
-  if (u[12] !== color_2 || u[13] !== dimColor_2 || u[14] !== L || u[15] !== R) {
-    H = jsxProd_default_2(Text, {
+    $[9] = TextComponent;
+    $[10] = detail;
+    $[11] = detailElement;
+  } else detailElement = $[11];
+  let mainElement;
+  if (
+    $[12] !== color_2 ||
+    $[13] !== dimColor_2 ||
+    $[14] !== textComponentElement ||
+    $[15] !== detailElement
+  ) {
+    mainElement = jsxProd_default_2(Text, {
       italic: true,
       color: color_2,
       dimColor: dimColor_2,
-      children: [L, R],
+      children: [textComponentElement, detailElement],
     });
-    u[12] = color_2;
-    u[13] = dimColor_2;
-    u[14] = L;
-    u[15] = R;
-    u[16] = H;
-  } else H = u[16];
-  let M;
-  if (u[17] !== i || u[18] !== subLines) {
-    M = subLines?.map((children, re) =>
+    $[12] = color_2;
+    $[13] = dimColor_2;
+    $[14] = textComponentElement;
+    $[15] = detailElement;
+    $[16] = mainElement;
+  } else mainElement = $[16];
+  let subLineElements;
+  if ($[17] !== TextComponent || $[18] !== subLines) {
+    subLineElements = subLines?.map((children, index) =>
       jsxProd_default(
         Text,
         {
           dimColor: true,
-          children: jsxProd_default(i, {
+          children: jsxProd_default(TextComponent, {
             children,
           }),
         },
-        re,
+        index,
       ),
     );
-    u[17] = i;
-    u[18] = subLines;
-    u[19] = M;
-  } else M = u[19];
-  let P;
-  if (u[20] !== H || u[21] !== M) {
-    P = jsxProd_default_2(Box, {
+    $[17] = TextComponent;
+    $[18] = subLines;
+    $[19] = subLineElements;
+  } else subLineElements = $[19];
+  let columnElement;
+  if ($[20] !== mainElement || $[21] !== subLineElements) {
+    columnElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       flexGrow: 1,
-      children: [H, M],
+      children: [mainElement, subLineElements],
     });
-    u[20] = H;
-    u[21] = M;
-    u[22] = P;
-  } else P = u[22];
-  let z;
-  if (u[23] !== P || u[24] !== f) {
-    z = jsxProd_default_2(Box, {
+    $[20] = mainElement;
+    $[21] = subLineElements;
+    $[22] = columnElement;
+  } else columnElement = $[22];
+  let rowElement;
+  if ($[23] !== columnElement || $[24] !== markerElement) {
+    rowElement = jsxProd_default_2(Box, {
       flexDirection: "row",
-      children: [f, P],
+      children: [markerElement, columnElement],
     });
-    u[23] = P;
-    u[24] = f;
-    u[25] = z;
-  } else z = u[25];
-  return z;
+    $[23] = columnElement;
+    $[24] = markerElement;
+    $[25] = rowElement;
+  } else rowElement = $[25];
+  return rowElement;
 }
 //@ chunk-07xmkrj2.js:2829-2902 placement
 function shouldShowNotice(verbose) {
   let transcriptMode = useTranscriptMode();
-  let l = useQueuedMessageContext()?.isQueued === true;
-  return !verbose && !transcriptMode && !l && currentToolPermissionContext();
+  let isQueued = useQueuedMessageContext()?.isQueued === true;
+  return !verbose && !transcriptMode && !isQueued && currentToolPermissionContext();
 }
 //@ chunk-07xmkrj2.js:2902-2984 placement
 function noticeSystemLines(verbose) {
-  let o = shouldShowNotice(verbose);
+  let showNotice = shouldShowNotice(verbose);
   let queuedMessageContext = useQueuedMessageContext();
-  return queuedMessageContext?.isQueued === true ? queuedMessageContext.noticeSystemLines : o;
+  return queuedMessageContext?.isQueued === true ? queuedMessageContext.noticeSystemLines : showNotice;
 }
 export {
   shouldShowNotice,

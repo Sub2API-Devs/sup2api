@@ -8,7 +8,7 @@
 import { textDecoder, textEncoder } from "./buffer_utils.js";
 import { isObject } from "./type_checks.js";
 import { JWTInvalid, JWTClaimValidationFailed, JWTExpired } from "../../node/esm/util/errors.js";
-import { Xa } from "../../../../../runtime/bun-runtime.js";
+import { __esm } from "../../../../../runtime/bun-runtime.js";
 import { init_sign_2 } from "../../node/esm/jws/compact/sign.js";
 
 //@ chunk-5h78gfwc.js:40204-40424 esm-fingerprint
@@ -165,7 +165,7 @@ function validateClaimsSet(protectedHeader, encodedPayload, options = {}) {
   return payload;
 }
 //@ chunk-5h78gfwc.js:43218-44123 esm-fingerprint
-class de {
+class JWTClaimsSetVerifier {
   #e;
   constructor(payload) {
     if (!isObject(payload)) throw TypeError("JWT Claims Set MUST be an object");
@@ -214,9 +214,9 @@ class de {
   }
 }
 //@ chunk-2tyrgda4.js:38804-38826 esm-layout
-var init_jwt_claims_set = Xa(() => {
+var init_jwt_claims_set = __esm(() => {
   init_sign_2();
 });
 //@ chunk-2tyrgda4.js:38826-38867 esm-fingerprint
 var epoch_2 = (date) => Math.floor(date.getTime() / 1000);
-export { epoch_2, init_jwt_claims_set, validateClaimsSet, de };
+export { epoch_2, init_jwt_claims_set, validateClaimsSet, JWTClaimsSetVerifier };

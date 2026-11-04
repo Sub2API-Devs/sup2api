@@ -8,9 +8,9 @@
  * pieces: chunk-a53esm6j.js (6)
  * attribution: placement 6
  */
-import { Ar } from "../../runtime/bun-runtime.js";
+import { __export } from "../../runtime/bun-runtime.js";
 import { pluginsMatchingEvent } from "../plugins/functionHooks/hookDispatch.js";
-import { TAo } from "../plugins/functionHooks/promptMentionRunner.js";
+import { UNHOOKED_MENTION_RESULT } from "../plugins/functionHooks/promptMentionRunner.js";
 import { createEventCallersRef } from "../plugins/functionHooks/eventCatalog.js";
 import { logForDebugging } from "../utils/debug.js";
 
@@ -20,7 +20,7 @@ import { logForDebugging } from "../utils/debug.js";
  */
 var mentionChainCache = {};
 //@ chunk-a53esm6j.js:11889-11966 placement
-Ar(mentionChainCache, {
+__export(mentionChainCache, {
   CONTEXT_DROPPED_NOTE: () => CONTEXT_DROPPED_NOTE,
   default: () => mentionChainCache,
   runPromptMentionChain: () => runPromptMentionChain,
@@ -29,32 +29,32 @@ Ar(mentionChainCache, {
 var CONTEXT_DROPPED_NOTE = "; the context beside the deny is dropped";
 //@ chunk-a53esm6j.js:12015-12107 placement
 function coreMentionHook(read) {
-  let n;
+  let cached;
   return {
     name: "core",
     isCore: true,
     budgetMs: 0,
-    run: (r) => {
-      n ??= read(r, "hooked");
-      return n;
+    run: (raised) => {
+      cached ??= read(raised, "hooked");
+      return cached;
     },
   };
 }
 //@ chunk-a53esm6j.js:12107-12226 placement
-var mentionVerdict = (o) => ({
-  isKept: o.deny === undefined && o.type !== null,
-  isDenied: o.deny !== undefined,
-  context: o.deny === undefined ? (o.context ?? []) : [],
+var mentionVerdict = (result) => ({
+  isKept: result.deny === undefined && result.type !== null,
+  isDenied: result.deny !== undefined,
+  context: result.deny === undefined ? (result.context ?? []) : [],
 });
 //@ chunk-a53esm6j.js:12226-12652 placement
-async function runPromptMentionChain(o) {
-  let { raised, signalOf, skipping, read } = o;
-  let s = pluginsMatchingEvent("prompt.mention", raised, skipping);
-  if (s.length === 0) {
+async function runPromptMentionChain(context) {
+  let { raised, signalOf, skipping, read } = context;
+  let hookedBy = pluginsMatchingEvent("prompt.mention", raised, skipping);
+  if (hookedBy.length === 0) {
     await read(raised, "unhooked");
-    return TAo;
+    return UNHOOKED_MENTION_RESULT;
   }
-  let e = await createEventCallersRef({
+  let verdict = await createEventCallersRef({
     signal: signalOf(),
     ...(skipping !== undefined && {
       origin: skipping,
@@ -63,11 +63,12 @@ async function runPromptMentionChain(o) {
       "prompt.mention": coreMentionHook(read),
     },
   }).prompt.mention(raised);
-  if (e.deny !== undefined) {
-    let d = Object.hasOwn(e, "context") ? CONTEXT_DROPPED_NOTE : "";
+  if (verdict.deny !== undefined) {
+    let contextNote = Object.hasOwn(verdict, "context") ? CONTEXT_DROPPED_NOTE : "";
     logForDebugging(
-      `prompt.mention of ${raised.path}: refused by a hook (${e.deny}); hooked by ${s.join("+")}; nothing attached${d}`,
+      `prompt.mention of ${raised.path}: refused by a hook (${verdict.deny}); hooked by ${hookedBy.join("+")}; nothing attached${contextNote}`,
     );
   }
-  return mentionVerdict(e);
+  return mentionVerdict(verdict);
 }
+export { CONTEXT_DROPPED_NOTE, mentionChainCache, runPromptMentionChain };

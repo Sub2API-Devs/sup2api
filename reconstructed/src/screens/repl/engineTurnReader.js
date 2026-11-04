@@ -25,25 +25,26 @@ import { errorMessage } from "../../utils/errors.js";
 import { normalizeSdkNotification } from "../../context/notifications.js";
 import { emitStatusChange, forwardStreamEventToBridge } from "../../state/onChangeAppState.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1496841-1496892 placement
-function isBusyOrPending(guard, x) {
-  return (D) => guard.isRunning || (x() && D());
+function isBusyOrPending(guard, pendingCheck) {
+  return (command) => guard.isRunning || (pendingCheck() && command());
 }
 //@ chunk-18hwfzwa.js:1496892-1497059 placement
 /**
  * 是否有等待结果的任务或待处理的任务通知。
  */
-function hasPendingTaskResults(h, commandQueue) {
+function hasPendingTaskResults(registry, commandQueue) {
   return (
-    h.awaitingResult().length > 0 ||
+    registry.awaitingResult().length > 0 ||
     commandQueue.some(
-      (D) =>
-        D.mode === "task-notification" &&
-        D.passive !== true &&
-        isMainAgentCommand(D) &&
-        typeof D.value === "string" &&
-        parseTaskNotificationToolUseId(D.value) !== null,
+      (command) =>
+        command.mode === "task-notification" &&
+        command.passive !== true &&
+        isMainAgentCommand(command) &&
+        typeof command.value === "string" &&
+        parseTaskNotificationToolUseId(command.value) !== null,
     )
   );
 }
@@ -51,21 +52,21 @@ function hasPendingTaskResults(h, commandQueue) {
 /**
  * 等待中的任务都停止时调用回调，返回取消订阅函数。
  */
-function onAwaitedTasksStopped(h, x) {
-  let D = h.awaitingResult();
-  if (D.length === 0) return () => {};
-  let L = h.subscribe(() => {
-    let snapshot = h.getSnapshot();
-    let ke = true;
-    for (let Re of D) {
-      let Be = snapshot.get(Re);
-      if (Be?.status === "running") return;
-      if (Be?.status !== "stopped") ke = false;
+function onAwaitedTasksStopped(registry, onStopped) {
+  let awaited = registry.awaitingResult();
+  if (awaited.length === 0) return () => {};
+  let unsubscribe = registry.subscribe(() => {
+    let snapshot = registry.getSnapshot();
+    let allDone = true;
+    for (let id of awaited) {
+      let row = snapshot.get(id);
+      if (row?.status === "running") return;
+      if (row?.status !== "stopped") allDone = false;
     }
-    L();
-    if (ke) x();
+    unsubscribe();
+    if (allDone) onStopped();
   });
-  return L;
+  return unsubscribe;
 }
 //@ chunk-18hwfzwa.js:1497308-1497318 placement
 var SLOW_TURN_READ_LOG_MS = 5;
@@ -87,9 +88,9 @@ async function readEngineTurn({
   feed.pendingQueryParams.push(turnInput);
   let last = newMessages.findLast((newMessage) => newMessage.type === "user");
   if (feed.input === null) {
-    let At = new Stream();
-    feed.input = At;
-    engine.streamInput(At).catch(logError);
+    let inputStream = new Stream();
+    feed.input = inputStream;
+    engine.streamInput(inputStream).catch(logError);
   }
   feed.input.enqueue({
     type: "user",
@@ -100,57 +101,57 @@ async function readEngineTurn({
     parent_tool_use_id: null,
   });
   let now = Date.now();
-  let Xe = await feed.readLock.acquire();
-  let rt = Date.now() - now;
-  if (rt >= SLOW_TURN_READ_LOG_MS)
-    logForDebugging(`[engine] turn read waited ${rt}ms for the previous turn's result`);
-  let kt;
+  let readLock = await feed.readLock.acquire();
+  let lockWaitMs = Date.now() - now;
+  if (lockWaitMs >= SLOW_TURN_READ_LOG_MS)
+    logForDebugging(`[engine] turn read waited ${lockWaitMs}ms for the previous turn's result`);
+  let resultMessage;
   try {
     onRead?.();
     while (true) {
-      let { value: msg, done: It } = await engine.next();
-      if (It) break;
-      if (msg.type === "system" && msg.subtype === "api_retry") continue;
-      if (msg.type === "system" && msg.subtype === "model_refusal_fallback") {
-        onQueryEvent(createRefusalFallbackMessage(msg));
+      let { value: event, done } = await engine.next();
+      if (done) break;
+      if (event.type === "system" && event.subtype === "api_retry") continue;
+      if (event.type === "system" && event.subtype === "model_refusal_fallback") {
+        onQueryEvent(createRefusalFallbackMessage(event));
         continue;
       }
-      if (msg.type === "system" && msg.subtype === "model_refusal_no_fallback") {
-        onQueryEvent(createRefusalNoFallbackMessage(msg));
+      if (event.type === "system" && event.subtype === "model_refusal_no_fallback") {
+        onQueryEvent(createRefusalNoFallbackMessage(event));
         continue;
       }
-      if (msg.type === "system" && msg.subtype === "memory_recall") continue;
-      if (msg.type === "system" && msg.subtype === "thinking_tokens" && "estimated_tokens_delta" in msg)
+      if (event.type === "system" && event.subtype === "memory_recall") continue;
+      if (event.type === "system" && event.subtype === "thinking_tokens" && "estimated_tokens_delta" in event)
         continue;
-      if (msg.type === "system" && msg.subtype === "compact_boundary") {
-        onQueryEvent(convertCompactBoundaryMessage(msg));
-        continue;
-      }
-      if (msg.type === "system" && msg.subtype === "model_fallback") {
-        onQueryEvent(createModelFallbackSystemMessage(msg));
+      if (event.type === "system" && event.subtype === "compact_boundary") {
+        onQueryEvent(convertCompactBoundaryMessage(event));
         continue;
       }
-      if (msg.type === "system" && msg.subtype === "model_consent_fallback") {
-        onQueryEvent(createConsentFallbackMessage(msg));
+      if (event.type === "system" && event.subtype === "model_fallback") {
+        onQueryEvent(createModelFallbackSystemMessage(event));
         continue;
       }
-      if (msg.type === "result") {
-        kt = msg;
-        if (msg.is_error) {
-          let Ot = msg.subtype === "success" ? msg.result : msg.errors.join("; ");
+      if (event.type === "system" && event.subtype === "model_consent_fallback") {
+        onQueryEvent(createConsentFallbackMessage(event));
+        continue;
+      }
+      if (event.type === "result") {
+        resultMessage = event;
+        if (event.is_error) {
+          let errorText = event.subtype === "success" ? event.result : event.errors.join("; ");
           logForDebugging(
-            `[engine] turn ended in error: ${Ot}`,
-            isAbortedTerminalReason(msg.terminal_reason)
+            `[engine] turn ended in error: ${errorText}`,
+            isAbortedTerminalReason(event.terminal_reason)
               ? undefined
               : {
                   level: "error",
                 },
           );
-          if (msg.subtype === "error_during_execution" && !isAbortedTerminalReason(msg.terminal_reason))
+          if (event.subtype === "error_during_execution" && !isAbortedTerminalReason(event.terminal_reason))
             try {
               onQueryEvent(
                 createApiErrorMessage({
-                  content: Ot,
+                  content: errorText,
                 }),
               );
             } catch (error) {
@@ -161,118 +162,118 @@ async function readEngineTurn({
         }
         break;
       }
-      if (msg.type === "system" && msg.subtype === "notification") {
-        addNotification(normalizeSdkNotification(msg));
+      if (event.type === "system" && event.subtype === "notification") {
+        addNotification(normalizeSdkNotification(event));
         continue;
       }
-      if (msg.type === "system" && msg.subtype === "status") {
-        if (msg.status === "requesting") onMainRequestStart();
+      if (event.type === "system" && event.subtype === "status") {
+        if (event.status === "requesting") onMainRequestStart();
         emitStatusChange({
-          status: msg.status,
-          permissionMode: msg.permissionMode,
-          compactResult: msg.compact_result,
-          compactError: msg.compact_error,
+          status: event.status,
+          permissionMode: event.permissionMode,
+          compactResult: event.compact_result,
+          compactError: event.compact_error,
         });
-        onStatus?.(msg.compact_result);
+        onStatus?.(event.compact_result);
         continue;
       }
-      if (msg.type === "system" && msg.subtype === "permission_denied") continue;
+      if (event.type === "system" && event.subtype === "permission_denied") continue;
       if (
-        msg.type === "system" &&
-        (msg.subtype === "task_started" ||
-          msg.subtype === "task_progress" ||
-          msg.subtype === "task_updated" ||
-          msg.subtype === "task_notification" ||
-          msg.subtype === "background_tasks_changed" ||
-          msg.subtype === "feedback_draft_queued" ||
-          msg.subtype === "task_summary" ||
-          msg.subtype === "session_metadata" ||
-          msg.subtype === "session_state_changed" ||
-          msg.subtype === "post_turn_summary" ||
-          msg.subtype === "hook_started" ||
-          msg.subtype === "hook_progress" ||
-          msg.subtype === "hook_response" ||
-          msg.subtype === "commands_changed" ||
-          msg.subtype === "elicitation_complete" ||
-          msg.subtype === "files_persisted" ||
-          msg.subtype === "mirror_error" ||
-          msg.subtype === "code_change_published" ||
-          msg.subtype === "ui_invalidate" ||
-          msg.subtype === "ui_log" ||
-          msg.subtype === "ui_toast" ||
-          msg.subtype === "ui_status" ||
-          msg.subtype === "ui_panes" ||
-          msg.subtype === "ui_placed" ||
-          msg.subtype === "ui_scroll" ||
-          msg.subtype === "ui_focus" ||
-          msg.subtype === "permission_check_status" ||
-          msg.subtype === "vcs_state_changed" ||
-          msg.subtype === "dev_intent" ||
-          msg.subtype === "session_title_changed" ||
-          msg.subtype === "turn_preempted" ||
-          msg.subtype === "per_turn_effort_changed" ||
-          msg.subtype === "file_attachments_missing")
+        event.type === "system" &&
+        (event.subtype === "task_started" ||
+          event.subtype === "task_progress" ||
+          event.subtype === "task_updated" ||
+          event.subtype === "task_notification" ||
+          event.subtype === "background_tasks_changed" ||
+          event.subtype === "feedback_draft_queued" ||
+          event.subtype === "task_summary" ||
+          event.subtype === "session_metadata" ||
+          event.subtype === "session_state_changed" ||
+          event.subtype === "post_turn_summary" ||
+          event.subtype === "hook_started" ||
+          event.subtype === "hook_progress" ||
+          event.subtype === "hook_response" ||
+          event.subtype === "commands_changed" ||
+          event.subtype === "elicitation_complete" ||
+          event.subtype === "files_persisted" ||
+          event.subtype === "mirror_error" ||
+          event.subtype === "code_change_published" ||
+          event.subtype === "ui_invalidate" ||
+          event.subtype === "ui_log" ||
+          event.subtype === "ui_toast" ||
+          event.subtype === "ui_status" ||
+          event.subtype === "ui_panes" ||
+          event.subtype === "ui_placed" ||
+          event.subtype === "ui_scroll" ||
+          event.subtype === "ui_focus" ||
+          event.subtype === "permission_check_status" ||
+          event.subtype === "vcs_state_changed" ||
+          event.subtype === "dev_intent" ||
+          event.subtype === "session_title_changed" ||
+          event.subtype === "turn_preempted" ||
+          event.subtype === "per_turn_effort_changed" ||
+          event.subtype === "file_attachments_missing")
       )
         continue;
-      if (msg.type === "system" && msg.subtype === "informational" && !("timestamp" in msg)) continue;
-      if (msg.type === "tool_progress") continue;
-      if (msg.type === "tool_use_summary") continue;
-      if (msg.type === "assistant" && "parent_tool_use_id" in msg) continue;
-      if (msg.type === "auth_status") continue;
-      if (msg.type === "prompt_suggestion") continue;
-      if (msg.type === "system" && msg.subtype === "init") continue;
-      if (msg.type === "rate_limit_event") continue;
-      if (msg.type === "conversation_reset") continue;
-      if (msg.type === "command_lifecycle") continue;
-      if (msg.type === "stream_event") {
-        forwardStreamEventToBridge(msg);
-        onQueryEvent(msg);
+      if (event.type === "system" && event.subtype === "informational" && !("timestamp" in event)) continue;
+      if (event.type === "tool_progress") continue;
+      if (event.type === "tool_use_summary") continue;
+      if (event.type === "assistant" && "parent_tool_use_id" in event) continue;
+      if (event.type === "auth_status") continue;
+      if (event.type === "prompt_suggestion") continue;
+      if (event.type === "system" && event.subtype === "init") continue;
+      if (event.type === "rate_limit_event") continue;
+      if (event.type === "conversation_reset") continue;
+      if (event.type === "command_lifecycle") continue;
+      if (event.type === "stream_event") {
+        forwardStreamEventToBridge(event);
+        onQueryEvent(event);
         continue;
       }
-      onQueryEvent(msg);
+      onQueryEvent(event);
     }
   } catch (error) {
     engine.interrupt("consumer-error", {
       scope: "turn-cancel",
     });
-    let It = await engine.next();
-    while (!It.done && It.value.type !== "result") It = await engine.next();
+    let nextResult = await engine.next();
+    while (!nextResult.done && nextResult.value.type !== "result") nextResult = await engine.next();
     throw error;
   } finally {
-    Xe();
+    readLock();
   }
-  return kt;
+  return resultMessage;
 }
 //@ chunk-18hwfzwa.js:1501087-1501338 placement
 /**
  * 更新工具提示表（clear 删除、其他覆盖）。
  */
-function applyToolHint(h, x) {
-  if (x.kind === "clear") {
-    if (!h.has(x.toolUseId)) return h;
-    let ee = new Map(h);
-    ee.delete(x.toolUseId);
-    return ee;
+function applyToolHint(hints, hint) {
+  if (hint.kind === "clear") {
+    if (!hints.has(hint.toolUseId)) return hints;
+    let copy = new Map(hints);
+    copy.delete(hint.toolUseId);
+    return copy;
   }
-  let D = h.get(x.toolUseId);
-  if (x.kind === "background_hint" && D?.kind === x.kind) return h;
-  let L = new Map(h);
-  L.set(x.toolUseId, x);
-  return L;
+  let existing = hints.get(hint.toolUseId);
+  if (hint.kind === "background_hint" && existing?.kind === hint.kind) return hints;
+  let nextHints = new Map(hints);
+  nextHints.set(hint.toolUseId, hint);
+  return nextHints;
 }
 //@ chunk-18hwfzwa.js:1501338-1501474 placement
 /**
  * 删除已完成工具的提示。
  */
-function dropToolHints(toolProgress, x) {
+function dropToolHints(toolProgress, ids) {
   if (toolProgress.size === 0) return toolProgress;
-  let D = null;
+  let copy = null;
   for (let key of toolProgress.keys())
-    if (x.has(key)) {
-      if (D === null) D = new Map(toolProgress);
-      D.delete(key);
+    if (ids.has(key)) {
+      if (copy === null) copy = new Map(toolProgress);
+      copy.delete(key);
     }
-  return D ?? toolProgress;
+  return copy ?? toolProgress;
 }
 //@ chunk-18hwfzwa.js:1501474-1502268 placement
 class FlushBatcher {
@@ -288,13 +289,13 @@ class FlushBatcher {
     this.flushIntervalMs = flushIntervalMs;
     this.boundFlush = this.flush.bind(this);
   }
-  apply(h) {
-    let x = h(this.pending);
-    if (x === null) {
+  apply(reducer) {
+    let nextPending = reducer(this.pending);
+    if (nextPending === null) {
       this.clear();
       return;
     }
-    this.pending = x;
+    this.pending = nextPending;
     if (this.cancelScheduledFlush === null)
       this.cancelScheduledFlush = this.scheduleTimeout(this.boundFlush, this.flushIntervalMs);
   }
@@ -335,29 +336,39 @@ function createFlushBatcher({ scheduleTimeout, onFlush, flushIntervalMs = 100 })
   });
 }
 //@ chunk-18hwfzwa.js:1502398-1502489 placement
-var TURN_RESULT_TIMEOUT_MS = 30000;
-var DRAIN_POLL_MS = 500;
-var inFlightByShell = new Map();
-var drainedShells = new Set();
-var pendingShellLines = [];
-var completedShellLines = [];
-var DRAINED_SHELL_LINE = "drained-shell-line";
-var MIN_SHELL_WIDTH_SLACK = 2;
+var TURN_RESULT_TIMEOUT_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DRAIN_POLL_MS;
+var inFlightByShell;
+var drainedShells;
+var pendingShellLines;
+var completedShellLines;
+var DRAINED_SHELL_LINE;
+var MIN_SHELL_WIDTH_SLACK;
+deferInit("chunk-18hwfzwa.js:1502398", () => {
+  TURN_RESULT_TIMEOUT_MS = 30000;
+  DRAIN_POLL_MS = 500;
+  inFlightByShell = new Map();
+  drainedShells = new Set();
+  pendingShellLines = [];
+  completedShellLines = [];
+  DRAINED_SHELL_LINE = "drained-shell-line";
+  MIN_SHELL_WIDTH_SLACK = 2;
+});
 //@ chunk-18hwfzwa.js:1502489-1502569 placement
-function endsBeforeLastLine(h) {
-  let index = h.lastIndexOf(`
+function endsBeforeLastLine(text) {
+  let index = text.lastIndexOf(`
 `);
-  return index !== -1 && /\S/.test(h.slice(0, index));
+  return index !== -1 && /\S/.test(text.slice(0, index));
 }
 //@ chunk-18hwfzwa.js:1502569-1502683 placement
 /**
  * 末行接近终端宽度。
  */
-function isLineNearlyFull(h, columns) {
-  let index = h.lastIndexOf(`
+function isLineNearlyFull(text, columns) {
+  let index = text.lastIndexOf(`
 `);
-  if (endsBeforeLastLine(h)) return true;
-  let sliced = h.slice(index + 1);
+  if (endsBeforeLastLine(text)) return true;
+  let sliced = text.slice(index + 1);
   return /\S/.test(sliced) && bunStringWidth(sliced) >= columns - MIN_SHELL_WIDTH_SLACK;
 }
 export {

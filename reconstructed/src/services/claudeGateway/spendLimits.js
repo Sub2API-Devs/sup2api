@@ -5,8 +5,8 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-1ny7cxrt.js (56)
- * attribution: placement 56
+ * pieces: chunk-1ny7cxrt.js (54)
+ * attribution: placement 54
  */
 import { timingSafeEqual } from "crypto";
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -23,15 +23,19 @@ import {
 import { gatewayLog, gatewayJsonLog } from "../gateway/gatewayBanner.js";
 import { errorMessage } from "../../utils/errors.js";
 import {
+  createSseUsageState,
+  SSE_EVENT_SEPARATOR_RE,
   accumulateSseUsage,
   finishSseUsage,
   parseJsonUsage,
+  CHARS_PER_OUTPUT_TOKEN,
   MIN_ESTIMATE_OUTPUT_CHARS,
 } from "./usageMetering.js";
 import { withTimeout } from "../../utils/sleep.js";
 import { mockLimitsFromSpend, withLimitStatus, mostSevereLimit, roundUtilization } from "./mockRateLimits.js";
 import { hasKnownModelCost } from "../../utils/modelCost.js";
 import { findPricingOverride, requestCostCents } from "./models.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-1ny7cxrt.js:1423402-1423544 placement
 /**
@@ -50,18 +54,18 @@ var ADMIN_ERROR_TYPE_BY_STATUS = {
 /**
  * 管理 API 错误响应（Anthropic 错误格式）。
  */
-function adminErrorResponse(e, message, requestId) {
+function adminErrorResponse(status, message, requestId) {
   return Response.json(
     {
       type: "error",
       error: {
-        type: ADMIN_ERROR_TYPE_BY_STATUS[e],
+        type: ADMIN_ERROR_TYPE_BY_STATUS[status],
         message,
       },
       request_id: requestId,
     },
     {
-      status: e,
+      status,
     },
   );
 }
@@ -69,10 +73,10 @@ function adminErrorResponse(e, message, requestId) {
 /**
  * 解析 limit 参数（1–1000），非法返回 null。
  */
-function parsePageLimit(searchParams, t) {
-  let n = Number(searchParams.get("limit") ?? t);
-  if (!Number.isInteger(n) || n < 1 || n > 1000) return null;
-  return n;
+function parsePageLimit(searchParams, defaultValue) {
+  let limit = Number(searchParams.get("limit") ?? defaultValue);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 1000) return null;
+  return limit;
 }
 //@ chunk-1ny7cxrt.js:1423761-1423797 placement
 /**
@@ -83,29 +87,29 @@ var SPEND_PERIODS = ["daily", "weekly", "monthly"];
 /**
  * 周期桶键：monthly 为 YYYY-MM，daily 为 YYYY-MM-DD，weekly 为 ISO 周 YYYY-Www。
  */
-function periodBucket(e = "monthly", t = new Date()) {
-  if (e === "monthly") return t.toISOString().slice(0, 7);
-  if (e === "daily") return t.toISOString().slice(0, 10);
-  let date = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate()));
-  let o = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() + 4 - o);
-  let utcFullYear = date.getUTCFullYear();
-  let s = Date.UTC(utcFullYear, 0, 1);
-  let a = Math.ceil(((date.getTime() - s) / 86400000 + 1) / 7);
-  return `${utcFullYear}-W${String(a).padStart(2, "0")}`;
+function periodBucket(period = "monthly", date = new Date()) {
+  if (period === "monthly") return date.toISOString().slice(0, 7);
+  if (period === "daily") return date.toISOString().slice(0, 10);
+  let date_2 = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  let isoWeekday = date_2.getUTCDay() || 7;
+  date_2.setUTCDate(date_2.getUTCDate() + 4 - isoWeekday);
+  let utcFullYear = date_2.getUTCFullYear();
+  let jan1 = Date.UTC(utcFullYear, 0, 1);
+  let week = Math.ceil(((date_2.getTime() - jan1) / 86400000 + 1) / 7);
+  return `${utcFullYear}-W${String(week).padStart(2, "0")}`;
 }
 //@ chunk-1ny7cxrt.js:1424192-1424442 placement
 /**
  * 当前周期的重置时间（下月 1 日、次日或下周一，UTC）。
  */
-function periodResetsAt(period, t = new Date()) {
-  let utcFullYear = t.getUTCFullYear();
-  let utcMonth = t.getUTCMonth();
-  let utcDate = t.getUTCDate();
+function periodResetsAt(period, date = new Date()) {
+  let utcFullYear = date.getUTCFullYear();
+  let utcMonth = date.getUTCMonth();
+  let utcDate = date.getUTCDate();
   if (period === "monthly") return new Date(Date.UTC(utcFullYear, utcMonth + 1, 1));
   if (period === "daily") return new Date(Date.UTC(utcFullYear, utcMonth, utcDate + 1));
-  let s = 8 - (t.getUTCDay() || 7);
-  return new Date(Date.UTC(utcFullYear, utcMonth, utcDate + s));
+  let daysUntilMonday = 8 - (date.getUTCDay() || 7);
+  return new Date(Date.UTC(utcFullYear, utcMonth, utcDate + daysUntilMonday));
 }
 //@ chunk-1ny7cxrt.js:1424442-1424498 placement
 /**
@@ -137,20 +141,20 @@ function toSpendScope(scopeType, scopeId) {
 /**
  * SQL：各周期的上限（caps_by_period）与该主体当前花费。
  */
-function queryCapsWithSpend(e, t, n, o, r = new Date()) {
-  let mapped = SPEND_PERIODS.map((a) => periodBucket(a, r));
-  return e`
+function queryCapsWithSpend(sql, principals, groupLimitMode, scopeTypes, date = new Date()) {
+  let mapped = SPEND_PERIODS.map((period) => periodBucket(period, date));
+  return sql`
     WITH pb AS (
       SELECT period, bucket, ordinality AS ord
-      FROM unnest(${e.array([...SPEND_PERIODS], "TEXT")}, ${e.array(mapped, "TEXT")})
+      FROM unnest(${sql.array([...SPEND_PERIODS], "TEXT")}, ${sql.array(mapped, "TEXT")})
         WITH ORDINALITY AS t(period, bucket)
     )
     SELECT pb.period, c.amount AS cap_cents, c.scope_type,
            coalesce(s.cents, 0)::float8 AS spent_cents
     FROM pb
-    JOIN caps_by_period(${t}, ${e.array([...n], "TEXT")}, ${o}) c
+    JOIN caps_by_period(${principals}, ${sql.array([...groupLimitMode], "TEXT")}, ${scopeTypes}) c
       ON c.period = pb.period
-    LEFT JOIN spend s ON s.principal = ${t} AND s.period = pb.bucket
+    LEFT JOIN spend s ON s.principal = ${principals} AND s.period = pb.bucket
     WHERE c.amount IS NOT NULL
     ORDER BY pb.ord
   `;
@@ -159,16 +163,16 @@ function queryCapsWithSpend(e, t, n, o, r = new Date()) {
 /**
  * SQL：用户所在组启用的月度共享预算与已用额度。
  */
-function queryPooledBudgets(e, t, n) {
-  return e`
+function queryPooledBudgets(sql, groupIds, now) {
+  return sql`
     SELECT l.scope_id AS "group",
            l.pooled_monthly_credit_limit::float8 AS "limit",
            coalesce(s.cents, 0)::float8 AS spent
     FROM spend_limits l
     LEFT JOIN pooled_spend s
-      ON s.rbac_group_id = l.scope_id AND s.period = ${periodBucket("monthly", n)}
+      ON s.rbac_group_id = l.scope_id AND s.period = ${periodBucket("monthly", now)}
     WHERE l.scope_type = 'rbac_group' AND l.period = 'monthly'
-      AND l.scope_id = ANY(${e.array([...t], "TEXT")})
+      AND l.scope_id = ANY(${sql.array([...groupIds], "TEXT")})
       AND l.pooled_limit_enabled
   `;
 }
@@ -176,53 +180,53 @@ function queryPooledBudgets(e, t, n) {
 /**
  * 在一个短超时事务中读取个人上限与组共享预算。
  */
-async function readSpendCaps(e, t, n, groupLimitMode, r, signal, groups = []) {
-  let l = await e.reserve();
+async function readSpendCaps(sql, sub, groups, scopeTypes, now, signal, groupIds = []) {
+  let client = await sql.reserve();
   try {
     signal?.throwIfAborted();
-    let [c, u, f, , h, m] = await Promise.allSettled([
-      l`BEGIN`,
-      l`SET LOCAL statement_timeout = '2s'`,
-      queryCapsWithSpend(l, t, n, groupLimitMode, r),
-      groups.length > 0 ? l`SET LOCAL statement_timeout = '300ms'` : [],
-      groups.length > 0 ? queryPooledBudgets(l, groups, r) : [],
-      l`COMMIT`,
+    let [beginResult, timeoutResult, capsResult, , poolsResult, commitResult] = await Promise.allSettled([
+      client`BEGIN`,
+      client`SET LOCAL statement_timeout = '2s'`,
+      queryCapsWithSpend(client, sub, groups, scopeTypes, now),
+      groupIds.length > 0 ? client`SET LOCAL statement_timeout = '300ms'` : [],
+      groupIds.length > 0 ? queryPooledBudgets(client, groupIds, now) : [],
+      client`COMMIT`,
     ]);
-    for (let y of [c, u]) if (y.status === "rejected") throw y.reason;
-    if (f.status === "rejected") throw f.reason;
-    if (m.status === "rejected") throw m.reason;
+    for (let settled of [beginResult, timeoutResult]) if (settled.status === "rejected") throw settled.reason;
+    if (capsResult.status === "rejected") throw capsResult.reason;
+    if (commitResult.status === "rejected") throw commitResult.reason;
     return {
-      caps: f.value,
-      pools: h,
+      caps: capsResult.value,
+      pools: poolsResult,
     };
   } finally {
-    Promise.resolve(l.release()).catch(() => {});
+    Promise.resolve(client.release()).catch(() => {});
   }
 }
 //@ chunk-1ny7cxrt.js:1426207-1426727 placement
 /**
  * 按各周期桶累加主体花费（语句超时时重试一次）。
  */
-async function recordSpend(e, t, n) {
-  let mapped = SPEND_PERIODS.map((s) => periodBucket(s));
-  let r = () =>
-    e.begin(async (s) => {
-      await s`SET LOCAL statement_timeout = '2s'`;
-      await s`
+async function recordSpend(sql, entries, options) {
+  let mapped = SPEND_PERIODS.map((period) => periodBucket(period));
+  let write = () =>
+    sql.begin(async (tx) => {
+      await tx`SET LOCAL statement_timeout = '2s'`;
+      await tx`
         INSERT INTO spend (principal, period, cents)
-        SELECT DISTINCT ${t}, b, ${n}
-        FROM unnest(${e.array(mapped, "TEXT")}) AS t(b)
+        SELECT DISTINCT ${entries}, b, ${options}
+        FROM unnest(${sql.array(mapped, "TEXT")}) AS t(b)
         ORDER BY 2
         ON CONFLICT (principal, period) DO UPDATE
           SET cents = spend.cents + EXCLUDED.cents, updated_at = now()
       `;
     });
   try {
-    await r();
+    await write();
   } catch (error) {
-    let a = error ?? {};
-    if (a.errno === "57014" || a.code === "57014") {
-      await r();
+    let err = error ?? {};
+    if (err.errno === "57014" || err.code === "57014") {
+      await write();
       return;
     }
     throw error;
@@ -232,13 +236,13 @@ async function recordSpend(e, t, n) {
 /**
  * 累加各组本月共享预算花费。
  */
-async function recordPooledSpend(e, t) {
-  await e`
+async function recordPooledSpend(sql, centsByGroup) {
+  await sql`
     INSERT INTO pooled_spend (rbac_group_id, period, cents)
     SELECT rbac_group_id, ${periodBucket("monthly")}, cents
     FROM unnest(
-      ${e.array([...t.keys()], "TEXT")},
-      ${e.array([...t.values()], "DOUBLE PRECISION")}
+      ${sql.array([...centsByGroup.keys()], "TEXT")},
+      ${sql.array([...centsByGroup.values()], "DOUBLE PRECISION")}
     ) AS t(rbac_group_id, cents)
     ORDER BY 1
     ON CONFLICT (rbac_group_id, period) DO UPDATE
@@ -249,22 +253,22 @@ async function recordPooledSpend(e, t) {
 /**
  * 记录主体的邮箱、姓名与所属组。
  */
-async function upsertPrincipalIdentity(e, t) {
-  let email = t.email || null;
-  let o = t.name || null;
-  let groups = t.groups ?? [];
-  await e.begin(async (s) => {
-    await s`SET LOCAL statement_timeout = '2s'`;
-    await s`
-      INSERT INTO principal_emails ${e({
-        principal: t.sub,
+async function upsertPrincipalIdentity(sql, identity) {
+  let email = identity.email || null;
+  let displayName = identity.name || null;
+  let groups = identity.groups ?? [];
+  await sql.begin(async (tx) => {
+    await tx`SET LOCAL statement_timeout = '2s'`;
+    await tx`
+      INSERT INTO principal_emails ${sql({
+        principal: identity.sub,
         email,
-        name: o,
+        name: displayName,
         groups,
       })}
       ON CONFLICT (principal) DO UPDATE SET
         email = coalesce(${email}, principal_emails.email),
-        name = coalesce(${o}, principal_emails.name),
+        name = coalesce(${displayName}, principal_emails.name),
         groups = ${groups},
         updated_at = now()
     `;
@@ -274,25 +278,25 @@ async function upsertPrincipalIdentity(e, t) {
 /**
  * 写一条管理审计记录。
  */
-async function insertAdminAudit(e, t) {
-  await e`INSERT INTO admin_audit ${e({
-    actor: t.actor,
-    action: t.action,
-    target: t.target,
-    before: t.before ?? null,
-    after: t.after ?? null,
-    reason: t.reason ?? null,
+async function insertAdminAudit(sql, event) {
+  await sql`INSERT INTO admin_audit ${sql({
+    actor: event.actor,
+    action: event.action,
+    target: event.target,
+    before: event.before ?? null,
+    after: event.after ?? null,
+    reason: event.reason ?? null,
   })}`;
 }
 //@ chunk-1ny7cxrt.js:1427775-1427999 placement
 /**
  * SQL 片段：周期与当前桶的列表。
  */
-function periodBucketsSql(e, t = SPEND_PERIODS, n = new Date()) {
-  let mapped = t.map((r) => periodBucket(r, n));
-  return e`
+function periodBucketsSql(sql, periods = SPEND_PERIODS, now = new Date()) {
+  let mapped = periods.map((period) => periodBucket(period, now));
+  return sql`
     SELECT period, bucket, ordinality AS ord
-    FROM unnest(${e.array([...t], "TEXT")}, ${e.array(mapped, "TEXT")})
+    FROM unnest(${sql.array([...periods], "TEXT")}, ${sql.array(mapped, "TEXT")})
       WITH ORDINALITY AS t(period, bucket)
   `;
 }
@@ -300,25 +304,27 @@ function periodBucketsSql(e, t = SPEND_PERIODS, n = new Date()) {
 /**
  * GET …/effective：按用户（或分页列出）返回各周期的生效上限、来源与已用额度，支持搜索与按花费排序。
  */
-async function handleEffectiveLimits({ url, sql, requestId }, groupLimitMode) {
+async function handleEffectiveLimits({ url, sql, requestId }, scopeTypes) {
   let searchParams = url.searchParams;
   let pageLimit = parsePageLimit(searchParams, 20);
   if (pageLimit === null) return adminErrorResponse(400, "limit: must be between 1 and 1000", requestId);
   let periods = parsePeriods(searchParams);
   if (periods === null)
     return adminErrorResponse(400, "period[]: must be one of daily, weekly, monthly", requestId);
-  let all = searchParams.getAll("user_ids[]");
-  if (all.length > 100)
+  let principals = searchParams.getAll("user_ids[]");
+  if (principals.length > 100)
     return adminErrorResponse(400, "user_ids[]: at most 100 entries per request", requestId);
-  let c = searchParams.get("q");
-  if (c !== null && c.length > 256) return adminErrorResponse(400, "q: too long", requestId);
-  let u = searchParams.get("sort");
-  if (u !== null && u !== "spend_desc") return adminErrorResponse(400, "sort: must be spend_desc", requestId);
-  let f = u === "spend_desc";
-  if (f && periods.length !== 1)
+  let searchQuery = searchParams.get("q");
+  if (searchQuery !== null && searchQuery.length > 256)
+    return adminErrorResponse(400, "q: too long", requestId);
+  let sort = searchParams.get("sort");
+  if (sort !== null && sort !== "spend_desc")
+    return adminErrorResponse(400, "sort: must be spend_desc", requestId);
+  let sortBySpend = sort === "spend_desc";
+  if (sortBySpend && periods.length !== 1)
     return adminErrorResponse(400, "sort=spend_desc requires exactly one period[]", requestId);
-  if (all.length > 0) {
-    let data = await queryEffectiveLimits(sql, all, periods, groupLimitMode);
+  if (principals.length > 0) {
+    let data = await queryEffectiveLimits(sql, principals, periods, scopeTypes);
     return Response.json(
       {
         data,
@@ -329,21 +335,21 @@ async function handleEffectiveLimits({ url, sql, requestId }, groupLimitMode) {
       },
     );
   }
-  let h = searchParams.get("page");
-  let m;
-  if (h !== null) {
-    m = decodePageToken(h, f);
-    if (m === undefined) return adminErrorResponse(400, "page: invalid page token", requestId);
+  let pageToken = searchParams.get("page");
+  let decodedToken;
+  if (pageToken !== null) {
+    decodedToken = decodePageToken(pageToken, sortBySpend);
+    if (decodedToken === undefined) return adminErrorResponse(400, "page: invalid page token", requestId);
   }
-  let y = c === null ? null : `%${escapeLikePattern(c)}%`;
-  let b = f
-    ? await listPrincipalsBySpend(sql, periodBucket(periods[0]), m, y, pageLimit)
-    : await listPrincipals(sql, m, y, pageLimit);
-  let data = await queryEffectiveLimits(sql, b.subs, periods, groupLimitMode);
+  let likePattern = searchQuery === null ? null : `%${escapeLikePattern(searchQuery)}%`;
+  let listing = sortBySpend
+    ? await listPrincipalsBySpend(sql, periodBucket(periods[0]), decodedToken, likePattern, pageLimit)
+    : await listPrincipals(sql, decodedToken, likePattern, pageLimit);
+  let data = await queryEffectiveLimits(sql, listing.subs, periods, scopeTypes);
   return Response.json(
     {
       data,
-      next_page: b.nextToken,
+      next_page: listing.nextToken,
     },
     {
       headers: NO_STORE_HEADERS_2,
@@ -357,45 +363,49 @@ async function handleEffectiveLimits({ url, sql, requestId }, groupLimitMode) {
 function parsePeriods(searchParams) {
   let all = searchParams.getAll("period[]");
   if (all.length === 0) return SPEND_PERIODS;
-  let n = [];
-  for (let o of all) {
-    if (o !== "daily" && o !== "weekly" && o !== "monthly") return null;
-    if (!n.includes(o)) n.push(o);
+  let periods = [];
+  for (let period of all) {
+    if (period !== "daily" && period !== "weekly" && period !== "monthly") return null;
+    if (!periods.includes(period)) periods.push(period);
   }
-  return n;
+  return periods;
 }
 //@ chunk-1ny7cxrt.js:1429183-1429270 placement
 /**
  * 带累计数的页令牌 schema（主体 + 数 + 已结束标记）。
  */
-var spendPageTokenSchema = DoctorLazy(() =>
-  create({
-    p: create_2(),
-    s: create_9().optional(),
-  }),
-);
-var spendPageTokenWithCountSchema = DoctorLazy(() =>
-  create({
-    p: create_2(),
-    c: create_3(),
-    s: create_25(true),
-  }),
-);
+var spendPageTokenSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var spendPageTokenWithCountSchema;
+deferInit("chunk-1ny7cxrt.js:1429183", () => {
+  spendPageTokenSchema = DoctorLazy(() =>
+    create({
+      p: create_2(),
+      s: create_9().optional(),
+    }),
+  );
+  spendPageTokenWithCountSchema = DoctorLazy(() =>
+    create({
+      p: create_2(),
+      c: create_3(),
+      s: create_25(true),
+    }),
+  );
+});
 //@ chunk-1ny7cxrt.js:1429270-1429345 placement
 /**
  * 把分页令牌编码成 base64url JSON。
  */
-function encodePageToken(e) {
-  return Buffer.from(JSON.stringify(e)).toString("base64url");
+function encodePageToken(token) {
+  return Buffer.from(JSON.stringify(token)).toString("base64url");
 }
 //@ chunk-1ny7cxrt.js:1429345-1429467 placement
 /**
  * 解码分页令牌（base64url JSON）。
  */
-function decodePageToken(e, t) {
-  let n = t ? spendPageTokenWithCountSchema() : spendPageTokenSchema();
+function decodePageToken(token, withCount) {
+  let schema = withCount ? spendPageTokenWithCountSchema() : spendPageTokenSchema();
   try {
-    return n.parse(JSON.parse(Buffer.from(e, "base64url").toString()));
+    return schema.parse(JSON.parse(Buffer.from(token, "base64url").toString()));
   } catch {
     return;
   }
@@ -404,27 +414,27 @@ function decodePageToken(e, t) {
 /**
  * 按花费降序分页列出主体（游标）。
  */
-async function listPrincipalsBySpend(sql, t, n, o, pageLimit) {
-  let s = n?.p ?? null;
-  let a = n?.s === true ? n.c : null;
-  let l = await sql`
+async function listPrincipalsBySpend(sql, groupLimitMode, query, scopeTypes, pageLimit) {
+  let afterPrincipal = query?.p ?? null;
+  let afterCents = query?.s === true ? query.c : null;
+  let rows = await sql`
     SELECT s.principal, s.cents FROM spend s
     LEFT JOIN principal_emails e ON e.principal = s.principal
-    WHERE s.period = ${t}
-      AND (${a}::float8 IS NULL
-           OR s.cents < ${a}
-           OR (s.cents = ${a} AND s.principal > ${s}))
-      AND (${o}::text IS NULL OR s.principal ILIKE ${o}
-           OR e.email ILIKE ${o} OR e.name ILIKE ${o})
+    WHERE s.period = ${groupLimitMode}
+      AND (${afterCents}::float8 IS NULL
+           OR s.cents < ${afterCents}
+           OR (s.cents = ${afterCents} AND s.principal > ${afterPrincipal}))
+      AND (${scopeTypes}::text IS NULL OR s.principal ILIKE ${scopeTypes}
+           OR e.email ILIKE ${scopeTypes} OR e.name ILIKE ${scopeTypes})
     ORDER BY s.cents DESC, s.principal LIMIT ${pageLimit + 1}
   `;
-  let c = l.length > pageLimit;
-  let sliced = l.slice(0, pageLimit);
+  let hasMore = rows.length > pageLimit;
+  let sliced = rows.slice(0, pageLimit);
   let last = sliced.at(-1);
   return {
-    subs: sliced.map((h) => h.principal),
+    subs: sliced.map((row) => row.principal),
     nextToken:
-      c && last !== undefined
+      hasMore && last !== undefined
         ? encodePageToken({
             p: last.principal,
             c: last.cents,
@@ -437,23 +447,23 @@ async function listPrincipalsBySpend(sql, t, n, o, pageLimit) {
 /**
  * 按主体名分页列出（可搜索）。
  */
-async function listPrincipals(sql, t, n, pageLimit) {
-  let r = t?.p ?? null;
-  let s = await sql`
+async function listPrincipals(sql, query, pageLimit, pageLimit_2) {
+  let afterPrincipal = query?.p ?? null;
+  let rows = await sql`
     SELECT s.principal FROM spend s
     LEFT JOIN principal_emails e ON e.principal = s.principal
-    WHERE (${r}::text IS NULL OR s.principal > ${r})
-      AND (${n}::text IS NULL OR s.principal ILIKE ${n}
-           OR e.email ILIKE ${n} OR e.name ILIKE ${n})
-    GROUP BY s.principal ORDER BY s.principal LIMIT ${pageLimit + 1}
+    WHERE (${afterPrincipal}::text IS NULL OR s.principal > ${afterPrincipal})
+      AND (${pageLimit}::text IS NULL OR s.principal ILIKE ${pageLimit}
+           OR e.email ILIKE ${pageLimit} OR e.name ILIKE ${pageLimit})
+    GROUP BY s.principal ORDER BY s.principal LIMIT ${pageLimit_2 + 1}
   `;
-  let sliced = s.map((u) => u.principal).slice(0, pageLimit);
-  let l = s.length > pageLimit;
+  let sliced = rows.map((row) => row.principal).slice(0, pageLimit_2);
+  let hasMore = rows.length > pageLimit_2;
   let last = sliced.at(-1);
   return {
     subs: sliced,
     nextToken:
-      l && last !== undefined
+      hasMore && last !== undefined
         ? encodePageToken({
             p: last,
           })
@@ -464,20 +474,20 @@ async function listPrincipals(sql, t, n, pageLimit) {
 /**
  * 转义 SQL LIKE 里的 \ % _。
  */
-function escapeLikePattern(e) {
-  return e.replace(/[\\%_]/g, (t) => `\\${t}`);
+function escapeLikePattern(pattern) {
+  return pattern.replace(/[\\%_]/g, (char) => `\\${char}`);
 }
 //@ chunk-1ny7cxrt.js:1430656-1431483 placement
 /**
  * 查询一批主体在各周期的生效上限与花费。
  */
-async function queryEffectiveLimits(sql, t, periods, o) {
-  if (t.length === 0) return [];
+async function queryEffectiveLimits(sql, principals, periods, scopeTypes) {
+  if (principals.length === 0) return [];
   return (
     await sql`
     WITH p AS (
       SELECT principal, ordinality AS ord
-      FROM unnest(${sql.array(t, "TEXT")}) WITH ORDINALITY AS t(principal)
+      FROM unnest(${sql.array(principals, "TEXT")}) WITH ORDINALITY AS t(principal)
     ),
     per AS (${periodBucketsSql(sql, periods)})
     SELECT p.principal, per.period, cap.amount, cap.scope_type,
@@ -490,38 +500,38 @@ async function queryEffectiveLimits(sql, t, periods, o) {
     LEFT JOIN LATERAL caps_by_period(
       p.principal,
       ARRAY(SELECT jsonb_array_elements_text(coalesce(e.groups, '[]'::jsonb))),
-      ${o}
+      ${scopeTypes}
     ) cap ON cap.period = per.period
     LEFT JOIN spend s ON s.principal = p.principal AND s.period = per.bucket
     ORDER BY p.ord, per.ord
   `
-  ).map((s) => toEffectiveLimit(s));
+  ).map((row) => toEffectiveLimit(row));
 }
 //@ chunk-1ny7cxrt.js:1431483-1431850 placement
 /**
  * 查询行转为生效上限 API 对象。
  */
-function toEffectiveLimit(e) {
-  let source = e.scope_type === null ? null : toSpendScope(e.scope_type, e.scope_id);
+function toEffectiveLimit(row) {
+  let source = row.scope_type === null ? null : toSpendScope(row.scope_type, row.scope_id);
   return {
     scope: {
       type: "user",
-      user_id: e.principal,
+      user_id: row.principal,
     },
-    groups: e.groups ?? [],
+    groups: row.groups ?? [],
     actor: {
       type: "user_actor",
-      user_id: e.principal,
-      name: e.name ?? null,
-      email_address: e.email ?? null,
+      user_id: row.principal,
+      name: row.name ?? null,
+      email_address: row.email ?? null,
       deleted: false,
     },
-    amount: e.amount,
+    amount: row.amount,
     currency: "USD",
-    period: e.period,
+    period: row.period,
     source,
-    spend_limit_id: e.spend_limit_id,
-    period_to_date_spend: formatCents(e.cents),
+    spend_limit_id: row.spend_limit_id,
+    period_to_date_spend: formatCents(row.cents),
   };
 }
 //@ chunk-1ny7cxrt.js:1431850-1431890 placement
@@ -540,22 +550,22 @@ function isSpendLimitsPath(pathname) {
 /**
  * 处理花费限额管理 API 请求（分配 request-id、记录日志）；路径不匹配返回 null。
  */
-async function handleSpendLimitAdmin(e, t, sql, keys, oidcAdmin, clientIp, groupLimitMode = "min") {
-  if (!isSpendLimitsPath(t.pathname)) return null;
-  let l = `req_${crypto.randomUUID().replace(/-/g, "")}`;
-  let c = await routeSpendLimitAdmin({
-    req: e,
-    url: t,
+async function handleSpendLimitAdmin(req, url, sql, keys, oidcAdmin, clientIp, groupLimitMode = "min") {
+  if (!isSpendLimitsPath(url.pathname)) return null;
+  let requestId = `req_${crypto.randomUUID().replace(/-/g, "")}`;
+  let response = await routeSpendLimitAdmin({
+    req,
+    url,
     sql,
     keys,
-    requestId: l,
+    requestId,
     oidcAdmin,
     clientIp,
     groupLimitMode,
   });
-  c.headers.set("request-id", l);
-  gatewayLog("info", `admin ${e.method} ${t.pathname} -> ${c.status} (${l})`);
-  return c;
+  response.headers.set("request-id", requestId);
+  gatewayLog("info", `admin ${req.method} ${url.pathname} -> ${response.status} (${requestId})`);
+  return response;
 }
 //@ chunk-1ny7cxrt.js:1432263-1433100 placement
 /**
@@ -564,38 +574,42 @@ async function handleSpendLimitAdmin(e, t, sql, keys, oidcAdmin, clientIp, group
 async function routeSpendLimitAdmin({ req, url, sql, keys, requestId, oidcAdmin, clientIp, groupLimitMode }) {
   let pathname = url.pathname;
   let method = req.method;
-  let f = req.headers.get("x-api-key");
-  let h = authenticateAdmin(f, keys, oidcAdmin);
-  if (!h) {
+  let apiKey = req.headers.get("x-api-key");
+  let auth = authenticateAdmin(apiKey, keys, oidcAdmin);
+  if (!auth) {
     gatewayJsonLog("admin.denied", {
-      reason: f ? "invalid_key" : req.headers.get("authorization") ? "bearer_rejected" : "no_credentials",
+      reason: apiKey
+        ? "invalid_key"
+        : req.headers.get("authorization")
+          ? "bearer_rejected"
+          : "no_credentials",
       method,
       path: pathname,
       client_ip: clientIp ?? null,
     });
     return adminErrorResponse(401, "missing or invalid admin credentials", requestId);
   }
-  let m = {
+  let ctx = {
     req,
     url,
     sql,
     requestId,
-    auth: h,
+    auth,
   };
   if (pathname === `${SPEND_LIMITS_PATH}/effective` && method === "GET")
-    return handleEffectiveLimits(m, groupLimitMode);
-  if (pathname === `${SPEND_LIMITS_PATH}/audit` && method === "GET") return handleAuditList(m);
-  if (pathname === SPEND_LIMITS_PATH && method === "GET") return handleListSpendLimits(m);
-  if (pathname === SPEND_LIMITS_PATH && method === "POST") return handleUpsertSpendLimit(m);
+    return handleEffectiveLimits(ctx, groupLimitMode);
+  if (pathname === `${SPEND_LIMITS_PATH}/audit` && method === "GET") return handleAuditList(ctx);
+  if (pathname === SPEND_LIMITS_PATH && method === "GET") return handleListSpendLimits(ctx);
+  if (pathname === SPEND_LIMITS_PATH && method === "POST") return handleUpsertSpendLimit(ctx);
   if (pathname.startsWith(`${SPEND_LIMITS_PATH}/`)) {
-    let y;
+    let id;
     try {
-      y = decodeURIComponent(pathname.slice(SPEND_LIMITS_PATH.length + 1));
+      id = decodeURIComponent(pathname.slice(SPEND_LIMITS_PATH.length + 1));
     } catch {
       return adminErrorResponse(400, "malformed spend limit id", requestId);
     }
-    if (method === "GET") return handleGetSpendLimit(m, y);
-    if (method === "DELETE") return handleDeleteSpendLimit(m, y);
+    if (method === "GET") return handleGetSpendLimit(ctx, id);
+    if (method === "DELETE") return handleDeleteSpendLimit(ctx, id);
     return adminErrorResponse(404, "not found", requestId);
   }
   return adminErrorResponse(404, "not found", requestId);
@@ -604,25 +618,25 @@ async function routeSpendLimitAdmin({ req, url, sql, keys, requestId, oidcAdmin,
 /**
  * 用 x-api-key（读/写密钥）或 OIDC 管理员身份认证，返回 {canWrite, actor}。
  */
-function authenticateAdmin(e, keys, oidcAdmin) {
-  if (!e)
+function authenticateAdmin(apiKey, keys, oidcAdmin) {
+  if (!apiKey)
     return oidcAdmin
       ? {
           canWrite: true,
           actor: `oidc:${oidcAdmin.sub}`,
         }
       : null;
-  let o = matchAdminKey(e, keys.writeKeys);
-  let r = matchAdminKey(e, keys.readKeys);
-  if (o !== undefined)
+  let writeKeyId = matchAdminKey(apiKey, keys.writeKeys);
+  let readKeyId = matchAdminKey(apiKey, keys.readKeys);
+  if (writeKeyId !== undefined)
     return {
       canWrite: true,
-      actor: `admin-key:${o}`,
+      actor: `admin-key:${writeKeyId}`,
     };
-  if (r !== undefined)
+  if (readKeyId !== undefined)
     return {
       canWrite: false,
-      actor: `admin-key:${r}`,
+      actor: `admin-key:${readKeyId}`,
     };
   return null;
 }
@@ -630,14 +644,14 @@ function authenticateAdmin(e, keys, oidcAdmin) {
 /**
  * 常数时间比较 API key，返回匹配的密钥 id。
  */
-function matchAdminKey(e, t) {
-  let buffer = Buffer.from(e);
-  let o;
-  for (let r of t) {
-    let buffer_2 = Buffer.from(r.key);
-    if (buffer_2.length === buffer.length && timingSafeEqual(buffer, buffer_2)) o = r.id;
+function matchAdminKey(presented, keys) {
+  let buffer = Buffer.from(presented);
+  let matchedId;
+  for (let key of keys) {
+    let buffer_2 = Buffer.from(key.key);
+    if (buffer_2.length === buffer.length && timingSafeEqual(buffer, buffer_2)) matchedId = key.id;
   }
-  return o;
+  return matchedId;
 }
 //@ chunk-1ny7cxrt.js:1433475-1434197 placement
 /**
@@ -646,28 +660,28 @@ function matchAdminKey(e, t) {
 async function handleAuditList({ url, sql, requestId }) {
   let pageLimit = parsePageLimit(url.searchParams, 100);
   if (pageLimit === null) return adminErrorResponse(400, "limit: must be between 1 and 1000", requestId);
-  let r = url.searchParams.get("after_id");
-  if (r !== null && !/^\d{1,18}$/.test(r))
+  let afterId = url.searchParams.get("after_id");
+  if (afterId !== null && !/^\d{1,18}$/.test(afterId))
     return adminErrorResponse(400, "after_id: must be an audit event id", requestId);
-  let s = await sql`
+  let rows = await sql`
     SELECT id, at, actor, action, target, before, after, reason
     FROM admin_audit
-    WHERE (${r}::bigint IS NULL OR id < ${r}::bigint)
+    WHERE (${afterId}::bigint IS NULL OR id < ${afterId}::bigint)
     ORDER BY id DESC LIMIT ${pageLimit + 1}
   `;
-  let hasMore = s.length > pageLimit;
+  let hasMore = rows.length > pageLimit;
   return Response.json(
     {
-      data: s.slice(0, pageLimit).map((l) => ({
+      data: rows.slice(0, pageLimit).map((row) => ({
         type: "audit_event",
-        id: l.id,
-        created_at: l.at.toISOString(),
-        actor: l.actor,
-        action: l.action,
-        target_id: l.target,
-        before: l.before ?? null,
-        after: l.after ?? null,
-        reason: l.reason ?? null,
+        id: row.id,
+        created_at: row.at.toISOString(),
+        actor: row.actor,
+        action: row.action,
+        target_id: row.target,
+        before: row.before ?? null,
+        after: row.after ?? null,
+        reason: row.reason ?? null,
       })),
       has_more: hasMore,
     },
@@ -684,55 +698,62 @@ async function handleListSpendLimits({ url, sql, requestId }) {
   let searchParams = url.searchParams;
   let pageLimit = parsePageLimit(searchParams, 20);
   if (pageLimit === null) return adminErrorResponse(400, "limit: must be between 1 and 1000", requestId);
-  let s = searchParams.get("scope_type");
-  if (s !== null && s !== "organization" && s !== "rbac_group" && s !== "user")
+  let scopeType = searchParams.get("scope_type");
+  if (
+    scopeType !== null &&
+    scopeType !== "organization" &&
+    scopeType !== "rbac_group" &&
+    scopeType !== "user"
+  )
     return adminErrorResponse(400, "scope_type: must be one of organization, rbac_group, user", requestId);
-  let a = searchParams.get("after_id");
-  let l = searchParams.get("before_id");
-  if (a !== null && l !== null)
+  let afterId = searchParams.get("after_id");
+  let beforeId = searchParams.get("before_id");
+  if (afterId !== null && beforeId !== null)
     return adminErrorResponse(400, "after_id and before_id are mutually exclusive", requestId);
-  let c = a ?? l;
-  let u;
-  if (c !== null) {
-    u = (await sql`SELECT created_at::text AS created_at, id FROM spend_limits WHERE id = ${c}`)[0];
-    if (!u)
+  let cursorId = afterId ?? beforeId;
+  let cursorRow;
+  if (cursorId !== null) {
+    cursorRow = (
+      await sql`SELECT created_at::text AS created_at, id FROM spend_limits WHERE id = ${cursorId}`
+    )[0];
+    if (!cursorRow)
       return adminErrorResponse(
         400,
-        `${a !== null ? "after_id" : "before_id"}: no spend limit with this id`,
+        `${afterId !== null ? "after_id" : "before_id"}: no spend limit with this id`,
         requestId,
       );
   }
-  let f = pageLimit + 1;
-  let h;
-  let m;
-  if (l !== null && u) {
-    let b = await sql`
+  let fetchLimit = pageLimit + 1;
+  let hasMore;
+  let rows;
+  if (beforeId !== null && cursorRow) {
+    let batch = await sql`
       SELECT * FROM spend_limits
-      WHERE (created_at, id) < (${u.created_at}::timestamptz, ${u.id})
-        AND (${s}::text IS NULL OR scope_type = ${s})
-      ORDER BY created_at DESC, id DESC LIMIT ${f}
+      WHERE (created_at, id) < (${cursorRow.created_at}::timestamptz, ${cursorRow.id})
+        AND (${scopeType}::text IS NULL OR scope_type = ${scopeType})
+      ORDER BY created_at DESC, id DESC LIMIT ${fetchLimit}
     `;
-    h = b.length > pageLimit;
-    m = b.slice(0, pageLimit).reverse().map(toSpendLimit);
+    hasMore = batch.length > pageLimit;
+    rows = batch.slice(0, pageLimit).reverse().map(toSpendLimit);
   } else {
-    let createdAt = u?.created_at ?? null;
-    let w = await sql`
+    let createdAt = cursorRow?.created_at ?? null;
+    let batch = await sql`
       SELECT * FROM spend_limits
       WHERE (${createdAt}::timestamptz IS NULL
-             OR (created_at, id) > (${createdAt}::timestamptz, ${u?.id ?? null}))
-        AND (${s}::text IS NULL OR scope_type = ${s})
-      ORDER BY created_at, id LIMIT ${f}
+             OR (created_at, id) > (${createdAt}::timestamptz, ${cursorRow?.id ?? null}))
+        AND (${scopeType}::text IS NULL OR scope_type = ${scopeType})
+      ORDER BY created_at, id LIMIT ${fetchLimit}
     `;
-    h = w.length > pageLimit;
-    m = w.slice(0, pageLimit).map(toSpendLimit);
+    hasMore = batch.length > pageLimit;
+    rows = batch.slice(0, pageLimit).map(toSpendLimit);
   }
-  let y = await withPooledSpend(sql, m);
+  let data = await withPooledSpend(sql, rows);
   return Response.json(
     {
-      data: y,
-      has_more: h,
-      first_id: y[0]?.id ?? null,
-      last_id: y.at(-1)?.id ?? null,
+      data,
+      has_more: hasMore,
+      first_id: data[0]?.id ?? null,
+      last_id: data.at(-1)?.id ?? null,
     },
     {
       headers: NO_STORE_HEADERS_2,
@@ -765,73 +786,74 @@ async function handleUpsertSpendLimit({ req, sql, requestId, auth }) {
         requestId,
       );
   }
-  let c = scopeId(scope);
-  let u = `spend_limits:${scope.type}:${c}:${period}`;
-  let f = {
+  let scopeId = scopeId_2(scope);
+  let lockKey = `spend_limits:${scope.type}:${scopeId}:${period}`;
+  let newRow = {
     id: `spl_${crypto.randomUUID().replace(/-/g, "")}`,
     scope_type: scope.type,
-    scope_id: c,
+    scope_id: scopeId,
     period,
     created_by: auth.actor,
   };
-  let h = await sql.begin(async (w) => {
-    await w`SELECT pg_advisory_xact_lock(hashtext(${u}))`;
-    let [S] = await w`
+  let txResult = await sql.begin(async (tx) => {
+    await tx`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+    let [existingRow] = await tx`
       SELECT * FROM spend_limits
-      WHERE scope_type = ${scope.type} AND scope_id = ${c} AND period = ${period}
+      WHERE scope_type = ${scope.type} AND scope_id = ${scopeId} AND period = ${period}
       FOR UPDATE
     `;
-    let j = S && toSpendLimit(S);
-    let amount = upsertBody.amount === undefined ? j?.amount : upsertBody.amount;
+    let existingLimit = existingRow && toSpendLimit(existingRow);
+    let amount = upsertBody.amount === undefined ? existingLimit?.amount : upsertBody.amount;
     if (amount === undefined)
       return "This spend limit doesn't exist yet, so it needs amount (each member's own limit). Set amount; it may equal pooled_budget.amount.";
-    let pooledBudget_2 = j?.pooled_budget;
-    let Z = pooledBudget.amount === undefined ? (pooledBudget_2?.amount ?? null) : pooledBudget.amount;
-    let F = pooledBudget.paused ?? pooledBudget_2?.paused ?? Z === null;
-    if (!F) {
-      if (Z === null)
+    let pooledBudget_2 = existingLimit?.pooled_budget;
+    let pooledAmount =
+      pooledBudget.amount === undefined ? (pooledBudget_2?.amount ?? null) : pooledBudget.amount;
+    let pooledPaused = pooledBudget.paused ?? pooledBudget_2?.paused ?? pooledAmount === null;
+    if (!pooledPaused) {
+      if (pooledAmount === null)
         return "A pooled budget that isn't paused needs an amount. Set pooled_budget.amount, or set pooled_budget.paused to true.";
       if (amount === null)
         return "A pooled budget that isn't paused needs amount (each member's own limit) on the same spend limit. Set amount; it may equal pooled_budget.amount.";
     }
-    let X = {
-      pooled_limit_enabled: !F,
-      pooled_monthly_credit_limit: Z,
+    let pooledFields = {
+      pooled_limit_enabled: !pooledPaused,
+      pooled_monthly_credit_limit: pooledAmount,
     };
-    let [he] = await w`
-      INSERT INTO spend_limits ${w({
-        ...f,
+    let [insertedRow] = await tx`
+      INSERT INTO spend_limits ${tx({
+        ...newRow,
         amount,
-        ...X,
+        ...pooledFields,
       })}
       ON CONFLICT (scope_type, scope_id, period) DO UPDATE
         SET amount = ${amount},
-            pooled_limit_enabled = ${X.pooled_limit_enabled},
-            pooled_monthly_credit_limit = ${X.pooled_monthly_credit_limit},
+            pooled_limit_enabled = ${pooledFields.pooled_limit_enabled},
+            pooled_monthly_credit_limit = ${pooledFields.pooled_monthly_credit_limit},
             updated_at = now()
       RETURNING *
     `;
-    let spendLimit = toSpendLimit(he);
-    await insertAdminAudit(w, {
+    let spendLimit = toSpendLimit(insertedRow);
+    await insertAdminAudit(tx, {
       actor: auth.actor,
       action: "spend_limit.upsert",
       target: spendLimit.id,
-      before: j ?? null,
+      before: existingLimit ?? null,
       after: spendLimit,
     });
     return {
-      before: j,
+      before: existingLimit,
       after: spendLimit,
-      json: (await withPooledSpend(w, [spendLimit]))[0],
+      json: (await withPooledSpend(tx, [spendLimit]))[0],
     };
   });
-  if (typeof h === "string") return adminErrorResponse(400, h, requestId);
-  let { before, after, json } = h;
+  if (typeof txResult === "string") return adminErrorResponse(400, txResult, requestId);
+  let { before, after, json } = txResult;
   gatewayJsonLog("admin.limit.upsert", {
     actor: auth.actor,
     target: after.id,
     scope_type: scope.type,
-    scope_id: c,
+    scope_id: scopeId,
     period,
     ...(before !== undefined && {
       before_amount: before.amount,
@@ -850,14 +872,14 @@ async function handleUpsertSpendLimit({ req, sql, requestId, auth }) {
 /**
  * GET 单个花费限额。
  */
-async function handleGetSpendLimit({ sql, requestId }, n) {
-  let r = (
+async function handleGetSpendLimit({ sql, requestId }, id) {
+  let row = (
     await sql`
-    SELECT id, scope_type, scope_id, amount, period, currency, pooled_limit_enabled, pooled_monthly_credit_limit, created_at, updated_at FROM spend_limits WHERE id = ${n}
+    SELECT id, scope_type, scope_id, amount, period, currency, pooled_limit_enabled, pooled_monthly_credit_limit, created_at, updated_at FROM spend_limits WHERE id = ${id}
   `
   )[0];
-  return r
-    ? Response.json((await withPooledSpend(sql, [toSpendLimit(r)]))[0], {
+  return row
+    ? Response.json((await withPooledSpend(sql, [toSpendLimit(row)]))[0], {
         headers: NO_STORE_HEADERS_2,
       })
     : adminErrorResponse(404, "spend limit not found", requestId);
@@ -866,34 +888,34 @@ async function handleGetSpendLimit({ sql, requestId }, n) {
 /**
  * DELETE 花费限额并审计。
  */
-async function handleDeleteSpendLimit({ sql, requestId, auth }, o) {
+async function handleDeleteSpendLimit({ sql, requestId, auth }, id) {
   if (!auth.canWrite) return adminErrorResponse(403, "requires write:spend_limits", requestId);
-  let r = await sql.begin(async (s) => {
-    let l = (
-      await s`
-      DELETE FROM spend_limits WHERE id = ${o} RETURNING id, scope_type, scope_id, amount, period, currency, pooled_limit_enabled, pooled_monthly_credit_limit, created_at, updated_at
+  let deleted = await sql.begin(async (tx) => {
+    let row = (
+      await tx`
+      DELETE FROM spend_limits WHERE id = ${id} RETURNING id, scope_type, scope_id, amount, period, currency, pooled_limit_enabled, pooled_monthly_credit_limit, created_at, updated_at
     `
     )[0];
-    if (!l) return false;
-    await insertAdminAudit(s, {
+    if (!row) return false;
+    await insertAdminAudit(tx, {
       actor: auth.actor,
       action: "spend_limit.delete",
-      target: o,
-      before: toSpendLimit(l),
+      target: id,
+      before: toSpendLimit(row),
     });
-    return l;
+    return row;
   });
-  if (r) {
+  if (deleted) {
     gatewayJsonLog("admin.limit.delete", {
       actor: auth.actor,
-      target: o,
-      scope_type: r.scope_type,
-      scope_id: r.scope_id,
-      period: r.period,
+      target: id,
+      scope_type: deleted.scope_type,
+      scope_id: deleted.scope_id,
+      period: deleted.period,
     });
     return Response.json({
       type: "spend_limit_deleted",
-      id: o,
+      id,
     });
   }
   return adminErrorResponse(404, "spend limit not found", requestId);
@@ -902,65 +924,69 @@ async function handleDeleteSpendLimit({ sql, requestId, auth }, o) {
 /**
  * 金额（分）字符串 schema 与创建请求体 schema。
  */
-var CENTS_STRING_SCHEMA = DoctorLazy(() =>
-  create_2()
-    .regex(/^\d{1,18}$/, "must be a whole-number decimal string of cents")
-    .nullable(),
-);
-var UPSERT_SPEND_LIMIT_SCHEMA = DoctorLazy(() =>
-  create({
-    scope: create_17("type", [
-      create({
-        type: create_25("user"),
-        user_id: create_2().min(1),
-      }),
-      create({
-        type: create_25("rbac_group"),
-        rbac_group_id: create_2().min(1),
-      }),
-      create({
-        type: create_25("organization"),
-      }),
-    ]),
-    amount: CENTS_STRING_SCHEMA().optional(),
-    period: create_26(["daily", "weekly", "monthly"]).default("monthly"),
-    currency: create_25("USD").optional(),
-    pooled_budget: create({
+var CENTS_STRING_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var UPSERT_SPEND_LIMIT_SCHEMA;
+deferInit("chunk-1ny7cxrt.js:1439096", () => {
+  CENTS_STRING_SCHEMA = DoctorLazy(() =>
+    create_2()
+      .regex(/^\d{1,18}$/, "must be a whole-number decimal string of cents")
+      .nullable(),
+  );
+  UPSERT_SPEND_LIMIT_SCHEMA = DoctorLazy(() =>
+    create({
+      scope: create_17("type", [
+        create({
+          type: create_25("user"),
+          user_id: create_2().min(1),
+        }),
+        create({
+          type: create_25("rbac_group"),
+          rbac_group_id: create_2().min(1),
+        }),
+        create({
+          type: create_25("organization"),
+        }),
+      ]),
       amount: CENTS_STRING_SCHEMA().optional(),
-      paused: create_6().nullish(),
+      period: create_26(["daily", "weekly", "monthly"]).default("monthly"),
       currency: create_25("USD").optional(),
-    }).nullish(),
-  }),
-);
+      pooled_budget: create({
+        amount: CENTS_STRING_SCHEMA().optional(),
+        paused: create_6().nullish(),
+        currency: create_25("USD").optional(),
+      }).nullish(),
+    }),
+  );
+});
 //@ chunk-1ny7cxrt.js:1439575-1439707 placement
 /**
  * 把第一个校验错误格式化为 “路径: 信息”。
  */
 function formatZodIssue(error) {
-  let t = error.issues[0];
-  if (!t) return "invalid request body";
-  let joined = t.path.join(".");
-  return joined ? `${joined}: ${t.message}` : t.message;
+  let issue = error.issues[0];
+  if (!issue) return "invalid request body";
+  let joined = issue.path.join(".");
+  return joined ? `${joined}: ${issue.message}` : issue.message;
 }
 //@ chunk-1ny7cxrt.js:1439707-1439873 placement
 /**
  * 解析并校验请求体，失败返回错误响应。
  */
 async function parseUpsertBody(req, requestId) {
-  let n;
+  let body;
   try {
-    n = await req.json();
+    body = await req.json();
   } catch {
     return adminErrorResponse(400, "invalid JSON body", requestId);
   }
-  let o = UPSERT_SPEND_LIMIT_SCHEMA().safeParse(n);
-  return o.success ? o.data : adminErrorResponse(400, formatZodIssue(o.error), requestId);
+  let parsed = UPSERT_SPEND_LIMIT_SCHEMA().safeParse(body);
+  return parsed.success ? parsed.data : adminErrorResponse(400, formatZodIssue(parsed.error), requestId);
 }
 //@ chunk-1ny7cxrt.js:1439873-1440000 placement
 /**
  * 作用域 id（用户 id、组 id 或空串）。
  */
-function scopeId(scope) {
+function scopeId_2(scope) {
   switch (scope.type) {
     case "user":
       return scope.user_id;
@@ -974,34 +1000,34 @@ function scopeId(scope) {
 /**
  * 数据库行转为花费限额对象（组月度限额带共享预算）。
  */
-function toSpendLimit(e) {
+function toSpendLimit(row) {
   return {
-    id: e.id,
-    scope: toSpendScope(e.scope_type, e.scope_id),
-    amount: e.amount,
-    period: e.period,
-    currency: e.currency,
-    ...(e.scope_type === "rbac_group" &&
-      e.period === "monthly" && {
+    id: row.id,
+    scope: toSpendScope(row.scope_type, row.scope_id),
+    amount: row.amount,
+    period: row.period,
+    currency: row.currency,
+    ...(row.scope_type === "rbac_group" &&
+      row.period === "monthly" && {
         pooled_budget:
-          e.pooled_monthly_credit_limit === null
+          row.pooled_monthly_credit_limit === null
             ? null
             : {
-                amount: e.pooled_monthly_credit_limit,
-                paused: !e.pooled_limit_enabled,
+                amount: row.pooled_monthly_credit_limit,
+                paused: !row.pooled_limit_enabled,
               },
       }),
-    created_at: e.created_at.toISOString(),
-    updated_at: e.updated_at.toISOString(),
+    created_at: row.created_at.toISOString(),
+    updated_at: row.updated_at.toISOString(),
   };
 }
 //@ chunk-1ny7cxrt.js:1440375-1441013 placement
 /**
  * 为花费限额 API 对象补上共享预算本月已用额度。
  */
-async function withPooledSpend(sql, t) {
-  let mapped = t.filter((s) => s.pooled_budget).map((s) => scopeId(s.scope));
-  let o =
+async function withPooledSpend(sql, limits) {
+  let mapped = limits.filter((limit) => limit.pooled_budget).map((limit) => scopeId_2(limit.scope));
+  let pooled =
     mapped.length === 0
       ? []
       : await sql`
@@ -1009,21 +1035,21 @@ async function withPooledSpend(sql, t) {
           WHERE period = ${periodBucket("monthly")}
             AND rbac_group_id = ANY(${sql.array(mapped, "TEXT")})
         `;
-  let r = new Map(o.map((s) => [s.rbac_group_id, s.cents]));
-  return t.map((s) => ({
+  let spendByGroup = new Map(pooled.map((row) => [row.rbac_group_id, row.cents]));
+  return limits.map((limit) => ({
     type: "spend_limit",
-    id: s.id,
-    created_at: s.created_at,
-    updated_at: s.updated_at,
-    scope: s.scope,
-    amount: s.amount,
-    currency: s.currency,
-    period: s.period,
-    ...(s.pooled_budget !== undefined && {
-      pooled_budget: s.pooled_budget && {
-        ...s.pooled_budget,
-        currency: s.currency,
-        period_to_date_spend: formatCents(r.get(scopeId(s.scope)) ?? 0),
+    id: limit.id,
+    created_at: limit.created_at,
+    updated_at: limit.updated_at,
+    scope: limit.scope,
+    amount: limit.amount,
+    currency: limit.currency,
+    period: limit.period,
+    ...(limit.pooled_budget !== undefined && {
+      pooled_budget: limit.pooled_budget && {
+        ...limit.pooled_budget,
+        currency: limit.currency,
+        period_to_date_spend: formatCents(spendByGroup.get(scopeId_2(limit.scope)) ?? 0),
       },
     }),
   }));
@@ -1032,17 +1058,19 @@ async function withPooledSpend(sql, t) {
 /**
  * 从用户所在组的共享预算中选出仍有余额的那个（按上限从大到小），否则返回全部已用尽。
  */
-function pickPayingPool(e) {
-  let [t, ...n] = e.toSorted((s, a) => a.limit - s.limit || (s.group < a.group ? -1 : 1));
-  if (!t) return null;
-  let o = [t, ...n];
-  let found = o.find((s) => s.spent < s.limit);
+function pickPayingPool(pools) {
+  let [best, ...rest] = pools.toSorted(
+    (left, right) => right.limit - left.limit || (left.group < right.group ? -1 : 1),
+  );
+  if (!best) return null;
+  let candidates = [best, ...rest];
+  let found = candidates.find((pool) => pool.spent < pool.limit);
   return found
     ? {
         pays: found,
       }
     : {
-        usedUp: o,
+        usedUp: candidates,
       };
 }
 //@ chunk-1ny7cxrt.js:1441192-1441206 placement
@@ -1054,27 +1082,27 @@ var SLOW_SPEND_WRITE_MS = 30000;
 /**
  * 合并累加花费并串行写入；写入耗时过长时回调提醒。
  */
-function createSpendFlusher(e, t, n = () => performance.now()) {
-  let o = new Map();
-  let r;
-  return async (s, a) => {
-    o.set(s, (o.get(s) ?? 0) + a);
-    if (r !== undefined) {
-      if (n() - r >= SLOW_SPEND_WRITE_MS) {
-        r = n();
-        t();
+function createSpendFlusher(sql, options, now = () => performance.now()) {
+  let pending = new Map();
+  let timer;
+  return async (principal, cents) => {
+    pending.set(principal, (pending.get(principal) ?? 0) + cents);
+    if (timer !== undefined) {
+      if (now() - timer >= SLOW_SPEND_WRITE_MS) {
+        timer = now();
+        options();
       }
       return;
     }
     try {
-      while (o.size > 0) {
-        let l = o;
-        o = new Map();
-        r = n();
-        await e(l);
+      while (pending.size > 0) {
+        let batch = pending;
+        pending = new Map();
+        timer = now();
+        await sql(batch);
       }
     } finally {
-      r = undefined;
+      timer = undefined;
     }
   };
 }
@@ -1104,47 +1132,54 @@ function groupBudgetExceededMessage(resetsAt) {
 /**
  * 包装上游响应流：边转发边解析用量，流结束/出错/取消时计算花费并记录。
  */
-function meterResponseUsage(e, t, n, o = null, speed, s = () => {}) {
-  if (!e.body || e.status >= 400) return e;
-  let included = (e.headers.get("content-type") ?? "").includes("text/event-stream");
-  let reader = e.body.getReader();
-  let usageAccumulator = createUsageAccumulator(included, o, speed);
-  let u = false;
-  async function f() {
-    if (u) return;
-    u = true;
+function meterResponseUsage(
+  response,
+  toCost,
+  persistUsage,
+  inputTokenEstimator = null,
+  speed,
+  trackWrite = () => {},
+) {
+  if (!response.body || response.status >= 400) return response;
+  let isSse = (response.headers.get("content-type") ?? "").includes("text/event-stream");
+  let reader = response.body.getReader();
+  let usageAccumulator = createUsageAccumulator(isSse, inputTokenEstimator, speed);
+  let finalized = false;
+  async function finalizeUsage() {
+    if (finalized) return;
+    finalized = true;
     try {
-      let m = await usageAccumulator.usage();
-      if (m) await n(t(m));
+      let usage = await usageAccumulator.usage();
+      if (usage) await persistUsage(toCost(usage));
     } catch (error) {
       gatewayLog("warn", `usage metering failed: ${errorMessage(error)}`);
     }
   }
   let readableStream = new ReadableStream({
-    async pull(m) {
+    async pull(controller) {
       try {
-        let y = await reader.read();
-        if (y.done) {
-          s(f());
-          m.close();
+        let chunk = await reader.read();
+        if (chunk.done) {
+          trackWrite(finalizeUsage());
+          controller.close();
           return;
         }
-        usageAccumulator.push(y.value);
-        m.enqueue(y.value);
+        usageAccumulator.push(chunk.value);
+        controller.enqueue(chunk.value);
       } catch (error) {
-        s(f());
-        m.error(error);
+        trackWrite(finalizeUsage());
+        controller.error(error);
       }
     },
-    async cancel(m) {
-      s(f());
-      await reader.cancel(m);
+    async cancel(reason) {
+      trackWrite(finalizeUsage());
+      await reader.cancel(reason);
     },
   });
   return new Response(readableStream, {
-    status: e.status,
-    statusText: e.statusText,
-    headers: e.headers,
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
   });
 }
 //@ chunk-1ny7cxrt.js:1442381-1442396 placement
@@ -1156,94 +1191,72 @@ var MAX_SSE_BUFFER_BYTES = 8388608;
 /**
  * 用量累加器：SSE 按事件解析，非流式解析 JSON；无用量时按输出字节估算。
  */
-function createUsageAccumulator(e, t, speed) {
+function createUsageAccumulator(isSse, inputTokenEstimator, speed) {
   let textDecoder = new TextDecoder();
-  if (e) {
-    let l = "";
+  if (isSse) {
+    let pendingText = "";
     let sseUsageState = createSseUsageState();
     return {
-      push(u) {
-        l += textDecoder.decode(u, {
+      push(chunk) {
+        pendingText += textDecoder.decode(chunk, {
           stream: true,
         });
-        let parts = l.split(SSE_EVENT_SEPARATOR_RE);
-        l = parts.pop() ?? "";
-        for (let h of parts) accumulateSseUsage(sseUsageState, h);
-        if (l.length > MAX_SSE_BUFFER_BYTES) l = "";
+        let parts = pendingText.split(SSE_EVENT_SEPARATOR_RE);
+        pendingText = parts.pop() ?? "";
+        for (let eventText of parts) accumulateSseUsage(sseUsageState, eventText);
+        if (pendingText.length > MAX_SSE_BUFFER_BYTES) pendingText = "";
       },
       async usage() {
-        if (l !== "") {
-          accumulateSseUsage(sseUsageState, l);
-          l = "";
+        if (pendingText !== "") {
+          accumulateSseUsage(sseUsageState, pendingText);
+          pendingText = "";
         }
         return finishSseUsage(sseUsageState);
       },
     };
   }
-  let r = "";
-  let s = 0;
-  let a = false;
+  let bodyText = "";
+  let charCount = 0;
+  let overflowed = false;
   return {
-    push(l) {
-      let c = textDecoder.decode(l, {
+    push(chunk) {
+      let text = textDecoder.decode(chunk, {
         stream: true,
       });
-      s += c.length;
-      if (a) return;
-      r += c;
-      if (r.length > MAX_SSE_BUFFER_BYTES) {
-        a = true;
-        r = "";
+      charCount += text.length;
+      if (overflowed) return;
+      bodyText += text;
+      if (bodyText.length > MAX_SSE_BUFFER_BYTES) {
+        overflowed = true;
+        bodyText = "";
       }
     },
     async usage() {
-      let l = a ? null : parseJsonUsage(r);
-      if (l) return l;
-      if (s === 0) return null;
+      let parsedUsage = overflowed ? null : parseJsonUsage(bodyText);
+      if (parsedUsage) return parsedUsage;
+      if (charCount === 0) return null;
       return {
-        input_tokens: (await t?.().catch(() => null)) ?? 0,
-        output_tokens: Math.ceil(s / CHARS_PER_OUTPUT_TOKEN),
+        input_tokens: (await inputTokenEstimator?.().catch(() => null)) ?? 0,
+        output_tokens: Math.ceil(charCount / CHARS_PER_OUTPUT_TOKEN),
         speed,
       };
     },
-  };
-}
-//@ chunk-1ny7cxrt.js:1442912-1442945 placement
-/**
- * 找 data: 字段时扣除的前缀长度。
- */
-var SSE_EVENT_SEPARATOR_RE = /\r?\n\r?\n/;
-var CHARS_PER_OUTPUT_TOKEN = 4;
-var DATA_PREFIX_LENGTH = 80;
-//@ chunk-1ny7cxrt.js:1442945-1443051 placement = getParentCacheSuppressReason (0.426)
-/**
- * SSE 用量解析器的初始状态（usage 0、是否见到、估算输出字符）。旧版名 getParentCacheSuppressReason 为错配，归错文件。
- */
-function createSseUsageState() {
-  return {
-    usage: {
-      input_tokens: 0,
-      output_tokens: 0,
-    },
-    seen: false,
-    estOutputChars: 0,
-    sawOutputTokens: false,
   };
 }
 //@ chunk-1ny7cxrt.js:1446994-1450809 placement
 function createSpendLimitAdmin(sql, gatewayConfig, spendFault) {
   if (!gatewayConfig.admin) return null;
   let admin = gatewayConfig.admin;
-  let r = new Set();
-  let s = new Map();
-  let a = 900000;
-  let l = new Map();
-  let c = 2000;
-  let u = new Set();
+  let warnedModels = new Set();
+  let identityCache = new Map();
+  let IDENTITY_WRITE_INTERVAL_MS = 900000;
+  let capsCache = new Map();
+  let CAPS_CACHE_MS = 2000;
+  let pendingWrites = new Set();
   let NEGATIVE_INFINITY = Number.NEGATIVE_INFINITY;
   let spendFlusher = createSpendFlusher(
-    (F) =>
-      recordPooledSpend(sql, F).catch((error) => {
+    (pendingSpend) =>
+      recordPooledSpend(sql, pendingSpend).catch((error) => {
         gatewayLog(
           "warn",
           `pooled spend record failed, so this spend is missing from group budgets: ${errorMessage(error)}`,
@@ -1256,30 +1269,30 @@ function createSpendLimitAdmin(sql, gatewayConfig, spendFault) {
         "a write to pooled_spend has not returned after 30 s, so this replica is not counting spend toward group budgets. The unsaved spend is held in memory and lost if the replica stops. Look for a lock on pooled_spend or a dead database connection",
       ),
   );
-  function m(F) {
-    u.add(F);
-    F.finally(() => u.delete(F));
+  function trackWrite(promise) {
+    pendingWrites.add(promise);
+    promise.finally(() => pendingWrites.delete(promise));
   }
-  async function y(F, requestId) {
+  async function precheck(principal, requestId) {
     let date = new Date();
     let abortController = new AbortController();
-    let ce = withTimeout(
+    let capsPromise = withTimeout(
       readSpendCaps(
         sql,
-        F.sub,
-        F.groups ?? [],
+        principal.sub,
+        principal.groups ?? [],
         admin.group_limit_mode,
         date,
         abortController.signal,
-        F.groups,
+        principal.groups,
       ),
       MIN_ESTIMATE_OUTPUT_CHARS + 500,
       "spend precheck timed out",
     );
-    j(F);
-    let Ne;
+    recordIdentity(principal);
+    let caps;
     try {
-      Ne = await ce;
+      caps = await capsPromise;
     } catch (error) {
       abortController.abort();
       gatewayLog("warn", `spend check failed: ${errorMessage(error)}`);
@@ -1291,22 +1304,22 @@ function createSpendLimitAdmin(sql, gatewayConfig, spendFault) {
           payingGroup: null,
         };
       return {
-        blocked: S(F.sub, requestId, null, {
+        blocked: blockedResponse(principal.sub, requestId, null, {
           "anthropic-ratelimit-unified-overage-disabled-reason": "fetch_error",
         }),
       };
     }
-    let { binding, headers } = mockLimitsFromSpend(Ne.caps, date);
+    let { binding, headers } = mockLimitsFromSpend(caps.caps, date);
     if (binding?.exceeded)
       return {
-        blocked: S(F.sub, requestId, binding, headers),
+        blocked: blockedResponse(principal.sub, requestId, binding, headers),
       };
-    if (Ne.pools.status === "rejected") {
+    if (caps.pools.status === "rejected") {
       if (date.getTime() - NEGATIVE_INFINITY >= 60000) {
         NEGATIVE_INFINITY = date.getTime();
         gatewayLog(
           "warn",
-          `pooled spend check failed, so group budgets are not enforced (developers' own caps are). Logged at most once a minute: ${errorMessage(Ne.pools.reason)}`,
+          `pooled spend check failed, so group budgets are not enforced (developers' own caps are). Logged at most once a minute: ${errorMessage(caps.pools.reason)}`,
         );
       }
       spendFault?.("check");
@@ -1316,44 +1329,44 @@ function createSpendLimitAdmin(sql, gatewayConfig, spendFault) {
         payingGroup: null,
       };
     }
-    let Ue = pickPayingPool(Ne.pools.value);
-    if (Ue && "usedUp" in Ue) {
-      let kt = mockLimitsFromSpend(
+    let payingPool = pickPayingPool(caps.pools.value);
+    if (payingPool && "usedUp" in payingPool) {
+      let poolLimits = mockLimitsFromSpend(
         [
           {
             period: "monthly",
-            cap_cents: String(Ue.usedUp[0].limit),
+            cap_cents: String(payingPool.usedUp[0].limit),
             scope_type: "group_pool",
-            spent_cents: Ue.usedUp[0].spent,
+            spent_cents: payingPool.usedUp[0].spent,
           },
         ],
         date,
       );
       return {
-        blocked: S(
-          F.sub,
+        blocked: blockedResponse(
+          principal.sub,
           requestId,
-          kt.binding,
-          kt.headers,
-          Ue.usedUp.map((je) => je.group),
+          poolLimits.binding,
+          poolLimits.headers,
+          payingPool.usedUp.map((exhausted) => exhausted.group),
         ),
       };
     }
     return {
       blocked: null,
       headers,
-      payingGroup: Ue?.pays.group ?? null,
+      payingGroup: payingPool?.pays.group ?? null,
     };
   }
-  async function b(F, X) {
+  async function usage(principal, requestId) {
     let date = new Date();
-    let Me;
+    let caps;
     try {
-      Me = await w(F, date);
+      caps = await readCachedCaps(principal, date);
     } catch (error) {
       gatewayLog(
         "warn",
-        `GET /api/oauth/usage: spend store read failed: ${errorMessage(error)} request_id=${X}`,
+        `GET /api/oauth/usage: spend store read failed: ${errorMessage(error)} request_id=${requestId}`,
       );
       spendFault?.("check");
       return new Response("spend limit unavailable", {
@@ -1361,32 +1374,39 @@ function createSpendLimitAdmin(sql, gatewayConfig, spendFault) {
         headers: NO_STORE_HEADERS_2,
       });
     }
-    return Response.json(toSpendRateLimits(Me, date), {
+    return Response.json(toSpendRateLimits(caps, date), {
       headers: NO_STORE_HEADERS_2,
     });
   }
-  function w(F, date) {
-    let he = l.get(F.sub);
-    if (he && date.getTime() - he.at < c) return he.caps;
-    if (l.size >= 1e4) l.clear();
+  function readCachedCaps(principal, now) {
+    let cached = capsCache.get(principal.sub);
+    if (cached && now.getTime() - cached.at < CAPS_CACHE_MS) return cached.caps;
+    if (capsCache.size >= 1e4) capsCache.clear();
     let abortController = new AbortController();
-    let ce = withTimeout(
-      readSpendCaps(sql, F.sub, F.groups ?? [], admin.group_limit_mode, date, abortController.signal),
+    let capsPromise = withTimeout(
+      readSpendCaps(
+        sql,
+        principal.sub,
+        principal.groups ?? [],
+        admin.group_limit_mode,
+        now,
+        abortController.signal,
+      ),
       MIN_ESTIMATE_OUTPUT_CHARS + 500,
       "spend usage read timed out",
     )
-      .then((Ne) => Ne.caps)
+      .then((result) => result.caps)
       .catch((error) => {
         abortController.abort();
         throw error;
       });
-    l.set(F.sub, {
-      at: date.getTime(),
-      caps: ce,
+    capsCache.set(principal.sub, {
+      at: now.getTime(),
+      caps: capsPromise,
     });
-    return ce;
+    return capsPromise;
   }
-  function S(sub, requestId, binding, headers, ce) {
+  function blockedResponse(sub, requestId, binding, headers, groups) {
     gatewayJsonLog("spend.blocked", {
       request_id: requestId,
       sub,
@@ -1396,14 +1416,14 @@ function createSpendLimitAdmin(sql, gatewayConfig, spendFault) {
         source: binding.scope_type,
         period: binding.period,
       }),
-      ...(ce && {
-        groups: ce,
+      ...(groups && {
+        groups,
       }),
       ...(gatewayConfig.load_test_mode?.enabled && {
         load_test: true,
       }),
     });
-    let Ne = binding
+    let message = binding
       ? binding.scope_type === "group_pool"
         ? groupBudgetExceededMessage(binding.resetsAt)
         : `spend limit reached (${binding.period}; resets ${binding.resetsAt.toISOString().slice(0, 16).replace("T", " ")} UTC)`
@@ -1413,7 +1433,7 @@ function createSpendLimitAdmin(sql, gatewayConfig, spendFault) {
         type: "error",
         error: {
           type: "billing_error",
-          message: admin.blocked_message ? `${Ne} \u2014 ${admin.blocked_message}` : Ne,
+          message: admin.blocked_message ? `${message} \u2014 ${admin.blocked_message}` : message,
         },
       },
       {
@@ -1425,86 +1445,102 @@ function createSpendLimitAdmin(sql, gatewayConfig, spendFault) {
       },
     );
   }
-  function j(F) {
-    let X = `${F.sub}\x00${F.email ?? ""}\x00${F.name ?? ""}\x00${(F.groups ?? []).join(",")}`;
-    let he = s.get(X) ?? 0;
-    if (Date.now() - he >= a) {
-      if (s.size >= 1e4) s.clear();
-      s.set(X, Date.now());
-      m(
-        upsertPrincipalIdentity(sql, F).catch((error) =>
+  function recordIdentity(principal) {
+    let identityKey = `${principal.sub}\x00${principal.email ?? ""}\x00${principal.name ?? ""}\x00${(principal.groups ?? []).join(",")}`;
+    let lastWriteMs = identityCache.get(identityKey) ?? 0;
+    if (Date.now() - lastWriteMs >= IDENTITY_WRITE_INTERVAL_MS) {
+      if (identityCache.size >= 1e4) identityCache.clear();
+      identityCache.set(identityKey, Date.now());
+      trackWrite(
+        upsertPrincipalIdentity(sql, principal).catch((error) =>
           gatewayLog("warn", `identity record failed: ${errorMessage(error)}`),
         ),
       );
     }
   }
-  function M(F, X, he, Me, ce, Ne, be, ve) {
+  function meter(
+    response,
+    principal,
+    pooledPayer,
+    upstreamName,
+    upstreamModel,
+    modelId,
+    estimateInputTokens,
+    meterTrackWrite,
+  ) {
     if (
-      F.status < 400 &&
-      ce !== null &&
-      !hasKnownModelCost(Ne ?? "") &&
-      !findPricingOverride(gatewayConfig.pricing, Me, ce, Ne)
+      response.status < 400 &&
+      upstreamModel !== null &&
+      !hasKnownModelCost(modelId ?? "") &&
+      !findPricingOverride(gatewayConfig.pricing, upstreamName, upstreamModel, modelId)
     )
-      N(ce);
+      warnUnpricedModel(upstreamModel);
     return meterResponseUsage(
-      F,
-      (Ue) =>
-        gatewayConfig.load_test_mode?.enabled ? 0 : requestCostCents(ce, Ue, Ne, gatewayConfig.pricing, Me),
-      (Ue) =>
+      response,
+      (usage) =>
+        gatewayConfig.load_test_mode?.enabled
+          ? 0
+          : requestCostCents(upstreamModel, usage, modelId, gatewayConfig.pricing, upstreamName),
+      (usage) =>
         Promise.all([
-          recordSpend(sql, X.sub, Ue).catch((error) => {
+          recordSpend(sql, principal.sub, usage).catch((error) => {
             gatewayLog("warn", `spend record failed: ${errorMessage(error)}`);
             spendFault?.("write");
           }),
-          he !== null && spendFlusher(he, Ue),
+          pooledPayer !== null && spendFlusher(pooledPayer, usage),
         ]),
-      be,
-      ve,
-      m,
+      estimateInputTokens,
+      meterTrackWrite,
+      trackWrite,
     );
   }
-  function N(F) {
-    if (hasKnownModelCost(F) || r.has(F) || r.size >= 1000) return;
-    r.add(F);
+  function warnUnpricedModel(modelId) {
+    if (hasKnownModelCost(modelId) || warnedModels.has(modelId) || warnedModels.size >= 1000) return;
+    warnedModels.add(modelId);
     gatewayLog(
       "warn",
-      `spend meter has no exact rates for model '${F}' \u2014 metering at the unknown-model default tier`,
+      `spend meter has no exact rates for model '${modelId}' \u2014 metering at the unknown-model default tier`,
     );
   }
-  async function Z() {
-    while (u.size > 0) await Promise.all(u);
+  async function flush() {
+    while (pendingWrites.size > 0) await Promise.all(pendingWrites);
   }
   return {
-    precheck: y,
-    usage: b,
-    meter: M,
-    flush: Z,
+    precheck,
+    usage,
+    meter,
+    flush,
   };
 }
 //@ chunk-1ny7cxrt.js:1451226-1451674 placement
 /**
  * 花费状态转为客户端额度显示（extra_usage 与各周期 limits、严重程度）。
  */
-function toSpendRateLimits(e, date = new Date()) {
-  let mapped = e.map((r) => withLimitStatus(r, date));
-  let o = mostSevereLimit(mapped);
+function toSpendRateLimits(limits, date = new Date()) {
+  let limits_2 = limits.map((limit) => withLimitStatus(limit, date));
+  let binding = mostSevereLimit(limits_2);
   return {
-    ...(o && {
+    ...(binding && {
       extra_usage: {
         is_enabled: true,
-        monthly_limit: Number(o.cap_cents),
-        used_credits: Math.floor(o.spent_cents),
-        utilization: Math.round(roundUtilization(o) * 100),
+        monthly_limit: Number(binding.cap_cents),
+        used_credits: Math.floor(binding.spent_cents),
+        utilization: Math.round(roundUtilization(binding) * 100),
         currency: "USD",
       },
     }),
-    limits: mapped.map((r) => ({
+    limits: limits_2.map((limit) => ({
       kind: "spend",
-      group: r.period,
-      percent: Math.round(roundUtilization(r) * 100),
-      resets_at: r.resetsAt.toISOString(),
-      severity: r.exceeded || r.utilization > 0.95 ? "critical" : r.utilization > 0.75 ? "warning" : "normal",
-      is_active: r === o,
+      group: limit.period,
+      percent: Math.round(roundUtilization(limit) * 100),
+      resets_at: limit.resetsAt.toISOString(),
+      severity:
+        limit.exceeded || limit.utilization > 0.95
+          ? "critical"
+          : limit.utilization > 0.75
+            ? "warning"
+            : "normal",
+      is_active: limit === binding,
     })),
   };
 }
@@ -1512,14 +1548,12 @@ function toSpendRateLimits(e, date = new Date()) {
 /**
  * 两个限额中取更严重的（超限优先，其次重置更晚或使用率更高）。
  */
-function pickMoreSevereLimit(e, t) {
-  if (e.exceeded !== t.exceeded) return e.exceeded ? e : t;
-  if (e.exceeded) return e.resetsAt.getTime() > t.resetsAt.getTime() ? e : t;
-  return e.utilization > t.utilization ? e : t;
+function pickMoreSevereLimit(left, right) {
+  if (left.exceeded !== right.exceeded) return left.exceeded ? left : right;
+  if (left.exceeded) return left.resetsAt.getTime() > right.resetsAt.getTime() ? left : right;
+  return left.utilization > right.utilization ? left : right;
 }
 export {
-  DATA_PREFIX_LENGTH,
-  CHARS_PER_OUTPUT_TOKEN,
   periodResetsAt,
   pickMoreSevereLimit,
   createSpendLimitAdmin,

@@ -35,13 +35,14 @@ import { getRootSession, getOriginalCwd } from "../../../bootstrap/state.js";
 import { sessionIdBody } from "../../../bridge/sessionIdCompat.js";
 import { getRemoteCaps } from "../../../remote/remoteMode.js";
 import { getStoredOauthAccountInfo } from "../../auth.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1775166-1776430 fingerprint = checkBackgroundRemoteSessionEligibility (0.664)
 /**
  * 依次检查：CLAUDE_CODE_EVAL_CONFINED、策略 allow_remote_sessions、登录状态、是否在 git 仓库、是否有 GitHub 远端（允许 bundle 时可跳过）、GitHub App/账号连接；返回错误列表并记 bg_remote_eligibility_check。
  */
 async function checkBackgroundRemoteSessionEligibility({
-  allowBundle: e = false,
+  allowBundle = false,
   cwd,
   storageV5,
   credentials,
@@ -64,35 +65,38 @@ async function checkBackgroundRemoteSessionEligibility({
     hasFreshSubscriberToken(credentials),
     detectCurrentRepositoryWithHost(cwd),
   ]);
-  let w =
+  let repository =
     currentRepositoryWithHost && isNestedGitLabProject(currentRepositoryWithHost)
       ? null
       : currentRepositoryWithHost;
-  let L = null;
-  let G = isConsoleProfileSessionsCredential() && (await sessionsApiAccessToken(true)) === undefined;
+  let environments = null;
+  let consoleNeedsLogin =
+    isConsoleProfileSessionsCredential() && (await sessionsApiAccessToken(true)) === undefined;
   if (needsLogin)
     errors.push({
       type: "not_logged_in",
     });
-  else if (G)
+  else if (consoleNeedsLogin)
     errors.push({
       type: "not_logged_in",
       message: cloudSessionsSignInRefusal(),
     });
   else
     try {
-      L = await fetchRemoteEnvironmentsForEligibility(storageV5, credentials);
+      environments = await fetchRemoteEnvironmentsForEligibility(storageV5, credentials);
     } catch {
       errors.push({
         type: "not_logged_in",
       });
     }
   let id = getEnvironmentSelectionInfo().id;
-  let Z =
+  let hasByocEnvironment =
     isCcpoolId(id) ||
-    (id !== undefined && L !== null && L.some((ke) => ke.environment_id === id && ke.kind === "byoc"));
-  let Se =
-    e &&
+    (id !== undefined &&
+      environments !== null &&
+      environments.some((environment) => environment.environment_id === id && environment.kind === "byoc"));
+  let bundleAllowed =
+    allowBundle &&
     (env.CCR_FORCE_BUNDLE ||
       env.CCR_ENABLE_BUNDLE ||
       (await checkGate_CACHED_OR_BLOCKING("tengu_ccr_bundle_seed_enabled")));
@@ -101,13 +105,13 @@ async function checkBackgroundRemoteSessionEligibility({
       type: "not_in_git_repo",
       cwd: cwd ?? getCwd(),
     });
-  else if (Se && findGitRoot(cwd ?? getCwd()) !== null);
-  else if (w === null)
+  else if (bundleAllowed && findGitRoot(cwd ?? getCwd()) !== null);
+  else if (repository === null)
     errors.push({
       type: "no_git_remote",
     });
-  else if (!Z && isGithubDotCom(w.host) && !G) {
-    let hasGithubApp = await checkGithubAppInstalled(w.owner, w.name);
+  else if (!hasByocEnvironment && isGithubDotCom(repository.host) && !consoleNeedsLogin) {
+    let hasGithubApp = await checkGithubAppInstalled(repository.owner, repository.name);
     if (hasGithubApp.linkedAccountAccess === "github_not_connected")
       errors.push({
         type: "github_not_connected",
@@ -145,7 +149,7 @@ function alwaysFalsePlaceholder() {
 /**
  * 占位实现，恒返回 undefined。
  */
-function stubSessionTeam(e) {
+function stubSessionTeam(tags) {
   return;
 }
 //@ chunk-e6aww6q8.js:1804179-1804327 placement
@@ -162,7 +166,10 @@ class RemoteSessionTeamState {
 /**
  * 按宿主隔离的远程会话团队状态缓存。
  */
-var remoteSessionTeamByHost = new HostScoped(() => new RemoteSessionTeamState());
+var remoteSessionTeamByHost; // deferred: uses RemoteSessionTeamState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1804327", () => {
+  remoteSessionTeamByHost = new HostScoped(() => new RemoteSessionTeamState());
+});
 //@ chunk-e6aww6q8.js:1804354-1804392 placement
 /**
  * 取出当前宿主的远程会话团队状态。
@@ -174,11 +181,11 @@ function getRemoteSessionTeamState() {
 /**
  * 记录某会话所属的团队并通知变更。
  */
-function recordRemoteSessionTeam(e, tags) {
-  let r = stubSessionTeam(tags);
-  if (r !== undefined) {
+function recordRemoteSessionTeam(sessionId, tags) {
+  let team = stubSessionTeam(tags);
+  if (team !== undefined) {
     let remoteSessionTeamState = getRemoteSessionTeamState();
-    remoteSessionTeamState.known.set(sessionIdBody(e), r);
+    remoteSessionTeamState.known.set(sessionIdBody(sessionId), team);
     remoteSessionTeamState.changed.emit();
   }
 }
@@ -186,9 +193,9 @@ function recordRemoteSessionTeam(e, tags) {
 /**
  * 当前会话的账号键（与给定团队一致时返回）。
  */
-function sessionAccountKeyOrUndefined(e) {
+function sessionAccountKeyOrUndefined(team) {
   let sessionId = getRemoteCaps()?.sessionId;
-  if (sessionId === undefined || getRemoteSessionTeamState().known.get(sessionIdBody(sessionId)) !== e)
+  if (sessionId === undefined || getRemoteSessionTeamState().known.get(sessionIdBody(sessionId)) !== team)
     return;
   return `${sessionIdBody(sessionId)} ${accountAndOrgKey()}`;
 }
@@ -212,8 +219,9 @@ function currentSessionTeamKey() {
  * 返回当前会话所属的团队（个人或团队），未知时 undefined。
  */
 function sessionTeamOrUndefined() {
-  let e = currentSessionTeamKey();
-  if (e !== undefined) return getRemoteSessionTeamState().isOnATeam.get(e) === true ? "personal" : undefined;
+  let sessionTeamKey = currentSessionTeamKey();
+  if (sessionTeamKey !== undefined)
+    return getRemoteSessionTeamState().isOnATeam.get(sessionTeamKey) === true ? "personal" : undefined;
   let sessionId = getRemoteCaps()?.sessionId;
   return sessionId === undefined
     ? undefined
@@ -223,8 +231,8 @@ function sessionTeamOrUndefined() {
 /**
  * 订阅远程会话团队状态的变更。
  */
-function onSessionTeamChanged(e) {
-  return getRemoteSessionTeamState().changed.subscribe(e);
+function onSessionTeamChanged(listener) {
+  return getRemoteSessionTeamState().changed.subscribe(listener);
 }
 //@ chunk-e6aww6q8.js:1804982-1805029 placement
 /**
@@ -253,22 +261,22 @@ function noDisplaySessionStatus() {
 /**
  * 把远程会话状态映射为展示用状态（已归档、失败、需要操作、空闲等）。
  */
-function toDisplaySessionStatus(e) {
-  switch (e.status) {
+function toDisplaySessionStatus(session) {
+  switch (session.status) {
     case "archived":
       return "archived";
     case "failed":
       return "failed";
     case "paused":
-      return e.worker_status === "requires_action" ? "requires_action" : "idle";
+      return session.worker_status === "requires_action" ? "requires_action" : "idle";
     default:
-      switch (e.worker_status) {
+      switch (session.worker_status) {
         case undefined:
         case "":
         case "WORKER_STATUS_UNSPECIFIED":
           return "pending";
         case "running":
-          return e.connection_status === "disconnected" ? "idle" : "running";
+          return session.connection_status === "disconnected" ? "idle" : "running";
         case "requires_action":
           return "requires_action";
         default:

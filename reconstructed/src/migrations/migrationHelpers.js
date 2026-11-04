@@ -10,39 +10,44 @@
  */
 import { PERMISSION_MODES, PERMISSION_MODE_MANUAL_ALIAS } from "../types/permissions.js";
 import { InvalidArgumentError } from "../../vendor/commander/esm.mjs";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-cjydagjy.js:4751-5048 placement
 /**
  * 列出 commander 中来源为命令行（getOptionValueSource==="cli"）的选项，含 --no-* 取反形式；remote-control/desktop 据此拒绝不兼容的根选项。
  */
 function getCliSuppliedOptions(program) {
-  let r = new Map();
+  let optionsByKey = new Map();
   for (let option of program.options) {
-    let s = option.attributeName();
-    if (r.has(s) || program.getOptionValueSource(s) !== "cli") continue;
-    let optionValue = program.getOptionValue(s);
-    let y =
+    let attributeName = option.attributeName();
+    if (optionsByKey.has(attributeName) || program.getOptionValueSource(attributeName) !== "cli") continue;
+    let optionValue = program.getOptionValue(attributeName);
+    let matchedOption =
       program.options.find(
-        (option) => option.attributeName() === s && option.negate === (optionValue === false),
+        (option) => option.attributeName() === attributeName && option.negate === (optionValue === false),
       ) ?? option;
-    r.set(s, {
-      flag: y.long ?? y.flags,
-      key: s,
+    optionsByKey.set(attributeName, {
+      flag: matchedOption.long ?? matchedOption.flags,
+      key: attributeName,
       value: optionValue,
     });
   }
-  return [...r.values()];
+  return [...optionsByKey.values()];
 }
 //@ chunk-cjydagjy.js:5137-5190 placement
 /**
  * 迁移脚本可接受的目标权限模式列表（default/acceptEdits/plan/bypassPermissions 加 manual 别名）。
  */
-var mapped = PERMISSION_MODES.map((e) => (e === "default" ? PERMISSION_MODE_MANUAL_ALIAS : e));
-var VALID_PERMISSION_MODE_CHOICES = [...PERMISSION_MODES, PERMISSION_MODE_MANUAL_ALIAS];
+var mapped; // deferred: uses EXTERNAL_PERMISSION_MODES (../types/permissions.js) of its import cycle while loading; runs once the cycle is complete
+var VALID_PERMISSION_MODE_CHOICES;
+deferInit("chunk-cjydagjy.js:5137", () => {
+  mapped = PERMISSION_MODES.map((mode) => (mode === "default" ? PERMISSION_MODE_MANUAL_ALIAS : mode));
+  VALID_PERMISSION_MODE_CHOICES = [...PERMISSION_MODES, PERMISSION_MODE_MANUAL_ALIAS];
+});
 //@ chunk-cjydagjy.js:5190-5288 placement
-function parsePermissionModeOption(e) {
-  if (!VALID_PERMISSION_MODE_CHOICES.includes(e))
+function parsePermissionModeOption(mode) {
+  if (!VALID_PERMISSION_MODE_CHOICES.includes(mode))
     throw new InvalidArgumentError(`Allowed choices are ${mapped.join(", ")}.`);
-  return e;
+  return mode;
 }
-export { getCliSuppliedOptions, mapped, parsePermissionModeOption };
+export { mapped, parsePermissionModeOption, getCliSuppliedOptions };

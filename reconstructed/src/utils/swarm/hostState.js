@@ -14,6 +14,7 @@ import { createSignal } from "../signal.js";
 import { createKeyedQueue } from "../promiseQueue.js";
 import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-c1qgdbhd.js:404-415 placement
 var MAILBOX_LEDGER_LIMIT = 2048;
@@ -24,48 +25,58 @@ var MAILBOX_LEDGER_LIMIT = 2048;
 class MailboxWriteLedger {
   #e = new Map();
   #n = new Set();
-  record(e, n) {
-    if (n.msg_id === undefined) return;
-    let s = this.#e.get(e);
-    if (s === undefined) {
-      s = new Map();
-      this.#e.set(e, s);
+  record(inboxPath, message) {
+    if (message.msg_id === undefined) return;
+    let ledger = this.#e.get(inboxPath);
+    if (ledger === undefined) {
+      ledger = new Map();
+      this.#e.set(inboxPath, ledger);
     }
-    s.set(n.msg_id, mailboxMessageHash(n));
-    if (!this.#n.has(e)) evictOldestLedgerEntry(s);
+    ledger.set(message.msg_id, mailboxMessageHash(message));
+    if (!this.#n.has(inboxPath)) evictOldestLedgerEntry(ledger);
   }
-  wrote(e, n) {
-    return n.msg_id !== undefined && this.#e.get(e)?.get(n.msg_id) === mailboxMessageHash(n);
+  wrote(inboxPath, message) {
+    return (
+      message.msg_id !== undefined &&
+      this.#e.get(inboxPath)?.get(message.msg_id) === mailboxMessageHash(message)
+    );
   }
-  retire(e, n) {
-    let s = new Set(n);
-    this.#s(e, (o) => !s.has(o));
+  retire(inboxPath, keepIds) {
+    let keep = new Set(keepIds);
+    this.#s(inboxPath, (messageId) => !keep.has(messageId));
   }
-  retain(e, n) {
-    this.#n.add(e);
-    this.#s(e, (s) => n.has(s));
+  retain(inboxPath, keepIds) {
+    this.#n.add(inboxPath);
+    this.#s(inboxPath, (messageId) => keepIds.has(messageId));
   }
-  forget(e) {
-    this.#e.delete(e);
+  forget(inboxPath) {
+    this.#e.delete(inboxPath);
   }
-  #s(e, n) {
-    let s = this.#e.get(e);
-    if (s === undefined) return;
-    for (let key of s.keys()) if (!n(key)) s.delete(key);
-    if (s.size === 0) this.#e.delete(e);
+  #s(inboxPath, keep) {
+    let ledger = this.#e.get(inboxPath);
+    if (ledger === undefined) return;
+    for (let key of ledger.keys()) if (!keep(key)) ledger.delete(key);
+    if (ledger.size === 0) this.#e.delete(inboxPath);
   }
 }
 //@ chunk-c1qgdbhd.js:927-1003 placement
-function evictOldestLedgerEntry(e) {
-  if (e.size <= MAILBOX_LEDGER_LIMIT) return;
-  let [n] = e.keys();
-  if (n !== undefined) e.delete(n);
+function evictOldestLedgerEntry(ledger) {
+  if (ledger.size <= MAILBOX_LEDGER_LIMIT) return;
+  let [oldestId] = ledger.keys();
+  if (oldestId !== undefined) ledger.delete(oldestId);
 }
 //@ chunk-c1qgdbhd.js:1003-1139 placement
-function mailboxMessageHash(e) {
+function mailboxMessageHash(message) {
   return createHash("sha256")
     .update(
-      jsonStringify([e.from, e.timestamp, e.text, e.summary ?? null, e.color ?? null, e.from_plugin ?? null]),
+      jsonStringify([
+        message.from,
+        message.timestamp,
+        message.text,
+        message.summary ?? null,
+        message.color ?? null,
+        message.from_plugin ?? null,
+      ]),
     )
     .digest("hex");
 }
@@ -177,7 +188,10 @@ class SwarmHostState {
   taskList = new TaskListState();
 }
 //@ chunk-c1qgdbhd.js:2777-2800 placement
-var swarmHostStateByHost = new HostScoped(() => new SwarmHostState());
+var swarmHostStateByHost; // deferred: uses SwarmHostState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-c1qgdbhd.js:2777", () => {
+  swarmHostStateByHost = new HostScoped(() => new SwarmHostState());
+});
 //@ chunk-c1qgdbhd.js:2800-2836 placement
 /**
  * 取当前宿主的 swarm 状态。

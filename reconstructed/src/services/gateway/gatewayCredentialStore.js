@@ -40,18 +40,19 @@ import {
 import { isGatewayLoginForced } from "../../utils/auth.js";
 import { hasRemoteHelperState } from "../../utils/settings/policyHelper/helperRemote.js";
 import { hasPolicyHelperConfig } from "../../utils/settings/policyHelper/helperPayload.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:498909-499423 placement
 /**
  * 保存新的网关凭据（失败时报告原因）。
  */
-async function saveGatewayCredential(e, credentials, r) {
-  setGatewayAuth(e);
-  let s = false;
+async function saveGatewayCredential(credential, credentials, allowlistEntry) {
+  setGatewayAuth(credential);
+  let wrote = false;
   let replaced;
   let replacedAllowlistEntry;
-  let S = (message) =>
-    s
+  let toFailure = (message) =>
+    wrote
       ? {
           outcome: "failed",
           replaced,
@@ -63,21 +64,24 @@ async function saveGatewayCredential(e, credentials, r) {
           message,
         };
   try {
-    let w = await getSecureStorage().mutate((R) => {
-      let x = hostOf(new URL(e.url));
-      let { enterpriseGateway, gatewayAllowlistEntries, ...L } = R;
+    let mutateResult = await getSecureStorage().mutate((stored) => {
+      let hostKey = hostOf(new URL(credential.url));
+      let { enterpriseGateway, gatewayAllowlistEntries, ...rest } = stored;
       replaced = enterpriseGateway;
-      replacedAllowlistEntry = gatewayAllowlistEntries?.[x];
-      s = true;
+      replacedAllowlistEntry = gatewayAllowlistEntries?.[hostKey];
+      wrote = true;
       return {
-        ...L,
-        enterpriseGateway: e,
-        ...replaceAllowlistEntry(gatewayAllowlistEntries, x, r),
+        ...rest,
+        enterpriseGateway: credential,
+        ...replaceAllowlistEntry(gatewayAllowlistEntries, hostKey, allowlistEntry),
       };
     }, credentials);
-    if (!w.success) return S(`Failed to persist gateway credential${w.warning ? `: ${w.warning}` : ""}`);
+    if (!mutateResult.success)
+      return toFailure(
+        `Failed to persist gateway credential${mutateResult.warning ? `: ${mutateResult.warning}` : ""}`,
+      );
   } catch (error) {
-    return S(errorMessage(error));
+    return toFailure(errorMessage(error));
   }
   return {
     outcome: "saved",
@@ -97,10 +101,14 @@ async function consumeBgAuthSnapshot() {
 /**
  * 判断错误码是否为权限被拒（EPERM、EACCES）。
  */
-var isPermissionDeniedCode = (e) => e === "EPERM" || e === "EACCES";
+var isPermissionDeniedCode = (code) => code === "EPERM" || code === "EACCES";
 //@ chunk-aepeg2w5.js:499519-499619 placement
-var SECURE_STORAGE_KINDS = new Set(["keychain", "plaintext", "windows-credman"]);
-var FALLBACK_STORAGE_RE = /^([a-z-]+)-with-([a-z-]+)-fallback$/;
+var SECURE_STORAGE_KINDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var FALLBACK_STORAGE_RE;
+deferInit("chunk-aepeg2w5.js:499519", () => {
+  SECURE_STORAGE_KINDS = new Set(["keychain", "plaintext", "windows-credman"]);
+  FALLBACK_STORAGE_RE = /^([a-z-]+)-with-([a-z-]+)-fallback$/;
+});
 //@ chunk-aepeg2w5.js:499619-499731 placement
 function storageKindForTelemetry_2(name) {
   if (SECURE_STORAGE_KINDS.has(name)) return fromSanitizer_SANITIZER_OUTPUT_ONLY(name);
@@ -113,8 +121,8 @@ function storageKindForTelemetry_2(name) {
 /**
  * 取用户设置里强制网关登录的地址。
  */
-function forcedLoginGatewayUrl(e) {
-  return e?.forceLoginMethod === "gateway" ? e.forceLoginGatewayUrl : undefined;
+function forcedLoginGatewayUrl(settings) {
+  return settings?.forceLoginMethod === "gateway" ? settings.forceLoginGatewayUrl : undefined;
 }
 //@ chunk-aepeg2w5.js:499815-499861 placement
 /**
@@ -138,10 +146,10 @@ function hasManagedForceLoginOrg() {
  */
 function getUserSettingsGateway() {
   {
-    let e = forcedLoginGatewayUrl(getSettingsForSource("userSettings"));
-    if (!e || isMachineAdminManaged()) return;
+    let url = forcedLoginGatewayUrl(getSettingsForSource("userSettings"));
+    if (!url || isMachineAdminManaged()) return;
     if (providerBlockedMessage("gateway") !== undefined) return;
-    return e;
+    return url;
   }
   return;
 }
@@ -149,7 +157,7 @@ function getUserSettingsGateway() {
 /**
  * 托管设置强制的网关登录 URL 与内网列表。
  */
-function getForcedGatewayLogin(userSettingsGateway) {
+function getForcedGatewayLogin(developerUrl) {
   if (isGatewayLoginForced()) {
     let { forceLoginGatewayUrl, gatewayInternalNetworks } = getHostPolicyLoginPins();
     return forceLoginGatewayUrl === undefined
@@ -163,26 +171,23 @@ function getForcedGatewayLogin(userSettingsGateway) {
         };
   }
   let forceLoginMethod = getInitialSettings_2().forceLoginMethod;
-  if (userSettingsGateway === undefined || forceLoginMethod === "claudeai" || forceLoginMethod === "console")
-    return;
+  if (developerUrl === undefined || forceLoginMethod === "claudeai" || forceLoginMethod === "console") return;
   return {
-    url: userSettingsGateway,
+    url: developerUrl,
     namedBy: "developer",
   };
 }
 //@ chunk-aepeg2w5.js:500313-500590 placement
 function isGatewayLoginRequired(url) {
   {
-    let machineAdminPolicyTier = getMachineAdminPolicyTier();
-    let r =
-      machineAdminPolicyTier?.forceLoginGatewayUrl === undefined &&
+    let settings = getMachineAdminPolicyTier();
+    let rules =
+      settings?.forceLoginGatewayUrl === undefined &&
       !hasRemoteHelperState() &&
-      (machineAdminPolicyTier?.policyHelper != null || hasPolicyHelperConfig(machineAdminPolicyTier));
-    let s =
-      machineAdminPolicyTier?.forceLoginGatewayUrl === undefined &&
-      machineAdminPolicyTier?.forceLoginMethod === "gateway";
+      (settings?.policyHelper != null || hasPolicyHelperConfig(settings));
+    let reason = settings?.forceLoginGatewayUrl === undefined && settings?.forceLoginMethod === "gateway";
     return (
-      (r || s
+      (rules || reason
         ? hasManagedForceLoginOrg() ||
           sameGatewayUrl(forcedLoginGatewayUrl(getSettingsForSourceTightenOnly("userSettings")), url)
         : isMachineAdminManaged()) &&

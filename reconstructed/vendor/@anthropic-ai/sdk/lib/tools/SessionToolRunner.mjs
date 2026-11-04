@@ -12,8 +12,8 @@ import { toolName, runRunnableTool } from "./BetaRunnableTool.mjs";
 import { linkAbort } from "../../internal/utils/abort.mjs";
 import { AnthropicError } from "../../core/error.mjs";
 import { buildHeaders } from "../../internal/headers.mjs";
-import { wr } from "../../internal/stainless-helper-header.mjs";
-import { isFatal4xx, applyJitter, cs } from "../../internal/utils/backoff.mjs";
+import { stainlessHelperHeader } from "../../internal/stainless-helper-header.mjs";
+import { isFatal4xx, applyJitter, backoff } from "../../internal/utils/backoff.mjs";
 import { sleepUnlessAborted } from "../../tools/agent-toolset/memories.mjs";
 
 //@ chunk-hwmsct5x.js:61240-61343 esm-layout
@@ -283,7 +283,7 @@ _SessionToolRunner_requestOptions = function () {
   return {
     ...__classPrivateFieldGet(this, _SessionToolRunner_requestOpts, "f"),
     headers: buildHeaders([
-      wr("session-tool-runner"),
+      stainlessHelperHeader("session-tool-runner"),
       __classPrivateFieldGet(this, _SessionToolRunner_requestOpts, "f")?.headers,
     ]),
     signal: __classPrivateFieldGet(this, _SessionToolRunner_controller, "f").signal,
@@ -665,7 +665,7 @@ _SessionToolRunner_sendResult = async function (result, toolUseId) {
         __classPrivateFieldGet(this, _SessionToolRunner_sendRetryWindowMs, "f") - (Date.now() - start);
       if (remainingMs <= 0) break;
       let waitMs = Math.min(
-        applyJitter(cs(attempt - 1, SEND_BACKOFF_START_MS, SEND_BACKOFF_CAP_MS)),
+        applyJitter(backoff(attempt - 1, SEND_BACKOFF_START_MS, SEND_BACKOFF_CAP_MS)),
         remainingMs,
       );
       __classPrivateFieldGet(this, _SessionToolRunner_logger, "f").warn("tool result send failed; retrying", {

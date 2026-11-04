@@ -25,19 +25,19 @@ import {
 import { Dialog } from "../../components/design-system/Dialog.js";
 import { Box, Text } from "../../ink/components/Text.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
-import { fo } from "../../../vendor/react/cjs/react.production.js";
+import { suspenseTypeExport } from "../../../vendor/react/cjs/react.production.js";
 import { WorkerBadge } from "../../components/permissions/WorkerBadge.js";
 import { MemoryFileSelector } from "../../components/memory/MemoryFileSelector.js";
 import { LearnMoreLink } from "../../components/LearnMoreLink.js";
 
 //@ chunk-c55mbvfz.js:41910-42077 file-last-pair
 function call(onDone) {
-  let _ = homedir();
+  let home = homedir();
   let cwd = getCwd();
-  let v = onDone.startsWith(_) ? "~" + onDone.slice(_.length) : null;
-  let T = onDone.startsWith(cwd) ? "./" + relative(cwd, onDone) : null;
-  if (v && T) return v.length <= T.length ? v : T;
-  return v || T || onDone;
+  let homePath = onDone.startsWith(home) ? "~" + onDone.slice(home.length) : null;
+  let cwdPath = onDone.startsWith(cwd) ? "./" + relative(cwd, onDone) : null;
+  if (homePath && cwdPath) return homePath.length <= cwdPath.length ? homePath : cwdPath;
+  return homePath || cwdPath || onDone;
 }
 //@ chunk-c55mbvfz.js:42077-43674 fingerprint = MemoryCommand (0.697)
 function MemoryCommand({ session, commandContext, addedInstructionFiles, onDone }) {
@@ -74,13 +74,13 @@ function MemoryCommand({ session, commandContext, addedInstructionFiles, onDone 
       let editorHint = editorInfo
         ? `> ${editorInfo} To change editor, set $EDITOR or $VISUAL environment variable.`
         : "> To use a different editor, set the $EDITOR or $VISUAL environment variable.";
-      let U = isSafeMode()
+      let safeModeNote = isSafeMode()
         ? `
 
 > Safe mode: this session doesn't load CLAUDE.md files, so changes take effect after you ${getSafeModeExitHint()}.`
         : "";
       onDone(
-        `Opened ${call(memoryPath)}${U}
+        `Opened ${call(memoryPath)}${safeModeNote}
 
 ${editorHint}`,
         {
@@ -128,7 +128,7 @@ ${editorHint}`,
               }),
             ],
           }),
-        jsxProd_default(fo, {
+        jsxProd_default(suspenseTypeExport, {
           fallback: jsxProd_default(WorkerBadge, {
             message: "Loading\u2026",
             dimColor: true,

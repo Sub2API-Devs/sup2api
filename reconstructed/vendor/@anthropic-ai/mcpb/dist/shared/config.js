@@ -105,3 +105,4 @@ function hasRequiredConfigMissing({ manifest, userConfig }) {
     }
   return false;
 }
+export { getMcpConfigForManifest };

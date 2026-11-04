@@ -14,7 +14,7 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/gr
 import { apiClient } from "../../services/routines/routinesApi.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
-import { y, P, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { useState, useEffect, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { streamFallbackWarning } from "../../services/api/streamFallbackWarning.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { readLocalMarketplaceFile, enoentError } from "../../utils/plugins/localMarketplacePaths.js";
@@ -27,17 +27,21 @@ import { isLocalMarketplaceSource } from "../../utils/plugins/reconciler.js";
 import { useSettingsSyncEffect } from "../../state/AppState.js";
 import { stripInvisibleKeepEmoji } from "../../utils/settings/marketplaceSettingsAliases.js";
 import { formatErrorMessage } from "./PluginErrors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-vrb44rx7.js:125194-125233 placement
-var SKILL_HEALTH_LEVELS = new Set(["good", "warn", "poor"]);
+var SKILL_HEALTH_LEVELS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vrb44rx7.js:125194", () => {
+  SKILL_HEALTH_LEVELS = new Set(["good", "warn", "poor"]);
+});
 //@ chunk-vrb44rx7.js:125233-125286 placement
 function isSkillHealthLevel(health) {
   return typeof health === "string" && SKILL_HEALTH_LEVELS.has(health);
 }
 //@ chunk-vrb44rx7.js:125286-125352 placement
-function cachedSkillHealth(i, credentials) {
-  i.skillHealthMap ??= fetchSkillHealth(credentials);
-  return i.skillHealthMap;
+function cachedSkillHealth(streamWarning, credentials) {
+  streamWarning.skillHealthMap ??= fetchSkillHealth(credentials);
+  return streamWarning.skillHealthMap;
 }
 //@ chunk-vrb44rx7.js:125352-125900 placement
 /**
@@ -46,26 +50,26 @@ function cachedSkillHealth(i, credentials) {
 async function fetchSkillHealth(credentials) {
   if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_skills_dashboard_enabled", false)) return null;
   try {
-    let h = await apiClient.get("/api/claude_code/skills", {
+    let response = await apiClient.get("/api/claude_code/skills", {
       auth: "async",
       timeout: 5000,
       validateStatus: () => true,
       credentials,
     });
-    if (!h.ok) {
-      logForDebugging(`Skill health fetch skipped: ${h.reason}`);
+    if (!response.ok) {
+      logForDebugging(`Skill health fetch skipped: ${response.reason}`);
       return null;
     }
-    if (h.status >= 400) {
-      logForDebugging(`Skill health fetch skipped: status ${h.status}`);
+    if (response.status >= 400) {
+      logForDebugging(`Skill health fetch skipped: status ${response.status}`);
       return null;
     }
-    let skills = h.data?.skills;
+    let skills = response.data?.skills;
     if (!Array.isArray(skills)) return null;
-    let C = new Map();
+    let byName = new Map();
     for (let skill of skills)
-      if (skill.skill_name && isSkillHealthLevel(skill.health)) C.set(skill.skill_name, skill.health);
-    return C;
+      if (skill.skill_name && isSkillHealthLevel(skill.health)) byName.set(skill.skill_name, skill.health);
+    return byName;
   } catch (error) {
     logForDebugging(`Skill health fetch skipped: ${error}`);
     return null;
@@ -77,65 +81,72 @@ async function fetchSkillHealth(credentials) {
  */
 function useSkillHealthData() {
   let { credentials } = useTheme_2();
-  let [h, k] = y(null);
-  P(() => {
-    let C = false;
-    cachedSkillHealth(streamFallbackWarning(), credentials).then((x) => {
-      if (!C && x) k(x);
+  let [health, setHealth] = useState(null);
+  useEffect(() => {
+    let loaded = false;
+    cachedSkillHealth(streamFallbackWarning(), credentials).then((health) => {
+      if (!loaded && health) setHealth(health);
     });
     return () => {
-      C = true;
+      loaded = true;
     };
   }, [credentials]);
-  return h;
+  return health;
 }
 //@ chunk-vrb44rx7.js:126132-126345 placement = readMarketplaceJsonContent (0.844)
 /**
  * 读取工作区 .claude-plugin/marketplace.json 内容（存储后端模式经存储层）。
  */
 async function readMarketplaceJsonContent(storageV5, plugin) {
-  let k = join(plugin.path, "..", ".claude-plugin", "marketplace.json");
+  let marketplacePath = join(plugin.path, "..", ".claude-plugin", "marketplace.json");
   if (isStorageV5Enabled() && storageV5 !== undefined && (await isLocalOnlyPlugin(storageV5, plugin))) {
-    let localMarketplaceFile = await readLocalMarketplaceFile(storageV5, "workspace", k);
-    if ("absent" in localMarketplaceFile) throw enoentError(k);
+    let localMarketplaceFile = await readLocalMarketplaceFile(storageV5, "workspace", marketplacePath);
+    if ("absent" in localMarketplaceFile) throw enoentError(marketplacePath);
     return localMarketplaceFile.text;
   }
-  return readFile(k, "utf-8");
+  return readFile(marketplacePath, "utf-8");
 }
 //@ chunk-vrb44rx7.js:126345-126608 placement
 /**
  * 判断插件是否只在本机存在（不在插件目录/会话缓存里）：内联市场插件，或来自本地市场源且没有种子目录的插件。
  */
-async function isLocalOnlyPlugin(i, h) {
-  let existingSessionPluginCachePath = getExistingSessionPluginCachePath();
+async function isLocalOnlyPlugin(storageV5, plugin) {
+  let dir = getExistingSessionPluginCachePath();
   if (
-    isPathInsideDir(getPluginsDirectory(), h.path) ||
-    (existingSessionPluginCachePath !== null && isPathInsideDir(existingSessionPluginCachePath, h.path))
+    isPathInsideDir(getPluginsDirectory(), plugin.path) ||
+    (dir !== null && isPathInsideDir(dir, plugin.path))
   )
     return false;
-  let C = marketplaceOf(h.source);
-  if (C !== undefined) return C === INLINE_PLUGIN_MARKETPLACE;
-  let x = marketplaceSuffix(h.source);
-  if (x === undefined) return false;
-  let T = (await loadKnownMarketplacesSafe(i))[x];
-  return T !== undefined && isLocalMarketplaceSource(T.source) && seedDirFor(T.installLocation) === undefined;
+  let marketplace = marketplaceOf(plugin.source);
+  if (marketplace !== undefined) return marketplace === INLINE_PLUGIN_MARKETPLACE;
+  let suffix = marketplaceSuffix(plugin.source);
+  if (suffix === undefined) return false;
+  let known = (await loadKnownMarketplacesSafe(storageV5))[suffix];
+  return (
+    known !== undefined &&
+    isLocalMarketplaceSource(known.source) &&
+    seedDirFor(known.installLocation) === undefined
+  );
 }
 //@ chunk-vrb44rx7.js:126608-126678 placement
-function isPathInsideDir(i, path) {
-  let k = resolve(i);
-  let C = resolve(path);
-  return C === k || C.startsWith(k + sep);
+function isPathInsideDir(dir, path) {
+  let parent = resolve(dir);
+  let child = resolve(path);
+  return child === parent || child.startsWith(parent + sep);
 }
 //@ chunk-vrb44rx7.js:126678-126682 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vrb44rx7.js:126678", () => {
+  init_react_production();
+});
 //@ chunk-vrb44rx7.js:126682-126762 placement
 function watchSkillHealthInvalidation(getEnabledPluginsBySource, enabledPluginsEqual) {
-  let [k, C] = y(getEnabledPluginsBySource);
+  let [current, setCurrent] = useState(getEnabledPluginsBySource);
   useSettingsSyncEffect(() => {
-    let x = getEnabledPluginsBySource();
-    C((T) => (enabledPluginsEqual(T, x) ? T : x));
+    let snapshot = getEnabledPluginsBySource();
+    setCurrent((prev) => (enabledPluginsEqual(prev, snapshot) ? prev : snapshot));
   });
-  return k;
+  return current;
 }
 //@ chunk-vrb44rx7.js:126762-126794 placement
 function formatSkillErrorMessage(error) {

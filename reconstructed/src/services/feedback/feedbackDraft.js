@@ -66,8 +66,8 @@ var TRANSCRIPT_SIZE_SLACK_BYTES = 65536;
 /**
  * 计算单条转录消息序列化后的字节数。
  */
-function serializedEntryBytes(e) {
-  return Buffer.byteLength(jsonStringifyRaw(jsonStringifyRaw(e)).slice(1, -1));
+function serializedEntryBytes(entry) {
+  return Buffer.byteLength(jsonStringifyRaw(jsonStringifyRaw(entry)).slice(1, -1));
 }
 //@ chunk-d16hc1ab.js:904-986 placement
 /**
@@ -88,114 +88,121 @@ function fitFeedbackPayloadToBudget(payload) {
       payload,
       trim: null,
     };
-  using h = slowLogging`fitFeedbackPayloadToBudget(${size})`;
+  using partCount = slowLogging`fitFeedbackPayloadToBudget(${size})`;
   let excess = size - (MAX_PAYLOAD_PART_COUNT - TRANSCRIPT_SIZE_SLACK_BYTES);
-  let mapped = payload.transcript.map((o) => serializedEntryBytes(o) + 1);
-  let reduced = mapped.reduce((acc, _) => acc + _, 0);
-  let w = payload.rawTranscriptJsonl === undefined ? 0 : serializedRawBytes(payload.rawTranscriptJsonl);
-  let M = excess <= reduced ? reduced - excess : Math.max(0, reduced - Math.max(0, excess - w));
-  let { start, keptBytes, oversized } = selectTailWithinBudget(mapped, M);
+  let sizes = payload.transcript.map((entry) => serializedEntryBytes(entry) + 1);
+  let reduced = sizes.reduce((acc, size) => acc + size, 0);
+  let rawBytes =
+    payload.rawTranscriptJsonl === undefined ? 0 : serializedRawBytes(payload.rawTranscriptJsonl);
+  let transcriptBudget =
+    excess <= reduced ? reduced - excess : Math.max(0, reduced - Math.max(0, excess - rawBytes));
+  let { start, keptBytes, oversized } = selectTailWithinBudget(sizes, transcriptBudget);
   let sliced = payload.transcript.slice(start);
-  let D = oversized.size === 0 ? sliced : sliced.filter((o, _) => !oversized.has(start + _));
-  let v = excess - (reduced - keptBytes);
+  let keptEntries =
+    oversized.size === 0 ? sliced : sliced.filter((entry, index) => !oversized.has(start + index));
+  let rawExcess = excess - (reduced - keptBytes);
   let rawTranscriptJsonl = payload.rawTranscriptJsonl;
-  let R = rawTranscriptJsonl === undefined ? "absent" : "untouched";
-  if (v > 0 && rawTranscriptJsonl !== undefined) {
-    let o = w - v;
-    if (o <= 0) {
+  let rawTail = rawTranscriptJsonl === undefined ? "absent" : "untouched";
+  if (rawExcess > 0 && rawTranscriptJsonl !== undefined) {
+    let rawBudget = rawBytes - rawExcess;
+    if (rawBudget <= 0) {
       rawTranscriptJsonl = undefined;
-      R = "omitted";
+      rawTail = "omitted";
     } else {
       let lines = rawTranscriptJsonl.split(`
 `);
-      let mapped = lines.map((line) =>
+      let sizes = lines.map((line) =>
         serializedRawBytes(
           line +
             `
 `,
         ),
       );
-      let { start, oversized } = selectTailWithinBudget(mapped, o);
+      let { start, oversized } = selectTailWithinBudget(sizes, rawBudget);
       let sliced = lines.slice(start);
-      let joined = (oversized.size === 0 ? sliced : sliced.filter((E, x) => !oversized.has(start + x))).join(`
+      let joined = (
+        oversized.size === 0 ? sliced : sliced.filter((line, index) => !oversized.has(start + index))
+      ).join(`
 `);
       if (joined === "") {
         rawTranscriptJsonl = undefined;
-        R = "omitted";
+        rawTail = "omitted";
       } else {
         rawTranscriptJsonl = joined;
-        R = "reduced";
+        rawTail = "reduced";
       }
     }
   }
-  let n = {
-    keptMessageCount: D.length,
+  let trimInfo = {
+    keptMessageCount: keptEntries.length,
     totalMessageCount: payload.transcript.length,
     oversizedMessageCount: oversized.size,
-    rawTail: R,
+    rawTail,
     rawTailKeptBytes: rawTranscriptJsonl === undefined ? 0 : Buffer.byteLength(rawTranscriptJsonl),
   };
-  let F = describeTranscriptTrim(n);
-  if (F === null)
+  let trimNote = describeTranscriptTrim(trimInfo);
+  if (trimNote === null)
     return {
       payload,
       trim: null,
     };
-  let { rawTranscriptJsonl: rawTranscriptJsonl_2, ...A } = payload;
-  let I = {
-    ...A,
-    message_count: D.length,
+  let { rawTranscriptJsonl: rawTranscriptJsonl_2, ...rest } = payload;
+  let nextPayload = {
+    ...rest,
+    message_count: keptEntries.length,
     description: `${payload.description}
-${F}`,
-    transcript: D,
+${trimNote}`,
+    transcript: keptEntries,
     ...(rawTranscriptJsonl !== undefined && {
       rawTranscriptJsonl,
     }),
   };
-  let P = feedbackPayloadPartCount(I);
-  if (P > MAX_PAYLOAD_PART_COUNT)
+  let nextSize = feedbackPayloadPartCount(nextPayload);
+  if (nextSize > MAX_PAYLOAD_PART_COUNT)
     logForDebugging(
-      `fitFeedbackPayloadToBudget: still ${P} bytes after trim (budget ${MAX_PAYLOAD_PART_COUNT})`,
+      `fitFeedbackPayloadToBudget: still ${nextSize} bytes after trim (budget ${MAX_PAYLOAD_PART_COUNT})`,
       {
         level: "error",
       },
     );
   return {
-    payload: I,
-    trim: n,
+    payload: nextPayload,
+    trim: trimInfo,
   };
 }
 //@ chunk-d16hc1ab.js:2202-2701 placement
 /**
  * 生成反馈草稿的转录裁剪说明：保留了多少条消息、原始日志保留多少 KiB 或已省略；未裁剪返回 null。
  */
-function describeTranscriptTrim(e) {
-  let r = [];
-  if (e.keptMessageCount < e.totalMessageCount)
-    r.push(`kept ${e.keptMessageCount} of ${e.totalMessageCount} transcript messages (newest kept first)`);
-  if (e.rawTail === "reduced")
-    r.push(
-      `kept ${Math.max(1, Math.round(e.rawTailKeptBytes / 1024))} KiB of the raw session log (newest kept first)`,
+function describeTranscriptTrim(trim) {
+  let lines = [];
+  if (trim.keptMessageCount < trim.totalMessageCount)
+    lines.push(
+      `kept ${trim.keptMessageCount} of ${trim.totalMessageCount} transcript messages (newest kept first)`,
     );
-  else if (e.rawTail === "omitted") r.push("omitted the raw session log");
-  if (r.length === 0) return null;
-  return `transcript_truncated: ${r.join("; ")} (trimmed client-side to fit the upload size limit)`;
+  if (trim.rawTail === "reduced")
+    lines.push(
+      `kept ${Math.max(1, Math.round(trim.rawTailKeptBytes / 1024))} KiB of the raw session log (newest kept first)`,
+    );
+  else if (trim.rawTail === "omitted") lines.push("omitted the raw session log");
+  if (lines.length === 0) return null;
+  return `transcript_truncated: ${lines.join("; ")} (trimmed client-side to fit the upload size limit)`;
 }
 //@ chunk-d16hc1ab.js:2701-3866 placement
 /**
  * 把反馈草稿格式化为提交描述：标题、详情、来源说明（是否经完整审阅）以及 trigger、area、模型、版本、轮次、request_ids 等元数据行。
  */
 function formatDraftDescription(draft, via = "panel") {
-  let h = recentEntries(draft.request_ids);
-  let d = sanitizeArea(draft.area);
-  let s = asFailureMode(draft.failure_mode);
-  let y = asTaskCategory(draft.task_category);
-  let w = sanitizeEffort(draft.effort);
-  let M = asThinkingType(draft.thinking_type);
-  let T = asTokenCount(draft.thinking_budget);
-  let k = asTokenCount(draft.message_count);
-  let p = asTokenCount(draft.assistant_turn_count);
-  let f = asTokenCount(draft.subagent_count);
+  let requestIds = recentEntries(draft.request_ids);
+  let area = sanitizeArea(draft.area);
+  let failureMode = asFailureMode(draft.failure_mode);
+  let taskCategory = asTaskCategory(draft.task_category);
+  let effort = sanitizeEffort(draft.effort);
+  let thinkingType = asThinkingType(draft.thinking_type);
+  let thinkingBudget = asTokenCount(draft.thinking_budget);
+  let messageCount = asTokenCount(draft.message_count);
+  let assistantTurnCount = asTokenCount(draft.assistant_turn_count);
+  let subagentCount = asTokenCount(draft.subagent_count);
   return [
     `[${draft.type}] ${sanitizeTitle(draft.title)}`,
     "",
@@ -206,23 +213,25 @@ function formatDraftDescription(draft, via = "panel") {
       ? "Drafted by Claude via the SendFeedback tool; approved by the user from the above-prompt card without full review."
       : "Drafted by Claude via the SendFeedback tool; reviewed and approved by the user before sending.",
     `trigger: ${draft.trigger}`,
-    ...(d !== undefined ? [`area: ${d}`] : []),
-    ...(s !== undefined ? [`failure_mode: ${s}`] : []),
-    ...(y !== undefined ? [`task_category: ${y}`] : []),
+    ...(area !== undefined ? [`area: ${area}`] : []),
+    ...(failureMode !== undefined ? [`failure_mode: ${failureMode}`] : []),
+    ...(taskCategory !== undefined ? [`task_category: ${taskCategory}`] : []),
     `draft_id: ${draft.draft_id}`,
     `drafted_at: ${draft.created_at}`,
     `source_session_id: ${draft.source_session_id}`,
     `model: ${sanitizeModel(draft.model)}`,
     `cli_version: ${sanitizeShortText(draft.cli_version, MAX_CLI_VERSION_LENGTH)}`,
     `os: ${sanitizeShortText(draft.os, MAX_OS_LENGTH)}`,
-    ...(w !== undefined ? [`effort: ${w}`] : []),
-    ...(M !== undefined ? [`thinking: ${M}${T !== undefined ? ` (budget ${T})` : ""}`] : []),
-    ...(p !== undefined
+    ...(effort !== undefined ? [`effort: ${effort}`] : []),
+    ...(thinkingType !== undefined
+      ? [`thinking: ${thinkingType}${thinkingBudget !== undefined ? ` (budget ${thinkingBudget})` : ""}`]
+      : []),
+    ...(assistantTurnCount !== undefined
       ? [
-          `turns: ${p} assistant${k !== undefined ? ` / ${k} messages` : ""}${f !== undefined && f > 0 ? `, ${f} ${plural(f, "subagent")}` : ""}`,
+          `turns: ${assistantTurnCount} assistant${messageCount !== undefined ? ` / ${messageCount} messages` : ""}${subagentCount !== undefined && subagentCount > 0 ? `, ${subagentCount} ${plural(subagentCount, "subagent")}` : ""}`,
         ]
       : []),
-    ...(h.length > 0 ? [`request_ids: ${h.join(", ")}`] : []),
+    ...(requestIds.length > 0 ? [`request_ids: ${requestIds.join(", ")}`] : []),
   ].join(`
 `);
 }
@@ -230,52 +239,57 @@ function formatDraftDescription(draft, via = "panel") {
 /**
  * 解析草稿的 JSONL 转录，只保留主线（非 sidechain）的 user/assistant 消息并精简字段。
  */
-function parseDraftTranscriptMessages(e) {
-  let r = [];
-  using h = slowLogging`parseDraftTranscriptMessages(${e.length})`;
-  for (let line of e.split(`
+function parseDraftTranscriptMessages(jsonl) {
+  let messages = [];
+  using size = slowLogging`parseDraftTranscriptMessages(${jsonl.length})`;
+  for (let line of jsonl.split(`
 `)) {
     if (!line) continue;
-    let s;
+    let entry;
     try {
-      s = jsonParseRaw(line);
+      entry = jsonParseRaw(line);
     } catch {
       continue;
     }
-    if (typeof s !== "object" || s === null) continue;
-    if (s.type !== "user" && s.type !== "assistant") continue;
-    if (typeof s.uuid !== "string" || typeof s.timestamp !== "string" || s.isSidechain === true || !s.message)
+    if (typeof entry !== "object" || entry === null) continue;
+    if (entry.type !== "user" && entry.type !== "assistant") continue;
+    if (
+      typeof entry.uuid !== "string" ||
+      typeof entry.timestamp !== "string" ||
+      entry.isSidechain === true ||
+      !entry.message
+    )
       continue;
-    r.push(
-      s.type === "user"
+    messages.push(
+      entry.type === "user"
         ? {
             type: "user",
-            uuid: s.uuid,
-            timestamp: s.timestamp,
-            message: s.message,
-            ...(s.isMeta === true && {
+            uuid: entry.uuid,
+            timestamp: entry.timestamp,
+            message: entry.message,
+            ...(entry.isMeta === true && {
               isMeta: true,
             }),
-            ...(s.toolUseResult !== undefined && {
-              toolUseResult: s.toolUseResult,
+            ...(entry.toolUseResult !== undefined && {
+              toolUseResult: entry.toolUseResult,
             }),
-            ...(s.isCompactSummary === true && {
+            ...(entry.isCompactSummary === true && {
               isCompactSummary: true,
             }),
-            ...(s.repeatsCompactSummary === true && {
+            ...(entry.repeatsCompactSummary === true && {
               repeatsCompactSummary: true,
             }),
           }
         : {
             type: "assistant",
-            uuid: s.uuid,
-            timestamp: s.timestamp,
-            message: s.message,
-            requestId: s.requestId,
+            uuid: entry.uuid,
+            timestamp: entry.timestamp,
+            message: entry.message,
+            requestId: entry.requestId,
           },
     );
   }
-  return r;
+  return messages;
 }
 //@ chunk-d16hc1ab.js:4603-4697 placement
 /**
@@ -298,13 +312,13 @@ async function submitFeedbackDraft({
   credentials,
   host,
 }) {
-  let k = draft.source_session_id === getSessionId();
-  let p = [];
-  let f;
+  let fromThisSession = draft.source_session_id === getSessionId();
+  let transcript = [];
+  let rawTranscriptJsonl;
   if (includeTranscript && draft.transcript_ref) {
     let draftTranscript = await resolveDraftTranscript(draft);
-    if (k) {
-      p = normalizeMessagesForAPI(
+    if (fromThisSession) {
+      transcript = normalizeMessagesForAPI(
         withholdForExport(currentSessionMessages, {
           host,
         }),
@@ -312,57 +326,57 @@ async function submitFeedbackDraft({
       if (draftTranscript !== null)
         try {
           let { content, bytesRead, bytesTotal } = await tailFile(draftTranscript, MAX_RAW_TRANSCRIPT_BYTES);
-          let u = content;
+          let rawText = content;
           if (bytesRead < bytesTotal)
-            u = u.slice(
-              u.indexOf(`
+            rawText = rawText.slice(
+              rawText.indexOf(`
 `) + 1,
             );
-          if (containsProviderId(u))
+          if (containsProviderId(rawText))
             logForDebugging(
               "rawTranscriptJsonl withheld from feedback draft submit: contains_3p_transcript_markers",
             );
           else
-            f = withholdTranscriptLine(redactTranscriptLines(u), {
+            rawTranscriptJsonl = withholdTranscriptLine(redactTranscriptLines(rawText), {
               host,
             }).jsonl;
         } catch {}
     } else if (draftTranscript !== null)
       try {
         let { content, bytesRead, bytesTotal } = await tailFile(draftTranscript, MAX_RAW_TRANSCRIPT_BYTES);
-        let u = content;
+        let rawText = content;
         if (bytesRead < bytesTotal)
-          u = u.slice(
-            u.indexOf(`
+          rawText = rawText.slice(
+            rawText.indexOf(`
 `) + 1,
           );
-        if (!transcriptCorroboratesDraft(u, draft))
+        if (!transcriptCorroboratesDraft(rawText, draft))
           logForDebugging("draft transcript withheld from feedback submit: identity_not_corroborated");
         else {
-          let draftTranscriptMessages = parseDraftTranscriptMessages(u);
-          if (anyMessageHasProviderId(draftTranscriptMessages))
+          let messages = parseDraftTranscriptMessages(rawText);
+          if (anyMessageHasProviderId(messages))
             logForDebugging("draft transcript withheld from feedback submit: contains_3p_transcript_markers");
           else
-            p = withholdForExport(draftTranscriptMessages, {
+            transcript = withholdForExport(messages, {
               host: undefined,
             });
-          if (containsProviderId(u))
+          if (containsProviderId(rawText))
             logForDebugging(
               "rawTranscriptJsonl withheld from feedback draft submit: contains_3p_transcript_markers",
             );
           else
-            f = withholdTranscriptLine(redactTranscriptLines(u), {
+            rawTranscriptJsonl = withholdTranscriptLine(redactTranscriptLines(rawText), {
               host: undefined,
             }).jsonl;
         }
       } catch {}
   }
-  let D = recentEntries(draft.request_ids).at(-1) ?? null;
+  let lastRequestId = recentEntries(draft.request_ids).at(-1) ?? null;
   let payload = {
-    latestAssistantMessageId: D,
+    latestAssistantMessageId: lastRequestId,
     latestAssistantAPIMessageId: null,
     lastInterruptedAssistantAPIMessageId: null,
-    message_count: p.length,
+    message_count: transcript.length,
     datetime: new Date().toISOString(),
     description: formatDraftDescription(draft, via),
     surface,
@@ -370,14 +384,14 @@ async function submitFeedbackDraft({
     gitRepo: false,
     commitSha: null,
     version: draft.cli_version,
-    transcript: p,
-    ...(f && {
-      rawTranscriptJsonl: f,
+    transcript,
+    ...(rawTranscriptJsonl && {
+      rawTranscriptJsonl,
     }),
   };
   let { payload: payload_2, trim } = fitFeedbackPayloadToBudget(payload);
-  let n = await submitFeedback(payload_2, signal, undefined, credentials);
-  if (n.success) {
+  let result = await submitFeedback(payload_2, signal, undefined, credentials);
+  if (result.success) {
     try {
       await deleteFeedbackDraft(draft.draft_id, storageV5);
     } catch (error) {
@@ -391,7 +405,7 @@ async function submitFeedbackDraft({
         phase: lit("post_submit"),
       });
     }
-    if (k) decrementSessionDraftCount();
+    if (fromThisSession) decrementSessionDraftCount();
     if (via !== "card_send_as_is") dismissFeedbackNotice_2(draft.draft_id);
     logEvent("tengu_feedback_draft_submitted", {
       type: fromEnum(draft.type),
@@ -403,79 +417,79 @@ async function submitFeedbackDraft({
       transcript_trimmed: trim !== null ? lit("true") : lit("false"),
       transcript_requested: includeTranscript ? lit("true") : lit("false"),
       transcript_available: draft.transcriptAvailable ? lit("true") : lit("false"),
-      from_this_session: k ? lit("true") : lit("false"),
-      feedback_id: sanitizeMarkName(n.feedbackId),
-      last_request_id: sanitizeMarkName(D),
+      from_this_session: fromThisSession ? lit("true") : lit("false"),
+      feedback_id: sanitizeMarkName(result.feedbackId),
+      last_request_id: sanitizeMarkName(lastRequestId),
     });
     logFeatureOk("feedback_draft_submit");
     return {
       success: true,
-      feedbackId: n.feedbackId,
+      feedbackId: result.feedbackId,
     };
   }
-  let F = sanitizeMarkName(n.requestId);
-  logFeatureBad("feedback_draft_submit", n.failureReason ?? "network_error", {
-    from_this_session: k ? lit("true") : lit("false"),
-    ...(n.statusCode !== undefined && {
-      http_status: n.statusCode,
+  let requestId = sanitizeMarkName(result.requestId);
+  logFeatureBad("feedback_draft_submit", result.failureReason ?? "network_error", {
+    from_this_session: fromThisSession ? lit("true") : lit("false"),
+    ...(result.statusCode !== undefined && {
+      http_status: result.statusCode,
     }),
-    ...(F !== undefined && {
-      requestId: F,
+    ...(requestId !== undefined && {
+      requestId,
     }),
   });
-  let z = orgRefusalError(n);
-  if (z !== undefined)
+  let refusal = orgRefusalError(result);
+  if (refusal !== undefined)
     return {
       success: false,
-      error: z,
-      orgRefusalReason: orgFeedbackRefusalMessage(n),
+      error: refusal,
+      orgRefusalReason: orgFeedbackRefusalMessage(result),
     };
-  if (n.failureReason === "auth_error")
+  if (result.failureReason === "auth_error")
     return {
       success: false,
       error:
         (!getAuthHeaders().error && feedbackUnavailableReason()) ||
         "Couldn't send feedback: not signed in. Run /login, then retry.",
     };
-  if (n.payloadTooLarge)
+  if (result.payloadTooLarge)
     return {
       success: false,
       error: PAYLOAD_TOO_LARGE_MESSAGE,
       payloadTooLarge: true,
     };
-  if (n.failureReason === "policy_blocked")
+  if (result.failureReason === "policy_blocked")
     return {
       success: false,
       error: checkProductFeedbackAllowed() ?? "Feedback is disabled by your organization's policy.",
     };
-  let A = credentialRefusalMessage(n);
-  if (A !== undefined)
+  let credentialMessage = credentialRefusalMessage(result);
+  if (credentialMessage !== undefined)
     return {
       success: false,
-      error: `${A} The draft is still queued.`,
+      error: `${credentialMessage} The draft is still queued.`,
     };
-  let I =
-    serverStatusSuffix(n) ??
-    (n.failureReason === "timeout" ? " (request timed out)" : " (couldn't reach the service)");
-  let P = n.refusal?.kind === "other" ? "" : " Try again later.";
+  let statusSuffix =
+    serverStatusSuffix(result) ??
+    (result.failureReason === "timeout" ? " (request timed out)" : " (couldn't reach the service)");
+  let retryHint = result.refusal?.kind === "other" ? "" : " Try again later.";
   return {
     success: false,
-    error: `Couldn't send feedback${I}. The draft is still queued.${P}`,
+    error: `Couldn't send feedback${statusSuffix}. The draft is still queued.${retryHint}`,
   };
 }
 //@ chunk-d16hc1ab.js:7857-8070 placement
 /**
  * 丢弃反馈草稿：删除草稿、关闭提示、调整会话草稿计数并上报 tengu_feedback_draft_discarded。
  */
-async function discardFeedbackDraft(e, r, storageV5) {
-  let d = await deleteFeedbackDraft(e.draft_id, storageV5);
-  dismissFeedbackNotice_2(e.draft_id);
-  if (!d) return;
-  if (e.source_session_id === getSessionId()) decrementSessionDraftCount();
+async function discardFeedbackDraft(draft, storageV5, storageV5_2) {
+  let deleted = await deleteFeedbackDraft(draft.draft_id, storageV5_2);
+  dismissFeedbackNotice_2(draft.draft_id);
+  if (!deleted) return;
+  if (draft.source_session_id === getSessionId()) decrementSessionDraftCount();
   logEvent("tengu_feedback_draft_discarded", {
-    type: fromEnum(e.type),
-    trigger: fromEnum(e.trigger),
-    discarded_via: fromEnum(r),
+    type: fromEnum(draft.type),
+    trigger: fromEnum(draft.trigger),
+    discarded_via: fromEnum(storageV5),
   });
 }
 export { submitFeedbackDraft, discardFeedbackDraft };

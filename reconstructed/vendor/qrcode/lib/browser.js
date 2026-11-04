@@ -5,14 +5,14 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_can_promise } from "./can-promise.js";
 import { require_qrcode } from "./core/qrcode.js";
 import { require_canvas } from "./renderer/canvas.js";
 import { require_svg_tag } from "./renderer/svg-tag.js";
 
 //@ chunk-spjgqa4y.js:57046-57866 cjs-fingerprint
-var require_browser = x(function (cjsExports) {
+var require_browser = __commonJS(function (cjsExports) {
   var canPromise = require_can_promise();
   var QRCode = require_qrcode();
   var CanvasRenderer = require_canvas();

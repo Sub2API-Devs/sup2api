@@ -5,11 +5,11 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_paeth_predictor } from "./paeth-predictor.js";
 
 //@ chunk-spjgqa4y.js:39166-40773 cjs-fingerprint
-var require_filter_pack = x(function (cjsExports, cjsModule) {
+var require_filter_pack = __commonJS(function (cjsExports, cjsModule) {
   var paethPredictor = require_paeth_predictor();
   function filterNone(pxData, pxPos, byteWidth, rawData, rawPos) {
     for (let x = 0; x < byteWidth; x++) rawData[rawPos + x] = pxData[pxPos + x];

@@ -9,8 +9,8 @@ import { Readable } from "stream";
 import { __asyncGenerator, __await, __asyncValues } from "../../../../../tslib/tslib.es6.mjs";
 
 //@ chunk-mrx6y2r5.js:47151-47192 esm-layout
-function rt(e, t) {
-  return Buffer.from(e, t);
+function stringToUint8Array(value, format) {
+  return Buffer.from(value, format);
 }
 //@ chunk-mrx6y2r5.js:49828-49879 esm-layout
 function hasStreamMethod(source) {
@@ -88,4 +88,4 @@ async function concat(sources) {
     );
   };
 }
-export { rt, hasStreamMethod, concat };
+export { stringToUint8Array, hasStreamMethod, concat };

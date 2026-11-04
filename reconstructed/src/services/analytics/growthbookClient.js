@@ -18,8 +18,8 @@ import { createSignal } from "../../utils/signal.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { RETRY_FLAG_NAMES, TENGU_FLAG_SET } from "../api/withRetry.js";
-import { Uo } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
-import { En, wS } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { import_sortedIndex_2, pickAlias } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { logError } from "../../utils/log.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, toError } from "../../utils/errors.js";
 import {
@@ -27,7 +27,7 @@ import {
   PRE_INIT_FALLBACK_TIMEOUT_MS,
   PRE_INIT_OAUTH_REASON,
   envBearerFallbackMarker,
-  getGrowthBookClient_2,
+  DEFAULT_GROWTHBOOK_HOST,
   PRE_INIT_KEY_HELPER_TIMEOUT_MS,
   PRE_INIT_OAUTH_TIMEOUT_MS,
   PLUGIN_HOOKS_MODULES_GATE,
@@ -35,23 +35,24 @@ import {
 import { withTimeout } from "../../utils/sleep.js";
 import { getGrowthBookClientKey } from "../../constants/keys.js";
 import { claudeCodeUserAgent } from "../../utils/http.js";
-import { Re } from "../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_core } from "../../../vendor/@opentelemetry/core/build/src/index.js";
 import { require_resources } from "../../../vendor/@opentelemetry/resources/build/src/index.js";
 import { require_api } from "../../../vendor/@opentelemetry/api/build/src/index.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:630358-630526 placement
 /**
  * 向 GrowthBook /api/eval/<clientKey> POST 评估请求。
  */
-var postGrowthBookEval = (e) =>
-  getPolyfills().fetch(`${e.host}/api/eval/${e.clientKey}`, {
+var postGrowthBookEval = (request) =>
+  getPolyfills().fetch(`${request.host}/api/eval/${request.clientKey}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...e.headers,
+      ...request.headers,
     },
-    body: jsonStringify(e.payload),
+    body: jsonStringify(request.payload),
     redirect: "error",
   });
 //@ chunk-aepeg2w5.js:630526-648604 placement
@@ -97,7 +98,7 @@ class GrowthBookClientHolder {
   processExitListenerInstalled = false;
   processExited = false;
   atisPinRefreshChain = Promise.resolve();
-  routeSdkRemoteEvalHere = (e) => this.fetchRemoteEval(e);
+  routeSdkRemoteEvalHere = (request) => this.fetchRemoteEval(request);
   disposed = false;
   credentials;
   storageV5;
@@ -112,19 +113,19 @@ class GrowthBookClientHolder {
   answerNextRemoteEvalWith(nextRemoteEvalAnswerer) {
     this.nextRemoteEvalAnswerer = nextRemoteEvalAnswerer;
   }
-  setCredentials(e) {
-    if (this.credentials !== undefined && this.credentials !== e) {
+  setCredentials(credentials) {
+    if (this.credentials !== undefined && this.credentials !== credentials) {
       logForDebugging("GrowthBook: a credentials store was already handed in; the later one is ignored");
       return;
     }
-    this.credentials = e;
+    this.credentials = credentials;
   }
-  setStorageBackend(e) {
-    if (this.storageV5 !== undefined && this.storageV5 !== e) {
+  setStorageBackend(storageV5) {
+    if (this.storageV5 !== undefined && this.storageV5 !== storageV5) {
       logForDebugging("GrowthBook: a storage backend was already handed in; the later one is ignored");
       return;
     }
-    this.storageV5 = e;
+    this.storageV5 = storageV5;
   }
   refreshOAuthToken() {
     if (isStorageV5Enabled())
@@ -133,41 +134,41 @@ class GrowthBookClientHolder {
       );
     return this.deps.refreshOAuthTokenIfNeeded(this.credentials, this.storageV5);
   }
-  onRefresh(e) {
-    let n = true;
-    let r = this.refreshed.subscribe(() => swallowAsync(e));
+  onRefresh(listener) {
+    let live = true;
+    let unsubscribe = this.refreshed.subscribe(() => swallowAsync(listener));
     if (this.remoteEvalFeatureValues.size > 0)
       queueMicrotask(() => {
-        if (n && this.remoteEvalFeatureValues.size > 0) swallowAsync(e);
+        if (live && this.remoteEvalFeatureValues.size > 0) swallowAsync(listener);
       });
     return () => {
-      n = false;
-      r();
+      live = false;
+      unsubscribe();
     };
   }
   getEnvironmentOverrides() {
     return null;
   }
-  hasEnvironmentOverride(e) {
+  hasEnvironmentOverride(key) {
     let environmentOverrides = this.getEnvironmentOverrides();
-    return environmentOverrides !== null && readGateOverride(environmentOverrides, e);
+    return environmentOverrides !== null && readGateOverride(environmentOverrides, key);
   }
-  hasOverride(e) {
-    if (this.hasEnvironmentOverride(e)) return true;
+  hasOverride(key) {
+    if (this.hasEnvironmentOverride(key)) return true;
     let configOverrides = this.readConfigOverrides();
-    return configOverrides != null && readGateOverride(configOverrides, e);
+    return configOverrides != null && readGateOverride(configOverrides, key);
   }
-  isFeatureFromExperiment(e) {
-    if (this.experimentDataByFeature.has(e)) return true;
-    if (!this.deps.isEnabled() || RETRY_FLAG_NAMES.has(e)) return false;
-    return (this.readSavedFlags().cachedExperimentFeatures ?? []).includes(e);
+  isFeatureFromExperiment(featureKey) {
+    if (this.experimentDataByFeature.has(featureKey)) return true;
+    if (!this.deps.isEnabled() || RETRY_FLAG_NAMES.has(featureKey)) return false;
+    return (this.readSavedFlags().cachedExperimentFeatures ?? []).includes(featureKey);
   }
   readConfigOverrides() {
     return;
   }
   getAllFeatures() {
     if (this.remoteEvalFeatureValues.size > 0) return Object.fromEntries(this.remoteEvalFeatureValues);
-    return Uo(this.readSavedFlags().cachedGrowthBookFeatures ?? {}, [...RETRY_FLAG_NAMES]);
+    return omitAlias(this.readSavedFlags().cachedGrowthBookFeatures ?? {}, [...RETRY_FLAG_NAMES]);
   }
   readSavedFlags() {
     return this.ownSavedFlags?.flags ?? this.deps.readGlobalConfig();
@@ -178,8 +179,8 @@ class GrowthBookClientHolder {
   okFetchCount() {
     return this.remoteEvalFetchOkCount;
   }
-  claimsOfPayloadFetchedWith(e) {
-    return this.payloadSender?.authBearer === e ? this.payloadSender.claims : undefined;
+  claimsOfPayloadFetchedWith(authBearer) {
+    return this.payloadSender?.authBearer === authBearer ? this.payloadSender.claims : undefined;
   }
   builtForIdentity() {
     return {
@@ -205,225 +206,232 @@ class GrowthBookClientHolder {
   getConfigOverrides() {
     return this.readConfigOverrides() ?? {};
   }
-  setConfigOverride(e, n) {
+  setConfigOverride(key, value) {
     return;
   }
   clearConfigOverrides() {
     return;
   }
-  recordDeferredExposure(e, n) {
-    let r = n.cachedExperimentData?.[e];
+  recordDeferredExposure(featureKey, flags) {
+    let experimentData = flags.cachedExperimentData?.[featureKey];
     if (
-      typeof r !== "object" ||
-      r === null ||
-      typeof r.experimentId !== "string" ||
-      typeof r.variationId !== "number" ||
-      !En(r.value, n.cachedGrowthBookFeatures?.[e])
+      typeof experimentData !== "object" ||
+      experimentData === null ||
+      typeof experimentData.experimentId !== "string" ||
+      typeof experimentData.variationId !== "number" ||
+      !import_sortedIndex_2(experimentData.value, flags.cachedGrowthBookFeatures?.[featureKey])
     )
       return;
-    this.pendingExposures.set(e, {
-      experimentId: r.experimentId,
-      variationId: r.variationId,
+    this.pendingExposures.set(featureKey, {
+      experimentId: experimentData.experimentId,
+      variationId: experimentData.variationId,
     });
   }
-  logExposureForFeature(e) {
-    if (this.loggedExposures.has(e)) return;
-    let n = this.experimentDataByFeature.get(e);
-    if (n) {
-      this.loggedExposures.add(e);
+  logExposureForFeature(featureKey) {
+    if (this.loggedExposures.has(featureKey)) return;
+    let data = this.experimentDataByFeature.get(featureKey);
+    if (data) {
+      this.loggedExposures.add(featureKey);
       if (
         !this.deps.logExposure({
-          experimentId: n.experimentId,
-          variationId: n.variationId,
+          experimentId: data.experimentId,
+          variationId: data.variationId,
           userAttributes: this.deps.getUserAttributes(),
           experimentMetadata: {
-            feature_id: e,
+            feature_id: featureKey,
           },
         })
       )
-        this.loggedExposures.delete(e);
+        this.loggedExposures.delete(featureKey);
     }
   }
   drainPendingExposures() {
-    for (let [e, n] of this.pendingExposures) {
-      let r = this.experimentDataByFeature.get(e);
-      if (r && r.experimentId === n.experimentId && r.variationId === n.variationId)
-        this.logExposureForFeature(e);
+    for (let [key, pending] of this.pendingExposures) {
+      let current = this.experimentDataByFeature.get(key);
+      if (
+        current &&
+        current.experimentId === pending.experimentId &&
+        current.variationId === pending.variationId
+      )
+        this.logExposureForFeature(key);
     }
     this.pendingExposures.clear();
   }
-  async processRemoteEvalPayload(e) {
-    let payload = e.getPayload();
+  async processRemoteEvalPayload(client) {
+    let payload = client.getPayload();
     if (!payload?.features || Object.keys(payload.features).length === 0) return false;
-    let r = new Map();
-    let s = new Set();
-    let h = {};
-    let y = [];
-    let S = [];
+    let experiments = new Map();
+    let nonDefaultKeys = new Set();
+    let features = {};
+    let nonObject = [];
+    let malformed = [];
     for (let [key, value] of Object.entries(payload.features)) {
-      let G = value;
-      if (G === null || typeof G !== "object") {
-        y.push(`${key}:${G === null ? "null" : typeof G}`);
+      let entry = value;
+      if (entry === null || typeof entry !== "object") {
+        nonObject.push(`${key}:${entry === null ? "null" : typeof entry}`);
         continue;
       }
-      if ("value" in G && !("defaultValue" in G))
-        h[key] = {
-          ...G,
-          defaultValue: G.value,
+      if ("value" in entry && !("defaultValue" in entry))
+        features[key] = {
+          ...entry,
+          defaultValue: entry.value,
         };
-      else h[key] = G;
-      if (G.source === "experiment" && G.experimentResult) {
-        let { experimentResult, experiment } = G;
+      else features[key] = entry;
+      if (entry.source === "experiment" && entry.experimentResult) {
+        let { experimentResult, experiment } = entry;
         if (typeof experiment?.key === "string" && typeof experimentResult.variationId === "number")
-          r.set(key, {
+          experiments.set(key, {
             experimentId: experiment.key,
             variationId: experimentResult.variationId,
           });
         else
-          S.push(`${key}:key=${typeof experiment?.key},variationId=${typeof experimentResult.variationId}`);
+          malformed.push(
+            `${key}:key=${typeof experiment?.key},variationId=${typeof experimentResult.variationId}`,
+          );
       }
-      if (G.source !== undefined && G.source !== "defaultValue" && G.source !== "unknownFeature") s.add(key);
+      if (entry.source !== undefined && entry.source !== "defaultValue" && entry.source !== "unknownFeature")
+        nonDefaultKeys.add(key);
     }
-    if (y.length > 0 && !this.loggedNonObjectFeatureOnce) {
+    if (nonObject.length > 0 && !this.loggedNonObjectFeatureOnce) {
       this.loggedNonObjectFeatureOnce = true;
-      logError(Error(`processRemoteEvalPayload: skipped non-object features [${y.join(", ")}]`));
+      logError(Error(`processRemoteEvalPayload: skipped non-object features [${nonObject.join(", ")}]`));
     }
-    if (S.length > 0 && !this.loggedMalformedExperimentOnce) {
+    if (malformed.length > 0 && !this.loggedMalformedExperimentOnce) {
       this.loggedMalformedExperimentOnce = true;
       logError(
         new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `processRemoteEvalPayload: skipped malformed experiment entries [${S.join(", ")}]`,
+          `processRemoteEvalPayload: skipped malformed experiment entries [${malformed.join(", ")}]`,
           "processRemoteEvalPayload: skipped malformed experiment entries",
         ),
       );
     }
-    let w = new Map();
-    let R = [];
-    for (let [key, value] of Object.entries(h)) {
-      let G = "value" in value ? value.value : value.defaultValue;
-      if (G !== undefined) w.set(key, G);
+    let values = new Map();
+    let valueless = [];
+    for (let [key, value] of Object.entries(features)) {
+      let value_2 = "value" in value ? value.value : value.defaultValue;
+      if (value_2 !== undefined) values.set(key, value_2);
       else {
-        r.delete(key);
-        s.delete(key);
-        delete h[key];
-        R.push(key);
+        experiments.delete(key);
+        nonDefaultKeys.delete(key);
+        delete features[key];
+        valueless.push(key);
       }
     }
-    if (R.length > 0 && !this.loggedValuelessPayloadOnce) {
+    if (valueless.length > 0 && !this.loggedValuelessPayloadOnce) {
       this.loggedValuelessPayloadOnce = true;
       logError(
         new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `processRemoteEvalPayload: skipped value-less entries [${R.join(", ")}]`,
+          `processRemoteEvalPayload: skipped value-less entries [${valueless.join(", ")}]`,
           "processRemoteEvalPayload: skipped value-less entries",
         ),
       );
     }
-    if (w.size === 0) return false;
-    let x = {
+    if (values.size === 0) return false;
+    let nextPayload = {
       ...payload,
-      features: h,
+      features,
     };
-    let P = this.senderByPayload.get(payload);
-    this.senderByPayload.set(x, P);
-    await e.setPayload(x);
-    if (this.client !== e) return false;
+    let sender = this.senderByPayload.get(payload);
+    this.senderByPayload.set(nextPayload, sender);
+    await client.setPayload(nextPayload);
+    if (this.client !== client) return false;
     this.experimentDataByFeature.clear();
-    for (let [F, L] of r) this.experimentDataByFeature.set(F, L);
+    for (let [key, data] of experiments) this.experimentDataByFeature.set(key, data);
     this.nonDefaultFeatureKeys.clear();
-    for (let F of s) this.nonDefaultFeatureKeys.add(F);
+    for (let key of nonDefaultKeys) this.nonDefaultFeatureKeys.add(key);
     this.remoteEvalFeatureValues.clear();
-    for (let [F, L] of w) this.remoteEvalFeatureValues.set(F, L);
-    this.payloadSender = P;
+    for (let [key, value] of values) this.remoteEvalFeatureValues.set(key, value);
+    this.payloadSender = sender;
     this.ownSavedFlags = null;
     return true;
   }
-  syncRemoteEvalToDisk(e) {
+  syncRemoteEvalToDisk(force) {
     if (this.clientSlackTagConnected) return;
     if (this.everCreatedWithAuth && !this.clientCreatedWithAuth) return;
     if (this.usedNonDefaultHost) return;
-    let n = this.payloadAsSaved();
+    let payload = this.payloadAsSaved();
     if (
-      (e || this.deps.skipsSavingUnchangedFetch?.() === true) &&
-      En(wS(this.deps.readGlobalConfig(), Object.keys(n)), n)
+      (force || this.deps.skipsSavingUnchangedFetch?.() === true) &&
+      import_sortedIndex_2(pickAlias(this.deps.readGlobalConfig(), Object.keys(payload)), payload)
     )
       return;
     this.deps.saveGlobalConfig(
-      (r) => ({
-        ...r,
-        ...n,
+      (config) => ({
+        ...config,
+        ...payload,
         cachedGrowthBookFeaturesAt: Date.now(),
       }),
       this.storageV5,
     );
   }
   payloadAsSaved() {
-    let cachedGrowthBookFeatures = Uo(Object.fromEntries(this.remoteEvalFeatureValues), [
+    let cachedGrowthBookFeatures = omitAlias(Object.fromEntries(this.remoteEvalFeatureValues), [
       ...RETRY_FLAG_NAMES,
     ]);
-    let n = {};
-    for (let [r, s] of this.experimentDataByFeature) {
-      if (RETRY_FLAG_NAMES.has(r)) continue;
-      n[r] = {
-        experimentId: s.experimentId,
-        variationId: s.variationId,
-        value: this.remoteEvalFeatureValues.get(r),
+    let experimentData = {};
+    for (let [key, data] of this.experimentDataByFeature) {
+      if (RETRY_FLAG_NAMES.has(key)) continue;
+      experimentData[key] = {
+        experimentId: data.experimentId,
+        variationId: data.variationId,
+        value: this.remoteEvalFeatureValues.get(key),
       };
     }
     return {
       cachedGrowthBookFeatures,
-      cachedExperimentFeatures: Object.keys(n).sort(),
-      cachedExperimentData: n,
+      cachedExperimentFeatures: Object.keys(experimentData).sort(),
+      cachedExperimentData: experimentData,
     };
   }
-  async fetchRemoteEval(e) {
-    if (this.disposed) return this.deps.fetchRemoteEvalFromSdk(e);
-    let { response, sender } = await this.requestRemoteEval(e);
+  async fetchRemoteEval(request) {
+    if (this.disposed) return this.deps.fetchRemoteEvalFromSdk(request);
+    let { response, sender } = await this.requestRemoteEval(request);
     if (response?.ok) {
       this.remoteEvalFetchOkCount++;
       let body = response.json();
       response.json = () => body;
-      let h = await body.catch(() => {
+      let body_2 = await body.catch(() => {
         return;
       });
-      if (typeof h === "object" && h !== null) this.senderByPayload.set(h, sender);
+      if (typeof body_2 === "object" && body_2 !== null) this.senderByPayload.set(body_2, sender);
     }
     return response;
   }
-  async sendStock(e) {
+  async sendStock(request) {
     return {
-      response: await this.deps.fetchRemoteEvalFromSdk(e),
+      response: await this.deps.fetchRemoteEvalFromSdk(request),
       sender: {
-        authBearer: e.headers?.Authorization,
-        claims: emptyAccountIdentity(e),
+        authBearer: request.headers?.Authorization,
+        claims: emptyAccountIdentity(request),
       },
     };
   }
-  async requestRemoteEval(e) {
-    let { host, clientKey, payload, headers } = e;
+  async requestRemoteEval(options) {
+    let { host, clientKey, payload, headers } = options;
     let nextRemoteEvalAnswerer = this.nextRemoteEvalAnswerer;
     this.nextRemoteEvalAnswerer = undefined;
     if (!this.getFeatureValueWithSource("tengu_gb_eval_authed_enable", false).value) {
-      if (!nextRemoteEvalAnswerer) return this.sendStock(e);
-      let w;
-      let R = await nextRemoteEvalAnswerer(e, async () => {
-        w = await this.sendStock(e);
-        return w.response;
+      if (!nextRemoteEvalAnswerer) return this.sendStock(options);
+      let response;
+      let answerer = await nextRemoteEvalAnswerer(options, async () => {
+        response = await this.sendStock(options);
+        return response.response;
       });
-      return w !== undefined && R === w.response
-        ? w
+      return response !== undefined && answerer === response.response
+        ? response
         : {
-            response: R,
+            response: answerer,
             sender: undefined,
           };
     }
-    let S = {};
+    let headers_2 = {};
     if (this.deps.hasWorkspaceTrust()) {
       try {
         await this.refreshOAuthToken();
       } catch {}
       try {
         let authHeaders = await this.deps.getAuthHeaders();
-        if (!authHeaders.error) S = authHeaders.headers;
+        if (!authHeaders.error) headers_2 = authHeaders.headers;
       } catch {}
     }
     try {
@@ -432,25 +440,25 @@ class GrowthBookClientHolder {
         headers: {
           "Content-Type": "application/json",
           ...headers,
-          ...S,
+          ...headers_2,
         },
         body: JSON.stringify(payload),
         redirect: "error",
       });
       if (!response.ok) {
         logError(Error("GrowthBook eval-authed returned non-ok; falling back to /api/eval"));
-        return this.sendStock(e);
+        return this.sendStock(options);
       }
       return {
         response,
         sender: {
-          authBearer: S.Authorization ?? headers?.Authorization,
-          claims: emptyAccountIdentity(e),
+          authBearer: headers_2.Authorization ?? headers?.Authorization,
+          claims: emptyAccountIdentity(options),
         },
       };
     } catch {
       logError(Error("GrowthBook eval-authed fetch threw; falling back to /api/eval"));
-      return this.sendStock(e);
+      return this.sendStock(options);
     }
   }
   getClient() {
@@ -464,57 +472,57 @@ class GrowthBookClientHolder {
       process.once("exit", this.onProcessExit);
     }
     let generation = this.generation;
-    let n = {
+    let result = {
       headers: {},
       error: "trust not established",
     };
-    let r = false;
+    let authLost = false;
     if (this.deps.hasWorkspaceTrust()) {
       try {
         await withTimeout(this.refreshOAuthToken(), PRE_INIT_FALLBACK_TIMEOUT_MS, PRE_INIT_OAUTH_REASON);
       } catch (error) {
         let error_2 = toError(error);
-        let F = error_2.message === PRE_INIT_OAUTH_REASON ? "timeout" : error_2.name;
-        logForDebugging(`GrowthBook: pre-init OAuth refresh failed (${F})`);
+        let errorKind = error_2.message === PRE_INIT_OAUTH_REASON ? "timeout" : error_2.name;
+        logForDebugging(`GrowthBook: pre-init OAuth refresh failed (${errorKind})`);
       }
       try {
-        n = await this.deps.getAuthHeaders();
+        result = await this.deps.getAuthHeaders();
       } catch (error) {
         logForDebugging(
           `GrowthBook: auth header resolution failed (${toError(error).name}), continuing without auth`,
         );
-        n = {
+        result = {
           headers: {},
           error: "auth resolution failed",
         };
-        r = true;
+        authLost = true;
       }
     }
     if (this.disposed || generation !== this.generation) return null;
-    let s = {
+    let identity = {
       ...this.deps.getUserAttributes(),
       ...(this.deps.sdkCachePartition !== undefined && {
         sdkCachePartition: this.deps.sdkCachePartition,
       }),
     };
     let clientKey = getGrowthBookClientKey();
-    let y = envBearerFallbackMarker(this.deps.profileFlagHost?.());
-    this.usedNonDefaultHost ||= y !== getGrowthBookClient_2;
-    let S = !n.error;
-    this.clientCreatedWithAuth = S;
-    this.everCreatedWithAuth ||= S;
-    if (S) this.authLostMidSession = false;
+    let bearerMarker = envBearerFallbackMarker(this.deps.profileFlagHost?.());
+    this.usedNonDefaultHost ||= bearerMarker !== DEFAULT_GROWTHBOOK_HOST;
+    let hasIdentity = !result.error;
+    this.clientCreatedWithAuth = hasIdentity;
+    this.everCreatedWithAuth ||= hasIdentity;
+    if (hasIdentity) this.authLostMidSession = false;
     this.clientAuthResolutionTransientlyFailed =
-      !S && (r || n.reasonCode === "wif_error" || this.authLostMidSession);
-    this.clientAuthBearer = S ? n.headers.Authorization : undefined;
-    this.clientAccountUuid = s.accountUUID;
-    this.clientOrganizationUuid = s.organizationUUID;
-    this.clientSlackTagConnected = s.slackTagConnected === true;
+      !hasIdentity && (authLost || result.reasonCode === "wif_error" || this.authLostMidSession);
+    this.clientAuthBearer = hasIdentity ? result.headers.Authorization : undefined;
+    this.clientAccountUuid = identity.accountUUID;
+    this.clientOrganizationUuid = identity.organizationUUID;
+    this.clientSlackTagConnected = identity.slackTagConnected === true;
     helpers.fetchRemoteEvalCall = this.routeSdkRemoteEvalHere;
-    let w = new GrowthBook({
-      apiHost: y,
+    let client = new GrowthBook({
+      apiHost: bearerMarker,
       clientKey,
-      attributes: s,
+      attributes: identity,
       remoteEval: true,
       cacheKeyAttributes: [
         "id",
@@ -526,30 +534,30 @@ class GrowthBookClientHolder {
       ],
       apiHostRequestHeaders: {
         "User-Agent": claudeCodeUserAgent(),
-        ...(S && n.headers),
+        ...(hasIdentity && result.headers),
       },
       ...false,
     });
-    this.client = w;
-    if (!S)
+    this.client = client;
+    if (!hasIdentity)
       return {
-        client: w,
+        client,
         initialized: Promise.resolve(),
       };
-    let initialized = w
+    let initialized = client
       .init({
         timeout: this.deps.sdkInitTimeoutMs ?? 5000,
         ...(this.deps.sdkCachePartition !== undefined && {
           skipCache: true,
         }),
       })
-      .then(async (x) => {
-        if (this.client !== w) return;
-        let P = await this.processRemoteEvalPayload(w);
-        if (this.client !== w) return;
-        if (P) {
+      .then(async (created) => {
+        if (this.client !== client) return;
+        let applied = await this.processRemoteEvalPayload(client);
+        if (this.client !== client) return;
+        if (applied) {
           this.drainPendingExposures();
-          this.syncRemoteEvalToDisk(x.source === "cache");
+          this.syncRemoteEvalToDisk(created.source === "cache");
           this.refreshed.emit();
         }
       })
@@ -559,19 +567,19 @@ class GrowthBookClientHolder {
     process.on("beforeExit", this.currentBeforeExitHandler);
     process.on("exit", this.currentExitHandler);
     return {
-      client: w,
+      client,
       initialized,
     };
   }
   initialize() {
-    let e = this.initializePromise === null && this.deps.isFetchHeld();
-    if (this.disposed || e) return Promise.resolve(null);
+    let heldWhileFetchHeld = this.initializePromise === null && this.deps.isFetchHeld();
+    if (this.disposed || heldWhileFetchHeld) return Promise.resolve(null);
     if (this.initializePromise === null) {
-      let n = this.initializeClient();
-      this.initializePromise = n;
+      let promise = this.initializeClient();
+      this.initializePromise = promise;
       this.initializeInFlight = true;
-      let r = () => {
-        if (this.initializePromise === n) {
+      let settle = () => {
+        if (this.initializePromise === promise) {
           this.initializeInFlight = false;
           if (
             this.ownSavedFlags !== null &&
@@ -584,7 +592,7 @@ class GrowthBookClientHolder {
           }
         }
       };
-      n.then(r, r);
+      promise.then(settle, settle);
     }
     return this.initializePromise;
   }
@@ -596,99 +604,100 @@ class GrowthBookClientHolder {
     this.startPeriodicRefresh();
     return client.client;
   }
-  async getFeatureValueBlocking(e, n) {
+  async getFeatureValueBlocking(featureKey, fallback) {
     let environmentOverrides = this.getEnvironmentOverrides();
-    if (environmentOverrides && e in environmentOverrides) return environmentOverrides[e];
+    if (environmentOverrides && featureKey in environmentOverrides) return environmentOverrides[featureKey];
     let configOverrides = this.readConfigOverrides();
-    if (configOverrides && e in configOverrides) return configOverrides[e];
-    if (!this.deps.isEnabled()) return n;
-    let h = await this.initialize();
-    if (!h) return n;
-    let y;
-    let S = this.remoteEvalFeatureValues.get(e);
-    if (S !== undefined) y = valueOrFallback(S, n);
-    else y = h.getFeatureValue(e, n);
-    this.logExposureForFeature(e);
-    return y;
+    if (configOverrides && featureKey in configOverrides) return configOverrides[featureKey];
+    if (!this.deps.isEnabled()) return fallback;
+    let client = await this.initialize();
+    if (!client) return fallback;
+    let value;
+    let remoteValue = this.remoteEvalFeatureValues.get(featureKey);
+    if (remoteValue !== undefined) value = valueOrFallback(remoteValue, fallback);
+    else value = client.getFeatureValue(featureKey, fallback);
+    this.logExposureForFeature(featureKey);
+    return value;
   }
-  getFeatureValueWithSource(e, n) {
+  getFeatureValueWithSource(featureKey, fallback) {
     let environmentOverrides = this.getEnvironmentOverrides();
-    if (environmentOverrides && readGateOverride(environmentOverrides, e))
+    if (environmentOverrides && readGateOverride(environmentOverrides, featureKey))
       return {
-        value: environmentOverrides[e],
+        value: environmentOverrides[featureKey],
         source: "override",
       };
     let configOverrides = this.readConfigOverrides();
-    if (configOverrides && readGateOverride(configOverrides, e))
+    if (configOverrides && readGateOverride(configOverrides, featureKey))
       return {
-        value: configOverrides[e],
+        value: configOverrides[featureKey],
         source: "override",
       };
     if (!this.deps.isEnabled() && !this.deps.isDiskCacheReadableWhileDisabled())
       return {
-        value: n,
+        value: fallback,
         source: "disabled",
       };
-    if (this.experimentDataByFeature.has(e)) this.logExposureForFeature(e);
-    let h = this.remoteEvalFeatureValues.get(e);
-    if (h !== undefined)
+    if (this.experimentDataByFeature.has(featureKey)) this.logExposureForFeature(featureKey);
+    let payloadValue = this.remoteEvalFeatureValues.get(featureKey);
+    if (payloadValue !== undefined)
       return {
-        value: valueOrFallback(h, n),
+        value: valueOrFallback(payloadValue, fallback),
         source: "payload",
       };
     if (this.remoteEvalFeatureValues.size > 0)
       return {
-        value: n,
+        value: fallback,
         source: "fallback",
       };
-    if (RETRY_FLAG_NAMES.has(e))
+    if (RETRY_FLAG_NAMES.has(featureKey))
       return {
-        value: n,
+        value: fallback,
         source: "fallback",
       };
     try {
       let savedFlags = this.readSavedFlags();
-      let S = savedFlags.cachedGrowthBookFeatures?.[e];
-      if (S !== undefined) {
-        this.recordDeferredExposure(e, savedFlags);
+      let diskValue = savedFlags.cachedGrowthBookFeatures?.[featureKey];
+      if (diskValue !== undefined) {
+        this.recordDeferredExposure(featureKey, savedFlags);
         return {
-          value: valueOrFallback(S, n),
+          value: valueOrFallback(diskValue, fallback),
           source: "disk",
         };
       }
     } catch {}
     return {
-      value: n,
+      value: fallback,
       source: "fallback",
     };
   }
-  async checkGateCachedOrBlocking(e) {
+  async checkGateCachedOrBlocking(featureKey) {
     let environmentOverrides = this.getEnvironmentOverrides();
-    if (environmentOverrides && e in environmentOverrides) return Boolean(environmentOverrides[e]);
+    if (environmentOverrides && featureKey in environmentOverrides)
+      return Boolean(environmentOverrides[featureKey]);
     let configOverrides = this.readConfigOverrides();
-    if (configOverrides && e in configOverrides) return Boolean(configOverrides[e]);
+    if (configOverrides && featureKey in configOverrides) return Boolean(configOverrides[featureKey]);
     if (!this.deps.isEnabled()) return false;
-    if (this.remoteEvalFeatureValues.get(e) === true) {
-      this.logExposureForFeature(e);
+    if (this.remoteEvalFeatureValues.get(featureKey) === true) {
+      this.logExposureForFeature(featureKey);
       return true;
     }
-    if (!RETRY_FLAG_NAMES.has(e)) {
-      let s =
-        this.ownSavedFlags?.flags.cachedGrowthBookFeatures?.[e] === true
+    if (!RETRY_FLAG_NAMES.has(featureKey)) {
+      let flags =
+        this.ownSavedFlags?.flags.cachedGrowthBookFeatures?.[featureKey] === true
           ? this.ownSavedFlags.flags
           : this.deps.readGlobalConfig();
-      if (s.cachedGrowthBookFeatures?.[e] === true) {
-        this.recordDeferredExposure(e, s);
+      if (flags.cachedGrowthBookFeatures?.[featureKey] === true) {
+        this.recordDeferredExposure(featureKey, flags);
         return true;
       }
     }
-    return this.getFeatureValueBlocking(e, false);
+    return this.getFeatureValueBlocking(featureKey, false);
   }
-  refreshAfterAuthChange(e) {
+  refreshAfterAuthChange(options) {
     if (this.disposed || !this.deps.isEnabled()) return;
     try {
       let ownSavedFlags = null;
-      if (e?.keepsOwnSavedFlags === true && !this.deps.isFetchHeld())
+      if (options?.keepsOwnSavedFlags === true && !this.deps.isFetchHeld())
         ownSavedFlags =
           this.remoteEvalFeatureValues.size > 0
             ? {
@@ -699,7 +708,7 @@ class GrowthBookClientHolder {
             : this.ownSavedFlags;
       this.reset({
         preservePendingExposures: true,
-        preserveLoggedExposures: e?.preserveLoggedExposures,
+        preserveLoggedExposures: options?.preserveLoggedExposures,
       });
       this.ownSavedFlags = ownSavedFlags;
       this.refreshed.emit();
@@ -710,7 +719,7 @@ class GrowthBookClientHolder {
       logError(toError(error));
     }
   }
-  reset(e) {
+  reset(options) {
     this.stopPeriodicRefresh();
     if (this.currentBeforeExitHandler) {
       process.off("beforeExit", this.currentBeforeExitHandler);
@@ -730,15 +739,15 @@ class GrowthBookClientHolder {
     this.clientAccountUuid = undefined;
     this.clientOrganizationUuid = undefined;
     this.clientSlackTagConnected = false;
-    if (!e?.preserveLoggedExposures) {
+    if (!options?.preserveLoggedExposures) {
       this.loggedNonObjectFeatureOnce = false;
       this.loggedMalformedExperimentOnce = false;
       this.loggedValuelessPayloadOnce = false;
     }
     this.experimentDataByFeature.clear();
     this.nonDefaultFeatureKeys.clear();
-    if (!e?.preservePendingExposures) this.pendingExposures.clear();
-    if (!e?.preserveLoggedExposures) this.loggedExposures.clear();
+    if (!options?.preservePendingExposures) this.pendingExposures.clear();
+    if (!options?.preserveLoggedExposures) this.loggedExposures.clear();
     this.remoteEvalFeatureValues.clear();
     this.payloadSender = undefined;
     this.ownSavedFlags = null;
@@ -780,45 +789,47 @@ class GrowthBookClientHolder {
           Authorization !== undefined &&
           Authorization !== this.clientAuthBearer
         ) {
-          let S = this.deps.rereadUserAttributes();
-          let w =
-            S.accountUUID === this.clientAccountUuid && S.organizationUUID === this.clientOrganizationUuid;
+          let attributes = this.deps.rereadUserAttributes();
+          let sameIdentity =
+            attributes.accountUUID === this.clientAccountUuid &&
+            attributes.organizationUUID === this.clientOrganizationUuid;
           this.refreshAfterAuthChange({
-            preserveLoggedExposures: w,
-            keepsOwnSavedFlags: w && S.accountUUID !== undefined,
+            preserveLoggedExposures: sameIdentity,
+            keepsOwnSavedFlags: sameIdentity && attributes.accountUUID !== undefined,
           });
           return;
         }
       } else if (this.clientAuthResolutionTransientlyFailed) {
-        let h = await this.deps.getAuthHeaders().catch(() => null);
+        let headers = await this.deps.getAuthHeaders().catch(() => null);
         if (
-          h &&
-          !h.error &&
-          (h.headers.Authorization || (this.authLostMidSession && Object.keys(h.headers).length > 0))
+          headers &&
+          !headers.error &&
+          (headers.headers.Authorization ||
+            (this.authLostMidSession && Object.keys(headers.headers).length > 0))
         ) {
           this.refreshAfterAuthChange();
           return;
         }
       }
-      let e = await this.initialize();
-      if (!e) return;
+      let client = await this.initialize();
+      if (!client) return;
       let atisPin = this.deps.getUserAttributes().atisPin;
-      let r = false;
-      if (atisPin !== e.getAttributes().atisPin) {
+      let pinChanged = false;
+      if (atisPin !== client.getAttributes().atisPin) {
         let remoteEvalFetchOkCount = this.remoteEvalFetchOkCount;
-        await e.updateAttributes({
+        await client.updateAttributes({
           atisPin,
         });
-        r = this.remoteEvalFetchOkCount !== remoteEvalFetchOkCount;
+        pinChanged = this.remoteEvalFetchOkCount !== remoteEvalFetchOkCount;
       }
-      if (!r)
-        await e.refreshFeatures({
+      if (!pinChanged)
+        await client.refreshFeatures({
           skipCache: true,
         });
-      if (e !== this.client) return;
-      let s = await this.processRemoteEvalPayload(e);
-      if (e !== this.client) return;
-      if (s) {
+      if (client !== this.client) return;
+      let applied = await this.processRemoteEvalPayload(client);
+      if (client !== this.client) return;
+      if (applied) {
         this.drainPendingExposures();
         this.syncRemoteEvalToDisk(false);
         this.refreshed.emit();
@@ -850,26 +861,26 @@ class GrowthBookClientHolder {
     };
     process.once("beforeExit", this.refreshLoopBeforeExitListener);
   }
-  async periodicRefreshLoop(e) {
-    while (!e.aborted && !this.disposed)
+  async periodicRefreshLoop(signal) {
+    while (!signal.aborted && !this.disposed)
       try {
         let { intervalMs, flagged } = this.deps.getRefreshCadence();
-        await this.deps.sleep(intervalMs, e, {
+        await this.deps.sleep(intervalMs, signal, {
           unref: true,
         });
-        if (e.aborted) return;
+        if (signal.aborted) return;
         let remoteEvalFetchOkCount = this.remoteEvalFetchOkCount;
         await this.refreshFeatures();
-        if (flagged && this.remoteEvalFetchOkCount === remoteEvalFetchOkCount && !e.aborted) {
-          await this.deps.sleep(Math.round(Math.random() * PRE_INIT_KEY_HELPER_TIMEOUT_MS), e, {
+        if (flagged && this.remoteEvalFetchOkCount === remoteEvalFetchOkCount && !signal.aborted) {
+          await this.deps.sleep(Math.round(Math.random() * PRE_INIT_KEY_HELPER_TIMEOUT_MS), signal, {
             unref: true,
           });
-          if (e.aborted) return;
+          if (signal.aborted) return;
           await this.refreshFeatures();
         }
       } catch (error) {
         logError(toError(error));
-        await this.deps.sleep(PRE_INIT_OAUTH_TIMEOUT_MS, e, {
+        await this.deps.sleep(PRE_INIT_OAUTH_TIMEOUT_MS, signal, {
           unref: true,
         });
       }
@@ -886,13 +897,13 @@ class GrowthBookClientHolder {
   }
 }
 //@ chunk-aepeg2w5.js:648604-648641 placement
-function valueOrFallback(e, n) {
-  return e === null ? n : e;
+function valueOrFallback(value, fallback) {
+  return value === null ? fallback : value;
 }
 //@ chunk-aepeg2w5.js:648641-648715 placement
-function swallowAsync(e) {
+function swallowAsync(promise) {
   try {
-    Promise.resolve(e()).catch((error) => {
+    Promise.resolve(promise()).catch((error) => {
       logError(error);
     });
   } catch (error) {
@@ -900,26 +911,36 @@ function swallowAsync(e) {
   }
 }
 //@ chunk-aepeg2w5.js:648715-648776 placement
-function readGateOverride(e, n) {
-  let r = n === PLUGIN_HOOKS_MODULES_GATE;
-  return n in e && (!r || e[n] === true);
+function readGateOverride(overrides, key) {
+  let isHooksGate = key === PLUGIN_HOOKS_MODULES_GATE;
+  return key in overrides && (!isHooksGate || overrides[key] === true);
 }
 //@ chunk-aepeg2w5.js:648776-648865 placement
-function stripCredentialFields(e) {
-  let filtered = Object.keys(e).filter((key) => TENGU_FLAG_SET.has(key));
-  return filtered.length === 0 ? e : Uo(e, filtered);
+function stripCredentialFields(payload) {
+  let filtered = Object.keys(payload).filter((key) => TENGU_FLAG_SET.has(key));
+  return filtered.length === 0 ? payload : omitAlias(payload, filtered);
 }
 //@ chunk-aepeg2w5.js:648865-648898 placement
-var nodeModuleA = Re(require_core(), 1);
-var nodeModuleB = Re(require_resources(), 1);
+var nodeModuleA; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var nodeModuleB;
+deferInit("chunk-aepeg2w5.js:648865", () => {
+  nodeModuleA = __toESM(require_core(), 1);
+  nodeModuleB = __toESM(require_resources(), 1);
+});
 //@ chunk-aepeg2w5.js:648898-648914 placement
-var growthbookSdkModule = Re(require_api());
+var growthbookSdkModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:648898", () => {
+  growthbookSdkModule = __toESM(require_api());
+});
 //@ chunk-aepeg2w5.js:648914-648933 placement
 class NoopEmitter {
-  emit(e) {}
+  emit(event) {}
 }
 //@ chunk-aepeg2w5.js:648933-648947 placement
-var noopEmitter = new NoopEmitter();
+var noopEmitter; // deferred: uses NoopEmitter of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:648933", () => {
+  noopEmitter = new NoopEmitter();
+});
 export {
   postGrowthBookEval,
   GrowthBookClientHolder,

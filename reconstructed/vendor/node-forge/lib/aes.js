@@ -5,14 +5,14 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_forge } from "./forge.js";
 import { require_cipher } from "./cipher.js";
 import { require_cipherModes } from "./cipherModes.js";
 import { require_util } from "./util.js";
 
 //@ chunk-fq0cr76a.js:43142-47100 cjs-fingerprint
-var require_aes = x(function (cjsExports, cjsModule) {
+var require_aes = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_cipher();
   require_cipherModes();
@@ -56,20 +56,20 @@ var require_aes = x(function (cjsExports, cjsModule) {
   };
   forge.aes.Algorithm = function (name, mode) {
     if (!init) initialize();
-    var r = this;
-    r.name = name;
-    r.mode = new mode({
+    var selfRef = this;
+    selfRef.name = name;
+    selfRef.mode = new mode({
       blockSize: 16,
       cipher: {
         encrypt: function (inBlock, outBlock) {
-          return _updateBlock(r._w, inBlock, outBlock, false);
+          return _updateBlock(selfRef._w, inBlock, outBlock, false);
         },
         decrypt: function (inBlock, outBlock) {
-          return _updateBlock(r._w, inBlock, outBlock, true);
+          return _updateBlock(selfRef._w, inBlock, outBlock, true);
         },
       },
     });
-    r._init = false;
+    selfRef._init = false;
   };
   forge.aes.Algorithm.prototype.initialize = function (options) {
     if (this._init) return;

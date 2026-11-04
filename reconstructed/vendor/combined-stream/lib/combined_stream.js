@@ -5,11 +5,11 @@
  * pieces: chunk-h6b7mazd.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_delayed_stream } from "../../delayed-stream/lib/delayed_stream.js";
 
 //@ chunk-h6b7mazd.js:1799-4742 cjs-fingerprint
-var require_combined_stream = x(function (cjsExports, cjsModule) {
+var require_combined_stream = __commonJS(function (cjsExports, cjsModule) {
   var util = importMetaRequire("util");
   var Stream = importMetaRequire("stream").Stream;
   var DelayedStream = require_delayed_stream();
@@ -117,9 +117,9 @@ var require_combined_stream = x(function (cjsExports, cjsModule) {
     this._getNext();
   };
   CombinedStream.prototype._handleErrors = function (stream) {
-    var t = this;
+    var selfRef = this;
     stream.on("error", function (err) {
-      t._emitError(err);
+      selfRef._emitError(err);
     });
   };
   CombinedStream.prototype.write = function (data) {
@@ -162,10 +162,10 @@ var require_combined_stream = x(function (cjsExports, cjsModule) {
   };
   CombinedStream.prototype._updateDataSize = function () {
     this.dataSize = 0;
-    var e = this;
+    var selfRef = this;
     this._streams.forEach(function (stream) {
       if (!stream.dataSize) return;
-      e.dataSize += stream.dataSize;
+      selfRef.dataSize += stream.dataSize;
     });
     if (this._currentStream && this._currentStream.dataSize) this.dataSize += this._currentStream.dataSize;
   };

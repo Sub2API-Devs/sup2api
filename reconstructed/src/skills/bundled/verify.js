@@ -8,14 +8,27 @@
  * pieces: chunk-4121qate.js (1), chunk-hantmvxa.js (3)
  * attribution: fingerprint 2, sole-consumer 1, affinity 1
  */
+import { checkPlainObject } from "../../plugins/functionHooks/sites/plainData.js";
 import { registerBundledSkill } from "../bundledSkills.js";
 import { COWORK_PLUGIN } from "./bundledSkillNames.js";
 import { isRemoteCowork, isCcsRemoteCowork } from "../../utils/entrypointKinds.js";
-import { checkPlainObject } from "../../plugins/functionHooks/sites/plainData.js";
 
+//@ chunk-4121qate.js:132362-132452 fingerprint
+/**
+ * 把非对象 frontmatter 规范化（checkPlainObject 返回字符串时保持原样）。
+ */
+function normalizeFrontmatter(skill) {
+  let frontmatter = checkPlainObject(skill.frontmatter);
+  return typeof frontmatter === "string"
+    ? skill
+    : {
+        ...skill,
+        frontmatter,
+      };
+}
 //@ chunk-hantmvxa.js:99444-99495 sole-consumer
 function loadCoworkPluginSkillFiles() {
-  return import("./chunk-3xrfrj7v.js");
+  return import("./SKILL_FILES.lazy.js");
 }
 //@ chunk-hantmvxa.js:99495-99892 affinity
 var COWORK_PLUGIN_DESCRIPTION =
@@ -32,10 +45,10 @@ function registerCoworkPluginSkill() {
     isEnabled: () => isRemoteCowork() || isCcsRemoteCowork(),
     files: () =>
       loadCoworkPluginSkillFiles().then((coworkPluginSkillFiles) => coworkPluginSkillFiles.SKILL_FILES),
-    async getPromptForCommand(e) {
+    async getPromptForCommand(args) {
       let { SKILL_MD } = await loadCoworkPluginSkillFiles();
       let parts = [SKILL_MD.trimStart()];
-      let trimmed = e?.trim();
+      let trimmed = args?.trim();
       if (trimmed)
         parts.push(`## User Request
 
@@ -50,18 +63,5 @@ ${trimmed}`);
       ];
     },
   });
-}
-//@ chunk-4121qate.js:132362-132452 fingerprint
-/**
- * 把非对象 frontmatter 规范化（checkPlainObject 返回字符串时保持原样）。
- */
-function normalizeFrontmatter(e) {
-  let o = checkPlainObject(e.frontmatter);
-  return typeof o === "string"
-    ? e
-    : {
-        ...e,
-        frontmatter: o,
-      };
 }
 export { normalizeFrontmatter, registerCoworkPluginSkill };

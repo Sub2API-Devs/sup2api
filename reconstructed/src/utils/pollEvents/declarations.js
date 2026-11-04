@@ -26,17 +26,18 @@ import { logFeatureOk, logFeatureSad, logFeatureBad } from "../../services/analy
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   zodStrictObject,
-  string,
+  stringSchema,
   unknown,
   array,
   record,
-  u,
+  objectSchema,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { jsonStringify } from "../slowOperations.js";
 import { memoizeWithLRU } from "../memoize.js";
 import { safeParseJSON } from "../json.js";
 import { logForDebugging } from "../debug.js";
 import { sanitizeTelemetryString } from "../sanitization.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:157378-157503 placement
 /**
@@ -45,10 +46,10 @@ import { sanitizeTelemetryString } from "../sanitization.js";
 var TENGU_MOONLIT_ISLAND = "tengu_moonlit_island";
 var POLL_EVENTS_ANNOUNCE_LINE = `<system>One or more events arrived; they follow as the result of a ${POLL} call.</system>`;
 //@ chunk-e6aww6q8.js:157503-157670 placement
-function declaredRoundStamp(e) {
+function declaredRoundStamp(entries) {
   try {
-    return e.length > 0 &&
-      e.every(
+    return entries.length > 0 &&
+      entries.every(
         ({ pollEvent }) => pollEvent?.declared !== undefined && !mentionsReservedKind(pollEvent.kind),
       ) &&
       getFeatureValue_CACHED_MAY_BE_STALE(TENGU_MOONLIT_ISLAND, false)
@@ -65,15 +66,15 @@ function declaredRoundStamp(e) {
 /**
  * neverDeclaresEvents：恒 false 的声明判定（占位）。
  */
-function neverDeclaresEvents(e) {
+function neverDeclaresEvents(entries) {
   return false;
 }
 //@ chunk-e6aww6q8.js:157695-157810 placement
-function isDeclaredRound(e) {
+function isDeclaredRound(round) {
   try {
     return (
-      e.declaredRound === true &&
-      e.userRoleGuard !== true &&
+      round.declaredRound === true &&
+      round.userRoleGuard !== true &&
       getFeatureValue_CACHED_MAY_BE_STALE(TENGU_MOONLIT_ISLAND, true)
     );
   } catch (error) {
@@ -82,59 +83,79 @@ function isDeclaredRound(e) {
   }
 }
 //@ chunk-e6aww6q8.js:157810-157845 placement
-var declaredRoundsSeen = identity_2(new Set(), (e) => e.clear());
+var declaredRoundsSeen; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:157810", () => {
+  declaredRoundsSeen = identity_2(new Set(), (store) => store.clear());
+});
 //@ chunk-e6aww6q8.js:157845-158153 placement
 /**
  * 每个回合记录一次"轮询事件声明轮次"的特性状态（已生效、开关关闭或未标记）。
  */
-function logDeclaredRound(e, n) {
+function logDeclaredRound(roundId, round) {
   try {
     if (
-      declaredRoundsSeen.has(e) ||
-      n.userRoleGuard === true ||
-      n.declared === undefined ||
-      n.declared.length === 0 ||
-      n.declared.some((r) => r === null) ||
-      n.kinds?.some(mentionsReservedKind) === true
+      declaredRoundsSeen.has(roundId) ||
+      round.userRoleGuard === true ||
+      round.declared === undefined ||
+      round.declared.length === 0 ||
+      round.declared.some((item) => item === null) ||
+      round.kinds?.some(mentionsReservedKind) === true
     )
       return;
-    declaredRoundsSeen.add(e);
-    if (isDeclaredRound(n)) logFeatureOk("poll_event_declared_round");
-    else logFeatureSad("poll_event_declared_round", n.declaredRound === true ? "flag_off" : "not_stamped");
+    declaredRoundsSeen.add(roundId);
+    if (isDeclaredRound(round)) logFeatureOk("poll_event_declared_round");
+    else
+      logFeatureSad("poll_event_declared_round", round.declaredRound === true ? "flag_off" : "not_stamped");
   } catch {}
 }
 //@ chunk-e6aww6q8.js:158153-158565 placement
 /**
  * 轮询事件声明的上限与 schema：kind 数量、字段路径数、枚举值数、at 令牌长度、描述长度、对象嵌套深度、提示词字节数、kind 名称格式、保留键，以及声明/事件 schema。
  */
-var MAX_DECLARED_KINDS = 64;
-var MAX_FIELD_PATHS = 48;
-var MAX_ENUM_VALUES = 32;
-var MAX_AT_TOKEN_LENGTH = 256;
-var MAX_KIND_DESCRIPTION = 500;
-var MAX_OBJECT_DEPTH = 3;
-var MAX_DECLARATIONS_PROMPT_BYTES = 16384;
-var KIND_NAME_REGEX = /^[a-z][a-z0-9_-]{0,63}$/;
-var RESERVED_ENVELOPE_KEYS = new Set(["type", "kind", "at", "nonce"]);
-var declarationSchema = DoctorLazy(() =>
-  zodStrictObject({
-    kind: string(),
-    description: string().max(MAX_KIND_DESCRIPTION).optional(),
-    schema: unknown().optional(),
-    untrusted_fields: array(string()).max(MAX_FIELD_PATHS).optional(),
-    auto_mode_fields: array(string()).max(MAX_FIELD_PATHS).optional(),
-  }),
-);
-var declarationsSchema = DoctorLazy(() => array(declarationSchema()).max(MAX_DECLARED_KINDS));
-var eventFieldsSchema = DoctorLazy(() => record(string(), unknown()));
-var pollEventSchema = DoctorLazy(() =>
-  u({
-    kind: string(),
-    at: string(),
-    fields: eventFieldsSchema(),
-  }),
-);
-var EMPTY_DECLARATIONS = new Map();
+var MAX_DECLARED_KINDS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_FIELD_PATHS;
+var MAX_ENUM_VALUES;
+var MAX_AT_TOKEN_LENGTH;
+var MAX_KIND_DESCRIPTION;
+var MAX_OBJECT_DEPTH;
+var MAX_DECLARATIONS_PROMPT_BYTES;
+var KIND_NAME_REGEX;
+var RESERVED_ENVELOPE_KEYS;
+var declarationSchema;
+var declarationsSchema;
+var eventFieldsSchema;
+var pollEventSchema;
+var EMPTY_DECLARATIONS;
+deferInit("chunk-e6aww6q8.js:158153", () => {
+  MAX_DECLARED_KINDS = 64;
+  MAX_FIELD_PATHS = 48;
+  MAX_ENUM_VALUES = 32;
+  MAX_AT_TOKEN_LENGTH = 256;
+  MAX_KIND_DESCRIPTION = 500;
+  MAX_OBJECT_DEPTH = 3;
+  MAX_DECLARATIONS_PROMPT_BYTES = 16384;
+  KIND_NAME_REGEX = /^[a-z][a-z0-9_-]{0,63}$/;
+  RESERVED_ENVELOPE_KEYS = new Set(["type", "kind", "at", "nonce"]);
+  declarationSchema = DoctorLazy(() =>
+    zodStrictObject({
+      kind: stringSchema(),
+      description: stringSchema().max(MAX_KIND_DESCRIPTION).optional(),
+      schema: unknown().optional(),
+      untrusted_fields: array(stringSchema()).max(MAX_FIELD_PATHS).optional(),
+      auto_mode_fields: array(stringSchema()).max(MAX_FIELD_PATHS).optional(),
+    }),
+  );
+  declarationsSchema = DoctorLazy(() => array(declarationSchema()).max(MAX_DECLARED_KINDS));
+  eventFieldsSchema = DoctorLazy(() => record(stringSchema(), unknown()));
+  pollEventSchema = DoctorLazy(() =>
+    objectSchema({
+      kind: stringSchema(),
+      at: stringSchema(),
+      fields: eventFieldsSchema(),
+    }),
+  );
+  EMPTY_DECLARATIONS = new Map();
+});
 //@ chunk-e6aww6q8.js:158565-158612 placement
 /**
  * eventDeclarations：宿主声明的事件种类。
@@ -150,43 +171,44 @@ function eventDeclarationFault() {
   return noHostDeclarations()?.fault;
 }
 //@ chunk-e6aww6q8.js:158647-159176 placement
-function validatePollEventDeclarations(e) {
-  let n = declarationsSchema().safeParse(e);
-  if (!n.success) {
-    let h = n.error.issues[0];
-    let y = h?.path.join(".") ?? "";
-    let S = y === "" ? "" : ` at ${y}`;
-    let w = h?.code === "unrecognized_keys" ? `: ${telemetryStringList(h.keys)} is not a key it takes` : "";
+function validatePollEventDeclarations(input) {
+  let result = declarationsSchema().safeParse(input);
+  if (!result.success) {
+    let issue = result.error.issues[0];
+    let path = issue?.path.join(".") ?? "";
+    let where = path === "" ? "" : ` at ${path}`;
+    let extra =
+      issue?.code === "unrecognized_keys" ? `: ${telemetryStringList(issue.keys)} is not a key it takes` : "";
     return {
       ok: false,
-      reason: `declarations do not match the schema${S}${w}`,
+      reason: `declarations do not match the schema${where}${extra}`,
     };
   }
-  let r = new Map();
-  for (let h of n.data) {
-    let y = validatePollEventDeclaration(h, r);
-    if (!y.ok) return y;
-    r.set(y.value.kind, y.value);
+  let byKind = new Map();
+  for (let declaration of result.data) {
+    let validated = validatePollEventDeclaration(declaration, byKind);
+    if (!validated.ok) return validated;
+    byKind.set(validated.value.kind, validated.value);
   }
-  let s = Buffer.byteLength(declaredKindsPrompt(r) ?? "", "utf8");
-  if (s > MAX_DECLARATIONS_PROMPT_BYTES)
+  let promptBytes = Buffer.byteLength(declaredKindsPrompt(byKind) ?? "", "utf8");
+  if (promptBytes > MAX_DECLARATIONS_PROMPT_BYTES)
     return {
       ok: false,
-      reason: `the declared kinds take ${s} bytes of prompt (cap ${MAX_DECLARATIONS_PROMPT_BYTES})`,
+      reason: `the declared kinds take ${promptBytes} bytes of prompt (cap ${MAX_DECLARATIONS_PROMPT_BYTES})`,
     };
   return {
     ok: true,
-    declarations: r,
+    declarations: byKind,
   };
 }
 //@ chunk-e6aww6q8.js:159176-159499 placement
 /**
  * 生成宿主声明的轮询事件说明提示词：每种 kind 的字段与不受信字段列表。
  */
-function declaredKindsPrompt(e) {
-  if (e.size === 0) return;
+function declaredKindsPrompt(byKind) {
+  if (byKind.size === 0) return;
   return `Your host declares the event kinds below. Poll returns each one as an event element whose body is one JSON object, with only the fields listed for its kind. ${EVENT_NONCE_RULE_TEXT} The host sets every field except those listed as untrusted, which may hold text from untrusted sources.
-${declaredKindsList(e)}`;
+${declaredKindsList(byKind)}`;
 }
 //@ chunk-e6aww6q8.js:159499-159590 placement
 var EVENT_NONCE_RULE_TEXT =
@@ -201,17 +223,17 @@ function buildPollEventEnvelope({ declaration, at, fields }) {
       ok: false,
       reason: `kind ${declaration.kind} is reserved`,
     };
-  let s = validateEventFields(declaration.fields, fields, "");
-  if (!s.ok)
+  let fieldResult = validateEventFields(declaration.fields, fields, "");
+  if (!fieldResult.ok)
     return {
       ok: false,
-      reason: `${s.reason} on kind ${declaration.kind}`,
+      reason: `${fieldResult.reason} on kind ${declaration.kind}`,
     };
-  let h = eventByteLength(s.value);
-  if (h > MAX_POLL_EVENT_ENVELOPE_BYTES)
+  let size = eventByteLength(fieldResult.value);
+  if (size > MAX_POLL_EVENT_ENVELOPE_BYTES)
     return {
       ok: false,
-      reason: `fields are ${h} bytes (cap ${MAX_POLL_EVENT_ENVELOPE_BYTES})`,
+      reason: `fields are ${size} bytes (cap ${MAX_POLL_EVENT_ENVELOPE_BYTES})`,
     };
   if (!isValidAtToken(at))
     return {
@@ -220,8 +242,8 @@ function buildPollEventEnvelope({ declaration, at, fields }) {
     };
   return {
     ok: true,
-    envelope: renderEventElement(declaration.kind, at, s.value),
-    fields: s.value,
+    envelope: renderEventElement(declaration.kind, at, fieldResult.value),
+    fields: fieldResult.value,
   };
 }
 //@ chunk-e6aww6q8.js:159984-160037 placement
@@ -229,24 +251,24 @@ function buildPollEventEnvelope({ declaration, at, fields }) {
  * collectFieldStrings：汇总事件字段的字符串。
  */
 function collectFieldStrings(fields) {
-  let n = [];
-  collectFieldStrings_2(fields, n);
-  return n.join(`
+  let strings = [];
+  collectFieldStrings_2(fields, strings);
+  return strings.join(`
 `);
 }
 //@ chunk-e6aww6q8.js:160037-160263 placement
-function collectFieldStrings_2(e, n) {
-  if (typeof e === "string") n.push(normalizeNewlines(e));
-  else if (typeof e === "number" || typeof e === "boolean") n.push(String(e));
-  else if (Array.isArray(e)) for (let r of e) collectFieldStrings_2(r, n);
-  else if (isPlainRecord(e)) for (let r of Object.values(e)) collectFieldStrings_2(r, n);
+function collectFieldStrings_2(value, out) {
+  if (typeof value === "string") out.push(normalizeNewlines(value));
+  else if (typeof value === "number" || typeof value === "boolean") out.push(String(value));
+  else if (Array.isArray(value)) for (let item of value) collectFieldStrings_2(item, out);
+  else if (isPlainRecord(value)) for (let item of Object.values(value)) collectFieldStrings_2(item, out);
 }
 //@ chunk-e6aww6q8.js:160263-160313 placement
 /**
  * escapedEventJsonBody：转义后的事件 JSON 正文。
  */
-function escapedEventJsonBody(e) {
-  return escapeHtmlChars(jsonStringify(normalizeNewlines(e))).slice(1, -1);
+function escapedEventJsonBody(value) {
+  return escapeHtmlChars(jsonStringify(normalizeNewlines(value))).slice(1, -1);
 }
 //@ chunk-e6aww6q8.js:160313-160538 placement
 /**
@@ -255,12 +277,14 @@ function escapedEventJsonBody(e) {
 function autoModeFieldsText({ declaration, fields }) {
   let filtered = declaration.fields
     .map((field) => field.name)
-    .filter((s) => declaration.auto_mode_fields.includes(s) && Object.hasOwn(fields, s));
+    .filter(
+      (fieldName) => declaration.auto_mode_fields.includes(fieldName) && Object.hasOwn(fields, fieldName),
+    );
   return filtered.length === 0
     ? undefined
     : sanitizedJson({
         kind: declaration.kind,
-        ...Object.fromEntries(filtered.map((s) => [s, fields[s]])),
+        ...Object.fromEntries(filtered.map((fieldName) => [fieldName, fields[fieldName]])),
       });
 }
 //@ chunk-e6aww6q8.js:160538-160560 placement
@@ -268,32 +292,35 @@ function noHostDeclarations() {
   return;
 }
 //@ chunk-e6aww6q8.js:160560-160808 placement
-var parseDeclarationsCached = memoizeWithLRU(
-  (e) => {
-    let n = validatePollEventDeclarations(safeParseJSON(e, false));
-    if (!n.ok) {
-      logFeatureBad("poll_event_delivery", "declarations_invalid");
-      logForDebugging(`poll event declarations refused: ${n.reason}`, {
-        level: "error",
-      });
+var parseDeclarationsCached; // deferred: uses memoizeWithLRU (../memoize.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:160560", () => {
+  parseDeclarationsCached = memoizeWithLRU(
+    (rawJson) => {
+      let result = validatePollEventDeclarations(safeParseJSON(rawJson, false));
+      if (!result.ok) {
+        logFeatureBad("poll_event_delivery", "declarations_invalid");
+        logForDebugging(`poll event declarations refused: ${result.reason}`, {
+          level: "error",
+        });
+        return {
+          declarations: EMPTY_DECLARATIONS,
+          fault: result.reason,
+        };
+      }
       return {
-        declarations: EMPTY_DECLARATIONS,
-        fault: n.reason,
+        declarations: result.declarations,
       };
-    }
-    return {
-      declarations: n.declarations,
-    };
-  },
-  (e) => e,
-  4,
-);
+    },
+    (rawJson) => rawJson,
+    4,
+  );
+});
 //@ chunk-e6aww6q8.js:160808-162060 placement
 /**
  * 校验轮询事件声明（kind 合法、不重复、描述无换行、受信字段）。
  */
-function validatePollEventDeclaration(e, n) {
-  let { kind } = e;
+function validatePollEventDeclaration(declaration, seenKinds) {
+  let { kind } = declaration;
   if (!isValidPollEventKind(kind))
     return {
       ok: false,
@@ -304,40 +331,41 @@ function validatePollEventDeclaration(e, n) {
       ok: false,
       reason: `kind ${kind} is reserved for a trusted in-process producer`,
     };
-  if (n.has(kind))
+  if (seenKinds.has(kind))
     return {
       ok: false,
       reason: `kind ${kind} is declared twice`,
     };
   if (
-    e.description !== undefined &&
-    (/[\n<>]/.test(e.description) || sanitizeTelemetryString(e.description) !== e.description)
+    declaration.description !== undefined &&
+    (/[\n<>]/.test(declaration.description) ||
+      sanitizeTelemetryString(declaration.description) !== declaration.description)
   )
     return {
       ok: false,
       reason: `kind ${kind}: the description has a line break, markup or a character that cannot be shown`,
     };
-  let s =
-    e.schema === undefined
+  let schemaResult =
+    declaration.schema === undefined
       ? {
           ok: true,
           value: [],
         }
-      : validatePollEventSchema(e.schema, "", 1, {
+      : validatePollEventSchema(declaration.schema, "", 1, {
           left: MAX_FIELD_PATHS,
         });
-  if (!s.ok)
+  if (!schemaResult.ok)
     return {
       ok: false,
-      reason: `kind ${kind}: ${s.reason}`,
+      reason: `kind ${kind}: ${schemaResult.reason}`,
     };
-  let untrustedFields = e.untrusted_fields ?? [];
+  let untrustedFields = declaration.untrusted_fields ?? [];
   for (let untrustedField of untrustedFields) {
-    let L = fieldPathProblem(s.value, untrustedField);
-    if (L !== undefined)
+    let fieldProblem = fieldPathProblem(schemaResult.value, untrustedField);
+    if (fieldProblem !== undefined)
       return {
         ok: false,
-        reason: `kind ${kind}: untrusted_fields names "${sanitizeTelemetryString(untrustedField)}", ${L}`,
+        reason: `kind ${kind}: untrusted_fields names "${sanitizeTelemetryString(untrustedField)}", ${fieldProblem}`,
       };
   }
   if (new Set(untrustedFields).size !== untrustedFields.length)
@@ -345,8 +373,10 @@ function validatePollEventDeclaration(e, n) {
       ok: false,
       reason: `kind ${kind}: untrusted_fields names a field twice`,
     };
-  let autoModeFields = e.auto_mode_fields ?? [];
-  let found = autoModeFields.find((autoModeField) => !s.value.some((L) => L.name === autoModeField));
+  let autoModeFields = declaration.auto_mode_fields ?? [];
+  let found = autoModeFields.find(
+    (autoModeField) => !schemaResult.value.some((field) => field.name === autoModeField),
+  );
   if (found !== undefined)
     return {
       ok: false,
@@ -361,10 +391,10 @@ function validatePollEventDeclaration(e, n) {
     ok: true,
     value: {
       kind,
-      ...(e.description !== undefined && {
-        description: e.description,
+      ...(declaration.description !== undefined && {
+        description: declaration.description,
       }),
-      fields: s.value,
+      fields: schemaResult.value,
       untrusted_fields: untrustedFields,
       auto_mode_fields: autoModeFields,
     },
@@ -374,129 +404,129 @@ function validatePollEventDeclaration(e, n) {
 /**
  * 校验轮询事件字段的 schema（对象嵌套深度等）。
  */
-function validatePollEventSchema(e, n, r, s) {
-  let h = n === "" ? "the schema" : `field ${n.slice(0, -1)}`;
-  if (!isPlainRecord(e) || e.type !== "object")
+function validatePollEventSchema(schema, pathPrefix, depth, budget) {
+  let label = pathPrefix === "" ? "the schema" : `field ${pathPrefix.slice(0, -1)}`;
+  if (!isPlainRecord(schema) || schema.type !== "object")
     return {
       ok: false,
-      reason: `${h} is not an object schema`,
+      reason: `${label} is not an object schema`,
     };
-  if (r > MAX_OBJECT_DEPTH)
+  if (depth > MAX_OBJECT_DEPTH)
     return {
       ok: false,
-      reason: `${h} nests objects more than ${MAX_OBJECT_DEPTH} deep`,
+      reason: `${label} nests objects more than ${MAX_OBJECT_DEPTH} deep`,
     };
-  let filtered = Object.keys(e).filter(
+  let filtered = Object.keys(schema).filter(
     (key) =>
       key !== "type" &&
       key !== "properties" &&
       key !== "required" &&
       key !== "additionalProperties" &&
-      !(key === "$schema" && n === ""),
+      !(key === "$schema" && pathPrefix === ""),
   );
   if (filtered.length > 0)
     return {
       ok: false,
-      reason: `${h}: ${telemetryStringList(filtered)} is not a key it takes`,
+      reason: `${label}: ${telemetryStringList(filtered)} is not a key it takes`,
     };
-  if (e.additionalProperties !== undefined && e.additionalProperties !== false)
+  if (schema.additionalProperties !== undefined && schema.additionalProperties !== false)
     return {
       ok: false,
-      reason: `${h}: additionalProperties, when present, is false`,
+      reason: `${label}: additionalProperties, when present, is false`,
     };
-  let properties = e.properties === undefined ? {} : e.properties;
-  let required = e.required === undefined ? [] : e.required;
+  let properties = schema.properties === undefined ? {} : schema.properties;
+  let required = schema.required === undefined ? [] : schema.required;
   if (
     !isPlainRecord(properties) ||
     !Array.isArray(required) ||
-    !required.every((Se) => typeof Se === "string")
+    !required.every((name) => typeof name === "string")
   )
     return {
       ok: false,
-      reason: `${h}: properties is an object and required a list of names`,
+      reason: `${label}: properties is an object and required a list of names`,
     };
   let keys = Object.keys(properties);
-  s.left -= keys.length;
-  if (s.left < 0)
+  budget.left -= keys.length;
+  if (budget.left < 0)
     return {
       ok: false,
       reason: `more than ${MAX_FIELD_PATHS} fields`,
     };
-  let G = new Set(required);
-  let found = required.find((Se) => !Object.hasOwn(properties, Se));
+  let requiredSet = new Set(required);
+  let found = required.find((requiredName) => !Object.hasOwn(properties, requiredName));
   if (found !== undefined)
     return {
       ok: false,
-      reason: `${h}: required names "${sanitizeTelemetryString(found)}", which is not a property`,
+      reason: `${label}: required names "${sanitizeTelemetryString(found)}", which is not a property`,
     };
-  let Z = [];
-  for (let Se of keys) {
-    if (!KIND_NAME_REGEX.test(Se) || (n === "" && RESERVED_ENVELOPE_KEYS.has(Se)))
+  let fields = [];
+  for (let fieldName of keys) {
+    if (!KIND_NAME_REGEX.test(fieldName) || (pathPrefix === "" && RESERVED_ENVELOPE_KEYS.has(fieldName)))
       return {
         ok: false,
-        reason: `field "${sanitizeTelemetryString(n + Se)}" is not a name a host may declare (a lowercase letter, then up to 63 lowercase letters, digits, hyphens or underscores, and not type, kind, at or nonce)`,
+        reason: `field "${sanitizeTelemetryString(pathPrefix + fieldName)}" is not a name a host may declare (a lowercase letter, then up to 63 lowercase letters, digits, hyphens or underscores, and not type, kind, at or nonce)`,
       };
-    let ke = validatePollEventField(properties[Se], n + Se, r, s);
-    if (!ke.ok) return ke;
-    Z.push({
-      name: Se,
-      required: G.has(Se),
-      is: ke.value,
+    let fieldResult = validatePollEventField(properties[fieldName], pathPrefix + fieldName, depth, budget);
+    if (!fieldResult.ok) return fieldResult;
+    fields.push({
+      name: fieldName,
+      required: requiredSet.has(fieldName),
+      is: fieldResult.value,
     });
   }
   return {
     ok: true,
-    value: Z,
+    value: fields,
   };
 }
 //@ chunk-e6aww6q8.js:163490-165066 placement
 /**
  * 校验轮询事件单个字段的 schema（类型、枚举）。
  */
-function validatePollEventField(e, n, r, s) {
-  if (!isPlainRecord(e))
+function validatePollEventField(schema, path, depth, budget) {
+  if (!isPlainRecord(schema))
     return {
       ok: false,
-      reason: `field ${n} has no schema`,
+      reason: `field ${path} has no schema`,
     };
-  switch (e.type) {
+  switch (schema.type) {
     case "string": {
-      let h = unknownKeysProblem(e, ["type", "enum"], n);
-      if (h !== undefined)
+      let unknownKey = unknownKeysProblem(schema, ["type", "enum"], path);
+      if (unknownKey !== undefined)
         return {
           ok: false,
-          reason: h,
+          reason: unknownKey,
         };
-      if (e.enum === undefined)
+      if (schema.enum === undefined)
         return {
           ok: true,
           value: {
             type: "string",
           },
         };
-      let y = e.enum;
+      let values = schema.enum;
       if (
-        !Array.isArray(y) ||
-        y.length === 0 ||
-        y.length > MAX_ENUM_VALUES ||
-        !y.every((S) => typeof S === "string" && isValidAtToken(S)) ||
-        new Set(y).size !== y.length
+        !Array.isArray(values) ||
+        values.length === 0 ||
+        values.length > MAX_ENUM_VALUES ||
+        !values.every((item) => typeof item === "string" && isValidAtToken(item)) ||
+        new Set(values).size !== values.length
       )
         return {
           ok: false,
-          reason: `field ${n} has an enum that is not a list of 1 to ${MAX_ENUM_VALUES} tokens, or lists one twice`,
+          reason: `field ${path} has an enum that is not a list of 1 to ${MAX_ENUM_VALUES} tokens, or lists one twice`,
         };
       return {
         ok: true,
         value: {
           type: "string",
-          values: y,
+          values,
         },
       };
     }
     case "boolean": {
-      let h = unknownKeysProblem(e, ["type"], n);
-      return h === undefined
+      let unknownKey = unknownKeysProblem(schema, ["type"], path);
+      return unknownKey === undefined
         ? {
             ok: true,
             value: {
@@ -505,35 +535,35 @@ function validatePollEventField(e, n, r, s) {
           }
         : {
             ok: false,
-            reason: h,
+            reason: unknownKey,
           };
     }
     case "integer":
     case "number": {
-      let h = unknownKeysProblem(e, ["type", "minimum", "maximum"], n);
-      if (h !== undefined)
+      let unknownKey = unknownKeysProblem(schema, ["type", "minimum", "maximum"], path);
+      if (unknownKey !== undefined)
         return {
           ok: false,
-          reason: h,
+          reason: unknownKey,
         };
-      let { minimum, maximum } = e;
+      let { minimum, maximum } = schema;
       if (
         (minimum !== undefined && !isFiniteNumber(minimum)) ||
         (maximum !== undefined && !isFiniteNumber(maximum))
       )
         return {
           ok: false,
-          reason: `field ${n}: minimum and maximum, when present, are numbers`,
+          reason: `field ${path}: minimum and maximum, when present, are numbers`,
         };
       if (minimum !== undefined && maximum !== undefined && minimum > maximum)
         return {
           ok: false,
-          reason: `field ${n}: minimum is greater than maximum`,
+          reason: `field ${path}: minimum is greater than maximum`,
         };
       return {
         ok: true,
         value: {
-          type: e.type,
+          type: schema.type,
           ...(minimum !== undefined && {
             minimum,
           }),
@@ -544,44 +574,44 @@ function validatePollEventField(e, n, r, s) {
       };
     }
     case "array": {
-      let h = unknownKeysProblem(e, ["type", "items"], n);
-      if (h !== undefined)
+      let unknownKey = unknownKeysProblem(schema, ["type", "items"], path);
+      if (unknownKey !== undefined)
         return {
           ok: false,
-          reason: h,
+          reason: unknownKey,
         };
-      if (isPlainRecord(e.items) && e.items.type === "array")
+      if (isPlainRecord(schema.items) && schema.items.type === "array")
         return {
           ok: false,
-          reason: `field ${n} is a list of lists, which a field may not be`,
+          reason: `field ${path} is a list of lists, which a field may not be`,
         };
-      let y = validatePollEventField(e.items, `${n}[]`, r, s);
-      return y.ok
+      let itemResult = validatePollEventField(schema.items, `${path}[]`, depth, budget);
+      return itemResult.ok
         ? {
             ok: true,
             value: {
               type: "array",
-              items: y.value,
+              items: itemResult.value,
             },
           }
-        : y;
+        : itemResult;
     }
     case "object": {
-      let h = validatePollEventSchema(e, `${n}.`, r + 1, s);
-      return h.ok
+      let objectResult = validatePollEventSchema(schema, `${path}.`, depth + 1, budget);
+      return objectResult.ok
         ? {
             ok: true,
             value: {
               type: "object",
-              fields: h.value,
+              fields: objectResult.value,
             },
           }
-        : h;
+        : objectResult;
     }
     default:
       return {
         ok: false,
-        reason: `field ${n} has a type that is not string, boolean, integer, number, array or object`,
+        reason: `field ${path} has a type that is not string, boolean, integer, number, array or object`,
       };
   }
 }
@@ -589,43 +619,49 @@ function validatePollEventField(e, n, r, s) {
 /**
  * 检查字段路径（a.b[] 形式）是否指向已声明的文本字段，不是时返回问题描述。
  */
-function fieldPathProblem(e, untrustedField) {
-  let r = e;
-  let s;
-  for (let h of untrustedField.split(".")) {
-    let y = h.endsWith("[]");
-    let S = y ? h.slice(0, -2) : h;
-    s = r?.find((w) => w.name === S)?.is;
-    if (s === undefined) return "which is not a declared field";
-    if (y && (s.type !== "array" || s.items.type === "string"))
-      return s.type === "array" ? "which names a list of strings, written without []" : "which is not a list";
-    if (s.type === "array" && (y || s.items.type === "string")) s = s.items;
-    r = s.type === "object" ? s.fields : undefined;
+function fieldPathProblem(fields, untrustedField) {
+  let currentFields = fields;
+  let current;
+  for (let segment of untrustedField.split(".")) {
+    let isList = segment.endsWith("[]");
+    let name = isList ? segment.slice(0, -2) : segment;
+    current = currentFields?.find((field) => field.name === name)?.is;
+    if (current === undefined) return "which is not a declared field";
+    if (isList && (current.type !== "array" || current.items.type === "string"))
+      return current.type === "array"
+        ? "which names a list of strings, written without []"
+        : "which is not a list";
+    if (current.type === "array" && (isList || current.items.type === "string")) current = current.items;
+    currentFields = current.type === "object" ? current.fields : undefined;
   }
-  return s?.type === "string" ? undefined : "which does not hold text";
+  return current?.type === "string" ? undefined : "which does not hold text";
 }
 //@ chunk-e6aww6q8.js:165551-166010 placement
 /**
  * 递归描述声明字段（枚举值、嵌套对象与列表），跳过不受信字段。
  */
-function describeFields(fields, n, r) {
-  return fields.flatMap(({ name: s, is }) => {
-    let y = r + s;
-    if (n.has(y)) return [];
-    let S = is.type === "array" ? is.items : is;
-    switch (S.type) {
+function describeFields(fields, untrusted, prefix) {
+  return fields.flatMap(({ name, is }) => {
+    let fullPath = prefix + name;
+    if (untrusted.has(fullPath)) return [];
+    let leaf = is.type === "array" ? is.items : is;
+    switch (leaf.type) {
       case "string":
-        return [S.values === undefined ? s : `${s} (${S.values.join(" | ")})`];
+        return [leaf.values === undefined ? name : `${name} (${leaf.values.join(" | ")})`];
       case "object": {
-        let w = describeFields(S.fields, n, is.type === "array" ? `${y}[].` : `${y}.`);
-        if (w.length === 0) return S.fields.length === 0 ? [s] : [];
-        return [`${s} (${is.type === "array" ? "each: " : ""}${w.join(", ")})`];
+        let childTexts = describeFields(
+          leaf.fields,
+          untrusted,
+          is.type === "array" ? `${fullPath}[].` : `${fullPath}.`,
+        );
+        if (childTexts.length === 0) return leaf.fields.length === 0 ? [name] : [];
+        return [`${name} (${is.type === "array" ? "each: " : ""}${childTexts.join(", ")})`];
       }
       case "boolean":
       case "integer":
       case "number":
       case "array":
-        return [s];
+        return [name];
     }
   });
 }
@@ -633,155 +669,161 @@ function describeFields(fields, n, r) {
 /**
  * 按声明校验事件字段：不允许未声明字段，必填字段必须存在，逐个校验值类型。
  */
-function validateEventFields(fields, n, r) {
-  let found = Object.keys(n).find((key) => !fields.some((S) => S.name === key));
+function validateEventFields(fields, values, prefix) {
+  let found = Object.keys(values).find((key) => !fields.some((field) => field.name === key));
   if (found !== undefined)
     return {
       ok: false,
-      reason: `field "${sanitizeTelemetryString(r + found)}" is not declared`,
+      reason: `field "${sanitizeTelemetryString(prefix + found)}" is not declared`,
     };
-  let h = [];
-  for (let y of fields) {
-    let S = r + y.name;
-    let w = Object.hasOwn(n, y.name) ? n[y.name] : undefined;
-    if (w === undefined) {
-      if (y.required)
+  let entries = [];
+  for (let field of fields) {
+    let fieldPath = prefix + field.name;
+    let value = Object.hasOwn(values, field.name) ? values[field.name] : undefined;
+    if (value === undefined) {
+      if (field.required)
         return {
           ok: false,
-          reason: `missing field ${S}`,
+          reason: `missing field ${fieldPath}`,
         };
       continue;
     }
-    let L = validatePollEventValue(y.is, w, S);
-    if (!L.ok) return L;
-    h.push([y.name, L.value]);
+    let result = validatePollEventValue(field.is, value, fieldPath);
+    if (!result.ok) return result;
+    entries.push([field.name, result.value]);
   }
   return {
     ok: true,
-    value: Object.fromEntries(h),
+    value: Object.fromEntries(entries),
   };
 }
 //@ chunk-e6aww6q8.js:166427-167330 placement
-function validatePollEventValue(e, n, r) {
-  switch (e.type) {
+function validatePollEventValue(schema, value, path) {
+  switch (schema.type) {
     case "string":
-      return typeof n === "string" && (e.values === undefined || e.values.includes(n))
+      return typeof value === "string" && (schema.values === undefined || schema.values.includes(value))
         ? {
             ok: true,
-            value: n,
+            value,
           }
         : {
             ok: false,
-            reason: `field ${r} is not ${e.values === undefined ? "a string" : "one of its enum values"}`,
+            reason: `field ${path} is not ${schema.values === undefined ? "a string" : "one of its enum values"}`,
           };
     case "boolean":
-      return typeof n === "boolean"
+      return typeof value === "boolean"
         ? {
             ok: true,
-            value: n,
+            value,
           }
         : {
             ok: false,
-            reason: `field ${r} is not a boolean`,
+            reason: `field ${path} is not a boolean`,
           };
     case "integer":
     case "number":
-      return isFiniteNumber(n) &&
-        (e.type === "number" || Number.isSafeInteger(n)) &&
-        (e.minimum === undefined || n >= e.minimum) &&
-        (e.maximum === undefined || n <= e.maximum)
+      return isFiniteNumber(value) &&
+        (schema.type === "number" || Number.isSafeInteger(value)) &&
+        (schema.minimum === undefined || value >= schema.minimum) &&
+        (schema.maximum === undefined || value <= schema.maximum)
         ? {
             ok: true,
-            value: n,
+            value,
           }
         : {
             ok: false,
-            reason: `field ${r} is not ${e.type === "integer" ? "an integer" : "a number"} in its range`,
+            reason: `field ${path} is not ${schema.type === "integer" ? "an integer" : "a number"} in its range`,
           };
     case "array": {
-      if (!Array.isArray(n))
+      if (!Array.isArray(value))
         return {
           ok: false,
-          reason: `field ${r} is not a list`,
+          reason: `field ${path} is not a list`,
         };
-      let s = [];
-      for (let [h, y] of n.entries()) {
-        let S = validatePollEventValue(e.items, y, `${r}[${h}]`);
-        if (!S.ok) return S;
-        s.push(S.value);
+      let items = [];
+      for (let [index, item] of value.entries()) {
+        let itemResult = validatePollEventValue(schema.items, item, `${path}[${index}]`);
+        if (!itemResult.ok) return itemResult;
+        items.push(itemResult.value);
       }
       return {
         ok: true,
-        value: s,
+        value: items,
       };
     }
     case "object":
-      return isPlainRecord(n)
-        ? validateEventFields(e.fields, n, `${r}.`)
+      return isPlainRecord(value)
+        ? validateEventFields(schema.fields, value, `${path}.`)
         : {
             ok: false,
-            reason: `field ${r} is not an object`,
+            reason: `field ${path} is not an object`,
           };
   }
 }
 //@ chunk-e6aww6q8.js:167330-167472 placement
-function unknownKeysProblem(e, n, r) {
-  let filtered = Object.keys(e).filter((key) => !n.includes(key));
+function unknownKeysProblem(schema, allowedKeys, path) {
+  let filtered = Object.keys(schema).filter((key) => !allowedKeys.includes(key));
   return filtered.length === 0
     ? undefined
-    : `field ${r}: ${telemetryStringList(filtered)} is not a key it takes`;
+    : `field ${path}: ${telemetryStringList(filtered)} is not a key it takes`;
 }
 //@ chunk-e6aww6q8.js:167472-167543 placement
-function isPlainRecord(e) {
-  return typeof e === "object" && e !== null && !Array.isArray(e);
+function isPlainRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 //@ chunk-e6aww6q8.js:167543-167606 placement
-function isFiniteNumber(e) {
-  return typeof e === "number" && Number.isFinite(e);
+function isFiniteNumber(value) {
+  return typeof value === "number" && Number.isFinite(value);
 }
 //@ chunk-e6aww6q8.js:167606-167673 placement
-function telemetryStringList(e) {
-  return e.map((n) => `"${sanitizeTelemetryString(String(n))}"`).join(", ");
+function telemetryStringList(items) {
+  return items.map((item) => `"${sanitizeTelemetryString(String(item))}"`).join(", ");
 }
 //@ chunk-e6aww6q8.js:167673-167748 placement
-function isValidAtToken(e) {
-  return e.length <= MAX_AT_TOKEN_LENGTH && /^[\x21-\x7E]+$/.test(e) && sanitizeEventAttributes(e) === e;
+function isValidAtToken(token) {
+  return (
+    token.length <= MAX_AT_TOKEN_LENGTH &&
+    /^[\x21-\x7E]+$/.test(token) &&
+    sanitizeEventAttributes(token) === token
+  );
 }
 //@ chunk-e6aww6q8.js:167748-167821 placement
-function renderEventElement(kind, at, r) {
+function renderEventElement(kind, at, fields) {
   return renderPollEvent({
     kind,
     at,
     content: `
-${escapeHtmlChars(sanitizedJson(r))}
+${escapeHtmlChars(sanitizedJson(fields))}
 `,
   });
 }
 //@ chunk-e6aww6q8.js:167821-167924 placement
-function escapeHtmlChars(e) {
-  return e.replaceAll("<", "\\u003c").replaceAll(">", "\\u003e").replaceAll("&", "\\u0026");
+function escapeHtmlChars(text) {
+  return text.replaceAll("<", "\\u003c").replaceAll(">", "\\u003e").replaceAll("&", "\\u0026");
 }
 //@ chunk-e6aww6q8.js:167924-168346 placement
 /**
  * 把声明的事件 kind 列成提示词条目：描述、字段与不受信字段。
  */
-function declaredKindsList(e) {
-  return [...e.values()].map((n) => {
-    let r = describeFields(n.fields, new Set(n.untrusted_fields), "");
-    let s = [
-      ...(n.description === undefined || n.description === ""
+function declaredKindsList(byKind) {
+  return [...byKind.values()].map((declaration) => {
+    let fieldDescs = describeFields(declaration.fields, new Set(declaration.untrusted_fields), "");
+    let parts = [
+      ...(declaration.description === undefined || declaration.description === ""
         ? []
-        : [/[.!?]$/.test(n.description) ? n.description : `${n.description}.`]),
-      ...(r.length > 0 ? [`Fields: ${r.join(", ")}.`] : []),
-      ...(n.untrusted_fields.length > 0 ? [`Untrusted: ${n.untrusted_fields.join(", ")}.`] : []),
+        : [/[.!?]$/.test(declaration.description) ? declaration.description : `${declaration.description}.`]),
+      ...(fieldDescs.length > 0 ? [`Fields: ${fieldDescs.join(", ")}.`] : []),
+      ...(declaration.untrusted_fields.length > 0
+        ? [`Untrusted: ${declaration.untrusted_fields.join(", ")}.`]
+        : []),
     ];
-    return s.length === 0 ? `- ${n.kind}` : `- ${n.kind}: ${s.join(" ")}`;
+    return parts.length === 0 ? `- ${declaration.kind}` : `- ${declaration.kind}: ${parts.join(" ")}`;
   }).join(`
 `);
 }
 //@ chunk-e6aww6q8.js:168346-168410 placement
-function sanitizedJson(e) {
-  return jsonStringify(e, (n, r) => (typeof r === "string" ? normalizeNewlines(r) : r));
+function sanitizedJson(value) {
+  return jsonStringify(value, (key, value) => (typeof value === "string" ? normalizeNewlines(value) : value));
 }
 export {
   isDeclaredRound,

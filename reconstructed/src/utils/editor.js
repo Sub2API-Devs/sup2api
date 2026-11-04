@@ -18,39 +18,54 @@ import { getSecondRootError } from "../ink/terminal.js";
 import { env } from "./env.js";
 import { HostScoped } from "./hostScoped.js";
 import { getRootSession, getAttacherCaps } from "../bootstrap/state.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-e6aww6q8.js:3244216-3244299 fingerprint = VSCODE_FAMILY (0.724)
+var VSCODE_FAMILY = {
+  vscode: ["code", "codium"],
+  cursor: ["cursor"],
+  windsurf: ["windsurf", "devin"],
+};
 //@ chunk-0dfh72mg.js:706-734 sole-consumer
 /**
  * 判断该项是否解析为可用编辑器。
  */
-function isResolvedEditor(n) {
-  return !!bunWhichSync(n);
+function isResolvedEditor(editorCommand) {
+  return !!bunWhichSync(editorCommand);
 }
 //@ chunk-0dfh72mg.js:734-775 sole-consumer
 /**
  * 视为 shell 而非编辑器的命令名（start、cmd、cmd.exe）。
  */
-var SHELL_EDITOR_NAMES = new Set(["start", "cmd", "cmd.exe"]);
+var SHELL_EDITOR_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0dfh72mg.js:734", () => {
+  SHELL_EDITOR_NAMES = new Set(["start", "cmd", "cmd.exe"]);
+});
 //@ chunk-0dfh72mg.js:775-968 affinity
-function getEditorBaseName(n) {
-  let parts = n.trim().split(/\s+/);
-  for (let r of parts) {
-    if (/^\/[^/]+$/.test(r)) continue;
-    if (r.startsWith("-")) continue;
-    let o = basename(r);
-    if (SHELL_EDITOR_NAMES.has(o.toLowerCase())) continue;
-    return o;
+function getEditorBaseName(editorCommand) {
+  let parts = editorCommand.trim().split(/\s+/);
+  for (let part of parts) {
+    if (/^\/[^/]+$/.test(part)) continue;
+    if (part.startsWith("-")) continue;
+    let baseName = basename(part);
+    if (SHELL_EDITOR_NAMES.has(baseName.toLowerCase())) continue;
+    return baseName;
   }
-  return basename(parts[0] ?? n);
+  return basename(parts[0] ?? editorCommand);
 }
 //@ chunk-0dfh72mg.js:968-1158 fingerprint = GUI_EDITORS (1)
-var GUI_EDITORS = ["code", "cursor", "windsurf", "codium", "subl", "atom", "gedit", "notepad++", "notepad"];
-var TERMINAL_EDITOR_RE = /\b(vi|vim|nvim|nano|emacs|pico|micro|helix|hx)\b/;
-var VSCODE_FAMILY_EDITORS = new Set(["code", "cursor", "windsurf", "codium"]);
+var GUI_EDITORS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var TERMINAL_EDITOR_RE;
+var VSCODE_FAMILY_EDITORS;
+deferInit("chunk-0dfh72mg.js:968", () => {
+  GUI_EDITORS = ["code", "cursor", "windsurf", "codium", "subl", "atom", "gedit", "notepad++", "notepad"];
+  TERMINAL_EDITOR_RE = /\b(vi|vim|nvim|nano|emacs|pico|micro|helix|hx)\b/;
+  VSCODE_FAMILY_EDITORS = new Set(["code", "cursor", "windsurf", "codium"]);
+});
 //@ chunk-0dfh72mg.js:1158-1217 file-local
 function classifyGuiEditor(editor) {
   let base = getEditorBaseName(editor);
-  return GUI_EDITORS.find((r) => base.includes(r));
+  return GUI_EDITORS.find((guiEditor) => base.includes(guiEditor));
 }
 //@ chunk-0dfh72mg.js:1217-1332 fingerprint = guiGotoArgv (1)
 function guiGotoArgv(guiFamily, filePath, line) {
@@ -104,18 +119,19 @@ function openFileInExternalEditor(filePath, line) {
     let syncOpts = {
       stdio: "inherit",
     };
-    let l;
+    let spawnResult;
     {
       let args = [...editorArgs, ...(useGotoLine ? [`+${line}`, filePath] : [filePath])];
-      let c = keeperCgroupSpawnOptions();
-      l = spawnSync(base, args, {
+      let cgroupOptions = keeperCgroupSpawnOptions();
+      spawnResult = spawnSync(base, args, {
         ...syncOpts,
-        ...c,
+        ...cgroupOptions,
       });
-      if (l.error && c.cgroup !== undefined) l = spawnSync(base, args, syncOpts);
+      if (spawnResult.error && cgroupOptions.cgroup !== undefined)
+        spawnResult = spawnSync(base, args, syncOpts);
     }
-    if (l.error) {
-      logForDebugging(`editor spawn failed: ${l.error}`, {
+    if (spawnResult.error) {
+      logForDebugging(`editor spawn failed: ${spawnResult.error}`, {
         level: "error",
       });
       return false;
@@ -134,8 +150,8 @@ class getExternalEditor {
     if (env.VISUAL) this.editor = env.VISUAL;
     else if (env.EDITOR) this.editor = env.EDITOR;
     else {
-      let n = ["code", "vi", "nano"];
-      this.editor = n.find((e) => isResolvedEditor(e));
+      let candidateEditors = ["code", "vi", "nano"];
+      this.editor = candidateEditors.find((editorName) => isResolvedEditor(editorName));
     }
     this.isResolved = true;
     return this.editor;
@@ -149,7 +165,10 @@ class getExternalEditor {
 /**
  * 按宿主隔离的外部编辑器解析状态。
  */
-var externalEditorByHost = new HostScoped(() => new getExternalEditor());
+var externalEditorByHost; // deferred: uses getExternalEditor of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0dfh72mg.js:2354", () => {
+  externalEditorByHost = new HostScoped(() => new getExternalEditor());
+});
 //@ chunk-0dfh72mg.js:2377-2412 placement
 /**
  * 取出当前宿主的外部编辑器解析状态。
@@ -174,12 +193,6 @@ function getShortEditorName() {
   let editorBaseName = getEditorBaseName(editorCommand);
   return editorBaseName && editorBaseName.length <= 8 ? editorBaseName : undefined;
 }
-//@ chunk-e6aww6q8.js:3244216-3244299 fingerprint = VSCODE_FAMILY (0.724)
-var VSCODE_FAMILY = {
-  vscode: ["code", "codium"],
-  cursor: ["cursor"],
-  windsurf: ["windsurf", "devin"],
-};
 export {
   resolveEditorCommand,
   classifyGuiEditor,

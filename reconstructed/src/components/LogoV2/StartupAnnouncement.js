@@ -9,10 +9,10 @@
  * attribution: placement 2
  */
 import { pickStartupAnnouncement as pickStartupAnnouncement_2 } from "../../services/startupAnnouncements.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import { useNoticeImpressionEnabled, useNoticeImpression } from "./CondensedLogo.js";
-import { y, Se } from "../../../vendor/react/cjs/react.production.js";
+import { useState, useContext } from "../../../vendor/react/cjs/react.production.js";
 import { SlashLinkContexts } from "../SlashCommandLink.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
@@ -30,101 +30,101 @@ function pickStartupAnnouncement() {
 }
 //@ chunk-ag5x7vhf.js:95198-96305 placement
 function StartupAnnouncementNotice() {
-  let T = w(19);
+  let $ = useMemoCache(19);
   let { storageV5 } = useTheme_2();
   let noticeImpressionEnabled = useNoticeImpressionEnabled();
-  let [x] = y(pickStartupAnnouncement);
-  let k;
-  if (T[0] !== noticeImpressionEnabled || T[1] !== x) {
-    k = noticeImpressionEnabled ? pickStartupAnnouncement_2(true) : x;
-    T[0] = noticeImpressionEnabled;
-    T[1] = x;
-    T[2] = k;
-  } else k = T[2];
-  let _ = k;
-  let I = Se(SlashLinkContexts);
-  let D;
-  if (T[3] !== _ || T[4] !== storageV5) {
-    D = () => {
-      if (!_) {
+  let [cached] = useState(pickStartupAnnouncement);
+  let announcement;
+  if ($[0] !== noticeImpressionEnabled || $[1] !== cached) {
+    announcement = noticeImpressionEnabled ? pickStartupAnnouncement_2(true) : cached;
+    $[0] = noticeImpressionEnabled;
+    $[1] = cached;
+    $[2] = announcement;
+  } else announcement = $[2];
+  let announcement_2 = announcement;
+  let linkContexts = useContext(SlashLinkContexts);
+  let onShown;
+  if ($[3] !== announcement_2 || $[4] !== storageV5) {
+    onShown = () => {
+      if (!announcement_2) {
         return;
       }
       logEvent("tengu_startup_announcement_shown", {
-        announcement_id: sanitizeMarkName(_.id),
-        impression: (getGlobalConfig().announcementImpressions?.[_.id] ?? 0) + 1,
+        announcement_id: sanitizeMarkName(announcement_2.id),
+        impression: (getGlobalConfig().announcementImpressions?.[announcement_2.id] ?? 0) + 1,
       });
       saveGlobalConfig(
-        (A) => ({
-          ...A,
+        (config) => ({
+          ...config,
           announcementImpressions: {
-            ...A.announcementImpressions,
-            [_.id]: (A.announcementImpressions?.[_.id] ?? 0) + 1,
+            ...config.announcementImpressions,
+            [announcement_2.id]: (config.announcementImpressions?.[announcement_2.id] ?? 0) + 1,
           },
         }),
         storageV5,
       );
     };
-    T[3] = _;
-    T[4] = storageV5;
-    T[5] = D;
-  } else D = T[5];
-  const enabled = _ !== undefined;
-  let V;
-  if (T[6] !== enabled) {
-    V = {
+    $[3] = announcement_2;
+    $[4] = storageV5;
+    $[5] = onShown;
+  } else onShown = $[5];
+  const enabled = announcement_2 !== undefined;
+  let impressionOptions;
+  if ($[6] !== enabled) {
+    impressionOptions = {
       enabled,
     };
-    T[6] = enabled;
-    T[7] = V;
-  } else V = T[7];
-  useNoticeImpression("startup-announcement", D, V);
-  if (!_) {
+    $[6] = enabled;
+    $[7] = impressionOptions;
+  } else impressionOptions = $[7];
+  useNoticeImpression("startup-announcement", onShown, impressionOptions);
+  if (!announcement_2) {
     return null;
   }
-  const alignItems = I ? "center" : undefined;
-  let z;
-  if (T[8] !== _.title) {
-    z = _.title
+  const alignItems = linkContexts ? "center" : undefined;
+  let title;
+  if ($[8] !== announcement_2.title) {
+    title = announcement_2.title
       ? jsxProd_default(Text, {
           color: "claude",
-          children: _.title,
+          children: announcement_2.title,
         })
       : null;
-    T[8] = _.title;
-    T[9] = z;
-  } else z = T[9];
-  let K;
-  if (T[10] !== _.text) {
-    K = jsxProd_default(MarkdownText_2, {
-      children: _.text,
+    $[8] = announcement_2.title;
+    $[9] = title;
+  } else title = $[9];
+  let text;
+  if ($[10] !== announcement_2.text) {
+    text = jsxProd_default(MarkdownText_2, {
+      children: announcement_2.text,
     });
-    T[10] = _.text;
-    T[11] = K;
-  } else K = T[11];
-  let q;
-  if (T[12] !== _.footer) {
-    q = _.footer
+    $[10] = announcement_2.text;
+    $[11] = text;
+  } else text = $[11];
+  let footer;
+  if ($[12] !== announcement_2.footer) {
+    footer = announcement_2.footer
       ? jsxProd_default(BaseText, {
           dim: true,
-          children: _.footer,
+          children: announcement_2.footer,
         })
       : null;
-    T[12] = _.footer;
-    T[13] = q;
-  } else q = T[13];
-  let Y;
-  if (T[14] !== alignItems || T[15] !== z || T[16] !== K || T[17] !== q) {
-    Y = jsxProd_default_2(Box, {
+    $[12] = announcement_2.footer;
+    $[13] = footer;
+  } else footer = $[13];
+  let box;
+  if ($[14] !== alignItems || $[15] !== title || $[16] !== text || $[17] !== footer) {
+    box = jsxProd_default_2(Box, {
       flexDirection: "column",
       alignItems,
-      children: [z, K, q],
+      children: [title, text, footer],
     });
-    T[14] = alignItems;
-    T[15] = z;
-    T[16] = K;
-    T[17] = q;
-    T[18] = Y;
-  } else Y = T[18];
-  return Y;
+    $[14] = alignItems;
+    $[15] = title;
+    $[16] = text;
+    $[17] = footer;
+    $[18] = box;
+  } else box = $[18];
+  return box;
 }
 export { StartupAnnouncementNotice };

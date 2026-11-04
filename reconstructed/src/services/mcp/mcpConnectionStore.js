@@ -30,32 +30,32 @@ import { isConnectedOrCached } from "../../skills/bundled/scheduleRemoteAgents.j
 import { mcpGateError } from "./mcpToggleMessages.js";
 import { isDiscoveryCacheOn } from "./mcpAccountKey.js";
 import { checkMcpServerHealth_2 } from "../../cli/handlers/mcp.js";
-import { SS } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { partitionAlias } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 
 //@ chunk-kvr3v8w9.js:646-715 placement
 /**
  * 懒加载 MCP 客户端模块。
  */
 function mcpClientModule() {
-  return require("./chunk-asne9cp8.js").mcpClientModule();
+  return require("./emitTripwireEvent.lazy.js").mcpClientModule();
 }
 //@ chunk-kvr3v8w9.js:715-809 placement
 /**
  * 关闭连接并清理服务器缓存。
  */
-function closeAndClearServer(n) {
-  identityId2(n.client).onclose = undefined;
+function closeAndClearServer(row) {
+  identityId2(row.client).onclose = undefined;
   mcpClientModule()
-    .clearServerCache(n.name, n.config)
+    .clearServerCache(row.name, row.config)
     .catch(() => {});
 }
 //@ chunk-kvr3v8w9.js:809-989 placement
-function withoutServerEntries(n, name, mcpPrefix) {
+function withoutServerEntries(state, name, mcpPrefix) {
   return {
-    tools: reject_default(n.tools, (e) => e.name?.startsWith(mcpPrefix)),
-    commands: reject_default(n.commands, (e) => commandBelongsToServer(e, name)),
-    resources: omitKeys(n.resources, name),
-    resourceTemplates: omitKeys(n.resourceTemplates, name),
+    tools: reject_default(state.tools, (tool) => tool.name?.startsWith(mcpPrefix)),
+    commands: reject_default(state.commands, (command) => commandBelongsToServer(command, name)),
+    resources: omitKeys(state.resources, name),
+    resourceTemplates: omitKeys(state.resourceTemplates, name),
   };
 }
 //@ chunk-kvr3v8w9.js:989-6346 placement
@@ -64,170 +64,175 @@ function withoutServerEntries(n, name, mcpPrefix) {
  */
 class McpConnectionStore {
   #e;
-  constructor(n) {
-    this.#e = n;
+  constructor(accessor) {
+    this.#e = accessor;
   }
-  static over(n) {
-    return new McpConnectionStore(fieldAccessor(n.getState, n.setState, "mcp"));
+  static over(store) {
+    return new McpConnectionStore(fieldAccessor(store.getState, store.setState, "mcp"));
   }
   get() {
     return this.#e.get();
   }
-  markNeedsAuth(n) {
-    this.#e.set((t) => markClientNeedsAuth(t, n));
+  markNeedsAuth(serverName) {
+    this.#e.set((state) => markClientNeedsAuth(state, serverName));
   }
-  async clearNeedsAuth(n) {
-    let found = this.get().clients.find((client) => client.name === n);
+  async clearNeedsAuth(serverName) {
+    let found = this.get().clients.find((client) => client.name === serverName);
     if (found?.type !== "needs-auth") return;
-    let i = await mcpClientModule().peekSettledConnection(n, found.config);
-    if (i?.type !== "connected") return;
-    this.#e.set((e) => ({
-      ...e,
-      clients: e.clients.map((client) => (client === found ? withConfigScope(i, found.config) : client)),
+    let connection = await mcpClientModule().peekSettledConnection(serverName, found.config);
+    if (connection?.type !== "connected") return;
+    this.#e.set((state) => ({
+      ...state,
+      clients: state.clients.map((client) =>
+        client === found ? withConfigScope(connection, found.config) : client,
+      ),
     }));
   }
-  adoptServer(n, t, i) {
-    let e = "adopted";
-    this.#e.set((s) => {
-      if (i?.asked === true)
+  adoptServer(serverName, result, options) {
+    let outcome = "adopted";
+    this.#e.set((mcpState) => {
+      if (options?.asked === true)
         return setMcpClientInAppState(
           {
-            mcp: s,
+            mcp: mcpState,
           },
-          n,
-          t,
+          serverName,
+          result,
         ).mcp;
-      let found = s.clients.find((client) => client.name === n);
-      e = adoptRefusal(found, t) ?? "adopted";
-      if (found === undefined) return s;
-      if (e !== "adopted") return applyRefusalToRow(s, found, e);
+      let found = mcpState.clients.find((client) => client.name === serverName);
+      outcome = adoptRefusal(found, result) ?? "adopted";
+      if (found === undefined) return mcpState;
+      if (outcome !== "adopted") return applyRefusalToRow(mcpState, found, outcome);
       return setMcpClientInAppState(
         {
-          mcp: s,
+          mcp: mcpState,
         },
-        n,
-        rebindAdoption(found, t),
+        serverName,
+        rebindAdoption(found, result),
         {
           appendIfAbsent: false,
         },
       ).mcp;
     });
-    return e;
+    return outcome;
   }
-  markReconnectDiscarded(n, t) {
-    this.#e.set((i) => {
-      let found = i.clients.find((client) => client.name === n);
-      if (found === undefined || serverCacheKey(n, found.config) !== serverCacheKey(n, t)) return i;
-      if (isMcpServerDisabled(n)) return applyRefusalToRow(i, found, "disabled");
-      if (mcpDialBlockCause(n, found.config) !== null) return applyRefusalToRow(i, found, "policy-blocked");
-      if (found.type !== "connected") return i;
+  markReconnectDiscarded(serverName, config) {
+    this.#e.set((state) => {
+      let row = state.clients.find((client) => client.name === serverName);
+      if (row === undefined || serverCacheKey(serverName, row.config) !== serverCacheKey(serverName, config))
+        return state;
+      if (isMcpServerDisabled(serverName)) return applyRefusalToRow(state, row, "disabled");
+      if (mcpDialBlockCause(serverName, row.config) !== null)
+        return applyRefusalToRow(state, row, "policy-blocked");
+      if (row.type !== "connected") return state;
       return {
-        ...i,
-        clients: i.clients.map((client) =>
-          client === found
+        ...state,
+        clients: state.clients.map((client) =>
+          client === row
             ? {
-                name: n,
+                name: serverName,
                 type: "failed",
-                config: found.config,
+                config: row.config,
                 error: "Its connection was closed while signing in again",
               }
             : client,
         ),
-        ...withoutServerItems(i, n),
+        ...withoutServerItems(state, serverName),
       };
     });
   }
-  swapServerTools(n, t, i) {
-    let e = false;
-    this.#e.set((s) => {
-      let r = redecorateTools(
-        s.clients.find((client) => client.name === n),
-        t,
-        i,
+  swapServerTools(serverName, tools, config) {
+    let changed = false;
+    this.#e.set((state) => {
+      let redecorated = redecorateTools(
+        state.clients.find((client) => client.name === serverName),
+        tools,
+        config,
       );
-      if (r === undefined) {
-        logMCPDebug(n, "A re-queried tool list was not applied: another server holds the name");
-        return s;
+      if (redecorated === undefined) {
+        logMCPDebug(serverName, "A re-queried tool list was not applied: another server holds the name");
+        return state;
       }
-      let c = replaceServerTools(
+      let nextState = replaceServerTools(
         {
-          mcp: s,
+          mcp: state,
         },
-        n,
-        r,
+        serverName,
+        redecorated,
       );
-      e = c.mcp !== s;
-      return c.mcp;
+      changed = nextState.mcp !== state;
+      return nextState.mcp;
     });
-    return e;
+    return changed;
   }
-  setSuppressedClaudeAiConnectors(n) {
-    this.#e.set((t) =>
-      suppressedConnectorsEqual(t.suppressedClaudeAiConnectors ?? [], n)
-        ? t
+  setSuppressedClaudeAiConnectors(connectors) {
+    this.#e.set((state) =>
+      suppressedConnectorsEqual(state.suppressedClaudeAiConnectors ?? [], connectors)
+        ? state
         : {
-            ...t,
-            suppressedClaudeAiConnectors: n,
+            ...state,
+            suppressedClaudeAiConnectors: connectors,
           },
     );
   }
-  setReservedNameRefusals(n) {
-    this.#e.set((t) => {
-      let reservedNameRefusals = t.reservedNameRefusals ?? [];
-      return reservedNameRefusals.length === n.length &&
+  setReservedNameRefusals(refusals) {
+    this.#e.set((state) => {
+      let reservedNameRefusals = state.reservedNameRefusals ?? [];
+      return reservedNameRefusals.length === refusals.length &&
         reservedNameRefusals.every(
-          (reservedNameRefusal, r) =>
-            reservedNameRefusal.scope === n[r]?.scope && reservedNameRefusal.name === n[r]?.name,
+          (reservedNameRefusal, index) =>
+            reservedNameRefusal.scope === refusals[index]?.scope &&
+            reservedNameRefusal.name === refusals[index]?.name,
         )
-        ? t
+        ? state
         : {
-            ...t,
-            reservedNameRefusals: n,
+            ...state,
+            reservedNameRefusals: refusals,
           };
     });
   }
-  addPendingServers(n) {
-    this.#e.set((t) => {
-      let i = pendingRowsFor(t, n);
-      if (i.length === 0) return t;
+  addPendingServers(configs) {
+    this.#e.set((state) => {
+      let pendingRows = pendingRowsFor(state, configs);
+      if (pendingRows.length === 0) return state;
       return {
-        ...t,
-        clients: [...t.clients, ...i],
+        ...state,
+        clients: [...state.clients, ...pendingRows],
       };
     });
   }
-  reconcileConfiguredServers(configs, workspaceRoot, i) {
-    this.#e.set((e) => {
-      let { stale, ...r } = excludeStalePluginClients(e, configs, workspaceRoot);
-      i(stale);
-      let c = pendingRowsFor(r, configs);
-      if (c.length === 0 && stale.length === 0) {
-        if (e.clientsInitialized) return e;
+  reconcileConfiguredServers(configs, workspaceRoot, onStale) {
+    this.#e.set((state) => {
+      let { stale, ...rest } = excludeStalePluginClients(state, configs, workspaceRoot);
+      onStale(stale);
+      let pendingRows = pendingRowsFor(rest, configs);
+      if (pendingRows.length === 0 && stale.length === 0) {
+        if (state.clientsInitialized) return state;
         return {
-          ...e,
+          ...state,
           clientsInitialized: true,
         };
       }
       return {
-        ...e,
-        ...r,
+        ...state,
+        ...rest,
         clientsInitialized: true,
-        clients: [...r.clients, ...c],
+        clients: [...rest.clients, ...pendingRows],
       };
     });
   }
-  applyIdentityBoundary(n, t) {
-    let i = [...n, ...t];
-    if (i.length === 0) return;
-    this.#e.set((e) => {
-      let mapped = i.map((c) => [c, getMcpPrefix(c)]);
-      let r = (c) => mapped.some(([l, u]) => isToolFromMcpServer(c, l, u));
+  applyIdentityBoundary(pickupNames, dropNames) {
+    let affectedNames = [...pickupNames, ...dropNames];
+    if (affectedNames.length === 0) return;
+    this.#e.set((state) => {
+      let mapped = affectedNames.map((name) => [name, getMcpPrefix(name)]);
+      let belongs = (tool) => mapped.some(([name, prefix]) => isToolFromMcpServer(tool, name, prefix));
       return {
-        ...e,
-        clients: e.clients.flatMap((client) =>
-          t.has(client.name)
+        ...state,
+        clients: state.clients.flatMap((client) =>
+          dropNames.has(client.name)
             ? []
-            : n.has(client.name)
+            : pickupNames.has(client.name)
               ? [
                   {
                     name: client.name,
@@ -237,131 +242,147 @@ class McpConnectionStore {
                 ]
               : [client],
         ),
-        tools: reject_default(e.tools, r),
-        commands: reject_default(e.commands, (c) => i.some((l) => commandBelongsToServer(c, l))),
-        resources: omitKeys(e.resources, i),
-        resourceTemplates: omitKeys(e.resourceTemplates, i),
+        tools: reject_default(state.tools, belongs),
+        commands: reject_default(state.commands, (command) =>
+          affectedNames.some((name) => commandBelongsToServer(command, name)),
+        ),
+        resources: omitKeys(state.resources, affectedNames),
+        resourceTemplates: omitKeys(state.resourceTemplates, affectedNames),
       };
     });
   }
-  applyQueuedUpdates(n, t) {
-    this.#e.set((i) => {
-      let e = i;
-      for (let s of n) {
-        if (s.epoch !== t.currentEpoch && isRemoteMcpTransport(s.config)) {
-          if (s.type === "connected") mcpClientModule().detachAndCloseConnection(s);
+  applyQueuedUpdates(updates, hooks) {
+    this.#e.set((state) => {
+      let nextState = state;
+      for (let update of updates) {
+        if (update.epoch !== hooks.currentEpoch && isRemoteMcpTransport(update.config)) {
+          if (update.type === "connected") mcpClientModule().detachAndCloseConnection(update);
           continue;
         }
-        let found = e.clients.find((client) => client.name === s.name);
-        let c = rowRelation(found, s);
-        let l = c === "stands" && found !== undefined ? rebindToRowConfig(found, s) : s;
-        let { tools, commands, resources, resourceTemplates, replaceOnly, epoch, asked, superseded, ...U } =
-          l;
-        let server = U;
-        let h = server.type === "disabled" || server.type === "failed";
-        let b = h ? (tools ?? []) : tools;
-        let T = h ? (commands ?? []) : commands;
-        let C = h ? (resources ?? []) : resources;
-        let y = h ? (resourceTemplates ?? []) : resourceTemplates;
-        let mcpPrefix = getMcpPrefix(server.name);
-        let index = e.clients.findIndex((client) => client.name === server.name);
-        let a = index !== -1 ? e.clients[index] : undefined;
-        let Q = server.type === "connected" && a?.type === "connected" && a.client === server.client;
-        let R =
-          isConnectedOrCached(server) && mcpDialBlockCause(server.name, server.config) === "managed-policy";
+        let found = nextState.clients.find((client) => client.name === update.name);
+        let relation = rowRelation(found, update);
+        let rebound =
+          relation === "stands" && found !== undefined ? rebindToRowConfig(found, update) : update;
+        let {
+          tools,
+          commands,
+          resources,
+          resourceTemplates,
+          replaceOnly,
+          epoch,
+          asked,
+          superseded,
+          ...rest
+        } = rebound;
+        let row = rest;
+        let isRefusalRow = row.type === "disabled" || row.type === "failed";
+        let nextTools = isRefusalRow ? (tools ?? []) : tools;
+        let nextCommands = isRefusalRow ? (commands ?? []) : commands;
+        let nextResources = isRefusalRow ? (resources ?? []) : resources;
+        let nextTemplates = isRefusalRow ? (resourceTemplates ?? []) : resourceTemplates;
+        let mcpPrefix = getMcpPrefix(row.name);
+        let index = nextState.clients.findIndex((client) => client.name === row.name);
+        let currentClient = index !== -1 ? nextState.clients[index] : undefined;
+        let isSameConnection =
+          row.type === "connected" &&
+          currentClient?.type === "connected" &&
+          currentClient.client === row.client;
+        let isPolicyBlocked =
+          isConnectedOrCached(row) && mcpDialBlockCause(row.name, row.config) === "managed-policy";
         if (
-          server.type !== "disabled" &&
-          !Q &&
-          isMcpServerDisabled(server.name) &&
-          !(R && a?.type !== "disabled")
+          row.type !== "disabled" &&
+          !isSameConnection &&
+          isMcpServerDisabled(row.name) &&
+          !(isPolicyBlocked && currentClient?.type !== "disabled")
         ) {
-          if (R) t.onDoorDenied(server.name);
-          if (server.type === "connected") closeAndClearServer(server);
-          t.onOrphanedDisable(server.name);
-          if (a && a.type !== "disabled" && (a.type !== "connected" || !isConnectedOrCached(server)))
-            e = {
-              ...e,
-              clients: e.clients.map((client) =>
-                client.name === server.name
+          if (isPolicyBlocked) hooks.onDoorDenied(row.name);
+          if (row.type === "connected") closeAndClearServer(row);
+          hooks.onOrphanedDisable(row.name);
+          if (
+            currentClient &&
+            currentClient.type !== "disabled" &&
+            (currentClient.type !== "connected" || !isConnectedOrCached(row))
+          )
+            nextState = {
+              ...nextState,
+              clients: nextState.clients.map((client) =>
+                client.name === row.name
                   ? {
-                      name: server.name,
+                      name: row.name,
                       type: "disabled",
-                      config: c === "elsewhere" ? client.config : server.config,
+                      config: relation === "elsewhere" ? client.config : row.config,
                     }
                   : client,
               ),
-              ...withoutServerEntries(e, server.name, mcpPrefix),
+              ...withoutServerEntries(nextState, row.name, mcpPrefix),
             };
           continue;
         }
-        if (c === "elsewhere" && a !== undefined) {
-          if (server.type !== "disabled") {
-            if (server.type === "connected") closeAndClearServer(server);
-            logMCPDebug(
-              server.name,
-              `A late ${server.type} result was dropped: another server holds the name`,
-            );
+        if (relation === "elsewhere" && currentClient !== undefined) {
+          if (row.type !== "disabled") {
+            if (row.type === "connected") closeAndClearServer(row);
+            logMCPDebug(row.name, `A late ${row.type} result was dropped: another server holds the name`);
             continue;
           }
-          if (a.type === "connected") closeAndClearServer(a);
-          server = {
-            name: server.name,
+          if (currentClient.type === "connected") closeAndClearServer(currentClient);
+          row = {
+            name: row.name,
             type: "disabled",
-            config: a.config,
+            config: currentClient.config,
           };
         }
-        let k = isConnectedOrCached(server) ? mcpDialBlockCause(server.name, server.config) : null;
-        if (k) {
-          t.onDoorDenied(server.name);
-          let config = server.config;
-          if (server.type === "connected") identityId2(server.client).onclose = undefined;
-          else if (a?.type === "connected") {
-            identityId2(a.client).onclose = undefined;
-            config = a.config;
+        let blockCause = isConnectedOrCached(row) ? mcpDialBlockCause(row.name, row.config) : null;
+        if (blockCause) {
+          hooks.onDoorDenied(row.name);
+          let config = row.config;
+          if (row.type === "connected") identityId2(row.client).onclose = undefined;
+          else if (currentClient?.type === "connected") {
+            identityId2(currentClient.client).onclose = undefined;
+            config = currentClient.config;
           }
           mcpClientModule()
-            .clearServerCache(server.name, config)
+            .clearServerCache(row.name, config)
             .catch(() => {});
           if (index === -1) continue;
-          e = {
-            ...e,
-            clients: e.clients.map((client) =>
-              client.name === server.name
+          nextState = {
+            ...nextState,
+            clients: nextState.clients.map((client) =>
+              client.name === row.name
                 ? {
-                    name: server.name,
+                    name: row.name,
                     type: "failed",
-                    config: server.config,
-                    ...mcpGateError(k, server.name, server.config),
+                    config: row.config,
+                    ...mcpGateError(blockCause, row.name, row.config),
                   }
                 : client,
             ),
-            ...withoutServerEntries(e, server.name, mcpPrefix),
+            ...withoutServerEntries(nextState, row.name, mcpPrefix),
           };
           continue;
         }
         if (
           replaceOnly &&
           index !== -1 &&
-          (e.clients[index]?.type === "needs-auth" || e.clients[index]?.type === "disabled")
+          (nextState.clients[index]?.type === "needs-auth" || nextState.clients[index]?.type === "disabled")
         ) {
-          if (server.type === "connected") {
-            identityId2(server.client).onclose = undefined;
+          if (row.type === "connected") {
+            identityId2(row.client).onclose = undefined;
             mcpClientModule()
-              .clearServerCache(server.name, server.config)
+              .clearServerCache(row.name, row.config)
               .catch(() => {});
           }
           continue;
         }
-        if (index === -1 && (replaceOnly || (c === "nowhere" && !superseded))) {
-          if (server.type === "connected") {
-            identityId2(server.client).onclose = undefined;
+        if (index === -1 && (replaceOnly || (relation === "nowhere" && !superseded))) {
+          if (row.type === "connected") {
+            identityId2(row.client).onclose = undefined;
             mcpClientModule()
-              .clearServerCache(server.name, server.config)
+              .clearServerCache(row.name, row.config)
               .catch(() => {});
           }
           if (!replaceOnly) {
-            t.onOrphanedDisable(server.name);
-            logMCPDebug(server.name, `A late ${server.type} result was dropped: no row holds the name`);
+            hooks.onOrphanedDisable(row.name);
+            logMCPDebug(row.name, `A late ${row.type} result was dropped: no row holds the name`);
           }
           continue;
         }
@@ -369,47 +390,50 @@ class McpConnectionStore {
           replaceOnly &&
           isDiscoveryCacheOn() &&
           index !== -1 &&
-          serverCacheKey(server.name, e.clients[index].config) !== serverCacheKey(server.name, server.config)
+          serverCacheKey(row.name, nextState.clients[index].config) !== serverCacheKey(row.name, row.config)
         ) {
-          if (server.type === "connected") mcpClientModule().detachAndCloseConnection(server);
+          if (row.type === "connected") mcpClientModule().detachAndCloseConnection(row);
           continue;
         }
-        if (index !== -1 && !checkMcpServerHealth_2(e.clients[index], server)) {
-          if (c === "asked") e = refreshRowConfig(e, server);
+        if (index !== -1 && !checkMcpServerHealth_2(nextState.clients[index], row)) {
+          if (relation === "asked") nextState = refreshRowConfig(nextState, row);
           continue;
         }
         let clients =
           index === -1
-            ? [...e.clients, server]
-            : e.clients.map((client) => (client.name === server.name ? server : client));
+            ? [...nextState.clients, row]
+            : nextState.clients.map((client) => (client.name === row.name ? row : client));
         let tools_2 =
-          b === undefined
-            ? e.tools
-            : [...reject_default(e.tools, (d) => d.name?.startsWith(mcpPrefix)), ...b];
+          nextTools === undefined
+            ? nextState.tools
+            : [...reject_default(nextState.tools, (tool) => tool.name?.startsWith(mcpPrefix)), ...nextTools];
         let commands_2 =
-          T === undefined
-            ? e.commands
-            : [...reject_default(e.commands, (d) => commandBelongsToServer(d, server.name)), ...T];
+          nextCommands === undefined
+            ? nextState.commands
+            : [
+                ...reject_default(nextState.commands, (command) => commandBelongsToServer(command, row.name)),
+                ...nextCommands,
+              ];
         let resources_2 =
-          C === undefined
-            ? e.resources
-            : C.length > 0
+          nextResources === undefined
+            ? nextState.resources
+            : nextResources.length > 0
               ? {
-                  ...e.resources,
-                  [server.name]: C,
+                  ...nextState.resources,
+                  [row.name]: nextResources,
                 }
-              : omitKeys(e.resources, server.name);
+              : omitKeys(nextState.resources, row.name);
         let resourceTemplates_2 =
-          y === undefined
-            ? e.resourceTemplates
-            : y.length > 0
+          nextTemplates === undefined
+            ? nextState.resourceTemplates
+            : nextTemplates.length > 0
               ? {
-                  ...e.resourceTemplates,
-                  [server.name]: y,
+                  ...nextState.resourceTemplates,
+                  [row.name]: nextTemplates,
                 }
-              : omitKeys(e.resourceTemplates, server.name);
-        e = {
-          ...e,
+              : omitKeys(nextState.resourceTemplates, row.name);
+        nextState = {
+          ...nextState,
           clients,
           tools: tools_2,
           commands: commands_2,
@@ -417,15 +441,15 @@ class McpConnectionStore {
           resourceTemplates: resourceTemplates_2,
         };
       }
-      return e;
+      return nextState;
     });
   }
 }
 //@ chunk-kvr3v8w9.js:6346-6520 placement
-function pendingRowsFor(n, t) {
-  let i = new Set(n.clients.map((client) => client.name));
-  return Object.entries(t)
-    .filter(([key]) => !i.has(key))
+function pendingRowsFor(state, configs) {
+  let existingNames = new Set(state.clients.map((client) => client.name));
+  return Object.entries(configs)
+    .filter(([key]) => !existingNames.has(key))
     .map(([key, value]) => ({
       name: key,
       type: isMcpServerDisabled(key) ? "disabled" : "pending",
@@ -433,40 +457,42 @@ function pendingRowsFor(n, t) {
     }));
 }
 //@ chunk-kvr3v8w9.js:6520-6609 placement = getToolNameForPermissionCheck (1)
-function getToolNameForPermissionCheck(tool, t) {
+function getToolNameForPermissionCheck(tool, serverName) {
   return tool.mcpInfo?.serverName === undefined
-    ? commandBelongsToServer(tool, t)
-    : tool.mcpInfo.serverName === t;
+    ? commandBelongsToServer(tool, serverName)
+    : tool.mcpInfo.serverName === serverName;
 }
 //@ chunk-kvr3v8w9.js:6609-6788 placement
-function withoutServerItems(n, t) {
-  let mcpPrefix = getMcpPrefix(t);
+function withoutServerItems(mcpState, serverName) {
+  let mcpPrefix = getMcpPrefix(serverName);
   return {
-    tools: reject_default(n.tools, (e) => isToolFromMcpServer(e, t, mcpPrefix)),
-    commands: reject_default(n.commands, (tool) => getToolNameForPermissionCheck(tool, t)),
-    resources: omitKeys(n.resources, t),
-    resourceTemplates: omitKeys(n.resourceTemplates, t),
+    tools: reject_default(mcpState.tools, (tool) => isToolFromMcpServer(tool, serverName, mcpPrefix)),
+    commands: reject_default(mcpState.commands, (tool) => getToolNameForPermissionCheck(tool, serverName)),
+    resources: omitKeys(mcpState.resources, serverName),
+    resourceTemplates: omitKeys(mcpState.resourceTemplates, serverName),
   };
 }
 //@ chunk-kvr3v8w9.js:6788-6934 placement
-function rowRelation(n, t) {
-  if (t.asked === true) return "asked";
-  if (n === undefined) return "nowhere";
-  return serverCacheKey(t.name, n.config) === serverCacheKey(t.name, t.config) ? "stands" : "elsewhere";
+function rowRelation(currentRow, update) {
+  if (update.asked === true) return "asked";
+  if (currentRow === undefined) return "nowhere";
+  return serverCacheKey(update.name, currentRow.config) === serverCacheKey(update.name, update.config)
+    ? "stands"
+    : "elsewhere";
 }
 //@ chunk-kvr3v8w9.js:6934-7109 placement
-function rebindToRowConfig(n, t) {
-  let i = {
-    name: t.name,
-    config: n.config,
+function rebindToRowConfig(row, update) {
+  let connection = {
+    name: update.name,
+    config: row.config,
   };
   return {
-    ...withMcpConfig(t, n.config),
-    ...(t.tools !== undefined && {
-      tools: decorateMcpTools(i, t.tools),
+    ...withMcpConfig(update, row.config),
+    ...(update.tools !== undefined && {
+      tools: decorateMcpTools(connection, update.tools),
     }),
-    ...(t.commands !== undefined && {
-      commands: stampToolScope(i, t.commands),
+    ...(update.commands !== undefined && {
+      commands: stampToolScope(connection, update.commands),
     }),
   };
 }
@@ -474,74 +500,82 @@ function rebindToRowConfig(n, t) {
 /**
  * 配置的非身份字段变化时，更新连接行的配置并重新装饰其工具与命令。
  */
-function refreshRowConfig(n, t) {
-  let found = n.clients.find((client) => client.name === t.name);
-  if (found === undefined || serverCacheKey(t.name, found.config) !== serverCacheKey(t.name, t.config))
-    return n;
-  let e = withMcpConfig(found, t.config);
-  if (e === found) return n;
-  let s = {
-    name: t.name,
-    config: t.config,
+function refreshRowConfig(state, input) {
+  let found = state.clients.find((client) => client.name === input.name);
+  if (
+    found === undefined ||
+    serverCacheKey(input.name, found.config) !== serverCacheKey(input.name, input.config)
+  )
+    return state;
+  let reboundClient = withMcpConfig(found, input.config);
+  if (reboundClient === found) return state;
+  let connection = {
+    name: input.name,
+    config: input.config,
   };
-  let mcpPrefix = getMcpPrefix(t.name);
-  let [c, l] = SS(n.tools, (m) => isToolFromMcpServer(m, t.name, mcpPrefix));
-  let [u, S] = SS(n.commands, (tool) => getToolNameForPermissionCheck(tool, t.name));
+  let mcpPrefix = getMcpPrefix(input.name);
+  let [serverTools, otherTools] = partitionAlias(state.tools, (tool) =>
+    isToolFromMcpServer(tool, input.name, mcpPrefix),
+  );
+  let [serverCommands, otherCommands] = partitionAlias(state.commands, (tool) =>
+    getToolNameForPermissionCheck(tool, input.name),
+  );
   return {
-    ...n,
-    clients: n.clients.map((client) => (client === found ? e : client)),
-    tools: [...l, ...decorateMcpTools(s, c)],
-    commands: [...S, ...stampToolScope(s, u)],
+    ...state,
+    clients: state.clients.map((client) => (client === found ? reboundClient : client)),
+    tools: [...otherTools, ...decorateMcpTools(connection, serverTools)],
+    commands: [...otherCommands, ...stampToolScope(connection, serverCommands)],
   };
 }
 //@ chunk-kvr3v8w9.js:7504-7716 placement
-function adoptRefusal(n, t) {
-  let { name: i } = t.client;
-  if (n === undefined) return "no-row";
-  if (serverCacheKey(i, n.config) !== serverCacheKey(i, t.client.config)) return "another-server";
-  if (isMcpServerDisabled(i)) return "disabled";
-  if (mcpDialBlockCause(i, n.config) !== null) return "policy-blocked";
+function adoptRefusal(existingRow, result) {
+  let { name: serverName } = result.client;
+  if (existingRow === undefined) return "no-row";
+  if (serverCacheKey(serverName, existingRow.config) !== serverCacheKey(serverName, result.client.config))
+    return "another-server";
+  if (isMcpServerDisabled(serverName)) return "disabled";
+  if (mcpDialBlockCause(serverName, existingRow.config) !== null) return "policy-blocked";
   return;
 }
 //@ chunk-kvr3v8w9.js:7716-8039 placement
 /**
  * 把禁用或策略拦截的结果应用到连接行：标记为 disabled，或为策略拦截生成带原因的 failed 状态，并移除其条目。
  */
-function applyRefusalToRow(n, t, i) {
-  if (i !== "disabled" && i !== "policy-blocked") return n;
-  let { name: e, config } = t;
-  let r = i === "policy-blocked" ? mcpDialBlockCause(e, config) : null;
-  if (r === null && t.type === "disabled") return n;
-  let c =
-    r === null
+function applyRefusalToRow(mcpState, row, reason) {
+  if (reason !== "disabled" && reason !== "policy-blocked") return mcpState;
+  let { name, config } = row;
+  let blockCause = reason === "policy-blocked" ? mcpDialBlockCause(name, config) : null;
+  if (blockCause === null && row.type === "disabled") return mcpState;
+  let nextRow =
+    blockCause === null
       ? {
-          name: e,
+          name,
           type: "disabled",
           config,
         }
       : {
-          name: e,
+          name,
           type: "failed",
           config,
-          ...mcpGateError(r, e, config),
+          ...mcpGateError(blockCause, name, config),
         };
   return {
-    ...n,
-    clients: n.clients.map((client) => (client === t ? c : client)),
-    ...withoutServerItems(n, e),
+    ...mcpState,
+    clients: mcpState.clients.map((client) => (client === row ? nextRow : client)),
+    ...withoutServerItems(mcpState, name),
   };
 }
 //@ chunk-kvr3v8w9.js:8039-8181 placement
-function rebindAdoption(n, t) {
-  let i = {
-    name: n.name,
-    config: n.config,
+function rebindAdoption(row, adopted) {
+  let connection = {
+    name: row.name,
+    config: row.config,
   };
   return {
-    ...t,
-    client: withMcpConfig(t.client, n.config),
-    tools: decorateMcpTools(i, t.tools),
-    commands: stampToolScope(i, t.commands),
+    ...adopted,
+    client: withMcpConfig(adopted.client, row.config),
+    tools: decorateMcpTools(connection, adopted.tools),
+    commands: stampToolScope(connection, adopted.commands),
   };
 }
 export { McpConnectionStore, getToolNameForPermissionCheck };

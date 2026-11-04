@@ -6,7 +6,7 @@
  * attribution: esm-fingerprint 1
  */
 import { APIResource } from "../../../core/resource.mjs";
-import { I } from "../../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../../internal/utils/path.mjs";
 import { TokenPage } from "../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:119673-120284 esm-fingerprint
@@ -18,10 +18,10 @@ class ExternalKeys extends APIResource {
     });
   }
   retrieve(externalKeyID, options) {
-    return this._client.get(I`/v1/organizations/external_keys/${externalKeyID}?beta=true`, options);
+    return this._client.get(parseUrl_2`/v1/organizations/external_keys/${externalKeyID}?beta=true`, options);
   }
   update(externalKeyID, body, options) {
-    return this._client.post(I`/v1/organizations/external_keys/${externalKeyID}?beta=true`, {
+    return this._client.post(parseUrl_2`/v1/organizations/external_keys/${externalKeyID}?beta=true`, {
       body,
       ...options,
     });
@@ -33,10 +33,16 @@ class ExternalKeys extends APIResource {
     });
   }
   delete(externalKeyID, options) {
-    return this._client.delete(I`/v1/organizations/external_keys/${externalKeyID}?beta=true`, options);
+    return this._client.delete(
+      parseUrl_2`/v1/organizations/external_keys/${externalKeyID}?beta=true`,
+      options,
+    );
   }
   validate(externalKeyID, options) {
-    return this._client.post(I`/v1/organizations/external_keys/${externalKeyID}/validate?beta=true`, options);
+    return this._client.post(
+      parseUrl_2`/v1/organizations/external_keys/${externalKeyID}/validate?beta=true`,
+      options,
+    );
   }
 }
 export { ExternalKeys };

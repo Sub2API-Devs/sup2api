@@ -37,25 +37,30 @@ import { getModelUnavailabilityReason } from "../../utils/model/classifierModel.
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   zodStrictObject,
-  M,
+  booleanSchema,
   partialRecord,
   _enum,
-  E,
-  string,
+  numberSchema,
+  stringSchema,
 } from "../../../vendor/zod/v4/classic/schemas.js";
-import { init_react_production, yt, y } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useSyncExternalStore,
+  useState,
+} from "../../../vendor/react/cjs/react.production.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../ink/components/Text.js";
 import { useAppStateSlice } from "../../state/AppState.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import { useShortcutDisplay } from "../../keybindings/useShortcutDisplay.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { telemetrySafeModelName } from "../../utils/model/telemetryModelName.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ag5x7vhf.js:76067-76120 placement
 function isMainLoopBusy() {
@@ -78,40 +83,40 @@ var EMPTY_SUCCESSOR_SHOWN = {
   lastShownAt: 0,
 };
 //@ chunk-ag5x7vhf.js:76256-76327 placement
-function successorNoticeViews(m) {
-  return getGlobalConfig().savedModelSuccessorShown?.[successorKey(m)]?.views ?? 0;
+function successorNoticeViews(successor) {
+  return getGlobalConfig().savedModelSuccessorShown?.[successorKey(successor)]?.views ?? 0;
 }
 //@ chunk-ag5x7vhf.js:76327-76498 placement
 /**
  * 判断某个保存的旧模型的"有新版本"提示是否还能显示：用户没回答过、展示次数未达上限、距上次展示已过最小间隔天数。
  */
 function shouldShowModelSuccessorNotice(
-  m,
+  successor,
   maxViews = MAX_SUCCESSOR_NOTICE_VIEWS,
   minDaysApart = SUCCESSOR_MIN_DAYS,
 ) {
   let globalConfig = getGlobalConfig();
-  let k = successorKey(m);
-  let { views, lastShownAt } = globalConfig.savedModelSuccessorShown?.[k] ?? EMPTY_SUCCESSOR_SHOWN;
+  let key = successorKey(successor);
+  let { views, lastShownAt } = globalConfig.savedModelSuccessorShown?.[key] ?? EMPTY_SUCCESSOR_SHOWN;
   return (
-    !globalConfig.savedModelSuccessorAnswered?.[k] &&
+    !globalConfig.savedModelSuccessorAnswered?.[key] &&
     views < maxViews &&
     Date.now() - lastShownAt >= minDaysApart * ONE_DAY_MS_SUCCESSOR
   );
 }
 //@ chunk-ag5x7vhf.js:76498-76731 placement
-function recordModelSuccessorShown(m, storageV5) {
-  let x = successorKey(m);
-  saveGlobalConfig((T) => {
-    let k = T.savedModelSuccessorShown?.[x] ?? EMPTY_SUCCESSOR_SHOWN;
-    return Date.now() - k.lastShownAt < SUCCESSOR_MIN_DAYS * ONE_DAY_MS_SUCCESSOR
-      ? T
+function recordModelSuccessorShown(successor, storageV5) {
+  let key = successorKey(successor);
+  saveGlobalConfig((config) => {
+    let entry = config.savedModelSuccessorShown?.[key] ?? EMPTY_SUCCESSOR_SHOWN;
+    return Date.now() - entry.lastShownAt < SUCCESSOR_MIN_DAYS * ONE_DAY_MS_SUCCESSOR
+      ? config
       : {
-          ...T,
+          ...config,
           savedModelSuccessorShown: {
-            ...T.savedModelSuccessorShown,
-            [x]: {
-              views: k.views + 1,
+            ...config.savedModelSuccessorShown,
+            [key]: {
+              views: entry.views + 1,
               lastShownAt: Date.now(),
             },
           },
@@ -122,13 +127,13 @@ function recordModelSuccessorShown(m, storageV5) {
 /**
  * 在全局配置里记下用户已回应过某模型的"有新版本"提示，以后不再显示。
  */
-function markModelSuccessorAnswered(m, storageV5) {
+function markModelSuccessorAnswered(successor, storageV5) {
   saveGlobalConfig(
-    (x) => ({
-      ...x,
+    (config) => ({
+      ...config,
       savedModelSuccessorAnswered: {
-        ...x.savedModelSuccessorAnswered,
-        [successorKey(m)]: true,
+        ...config.savedModelSuccessorAnswered,
+        [successorKey(successor)]: true,
       },
     }),
     storageV5,
@@ -163,40 +168,47 @@ function savedModelSuccessor() {
     strip1mSuffix(getMainLoopModel()) !== strip1mSuffix(model)
   )
     return;
-  let T = strip1mSuffix(model);
-  let modelId = parseModelId(T);
-  if (!modelId || !isBaseModelKey(modelId.family) || !(getCatalogEntry(T) ?? catalogIdForProviderModelId(T)))
+  let currentModel = strip1mSuffix(model);
+  let modelId = parseModelId(currentModel);
+  if (
+    !modelId ||
+    !isBaseModelKey(modelId.family) ||
+    !(getCatalogEntry(currentModel) ?? catalogIdForProviderModelId(currentModel))
+  )
     return;
-  let _ = strip1mSuffix(parseUserSpecifiedModel(modelId.family));
-  let modelId_2 = parseModelId(_);
+  let familyModel = strip1mSuffix(parseUserSpecifiedModel(modelId.family));
+  let modelId_2 = parseModelId(familyModel);
   if (
     modelId_2?.family !== modelId.family ||
     compareVersion(modelId_2, modelId) <= 0 ||
-    !isModelKnownServedToOrg(_) ||
-    !isModelAllowed(_) ||
-    getModelUnavailabilityReason(_) !== null
+    !isModelKnownServedToOrg(familyModel) ||
+    !isModelAllowed(familyModel) ||
+    getModelUnavailabilityReason(familyModel) !== null
   )
     return;
   return {
-    from: T,
-    to: _,
+    from: currentModel,
+    to: familyModel,
     family: modelId.family,
-    alias: `${modelId.family}${model.slice(T.length)}`,
+    alias: `${modelId.family}${model.slice(currentModel.length)}`,
   };
 }
 //@ chunk-ag5x7vhf.js:77450-77658 placement
-var SuccessorNoticeConfigSchema = DoctorLazy(() =>
-  zodStrictObject({
-    off: M().optional(),
-    families: partialRecord(_enum(MODEL_KEY_NAMES), M()).optional(),
-    maxViews: E().optional(),
-    minDaysApart: E().optional(),
-    lead: string().optional(),
-    text: string().optional(),
-    action: string().optional(),
-    done: string().optional(),
-  }),
-);
+var SuccessorNoticeConfigSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ag5x7vhf.js:77450", () => {
+  SuccessorNoticeConfigSchema = DoctorLazy(() =>
+    zodStrictObject({
+      off: booleanSchema().optional(),
+      families: partialRecord(_enum(MODEL_KEY_NAMES), booleanSchema()).optional(),
+      maxViews: numberSchema().optional(),
+      minDaysApart: numberSchema().optional(),
+      lead: stringSchema().optional(),
+      text: stringSchema().optional(),
+      action: stringSchema().optional(),
+      done: stringSchema().optional(),
+    }),
+  );
+});
 //@ chunk-ag5x7vhf.js:77658-77742 placement
 function successorNoticeConfig() {
   return (
@@ -214,127 +226,134 @@ function successorNoticeConfig() {
  * 判断是否不显示"模型有新版本"提示：没有保存的旧模型、配置关闭、该模型族未启用，或展示频率已达上限。
  */
 function isModelSuccessorNoticeHidden() {
-  let m = savedModelSuccessor();
-  let h = successorNoticeConfig();
+  let successor = savedModelSuccessor();
+  let config = successorNoticeConfig();
   return (
-    !m ||
-    h.off === true ||
-    !(h.families?.[m.family] ?? SUCCESSOR_FAMILIES[m.family]) ||
-    !shouldShowModelSuccessorNotice(m, h.maxViews, h.minDaysApart)
+    !successor ||
+    config.off === true ||
+    !(config.families?.[successor.family] ?? SUCCESSOR_FAMILIES[successor.family]) ||
+    !shouldShowModelSuccessorNotice(successor, config.maxViews, config.minDaysApart)
   );
 }
 //@ chunk-ag5x7vhf.js:77871-77875 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:77871", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:78698-78702 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:78698", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:91256-91289 placement
 function mainLoopBusyWithNotice() {
   return isModelSuccessorNoticeActive() && isMainLoopBusy();
 }
 //@ chunk-ag5x7vhf.js:91289-91368 placement = useMainLoopModel (1)
-function useMainLoopModel(m) {
-  return isModelSuccessorNoticeActive() && `${m.mainLoopModel} ${m.mainLoopModelForSession}`;
+function useMainLoopModel(state) {
+  return isModelSuccessorNoticeActive() && `${state.mainLoopModel} ${state.mainLoopModelForSession}`;
 }
 //@ chunk-ag5x7vhf.js:91368-91465 placement
-function renderInlineCode(Y, pe) {
-  return Y.startsWith("`")
+function renderInlineCode(text, key) {
+  return text.startsWith("`")
     ? jsxProd_default(
         Text,
         {
           color: "permission",
-          children: Y.slice(1, -1),
+          children: text.slice(1, -1),
         },
-        pe,
+        key,
       )
-    : Y;
+    : text;
 }
 //@ chunk-ag5x7vhf.js:91465-91550 placement
 var SUCCESSOR_NOTICE_TEMPLATE = "{from} is your default model.";
 var SUCCESSOR_KEY_HINT_TEMPLATE = "Press `{key}` to make {to} your default.";
 //@ chunk-ag5x7vhf.js:91550-91604 placement
 function useModelSuccessorSubscriptions() {
-  yt(uiSignals.mainLoopBusy.subscribe, mainLoopBusyWithNotice);
+  useSyncExternalStore(uiSignals.mainLoopBusy.subscribe, mainLoopBusyWithNotice);
   useAppStateSlice(useMainLoopModel);
 }
 //@ chunk-ag5x7vhf.js:91604-92617 placement
 function ModelSuccessorNotice() {
-  let k = w(18);
+  let $ = useMemoCache(18);
   let { storageV5 } = useTheme_2();
-  let [h] = y(savedModelSuccessor);
-  let [x] = y(successorNoticeConfig);
+  let [successor] = useState(savedModelSuccessor);
+  let [config] = useState(successorNoticeConfig);
   let shortcutDisplay = useShortcutDisplay("chat:defaultToNewerModel", "Chat", "ctrl+y");
-  let _;
-  if (k[0] !== h || k[1] !== storageV5) {
-    _ = () => {
-      if (!h) {
+  let onShown;
+  if ($[0] !== successor || $[1] !== storageV5) {
+    onShown = () => {
+      if (!successor) {
         return;
       }
       announcementState().savedModelSuccessorDrawnAt = Date.now();
       logFeatureOk("model_saved_successor_notice");
       logEvent("tengu_saved_model_successor_shown", {
-        from_model: telemetrySafeModelName(h.from),
-        to_model: telemetrySafeModelName(h.to),
-        view: successorNoticeViews(h) + 1,
+        from_model: telemetrySafeModelName(successor.from),
+        to_model: telemetrySafeModelName(successor.to),
+        view: successorNoticeViews(successor) + 1,
       });
-      recordModelSuccessorShown(h, storageV5);
+      recordModelSuccessorShown(successor, storageV5);
     };
-    k[0] = h;
-    k[1] = storageV5;
-    k[2] = _;
-  } else _ = k[2];
-  useNoticeImpression(SAVED_MODEL_SUCCESSOR, _);
-  if (!h) {
+    $[0] = successor;
+    $[1] = storageV5;
+    $[2] = onShown;
+  } else onShown = $[2];
+  useNoticeImpression(SAVED_MODEL_SUCCESSOR, onShown);
+  if (!successor) {
     return null;
   }
-  let I;
-  if (k[3] !== shortcutDisplay || k[4] !== h.from || k[5] !== h.to) {
-    I = (D) =>
-      D.replaceAll("{from}", renderModelName(h.from))
+  let fillTemplate;
+  if ($[3] !== shortcutDisplay || $[4] !== successor.from || $[5] !== successor.to) {
+    fillTemplate = (template) =>
+      template
+        .replaceAll("{from}", renderModelName(successor.from))
         .replaceAll("{key}", shortcutDisplay)
-        .replaceAll("{to}", `\`${renderModelName(h.to)}\``);
-    k[3] = shortcutDisplay;
-    k[4] = h.from;
-    k[5] = h.to;
-    k[6] = I;
-  } else I = k[6];
-  let A = I;
-  const lead = x.lead ?? SUCCESSOR_NOTICE_TEMPLATE;
+        .replaceAll("{to}", `\`${renderModelName(successor.to)}\``);
+    $[3] = shortcutDisplay;
+    $[4] = successor.from;
+    $[5] = successor.to;
+    $[6] = fillTemplate;
+  } else fillTemplate = $[6];
+  let fillTemplate_2 = fillTemplate;
+  const lead = config.lead ?? SUCCESSOR_NOTICE_TEMPLATE;
   let children;
-  if (k[7] !== A || k[8] !== lead) {
-    children = A(lead).replaceAll("`", "");
-    k[7] = A;
-    k[8] = lead;
-    k[9] = children;
-  } else children = k[9];
-  let W;
-  if (k[10] !== children) {
-    W = jsxProd_default(Text, {
+  if ($[7] !== fillTemplate_2 || $[8] !== lead) {
+    children = fillTemplate_2(lead).replaceAll("`", "");
+    $[7] = fillTemplate_2;
+    $[8] = lead;
+    $[9] = children;
+  } else children = $[9];
+  let leadText;
+  if ($[10] !== children) {
+    leadText = jsxProd_default(Text, {
       dimColor: true,
       children,
     });
-    k[10] = children;
-    k[11] = W;
-  } else W = k[11];
-  const text = x.text ?? SUCCESSOR_KEY_HINT_TEMPLATE;
-  let K;
-  if (k[12] !== A || k[13] !== text) {
-    K = A(text)
+    $[10] = children;
+    $[11] = leadText;
+  } else leadText = $[11];
+  const text = config.text ?? SUCCESSOR_KEY_HINT_TEMPLATE;
+  let hintParts;
+  if ($[12] !== fillTemplate_2 || $[13] !== text) {
+    hintParts = fillTemplate_2(text)
       .split(/(`[^`]+`)/)
       .map(renderInlineCode);
-    k[12] = A;
-    k[13] = text;
-    k[14] = K;
-  } else K = k[14];
-  let q;
-  if (k[15] !== W || k[16] !== K) {
-    q = jsxProd_default_2(Text, {
-      children: [W, " ", K],
+    $[12] = fillTemplate_2;
+    $[13] = text;
+    $[14] = hintParts;
+  } else hintParts = $[14];
+  let line;
+  if ($[15] !== leadText || $[16] !== hintParts) {
+    line = jsxProd_default_2(Text, {
+      children: [leadText, " ", hintParts],
     });
-    k[15] = W;
-    k[16] = K;
-    k[17] = q;
-  } else q = k[17];
-  return q;
+    $[15] = leadText;
+    $[16] = hintParts;
+    $[17] = line;
+  } else line = $[17];
+  return line;
 }
 export {
   SAVED_MODEL_SUCCESSOR,

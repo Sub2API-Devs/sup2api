@@ -5,38 +5,38 @@
  * pieces: chunk-bmbhxpfm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 import { require_signals } from "./signals.js";
 
 //@ chunk-bmbhxpfm.js:15044-17126 cjs-fingerprint
-var require_signal_exit = x(function (cjsExports, cjsModule) {
-  var g = global.process;
-  var processOk = function (e) {
+var require_signal_exit = __commonJS(function (cjsExports, cjsModule) {
+  var processRef = global.process;
+  var processOk = function (processRef) {
     return (
-      e &&
-      typeof e === "object" &&
-      typeof e.removeListener === "function" &&
-      typeof e.emit === "function" &&
-      typeof e.reallyExit === "function" &&
-      typeof e.listeners === "function" &&
-      typeof e.kill === "function" &&
-      typeof e.pid === "number" &&
-      typeof e.on === "function"
+      processRef &&
+      typeof processRef === "object" &&
+      typeof processRef.removeListener === "function" &&
+      typeof processRef.emit === "function" &&
+      typeof processRef.reallyExit === "function" &&
+      typeof processRef.listeners === "function" &&
+      typeof processRef.kill === "function" &&
+      typeof processRef.pid === "number" &&
+      typeof processRef.on === "function"
     );
   };
-  if (!processOk(g))
+  if (!processOk(processRef))
     cjsModule.exports = function () {
       return function () {};
     };
   else {
     assert = importMetaRequire("assert");
     signals = require_signals();
-    isWin = /^win/i.test(g.platform);
+    isWin = /^win/i.test(processRef.platform);
     EE = importMetaRequire("events");
     if (typeof EE !== "function") EE = EE.EventEmitter;
-    if (g.__signal_exit_emitter__) emitter = g.__signal_exit_emitter__;
+    if (processRef.__signal_exit_emitter__) emitter = processRef.__signal_exit_emitter__;
     else {
-      emitter = g.__signal_exit_emitter__ = new EE();
+      emitter = processRef.__signal_exit_emitter__ = new EE();
       emitter.count = 0;
       emitter.emitted = {};
     }
@@ -62,11 +62,11 @@ var require_signal_exit = x(function (cjsExports, cjsModule) {
       loaded = false;
       signals.forEach(function (sig) {
         try {
-          g.removeListener(sig, sigListeners[sig]);
+          processRef.removeListener(sig, sigListeners[sig]);
         } catch (er) {}
       });
-      g.emit = originalProcessEmit;
-      g.reallyExit = originalProcessReallyExit;
+      processRef.emit = originalProcessEmit;
+      processRef.reallyExit = originalProcessReallyExit;
       emitter.count -= 1;
     };
     cjsModule.exports.unload = unload;
@@ -79,13 +79,13 @@ var require_signal_exit = x(function (cjsExports, cjsModule) {
     signals.forEach(function (sig) {
       sigListeners[sig] = function () {
         if (!processOk(global.process)) return;
-        var listeners = g.listeners(sig);
+        var listeners = processRef.listeners(sig);
         if (listeners.length === emitter.count) {
           unload();
           emit("exit", null, sig);
           emit("afterexit", null, sig);
           if (isWin && sig === "SIGHUP") sig = "SIGINT";
-          g.kill(g.pid, sig);
+          processRef.kill(processRef.pid, sig);
         }
       };
     });
@@ -99,31 +99,31 @@ var require_signal_exit = x(function (cjsExports, cjsModule) {
       emitter.count += 1;
       signals = signals.filter(function (sig) {
         try {
-          g.on(sig, sigListeners[sig]);
+          processRef.on(sig, sigListeners[sig]);
           return true;
         } catch (er) {
           return false;
         }
       });
-      g.emit = processEmit;
-      g.reallyExit = processReallyExit;
+      processRef.emit = processEmit;
+      processRef.reallyExit = processReallyExit;
     };
     cjsModule.exports.load = load;
-    originalProcessReallyExit = g.reallyExit;
+    originalProcessReallyExit = processRef.reallyExit;
     processReallyExit = function (code) {
       if (!processOk(global.process)) return;
-      g.exitCode = code || 0;
-      emit("exit", g.exitCode, null);
-      emit("afterexit", g.exitCode, null);
-      originalProcessReallyExit.call(g, g.exitCode);
+      processRef.exitCode = code || 0;
+      emit("exit", processRef.exitCode, null);
+      emit("afterexit", processRef.exitCode, null);
+      originalProcessReallyExit.call(processRef, processRef.exitCode);
     };
-    originalProcessEmit = g.emit;
+    originalProcessEmit = processRef.emit;
     processEmit = function (ev, arg) {
       if (ev === "exit" && processOk(global.process)) {
-        if (arg !== undefined) g.exitCode = arg;
+        if (arg !== undefined) processRef.exitCode = arg;
         var ret = originalProcessEmit.apply(this, arguments);
-        emit("exit", g.exitCode, null);
-        emit("afterexit", g.exitCode, null);
+        emit("exit", processRef.exitCode, null);
+        emit("afterexit", processRef.exitCode, null);
         return ret;
       } else return originalProcessEmit.apply(this, arguments);
     };

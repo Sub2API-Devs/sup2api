@@ -20,29 +20,29 @@ import {
 /**
  * vetPathSpellingsOrChain：先按拼写审查，再按解析链审查。
  */
-function vetPathSpellingsOrChain(e, n, trustedNetworkDirectories, s) {
+function vetPathSpellingsOrChain(rawPath, resolvedPath, trustedNetworkDirectories, options) {
   return (
-    vetPathSpellings(e, n, trustedNetworkDirectories) ??
-    vetResolvedPathChain(getPathsForNetworkScreen(n), trustedNetworkDirectories, s)
+    vetPathSpellings(rawPath, resolvedPath, trustedNetworkDirectories) ??
+    vetResolvedPathChain(getPathsForNetworkScreen(resolvedPath), trustedNetworkDirectories, options)
   );
 }
 //@ chunk-s61vbvea.js:583466-583529 placement
 /**
  * vetPathSpellingsOrChainAsync：异步版：网络屏幕路径异步获取。
  */
-async function vetPathSpellingsOrChainAsync(e, n, trustedNetworkDirectories) {
+async function vetPathSpellingsOrChainAsync(rawPath, resolvedPath, trustedNetworkDirectories) {
   return (
-    vetPathSpellings(e, n, trustedNetworkDirectories) ??
-    vetResolvedPathChain(await getPathsForNetworkScreenAsync(n), trustedNetworkDirectories)
+    vetPathSpellings(rawPath, resolvedPath, trustedNetworkDirectories) ??
+    vetResolvedPathChain(await getPathsForNetworkScreenAsync(resolvedPath), trustedNetworkDirectories)
   );
 }
 //@ chunk-s61vbvea.js:583529-583641 placement
-function vetPathSpellings(e, n, r) {
-  let trimmed = e.trim();
-  let h = trimmed === n ? [n] : [trimmed, n];
-  for (let y of h) {
-    let S = vetPathSpelling(y, r);
-    if (S !== undefined) return S;
+function vetPathSpellings(rawPath, resolvedPath, trustedNetworkDirectories) {
+  let trimmed = rawPath.trim();
+  let spellings = trimmed === resolvedPath ? [resolvedPath] : [trimmed, resolvedPath];
+  for (let spelling of spellings) {
+    let failure = vetPathSpelling(spelling, trustedNetworkDirectories);
+    if (failure !== undefined) return failure;
   }
   return;
 }
@@ -50,17 +50,17 @@ function vetPathSpellings(e, n, r) {
 /**
  * 审查路径解析链：链不可审查、任一路径命中 NT 命名空间/不可信 UNC/自动挂载/可疑 Windows 拼写，或链接文本向上越级（未允许时）则拒绝，否则返回待检查路径。
  */
-function vetResolvedPathChain({ paths, vetted, linkTextClimbs }, s, h) {
+function vetResolvedPathChain({ paths, vetted, linkTextClimbs }, trustedNetworkDirectories, options) {
   if (!vetted)
     return {
       ok: false,
       reason: "unvettable_chain",
     };
   for (let path of paths) {
-    let S = vetPathSpelling(path, s);
-    if (S !== undefined) return S;
+    let failure = vetPathSpelling(path, trustedNetworkDirectories);
+    if (failure !== undefined) return failure;
   }
-  if (linkTextClimbs && !h?.allowLinkTextClimbs)
+  if (linkTextClimbs && !options?.allowLinkTextClimbs)
     return {
       ok: false,
       reason: "link_text_climbs",
@@ -74,32 +74,32 @@ function vetResolvedPathChain({ paths, vetted, linkTextClimbs }, s, h) {
 /**
  * pathVettingReason：路径审查不通过的原因。
  */
-function pathVettingReason(e, trustedNetworkDirectories) {
-  return vetPathSpelling(e, trustedNetworkDirectories)?.reason;
+function pathVettingReason(spelling, trustedNetworkDirectories) {
+  return vetPathSpelling(spelling, trustedNetworkDirectories)?.reason;
 }
 //@ chunk-s61vbvea.js:583932-584196 placement
-function vetPathSpelling(e, n) {
-  if (isDevicePrefixPath(e))
+function vetPathSpelling(spelling, trustedNetworkDirectories) {
+  if (isDevicePrefixPath(spelling))
     return {
       ok: false,
       reason: "nt_namespace",
     };
-  if (isUntrustedUncPath(e, n))
+  if (isUntrustedUncPath(spelling, trustedNetworkDirectories))
     return {
       ok: false,
       reason: "untrusted_unc",
     };
-  if (isUntrustedAutomountPath(e, n))
+  if (isUntrustedAutomountPath(spelling, trustedNetworkDirectories))
     return {
       ok: false,
       reason: "untrusted_automount",
     };
-  let r = classifySuspiciousWindowsPathPattern(e, n);
-  if (r !== undefined)
+  let patternKind = classifySuspiciousWindowsPathPattern(spelling, trustedNetworkDirectories);
+  if (patternKind !== undefined)
     return {
       ok: false,
       reason: "suspicious_windows_spelling",
-      spelling: r,
+      spelling: patternKind,
     };
   return;
 }

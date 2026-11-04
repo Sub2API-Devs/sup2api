@@ -20,7 +20,7 @@ function hasWorktreeRemoveHook() {
   return hooksForEventFiltered("WorktreeRemove").length > 0;
 }
 //@ chunk-s61vbvea.js:429715-429755 placement
-function hooksForEventFiltered(e) {
-  return filterHooksByManagedHold([...getHooksForEvent(e)], e);
+function hooksForEventFiltered(event) {
+  return filterHooksByManagedHold([...getHooksForEvent(event)], event);
 }
 export { hasWorktreeRemoveHook, hasWorktreeCreateHook };

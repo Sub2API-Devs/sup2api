@@ -25,102 +25,108 @@ import { claudeInChromeSession } from "../../commands/mobile/mobile.js";
 import { noBrowserForSetupCard } from "./telemetry.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { env } from "../env.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-2nznck8t.js:788-833 placement
 /**
  * 去掉主机名的 www. 前缀。
  */
-function stripWwwPrefix(t) {
-  return t.replace(/^www\./i, "");
+function stripWwwPrefix(host) {
+  return host.replace(/^www\./i, "");
 }
 //@ chunk-2nznck8t.js:833-977 placement
 /**
  * 去掉主机串中的端口（IPv6 方括号形式保留括号内地址）。
  */
-function hostWithoutPort(t) {
-  if (t.startsWith("[")) {
-    let index = t.indexOf("]");
-    return index === -1 ? t : t.slice(0, index + 1);
+function hostWithoutPort(host) {
+  if (host.startsWith("[")) {
+    let index = host.indexOf("]");
+    return index === -1 ? host : host.slice(0, index + 1);
   }
-  let index = t.lastIndexOf(":");
-  return index === -1 ? t : t.slice(0, index);
+  let index = host.lastIndexOf(":");
+  return index === -1 ? host : host.slice(0, index);
 }
 //@ chunk-2nznck8t.js:977-1120 placement
 /**
  * 规范化 Chrome 站点规则中的主机：去结尾点、转小写、IDN 转换后保留端口部分。
  */
-function normalizeChromeSite(host) {
-  let lower = normalizeHostnameText(host)
+function normalizeChromeSite(text) {
+  let lower = normalizeHostnameText(text)
     .replace(/\.+(?=$|:)/, "")
     .toLowerCase();
-  let o = hostWithoutPort(lower);
-  let sliced = lower.slice(o.length);
-  let replaced = (canonicalHostname(o) || o).replace(/\.+$/, "");
+  let hostPart = hostWithoutPort(lower);
+  let sliced = lower.slice(hostPart.length);
+  let replaced = (canonicalHostname(hostPart) || hostPart).replace(/\.+$/, "");
   return stripWwwPrefix(replaced + sliced);
 }
 //@ chunk-2nznck8t.js:1120-1161 placement
-var regExp = new RegExp(`^${CLAUDE_IN_CHROME_DOMAIN_RULE_TOOL}\\(([^)]+)\\)$`);
+var regExp; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-2nznck8t.js:1120", () => {
+  regExp = new RegExp(`^${CLAUDE_IN_CHROME_DOMAIN_RULE_TOOL}\\(([^)]+)\\)$`);
+});
 //@ chunk-2nznck8t.js:1161-1323 placement
 /**
  * 从权限上下文收集 Claude in Chrome 的站点规则：允许与拒绝的站点集合（规范化）、原始允许项与每个站点的规则来源。
  */
 function collectChromeSiteRules(toolPermissionContext) {
-  let e = new Set();
-  let o = [];
-  let r = new Set();
-  let n = new Map();
-  addSiteRules(toolPermissionContext.alwaysDenyRules, r, n);
-  addSiteRules(toolPermissionContext.alwaysAllowRules, e, n, o, r);
+  let allowed = new Set();
+  let allowedRaw = [];
+  let denied = new Set();
+  let sourceOf = new Map();
+  addSiteRules(toolPermissionContext.alwaysDenyRules, denied, sourceOf);
+  addSiteRules(toolPermissionContext.alwaysAllowRules, allowed, sourceOf, allowedRaw, denied);
   return {
-    allowed: e,
-    denied: r,
-    allowedRaw: o,
-    sourceOf: n,
+    allowed,
+    denied,
+    allowedRaw,
+    sourceOf,
   };
 }
 //@ chunk-2nznck8t.js:1323-1372 placement
 /**
  * 判断站点是否在 Chrome 拒绝列表里（同时查去端口形式）。
  */
-function isSiteDenied(t, e) {
-  return t.has(e) || t.has(hostWithoutPort(e));
+function isSiteDenied(sites, site) {
+  return sites.has(site) || sites.has(hostWithoutPort(site));
 }
 //@ chunk-2nznck8t.js:1372-1653 placement
 /**
  * 若站点命中 Chrome 站点拒绝列表，返回拒绝决定（附规则来源，按带/不带端口查找）。
  */
-function chromeSiteDenyDecision(chromeSiteRules, e) {
-  let o = normalizeChromeSite(e);
-  if (!isSiteDenied(chromeSiteRules.denied, o)) return;
+function chromeSiteDenyDecision(chromeSiteRules, site) {
+  let normalizedSite = normalizeChromeSite(site);
+  if (!isSiteDenied(chromeSiteRules.denied, normalizedSite)) return;
   return {
     behavior: "deny",
-    message: `Claude in Chrome is denied on ${e}.`,
+    message: `Claude in Chrome is denied on ${site}.`,
     decisionReason: {
       type: "rule",
       rule: {
         source:
-          chromeSiteRules.sourceOf.get(o) ?? chromeSiteRules.sourceOf.get(hostWithoutPort(o)) ?? "session",
+          chromeSiteRules.sourceOf.get(normalizedSite) ??
+          chromeSiteRules.sourceOf.get(hostWithoutPort(normalizedSite)) ??
+          "session",
         ruleBehavior: "deny",
         ruleValue: {
           toolName: CLAUDE_IN_CHROME_DOMAIN_RULE_TOOL,
-          ruleContent: e,
+          ruleContent: site,
         },
       },
     },
   };
 }
 //@ chunk-2nznck8t.js:1653-1843 placement
-function addSiteRules(t, e, o, r, n) {
-  for (let [key, value] of Object.entries(t))
-    for (let s of value ?? []) {
-      let match = regExp.exec(s);
+function addSiteRules(rules, allowed, sourceOf, allowedRaw, denied) {
+  for (let [key, value] of Object.entries(rules))
+    for (let ruleValue of value ?? []) {
+      let match = regExp.exec(ruleValue);
       if (match?.[1]) {
-        let a = normalizeChromeSite(match[1]);
-        if (n && isSiteDenied(n, a)) continue;
-        if (!e.has(a)) {
-          e.add(a);
-          o.set(a, key);
-          r?.push(match[1]);
+        let site = normalizeChromeSite(match[1]);
+        if (denied && isSiteDenied(denied, site)) continue;
+        if (!allowed.has(site)) {
+          allowed.add(site);
+          sourceOf.set(site, key);
+          allowedRaw?.push(match[1]);
         }
       }
     }
@@ -129,8 +135,8 @@ function addSiteRules(t, e, o, r, n) {
 /**
  * 判断动作是否为 back/forward 导航。
  */
-function isBackOrForward(t) {
-  return ["back", "forward"].includes(t.trim().toLowerCase());
+function isBackOrForward(target) {
+  return ["back", "forward"].includes(target.trim().toLowerCase());
 }
 //@ chunk-2nznck8t.js:1917-1967 placement
 /**
@@ -143,27 +149,27 @@ var URL_LIKE_SCHEME_RE = /^(?:https?|wss?|ftp|file)\.*(?=[\\?#]|$)/i;
  */
 function parseChromeUrl(url) {
   let replaced = url.replace(/[\t\n\r]/g, "").replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/g, "");
-  let o;
+  let parsedUrl;
   try {
-    o = new URL(replaced);
-    if (o.protocol !== "http:" && o.protocol !== "https:") {
+    parsedUrl = new URL(replaced);
+    if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
       if (!/^(localhost|[a-z0-9-]+\.[a-z0-9.-]+):\d+(?=$|[/?#])/i.test(replaced)) return;
-      o = undefined;
+      parsedUrl = undefined;
     }
   } catch {}
-  if (!o) {
+  if (!parsedUrl) {
     if (/^[^/\\?#]*:(?=$|[/\\?#])/.test(replaced)) return;
     try {
-      o = new URL(`https://${replaced}`);
+      parsedUrl = new URL(`https://${replaced}`);
     } catch {
       return;
     }
     if (URL_LIKE_SCHEME_RE.test(stripVariationSelectors(replaced))) return;
   }
-  if (!o.host || o.username || o.password) return;
+  if (!parsedUrl.host || parsedUrl.username || parsedUrl.password) return;
   return {
-    host: o.host,
-    url: o.href,
+    host: parsedUrl.host,
+    url: parsedUrl.href,
   };
 }
 //@ chunk-2nznck8t.js:2417-2517 placement
@@ -171,15 +177,15 @@ function parseChromeUrl(url) {
  * 取标签页 URL 的主机（http 且无端口时补 :80）。
  */
 function hostWithDefaultPort(chromeUrl) {
-  let e = new URL(chromeUrl.url);
-  return e.protocol === "http:" && e.port === "" ? `${e.host}:80` : e.host;
+  let url = new URL(chromeUrl.url);
+  return url.protocol === "http:" && url.port === "" ? `${url.host}:80` : url.host;
 }
 //@ chunk-2nznck8t.js:2517-2575 placement
 /**
  * 解析动作的目标 URL 并补上默认端口。
  */
-function parseSiteActionUrl(t) {
-  let chromeUrl = parseChromeUrl(t);
+function parseSiteActionUrl(rawInput) {
+  let chromeUrl = parseChromeUrl(rawInput);
   return (
     chromeUrl && {
       ...chromeUrl,
@@ -191,9 +197,9 @@ function parseSiteActionUrl(t) {
 /**
  * 在 browser_batch 的动作列表中找出第一个作用于站点的动作（navigate 到 URL 或带 tabId 的动作），跳过无站点动作与 back/forward 导航。
  */
-function firstSiteActionInBatch(t) {
-  if (!Array.isArray(t.actions)) return;
-  for (let action of t.actions) {
+function firstSiteActionInBatch(input) {
+  if (!Array.isArray(input.actions)) return;
+  for (let action of input.actions) {
     if (!isPlainObject(action) || typeof action.name !== "string") continue;
     let input = isPlainObject(action.input) ? action.input : {};
     if (CHROME_INPUT_APPROVED_TOOL_NAMES.has(action.name) && isBrowserHousekeepingCall(action.name, input))
@@ -238,24 +244,26 @@ function canShowChromeSetupCard({
     (isUserDrivenHere(messages) ||
       (allowGivenBy?.toolUseId === toolUseId && allowGivenBy?.approver === "user")) &&
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_memoized_owl", false) &&
-    !(refreshTools?.() ?? tools).some((s) => isChromeToolName(s.name) && !s.name.startsWith(CFC_TOOL_PREFIX))
+    !(refreshTools?.() ?? tools).some(
+      (tool) => isChromeToolName(tool.name) && !tool.name.startsWith(CFC_TOOL_PREFIX),
+    )
   );
 }
 //@ chunk-2nznck8t.js:3732-3985 placement
 /**
  * Chrome 工具返回"扩展未连接"且确无已连接浏览器时，把结果替换为引导用户在卡片中设置浏览器的说明。
  */
-async function chromeNotConnectedAnswer(t, e) {
-  let [o, ...r] = t.content ?? [];
+async function chromeNotConnectedAnswer(result, toolUseContext) {
+  let [firstBlock, ...restBlocks] = result.content ?? [];
   if (!(
-    o?.type === "text" &&
-    r.length === 0 &&
-    hasDisconnectedAnswerText(o.text) &&
+    firstBlock?.type === "text" &&
+    restBlocks.length === 0 &&
+    hasDisconnectedAnswerText(firstBlock.text) &&
     !claudeInChromeSession().bridgeBinding?.context.getPersistedDeviceId?.() &&
-    canShowChromeSetupCard(e) &&
+    canShowChromeSetupCard(toolUseContext) &&
     (await noBrowserForSetupCard())
   ))
-    return t;
+    return result;
   logFeatureOk("chrome_setup_card_answer");
   return {
     content: [
@@ -270,20 +278,20 @@ async function chromeNotConnectedAnswer(t, e) {
 /**
  * 结果带"无浏览器"标记时：手机端返回手机专用说明；无首选设备且满足条件时替换为设置浏览器卡片说明。
  */
-function chromeNoBrowserAnswer(content, e, o) {
-  if (e?.[CHROME_NO_BROWSER_META] !== true) return content;
-  let r = phoneChromeAnswer();
-  if (r !== undefined)
+function chromeNoBrowserAnswer(content, result, toolUseContext) {
+  if (result?.[CHROME_NO_BROWSER_META] !== true) return content;
+  let phoneAnswer = phoneChromeAnswer();
+  if (phoneAnswer !== undefined)
     return [
       {
         type: "text",
-        text: r,
+        text: phoneAnswer,
       },
     ];
   if (!(
     !claudeInChromeSession().browserHints?.preferredDeviceId &&
     !env.CLAUDE_CHROME_PAIRED_DEVICE_ID &&
-    canShowChromeSetupCard(o)
+    canShowChromeSetupCard(toolUseContext)
   ))
     return content;
   logFeatureOk("chrome_setup_card_answer");

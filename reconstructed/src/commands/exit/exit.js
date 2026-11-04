@@ -9,22 +9,35 @@
  * attribution: placement 2, fingerprint 3
  */
 import { spawnSync } from "child_process";
-import { sampleAlias } from "../../components/Spinner/spinnerStatus.js";
-import { isBgSession } from "../../utils/concurrentSessions.js";
-import { ExitFlow } from "../../components/ExitFlow.js";
-import { submittedMessages, isMidTurnStreaming } from "../../utils/promptSubmissionOrigin.js";
 import { env } from "../../utils/env.js";
 import { resolveExecutableSafely } from "../../utils/findExecutableWindows.js";
 import { subprocessEnv } from "../../utils/subprocessEnv.js";
 import { _tmuxGlobalEnvOutputHasMarker } from "../../utils/teammate.js";
+import { isBgSession } from "../../utils/concurrentSessions.js";
+import { ExitFlow } from "../../components/ExitFlow.js";
+import { submittedMessages, isMidTurnStreaming } from "../../utils/promptSubmissionOrigin.js";
+import { sampleAlias } from "../../components/Spinner/spinnerStatus.js";
 
-//@ chunk-18hwfzwa.js:1706346-1706362 placement
-function noopExitHandler() {}
-//@ chunk-18hwfzwa.js:1706362-1706419 fingerprint = GOODBYE_MESSAGES (1)
-var GOODBYE_MESSAGES = ["Goodbye!", "See ya!", "Bye!", "Catch you later!"];
-//@ chunk-18hwfzwa.js:1706419-1706461 fingerprint = getRandomGoodbyeMessage (1)
-function getRandomGoodbyeMessage() {
-  return sampleAlias(GOODBYE_MESSAGES) ?? "Goodbye!";
+//@ chunk-fxf1mb10.js:2534-2853 fingerprint = call (0.371)
+function call() {
+  if (!env.TMUX) return "absent";
+  let executable = resolveExecutableSafely("tmux");
+  if (executable === null) return "unknown";
+  let exitCode;
+  try {
+    exitCode = spawnSync(executable, ["show-environment", "-g"], {
+      encoding: "utf8",
+      timeout: 250,
+      stdio: ["ignore", "pipe", "ignore"],
+      cwd: undefined,
+      env: subprocessEnv(),
+      windowsHide: true,
+    });
+  } catch {
+    return "unknown";
+  }
+  if (exitCode.status !== 0) return "unknown";
+  return _tmuxGlobalEnvOutputHasMarker(exitCode.stdout) ? "ambient" : "absent";
 }
 //@ chunk-f55t9a8b.js:12092-12271 placement
 /**
@@ -47,25 +60,12 @@ async function runExitCommand(args, context) {
     type: "skip",
   };
 }
-//@ chunk-fxf1mb10.js:2534-2853 fingerprint = call (0.371)
-function call() {
-  if (!env.TMUX) return "absent";
-  let executable = resolveExecutableSafely("tmux");
-  if (executable === null) return "unknown";
-  let t;
-  try {
-    t = spawnSync(executable, ["show-environment", "-g"], {
-      encoding: "utf8",
-      timeout: 250,
-      stdio: ["ignore", "pipe", "ignore"],
-      cwd: undefined,
-      env: subprocessEnv(),
-      windowsHide: true,
-    });
-  } catch {
-    return "unknown";
-  }
-  if (t.status !== 0) return "unknown";
-  return _tmuxGlobalEnvOutputHasMarker(t.stdout) ? "ambient" : "absent";
+//@ chunk-18hwfzwa.js:1706346-1706362 placement
+function noopExitHandler() {}
+//@ chunk-18hwfzwa.js:1706362-1706419 fingerprint = GOODBYE_MESSAGES (1)
+var GOODBYE_MESSAGES = ["Goodbye!", "See ya!", "Bye!", "Catch you later!"];
+//@ chunk-18hwfzwa.js:1706419-1706461 fingerprint = getRandomGoodbyeMessage (1)
+function getRandomGoodbyeMessage() {
+  return sampleAlias(GOODBYE_MESSAGES) ?? "Goodbye!";
 }
-export { getRandomGoodbyeMessage, noopExitHandler, call };
+export { getRandomGoodbyeMessage, noopExitHandler, call, runExitCommand };

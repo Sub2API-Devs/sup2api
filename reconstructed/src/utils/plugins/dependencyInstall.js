@@ -33,8 +33,8 @@ import { formatDependencyCountSuffix, missingDependenciesHint } from "./dependen
 /**
  * ensureCatalogForOfficialDeps：依赖里有官方市场插件时加载插件目录。
  */
-async function ensureCatalogForOfficialDeps(l, storageV5) {
-  return l.some((n) => n.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`))
+async function ensureCatalogForOfficialDeps(pluginIds, storageV5) {
+  return pluginIds.some((pluginId) => pluginId.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`))
     ? ensurePluginDirectoryCatalog(storageV5)
     : "not_needed";
 }
@@ -44,71 +44,74 @@ var INSTALLABLE_SCOPES = ["user", "project", "local"];
 /**
  * 找出缺失的插件依赖并按市场安装（策略阻止、跨市场依赖不在声明市场时跳过）。
  */
-async function resolveMissingDependencies(errors, r) {
-  let n = new Map();
-  for (let e of errors) {
-    if (e.type !== "dependency-unsatisfied" || e.reason !== "not-found") continue;
-    let a = n.get(e.dependency);
-    if (!a) {
-      a = new Set();
-      n.set(e.dependency, a);
+async function resolveMissingDependencies(errors, storageV5) {
+  let sourcesByDependency = new Map();
+  for (let error of errors) {
+    if (error.type !== "dependency-unsatisfied" || error.reason !== "not-found") continue;
+    let sources = sourcesByDependency.get(error.dependency);
+    if (!sources) {
+      sources = new Set();
+      sourcesByDependency.set(error.dependency, sources);
     }
-    a.add(e.source);
+    sources.add(error.source);
   }
-  if (n.size === 0)
+  if (sourcesByDependency.size === 0)
     return {
       installed: [],
       stillUnresolved: [],
       marketplaceMissing: [],
     };
-  let knownMarketplaces = await loadKnownMarketplacesSafe(r);
-  let mapped = INSTALLABLE_SCOPES.map((e) => [e, getEnabledPluginIdsInSource(scopeToSettingSource(e))]);
-  let g = [];
-  let s = [];
-  let p = [];
-  for (let [e, a] of n) {
-    let marketplace = parsePluginIdentifier(e).marketplace;
-    let k = marketplace ? ownPropertyOrUndefined(knownMarketplaces, marketplace) : undefined;
-    if (!marketplace || !k) {
-      s.push(e);
-      p.push(e);
+  let knownMarketplaces = await loadKnownMarketplacesSafe(storageV5);
+  let scopePluginIds = INSTALLABLE_SCOPES.map((scope) => [
+    scope,
+    getEnabledPluginIdsInSource(scopeToSettingSource(scope)),
+  ]);
+  let installed = [];
+  let unresolved = [];
+  let marketplaceMissing = [];
+  for (let [dependencyId, sources] of sourcesByDependency) {
+    let marketplace = parsePluginIdentifier(dependencyId).marketplace;
+    let marketplaceEntry = marketplace ? ownPropertyOrUndefined(knownMarketplaces, marketplace) : undefined;
+    if (!marketplace || !marketplaceEntry) {
+      unresolved.push(dependencyId);
+      marketplaceMissing.push(dependencyId);
       continue;
     }
-    if (!isSourceAllowedByPolicy(k.source)) {
+    if (!isSourceAllowedByPolicy(marketplaceEntry.source)) {
       logForDebugging(
-        `resolveMissingDependencies: skipping "${e}" \u2014 marketplace "${marketplace}" is blocked by enterprise policy`,
+        `resolveMissingDependencies: skipping "${dependencyId}" \u2014 marketplace "${marketplace}" is blocked by enterprise policy`,
       );
-      s.push(e);
+      unresolved.push(dependencyId);
       continue;
     }
-    let y = false;
-    for (let o of a) {
-      let marketplace_2 = parsePluginIdentifier(o).marketplace;
+    let allowed = false;
+    for (let dependentId of sources) {
+      let marketplace_2 = parsePluginIdentifier(dependentId).marketplace;
       if (marketplace_2 === marketplace) {
-        y = true;
+        allowed = true;
         break;
       }
       if (!marketplace_2) continue;
       if (
-        (await getMarketplaceCacheOnly(marketplace_2, r))?.allowCrossMarketplaceDependenciesOn?.includes(
-          marketplace,
-        )
+        (
+          await getMarketplaceCacheOnly(marketplace_2, storageV5)
+        )?.allowCrossMarketplaceDependenciesOn?.includes(marketplace)
       ) {
-        y = true;
+        allowed = true;
         break;
       }
     }
-    if (!y) {
+    if (!allowed) {
       logForDebugging(
-        `resolveMissingDependencies: skipping "${e}" \u2014 cross-marketplace dependency not in any declaring marketplace's allowlist`,
+        `resolveMissingDependencies: skipping "${dependencyId}" \u2014 cross-marketplace dependency not in any declaring marketplace's allowlist`,
       );
-      s.push(e);
+      unresolved.push(dependencyId);
       continue;
     }
     try {
-      let pluginByIdAnySource = await getPluginByIdAnySource(e, r, "install");
+      let pluginByIdAnySource = await getPluginByIdAnySource(dependencyId, storageV5, "install");
       if (!pluginByIdAnySource) {
-        s.push(e);
+        unresolved.push(dependencyId);
         continue;
       }
       let source = pluginByIdAnySource.entry.source;
@@ -119,79 +122,89 @@ async function resolveMissingDependencies(errors, r) {
           headersHelperNotRunReason({
             entry: pluginByIdAnySource.entry,
             archiveUrl: source.url,
-            marketplaceSource: marketplaceSourceOfEntry(e, knownMarketplaces),
+            marketplaceSource: marketplaceSourceOfEntry(dependencyId, knownMarketplaces),
             trustedSettingsEntryAuth: findSettingsArchiveEntry(
-              marketplaceNameOfId(e),
+              marketplaceNameOfId(dependencyId),
               pluginByIdAnySource.entry.name,
             ),
           }).entry,
         )
       ) {
         logForDebugging(
-          `resolveMissingDependencies: skipping "${e}" \u2014 it fetches its archive through an entry headersHelper, which only an explicit install from /plugin may run`,
+          `resolveMissingDependencies: skipping "${dependencyId}" \u2014 it fetches its archive through an entry headersHelper, which only an explicit install from /plugin may run`,
         );
-        s.push(e);
+        unresolved.push(dependencyId);
         continue;
       }
-      let m = marketplaceWithDependency(a, mapped);
-      let h = await installResolvedPlugin({
-        pluginId: e,
+      let dependentScope = marketplaceWithDependency(sources, scopePluginIds);
+      let installResult = await installResolvedPlugin({
+        pluginId: dependencyId,
         entry: pluginByIdAnySource.entry,
-        scope: m ?? "user",
+        scope: dependentScope ?? "user",
         marketplaceInstallLocation: pluginByIdAnySource.marketplaceInstallLocation,
         trigger: "dependency-resolution",
         explicit: false,
-        auto: m !== undefined,
+        auto: dependentScope !== undefined,
         requiredByEnabledDependent: true,
-        storageV5: r,
+        storageV5,
       });
-      if (h.ok) {
-        for (let S of h.closure) if (!g.includes(S)) g.push(S);
+      if (installResult.ok) {
+        for (let installedId of installResult.closure)
+          if (!installed.includes(installedId)) installed.push(installedId);
       } else {
-        logForDebugging(`resolveMissingDependencies: install of "${e}" did not complete (${h.reason})`, {
-          level: "warn",
-        });
-        s.push(e);
+        logForDebugging(
+          `resolveMissingDependencies: install of "${dependencyId}" did not complete (${installResult.reason})`,
+          {
+            level: "warn",
+          },
+        );
+        unresolved.push(dependencyId);
       }
     } catch (error) {
-      logForDebugging(`resolveMissingDependencies: install of "${e}" threw: ${errorMessage(error)}`, {
-        level: "warn",
-      });
-      s.push(e);
+      logForDebugging(
+        `resolveMissingDependencies: install of "${dependencyId}" threw: ${errorMessage(error)}`,
+        {
+          level: "warn",
+        },
+      );
+      unresolved.push(dependencyId);
     }
   }
   return {
-    installed: g,
-    stillUnresolved: s,
-    marketplaceMissing: p,
+    installed,
+    stillUnresolved: unresolved,
+    marketplaceMissing,
   };
 }
 //@ chunk-jnt55rm1.js:2555-2652 placement
 /**
  * dependencyErrorsForSource：某来源的依赖加载错误。
  */
-async function dependencyErrorsForSource(l, r) {
-  let { errors } = await loadAllPluginsCacheOnly(r);
-  return errors.filter(isDependencyError).filter((error) => error.source === l);
+async function dependencyErrorsForSource(source, storageV5) {
+  let { errors } = await loadAllPluginsCacheOnly(storageV5);
+  return errors.filter(isDependencyError).filter((error) => error.source === source);
 }
 //@ chunk-jnt55rm1.js:2652-2901 placement
 /**
  * 安装插件缺失的依赖并生成结果后缀文字。
  */
-async function installMissingDependencies(l, storageV5) {
-  let n = await dependencyErrorsForSource(l, storageV5);
-  if (n.length === 0) return null;
-  let { installed, marketplaceMissing } = await resolveMissingDependencies(n, storageV5);
-  let g = new Set(installed);
-  let filtered = uniq(n.map((p) => p.dependency)).filter((p) => !g.has(p));
+async function installMissingDependencies(source, storageV5) {
+  let depErrors = await dependencyErrorsForSource(source, storageV5);
+  if (depErrors.length === 0) return null;
+  let { installed, marketplaceMissing } = await resolveMissingDependencies(depErrors, storageV5);
+  let installedSet = new Set(installed);
+  let dependencyIds = uniq(depErrors.map((error) => error.dependency)).filter(
+    (dependencyId) => !installedSet.has(dependencyId),
+  );
   return {
-    suffix: `${formatDependencyCountSuffix(installed)}${missingDependenciesHint(filtered, marketplaceMissing)}`,
+    suffix: `${formatDependencyCountSuffix(installed)}${missingDependenciesHint(dependencyIds, marketplaceMissing)}`,
     changed: installed.length > 0,
   };
 }
 //@ chunk-jnt55rm1.js:2901-2977 placement
-function marketplaceWithDependency(l, r) {
-  for (let [n, i] of r) for (let f of l) if (i.has(f)) return n;
+function marketplaceWithDependency(dependencyIds, scopePluginIds) {
+  for (let [scope, pluginIds] of scopePluginIds)
+    for (let dependencyId of dependencyIds) if (pluginIds.has(dependencyId)) return scope;
   return;
 }
 export {

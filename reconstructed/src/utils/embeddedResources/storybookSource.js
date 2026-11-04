@@ -21,3 +21,4 @@ var STORYBOOK_SOURCE_RESOURCE = __cc_resource_0;
  * 读出的 storybook 源码文本。
  */
 var storybookSourceText = readEmbeddedTextSync(STORYBOOK_SOURCE_RESOURCE, import.meta.dirname);
+export { storybookSourceText };

@@ -8,7 +8,13 @@
  * pieces: chunk-0e8j1zzj.js (4)
  * attribution: placement 1, fingerprint 3
  */
-import { init_react_production, y, P, ce, Q } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "../../../vendor/react/cjs/react.production.js";
 import { useShellPermissionFeedback } from "./useShellPermissionFeedback.js";
 import { KillAgentsConfirm } from "../KillAgentsConfirm.js";
 import { MessageActionsKeybindings } from "../messageActions.js";
@@ -21,9 +27,13 @@ import { ModelSelector } from "../agents/ModelSelector.js";
 import { NO_COMMITTED_ROW } from "../CustomSelect/select.js";
 import { Byline } from "../design-system/Byline.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-0e8j1zzj.js:25579-25583 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0e8j1zzj.js:25579", () => {
+  init_react_production();
+});
 //@ chunk-0e8j1zzj.js:25583-25686 fingerprint = _temp (1)
 /**
  * 把权限提示归因状态中的 Esc 次数加一。
@@ -56,12 +66,12 @@ function PermissionPrompt({
   hideIndexes,
   requestSource,
 }) {
-  let [k, f] = y(defaultFocusValue);
-  P(() => {
-    f(undefined);
+  let [selectedValue, setSelectedValue] = useState(defaultFocusValue);
+  useEffect(() => {
+    setSelectedValue(undefined);
   }, []);
-  let feedbackTypeOf = ce(
-    (F) => options.find((option) => option.value === F)?.feedbackConfig?.type,
+  let feedbackTypeOf = useCallback(
+    (feedbackTypeOf) => options.find((option) => option.value === feedbackTypeOf)?.feedbackConfig?.type,
     [options],
   );
   let {
@@ -81,8 +91,8 @@ function PermissionPrompt({
     toolName: toolAnalyticsContext?.toolName,
     isMcp: toolAnalyticsContext?.isMcp ?? false,
   });
-  let le = KillAgentsConfirm(requestSource);
-  let options_2 = Q(
+  let killAgentsConfirm = KillAgentsConfirm(requestSource);
+  let options_2 = useMemo(
     () =>
       options.map((opt) => {
         let { value, label, feedbackConfig } = opt;
@@ -115,38 +125,39 @@ function PermissionPrompt({
       }),
     [options, acceptInputMode, rejectInputMode],
   );
-  let X = ce(
+  let onChange = useCallback(
     (value_0) => {
       let option = options.find((opt_1) => opt_1.value === value_0);
       if (!option || option.disabled) return;
       let feedbackConfig = option.feedbackConfig;
-      let de;
-      let oe = "";
+      let onSubmit;
+      let typedFeedback = "";
       if (feedbackConfig) {
-        oe = (feedbackConfig.type === "accept" ? acceptFeedback : rejectFeedback).trim();
-        if (oe) de = oe;
+        typedFeedback = (feedbackConfig.type === "accept" ? acceptFeedback : rejectFeedback).trim();
+        if (typedFeedback) onSubmit = typedFeedback;
       }
-      if (onSelect(value_0, de) === false) return false;
-      if (feedbackConfig) logSubmitted(feedbackConfig.type, oe);
+      if (onSelect(value_0, onSubmit) === false) return false;
+      if (feedbackConfig) logSubmitted(feedbackConfig.type, typedFeedback);
     },
     [options, acceptFeedback, rejectFeedback, onSelect, logSubmitted],
   );
-  let Y = Q(() => {
+  let feedbackEffect = useMemo(() => {
     let option_0 = options.find(
       (opt_2) =>
         (opt_2.feedbackConfig?.type === "accept" && acceptInputMode) ||
         (opt_2.feedbackConfig?.type === "reject" && rejectInputMode),
     );
-    let U = {};
+    let keybindingHandlers = {};
     for (let opt_3 of options)
       if (opt_3.keybinding)
-        U[opt_3.keybinding] = () => (option_0 ? handleInputModeToggle(option_0.value) : X(opt_3.value));
-    return U;
-  }, [options, acceptInputMode, rejectInputMode, handleInputModeToggle, X]);
-  MessageActionsKeybindings(Y, {
+        keybindingHandlers[opt_3.keybinding] = () =>
+          option_0 ? handleInputModeToggle(option_0.value) : onChange(opt_3.value);
+    return keybindingHandlers;
+  }, [options, acceptInputMode, rejectInputMode, handleInputModeToggle, onChange]);
+  MessageActionsKeybindings(feedbackEffect, {
     context: "Confirmation",
   });
-  let onCancel_2 = ce(() => {
+  let onCancel_2 = useCallback(() => {
     if (onCancel?.() === false) return;
     logEscape();
   }, [onCancel, logEscape]);
@@ -161,10 +172,10 @@ function PermissionPrompt({
       jsxProd_default(ModelSelector, {
         selectedValue: NO_COMMITTED_ROW,
         options: options_2,
-        defaultFocusValue: k,
+        defaultFocusValue: selectedValue,
         hideIndexes,
         inlineDescriptions: true,
-        onChange: X,
+        onChange,
         onCancel: onCancel_2,
         onFocus: handleFocus,
         onInputModeToggle: handleInputModeToggle,
@@ -173,7 +184,7 @@ function PermissionPrompt({
         marginTop: 1,
         children: jsxProd_default(Text, {
           dimColor: true,
-          wrap: le ? "truncate" : undefined,
+          wrap: killAgentsConfirm ? "truncate" : undefined,
           children: jsxProd_default_2(Byline, {
             children: [
               jsxProd_default(KeyboardShortcutHint, {
@@ -181,7 +192,7 @@ function PermissionPrompt({
                 action: "cancel",
               }),
               hintNode,
-              le,
+              killAgentsConfirm,
             ],
           }),
         }),

@@ -5,11 +5,11 @@
  * pieces: chunk-hq88884p.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_types } from "../../types/dist-cjs/index.js";
 
 //@ chunk-hq88884p.js:2578-4952 cjs-fingerprint
-var require_protocol_http = x(function (cjsExports) {
+var require_protocol_http = __commonJS(function (cjsExports) {
   var types = require_types();
   var getHttpHandlerExtensionConfiguration = (runtimeConfig) => ({
     setHttpHandler(handler) {

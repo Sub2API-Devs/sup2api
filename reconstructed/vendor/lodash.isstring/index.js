@@ -5,10 +5,10 @@
  * pieces: chunk-mrx6y2r5.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-mrx6y2r5.js:15499-15734 cjs-fingerprint
-var require_lodash_isstring = x(function (cjsExports, cjsModule) {
+var require_lodash_isstring = __commonJS(function (cjsExports, cjsModule) {
   var stringTag = "[object String]";
   var objectProto = Object.prototype;
   var objectToString = objectProto.toString;

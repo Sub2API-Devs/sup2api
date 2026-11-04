@@ -5,15 +5,15 @@
  * pieces: chunk-m4p5zn6n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { require_which } from "../../../which/which.js";
-import { Et } from "../../../unresolved-cjs/index.js";
+import { require_pathKey } from "../../../unresolved-cjs/index.js";
 
 //@ chunk-m4p5zn6n.js:3917-4564 cjs-fingerprint
-var require_resolveCommand = x(function (cjsExports, cjsModule) {
+var require_resolveCommand = __commonJS(function (cjsExports, cjsModule) {
   var path = importMetaRequire("path");
-  var Tt = require_which();
-  var Jn = Et();
+  var which = require_which();
+  var getPathKey = require_pathKey();
   function resolveCommandAttempt(parsed, withoutPathExt) {
     let env = parsed.options.env || process.env;
     let cwd = process.cwd();
@@ -25,9 +25,9 @@ var require_resolveCommand = x(function (cjsExports, cjsModule) {
       } catch (error) {}
     let resolved;
     try {
-      resolved = Tt.sync(parsed.command, {
+      resolved = which.sync(parsed.command, {
         path: env[
-          Jn({
+          getPathKey({
             env,
           })
         ],

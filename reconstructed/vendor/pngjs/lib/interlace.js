@@ -5,10 +5,10 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:23141-23814 cjs-fingerprint
-var require_interlace = x(function (cjsExports) {
+var require_interlace = __commonJS(function (cjsExports) {
   var imagePasses = [
     {
       x: [0],

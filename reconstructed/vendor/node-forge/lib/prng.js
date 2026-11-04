@@ -5,12 +5,12 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_forge } from "./forge.js";
 import { require_util } from "./util.js";
 
 //@ chunk-fq0cr76a.js:84760-88346 cjs-fingerprint
-var require_prng = x(function (cjsExports, cjsModule) {
+var require_prng = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_util();
   var _crypto = null;

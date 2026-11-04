@@ -45,7 +45,7 @@ import { SubAgentContext } from "../../components/CtrlOToExpand.js";
 import {
   removeCaptureStackTrace,
   createVmRealm,
-  vUe,
+  NO_IMPORT_OPTIONS,
   createVmHostFnWrapper,
   createVmInboundCopier,
   awaitAsNullProto,
@@ -58,17 +58,18 @@ import { loadWorkflowScriptFile, workflowToolContext } from "./scriptFile.js";
 import { createWorkflowCall } from "./childWorkflows.js";
 import { clone, jsonStringify } from "../../utils/slowOperations.js";
 import { logForDebugging } from "../../utils/debug.js";
+import { runDeferredInits } from "../../../runtime/deferred-init.js";
 
 //@ chunk-41w44bgm.js:90673-90749 placement = countUnseenAssistantTurns (1)
 function countUnseenAssistantTurns(onProgress) {
-  return (n) => {
+  return (event) => {
     onProgress(
-      n.type === "progress"
+      event.type === "progress"
         ? {
-            ...n,
-            data: truncateProgressStrings(n.data),
+            ...event,
+            data: truncateProgressStrings(event.data),
           }
-        : n,
+        : event,
     );
   };
 }
@@ -76,38 +77,38 @@ function countUnseenAssistantTurns(onProgress) {
 /**
  * 以 AbortError 中止卡住的执行。
  */
-function abortStalled(e) {
-  e.abort(new DOMException("stalled", "AbortError"));
+function abortStalled(controller) {
+  controller.abort(new DOMException("stalled", "AbortError"));
 }
 //@ chunk-41w44bgm.js:90814-90879 placement
 /**
  * 截断进度里的 label 与 phase。
  */
-function truncateProgressFields(e, n) {
+function truncateProgressFields(label, phase) {
   return {
-    ...(e && {
-      label: truncateMiddle(e),
+    ...(label && {
+      label: truncateMiddle(label),
     }),
-    ...(n && {
-      phase: truncateMiddle(n),
+    ...(phase && {
+      phase: truncateMiddle(phase),
     }),
   };
 }
 //@ chunk-41w44bgm.js:90879-91047 placement
-function truncateProgressStrings(e) {
-  let n;
-  for (let key of Object.keys(e)) {
-    let h = Reflect.get(e, key);
-    if (typeof h !== "string") continue;
-    let T = truncateMiddle(h);
-    if (T !== h) {
-      n ??= {
-        ...e,
+function truncateProgressStrings(data) {
+  let copy;
+  for (let key of Object.keys(data)) {
+    let value = Reflect.get(data, key);
+    if (typeof value !== "string") continue;
+    let truncated = truncateMiddle(value);
+    if (truncated !== value) {
+      copy ??= {
+        ...data,
       };
-      Reflect.set(n, key, T);
+      Reflect.set(copy, key, truncated);
     }
   }
-  return n ?? e;
+  return copy ?? data;
 }
 //@ chunk-41w44bgm.js:91047-91246 placement
 /**
@@ -135,15 +136,15 @@ function structuredOutputUnjudgedWarning(noVerdict) {
 /**
  * 给 agent 定义的系统提示词追加一段后缀（返回新定义）。
  */
-function withSystemPromptSuffix(e, n) {
-  return isBuiltInAgent(e)
+function withSystemPromptSuffix(agent, suffix) {
+  return isBuiltInAgent(agent)
     ? {
-        ...e,
-        getSystemPrompt: (r) => e.getSystemPrompt(r) + n,
+        ...agent,
+        getSystemPrompt: (context) => agent.getSystemPrompt(context) + suffix,
       }
     : {
-        ...e,
-        getSystemPrompt: (r) => e.getSystemPrompt(r) + n,
+        ...agent,
+        getSystemPrompt: (context) => agent.getSystemPrompt(context) + suffix,
       };
 }
 //@ chunk-41w44bgm.js:91378-92280 placement
@@ -169,16 +170,16 @@ async function judgeStructuredOutputVerdict({ calls, deliveredId, delivered, las
     );
   }
   let missingVerdict = deliveredVerdict === undefined;
-  for (let [he, ke] of calls) {
-    if (he === deliveredId) continue;
-    let te = await structuredOutputVerdict(ke.response, he);
-    if (te?.flagged) {
+  for (let [callId, call] of calls) {
+    if (callId === deliveredId) continue;
+    let verdict = await structuredOutputVerdict(call.response, callId);
+    if (verdict?.flagged) {
       logFeatureOk("workflow_structured_output_verdict", {
         flagged: true,
       });
-      return flaggedStructuredResultWarning(te.reason, "another");
+      return flaggedStructuredResultWarning(verdict.reason, "another");
     }
-    missingVerdict ||= te === undefined;
+    missingVerdict ||= verdict === undefined;
   }
   if (missingVerdict) {
     logFeatureSad("workflow_structured_output_verdict", "no_verdict");
@@ -221,41 +222,42 @@ function createWorkflowVmContext(
   context,
   canUseTool,
   onProgress,
-  h,
-  T,
-  y,
-  seedPhaseTitles,
-  tokenBudget,
+  workflowRunId,
+  onAgentController,
+  args,
+  initialPhases,
+  budget,
   journal,
-  he,
+  journalIndex,
   workflowName,
   invokingRequestId,
   parentPromptId,
-  We,
-  withholdScript,
+  onRateLimitWait,
+  numberedLabels,
 ) {
   let emitProgress = countUnseenAssistantTurns(onProgress);
   let runtime = createWorkflowAgentRuntime(
     context,
     canUseTool,
     emitProgress,
-    h,
-    T,
-    seedPhaseTitles,
-    tokenBudget,
+    workflowRunId,
+    onAgentController,
+    initialPhases,
+    budget,
     journal,
-    he,
+    journalIndex,
     workflowName,
     invokingRequestId,
     parentPromptId,
-    We,
-    withholdScript,
+    onRateLimitWait,
+    numberedLabels,
   );
-  let s = {
-    sanitize: ($e) => ($e === null || (typeof $e !== "object" && typeof $e !== "function") ? $e : {}),
-    toStr: ($e) => describeBoundaryValue($e),
+  let bridges = {
+    sanitize: (value) =>
+      value === null || (typeof value !== "object" && typeof value !== "function") ? value : {},
+    toStr: (value) => describeBoundaryValue(value),
   };
-  let S = createVmConsole(
+  let vmConsole = createVmConsole(
     (message) =>
       emitProgress({
         type: "progress",
@@ -265,14 +267,14 @@ function createWorkflowVmContext(
           message,
         },
       }),
-    s,
+    bridges,
   );
-  let budget = Object.freeze({
+  let budget_2 = Object.freeze({
     __proto__: null,
-    total: tokenBudget?.total ?? null,
-    spent: sanitizeAndLogError(() => tokenBudget?.getTurnSpent() ?? 0),
+    total: budget?.total ?? null,
+    spent: sanitizeAndLogError(() => budget?.getTurnSpent() ?? 0),
     remaining: sanitizeAndLogError(() =>
-      tokenBudget?.total == null ? 1 / 0 : Math.max(0, tokenBudget.total - tokenBudget.getTurnSpent()),
+      budget?.total == null ? 1 / 0 : Math.max(0, budget.total - budget.getTurnSpent()),
     ),
   });
   let signal = context.abortController?.signal;
@@ -282,8 +284,8 @@ function createWorkflowVmContext(
       __proto__: null,
       log: sanitizeAndLogError(runtime.log),
       phase: sanitizeAndLogError(runtime.phase),
-      console: S,
-      budget,
+      console: vmConsole,
+      budget: budget_2,
       setTimeout: timers.setTimeout,
       clearTimeout: timers.clearTimeout,
     },
@@ -296,59 +298,59 @@ function createWorkflowVmContext(
   );
   installDeterminismShim(vmContext);
   removeCaptureStackTrace(vmContext);
-  createVmRealm(vmContext, vUe);
+  createVmRealm(vmContext, NO_IMPORT_OPTIONS);
   defineVmPromiseResolve(vmContext);
-  let se = isZestyFeatherOn();
-  let wrapCallable = se ? createVmHostFnWrapper(vmContext) : ($e) => $e;
-  if (se) sealSyncGlobalsInVM(vmContext, wrapCallable);
+  let sealHooks = isZestyFeatherOn();
+  let wrapCallable = sealHooks ? createVmHostFnWrapper(vmContext) : (fn) => fn;
+  if (sealHooks) sealSyncGlobalsInVM(vmContext, wrapCallable);
   let { vmToStr, vmStringify, vmOwnString } = VM_STRING_BRIDGE_SOURCE(vmContext);
   timers.bindVMInvoke(vmModule_2.runInContext("(fn => { fn() })", vmContext));
   let vmInboundCopier = createVmInboundCopier(vmContext);
   let settle = awaitAsNullProto(vmContext);
   let call = callWithArgs(vmContext);
-  let ye = {};
-  let gt = {
+  let childSpawnMemoRef = {};
+  let childHooks = {
     hooks: runtime,
-    budget,
+    budget: budget_2,
     abortSignal: signal,
     timers,
-    resolveWorkflow: ($e, Se) => findWorkflowByName($e, Se, context.storageV5),
-    getAllWorkflows: ($e) => allWorkflowsForHost($e, context.storageV5),
+    resolveWorkflow: (name, cwd) => findWorkflowByName(name, cwd, context.storageV5),
+    getAllWorkflows: (cwd) => allWorkflowsForHost(cwd, context.storageV5),
     intakeClone: vmInboundCopier,
-    sealSyncHooksInVM: se,
+    sealSyncHooksInVM: sealHooks,
     loadScriptPath: (scriptPath) => loadWorkflowScriptFile(scriptPath, workflowToolContext(context)),
-    childSpawnMemo: () => ye.get?.(),
+    childSpawnMemo: () => childSpawnMemoRef.get?.(),
   };
-  let workflowCall = createWorkflowCall(gt);
-  let $t = wrapVmGlobal(vmContext);
-  let jt = ($e, Se) => runtime.agent($e, Se);
-  for (let [$e, Se] of [
-    ["agent", jt],
+  let workflowCall = createWorkflowCall(childHooks);
+  let asyncWrap = wrapVmGlobal(vmContext);
+  let agentFn = (prompt, options) => runtime.agent(prompt, options);
+  for (let [hookName, hookFn] of [
+    ["agent", agentFn],
     ["parallel", runtime.parallel],
     ["pipeline", runtime.pipeline],
     ["workflow", workflowCall],
   ])
-    Object.defineProperty(vmContext, $e, {
-      value: $t(wrapHostFnForVm(Se)),
+    Object.defineProperty(vmContext, hookName, {
+      value: asyncWrap(wrapHostFnForVm(hookFn)),
       writable: true,
       enumerable: true,
       configurable: true,
     });
   {
-    let $e = y === undefined ? undefined : JSON.stringify(y);
+    let argsJson = args === undefined ? undefined : JSON.stringify(args);
     Object.defineProperty(vmContext, "args", {
       value:
-        $e === undefined
+        argsJson === undefined
           ? undefined
-          : vmModule_2.runInContext(`JSON.parse(${JSON.stringify($e)})`, vmContext),
+          : vmModule_2.runInContext(`JSON.parse(${JSON.stringify(argsJson)})`, vmContext),
       writable: true,
       enumerable: true,
       configurable: true,
     });
   }
-  let vmSideCopier = createVmSideCopier(vmContext, vUe);
-  s.sanitize = vmSideCopier.sanitize;
-  s.toStr = vmToStr;
+  let vmSideCopier = createVmSideCopier(vmContext, NO_IMPORT_OPTIONS);
+  bridges.sanitize = vmSideCopier.sanitize;
+  bridges.toStr = vmToStr;
   runtime.bindVMAwait({
     settle,
     call,
@@ -364,16 +366,16 @@ function createWorkflowVmContext(
     vmOwnString,
     vmStringify,
     timers,
-    childSpawnMemoRef: ye,
+    childSpawnMemoRef,
     vmBoundary: {
       clone: vmInboundCopier,
       call,
       settle,
       sanitize: vmSideCopier.sanitize,
-      asyncWrap: $t,
+      asyncWrap,
       syncWrap: wrapCallable,
     },
-    childWorkflow: gt,
+    childWorkflow: childHooks,
   };
 }
 //@ chunk-41w44bgm.js:94269-94281 placement
@@ -386,12 +388,12 @@ var PROGRESS_TICK_MS = 1000;
 async function runWorkflowScript(compiledScript, context, canUseTool, options = {}) {
   let now = Date.now();
   let logs = [];
-  let onProgress = (me) => {
-    if (me.type === "progress" && me.data.type === "workflow_log" && logs.length < PROGRESS_TICK_MS)
-      logs.push(me.data.message);
-    options.onProgress?.(me);
+  let onProgress = (event) => {
+    if (event.type === "progress" && event.data.type === "workflow_log" && logs.length < PROGRESS_TICK_MS)
+      logs.push(event.data.message);
+    options.onProgress?.(event);
   };
-  let L = options.journal ? await options.journal.load() : undefined;
+  let journalIndex = options.journal ? await options.journal.load() : undefined;
   let vm = createWorkflowVmContext(
     context,
     canUseTool,
@@ -402,7 +404,7 @@ async function runWorkflowScript(compiledScript, context, canUseTool, options = 
     options.seedPhaseTitles,
     options.tokenBudget,
     options.journal,
-    L,
+    journalIndex,
     options.workflowName,
     options.invokingRequestId,
     options.parentPromptId,
@@ -411,42 +413,47 @@ async function runWorkflowScript(compiledScript, context, canUseTool, options = 
   );
   let vmErrorDescriber = createVmErrorDescriber(vm.vmContext);
   let signal = context.abortController?.signal;
-  let te;
+  let removeAbortListener;
   try {
-    let me = compiledScript.runInContext(
+    let rawResult = compiledScript.runInContext(
       vm.vmContext,
       timeoutOption(VM_ABORT_TIMEOUT_MS, options.syncTimeoutMs),
     );
-    let We = awaitAsNullProto(vm.vmContext)(me);
-    We.catch(() => {});
-    let ce = (
+    let settled = awaitAsNullProto(vm.vmContext)(rawResult);
+    settled.catch(() => {});
+    let resultValue = (
       signal
         ? await Promise.race([
-            We,
+            settled,
             new Promise((resolve, reject) => {
-              let V = () => reject(Error("Workflow aborted"));
-              if (signal.aborted) V();
+              let onAbort = () => reject(Error("Workflow aborted"));
+              if (signal.aborted) onAbort();
               else {
-                signal.addEventListener("abort", V);
-                te = () => signal.removeEventListener("abort", V);
+                signal.addEventListener("abort", onAbort);
+                removeAbortListener = () => signal.removeEventListener("abort", onAbort);
               }
             }),
           ])
-        : await We
+        : await settled
     ).v;
-    if (typeof ce === "function") throw Error("workflow result cannot be a function");
-    let E = ce !== null && typeof ce === "object" ? vm.hooks.sanitizeVMValue(ce) : ce;
-    let s;
+    if (typeof resultValue === "function") throw Error("workflow result cannot be a function");
+    let sanitized =
+      resultValue !== null && typeof resultValue === "object"
+        ? vm.hooks.sanitizeVMValue(resultValue)
+        : resultValue;
+    let cloned;
     try {
-      s = clone(E);
+      cloned = clone(sanitized);
     } catch (error) {
-      if (E === null || typeof E !== "object") throw error;
-      s = JSON.parse(jsonStringify(E, (P, V) => (typeof V === "function" ? undefined : V)) ?? "null");
+      if (sanitized === null || typeof sanitized !== "object") throw error;
+      cloned = JSON.parse(
+        jsonStringify(sanitized, (key, value) => (typeof value === "function" ? undefined : value)) ?? "null",
+      );
     }
-    jsonStringify(s);
+    jsonStringify(cloned);
     let toolsUsed = vm.hooks.getToolsUsed();
     return {
-      result: s,
+      result: cloned,
       agentCount: vm.hooks.getAgentCount(),
       logs,
       failures: vm.hooks.getFailures(),
@@ -460,7 +467,7 @@ async function runWorkflowScript(compiledScript, context, canUseTool, options = 
       durationMs: Date.now() - now,
     };
   } catch (error) {
-    let { name: We, message, stack } = vmErrorDescriber(error);
+    let { name: errorName, message, stack } = vmErrorDescriber(error);
     if (stack)
       logForDebugging(
         `Workflow script error stack trace:
@@ -484,15 +491,19 @@ ${stack}`,
       usageLimitDenial: vm.hooks.takeUsageLimitDenial(),
       durationMs: Date.now() - now,
       error: summarizeError({
-        name: We,
+        name: errorName,
         message,
         stack,
       }),
     };
   } finally {
-    te?.();
+    removeAbortListener?.();
   }
 }
+
+// The import cycle this module closes (2 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("src/services/workflow/runScript.js");
 export {
   truncateProgressFields,
   withSystemPromptSuffix,

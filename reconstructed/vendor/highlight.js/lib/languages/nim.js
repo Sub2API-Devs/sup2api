@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:310953-312633 cjs-fingerprint
-var require_nim = x(function (cjsExports, cjsModule) {
+var require_nim = __commonJS(function (cjsExports, cjsModule) {
   function nim(hljs) {
     return {
       name: "Nim",

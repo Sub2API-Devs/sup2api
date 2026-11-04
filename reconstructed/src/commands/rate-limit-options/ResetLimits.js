@@ -8,8 +8,8 @@
  * pieces: chunk-jh6bkx5v.js (7)
  * attribution: placement 7
  */
-import { init_react_production, y, R } from "../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { init_react_production, useState, useRef } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   useInputRefusalWindow,
   useRefusalTracker,
@@ -46,19 +46,19 @@ function noop() {}
  * 重置用量限额的界面：调用重置接口并显示进度
  */
 function ResetLimits(props) {
-  let t = w(55);
+  let $ = useMemoCache(55);
   let { offer, entry, credentials, onDone } = props;
-  let [u, I] = y(false);
-  let T = R(false);
+  let [isClaiming, setIsClaiming] = useState(false);
+  let submittedRef = useRef(false);
   let inputRefusalWindow = useInputRefusalWindow(RECENT_INPUT_GUARD_MS);
   let { refusedWithin, noteRefused } = useRefusalTracker();
   let mountTime = useMountTime();
-  let m;
-  let i;
-  let v;
+  let ConfirmComponent;
+  let DialogComponent;
+  let handleDecline;
   let refuseInput;
-  let W;
-  let z;
+  let bodyElement;
+  let earlyReturnElement;
   let openedAt;
   let windowMs;
   let hideIndexes;
@@ -69,64 +69,64 @@ function ResetLimits(props) {
   let color;
   let onConfirm;
   if (
-    t[0] !== u ||
-    t[1] !== credentials ||
-    t[2] !== entry ||
-    t[3] !== inputRefusalWindow ||
-    t[4] !== noteRefused ||
-    t[5] !== offer ||
-    t[6] !== onDone ||
-    t[7] !== refusedWithin ||
-    t[8] !== mountTime
+    $[0] !== isClaiming ||
+    $[1] !== credentials ||
+    $[2] !== entry ||
+    $[3] !== inputRefusalWindow ||
+    $[4] !== noteRefused ||
+    $[5] !== offer ||
+    $[6] !== onDone ||
+    $[7] !== refusedWithin ||
+    $[8] !== mountTime
   ) {
-    z = EARLY_RETURN_SENTINEL;
+    earlyReturnElement = EARLY_RETURN_SENTINEL;
     io: {
       let cedarEmberCopy = getCedarEmberCopy();
-      let L = resetOfferFields(offer);
-      let H;
-      if (t[24] !== offer) {
-        H = earlyUseLine(offer);
-        t[24] = offer;
-        t[25] = H;
-      } else H = t[25];
-      let J = H;
-      let Y;
-      if (t[26] !== inputRefusalWindow || t[27] !== noteRefused || t[28] !== refusedWithin) {
-        Y = function A() {
+      let templateFields = resetOfferFields(offer);
+      let earlyUseLineRaw;
+      if ($[24] !== offer) {
+        earlyUseLineRaw = earlyUseLine(offer);
+        $[24] = offer;
+        $[25] = earlyUseLineRaw;
+      } else earlyUseLineRaw = $[25];
+      let earlyUseText = earlyUseLineRaw;
+      let shouldRefuseCached;
+      if ($[26] !== inputRefusalWindow || $[27] !== noteRefused || $[28] !== refusedWithin) {
+        shouldRefuseCached = function shouldRefuseRecentInput() {
           if (inputRefusalWindow() || refusedWithin(RECENT_INPUT_GUARD_MS)) {
             noteRefused();
             return true;
           }
           return false;
         };
-        t[26] = inputRefusalWindow;
-        t[27] = noteRefused;
-        t[28] = refusedWithin;
-        t[29] = Y;
-      } else Y = t[29];
-      let A = Y;
-      let le;
-      if (t[30] !== entry || t[31] !== offer || t[32] !== onDone || t[33] !== A) {
-        le = function v() {
-          if (T.current || A()) {
+        $[26] = inputRefusalWindow;
+        $[27] = noteRefused;
+        $[28] = refusedWithin;
+        $[29] = shouldRefuseCached;
+      } else shouldRefuseCached = $[29];
+      let shouldRefuseInput = shouldRefuseCached;
+      let declineHandlerCached;
+      if ($[30] !== entry || $[31] !== offer || $[32] !== onDone || $[33] !== shouldRefuseInput) {
+        declineHandlerCached = function handleDeclineInternal() {
+          if (submittedRef.current || shouldRefuseInput()) {
             return;
           }
-          T.current = true;
+          submittedRef.current = true;
           onDone(reportResetDeclined(entry, offer));
         };
-        t[30] = entry;
-        t[31] = offer;
-        t[32] = onDone;
-        t[33] = A;
-        t[34] = le;
-      } else le = t[34];
-      v = le;
-      onConfirm = function x() {
-        if (T.current || A()) {
+        $[30] = entry;
+        $[31] = offer;
+        $[32] = onDone;
+        $[33] = shouldRefuseInput;
+        $[34] = declineHandlerCached;
+      } else declineHandlerCached = $[34];
+      handleDecline = declineHandlerCached;
+      onConfirm = function handleConfirm() {
+        if (submittedRef.current || shouldRefuseInput()) {
           return;
         }
-        T.current = true;
-        I(true);
+        submittedRef.current = true;
+        setIsClaiming(true);
         claimReset(entry, credentials, offer)
           .then(onDone)
           .catch(() => {
@@ -136,22 +136,22 @@ function ResetLimits(props) {
                 offer.origin === "wall"
                   ? cedarEmberCopy.unconfirmedLine
                   : cedarEmberCopy.unconfirmedAnytimeLine,
-                L,
+                templateFields,
               ),
             });
           });
       };
-      if (u) {
-        const title = formatLimitResetTemplate(cedarEmberCopy.confirmTitle, L);
+      if (isClaiming) {
+        const title = formatLimitResetTemplate(cedarEmberCopy.confirmTitle, templateFields);
         let children;
-        if (t[35] === MEMO_CACHE_SENTINEL) {
+        if ($[35] === MEMO_CACHE_SENTINEL) {
           children = jsxProd_default(Text, {
             dimColor: true,
             children: "Resetting your limits\u2026 this usually takes a few seconds",
           });
-          t[35] = children;
-        } else children = t[35];
-        z = jsxProd_default(Dialog, {
+          $[35] = children;
+        } else children = $[35];
+        earlyReturnElement = jsxProd_default(Dialog, {
           title,
           onCancel: noop,
           exitOnCtrlCD: true,
@@ -161,97 +161,97 @@ function ResetLimits(props) {
         });
         break io;
       }
-      i = Dialog;
-      title = formatLimitResetTemplate(cedarEmberCopy.confirmTitle, L);
-      onCancel = v;
+      DialogComponent = Dialog;
+      title = formatLimitResetTemplate(cedarEmberCopy.confirmTitle, templateFields);
+      onCancel = handleDecline;
       color = "suggestion";
-      let Q;
-      if (t[36] !== J) {
-        Q =
-          J === undefined
+      let earlyUseElement;
+      if ($[36] !== earlyUseText) {
+        earlyUseElement =
+          earlyUseText === undefined
             ? null
             : jsxProd_default(Text, {
-                children: J,
+                children: earlyUseText,
               });
-        t[36] = J;
-        t[37] = Q;
-      } else Q = t[37];
-      W = jsxProd_default_2(Box, {
+        $[36] = earlyUseText;
+        $[37] = earlyUseElement;
+      } else earlyUseElement = $[37];
+      bodyElement = jsxProd_default_2(Box, {
         flexDirection: "column",
         children: [
-          Q,
+          earlyUseElement,
           jsxProd_default(Text, {
-            children: formatLimitResetTemplate(cedarEmberCopy.confirmBody, L),
+            children: formatLimitResetTemplate(cedarEmberCopy.confirmBody, templateFields),
           }),
           jsxProd_default(Text, {
             dimColor: true,
-            children: formatLimitResetTemplate(cedarEmberCopy.confirmDetail, L),
+            children: formatLimitResetTemplate(cedarEmberCopy.confirmDetail, templateFields),
           }),
         ],
       });
-      m = ConfirmSelect;
-      refuseInput = A;
+      ConfirmComponent = ConfirmSelect;
+      refuseInput = shouldRefuseInput;
       openedAt = mountTime;
       windowMs = RECENT_INPUT_GUARD_MS;
       hideIndexes = true;
-      confirmLabel = formatLimitResetTemplate(cedarEmberCopy.confirmYes, L);
-      cancelLabel = formatLimitResetTemplate(cedarEmberCopy.confirmNo, L);
+      confirmLabel = formatLimitResetTemplate(cedarEmberCopy.confirmYes, templateFields);
+      cancelLabel = formatLimitResetTemplate(cedarEmberCopy.confirmNo, templateFields);
     }
-    t[0] = u;
-    t[1] = credentials;
-    t[2] = entry;
-    t[3] = inputRefusalWindow;
-    t[4] = noteRefused;
-    t[5] = offer;
-    t[6] = onDone;
-    t[7] = refusedWithin;
-    t[8] = mountTime;
-    t[9] = m;
-    t[10] = i;
-    t[11] = v;
-    t[12] = refuseInput;
-    t[13] = W;
-    t[14] = z;
-    t[15] = openedAt;
-    t[16] = windowMs;
-    t[17] = hideIndexes;
-    t[18] = confirmLabel;
-    t[19] = cancelLabel;
-    t[20] = title;
-    t[21] = onCancel;
-    t[22] = color;
-    t[23] = onConfirm;
+    $[0] = isClaiming;
+    $[1] = credentials;
+    $[2] = entry;
+    $[3] = inputRefusalWindow;
+    $[4] = noteRefused;
+    $[5] = offer;
+    $[6] = onDone;
+    $[7] = refusedWithin;
+    $[8] = mountTime;
+    $[9] = ConfirmComponent;
+    $[10] = DialogComponent;
+    $[11] = handleDecline;
+    $[12] = refuseInput;
+    $[13] = bodyElement;
+    $[14] = earlyReturnElement;
+    $[15] = openedAt;
+    $[16] = windowMs;
+    $[17] = hideIndexes;
+    $[18] = confirmLabel;
+    $[19] = cancelLabel;
+    $[20] = title;
+    $[21] = onCancel;
+    $[22] = color;
+    $[23] = onConfirm;
   } else {
-    m = t[9];
-    i = t[10];
-    v = t[11];
-    refuseInput = t[12];
-    W = t[13];
-    z = t[14];
-    openedAt = t[15];
-    windowMs = t[16];
-    hideIndexes = t[17];
-    confirmLabel = t[18];
-    cancelLabel = t[19];
-    title = t[20];
-    onCancel = t[21];
-    color = t[22];
-    onConfirm = t[23];
+    ConfirmComponent = $[9];
+    DialogComponent = $[10];
+    handleDecline = $[11];
+    refuseInput = $[12];
+    bodyElement = $[13];
+    earlyReturnElement = $[14];
+    openedAt = $[15];
+    windowMs = $[16];
+    hideIndexes = $[17];
+    confirmLabel = $[18];
+    cancelLabel = $[19];
+    title = $[20];
+    onCancel = $[21];
+    color = $[22];
+    onConfirm = $[23];
   }
-  if (z !== EARLY_RETURN_SENTINEL) return z;
-  let H;
+  if (earlyReturnElement !== EARLY_RETURN_SENTINEL) return earlyReturnElement;
+  let confirmSelectElement;
   if (
-    t[38] !== m ||
-    t[39] !== v ||
-    t[40] !== refuseInput ||
-    t[41] !== openedAt ||
-    t[42] !== windowMs ||
-    t[43] !== hideIndexes ||
-    t[44] !== confirmLabel ||
-    t[45] !== cancelLabel ||
-    t[46] !== onConfirm
+    $[38] !== ConfirmComponent ||
+    $[39] !== handleDecline ||
+    $[40] !== refuseInput ||
+    $[41] !== openedAt ||
+    $[42] !== windowMs ||
+    $[43] !== hideIndexes ||
+    $[44] !== confirmLabel ||
+    $[45] !== cancelLabel ||
+    $[46] !== onConfirm
   ) {
-    H = jsxProd_default(m, {
+    confirmSelectElement = jsxProd_default(ConfirmComponent, {
       refuseInput,
       openedAt,
       windowMs,
@@ -259,51 +259,58 @@ function ResetLimits(props) {
       confirmLabel,
       cancelLabel,
       onConfirm,
-      onCancel: v,
+      onCancel: handleDecline,
     });
-    t[38] = m;
-    t[39] = v;
-    t[40] = refuseInput;
-    t[41] = openedAt;
-    t[42] = windowMs;
-    t[43] = hideIndexes;
-    t[44] = confirmLabel;
-    t[45] = cancelLabel;
-    t[46] = onConfirm;
-    t[47] = H;
-  } else H = t[47];
-  let Y;
-  if (t[48] !== i || t[49] !== W || t[50] !== H || t[51] !== title || t[52] !== onCancel || t[53] !== color) {
-    Y = jsxProd_default_2(i, {
+    $[38] = ConfirmComponent;
+    $[39] = handleDecline;
+    $[40] = refuseInput;
+    $[41] = openedAt;
+    $[42] = windowMs;
+    $[43] = hideIndexes;
+    $[44] = confirmLabel;
+    $[45] = cancelLabel;
+    $[46] = onConfirm;
+    $[47] = confirmSelectElement;
+  } else confirmSelectElement = $[47];
+  let dialogElement;
+  if (
+    $[48] !== DialogComponent ||
+    $[49] !== bodyElement ||
+    $[50] !== confirmSelectElement ||
+    $[51] !== title ||
+    $[52] !== onCancel ||
+    $[53] !== color
+  ) {
+    dialogElement = jsxProd_default_2(DialogComponent, {
       title,
       onCancel,
       color,
-      children: [W, H],
+      children: [bodyElement, confirmSelectElement],
     });
-    t[48] = i;
-    t[49] = W;
-    t[50] = H;
-    t[51] = title;
-    t[52] = onCancel;
-    t[53] = color;
-    t[54] = Y;
-  } else Y = t[54];
-  return Y;
+    $[48] = DialogComponent;
+    $[49] = bodyElement;
+    $[50] = confirmSelectElement;
+    $[51] = title;
+    $[52] = onCancel;
+    $[53] = color;
+    $[54] = dialogElement;
+  } else dialogElement = $[54];
+  return dialogElement;
 }
 //@ chunk-jh6bkx5v.js:2981-2985 placement
 init_react_production();
 //@ chunk-jh6bkx5v.js:2985-3034 placement
-function resetOfferOption(x) {
+function resetOfferOption(offer) {
   return {
-    label: resetOfferLabel(x),
-    value: x.kind,
+    label: resetOfferLabel(offer),
+    value: offer.kind,
   };
 }
 //@ chunk-jh6bkx5v.js:3034-3095 placement
-function unusableResetOption(c) {
+function unusableResetOption(unusable) {
   return {
-    label: c.text,
-    value: c.kind,
+    label: unusable.text,
+    value: unusable.kind,
     disabled: true,
   };
 }
@@ -312,118 +319,118 @@ function unusableResetOption(c) {
  * 重置限额选项列表（选中后进入确认）。
  */
 function ResetLimitsOffers(props) {
-  let t = w(30);
+  let $ = useMemoCache(30);
   let { offers, unusable, entry, credentials, onDone } = props;
-  let [I, T] = y(null);
-  let b = R(false);
+  let [selectedOffer, setSelectedOffer] = useState(null);
+  let submittedRef = useRef(false);
   let inputRefusalWindow = useInputRefusalWindow(RECENT_INPUT_GUARD_MS);
   let { refusedWithin, noteRefused } = useRefusalTracker();
-  if (I !== null) {
-    let m;
-    if (t[0] !== I || t[1] !== credentials || t[2] !== entry || t[3] !== onDone) {
-      m = jsxProd_default(ResetLimits, {
-        offer: I,
+  if (selectedOffer !== null) {
+    let resetLimitsElement;
+    if ($[0] !== selectedOffer || $[1] !== credentials || $[2] !== entry || $[3] !== onDone) {
+      resetLimitsElement = jsxProd_default(ResetLimits, {
+        offer: selectedOffer,
         entry,
         credentials,
         onDone,
       });
-      t[0] = I;
-      t[1] = credentials;
-      t[2] = entry;
-      t[3] = onDone;
-      t[4] = m;
-    } else m = t[4];
-    return m;
+      $[0] = selectedOffer;
+      $[1] = credentials;
+      $[2] = entry;
+      $[3] = onDone;
+      $[4] = resetLimitsElement;
+    } else resetLimitsElement = $[4];
+    return resetLimitsElement;
   }
-  let m;
-  if (t[5] !== inputRefusalWindow || t[6] !== noteRefused || t[7] !== refusedWithin) {
-    m = function i() {
+  let shouldRefuseCached;
+  if ($[5] !== inputRefusalWindow || $[6] !== noteRefused || $[7] !== refusedWithin) {
+    shouldRefuseCached = function shouldRefuseRecentInput() {
       if (inputRefusalWindow() || refusedWithin(RECENT_INPUT_GUARD_MS)) {
         noteRefused();
         return true;
       }
       return false;
     };
-    t[5] = inputRefusalWindow;
-    t[6] = noteRefused;
-    t[7] = refusedWithin;
-    t[8] = m;
-  } else m = t[8];
-  let i = m;
-  let v;
-  if (t[9] !== entry || t[10] !== offers || t[11] !== onDone || t[12] !== i) {
-    v = function f() {
-      if (b.current || i()) {
+    $[5] = inputRefusalWindow;
+    $[6] = noteRefused;
+    $[7] = refusedWithin;
+    $[8] = shouldRefuseCached;
+  } else shouldRefuseCached = $[8];
+  let shouldRefuseInput = shouldRefuseCached;
+  let cancelHandlerCached;
+  if ($[9] !== entry || $[10] !== offers || $[11] !== onDone || $[12] !== shouldRefuseInput) {
+    cancelHandlerCached = function handleCancelInternal() {
+      if (submittedRef.current || shouldRefuseInput()) {
         return;
       }
-      b.current = true;
+      submittedRef.current = true;
       onDone(keepResetForLater(entry, offers));
     };
-    t[9] = entry;
-    t[10] = offers;
-    t[11] = onDone;
-    t[12] = i;
-    t[13] = v;
-  } else v = t[13];
-  let onCancel = v;
-  let W;
-  if (t[14] !== entry || t[15] !== offers || t[16] !== i) {
-    W = function E(z) {
-      let found = offers.find((offer) => offer.kind === z);
-      if (found === undefined || b.current || i()) {
+    $[9] = entry;
+    $[10] = offers;
+    $[11] = onDone;
+    $[12] = shouldRefuseInput;
+    $[13] = cancelHandlerCached;
+  } else cancelHandlerCached = $[13];
+  let onCancel = cancelHandlerCached;
+  let changeHandlerCached;
+  if ($[14] !== entry || $[15] !== offers || $[16] !== shouldRefuseInput) {
+    changeHandlerCached = function handleChangeInternal(kind) {
+      let offer = offers.find((offer) => offer.kind === kind);
+      if (offer === undefined || submittedRef.current || shouldRefuseInput()) {
         return;
       }
-      reportResetSelected(entry, found);
-      T(found);
+      reportResetSelected(entry, offer);
+      setSelectedOffer(offer);
     };
-    t[14] = entry;
-    t[15] = offers;
-    t[16] = i;
-    t[17] = W;
-  } else W = t[17];
-  let onChange = W;
-  let U;
-  if (t[18] !== offers || t[19] !== unusable) {
-    U = [...offers.map(resetOfferOption), ...unusable.map(unusableResetOption)];
-    t[18] = offers;
-    t[19] = unusable;
-    t[20] = U;
-  } else U = t[20];
-  let g = U;
-  let P;
-  if (t[21] === MEMO_CACHE_SENTINEL) {
-    P = getCedarEmberCopy();
-    t[21] = P;
-  } else P = t[21];
+    $[14] = entry;
+    $[15] = offers;
+    $[16] = shouldRefuseInput;
+    $[17] = changeHandlerCached;
+  } else changeHandlerCached = $[17];
+  let onChange = changeHandlerCached;
+  let optionsDraft;
+  if ($[18] !== offers || $[19] !== unusable) {
+    optionsDraft = [...offers.map(resetOfferOption), ...unusable.map(unusableResetOption)];
+    $[18] = offers;
+    $[19] = unusable;
+    $[20] = optionsDraft;
+  } else optionsDraft = $[20];
+  let options = optionsDraft;
+  let copy;
+  if ($[21] === MEMO_CACHE_SENTINEL) {
+    copy = getCedarEmberCopy();
+    $[21] = copy;
+  } else copy = $[21];
   let children;
-  if (t[22] !== onChange || t[23] !== onCancel || t[24] !== g || t[25] !== i) {
+  if ($[22] !== onChange || $[23] !== onCancel || $[24] !== options || $[25] !== shouldRefuseInput) {
     children = jsxProd_default(ModelSelector, {
-      options: g,
+      options,
       onChange,
       onCancel,
-      refuseInput: i,
+      refuseInput: shouldRefuseInput,
       selectedValue: NO_COMMITTED_ROW,
       hideIndexes: true,
-      visibleOptionCount: g.length,
+      visibleOptionCount: options.length,
     });
-    t[22] = onChange;
-    t[23] = onCancel;
-    t[24] = g;
-    t[25] = i;
-    t[26] = children;
-  } else children = t[26];
-  let N;
-  if (t[27] !== onCancel || t[28] !== children) {
-    N = jsxProd_default(Dialog, {
-      title: P.chooseTitle,
+    $[22] = onChange;
+    $[23] = onCancel;
+    $[24] = options;
+    $[25] = shouldRefuseInput;
+    $[26] = children;
+  } else children = $[26];
+  let dialogElement;
+  if ($[27] !== onCancel || $[28] !== children) {
+    dialogElement = jsxProd_default(Dialog, {
+      title: copy.chooseTitle,
       onCancel,
       color: "suggestion",
       children,
     });
-    t[27] = onCancel;
-    t[28] = children;
-    t[29] = N;
-  } else N = t[29];
-  return N;
+    $[27] = onCancel;
+    $[28] = children;
+    $[29] = dialogElement;
+  } else dialogElement = $[29];
+  return dialogElement;
 }
 export { ResetLimits, ResetLimitsOffers };

@@ -12,9 +12,11 @@ import { doesEnterpriseMcpConfigExist, isMcpServerAllowedByPolicy } from "./conf
 import { areSideloadFlagsDisabledByPolicy } from "../../utils/plugins/marketplacePolicy.js";
 
 //@ chunk-3wek6r2k.js:60423-60469 placement
-function isLockedOutByOrgMcpPolicy(e, o) {
+function isLockedOutByOrgMcpPolicy(serverName, config) {
   return (
-    doesEnterpriseMcpConfigExist() || areSideloadFlagsDisabledByPolicy() || !isMcpServerAllowedByPolicy(e, o)
+    doesEnterpriseMcpConfigExist() ||
+    areSideloadFlagsDisabledByPolicy() ||
+    !isMcpServerAllowedByPolicy(serverName, config)
   );
 }
 export { isLockedOutByOrgMcpPolicy };

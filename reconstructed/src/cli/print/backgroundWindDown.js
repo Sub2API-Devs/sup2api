@@ -76,92 +76,95 @@ import { lookupTaskForStop } from "../../utils/swarm/teammateAddressLookup.js";
 /**
  * 回看转录，判断被折叠进上一轮的后续排队消息是否已被模型读到/回复，用于结果遥测。
  */
-function classifyFoldedFollowUps(messages, n, r) {
-  let s = new Map();
+function classifyFoldedFollowUps(messages, skip, hasOpener) {
+  let states = new Map();
   try {
-    let index = messages.findIndex((R) => queuedCommandSourceUuid(R) !== undefined);
-    let y = FOLD_END_NO_MORE_ROWS;
-    let S = FOLD_END_NO_MORE_ROWS;
+    let index = messages.findIndex((message) => queuedCommandSourceUuid(message) !== undefined);
+    let latestRow = FOLD_END_NO_MORE_ROWS;
+    let nextRow = FOLD_END_NO_MORE_ROWS;
     for (let j = messages.length - 1; index !== -1 && j >= index; j--) {
-      let w = messages[j];
-      if (n.has(w)) continue;
-      if ("isSidechain" in w && w.isSidechain === true) continue;
-      if (isCompactBoundaryOrSummary(w)) {
-        y = S = FOLD_END_SOMETHING_FOLLOWS_MODEL_KEPT;
+      let message = messages[j];
+      if (skip.has(message)) continue;
+      if ("isSidechain" in message && message.isSidechain === true) continue;
+      if (isCompactBoundaryOrSummary(message)) {
+        latestRow = nextRow = FOLD_END_SOMETHING_FOLLOWS_MODEL_KEPT;
         continue;
       }
-      if (w.type === "attachment") {
-        let P = queuedCommandSourceUuid(w);
-        if (P !== undefined && !s.has(P)) s.set(P, foldedFollowUpState(y, r));
-      } else if (w.type === "assistant") {
-        if (w.isApiErrorMessage || w.message.model === SYNTHETIC_MODEL) continue;
-        let content = Array.isArray(w.message.content) ? w.message.content : [];
-        let any = content.some((x) => x.type === "tool_use");
-        let any_2 = content.some((x) => x.type === "text" && x.text.trim() !== "");
+      if (message.type === "attachment") {
+        let sourceUuid = queuedCommandSourceUuid(message);
+        if (sourceUuid !== undefined && !states.has(sourceUuid))
+          states.set(sourceUuid, foldedFollowUpState(latestRow, hasOpener));
+      } else if (message.type === "assistant") {
+        if (message.isApiErrorMessage || message.message.model === SYNTHETIC_MODEL) continue;
+        let content = Array.isArray(message.message.content) ? message.message.content : [];
+        let any = content.some((block) => block.type === "tool_use");
+        let any_2 = content.some((block) => block.type === "text" && block.text.trim() !== "");
         if (!any && !any_2) {
-          y = withModelEndedTurnDefault(y);
-          S = withModelEndedTurnDefault(S);
+          latestRow = withModelEndedTurnDefault(latestRow);
+          nextRow = withModelEndedTurnDefault(nextRow);
           continue;
         }
-        S = FOLD_END_SOMETHING_FOLLOWS;
-        if (!y.modelWrote)
-          y = {
-            ...y,
+        nextRow = FOLD_END_SOMETHING_FOLLOWS;
+        if (!latestRow.modelWrote)
+          latestRow = {
+            ...latestRow,
             modelWrote: true,
-            modelEndedTheTurn: y.modelEndedTheTurn ?? (any_2 && !any && w.message.stop_reason === "end_turn"),
+            modelEndedTheTurn:
+              latestRow.modelEndedTheTurn ?? (any_2 && !any && message.message.stop_reason === "end_turn"),
           };
-      } else if (w.type !== "user") continue;
-      else if (isToolResultMessage(w)) y = S = withModelEndedTurnDefault(y);
-      else if (isContextAppendMessage(w)) y = S;
-      else if (isInterruptionOnlyMessage(w) && w.interruptedByShutdown !== true) y = S = FOLD_END_STOPPED;
-      else if (!isNonPromptUserRow(w)) y = S = FOLD_END_SOMETHING_FOLLOWS;
+      } else if (message.type !== "user") continue;
+      else if (isToolResultMessage(message)) latestRow = nextRow = withModelEndedTurnDefault(latestRow);
+      else if (isContextAppendMessage(message)) latestRow = nextRow;
+      else if (isInterruptionOnlyMessage(message) && message.interruptedByShutdown !== true)
+        latestRow = nextRow = FOLD_END_STOPPED;
+      else if (!isNonPromptUserRow(message)) latestRow = nextRow = FOLD_END_SOMETHING_FOLLOWS;
       else {
-        y = withModelEndedTurnDefault(y);
-        S = withModelEndedTurnDefault(S);
+        latestRow = withModelEndedTurnDefault(latestRow);
+        nextRow = withModelEndedTurnDefault(nextRow);
       }
     }
   } catch (error) {
     logError(error);
   }
-  return s;
+  return states;
 }
 //@ chunk-tyg7f3ek.js:96479-96628 placement
-function queuedCommandSourceUuid(e) {
-  return e.type === "attachment" &&
-    e.attachment.type === "queued_command" &&
-    e.attachment.commandMode !== undefined
-    ? e.attachment.source_uuid
+function queuedCommandSourceUuid(message) {
+  return message.type === "attachment" &&
+    message.attachment.type === "queued_command" &&
+    message.attachment.commandMode !== undefined
+    ? message.attachment.source_uuid
     : undefined;
 }
 //@ chunk-tyg7f3ek.js:96628-96709 placement
-function withModelEndedTurnDefault(e) {
-  return e.modelEndedTheTurn === undefined
+function withModelEndedTurnDefault(state) {
+  return state.modelEndedTheTurn === undefined
     ? {
-        ...e,
+        ...state,
         modelEndedTheTurn: false,
       }
-    : e;
+    : state;
 }
 //@ chunk-tyg7f3ek.js:96709-97015 placement
-function foldedFollowUpState(e, n) {
-  if (e.end === "stopped")
+function foldedFollowUpState(state, hasOpener) {
+  if (state.end === "stopped")
     return {
       state: "stopped",
     };
-  if (e.end === "no_more_rows" && n)
+  if (state.end === "no_more_rows" && hasOpener)
     return {
       state: "open",
-      replySeen: e.modelWrote,
+      replySeen: state.modelWrote,
     };
-  if (!e.modelWrote)
+  if (!state.modelWrote)
     return {
       state: "unread",
     };
-  if (e.modelEndedTheTurn === true)
+  if (state.modelEndedTheTurn === true)
     return {
       state: "finished",
     };
-  return e.end === "something_follows"
+  return state.end === "something_follows"
     ? {
         state: "left",
       }
@@ -171,15 +174,15 @@ function foldedFollowUpState(e, n) {
       };
 }
 //@ chunk-tyg7f3ek.js:97015-97259 placement
-function foldedFollowUpTelemetry(e, { cardCanBeHeld, openerKnown }) {
-  if (e === undefined) return {};
-  if (e.state !== "open")
+function foldedFollowUpTelemetry(folded, { cardCanBeHeld, openerKnown }) {
+  if (folded === undefined) return {};
+  if (folded.state !== "open")
     return {
-      folded_follow_up: e.state,
+      folded_follow_up: folded.state,
     };
   return {
     folded_follow_up: "open",
-    folded_turn_reply_seen: e.replySeen,
+    folded_turn_reply_seen: folded.replySeen,
     folded_turn_opener_known: openerKnown,
     folded_turn_has_owner: cardCanBeHeld && openerKnown,
   };
@@ -197,54 +200,60 @@ async function reportUserDataAttachments(sdkUrl) {
     !hasManagedSettings()
   )
     return;
-  let r = await import("./chunk-xdz4h5jb.js")
-    .then((w) => {
-      let P = isPolicyVerdictAbsent();
-      return w.isRetentionExemptionDisabled() ? "retention_governed" : P ? "retention_unknown" : null;
+  let reason = await import("../../utils/cleanup.js")
+    .then((mod) => {
+      let policyAbsent = isPolicyVerdictAbsent();
+      return mod.isRetentionExemptionDisabled()
+        ? "retention_governed"
+        : policyAbsent
+          ? "retention_unknown"
+          : null;
     })
     .catch(() => "retention_unknown");
-  if (r !== null) {
+  if (reason !== null) {
     logForDiagnosticsNoPII("warn", "attachments_in_user_data", {
       state: "not_used",
-      reason: r,
+      reason,
     });
-    logFeatureSad("bridge_attachment_user_data_root", r);
+    logFeatureSad("bridge_attachment_user_data_root", reason);
     return;
   }
   let attachmentsRoot = getAttachmentsRoot();
-  let h = await openOwnedDirChain(attachmentsRoot, 1).catch(() => "unknown");
-  if (typeof h === "string") {
+  let dirChain = await openOwnedDirChain(attachmentsRoot, 1).catch(() => "unknown");
+  if (typeof dirChain === "string") {
     logForDiagnosticsNoPII("warn", "attachments_in_user_data", {
       state: "not_used",
-      reason: h,
+      reason: dirChain,
     });
-    logFeatureSad("bridge_attachment_user_data_root", h);
+    logFeatureSad("bridge_attachment_user_data_root", dirChain);
     return;
   }
-  let y = await probeNoFollowSupport(h);
-  await h.release();
-  if (y !== true) {
+  let noFollowSupport = await probeNoFollowSupport(dirChain);
+  await dirChain.release();
+  if (noFollowSupport !== true) {
     logForDiagnosticsNoPII("warn", "attachments_in_user_data", {
       state: "not_used",
-      reason: y,
+      reason: noFollowSupport,
     });
-    logFeatureSad("bridge_attachment_user_data_root", y);
+    logFeatureSad("bridge_attachment_user_data_root", noFollowSupport);
     return;
   }
   setLocalUploadsRoot(attachmentsRoot);
-  let S = await countUserDataFiles(join(attachmentsRoot, hashSessionAddress(CLAUDE_CODE_REMOTE_SESSION_ID)));
-  let R = {
-    session_folder_existed: S !== null,
-    files_found: S ?? 0,
+  let fileCount = await countUserDataFiles(
+    join(attachmentsRoot, hashSessionAddress(CLAUDE_CODE_REMOTE_SESSION_ID)),
+  );
+  let result = {
+    session_folder_existed: fileCount !== null,
+    files_found: fileCount ?? 0,
   };
-  logFeatureOk("bridge_attachment_user_data_root", R);
-  if (R.files_found > 0) logFeatureOk("bridge_attachment_user_data_files_found");
+  logFeatureOk("bridge_attachment_user_data_root", result);
+  if (result.files_found > 0) logFeatureOk("bridge_attachment_user_data_files_found");
 }
 //@ chunk-tyg7f3ek.js:98319-98422 placement
-async function countUserDataFiles(e) {
+async function countUserDataFiles(dir) {
   try {
     return Math.min(
-      count(await readdir(e), (n) => !n.startsWith(".")),
+      count(await readdir(dir), (name) => !name.startsWith(".")),
       MAX_USER_DATA_ATTACHMENT_FILES,
     );
   } catch {
@@ -271,7 +280,7 @@ function installAutocompactStateReporter({ session, sessionState, enqueue, readI
       session_id: getSessionId(),
     });
   });
-  let S = () => {
+  let notify = () => {
     try {
       let { model, autoCompactWindow } = readInputs();
       autocompactStateReporter.notify(model, autoCompactWindow);
@@ -279,24 +288,24 @@ function installAutocompactStateReporter({ session, sessionState, enqueue, readI
       logError(error);
     }
   };
-  let R = false;
+  let ready = false;
   initializeGrowthBook()
     .catch(() => {})
     .then(() => {
-      R = true;
+      ready = true;
       sessionState.onAutocompactInputsChanged = () => {
-        S();
+        notify();
         reportContextUsage();
       };
       sessionState.onConversationReset = () => {
         autocompactStateReporter.reset();
-        S();
+        notify();
       };
-      S();
+      notify();
       reportContextUsage();
     });
   return () => {
-    if (R) S();
+    if (ready) notify();
   };
 }
 //@ chunk-tyg7f3ek.js:98992-99014 placement
@@ -312,15 +321,15 @@ function clearTeardownUnwind() {
   setTeardownUnwindRequested(false);
 }
 //@ chunk-tyg7f3ek.js:99063-99180 placement
-function hasBudgetBoundBackgroundAgents(maxBudgetUsd, n) {
+function hasBudgetBoundBackgroundAgents(maxBudgetUsd, tasks) {
   if (!hasReachedBudget(maxBudgetUsd)) return false;
-  return n.some(
-    (r) =>
-      r.status === "running" &&
-      waitForTaskCompletion(r) &&
-      isWaitableAgentOrWorkflow(r) &&
-      !isObserverAgentTask(r) &&
-      !r.stoppedByUser,
+  return tasks.some(
+    (task) =>
+      task.status === "running" &&
+      waitForTaskCompletion(task) &&
+      isWaitableAgentOrWorkflow(task) &&
+      !isObserverAgentTask(task) &&
+      !task.stoppedByUser,
   );
 }
 //@ chunk-tyg7f3ek.js:99180-99672 placement
@@ -353,33 +362,33 @@ function stopAgentsOverBudget({
   return true;
 }
 //@ chunk-tyg7f3ek.js:99672-99806 placement
-function isUnnotifiedTerminalTask(e) {
-  if (!isWaitableAgentOrWorkflow(e)) return false;
-  if ("isBackgrounded" in e && e.isBackgrounded === false) return false;
-  if (!isTerminalTaskStatus(e.status)) return false;
-  return !e.notified;
+function isUnnotifiedTerminalTask(task) {
+  if (!isWaitableAgentOrWorkflow(task)) return false;
+  if ("isBackgrounded" in task && task.isBackgrounded === false) return false;
+  if (!isTerminalTaskStatus(task.status)) return false;
+  return !task.notified;
 }
 //@ chunk-tyg7f3ek.js:99806-100304 placement
 /**
  * 找出已结束但完成通知尚未入队的后台任务，带超时标记，避免无限等待。
  */
 function collectOwedTaskNotifications({ tasks, waits, now }) {
-  let s = false;
-  let h = new Set();
+  let owed = false;
+  let liveIds = new Set();
   for (let task of tasks) {
     if (!isUnnotifiedTerminalTask(task)) continue;
-    h.add(task.id);
-    let S = waits.get(task.id);
-    if (!S) {
-      S = {
+    liveIds.add(task.id);
+    let wait = waits.get(task.id);
+    if (!wait) {
+      wait = {
         firstSeen: now,
         expired: false,
       };
-      waits.set(task.id, S);
+      waits.set(task.id, wait);
     }
-    if (S.expired) continue;
-    if (now - S.firstSeen >= AGENT_STALL_GRACE_MS) {
-      S.expired = true;
+    if (wait.expired) continue;
+    if (now - wait.firstSeen >= AGENT_STALL_GRACE_MS) {
+      wait.expired = true;
       logForDebugging(
         `[print] task ${task.id} is terminal but its completion notification did not enqueue within ${AGENT_STALL_GRACE_MS}ms \u2014 exiting without it (enqueue dropped, or post-completion work still in flight)`,
         {
@@ -388,10 +397,10 @@ function collectOwedTaskNotifications({ tasks, waits, now }) {
       );
       continue;
     }
-    s = true;
+    owed = true;
   }
-  for (let key of waits.keys()) if (!h.has(key)) waits.delete(key);
-  return s;
+  for (let key of waits.keys()) if (!liveIds.has(key)) waits.delete(key);
+  return owed;
 }
 //@ chunk-tyg7f3ek.js:100304-100368 placement
 function reportsRunningBackgroundTasks() {
@@ -402,12 +411,12 @@ function reportsRunningBackgroundTasksExplicit() {
   return env.CLAUDE_CODE_BG_TASKS_REPORT_RUNNING === true;
 }
 //@ chunk-tyg7f3ek.js:100432-100588 placement
-function isAwaitedBackgroundTask(e) {
+function isAwaitedBackgroundTask(task) {
   return (
-    isWaitableBackgroundTask(e) &&
-    !isHeldMcpTask(e) &&
-    !(e.type === "remote_agent" && e.isLongRunning) &&
-    !((e.type === "monitor_ws" || e.type === "monitor_mcp") && e.timeoutId === undefined)
+    isWaitableBackgroundTask(task) &&
+    !isHeldMcpTask(task) &&
+    !(task.type === "remote_agent" && task.isLongRunning) &&
+    !((task.type === "monitor_ws" || task.type === "monitor_mcp") && task.timeoutId === undefined)
   );
 }
 //@ chunk-tyg7f3ek.js:100588-100711 placement = hasWorkingInProcessTeammates (0.79)
@@ -422,8 +431,8 @@ function isTeammateStillWorking(task) {
   );
 }
 //@ chunk-tyg7f3ek.js:100711-100747 placement
-function isAmbientBackgroundTask(e) {
-  return isWaitableBackgroundTask(e) && !isAwaitedBackgroundTask(e);
+function isAmbientBackgroundTask(task) {
+  return isWaitableBackgroundTask(task) && !isAwaitedBackgroundTask(task);
 }
 //@ chunk-tyg7f3ek.js:100747-100799 placement
 function hasAwaitedRunningTaskIn(tasks) {
@@ -433,8 +442,8 @@ function hasAwaitedRunningTaskIn(tasks) {
 /**
  * 运行中且属于需要等待完成的任务。
  */
-function isAwaitedRunningTask(e) {
-  return e.status === "running" && waitForTaskCompletion(e) && isWaitableAgentOrWorkflow(e);
+function isAwaitedRunningTask(task) {
+  return task.status === "running" && waitForTaskCompletion(task) && isWaitableAgentOrWorkflow(task);
 }
 //@ chunk-tyg7f3ek.js:100856-100938 placement = requestTeammateShutdown (1)
 /**
@@ -444,9 +453,12 @@ function hasAwaitedRunningTasks(tasks) {
   return Object.values(tasks ?? {}).some((task) => task.status === "running" && waitForTaskCompletion(task));
 }
 //@ chunk-tyg7f3ek.js:100938-101031 placement
-function isUnownedRunningShell(e) {
+function isUnownedRunningShell(task) {
   return (
-    e.status === "running" && waitForTaskCompletion(e) && e.type === "local_bash" && e.agentId === undefined
+    task.status === "running" &&
+    waitForTaskCompletion(task) &&
+    task.type === "local_bash" &&
+    task.agentId === undefined
   );
 }
 //@ chunk-tyg7f3ek.js:101031-101111 placement
@@ -481,15 +493,15 @@ function shouldStayRunningForInput({
   return !inputClosed && currentState === "running";
 }
 //@ chunk-tyg7f3ek.js:101398-101695 placement
-function summarizeTasksForTelemetry(e) {
-  return e.map((n) => ({
-    type: n.type,
-    status: n.status,
-    isBackgrounded: "isBackgrounded" in n ? n.isBackgrounded : undefined,
-    isObserver: "isObserver" in n ? n.isObserver : undefined,
-    ambient: "ambient" in n ? n.ambient : undefined,
-    parked: "parked" in n ? n.parked : undefined,
-    holdCapped: "holdCapped" in n ? n.holdCapped : undefined,
+function summarizeTasksForTelemetry(tasks) {
+  return tasks.map((task) => ({
+    type: task.type,
+    status: task.status,
+    isBackgrounded: "isBackgrounded" in task ? task.isBackgrounded : undefined,
+    isObserver: "isObserver" in task ? task.isObserver : undefined,
+    ambient: "ambient" in task ? task.ambient : undefined,
+    parked: "parked" in task ? task.parked : undefined,
+    holdCapped: "holdCapped" in task ? task.holdCapped : undefined,
   }));
 }
 //@ chunk-tyg7f3ek.js:101695-101801 placement
@@ -500,25 +512,25 @@ function mayEndWithBackgroundWork({ hasActiveTeammates, hasRunningBgTasks, hasPe
   );
 }
 //@ chunk-tyg7f3ek.js:101801-102007 placement
-function isWaitableBackgroundTask(e) {
+function isWaitableBackgroundTask(task) {
   return (
-    waitForTaskCompletion(e) &&
-    e.type !== "in_process_teammate" &&
-    e.type !== "local_bash" &&
-    e.type !== "dream" &&
-    e.type !== "post_turn_memory" &&
-    !(e.type === "monitor_mcp" && e.streamed) &&
-    !(e.type === "monitor_ws" && e.ambient)
+    waitForTaskCompletion(task) &&
+    task.type !== "in_process_teammate" &&
+    task.type !== "local_bash" &&
+    task.type !== "dream" &&
+    task.type !== "post_turn_memory" &&
+    !(task.type === "monitor_mcp" && task.streamed) &&
+    !(task.type === "monitor_ws" && task.ambient)
   );
 }
 //@ chunk-tyg7f3ek.js:102007-102242 placement
 function isShellHeldByPlugin(command) {
-  for (let [n, r] of getTaskRunState().heldShellReleases)
+  for (let [predicate, state] of getTaskRunState().heldShellReleases)
     try {
-      if (n(command)) return true;
+      if (predicate(command)) return true;
     } catch (error) {
-      if (!r.threw) {
-        r.threw = true;
+      if (!state.threw) {
+        state.threw = true;
         logError(
           Error(
             "A built-in plugin threw while checking a background shell; claude -p keeps waiting for that shell",
@@ -590,68 +602,72 @@ function decideBackgroundWait({
 //@ chunk-tyg7f3ek.js:102745-102755 placement
 var SHELL_DEADLINE_GRACE_MS = WIND_DOWN_GRACE_MS;
 //@ chunk-tyg7f3ek.js:102755-102847 placement
-function hasShellBeforeDeadline(e, n) {
-  return e.some(
-    (r) =>
-      isKillableBackgroundTask(r) &&
-      isLocalShellTask(r) &&
-      r.deadlineAt !== undefined &&
-      r.deadlineAt + SHELL_DEADLINE_GRACE_MS > n,
+function hasShellBeforeDeadline(tasks, deadline) {
+  return tasks.some(
+    (task) =>
+      isKillableBackgroundTask(task) &&
+      isLocalShellTask(task) &&
+      task.deadlineAt !== undefined &&
+      task.deadlineAt + SHELL_DEADLINE_GRACE_MS > deadline,
   );
 }
 //@ chunk-tyg7f3ek.js:102847-102861 placement
 var LOOP_WAKEUP_HOLD_MS = 120000;
 //@ chunk-tyg7f3ek.js:102861-103006 placement
 function hasPendingLoopWakeup(sessionCronTasks, { now, parkedSince }) {
-  let s = parkedSince ?? now;
+  let baseline = parkedSince ?? now;
   return sessionCronTasks.some(
-    (h) =>
-      h.kind === "loop" &&
-      (h.scheduledFor === undefined || now <= Math.max(h.scheduledFor, s) + LOOP_WAKEUP_HOLD_MS),
+    (task) =>
+      task.kind === "loop" &&
+      (task.scheduledFor === undefined || now <= Math.max(task.scheduledFor, baseline) + LOOP_WAKEUP_HOLD_MS),
   );
 }
 //@ chunk-tyg7f3ek.js:103006-103681 placement
 /**
  * print 收尾：在宽限期后杀掉后台 shell、观察者 agent 等仍在运行的任务。
  */
-function killBackgroundTasksForWindDown(e, taskFramework, setState, featureValue_CACHED_MAY_BE_STALE) {
-  for (let h of e)
-    if (isLocalShellTask(h)) {
+function killBackgroundTasksForWindDown(tasks, taskFramework, setState, featureValue_CACHED_MAY_BE_STALE) {
+  for (let task of tasks)
+    if (isLocalShellTask(task)) {
       logForDebugging(
-        `print wind-down: killing background shell ${h.id} ("${h.description}") after ${WIND_DOWN_GRACE_MS}ms grace`,
+        `print wind-down: killing background shell ${task.id} ("${task.description}") after ${WIND_DOWN_GRACE_MS}ms grace`,
       );
-      killTask(h.id, taskFramework, {
+      killTask(task.id, taskFramework, {
         cause: "session_exit",
       });
-    } else if (isObserverAgentTask(h)) {
+    } else if (isObserverAgentTask(task)) {
       logForDebugging(
-        `print wind-down: killing mid-delivery observer ${h.id} after ${WIND_DOWN_GRACE_MS}ms grace`,
+        `print wind-down: killing mid-delivery observer ${task.id} after ${WIND_DOWN_GRACE_MS}ms grace`,
       );
-      killAsyncAgent(h.id, taskFramework);
-    } else if (featureValue_CACHED_MAY_BE_STALE && isWaitableAgentOrWorkflow(h) && h.status === "running") {
+      killAsyncAgent(task.id, taskFramework);
+    } else if (
+      featureValue_CACHED_MAY_BE_STALE &&
+      isWaitableAgentOrWorkflow(task) &&
+      task.status === "running"
+    ) {
       logForDebugging(
-        `print wind-down: killing background ${h.type} task ${h.id} ("${h.description}") at the wait ceiling`,
+        `print wind-down: killing background ${task.type} task ${task.id} ("${task.description}") at the wait ceiling`,
       );
-      getSelectableBackgroundTasks(h, taskFramework, setState);
+      getSelectableBackgroundTasks(task, taskFramework, setState);
     } else {
-      logForDebugging(`print wind-down: no longer waiting on background ${h.type} task ${h.id}`);
-      if (isLocalAgent(h)) h.spawnedSubagent?.killed("system");
-      emitTaskNotification(h.id, "stopped", {
-        toolUseId: h.toolUseId,
-        summary: h.description,
-        ambient: skipsTranscript(h),
+      logForDebugging(`print wind-down: no longer waiting on background ${task.type} task ${task.id}`);
+      if (isLocalAgent(task)) task.spawnedSubagent?.killed("system");
+      emitTaskNotification(task.id, "stopped", {
+        toolUseId: task.toolUseId,
+        summary: task.description,
+        ambient: skipsTranscript(task),
       });
     }
-  if (e.length > 0) logFeatureOk("print_wind_down");
+  if (tasks.length > 0) logFeatureOk("print_wind_down");
 }
 //@ chunk-tyg7f3ek.js:103681-103815 placement = getSelectableBackgroundTasks (0.799)
-async function getSelectableBackgroundTasks(e, n, r) {
+async function getSelectableBackgroundTasks(task, taskFramework, setState) {
   try {
-    if (e.type === "local_agent") {
-      markAgentNotified(e.id, n);
-      dropQueuedCommandsForAgent(e.id);
+    if (task.type === "local_agent") {
+      markAgentNotified(task.id, taskFramework);
+      dropQueuedCommandsForAgent(task.id);
     }
-    await lookupTaskForStop(e.type)?.kill(e.id, n, r, "system");
+    await lookupTaskForStop(task.type)?.kill(task.id, taskFramework, setState, "system");
   } catch (error) {
     logError(error);
   }
@@ -662,17 +678,17 @@ function shouldKillOnStreamClose({ shuttingDown, remoteTransport }) {
 }
 //@ chunk-tyg7f3ek.js:103876-104220 placement
 function killOrphanedShells(taskFramework) {
-  for (let n of Object.values(taskFramework.all())) {
-    if (!isLocalShellTask(n) || n.status !== "running") continue;
-    if (!n.isBackgrounded && n.agentId !== undefined) {
-      let r = taskFramework.get(n.agentId);
-      if (r === undefined || !isTerminalTaskStatus(r.status)) continue;
+  for (let task of Object.values(taskFramework.all())) {
+    if (!isLocalShellTask(task) || task.status !== "running") continue;
+    if (!task.isBackgrounded && task.agentId !== undefined) {
+      let ownerTask = taskFramework.get(task.agentId);
+      if (ownerTask === undefined || !isTerminalTaskStatus(ownerTask.status)) continue;
     }
     logForDebugging(
-      `print teardown: killing shell ${n.id} ("${n.description}") still running at stream close`,
+      `print teardown: killing shell ${task.id} ("${task.description}") still running at stream close`,
     );
     try {
-      killTask(n.id, taskFramework, {
+      killTask(task.id, taskFramework, {
         cause: "session_exit",
       });
     } catch (error) {
@@ -681,20 +697,20 @@ function killOrphanedShells(taskFramework) {
   }
 }
 //@ chunk-tyg7f3ek.js:104220-104290 placement
-function isKillableBackgroundTask(e) {
-  return isBackgroundedShellTask(e) && !(e.type === "local_bash" && isShellHeldByPlugin(e.command));
+function isKillableBackgroundTask(task) {
+  return isBackgroundedShellTask(task) && !(task.type === "local_bash" && isShellHeldByPlugin(task.command));
 }
 //@ chunk-tyg7f3ek.js:104290-104303 placement
 var WIND_DOWN_LOG_INTERVAL_MS = 30000;
 //@ chunk-tyg7f3ek.js:104303-104419 placement
-function makeThrottledLogger(keepAliveSender, n, r = Date.now) {
-  let s = r();
+function makeThrottledLogger(keepAliveSender, isEnabled, now = Date.now) {
+  let lastSentAt = now();
   return () => {
-    if (!n) return false;
-    let h = r();
-    if (h - s >= 30000) {
+    if (!isEnabled) return false;
+    let firedAt = now();
+    if (firedAt - lastSentAt >= 30000) {
       keepAliveSender();
-      s = h;
+      lastSentAt = firedAt;
       return true;
     }
     return false;

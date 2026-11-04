@@ -8,7 +8,7 @@
  * pieces: chunk-1ny7cxrt.js (4)
  * attribution: placement 4
  */
-import { Re } from "../../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { createCaTransporterOptions } from "../network.js";
 import { withTimeout } from "../../../utils/sleep.js";
 import { truncateAtWord } from "../../../utils/stringUtils.js";
@@ -25,30 +25,30 @@ var GOOGLEAPIS_COM = "googleapis.com";
  * 检查 auth.google 目标：必须 https、googleapis.com 主机、且不自带 Authorization 头。
  */
 function validateGoogleAuthTarget(url, headers) {
-  let n;
+  let parsed;
   try {
-    n = new URL(url);
+    parsed = new URL(url);
   } catch {
     return ["auth.google needs a url that parses"];
   }
-  let replaced = n.hostname.replace(/\.$/, "");
-  let r = [];
-  if (n.protocol !== "https:")
-    r.push(
+  let replaced = parsed.hostname.replace(/\.$/, "");
+  let problems = [];
+  if (parsed.protocol !== "https:")
+    problems.push(
       "auth.google needs an https:// url: over http:// the access token would cross the network unencrypted",
     );
   if (!(
     replaced === GOOGLEAPIS_COM ||
     (replaced.endsWith(`.${GOOGLEAPIS_COM}`) && !replaced.split(".").includes(""))
   ))
-    r.push(
+    problems.push(
       `auth.google sends a Google access token, so url must be a ${GOOGLEAPIS_COM} host such as https://telemetry.googleapis.com (got ${replaced})`,
     );
   if (Object.keys(headers).some((key) => key.toLowerCase() === "authorization"))
-    r.push(
+    problems.push(
       "auth.google sets the Authorization header on each export: remove Authorization from headers, or remove auth",
     );
-  return r;
+  return problems;
 }
 //@ chunk-1ny7cxrt.js:1386859-1386869 placement
 /**
@@ -59,35 +59,37 @@ var GOOGLE_TOKEN_TIMEOUT_SEC = 10;
 /**
  * 懒加载 google-auth 库，返回获取 Authorization（及 x-goog-user-project）头的函数（带超时，失败时重置）。
  */
-function createGoogleHeaderProvider(e) {
-  let t;
+function createGoogleHeaderProvider(opts) {
+  let auth;
   return async () => {
-    let { GoogleAuth, gcpMetadata } = await import("./chunk-ndb2dret.js").then((m) => Re(m.default, 1));
-    t ??= new GoogleAuth({
+    let { GoogleAuth, gcpMetadata } = await import("../../../utils/lazyDefaultExport.js").then((mod) =>
+      __toESM(mod.default, 1),
+    );
+    auth ??= new GoogleAuth({
       scopes: GOOGLE_CLOUD_PLATFORM_SCOPE,
       projectId: "unused",
-      ...(e.service_account_json && {
-        keyFilename: e.service_account_json,
+      ...(opts.service_account_json && {
+        keyFilename: opts.service_account_json,
       }),
       clientOptions: createCaTransporterOptions(),
     });
     try {
-      let r = await withTimeout(
-        t.getRequestHeaders(),
+      let headers = await withTimeout(
+        auth.getRequestHeaders(),
         GOOGLE_TOKEN_TIMEOUT_SEC * 1000,
         `no Google credentials or token within ${GOOGLE_TOKEN_TIMEOUT_SEC} s`,
       );
-      let s = r.get("authorization");
-      if (!s) throw Error("Google's library returned no Authorization header");
-      let a = r.get("x-goog-user-project");
+      let token = headers.get("authorization");
+      if (!token) throw Error("Google's library returned no Authorization header");
+      let err = headers.get("x-goog-user-project");
       return {
-        authorization: s,
-        ...(a && {
-          "x-goog-user-project": a,
+        authorization: token,
+        ...(err && {
+          "x-goog-user-project": err,
         }),
       };
     } catch (error) {
-      t = undefined;
+      auth = undefined;
       gcpMetadata.resetIsAvailableCache();
       throw Error(`no Google access token: ${truncateAtWord(errorMessage(error), 500)}`);
     }

@@ -24,66 +24,76 @@ import { hasLink } from "../../utils/hasLink.js";
 import { getHooksForEvent, hasNonInternalHook } from "../../utils/hooks.js";
 import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-rxmpx0xj.js:537-579 placement
-var flattened = [ARTIFACT_TOOL_NAME, ARTIFACT_DATA_TOOL_NAME].flatMap((o) => [o, ...legacyToolNamesFor(o)]);
+var flattened; // deferred: uses ARTIFACT_TOOL_NAME (../../tools/ArtifactTool/constants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-rxmpx0xj.js:537", () => {
+  flattened = [ARTIFACT_TOOL_NAME, ARTIFACT_DATA_TOOL_NAME].flatMap((name) => [
+    name,
+    ...legacyToolNamesFor(name),
+  ]);
+});
 //@ chunk-rxmpx0xj.js:579-827 placement
 /**
  * 按工具别名扩展工具名列表
  */
-function expandToolAliases(o, t) {
-  let r = [
-    ...Object.entries(o.options.toolAliases ?? {}),
-    ...Object.entries(getToolPermissionContext(o).toolAliases ?? {}),
+function expandToolAliases(context, names) {
+  let aliases = [
+    ...Object.entries(context.options.toolAliases ?? {}),
+    ...Object.entries(getToolPermissionContext(context).toolAliases ?? {}),
   ];
-  let flattened = r.flatMap(([n, i]) => [...(t.includes(i) ? [n] : []), ...(t.includes(n) ? [i] : [])]);
-  let flattened_2 = r.flatMap(([n, i]) => (flattened.includes(i) ? [n] : []));
-  return [...t, ...flattened, ...flattened_2];
+  let flattened = aliases.flatMap(([alias, canonical]) => [
+    ...(names.includes(canonical) ? [alias] : []),
+    ...(names.includes(alias) ? [canonical] : []),
+  ]);
+  let flattened_2 = aliases.flatMap(([alias, canonical]) => (flattened.includes(canonical) ? [alias] : []));
+  return [...names, ...flattened, ...flattened_2];
 }
 //@ chunk-rxmpx0xj.js:882-1130 placement
 /**
  * hook matcher 是否覆盖给定工具
  */
-function matcherCoversTools(matcher, t, r = true) {
-  if (!matcher || matcher === "*") return true;
-  if (/^[a-zA-Z0-9_|, -]+$/.test(matcher))
-    return matcher
+function matcherCoversTools(pattern, tools, allowLegacy = true) {
+  if (!pattern || pattern === "*") return true;
+  if (/^[a-zA-Z0-9_|, -]+$/.test(pattern))
+    return pattern
       .split(/[|,]/)
-      .map((e) => e.trim())
-      .some((e) => t.includes(e) || t.includes(canonicalToolName(e)));
+      .map((token) => token.trim())
+      .some((token) => tools.includes(token) || tools.includes(canonicalToolName(token)));
   try {
-    let e = checkHookMatcherForCloud(matcher);
-    return t.some((s) => e.test(s));
+    let cloud = checkHookMatcherForCloud(pattern);
+    return tools.some((tool) => cloud.test(tool));
   } catch (error) {
-    return r || error instanceof MatcherUnsupportableError;
+    return allowLegacy || error instanceof MatcherUnsupportableError;
   }
 }
 //@ chunk-rxmpx0xj.js:1130-1364 placement
 /**
  * hooks 模块的 tool.call/check 是否可能覆盖工具
  */
-function hooksModuleMayCoverTools(o, t, hasLink = () => false) {
-  let filtered = getLoadedModulesForSite("tool.call").filter((n) => !hasLink(n));
+function hooksModuleMayCoverTools(site, tools, hasLink = () => false) {
+  let filtered = getLoadedModulesForSite("tool.call").filter((siteModule) => !hasLink(siteModule));
   let loadedModulesForSite = getLoadedModulesForSite("tool.check");
   return (
     hasModuleHookingSite("classic.PreToolUse", undefined, getLoadedModulesForSite("classic.PreToolUse")) ||
-    o.some(
-      (n) =>
+    site.some(
+      (toolName) =>
         hasModuleHookingSite(
           "tool.call",
           {
-            tool: n,
+            tool: toolName,
           },
           filtered,
         ) ||
         hasModuleHookingSite(
           "tool.check",
-          t
+          tools
             ? {
-                tool: n,
+                tool: toolName,
               }
             : matcherTestTarget({
-                name: n,
+                name: toolName,
               }),
           loadedModulesForSite,
         ),
@@ -91,11 +101,11 @@ function hooksModuleMayCoverTools(o, t, hasLink = () => false) {
   );
 }
 //@ chunk-rxmpx0xj.js:1364-1480 placement
-function hooksModuleMayCover(o, t) {
+function hooksModuleMayCover(site, tools) {
   try {
-    let flattened = t.flatMap((s) => [s, ...legacyToolNamesFor(s)]);
-    let e = expandToolAliases(o, flattened);
-    return hooksModuleMayCoverTools(e, e.length > flattened.length, hasLink);
+    let names = tools.flatMap((tool) => [tool, ...legacyToolNamesFor(tool)]);
+    let expanded = expandToolAliases(site, names);
+    return hooksModuleMayCoverTools(expanded, expanded.length > names.length, hasLink);
   } catch {
     return true;
   }
@@ -104,27 +114,34 @@ function hooksModuleMayCover(o, t) {
 /**
  * PreToolUse hook 是否可能覆盖 artifact 工具调用。
  */
-function preToolUseHookMayCoverArtifact(context, t) {
+function preToolUseHookMayCoverArtifact(context, hookContext) {
   try {
-    let r = t === undefined ? flattened : [...flattened, t, ...legacyToolNamesFor(t)];
-    let e = expandToolAliases(context, r);
-    if (hooksModuleMayCoverTools(e, e.length > r.length)) return true;
+    let tools =
+      hookContext === undefined ? flattened : [...flattened, hookContext, ...legacyToolNamesFor(hookContext)];
+    let expanded = expandToolAliases(context, tools);
+    if (hooksModuleMayCoverTools(expanded, expanded.length > tools.length)) return true;
     if (context.sessionHooksRegistry.has(context.agentId ?? context.session.id, "PreToolUse")) return true;
     return getHooksForEvent("PreToolUse").some(
-      (s) => matcherCoversTools(s.matcher, e) && hasNonInternalHook(s),
+      (hook) => matcherCoversTools(hook.matcher, expanded) && hasNonInternalHook(hook),
     );
   } catch {
     return true;
   }
 }
 //@ chunk-rxmpx0xj.js:1733-1775 placement
-var flattened_2 = [FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME].flatMap((o) => [o, ...legacyToolNamesFor(o)]);
+var flattened_2; // deferred: uses legacyToolNamesFor (../../utils/permissions/permissionRuleParser.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-rxmpx0xj.js:1733", () => {
+  flattened_2 = [FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME].flatMap((name) => [
+    name,
+    ...legacyToolNamesFor(name),
+  ]);
+});
 //@ chunk-rxmpx0xj.js:1775-1861 placement
 function fileEditHookLoaded() {
   return (
     hooksModuleMayCoverTools(flattened_2, false, hasLink) ||
     getHooksForEvent("PreToolUse").some(
-      (o) => matcherCoversTools(o.matcher, flattened_2, false) && hasNonInternalHook(o),
+      (hook) => matcherCoversTools(hook.matcher, flattened_2, false) && hasNonInternalHook(hook),
     )
   );
 }

@@ -8,9 +8,9 @@
 import { APIResource } from "../../core/resource.mjs";
 import { TokenPage } from "../../core/pagination.mjs";
 import { buildHeaders } from "../../internal/headers.mjs";
-import { I } from "../../internal/utils/path.mjs";
-import { ut } from "../../internal/uploads.mjs";
-import { is } from "../../internal/stainless-helper-header.mjs";
+import { parseUrl_2 } from "../../internal/utils/path.mjs";
+import { withUploadBody } from "../../internal/uploads.mjs";
+import { stainlessHelperHeaders } from "../../internal/stainless-helper-header.mjs";
 
 //@ chunk-hwmsct5x.js:50044-51409 esm-fingerprint
 class Files extends APIResource {
@@ -38,7 +38,7 @@ class Files extends APIResource {
   }
   delete(fileID, params = {}, options) {
     let { betas, workspace_id } = params ?? {};
-    return this._client.delete(I`/v1/files/${fileID}?beta=true`, {
+    return this._client.delete(parseUrl_2`/v1/files/${fileID}?beta=true`, {
       ...options,
       headers: buildHeaders([
         {
@@ -59,7 +59,7 @@ class Files extends APIResource {
   }
   download(fileID, params = {}, options) {
     let { betas, workspace_id } = params ?? {};
-    return this._client.get(I`/v1/files/${fileID}/content?beta=true`, {
+    return this._client.get(parseUrl_2`/v1/files/${fileID}/content?beta=true`, {
       ...options,
       headers: buildHeaders([
         {
@@ -82,7 +82,7 @@ class Files extends APIResource {
   }
   retrieveMetadata(fileID, params = {}, options) {
     let { betas, workspace_id } = params ?? {};
-    return this._client.get(I`/v1/files/${fileID}?beta=true`, {
+    return this._client.get(parseUrl_2`/v1/files/${fileID}?beta=true`, {
       ...options,
       headers: buildHeaders([
         {
@@ -105,7 +105,7 @@ class Files extends APIResource {
     let { betas, workspace_id, ...body } = params;
     return this._client.post(
       "/v1/files?beta=true",
-      ut(
+      withUploadBody(
         {
           body,
           ...options,
@@ -122,7 +122,7 @@ class Files extends APIResource {
                   }
                 : undefined),
             },
-            is(body.file),
+            stainlessHelperHeaders(body.file),
             options?.headers,
           ]),
         },

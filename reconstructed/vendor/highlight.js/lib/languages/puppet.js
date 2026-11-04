@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:374758-378896 cjs-fingerprint
-var require_puppet = x(function (cjsExports, cjsModule) {
+var require_puppet = __commonJS(function (cjsExports, cjsModule) {
   function puppet(hljs) {
     let PUPPET_KEYWORDS = {
       keyword:

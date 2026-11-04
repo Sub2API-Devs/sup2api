@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (3)
  * attribution: fingerprint 3
  */
-import { Uy, ce } from "../../../../vendor/react/cjs/react.production.js";
+import { useReducer, useCallback } from "../../../../vendor/react/cjs/react.production.js";
 
 //@ chunk-18hwfzwa.js:1274152-1274957 fingerprint = reducer (0.952)
 function reducer(state, action) {
@@ -73,18 +73,18 @@ var INITIAL_STATE = {
 };
 //@ chunk-18hwfzwa.js:1275036-1275630 fingerprint = useMultipleChoiceState (1)
 function useMultipleChoiceState() {
-  let [state, dispatch] = Uy(reducer, INITIAL_STATE);
-  let nextQuestion = ce(() => {
+  let [state, dispatch] = useReducer(reducer, INITIAL_STATE);
+  let nextQuestion = useCallback(() => {
     dispatch({
       type: "next-question",
     });
   }, []);
-  let prevQuestion = ce(() => {
+  let prevQuestion = useCallback(() => {
     dispatch({
       type: "prev-question",
     });
   }, []);
-  let updateQuestionState = ce((questionText, updates, isMultiSelect) => {
+  let updateQuestionState = useCallback((questionText, updates, isMultiSelect) => {
     dispatch({
       type: "update-question-state",
       questionText,
@@ -92,7 +92,7 @@ function useMultipleChoiceState() {
       isMultiSelect,
     });
   }, []);
-  let setAnswer = ce((questionText, answer, shouldAdvance = true) => {
+  let setAnswer = useCallback((questionText, answer, shouldAdvance = true) => {
     dispatch({
       type: "set-answer",
       questionText,
@@ -100,7 +100,7 @@ function useMultipleChoiceState() {
       shouldAdvance,
     });
   }, []);
-  let setTextInputMode = ce((isInInput) => {
+  let setTextInputMode = useCallback((isInInput) => {
     dispatch({
       type: "set-text-input-mode",
       isInInput,

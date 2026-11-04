@@ -92,55 +92,61 @@ import { isNarrationThinking } from "./narrationClassifier.js";
 import { SKILL_2 } from "../../tools/SkillTool/skillToolNames.js";
 import { writeOtelResponseBody } from "../../utils/telemetry/otelRawBodies.js";
 import { isBetaTracingEnabled } from "../../utils/telemetry/betaSessionTracing.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1559771-1560221 fingerprint = GATEWAY_FINGERPRINTS (0.715)
 /**
  * 已知 LLM 网关指纹：litellm、helicone、portkey、cloudflare-ai-gateway、kong、braintrust、bifrost（按响应头前缀）、databricks（按 host 后缀）。
  */
-var GATEWAY_FINGERPRINTS = {
-  litellm: {
-    headerPrefixes: ["x-litellm-"],
-    versionHeader: "x-litellm-version",
-  },
-  helicone: {
-    headerPrefixes: ["helicone-"],
-  },
-  portkey: {
-    headerPrefixes: ["x-portkey-"],
-  },
-  "cloudflare-ai-gateway": {
-    headerPrefixes: ["cf-aig-"],
-  },
-  kong: {
-    headerPrefixes: ["x-kong-"],
-  },
-  braintrust: {
-    headerPrefixes: ["x-bt-"],
-  },
-  bifrost: {
-    headerPrefixes: ["x-bifrost-"],
-  },
-  databricks: {
-    hostSuffixes: [".cloud.databricks.com", ".azuredatabricks.net", ".gcp.databricks.com"],
-  },
-};
-var GATEWAY_FINGERPRINT_ENTRIES = Object.entries(GATEWAY_FINGERPRINTS);
+var GATEWAY_FINGERPRINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var GATEWAY_FINGERPRINT_ENTRIES;
+deferInit("chunk-e6aww6q8.js:1559771", () => {
+  GATEWAY_FINGERPRINTS = {
+    litellm: {
+      headerPrefixes: ["x-litellm-"],
+      versionHeader: "x-litellm-version",
+    },
+    helicone: {
+      headerPrefixes: ["helicone-"],
+    },
+    portkey: {
+      headerPrefixes: ["x-portkey-"],
+    },
+    "cloudflare-ai-gateway": {
+      headerPrefixes: ["cf-aig-"],
+    },
+    kong: {
+      headerPrefixes: ["x-kong-"],
+    },
+    braintrust: {
+      headerPrefixes: ["x-bt-"],
+    },
+    bifrost: {
+      headerPrefixes: ["x-bifrost-"],
+    },
+    databricks: {
+      hostSuffixes: [".cloud.databricks.com", ".azuredatabricks.net", ".gcp.databricks.com"],
+    },
+  };
+  GATEWAY_FINGERPRINT_ENTRIES = Object.entries(GATEWAY_FINGERPRINTS);
+});
 //@ chunk-e6aww6q8.js:1560221-1560527 affinity
 /**
  * 按响应头前缀或 base URL 主机后缀识别中间网关名，写进 API 成功/失败事件。
  */
 function detectGateway({ headers, baseUrl }) {
   if (headers) {
-    let r = [];
-    headers.forEach((header, h) => r.push(h));
-    for (let [s, { headerPrefixes: h }] of GATEWAY_FINGERPRINT_ENTRIES)
-      if (h?.some((y) => r.some((S) => S.startsWith(y)))) return s;
+    let headerNames = [];
+    headers.forEach((header, headerName) => headerNames.push(headerName));
+    for (let [gatewayKind, { headerPrefixes }] of GATEWAY_FINGERPRINT_ENTRIES)
+      if (headerPrefixes?.some((prefix) => headerNames.some((name) => name.startsWith(prefix))))
+        return gatewayKind;
   }
   if (baseUrl)
     try {
       let lower = new URL(baseUrl).hostname.toLowerCase();
-      for (let [s, { hostSuffixes: h }] of GATEWAY_FINGERPRINT_ENTRIES)
-        if (h?.some((y) => lower.endsWith(y))) return s;
+      for (let [gatewayKind, { hostSuffixes }] of GATEWAY_FINGERPRINT_ENTRIES)
+        if (hostSuffixes?.some((suffix) => lower.endsWith(suffix))) return gatewayKind;
     } catch {}
   return;
 }
@@ -175,7 +181,7 @@ var KNOWN_ENTRYPOINTS = [
  * 导出函数 `entrypointForTelemetry`：参数 e，返回 fromEnumOpt(found) ?? lit_2("other")。
  */
 function entrypointForTelemetry(messageClientPlatform) {
-  let found = KNOWN_ENTRYPOINTS.find((r) => r === messageClientPlatform);
+  let found = KNOWN_ENTRYPOINTS.find((entrypoint) => entrypoint === messageClientPlatform);
   return fromEnumOpt(found) ?? lit_2("other");
 }
 //@ chunk-e6aww6q8.js:2540185-2540288 placement = _temp9 (0.529)
@@ -189,71 +195,79 @@ function emptyUsageCounters() {
   };
 }
 //@ chunk-e6aww6q8.js:2540288-2540322 placement
-var MAX_TRACKED_MAPS = 32;
-var usageMapsByHost = new HostScoped(() => new Map());
+var MAX_TRACKED_MAPS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var usageMapsByHost;
+deferInit("chunk-e6aww6q8.js:2540288", () => {
+  MAX_TRACKED_MAPS = 32;
+  usageMapsByHost = new HostScoped(() => new Map());
+});
 //@ chunk-e6aww6q8.js:2540322-2540396 placement
-function isMainThreadQueryLogging(querySource, n) {
-  return n && (querySource.startsWith("repl_main_thread") || querySource === "sdk");
+function isMainThreadQueryLogging(querySource, sourceKind) {
+  return sourceKind && (querySource.startsWith("repl_main_thread") || querySource === "sdk");
 }
 //@ chunk-e6aww6q8.js:2540396-2540588 placement
-function sessionUsageTotals(e) {
-  let n = usageMapsByHost.of(e ?? getRootSession().host);
+function sessionUsageTotals(host) {
+  let usageMaps = usageMapsByHost.of(host ?? getRootSession().host);
   let sessionId = getSessionId();
-  let s = n.get(sessionId);
-  if (s === undefined) {
-    s = {
+  let totals = usageMaps.get(sessionId);
+  if (totals === undefined) {
+    totals = {
       all: emptyUsageCounters(),
       main: emptyUsageCounters(),
     };
-    for (let key of n.keys()) {
-      if (n.size < MAX_TRACKED_MAPS) break;
-      n.delete(key);
+    for (let key of usageMaps.keys()) {
+      if (usageMaps.size < MAX_TRACKED_MAPS) break;
+      usageMaps.delete(key);
     }
-  } else n.delete(sessionId);
-  n.set(sessionId, s);
-  return s;
+  } else usageMaps.delete(sessionId);
+  usageMaps.set(sessionId, totals);
+  return totals;
 }
 //@ chunk-e6aww6q8.js:2540588-2540665 placement
-function addUsageToSession(usage, n, r) {
+function addUsageToSession(delta, sessionId, host) {
   try {
-    let s = sessionUsageTotals(r);
-    addUsage(s.all, usage);
-    if (n) addUsage(s.main, usage);
+    let totals = sessionUsageTotals(host);
+    addUsage(totals.all, delta);
+    if (sessionId) addUsage(totals.main, delta);
   } catch {}
 }
 //@ chunk-e6aww6q8.js:2540665-2540877 placement
-function addUsage(e, n) {
-  e.inputTokens += finiteOrZero(n.input_tokens);
-  e.cacheCreationTokens += finiteOrZero(n.cache_creation_input_tokens);
-  e.cacheReadTokens += finiteOrZero(n.cache_read_input_tokens);
-  e.outputTokens += finiteOrZero(n.output_tokens);
-  e.requests += 1;
+function addUsage(target, delta) {
+  target.inputTokens += finiteOrZero(delta.input_tokens);
+  target.cacheCreationTokens += finiteOrZero(delta.cache_creation_input_tokens);
+  target.cacheReadTokens += finiteOrZero(delta.cache_read_input_tokens);
+  target.outputTokens += finiteOrZero(delta.output_tokens);
+  target.requests += 1;
 }
 //@ chunk-e6aww6q8.js:2540877-2540944 placement
-function finiteOrZero(e) {
-  return typeof e === "number" && Number.isFinite(e) ? e : 0;
+function finiteOrZero(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 //@ chunk-e6aww6q8.js:2540944-2541063 placement
-var EXCUSED_TAIL_REASONS = new Set([
-  "none",
-  "sent_once_text",
-  "sent_once_oversized",
-  "sent_once_mislabeled",
-  "request_scoped_user",
-]);
-var MIN_EXCESS_TOKENS = 4096;
+var EXCUSED_TAIL_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MIN_EXCESS_TOKENS;
+deferInit("chunk-e6aww6q8.js:2540944", () => {
+  EXCUSED_TAIL_REASONS = new Set([
+    "none",
+    "sent_once_text",
+    "sent_once_oversized",
+    "sent_once_mislabeled",
+    "request_scoped_user",
+  ]);
+  MIN_EXCESS_TOKENS = 4096;
+});
 //@ chunk-e6aww6q8.js:2541063-2541674 placement
 /**
  * 计算未被缓存覆盖的尾部字段：原因、标记后的消息数、重发/单次发送/无理由的尾部 token 估计，以及普通输入超出量。
  */
 function uncoveredTailFields(audit, usage) {
-  let r = !Array.isArray(usage.iterations) || usage.iterations.length <= 1;
+  let singleIteration = !Array.isArray(usage.iterations) || usage.iterations.length <= 1;
   let tokenCountFromUsage = getTokenCountFromUsage_5(usage);
-  let h =
+  let iterations =
     tokenCountFromUsage.input_tokens +
     tokenCountFromUsage.cache_read_input_tokens +
     tokenCountFromUsage.cache_creation_input_tokens;
-  let y =
+  let first =
     audit.resentTailTokensEst +
     audit.sentOnceTailTokensEst -
     (audit.reason === "sent_once_oversized" || audit.reason === "sent_once_mislabeled"
@@ -265,10 +279,10 @@ function uncoveredTailFields(audit, usage) {
     resentTailTokensEst: audit.resentTailTokensEst,
     sentOnceTailTokensEst: audit.sentOnceTailTokensEst,
     unexcusedTailTokensEst: audit.unexcusedTailTokensEst,
-    ...(r &&
-      h >= MIN_EXCESS_TOKENS &&
+    ...(singleIteration &&
+      iterations >= MIN_EXCESS_TOKENS &&
       EXCUSED_TAIL_REASONS.has(audit.reason) && {
-        plainInputExcessTokens: Math.max(0, tokenCountFromUsage.input_tokens - y),
+        plainInputExcessTokens: Math.max(0, tokenCountFromUsage.input_tokens - first),
       }),
   };
 }
@@ -346,7 +360,7 @@ function apiErrorFields({
   querySource,
   effort,
 }) {
-  let q = normalizeAgentQuerySource(querySource);
+  let category = normalizeAgentQuerySource(querySource);
   return {
     model,
     error,
@@ -358,8 +372,8 @@ function apiErrorFields({
     request_id: requestId ?? undefined,
     client_request_id: clientRequestId,
     speed: fastMode ? "fast" : "normal",
-    ...(q && {
-      query_source: q,
+    ...(category && {
+      query_source: category,
     }),
     ...(effort && {
       effort,
@@ -510,15 +524,15 @@ function logAPIError({
   if (isRequestTooLargeError_2(error) || alwaysFalseErrors(error)) addSafetyStop();
   let headers = error instanceof APIError && error.headers ? error.headers : observedResponse?.headers;
   emitEpochFromHeader(headers?.get?.(TUNNEL_CREDENTIAL_EPOCH_HEADER));
-  let gt = didFallBackToNonStreaming ? undefined : clientRequestId;
+  let requestLabel = didFallBackToNonStreaming ? undefined : clientRequestId;
   let gateway = getErrorMessage(error);
   let status = error instanceof APIError ? error.status : undefined;
   let errStr = fromNumberOpt(status);
-  let qt = classifyAPIError(error);
-  let Zt = normalizeAgentQuerySource(querySource);
-  if (qt === "stored_login_refused" && classifyQuerySource(querySource) === "main")
+  let errorKind = classifyAPIError(error);
+  let sourceCategory = normalizeAgentQuerySource(querySource);
+  if (errorKind === "stored_login_refused" && classifyQuerySource(querySource) === "main")
     logFeatureBad("managed_settings_stored_login_refused", "helper_not_in_force");
-  let rn = promptTooLongIsHandled && qt === "prompt_too_long";
+  let promptTooLong = promptTooLongIsHandled && errorKind === "prompt_too_long";
   let connectionErrorDetails = extractConnectionErrorDetails(error);
   if (connectionErrorDetails) {
     let sslLabel = connectionErrorDetails.isSSLError ? " (SSL error)" : "";
@@ -529,7 +543,7 @@ function logAPIError({
       },
     );
   }
-  let no = rn ? undefined : consumeInvokingRequestId(agentContext);
+  let invokingId = promptTooLong ? undefined : consumeInvokingRequestId(agentContext);
   if (clientRequestId)
     logForDebugging(
       `API error x-client-request-id=${clientRequestId} (give this to the API team for server-log lookup)`,
@@ -537,80 +551,80 @@ function logAPIError({
         level: "error",
       },
     );
-  if (!rn) {
+  if (!promptTooLong) {
     logForDiagnosticsNoPII("error", "cli_api_error", () => ({
-      ...classifyApiErrorKind(error, qt, observedResponse),
+      ...classifyApiErrorKind(error, errorKind, observedResponse),
       attempt,
       duration_ms: durationMs,
       duration_ms_including_retries: durationMsIncludingRetries,
       did_fallback_to_non_streaming: didFallBackToNonStreaming ?? false,
-      client_request_id: sanitizeMarkName(gt) ?? null,
+      client_request_id: sanitizeMarkName(requestLabel) ?? null,
       model: telemetrySafeModelName(model) ?? null,
-      query_source: Zt ?? null,
+      query_source: sourceCategory ?? null,
       route: connectionSetupFacts(),
     }));
     if (
-      qt === "connection_error" ||
-      qt === "server_overload" ||
-      qt === "api_timeout" ||
-      qt === "stream_idle_timeout" ||
-      qt === "rate_limit" ||
-      qt === "no_api_attempts_left"
+      errorKind === "connection_error" ||
+      errorKind === "server_overload" ||
+      errorKind === "api_timeout" ||
+      errorKind === "stream_idle_timeout" ||
+      errorKind === "rate_limit" ||
+      errorKind === "no_api_attempts_left"
     )
-      logForDebugging(`API ${qt} after retries: ${gateway}`, {
+      logForDebugging(`API ${errorKind} after retries: ${gateway}`, {
         level: "error",
       });
-    else if (qt === "model_not_found")
+    else if (errorKind === "model_not_found")
       logForDebugging(`API model not found: ${gateway}`, {
         level: "error",
       });
-    else if (qt === "invalid_api_key" || qt === "invalid_request_header")
-      logForDebugging(`API ${qt}: ${gateway}`, {
+    else if (errorKind === "invalid_api_key" || errorKind === "invalid_request_header")
+      logForDebugging(`API ${errorKind}: ${gateway}`, {
         level: "error",
       });
-    else if (qt === "output_content_filtered")
+    else if (errorKind === "output_content_filtered")
       logForDebugging(`API output_content_filtered: ${gateway}`, {
         level: "error",
       });
-    else if (qt === DLP_REQUEST_DENIED)
-      logForDebugging(`API ${qt}: ${gateway}`, {
+    else if (errorKind === DLP_REQUEST_DENIED)
+      logForDebugging(`API ${errorKind}: ${gateway}`, {
         level: "error",
       });
-    else if (qt === CLAUDE_CODE_VERSION_TOO_OLD)
-      logForDebugging(`API ${qt}: ${gateway}`, {
+    else if (errorKind === CLAUDE_CODE_VERSION_TOO_OLD)
+      logForDebugging(`API ${errorKind}: ${gateway}`, {
         level: "error",
       });
-    else if (qt === "request_too_large")
+    else if (errorKind === "request_too_large")
       logForDebugging(`API request_too_large: ${gateway}`, {
         level: "error",
       });
-    else if (qt === "system_role_misplaced")
-      logForDebugging(`API ${qt}: ${gateway}`, {
+    else if (errorKind === "system_role_misplaced")
+      logForDebugging(`API ${errorKind}: ${gateway}`, {
         level: "error",
       });
-    else if (qt === "wif_credential_error" || qt === "cloud_credential_error")
-      logForDebugging(`API ${qt}: ${gateway}`, {
+    else if (errorKind === "wif_credential_error" || errorKind === "cloud_credential_error")
+      logForDebugging(`API ${errorKind}: ${gateway}`, {
         level: "error",
       });
     else if (
-      qt === "auth_error" ||
-      qt === "token_revoked" ||
-      qt === "oauth_org_not_allowed" ||
-      qt === "oauth_refresh_lock_timeout" ||
-      qt === "oauth_refresh_disk_full" ||
-      qt === "stored_login_refused" ||
-      qt === "verification_required"
+      errorKind === "auth_error" ||
+      errorKind === "token_revoked" ||
+      errorKind === "oauth_org_not_allowed" ||
+      errorKind === "oauth_refresh_lock_timeout" ||
+      errorKind === "oauth_refresh_disk_full" ||
+      errorKind === "stored_login_refused" ||
+      errorKind === "verification_required"
     )
-      logForDebugging(`API ${qt}: ${gateway}`, {
+      logForDebugging(`API ${errorKind}: ${gateway}`, {
         level: "error",
       });
     else {
-      let Kn = formatApiErrorType(qt, status);
-      if (qt === "unknown") {
-        let Xn = classifyApiErrorKind(error, qt, observedResponse);
-        Kn += ` class=${Xn.error_class} name=${Xn.error_name ?? "none"} code=${Xn.connection_code ?? "none"}`;
+      let typeText = formatApiErrorType(errorKind, status);
+      if (errorKind === "unknown") {
+        let kindText = classifyApiErrorKind(error, errorKind, observedResponse);
+        typeText += ` class=${kindText.error_class} name=${kindText.error_name ?? "none"} code=${kindText.connection_code ?? "none"}`;
       }
-      logError(withTelemetryMessage(error, Kn));
+      logError(withTelemetryMessage(error, typeText));
     }
     let errorType = detectGateway({
       headers,
@@ -622,10 +636,10 @@ function logAPIError({
         is_low_priority: true,
       }),
       dispatch: dispatch ?? lit_2("none"),
-      error: formatApiErrorType(qt, status),
+      error: formatApiErrorType(errorKind, status),
       ...errorTelemetryFields(error),
       status: errStr,
-      errorType: fromEnum(qt),
+      errorType: fromEnum(errorKind),
       ...(effort && {
         effort_level: fromEnum(effort),
       }),
@@ -636,14 +650,14 @@ function logAPIError({
       attempt,
       provider: getAPIProviderForAnalytics(),
       requestId: sanitizeMarkName(requestId) || undefined,
-      ...(no && {
-        invokingRequestId: sanitizeMarkName(no.invokingRequestId),
-        invocationKind: fromEnumOpt(no.invocationKind),
+      ...(invokingId && {
+        invokingRequestId: sanitizeMarkName(invokingId.invokingRequestId),
+        invocationKind: fromEnumOpt(invokingId.invocationKind),
       }),
       clientRequestId: sanitizeMarkName(clientRequestId) || undefined,
       user_message_uuid: sanitizeMarkName(turnAttributionKeyFor(agentContext)),
       didFallBackToNonStreaming,
-      ...gzipTelemetryFields(takeGzipTelemetry(gt)),
+      ...gzipTelemetryFields(takeGzipTelemetry(requestLabel)),
       ...(errorType && {
         gateway: fromEnum(errorType),
       }),
@@ -672,7 +686,7 @@ function logAPIError({
   }
   let connectionDetails = apiErrorText({
     error,
-    errorClass: qt,
+    errorClass: errorKind,
     querySource,
     accountMemoryKeys,
   });
@@ -686,7 +700,7 @@ function logAPIError({
         durationMs,
         attempt,
         requestId,
-        clientRequestId: gt,
+        clientRequestId: requestLabel,
         fastMode,
         querySource,
         effort,
@@ -708,8 +722,8 @@ function logAPIError({
         total_attempts: attempt,
         total_retry_duration_ms: durationMsIncludingRetries,
         speed: fastMode ? "fast" : "normal",
-        ...(Zt && {
-          query_source: Zt,
+        ...(sourceCategory && {
+          query_source: sourceCategory,
         }),
         ...(effort && {
           effort,
@@ -721,17 +735,17 @@ function logAPIError({
     success: false,
     statusCode: errStr ? parseInt(errStr) : undefined,
     error: connectionDetails,
-    errorClass: qt,
+    errorClass: errorKind,
     attempt,
     requestId: requestId ?? undefined,
-    clientRequestId: gt,
+    clientRequestId: requestLabel,
     effort,
   });
-  let teleportInfo = rn ? undefined : getTeleportedSessionInfo();
+  let teleportInfo = promptTooLong ? undefined : getTeleportedSessionInfo();
   if (teleportInfo?.isTeleported && !teleportInfo.hasLoggedFirstMessage) {
     logEvent("tengu_teleport_first_message_error", {
       session_id: sanitizeMarkName(teleportInfo.sessionId),
-      error_type: fromEnum(qt),
+      error_type: fromEnum(errorKind),
     });
     markFirstTeleportMessageLogged();
   }
@@ -740,7 +754,10 @@ function logAPIError({
 /**
  * 可上报的拒答类别：cyber/bio/frontier_llm/reasoning_extraction。
  */
-var SHAREABLE_REFUSAL_CATEGORIES = new Set(["cyber", "bio", "frontier_llm", "reasoning_extraction"]);
+var SHAREABLE_REFUSAL_CATEGORIES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:2549172", () => {
+  SHAREABLE_REFUSAL_CATEGORIES = new Set(["cyber", "bio", "frontier_llm", "reasoning_extraction"]);
+});
 //@ chunk-e6aww6q8.js:2549243-2549704 layout
 /**
  * 记 api_refusal 事件（模型、request id、速度、类别是否存在等）。
@@ -758,9 +775,9 @@ function logApiRefusal({
   agentContext,
 }) {
   addSafetyStop();
-  let q = normalizeAgentQuerySource(querySource);
-  let category = stopDetails?.category;
-  let Se = category && SHAREABLE_REFUSAL_CATEGORIES.has(category) ? category : null;
+  let category = normalizeAgentQuerySource(querySource);
+  let category_2 = stopDetails?.category;
+  let shareableCategory = category_2 && SHAREABLE_REFUSAL_CATEGORIES.has(category_2) ? category_2 : null;
   logOTelEvent(
     "api_refusal",
     {
@@ -769,19 +786,19 @@ function logApiRefusal({
       speed: fastMode ? "fast" : "normal",
       attempt,
       server_fallback_hop: serverFallbackHop,
-      ...(q && {
-        query_source: q,
+      ...(category && {
+        query_source: category,
       }),
       ...(effort && {
         effort,
       }),
       ...(stopDetails !== undefined && {
-        has_category: Se !== null,
+        has_category: shareableCategory !== null,
         has_explanation: Boolean(stopDetails?.explanation),
       }),
-      ...(Se &&
+      ...(shareableCategory &&
         isToolDetailsLoggingEnabled() && {
-          category: Se,
+          category: shareableCategory,
         }),
       ...(attribution && attributionForLog(querySource, attribution)),
     },
@@ -792,24 +809,29 @@ function logApiRefusal({
 /**
  * base64 字符串解码后的字节数。
  */
-function base64DecodedLength(e) {
-  let n = e.endsWith("==") ? 2 : e.endsWith("=") ? 1 : 0;
-  return Math.floor((e.length * 3) / 4) - n;
+function base64DecodedLength(base64) {
+  let padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+  return Math.floor((base64.length * 3) / 4) - padding;
 }
 //@ chunk-e6aww6q8.js:2549799-2549836 layout
 /**
  * 87400 / 40：读图片尺寸时先取 40 字符再取 87400 字符解码头部；WeakMap 缓存每个 source 的统计。
  */
-var IMAGE_HEADER_SNIFF_LONG_CHARS = 87400;
-var IMAGE_HEADER_SNIFF_SHORT_CHARS = 40;
-var imageStatsCache = new WeakMap();
+var IMAGE_HEADER_SNIFF_LONG_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var IMAGE_HEADER_SNIFF_SHORT_CHARS;
+var imageStatsCache;
+deferInit("chunk-e6aww6q8.js:2549799", () => {
+  IMAGE_HEADER_SNIFF_LONG_CHARS = 87400;
+  IMAGE_HEADER_SNIFF_SHORT_CHARS = 40;
+  imageStatsCache = new WeakMap();
+});
 //@ chunk-e6aww6q8.js:2549836-2549938 layout
 /**
  * requestContentStats 的异常保护版。
  */
-function safeRequestContentStats(messagesForAPI, model) {
+function safeRequestContentStats(messages, model) {
   try {
-    return requestContentStats(messagesForAPI, model);
+    return requestContentStats(messages, model);
   } catch (error) {
     logError(withTelemetryMessage(toError(error), "request content telemetry failed"));
     return;
@@ -819,104 +841,106 @@ function safeRequestContentStats(messagesForAPI, model) {
 /**
  * 统计请求消息内容：图片数/字节/像素、文档数/字节、文本/思考/工具输入/工具结果字符数。
  */
-function requestContentStats(e, n) {
-  let r = bytesPerTokenForModel(n);
+function requestContentStats(messages, model) {
+  let bytesPerToken = bytesPerTokenForModel(model);
   let weakMap = new WeakMap();
-  let h = (S, w) => {
-    switch (w.type) {
+  let countBlock = (stats, block) => {
+    switch (block.type) {
       case "image": {
-        S.imageBlockCount += 1;
-        if (!isBase64ImageBlock_3(w)) return S;
-        let L = w.source.data;
-        let G = imageStatsCache.get(w.source);
-        if (G?.data !== L) {
-          let q =
-            parseWebpHeader(Buffer.from(L.slice(0, IMAGE_HEADER_SNIFF_SHORT_CHARS), "base64")) ??
-            parseWebpHeader(Buffer.from(L.slice(0, IMAGE_HEADER_SNIFF_LONG_CHARS), "base64"));
-          G = {
-            data: L,
-            bytes: base64DecodedLength(L),
-            pixels: q ? q.width * q.height : 0,
+        stats.imageBlockCount += 1;
+        if (!isBase64ImageBlock_3(block)) return stats;
+        let imageData = block.source.data;
+        let cachedImageStats = imageStatsCache.get(block.source);
+        if (cachedImageStats?.data !== imageData) {
+          let webpHeader =
+            parseWebpHeader(Buffer.from(imageData.slice(0, IMAGE_HEADER_SNIFF_SHORT_CHARS), "base64")) ??
+            parseWebpHeader(Buffer.from(imageData.slice(0, IMAGE_HEADER_SNIFF_LONG_CHARS), "base64"));
+          cachedImageStats = {
+            data: imageData,
+            bytes: base64DecodedLength(imageData),
+            pixels: webpHeader ? webpHeader.width * webpHeader.height : 0,
           };
-          imageStatsCache.set(w.source, G);
+          imageStatsCache.set(block.source, cachedImageStats);
         }
-        S.imageTotalBytes += G.bytes;
-        S.imageTotalPixels += G.pixels;
-        return S;
+        stats.imageTotalBytes += cachedImageStats.bytes;
+        stats.imageTotalPixels += cachedImageStats.pixels;
+        return stats;
       }
       case "document": {
-        S.documentBlockCount += 1;
-        let source = w.source;
-        if (!isPlainObject_5(source)) return S;
-        switch (w.source.type) {
+        stats.documentBlockCount += 1;
+        let source = block.source;
+        if (!isPlainObject_5(source)) return stats;
+        switch (block.source.type) {
           case "base64":
-            if (isBase64ImageBlock_3(w)) S.documentTotalBytes += base64DecodedLength(w.source.data);
-            return S;
+            if (isBase64ImageBlock_3(block))
+              stats.documentTotalBytes += base64DecodedLength(block.source.data);
+            return stats;
           case "text":
-            if (typeof w.source.data === "string") S.documentTotalBytes += w.source.data.length;
-            return S;
+            if (typeof block.source.data === "string") stats.documentTotalBytes += block.source.data.length;
+            return stats;
           case "content": {
-            let content = w.source.content;
-            if (typeof content === "string") S.documentTotalBytes += content.length;
+            let content = block.source.content;
+            if (typeof content === "string") stats.documentTotalBytes += content.length;
             else if (Array.isArray(content))
-              S.documentTotalBytes += content.reduce(
-                (acc, Z) => acc + (Z?.type === "text" && typeof Z.text === "string" ? Z.text.length : 0),
+              stats.documentTotalBytes += content.reduce(
+                (acc, item) =>
+                  acc + (item?.type === "text" && typeof item.text === "string" ? item.text.length : 0),
                 0,
               );
-            return S;
+            return stats;
           }
           default:
-            return S;
+            return stats;
         }
       }
       case "text":
-        S.inputTextCharLength += typeof w.text === "string" ? w.text.length : 0;
-        return S;
+        stats.inputTextCharLength += typeof block.text === "string" ? block.text.length : 0;
+        return stats;
       case "thinking":
-        S.inputTextCharLength += typeof w.thinking === "string" ? w.thinking.length : 0;
-        return S;
+        stats.inputTextCharLength += typeof block.thinking === "string" ? block.thinking.length : 0;
+        return stats;
       case "redacted_thinking":
-        S.inputTextCharLength += typeof w.data === "string" ? w.data.length : 0;
-        return S;
+        stats.inputTextCharLength += typeof block.data === "string" ? block.data.length : 0;
+        return stats;
       case "tool_use":
       case "server_tool_use":
       case "mcp_tool_use":
-        S.inputTextCharLength +=
-          (typeof w.name === "string" ? w.name.length : 0) +
-          (getCachedJsonLength(w.input, weakMap) ?? jsonStringify(w.input ?? {}).length);
-        return S;
+        stats.inputTextCharLength +=
+          (typeof block.name === "string" ? block.name.length : 0) +
+          (getCachedJsonLength(block.input, weakMap) ?? jsonStringify(block.input ?? {}).length);
+        return stats;
       case "tool_result":
       case "mcp_tool_result": {
-        let content = w.content;
+        let content = block.content;
         if (typeof content === "string") {
-          S.inputTextCharLength += content.length;
-          return S;
+          stats.inputTextCharLength += content.length;
+          return stats;
         }
-        if (!Array.isArray(content)) return S;
-        return content.reduce(y, S);
+        if (!Array.isArray(content)) return stats;
+        return content.reduce(countItem, stats);
       }
       default:
-        S.inputTextCharLength += jsonStringify(w).length;
-        return S;
+        stats.inputTextCharLength += jsonStringify(block).length;
+        return stats;
     }
   };
-  let y = (S, w) => {
-    if (typeof w === "string") {
-      S.inputTextCharLength += jsonStringify(w).length;
-      return S;
+  let countItem = (stats, item) => {
+    if (typeof item === "string") {
+      stats.inputTextCharLength += jsonStringify(item).length;
+      return stats;
     }
-    return isObjectBlock(w) ? h(S, w) : S;
+    return isObjectBlock(item) ? countBlock(stats, item) : stats;
   };
-  return e.reduce(
-    (acc, w) => {
-      let content = w.message.content;
-      acc.estimatedInputTokens += roughTokenCountEstimationForContent(content, r, weakMap);
+  return messages.reduce(
+    (acc, message) => {
+      let content = message.message.content;
+      acc.estimatedInputTokens += roughTokenCountEstimationForContent(content, bytesPerToken, weakMap);
       if (typeof content === "string") {
         acc.inputTextCharLength += content.length;
         return acc;
       }
       if (!Array.isArray(content)) return acc;
-      for (let G of content) y(acc, G);
+      for (let item of content) countItem(acc, item);
       return acc;
     },
     {
@@ -934,37 +958,41 @@ function requestContentStats(e, n) {
 /**
  * 统计本次新发与重发的图片块数与字节。
  */
-function sentImageStats(messagesForAPI, n) {
+function sentImageStats(messagesForAPI, fallbackLimit) {
   try {
-    let r = {
+    let out = {
       imageNewBlockCount: 0,
       imageNewBytes: 0,
       imageResentBlockCount: 0,
       imageResentBytes: 0,
     };
-    let lastIndex = messagesForAPI.findLastIndex((h) => h.type === "assistant" && isRealApiResponse(h));
-    for (let [h, y] of messagesForAPI.entries()) {
-      let content = y.message.content;
-      if (h < n || !Array.isArray(content)) continue;
-      for (let w of content) {
+    let lastIndex = messagesForAPI.findLastIndex(
+      (realChunk) => realChunk.type === "assistant" && isRealApiResponse(realChunk),
+    );
+    for (let [index, message] of messagesForAPI.entries()) {
+      let content = message.message.content;
+      if (index < fallbackLimit || !Array.isArray(content)) continue;
+      for (let block of content) {
         let content =
-          isObjectBlock(w) && (w.type === "tool_result" || w.type === "mcp_tool_result") && "content" in w
-            ? w.content
+          isObjectBlock(block) &&
+          (block.type === "tool_result" || block.type === "mcp_tool_result") &&
+          "content" in block
+            ? block.content
             : undefined;
-        for (let G of Array.isArray(content) ? content : [w]) {
-          if (!isObjectBlock(G) || G.type !== "image" || !isBase64ImageBlock_3(G)) continue;
-          let q = base64DecodedLength(G.source.data);
-          if (h < lastIndex) {
-            r.imageResentBlockCount += 1;
-            r.imageResentBytes += q;
+        for (let item of Array.isArray(content) ? content : [block]) {
+          if (!isObjectBlock(item) || item.type !== "image" || !isBase64ImageBlock_3(item)) continue;
+          let bytes = base64DecodedLength(item.source.data);
+          if (index < lastIndex) {
+            out.imageResentBlockCount += 1;
+            out.imageResentBytes += bytes;
           } else {
-            r.imageNewBlockCount += 1;
-            r.imageNewBytes += q;
+            out.imageNewBlockCount += 1;
+            out.imageNewBytes += bytes;
           }
         }
       }
     }
-    return r;
+    return out;
   } catch (error) {
     logError(withTelemetryMessage(toError(error), "sent image telemetry failed"));
     return;
@@ -974,12 +1002,12 @@ function sentImageStats(messagesForAPI, n) {
 /**
  * 遥测用工具名：内置工具原名，MCP 工具归为 mcp_tool，其他为 other。
  */
-function toolNameForTelemetry_2(name, n) {
-  let r = n.get(name);
-  if (r === "static") return sanitizeToolNameForAnalytics(name);
-  if (r === "mcp") {
-    let s = sanitizeToolNameForAnalytics(name);
-    return s === name ? lit_2("mcp_tool") : s;
+function toolNameForTelemetry_2(name, names) {
+  let mapped = names.get(name);
+  if (mapped === "static") return sanitizeToolNameForAnalytics(name);
+  if (mapped === "mcp") {
+    let sanitized = sanitizeToolNameForAnalytics(name);
+    return sanitized === name ? lit_2("mcp_tool") : sanitized;
   }
   return lit_2("other");
 }
@@ -987,10 +1015,16 @@ function toolNameForTelemetry_2(name, n) {
 /**
  * 把 [工具类别, 字符数] 列表拼成脱敏 JSON 字符串（遥测元数据）。
  */
-function buildToolSizeJson(e) {
+function buildToolSizeJson(schemas) {
   return concatSafe(
     lit_2("{"),
-    ...e.flatMap(([n, r], s) => [...(s > 0 ? [lit_2(",")] : []), lit_2('"'), n, lit_2('":'), fromNumber(r)]),
+    ...schemas.flatMap(([name, schema], index) => [
+      ...(index > 0 ? [lit_2(",")] : []),
+      lit_2('"'),
+      name,
+      lit_2('":'),
+      fromNumber(schema),
+    ]),
     lit_2("}"),
   );
 }
@@ -998,29 +1032,34 @@ function buildToolSizeJson(e) {
 /**
  * system 字符数、工具 schema 字符数、工具数、延迟工具数与 schema 哈希（请求前缀遥测）。
  */
-function requestPrefixStats(e, n, r) {
+function requestPrefixStats(systemBlocks, tools, querySource) {
   try {
     let systemCharLength = 0;
-    for (let G of e) systemCharLength += G.text.length;
+    for (let block of systemBlocks) systemCharLength += block.text.length;
     let toolsCharLength = 0;
     let deferredToolsCount = 0;
-    let S = new Map();
-    for (let G of n) {
-      if ("defer_loading" in G && G.defer_loading === true) {
+    let bytesByToolName = new Map();
+    for (let tool of tools) {
+      if ("defer_loading" in tool && tool.defer_loading === true) {
         deferredToolsCount += 1;
         continue;
       }
-      let q = jsonStringifyRaw(G).length;
-      toolsCharLength += q;
-      let Z = "name" in G && typeof G.name === "string" ? toolNameForTelemetry_2(G.name, r) : lit_2("other");
-      S.set(Z, (S.get(Z) ?? 0) + q);
+      let toolBytes = jsonStringifyRaw(tool).length;
+      toolsCharLength += toolBytes;
+      let toolName =
+        "name" in tool && typeof tool.name === "string"
+          ? toolNameForTelemetry_2(tool.name, querySource)
+          : lit_2("other");
+      bytesByToolName.set(toolName, (bytesByToolName.get(toolName) ?? 0) + toolBytes);
     }
-    let sorted = [...S.entries()].sort(([G], [q]) => (G < q ? -1 : G > q ? 1 : 0));
-    let toolSizeJson = buildToolSizeJson(sorted);
+    let schemas = [...bytesByToolName.entries()].sort(([nameA], [nameB]) =>
+      nameA < nameB ? -1 : nameA > nameB ? 1 : 0,
+    );
+    let toolSizeJson = buildToolSizeJson(schemas);
     return {
       systemCharLength,
       toolsCharLength,
-      toolsCount: n.length,
+      toolsCount: tools.length,
       deferredToolsCount,
       toolSchemasHash: shortHash(toolSizeJson),
       toolSchemaCharLengths: toolSizeJson,
@@ -1034,8 +1073,12 @@ function requestPrefixStats(e, n, r) {
 /**
  * 512：tengu_tool_schema_sizes 去重集合及其上限。
  */
-var loggedToolSchemaKeys = new HostScoped(() => new Set());
-var MAX_LOGGED_TOOL_SCHEMA_KEYS = 512;
+var loggedToolSchemaKeys; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_LOGGED_TOOL_SCHEMA_KEYS;
+deferInit("chunk-e6aww6q8.js:2553413", () => {
+  loggedToolSchemaKeys = new HostScoped(() => new Set());
+  MAX_LOGGED_TOOL_SCHEMA_KEYS = 512;
+});
 //@ chunk-e6aww6q8.js:2553448-2557974 fingerprint = logAPISuccess (0.505)
 /**
  * 记 tengu_api_success：模型、usage、耗时（含重试）、TTFT、首内容时间、stop_reason、成本、是否回退非流式、网关等；必要时记工具 schema 大小。
@@ -1102,18 +1145,18 @@ function logAPISuccess({
   let isNonInteractiveSession = getIsNonInteractiveSession();
   let isPostCompaction = consumePostCompaction();
   let hasPrintFlag = eagerHasCliFlag("-p") || eagerHasCliFlag("--print");
-  let _r = loggedToolSchemaKeys.of(getRootSession().host);
+  let logged = loggedToolSchemaKeys.of(getRootSession().host);
   let now = Date.now();
   let lastCompletion = getLastApiCompletionTimestamp();
   let timeSinceLastApiCallMs =
     lastCompletion !== null ? Math.max(0, Math.round(now - lastCompletion)) : undefined;
-  let jr = consumeInvokingRequestId(agentContext);
-  let Or = isMainThreadQueryLogging(querySource, isMainAgent(agentContext));
+  let invokingRequestId = consumeInvokingRequestId(agentContext);
+  let isMain = isMainThreadQueryLogging(querySource, isMainAgent(agentContext));
   onMainRequestLogged({
-    isMainLoop: Or,
+    isMainLoop: isMain,
     now,
   });
-  addUsageToSession(usage, Or);
+  addUsageToSession(usage, isMain);
   logEvent("tengu_api_success", {
     model: telemetrySafeModelName(model),
     ...(isLowPriority && {
@@ -1160,9 +1203,9 @@ function logAPISuccess({
       firstAttemptRequestId !== requestId && {
         firstAttemptRequestId: sanitizeMarkName(firstAttemptRequestId),
       }),
-    ...(jr && {
-      invokingRequestId: sanitizeMarkName(jr.invokingRequestId),
-      invocationKind: fromEnumOpt(jr.invocationKind),
+    ...(invokingRequestId && {
+      invokingRequestId: sanitizeMarkName(invokingRequestId.invokingRequestId),
+      invocationKind: fromEnumOpt(invokingRequestId.invocationKind),
     }),
     stop_reason: fromEnumOpt(stopReason) ?? undefined,
     ...(effort && {
@@ -1273,9 +1316,9 @@ function logAPISuccess({
     ...getAnthropicEnvMetadata(),
     timeSinceLastApiCallMs,
   });
-  if (requestPrefixTelemetry && !_r.has(requestPrefixTelemetry.toolSchemasHash)) {
-    if (_r.size >= MAX_LOGGED_TOOL_SCHEMA_KEYS) _r.clear();
-    _r.add(requestPrefixTelemetry.toolSchemasHash);
+  if (requestPrefixTelemetry && !logged.has(requestPrefixTelemetry.toolSchemasHash)) {
+    if (logged.size >= MAX_LOGGED_TOOL_SCHEMA_KEYS) logged.clear();
+    logged.add(requestPrefixTelemetry.toolSchemasHash);
     logEvent("tengu_tool_schema_sizes", {
       toolSchemasHash: requestPrefixTelemetry.toolSchemasHash,
       toolSchemaCharLengths: requestPrefixTelemetry.toolSchemaCharLengths,
@@ -1362,17 +1405,17 @@ function logAPISuccessAndDuration({
     try {
       let textLen = 0;
       let thinkingLen = 0;
-      let Vi = false;
-      let ji = 0;
-      let Wi = new Map();
+      let hasThinking = false;
+      let narrationCount = 0;
+      let toolInputLengths = new Map();
       for (let msg of newMessages)
         for (let block of msg.message.content)
           if (block.type === "text") textLen += block.text?.length ?? 0;
           else if (block.type === "thinking") {
             thinkingLen += block.thinking?.length ?? 0;
-            Vi = true;
-            if (isNarrationThinking(block)) ji++;
-          } else if (block.type === "redacted_thinking") Vi = true;
+            hasThinking = true;
+            if (isNarrationThinking(block)) narrationCount++;
+          } else if (block.type === "redacted_thinking") hasThinking = true;
           else if (
             block.type === "tool_use" ||
             block.type === "server_tool_use" ||
@@ -1385,12 +1428,12 @@ function logAPISuccessAndDuration({
                 : block.name.startsWith(SKILL_2)
                   ? lit_2("skill_tool")
                   : sanitizeToolNameForAnalytics(block.name);
-            Wi.set(sanitizedName, (Wi.get(sanitizedName) ?? 0) + inputLen);
+            toolInputLengths.set(sanitizedName, (toolInputLengths.get(sanitizedName) ?? 0) + inputLen);
           }
       textContentLength = textLen;
-      thinkingContentLength = Vi ? thinkingLen : undefined;
-      narrationBlockCount = ji;
-      toolUseContentLengths = Wi.size > 0 ? hashEntries(Wi) : undefined;
+      thinkingContentLength = hasThinking ? thinkingLen : undefined;
+      narrationBlockCount = narrationCount;
+      toolUseContentLengths = toolInputLengths.size > 0 ? hashEntries(toolInputLengths) : undefined;
     } catch (error) {
       logError(withTelemetryMessage(toError(error), "response content telemetry failed"));
     }
@@ -1455,7 +1498,7 @@ function logAPISuccessAndDuration({
     uncoveredTail,
   });
   let costUSD_2 = Number.isFinite(costUSD) ? costUSD : 0;
-  let Io = apiSuccessFields(
+  let successFields = apiSuccessFields(
     {
       model,
       usage,
@@ -1473,25 +1516,25 @@ function logAPISuccessAndDuration({
   logOTelEvent(
     "api_request",
     {
-      ...Io,
+      ...successFields,
       ...(attribution && attributionForLog(querySource, attribution)),
       ...modelCallNames,
     },
     agentContext,
   );
-  let zo = (fs) => redactAccountMemoryText(accountMemoryKeys, querySource, fs);
+  let redactText = (text) => redactAccountMemoryText(accountMemoryKeys, querySource, text);
   if (newMessages) {
-    let joined = newMessages.flatMap((m) =>
-      m.message.content.filter((Vi) => Vi.type === "text").map((Vi) => Vi.text),
+    let text = newMessages.flatMap((m) =>
+      m.message.content.filter((block) => block.type === "text").map((block) => block.text),
     ).join(`
 `);
-    if (joined)
+    if (text)
       logOTelEvent(
         "assistant_response",
         {
-          response_length: joined.length,
+          response_length: text.length,
           response: isAssistantResponseLoggingEnabled()
-            ? truncateContentForTelemetry(zo(joined)).content
+            ? truncateContentForTelemetry(redactText(text)).content
             : "<REDACTED>",
           request_id: requestId ?? undefined,
           "message.uuid": newMessages.at(-1)?.uuid,
@@ -1514,10 +1557,11 @@ function logAPISuccessAndDuration({
   let hasToolCall;
   if (isBetaTracingEnabled() && newMessages) {
     modelOutput =
-      newMessages.flatMap((m) => m.message.content.filter((as) => as.type === "text").map((as) => as.text))
-        .join(`
+      newMessages.flatMap((m) =>
+        m.message.content.filter((block) => block.type === "text").map((block) => block.text),
+      ).join(`
 `) || undefined;
-    hasToolCall = newMessages.some((m) => m.message.content.some((as) => as.type === "tool_use"));
+    hasToolCall = newMessages.some((m) => m.message.content.some((block) => block.type === "tool_use"));
   }
   endLLMRequestSpan(llmSpan, {
     success: true,

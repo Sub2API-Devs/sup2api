@@ -9,7 +9,7 @@
  * attribution: placement 2
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, booleanSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { buildTool } from "../tools/permissionCheckGuard.js";
 import { SUBAGENTHANDBACK } from "../../tools/AgentTool/constants.js";
 import {
@@ -25,14 +25,14 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 
 //@ chunk-41w44bgm.js:38376-38491 placement
 var reportInputSchema = DoctorLazy(() =>
-  u({
-    message: string().describe("Your full report for your caller"),
+  objectSchema({
+    message: stringSchema().describe("Your full report for your caller"),
   }),
 );
 var reportOutputSchema = DoctorLazy(() =>
-  u({
-    success: M(),
-    message: string(),
+  objectSchema({
+    success: booleanSchema(),
+    message: stringSchema(),
   }),
 );
 //@ chunk-41w44bgm.js:38491-40004 placement
@@ -69,13 +69,13 @@ function createSubagentHandbackTool(agentId, deliver) {
     async prompt() {
       return SUBAGENT_HANDBACK_INSTRUCTIONS;
     },
-    toAutoClassifierInput(r) {
-      return `${SUBAGENT_HANDBACK_DESCRIPTION}: ${r.message}`;
+    toAutoClassifierInput(input) {
+      return `${SUBAGENT_HANDBACK_DESCRIPTION}: ${input.message}`;
     },
-    create(r) {
+    create(context) {
       return {
-        async validateInput(h) {
-          return h.message.trim().length === 0
+        async validateInput(input) {
+          return input.message.trim().length === 0
             ? {
                 result: false,
                 message: "Your report is empty. Put your full report in message and call again.",
@@ -85,11 +85,11 @@ function createSubagentHandbackTool(agentId, deliver) {
                 result: true,
               };
         },
-        async call(h, T) {
-          let y = takeClassifierBlock(T.toolUseId);
-          if (y !== undefined && y.kind !== "unavailable" && r.agentId !== undefined)
-            flagAgentContract(r.agentId);
-          if (r.agentId !== agentId)
+        async call(input, callContext) {
+          let block = takeClassifierBlock(callContext.toolUseId);
+          if (block !== undefined && block.kind !== "unavailable" && context.agentId !== undefined)
+            flagAgentContract(context.agentId);
+          if (context.agentId !== agentId)
             return {
               data: {
                 success: false,
@@ -97,23 +97,23 @@ function createSubagentHandbackTool(agentId, deliver) {
               },
             };
           let review =
-            y === undefined
+            block === undefined
               ? null
-              : y.kind === "blocked"
+              : block.kind === "blocked"
                 ? {
-                    warning: blockedReportWarning(y.reason),
+                    warning: blockedReportWarning(block.reason),
                     kind: "flagged",
                   }
                 : undefined;
           if (
             !deliver({
-              message: h.message,
+              message: input.message,
               review,
-              ...(y !== undefined &&
-                y.kind !== "blocked" && {
-                  noVerdict: y,
+              ...(block !== undefined &&
+                block.kind !== "blocked" && {
+                  noVerdict: block,
                 }),
-              toolUseId: T.toolUseId,
+              toolUseId: callContext.toolUseId,
             })
           )
             return {
@@ -122,7 +122,7 @@ function createSubagentHandbackTool(agentId, deliver) {
                 message: "Not sent: you already delivered a report, and only the first one counts. Stop now.",
               },
             };
-          if (T.toolUseId !== undefined) setAgentMissState(agentId, T.toolUseId);
+          if (callContext.toolUseId !== undefined) setAgentMissState(agentId, callContext.toolUseId);
           return {
             data: {
               success: true,
@@ -135,14 +135,14 @@ function createSubagentHandbackTool(agentId, deliver) {
         },
       };
     },
-    mapToolResultToToolResultBlockParam(r, toolUseId) {
+    mapToolResultToToolResultBlockParam(result, toolUseId) {
       return {
         tool_use_id: toolUseId,
         type: "tool_result",
         content: [
           {
             type: "text",
-            text: jsonStringify(r),
+            text: jsonStringify(result),
           },
         ],
       };

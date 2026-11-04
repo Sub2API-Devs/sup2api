@@ -17,17 +17,21 @@ import { isBridgeEnvironment } from "../../utils/remoteEnvironment.js";
 import { getFeatureValue_SESSION_PINNED } from "../../services/analytics/growthbook.js";
 import { glabMrId, glabMrProjectUrl } from "../../utils/detectRepository.js";
 import { VERIFY } from "../../skills/bundled/bundledSkillNames.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hantmvxa.js:79524-79601 placement
-var REMOTE_ENTRYPOINTS = new Set(["remote", "remote_desktop", "remote_mobile", "remote_trigger"]);
+var REMOTE_ENTRYPOINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hantmvxa.js:79524", () => {
+  REMOTE_ENTRYPOINTS = new Set(["remote", "remote_desktop", "remote_mobile", "remote_trigger"]);
+});
 //@ chunk-hantmvxa.js:79601-80043 placement
-function getReportFindingsMode(e) {
-  if (e.options?.isSkillPreload || e.agentId !== undefined) return;
+function getReportFindingsMode(context) {
+  if (context.options?.isSkillPreload || context.agentId !== undefined) return;
   let printOutputFormat = getPrintOutputFormat();
   if (printOutputFormat === "text" || printOutputFormat === "json") return;
-  if (!e.options?.tools?.some((tool) => toolMatchesName(tool, REPORTFINDINGS))) return;
+  if (!context.options?.tools?.some((tool) => toolMatchesName(tool, REPORTFINDINGS))) return;
   if (env.CLAUDE_CODE_REPORT_FINDINGS) return "spawn";
-  let messageClientPlatform = e.options?.messageClientPlatform;
+  let messageClientPlatform = context.options?.messageClientPlatform;
   let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
   return (messageClientPlatform === "desktop_app" || messageClientPlatform === "web_claude_ai") &&
     !isCoworkAny() &&
@@ -53,17 +57,17 @@ or print the findings instead. If the target is not a PR, print the findings
 to the terminal and note that \`--comment\` was ignored.
 `;
 //@ chunk-hantmvxa.js:80631-81428 placement
-function buildGitLabCommentSection(e) {
-  let n = glabMrId(e);
-  let s = glabMrProjectUrl(e);
-  let r = s ? ` -R ${s}` : "";
+function buildGitLabCommentSection(target) {
+  let mrId = glabMrId(target);
+  let projectUrl = glabMrProjectUrl(target);
+  let repoArg = projectUrl ? ` -R ${projectUrl}` : "";
   return `
 
 ## Posting to GitLab (--comment)
 
 The \`--comment\` flag was passed. After producing the findings list, if the
 review target is a GitLab merge request, post the findings as one general MR
-note via \`${`glab mr note${n ? ` ${n}` : ""}${r} -m "<body>"`}\`${s ? "" : " from inside that project's checkout"}
+note via \`${`glab mr note${mrId ? ` ${mrId}` : ""}${repoArg} -m "<body>"`}\`${projectUrl ? "" : " from inside that project's checkout"}
 (every finding with its file:line, the issue, and the suggested fix). glab has no single verb for line-anchored
 comments; those require \`glab api projects/:id/merge_requests/:iid/discussions\`,
 so post the general note unless the user asks for inline threads. If glab is
@@ -94,7 +98,7 @@ var REPORT_OUTCOMES_LINE_TEXT = `After the call, give one line per finding with 
 also be read from a client that does not show the tool call.
 `;
 //@ chunk-hantmvxa.js:82172-82812 placement
-function buildFixSection(e) {
+function buildFixSection(hasReportTool) {
   return `
 
 ## Applying fixes (--fix)
@@ -105,7 +109,7 @@ directly \u2014 correctness bugs and reuse/simplification/efficiency cleanups al
 Skip any finding whose fix would change intended behavior, require changes well
 outside the reviewed diff, or that you judge to be a false positive \u2014 note the
 skip rather than arguing with it. ${
-    e
+    hasReportTool
       ? `Then ${REPORT_OUTCOMES_SECTION}; after the call, give one line per skipped finding saying why.`
       : `Finish with a brief summary of what was fixed
 and what was skipped.`

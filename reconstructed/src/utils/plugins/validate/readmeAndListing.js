@@ -26,22 +26,22 @@ import {
   URL_PATTERN_GLOBAL,
   LISTING_WHITESPACE_RE,
   URL_PATTERN,
-  PLUGIN_NAME_SPACE_MESSAGE,
-  MAX_README_CHARS,
-  MAX_DESCRIPTION_LENGTH,
-  MAX_NAME_SUGGESTION_COUNT,
-  MAX_SCREENSHOT_BYTES,
-  MAX_ICON_BYTES,
+  MAX_README_BYTES,
+  MAX_BRACKET_CELLS,
+  MAX_DELIMITER_CHARS,
+  MAX_DELIMITER_RUNS,
+  MAX_INDENT_COLUMNS,
+  MAX_LIST_NESTING,
   README_CANDIDATES,
   PRIVACY_WORD_RE,
   SUPPORT_WORD_RE,
   TERMS_WORD_RE,
   DOCS_WORD_RE,
-  PLUGIN_VALIDATION_ISSUES,
-  MAX_LISTING_CHARS,
+  PLUGIN_MANIFEST_PATH,
+  MAX_SCREENSHOTS,
   README_ROOT_CANDIDATES,
+  MAX_ICON_BYTES,
   ICON_INVALID_MESSAGE,
-  MIN_README_WORDS,
   UNSAFE_SVG_ELEMENT_RE,
   SVG_EVENT_HANDLER_RE,
   SVG_EXTERNAL_REF_RE,
@@ -56,27 +56,27 @@ import {
 } from "../validatePlugin.js";
 
 //@ chunk-5aas12zq.js:25014-25298 placement
-function countReadmeWords(e) {
-  let n = 0;
-  let t = false;
-  for (let line of e.split(`
+function countReadmeWords(text) {
+  let wordCount = 0;
+  let inFence = false;
+  for (let line of text.split(`
 `)) {
-    let s = countLeadingChars(line);
-    if (line.startsWith("```", s) || line.startsWith("~~~", s)) {
-      t = !t;
+    let indent = countLeadingChars(line);
+    if (line.startsWith("```", indent) || line.startsWith("~~~", indent)) {
+      inFence = !inFence;
       continue;
     }
-    if (t) continue;
-    let o = "";
-    let a = 0;
-    for (let l of isUrl(line)) {
-      o += line.slice(a, l.start) + l.text;
-      a = l.end;
+    if (inFence) continue;
+    let stripped = "";
+    let cursor = 0;
+    for (let link of isUrl(line)) {
+      stripped += line.slice(cursor, link.start) + link.text;
+      cursor = link.end;
     }
-    o = (o + line.slice(a)).replace(URL_PATTERN_GLOBAL, "");
-    n += count(o.split(LISTING_WHITESPACE_RE), (l) => l !== "");
+    stripped = (stripped + line.slice(cursor)).replace(URL_PATTERN_GLOBAL, "");
+    wordCount += count(stripped.split(LISTING_WHITESPACE_RE), (token) => token !== "");
   }
-  return n;
+  return wordCount;
 }
 //@ chunk-5aas12zq.js:25298-25316 placement
 /**
@@ -85,56 +85,56 @@ function countReadmeWords(e) {
 var README_LINE_BREAK_CHARS = `) 	
 \f\r`;
 //@ chunk-5aas12zq.js:25316-25474 placement
-function isShortLinkSpan(source, n, t) {
-  let r = t - n;
-  if (r < 0 || r > 160) return false;
-  if (r <= 80) return true;
-  let s = 0;
-  for (let o = n; o < t; o++) {
-    let code = source.charCodeAt(o);
-    if (code < 56320 || code > 57343) s++;
+function isShortLinkSpan(source, start, end) {
+  let length = end - start;
+  if (length < 0 || length > 160) return false;
+  if (length <= 80) return true;
+  let visibleCount = 0;
+  for (let index = start; index < end; index++) {
+    let code = source.charCodeAt(index);
+    if (code < 56320 || code > 57343) visibleCount++;
   }
-  return s <= 80;
+  return visibleCount <= 80;
 }
 //@ chunk-5aas12zq.js:25909-26118 placement
-function findTopicUrl(e, n) {
-  for (let line of e.split(`
+function findTopicUrl(text, topicPattern) {
+  for (let line of text.split(`
 `)) {
-    if (!n.test(line)) continue;
-    let r = isUrl(line);
-    let o = r.find((l) => n.test(l.text) || n.test(l.url)) ?? r[0];
-    if (o !== undefined) return linkTargetOf(line, o);
+    if (!topicPattern.test(line)) continue;
+    let links = isUrl(line);
+    let link = links.find((link) => topicPattern.test(link.text) || topicPattern.test(link.url)) ?? links[0];
+    if (link !== undefined) return linkTargetOf(line, link);
     let match = URL_PATTERN.exec(line);
     if (match !== null) return match[0];
   }
   return "";
 }
 //@ chunk-5aas12zq.js:26118-26240 placement
-function linkTargetOf(line, n) {
+function linkTargetOf(text, link) {
   return (
-    (n.text.startsWith("![") || (n.start >= 2 && line.slice(n.start - 2, n.start) === "[!")
-      ? isUrl_2(line, n.end)
-      : undefined) ?? n.url
+    (link.text.startsWith("![") || (link.start >= 2 && text.slice(link.start - 2, link.start) === "[!")
+      ? isUrl_2(text, link.end)
+      : undefined) ?? link.url
   );
 }
 //@ chunk-5aas12zq.js:26240-26468 layout = isUrl (1)
-function isUrl_2(e, end) {
-  let t = end + 2;
-  let r = e.startsWith("https://", t) ? 8 : e.startsWith("http://", t) ? 7 : 0;
-  if (e[end] !== "]" || e[end + 1] !== "(" || r === 0) return;
-  let s = t;
-  while (s < e.length && !README_LINE_BREAK_CHARS.includes(e[s] ?? "")) s++;
-  return e[s] === ")" && s > t + r ? e.slice(t, s) : undefined;
+function isUrl_2(text, end) {
+  let index = end + 2;
+  let schemeLength = text.startsWith("https://", index) ? 8 : text.startsWith("http://", index) ? 7 : 0;
+  if (text[end] !== "]" || text[end + 1] !== "(" || schemeLength === 0) return;
+  let cursor = index;
+  while (cursor < text.length && !README_LINE_BREAK_CHARS.includes(text[cursor] ?? "")) cursor++;
+  return text[cursor] === ")" && cursor > index + schemeLength ? text.slice(index, cursor) : undefined;
 }
 //@ chunk-5aas12zq.js:26468-26953 placement
 /**
  * README 过大或 markdown 结构过复杂时给出原因与修复。
  */
 function checkReadmeRenderable(text) {
-  if (Buffer.byteLength(text, "utf-8") > PLUGIN_NAME_SPACE_MESSAGE)
+  if (Buffer.byteLength(text, "utf-8") > MAX_README_BYTES)
     return {
-      why: `README is larger than ${PLUGIN_NAME_SPACE_MESSAGE} bytes`,
-      fix: `Shorten the README to under ${PLUGIN_NAME_SPACE_MESSAGE / 1024} KiB, for example by moving long reference material to other files; its text is still counted and read.`,
+      why: `README is larger than ${MAX_README_BYTES} bytes`,
+      fix: `Shorten the README to under ${MAX_README_BYTES / 1024} KiB, for example by moving long reference material to other files; its text is still counted and read.`,
     };
   let readmeComplexity = findReadmeComplexity(text);
   return readmeComplexity === undefined
@@ -148,88 +148,92 @@ function checkReadmeRenderable(text) {
 /**
  * 方括号、强调符、缩进、嵌套过多时返回原因。
  */
-function findReadmeComplexity(e) {
-  let n = 0;
-  for (let idx = 0; idx < e.length; idx++) if (e[idx] === "[" || e[idx] === "]") n++;
-  if (n > MAX_README_CHARS) return `more than ${MAX_README_CHARS} square brackets`;
-  let t = 0;
-  let r = 0;
-  for (let idx = 0; idx < e.length; idx++) {
-    let o = e[idx];
-    if (o !== "*" && o !== "_" && o !== "~" && o !== "`") continue;
-    if (++r > MAX_DESCRIPTION_LENGTH)
-      return `more than ${MAX_DESCRIPTION_LENGTH} emphasis / code delimiter characters`;
-    if ((idx === 0 || e[idx - 1] !== o) && ++t > MAX_NAME_SUGGESTION_COUNT)
-      return `more than ${MAX_NAME_SUGGESTION_COUNT} emphasis / code delimiter runs`;
+function findReadmeComplexity(text) {
+  let bracketCount = 0;
+  for (let idx = 0; idx < text.length; idx++) if (text[idx] === "[" || text[idx] === "]") bracketCount++;
+  if (bracketCount > MAX_BRACKET_CELLS) return `more than ${MAX_BRACKET_CELLS} square brackets`;
+  let delimiterRuns = 0;
+  let delimiterChars = 0;
+  for (let idx = 0; idx < text.length; idx++) {
+    let char = text[idx];
+    if (char !== "*" && char !== "_" && char !== "~" && char !== "`") continue;
+    if (++delimiterChars > MAX_DELIMITER_CHARS)
+      return `more than ${MAX_DELIMITER_CHARS} emphasis / code delimiter characters`;
+    if ((idx === 0 || text[idx - 1] !== char) && ++delimiterRuns > MAX_DELIMITER_RUNS)
+      return `more than ${MAX_DELIMITER_RUNS} emphasis / code delimiter runs`;
   }
-  for (let line of e.split(`
+  for (let line of text.split(`
 `)) {
-    if (leadingIndentWidth(line) > MAX_SCREENSHOT_BYTES)
-      return `a line indented more than ${MAX_SCREENSHOT_BYTES} columns`;
-    if (countLineNesting(line) > MAX_ICON_BYTES)
-      return `blockquotes / lists nested more than ${MAX_ICON_BYTES} deep on one line`;
+    if (leadingIndentWidth(line) > MAX_INDENT_COLUMNS)
+      return `a line indented more than ${MAX_INDENT_COLUMNS} columns`;
+    if (countLineNesting(line) > MAX_LIST_NESTING)
+      return `blockquotes / lists nested more than ${MAX_LIST_NESTING} deep on one line`;
   }
   return;
 }
 //@ chunk-5aas12zq.js:27510-27605 placement
 function leadingIndentWidth(line) {
-  let n = 0;
-  for (let t of line)
-    if (t === " ") n++;
-    else if (t === "\t") n += 4;
+  let width = 0;
+  for (let char of line)
+    if (char === " ") width++;
+    else if (char === "\t") width += 4;
     else break;
-  return n;
+  return width;
 }
 //@ chunk-5aas12zq.js:27605-28154 placement
 /**
  * 一行开头的引用/列表嵌套层数。
  */
 function countLineNesting(line) {
-  let n = trimEndChars(line, " \t");
-  let last = n.at(-1);
+  let stripped = trimEndChars(line, " \t");
+  let last = stripped.at(-1);
   if (
     last !== undefined &&
     "-*_".includes(last) &&
-    [...n].every((o) => o === last || o === " " || o === "\t")
+    [...stripped].every((char) => char === last || char === " " || char === "\t")
   )
     return 0;
-  let r = 0;
-  let s = 0;
-  while (s < line.length) {
-    let o = s;
-    for (let idx = 0; idx < 3 && (line[o] === " " || line[o] === "\t"); idx++) o++;
-    let a = line[o];
-    if (a === undefined) break;
-    let l = line[o + 1];
-    if (a === ">") o += l === " " || l === "\t" ? 2 : 1;
-    else if ((a === "-" || a === "+" || a === "*") && (l === " " || l === "\t")) o += 2;
-    else if (a >= "0" && a <= "9") {
-      let d = o;
-      while (d - o < 9 && (line[d] ?? "") >= "0" && (line[d] ?? "") <= "9") d++;
-      let f = line[d + 1];
-      if ((line[d] !== "." && line[d] !== ")") || (f !== " " && f !== "\t")) return r;
-      o = d + 2;
-    } else return r;
-    r++;
-    s = o;
+  let depth = 0;
+  let cursor = 0;
+  while (cursor < line.length) {
+    let markerStart = cursor;
+    for (let idx = 0; idx < 3 && (line[markerStart] === " " || line[markerStart] === "\t"); idx++)
+      markerStart++;
+    let marker = line[markerStart];
+    if (marker === undefined) break;
+    let nextChar = line[markerStart + 1];
+    if (marker === ">") markerStart += nextChar === " " || nextChar === "\t" ? 2 : 1;
+    else if ((marker === "-" || marker === "+" || marker === "*") && (nextChar === " " || nextChar === "\t"))
+      markerStart += 2;
+    else if (marker >= "0" && marker <= "9") {
+      let digitsEnd = markerStart;
+      while (digitsEnd - markerStart < 9 && (line[digitsEnd] ?? "") >= "0" && (line[digitsEnd] ?? "") <= "9")
+        digitsEnd++;
+      let afterChar = line[digitsEnd + 1];
+      if ((line[digitsEnd] !== "." && line[digitsEnd] !== ")") || (afterChar !== " " && afterChar !== "\t"))
+        return depth;
+      markerStart = digitsEnd + 2;
+    } else return depth;
+    depth++;
+    cursor = markerStart;
   }
-  return r;
+  return depth;
 }
 //@ chunk-5aas12zq.js:28154-28345 placement = setCwdState (0.845)
 async function findFileCaseInsensitive(cwd) {
-  let n = new Set(README_CANDIDATES.map((r) => r.toLowerCase()));
+  let lowerNames = new Set(README_CANDIDATES.map((candidate) => candidate.toLowerCase()));
   return (
     await readdir(cwd, {
       withFileTypes: true,
     }).catch(() => [])
-  ).find((r) => r.isFile() && n.has(r.name.normalize("NFC").toLowerCase()))?.name;
+  ).find((dirent) => dirent.isFile() && lowerNames.has(dirent.name.normalize("NFC").toLowerCase()))?.name;
 }
 //@ chunk-5aas12zq.js:28345-29062 placement
 /**
  * 依次检查 manifest 中 homepage、repository 及几类主题链接（缺失时尝试从 README 中找），不是 https://（或允许时 mailto:）的记 LISTING_URL_SCHEME； 返回作为主链接的 URL 及是否来自 README。
  */
-function checkListingUrls(e, text, t) {
-  let r = [
+function checkListingUrls(manifest, text, findings) {
+  let candidates = [
     {
       keys: ["homepage"],
       topic: undefined,
@@ -261,215 +265,219 @@ function checkListingUrls(e, text, t) {
       mailto: false,
     },
   ];
-  let s = {
+  let privacyUrl = {
     url: undefined,
     fromReadme: false,
   };
-  for (let { keys, topic, mailto } of r) {
-    let found = keys.find((key) => stringField(e, key) !== "");
-    let f = found === undefined ? "" : stringField(e, found);
-    let p = f === "" && topic !== undefined && text !== undefined;
-    if (p) f = cleanDisplayName(findTopicUrl(text ?? "", topic ?? /$^/));
-    if (f === "") continue;
-    let S = found ?? keys[0] ?? "";
-    let b = isAllowedListingUrl(f, mailto);
-    if (!b) {
-      let I = mailto ? "https:// or mailto:" : "https://";
-      t.push({
+  for (let { keys, topic, mailto } of candidates) {
+    let key = keys.find((key) => stringField(manifest, key) !== "");
+    let url = key === undefined ? "" : stringField(manifest, key);
+    let fromReadme = url === "" && topic !== undefined && text !== undefined;
+    if (fromReadme) url = cleanDisplayName(findTopicUrl(text ?? "", topic ?? /$^/));
+    if (url === "") continue;
+    let fieldName = key ?? keys[0] ?? "";
+    let isAllowed = isAllowedListingUrl(url, mailto);
+    if (!isAllowed) {
+      let schemeHint = mailto ? "https:// or mailto:" : "https://";
+      findings.push({
         ...makeFinding(
           "LISTING_URL_SCHEME",
-          p ? "README.md" : PLUGIN_VALIDATION_ISSUES,
-          p ? "" : S,
-          `${S} ${quotedToolInput(f, 120)} is not ${I}; it was dropped from the listing preview.`,
+          fromReadme ? "README.md" : PLUGIN_MANIFEST_PATH,
+          fromReadme ? "" : fieldName,
+          `${fieldName} ${quotedToolInput(url, 120)} is not ${schemeHint}; it was dropped from the listing preview.`,
         ),
-        fix: `Use an ${I} URL.`,
+        fix: `Use an ${schemeHint} URL.`,
       });
     }
-    if (keys === PRIVACY_POLICY_KEYS && b)
-      s = {
-        url: f,
-        fromReadme: p,
+    if (keys === PRIVACY_POLICY_KEYS && isAllowed)
+      privacyUrl = {
+        url,
+        fromReadme,
       };
   }
-  return s;
+  return privacyUrl;
 }
 //@ chunk-5aas12zq.js:29062-29610 placement
 /**
  * 链接是 https://（或允许的 mailto:）且主机名合法。
  */
-function isAllowedListingUrl(e, n) {
-  if (e === "" || /["'<>\\\u0000-\u0020\u007f]/.test(e)) return false;
-  if (/^mailto:/i.test(e)) {
-    let d = e.slice(7).split(/[?#]/, 1)[0] ?? "";
-    return n && d !== "" && !d.startsWith("/") && d.includes("@");
+function isAllowedListingUrl(url, allowMailto) {
+  if (url === "" || /["'<>\\\u0000-\u0020\u007f]/.test(url)) return false;
+  if (/^mailto:/i.test(url)) {
+    let address = url.slice(7).split(/[?#]/, 1)[0] ?? "";
+    return allowMailto && address !== "" && !address.startsWith("/") && address.includes("@");
   }
-  if (!/^https:\/\//i.test(e)) return false;
-  let sliced = e.slice(8);
+  if (!/^https:\/\//i.test(url)) return false;
+  let sliced = url.slice(8);
   let sliced_2 = sliced.slice(0, sliced.search(/[/?#]|$/));
-  let index = e.indexOf("#");
-  let o = index === -1 ? e : e.slice(0, index);
-  let index_2 = o.indexOf("?");
-  let l = (index_2 === -1 ? o : o.slice(0, index_2)) + (index === -1 ? "" : e.slice(index));
+  let index = url.indexOf("#");
+  let withoutHash = index === -1 ? url : url.slice(0, index);
+  let index_2 = withoutHash.indexOf("?");
+  let withoutQuery =
+    (index_2 === -1 ? withoutHash : withoutHash.slice(0, index_2)) + (index === -1 ? "" : url.slice(index));
   if (
     sliced_2 === "" ||
     sliced_2.includes("@") ||
     /[`{}]/.test(sliced_2) ||
-    /%(?![0-9A-Fa-f]{2})/.test(l) ||
+    /%(?![0-9A-Fa-f]{2})/.test(withoutQuery) ||
     /%[0-7][0-9A-Fa-f]/.test(sliced_2)
   )
     return false;
-  return URL.canParse(e) && new URL(e).hostname !== "";
+  return URL.canParse(url) && new URL(url).hostname !== "";
 }
 //@ chunk-5aas12zq.js:29610-30113 placement
 /**
  * screenshots 中非 https 的 URL 记发现项（超出上限只计数）。
  */
-function checkScreenshotUrls(e, n) {
-  let screenshots = e.screenshots;
+function checkScreenshotUrls(manifest, notices) {
+  let screenshots = manifest.screenshots;
   if (!Array.isArray(screenshots)) return [];
-  let r = [];
-  let s = 0;
-  for (let [o, a] of screenshots.entries()) {
-    let l = typeof a === "string" ? cleanDisplayName(a) : "";
-    if (l === "" || isAllowedListingUrl(l, false)) continue;
-    if (r.length >= MAX_LISTING_CHARS) {
-      s++;
+  let findings = [];
+  let droppedCount = 0;
+  for (let [index, value] of screenshots.entries()) {
+    let url = typeof value === "string" ? cleanDisplayName(value) : "";
+    if (url === "" || isAllowedListingUrl(url, false)) continue;
+    if (findings.length >= MAX_SCREENSHOTS) {
+      droppedCount++;
       continue;
     }
-    r.push({
+    findings.push({
       ...makeFinding(
         "LISTING_URL_SCHEME",
-        PLUGIN_VALIDATION_ISSUES,
-        `screenshots[${o}]`,
-        `screenshot URL ${quotedToolInput(l, 120)} is not https://; it was dropped from the listing preview.`,
+        PLUGIN_MANIFEST_PATH,
+        `screenshots[${index}]`,
+        `screenshot URL ${quotedToolInput(url, 120)} is not https://; it was dropped from the listing preview.`,
       ),
       fix: "Use https:// URLs.",
     });
   }
-  if (s > 0)
-    n.push(
-      `${s} more screenshot ${plural(s, "URL")} ${s === 1 ? "is" : "are"} not https:// and ${s === 1 ? "is" : "are"} not listed.`,
+  if (droppedCount > 0)
+    notices.push(
+      `${droppedCount} more screenshot ${plural(droppedCount, "URL")} ${droppedCount === 1 ? "is" : "are"} not https:// and ${droppedCount === 1 ? "is" : "are"} not listed.`,
     );
-  return r;
+  return findings;
 }
 //@ chunk-5aas12zq.js:30113-31684 placement
 /**
  * 检查 icon 字段与图标文件（路径、协议、存在性、格式）。
  */
-async function checkPluginIcon(e, n) {
-  let t = [];
-  let r = stringField(n, "icon");
-  let s = r.includes("://") || r.startsWith("//") || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(r);
-  let o = r !== "" && !s;
-  if (o && hasPathTraversal(r))
-    t.push(
+async function checkPluginIcon(rootDir, manifest) {
+  let findings = [];
+  let iconValue = stringField(manifest, "icon");
+  let isRemote =
+    iconValue.includes("://") || iconValue.startsWith("//") || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(iconValue);
+  let isLocalPath = iconValue !== "" && !isRemote;
+  if (isLocalPath && hasPathTraversal(iconValue))
+    findings.push(
       makeFinding(
         "PATH_TRAVERSAL",
-        PLUGIN_VALIDATION_ISSUES,
+        PLUGIN_MANIFEST_PATH,
         "icon",
-        `Path contains ".." which could be a path traversal attempt: ${extractToolInputForTelemetry(r, 200)}`,
+        `Path contains ".." which could be a path traversal attempt: ${extractToolInputForTelemetry(iconValue, 200)}`,
       ),
     );
-  else if (o && /["'<>\\`&\u0000-\u0020\u007f]/.test(r))
-    t.push({
+  else if (isLocalPath && /["'<>\\`&\u0000-\u0020\u007f]/.test(iconValue))
+    findings.push({
       ...makeFinding(
         "LISTING_URL_SCHEME",
-        PLUGIN_VALIDATION_ISSUES,
+        PLUGIN_MANIFEST_PATH,
         "icon",
-        `manifest \`icon\` path ${quotedToolInput(r, 120)} contains characters that are not allowed in a listing path (quotes, angle brackets, backslash, backtick, whitespace or control characters); it was dropped from the listing preview.`,
+        `manifest \`icon\` path ${quotedToolInput(iconValue, 120)} contains characters that are not allowed in a listing path (quotes, angle brackets, backslash, backtick, whitespace or control characters); it was dropped from the listing preview.`,
       ),
       fix: "Use a plain relative path to a file inside the plugin.",
     });
-  else if (s && !isAllowedListingUrl(r, false))
-    t.push({
+  else if (isRemote && !isAllowedListingUrl(iconValue, false))
+    findings.push({
       ...makeFinding(
         "LISTING_URL_SCHEME",
-        PLUGIN_VALIDATION_ISSUES,
+        PLUGIN_MANIFEST_PATH,
         "icon",
-        `manifest \`icon\` URL ${quotedToolInput(r, 120)} is not https://; it was dropped from the listing preview.`,
+        `manifest \`icon\` URL ${quotedToolInput(iconValue, 120)} is not https://; it was dropped from the listing preview.`,
       ),
       fix: "Use an https:// URL or a file inside the plugin.",
     });
-  let a;
-  let l;
-  for (let d of README_ROOT_CANDIDATES) {
-    let pluginFile = await readPluginFileSafe(e, d, ICON_INVALID_MESSAGE);
+  let foundPath;
+  let foundBytes;
+  for (let candidate of README_ROOT_CANDIDATES) {
+    let pluginFile = await readPluginFileSafe(rootDir, candidate, MAX_ICON_BYTES);
     if (pluginFile.found) {
-      a = d;
-      l = pluginFile.bytes;
+      foundPath = candidate;
+      foundBytes = pluginFile.bytes;
       break;
     }
   }
-  if (a === undefined && trimmedStringField(n, "icon") === "") {
-    t.push(
+  if (foundPath === undefined && trimmedStringField(manifest, "icon") === "") {
+    findings.push(
       makeFinding(
         "ICON_MISSING",
-        PLUGIN_VALIDATION_ISSUES,
+        PLUGIN_MANIFEST_PATH,
         "icon",
         "No icon found in the plugin. The validator looked for `icon` in plugin.json and for a file at .claude-plugin/icon.png or .svg, assets/icon.png or .svg, or a similar path.",
       ),
     );
-    return t;
+    return findings;
   }
-  if (a !== undefined && !isValidImageContent(a, l))
-    t.push(makeFinding("ICON_INVALID", a, "", MIN_README_WORDS));
-  if (r !== "" && !s) {
-    let replaced = r.replace(/^\.\//, "");
-    let normalized = pathModule.posix.normalize(replaced);
-    let S =
-      !pathModule.isAbsolute(replaced) && normalized !== ".." && !normalized.startsWith("../")
-        ? await readPluginFileSafe(e, replaced, ICON_INVALID_MESSAGE)
+  if (foundPath !== undefined && !isValidImageContent(foundPath, foundBytes))
+    findings.push(makeFinding("ICON_INVALID", foundPath, "", ICON_INVALID_MESSAGE));
+  if (iconValue !== "" && !isRemote) {
+    let path = iconValue.replace(/^\.\//, "");
+    let normalized = pathModule.posix.normalize(path);
+    let iconFile =
+      !pathModule.isAbsolute(path) && normalized !== ".." && !normalized.startsWith("../")
+        ? await readPluginFileSafe(rootDir, path, MAX_ICON_BYTES)
         : {
             found: false,
           };
-    if (!S.found)
-      t.push(
+    if (!iconFile.found)
+      findings.push(
         makeFinding(
           "ICON_INVALID",
-          PLUGIN_VALIDATION_ISSUES,
+          PLUGIN_MANIFEST_PATH,
           "icon",
-          `manifest \`icon\` points at ${quoteForDisplay(r)}, which is not a file in the plugin.`,
+          `manifest \`icon\` points at ${quoteForDisplay(iconValue)}, which is not a file in the plugin.`,
         ),
       );
-    else if (!isValidImageContent(replaced, S.bytes))
-      t.push(makeFinding("ICON_INVALID", replaced, "", MIN_README_WORDS));
+    else if (!isValidImageContent(path, iconFile.bytes))
+      findings.push(makeFinding("ICON_INVALID", path, "", ICON_INVALID_MESSAGE));
   }
-  return t;
+  return findings;
 }
 //@ chunk-5aas12zq.js:31684-31902 placement
-function hasPathTraversal(e) {
-  let n = e;
+function hasPathTraversal(path) {
+  let current = path;
   for (let idx = 0; ; idx++) {
-    if (n.replaceAll("\\", "/").includes("..") || /%2e/i.test(n)) return true;
-    let replaced = n.replace(/%([0-9a-fA-F]{2})/g, (s, o) => String.fromCharCode(parseInt(o, 16)));
-    if (idx === 3 || replaced === n) return false;
-    n = replaced;
+    if (current.replaceAll("\\", "/").includes("..") || /%2e/i.test(current)) return true;
+    let replaced = current.replace(/%([0-9a-fA-F]{2})/g, (match, hex) =>
+      String.fromCharCode(parseInt(hex, 16)),
+    );
+    if (idx === 3 || replaced === current) return false;
+    current = replaced;
   }
 }
 //@ chunk-5aas12zq.js:31902-32063 placement
-function stripHtmlComments(e) {
-  let n = "";
-  let t = 0;
+function stripHtmlComments(text) {
+  let out = "";
+  let cursor = 0;
   for (;;) {
-    let index = e.indexOf("<!--", t);
-    if (index === -1) return n + e.slice(t);
-    n += e.slice(t, index);
-    let index_2 = e.indexOf("-->", index + 4);
-    if (index_2 === -1) return n;
-    t = index_2 + 3;
+    let index = text.indexOf("<!--", cursor);
+    if (index === -1) return out + text.slice(cursor);
+    out += text.slice(cursor, index);
+    let index_2 = text.indexOf("-->", index + 4);
+    if (index_2 === -1) return out;
+    cursor = index_2 + 3;
   }
 }
 //@ chunk-5aas12zq.js:32063-32752 placement
 /**
  * 按扩展名校验图片魔数；SVG 拒绝脚本、实体与外部引用。
  */
-function isValidImageContent(e, n) {
-  if (n === undefined || n.length < 12) return false;
-  let sliced = e.slice(e.lastIndexOf("/") + 1);
+function isValidImageContent(path, bytes) {
+  if (bytes === undefined || bytes.length < 12) return false;
+  let sliced = path.slice(path.lastIndexOf("/") + 1);
   let index = sliced.lastIndexOf(".");
   switch (index === -1 ? "" : sliced.slice(index).toLowerCase()) {
     case ".png":
-      return n.subarray(0, 8).equals(
+      return bytes.subarray(0, 8).equals(
         Buffer.from(
           `\x89PNG\r
 \x1A
@@ -479,24 +487,25 @@ function isValidImageContent(e, n) {
       );
     case ".jpg":
     case ".jpeg":
-      return n.subarray(0, 3).equals(Buffer.from([255, 216, 255]));
+      return bytes.subarray(0, 3).equals(Buffer.from([255, 216, 255]));
     case ".webp":
       return (
-        n.subarray(0, 4).toString("latin1") === "RIFF" && n.subarray(8, 12).toString("latin1") === "WEBP"
+        bytes.subarray(0, 4).toString("latin1") === "RIFF" &&
+        bytes.subarray(8, 12).toString("latin1") === "WEBP"
       );
     case ".svg": {
-      let str = n.toString("utf-8");
-      let lower = str.toLowerCase();
-      let a = stripHtmlComments(lower);
+      let str = bytes.toString("utf-8");
+      let text = str.toLowerCase();
+      let withoutComments = stripHtmlComments(text);
       return (
-        lower.slice(0, 1024).includes("<svg") &&
-        !a.includes("<!doctype") &&
-        !a.includes("<!entity") &&
+        text.slice(0, 1024).includes("<svg") &&
+        !withoutComments.includes("<!doctype") &&
+        !withoutComments.includes("<!entity") &&
         !UNSAFE_SVG_ELEMENT_RE.test(str) &&
         !SVG_EVENT_HANDLER_RE.test(str) &&
         !SVG_EXTERNAL_REF_RE.test(str) &&
-        !lower.includes("javascript:") &&
-        !lower.includes("@import")
+        !text.includes("javascript:") &&
+        !text.includes("@import")
       );
     }
     default:
@@ -507,9 +516,9 @@ function isValidImageContent(e, n) {
 /**
  * toArray：标量转数组。
  */
-function toArray(e) {
-  if (Array.isArray(e)) return e;
-  return e === undefined ? [] : [e];
+function toArray(value) {
+  if (Array.isArray(value)) return value;
+  return value === undefined ? [] : [value];
 }
 export {
   findFileCaseInsensitive,

@@ -18,83 +18,90 @@ import { normalizedRealHomeDir } from "./settingsFileParsing.js";
 import { identity } from "../pathClassification.js";
 import { findCanonicalGitRoot, findCanonicalGitRootUncached, findGitRoot } from "../git.js";
 import { uniq } from "../collections.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-q8cqcff6.js:2705-2880 placement
-function warnDisklessSettingsWrite(e, n) {
+function warnDisklessSettingsWrite(writer, path) {
   logForDebugging(
-    `Diskless session: skipped the ${e} write to ${n} because no storage backend could take it`,
+    `Diskless session: skipped the ${writer} write to ${path} because no storage backend could take it`,
     {
       level: "warn",
     },
   );
   logEvent("tengu_diskless_write_skipped", {
-    writer: fromEnum(e),
+    writer: fromEnum(writer),
   });
 }
 //@ chunk-q8cqcff6.js:2912-2958 placement
 /**
  * noUncachedRoot：无缓存根（占位）。
  */
-function noUncachedRoot(e, { uncached: n = false } = {}) {
+function noUncachedRoot(root, { uncached = false } = {}) {
   return null;
 }
 //@ chunk-q8cqcff6.js:2958-2992 placement
-var homeDirRootCache = identity_2(new Map(), (e) => e.clear());
+var homeDirRootCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-q8cqcff6.js:2958", () => {
+  homeDirRootCache = identity_2(new Map(), (cache) => cache.clear());
+});
 //@ chunk-q8cqcff6.js:2992-3174 placement
 /**
  * 判断目录（解析真实路径后）是否就是用户主目录，结果缓存。
  */
-function isHomeDirRoot(root, { uncached: n = false } = {}) {
-  let r = n ? undefined : homeDirRootCache.get(root);
-  if (r !== undefined) return r;
-  let s = nativeRealpathLong(root);
-  if (s === null) return;
-  let S;
+function isHomeDirRoot(root, { uncached = false } = {}) {
+  let cached = uncached ? undefined : homeDirRootCache.get(root);
+  if (cached !== undefined) return cached;
+  let realRoot = nativeRealpathLong(root);
+  if (realRoot === null) return;
+  let homeDir;
   try {
-    S = normalizedRealHomeDir();
+    homeDir = normalizedRealHomeDir();
   } catch {
     return;
   }
-  let E = identity(s) === S;
-  homeDirRootCache.set(root, E);
-  return E;
+  let isHome = identity(realRoot) === homeDir;
+  homeDirRootCache.set(root, isHome);
+  return isHome;
 }
 //@ chunk-q8cqcff6.js:3174-3208 placement
-var storageRootCache = identity_2(new Map(), (e) => e.clear());
+var storageRootCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-q8cqcff6.js:3174", () => {
+  storageRootCache = identity_2(new Map(), (cache) => cache.clear());
+});
 //@ chunk-q8cqcff6.js:3208-3251 placement
-function neverRoot(e, { uncached: n = false } = {}) {
+function neverRoot(root, { uncached = false } = {}) {
   return false;
 }
 //@ chunk-q8cqcff6.js:3251-3455 placement
 /**
  * 从给定路径向上查找最近的可识别存储根目录，返回根目录与是否可读。
  */
-function findNearestRoot(e, { uncached: n = false } = {}) {
-  let r = e;
+function findNearestRoot(startPath, { uncached = false } = {}) {
+  let current = startPath;
   for (;;) {
-    let s = noUncachedRoot(r, {
-      uncached: n,
+    let nextRoot = noUncachedRoot(current, {
+      uncached,
     });
-    if (s === null) return null;
-    let S = neverRoot(s, {
-      uncached: n,
+    if (nextRoot === null) return null;
+    let readable = neverRoot(nextRoot, {
+      uncached,
     });
-    if (S !== false)
+    if (readable !== false)
       return {
-        root: s,
-        readable: S === true,
+        root: nextRoot,
+        readable: readable === true,
       };
-    let E = dirname(s);
-    if (E === s) return null;
-    r = E;
+    let parent = dirname(nextRoot);
+    if (parent === nextRoot) return null;
+    current = parent;
   }
 }
 //@ chunk-q8cqcff6.js:3455-3643 placement
-function resolveStorageRoot(e, n, uncached) {
-  let nearestRoot = findNearestRoot(e, {
+function resolveStorageRoot(startPath, fallbackRoot, uncached) {
+  let nearestRoot = findNearestRoot(startPath, {
     uncached,
   });
-  if (nearestRoot === null) return n();
+  if (nearestRoot === null) return fallbackRoot();
   if (!nearestRoot.readable) return null;
   switch (
     isHomeDirRoot(nearestRoot.root, {
@@ -104,7 +111,7 @@ function resolveStorageRoot(e, n, uncached) {
     case false:
       return nearestRoot.root;
     case true:
-      return n();
+      return fallbackRoot();
     default:
       return null;
   }
@@ -113,30 +120,32 @@ function resolveStorageRoot(e, n, uncached) {
 /**
  * storageRootFor：解析路径对应的存储根。
  */
-function storageRootFor(e) {
-  return resolveStorageRoot(e, () => findCanonicalGitRoot(e), false);
+function storageRootFor(startPath) {
+  return resolveStorageRoot(startPath, () => findCanonicalGitRoot(startPath), false);
 }
 //@ chunk-q8cqcff6.js:3684-3725 placement
 /**
  * uncachedStorageRootFor：不缓存的存储根解析。
  */
-function uncachedStorageRootFor(e) {
-  return resolveStorageRoot(e, () => findCanonicalGitRootUncached(e), true);
+function uncachedStorageRootFor(startPath) {
+  return resolveStorageRoot(startPath, () => findCanonicalGitRootUncached(startPath), true);
 }
 //@ chunk-q8cqcff6.js:3725-3801 placement
 /**
  * nearestNonHomeRoot：最近的非主目录根。
  */
-function nearestNonHomeRoot(e) {
-  let nearestRoot = findNearestRoot(e);
-  return nearestRoot !== null && isHomeDirRoot(nearestRoot.root) !== true ? nearestRoot.root : findGitRoot(e);
+function nearestNonHomeRoot(startPath) {
+  let nearestRoot = findNearestRoot(startPath);
+  return nearestRoot !== null && isHomeDirRoot(nearestRoot.root) !== true
+    ? nearestRoot.root
+    : findGitRoot(startPath);
 }
 //@ chunk-q8cqcff6.js:3801-3863 placement
 /**
  * storageRootsFor：路径的所有存储根。
  */
-function storageRootsFor(e) {
-  return uniq([storageRootFor(e), findCanonicalGitRoot(e)].filter((n) => n !== null));
+function storageRootsFor(startPath) {
+  return uniq([storageRootFor(startPath), findCanonicalGitRoot(startPath)].filter((root) => root !== null));
 }
 export {
   uncachedStorageRootFor,

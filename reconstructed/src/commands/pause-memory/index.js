@@ -30,7 +30,7 @@ var pauseMemoryCommandDefinition = {
   },
   supportsNonInteractive: true,
   thinClientDispatch: "post-text",
-  load: () => import("./chunk-8dz40wpq.js"),
+  load: () => import("./call.lazy.js"),
   userFacingName() {
     return "pause-memory";
   },

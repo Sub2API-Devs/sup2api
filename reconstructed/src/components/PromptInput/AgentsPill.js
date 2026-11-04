@@ -8,8 +8,13 @@
  * pieces: chunk-18hwfzwa.js (8)
  * attribution: placement 8
  */
-import { init_react_production, P, y, R } from "../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import {
+  init_react_production,
+  useEffect,
+  useState,
+  useRef,
+} from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import {
   jsxProd_default_2,
@@ -17,7 +22,7 @@ import {
   Fragment,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../ink/components/Text.js";
-import { LEFT_ARROW } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { LEFT_ARROW } from "../../constants/figures.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { useAppStateSlice } from "../../state/AppState.js";
 import { useFleetNudgeStore } from "../fleet/FleetNudgeStore.js";
@@ -28,224 +33,230 @@ import { useClock } from "../../ink/components/ClockContext.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { plural } from "../../utils/stringUtils.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:806983-806987 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:806983", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:806987-807031 placement
-function selectLeftArrowLeadsTo(Mn) {
-  return Mn.leftArrowLeadsTo;
+function selectLeftArrowLeadsTo(state) {
+  return state.leftArrowLeadsTo;
 }
 //@ chunk-18hwfzwa.js:807031-807051 placement
 var AGENTS_PILL_DONE_CLEAR_MS = 2500;
 var NARROW_AGENTS_PILL_COLUMNS = 100;
 //@ chunk-18hwfzwa.js:807051-807243 placement
 function AgentsPillHint(props) {
-  let $ = w(2);
+  let $ = useMemoCache(2);
   let { words, narrow } = props;
   let { columns } = useTerminalSize();
-  const ee = columns >= NARROW_AGENTS_PILL_COLUMNS ? words : narrow;
-  let Re;
-  if ($[0] !== ee) {
-    Re = jsxProd_default_2(Text, {
+  const hintText = columns >= NARROW_AGENTS_PILL_COLUMNS ? words : narrow;
+  let hintElement;
+  if ($[0] !== hintText) {
+    hintElement = jsxProd_default_2(Text, {
       dimColor: true,
-      children: [LEFT_ARROW, " ", ee],
+      children: [LEFT_ARROW, " ", hintText],
     });
-    $[0] = ee;
-    $[1] = Re;
-  } else Re = $[1];
-  return Re;
+    $[0] = hintText;
+    $[1] = hintElement;
+  } else hintElement = $[1];
+  return hintElement;
 }
 //@ chunk-18hwfzwa.js:807243-809924 placement
 function AgentsPill(props) {
-  let $ = w(36);
+  let $ = useMemoCache(36);
   let { available, restingHintExpired } = props;
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let appStateSlice = useAppStateSlice(selectLeftArrowLeadsTo);
-  let ke = available && !isScreenReaderEnabled && appStateSlice === undefined;
+  let enabled = available && !isScreenReaderEnabled && appStateSlice === undefined;
   let fleetNudgeStore = useFleetNudgeStore();
-  let storeSelector = useStoreSelector(ke ? fleetNudgeStore : null);
+  let storeSelector = useStoreSelector(enabled ? fleetNudgeStore : null);
   let needsInput = storeSelector?.needsInput;
   let succeeded = storeSelector?.succeeded;
   let terminalFocusState = useTerminalFocusState();
-  let rt;
-  let kt;
-  if ($[0] !== ke || $[1] !== terminalFocusState || $[2] !== fleetNudgeStore) {
-    rt = () => {
-      if (ke) fleetNudgeStore.setFocused(terminalFocusState !== "blurred");
+  let focusEffect;
+  let focusDeps;
+  if ($[0] !== enabled || $[1] !== terminalFocusState || $[2] !== fleetNudgeStore) {
+    focusEffect = () => {
+      if (enabled) fleetNudgeStore.setFocused(terminalFocusState !== "blurred");
     };
-    kt = [ke, terminalFocusState, fleetNudgeStore];
-    $[0] = ke;
+    focusDeps = [enabled, terminalFocusState, fleetNudgeStore];
+    $[0] = enabled;
     $[1] = terminalFocusState;
     $[2] = fleetNudgeStore;
-    $[3] = rt;
-    $[4] = kt;
+    $[3] = focusEffect;
+    $[4] = focusDeps;
   } else {
-    rt = $[3];
-    kt = $[4];
+    focusEffect = $[3];
+    focusDeps = $[4];
   }
-  P(rt, kt);
+  useEffect(focusEffect, focusDeps);
   let prefersReducedMotion = usePrefersReducedMotion();
   let clock = useClock();
-  let [Ot, Et] = y("none");
-  let [Dt, Lt] = y(0);
-  let needsInputRef = R(undefined);
-  let succeededRef = R(undefined);
-  let io = R(null);
-  let so;
+  let [phase, setPhase] = useState("none");
+  let [justDoneCount, setJustDoneCount] = useState(0);
+  let needsInputRef = useRef(undefined);
+  let succeededRef = useRef(undefined);
+  let timerRef = useRef(null);
+  let cleanupEffect;
   if ($[5] === MEMO_CACHE_SENTINEL) {
-    so = () => () => io.current?.clear();
-    $[5] = so;
-  } else so = $[5];
-  let po;
-  if ($[6] !== ke) {
-    po = [ke];
-    $[6] = ke;
-    $[7] = po;
-  } else po = $[7];
-  P(so, po);
-  let ao;
-  let co;
+    cleanupEffect = () => () => timerRef.current?.clear();
+    $[5] = cleanupEffect;
+  } else cleanupEffect = $[5];
+  let cleanupDeps;
+  if ($[6] !== enabled) {
+    cleanupDeps = [enabled];
+    $[6] = enabled;
+    $[7] = cleanupDeps;
+  } else cleanupDeps = $[7];
+  useEffect(cleanupEffect, cleanupDeps);
+  let phaseEffect;
+  let phaseDeps;
   if ($[8] !== clock || $[9] !== needsInput || $[10] !== prefersReducedMotion || $[11] !== succeeded) {
-    ao = () => {
-      let bo = needsInputRef.current;
-      let Ao = succeededRef.current;
+    phaseEffect = () => {
+      let prevNeedsInput = needsInputRef.current;
+      let prevSucceeded = succeededRef.current;
       needsInputRef.current = needsInput;
       succeededRef.current = succeeded;
-      let Bo = bo !== undefined && needsInput !== undefined && needsInput !== bo;
-      let Ro = Ao !== undefined && succeeded !== undefined && succeeded > Ao;
-      let Ho = needsInput !== undefined && needsInput > 0;
-      if (!Ho && Ro && !prefersReducedMotion) {
-        io.current?.clear();
-        let Io = succeeded - Ao;
-        Lt(Io);
-        let Wo = clock.setTimeout(() => {
-          io.current = null;
-          Lt(0);
+      let needsInputChanged =
+        prevNeedsInput !== undefined && needsInput !== undefined && needsInput !== prevNeedsInput;
+      let succeededIncreased =
+        prevSucceeded !== undefined && succeeded !== undefined && succeeded > prevSucceeded;
+      let hasNeedsInput = needsInput !== undefined && needsInput > 0;
+      if (!hasNeedsInput && succeededIncreased && !prefersReducedMotion) {
+        timerRef.current?.clear();
+        let doneCount = succeeded - prevSucceeded;
+        setJustDoneCount(doneCount);
+        let timeoutId = clock.setTimeout(() => {
+          timerRef.current = null;
+          setJustDoneCount(0);
         }, AGENTS_PILL_DONE_CLEAR_MS);
-        io.current = {
+        timerRef.current = {
           kind: "done",
           clear: () => {
-            Wo();
-            io.current = null;
-            Lt(0);
+            timeoutId();
+            timerRef.current = null;
+            setJustDoneCount(0);
           },
         };
         return;
       }
-      if (!Ho || (!Bo && !Ro) || prefersReducedMotion) {
+      if (!hasNeedsInput || (!needsInputChanged && !succeededIncreased) || prefersReducedMotion) {
         return;
       }
-      if (!Bo && io.current?.kind === "awaiting") {
+      if (!needsInputChanged && timerRef.current?.kind === "awaiting") {
         return;
       }
-      io.current?.clear();
-      let mn = Bo ? "awaiting" : "done";
-      Et(mn);
-      let Cn = clock.setTimeout(() => {
-        io.current = null;
-        Et("none");
+      timerRef.current?.clear();
+      let nextPhase = needsInputChanged ? "awaiting" : "done";
+      setPhase(nextPhase);
+      let timeoutId = clock.setTimeout(() => {
+        timerRef.current = null;
+        setPhase("none");
       }, AGENTS_PILL_DONE_CLEAR_MS);
-      io.current = {
-        kind: mn,
+      timerRef.current = {
+        kind: nextPhase,
         clear: () => {
-          Cn();
-          io.current = null;
-          Et("none");
+          timeoutId();
+          timerRef.current = null;
+          setPhase("none");
         },
       };
     };
-    co = [needsInput, succeeded, clock, prefersReducedMotion];
+    phaseDeps = [needsInput, succeeded, clock, prefersReducedMotion];
     $[8] = clock;
     $[9] = needsInput;
     $[10] = prefersReducedMotion;
     $[11] = succeeded;
-    $[12] = ao;
-    $[13] = co;
+    $[12] = phaseEffect;
+    $[13] = phaseDeps;
   } else {
-    ao = $[12];
-    co = $[13];
+    phaseEffect = $[12];
+    phaseDeps = $[13];
   }
-  P(ao, co);
+  useEffect(phaseEffect, phaseDeps);
   if (!available) {
     return null;
   }
-  if (ke && (needsInput === 0 || needsInput === undefined) && Dt > 0) {
-    let No;
+  if (enabled && (needsInput === 0 || needsInput === undefined) && justDoneCount > 0) {
+    let arrowPrefix_2;
     if ($[14] === MEMO_CACHE_SENTINEL) {
-      No = jsxProd_default_2(Text, {
+      arrowPrefix_2 = jsxProd_default_2(Text, {
         dimColor: true,
         children: [LEFT_ARROW, " "],
       });
-      $[14] = No;
-    } else No = $[14];
-    const children = Dt > 99 ? "99+" : Dt;
-    let Yo;
+      $[14] = arrowPrefix_2;
+    } else arrowPrefix_2 = $[14];
+    const children = justDoneCount > 99 ? "99+" : justDoneCount;
+    let countText;
     if ($[15] !== children) {
-      Yo = jsxProd_default(Text, {
+      countText = jsxProd_default(Text, {
         color: "success",
         children,
       });
       $[15] = children;
-      $[16] = Yo;
-    } else Yo = $[16];
-    let kn;
+      $[16] = countText;
+    } else countText = $[16];
+    let neverFlag;
     if ($[17] === MEMO_CACHE_SENTINEL) {
-      kn = jsxProd_default(Text, {
+      neverFlag = jsxProd_default(Text, {
         dimColor: true,
         children: " done",
       });
-      $[17] = kn;
-    } else kn = $[17];
-    let Fn;
-    if ($[18] !== Yo) {
-      Fn = jsxProd_default_2(Fragment, {
-        children: [No, Yo, kn],
+      $[17] = neverFlag;
+    } else neverFlag = $[17];
+    let countElement;
+    if ($[18] !== countText) {
+      countElement = jsxProd_default_2(Fragment, {
+        children: [arrowPrefix_2, countText, neverFlag],
       });
-      $[18] = Yo;
-      $[19] = Fn;
-    } else Fn = $[19];
-    return Fn;
+      $[18] = countText;
+      $[19] = countElement;
+    } else countElement = $[19];
+    return countElement;
   }
   if (appStateSlice !== undefined) {
-    let No;
+    let placeholder;
     if ($[20] !== appStateSlice) {
-      No = jsxProd_default(AgentsPillHint, {
+      placeholder = jsxProd_default(AgentsPillHint, {
         ...appStateSlice,
       });
       $[20] = appStateSlice;
-      $[21] = No;
-    } else No = $[21];
-    return No;
+      $[21] = placeholder;
+    } else placeholder = $[21];
+    return placeholder;
   }
-  if (!ke || needsInput === undefined || needsInput === 0) {
-    let No;
+  if (!enabled || needsInput === undefined || needsInput === 0) {
+    let restingHint;
     if ($[22] !== restingHintExpired) {
-      No = restingHintExpired
+      restingHint = restingHintExpired
         ? null
         : jsxProd_default_2(Text, {
             dimColor: true,
             children: [LEFT_ARROW, " for agents"],
           });
       $[22] = restingHintExpired;
-      $[23] = No;
-    } else No = $[23];
-    return No;
+      $[23] = restingHint;
+    } else restingHint = $[23];
+    return restingHint;
   }
-  let No;
+  let arrowPrefix_3;
   if ($[24] === MEMO_CACHE_SENTINEL) {
-    No = jsxProd_default_2(Text, {
+    arrowPrefix_3 = jsxProd_default_2(Text, {
       dimColor: true,
       children: [LEFT_ARROW, " "],
     });
-    $[24] = No;
-  } else No = $[24];
-  const color = Ot === "awaiting" ? "warning" : Ot === "done" ? "success" : undefined;
-  const dimColor = Ot === "none";
+    $[24] = arrowPrefix_3;
+  } else arrowPrefix_3 = $[24];
+  const color = phase === "awaiting" ? "warning" : phase === "done" ? "success" : undefined;
+  const dimColor = phase === "none";
   const children = needsInput > 99 ? "99+" : needsInput;
-  let Fn;
+  let countText_2;
   if ($[25] !== children || $[26] !== color || $[27] !== dimColor) {
-    Fn = jsxProd_default(Text, {
+    countText_2 = jsxProd_default(Text, {
       color,
       dimColor,
       children,
@@ -253,40 +264,40 @@ function AgentsPill(props) {
     $[25] = children;
     $[26] = color;
     $[27] = dimColor;
-    $[28] = Fn;
-  } else Fn = $[28];
-  let bn;
+    $[28] = countText_2;
+  } else countText_2 = $[28];
+  let agentWord;
   if ($[29] !== needsInput) {
-    bn = plural(needsInput, "agent");
+    agentWord = plural(needsInput, "agent");
     $[29] = needsInput;
-    $[30] = bn;
-  } else bn = $[30];
-  let Go;
-  if ($[31] !== bn) {
-    Go = jsxProd_default_2(Text, {
+    $[30] = agentWord;
+  } else agentWord = $[30];
+  let agentSuffix;
+  if ($[31] !== agentWord) {
+    agentSuffix = jsxProd_default_2(Text, {
       dimColor: true,
-      children: [" ", bn],
+      children: [" ", agentWord],
     });
-    $[31] = bn;
-    $[32] = Go;
-  } else Go = $[32];
-  let hn;
-  if ($[33] !== Fn || $[34] !== Go) {
-    hn = jsxProd_default_2(Fragment, {
-      children: [No, Fn, Go],
+    $[31] = agentWord;
+    $[32] = agentSuffix;
+  } else agentSuffix = $[32];
+  let content;
+  if ($[33] !== countText_2 || $[34] !== agentSuffix) {
+    content = jsxProd_default_2(Fragment, {
+      children: [arrowPrefix_3, countText_2, agentSuffix],
     });
-    $[33] = Fn;
-    $[34] = Go;
-    $[35] = hn;
-  } else hn = $[35];
-  return hn;
+    $[33] = countText_2;
+    $[34] = agentSuffix;
+    $[35] = content;
+  } else content = $[35];
+  return content;
 }
 //@ chunk-18hwfzwa.js:809924-810035 placement
 /**
  * 侧问（/btw）界面里的代理入口胶囊（始终可用、不显示静止提示）。
  */
 function SideQuestionAgentsPill() {
-  let $ = w(1);
+  let $ = useMemoCache(1);
   let props;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     props = {
@@ -298,16 +309,24 @@ function SideQuestionAgentsPill() {
   return AgentsPill(props);
 }
 //@ chunk-18hwfzwa.js:810035-810039 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:810035", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:810039-810094 placement
-var SIDE_QUESTION_HINT_MS = 5000;
-var sideQuestionAgentsSchema = DoctorLazy(() =>
-  u({
-    id: string(),
-    content: string(),
-  }),
-);
-var SIDE_QUESTION_MAX_AGENTS = 16;
+var SIDE_QUESTION_HINT_MS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var sideQuestionAgentsSchema;
+var SIDE_QUESTION_MAX_AGENTS;
+deferInit("chunk-18hwfzwa.js:810039", () => {
+  SIDE_QUESTION_HINT_MS = 5000;
+  sideQuestionAgentsSchema = DoctorLazy(() =>
+    objectSchema({
+      id: stringSchema(),
+      content: stringSchema(),
+    }),
+  );
+  SIDE_QUESTION_MAX_AGENTS = 16;
+});
 export {
   AgentsPill,
   SIDE_QUESTION_MAX_AGENTS,

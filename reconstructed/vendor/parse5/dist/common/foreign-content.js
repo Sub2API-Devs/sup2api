@@ -5,7 +5,7 @@
  * pieces: chunk-6ja29j2n.js (9)
  * attribution: esm-fingerprint 9
  */
-import { E, g } from "../../lib/common/html.js";
+import { NAMESPACES, ATTRS } from "../../lib/common/html.js";
 import { TAG_ID, getTagID } from "./html.js";
 
 //@ chunk-6ja29j2n.js:129218-131766 esm-fingerprint
@@ -83,7 +83,7 @@ var XML_ATTRS_ADJUSTMENT_MAP = new Map([
     {
       prefix: "xlink",
       name: "actuate",
-      namespace: E.XLINK,
+      namespace: NAMESPACES.XLINK,
     },
   ],
   [
@@ -91,7 +91,7 @@ var XML_ATTRS_ADJUSTMENT_MAP = new Map([
     {
       prefix: "xlink",
       name: "arcrole",
-      namespace: E.XLINK,
+      namespace: NAMESPACES.XLINK,
     },
   ],
   [
@@ -99,7 +99,7 @@ var XML_ATTRS_ADJUSTMENT_MAP = new Map([
     {
       prefix: "xlink",
       name: "href",
-      namespace: E.XLINK,
+      namespace: NAMESPACES.XLINK,
     },
   ],
   [
@@ -107,7 +107,7 @@ var XML_ATTRS_ADJUSTMENT_MAP = new Map([
     {
       prefix: "xlink",
       name: "role",
-      namespace: E.XLINK,
+      namespace: NAMESPACES.XLINK,
     },
   ],
   [
@@ -115,7 +115,7 @@ var XML_ATTRS_ADJUSTMENT_MAP = new Map([
     {
       prefix: "xlink",
       name: "show",
-      namespace: E.XLINK,
+      namespace: NAMESPACES.XLINK,
     },
   ],
   [
@@ -123,7 +123,7 @@ var XML_ATTRS_ADJUSTMENT_MAP = new Map([
     {
       prefix: "xlink",
       name: "title",
-      namespace: E.XLINK,
+      namespace: NAMESPACES.XLINK,
     },
   ],
   [
@@ -131,7 +131,7 @@ var XML_ATTRS_ADJUSTMENT_MAP = new Map([
     {
       prefix: "xlink",
       name: "type",
-      namespace: E.XLINK,
+      namespace: NAMESPACES.XLINK,
     },
   ],
   [
@@ -139,7 +139,7 @@ var XML_ATTRS_ADJUSTMENT_MAP = new Map([
     {
       prefix: "xml",
       name: "lang",
-      namespace: E.XML,
+      namespace: NAMESPACES.XML,
     },
   ],
   [
@@ -147,7 +147,7 @@ var XML_ATTRS_ADJUSTMENT_MAP = new Map([
     {
       prefix: "xml",
       name: "space",
-      namespace: E.XML,
+      namespace: NAMESPACES.XML,
     },
   ],
   [
@@ -155,7 +155,7 @@ var XML_ATTRS_ADJUSTMENT_MAP = new Map([
     {
       prefix: "",
       name: "xmlns",
-      namespace: E.XMLNS,
+      namespace: NAMESPACES.XMLNS,
     },
   ],
   [
@@ -163,7 +163,7 @@ var XML_ATTRS_ADJUSTMENT_MAP = new Map([
     {
       prefix: "xmlns",
       name: "xlink",
-      namespace: E.XMLNS,
+      namespace: NAMESPACES.XMLNS,
     },
   ],
 ]);
@@ -258,7 +258,9 @@ function causesExit(startTagToken) {
   let tn = startTagToken.tagID;
   return (
     (tn === TAG_ID.FONT &&
-      startTagToken.attrs.some(({ name }) => name === g.COLOR || name === g.SIZE || name === g.FACE)) ||
+      startTagToken.attrs.some(
+        ({ name }) => name === ATTRS.COLOR || name === ATTRS.SIZE || name === ATTRS.FACE,
+      )) ||
     EXITS_FOREIGN_CONTENT.has(tn)
   );
 }
@@ -299,26 +301,26 @@ function adjustTokenSVGTagName(token) {
 //@ chunk-6ja29j2n.js:132346-132438 esm-fingerprint
 function isMathMLTextIntegrationPoint(tn, ns) {
   return (
-    ns === E.MATHML &&
+    ns === NAMESPACES.MATHML &&
     (tn === TAG_ID.MI || tn === TAG_ID.MO || tn === TAG_ID.MN || tn === TAG_ID.MS || tn === TAG_ID.MTEXT)
   );
 }
 //@ chunk-6ja29j2n.js:132438-132696 esm-fingerprint
 function isHtmlIntegrationPoint(tn, ns, attrs) {
-  if (ns === E.MATHML && tn === TAG_ID.ANNOTATION_XML) {
+  if (ns === NAMESPACES.MATHML && tn === TAG_ID.ANNOTATION_XML) {
     for (let i = 0; i < attrs.length; i++)
-      if (attrs[i].name === g.ENCODING) {
+      if (attrs[i].name === ATTRS.ENCODING) {
         let value = attrs[i].value.toLowerCase();
         return value === MIME_TYPES.TEXT_HTML || value === MIME_TYPES.APPLICATION_XML;
       }
   }
-  return ns === E.SVG && (tn === TAG_ID.FOREIGN_OBJECT || tn === TAG_ID.DESC || tn === TAG_ID.TITLE);
+  return ns === NAMESPACES.SVG && (tn === TAG_ID.FOREIGN_OBJECT || tn === TAG_ID.DESC || tn === TAG_ID.TITLE);
 }
 //@ chunk-6ja29j2n.js:132696-132780 esm-fingerprint
 function isIntegrationPoint(tn, ns, attrs, foreignNS) {
   return (
-    ((!foreignNS || foreignNS === E.HTML) && isHtmlIntegrationPoint(tn, ns, attrs)) ||
-    ((!foreignNS || foreignNS === E.MATHML) && isMathMLTextIntegrationPoint(tn, ns))
+    ((!foreignNS || foreignNS === NAMESPACES.HTML) && isHtmlIntegrationPoint(tn, ns, attrs)) ||
+    ((!foreignNS || foreignNS === NAMESPACES.MATHML) && isMathMLTextIntegrationPoint(tn, ns))
   );
 }
 export {

@@ -9,7 +9,7 @@ import { URL as x } from "url";
 import { BlockList, isIP, connect } from "net";
 import { connect as connect_2 } from "tls";
 import { logForDebugging } from "../utils/debug.js";
-import { addRange, M3r, addressInSet, mappedIPv4 } from "./address.js";
+import { addRange, ipFamily, addressInSet, mappedIPv4 } from "./address.js";
 
 //@ chunk-078pp0rm.js:2133-2291 esm-fingerprint
 var CONNECT_TIMEOUT_MS = 30000;
@@ -32,9 +32,9 @@ function resolveParentProxy(cfg) {
   if (!http && !https) return;
   let parse = (u) => {
     if (!u) return;
-    let f = /^[a-z][a-z0-9+.-]*:\/\//i.test(u) ? u : `http://${u}`;
+    let withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(u) ? u : `http://${u}`;
     try {
-      let parsed = new x(f);
+      let parsed = new x(withScheme);
       if ((parsed.protocol !== "http:" && parsed.protocol !== "https:") || !parsed.hostname)
         throw Error("unsupported scheme or empty host");
       return parsed;
@@ -87,7 +87,7 @@ function parseNoProxy(raw) {
 //@ chunk-078pp0rm.js:3321-3627 esm-fingerprint
 function shouldBypassParentProxy(resolved, host) {
   let h = stripBrackets(host.toLowerCase().replace(/\.$/, ""));
-  if (h === "localhost" || M3r(h)) return true;
+  if (h === "localhost" || ipFamily(h)) return true;
   if (resolved.noProxy.all) return true;
   if (addressInSet(resolved.noProxy.cidr, h)) return true;
   for (let v of resolved.noProxy.suffixes)
@@ -293,7 +293,7 @@ function canonicalizeHost(h) {
   }
 }
 //@ chunk-078pp0rm.js:6833-6906 esm-layout
-function RTt(host, port, defaultPort) {
+function formatAuthority(host, port, defaultPort) {
   let bracketed = isIP(host) === 6 ? `[${host}]` : host;
   return port === defaultPort ? bracketed : `${bracketed}:${port}`;
 }
@@ -344,7 +344,7 @@ function dialDirect(host, port, lookup, timeoutMs = CONNECT_TIMEOUT_MS) {
 export {
   canonicalizeHost,
   stripBrackets,
-  RTt,
+  formatAuthority,
   directRequestOptions,
   stripHopByHop,
   relayResponseHead,

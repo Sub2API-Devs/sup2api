@@ -21,7 +21,7 @@ var handlersModule = null;
 var ENDPOINTS_UNAVAILABLE = "artifact endpoints are not available in this build";
 var ARTIFACT_ENDPOINTS_ACTION_HANDLER = {
   actions: ["get_endpoints", "call_endpoint", "run_script"],
-  async checkPermissions(e, n, s) {
+  async checkPermissions(tool, input, context) {
     if (!handlersModule)
       return {
         behavior: "deny",
@@ -31,38 +31,47 @@ var ARTIFACT_ENDPOINTS_ACTION_HANDLER = {
           reason: "not available",
         },
       };
-    return handlersModule.handlersHandler.checkPermissions(e, n, s);
+    return handlersModule.handlersHandler.checkPermissions(tool, input, context);
   },
-  async validateInput(e, n, s) {
+  async validateInput(tool, input, context) {
     if (!handlersModule)
       return {
         result: false,
         message: ENDPOINTS_UNAVAILABLE,
         errorCode: 9,
       };
-    return handlersModule.handlersHandler.validateInput(e, n, s);
+    return handlersModule.handlersHandler.validateInput(tool, input, context);
   },
-  toAutoClassifierInput(e) {
-    let n = handlersModule ? handlersModule.handlersHandler.toAutoClassifierInput?.(e) : undefined;
-    if (n !== undefined) return n;
-    return e?.action === "get_endpoints"
+  toAutoClassifierInput(input) {
+    let classifierInput = handlersModule
+      ? handlersModule.handlersHandler.toAutoClassifierInput?.(input)
+      : undefined;
+    if (classifierInput !== undefined) return classifierInput;
+    return input?.action === "get_endpoints"
       ? "list artifact endpoints"
-      : e?.action === "call_endpoint"
+      : input?.action === "call_endpoint"
         ? "call an artifact endpoint"
-        : e?.action === "run_script"
+        : input?.action === "run_script"
           ? "run a script on an artifact"
-          : throwUnroutedArtifactAction("handlers.toAutoClassifierInput", e);
+          : throwUnroutedArtifactAction("handlers.toAutoClassifierInput", input);
   },
-  async description(e, n, s) {
+  async description(input, options, context) {
     let description = handlersModule ? handlersModule.handlersHandler.description : undefined;
-    return description ? description(e, n, s) : "Use an artifact's server-side endpoints.";
+    return description ? description(input, options, context) : "Use an artifact's server-side endpoints.";
   },
-  getToolUseSummary(e) {
-    return handlersModule ? (handlersModule.handlersHandler.getToolUseSummary?.(e) ?? null) : null;
+  getToolUseSummary(input) {
+    return handlersModule ? (handlersModule.handlersHandler.getToolUseSummary?.(input) ?? null) : null;
   },
-  async call(e, n, s, r, h, y) {
+  async call(input, toolUseContext, canUseTool, parentMessage, onProgress, options) {
     if (!handlersModule) throw new ArtifactInputError(ENDPOINTS_UNAVAILABLE, "handlers_unavailable");
-    return handlersModule.handlersHandler.call(e, n, s, r, h, y);
+    return handlersModule.handlersHandler.call(
+      input,
+      toolUseContext,
+      canUseTool,
+      parentMessage,
+      onProgress,
+      options,
+    );
   },
 };
 //@ chunk-8wvtd8sr.js:250851-250958 placement
@@ -78,23 +87,28 @@ function unreadableRecordResult(toolUseId) {
  * 端点结果渲染与存储瘦身：Ha 代理到实现模块的渲染器；Eh / Ph 在存储时去掉 script_result / handler_result 的返回值、正文、头与错误详情，日志清空为占位。
  */
 var ENDPOINT_RESULT_MAPPERS = {
-  handlers_doc: (e, toolUseId) =>
+  handlers_doc: (result, toolUseId) =>
     handlersModule
-      ? handlersModule.handlersResultMappers.handlers_doc(e, toolUseId)
+      ? handlersModule.handlersResultMappers.handlers_doc(result, toolUseId)
       : unreadableRecordResult(toolUseId),
-  handler_result: (e, toolUseId) =>
+  handler_result: (result, toolUseId) =>
     handlersModule
-      ? handlersModule.handlersResultMappers.handler_result(e, toolUseId)
+      ? handlersModule.handlersResultMappers.handler_result(result, toolUseId)
       : unreadableRecordResult(toolUseId),
-  script_result: (e, toolUseId) =>
+  script_result: (result, toolUseId) =>
     handlersModule
-      ? handlersModule.handlersResultMappers.script_result(e, toolUseId)
+      ? handlersModule.handlersResultMappers.script_result(result, toolUseId)
       : unreadableRecordResult(toolUseId),
 };
-var stripScriptResult = (e) => {
-  if (e === null || typeof e !== "object" || !("script_result" in e) || !isPlainObject(e.script_result))
-    return e;
-  let scriptResult = e.script_result;
+var stripScriptResult = (result) => {
+  if (
+    result === null ||
+    typeof result !== "object" ||
+    !("script_result" in result) ||
+    !isPlainObject(result.script_result)
+  )
+    return result;
+  let scriptResult = result.script_result;
   let error = isPlainObject(scriptResult.error) ? scriptResult.error : undefined;
   if (
     !("value" in scriptResult) &&
@@ -102,25 +116,30 @@ var stripScriptResult = (e) => {
     scriptResult.logs.every((log) => log === "") &&
     (!("error" in scriptResult) || (error !== undefined && !("detail" in error)))
   )
-    return e;
-  let { value: r, error: error_2, ...y } = scriptResult;
-  let { detail, ...w } = error ?? {};
+    return result;
+  let { value, error: error_2, ...rest } = scriptResult;
+  let { detail, ...errorRest } = error ?? {};
   let scriptResult_2 = {
-    ...y,
+    ...rest,
     logs: Array.isArray(scriptResult.logs) ? scriptResult.logs.map(() => "") : [],
     ...(error !== undefined && {
-      error: w,
+      error: errorRest,
     }),
   };
   return {
-    ...e,
+    ...result,
     script_result: scriptResult_2,
   };
 };
-var stripHandlerResult = (e) => {
-  if (e === null || typeof e !== "object" || !("handler_result" in e) || !isPlainObject(e.handler_result))
-    return e;
-  let handlerResult = e.handler_result;
+var stripHandlerResult = (result) => {
+  if (
+    result === null ||
+    typeof result !== "object" ||
+    !("handler_result" in result) ||
+    !isPlainObject(result.handler_result)
+  )
+    return result;
+  let handlerResult = result.handler_result;
   let error = isPlainObject(handlerResult.error) ? handlerResult.error : undefined;
   if (
     !("body" in handlerResult) &&
@@ -129,18 +148,18 @@ var stripHandlerResult = (e) => {
     handlerResult.logs.every((log) => log === "") &&
     (!("error" in handlerResult) || (error !== undefined && !("detail" in error)))
   )
-    return e;
-  let { body, headers, error: error_2, ...p } = handlerResult;
-  let { detail, ...A } = error ?? {};
+    return result;
+  let { body, headers, error: error_2, ...rest } = handlerResult;
+  let { detail, ...errorRest } = error ?? {};
   let handlerResult_2 = {
-    ...p,
+    ...rest,
     logs: Array.isArray(handlerResult.logs) ? handlerResult.logs.map(() => "") : [],
     ...(error !== undefined && {
-      error: A,
+      error: errorRest,
     }),
   };
   return {
-    ...e,
+    ...result,
     handler_result: handlerResult_2,
   };
 };

@@ -26,56 +26,56 @@ function shellToolNameOrNull(toolName) {
   return null;
 }
 //@ chunk-4p0ppc72.js:534-701 placement
-function classifyShellAllowRule(l, ruleContent) {
-  let toolName = shellToolNameOrNull(l);
-  if (toolName === null) return null;
+function classifyShellAllowRule(toolName, ruleContent) {
+  let toolName_2 = shellToolNameOrNull(toolName);
+  if (toolName_2 === null) return null;
   if (ruleContent === undefined || ruleContent === "" || /^[\s*]+$/.test(ruleContent)) return "bare";
   return (
-    toolName === BASH_TOOL_NAME
-      ? isDangerousBashPermission(toolName, ruleContent)
-      : isDangerousPowerShellPermission(toolName, ruleContent)
+    toolName_2 === BASH_TOOL_NAME
+      ? isDangerousBashPermission(toolName_2, ruleContent)
+      : isDangerousPowerShellPermission(toolName_2, ruleContent)
   )
     ? "dangerous_prefix"
     : "scoped";
 }
 //@ chunk-4p0ppc72.js:701-945 placement
-function countShellAllowRules(l) {
-  let e = {};
-  let o = 0;
-  for (let r of PERMISSION_UPDATE_DESTINATIONS)
-    for (let t of l[r] ?? []) {
-      let { toolName, ruleContent } = permissionRuleValueFromString(t);
-      let n = shellToolNameOrNull(toolName);
-      if (n === null) continue;
-      let i = classifyShellAllowRule(n, ruleContent);
-      if (i === null) continue;
-      let u = `${r}_${n}_${i}`;
-      e[u] = (e[u] ?? 0) + 1;
-      o++;
+function countShellAllowRules(rulesByDestination) {
+  let counts = {};
+  let total = 0;
+  for (let destination of PERMISSION_UPDATE_DESTINATIONS)
+    for (let ruleString of rulesByDestination[destination] ?? []) {
+      let { toolName, ruleContent } = permissionRuleValueFromString(ruleString);
+      let shellTool = shellToolNameOrNull(toolName);
+      if (shellTool === null) continue;
+      let category = classifyShellAllowRule(shellTool, ruleContent);
+      if (category === null) continue;
+      let key = `${destination}_${shellTool}_${category}`;
+      counts[key] = (counts[key] ?? 0) + 1;
+      total++;
     }
-  e.total_shell_allow_rules = o;
-  return e;
+  counts.total_shell_allow_rules = total;
+  return counts;
 }
 //@ chunk-4p0ppc72.js:945-1003 placement
 /**
  * logShellAllowRulesAtInit：启动时上报 shell 允许规则数量。
  */
-function logShellAllowRulesAtInit(alwaysAllowRules) {
-  logEvent("tengu_shell_allow_rules_at_init", countShellAllowRules(alwaysAllowRules));
+function logShellAllowRulesAtInit(rulesByDestination) {
+  logEvent("tengu_shell_allow_rules_at_init", countShellAllowRules(rulesByDestination));
 }
 //@ chunk-4p0ppc72.js:1003-1302 placement
-function logShellAllowRuleAdded(l) {
-  for (let e of l) {
-    if (e.type !== "addRules" || e.behavior !== "allow") continue;
-    for (let rule of e.rules) {
-      let r = shellToolNameOrNull(rule.toolName);
-      if (r === null) continue;
-      let t = classifyShellAllowRule(rule.toolName, rule.ruleContent);
-      if (t === null) continue;
+function logShellAllowRuleAdded(updates) {
+  for (let update of updates) {
+    if (update.type !== "addRules" || update.behavior !== "allow") continue;
+    for (let rule of update.rules) {
+      let shellTool = shellToolNameOrNull(rule.toolName);
+      if (shellTool === null) continue;
+      let category = classifyShellAllowRule(rule.toolName, rule.ruleContent);
+      if (category === null) continue;
       logEvent("tengu_shell_allow_rule_added", {
-        toolName: fromEnum(r),
-        category: fromEnum(t),
-        destination: fromEnum(e.destination),
+        toolName: fromEnum(shellTool),
+        category: fromEnum(category),
+        destination: fromEnum(update.destination),
       });
     }
   }

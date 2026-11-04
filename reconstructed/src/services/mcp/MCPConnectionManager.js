@@ -8,7 +8,14 @@
  * pieces: chunk-18hwfzwa.js (9), chunk-26sy0x4v.js (2)
  * attribution: placement 7, layout 1, fingerprint 3
  */
-import { y, P, qt, Se } from "../../../vendor/react/cjs/react.production.js";
+import { isUnhiddenFailedServer } from "../../hooks/notifs/useMcpConnectivityStatus.js";
+import { describeDisabledServers } from "./mcpToggleMessages.js";
+import {
+  useState,
+  useEffect,
+  createContext,
+  useContext,
+} from "../../../vendor/react/cjs/react.production.js";
 import {
   onPolicyVerdictChanged,
   getPolicyLimitsIneligibleReason,
@@ -27,32 +34,55 @@ import {
 } from "../policyLimits/policyEvidence.js";
 import { clearReconnectHandles, setReconnectHandles } from "./reconnectHandles.js";
 import { getCliOwnedState } from "./cliOwnedClients.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { isMcpServerDisabled, mcpDialBlockCause } from "./config.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { isUnhiddenFailedServer } from "../../hooks/notifs/useMcpConnectivityStatus.js";
-import { describeDisabledServers } from "./mcpToggleMessages.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-26sy0x4v.js:232-316 placement
+/**
+ * 选出需要重连的失败服务器并附上禁用服务器说明。
+ */
+function reconnectTargets(clients, context) {
+  return {
+    targets: clients.filter((client) => isUnhiddenFailedServer(client, context)),
+    outOfBandNote: describeDisabledServers(clients, true, context),
+  };
+}
+//@ chunk-26sy0x4v.js:316-508 placement
+/**
+ * 并行重连给定的 MCP 服务器，返回各自结果与成功连接的数量。
+ */
+async function reconnectAllServers(targets, reconnect) {
+  let settled = await Promise.allSettled(targets.map((target) => reconnect(target.name)));
+  let connectedCount = 0;
+  for (let outcome of settled)
+    if (outcome.status === "fulfilled" && outcome.value.client.type === "connected") connectedCount++;
+  return {
+    results: settled,
+    connected: connectedCount,
+  };
+}
 //@ chunk-18hwfzwa.js:1738247-1738407 placement
 /**
  * React hook：订阅组织限制 allow_claude_browser_extension 的变化（微任务里重读），返回当前是否允许 Claude in Chrome 浏览器扩展。
  */
 function useBrowserExtensionAllowed() {
-  let [h, x] = y(getInitialBrowserExtensionAllowed);
-  P(() => {
-    let D = true;
-    let L = () => {
+  let [allowed, setAllowed] = useState(getInitialBrowserExtensionAllowed);
+  useEffect(() => {
+    let mounted = true;
+    let update = () => {
       let browserExtensionRestriction = readBrowserExtensionRestriction();
-      if (D && browserExtensionRestriction !== null) x(browserExtensionRestriction);
+      if (mounted && browserExtensionRestriction !== null) setAllowed(browserExtensionRestriction);
     };
-    let ee = onPolicyVerdictChanged(() => queueMicrotask(L));
-    L();
+    let unsubscribe = onPolicyVerdictChanged(() => queueMicrotask(update));
+    update();
     return () => {
-      D = false;
-      ee();
+      mounted = false;
+      unsubscribe();
     };
   }, []);
-  return h;
+  return allowed;
 }
 //@ chunk-18hwfzwa.js:1738407-1738464 placement
 /**
@@ -71,8 +101,8 @@ function getInitialBrowserExtensionAllowed() {
  */
 function readBrowserExtensionRestriction() {
   try {
-    let h = policyDenyKind(ALLOW_CLAUDE_BROWSER_EXTENSION);
-    switch (h) {
+    let denyKind = policyDenyKind(ALLOW_CLAUDE_BROWSER_EXTENSION);
+    switch (denyKind) {
       case null:
         return isSessionVerdictFromServerFetch() || isEntrypointExemptFromBrowserRestriction() ? true : null;
       case "cache_miss":
@@ -108,13 +138,16 @@ function teardownMcpGlobalHandles() {
   getCliOwnedState().searchRedial = null;
 }
 //@ chunk-18hwfzwa.js:1738827-1738843 layout
-var MCPConnectionContext = qt(null);
+var MCPConnectionContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1738827", () => {
+  MCPConnectionContext = createContext(null);
+});
 //@ chunk-18hwfzwa.js:1738843-1738978 fingerprint = useMcpReconnect (1)
 /**
  * useMcpReconnect：从 MCPConnectionContext 取 reconnectMcpServer，不在 Provider 内抛错。
  */
 function useMcpReconnect() {
-  let context = Se(MCPConnectionContext);
+  let context = useContext(MCPConnectionContext);
   if (!context) {
     throw Error("useMcpReconnect must be used within MCPConnectionManager");
   }
@@ -125,7 +158,7 @@ function useMcpReconnect() {
  * useMcpToggleEnabled：从 MCPConnectionContext 取 toggleMcpServer，不在 Provider 内抛错。
  */
 function useMcpToggleEnabled() {
-  let context = Se(MCPConnectionContext);
+  let context = useContext(MCPConnectionContext);
   if (!context) {
     throw Error("useMcpToggleEnabled must be used within MCPConnectionManager");
   }
@@ -136,7 +169,7 @@ function useMcpToggleEnabled() {
  * MCPConnectionManager React 组件：调用 useManageMCPConnections 管理全部连接，通过 MCPConnectionContext 向子树提供 reconnectMcpServer/toggleMcpServer，并注册全局 searchRedial。
  */
 function MCPConnectionManager(props) {
-  let He = w(12);
+  let $ = useMemoCache(12);
   let { children, dynamicMcpConfig, isStrictMcpConfig, permissionRelays, requestDialog } = props;
   let { reconnectMcpServer, toggleMcpServer } = useManageMCPConnections(
     dynamicMcpConfig,
@@ -145,76 +178,53 @@ function MCPConnectionManager(props) {
     requestDialog,
   );
   let toggleMcpServer_2;
-  if (He[0] !== toggleMcpServer) {
-    toggleMcpServer_2 = async (ze) => {
-      await toggleMcpServer(ze);
+  if ($[0] !== toggleMcpServer) {
+    toggleMcpServer_2 = async (serverName) => {
+      await toggleMcpServer(serverName);
     };
-    He[0] = toggleMcpServer;
-    He[1] = toggleMcpServer_2;
-  } else toggleMcpServer_2 = He[1];
-  let Xe;
-  if (He[2] !== reconnectMcpServer || He[3] !== toggleMcpServer_2) {
-    Xe = {
+    $[0] = toggleMcpServer;
+    $[1] = toggleMcpServer_2;
+  } else toggleMcpServer_2 = $[1];
+  let contextValue;
+  if ($[2] !== reconnectMcpServer || $[3] !== toggleMcpServer_2) {
+    contextValue = {
       reconnectMcpServer,
       toggleMcpServer: toggleMcpServer_2,
     };
-    He[2] = reconnectMcpServer;
-    He[3] = toggleMcpServer_2;
-    He[4] = Xe;
-  } else Xe = He[4];
-  let value = Xe;
-  let kt;
-  let At;
-  if (He[5] !== reconnectMcpServer || He[6] !== toggleMcpServer) {
-    kt = () => {
+    $[2] = reconnectMcpServer;
+    $[3] = toggleMcpServer_2;
+    $[4] = contextValue;
+  } else contextValue = $[4];
+  let value = contextValue;
+  let setupHandles;
+  let dependencies;
+  if ($[5] !== reconnectMcpServer || $[6] !== toggleMcpServer) {
+    setupHandles = () => {
       setReconnectHandles(reconnectMcpServer, toggleMcpServer, isMcpServerDisabled, mcpDialBlockCause);
       getCliOwnedState().searchRedial = redialFailedMcpServers(reconnectMcpServer);
       return teardownMcpGlobalHandles;
     };
-    At = [reconnectMcpServer, toggleMcpServer];
-    He[5] = reconnectMcpServer;
-    He[6] = toggleMcpServer;
-    He[7] = kt;
-    He[8] = At;
+    dependencies = [reconnectMcpServer, toggleMcpServer];
+    $[5] = reconnectMcpServer;
+    $[6] = toggleMcpServer;
+    $[7] = setupHandles;
+    $[8] = dependencies;
   } else {
-    kt = He[7];
-    At = He[8];
+    setupHandles = $[7];
+    dependencies = $[8];
   }
-  P(kt, At);
+  useEffect(setupHandles, dependencies);
   let t2;
-  if (He[9] !== children || He[10] !== value) {
+  if ($[9] !== children || $[10] !== value) {
     t2 = jsxProd_default(MCPConnectionContext.Provider, {
       value,
       children,
     });
-    He[9] = children;
-    He[10] = value;
-    He[11] = t2;
-  } else t2 = He[11];
+    $[9] = children;
+    $[10] = value;
+    $[11] = t2;
+  } else t2 = $[11];
   return t2;
-}
-//@ chunk-26sy0x4v.js:232-316 placement
-/**
- * 选出需要重连的失败服务器并附上禁用服务器说明。
- */
-function reconnectTargets(e, n) {
-  return {
-    targets: e.filter((t) => isUnhiddenFailedServer(t, n)),
-    outOfBandNote: describeDisabledServers(e, true, n),
-  };
-}
-//@ chunk-26sy0x4v.js:316-508 placement
-/**
- * 并行重连给定的 MCP 服务器，返回各自结果与成功连接的数量。
- */
-async function reconnectAllServers(e, n) {
-  let settled = await Promise.allSettled(e.map((o) => n(o.name)));
-  let r = 0;
-  for (let o of settled) if (o.status === "fulfilled" && o.value.client.type === "connected") r++;
-  return {
-    results: settled,
-    connected: r,
-  };
 }
 export {
   MCPConnectionManager,

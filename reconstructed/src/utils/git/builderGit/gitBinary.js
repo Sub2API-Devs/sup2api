@@ -19,55 +19,65 @@ import { whichOnPath } from "../../which.js";
 import { auditEnvironment } from "./gitConfigAudit.js";
 import { HostScoped } from "../../hostScoped.js";
 import { getRootSession } from "../../../bootstrap/state.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:277278-277426 placement
-var PROBED_PROGRAMS = getPlatform_2() === "windows" ? ["git", "powershell.exe"] : ["git", "ps"];
-var WINDOWS_EXEC_EXTENSIONS = [
-  ".exe",
-  ".com",
-  ".cmd",
-  ".bat",
-  ".vbs",
-  ".vbe",
-  ".js",
-  ".jse",
-  ".wsf",
-  ".wsh",
-  ".msc",
-];
-var MAX_PATHEXT_ENTRIES = 32;
+var PROBED_PROGRAMS; // deferred: uses getPlatform (../../platform.js) of its import cycle while loading; runs once the cycle is complete
+var WINDOWS_EXEC_EXTENSIONS;
+var MAX_PATHEXT_ENTRIES;
+deferInit("chunk-s61vbvea.js:277278", () => {
+  PROBED_PROGRAMS = getPlatform_2() === "windows" ? ["git", "powershell.exe"] : ["git", "ps"];
+  WINDOWS_EXEC_EXTENSIONS = [
+    ".exe",
+    ".com",
+    ".cmd",
+    ".bat",
+    ".vbs",
+    ".vbe",
+    ".js",
+    ".jse",
+    ".wsf",
+    ".wsh",
+    ".msc",
+  ];
+  MAX_PATHEXT_ENTRIES = 32;
+});
 //@ chunk-s61vbvea.js:277426-277665 placement
 function listProgramNames(envCaseInsensitive) {
-  let n =
+  let execExtensions =
     getPlatform_2() === "windows"
       ? uniq([
           ...WINDOWS_EXEC_EXTENSIONS,
           ...(envCaseInsensitive ?? "")
             .split(";")
-            .map((r) => r.trim().toLowerCase())
-            .filter((r) => /^\.[^.\\/]+$/.test(r))
+            .map((entry) => entry.trim().toLowerCase())
+            .filter((entry) => /^\.[^.\\/]+$/.test(entry))
             .slice(0, MAX_PATHEXT_ENTRIES),
         ])
       : [];
-  return PROBED_PROGRAMS.flatMap((r) =>
-    getPlatform_2() === "windows" && !r.includes(".") ? [r, ...n.map((s) => r + s)] : [r],
+  return PROBED_PROGRAMS.flatMap((program) =>
+    getPlatform_2() === "windows" && !program.includes(".")
+      ? [program, ...execExtensions.map((extension) => program + extension)]
+      : [program],
   );
 }
 //@ chunk-s61vbvea.js:277665-277704 placement
 /**
  * 用探测程序列表判断某个程序目录是否安全（无越权文件）。
  */
-function isProgramDirSafe(e, n, r) {
-  return isProgramDirSafeFor(e, n, PROBED_PROGRAMS, r);
+function isProgramDirSafe(realCandidate, reachPredicate, collector) {
+  return isProgramDirSafeFor(realCandidate, reachPredicate, PROBED_PROGRAMS, collector);
 }
 //@ chunk-s61vbvea.js:277704-277799 placement
 /**
  * 判断目录 e 对路径 n 是否安全：可达或不在团队目录内即可。
  */
-function isProgramDirSafeFor(realCandidate, reachPredicate, r, s) {
-  if (isReachableOrUnsafe(realCandidate, reachPredicate, s)) return true;
-  let h = isRealPathWithinTeamDir(realCandidate);
-  return h === null || !isPathDirSafe(realCandidate, reachPredicate, [...h, ...r], s);
+function isProgramDirSafeFor(realCandidate, programDir, expectedEntries, collector) {
+  if (isReachableOrUnsafe(realCandidate, programDir, collector)) return true;
+  let entries = isRealPathWithinTeamDir(realCandidate);
+  return (
+    entries === null || !isPathDirSafe(realCandidate, programDir, [...entries, ...expectedEntries], collector)
+  );
 }
 //@ chunk-s61vbvea.js:277799-277998 placement = isRealPathWithinTeamDir (0.762)
 function isRealPathWithinTeamDir(realCandidate) {
@@ -75,8 +85,8 @@ function isRealPathWithinTeamDir(realCandidate) {
     let mapped = readdirSync(realCandidate, {
       withFileTypes: true,
     })
-      .filter((r) => getPlatform_2() === "windows" || !r.isFile())
-      .map((r) => r.name);
+      .filter((dirent) => getPlatform_2() === "windows" || !dirent.isFile())
+      .map((dirent) => dirent.name);
     return mapped.length > MAX_DIRECTORY_ENTRIES ? null : mapped;
   } catch (error) {
     let code = getErrnoCode(error);
@@ -84,21 +94,27 @@ function isRealPathWithinTeamDir(realCandidate) {
   }
 }
 //@ chunk-s61vbvea.js:277998-278413 placement
-function findXcodeGit(e, reachPredicate, r) {
-  return [e, join(e, "Contents", "Developer")].some((s) => {
-    if (isReachableOrUnsafe(s, reachPredicate, r)) return true;
-    let h = isReachableOrUnsafe(join(s, "Toolchains"), reachPredicate, r)
+function findXcodeGit(xcodeRoot, reachPredicate, collector) {
+  return [xcodeRoot, join(xcodeRoot, "Contents", "Developer")].some((candidateRoot) => {
+    if (isReachableOrUnsafe(candidateRoot, reachPredicate, collector)) return true;
+    let toolchainEntries = isReachableOrUnsafe(join(candidateRoot, "Toolchains"), reachPredicate, collector)
       ? null
-      : isRealPathWithinTeamDir_2(join(s, "Toolchains"));
-    let y = h === null ? null : [s, ...h.map((S) => join(s, "Toolchains", S))];
+      : isRealPathWithinTeamDir_2(join(candidateRoot, "Toolchains"));
+    let toolchainPaths =
+      toolchainEntries === null
+        ? null
+        : [
+            candidateRoot,
+            ...toolchainEntries.map((toolchainName) => join(candidateRoot, "Toolchains", toolchainName)),
+          ];
     return (
-      y === null ||
-      !isPathDirSafe(join(s, "usr", "lib"), reachPredicate, ["libxcrun.dylib"], r) ||
-      !isPathDirSafe(join(s, "usr", "bin"), reachPredicate, ["xcrun", "xcodebuild"], r) ||
-      y.some(
-        (S) =>
-          !isPathDirSafe(join(S, "usr", "bin"), reachPredicate, ["git"], r) ||
-          isProgramDirSafe(join(S, "usr", "libexec", "git-core"), reachPredicate, r),
+      toolchainPaths === null ||
+      !isPathDirSafe(join(candidateRoot, "usr", "lib"), reachPredicate, ["libxcrun.dylib"], collector) ||
+      !isPathDirSafe(join(candidateRoot, "usr", "bin"), reachPredicate, ["xcrun", "xcodebuild"], collector) ||
+      toolchainPaths.some(
+        (toolchainPath) =>
+          !isPathDirSafe(join(toolchainPath, "usr", "bin"), reachPredicate, ["git"], collector) ||
+          isProgramDirSafe(join(toolchainPath, "usr", "libexec", "git-core"), reachPredicate, collector),
       )
     );
   });
@@ -106,8 +122,8 @@ function findXcodeGit(e, reachPredicate, r) {
 //@ chunk-s61vbvea.js:278413-278534 placement = isRealPathWithinTeamDir (1)
 function isRealPathWithinTeamDir_2(realCandidate) {
   try {
-    let n = readdirSync(realCandidate);
-    return n.length > MAX_DIRECTORY_ENTRIES ? null : n;
+    let entries = readdirSync(realCandidate);
+    return entries.length > MAX_DIRECTORY_ENTRIES ? null : entries;
   } catch (error) {
     let code = getErrnoCode(error);
     return code === "ENOENT" || code === "ENOTDIR" ? [] : null;
@@ -119,34 +135,34 @@ var MAX_DIRECTORY_ENTRIES = 1024;
 class GitBinaryError {
   #e = new Map();
   screenMemo;
-  constructor(e = "host") {
-    this.screenMemo = e === "host" ? undefined : createReachCollector(e === "operation");
+  constructor(scope = "host") {
+    this.screenMemo = scope === "host" ? undefined : createReachCollector(scope === "operation");
   }
-  gitExeOnPath(e) {
-    let n = getEnvCaseInsensitive(e, "PATH") ?? "";
-    let r = this.#e.get(n);
-    if (r !== undefined) return r;
-    let gitOnPath = findGitOnPath(n);
-    if (gitOnPath !== null) this.#e.set(n, gitOnPath);
+  gitExeOnPath(env) {
+    let pathValue = getEnvCaseInsensitive(env, "PATH") ?? "";
+    let cachedPath = this.#e.get(pathValue);
+    if (cachedPath !== undefined) return cachedPath;
+    let gitOnPath = findGitOnPath(pathValue);
+    if (gitOnPath !== null) this.#e.set(pathValue, gitOnPath);
     return gitOnPath;
   }
 }
 //@ chunk-s61vbvea.js:278785-278810 placement
 var WINDOWS_EXEC_RE = /\.(?:exe|com)$/i;
 //@ chunk-s61vbvea.js:278810-278956 placement
-function findGitOnPath(e, n = "linux") {
-  let r = whichOnPath("git", e);
-  if (n !== "win32" || r === null || WINDOWS_EXEC_RE.test(r)) return r;
-  let s = whichOnPath("git.exe", e);
-  return s !== null && WINDOWS_EXEC_RE.test(s) ? s : null;
+function findGitOnPath(pathValue, platform = "linux") {
+  let gitPath = whichOnPath("git", pathValue);
+  if (platform !== "win32" || gitPath === null || WINDOWS_EXEC_RE.test(gitPath)) return gitPath;
+  let gitExePath = whichOnPath("git.exe", pathValue);
+  return gitExePath !== null && WINDOWS_EXEC_RE.test(gitExePath) ? gitExePath : null;
 }
 //@ chunk-s61vbvea.js:278956-279038 placement
 /**
  * 判断 PATH 上只有 shim（git 解析不到 exe，但 which 能找到）。
  */
 function isGitShimOnly() {
-  let e = getEnvCaseInsensitive(auditEnvironment(), "PATH") ?? "";
-  return findGitOnPath(e) === null && whichOnPath("git", e) !== null;
+  let pathValue = getEnvCaseInsensitive(auditEnvironment(), "PATH") ?? "";
+  return findGitOnPath(pathValue) === null && whichOnPath("git", pathValue) !== null;
 }
 //@ chunk-s61vbvea.js:279038-279145 placement
 function windowsGitNote() {
@@ -164,7 +180,10 @@ function windowsGitDirNote() {
     : "";
 }
 //@ chunk-s61vbvea.js:279290-279316 placement
-var gitBinaryStateRegistry = new HostScoped(() => new GitBinaryError());
+var gitBinaryStateRegistry; // deferred: uses GitBinaryError of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:279290", () => {
+  gitBinaryStateRegistry = new HostScoped(() => new GitBinaryError());
+});
 //@ chunk-s61vbvea.js:279316-279354 placement
 /**
  * 取当前宿主的 git 二进制状态缓存。
@@ -176,8 +195,8 @@ function currentGitBinaryState() {
 /**
  * 在给定环境中解析 PATH 上的 git 可执行文件。
  */
-function gitExeOnPathInEnv(gitEnv, n = currentGitBinaryState()) {
-  return n.gitExeOnPath(gitEnv);
+function gitExeOnPathInEnv(gitEnv, probes = currentGitBinaryState()) {
+  return probes.gitExeOnPath(gitEnv);
 }
 export {
   GitBinaryError,

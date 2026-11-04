@@ -5,7 +5,7 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS as x } from "../../../runtime/bun-runtime.js";
 import { require_index_minimal as tIo } from "./index-minimal.js";
 import { Ka } from "./encoder.js";
 import { qa } from "./decoder.js";

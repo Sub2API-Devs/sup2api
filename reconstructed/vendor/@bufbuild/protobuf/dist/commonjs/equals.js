@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_scalar } from "./reflect/scalar.js";
 import { require_reflect } from "../cjs/reflect/reflect.js";
 import { require_descriptors } from "../cjs/descriptors.js";
@@ -13,7 +13,7 @@ import { require_error_4 } from "../../../../@anthropic-ai/bedrock-sdk/core/erro
 import { require_extensions } from "./extensions.js";
 
 //@ chunk-fq0cr76a.js:443249-445879 cjs-fingerprint
-var require_equals = x(function (cjsExports) {
+var require_equals = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

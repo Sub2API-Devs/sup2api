@@ -11,42 +11,46 @@
 import { InkEvent } from "./event.js";
 import { NO_MOUSE_MODS } from "../components/ErrorBoundary.js";
 import { PointerEvent } from "./pointer-event.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-bzr73sfg.js:172404-172812 placement
 /**
  * 鼠标事件基类（继承 TerminalEvent 的基础 Event）：屏幕坐标 col/row 与相对目标的 localCol/localRow、目标格是否空白、所在格的 OSC 8 链接、是否为窗口激活点击、修饰键；allowDefault()/dropAsStray()/endClickChain() 供处理器影响默认行为（选区、多击链）。
  */
-class ClickEvent extends InkEvent {
-  col;
-  row;
-  localCol = 0;
-  localRow = 0;
-  cellIsBlank;
-  hyperlinkUrl;
-  isWindowActivation;
-  mods;
-  defaultAllowed = false;
-  allowDefault() {
-    this.defaultAllowed = true;
-  }
-  droppedAsStray = false;
-  dropAsStray() {
-    this.droppedAsStray = true;
-  }
-  endsClickChain = false;
-  endClickChain() {
-    this.endsClickChain = true;
-  }
-  constructor(col, row, cellIsBlank, hyperlinkUrl, isWindowActivation = false, mods = NO_MOUSE_MODS) {
-    super();
-    this.col = col;
-    this.row = row;
-    this.cellIsBlank = cellIsBlank;
-    this.hyperlinkUrl = hyperlinkUrl;
-    this.isWindowActivation = isWindowActivation;
-    this.mods = mods;
-  }
-}
+let ClickEvent; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bzr73sfg.js:172404", () => {
+  ClickEvent = class ClickEvent extends InkEvent {
+    col;
+    row;
+    localCol = 0;
+    localRow = 0;
+    cellIsBlank;
+    hyperlinkUrl;
+    isWindowActivation;
+    mods;
+    defaultAllowed = false;
+    allowDefault() {
+      this.defaultAllowed = true;
+    }
+    droppedAsStray = false;
+    dropAsStray() {
+      this.droppedAsStray = true;
+    }
+    endsClickChain = false;
+    endClickChain() {
+      this.endsClickChain = true;
+    }
+    constructor(col, row, cellIsBlank, hyperlinkUrl, isWindowActivation = false, mods = NO_MOUSE_MODS) {
+      super();
+      this.col = col;
+      this.row = row;
+      this.cellIsBlank = cellIsBlank;
+      this.hyperlinkUrl = hyperlinkUrl;
+      this.isWindowActivation = isWindowActivation;
+      this.mods = mods;
+    }
+  };
+});
 //@ chunk-bzr73sfg.js:258255-258541 fingerprint = ClickEvent (0.495)
 /**
  * 把指针事件派给节点的 onPointer，换算成节点内的局部坐标（含像素精度 fine）；节点已从树上摘下时只派发 up。

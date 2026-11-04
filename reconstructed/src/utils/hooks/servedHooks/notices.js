@@ -25,8 +25,8 @@ var HOOK_NOT_RUN_REASONS = {
   model_hook: "an agent or prompt hook cannot run for a call from a cloud session",
 };
 //@ chunk-e6aww6q8.js:879341-879479 placement
-function hookNotRunNotice(e, type, r) {
-  return `A ${e} ${type} hook on this machine was not run for this call: ${HOOK_NOT_RUN_REASONS[r]}. Its output is not part of this result.`;
+function hookNotRunNotice(agentKind, type, reasonCode) {
+  return `A ${agentKind} ${type} hook on this machine was not run for this call: ${HOOK_NOT_RUN_REASONS[reasonCode]}. Its output is not part of this result.`;
 }
 //@ chunk-e6aww6q8.js:879479-881402 placement
 /**
@@ -58,8 +58,8 @@ var HOOK_CHANGED_QUESTION =
 /**
  * 生成询问是否使用已更新 hook 脚本的提示。
  */
-function hookScriptChangedQuestion(e, n) {
-  return `A script in this project checks each command before it runs. It changed since this computer last used it, for example after a project update (version ${e} \u2192 ${n}, not shown). Use the updated script? Yes: this command runs now, then the script runs in a read-only sandbox, can only block or question commands, and becomes the expected one. No: it is not run and each command asks you.`;
+function hookScriptChangedQuestion(previousVersion, currentVersion) {
+  return `A script in this project checks each command before it runs. It changed since this computer last used it, for example after a project update (version ${previousVersion} \u2192 ${currentVersion}, not shown). Use the updated script? Yes: this command runs now, then the script runs in a read-only sandbox, can only block or question commands, and becomes the expected one. No: it is not run and each command asks you.`;
 }
 //@ chunk-e6aww6q8.js:881817-882002 placement
 var HOOK_UPDATED_NOT_ACCEPTED_QUESTION =
@@ -76,8 +76,8 @@ function lastIfChangedQuestion(message, changedHookKeys) {
  * 在问题列表中找出文本以其结尾的最后一条。
  */
 function findLastMatchingQuestion(message, changedHookKeys, updatedAsks) {
-  return changedHookKeys?.findLast((s) => {
-    let question = updatedAsks?.get(s)?.question;
+  return changedHookKeys?.findLast((hookKey) => {
+    let question = updatedAsks?.get(hookKey)?.question;
     return question !== undefined && message.endsWith(question);
   });
 }
@@ -115,15 +115,15 @@ var HOOK_WANTS_CONFIRM_QUESTION = "This project's command check wants you to con
 var HOOK_REWRITE_REFUSED_QUESTION =
   "This project's command check wanted to change this command, which it may not do for a cloud session. Approve the command as written?";
 //@ chunk-e6aww6q8.js:883790-883929 placement
-function hookCheckUnfinishedQuestion(e) {
-  return `This project's command check couldn't finish on this computer (${e}), so Claude needs your OK to run this command.`;
+function hookCheckUnfinishedQuestion(reason) {
+  return `This project's command check couldn't finish on this computer (${reason}), so Claude needs your OK to run this command.`;
 }
 //@ chunk-e6aww6q8.js:883929-884166 placement
-function hookBlockedMessage(e, n, r) {
-  let s = `A command check in this project (${e}) blocked this command: ${n}`;
-  return r
-    ? `${s} (this computer is still using the check from before the project's files changed. Reconnect the computer to use the new one.)`
-    : s;
+function hookBlockedMessage(checkLabel, reason, isStale) {
+  let message = `A command check in this project (${checkLabel}) blocked this command: ${reason}`;
+  return isStale
+    ? `${message} (this computer is still using the check from before the project's files changed. Reconnect the computer to use the new one.)`
+    : message;
 }
 //@ chunk-e6aww6q8.js:884166-884931 placement
 /**
@@ -136,21 +136,21 @@ var HOOKS_SANDBOXED_NOTE =
 var HOOK_CHANGED_ON_DISK_NOTE =
   "This project's command check changed on disk during this session (for example after a git checkout). This computer keeps using the version recorded when the session connected. The changed one is not run. The recorded version may be looser or stricter than the new one. The person is asked about the new one the next time this computer serves this project.";
 //@ chunk-e6aww6q8.js:884931-885138 placement
-function hookCheckOutputNote(e, n, r) {
-  return `This project's command check (${e}) ${
+function hookCheckOutputNote(checkLabel, kind, text) {
+  return `This project's command check (${checkLabel}) ${
     {
       asked: "asked for confirmation and said",
       context: "added this context",
       stderr: "did not finish; its first line of error output was",
-    }[n]
-  }: ${r}`;
+    }[kind]
+  }: ${text}`;
 }
 //@ chunk-e6aww6q8.js:885138-885470 placement
 /**
  * 生成 hook 连续三次需要确认后不再运行的提示。
  */
-function hookStruckOutNotice(e) {
-  return `This project's command check (${e}) needed the person's OK three times in a row on this computer, so it is not run again for this session and each command asks instead. If it could not finish there, make it work read-only (no writes outside $TMPDIR, no network, no tools installed under the home directory).`;
+function hookStruckOutNotice(checkLabel) {
+  return `This project's command check (${checkLabel}) needed the person's OK three times in a row on this computer, so it is not run again for this session and each command asks instead. If it could not finish there, make it work read-only (no writes outside $TMPDIR, no network, no tools installed under the home directory).`;
 }
 //@ chunk-e6aww6q8.js:885470-886048 placement
 /**

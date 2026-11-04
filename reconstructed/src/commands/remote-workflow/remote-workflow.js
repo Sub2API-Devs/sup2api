@@ -18,10 +18,10 @@ import { REMOTE_WORKFLOW_ENV, CLAUDE_REMOTE_WORKFLOW_ARGS } from "../../services
 import { MAX_SCRIPT_FILE_BYTES } from "../../services/workflow/scriptFile.js";
 
 //@ chunk-cg8zacmh.js:12892-12943 placement
-function remoteWorkflowTextResult(s, t) {
+function remoteWorkflowTextResult(kind, message) {
   return {
     type: "text",
-    value: remoteWorkflowErrorLine(s, t),
+    value: remoteWorkflowErrorLine(kind, message),
   };
 }
 //@ chunk-cg8zacmh.js:12943-13785 placement
@@ -40,8 +40,8 @@ var call = async (args, context) => {
       "env-missing",
       `${REMOTE_WORKFLOW_ENV} is not set. This command is the deterministic entry point for sessions launched with an environment-delivered workflow script; it has no interactive use.`,
     );
-  let a = workflowPolicyRefusal();
-  if (a) return remoteWorkflowTextResult("policy-gate", a);
+  let policyRefusal = workflowPolicyRefusal();
+  if (policyRefusal) return remoteWorkflowTextResult("policy-gate", policyRefusal);
   let args_2;
   let CLAUDE_REMOTE_WORKFLOW_ARGS_2 = env.CLAUDE_REMOTE_WORKFLOW_ARGS;
   if (CLAUDE_REMOTE_WORKFLOW_ARGS_2 !== undefined && CLAUDE_REMOTE_WORKFLOW_ARGS_2 !== "") {
@@ -71,3 +71,4 @@ var call = async (args, context) => {
     ).line,
   };
 };
+export { call };

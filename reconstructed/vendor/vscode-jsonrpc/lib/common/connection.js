@@ -5,7 +5,7 @@
  * pieces: chunk-t4ksmxzx.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_ral } from "./ral.js";
 import { require_is } from "./is.js";
 import { require_messages } from "./messages.js";
@@ -14,7 +14,7 @@ import { require_events } from "./events.js";
 import { require_cancellation } from "./cancellation.js";
 
 //@ chunk-t4ksmxzx.js:26637-44519 cjs-fingerprint
-var require_connection = x(function (cjsExports) {
+var require_connection = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

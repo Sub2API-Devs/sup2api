@@ -21,3 +21,4 @@ var PREVIEW_REBUILD_RESOURCE = __cc_resource_0;
  * 读出的预览重建脚本文本（内嵌资源解压后转文本）。
  */
 var previewRebuildSource = readEmbeddedTextSync(PREVIEW_REBUILD_RESOURCE, import.meta.dirname);
+export { previewRebuildSource };

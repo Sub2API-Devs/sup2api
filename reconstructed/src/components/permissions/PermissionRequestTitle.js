@@ -8,39 +8,58 @@
  * pieces: chunk-3v13eg2e.js (11)
  * attribution: placement 10, fingerprint 1
  */
-import { init_react_production, qt, Se, yt, Oo, y, P } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  createContext,
+  useContext,
+  useSyncExternalStore,
+  useEffectEvent,
+  useState,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
 import { DialogStoreContext } from "../../state/dialogQueue.js";
 import { logError } from "../../utils/log.js";
 import { toApprovalLabel } from "../../utils/permissions/approvalPayloadSerialization.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-3v13eg2e.js:759-763 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3v13eg2e.js:759", () => {
+  init_react_production();
+});
 //@ chunk-3v13eg2e.js:763-767 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3v13eg2e.js:763", () => {
+  init_react_production();
+});
 //@ chunk-3v13eg2e.js:767-784 placement
 /**
  * 导出值：permissionTitleRef（权限标题 ref）；位于「权限对话框标题行（工具名、子标题、队友 WorkerBadge）」模块。
  */
-var permissionTitleRef = qt(null);
+var permissionTitleRef; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3v13eg2e.js:767", () => {
+  permissionTitleRef = createContext(null);
+});
 //@ chunk-3v13eg2e.js:784-929 placement
 /**
  * 返回一个回调：调用时通知对话框存储中当前对话框已被认领（onClaimed）。
  */
 function useNotifyDialogClaimed() {
-  let i = Se(permissionTitleRef);
-  let t = Se(DialogStoreContext);
+  let titleRef = useContext(permissionTitleRef);
+  let dialogStore = useContext(DialogStoreContext);
   return () => {
-    if (i === null || !t) return;
+    if (titleRef === null || !dialogStore) return;
     try {
-      t.getState()
-        .open.find((o) => o.id === i)
+      dialogStore
+        .getState()
+        .open.find((state) => state.id === titleRef)
         ?.onClaimed?.();
     } catch (error) {
       logError(error);
@@ -52,11 +71,14 @@ function useNotifyDialogClaimed() {
  * 订阅并返回当前询问在本轮询问计数中的位置标签（如 2/3）。
  */
 function useAskPositionLabel() {
-  let i = Se(permissionTitleRef);
-  let t = Se(DialogStoreContext);
-  let countedAsk = i === null || !t ? undefined : t.getState().open.find((d) => d.id === i)?.countedAsk;
-  let askTally = countedAsk === undefined ? undefined : t?.askTally;
-  return yt(askTally?.subscribe ?? noopUnsubscribe, () =>
+  let titleRef = useContext(permissionTitleRef);
+  let dialogStore = useContext(DialogStoreContext);
+  let countedAsk =
+    titleRef === null || !dialogStore
+      ? undefined
+      : dialogStore.getState().open.find((state) => state.id === titleRef)?.countedAsk;
+  let askTally = countedAsk === undefined ? undefined : dialogStore?.askTally;
+  return useSyncExternalStore(askTally?.subscribe ?? noopUnsubscribe, () =>
     countedAsk === undefined || !askTally ? null : askTally.positionLabel(countedAsk),
   );
 }
@@ -64,25 +86,29 @@ function useAskPositionLabel() {
 /**
  * 对话框首次显示时执行一次回调（按对话框 id 与键去重；perReveal 时每次重新显示各算一次）。
  */
-function useOnFirstReveal(i, t, { perReveal: o = false } = {}) {
-  let u = Se(permissionTitleRef);
-  let d = Se(DialogStoreContext);
-  let A = Oo(t);
-  let [a] = y(() => (o && u !== null && d ? (d.getState().open.find((p) => p.id === u)?.revealSeq ?? 0) : 0));
-  P(() => {
-    if (u !== null && d) {
-      if (!d.firstReveal(u, o ? `${i}@${a}` : i)) return;
+function useOnFirstReveal(revealKey, onReveal, { perReveal = false } = {}) {
+  let titleRef = useContext(permissionTitleRef);
+  let dialogStore = useContext(DialogStoreContext);
+  let onRevealRef = useEffectEvent(onReveal);
+  let [revealSeq] = useState(() =>
+    perReveal && titleRef !== null && dialogStore
+      ? (dialogStore.getState().open.find((state) => state.id === titleRef)?.revealSeq ?? 0)
+      : 0,
+  );
+  useEffect(() => {
+    if (titleRef !== null && dialogStore) {
+      if (!dialogStore.firstReveal(titleRef, perReveal ? `${revealKey}@${revealSeq}` : revealKey)) return;
     }
-    A();
-  }, [u, d, i, o, a]);
+    onRevealRef();
+  }, [titleRef, dialogStore, revealKey, perReveal, revealSeq]);
 }
 //@ chunk-3v13eg2e.js:1375-1402 placement
 function noopUnsubscribe() {
   return () => {};
 }
 //@ chunk-3v13eg2e.js:1402-1461 placement
-function commandNameOf(i) {
-  let approvalLabel = toApprovalLabel(i);
+function commandNameOf(command) {
+  let approvalLabel = toApprovalLabel(command);
   return approvalLabel === null ? undefined : String(approvalLabel);
 }
 //@ chunk-3v13eg2e.js:1461-1849 placement
@@ -92,18 +118,18 @@ function commandNameOf(i) {
 function describeRequestSource(requestSource) {
   switch (requestSource?.type) {
     case "workflow-agent": {
-      let t = commandNameOf(requestSource.workflowName);
-      return t !== undefined ? `from the "${t}" workflow` : "from a workflow";
+      let workflowName = commandNameOf(requestSource.workflowName);
+      return workflowName !== undefined ? `from the "${workflowName}" workflow` : "from a workflow";
     }
     case "subagent": {
-      let t = commandNameOf(requestSource.agentName);
-      return t !== undefined ? `from the ${t} agent` : "from a subagent";
+      let agentName = commandNameOf(requestSource.agentName);
+      return agentName !== undefined ? `from the ${agentName} agent` : "from a subagent";
     }
     case "remote-agent":
       return "from a remote cloud agent";
     case "plugin": {
-      let t = commandNameOf(requestSource.pluginName);
-      return t === undefined ? "from a plugin" : `from the ${t} plugin`;
+      let pluginName = commandNameOf(requestSource.pluginName);
+      return pluginName === undefined ? "from a plugin" : `from the ${pluginName} plugin`;
     }
   }
   return;
@@ -112,103 +138,105 @@ function describeRequestSource(requestSource) {
 /**
  * 函数 fitsWithMeta（标题加元信息能否放进宽度）；位于「权限对话框标题行（工具名、子标题、队友 WorkerBadge）」模块。
  */
-function fitsWithMeta(i, requestSource, o) {
-  let u = describeRequestSource(requestSource);
-  return bunStringWidth(i) + (u === undefined ? 0 : 1 + bunStringWidth(`\xB7 ${u}`)) <= o;
+function fitsWithMeta(title, requestSource, width) {
+  let sourceText = describeRequestSource(requestSource);
+  return (
+    bunStringWidth(title) + (sourceText === undefined ? 0 : 1 + bunStringWidth(`\xB7 ${sourceText}`)) <= width
+  );
 }
 //@ chunk-3v13eg2e.js:1929-3158 fingerprint = PermissionRequestTitle (0.588)
 /**
  * 权限对话框标题：工具名、副标题（截断）、队友徽章、读屏 aria-label。
  */
 function PermissionRequestTitle(props) {
-  let $ = w(25);
+  let $ = useMemoCache(25);
   let { title, subtitle, color, requestSource, srPrefix, aside } = props;
   let color_2 = color === undefined ? "permission" : color;
-  let F;
+  let sourceLabel;
   if ($[0] !== requestSource) {
-    F = describeRequestSource(requestSource);
+    sourceLabel = describeRequestSource(requestSource);
     $[0] = requestSource;
-    $[1] = F;
-  } else F = $[1];
-  let c = F;
-  const R = srPrefix !== undefined ? `${srPrefix} ${title}` : undefined;
-  let f;
-  if ($[2] !== color_2 || $[3] !== R || $[4] !== title) {
-    f = jsxProd_default(Text, {
-      "aria-label": R,
+    $[1] = sourceLabel;
+  } else sourceLabel = $[1];
+  let sourceText = sourceLabel;
+  const screenReaderLabel = srPrefix !== undefined ? `${srPrefix} ${title}` : undefined;
+  let textElement;
+  if ($[2] !== color_2 || $[3] !== screenReaderLabel || $[4] !== title) {
+    textElement = jsxProd_default(Text, {
+      "aria-label": screenReaderLabel,
       bold: true,
       color: color_2,
       children: title,
     });
     $[2] = color_2;
-    $[3] = R;
+    $[3] = screenReaderLabel;
     $[4] = title;
-    $[5] = f;
-  } else f = $[5];
-  let g;
-  if ($[6] !== c) {
-    g =
-      c !== undefined &&
+    $[5] = textElement;
+  } else textElement = $[5];
+  let sourceElement;
+  if ($[6] !== sourceText) {
+    sourceElement =
+      sourceText !== undefined &&
       jsxProd_default_2(Text, {
         children: [
           jsxProd_default(Text, {
             dimColor: true,
             children: "\xB7 ",
           }),
-          c,
+          sourceText,
         ],
       });
-    $[6] = c;
-    $[7] = g;
-  } else g = $[7];
-  let k;
-  if ($[8] !== f || $[9] !== g) {
-    k = jsxProd_default_2(Box, {
+    $[6] = sourceText;
+    $[7] = sourceElement;
+  } else sourceElement = $[7];
+  let titleRow;
+  if ($[8] !== textElement || $[9] !== sourceElement) {
+    titleRow = jsxProd_default_2(Box, {
       flexDirection: "row",
       gap: 1,
-      children: [f, g],
+      children: [textElement, sourceElement],
     });
-    $[8] = f;
-    $[9] = g;
-    $[10] = k;
-  } else k = $[10];
-  let C = k;
-  let N;
+    $[8] = textElement;
+    $[9] = sourceElement;
+    $[10] = titleRow;
+  } else titleRow = $[10];
+  let titleRowValue = titleRow;
+  let asideElement;
   if ($[11] !== aside || $[12] !== requestSource || $[13] !== title) {
-    N =
+    asideElement =
       aside !== undefined &&
       fitsWithMeta(title, requestSource, aside.rowColumns - 1 - bunStringWidth(aside.text));
     $[11] = aside;
     $[12] = requestSource;
     $[13] = title;
-    $[14] = N;
-  } else N = $[14];
-  let L = N;
-  const flexGrow = L ? 1 : undefined;
-  let m;
-  if ($[15] !== aside || $[16] !== L || $[17] !== C) {
-    m = L
+    $[14] = asideElement;
+  } else asideElement = $[14];
+  let asideValue = asideElement;
+  const flexGrow = asideValue ? 1 : undefined;
+  let headerRow;
+  if ($[15] !== aside || $[16] !== asideValue || $[17] !== titleRowValue) {
+    headerRow = asideValue
       ? jsxProd_default_2(Box, {
           flexDirection: "row",
           justifyContent: "space-between",
           gap: 1,
           children: [
-            C,
+            titleRowValue,
             jsxProd_default(Text, {
               dimColor: true,
               children: aside.text,
             }),
           ],
         })
-      : C;
+      : titleRowValue;
     $[15] = aside;
-    $[16] = L;
-    $[17] = C;
-    $[18] = m;
-  } else m = $[18];
-  let b;
+    $[16] = asideValue;
+    $[17] = titleRowValue;
+    $[18] = headerRow;
+  } else headerRow = $[18];
+  let subtitleElement;
   if ($[19] !== subtitle) {
-    b =
+    subtitleElement =
       subtitle != null &&
       (typeof subtitle === "string"
         ? jsxProd_default(Text, {
@@ -218,21 +246,21 @@ function PermissionRequestTitle(props) {
           })
         : subtitle);
     $[19] = subtitle;
-    $[20] = b;
-  } else b = $[20];
-  let T;
-  if ($[21] !== b || $[22] !== flexGrow || $[23] !== m) {
-    T = jsxProd_default_2(Box, {
+    $[20] = subtitleElement;
+  } else subtitleElement = $[20];
+  let headerColumn;
+  if ($[21] !== subtitleElement || $[22] !== flexGrow || $[23] !== headerRow) {
+    headerColumn = jsxProd_default_2(Box, {
       flexDirection: "column",
       flexGrow,
-      children: [m, b],
+      children: [headerRow, subtitleElement],
     });
-    $[21] = b;
+    $[21] = subtitleElement;
     $[22] = flexGrow;
-    $[23] = m;
-    $[24] = T;
-  } else T = $[24];
-  return T;
+    $[23] = headerRow;
+    $[24] = headerColumn;
+  } else headerColumn = $[24];
+  return headerColumn;
 }
 export {
   useOnFirstReveal,

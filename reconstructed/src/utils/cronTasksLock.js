@@ -11,7 +11,7 @@
 import { join, dirname } from "path";
 import { readFile, writeFile, mkdir, unlink } from "fs/promises";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, string, E } from "../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, numberSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { getProjectRoot, getSessionId } from "../bootstrap/state.js";
 import { safeParseJSON } from "./json.js";
 import { jsonStringify } from "./slowOperations.js";
@@ -29,11 +29,11 @@ import { isProcessRunning } from "./genericProcessUtils.js";
  */
 var LOCK_FILE_REL = join(".claude", "scheduled_tasks.lock");
 var schedulerLockSchema = DoctorLazy(() =>
-  u({
-    sessionId: string(),
-    pid: E(),
-    procStart: string().optional(),
-    acquiredAt: E(),
+  objectSchema({
+    sessionId: stringSchema(),
+    pid: numberSchema(),
+    procStart: stringSchema().optional(),
+    acquiredAt: numberSchema(),
   }),
 );
 //@ chunk-hnzqng4j.js:3163-3199 layout

@@ -27,23 +27,23 @@ import { getShareEntry, typeLockedFor, mayBeShared, triState } from "../shareEnt
 import { LIVE_DOC, isMeaningfulFlag } from "../textSanitize.js";
 
 //@ chunk-b0a246e7.js:18315-18765 placement
-function classifyCommentsReadError(e, t) {
-  if (e.status === 403 && errorMessage(e.data).includes(NO_USER_CREDENTIAL_TEXT)) {
-    logFeatureSad(t, "service_key_credential");
+function classifyCommentsReadError(response, featureName) {
+  if (response.status === 403 && errorMessage(response.data).includes(NO_USER_CREDENTIAL_TEXT)) {
+    logFeatureSad(featureName, "service_key_credential");
     return {
       err: ORG_SERVICE_KEY_READ_TEXT,
       unavailable: true,
     };
   }
-  if (e.status < 200 || e.status >= 300) {
-    logFeatureSad(t, "server_read_unavailable", {
-      status: e.status,
+  if (response.status < 200 || response.status >= 300) {
+    logFeatureSad(featureName, "server_read_unavailable", {
+      status: response.status,
     });
-    return commentsUnavailable(e.status);
+    return commentsUnavailable(response.status);
   }
-  let commentThreads = parseCommentThreads(e.data, t);
+  let commentThreads = parseCommentThreads(response.data, featureName);
   if (commentThreads === null) {
-    logFeatureBad(t, "malformed_body");
+    logFeatureBad(featureName, "malformed_body");
     return {
       err: "comments fetch failed (unexpected response)",
     };
@@ -66,9 +66,9 @@ var READ_RETRY_JITTER_MS = {
 };
 var MAX_READ_RETRY_WAIT_MS = 120000;
 //@ chunk-b0a246e7.js:18800-18929 placement
-function getRetryAfterCap(status, t) {
+function getRetryAfterCap(status, headerValue) {
   if (status !== 429 && status !== 503) return;
-  let retryAfterMs = parseRetryAfterMs(typeof t === "string" ? t : undefined);
+  let retryAfterMs = parseRetryAfterMs(typeof headerValue === "string" ? headerValue : undefined);
   return retryAfterMs === undefined || retryAfterMs <= 0
     ? undefined
     : Math.min(retryAfterMs, MAX_READ_RETRY_WAIT_MS);
@@ -79,25 +79,28 @@ function readRetryJitter() {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 //@ chunk-b0a246e7.js:19006-20935 placement
-async function fetchComments(e, signal, n, r, o) {
-  let u = await commentsAuthContext(r);
+async function fetchComments(slug, signal, featureName, credentials, withNames) {
+  let authContext = await commentsAuthContext(credentials);
   let startTime = performance.now();
-  let a;
+  let response;
   try {
-    a = await frameApi.getRelayBound(`/api/frame/comments/${encodeURIComponent(e)}${o ? "?names=1" : ""}`, {
-      refreshOAuth: true,
-      credentials: r,
-      headers: buildFrameHeaders(),
-      timeout: 15000,
-      maxContentLength: MAX_FRAME_HTML_BYTES,
-      signal,
-      reportSentAuth: true,
-    });
+    response = await frameApi.getRelayBound(
+      `/api/frame/comments/${encodeURIComponent(slug)}${withNames ? "?names=1" : ""}`,
+      {
+        refreshOAuth: true,
+        credentials,
+        headers: buildFrameHeaders(),
+        timeout: 15000,
+        maxContentLength: MAX_FRAME_HTML_BYTES,
+        signal,
+        reportSentAuth: true,
+      },
+    );
   } catch (error) {
     if (isCancel(error)) throw error;
     let transportErrorProps = getTransportErrorProps(error, startTime);
-    let h = () => {
-      logFeatureBad(n, "server_read_request_error", transportErrorProps);
+    let failRetryable = () => {
+      logFeatureBad(featureName, "server_read_request_error", transportErrorProps);
       return transportErrorProps.transport
         ? {
             err: "comments fetch failed (network error)",
@@ -111,79 +114,79 @@ async function fetchComments(e, signal, n, r, o) {
       ? {
           kind: "retryable",
           miss: transportErrorProps,
-          fail: h,
+          fail: failRetryable,
         }
       : {
           kind: "done",
-          result: h(),
+          result: failRetryable(),
         };
   }
-  if (!a.ok) {
-    if (a.reason === "relay-unavailable") {
-      let { status } = a;
-      logFeatureBad(n, "server_read_relay_unavailable", {
+  if (!response.ok) {
+    if (response.reason === "relay-unavailable") {
+      let { status } = response;
+      logFeatureBad(featureName, "server_read_relay_unavailable", {
         status,
       });
-      let A = status === 0 || status === 429 || status >= 500;
+      let retryableStatus = status === 0 || status === 429 || status >= 500;
       return {
         kind: "done",
         result: {
           err: `comments fetch failed (this session's comment connection did not carry the read${status !== 0 ? `, HTTP ${status}` : ""}; nothing was read) \u2014 retry once; if it fails again, tell the user comments cannot be read from this session right now`,
-          ...(A && {
+          ...(retryableStatus && {
             retryable: true,
           }),
         },
       };
     }
-    logFeatureBad(n, a.reason.replace(/-/g, "_"));
+    logFeatureBad(featureName, response.reason.replace(/-/g, "_"));
     return {
       kind: "done",
       result: {
         err:
-          a.reason === "no-auth"
-            ? describeArtifactAuthFailure(a.detail)
-            : `comments read unavailable: ${a.reason}`,
+          response.reason === "no-auth"
+            ? describeArtifactAuthFailure(response.detail)
+            : `comments read unavailable: ${response.reason}`,
       },
     };
   }
-  if (!a.fromFrame) {
-    let { status } = a;
-    let A = status >= 500 || status === 499;
-    let h = () => {
-      logFeatureBad(n, "server_read_relay_error", {
+  if (!response.fromFrame) {
+    let { status } = response;
+    let retryableStatus = status >= 500 || status === 499;
+    let failRetryable = () => {
+      logFeatureBad(featureName, "server_read_relay_error", {
         status,
       });
       return {
         err: `comments fetch failed (relay HTTP ${status})`,
-        ...((A || status === 429) && {
+        ...((retryableStatus || status === 429) && {
           retryable: true,
         }),
       };
     };
-    return A
+    return retryableStatus
       ? {
           kind: "retryable",
           miss: {
             relay_status: status,
           },
-          fail: h,
+          fail: failRetryable,
         }
       : {
           kind: "done",
-          result: h(),
+          result: failRetryable(),
         };
   }
-  if (a.status >= 500 || a.status === 429) {
-    let { status } = a;
-    let retryAfterCap = getRetryAfterCap(status, a.response?.headers?.["retry-after"]);
-    let h = status === 429 || retryAfterCap !== undefined;
-    let s = () => {
-      if (h)
-        logFeatureSad(n, "server_read_unavailable", {
+  if (response.status >= 500 || response.status === 429) {
+    let { status } = response;
+    let retryAfterCap = getRetryAfterCap(status, response.response?.headers?.["retry-after"]);
+    let unavailable = status === 429 || retryAfterCap !== undefined;
+    let collectResult = () => {
+      if (unavailable)
+        logFeatureSad(featureName, "server_read_unavailable", {
           status,
         });
       else
-        logFeatureBad(n, "server_read_unavailable", {
+        logFeatureBad(featureName, "server_read_unavailable", {
           status,
         });
       return commentsUnavailable(status, {
@@ -191,79 +194,84 @@ async function fetchComments(e, signal, n, r, o) {
         retryAfterMs: retryAfterCap,
       });
     };
-    return status === 503 || h
+    return status === 503 || unavailable
       ? {
           kind: "done",
-          result: s(),
+          result: collectResult(),
         }
       : {
           kind: "retryable",
           miss: {
             status,
           },
-          fail: s,
+          fail: collectResult,
         };
   }
-  let d = classifyCommentsReadError(a, n);
-  if (d.err === null) {
-    rememberPrincipalTokens(viewerFromResponse(a.data), u, a.sentAuthFingerprint, a.route);
-    let l = o ? parseCommentAnchorNames(a.data) : undefined;
-    if (l !== undefined)
+  let classified = classifyCommentsReadError(response, featureName);
+  if (classified.err === null) {
+    rememberPrincipalTokens(
+      viewerFromResponse(response.data),
+      authContext,
+      response.sentAuthFingerprint,
+      response.route,
+    );
+    let anchorNames = withNames ? parseCommentAnchorNames(response.data) : undefined;
+    if (anchorNames !== undefined)
       return {
         kind: "done",
         result: {
-          ...d,
-          names: l,
+          ...classified,
+          names: anchorNames,
         },
       };
   }
   return {
     kind: "done",
-    result: d,
+    result: classified,
   };
 }
 //@ chunk-b0a246e7.js:20935-21017 placement
-function viewerFromResponse(e) {
-  return typeof e === "object" && e !== null && "viewer" in e ? e.viewer : undefined;
+function viewerFromResponse(payload) {
+  return typeof payload === "object" && payload !== null && "viewer" in payload ? payload.viewer : undefined;
 }
 //@ chunk-b0a246e7.js:21017-21028 placement
 var MAX_COMMENT_THREADS = 64;
 //@ chunk-b0a246e7.js:21028-21249 placement
-function parseCommentAnchorNames(e) {
-  if (!isPlainObject(e) || !isPlainObject(e.names)) return;
-  let t = [];
-  for (let [key, value] of Object.entries(e.names)) {
-    let o = isCommentId(key) ? cleanAnchorText(value) : undefined;
-    if (o !== undefined) {
-      t.push([key, o]);
-      if (t.length === MAX_COMMENT_THREADS) break;
+function parseCommentAnchorNames(payload) {
+  if (!isPlainObject(payload) || !isPlainObject(payload.names)) return;
+  let names = [];
+  for (let [key, value] of Object.entries(payload.names)) {
+    let cleaned = isCommentId(key) ? cleanAnchorText(value) : undefined;
+    if (cleaned !== undefined) {
+      names.push([key, cleaned]);
+      if (names.length === MAX_COMMENT_THREADS) break;
     }
   }
-  return t.length > 0 ? Object.fromEntries(t) : undefined;
+  return names.length > 0 ? Object.fromEntries(names) : undefined;
 }
 //@ chunk-b0a246e7.js:21249-21492 placement
-function commentsUnavailable(status, t = {}) {
+function commentsUnavailable(status, extra = {}) {
   return {
     err: `comments are not available on this artifact right now (the comments service answered HTTP ${status})`,
     unavailable: true,
     status,
-    ...(t.retryable && {
+    ...(extra.retryable && {
       retryable: true,
     }),
-    ...(t.retryAfterMs !== undefined && {
-      retryAfterMs: t.retryAfterMs,
+    ...(extra.retryAfterMs !== undefined && {
+      retryAfterMs: extra.retryAfterMs,
     }),
   };
 }
 //@ chunk-b0a246e7.js:21492-21759 placement
-async function fetchCommentsWithRetry(slug, signal, n, r, o) {
-  let comments = await fetchComments(slug, signal, n, r, o);
+async function fetchCommentsWithRetry(slug, signal, featureName, credentials, withNames) {
+  let comments = await fetchComments(slug, signal, featureName, credentials, withNames);
   if (comments.kind === "done") return comments.result;
   await sleep(readRetryJitter(), signal);
   if (signal.aborted) throw new AbortError();
-  let comments_2 = await fetchComments(slug, signal, n, r, o);
+  let comments_2 = await fetchComments(slug, signal, featureName, credentials, withNames);
   if (comments_2.kind === "done") {
-    if (comments_2.result.err === null) logFeatureSad(n, "server_read_retried", comments.miss);
+    if (comments_2.result.err === null) logFeatureSad(featureName, "server_read_retried", comments.miss);
     return comments_2.result;
   }
   return comments_2.fail();
@@ -273,29 +281,29 @@ async function fetchCommentsWithRetry(slug, signal, n, r, o) {
  * 读取 artifact 的评论线程（tengu_onyx_sluice 开关），处理中继/直连、重试与权限探测。
  */
 async function readArtifactComments(
-  e,
+  artifactId,
   signal,
   credentials,
-  r = "artifact_comments_read",
-  { skipBootProbe: o = false, probeToolUseId: u, withNames: c = false } = {},
+  featureName = "artifact_comments_read",
+  { skipBootProbe = false, probeToolUseId, withNames = false } = {},
 ) {
   if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_onyx_sluice", false)) {
-    logFeatureSad(r, "cp_read_disabled");
+    logFeatureSad(featureName, "cp_read_disabled");
     return {
       err: "comments are not available on this artifact right now",
       unavailable: true,
     };
   }
-  let a;
-  let d = false;
-  let l;
-  if (!o) {
-    let artifactBootWithProbe = await fetchArtifactBootWithProbe(e, r, signal, {
+  let version;
+  let isExternal = false;
+  let error;
+  if (!skipBootProbe) {
+    let artifactBootWithProbe = await fetchArtifactBootWithProbe(artifactId, featureName, signal, {
       credentials,
-      probeToolUseId: u,
+      probeToolUseId,
     });
     if (artifactBootWithProbe.err !== null) {
-      let E =
+      let retryable =
         artifactBootWithProbe.errorCode === "boot_request_error" ||
         (artifactBootWithProbe.errorCode === "boot_relay_error" &&
           artifactBootWithProbe.status === undefined) ||
@@ -303,7 +311,7 @@ async function readArtifactComments(
           (artifactBootWithProbe.status >= 500 || artifactBootWithProbe.status === 429));
       return {
         err: artifactBootWithProbe.err,
-        ...(E && {
+        ...(retryable && {
           retryable: true,
         }),
       };
@@ -312,19 +320,19 @@ async function readArtifactComments(
       return {
         err: "comments are not readable on a public artifact serve",
       };
-    d = artifactBootWithProbe.data.mode === "external";
-    let shareEntry = getShareEntry(e.slug);
-    let x =
+    isExternal = artifactBootWithProbe.data.mode === "external";
+    let shareEntry = getShareEntry(artifactId.slug);
+    let ready =
       (Array.isArray(artifactBootWithProbe.data.docs) && artifactBootWithProbe.data.docs.length > 0) ||
       (shareEntry?.livePaths?.length ?? 0) > 0;
     if (
       artifactBootWithProbe.data.artifactKind !== LIVE_DOC &&
       shareEntry?.artifactKind !== LIVE_DOC &&
       artifactBootWithProbe.data.headSeq === undefined &&
-      !x
+      !ready
     )
-      a = artifactBootWithProbe.ver;
-    l =
+      version = artifactBootWithProbe.ver;
+    error =
       artifactBootWithProbe.data.authoredByOthers === true ||
       shareEntry?.authoredByOthers === true ||
       isMeaningfulFlag(artifactBootWithProbe.data.outsidersMayHaveWritten) ||
@@ -332,26 +340,32 @@ async function readArtifactComments(
       artifactBootWithProbe.data.perm?.role !== "owner" ||
       artifactBootWithProbe.data.cowritten === true ||
       shareEntry?.cowritten === true ||
-      typeLockedFor(e.slug, artifactBootWithProbe.data.type) ||
+      typeLockedFor(artifactId.slug, artifactBootWithProbe.data.type) ||
       mayBeShared(
         artifactBootWithProbe.data.perm?.role === "owner",
         triState(artifactBootWithProbe.data.outsideWriter),
         shareEntry?.outsideWriter,
       ) ||
-      a === undefined;
+      version === undefined;
   }
-  let commentsWithRetry = await fetchCommentsWithRetry(e.slug, signal, r, credentials, c);
+  let commentsWithRetry = await fetchCommentsWithRetry(
+    artifactId.slug,
+    signal,
+    featureName,
+    credentials,
+    withNames,
+  );
   return commentsWithRetry.err === null
     ? {
         ...commentsWithRetry,
-        ...(a !== undefined && {
-          ver: a,
+        ...(version !== undefined && {
+          ver: version,
         }),
-        ...(d && {
+        ...(isExternal && {
           external: true,
         }),
-        ...(l !== undefined && {
-          pageForeign: l,
+        ...(error !== undefined && {
+          pageForeign: error,
         }),
       }
     : commentsWithRetry;

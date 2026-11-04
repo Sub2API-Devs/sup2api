@@ -18,7 +18,7 @@ var MOD_CHANGE_VETOED_TEXT =
 /**
  * 去空白与结尾标点
  */
-var trimSentence = (e) => e.trimEnd().replace(/[.!?]$/u, "");
+var trimSentence = (text) => text.trimEnd().replace(/[.!?]$/u, "");
 //@ chunk-e6aww6q8.js:4143908-4144005 placement
 /**
  * 改动未加载，旧版仍在跑
@@ -68,8 +68,8 @@ var MOD_LOAD_FAILED_TEXT = (refused) => `This mod didn't load: ${trimSentence(re
 /**
  * 加载失败且旧版已停
  */
-var MOD_LOAD_FAILED_OLD_GONE = (e) =>
-  `This mod didn't load, and the earlier version is no longer running: ${trimSentence(e)}.`;
+var MOD_LOAD_FAILED_OLD_GONE = (reason) =>
+  `This mod didn't load, and the earlier version is no longer running: ${trimSentence(reason)}.`;
 //@ chunk-e6aww6q8.js:4144791-4144848 placement
 /**
  * 文件变化后已重载
@@ -125,38 +125,38 @@ function describeModEvent(event) {
 /**
  * mod 出现/移除时的提示文字（已加载、未加载、暂缓、下次启动生效）。
  */
-function describeModPresence(e, n) {
-  let r = e === "new";
-  switch (n) {
+function describeModPresence(path, event) {
+  let isNew = path === "new";
+  switch (event) {
     case "reloaded":
-      return r ? MOD_LOADED_TEXT : MOD_REMOVED_TEXT;
+      return isNew ? MOD_LOADED_TEXT : MOD_REMOVED_TEXT;
     case "not-loaded":
       return MOD_NOT_LOADED_TEXT;
     case "held":
-      return r ? MOD_ON_HOLD_TEXT : MOD_ON_HOLD_ALIAS;
+      return isNew ? MOD_ON_HOLD_TEXT : MOD_ON_HOLD_ALIAS;
     case "unbound":
-      return r ? MOD_NEXT_START_TEXT : MOD_REMOVED_STILL_LOADED;
+      return isNew ? MOD_NEXT_START_TEXT : MOD_REMOVED_STILL_LOADED;
   }
 }
 //@ chunk-e6aww6q8.js:4145613-4145644 placement
 /**
  * 在 mods 目录内才给存在性说明
  */
-var presenceForPath = (e) => (isInModsFolder(e) ? describeModPresence : undefined);
+var presenceForPath = (path) => (isInModsFolder(path) ? describeModPresence : undefined);
 //@ chunk-e6aww6q8.js:4145644-4145659 placement
 var MODS = "Mods";
 //@ chunk-e6aww6q8.js:4145659-4145858 placement
 /**
  * 若插件在 mods 目录里，把监视通知改写为面向用户的说明（目录级事件归到 Mods）。
  */
-function modsNoticeFor(e, n) {
-  let r = isInModsFolder(e.folder);
-  let s = r ? describeModEvent(n.event) : undefined;
-  let h = r && (n.event.kind === "folder-failed" || n.event.kind === "folder-paused");
-  return h || s !== undefined
+function modsNoticeFor(request, event) {
+  let inModsFolder = isInModsFolder(request.folder);
+  let description = inModsFolder ? describeModEvent(event.event) : undefined;
+  let notice = inModsFolder && (event.event.kind === "folder-failed" || event.event.kind === "folder-paused");
+  return notice || description !== undefined
     ? {
-        plugin: h ? MODS : e.plugin,
-        text: s ?? n.text,
+        plugin: notice ? MODS : request.plugin,
+        text: description ?? event.text,
       }
     : undefined;
 }

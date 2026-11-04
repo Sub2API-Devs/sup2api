@@ -5,10 +5,10 @@
  * pieces: chunk-bmbhxpfm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-bmbhxpfm.js:11354-13629 cjs-fingerprint
-var require_retry_operation = x(function (cjsExports, cjsModule) {
+var require_retry_operation = __commonJS(function (cjsExports, cjsModule) {
   function RetryOperation(timeouts, options) {
     if (typeof options === "boolean")
       options = {
@@ -53,16 +53,16 @@ var require_retry_operation = x(function (cjsExports, cjsModule) {
         this._timeouts = this._cachedTimeouts.slice(0);
         timeout = this._timeouts.shift();
       } else return false;
-    var i = this;
+    var operation = this;
     var timer = setTimeout(function () {
-      i._attempts++;
-      if (i._operationTimeoutCb) {
-        i._timeout = setTimeout(function () {
-          i._operationTimeoutCb(i._attempts);
-        }, i._operationTimeout);
-        if (i._options.unref) i._timeout.unref();
+      operation._attempts++;
+      if (operation._operationTimeoutCb) {
+        operation._timeout = setTimeout(function () {
+          operation._operationTimeoutCb(operation._attempts);
+        }, operation._operationTimeout);
+        if (operation._options.unref) operation._timeout.unref();
       }
-      i._fn(i._attempts);
+      operation._fn(operation._attempts);
     }, timeout);
     if (this._options.unref) timer.unref();
     return true;
@@ -73,11 +73,11 @@ var require_retry_operation = x(function (cjsExports, cjsModule) {
       if (timeoutOps.timeout) this._operationTimeout = timeoutOps.timeout;
       if (timeoutOps.cb) this._operationTimeoutCb = timeoutOps.cb;
     }
-    var n = this;
+    var operation = this;
     if (this._operationTimeoutCb)
       this._timeout = setTimeout(function () {
-        n._operationTimeoutCb();
-      }, n._operationTimeout);
+        operation._operationTimeoutCb();
+      }, operation._operationTimeout);
     this._operationStart = new Date().getTime();
     this._fn(this._attempts);
   };
@@ -101,8 +101,8 @@ var require_retry_operation = x(function (cjsExports, cjsModule) {
     var counts = {};
     var mainError = null;
     var mainErrorCount = 0;
-    for (var i = 0; i < this._errors.length; i++) {
-      var error = this._errors[i];
+    for (var errorIndex = 0; errorIndex < this._errors.length; errorIndex++) {
+      var error = this._errors[errorIndex];
       var message = error.message;
       var count = (counts[message] || 0) + 1;
       counts[message] = count;

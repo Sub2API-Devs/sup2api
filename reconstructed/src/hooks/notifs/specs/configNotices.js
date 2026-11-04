@@ -19,13 +19,13 @@ import { MAX_NAME_WARNINGS, INVALID_NAME_MESSAGE } from "../../../skills/loadSki
 var oauthExpiryWarningNoticeSpec = {
   id: "oauth-expiry-warning",
   compute: () => {
-    let h = oauthExpiryWarning();
-    if (!h || h.daysLeft > 1) return null;
+    let warning = oauthExpiryWarning();
+    if (!warning || warning.daysLeft > 1) return null;
     return {
       key: "oauth-expiry-warning",
       segments: [
         {
-          text: `Your login expires in ${h.daysLeft} ${plural(h.daysLeft, "day")}`,
+          text: `Your login expires in ${warning.daysLeft} ${plural(warning.daysLeft, "day")}`,
           color: "warning",
         },
         {
@@ -46,29 +46,29 @@ var RESERVED_SKILL_NAMES_TIMEOUT_MS = 15000;
 var reservedSkillNamesNoticeSpec = {
   id: "reserved-skill-names",
   compute: () => {
-    let h = getHostState().refusedReservedSkillNames();
-    let x = h[0];
-    if (x === undefined) return null;
-    let D = x.path ? getDisplayPath(x.path) : undefined;
-    let L =
-      x.change === "frontmatter-name"
-        ? `edit the name: line in ${D ?? `"${x.name}"`}`
-        : x.change === "workflow-name"
-          ? `rename workflow "${x.name}"`
-          : `rename ${D ?? `"${x.name}"`}`;
-    let ee = h.length > 1 ? ` \xB7 ${h.length - 1} more` : "";
+    let refused = getHostState().refusedReservedSkillNames();
+    let first = refused[0];
+    if (first === undefined) return null;
+    let pathLabel = first.path ? getDisplayPath(first.path) : undefined;
+    let message =
+      first.change === "frontmatter-name"
+        ? `edit the name: line in ${pathLabel ?? `"${first.name}"`}`
+        : first.change === "workflow-name"
+          ? `rename workflow "${first.name}"`
+          : `rename ${pathLabel ?? `"${first.name}"`}`;
+    let moreSuffix = refused.length > 1 ? ` \xB7 ${refused.length - 1} more` : "";
     return {
       key: "reserved-skill-names",
       kind: "warning",
       segments: [
         {
-          text: `Not loaded: ${L}, then restart \u2014 its name ${reservedNameReason(x.name)}`,
+          text: `Not loaded: ${message}, then restart \u2014 its name ${reservedNameReason(first.name)}`,
           color: "warning",
         },
-        ...(ee
+        ...(moreSuffix
           ? [
               {
-                text: ee,
+                text: moreSuffix,
                 dim: true,
               },
             ]

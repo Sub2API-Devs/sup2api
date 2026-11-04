@@ -50,7 +50,7 @@ import {
 import { serializeCalls } from "../promiseQueue.js";
 import { logForDiagnosticsNoPII } from "../diagLogs.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { looseObject, string, E, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import { looseObject, stringSchema, numberSchema, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
 import { pluginAvailabilitySchema, pluginOriginSchema } from "../plugins/marketplaceNames.js";
 import { getErrnoCode, isENOENT } from "../errors.js";
 import {
@@ -88,7 +88,7 @@ import {
   MARKETPLACE_NAME,
   INSTALLATION_PREFERENCE,
   MARKETPLACE_KIND,
-  pluginAttributionSchema,
+  MAX_ATTRIBUTION_FILE_BYTES,
   readPluginAttributionSidecar,
 } from "../plugins/pluginAttribution.js";
 import { readSmallFileOrNull } from "../readSmallFile.js";
@@ -141,6 +141,7 @@ import { printableMessage } from "../printableName.js";
 import { fromEnum, lit as lit_2 } from "../../services/analytics/safeMetadata.js";
 import { tildify } from "../path.js";
 import { isPluginVersionInUse } from "../plugins/inUseMarkers.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:647465-647498 placement
 /**
@@ -153,8 +154,8 @@ function syncedPluginsRoot() {
 /**
  * 某插件桶在同步根下的目录。
  */
-function syncedPluginBucketDir(e) {
-  return join(syncedPluginsRoot(), e);
+function syncedPluginBucketDir(bucketId) {
+  return join(syncedPluginsRoot(), bucketId);
 }
 //@ chunk-e6aww6q8.js:647532-647563 placement
 /**
@@ -194,13 +195,13 @@ function ensurePluginsBucketRoot(rootSession, bucket) {
 /**
  * 插件同步轮开始前准备桶目录：未标记但存在的目录先隔离到回收区；校验同步根；标记文件不可读时拒绝；最后创建标记。
  */
-async function preparePluginsBucket(e) {
-  let bucketDir = syncedPluginBucketDir(e);
-  let markerState = await readSyncMarker(syncedPluginsRoot(), e);
+async function preparePluginsBucket(bucketId) {
+  let bucketDir = syncedPluginBucketDir(bucketId);
+  let markerState = await readSyncMarker(syncedPluginsRoot(), bucketId);
   if (
     markerState === "unmarked" &&
     (await lstat(bucketDir).then(
-      (s) => s.isDirectory(),
+      (stats) => stats.isDirectory(),
       () => false,
     )) &&
     (await checkSyncRoots({
@@ -215,7 +216,7 @@ async function preparePluginsBucket(e) {
   if (typeof markerState === "object") {
     logForDiagnosticsNoPII("warn", "plugins_sync_root_refused", {
       phase: "round_head",
-      root: toPosixLabelPath(join(SKILLS_SYNCED_STAGING, e)),
+      root: toPosixLabelPath(join(SKILLS_SYNCED_STAGING, bucketId)),
       component: "marker",
       reason: "unverified",
       code: markerState.unreadable,
@@ -224,39 +225,43 @@ async function preparePluginsBucket(e) {
       code: markerState.unreadable,
     });
   }
-  await touchExclusive(syncedPluginsRoot(), e);
+  await touchExclusive(syncedPluginsRoot(), bucketId);
 }
 //@ chunk-e6aww6q8.js:648326-648875 placement
 /**
  * 已同步插件清单行（ID、名称、版本、更新时间、市场信息、代数等）与清单文件的 schema。
  */
-var syncedPluginRowSchema = DoctorLazy(() =>
-  looseObject({
-    pluginId: string(),
-    name: string(),
-    description: string().catch(""),
-    version: string().nullable().catch(null),
-    updatedAt: string().nullable().catch(null),
-    requestedVersion: string().optional().catch(undefined),
-    marketplaceName: string().optional().catch(undefined),
-    installationPreference: pluginAvailabilitySchema().optional().catch(undefined),
-    marketplaceKind: pluginOriginSchema().optional().catch(undefined),
-    presentsAs: string().optional().catch(undefined),
-    generation: E().int().min(2).optional().catch(undefined),
-  }),
-);
-var pluginsManifestSchema = DoctorLazy(() =>
-  looseObject({
-    lastUpdated: E().catch(0),
-    plugins: unknown().optional(),
-    staleDirs: unknown().optional(),
-    appliedListIds: unknown().optional(),
-  }),
-);
+var syncedPluginRowSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var pluginsManifestSchema;
+deferInit("chunk-e6aww6q8.js:648326", () => {
+  syncedPluginRowSchema = DoctorLazy(() =>
+    looseObject({
+      pluginId: stringSchema(),
+      name: stringSchema(),
+      description: stringSchema().catch(""),
+      version: stringSchema().nullable().catch(null),
+      updatedAt: stringSchema().nullable().catch(null),
+      requestedVersion: stringSchema().optional().catch(undefined),
+      marketplaceName: stringSchema().optional().catch(undefined),
+      installationPreference: pluginAvailabilitySchema().optional().catch(undefined),
+      marketplaceKind: pluginOriginSchema().optional().catch(undefined),
+      presentsAs: stringSchema().optional().catch(undefined),
+      generation: numberSchema().int().min(2).optional().catch(undefined),
+    }),
+  );
+  pluginsManifestSchema = DoctorLazy(() =>
+    looseObject({
+      lastUpdated: numberSchema().catch(0),
+      plugins: unknown().optional(),
+      staleDirs: unknown().optional(),
+      appliedListIds: unknown().optional(),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:648875-648984 placement
-async function isManifestReadableOrAbsent(pluginsRootGuard) {
-  if ((await readPluginsManifest(pluginsRootGuard)) !== null) return true;
-  return lstat(syncedManifestPath(pluginsRootGuard.root)).then(
+async function isManifestReadableOrAbsent(rootGuard) {
+  if ((await readPluginsManifest(rootGuard)) !== null) return true;
+  return lstat(syncedManifestPath(rootGuard.root)).then(
     () => false,
     (error) => getErrnoCode(error) === "ENOENT",
   );
@@ -265,23 +270,23 @@ async function isManifestReadableOrAbsent(pluginsRootGuard) {
 /**
  * 读取插件同步清单（首次读取失败时记诊断），解析插件行、过期目录与已应用列表 ID。
  */
-async function readPluginsManifest(e) {
-  let n = !e.manifestRead;
-  e.manifestRead = true;
+async function readPluginsManifest(guard) {
+  let firstRead = !guard.manifestRead;
+  guard.manifestRead = true;
   let manifestText = await readManifestText(
-    syncedManifestPath(e.root),
-    n ? "plugins_sync_manifest_unreadable" : null,
+    syncedManifestPath(guard.root),
+    firstRead ? "plugins_sync_manifest_unreadable" : null,
   );
   if (manifestText === null) return null;
   let manifestJson = parseManifestJson(
     manifestText,
     pluginsManifestSchema(),
-    n ? "plugins_sync_manifest_unreadable" : null,
+    firstRead ? "plugins_sync_manifest_unreadable" : null,
   );
   if (manifestJson === null) return null;
-  let { plugins, staleDirs, appliedListIds, ...w } = manifestJson;
+  let { plugins, staleDirs, appliedListIds, ...rest } = manifestJson;
   return {
-    ...w,
+    ...rest,
     plugins: parseValidRows(syncedPluginRowSchema(), plugins),
     staleDirs: stringArray(staleDirs),
     ...(Array.isArray(appliedListIds) && {
@@ -293,14 +298,14 @@ async function readPluginsManifest(e) {
 /**
  * 写入插件同步清单：校验根，合并旧清单字段与新内容，按新顺序排列插件行，合并过期目录，可选沿用已应用列表 ID。
  */
-async function writePluginsManifest(e, n, r) {
-  assertSyncRootAllowed(e);
-  await checkPluginsSyncRoot(e.root);
-  let pluginsManifest = await readPluginsManifest(e);
-  let validRows = parseValidRows(syncedPluginRowSchema(), n.plugins);
-  let y = new Map(validRows.map((S, w) => [S.pluginId, w]));
+async function writePluginsManifest(guard, manifest, options) {
+  assertSyncRootAllowed(guard);
+  await checkPluginsSyncRoot(guard.root);
+  let pluginsManifest = await readPluginsManifest(guard);
+  let validRows = parseValidRows(syncedPluginRowSchema(), manifest.plugins);
+  let orderByPluginId = new Map(validRows.map((row, index) => [row.pluginId, index]));
   await writeFileAtomic_2(
-    syncedManifestPath(e.root),
+    syncedManifestPath(guard.root),
     jsonStringify(
       {
         ...omitKeys_2(pluginsManifest, [
@@ -310,19 +315,21 @@ async function writePluginsManifest(e, n, r) {
           "appliedListIds",
           "askedListIds",
         ]),
-        ...(r.carryAppliedListIds && {
+        ...(options.carryAppliedListIds && {
           appliedListIds: pluginsManifest?.appliedListIds,
         }),
-        ...n,
+        ...manifest,
         plugins: mergeManifestRows(
           validRows,
           pluginsManifest?.plugins,
-          (S) => S.pluginId,
-          r.removedPluginIds,
+          (row) => row.pluginId,
+          options.removedPluginIds,
         ).toSorted(
-          (S, w) => (y.get(S.pluginId) ?? validRows.length) - (y.get(w.pluginId) ?? validRows.length),
+          (leftRow, rightRow) =>
+            (orderByPluginId.get(leftRow.pluginId) ?? validRows.length) -
+            (orderByPluginId.get(rightRow.pluginId) ?? validRows.length),
         ),
-        staleDirs: mergeStaleDirs(n.staleDirs, pluginsManifest?.staleDirs, r.staleDirs),
+        staleDirs: mergeStaleDirs(manifest.staleDirs, pluginsManifest?.staleDirs, options.staleDirs),
       },
       null,
       2,
@@ -340,71 +347,72 @@ function pluginReplaceTmpDir(root) {
 /**
  * 某同步插件项在桶里的目录路径。
  */
-function syncedItemDir(e, name) {
-  return syncedItemPath(name, e);
+function syncedItemDir(root, itemName) {
+  return syncedItemPath(itemName, root);
 }
 //@ chunk-e6aww6q8.js:649954-650008 placement
 /**
  * 同步插件项的安装路径（按代数区分）。
  */
-function itemInstallPath(e, n) {
-  return syncedItemPathForGeneration(n.name, n.generation ?? 1, e);
+function itemInstallPath(root, item) {
+  return syncedItemPathForGeneration(item.name, item.generation ?? 1, root);
 }
 //@ chunk-e6aww6q8.js:650008-650069 placement
 /**
  * 同步插件项的目录名，取不到时退回插件原名。
  */
-function itemDirName(root, n) {
+function itemDirName(root, item) {
   try {
-    return basename(itemInstallPath(root, n));
+    return basename(itemInstallPath(root, item));
   } catch {
-    return n.name;
+    return item.name;
   }
 }
 //@ chunk-e6aww6q8.js:650069-650858 placement
-async function writeSyncedPluginSidecar(root, n) {
-  let { pluginId } = n;
-  let s;
+async function writeSyncedPluginSidecar(root, row) {
+  let { pluginId } = row;
+  let sidecarPath;
   try {
-    s = itemInstallPath(root, n) + PLUGIN_META_SUFFIX;
+    sidecarPath = itemInstallPath(root, row) + PLUGIN_META_SUFFIX;
   } catch {
     return;
   }
   try {
-    let h = await lstat(s).catch(() => null);
-    if (h !== null && !h.isFile())
-      if (h.isDirectory())
+    let stats = await lstat(sidecarPath).catch(() => null);
+    if (stats !== null && !stats.isFile())
+      if (stats.isDirectory())
         await checkSyncRoots({
-          dir: s,
+          dir: sidecarPath,
           trashRoot: pluginsTrashRoot(),
           configHome: getClaudeConfigDir(),
           failureEvent: "plugins_sync_trash_move_failed",
         });
       else
-        await rm_2(s, {
+        await rm_2(sidecarPath, {
           force: true,
         });
     if (isServerPluginId(pluginId)) {
-      let y = n.marketplaceName !== undefined && isAttributionNameValid(n.marketplaceName);
-      if (n.marketplaceName !== undefined && !y)
+      let hasValidMarketplaceName =
+        row.marketplaceName !== undefined && isAttributionNameValid(row.marketplaceName);
+      if (row.marketplaceName !== undefined && !hasValidMarketplaceName)
         logForDiagnosticsNoPII("warn", "plugins_sync_sidecar_invalid_marketplace_name");
-      let S = jsonStringify({
+      let sidecarJson = jsonStringify({
         [SERVER_PLUGIN_ID]: pluginId,
-        ...(y && {
-          [MARKETPLACE_NAME]: n.marketplaceName,
+        ...(hasValidMarketplaceName && {
+          [MARKETPLACE_NAME]: row.marketplaceName,
         }),
-        ...(n.installationPreference !== undefined && {
-          [INSTALLATION_PREFERENCE]: n.installationPreference,
+        ...(row.installationPreference !== undefined && {
+          [INSTALLATION_PREFERENCE]: row.installationPreference,
         }),
-        ...(n.marketplaceKind !== undefined && {
-          [MARKETPLACE_KIND]: n.marketplaceKind,
+        ...(row.marketplaceKind !== undefined && {
+          [MARKETPLACE_KIND]: row.marketplaceKind,
         }),
       });
-      if ((await readSmallFileOrNull(s, pluginAttributionSchema)) === S) return;
-      await writeFileAtomic_2(s, S);
+      if ((await readSmallFileOrNull(sidecarPath, MAX_ATTRIBUTION_FILE_BYTES)) === sidecarJson) return;
+      await writeFileAtomic_2(sidecarPath, sidecarJson);
     } else {
       logForDiagnosticsNoPII("warn", "plugins_sync_sidecar_invalid_id");
-      await rm_2(s, {
+      await rm_2(sidecarPath, {
         force: true,
       });
     }
@@ -413,23 +421,23 @@ async function writeSyncedPluginSidecar(root, n) {
   }
 }
 //@ chunk-e6aww6q8.js:650858-651091 placement
-async function reconcilePluginSidecars(pluginsRootGuard, n) {
-  if (!(await pluginsRootGuard.guard.verify())) return;
-  let r = new Map();
-  for (let s of n) {
-    let h;
+async function reconcilePluginSidecars(rootGuard, rows) {
+  if (!(await rootGuard.guard.verify())) return;
+  let rowsByInstallPath = new Map();
+  for (let row of rows) {
+    let installPath;
     try {
-      h = itemInstallPath(pluginsRootGuard.root, s);
+      installPath = itemInstallPath(rootGuard.root, row);
     } catch {
       continue;
     }
-    let y = stripInvisibleChars_3(h);
-    if (!r.has(y)) r.set(y, s);
+    let plainPath = stripInvisibleChars_3(installPath);
+    if (!rowsByInstallPath.has(plainPath)) rowsByInstallPath.set(plainPath, row);
   }
   await Promise.all(
     Array.from(
-      r.values(),
-      limitConcurrency(MAX_DEFERRED_RELIST_ROUNDS, (s) => writeSyncedPluginSidecar(pluginsRootGuard.root, s)),
+      rowsByInstallPath.values(),
+      limitConcurrency(MAX_DEFERRED_RELIST_ROUNDS, (row) => writeSyncedPluginSidecar(rootGuard.root, row)),
     ),
   );
 }
@@ -437,57 +445,57 @@ async function reconcilePluginSidecars(pluginsRootGuard, n) {
 /**
  * 判断两个同步插件项是否指向同一目录（含大小写不敏感比较）。
  */
-async function sameSyncedItem(root, n, r) {
+async function sameSyncedItem(root, item, path) {
   try {
-    let s = itemInstallPath(root, n);
-    return basename(s) === basename(r) || (await isSameFileIdentity(s, r));
+    let installPath = itemInstallPath(root, item);
+    return basename(installPath) === basename(path) || (await isSameFileIdentity(installPath, path));
   } catch {
     return false;
   }
 }
 //@ chunk-e6aww6q8.js:651188-651357 placement
-function toSyncedPluginRow(e) {
+function toSyncedPluginRow(plugin) {
   return {
-    pluginId: e.id,
-    name: e.directory || e.name || e.id,
-    description: e.description,
-    version: e.version || null,
+    pluginId: plugin.id,
+    name: plugin.directory || plugin.name || plugin.id,
+    description: plugin.description,
+    version: plugin.version || null,
     updatedAt: null,
-    requestedVersion: e.version || undefined,
+    requestedVersion: plugin.version || undefined,
   };
 }
 //@ chunk-e6aww6q8.js:651357-651584 placement
 function collectOfficialAttestations(entries) {
-  let n = new Map();
-  for (let r of entries)
+  let attestations = new Map();
+  for (let entry of entries)
     if (
-      r.isOfficial === true &&
-      r.marketplaceName !== undefined &&
-      ALLOWED_OFFICIAL_MARKETPLACE_NAMES.has(r.marketplaceName)
+      entry.isOfficial === true &&
+      entry.marketplaceName !== undefined &&
+      ALLOWED_OFFICIAL_MARKETPLACE_NAMES.has(entry.marketplaceName)
     )
-      n.set(r.id, {
+      attestations.set(entry.id, {
         attestation: {
-          marketplace: r.marketplaceName,
-          pluginName: r.name,
+          marketplace: entry.marketplaceName,
+          pluginName: entry.name,
         },
-        rowName: toSyncedPluginRow(r).name,
+        rowName: toSyncedPluginRow(entry).name,
       });
-  return n;
+  return attestations;
 }
 //@ chunk-e6aww6q8.js:651584-651731 placement
-function carryMarketplaceInfo(e, n) {
+function carryMarketplaceInfo(row, info) {
   return {
-    ...e,
-    marketplaceName: n.marketplaceName,
-    installationPreference: n.installationPreference,
-    marketplaceKind: n.marketplaceKind,
+    ...row,
+    marketplaceName: info.marketplaceName,
+    installationPreference: info.installationPreference,
+    marketplaceKind: info.marketplaceKind,
   };
 }
 //@ chunk-e6aww6q8.js:651731-651907 placement
-function planPluginDownloads(root, plugins, r) {
-  return planSyncDownloads(plugins, r, {
-    idOf: (s) => s.pluginId,
-    dirFor: (s) => syncedItemDir(root, s),
+function planPluginDownloads(root, listedRows, plugins) {
+  return planSyncDownloads(listedRows, plugins, {
+    idOf: (plugin) => plugin.pluginId,
+    dirFor: (plugin) => syncedItemDir(root, plugin),
     invalidNameTag: "plugins_sync_invalid_name",
     collisionTag: "plugins_sync_name_collision",
     carry: carryMarketplaceInfo,
@@ -508,37 +516,39 @@ function syncedItemKey(root, plugin) {
 /**
  * 复用标记落盘的子目录名（converted-skills）。
  */
-function reuseStampVariant(e) {
-  return e ? "converted-skills" : "";
+function reuseStampVariant(convertedSkills) {
+  return convertedSkills ? "converted-skills" : "";
 }
 //@ chunk-e6aww6q8.js:652035-652110 placement
 /**
  * 已应用清单 id 的附加字段构造。
  */
-function appliedListIdsField(e, n, r) {
-  return e && n
+function appliedListIdsField(convertedSkills, listed, rows) {
+  return convertedSkills && listed
     ? {
-        appliedListIds: r.map((s) => s.pluginId),
+        appliedListIds: rows.map((row) => row.pluginId),
       }
     : {};
 }
 //@ chunk-e6aww6q8.js:652110-652240 placement
-function sameIdSet(appliedListIds, n) {
-  if (appliedListIds === undefined || n === undefined) return appliedListIds === n;
-  let r = new Set(n);
-  return new Set(appliedListIds).size === r.size && appliedListIds.every((s) => r.has(s));
+function sameIdSet(appliedListIds, otherIds) {
+  if (appliedListIds === undefined || otherIds === undefined) return appliedListIds === otherIds;
+  let otherSet = new Set(otherIds);
+  return new Set(appliedListIds).size === otherSet.size && appliedListIds.every((id) => otherSet.has(id));
 }
 //@ chunk-e6aww6q8.js:652240-652323 placement
 /**
  * 复用标记里是否列出了该变体。
  */
-async function isReuseStampListed(root, n) {
-  return ((await readReuseStamp(root))?.listedFor.includes(reuseStampVariant(true)) === true) === n;
+async function isReuseStampListed(root, convertedSkills) {
+  return (
+    ((await readReuseStamp(root))?.listedFor.includes(reuseStampVariant(true)) === true) === convertedSkills
+  );
 }
 //@ chunk-e6aww6q8.js:652323-652425 placement
-function createPluginsRootGuard(e) {
+function createPluginsRootGuard(root) {
   return freshRootState({
-    root: () => e,
+    root: () => root,
     configHome: getClaudeConfigDir,
     rootLabel: SKILLS_SYNCED_STAGING,
     event: "plugins_sync_root_refused",
@@ -548,24 +558,24 @@ function createPluginsRootGuard(e) {
 /**
  * 校验同步根守卫，失败时返回拒绝结果。
  */
-async function verifyGuardOrRefused(e) {
-  return (await e.guard.verify()) ? null : ROOT_REFUSED_RESULT;
+async function verifyGuardOrRefused(pluginsRootGuard) {
+  return (await pluginsRootGuard.guard.verify()) ? null : ROOT_REFUSED_RESULT;
 }
 //@ chunk-e6aww6q8.js:652486-652556 placement
 /**
  * 同步根被拒时抛出错误。
  */
-function assertSyncRootAllowed(pluginsRootGuard) {
-  let n = pluginsRootGuard.guard.refusedReason();
-  if (n !== null) throw rootRefusedError(n);
+function assertSyncRootAllowed(rootGuard) {
+  let refusedReason = rootGuard.guard.refusedReason();
+  if (refusedReason !== null) throw rootRefusedError(refusedReason);
 }
 //@ chunk-e6aww6q8.js:652556-652749 placement
-function getDownloadSizeTelemetry(e) {
-  return e.zipBytes === 0
+function getDownloadSizeTelemetry(stats) {
+  return stats.zipBytes === 0
     ? {}
     : {
-        approx_downloaded_bytes: Number(e.zipBytes.toPrecision(2)),
-        approx_downloaded_bytes_anthropic_catalog: Number(e.anthropicCatalogZipBytes.toPrecision(2)),
+        approx_downloaded_bytes: Number(stats.zipBytes.toPrecision(2)),
+        approx_downloaded_bytes_anthropic_catalog: Number(stats.anthropicCatalogZipBytes.toPrecision(2)),
       };
 }
 //@ chunk-e6aww6q8.js:652749-652760 placement
@@ -577,47 +587,48 @@ var MAX_PROMOTE_ATTEMPTS = 16;
 /**
  * 把下载好的同步插件提升为正式安装，处理占位目录冲突。
  */
-async function promoteSyncedPlugin(e, n, r, s, h, credentials, S) {
-  let root = n.root;
-  let L = syncedItemDir(root, r.name);
-  let G = join(pluginReplaceTmpDir(root), relative(root, L));
-  let tempZipPath = makeTempZipPath();
-  let Z;
+async function promoteSyncedPlugin(pluginsSync, pluginsRootGuard, item, prev, stats, credentials, semaphore) {
+  let root = pluginsRootGuard.root;
+  let liveDir = syncedItemDir(root, item.name);
+  let replaceDir = join(pluginReplaceTmpDir(root), relative(root, liveDir));
+  let zipPath = makeTempZipPath();
+  let releaseSemaphore;
   try {
-    if (n.guard.refused()) return ROOT_REFUSED_RESULT;
+    if (pluginsRootGuard.guard.refused()) return ROOT_REFUSED_RESULT;
     let now = Date.now();
-    let ke = await downloadWithRetry(r.pluginId, tempZipPath, r.requestedVersion, {
+    let downloadResult = await downloadWithRetry(item.pluginId, zipPath, item.requestedVersion, {
       isBackground: true,
       credentials,
     });
-    h.downloadMs.push(Date.now() - now);
-    if (!ke.ok) return downloadFailure(ke.reason);
-    let size = (await lstat(tempZipPath).catch(() => null))?.size ?? 0;
-    h.zipBytes += size;
-    if (r.marketplaceKind === "anthropic_catalog") h.anthropicCatalogZipBytes += size;
-    Z = await S.acquire();
-    let Ee = await verifyGuardOrRefused(n);
-    if (Ee !== null) return Ee;
+    stats.downloadMs.push(Date.now() - now);
+    if (!downloadResult.ok) return downloadFailure(downloadResult.reason);
+    let size = (await lstat(zipPath).catch(() => null))?.size ?? 0;
+    stats.zipBytes += size;
+    if (item.marketplaceKind === "anthropic_catalog") stats.anthropicCatalogZipBytes += size;
+    releaseSemaphore = await semaphore.acquire();
+    let guardResult = await verifyGuardOrRefused(pluginsRootGuard);
+    if (guardResult !== null) return guardResult;
     let now_2 = Date.now();
     try {
-      let Ie = await unzipPluginCache(tempZipPath, G);
-      if (!Ie.ok) return extractFailure("extracted tree carries a bare-repo layout");
-      let root_2 = Ie.root;
-      let We = await verifyGuardOrRefused(n);
-      if (We !== null) return We;
+      let unzipResult = await unzipPluginCache(zipPath, replaceDir);
+      if (!unzipResult.ok) return extractFailure("extracted tree carries a bare-repo layout");
+      let root_2 = unzipResult.root;
+      let guardResult = await verifyGuardOrRefused(pluginsRootGuard);
+      if (guardResult !== null) return guardResult;
       await rm_2(join(root_2, IN_USE_MARKER_FILE), {
         recursive: true,
         force: true,
       });
-      let ze = hasSyncedPluginLaneOpened();
-      if (ze || (await isPluginDirInUse(L))) {
-        let nt = s !== undefined && s.name === r.name ? (s.generation ?? 1) : undefined;
-        let pt = 0;
-        for (let idx = 1; pt < MAX_PROMOTE_ATTEMPTS; idx++) {
-          if (idx === nt) continue;
-          pt++;
+      let laneOpened = hasSyncedPluginLaneOpened();
+      if (laneOpened || (await isPluginDirInUse(liveDir))) {
+        let skipGeneration =
+          prev !== undefined && prev.name === item.name ? (prev.generation ?? 1) : undefined;
+        let attempts = 0;
+        for (let idx = 1; attempts < MAX_PROMOTE_ATTEMPTS; idx++) {
+          if (idx === skipGeneration) continue;
+          attempts++;
           try {
-            await rename(root_2, syncedItemPathForGeneration(r.name, idx, root));
+            await rename(root_2, syncedItemPathForGeneration(item.name, idx, root));
             return {
               ok: true,
               generation: idx,
@@ -633,7 +644,7 @@ async function promoteSyncedPlugin(e, n, r, s, h, credentials, S) {
             }
           }
         }
-        if (ze) {
+        if (laneOpened) {
           logForDiagnosticsNoPII("warn", "plugins_sync_occupant_displace_failed", {
             code: "generations_occupied",
           });
@@ -642,7 +653,7 @@ async function promoteSyncedPlugin(e, n, r, s, h, credentials, S) {
         logForDiagnosticsNoPII("warn", "plugins_sync_held_copy_displaced");
       }
       try {
-        await rename(root_2, L);
+        await rename(root_2, liveDir);
         return {
           ok: true,
           generation: 1,
@@ -657,22 +668,25 @@ async function promoteSyncedPlugin(e, n, r, s, h, credentials, S) {
           return buildLocalPlacementFailure(errnoCode);
         }
       }
-      let lt = s !== undefined && (await sameSyncedItem(root, s, L));
-      if (!lt) {
-        for (let nt of (await readPluginsManifest(n))?.plugins ?? [])
-          if (nt.pluginId === r.pluginId && (await sameSyncedItem(root, nt, L))) {
-            lt = true;
+      let alreadySame = prev !== undefined && (await sameSyncedItem(root, prev, liveDir));
+      if (!alreadySame) {
+        for (let manifestPlugin of (await readPluginsManifest(pluginsRootGuard))?.plugins ?? [])
+          if (
+            manifestPlugin.pluginId === item.pluginId &&
+            (await sameSyncedItem(root, manifestPlugin, liveDir))
+          ) {
+            alreadySame = true;
             break;
           }
       }
-      let Je;
-      if (lt) {
-        Je = join(
+      let oldCopyPath;
+      if (alreadySame) {
+        oldCopyPath = join(
           pluginReplaceTmpDir(root),
           `.replaced-${process.pid}-${Math.random().toString(36).slice(2)}`,
         );
         try {
-          await rename(L, Je);
+          await rename(liveDir, oldCopyPath);
         } catch (error) {
           logForDiagnosticsNoPII("warn", "plugins_sync_occupant_displace_failed", {
             code: getErrnoCode(error) ?? "unknown",
@@ -681,7 +695,7 @@ async function promoteSyncedPlugin(e, n, r, s, h, credentials, S) {
         }
       } else if (
         !(await checkSyncRoots({
-          dir: L,
+          dir: liveDir,
           trashRoot: pluginsTrashRoot(),
           configHome: getClaudeConfigDir(),
           failureEvent: "plugins_sync_trash_move_failed",
@@ -689,12 +703,12 @@ async function promoteSyncedPlugin(e, n, r, s, h, credentials, S) {
       )
         return LOCAL_PLACEMENT_FAILURE;
       try {
-        await rename(root_2, L);
+        await rename(root_2, liveDir);
       } catch (error) {
         let restored =
-          Je === undefined
+          oldCopyPath === undefined
             ? false
-            : await rename(Je, L).then(
+            : await rename(oldCopyPath, liveDir).then(
                 () => true,
                 () => false,
               );
@@ -704,9 +718,9 @@ async function promoteSyncedPlugin(e, n, r, s, h, credentials, S) {
         });
         return buildLocalPlacementFailure(getErrnoCode(error));
       }
-      if (Je !== undefined)
-        e.pendingTrashRemovals.push(
-          rm_2(Je, {
+      if (oldCopyPath !== undefined)
+        pluginsSync.pendingTrashRemovals.push(
+          rm_2(oldCopyPath, {
             recursive: true,
             force: true,
           }).catch(() => {}),
@@ -716,15 +730,15 @@ async function promoteSyncedPlugin(e, n, r, s, h, credentials, S) {
         generation: 1,
       };
     } finally {
-      h.extractMs.push(Date.now() - now_2);
+      stats.extractMs.push(Date.now() - now_2);
     }
   } finally {
-    Z?.();
-    await rm_2(tempZipPath, {
+    releaseSemaphore?.();
+    await rm_2(zipPath, {
       force: true,
     }).catch(() => {});
     if (
-      !n.guard.refused() &&
+      !pluginsRootGuard.guard.refused() &&
       (await verifySyncRoot(
         root,
         getClaudeConfigDir(),
@@ -738,7 +752,7 @@ async function promoteSyncedPlugin(e, n, r, s, h, credentials, S) {
         },
       ).catch(() => null)) === "real"
     )
-      await rm_2(G, {
+      await rm_2(replaceDir, {
         recursive: true,
         force: true,
       }).catch(() => {});
@@ -750,31 +764,47 @@ async function promoteSyncedPlugin(e, n, r, s, h, credentials, S) {
  */
 var PROMOTE_RETRY_SLEEP_MS = 500;
 //@ chunk-e6aww6q8.js:655182-655337 placement
-async function promotePluginWithRetry(pluginsSync, pluginsRootGuard, r, prev, h, credentials, semaphore) {
+async function promotePluginWithRetry(
+  pluginsSync,
+  pluginsRootGuard,
+  item,
+  prev,
+  stats,
+  credentials,
+  semaphore,
+) {
   try {
-    return await promoteSyncedPlugin(pluginsSync, pluginsRootGuard, r, prev, h, credentials, semaphore);
+    return await promoteSyncedPlugin(
+      pluginsSync,
+      pluginsRootGuard,
+      item,
+      prev,
+      stats,
+      credentials,
+      semaphore,
+    );
   } catch {
     logForDiagnosticsNoPII("warn", "plugins_sync_extract_retry");
     await sleep(PROMOTE_RETRY_SLEEP_MS);
-    return promoteSyncedPlugin(pluginsSync, pluginsRootGuard, r, prev, h, credentials, semaphore);
+    return promoteSyncedPlugin(pluginsSync, pluginsRootGuard, item, prev, stats, credentials, semaphore);
   }
 }
 //@ chunk-e6aww6q8.js:655337-655542 placement
-function recordSyncError_2(pluginsSync, n, r, reason) {
-  let source = `${n.name}@${SYNCED}`;
+function recordSyncError_2(pluginsSync, item, errorType, reason) {
+  let source = `${item.name}@${SYNCED}`;
   pluginsSync.syncErrors.push(
-    r === "network-error"
+    errorType === "network-error"
       ? {
-          type: r,
+          type: errorType,
           source,
-          plugin: n.name,
-          url: pluginDownloadPath(n.pluginId, n.requestedVersion),
+          plugin: item.name,
+          url: pluginDownloadPath(item.pluginId, item.requestedVersion),
           details: reason,
         }
       : {
-          type: r,
+          type: errorType,
           source,
-          plugin: n.name,
+          plugin: item.name,
           error: reason,
         },
   );
@@ -783,561 +813,593 @@ function recordSyncError_2(pluginsSync, n, r, reason) {
 /**
  * 记录一轮插件同步的结论（仅 datadog 遥测允许时）。
  */
-function recordPluginsSyncRound(e, n) {
+function recordPluginsSyncRound(host, outcome) {
   startupTimingRecorderByHost
-    .of(e.host)
-    .markPluginsSyncRound(n, () => isRemoteManagedEnvironment() && isDatadogAllowed());
+    .of(host.host)
+    .markPluginsSyncRound(outcome, () => isRemoteManagedEnvironment() && isDatadogAllowed());
 }
 //@ chunk-e6aww6q8.js:655615-666154 placement
 /**
  * 执行一轮 claude.ai 插件同步：拉取目录、安装/更新/移除并记录遥测。
  */
-async function runPluginsSyncRound(e, n, { startup: r = false } = {}) {
-  let pluginsSync = e.pluginsSync;
+async function runPluginsSyncRound(session, credentials, { startup = false } = {}) {
+  let pluginsSync = session.pluginsSync;
   let now = Date.now();
   pluginsSync.syncErrors = [];
   pluginsSync.accountListing = "pending";
   pluginsSync.lastRoundListed = false;
   pluginsSync.listedStamp = null;
-  let y = syncedPluginDirsKey();
-  let S;
+  let dirsKeyBefore = syncedPluginDirsKey();
+  let loopDelay;
   try {
-    S = monitorEventLoopDelay({
+    loopDelay = monitorEventLoopDelay({
       resolution: 20,
     });
-    S.enable();
+    loopDelay.enable();
   } catch {}
-  let w = () => {
-    if (!S) return {};
-    S.disable();
+  let loopLagTelemetry = () => {
+    if (!loopDelay) return {};
+    loopDelay.disable();
     return {
-      loop_lag_p95_ms: Math.round(S.percentile(95) / 1e6),
-      loop_lag_max_ms: Math.round(S.max / 1e6),
+      loop_lag_p95_ms: Math.round(loopDelay.percentile(95) / 1e6),
+      loop_lag_max_ms: Math.round(loopDelay.max / 1e6),
     };
   };
-  let L;
-  let G = {
+  let listMs;
+  let stats = {
     downloadMs: [],
     extractMs: [],
     zipBytes: 0,
     anthropicCatalogZipBytes: 0,
   };
-  let q = false;
-  let Z = null;
-  let Se = false;
-  let ke = false;
-  let we = false;
-  let Ee = false;
-  let Ae = () => ({
-    account_opt_in: ke,
+  let bucketRootReady = false;
+  let pluginsRootGuard = null;
+  let dirsRegistered = false;
+  let accountOptIn = false;
+  let convertedSkillsAsked = false;
+  let changesLanded = false;
+  let baseTelemetry = () => ({
+    account_opt_in: accountOptIn,
     duration_ms: Date.now() - now,
-    ...getDownloadSizeTelemetry(G),
-    ...(we && {
+    ...getDownloadSizeTelemetry(stats),
+    ...(convertedSkillsAsked && {
       converted_skills_asked: true,
     }),
   });
-  let Ie = "end_not_recorded";
-  if (r) recordPluginsSyncRound(e, "still_running");
+  let outcome = "end_not_recorded";
+  if (startup) recordPluginsSyncRound(session, "still_running");
   try {
-    ke = getAccountPluginsSyncEnabled();
-    if (enableAccountPluginsSync()) ke = true;
-    if (!isPluginsSyncActive(e) || !syncSettingsEnabled()) {
+    accountOptIn = getAccountPluginsSyncEnabled();
+    if (enableAccountPluginsSync()) accountOptIn = true;
+    if (!isPluginsSyncActive(session) || !syncSettingsEnabled()) {
       logForDiagnosticsNoPII("info", "plugins_sync_gate_closed");
-      logFeatureSad("plugins_sync_round", "gate_closed", Ae());
-      Ie = "gate_closed";
-      if (!isPluginsSyncDenied()) e.pluginsSync.accountListing = "refused";
+      logFeatureSad("plugins_sync_round", "gate_closed", baseTelemetry());
+      outcome = "gate_closed";
+      if (!isPluginsSyncDenied()) session.pluginsSync.accountListing = "refused";
       return false;
     }
     if (isPluginsSyncEligible()) {
       logForDiagnosticsNoPII("info", "plugins_sync_policy_verdict_pending");
-      logFeatureSad("plugins_sync_round", "policy_verdict_pending", Ae());
-      Ie = "policy_verdict_pending";
+      logFeatureSad("plugins_sync_round", "policy_verdict_pending", baseTelemetry());
+      outcome = "policy_verdict_pending";
       return false;
     }
-    let syncBucket = await getSyncBucket(n);
+    let syncBucket = await getSyncBucket(credentials);
     if (syncBucket === null) {
       logForDiagnosticsNoPII("info", "plugins_sync_bucket_unresolved");
-      logFeatureSad("plugins_sync_round", "bucket_unresolved", Ae());
-      Ie = "bucket_unresolved";
+      logFeatureSad("plugins_sync_round", "bucket_unresolved", baseTelemetry());
+      outcome = "bucket_unresolved";
       return false;
     }
-    let pluginsRootGuard = createPluginsRootGuard(syncedPluginBucketDir(syncBucket));
-    Z = pluginsRootGuard;
-    let root = pluginsRootGuard.root;
+    let pluginsRootGuard_2 = createPluginsRootGuard(syncedPluginBucketDir(syncBucket));
+    pluginsRootGuard = pluginsRootGuard_2;
+    let root = pluginsRootGuard_2.root;
     logForDiagnosticsNoPII("info", "plugins_sync_starting");
-    await ensurePluginsBucketRoot(e, syncBucket);
-    q = true;
-    let lt = isSkillsAsPluginsActive(e);
-    if (r && !isSessionRefsSyncEnabled(e)) {
-      let Or = await checkReuseWindow(root, syncReuseWithinMs());
+    await ensurePluginsBucketRoot(session, syncBucket);
+    bucketRootReady = true;
+    let skillsAsPlugins = isSkillsAsPluginsActive(session);
+    if (startup && !isSessionRefsSyncEnabled(session)) {
+      let reuseWindow = await checkReuseWindow(root, syncReuseWithinMs());
       if (
-        Or.reuse &&
-        (await isManifestReadableOrAbsent(pluginsRootGuard)) &&
-        (await isReuseStampListed(root, lt))
+        reuseWindow.reuse &&
+        (await isManifestReadableOrAbsent(pluginsRootGuard_2)) &&
+        (await isReuseStampListed(root, skillsAsPlugins))
       ) {
         logForDiagnosticsNoPII("info", "plugins_sync_round_reused", {
-          age_ms: Or.ageMs,
-          within_ms: Or.withinMs,
+          age_ms: reuseWindow.ageMs,
+          within_ms: reuseWindow.withinMs,
         });
-        await registerSyncedPluginDirs(pluginsRootGuard, {
+        await registerSyncedPluginDirs(pluginsRootGuard_2, {
           reconcileSidecars: true,
         });
-        scheduleDeferredRelist(e, n);
+        scheduleDeferredRelist(session, credentials);
         logFeatureOk("plugins_sync_round", {
-          ...Ae(),
+          ...baseTelemetry(),
           reused: true,
         });
-        Ie = "ok_reused";
-        e.pluginsSync.accountListing = "listed";
+        outcome = "ok_reused";
+        session.pluginsSync.accountListing = "listed";
         return false;
       }
     }
-    let Je = lt && {
+    let skillsAsPluginsOption = skillsAsPlugins && {
       convertedSkillsAsPlugins: true,
     };
     let now_2 = Date.now();
-    let pt;
-    let Et = [];
-    let yt = new Map();
-    if (isSessionRefsSyncEnabled(e)) {
-      let Or = sessionSkillManifestSlot.of(e).listEntries("plugins", {
-        startup: r,
+    let listResult;
+    let sessionRows = [];
+    let attestations = new Map();
+    if (isSessionRefsSyncEnabled(session)) {
+      let sessionEntries = sessionSkillManifestSlot.of(session).listEntries("plugins", {
+        startup,
       });
-      let Io = env.CLAUDE_CODE_SYNC_PLUGINS || getAccountPluginsSyncEnabled();
-      we = lt && Io;
-      let [zo, rs] = await Promise.all([
-        Or,
-        Io
+      let accountSyncEnabled = env.CLAUDE_CODE_SYNC_PLUGINS || getAccountPluginsSyncEnabled();
+      convertedSkillsAsked = skillsAsPlugins && accountSyncEnabled;
+      let [sessionList, accountList] = await Promise.all([
+        sessionEntries,
+        accountSyncEnabled
           ? listAccountPlugins({
               isBackground: true,
-              credentials: n,
-              ...Je,
+              credentials,
+              ...skillsAsPluginsOption,
             })
           : null,
       ]);
-      if (!zo.success) pt = zo;
+      if (!sessionList.success) listResult = sessionList;
       else {
-        yt = collectOfficialAttestations(zo.entries);
-        Et = zo.entries.map(toSyncedPluginRow);
-        if (rs === null)
-          pt = {
+        attestations = collectOfficialAttestations(sessionList.entries);
+        sessionRows = sessionList.entries.map(toSyncedPluginRow);
+        if (accountList === null)
+          listResult = {
             success: true,
-            plugins: Et,
+            plugins: sessionRows,
           };
-        else if (!rs.success) pt = rs;
+        else if (!accountList.success) listResult = accountList;
         else
-          pt = {
+          listResult = {
             success: true,
-            plugins: mergeRowsByKey(Et, rs.plugins, (Es) => Es.pluginId, carryMarketplaceInfo),
-            ...(rs.degraded && {
-              degraded: rs.degraded,
+            plugins: mergeRowsByKey(
+              sessionRows,
+              accountList.plugins,
+              (row) => row.pluginId,
+              carryMarketplaceInfo,
+            ),
+            ...(accountList.degraded && {
+              degraded: accountList.degraded,
             }),
           };
       }
     } else {
-      we = lt;
-      pt = await listAccountPlugins({
+      convertedSkillsAsked = skillsAsPlugins;
+      listResult = await listAccountPlugins({
         isBackground: true,
-        credentials: n,
-        ...Je,
+        credentials,
+        ...skillsAsPluginsOption,
       });
     }
-    L = Date.now() - now_2;
-    let gt = !pt.success && isNotFoundServerError(pt);
-    if (gt) {
+    listMs = Date.now() - now_2;
+    let notEntitled = !listResult.success && isNotFoundServerError(listResult);
+    if (notEntitled) {
       logForDiagnosticsNoPII("warn", "plugins_sync_list_refused", {
-        list_ms: L,
+        list_ms: listMs,
       });
-      pt = {
+      listResult = {
         success: true,
-        plugins: Et,
+        plugins: sessionRows,
       };
     }
-    if (pt.success && pt.degraded)
+    if (listResult.success && listResult.degraded)
       logForDiagnosticsNoPII("warn", "plugins_sync_list_degraded", {
-        list_ms: L,
+        list_ms: listMs,
       });
-    if (!pt.success) {
-      if (isSyncRefusal(pt)) e.pluginsSync.accountListing = "refused";
-      let Or = w();
-      let Io = listErrorTelemetry(pt);
+    if (!listResult.success) {
+      if (isSyncRefusal(listResult)) session.pluginsSync.accountListing = "refused";
+      let loopLag = loopLagTelemetry();
+      let listErrorFacts = listErrorTelemetry(listResult);
       logForDiagnosticsNoPII("warn", "plugins_sync_list_failed", {
         duration_ms: Date.now() - now,
-        list_ms: L,
-        ...Or,
-        ...Io,
+        list_ms: listMs,
+        ...loopLag,
+        ...listErrorFacts,
       });
       logEvent("tengu_plugins_sync_list_failed", {
         duration_ms: Date.now() - now,
-        list_ms: L,
-        ...Or,
-        ...Io,
+        list_ms: listMs,
+        ...loopLag,
+        ...listErrorFacts,
       });
       logFeatureBad("plugins_sync_round", "list_failed", {
-        ...Ae(),
-        ...Io,
+        ...baseTelemetry(),
+        ...listErrorFacts,
       });
-      Ie = "list_failed";
-      await registerSyncedPluginDirs(pluginsRootGuard, {
+      outcome = "list_failed";
+      await registerSyncedPluginDirs(pluginsRootGuard_2, {
         reconcileSidecars: true,
       });
       return false;
     }
     await takeReuseStamp(root);
-    let At = pt.degraded || isSessionRefsSyncEnabled(e) ? null : pluginListFingerprint(pt.plugins);
-    let pluginsManifest = await readPluginsManifest(pluginsRootGuard);
+    let listFingerprint =
+      listResult.degraded || isSessionRefsSyncEnabled(session)
+        ? null
+        : pluginListFingerprint(listResult.plugins);
+    let pluginsManifest = await readPluginsManifest(pluginsRootGuard_2);
     let hadManifest = pluginsManifest !== null;
-    let plugins = pt.plugins;
-    if (pt.degraded) {
-      let Or = new Set(pt.plugins.map((plugin) => plugin.pluginId));
+    let plugins = listResult.plugins;
+    if (listResult.degraded) {
+      let listedIds = new Set(listResult.plugins.map((plugin) => plugin.pluginId));
       plugins = [
-        ...pt.plugins,
+        ...listResult.plugins,
         ...(pluginsManifest?.plugins ?? []).filter(
-          (Io) => !Or.has(Io.pluginId) && Io.requestedVersion === undefined,
+          (manifestPlugin) =>
+            !listedIds.has(manifestPlugin.pluginId) && manifestPlugin.requestedVersion === undefined,
         ),
       ];
     }
-    if (we) {
-      let Or = new Set(
-        [...Et, ...(pluginsManifest?.plugins ?? [])].map((zo) => syncedItemKey(root, zo)).filter(Boolean),
+    if (convertedSkillsAsked) {
+      let keptDirs = new Set(
+        [...sessionRows, ...(pluginsManifest?.plugins ?? [])]
+          .map((dirRow) => syncedItemKey(root, dirRow))
+          .filter(Boolean),
       );
-      let Io = new Set(plugins.filter((plugin) => Or.has(syncedItemKey(root, plugin))));
-      plugins = [...Io, ...plugins.filter((plugin) => !Io.has(plugin))];
+      let keptIds = new Set(plugins.filter((plugin) => keptDirs.has(syncedItemKey(root, plugin))));
+      plugins = [...keptIds, ...plugins.filter((plugin) => !keptIds.has(plugin))];
     }
-    let Zt = new Set(Et.map((Or) => Or.pluginId));
-    let rn = new Set(
-      pt.plugins
+    let sessionPluginIds = new Set(sessionRows.map((row) => row.pluginId));
+    let requiredIds = new Set(
+      listResult.plugins
         .filter((plugin) => plugin.installationPreference === "required")
         .map((plugin) => plugin.pluginId),
     );
     plugins = [
-      ...plugins.filter((plugin) => Zt.has(plugin.pluginId)),
-      ...plugins.filter((plugin) => !Zt.has(plugin.pluginId) && rn.has(plugin.pluginId)),
-      ...plugins.filter((plugin) => !Zt.has(plugin.pluginId) && !rn.has(plugin.pluginId)),
+      ...plugins.filter((plugin) => sessionPluginIds.has(plugin.pluginId)),
+      ...plugins.filter(
+        (plugin) => !sessionPluginIds.has(plugin.pluginId) && requiredIds.has(plugin.pluginId),
+      ),
+      ...plugins.filter(
+        (plugin) => !sessionPluginIds.has(plugin.pluginId) && !requiredIds.has(plugin.pluginId),
+      ),
     ];
     let { toDownload, toRemove, carryover, carryoverOwningLiveDir } = planPluginDownloads(
       root,
       plugins,
       pluginsManifest?.plugins ?? [],
     );
-    let yn = new Set();
-    let Kn = new Map();
+    let replacedIds = new Set();
+    let serverPluginIds = new Map();
     let results = await Promise.all(
-      carryover.map(async (Or) => {
-        if (!carryoverOwningLiveDir.has(Or.pluginId)) return false;
+      carryover.map(async (prevItem) => {
+        if (!carryoverOwningLiveDir.has(prevItem.pluginId)) return false;
         try {
-          let Io = itemInstallPath(root, Or);
-          if (!(await lstat(Io)).isDirectory()) return true;
-          let { serverPluginId } = await readPluginAttributionSidecar(Io);
-          if (serverPluginId === undefined || serverPluginId === Or.pluginId) return false;
-          Kn.set(Or.pluginId, serverPluginId);
+          let installPath = itemInstallPath(root, prevItem);
+          if (!(await lstat(installPath)).isDirectory()) return true;
+          let { serverPluginId } = await readPluginAttributionSidecar(installPath);
+          if (serverPluginId === undefined || serverPluginId === prevItem.pluginId) return false;
+          serverPluginIds.set(prevItem.pluginId, serverPluginId);
           return true;
         } catch {
           return true;
         }
       }),
     );
-    for (let [Or, Io] of carryover.entries()) {
-      if (!results[Or]) continue;
-      let found = pt.plugins.find((plugin) => plugin.pluginId === Io.pluginId);
+    for (let [index, prevItem] of carryover.entries()) {
+      if (!results[index]) continue;
+      let found = listResult.plugins.find((plugin) => plugin.pluginId === prevItem.pluginId);
       if (found) {
-        yn.add(Io.pluginId);
+        replacedIds.add(prevItem.pluginId);
         toDownload.push({
           item: found,
-          prev: Io,
+          prev: prevItem,
         });
       }
     }
-    let filtered = carryover.filter((Or) => !yn.has(Or.pluginId));
-    let filtered_2 = filtered.filter((Or) => carryoverOwningLiveDir.has(Or.pluginId));
+    let rows = carryover.filter((prevItem) => !replacedIds.has(prevItem.pluginId));
+    let rows_2 = rows.filter((livePrevItem) => carryoverOwningLiveDir.has(livePrevItem.pluginId));
     let liveEntryClassifier = createLiveEntryClassifier(
-      new Set(manifestRowDirs(root, [...filtered_2, ...toDownload.map(({ item, prev }) => prev ?? item)])),
+      new Set(manifestRowDirs(root, [...rows_2, ...toDownload.map(({ item, prev }) => prev ?? item)])),
     );
     let rowDirNames = getRowDirNames(root, plugins);
     await Promise.all(pluginsSync.pendingTrashRemovals.splice(0));
-    if ((await verifyGuardOrRefused(pluginsRootGuard)) === null)
+    if ((await verifyGuardOrRefused(pluginsRootGuard_2)) === null)
       await rm_2(pluginReplaceTmpDir(root), {
         recursive: true,
         force: true,
       }).catch(() => {});
-    let co = new Set(pluginsManifest?.staleDirs ?? []);
-    let So = await removeStaleDirs(
+    let staleDirs = new Set(pluginsManifest?.staleDirs ?? []);
+    let removedDirs = await removeStaleDirs(
       root,
-      Array.from(co).filter((Or) => !pluginsSync.removalsDeferredHere.has(Or)),
+      Array.from(staleDirs).filter((dirName) => !pluginsSync.removalsDeferredHere.has(dirName)),
       liveEntryClassifier,
       rowDirNames,
     );
-    for (let Or of So) co.delete(Or);
+    for (let removedDir of removedDirs) staleDirs.delete(removedDir);
     if (toDownload.length === 0 && toRemove.length === 0) {
-      assertSyncRootAllowed(pluginsRootGuard);
-      await reconcilePluginSidecars(pluginsRootGuard, filtered);
-      assertSyncRootAllowed(pluginsRootGuard);
-      registerDirsWithAttestations(root, filtered_2, yt);
-      Se = true;
-      pluginsSync.lastRoundListed = !pt.degraded;
-      recordCompleteList(pluginsSync, syncBucket, root, pt);
-      let Or = replaceRowsWithAttribution(
+      assertSyncRootAllowed(pluginsRootGuard_2);
+      await reconcilePluginSidecars(pluginsRootGuard_2, rows);
+      assertSyncRootAllowed(pluginsRootGuard_2);
+      registerDirsWithAttestations(root, rows_2, attestations);
+      dirsRegistered = true;
+      pluginsSync.lastRoundListed = !listResult.degraded;
+      recordCompleteList(pluginsSync, syncBucket, root, listResult);
+      let replacedRows = replaceRowsWithAttribution(
         pluginsManifest?.plugins ?? [],
         carryover,
-        (Es) => Es.pluginId,
-        (Es, Nr) =>
-          Es.marketplaceName === Nr.marketplaceName &&
-          Es.installationPreference === Nr.installationPreference &&
-          Es.marketplaceKind === Nr.marketplaceKind,
+        (row) => row.pluginId,
+        (leftRow, rightRow) =>
+          leftRow.marketplaceName === rightRow.marketplaceName &&
+          leftRow.installationPreference === rightRow.installationPreference &&
+          leftRow.marketplaceKind === rightRow.marketplaceKind,
       );
-      let Io = !gt && !pt.degraded && !isSessionRefsSyncEnabled(e);
-      let zo = Io && co.size === 0;
-      let rs = appliedListIdsField(lt && pt.convertedSkillsAsPlugins === true, Io, Or.rows);
+      let fullListApplied = !notEntitled && !listResult.degraded && !isSessionRefsSyncEnabled(session);
+      let canReuse = fullListApplied && staleDirs.size === 0;
+      let appliedIdsField = appliedListIdsField(
+        skillsAsPlugins && listResult.convertedSkillsAsPlugins === true,
+        fullListApplied,
+        replacedRows.rows,
+      );
       if (
-        (So.size > 0 ||
-          Or.attributionMoved ||
-          (lt && !sameIdSet(pluginsManifest?.appliedListIds, rs.appliedListIds))) &&
+        (removedDirs.size > 0 ||
+          replacedRows.attributionMoved ||
+          (skillsAsPlugins && !sameIdSet(pluginsManifest?.appliedListIds, appliedIdsField.appliedListIds))) &&
         pluginsManifest
       )
         await writePluginsManifest(
-          pluginsRootGuard,
+          pluginsRootGuard_2,
           {
             lastUpdated: pluginsManifest.lastUpdated,
-            plugins: Or.rows,
-            staleDirs: co.size > 0 ? Array.from(co) : undefined,
-            ...rs,
+            plugins: replacedRows.rows,
+            staleDirs: staleDirs.size > 0 ? Array.from(staleDirs) : undefined,
+            ...appliedIdsField,
           },
           {
-            staleDirs: So,
+            staleDirs: removedDirs,
             removedPluginIds: new Set(),
           },
         );
-      await trashOrphanSyncedPluginDirs(pluginsRootGuard, plugins, pluginsSync.removalsDeferredHere);
+      await trashOrphanSyncedPluginDirs(pluginsRootGuard_2, plugins, pluginsSync.removalsDeferredHere);
       await trashStrayPluginBuckets();
       if (pluginsManifest) {
         let date = new Date();
         await lutimes(syncedManifestPath(root), date, date).catch(() => {});
       }
-      await writeOrClearReuseStamp(root, "plugins", zo, null, reuseStampVariant(lt));
+      await writeOrClearReuseStamp(root, "plugins", canReuse, null, reuseStampVariant(skillsAsPlugins));
       logForDiagnosticsNoPII("info", "plugins_sync_no_changes", {
         count: carryover.length,
         duration_ms: Date.now() - now,
-        list_ms: L,
+        list_ms: listMs,
         had_manifest: hadManifest,
-        ...w(),
+        ...loopLagTelemetry(),
       });
-      if (gt) {
-        logFeatureSad("plugins_sync_round", "not_entitled", Ae());
-        Ie = "not_entitled";
-      } else if (pt.degraded) {
-        logFeatureSad("plugins_sync_round", "list_degraded", Ae());
-        Ie = "list_degraded";
+      if (notEntitled) {
+        logFeatureSad("plugins_sync_round", "not_entitled", baseTelemetry());
+        outcome = "not_entitled";
+      } else if (listResult.degraded) {
+        logFeatureSad("plugins_sync_round", "list_degraded", baseTelemetry());
+        outcome = "list_degraded";
       } else {
-        logFeatureOk("plugins_sync_round", Ae());
-        Ie = "ok";
+        logFeatureOk("plugins_sync_round", baseTelemetry());
+        outcome = "ok";
       }
-      e.pluginsSync.accountListing = gt ? "refused" : pt.degraded ? "pending" : "listed";
-      pluginsSync.listedStamp = hasRemovalOwed(pluginsSync) ? null : At;
+      session.pluginsSync.accountListing = notEntitled
+        ? "refused"
+        : listResult.degraded
+          ? "pending"
+          : "listed";
+      pluginsSync.listedStamp = hasRemovalOwed(pluginsSync) ? null : listFingerprint;
       return false;
     }
-    let liveEntryClassifier_2 = createLiveEntryClassifier(
-      new Set(manifestRowDirs(root, [...filtered_2, ...toDownload.map(({ item }) => item)])),
+    let classifyLive = createLiveEntryClassifier(
+      new Set(manifestRowDirs(root, [...rows_2, ...toDownload.map(({ item }) => item)])),
     );
-    let un = 0;
-    let ao = (Or, { oldCopy, heldTarget }) => {
+    let deferredRemovals = 0;
+    let removeIfSafe = (dirName, { oldCopy, heldTarget }) => {
       if (hasSyncedPluginLaneOpened()) {
-        un++;
-        pluginsSync.removalsDeferredHere.add(Or);
+        deferredRemovals++;
+        pluginsSync.removalsDeferredHere.add(dirName);
         return Promise.resolve(false);
       }
-      if (Or === heldTarget) return Promise.resolve(false);
-      return removeSyncedPluginDir(root, Or, liveEntryClassifier_2, oldCopy ? rowDirNames : undefined);
+      if (dirName === heldTarget) return Promise.resolve(false);
+      return removeSyncedPluginDir(root, dirName, classifyLive, oldCopy ? rowDirNames : undefined);
     };
-    let $o = [];
-    let yo = [];
-    let Ho = new Set();
+    let downloadedItems = [];
+    let droppedItems = [];
+    let removedPluginIds = new Set();
     let now_3 = Date.now();
-    let br = env.CLAUDE_CODE_SYNC_PLUGINS_DOWNLOAD_CONCURRENCY ?? MAX_DEFERRED_RELIST_ROUNDS;
+    let downloadConcurrency = env.CLAUDE_CODE_SYNC_PLUGINS_DOWNLOAD_CONCURRENCY ?? MAX_DEFERRED_RELIST_ROUNDS;
     let semaphore = createSemaphore(MAX_DEFERRED_RELIST_ROUNDS);
     await Promise.all(
       toDownload.map(
-        limitConcurrency(br, async ({ item, prev }) => {
-          let zo;
+        limitConcurrency(downloadConcurrency, async ({ item, prev }) => {
+          let promoteResult;
           try {
-            zo = await promotePluginWithRetry(pluginsSync, pluginsRootGuard, item, prev, G, n, semaphore);
-            if (!zo.ok)
-              switch (zo.cause) {
+            promoteResult = await promotePluginWithRetry(
+              pluginsSync,
+              pluginsRootGuard_2,
+              item,
+              prev,
+              stats,
+              credentials,
+              semaphore,
+            );
+            if (!promoteResult.ok)
+              switch (promoteResult.cause) {
                 case "download":
                   logForDiagnosticsNoPII("warn", "plugins_sync_download_failed");
-                  recordSyncError_2(pluginsSync, item, "network-error", zo.reason);
+                  recordSyncError_2(pluginsSync, item, "network-error", promoteResult.reason);
                   break;
                 case "root_refused":
                 case "extract":
-                  recordSyncError_2(pluginsSync, item, "generic-error", zo.reason);
+                  recordSyncError_2(pluginsSync, item, "generic-error", promoteResult.reason);
                   break;
                 case "local":
-                  recordSyncError_2(pluginsSync, item, "generic-error", zo.reason);
+                  recordSyncError_2(pluginsSync, item, "generic-error", promoteResult.reason);
                   break;
                 case "deferred":
                   logForDiagnosticsNoPII("warn", "plugins_sync_unexpected_landing_cause");
-                  recordSyncError_2(pluginsSync, item, "generic-error", zo.reason);
+                  recordSyncError_2(pluginsSync, item, "generic-error", promoteResult.reason);
                   break;
               }
           } catch (error) {
             let reason = printableMessage(error);
-            zo = extractFailure(reason);
+            promoteResult = extractFailure(reason);
             logForDiagnosticsNoPII("warn", "plugins_sync_extract_failed");
             recordSyncError_2(pluginsSync, item, "generic-error", reason);
           }
-          if (zo.ok) {
-            let rs =
-              zo.generation > 1
+          if (promoteResult.ok) {
+            let finalItem =
+              promoteResult.generation > 1
                 ? {
                     ...item,
-                    generation: zo.generation,
+                    generation: promoteResult.generation,
                   }
                 : item;
-            $o.push(rs);
-            if (!prev) markSyncedPluginDirNewHere(itemInstallPath(root, rs));
+            downloadedItems.push(finalItem);
+            if (!prev) markSyncedPluginDirNewHere(itemInstallPath(root, finalItem));
             if (prev) {
-              let Es = itemDirName(root, prev);
+              let prevDirName = itemDirName(root, prev);
               if (
-                Es !== itemDirName(root, rs) &&
-                !(await ao(Es, {
+                prevDirName !== itemDirName(root, finalItem) &&
+                !(await removeIfSafe(prevDirName, {
                   oldCopy: true,
                   heldTarget:
-                    zo.generation > 1
+                    promoteResult.generation > 1
                       ? itemDirName(root, {
                           name: item.name,
                         })
                       : undefined,
                 }))
               )
-                co.add(Es);
+                staleDirs.add(prevDirName);
             }
-          } else if (prev && Kn.has(prev.pluginId)) {
-            let rs = syncedItemKey(root, {
+          } else if (prev && serverPluginIds.has(prev.pluginId)) {
+            let serverKey = syncedItemKey(root, {
               ...prev,
-              pluginId: Kn.get(prev.pluginId) ?? "",
+              pluginId: serverPluginIds.get(prev.pluginId) ?? "",
             });
-            if (!plugins.some((plugin) => syncedItemKey(root, plugin) === rs)) Ho.add(prev.pluginId);
-          } else if (prev) yo.push(prev);
+            if (!plugins.some((plugin) => syncedItemKey(root, plugin) === serverKey))
+              removedPluginIds.add(prev.pluginId);
+          } else if (prev) droppedItems.push(prev);
         }),
       ),
     );
     let downloadExtractMs = Date.now() - now_3;
-    let downloadTimingTelemetry = getDownloadTimingTelemetry(G);
+    let downloadTimingTelemetry = getDownloadTimingTelemetry(stats);
     await Promise.all(
       toRemove.map(
-        limitConcurrency(MAX_DEFERRED_RELIST_ROUNDS, async (Or) => {
-          let Io = itemDirName(root, Or);
+        limitConcurrency(MAX_DEFERRED_RELIST_ROUNDS, async (item) => {
+          let dirName = itemDirName(root, item);
           if (
-            !(await ao(Io, {
+            !(await removeIfSafe(dirName, {
               oldCopy: false,
             }))
           )
-            co.add(Io);
+            staleDirs.add(dirName);
         }),
       ),
     );
-    if (un > 0)
+    if (deferredRemovals > 0)
       logForDiagnosticsNoPII("info", "plugins_sync_removal_deferred_loaded", {
-        count: un,
+        count: deferredRemovals,
       });
-    Ee = $o.length > 0 || toRemove.length > 0;
-    let _r = [...$o, ...yo, ...filtered];
-    assertSyncRootAllowed(pluginsRootGuard);
-    await reconcilePluginSidecars(pluginsRootGuard, _r);
-    assertSyncRootAllowed(pluginsRootGuard);
-    registerDirsWithAttestations(root, _r, yt, new Set($o));
-    Se = true;
-    pluginsSync.lastRoundListed = !pt.degraded;
-    recordCompleteList(pluginsSync, syncBucket, root, pt);
-    let Cr = !gt && !pt.degraded && !isSessionRefsSyncEnabled(e);
-    let Vr = Cr && pluginsSync.syncErrors.length === 0 && co.size === 0;
+    changesLanded = downloadedItems.length > 0 || toRemove.length > 0;
+    let finalRows = [...downloadedItems, ...droppedItems, ...rows];
+    assertSyncRootAllowed(pluginsRootGuard_2);
+    await reconcilePluginSidecars(pluginsRootGuard_2, finalRows);
+    assertSyncRootAllowed(pluginsRootGuard_2);
+    registerDirsWithAttestations(root, finalRows, attestations, new Set(downloadedItems));
+    dirsRegistered = true;
+    pluginsSync.lastRoundListed = !listResult.degraded;
+    recordCompleteList(pluginsSync, syncBucket, root, listResult);
+    let fullListApplied = !notEntitled && !listResult.degraded && !isSessionRefsSyncEnabled(session);
+    let canReuse = fullListApplied && pluginsSync.syncErrors.length === 0 && staleDirs.size === 0;
     await writePluginsManifest(
-      pluginsRootGuard,
+      pluginsRootGuard_2,
       {
         lastUpdated: Date.now(),
-        plugins: _r,
-        staleDirs: co.size > 0 ? Array.from(co) : undefined,
+        plugins: finalRows,
+        staleDirs: staleDirs.size > 0 ? Array.from(staleDirs) : undefined,
         ...appliedListIdsField(
-          lt && pt.convertedSkillsAsPlugins === true,
-          Cr && pluginsSync.syncErrors.length === 0,
-          _r,
+          skillsAsPlugins && listResult.convertedSkillsAsPlugins === true,
+          fullListApplied && pluginsSync.syncErrors.length === 0,
+          finalRows,
         ),
       },
       {
-        staleDirs: So,
-        removedPluginIds: new Set([...toRemove.map((Or) => Or.pluginId), ...Ho]),
+        staleDirs: removedDirs,
+        removedPluginIds: new Set([...toRemove.map((item) => item.pluginId), ...removedPluginIds]),
       },
     );
-    await trashOrphanSyncedPluginDirs(pluginsRootGuard, plugins, pluginsSync.removalsDeferredHere);
+    await trashOrphanSyncedPluginDirs(pluginsRootGuard_2, plugins, pluginsSync.removalsDeferredHere);
     await trashStrayPluginBuckets();
-    let Oo = w();
+    let loopLag = loopLagTelemetry();
     logForDiagnosticsNoPII("info", "plugins_sync_complete", {
-      downloaded: $o.length,
+      downloaded: downloadedItems.length,
       removed: toRemove.length,
       failed: pluginsSync.syncErrors.length,
       duration_ms: Date.now() - now,
-      list_ms: L,
+      list_ms: listMs,
       download_extract_ms: downloadExtractMs,
-      download_concurrency: br,
+      download_concurrency: downloadConcurrency,
       had_manifest: hadManifest,
       ...downloadTimingTelemetry,
-      ...Oo,
+      ...loopLag,
     });
     logEvent("tengu_plugins_sync_success", {
-      downloaded: $o.length,
+      downloaded: downloadedItems.length,
       removed: toRemove.length,
-      total: pt.plugins.length,
+      total: listResult.plugins.length,
       duration_ms: Date.now() - now,
-      list_ms: L,
+      list_ms: listMs,
       download_extract_ms: downloadExtractMs,
-      download_concurrency: br,
+      download_concurrency: downloadConcurrency,
       had_manifest: hadManifest,
       ...downloadTimingTelemetry,
-      ...Oo,
+      ...loopLag,
     });
-    await writeOrClearReuseStamp(root, "plugins", Vr, null, reuseStampVariant(lt));
+    await writeOrClearReuseStamp(root, "plugins", canReuse, null, reuseStampVariant(skillsAsPlugins));
     if (pluginsSync.syncErrors.length > 0) {
-      logFeatureSad("plugins_sync_round", "download_failed", Ae());
-      Ie = "download_failed";
-    } else if (gt) {
-      logFeatureSad("plugins_sync_round", "not_entitled", Ae());
-      Ie = "not_entitled";
-    } else if (pt.degraded) {
-      logFeatureSad("plugins_sync_round", "list_degraded", Ae());
-      Ie = "list_degraded";
+      logFeatureSad("plugins_sync_round", "download_failed", baseTelemetry());
+      outcome = "download_failed";
+    } else if (notEntitled) {
+      logFeatureSad("plugins_sync_round", "not_entitled", baseTelemetry());
+      outcome = "not_entitled";
+    } else if (listResult.degraded) {
+      logFeatureSad("plugins_sync_round", "list_degraded", baseTelemetry());
+      outcome = "list_degraded";
     } else {
-      logFeatureOk("plugins_sync_round", Ae());
-      Ie = "ok";
+      logFeatureOk("plugins_sync_round", baseTelemetry());
+      outcome = "ok";
     }
-    e.pluginsSync.accountListing = gt ? "refused" : pt.degraded ? "pending" : "listed";
-    let jr = pluginsSync.syncErrors.length === 0 && !hasRemovalOwed(pluginsSync);
-    pluginsSync.listedStamp = jr ? At : null;
+    session.pluginsSync.accountListing = notEntitled ? "refused" : listResult.degraded ? "pending" : "listed";
+    let listedCleanly = pluginsSync.syncErrors.length === 0 && !hasRemovalOwed(pluginsSync);
+    pluginsSync.listedStamp = listedCleanly ? listFingerprint : null;
   } catch (error) {
-    let We = w();
-    let ze = {
-      ...(L !== undefined && {
-        list_ms: L,
+    let loopLag = loopLagTelemetry();
+    let timingFacts = {
+      ...(listMs !== undefined && {
+        list_ms: listMs,
       }),
-      ...(G.downloadMs.length > 0 && getDownloadTimingTelemetry(G)),
+      ...(stats.downloadMs.length > 0 && getDownloadTimingTelemetry(stats)),
     };
     if (!(error instanceof SyncOwnedRootRefusedError)) {
       logForDiagnosticsNoPII("error", "plugins_sync_unexpected_error", {
         kind: error instanceof Error ? error.constructor.name : "unknown",
         duration_ms: Date.now() - now,
-        ...ze,
-        ...We,
+        ...timingFacts,
+        ...loopLag,
       });
       logEvent("tengu_plugins_sync_error", {
         duration_ms: Date.now() - now,
-        ...ze,
-        ...We,
+        ...timingFacts,
+        ...loopLag,
       });
-      logFeatureBad("plugins_sync_round", "unexpected_error", Ae());
-      Ie = "unexpected_error";
+      logFeatureBad("plugins_sync_round", "unexpected_error", baseTelemetry());
+      outcome = "unexpected_error";
     } else {
-      logFeatureSad("plugins_sync_round", "root_refused", Ae());
-      Ie = "root_refused";
+      logFeatureSad("plugins_sync_round", "root_refused", baseTelemetry());
+      outcome = "root_refused";
     }
-    if (error instanceof SyncOwnedRootRefusedError && Se) {
+    if (error instanceof SyncOwnedRootRefusedError && dirsRegistered) {
       logForDiagnosticsNoPII("warn", "plugins_sync_post_registration_refusal", {
         reason: error.reason,
       });
@@ -1346,7 +1408,7 @@ async function runPluginsSyncRound(e, n, { startup: r = false } = {}) {
         phase: lit_2("post_registration"),
         duration_ms: Date.now() - now,
       });
-      q = false;
+      bucketRootReady = false;
     } else if (error instanceof SyncOwnedRootRefusedError) {
       logForDiagnosticsNoPII("warn", "plugins_sync_root_refused_fail_closed");
       logEvent("tengu_plugins_sync_root_refused", {
@@ -1354,31 +1416,31 @@ async function runPluginsSyncRound(e, n, { startup: r = false } = {}) {
         phase: lit_2("head"),
         duration_ms: Date.now() - now,
       });
-      let lt = tildify(join(getClaudeConfigDir(), "plugins"));
+      let pluginsDirLabel = tildify(join(getClaudeConfigDir(), "plugins"));
       pluginsSync.syncErrors.push({
         type: "generic-error",
         source: `${SYNCED}[root]`,
         error:
           error.reason === "unverified" || error.reason === "landing_unverified"
-            ? `claude.ai plugin sync disabled this session: ${lt} could not be verified${error.code ? ` (${error.code})` : ""}`
+            ? `claude.ai plugin sync disabled this session: ${pluginsDirLabel} could not be verified${error.code ? ` (${error.code})` : ""}`
             : error.reason === "landing_absent"
-              ? `claude.ai plugin sync disabled this session: ${lt} was removed while a sync round was running`
-              : `claude.ai plugin sync disabled this session: ${lt} is not a plain directory tree (a symlink or stray file is in the way)`,
+              ? `claude.ai plugin sync disabled this session: ${pluginsDirLabel} was removed while a sync round was running`
+              : `claude.ai plugin sync disabled this session: ${pluginsDirLabel} is not a plain directory tree (a symlink or stray file is in the way)`,
       });
       setSyncedPluginDirs([]);
-    } else if (!Se && Z !== null)
-      await registerSyncedPluginDirs(Z, {
+    } else if (!dirsRegistered && pluginsRootGuard !== null)
+      await registerSyncedPluginDirs(pluginsRootGuard, {
         reconcileSidecars: true,
       });
   } finally {
-    if (Ee || syncedPluginDirsKey() !== y) getSyncedPluginReloadDebt().changesLanded++;
-    S?.disable();
-    if (Z === null || Z.guard.refused()) q = false;
-    if (q && Z !== null) {
-      let We = pluginReplaceTmpDir(Z.root);
-      let root = Z.root;
+    if (changesLanded || syncedPluginDirsKey() !== dirsKeyBefore) getSyncedPluginReloadDebt().changesLanded++;
+    loopDelay?.disable();
+    if (pluginsRootGuard === null || pluginsRootGuard.guard.refused()) bucketRootReady = false;
+    if (bucketRootReady && pluginsRootGuard !== null) {
+      let replaceDir = pluginReplaceTmpDir(pluginsRootGuard.root);
+      let root = pluginsRootGuard.root;
       let claudeConfigDir = getClaudeConfigDir();
-      let Je = Promise.all(pluginsSync.pendingTrashRemovals.splice(0)).then(async () => {
+      let cleanupPromise = Promise.all(pluginsSync.pendingTrashRemovals.splice(0)).then(async () => {
         if (
           (await verifySyncRoot(
             root,
@@ -1393,59 +1455,59 @@ async function runPluginsSyncRound(e, n, { startup: r = false } = {}) {
             },
           ).catch(() => null)) === "real"
         )
-          await rm_2(We, {
+          await rm_2(replaceDir, {
             recursive: true,
             force: true,
           }).catch(() => {});
       });
-      pluginsSync.pendingTrashRemovals.push(Je);
+      pluginsSync.pendingTrashRemovals.push(cleanupPromise);
     }
-    if (r) recordPluginsSyncRound(e, Ie);
+    if (startup) recordPluginsSyncRound(session, outcome);
   }
-  return Ee;
+  return changesLanded;
 }
 //@ chunk-e6aww6q8.js:666154-666372 placement
-function getDownloadTimingTelemetry(e) {
+function getDownloadTimingTelemetry(stats) {
   return {
-    ...getDownloadSizeTelemetry(e),
-    download_ms_sum: e.downloadMs.reduce((acc, downloadM) => acc + downloadM, 0),
-    download_ms_max: Math.max(0, ...e.downloadMs),
-    extract_ms_sum: e.extractMs.reduce((acc, extractM) => acc + extractM, 0),
-    extract_ms_max: Math.max(0, ...e.extractMs),
+    ...getDownloadSizeTelemetry(stats),
+    download_ms_sum: stats.downloadMs.reduce((acc, downloadM) => acc + downloadM, 0),
+    download_ms_max: Math.max(0, ...stats.downloadMs),
+    extract_ms_sum: stats.extractMs.reduce((acc, extractM) => acc + extractM, 0),
+    extract_ms_max: Math.max(0, ...stats.extractMs),
   };
 }
 //@ chunk-e6aww6q8.js:666372-666704 placement
 /**
  * 从清单登记已同步插件目录与认证信息（可先对齐 sidecar）；根被拒时按关闭失败处理并清空。
  */
-async function registerSyncedPluginDirs(pluginsRootGuard, { reconcileSidecars }) {
-  let pluginsManifest = await readPluginsManifest(pluginsRootGuard);
+async function registerSyncedPluginDirs(rootGuard, { reconcileSidecars }) {
+  let pluginsManifest = await readPluginsManifest(rootGuard);
   if (!pluginsManifest) return;
-  if (reconcileSidecars) await reconcilePluginSidecars(pluginsRootGuard, pluginsManifest.plugins);
-  if (pluginsRootGuard.guard.refusedReason() !== null) {
+  if (reconcileSidecars) await reconcilePluginSidecars(rootGuard, pluginsManifest.plugins);
+  if (rootGuard.guard.refusedReason() !== null) {
     logForDiagnosticsNoPII("warn", "plugins_sync_root_refused_fail_closed");
     setSyncedPluginDirs([]);
     return;
   }
-  let s = mapRowsToDirs(pluginsRootGuard.root, pluginsManifest.plugins);
-  let mapped = s.map(({ dir }) => dir);
-  let y = new Map();
-  for (let S of mapped) {
-    let syncedPluginAttestation = getSyncedPluginAttestation(S);
-    if (syncedPluginAttestation !== undefined) y.set(S, syncedPluginAttestation);
+  let dirs = mapRowsToDirs(rootGuard.root, pluginsManifest.plugins);
+  let dirs_2 = dirs.map(({ dir }) => dir);
+  let attestations = new Map();
+  for (let dir of dirs_2) {
+    let syncedPluginAttestation = getSyncedPluginAttestation(dir);
+    if (syncedPluginAttestation !== undefined) attestations.set(dir, syncedPluginAttestation);
   }
-  setSyncedPluginDirs(mapped, y, dirToPluginIdMap(s));
+  setSyncedPluginDirs(dirs_2, attestations, dirToPluginIdMap(dirs));
 }
 //@ chunk-e6aww6q8.js:666704-666765 placement
 /**
  * 列出已同步插件的目录。
  */
-async function listSyncedPluginDirsOnly(e) {
-  return (await listSyncedPluginDirs(e)).map(({ dir }) => dir);
+async function listSyncedPluginDirsOnly(storageV5) {
+  return (await listSyncedPluginDirs(storageV5)).map(({ dir }) => dir);
 }
 //@ chunk-e6aww6q8.js:666765-666910 placement
-async function listSyncedPluginDirs(e) {
-  let syncedPluginsState = await readSyncedPluginsState(e);
+async function listSyncedPluginDirs(storageV5) {
+  let syncedPluginsState = await readSyncedPluginsState(storageV5);
   return syncedPluginsState?.manifest
     ? mapRowsToDirs(syncedPluginsState.root, syncedPluginsState.manifest.plugins).map(({ dir, row }) => ({
         dir,
@@ -1457,29 +1519,29 @@ async function listSyncedPluginDirs(e) {
 /**
  * 在已同步插件中找出给定 ID 中实际存在目录的那些；无法判断时返回 null。
  */
-async function findInstalledSyncedPlugins(e, n) {
-  let bucketState = await readBucketState(e);
+async function findInstalledSyncedPlugins(storageV5, candidateIds) {
+  let bucketState = await readBucketState(storageV5);
   if (!bucketState?.manifest) return null;
   let filtered = mapRowsToDirs(bucketState.root, bucketState.manifest.plugins).filter(({ row }) =>
-    n.has(row.pluginId),
+    candidateIds.has(row.pluginId),
   );
   let results = await Promise.all(
     filtered.map(({ dir }) =>
       lstat(dir).then(
-        (S) => S.isDirectory(),
+        (entry) => entry.isDirectory(),
         (error) => (isENOENT(error) ? false : null),
       ),
     ),
   );
   if (results.includes(null)) return null;
-  return new Set(filtered.flatMap(({ row }, S) => (results[S] ? [row.pluginId] : [])));
+  return new Set(filtered.flatMap(({ row }, entryIndex) => (results[entryIndex] ? [row.pluginId] : [])));
 }
 //@ chunk-e6aww6q8.js:667237-667378 placement
 /**
  * 已应用的插件列表是否与清单中的插件一致。
  */
-async function isAppliedListCurrent(e) {
-  let manifest = (await readSyncedPluginsState(e))?.manifest;
+async function isAppliedListCurrent(storageV5) {
+  let manifest = (await readSyncedPluginsState(storageV5))?.manifest;
   return (
     manifest?.appliedListIds !== undefined &&
     sameIdSet(
@@ -1489,32 +1551,32 @@ async function isAppliedListCurrent(e) {
   );
 }
 //@ chunk-e6aww6q8.js:667378-667518 placement
-async function readSyncedPluginsState(e) {
+async function readSyncedPluginsState(storageV5) {
   if (isDiskless()) return null;
-  let syncBucket = await getSyncBucket(e);
-  if (syncBucket === null) {
+  let storageV5_2 = await getSyncBucket(storageV5);
+  if (storageV5_2 === null) {
     logForDiagnosticsNoPII("info", "plugins_sync_bucket_unresolved");
     return null;
   }
-  return readBucketState(syncBucket);
+  return readBucketState(storageV5_2);
 }
 //@ chunk-e6aww6q8.js:667518-667883 placement
 /**
  * 读取插件同步桶状态：同步根与回收根都校验通过且桶有标记时返回根与清单，否则 null。
  */
-async function readBucketState(e) {
+async function readBucketState(storageV5) {
   if (isDiskless()) return null;
-  let n = syncedPluginBucketDir(e);
-  let r = {
+  let root = syncedPluginBucketDir(storageV5);
+  let refusalLabels = {
     event: "plugins_sync_root_refused",
     phase: "read",
   };
-  let [s, h] = await Promise.all([
+  let [rootCheck, stagingCheck] = await Promise.all([
     verifySyncRoot(
-      n,
+      root,
       getClaudeConfigDir(),
       {
-        ...r,
+        ...refusalLabels,
         rootLabel: SKILLS_SYNCED_STAGING,
       },
       {
@@ -1522,28 +1584,32 @@ async function readBucketState(e) {
       },
     ).catch(() => null),
     verifySyncRoot(pluginsTrashRoot(), getClaudeConfigDir(), {
-      ...r,
+      ...refusalLabels,
       rootLabel: PLUGINS_SYNC_DIR,
     }).catch(() => null),
   ]);
-  if (s !== "real" || (h !== "real" && h !== "absent") || !(await hasSyncMarker(syncedPluginsRoot(), e)))
+  if (
+    rootCheck !== "real" ||
+    (stagingCheck !== "real" && stagingCheck !== "absent") ||
+    !(await hasSyncMarker(syncedPluginsRoot(), storageV5))
+  )
     return null;
   return {
-    root: n,
-    manifest: await readPluginsManifest(createPluginsRootGuard(n)),
+    root,
+    manifest: await readPluginsManifest(createPluginsRootGuard(root)),
   };
 }
 //@ chunk-e6aww6q8.js:667883-668076 placement
-async function getRegisteredSyncedDirs(e) {
+async function getRegisteredSyncedDirs(storageV5) {
   let syncedPluginDirs = getSyncedPluginDirs();
   if (syncedPluginDirs.length === 0) return syncedPluginDirs;
-  let syncBucket = await getSyncBucket(e);
+  let syncBucket = await getSyncBucket(storageV5);
   if (syncBucket === null) {
     logForDiagnosticsNoPII("info", "plugins_sync_bucket_unresolved");
     return [];
   }
-  let s = syncedPluginBucketDir(syncBucket);
-  return syncedPluginDirs.every((syncedPluginDir) => dirname(syncedPluginDir) === s)
+  let bucketDir = syncedPluginBucketDir(syncBucket);
+  return syncedPluginDirs.every((syncedPluginDir) => dirname(syncedPluginDir) === bucketDir)
     ? syncedPluginDirs
     : null;
 }
@@ -1553,49 +1619,49 @@ async function getRegisteredSyncedDirs(e) {
  */
 async function ensureSyncedPluginDirsRegistered() {
   if (hasRegisteredSyncedPluginDirs()) return;
-  let e = await listSyncedPluginDirs();
+  let dirs = await listSyncedPluginDirs();
   setSyncedPluginDirs(
-    e.map(({ dir }) => dir),
+    dirs.map(({ dir }) => dir),
     undefined,
-    new Map(e.map(({ dir, pluginId }) => [dir, pluginId])),
+    new Map(dirs.map(({ dir, pluginId }) => [dir, pluginId])),
   );
 }
 //@ chunk-e6aww6q8.js:668207-668635 placement
 /**
  * 删除已同步插件目录：保留拼写不删；正在使用或有在线会话时推迟；否则移入回收区并删除元数据文件。返回是否已删除。
  */
-async function removeSyncedPluginDir(root, n, r, s) {
-  let h;
+async function removeSyncedPluginDir(root, dirName, classifyLive, rowDirNames) {
+  let dirPath;
   try {
-    h = syncedItemPath_2(n, root);
+    dirPath = syncedItemPath_2(dirName, root);
   } catch (error) {
     if (error instanceof LegacyReservedSpellingError) return false;
     return true;
   }
-  if (r) {
-    let S = await r(h);
-    if (S === "live") return true;
-    if (S === "indeterminate") return false;
+  if (classifyLive) {
+    let liveState = await classifyLive(dirPath);
+    if (liveState === "live") return true;
+    if (liveState === "indeterminate") return false;
   }
-  if (s !== undefined && (await isRegisteredLivePluginDir(h, n, s))) {
+  if (rowDirNames !== undefined && (await isRegisteredLivePluginDir(dirPath, dirName, rowDirNames))) {
     logForDiagnosticsNoPII("info", "plugins_sync_removal_deferred_live_session");
     return false;
   }
-  let y = await checkSyncRoots({
-    dir: h,
+  let removed = await checkSyncRoots({
+    dir: dirPath,
     trashRoot: pluginsTrashRoot(),
     configHome: getClaudeConfigDir(),
     failureEvent: "plugins_sync_trash_move_failed",
   });
-  if (y)
-    await rm_2(h + PLUGIN_META_SUFFIX, {
+  if (removed)
+    await rm_2(dirPath + PLUGIN_META_SUFFIX, {
       force: true,
     }).catch(() => {});
-  return y;
+  return removed;
 }
 //@ chunk-e6aww6q8.js:668635-668775 placement
-async function isPluginDirInUse(e) {
-  return isPluginVersionInUse(e, {
+async function isPluginDirInUse(dirName) {
+  return isPluginVersionInUse(dirName, {
     refusedCountsAsLive: false,
     requireIdentity: true,
   }).catch(() => {
@@ -1607,47 +1673,56 @@ async function isPluginDirInUse(e) {
 /**
  * 目录是否属于仍登记、正在使用的插件。
  */
-async function isRegisteredLivePluginDir(e, n, r) {
-  return r.has(stripInvisibleChars_3(stripGenerationSuffix(n))) && (await isPluginDirInUse(e));
+async function isRegisteredLivePluginDir(dirName, dirPath, rowDirNames) {
+  return (
+    rowDirNames.has(stripInvisibleChars_3(stripGenerationSuffix(dirPath))) &&
+    (await isPluginDirInUse(dirName))
+  );
 }
 //@ chunk-e6aww6q8.js:668840-669339 placement
 /**
  * 记录最近一次完整列表（每个插件的目录集合与待删除目录），用于后续清理已下架的插件目录。
  */
-function recordCompleteList(pluginsSync, syncBucket, root, s) {
-  if (s.degraded) return;
+function recordCompleteList(pluginsSync, syncBucket, root, listResult) {
+  if (listResult.degraded) return;
   let lastCompleteList = pluginsSync.lastCompleteList;
-  let y = lastCompleteList !== null && lastCompleteList.bucket === syncBucket ? lastCompleteList : null;
-  let S = y?.dirsById ?? new Map();
-  let w = new Map();
-  for (let plugin of s.plugins)
-    w.set(plugin.pluginId, new Set([...(S.get(plugin.pluginId) ?? []), ...getRowDirNames(root, [plugin])]));
-  let L = new Set([
-    ...Array.from(S).flatMap(([Z, Se]) => (w.has(Z) ? [] : Array.from(Se))),
-    ...(y?.removalOwed ?? []),
+  let previousList =
+    lastCompleteList !== null && lastCompleteList.bucket === syncBucket ? lastCompleteList : null;
+  let previousDirsById = previousList?.dirsById ?? new Map();
+  let dirsById = new Map();
+  for (let plugin of listResult.plugins)
+    dirsById.set(
+      plugin.pluginId,
+      new Set([...(previousDirsById.get(plugin.pluginId) ?? []), ...getRowDirNames(root, [plugin])]),
+    );
+  let delistedDirs = new Set([
+    ...Array.from(previousDirsById).flatMap(([pluginId, dirs]) =>
+      dirsById.has(pluginId) ? [] : Array.from(dirs),
+    ),
+    ...(previousList?.removalOwed ?? []),
   ]);
-  let listedDirs = new Set(Array.from(w.values()).flatMap((Z) => Array.from(Z)));
-  let q = removeDelistedSkillHooks({
+  let listedDirs = new Set(Array.from(dirsById.values()).flatMap((dirs) => Array.from(dirs)));
+  let hooksRemoved = removeDelistedSkillHooks({
     bucket: syncBucket,
-    delistedDirs: L,
+    delistedDirs,
     listedDirs,
   });
   pluginsSync.lastCompleteList = {
     bucket: syncBucket,
-    dirsById: w,
-    removalOwed: q ? new Set() : L,
+    dirsById,
+    removalOwed: hooksRemoved ? new Set() : delistedDirs,
   };
 }
 //@ chunk-e6aww6q8.js:669339-669449 placement
 function getRowDirNames(root, plugins) {
   return new Set(
-    plugins.flatMap(({ name: r }) => {
+    plugins.flatMap(({ name }) => {
       try {
         return [
           stripInvisibleChars_3(
             basename(
               itemInstallPath(root, {
-                name: r,
+                name,
               }),
             ),
           ),
@@ -1659,13 +1734,13 @@ function getRowDirNames(root, plugins) {
   );
 }
 //@ chunk-e6aww6q8.js:669449-669572 placement
-async function removeStaleDirs(root, n, liveEntryClassifier, rowDirNames) {
-  let h = new Set();
-  for (let y of n) {
-    if (isSyncedPluginDirLoadedHere(join(root, y))) continue;
-    if (await removeSyncedPluginDir(root, y, liveEntryClassifier, rowDirNames)) h.add(y);
+async function removeStaleDirs(root, dirNames, classifyLive, rowDirNames) {
+  let removedDirs = new Set();
+  for (let dirName of dirNames) {
+    if (isSyncedPluginDirLoadedHere(join(root, dirName))) continue;
+    if (await removeSyncedPluginDir(root, dirName, classifyLive, rowDirNames)) removedDirs.add(dirName);
   }
-  return h;
+  return removedDirs;
 }
 //@ chunk-e6aww6q8.js:669572-670106 placement
 /**
@@ -1713,30 +1788,30 @@ async function listPluginBuckets() {
 }
 //@ chunk-e6aww6q8.js:670106-670334 placement
 async function trashStrayEntries(strays) {
-  let n = 0;
-  for (let r of strays)
+  let count = 0;
+  for (let strayName of strays)
     if (
       await checkSyncRoots({
-        dir: join(syncedPluginsRoot(), r),
+        dir: join(syncedPluginsRoot(), strayName),
         trashRoot: pluginsTrashRoot(),
         configHome: getClaudeConfigDir(),
         failureEvent: "plugins_sync_trash_move_failed",
       })
     )
-      n++;
-  if (n > 0)
+      count++;
+  if (count > 0)
     logForDiagnosticsNoPII("info", "plugins_sync_stray_entry_trashed", {
-      count: n,
+      count,
     });
-  return n;
+  return count;
 }
 //@ chunk-e6aww6q8.js:670334-670424 placement
 /**
  * 清理多余（已下架）的插件桶目录。
  */
 async function trashStrayPluginBuckets() {
-  let e = await listPluginBuckets();
-  if (e !== null && e.strays.length > 0) await trashStrayEntries(e.strays);
+  let bucketScan = await listPluginBuckets();
+  if (bucketScan !== null && bucketScan.strays.length > 0) await trashStrayEntries(bucketScan.strays);
 }
 //@ chunk-e6aww6q8.js:670424-670520 placement
 /**
@@ -1762,50 +1837,50 @@ async function pruneSyncedPluginsForClosedGate() {
     logForDiagnosticsNoPII("info", "plugins_sync_prune_deferred_loaded");
     return false;
   }
-  let e = await listPluginBuckets();
-  if (!e) return false;
+  let bucketScan = await listPluginBuckets();
+  if (!bucketScan) return false;
   setSyncedPluginDirs([]);
-  let n = 0;
+  let movedCount = 0;
   let retained = 0;
-  for (let bucket of e.buckets) {
-    let h = syncedPluginBucketDir(bucket);
-    await rm_2(join(h, MARKETPLACES_JSON_FILE), {
+  for (let bucket of bucketScan.buckets) {
+    let bucketDir = syncedPluginBucketDir(bucket);
+    await rm_2(join(bucketDir, MARKETPLACES_JSON_FILE), {
       force: true,
     }).catch(() => {});
-    for (let we of await readdir(h).catch(() => []))
-      if (isClaudeAiMarketplaceFile(we))
-        await rm_2(join(h, we), {
+    for (let fileName of await readdir(bucketDir).catch(() => []))
+      if (isClaudeAiMarketplaceFile(fileName))
+        await rm_2(join(bucketDir, fileName), {
           force: true,
         }).catch(() => {});
-    await rm_2(lastCompleteRoundPath(h), {
+    await rm_2(lastCompleteRoundPath(bucketDir), {
       force: true,
     }).catch(() => {});
     let bucketRound = await readBucketRound(bucket);
     if (!bucketRound) continue;
     let { round, manifest } = bucketRound;
     let root = round.root;
-    let G = [];
-    let q = new Set();
+    let retainedPlugins = [];
+    let removedPluginIds = new Set();
     for (let plugin of manifest.plugins)
-      if (await removeSyncedPluginDir(root, itemDirName(root, plugin))) q.add(plugin.pluginId);
-      else G.push(plugin);
-    let Z = new Set(manifest.staleDirs ?? []);
-    let Se = await removeStaleDirs(root, Z);
-    for (let we of Se) Z.delete(we);
-    let ke = await trashOrphanSyncedPluginDirs(round, [], null);
-    n += q.size + Se.size + ke;
-    if (G.length > 0 || Z.size > 0) {
-      retained += G.length + Z.size;
+      if (await removeSyncedPluginDir(root, itemDirName(root, plugin))) removedPluginIds.add(plugin.pluginId);
+      else retainedPlugins.push(plugin);
+    let staleDirs = new Set(manifest.staleDirs ?? []);
+    let removedDirs = await removeStaleDirs(root, staleDirs);
+    for (let dirName of removedDirs) staleDirs.delete(dirName);
+    let orphanCount = await trashOrphanSyncedPluginDirs(round, [], null);
+    movedCount += removedPluginIds.size + removedDirs.size + orphanCount;
+    if (retainedPlugins.length > 0 || staleDirs.size > 0) {
+      retained += retainedPlugins.length + staleDirs.size;
       await writePluginsManifest(
         round,
         {
           lastUpdated: manifest.lastUpdated,
-          plugins: G,
-          staleDirs: Z.size > 0 ? Array.from(Z) : undefined,
+          plugins: retainedPlugins,
+          staleDirs: staleDirs.size > 0 ? Array.from(staleDirs) : undefined,
         },
         {
-          staleDirs: Se,
-          removedPluginIds: q,
+          staleDirs: removedDirs,
+          removedPluginIds,
         },
       ).catch(() => {});
     } else {
@@ -1818,13 +1893,13 @@ async function pruneSyncedPluginsForClosedGate() {
       );
     }
   }
-  n += await trashStrayEntries([...e.strays, ...e.unreadable]);
+  movedCount += await trashStrayEntries([...bucketScan.strays, ...bucketScan.unreadable]);
   await rmdir(syncedPluginsRoot()).catch(() => {});
   logForDiagnosticsNoPII("info", "plugins_sync_pruned_for_closed_gate", {
-    moved: n,
+    moved: movedCount,
     retained,
   });
-  return n > 0;
+  return movedCount > 0;
 }
 //@ chunk-e6aww6q8.js:671618-672275 placement
 /**
@@ -1852,7 +1927,7 @@ async function completeDeferredRemovals() {
       retained += staleDirs.size;
       continue;
     }
-    for (let q of removed) staleDirs.delete(q);
+    for (let dirName of removed) staleDirs.delete(dirName);
     moved += removed.size;
     retained += staleDirs.size;
     await writePluginsManifest(
@@ -1877,21 +1952,21 @@ async function completeDeferredRemovals() {
   return true;
 }
 //@ chunk-e6aww6q8.js:672275-673261 placement
-async function trashOrphanSyncedPluginDirs(e, plugins, removalsDeferredHere) {
-  if (!(await e.guard.verify())) return 0;
-  let root = e.root;
-  let pluginsManifest = await readPluginsManifest(e);
+async function trashOrphanSyncedPluginDirs(pluginsRootGuard, plugins, removalsDeferredHere) {
+  if (!(await pluginsRootGuard.guard.verify())) return 0;
+  let root = pluginsRootGuard.root;
+  let pluginsManifest = await readPluginsManifest(pluginsRootGuard);
   if (!pluginsManifest) return 0;
-  let y = new Set(
+  let knownDirNames = new Set(
     [
       ...[
         ...pluginsManifest.plugins,
-        ...plugins.map(({ name: q }) => ({
-          name: q,
+        ...plugins.map(({ name }) => ({
+          name,
         })),
-      ].flatMap((q) => {
+      ].flatMap((row) => {
         try {
-          return [basename(itemInstallPath(root, q))];
+          return [basename(itemInstallPath(root, row))];
         } catch {
           return [];
         }
@@ -1899,21 +1974,26 @@ async function trashOrphanSyncedPluginDirs(e, plugins, removalsDeferredHere) {
       ...(pluginsManifest.staleDirs ?? []),
     ].map(stripInvisibleChars_3),
   );
-  let S;
+  let entries;
   try {
-    S = await readdir(root, {
+    entries = await readdir(root, {
       withFileTypes: true,
     });
   } catch {
     return 0;
   }
-  let mapped = S.filter(
-    (q) => q.isDirectory() && !isHiddenFoldName(q.name) && !y.has(stripInvisibleChars_3(q.name)),
-  ).map((q) => q.name);
+  let mapped = entries
+    .filter(
+      (entry) =>
+        entry.isDirectory() &&
+        !isHiddenFoldName(entry.name) &&
+        !knownDirNames.has(stripInvisibleChars_3(entry.name)),
+    )
+    .map((entry) => entry.name);
   if (mapped.length === 0) return 0;
   if (hasSyncedPluginLaneOpened()) {
     await writePluginsManifest(
-      e,
+      pluginsRootGuard,
       {
         lastUpdated: pluginsManifest.lastUpdated,
         plugins: pluginsManifest.plugins,
@@ -1925,87 +2005,87 @@ async function trashOrphanSyncedPluginDirs(e, plugins, removalsDeferredHere) {
         carryAppliedListIds: true,
       },
     );
-    for (let q of mapped) removalsDeferredHere?.add(q);
+    for (let dirName of mapped) removalsDeferredHere?.add(dirName);
     logForDiagnosticsNoPII("info", "plugins_sync_orphan_dir_deferred", {
       count: mapped.length,
     });
     return 0;
   }
-  let L = 0;
+  let trashedCount = 0;
   let rowDirNames = getRowDirNames(root, plugins);
-  for (let q of mapped) {
-    if (await isRegisteredLivePluginDir(join(root, q), q, rowDirNames)) continue;
+  for (let dirName of mapped) {
+    if (await isRegisteredLivePluginDir(join(root, dirName), dirName, rowDirNames)) continue;
     if (
       await checkSyncRoots({
-        dir: join(root, q),
+        dir: join(root, dirName),
         trashRoot: pluginsTrashRoot(),
         configHome: getClaudeConfigDir(),
         failureEvent: "plugins_sync_trash_move_failed",
       })
     ) {
-      L++;
-      await rm_2(join(root, q) + PLUGIN_META_SUFFIX, {
+      trashedCount++;
+      await rm_2(join(root, dirName) + PLUGIN_META_SUFFIX, {
         force: true,
       }).catch(() => {});
     }
   }
-  if (L > 0)
+  if (trashedCount > 0)
     logForDiagnosticsNoPII("info", "plugins_sync_orphan_dir_trashed", {
-      count: L,
+      count: trashedCount,
     });
-  return L;
+  return trashedCount;
 }
 //@ chunk-e6aww6q8.js:673261-673312 placement
 /**
  * 把清单行映射为目录列表。
  */
-function manifestRowDirs(root, n) {
-  return mapRowsToDirs(root, n).map(({ dir }) => dir);
+function manifestRowDirs(root, plugins) {
+  return mapRowsToDirs(root, plugins).map(({ dir }) => dir);
 }
 //@ chunk-e6aww6q8.js:673312-673472 placement
 function mapRowsToDirs(root, plugins) {
-  let r = new Map();
-  for (let s of plugins) {
-    let h;
+  let byDir = new Map();
+  for (let plugin of plugins) {
+    let dirPath;
     try {
-      h = itemInstallPath(root, s);
+      dirPath = itemInstallPath(root, plugin);
     } catch {
       continue;
     }
-    let y = stripInvisibleChars_3(h);
-    if (!r.has(y))
-      r.set(y, {
-        dir: h,
-        row: s,
+    let strippedDir = stripInvisibleChars_3(dirPath);
+    if (!byDir.has(strippedDir))
+      byDir.set(strippedDir, {
+        dir: dirPath,
+        row: plugin,
       });
   }
-  return Array.from(r.values());
+  return Array.from(byDir.values());
 }
 //@ chunk-e6aww6q8.js:673472-673719 placement
-function registerDirsWithAttestations(root, n, r, s = new Set()) {
-  let h = mapRowsToDirs(root, n);
-  let y = new Map();
-  for (let { dir, row } of h) {
-    let L = r.get(row.pluginId);
+function registerDirsWithAttestations(root, rows, attestations, newHere = new Set()) {
+  let dirs = mapRowsToDirs(root, rows);
+  let dirAttestations = new Map();
+  for (let { dir, row } of dirs) {
+    let attestation = attestations.get(row.pluginId);
     if (
-      L !== undefined &&
-      row.name === L.rowName &&
-      (row.generation === undefined || s.has(row) || getSyncedPluginAttestation(dir) !== undefined)
+      attestation !== undefined &&
+      row.name === attestation.rowName &&
+      (row.generation === undefined || newHere.has(row) || getSyncedPluginAttestation(dir) !== undefined)
     )
-      y.set(dir, L.attestation);
+      dirAttestations.set(dir, attestation.attestation);
   }
   setSyncedPluginDirs(
-    h.map(({ dir }) => dir),
-    y,
-    dirToPluginIdMap(h),
+    dirs.map(({ dir }) => dir),
+    dirAttestations,
+    dirToPluginIdMap(dirs),
   );
 }
 //@ chunk-e6aww6q8.js:673719-673790 placement
 /**
  * 目录 → 插件 id 的映射，用于登记已同步目录。
  */
-function dirToPluginIdMap(e) {
-  return new Map(e.map(({ dir, row }) => [dir, row.pluginId]));
+function dirToPluginIdMap(rows) {
+  return new Map(rows.map(({ dir, row }) => [dir, row.pluginId]));
 }
 export {
   isAppliedListCurrent,

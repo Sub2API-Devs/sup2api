@@ -41,7 +41,7 @@ import { showScreen } from "../../utils/runSteps.js";
 import { logError } from "../../utils/log.js";
 import { getBaseRenderOptions } from "../../utils/renderOptions.js";
 import { logForDebugging, createAttachmentMessage_2 as createAttachmentMessage } from "../../utils/debug.js";
-import { Uo } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { cleanupTerminalModes, gracefulShutdown } from "../../utils/gracefulShutdown.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import {
@@ -145,11 +145,11 @@ import {
   jsxProd_default,
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { string, u } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema, objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { createStore } from "../../state/store.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { y, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { useState, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import {
   TURN_STOPPED_BLOCK,
   UNSENT_INPUT_BLOCK,
@@ -176,7 +176,7 @@ import { getPermissionModeCycle } from "../../utils/permissions/permissions.js";
 import { promptProactivityLevel } from "../../utils/proactivityLevel.js";
 import { HUMAN_CADENCE_MS, LEFT_ARROW_BACK_HINT } from "../../hooks/useTextInput.js";
 import { topBlockingDialog, LEFT_ARROW_CONFIRM_DIALOG } from "../replDialogState.js";
-import { wi } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_reject } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { getSystemPrompt } from "../../constants/prompts.js";
 import { getRuntimeMainLoopModel } from "../../utils/model/planModeModel.js";
 import { getOrBuildUserContext, getCachedSystemContext } from "../../context.js";
@@ -186,53 +186,54 @@ import { imageLimitsForModel } from "../../utils/attachmentMedia.js";
 import { cloneStickyBetaLatches } from "../../bootstrap/stateSlices.js";
 import { startBackgroundSession } from "../../tasks/LocalMainSessionTask.js";
 import { getQuerySourceForREPL } from "../../utils/promptCategory.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:82387-82574 placement
 function preloadBackgroundChunks() {
   return Promise.all([
-    import("./chunk-1m6xc21j.js"),
-    import("./chunk-jsc6qjj6.js"),
-    import("./chunk-7gry1hef.js"),
-    import("./chunk-ygxzcsa5.js"),
-    import("./chunk-sqs18vyt.js"),
+    import("../../ink/components/Ansi.lazy.js"),
+    import("../../components/fleet/FleetView.js"),
+    import("../FleetView/FleetViewScreen.js"),
+    import("../../components/fleet/mountFleetView.js"),
+    import("../../components/fleet/useAttachFleetOwners.js"),
   ]);
 }
 //@ chunk-18hwfzwa.js:82574-83646 placement
-async function detachToBackground(h, x, D) {
+async function detachToBackground(jobId, preloadBackgroundChunks_2, host) {
   disposeLiveState();
   teardownFrameLiveForProcessHandoff();
   removeQueuedByFilter(isPassiveMainAgentCommand);
   resetNoticeBudgets();
-  let L = listJobs(undefined, D?.storageV5).catch(() => []);
+  let jobsPromise = listJobs(undefined, host?.storageV5).catch(() => []);
   await withTimeout(flushSessionStorage(), 2000, "flush timeout").catch(() => {});
-  let ee = rootOf(process.stdout);
-  let ke = D?.abortLiveTurn?.();
-  if (ee) showScreen(ee, null);
-  ke?.then(D?.dropLateQueued).catch((error) => {
+  let existingRoot = rootOf(process.stdout);
+  let abortLiveTurnResult = host?.abortLiveTurn?.();
+  if (existingRoot) showScreen(existingRoot, null);
+  abortLiveTurnResult?.then(host?.dropLateQueued).catch((error) => {
     logError(error);
   });
-  process.env.CLAUDE_AGENTS_SELECT = h;
+  process.env.CLAUDE_AGENTS_SELECT = jobId;
   let [
-    { createRoot: Re },
-    { seedHostJobs: Be },
-    { applyFleetViewHostWindowsEnv: He },
-    { mountFleetViewWithComposerBack: We },
-    { createFleetViewHost: ze },
-  ] = await (x ?? preloadBackgroundChunks());
-  He();
-  let Xe = ee ?? (await Re(getBaseRenderOptions(false)));
-  let rt = ze();
-  rt.fleetNudgeStore = D?.fleetNudgeStore ?? null;
-  let kt = await withTimeout(L, 50, "listJobs seed").catch(() => null);
-  if (kt !== null) Be(rt, kt, D?.storageV5);
+    { createRoot },
+    { seedHostJobs },
+    { applyFleetViewHostWindowsEnv },
+    { mountFleetViewWithComposerBack },
+    { createFleetViewHost },
+  ] = await (preloadBackgroundChunks_2 ?? preloadBackgroundChunks());
+  applyFleetViewHostWindowsEnv();
+  let root = existingRoot ?? (await createRoot(getBaseRenderOptions(false)));
+  let fleetHost = createFleetViewHost();
+  fleetHost.fleetNudgeStore = host?.fleetNudgeStore ?? null;
+  let jobs = await withTimeout(jobsPromise, 50, "listJobs seed").catch(() => null);
+  if (jobs !== null) seedHostJobs(fleetHost, jobs, host?.storageV5);
   logForDebugging("[PERF:bg-leftarrow-mounted]");
-  await We(Xe, {
-    ...Uo(D, "abortLiveTurn", "dropLateQueued"),
-    host: rt,
+  await mountFleetViewWithComposerBack(root, {
+    ...omitAlias(host, "abortLiveTurn", "dropLateQueued"),
+    host: fleetHost,
     entryChannel: "repl_back",
-    originJobId: h,
+    originJobId: jobId,
   });
-  let originSpawn = D?.originSpawn;
+  let originSpawn = host?.originSpawn;
   if (originSpawn?.resumeHintRequested && originSpawn.transcriptMaterialized) {
     cleanupTerminalModes();
     try {
@@ -261,37 +262,37 @@ function demoteInheritedPermissionMode(permissionMode) {
       };
 }
 //@ chunk-18hwfzwa.js:83778-84339 placement
-async function carryTaskListToFork(taskListId, signal, store) {
+async function carryTaskListToFork(forkSessionId, signal, storageV5) {
   let sessionId = getSessionId();
   if (env.CLAUDE_CODE_TASK_LIST_ID || getTaskListId() !== sessionId) return;
-  if (isStorageV5Enabled() && store) {
-    await copyTaskListEntries(store, sessionId, taskListId, signal);
+  if (isStorageV5Enabled() && storageV5) {
+    await copyTaskListEntries(storageV5, sessionId, forkSessionId, signal);
     return;
   }
   let fileReader = getFileReader();
   let taskOutputDir = getTaskOutputDir_2(sessionId);
-  let taskOutputDir_2 = getTaskOutputDir_2(taskListId);
-  let Be = await fileReader.listEntries(taskOutputDir).catch((error) => {
+  let taskOutputDir_2 = getTaskOutputDir_2(forkSessionId);
+  let entries = await fileReader.listEntries(taskOutputDir).catch((error) => {
     if (!isENOENT(error))
       logForDebugging(`[tasks] carry to fork failed: ${error}`, {
         level: "warn",
       });
     return null;
   });
-  if (Be === null) return;
-  await ensureTaskListDir(taskListId, store);
-  for (let He of Be) {
+  if (entries === null) return;
+  await ensureTaskListDir(forkSessionId, storageV5);
+  for (let entry of entries) {
     if (signal?.aborted) {
       logForDebugging("[tasks] carry to fork stopped at the cap", {
         level: "warn",
       });
       return;
     }
-    if (!He.isFile) continue;
+    if (!entry.isFile) continue;
     try {
-      await fileReader.copy(join(taskOutputDir, He.name), join(taskOutputDir_2, He.name));
+      await fileReader.copy(join(taskOutputDir, entry.name), join(taskOutputDir_2, entry.name));
     } catch (error) {
-      logForDebugging(`[tasks] carry to fork skipped ${He.name}: ${error}`, {
+      logForDebugging(`[tasks] carry to fork skipped ${entry.name}: ${error}`, {
         level: "warn",
       });
     }
@@ -300,114 +301,120 @@ async function carryTaskListToFork(taskListId, signal, store) {
 //@ chunk-18hwfzwa.js:84339-84349 placement
 var MAX_PARALLEL_EXPIRY_WRITES = 8;
 //@ chunk-18hwfzwa.js:84349-85537 placement
-async function copyTaskListEntries(h, sessionId, D, L) {
-  let ee = sanitizePathComponent(sessionId);
-  let ke = sanitizePathComponent(D);
-  let Re = [];
-  let Be;
+async function copyTaskListEntries(storage, sessionId, forkSessionId, signal) {
+  let sourceListId = sanitizePathComponent(sessionId);
+  let targetListId = sanitizePathComponent(forkSessionId);
+  let taskIds = [];
+  let cursor;
   do {
-    let Xe = await h.listEntries(
+    let page = await storage.listEntries(
       {
         namespace: "task",
-        listId: ee,
+        listId: sourceListId,
       },
-      Be === undefined
+      cursor === undefined
         ? undefined
         : {
-            cursor: Be,
+            cursor,
           },
     );
-    if (!Xe.ok) {
-      logForDebugging(`[tasks] carry to fork failed: ${Xe.error.code}`, {
+    if (!page.ok) {
+      logForDebugging(`[tasks] carry to fork failed: ${page.error.code}`, {
         level: "warn",
       });
       return;
     }
-    for (let item of Xe.value.items)
+    for (let item of page.value.items)
       if (item.kind === "key" && item.key.namespace === "task" && "taskId" in item.key)
-        Re.push(item.key.taskId);
-    Be = Xe.value.cursor;
-  } while (Be !== undefined);
-  let He = async (Xe, rt, kt) => {
-    let At = await h.read([Xe]);
-    if (!At.ok) {
-      logForDebugging(`[tasks] carry to fork skipped ${kt}: ${At.error.code}`, {
+        taskIds.push(item.key.taskId);
+    cursor = page.value.cursor;
+  } while (cursor !== undefined);
+  let carryEntry = async (sourceKey, targetKey, taskId) => {
+    let readResult = await storage.read([sourceKey]);
+    if (!readResult.ok) {
+      logForDebugging(`[tasks] carry to fork skipped ${taskId}: ${readResult.error.code}`, {
         level: "warn",
       });
       return;
     }
-    let It = At.value.items[0];
-    if (!It || !It.found) return;
-    let Ot = await h.write(rt, It.value, {
+    let item = readResult.value.items[0];
+    if (!item || !item.found) return;
+    let writeResult = await storage.write(targetKey, item.value, {
       precondition: {
         type: "ifAbsent",
       },
       mode: 438 & ~process.umask(),
     });
-    if (!Ot.ok)
-      logForDebugging(`[tasks] carry to fork skipped ${kt}: ${Ot.error.code}`, {
+    if (!writeResult.ok)
+      logForDebugging(`[tasks] carry to fork skipped ${taskId}: ${writeResult.error.code}`, {
         level: "warn",
       });
   };
-  if (L?.aborted) {
+  if (signal?.aborted) {
     logForDebugging("[tasks] carry to fork stopped at the cap", {
       level: "warn",
     });
     return;
   }
-  await He(
-    STORAGE_SPACES.taskListHighWaterMark(ee),
-    STORAGE_SPACES.taskListHighWaterMark(ke),
+  await carryEntry(
+    STORAGE_SPACES.taskListHighWaterMark(sourceListId),
+    STORAGE_SPACES.taskListHighWaterMark(targetListId),
     HIGH_WATER_MARK_FILE,
   );
-  let We = 0;
-  let ze = async () => {
-    while (We < Re.length && !L?.aborted) {
-      let Xe = Re[We++];
-      await He(STORAGE_SPACES.task(ee, Xe), STORAGE_SPACES.task(ke, Xe), Xe);
+  let nextIndex = 0;
+  let worker = async () => {
+    while (nextIndex < taskIds.length && !signal?.aborted) {
+      let taskId = taskIds[nextIndex++];
+      await carryEntry(
+        STORAGE_SPACES.task(sourceListId, taskId),
+        STORAGE_SPACES.task(targetListId, taskId),
+        taskId,
+      );
     }
   };
   await Promise.all(
     Array.from(
       {
-        length: Math.min(MAX_PARALLEL_EXPIRY_WRITES, Re.length),
+        length: Math.min(MAX_PARALLEL_EXPIRY_WRITES, taskIds.length),
       },
-      ze,
+      worker,
     ),
   );
-  if (L?.aborted && We < Re.length)
+  if (signal?.aborted && nextIndex < taskIds.length)
     logForDebugging("[tasks] carry to fork stopped at the cap", {
       level: "warn",
     });
 }
 //@ chunk-18hwfzwa.js:85537-85699 placement
-async function removeJobScope(h, x, D) {
-  if (D && h === getJobDir(x)) {
-    await D.deleteScope({
-      namespace: "job",
-      jobId: x,
-    }).catch(() => {});
+async function removeJobScope(dir, jobId, scopeStore) {
+  if (scopeStore && dir === getJobDir(jobId)) {
+    await scopeStore
+      .deleteScope({
+        namespace: "job",
+        jobId,
+      })
+      .catch(() => {});
     return;
   }
-  await rm(h, {
+  await rm(dir, {
     recursive: true,
     force: true,
   }).catch(() => {});
 }
 //@ chunk-18hwfzwa.js:85699-85744 placement
-function markExpired(h) {
-  return rename(h, `${h}.expired`);
+function markExpired(path) {
+  return rename(path, `${path}.expired`);
 }
 //@ chunk-18hwfzwa.js:85744-85807 placement
-function removeExpired(h) {
-  return unlink(`${h}.expired`).then(
+function removeExpired(path) {
+  return unlink(`${path}.expired`).then(
     () => {},
     () => {},
   );
 }
 //@ chunk-18hwfzwa.js:85807-86103 placement
 async function pingDaemon() {
-  let h = await controlRequest(
+  let response = await controlRequest(
     {
       proto: BG_PROTO,
       op: "ping",
@@ -416,48 +423,50 @@ async function pingDaemon() {
       timeoutMs: 2000,
     },
   );
-  if (!h.ok)
-    return h.code === "ENOCONN" && h.connected === false && isDaemonSocketGoneError(h.errno)
+  if (!response.ok)
+    return response.code === "ENOCONN" &&
+      response.connected === false &&
+      isDaemonSocketGoneError(response.errno)
       ? "reads"
       : "unreachable";
-  if (h.op !== "ping" || typeof h.carriedPromptsFormat !== "number") return "silent";
-  return h.carriedPromptsFormat >= MAX_CARRIED_PROMPTS_VARIANT ? "reads" : "lower-format";
+  if (response.op !== "ping" || typeof response.carriedPromptsFormat !== "number") return "silent";
+  return response.carriedPromptsFormat >= MAX_CARRIED_PROMPTS_VARIANT ? "reads" : "lower-format";
 }
 //@ chunk-18hwfzwa.js:86103-94334 placement
 /**
  * 输入框为空时按 ← 的处理：检查会话持久化/--project 等前提，统计在途读取与排队提示，决定是否需要后台化确认，然后 fork 当前会话并切到 agents 视图；被阻止时给出原因。
  */
 async function openAgentsViaLeftArrow(
-  snapshot,
-  sessionEffort,
+  messages,
+  effortLevel,
   permissionMode,
   additionalWorkingDirectories,
-  alwaysAllowRules,
-  alwaysDenyRules,
+  allowRules,
+  denyRules,
   messageQueue,
-  Be,
-  He,
+  autoJobName,
+  dispatchInfo,
   storageV5,
   credentials,
 ) {
-  let handoffRecord = takeHandoffRecord(snapshot, messageQueue);
-  let rt = false;
+  let handoffRecord = takeHandoffRecord(messages, messageQueue);
+  let didRelaunch = false;
   try {
-    let kt = await (async () => {
+    let handoffResult = await (async () => {
       logForDebugging("[PERF:bg-leftarrow-start]");
-      let backgroundSeed = deriveBackgroundSeed(snapshot, "");
-      if (backgroundSeed !== null && isTranscriptPersistenceDisabled()) {
+      let seed = deriveBackgroundSeed(messages, "");
+      if (seed !== null && isTranscriptPersistenceDisabled()) {
         logEvent("tengu_left_arrow_blocked", {
           reason: lit_2("persistence"),
-          inflight_count: He?.inflightCount ?? 0,
-          inflight_kinds: fromEnumArr(He?.inflightKinds ?? []),
+          inflight_count: dispatchInfo?.inflightCount ?? 0,
+          inflight_kinds: fromEnumArr(dispatchInfo?.inflightKinds ?? []),
         });
         return "Cannot open agents \u2014 session persistence is disabled, so this conversation cannot be backgrounded.";
       }
-      let It = isLeftArrowCarriesQueuedOn();
-      let Ot = (Qn) =>
-        It
-          ? collectCarriablePrompts(messageQueue, Qn)
+      let carriesQueued = isLeftArrowCarriesQueuedOn();
+      let collectPrompts = (queue) =>
+        carriesQueued
+          ? collectCarriablePrompts(messageQueue, queue)
           : {
               leftEarlier: [],
               beingRead: [],
@@ -465,87 +474,90 @@ async function openAgentsViaLeftArrow(
               stranded: [],
               fileContents: "",
             };
-      let Et = Ot();
-      let Dt = new Set();
-      let Lt = [];
-      let oo = () => {
-        let Qn = new Set([...Et.carriable, ...Et.beingRead]);
-        for (let ur of He?.replyOnResume ? messageQueue.getCommandQueue() : []) if (Qn.has(ur)) Dt.add(ur);
+      let collected = collectPrompts();
+      let carriedCommands = new Set();
+      let takenBackCommands = [];
+      let collectDiscarded = () => {
+        let collectedSet = new Set([...collected.carriable, ...collected.beingRead]);
+        for (let command of dispatchInfo?.replyOnResume ? messageQueue.getCommandQueue() : [])
+          if (collectedSet.has(command)) carriedCommands.add(command);
       };
-      oo();
-      let Xt =
-        Dt.size > 0
-          ? commandsDiscardedSignal.subscribe((Qn) => {
-              for (let ur of Qn) if (Dt.delete(ur)) Lt.push(ur);
+      collectDiscarded();
+      let unsubscribe =
+        carriedCommands.size > 0
+          ? commandsDiscardedSignal.subscribe((discardedCommands) => {
+              for (let command of discardedCommands)
+                if (carriedCommands.delete(command)) takenBackCommands.push(command);
             })
           : () => {};
-      using io = {
-        [Symbol.dispose]: Xt,
+      using subscription = {
+        [Symbol.dispose]: unsubscribe,
       };
-      let so = "reads";
-      if (Dt.size > 0) {
-        so = await pingDaemon();
-        Et = Ot();
-        oo();
+      let daemonState = "reads";
+      if (carriedCommands.size > 0) {
+        daemonState = await pingDaemon();
+        collected = collectPrompts();
+        collectDiscarded();
       }
-      let po =
-        Et.stranded.length > 0
+      let blockReason =
+        collected.stranded.length > 0
           ? "queued-uncarriable"
-          : so !== "reads" && Dt.size > 0
-            ? `queued-${so}-service`
-            : Et.carriable.length > 0 && !He?.replyOnResume
+          : daemonState !== "reads" && carriedCommands.size > 0
+            ? `queued-${daemonState}-service`
+            : collected.carriable.length > 0 && !dispatchInfo?.replyOnResume
               ? "queued-fork-idles"
               : undefined;
-      if (po !== undefined) {
-        let Qn =
-          po === "queued-uncarriable"
-            ? Et.stranded.length
-            : po === "queued-fork-idles"
-              ? Et.carriable.length
-              : Dt.size;
+      if (blockReason !== undefined) {
+        let blockedCount =
+          blockReason === "queued-uncarriable"
+            ? collected.stranded.length
+            : blockReason === "queued-fork-idles"
+              ? collected.carriable.length
+              : carriedCommands.size;
         logEvent("tengu_left_arrow_blocked", {
-          reason: fromEnum(po),
-          inflight_count: Qn,
-          inflight_kinds: fromEnumArr(He?.inflightKinds ?? []),
+          reason: fromEnum(blockReason),
+          inflight_count: blockedCount,
+          inflight_kinds: fromEnumArr(dispatchInfo?.inflightKinds ?? []),
         });
-        return cannotOpenAgentsQueuedMessage(Qn);
+        return cannotOpenAgentsQueuedMessage(blockedCount);
       }
-      if (backgroundSeed && !backgroundSeed.name && Be) {
-        backgroundSeed.name = Be;
-        backgroundSeed.nameSource = "auto";
+      if (seed && !seed.name && autoJobName) {
+        seed.name = autoJobName;
+        seed.nameSource = "auto";
       }
-      let ao = preloadBackgroundChunks();
-      let co = backgroundSeed
-        ? await settleSeedName(backgroundSeed, storageV5)
+      let preloadedChunks = preloadBackgroundChunks();
+      let settledSeed = seed
+        ? await settleSeedName(seed, storageV5)
         : {
             intent: "",
           };
-      let workerName = backgroundSeed && co.name !== backgroundSeed.name ? co.name : undefined;
-      let Ao = randomUUID();
+      let workerName = seed && settledSeed.name !== seed.name ? settledSeed.name : undefined;
+      let forkSessionId = randomUUID();
       let currentWorktreeSession = getCurrentWorktreeSession();
-      let Ro = Boolean(currentWorktreeSession && !currentWorktreeSession.enteredExisting);
-      let Ho = He?.taskRegistry?.all();
-      let Io = Ho ? summarizeBackgroundWork(Ho) : undefined;
-      let Wo = Ho ? carriedFrameLiveSlugs(Ho) : undefined;
-      let mn = Io
-        ? Io.count - Io.carriedMonitors === 0 && Io.restartableCount === 0
-        : He?.inflightCount === 0 && He?.restartableCount === 0;
-      let parkedJobId;
-      let No;
+      let isNewWorktree = Boolean(currentWorktreeSession && !currentWorktreeSession.enteredExisting);
+      let registeredTasks = dispatchInfo?.taskRegistry?.all();
+      let backgroundWorkSummary = registeredTasks ? summarizeBackgroundWork(registeredTasks) : undefined;
+      let frameLiveSlugs = registeredTasks ? carriedFrameLiveSlugs(registeredTasks) : undefined;
+      let hasNothingInFlight = backgroundWorkSummary
+        ? backgroundWorkSummary.count - backgroundWorkSummary.carriedMonitors === 0 &&
+          backgroundWorkSummary.restartableCount === 0
+        : dispatchInfo?.inflightCount === 0 && dispatchInfo?.restartableCount === 0;
+      let jobShortId;
+      let jobDir;
       try {
-        ({ short: parkedJobId, jobDir: No } = await preSeedReplBgJob(
-          Ao,
+        ({ short: jobShortId, jobDir } = await preSeedReplBgJob(
+          forkSessionId,
           {
-            ...co,
+            ...settledSeed,
             cwd: currentWorktreeSession?.worktreePath ?? getOriginalCwd(),
-            inFlight: mn
+            inFlight: hasNothingInFlight
               ? {
                   tasks: 0,
                   queued: 0,
                   kinds: [],
                 }
               : undefined,
-            worktree: Ro
+            worktree: isNewWorktree
               ? {
                   path: currentWorktreeSession.worktreePath,
                   branch: currentWorktreeSession.worktreeBranch,
@@ -554,15 +566,15 @@ async function openAgentsViaLeftArrow(
                 }
               : undefined,
             sessionPermissionRules: (() => {
-              let Qn = sessionAddDirs(additionalWorkingDirectories);
-              return (alwaysAllowRules.session?.length ?? 0) > 0 ||
-                (alwaysDenyRules.session?.length ?? 0) > 0 ||
-                Qn.length > 0
+              let sessionAddDirs_2 = sessionAddDirs(additionalWorkingDirectories);
+              return (allowRules.session?.length ?? 0) > 0 ||
+                (denyRules.session?.length ?? 0) > 0 ||
+                sessionAddDirs_2.length > 0
                 ? {
-                    allow: [...(alwaysAllowRules.session ?? [])],
-                    deny: [...(alwaysDenyRules.session ?? [])],
-                    ...(Qn.length > 0 && {
-                      addDirs: Qn,
+                    allow: [...(allowRules.session ?? [])],
+                    deny: [...(denyRules.session ?? [])],
+                    ...(sessionAddDirs_2.length > 0 && {
+                      addDirs: sessionAddDirs_2,
                     }),
                   }
                 : undefined;
@@ -575,127 +587,137 @@ async function openAgentsViaLeftArrow(
       } catch (error) {
         return `Cannot open agents \u2014 ${error instanceof Error ? error.message : String(error)}`;
       }
-      rt = await confirmRelaunch(
-        snapshot,
+      didRelaunch = await confirmRelaunch(
+        messages,
         "background_handoff",
         {
-          responseStreaming: He?.abortAfterFlush !== undefined,
+          responseStreaming: dispatchInfo?.abortAfterFlush !== undefined,
         },
         storageV5,
       );
-      let vo = null;
-      if (He?.taskRegistry) vo = await serializeAdoptable(He.taskRegistry.all(), messageQueue);
-      let Yo = Wo === undefined ? 0 : count(vo?.payload.frameLive ?? [], (Qn) => !Wo.has(Qn.slug));
+      let adoptable = null;
+      if (dispatchInfo?.taskRegistry)
+        adoptable = await serializeAdoptable(dispatchInfo.taskRegistry.all(), messageQueue);
+      let undisclosedFrameCount =
+        frameLiveSlugs === undefined
+          ? 0
+          : count(adoptable?.payload.frameLive ?? [], (frameEntry) => !frameLiveSlugs.has(frameEntry.slug));
       let replBridgeHandle = getReplBridgeHandle();
-      let Fn = 16384;
-      let bn = He?.partialText?.trimEnd() ?? "";
-      let Go = bn.length > Fn ? bn.slice(-Fn) : bn;
-      let hn =
-        He?.via === "abort-then-fork" && Go.length > 0 && !replBridgeHandle && !vo?.payload?.agents?.length
+      let maxPrefillChars = 16384;
+      let partialText = dispatchInfo?.partialText?.trimEnd() ?? "";
+      let prefillText =
+        partialText.length > maxPrefillChars ? partialText.slice(-maxPrefillChars) : partialText;
+      let prefill =
+        dispatchInfo?.via === "abort-then-fork" &&
+        prefillText.length > 0 &&
+        !replBridgeHandle &&
+        !adoptable?.payload?.agents?.length
           ? {
-              text: Go,
-              boundaryUuid: He?.boundaryUuid,
+              text: prefillText,
+              boundaryUuid: dispatchInfo?.boundaryUuid,
             }
           : undefined;
-      let Mn = false;
-      let Xo = false;
-      let Sn;
-      if (vo || hn)
+      let hasPrefill = false;
+      let consentCarryWritten = false;
+      let adoptedFrameCount;
+      if (adoptable || prefill)
         try {
           await writeAdoptJson(
-            No,
+            jobDir,
             {
-              ...(vo?.payload ?? {
+              ...(adoptable?.payload ?? {
                 writtenAtMs: Date.now(),
                 shells: [],
                 cron: [],
               }),
-              ...(hn && {
-                prefill: hn,
+              ...(prefill && {
+                prefill,
               }),
             },
             {},
             storageV5,
           );
-          Xo = true;
-          Mn = hn !== undefined;
-          if (vo && He?.taskRegistry) {
-            vo.stopCarriedWatches(He.taskRegistry);
-            await vo.checkpointAgents(He.taskRegistry);
-            vo.disown(He.taskRegistry);
+          consentCarryWritten = true;
+          hasPrefill = prefill !== undefined;
+          if (adoptable && dispatchInfo?.taskRegistry) {
+            adoptable.stopCarriedWatches(dispatchInfo.taskRegistry);
+            await adoptable.checkpointAgents(dispatchInfo.taskRegistry);
+            adoptable.disown(dispatchInfo.taskRegistry);
           }
         } catch (error) {
-          Sn = vo?.payload.frameLive?.length ?? 0;
-          if (Sn > 0 && !Xo) {
+          adoptedFrameCount = adoptable?.payload.frameLive?.length ?? 0;
+          if (adoptedFrameCount > 0 && !consentCarryWritten) {
             logFeatureSad("artifact_live_subscribe", "consent_carry_write_failed");
-            Sn = 0;
+            adoptedFrameCount = 0;
           }
-          logForDebugging(`[adopt] hand-off step failed (written=${Xo}): ${error}`, {
+          logForDebugging(`[adopt] hand-off step failed (written=${consentCarryWritten}): ${error}`, {
             level: "warn",
           });
-          vo = null;
+          adoptable = null;
         }
-      let $n = He?.fleetNudgeStore?.recordOpenViaLeft();
+      let nudgeState = dispatchInfo?.fleetNudgeStore?.recordOpenViaLeft();
       logEvent("tengu_open_agents_via_left", {
-        was_empty: backgroundSeed === null,
-        nudge_active: $n !== undefined && $n.needsInput > 0,
-        nudge_needs_input_count: $n?.needsInput ?? 0,
-        via: fromEnum(He?.via ?? "idle-fork"),
-        confirmed_interstitial: He?.confirmedInterstitial ?? false,
-        inflight_count: He?.inflightCount ?? 0,
-        inflight_kinds: fromEnumArr(He?.inflightKinds ?? []),
-        restartable_count: He?.restartableCount ?? 0,
-        partial_chars: He?.partialChars ?? 0,
-        has_prefill: Mn,
-        has_boundary_uuid: Mn && He?.boundaryUuid !== undefined,
-        prefill_truncated: bn.length > Fn,
-        defer_wait_ms: He?.deferWaitMs ?? 0,
-        defer_cap_fired: He?.deferCapFired ?? false,
-        ...adoptedCounts(vo?.payload),
-        ...(Sn !== undefined && {
-          adopted_frame_live: Sn,
+        was_empty: seed === null,
+        nudge_active: nudgeState !== undefined && nudgeState.needsInput > 0,
+        nudge_needs_input_count: nudgeState?.needsInput ?? 0,
+        via: fromEnum(dispatchInfo?.via ?? "idle-fork"),
+        confirmed_interstitial: dispatchInfo?.confirmedInterstitial ?? false,
+        inflight_count: dispatchInfo?.inflightCount ?? 0,
+        inflight_kinds: fromEnumArr(dispatchInfo?.inflightKinds ?? []),
+        restartable_count: dispatchInfo?.restartableCount ?? 0,
+        partial_chars: dispatchInfo?.partialChars ?? 0,
+        has_prefill: hasPrefill,
+        has_boundary_uuid: hasPrefill && dispatchInfo?.boundaryUuid !== undefined,
+        prefill_truncated: partialText.length > maxPrefillChars,
+        defer_wait_ms: dispatchInfo?.deferWaitMs ?? 0,
+        defer_cap_fired: dispatchInfo?.deferCapFired ?? false,
+        ...adoptedCounts(adoptable?.payload),
+        ...(adoptedFrameCount !== undefined && {
+          adopted_frame_live: adoptedFrameCount,
         }),
-        undisclosed_frame_live: Sn === 0 ? 0 : Yo,
+        undisclosed_frame_live: adoptedFrameCount === 0 ? 0 : undisclosedFrameCount,
       });
       if (replBridgeHandle) {
-        let Qn = He?.replyOnResume ? 5000 : 2000;
-        await withTimeout(replBridgeHandle.flush(), Qn, "bridge flush").catch(() => {
+        let flushCapMs = dispatchInfo?.replyOnResume ? 5000 : 2000;
+        await withTimeout(replBridgeHandle.flush(), flushCapMs, "bridge flush").catch(() => {
           logEvent("tengu_bg_bridge_flush_truncated", {
-            via: fromEnum(He?.via ?? "idle-fork"),
-            cap_ms: Qn,
+            via: fromEnum(dispatchInfo?.via ?? "idle-fork"),
+            cap_ms: flushCapMs,
           });
         });
         replBridgeHandle.teardown({
           skipArchive: true,
         });
       }
-      if (He?.abortAfterFlush)
+      if (dispatchInfo?.abortAfterFlush)
         await withTimeout(flushSessionStorage(), 2000, "flush timeout").catch(() => {});
-      let on = 2000;
+      let carryCapMs = 2000;
       let abortController = new AbortController();
       await withTimeout(
-        carryTaskListToFork(Ao, abortController.signal, storageV5),
-        on,
+        carryTaskListToFork(forkSessionId, abortController.signal, storageV5),
+        carryCapMs,
         "task-list carry",
       ).catch(() => abortController.abort());
-      Xt();
-      let cn = new Set(messageQueue.getCommandQueue());
-      let Dn = Ot([...Dt].filter((Qn) => !cn.has(Qn)));
-      Dt.clear();
-      let carriable = He?.replyOnResume ? Dn.carriable : [];
-      let mr = He?.replyOnResume ? Dn.stranded : [...Dn.carriable, ...Dn.stranded];
-      let beingRead = He?.replyOnResume ? Dn.beingRead : [];
-      let Wn = Dn.leftEarlier.length + beingRead.length;
-      let Fr = (Qn) =>
+      unsubscribe();
+      let stillQueued = new Set(messageQueue.getCommandQueue());
+      let recollected = collectPrompts([...carriedCommands].filter((command) => !stillQueued.has(command)));
+      carriedCommands.clear();
+      let carriable = dispatchInfo?.replyOnResume ? recollected.carriable : [];
+      let droppedPrompts = dispatchInfo?.replyOnResume
+        ? recollected.stranded
+        : [...recollected.carriable, ...recollected.stranded];
+      let beingRead = dispatchInfo?.replyOnResume ? recollected.beingRead : [];
+      let perhapsDeliveredCount = recollected.leftEarlier.length + beingRead.length;
+      let recordPrompts = (prompts) =>
         recordSubmittedPrompts(
-          Qn.map((ur) =>
-            ur.historyEntry || !isRefillableInput(ur)
-              ? ur
+          prompts.map((prompt) =>
+            prompt.historyEntry || !isRefillableInput(prompt)
+              ? prompt
               : {
-                  ...ur,
+                  ...prompt,
                   historyEntry: {
-                    display: inputDisplayText(ur),
-                    pastedContents: ur.pastedContents ?? {},
+                    display: inputDisplayText(prompt),
+                    pastedContents: prompt.pastedContents ?? {},
                   },
                 },
           ),
@@ -706,18 +728,23 @@ async function openAgentsViaLeftArrow(
             unanswered: "typed",
           },
         );
-      if (carriable.length > 0 || mr.length > 0 || Wn > 0 || Lt.length > 0) {
-        let Qn = new Set([...carriable, ...beingRead, ...mr]);
-        Fr(
+      if (
+        carriable.length > 0 ||
+        droppedPrompts.length > 0 ||
+        perhapsDeliveredCount > 0 ||
+        takenBackCommands.length > 0
+      ) {
+        let keptSet = new Set([...carriable, ...beingRead, ...droppedPrompts]);
+        recordPrompts(
           messageQueue
             .getCommandQueue()
-            .filter((Ir) => Qn.has(Ir))
-            .concat(Lt),
+            .filter((command) => keptSet.has(command))
+            .concat(takenBackCommands),
         );
-        for (let Ir of beingRead) Ir.historyEntry = undefined;
-        for (let Ir of [
+        for (let command of beingRead) command.historyEntry = undefined;
+        for (let cleanup of [
           () =>
-            messageQueue.remove(mr, {
+            messageQueue.remove(droppedPrompts, {
               reason: "not_carried_to_background",
             }),
           () =>
@@ -726,13 +753,17 @@ async function openAgentsViaLeftArrow(
             }),
         ])
           try {
-            Ir();
+            cleanup();
           } catch (error) {
             logError(error);
           }
         let written =
-          carriable.length + Wn > 0
-            ? await withTimeout(writeCarriedPrompts(No, Dn.fileContents), 2000, "carried prompts write").then(
+          carriable.length + perhapsDeliveredCount > 0
+            ? await withTimeout(
+                writeCarriedPrompts(jobDir, recollected.fileContents),
+                2000,
+                "carried prompts write",
+              ).then(
                 () => true,
                 (error) => {
                   logForDebugging(`[carried-prompts] write failed: ${error}`, {
@@ -743,70 +774,70 @@ async function openAgentsViaLeftArrow(
               )
             : undefined;
         logEvent("tengu_left_arrow_prompts_carried", {
-          via: fromEnum(He?.via ?? "idle-fork"),
+          via: fromEnum(dispatchInfo?.via ?? "idle-fork"),
           count: carriable.length,
           written,
-          dropped: mr.length,
-          perhaps_delivered: Wn,
-          taken_back: Lt.length,
+          dropped: droppedPrompts.length,
+          perhaps_delivered: perhapsDeliveredCount,
+          taken_back: takenBackCommands.length,
         });
-        Lt.length = 0;
+        takenBackCommands.length = 0;
       }
-      let dropLateQueued = (Qn) => {
+      let dropLateQueued = (turnOutcome) => {
         try {
-          let ur = It ? messageQueue.getCommandQueue().filter(isHumanPromptCommand) : [];
-          if (ur.length > 0) {
-            Fr(ur);
-            messageQueue.remove(ur, {
+          let lateQueued = carriesQueued ? messageQueue.getCommandQueue().filter(isHumanPromptCommand) : [];
+          if (lateQueued.length > 0) {
+            recordPrompts(lateQueued);
+            messageQueue.remove(lateQueued, {
               reason: "not_carried_to_background",
             });
             logForDebugging(
-              `[carried-prompts] ${ur.length} ${plural(ur.length, "message")} still queued when \u2190 closed this screen: not sent, typed text is in \u2191 history`,
+              `[carried-prompts] ${lateQueued.length} ${plural(lateQueued.length, "message")} still queued when \u2190 closed this screen: not sent, typed text is in \u2191 history`,
               {
                 level: "warn",
               },
             );
           }
-          if (Qn.cutLive || Qn.timedOut || ur.length > 0)
+          if (turnOutcome.cutLive || turnOutcome.timedOut || lateQueued.length > 0)
             logEvent("tengu_left_arrow_cut_or_dropped", {
-              via: fromEnum(He?.via ?? "idle-fork"),
-              turn_cut: Qn.cutLive,
-              turn_state: fromEnum(Qn.guard),
-              wait_timed_out: Qn.timedOut,
-              late_dropped: ur.length,
+              via: fromEnum(dispatchInfo?.via ?? "idle-fork"),
+              turn_cut: turnOutcome.cutLive,
+              turn_state: fromEnum(turnOutcome.guard),
+              wait_timed_out: turnOutcome.timedOut,
+              late_dropped: lateQueued.length,
             });
         } catch (error) {
           logError(error);
         }
       };
-      let Un = {
+      let spawnState = {
         settled: false,
         ok: false,
-        forkSessionId: Ao,
+        forkSessionId,
       };
       trackBgDispatch(
-        parkedJobId,
+        jobShortId,
         spawnBackgroundFork(
-          co,
+          settledSeed,
           null,
-          sessionEffort,
+          effortLevel,
           permissionMode,
           additionalWorkingDirectories,
-          alwaysAllowRules,
-          alwaysDenyRules,
+          allowRules,
+          denyRules,
           "left_arrow",
-          snapshot,
+          messages,
           {
-            proactivityLevel: He?.proactivityLevel,
-            providedSessionId: Ao,
-            replyOnResume: He?.replyOnResume,
+            proactivityLevel: dispatchInfo?.proactivityLevel,
+            providedSessionId: forkSessionId,
+            replyOnResume: dispatchInfo?.replyOnResume,
             handoffRecord,
-            isTurnLive: He?.abortAfterFlush !== undefined,
+            isTurnLive: dispatchInfo?.abortAfterFlush !== undefined,
             workerName,
             storageV5,
             credentials,
             extraEnv: attachCarriedPromptHash(
-              No,
+              jobDir,
               buildBridgeReattachEnv(
                 replBridgeHandle?.bridgeSessionId,
                 replBridgeHandle?.getLastSequenceNum(),
@@ -817,115 +848,115 @@ async function openAgentsViaLeftArrow(
             ),
           },
         ).then(async (backgroundFork) => {
-          if (backgroundFork.ok || !backgroundFork.queued) dropCarriedPromptHash(No);
+          if (backgroundFork.ok || !backgroundFork.queued) dropCarriedPromptHash(jobDir);
           if (!backgroundFork.ok && !backgroundFork.queued && !backgroundFork.alive) {
-            vo?.abandon();
-            if (carriable.length + Wn > 0)
+            adoptable?.abandon();
+            if (carriable.length + perhapsDeliveredCount > 0)
               logEvent("tengu_left_arrow_carried_prompts_lost", {
                 count: carriable.length,
-                perhaps_delivered: Wn,
+                perhaps_delivered: perhapsDeliveredCount,
               });
-            await removeJobScope(No, parkedJobId, storageV5);
+            await removeJobScope(jobDir, jobShortId, storageV5);
           }
           return backgroundFork;
         }),
       )
-        .then((Qn) => {
-          Un.settled = true;
-          let ur = Qn.ok || Qn.alive === true;
-          Un.ok = ur;
-          Un.transcriptMaterialized = ur || Qn.queued === true;
-          if (!ur && !Qn.queued) clearSessionParked(storageV5).catch(() => {});
-          if (!Qn.ok) {
-            if (Qn.queued && vo) {
-              let Ir = join(No, "adopt.json");
-              let Pr = () =>
-                markExpired(Ir).then(
+        .then((spawnResult) => {
+          spawnState.settled = true;
+          let spawnedOk = spawnResult.ok || spawnResult.alive === true;
+          spawnState.ok = spawnedOk;
+          spawnState.transcriptMaterialized = spawnedOk || spawnResult.queued === true;
+          if (!spawnedOk && !spawnResult.queued) clearSessionParked(storageV5).catch(() => {});
+          if (!spawnResult.ok) {
+            if (spawnResult.queued && adoptable) {
+              let adoptJsonPath = join(jobDir, "adopt.json");
+              let expireAdoptRecord = () =>
+                markExpired(adoptJsonPath).then(
                   () => {
-                    vo?.abandon();
-                    return removeExpired(Ir);
+                    adoptable?.abandon();
+                    return removeExpired(adoptJsonPath);
                   },
                   () => {},
                 );
-              let max = Math.max(0, STALE_THRESHOLD_MS - 5000 - (Date.now() - vo.payload.writtenAtMs));
-              let Gn = registerCleanup(Pr);
+              let max = Math.max(0, STALE_THRESHOLD_MS - 5000 - (Date.now() - adoptable.payload.writtenAtMs));
+              let unregisterCleanup = registerCleanup(expireAdoptRecord);
               setTimeout(
-                (Ur, Zr) => {
-                  Ur();
-                  Zr();
+                (unregister, expire) => {
+                  unregister();
+                  expire();
                 },
                 max,
-                Gn,
-                Pr,
+                unregisterCleanup,
+                expireAdoptRecord,
               ).unref();
             }
             if (
-              Qn.reason === undefined ||
-              Qn.reason === "spawn_failed_unknown" ||
-              Qn.reason.startsWith("spawn_failed_ERR_")
+              spawnResult.reason === undefined ||
+              spawnResult.reason === "spawn_failed_unknown" ||
+              spawnResult.reason.startsWith("spawn_failed_ERR_")
             )
               logError(
                 withTelemetryMessage(
-                  Error(`background spawn failed: ${Qn.error}`),
-                  `background spawn failed: ${Qn.reason ?? "unclassified"}`,
+                  Error(`background spawn failed: ${spawnResult.error}`),
+                  `background spawn failed: ${spawnResult.reason ?? "unclassified"}`,
                 ),
               );
             else
-              logForDebugging(`background spawn failed: ${Qn.error}`, {
+              logForDebugging(`background spawn failed: ${spawnResult.error}`, {
                 level: "warn",
               });
           }
         })
         .catch((error) => {
-          if (!Un.settled) {
-            Un.settled = true;
-            Un.ok = false;
+          if (!spawnState.settled) {
+            spawnState.settled = true;
+            spawnState.ok = false;
           }
           logError(error);
         });
-      He?.abortAfterFlush?.abort(userAbortReason("background"));
-      if (He?.sessionScratch) {
-        clearPendingGoalIdleCheckin(He.sessionScratch);
-        clearPendingGoalReprompt(He.sessionScratch);
-        disarmWorkerCheckin(He.sessionScratch);
+      dispatchInfo?.abortAfterFlush?.abort(userAbortReason("background"));
+      if (dispatchInfo?.sessionScratch) {
+        clearPendingGoalIdleCheckin(dispatchInfo.sessionScratch);
+        clearPendingGoalReprompt(dispatchInfo.sessionScratch);
+        disarmWorkerCheckin(dispatchInfo.sessionScratch);
       }
       messageQueue.removeByFilter(isCheckinNotification);
       forgetMainChainOnHandOff();
-      markSessionParked(parkedJobId, storageV5).catch(() => {});
-      let dr = demoteInheritedPermissionMode(permissionMode);
-      let or = earlyArgsArgv(additionalWorkingDirectories);
+      markSessionParked(jobShortId, storageV5).catch(() => {});
+      let dispatchDefaults = demoteInheritedPermissionMode(permissionMode);
+      let dispatchExtraArgs = earlyArgsArgv(additionalWorkingDirectories);
       if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_bg_leftarrow_inprocess", true)) {
-        let Qn = noopSyncPermissionMode();
+        let savedPermissionMode = noopSyncPermissionMode();
         let sessionId = getSessionId();
         noopMergeSessionFlags(undefined);
         try {
-          return await detachToBackground(parkedJobId, ao, {
-            dispatchDefaults: dr,
-            dispatchExtraArgs: or,
-            ...(He?.autoOpenJobId !== undefined && {
-              autoOpenJobId: He.autoOpenJobId,
+          return await detachToBackground(jobShortId, preloadedChunks, {
+            dispatchDefaults,
+            dispatchExtraArgs,
+            ...(dispatchInfo?.autoOpenJobId !== undefined && {
+              autoOpenJobId: dispatchInfo.autoOpenJobId,
             }),
-            originSpawn: Un,
+            originSpawn: spawnState,
             storageV5,
             credentials,
-            fleetNudgeStore: He?.fleetNudgeStore,
-            ...(He?.abortLiveTurn && {
-              abortLiveTurn: He.abortLiveTurn,
+            fleetNudgeStore: dispatchInfo?.fleetNudgeStore,
+            ...(dispatchInfo?.abortLiveTurn && {
+              abortLiveTurn: dispatchInfo.abortLiveTurn,
               dropLateQueued,
             }),
           });
         } catch (error) {
-          if (getSessionId() === sessionId) noopMergeSessionFlags(Qn);
+          if (getSessionId() === sessionId) noopMergeSessionFlags(savedPermissionMode);
           logError(error);
         }
       }
-      let pr = await relaunchClaudeCode({
-        args: ["agents", ...or, ...buildDispatchArgs(dr)],
+      let relaunchResult = await relaunchClaudeCode({
+        args: ["agents", ...dispatchExtraArgs, ...buildDispatchArgs(dispatchDefaults)],
         env: {
           CLAUDE_AGENTS_SELECT:
-            He?.autoOpenJobId !== undefined && SHORT_RE.test(He.autoOpenJobId)
-              ? He.autoOpenJobId
-              : parkedJobId,
+            dispatchInfo?.autoOpenJobId !== undefined && SHORT_RE.test(dispatchInfo.autoOpenJobId)
+              ? dispatchInfo.autoOpenJobId
+              : jobShortId,
           ...getScreenReaderEnv(),
           ...(isRestrictedSession() && {
             CLAUDE_CODE_RESTRICTED: "1",
@@ -933,13 +964,13 @@ async function openAgentsViaLeftArrow(
         },
       });
       clearSessionParked(storageV5).catch(() => {});
-      return pr;
+      return relaunchResult;
     })();
-    return withRelaunchHint(kt, rt);
+    return withRelaunchHint(handoffResult, didRelaunch);
   } catch (error) {
     logError(error);
     clearSessionParked(storageV5).catch(() => {});
-    return withRelaunchHint("Couldn't background this session (an internal error was logged)", rt);
+    return withRelaunchHint("Couldn't background this session (an internal error was logged)", didRelaunch);
   }
 }
 //@ chunk-18hwfzwa.js:94334-94356 placement
@@ -962,11 +993,11 @@ class BackgroundGesture {
   #l = undefined;
   #d = undefined;
   #m = 0;
-  constructor(h) {
-    this.#e = h;
+  constructor(options) {
+    this.#e = options;
   }
-  bindHost(h) {
-    this.#t = h;
+  bindHost(host) {
+    this.#t = host;
   }
   #p() {
     if (this.#t === null) throw Error("BackgroundGesture: used before its screen bound a host");
@@ -989,10 +1020,10 @@ class BackgroundGesture {
     }
   }
   stopsLoopForPending() {
-    let h = this.#n;
+    let pending = this.#n;
     try {
       if (
-        h !== null &&
+        pending !== null &&
         this.#e.getInputValue().trim() !== "" &&
         getFeatureValue_CACHED_MAY_BE_STALE("tengu_keen_sloth", true)
       ) {
@@ -1000,7 +1031,7 @@ class BackgroundGesture {
         this.#y(UNSENT_INPUT_BLOCK);
         logEvent("tengu_defer_boundary_cancelled_draft", {
           site: lit_2("loop_top"),
-          wait_ms: this.#e.now() - h.armedAtMs,
+          wait_ms: this.#e.now() - pending.armedAtMs,
         });
       }
     } catch (error) {
@@ -1027,48 +1058,48 @@ class BackgroundGesture {
     if (alwaysFalseBackgroundConfirm()) return;
     this.#u();
   };
-  #u(h) {
-    let x = noopBackgroundConfirm(h);
-    if (h !== undefined && x === undefined) return false;
-    let D = this.#e.now();
-    if (D - this.#m < BACKGROUND_GESTURE_DOUBLE_MS && getAttachStampMs() <= this.#m) return false;
-    this.#m = D;
+  #u(input) {
+    let message = noopBackgroundConfirm(input);
+    if (input !== undefined && message === undefined) return false;
+    let nowMs = this.#e.now();
+    if (nowMs - this.#m < BACKGROUND_GESTURE_DOUBLE_MS && getAttachStampMs() <= this.#m) return false;
+    this.#m = nowMs;
     sendDetachRequest({
-      message: x,
+      message,
     });
     return true;
   }
-  requestAttach(h) {
-    return !CLOUD_SESSION_ID_RE.test(h) && this.#f(h);
+  requestAttach(sessionId) {
+    return !CLOUD_SESSION_ID_RE.test(sessionId) && this.#f(sessionId);
   }
-  requestCloudTab(h) {
-    return CLOUD_SESSION_ID_RE.test(h) && this.#f(h);
+  requestCloudTab(sessionId) {
+    return CLOUD_SESSION_ID_RE.test(sessionId) && this.#f(sessionId);
   }
-  #f(h) {
-    if (alwaysFalseBackgroundConfirm()) return this.#u(parseSwitchTarget(h));
+  #f(target) {
+    if (alwaysFalseBackgroundConfirm()) return this.#u(parseSwitchTarget(target));
     if (this.#l !== undefined || isBgSession() || this.#S()) return false;
-    this.#l = h;
-    let x = () => {
+    this.#l = target;
+    let flushAttach = () => {
       queueMicrotask(() => {
-        let ee = this.#l;
+        let heldTarget = this.#l;
         this.#l = undefined;
-        if (ee !== undefined) this.onAttachRequest(ee);
+        if (heldTarget !== undefined) this.onAttachRequest(heldTarget);
       });
     };
     let { guard } = this.#e.turn;
     if (!guard.isActive || guard.isRunning) {
-      x();
+      flushAttach();
       return true;
     }
-    let L = guard.subscribe(() => {
+    let unsubscribe = guard.subscribe(() => {
       if (!guard.isActive) this.#d?.fire();
     });
     this.#d = {
-      release: L,
+      release: unsubscribe,
       fire: () => {
-        L();
+        unsubscribe();
         this.#d = undefined;
-        x();
+        flushAttach();
       },
     };
     return true;
@@ -1084,32 +1115,32 @@ class BackgroundGesture {
   }
   #S() {
     if (getBgTakeover() !== null) return true;
-    let h = summarizeBackgroundWork(this.#e.store.getState().tasks);
-    let x = backgroundEligibilityForSession({
+    let workSummary = summarizeBackgroundWork(this.#e.store.getState().tasks);
+    let eligibility = backgroundEligibilityForSession({
       isBg: false,
       isLoading: false,
       isExternalLoading: false,
       betweenCalls: true,
-      inFlight: h,
+      inFlight: workSummary,
     });
-    if (!needsDetachBeforeBackground(x)) {
-      if (!x.ok)
+    if (!needsDetachBeforeBackground(eligibility)) {
+      if (!eligibility.ok)
         logEvent("tengu_left_arrow_blocked", {
-          reason: fromEnum(x.reason),
-          inflight_count: h.count,
-          inflight_kinds: fromEnumArr(h.kinds),
+          reason: fromEnum(eligibility.reason),
+          inflight_count: workSummary.count,
+          inflight_kinds: fromEnumArr(workSummary.kinds),
         });
       return true;
     }
-    return this.#h(h);
+    return this.#h(workSummary);
   }
-  #h(h) {
+  #h(workSummary) {
     let { store, transcript, turn, messageQueue, getInputValue } = this.#e;
     if (isTranscriptPersistenceDisabled()) {
       logEvent("tengu_left_arrow_blocked", {
         reason: lit_2("persistence"),
-        inflight_count: h.count,
-        inflight_kinds: fromEnumArr(h.kinds),
+        inflight_count: workSummary.count,
+        inflight_kinds: fromEnumArr(workSummary.kinds),
       });
       this.#y(
         "Cannot open agents \u2014 session persistence is disabled, so this conversation cannot be backgrounded.",
@@ -1119,8 +1150,8 @@ class BackgroundGesture {
     if (getProjectConfigRoot() !== null) {
       logEvent("tengu_left_arrow_blocked", {
         reason: lit_2("project-config-root"),
-        inflight_count: h.count,
-        inflight_kinds: fromEnumArr(h.kinds),
+        inflight_count: workSummary.count,
+        inflight_kinds: fromEnumArr(workSummary.kinds),
       });
       this.#y(
         "Can't move this session to the background. It was started with --project-config-root. A background copy would not get that flag, so it would run the hooks and settings in the working folder. Keep working in this session.",
@@ -1131,7 +1162,7 @@ class BackgroundGesture {
       this.#y(withTaskSuffix("Claude ended this conversation. Start a new session (or /clear) to continue."));
       return true;
     }
-    let Re = countHeldQueuedCommands(
+    let heldCommandCount = countHeldQueuedCommands(
       messageQueue.getCommandQueue(),
       createHeldScreeningCheck(() =>
         turn.buildToolUseContext(
@@ -1142,22 +1173,22 @@ class BackgroundGesture {
         ),
       ),
     );
-    if (Re > 0) {
+    if (heldCommandCount > 0) {
       logEvent("tengu_left_arrow_blocked", {
         reason: lit_2("queued-commands"),
-        inflight_count: Re,
-        inflight_kinds: fromEnumArr(h.kinds),
+        inflight_count: heldCommandCount,
+        inflight_kinds: fromEnumArr(workSummary.kinds),
       });
       this.#y(
-        `Cannot open agents \u2014 ${Re} queued ${plural(Re, "command")} would be lost. Run or clear ${Re === 1 ? "it" : "them"} first.`,
+        `Cannot open agents \u2014 ${heldCommandCount} queued ${plural(heldCommandCount, "command")} would be lost. Run or clear ${heldCommandCount === 1 ? "it" : "them"} first.`,
       );
       return true;
     }
     if (getInputValue().trim() !== "") {
       logEvent("tengu_left_arrow_blocked", {
         reason: lit_2("draft"),
-        inflight_count: h.count,
-        inflight_kinds: fromEnumArr(h.kinds),
+        inflight_count: workSummary.count,
+        inflight_kinds: fromEnumArr(workSummary.kinds),
       });
       this.#y(
         "Cannot open agents \u2014 you have unsent text in the input. Send it or clear it first (double-tap esc clears).",
@@ -1166,47 +1197,48 @@ class BackgroundGesture {
     }
     return false;
   }
-  #y = (h) => {
-    this.#e.transcript.replace((x) => {
-      let last = x.at(-1);
-      if (last?.type === "system" && last.subtype === "informational" && last.content === h) return x;
-      return [...x, createSystemMessage(h, "warning")];
+  #y = (text) => {
+    this.#e.transcript.replace((messages) => {
+      let last = messages.at(-1);
+      if (last?.type === "system" && last.subtype === "informational" && last.content === text)
+        return messages;
+      return [...messages, createSystemMessage(text, "warning")];
     });
   };
   get isAttachPending() {
     return this.#l !== undefined;
   }
-  onAttachRequest(h) {
+  onAttachRequest(tabId) {
     if (isBgSession()) return;
-    this.#i = h;
+    this.#i = tabId;
     this.#a = true;
     this.onLeftArrow();
   }
   confirm = () => {
-    let h = this.#o;
-    if (h === null) return;
+    let pendingConfirm = this.#o;
+    if (pendingConfirm === null) return;
     logEvent("tengu_left_arrow_confirm", {
       accepted: true,
-      count: h.inFlight.count,
-      kinds: fromEnumArr(h.inFlight.kinds),
-      carryover_count: h.carryOverCount,
-      workflow_agent_count: h.workflowAgents.running,
+      count: pendingConfirm.inFlight.count,
+      kinds: fromEnumArr(pendingConfirm.inFlight.kinds),
+      carryover_count: pendingConfirm.carryOverCount,
+      workflow_agent_count: pendingConfirm.workflowAgents.running,
     });
     try {
-      h.proceed();
+      pendingConfirm.proceed();
     } finally {
       this.#o = null;
     }
   };
   cancelConfirm = () => {
-    let h = this.#o;
-    if (h === null) return;
+    let pendingConfirm = this.#o;
+    if (pendingConfirm === null) return;
     logEvent("tengu_left_arrow_confirm", {
       accepted: false,
-      count: h.inFlight.count,
-      kinds: fromEnumArr(h.inFlight.kinds),
-      carryover_count: h.carryOverCount,
-      workflow_agent_count: h.workflowAgents.running,
+      count: pendingConfirm.inFlight.count,
+      kinds: fromEnumArr(pendingConfirm.inFlight.kinds),
+      carryover_count: pendingConfirm.carryOverCount,
+      workflow_agent_count: pendingConfirm.workflowAgents.running,
     });
     this.#o = null;
     this.#i = undefined;
@@ -1217,17 +1249,17 @@ class BackgroundGesture {
   cloudSessionRoute() {
     return;
   }
-  #b(h, x) {
-    if (isCannotOpenAgentsMessage(h) || !isBridgeOrTransport(this.#e.session)) return h;
+  #b(message, fallbackMessage) {
+    if (isCannotOpenAgentsMessage(message) || !isBridgeOrTransport(this.#e.session)) return message;
     logForDebugging(
-      `leftArrowGesture: \u2190 failed; withheld from the screen because rows may be stored off this machine: ${h}`,
+      `leftArrowGesture: \u2190 failed; withheld from the screen because rows may be stored off this machine: ${message}`,
       {
         level: "warn",
       },
     );
-    return withResumeFlag(x, h);
+    return withResumeFlag(fallbackMessage, message);
   }
-  #g(h) {
+  #g(request) {
     let {
       store,
       transcript,
@@ -1242,11 +1274,11 @@ class BackgroundGesture {
     } = this.#e;
     let { agentTitle, haikuTitle } = titles.getSnapshot();
     this.#r = true;
-    let state = store.getState();
-    let { sessionEffort, toolPermissionContext } = state;
-    let Ot = this.#i;
+    let context = store.getState();
+    let { sessionEffort, toolPermissionContext } = context;
+    let autoOpenJobId = this.#i;
     this.#i = undefined;
-    let abortController = h.via === "defer-then-fork" ? turn.abortController : null;
+    let abortController = request.via === "defer-then-fork" ? turn.abortController : null;
     let abortLiveTurn = async () => {
       let abortController_2 = turn.abortController;
       let cutLive =
@@ -1255,12 +1287,12 @@ class BackgroundGesture {
         abortController_2 !== abortController;
       let guard = !turn.guard.isActive ? "idle" : turn.guard.isRunning ? "running" : "dispatching";
       abortController_2?.abort(userAbortReason("background"));
-      let so = await waitForStoreState(
+      let idleReached = await waitForStoreState(
         {
           getState: () => turn.guard,
-          subscribe: (po) => turn.guard.subscribe(po),
+          subscribe: (listener) => turn.guard.subscribe(listener),
         },
-        (po) => !po.isActive || po.isRunning,
+        (guardState) => !guardState.isActive || guardState.isRunning,
         {
           timeoutMs: 2000,
         },
@@ -1268,24 +1300,24 @@ class BackgroundGesture {
       return {
         cutLive,
         guard,
-        timedOut: !so,
+        timedOut: !idleReached,
       };
     };
     let agentsViaLeftArrow = openAgentsViaLeftArrow(
       transcript.getSnapshot(),
       sessionEffort,
-      getPermissionModeCycle(state),
+      getPermissionModeCycle(context),
       toolPermissionContext.additionalWorkingDirectories,
       toolPermissionContext.alwaysAllowRules,
       toolPermissionContext.alwaysDenyRules,
       messageQueue,
       agentTitle ?? haikuTitle,
       {
-        ...h,
-        proactivityLevel: promptProactivityLevel(state),
+        ...request,
+        proactivityLevel: promptProactivityLevel(context),
         taskRegistry,
-        ...(Ot !== undefined && {
-          autoOpenJobId: Ot,
+        ...(autoOpenJobId !== undefined && {
+          autoOpenJobId,
         }),
         fleetNudgeStore,
         sessionScratch: session.sessionScratch,
@@ -1297,65 +1329,66 @@ class BackgroundGesture {
       credentials,
     );
     if (isLeftArrowCarriesQueuedOn()) {
-      let oo = () => this.#c.setState(() => false);
-      agentsViaLeftArrow.then(oo, oo);
+      let clearHandingOver = () => this.#c.setState(() => false);
+      agentsViaLeftArrow.then(clearHandingOver, clearHandingOver);
       this.#c.setState(() => true);
     }
     return agentsViaLeftArrow;
   }
-  onLeftArrow = (h) => {
+  onLeftArrow = (confirmGapMs) => {
     let { store, transcript, turn, messageQueue, clock, now, getInputValue, dialogStore } = this.#e;
     let guard = turn.guard;
-    let ze = this.#a;
+    let fromAttachRequest = this.#a;
     if (this.#a) this.#a = false;
     else this.#i = undefined;
     {
       if (this.#r || this.#o !== null) return;
       let { tasks } = store.getState();
-      let rt = summarizeBackgroundWork(tasks);
+      let workSummary = summarizeBackgroundWork(tasks);
       let adoptability = computeAdoptability(tasks);
-      let At = carriedFrameLiveSlugs(tasks);
-      let It = this.#y;
-      if (this.#h(rt)) return;
-      let Ot = (oo) => this.#b(oo, "Couldn't open the agents view (detail withheld on this connection).");
-      let Et = (oo) => {
+      let carriedSlugsAtPress = carriedFrameLiveSlugs(tasks);
+      let showNotice = this.#y;
+      if (this.#h(workSummary)) return;
+      let withholdMessage = (message) =>
+        this.#b(message, "Couldn't open the agents view (detail withheld on this connection).");
+      let onHandoffDone = (result) => {
         this.#r = false;
-        It(Ot(oo));
+        showNotice(withholdMessage(result));
       };
       if (this.#n) {
-        let oo = this.#n;
-        let Xt = now();
-        let io = Xt - oo.absorbAnchorMs;
-        let so = !ze && Xt - oo.lastPressMs < HUMAN_CADENCE_MS;
-        if (so) oo.absorbAnchorMs = Xt;
-        oo.lastPressMs = Xt;
-        let po = h !== undefined && h < BACKGROUND_GESTURE_HOLD_MS;
-        if (po)
+        let pending = this.#n;
+        let nowMs = now();
+        let elapsedMs = nowMs - pending.absorbAnchorMs;
+        let isHumanCadence = !fromAttachRequest && nowMs - pending.lastPressMs < HUMAN_CADENCE_MS;
+        if (isHumanCadence) pending.absorbAnchorMs = nowMs;
+        pending.lastPressMs = nowMs;
+        let answeredHint = confirmGapMs !== undefined && confirmGapMs < BACKGROUND_GESTURE_HOLD_MS;
+        if (answeredHint)
           logForDebugging(
-            `leftArrowGesture: \u2190 answered the hint with a defer pending, still waiting for the tool (confirm_gap_ms=${h})`,
+            `leftArrowGesture: \u2190 answered the hint with a defer pending, still waiting for the tool (confirm_gap_ms=${confirmGapMs})`,
             {
               level: "debug",
             },
           );
-        if (io < BACKGROUND_GESTURE_HOLD_MS || so || po) return;
-        oo.absorbAnchorMs = Xt;
+        if (elapsedMs < BACKGROUND_GESTURE_HOLD_MS || isHumanCadence || answeredHint) return;
+        pending.absorbAnchorMs = nowMs;
         let abortController = turn.abortController;
-        let co = turn.stream.peekStreamingText();
-        let partialChars = (co?.length ?? 0) + streamingTextLength(transcript.getSnapshot());
-        let partialText = streamingTextSoFar(transcript.getSnapshot(), co);
+        let streamingText = turn.stream.peekStreamingText();
+        let partialChars = (streamingText?.length ?? 0) + streamingTextLength(transcript.getSnapshot());
+        let partialText = streamingTextSoFar(transcript.getSnapshot(), streamingText);
         let boundaryUuid = lastSettledMessageUuid(transcript.getSnapshot());
-        let Ro = countAbandonable(tasks);
-        if (!oo.confirmedInterstitial && Ro > 0) {
-          It(
-            `Still backgrounding after the current tool \u2014 ${Ro} background ${plural(Ro, "task")} would be abandoned by skipping ahead.`,
+        let abandonableCount = countAbandonable(tasks);
+        if (!pending.confirmedInterstitial && abandonableCount > 0) {
+          showNotice(
+            `Still backgrounding after the current tool \u2014 ${abandonableCount} background ${plural(abandonableCount, "task")} would be abandoned by skipping ahead.`,
           );
           return;
         }
-        let Ho = countCarriedSince(tasks, oo.carriedAtPress);
-        if (Ho > 0) {
+        let carriedSincePress = countCarriedSince(tasks, pending.carriedAtPress);
+        if (carriedSincePress > 0) {
           this.clearPending();
-          It(
-            `Backgrounding cancelled \u2014 ${Ho} Artifact comment ${plural(Ho, "monitor")} started after you pressed \u2190. Press \u2190 again to review and confirm.`,
+          showNotice(
+            `Backgrounding cancelled \u2014 ${carriedSincePress} Artifact comment ${plural(carriedSincePress, "monitor")} started after you pressed \u2190. Press \u2190 again to review and confirm.`,
           );
           return;
         }
@@ -1364,44 +1397,44 @@ class BackgroundGesture {
           this.#g({
             via: "abort-then-fork",
             replyOnResume: true,
-            confirmedInterstitial: oo.confirmedInterstitial,
-            inflightCount: rt.count,
-            inflightKinds: rt.kinds,
-            restartableCount: rt.restartableCount,
+            confirmedInterstitial: pending.confirmedInterstitial,
+            inflightCount: workSummary.count,
+            inflightKinds: workSummary.kinds,
+            restartableCount: workSummary.restartableCount,
             partialChars,
             partialText,
             boundaryUuid,
-            deferWaitMs: now() - oo.armedAtMs,
+            deferWaitMs: now() - pending.armedAtMs,
             abortAfterFlush: abortController,
-          }).then(Et);
+          }).then(onHandoffDone);
         } else if (!guard.isActive) {
           this.clearPending();
-          oo.proceed().then((Io) => It(Io));
+          pending.proceed().then((notice) => showNotice(notice));
         }
         return;
       }
-      let Dt = backgroundEligibilityForSession({
+      let eligibility = backgroundEligibilityForSession({
         isBg: false,
         isLoading: guard.isActive,
         isExternalLoading: turn.isExternalLoading,
         betweenCalls: isIdleForBackground(transcript.getSnapshot(), turn.stream.peekStreamingText() !== null),
-        inFlight: rt,
+        inFlight: workSummary,
       });
-      if (!Dt.ok) {
+      if (!eligibility.ok) {
         logEvent("tengu_left_arrow_blocked", {
-          reason: fromEnum(Dt.reason),
-          inflight_count: Dt.inFlight.count,
-          inflight_kinds: fromEnumArr(Dt.inFlight.kinds),
+          reason: fromEnum(eligibility.reason),
+          inflight_count: eligibility.inFlight.count,
+          inflight_kinds: fromEnumArr(eligibility.inFlight.kinds),
         });
         return;
       }
-      let Lt = (confirmedInterstitial) => {
-        let Xt = summarizeBackgroundWork(store.getState().tasks);
-        let io = turn.stream.peekStreamingText();
-        let partialChars = (io?.length ?? 0) + streamingTextLength(transcript.getSnapshot());
-        let partialText = streamingTextSoFar(transcript.getSnapshot(), io);
+      let proceedHandoff = (confirmedInterstitial) => {
+        let workSummary = summarizeBackgroundWork(store.getState().tasks);
+        let streamingText = turn.stream.peekStreamingText();
+        let partialChars = (streamingText?.length ?? 0) + streamingTextLength(transcript.getSnapshot());
+        let partialText = streamingTextSoFar(transcript.getSnapshot(), streamingText);
         let boundaryUuid = lastSettledMessageUuid(transcript.getSnapshot());
-        let co = backgroundEligibilityForSession({
+        let eligibility = backgroundEligibilityForSession({
           isBg: false,
           isLoading: guard.isActive,
           isExternalLoading: turn.isExternalLoading,
@@ -1409,149 +1442,156 @@ class BackgroundGesture {
             transcript.getSnapshot(),
             turn.stream.peekStreamingText() !== null,
           ),
-          inFlight: Xt,
+          inFlight: workSummary,
         });
-        if (!co.ok) {
+        if (!eligibility.ok) {
           logEvent("tengu_left_arrow_blocked", {
-            reason: fromEnum(co.reason),
-            inflight_count: Xt.count,
-            inflight_kinds: fromEnumArr(Xt.kinds),
+            reason: fromEnum(eligibility.reason),
+            inflight_count: workSummary.count,
+            inflight_kinds: fromEnumArr(workSummary.kinds),
           });
-          It("Cannot open agents \u2014 a foregrounded task is running.");
+          showNotice("Cannot open agents \u2014 a foregrounded task is running.");
           return;
         }
-        let bo = countCarriedSince(store.getState().tasks, At);
-        if (bo > 0) {
-          It(
-            `Backgrounding cancelled \u2014 ${bo} Artifact comment ${plural(bo, "monitor")} started after you pressed \u2190. Press \u2190 again to review and confirm.`,
+        let carriedSincePress = countCarriedSince(store.getState().tasks, carriedSlugsAtPress);
+        if (carriedSincePress > 0) {
+          showNotice(
+            `Backgrounding cancelled \u2014 ${carriedSincePress} Artifact comment ${plural(carriedSincePress, "monitor")} started after you pressed \u2190. Press \u2190 again to review and confirm.`,
           );
           return;
         }
         let abortController = turn.abortController;
-        let via = co.via === "abort-then-fork" && !abortController ? "defer-then-fork" : co.via;
-        let Ro = {
+        let via =
+          eligibility.via === "abort-then-fork" && !abortController ? "defer-then-fork" : eligibility.via;
+        let request = {
           via,
           confirmedInterstitial,
-          inflightCount: Xt.count,
-          inflightKinds: Xt.kinds,
-          restartableCount: Xt.restartableCount,
+          inflightCount: workSummary.count,
+          inflightKinds: workSummary.kinds,
+          restartableCount: workSummary.restartableCount,
           partialChars,
           deferWaitMs: 0,
         };
         if (via === "defer-then-fork") {
-          let Ho = now();
-          let Io = getFeatureValue_CACHED_MAY_BE_STALE("tengu_defer_cap_ms", 1e4) ?? 1e4;
+          let armedAtMs = now();
+          let deferCapMs = getFeatureValue_CACHED_MAY_BE_STALE("tengu_defer_cap_ms", 1e4) ?? 1e4;
           let clearCapTimer = clock.setTimeout(() => {
-            let mn = this.#n;
-            if (!mn || mn.armedAtMs !== Ho) return;
+            let pendingAtFire = this.#n;
+            if (!pendingAtFire || pendingAtFire.armedAtMs !== armedAtMs) return;
             let tasks = store.getState().tasks;
-            let No = count(messageQueue.getCommandQueue(), (Fn) => !isCheckinNotification(Fn));
+            let queuedCount = count(
+              messageQueue.getCommandQueue(),
+              (command) => !isCheckinNotification(command),
+            );
             if (
-              No > 0 ||
-              (!mn.confirmedInterstitial && countAbandonable(tasks) > 0) ||
-              countCarriedSince(tasks, mn.carriedAtPress) > 0
+              queuedCount > 0 ||
+              (!pendingAtFire.confirmedInterstitial && countAbandonable(tasks) > 0) ||
+              countCarriedSince(tasks, pendingAtFire.carriedAtPress) > 0
             ) {
-              if (No > 0)
+              if (queuedCount > 0)
                 logEvent("tengu_defer_cap_refused_queued", {
-                  queue_len: No,
-                  wait_ms: now() - Ho,
+                  queue_len: queuedCount,
+                  wait_ms: now() - armedAtMs,
                 });
               return;
             }
-            let vo = summarizeBackgroundWork(tasks);
-            let restartableCount = vo.restartableCount;
+            let workSummary = summarizeBackgroundWork(tasks);
+            let restartableCount = workSummary.restartableCount;
             if (restartableCount > 0) {
               logEvent("tengu_defer_cap_refused_restartable", {
                 restartable_count: restartableCount,
-                wait_ms: now() - Ho,
+                wait_ms: now() - armedAtMs,
               });
-              It(waitingForSubagentsMessage(restartableCount));
+              showNotice(waitingForSubagentsMessage(restartableCount));
               return;
             }
             let abortController = turn.abortController;
             if (abortController && !abortController.signal.aborted && guard.isActive) {
               if (getInputValue().trim() !== "") {
                 logEvent("tengu_defer_cap_cancelled_draft", {
-                  wait_ms: now() - Ho,
+                  wait_ms: now() - armedAtMs,
                 });
                 this.clearPending();
-                It(UNSENT_INPUT_BLOCK);
+                showNotice(UNSENT_INPUT_BLOCK);
                 return;
               }
               if (topBlockingDialog(dialogStore.getState()) !== null) {
                 logEvent("tengu_defer_cap_refused_ask", {
-                  wait_ms: now() - Ho,
+                  wait_ms: now() - armedAtMs,
                 });
-                It(WAITING_FOR_ANSWER_MESSAGE);
+                showNotice(WAITING_FOR_ANSWER_MESSAGE);
                 return;
               }
-              let Fn = turn.stream.peekStreamingText();
+              let streamingText = turn.stream.peekStreamingText();
               this.#n = null;
               this.#g({
                 via: "abort-then-fork",
                 replyOnResume: true,
-                confirmedInterstitial: mn.confirmedInterstitial,
-                inflightCount: vo.count,
-                inflightKinds: vo.kinds,
-                restartableCount: vo.restartableCount,
-                partialChars: (Fn?.length ?? 0) + streamingTextLength(transcript.getSnapshot()),
-                partialText: streamingTextSoFar(transcript.getSnapshot(), Fn),
+                confirmedInterstitial: pendingAtFire.confirmedInterstitial,
+                inflightCount: workSummary.count,
+                inflightKinds: workSummary.kinds,
+                restartableCount: workSummary.restartableCount,
+                partialChars: (streamingText?.length ?? 0) + streamingTextLength(transcript.getSnapshot()),
+                partialText: streamingTextSoFar(transcript.getSnapshot(), streamingText),
                 boundaryUuid: lastSettledMessageUuid(transcript.getSnapshot()),
-                deferWaitMs: now() - Ho,
+                deferWaitMs: now() - armedAtMs,
                 deferCapFired: true,
                 abortAfterFlush: abortController,
-              }).then(Et);
+              }).then(onHandoffDone);
             }
-          }, Io);
+          }, deferCapMs);
           this.#n = {
             confirmedInterstitial,
-            armedAtMs: Ho,
-            absorbAnchorMs: Ho,
-            lastPressMs: Ho,
+            armedAtMs,
+            absorbAnchorMs: armedAtMs,
+            lastPressMs: armedAtMs,
             clearCapTimer,
-            carriedAtPress: At,
+            carriedAtPress: carriedSlugsAtPress,
             proceed: () =>
               this.#g({
-                ...Ro,
+                ...request,
                 replyOnResume: true,
-                deferWaitMs: now() - Ho,
-              }).then((mn) => {
+                deferWaitMs: now() - armedAtMs,
+              }).then((result) => {
                 this.#r = false;
-                return Ot(mn);
+                return withholdMessage(result);
               }),
           };
-          It("Backgrounding after the current tool finishes\u2026");
+          showNotice("Backgrounding after the current tool finishes\u2026");
           return;
         }
         if (via === "abort-then-fork") {
           this.#g({
-            ...Ro,
+            ...request,
             replyOnResume: true,
             partialText,
             boundaryUuid,
             abortAfterFlush: abortController ?? undefined,
-          }).then(Et);
+          }).then(onHandoffDone);
           return;
         }
         this.#g({
-          ...Ro,
+          ...request,
           replyOnResume: isAtResumePoint(this.#s, transcript.getSnapshot()),
-        }).then(Et);
+        }).then(onHandoffDone);
       };
       if (leftArrowNeedsInterstitial(tasks, adoptability)) {
-        let oo = wi(tasks, (co) => isAdoptableTask(co, adoptability) || isCarriedFrameLiveWatch(co));
-        let summary = backgroundWorkSummary(oo, {
-          cronFilter: (co) => !isAdoptableCron(co, adoptability),
+        let relevantTasks = import_reject(
+          tasks,
+          (task) => isAdoptableTask(task, adoptability) || isCarriedFrameLiveWatch(task),
+        );
+        let summary = backgroundWorkSummary(relevantTasks, {
+          cronFilter: (cron) => !isAdoptableCron(cron, adoptability),
         }).summary;
         let confirmedInterstitial = summary !== "";
-        let size = At.size;
+        let size = carriedSlugsAtPress.size;
         let carryOverCount = countAdoptable(tasks, adoptability) - size;
         let workflowAgents = countLiveWorkflowAgents(tasks, adoptability);
         this.#o = {
-          inFlight: rt,
+          inFlight: workSummary,
           carryOverCount,
           workflowAgents,
-          proceed: () => Lt(confirmedInterstitial),
+          proceed: () => proceedHandoff(confirmedInterstitial),
         };
         this.#e
           .requestDialog(LEFT_ARROW_CONFIRM_DIALOG, {
@@ -1560,8 +1600,8 @@ class BackgroundGesture {
             monitorParkCount: size,
             workflowAgents,
           })
-          .then((co) => {
-            switch (co) {
+          .then((answer) => {
+            switch (answer) {
               case "confirm":
                 this.confirm();
                 return;
@@ -1577,7 +1617,7 @@ class BackgroundGesture {
           .catch(logError);
         return;
       }
-      Lt(false);
+      proceedHandoff(false);
     }
   };
   backgroundQuery = () => {
@@ -1587,7 +1627,7 @@ class BackgroundGesture {
     let { mainThreadAgentDefinition } = scope;
     let { toolPermissionContext } = store.getState();
     turn.abortController?.abort(userAbortReason("background"));
-    let Ot = messageQueue.removeByFilter(
+    let pendingCommands = messageQueue.removeByFilter(
       (queuedCommands) => processQueuedCommands_3(queuedCommands) && !isSlashCommand_2(queuedCommands),
     );
     (async () => {
@@ -1597,7 +1637,7 @@ class BackgroundGesture {
         new AbortController(),
         mainLoopModel,
       );
-      let [systemPrompt, Lt, cachedSystemContext] = await Promise.all([
+      let [systemPrompt, userContext, cachedSystemContext] = await Promise.all([
         getSystemPrompt(
           toolUseContext.options.tools,
           getRuntimeMainLoopModel({
@@ -1608,31 +1648,32 @@ class BackgroundGesture {
         getOrBuildUserContext(toolUseContext.session, toolUseContext.storageV5, toolUseContext.credentials),
         getCachedSystemContext(toolUseContext.session, toolUseContext.options.cacheBreakerPhrase),
       ]);
-      let Xt = effectiveSystemPromptText({
+      let systemPromptText = effectiveSystemPromptText({
         mainThreadAgentDefinition,
         toolUseContext,
         customSystemPrompt,
         defaultSystemPrompt: systemPrompt,
         appendSystemPrompt,
       });
-      toolUseContext.renderedSystemPrompt = Xt;
+      toolUseContext.renderedSystemPrompt = systemPromptText;
       let mapped = (
-        await getQueuedCommandAttachments(Ot, imageLimitsForModel(mainLoopModel)).catch(() => [])
-      ).map((Ao) => createAttachmentMessage(Ao));
-      let po = new Set();
-      let ao = (prompt) => prompt.replace(regExp_4_2, "");
-      for (let Ao of transcript.getSnapshot())
+        await getQueuedCommandAttachments(pendingCommands, imageLimitsForModel(mainLoopModel)).catch(() => [])
+      ).map((attachment) => createAttachmentMessage(attachment));
+      let seenPrompts = new Set();
+      let stripTags = (prompt) => prompt.replace(regExp_4_2, "");
+      for (let message of transcript.getSnapshot())
         if (
-          Ao.type === "attachment" &&
-          Ao.attachment.type === "queued_command" &&
-          Ao.attachment.commandMode === "task-notification" &&
-          typeof Ao.attachment.prompt === "string"
+          message.type === "attachment" &&
+          message.attachment.type === "queued_command" &&
+          message.attachment.commandMode === "task-notification" &&
+          typeof message.attachment.prompt === "string"
         )
-          po.add(ao(Ao.attachment.prompt));
+          seenPrompts.add(stripTags(message.attachment.prompt));
       let filtered = mapped.filter(
-        (Ao) =>
-          Ao.attachment.type === "queued_command" &&
-          (typeof Ao.attachment.prompt !== "string" || !po.has(ao(Ao.attachment.prompt))),
+        (message) =>
+          message.attachment.type === "queued_command" &&
+          (typeof message.attachment.prompt !== "string" ||
+            !seenPrompts.has(stripTags(message.attachment.prompt))),
       );
       let stickyBetas = cloneStickyBetaLatches(getStickyBetas());
       toolUseContext.stickyBetas = stickyBetas;
@@ -1640,8 +1681,8 @@ class BackgroundGesture {
       startBackgroundSession({
         messages: [...transcript.getSnapshot(), ...filtered],
         queryParams: {
-          systemPrompt: Xt,
-          userContext: Lt,
+          systemPrompt: systemPromptText,
+          userContext,
           systemContext: cachedSystemContext,
           canUseTool,
           toolUseContext,
@@ -1676,7 +1717,7 @@ function leftArrowHintText(
   }
   {
     if (tabsStandIn) return;
-    let Be = backgroundEligibilityForSession({
+    let eligibility = backgroundEligibilityForSession({
       isBg: isBgSession(),
       isLoading,
       isExternalLoading,
@@ -1686,12 +1727,12 @@ function leftArrowHintText(
         kinds: [],
       },
     });
-    if (Be.ok && Be.via === "detach")
+    if (eligibility.ok && eligibility.via === "detach")
       return {
         handler: gesture.onBgDetach,
         confirmHint: LEFT_ARROW_BACK_HINT,
       };
-    if (needsDetachBeforeBackground(Be) && leftArrowOpensAgents)
+    if (needsDetachBeforeBackground(eligibility) && leftArrowOpensAgents)
       return {
         handler: gesture.onLeftArrow,
         confirmHint: "Press \u2190 again to open agents",
@@ -1700,7 +1741,13 @@ function leftArrowHintText(
   return;
 }
 //@ chunk-18hwfzwa.js:107461-107465 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:107461", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:107465-107469 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:107465", () => {
+  init_react_production();
+});
 export { BackgroundGesture, leftArrowHintText };

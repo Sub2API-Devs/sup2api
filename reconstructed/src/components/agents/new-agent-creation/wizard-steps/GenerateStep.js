@@ -8,9 +8,9 @@
  * pieces: chunk-sx9xc5ee.js (1)
  * attribution: callgraph-fingerprint 1
  */
-import { w } from "../../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../../vendor/react/compiler-runtime.js";
 import { useWizard } from "../../../wizard/useWizard.js";
-import { y } from "../../../../../vendor/react/cjs/react.production.js";
+import { useState } from "../../../../../vendor/react/cjs/react.production.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../../runtime/bun-runtime.js";
 import { useKeybinding } from "../../../../keybindings/useKeybinding.js";
 import { BEDROCK_STEPS } from "../../../providerSetup/bedrock/BedrockCredentialsStep.js";
@@ -28,28 +28,28 @@ import { WizardDialogLayout } from "../../../wizard/WizardDialogLayout.js";
 
 //@ chunk-sx9xc5ee.js:3821-5151 callgraph-fingerprint = GenerateStep (0.446)
 function GenerateStep() {
-  let $ = w(17);
+  let $ = useMemoCache(17);
   let { goBack, goToStep, updateWizardData, wizardData } = useWizard();
-  let [bearerToken, setBearerToken] = y(wizardData.bearerToken ?? "");
-  let [g, h] = y(bearerToken.length);
-  let [u, B] = y(null);
-  let A;
+  let [bearerToken, setBearerToken] = useState(wizardData.bearerToken ?? "");
+  let [cursorOffset, setCursorOffset] = useState(bearerToken.length);
+  let [error, setError] = useState(null);
+  let keybindingsContext;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    A = {
+    keybindingsContext = {
       context: "Settings",
     };
-    $[0] = A;
-  } else A = $[0];
-  useKeybinding("confirm:no", goBack, A);
-  let E;
+    $[0] = keybindingsContext;
+  } else keybindingsContext = $[0];
+  useKeybinding("confirm:no", goBack, keybindingsContext);
+  let handleSubmit;
   if ($[1] !== goToStep || $[2] !== updateWizardData || $[3] !== bearerToken) {
-    E = () => {
+    handleSubmit = () => {
       let trimmedPrompt = bearerToken.trim();
       if (!trimmedPrompt) {
-        B("API key is required");
+        setError("API key is required");
         return;
       }
-      B(null);
+      setError(null);
       updateWizardData({
         bearerToken: trimmedPrompt,
       });
@@ -58,9 +58,9 @@ function GenerateStep() {
     $[1] = goToStep;
     $[2] = updateWizardData;
     $[3] = bearerToken;
-    $[4] = E;
-  } else E = $[4];
-  let onSubmit = E;
+    $[4] = handleSubmit;
+  } else handleSubmit = $[4];
+  let onSubmit = handleSubmit;
   let footerText;
   if ($[5] === MEMO_CACHE_SENTINEL) {
     footerText = jsxProd_default_2(Byline, {
@@ -79,24 +79,24 @@ function GenerateStep() {
     });
     $[5] = footerText;
   } else footerText = $[5];
-  let v;
-  let T;
+  let introText;
+  let keyNote;
   if ($[6] === MEMO_CACHE_SENTINEL) {
-    v = jsxProd_default(Text, {
+    introText = jsxProd_default(Text, {
       children: "Paste your Bedrock API key.",
     });
-    T = jsxProd_default(Text, {
+    keyNote = jsxProd_default(Text, {
       dimColor: true,
       children: "Generate one in the AWS console under Bedrock \u2192 API keys.",
     });
-    $[6] = v;
-    $[7] = T;
+    $[6] = introText;
+    $[7] = keyNote;
   } else {
-    v = $[6];
-    T = $[7];
+    introText = $[6];
+    keyNote = $[7];
   }
   let _;
-  if ($[8] !== g || $[9] !== onSubmit || $[10] !== bearerToken) {
+  if ($[8] !== cursorOffset || $[9] !== onSubmit || $[10] !== bearerToken) {
     _ = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(TextInput, {
@@ -106,44 +106,44 @@ function GenerateStep() {
         placeholder: "bedrock-api-key-\u2026",
         mask: "*",
         columns: 60,
-        cursorOffset: g,
-        onChangeCursorOffset: h,
+        cursorOffset,
+        onChangeCursorOffset: setCursorOffset,
         focus: true,
         showCursor: true,
       }),
     });
-    $[8] = g;
+    $[8] = cursorOffset;
     $[9] = onSubmit;
     $[10] = bearerToken;
     $[11] = _;
   } else _ = $[11];
-  let D;
-  if ($[12] !== u) {
-    D =
-      u &&
+  let errorBox;
+  if ($[12] !== error) {
+    errorBox =
+      error &&
       jsxProd_default(Box, {
         marginTop: 1,
         children: jsxProd_default(ErrorText, {
-          error: u,
+          error,
         }),
       });
-    $[12] = u;
-    $[13] = D;
-  } else D = $[13];
-  let W;
-  if ($[14] !== _ || $[15] !== D) {
-    W = jsxProd_default(WizardDialogLayout, {
+    $[12] = error;
+    $[13] = errorBox;
+  } else errorBox = $[13];
+  let layout;
+  if ($[14] !== _ || $[15] !== errorBox) {
+    layout = jsxProd_default(WizardDialogLayout, {
       subtitle: "Bedrock API key",
       footerText,
       children: jsxProd_default_2(Box, {
         flexDirection: "column",
-        children: [v, T, _, D],
+        children: [introText, keyNote, _, errorBox],
       }),
     });
     $[14] = _;
-    $[15] = D;
-    $[16] = W;
-  } else W = $[16];
-  return W;
+    $[15] = errorBox;
+    $[16] = layout;
+  } else layout = $[16];
+  return layout;
 }
 export { GenerateStep };

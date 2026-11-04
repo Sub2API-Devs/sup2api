@@ -16,12 +16,12 @@ init_react_production();
 /**
  * 递归提取 React 节点的纯文本（字符串、数字、数组与元素 children）。
  */
-function reactNodeText(r) {
-  if (typeof r === "string") return r;
-  if (typeof r === "number") return String(r);
-  if (!r) return "";
-  if (Array.isArray(r)) return r.map(reactNodeText).join("");
-  if (isValidElement_default(r)) return reactNodeText(r.props.children);
+function reactNodeText(node) {
+  if (typeof node === "string") return node;
+  if (typeof node === "number") return String(node);
+  if (!node) return "";
+  if (Array.isArray(node)) return node.map(reactNodeText).join("");
+  if (isValidElement_default(node)) return reactNodeText(node.props.children);
   return "";
 }
 export { reactNodeText };

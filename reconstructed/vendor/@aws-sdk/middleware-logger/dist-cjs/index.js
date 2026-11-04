@@ -5,10 +5,10 @@
  * pieces: chunk-edce4vxq.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-edce4vxq.js:1420-2273 cjs-fingerprint
-var require_middleware_logger = x(function (cjsExports) {
+var require_middleware_logger = __commonJS(function (cjsExports) {
   var loggerMiddleware = () => (next, context) => async (args) => {
     try {
       let response = await next(args);

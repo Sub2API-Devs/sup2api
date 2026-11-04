@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:180972-182575 cjs-fingerprint
-var require_groovy = x(function (cjsExports, cjsModule) {
+var require_groovy = __commonJS(function (cjsExports, cjsModule) {
   function variants(variants, obj = {}) {
     obj.variants = variants;
     return obj;

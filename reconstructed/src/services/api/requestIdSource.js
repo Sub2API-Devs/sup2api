@@ -13,12 +13,15 @@ import { isSessionsToken } from "../oauth/sessionsBearerHooks.js";
 //@ chunk-949rqstz.js:227-247 placement
 var CLOUDFLARE_SERVER_RE = /cloudflare/i;
 //@ chunk-949rqstz.js:247-477 placement
-function readRequestIdSource(e) {
-  let n = e("request-id");
-  if (typeof n === "string" && isSessionsToken(n.trim())) return "origin";
-  let r = e("cf-ray");
-  let o = e("server");
-  if ((typeof r === "string" && r !== "") || (typeof o === "string" && CLOUDFLARE_SERVER_RE.test(o)))
+function readRequestIdSource(getter) {
+  let requestId = getter("request-id");
+  if (typeof requestId === "string" && isSessionsToken(requestId.trim())) return "origin";
+  let ray = getter("cf-ray");
+  let server = getter("server");
+  if (
+    (typeof ray === "string" && ray !== "") ||
+    (typeof server === "string" && CLOUDFLARE_SERVER_RE.test(server))
+  )
     return "nonorigin_cf";
   return "nonorigin_other";
 }
@@ -26,12 +29,12 @@ function readRequestIdSource(e) {
 /**
  * 导出函数 `isNonOriginSource`：参数 e，返回 e === "nonorigin_cf" || e === "nonorigin_other"。
  */
-function isNonOriginSource(e) {
-  return e === "nonorigin_cf" || e === "nonorigin_other";
+function isNonOriginSource(source) {
+  return source === "nonorigin_cf" || source === "nonorigin_other";
 }
 //@ chunk-949rqstz.js:542-1004 placement
-function describeNonOriginRefusal(e) {
-  switch (e) {
+function describeNonOriginRefusal(source) {
+  switch (source) {
     case "nonorigin_cf":
       return "a network edge refused the connection before it reached Anthropic's server (HTTP 403 \u2014 Anthropic's CDN enforcing a region or network policy, or a Cloudflare gateway on this network) rather than this session; this often follows a VPN or network change";
     case "nonorigin_other":

@@ -35,11 +35,12 @@ import { onPolicyVerdictChanged } from "../../services/policyLimits/policyState.
 import { refreshSkillsSyncVeto } from "../claudeAiSync/skillsSync.js";
 import { resetSkillSyncState } from "../../services/skillsSync/skillsSync.js";
 import { logError } from "../log.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-3wek6r2k.js:71354-71436 placement
-function configChangeBlocker(e, storageV5, credentials) {
-  return (r, filePath) =>
-    executeConfigChangeHooks(e, r, filePath, {
+function configChangeBlocker(session, storageV5, credentials) {
+  return (change, filePath) =>
+    executeConfigChangeHooks(session, change, filePath, {
       storageV5,
       credentials,
     }).then(hasBlockingResult);
@@ -48,28 +49,34 @@ function configChangeBlocker(e, storageV5, credentials) {
 function providerEnvAttribution({ eligible, reason, machineTiers, launchEnv, flagEnv, servedEnv, liveEnv }) {
   if (eligible === undefined) return "undecided";
   if (eligible) return "not_applicable";
-  let S = reason === undefined ? undefined : providerEnvMatcher(reason);
-  if (S === undefined) return "not_attributed";
+  let matcher = reason === undefined ? undefined : providerEnvMatcher(reason);
+  if (matcher === undefined) return "not_attributed";
   if (
-    machineTiers.some((machineTier) => machineTier.allowedProviders !== undefined || S(machineTier.env ?? {}))
+    machineTiers.some(
+      (machineTier) => machineTier.allowedProviders !== undefined || matcher(machineTier.env ?? {}),
+    )
   )
     return "machine_admin";
-  if (S(launchEnv)) return "process_env";
-  if (flagEnv !== undefined && S(flagEnv)) return "launch_flag";
-  if (servedEnv !== undefined && S(servedEnv)) return "served_settings";
-  return S(liveEnv) ? "settings_file" : "not_attributed";
+  if (matcher(launchEnv)) return "process_env";
+  if (flagEnv !== undefined && matcher(flagEnv)) return "launch_flag";
+  if (servedEnv !== undefined && matcher(servedEnv)) return "served_settings";
+  return matcher(liveEnv) ? "settings_file" : "not_attributed";
 }
 //@ chunk-3wek6r2k.js:71894-72431 placement
-function providerEnvMatcher(e) {
-  switch (e) {
+function providerEnvMatcher(reason) {
+  switch (reason) {
     case "third_party_provider":
-      return (o) => PROVIDER_ENV_FLAGS.some((n) => isEnvTruthy(o[n]));
+      return (tupleEnv) => PROVIDER_ENV_FLAGS.some((flag) => isEnvTruthy(tupleEnv[flag]));
     case "custom_base_url":
-      return (o) => !!o.ANTHROPIC_BASE_URL && !isFirstPartyAnthropicHost(o.ANTHROPIC_BASE_URL);
+      return (tupleEnv) =>
+        !!tupleEnv.ANTHROPIC_BASE_URL && !isFirstPartyAnthropicHost(tupleEnv.ANTHROPIC_BASE_URL);
     case "unpinned_gateway":
-      return (o) => isEnvTruthy(o.CLAUDE_CODE_USE_GATEWAY);
+      return (tupleEnv) => isEnvTruthy(tupleEnv.CLAUDE_CODE_USE_GATEWAY);
     case "hybrid_yields_to_device_policy":
-      return (o) => ["third_party_provider", "custom_base_url"].some((n) => providerEnvMatcher(n)?.(o));
+      return (tupleEnv) =>
+        ["third_party_provider", "custom_base_url"].some((otherReason) =>
+          providerEnvMatcher(otherReason)?.(tupleEnv),
+        );
     case "profile_base_url_mismatch":
     case "sandboxed_entrypoint":
     case "claude_tag":
@@ -83,10 +90,10 @@ function providerEnvMatcher(e) {
 //@ chunk-3wek6r2k.js:72431-72809 placement
 function machineProviderEnv() {
   let everyMachineAdminTierSettings = getEveryMachineAdminTierSettings();
-  let o = {};
-  for (let n of [...PROVIDER_ENV_FLAGS, "CLAUDE_CODE_USE_GATEWAY", "ANTHROPIC_BASE_URL"]) {
-    let r = env[n];
-    o[n] = r === undefined || r === false ? undefined : String(r);
+  let liveEnv = {};
+  for (let name of [...PROVIDER_ENV_FLAGS, "CLAUDE_CODE_USE_GATEWAY", "ANTHROPIC_BASE_URL"]) {
+    let value = env[name];
+    liveEnv[name] = value === undefined || value === false ? undefined : String(value);
   }
   return {
     author: providerEnvAttribution({
@@ -96,7 +103,7 @@ function machineProviderEnv() {
       launchEnv: getPreSettingsEnvSnapshot(),
       flagEnv: getSettingsForSource("flagSettings")?.env,
       servedEnv: getSettingsForSource("policySettings")?.env,
-      liveEnv: o,
+      liveEnv,
     }),
     forcedRefreshFromMachine: everyMachineAdminTierSettings.some(
       (everyMachineAdminTierSetting) => everyMachineAdminTierSetting.forceRemoteSettingsRefresh === true,
@@ -141,7 +148,7 @@ function modelDefinitionSource(mainLoopModel) {
   if (findEffectiveServedEntry(mainLoopModel, canonicalName) !== undefined) return "served_catalog";
   if (
     getAdditionalModelOptionsCache().some(
-      (r) => typeof r.value === "string" && sameModelSpelling(r.value, mainLoopModel),
+      (option) => typeof option.value === "string" && sameModelSpelling(option.value, mainLoopModel),
     )
   )
     return "bootstrap_additional_option";
@@ -151,7 +158,7 @@ function modelDefinitionSource(mainLoopModel) {
   if (isTierDefaultModelEnv(mainLoopModel)) return "tier_pin_env";
   if (
     getGatewayModelOptions().some(
-      (r) => typeof r.value === "string" && sameModelSpelling(r.value, mainLoopModel),
+      (option) => typeof option.value === "string" && sameModelSpelling(option.value, mainLoopModel),
     )
   )
     return "gateway_discovery";
@@ -208,10 +215,13 @@ function modelAttributionFields() {
   };
 }
 //@ chunk-3wek6r2k.js:74721-74815 placement
-var RESUME_MODEL_ATTRIBUTION = {
-  model_definition_source: lit("omitted_resume"),
-  model_setting_source: lit("omitted_resume"),
-};
+var RESUME_MODEL_ATTRIBUTION; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3wek6r2k.js:74721", () => {
+  RESUME_MODEL_ATTRIBUTION = {
+    model_definition_source: lit("omitted_resume"),
+    model_setting_source: lit("omitted_resume"),
+  };
+});
 //@ chunk-3wek6r2k.js:74815-74928 placement
 function onSkillsSyncVetoChange() {
   return onPolicyVerdictChanged(() => {
@@ -228,8 +238,8 @@ function onSkillsSyncVetoChange() {
   });
 }
 export {
-  machineForcedRefresh,
   configChangeBlocker,
+  machineForcedRefresh,
   machineProviderEnv,
   onSkillsSyncVetoChange,
   modelAttributionFields,

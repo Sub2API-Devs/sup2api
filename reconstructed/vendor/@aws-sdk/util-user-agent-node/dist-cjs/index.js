@@ -5,13 +5,13 @@
  * pieces: chunk-edce4vxq.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { require_middleware_user_agent } from "../../middleware-user-agent/dist-cjs/index.js";
 
 //@ chunk-edce4vxq.js:134734-135599 cjs-fingerprint
-var require_util_user_agent_node = x(function (cjsExports) {
+var require_util_user_agent_node = __commonJS(function (cjsExports) {
   var os = importMetaRequire("os");
-  var hr = importMetaRequire("process");
+  var processModule = importMetaRequire("process");
   var middlewareUserAgent = require_middleware_user_agent();
   var crtAvailability = {
     isCrtAvailable: false,
@@ -28,12 +28,13 @@ var require_util_user_agent_node = x(function (cjsExports) {
         ["ua", "2.1"],
         [`os/${os.platform()}`, os.release()],
         ["lang/js"],
-        ["md/nodejs", `${hr.versions.node}`],
+        ["md/nodejs", `${processModule.versions.node}`],
       ];
       let crtAvailable = isCrtAvailable();
       if (crtAvailable) sections.push(crtAvailable);
       if (serviceId) sections.push([`api/${serviceId}`, clientVersion]);
-      if (hr.env.AWS_EXECUTION_ENV) sections.push([`exec-env/${hr.env.AWS_EXECUTION_ENV}`]);
+      if (processModule.env.AWS_EXECUTION_ENV)
+        sections.push([`exec-env/${processModule.env.AWS_EXECUTION_ENV}`]);
       let appId = await config?.userAgentAppId?.();
       return appId ? [...sections, [`app/${appId}`]] : [...sections];
     };

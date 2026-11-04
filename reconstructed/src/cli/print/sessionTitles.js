@@ -26,88 +26,90 @@ import { hasModuleHookingSite } from "../../plugins/hooksModules/loadedModuleFil
 import { isHumanTurn_3 } from "../../utils/messagePredicates.js";
 
 //@ chunk-nkdv7dw8.js:36337-36594 placement
-function generateTitleFromPrompt(prose, n, signal) {
-  let { titles } = n;
+function generateTitleFromPrompt(prose, context, signal) {
+  let { titles } = context;
   if (titles.attempted) return;
   let sessionId = getSessionId();
-  let u = pickTitleFallback({
+  let fallback = pickTitleFallback({
     prose,
     isContinuationTurn: false,
     fallback: titles.fallback?.sessionId === sessionId ? titles.fallback.fallback : undefined,
   });
-  if (!u) return;
+  if (!fallback) return;
   titles.attempted = true;
   titles.fallback = {
     sessionId,
-    fallback: u,
+    fallback,
   };
-  if (!getCurrentSessionDisplayTitle(sessionId)) saveGeneratedTitle(u.text, n, signal);
+  if (!getCurrentSessionDisplayTitle(sessionId)) saveGeneratedTitle(fallback.text, context, signal);
 }
 //@ chunk-nkdv7dw8.js:36594-36750 placement
 /**
  * 撤回本会话尚未完成的会话标题生成请求，并清除回退标题。
  */
-function retractPendingTitle(e) {
-  e.fallback = undefined;
-  if (e.pending?.sessionId === getSessionId() && !e.pending.call.settled) {
-    e.pending.call.retracted = true;
-    e.pending = undefined;
-    e.attempted = e.latched;
+function retractPendingTitle(titles) {
+  titles.fallback = undefined;
+  if (titles.pending?.sessionId === getSessionId() && !titles.pending.call.settled) {
+    titles.pending.call.retracted = true;
+    titles.pending = undefined;
+    titles.attempted = titles.latched;
   }
 }
 //@ chunk-nkdv7dw8.js:36750-37111 placement
 /**
  * 收到首条真实用户输入时尝试生成会话标题：跳过非人工/合成/对等来源；prompt hook 观察中等情况下推迟（标记 owed），否则立即生成。疑似放错文件（与 MCP 控制请求无关）。
  */
-function maybeTitleFromUserMessage(e, n) {
+function maybeTitleFromUserMessage(message, context) {
   if (
-    n.titles.attempted ||
-    e.shouldQuery === false ||
-    e.peerFrom ||
-    e.isSynthetic ||
-    !isHumanOrUnset(e.origin)
+    context.titles.attempted ||
+    message.shouldQuery === false ||
+    message.peerFrom ||
+    message.isSynthetic ||
+    !isHumanOrUnset(message.origin)
   )
     return;
   let prose;
   try {
     prose = textForResubmit({
-      content: e.content,
-      origin: e.queuedOrigin,
-      commands: n.dispatchCommands(),
-      dispatchesSlashCommands: e.dispatchesSlashCommands,
+      content: message.content,
+      origin: message.queuedOrigin,
+      commands: context.dispatchCommands(),
+      dispatchesSlashCommands: message.dispatchesSlashCommands,
     });
   } catch (error) {
-    logTitleChangeError(n, error);
+    logTitleChangeError(context, error);
     return;
   }
   if (prose === null) return;
   if (isPromptHookObserved() || needsPromptsScreened() || hasModuleHookingSite("session.append")) {
-    n.titles.owed = true;
+    context.titles.owed = true;
     return;
   }
-  generateTitleFromPrompt(prose, n);
+  generateTitleFromPrompt(prose, context);
 }
 //@ chunk-nkdv7dw8.js:37111-37344 placement
 /**
  * 若欠一次会话标题生成，则取最近一条用户输入的文本生成标题；出错交给错误处理。
  */
-function settleOwedTitle(e) {
+function settleOwedTitle(context) {
   try {
-    if (!e.titles.owed) return;
-    let messages = e.conversation().findLast((r) => getUserPromptFromMessage(r) !== undefined);
-    let o = messages && getUserPromptFromMessage(messages);
+    if (!context.titles.owed) return;
+    let messages = context
+      .conversation()
+      .findLast((message) => getUserPromptFromMessage(message) !== undefined);
+    let prompt = messages && getUserPromptFromMessage(messages);
     let prose =
-      o &&
+      prompt &&
       getResubmitText({
-        ...o,
-        commands: e.dispatchCommands(),
+        ...prompt,
+        commands: context.dispatchCommands(),
       });
     if (prose) {
-      e.titles.owed = false;
-      generateTitleFromPrompt(prose, e, new AbortController().signal);
+      context.titles.owed = false;
+      generateTitleFromPrompt(prose, context, new AbortController().signal);
     }
   } catch (error) {
-    logTitleChangeError(e, error);
+    logTitleChangeError(context, error);
   }
 }
 //@ chunk-nkdv7dw8.js:37344-37689 placement = getVerifyPlanReminderTurnCount (0.415)

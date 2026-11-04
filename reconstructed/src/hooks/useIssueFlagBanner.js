@@ -58,7 +58,7 @@ function isSessionContainerCompatible(messages) {
       if (toolName.startsWith("mcp__")) return false;
       if (SHELL_TOOL_NAMES.includes(toolName)) {
         let command = block.input?.command || "";
-        if (NETWORK_COMMAND_PATTERNS.some((Be) => Be.test(command))) return false;
+        if (NETWORK_COMMAND_PATTERNS.some((pattern) => pattern.test(command))) return false;
       }
     }
   }
@@ -71,7 +71,7 @@ function hasFrictionSignal(messages) {
     if (msg.type !== "user") continue;
     let text = getUserMessageText(msg);
     if (!text) continue;
-    return FRUSTRATION_PATTERNS.some((ee) => ee.test(text));
+    return FRUSTRATION_PATTERNS.some((pattern) => pattern.test(text));
   }
   return false;
 }
@@ -83,18 +83,18 @@ var MIN_TURNS_FOR_ISSUE_FLAG = 3;
 var ISSUE_FLAG_COOLDOWN_MS = 1800000;
 var issueFlagNotification = {
   id: "issue-flag",
-  deps: (h) => [h.transcript.getSnapshot(), h.turnAtRender.submitCount, h.addNotification],
+  deps: (ctx) => [ctx.transcript.getSnapshot(), ctx.turnAtRender.submitCount, ctx.addNotification],
   setup() {
-    let h = 0;
-    let x = -1;
-    let D = false;
-    function L(messages, ke) {
-      if (x === ke) return true;
-      if (Date.now() - h < ISSUE_FLAG_COOLDOWN_MS) return false;
-      if (ke < MIN_TURNS_FOR_ISSUE_FLAG) return false;
+    let turns = 0;
+    let lastTurn = -1;
+    let flagged = false;
+    function checkTurns(messages, messages_2) {
+      if (lastTurn === messages_2) return true;
+      if (Date.now() - turns < ISSUE_FLAG_COOLDOWN_MS) return false;
+      if (messages_2 < MIN_TURNS_FOR_ISSUE_FLAG) return false;
       if (!isSessionContainerCompatible(messages) || !hasFrictionSignal(messages)) return false;
-      h = Date.now();
-      x = ke;
+      turns = Date.now();
+      lastTurn = messages_2;
       return true;
     }
     return ({ addNotification, transcript, turnAtRender }) => {};

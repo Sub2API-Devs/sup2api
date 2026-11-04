@@ -38,9 +38,10 @@ function generateContextSuggestions(data) {
   checkReadResultBloat(data, suggestions);
   checkMemoryBloat(data, suggestions);
   checkAutoCompactDisabled(data, suggestions);
-  suggestions.sort((m, i) => {
-    if (m.severity !== i.severity) return m.severity === "warning" ? -1 : 1;
-    return (i.savingsTokens ?? 0) - (m.savingsTokens ?? 0);
+  suggestions.sort((leftSuggestion, rightSuggestion) => {
+    if (leftSuggestion.severity !== rightSuggestion.severity)
+      return leftSuggestion.severity === "warning" ? -1 : 1;
+    return (rightSuggestion.savingsTokens ?? 0) - (leftSuggestion.savingsTokens ?? 0);
   });
   return suggestions;
 }
@@ -158,7 +159,7 @@ function checkMemoryBloat(data, suggestions) {
   let memoryPercent = (totalMemoryTokens / data.rawMaxTokens) * 100;
   if (memoryPercent >= MEMORY_BLOAT_PERCENT && totalMemoryTokens >= MEMORY_BLOAT_MIN_TOKENS) {
     let largestFiles = [...data.memoryFiles]
-      .sort((u, c) => c.tokens - u.tokens)
+      .sort((leftFile, rightFile) => rightFile.tokens - leftFile.tokens)
       .slice(0, 3)
       .map((memoryFile) => `${getDisplayPath(memoryFile.path)} (${formatTokens(memoryFile.tokens)})`)
       .join(", ");

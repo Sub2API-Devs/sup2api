@@ -20,8 +20,8 @@ import { env } from "./env.js";
  */
 function todoToolsEnabled() {
   if (isActingAsBgJob() || getTodoToolsOptIn()) return true;
-  let e = mainLoopCanonicalModel();
-  if (e === undefined || isInferenceProfileModelId(e) || isTodoToolLegacyModel(e)) return true;
+  let model = mainLoopCanonicalModel();
+  if (model === undefined || isInferenceProfileModelId(model) || isTodoToolLegacyModel(model)) return true;
   return env.CLAUDE_CODE_ENABLE_TODO_TOOLS === true;
 }
 export { todoToolsEnabled };

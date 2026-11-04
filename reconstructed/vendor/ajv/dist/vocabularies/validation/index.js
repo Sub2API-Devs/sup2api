@@ -5,7 +5,7 @@
  * pieces: chunk-s82q9s4x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_limitNumber } from "./limitNumber.js";
 import { require_multipleOf } from "./multipleOf.js";
 import { require_limitLength } from "./limitLength.js";
@@ -18,7 +18,7 @@ import { require_const } from "./const.js";
 import { require_enum } from "./enum.js";
 
 //@ chunk-s82q9s4x.js:91741-92118 cjs-fingerprint
-var require_validation = x(function (cjsExports) {
+var require_validation = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

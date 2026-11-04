@@ -11,7 +11,14 @@
 import { join } from "path";
 import { readdir } from "fs/promises";
 import { DoctorLazy } from "./cli/handlers/util.js";
-import { u, E, _enum, string, record, unknown } from "../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  numberSchema,
+  _enum,
+  stringSchema,
+  record,
+  unknown,
+} from "../vendor/zod/v4/classic/schemas.js";
 import { regExp, TEAM_SETUP_GUIDE_LABEL, shouldRedactInput } from "./commands.js";
 import { uniq } from "./utils/collections.js";
 import { buildLaunchMessage } from "./commands/ultraplan.js";
@@ -52,40 +59,48 @@ import { registerCleanup } from "./utils/cleanupRegistry.js";
 import { HostScoped } from "./utils/hostScoped.js";
 import { isStoreError } from "./utils/storage/storageErrors.js";
 import { SessionRootSlot } from "./bootstrap/sessionSlices.js";
+import { readPublishedReadme } from "./services/artifacts/designSystemReadRules.js";
+import { README_MD, PROJECT_README_MD } from "./services/artifacts/designSystemGuide.js";
+import { getSkillDirCommandsCached } from "./skills/loadSkillsDir.js";
 import { sessionTagSalt, createInlineTextTag, MIN_INLINE_TAG_BLOCK } from "./utils/userTurnTags.js";
 import { splitPastedContentBlocks, hasWordAfterPunct } from "./utils/pastedContent.js";
 import { PASTE_THRESHOLD } from "./utils/imagePaste.js";
 import { isVirtualPancakeEnabled } from "./utils/permissions/permissionSetup.js";
-import { getSkillDirCommandsCached } from "./skills/loadSkillsDir.js";
+import { env } from "./utils/env.js";
 import { isOwnTempName } from "./utils/atomicPublishWrite.js";
 import { isHashTempFile } from "./services/memorySync/syncFiles.js";
-import { env } from "./utils/env.js";
-import { readPublishedReadme } from "./services/artifacts/designSystemReadRules.js";
-import { README_MD, PROJECT_README_MD } from "./services/artifacts/designSystemGuide.js";
+import { deferInit } from "../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:34066-34244 fingerprint = resolveStoredPastedContent (0.799)
-var MAX_HISTORY_ITEMS = 100;
-var MAX_CLEARED_DRAFTS = 10;
-var MAX_CLEARED_DRAFTS_CHARS = 1e7;
-var MAX_PASTED_CONTENT_LENGTH = 1024;
-var PastedContentSchema = DoctorLazy(() =>
-  u({
-    id: E(),
-    type: _enum(["text", "image"]),
-    content: string().optional(),
-    contentHash: string().optional(),
-    mediaType: string().optional(),
-    filename: string().optional(),
-  }),
-);
+var MAX_HISTORY_ITEMS; // deferred: uses DoctorLazy (./cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_CLEARED_DRAFTS;
+var MAX_CLEARED_DRAFTS_CHARS;
+var MAX_PASTED_CONTENT_LENGTH;
+var PastedContentSchema;
+deferInit("chunk-s61vbvea.js:34066", () => {
+  MAX_HISTORY_ITEMS = 100;
+  MAX_CLEARED_DRAFTS = 10;
+  MAX_CLEARED_DRAFTS_CHARS = 1e7;
+  MAX_PASTED_CONTENT_LENGTH = 1024;
+  PastedContentSchema = DoctorLazy(() =>
+    objectSchema({
+      id: numberSchema(),
+      type: _enum(["text", "image"]),
+      content: stringSchema().optional(),
+      contentHash: stringSchema().optional(),
+      mediaType: stringSchema().optional(),
+      filename: stringSchema().optional(),
+    }),
+  );
+});
 //@ chunk-s61vbvea.js:34244-34301 file-local
 function getPastedTextRefNumLines(text) {
   return (text.match(/\r\n|\r|\n/g) || []).length;
 }
 //@ chunk-s61vbvea.js:34301-34398 fingerprint = formatPastedTextRef (0.508)
-function formatPastedTextRef(id, numLines, r = "Pasted text") {
-  if (numLines === 0) return `[${r} #${id}]`;
-  return `[${r} #${id} +${numLines} lines]`;
+function formatPastedTextRef(id, numLines, label = "Pasted text") {
+  if (numLines === 0) return `[${label} #${id}]`;
+  return `[${label} #${id} +${numLines} lines]`;
 }
 //@ chunk-s61vbvea.js:34398-34436 fingerprint = formatImageRef (1)
 function formatImageRef(id) {
@@ -95,22 +110,22 @@ function formatImageRef(id) {
 /**
  * 从文本中解析粘贴内容占位符（[Pasted text #N] 等），返回 {id, match, index} 列表。
  */
-function parsePastedRefs(e) {
-  if (!e) return [];
-  return [...e.matchAll(regExp)]
-    .map((r) => ({
-      id: parseInt(r[2] || "0"),
-      match: r[0],
-      index: r.index,
+function parsePastedRefs(display) {
+  if (!display) return [];
+  return [...display.matchAll(regExp)]
+    .map((match) => ({
+      id: parseInt(match[2] || "0"),
+      match: match[0],
+      index: match.index,
     }))
-    .filter((r) => r.id > 0);
+    .filter((ref) => ref.id > 0);
 }
 //@ chunk-s61vbvea.js:34575-34637 layout
 /**
  * 函数 isValidPasteId（正整数且 < 2^32）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
-function isValidPasteId(e) {
-  return Number.isInteger(e) && e > 0 && e < 4294967296;
+function isValidPasteId(id) {
+  return Number.isInteger(id) && id > 0 && id < 4294967296;
 }
 //@ chunk-s61vbvea.js:34637-35038 layout
 /**
@@ -119,29 +134,32 @@ function isValidPasteId(e) {
 function getPromptHistoryKey(display, pastedContents) {
   let pastedRefs = parsePastedRefs(display);
   if (pastedRefs.length === 0) return display;
-  let s = display;
+  let placeholderKey = display;
   for (let j = pastedRefs.length - 1; j >= 0; j--) {
-    let S = pastedRefs[j];
-    s = s.slice(0, S.index) + S.match.replace(`#${S.id}`, "#_") + s.slice(S.index + S.match.length);
+    let ref = pastedRefs[j];
+    placeholderKey =
+      placeholderKey.slice(0, ref.index) +
+      ref.match.replace(`#${ref.id}`, "#_") +
+      placeholderKey.slice(ref.index + ref.match.length);
   }
   let mapped = pastedRefs.map((pastedRef) => {
-    let S = pastedContents?.[pastedRef.id];
-    if (!S) return `literal:${pastedRef.id}`;
-    if (S.unavailable) return "dead";
-    return S.contentHash !== undefined ? `hash:${S.contentHash}` : `inline:${S.content ?? ""}`;
+    let entry = pastedContents?.[pastedRef.id];
+    if (!entry) return `literal:${pastedRef.id}`;
+    if (entry.unavailable) return "dead";
+    return entry.contentHash !== undefined ? `hash:${entry.contentHash}` : `inline:${entry.content ?? ""}`;
   });
-  return `${s}\x00${mapped.join("\x01")}`;
+  return `${placeholderKey}\x00${mapped.join("\x01")}`;
 }
 //@ chunk-s61vbvea.js:35038-35101 layout
 /**
  * 函数 addPastedEntry（写入一条粘贴记录）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
-function addPastedEntry(e, n, r, s) {
+function addPastedEntry(display, pastedContents, lookup, refs) {
   return joinPromptSegments(
-    splitPromptSegments(e, parsePastedRefs(e), n, false, r),
-    s,
-    r,
-    getInlinePasteTexts(n),
+    splitPromptSegments(display, parsePastedRefs(display), pastedContents, false, lookup),
+    refs,
+    lookup,
+    getInlinePasteTexts(pastedContents),
   );
 }
 //@ chunk-s61vbvea.js:35101-35165 layout
@@ -149,99 +167,103 @@ var LEADING_COMBINING_MARKS = /^[\p{M}\u1161-\u1175\u11A8-\u11C2\u{16D67}\u{16D6
 //@ chunk-s61vbvea.js:35165-35275 layout = setCwdState (0.843)
 function nfcVariants(cwd) {
   let normalized = cwd.normalize("NFC");
-  let r = normalized.replace(LEADING_COMBINING_MARKS, "").trimStart();
-  return uniq([cwd, normalized, r]).filter((s) => s !== "");
+  let stripped = normalized.replace(LEADING_COMBINING_MARKS, "").trimStart();
+  return uniq([cwd, normalized, stripped]).filter((variant) => variant !== "");
 }
 //@ chunk-s61vbvea.js:35275-35489 layout
 /**
  * 收集内联粘贴文本（可包含仅斜杠名的项），含 NFC 变体，按长度降序。
  */
-function getInlinePasteTexts(e, n = false) {
-  let r = new Set();
-  for (let s of Object.values(e))
-    if (s.type === "text" && s.inline && s.content !== "" && (n || !s.slashNameOnly))
-      for (let h of nfcVariants(s.content)) r.add(h);
-  return [...r].sort((s, h) => h.length - s.length);
+function getInlinePasteTexts(pastedContents, includeSlashOnly = false) {
+  let texts = new Set();
+  for (let entry of Object.values(pastedContents))
+    if (
+      entry.type === "text" &&
+      entry.inline &&
+      entry.content !== "" &&
+      (includeSlashOnly || !entry.slashNameOnly)
+    )
+      for (let variant of nfcVariants(entry.content)) texts.add(variant);
+  return [...texts].sort((a, b) => b.length - a.length);
 }
 //@ chunk-s61vbvea.js:35489-35984 layout
 /**
  * 在占位符之外的文本中查找内联粘贴内容出现的区间，合并重叠后按起点排序。
  */
-function findInlinePasteRanges(e, n, r = false) {
-  if (n === undefined) return [];
-  let inlinePasteTexts = getInlinePasteTexts(n, r);
+function findInlinePasteRanges(text, pastedContents, includeSlashOnly = false) {
+  if (pastedContents === undefined) return [];
+  let inlinePasteTexts = getInlinePasteTexts(pastedContents, includeSlashOnly);
   if (inlinePasteTexts.length === 0) return [];
-  let h = [];
-  let y = (R, x) => {
-    let P = R;
-    for (let [j, G] of [...h].sort((L, q) => L[0] - q[0])) {
-      if (G <= P || j >= x) continue;
-      if (j > P) h.push([P, j]);
-      P = Math.max(P, G);
+  let ranges = [];
+  let addRange = (from, to) => {
+    let cursor = from;
+    for (let [rangeFrom, rangeTo] of [...ranges].sort((a, b) => a[0] - b[0])) {
+      if (rangeTo <= cursor || rangeFrom >= to) continue;
+      if (rangeFrom > cursor) ranges.push([cursor, rangeFrom]);
+      cursor = Math.max(cursor, rangeTo);
     }
-    if (P < x) h.push([P, x]);
+    if (cursor < to) ranges.push([cursor, to]);
   };
-  let S = (R, x) => {
-    let sliced = e.slice(R, x);
+  let addMatchesIn = (from, to) => {
+    let sliced = text.slice(from, to);
     for (let inlinePasteText of inlinePasteTexts) {
       let index = sliced.indexOf(inlinePasteText);
       while (index !== -1) {
-        y(R + index, R + index + inlinePasteText.length);
+        addRange(from + index, from + index + inlinePasteText.length);
         index = sliced.indexOf(inlinePasteText, index + 1);
       }
     }
   };
-  let w = 0;
-  for (let R of parsePastedRefs(e)) {
-    if (n[R.id] === undefined) continue;
-    S(w, R.index);
-    w = R.index + R.match.length;
+  let cursor = 0;
+  for (let ref of parsePastedRefs(text)) {
+    if (pastedContents[ref.id] === undefined) continue;
+    addMatchesIn(cursor, ref.index);
+    cursor = ref.index + ref.match.length;
   }
-  S(w, e.length);
-  return h.sort((R, x) => R[0] - x[0]);
+  addMatchesIn(cursor, text.length);
+  return ranges.sort((a, b) => a[0] - b[0]);
 }
 //@ chunk-s61vbvea.js:35984-36222 layout
 /**
  * 把文本中的"[...Truncated text]"占位替换为对应的完整粘贴内容。
  */
-function expandTruncatedPastes(e, n) {
-  if (n === undefined) return e;
-  let r = "";
-  let s = 0;
-  for (let h of parsePastedRefs(e)) {
-    let y = n[h.id];
-    if (y?.type === "text" && !y.inline && h.match.startsWith("[...Truncated text")) {
-      r += e.slice(s, h.index) + y.content;
-      s = h.index + h.match.length;
+function expandTruncatedPastes(display, pastedContents) {
+  if (pastedContents === undefined) return display;
+  let out = "";
+  let cursor = 0;
+  for (let ref of parsePastedRefs(display)) {
+    let entry = pastedContents[ref.id];
+    if (entry?.type === "text" && !entry.inline && ref.match.startsWith("[...Truncated text")) {
+      out += display.slice(cursor, ref.index) + entry.content;
+      cursor = ref.index + ref.match.length;
     }
   }
-  return r + e.slice(s);
+  return out + display.slice(cursor);
 }
 //@ chunk-s61vbvea.js:36222-36410 layout
 /**
  * 生成启动消息片段，排除与粘贴内容重叠的部分；粘贴中有 ultraplan 而原文没有时返回空。
  */
-function getLaunchMessagesOutsidePastes(disconnectedBridge, n) {
-  let inlinePasteTexts = getInlinePasteTexts(n ?? {});
-  let launchMessage = buildLaunchMessage(disconnectedBridge);
+function getLaunchMessagesOutsidePastes(messageText, pastedContents) {
+  let inlinePasteTexts = getInlinePasteTexts(pastedContents ?? {});
+  let launchMessage = buildLaunchMessage(messageText);
   if (inlinePasteTexts.length === 0) return launchMessage;
   if (
     inlinePasteTexts.some(
-      (inlinePasteText) =>
-        /ultraplan/i.test(inlinePasteText) && !disconnectedBridge.includes(inlinePasteText),
+      (inlinePasteText) => /ultraplan/i.test(inlinePasteText) && !messageText.includes(inlinePasteText),
     )
   )
     return [];
-  let inlinePasteRanges = findInlinePasteRanges(disconnectedBridge, n);
-  return launchMessage.filter((y) => !rangesOverlap(y.start, y.end, inlinePasteRanges));
+  let inlinePasteRanges = findInlinePasteRanges(messageText, pastedContents);
+  return launchMessage.filter((range) => !rangesOverlap(range.start, range.end, inlinePasteRanges));
 }
 //@ chunk-s61vbvea.js:36410-36453 file-local
-function flushPromptHistory(e, n) {
-  return getLaunchMessagesOutsidePastes(e, n).length > 0;
+function flushPromptHistory(disconnectedBridge, pastedContents) {
+  return getLaunchMessagesOutsidePastes(disconnectedBridge, pastedContents).length > 0;
 }
 //@ chunk-s61vbvea.js:36453-36505 layout
 function rangesOverlap(start, end, inlinePasteRanges) {
-  return inlinePasteRanges.some(([s, h]) => start < h && end > s);
+  return inlinePasteRanges.some(([from, to]) => start < to && end > from);
 }
 //@ chunk-s61vbvea.js:36505-36581 layout
 function isPastedPlaceholderText(match) {
@@ -252,10 +274,10 @@ function isPastedPlaceholderText(match) {
  * 取文本中占位符对应、仍可用的手动输入粘贴内容。
  */
 function getTypedPasteContents(text, nextPasteId) {
-  return parsePastedRefs(text).flatMap((r) => {
-    let s = nextPasteId[r.id];
-    return s?.type === "text" && s.unavailable !== true && isPastedPlaceholderText(r.match)
-      ? [s.content]
+  return parsePastedRefs(text).flatMap((ref) => {
+    let entry = nextPasteId[ref.id];
+    return entry?.type === "text" && entry.unavailable !== true && isPastedPlaceholderText(ref.match)
+      ? [entry.content]
       : [];
   });
 }
@@ -263,130 +285,130 @@ function getTypedPasteContents(text, nextPasteId) {
 /**
  * 按占位符把提示拆成段：用户输入的文本、展开的粘贴内容（可经变换标为非输入）、不可用或非文本占位保持原样。
  */
-function splitPromptSegments(e, pastedRefs, r, s, h) {
-  let y = [];
-  let S = e.length;
+function splitPromptSegments(display, pastedRefs, pastedContents, skipUnavailable, wrapUntyped) {
+  let segments = [];
+  let end = display.length;
   for (let j = pastedRefs.length - 1; j >= 0; j--) {
-    let R = pastedRefs[j];
-    y.unshift({
-      text: e.slice(R.index + R.match.length, S),
+    let ref = pastedRefs[j];
+    segments.unshift({
+      text: display.slice(ref.index + ref.match.length, end),
       typed: true,
     });
-    S = R.index;
-    let x = r[R.id];
-    if (x?.unavailable === true) {
-      if (!s || R.match.startsWith("[Image"))
-        y.unshift({
-          text: R.match,
+    end = ref.index;
+    let entry = pastedContents[ref.id];
+    if (entry?.unavailable === true) {
+      if (!skipUnavailable || ref.match.startsWith("[Image"))
+        segments.unshift({
+          text: ref.match,
           typed: true,
         });
       continue;
     }
-    if (x?.type !== "text") {
-      y.unshift({
-        text: R.match,
+    if (entry?.type !== "text") {
+      segments.unshift({
+        text: ref.match,
         typed: true,
       });
       continue;
     }
-    if (!isPastedPlaceholderText(R.match) || !h) {
-      y.unshift({
-        text: x.content,
+    if (!isPastedPlaceholderText(ref.match) || !wrapUntyped) {
+      segments.unshift({
+        text: entry.content,
         typed: true,
       });
       continue;
     }
-    y.unshift({
-      text: h(x.content),
+    segments.unshift({
+      text: wrapUntyped(entry.content),
       typed: false,
     });
   }
-  y.unshift({
-    text: e.slice(0, S),
+  segments.unshift({
+    text: display.slice(0, end),
     typed: true,
   });
-  return y;
+  return segments;
 }
 //@ chunk-s61vbvea.js:37209-37656 layout
 /**
  * 把提示段拼回文本：输入段可经转换（可按内联粘贴再拆分），非输入段之后补换行。
  */
-function joinPromptSegments(e, n, r, inlinePasteTexts = []) {
-  if (!n && !r) return e.map((x) => x.text).join("");
-  let h = n ?? ((x) => x);
-  let y = [];
-  let S = "";
-  let w = () => {
-    if (S === "") return;
-    if (r && inlinePasteTexts.length > 0)
-      y.push(
-        ...splitByInlinePastes(S, inlinePasteTexts, r).map((x) =>
-          x.typed
+function joinPromptSegments(segments, transformTyped, inlinePasteTexts, inlinePasteTexts_2 = []) {
+  if (!transformTyped && !inlinePasteTexts) return segments.map((segment) => segment.text).join("");
+  let transform = transformTyped ?? ((text) => text);
+  let out = [];
+  let pendingTyped = "";
+  let flushTyped = () => {
+    if (pendingTyped === "") return;
+    if (inlinePasteTexts && inlinePasteTexts_2.length > 0)
+      out.push(
+        ...splitByInlinePastes(pendingTyped, inlinePasteTexts_2, inlinePasteTexts).map((segment) =>
+          segment.typed
             ? {
-                text: h(x.text),
+                text: transform(segment.text),
                 typed: true,
               }
-            : x,
+            : segment,
         ),
       );
     else
-      y.push({
-        text: h(S),
+      out.push({
+        text: transform(pendingTyped),
         typed: true,
       });
-    S = "";
+    pendingTyped = "";
   };
-  for (let x of e) {
-    if (x.typed) {
-      S += x.text;
+  for (let segment of segments) {
+    if (segment.typed) {
+      pendingTyped += segment.text;
       continue;
     }
-    w();
-    y.push(x);
+    flushTyped();
+    out.push(segment);
   }
-  w();
-  let R = "";
-  for (let idx = 0; idx < y.length; idx++) {
-    let P = y[idx];
-    R += P.text;
-    let text = y[idx + 1]?.text ?? "";
+  flushTyped();
+  let joined = "";
+  for (let idx = 0; idx < out.length; idx++) {
+    let segment = out[idx];
+    joined += segment.text;
+    let text = out[idx + 1]?.text ?? "";
     if (
-      !P.typed &&
+      !segment.typed &&
       text !== "" &&
       !text.startsWith(`
 `)
     )
-      R += `
+      joined += `
 `;
   }
-  return R;
+  return joined;
 }
 //@ chunk-s61vbvea.js:37656-37892 layout
-function splitByInlinePastes(e, n, r) {
-  let s = [];
-  let h = 0;
-  for (let y of findHistoryCopySpans(e, n)) {
-    if (y.from > h)
-      s.push({
-        text: e.slice(h, y.from),
+function splitByInlinePastes(text, inlinePasteTexts, wrap) {
+  let segments = [];
+  let cursor = 0;
+  for (let span of findHistoryCopySpans(text, inlinePasteTexts)) {
+    if (span.from > cursor)
+      segments.push({
+        text: text.slice(cursor, span.from),
         typed: true,
       });
-    s.push({
-      text: r(e.slice(y.from, y.to)),
+    segments.push({
+      text: wrap(text.slice(span.from, span.to)),
       typed: false,
     });
-    h = y.to;
+    cursor = span.to;
   }
-  if (h < e.length || s.length === 0)
-    s.push({
-      text: e.slice(h),
+  if (cursor < text.length || segments.length === 0)
+    segments.push({
+      text: text.slice(cursor),
       typed: true,
     });
-  return s;
+  return segments;
 }
 //@ chunk-s61vbvea.js:37892-37969 layout
-function stripPlaceholders(display, n) {
-  let { stripped, removed } = expandPromptForSubmit(display, n);
+function stripPlaceholders(display, pastedContents) {
+  let { stripped, removed } = expandPromptForSubmit(display, pastedContents);
   return {
     input: stripped,
     removed,
@@ -396,45 +418,45 @@ function stripPlaceholders(display, n) {
 /**
  * 展开提示中的占位：去掉已不可用的粘贴占位（记录被删的项），并生成展开后的文本。
  */
-function expandPromptForSubmit(e, n, r, s) {
-  let pastedRefs = parsePastedRefs(e);
-  let y = [];
-  let S = e;
+function expandPromptForSubmit(display, pastedContents, wrapUntyped, escapePastedContentTag) {
+  let pastedRefs = parsePastedRefs(display);
+  let removed = [];
+  let stripped = display;
   for (let j = pastedRefs.length - 1; j >= 0; j--) {
-    let x = pastedRefs[j];
-    if (!x.match.startsWith("[Image") && n[x.id]?.unavailable === true) {
-      S = S.slice(0, x.index) + S.slice(x.index + x.match.length);
-      y.unshift({
-        id: x.id,
-        label: x.match.startsWith("[...Truncated text") ? "Truncated text" : "Pasted text",
+    let ref = pastedRefs[j];
+    if (!ref.match.startsWith("[Image") && pastedContents[ref.id]?.unavailable === true) {
+      stripped = stripped.slice(0, ref.index) + stripped.slice(ref.index + ref.match.length);
+      removed.unshift({
+        id: ref.id,
+        label: ref.match.startsWith("[...Truncated text") ? "Truncated text" : "Pasted text",
       });
     }
   }
   let expanded = joinPromptSegments(
-    splitPromptSegments(e, pastedRefs, n, true, r),
-    s,
-    r,
-    getInlinePasteTexts(n),
+    splitPromptSegments(display, pastedRefs, pastedContents, true, wrapUntyped),
+    escapePastedContentTag,
+    wrapUntyped,
+    getInlinePasteTexts(pastedContents),
   );
   return {
-    stripped: S,
+    stripped,
     expanded,
-    removed: y,
+    removed,
   };
 }
 //@ chunk-s61vbvea.js:38341-38382 layout
 /**
  * 函数 stripPlaceholdersWithOptions（带选项的剥离）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
-function stripPlaceholdersWithOptions(e, n, wrapUserTurnContent, escapePastedContentTag) {
-  return expandPromptForSubmit(e, n, wrapUserTurnContent, escapePastedContentTag);
+function stripPlaceholdersWithOptions(text, pastedContents, wrapUntyped, escapePastedContentTag) {
+  return expandPromptForSubmit(text, pastedContents, wrapUntyped, escapePastedContentTag);
 }
 //@ chunk-s61vbvea.js:38382-38547 layout
 function getReferencedTextPastes(display, pastedContents) {
   if (!pastedContents) return [];
-  let r = new Set(parsePastedRefs(display).map((s) => s.id));
+  let referencedIds = new Set(parsePastedRefs(display).map((ref) => ref.id));
   return Object.entries(pastedContents).filter(
-    (s) => s[1].type === "text" && !s[1].unavailable && r.has(Number(s[0])),
+    (pair) => pair[1].type === "text" && !pair[1].unavailable && referencedIds.has(Number(pair[0])),
   );
 }
 //@ chunk-s61vbvea.js:38547-38736 layout
@@ -442,9 +464,9 @@ function getReferencedTextPastes(display, pastedContents) {
  * 说明哪些粘贴内容已不可用并已从提示中移除。
  */
 function describeRemovedPastes(removed) {
-  let n = describePlaceholders(removed);
-  let joined = n.join(", ");
-  return n.length === 1
+  let labels = describePlaceholders(removed);
+  let joined = labels.join(", ");
+  return labels.length === 1
     ? `${joined} is no longer available and was removed from the prompt`
     : `${joined} are no longer available and were removed from the prompt`;
 }
@@ -453,12 +475,12 @@ function describeRemovedPastes(removed) {
  * 生成粘贴内容不可用导致未发送的错误提示，请用户放回原文后重发。
  */
 function buildUnavailablePasteError(removed) {
-  let n = describePlaceholders(removed);
-  return `Not sent: ${n.join(", ")} ${n.length === 1 ? "is" : "are"} no longer available. Put that text back in place of its placeholder and send again.`;
+  let labels = describePlaceholders(removed);
+  return `Not sent: ${labels.join(", ")} ${labels.length === 1 ? "is" : "are"} no longer available. Put that text back in place of its placeholder and send again.`;
 }
 //@ chunk-s61vbvea.js:38909-38968 layout
-function describePlaceholders(e) {
-  return uniq(e.map((n) => `${n.label} #${n.id}`));
+function describePlaceholders(removed) {
+  return uniq(removed.map((item) => `${item.label} #${item.id}`));
 }
 //@ chunk-s61vbvea.js:38968-38980 layout
 /**
@@ -469,20 +491,20 @@ var MAX_HISTORY_ENTRIES = 1e5;
 /**
  * 把最后一个可用的文本粘贴占位就地展开（内容过长时不展开），返回展开文本、ID 与光标位置。
  */
-function expandLastPaste(e, n) {
-  let r = null;
-  for (let h of parsePastedRefs(e)) {
-    let y = n[h.id];
-    if (y?.type !== "text" || y.unavailable) continue;
-    if (!r || h.id > r.id) r = h;
+function expandLastPaste(display, pastedContents) {
+  let bestRef = null;
+  for (let ref of parsePastedRefs(display)) {
+    let entry = pastedContents[ref.id];
+    if (entry?.type !== "text" || entry.unavailable) continue;
+    if (!bestRef || ref.id > bestRef.id) bestRef = ref;
   }
-  if (!r) return null;
-  let content = n[r.id].content;
+  if (!bestRef) return null;
+  let content = pastedContents[bestRef.id].content;
   if (content.length > MAX_HISTORY_ENTRIES) return null;
   return {
-    expanded: e.slice(0, r.index) + content + e.slice(r.index + r.match.length),
-    id: r.id,
-    cursorOffset: r.index + content.length,
+    expanded: display.slice(0, bestRef.index) + content + display.slice(bestRef.index + bestRef.match.length),
+    id: bestRef.id,
+    cursorOffset: bestRef.index + content.length,
   };
 }
 //@ chunk-s61vbvea.js:39284-39305 layout
@@ -533,28 +555,31 @@ async function* readHistoryRecordsBackward(storage) {
   }
 }
 //@ chunk-s61vbvea.js:39871-40221 fingerprint = getTimestampedHistory (0.47)
-var getTimestampedHistory_2 = DoctorLazy(() =>
-  u({
-    display: string(),
-    pastedContents: record(string(), unknown())
-      .catch({})
-      .transform((e) =>
-        Object.fromEntries(
-          Object.entries(e).flatMap(([key, value]) => {
-            let s = PastedContentSchema().safeParse(value);
-            if (s.success) return [[key, s.data]];
-            logForDebugging(
-              `Dropping a malformed paste record from a history line (${formatZodIssues(s.error)})`,
-            );
-            return [];
-          }),
+var getTimestampedHistory_2; // deferred: uses DoctorLazy (./cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:39871", () => {
+  getTimestampedHistory_2 = DoctorLazy(() =>
+    objectSchema({
+      display: stringSchema(),
+      pastedContents: record(stringSchema(), unknown())
+        .catch({})
+        .transform((pastedContents) =>
+          Object.fromEntries(
+            Object.entries(pastedContents).flatMap(([key, value]) => {
+              let parsed = PastedContentSchema().safeParse(value);
+              if (parsed.success) return [[key, parsed.data]];
+              logForDebugging(
+                `Dropping a malformed paste record from a history line (${formatZodIssues(parsed.error)})`,
+              );
+              return [];
+            }),
+          ),
         ),
-      ),
-    timestamp: E(),
-    project: string(),
-    sessionId: string().optional().catch(undefined),
-  }),
-);
+      timestamp: numberSchema(),
+      project: stringSchema(),
+      sessionId: stringSchema().optional().catch(undefined),
+    }),
+  );
+});
 //@ chunk-s61vbvea.js:40221-40318 layout
 function formatZodIssues(error) {
   return error.issues.map((issue) => `${issue.path.join(".") || "value"}: ${issue.message}`).join("; ");
@@ -563,16 +588,16 @@ function formatZodIssues(error) {
 /**
  * 解析 history.jsonl 一行并按 schema 校验，失败返回 parse_failed 或 shape_rejected。
  */
-function parseHistoryLine(e) {
+function parseHistoryLine(line) {
   try {
-    let n = jsonParseRaw(e);
-    let r = getTimestampedHistory_2().safeParse(n);
-    if (r.success)
+    let json = jsonParseRaw(line);
+    let parsed = getTimestampedHistory_2().safeParse(json);
+    if (parsed.success)
       return {
-        entry: r.data,
-        droppedPasteRecords: hasDroppedPasteRecords(n, r.data),
+        entry: parsed.data,
+        droppedPasteRecords: hasDroppedPasteRecords(json, parsed.data),
       };
-    logForDebugging(`Skipping malformed history line (${formatZodIssues(r.error)})`);
+    logForDebugging(`Skipping malformed history line (${formatZodIssues(parsed.error)})`);
     return {
       rejection: "shape_rejected",
     };
@@ -584,41 +609,41 @@ function parseHistoryLine(e) {
   }
 }
 //@ chunk-s61vbvea.js:40610-40854 placement
-function hasDroppedPasteRecords(e, n) {
-  if (typeof e !== "object" || e === null || !("pastedContents" in e)) return false;
-  let pastedContents = e.pastedContents;
+function hasDroppedPasteRecords(raw, parsed) {
+  if (typeof raw !== "object" || raw === null || !("pastedContents" in raw)) return false;
+  let pastedContents = raw.pastedContents;
   if (pastedContents === null) return false;
   if (typeof pastedContents !== "object" || Array.isArray(pastedContents)) return true;
-  return Object.keys(pastedContents).length > Object.keys(n.pastedContents).length;
+  return Object.keys(pastedContents).length > Object.keys(parsed.pastedContents).length;
 }
 //@ chunk-s61vbvea.js:40854-40935 placement
 function totalPastedLength(pastedContents) {
-  return Object.values(pastedContents).reduce((acc, r) => acc + (r.content?.length ?? 0), 0);
+  return Object.values(pastedContents).reduce((acc, entry) => acc + (entry.content?.length ?? 0), 0);
 }
 //@ chunk-s61vbvea.js:40935-40959 placement
 var MAX_EXPANDED_PASTE_CHARS = 32768;
 var MAX_PROJECT_HISTORY_BYTES = 4194304;
 //@ chunk-s61vbvea.js:40959-41098 placement
-function expandHistoryDisplay(display, n) {
-  let r = {};
-  for (let [key, value] of Object.entries(n))
-    r[Number(key)] =
+function expandHistoryDisplay(display, pastedContents) {
+  let expandedContents = {};
+  for (let [key, value] of Object.entries(pastedContents))
+    expandedContents[Number(key)] =
       value.type === "text"
         ? {
             ...value,
             content: truncateToLength(value.content, MAX_EXPANDED_PASTE_CHARS),
           }
         : value;
-  return addPastedEntry(display, r);
+  return addPastedEntry(display, expandedContents);
 }
 //@ chunk-s61vbvea.js:41098-41141 placement
 var HISTORY_SCOPES = ["session", "project", "everywhere"];
 //@ chunk-s61vbvea.js:41141-41342 placement
-function isDuplicateOfLastEntry(e) {
-  let { prev, next: r, project, sessionId } = e;
-  if (!prev || prev.display !== r.display) return false;
+function isDuplicateOfLastEntry(candidate) {
+  let { prev, next, project, sessionId } = candidate;
+  if (!prev || prev.display !== next.display) return false;
   if (prev.project !== project || prev.sessionId !== sessionId) return false;
-  return !(Object.keys(prev.pastedContents).length > 0) && !r.hasPastes;
+  return !(Object.keys(prev.pastedContents).length > 0) && !next.hasPastes;
 }
 //@ chunk-s61vbvea.js:41342-51397 placement
 /**
@@ -641,48 +666,48 @@ class PromptHistoryStore {
   inFlightFlushEntries = null;
   reportedLostPasteHashes = new Set();
   clearedDrafts = [];
-  immediateFlush = serializeCalls((e) => this.flushEntriesToDisk(e));
+  immediateFlush = serializeCalls((storageV5) => this.flushEntriesToDisk(storageV5));
   async *readLogEntries(storage) {
     let sliced = this.pendingEntries.slice();
-    let r = new Set(sliced.map((R) => `${R.timestamp}\x00${R.sessionId ?? ""}`));
+    let pendingKeys = new Set(sliced.map((entry) => `${entry.timestamp}\x00${entry.sessionId ?? ""}`));
     for (let j = sliced.length - 1; j >= 0; j--) yield sliced[j];
-    let s = join(getClaudeConfigDir(), "history.jsonl");
-    let h = false;
-    let y = false;
-    let S = false;
-    let w = false;
+    let historyPath = join(getClaudeConfigDir(), "history.jsonl");
+    let hadParseFailure = false;
+    let hadShapeRejection = false;
+    let hadDroppedPaste = false;
+    let yieldedAny = false;
     try {
-      let R = storage
+      let source = storage
         ? readHistoryRecordsBackward(storage)
-        : readLinesReverse(s, undefined, {
+        : readLinesReverse(historyPath, undefined, {
             strict: false,
           });
-      for await (let P of R) {
-        let historyLine = parseHistoryLine(P);
+      for await (let line of source) {
+        let historyLine = parseHistoryLine(line);
         if (!historyLine.entry) {
-          if (historyLine.rejection === "parse_failed") h = true;
-          else y = true;
+          if (historyLine.rejection === "parse_failed") hadParseFailure = true;
+          else hadShapeRejection = true;
           continue;
         }
-        if (historyLine.droppedPasteRecords) S = true;
+        if (historyLine.droppedPasteRecords) hadDroppedPaste = true;
         let entry = historyLine.entry;
-        let L = `${entry.timestamp}\x00${entry.sessionId ?? ""}`;
-        if (this.skippedKeys.has(L) || r.has(L)) continue;
-        w = true;
+        let entryKey = `${entry.timestamp}\x00${entry.sessionId ?? ""}`;
+        if (this.skippedKeys.has(entryKey) || pendingKeys.has(entryKey)) continue;
+        yieldedAny = true;
         yield entry;
       }
-      let x = h
+      let failureKind = hadParseFailure
         ? "history_load_parse_failed"
-        : y
+        : hadShapeRejection
           ? "history_load_shape_rejected"
-          : S
+          : hadDroppedPaste
             ? "history_load_paste_record_dropped"
             : undefined;
-      if (x)
-        logFeatureSad("history_load", x, {
-          parse_failed: h,
-          shape_rejected: y,
-          paste_record_dropped: S,
+      if (failureKind)
+        logFeatureSad("history_load", failureKind, {
+          parse_failed: hadParseFailure,
+          shape_rejected: hadShapeRejection,
+          paste_record_dropped: hadDroppedPaste,
         });
       else logFeatureOk("history_load");
     } catch (error) {
@@ -690,133 +715,142 @@ class PromptHistoryStore {
         logFeatureOk("history_load");
         return;
       }
-      if (w || sliced.length > 0) logFeatureSad("history_load", "history_load_read_interrupted");
+      if (yieldedAny || sliced.length > 0) logFeatureSad("history_load", "history_load_read_interrupted");
       else logFeatureBad("history_load", "history_load_read_failed");
       throw error;
     }
   }
-  async *readEntries(e) {
-    for await (let n of this.readLogEntries(e)) yield await this.toHistoryEntry(n, e);
+  async *readEntries(storageV5) {
+    for await (let entry of this.readLogEntries(storageV5)) yield await this.toHistoryEntry(entry, storageV5);
   }
-  async *readTimestamped(e = "project", n) {
+  async *readTimestamped(scope = "project", storageV5) {
     let projectRoot = getProjectRoot();
     let sessionId = getSessionId();
-    let h = new Set();
-    let y = 0;
-    for await (let S of this.readLogEntries(n)) {
-      if (e === "project" && S.project !== projectRoot) continue;
-      if (e === "session" && S.sessionId !== sessionId) continue;
-      let promptHistoryKey = getPromptHistoryKey(S.display, S.pastedContents);
-      if (h.has(promptHistoryKey)) continue;
-      h.add(promptHistoryKey);
-      let R = {};
-      if (y < MAX_PROJECT_HISTORY_BYTES)
-        for (let [key, value] of Object.entries(S.pastedContents)) {
-          let G = value.type === "text" ? await this.resolveStoredPastedContent(value, n) : null;
-          if (G) R[Number(key)] = G;
+    let seenKeys = new Set();
+    let expandedChars = 0;
+    for await (let entry of this.readLogEntries(storageV5)) {
+      if (scope === "project" && entry.project !== projectRoot) continue;
+      if (scope === "session" && entry.sessionId !== sessionId) continue;
+      let promptHistoryKey = getPromptHistoryKey(entry.display, entry.pastedContents);
+      if (seenKeys.has(promptHistoryKey)) continue;
+      seenKeys.add(promptHistoryKey);
+      let resolvedContents = {};
+      if (expandedChars < MAX_PROJECT_HISTORY_BYTES)
+        for (let [key, value] of Object.entries(entry.pastedContents)) {
+          let resolved =
+            value.type === "text" ? await this.resolveStoredPastedContent(value, storageV5) : null;
+          if (resolved) resolvedContents[Number(key)] = resolved;
         }
-      let x = expandHistoryDisplay(S.display, R);
-      if (x !== S.display) y += x.length;
+      let expandedDisplay = expandHistoryDisplay(entry.display, resolvedContents);
+      if (expandedDisplay !== entry.display) expandedChars += expandedDisplay.length;
       yield {
-        display: S.display,
-        expandedDisplay: x,
-        timestamp: S.timestamp,
-        textLength: S.display.length + (x === S.display ? totalPastedLength(S.pastedContents) : x.length),
-        resolve: () => this.toHistoryEntry(S, n),
+        display: entry.display,
+        expandedDisplay,
+        timestamp: entry.timestamp,
+        textLength:
+          entry.display.length +
+          (expandedDisplay === entry.display
+            ? totalPastedLength(entry.pastedContents)
+            : expandedDisplay.length),
+        resolve: () => this.toHistoryEntry(entry, storageV5),
       };
     }
   }
-  async countForProject(e, n) {
+  async countForProject(filter, storageV5) {
     let projectRoot = getProjectRoot();
-    let s = 0;
-    let h = 0;
+    let seen = 0;
+    let matched = 0;
     try {
-      for await (let S of this.readLogEntries(n)) {
-        if (S.project !== projectRoot) continue;
-        s++;
-        if (!e || e(S.display)) h++;
-        if (s >= MAX_HISTORY_ITEMS) break;
+      for await (let entry of this.readLogEntries(storageV5)) {
+        if (entry.project !== projectRoot) continue;
+        seen++;
+        if (!filter || filter(entry.display)) matched++;
+        if (seen >= MAX_HISTORY_ITEMS) break;
       }
     } catch {
       return null;
     }
     let sessionId = getSessionId();
     for (let { entry, project, sessionId: sessionId_2 } of this.clearedDrafts)
-      if (project === projectRoot && sessionId_2 === sessionId && (!e || e(entry.display))) h++;
-    return h;
+      if (project === projectRoot && sessionId_2 === sessionId && (!filter || filter(entry.display)))
+        matched++;
+    return matched;
   }
-  async *readForProject(e, { withClearedDrafts: n = false } = {}) {
+  async *readForProject(storageV5, { withClearedDrafts = false } = {}) {
     let projectRoot = getProjectRoot();
     let sessionId = getSessionId();
-    let h = [];
-    let y = 0;
-    let S = n
+    let otherSession = [];
+    let emitted = 0;
+    let drafts = withClearedDrafts
       ? this.clearedDrafts.filter(
           (clearedDraft) => clearedDraft.project === projectRoot && clearedDraft.sessionId === sessionId,
         )
       : [];
-    let w = S.length - 1;
-    for await (let R of this.readLogEntries(e)) {
-      if (R.project !== projectRoot) continue;
-      if (R.sessionId === sessionId) {
-        for (; w >= 0 && S[w].timestamp > R.timestamp; w--) yield S[w].entry;
-        yield await this.toHistoryEntry(R, e);
-        y++;
-      } else h.push(R);
-      if (y + h.length >= MAX_HISTORY_ITEMS) break;
+    let draftIndex = drafts.length - 1;
+    for await (let entry of this.readLogEntries(storageV5)) {
+      if (entry.project !== projectRoot) continue;
+      if (entry.sessionId === sessionId) {
+        for (; draftIndex >= 0 && drafts[draftIndex].timestamp > entry.timestamp; draftIndex--)
+          yield drafts[draftIndex].entry;
+        yield await this.toHistoryEntry(entry, storageV5);
+        emitted++;
+      } else otherSession.push(entry);
+      if (emitted + otherSession.length >= MAX_HISTORY_ITEMS) break;
     }
-    for (; w >= 0; w--) yield S[w].entry;
-    for (let R of h) {
-      if (y >= MAX_HISTORY_ITEMS) return;
-      yield await this.toHistoryEntry(R, e);
-      y++;
+    for (; draftIndex >= 0; draftIndex--) yield drafts[draftIndex].entry;
+    for (let entry of otherSession) {
+      if (emitted >= MAX_HISTORY_ITEMS) return;
+      yield await this.toHistoryEntry(entry, storageV5);
+      emitted++;
     }
   }
-  async resolveStoredPastedContent(e, n) {
-    if (e.content)
+  async resolveStoredPastedContent(stored, storageV5) {
+    if (stored.content)
       return {
-        id: e.id,
-        type: e.type,
-        content: e.content,
-        mediaType: e.mediaType,
-        filename: e.filename,
+        id: stored.id,
+        type: stored.type,
+        content: stored.content,
+        mediaType: stored.mediaType,
+        filename: stored.filename,
       };
-    if (e.contentHash) {
-      let pastedTextByHash = await this.resolvePastedTextByHash(e.contentHash, n);
+    if (stored.contentHash) {
+      let pastedTextByHash = await this.resolvePastedTextByHash(stored.contentHash, storageV5);
       if (pastedTextByHash)
         return {
-          id: e.id,
-          type: e.type,
+          id: stored.id,
+          type: stored.type,
           content: pastedTextByHash,
-          mediaType: e.mediaType,
-          filename: e.filename,
+          mediaType: stored.mediaType,
+          filename: stored.filename,
         };
     }
     return null;
   }
-  reportLostPasteContent(e) {
-    let n = e ?? "missing-hash";
-    if (this.reportedLostPasteHashes.has(n)) return;
-    this.reportedLostPasteHashes.add(n);
+  reportLostPasteContent(hash) {
+    let key = hash ?? "missing-hash";
+    if (this.reportedLostPasteHashes.has(key)) return;
+    this.reportedLostPasteHashes.add(key);
     logFeatureSad("paste_store", "paste_store_content_lost");
   }
-  async resolvePastedTextByHash(e, n) {
-    return this.pendingPasteContents.get(e) ?? (await retrievePastedText(e, n));
+  async resolvePastedTextByHash(hash, storageV5) {
+    return this.pendingPasteContents.get(hash) ?? (await retrievePastedText(hash, storageV5));
   }
-  registerPastedTextForRecall(content, n) {
-    let r = hashPastedText(content);
-    this.pendingPasteContents.set(r, content);
-    let s = storePastedTextQueued(r, content, n);
-    this.pendingPasteWrites.add(s);
-    s.then(() => this.pendingPasteContents.delete(r)).finally(() => this.pendingPasteWrites.delete(s));
-    return r;
+  registerPastedTextForRecall(pastedText, storageV5) {
+    let hash = hashPastedText(pastedText);
+    this.pendingPasteContents.set(hash, pastedText);
+    let write = storePastedTextQueued(hash, pastedText, storageV5);
+    this.pendingPasteWrites.add(write);
+    write
+      .then(() => this.pendingPasteContents.delete(hash))
+      .finally(() => this.pendingPasteWrites.delete(write));
+    return hash;
   }
-  async toHistoryEntry(e, n) {
-    let r = {};
-    for (let [key, value] of Object.entries(e.pastedContents)) {
-      let storedPastedContent = await this.resolveStoredPastedContent(value, n);
+  async toHistoryEntry(entry, storageV5) {
+    let resolvedContents = {};
+    for (let [key, value] of Object.entries(entry.pastedContents)) {
+      let storedPastedContent = await this.resolveStoredPastedContent(value, storageV5);
       if (!storedPastedContent && value.type === "text") this.reportLostPasteContent(value.contentHash);
-      r[Number(key)] = storedPastedContent ?? {
+      resolvedContents[Number(key)] = storedPastedContent ?? {
         id: value.id,
         type: value.type,
         content: "",
@@ -824,36 +858,40 @@ class PromptHistoryStore {
       };
     }
     return {
-      display: e.display,
-      pastedContents: r,
+      display: entry.display,
+      pastedContents: resolvedContents,
     };
   }
-  async flushEntriesToDisk(e) {
+  async flushEntriesToDisk(storageV5) {
     if (this.pendingEntries.length === 0) return true;
     let sliced = this.pendingEntries.slice();
     this.inFlightFlushEntries = new Set(sliced);
     while (this.pendingPasteWrites.size > 0) await Promise.all(this.pendingPasteWrites);
-    if (e)
+    if (storageV5)
       try {
-        let s = await e.append(
+        let writeResult = await storageV5.append(
           STORAGE_SPACES.history(),
-          sliced.map((y) => ({
+          sliced.map((entry) => ({
             data:
-              jsonStringify(y) +
+              jsonStringify(entry) +
               `
 `,
           })),
         );
-        if (!s.ok) {
-          logForDebugging(`Failed to write prompt history: ${s.error.code}`);
-          let y =
-            "telemetryCode" in s.error &&
-            (s.error.telemetryCode === "LockContended" || s.error.telemetryCode === "LockAcquireFailed");
-          logFeatureSad("history_save", y ? "history_save_lock_failed" : "history_save_write_failed");
+        if (!writeResult.ok) {
+          logForDebugging(`Failed to write prompt history: ${writeResult.error.code}`);
+          let isLockFailure =
+            "telemetryCode" in writeResult.error &&
+            (writeResult.error.telemetryCode === "LockContended" ||
+              writeResult.error.telemetryCode === "LockAcquireFailed");
+          logFeatureSad(
+            "history_save",
+            isLockFailure ? "history_save_lock_failed" : "history_save_write_failed",
+          );
           return false;
         }
-        let h = new Set(sliced);
-        this.pendingEntries = this.pendingEntries.filter((pendingEntry) => !h.has(pendingEntry));
+        let written = new Set(sliced);
+        this.pendingEntries = this.pendingEntries.filter((pendingEntry) => !written.has(pendingEntry));
         logFeatureOk("history_save");
         return true;
       } catch (error) {
@@ -863,224 +901,227 @@ class PromptHistoryStore {
       } finally {
         this.inFlightFlushEntries = null;
       }
-    let r;
+    let releaseLock;
     try {
-      let s = join(getClaudeConfigDir(), "history.jsonl");
-      await getFileReader().append(s, "", 384);
-      r = await lock(s, {
+      let historyPath = join(getClaudeConfigDir(), "history.jsonl");
+      await getFileReader().append(historyPath, "", 384);
+      releaseLock = await lock(historyPath, {
         ...HISTORY_FILE_RETRY_OPTIONS,
-        onCompromised: (S) =>
-          logForDebugging(`History lock compromised: ${S}`, {
+        onCompromised: (cause) =>
+          logForDebugging(`History lock compromised: ${cause}`, {
             level: "error",
           }),
       });
       let mapped = sliced.map(
-        (S) =>
-          jsonStringify(S) +
+        (entry) =>
+          jsonStringify(entry) +
           `
 `,
       );
-      await getFileReader().append(s, mapped.join(""), 384);
-      let y = new Set(sliced);
-      this.pendingEntries = this.pendingEntries.filter((pendingEntry) => !y.has(pendingEntry));
+      await getFileReader().append(historyPath, mapped.join(""), 384);
+      let written = new Set(sliced);
+      this.pendingEntries = this.pendingEntries.filter((pendingEntry) => !written.has(pendingEntry));
       logFeatureOk("history_save");
       return true;
     } catch (error) {
       logForDebugging(`Failed to write prompt history: ${error}`);
-      if (r) logFeatureSad("history_save", "history_save_write_failed");
+      if (releaseLock) logFeatureSad("history_save", "history_save_write_failed");
       else logFeatureSad("history_save", "history_save_lock_failed");
       return false;
     } finally {
       this.inFlightFlushEntries = null;
-      if (r) await r().catch(logError);
+      if (releaseLock) await releaseLock().catch(logError);
     }
   }
-  async flushWithRetries(e, n) {
+  async flushWithRetries(attempt, storageV5) {
     if (this.isWriting || this.pendingEntries.length === 0) return;
-    if (e > 5) return;
+    if (attempt > 5) return;
     this.isWriting = true;
-    let r = false;
+    let succeeded = false;
     try {
-      r = await this.immediateFlush(n);
+      succeeded = await this.immediateFlush(storageV5);
     } finally {
       this.isWriting = false;
       if (this.pendingEntries.length > 0) {
         await sleep(500);
-        this.currentFlushPromise = this.flushWithRetries(r ? 0 : e + 1, n);
+        this.currentFlushPromise = this.flushWithRetries(succeeded ? 0 : attempt + 1, storageV5);
       }
     }
   }
-  async addEntry(e, n, r, s = true) {
-    let h =
-      typeof e === "string"
+  async addEntry(input_, storageV5, submitMode, armUndo = true) {
+    let entry =
+      typeof input_ === "string"
         ? {
-            display: e,
+            display: input_,
             pastedContents: {},
           }
-        : e;
-    let { input, removed } = stripPlaceholders(h.display, h.pastedContents ?? {});
+        : input_;
+    let { input, removed } = stripPlaceholders(entry.display, entry.pastedContents ?? {});
     let trimmed = input.trim();
     if (removed.length > 0 && trimmed === "") return;
-    if (removed.length > 0 && h.display.trimStart().startsWith("!")) {
-      if (s && r !== undefined && r !== "bash") this.lastAddWasDeduped = true;
+    if (removed.length > 0 && entry.display.trimStart().startsWith("!")) {
+      if (armUndo && submitMode !== undefined && submitMode !== "bash") this.lastAddWasDeduped = true;
       return;
     }
-    if (removed.length > 0 && h.display.trimStart().startsWith("/")) return;
+    if (removed.length > 0 && entry.display.trimStart().startsWith("/")) return;
     if (removed.length > 0) {
-      let Q = h.display.trimStart();
+      let trimmedDisplay = entry.display.trimStart();
       if (
-        (trimmed.startsWith("/") && !Q.startsWith("/")) ||
-        (trimmed.startsWith("!") && !Q.startsWith("!")) ||
-        (trimmed.startsWith("@") && !Q.startsWith("@"))
+        (trimmed.startsWith("/") && !trimmedDisplay.startsWith("/")) ||
+        (trimmed.startsWith("!") && !trimmedDisplay.startsWith("!")) ||
+        (trimmed.startsWith("@") && !trimmedDisplay.startsWith("@"))
       ) {
-        if (s) this.lastAddWasDeduped = true;
+        if (armUndo) this.lastAddWasDeduped = true;
         return;
       }
     }
     if (removed.length > 0) {
-      let Q = new Map();
-      for (let ae of parsePastedRefs(h.display)) Q.set(ae.id, (Q.get(ae.id) ?? 0) + 1);
-      let Z = new Map();
-      for (let ae of parsePastedRefs(input)) Z.set(ae.id, (Z.get(ae.id) ?? 0) + 1);
-      let ee = false;
-      for (let [ae, se] of Z) {
-        if (se <= (Q.get(ae) ?? 0)) continue;
-        let re = h.pastedContents?.[ae];
-        if (re !== undefined && re.type !== "image" && !re.unavailable) {
-          ee = true;
+      let originalRefCounts = new Map();
+      for (let ref of parsePastedRefs(entry.display))
+        originalRefCounts.set(ref.id, (originalRefCounts.get(ref.id) ?? 0) + 1);
+      let strippedRefCounts = new Map();
+      for (let ref of parsePastedRefs(input))
+        strippedRefCounts.set(ref.id, (strippedRefCounts.get(ref.id) ?? 0) + 1);
+      let lostPaste = false;
+      for (let [id, count] of strippedRefCounts) {
+        if (count <= (originalRefCounts.get(id) ?? 0)) continue;
+        let content = entry.pastedContents?.[id];
+        if (content !== undefined && content.type !== "image" && !content.unavailable) {
+          lostPaste = true;
           break;
         }
       }
-      if (ee) {
-        if (s) this.lastAddWasDeduped = true;
+      if (lostPaste) {
+        if (armUndo) this.lastAddWasDeduped = true;
         return;
       }
     }
-    let R =
+    let storedEntry =
       removed.length > 0
         ? {
-            ...h,
+            ...entry,
             display: input,
           }
-        : h;
+        : entry;
     let projectRoot = getProjectRoot();
     let sessionId = getSessionId();
-    let referencedTextPastes = getReferencedTextPastes(R.display, R.pastedContents);
+    let referencedTextPastes = getReferencedTextPastes(storedEntry.display, storedEntry.pastedContents);
     if (
       isDuplicateOfLastEntry({
         prev: this.lastStoredEntry,
         next: {
-          display: R.display,
+          display: storedEntry.display,
           hasPastes: referencedTextPastes.length > 0,
         },
         project: projectRoot,
         sessionId,
       })
     ) {
-      if (s) this.lastAddWasDeduped = true;
+      if (armUndo) this.lastAddWasDeduped = true;
       return;
     }
-    let G = {};
-    for (let [Q, Z] of referencedTextPastes)
-      if (Z.content.length <= MAX_PASTED_CONTENT_LENGTH)
-        G[Number(Q)] = {
-          id: Z.id,
-          type: Z.type,
-          content: Z.content,
-          mediaType: Z.mediaType,
-          filename: Z.filename,
+    let pastedContents = {};
+    for (let [id, paste] of referencedTextPastes)
+      if (paste.content.length <= MAX_PASTED_CONTENT_LENGTH)
+        pastedContents[Number(id)] = {
+          id: paste.id,
+          type: paste.type,
+          content: paste.content,
+          mediaType: paste.mediaType,
+          filename: paste.filename,
         };
       else
-        G[Number(Q)] = {
-          id: Z.id,
-          type: Z.type,
-          contentHash: this.registerPastedTextForRecall(Z.content, n),
-          mediaType: Z.mediaType,
-          filename: Z.filename,
+        pastedContents[Number(id)] = {
+          id: paste.id,
+          type: paste.type,
+          contentHash: this.registerPastedTextForRecall(paste.content, storageV5),
+          mediaType: paste.mediaType,
+          filename: paste.filename,
         };
     let max = Math.max(Date.now(), this.lastAssignedTimestamp + 1);
     this.lastAssignedTimestamp = max;
-    let q = {
-      ...R,
-      pastedContents: G,
+    let record = {
+      ...storedEntry,
+      pastedContents,
       timestamp: max,
       project: projectRoot,
       sessionId,
     };
-    this.pendingEntries.push(q);
-    this.lastStoredEntry = q;
+    this.pendingEntries.push(record);
+    this.lastStoredEntry = record;
     this.storedEntryGeneration++;
-    this.dropClearedDraftCopies(R, projectRoot, sessionId);
-    if (s) {
-      this.lastAddedEntry = q;
+    this.dropClearedDraftCopies(storedEntry, projectRoot, sessionId);
+    if (armUndo) {
+      this.lastAddedEntry = record;
       this.lastAddWasDeduped = false;
     }
-    this.currentFlushPromise = this.flushWithRetries(0, n);
+    this.currentFlushPromise = this.flushWithRetries(0, storageV5);
     this.currentFlushPromise;
   }
-  async flushOnExit(e) {
-    let n = null;
-    while (this.currentFlushPromise && this.currentFlushPromise !== n) {
-      n = this.currentFlushPromise;
-      await n;
+  async flushOnExit(storageV5) {
+    let waited = null;
+    while (this.currentFlushPromise && this.currentFlushPromise !== waited) {
+      waited = this.currentFlushPromise;
+      await waited;
     }
     if (this.pendingEntries.length > 0) {
-      if (!(await this.immediateFlush(e))) logFeatureBad("history_save", "history_save_exit_flush_failed");
+      if (!(await this.immediateFlush(storageV5)))
+        logFeatureBad("history_save", "history_save_exit_flush_failed");
     }
     while (this.pendingPasteWrites.size > 0) await Promise.all(this.pendingPasteWrites);
   }
-  add(e, n, r) {
+  add(display, storageV5, options) {
     if (isEnvTruthy(process.env.CLAUDE_CODE_SKIP_PROMPT_HISTORY) || isNestedInteractiveClaudeSession())
       return;
     if (
       this.isSensitive(
-        typeof e === "string"
+        typeof display === "string"
           ? {
-              display: e,
+              display,
               pastedContents: {},
             }
-          : e,
+          : display,
       )
     ) {
-      if (r?.armUndo !== false) this.lastAddWasDeduped = true;
+      if (options?.armUndo !== false) this.lastAddWasDeduped = true;
       return;
     }
-    this.registerExitFlush(n);
-    this.addEntry(e, n, r?.submitMode, r?.armUndo).catch(logError);
+    this.registerExitFlush(storageV5);
+    this.addEntry(display, storageV5, options?.submitMode, options?.armUndo).catch(logError);
   }
-  registerExitFlush(e) {
+  registerExitFlush(storageV5) {
     if (this.exitFlushHandle) return;
-    this.exitFlushHandle = registerCleanup(() => this.flushOnExit(e));
+    this.exitFlushHandle = registerCleanup(() => this.flushOnExit(storageV5));
   }
   registerSensitiveCommands(getSensitiveCommands) {
     this.getSensitiveCommands = getSensitiveCommands;
   }
-  keepClearedDraft(e, timestamp) {
+  keepClearedDraft(draft, timestamp) {
     let projectRoot = getProjectRoot();
     let sessionId = getSessionId();
     if (
-      this.isSensitive(e) ||
+      this.isSensitive(draft) ||
       false ||
       isDuplicateOfLastEntry({
         prev: this.lastStoredEntry,
         next: {
-          display: e.display,
-          hasPastes: Object.keys(e.pastedContents).length > 0,
+          display: draft.display,
+          hasPastes: Object.keys(draft.pastedContents).length > 0,
         },
         project: projectRoot,
         sessionId,
       })
     )
       return;
-    this.dropClearedDraftCopies(e, projectRoot, sessionId);
+    this.dropClearedDraftCopies(draft, projectRoot, sessionId);
     this.clearedDrafts.push({
-      entry: e,
+      entry: draft,
       timestamp,
       project: projectRoot,
       sessionId,
-      length: Object.values(e.pastedContents).reduce(
+      length: Object.values(draft.pastedContents).reduce(
         (acc, pastedContent) => acc + pastedContent.content.length,
-        e.display.length,
+        draft.display.length,
       ),
     });
     let reduced = this.clearedDrafts.reduce((acc, clearedDraft) => acc + clearedDraft.length, 0);
@@ -1088,20 +1129,20 @@ class PromptHistoryStore {
       reduced -= this.clearedDrafts.shift().length;
     this.storedEntryGeneration++;
   }
-  dropClearedDraftCopies({ display, pastedContents }, r, s) {
+  dropClearedDraftCopies({ display, pastedContents }, project, sessionId) {
     if (this.clearedDrafts.length === 0) return;
     let promptHistoryKey = getPromptHistoryKey(display, pastedContents);
     this.clearedDrafts = this.clearedDrafts.filter(
       (clearedDraft) =>
-        clearedDraft.project !== r ||
-        clearedDraft.sessionId !== s ||
+        clearedDraft.project !== project ||
+        clearedDraft.sessionId !== sessionId ||
         getPromptHistoryKey(clearedDraft.entry.display, clearedDraft.entry.pastedContents) !==
           promptHistoryKey,
     );
   }
   isSensitive({ display, pastedContents }) {
     return shouldRedactInput(display, (this.getSensitiveCommands ?? getSensitiveCommandsRegistry().get)(), {
-      pastedTexts: getReferencedTextPastes(display, pastedContents).map(([, r]) => r.content),
+      pastedTexts: getReferencedTextPastes(display, pastedContents).map(([, paste]) => paste.content),
     });
   }
   getGeneration() {
@@ -1142,7 +1183,10 @@ class PromptHistoryStore {
   }
 }
 //@ chunk-s61vbvea.js:51397-51422 placement
-var promptHistoryByHost = new HostScoped(() => new PromptHistoryStore());
+var promptHistoryByHost; // deferred: uses PromptHistoryStore of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:51397", () => {
+  promptHistoryByHost = new HostScoped(() => new PromptHistoryStore());
+});
 //@ chunk-s61vbvea.js:51422-51459 placement
 /**
  * 取当前宿主的输入历史存储（PromptHistoryStore）。
@@ -1155,7 +1199,10 @@ class SensitiveCommandsRegistry {
   get = () => [];
 }
 //@ chunk-s61vbvea.js:51479-51504 placement
-var historyStoreSlot = new HostScoped(() => new SensitiveCommandsRegistry());
+var historyStoreSlot; // deferred: uses SensitiveCommandsRegistry of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:51479", () => {
+  historyStoreSlot = new HostScoped(() => new SensitiveCommandsRegistry());
+});
 //@ chunk-s61vbvea.js:51504-51541 placement
 function getSensitiveCommandsRegistry() {
   return historyStoreSlot.of(getRootSession().host);
@@ -1165,69 +1212,70 @@ function getHistory(storageV5) {
   return getPromptHistory().readEntries(storageV5);
 }
 //@ chunk-s61vbvea.js:51584-51782 placement
-function isTransientHistoryReadError(e) {
-  if (e instanceof FileChangedDuringReadError) return true;
-  let cause = e instanceof Error ? e.cause : undefined;
+function isTransientHistoryReadError(error) {
+  if (error instanceof FileChangedDuringReadError) return true;
+  let cause = error instanceof Error ? error.cause : undefined;
   if (
     isStoreError(cause) &&
     cause.code === "Unavailable" &&
     errnoShapedCode(cause.telemetryCode) === undefined
   )
     return true;
-  let r = getErrnoCode(e) ?? storageCauseErrnoCode(e);
-  return isSadFsErrnoCode(r) || isEnvFsErrnoCode(r);
+  let errno = getErrnoCode(error) ?? storageCauseErrnoCode(error);
+  return isSadFsErrnoCode(errno) || isEnvFsErrnoCode(errno);
 }
 //@ chunk-s61vbvea.js:51782-51843 placement
-function getTimestampedHistory(e = "project", storageV5) {
-  return getPromptHistory().readTimestamped(e, storageV5);
+function getTimestampedHistory(scope = "project", storageV5) {
+  return getPromptHistory().readTimestamped(scope, storageV5);
 }
 //@ chunk-s61vbvea.js:51843-51894 placement
-function countHistoryForProject(e, storageV5) {
-  return getPromptHistory().countForProject(e, storageV5);
+function countHistoryForProject(filter, storageV5) {
+  return getPromptHistory().countForProject(filter, storageV5);
 }
 //@ chunk-s61vbvea.js:51894-51944 placement
 /**
  * 函数 readProjectHistory（读项目历史）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
-function readProjectHistory(e, n) {
-  return getPromptHistory().readForProject(e, n);
+function readProjectHistory(storageV5, options) {
+  return getPromptHistory().readForProject(storageV5, options);
 }
 //@ chunk-s61vbvea.js:51944-51980 placement
 /**
  * 函数 addHistoryEntry（追加历史）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
-function addHistoryEntry(e, storageV5, r) {
-  getPromptHistory().add(e, storageV5, r);
+function addHistoryEntry(display, storageV5, options) {
+  getPromptHistory().add(display, storageV5, options);
 }
 //@ chunk-s61vbvea.js:51980-52256 placement
 /**
  * 把提交的提示逐条写入历史（含筛查与未回答状态），全都没写入时按需撤销撤回状态。
  */
-function recordSubmittedPrompts(e, storageV5, r) {
-  let s = false;
-  for (let h of e)
+function recordSubmittedPrompts(prompts, storageV5, context) {
+  let isFirst = false;
+  for (let prompt of prompts)
     try {
-      let historyEntryForCommand = getHistoryEntryForCommand(h, r.placed, {
-        screened: r.screened?.get(h),
-        unanswered: r.unanswered ?? "skipped",
+      let historyEntryForCommand = getHistoryEntryForCommand(prompt, context.placed, {
+        screened: context.screened?.get(prompt),
+        unanswered: context.unanswered ?? "skipped",
       });
       if (!historyEntryForCommand) continue;
-      s = true;
+      isFirst = true;
       addHistoryEntry(historyEntryForCommand, storageV5, {
-        submitMode: h.mode,
-        armUndo: r.armUndo,
+        submitMode: prompt.mode,
+        armUndo: context.armUndo,
       });
     } catch (error) {
       logError(error);
     }
-  if (!s && r.armUndo !== false && r.screened === undefined) getPromptHistory().disarmUndo();
+  if (!isFirst && context.armUndo !== false && context.screened === undefined)
+    getPromptHistory().disarmUndo();
 }
 //@ chunk-s61vbvea.js:52256-52311 placement
 /**
  * 函数 addHistoryEntryNoUndo（追加历史且不挂撤销）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
-function addHistoryEntryNoUndo(e, storageV5, submitMode) {
-  addHistoryEntry(e, storageV5, {
+function addHistoryEntryNoUndo(text, storageV5, submitMode) {
+  addHistoryEntry(text, storageV5, {
     submitMode,
     armUndo: false,
   });
@@ -1236,8 +1284,8 @@ function addHistoryEntryNoUndo(e, storageV5, submitMode) {
 /**
  * 函数 registerHistoryExitFlush（注册退出前刷盘）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
-function registerHistoryExitFlush(e) {
-  getPromptHistory().registerExitFlush(e);
+function registerHistoryExitFlush(flushFn) {
+  getPromptHistory().registerExitFlush(flushFn);
 }
 //@ chunk-s61vbvea.js:52353-52380 placement
 /**
@@ -1250,8 +1298,8 @@ function setHistoryStore(get) {
 /**
  * 函数 keepClearedDraft（保留已清空的草稿）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
-function keepClearedDraft(e, clearedAt) {
-  getPromptHistory().keepClearedDraft(e, clearedAt);
+function keepClearedDraft(draft, clearedAt) {
+  getPromptHistory().keepClearedDraft(draft, clearedAt);
 }
 //@ chunk-s61vbvea.js:52425-52468 placement
 /**
@@ -1268,15 +1316,15 @@ function removeLastHistoryEntry() {
   getPromptHistory().removeLast();
 }
 //@ chunk-e6aww6q8.js:191405-191531 placement
-function groupByToObject(e, n) {
-  let r = Object.create(null);
-  let s = 0;
-  for (let h of e) {
-    let y = n(h, s++);
-    if (r[y] === undefined) r[y] = [];
-    r[y].push(h);
+function groupByToObject(items, keyOf) {
+  let groups = Object.create(null);
+  let index = 0;
+  for (let item of items) {
+    let key = keyOf(item, index++);
+    if (groups[key] === undefined) groups[key] = [];
+    groups[key].push(item);
   }
-  return r;
+  return groups;
 }
 //@ chunk-e6aww6q8.js:191531-191550 placement
 var MAX_PASTE_ID = 2147483648;
@@ -1289,17 +1337,17 @@ class PasteIdAllocator {
   minted = new Set();
   flooredSessionId = null;
   carrierProviders = new Set();
-  registerCarrier(e) {
-    this.carrierProviders.add(e);
+  registerCarrier(carrier) {
+    this.carrierProviders.add(carrier);
     return () => {
-      this.carrierProviders.delete(e);
+      this.carrierProviders.delete(carrier);
     };
   }
-  advancePast(e) {
-    if (isValidPasteId(e) && e < MAX_PASTE_ID && e >= this.next) this.next = e + 1;
+  advancePast(pasteId) {
+    if (isValidPasteId(pasteId) && pasteId < MAX_PASTE_ID && pasteId >= this.next) this.next = pasteId + 1;
   }
-  advancePastText(e) {
-    for (let n of parsePastedRefs(e)) this.advancePast(n.id);
+  advancePastText(text) {
+    for (let ref of parsePastedRefs(text)) this.advancePast(ref.id);
   }
   startEpoch(flooredSessionId) {
     this.minted = new Set();
@@ -1307,18 +1355,21 @@ class PasteIdAllocator {
   }
   mint() {
     for (let carrierProvider of this.carrierProviders)
-      for (let r of carrierProvider()) this.advancePastText(r);
+      for (let carrierText of carrierProvider()) this.advancePastText(carrierText);
     if (!isValidPasteId(this.next)) this.next = MAX_PASTE_ID;
-    let e = this.next++;
-    this.minted.add(e);
-    return e;
+    let id = this.next++;
+    this.minted.add(id);
+    return id;
   }
-  wasMintedThisEpoch(e) {
-    return this.minted.has(e);
+  wasMintedThisEpoch(pasteId) {
+    return this.minted.has(pasteId);
   }
 }
 //@ chunk-e6aww6q8.js:192112-192140 placement
-var pasteIdAllocatorSlot = new SessionRootSlot(() => new PasteIdAllocator());
+var pasteIdAllocatorSlot; // deferred: uses SessionRootSlot (./bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:192112", () => {
+  pasteIdAllocatorSlot = new SessionRootSlot(() => new PasteIdAllocator());
+});
 //@ chunk-e6aww6q8.js:192140-192173 placement
 function pasteIdAllocator() {
   return pasteIdAllocatorSlot.of(getRootSession());
@@ -1327,8 +1378,8 @@ function pasteIdAllocator() {
 /**
  * 函数 registerPasteCarrier（登记粘贴占位载体）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
-function registerPasteCarrier(e) {
-  return pasteIdAllocator().registerCarrier(e);
+function registerPasteCarrier(carrier) {
+  return pasteIdAllocator().registerCarrier(carrier);
 }
 //@ chunk-e6aww6q8.js:192219-192938 placement
 /**
@@ -1341,7 +1392,8 @@ function primePasteIdsFromMessages(messages) {
       if (message.imagePasteIds)
         for (let imagePasteId of message.imagePasteIds) allocator.advancePast(imagePasteId);
       if (Array.isArray(message.message.content)) {
-        for (let s of message.message.content) if (s.type === "text") allocator.advancePastText(s.text);
+        for (let block of message.message.content)
+          if (block.type === "text") allocator.advancePastText(block.text);
       } else if (typeof message.message.content === "string")
         allocator.advancePastText(message.message.content);
       if (message.stackedOriginalInput) allocator.advancePastText(message.stackedOriginalInput);
@@ -1351,7 +1403,7 @@ function primePasteIdsFromMessages(messages) {
         for (let imagePasteId of attachment.imagePasteIds) allocator.advancePast(imagePasteId);
       if (typeof attachment.prompt === "string") allocator.advancePastText(attachment.prompt);
       else if (Array.isArray(attachment.prompt)) {
-        for (let h of attachment.prompt) if (h.type === "text") allocator.advancePastText(h.text);
+        for (let part of attachment.prompt) if (part.type === "text") allocator.advancePastText(part.text);
       }
     }
   allocator.startEpoch(getSessionId());
@@ -1367,18 +1419,18 @@ function advancePasteId(maxStoredImageId) {
 /**
  * 函数 mintPasteId（分配新的粘贴编号）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
  */
-function mintPasteId(e, n) {
-  return mintPasteId_2(pasteIdAllocator(), e, n);
+function mintPasteId(allocator, text) {
+  return mintPasteId_2(pasteIdAllocator(), allocator, text);
 }
 //@ chunk-e6aww6q8.js:193012-193132 placement
-function mintPasteId_2(e, n, r) {
-  if (n) e.advancePastText(n);
-  if (r) for (let key of Object.keys(r)) e.advancePast(Number(key));
-  return e.mint();
+function mintPasteId_2(allocator, display, pastedContents) {
+  if (display) allocator.advancePastText(display);
+  if (pastedContents) for (let key of Object.keys(pastedContents)) allocator.advancePast(Number(key));
+  return allocator.mint();
 }
 //@ chunk-e6aww6q8.js:193132-193311 placement
-function isPasteRefOfType(match, n) {
-  switch (n) {
+function isPasteRefOfType(match, labelPrefix) {
+  switch (labelPrefix) {
     case "text":
       return (
         match.startsWith("[Pasted text") ||
@@ -1390,14 +1442,16 @@ function isPasteRefOfType(match, n) {
   }
 }
 //@ chunk-e6aww6q8.js:193311-193524 placement
-function expandPastedTextRefs_2(input, n, r, s) {
-  let refs = parsePastedRefs(input).filter((S) => S.id === n && isPasteRefOfType(S.match, s));
+function expandPastedTextRefs_2(input, pasteId, pastedContents, labelPrefix) {
+  let refs = parsePastedRefs(input).filter(
+    (ref) => ref.id === pasteId && isPasteRefOfType(ref.match, labelPrefix),
+  );
   let expanded = input;
   for (let i = refs.length - 1; i >= 0; i--) {
     let ref = refs[i];
     expanded =
       expanded.slice(0, ref.index) +
-      ref.match.replace(`#${n}`, `#${r}`) +
+      ref.match.replace(`#${pasteId}`, `#${pastedContents}`) +
       expanded.slice(ref.index + ref.match.length);
   }
   return expanded;
@@ -1407,204 +1461,66 @@ function expandPastedTextRefs_2(input, n, r, s) {
  * 把历史条目里的粘贴编号重新分配为本会话不冲突的新编号，同时更新显示文本中的占位（本纪元已分配的可跳过）。
  */
 function renumberPastedContents({ display, pastedContents, allowCurrentEpochSkip = false }) {
-  let s = pasteIdAllocator();
-  let h = allowCurrentEpochSkip && s.flooredSessionId === getSessionId();
+  let allocator = pasteIdAllocator();
+  let skippable = allowCurrentEpochSkip && allocator.flooredSessionId === getSessionId();
   let entries = Object.entries(pastedContents);
-  let S = [];
-  let w = {};
-  for (let [G, q] of entries) {
-    let Z = Number(G);
-    if (!isValidPasteId(Z) || (h && s.wasMintedThisEpoch(Z))) {
-      w[Z] = q;
+  let refs = [];
+  let contents = {};
+  for (let [id, entry] of entries) {
+    let numericId = Number(id);
+    if (!isValidPasteId(numericId) || (skippable && allocator.wasMintedThisEpoch(numericId))) {
+      contents[numericId] = entry;
       continue;
     }
-    S.push([Z, q]);
+    refs.push([numericId, entry]);
   }
-  if (S.length === 0)
+  if (refs.length === 0)
     return {
       display,
       pastedContents,
     };
-  let L = display;
-  S.sort((G, q) => G[0] - q[0]);
-  for (let [G, q] of S) {
-    let Z = mintPasteId_2(s, L, pastedContents);
-    L = expandPastedTextRefs_2(L, G, Z, q.type);
-    w[Z] = {
-      ...q,
-      id: Z,
+  let display_2 = display;
+  refs.sort((a, b) => a[0] - b[0]);
+  for (let [from, to] of refs) {
+    let newId = mintPasteId_2(allocator, display_2, pastedContents);
+    display_2 = expandPastedTextRefs_2(display_2, from, newId, to.type);
+    contents[newId] = {
+      ...to,
+      id: newId,
     };
   }
   return {
-    display: L,
-    pastedContents: w,
+    display: display_2,
+    pastedContents: contents,
   };
 }
 //@ chunk-e6aww6q8.js:932812-933012 fingerprint = removeLastFromHistory (0.389)
 class HistoryWriterStack {
   writers = [];
-  register(e) {
-    this.writers.push(e);
+  register(writer) {
+    this.writers.push(writer);
   }
-  unregister(e) {
-    let index = this.writers.lastIndexOf(e);
+  unregister(writer) {
+    let index = this.writers.lastIndexOf(writer);
     if (index >= 0) this.writers.splice(index, 1);
   }
   reset() {
     this.writers.length = 0;
   }
-  write(e) {
-    this.writers.at(-1)?.(e);
+  write(line) {
+    this.writers.at(-1)?.(line);
   }
 }
-//@ chunk-ha3km179.js:52979-53402 placement
-/**
- * 把短小的粘贴块（不超过限定行数）展开回文本，其余保留为粘贴引用。
- */
-function collapseSmallPastedBlocks(e, n = sessionTagSalt()) {
-  let r = splitPastedContentBlocks(e);
-  if (!r.some((y) => y.kind === "block" && y.id === n))
-    return {
-      text: e,
-      pastedContents: {},
-    };
-  let s = new Set();
-  for (let [y, S] of r.entries())
-    if (
-      S.kind === "block" &&
-      S.id === n &&
-      S.body.length <= PASTE_THRESHOLD &&
-      getPastedTextRefNumLines(S.body) <= 2
-    )
-      s.add(y);
-  for (;;) {
-    let shortPastePieces = getShortPastePieces(
-      rebuildPastedContents(r, n, s, () => {
-        return;
-      }),
-    );
-    if (shortPastePieces.length === 0) break;
-    for (let shortPastePiece of shortPastePieces) s.delete(shortPastePiece);
-  }
-  let h = rebuildPastedContents(r, n, s, (content, S) => ({
-    id: mintPasteId(e, S),
-    type: "text",
-    content,
-  }));
+//@ chunk-ez320trn.js:7416-7526 fingerprint = getHistory (0.7)
+async function getHistory_2(slug, deadlineSignal, context) {
+  let [publishedReadme, publishedReadme_2] = await Promise.all([
+    readPublishedReadme(slug, README_MD, false, deadlineSignal, context),
+    readPublishedReadme(slug, PROJECT_README_MD, true, deadlineSignal, context),
+  ]);
   return {
-    text: h.text,
-    pastedContents: h.entries,
+    root: publishedReadme,
+    project: publishedReadme_2,
   };
-}
-//@ chunk-ha3km179.js:53402-53931 placement
-/**
- * 按块重建提示文本与 pastedContents 映射。
- */
-function rebuildPastedContents(e, n, r, s) {
-  let h = {};
-  let y = [];
-  let S = [];
-  let M = "";
-  for (let [R, T] of e.entries()) {
-    if (T.kind === "text") {
-      M += T.text;
-      continue;
-    }
-    if (T.id !== n) {
-      M += T.raw;
-      continue;
-    }
-    if (r.has(R)) {
-      let inlineTextTag = createInlineTextTag(T.body, h, MIN_INLINE_TAG_BLOCK);
-      if (inlineTextTag) {
-        h[inlineTextTag.id] = inlineTextTag;
-        let L = M.length + T.body.length - T.body.trimStart().length;
-        S.push({
-          piece: R,
-          from: L,
-          to: L + inlineTextTag.content.length,
-        });
-      }
-      M += T.body;
-      let D = e[R + 1];
-      if (D !== undefined && (D.kind === "block" || !hasWordAfterPunct(D.text)))
-        M += `
-`;
-      continue;
-    }
-    let from = M.length;
-    let P = s(T.body, h);
-    if (P) {
-      h[P.id] = P;
-      M += formatPastedTextRef(P.id, getPastedTextRefNumLines(T.body));
-    }
-    y.push({
-      from,
-      to: M.length,
-    });
-  }
-  return {
-    text: M,
-    entries: h,
-    pills: y,
-    shortPastes: S,
-  };
-}
-//@ chunk-ha3km179.js:53931-54196 placement
-function getShortPastePieces(e) {
-  let inlinePasteTexts = getInlinePasteTexts(e.entries);
-  let r = [];
-  let s = 0;
-  for (let h of [...e.pills, undefined]) {
-    let y = h?.from ?? e.text.length;
-    let historyCopySpans = findHistoryCopySpans(e.text.slice(s, y), inlinePasteTexts);
-    for (let shortPaste of e.shortPastes)
-      if (
-        shortPaste.from >= s &&
-        shortPaste.to <= y &&
-        !historyCopySpans.some(
-          (historyCopySpan) =>
-            historyCopySpan.from + s <= shortPaste.from && shortPaste.to <= historyCopySpan.to + s,
-        )
-      )
-        r.push(shortPaste.piece);
-    s = h?.to ?? s;
-  }
-  return r;
-}
-//@ chunk-ha3km179.js:54196-54258 placement
-/**
- * 函数 readPromptText（按特性返回纯文本或解析后的粘贴内容）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
- */
-function readPromptText(text) {
-  return isVirtualPancakeEnabled()
-    ? collapseSmallPastedBlocks(text)
-    : {
-        text,
-        pastedContents: {},
-      };
-}
-//@ chunk-ha3km179.js:54258-54310 fingerprint = logEntryToHistoryEntry (1)
-var logEntryToHistoryEntry = (e, display, pastedContents) => ({
-  ...e,
-  display,
-  pastedContents,
-});
-//@ chunk-0eyv3mzk.js:584-632 affinity
-var URL_HOST_PATTERN = /https?:\/\/([^\s/?#'"`<>\\)\];&|(,]+)/gi;
-//@ chunk-0eyv3mzk.js:632-839 fingerprint = parseReferences (0.696)
-function parseReferences(input) {
-  if (!input) return [];
-  let s = [];
-  for (let e of input.matchAll(URL_HOST_PATTERN)) {
-    let lower = e[1].toLowerCase();
-    let index = lower.lastIndexOf("@");
-    if (index !== -1) lower = lower.slice(index + 1);
-    let index_2 = lower.indexOf(":");
-    if (index_2 !== -1) lower = lower.slice(0, index_2);
-    if (lower) s.push(lower);
-  }
-  return s;
 }
 //@ chunk-2njac0sx.js:812-935 placement
 var SKILL_WATCH_DEBOUNCE_MS = 1000;
@@ -1624,35 +1540,173 @@ async function collectPromptCommandHashes(command) {
   let skillDirCommands = await getSkillDirCommandsCached(getProjectRoot(), command);
   let originalCwd = getOriginalCwd();
   let entry = originalCwd !== getProjectRoot() ? await getSkillDirCommandsCached(originalCwd, command) : [];
-  let p = new Map();
-  for (let k of [...skillDirCommands, ...entry])
-    p.set(k.name, k.type === "prompt" ? (k.contentHash ?? "") : "");
-  return p;
+  let hashes = new Map();
+  for (let command of [...skillDirCommands, ...entry])
+    hashes.set(command.name, command.type === "prompt" ? (command.contentHash ?? "") : "");
+  return hashes;
+}
+//@ chunk-ha3km179.js:52979-53402 placement
+/**
+ * 把短小的粘贴块（不超过限定行数）展开回文本，其余保留为粘贴引用。
+ */
+function collapseSmallPastedBlocks(text, salt = sessionTagSalt()) {
+  let pieces = splitPastedContentBlocks(text);
+  if (!pieces.some((piece) => piece.kind === "block" && piece.id === salt))
+    return {
+      text,
+      pastedContents: {},
+    };
+  let collapsed = new Set();
+  for (let [index, piece] of pieces.entries())
+    if (
+      piece.kind === "block" &&
+      piece.id === salt &&
+      piece.body.length <= PASTE_THRESHOLD &&
+      getPastedTextRefNumLines(piece.body) <= 2
+    )
+      collapsed.add(index);
+  for (;;) {
+    let shortPastePieces = getShortPastePieces(
+      rebuildPastedContents(pieces, salt, collapsed, () => {
+        return;
+      }),
+    );
+    if (shortPastePieces.length === 0) break;
+    for (let shortPastePiece of shortPastePieces) collapsed.delete(shortPastePiece);
+  }
+  let rebuilt = rebuildPastedContents(pieces, salt, collapsed, (content, body) => ({
+    id: mintPasteId(text, body),
+    type: "text",
+    content,
+  }));
+  return {
+    text: rebuilt.text,
+    pastedContents: rebuilt.entries,
+  };
+}
+//@ chunk-ha3km179.js:53402-53931 placement
+/**
+ * 按块重建提示文本与 pastedContents 映射。
+ */
+function rebuildPastedContents(pieces, salt, collapsed, makeRef) {
+  let entries = {};
+  let pills = [];
+  let shortPastes = [];
+  let text = "";
+  for (let [index, piece] of pieces.entries()) {
+    if (piece.kind === "text") {
+      text += piece.text;
+      continue;
+    }
+    if (piece.id !== salt) {
+      text += piece.raw;
+      continue;
+    }
+    if (collapsed.has(index)) {
+      let inlineTextTag = createInlineTextTag(piece.body, entries, MIN_INLINE_TAG_BLOCK);
+      if (inlineTextTag) {
+        entries[inlineTextTag.id] = inlineTextTag;
+        let from = text.length + piece.body.length - piece.body.trimStart().length;
+        shortPastes.push({
+          piece: index,
+          from,
+          to: from + inlineTextTag.content.length,
+        });
+      }
+      text += piece.body;
+      let nextPiece = pieces[index + 1];
+      if (nextPiece !== undefined && (nextPiece.kind === "block" || !hasWordAfterPunct(nextPiece.text)))
+        text += `
+`;
+      continue;
+    }
+    let from = text.length;
+    let ref = makeRef(piece.body, entries);
+    if (ref) {
+      entries[ref.id] = ref;
+      text += formatPastedTextRef(ref.id, getPastedTextRefNumLines(piece.body));
+    }
+    pills.push({
+      from,
+      to: text.length,
+    });
+  }
+  return {
+    text,
+    entries,
+    pills,
+    shortPastes,
+  };
+}
+//@ chunk-ha3km179.js:53931-54196 placement
+function getShortPastePieces(rebuilt) {
+  let needles = getInlinePasteTexts(rebuilt.entries);
+  let pieces = [];
+  let cursor = 0;
+  for (let pill of [...rebuilt.pills, undefined]) {
+    let end = pill?.from ?? rebuilt.text.length;
+    let historyCopySpans = findHistoryCopySpans(rebuilt.text.slice(cursor, end), needles);
+    for (let shortPaste of rebuilt.shortPastes)
+      if (
+        shortPaste.from >= cursor &&
+        shortPaste.to <= end &&
+        !historyCopySpans.some(
+          (historyCopySpan) =>
+            historyCopySpan.from + cursor <= shortPaste.from && shortPaste.to <= historyCopySpan.to + cursor,
+        )
+      )
+        pieces.push(shortPaste.piece);
+    cursor = pill?.to ?? cursor;
+  }
+  return pieces;
+}
+//@ chunk-ha3km179.js:54196-54258 placement
+/**
+ * 函数 readPromptText（按特性返回纯文本或解析后的粘贴内容）；位于「输入历史（↑ 键/Ctrl+R）：PromptHistoryStore 读写 <配置目录>/history.jsonl，长粘贴转存 paste-cache，按项目/会话过滤，最多 100 条」模块。
+ */
+function readPromptText(text) {
+  return isVirtualPancakeEnabled()
+    ? collapseSmallPastedBlocks(text)
+    : {
+        text,
+        pastedContents: {},
+      };
+}
+//@ chunk-ha3km179.js:54258-54310 fingerprint = logEntryToHistoryEntry (1)
+var logEntryToHistoryEntry = (logEntry, display, pastedContents) => ({
+  ...logEntry,
+  display,
+  pastedContents,
+});
+//@ chunk-8t8n4kdh.js:174068-174129 fingerprint = addToHistory (1)
+function addToHistory_2() {
+  return isSessionPersistenceDisabled() || env.CLAUDE_CODE_SKIP_PROMPT_HISTORY;
+}
+//@ chunk-0eyv3mzk.js:584-632 affinity
+var URL_HOST_PATTERN = /https?:\/\/([^\s/?#'"`<>\\)\];&|(,]+)/gi;
+//@ chunk-0eyv3mzk.js:632-839 fingerprint = parseReferences (0.696)
+function parseReferences(input) {
+  if (!input) return [];
+  let hosts = [];
+  for (let match of input.matchAll(URL_HOST_PATTERN)) {
+    let lower = match[1].toLowerCase();
+    let index = lower.lastIndexOf("@");
+    if (index !== -1) lower = lower.slice(index + 1);
+    let index_2 = lower.indexOf(":");
+    if (index_2 !== -1) lower = lower.slice(0, index_2);
+    if (lower) hosts.push(lower);
+  }
+  return hosts;
 }
 //@ chunk-5f8vf2zr.js:28166-28267 fingerprint = makeLogEntryReader (0.56)
 async function dirHasHistoryFile(claudeConfigDir) {
   try {
     return (await readdir(claudeConfigDir)).some(
-      (o) => isOwnTempName(o, "history.jsonl") || isHashTempFile(o),
+      (name) => isOwnTempName(name, "history.jsonl") || isHashTempFile(name),
     );
   } catch {
     return false;
   }
-}
-//@ chunk-8t8n4kdh.js:174068-174129 fingerprint = addToHistory (1)
-function addToHistory_2() {
-  return isSessionPersistenceDisabled() || env.CLAUDE_CODE_SKIP_PROMPT_HISTORY;
-}
-//@ chunk-ez320trn.js:7416-7526 fingerprint = getHistory (0.7)
-async function getHistory_2(parsed, signal, context) {
-  let [publishedReadme, publishedReadme_2] = await Promise.all([
-    readPublishedReadme(parsed, README_MD, false, signal, context),
-    readPublishedReadme(parsed, PROJECT_README_MD, true, signal, context),
-  ]);
-  return {
-    root: publishedReadme,
-    project: publishedReadme_2,
-  };
 }
 export {
   mintPasteId,

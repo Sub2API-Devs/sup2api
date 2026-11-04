@@ -117,11 +117,11 @@ function finalContextTokensFromLastResponse(messages) {
 /**
  * 最近一次 usage 规整为最后迭代值。
  */
-function getLastApiUsage(e) {
-  for (let idx = e.length - 1; idx >= 0; idx--) {
-    let r = e[idx];
-    let s = r ? getTokenUsage(r) : undefined;
-    if (s) return getTokenCountFromUsage_5(s);
+function getLastApiUsage(messages) {
+  for (let idx = messages.length - 1; idx >= 0; idx--) {
+    let message = messages[idx];
+    let usage = message ? getTokenUsage(message) : undefined;
+    if (usage) return getTokenCountFromUsage_5(usage);
   }
   return null;
 }
@@ -129,45 +129,51 @@ function getLastApiUsage(e) {
 /**
  * 从某下标起按 message id 去重累计 assistant 的 input+cache_creation+output；缺 usage 的回调通知。
  */
-function sumAssistantTokensSince(e, n, r, s) {
-  let h = 0;
-  for (let y = r; y < e.length; y++) {
-    let S = e[y];
-    let tokenUsage = getTokenUsage(S);
+function sumAssistantTokensSince(messages, start, end, onUsageMissing) {
+  let total = 0;
+  for (let index = end; index < messages.length; index++) {
+    let message = messages[index];
+    let tokenUsage = getTokenUsage(message);
     if (!tokenUsage) {
-      if (s && S.type === "assistant" && S.message.usage == null && getAssistantMessageApiId(S) !== undefined)
-        s(y);
+      if (
+        onUsageMissing &&
+        message.type === "assistant" &&
+        message.message.usage == null &&
+        getAssistantMessageApiId(message) !== undefined
+      )
+        onUsageMissing(index);
       continue;
     }
-    let assistantMessageApiId = getAssistantMessageApiId(S);
-    if (!assistantMessageApiId || n.has(assistantMessageApiId)) continue;
-    n.add(assistantMessageApiId);
-    h += tokenUsage.input_tokens + (tokenUsage.cache_creation_input_tokens ?? 0) + tokenUsage.output_tokens;
+    let assistantMessageApiId = getAssistantMessageApiId(message);
+    if (!assistantMessageApiId || start.has(assistantMessageApiId)) continue;
+    start.add(assistantMessageApiId);
+    total +=
+      tokenUsage.input_tokens + (tokenUsage.cache_creation_input_tokens ?? 0) + tokenUsage.output_tokens;
   }
-  return h;
+  return total;
 }
 //@ chunk-e6aww6q8.js:1535960-1536151 layout
 /**
  * 所有 compact_boundary 中最大的累计丢弃 token。
  */
-function getMaxCumulativeDroppedTokens(e) {
-  let n = 0;
-  for (let r of e)
-    if (r && isCompactBoundaryMessage_3(r) && r.compactMetadata) {
-      let { cumulativeDroppedTokens, preTokens, postTokens } = r.compactMetadata;
-      let S = cumulativeDroppedTokens ?? Math.max(0, preTokens - (postTokens ?? 0));
-      if (S > n) n = S;
+function getMaxCumulativeDroppedTokens(messages) {
+  let total = 0;
+  for (let message of messages)
+    if (message && isCompactBoundaryMessage_3(message) && message.compactMetadata) {
+      let { cumulativeDroppedTokens, preTokens, postTokens } = message.compactMetadata;
+      let currentMessage = cumulativeDroppedTokens ?? Math.max(0, preTokens - (postTokens ?? 0));
+      if (currentMessage > total) total = currentMessage;
     }
-  return n;
+  return total;
 }
 //@ chunk-e6aww6q8.js:1536151-1536291 layout
 /**
  * 在新边界上记录累计丢弃 token = 之前最大值 + 本次(pre−post)。
  */
-function setCumulativeDroppedTokens(e, n) {
-  let maxCumulativeDroppedTokens = getMaxCumulativeDroppedTokens(n);
-  let { preTokens, postTokens } = e.compactMetadata;
-  e.compactMetadata.cumulativeDroppedTokens =
+function setCumulativeDroppedTokens(messages, value) {
+  let maxCumulativeDroppedTokens = getMaxCumulativeDroppedTokens(value);
+  let { preTokens, postTokens } = messages.compactMetadata;
+  messages.compactMetadata.cumulativeDroppedTokens =
     maxCumulativeDroppedTokens + Math.max(0, preTokens - (postTokens ?? 0));
 }
 //@ chunk-e6aww6q8.js:1536291-1536403 callgraph-witnessed = doesMostRecentAssistantMessageExceed200k (1)

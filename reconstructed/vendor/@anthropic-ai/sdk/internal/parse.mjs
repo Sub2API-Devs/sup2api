@@ -13,7 +13,7 @@ import { Stream } from "../core/streaming.mjs";
 import { releaseAbortListener } from "./request-signal.mjs";
 
 //@ chunk-hwmsct5x.js:32502-33815 esm-layout
-async function* mu(response, controller) {
+async function* iterateSseEvents(response, controller) {
   if (!response.body) {
     controller.abort();
     if (typeof globalThis.navigator !== "undefined" && globalThis.navigator.product === "ReactNative")
@@ -25,89 +25,89 @@ async function* mu(response, controller) {
   let textDecoder = new TextDecoder("utf-8", {
     ignoreBOM: true,
   });
-  let s = "";
-  let h = null;
-  let y = [];
-  let w = [];
-  let S = (E) => {
-    if (E.charCodeAt(0) === 65279) E = E.slice(1);
-    if (!E) {
-      if (!h && !y.length) return null;
-      let M = {
-        event: h,
-        data: y.join(`
+  let buffer = "";
+  let eventName = null;
+  let dataLines = [];
+  let rawLines = [];
+  let parseLine = (line) => {
+    if (line.charCodeAt(0) === 65279) line = line.slice(1);
+    if (!line) {
+      if (!eventName && !dataLines.length) return null;
+      let event = {
+        event: eventName,
+        data: dataLines.join(`
 `),
-        raw: w,
+        raw: rawLines,
       };
-      h = null;
-      y = [];
-      w = [];
-      return M;
+      eventName = null;
+      dataLines = [];
+      rawLines = [];
+      return event;
     }
-    w.push(E);
-    let index = E.indexOf(":");
+    rawLines.push(line);
+    let index = line.indexOf(":");
     if (index === 0) return null;
-    let L = index === -1 ? E : E.slice(0, index);
-    if (L !== "event" && L !== "data") return null;
-    let O = index === -1 ? "" : E.slice(E.charCodeAt(index + 1) === 32 ? index + 2 : index + 1);
-    if (L === "event") h = O;
-    else y.push(O);
+    let field = index === -1 ? line : line.slice(0, index);
+    if (field !== "event" && field !== "data") return null;
+    let value = index === -1 ? "" : line.slice(line.charCodeAt(index + 1) === 32 ? index + 2 : index + 1);
+    if (field === "event") eventName = value;
+    else dataLines.push(value);
     return null;
   };
-  for await (let E of ReadableStreamToAsyncIterable(response.body)) {
-    if (E == null) continue;
-    s += textDecoder.decode(typeof E === "string" ? encodeUTF8(E) : E, {
+  for await (let chunk of ReadableStreamToAsyncIterable(response.body)) {
+    if (chunk == null) continue;
+    buffer += textDecoder.decode(typeof chunk === "string" ? encodeUTF8(chunk) : chunk, {
       stream: true,
     });
-    let R = 0;
-    if (!s.includes("\r")) {
-      let L;
+    let cursor = 0;
+    if (!buffer.includes("\r")) {
+      let newlineIndex;
       while (
-        (L = s.indexOf(
+        (newlineIndex = buffer.indexOf(
           `
 `,
-          R,
+          cursor,
         )) !== -1
       ) {
-        let O = S(s.slice(R, L));
-        R = L + 1;
-        if (O) yield O;
+        let event = parseLine(buffer.slice(cursor, newlineIndex));
+        cursor = newlineIndex + 1;
+        if (event) yield event;
       }
     } else
-      for (let j = 0; j < s.length; j++) {
-        let O = s[j];
+      for (let j = 0; j < buffer.length; j++) {
+        let char = buffer[j];
         if (
-          O !==
+          char !==
             `
 ` &&
-          O !== "\r"
+          char !== "\r"
         )
           continue;
-        if (O === "\r" && j + 1 === s.length) break;
-        let M = S(s.slice(R, j));
+        if (char === "\r" && j + 1 === buffer.length) break;
+        let event = parseLine(buffer.slice(cursor, j));
         if (
-          O === "\r" &&
-          s[j + 1] ===
+          char === "\r" &&
+          buffer[j + 1] ===
             `
 `
         )
           j++;
-        R = j + 1;
-        if (M) yield M;
+        cursor = j + 1;
+        if (event) yield event;
       }
-    s = s.slice(R);
+    buffer = buffer.slice(cursor);
   }
-  s += textDecoder.decode();
-  if (s)
-    for (let line of s.replace(/\r$/, "").split(/\r\n|[\n\r]/)) {
-      let R = S(line);
-      if (R) yield R;
+  buffer += textDecoder.decode();
+  if (buffer)
+    for (let line of buffer.replace(/\r$/, "").split(/\r\n|[\n\r]/)) {
+      let event = parseLine(line);
+      if (event) yield event;
     }
 }
 //@ chunk-hwmsct5x.js:33815-34546 esm-fingerprint
-async function Xo(client, props) {
+async function defaultParseResponse(client, props) {
   let { response, requestLogID, retryOfRequestLogID, startTime } = props;
-  let w = await (async () => {
+  let parsed = await (async () => {
     if (props.options.stream) {
       loggerFor(client).debug("response", response.status, response.url, response.headers, response.body);
       return Stream.fromSSEResponse(response, props.controller, client);
@@ -128,15 +128,15 @@ async function Xo(client, props) {
     retryOfRequestLogID,
     url: response.url,
     status: response.status,
-    body: w,
+    body: parsed,
     durationMs: Date.now() - startTime,
   });
-  return w;
+  return parsed;
 }
 //@ chunk-hwmsct5x.js:34546-34791 esm-fingerprint
-function addResponseIDs(e, response) {
-  if (!e || typeof e !== "object" || Array.isArray(e)) return e;
-  return Object.defineProperties(e, {
+function addResponseIDs(value, response) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  return Object.defineProperties(value, {
     _request_id: {
       value: response.headers.get("request-id"),
       enumerable: false,
@@ -147,4 +147,4 @@ function addResponseIDs(e, response) {
     },
   });
 }
-export { mu, addResponseIDs, Xo };
+export { iterateSseEvents, addResponseIDs, defaultParseResponse };

@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (7)
  * attribution: placement 7
  */
-import { init_react_production, y, P } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { useStdin } from "../../components/design-system/ThemeProvider.js";
 import { useSession } from "../../context/session.js";
 import { useAppStoreDirect, useSessionHooksRegistry, useAppStateSession } from "../../state/AppState.js";
@@ -25,34 +25,41 @@ import { waitingFor, subscribeWaiting } from "../../services/artifacts/presenceS
 import { logError } from "../../utils/log.js";
 import { getRipgrepStatus } from "../../utils/ripgrep.js";
 import { sessionHooksRegistrySlot } from "../../utils/model/modelSwitchHooks.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1739793-1739797 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1739793", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1739797-1740165 placement
 function useSuspendResume() {
   let { internal_eventEmitter } = useStdin();
-  let [x, D] = y(0);
-  P(() => {
-    let L = () => {
+  let [count, setCount] = useState(0);
+  useEffect(() => {
+    let onSuspend = () => {
       process.stdout.write(`
 Claude Code has been suspended. Run \`fg\` to bring Claude Code back.
 Note: ctrl + z now suspends Claude Code, ctrl + _ undoes input.
 `);
     };
-    let ee = () => {
-      D((ke) => ke + 1);
+    let onEffect = () => {
+      setCount((count) => count + 1);
     };
-    internal_eventEmitter?.on("suspend", L);
-    internal_eventEmitter?.on("resume", ee);
+    internal_eventEmitter?.on("suspend", onSuspend);
+    internal_eventEmitter?.on("resume", onEffect);
     return () => {
-      internal_eventEmitter?.off("suspend", L);
-      internal_eventEmitter?.off("resume", ee);
+      internal_eventEmitter?.off("suspend", onSuspend);
+      internal_eventEmitter?.off("resume", onEffect);
     };
   }, [internal_eventEmitter]);
-  return x;
+  return count;
 }
 //@ chunk-18hwfzwa.js:1740165-1740169 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1740165", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1740169-1740549 placement
 /**
  * 后台会话中同步工作状态（旋转模式、压缩、子任务、等待）。
@@ -61,8 +68,8 @@ function useBackgroundStatusSync() {
   let session = useSession();
   let appStoreDirect = useAppStoreDirect();
   let spinnerStore = useSpinnerStore();
-  P(() => {
-    function L() {
+  useEffect(() => {
+    function sync() {
       try {
         if (!isDapperDawnEnabled() && !isKeepaliveArmed()) return;
         let { mode, isCompacting } = spinnerStore.get();
@@ -78,21 +85,24 @@ function useBackgroundStatusSync() {
       }
     }
     setInteractive(true);
-    L();
-    let ee = [
-      spinnerStore.subscribe(L),
-      getRipgrepStatus(session, L),
-      subscribeWaiting(session, L),
-      appStoreDirect.subscribe(L),
+    sync();
+    let cleanups = [
+      spinnerStore.subscribe(sync),
+      getRipgrepStatus(session, sync),
+      subscribeWaiting(session, sync),
+      appStoreDirect.subscribe(sync),
     ];
     return () => {
-      for (let ke of ee) ke();
+      for (let cleanup of cleanups) cleanup();
       setInteractive(false);
     };
   }, [session, appStoreDirect, spinnerStore]);
 }
 //@ chunk-18hwfzwa.js:1740549-1740553 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1740549", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1740553-1740766 placement
 /**
  * 挂载期间替换相关实例的注册表，卸载时恢复。
@@ -100,15 +110,21 @@ init_react_production();
 function useRegistryOverride(session) {
   let sessionHooksRegistry = useSessionHooksRegistry();
   let appStateSession = useAppStateSession();
-  P(() => {
-    let L = new Set([sessionHooksRegistrySlot.of(session), sessionHooksRegistrySlot.of(appStateSession)]);
-    let ee = new Map([...L].map((ke) => [ke, ke.registry]));
-    for (let ke of L) ke.registry = sessionHooksRegistry;
+  useEffect(() => {
+    let registries = new Set([
+      sessionHooksRegistrySlot.of(session),
+      sessionHooksRegistrySlot.of(appStateSession),
+    ]);
+    let pairs = new Map([...registries].map((registry) => [registry, registry.registry]));
+    for (let registry of registries) registry.registry = sessionHooksRegistry;
     return () => {
-      for (let [ke, Re] of ee) ke.registry = Re;
+      for (let [registry, hooksRegistry] of pairs) registry.registry = hooksRegistry;
     };
   }, [session, appStateSession, sessionHooksRegistry]);
 }
 //@ chunk-18hwfzwa.js:1740766-1740770 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1740766", () => {
+  init_react_production();
+});
 export { useRegistryOverride, useBackgroundStatusSync, useSuspendResume };

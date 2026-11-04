@@ -18,7 +18,7 @@ import "fs";
 import "fs";
 import "fs";
 import "fs";
-import { Dqt, normalizePathForSandbox, isAtOrUnder } from "./sandbox-utils.js";
+import { pathSpellingVariants, normalizePathForSandbox, isAtOrUnder } from "./sandbox-utils.js";
 
 //@ chunk-fq0cr76a.js:817514-817926 esm-fingerprint
 function ownInstallWarning(allowedWritePaths, moduleFile = fileURLToPath(import.meta.url)) {
@@ -28,8 +28,10 @@ function ownInstallWarning(allowedWritePaths, moduleFile = fileURLToPath(import.
     root = pathModule_2.dirname(root);
   }
   if (!root.split(pathModule_2.sep).includes("node_modules")) return;
-  let writable = allowedWritePaths.flatMap((allowed) => Dqt(normalizePathForSandbox(allowed)));
-  return Dqt(root).some((form) => writable.some((allowed) => isAtOrUnder(form, allowed)))
+  let writable = allowedWritePaths.flatMap((allowed) =>
+    pathSpellingVariants(normalizePathForSandbox(allowed)),
+  );
+  return pathSpellingVariants(root).some((form) => writable.some((allowed) => isAtOrUnder(form, allowed)))
     ? `sandbox-runtime is installed in ${root}, where a sandboxed command can write it - install it outside the allowed write paths`
     : undefined;
 }

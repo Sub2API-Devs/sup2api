@@ -61,18 +61,18 @@ async function awaitMcpPolicyColdStart(options) {
     mayNeedPolicyLimits = true;
   } else logForDebugging("[mcp-policy-cold-start] skipped \u2014 no MCP server source visible");
   if (waitStart !== undefined && getRecordedPhase("mcp_policy_settings_wait_ms") === undefined) {
-    let s = performance.now() - waitStart;
-    let c = didRemoteManagedSettingsBackstopRelease();
-    recordPhase("mcp_policy_settings_wait_ms", s, waitStart);
-    let d = c
+    let waitedMs = performance.now() - waitStart;
+    let timedOut = didRemoteManagedSettingsBackstopRelease();
+    recordPhase("mcp_policy_settings_wait_ms", waitedMs, waitStart);
+    let outcome = timedOut
       ? "timed_out"
       : isRemoteManagedSettingsColdStartPending() || isRemoteManagedProvisionPending()
         ? "load_failed"
         : "ok";
-    logForDiagnosticsNoPII(d === "ok" ? "info" : "warn", "mcp_policy_settings_wait", {
-      waited_ms: Math.round(s),
-      timed_out: c,
-      outcome: d,
+    logForDiagnosticsNoPII(outcome === "ok" ? "info" : "warn", "mcp_policy_settings_wait", {
+      waited_ms: Math.round(waitedMs),
+      timed_out: timedOut,
+      outcome,
       ...(hostSessionSkipsSharedCache() && {
         stored_copy: "not_read",
       }),

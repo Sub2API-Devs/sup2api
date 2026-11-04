@@ -8,7 +8,17 @@
  * pieces: chunk-hwmsct5x.js (1), chunk-vrb44rx7.js (16)
  * attribution: fingerprint 2, placement 15
  */
-import { init_react_production, y, R, P, fo, Qr, Oo } from "../../../vendor/react/cjs/react.production.js";
+import { stripAnsi } from "../../utils/stripAnsi.js";
+import { sanitizeTitle, markdownSafeText } from "../../utils/resultError.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useEffect,
+  suspenseTypeExport,
+  use,
+  useEffectEvent,
+} from "../../../vendor/react/cjs/react.production.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 import { loadAllPlugins } from "../../utils/plugins/pluginLoader.js";
@@ -22,7 +32,7 @@ import { getUnconfiguredChannels } from "../../utils/plugins/mcpPluginIntegratio
 import { getEnabledSettingSources } from "../../utils/settings/constants.js";
 import { lookupByPluginAliases } from "../../utils/plugins/pluginConfigSources.js";
 import { getSettingsForSource } from "../../utils/settings/settings.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { claudeCommand } from "../../utils/worktreeResumeHint.js";
 import { NEEDS_CONFIG_NOTE } from "./activatePluginsAfterInstall.js";
@@ -33,16 +43,36 @@ import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 import { loadMcpServerUserConfig, saveMcpServerUserConfig } from "../../utils/plugins/mcpbHandler.js";
 import { SettingsDialogCancelBinding } from "../../utils/settings/mdm/constants.js";
 import { PluginOptionsDialog } from "./PluginOptionsDialog.js";
-import { stripAnsi } from "../../utils/stripAnsi.js";
-import { sanitizeTitle, markdownSafeText } from "../../utils/resultError.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-hwmsct5x.js:222410-222714 fingerprint = findPluginOptionsTarget (0.49)
+function findPluginOptionsTarget(pluginId) {
+  if (typeof pluginId.value !== "string") return null;
+  let resolvedPluginId = pluginId.value === "default" ? null : stripAnsi(pluginId.value);
+  let displayName = typeof pluginId.displayName === "string" ? pluginId.displayName : "";
+  let description = typeof pluginId.description === "string" ? pluginId.description : "";
+  return {
+    value: resolvedPluginId,
+    label: sanitizeTitle(displayName) || (resolvedPluginId !== null ? sanitizeTitle(resolvedPluginId) : ""),
+    description: markdownSafeText(description),
+    ...(pluginId.disabled === true && {
+      disabled: true,
+    }),
+  };
+}
 //@ chunk-vrb44rx7.js:43972-43976 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vrb44rx7.js:43972", () => {
+  init_react_production();
+});
 //@ chunk-vrb44rx7.js:43976-43980 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vrb44rx7.js:43976", () => {
+  init_react_production();
+});
 //@ chunk-vrb44rx7.js:43980-44043 placement
-function channelNeedsOptions(Se) {
-  return Object.keys(Se.userConfig ?? {}).length > 0;
+function channelNeedsOptions(channel) {
+  return Object.keys(channel.userConfig ?? {}).length > 0;
 }
 //@ chunk-vrb44rx7.js:44043-44076 placement
 function optionsSteps(steps) {
@@ -53,45 +83,48 @@ function optionsSteps(steps) {
 //@ chunk-vrb44rx7.js:44076-44091 placement
 function noop() {}
 //@ chunk-vrb44rx7.js:44091-44200 placement
-function toPluginOptionsSaveError(ft) {
-  logForDebugging(`Failed to save plugin options: ${errorMessage(ft)}`, {
+function toPluginOptionsSaveError(error) {
+  logForDebugging(`Failed to save plugin options: ${errorMessage(error)}`, {
     level: "error",
   });
-  return ft ?? Error("save failed");
+  return error ?? Error("save failed");
 }
 //@ chunk-vrb44rx7.js:44200-44291 placement
-async function findMarketplaceOfAllPlugins(i, h, k) {
-  let { enabled, disabled } = await loadAllPlugins(h, k);
-  return findMarketplace([...enabled, ...disabled], i);
+async function findMarketplaceOfAllPlugins(pluginIds, state, storageV5) {
+  let { enabled, disabled } = await loadAllPlugins(state, storageV5);
+  return findMarketplace([...enabled, ...disabled], pluginIds);
 }
 //@ chunk-vrb44rx7.js:44291-44385 placement
-async function hasUnconfiguredOptions(plugin, h) {
+async function hasUnconfiguredOptions(plugin, targetPlugin) {
   return (
-    Object.keys(await getUnconfiguredOptions(plugin, h)).length > 0 ||
-    (await getUnconfiguredChannels(plugin, h)).length > 0
+    Object.keys(await getUnconfiguredOptions(plugin, targetPlugin)).length > 0 ||
+    (await getUnconfiguredChannels(plugin, targetPlugin)).length > 0
   );
 }
 //@ chunk-vrb44rx7.js:44385-44810 placement
-async function savePluginOptions(i, h, storageV5, credentials) {
-  let marketplaceOfAllPlugins = await findMarketplaceOfAllPlugins(i, storageV5, credentials);
+async function savePluginOptions(pluginId, options, state, credentials) {
+  let marketplaceOfAllPlugins = await findMarketplaceOfAllPlugins(pluginId, state, credentials);
   if (!marketplaceOfAllPlugins || !(await hasUnconfiguredOptions(marketplaceOfAllPlugins, credentials)))
     return null;
-  let T;
-  for (let U of getEnabledSettingSources()) {
-    let L = lookupByPluginAliases(getSettingsForSource(U)?.enabledPlugins, i);
-    if (L !== undefined) T = L;
+  let saveResult;
+  for (let source of getEnabledSettingSources()) {
+    let entry = lookupByPluginAliases(getSettingsForSource(source)?.enabledPlugins, pluginId);
+    if (entry !== undefined) saveResult = entry;
   }
   let installedDisabled =
-    T !== undefined ? T === false : marketplaceOfAllPlugins.manifest.defaultEnabled === false;
+    saveResult !== undefined
+      ? saveResult === false
+      : marketplaceOfAllPlugins.manifest.defaultEnabled === false;
   return {
     type: "plugin-options",
     plugin: marketplaceOfAllPlugins,
-    pluginId: i,
-    depNote: h?.suffix ?? "",
+    pluginId,
+    depNote: options?.suffix ?? "",
     alreadyInstalled: true,
-    depsResolved: h?.changed ?? false,
+    depsResolved: options?.changed ?? false,
     installedDisabled,
-    installedDisabledByDefault: T === undefined && marketplaceOfAllPlugins.manifest.defaultEnabled === false,
+    installedDisabledByDefault:
+      saveResult === undefined && marketplaceOfAllPlugins.manifest.defaultEnabled === false,
   };
 }
 //@ chunk-vrb44rx7.js:44810-47061 placement
@@ -99,7 +132,7 @@ async function savePluginOptions(i, h, storageV5, credentials) {
  * 生成安装/配置结果提示（已安装、需重载、加载失败、默认禁用、已激活等）。
  */
 function formatInstallOutcome(props) {
-  let pe = w(22);
+  let $ = useMemoCache(22);
   let { viewState, onInstallComplete, onFinish } = props;
   let {
     plugin,
@@ -110,45 +143,48 @@ function formatInstallOutcome(props) {
     installedDisabled,
     installedDisabledByDefault,
   } = viewState;
-  let V = alreadyInstalled ? "Already installed" : "Installed";
-  let [B, _] = y(false);
-  let J = R(false);
-  let fe;
-  let me;
-  if (pe[0] === MEMO_CACHE_SENTINEL) {
-    fe = () => () => {
-      J.current = true;
+  let tabLabel = alreadyInstalled ? "Already installed" : "Installed";
+  let [installing, setInstalling] = useState(false);
+  let finishedRef = useRef(false);
+  let content;
+  let footer;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    content = () => () => {
+      finishedRef.current = true;
     };
-    me = [];
-    pe[0] = fe;
-    pe[1] = me;
+    footer = [];
+    $[0] = content;
+    $[1] = footer;
   } else {
-    fe = pe[0];
-    me = pe[1];
+    content = $[0];
+    footer = $[1];
   }
-  P(fe, me);
-  let ne = !alreadyInstalled || Boolean(depsResolved);
-  let he;
+  useEffect(content, footer);
+  let canInstall = !alreadyInstalled || Boolean(depsResolved);
+  let runInstall;
   if (
-    pe[2] !== installedDisabled ||
-    pe[3] !== installedDisabledByDefault ||
-    pe[4] !== onInstallComplete ||
-    pe[5] !== pluginId
+    $[2] !== installedDisabled ||
+    $[3] !== installedDisabledByDefault ||
+    $[4] !== onInstallComplete ||
+    $[5] !== pluginId
   ) {
-    he = async function ae(W) {
-      if (!W) {
+    runInstall = async function runInstall(config) {
+      if (!config) {
         return "";
       }
-      let Oe = onInstallComplete ? await onInstallComplete([pluginId]) : "reload-required";
+      let installOutcome = onInstallComplete ? await onInstallComplete([pluginId]) : "reload-required";
       if (installedDisabled) {
-        let rt = claudeCommand("plugin enable", pluginId);
-        let et = `enable it in /plugin${rt ? ` or run: ${rt}` : ""}.`;
-        let je = Oe === "load-failed" ? " The plugin couldn't be loaded \u2014 see /plugin for details." : "";
+        let enableCommand = claudeCommand("plugin enable", pluginId);
+        let enableHint = `enable it in /plugin${enableCommand ? ` or run: ${enableCommand}` : ""}.`;
+        let body =
+          installOutcome === "load-failed"
+            ? " The plugin couldn't be loaded \u2014 see /plugin for details."
+            : "";
         return installedDisabledByDefault
-          ? ` This plugin is disabled by default \u2014 ${et}${je}`
-          : ` This plugin is disabled \u2014 ${et}${je}`;
+          ? ` This plugin is disabled by default \u2014 ${enableHint}${body}`
+          : ` This plugin is disabled \u2014 ${enableHint}${body}`;
       }
-      switch (Oe) {
+      switch (installOutcome) {
         case "activated": {
           return " Plugin is now active.";
         }
@@ -163,104 +199,107 @@ function formatInstallOutcome(props) {
         }
       }
     };
-    pe[2] = installedDisabled;
-    pe[3] = installedDisabledByDefault;
-    pe[4] = onInstallComplete;
-    pe[5] = pluginId;
-    pe[6] = he;
-  } else he = pe[6];
-  let ae = he;
-  if (B) {
-    let Se;
-    if (pe[7] === MEMO_CACHE_SENTINEL) {
-      Se = jsxProd_default(WorkerBadge, {
+    $[2] = installedDisabled;
+    $[3] = installedDisabledByDefault;
+    $[4] = onInstallComplete;
+    $[5] = pluginId;
+    $[6] = runInstall;
+  } else runInstall = $[6];
+  let install = runInstall;
+  if (installing) {
+    let activatingBadge;
+    if ($[7] === MEMO_CACHE_SENTINEL) {
+      activatingBadge = jsxProd_default(WorkerBadge, {
         message: "Activating plugin\u2026",
       });
-      pe[7] = Se;
-    } else Se = pe[7];
-    return Se;
+      $[7] = activatingBadge;
+    } else activatingBadge = $[7];
+    return activatingBadge;
   }
   let onDone;
   if (
-    pe[8] !== ae ||
-    pe[9] !== alreadyInstalled ||
-    pe[10] !== ne ||
-    pe[11] !== depNote ||
-    pe[12] !== onFinish ||
-    pe[13] !== onInstallComplete ||
-    pe[14] !== plugin ||
-    pe[15] !== pluginId ||
-    pe[16] !== V
+    $[8] !== install ||
+    $[9] !== alreadyInstalled ||
+    $[10] !== canInstall ||
+    $[11] !== depNote ||
+    $[12] !== onFinish ||
+    $[13] !== onInstallComplete ||
+    $[14] !== plugin ||
+    $[15] !== pluginId ||
+    $[16] !== tabLabel
   ) {
-    onDone = (kt, Tt, Ke) => {
+    onDone = (outcome, config, extra) => {
       (async () => {
-        _(true);
-        let He = (Et) => {
-          if (!J.current) onFinish(Et);
+        setInstalling(true);
+        let chosen = (value) => {
+          if (!finishedRef.current) onFinish(value);
         };
-        oe: switch (kt) {
+        oe: switch (outcome) {
           case "configured": {
-            let ct = Boolean(Ke);
-            let Ct = ne || ct;
-            He(
-              `\u2713 ${ct ? (alreadyInstalled ? "Configured" : "Installed and configured") : V} ${getPluginDisplayName(plugin)}${depNote}.${await ae(Ct)}`,
+            let hasExtra = Boolean(extra);
+            let canProceed = canInstall || hasExtra;
+            chosen(
+              `\u2713 ${hasExtra ? (alreadyInstalled ? "Configured" : "Installed and configured") : tabLabel} ${getPluginDisplayName(plugin)}${depNote}.${await install(canProceed)}`,
             );
             break oe;
           }
           case "skipped": {
-            let ft = ne || Boolean(Ke);
-            He(`\u2713 ${V} ${getPluginDisplayName(plugin)}${depNote}.${await ae(ft)}`);
+            let needsDeps = canInstall || Boolean(extra);
+            chosen(
+              `\u2713 ${tabLabel} ${getPluginDisplayName(plugin)}${depNote}.${await install(needsDeps)}`,
+            );
             break oe;
           }
           case "read-error": {
-            He(
-              `${V} ${getPluginDisplayName(plugin)}${depNote}, but its saved options could not be read (${Tt}).${await ae(ne)}`,
+            chosen(
+              `${tabLabel} ${getPluginDisplayName(plugin)}${depNote}, but its saved options could not be read (${config}).${await install(canInstall)}`,
             );
             break oe;
           }
           case "error": {
-            let at = false;
-            if (ne || Boolean(Ke)) at = (await onInstallComplete?.([pluginId])) === "load-failed";
-            He(
-              `${V} but failed to save config: ${Tt}${at ? " The plugin couldn't be loaded \u2014 see /plugin for details." : ""}`,
+            let failed = false;
+            if (canInstall || Boolean(extra))
+              failed = (await onInstallComplete?.([pluginId])) === "load-failed";
+            chosen(
+              `${tabLabel} but failed to save config: ${config}${failed ? " The plugin couldn't be loaded \u2014 see /plugin for details." : ""}`,
             );
           }
         }
       })();
     };
-    pe[8] = ae;
-    pe[9] = alreadyInstalled;
-    pe[10] = ne;
-    pe[11] = depNote;
-    pe[12] = onFinish;
-    pe[13] = onInstallComplete;
-    pe[14] = plugin;
-    pe[15] = pluginId;
-    pe[16] = V;
-    pe[17] = onDone;
-  } else onDone = pe[17];
-  let Ot;
-  if (pe[18] !== plugin || pe[19] !== pluginId || pe[20] !== onDone) {
-    Ot = jsxProd_default(PluginOptionsFlow, {
+    $[8] = install;
+    $[9] = alreadyInstalled;
+    $[10] = canInstall;
+    $[11] = depNote;
+    $[12] = onFinish;
+    $[13] = onInstallComplete;
+    $[14] = plugin;
+    $[15] = pluginId;
+    $[16] = tabLabel;
+    $[17] = onDone;
+  } else onDone = $[17];
+  let details;
+  if ($[18] !== plugin || $[19] !== pluginId || $[20] !== onDone) {
+    details = jsxProd_default(PluginOptionsFlow, {
       plugin,
       pluginId,
       onDone,
     });
-    pe[18] = plugin;
-    pe[19] = pluginId;
-    pe[20] = onDone;
-    pe[21] = Ot;
-  } else Ot = pe[21];
-  return Ot;
+    $[18] = plugin;
+    $[19] = pluginId;
+    $[20] = onDone;
+    $[21] = details;
+  } else details = $[21];
+  return details;
 }
 //@ chunk-vrb44rx7.js:47061-48783 fingerprint = PluginOptionsFlow (0.768)
 function PluginOptionsFlow(props) {
-  let D = w(24);
+  let $ = useMemoCache(24);
   let { plugin, pluginId, onDone } = props;
   let { storageV5, credentials } = useTheme_2();
-  let U;
-  if (D[0] !== credentials || D[1] !== plugin || D[2] !== pluginId || D[3] !== storageV5) {
-    U = async function J() {
+  let loadSteps;
+  if ($[0] !== credentials || $[1] !== plugin || $[2] !== pluginId || $[3] !== storageV5) {
+    loadSteps = async function loadSteps() {
       let result = [];
       let unconfigured = await getUnconfiguredOptions(plugin, credentials);
       if (Object.keys(unconfigured).length > 0)
@@ -286,24 +325,24 @@ function PluginOptionsFlow(props) {
         });
       return result;
     };
-    D[0] = credentials;
-    D[1] = plugin;
-    D[2] = pluginId;
-    D[3] = storageV5;
-    D[4] = U;
-  } else U = D[4];
-  let J = U;
-  let pe;
+    $[0] = credentials;
+    $[1] = plugin;
+    $[2] = pluginId;
+    $[3] = storageV5;
+    $[4] = loadSteps;
+  } else loadSteps = $[4];
+  let load = loadSteps;
+  let steps;
   if (
-    D[5] !== J ||
-    D[6] !== plugin.manifest.channels ||
-    D[7] !== plugin.manifest.userConfig ||
-    D[8] !== pluginId
+    $[5] !== load ||
+    $[6] !== plugin.manifest.channels ||
+    $[7] !== plugin.manifest.userConfig ||
+    $[8] !== pluginId
   ) {
-    pe = () =>
+    steps = () =>
       Object.keys(plugin.manifest.userConfig ?? {}).length > 0 ||
       (plugin.manifest.channels ?? []).some(channelNeedsOptions)
-        ? J().then(optionsSteps, (values_1) => {
+        ? load().then(optionsSteps, (values_1) => {
             logOptionsReadFailure(pluginId, values_1);
             return {
               steps: [],
@@ -313,359 +352,344 @@ function PluginOptionsFlow(props) {
         : {
             steps: [],
           };
-    D[5] = J;
-    D[6] = plugin.manifest.channels;
-    D[7] = plugin.manifest.userConfig;
-    D[8] = pluginId;
-    D[9] = pe;
-  } else pe = D[9];
-  let [me] = y(pe);
-  let ne = R(false);
-  let [he, W] = y(false);
-  if (!(me instanceof Promise)) {
-    let Oe;
-    if (D[10] !== onDone || D[11] !== me) {
-      Oe = jsxProd_default(PluginOptionsLoader, {
-        loaded: me,
+    $[5] = load;
+    $[6] = plugin.manifest.channels;
+    $[7] = plugin.manifest.userConfig;
+    $[8] = pluginId;
+    $[9] = steps;
+  } else steps = $[9];
+  let [loadedSteps] = useState(steps);
+  let loadingRef = useRef(false);
+  let [started, setStarted] = useState(false);
+  if (!(loadedSteps instanceof Promise)) {
+    let loader;
+    if ($[10] !== onDone || $[11] !== loadedSteps) {
+      loader = jsxProd_default(PluginOptionsLoader, {
+        loaded: loadedSteps,
         onDone,
       });
-      D[10] = onDone;
-      D[11] = me;
-      D[12] = Oe;
-    } else Oe = D[12];
-    return Oe;
+      $[10] = onDone;
+      $[11] = loadedSteps;
+      $[12] = loader;
+    } else loader = $[12];
+    return loader;
   }
-  if (he) {
+  if (started) {
     return null;
   }
   let onCancel;
-  if (D[13] !== onDone) {
+  if ($[13] !== onDone) {
     onCancel = () => {
-      if (ne.current) {
+      if (loadingRef.current) {
         return;
       }
-      ne.current = true;
-      W(true);
+      loadingRef.current = true;
+      setStarted(true);
       onDone("skipped", undefined, false);
     };
-    D[13] = onDone;
-    D[14] = onCancel;
-  } else onCancel = D[14];
+    $[13] = onDone;
+    $[14] = onCancel;
+  } else onCancel = $[14];
   let children;
-  if (D[15] === MEMO_CACHE_SENTINEL) {
+  if ($[15] === MEMO_CACHE_SENTINEL) {
     children = jsxProd_default(WorkerBadge, {
       message: "Loading\u2026",
       dimColor: true,
     });
-    D[15] = children;
-  } else children = D[15];
+    $[15] = children;
+  } else children = $[15];
   let fallback;
-  if (D[16] !== onCancel) {
+  if ($[16] !== onCancel) {
     fallback = jsxProd_default(SettingsDialogCancelBinding, {
       onCancel,
       children,
     });
-    D[16] = onCancel;
-    D[17] = fallback;
-  } else fallback = D[17];
+    $[16] = onCancel;
+    $[17] = fallback;
+  } else fallback = $[17];
   let children_2;
-  if (D[18] !== onDone || D[19] !== me) {
+  if ($[18] !== onDone || $[19] !== loadedSteps) {
     children_2 = jsxProd_default(PluginOptionsStepsLoader, {
-      steps: me,
+      steps: loadedSteps,
       onDone,
     });
-    D[18] = onDone;
-    D[19] = me;
-    D[20] = children_2;
-  } else children_2 = D[20];
-  let ae;
-  if (D[21] !== fallback || D[22] !== children_2) {
-    ae = jsxProd_default(fo, {
+    $[18] = onDone;
+    $[19] = loadedSteps;
+    $[20] = children_2;
+  } else children_2 = $[20];
+  let suspenseWrapper;
+  if ($[21] !== fallback || $[22] !== children_2) {
+    suspenseWrapper = jsxProd_default(suspenseTypeExport, {
       fallback,
       children: children_2,
     });
-    D[21] = fallback;
-    D[22] = children_2;
-    D[23] = ae;
-  } else ae = D[23];
-  return ae;
+    $[21] = fallback;
+    $[22] = children_2;
+    $[23] = suspenseWrapper;
+  } else suspenseWrapper = $[23];
+  return suspenseWrapper;
 }
 //@ chunk-vrb44rx7.js:48783-48932 placement
 function PluginOptionsStepsLoader(props) {
-  let x = w(3);
+  let $ = useMemoCache(3);
   let { steps, onDone } = props;
-  let loaded = Qr(steps);
-  let T;
-  if (x[0] !== loaded || x[1] !== onDone) {
-    T = jsxProd_default(PluginOptionsLoader, {
+  let loaded = use(steps);
+  let content;
+  if ($[0] !== loaded || $[1] !== onDone) {
+    content = jsxProd_default(PluginOptionsLoader, {
       loaded,
       onDone,
     });
-    x[0] = loaded;
-    x[1] = onDone;
-    x[2] = T;
-  } else T = x[2];
-  return T;
+    $[0] = loaded;
+    $[1] = onDone;
+    $[2] = content;
+  } else content = $[2];
+  return content;
 }
 //@ chunk-vrb44rx7.js:48932-50819 placement
 /**
  * 读取已保存的插件选项并决定配置步骤（读失败、跳过、已配置）。
  */
 function PluginOptionsLoader(props) {
-  let K = w(34);
+  let $ = useMemoCache(34);
   let { loaded, onDone } = props;
   let { steps, error } = loaded;
-  let [T, D] = y(0);
-  let U = R(false);
-  let L = R(false);
-  let A = R(false);
-  let V;
-  if (K[0] !== onDone) {
-    V = function J(...B) {
-      let _ = B;
-      if (L.current) {
+  let [stepIndex, setStepIndex] = useState(0);
+  let savedAny = useRef(false);
+  let finishedRef = useRef(false);
+  let savingRef = useRef(false);
+  let onFinishOnce;
+  if ($[0] !== onDone) {
+    onFinishOnce = function onFinishOnce(...args) {
+      let finishArgs = args;
+      if (finishedRef.current) {
         return;
       }
-      L.current = true;
-      onDone(..._);
+      finishedRef.current = true;
+      onDone(...finishArgs);
     };
-    K[0] = onDone;
-    K[1] = V;
-  } else V = K[1];
-  let J = V;
-  let B;
-  if (K[2] !== J || K[3] !== error) {
-    B = () => {
-      if (error !== undefined) J("read-error", error);
-      else J("skipped");
+    $[0] = onDone;
+    $[1] = onFinishOnce;
+  } else onFinishOnce = $[1];
+  let finish = onFinishOnce;
+  let skipIfNoSteps;
+  if ($[2] !== finish || $[3] !== error) {
+    skipIfNoSteps = () => {
+      if (error !== undefined) finish("read-error", error);
+      else finish("skipped");
     };
-    K[2] = J;
-    K[3] = error;
-    K[4] = B;
-  } else B = K[4];
-  let pe = Oo(B);
-  let fe;
-  if (K[5] !== error || K[6] !== pe || K[7] !== steps.length) {
-    fe = () => {
-      if (error !== undefined || steps.length === 0) pe();
+    $[2] = finish;
+    $[3] = error;
+    $[4] = skipIfNoSteps;
+  } else skipIfNoSteps = $[4];
+  let runSkip = useEffectEvent(skipIfNoSteps);
+  let onEmpty;
+  if ($[5] !== error || $[6] !== runSkip || $[7] !== steps.length) {
+    onEmpty = () => {
+      if (error !== undefined || steps.length === 0) runSkip();
     };
-    K[5] = error;
-    K[6] = pe;
-    K[7] = steps.length;
-    K[8] = fe;
-  } else fe = K[8];
-  let me;
-  if (K[9] !== error || K[10] !== steps.length) {
-    me = [steps.length, error];
-    K[9] = error;
-    K[10] = steps.length;
-    K[11] = me;
-  } else me = K[11];
-  P(fe, me);
-  let [ne, he] = y(null);
-  let W;
-  if (K[12] !== J || K[13] !== steps.length) {
-    W = (Oe, rt) => {
-      A.current = false;
-      he(null);
-      if (rt !== undefined) {
-        J("error", errorMessage(rt), U.current);
+    $[5] = error;
+    $[6] = runSkip;
+    $[7] = steps.length;
+    $[8] = onEmpty;
+  } else onEmpty = $[8];
+  let emptyDeps;
+  if ($[9] !== error || $[10] !== steps.length) {
+    emptyDeps = [steps.length, error];
+    $[9] = error;
+    $[10] = steps.length;
+    $[11] = emptyDeps;
+  } else emptyDeps = $[11];
+  useEffect(onEmpty, emptyDeps);
+  let [pendingSave, setPendingSave] = useState(null);
+  let handleSaved;
+  if ($[12] !== finish || $[13] !== steps.length) {
+    handleSaved = (entry, saveError) => {
+      savingRef.current = false;
+      setPendingSave(null);
+      if (saveError !== undefined) {
+        finish("error", errorMessage(saveError), savedAny.current);
         return;
       }
-      if (Object.keys(Oe.values).length > 0) U.current = true;
-      let et = Oe.index + 1;
-      if (et < steps.length) D(et);
-      else J("configured", undefined, U.current);
+      if (Object.keys(entry.values).length > 0) savedAny.current = true;
+      let nextIndex = entry.index + 1;
+      if (nextIndex < steps.length) setStepIndex(nextIndex);
+      else finish("configured", undefined, savedAny.current);
     };
-    K[12] = J;
-    K[13] = steps.length;
-    K[14] = W;
-  } else W = K[14];
-  let je = Oo(W);
-  let ae;
-  if (K[15] !== ne || K[16] !== je) {
-    ae = () => {
-      if (ne === null) {
+    $[12] = finish;
+    $[13] = steps.length;
+    $[14] = handleSaved;
+  } else handleSaved = $[14];
+  let handleSavedOnce = useEffectEvent(handleSaved);
+  let resolvePending;
+  if ($[15] !== pendingSave || $[16] !== handleSavedOnce) {
+    resolvePending = () => {
+      if (pendingSave === null) {
         return;
       }
-      let Se = ne;
-      Se.saveOutcome.then((kt) => je(Se, kt));
+      let savedEntry = pendingSave;
+      savedEntry.saveOutcome.then((outcome) => handleSavedOnce(savedEntry, outcome));
     };
-    K[15] = ne;
-    K[16] = je;
-    K[17] = ae;
-  } else ae = K[17];
-  let Tt;
-  if (K[18] !== ne) {
-    Tt = [ne];
-    K[18] = ne;
-    K[19] = Tt;
-  } else Tt = K[19];
-  P(ae, Tt);
+    $[15] = pendingSave;
+    $[16] = handleSavedOnce;
+    $[17] = resolvePending;
+  } else resolvePending = $[17];
+  let saveDeps;
+  if ($[18] !== pendingSave) {
+    saveDeps = [pendingSave];
+    $[18] = pendingSave;
+    $[19] = saveDeps;
+  } else saveDeps = $[19];
+  useEffect(resolvePending, saveDeps);
   if (steps.length === 0) {
     return null;
   }
-  let Ke = steps[T];
-  let Et;
-  if (K[20] !== Ke || K[21] !== T || K[22] !== ne) {
-    Et = function ct(He) {
-      if (L.current || A.current || ne !== null) {
+  let step = steps[stepIndex];
+  let renderStep;
+  if ($[20] !== step || $[21] !== stepIndex || $[22] !== pendingSave) {
+    renderStep = function renderStep(stepProps) {
+      if (finishedRef.current || savingRef.current || pendingSave !== null) {
         return;
       }
-      A.current = true;
-      he({
-        index: T,
-        values: He,
-        saveOutcome: (async () => Ke.save(He))().then(noop, toPluginOptionsSaveError),
+      savingRef.current = true;
+      setPendingSave({
+        index: stepIndex,
+        values: stepProps,
+        saveOutcome: (async () => step.save(stepProps))().then(noop, toPluginOptionsSaveError),
       });
     };
-    K[20] = Ke;
-    K[21] = T;
-    K[22] = ne;
-    K[23] = Et;
-  } else Et = K[23];
-  let onSave = Et;
+    $[20] = step;
+    $[21] = stepIndex;
+    $[22] = pendingSave;
+    $[23] = renderStep;
+  } else renderStep = $[23];
+  let onSave = renderStep;
   let onCancel;
-  if (K[24] !== J) {
+  if ($[24] !== finish) {
     onCancel = () => {
-      if (A.current) {
+      if (savingRef.current) {
         return;
       }
-      J("skipped", undefined, U.current);
+      finish("skipped", undefined, savedAny.current);
     };
-    K[24] = J;
-    K[25] = onCancel;
-  } else onCancel = K[25];
-  let oe;
+    $[24] = finish;
+    $[25] = onCancel;
+  } else onCancel = $[25];
+  let content;
   if (
-    K[26] !== Ke.key ||
-    K[27] !== Ke.load ||
-    K[28] !== Ke.schema ||
-    K[29] !== Ke.subtitle ||
-    K[30] !== Ke.title ||
-    K[31] !== onSave ||
-    K[32] !== onCancel
+    $[26] !== step.key ||
+    $[27] !== step.load ||
+    $[28] !== step.schema ||
+    $[29] !== step.subtitle ||
+    $[30] !== step.title ||
+    $[31] !== onSave ||
+    $[32] !== onCancel
   ) {
-    oe = jsxProd_default(
+    content = jsxProd_default(
       PluginOptionsDialogLoader,
       {
-        title: Ke.title,
-        subtitle: Ke.subtitle,
-        configSchema: Ke.schema,
-        load: Ke.load,
+        title: step.title,
+        subtitle: step.subtitle,
+        configSchema: step.schema,
+        load: step.load,
         onSave,
         onCancel,
       },
-      Ke.key,
+      step.key,
     );
-    K[26] = Ke.key;
-    K[27] = Ke.load;
-    K[28] = Ke.schema;
-    K[29] = Ke.subtitle;
-    K[30] = Ke.title;
-    K[31] = onSave;
-    K[32] = onCancel;
-    K[33] = oe;
-  } else oe = K[33];
-  return oe;
+    $[26] = step.key;
+    $[27] = step.load;
+    $[28] = step.schema;
+    $[29] = step.subtitle;
+    $[30] = step.title;
+    $[31] = onSave;
+    $[32] = onCancel;
+    $[33] = content;
+  } else content = $[33];
+  return content;
 }
 //@ chunk-vrb44rx7.js:50819-51351 placement
 /**
  * 异步执行 load 取已保存的插件选项（失败时记日志），在 Suspense 下渲染选项对话框；加载期间只挂取消键绑定。
  */
 function PluginOptionsDialogLoader(props) {
-  let h = w(14);
+  let $ = useMemoCache(14);
   let dialogProps;
   let load;
-  if (h[0] !== props) {
+  if ($[0] !== props) {
     ({ load, ...dialogProps } = props);
-    h[0] = props;
-    h[1] = dialogProps;
-    h[2] = load;
+    $[0] = props;
+    $[1] = dialogProps;
+    $[2] = load;
   } else {
-    dialogProps = h[1];
-    load = h[2];
+    dialogProps = $[1];
+    load = $[2];
   }
-  let x;
-  if (h[3] !== dialogProps.title || h[4] !== load) {
-    x = () =>
+  let content;
+  if ($[3] !== dialogProps.title || $[4] !== load) {
+    content = () =>
       Promise.resolve()
         .then(load)
         .catch((error) => {
           logOptionsReadFailure(dialogProps.title, error);
         });
-    h[3] = dialogProps.title;
-    h[4] = load;
-    h[5] = x;
-  } else x = h[5];
-  let [savedPromise] = y(x);
+    $[3] = dialogProps.title;
+    $[4] = load;
+    $[5] = content;
+  } else content = $[5];
+  let [savedPromise] = useState(content);
   let fallback;
-  if (h[6] !== dialogProps.onCancel) {
+  if ($[6] !== dialogProps.onCancel) {
     fallback = jsxProd_default(SettingsDialogCancelBinding, {
       onCancel: dialogProps.onCancel,
     });
-    h[6] = dialogProps.onCancel;
-    h[7] = fallback;
-  } else fallback = h[7];
+    $[6] = dialogProps.onCancel;
+    $[7] = fallback;
+  } else fallback = $[7];
   let children;
-  if (h[8] !== dialogProps || h[9] !== savedPromise) {
+  if ($[8] !== dialogProps || $[9] !== savedPromise) {
     children = jsxProd_default(PluginOptionsDialogWithSaved, {
       dialog: dialogProps,
       saved: savedPromise,
     });
-    h[8] = dialogProps;
-    h[9] = savedPromise;
-    h[10] = children;
-  } else children = h[10];
-  let A;
-  if (h[11] !== fallback || h[12] !== children) {
-    A = jsxProd_default(fo, {
+    $[8] = dialogProps;
+    $[9] = savedPromise;
+    $[10] = children;
+  } else children = $[10];
+  let footer;
+  if ($[11] !== fallback || $[12] !== children) {
+    footer = jsxProd_default(suspenseTypeExport, {
       fallback,
       children,
     });
-    h[11] = fallback;
-    h[12] = children;
-    h[13] = A;
-  } else A = h[13];
-  return A;
+    $[11] = fallback;
+    $[12] = children;
+    $[13] = footer;
+  } else footer = $[13];
+  return footer;
 }
 //@ chunk-vrb44rx7.js:51351-51441 placement
-function logOptionsReadFailure(i, h) {
-  logForDebugging(`Failed to read saved plugin options (${i}): ${errorMessage(h)}`, {
+function logOptionsReadFailure(pluginId, error) {
+  logForDebugging(`Failed to read saved plugin options (${pluginId}): ${errorMessage(error)}`, {
     level: "error",
   });
 }
 //@ chunk-vrb44rx7.js:51441-51594 placement
 function PluginOptionsDialogWithSaved(props) {
-  let x = w(3);
+  let $ = useMemoCache(3);
   let { dialog, saved } = props;
-  let initialValues = Qr(saved);
-  let T;
-  if (x[0] !== dialog || x[1] !== initialValues) {
-    T = jsxProd_default(PluginOptionsDialog, {
+  let initialValues = use(saved);
+  let content;
+  if ($[0] !== dialog || $[1] !== initialValues) {
+    content = jsxProd_default(PluginOptionsDialog, {
       ...dialog,
       initialValues,
     });
-    x[0] = dialog;
-    x[1] = initialValues;
-    x[2] = T;
-  } else T = x[2];
-  return T;
-}
-//@ chunk-hwmsct5x.js:222410-222714 fingerprint = findPluginOptionsTarget (0.49)
-function findPluginOptionsTarget(pluginId) {
-  if (typeof pluginId.value !== "string") return null;
-  let n = pluginId.value === "default" ? null : stripAnsi(pluginId.value);
-  let displayName = typeof pluginId.displayName === "string" ? pluginId.displayName : "";
-  let description = typeof pluginId.description === "string" ? pluginId.description : "";
-  return {
-    value: n,
-    label: sanitizeTitle(displayName) || (n !== null ? sanitizeTitle(n) : ""),
-    description: markdownSafeText(description),
-    ...(pluginId.disabled === true && {
-      disabled: true,
-    }),
-  };
+    $[0] = dialog;
+    $[1] = initialValues;
+    $[2] = content;
+  } else content = $[2];
+  return content;
 }
 export {
   findPluginOptionsTarget,

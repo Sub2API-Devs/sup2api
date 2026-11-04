@@ -27,56 +27,57 @@ import { logError } from "../../utils/log.js";
 import { languageErrorNameOf } from "../../utils/errors.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-a76knw89.js:11390-12492 placement
 /**
  * 把一次 batch_tools 调用拆成多个 tool_use（解析失败时记录）。
  */
-function expandBatchToolsCall(e, n, o) {
-  let toolByName = findToolByName(n, e.name);
+function expandBatchToolsCall(block, tools, normalizeEntry) {
+  let toolByName = findToolByName(tools, block.name);
   if (toolByName === undefined || !isMultiEntryAliasTool(toolByName)) return null;
-  let c = (s) => {
-    logFeatureSad("batch_tools", s, {
+  let failSynthetic = (reason) => {
+    logFeatureSad("batch_tools", reason, {
       tool_name: sanitizeToolNameForAnalytics(toolByName.name),
       isMcp: false,
     });
     return [
       {
         type: "tool_use",
-        id: prefixedName(e.id, 0),
+        id: prefixedName(block.id, 0),
         name: toolByName.name,
-        input: e.input,
-        ...(e.caller !== undefined && {
-          caller: e.caller,
+        input: block.input,
+        ...(block.caller !== undefined && {
+          caller: block.caller,
         }),
       },
     ];
   };
   try {
-    let s = toolByName.inputSchema.safeParse(e.input);
-    if (!s.success)
+    let parsed = toolByName.inputSchema.safeParse(block.input);
+    if (!parsed.success)
       return {
-        synthetics: c("parse_failed"),
+        synthetics: failSynthetic("parse_failed"),
         decomposed: false,
       };
-    let { v1Tool, entries } = toolByName.perEntryHookInputs(s.data);
+    let { v1Tool, entries } = toolByName.perEntryHookInputs(parsed.data);
     if (entries.length === 0)
       return {
-        synthetics: c("zero_entries"),
+        synthetics: failSynthetic("zero_entries"),
         decomposed: false,
       };
     return {
       decomposed: true,
-      synthetics: entries.map((entry, T) => {
+      synthetics: entries.map((entry, index) => {
         let input = entry;
         try {
-          input = o(v1Tool, entry);
+          input = normalizeEntry(v1Tool, entry);
         } catch (error) {
           if (error instanceof Error && error.name === "ZodError") {
-            let k =
+            let issueCodes =
               error instanceof ZodError ? uniq(error.issues.map((issue) => issue.code)).join(",") : "unknown";
             logForDebugging(
-              `Normalizing a batch entry's input for tool=${toolCategoryForTelemetry(v1Tool)} was rejected: issues ${k}; the error text (${error.message.length} characters) is not logged`,
+              `Normalizing a batch entry's input for tool=${toolCategoryForTelemetry(v1Tool)} was rejected: issues ${issueCodes}; the error text (${error.message.length} characters) is not logged`,
               {
                 level: "error",
               },
@@ -90,18 +91,18 @@ function expandBatchToolsCall(e, n, o) {
         }
         return {
           type: "tool_use",
-          id: prefixedName(e.id, T),
+          id: prefixedName(block.id, index),
           name: v1Tool.name,
           input,
-          ...(e.caller !== undefined && {
-            caller: e.caller,
+          ...(block.caller !== undefined && {
+            caller: block.caller,
           }),
         };
       }),
     };
   } catch {
     return {
-      synthetics: c("per_entry_threw"),
+      synthetics: failSynthetic("per_entry_threw"),
       decomposed: false,
     };
   }
@@ -110,47 +111,47 @@ function expandBatchToolsCall(e, n, o) {
 /**
  * 有多入口别名工具时，从工具列表中去掉其底层 v1 工具。
  */
-function hideAliasedV1Tools(e) {
-  let n;
-  for (let o of e)
-    if (isMultiEntryAliasTool(o)) {
-      n ??= new Set();
-      n.add(o.underlyingV1ToolName);
+function hideAliasedV1Tools(tools) {
+  let hiddenNames;
+  for (let tool of tools)
+    if (isMultiEntryAliasTool(tool)) {
+      hiddenNames ??= new Set();
+      hiddenNames.add(tool.underlyingV1ToolName);
     }
-  if (n === undefined) return e;
-  return e.filter((o) => !n.has(o.name));
+  if (hiddenNames === undefined) return tools;
+  return tools.filter((tool) => !hiddenNames.has(tool.name));
 }
 //@ chunk-a76knw89.js:12640-12976 placement
-function isBatchToolsUse(e, tools, o) {
-  let r;
-  let c = [];
-  for (let j = 0; j < e.length; j++) {
-    let u = e[j];
-    if (u.type !== "tool_use") {
-      r?.push(u);
+function isBatchToolsUse(content, tools, normalizeEntry) {
+  let expanded;
+  let batchToolUses = [];
+  for (let j = 0; j < content.length; j++) {
+    let block = content[j];
+    if (block.type !== "tool_use") {
+      expanded?.push(block);
       continue;
     }
-    let p = expandBatchToolsCall(u, tools, o);
-    if (p === null) {
-      r?.push(u);
+    let expansion = expandBatchToolsCall(block, tools, normalizeEntry);
+    if (expansion === null) {
+      expanded?.push(block);
       continue;
     }
-    r ??= e.slice(0, j);
-    r.push(...p.synthetics);
-    if (p.decomposed) {
-      c.push({
-        id: u.id,
-        name: u.name,
+    expanded ??= content.slice(0, j);
+    expanded.push(...expansion.synthetics);
+    if (expansion.decomposed) {
+      batchToolUses.push({
+        id: block.id,
+        name: block.name,
       });
       logFeatureOk("batch_tools", {
-        tool_name: sanitizeToolNameForAnalytics(u.name),
+        tool_name: sanitizeToolNameForAnalytics(block.name),
         isMcp: false,
       });
     }
   }
   return {
-    content: r ?? e,
-    batchToolUses: c,
+    content: expanded ?? content,
+    batchToolUses,
   };
 }
 //@ chunk-a76knw89.js:12976-13680 placement
@@ -159,217 +160,224 @@ function isBatchToolsUse(e, tools, o) {
  */
 function reassembleBatchResults(content, batchToolUses, tools) {
   if (batchToolUses === undefined || batchToolUses.length === 0) return content;
-  let r = new Map();
-  for (let p of batchToolUses) if (!r.has(p.id)) r.set(p.id, p);
-  let c = new Map();
-  for (let p of r.values()) {
-    let toolByName = findToolByName(tools, p.name);
+  let batchById = new Map();
+  for (let batchUse of batchToolUses) if (!batchById.has(batchUse.id)) batchById.set(batchUse.id, batchUse);
+  let reassembledById = new Map();
+  for (let batchUse of batchById.values()) {
+    let toolByName = findToolByName(tools, batchUse.name);
     if (toolByName === undefined || !isMultiEntryAliasTool(toolByName)) continue;
-    let T = [];
-    let y;
-    for (let b of content)
-      if (b.type === "tool_use" && stripSuffixNumber(b.id) === p.id) {
-        y ??= b;
-        T.push(b.input);
+    let inputs = [];
+    let firstBlock;
+    for (let block of content)
+      if (block.type === "tool_use" && stripSuffixNumber(block.id) === batchUse.id) {
+        firstBlock ??= block;
+        inputs.push(block.input);
       }
     try {
-      c.set(p.id, {
+      reassembledById.set(batchUse.id, {
         type: "tool_use",
-        id: p.id,
-        name: p.name,
-        input: toolByName.reassemble(T),
-        ...(y?.caller !== undefined && {
-          caller: y.caller,
+        id: batchUse.id,
+        name: batchUse.name,
+        input: toolByName.reassemble(inputs),
+        ...(firstBlock?.caller !== undefined && {
+          caller: firstBlock.caller,
         }),
       });
     } catch {
-      let b = unsupportedToolsSeen.of(getRootSession().host);
-      if (!b.has(p.id)) {
-        b.add(p.id);
+      let reportedIds = unsupportedToolsSeen.of(getRootSession().host);
+      if (!reportedIds.has(batchUse.id)) {
+        reportedIds.add(batchUse.id);
         logFeatureSad("batch_tools", "reassemble_threw", {
-          tool_name: sanitizeToolNameForAnalytics(p.name),
+          tool_name: sanitizeToolNameForAnalytics(batchUse.name),
           isMcp: false,
         });
       }
     }
   }
-  let s = new Set();
-  let u = [];
-  for (let p of content) {
-    if (p.type === "tool_use") {
-      let h = stripSuffixNumber(p.id);
-      if (h !== undefined && c.has(h)) {
-        if (!s.has(h)) {
-          s.add(h);
-          u.push(c.get(h));
+  let emitted = new Set();
+  let output = [];
+  for (let block of content) {
+    if (block.type === "tool_use") {
+      let baseId = stripSuffixNumber(block.id);
+      if (baseId !== undefined && reassembledById.has(baseId)) {
+        if (!emitted.has(baseId)) {
+          emitted.add(baseId);
+          output.push(reassembledById.get(baseId));
         }
         continue;
       }
     }
-    u.push(p);
+    output.push(block);
   }
-  return u;
+  return output;
 }
 //@ chunk-a76knw89.js:13680-14996 placement = countToolCallsSince (1)
 function countToolCallsSince(messages, sinceUuid) {
-  let o = false;
+  let sawBatch = false;
   for (let message of messages) {
     if (message.type === "assistant") {
-      for (let p of message.message.content)
-        if (p.type === "tool_use") {
-          let toolByName = findToolByName(sinceUuid, p.name);
-          if (toolByName !== undefined && isMultiEntryAliasTool(toolByName)) o = true;
+      for (let block of message.message.content)
+        if (block.type === "tool_use") {
+          let toolByName = findToolByName(sinceUuid, block.name);
+          if (toolByName !== undefined && isMultiEntryAliasTool(toolByName)) sawBatch = true;
         }
     }
-    if (message.type === "user" && !o) {
+    if (message.type === "user" && !sawBatch) {
       if (
         Array.isArray(message.message.content) &&
         message.message.content.some(
-          (p) => p.type === "tool_result" && stripSuffixNumber(p.tool_use_id) !== undefined,
+          (block) => block.type === "tool_result" && stripSuffixNumber(block.tool_use_id) !== undefined,
         )
       )
-        o = true;
+        sawBatch = true;
     }
   }
-  if (!o) return messages;
-  let r = new Map();
+  if (!sawBatch) return messages;
+  let toolUseById = new Map();
   for (let message of messages) {
     if (message.type !== "assistant") continue;
-    for (let p of message.message.content) if (p.type === "tool_use") r.set(p.id, p);
+    for (let block of message.message.content)
+      if (block.type === "tool_use") toolUseById.set(block.id, block);
   }
-  let c = new Map();
+  let resultsById = new Map();
   for (let message of messages) {
     if (message.type !== "user" || !Array.isArray(message.message.content)) continue;
-    for (let p of message.message.content) {
-      if (p.type !== "tool_result") continue;
-      let h = stripSuffixNumber(p.tool_use_id);
-      if (h === undefined || !r.has(h)) continue;
-      let T = c.get(h);
-      if (T === undefined) {
-        T = new Map();
-        c.set(h, T);
+    for (let block of message.message.content) {
+      if (block.type !== "tool_result") continue;
+      let baseId = stripSuffixNumber(block.tool_use_id);
+      if (baseId === undefined || !toolUseById.has(baseId)) continue;
+      let perId = resultsById.get(baseId);
+      if (perId === undefined) {
+        perId = new Map();
+        resultsById.set(baseId, perId);
       }
-      if (!T.has(p.tool_use_id)) T.set(p.tool_use_id, p);
+      if (!perId.has(block.tool_use_id)) perId.set(block.tool_use_id, block);
     }
   }
-  if (c.size === 0) return messages;
-  let s = new Set();
+  if (resultsById.size === 0) return messages;
+  let emitted = new Set();
   return messages.flatMap((block) => {
     if (block.type !== "user" || !Array.isArray(block.message.content)) return [block];
-    let p = false;
-    let h = [];
-    for (let T of block.message.content) {
-      if (T.type !== "tool_result") {
-        h.push(T);
+    let didReassemble = false;
+    let blocks = [];
+    for (let resultBlock of block.message.content) {
+      if (resultBlock.type !== "tool_result") {
+        blocks.push(resultBlock);
         continue;
       }
-      let toolUseId = stripSuffixNumber(T.tool_use_id);
-      let b = toolUseId !== undefined ? c.get(toolUseId) : undefined;
-      if (toolUseId === undefined || b === undefined) {
-        h.push(T);
+      let baseToolUseId = stripSuffixNumber(resultBlock.tool_use_id);
+      let perId = baseToolUseId !== undefined ? resultsById.get(baseToolUseId) : undefined;
+      if (baseToolUseId === undefined || perId === undefined) {
+        blocks.push(resultBlock);
         continue;
       }
-      p = true;
-      if (s.has(toolUseId)) continue;
-      s.add(toolUseId);
-      let k = r.get(toolUseId);
-      let toolByName = findToolByName(sinceUuid, k.name);
-      let x = toolByName !== undefined && isMultiEntryAliasTool(toolByName) ? toolByName : undefined;
-      h.push(formatBatchResultEntries(x, toolUseId, NO_RESULT_TEXT(x, k.input, toolUseId, b)));
+      didReassemble = true;
+      if (emitted.has(baseToolUseId)) continue;
+      emitted.add(baseToolUseId);
+      let toolUse = toolUseById.get(baseToolUseId);
+      let toolByName = findToolByName(sinceUuid, toolUse.name);
+      let aliasTool = toolByName !== undefined && isMultiEntryAliasTool(toolByName) ? toolByName : undefined;
+      blocks.push(
+        formatBatchResultEntries(
+          aliasTool,
+          baseToolUseId,
+          NO_RESULT_TEXT(aliasTool, toolUse.input, baseToolUseId, perId),
+        ),
+      );
     }
-    if (!p) return [block];
-    if (h.length === 0) return [];
+    if (!didReassemble) return [block];
+    if (blocks.length === 0) return [];
     return [
       {
         ...block,
         message: {
           ...block.message,
-          content: h,
+          content: blocks,
         },
       },
     ];
   });
 }
 //@ chunk-a76knw89.js:14996-15391 placement
-function NO_RESULT_TEXT(e, n, o, r) {
-  let c;
-  if (e !== undefined)
+function NO_RESULT_TEXT(aliasTool, input, baseId, results) {
+  let entries;
+  if (aliasTool !== undefined)
     try {
-      let u = e.inputSchema.safeParse(n);
-      if (u.success) c = e.perEntryHookInputs(u.data).entries;
+      let parsed = aliasTool.inputSchema.safeParse(input);
+      if (parsed.success) entries = aliasTool.perEntryHookInputs(parsed.data).entries;
     } catch {}
-  let s = c?.length ?? 0;
-  for (let key of r.keys()) {
+  let count = entries?.length ?? 0;
+  for (let key of results.keys()) {
     let match = SUFFIX_NUMBER_RE.exec(key);
-    if (match) s = Math.max(s, Number(match[1]) + 1);
+    if (match) count = Math.max(count, Number(match[1]) + 1);
   }
-  if (s > 1000) s = c?.length ?? r.size;
+  if (count > 1000) count = entries?.length ?? results.size;
   return Array.from(
     {
-      length: s,
+      length: count,
     },
-    (u, p) => {
-      let h = r.get(prefixedName(o, p));
-      return h !== undefined
+    (unused, index) => {
+      let result = results.get(prefixedName(baseId, index));
+      return result !== undefined
         ? {
-            input: c?.[p],
-            result: h,
+            input: entries?.[index],
+            result,
           }
         : {
-            input: c?.[p],
+            input: entries?.[index],
             error: "no result",
           };
     },
   );
 }
 //@ chunk-a76knw89.js:15391-16297 placement
-function formatBatchResultEntries(e, toolUseId, o) {
-  let r = [];
-  let c = "";
-  let s = false;
-  let u = (h) => {
-    if (h.length > 0)
-      c =
-        c === ""
-          ? h
-          : `${c}
-${h}`;
+function formatBatchResultEntries(aliasTool, toolUseId, entries) {
+  let content = [];
+  let textBuffer = "";
+  let isError = false;
+  let appendText = (text) => {
+    if (text.length > 0)
+      textBuffer =
+        textBuffer === ""
+          ? text
+          : `${textBuffer}
+${text}`;
   };
-  let p = () => {
-    if (c !== "") {
-      r.push({
+  let flushText = () => {
+    if (textBuffer !== "") {
+      content.push({
         type: "text",
-        text: c,
+        text: textBuffer,
       });
-      c = "";
+      textBuffer = "";
     }
   };
-  for (let [h, T] of o.entries()) {
-    let y = T.result === undefined || T.result.is_error === true;
-    if (y) s = true;
-    u(`--- entry ${h + 1}${y ? " (error)" : ""} ---`);
-    if (T.result !== undefined) {
-      let content = T.result.content;
-      if (typeof content === "string") u(content);
-      else if (Array.isArray(content))
-        for (let k of content)
-          if (k.type === "text") u(k.text);
+  for (let [index, entry] of entries.entries()) {
+    let isEntryError = entry.result === undefined || entry.result.is_error === true;
+    if (isEntryError) isError = true;
+    appendText(`--- entry ${index + 1}${isEntryError ? " (error)" : ""} ---`);
+    if (entry.result !== undefined) {
+      let content_2 = entry.result.content;
+      if (typeof content_2 === "string") appendText(content_2);
+      else if (Array.isArray(content_2))
+        for (let item of content_2)
+          if (item.type === "text") appendText(item.text);
           else {
-            p();
-            r.push(k);
+            flushText();
+            content.push(item);
           }
-    } else u(`[entry ${h + 1} error: ${T.error ?? "no result"}]`);
+    } else appendText(`[entry ${index + 1} error: ${entry.error ?? "no result"}]`);
   }
-  if (o.length === 1 && e !== undefined)
-    u(
-      `<system-reminder>Tip: ${e.name} accepts multiple entries in one call (\`${e.entryFieldName}: [{...}, {...}]\`). Batching related operations into a single call is faster than issuing them as separate or parallel calls. No action needed for this result.</system-reminder>`,
+  if (entries.length === 1 && aliasTool !== undefined)
+    appendText(
+      `<system-reminder>Tip: ${aliasTool.name} accepts multiple entries in one call (\`${aliasTool.entryFieldName}: [{...}, {...}]\`). Batching related operations into a single call is faster than issuing them as separate or parallel calls. No action needed for this result.</system-reminder>`,
     );
-  p();
+  flushText();
   return {
     type: "tool_result",
     tool_use_id: toolUseId,
-    content: r.length === 1 && r[0]?.type === "text" ? r[0].text : r,
-    ...(s && {
+    content: content.length === 1 && content[0]?.type === "text" ? content[0].text : content,
+    ...(isError && {
       is_error: true,
     }),
   };
@@ -378,51 +386,59 @@ ${h}`;
 /**
  * 别名 → 工具定义的注册表。
  */
-var toolAliasRegistry = new Map();
+var toolAliasRegistry; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-a76knw89.js:16297", () => {
+  toolAliasRegistry = new Map();
+});
 //@ chunk-a76knw89.js:16312-16345 placement
 /**
  * 按别名查工具定义。
  */
-function toolByAlias(e) {
-  return toolAliasRegistry.get(e);
+function toolByAlias(name) {
+  return toolAliasRegistry.get(name);
 }
 //@ chunk-a76knw89.js:16345-16430 placement
 /**
  * 把别名列表映射成当前启用中的工具定义。
  */
-function enabledToolsForAliases(e) {
-  return e
+function enabledToolsForAliases(names) {
+  return names
     .map(toolByAlias)
-    .filter((n) => n !== undefined)
-    .filter((n) => n.isEnabled());
+    .filter((tool) => tool !== undefined)
+    .filter((tool) => tool.isEnabled());
 }
 //@ chunk-a76knw89.js:16430-16504 placement
 /**
  * 把工具的内部 V1 名换成当前对外名。
  */
-function canonicalToolName(e, tools) {
-  return tools.find((o) => o.underlyingV1ToolName === e)?.name ?? e;
+function canonicalToolName(name, tools) {
+  return tools.find((tool) => tool.underlyingV1ToolName === name)?.name ?? name;
 }
 //@ chunk-a76knw89.js:16504-16568 placement
 /**
  * 按工具名反查它的别名。
  */
-function aliasOfToolName(e) {
-  for (let [n, o] of toolAliasRegistry) if (o.name === e) return n;
+function aliasOfToolName(toolName) {
+  for (let [alias, tool] of toolAliasRegistry) if (tool.name === toolName) return alias;
   return;
 }
 //@ chunk-a76knw89.js:16568-16634 placement
-var TENGU_MARLIN_THICKET = "tengu_marlin_thicket";
-var MARLIN_THICKET_FLAG = "ide";
-var ideReadSlot = new SessionRootSlot(() => ({
-  read: false,
-}));
+var TENGU_MARLIN_THICKET; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+var MARLIN_THICKET_FLAG;
+var ideReadSlot;
+deferInit("chunk-a76knw89.js:16568", () => {
+  TENGU_MARLIN_THICKET = "tengu_marlin_thicket";
+  MARLIN_THICKET_FLAG = "ide";
+  ideReadSlot = new SessionRootSlot(() => ({
+    read: false,
+  }));
+});
 //@ chunk-a76knw89.js:16634-16692 placement
 /**
  * 取对象自身的属性（不存在时 undefined）。
  */
-function ownField(mcpLegacyKeyOwners, n) {
-  return mcpLegacyKeyOwners && Object.hasOwn(mcpLegacyKeyOwners, n) ? mcpLegacyKeyOwners[n] : undefined;
+function ownField(mcpLegacyKeyOwners, key) {
+  return mcpLegacyKeyOwners && Object.hasOwn(mcpLegacyKeyOwners, key) ? mcpLegacyKeyOwners[key] : undefined;
 }
 export {
   reassembleBatchResults,

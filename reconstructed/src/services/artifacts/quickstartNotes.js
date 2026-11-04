@@ -12,21 +12,23 @@ import { shellQuoteArgs } from "../../utils/bash/bashPipeCommand.js";
 import { canonicalArtifactTargetFor } from "../../tools/ArtifactTool/artifactUrls.js";
 
 //@ chunk-chsmq3nc.js:991-1715 placement
-function afterQuickstartSavedLine(t, o, a, d) {
-  let e = (i, r) => typeof i === "string" && typeof r === "string" && i === a(r);
-  let s = e(t.saved_pages_dir, o)
-    ? `[A quickstart in this conversation saved reference pages of this type on disk in ${shellQuoteArgs([t.saved_pages_dir])}; its result lists them, so those are not attached here.]`
+function afterQuickstartSavedLine(result, pageDir, sameDir, prefix) {
+  let isUnder = (base, child) =>
+    typeof base === "string" && typeof child === "string" && base === sameDir(child);
+  let savedNote = isUnder(result.saved_pages_dir, pageDir)
+    ? `[A quickstart in this conversation saved reference pages of this type on disk in ${shellQuoteArgs([result.saved_pages_dir])}; its result lists them, so those are not attached here.]`
     : "";
-  if (t.not_listed === true)
-    return s === ""
+  if (result.not_listed === true)
+    return savedNote === ""
       ? ""
       : `
 
-${s}`;
-  let n = s === "" ? "" : ` ${s}`;
-  if (typeof t.saved_system === "string" && e(t.saved_system_dir, t.saved_system))
+${savedNote}`;
+  let suffix = savedNote === "" ? "" : ` ${savedNote}`;
+  if (typeof result.saved_system === "string" && isUnder(result.saved_system_dir, result.saved_system))
     return `
 
-[A quickstart in this conversation already listed the design systems and saved the files of ${canonicalArtifactTargetFor(t.saved_system, "(unrecognized address)")} on disk \u2014 skip the instructions' step that lists them and reads that README; its result lists the saved files.]${n}`;
-  return s === "" ? null : `${d}${n}`;
+[A quickstart in this conversation already listed the design systems and saved the files of ${canonicalArtifactTargetFor(result.saved_system, "(unrecognized address)")} on disk \u2014 skip the instructions' step that lists them and reads that README; its result lists the saved files.]${suffix}`;
+  return savedNote === "" ? null : `${prefix}${suffix}`;
 }
+export { afterQuickstartSavedLine };

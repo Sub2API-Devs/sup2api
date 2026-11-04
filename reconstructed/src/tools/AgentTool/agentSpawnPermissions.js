@@ -17,7 +17,7 @@ import {
 } from "../../utils/permissions/permissions.js";
 import { isSameRuleDecision } from "./agentLaunchHelpers.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { URL_IN_TEXT_RE, trimTrailingPunctuation } from "../../services/oauth/oauthErrors.js";
 import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
 import { isAutoClassifierActive } from "../../utils/permissions/autoModeState.js";
@@ -25,6 +25,7 @@ import { narrowerMode } from "../../utils/permissions/browserToolNames.js";
 import { resolveAgentOverrides } from "./agentDisplay.js";
 import { WEBFETCH } from "../WebFetchTool/prompt.js";
 import { WebFetchTool } from "../WebFetchTool/WebFetchTool.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-0tkmvwy0.js:6083-6264 placement
 /**
@@ -56,54 +57,62 @@ class ToolUseKeyedCache {
   #e = new Map();
   #t;
   #n;
-  constructor(n = 2048, e = 600000) {
-    this.#t = n;
-    this.#n = e;
+  constructor(maxEntries = 2048, ttlMs = 600000) {
+    this.#t = maxEntries;
+    this.#n = ttlMs;
   }
-  static key(n, e) {
-    return JSON.stringify([n, ...e]);
+  static key(toolUseId, parts) {
+    return JSON.stringify([toolUseId, ...parts]);
   }
-  static #o(n) {
-    return `${JSON.stringify([n]).slice(0, -1)},`;
+  static #o(toolUseId) {
+    return `${JSON.stringify([toolUseId]).slice(0, -1)},`;
   }
   get size() {
     return this.#e.size;
   }
-  set(n, e, value) {
-    this.dropToolUse(n);
+  set(toolUseId, parts, value) {
+    this.dropToolUse(toolUseId);
     if (this.#e.size >= this.#t) {
       let now = Date.now();
-      for (let [y, _] of this.#e) if (now - _.at > this.#n) this.#e.delete(y);
+      for (let [cacheKey, entry] of this.#e) if (now - entry.at > this.#n) this.#e.delete(cacheKey);
       if (this.#e.size >= this.#t) {
-        let y = this.#e.keys().next().value;
-        if (y !== undefined) this.#e.delete(y);
+        let oldestKey = this.#e.keys().next().value;
+        if (oldestKey !== undefined) this.#e.delete(oldestKey);
       }
     }
-    this.#e.set(ToolUseKeyedCache.key(n, e), {
+    this.#e.set(ToolUseKeyedCache.key(toolUseId, parts), {
       value,
       at: Date.now(),
     });
   }
-  take(n, e) {
-    let s = ToolUseKeyedCache.key(n, e);
-    let f = this.#e.get(s);
-    this.#e.delete(s);
-    return f?.value;
+  take(toolUseId, parts) {
+    let cacheKey = ToolUseKeyedCache.key(toolUseId, parts);
+    let entry = this.#e.get(cacheKey);
+    this.#e.delete(cacheKey);
+    return entry?.value;
   }
-  has(n, e) {
-    return this.#e.has(ToolUseKeyedCache.key(n, e));
+  has(toolUseId, parts) {
+    return this.#e.has(ToolUseKeyedCache.key(toolUseId, parts));
   }
-  dropToolUse(n) {
-    let e = ToolUseKeyedCache.#o(n);
-    for (let key of this.#e.keys()) if (key.startsWith(e)) this.#e.delete(key);
+  dropToolUse(toolUseId) {
+    let keyPrefix = ToolUseKeyedCache.#o(toolUseId);
+    for (let key of this.#e.keys()) if (key.startsWith(keyPrefix)) this.#e.delete(key);
   }
 }
 //@ chunk-0tkmvwy0.js:7236-7289 placement
-var DONTASK = "dontAsk";
-var MAX_WEBFETCH_DISPATCH_URLS = 8;
-var regExp = new RegExp(URL_IN_TEXT_RE.source, "gi");
+var DONTASK; // deferred: uses URL_IN_TEXT_RE (../../services/oauth/oauthErrors.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_WEBFETCH_DISPATCH_URLS;
+var regExp;
+deferInit("chunk-0tkmvwy0.js:7236", () => {
+  DONTASK = "dontAsk";
+  MAX_WEBFETCH_DISPATCH_URLS = 8;
+  regExp = new RegExp(URL_IN_TEXT_RE.source, "gi");
+});
 //@ chunk-0tkmvwy0.js:7289-7310 placement
-class WebFetchDispatchApprovals extends ToolUseKeyedCache {}
+let WebFetchDispatchApprovals; // deferred: uses ToolUseKeyedCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0tkmvwy0.js:7289", () => {
+  WebFetchDispatchApprovals = class WebFetchDispatchApprovals extends ToolUseKeyedCache {};
+});
 //@ chunk-0tkmvwy0.js:7310-7783 placement
 /**
  * dontAsk 模式下判断 web-fetch 代理派发能否免分类器审核：prompt 中 1–8 个 URL 均能通过 WebFetch 的输入校验与权限检查。
@@ -121,17 +130,17 @@ async function isAutoApprovableWebFetchDispatch({ prompt, subagent_type: subagen
     isWebToolClassifierRouted_2(WEBFETCH, mode, toolPermissionContext)
   )
     return false;
-  let _ = new Set([...prompt.matchAll(regExp)].map((S) => trimTrailingPunctuation(S[0])));
-  if (_.size === 0 || _.size > MAX_WEBFETCH_DISPATCH_URLS) return false;
-  for (let url of _) {
-    let I = WebFetchTool.inputSchema.safeParse({
+  let urls = new Set([...prompt.matchAll(regExp)].map((match) => trimTrailingPunctuation(match[0])));
+  if (urls.size === 0 || urls.size > MAX_WEBFETCH_DISPATCH_URLS) return false;
+  for (let url of urls) {
+    let parsedInput = WebFetchTool.inputSchema.safeParse({
       url,
       prompt: "",
     });
     if (
-      !I.success ||
-      (await checkRuleBasedPermissions(WebFetchTool, I.data, toolUseContext)) !== null ||
-      (await WebFetchTool.checkPermissions(I.data, toolUseContext)).behavior !== "allow"
+      !parsedInput.success ||
+      (await checkRuleBasedPermissions(WebFetchTool, parsedInput.data, toolUseContext)) !== null ||
+      (await WebFetchTool.checkPermissions(parsedInput.data, toolUseContext)).behavior !== "allow"
     )
       return false;
   }

@@ -5,13 +5,13 @@
  * pieces: chunk-y366fgzk.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_tslib } from "../../../../../tslib/tslib.js";
 import { require_package } from "../../../package.json.js";
-import { require_core as require_core_2 } from "../../../../core/dist-cjs/index.js";
+import { require_core_2 } from "../../../../core/dist-cjs/index.js";
 import { require_util_user_agent_node } from "../../../../util-user-agent-node/dist-cjs/index.js";
 import { require_index_native } from "../../../../../@smithy/core/dist-cjs/submodules/config/index.native.js";
-import { Nme, $me } from "../../../../../unresolved-cjs/index.js";
+import { hashModule, bodyLengthNodeModule } from "../../../../../unresolved-cjs/index.js";
 import { require_retry } from "../../../../../@smithy/core/dist-cjs/submodules/retry/index.js";
 import {
   require_node_config_provider,
@@ -23,7 +23,7 @@ import { require_runtimeConfig_shared } from "./runtimeConfig.shared.js";
 import { require_client } from "../../../../../@smithy/core/dist-cjs/submodules/client/index.js";
 
 //@ chunk-y366fgzk.js:5894-7546 cjs-require-graph
-var require_runtimeConfig = x(function (cjsExports) {
+var require_runtimeConfig = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -33,11 +33,11 @@ var require_runtimeConfig = x(function (cjsExports) {
   var core_1 = require_core_2();
   var util_user_agent_node_1 = require_util_user_agent_node();
   var config_resolver_1 = require_index_native();
-  var hash_node_1 = Nme();
+  var hash_node_1 = hashModule();
   var middleware_retry_1 = require_retry();
   var node_config_provider_1 = require_node_config_provider();
   var node_http_handler_1 = require_node_http_handler();
-  var util_body_length_node_1 = $me();
+  var util_body_length_node_1 = bodyLengthNodeModule();
   var util_retry_1 = require_index_browser_2();
   var runtimeConfig_shared_1 = require_runtimeConfig_shared();
   var smithy_client_1 = require_client();

@@ -24,115 +24,115 @@ import { getPlatform } from "../../platform.js";
 import { getIsNonInteractiveSession } from "../../../bootstrap/state.js";
 
 //@ chunk-78rbfds1.js:3095-3327 facade-exports
-async function ensureBackendsRegistered(e = backendRegistryState) {
-  if (e.backendsRegistered) return;
-  let { TmuxBackend } = await import("./chunk-wcewyth1.js");
-  let { ITermBackend } = await import("./chunk-vdskh52v.js");
-  e.TmuxBackendClass = TmuxBackend;
-  e.ITermBackendClass = ITermBackend;
-  e.backendsRegistered = true;
+async function ensureBackendsRegistered(state = backendRegistryState) {
+  if (state.backendsRegistered) return;
+  let { TmuxBackend } = await import("./TmuxBackend.js");
+  let { ITermBackend } = await import("./ITermBackend.js");
+  state.TmuxBackendClass = TmuxBackend;
+  state.ITermBackendClass = ITermBackend;
+  state.backendsRegistered = true;
 }
 //@ chunk-78rbfds1.js:3327-3552 fingerprint = createTmuxBackend (0.664)
 /**
  * 懒创建 tmux 后端实例（类须先注册）。
  */
-function createTmuxBackend(e) {
-  if (e.tmuxBackend) return e.tmuxBackend;
-  if (!e.TmuxBackendClass)
+function createTmuxBackend(state) {
+  if (state.tmuxBackend) return state.tmuxBackend;
+  if (!state.TmuxBackendClass)
     throw Error("TmuxBackend not registered. Import TmuxBackend.ts before using the registry.");
-  e.tmuxBackend = new e.TmuxBackendClass();
-  return e.tmuxBackend;
+  state.tmuxBackend = new state.TmuxBackendClass();
+  return state.tmuxBackend;
 }
 //@ chunk-78rbfds1.js:3552-3785 fingerprint = createITermBackend (0.664)
 /**
  * 懒创建 iTerm2 后端实例。
  */
-function createITermBackend(e) {
-  if (e.itermBackend) return e.itermBackend;
-  if (!e.ITermBackendClass)
+function createITermBackend(state) {
+  if (state.itermBackend) return state.itermBackend;
+  if (!state.ITermBackendClass)
     throw Error("ITermBackend not registered. Import ITermBackend.ts before using the registry.");
-  e.itermBackend = new e.ITermBackendClass();
-  return e.itermBackend;
+  state.itermBackend = new state.ITermBackendClass();
+  return state.itermBackend;
 }
 //@ chunk-78rbfds1.js:3785-6399 facade-exports = detectAndGetBackend (0.743)
 /**
  * 检测并返回 pane 后端：teammateMode=iterm2 时强制 iTerm2（不满足即报错）；在 tmux 内用 tmux；在 iTerm2 中优先 it2，否则回退 tmux（提示安装 it2）；都不在时有 tmux 就用外部 claude-swarm 会话；否则报错并给安装说明。结果缓存。
  */
-async function detectAndGetBackend(e = backendRegistryState) {
-  await ensureBackendsRegistered(e);
-  if (e.cachedDetectionResult) {
-    logForDebugging(`[BackendRegistry] Using cached backend: ${e.cachedDetectionResult.backend.type}`);
-    return e.cachedDetectionResult;
+async function detectAndGetBackend(state = backendRegistryState) {
+  await ensureBackendsRegistered(state);
+  if (state.cachedDetectionResult) {
+    logForDebugging(`[BackendRegistry] Using cached backend: ${state.cachedDetectionResult.backend.type}`);
+    return state.cachedDetectionResult;
   }
   logForDebugging("[BackendRegistry] Starting backend detection...");
   if (getTeammateModeFromSnapshot() === "iterm2") {
-    if (!isInITerm2(e)) {
+    if (!isInITerm2(state)) {
       logFeatureBad("swarm_backend_detect", "iterm2_explicit_not_in_iterm2");
       throw Error(
         'teammateMode is set to "iterm2" but this session is not running inside iTerm2. Launch Claude from iTerm2, or change teammateMode in settings.',
       );
     }
-    if (!(await isIt2CliAvailable_2(e))) {
+    if (!(await isIt2CliAvailable_2(state))) {
       logFeatureBad("swarm_backend_detect", "iterm2_explicit_no_it2");
       throw Error(
         'teammateMode is set to "iterm2" but the it2 CLI is not reachable. Install it with `pip install it2` and enable the Python API in iTerm2 (Preferences > General > Magic > Enable Python API).',
       );
     }
     logForDebugging("[BackendRegistry] Selected: iterm2 (explicit teammateMode)");
-    let backend = createITermBackend(e);
-    e.cachedDetectionResult = {
+    let backend = createITermBackend(state);
+    state.cachedDetectionResult = {
       backend,
       isNative: true,
       needsIt2Setup: false,
     };
     logFeatureOk("swarm_backend_detect");
-    return e.cachedDetectionResult;
+    return state.cachedDetectionResult;
   }
   let insideTmux = await isInsideTmux();
-  let inITerm2 = isInITerm2(e);
+  let inITerm2 = isInITerm2(state);
   logForDebugging(`[BackendRegistry] Environment: insideTmux=${insideTmux}, inITerm2=${inITerm2}`);
   if (insideTmux) {
     logForDebugging("[BackendRegistry] Selected: tmux (running inside tmux session)");
-    let backend = createTmuxBackend(e);
-    e.cachedDetectionResult = {
+    let backend = createTmuxBackend(state);
+    state.cachedDetectionResult = {
       backend,
       isNative: true,
       needsIt2Setup: false,
     };
     logFeatureOk("swarm_backend_detect");
-    return e.cachedDetectionResult;
+    return state.cachedDetectionResult;
   }
   if (inITerm2) {
     let preferTmux = getPreferTmuxOverIterm2();
     if (preferTmux)
       logForDebugging("[BackendRegistry] User prefers tmux over iTerm2, skipping iTerm2 detection");
     else {
-      let it2Available = await isIt2CliAvailable_2(e);
+      let it2Available = await isIt2CliAvailable_2(state);
       logForDebugging(`[BackendRegistry] iTerm2 detected, it2 CLI available: ${it2Available}`);
       if (it2Available) {
         logForDebugging("[BackendRegistry] Selected: iterm2 (native iTerm2 with it2 CLI)");
-        let backend = createITermBackend(e);
-        e.cachedDetectionResult = {
+        let backend = createITermBackend(state);
+        state.cachedDetectionResult = {
           backend,
           isNative: true,
           needsIt2Setup: false,
         };
         logFeatureOk("swarm_backend_detect");
-        return e.cachedDetectionResult;
+        return state.cachedDetectionResult;
       }
     }
     let tmuxAvailable = await isTmuxAvailable();
     logForDebugging(`[BackendRegistry] it2 not available, tmux available: ${tmuxAvailable}`);
     if (tmuxAvailable) {
       logForDebugging("[BackendRegistry] Selected: tmux (fallback in iTerm2, it2 setup recommended)");
-      let backend = createTmuxBackend(e);
-      e.cachedDetectionResult = {
+      let backend = createTmuxBackend(state);
+      state.cachedDetectionResult = {
         backend,
         isNative: false,
         needsIt2Setup: !preferTmux,
       };
       logFeatureSad("swarm_backend_detect", preferTmux ? "fallback_to_tmux" : "needs_it2_setup");
-      return e.cachedDetectionResult;
+      return state.cachedDetectionResult;
     }
     logForDebugging("[BackendRegistry] ERROR: iTerm2 detected but no it2 CLI and no tmux");
     logFeatureBad("swarm_backend_detect", "iterm2_no_it2_no_tmux");
@@ -142,14 +142,14 @@ async function detectAndGetBackend(e = backendRegistryState) {
   logForDebugging(`[BackendRegistry] Not in tmux or iTerm2, tmux available: ${tmuxAvailable}`);
   if (tmuxAvailable) {
     logForDebugging("[BackendRegistry] Selected: tmux (external session mode)");
-    let backend = createTmuxBackend(e);
-    e.cachedDetectionResult = {
+    let backend = createTmuxBackend(state);
+    state.cachedDetectionResult = {
       backend,
       isNative: false,
       needsIt2Setup: false,
     };
     logFeatureOk("swarm_backend_detect");
-    return e.cachedDetectionResult;
+    return state.cachedDetectionResult;
   }
   logForDebugging("[BackendRegistry] ERROR: No pane backend available");
   logFeatureBad("swarm_backend_detect", "no_backend_available");
@@ -197,16 +197,16 @@ function getBackendByType(type, state = backendRegistryState) {
 /**
  * 已缓存的后端检测结果。
  */
-function getCachedDetectionResult(e = backendRegistryState) {
-  return e.cachedDetectionResult;
+function getCachedDetectionResult(state = backendRegistryState) {
+  return state.cachedDetectionResult;
 }
 //@ chunk-78rbfds1.js:7275-7385 facade-exports = markInProcessFallback (0.806)
 /**
  * 标记 pane 后端不可用、已回退到同进程 teammate。
  */
-function markInProcessFallback(e = backendRegistryState) {
+function markInProcessFallback(state = backendRegistryState) {
   logForDebugging("[BackendRegistry] Marking in-process fallback as active");
-  e.inProcessFallbackActive = true;
+  state.inProcessFallbackActive = true;
 }
 //@ chunk-78rbfds1.js:7385-7411 layout
 function getTeammateMode() {
@@ -216,7 +216,7 @@ function getTeammateMode() {
 /**
  * 是否使用同进程 teammate：非交互会话总是；teammateMode=in-process 是；tmux/iterm2 否；auto 时已回退或既不在 tmux 也不在 iTerm2 才是。
  */
-function isInProcessEnabled(e = backendRegistryState) {
+function isInProcessEnabled(state = backendRegistryState) {
   if (getIsNonInteractiveSession()) {
     logForDebugging("[BackendRegistry] isInProcessEnabled: true (non-interactive session)");
     return true;
@@ -226,24 +226,24 @@ function isInProcessEnabled(e = backendRegistryState) {
   if (mode === "in-process") enabled = true;
   else if (mode === "tmux" || mode === "iterm2") enabled = false;
   else {
-    if (e.inProcessFallbackActive) {
+    if (state.inProcessFallbackActive) {
       logForDebugging("[BackendRegistry] isInProcessEnabled: true (fallback after pane backend unavailable)");
       return true;
     }
     let insideTmux = isInsideTmuxSync();
-    let inITerm2 = isInITerm2(e);
+    let inITerm2 = isInITerm2(state);
     enabled = !insideTmux && !inITerm2;
   }
   logForDebugging(
-    `[BackendRegistry] isInProcessEnabled: ${enabled} (mode=${mode}, insideTmux=${isInsideTmuxSync()}, inITerm2=${isInITerm2(e)})`,
+    `[BackendRegistry] isInProcessEnabled: ${enabled} (mode=${mode}, insideTmux=${isInsideTmuxSync()}, inITerm2=${isInITerm2(state)})`,
   );
   return enabled;
 }
 //@ chunk-78rbfds1.js:7872-7974 facade-exports
-function resetBackendDetection(e = backendRegistryState) {
-  e.cachedDetectionResult = null;
-  e.backendsRegistered = false;
-  e.inProcessFallbackActive = false;
+function resetBackendDetection(state = backendRegistryState) {
+  state.cachedDetectionResult = null;
+  state.backendsRegistered = false;
+  state.inProcessFallbackActive = false;
 }
 export {
   isInProcessEnabled,

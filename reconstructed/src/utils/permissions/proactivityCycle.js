@@ -30,61 +30,63 @@ import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
  * 按主动性等级计算下一权限模式，并给出切换后的权限上下文。
  */
 function computeProactivityModeTransition(
-  o,
+  level,
   toolPermissionContext,
-  { trigger: n, offerBypass: s = true } = {},
+  { trigger, offerBypass = true } = {},
 ) {
-  let t = nextPermissionMode(o, toolPermissionContext, {
-    offerBypass: s,
+  let nextMode = nextPermissionMode(level, toolPermissionContext, {
+    offerBypass,
   });
   return {
-    level: o,
+    level,
     currentMode: toolPermissionContext.mode,
-    nextMode: t,
-    context: transitionPermissionMode(toolPermissionContext.mode, t, toolPermissionContext, n),
+    nextMode,
+    context: transitionPermissionMode(toolPermissionContext.mode, nextMode, toolPermissionContext, trigger),
   };
 }
 //@ chunk-g2tve833.js:649-1021 placement
-function nextPermissionMode(level, context, { offerBypass: n = true } = {}) {
-  let s = getHipaaPolicyVerdict() !== undefined;
-  let t = context.mode === "plan" ? (context.prePlanMode ?? "plan") : context.mode;
-  let i = permissionModeForProactivityLevel(
+function nextPermissionMode(level, context, { offerBypass = true } = {}) {
+  let hipaaPending = getHipaaPolicyVerdict() !== undefined;
+  let baseMode = context.mode === "plan" ? (context.prePlanMode ?? "plan") : context.mode;
+  let levelMode = permissionModeForProactivityLevel(
     level,
     {
       isAutoModeAvailable: canCycleToAuto(context),
       isBypassPermissionsModeAvailable:
-        n && canCycleToBypassPermissions(context) && (!s || t === "bypassPermissions"),
+        offerBypass &&
+        canCycleToBypassPermissions(context) &&
+        (!hipaaPending || baseMode === "bypassPermissions"),
     },
     context.proactivityBaseline?.mode,
   );
   let mode = context.proactivityBaseline?.mode;
-  let d =
-    i === "acceptEdits" && mode === "acceptEdits"
+  let baselineMode =
+    levelMode === "acceptEdits" && mode === "acceptEdits"
       ? mode
       : hasLeftProactivityBaseline(context)
         ? undefined
-        : t;
-  return getProactivityPolicyVerdict(level, i, d) === undefined ? i : "default";
+        : baseMode;
+  return getProactivityPolicyVerdict(level, levelMode, baselineMode) === undefined ? levelMode : "default";
 }
 //@ chunk-g2tve833.js:1021-1520 placement
 /**
  * 设置主动性等级：更新 AppState 中的等级与权限模式，记遥测；模式变化或等级跨档时触发事件通知。
  */
-function setProactivityLevel(o, e, n, { offerBypass: s = true } = {}) {
-  let t;
-  e((i) => {
-    if (i.proactivityLevel === o) return i;
-    let proactivityModeTransition = computeProactivityModeTransition(o, i.toolPermissionContext, {
-      offerBypass: s,
+function setProactivityLevel(level, setAppState, context, { offerBypass = true } = {}) {
+  let change;
+  setAppState((state) => {
+    if (state.proactivityLevel === level) return state;
+    let proactivityModeTransition = computeProactivityModeTransition(level, state.toolPermissionContext, {
+      offerBypass,
     });
-    t = {
-      from: i.proactivityLevel,
+    change = {
+      from: state.proactivityLevel,
       toMode: proactivityModeTransition.nextMode,
       modeChanged: proactivityModeTransition.nextMode !== proactivityModeTransition.currentMode,
     };
     return {
-      ...i,
-      proactivityLevel: o,
+      ...state,
+      proactivityLevel: level,
       toolPermissionContext: {
         ...proactivityModeTransition.context,
         mode: proactivityModeTransition.nextMode,
@@ -92,22 +94,22 @@ function setProactivityLevel(o, e, n, { offerBypass: s = true } = {}) {
       },
     };
   });
-  if (t === undefined) return;
-  logProactivityCycle(o, n, {
+  if (change === undefined) return;
+  logProactivityCycle(level, context, {
     source: "sdk_host",
-    from: t.from,
-    toMode: t.toMode,
+    from: change.from,
+    toMode: change.toMode,
   });
-  if (t.modeChanged || isProactivityModeChange(t.from, o))
+  if (change.modeChanged || isProactivityModeChange(change.from, level))
     setImmediate(() => {
       permissionModeSignal.emit();
     });
 }
 //@ chunk-g2tve833.js:1520-1672 placement
-function logProactivityCycle(o, e, { source, from, toMode }) {
-  noopWithArgs(o, e);
+function logProactivityCycle(level, context, { source, from, toMode }) {
+  noopWithArgs(level, context);
   logEvent("tengu_proactivity_cycle", {
-    level: fromEnum(o),
+    level: fromEnum(level),
     from: fromEnum(from),
     to_mode: fromEnum(toMode),
     source: fromEnum(source),

@@ -6,13 +6,13 @@
  * attribution: placement 3
  */
 //@ chunk-a16kyqj3.js:191-267 placement
-var c = typeof global == "object" && global && global.Object === Object && global;
-var Mdo = c;
+var freeGlobal = typeof global == "object" && global && global.Object === Object && global;
+var freeGlobalExport = freeGlobal;
 //@ chunk-a16kyqj3.js:267-370 placement
 var freeSelf = typeof self == "object" && self && self.Object === Object && self;
-var p = Mdo || freeSelf || Function("return this")();
-var xj = p;
+var freeSelfOrGlobal = freeGlobalExport || freeSelf || Function("return this")();
+var rootExport = freeSelfOrGlobal;
 //@ chunk-a16kyqj3.js:370-391 placement
-var d = xj.Symbol;
-var dV = d;
-export { dV, xj, Mdo };
+var rootSymbol = rootExport.Symbol;
+var symbolExport = rootSymbol;
+export { symbolExport, rootExport, freeGlobalExport };

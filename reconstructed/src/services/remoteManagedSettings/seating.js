@@ -11,17 +11,21 @@
 import { SEC_DEFAULT_PLUGIN_NAME } from "../../utils/plugins/securityDefaultPlugin.js";
 import { BUILTIN } from "../../utils/telemetry/pluginTelemetry.js";
 import { identity } from "../../utils/identity.js";
-import { pu } from "../../../vendor/@growthbook/growthbook/dist/bundles/esm.js";
+import { subscribe } from "../../../vendor/@growthbook/growthbook/dist/bundles/esm.js";
 import { bearerAccountOverride } from "../oauth/bearerAccountOverride.js";
 import { marketplaceNameAnswerState } from "../../utils/plugins/marketplaceNames.js";
 import { claimedSubscriptionType } from "../../entrypoints/warmSpare/claimCredentials.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-czx62zen.js:946-965 placement
 /**
  * 默认要座席到最外层的安全插件标识（内置安全插件）。
  */
-var DEFAULT_SECURITY_SEAT_PLUGIN = SEC_DEFAULT_PLUGIN_NAME + "@" + BUILTIN;
+var DEFAULT_SECURITY_SEAT_PLUGIN; // deferred: uses SEC_DEFAULT_PLUGIN_NAME (../../utils/plugins/securityDefaultPlugin.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-czx62zen.js:946", () => {
+  DEFAULT_SECURITY_SEAT_PLUGIN = SEC_DEFAULT_PLUGIN_NAME + "@" + BUILTIN;
+});
 //@ chunk-czx62zen.js:965-1099 placement
 /**
  * 默认把安全插件座席到最外层。
@@ -34,16 +38,19 @@ var defaultSecuritySeat = () => ({
 /**
  * 远程设置在场信号：null（未知）、"empty"（组织答复为空）、"served"（非空设置已下发）。
  */
-var settingsPresenceSignal = identity(pu(), (e) => e.set(null));
+var settingsPresenceSignal; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czx62zen.js:1099", () => {
+  settingsPresenceSignal = identity(subscribe(), (signal) => signal.set(null));
+});
 //@ chunk-czx62zen.js:1132-1249 placement
 /**
  * Pro/Max 账号且远程设置为空、组织已答复。
  */
 function isProMaxWithoutSettings() {
-  let e = bearerAccountOverride.get();
-  let n = e === "pro" || e === "max";
-  let o = settingsPresenceSignal.get() === "empty" && marketplaceNameAnswerState() === "answered";
-  return n && o && claimedSubscriptionType() === e;
+  let bearerOverride = bearerAccountOverride.get();
+  let isProOrMax = bearerOverride === "pro" || bearerOverride === "max";
+  let noSettingsYet = settingsPresenceSignal.get() === "empty" && marketplaceNameAnswerState() === "answered";
+  return isProOrMax && noSettingsYet && claimedSubscriptionType() === bearerOverride;
 }
 //@ chunk-czx62zen.js:1249-1299 placement
 /**
@@ -63,15 +70,22 @@ function markSettingsPresenceEmpty() {
 /**
  * 远程设置非空时记为 served。
  */
-function noteServedSettings(e) {
-  let n = isPlainObject(e);
-  let settings = n ? e.settings : undefined;
-  let s = isPlainObject(settings) && Object.keys(settings).length === 0;
-  let r = e === null || e === undefined || e === "" || (n && Object.keys(e).length === 0);
-  if (!s && !r) settingsPresenceSignal.set("served");
+function noteServedSettings(payload) {
+  let isObject = isPlainObject(payload);
+  let settings = isObject ? payload.settings : undefined;
+  let blockEmpty = isPlainObject(settings) && Object.keys(settings).length === 0;
+  let wholeEmpty =
+    payload === null ||
+    payload === undefined ||
+    payload === "" ||
+    (isObject && Object.keys(payload).length === 0);
+  if (!blockEmpty && !wholeEmpty) settingsPresenceSignal.set("served");
 }
 //@ chunk-czx62zen.js:1524-1537 placement
-var serverFilePresenceSlot = pu();
+var serverFilePresenceSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-czx62zen.js:1524", () => {
+  serverFilePresenceSlot = subscribe();
+});
 export {
   serverFilePresenceSlot,
   isProMaxWithoutSettings,

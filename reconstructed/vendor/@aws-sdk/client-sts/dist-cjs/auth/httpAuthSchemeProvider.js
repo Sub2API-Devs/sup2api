@@ -5,7 +5,7 @@
  * pieces: chunk-a8ee6x44.js (1), chunk-heg39xxp.js (6)
  * attribution: cjs-require-graph 1, esm-layout 2, esm-fingerprint 4
  */
-import { Re, x } from "../../../../../runtime/bun-runtime.js";
+import { __toESM, __commonJS } from "../../../../../runtime/bun-runtime.js";
 import {
   require_middleware_host_header,
   require_middleware_host_header_2,
@@ -19,26 +19,27 @@ import { require_schema } from "../../../../@smithy/core/dist-cjs/submodules/sch
 import { require_middleware_endpoint } from "../../../../@smithy/middleware-endpoint/dist-cjs/index.js";
 import { require_retry } from "../../../../@smithy/core/dist-cjs/submodules/retry/index.js";
 import { require_client } from "../../../../@smithy/core/dist-cjs/submodules/client/index.js";
-import { require_core as require_core_2 } from "../../../core/dist-cjs/index.js";
+import { require_core_2 } from "../../../core/dist-cjs/index.js";
 import { require_util_middleware } from "../../../../@smithy/util-middleware/dist-cjs/index.js";
 import { CognitoIdentityClient } from "../../../nested-clients/dist-cjs/submodules/cognito-identity/index.js";
 import { require_STSClient } from "../../../nested-clients/dist-cjs/submodules/sts/STSClient.js";
+import { deferInit } from "../../../../../runtime/deferred-init.js";
 
 //@ chunk-heg39xxp.js:747-884 esm-layout
-var import_middleware_host_header = Re(require_middleware_host_header());
-var import_middleware_logger = Re(require_middleware_logger());
-var import_middleware_recursion_detection = Re(require_middleware_recursion_detection());
-var import_middleware_user_agent = Re(require_middleware_user_agent());
-var import_index_native = Re(require_index_native());
-var import_core = Re(require_core());
-var import_schema = Re(require_schema());
-var import_middleware_host_header_2 = Re(require_middleware_host_header_2());
-var import_middleware_endpoint = Re(require_middleware_endpoint());
-var import_retry = Re(require_retry());
-var import_client = Re(require_client());
+var import_middleware_host_header = __toESM(require_middleware_host_header());
+var import_middleware_logger = __toESM(require_middleware_logger());
+var import_middleware_recursion_detection = __toESM(require_middleware_recursion_detection());
+var import_middleware_user_agent = __toESM(require_middleware_user_agent());
+var import_index_native = __toESM(require_index_native());
+var import_core = __toESM(require_core());
+var import_schema = __toESM(require_schema());
+var import_middleware_host_header_2 = __toESM(require_middleware_host_header_2());
+var import_middleware_endpoint = __toESM(require_middleware_endpoint());
+var import_retry_2 = __toESM(require_retry());
+var import_client = __toESM(require_client());
 //@ chunk-heg39xxp.js:884-910 esm-layout
-var import_core_2 = Re(require_core_2());
-var import_util_middleware = Re(require_util_middleware());
+var import_core_2 = __toESM(require_core_2());
+var import_util_middleware = __toESM(require_util_middleware());
 //@ chunk-heg39xxp.js:910-1103 esm-fingerprint
 var defaultSTSHttpAuthSchemeParametersProvider = async (config, context, input) => ({
   operation: import_util_middleware.getSmithyContext(context).operation,
@@ -99,80 +100,83 @@ var resolveHttpAuthSchemeConfig = (config) => {
   });
 };
 //@ chunk-a8ee6x44.js:763-1925 cjs-require-graph
-var require_httpAuthSchemeProvider = x(function (cjsExports) {
-  Object.defineProperty(cjsExports, "__esModule", {
-    value: true,
-  });
-  cjsExports.resolveHttpAuthSchemeConfig =
-    cjsExports.resolveStsAuthConfig =
-    cjsExports.defaultSTSHttpAuthSchemeProvider =
-    cjsExports.defaultSTSHttpAuthSchemeParametersProvider =
-      undefined;
-  var core_1 = require_core_2();
-  var util_middleware_1 = require_util_middleware();
-  var STSClient_1 = require_STSClient();
-  var defaultSTSHttpAuthSchemeParametersProvider = async (config, context, input) => ({
-    operation: util_middleware_1.getSmithyContext(context).operation,
-    region:
-      (await util_middleware_1.normalizeProvider(config.region)()) ||
-      (() => {
-        throw Error("expected `region` to be configured for `aws.auth#sigv4`");
-      })(),
-  });
-  cjsExports.defaultSTSHttpAuthSchemeParametersProvider = defaultSTSHttpAuthSchemeParametersProvider;
-  function createAwsAuthSigv4HttpAuthOption(authParameters) {
-    return {
-      schemeId: "aws.auth#sigv4",
-      signingProperties: {
-        name: "sts",
-        region: authParameters.region,
-      },
-      propertiesExtractor: (config, context) => ({
+var require_httpAuthSchemeProvider; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-a8ee6x44.js:763", () => {
+  require_httpAuthSchemeProvider = __commonJS(function (cjsExports) {
+    Object.defineProperty(cjsExports, "__esModule", {
+      value: true,
+    });
+    cjsExports.resolveHttpAuthSchemeConfig =
+      cjsExports.resolveStsAuthConfig =
+      cjsExports.defaultSTSHttpAuthSchemeProvider =
+      cjsExports.defaultSTSHttpAuthSchemeParametersProvider =
+        undefined;
+    var core_1 = require_core_2();
+    var util_middleware_1 = require_util_middleware();
+    var STSClient_1 = require_STSClient();
+    var defaultSTSHttpAuthSchemeParametersProvider = async (config, context, input) => ({
+      operation: util_middleware_1.getSmithyContext(context).operation,
+      region:
+        (await util_middleware_1.normalizeProvider(config.region)()) ||
+        (() => {
+          throw Error("expected `region` to be configured for `aws.auth#sigv4`");
+        })(),
+    });
+    cjsExports.defaultSTSHttpAuthSchemeParametersProvider = defaultSTSHttpAuthSchemeParametersProvider;
+    function createAwsAuthSigv4HttpAuthOption(authParameters) {
+      return {
+        schemeId: "aws.auth#sigv4",
         signingProperties: {
-          config,
-          context,
+          name: "sts",
+          region: authParameters.region,
         },
-      }),
-    };
-  }
-  function createSmithyApiNoAuthHttpAuthOption(authParameters) {
-    return {
-      schemeId: "smithy.api#noAuth",
-    };
-  }
-  var defaultSTSHttpAuthSchemeProvider = (authParameters) => {
-    let options = [];
-    switch (authParameters.operation) {
-      case "AssumeRoleWithWebIdentity": {
-        options.push(createSmithyApiNoAuthHttpAuthOption(authParameters));
-        break;
-      }
-      default:
-        options.push(createAwsAuthSigv4HttpAuthOption(authParameters));
+        propertiesExtractor: (config, context) => ({
+          signingProperties: {
+            config,
+            context,
+          },
+        }),
+      };
     }
-    return options;
-  };
-  cjsExports.defaultSTSHttpAuthSchemeProvider = defaultSTSHttpAuthSchemeProvider;
-  var resolveStsAuthConfig = (input) =>
-    Object.assign(input, {
-      stsClientCtor: STSClient_1.STSClient,
-    });
-  cjsExports.resolveStsAuthConfig = resolveStsAuthConfig;
-  var resolveHttpAuthSchemeConfig = (config) => {
-    let config_0 = cjsExports.resolveStsAuthConfig(config);
-    let config_1 = core_1.resolveAwsSdkSigV4Config(config_0);
-    return Object.assign(config_1, {
-      authSchemePreference: util_middleware_1.normalizeProvider(config.authSchemePreference ?? []),
-    });
-  };
-  cjsExports.resolveHttpAuthSchemeConfig = resolveHttpAuthSchemeConfig;
+    function createSmithyApiNoAuthHttpAuthOption(authParameters) {
+      return {
+        schemeId: "smithy.api#noAuth",
+      };
+    }
+    var defaultSTSHttpAuthSchemeProvider = (authParameters) => {
+      let options = [];
+      switch (authParameters.operation) {
+        case "AssumeRoleWithWebIdentity": {
+          options.push(createSmithyApiNoAuthHttpAuthOption(authParameters));
+          break;
+        }
+        default:
+          options.push(createAwsAuthSigv4HttpAuthOption(authParameters));
+      }
+      return options;
+    };
+    cjsExports.defaultSTSHttpAuthSchemeProvider = defaultSTSHttpAuthSchemeProvider;
+    var resolveStsAuthConfig = (input) =>
+      Object.assign(input, {
+        stsClientCtor: STSClient_1.STSClient,
+      });
+    cjsExports.resolveStsAuthConfig = resolveStsAuthConfig;
+    var resolveHttpAuthSchemeConfig = (config) => {
+      let config_0 = cjsExports.resolveStsAuthConfig(config);
+      let config_1 = core_1.resolveAwsSdkSigV4Config(config_0);
+      return Object.assign(config_1, {
+        authSchemePreference: util_middleware_1.normalizeProvider(config.authSchemePreference ?? []),
+      });
+    };
+    cjsExports.resolveHttpAuthSchemeConfig = resolveHttpAuthSchemeConfig;
+  });
 });
 export {
   defaultSTSHttpAuthSchemeProvider,
   require_httpAuthSchemeProvider,
   import_client,
   import_middleware_user_agent,
-  import_retry,
+  import_retry_2,
   import_index_native,
   import_middleware_host_header,
   import_middleware_endpoint,

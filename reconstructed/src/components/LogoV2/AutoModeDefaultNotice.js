@@ -24,11 +24,11 @@ var AUTO_DEFAULT_NOTICE_BODY =
   "Auto mode lets Claude handle permission prompts automatically. Claude checks each tool call for risky actions and prompt injection before executing, runs the ones it assesses as lower-risk, and blocks the rest.";
 var AUTO_DEFAULT_NOTICE_URL = "https://code.claude.com/docs/en/permission-modes";
 //@ chunk-ag5x7vhf.js:86419-86600 placement
-function shouldShowAutoDefaultNotice(m) {
+function shouldShowAutoDefaultNotice(permissionMode) {
   let globalConfig = getGlobalConfig();
   return (
     isAutoModeFromFallback() &&
-    m === "auto" &&
+    permissionMode === "auto" &&
     !isSessionRestored(getRootSession().host) &&
     !isActingAsBgJob() &&
     !getIsRemoteMode() &&
@@ -42,7 +42,7 @@ function shouldShowAutoDefaultNotice(m) {
 function shouldShowAutoModeEntryWarning() {
   return (
     !["policySettings", "userSettings", "flagSettings"].some(
-      (h) => getSettingsForSource(h)?.skipAutoPermissionPrompt === true,
+      (source) => getSettingsForSource(source)?.skipAutoPermissionPrompt === true,
     ) && !getGlobalConfig().hasSeenAutoModeEntryWarning
   );
 }
@@ -51,11 +51,11 @@ var AUTO_MODE_DEFAULT = "auto-mode-default";
 //@ chunk-ag5x7vhf.js:86782-86912 placement
 function markAutoDefaultNoticeSeen(storageV5) {
   saveGlobalConfig(
-    (h) =>
-      h.hasSeenAutoDefaultNotice
-        ? h
+    (config) =>
+      config.hasSeenAutoDefaultNotice
+        ? config
         : {
-            ...h,
+            ...config,
             hasSeenAutoDefaultNotice: true,
           },
     storageV5,

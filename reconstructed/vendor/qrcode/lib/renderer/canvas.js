@@ -5,11 +5,11 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_utils_2 } from "./utils.js";
 
 //@ chunk-spjgqa4y.js:56269-57046 cjs-fingerprint
-var require_canvas = x(function (cjsExports) {
+var require_canvas = __commonJS(function (cjsExports) {
   var Utils = require_utils_2();
   function clearCanvas(ctx, canvas, size) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);

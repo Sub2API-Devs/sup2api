@@ -85,10 +85,10 @@ function scopeTrustGroup(scope) {
 /**
  * 判断 scope/agentSource 是否属于仓库可信组。
  */
-function isRepoTrustedScope(e) {
+function isRepoTrustedScope(config) {
   return (
-    scopeTrustGroup(e.scope) === "repo" ||
-    (e.agentSource !== undefined && getAgentSourceTrustGroup(e.agentSource) === "repo")
+    scopeTrustGroup(config.scope) === "repo" ||
+    (config.agentSource !== undefined && getAgentSourceTrustGroup(config.agentSource) === "repo")
   );
 }
 //@ chunk-g2rygg7v.js:7287-7419 layout
@@ -126,7 +126,7 @@ async function getMcpHeadersFromHelper(serverName, config) {
             : getClaudeConfigDir()),
       scrubCredentialEnv: needsWorkspaceTrust(config, pluginRoot),
       pluginId: config.pluginSource,
-      readEnvAsStarts: (u) => runWithPluginWriteScope(config, u),
+      readEnvAsStarts: (fn) => runWithPluginWriteScope(config, fn),
       env: {
         CLAUDE_CODE_MCP_SERVER_NAME: serverName,
         CLAUDE_CODE_MCP_SERVER_URL: config.url,
@@ -144,14 +144,14 @@ async function getMcpHeadersFromHelper(serverName, config) {
       return helperResult.headers;
     }
     if (helperResult.reason === "missing_trust") {
-      let u = ignoresPersistedTrust()
+      let hint = ignoresPersistedTrust()
         ? `${PERSISTED_TRUST_IGNORED}, so add the server at user scope or in a managed MCP config instead`
         : isHomeDirectorySession()
           ? "not available to a session rooted at the home directory without a person present (home trust is session-only): run Claude Code interactively here and accept the trust dialog for that session, or work from a project directory you have trusted"
           : `accept the trust dialog here once interactively, or set projects[${escapedJsonStringify(getWorkspacePersistedTrustKey())}].hasTrustDialogAccepted in ${describeGlobalConfigFile()}`;
-      logMCPDebug(serverName, `headersHelper not run: this workspace has no persisted trust; ${u}.`);
+      logMCPDebug(serverName, `headersHelper not run: this workspace has no persisted trust; ${hint}.`);
       if (getIsNonInteractiveSession() && firstGatedTrustDiagnosticFor(`mcp headersHelper ${serverName}`))
-        writeToStderr(`MCP server '${replaceControlChars(serverName)}': headersHelper not run \u2014 this workspace has no persisted trust; ${u}.
+        writeToStderr(`MCP server '${replaceControlChars(serverName)}': headersHelper not run \u2014 this workspace has no persisted trust; ${hint}.
 `);
       logEvent("tengu_mcp_headersHelper_missing_trust", {});
       logFeatureSad("mcp_headers_helper", "missing_trust");
@@ -199,18 +199,18 @@ async function getMcpServerHeaders(serverName, config) {
       serverName,
       `Header values reference unset environment variables: ${uniq(missingVars).join(", ")}`,
     );
-  let s = (await getMcpHeadersFromHelper(serverName, config)) || {};
-  let u = {
+  let helperHeaders = (await getMcpHeadersFromHelper(serverName, config)) || {};
+  let headers = {
     ...staticHeaders,
-    ...s,
+    ...helperHeaders,
   };
   if (
     isMcpAppsHost() &&
     URL.parse(config.url)?.hostname === "api.githubcopilot.com" &&
-    !Object.keys(u).some((key) => key.toLowerCase() === "x-mcp-features")
+    !Object.keys(headers).some((key) => key.toLowerCase() === "x-mcp-features")
   )
-    u["X-MCP-Features"] = "mcp_apps_disable_form_deferral";
-  return u;
+    headers["X-MCP-Features"] = "mcp_apps_disable_form_deferral";
+  return headers;
 }
 //@ chunk-g2rygg7v.js:10275-10283 placement
 /**
@@ -222,30 +222,32 @@ var MAX_REDIRECTS = 5;
  * 包装 fetch：按需附加 MCP 动态头并处理重试。
  */
 function wrapFetchWithHeaders(serverName, serverConfig, authFetch) {
-  let o;
-  return async (s, u) => {
-    let l = (u?.method ?? "GET").toUpperCase() === "GET";
-    let i = s;
+  let dynamicHeadersPromise;
+  return async (input, init) => {
+    let isGet = (init?.method ?? "GET").toUpperCase() === "GET";
+    let currentUrl = input;
     for (let idx = 0; ; idx++) {
-      if (!canAttachDynamicHeaders(serverConfig, i)) return authFetch(i, u);
-      o ??= buildDynamicHeaders(serverName, serverConfig);
-      let headers = new Headers(await o);
-      new Headers(u?.headers).forEach((U, O) => headers.set(O, U));
-      let S = await authFetch(i, {
-        ...u,
+      if (!canAttachDynamicHeaders(serverConfig, currentUrl)) return authFetch(currentUrl, init);
+      dynamicHeadersPromise ??= buildDynamicHeaders(serverName, serverConfig);
+      let headers = new Headers(await dynamicHeadersPromise);
+      new Headers(init?.headers).forEach((value, key) => headers.set(key, value));
+      let response = await authFetch(currentUrl, {
+        ...init,
         headers,
         redirect: "manual",
       });
-      let p = S.headers.get("location");
-      if (!(S.status >= 300 && S.status < 400) || !p || idx === MAX_REDIRECTS) return S;
-      let _ = new URL(p, i);
+      let location = response.headers.get("location");
+      if (!(response.status >= 300 && response.status < 400) || !location || idx === MAX_REDIRECTS)
+        return response;
+      let nextUrl = new URL(location, currentUrl);
       if (
-        !(l
-          ? _.protocol === "https:" || _.protocol === "http:"
-          : (S.status === 307 || S.status === 308) && canAttachDynamicHeaders(serverConfig, _))
+        !(isGet
+          ? nextUrl.protocol === "https:" || nextUrl.protocol === "http:"
+          : (response.status === 307 || response.status === 308) &&
+            canAttachDynamicHeaders(serverConfig, nextUrl))
       )
-        return S;
-      i = _;
+        return response;
+      currentUrl = nextUrl;
     }
   };
 }
@@ -253,8 +255,8 @@ function wrapFetchWithHeaders(serverName, serverConfig, authFetch) {
 /**
  * 给请求附加动态请求头（仅同源且有配置时）。
  */
-async function dynamicHeadersForRequest(serverName, serverConfig, revocationEndpointStr) {
-  return canAttachDynamicHeaders(serverConfig, revocationEndpointStr)
+async function dynamicHeadersForRequest(serverName, serverConfig, url) {
+  return canAttachDynamicHeaders(serverConfig, url)
     ? Object.fromEntries(await buildDynamicHeaders(serverName, serverConfig))
     : {};
 }
@@ -263,23 +265,27 @@ async function dynamicHeadersForRequest(serverName, serverConfig, revocationEndp
  * 返回重定向守卫：跨源重定向直接报错。
  */
 function sameOriginRedirectGuard(endpoint) {
-  return (r) => {
-    if (!sameOrigin(urlFromRequestOptions(r), endpoint)) throw Error("Refused a redirect to another origin");
+  return (requestOptions) => {
+    if (!sameOrigin(urlFromRequestOptions(requestOptions), endpoint))
+      throw Error("Refused a redirect to another origin");
   };
 }
 //@ chunk-g2rygg7v.js:10947-11023 placement
 /**
  * 判断能否给该请求加动态头（有 headers 或 headersHelper 且同源）。
  */
-function canAttachDynamicHeaders(e, r) {
-  return (!!e.headers || !!e.headersHelper) && sameOrigin(String(r), e.url);
+function canAttachDynamicHeaders(serverConfig, url) {
+  return (
+    (!!serverConfig.headers || !!serverConfig.headersHelper) && sameOrigin(String(url), serverConfig.url)
+  );
 }
 //@ chunk-g2rygg7v.js:11023-11192 placement
-async function buildDynamicHeaders(e, r) {
+async function buildDynamicHeaders(serverName, serverConfig) {
   let headers = new Headers();
-  for (let [key, value] of Object.entries(await getMcpServerHeaders(e, r))) headers.set(key, value);
+  for (let [key, value] of Object.entries(await getMcpServerHeaders(serverName, serverConfig)))
+    headers.set(key, value);
   headers.delete("authorization");
-  recordPresentedHeaderSecrets(r.headers, Object.fromEntries(headers));
+  recordPresentedHeaderSecrets(serverConfig.headers, Object.fromEntries(headers));
   return headers;
 }
 //@ chunk-g2rygg7v.js:11192-11529 placement
@@ -302,9 +308,12 @@ function mcpServerTelemetry(serverConfig, redirectUri) {
   };
 }
 //@ chunk-16jhn3ak.js:441-476 fingerprint = isMcpServerFromProjectOrLocalSettings (1)
-var isMcpServerFromProjectOrLocalSettings = ["project", "local", "user"];
+/**
+ * 设置层级名单 ["project","local","user"]：v$s = (kind) => !bMr.includes(kind)，用来判断某个 kind 是否属于这三层设置；导出为 bMr。
+ */
+var MCP_SETTINGS_SCOPE_KINDS = ["project", "local", "user"];
 export {
-  isMcpServerFromProjectOrLocalSettings,
+  MCP_SETTINGS_SCOPE_KINDS,
   getMcpServerHeaders,
   sameOriginRedirectGuard,
   wrapFetchWithHeaders,

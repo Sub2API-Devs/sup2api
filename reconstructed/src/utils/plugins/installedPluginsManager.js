@@ -5,8 +5,8 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/installedPluginsManager.ts
- * pieces: chunk-e6aww6q8.js (111)
- * attribution: fingerprint 21, layout 54, callgraph-fingerprint 3, placement 32, affinity 1
+ * pieces: chunk-e6aww6q8.js (112)
+ * attribution: fingerprint 21, layout 54, callgraph-fingerprint 3, placement 33, affinity 1
  */
 import { join, resolve as resolve_2, sep, dirname, basename } from "path";
 import { createHash } from "crypto";
@@ -75,7 +75,6 @@ import {
 } from "./marketplaceManager.js";
 import { countCharInString } from "../stringUtils.js";
 import { quotedPrintable, truncateWithEllipsis as truncateWithEllipsis_2 } from "../printableName.js";
-import { appendEntryToFile } from "../sessionStorage.js";
 import { getPlan_2 } from "../plans.js";
 import { getMcpAuthCache } from "../../services/mcp/client.js";
 import { formatStorageError } from "../storage/storageErrors.js";
@@ -118,6 +117,7 @@ import { parsePluginIdentifier } from "./pluginIdentifier.js";
 import { OFFICIAL_MARKETPLACE_NAME } from "./officialMarketplaceNames.js";
 import { isTempSiblingName } from "./pluginCacheMaterialize.js";
 import { readOnlyNoFollowFlags } from "../platformTargets.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:4326097-4326152 fingerprint = getInstalledPluginsFilePath (1)
 /**
@@ -148,43 +148,46 @@ function setInstalledPluginsCache(installedPluginsFile) {
   pluginRegistry.installedPluginsEpoch++;
 }
 //@ chunk-e6aww6q8.js:4326438-4326477 layout
-var UNPARSEABLE_RECORD_IDS = Symbol("unparseableRecordIds");
+var UNPARSEABLE_RECORD_IDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4326438", () => {
+  UNPARSEABLE_RECORD_IDS = Symbol("unparseableRecordIds");
+});
 //@ chunk-e6aww6q8.js:4326477-4326633 layout
 /**
  * 在错误对象上附加无法解析的记录 ID 列表（不可枚举属性）。
  */
-function markUnparseableRecords(firstUnparseableError, n) {
-  let r = firstUnparseableError ?? Error("a record under a valid plugin id could not be parsed");
-  Object.defineProperty(r, UNPARSEABLE_RECORD_IDS, {
-    value: [...n],
+function markUnparseableRecords(firstUnparseableError, recordIds) {
+  let error = firstUnparseableError ?? Error("a record under a valid plugin id could not be parsed");
+  Object.defineProperty(error, UNPARSEABLE_RECORD_IDS, {
+    value: [...recordIds],
     enumerable: false,
   });
-  return r;
+  return error;
 }
 //@ chunk-e6aww6q8.js:4326633-4326689 layout
 /**
  * 读取错误对象上的无法解析记录 ID 列表。
  */
-function getUnparseableRecordIds(e) {
-  return e instanceof Error ? e[UNPARSEABLE_RECORD_IDS] : undefined;
+function getUnparseableRecordIds(error) {
+  return error instanceof Error ? error[UNPARSEABLE_RECORD_IDS] : undefined;
 }
 //@ chunk-e6aww6q8.js:4326689-4326986 layout
 /**
  * 记录插件状态文件错误遥测 tengu_plugin_state_file_error（操作、错误种类：无法解析的记录/未替换/JSON 语法…）。
  */
-function logPluginStateFileError(e, n, recovered) {
+function logPluginStateFileError(operation, error, recovered) {
   logEvent("tengu_plugin_state_file_error", {
-    operation: fromEnum(e),
+    operation: fromEnum(operation),
     error_kind:
-      getUnparseableRecordIds(n) !== undefined
+      getUnparseableRecordIds(error) !== undefined
         ? lit_2("unparsed-record")
-        : n instanceof InstalledListNotReplacedError
-          ? (sanitizeErrnoForTelemetry(n) ?? lit_2("not-replaced"))
-          : n instanceof SyntaxError
+        : error instanceof InstalledListNotReplacedError
+          ? (sanitizeErrnoForTelemetry(error) ?? lit_2("not-replaced"))
+          : error instanceof SyntaxError
             ? lit_2("syntax-error")
-            : n instanceof Error && n.name === "ZodError"
+            : error instanceof Error && error.name === "ZodError"
               ? lit_2("validation-error")
-              : (sanitizeErrnoForTelemetry(n) ?? lit_2("unknown")),
+              : (sanitizeErrnoForTelemetry(error) ?? lit_2("unknown")),
     recovered,
   });
 }
@@ -192,36 +195,36 @@ function logPluginStateFileError(e, n, recovered) {
 /**
  * 一次性迁移：把旧的 installed_plugins_v2.json 与旧版单文件合并成单一 installed_plugins.json（V2 形状），不会覆盖已有列表。
  */
-async function migrateToSinglePluginFile(e) {
+async function migrateToSinglePluginFile(storageV5) {
   let fs = getPluginRegistry();
   if (fs.installedPluginsMigrated) return;
   let mainFilePath = getFsImplementation();
   let mainFilePath_2 = getInstalledPluginsFilePath();
   let v2Data = getInstalledPluginsV2FilePath();
-  let y = installedStorageKey(e);
-  let S;
+  let storageKey = installedStorageKey(storageV5);
+  let cleanupPromise;
   try {
-    let w = false;
-    let L = false;
-    let G = true;
+    let renamed = false;
+    let mainReplaceable = false;
+    let v2Present = true;
     try {
       let installedPluginsFileRaw = readInstalledPluginsFileRaw(mainFilePath_2);
       try {
-        G = readInstalledPluginsFileRaw(v2Data) !== null;
+        v2Present = readInstalledPluginsFileRaw(v2Data) !== null;
       } catch {}
-      if (G) assertInstalledPluginsReplaceable_2(installedPluginsFileRaw);
+      if (v2Present) assertInstalledPluginsReplaceable_2(installedPluginsFileRaw);
       else assertInstalledPluginsReplaceable(installedPluginsFileRaw);
     } catch (error) {
       if (!(error instanceof InstalledListNotReplacedError)) throw error;
-      L = true;
+      mainReplaceable = true;
     }
     try {
-      if (L || !G)
+      if (mainReplaceable || !v2Present)
         throw Object.assign(Error("nothing is renamed over the list"), {
           code: "ENOENT",
         });
       mainFilePath.renameSync(v2Data, mainFilePath_2);
-      w = true;
+      renamed = true;
     } catch (error) {
       let errnoCode = getErrnoCode(error);
       if (errnoCode !== "ENOENT" && errnoCode !== "EEXIST") throw error;
@@ -230,29 +233,29 @@ async function migrateToSinglePluginFile(e) {
           mainFilePath.unlinkSync(v2Data);
         } catch {}
     }
-    if (w) {
+    if (renamed) {
       logForDebugging("Renamed installed_plugins_v2.json to installed_plugins.json");
-      if (isStorageV5Enabled() && e !== undefined && y !== null) {
+      if (isStorageV5Enabled() && storageV5 !== undefined && storageKey !== null) {
         let installedPluginsEpoch = fs.installedPluginsEpoch;
-        let rawData = await readInstalledPluginsFileRaw_2(e, y);
+        let rawData = await readInstalledPluginsFileRaw_2(storageV5, storageKey);
         if (rawData !== null) {
           let installedPluginsV2 = loadInstalledPluginsV2(rawData);
           if (fs.installedPluginsEpoch === installedPluginsEpoch)
             fs.installedPluginsFile = installedPluginsV2;
           await cleanupLegacyCache(installedPluginsV2);
         }
-      } else S = cleanupLegacyCache(getInstalledPlugins());
+      } else cleanupPromise = cleanupLegacyCache(getInstalledPlugins());
       fs.installedPluginsMigrated = true;
-      await S;
+      await cleanupPromise;
       return;
     }
-    if (isStorageV5Enabled() && e !== undefined && y !== null) {
-      let ke = await migrateStoredV1ToV2(e, y);
-      if (ke !== undefined) {
+    if (isStorageV5Enabled() && storageV5 !== undefined && storageKey !== null) {
+      let migrated = await migrateStoredV1ToV2(storageV5, storageKey);
+      if (migrated !== undefined) {
         logForDebugging(
-          `Converted installed_plugins.json from V1 to V2 format (${ke.v1PluginCount} plugins)`,
+          `Converted installed_plugins.json from V1 to V2 format (${migrated.v1PluginCount} plugins)`,
         );
-        await cleanupLegacyCache(ke.data);
+        await cleanupLegacyCache(migrated.data);
       }
       fs.installedPluginsMigrated = true;
       return;
@@ -276,7 +279,7 @@ async function migrateToSinglePluginFile(e) {
       logForDebugging(
         `Converted installed_plugins.json from V1 to V2 format (${Object.keys(v1Data.plugins).length} plugins)`,
       );
-      S = cleanupLegacyCache(v2Data);
+      cleanupPromise = cleanupLegacyCache(v2Data);
     }
     fs.installedPluginsMigrated = true;
   } catch (error) {
@@ -288,7 +291,7 @@ async function migrateToSinglePluginFile(e) {
     logPluginStateFileError("migrate-single-file", error, true);
     fs.installedPluginsMigrated = true;
   }
-  await S;
+  await cleanupPromise;
 }
 //@ chunk-e6aww6q8.js:4328557-4329866 fingerprint = cleanupLegacyCache (0.4)
 /**
@@ -305,8 +308,8 @@ async function cleanupLegacyCache(v2Data) {
   let cachePath = anchoredPluginCachePath();
   try {
     let referencedPaths = new Set();
-    let h = wslWalkRootOf(cachePath);
-    if (h === "undeterminable") {
+    let walkRoot = wslWalkRootOf(cachePath);
+    if (walkRoot === "undeterminable") {
       logForDebugging(
         "Skipping legacy cache cleanup: the cache root volume could not be read to map its WSL companion views",
       );
@@ -315,21 +318,21 @@ async function cleanupLegacyCache(v2Data) {
     for (let installations of Object.values(v2Data.plugins))
       for (let entry of installations) {
         referencedPaths.add(normalizePathForPlatform(resolve_2(getOriginalCwd(), entry.installPath)));
-        let G = classifyMarketplacePath(entry.installPath);
-        if (!G.suspect)
+        let classified = classifyMarketplacePath(entry.installPath);
+        if (!classified.suspect)
           referencedPaths.add(
             normalizePathForPlatform(
-              toComparablePath(G.absolute, {
+              toComparablePath(classified.absolute, {
                 foldCase: true,
                 knownNotSuspect: true,
               }),
             ),
           );
-        let alternatePlatformPath = toAlternatePlatformPath(entry.installPath, h);
+        let alternatePlatformPath = toAlternatePlatformPath(entry.installPath, walkRoot);
         if (alternatePlatformPath !== undefined)
           referencedPaths.add(normalizePathForPlatform(alternatePlatformPath));
       }
-    let y = [...referencedPaths];
+    let referencedList = [...referencedPaths];
     let entries = await fs.readdir(cachePath);
     for (let dirent of entries) {
       let entry = dirent.name;
@@ -338,24 +341,25 @@ async function cleanupLegacyCache(v2Data) {
       try {
         if (!(await classifyDirEntrySafe(cachePath, dirent))?.isDirectory) continue;
         let entries = await fs.readdir(entryPath);
-        let Z = false;
-        for (let we of entries) {
-          if (!(await classifyDirEntrySafe(entryPath, we))?.isDirectory) continue;
-          let Ee = join(entryPath, we.name);
-          let entries = await fs.readdir(Ee);
-          for (let Ie of entries)
-            if (Ie.name.endsWith(".zip") || (await classifyDirEntrySafe(Ee, Ie))?.isDirectory) {
-              Z = true;
+        let hasInstalledContent = false;
+        for (let entry of entries) {
+          if (!(await classifyDirEntrySafe(entryPath, entry))?.isDirectory) continue;
+          let pluginDir = join(entryPath, entry.name);
+          let entries = await fs.readdir(pluginDir);
+          for (let entry of entries)
+            if (entry.name.endsWith(".zip") || (await classifyDirEntrySafe(pluginDir, entry))?.isDirectory) {
+              hasInstalledContent = true;
               break;
             }
-          if (Z) break;
+          if (hasInstalledContent) break;
         }
-        if (Z) continue;
-        let Se = (subDirent) =>
-          referencedPaths.has(subDirent) || y.some((vDirent) => vDirent.startsWith(subDirent + sep));
+        if (hasInstalledContent) continue;
+        let isReferenced = (subDirent) =>
+          referencedPaths.has(subDirent) ||
+          referencedList.some((vDirent) => vDirent.startsWith(subDirent + sep));
         if (!(
-          Se(normalizePathForPlatform(entryPath)) ||
-          Se(
+          isReferenced(normalizePathForPlatform(entryPath)) ||
+          isReferenced(
             normalizePathForPlatform(
               toComparablePath(entryPath, {
                 foldCase: true,
@@ -380,41 +384,43 @@ async function cleanupLegacyCache(v2Data) {
   }
 }
 //@ chunk-e6aww6q8.js:4330013-4330286 callgraph-fingerprint = readInstalledPluginsFileRaw (0.319)
-async function readInstalledPluginsFileRaw_2(e, n) {
-  let r = await e.read([n]);
-  if (!r.ok) throw storageAccessError(r.error);
-  let s = r.value.items[0];
-  if (s === undefined) throw Error("installed plugins registry read settled without an outcome for its key");
-  if (!s.found) return null;
-  return parseInstalledPluginsJson(Buffer.from(s.value).toString("utf-8"));
+async function readInstalledPluginsFileRaw_2(storageV5, storageKey) {
+  let readResult = await storageV5.read([storageKey]);
+  if (!readResult.ok) throw storageAccessError(readResult.error);
+  let item = readResult.value.items[0];
+  if (item === undefined)
+    throw Error("installed plugins registry read settled without an outcome for its key");
+  if (!item.found) return null;
+  return parseInstalledPluginsJson(Buffer.from(item.value).toString("utf-8"));
 }
 //@ chunk-e6aww6q8.js:4330286-4330544 layout
 /**
  * 经存储层读取 installed_plugins.json 原文（不存在返回 null）。
  */
-async function readInstalledPluginsViaStorage(e, n) {
-  let r = await e.read([n]);
-  if (!r.ok) throw storageAccessError(r.error);
-  let s = r.value.items[0];
-  if (s === undefined) throw Error("installed plugins registry read settled without an outcome for its key");
-  return s.found ? Buffer.from(s.value).toString("utf-8") : null;
+async function readInstalledPluginsViaStorage(storageV5, storageKey) {
+  let readResult = await storageV5.read([storageKey]);
+  if (!readResult.ok) throw storageAccessError(readResult.error);
+  let item = readResult.value.items[0];
+  if (item === undefined)
+    throw Error("installed plugins registry read settled without an outcome for its key");
+  return item.found ? Buffer.from(item.value).toString("utf-8") : null;
 }
 //@ chunk-e6aww6q8.js:4330544-4330635 layout
 /**
  * 解析 installed_plugins.json 文本，返回 {version, data}（无 version 视为 1）。
  */
-function parseInstalledPluginsJson(e) {
-  let n = jsonParse(e);
+function parseInstalledPluginsJson(text) {
+  let parsed = jsonParse(text);
   return {
-    version: typeof n?.version === "number" ? n.version : 1,
-    data: n,
+    version: typeof parsed?.version === "number" ? parsed.version : 1,
+    data: parsed,
   };
 }
 //@ chunk-e6aww6q8.js:4330635-4330731 layout
-function toInstalledPluginsV2(e) {
-  return e.version === 2
-    ? normalizeInstallPaths(parseInstalledPluginsV2Strict(e.data, "load-from-disk"))
-    : migrateV1ToV2(InstalledPluginsFileSchemaV1().parse(e.data));
+function toInstalledPluginsV2(raw) {
+  return raw.version === 2
+    ? normalizeInstallPaths(parseInstalledPluginsV2Strict(raw.data, "load-from-disk"))
+    : migrateV1ToV2(InstalledPluginsFileSchemaV1().parse(raw.data));
 }
 //@ chunk-e6aww6q8.js:4330731-4330882 fingerprint = hasPendingUpdates (0.783)
 function normalizeInstallPaths(installedPluginsV2Strict) {
@@ -433,29 +439,29 @@ function formatInvalidPluginIdMessage(pluginId, dependentId, parts) {
   let atIndex = pluginId.lastIndexOf("@");
   let marketplaceName = parts?.marketplaceName ?? (atIndex >= 0 ? pluginId.slice(atIndex + 1) : "");
   let pluginName = parts?.pluginName ?? (atIndex > 0 ? pluginId.slice(0, atIndex) : "");
-  let S = marketplaceName === pluginManifestPathSchemas;
-  let w = countCharInString(pluginId, "@");
-  let L = parts === undefined && w > (S && pluginId.startsWith("@") ? 2 : 1);
-  let G = isValidPluginIdSegment(pluginName);
-  let q = atIndex >= 0 && isValidPluginIdSegment(marketplaceName);
-  let Z =
+  let isPackageName = marketplaceName === pluginManifestPathSchemas;
+  let atCount = countCharInString(pluginId, "@");
+  let extraAtSign = parts === undefined && atCount > (isPackageName && pluginId.startsWith("@") ? 2 : 1);
+  let pluginNameOk = isValidPluginIdSegment(pluginName);
+  let marketplaceNameOk = atIndex >= 0 && isValidPluginIdSegment(marketplaceName);
+  let ruleText =
     'Each part of a plugin id (plugin@marketplace) may use only the letters a-z and A-Z, digits, ".", "_" and "-", and must start with a letter or digit.';
-  let Se = L
+  let invalidText = extraAtSign
     ? `Each part of a plugin id (plugin@marketplace) may use only the letters a-z and A-Z, digits, ".", "_" and "-", and must start with a letter or digit. Here the id holds more than one "@", so the plugin's name or the marketplace's name holds one; whoever named it can rename it.`
-    : S
+    : isPackageName
       ? "its first half is not a package name that the npm marketplace accepts."
-      : `Each part of a plugin id (plugin@marketplace) may use only the letters a-z and A-Z, digits, ".", "_" and "-", and must start with a letter or digit. Here ${G && !q ? "the marketplace's name does not" : !G && q ? "the plugin's name does not" : "they do not"}; the marketplace's maintainer can rename ${G || q ? "it" : "both"}.`;
-  let ke = quotedPrintable(pluginId);
-  let we = ke !== truncateWithEllipsis_2(normalizeQuotes(pluginId), 300);
-  let Ee = dependentId !== undefined && dependentId !== pluginId;
-  let Ae = !we
+      : `Each part of a plugin id (plugin@marketplace) may use only the letters a-z and A-Z, digits, ".", "_" and "-", and must start with a letter or digit. Here ${pluginNameOk && !marketplaceNameOk ? "the marketplace's name does not" : !pluginNameOk && marketplaceNameOk ? "the plugin's name does not" : "they do not"}; the marketplace's maintainer can rename ${pluginNameOk || marketplaceNameOk ? "it" : "both"}.`;
+  let printableId = quotedPrintable(pluginId);
+  let hasHiddenChars = printableId !== truncateWithEllipsis_2(normalizeQuotes(pluginId), 300);
+  let isDependent = dependentId !== undefined && dependentId !== pluginId;
+  let hiddenNote = !hasHiddenChars
     ? ""
-    : Ee
+    : isDependent
       ? " The name of the plugin it depends on holds a character that is not shown here."
       : " The name holds a character that is not shown here.";
-  return Ee
-    ? `Plugin "${quotedPrintable(dependentId)}" cannot be installed, because it depends on "${ke}", whose id is invalid: ${Se}${Ae}`
-    : `Plugin "${ke}" cannot be installed, because its id is invalid: ${Se}${Ae}`;
+  return isDependent
+    ? `Plugin "${quotedPrintable(dependentId)}" cannot be installed, because it depends on "${printableId}", whose id is invalid: ${invalidText}${hiddenNote}`
+    : `Plugin "${printableId}" cannot be installed, because its id is invalid: ${invalidText}${hiddenNote}`;
 }
 //@ chunk-e6aww6q8.js:4332310-4332478 layout = setCwdState (1)
 function normalizeQuotes(cwd) {
@@ -470,33 +476,41 @@ function normalizeQuotes(cwd) {
 /**
  * isRecordablePluginId：插件 id 符合 schema。
  */
-function isRecordablePluginId(e) {
-  return PluginIdSchema().safeParse(e).success;
+function isRecordablePluginId(pluginId) {
+  return PluginIdSchema().safeParse(pluginId).success;
 }
 //@ chunk-e6aww6q8.js:4332527-4332706 layout
-class UnrecordablePluginIdError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  pluginCommandErrorCategory = "validation";
-  constructor(pluginId) {
-    super(formatInvalidPluginIdMessage(pluginId), "plugin id cannot be a key of the install records");
-    this.name = "UnrecordablePluginIdError";
-  }
-}
+let UnrecordablePluginIdError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:4332527", () => {
+  UnrecordablePluginIdError = class UnrecordablePluginIdError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    pluginCommandErrorCategory = "validation";
+    constructor(pluginId) {
+      super(formatInvalidPluginIdMessage(pluginId), "plugin id cannot be a key of the install records");
+      this.name = "UnrecordablePluginIdError";
+    }
+  };
+});
 //@ chunk-e6aww6q8.js:4332706-4332750 layout
 /**
  * assertRecordablePluginId：id 不可记录时抛错。
  */
-function assertRecordablePluginId(e) {
-  if (!isRecordablePluginId(e)) throw new UnrecordablePluginIdError(e);
+function assertRecordablePluginId(pluginId) {
+  if (!isRecordablePluginId(pluginId)) throw new UnrecordablePluginIdError(pluginId);
 }
 //@ chunk-e6aww6q8.js:4332750-4332791 layout
-var SET_ASIDE_RECORDS = Symbol("setAsideInstallRecords");
+var SET_ASIDE_RECORDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4332750", () => {
+  SET_ASIDE_RECORDS = Symbol("setAsideInstallRecords");
+});
 //@ chunk-e6aww6q8.js:4332791-4332821 layout
-function setAsideRecordsOf(e) {
-  return e[SET_ASIDE_RECORDS];
+function setAsideRecordsOf(error) {
+  return error[SET_ASIDE_RECORDS];
 }
 //@ chunk-e6aww6q8.js:4332821-4332920 layout
-function attachSetAsideRecords(e, value) {
-  Object.defineProperty(e, SET_ASIDE_RECORDS, {
+function attachSetAsideRecords(target, value) {
+  Object.defineProperty(target, SET_ASIDE_RECORDS, {
     value,
     enumerable: false,
     configurable: true,
@@ -504,28 +518,28 @@ function attachSetAsideRecords(e, value) {
   });
 }
 //@ chunk-e6aww6q8.js:4332920-4332974 layout
-function copySetAsideRecords(e, v2Data) {
-  let r = setAsideRecordsOf(e);
-  if (r !== undefined) attachSetAsideRecords(v2Data, r);
+function copySetAsideRecords(source, v2Data) {
+  let setAside = setAsideRecordsOf(source);
+  if (setAside !== undefined) attachSetAsideRecords(v2Data, setAside);
 }
 //@ chunk-e6aww6q8.js:4332974-4333016 layout
-function serializeInstalledPlugins(e) {
-  writeSetAsideRecords(e);
-  return jsonStringify(e, null, 2);
+function serializeInstalledPlugins(data) {
+  writeSetAsideRecords(data);
+  return jsonStringify(data, null, 2);
 }
 //@ chunk-e6aww6q8.js:4333016-4333932 layout
 /**
  * 宽松解析 installed_plugins.json V2：存在键合法但本版本解析不了的记录时记 warn 并抛出（视为不可读、不覆盖文件）； 键本身不合法的记录登记为 set-aside（下次写时复制到带日期的旁文件后丢弃）。返回解析后的文件对象。
  */
-function parseInstalledPluginsV2Strict(e, n) {
-  let { file, setAside, keptRaw, firstError, firstUnparseableError } = parseInstalledPluginsV2Leniently(e);
+function parseInstalledPluginsV2Strict(raw, operation) {
+  let { file, setAside, keptRaw, firstError, firstUnparseableError } = parseInstalledPluginsV2Leniently(raw);
   let keys = Object.keys(setAside);
   let keys_2 = Object.keys(keptRaw);
   if (keys_2.length > 0) {
     logForDebugging(
       `installed_plugins.json: ${keys_2.length} record(s) under a valid plugin id that this build cannot parse (another build's, perhaps newer): ${keys_2
         .slice(0, 10)
-        .map((G) => jsonStringify(quotedPrintable(G, 120)))
+        .map((key) => jsonStringify(quotedPrintable(key, 120)))
         .join(
           ", ",
         )}${keys_2.length > 10 ? `, and ${keys_2.length - 10} more` : ""}. The list counts as unreadable for this build, and this build does not replace the file while they stay.`,
@@ -537,11 +551,11 @@ function parseInstalledPluginsV2Strict(e, n) {
   }
   if (keys.length > 0) {
     attachSetAsideRecords(file, setAside);
-    logPluginStateFileError(n, firstError, true);
+    logPluginStateFileError(operation, firstError, true);
     logForDebugging(
       `installed_plugins.json: ${keys.length} record(s) set aside, because their key is not a valid plugin id and no build to date can use them: ${keys
         .slice(0, 10)
-        .map((G) => jsonStringify(quotedPrintable(G, 120)))
+        .map((key) => jsonStringify(quotedPrintable(key, 120)))
         .join(
           ", ",
         )}${keys.length > 10 ? `, and ${keys.length - 10} more` : ""}. The next write of installed_plugins.json copies them to a dated file beside it and drops them from the list.`,
@@ -553,9 +567,9 @@ function parseInstalledPluginsV2Strict(e, n) {
   return file;
 }
 //@ chunk-e6aww6q8.js:4333932-4334071 layout
-function tryParseInstalledPluginsV2(e) {
+function tryParseInstalledPluginsV2(raw) {
   try {
-    let { file, keptRaw } = parseInstalledPluginsV2Leniently(e);
+    let { file, keptRaw } = parseInstalledPluginsV2Leniently(raw);
     return Object.keys(keptRaw).length > 0
       ? {
           success: false,
@@ -574,9 +588,9 @@ function tryParseInstalledPluginsV2(e) {
 /**
  * set-aside 记录旁文件写失败的错误。
  */
-function setAsideCopyFailedError(e, n) {
+function setAsideCopyFailedError(sidePath, reason) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-    `installed_plugins.json was not changed: it holds records under names that no version of Claude Code can use; they are copied to a side file before they are removed, and that copy could not be written to ${e} (${n}). Make that path writable, or move what stands there away, and try again.`,
+    `installed_plugins.json was not changed: it holds records under names that no version of Claude Code can use; they are copied to a side file before they are removed, and that copy could not be written to ${sidePath} (${reason}). Make that path writable, or move what stands there away, and try again.`,
     "the side copy of set-aside install records could not be written",
   );
 }
@@ -584,25 +598,25 @@ function setAsideCopyFailedError(e, n) {
 /**
  * 写 installed_plugins.json 前，把被 set aside 的记录按键排序写到插件目录下带日期与内容哈希的旁文件（权限 0600），失败抛 Sys 错误；成功后清空登记。
  */
-function writeSetAsideRecords(e) {
-  let n = setAsideRecordsOf(e);
-  if (n === undefined || Object.keys(n).length === 0) return;
-  let r = Object.create(null);
-  for (let key of Object.keys(n).sort()) r[key] = n[key];
-  let s = jsonStringify(r, null, 2);
-  let h = join(
+function writeSetAsideRecords(data) {
+  let setAside = setAsideRecordsOf(data);
+  if (setAside === undefined || Object.keys(setAside).length === 0) return;
+  let sorted = Object.create(null);
+  for (let key of Object.keys(setAside).sort()) sorted[key] = setAside[key];
+  let sideJson = jsonStringify(sorted, null, 2);
+  let sidePath = join(
     getPluginsDirectory(),
-    setAsideFileName(new Date(), createHash("sha256").update(s).digest("hex").slice(0, 12)),
+    setAsideFileName(new Date(), createHash("sha256").update(sideJson).digest("hex").slice(0, 12)),
   );
   try {
-    appendEntryToFile();
-    writeAndPublishSync(h, s, 384);
+    ensurePluginsDirectoryExists();
+    writeAndPublishSync(sidePath, sideJson, 384);
   } catch (error) {
-    throw setAsideCopyFailedError(h, errorMessage(error));
+    throw setAsideCopyFailedError(sidePath, errorMessage(error));
   }
-  attachSetAsideRecords(e, {});
+  attachSetAsideRecords(data, {});
   logForDebugging(
-    `installed_plugins.json: copied ${Object.keys(n).length} set-aside record(s) to ${h} before this write drops them from installed_plugins.json`,
+    `installed_plugins.json: copied ${Object.keys(setAside).length} set-aside record(s) to ${sidePath} before this write drops them from installed_plugins.json`,
     {
       level: "warn",
     },
@@ -647,9 +661,9 @@ function getInstalledPlugins() {
 /**
  * 经存储后端（storageV5）异步读取 installed_plugins.json 并缓存；内存已有时直接返回缓存。
  */
-async function getInstalledPluginsAsync(e) {
-  let n = installedStorageKey(e);
-  if (!isStorageV5Enabled() || e === undefined || n === null) return getInstalledPlugins();
+async function getInstalledPluginsAsync(storageV5) {
+  let storageKey = installedStorageKey(storageV5);
+  if (!isStorageV5Enabled() || storageV5 === undefined || storageKey === null) return getInstalledPlugins();
   let pluginRegistry = getPluginRegistry();
   if (pluginRegistry.installedPluginsFile !== null) {
     logForDebugging(
@@ -658,18 +672,18 @@ async function getInstalledPluginsAsync(e) {
     return pluginRegistry.installedPluginsFile;
   }
   let installedPluginsEpoch = pluginRegistry.installedPluginsEpoch;
-  let h;
+  let loaded;
   try {
-    h = loadInstalledPluginsV2(await readInstalledPluginsFileRaw_2(e, n));
+    loaded = loadInstalledPluginsV2(await readInstalledPluginsFileRaw_2(storageV5, storageKey));
     logForDebugging(
-      `Loaded installed_plugins.json through the storage interface (${Object.keys(h.plugins).length} plugins)`,
+      `Loaded installed_plugins.json through the storage interface (${Object.keys(loaded.plugins).length} plugins)`,
     );
   } catch (error) {
-    h = emptyStateAfterLoadFailure(error);
+    loaded = emptyStateAfterLoadFailure(error);
   }
   if (pluginRegistry.installedPluginsEpoch === installedPluginsEpoch)
-    pluginRegistry.installedPluginsFile ??= h;
-  return pluginRegistry.installedPluginsFile ?? h;
+    pluginRegistry.installedPluginsFile ??= loaded;
+  return pluginRegistry.installedPluginsFile ?? loaded;
 }
 //@ chunk-e6aww6q8.js:4335893-4335943 layout
 /**
@@ -703,56 +717,59 @@ function loadInstalledPluginsV2(rawData) {
   };
 }
 //@ chunk-e6aww6q8.js:4336352-4336372 layout
-var failedInstalledPluginsReads = new WeakSet();
+var failedInstalledPluginsReads; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4336352", () => {
+  failedInstalledPluginsReads = new WeakSet();
+});
 //@ chunk-e6aww6q8.js:4336372-4336405 placement
 /**
  * hasFailedInstalledPluginsRead：该路径曾读失败。
  */
-function hasFailedInstalledPluginsRead(e) {
-  return failedInstalledPluginsReads.has(e);
+function hasFailedInstalledPluginsRead(state) {
+  return failedInstalledPluginsReads.has(state);
 }
 //@ chunk-e6aww6q8.js:4336405-4336577 placement
-async function getInstalledPluginsMap(e, n = false) {
-  if (n) {
+async function getInstalledPluginsMap(storageV5, sync = false) {
+  if (sync) {
     let installedPlugins = loadInstalledPluginsSync();
     return hasFailedInstalledPluginsRead(installedPlugins) ? undefined : installedPlugins.plugins;
   }
   let installedPluginsFile = getPluginRegistry().installedPluginsFile;
-  if (installedPluginsFile === null && !e) return;
-  let s = installedPluginsFile ?? getInstalledPlugins();
-  return hasFailedInstalledPluginsRead(s) ? undefined : s.plugins;
+  if (installedPluginsFile === null && !storageV5) return;
+  let state = installedPluginsFile ?? getInstalledPlugins();
+  return hasFailedInstalledPluginsRead(state) ? undefined : state.plugins;
 }
 //@ chunk-e6aww6q8.js:4336577-4336721 placement
 /**
  * 其他与该插件共用（大小写不敏感）数据目录的插件 id。
  */
-function findDataDirSharers(e, n, r = new Set([e])) {
-  let lower = pluginDataDirPath(e).toLowerCase();
-  return Object.keys(n.plugins).filter(
-    (key) => key !== e && !r.has(key) && pluginDataDirPath(key).toLowerCase() === lower,
+function findDataDirSharers(pluginId, state, exclude = new Set([pluginId])) {
+  let lower = pluginDataDirPath(pluginId).toLowerCase();
+  return Object.keys(state.plugins).filter(
+    (key) => key !== pluginId && !exclude.has(key) && pluginDataDirPath(key).toLowerCase() === lower,
   );
 }
 //@ chunk-e6aww6q8.js:4336721-4336799 placement
 /**
  * isPluginUnreadableOrShared：插件读失败或数据目录被共享。
  */
-function isPluginUnreadableOrShared(e, n, r = new Set([e])) {
-  if (hasFailedInstalledPluginsRead(n)) return true;
-  return findDataDirSharers(e, n, r).length > 0;
+function isPluginUnreadableOrShared(pluginId, state, exclude = new Set([pluginId])) {
+  if (hasFailedInstalledPluginsRead(state)) return true;
+  return findDataDirSharers(pluginId, state, exclude).length > 0;
 }
 //@ chunk-e6aww6q8.js:4336799-4336899 placement
 /**
  * 有安装记录的插件 id；读失败返回 unknown。
  */
-function listInstalledPluginIds(installedPlugins) {
-  return hasFailedInstalledPluginsRead(installedPlugins)
+function listInstalledPluginIds(data) {
+  return hasFailedInstalledPluginsRead(data)
     ? "unknown"
-    : Object.entries(installedPlugins.plugins).flatMap(([key, value]) => (value.length > 0 ? [key] : []));
+    : Object.entries(data.plugins).flatMap(([key, value]) => (value.length > 0 ? [key] : []));
 }
 //@ chunk-e6aww6q8.js:4336899-4337148 placement
 function emptyStateAfterLoadFailure(error) {
-  let n = errorMessage(error);
-  logForDebugging(`Failed to load installed_plugins.json: ${n}. Starting with empty state.`, {
+  let reason = errorMessage(error);
+  logForDebugging(`Failed to load installed_plugins.json: ${reason}. Starting with empty state.`, {
     level: "error",
   });
   if (
@@ -762,16 +779,16 @@ function emptyStateAfterLoadFailure(error) {
   )
     logError(toError(error));
   logPluginStateFileError("load", error, true);
-  let r = {
+  let state = {
     version: 2,
     plugins: {},
   };
-  failedInstalledPluginsReads.add(r);
-  return r;
+  failedInstalledPluginsReads.add(state);
+  return state;
 }
 //@ chunk-e6aww6q8.js:4337148-4337208 placement
-function installedStorageKey(e) {
-  return !isStorageV5Enabled() || e === undefined ? null : pluginRegistrySpace("installed");
+function installedStorageKey(storageV5) {
+  return !isStorageV5Enabled() || storageV5 === undefined ? null : pluginRegistrySpace("installed");
 }
 //@ chunk-e6aww6q8.js:4337208-4337251 placement
 function installedPluginsFileMode() {
@@ -781,44 +798,56 @@ function installedPluginsFileMode() {
 /**
  * 读取 installed_plugins.json，遇到未知版本格式时报错。
  */
-function readInstalledPluginsFile(e) {
-  if (e.unreadRecordIds.length === 0)
-    return `installed_plugins.json is in a format (version ${e.formatVersion ?? "unknown"}) that this version of Claude Code does not know, so plugins cannot be changed from this version, and some may not load. Update Claude Code on this machine (claude update), or change plugins with the version of Claude Code that wrote ${getInstalledPluginsFilePath()}.`;
-  let mapped = e.unreadRecordIds
+function readInstalledPluginsFile(refusal) {
+  if (refusal.unreadRecordIds.length === 0)
+    return `installed_plugins.json is in a format (version ${refusal.formatVersion ?? "unknown"}) that this version of Claude Code does not know, so plugins cannot be changed from this version, and some may not load. Update Claude Code on this machine (claude update), or change plugins with the version of Claude Code that wrote ${getInstalledPluginsFilePath()}.`;
+  let mapped = refusal.unreadRecordIds
     .slice(0, 3)
     .map((unreadRecordId) => `"${quotedPrintable(unreadRecordId, 120)}"`);
-  let r = e.unreadRecordIds.length - mapped.length;
-  let s = e.unreadRecordIds.length === 1;
-  let h = `${mapped.join(", ")}${r > 0 ? ` and ${r} more` : ""}`;
-  return `installed_plugins.json holds ${s ? "a record" : "records"} under ${h} that this version of Claude Code cannot read, so plugins cannot be changed from this version, and some may not load. Update Claude Code on this machine (claude update); or uninstall ${s ? "that plugin" : "those plugins"} with the version of Claude Code that wrote ${s ? "the record" : "the records"}; or, if neither helps, delete ${s ? "that record" : "each of those records"} from ${getInstalledPluginsFilePath()} by hand, then restart or run /reload-plugins.`;
+  let moreCount = refusal.unreadRecordIds.length - mapped.length;
+  let isSingle = refusal.unreadRecordIds.length === 1;
+  let idsText = `${mapped.join(", ")}${moreCount > 0 ? ` and ${moreCount} more` : ""}`;
+  return `installed_plugins.json holds ${isSingle ? "a record" : "records"} under ${idsText} that this version of Claude Code cannot read, so plugins cannot be changed from this version, and some may not load. Update Claude Code on this machine (claude update); or uninstall ${isSingle ? "that plugin" : "those plugins"} with the version of Claude Code that wrote ${isSingle ? "the record" : "the records"}; or, if neither helps, delete ${isSingle ? "that record" : "each of those records"} from ${getInstalledPluginsFilePath()} by hand, then restart or run /reload-plugins.`;
 }
 //@ chunk-e6aww6q8.js:4338298-4338628 placement
-class InstalledListNotReplacedError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  unreadRecordIds;
-  formatVersion;
-  constructor(unreadRecordIds, formatVersion, r) {
-    super(
-      `installed_plugins.json was not changed: ${
-        r ??
-        readInstalledPluginsFile({
-          unreadRecordIds,
-          formatVersion,
-        })
-      }`,
-      "installed_plugins.json was not replaced: it holds what this build cannot read",
-    );
-    this.unreadRecordIds = unreadRecordIds;
-    this.formatVersion = formatVersion;
-    this.name = "InstalledListNotReplacedError";
-  }
+let InstalledListNotReplacedError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:4338298", () => {
+  InstalledListNotReplacedError = class InstalledListNotReplacedError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    unreadRecordIds;
+    formatVersion;
+    constructor(unreadRecordIds, formatVersion, detail) {
+      super(
+        `installed_plugins.json was not changed: ${
+          detail ??
+          readInstalledPluginsFile({
+            unreadRecordIds,
+            formatVersion,
+          })
+        }`,
+        "installed_plugins.json was not replaced: it holds what this build cannot read",
+      );
+      this.unreadRecordIds = unreadRecordIds;
+      this.formatVersion = formatVersion;
+      this.name = "InstalledListNotReplacedError";
+    }
+  };
+});
+//@ chunk-e6aww6q8.js:4338628-4338664 placement = appendEntryToFile (0.638)
+/**
+ * 写已安装插件清单前确保插件数据目录存在（mkdirSync，已存在则无操作）。
+ */
+function ensurePluginsDirectoryExists() {
+  getFsImplementation().mkdirSync(getPluginsDirectory());
 }
 //@ chunk-e6aww6q8.js:4338664-4339067 placement
 /**
  * 不可读文件的保留副本写失败的错误。
  */
-function keptCopyWriteFailedError(e, n) {
+function keptCopyWriteFailedError(filePath, reason) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-    `installed_plugins.json cannot be read, and it was not changed. Before it is rebuilt, its contents are kept in a file beside it, but that file (${e}) could not be written: ${n}. Free disk space or make the plugins folder writable, or move installed_plugins.json aside by hand, then try again.`,
+    `installed_plugins.json cannot be read, and it was not changed. Before it is rebuilt, its contents are kept in a file beside it, but that file (${filePath}) could not be written: ${reason}. Free disk space or make the plugins folder writable, or move installed_plugins.json aside by hand, then try again.`,
     "the kept copy of an unreadable installed_plugins.json could not be written",
   );
 }
@@ -829,50 +858,50 @@ var MAX_INSTALLED_PLUGINS_BYTES = 16777216;
  * 安全地同步读取文件：O_RDONLY|O_NOFOLLOW|O_NONBLOCK 打开，fstat 与 lstat 必须同为单硬链接普通文件且 dev/ino 一致， 大小不超过 Rys；读满或出错返回 undefined。
  */
 function readSmallRegularFileSync(installedPluginsFilePath) {
-  let n;
+  let fd;
   try {
-    n = openSync(installedPluginsFilePath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-    let r = fstatSync(n, {
+    fd = openSync(installedPluginsFilePath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    let fdStat = fstatSync(fd, {
       bigint: true,
     });
-    let s = lstatSync(installedPluginsFilePath, {
+    let pathStat = lstatSync(installedPluginsFilePath, {
       bigint: true,
     });
     if (
-      !r.isFile() ||
-      !s.isFile() ||
-      r.nlink !== 1n ||
-      s.nlink !== 1n ||
-      isSentinelInode(r.ino) ||
-      r.dev !== s.dev ||
-      r.ino !== s.ino
+      !fdStat.isFile() ||
+      !pathStat.isFile() ||
+      fdStat.nlink !== 1n ||
+      pathStat.nlink !== 1n ||
+      isSentinelInode(fdStat.ino) ||
+      fdStat.dev !== pathStat.dev ||
+      fdStat.ino !== pathStat.ino
     )
       return;
-    if (r.size > BigInt(MAX_INSTALLED_PLUGINS_BYTES)) return;
-    let h = Buffer.allocUnsafe(Number(r.size) + 1);
-    let y = 0;
-    while (y < h.length) {
-      let S = readSync(n, h, y, h.length - y, y);
-      if (S === 0) return Buffer.from(h.subarray(0, y));
-      y += S;
+    if (fdStat.size > BigInt(MAX_INSTALLED_PLUGINS_BYTES)) return;
+    let buffer = Buffer.allocUnsafe(Number(fdStat.size) + 1);
+    let offset = 0;
+    while (offset < buffer.length) {
+      let bytesRead = readSync(fd, buffer, offset, buffer.length - offset, offset);
+      if (bytesRead === 0) return Buffer.from(buffer.subarray(0, offset));
+      offset += bytesRead;
     }
     return;
   } catch {
     return;
   } finally {
-    if (n !== undefined)
+    if (fd !== undefined)
       try {
-        closeSync(n);
+        closeSync(fd);
       } catch {}
   }
 }
 //@ chunk-e6aww6q8.js:4339548-4340376 placement
-function readInstalledPluginsRaw(e) {
-  let n = typeof e === "string" ? Buffer.from(e, "latin1") : Buffer.from(e);
+function readInstalledPluginsRaw(raw) {
+  let rawBuf = typeof raw === "string" ? Buffer.from(raw, "latin1") : Buffer.from(raw);
   let smallRegularFile = readSmallRegularFileSync(getInstalledPluginsFilePath());
   if (
     smallRegularFile === undefined ||
-    !(smallRegularFile.equals(n) || smallRegularFile.toString("utf8") === n.toString("utf8"))
+    !(smallRegularFile.equals(rawBuf) || smallRegularFile.toString("utf8") === rawBuf.toString("utf8"))
   ) {
     logForDebugging(
       "installed_plugins.json could not be read at all, and its bytes are NOT kept: its name is not a plain file of its own (a symbolic link, a second name of another file, too large), or it changed while it was read; this write replaces only the name",
@@ -882,7 +911,7 @@ function readInstalledPluginsRaw(e) {
     );
     return;
   }
-  let s = join(
+  let keptPath = join(
     getPluginsDirectory(),
     unreadableKeptFileName(
       new Date(),
@@ -890,14 +919,14 @@ function readInstalledPluginsRaw(e) {
     ),
   );
   try {
-    appendEntryToFile();
-    writeAndPublishSync(s, smallRegularFile, 384);
+    ensurePluginsDirectoryExists();
+    writeAndPublishSync(keptPath, smallRegularFile, 384);
   } catch (error) {
-    let y = keptCopyWriteFailedError(s, errorMessage(error));
+    let keptCopyError = keptCopyWriteFailedError(keptPath, errorMessage(error));
     let errnoCode = getErrnoCode(error);
     let errno = isSyscallError(error) ? error.errno : undefined;
     throw Object.assign(
-      y,
+      keptCopyError,
       errnoCode === undefined
         ? {}
         : {
@@ -911,7 +940,7 @@ function readInstalledPluginsRaw(e) {
     );
   }
   logForDebugging(
-    `installed_plugins.json could not be read at all (not JSON, or not a list of plugins): its bytes are kept in ${s} before this write rebuilds it`,
+    `installed_plugins.json could not be read at all (not JSON, or not a list of plugins): its bytes are kept in ${keptPath} before this write rebuilds it`,
     {
       level: "warn",
     },
@@ -969,30 +998,30 @@ function checkInstalledPluginsReplaceable(raw) {
       };
 }
 //@ chunk-e6aww6q8.js:4341033-4341216 placement
-function assertInstalledPluginsReplaceable_2(installedPluginsFileRaw, n) {
-  if (installedPluginsFileRaw === null) return;
-  let r = checkInstalledPluginsReplaceable(installedPluginsFileRaw);
-  if (r.refusal !== undefined) throw r.refusal;
-  if (n !== undefined && r.setAside !== undefined)
-    attachSetAsideRecords(n, {
-      ...setAsideRecordsOf(n),
-      ...r.setAside,
+function assertInstalledPluginsReplaceable_2(raw, target) {
+  if (raw === null) return;
+  let check = checkInstalledPluginsReplaceable(raw);
+  if (check.refusal !== undefined) throw check.refusal;
+  if (target !== undefined && check.setAside !== undefined)
+    attachSetAsideRecords(target, {
+      ...setAsideRecordsOf(target),
+      ...check.setAside,
     });
-  if (r.unreadableAtAll) readInstalledPluginsRaw(installedPluginsFileRaw);
+  if (check.unreadableAtAll) readInstalledPluginsRaw(raw);
 }
 //@ chunk-e6aww6q8.js:4341216-4341381 placement
 /**
  * 列出 installed_plugins 不可读时保留的副本文件。
  */
 async function listUnreadableKeptFiles() {
-  let e = dirname(getInstalledPluginsFilePath());
+  let dir = dirname(getInstalledPluginsFilePath());
   try {
-    return (await getFsImplementation().readdir(e))
-      .filter((r) => r.isFile())
-      .map((r) => r.name)
+    return (await getFsImplementation().readdir(dir))
+      .filter((entry) => entry.isFile())
+      .map((entry) => entry.name)
       .filter(isUnreadableKeptFileName)
       .sort()
-      .map((r) => join(e, r));
+      .map((fileName) => join(dir, fileName));
   } catch {
     return [];
   }
@@ -1002,14 +1031,14 @@ async function listUnreadableKeptFiles() {
  * 列出 set-aside 旁文件。
  */
 async function listSetAsideFiles() {
-  let e = dirname(getInstalledPluginsFilePath());
+  let dir = dirname(getInstalledPluginsFilePath());
   try {
-    return (await getFsImplementation().readdir(e))
-      .filter((r) => r.isFile())
-      .map((r) => r.name)
+    return (await getFsImplementation().readdir(dir))
+      .filter((entry) => entry.isFile())
+      .map((entry) => entry.name)
       .filter(isSetAsideFileName)
       .sort()
-      .map((r) => join(e, r));
+      .map((fileName) => join(dir, fileName));
   } catch {
     return [];
   }
@@ -1020,10 +1049,10 @@ async function listSetAsideFiles() {
  */
 async function getInstalledListRefusal(storageV5) {
   try {
-    let n = installedStorageKey(storageV5);
+    let storageKey = installedStorageKey(storageV5);
     assertInstalledPluginsReplaceable(
-      isStorageV5Enabled() && storageV5 !== undefined && n !== null
-        ? await readInstalledPluginsViaStorage(storageV5, n)
+      isStorageV5Enabled() && storageV5 !== undefined && storageKey !== null
+        ? await readInstalledPluginsViaStorage(storageV5, storageKey)
         : readInstalledPluginsFileRaw(getInstalledPluginsFilePath()),
     );
     return;
@@ -1038,15 +1067,15 @@ async function getInstalledListRefusal(storageV5) {
   }
 }
 //@ chunk-e6aww6q8.js:4341807-4342000 placement
-async function readInstalledPluginsLenient(e) {
+async function readInstalledPluginsLenient(storageV5) {
   try {
-    let n = installedStorageKey(e);
-    let r =
-      isStorageV5Enabled() && e !== undefined && n !== null
-        ? await readInstalledPluginsViaStorage(e, n)
+    let storageKey = installedStorageKey(storageV5);
+    let raw =
+      isStorageV5Enabled() && storageV5 !== undefined && storageKey !== null
+        ? await readInstalledPluginsViaStorage(storageV5, storageKey)
         : readInstalledPluginsFileRaw(getInstalledPluginsFilePath());
-    if (r === null) return {};
-    let installedPluginsJson = parseInstalledPluginsJson(getMcpAuthCache(r));
+    if (raw === null) return {};
+    let installedPluginsJson = parseInstalledPluginsJson(getMcpAuthCache(raw));
     return installedPluginsJson.version === 2
       ? parseInstalledPluginsV2Leniently(installedPluginsJson.data).file.plugins
       : {};
@@ -1055,12 +1084,12 @@ async function readInstalledPluginsLenient(e) {
   }
 }
 //@ chunk-e6aww6q8.js:4342000-4342192 placement
-async function isInstalledListReplaceRefused(e) {
+async function isInstalledListReplaceRefused(storageV5) {
   try {
-    let n = installedStorageKey(e);
+    let storageKey = installedStorageKey(storageV5);
     assertInstalledPluginsReplaceable(
-      isStorageV5Enabled() && e !== undefined && n !== null
-        ? await readInstalledPluginsViaStorage(e, n)
+      isStorageV5Enabled() && storageV5 !== undefined && storageKey !== null
+        ? await readInstalledPluginsViaStorage(storageV5, storageKey)
         : readInstalledPluginsFileRaw(getInstalledPluginsFilePath()),
     );
     return false;
@@ -1075,10 +1104,10 @@ async function isInstalledListReplaceRefused(e) {
 /**
  * 以 latin1 读原始字节；不存在返回 null，读不了抛不可覆盖错误。
  */
-function readInstalledPluginsFileRaw(e) {
+function readInstalledPluginsFileRaw(filePath) {
   try {
     return Buffer.from(
-      getFsImplementation().readFileSync(e, {
+      getFsImplementation().readFileSync(filePath, {
         encoding: "latin1",
       }),
       "latin1",
@@ -1110,15 +1139,15 @@ function readInstalledPluginsFileRaw(e) {
 /**
  * 写回 installed_plugins.json（V2），存储后端模式下经存储接口原子写。
  */
-async function saveInstalledPluginsV2(installedPluginsFile, n) {
-  let r = installedStorageKey(n);
-  if (isStorageV5Enabled() && n !== undefined && r !== null) {
+async function saveInstalledPluginsV2(installedPluginsFile, storageV5) {
+  let storageKey = installedStorageKey(storageV5);
+  if (isStorageV5Enabled() && storageV5 !== undefined && storageKey !== null) {
     await storageUpdateWithRetry(
-      n,
-      r,
-      (y) => {
+      storageV5,
+      storageKey,
+      (current) => {
         assertInstalledPluginsReplaceable_2(
-          y === undefined ? null : Buffer.from(y.value),
+          current === undefined ? null : Buffer.from(current.value),
           installedPluginsFile,
         );
         return {
@@ -1154,122 +1183,142 @@ async function saveInstalledPluginsV2(installedPluginsFile, n) {
   }
 }
 //@ chunk-e6aww6q8.js:4343100-4343460 layout
-function storageSaveError(e) {
-  let n = formatStorageError(e);
-  logForDebugging(`Failed to save installed_plugins.json through the storage interface: ${n}`, {
+function storageSaveError(error) {
+  let formatted = formatStorageError(error);
+  logForDebugging(`Failed to save installed_plugins.json through the storage interface: ${formatted}`, {
     level: "error",
   });
-  let r =
-    e.code === "Failed" && e.cause instanceof Error
-      ? attachErrnoFields(e.cause, e)
+  let wrapped =
+    error.code === "Failed" && error.cause instanceof Error
+      ? attachErrnoFields(error.cause, error)
       : Object.assign(
           new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `Failed to save installed_plugins.json: ${n}`,
+            `Failed to save installed_plugins.json: ${formatted}`,
             "failed to save installed_plugins.json (v5 backend error)",
           ),
           {
-            cause: e,
-            ...errnoFieldsFromStorageError(e),
+            cause: error,
+            ...errnoFieldsFromStorageError(error),
           },
         );
-  logPluginStateFileError("save", r, false);
-  return r;
+  logPluginStateFileError("save", wrapped, false);
+  return wrapped;
 }
 //@ chunk-e6aww6q8.js:4343460-4343685 layout
-function storageAccessError(error) {
-  return error.code === "Failed" && error.cause instanceof Error
-    ? attachErrnoFields(error.cause, error)
+function storageAccessError(storageError) {
+  return storageError.code === "Failed" && storageError.cause instanceof Error
+    ? attachErrnoFields(storageError.cause, storageError)
     : Object.assign(
         new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `installed_plugins.json: ${formatStorageError(error)}`,
+          `installed_plugins.json: ${formatStorageError(storageError)}`,
           "installed_plugins.json storage access failed (v5 backend error)",
         ),
         {
-          cause: error,
-          ...errnoFieldsFromStorageError(error),
+          cause: storageError,
+          ...errnoFieldsFromStorageError(storageError),
         },
       );
 }
 //@ chunk-e6aww6q8.js:4343685-4343742 layout
-function attachErrnoFields(cause, n) {
-  return isSyscallError(cause) ? cause : Object.assign(cause, errnoFieldsFromStorageError(n));
+function attachErrnoFields(cause, storageError) {
+  return isSyscallError(cause) ? cause : Object.assign(cause, errnoFieldsFromStorageError(storageError));
 }
 //@ chunk-e6aww6q8.js:4343742-4343785 layout
-var ERRNO_BY_CODE = new Map(Object.entries(constants_8.errno));
+var ERRNO_BY_CODE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4343742", () => {
+  ERRNO_BY_CODE = new Map(Object.entries(constants_8.errno));
+});
 //@ chunk-e6aww6q8.js:4343785-4343936 layout
-function errnoFieldsFromStorageError(e) {
-  let telemetryCode = "telemetryCode" in e ? e.telemetryCode : undefined;
-  let r = telemetryCode === undefined ? undefined : ERRNO_BY_CODE.get(telemetryCode);
-  return telemetryCode === undefined || r === undefined
+function errnoFieldsFromStorageError(storageError) {
+  let telemetryCode = "telemetryCode" in storageError ? storageError.telemetryCode : undefined;
+  let errno = telemetryCode === undefined ? undefined : ERRNO_BY_CODE.get(telemetryCode);
+  return telemetryCode === undefined || errno === undefined
     ? undefined
     : {
         code: telemetryCode,
-        errno: -r,
+        errno: -errno,
       };
 }
 //@ chunk-e6aww6q8.js:4343936-4343958 layout
-var STORAGE_UPDATE_MAX_ATTEMPTS = 5;
-var storageUpdateBackoff = createJitteredBackoff(50);
+var STORAGE_UPDATE_MAX_ATTEMPTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var storageUpdateBackoff;
+deferInit("chunk-e6aww6q8.js:4343936", () => {
+  STORAGE_UPDATE_MAX_ATTEMPTS = 5;
+  storageUpdateBackoff = createJitteredBackoff(50);
+});
 //@ chunk-e6aww6q8.js:4343958-4344319 layout
-async function updateInstalledPluginsViaStorage(e, n, r) {
-  let s = await storageUpdateWithRetry(e, n, (h) => applyUpdateToStoredFile(h, r), storageSaveError);
-  if (s.loadError !== undefined) {
-    logForDebugging(`Failed to load installed plugins from disk: ${errorMessage(s.loadError)}`, {
+async function updateInstalledPluginsViaStorage(storageV5, storageKey, update) {
+  let outcome = await storageUpdateWithRetry(
+    storageV5,
+    storageKey,
+    (current) => applyUpdateToStoredFile(current, update),
+    storageSaveError,
+  );
+  if (outcome.loadError !== undefined) {
+    logForDebugging(`Failed to load installed plugins from disk: ${errorMessage(outcome.loadError)}`, {
       level: "error",
     });
-    logPluginStateFileError("load-from-disk", s.loadError, true);
+    logPluginStateFileError("load-from-disk", outcome.loadError, true);
   }
-  if (s.written !== undefined) {
-    setInstalledPluginsCache(s.written);
+  if (outcome.written !== undefined) {
+    setInstalledPluginsCache(outcome.written);
     logForDebugging(
-      `Saved ${Object.keys(s.written.plugins).length} installed plugins through the storage interface`,
+      `Saved ${Object.keys(outcome.written.plugins).length} installed plugins through the storage interface`,
     );
   }
-  return s.result;
+  return outcome.result;
 }
 //@ chunk-e6aww6q8.js:4344319-4344708 layout
-async function storageUpdateWithRetry(e, n, r, s) {
+async function storageUpdateWithRetry(storageV5, storageKey, update, toError) {
   for (let idx = 1; ; idx++) {
-    let y = await e.update(n, r, {
+    let result = await storageV5.update(storageKey, update, {
       mode: installedPluginsFileMode(),
     });
-    if (!y.ok) {
+    if (!result.ok) {
       if (
-        y.error.code === "Unavailable" &&
-        y.error.telemetryCode === "LockSuspect" &&
+        result.error.code === "Unavailable" &&
+        result.error.telemetryCode === "LockSuspect" &&
         idx < STORAGE_UPDATE_MAX_ATTEMPTS
       ) {
-        await (y.error.retryAfterMs !== undefined ? sleep(y.error.retryAfterMs) : storageUpdateBackoff(idx));
+        await (result.error.retryAfterMs !== undefined
+          ? sleep(result.error.retryAfterMs)
+          : storageUpdateBackoff(idx));
         continue;
       }
-      throw s(y.error);
+      throw toError(result.error);
     }
-    let S = y.value.result;
-    if (S === undefined) throw Error("installed plugins registry update settled without an outcome");
-    return S;
+    let updateResult = result.value.result;
+    if (updateResult === undefined)
+      throw Error("installed plugins registry update settled without an outcome");
+    return updateResult;
   }
 }
 //@ chunk-e6aww6q8.js:4344708-4344862 layout
 /**
  * 存储后端模式下把旧的 V1 installed_plugins.json 原地迁移为 V2 并刷新内存缓存。
  */
-async function migrateStoredV1ToV2(e, n) {
-  let installedPluginsFileRaw = await readInstalledPluginsFileRaw_2(e, n);
+async function migrateStoredV1ToV2(storageV5, storageKey) {
+  let installedPluginsFileRaw = await readInstalledPluginsFileRaw_2(storageV5, storageKey);
   if (installedPluginsFileRaw === null || installedPluginsFileRaw.version !== 1) return;
-  let { converted } = await storageUpdateWithRetry(e, n, convertStoredV1, storageAccessError);
+  let { converted } = await storageUpdateWithRetry(
+    storageV5,
+    storageKey,
+    convertStoredV1,
+    storageAccessError,
+  );
   if (converted !== undefined) setInstalledPluginsCache(converted.data);
   return converted;
 }
 //@ chunk-e6aww6q8.js:4344862-4345201 layout
-function convertStoredV1(e) {
-  if (e === undefined)
+function convertStoredV1(current) {
+  if (current === undefined)
     return {
       skip: true,
       result: {
         converted: undefined,
       },
     };
-  let installedPluginsJson = parseInstalledPluginsJson(Buffer.from(e.value).toString("utf-8"));
+  let installedPluginsJson = parseInstalledPluginsJson(Buffer.from(current.value).toString("utf-8"));
   if (installedPluginsJson.version !== 1)
     return {
       skip: true,
@@ -1277,42 +1326,45 @@ function convertStoredV1(e) {
         converted: undefined,
       },
     };
-  let r = InstalledPluginsFileSchemaV1().parse(installedPluginsJson.data);
-  let s = migrateV1ToV2(r);
-  assertInstalledPluginsReplaceable_2(Buffer.from(e.value));
+  let v1Data = InstalledPluginsFileSchemaV1().parse(installedPluginsJson.data);
+  let v2Data = migrateV1ToV2(v1Data);
+  assertInstalledPluginsReplaceable_2(Buffer.from(current.value));
   return {
-    write: jsonStringify(s, null, 2),
+    write: jsonStringify(v2Data, null, 2),
     result: {
       converted: {
-        data: s,
-        v1PluginCount: Object.keys(r.plugins).length,
+        data: v2Data,
+        v1PluginCount: Object.keys(v1Data.plugins).length,
       },
     },
   };
 }
 //@ chunk-e6aww6q8.js:4345201-4345509 layout
-function applyUpdateToStoredFile(e, n) {
-  let r = {
+function applyUpdateToStoredFile(current, update) {
+  let stateFile = {
     version: 2,
     plugins: {},
   };
   let loadError;
-  if (e !== undefined)
+  if (current !== undefined)
     try {
-      r = toInstalledPluginsV2(parseInstalledPluginsJson(Buffer.from(e.value).toString("utf-8")));
+      stateFile = toInstalledPluginsV2(
+        parseInstalledPluginsJson(Buffer.from(current.value).toString("utf-8")),
+      );
     } catch (error) {
       loadError = error;
     }
-  let h = n(r);
-  if (h.write && e !== undefined) assertInstalledPluginsReplaceable_2(Buffer.from(e.value));
+  let updateResult = update(stateFile);
+  if (updateResult.write && current !== undefined)
+    assertInstalledPluginsReplaceable_2(Buffer.from(current.value));
   let result = {
-    result: h.result,
-    written: h.write ? r : undefined,
+    result: updateResult.result,
+    written: updateResult.write ? stateFile : undefined,
     loadError,
   };
-  return h.write
+  return updateResult.write
     ? {
-        write: serializeInstalledPlugins(r),
+        write: serializeInstalledPlugins(stateFile),
         result,
       }
     : {
@@ -1324,28 +1376,29 @@ function applyUpdateToStoredFile(e, n) {
 /**
  * installed_plugins.json 的读-改-写入口：回调拿到当前文件，返回 {write, result}；write 为真时保存（存储后端模式下走带重试的 update）。
  */
-async function updateInstalledPlugins(e, n) {
-  let r = installedStorageKey(n);
-  if (isStorageV5Enabled() && n !== undefined && r !== null) return updateInstalledPluginsViaStorage(n, r, e);
+async function updateInstalledPlugins(update, storageV5) {
+  let storageKey = installedStorageKey(storageV5);
+  if (isStorageV5Enabled() && storageV5 !== undefined && storageKey !== null)
+    return updateInstalledPluginsViaStorage(storageV5, storageKey, update);
   let installedPlugins = loadInstalledPluginsSync();
-  let h = e(installedPlugins);
-  if (h.write) await saveInstalledPluginsV2(installedPlugins);
-  return h.result;
+  let updateResult = update(installedPlugins);
+  if (updateResult.write) await saveInstalledPluginsV2(installedPlugins);
+  return updateResult.result;
 }
 //@ chunk-e6aww6q8.js:4345649-4345876 fingerprint = removePluginInstallation (0.661)
 /**
  * 删除某插件在指定作用域/项目下的安装记录。
  */
-async function removePluginInstallation(e, scope, r, storageV5, h) {
-  let y = await updateInstalledPlugins(
-    (entry) => removeInstallationFromFile(entry, e, scope, r, h),
+async function removePluginInstallation(pluginId, scope, projectPath, storageV5, keepRecord) {
+  let result = await updateInstalledPlugins(
+    (entry) => removeInstallationFromFile(entry, pluginId, scope, projectPath, keepRecord),
     storageV5,
   );
-  if (y === "kept") return false;
-  if (y) {
-    logForDebugging(`Removed installation for ${e} at scope ${scope}`);
-    if (y.producerDirs.length > 0) {
-      for (let producerDir of y.producerDirs)
+  if (result === "kept") return false;
+  if (result) {
+    logForDebugging(`Removed installation for ${pluginId} at scope ${scope}`);
+    if (result.producerDirs.length > 0) {
+      for (let producerDir of result.producerDirs)
         recordProducerDir(producerDir, {
           emit: false,
         });
@@ -1357,33 +1410,42 @@ async function removePluginInstallation(e, scope, r, storageV5, h) {
 /**
  * 从 V2 数据中删除指定作用域/项目的安装记录（给定期望记录不匹配时保留，返回 kept）。
  */
-function removeInstallationFromFile(entry, n, r, s, h) {
-  let y = entry.plugins[n];
-  if (!y)
+function removeInstallationFromFile(entry, pluginId, scope, projectPath, keepRecord) {
+  let installations = entry.plugins[pluginId];
+  if (!installations)
     return {
       write: false,
       result: false,
     };
-  let found = y.find((q) => q.scope === r && q.projectPath === s);
-  if (h !== undefined && found !== undefined && !registerPluginInstallation(found, h))
+  let existing = installations.find(
+    (installation) => installation.scope === scope && installation.projectPath === projectPath,
+  );
+  if (keepRecord !== undefined && existing !== undefined && !registerPluginInstallation(existing, keepRecord))
     return {
       write: false,
       result: "kept",
     };
-  let w = [];
-  let L = h === undefined ? findMatchingInstallations(y, r, s) : undefined;
-  entry.plugins[n] = y.filter((q) => {
-    let Z = L ? L.includes(q) : q.scope === r && q.projectPath === s;
-    if (Z) {
-      for (let Se of [q.sourceProducerPath, ...(q.previousProducerPaths ?? [])]) if (Se) w.push(Se);
+  let producerDirs = [];
+  let matching =
+    keepRecord === undefined ? findMatchingInstallations(installations, scope, projectPath) : undefined;
+  entry.plugins[pluginId] = installations.filter((installation) => {
+    let matches = matching
+      ? matching.includes(installation)
+      : installation.scope === scope && installation.projectPath === projectPath;
+    if (matches) {
+      for (let producerDir of [
+        installation.sourceProducerPath,
+        ...(installation.previousProducerPaths ?? []),
+      ])
+        if (producerDir) producerDirs.push(producerDir);
     }
-    return !Z;
+    return !matches;
   });
-  if (entry.plugins[n].length === 0) delete entry.plugins[n];
+  if (entry.plugins[pluginId].length === 0) delete entry.plugins[pluginId];
   return {
     write: true,
     result: {
-      producerDirs: w,
+      producerDirs,
     },
   };
 }
@@ -1391,26 +1453,31 @@ function removeInstallationFromFile(entry, n, r, s, h) {
 /**
  * 批量删除安装记录，有变化时清空全局快照。
  */
-async function removeInstallationsAndRefreshSnapshot(e, storageV5) {
-  if (e.length === 0) return;
-  if (await updateInstalledPlugins((s) => dropRenamedNonManagedInstallations(s, e), storageV5))
+async function removeInstallationsAndRefreshSnapshot(renames, storageV5) {
+  if (renames.length === 0) return;
+  if (
+    await updateInstalledPlugins(
+      (stateFile) => dropRenamedNonManagedInstallations(stateFile, renames),
+      storageV5,
+    )
+  )
     getPluginRegistry().installedPluginsSnapshot = null;
 }
 //@ chunk-e6aww6q8.js:4346491-4346739 layout
-function dropRenamedNonManagedInstallations(e, n) {
-  let r = false;
-  for (let { oldId, newId } of n) {
-    let y = e.plugins[oldId];
-    if (!y) continue;
-    let filtered = y.filter((w) => w.scope === "managed");
-    if (filtered.length === y.length) continue;
-    if (filtered.length > 0) e.plugins[oldId] = filtered;
-    else delete e.plugins[oldId];
-    r = true;
+function dropRenamedNonManagedInstallations(stateFile, renames) {
+  let changed = false;
+  for (let { oldId, newId } of renames) {
+    let installations = stateFile.plugins[oldId];
+    if (!installations) continue;
+    let filtered = installations.filter((installation) => installation.scope === "managed");
+    if (filtered.length === installations.length) continue;
+    if (filtered.length > 0) stateFile.plugins[oldId] = filtered;
+    else delete stateFile.plugins[oldId];
+    changed = true;
   }
   return {
-    write: r,
-    result: r,
+    write: changed,
+    result: changed,
   };
 }
 //@ chunk-e6aww6q8.js:4346739-4346833 layout
@@ -1444,12 +1511,13 @@ function loadInstalledPluginsSync() {
  * 读取 installed_plugins.json（有存储后端时经存储层）并转为 V2，不使用内存缓存。
  */
 async function loadInstalledPlugins(pluginId) {
-  let n = installedStorageKey(pluginId);
-  if (pluginId === undefined || n === null || !isStorageV5Enabled()) return loadInstalledPluginsSync();
+  let storageKey = installedStorageKey(pluginId);
+  if (pluginId === undefined || storageKey === null || !isStorageV5Enabled())
+    return loadInstalledPluginsSync();
   try {
-    let installedPluginsFileRaw = await readInstalledPluginsFileRaw_2(pluginId, n);
-    return installedPluginsFileRaw
-      ? toInstalledPluginsV2(installedPluginsFileRaw)
+    let raw = await readInstalledPluginsFileRaw_2(pluginId, storageKey);
+    return raw
+      ? toInstalledPluginsV2(raw)
       : {
           version: 2,
           plugins: {},
@@ -1465,58 +1533,58 @@ function loadInstalledPluginsFromDisk(error) {
     level: "error",
   });
   logPluginStateFileError("load-from-disk", error, true);
-  let r = {
+  let state = {
     version: 2,
     plugins: {},
   };
-  failedInstalledPluginsReads.add(r);
-  return r;
+  failedInstalledPluginsReads.add(state);
+  return state;
 }
 //@ chunk-e6aww6q8.js:4347261-4348020 fingerprint = updateInstallationPathOnDisk (0.516)
 /**
  * 插件更新后把磁盘上安装记录的 installPath/version/gitCommitSha/command 来源字段改成新值（找不到记录时报错）。
  */
 async function updateInstallationPathOnDisk(
-  e,
+  pluginId,
   scope,
   projectPath,
-  s,
-  h,
+  installPath,
+  version,
   gitCommitSha,
   resolvedVersion,
-  w,
+  sourceMeta,
   storageV5,
   claudeAi,
-  q,
+  directoryRepositoryKey,
   npm,
 ) {
-  let sourceCommand = w?.sourceCommand;
-  let sourceProducerPath = w?.sourceProducerPath;
-  let we = {
-    newPath: s,
-    newVersion: h,
+  let sourceCommand = sourceMeta?.sourceCommand;
+  let sourceProducerPath = sourceMeta?.sourceProducerPath;
+  let patch = {
+    newPath: installPath,
+    newVersion: version,
     gitCommitSha,
     resolvedVersion,
     sourceCommand,
     sourceProducerPath,
     claudeAi,
-    directoryRepositoryKey: q,
+    directoryRepositoryKey,
     npm,
   };
-  if (q !== undefined)
-    await setDirectoryBinding(e, q, {
+  if (directoryRepositoryKey !== undefined)
+    await setDirectoryBinding(pluginId, directoryRepositoryKey, {
       keepExisting: true,
     });
-  let Ee = installedStorageKey(storageV5);
-  let Ae;
-  if (isStorageV5Enabled() && storageV5 !== undefined && Ee !== null)
-    Ae = await updateInstalledPluginsViaStorage(storageV5, Ee, (Ie) =>
-      updateInstallationRecord(Ie, e, scope, projectPath, we),
+  let storageKey = installedStorageKey(storageV5);
+  let result;
+  if (isStorageV5Enabled() && storageV5 !== undefined && storageKey !== null)
+    result = await updateInstalledPluginsViaStorage(storageV5, storageKey, (stateFile) =>
+      updateInstallationRecord(stateFile, pluginId, scope, projectPath, patch),
     );
   else {
     let filePath = loadInstalledPluginsSync();
-    Ae = updateInstallationRecord(filePath, e, scope, projectPath, we).result;
-    if (Ae === "updated") {
+    result = updateInstallationRecord(filePath, pluginId, scope, projectPath, patch).result;
+    if (result === "updated") {
       assertInstalledPluginsReplaceable_2(
         readInstalledPluginsFileRaw(getInstalledPluginsFilePath()),
         filePath,
@@ -1525,41 +1593,42 @@ async function updateInstallationPathOnDisk(
       getPluginRegistry().installedPluginsFile = null;
     }
   }
-  switch (Ae) {
+  switch (result) {
     case "no-plugin":
-      logForDebugging(`Cannot update ${e} on disk: plugin not found in installed plugins`);
+      logForDebugging(`Cannot update ${pluginId} on disk: plugin not found in installed plugins`);
       return;
     case "no-installation":
-      logForDebugging(`Cannot update ${e} on disk: no installation for scope ${scope}`);
+      logForDebugging(`Cannot update ${pluginId} on disk: no installation for scope ${scope}`);
       return;
     case "updated":
-      logForDebugging(`Updated ${e} on disk to version ${h} at ${s}`);
+      logForDebugging(`Updated ${pluginId} on disk to version ${version} at ${installPath}`);
   }
 }
 //@ chunk-e6aww6q8.js:4348020-4348384 layout
 /**
  * 为插件目录市场安装的插件记录 directoryRepositoryKey（仓库名绑定）。
  */
-async function recordDirectoryRepositoryKey(e, scope, projectPath, s, storageV5) {
+async function recordDirectoryRepositoryKey(pluginId, scope, projectPath, directoryRepositoryKey, storageV5) {
   {
-    await setDirectoryBinding(e, s, {
+    await setDirectoryBinding(pluginId, directoryRepositoryKey, {
       keepExisting: true,
     });
-    let y = (installedPlugins) => {
-      let G = installationAtTarget(installedPlugins.plugins[e], scope, projectPath);
-      if (G && G.directoryRepositoryKey === undefined) G.directoryRepositoryKey = s;
+    let applyPatch = (installedPlugins) => {
+      let installation = installationAtTarget(installedPlugins.plugins[pluginId], scope, projectPath);
+      if (installation && installation.directoryRepositoryKey === undefined)
+        installation.directoryRepositoryKey = directoryRepositoryKey;
       return {
-        write: G !== undefined,
-        result: G !== undefined,
+        write: installation !== undefined,
+        result: installation !== undefined,
       };
     };
-    let S = installedStorageKey(storageV5);
-    if (isStorageV5Enabled() && storageV5 !== undefined && S !== null) {
-      await updateInstalledPluginsViaStorage(storageV5, S, y);
+    let storageKey = installedStorageKey(storageV5);
+    if (isStorageV5Enabled() && storageV5 !== undefined && storageKey !== null) {
+      await updateInstalledPluginsViaStorage(storageV5, storageKey, applyPatch);
       return;
     }
     let installedPlugins = loadInstalledPluginsSync();
-    if (y(installedPlugins).write) {
+    if (applyPatch(installedPlugins).write) {
       assertInstalledPluginsReplaceable_2(
         readInstalledPluginsFileRaw(getInstalledPluginsFilePath()),
         installedPlugins,
@@ -1571,10 +1640,10 @@ async function recordDirectoryRepositoryKey(e, scope, projectPath, s, storageV5)
 }
 //@ chunk-e6aww6q8.js:4348384-4349921 layout
 function updateInstallationRecord(
-  e,
-  n,
-  r,
-  s,
+  stateFile,
+  pluginId,
+  scope,
+  projectPath,
   {
     newPath,
     newVersion,
@@ -1587,51 +1656,53 @@ function updateInstallationRecord(
     npm,
   },
 ) {
-  let ke = e.plugins[n];
-  if (!ke)
+  let installations = stateFile.plugins[pluginId];
+  if (!installations)
     return {
       write: false,
       result: "no-plugin",
     };
-  let we = installationAtTarget(ke, r, s);
-  if (we) {
-    we.installPath = newPath;
-    if (we.version !== undefined) we.version = newVersion;
-    if (resolvedVersion !== undefined) we.resolvedVersion = resolvedVersion;
-    else delete we.resolvedVersion;
-    we.lastUpdated = new Date().toISOString();
-    if (gitCommitSha === null) delete we.gitCommitSha;
-    else if (gitCommitSha !== undefined) we.gitCommitSha = gitCommitSha;
+  let installation = installationAtTarget(installations, scope, projectPath);
+  if (installation) {
+    installation.installPath = newPath;
+    if (installation.version !== undefined) installation.version = newVersion;
+    if (resolvedVersion !== undefined) installation.resolvedVersion = resolvedVersion;
+    else delete installation.resolvedVersion;
+    installation.lastUpdated = new Date().toISOString();
+    if (gitCommitSha === null) delete installation.gitCommitSha;
+    else if (gitCommitSha !== undefined) installation.gitCommitSha = gitCommitSha;
     if (npm !== undefined) {
-      if (npm.npmVersionSpec !== undefined) we.npmVersionSpec = npm.npmVersionSpec;
-      else delete we.npmVersionSpec;
-      if (npm.npmResolved !== undefined) we.npmResolved = npm.npmResolved;
-      else delete we.npmResolved;
-      if (npm.npmIntegrity !== undefined) we.npmIntegrity = npm.npmIntegrity;
-      else delete we.npmIntegrity;
-      if (npm.npmRegistry !== undefined) we.npmRegistry = npm.npmRegistry;
-      else delete we.npmRegistry;
+      if (npm.npmVersionSpec !== undefined) installation.npmVersionSpec = npm.npmVersionSpec;
+      else delete installation.npmVersionSpec;
+      if (npm.npmResolved !== undefined) installation.npmResolved = npm.npmResolved;
+      else delete installation.npmResolved;
+      if (npm.npmIntegrity !== undefined) installation.npmIntegrity = npm.npmIntegrity;
+      else delete installation.npmIntegrity;
+      if (npm.npmRegistry !== undefined) installation.npmRegistry = npm.npmRegistry;
+      else delete installation.npmRegistry;
     }
     if (claudeAi !== undefined) {
-      we.claudeaiPluginId = claudeAi.claudeaiPluginId;
-      if (claudeAi.archiveSha256 !== undefined) we.archiveSha256 = claudeAi.archiveSha256;
-      else delete we.archiveSha256;
+      installation.claudeaiPluginId = claudeAi.claudeaiPluginId;
+      if (claudeAi.archiveSha256 !== undefined) installation.archiveSha256 = claudeAi.archiveSha256;
+      else delete installation.archiveSha256;
     }
-    if (directoryRepositoryKey !== undefined) we.directoryRepositoryKey = directoryRepositoryKey;
-    if (sourceCommand !== undefined) we.sourceCommand = sourceCommand;
-    else delete we.sourceCommand;
+    if (directoryRepositoryKey !== undefined) installation.directoryRepositoryKey = directoryRepositoryKey;
+    if (sourceCommand !== undefined) installation.sourceCommand = sourceCommand;
+    else delete installation.sourceCommand;
     if (sourceCommand !== undefined && sourceProducerPath !== undefined) {
-      let Ee = mergePreviousProducerPaths(we, sourceProducerPath);
-      we.sourceProducerPath = sourceProducerPath;
-      if (Ee.length > 0) we.previousProducerPaths = Ee;
-      else delete we.previousProducerPaths;
+      let previousProducerPaths = mergePreviousProducerPaths(installation, sourceProducerPath);
+      installation.sourceProducerPath = sourceProducerPath;
+      if (previousProducerPaths.length > 0) installation.previousProducerPaths = previousProducerPaths;
+      else delete installation.previousProducerPaths;
     } else if (sourceCommand === undefined) {
-      if (we.sourceProducerPath !== undefined)
-        we.previousProducerPaths = [
-          ...(we.previousProducerPaths ?? []).filter((Ee) => Ee !== we.sourceProducerPath),
-          we.sourceProducerPath,
+      if (installation.sourceProducerPath !== undefined)
+        installation.previousProducerPaths = [
+          ...(installation.previousProducerPaths ?? []).filter(
+            (producerPath) => producerPath !== installation.sourceProducerPath,
+          ),
+          installation.sourceProducerPath,
         ].slice(-MAX_PREVIOUS_PRODUCER_PATHS);
-      delete we.sourceProducerPath;
+      delete installation.sourceProducerPath;
     }
     return {
       write: true,
@@ -1676,13 +1747,13 @@ async function removeAllPluginsForMarketplace(marketplaceName, storageV5) {
       sharedDataDirPluginIds: [],
       installPathsStillInUse: [],
     };
-  let r = await updateInstalledPlugins(
+  let result = await updateInstalledPlugins(
     (file) => removeMarketplacePluginRecords(file, marketplaceName),
     storageV5,
   );
-  for (let removedPluginId of r.removedPluginIds)
+  for (let removedPluginId of result.removedPluginIds)
     logForDebugging(`Removed installed plugin for marketplace removal: ${removedPluginId}`);
-  return r;
+  return result;
 }
 //@ chunk-e6aww6q8.js:4350559-4351122 layout
 /**
@@ -1698,8 +1769,9 @@ function removeMarketplacePluginRecords(file, marketplaceName) {
   );
   let stillInUse = new Set();
   for (let marketplaceId of marketplaceIds)
-    for (let G of findDataDirSharers(marketplaceId, file, marketplaceIds))
-      for (let q of file.plugins[G] ?? []) if (q.installPath) stillInUse.add(q.installPath);
+    for (let sharerId of findDataDirSharers(marketplaceId, file, marketplaceIds))
+      for (let installation of file.plugins[sharerId] ?? [])
+        if (installation.installPath) stillInUse.add(installation.installPath);
   for (let pluginId of Object.keys(file.plugins)) {
     if (!pluginId.endsWith(suffix)) continue;
     for (let entry of file.plugins[pluginId] ?? [])
@@ -1726,8 +1798,8 @@ function isInstallationRelevantToCurrentProject(inst) {
   let originalCwd = getOriginalCwd();
   if (inst.projectPath === originalCwd) return true;
   if (!inst.projectPath) return false;
-  let r = storageRootFor(originalCwd);
-  return r !== null && storageRootFor(inst.projectPath) === r;
+  let currentRoot = storageRootFor(originalCwd);
+  return currentRoot !== null && storageRootFor(inst.projectPath) === currentRoot;
 }
 //@ chunk-e6aww6q8.js:4351306-4351526 layout = isInstallationRelevantToCurrentProject (1)
 function isInstallationRelevantToCurrentProject_2(inst) {
@@ -1735,10 +1807,10 @@ function isInstallationRelevantToCurrentProject_2(inst) {
   if (!inst.projectPath) return false;
   let originalCwd = getOriginalCwd();
   if (isSameNormalizedProjectPath(inst.projectPath, originalCwd)) return true;
-  let r = storageRootFor(originalCwd);
-  if (r === null) return false;
-  let s = storageRootFor(inst.projectPath);
-  return s !== null && isSameNormalizedProjectPath(s, r);
+  let currentRoot = storageRootFor(originalCwd);
+  if (currentRoot === null) return false;
+  let otherRoot = storageRootFor(inst.projectPath);
+  return otherRoot !== null && isSameNormalizedProjectPath(otherRoot, currentRoot);
 }
 //@ chunk-e6aww6q8.js:4351526-4351564 layout
 function isWindows() {
@@ -1748,11 +1820,11 @@ function isWindows() {
 /**
  * 从一个插件的安装记录里筛出与当前项目相关的（user/managed 全局记录，或 project/local 且 projectPath 为当前目录）；Windows 下找不到时按路径的另一种拼写回退并记日志。
  */
-function filterInstallationsForCurrentProject(e) {
+function filterInstallationsForCurrentProject(installations) {
   countRecordSpellings();
-  let filtered = e.filter(isInstallationRelevantToCurrentProject);
+  let filtered = installations.filter(isInstallationRelevantToCurrentProject);
   if (filtered.length > 0 || !isWindows()) return filtered;
-  let filtered_2 = e.filter(isInstallationRelevantToCurrentProject_2);
+  let filtered_2 = installations.filter(isInstallationRelevantToCurrentProject_2);
   logRecordSpellingFallback(filtered_2[0]);
   return filtered_2;
 }
@@ -1760,20 +1832,20 @@ function filterInstallationsForCurrentProject(e) {
 /**
  * 在一个插件的安装记录里找与当前项目相关的那条（Windows 路径拼写回退同 filterInstallationsForCurrentProject）。
  */
-function findInstallationForCurrentProject(e) {
+function findInstallationForCurrentProject(installations) {
   countRecordSpellings();
-  let found = e.find(isInstallationRelevantToCurrentProject);
+  let found = installations.find(isInstallationRelevantToCurrentProject);
   if (found !== undefined || !isWindows()) return found;
-  let found_2 = e.find(isInstallationRelevantToCurrentProject_2);
-  logRecordSpellingFallback(found_2);
-  return found_2;
+  let installation = installations.find(isInstallationRelevantToCurrentProject_2);
+  logRecordSpellingFallback(installation);
+  return installation;
 }
 //@ chunk-e6aww6q8.js:4351779-4351818 layout
 /**
  * 是否存在与当前项目相关的安装记录。
  */
-function hasInstallationForCurrentProject(e) {
-  return findInstallationForCurrentProject(e) !== undefined;
+function hasInstallationForCurrentProject(installations) {
+  return findInstallationForCurrentProject(installations) !== undefined;
 }
 //@ chunk-e6aww6q8.js:4351818-4352285 layout
 function countRecordSpellings() {
@@ -1788,30 +1860,37 @@ function countRecordSpellings() {
     return;
   pluginRegistry.recordSpellingsCounted = true;
   let originalCwd = getOriginalCwd();
-  let s = 0;
-  let h = 0;
+  let staleCount = 0;
+  let bothCount = 0;
   for (let plugin of Object.values(installedPluginsFile.plugins)) {
     let found = plugin.find(
-      (w) => (w.scope === "project" || w.scope === "local") && isStaleInstallTarget(w, w.scope, originalCwd),
+      (installation) =>
+        (installation.scope === "project" || installation.scope === "local") &&
+        isStaleInstallTarget(installation, installation.scope, originalCwd),
     );
     if (found !== undefined) {
-      s++;
-      if (plugin.some((w) => w.scope === found.scope && w.projectPath === originalCwd)) h++;
+      staleCount++;
+      if (
+        plugin.some(
+          (installation) => installation.scope === found.scope && installation.projectPath === originalCwd,
+        )
+      )
+        bothCount++;
     }
   }
   logEvent("tengu_plugin_record_spelling", {
     kind: lit_2("registry"),
-    plugins_with_other_spelling: s,
-    plugins_with_both_spellings: h,
+    plugins_with_other_spelling: staleCount,
+    plugins_with_both_spellings: bothCount,
   });
 }
 //@ chunk-e6aww6q8.js:4352285-4352707 layout
-function logRecordSpellingFallback(e) {
-  if (e === undefined) return;
-  let { scope } = e;
+function logRecordSpellingFallback(installation) {
+  if (installation === undefined) return;
+  let { scope } = installation;
   if (scope !== "project" && scope !== "local") return;
   logForDebugging(
-    `Using the install record for ${e.projectPath} (${scope} scope) for this session in ${getOriginalCwd()}: the same folder or the same checkout, under another spelling of its path (gh-74612)`,
+    `Using the install record for ${installation.projectPath} (${scope} scope) for this session in ${getOriginalCwd()}: the same folder or the same checkout, under another spelling of its path (gh-74612)`,
   );
   let pluginRegistry = getPluginRegistry();
   if (pluginRegistry.recordSpellingFallbackReported) return;
@@ -1825,8 +1904,8 @@ function logRecordSpellingFallback(e) {
 /**
  * 取第一个已知版本并加 v 前缀（unknown 跳过）。
  */
-function formatFirstKnownVersion(...e) {
-  let found = e.find((r) => r && r !== "unknown");
+function formatFirstKnownVersion(...versions) {
+  let found = versions.find((version) => version && version !== "unknown");
   return found ? `v${found}` : undefined;
 }
 //@ chunk-e6aww6q8.js:4352786-4352913 fingerprint = isPluginInstalled (1)
@@ -1853,31 +1932,33 @@ function isPluginGloballyInstalled(pluginId) {
 /**
  * 当前项目相关安装记录的 gitCommitSha（多条记录 sha 不一致时返回 undefined）。
  */
-function getInstalledGitCommitSha(pluginId, n = {}) {
-  let r = getInstalledPlugins().plugins[pluginId];
-  if (!r || r.length === 0) return;
-  let s = filterInstallationsForCurrentProject(
-    n.scope !== undefined ? r.filter((y) => y.scope === n.scope) : r,
+function getInstalledGitCommitSha(pluginId, options = {}) {
+  let installations = getInstalledPlugins().plugins[pluginId];
+  if (!installations || installations.length === 0) return;
+  let relevant = filterInstallationsForCurrentProject(
+    options.scope !== undefined
+      ? installations.filter((installation) => installation.scope === options.scope)
+      : installations,
   );
-  if (new Set(s.map((y) => y.gitCommitSha)).size !== 1) return;
-  return s[0]?.gitCommitSha;
+  if (new Set(relevant.map((installation) => installation.gitCommitSha)).size !== 1) return;
+  return relevant[0]?.gitCommitSha;
 }
 //@ chunk-e6aww6q8.js:4353299-4353602 fingerprint = addInstalledPlugin (0.595)
 /**
  * 新增或更新一条安装记录（scope、projectPath、installPath、version、gitCommitSha…）并保存。
  */
-async function addInstalledPlugin(scope, installPath, metadata = "user", projectPath, h) {
-  assertRecordablePluginId(scope);
+async function addInstalledPlugin(pluginId, installPath, metadata = "user", projectPath, storageV5) {
+  assertRecordablePluginId(pluginId);
   if (installPath.directoryRepositoryKey !== undefined)
-    await setDirectoryBinding(scope, installPath.directoryRepositoryKey, {
+    await setDirectoryBinding(pluginId, installPath.directoryRepositoryKey, {
       keepExisting: true,
     });
   let { isUpdate, before } = await updateInstalledPlugins(
-    (entry) => addPluginInstallation(entry, scope, installPath, metadata, projectPath),
-    h,
+    (entry) => addPluginInstallation(entry, pluginId, installPath, metadata, projectPath),
+    storageV5,
   );
   getPluginRegistry().installedPluginsSnapshot = null;
-  logForDebugging(`${isUpdate ? "Updated" : "Added"} installed plugin: ${scope} (scope: ${metadata})`);
+  logForDebugging(`${isUpdate ? "Updated" : "Added"} installed plugin: ${pluginId} (scope: ${metadata})`);
   return before;
 }
 //@ chunk-e6aww6q8.js:4353602-4354776 fingerprint = addPluginInstallation (0.369)
@@ -1885,13 +1966,13 @@ async function addInstalledPlugin(scope, installPath, metadata = "user", project
  * 在 V2 数据中为插件新增或替换一条安装记录（按作用域+projectPath 匹配），保留显式安装标记（auto 只在新记录或原本也是 auto 时保留）。
  */
 function addPluginInstallation(pluginId, scope, installPath, metadata, projectPath) {
-  let y = pluginId.plugins[scope] || [];
-  let before = y.slice();
-  let installationIndex = findInstallationIndex(y, metadata, projectPath);
-  let L = installationIndex >= 0 ? y[installationIndex].projectPath : projectPath;
-  let G = installationIndex >= 0 && y[installationIndex]?.auto !== true;
-  let q = installPath.auto === true && !G;
-  let Z = {
+  let installations = pluginId.plugins[scope] || [];
+  let before = installations.slice();
+  let installationIndex = findInstallationIndex(installations, metadata, projectPath);
+  let recordProjectPath = installationIndex >= 0 ? installations[installationIndex].projectPath : projectPath;
+  let existingManual = installationIndex >= 0 && installations[installationIndex]?.auto !== true;
+  let isAuto = installPath.auto === true && !existingManual;
+  let nextRecord = {
     scope: metadata,
     installPath: installPath.installPath,
     version: installPath.version,
@@ -1901,10 +1982,10 @@ function addPluginInstallation(pluginId, scope, installPath, metadata, projectPa
     ...(installPath.resolvedVersion && {
       resolvedVersion: installPath.resolvedVersion,
     }),
-    ...(L && {
-      projectPath: L,
+    ...(recordProjectPath && {
+      projectPath: recordProjectPath,
     }),
-    ...(q && {
+    ...(isAuto && {
       auto: true,
     }),
     ...(installPath.claudeaiPluginId !== undefined && {
@@ -1937,47 +2018,57 @@ function addPluginInstallation(pluginId, scope, installPath, metadata, projectPa
       npmRegistry: installPath.npmRegistry,
     }),
   };
-  let Se = installationIndex >= 0 ? y[installationIndex] : undefined;
-  if (Se) {
-    let we = mergePreviousProducerPaths(Se, Z.sourceProducerPath ?? "");
-    if (we.length > 0) Z.previousProducerPaths = we;
+  let existingRecord = installationIndex >= 0 ? installations[installationIndex] : undefined;
+  if (existingRecord) {
+    let previousProducerPaths = mergePreviousProducerPaths(
+      existingRecord,
+      nextRecord.sourceProducerPath ?? "",
+    );
+    if (previousProducerPaths.length > 0) nextRecord.previousProducerPaths = previousProducerPaths;
   }
-  let ke = installationIndex >= 0;
-  if (ke) y[installationIndex] = Z;
-  else y.push(Z);
-  pluginId.plugins[scope] = y;
+  let isUpdate = installationIndex >= 0;
+  if (isUpdate) installations[installationIndex] = nextRecord;
+  else installations.push(nextRecord);
+  pluginId.plugins[scope] = installations;
   return {
     write: true,
     result: {
-      isUpdate: ke,
+      isUpdate,
       before,
     },
   };
 }
 //@ chunk-e6aww6q8.js:4354890-4355072 placement
-async function restoreEarlierInstallRecord(e, n, r, storageV5) {
-  let h = await updateInstalledPlugins((y) => getPendingUpdatesDetails(y, e, n, r), storageV5);
-  if (h) {
+async function restoreEarlierInstallRecord(pluginId, target, record, storageV5) {
+  let changed = await updateInstalledPlugins(
+    (stateFile) => getPendingUpdatesDetails(stateFile, pluginId, target, record),
+    storageV5,
+  );
+  if (changed) {
     getPluginRegistry().installedPluginsSnapshot = null;
-    logForDebugging(`Restored the earlier install record of ${e} (scope: ${n.scope})`);
+    logForDebugging(`Restored the earlier install record of ${pluginId} (scope: ${target.scope})`);
   }
-  return h;
+  return changed;
 }
 //@ chunk-e6aww6q8.js:4355072-4355307 placement
-function getPendingUpdatesDetails(e, n, r, s) {
-  let memoryInstallations = e.plugins[n];
-  let y =
+function getPendingUpdatesDetails(stateFile, pluginId, target, record) {
+  let memoryInstallations = stateFile.plugins[pluginId];
+  let index =
     memoryInstallations?.findIndex(
       (memoryInstallation) =>
-        memoryInstallation.scope === r.scope && memoryInstallation.projectPath === r.projectPath,
+        memoryInstallation.scope === target.scope && memoryInstallation.projectPath === target.projectPath,
     ) ?? -1;
-  let S = y >= 0 ? memoryInstallations?.[y] : undefined;
-  if (memoryInstallations === undefined || S === undefined || !registerPluginInstallation(S, s))
+  let memoryInstallation = index >= 0 ? memoryInstallations?.[index] : undefined;
+  if (
+    memoryInstallations === undefined ||
+    memoryInstallation === undefined ||
+    !registerPluginInstallation(memoryInstallation, record)
+  )
     return {
       write: false,
       result: false,
     };
-  memoryInstallations[y] = r;
+  memoryInstallations[index] = target;
   return {
     write: true,
     result: true,
@@ -1987,24 +2078,24 @@ function getPendingUpdatesDetails(e, n, r, s) {
 /**
  * 去掉安装记录的 auto 标记（用户显式安装）。
  */
-async function clearAutoInstalledFlag(e, scope, projectPathForScope, storageV5) {
-  let h = await updateInstalledPlugins(
-    (y) => clearAutoFlagUpdate(y, e, scope, projectPathForScope),
+async function clearAutoInstalledFlag(pluginId, scope, projectPathForScope, storageV5) {
+  let changed = await updateInstalledPlugins(
+    (stateFile) => clearAutoFlagUpdate(stateFile, pluginId, scope, projectPathForScope),
     storageV5,
   );
-  if (h) getPluginRegistry().installedPluginsSnapshot = null;
-  return h;
+  if (changed) getPluginRegistry().installedPluginsSnapshot = null;
+  return changed;
 }
 //@ chunk-e6aww6q8.js:4355420-4355558 placement
-function clearAutoFlagUpdate(e, n, r, s) {
-  let h = e.plugins[n];
-  let y = installationAtTarget(h, r, s);
-  if (y?.auto !== true)
+function clearAutoFlagUpdate(stateFile, pluginId, scope, projectPath) {
+  let installations = stateFile.plugins[pluginId];
+  let installation = installationAtTarget(installations, scope, projectPath);
+  if (installation?.auto !== true)
     return {
       write: false,
       result: false,
     };
-  delete y.auto;
+  delete installation.auto;
   return {
     write: true,
     result: true,
@@ -2014,8 +2105,8 @@ function clearAutoFlagUpdate(e, n, r, s) {
 /**
  * readInstalledPluginsIfAny：读取安装记录，缺失返回 undefined。
  */
-async function readInstalledPluginsIfAny(e, n = e) {
-  return (await pluginGitHead(e, n)) ?? undefined;
+async function readInstalledPluginsIfAny(installPath, containmentRoot = installPath) {
+  return (await pluginGitHead(installPath, containmentRoot)) ?? undefined;
 }
 //@ chunk-e6aww6q8.js:4355614-4355628 placement
 var MAX_PLUGIN_MANIFEST_BYTES = 65536;
@@ -2023,15 +2114,17 @@ var MAX_PLUGIN_MANIFEST_BYTES = 65536;
 /**
  * 从插件清单读取版本号，清单超过 64 KB 时视为无版本。
  */
-async function readManifestVersion(e, n, r) {
+async function readManifestVersion(installPath, pluginId, storageV5) {
   let fsImplementation = getFsImplementation();
-  let h = join(e, ".claude-plugin", "plugin.json");
-  let y =
-    isStorageV5Enabled() && r !== undefined ? parseVersionCachePath(e, anchoredPluginCachePath()) : null;
-  if (isStorageV5Enabled() && r !== undefined && y) {
-    let S = await r.read([
+  let manifestPath = join(installPath, ".claude-plugin", "plugin.json");
+  let cacheCoords =
+    isStorageV5Enabled() && storageV5 !== undefined
+      ? parseVersionCachePath(installPath, anchoredPluginCachePath())
+      : null;
+  if (isStorageV5Enabled() && storageV5 !== undefined && cacheCoords) {
+    let readResult = await storageV5.read([
       {
-        key: STORAGE_SPACES.pluginCache(y.marketplace, y.plugin, y.version, [
+        key: STORAGE_SPACES.pluginCache(cacheCoords.marketplace, cacheCoords.plugin, cacheCoords.version, [
           ".claude-plugin",
           "plugin.json",
         ]),
@@ -2039,31 +2132,31 @@ async function readManifestVersion(e, n, r) {
         length: MAX_PLUGIN_MANIFEST_BYTES,
       },
     ]);
-    if (!S.ok || !S.value.items[0].found) {
-      logForDebugging(`Could not extract version from manifest for ${n}`);
+    if (!readResult.ok || !readResult.value.items[0].found) {
+      logForDebugging(`Could not extract version from manifest for ${pluginId}`);
       return "unknown";
     }
-    let w = S.value.items[0];
-    if (w.totalBytes > MAX_PLUGIN_MANIFEST_BYTES) {
-      logForDebugging(`Manifest for ${n} exceeds 64 KB, treating as unversioned`);
+    let item = readResult.value.items[0];
+    if (item.totalBytes > MAX_PLUGIN_MANIFEST_BYTES) {
+      logForDebugging(`Manifest for ${pluginId} exceeds 64 KB, treating as unversioned`);
       return "unknown";
     }
     try {
-      return jsonParse(stripBom(Buffer.from(w.value).toString("utf-8"))).version || "unknown";
+      return jsonParse(stripBom(Buffer.from(item.value).toString("utf-8"))).version || "unknown";
     } catch {
-      logForDebugging(`Could not extract version from manifest for ${n}`);
+      logForDebugging(`Could not extract version from manifest for ${pluginId}`);
       return "unknown";
     }
   }
   try {
-    let fileBytes = await fsImplementation.readFileBytes(h, MAX_PLUGIN_MANIFEST_BYTES + 1);
+    let fileBytes = await fsImplementation.readFileBytes(manifestPath, MAX_PLUGIN_MANIFEST_BYTES + 1);
     if (fileBytes.length > MAX_PLUGIN_MANIFEST_BYTES) {
-      logForDebugging(`Manifest for ${n} exceeds 64 KB, treating as unversioned`);
+      logForDebugging(`Manifest for ${pluginId} exceeds 64 KB, treating as unversioned`);
       return "unknown";
     }
     return jsonParse(stripBom(fileBytes.toString("utf-8"))).version || "unknown";
   } catch {
-    logForDebugging(`Could not extract version from manifest for ${n}`);
+    logForDebugging(`Could not extract version from manifest for ${pluginId}`);
     return "unknown";
   }
 }
@@ -2071,39 +2164,39 @@ async function readManifestVersion(e, n, r) {
 /**
  * 启动时把 settings 的 enabledPlugins 与 installed_plugins.json 对齐：为已启用但无安装记录的市场插件补记录（或排队安装），跳过托管/种子/读失败情况。
  */
-async function migrateFromEnabledPlugins(version) {
-  if (await isInstalledListReplaceRefused(version)) {
+async function migrateFromEnabledPlugins(storageV5) {
+  if (await isInstalledListReplaceRefused(storageV5)) {
     logForDebugging(
       "Skipping the enabled-plugins sync: installed_plugins.json holds what this build cannot read, so it is left as it is",
       {
         level: "warn",
       },
     );
-    let pt = count(
+    let requiredCount = count(
       Object.values(getSettingsForSource("policySettings")?.enabledPlugins ?? {}),
-      (Et) => Et === true,
+      (value) => value === true,
     );
-    if (pt > 0)
+    if (requiredCount > 0)
       logEvent("tengu_plugin_state_file_error", {
         operation: lit_2("migrate-from-enabled"),
         error_kind: lit_2("policy-sync-skipped"),
         recovered: false,
-        required_count: pt,
+        required_count: requiredCount,
       });
     return;
   }
   let settings = isRemoteSettingsFetchFailed();
-  let r = new Set(
+  let requiredIds = new Set(
     Object.entries(getSettingsForSource("policySettings")?.enabledPlugins || {})
       .filter(([key, value]) => value === true && PluginIdSchema().safeParse(key).success)
       .map(([key]) => key),
   );
   let rawFileData = getOriginalCwd();
-  let h = new Map();
+  let wanted = new Map();
   let pluginScopeFromSettings = new Set();
-  let S;
-  let w = () =>
-    (S ??= isLocalSettingsGitTracked({
+  let gitTracked;
+  let isGitTracked = () =>
+    (gitTracked ??= isLocalSettingsGitTracked({
       onIndeterminate: "tracked",
     }));
   for (let source of EDITABLE_SETTING_SOURCES) {
@@ -2116,127 +2209,142 @@ async function migrateFromEnabledPlugins(version) {
     for (let pluginId of Object.keys(enabledPlugins)) {
       if (!PluginIdSchema().safeParse(pluginId).success) continue;
       if (enabledPlugins[pluginId] !== true) continue;
-      let It = source === "userSettings" || (source === "localSettings" && !w());
+      let ownConfig = source === "userSettings" || (source === "localSettings" && !isGitTracked());
       let scope = settingsSourceName(source);
-      let qt = h.get(pluginId);
-      h.set(pluginId, {
+      let existing = wanted.get(pluginId);
+      wanted.set(pluginId, {
         scope,
         projectPath: scope === "user" ? undefined : rawFileData,
-        fromOwnConfig: It || (qt?.fromOwnConfig ?? false),
+        fromOwnConfig: ownConfig || (existing?.fromOwnConfig ?? false),
       });
     }
   }
-  let L = new Set();
+  let flagAllIds = new Set();
   for (let [key, value] of Object.entries(getSettingsForSource("flagSettings")?.enabledPlugins || {})) {
     if (value !== true || !PluginIdSchema().safeParse(key).success || isPluginBlockedByPolicy(key)) continue;
-    let yt = h.get(key);
-    if (yt) {
-      if (!yt.fromOwnConfig) L.add(key);
-      yt.fromOwnConfig = true;
+    let existing = wanted.get(key);
+    if (existing) {
+      if (!existing.fromOwnConfig) flagAllIds.add(key);
+      existing.fromOwnConfig = true;
       continue;
     }
-    h.set(key, {
+    wanted.set(key, {
       scope: "user",
       projectPath: undefined,
       fromOwnConfig: true,
     });
-    L.add(key);
+    flagAllIds.add(key);
   }
-  let G = installedStorageKey(version);
-  let q =
-    isStorageV5Enabled() && version !== undefined && G !== null
-      ? await readInstalledPluginsFileRaw_2(version, G)
+  let storageKey = installedStorageKey(storageV5);
+  let rawFile =
+    isStorageV5Enabled() && storageV5 !== undefined && storageKey !== null
+      ? await readInstalledPluginsFileRaw_2(storageV5, storageKey)
       : getPlan_2();
-  let Z = q !== null;
-  let ke = Z && q?.version === 2 && q ? tryParseInstalledPluginsV2(q.data) : undefined;
-  if (ke?.success) normalizeInstallPaths(ke.data);
-  let we = new Set();
-  if (ke?.success && settings) {
-    for (let [key, value] of Object.entries(ke.data.plugins))
-      if (!r.has(key) && !isPluginBlockedByPolicy(key) && value.some((yt) => yt.scope === "managed")) {
-        we.add(key);
-        r.add(key);
+  let hasFile = rawFile !== null;
+  let parsedV2 =
+    hasFile && rawFile?.version === 2 && rawFile ? tryParseInstalledPluginsV2(rawFile.data) : undefined;
+  if (parsedV2?.success) normalizeInstallPaths(parsedV2.data);
+  let keptManaged = new Set();
+  if (parsedV2?.success && settings) {
+    for (let [key, value] of Object.entries(parsedV2.data.plugins))
+      if (
+        !requiredIds.has(key) &&
+        !isPluginBlockedByPolicy(key) &&
+        value.some((installation) => installation.scope === "managed")
+      ) {
+        keptManaged.add(key);
+        requiredIds.add(key);
       }
-    if (we.size > 0)
+    if (keptManaged.size > 0)
       logForDebugging(
-        `Remote managed settings not settled; keeping managed record(s) for ${[...we].join(", ")} as they are`,
+        `Remote managed settings not settled; keeping managed record(s) for ${[...keptManaged].join(", ")} as they are`,
       );
   }
-  for (let pt of r) {
-    h.set(pt, {
+  for (let id of requiredIds) {
+    wanted.set(id, {
       scope: "managed",
       projectPath: undefined,
       fromOwnConfig: true,
     });
-    L.delete(pt);
+    flagAllIds.delete(id);
   }
-  let Ee = new Set([...L, ...r].filter((pt) => !we.has(pt)));
-  let Ae;
-  let Ie = () => (Ae ??= loadKnownMarketplacesSafe(isStorageV5Enabled() ? version : undefined));
-  if (h.size === 0 && !Z) return;
-  if (ke?.success) {
-    let plugins = ke.data.plugins;
-    let Et = new Set();
-    let filtered = [...r].filter((It) => (plugins[It]?.length ?? 0) === 0);
+  let toProvision = new Set([...flagAllIds, ...requiredIds].filter((id) => !keptManaged.has(id)));
+  let knownPromise;
+  let loadKnown = () =>
+    (knownPromise ??= loadKnownMarketplacesSafe(isStorageV5Enabled() ? storageV5 : undefined));
+  if (wanted.size === 0 && !hasFile) return;
+  if (parsedV2?.success) {
+    let plugins = parsedV2.data.plugins;
+    let skippedIds = new Set();
+    let filtered = [...requiredIds].filter((id) => (plugins[id]?.length ?? 0) === 0);
     if (filtered.length > 0) {
-      let It = await Ie();
-      for (let Yt of filtered) {
-        let { marketplace } = parsePluginIdentifier(Yt);
-        if (isSourceDisallowedOrUnverifiable(marketplace ? It[marketplace]?.source : undefined)) Et.add(Yt);
+      let knownMarketplaces = await loadKnown();
+      for (let id of filtered) {
+        let { marketplace } = parsePluginIdentifier(id);
+        if (
+          isSourceDisallowedOrUnverifiable(marketplace ? knownMarketplaces[marketplace]?.source : undefined)
+        )
+          skippedIds.add(id);
       }
     }
-    let all = [...h.entries()].every(([It, Yt]) => {
-      let qt = plugins[It];
-      if (r.has(It)) return Et.has(It) || we.has(It) || (qt?.length === 1 && qt[0]?.scope === "managed");
-      let Zt = installationAtTarget(qt, Yt.scope, Yt.projectPath) !== undefined;
-      if (!Yt.fromOwnConfig) return true;
-      return Zt;
+    let all = [...wanted.entries()].every(([id, want]) => {
+      let installations = plugins[id];
+      if (requiredIds.has(id))
+        return (
+          skippedIds.has(id) ||
+          keptManaged.has(id) ||
+          (installations?.length === 1 && installations[0]?.scope === "managed")
+        );
+      let present = installationAtTarget(installations, want.scope, want.projectPath) !== undefined;
+      if (!want.fromOwnConfig) return true;
+      return present;
     });
     let all_2 = Object.entries(plugins).every(
-      ([key, value]) => r.has(key) || !value.some((qt) => qt.scope === "managed"),
+      ([key, value]) =>
+        requiredIds.has(key) || !value.some((installation) => installation.scope === "managed"),
     );
     if (all && all_2) {
-      let It = true;
-      for (let Yt of r) {
-        if (Et.has(Yt) || we.has(Yt)) continue;
-        let qt = plugins[Yt]?.[0];
-        if (qt === undefined || !(await parsePluginIdSafe(Yt, qt, version, Ie))) {
-          It = false;
+      let allResolvable = true;
+      for (let id of requiredIds) {
+        if (skippedIds.has(id) || keptManaged.has(id)) continue;
+        let first = plugins[id]?.[0];
+        if (first === undefined || !(await parsePluginIdSafe(id, first, storageV5, loadKnown))) {
+          allResolvable = false;
           break;
         }
       }
-      if (It) {
+      if (allResolvable) {
         logForDebugging("All plugins already exist, skipping migration");
         return;
       }
     }
   }
   logForDebugging(
-    Z
+    hasFile
       ? "Syncing installed_plugins.json with enabledPlugins from all settings.json files"
       : "Creating installed_plugins.json from settings.json files",
   );
-  let Me = Ee.size > 0 ? await Ie() : undefined;
+  let known = toProvision.size > 0 ? await loadKnown() : undefined;
   let iso = new Date().toISOString();
   let v2Plugins = {};
-  let lt;
-  if (Z) {
-    lt =
-      isStorageV5Enabled() && version !== undefined && G !== null
-        ? await getInstalledPluginsAsync(version)
+  let existingState;
+  if (hasFile) {
+    existingState =
+      isStorageV5Enabled() && storageV5 !== undefined && storageKey !== null
+        ? await getInstalledPluginsAsync(storageV5)
         : getInstalledPlugins();
     v2Plugins = {
-      ...lt.plugins,
+      ...existingState.plugins,
     };
   }
-  let Je = 0;
-  let nt = 0;
+  let updatedCount = 0;
+  let addedCount = 0;
   for (let [key, value] of Object.entries(v2Plugins)) {
-    if (r.has(key)) continue;
-    if (h.has(key)) continue;
-    if (!value.some((gt) => gt.scope === "managed")) continue;
-    let filtered = value.filter((gt) => gt.scope !== "managed");
-    if (!(await ensureDirectoryBindingForMigration(key, value, filtered))) {
+    if (requiredIds.has(key)) continue;
+    if (wanted.has(key)) continue;
+    if (!value.some((installation) => installation.scope === "managed")) continue;
+    let remaining = value.filter((installation) => installation.scope !== "managed");
+    if (!(await ensureDirectoryBindingForMigration(key, value, remaining))) {
       logForDebugging(
         `Kept the managed entries of ${key} though policy no longer requires them: removing them needs plugin-directory-bindings.json in the plugins folder to record which repository the plugin was installed from, and that file could not be used or written. Will try again at next start.`,
         {
@@ -2245,246 +2353,259 @@ async function migrateFromEnabledPlugins(version) {
       );
       continue;
     }
-    if (filtered.length === 0) delete v2Plugins[key];
-    else v2Plugins[key] = filtered;
-    Je++;
+    if (remaining.length === 0) delete v2Plugins[key];
+    else v2Plugins[key] = remaining;
+    updatedCount++;
     logForDebugging(`Dropped orphaned managed entry for ${key} (no longer policy-required)`);
   }
-  for (let [pt, Et] of h) {
-    if (we.has(pt)) continue;
-    let yt = v2Plugins[pt];
-    if (yt && yt.length > 0) {
-      let gt = false;
-      if (Et.scope === "managed") {
-        let At = yt[0];
-        if (At && !(await parsePluginIdSafe(pt, At, version, Ie))) {
-          let It = await healManagedRecord(pt, Me, version);
-          if (It !== undefined) {
-            At.installPath = It.installPath;
-            At.version = It.version;
-            if (It.gitCommitSha !== undefined) At.gitCommitSha = It.gitCommitSha;
-            else if (!It.keepStoredCommit) delete At.gitCommitSha;
-            delete At.resolvedVersion;
-            At.lastUpdated = iso;
-            gt = true;
-            logForDebugging(`Healed ${pt} managed record from its marketplace at version ${It.version}`);
+  for (let [pluginId, want] of wanted) {
+    if (keptManaged.has(pluginId)) continue;
+    let installations = v2Plugins[pluginId];
+    if (installations && installations.length > 0) {
+      let changed = false;
+      if (want.scope === "managed") {
+        let first = installations[0];
+        if (first && !(await parsePluginIdSafe(pluginId, first, storageV5, loadKnown))) {
+          let healed = await healManagedRecord(pluginId, known, storageV5);
+          if (healed !== undefined) {
+            first.installPath = healed.installPath;
+            first.version = healed.version;
+            if (healed.gitCommitSha !== undefined) first.gitCommitSha = healed.gitCommitSha;
+            else if (!healed.keepStoredCommit) delete first.gitCommitSha;
+            delete first.resolvedVersion;
+            first.lastUpdated = iso;
+            changed = true;
+            logForDebugging(
+              `Healed ${pluginId} managed record from its marketplace at version ${healed.version}`,
+            );
           } else
             logForDebugging(
-              `Left ${pt} managed record as is: the loader cannot load from its cache and it could not be materialized`,
+              `Left ${pluginId} managed record as is: the loader cannot load from its cache and it could not be materialized`,
             );
         }
-        if (At && (At.scope !== "managed" || At.projectPath !== undefined)) {
-          At.scope = "managed";
-          delete At.projectPath;
-          At.lastUpdated = iso;
-          gt = true;
-          logForDebugging(`Updated ${pt} scope to managed (settings.json is source of truth)`);
+        if (first && (first.scope !== "managed" || first.projectPath !== undefined)) {
+          first.scope = "managed";
+          delete first.projectPath;
+          first.lastUpdated = iso;
+          changed = true;
+          logForDebugging(`Updated ${pluginId} scope to managed (settings.json is source of truth)`);
         }
-        if (yt.length > 1) {
-          let sliced = yt.slice(0, 1);
-          if (await ensureDirectoryBindingForMigration(pt, yt, sliced)) {
-            logForDebugging(`Collapsed ${pt} to single managed entry (was ${yt.length})`);
-            v2Plugins[pt] = sliced;
-            gt = true;
+        if (installations.length > 1) {
+          let remaining = installations.slice(0, 1);
+          if (await ensureDirectoryBindingForMigration(pluginId, installations, remaining)) {
+            logForDebugging(`Collapsed ${pluginId} to single managed entry (was ${installations.length})`);
+            v2Plugins[pluginId] = remaining;
+            changed = true;
           } else
             logForDebugging(
-              `Did not collapse ${pt} to one managed entry (has ${yt.length}): removing the others needs plugin-directory-bindings.json in the plugins folder to record which repository the plugin was installed from, and that file could not be used or written. Will try again at next start.`,
+              `Did not collapse ${pluginId} to one managed entry (has ${installations.length}): removing the others needs plugin-directory-bindings.json in the plugins folder to record which repository the plugin was installed from, and that file could not be used or written. Will try again at next start.`,
               {
                 level: "warn",
               },
             );
         }
       } else {
-        let At = installationAtTarget(yt, Et.scope, Et.projectPath);
-        let It = false;
-        if (!At && Et.fromOwnConfig && L.has(pt)) {
-          let { marketplace } = parsePluginIdentifier(pt);
-          let source = marketplace ? Me?.[marketplace]?.source : undefined;
-          It = isPluginBlockedByPolicy(pt) || isSourceDisallowedOrUnverifiable(source);
+        let existing = installationAtTarget(installations, want.scope, want.projectPath);
+        let blocked = false;
+        if (!existing && want.fromOwnConfig && flagAllIds.has(pluginId)) {
+          let { marketplace } = parsePluginIdentifier(pluginId);
+          let source = marketplace ? known?.[marketplace]?.source : undefined;
+          blocked = isPluginBlockedByPolicy(pluginId) || isSourceDisallowedOrUnverifiable(source);
         }
-        if (!At && !Et.fromOwnConfig)
+        if (!existing && !want.fromOwnConfig)
           logForDebugging(
-            `Skipped auto-recording ${pt} for ${Et.scope} (${Et.projectPath ?? ""}) \u2014 enabled only by repo-authored settings`,
+            `Skipped auto-recording ${pluginId} for ${want.scope} (${want.projectPath ?? ""}) \u2014 enabled only by repo-authored settings`,
           );
-        else if (!At && It)
-          logForDebugging(`Skipping --settings-enabled ${pt}: blocked by policy, not writing a record`);
-        else if (!At) {
-          let Zt =
-            yt.find((rn) => rn.projectPath !== undefined && rn.projectPath === rawFileData) ??
-            yt.find((rn) => rn.scope === "user") ??
-            yt.find(
-              (rn) =>
-                rn.projectPath !== undefined && isSameNormalizedProjectPath(rn.projectPath, rawFileData),
+        else if (!existing && blocked)
+          logForDebugging(`Skipping --settings-enabled ${pluginId}: blocked by policy, not writing a record`);
+        else if (!existing) {
+          let template =
+            installations.find(
+              (installation) =>
+                installation.projectPath !== undefined && installation.projectPath === rawFileData,
             ) ??
-            yt.reduce((acc, pn) => ((pn.lastUpdated ?? "") > (acc.lastUpdated ?? "") ? pn : acc));
-          yt.push({
-            scope: Et.scope,
-            installPath: Zt.installPath,
-            ...(Zt.version !== undefined && {
-              version: Zt.version,
+            installations.find((installation) => installation.scope === "user") ??
+            installations.find(
+              (installation) =>
+                installation.projectPath !== undefined &&
+                isSameNormalizedProjectPath(installation.projectPath, rawFileData),
+            ) ??
+            installations.reduce((acc, better) =>
+              (better.lastUpdated ?? "") > (acc.lastUpdated ?? "") ? better : acc,
+            );
+          installations.push({
+            scope: want.scope,
+            installPath: template.installPath,
+            ...(template.version !== undefined && {
+              version: template.version,
             }),
-            ...(Zt.resolvedVersion !== undefined && {
-              resolvedVersion: Zt.resolvedVersion,
+            ...(template.resolvedVersion !== undefined && {
+              resolvedVersion: template.resolvedVersion,
             }),
             installedAt: iso,
             lastUpdated: iso,
-            ...(Zt.gitCommitSha !== undefined && {
-              gitCommitSha: Zt.gitCommitSha,
+            ...(template.gitCommitSha !== undefined && {
+              gitCommitSha: template.gitCommitSha,
             }),
-            ...(Zt.sourceCommand !== undefined && {
-              sourceCommand: Zt.sourceCommand,
+            ...(template.sourceCommand !== undefined && {
+              sourceCommand: template.sourceCommand,
             }),
-            ...(Zt.sourceProducerPath !== undefined && {
-              sourceProducerPath: Zt.sourceProducerPath,
+            ...(template.sourceProducerPath !== undefined && {
+              sourceProducerPath: template.sourceProducerPath,
             }),
-            ...(Zt.previousProducerPaths !== undefined && {
-              previousProducerPaths: Zt.previousProducerPaths,
+            ...(template.previousProducerPaths !== undefined && {
+              previousProducerPaths: template.previousProducerPaths,
             }),
-            ...(Et.projectPath && {
-              projectPath: Et.projectPath,
+            ...(want.projectPath && {
+              projectPath: want.projectPath,
             }),
           });
-          gt = true;
+          changed = true;
           logForDebugging(
-            `Added ${pt} installation for scope ${Et.scope}${Et.projectPath ? ` (${Et.projectPath})` : ""}`,
+            `Added ${pluginId} installation for scope ${want.scope}${want.projectPath ? ` (${want.projectPath})` : ""}`,
           );
         }
-        let Yt = new Set();
-        let filtered = yt.filter((Zt) => {
-          if (Zt.scope === "managed") return false;
-          let rn = `${Zt.scope}|${Zt.projectPath ?? ""}`;
-          if (Yt.has(rn)) return false;
-          Yt.add(rn);
+        let seen = new Set();
+        let remaining = installations.filter((installation) => {
+          if (installation.scope === "managed") return false;
+          let key = `${installation.scope}|${installation.projectPath ?? ""}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
           return true;
         });
-        if (filtered.length < yt.length)
-          if (await ensureDirectoryBindingForMigration(pt, yt, filtered)) {
+        if (remaining.length < installations.length)
+          if (await ensureDirectoryBindingForMigration(pluginId, installations, remaining)) {
             logForDebugging(
-              `Cleaned ${pt} (${yt.length}\u2192${filtered.length}: stale managed and/or duplicates)`,
+              `Cleaned ${pluginId} (${installations.length}\u2192${remaining.length}: stale managed and/or duplicates)`,
             );
-            if (filtered.length === 0) delete v2Plugins[pt];
-            else v2Plugins[pt] = filtered;
-            gt = true;
+            if (remaining.length === 0) delete v2Plugins[pluginId];
+            else v2Plugins[pluginId] = remaining;
+            changed = true;
           } else
             logForDebugging(
-              `Kept ${yt.length - filtered.length} stale managed or duplicate entries of ${pt}: removing them needs plugin-directory-bindings.json in the plugins folder to record which repository the plugin was installed from, and that file could not be used or written.`,
+              `Kept ${installations.length - remaining.length} stale managed or duplicate entries of ${pluginId}: removing them needs plugin-directory-bindings.json in the plugins folder to record which repository the plugin was installed from, and that file could not be used or written.`,
               {
                 level: "warn",
               },
             );
       }
-      if (gt) Je++;
+      if (changed) updatedCount++;
     } else {
-      if (!Et.fromOwnConfig) {
-        logForDebugging(`Skipped auto-recording ${pt} \u2014 enabled only by repo-authored settings`);
+      if (!want.fromOwnConfig) {
+        logForDebugging(`Skipped auto-recording ${pluginId} \u2014 enabled only by repo-authored settings`);
         continue;
       }
-      let { name: pluginName, marketplace } = parsePluginIdentifier(pt);
+      let { name: pluginName, marketplace } = parsePluginIdentifier(pluginId);
       if (!pluginName || !marketplace) continue;
       try {
-        logForDebugging(`Looking up plugin ${pt} in marketplace ${marketplace}`);
-        let It =
+        logForDebugging(`Looking up plugin ${pluginId} in marketplace ${marketplace}`);
+        let found =
           marketplace === OFFICIAL_MARKETPLACE_NAME
-            ? await getPluginByIdCacheOnly(pt, version)
-            : await getPluginById(pt, version);
-        if (!It) {
-          logForDebugging(`Plugin ${pt} not found in any marketplace, skipping`);
+            ? await getPluginByIdCacheOnly(pluginId, storageV5)
+            : await getPluginById(pluginId, storageV5);
+        if (!found) {
+          logForDebugging(`Plugin ${pluginId} not found in any marketplace, skipping`);
           continue;
         }
-        let { entry, marketplaceInstallLocation } = It;
-        let Zt;
-        if (Ee.has(pt)) {
-          Zt = Me?.[marketplace]?.source;
-          if (isPluginBlockedByPolicy(pt) || isSourceDisallowedOrUnverifiable(Zt)) {
-            logForDebugging(`Skipping ${pt}: blocked by policy, not writing a record`);
+        let { entry, marketplaceInstallLocation } = found;
+        let source;
+        if (toProvision.has(pluginId)) {
+          source = known?.[marketplace]?.source;
+          if (isPluginBlockedByPolicy(pluginId) || isSourceDisallowedOrUnverifiable(source)) {
+            logForDebugging(`Skipping ${pluginId}: blocked by policy, not writing a record`);
             continue;
           }
         }
-        let rn;
-        let pn;
-        let no = undefined;
+        let installPath;
+        let pluginVersion;
+        let gitCommitSha = undefined;
         if (typeof entry.source === "string") {
-          let hn = await cacheAndRegisterPlugin(
-            pt,
+          let cached = await cacheAndRegisterPlugin(
+            pluginId,
             entry,
             entry.source,
             marketplaceInstallLocation,
-            Me,
-            Ee.has(pt) && !isLocalMarketplaceEntry(entry.source, Zt),
-            version,
+            known,
+            toProvision.has(pluginId) && !isLocalMarketplaceEntry(entry.source, source),
+            storageV5,
           );
-          if (hn === undefined) continue;
-          ({ installPath: rn, version: pn, gitCommitSha: no } = hn);
+          if (cached === undefined) continue;
+          ({ installPath, version: pluginVersion, gitCommitSha } = cached);
         } else {
-          let hn = dirname(getVersionedCachePath(pt, "x"));
-          let ho;
+          let versionDir = dirname(getVersionedCachePath(pluginId, "x"));
+          let versions;
           try {
-            ho = (await getFsImplementation().readdir(hn))
-              .filter((bo) => bo.isDirectory() && !isTempSiblingName(bo.name))
-              .map((bo) => bo.name);
+            versions = (await getFsImplementation().readdir(versionDir))
+              .filter((entry) => entry.isDirectory() && !isTempSiblingName(entry.name))
+              .map((entry) => entry.name);
           } catch (error) {
             if (!isENOENT(error)) throw error;
-            logForDebugging(`External plugin ${pt} not in cache, skipping`);
+            logForDebugging(`External plugin ${pluginId} not in cache, skipping`);
             continue;
           }
-          if (Ee.has(pt)) {
-            let bo = [];
-            for (let vn of ho) if (await pluginInstallPathExists(join(hn, vn), version)) bo.push(vn);
-            ho = bo;
+          if (toProvision.has(pluginId)) {
+            let kept = [];
+            for (let versionName of versions)
+              if (await pluginInstallPathExists(join(versionDir, versionName), storageV5))
+                kept.push(versionName);
+            versions = kept;
           }
-          if (ho.length === 0) {
-            logForDebugging(`External plugin ${pt} has no cached versions, skipping`);
+          if (versions.length === 0) {
+            logForDebugging(`External plugin ${pluginId} has no cached versions, skipping`);
             continue;
           }
-          let yn = entry.version ? getVersionedCachePath(pt, entry.version) : undefined;
-          let Kn = yn && ho.includes(basename(yn)) ? yn : join(hn, ho[0]);
-          let Xn = basename(Kn);
-          rn = Kn;
-          let fo = typeof entry.source === "string" || getPluginCloneUrl(entry.source) !== null;
-          no = fo ? await readInstalledPluginsIfAny(Kn) : undefined;
-          let To =
+          let preferredPath = entry.version ? getVersionedCachePath(pluginId, entry.version) : undefined;
+          let cachePath =
+            preferredPath && versions.includes(basename(preferredPath))
+              ? preferredPath
+              : join(versionDir, versions[0]);
+          let versionName = basename(cachePath);
+          installPath = cachePath;
+          let isGitBacked = typeof entry.source === "string" || getPluginCloneUrl(entry.source) !== null;
+          gitCommitSha = isGitBacked ? await readInstalledPluginsIfAny(cachePath) : undefined;
+          let isRefTracked =
             isGitShaVersionName({
-              isGitBacked: fo,
+              isGitBacked,
               sourceHasPinnedSha: "sha" in entry.source && !!entry.source.sha,
               entryHasVersion: !!entry.version,
-              versionName: Xn,
-            }) && (await readManifestVersion(Kn, pt, version)) === "unknown";
-          pn = To ? undefined : Xn;
-          if (To)
+              versionName,
+            }) && (await readManifestVersion(cachePath, pluginId, storageV5)) === "unknown";
+          pluginVersion = isRefTracked ? undefined : versionName;
+          if (isRefTracked)
             logForDebugging(
-              `External plugin ${pt} is ref-tracked (cache dir ${Xn} is a git SHA, no manifest version), recording without a version so the loader re-clones it each load`,
+              `External plugin ${pluginId} is ref-tracked (cache dir ${versionName} is a git SHA, no manifest version), recording without a version so the loader re-clones it each load`,
             );
         }
-        v2Plugins[pt] = [
+        v2Plugins[pluginId] = [
           {
-            scope: Et.scope,
-            installPath: rn,
-            ...(pn !== undefined && {
-              version: pn,
+            scope: want.scope,
+            installPath,
+            ...(pluginVersion !== undefined && {
+              version: pluginVersion,
             }),
             installedAt: iso,
             lastUpdated: iso,
-            gitCommitSha: no,
-            ...(Et.projectPath && {
-              projectPath: Et.projectPath,
+            gitCommitSha,
+            ...(want.projectPath && {
+              projectPath: want.projectPath,
             }),
           },
         ];
-        nt++;
-        logForDebugging(`Added ${pt} with scope ${Et.scope}`);
+        addedCount++;
+        logForDebugging(`Added ${pluginId} with scope ${want.scope}`);
       } catch (error) {
-        logForDebugging(`Failed to add plugin ${pt}: ${error}`);
+        logForDebugging(`Failed to add plugin ${pluginId}: ${error}`);
       }
     }
   }
-  if (!Z || Je > 0 || nt > 0) {
+  if (!hasFile || updatedCount > 0 || addedCount > 0) {
     let v2Data = {
       version: 2,
       plugins: v2Plugins,
     };
-    if (lt !== undefined) copySetAsideRecords(lt, v2Data);
-    await saveInstalledPluginsV2(v2Data, version);
-    logForDebugging(`Sync completed: ${nt} added, ${Je} updated in installed_plugins.json`);
+    if (existingState !== undefined) copySetAsideRecords(existingState, v2Data);
+    await saveInstalledPluginsV2(v2Data, storageV5);
+    logForDebugging(`Sync completed: ${addedCount} added, ${updatedCount} updated in installed_plugins.json`);
   }
 }
 //@ chunk-e6aww6q8.js:4365369-4365510 affinity
@@ -2500,67 +2621,68 @@ function isGitShaVersionName({ isGitBacked, sourceHasPinnedSha, entryHasVersion,
 /**
  * 从插件目录 .claude-plugin/plugin.json 读 version（存储后端模式下经存储层读）。
  */
-async function getPluginVersionFromManifest(e, storageV5, r) {
-  if (isStorageV5Enabled() && storageV5 !== undefined && r !== null) {
-    let pluginManifestViaStorage = await readPluginManifestViaStorage(storageV5, r);
-    return pluginManifestViaStorage === undefined
-      ? undefined
-      : readManifestBinaries(pluginManifestViaStorage);
+async function getPluginVersionFromManifest(installPath, storageV5, storageKey) {
+  if (isStorageV5Enabled() && storageV5 !== undefined && storageKey !== null) {
+    let text = await readPluginManifestViaStorage(storageV5, storageKey);
+    return text === undefined ? undefined : readManifestBinaries(text);
   }
-  let s = join(e, ".claude-plugin");
-  if (!(await lstat(s).catch(() => null))?.isDirectory()) return;
-  let y = join(s, "plugin.json");
-  if (!(await lstat(y).catch(() => null))?.isFile()) return;
-  let w;
-  let L;
+  let manifestDir = join(installPath, ".claude-plugin");
+  if (!(await lstat(manifestDir).catch(() => null))?.isDirectory()) return;
+  let manifestPath = join(manifestDir, "plugin.json");
+  if (!(await lstat(manifestPath).catch(() => null))?.isFile()) return;
+  let text;
+  let handle;
   try {
-    L = await open(y, readOnlyNoFollowFlags());
-    let stats = await L.stat();
+    handle = await open(manifestPath, readOnlyNoFollowFlags());
+    let stats = await handle.stat();
     if (!stats.isFile() || stats.size > ONE_MIB) return;
-    w = await L.readFile({
+    text = await handle.readFile({
       encoding: "utf-8",
     });
   } catch {
     return;
   } finally {
-    await L?.close().catch(() => {
+    await handle?.close().catch(() => {
       return;
     });
   }
-  return readManifestBinaries(w);
+  return readManifestBinaries(text);
 }
 //@ chunk-e6aww6q8.js:4374071-4374185 placement
-function readManifestBinaries(e) {
-  let n;
+function readManifestBinaries(text) {
+  let parsed;
   try {
-    n = jsonParse(stripBom(e));
+    parsed = jsonParse(stripBom(text));
   } catch {
     return;
   }
-  if (typeof n !== "object" || n === null) return;
-  return parsePluginBinaries(n.binaries);
+  if (typeof parsed !== "object" || parsed === null) return;
+  return parsePluginBinaries(parsed.binaries);
 }
 //@ chunk-e6aww6q8.js:4374185-4374535 placement
 /**
  * 经 v5 存储读缓存版本里的 plugin.json（≤1 MiB）。
  */
-async function readPluginManifestViaStorage(e, n) {
-  let r = await e.scopeKind({
-    ...n,
+async function readPluginManifestViaStorage(storageV5, coords) {
+  let dirResult = await storageV5.scopeKind({
+    ...coords,
     relPath: [".claude-plugin"],
   });
-  if (!r.ok || r.value.kind !== "directory") return;
-  let text = await e.readText([
+  if (!dirResult.ok || dirResult.value.kind !== "directory") return;
+  let text = await storageV5.readText([
     {
-      key: STORAGE_SPACES.pluginCache(n.marketplace, n.plugin, n.version, [".claude-plugin", "plugin.json"]),
+      key: STORAGE_SPACES.pluginCache(coords.marketplace, coords.plugin, coords.version, [
+        ".claude-plugin",
+        "plugin.json",
+      ]),
       offset: 0,
       length: ONE_MIB + 1,
     },
   ]);
   if (!text.ok) return;
-  let [h] = text.value.items;
-  if (!h.found || h.totalBytes > ONE_MIB) return;
-  return h.value;
+  let [item] = text.value.items;
+  if (!item.found || item.totalBytes > ONE_MIB) return;
+  return item.value;
 }
 export {
   loadInstalledPlugins,
@@ -2569,14 +2691,14 @@ export {
   getInstalledGitCommitSha,
   getInstalledPlugins,
   isPluginInstalled,
-  listInstalledPluginIds,
   hasFailedInstalledPluginsRead,
+  isInstallationRelevantToCurrentProject,
+  listInstalledPluginIds,
   hasInstallationForCurrentProject,
   getInstalledListRefusal,
   readInstalledPluginsFile,
   clearAutoInstalledFlag,
   formatInvalidPluginIdMessage,
-  isInstallationRelevantToCurrentProject,
   addInstalledPlugin,
   removePluginInstallation,
   findDataDirSharers,

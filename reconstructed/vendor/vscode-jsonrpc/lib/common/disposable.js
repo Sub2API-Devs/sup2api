@@ -5,10 +5,10 @@
  * pieces: chunk-t4ksmxzx.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-t4ksmxzx.js:13140-13327 cjs-fingerprint
-var require_disposable = x(function (cjsExports) {
+var require_disposable = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

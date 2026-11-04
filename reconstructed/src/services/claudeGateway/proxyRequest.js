@@ -18,28 +18,32 @@ import {
   getBedrockRegionPrefix_2,
   isFoundationModel,
 } from "../../utils/model/bedrock.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-1ny7cxrt.js:1345635-1345745 placement
 /**
  * 转发给上游的请求头白名单（另含 x-stainless-*）。
  */
-var FORWARDED_REQUEST_HEADERS = new Set([
-  "content-type",
-  "accept",
-  "accept-encoding",
-  "anthropic-beta",
-  "anthropic-version",
-  "user-agent",
-]);
+var FORWARDED_REQUEST_HEADERS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-1ny7cxrt.js:1345635", () => {
+  FORWARDED_REQUEST_HEADERS = new Set([
+    "content-type",
+    "accept",
+    "accept-encoding",
+    "anthropic-beta",
+    "anthropic-version",
+    "user-agent",
+  ]);
+});
 //@ chunk-1ny7cxrt.js:1345745-1345883 placement
 /**
  * 从客户端请求头中挑出允许转发的头。
  */
 function pickForwardedHeaders(headers) {
   let headers_2 = new Headers();
-  headers.forEach((n, o) => {
-    let lower = o.toLowerCase();
-    if (FORWARDED_REQUEST_HEADERS.has(lower) || lower.startsWith("x-stainless-")) headers_2.set(o, n);
+  headers.forEach((value, name) => {
+    let lower = name.toLowerCase();
+    if (FORWARDED_REQUEST_HEADERS.has(lower) || lower.startsWith("x-stainless-")) headers_2.set(name, value);
   });
   return headers_2;
 }
@@ -47,10 +51,10 @@ function pickForwardedHeaders(headers) {
 /**
  * 取要转发的请求部分（查询串与允许转发的请求头）。
  */
-function forwardedRequestParts(e) {
+function forwardedRequestParts(request) {
   return {
-    search: new URL(e.url).search,
-    headers: pickForwardedHeaders(e.headers),
+    search: new URL(request.url).search,
+    headers: pickForwardedHeaders(request.headers),
   };
 }
 //@ chunk-1ny7cxrt.js:1345957-1346344 placement
@@ -84,70 +88,71 @@ var PROXIED_PATHS = ["/v1/messages", "/v1/messages/count_tokens"];
 /**
  * 依次尝试各上游的 count_tokens（SDK 或 HTTP），Bedrock 用 countTokens 或 max_tokens=1 的请求；都失败时按字符数/4 估算。
  */
-async function countTokensViaUpstreams(e, t, n, autoIncludeBuiltinModels, r) {
-  let model = typeof e.model === "string" ? e.model : null;
-  let a = {
-    system: e.system,
-    messages: e.messages,
-    tools: e.tools,
+async function countTokensViaUpstreams(payload, upstreams, models, autoIncludeBuiltinModels, principal) {
+  let model = typeof payload.model === "string" ? payload.model : null;
+  let countPayload = {
+    system: payload.system,
+    messages: payload.messages,
+    tools: payload.tools,
   };
-  for (let l of t) {
-    if (l.kind === "sdk" && l.provider === "bedrock") continue;
-    let c = model ? resolveUpstreamModel(model, l, n, autoIncludeBuiltinModels) : null;
-    if (!c?.ok) continue;
-    let u = {
-      ...a,
-      model: c.model,
+  for (let upstream of upstreams) {
+    if (upstream.kind === "sdk" && upstream.provider === "bedrock") continue;
+    let resolved = model ? resolveUpstreamModel(model, upstream, models, autoIncludeBuiltinModels) : null;
+    if (!resolved?.ok) continue;
+    let upstreamPayload = {
+      ...countPayload,
+      model: resolved.model,
     };
     try {
-      if (l.kind === "sdk") return (await l.client.messages.countTokens(u)).input_tokens;
+      if (upstream.kind === "sdk")
+        return (await upstream.client.messages.countTokens(upstreamPayload)).input_tokens;
       let headers = new Headers({
         "content-type": "application/json",
         "anthropic-version": "2023-06-01",
       });
-      copyHeadersInto(headers, l);
-      setUserIdentityHeaders(headers, l, r);
-      await l.applyAuth(headers);
-      let h = `${l.baseUrl.replace(/\/$/, "")}/v1/messages/count_tokens`;
-      let m = await (l.fetch ?? ssrfSafeFetch)(h, {
+      copyHeadersInto(headers, upstream);
+      setUserIdentityHeaders(headers, upstream, principal);
+      await upstream.applyAuth(headers);
+      let countUrl = `${upstream.baseUrl.replace(/\/$/, "")}/v1/messages/count_tokens`;
+      let response = await (upstream.fetch ?? ssrfSafeFetch)(countUrl, {
         method: "POST",
         headers,
-        body: jsonStringify(u),
+        body: jsonStringify(upstreamPayload),
         ...getProxyFetchOptions({
-          url: h,
+          url: countUrl,
         }),
         timeout: false,
         signal: AbortSignal.timeout(1e4),
       });
-      if (!m.ok) continue;
-      let body = await m.json();
+      if (!response.ok) continue;
+      let body = await response.json();
       if (typeof body.input_tokens === "number") return body.input_tokens;
     } catch {}
   }
-  for (let l of t) {
-    if (l.kind !== "sdk" || l.provider !== "bedrock") continue;
-    let c = model ? resolveUpstreamModel(model, l, n, autoIncludeBuiltinModels) : null;
-    if (!c?.ok) continue;
-    let u = await l.countTokens?.(c.model, {
-      ...a,
-      max_tokens: typeof e.max_tokens === "number" ? e.max_tokens : 1,
-      ...(e.thinking !== undefined && {
-        thinking: e.thinking,
+  for (let upstream of upstreams) {
+    if (upstream.kind !== "sdk" || upstream.provider !== "bedrock") continue;
+    let resolved = model ? resolveUpstreamModel(model, upstream, models, autoIncludeBuiltinModels) : null;
+    if (!resolved?.ok) continue;
+    let tokenCount = await upstream.countTokens?.(resolved.model, {
+      ...countPayload,
+      max_tokens: typeof payload.max_tokens === "number" ? payload.max_tokens : 1,
+      ...(payload.thinking !== undefined && {
+        thinking: payload.thinking,
       }),
     });
-    if (typeof u === "number") return u;
+    if (typeof tokenCount === "number") return tokenCount;
     try {
       return (
-        await l.client.messages.create({
-          ...a,
-          model: c.model,
+        await upstream.client.messages.create({
+          ...countPayload,
+          model: resolved.model,
           max_tokens: 1,
           stream: false,
         })
       ).usage.input_tokens;
     } catch {}
   }
-  return Math.ceil(jsonStringify(a).length / 4);
+  return Math.ceil(jsonStringify(countPayload).length / 4);
 }
 //@ chunk-1ny7cxrt.js:1347543-1347580 placement
 /**

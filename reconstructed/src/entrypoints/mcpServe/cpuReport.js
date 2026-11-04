@@ -32,8 +32,8 @@ var CPU_METRIC_VERSION = 1;
 var ONE_DAY_MS = 86400000;
 var CPU_REPORT_TTL_MS = 31 * ONE_DAY_MS;
 //@ chunk-gg8n9khb.js:611-648 placement
-function isCurrentCpuReport(n) {
-  return isPlainObject(n) && n[CPU_METRIC_NAME] === CPU_METRIC_VERSION;
+function isCurrentCpuReport(report) {
+  return isPlainObject(report) && report[CPU_METRIC_NAME] === CPU_METRIC_VERSION;
 }
 //@ chunk-gg8n9khb.js:648-684 placement
 var CPU_SAMPLE_MS = 1000;
@@ -47,58 +47,59 @@ function startServedCpuMeter(host, kind) {
     env.CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE === "self_hosted"
   )
     return;
-  let r;
+  let meter;
   try {
-    r = readFileSync("/proc/self/cgroup", "utf8");
+    meter = readFileSync("/proc/self/cgroup", "utf8");
   } catch {
     return;
   }
-  let cpuacctPath = getCpuacctPath(r);
-  if (cpuacctPath === undefined) return;
+  let groupPath = getCpuacctPath(meter);
+  if (groupPath === undefined) return;
   let containerCpu = readContainerCpu(0);
-  let cpuacctGroup = ensureCpuacctGroup(cpuacctPath);
+  let cpuacctGroup = ensureCpuacctGroup(groupPath);
   if (containerCpu !== undefined) {
-    let s = cpuacctGroup === undefined ? undefined : posix.join(cpuacctGroup, "cpuacct.usage");
-    let p = s === undefined ? undefined : readCpuUsageSeconds(s);
-    let u = {
+    let usageFile = cpuacctGroup === undefined ? undefined : posix.join(cpuacctGroup, "cpuacct.usage");
+    let baseline = usageFile === undefined ? undefined : readCpuUsageSeconds(usageFile);
+    let state = {
       machineMsAtZero: containerCpu.cpuMs - containerCpu.daemonCpuMs,
       callsBeingServed: 0,
       atCallsStart: undefined,
       inCallMs: 0,
       inCallCpuMs: 0,
       shell:
-        s === undefined || p === undefined
+        usageFile === undefined || baseline === undefined
           ? undefined
           : {
-              usageFile: s,
-              msAtZero: p,
+              usageFile,
+              msAtZero: baseline,
             },
       lastLoopTickMs: performance.now(),
       loopStallMs: 0,
     };
-    cpuReportSlot.of(host).meter = u;
+    cpuReportSlot.of(host).meter = state;
     leftoverProcessTracker.enableCounting();
-    setInterval(noteLoopTick, CPU_SAMPLE_MS, u).unref();
+    setInterval(noteLoopTick, CPU_SAMPLE_MS, state).unref();
   }
   setCpuacctDir(cpuacctGroup);
 }
 //@ chunk-gg8n9khb.js:1281-1397 placement
-function noteLoopTick(n) {
+function noteLoopTick(meter) {
   let startTime = performance.now();
-  if (startTime - n.lastLoopTickMs >= CPU_REPORT_INTERVAL_MS) n.loopStallMs += startTime - n.lastLoopTickMs;
-  n.lastLoopTickMs = startTime;
+  if (startTime - meter.lastLoopTickMs >= CPU_REPORT_INTERVAL_MS)
+    meter.loopStallMs += startTime - meter.lastLoopTickMs;
+  meter.lastLoopTickMs = startTime;
 }
 //@ chunk-gg8n9khb.js:1397-1669 placement
-function servingCall(n) {
-  let { meter } = cpuReportSlot.of(n);
+function servingCall(host) {
+  let { meter } = cpuReportSlot.of(host);
   if (meter === undefined) return;
   if (meter.callsBeingServed++ === 0) meter.atCallsStart = readContainerCpu(meter.machineMsAtZero);
   return {
     [Symbol.dispose]() {
       if (--meter.callsBeingServed === 0) {
-        let r = addCpuSinceCallStart(meter, readContainerCpu(meter.machineMsAtZero));
-        meter.inCallMs = r.ms;
-        meter.inCallCpuMs = r.cpuMs;
+        let containerCpu = addCpuSinceCallStart(meter, readContainerCpu(meter.machineMsAtZero));
+        meter.inCallMs = containerCpu.ms;
+        meter.inCallCpuMs = containerCpu.cpuMs;
         meter.atCallsStart = undefined;
       }
     },
@@ -108,37 +109,40 @@ function servingCall(n) {
 /**
  * 为工具容器调用附加 CPU 用量报告（cgroup cpuacct）。
  */
-function withCpuReport(n, e, r) {
-  let { meter } = cpuReportSlot.of(e);
-  if (meter === undefined || !isCurrentCpuReport(r)) return n;
-  let l = meter.shell === undefined ? undefined : readCpuUsageSeconds(meter.shell.usageFile);
-  let containerCpu = readContainerCpu(meter.machineMsAtZero);
-  if (containerCpu === undefined) return n;
-  let s = addCpuSinceCallStart(meter, containerCpu);
+function withCpuReport(result, meter, options) {
+  let { meter: meter_2 } = cpuReportSlot.of(meter);
+  if (meter_2 === undefined || !isCurrentCpuReport(options)) return result;
+  let shellCpu = meter_2.shell === undefined ? undefined : readCpuUsageSeconds(meter_2.shell.usageFile);
+  let containerCpu = readContainerCpu(meter_2.machineMsAtZero);
+  if (containerCpu === undefined) return result;
+  let cpuDelta = addCpuSinceCallStart(meter_2, containerCpu);
   let floored = Math.floor(containerCpu.cpuMs);
-  let u = meter.shell === undefined || l === undefined ? undefined : Math.floor(l - meter.shell.msAtZero);
-  let h = {
+  let payload =
+    meter_2.shell === undefined || shellCpu === undefined
+      ? undefined
+      : Math.floor(shellCpu - meter_2.shell.msAtZero);
+  let report = {
     start_time_unix_ms: Math.floor(performance.timeOrigin),
     up_ms: Math.floor(containerCpu.upMs),
     cpu_ms: floored,
     daemon_cpu_ms: Math.floor(containerCpu.daemonCpuMs),
-    in_call_ms: Math.floor(s.ms),
-    in_call_cpu_ms: Math.floor(s.cpuMs),
-    ...(u !== undefined &&
-      u >= 1 &&
-      u <= floored && {
-        shell_cpu_ms: u,
+    in_call_ms: Math.floor(cpuDelta.ms),
+    in_call_cpu_ms: Math.floor(cpuDelta.cpuMs),
+    ...(payload !== undefined &&
+      payload >= 1 &&
+      payload <= floored && {
+        shell_cpu_ms: payload,
       }),
     left_running_programs: leftoverProcessTracker.countRunning(),
-    started_mcp_servers: startedServerKeys.of(e).size,
-    loop_stall_ms: Math.floor(meter.loopStallMs),
+    started_mcp_servers: startedServerKeys.of(meter).size,
+    loop_stall_ms: Math.floor(meter_2.loopStallMs),
   };
-  let C = n.isError === true ? ANTHROPIC_TOOLCONTAINERCPU : CPU_METRIC_NAME;
+  let metricName = result.isError === true ? ANTHROPIC_TOOLCONTAINERCPU : CPU_METRIC_NAME;
   return {
-    ...n,
+    ...result,
     _meta: {
-      ...n._meta,
-      [C]: h,
+      ...result._meta,
+      [metricName]: report,
     },
   };
 }
@@ -175,4 +179,4 @@ function readContainerCpu(machineMsAtZero) {
     return;
   }
 }
-export { startServedCpuMeter };
+export { startServedCpuMeter, servingCall, withCpuReport };

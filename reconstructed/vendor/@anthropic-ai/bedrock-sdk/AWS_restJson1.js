@@ -5,7 +5,7 @@
  * pieces: chunk-h87x8cg3.js (3)
  * attribution: esm-layout 2, esm-fingerprint 1
  */
-import { Re } from "../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../runtime/bun-runtime.js";
 import { base64Module } from "../../@aws-sdk/credential-provider-web-identity/dist-cjs/index.js";
 import { require_fetch_http_handler } from "../../@smithy/fetch-http-handler/dist-cjs/index.js";
 import { require_client } from "../../@smithy/core/dist-cjs/submodules/client/index.js";
@@ -19,10 +19,10 @@ import {
 } from "../../@aws-sdk/client-bedrock-runtime/dist-cjs/index.js";
 
 //@ chunk-h87x8cg3.js:3110-3141 esm-layout
-var import_credential_provider_web_identity = Re(base64Module(), 1);
-var import_fetch_http_handler_2 = Re(require_fetch_http_handler(), 1);
+var import_credential_provider_web_identity = __toESM(base64Module(), 1);
+var import_fetch_http_handler_2 = __toESM(require_fetch_http_handler(), 1);
 //@ chunk-h87x8cg3.js:3141-3158 esm-layout
-var import_client = Re(require_client(), 1);
+var import_client = __toESM(require_client(), 1);
 //@ chunk-h87x8cg3.js:3158-5935 esm-fingerprint
 var de_InternalServerExceptionRes = async (parsedOutput, context) => {
   let contents = import_client.map({});

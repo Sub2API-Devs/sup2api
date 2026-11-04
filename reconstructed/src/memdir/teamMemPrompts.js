@@ -14,7 +14,7 @@ import { isValidKeySegment, STORAGE_SPACES, storageNameSpellings } from "../util
 import { validateStorageKey } from "../utils/storage/storageKeys.js";
 import { getProjectsDir } from "../utils/sessionStoragePortable.js";
 import { parseMemoryStoresEnv } from "../services/orgMemory/memoryStores.js";
-import { isTeamSubscriber_2 } from "../utils/auth.js";
+import { TEAM_MEMORY_SCOPE } from "../utils/auth.js";
 import { isENOENT } from "../utils/errors.js";
 import {
   memoryIndexDirPrefix,
@@ -56,29 +56,29 @@ import { HOW_TO_SAVE_MEMORIES_SECTION } from "./memoryStoresPrompt.js";
 /**
  * 从记忆目录路径取出项目键（<project>/memory 形式）。
  */
-function projectKeyFromMemoryDir(e) {
-  let n = projectsRelativeParts(e);
-  if (n?.length !== 2 || n[1] !== "memory") return;
-  let r = n[0];
-  return isValidKeySegment(r) ? r : undefined;
+function projectKeyFromMemoryDir(memoryDir) {
+  let parts = projectsRelativeParts(memoryDir);
+  if (parts?.length !== 2 || parts[1] !== "memory") return;
+  let projectKey = parts[0];
+  return isValidKeySegment(projectKey) ? projectKey : undefined;
 }
 //@ chunk-82kqcve8.js:125573-125790 placement
 /**
  * 把挂载目录下的文件路径换成 memory 存储键（逐段校验合法、整体再校验），不在挂载目录下或不合法时返回 undefined。
  */
 function storageKeyForMountPath(mount, mountDir, filePath) {
-  let s = mountDir.endsWith(sep) ? mountDir : mountDir + sep;
-  if (!filePath.startsWith(s)) return;
-  let parts = filePath.slice(s.length).split(sep);
+  let mountDirWithSep = mountDir.endsWith(sep) ? mountDir : mountDir + sep;
+  if (!filePath.startsWith(mountDirWithSep)) return;
+  let parts = filePath.slice(mountDirWithSep.length).split(sep);
   if (!parts.every(isValidKeySegment)) return;
-  let y = STORAGE_SPACES.memory(mount.projectKey, [...mount.baseRelPath, ...parts]);
-  return validateStorageKey(y) === undefined ? y : undefined;
+  let storageKey = STORAGE_SPACES.memory(mount.projectKey, [...mount.baseRelPath, ...parts]);
+  return validateStorageKey(storageKey) === undefined ? storageKey : undefined;
 }
 //@ chunk-82kqcve8.js:125913-126057 placement
-function projectsRelativeParts(e) {
-  let n = getProjectsDir() + sep;
-  if (!e.startsWith(n)) return;
-  let sliced = e.slice(n.length);
+function projectsRelativeParts(path) {
+  let projectsPrefix = getProjectsDir() + sep;
+  if (!path.startsWith(projectsPrefix)) return;
+  let sliced = path.slice(projectsPrefix.length);
   while (sliced.endsWith(sep)) sliced = sliced.slice(0, -sep.length);
   return sliced.split(sep);
 }
@@ -91,7 +91,9 @@ async function isTeamMemoryDirAbsent(autoMemPath) {
     if ((parseMemoryStoresEnv() ?? []).length > 0) return false;
   } catch {}
   try {
-    return !(await readdir(autoMemPath)).some((r) => storageNameSpellings(r).includes(isTeamSubscriber_2));
+    return !(await readdir(autoMemPath)).some((dirent) =>
+      storageNameSpellings(dirent).includes(TEAM_MEMORY_SCOPE),
+    );
   } catch (error) {
     return isENOENT(error);
   }
@@ -100,7 +102,7 @@ async function isTeamMemoryDirAbsent(autoMemPath) {
 /**
  * 生成团队记忆目录提示段（team/ 只读或可写）
  */
-function buildTeamMemoryDirsPrompt(e) {
+function buildTeamMemoryDirsPrompt(options) {
   let {
     autoDir,
     teamDir,
@@ -110,9 +112,9 @@ function buildTeamMemoryDirsPrompt(e) {
     teamMounts,
     noPrivateDir = false,
     rewriteMemoryHygiene = false,
-  } = e;
-  let filtered = (teamMounts ?? []).filter((se) => se.mode === "rw");
-  let P =
+  } = options;
+  let filtered = (teamMounts ?? []).filter((teamMount) => teamMount.mode === "rw");
+  let dirDescriptions =
     teamDir && teamMounts
       ? teamMounts.map((teamMount) =>
           teamMount.mode === "ro"
@@ -122,49 +124,49 @@ function buildTeamMemoryDirsPrompt(e) {
       : teamDir
         ? [`\`${teamDir}\``]
         : [];
-  let L = teamMounts ? filtered.length > 0 : teamDir !== null;
-  let j =
+  let hasWritableTeamDir = teamMounts ? filtered.length > 0 : teamDir !== null;
+  let teamPrefixes =
     teamDir && teamMounts
-      ? filtered.map((se) => `team/${se.mount}/${memoryIndexDirPrefix(se.promptIndex)}`)
+      ? filtered.map((teamMount) => `team/${teamMount.mount}/${memoryIndexDirPrefix(teamMount.promptIndex)}`)
       : teamDir
         ? ["team/"]
         : [];
-  let G = noPrivateDir && teamDir !== null && (teamMounts?.length ?? 0) > 0;
-  let Z = G
-    ? `at ${P.join(" and ")} (shared with all users of this project). ${L ? (P.length > 1 ? "These directories already exist \u2014 write to them directly with the Write tool (do not run mkdir or check for their existence)." : DIR_EXISTS_GUIDANCE) : "Team memory is read-only this session \u2014 you cannot persist new memories."}`
-    : P.length > 0
-      ? `at \`${autoDir}\` (private to this user) and ${P.join(" and ")} (shared with all users of this project). ${L ? (teamMounts ? "These directories already exist \u2014 write to them directly with the Write tool (do not run mkdir or check for their existence)." : DIRS_EXIST_GUIDANCE) : `Write only to \`${autoDir}\` \u2014 it already exists; write to it directly with the Write tool (do not run mkdir or check for its existence). The shared director${P.length > 1 ? "ies are" : "y is"} read-only and changes there would not persist.`}`
+  let teamOnly = noPrivateDir && teamDir !== null && (teamMounts?.length ?? 0) > 0;
+  let locationLine = teamOnly
+    ? `at ${dirDescriptions.join(" and ")} (shared with all users of this project). ${hasWritableTeamDir ? (dirDescriptions.length > 1 ? "These directories already exist \u2014 write to them directly with the Write tool (do not run mkdir or check for their existence)." : DIR_EXISTS_GUIDANCE) : "Team memory is read-only this session \u2014 you cannot persist new memories."}`
+    : dirDescriptions.length > 0
+      ? `at \`${autoDir}\` (private to this user) and ${dirDescriptions.join(" and ")} (shared with all users of this project). ${hasWritableTeamDir ? (teamMounts ? "These directories already exist \u2014 write to them directly with the Write tool (do not run mkdir or check for their existence)." : DIRS_EXIST_GUIDANCE) : `Write only to \`${autoDir}\` \u2014 it already exists; write to it directly with the Write tool (do not run mkdir or check for its existence). The shared director${dirDescriptions.length > 1 ? "ies are" : "y is"} read-only and changes there would not persist.`}`
       : `at \`${autoDir}\`. ${DIR_EXISTS_GUIDANCE}`;
-  let ae = G
-    ? j.length > 0
-      ? ` There is no separate private memory directory in this session \u2014 save every memory type to the team director${P.length > 1 ? "ies, bearing in mind they are" : "y, bearing in mind it is"} shared with teammates. Never write secrets or credentials to team memory.`
+  let sharedNote = teamOnly
+    ? teamPrefixes.length > 0
+      ? ` There is no separate private memory directory in this session \u2014 save every memory type to the team director${dirDescriptions.length > 1 ? "ies, bearing in mind they are" : "y, bearing in mind it is"} shared with teammates. Never write secrets or credentials to team memory.`
       : ""
-    : j.length > 0
+    : teamPrefixes.length > 0
       ? ` ${memoryVisibilityDefaults("team")} Never write secrets or credentials to the team directory.`
       : "";
-  let ee = citeMemories ? ` ${MEMORY_CITATION_GUIDANCE}` : "";
-  let re = skipIndex || G;
-  let ce = re
+  let citationNote = citeMemories ? ` ${MEMORY_CITATION_GUIDANCE}` : "";
+  let skipIndexPointer = skipIndex || teamOnly;
+  let indexPointerNote = skipIndexPointer
     ? ""
     : `
 
-After writing the file, add a one-line pointer in \`${MEMORY_INDEX_FILENAME}\` (\`- [Title](file.md) \u2014 hook\`). \`${MEMORY_INDEX_FILENAME}\` is the index loaded into context each session \u2014 one line per memory, no frontmatter, never put memory content there.${j.length > 0 ? ` It lives in the private directory and indexes both; use a ${j.map((se) => `\`${se}\``).join(" or ")} path prefix for team memories.` : ""}`;
-  if (G && !L) {
-    let ye = [
+After writing the file, add a one-line pointer in \`${MEMORY_INDEX_FILENAME}\` (\`- [Title](file.md) \u2014 hook\`). \`${MEMORY_INDEX_FILENAME}\` is the index loaded into context each session \u2014 one line per memory, no frontmatter, never put memory content there.${teamPrefixes.length > 0 ? ` It lives in the private directory and indexes both; use a ${teamPrefixes.map((prefix) => `\`${prefix}\``).join(" or ")} path prefix for team memories.` : ""}`;
+  if (teamOnly && !hasWritableTeamDir) {
+    let lines = [
       `# Memory
 
-You have a persistent file-based memory ${Z} If the user asks you to remember something, explain that memory is read-only in this session.
+You have a persistent file-based memory ${locationLine} If the user asks you to remember something, explain that memory is read-only in this session.
 
-${RECALLED_MEMORY_CAVEAT}${ee}`,
+${RECALLED_MEMORY_CAVEAT}${citationNote}`,
     ];
-    if (extraGuidelines?.length) ye.push("", ...extraGuidelines);
-    return ye.join(`
+    if (extraGuidelines?.length) lines.push("", ...extraGuidelines);
+    return lines.join(`
 `);
   }
-  let me = [
+  let lines = [
     `# Memory
 
-You have a persistent file-based memory ${Z} Each memory is one file holding one fact, with frontmatter:
+You have a persistent file-based memory ${locationLine} Each memory is one file holding one fact, with frontmatter:
 
 \`\`\`markdown
 ---
@@ -178,11 +180,11 @@ metadata:
 \`\`\`
 
 ${MEMORY_LINKING_GUIDANCE_2.join(`
-`)}${re ? ` ${MEMORY_FILE_SIZE_GUIDE}` : ""}
+`)}${skipIndexPointer ? ` ${MEMORY_FILE_SIZE_GUIDE}` : ""}
 
-${MEMORY_TYPES_GUIDANCE}${ae}${ce}
+${MEMORY_TYPES_GUIDANCE}${sharedNote}${indexPointerNote}
 
-${rewriteMemoryHygiene ? MEMORY_WRITING_GUIDE : `${MEMORY_DEDUP_GUIDANCE} ${RECALLED_MEMORY_CAVEAT}`}${ee}${
+${rewriteMemoryHygiene ? MEMORY_WRITING_GUIDE : `${MEMORY_DEDUP_GUIDANCE} ${RECALLED_MEMORY_CAVEAT}`}${citationNote}${
       isMemoryLinkingEnabled()
         ? `
 
@@ -190,16 +192,16 @@ ${MEMORY_LINKING_GUIDANCE}`
         : ""
     }`,
   ];
-  if (extraGuidelines?.length) me.push("", ...extraGuidelines);
-  return me.join(`
+  if (extraGuidelines?.length) lines.push("", ...extraGuidelines);
+  return lines.join(`
 `);
 }
 //@ chunk-82kqcve8.js:132114-132149 placement
 /**
  * 判断某路径是否属于团队记忆 store（且团队记忆可用）。
  */
-function isTeamMemoryPath(e) {
-  return canUseTeamMemory() && isTeamMemPath(e);
+function isTeamMemoryPath(filePath) {
+  return canUseTeamMemory() && isTeamMemPath(filePath);
 }
 //@ chunk-82kqcve8.js:132188-135953 fingerprint = buildCombinedMemoryPrompt (0.748)
 /**

@@ -18,95 +18,98 @@ var HELP_TERM_WIDTH = 36;
 var HELP_MIN_DESC_WIDTH = 30;
 var HELP_SUBCOMMAND_INDENT = 4;
 //@ chunk-b7dyevzy.js:35796-36090 placement
-function wrapHelpText(t, e) {
-  let max = Math.max(e, 1);
-  let n = [];
-  for (let line of t.split(`
+function wrapHelpText(text, width) {
+  let max = Math.max(width, 1);
+  let lines = [];
+  for (let line of text.split(`
 `)) {
     let match = line.match(/\s*\S+/g);
     if (!match) {
-      n.push("");
+      lines.push("");
       continue;
     }
-    let a = "";
-    let o = 0;
-    let h = false;
-    for (let u of match) {
-      let c = bunStringWidth(u);
-      if (!h) {
-        a = u;
-        o = c;
-        h = true;
-      } else if (o + c <= max) {
-        a += u;
-        o += c;
+    let wrappedLine = "";
+    let lineWidth = 0;
+    let hasLine = false;
+    for (let word of match) {
+      let wordWidth = bunStringWidth(word);
+      if (!hasLine) {
+        wrappedLine = word;
+        lineWidth = wordWidth;
+        hasLine = true;
+      } else if (lineWidth + wordWidth <= max) {
+        wrappedLine += word;
+        lineWidth += wordWidth;
       } else {
-        n.push(a);
-        let replaced = u.replace(/^\s+/, "");
-        a = replaced;
-        o = bunStringWidth(replaced);
+        lines.push(wrappedLine);
+        let replaced = word.replace(/^\s+/, "");
+        wrappedLine = replaced;
+        lineWidth = bunStringWidth(replaced);
       }
     }
-    n.push(a);
+    lines.push(wrappedLine);
   }
-  return n.join(`
+  return lines.join(`
 `);
 }
 //@ chunk-b7dyevzy.js:36090-36451 placement
 /**
  * 格式化帮助中的一项：名称列对齐后接说明；说明多行或列宽不够时换行缩进。
  */
-function formatHelpItem(t, e, i, helpWidth) {
-  let s = " ".repeat(HELP_INDENT);
-  if (!e) return s + t;
-  let r = bunStringWidth(t);
+function formatHelpItem(term, description, padWidth, helpWidth) {
+  let termWidthLimit = " ".repeat(HELP_INDENT);
+  if (!description) return termWidthLimit + term;
+  let indent = bunStringWidth(term);
   if (
-    e.includes(`
+    description.includes(`
 `)
   ) {
-    let c = r <= i ? repeatString(" ", i - r + HELP_COLUMN_GAP) : " ".repeat(HELP_COLUMN_GAP);
-    return (s + t + c + e).replace(
+    let termWidth =
+      indent <= padWidth
+        ? repeatString(" ", padWidth - indent + HELP_COLUMN_GAP)
+        : " ".repeat(HELP_COLUMN_GAP);
+    return (termWidthLimit + term + termWidth + description).replace(
       /\n/g,
       `
-` + s,
+` + termWidthLimit,
     );
   }
-  let a = helpWidth - HELP_INDENT - i - HELP_COLUMN_GAP;
-  if (r <= i && a >= HELP_MIN_DESC_WIDTH) {
-    let c = repeatString(" ", i - r + HELP_COLUMN_GAP);
-    let d = " ".repeat(HELP_INDENT + i + HELP_COLUMN_GAP);
-    let _ = wrapHelpText(e, a);
+  let available = helpWidth - HELP_INDENT - padWidth - HELP_COLUMN_GAP;
+  if (indent <= padWidth && available >= HELP_MIN_DESC_WIDTH) {
+    let wrapped = repeatString(" ", padWidth - indent + HELP_COLUMN_GAP);
+    let hangIndent = " ".repeat(HELP_INDENT + padWidth + HELP_COLUMN_GAP);
+    let hangWidth = wrapHelpText(description, available);
     return (
-      s +
-      t +
-      c +
-      _.replace(
+      termWidthLimit +
+      term +
+      wrapped +
+      hangWidth.replace(
         /\n/g,
         `
-` + d,
+` + hangIndent,
       )
     );
   }
-  let o = " ".repeat(HELP_INDENT + HELP_SUBCOMMAND_INDENT);
-  let h = helpWidth - HELP_INDENT - HELP_SUBCOMMAND_INDENT;
-  let u = wrapHelpText(e, h);
+  let hangLines = " ".repeat(HELP_INDENT + HELP_SUBCOMMAND_INDENT);
+  let lines = helpWidth - HELP_INDENT - HELP_SUBCOMMAND_INDENT;
+  let entries = wrapHelpText(description, lines);
   return (
-    s +
-    t +
+    termWidthLimit +
+    term +
     `
 ` +
-    o +
-    u.replace(
+    hangLines +
+    entries.replace(
       /\n/g,
       `
-` + o,
+` + hangLines,
     )
   );
 }
 //@ chunk-b7dyevzy.js:36451-36510 placement
-function pushHelpSection(lines, e, i) {
-  if (i.length === 0) return;
-  lines.push(e, ...i, "");
+function pushHelpSection(lines, title, help) {
+  if (help.length === 0) return;
+  lines.push(title, ...help, "");
 }
 //@ chunk-b7dyevzy.js:36510-37116 placement
 /**
@@ -116,21 +119,25 @@ function formatCommandHelp(command, helper) {
   let helpWidth = helper.helpWidth || 80;
   let min = Math.min(helper.padWidth(command, helper), HELP_TERM_WIDTH);
   let lines = [`Usage: ${helper.commandUsage(command)}`, ""];
-  let r = helper.commandDescription(command);
-  if (r.length > 0) lines.push(wrapHelpText(r, helpWidth), "");
+  let out = helper.commandDescription(command);
+  if (out.length > 0) lines.push(wrapHelpText(out, helpWidth), "");
   pushHelpSection(
     lines,
     "Arguments:",
     helper
       .visibleArguments(command)
-      .map((a) => formatHelpItem(helper.argumentTerm(a), helper.argumentDescription(a), min, helpWidth)),
+      .map((option) =>
+        formatHelpItem(helper.argumentTerm(option), helper.argumentDescription(option), min, helpWidth),
+      ),
   );
   pushHelpSection(
     lines,
     "Options:",
     helper
       .visibleOptions(command)
-      .map((a) => formatHelpItem(helper.optionTerm(a), helper.optionDescription(a), min, helpWidth)),
+      .map((option) =>
+        formatHelpItem(helper.optionTerm(option), helper.optionDescription(option), min, helpWidth),
+      ),
   );
   if (helper.showGlobalOptions)
     pushHelpSection(
@@ -138,21 +145,25 @@ function formatCommandHelp(command, helper) {
       "Global Options:",
       helper
         .visibleGlobalOptions(command)
-        .map((a) => formatHelpItem(helper.optionTerm(a), helper.optionDescription(a), min, helpWidth)),
+        .map((option) =>
+          formatHelpItem(helper.optionTerm(option), helper.optionDescription(option), min, helpWidth),
+        ),
     );
   pushHelpSection(
     lines,
     "Commands:",
     helper
       .visibleCommands(command)
-      .map((a) => formatHelpItem(helper.subcommandTerm(a), helper.subcommandDescription(a), min, helpWidth)),
+      .map((command) =>
+        formatHelpItem(helper.subcommandTerm(command), helper.subcommandDescription(command), min, helpWidth),
+      ),
   );
   return lines.join(`
 `);
 }
 //@ chunk-b7dyevzy.js:37116-37320 placement
 function createHelpConfig() {
-  let t = (e) => e.long?.replace(/^--/, "") ?? e.short?.replace(/^-/, "") ?? "";
+  let flagName = (option) => option.long?.replace(/^--/, "") ?? option.short?.replace(/^-/, "") ?? "";
   return Object.assign(
     {
       sortSubcommands: true,
@@ -160,7 +171,7 @@ function createHelpConfig() {
       formatHelp: formatCommandHelp,
     },
     {
-      compareOptions: (e, i) => t(e).localeCompare(t(i)),
+      compareOptions: (a, b) => flagName(a).localeCompare(flagName(b)),
     },
   );
 }

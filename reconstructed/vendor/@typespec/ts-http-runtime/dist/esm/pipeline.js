@@ -5,11 +5,11 @@
  * pieces: chunk-mrx6y2r5.js (4)
  * attribution: esm-layout 2, esm-fingerprint 2
  */
-import { dl } from "./pipelineRequest.js";
+import { PipelineRequestImpl } from "./pipelineRequest.js";
 
 //@ chunk-mrx6y2r5.js:32039-32071 esm-layout
-function Bs(options) {
-  return new dl(options);
+function createEmptyPipeline(options) {
+  return new PipelineRequestImpl(options);
 }
 //@ chunk-mrx6y2r5.js:32071-32130 esm-fingerprint
 var ValidPhaseNames = new Set(["Deserialize", "Serialize", "Retry", "Sign"]);
@@ -164,7 +164,7 @@ class HttpPipeline {
   }
 }
 //@ chunk-mrx6y2r5.js:34701-34734 esm-layout
-function createEmptyPipeline() {
+function createEmptyPipeline_2() {
   return HttpPipeline.create();
 }
-export { createEmptyPipeline, Bs };
+export { createEmptyPipeline_2, createEmptyPipeline };

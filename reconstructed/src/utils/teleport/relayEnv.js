@@ -15,32 +15,32 @@ import { isFirstPartyProvider } from "../model/providers.js";
 /**
  * 校验 teleport 中继的 SESSION_INGRESS_URL 来源（必须 https、无额外部分）。
  */
-function validateIngressOrigin(s) {
-  if (!s.startsWith("https://"))
+function validateIngressOrigin(origin) {
+  if (!origin.startsWith("https://"))
     return {
       ok: false,
       cause: "non_https",
     };
-  let e;
+  let url;
   try {
-    e = new URL(s);
+    url = new URL(origin);
   } catch {
     return {
       ok: false,
       cause: "unparseable",
     };
   }
-  if (e.protocol !== "https:")
+  if (url.protocol !== "https:")
     return {
       ok: false,
       cause: "non_https",
     };
   if (
-    e.username !== "" ||
-    e.password !== "" ||
-    e.search !== "" ||
-    e.hash !== "" ||
-    (e.pathname !== "" && e.pathname !== "/")
+    url.username !== "" ||
+    url.password !== "" ||
+    url.search !== "" ||
+    url.hash !== "" ||
+    (url.pathname !== "" && url.pathname !== "/")
   )
     return {
       ok: false,
@@ -48,7 +48,7 @@ function validateIngressOrigin(s) {
     };
   return {
     ok: true,
-    origin: e.origin,
+    origin: url.origin,
   };
 }
 //@ chunk-2nwtj5hg.js:624-652 placement
@@ -69,11 +69,11 @@ function readTeleportRelayEnv() {
       ok: false,
       cause: "missing_ingress_url",
     };
-  let e = validateIngressOrigin(SESSION_INGRESS_URL);
-  if (!e.ok)
+  let ingress = validateIngressOrigin(SESSION_INGRESS_URL);
+  if (!ingress.ok)
     return {
       ok: false,
-      cause: `invalid_ingress_origin:${e.cause}`,
+      cause: `invalid_ingress_origin:${ingress.cause}`,
     };
   let CLAUDE_CODE_REMOTE_SESSION_ID = env.CLAUDE_CODE_REMOTE_SESSION_ID;
   if (!CLAUDE_CODE_REMOTE_SESSION_ID)
@@ -99,7 +99,7 @@ function readTeleportRelayEnv() {
   return {
     ok: true,
     config: {
-      ingressOrigin: e.origin,
+      ingressOrigin: ingress.origin,
       remoteSessionId: CLAUDE_CODE_REMOTE_SESSION_ID,
     },
   };

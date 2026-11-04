@@ -8,10 +8,15 @@
  * pieces: chunk-myhtjy4v.js (13)
  * attribution: placement 13
  */
-import { init_react_production, y, R, P } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
 import { clamp } from "../../ink/screen.js";
 import { invalidateCursorYankBug, hasCursorUpViewportYankBug } from "../../ink/terminal.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { scrollStepLines } from "../../components/ScrollKeybindingHandler.js";
@@ -56,16 +61,16 @@ var SCROLL_SPEED_DECAY_START = 0.25;
 var SCROLL_SPEED_STEP = 0.25;
 var SCROLL_SPEED_BAR_TICKS = 10;
 //@ chunk-myhtjy4v.js:5601-5676 placement
-function snapScrollSpeed(t, o) {
-  let D = t < 1 ? Math.round(t / SCROLL_SPEED_STEP) * SCROLL_SPEED_STEP : Math.round(t);
-  return clamp(D, o, SCROLL_SPEED_BAR_TICKS);
+function snapScrollSpeed(speed, minSpeed) {
+  let snapped = speed < 1 ? Math.round(speed / SCROLL_SPEED_STEP) * SCROLL_SPEED_STEP : Math.round(speed);
+  return clamp(snapped, minSpeed, SCROLL_SPEED_BAR_TICKS);
 }
 //@ chunk-myhtjy4v.js:5676-5709 placement
 var CLAUDE_CODE_SCROLL_SPEED = "CLAUDE_CODE_SCROLL_SPEED";
 //@ chunk-myhtjy4v.js:5709-5787 placement
-function setScrollSpeedEnv(t) {
-  if (t === undefined) delete process.env[CLAUDE_CODE_SCROLL_SPEED];
-  else process.env[CLAUDE_CODE_SCROLL_SPEED] = t;
+function setScrollSpeedEnv(speed) {
+  if (speed === undefined) delete process.env[CLAUDE_CODE_SCROLL_SPEED];
+  else process.env[CLAUDE_CODE_SCROLL_SPEED] = speed;
   invalidateCursorYankBug();
 }
 //@ chunk-myhtjy4v.js:5787-10391 placement
@@ -73,158 +78,159 @@ function setScrollSpeedEnv(t) {
  * /scroll-speed 设置界面：显示演示标尺、编辑器滚轮灵敏度并保存到 userSettings。
  */
 function ScrollSpeedDialog(props) {
-  let d = w(63);
+  let $ = useMemoCache(63);
   let { onDone, showDemoRuler, editorSensitivity } = props;
-  let C = showDemoRuler === undefined ? true : showDemoRuler;
-  let g = editorSensitivity === undefined ? null : editorSensitivity;
+  let showDemo = showDemoRuler === undefined ? true : showDemoRuler;
+  let sensitivity = editorSensitivity === undefined ? null : editorSensitivity;
   let { storageV5 } = useTheme_2();
-  let [_] = y(scrollSpeedEnvValue);
-  let u;
-  let Ie;
-  if (d[0] === MEMO_CACHE_SENTINEL) {
-    u = hasCursorUpViewportYankBug();
-    Ie = scrollStepLines(u.xtermJs, u.wheelFlood, u.wtSession);
-    d[0] = u;
-    d[1] = Ie;
+  let [envScrollSpeed] = useState(scrollSpeedEnvValue);
+  let bugInfo;
+  let autoSpeed;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    bugInfo = hasCursorUpViewportYankBug();
+    autoSpeed = scrollStepLines(bugInfo.xtermJs, bugInfo.wheelFlood, bugInfo.wtSession);
+    $[0] = bugInfo;
+    $[1] = autoSpeed;
   } else {
-    u = d[0];
-    Ie = d[1];
+    bugInfo = $[0];
+    autoSpeed = $[1];
   }
-  let x = Ie;
-  let ye = u.useDecayCurve ? SCROLL_SPEED_MIN : SCROLL_SPEED_DECAY_START;
-  let Ne;
-  if (d[2] === MEMO_CACHE_SENTINEL) {
-    Ne = () => snapScrollSpeed(u.base, ye);
-    d[2] = Ne;
-  } else Ne = d[2];
-  let [m, Ue] = y(Ne);
-  let [B, Ge] = y(_ !== undefined);
-  let Xe = R(false);
-  let Be = R(false);
-  let J = R(false);
-  let Le = !u.xtermJs && !u.wheelFlood;
-  let ze;
-  let Qe;
-  if (d[3] !== C) {
-    ze = () => {
+  let autoSpeedLines = autoSpeed;
+  let minSpeed = bugInfo.useDecayCurve ? SCROLL_SPEED_MIN : SCROLL_SPEED_DECAY_START;
+  let initialSnap;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    initialSnap = () => snapScrollSpeed(bugInfo.base, minSpeed);
+    $[2] = initialSnap;
+  } else initialSnap = $[2];
+  let [speed, setSpeed] = useState(initialSnap);
+  let [isCustom, setIsCustom] = useState(envScrollSpeed !== undefined);
+  let sawScrollWheel = useRef(false);
+  let sawTrackpad = useRef(false);
+  let finishedRef = useRef(false);
+  let canWatchLive = !bugInfo.xtermJs && !bugInfo.wheelFlood;
+  let liveWatchEffect;
+  let liveWatchDeps;
+  if ($[3] !== showDemo) {
+    liveWatchEffect = () => {
       setScrollTraceLiveWatching(true, {
-        demoRuler: C,
+        demoRuler: showDemo,
       });
-      let Mt = Le
+      let unsubscribe = canWatchLive
         ? subscribeScrollTraceLive(() => {
             let scrollTraceLiveState = getScrollTraceLiveState();
             if (!scrollTraceLiveState) {
               return;
             }
-            if (scrollTraceLiveState.wheelMode) Xe.current = true;
-            else Be.current = true;
+            if (scrollTraceLiveState.wheelMode) sawScrollWheel.current = true;
+            else sawTrackpad.current = true;
           })
         : undefined;
       return () => {
-        Mt?.();
+        unsubscribe?.();
         setScrollTraceLiveWatching(false);
       };
     };
-    Qe = [C, Le];
-    d[3] = C;
-    d[4] = ze;
-    d[5] = Qe;
+    liveWatchDeps = [showDemo, canWatchLive];
+    $[3] = showDemo;
+    $[4] = liveWatchEffect;
+    $[5] = liveWatchDeps;
   } else {
-    ze = d[4];
-    Qe = d[5];
+    liveWatchEffect = $[4];
+    liveWatchDeps = $[5];
   }
-  P(ze, Qe);
-  let Ze;
-  let qe;
-  if (d[6] !== _) {
-    Ze = () => {
-      let He = J;
+  useEffect(liveWatchEffect, liveWatchDeps);
+  let restoreEnvEffect;
+  let restoreEnvDeps;
+  if ($[6] !== envScrollSpeed) {
+    restoreEnvEffect = () => {
+      let finishedAtMount = finishedRef;
       return () => {
-        if (He.current) {
+        if (finishedAtMount.current) {
           return;
         }
-        He.current = true;
-        setScrollSpeedEnv(_);
+        finishedAtMount.current = true;
+        setScrollSpeedEnv(envScrollSpeed);
       };
     };
-    qe = [_];
-    d[6] = _;
-    d[7] = Ze;
-    d[8] = qe;
+    restoreEnvDeps = [envScrollSpeed];
+    $[6] = envScrollSpeed;
+    $[7] = restoreEnvEffect;
+    $[8] = restoreEnvDeps;
   } else {
-    Ze = d[7];
-    qe = d[8];
+    restoreEnvEffect = $[7];
+    restoreEnvDeps = $[8];
   }
-  P(Ze, qe);
-  let et;
-  if (d[9] !== m) {
-    et = function K(Ft) {
-      let Vt = Ft < 0 ? (m <= 1 ? -SCROLL_SPEED_STEP : -1) : m < 1 ? SCROLL_SPEED_STEP : 1;
-      let he = snapScrollSpeed(m + Vt, ye);
-      if (he === m) {
+  useEffect(restoreEnvEffect, restoreEnvDeps);
+  let adjustSpeedFn;
+  if ($[9] !== speed) {
+    adjustSpeedFn = function delta(direction) {
+      let stepSize =
+        direction < 0 ? (speed <= 1 ? -SCROLL_SPEED_STEP : -1) : speed < 1 ? SCROLL_SPEED_STEP : 1;
+      let nextSpeed = snapScrollSpeed(speed + stepSize, minSpeed);
+      if (nextSpeed === speed) {
         return;
       }
-      process.env[CLAUDE_CODE_SCROLL_SPEED] = String(he);
+      process.env[CLAUDE_CODE_SCROLL_SPEED] = String(nextSpeed);
       invalidateCursorYankBug();
-      Ge(true);
-      Ue(he);
+      setIsCustom(true);
+      setSpeed(nextSpeed);
     };
-    d[9] = m;
-    d[10] = et;
-  } else et = d[10];
-  let K = et;
-  let tt;
-  if (d[11] === MEMO_CACHE_SENTINEL) {
-    tt = function rt() {
+    $[9] = speed;
+    $[10] = adjustSpeedFn;
+  } else adjustSpeedFn = $[10];
+  let adjustSpeed = adjustSpeedFn;
+  let resetToAutoFn;
+  if ($[11] === MEMO_CACHE_SENTINEL) {
+    resetToAutoFn = function resetToAutoImpl() {
       delete process.env[CLAUDE_CODE_SCROLL_SPEED];
       invalidateCursorYankBug();
-      Ue(snapScrollSpeed(x, ye));
-      Ge(false);
+      setSpeed(snapScrollSpeed(autoSpeedLines, minSpeed));
+      setIsCustom(false);
     };
-    d[11] = tt;
-  } else tt = d[11];
-  let rt = tt;
-  let ot;
-  if (d[12] !== _) {
-    ot = function b() {
-      setScrollSpeedEnv(_);
+    $[11] = resetToAutoFn;
+  } else resetToAutoFn = $[11];
+  let resetToAuto = resetToAutoFn;
+  let restoreEnvFn;
+  if ($[12] !== envScrollSpeed) {
+    restoreEnvFn = function restoreEnvImpl() {
+      setScrollSpeedEnv(envScrollSpeed);
     };
-    d[12] = _;
-    d[13] = ot;
-  } else ot = d[13];
-  let b = ot;
-  let nt;
-  if (d[14] !== onDone || d[15] !== b) {
-    nt = function L() {
-      if (J.current) {
+    $[12] = envScrollSpeed;
+    $[13] = restoreEnvFn;
+  } else restoreEnvFn = $[13];
+  let restoreEnv = restoreEnvFn;
+  let handleCancelFn;
+  if ($[14] !== onDone || $[15] !== restoreEnv) {
+    handleCancelFn = function handleCancelImpl() {
+      if (finishedRef.current) {
         return;
       }
-      J.current = true;
-      b();
+      finishedRef.current = true;
+      restoreEnv();
       onDone("Scroll speed unchanged");
     };
-    d[14] = onDone;
-    d[15] = b;
-    d[16] = nt;
-  } else nt = d[16];
-  let L = nt;
-  let it;
+    $[14] = onDone;
+    $[15] = restoreEnv;
+    $[16] = handleCancelFn;
+  } else handleCancelFn = $[16];
+  let handleCancel = handleCancelFn;
+  let handleSave;
   if (
-    d[17] !== g?.sensitivity ||
-    d[18] !== onDone ||
-    d[19] !== B ||
-    d[20] !== b ||
-    d[21] !== m ||
-    d[22] !== storageV5
+    $[17] !== sensitivity?.sensitivity ||
+    $[18] !== onDone ||
+    $[19] !== isCustom ||
+    $[20] !== restoreEnv ||
+    $[21] !== speed ||
+    $[22] !== storageV5
   ) {
-    it = async function Q() {
-      if (J.current) {
+    handleSave = async function saveImpl() {
+      if (finishedRef.current) {
         return;
       }
-      J.current = true;
-      let z = !B;
+      finishedRef.current = true;
+      let removingSpeed = !isCustom;
       let env = {
-        [CLAUDE_CODE_SCROLL_SPEED]: z ? undefined : String(m),
+        [CLAUDE_CODE_SCROLL_SPEED]: removingSpeed ? undefined : String(speed),
       };
       let { error } = await updateSettingsForSource(
         "userSettings",
@@ -236,76 +242,76 @@ function ScrollSpeedDialog(props) {
       );
       if (error) {
         logError(error);
-        b();
+        restoreEnv();
         onDone(`Couldn't save scroll speed: ${error.message}`);
         return;
       }
       logEvent("tengu_scroll_speed_set", {
-        scroll_speed: z ? x : m,
-        scroll_speed_auto: x,
-        reset_to_auto: z,
-        xterm_js: u.xtermJs,
-        wheel_flood: u.wheelFlood,
-        wt_session: u.wtSession,
-        use_decay_curve: u.useDecayCurve,
-        saw_scroll_wheel: Xe.current,
-        saw_trackpad: Be.current,
-        editor_wheel_sensitivity: g?.sensitivity ?? undefined,
-        term_program: sanitizeTerminalName(u.termProgram),
-        term_program_version: sanitizeVersion(u.termProgramVersion),
+        scroll_speed: removingSpeed ? autoSpeedLines : speed,
+        scroll_speed_auto: autoSpeedLines,
+        reset_to_auto: removingSpeed,
+        xterm_js: bugInfo.xtermJs,
+        wheel_flood: bugInfo.wheelFlood,
+        wt_session: bugInfo.wtSession,
+        use_decay_curve: bugInfo.useDecayCurve,
+        saw_scroll_wheel: sawScrollWheel.current,
+        saw_trackpad: sawTrackpad.current,
+        editor_wheel_sensitivity: sensitivity?.sensitivity ?? undefined,
+        term_program: sanitizeTerminalName(bugInfo.termProgram),
+        term_program_version: sanitizeVersion(bugInfo.termProgramVersion),
       });
-      let st = `\`${tildify(getSettingsFilePathForSource("userSettings") ?? "settings.json")}\``;
+      let settingsFileText = `\`${tildify(getSettingsFilePathForSource("userSettings") ?? "settings.json")}\``;
       onDone(
-        z
-          ? `Scroll speed reset to auto (${x} ${plural(x, "line")} per notch) \xB7 removed from ${st}`
-          : `Scroll speed set to ${m} ${plural(m, "line")} per notch \xB7 saved to ${st}`,
+        removingSpeed
+          ? `Scroll speed reset to auto (${autoSpeedLines} ${plural(autoSpeedLines, "line")} per notch) \xB7 removed from ${settingsFileText}`
+          : `Scroll speed set to ${speed} ${plural(speed, "line")} per notch \xB7 saved to ${settingsFileText}`,
       );
     };
-    d[17] = g?.sensitivity;
-    d[18] = onDone;
-    d[19] = B;
-    d[20] = b;
-    d[21] = m;
-    d[22] = storageV5;
-    d[23] = it;
-  } else it = d[23];
-  let Q = it;
-  let at;
-  if (d[24] !== K || d[25] !== L || d[26] !== Q) {
-    at = function Y(event) {
+    $[17] = sensitivity?.sensitivity;
+    $[18] = onDone;
+    $[19] = isCustom;
+    $[20] = restoreEnv;
+    $[21] = speed;
+    $[22] = storageV5;
+    $[23] = handleSave;
+  } else handleSave = $[23];
+  let saveScrollSpeed = handleSave;
+  let handleKeyDown;
+  if ($[24] !== adjustSpeed || $[25] !== handleCancel || $[26] !== saveScrollSpeed) {
+    handleKeyDown = function keyEvent(event) {
       if (event.key === "left") {
         event.preventDefault();
-        K(-1);
+        adjustSpeed(-1);
       } else if (event.key === "right") {
         event.preventDefault();
-        K(1);
+        adjustSpeed(1);
       } else if (event.key === "return") {
         event.preventDefault();
-        Q();
+        saveScrollSpeed();
       } else if (event.key === "escape" || (event.ctrl && (event.key === "c" || event.key === "d"))) {
         event.preventDefault();
-        L();
+        handleCancel();
       } else if (event.key === "r") {
         event.preventDefault();
-        rt();
+        resetToAuto();
       }
     };
-    d[24] = K;
-    d[25] = L;
-    d[26] = Q;
-    d[27] = at;
-  } else at = d[27];
-  let onKeyDown = at;
-  let M = !B;
-  let lt;
-  if (d[28] === MEMO_CACHE_SENTINEL) {
-    lt = stableEmptyObject(false);
-    d[28] = lt;
-  } else lt = d[28];
-  let H = lt;
-  let dt;
-  if (d[29] === MEMO_CACHE_SENTINEL) {
-    dt =
+    $[24] = adjustSpeed;
+    $[25] = handleCancel;
+    $[26] = saveScrollSpeed;
+    $[27] = handleKeyDown;
+  } else handleKeyDown = $[27];
+  let onKeyDown = handleKeyDown;
+  let isAuto = !isCustom;
+  let emptyHintProps;
+  if ($[28] === MEMO_CACHE_SENTINEL) {
+    emptyHintProps = stableEmptyObject(false);
+    $[28] = emptyHintProps;
+  } else emptyHintProps = $[28];
+  let hintProps = emptyHintProps;
+  let headerRow;
+  if ($[29] === MEMO_CACHE_SENTINEL) {
+    headerRow =
       true &&
       jsxProd_default_2(Fragment, {
         children: [
@@ -318,116 +324,116 @@ function ScrollSpeedDialog(props) {
           }),
         ],
       });
-    d[29] = dt;
-  } else dt = d[29];
+    $[29] = headerRow;
+  } else headerRow = $[29];
   let children;
-  if (d[30] !== m) {
-    children = speedBar(m);
-    d[30] = m;
-    d[31] = children;
-  } else children = d[31];
-  let te;
-  if (d[32] !== children) {
-    te = jsxProd_default(Text, {
+  if ($[30] !== speed) {
+    children = speedBar(speed);
+    $[30] = speed;
+    $[31] = children;
+  } else children = $[31];
+  let speedBarText;
+  if ($[32] !== children) {
+    speedBarText = jsxProd_default(Text, {
       color: "permission",
       children,
     });
-    d[32] = children;
-    d[33] = te;
-  } else te = d[33];
-  let re;
-  if (d[34] !== m) {
-    re = plural(m, "line");
-    d[34] = m;
-    d[35] = re;
-  } else re = d[35];
-  let oe;
-  if (d[36] !== m || d[37] !== re) {
-    oe = jsxProd_default_2(Text, {
-      children: ["  ", m, " ", re, " per wheel notch"],
+    $[32] = children;
+    $[33] = speedBarText;
+  } else speedBarText = $[33];
+  let lineWord;
+  if ($[34] !== speed) {
+    lineWord = plural(speed, "line");
+    $[34] = speed;
+    $[35] = lineWord;
+  } else lineWord = $[35];
+  let speedLine;
+  if ($[36] !== speed || $[37] !== lineWord) {
+    speedLine = jsxProd_default_2(Text, {
+      children: ["  ", speed, " ", lineWord, " per wheel notch"],
     });
-    d[36] = m;
-    d[37] = re;
-    d[38] = oe;
-  } else oe = d[38];
-  let ne;
-  if (d[39] !== M) {
-    ne =
-      M &&
+    $[36] = speed;
+    $[37] = lineWord;
+    $[38] = speedLine;
+  } else speedLine = $[38];
+  let autoSuffix;
+  if ($[39] !== isAuto) {
+    autoSuffix =
+      isAuto &&
       jsxProd_default(Text, {
         dimColor: true,
         children: " (auto)",
       });
-    d[39] = M;
-    d[40] = ne;
-  } else ne = d[40];
-  let ie;
-  if (d[41] !== M) {
-    ie =
-      !M &&
+    $[39] = isAuto;
+    $[40] = autoSuffix;
+  } else autoSuffix = $[40];
+  let autoHint;
+  if ($[41] !== isAuto) {
+    autoHint =
+      !isAuto &&
       jsxProd_default_2(Text, {
         dimColor: true,
-        children: [" \xB7 auto is ", x],
+        children: [" \xB7 auto is ", autoSpeedLines],
       });
-    d[41] = M;
-    d[42] = ie;
-  } else ie = d[42];
-  let se;
-  if (d[43] !== te || d[44] !== oe || d[45] !== ne || d[46] !== ie) {
-    se = jsxProd_default_2(Box, {
-      children: [te, oe, ne, ie],
+    $[41] = isAuto;
+    $[42] = autoHint;
+  } else autoHint = $[42];
+  let speedBox;
+  if ($[43] !== speedBarText || $[44] !== speedLine || $[45] !== autoSuffix || $[46] !== autoHint) {
+    speedBox = jsxProd_default_2(Box, {
+      children: [speedBarText, speedLine, autoSuffix, autoHint],
     });
-    d[43] = te;
-    d[44] = oe;
-    d[45] = ne;
-    d[46] = ie;
-    d[47] = se;
-  } else se = d[47];
-  let mt;
-  if (d[48] === MEMO_CACHE_SENTINEL) {
-    mt = jsxProd_default(Box, {
+    $[43] = speedBarText;
+    $[44] = speedLine;
+    $[45] = autoSuffix;
+    $[46] = autoHint;
+    $[47] = speedBox;
+  } else speedBox = $[47];
+  let spacer;
+  if ($[48] === MEMO_CACHE_SENTINEL) {
+    spacer = jsxProd_default(Box, {
       height: 1,
     });
-    d[48] = mt;
-  } else mt = d[48];
-  let ut;
-  if (d[49] === MEMO_CACHE_SENTINEL) {
-    ut = jsxProd_default(LabeledValue, {
+    $[48] = spacer;
+  } else spacer = $[48];
+  let terminalRow;
+  if ($[49] === MEMO_CACHE_SENTINEL) {
+    terminalRow = jsxProd_default(LabeledValue, {
       label: "Terminal",
-      value: environmentSummary(u),
+      value: environmentSummary(bugInfo),
     });
-    d[49] = ut;
-  } else ut = d[49];
-  let ae;
-  if (d[50] !== g) {
-    ae =
-      g &&
+    $[49] = terminalRow;
+  } else terminalRow = $[49];
+  let editorRow;
+  if ($[50] !== sensitivity) {
+    editorRow =
+      sensitivity &&
       jsxProd_default(LabeledValue, {
         label: "Editor",
-        value: describeWheelSensitivity(g),
+        value: describeWheelSensitivity(sensitivity),
       });
-    d[50] = g;
-    d[51] = ae;
-  } else ae = d[51];
-  let ct;
-  let pt;
-  if (d[52] === MEMO_CACHE_SENTINEL) {
-    ct = jsxProd_default(Box, {
+    $[50] = sensitivity;
+    $[51] = editorRow;
+  } else editorRow = $[51];
+  let spacer2;
+  let scrollHint;
+  if ($[52] === MEMO_CACHE_SENTINEL) {
+    spacer2 = jsxProd_default(Box, {
       height: 1,
     });
-    pt = jsxProd_default(Text, {
+    scrollHint = jsxProd_default(Text, {
       dimColor: true,
       children: "Scroll to feel it",
     });
-    d[52] = ct;
-    d[53] = pt;
+    $[52] = spacer2;
+    $[53] = scrollHint;
   } else {
-    ct = d[52];
-    pt = d[53];
+    spacer2 = $[52];
+    scrollHint = $[53];
   }
-  let ft;
-  if (d[54] === MEMO_CACHE_SENTINEL) {
-    ft = jsxProd_default(Text, {
+  let byline;
+  if ($[54] === MEMO_CACHE_SENTINEL) {
+    byline = jsxProd_default(Text, {
       dimColor: true,
       italic: false,
       children: jsxProd_default_2(Byline, {
@@ -435,127 +441,127 @@ function ScrollSpeedDialog(props) {
           jsxProd_default(KeyboardShortcutHint, {
             chord: ["left", "right"],
             action: "adjust",
-            ...H,
+            ...hintProps,
           }),
           jsxProd_default(KeyboardShortcutHint, {
             chord: "r",
             action: "reset to auto",
-            ...H,
+            ...hintProps,
           }),
           jsxProd_default(KeyboardShortcutHint, {
             chord: "enter",
             action: "save",
-            ...H,
+            ...hintProps,
           }),
           jsxProd_default(KeyboardShortcutHint, {
             chord: "escape",
             action: "cancel",
-            ...H,
+            ...hintProps,
           }),
         ],
       }),
     });
-    d[54] = ft;
-  } else ft = d[54];
-  let vt;
-  if (d[55] !== se || d[56] !== ae) {
-    vt = jsxProd_default_2(Box, {
+    $[54] = byline;
+  } else byline = $[54];
+  let contentColumn;
+  if ($[55] !== speedBox || $[56] !== editorRow) {
+    contentColumn = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [dt, se, mt, ut, ae, ct, pt, ft],
+      children: [headerRow, speedBox, spacer, terminalRow, editorRow, spacer2, scrollHint, byline],
     });
-    d[55] = se;
-    d[56] = ae;
-    d[57] = vt;
-  } else vt = d[57];
-  let children_2 = vt;
+    $[55] = speedBox;
+    $[56] = editorRow;
+    $[57] = contentColumn;
+  } else contentColumn = $[57];
+  let children_2 = contentColumn;
   let children_3;
-  if (d[58] !== children_2) {
+  if ($[58] !== children_2) {
     children_3 = jsxProd_default(Pane, {
       color: "permission",
       children: children_2,
     });
-    d[58] = children_2;
-    d[59] = children_3;
-  } else children_3 = d[59];
-  let gt;
-  if (d[60] !== onKeyDown || d[61] !== children_3) {
-    gt = jsxProd_default(FocusColumn, {
+    $[58] = children_2;
+    $[59] = children_3;
+  } else children_3 = $[59];
+  let focusColumn;
+  if ($[60] !== onKeyDown || $[61] !== children_3) {
+    focusColumn = jsxProd_default(FocusColumn, {
       onKeyDown,
       children: children_3,
     });
-    d[60] = onKeyDown;
-    d[61] = children_3;
-    d[62] = gt;
-  } else gt = d[62];
-  return gt;
+    $[60] = onKeyDown;
+    $[61] = children_3;
+    $[62] = focusColumn;
+  } else focusColumn = $[62];
+  return focusColumn;
 }
 //@ chunk-myhtjy4v.js:10391-10691 placement
 /**
  * 一行"标签: 值"的小组件。
  */
 function LabeledValue(props) {
-  let E = w(7);
-  let { label, value: D } = props;
-  let C;
-  if (E[0] !== label) {
-    C = jsxProd_default(Box, {
+  let $ = useMemoCache(7);
+  let { label, value } = props;
+  let labelBox;
+  if ($[0] !== label) {
+    labelBox = jsxProd_default(Box, {
       width: 12,
       children: jsxProd_default(Text, {
         dimColor: true,
         children: label,
       }),
     });
-    E[0] = label;
-    E[1] = C;
-  } else C = E[1];
-  let g;
-  if (E[2] !== D) {
-    g = jsxProd_default(Text, {
-      children: D,
+    $[0] = label;
+    $[1] = labelBox;
+  } else labelBox = $[1];
+  let valueText;
+  if ($[2] !== value) {
+    valueText = jsxProd_default(Text, {
+      children: value,
     });
-    E[2] = D;
-    E[3] = g;
-  } else g = E[3];
-  let W;
-  if (E[4] !== C || E[5] !== g) {
-    W = jsxProd_default_2(Box, {
-      children: [C, g],
+    $[2] = value;
+    $[3] = valueText;
+  } else valueText = $[3];
+  let row;
+  if ($[4] !== labelBox || $[5] !== valueText) {
+    row = jsxProd_default_2(Box, {
+      children: [labelBox, valueText],
     });
-    E[4] = C;
-    E[5] = g;
-    E[6] = W;
-  } else W = E[6];
-  return W;
+    $[4] = labelBox;
+    $[5] = valueText;
+    $[6] = row;
+  } else row = $[6];
+  return row;
 }
 //@ chunk-myhtjy4v.js:10691-10812 placement
-function speedBar(t) {
-  if (t < 1) return "\u25AA" + repeatString("\xB7", SCROLL_SPEED_BAR_TICKS - 1);
-  let o = clamp(Math.round(t), SCROLL_SPEED_MIN, SCROLL_SPEED_BAR_TICKS);
-  return "\u25A0".repeat(o) + repeatString("\xB7", SCROLL_SPEED_BAR_TICKS - o);
+function speedBar(speed) {
+  if (speed < 1) return "\u25AA" + repeatString("\xB7", SCROLL_SPEED_BAR_TICKS - 1);
+  let ticks = clamp(Math.round(speed), SCROLL_SPEED_MIN, SCROLL_SPEED_BAR_TICKS);
+  return "\u25A0".repeat(ticks) + repeatString("\xB7", SCROLL_SPEED_BAR_TICKS - ticks);
 }
 //@ chunk-myhtjy4v.js:10812-11014 placement
-function environmentSummary(t) {
-  let o = [detectEditorHost(t), getPlatformDisplayName(t.platform)];
-  if (t.wheelFlood) o.push("high-rate wheel events");
-  else if (t.xtermJs) o.push("xterm.js");
-  else if (t.wtSession) o.push("Windows Terminal");
-  return o.join(" \xB7 ");
+function environmentSummary(info) {
+  let parts = [detectEditorHost(info), getPlatformDisplayName(info.platform)];
+  if (info.wheelFlood) parts.push("high-rate wheel events");
+  else if (info.xtermJs) parts.push("xterm.js");
+  else if (info.wtSession) parts.push("Windows Terminal");
+  return parts.join(" \xB7 ");
 }
 //@ chunk-myhtjy4v.js:11014-11655 placement
 /**
  * 根据环境变量识别宿主编辑器（Cursor、VS Code、Devin、Antigravity 等）。
  */
-function detectEditorHost(t) {
+function detectEditorHost(scrollInfo) {
   if (process.env.CURSOR_TRACE_ID !== undefined) return "Cursor";
   let VSCODE_GIT_ASKPASS_MAIN = env.VSCODE_GIT_ASKPASS_MAIN ?? "";
   if (VSCODE_GIT_ASKPASS_MAIN.includes("cursor")) return "Cursor (remote)";
   if (isWindsurfOrDevin(VSCODE_GIT_ASKPASS_MAIN)) return "Devin Desktop";
   if (VSCODE_GIT_ASKPASS_MAIN.includes("antigravity")) return "Antigravity";
-  if (t.termProgram === "vscode")
-    return `VS Code${t.termProgramVersion !== "unset" ? ` ${t.termProgramVersion}` : ""}`;
-  switch (t.termProgram) {
+  if (scrollInfo.termProgram === "vscode")
+    return `VS Code${scrollInfo.termProgramVersion !== "unset" ? ` ${scrollInfo.termProgramVersion}` : ""}`;
+  switch (scrollInfo.termProgram) {
     case "unset":
-      return t.wtSession || t.platform === "win32" ? "Windows console" : "terminal";
+      return scrollInfo.wtSession || scrollInfo.platform === "win32" ? "Windows console" : "terminal";
     case "iTerm.app":
       return "iTerm2";
     case "Apple_Terminal":
@@ -567,19 +573,20 @@ function detectEditorHost(t) {
     case "WarpTerminal":
       return "Warp";
     default:
-      return t.termProgram;
+      return scrollInfo.termProgram;
   }
 }
 //@ chunk-myhtjy4v.js:11655-12004 placement
 /**
  * 描述编辑器滚轮灵敏度设置与推荐值。
  */
-function describeWheelSensitivity(t) {
-  let editor = t.editor === "VSCode" ? "VS Code" : t.editor;
-  if (t.sensitivity === null)
-    return `${editor} wheel sensitivity unset \xB7 /terminal-setup sets it to ${t.recommended}`;
-  if (t.sensitivity >= t.recommended) return `${editor} wheel sensitivity ${t.sensitivity}`;
-  return `${editor} wheel sensitivity ${t.sensitivity} \xB7 /terminal-setup raises it to ${t.recommended}`;
+function describeWheelSensitivity(sensitivityInfo) {
+  let editor = sensitivityInfo.editor === "VSCode" ? "VS Code" : sensitivityInfo.editor;
+  if (sensitivityInfo.sensitivity === null)
+    return `${editor} wheel sensitivity unset \xB7 /terminal-setup sets it to ${sensitivityInfo.recommended}`;
+  if (sensitivityInfo.sensitivity >= sensitivityInfo.recommended)
+    return `${editor} wheel sensitivity ${sensitivityInfo.sensitivity}`;
+  return `${editor} wheel sensitivity ${sensitivityInfo.sensitivity} \xB7 /terminal-setup raises it to ${sensitivityInfo.recommended}`;
 }
 //@ chunk-myhtjy4v.js:12004-12204 placement
 /**
@@ -599,3 +606,4 @@ var runScrollSpeedCommand = async (onDone, context) => {
     editorSensitivity,
   });
 };
+export { runScrollSpeedCommand };

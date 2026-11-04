@@ -45,101 +45,101 @@ var AUTO_COMPACT_WINDOW_SOURCE_LABELS = {
  */
 function describeAutoCompactWindow(mainLoopModel, autoCompactWindow) {
   let modelContextInfo = getModelContextInfo(mainLoopModel);
-  let { window: n, configured, source } = getAutoCompactWindow(modelContextInfo, autoCompactWindow);
-  let t = configured > n ? ` \xB7 capped to ${formatTokens(n)} by model` : "";
-  let m =
+  let { window: windowSize, configured, source } = getAutoCompactWindow(modelContextInfo, autoCompactWindow);
+  let cappedNote = configured > windowSize ? ` \xB7 capped to ${formatTokens(windowSize)} by model` : "";
+  let windowLabel =
     source === "auto"
       ? "auto"
       : source === "experiment" || source === "clientdata"
-        ? `auto (${formatTokens(configured)} tokens)${t}`
-        : `${formatTokens(configured)} tokens (${AUTO_COMPACT_WINDOW_SOURCE_LABELS[source]})${t}`;
-  let u = [`Auto-compact window for ${renderModelName(modelContextInfo.settingsKey)}: ${m}`];
-  let p = reportInvalidWindowEnv(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW);
-  if (p !== null) u.push(p);
-  if (!isAutoCompactEnabled()) u.push("Auto-compact is currently disabled (see /config)");
-  u.push(
+        ? `auto (${formatTokens(configured)} tokens)${cappedNote}`
+        : `${formatTokens(configured)} tokens (${AUTO_COMPACT_WINDOW_SOURCE_LABELS[source]})${cappedNote}`;
+  let lines = [`Auto-compact window for ${renderModelName(modelContextInfo.settingsKey)}: ${windowLabel}`];
+  let envWarning = reportInvalidWindowEnv(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW);
+  if (envWarning !== null) lines.push(envWarning);
+  if (!isAutoCompactEnabled()) lines.push("Auto-compact is currently disabled (see /config)");
+  lines.push(
     "Auto-compact summarizes the conversation when context usage approaches this limit. The actual threshold is the minimum of this setting and your model's maximum context window.",
   );
   if (advisesStayingOnAuto(modelContextInfo.settingsKey))
-    u.push(
+    lines.push(
       "The auto setting picks a window tuned for your model and is strongly recommended for the best cost and performance.",
     );
   if (isEnvOrSettingsSource(source) && isAboveAutoWindow(modelContextInfo, configured))
-    u.push("Overriding auto may result in high token usage, especially when resuming long sessions.");
-  return u.join(`
+    lines.push("Overriding auto may result in high token usage, especially when resuming long sessions.");
+  return lines.join(`
 `);
 }
 //@ chunk-z3fsn6g8.js:1611-1641 placement
-function advisesStayingOnAuto(settingsKey) {
-  return !userEffortForAccount(settingsKey);
+function advisesStayingOnAuto(accountId) {
+  return !userEffortForAccount(accountId);
 }
 //@ chunk-z3fsn6g8.js:1641-1708 placement
-function isAboveAutoWindow(modelContextInfo, o) {
-  return Math.min(modelContextInfo.contextWindow, o) > resolveAutoCompactWindow(modelContextInfo).window;
+function isAboveAutoWindow(modelInfo, limit) {
+  return Math.min(modelInfo.contextWindow, limit) > resolveAutoCompactWindow(modelInfo).window;
 }
 //@ chunk-z3fsn6g8.js:1708-3094 placement
 /**
  * 应用自动压缩窗口设置（/autocompact）。
  */
-async function applyAutoCompactWindow(e, o, s) {
-  let modelContextInfo = getModelContextInfo(o.options.mainLoopModel);
+async function applyAutoCompactWindow(args, session, storageV5) {
+  let modelContextInfo = getModelContextInfo(session.options.mainLoopModel);
   if (getAutoCompactWindow(modelContextInfo, undefined).source === "env")
     return "CLAUDE_CODE_AUTO_COMPACT_WINDOW is set and takes precedence. Unset it to change this setting.";
-  let lower = e.trim().toLowerCase();
-  let t = lower === "reset" || lower === "unset" || lower === "default" ? "auto" : parseWindowArgument(lower);
-  if (t === undefined)
-    return `Couldn't parse '${e}'. Expected 'auto' or 100k\u20131M tokens (e.g. 500k, 200000, or 200 as shorthand)`;
-  let m = t === "auto" ? undefined : t;
-  let windowOrigin = resolveWindowOrigin(modelContextInfo, o.options.autoCompactWindow);
+  let raw = args.trim().toLowerCase();
+  let parsed = raw === "reset" || raw === "unset" || raw === "default" ? "auto" : parseWindowArgument(raw);
+  if (parsed === undefined)
+    return `Couldn't parse '${args}'. Expected 'auto' or 100k\u20131M tokens (e.g. 500k, 200000, or 200 as shorthand)`;
+  let nextWindow = parsed === "auto" ? undefined : parsed;
+  let windowOrigin = resolveWindowOrigin(modelContextInfo, session.options.autoCompactWindow);
   let { error } = await updateSettingsForSource(
     "userSettings",
     buildModelSettingsPatch(
       modelContextInfo.model,
       {
-        autoCompactWindow: t,
+        autoCompactWindow: parsed,
       },
       {
-        autoCompactWindow: m,
+        autoCompactWindow: nextWindow,
       },
     ),
     undefined,
-    o.storageV5,
+    session.storageV5,
   );
   if (error) return `Couldn't save setting: ${error.message}`;
-  persistSessionWindow(modelContextInfo.settingsKey, t);
+  persistSessionWindow(modelContextInfo.settingsKey, parsed);
   let {
-    window: l,
+    window: currentWindow,
     configured,
     source,
   } = getAutoCompactWindow(modelContextInfo, readAutoCompactWindowSetting());
-  let f = (source === "settings" ? configured : undefined) !== m;
-  o.onQueryEvent?.({
+  let changed = (source === "settings" ? configured : undefined) !== nextWindow;
+  session.onQueryEvent?.({
     type: "apply_flag_settings",
     settings: {
       autoCompactWindow: null,
     },
   });
   logEvent("tengu_autocompact_command", {
-    action: lit(t === "auto" ? "auto" : "set"),
-    ...(m !== undefined && {
-      tokens: m,
+    action: lit(parsed === "auto" ? "auto" : "set"),
+    ...(nextWindow !== undefined && {
+      tokens: nextWindow,
     }),
     window_model: telemetrySafeModelName(modelContextInfo.settingsKey),
     previous_tokens: windowOrigin.window,
     previous_origin: fromEnum(windowOrigin.origin),
-    resulting_tokens: l,
-    overridden: f,
-    route: fromEnum(s),
+    resulting_tokens: currentWindow,
+    overridden: changed,
+    route: fromEnum(storageV5),
   });
-  let g = `Auto-compact window for ${renderModelName(modelContextInfo.settingsKey)}`;
-  if (t === "auto")
-    return f
-      ? `${g} set to auto in settings, but a higher-priority override is active (${formatTokens(l)} tokens)`
-      : `${g} set to auto`;
-  let w = "";
-  if (f) w = `, but a higher-priority override is active (${formatTokens(l)} tokens)`;
-  else if (l < t) w = ` (capped to model limit of ${formatTokens(l)})`;
-  return `${g} set to ${formatTokens(t)} tokens${w}`;
+  let header = `Auto-compact window for ${renderModelName(modelContextInfo.settingsKey)}`;
+  if (parsed === "auto")
+    return changed
+      ? `${header} set to auto in settings, but a higher-priority override is active (${formatTokens(currentWindow)} tokens)`
+      : `${header} set to auto`;
+  let envNote = "";
+  if (changed) envNote = `, but a higher-priority override is active (${formatTokens(currentWindow)} tokens)`;
+  else if (currentWindow < parsed) envNote = ` (capped to model limit of ${formatTokens(currentWindow)})`;
+  return `${header} set to ${formatTokens(parsed)} tokens${envNote}`;
 }
 //@ chunk-z3fsn6g8.js:3094-3276 placement
 var call = async (args, context) => {
@@ -154,4 +154,4 @@ var call = async (args, context) => {
     value: await applyAutoCompactWindow(trimmed, context, "noninteractive"),
   };
 };
-export { applyAutoCompactWindow, advisesStayingOnAuto, isAboveAutoWindow };
+export { applyAutoCompactWindow, advisesStayingOnAuto, isAboveAutoWindow, call };

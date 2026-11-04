@@ -17,49 +17,53 @@ import { TRANSPORT_FALLBACK_TIMEOUT_MS } from "../services/mcp/client.js";
 /**
  * 判断 MCP 服务器是否仍在连接中且其工具尚未出现在工具列表里。
  */
-function isPendingServerWithoutTools(o, tools) {
-  if (o.type !== "pending") return false;
-  let mcpPrefix = getMcpPrefix(o.name);
-  return !tools.some((t) => isToolFromMcpServer(t, o.name, mcpPrefix));
+function isPendingServerWithoutTools(server, tools) {
+  if (server.type !== "pending") return false;
+  let mcpPrefix = getMcpPrefix(server.name);
+  return !tools.some((tool) => isToolFromMcpServer(tool, server.name, mcpPrefix));
 }
 //@ chunk-h4jqyaw4.js:439-642 placement
 /**
  * 轮询等待 MCP 客户端状态：只要还有满足条件（如仍在连接）的客户端就继续等，直到超时或满足 until 条件。
  */
-async function waitForMcpClients(o, e, n) {
-  let { maxWaitMs, until, pollMs = 50 } = n;
-  let i = (r) => r.clients.some((client) => e(client, r));
-  if (!i(o())) return;
-  let p = Date.now() + maxWaitMs;
-  while (Date.now() < p) {
+async function waitForMcpClients(getTools, isReady, maxWaitMs) {
+  let { maxWaitMs: maxWaitMs_2, until, pollMs = 50 } = maxWaitMs;
+  let allReady = (state) => state.clients.some((client) => isReady(client, state));
+  if (!allReady(getTools())) return;
+  let deadline = Date.now() + maxWaitMs_2;
+  while (Date.now() < deadline) {
     await sleep(pollMs);
-    let r = o();
-    if (until?.(r) || !i(r)) return;
+    let tools = getTools();
+    if (until?.(tools) || !allReady(tools)) return;
   }
 }
 //@ chunk-h4jqyaw4.js:642-677 placement
-function hasCommsRoledServer(o) {
-  return o.some(isCommsRoledServer);
+function hasCommsRoledServer(server) {
+  return server.some(isCommsRoledServer);
 }
 //@ chunk-h4jqyaw4.js:677-742 placement
-function isCommsRoledServer(o) {
-  return "role" in o.config && o.config.role === "comms";
+function isCommsRoledServer(server) {
+  return "role" in server.config && server.config.role === "comms";
 }
 //@ chunk-h4jqyaw4.js:742-791 placement
-function isCoordinatorCommsMcpTool(o) {
-  return o.mcpInfo?.role === "comms";
+function isCoordinatorCommsMcpTool(tool) {
+  return tool.mcpInfo?.role === "comms";
 }
 //@ chunk-h4jqyaw4.js:791-854 placement
-function excludeCoordinatorCommsMcpTools(o) {
-  if (isCoordinatorMode_2()) return o.filter((e) => !isCoordinatorCommsMcpTool(e));
-  return o;
+function excludeCoordinatorCommsMcpTools(tools) {
+  if (isCoordinatorMode_2()) return tools.filter((tool) => !isCoordinatorCommsMcpTool(tool));
+  return tools;
 }
 //@ chunk-h4jqyaw4.js:854-952 placement
-async function waitForCoordinatorSubagentMcpServers(o) {
+async function waitForCoordinatorSubagentMcpServers(getTools) {
   if (!isCoordinatorMode_2()) return;
-  await waitForMcpClients(o, (e, n) => isPendingServerWithoutTools(e, n.tools) && !isCommsRoledServer(e), {
-    maxWaitMs: TRANSPORT_FALLBACK_TIMEOUT_MS,
-  });
+  await waitForMcpClients(
+    getTools,
+    (server, state) => isPendingServerWithoutTools(server, state.tools) && !isCommsRoledServer(server),
+    {
+      maxWaitMs: TRANSPORT_FALLBACK_TIMEOUT_MS,
+    },
+  );
 }
 export {
   excludeCoordinatorCommsMcpTools,

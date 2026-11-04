@@ -8,7 +8,7 @@
  * pieces: chunk-vrb44rx7.js (8)
  * attribution: fingerprint 2, placement 1, callgraph-fingerprint 1, layout 4
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { getClaudeAIOAuthTokens } from "../../utils/auth.js";
 import { isDesignMcpUrl, hasExternalAuthForConfig } from "../../services/mcp/auth.js";
 import { checkConsent } from "../../services/mcp/firstPartyDesignConsent.js";
@@ -17,7 +17,11 @@ import {
   returnFalseRemoteMenu_2,
   MCPRemoteServerMenu,
 } from "./MCPRemoteServerMenu.js";
-import { y, fo, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import {
+  useState,
+  suspenseTypeExport,
+  init_react_production,
+} from "../../../vendor/react/cjs/react.production.js";
 import { hasValidMcpOAuthToken } from "./CapabilitiesSection.js";
 import { capitalize, collapseWhitespace, plural } from "../../utils/stringUtils.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
@@ -39,55 +43,57 @@ import { count } from "../../utils/collections.js";
 import { getMcpDisplayName, extractMcpToolDisplayName } from "../../services/mcp/mcpStringUtils.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { HintText } from "../design-system/HintText.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-vrb44rx7.js:8350-9935 fingerprint = _temp2 (0.345)
 /**
  * 远程（SSE/HTTP）MCP 服务器菜单的外壳：异步检查 design MCP 凭证与已存 OAuth token，检查期间显示 “Checking credentials…”，完成后渲染 MCPRemoteServerMenu。
  */
 function RemoteServerMenuLoader(exitState) {
-  let $ = w(28);
+  let $ = useMemoCache(28);
   let config = exitState.server.config;
   let hasClaudeAiToken =
     (config.type === "sse" || config.type === "http") && !!getClaudeAIOAuthTokens()?.accessToken;
-  let x;
+  let needsDesignCredential;
   if ($[0] !== config || $[1] !== hasClaudeAiToken) {
-    x =
+    needsDesignCredential =
       (config.type === "sse" || config.type === "http") &&
       isDesignMcpUrl(config.url) &&
       hasExternalAuthForConfig(config, hasClaudeAiToken) !== hasExternalAuthForConfig(config, true);
     $[0] = config;
     $[1] = hasClaudeAiToken;
-    $[2] = x;
-  } else x = $[2];
-  let needsDesignCredential = x;
-  let D;
-  if ($[3] !== needsDesignCredential) {
-    D = () => (needsDesignCredential ? checkConsent().catch(returnFalseRemoteMenu) : null);
-    $[3] = needsDesignCredential;
-    $[4] = D;
-  } else D = $[4];
-  let [designCredential] = y(D);
-  let L;
+    $[2] = needsDesignCredential;
+  } else needsDesignCredential = $[2];
+  let needsDesignCredential_2 = needsDesignCredential;
+  let loadDesignCredential;
+  if ($[3] !== needsDesignCredential_2) {
+    loadDesignCredential = () =>
+      needsDesignCredential_2 ? checkConsent().catch(returnFalseRemoteMenu) : null;
+    $[3] = needsDesignCredential_2;
+    $[4] = loadDesignCredential;
+  } else loadDesignCredential = $[4];
+  let [designConsentResult] = useState(loadDesignCredential);
+  let loadOAuthTokens;
   if ($[5] !== config || $[6] !== exitState.server.isAuthenticated || $[7] !== exitState.server.name) {
-    L = () =>
+    loadOAuthTokens = () =>
       exitState.server.isAuthenticated === undefined && (config.type === "sse" || config.type === "http")
         ? hasValidMcpOAuthToken(exitState.server.name, config).catch(returnFalseRemoteMenu_2)
         : null;
     $[5] = config;
     $[6] = exitState.server.isAuthenticated;
     $[7] = exitState.server.name;
-    $[8] = L;
-  } else L = $[8];
-  let [storedOAuthTokens] = y(L);
+    $[8] = loadOAuthTokens;
+  } else loadOAuthTokens = $[8];
+  let [storedOAuthTokens] = useState(loadOAuthTokens);
   const paddingX = exitState.borderless ? 1 : 0;
-  const V = String(exitState.server.name);
-  let B;
-  if ($[9] !== V) {
-    B = capitalize(V);
-    $[9] = V;
-    $[10] = B;
-  } else B = $[10];
-  const title = `${B} MCP Server`;
+  const rawName = String(exitState.server.name);
+  let capitalizedName;
+  if ($[9] !== rawName) {
+    capitalizedName = capitalize(rawName);
+    $[9] = rawName;
+    $[10] = capitalizedName;
+  } else capitalizedName = $[10];
+  const title = `${capitalizedName} MCP Server`;
   let inputGuide;
   let children;
   if ($[11] === MEMO_CACHE_SENTINEL) {
@@ -136,7 +142,7 @@ function RemoteServerMenuLoader(exitState) {
   } else fallback = $[19];
   let children_3;
   if (
-    $[20] !== designCredential ||
+    $[20] !== designConsentResult ||
     $[21] !== hasClaudeAiToken ||
     $[22] !== exitState ||
     $[23] !== storedOAuthTokens
@@ -144,29 +150,32 @@ function RemoteServerMenuLoader(exitState) {
     children_3 = jsxProd_default(MCPRemoteServerMenu, {
       ...exitState,
       hasClaudeAiToken,
-      designCredential,
+      designCredential: designConsentResult,
       storedOAuthTokens,
     });
-    $[20] = designCredential;
+    $[20] = designConsentResult;
     $[21] = hasClaudeAiToken;
     $[22] = exitState;
     $[23] = storedOAuthTokens;
     $[24] = children_3;
   } else children_3 = $[24];
-  let he;
+  let menu;
   if ($[25] !== fallback || $[26] !== children_3) {
-    he = jsxProd_default(fo, {
+    menu = jsxProd_default(suspenseTypeExport, {
       fallback,
       children: children_3,
     });
     $[25] = fallback;
     $[26] = children_3;
-    $[27] = he;
-  } else he = $[27];
-  return he;
+    $[27] = menu;
+  } else menu = $[27];
+  return menu;
 }
 //@ chunk-vrb44rx7.js:33767-33771 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vrb44rx7.js:33767", () => {
+  init_react_production();
+});
 //@ chunk-vrb44rx7.js:33771-33807 callgraph-fingerprint = _temp (1)
 function selectMcpTools(s) {
   return s.mcp.tools;
@@ -175,84 +184,84 @@ function selectMcpTools(s) {
 /**
  * 排序比较：effectiveMaxPermission 为 blocked 的工具排在后面。
  */
-function compareBlockedLast(Yt, _e) {
-  let qe = Yt.mcpInfo?.effectiveMaxPermission === "blocked" ? 1 : 0;
-  let vt = _e.mcpInfo?.effectiveMaxPermission === "blocked" ? 1 : 0;
-  return qe - vt;
+function compareBlockedLast(toolA, toolB) {
+  let rankA = toolA.mcpInfo?.effectiveMaxPermission === "blocked" ? 1 : 0;
+  let rankB = toolB.mcpInfo?.effectiveMaxPermission === "blocked" ? 1 : 0;
+  return rankA - rankB;
 }
 //@ chunk-vrb44rx7.js:33955-34025 layout
-function isBlockedTool(Lt) {
-  return Lt.mcpInfo?.effectiveMaxPermission === "blocked";
+function isBlockedTool(tool) {
+  return tool.mcpInfo?.effectiveMaxPermission === "blocked";
 }
 //@ chunk-vrb44rx7.js:34025-34074 layout
-function isCliOwnedTool(nn) {
-  return nn.mcpInfo?.cliOwned === true;
+function isCliOwnedTool(tool) {
+  return tool.mcpInfo?.cliOwned === true;
 }
 //@ chunk-vrb44rx7.js:34074-34200 layout
 /**
  * 工具列表项（被阻止时带警告图标）。
  */
-function renderToolListItem($t) {
+function renderToolListItem(item) {
   return jsxProd_default(
     OrderedListWithItem.Item,
     {
-      label: $t.label,
-      icon: $t.blocked
+      label: item.label,
+      icon: item.blocked
         ? jsxProd_default(StatusIcon, {
             status: "warning",
           })
         : undefined,
-      meta: $t.facts,
+      meta: item.facts,
     },
-    $t.tool.name,
+    item.tool.name,
   );
 }
 //@ chunk-vrb44rx7.js:34200-36255 fingerprint = MCPToolListView (0.487)
 function MCPToolListView(props) {
-  let $ = w(23);
+  let $ = useMemoCache(23);
   let { server, onSelectTool, onBack } = props;
   let mcpTools = useAppState(selectMcpTools);
-  let [T, D] = y(0);
-  let [U, L] = y(false);
+  let [focusedIndex, setFocusedIndex] = useState(0);
+  let [showBlockedNotice, setShowBlockedNotice] = useState(false);
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let K;
+  let tools;
   _: {
     if (!isConnectedOrCached(server.client)) {
-      let B;
+      let emptyTools;
       if ($[0] === MEMO_CACHE_SENTINEL) {
-        B = [];
-        $[0] = B;
-      } else B = $[0];
-      K = B;
+        emptyTools = [];
+        $[0] = emptyTools;
+      } else emptyTools = $[0];
+      tools = emptyTools;
       break _;
     }
-    let B;
+    let sortedTools;
     if ($[1] !== mcpTools || $[2] !== server.name) {
-      B = filterToolsByServer(mcpTools, server.name).sort(compareBlockedLast);
+      sortedTools = filterToolsByServer(mcpTools, server.name).sort(compareBlockedLast);
       $[1] = mcpTools;
       $[2] = server.name;
-      $[3] = B;
-    } else B = $[3];
-    K = B;
+      $[3] = sortedTools;
+    } else sortedTools = $[3];
+    tools = sortedTools;
   }
-  let J = K;
-  let pe = count(J, isBlockedTool);
-  let fe = J.some(isCliOwnedTool) ? "Claude Code" : "your organization";
-  let B;
+  let tools_2 = tools;
+  let blockedCount = count(tools_2, isBlockedTool);
+  let blockedBy = tools_2.some(isCliOwnedTool) ? "Claude Code" : "your organization";
+  let dialog;
   if (
-    $[4] !== fe ||
-    $[5] !== pe ||
-    $[6] !== T ||
+    $[4] !== blockedBy ||
+    $[5] !== blockedCount ||
+    $[6] !== focusedIndex ||
     $[7] !== isScreenReaderEnabled ||
     $[8] !== onBack ||
     $[9] !== onSelectTool ||
-    $[10] !== U ||
+    $[10] !== showBlockedNotice ||
     $[11] !== server.name ||
-    $[12] !== J
+    $[12] !== tools_2
   ) {
-    let me;
-    if ($[14] !== fe || $[15] !== server.name) {
-      me = (tool) => {
+    let toItem;
+    if ($[14] !== blockedBy || $[15] !== server.name) {
+      toItem = (tool) => {
         let toolName = getMcpDisplayName(tool.name, server.name);
         let fullDisplayName = tool.userFacingName ? tool.userFacingName({}) : toolName;
         let displayName = collapseWhitespace(extractMcpToolDisplayName(fullDisplayName));
@@ -265,95 +274,95 @@ function MCPToolListView(props) {
             tool,
             label: displayName,
             blocked: true,
-            facts: [`disabled by ${fe}`],
+            facts: [`disabled by ${blockedBy}`],
           };
         }
-        let Se = effectiveMaxPermission === "ask" ? ["ask-only"] : [];
-        if (isReadOnly) Se.push("read-only");
-        if (isDestructive) Se.push("destructive");
-        if (isOpenWorld) Se.push("open-world");
+        let facts = effectiveMaxPermission === "ask" ? ["ask-only"] : [];
+        if (isReadOnly) facts.push("read-only");
+        if (isDestructive) facts.push("destructive");
+        if (isOpenWorld) facts.push("open-world");
         return {
           tool,
           label: displayName,
           blocked: false,
-          facts: Se,
+          facts,
         };
       };
-      $[14] = fe;
+      $[14] = blockedBy;
       $[15] = server.name;
-      $[16] = me;
-    } else me = $[16];
-    let mapped = J.map(me);
-    let Tt = J.length - pe;
-    let Ke = U ? mapped[T] : undefined;
-    let subtitle = Ke?.blocked
+      $[16] = toItem;
+    } else toItem = $[16];
+    let mapped = tools_2.map(toItem);
+    let enabledCount = tools_2.length - blockedCount;
+    let focusedItem = showBlockedNotice ? mapped[focusedIndex] : undefined;
+    let subtitle = focusedItem?.blocked
       ? jsxProd_default_2(Text, {
           color: "warning",
-          children: [Ke.label, " is disabled by ", fe],
+          children: [focusedItem.label, " is disabled by ", blockedBy],
         })
-      : pe > 0
-        ? `${Tt} ${plural(Tt, "tool")} \xB7 ${pe} disabled by ${fe}`
-        : `${J.length} ${plural(J.length, "tool")}`;
-    let He;
+      : blockedCount > 0
+        ? `${enabledCount} ${plural(enabledCount, "tool")} \xB7 ${blockedCount} disabled by ${blockedBy}`
+        : `${tools_2.length} ${plural(tools_2.length, "tool")}`;
+    let navigateHint;
     if ($[17] !== isScreenReaderEnabled) {
-      He =
+      navigateHint =
         !isScreenReaderEnabled &&
         jsxProd_default(KeyboardShortcutHint, {
           chord: ["up", "down"],
           action: "navigate",
         });
       $[17] = isScreenReaderEnabled;
-      $[18] = He;
-    } else He = $[18];
-    const ct =
-      isScreenReaderEnabled || mapped[T]?.blocked
+      $[18] = navigateHint;
+    } else navigateHint = $[18];
+    const selectHint =
+      isScreenReaderEnabled || mapped[focusedIndex]?.blocked
         ? null
         : jsxProd_default(KeyboardShortcutHint, {
             chord: "enter",
             action: "select",
           });
-    let Ct;
+    let backHint;
     if ($[19] === MEMO_CACHE_SENTINEL) {
-      Ct = jsxProd_default(ConfigurableShortcutHint, {
+      backHint = jsxProd_default(ConfigurableShortcutHint, {
         action: "confirm:no",
         context: "Confirmation",
         fallback: "Esc",
         description: "back",
       });
-      $[19] = Ct;
-    } else Ct = $[19];
+      $[19] = backHint;
+    } else backHint = $[19];
     let inputGuide;
-    if ($[20] !== He || $[21] !== ct) {
+    if ($[20] !== navigateHint || $[21] !== selectHint) {
       inputGuide = jsxProd_default_2(Byline, {
-        children: [He, ct, Ct],
+        children: [navigateHint, selectHint, backHint],
       });
-      $[20] = He;
-      $[21] = ct;
+      $[20] = navigateHint;
+      $[21] = selectHint;
       $[22] = inputGuide;
     } else inputGuide = $[22];
-    B = jsxProd_default(Dialog, {
+    dialog = jsxProd_default(Dialog, {
       title: `Tools for ${server.name}`,
       subtitle,
       onCancel: onBack,
       inputGuide,
       children:
-        J.length === 0
+        tools_2.length === 0
           ? jsxProd_default(HintText, {
               children: "No tools available",
             })
           : jsxProd_default(OrderedListWithItem, {
               wrap: true,
               onFocus: (value) => {
-                D(value);
-                L(false);
+                setFocusedIndex(value);
+                setShowBlockedNotice(false);
               },
-              onSelect: (at) => {
-                let tool_0 = mapped[at];
+              onSelect: (index) => {
+                let tool_0 = mapped[index];
                 if (!tool_0) {
                   return;
                 }
                 if (tool_0.blocked) {
-                  L(true);
+                  setShowBlockedNotice(true);
                   return;
                 }
                 onSelectTool(tool_0.tool);
@@ -361,17 +370,17 @@ function MCPToolListView(props) {
               children: mapped.map(renderToolListItem),
             }),
     });
-    $[4] = fe;
-    $[5] = pe;
-    $[6] = T;
+    $[4] = blockedBy;
+    $[5] = blockedCount;
+    $[6] = focusedIndex;
     $[7] = isScreenReaderEnabled;
     $[8] = onBack;
     $[9] = onSelectTool;
-    $[10] = U;
+    $[10] = showBlockedNotice;
     $[11] = server.name;
-    $[12] = J;
-    $[13] = B;
-  } else B = $[13];
-  return B;
+    $[12] = tools_2;
+    $[13] = dialog;
+  } else dialog = $[13];
+  return dialog;
 }
 export { RemoteServerMenuLoader, MCPToolListView };

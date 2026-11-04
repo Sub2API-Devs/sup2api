@@ -31,9 +31,9 @@ var JOB_STATE_NAMES = new Set([
 /**
  * 把作业状态名规范成已知枚举，未知归 other。
  */
-function daemonSessionStateLabel(state) {
-  if (state === undefined) return;
-  return fromSanitizer_SANITIZER_OUTPUT_ONLY(JOB_STATE_NAMES.has(state) ? state : "other");
+function daemonSessionStateLabel(jobState) {
+  if (jobState === undefined) return;
+  return fromSanitizer_SANITIZER_OUTPUT_ONLY(JOB_STATE_NAMES.has(jobState) ? jobState : "other");
 }
 //@ chunk-ex2reyb6.js:440-482 placement
 /**
@@ -44,7 +44,7 @@ var DAEMON_SESSION_STATES = new Set(["cold", "spare", "adopted"]);
 /**
  * 只保留已知会话状态，其他返回 undefined。
  */
-function normalizeDaemonSessionState(e) {
-  return typeof e === "string" && DAEMON_SESSION_STATES.has(e) ? e : undefined;
+function normalizeDaemonSessionState(state) {
+  return typeof state === "string" && DAEMON_SESSION_STATES.has(state) ? state : undefined;
 }
 export { daemonSessionStateLabel, normalizeDaemonSessionState };

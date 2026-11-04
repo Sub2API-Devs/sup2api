@@ -11,6 +11,17 @@
 import { join, parse, dirname } from "path";
 import { randomBytes, createHash } from "crypto";
 import {
+  isSameOriginAsCcr,
+  originIfValid,
+  parseCcrSessionMcpUrl,
+  isToolboxMcpServerConfig,
+  isCcrMemoryMcpServer,
+  hasOnlyAllowedCcrParams,
+  matchesCcrMcpServerId,
+  urlPathOf,
+} from "./ccrMcpUrls.js";
+import { isCliOwnedConfig, registerCliOwnedConfig } from "./cliOwnedClients.js";
+import {
   isIdeOrSdkType,
   McpStdioServerConfigSchema,
   McpSSEServerConfigSchema,
@@ -27,7 +38,6 @@ import { isGateOOn, isLovelyUmbrellaOn } from "../../utils/settings/settingsSour
 import { MEMORY, CLAUDE_ARTIFACTS } from "./firstPartyServerIds.js";
 import { normalizedKey } from "./normalization.js";
 import { getPrefixServerKey } from "../../components/agents/ToolSelector.js";
-import { isCliOwnedConfig, registerCliOwnedConfig } from "./cliOwnedClients.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import {
   getRootSession,
@@ -62,24 +72,14 @@ import {
 import { armedFromUserWritableBase } from "../../utils/settings/policyHelper/helperRemote.js";
 import { scrubbedEnvKeys, expandMcpCredentialEnvVars } from "../../utils/envExpansion.js";
 import { uniq } from "../../utils/collections.js";
-import { xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { containsEnvRef, ENV_REF_PATTERN } from "./envExpansion.js";
 import { jsonStringify, clone } from "../../utils/slowOperations.js";
 import { CLAUDE_CODE_REMOTE, ccrMetaMcpServerConfig, REPO_TOOL_NAMES_WITH_ROOT } from "./ccrMetaMcp.js";
-import {
-  originIfValid,
-  parseCcrSessionMcpUrl,
-  isToolboxMcpServerConfig,
-  isCcrMemoryMcpServer,
-  hasOnlyAllowedCcrParams,
-  matchesCcrMcpServerId,
-  isSameOriginAsCcr,
-  urlPathOf,
-} from "./ccrMcpUrls.js";
 import { startupCcrEnv } from "../../tasks/RemoteAgentTask/remoteAgentKinds.js";
-import { u, record, string, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, record, stringSchema, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
 import { replaceControlChars } from "../../utils/resultError.js";
-import { formatWithheldEnvNotice, withHostEnvRestored } from "../../utils/settings/managedSettingsFiles.js";
+import { formatWithheldEnvNotice, withHostEnvRestored } from "../../utils/settings/hostEnvWrites.js";
 import { isPrototypeKey } from "../../schemas/hookEntryValidation.js";
 import { env } from "../../utils/env.js";
 import {
@@ -201,12 +201,89 @@ import { commandSyncNameState } from "../../utils/settings/commandSyncNames.js";
 import { isManagedFolderWritable } from "../../plugins/functionHooks/sites/promptContextSites.js";
 import { isBareMode } from "../../utils/envUtils.js";
 import { deliveredReaderSlot, deliveredNamesOf } from "../../plugins/functionHooks/api/settingsRead.js";
+import { MCP_TRANSPORTS_SUPPORTING_TOOLS } from "../tools/toolExecutionTelemetry.js";
+import { PRIVATE_DNS_SUFFIXES } from "../../cli/cloudSession/validateCloudFlags.js";
 import { mcpServerSource } from "./fileReference/fileReferencePolicy.js";
 import { isConnectedOrCached } from "../../skills/bundled/scheduleRemoteAgents.js";
 import { mcpAuthErrorCode } from "../../entrypoints/sdk/coreSchemas.js";
-import { MCP_TRANSPORTS_SUPPORTING_TOOLS } from "../tools/toolExecutionTelemetry.js";
-import { PRIVATE_DNS_SUFFIXES } from "../../cli/cloudSession/validateCloudFlags.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-dcmhvw5a.js:422731-422935 placement
+/**
+ * 与 MCP 策略相关的设置键（允许/拒绝列表、项目 MCP 启用、claude.ai 连接器开关、托管服务器）。
+ */
+var MCP_POLICY_SETTING_KEYS = [
+  "allowManagedMcpServersOnly",
+  "allowedMcpServers",
+  "deniedMcpServers",
+  "disabledMcpjsonServers",
+  "enabledMcpjsonServers",
+  "enableAllProjectMcpServers",
+  "disableClaudeAiConnectors",
+  "managedMcpServers",
+];
+//@ chunk-dcmhvw5a.js:422935-423061 fingerprint = shouldAllowManagedMcpServersOnly (0.416)
+/**
+ * shouldAllowManagedMcpServersOnly：策略槽或管理员层设置 allowManagedMcpServersOnly。
+ */
+function shouldAllowManagedMcpServersOnly({ slot, adminTiers }) {
+  return (
+    slot?.allowManagedMcpServersOnly === true ||
+    adminTiers.some((adminTier) => adminTier.allowManagedMcpServersOnly === true)
+  );
+}
+//@ chunk-1wpnxx5r.js:3164-3514 fingerprint = CCR_PROXY_PATH_MARKERS (0.563)
+/**
+ * CCR 代理路径常量：/v2/ccr-sessions/、/v1/code/、session_ingress shttp/ws 路径与 MCP 路由正则。
+ */
+var CCR_SESSION_PATH_PREFIXES = ["/v2/ccr-sessions/", "/v1/code/"];
+var CCR_PROXY_PATH_MARKERS = [
+  "/v2/session_ingress/shttp/mcp/",
+  "/v2/session_ingress/mcp/ws/",
+  ...CCR_SESSION_PATH_PREFIXES,
+];
+var CCR_MCP_PATH_PATTERNS = [
+  /^\/v2\/ccr-sessions\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+\/mcp(?:\/[A-Za-z0-9_-]+)?$/,
+  /^\/v1\/code\/sessions\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+\/mcp(?:\/[A-Za-z0-9_-]+)?$/,
+  /^\/v1\/code\/mcp\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)?$/,
+];
+var SPENT = "spent";
+//@ chunk-1wpnxx5r.js:15428-15515 fingerprint = getServerUrl (1)
+/**
+ * 判断是否 CCR 托管的 MCP 配置：url 指向 CCR MCP 代理，或配置本身带 CCR 托管标记。
+ */
+function isCcrHostedConfig(config) {
+  if ("url" in config && typeof config.url === "string" && isSameOriginAsCcr(config.url)) return true;
+  return isCliOwnedConfig(config);
+}
+//@ chunk-1wpnxx5r.js:16374-16417 shared-adjacent = getServerUrl (1)
+/**
+ * 取服务器配置的 url（没有 url 字段的类型返回 null）。
+ */
+function getServerUrl(config) {
+  return "url" in config ? config.url : null;
+}
+//@ chunk-1wpnxx5r.js:16417-16522 affinity = getServerCommandArray (1)
+/**
+ * 取 stdio 服务器的命令数组 [command, ...args]；非 stdio 返回 null。用于签名去重与策略匹配。
+ */
+function getServerCommandArray(config) {
+  if (config.type !== undefined && config.type !== "stdio") return null;
+  let stdioConfig = config;
+  return [stdioConfig.command, ...(stdioConfig.args ?? [])];
+}
+//@ chunk-1wpnxx5r.js:16522-16647 fingerprint = unwrapCcrProxyUrl (1)
+/**
+ * 若 URL 是 CCR MCP 代理地址（含代理路径标记），取出查询参数 `mcp_url` 指向的原始服务器地址；否则或解析失败原样返回。用于签名去重。
+ */
+function unwrapCcrProxyUrl(url) {
+  if (!CCR_PROXY_PATH_MARKERS.some((m) => url.includes(m))) return url;
+  try {
+    return new URL(url).searchParams.get("mcp_url") || url;
+  } catch {
+    return url;
+  }
+}
 //@ chunk-e6aww6q8.js:2316830-2316945 placement
 /**
  * 判断 MCP 传输类型能否由用户配置添加：IDE/SDK 类型只由宿主提供，claude.ai 代理类型需开关开启。
@@ -225,60 +302,63 @@ var recordedPromptBoundCarrier = null;
 /**
  * 记录提示绑定的桥接载体。
  */
-function setPromptBoundCarrier(e) {
-  recordedPromptBoundCarrier = e;
+function setPromptBoundCarrier(carrier) {
+  recordedPromptBoundCarrier = carrier;
 }
 //@ chunk-e6aww6q8.js:3820812-3820823 placement
 /**
  * 内置记忆服务器的名字。
  */
-var MEMORY_SERVER_NAME = MEMORY;
+var MEMORY_SERVER_NAME; // deferred: uses MEMORY (./firstPartyServerIds.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3820812", () => {
+  MEMORY_SERVER_NAME = MEMORY;
+});
 //@ chunk-e6aww6q8.js:3820823-3820862 placement
 /**
  * 判断服务器名是否就是记忆服务器。
  */
-function isMemoryServerName(e) {
-  return normalizedKey(getPrefixServerKey(e)) === MEMORY_SERVER_NAME;
+function isMemoryServerName(serverKey) {
+  return normalizedKey(getPrefixServerKey(serverKey)) === MEMORY_SERVER_NAME;
 }
 //@ chunk-e6aww6q8.js:3820862-3820898 layout
-function isBridgeCarrierDynamicConfig(e) {
-  return isCliOwnedConfig(e?.[MEMORY_SERVER_NAME]);
+function isBridgeCarrierDynamicConfig(configs) {
+  return isCliOwnedConfig(configs?.[MEMORY_SERVER_NAME]);
 }
 //@ chunk-e6aww6q8.js:3820898-3821175 fingerprint = getAllMcpConfigs (0.507)
 /**
  * refuseReservedNamesForCarrier：Remote Control carrier 会话中，保留名的非 carrier 服务器被拒绝加载，返回 {servers, refused}。
  */
-function refuseReservedNamesForCarrier(e, n) {
-  if (!isBridgeCarrierDynamicConfig(n))
+function refuseReservedNamesForCarrier(servers, configs) {
+  if (!isBridgeCarrierDynamicConfig(configs))
     return {
-      servers: e,
+      servers,
       refused: [],
     };
-  let r = [];
-  let s;
-  for (let [key, value] of Object.entries(e)) {
+  let refused = [];
+  let keptServers;
+  for (let [key, value] of Object.entries(servers)) {
     if (isCliOwnedConfig(value) || !isMemoryServerName(key)) continue;
-    s ??= Object.assign(Object.create(null), e);
-    delete s[key];
-    r.push({
+    keptServers ??= Object.assign(Object.create(null), servers);
+    delete keptServers[key];
+    refused.push({
       name: key,
       scope: value.scope,
     });
   }
-  return s === undefined
+  return keptServers === undefined
     ? {
-        servers: e,
+        servers,
         refused: [],
       }
     : {
-        servers: s,
-        refused: r,
+        servers: keptServers,
+        refused,
       };
 }
 //@ chunk-e6aww6q8.js:3821175-3821608 layout
-function describeScopeOrigin(e) {
+function describeScopeOrigin(scope) {
   return "";
-  switch (e) {
+  switch (scope) {
     case "user":
       return "your user settings";
     case "local":
@@ -296,29 +376,33 @@ function describeScopeOrigin(e) {
     case "claudeai":
       return "claude.ai";
     default:
-      return e;
+      return scope;
   }
 }
 //@ chunk-e6aww6q8.js:3821608-3821633 layout
 /**
  * 恒返回空串的占位函数。
  */
-function emptyString_2(e) {
+function emptyString_2(ignored) {
   return "";
 }
 //@ chunk-e6aww6q8.js:3821633-3821655 layout
 /**
  * 按宿主保存的“保留名被拒”记录。
  */
-var refusedReservedNameHostState = new HostScoped(() => []);
+var refusedReservedNameHostState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3821633", () => {
+  refusedReservedNameHostState = new HostScoped(() => []);
+});
 //@ chunk-e6aww6q8.js:3821655-3821778 layout
 /**
  * 记录一次"保留服务器名被拒绝"事件到按宿主隔离的列表（同 scope+name 去重），供 useManageMCPConnections 汇总提示；代理 frontmatter 的 mcpServers 被拒时以 scope=agent 记录。
  */
-function addAgentModelOverrideNotice(e, n = getRootSession().host) {
-  let r = refusedReservedNameHostState.of(n);
-  if (r.some((s) => s.scope === e.scope && s.name === e.name)) return false;
-  r.push(e);
+function addAgentModelOverrideNotice(notice, host = getRootSession().host) {
+  let recorded = refusedReservedNameHostState.of(host);
+  if (recorded.some((existing) => existing.scope === notice.scope && existing.name === notice.name))
+    return false;
+  recorded.push(notice);
   return true;
 }
 //@ chunk-e6aww6q8.js:3821778-3821841 layout
@@ -332,47 +416,50 @@ function hasCliOwnedMemoryServer(configs) {
 /**
  * 取当前宿主记录的保留名拒绝列表。
  */
-function refusedReservedNames(e = getRootSession().host) {
-  return refusedReservedNameHostState.of(e);
+function refusedReservedNames(host = getRootSession().host) {
+  return refusedReservedNameHostState.of(host);
 }
 //@ chunk-e6aww6q8.js:3821883-3822005 layout
 /**
  * 合并两组保留名拒绝记录，按 scope+name 去重保持先后顺序。
  */
-function mergeUniqueServerRefs(e, reservedNameRefusals) {
-  let r = [];
-  for (let s of [...e, ...reservedNameRefusals])
-    if (!r.some((h) => h.scope === s.scope && h.name === s.name)) r.push(s);
-  return r;
+function mergeUniqueServerRefs(refs, reservedNameRefusals) {
+  let uniqueRefs = [];
+  for (let ref of [...refs, ...reservedNameRefusals])
+    if (!uniqueRefs.some((existing) => existing.scope === ref.scope && existing.name === ref.name))
+      uniqueRefs.push(ref);
+  return uniqueRefs;
 }
 //@ chunk-e6aww6q8.js:3822005-3822068 layout
 /**
  * 生成 “ (local scope for …)” 的说明后缀。
  */
-function localScopeNote(e) {
-  return e === undefined ? "" : ` (local scope for ${e})`;
+function localScopeNote(projectPath) {
+  return projectPath === undefined ? "" : ` (local scope for ${projectPath})`;
 }
 //@ chunk-e6aww6q8.js:3822068-3822452 layout
 function mcpConfigWriteNotSavedError(name, filePath, operation, projectPath) {
-  let h = operation === "add" ? `was not saved to ${filePath}` : `was not removed from ${filePath}`;
-  let y = operation === "add" ? "add the server again" : "remove the server again";
+  let actionText = operation === "add" ? `was not saved to ${filePath}` : `was not removed from ${filePath}`;
+  let retryHint = operation === "add" ? "add the server again" : "remove the server again";
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-    `MCP server "${name}" ${h}${localScopeNote(projectPath)}. If that file is read-only or protected by a sandbox, make it writable or run the command outside the sandbox, then ${y}.`,
+    `MCP server "${name}" ${actionText}${localScopeNote(projectPath)}. If that file is read-only or protected by a sandbox, make it writable or run the command outside the sandbox, then ${retryHint}.`,
     "MCP server config write did not reach the global config file",
   );
 }
 //@ chunk-e6aww6q8.js:3822452-3822943 layout
-function mcpConfigWriteUnconfirmedError(e, n, r, s, h) {
-  let y = r === "add" ? "saved" : "removed";
-  let S =
-    r === "add" ? "add the server again if it is missing" : "remove the server again if it is still listed";
-  let w = s === undefined ? "" : `from ${s} `;
-  let L = runCommandHint("mcp get", e, {
-    tail: `${w}to check`,
-    fallback: `run \`claude mcp list\` ${w}to check`,
+function mcpConfigWriteUnconfirmedError(name, filePath, operation, projectPath, readError) {
+  let verb = operation === "add" ? "saved" : "removed";
+  let retryHint =
+    operation === "add"
+      ? "add the server again if it is missing"
+      : "remove the server again if it is still listed";
+  let scopeFrom = projectPath === undefined ? "" : `from ${projectPath} `;
+  let checkHint = runCommandHint("mcp get", name, {
+    tail: `${scopeFrom}to check`,
+    fallback: `run \`claude mcp list\` ${scopeFrom}to check`,
   });
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-    `MCP server "${e}" may not have been ${y}${localScopeNote(s)}: ${n} could not be read to confirm the change (${h}). ${capitalize(L)}, then ${S}.`,
+    `MCP server "${name}" may not have been ${verb}${localScopeNote(projectPath)}: ${filePath} could not be read to confirm the change (${readError}). ${capitalize(checkHint)}, then ${retryHint}.`,
     "MCP server config write to the global config file could not be confirmed",
   );
 }
@@ -404,43 +491,45 @@ function getPolicyManagedMcpServers() {
 /**
  * 生成"`<名字>` 是保留的 MCP 服务器名，未加载"的提示文案。
  */
-function reservedServerNameMessage(e) {
-  return `"${e}" is a reserved MCP server name and was not loaded`;
+function reservedServerNameMessage(serverName) {
+  return `"${serverName}" is a reserved MCP server name and was not loaded`;
 }
 //@ chunk-e6aww6q8.js:3823509-3823792 layout
 /**
  * expandServerConfigEnvVars：对 stdio 的 command/args/env 或远程的 url/headers 做 ${VAR} 展开，返回展开结果、缺失变量与 url 是否展开为空。
  */
 function expandServerConfigEnvVars(config) {
-  let n = [];
+  let missingVars = [];
   let urlExpandedToEmpty = false;
   let blankList;
   return {
-    expanded: mapServerConfigStrings(config, (y, S, remoteSink) => {
-      if (y.includes("${")) blankList ??= scrubbedEnvKeys();
-      let L = expandMcpCredentialEnvVars(y, undefined, undefined, {
+    expanded: mapServerConfigStrings(config, (value, field, remoteSink) => {
+      if (value.includes("${")) blankList ??= scrubbedEnvKeys();
+      let expansion = expandMcpCredentialEnvVars(value, undefined, undefined, {
         remoteSink,
         blankList,
       });
-      n.push(...L.missingVars);
-      if (S === "url") urlExpandedToEmpty = y.trim() !== "" && L.expanded.trim() === "";
-      return L.expanded;
+      missingVars.push(...expansion.missingVars);
+      if (field === "url") urlExpandedToEmpty = value.trim() !== "" && expansion.expanded.trim() === "";
+      return expansion.expanded;
     }),
-    missingVars: uniq(n),
+    missingVars: uniq(missingVars),
     urlExpandedToEmpty,
   };
 }
 //@ chunk-e6aww6q8.js:3823792-3824192 layout
-function mapServerConfigStrings(config, n) {
+function mapServerConfigStrings(config, mapString) {
   switch (config.type) {
     case undefined:
     case "stdio": {
       let stdioConfig = config;
       return {
         ...stdioConfig,
-        command: n(stdioConfig.command, "command", false),
-        args: stdioConfig.args.map((arg) => n(arg, "args", false)),
-        env: stdioConfig.env ? xr(stdioConfig.env, (s) => n(s, "env", false)) : undefined,
+        command: mapString(stdioConfig.command, "command", false),
+        args: stdioConfig.args.map((arg) => mapString(arg, "args", false)),
+        env: stdioConfig.env
+          ? import_mapValues(stdioConfig.env, (value) => mapString(value, "env", false))
+          : undefined,
       };
     }
     case "sse":
@@ -449,8 +538,10 @@ function mapServerConfigStrings(config, n) {
       let remoteConfig = config;
       return {
         ...remoteConfig,
-        url: n(remoteConfig.url, "url", true),
-        headers: remoteConfig.headers ? xr(remoteConfig.headers, (s) => n(s, "headers", true)) : undefined,
+        url: mapString(remoteConfig.url, "url", true),
+        headers: remoteConfig.headers
+          ? import_mapValues(remoteConfig.headers, (value) => mapString(value, "headers", true))
+          : undefined,
       };
     }
     case "sse-ide":
@@ -461,52 +552,55 @@ function mapServerConfigStrings(config, n) {
   }
 }
 //@ chunk-e6aww6q8.js:3824192-3824256 layout
-function cloneAsWrittenEntry(e) {
+function cloneAsWrittenEntry(value) {
   try {
-    return containsEnvRef(jsonStringify(e)) ? undefined : clone(e);
+    return containsEnvRef(jsonStringify(value)) ? undefined : clone(value);
   } catch {
     return;
   }
 }
 //@ chunk-e6aww6q8.js:3824256-3824330 layout
 function configReferencesEnvVars(config) {
-  let n = false;
-  mapServerConfigStrings(config, (r, s) => {
-    n ||= s !== "env" && containsEnvRef(r);
-    return r;
+  let hasRef = false;
+  mapServerConfigStrings(config, (value, field) => {
+    hasRef ||= field !== "env" && containsEnvRef(value);
+    return value;
   });
-  return n;
+  return hasRef;
 }
 //@ chunk-e6aww6q8.js:3824330-3824425 layout
-var SERVER_CONFIG_SCHEMAS_BY_TYPE = {
-  stdio: McpStdioServerConfigSchema,
-  sse: McpSSEServerConfigSchema,
-  http: McpHTTPServerConfigSchema,
-  "streamable-http": McpHTTPServerConfigSchema,
-  ws: McpWebSocketServerConfigSchema,
-  sdk: McpSdkServerConfigSchema,
-  "claudeai-proxy": McpClaudeAIProxyServerConfigSchema,
-};
+var SERVER_CONFIG_SCHEMAS_BY_TYPE; // deferred: uses McpStdioServerConfigSchema (./types.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3824330", () => {
+  SERVER_CONFIG_SCHEMAS_BY_TYPE = {
+    stdio: McpStdioServerConfigSchema,
+    sse: McpSSEServerConfigSchema,
+    http: McpHTTPServerConfigSchema,
+    "streamable-http": McpHTTPServerConfigSchema,
+    ws: McpWebSocketServerConfigSchema,
+    sdk: McpSdkServerConfigSchema,
+    "claudeai-proxy": McpClaudeAIProxyServerConfigSchema,
+  };
+});
 //@ chunk-e6aww6q8.js:3824425-3824885 layout
-function findWhitespacePaddedFields(e) {
-  let n = [];
-  function r(s, h) {
-    if (h !== h.trim()) n.push(s);
+function findWhitespacePaddedFields(config) {
+  let fields = [];
+  function checkField(fieldLabel, value) {
+    if (value !== value.trim()) fields.push(fieldLabel);
   }
-  if ("command" in e) r("command", e.command);
-  if ("url" in e) r("url", e.url);
-  if ("args" in e && e.args) e.args.forEach((arg, h) => r(`args[${h}]`, arg));
-  if ("env" in e && e.env)
-    for (let [key, value] of Object.entries(e.env)) {
-      if (key !== key.trim()) n.push(`env name ${jsonStringify(key)}`);
-      r(`env.${key}`, value);
+  if ("command" in config) checkField("command", config.command);
+  if ("url" in config) checkField("url", config.url);
+  if ("args" in config && config.args) config.args.forEach((arg, index) => checkField(`args[${index}]`, arg));
+  if ("env" in config && config.env)
+    for (let [key, value] of Object.entries(config.env)) {
+      if (key !== key.trim()) fields.push(`env name ${jsonStringify(key)}`);
+      checkField(`env.${key}`, value);
     }
-  if ("headers" in e && e.headers)
-    for (let [key, value] of Object.entries(e.headers)) {
-      if (key !== key.trim()) n.push(`header name ${jsonStringify(key)}`);
-      r(`headers.${key}`, value);
+  if ("headers" in config && config.headers)
+    for (let [key, value] of Object.entries(config.headers)) {
+      if (key !== key.trim()) fields.push(`header name ${jsonStringify(key)}`);
+      checkField(`headers.${key}`, value);
     }
-  return n;
+  return fields;
 }
 //@ chunk-e6aww6q8.js:3824885-3825662 layout
 var BRIDGE_CARRIER_DROP_MESSAGES = {
@@ -533,8 +627,8 @@ function verifyBridgeCarrierEntry(name, config, sessionId) {
     return {
       drop: "bridge_carrier_not_http",
     };
-  let s = originIfValid(startupCcrEnv.atStartup);
-  if (!s)
+  let ingressOrigin = originIfValid(startupCcrEnv.atStartup);
+  if (!ingressOrigin)
     return {
       drop: "bridge_carrier_no_ingress_origin",
     };
@@ -542,7 +636,7 @@ function verifyBridgeCarrierEntry(name, config, sessionId) {
     return {
       drop: "bridge_carrier_no_session_id",
     };
-  let ccrSessionMcpUrl = parseCcrSessionMcpUrl(config.url, s, sessionId);
+  let ccrSessionMcpUrl = parseCcrSessionMcpUrl(config.url, ingressOrigin, sessionId);
   if (!ccrSessionMcpUrl)
     return {
       drop: "bridge_carrier_url_mismatch",
@@ -558,11 +652,11 @@ function verifyBridgeCarrierEntry(name, config, sessionId) {
  */
 function parseMcpConfig(params) {
   let { configObject, expandVars, scope, filePath, bridgeSessionId } = params;
-  let schemaResult = u({
-    mcpServers: record(string(), unknown()),
+  let schemaResult = objectSchema({
+    mcpServers: record(stringSchema(), unknown()),
   }).safeParse(configObject);
   if (!schemaResult.success) {
-    let ke =
+    let hasServersKey =
       configObject !== null &&
       typeof configObject === "object" &&
       "servers" in configObject &&
@@ -574,10 +668,10 @@ function parseMcpConfig(params) {
           file: filePath,
         }),
         path: issue.path.join("."),
-        message: ke
+        message: hasServersKey
           ? 'Missing "mcpServers" \u2014 found "servers" instead. Claude Code reads MCP servers from the "mcpServers" key.'
           : issue.message,
-        ...(ke && {
+        ...(hasServersKey && {
           suggestion: `Rename the top-level "servers" key to "mcpServers" in ${filePath ?? "your MCP config"}`,
         }),
         mcpErrorMetadata: {
@@ -591,32 +685,32 @@ function parseMcpConfig(params) {
   let errors = [];
   let servers = {};
   let asWrittenEntries = {};
-  function pushServerError(ke, we, Ee, Ae) {
+  function pushServerError(serverName, message, suggestion, skipReason) {
     errors.push({
       ...(filePath && {
         file: filePath,
       }),
-      path: `mcpServers.${ke}`,
-      message: replaceControlChars(we),
-      ...(Ee && {
-        suggestion: replaceControlChars(Ee),
+      path: `mcpServers.${serverName}`,
+      message: replaceControlChars(message),
+      ...(suggestion && {
+        suggestion: replaceControlChars(suggestion),
       }),
       mcpErrorMetadata: {
         scope,
-        serverName: ke,
+        serverName,
         severity: "warning",
-        ...(Ae && {
-          skipReason: Ae,
+        ...(skipReason && {
+          skipReason,
         }),
       },
     });
   }
-  function pushMissingEnvVarsError(ke, we) {
-    if (we.length > 0)
+  function pushMissingEnvVarsError(serverName, missingVars) {
+    if (missingVars.length > 0)
       pushServerError(
-        ke,
-        formatWithheldEnvNotice(we, isManagedConfigScope(scope)),
-        `Set the following environment variables: ${we.join(", ")}`,
+        serverName,
+        formatWithheldEnvNotice(missingVars, isManagedConfigScope(scope)),
+        `Set the following environment variables: ${missingVars.join(", ")}`,
       );
   }
   let mcpServers = configObject.mcpServers;
@@ -629,21 +723,23 @@ function parseMcpConfig(params) {
     );
   for (let [key, value] of Object.entries(schemaResult.data.mcpServers)) {
     if (isPrototypeKey(key)) continue;
-    let Ee =
+    let serverType =
       value && typeof value === "object" && "type" in value && typeof value.type === "string"
         ? value.type
         : "stdio";
-    let Ae = Object.hasOwn(SERVER_CONFIG_SCHEMAS_BY_TYPE, Ee) ? SERVER_CONFIG_SCHEMAS_BY_TYPE[Ee] : undefined;
-    if (!Ae) {
+    let schemaFactory = Object.hasOwn(SERVER_CONFIG_SCHEMAS_BY_TYPE, serverType)
+      ? SERVER_CONFIG_SCHEMAS_BY_TYPE[serverType]
+      : undefined;
+    if (!schemaFactory) {
       pushServerError(
         key,
-        `Skipped \u2014 unknown MCP server type "${Ee}" for server "${key}"`,
+        `Skipped \u2014 unknown MCP server type "${serverType}" for server "${key}"`,
         `Valid types are: stdio, sse, http (or streamable-http), ws${scope === "dynamic" ? ", sdk" : ""}`,
         "unknown_type",
       );
       continue;
     }
-    if (Ee === "sdk" && scope !== "dynamic") {
+    if (serverType === "sdk" && scope !== "dynamic") {
       pushServerError(
         key,
         `Skipped \u2014 MCP server "${key}" declares type "sdk", which only an SDK host application can register`,
@@ -652,7 +748,7 @@ function parseMcpConfig(params) {
       );
       continue;
     }
-    if (scope !== "dynamic" && unaddableTransportReason(Ee) === "claudeai-connector") {
+    if (scope !== "dynamic" && unaddableTransportReason(serverType) === "claudeai-connector") {
       pushServerError(
         key,
         `Skipped \u2014 MCP server "${key}" declares type "claudeai-proxy", which only claude.ai connectors use`,
@@ -661,8 +757,8 @@ function parseMcpConfig(params) {
       );
       continue;
     }
-    let Ie = Ae().safeParse(value);
-    if (!Ie.success) {
+    let parseResult = schemaFactory().safeParse(value);
+    if (!parseResult.success) {
       if (
         value !== null &&
         typeof value === "object" &&
@@ -678,7 +774,7 @@ function parseMcpConfig(params) {
         );
         continue;
       }
-      let joined = Ie.error.issues
+      let joined = parseResult.error.issues
         .map((issue) => {
           let replaced = issue.message.replace(/^Invalid input: /, "");
           return `${issue.path.join(".") || "(root)"}: ${replaced}`;
@@ -692,38 +788,43 @@ function parseMcpConfig(params) {
       );
       continue;
     }
-    let config = Ie.data;
-    if (config.type === "sdk") {
-      let { tools, connectorId, ...Et } = config;
-      config = Et;
+    let parsedConfig = parseResult.data;
+    if (parsedConfig.type === "sdk") {
+      let { tools, connectorId, ...restConfig } = parsedConfig;
+      parsedConfig = restConfig;
     }
     if (scope === "dynamic" && startupCcrEnv.isBridgeCarrierChild) {
-      let nt = verifyBridgeCarrierEntry(key, config, bridgeSessionId);
-      if ("drop" in nt) {
-        pushServerError(key, `"${key}" ${BRIDGE_CARRIER_DROP_MESSAGES[nt.drop]}`, undefined, nt.drop);
+      let carrierCheck = verifyBridgeCarrierEntry(key, parsedConfig, bridgeSessionId);
+      if ("drop" in carrierCheck) {
+        pushServerError(
+          key,
+          `"${key}" ${BRIDGE_CARRIER_DROP_MESSAGES[carrierCheck.drop]}`,
+          undefined,
+          carrierCheck.drop,
+        );
         continue;
       }
-      servers[key] = registerCliOwnedConfig(ccrMetaMcpServerConfig(nt.url, nt.sessionId));
+      servers[key] = registerCliOwnedConfig(ccrMetaMcpServerConfig(carrierCheck.url, carrierCheck.sessionId));
       continue;
     }
-    let We = scope === "dynamic" && (params.hostCarrier ?? env.CLAUDE_CODE_REMOTE);
-    let ze = expandVars
+    let hostCarrier = scope === "dynamic" && (params.hostCarrier ?? env.CLAUDE_CODE_REMOTE);
+    let expansion = expandVars
       ? isManagedConfigScope(scope)
-        ? withHostEnvRestored(() => expandServerConfigEnvVars(config))
-        : expandServerConfigEnvVars(config)
+        ? withHostEnvRestored(() => expandServerConfigEnvVars(parsedConfig))
+        : expandServerConfigEnvVars(parsedConfig)
       : undefined;
     if (
       isBuiltinMcpServerName(key, {
-        hostCarrier: We,
+        hostCarrier,
         ...(params.hostCarrier && {
           hosted: true,
         }),
-        config: ze?.expanded ?? config,
+        config: expansion?.expanded ?? parsedConfig,
       }) &&
-      config.type !== "sdk"
+      parsedConfig.type !== "sdk"
     ) {
-      if (We && BROWSER_SERVER_NAMES.has(key)) {
-        pushMissingEnvVarsError(key, ze?.missingVars ?? []);
+      if (hostCarrier && BROWSER_SERVER_NAMES.has(key)) {
+        pushMissingEnvVarsError(key, expansion?.missingVars ?? []);
         pushServerError(
           key,
           `"${key}" on a hosted session is reserved except as an http server on a loopback IP literal (e.g. http://127.0.0.1:PORT/mcp) and was not loaded`,
@@ -742,38 +843,41 @@ function parseMcpConfig(params) {
       );
       continue;
     }
-    let whitespacePaddedFields = findWhitespacePaddedFields(config);
+    let whitespacePaddedFields = findWhitespacePaddedFields(parsedConfig);
     if (whitespacePaddedFields.length > 0)
       pushServerError(
         key,
         `Leading or trailing whitespace in: ${whitespacePaddedFields.join(", ")}`,
         `Remove the whitespace from these values in the "${key}" entry \u2014 they are used exactly as written`,
       );
-    let configToCheck = config;
-    if (ze) {
-      let { expanded, missingVars, urlExpandedToEmpty } = ze;
+    let configToCheck = parsedConfig;
+    if (expansion) {
+      let { expanded, missingVars, urlExpandedToEmpty } = expansion;
       pushMissingEnvVarsError(key, missingVars);
-      let yt = "command" in config && "command" in expanded ? stdioIdentityDiff(config, expanded) : undefined;
+      let commandDiff =
+        "command" in parsedConfig && "command" in expanded
+          ? stdioIdentityDiff(parsedConfig, expanded)
+          : undefined;
       configToCheck = {
         ...expanded,
-        ...(yt && {
-          configuredCommand: yt,
+        ...(commandDiff && {
+          configuredCommand: commandDiff,
         }),
       };
-      if (urlExpandedToEmpty && "url" in config)
+      if (urlExpandedToEmpty && "url" in parsedConfig)
         configToCheck = {
           ...expanded,
-          configError: `'url' ${jsonStringify(config.url)} expanded to an empty string. Set the referenced environment variable, or update the server's config and reconnect.`,
+          configError: `'url' ${jsonStringify(parsedConfig.url)} expanded to an empty string. Set the referenced environment variable, or update the server's config and reconnect.`,
           configErrorReason: "url_invalid",
         };
     }
-    if (scope === "enterprise" && configReferencesEnvVars(config))
+    if (scope === "enterprise" && configReferencesEnvVars(parsedConfig))
       configToCheck = {
         ...configToCheck,
         expandedFromEnv: true,
       };
     servers[key] = configToCheck;
-    if (We) asWrittenEntries[key] = "url" in configToCheck ? cloneAsWrittenEntry(value) : undefined;
+    if (hostCarrier) asWrittenEntries[key] = "url" in configToCheck ? cloneAsWrittenEntry(value) : undefined;
   }
   return {
     config: {
@@ -789,42 +893,53 @@ var MCP_PROJECT_SERVERS_APPROVED = "mcp_project_servers_approved";
 /**
  * logProjectServersApprovedOnce：每会话一次记录 tengu_mcp_project_servers_approved（按审批方式与传输计数）。
  */
-function logProjectServersApprovedOnce(approvedProjectServers, n, resolveProjectMcpServerApproval) {
-  let s = sessionHostKind();
-  if (s === "none" || claimOnce().has(MCP_PROJECT_SERVERS_APPROVED)) return;
-  let h = {
+function logProjectServersApprovedOnce(
+  approvedProjectServers,
+  repoPluginServers,
+  resolveProjectMcpServerApproval,
+) {
+  let hostKind = sessionHostKind();
+  if (hostKind === "none" || claimOnce().has(MCP_PROJECT_SERVERS_APPROVED)) return;
+  let byApprover = {
     settings: 0,
     bypass: 0,
     non_interactive: 0,
   };
-  let y = {
+  let byTransport = {
     stdio: 0,
     http: 0,
     sse: 0,
     ws: 0,
     other: 0,
   };
-  for (let [w, L] of [...Object.entries(approvedProjectServers), ...Object.entries(n)]) {
-    let G = resolveProjectMcpServerApproval(w);
-    if (G.status === "approved") {
-      h[G.by]++;
-      let q = L.type ?? "stdio";
-      let Z = q === "stdio" || q === "http" || q === "sse" || q === "ws";
-      y[Z ? q : "other"]++;
+  for (let [name, config] of [
+    ...Object.entries(approvedProjectServers),
+    ...Object.entries(repoPluginServers),
+  ]) {
+    let approval = resolveProjectMcpServerApproval(name);
+    if (approval.status === "approved") {
+      byApprover[approval.by]++;
+      let transport = config.type ?? "stdio";
+      let knownTransport =
+        transport === "stdio" || transport === "http" || transport === "sse" || transport === "ws";
+      byTransport[knownTransport ? transport : "other"]++;
     }
   }
-  if (h.settings + h.bypass + h.non_interactive > 0 && claimOnce().claim(MCP_PROJECT_SERVERS_APPROVED))
+  if (
+    byApprover.settings + byApprover.bypass + byApprover.non_interactive > 0 &&
+    claimOnce().claim(MCP_PROJECT_SERVERS_APPROVED)
+  )
     logEvent("tengu_mcp_project_servers_approved", {
-      hostedKind: fromEnum(s),
-      approvedBySettings: h.settings,
-      approvedByBypass: h.bypass,
-      approvedByNonInteractive: h.non_interactive,
-      stdioCount: y.stdio,
-      httpCount: y.http,
-      sseCount: y.sse,
-      wsCount: y.ws,
-      otherTransportCount: y.other,
-      fromRepoPluginsCount: Object.keys(n).length,
+      hostedKind: fromEnum(hostKind),
+      approvedBySettings: byApprover.settings,
+      approvedByBypass: byApprover.bypass,
+      approvedByNonInteractive: byApprover.non_interactive,
+      stdioCount: byTransport.stdio,
+      httpCount: byTransport.http,
+      sseCount: byTransport.sse,
+      wsCount: byTransport.ws,
+      otherTransportCount: byTransport.other,
+      fromRepoPluginsCount: Object.keys(repoPluginServers).length,
       workspacePersistedTrusted: isWorkspacePersistedTrusted(),
     });
 }
@@ -847,12 +962,12 @@ function emptyServerMap() {
   return Object.create(null);
 }
 //@ chunk-e6aww6q8.js:3831548-3831685 layout
-function addScopeToServers(mcpServers, scope, r) {
+function addScopeToServers(mcpServers, scope, declaredIn) {
   let scopedServers = emptyServerMap();
   if (mcpServers)
     for (let [name, config] of Object.entries(mcpServers))
       scopedServers[name] =
-        r === undefined
+        declaredIn === undefined
           ? {
               ...config,
               scope,
@@ -860,7 +975,7 @@ function addScopeToServers(mcpServers, scope, r) {
           : {
               ...config,
               scope,
-              declaredIn: r,
+              declaredIn,
             };
   return scopedServers;
 }
@@ -886,15 +1001,15 @@ function commandArraysMatch(a, b) {
   return a.every((val, idx) => val === b[idx]);
 }
 //@ chunk-e6aww6q8.js:3832083-3832184 layout
-function expandEnvString(serverUrl, blankList, { remoteSink: r = false } = {}) {
+function expandEnvString(serverUrl, blankList, { remoteSink = false } = {}) {
   return expandMcpCredentialEnvVars(serverUrl, undefined, undefined, {
-    remoteSink: r,
+    remoteSink,
     blankList,
   }).expanded;
 }
 //@ chunk-e6aww6q8.js:3832184-3832229 layout
-function expandEnvInArray(serverCommandArray, n) {
-  return serverCommandArray.map((r) => expandEnvString(r, n));
+function expandEnvInArray(serverCommandArray, blankList) {
+  return serverCommandArray.map((commandPart) => expandEnvString(commandPart, blankList));
 }
 //@ chunk-e6aww6q8.js:3832229-3832269 layout
 function getPolicyExpansionEnv() {
@@ -906,8 +1021,8 @@ function getPolicyExpansionEnv() {
 //@ chunk-e6aww6q8.js:3832269-3832371 file-local
 function getAdminTierEnv() {
   let scopedServers = {};
-  for (let n of getAllPolicyTierSettings())
-    for (let [name, config] of Object.entries(filterEnvForPolicyPredicateMatch(n.env)))
+  for (let tierSettings of getAllPolicyTierSettings())
+    for (let [name, config] of Object.entries(filterEnvForPolicyPredicateMatch(tierSettings.env)))
       scopedServers[name] ??= config;
   return scopedServers;
 }
@@ -920,9 +1035,9 @@ function getPolicyMatchEnv() {
 }
 //@ chunk-e6aww6q8.js:3832456-3832714 layout
 function getPolicyExpansionEnvs() {
-  let e = {};
+  let fallbackEnv = {};
   Object.assign(
-    e,
+    fallbackEnv,
     filterEnvForPolicyPredicateMatch(getLegacyEnvMap(), "globalConfig"),
     isSettingSourceEnabled("userSettings")
       ? filterEnvForPolicyPredicateMatch(getSettingsForSource("userSettings")?.env, "userSettings")
@@ -932,12 +1047,12 @@ function getPolicyExpansionEnvs() {
   );
   return {
     env: getPolicyExpansionEnv(),
-    fallbackEnv: e,
+    fallbackEnv,
   };
 }
 //@ chunk-e6aww6q8.js:3832714-3832992 layout
-function expandPolicyCommandPart(e, n, blankList, s) {
-  let { expanded, missingVars, blankedVars } = expandMcpCredentialEnvVars(e, n, s, {
+function expandPolicyCommandPart(part, env, blankList, fallbackEnv) {
+  let { expanded, missingVars, blankedVars } = expandMcpCredentialEnvVars(part, env, fallbackEnv, {
     blankAsLive: true,
     blankList,
   });
@@ -965,56 +1080,67 @@ function warnBlankedCredentialVars(blankedVars) {
 /**
  * 解析主机模式时用来占位通配符的随机哨兵串。
  */
-var HOST_PATTERN_WILDCARD_SENTINEL = `zzadminwc${randomBytes(8).toString("hex")}zz`;
-var ZZENVSUBZZ = "zzenvsubzz";
+var HOST_PATTERN_WILDCARD_SENTINEL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ZZENVSUBZZ;
+deferInit("chunk-e6aww6q8.js:3833227", () => {
+  HOST_PATTERN_WILDCARD_SENTINEL = `zzadminwc${randomBytes(8).toString("hex")}zz`;
+  ZZENVSUBZZ = "zzenvsubzz";
+});
 //@ chunk-e6aww6q8.js:3833290-3833531 layout
-function maskEnvValueForProbe(e) {
-  let n = /\.+$/.exec(e)?.[0];
-  if (n && e.length > n.length) return `${maskEnvValueForProbe(e.slice(0, -n.length))}${n}`;
-  if (/^[0-9]+(\.[0-9]+)*$/.test(e)) return e.replace(/[0-9]+/g, "0");
-  if (e.includes(":") && /^[0-9a-fA-F:.]+$/.test(e)) return "::";
+function maskEnvValueForProbe(value) {
+  let trailingDots = /\.+$/.exec(value)?.[0];
+  if (trailingDots && value.length > trailingDots.length)
+    return `${maskEnvValueForProbe(value.slice(0, -trailingDots.length))}${trailingDots}`;
+  if (/^[0-9]+(\.[0-9]+)*$/.test(value)) return value.replace(/[0-9]+/g, "0");
+  if (value.includes(":") && /^[0-9a-fA-F:.]+$/.test(value)) return "::";
   return ZZENVSUBZZ;
 }
 //@ chunk-e6aww6q8.js:3833531-3834362 layout
-function classifyUrlVarPositions(e, env) {
-  let r = [];
-  for (let w of e.matchAll(new RegExp(ENV_REF_PATTERN, "g"))) {
-    let L = w[1];
-    if (!r.includes(L) && Object.hasOwn(env, L) && typeof env[L] === "string") r.push(L);
+function classifyUrlVarPositions(pattern, env) {
+  let varNames = [];
+  for (let match of pattern.matchAll(new RegExp(ENV_REF_PATTERN, "g"))) {
+    let name = match[1];
+    if (!varNames.includes(name) && Object.hasOwn(env, name) && typeof env[name] === "string")
+      varNames.push(name);
   }
-  let s = new Map();
-  let h = (w, L) => {
-    let G = `zzv${r.indexOf(w)}zz`;
+  let positions = new Map();
+  let classifyOne = (name, asScheme) => {
+    let marker = `zzv${varNames.indexOf(name)}zz`;
     let proxy = new Proxy(
       {},
       {
-        get: (ke, we) => {
-          if (typeof we !== "string") return;
-          if (we === w) return G;
-          if (!Object.hasOwn(env, we) || typeof env[we] !== "string") return;
-          return L.has(we) ? String(env[we]) : maskEnvValueForProbe(String(env[we]));
+        get: (target, key) => {
+          if (typeof key !== "string") return;
+          if (key === name) return marker;
+          if (!Object.hasOwn(env, key) || typeof env[key] !== "string") return;
+          return asScheme.has(key) ? String(env[key]) : maskEnvValueForProbe(String(env[key]));
         },
       },
     );
-    let expanded = expandMcpCredentialEnvVars(e, proxy).expanded;
+    let expanded = expandMcpCredentialEnvVars(pattern, proxy).expanded;
     let hostPattern = parseHostPattern(expanded, HOST_PATTERN_WILDCARD_SENTINEL);
     if (hostPattern === null) return "authority";
-    if (hostPattern.protocol.includes(G)) return "scheme";
+    if (hostPattern.protocol.includes(marker)) return "scheme";
     if (
-      hostPattern.username.includes(G) ||
-      hostPattern.password.includes(G) ||
-      hostPattern.hostname.includes(G) ||
-      hostPattern.port.includes(G)
+      hostPattern.username.includes(marker) ||
+      hostPattern.password.includes(marker) ||
+      hostPattern.hostname.includes(marker) ||
+      hostPattern.port.includes(marker)
     )
       return "authority";
-    if (hostPattern.pathname.includes(G) || hostPattern.search.includes(G) || hostPattern.hash.includes(G))
+    if (
+      hostPattern.pathname.includes(marker) ||
+      hostPattern.search.includes(marker) ||
+      hostPattern.hash.includes(marker)
+    )
       return "rest";
     return "scheme";
   };
-  let y = new Set();
-  let S = new Set(r.filter((w) => h(w, y) === "scheme"));
-  for (let w of r) s.set(w, S.has(w) ? "scheme" : h(w, S));
-  return s;
+  let schemeNames = new Set();
+  let schemeSet = new Set(varNames.filter((name) => classifyOne(name, schemeNames) === "scheme"));
+  for (let name of varNames)
+    positions.set(name, schemeSet.has(name) ? "scheme" : classifyOne(name, schemeSet));
+  return positions;
 }
 //@ chunk-e6aww6q8.js:3834362-3834401 layout
 /**
@@ -1023,11 +1149,14 @@ function classifyUrlVarPositions(e, env) {
 var UNSAFE_PATH_CHARS_RE = /[/@#?\\\s]/;
 var UNSAFE_SCHEME_CHARS_RE = /[:/@#?\\\s]/;
 //@ chunk-e6aww6q8.js:3834401-3834544 layout
-function hasUnsafeSchemeOrHostValue(e, env) {
-  for (let [r, s] of e) {
-    if (s === "rest") continue;
-    let h = env[r];
-    if (typeof h === "string" && (s === "scheme" ? UNSAFE_SCHEME_CHARS_RE : UNSAFE_PATH_CHARS_RE).test(h))
+function hasUnsafeSchemeOrHostValue(value, env) {
+  for (let [varName, position] of value) {
+    if (position === "rest") continue;
+    let value = env[varName];
+    if (
+      typeof value === "string" &&
+      (position === "scheme" ? UNSAFE_SCHEME_CHARS_RE : UNSAFE_PATH_CHARS_RE).test(value)
+    )
       return true;
   }
   return false;
@@ -1038,12 +1167,12 @@ function hasUnsafeSchemeOrHostValue(e, env) {
  */
 var DOT_SEGMENT_RE = /(^|\/)(\.|%2e)(\.|%2e)?(\/|$)/i;
 //@ chunk-e6aww6q8.js:3834585-3834829 layout
-function hasUnsafePathExpansion(e, env) {
-  for (let r of e.matchAll(new RegExp(ENV_REF_PATTERN, "g"))) {
-    let s = env[r[1]];
-    if (typeof s !== "string") continue;
-    if (/[?#]/.test(s)) return true;
-    let replaced = s
+function hasUnsafePathExpansion(text, env) {
+  for (let match of text.matchAll(new RegExp(ENV_REF_PATTERN, "g"))) {
+    let value = env[match[1]];
+    if (typeof value !== "string") continue;
+    if (/[?#]/.test(value)) return true;
+    let replaced = value
       .replace(/[\t\n\r]/g, "")
       .replaceAll("\\", "/")
       .replace(/%2e/gi, ".");
@@ -1053,93 +1182,98 @@ function hasUnsafePathExpansion(e, env) {
 }
 //@ chunk-e6aww6q8.js:3834829-3835083 layout
 function hasDotSegmentPath(expanded) {
-  let n = 0;
-  let r = expanded.length;
-  while (n < r && expanded.charCodeAt(n) <= 32) n++;
-  while (r > n && expanded.charCodeAt(r - 1) <= 32) r--;
+  let start = 0;
+  let end = expanded.length;
+  while (start < end && expanded.charCodeAt(start) <= 32) start++;
+  while (end > start && expanded.charCodeAt(end - 1) <= 32) end--;
   let replaced = expanded
-    .slice(n, r)
+    .slice(start, end)
     .replace(/[\t\n\r]/g, "")
     .replaceAll("\\", "/")
     .replace(/%2e/gi, ".");
-  let h = replaced.search(/[?#]/);
-  let y = h === -1 ? replaced : replaced.slice(0, h);
-  return DOT_SEGMENT_RE.test(y);
+  let queryOrHashIndex = replaced.search(/[?#]/);
+  let pathPart = queryOrHashIndex === -1 ? replaced : replaced.slice(0, queryOrHashIndex);
+  return DOT_SEGMENT_RE.test(pathPart);
 }
 //@ chunk-e6aww6q8.js:3835083-3837046 layout
 /**
  * expandPolicyUrlPattern：展开 allow/deny 策略里的 URL 模式（* 通配保留），检测值注入通配、改变 URL 结构、点段等"不安全展开"，对白名单失败关闭。
  */
-function expandPolicyUrlPattern(pattern, env, blankList, fallbackEnv, { asConfigured: h = false } = {}) {
+function expandPolicyUrlPattern(pattern, env, blankList, fallbackEnv, { asConfigured = false } = {}) {
   let replaced = pattern.replace(/[\t\n\r]/g, "");
   let replaced_2 = replaced.replaceAll("*", HOST_PATTERN_WILDCARD_SENTINEL);
-  let w = expandMcpCredentialEnvVars(replaced_2, env, fallbackEnv, {
-    remoteSink: !h,
-    blankAsLive: !h,
+  let expansion = expandMcpCredentialEnvVars(replaced_2, env, fallbackEnv, {
+    remoteSink: !asConfigured,
+    blankAsLive: !asConfigured,
     blankList,
   });
-  warnBlankedCredentialVars(w.blankedVars);
+  warnBlankedCredentialVars(expansion.blankedVars);
   let proxy = new Proxy(
     {},
     {
-      get: (Me, We) =>
-        typeof We === "string" && Object.hasOwn(env, We) ? maskEnvValueForProbe(String(env[We])) : undefined,
+      get: (target, key) =>
+        typeof key === "string" && Object.hasOwn(env, key)
+          ? maskEnvValueForProbe(String(env[key]))
+          : undefined,
     },
   );
-  let G = expandMcpCredentialEnvVars(replaced_2, proxy, undefined, {
-    remoteSink: !h,
-    blankAsLive: !h,
+  let maskedExpansion = expandMcpCredentialEnvVars(replaced_2, proxy, undefined, {
+    remoteSink: !asConfigured,
+    blankAsLive: !asConfigured,
     blankList,
   });
-  let hostPattern = parseHostPattern(w.expanded, HOST_PATTERN_WILDCARD_SENTINEL);
-  let hostPattern_2 = parseHostPattern(G.expanded, HOST_PATTERN_WILDCARD_SENTINEL);
+  let hostPattern = parseHostPattern(expansion.expanded, HOST_PATTERN_WILDCARD_SENTINEL);
+  let hostPattern_2 = parseHostPattern(maskedExpansion.expanded, HOST_PATTERN_WILDCARD_SENTINEL);
   let hostname = hostPattern?.hostname ?? null;
   let hostname_2 = hostPattern_2?.hostname ?? null;
-  let we = G.expanded !== replaced_2;
-  let Ee = we ? classifyUrlVarPositions(replaced_2, env) : new Map();
-  let Ae = replaced.includes("$") && hasDotSegmentPath(w.expanded);
-  let Ie =
-    w.wildcardVars.length > 0 ||
-    (we && hasUnsafeSchemeOrHostValue(Ee, env)) ||
+  let expansionChanged = maskedExpansion.expanded !== replaced_2;
+  let varPositions = expansionChanged ? classifyUrlVarPositions(replaced_2, env) : new Map();
+  let hasDotSegment = replaced.includes("$") && hasDotSegmentPath(expansion.expanded);
+  let unsafeExpansion =
+    expansion.wildcardVars.length > 0 ||
+    (expansionChanged && hasUnsafeSchemeOrHostValue(varPositions, env)) ||
     (hostname === null) !== (hostname_2 === null) ||
-    (we && hostname === null) ||
+    (expansionChanged && hostname === null) ||
     (hostPattern !== null &&
       ((hostPattern.hash !== "" && (hostPattern_2?.hash ?? "") === "") ||
         (hostPattern.search !== "" && (hostPattern_2?.search ?? "") === ""))) ||
-    (we && hasUnsafePathExpansion(replaced_2, env)) ||
-    Ae ||
+    (expansionChanged && hasUnsafePathExpansion(replaced_2, env)) ||
+    hasDotSegment ||
     (hostname !== null &&
       ((hostname.includes("*") && !(hostname_2 ?? "").includes("*")) ||
         (hostname.endsWith(".") && !(hostname_2 ?? "").endsWith(".")) ||
         (hostname.includes(HOST_PATTERN_WILDCARD_SENTINEL) &&
           !(hostname_2 ?? "").includes(HOST_PATTERN_WILDCARD_SENTINEL))));
-  if (w.missingVars.length > 0)
+  if (expansion.missingVars.length > 0)
     logForDebugging(
-      `MCP policy predicate references environment variable(s) not present in the policy expansion env: ${w.missingVars.join(", ")}`,
+      `MCP policy predicate references environment variable(s) not present in the policy expansion env: ${expansion.missingVars.join(", ")}`,
     );
-  if (Ie) {
-    let Me =
-      w.wildcardVars.length > 0
-        ? w.wildcardVars
+  if (unsafeExpansion) {
+    let variables =
+      expansion.wildcardVars.length > 0
+        ? expansion.wildcardVars
         : [
             ...Object.keys(env).filter(
               (key) => pattern.includes("${" + key + "}") || pattern.includes("${" + key + ":"),
             ),
-            ...w.missingVars,
+            ...expansion.missingVars,
           ];
     let matches = new RegExp(ENV_REF_PATTERN).test(replaced);
     logForDebugging(
-      `MCP policy URL predicate expansion was unsafe \u2014 ${w.wildcardVars.length > 0 ? "a value injected wildcard semantics" : Ae ? `the expanded entry's path carries a dot segment ('..' or '.') that URL parsing would collapse \u2014 remove dot segments from the pattern${matches ? ", or set the referenced variable(s)" : " (the pattern's '$' text is not a ${NAME} reference, so environment values cannot affect it)"}` : "a value restructured the URL, or the expansion is unparseable as a URL (e.g. a whole-URL ${VAR}: rewrite as https://${HOST}/path \u2014 hostname-position variables are fully supported)"} (variables: ${Me.join(", ") || "unknown"}) \u2014 allowlist URL entries using it fail closed; denylist entries are unaffected`,
+      `MCP policy URL predicate expansion was unsafe \u2014 ${expansion.wildcardVars.length > 0 ? "a value injected wildcard semantics" : hasDotSegment ? `the expanded entry's path carries a dot segment ('..' or '.') that URL parsing would collapse \u2014 remove dot segments from the pattern${matches ? ", or set the referenced variable(s)" : " (the pattern's '$' text is not a ${NAME} reference, so environment values cannot affect it)"}` : "a value restructured the URL, or the expansion is unparseable as a URL (e.g. a whole-URL ${VAR}: rewrite as https://${HOST}/path \u2014 hostname-position variables are fully supported)"} (variables: ${variables.join(", ") || "unknown"}) \u2014 allowlist URL entries using it fail closed; denylist entries are unaffected`,
     );
   }
   return {
-    expanded: w.expanded.replaceAll(HOST_PATTERN_WILDCARD_SENTINEL, "*"),
-    unsafeExpansion: Ie,
-    missingVars: w.missingVars,
+    expanded: expansion.expanded.replaceAll(HOST_PATTERN_WILDCARD_SENTINEL, "*"),
+    unsafeExpansion,
+    missingVars: expansion.missingVars,
   };
 }
 //@ chunk-e6aww6q8.js:3837046-3837067 layout
-var SIGNATURE_IGNORED_ENV = new Set(PLUGIN_ENV_VAR_NAMES);
+var SIGNATURE_IGNORED_ENV; // deferred: uses PLUGIN_ENV_VAR_NAMES (../../utils/plugins/lspPluginIntegration.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3837046", () => {
+  SIGNATURE_IGNORED_ENV = new Set(PLUGIN_ENV_VAR_NAMES);
+});
 //@ chunk-e6aww6q8.js:3837067-3837449 facade-majority = getMcpServerSignature (0.578)
 /**
  * getMcpServerSignature：服务器去重签名：stdio 为 stdio:JSON(命令数组)[:JSON(排序后 env)]，远程为 url:规范化 URL（CCR 代理取 mcp_url）。
@@ -1151,14 +1285,14 @@ function getMcpServerSignature(config, options) {
     if (options?.includeEnv === false) return `stdio:${jsonStringify(cmd)}`;
     let sorted = Object.entries(config.env ?? {})
       .filter(([key]) => !SIGNATURE_IGNORED_ENV.has(key))
-      .sort(([w], [L]) => (w < L ? -1 : w > L ? 1 : 0));
-    let S = sorted.length > 0 ? `:${jsonStringify(Object.fromEntries(sorted))}` : "";
-    return `stdio:${jsonStringify(cmd)}${S}`;
+      .sort(([keyA], [keyB]) => (keyA < keyB ? -1 : keyA > keyB ? 1 : 0));
+    let envSuffix = sorted.length > 0 ? `:${jsonStringify(Object.fromEntries(sorted))}` : "";
+    return `stdio:${jsonStringify(cmd)}${envSuffix}`;
   }
   let url = getServerUrl(config);
   if (url) {
-    let h = unwrapCcrProxyUrl(url);
-    return options?.exactUrl ? `url:${h}` : `url:${normalizeMcpServerUrl(h)}`;
+    let unwrappedUrl = unwrapCcrProxyUrl(url);
+    return options?.exactUrl ? `url:${unwrappedUrl}` : `url:${normalizeMcpServerUrl(unwrappedUrl)}`;
   }
   return null;
 }
@@ -1220,10 +1354,10 @@ function dedupPluginMcpServers(pluginServers, manualServers) {
 /**
  * 生成配置端点的来源描述。
  */
-function endpointOriginFor(e) {
+function endpointOriginFor(config) {
   return describeEndpointOrigin({
-    authoredUnexpanded: e,
-    expanded: e,
+    authoredUnexpanded: config,
+    expanded: config,
     cliOwned: false,
   });
 }
@@ -1232,7 +1366,7 @@ function endpointOriginFor(e) {
  * findMultiScopeEndpointConflicts：同名服务器在多个作用域端点不同时生成警告（OAuth 令牌按端点存，不会通用）。
  */
 function getMcpScopeConflicts(scopeEntries) {
-  let n = new Map();
+  let byName = new Map();
   for (let { scope, servers, displayServers } of scopeEntries)
     for (let [key, value] of Object.entries(servers)) {
       let mcpServerSignature = getMcpServerSignature(value, {
@@ -1240,49 +1374,51 @@ function getMcpScopeConflicts(scopeEntries) {
         exactUrl: true,
       });
       if (!mcpServerSignature) continue;
-      let G = n.get(key);
-      if (!G) n.set(key, (G = []));
-      let q = displayServers[key];
-      G.push({
+      let definitions = byName.get(key);
+      if (!definitions) byName.set(key, (definitions = []));
+      let displayConfig = displayServers[key];
+      definitions.push({
         scope,
         sig: mcpServerSignature,
-        endpoint: q ? endpointOriginFor(q) : mcpTransportType(value),
+        endpoint: displayConfig ? endpointOriginFor(displayConfig) : mcpTransportType(value),
       });
     }
-  let r = [];
-  for (let [s, h] of n) {
-    if (h.length < 2) continue;
-    if (new Set(h.map((S) => S.sig)).size < 2) continue;
-    let filtered = h.map((S) => claudeCommand("mcp remove", s, `-s ${S.scope}`)).filter((S) => S !== null);
-    r.push({
-      path: `mcpServers.${s}`,
-      message: `Server "${s}" is defined in multiple scopes with different endpoints: ${h.map((S) => `${S.scope} (${S.endpoint})`).join(", ")}. OAuth tokens are stored per endpoint, so authenticating in one context will not carry over.`,
+  let errors = [];
+  for (let [serverName, definitions] of byName) {
+    if (definitions.length < 2) continue;
+    if (new Set(definitions.map((definition) => definition.sig)).size < 2) continue;
+    let filtered = definitions
+      .map((definition) => claudeCommand("mcp remove", serverName, `-s ${definition.scope}`))
+      .filter((command) => command !== null);
+    errors.push({
+      path: `mcpServers.${serverName}`,
+      message: `Server "${serverName}" is defined in multiple scopes with different endpoints: ${definitions.map((definition) => `${definition.scope} (${definition.endpoint})`).join(", ")}. OAuth tokens are stored per endpoint, so authenticating in one context will not carry over.`,
       severity: "warning",
       suggestion:
         filtered.length > 0
-          ? `Keep the correct endpoint and remove the others: ${filtered.map((S) => `\`${S}\``).join(" or ")}`
+          ? `Keep the correct endpoint and remove the others: ${filtered.map((command) => `\`${command}\``).join(" or ")}`
           : "Keep the correct endpoint and remove the others from the scopes listed above.",
       mcpErrorMetadata: {
-        scope: h[0].scope,
-        serverName: s,
+        scope: definitions[0].scope,
+        serverName,
         severity: "warning",
       },
     });
   }
-  return r;
+  return errors;
 }
 //@ chunk-e6aww6q8.js:3839118-3839280 facade-majority
 /**
  * suppressedListsEqual：比较两次去重压制列表是否相同。
  */
-function suppressedConnectorsEqual(e, n) {
+function suppressedConnectorsEqual(a, b) {
   return (
-    e.length === n.length &&
-    e.every(
-      (r, s) =>
-        r.name === n[s]?.name &&
-        r.duplicateOf === n[s]?.duplicateOf &&
-        r.duplicateOfScope === n[s]?.duplicateOfScope,
+    a.length === b.length &&
+    a.every(
+      (connector, index) =>
+        connector.name === b[index]?.name &&
+        connector.duplicateOf === b[index]?.duplicateOf &&
+        connector.duplicateOfScope === b[index]?.duplicateOfScope,
     )
   );
 }
@@ -1291,7 +1427,7 @@ function suppressedConnectorsEqual(e, n) {
  * dedupClaudeAiMcpServers：claude.ai 连接器与已启用的手工配置签名相同时压制。
  */
 async function dedupClaudeAiMcpServers(claudeAiServers, manualServers) {
-  let mcpOAuthStore = await readMcpOAuthStore();
+  let store = await readMcpOAuthStore();
   let manualSigs = new Map();
   for (let [key, value] of Object.entries(manualServers)) {
     if (isMcpServerDisabled(key)) continue;
@@ -1303,9 +1439,9 @@ async function dedupClaudeAiMcpServers(claudeAiServers, manualServers) {
           ...value,
           redialToRelearnRegistration: undefined,
         },
-        mcpOAuthStore,
+        store,
       ) ||
-        hasExpiredAccessTokenOnly(key, value, mcpOAuthStore))
+        hasExpiredAccessTokenOnly(key, value, store))
     )
       continue;
     let sig = getMcpServerSignature(value);
@@ -1349,19 +1485,21 @@ function getMcpAllowlistPolicy() {
 //@ chunk-e6aww6q8.js:3839926-3840169 layout
 function getMcpDenylistPolicy() {
   let deniedMcpServers = getInitialSettings_2().deniedMcpServers;
-  let flattened = getDurablePolicyTierSettings().flatMap((h) => h.deniedMcpServers ?? []);
+  let flattened = getDurablePolicyTierSettings().flatMap(
+    (tierSettings) => tierSettings.deniedMcpServers ?? [],
+  );
   if (deniedMcpServers === undefined && flattened.length === 0) return {};
-  let r = new Set();
-  let s = [];
-  for (let h of [...(deniedMcpServers ?? []), ...flattened]) {
-    let y = jsonStringify(h);
-    if (!r.has(y)) {
-      r.add(y);
-      s.push(h);
+  let seen = new Set();
+  let entries = [];
+  for (let entry of [...(deniedMcpServers ?? []), ...flattened]) {
+    let serialized = jsonStringify(entry);
+    if (!seen.has(serialized)) {
+      seen.add(serialized);
+      entries.push(entry);
     }
   }
   return {
-    deniedMcpServers: s,
+    deniedMcpServers: entries,
   };
 }
 //@ chunk-e6aww6q8.js:3840169-3840313 facade-majority
@@ -1378,96 +1516,106 @@ function getEffectiveMcpPolicyKey() {
   ]);
 }
 //@ chunk-e6aww6q8.js:3840313-3840440 layout
-function recordPolicyPredicateOutcome(e) {
+function recordPolicyPredicateOutcome(outcome) {
   let policyPredicateTelemetryEmitted = getPolicyPredicateTelemetryEmitted();
-  if (policyPredicateTelemetryEmitted.has(e)) return;
-  policyPredicateTelemetryEmitted.add(e);
-  if (e === "ok") logFeatureOk("mcp_policy_predicate");
-  else logFeatureSad("mcp_policy_predicate", e);
+  if (policyPredicateTelemetryEmitted.has(outcome)) return;
+  policyPredicateTelemetryEmitted.add(outcome);
+  if (outcome === "ok") logFeatureOk("mcp_policy_predicate");
+  else logFeatureSad("mcp_policy_predicate", outcome);
 }
 //@ chunk-e6aww6q8.js:3840440-3840518 layout
-function recordPolicyExpansionIssues(e, n) {
-  if (e) recordPolicyPredicateOutcome("missing_policy_var");
-  if (n) recordPolicyPredicateOutcome("unsafe_expansion");
+function recordPolicyExpansionIssues(hasMissingVars, hasUnsafeExpansion) {
+  if (hasMissingVars) recordPolicyPredicateOutcome("missing_policy_var");
+  if (hasUnsafeExpansion) recordPolicyPredicateOutcome("unsafe_expansion");
 }
 //@ chunk-e6aww6q8.js:3840518-3841609 facade-majority
 /**
  * expandMcpPolicyForDisplay：把 allow/deny 策略中的 ${VAR} 用屏蔽后的环境值展开，用于展示与比较。
  */
-function expandMcpPolicyPredicates(e) {
-  if (!e.deniedMcpServers && !e.allowedMcpServers) return e;
-  let n = new Set(flattened_3.map((q) => q.toUpperCase()));
-  let r = (q, Z) =>
-    isSecretEnvName(q) || n.has(q.toUpperCase()) || (Z !== undefined && containsCredential(Z));
-  let s = (q, Z) => {
-    if (isSecretEnvName(q) || n.has(q.toUpperCase())) return "*";
-    let Se = sanitizeIndexUrlEnv(q, Z).value;
-    if (Se === HTTP_INDEX_INVALID) return "*";
-    return !Z.endsWith("/") && Se.endsWith("/") ? Se.slice(0, -1) : Se;
+function expandMcpPolicyPredicates(policy) {
+  if (!policy.deniedMcpServers && !policy.allowedMcpServers) return policy;
+  let secretNames = new Set(flattened_3.map((name) => name.toUpperCase()));
+  let isSensitiveVar = (key, value) =>
+    isSecretEnvName(key) ||
+    secretNames.has(key.toUpperCase()) ||
+    (value !== undefined && containsCredential(value));
+  let maskVar = (key, value) => {
+    if (isSecretEnvName(key) || secretNames.has(key.toUpperCase())) return "*";
+    let sanitizedValue = sanitizeIndexUrlEnv(key, value).value;
+    if (sanitizedValue === HTTP_INDEX_INVALID) return "*";
+    return !value.endsWith("/") && sanitizedValue.endsWith("/")
+      ? sanitizedValue.slice(0, -1)
+      : sanitizedValue;
   };
-  let h = {
+  let env = {
     ...getPolicyExpansionEnv(),
   };
-  let y = {
-    ...h,
+  let maskedEnv = {
+    ...env,
   };
   let blankList = scrubbedEnvKeys();
-  for (let [key, value] of Object.entries(h))
-    if (r(key, value)) {
-      delete h[key];
-      if (value === undefined) delete y[key];
-      else y[key] = s(key, value);
+  for (let [key, value] of Object.entries(env))
+    if (isSensitiveVar(key, value)) {
+      delete env[key];
+      if (value === undefined) delete maskedEnv[key];
+      else maskedEnv[key] = maskVar(key, value);
     }
-  let w = {
+  let fallbackEnv = {
     ...getPolicyExpansionEnvs().fallbackEnv,
   };
-  let L = {
-    ...w,
+  let maskedFallbackEnv = {
+    ...fallbackEnv,
   };
-  for (let [key, value] of Object.entries(w))
-    if (r(key, value)) {
-      delete L[key];
-      if (value === undefined) delete w[key];
-      else w[key] = s(key, value);
+  for (let [key, value] of Object.entries(fallbackEnv))
+    if (isSensitiveVar(key, value)) {
+      delete maskedFallbackEnv[key];
+      if (value === undefined) delete fallbackEnv[key];
+      else fallbackEnv[key] = maskVar(key, value);
     }
-  let G = (entry, Z) => {
-    let fallbackEnv = Z === "deny" ? w : undefined;
-    let env = Z === "deny" ? y : h;
+  let expandEntry = (entry, kind) => {
+    let fallbackEnv_2 = kind === "deny" ? fallbackEnv : undefined;
+    let env_2 = kind === "deny" ? maskedEnv : env;
     if (isMcpServerUrlEntry(entry)) {
-      let we = expandPolicyUrlPattern(entry.serverUrl, env, blankList, fallbackEnv, {
-        asConfigured: Z === "deny",
+      let urlResult = expandPolicyUrlPattern(entry.serverUrl, env_2, blankList, fallbackEnv_2, {
+        asConfigured: kind === "deny",
       });
-      return Z === "allow" && we.unsafeExpansion
+      return kind === "allow" && urlResult.unsafeExpansion
         ? entry
         : {
             ...entry,
-            serverUrl: we.expanded,
+            serverUrl: urlResult.expanded,
           };
     }
     if (isMcpServerCommandEntry(entry))
       return {
         ...entry,
         serverCommand: entry.serverCommand.map(
-          (we) => expandPolicyCommandPart(we, h, blankList, Z === "deny" ? L : undefined).expanded,
+          (part) =>
+            expandPolicyCommandPart(part, env, blankList, kind === "deny" ? maskedFallbackEnv : undefined)
+              .expanded,
         ),
       };
     return entry;
   };
   return {
-    ...e,
-    ...(e.deniedMcpServers && {
-      deniedMcpServers: e.deniedMcpServers.map((deniedMcpServer) => G(deniedMcpServer, "deny")),
+    ...policy,
+    ...(policy.deniedMcpServers && {
+      deniedMcpServers: policy.deniedMcpServers.map((deniedMcpServer) =>
+        expandEntry(deniedMcpServer, "deny"),
+      ),
     }),
-    ...(e.allowedMcpServers && {
-      allowedMcpServers: e.allowedMcpServers.map((allowedMcpServer) => G(allowedMcpServer, "allow")),
+    ...(policy.allowedMcpServers && {
+      allowedMcpServers: policy.allowedMcpServers.map((allowedMcpServer) =>
+        expandEntry(allowedMcpServer, "allow"),
+      ),
     }),
   };
 }
 //@ chunk-e6aww6q8.js:3841609-3841744 layout
-function getClaudeAiProxyUrl(e) {
-  if (!isValidServerId(e.id)) return null;
+function getClaudeAiProxyUrl(config) {
+  if (!isValidServerId(config.id)) return null;
   let { MCP_PROXY_URL, MCP_PROXY_PATH } = getOauthConfig();
-  return `${MCP_PROXY_URL}${MCP_PROXY_PATH.replace("{server_id}", normalizeConnectorId(e.id))}`;
+  return `${MCP_PROXY_URL}${MCP_PROXY_PATH.replace("{server_id}", normalizeConnectorId(config.id))}`;
 }
 //@ chunk-e6aww6q8.js:3841744-3841814 layout
 function isNonClaudeAiScopedProxyConfig(config) {
@@ -1495,35 +1643,35 @@ function admitClaudeAiConnectorByPolicy(config) {
 /**
  * 判断一个非 claude.ai 作用域的代理配置是否要按 claude.ai 连接器列表来裁决：能解析出 claude.ai 代理 URL、非受控环境且存在组织策略。
  */
-function isJudgedOnClaudeAiConnectorList(e) {
+function isJudgedOnClaudeAiConnectorList(config) {
   return (
-    isNonClaudeAiScopedProxyConfig(e) &&
-    getClaudeAiProxyUrl(e) !== null &&
+    isNonClaudeAiScopedProxyConfig(config) &&
+    getClaudeAiProxyUrl(config) !== null &&
     !hasDisableClaudeAiConnectors() &&
     hasManagedMcpPolicy()
   );
 }
 //@ chunk-e6aww6q8.js:3842128-3842343 layout
-function getClaudeAiProxyUrlVariants(e) {
-  let claudeAiProxyUrl = getClaudeAiProxyUrl(e);
+function getClaudeAiProxyUrlVariants(config) {
+  let claudeAiProxyUrl = getClaudeAiProxyUrl(config);
   if (claudeAiProxyUrl === null) return [];
-  let r = normalizeConnectorId(e.id);
-  let s = r.startsWith("mcpsrv") ? `mcprs${r.slice(6)}` : r;
+  let connectorId = normalizeConnectorId(config.id);
+  let siblingId = connectorId.startsWith("mcpsrv") ? `mcprs${connectorId.slice(6)}` : connectorId;
   let { MCP_PROXY_URL, MCP_PROXY_PATH } = getOauthConfig();
-  let S = `${MCP_PROXY_URL}${MCP_PROXY_PATH.replace("{server_id}", s)}`;
-  return S === claudeAiProxyUrl ? [claudeAiProxyUrl] : [claudeAiProxyUrl, S];
+  let siblingUrl = `${MCP_PROXY_URL}${MCP_PROXY_PATH.replace("{server_id}", siblingId)}`;
+  return siblingUrl === claudeAiProxyUrl ? [claudeAiProxyUrl] : [claudeAiProxyUrl, siblingUrl];
 }
 //@ chunk-e6aww6q8.js:3842343-3842486 layout
 function claudeAiProxyUrlVariantsWithSiblings(config) {
-  let n = new Set(getClaudeAiProxyUrlVariants(config));
+  let urls = new Set(getClaudeAiProxyUrlVariants(config));
   let claudeAiConnectorById = lookupClaudeAiConnectorById(config.id);
   if (claudeAiConnectorById.kind === "found")
     for (let id of claudeAiConnectorById.siblingIds)
-      for (let h of getClaudeAiProxyUrlVariants({
+      for (let url of getClaudeAiProxyUrlVariants({
         id,
       }))
-        n.add(h);
-  return [...n];
+        urls.add(url);
+  return [...urls];
 }
 //@ chunk-e6aww6q8.js:3842486-3842539 layout
 /**
@@ -1537,11 +1685,13 @@ function configEndpointUrl(config) {
 /**
  * 判断服务器是否被 deny 名单拒绝：本名命中，或其配置的任一别名（如代理 URL 的另一形式）命中都算。
  */
-function isMcpServerDenied(serverName, config) {
+function isMcpServerDenied(serverName, serverConfig) {
   return (
-    isMcpServerDenied_2(serverName, config) ||
-    (config !== undefined &&
-      getServerUrl_3(config).some((r) => isMcpServerDenied_2(serverName, copyCcrMarks(config, r))))
+    isMcpServerDenied_2(serverName, serverConfig) ||
+    (serverConfig !== undefined &&
+      getServerUrl_3(serverConfig).some((url) =>
+        isMcpServerDenied_2(serverName, copyCcrMarks(serverConfig, url)),
+      ))
   );
 }
 //@ chunk-e6aww6q8.js:3842619-3843520 fingerprint = isMcpServerDenied (0.562)
@@ -1570,24 +1720,27 @@ function isMcpServerDenied_2(serverName, config) {
     let blankList = scrubbedEnvKeys();
     let serverCommandArray = getServerCommandArray(config);
     if (serverCommandArray) {
-      let G = expandEnvInArray(serverCommandArray, blankList);
-      let q = isManagedPluginScope(config)
-        ? [G, runWithPluginWriteScope(config, () => expandEnvInArray(serverCommandArray, blankList))]
-        : [G];
+      let expandedCommand = expandEnvInArray(serverCommandArray, blankList);
+      let commandVariants = isManagedPluginScope(config)
+        ? [
+            expandedCommand,
+            runWithPluginWriteScope(config, () => expandEnvInArray(serverCommandArray, blankList)),
+          ]
+        : [expandedCommand];
       for (let entry of settings.deniedMcpServers) {
         if (!isMcpServerCommandEntry(entry)) continue;
         let mapped = entry.serverCommand.map(
-          (ke) => expandPolicyCommandPart(ke, env, blankList, fallbackEnv).expanded,
+          (part) => expandPolicyCommandPart(part, env, blankList, fallbackEnv).expanded,
         );
-        if (q.some((ke) => commandArraysMatch(mapped, ke))) return true;
+        if (commandVariants.some((variant) => commandArraysMatch(mapped, variant))) return true;
       }
     }
     let serverUrl = getServerUrl(config);
-    let L = isNonClaudeAiScopedProxyConfig(config)
+    let proxyUrls = isNonClaudeAiScopedProxyConfig(config)
       ? claudeAiProxyUrlVariantsWithSiblings(config)
       : ccrConfigHosts(config);
-    if (serverUrl || L.length > 0) {
-      let G = [
+    if (serverUrl || proxyUrls.length > 0) {
+      let urlVariants = [
         ...(serverUrl
           ? [
               expandEnvString(serverUrl, blankList, {
@@ -1604,7 +1757,7 @@ function isMcpServerDenied_2(serverName, config) {
                 : []),
             ]
           : []),
-        ...L.filter((q) => q !== serverUrl),
+        ...proxyUrls.filter((url) => url !== serverUrl),
       ];
       for (let entry of settings.deniedMcpServers) {
         if (!isMcpServerUrlEntry(entry)) continue;
@@ -1614,7 +1767,12 @@ function isMcpServerDenied_2(serverName, config) {
               asConfigured,
             }).expanded,
         );
-        if (G.some((Se) => mapped.some((ke) => buildHostPatternRegex(Se, ke)))) return true;
+        if (
+          urlVariants.some((variant) =>
+            mapped.some((entryPattern) => buildHostPatternRegex(variant, entryPattern)),
+          )
+        )
+          return true;
       }
     }
   }
@@ -1665,21 +1823,23 @@ function isMcpServerAllowedByPolicy(serverName, config) {
     if (serverCommandArray) {
       if (hasCommandEntries) {
         let blankList = scrubbedEnvKeys();
-        let G = runWithPluginWriteScope(config, () => expandEnvInArray(serverCommandArray, blankList));
-        let q = false;
+        let expandedCommand = runWithPluginWriteScope(config, () =>
+          expandEnvInArray(serverCommandArray, blankList),
+        );
+        let hasMissingVars = false;
         for (let allowedMcpServer of settings.allowedMcpServers)
           if (isMcpServerCommandEntry(allowedMcpServer)) {
-            let mapped = allowedMcpServer.serverCommand.map((ke) => {
-              let we = expandPolicyCommandPart(ke, env, blankList);
-              q ||= we.missingVars.length > 0;
-              return we.expanded;
+            let mapped = allowedMcpServer.serverCommand.map((part) => {
+              let expansion = expandPolicyCommandPart(part, env, blankList);
+              hasMissingVars ||= expansion.missingVars.length > 0;
+              return expansion.expanded;
             });
-            if (commandArraysMatch(mapped, G)) {
+            if (commandArraysMatch(mapped, expandedCommand)) {
               recordPolicyPredicateOutcome("ok");
               return true;
             }
           }
-        recordPolicyExpansionIssues(q, false);
+        recordPolicyExpansionIssues(hasMissingVars, false);
         return false;
       } else {
         for (let entry of settings.allowedMcpServers)
@@ -1689,13 +1849,13 @@ function isMcpServerAllowedByPolicy(serverName, config) {
     } else if (serverUrl) {
       if (hasUrlEntries) {
         let blankList = scrubbedEnvKeys();
-        let G = runWithPluginWriteScope(config, () =>
+        let expandedUrl = runWithPluginWriteScope(config, () =>
           expandEnvString(serverUrl, blankList, {
             remoteSink: true,
           }),
         );
-        let q = false;
-        let Z = false;
+        let hasMissingVars = false;
+        let hasUnsafe = false;
         for (let allowedMcpServer of settings.allowedMcpServers) {
           if (!isMcpServerUrlEntry(allowedMcpServer)) continue;
           let { expanded, unsafeExpansion, missingVars } = expandPolicyUrlPattern(
@@ -1703,25 +1863,25 @@ function isMcpServerAllowedByPolicy(serverName, config) {
             env,
             blankList,
           );
-          q ||= missingVars.length > 0;
-          Z ||= unsafeExpansion;
+          hasMissingVars ||= missingVars.length > 0;
+          hasUnsafe ||= unsafeExpansion;
           if (unsafeExpansion) continue;
-          if (buildHostPatternRegex(G, expanded)) {
+          if (buildHostPatternRegex(expandedUrl, expanded)) {
             recordPolicyPredicateOutcome("ok");
             return true;
           }
         }
-        recordPolicyExpansionIssues(q, Z);
+        recordPolicyExpansionIssues(hasMissingVars, hasUnsafe);
         return false;
       } else {
-        let L = serverName;
+        let matchName = serverName;
         if (isNonClaudeAiScopedProxyConfig(config)) {
           let claudeAiConnectorById = lookupClaudeAiConnectorById(config.id);
           if (claudeAiConnectorById.kind !== "found") return false;
-          L = claudeAiConnectorById.name;
+          matchName = claudeAiConnectorById.name;
         }
         for (let entry of settings.allowedMcpServers)
-          if (isMcpServerNameEntry(entry) && entry.serverName === L) return true;
+          if (isMcpServerNameEntry(entry) && entry.serverName === matchName) return true;
         return false;
       }
     } else {
@@ -1749,8 +1909,8 @@ function filterMcpServersByPolicy(configs) {
   let allowed = Object.create(null);
   let blocked = [];
   for (let [name, config] of Object.entries(configs)) {
-    let y = config;
-    if (y.type === "sdk" || isMcpServerAllowedByPolicy(name, y)) allowed[name] = config;
+    let candidate = config;
+    if (candidate.type === "sdk" || isMcpServerAllowedByPolicy(name, candidate)) allowed[name] = config;
     else blocked.push(name);
   }
   return {
@@ -1759,21 +1919,25 @@ function filterMcpServersByPolicy(configs) {
   };
 }
 //@ chunk-e6aww6q8.js:3845377-3845425 layout
-var CONNECT_TIME_POLICY_SCOPES = new Set(["dynamic", "agent", "claudeai"]);
+var CONNECT_TIME_POLICY_SCOPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3845377", () => {
+  CONNECT_TIME_POLICY_SCOPES = new Set(["dynamic", "agent", "claudeai"]);
+});
 //@ chunk-e6aww6q8.js:3845425-3845817 facade-majority
 /**
  * isRefusedByBuiltinPlugin：内置插件声明 mayConnectMcpServer 且返回 false 时拒绝其服务器（异常也拒绝）。
  */
 function isWithdrawnBuiltinPluginServer(name, config) {
   let pluginSource = config.pluginSource;
-  let s = config.type === "sdk" || pluginSource === undefined ? undefined : officialPluginId(pluginSource);
-  if (s === undefined) return false;
-  let sliced = s.slice(0, -`@${BUILTIN}`.length);
+  let pluginId =
+    config.type === "sdk" || pluginSource === undefined ? undefined : officialPluginId(pluginSource);
+  if (pluginId === undefined) return false;
+  let sliced = pluginId.slice(0, -`@${BUILTIN}`.length);
   let mayConnectMcpServer = getHostState().builtinPlugins.get(sliced)?.mayConnectMcpServer;
   if (mayConnectMcpServer === undefined) return false;
-  let S = `plugin:${pluginDisplayKey(sliced, s)}:`;
+  let serverPrefix = `plugin:${pluginDisplayKey(sliced, pluginId)}:`;
   try {
-    return !mayConnectMcpServer(name.startsWith(S) ? name.slice(S.length) : name);
+    return !mayConnectMcpServer(name.startsWith(serverPrefix) ? name.slice(serverPrefix.length) : name);
   } catch (error) {
     logError(
       withTelemetryMessage(
@@ -1798,8 +1962,10 @@ function withdrawnBuiltinPluginServerError(name) {
 /**
  * 判断该服务器连接会接到 Claude in Chrome 桥（名字是 Chrome 内置名或配置指向 Chrome 桥），sdk 类型除外。
  */
-function dialsClaudeInChromeBridge(e, config) {
-  return config.type !== "sdk" && (isClaudeInChromeMCPServer(e) || isClaudeInChromeMcpLaunch(config));
+function dialsClaudeInChromeBridge(serverName, config) {
+  return (
+    config.type !== "sdk" && (isClaudeInChromeMCPServer(serverName) || isClaudeInChromeMcpLaunch(config))
+  );
 }
 //@ chunk-e6aww6q8.js:3846108-3846163 layout
 /**
@@ -1819,38 +1985,37 @@ function isToolboxServerNeedingIngress(name, config) {
 /**
  * 按宿主记录“连接时被阻止”的提示状态。
  */
-var notedConnectBlockState = identity_2(
-  {
-    noted: new WeakMap(),
-  },
-  (e) => {
-    e.noted = new WeakMap();
-  },
-);
+var notedConnectBlockState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3846213", () => {
+  notedConnectBlockState = identity_2(
+    {
+      noted: new WeakMap(),
+    },
+    (state) => {
+      state.noted = new WeakMap();
+    },
+  );
+});
 //@ chunk-e6aww6q8.js:3846272-3846667 layout
-function noteStrayMemoryRouteEntry(serverName, config, r) {
-  if (notedConnectBlockState.noted.get(config) === r) return;
-  notedConnectBlockState.noted.set(config, r);
+function noteStrayMemoryRouteEntry(serverName, config, refused) {
+  if (notedConnectBlockState.noted.get(config) === refused) return;
+  notedConnectBlockState.noted.set(config, refused);
   logForDebugging(
-    `MCP server "${serverName}" could reach the account memory server but is not the entry the cloud service provides for it: ${r ? "let through, the refusal is lifted" : "refused at connect, so its tools are not available"}.`,
+    `MCP server "${serverName}" could reach the account memory server but is not the entry the cloud service provides for it: ${refused ? "let through, the refusal is lifted" : "refused at connect, so its tools are not available"}.`,
     {
       level: "warn",
     },
   );
   logEvent("tengu_mcp_stray_memory_route_entry", {
     reason: fromEnum(serverName === MEMORY ? "not_canonical" : "other_name"),
-    lifted: r,
+    lifted: refused,
   });
 }
 //@ chunk-e6aww6q8.js:3846667-3847384 facade-majority
 /**
  * isMcpServerBlockedAtConnectTime：连接前的封锁判断：浏览器扩展开关、HIPAA、桌面入口、保留地址、账号记忆路由、claude.ai 代理可用性与策略 admit/hold/refuse、dynamic/agent/claudeai 作用域的策略。
  */
-function isMcpServerBlockedAtConnectTime(
-  serverName,
-  config,
-  { leavesReservedAddressEntries: r = false } = {},
-) {
+function isMcpServerBlockedAtConnectTime(serverName, config, { leavesReservedAddressEntries = false } = {}) {
   if (dialsClaudeInChromeBridge(serverName, config) && !isPolicyAllowed_2("allow_claude_browser_extension"))
     return true;
   if (config.type !== "sdk" && isComputerUseServer(serverName) && hasComplianceTaint("hipaa")) return true;
@@ -1865,12 +2030,12 @@ function isMcpServerBlockedAtConnectTime(
     return true;
   if ("url" in config && typeof config.url === "string" && matchesCcrMcpServerId(serverName, config.url))
     return true;
-  if (!r && isToolboxServerNeedingIngress(serverName, config)) {
-    let s = isConnectTimeMcpBlockEnabled();
-    noteStrayMemoryRouteEntry(serverName, config, s);
-    if (!s) return true;
+  if (!leavesReservedAddressEntries && isToolboxServerNeedingIngress(serverName, config)) {
+    let blockEnabled = isConnectTimeMcpBlockEnabled();
+    noteStrayMemoryRouteEntry(serverName, config, blockEnabled);
+    if (!blockEnabled) return true;
   }
-  if (!r && isSelfHostedRunnerCcrServer(config)) return true;
+  if (!leavesReservedAddressEntries && isSelfHostedRunnerCcrServer(config)) return true;
   if (
     config.type === "claudeai-proxy" &&
     (hasDisableClaudeAiConnectors() || getClaudeAiProxyUrl(config) === null)
@@ -1895,62 +2060,65 @@ function isMcpServerBlockedAtConnectTime(
 /**
  * 判断连接时是否被策略阻止（mcpDialBlockCause 非空）。
  */
-function isMcpDialBlockedByPolicy(e, n) {
-  return mcpDialBlockCause(e, n) !== null;
+function isMcpDialBlockedByPolicy(serverName, config) {
+  return mcpDialBlockCause(serverName, config) !== null;
 }
 //@ chunk-e6aww6q8.js:3847423-3847557 facade-majority
 /**
  * 给出连接被阻止的原因：连接时策略拦截或不在 allow 名单返回 managed-policy；不属于设置类作用域的不判；其余看作用域门控（可能返回其他原因或 null）。
  */
-function mcpDialBlockCause(e, n) {
-  if (isMcpServerBlockedAtConnectTime(e, n)) return "managed-policy";
-  if (!MCP_SETTINGS_SCOPE_SET.has(n.scope)) return null;
-  if (!isMcpServerAllowedByPolicy(e, n)) return "managed-policy";
-  return getMcpServerScopeGate(e, n);
+function mcpDialBlockCause(serverName, config) {
+  if (isMcpServerBlockedAtConnectTime(serverName, config)) return "managed-policy";
+  if (!MCP_SETTINGS_SCOPE_SET.has(config.scope)) return null;
+  if (!isMcpServerAllowedByPolicy(serverName, config)) return "managed-policy";
+  return getMcpServerScopeGate(serverName, config);
 }
 //@ chunk-e6aww6q8.js:3847557-3847652 layout
 /**
  * 动态配置在连接时是否应被阻止的判断函数。
  */
-function dynamicBlockPredicate(e, n) {
+function dynamicBlockPredicate(serverName, config) {
   return (
-    ((isToolboxServerNeedingIngress(e, n) && !isConnectTimeMcpBlockEnabled()) ||
-      isSelfHostedRunnerCcrServer(n)) &&
-    !isMcpServerBlockedAtConnectTime(e, n, {
+    ((isToolboxServerNeedingIngress(serverName, config) && !isConnectTimeMcpBlockEnabled()) ||
+      isSelfHostedRunnerCcrServer(config)) &&
+    !isMcpServerBlockedAtConnectTime(serverName, config, {
       leavesReservedAddressEntries: true,
     })
   );
 }
 //@ chunk-e6aww6q8.js:3847652-3847661 layout
-setVerdictJudge(dynamicBlockPredicate);
+// deferred: uses setVerdictJudge (../analytics/growthbookGates.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3847652", () => {
+  setVerdictJudge(dynamicBlockPredicate);
+});
 //@ chunk-e6aww6q8.js:3847661-3847917 facade-majority
 /**
  * partitionByConnectTimePolicy：把服务器分成可连、被封锁、暂缓（等待连接器列表）三组。
  */
-function filterDynamicMcpServersByPolicy(e) {
-  if (!e)
+function filterDynamicMcpServersByPolicy(configs) {
+  if (!configs)
     return {
       configs: {},
       blocked: [],
       held: [],
     };
-  let n = {};
-  let r = [];
-  let s = [];
-  for (let [key, value] of Object.entries(e))
+  let allowed = {};
+  let blocked = [];
+  let held = [];
+  for (let [key, value] of Object.entries(configs))
     if (isJudgedOnClaudeAiConnectorList(value) && admitClaudeAiConnectorByPolicy(value) === "hold")
-      s.push(key);
+      held.push(key);
     else if (
       isMcpServerBlockedAtConnectTime(key, value, {
         leavesReservedAddressEntries: true,
       })
     )
-      r.push(key);
-    else n[key] = value;
+      blocked.push(key);
+    else allowed[key] = value;
   return {
-    configs: n,
-    blocked: r,
-    held: s,
+    configs: allowed,
+    blocked,
+    held,
   };
 }
 //@ chunk-e6aww6q8.js:3847917-3848116 facade-majority
@@ -1958,12 +2126,16 @@ function filterDynamicMcpServersByPolicy(e) {
  * getRepoMcpPolicyFlags：仓库内设置源是否带 allowedMcpServers / deniedMcpServers（遥测）。
  */
 function getRepoMcpListsForAnalytics() {
-  let e = projectSettingsAliasesUserSettings()
+  let repoSettings = projectSettingsAliasesUserSettings()
     ? []
-    : REPO_DIR_SETTING_SOURCE_LIST.filter(isSettingSourceEnabled).map((n) => getSettingsForSource(n));
+    : REPO_DIR_SETTING_SOURCE_LIST.filter(isSettingSourceEnabled).map((source) =>
+        getSettingsForSource(source),
+      );
   return {
-    repoMcpAllowList: !isManagedMcpServersOnly() && e.some((n) => n?.allowedMcpServers !== undefined),
-    repoMcpDenyList: e.some((n) => (n?.deniedMcpServers?.length ?? 0) > 0),
+    repoMcpAllowList:
+      !isManagedMcpServersOnly() &&
+      repoSettings.some((settings) => settings?.allowedMcpServers !== undefined),
+    repoMcpDenyList: repoSettings.some((settings) => (settings?.deniedMcpServers?.length ?? 0) > 0),
   };
 }
 //@ chunk-e6aww6q8.js:3848116-3848243 facade-majority
@@ -2037,13 +2209,13 @@ async function addMcpConfig(name, config, scope, storageV5) {
     );
   }
   let validatedConfig = result.data;
-  let S = unaddableTransportReason(validatedConfig.type);
-  if (S === "host-only")
+  let unaddableReason = unaddableTransportReason(validatedConfig.type);
+  if (unaddableReason === "host-only")
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `Cannot add MCP server "${name}": type "${validatedConfig.type}" servers are registered by the host application at runtime, not stored in configuration`,
       "Cannot add MCP server: host-only transport type",
     );
-  if (S === "claudeai-connector")
+  if (unaddableReason === "claudeai-connector")
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `Cannot add MCP server "${name}": type "claudeai-proxy" is used only by claude.ai connectors \u2014 connect the service at claude.ai/customize/connectors, or add it with type "http"`,
       "Cannot add MCP server: claudeai-proxy transport type",
@@ -2149,19 +2321,19 @@ async function addMcpConfig(name, config, scope, storageV5) {
 /**
  * verifyGlobalConfigWrite：重读全局配置（带重试）确认 add/remove 生效，否则抛"未保存/无法确认"错误。
  */
-async function verifyGlobalConfigWrite(name, scope, operation, s) {
-  let h = operation === "add" ? "mcp_config_add" : "mcp_config_remove";
+async function verifyGlobalConfigWrite(name, scope, operation, storageV5) {
+  let metricName = operation === "add" ? "mcp_config_add" : "mcp_config_remove";
   let filePath = describeMcpConfigFilePath("user");
   let projectPath = scope === "local" ? getProjectPathForConfig() : undefined;
-  let w;
+  let globalConfig;
   for (let idx = 0; ; idx++)
     try {
-      w = await readGlobalConfigFromDiskOrThrow(s);
+      globalConfig = await readGlobalConfigFromDiskOrThrow(storageV5);
       break;
     } catch (error) {
-      let ke = CONFIG_READ_RETRY_DELAYS_MS[idx];
-      if (ke !== undefined) {
-        await sleep(ke);
+      let delayMs = CONFIG_READ_RETRY_DELAYS_MS[idx];
+      if (delayMs !== undefined) {
+        await sleep(delayMs);
         continue;
       }
       logForDebugging(
@@ -2170,28 +2342,29 @@ async function verifyGlobalConfigWrite(name, scope, operation, s) {
           level: "error",
         },
       );
-      logFeatureBad(h, "mcp_config_write_unconfirmed");
+      logFeatureBad(metricName, "mcp_config_write_unconfirmed");
       throw mcpConfigWriteUnconfirmedError(name, filePath, operation, projectPath, errorMessage(error));
     }
-  let L = projectPath === undefined ? w : getProp(getProp(w, "projects"), projectPath);
-  let prop = getProp(L, "mcpServers");
+  let scopeConfig =
+    projectPath === undefined ? globalConfig : getProp(getProp(globalConfig, "projects"), projectPath);
+  let prop = getProp(scopeConfig, "mcpServers");
   if ((isObjectLike_4(prop) && Object.hasOwn(prop, name)) === (operation === "add")) return;
-  logFeatureBad(h, "mcp_config_write_failed");
+  logFeatureBad(metricName, "mcp_config_write_failed");
   throw mcpConfigWriteNotSavedError(name, filePath, operation, projectPath);
 }
 //@ chunk-e6aww6q8.js:3852452-3852505 layout
-function isObjectLike_4(e) {
-  return typeof e === "object" && e !== null;
+function isObjectLike_4(value) {
+  return typeof value === "object" && value !== null;
 }
 //@ chunk-e6aww6q8.js:3852505-3852549 layout
-function getProp(e, n) {
-  return isObjectLike_4(e) ? e[n] : undefined;
+function getProp(object, key) {
+  return isObjectLike_4(object) ? object[key] : undefined;
 }
 //@ chunk-e6aww6q8.js:3852549-3853366 facade-majority = removeMcpConfig (0.501)
 /**
  * removeMcpConfig：claude mcp remove 的实现，按作用域删除并确认落盘。
  */
-async function removeMcpConfig(name, scope, r) {
+async function removeMcpConfig(name, scope, storageV5) {
   switch (scope) {
     case "project": {
       assertProjectScopeWritable();
@@ -2213,14 +2386,14 @@ async function removeMcpConfig(name, scope, r) {
       if (!getGlobalConfig().mcpServers?.[name]) throw Error(`No MCP server named "${name}" in user scope`);
       if (
         !(await saveGlobalConfigDurably((current) => {
-          let { [name]: S, ...restMcpServers } = current.mcpServers ?? {};
+          let { [name]: removed, ...restMcpServers } = current.mcpServers ?? {};
           return {
             ...current,
             mcpServers: restMcpServers,
           };
-        }, r))
+        }, storageV5))
       )
-        await verifyGlobalConfigWrite(name, scope, "remove", r);
+        await verifyGlobalConfigWrite(name, scope, "remove", storageV5);
       break;
     }
     case "local": {
@@ -2228,14 +2401,14 @@ async function removeMcpConfig(name, scope, r) {
         throw Error(`No MCP server named "${name}" in local scope`);
       if (
         !(await saveCurrentProjectConfigDurably((current) => {
-          let { [name]: S, ...restMcpServers } = current.mcpServers ?? {};
+          let { [name]: removed, ...restMcpServers } = current.mcpServers ?? {};
           return {
             ...current,
             mcpServers: restMcpServers,
           };
-        }, r))
+        }, storageV5))
       )
-        await verifyGlobalConfigWrite(name, scope, "remove", r);
+        await verifyGlobalConfigWrite(name, scope, "remove", storageV5);
       break;
     }
     default:
@@ -2247,8 +2420,8 @@ async function removeMcpConfig(name, scope, r) {
 /**
  * 判断 user 作用域（~/.claude.json 顶层 mcpServers）是否已有同名服务器。
  */
-function userScopeMcpServerExists(e) {
-  return getGlobalConfig().mcpServers?.[e] !== undefined;
+function userScopeMcpServerExists(serverName) {
+  return getGlobalConfig().mcpServers?.[serverName] !== undefined;
 }
 //@ chunk-e6aww6q8.js:3853419-3853984 facade-majority = getProjectMcpConfigsFromCwd (0.205)
 /**
@@ -2256,7 +2429,7 @@ function userScopeMcpServerExists(e) {
  */
 async function readRawMcpJsonServersFromCwd() {
   let mcpJsonPath = join(getCwd(), ".mcp.json");
-  let n;
+  let rawText;
   try {
     let smallFileChecked = await readSmallFileChecked(
       getFsImplementation(),
@@ -2268,37 +2441,43 @@ async function readRawMcpJsonServersFromCwd() {
         `Can't read .mcp.json: it isn't a regular file or is larger than ${MAX_MCP_CONFIG_FILE_BYTES} bytes. Fix or remove it, then run the command again.`,
         "Project .mcp.json is not a regular file or exceeds the size limit",
       );
-    n = smallFileChecked;
+    rawText = smallFileChecked;
   } catch (error) {
     if (getErrnoCode(error) === "ENOENT") return {};
     throw error;
   }
-  if (!n.trim()) return {};
-  let r = u({
-    mcpServers: record(string(), unknown()).default({}),
-  }).safeParse(safeParseJSON(n, false));
-  if (!r.success) throw Error(".mcp.json is malformed (not valid JSON, or mcpServers is not an object)");
-  return r.data.mcpServers;
+  if (!rawText.trim()) return {};
+  let parseResult = objectSchema({
+    mcpServers: record(stringSchema(), unknown()).default({}),
+  }).safeParse(safeParseJSON(rawText, false));
+  if (!parseResult.success)
+    throw Error(".mcp.json is malformed (not valid JSON, or mcpServers is not an object)");
+  return parseResult.data.mcpServers;
 }
 //@ chunk-e6aww6q8.js:3853984-3854094 facade-majority = SCOPE_ORDER (0.845)
 /**
  * 实际读取配置的作用域顺序（含 local/project/user）。
  */
-var MCP_SETTINGS_SCOPES = ["enterprise", "managed", "local", "user", "project"];
-var MCP_SETTINGS_SCOPE_SET = new Set(MCP_SETTINGS_SCOPES);
-var CONFIG_READ_SCOPES = [...MANAGED_CONFIG_SCOPES, "local", "project", "user"];
+var MCP_SETTINGS_SCOPES; // deferred: uses ConfigScopeSchema (./types.js) of its import cycle while loading; runs once the cycle is complete
+var MCP_SETTINGS_SCOPE_SET;
+var CONFIG_READ_SCOPES;
+deferInit("chunk-e6aww6q8.js:3853984", () => {
+  MCP_SETTINGS_SCOPES = ["enterprise", "managed", "local", "user", "project"];
+  MCP_SETTINGS_SCOPE_SET = new Set(MCP_SETTINGS_SCOPES);
+  CONFIG_READ_SCOPES = [...MANAGED_CONFIG_SCOPES, "local", "project", "user"];
+});
 //@ chunk-e6aww6q8.js:3854094-3854198 facade-majority
 /**
  * 按作用域读取 MCP 配置的外层：安全模式（禁用自动发现）下返回空集，否则交给真正的读取实现，可选是否展开环境变量。
  */
-function getMcpConfigsByScope(scope, { expandVars: n = true } = {}) {
+function getMcpConfigsByScope(scope, { expandVars = true } = {}) {
   if (getIsRemoteMode())
     return {
       servers: emptyServerMap(),
       errors: [],
     };
   return getMcpConfigsByScope_2(scope, {
-    expandVars: n,
+    expandVars,
   });
 }
 //@ chunk-e6aww6q8.js:3854198-3856139 fingerprint = getMcpConfigsByScope (0.904)
@@ -2470,31 +2649,31 @@ function getMcpConfigsByScope_2(scope, { expandVars = true } = {}) {
   }
 }
 //@ chunk-e6aww6q8.js:3856139-3856180 layout
-function isMcpServerUngated(e, n) {
-  return getMcpServerScopeGate(e, n) === null;
+function isMcpServerUngated(serverName, config) {
+  return getMcpServerScopeGate(serverName, config) === null;
 }
 //@ chunk-e6aww6q8.js:3856180-3856426 fingerprint = getMcpConfigByName (0.33)
 /**
  * getMcpServerScopeGate：作用域门控原因：安全模式或企业/插件独占时 managed-policy，未批准的 project 为 project-approval，否则 null。
  */
-function getMcpServerScopeGate(e, n) {
-  if (!MCP_SETTINGS_SCOPE_SET.has(n.scope)) return null;
+function getMcpServerScopeGate(serverName, config) {
+  if (!MCP_SETTINGS_SCOPE_SET.has(config.scope)) return null;
   if (isCustomizationDisabled("mcpAutoDiscovered")) return "managed-policy";
   if (doesEnterpriseMcpConfigExist() || isRestrictedToPluginOnly("mcp"))
-    return isManagedConfigScope(n.scope) ? null : "managed-policy";
-  if (n.scope === "project")
-    return getEffectiveProjectMcpServerStatus(e) === "approved" ? null : "project-approval";
+    return isManagedConfigScope(config.scope) ? null : "managed-policy";
+  if (config.scope === "project")
+    return getEffectiveProjectMcpServerStatus(serverName) === "approved" ? null : "project-approval";
   return null;
 }
 //@ chunk-e6aww6q8.js:3856426-3856556 facade-majority
 /**
  * 在设置类作用域（按优先顺序）中按名字找服务器配置；project 作用域只认已批准的 .mcp.json 服务器；找不到返回 null。
  */
-function getSettingsMcpConfigByName(e) {
-  for (let n of CONFIG_READ_SCOPES) {
-    if (n === "project" && getEffectiveProjectMcpServerStatus(e) !== "approved") continue;
-    let r = getMcpConfigsByScope(n).servers[e];
-    if (r) return r;
+function getSettingsMcpConfigByName(serverName) {
+  for (let scope of CONFIG_READ_SCOPES) {
+    if (scope === "project" && getEffectiveProjectMcpServerStatus(serverName) !== "approved") continue;
+    let config = getMcpConfigsByScope(scope).servers[serverName];
+    if (config) return config;
   }
   return null;
 }
@@ -2502,13 +2681,13 @@ function getSettingsMcpConfigByName(e) {
 /**
  * getMcpConfigByName：按作用域优先级查找可用的同名配置（受企业独占、仅插件、审批限制）。
  */
-function getMcpConfigByName(e) {
+function getMcpConfigByName(serverName) {
   if (isCustomizationDisabled("mcpAutoDiscovered")) return null;
-  for (let n of CONFIG_READ_SCOPES) {
-    if (!isManagedConfigScope(n) && (doesEnterpriseMcpConfigExist() || isRestrictedToPluginOnly("mcp")))
+  for (let scope of CONFIG_READ_SCOPES) {
+    if (!isManagedConfigScope(scope) && (doesEnterpriseMcpConfigExist() || isRestrictedToPluginOnly("mcp")))
       return null;
-    let r = getMcpConfigsByScope(n).servers[e];
-    if (r && isMcpServerUngated(e, r)) return r;
+    let config = getMcpConfigsByScope(scope).servers[serverName];
+    if (config && isMcpServerUngated(serverName, config)) return config;
   }
   return null;
 }
@@ -2529,18 +2708,18 @@ async function getClaudeCodeMcpConfigs(dynamicServers = {}, extraDedupTargets = 
   let getScopeConfigs =
     extraDedupTargets.purpose === "deviceBridge" ? getMcpConfigsByScope_2 : getMcpConfigsByScope;
   let { admits } = extraDedupTargets;
-  let h = admits
-    ? (rn) => {
-        let pn = emptyServerMap();
-        for (let [key, value] of Object.entries(getScopeConfigs(rn).servers))
-          if (admits(key, value)) pn[key] = value;
+  let getScopeConfigsFiltered = admits
+    ? (scope) => {
+        let kept = emptyServerMap();
+        for (let [key, value] of Object.entries(getScopeConfigs(scope).servers))
+          if (admits(key, value)) kept[key] = value;
         return {
-          servers: pn,
+          servers: kept,
         };
       }
     : getScopeConfigs;
-  let { servers: enterpriseServers } = h("enterprise");
-  let { servers } = h("managed");
+  let { servers: enterpriseServers } = getScopeConfigsFiltered("enterprise");
+  let { servers } = getScopeConfigsFiltered("managed");
   if (doesEnterpriseMcpConfigExist()) {
     let filtered = emptyServerMap();
     for (let [name, serverConfig] of Object.entries({
@@ -2563,9 +2742,9 @@ async function getClaudeCodeMcpConfigs(dynamicServers = {}, extraDedupTargets = 
   let noServers = {
     servers: emptyServerMap(),
   };
-  let { servers: userServers } = mcpLocked ? noServers : h("user");
-  let { servers: projectServers } = mcpLocked ? noServers : h("project");
-  let { servers: localServers } = mcpLocked ? noServers : h("local");
+  let { servers: userServers } = mcpLocked ? noServers : getScopeConfigsFiltered("user");
+  let { servers: projectServers } = mcpLocked ? noServers : getScopeConfigsFiltered("project");
+  let { servers: localServers } = mcpLocked ? noServers : getScopeConfigsFiltered("local");
   let pluginServers = emptyServerMap();
   let pluginLoadResult =
     extraDedupTargets.pluginLoadResult ??
@@ -2596,8 +2775,8 @@ async function getClaudeCodeMcpConfigs(dynamicServers = {}, extraDedupTargets = 
       : extraDedupTargets.includePendingProjectServers || extraDedupTargets.includeRejectedProjectServers
         ? getProjectMcpServerStatus
         : getEffectiveProjectMcpServerStatus;
-  let We = emptyServerMap();
-  let ze = extraDedupTargets.purpose === "deviceBridge" ? getPolicyAllowedSet() : null;
+  let projectPluginServers = emptyServerMap();
+  let policyAllowedSources = extraDedupTargets.purpose === "deviceBridge" ? getPolicyAllowedSet() : null;
   let pluginServerResults = await Promise.all(
     pluginLoadResult.enabled.map(async (plugin) => {
       let pluginMcpServers = await getPluginMcpServers(
@@ -2607,40 +2786,40 @@ async function getClaudeCodeMcpConfigs(dynamicServers = {}, extraDedupTargets = 
         undefined,
         warnings,
       );
-      let no =
+      let admittedServers =
         pluginMcpServers && admits
-          ? pickByHelper(pluginMcpServers, (ho, yn) => admits(yn, ho))
+          ? pickByHelper(pluginMcpServers, (config, name) => admits(name, config))
           : pluginMcpServers;
       if (
-        no &&
+        admittedServers &&
         extraDedupTargets.purpose === "deviceBridge" &&
-        (ze?.has(plugin.source) === true || plugin.admittedByManagedLock === true)
+        (policyAllowedSources?.has(plugin.source) === true || plugin.admittedByManagedLock === true)
       )
-        return xr(no, (ho) => ({
-          ...ho,
+        return import_mapValues(admittedServers, (config) => ({
+          ...config,
           scope: "managed",
         }));
-      if (!no || !isProjectLocalPlugin(plugin)) return no;
-      let hn = pickByHelper(no, (ho, yn) => {
-        let projectStatus = getProjectStatus(yn);
+      if (!admittedServers || !isProjectLocalPlugin(plugin)) return admittedServers;
+      let projectFilteredServers = pickByHelper(admittedServers, (config, name) => {
+        let projectStatus = getProjectStatus(name);
         if (projectStatus === "approved") return true;
         if (projectStatus === "pending" && extraDedupTargets.includePendingProjectServers) {
-          pendingProjectServers.add(yn);
+          pendingProjectServers.add(name);
           return true;
         }
         if (projectStatus === "rejected" && extraDedupTargets.includeRejectedProjectServers) {
-          rejectedProjectServers.add(yn);
+          rejectedProjectServers.add(name);
           return true;
         }
         return false;
       });
-      Object.assign(We, hn);
+      Object.assign(projectPluginServers, projectFilteredServers);
       return extraDedupTargets.purpose === "deviceBridge"
-        ? xr(hn, (ho) => ({
-            ...ho,
+        ? import_mapValues(projectFilteredServers, (config) => ({
+            ...config,
             scope: "project",
           }))
-        : hn;
+        : projectFilteredServers;
     }),
   );
   for (let servers of pluginServerResults) if (servers) Object.assign(pluginServers, servers);
@@ -2668,8 +2847,12 @@ async function getClaudeCodeMcpConfigs(dynamicServers = {}, extraDedupTargets = 
     }
   }
   if (getProjectStatus === getEffectiveProjectMcpServerStatus)
-    logProjectServersApprovedOnce(approvedProjectServers, We, resolveProjectMcpServerApproval);
-  let nt = isBridgeCarrierDynamicConfig(dynamicServers);
+    logProjectServersApprovedOnce(
+      approvedProjectServers,
+      projectPluginServers,
+      resolveProjectMcpServerApproval,
+    );
+  let isBridgeCarrier = isBridgeCarrierDynamicConfig(dynamicServers);
   let manualServers = {};
   for (let [name, config] of Object.entries({
     ...userServers,
@@ -2683,7 +2866,7 @@ async function getClaudeCodeMcpConfigs(dynamicServers = {}, extraDedupTargets = 
       !pendingProjectServers.has(name) &&
       !rejectedProjectServers.has(name) &&
       isMcpServerAllowedByPolicy(name, config) &&
-      !(nt && isMemoryServerName(name) && !isCliOwnedConfig(config))
+      !(isBridgeCarrier && isMemoryServerName(name) && !isCliOwnedConfig(config))
     )
       manualServers[name] = config;
   let enabledPluginServers = {};
@@ -2722,21 +2905,21 @@ async function getClaudeCodeMcpConfigs(dynamicServers = {}, extraDedupTargets = 
     localServers,
     servers,
   );
-  let Yt = emptyServerMap();
+  let policyAllowed = emptyServerMap();
   for (let [key, value] of Object.entries(configs)) {
-    let no = value;
-    if (!isMcpServerAllowedByPolicy(key, no)) continue;
-    Yt[key] = no;
+    let config = value;
+    if (!isMcpServerAllowedByPolicy(key, config)) continue;
+    policyAllowed[key] = config;
   }
-  for (let rn of [pendingProjectServers, rejectedProjectServers])
-    for (let pn of rn) {
-      let scope = Yt[pn]?.scope;
-      if (scope !== "project" && scope !== "dynamic") rn.delete(pn);
+  for (let nameSet of [pendingProjectServers, rejectedProjectServers])
+    for (let name of nameSet) {
+      let scope = policyAllowed[name]?.scope;
+      if (scope !== "project" && scope !== "dynamic") nameSet.delete(name);
     }
-  let { servers: servers_2, refused } = refuseReservedNamesForCarrier(Yt, dynamicServers);
-  for (let rn of refused) {
-    pendingProjectServers.delete(rn.name);
-    rejectedProjectServers.delete(rn.name);
+  let { servers: servers_2, refused } = refuseReservedNamesForCarrier(policyAllowed, dynamicServers);
+  for (let refusal of refused) {
+    pendingProjectServers.delete(refusal.name);
+    rejectedProjectServers.delete(refusal.name);
   }
   return {
     servers: servers_2,
@@ -2751,25 +2934,29 @@ async function getClaudeCodeMcpConfigs(dynamicServers = {}, extraDedupTargets = 
 /**
  * getAllMcpConfigs：getClaudeCodeMcpConfigs + claude.ai 连接器（策略过滤后与手工配置按签名去重），合并成最终服务器表。
  */
-async function getAllMcpConfigs(e = {}) {
-  if (shouldSkipClaudeAiFetchForEnterpriseLockdown() || e.admits) return getClaudeCodeMcpConfigs({}, e);
+async function getAllMcpConfigs(options = {}) {
+  if (shouldSkipClaudeAiFetchForEnterpriseLockdown() || options.admits)
+    return getClaudeCodeMcpConfigs({}, options);
   let claudeAiConfigs = fetchClaudeAiConfigsOnce();
   if (isGateOOn() && hasManagedMcpPolicy()) await claudeAiConfigs.catch(() => ({}));
   let { servers, pendingProjectServers, rejectedProjectServers, errors, warnings } =
-    await getClaudeCodeMcpConfigs({}, e);
+    await getClaudeCodeMcpConfigs({}, options);
   let { allowed: claudeaiMcpServers } = filterMcpServersByPolicy((await claudeAiConfigs) ?? {});
   printClaudeAiConnectorNotice();
   let manualServers =
-    e.includePendingProjectServers || e.includeRejectedProjectServers
-      ? pickByHelper(servers, (Z, Se) => !pendingProjectServers.has(Se) && !rejectedProjectServers.has(Se))
+    options.includePendingProjectServers || options.includeRejectedProjectServers
+      ? pickByHelper(
+          servers,
+          (config, name) => !pendingProjectServers.has(name) && !rejectedProjectServers.has(name),
+        )
       : servers;
   let { servers: servers_2 } = await dedupClaudeAiMcpServers(claudeaiMcpServers, manualServers);
   let merged = Object.assign(emptyServerMap(), servers_2, servers);
-  for (let Z of [pendingProjectServers, rejectedProjectServers])
-    for (let Se of Z)
-      if (Object.hasOwn(servers_2, Se)) {
-        merged[Se] = servers_2[Se];
-        Z.delete(Se);
+  for (let nameSet of [pendingProjectServers, rejectedProjectServers])
+    for (let name of nameSet)
+      if (Object.hasOwn(servers_2, name)) {
+        merged[name] = servers_2[name];
+        nameSet.delete(name);
       }
   return {
     servers: merged,
@@ -2784,21 +2971,21 @@ async function getAllMcpConfigs(e = {}) {
  * getPluginProvidedServerNames：当前配置中由插件提供的服务器名集合。
  */
 async function getConnectablePluginMcpServerNames(
-  e = {},
+  dynamicServers = {},
   storageV5,
-  r = () => loadAllPluginsForPreview(storageV5),
+  loadPlugins = () => loadAllPluginsForPreview(storageV5),
   admits,
 ) {
   if (getStrictMcpConfig()) return new Set();
-  let pluginLoadResult = await r();
-  let { servers } = await getClaudeCodeMcpConfigs(e, {
+  let pluginLoadResult = await loadPlugins();
+  let { servers } = await getClaudeCodeMcpConfigs(dynamicServers, {
     pluginLoadResult,
     storageV5,
     admits,
   });
-  let S = new Set();
-  for (let [key, value] of Object.entries(servers)) if (value.pluginSource !== undefined) S.add(key);
-  return S;
+  let names = new Set();
+  for (let [key, value] of Object.entries(servers)) if (value.pluginSource !== undefined) names.add(key);
+  return names;
 }
 //@ chunk-e6aww6q8.js:3861065-3861151 facade-majority
 /**
@@ -2819,11 +3006,11 @@ function isBridgeCarrierPromptBound() {
  * verifyBridgeAppendPromptFile：bridge carrier 子进程校验 --append-system-prompt-file 内容的 SHA-256 与守护进程写入的一致，否则丢弃。
  */
 function verifyBridgeCarrierPrompt(file) {
-  let n = isBridgeCarrierPromptBound();
+  let isPromptBound = isBridgeCarrierPromptBound();
   let CLAUDE_CODE_BRIDGE_PROMPT_SHA256 = env.CLAUDE_CODE_BRIDGE_PROMPT_SHA256;
   env.unset("CLAUDE_CODE_BRIDGE_PROMPT_SHA256");
   if (
-    !n ||
+    !isPromptBound ||
     (CLAUDE_CODE_BRIDGE_PROMPT_SHA256 !== undefined &&
       createHash("sha256").update(file).digest("hex") === CLAUDE_CODE_BRIDGE_PROMPT_SHA256.toLowerCase())
   )
@@ -2845,25 +3032,25 @@ var MAX_MCP_CONFIG_FILE_BYTES = 2097152;
 function parseMcpConfigFromFilePath(params) {
   let { filePath, expandVars, scope, bridgeSessionId } = params;
   let fs = getFsImplementation();
-  let S = {
+  let metricAttrs = {
     scope: fromEnum(scope),
   };
   let configContent;
   try {
-    let q =
+    let fileContents =
       scope === "dynamic"
         ? fs.readFileSync(filePath, {
             encoding: "utf8",
           })
         : readSmallFileCheckedSync(fs, filePath, MAX_MCP_CONFIG_FILE_BYTES);
-    if (q === null) {
+    if (fileContents === null) {
       logForDebugging(
         `MCP config skipped for ${filePath} (scope=${scope}): not a regular file or exceeds ${MAX_MCP_CONFIG_FILE_BYTES} byte limit`,
         {
           level: "warn",
         },
       );
-      logFeatureBad("mcp_config_parse", "mcp_config_shape_gate", S);
+      logFeatureBad("mcp_config_parse", "mcp_config_shape_gate", metricAttrs);
       return {
         config: null,
         errors: [
@@ -2881,7 +3068,7 @@ function parseMcpConfigFromFilePath(params) {
         present: true,
       };
     }
-    configContent = q;
+    configContent = fileContents;
   } catch (error) {
     let code = getErrnoCode(error);
     if (code === "ENOENT" || code === "ENOTDIR")
@@ -2903,18 +3090,19 @@ function parseMcpConfigFromFilePath(params) {
       };
     let syscall =
       typeof error === "object" && error !== null && "syscall" in error ? error.syscall : undefined;
-    let ke =
+    let ancestorInaccessible =
       code === "EACCES" &&
       (syscall === "stat" || syscall === "statx" || syscall === "lstat") &&
       getPlatform() !== "windows";
     logForDebugging(
-      `MCP config read error for ${filePath} (scope=${scope}): ${error}${ke ? " \u2014 a parent directory is not searchable; treating the config as not deployed" : ""}`,
+      `MCP config read error for ${filePath} (scope=${scope}): ${error}${ancestorInaccessible ? " \u2014 a parent directory is not searchable; treating the config as not deployed" : ""}`,
       {
         level: "error",
       },
     );
-    if (ke) logFeatureSad("mcp_config_parse", "mcp_config_ancestor_inaccessible", S);
-    else logFeatureBad("mcp_config_parse", "mcp_config_read_failed", S);
+    if (ancestorInaccessible)
+      logFeatureSad("mcp_config_parse", "mcp_config_ancestor_inaccessible", metricAttrs);
+    else logFeatureBad("mcp_config_parse", "mcp_config_read_failed", metricAttrs);
     return {
       config: null,
       errors: [
@@ -2929,7 +3117,7 @@ function parseMcpConfigFromFilePath(params) {
           },
         },
       ],
-      present: !ke,
+      present: !ancestorInaccessible,
     };
   }
   if (scope === "project" && !configContent.trim()) {
@@ -2950,7 +3138,7 @@ function parseMcpConfigFromFilePath(params) {
         level: "error",
       },
     );
-    logFeatureBad("mcp_config_parse", "mcp_config_invalid_json", S);
+    logFeatureBad("mcp_config_parse", "mcp_config_invalid_json", metricAttrs);
     return {
       config: null,
       errors: [
@@ -2975,8 +3163,9 @@ function parseMcpConfigFromFilePath(params) {
     filePath,
     bridgeSessionId,
   });
-  if (parsedJson_2.config === null) logFeatureBad("mcp_config_parse", "mcp_config_invalid_schema", S);
-  else logFeatureOk("mcp_config_parse", S);
+  if (parsedJson_2.config === null)
+    logFeatureBad("mcp_config_parse", "mcp_config_invalid_schema", metricAttrs);
+  else logFeatureOk("mcp_config_parse", metricAttrs);
   return {
     ...parsedJson_2,
     present: true,
@@ -3021,8 +3210,8 @@ class EnterpriseMcpConfigState {
       new Map(),
     );
   }
-  isHeld(e = this.load().present) {
-    return e && isManagedFolderWritable(getEnterpriseMcpFilePath());
+  isHeld(present = this.load().present) {
+    return present && isManagedFolderWritable(getEnterpriseMcpFilePath());
   }
   check() {
     return this.load().present;
@@ -3040,7 +3229,10 @@ class EnterpriseMcpConfigState {
 /**
  * 按宿主保存的企业 MCP 配置状态。
  */
-var enterpriseMcpConfigState = new HostScoped(() => new EnterpriseMcpConfigState());
+var enterpriseMcpConfigState; // deferred: uses EnterpriseMcpConfigState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3864425", () => {
+  enterpriseMcpConfigState = new HostScoped(() => new EnterpriseMcpConfigState());
+});
 //@ chunk-e6aww6q8.js:3864452-3864487 facade-majority
 /**
  * 判断企业 MCP 配置（managed-mcp.json）是否存在；存在即独占其他作用域。
@@ -3059,19 +3251,19 @@ function isEnterpriseMcpConfigHeld() {
 /**
  * 在企业配置未暂扣时等待额外的配置读取，若读完后仍未暂扣则用新结果，否则回退到原 Promise；出错只记录。用于启动时等待 MCP 配置就绪。
  */
-async function mcpConfigsAfterWaits(e, n, r) {
+async function mcpConfigsAfterWaits(configsPromise, waitForHeld, loadAfterWait) {
   try {
-    if (n && !isEnterpriseMcpConfigHeld()) {
-      let s = await r();
+    if (waitForHeld && !isEnterpriseMcpConfigHeld()) {
+      let loaded = await loadAfterWait();
       if (!isEnterpriseMcpConfigHeld()) {
-        e.catch(logError);
-        return s;
+        configsPromise.catch(logError);
+        return loaded;
       }
     }
   } catch (error) {
     logError(error);
   }
-  return e;
+  return configsPromise;
 }
 //@ chunk-e6aww6q8.js:3864638-3864677 layout
 function getEnterpriseMcpConfigState() {
@@ -3085,9 +3277,11 @@ function getUnusableEnterpriseMcpConfigMessage() {
   let enterpriseMcpConfigState = getEnterpriseMcpConfigState();
   if (enterpriseMcpConfigState.isHeld())
     return `${getEnterpriseMcpFilePath()} adds no MCP servers in this session, because the session takes its managed settings from your organization. MCP servers from other sources stay blocked. Servers the session's host provides still load.`;
-  let n = enterpriseMcpConfigState.fatalErrors();
-  if (n.length === 0) return null;
-  let joined = n.map((s) => (s.path ? `${s.path}: ${s.message}` : s.message)).join("; ");
+  let fatalErrors = enterpriseMcpConfigState.fatalErrors();
+  if (fatalErrors.length === 0) return null;
+  let joined = fatalErrors
+    .map((error) => (error.path ? `${error.path}: ${error.message}` : error.message))
+    .join("; ");
   return `Enterprise MCP config ${getEnterpriseMcpFilePath()} cannot be read or parsed (${joined}), so it keeps exclusive control: ${ENTERPRISE_EXCLUSIVE_HINT}`;
 }
 //@ chunk-e6aww6q8.js:3865168-3865266 facade-majority
@@ -3096,7 +3290,8 @@ function getUnusableEnterpriseMcpConfigMessage() {
  */
 function shouldSkipClaudeAiFetchForEnterpriseLockdown() {
   if (!doesEnterpriseMcpConfigExist()) return false;
-  if (getAllPolicyTierSettings().some((e) => e.allowAllClaudeAiMcps === true)) return false;
+  if (getAllPolicyTierSettings().some((tierSettings) => tierSettings.allowAllClaudeAiMcps === true))
+    return false;
   return true;
 }
 //@ chunk-e6aww6q8.js:3865266-3865333 layout
@@ -3141,9 +3336,12 @@ function headlessSyncsClaudeAiConnectors() {
   return !getStrictMcpConfig() && !shouldSkipClaudeAiFetchForEnterpriseLockdown() && !isBareMode();
 }
 //@ chunk-e6aww6q8.js:3865669-3865747 layout
-setPromptBoundCarrier({
-  headlessSyncsClaudeAiConnectors,
-  isMcpServerBlockedAtConnectTime,
+// deferred: uses setPromptBoundCarrier of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3865669", () => {
+  setPromptBoundCarrier({
+    headlessSyncsClaudeAiConnectors,
+    isMcpServerBlockedAtConnectTime,
+  });
 });
 //@ chunk-e6aww6q8.js:3865747-3865780 layout
 function isManagedMcpServersOnly() {
@@ -3154,29 +3352,31 @@ function isManagedMcpServersOnly() {
  * 判断一组 MCP 配置是否全是 sdk 类型（用于企业配置存在时放行 SDK 传入的服务器）。
  */
 function areMcpConfigsAllSdkType(configs) {
-  return Object.values(configs).every((n) => n.type === "sdk");
+  return Object.values(configs).every((config) => config.type === "sdk");
 }
 //@ chunk-e6aww6q8.js:3865847-3865913 facade-majority
 /**
  * 判断一组动态 MCP 配置在企业配置存在时是否全部允许（逐个调用单条判定）。
  */
-function areMcpConfigsAllowedWithEnterpriseMcpConfig(e) {
-  return Object.entries(e).every(([key, value]) => areMcpConfigsAllowedWithEnterpriseMcpConfig_2(key, value));
+function areMcpConfigsAllowedWithEnterpriseMcpConfig(configs) {
+  return Object.entries(configs).every(([key, value]) =>
+    areMcpConfigsAllowedWithEnterpriseMcpConfig_2(key, value),
+  );
 }
 //@ chunk-e6aww6q8.js:3865913-3866005 fingerprint = areMcpConfigsAllowedWithEnterpriseMcpConfig (1)
-function areMcpConfigsAllowedWithEnterpriseMcpConfig_2(e, n) {
+function areMcpConfigsAllowedWithEnterpriseMcpConfig_2(serverName, config) {
   return (
-    (n.type === "sdk" && n.name === "claude-vscode") ||
-    isCcrInjectedConfig(n) ||
-    (isChromeStdioServer(e, n) && !isClaudeInChromeBlockedByEnterpriseMcpConfig())
+    (config.type === "sdk" && config.name === "claude-vscode") ||
+    isCcrInjectedConfig(config) ||
+    (isChromeStdioServer(serverName, config) && !isClaudeInChromeBlockedByEnterpriseMcpConfig())
   );
 }
 //@ chunk-e6aww6q8.js:3866005-3866046 layout
 /**
  * 判断是否是被管理的 Chrome stdio 服务器。
  */
-function isChromeStdioServer(e, n) {
-  return isClaudeInChromeMCPServer(e) && isReservedStdioServer(e, n);
+function isChromeStdioServer(serverName, config) {
+  return isClaudeInChromeMCPServer(serverName) && isReservedStdioServer(serverName, config);
 }
 //@ chunk-e6aww6q8.js:3866046-3866669 facade-majority
 /**
@@ -3201,7 +3401,7 @@ function gateDynamicMcpConfigForEnterpriseMcpConfig({ dynamicMcpConfig, strictMc
     if (filtered.length > 0)
       return {
         kind: "refuse",
-        message: filtered.every(([y, S]) => isChromeStdioServer(y, S))
+        message: filtered.every(([name, config]) => isChromeStdioServer(name, config))
           ? CLAUDE_IN_CHROME_MANAGED_MCP_REFUSAL
           : "You cannot dynamically configure MCP servers when an enterprise MCP config is present",
       };
@@ -3211,15 +3411,15 @@ function gateDynamicMcpConfigForEnterpriseMcpConfig({ dynamicMcpConfig, strictMc
       dropped: [],
     };
   }
-  let r = emptyServerMap();
-  let s = [];
+  let allowed = emptyServerMap();
+  let dropped = [];
   for (let [key, value] of Object.entries(dynamicMcpConfig))
-    if (areMcpConfigsAllowedWithEnterpriseMcpConfig_2(key, value)) r[key] = value;
-    else s.push(key);
+    if (areMcpConfigsAllowedWithEnterpriseMcpConfig_2(key, value)) allowed[key] = value;
+    else dropped.push(key);
   return {
     kind: "continue",
-    servers: r,
-    dropped: s,
+    servers: allowed,
+    dropped,
   };
 }
 //@ chunk-e6aww6q8.js:3866669-3866707 layout
@@ -3227,8 +3427,8 @@ function isOptInBuiltinServer(name) {
   return name === COMPUTER_USE_MCP_SERVER_NAME && !isHostedDesktopSession();
 }
 //@ chunk-e6aww6q8.js:3866707-3866751 layout
-function asArray(e) {
-  return Array.isArray(e) ? e : [];
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
 }
 //@ chunk-e6aww6q8.js:3866751-3866874 facade-majority = isMcpServerDisabled (1)
 /**
@@ -3250,22 +3450,22 @@ function getSwitchedOffMcpServers() {
 /**
  * 把一批服务器名加入 `disabledMcpServers`（已全部在内则不写），写入指定设置源。
  */
-function switchOffMcpServers(e, n) {
-  saveCurrentProjectConfig((r) => {
-    let s = asArray(r.disabledMcpServers);
-    let h = new Set(s);
-    return e.every((y) => h.has(y))
-      ? r
+function switchOffMcpServers(names, storageV5) {
+  saveCurrentProjectConfig((current) => {
+    let list = asArray(current.disabledMcpServers);
+    let present = new Set(list);
+    return names.every((name) => present.has(name))
+      ? current
       : {
-          ...r,
-          disabledMcpServers: uniq([...s, ...e]),
+          ...current,
+          disabledMcpServers: uniq([...list, ...names]),
         };
-  }, n);
+  }, storageV5);
 }
 //@ chunk-e6aww6q8.js:3867072-3867161 file-local
 function toggleMembership(list, name, shouldContain) {
   if (list.includes(name) === shouldContain) return list;
-  return shouldContain ? [...list, name] : list.filter((h) => h !== name);
+  return shouldContain ? [...list, name] : list.filter((entry) => entry !== name);
 }
 //@ chunk-e6aww6q8.js:3867161-3867218 facade-majority
 /**
@@ -3280,15 +3480,15 @@ function setMcpServerEnabled(name, enabled, storageV5) {
  * setMcpServerEnabledVerified：写本地配置切换启用状态，写入无法确认时回滚。
  */
 function setMcpServerEnabledDurably(name, enabled, storageV5) {
-  let s = saveCurrentProjectConfigDurably;
-  let h = isMcpServerDisabled(name);
-  return setMcpServerEnabled_2(s, name, enabled, storageV5).then(async function (S) {
-    if (S) {
+  let saveConfig = saveCurrentProjectConfigDurably;
+  let wasDisabled = isMcpServerDisabled(name);
+  return setMcpServerEnabled_2(saveConfig, name, enabled, storageV5).then(async function (saved) {
+    if (saved) {
       logFeatureOk("mcp_server_toggle");
       return true;
     }
     logFeatureBad("mcp_server_toggle", "mcp_config_write_unconfirmed");
-    await setMcpServerEnabled_2(s, name, !h, storageV5);
+    await setMcpServerEnabled_2(saveConfig, name, !wasDisabled, storageV5);
     return false;
   });
 }
@@ -3296,9 +3496,9 @@ function setMcpServerEnabledDurably(name, enabled, storageV5) {
 /**
  * setMcpServerEnabled：切换项目配置中的 enabledMcpServers/disabledMcpServers；内置服务器切换记录 tengu_builtin_mcp_toggle。
  */
-function setMcpServerEnabled_2(e, name, enabled, s) {
+function setMcpServerEnabled_2(saveConfig, name, enabled, storageV5) {
   let isBuiltinStateChange = isOptInBuiltinServer(name) && isMcpServerDisabled(name) === enabled;
-  let y = e((current) => {
+  let saved = saveConfig((current) => {
     if (isOptInBuiltinServer(name)) {
       let enabledMcpServers = current.enabledMcpServers;
       let list = asArray(enabledMcpServers);
@@ -3319,24 +3519,27 @@ function setMcpServerEnabled_2(e, name, enabled, s) {
       ...current,
       disabledMcpServers: next,
     };
-  }, s);
+  }, storageV5);
   if (isBuiltinStateChange)
     logEvent("tengu_builtin_mcp_toggle", {
       serverName: mcpNameForAnalytics_GATE_EVALUATED(name, isOptInBuiltinServer(name)),
       enabled,
     });
-  return y;
+  return saved;
 }
 //@ chunk-e6aww6q8.js:3867840-3867900 shared-adjacent = doesEnterpriseMcpConfigExist (0.88)
-deliveredReaderSlot.set(() =>
-  doesEnterpriseMcpConfigExist()
-    ? deliveredNamesOf(
-        getMcpConfigsByScope_2("enterprise", {
-          expandVars: false,
-        }),
-      )
-    : [],
-);
+// deferred: uses deliveredReaderSlot (../../plugins/functionHooks/api/settingsRead.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3867840", () => {
+  deliveredReaderSlot.set(() =>
+    doesEnterpriseMcpConfigExist()
+      ? deliveredNamesOf(
+          getMcpConfigsByScope_2("enterprise", {
+            expandVars: false,
+          }),
+        )
+      : [],
+  );
+});
 //@ chunk-e6aww6q8.js:3873177-3873356 fingerprint = expandEnvVars (0.913)
 /**
  * supportsEnvExpansion：按 type 判断（stdio/sse/http/sdk 为 true）。
@@ -3358,57 +3561,27 @@ function supportsEnvExpansion(config) {
       return false;
   }
 }
-//@ chunk-1wpnxx5r.js:3164-3514 fingerprint = CCR_PROXY_PATH_MARKERS (0.563)
-/**
- * CCR 代理路径常量：/v2/ccr-sessions/、/v1/code/、session_ingress shttp/ws 路径与 MCP 路由正则。
- */
-var CCR_SESSION_PATH_PREFIXES = ["/v2/ccr-sessions/", "/v1/code/"];
-var CCR_PROXY_PATH_MARKERS = [
-  "/v2/session_ingress/shttp/mcp/",
-  "/v2/session_ingress/mcp/ws/",
-  ...CCR_SESSION_PATH_PREFIXES,
-];
-var CCR_MCP_PATH_PATTERNS = [
-  /^\/v2\/ccr-sessions\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+\/mcp(?:\/[A-Za-z0-9_-]+)?$/,
-  /^\/v1\/code\/sessions\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+\/mcp(?:\/[A-Za-z0-9_-]+)?$/,
-  /^\/v1\/code\/mcp\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)?$/,
-];
-var SPENT = "spent";
-//@ chunk-1wpnxx5r.js:15428-15515 fingerprint = getServerUrl (1)
-/**
- * 判断是否 CCR 托管的 MCP 配置：url 指向 CCR MCP 代理，或配置本身带 CCR 托管标记。
- */
-function isCcrHostedConfig(config) {
-  if ("url" in config && typeof config.url === "string" && isSameOriginAsCcr(config.url)) return true;
-  return isCliOwnedConfig(config);
+//@ chunk-0h4e7gnq.js:29912-30007 fingerprint = getServerCommandArray (1)
+function getMcpTransportTelemetryLabel(config) {
+  let transportType = config.type ?? "stdio";
+  return typeof transportType === "string" && Object.hasOwn(MCP_TRANSPORTS_SUPPORTING_TOOLS, transportType)
+    ? transportType
+    : "other";
 }
-//@ chunk-1wpnxx5r.js:16374-16417 shared-adjacent = getServerUrl (1)
-/**
- * 取服务器配置的 url（没有 url 字段的类型返回 null）。
- */
-function getServerUrl(config) {
-  return "url" in config ? config.url : null;
-}
-//@ chunk-1wpnxx5r.js:16417-16522 affinity = getServerCommandArray (1)
-/**
- * 取 stdio 服务器的命令数组 [command, ...args]；非 stdio 返回 null。用于签名去重与策略匹配。
- */
-function getServerCommandArray(config) {
-  if (config.type !== undefined && config.type !== "stdio") return null;
-  let stdioConfig = config;
-  return [stdioConfig.command, ...(stdioConfig.args ?? [])];
-}
-//@ chunk-1wpnxx5r.js:16522-16647 fingerprint = unwrapCcrProxyUrl (1)
-/**
- * 若 URL 是 CCR MCP 代理地址（含代理路径标记），取出查询参数 `mcp_url` 指向的原始服务器地址；否则或解析失败原样返回。用于签名去重。
- */
-function unwrapCcrProxyUrl(url) {
-  if (!CCR_PROXY_PATH_MARKERS.some((m) => url.includes(m))) return url;
-  try {
-    return new URL(url).searchParams.get("mcp_url") || url;
-  } catch {
-    return url;
-  }
+//@ chunk-3wek6r2k.js:59775-60150 file-local
+function isPrivateNetworkHost(host) {
+  if (!host.includes(".") && !host.includes(":")) return true;
+  if (
+    /^10\.\d+\.\d+\.\d+$/.test(host) ||
+    /^192\.168\.\d+\.\d+$/.test(host) ||
+    /^172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(host) ||
+    /^169\.254\.\d+\.\d+$/.test(host) ||
+    /^100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+$/.test(host) ||
+    /^f[cd][0-9a-f]{2}:/.test(host) ||
+    /^fe[89ab][0-9a-f]:/.test(host)
+  )
+    return true;
+  return PRIVATE_DNS_SUFFIXES.some((suffix) => host.endsWith(suffix));
 }
 //@ chunk-2yv46yc2.js:340-381 placement
 /**
@@ -3419,13 +3592,13 @@ var ORG_VALUE_PLACEHOLDER = "(value set by your organization)";
 /**
  * managed 作用域的 MCP 服务器配置脱敏（URL 与 headers 打码）。名字配错且应归 MCP，见 lead 建议。
  */
-function redactManagedMcpServerConfig(r, scope) {
-  if (scope !== "managed") return r;
+function redactManagedMcpServerConfig(config, scope) {
+  if (scope !== "managed") return config;
   return {
-    ...r,
-    url: urlPathOf(r.url) ?? ORG_VALUE_PLACEHOLDER,
-    ...(r.headers && {
-      headers: xr(r.headers, () => ORG_VALUE_PLACEHOLDER),
+    ...config,
+    url: urlPathOf(config.url) ?? ORG_VALUE_PLACEHOLDER,
+    ...(config.headers && {
+      headers: import_mapValues(config.headers, () => ORG_VALUE_PLACEHOLDER),
     }),
   };
 }
@@ -3442,9 +3615,9 @@ function clientStatusForSnapshot(type) {
  */
 function mcpServerStatusSnapshots(clients) {
   return clients.map((client) => {
-    let o;
+    let redactedConfig;
     if (client.config.type === "sse" || client.config.type === "http")
-      o = redactManagedMcpServerConfig(
+      redactedConfig = redactManagedMcpServerConfig(
         {
           type: client.config.type,
           url: client.config.url,
@@ -3453,13 +3626,13 @@ function mcpServerStatusSnapshots(clients) {
         client.config.scope,
       );
     else if (client.config.type === "claudeai-proxy")
-      o = {
+      redactedConfig = {
         type: "claudeai-proxy",
         url: client.config.url,
         id: client.config.id,
       };
     else if (client.config.type === "stdio" || client.config.type === undefined)
-      o = {
+      redactedConfig = {
         type: "stdio",
         command: client.config.command,
         args: client.config.args,
@@ -3467,7 +3640,7 @@ function mcpServerStatusSnapshots(clients) {
     return {
       name: client.name,
       status: clientStatusForSnapshot(client.type),
-      config: o,
+      config: redactedConfig,
       scope: client.config.scope,
       source: mcpServerSource(client.name, client.config),
       serverInfo: isConnectedOrCached(client) ? client.serverInfo : undefined,
@@ -3476,67 +3649,23 @@ function mcpServerStatusSnapshots(clients) {
     };
   });
 }
-//@ chunk-dcmhvw5a.js:422731-422935 placement
-/**
- * 与 MCP 策略相关的设置键（允许/拒绝列表、项目 MCP 启用、claude.ai 连接器开关、托管服务器）。
- */
-var MCP_POLICY_SETTING_KEYS = [
-  "allowManagedMcpServersOnly",
-  "allowedMcpServers",
-  "deniedMcpServers",
-  "disabledMcpjsonServers",
-  "enabledMcpjsonServers",
-  "enableAllProjectMcpServers",
-  "disableClaudeAiConnectors",
-  "managedMcpServers",
-];
-//@ chunk-dcmhvw5a.js:422935-423061 fingerprint = shouldAllowManagedMcpServersOnly (0.416)
-/**
- * shouldAllowManagedMcpServersOnly：策略槽或管理员层设置 allowManagedMcpServersOnly。
- */
-function shouldAllowManagedMcpServersOnly({ slot, adminTiers }) {
-  return (
-    slot?.allowManagedMcpServersOnly === true ||
-    adminTiers.some((adminTier) => adminTier.allowManagedMcpServersOnly === true)
-  );
-}
-//@ chunk-0h4e7gnq.js:29912-30007 fingerprint = getServerCommandArray (1)
-function getMcpTransportTelemetryLabel(config) {
-  let n = config.type ?? "stdio";
-  return typeof n === "string" && Object.hasOwn(MCP_TRANSPORTS_SUPPORTING_TOOLS, n) ? n : "other";
-}
 //@ chunk-18hwfzwa.js:1738045-1738247 placement = hasBlockingResult (0.495)
 /**
  * 在已扣住的 MCP 配置之外，再把需要审批的项目 MCP 服务器移入 blocked。旧版名 hasBlockingResult 存疑，疑似 MCP 配置代码误归 hooks.ts。
  */
-function filterUnapprovedMcpServers(h, browserExtensionAllowed) {
-  let D = filterDynamicMcpServersByPolicy(h);
-  if (browserExtensionAllowed || isLovelyUmbrellaOn()) return D;
-  let L = {};
-  let ee = [...D.blocked];
-  for (let [key, value] of Object.entries(D.configs))
-    if (dialsClaudeInChromeBridge(key, value)) ee.push(key);
-    else L[key] = value;
+function filterUnapprovedMcpServers(configs, browserExtensionAllowed) {
+  let policyFiltered = filterDynamicMcpServersByPolicy(configs);
+  if (browserExtensionAllowed || isLovelyUmbrellaOn()) return policyFiltered;
+  let kept = {};
+  let blocked = [...policyFiltered.blocked];
+  for (let [key, value] of Object.entries(policyFiltered.configs))
+    if (dialsClaudeInChromeBridge(key, value)) blocked.push(key);
+    else kept[key] = value;
   return {
-    configs: L,
-    blocked: ee,
-    held: D.held,
+    configs: kept,
+    blocked,
+    held: policyFiltered.held,
   };
-}
-//@ chunk-3wek6r2k.js:59775-60150 file-local
-function isPrivateNetworkHost(e) {
-  if (!e.includes(".") && !e.includes(":")) return true;
-  if (
-    /^10\.\d+\.\d+\.\d+$/.test(e) ||
-    /^192\.168\.\d+\.\d+$/.test(e) ||
-    /^172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(e) ||
-    /^169\.254\.\d+\.\d+$/.test(e) ||
-    /^100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+$/.test(e) ||
-    /^f[cd][0-9a-f]{2}:/.test(e) ||
-    /^fe[89ab][0-9a-f]:/.test(e)
-  )
-    return true;
-  return PRIVATE_DNS_SUFFIXES.some((o) => e.endsWith(o));
 }
 export {
   getMcpTransportTelemetryLabel,
@@ -3559,10 +3688,10 @@ export {
   isMcpServerBlockedAtConnectTime,
   isMcpDialBlockedByPolicy,
   getAllMcpConfigs,
+  isBuiltinInProcessMcpServer,
+  supportsEnvExpansion,
   emptyServerMap,
   MCP_SETTINGS_SCOPE_SET,
-  supportsEnvExpansion,
-  isBuiltinInProcessMcpServer,
   reservedServerNameMessage,
   mergeUniqueServerRefs,
   refusedReservedNames,

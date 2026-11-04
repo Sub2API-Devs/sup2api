@@ -10,7 +10,7 @@
  */
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logForDebugging } from "../utils/debug.js";
-import { string } from "../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { createSignal } from "../utils/signal.js";
 import { Text, Box } from "../ink/components/Text.js";
 import { getAPIProvider } from "../utils/model/providers.js";
@@ -34,26 +34,26 @@ class ApiKeyVerification {
   constructor() {
     this.#e = useApiKeyVerification();
   }
-  subscribe = (h) => this.#o.subscribe(h);
+  subscribe = (listener) => this.#o.subscribe(listener);
   getSnapshot = () => this.#e;
-  #n(h) {
-    if (h === this.#e) return;
-    this.#e = h;
+  #n(next) {
+    if (next === this.#e) return;
+    this.#e = next;
     this.#o.emit();
   }
-  #s(h, x) {
-    if (h !== this.#t) return;
-    this.#n(x);
+  #s(generation, status) {
+    if (generation !== this.#t) return;
+    this.#n(status);
   }
   verify = async ({ credentials, storageV5 }) => {
-    let D = ++this.#t;
+    let generation = ++this.#t;
     if (getAPIProvider() === "gateway" && !getGatewayAuth()) {
-      this.#s(D, "missing");
+      this.#s(generation, "missing");
       logFeatureSad("auth_api_key_verify", "missing");
       return;
     }
     if (!isAnthropicAuthEnabled() || isClaudeAISubscriber()) {
-      this.#s(D, "valid");
+      this.#s(generation, "valid");
       logFeatureOk("auth_api_key_verify");
       return;
     }
@@ -61,31 +61,34 @@ class ApiKeyVerification {
     let { key, source } = getAnthropicApiKeyWithSource();
     if (!key?.trim()) {
       if (source === "apiKeyHelper") {
-        this.#s(D, "error");
+        this.#s(generation, "error");
         logFeatureBad("auth_api_key_verify", "apikeyhelper_failed");
         return;
       }
-      this.#s(D, "missing");
+      this.#s(generation, "missing");
       logFeatureSad("auth_api_key_verify", "missing");
       return;
     }
     try {
-      let ke = await verifyApiKey(key, false, credentials, storageV5);
-      this.#s(D, ke ? "valid" : "invalid");
-      if (ke) logFeatureOk("auth_api_key_verify");
+      let isValid = await verifyApiKey(key, false, credentials, storageV5);
+      this.#s(generation, isValid ? "valid" : "invalid");
+      if (isValid) logFeatureOk("auth_api_key_verify");
       else logFeatureBad("auth_api_key_verify", "invalid");
     } catch {
-      this.#s(D, "error");
+      this.#s(generation, "error");
       logFeatureBad("auth_api_key_verify", "network_error");
     }
   };
-  recheckAfterCredentialsChange = async (h) => {
+  recheckAfterCredentialsChange = async (context) => {
     if (!this.showsLoginNotice()) return false;
-    let claudeAIOAuthTokens = await getClaudeAIOAuthTokensAsync(h.credentials);
+    let claudeAIOAuthTokens = await getClaudeAIOAuthTokensAsync(context.credentials);
     if (!this.showsLoginNotice() || !isClaudeAISubscriber()) return false;
-    if (claudeAIOAuthTokens && wasOAuthAccessTokenSavedByThisProcess(h.host, claudeAIOAuthTokens.accessToken))
+    if (
+      claudeAIOAuthTokens &&
+      wasOAuthAccessTokenSavedByThisProcess(context.host, claudeAIOAuthTokens.accessToken)
+    )
       return false;
-    await this.verify(h);
+    await this.verify(context);
     return this.#e === "valid";
   };
   showsLoginNotice() {

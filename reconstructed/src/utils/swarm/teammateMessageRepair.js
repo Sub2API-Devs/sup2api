@@ -14,59 +14,72 @@ import { SUMMARY_MAX_CHARS } from "../../tools/SendMessageTool/constants.js";
 import { jsonParse } from "../slowOperations.js";
 import { identity } from "../identity.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, _enum, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, _enum, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { safeParseJSON } from "../json.js";
 import { storageSpaceId } from "../storage/storageSpaces.js";
 import { swarmHostState } from "./hostState.js";
 import { slugifySessionName } from "../sessionAddresses.js";
 import { TEAM_LEAD, USER, SYSTEM } from "./constants.js";
 import { notifyTasksUpdated } from "../tasks.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-nw7jbebs.js:1466-1723 placement
-var SEND_MESSAGE_FIELDS = new Set(["to", "summary", "message", "notify_when_idle"]);
-var ANTML = "antml:";
-var SUMMARY_CLOSE_TAG = "</summary>";
-var BARE_MESSAGE_PARAM = '<parameter name="message">';
-var NAMESPACED_MESSAGE_PARAM = `<${ANTML}parameter name="message">`;
-var regExp = new RegExp(
-  `<(?:${ANTML})?parameter\\b|</(?:${ANTML})?(?:parameter|invoke|function_calls|message)>`,
-);
+var SEND_MESSAGE_FIELDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ANTML;
+var SUMMARY_CLOSE_TAG;
+var BARE_MESSAGE_PARAM;
+var NAMESPACED_MESSAGE_PARAM;
+var regExp;
+deferInit("chunk-nw7jbebs.js:1466", () => {
+  SEND_MESSAGE_FIELDS = new Set(["to", "summary", "message", "notify_when_idle"]);
+  ANTML = "antml:";
+  SUMMARY_CLOSE_TAG = "</summary>";
+  BARE_MESSAGE_PARAM = '<parameter name="message">';
+  NAMESPACED_MESSAGE_PARAM = `<${ANTML}parameter name="message">`;
+  regExp = new RegExp(
+    `<(?:${ANTML})?parameter\\b|</(?:${ANTML})?(?:parameter|invoke|function_calls|message)>`,
+  );
+});
 //@ chunk-nw7jbebs.js:1723-1807 placement
-function splitRepairedMessage(e) {
-  let n = repairSendMessageInput(e);
-  return n !== undefined && n.unrepaired === undefined ? n.split : undefined;
+function splitRepairedMessage(input) {
+  let repaired = repairSendMessageInput(input);
+  return repaired !== undefined && repaired.unrepaired === undefined ? repaired.split : undefined;
 }
 //@ chunk-nw7jbebs.js:1807-2407 placement
-function repairSendMessageInput(e) {
-  if (!isPlainObject(e)) return;
-  let { message, summary } = e;
+function repairSendMessageInput(input) {
+  if (!isPlainObject(input)) return;
+  let { message, summary } = input;
   if (
-    typeof e.to !== "string" ||
+    typeof input.to !== "string" ||
     (message !== undefined && message !== null) ||
     typeof summary !== "string" ||
-    !Object.keys(e).every((key) => SEND_MESSAGE_FIELDS.has(key))
+    !Object.keys(input).every((key) => SEND_MESSAGE_FIELDS.has(key))
   )
     return;
   let index = summary.indexOf(SUMMARY_CLOSE_TAG);
   while (index !== -1) {
-    let c = index + SUMMARY_CLOSE_TAG.length;
-    while (c < summary.length && /\s/.test(summary.charAt(c))) c++;
-    let y = summary.startsWith(NAMESPACED_MESSAGE_PARAM, c)
+    let afterClose = index + SUMMARY_CLOSE_TAG.length;
+    while (afterClose < summary.length && /\s/.test(summary.charAt(afterClose))) afterClose++;
+    let openerForm = summary.startsWith(NAMESPACED_MESSAGE_PARAM, afterClose)
       ? "namespaced"
-      : summary.startsWith(BARE_MESSAGE_PARAM, c)
+      : summary.startsWith(BARE_MESSAGE_PARAM, afterClose)
         ? "bare"
         : undefined;
-    if (y !== undefined) {
-      let a = y === "namespaced" ? NAMESPACED_MESSAGE_PARAM : BARE_MESSAGE_PARAM;
-      let h = summary.slice(c + a.length).trimEnd();
-      if (h.trim().length === 0) return;
+    if (openerForm !== undefined) {
+      let opener = openerForm === "namespaced" ? NAMESPACED_MESSAGE_PARAM : BARE_MESSAGE_PARAM;
+      let messageText = summary.slice(afterClose + opener.length).trimEnd();
+      if (messageText.trim().length === 0) return;
       return {
         split: {
           summary: summary.slice(0, index).trim(),
-          message: h,
-          openerForm: y,
+          message: messageText,
+          openerForm,
         },
-        unrepaired: regExp.test(h) ? "markup" : looksLikeJsonPayload(h) ? "json" : undefined,
+        unrepaired: regExp.test(messageText)
+          ? "markup"
+          : looksLikeJsonPayload(messageText)
+            ? "json"
+            : undefined,
       };
     }
     index = summary.indexOf(SUMMARY_CLOSE_TAG, index + SUMMARY_CLOSE_TAG.length);
@@ -77,76 +90,81 @@ function repairSendMessageInput(e) {
 /**
  * 修复模型把 summary 等字段混进 message 的 SendMessage 输入，必要时拆分。
  */
-function normalizeSendMessageInput(e, { applySplit: n = true } = {}) {
-  if (!isPlainObject(e)) return null;
-  let { message, summary } = e;
-  let c = [];
-  let y = repairSendMessageInput(e);
-  let split = y?.unrepaired === undefined ? y?.split : undefined;
-  if (split !== undefined && n) {
+function normalizeSendMessageInput(input, { applySplit = true } = {}) {
+  if (!isPlainObject(input)) return null;
+  let { message, summary } = input;
+  let changes = [];
+  let repaired = repairSendMessageInput(input);
+  let split = repaired?.unrepaired === undefined ? repaired?.split : undefined;
+  if (split !== undefined && applySplit) {
     message = split.message;
     summary = split.summary;
-    c.push(`split_slipped_summary_${split.openerForm}`);
+    changes.push(`split_slipped_summary_${split.openerForm}`);
   }
   if (typeof message === "string" && (typeof summary !== "string" || summary.trim().length === 0)) {
     let trimmed = getFirstLine(message.trim()).trim();
     if (trimmed.length > 0) {
       summary = trimmed;
-      c.push("derive_summary");
+      changes.push("derive_summary");
     }
   }
   if (typeof summary === "string" && summary.length > SUMMARY_MAX_CHARS) {
     summary = truncateToLength(summary, SUMMARY_MAX_CHARS - 1) + "\u2026";
-    c.push("truncate_summary");
+    changes.push("truncate_summary");
   }
-  let [h] = c;
-  let b =
-    y?.unrepaired !== undefined
-      ? `split_slipped_summary_${y.split.openerForm}_unrepaired_${y.unrepaired}`
-      : split !== undefined && !n
+  let [firstChange] = changes;
+  let shapeClass =
+    repaired?.unrepaired !== undefined
+      ? `split_slipped_summary_${repaired.split.openerForm}_unrepaired_${repaired.unrepaired}`
+      : split !== undefined && !applySplit
         ? `split_slipped_summary_${split.openerForm}_detect_only`
-        : h;
-  if (b === undefined) return null;
+        : firstChange;
+  if (shapeClass === undefined) return null;
   return {
     input: {
-      ...e,
+      ...input,
       ...(message !== undefined && {
         message,
       }),
       summary,
     },
-    shapeClass: b,
+    shapeClass,
   };
 }
 //@ chunk-nw7jbebs.js:3132-3282 placement
-function looksLikeJsonPayload(e) {
-  let trimmed = e.trim();
+function looksLikeJsonPayload(text) {
+  let trimmed = text.trim();
   if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return false;
   try {
-    let r = jsonParse(trimmed);
-    return typeof r === "object" && r !== null;
+    let parsed = jsonParse(trimmed);
+    return typeof parsed === "object" && parsed !== null;
   } catch {
     return false;
   }
 }
 //@ chunk-nw7jbebs.js:3282-3400 placement
-var repairedMessageCache = identity(new Map(), (e) => e.clear());
-var MAX_REPAIR_CACHE = 64;
-var shutdownResponseSchema = DoctorLazy(() =>
-  u({
-    type: _enum(["shutdown_approved", "shutdown_rejected"]),
-    requestId: string(),
-  }),
-);
+var repairedMessageCache; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_REPAIR_CACHE;
+var shutdownResponseSchema;
+deferInit("chunk-nw7jbebs.js:3282", () => {
+  repairedMessageCache = identity(new Map(), (cache) => cache.clear());
+  MAX_REPAIR_CACHE = 64;
+  shutdownResponseSchema = DoctorLazy(() =>
+    objectSchema({
+      type: _enum(["shutdown_approved", "shutdown_rejected"]),
+      requestId: stringSchema(),
+    }),
+  );
+});
 //@ chunk-nw7jbebs.js:3400-3477 placement
-function rememberRepair(requestId, n) {
-  repairedMessageCache.set(requestId, n);
+function rememberRepair(requestId, fingerprint) {
+  repairedMessageCache.set(requestId, fingerprint);
   if (repairedMessageCache.size > MAX_REPAIR_CACHE)
     repairedMessageCache.delete(repairedMessageCache.keys().next().value ?? requestId);
 }
 //@ chunk-nw7jbebs.js:3477-3527 placement
-function wasRepaired(requestId, n) {
-  return n !== undefined && repairedMessageCache.get(requestId) === n;
+function wasRepaired(requestId, fingerprint) {
+  return fingerprint !== undefined && repairedMessageCache.get(requestId) === fingerprint;
 }
 //@ chunk-nw7jbebs.js:3527-3555 placement
 function forgetRepair(requestId) {
@@ -155,49 +173,53 @@ function forgetRepair(requestId) {
 //@ chunk-nw7jbebs.js:3555-3749 placement
 function scanRepairs(unread) {
   if (repairedMessageCache.size === 0) return;
-  for (let n of unread) {
-    let text = n?.text;
+  for (let message of unread) {
+    let text = message?.text;
     if (typeof text !== "string" || !text.includes('"shutdown_')) continue;
-    let s = shutdownResponseSchema().safeParse(safeParseJSON(text));
-    if (s.success) repairedMessageCache.delete(s.data.requestId);
+    let parsed = shutdownResponseSchema().safeParse(safeParseJSON(text));
+    if (parsed.success) repairedMessageCache.delete(parsed.data.requestId);
   }
 }
 //@ chunk-nw7jbebs.js:3749-3823 placement
-function internMailboxKey(e) {
-  let n = freezeDefinedFields(e);
-  return internFrozenTag(`\x00k${storageSpaceId(n)}`, {
+function internMailboxKey(key) {
+  let frozenKey = freezeDefinedFields(key);
+  return internFrozenTag(`\x00k${storageSpaceId(frozenKey)}`, {
     at: "store",
-    key: n,
+    key: frozenKey,
   });
 }
 //@ chunk-nw7jbebs.js:3823-3924 placement
-function mailboxKeyOf(e, n, r) {
-  if (typeof e === "string") return n(e);
-  let s = r(e.key);
-  return s === undefined ? undefined : internMailboxKey(s);
+function mailboxKeyOf(input, fromString, fromKey) {
+  if (typeof input === "string") return fromString(input);
+  let keyObject = fromKey(input.key);
+  return keyObject === undefined ? undefined : internMailboxKey(keyObject);
 }
 //@ chunk-nw7jbebs.js:3924-4019 placement = propagateAbort (1)
-var internedFrozenTagCache = new Map();
-var finalizationRegistry = new FinalizationRegistry((e) => {
-  if (internedFrozenTagCache.get(e)?.deref() === undefined) internedFrozenTagCache.delete(e);
+var internedFrozenTagCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var finalizationRegistry;
+deferInit("chunk-nw7jbebs.js:3924", () => {
+  internedFrozenTagCache = new Map();
+  finalizationRegistry = new FinalizationRegistry((tagKey) => {
+    if (internedFrozenTagCache.get(tagKey)?.deref() === undefined) internedFrozenTagCache.delete(tagKey);
+  });
 });
 //@ chunk-nw7jbebs.js:4019-4178 placement
-function internFrozenTag(e, n) {
-  let r = internedFrozenTagCache.get(e)?.deref();
-  if (r !== undefined) return r;
-  let s = Object.freeze({
-    ...n,
-    toString: () => e,
+function internFrozenTag(tagKey, fields) {
+  let existing = internedFrozenTagCache.get(tagKey)?.deref();
+  if (existing !== undefined) return existing;
+  let frozen = Object.freeze({
+    ...fields,
+    toString: () => tagKey,
   });
-  internedFrozenTagCache.set(e, new WeakRef(s));
-  finalizationRegistry.register(s, e);
-  return s;
+  internedFrozenTagCache.set(tagKey, new WeakRef(frozen));
+  finalizationRegistry.register(frozen, tagKey);
+  return frozen;
 }
 //@ chunk-nw7jbebs.js:4178-4339 placement
-function freezeDefinedFields(e) {
+function freezeDefinedFields(record) {
   return Object.freeze(
     Object.fromEntries(
-      Object.entries(e)
+      Object.entries(record)
         .filter(([, value]) => value !== undefined)
         .map(([key, value]) => [key, Array.isArray(value) ? Object.freeze([...value]) : value]),
     ),
@@ -208,35 +230,40 @@ function mailboxLedger() {
   return swarmHostState().mailbox.ledger;
 }
 //@ chunk-nw7jbebs.js:4379-4463 placement
-function findTeammateByName(e, roster) {
-  let r = slugifySessionName(e);
-  return Object.values(roster ?? {}).find((s) => slugifySessionName(s.name) === r);
+function findTeammateByName(name, roster) {
+  let slug = slugifySessionName(name);
+  return Object.values(roster ?? {}).find((member) => slugifySessionName(member.name) === slug);
 }
 //@ chunk-nw7jbebs.js:4463-4718 placement
-function hasPaneTeammates(from, n) {
-  if (n.isPaneTeammate) return false;
-  if (!Object.values(n.roster ?? {}).some((a) => a.tmuxPaneId === "leader")) return false;
-  let s = slugifySessionName(from);
-  if (s === TEAM_LEAD || s === USER || s === SYSTEM) return true;
-  let teammateByName = findTeammateByName(from, n.roster);
+function hasPaneTeammates(name, options) {
+  if (options.isPaneTeammate) return false;
+  if (!Object.values(options.roster ?? {}).some((member) => member.tmuxPaneId === "leader")) return false;
+  let slug = slugifySessionName(name);
+  if (slug === TEAM_LEAD || slug === USER || slug === SYSTEM) return true;
+  let teammateByName = findTeammateByName(name, options.roster);
   return teammateByName?.tmuxPaneId === "in-process" || teammateByName?.tmuxPaneId === "leader";
 }
 //@ chunk-nw7jbebs.js:4718-4951 placement
-function dedupeMailboxMessages(e, inboxPath, r) {
-  let s = mailboxLedger();
-  let c = new Set();
-  let y = new Map();
-  for (let a of e)
-    if (a.msg_id !== undefined && !c.has(a.msg_id) && s.wrote(inboxPath, a) && a.msg_id !== undefined) {
-      c.add(a.msg_id);
-      y.set(a, "verified");
-    } else y.set(a, hasPaneTeammates(a.from, r) ? "forged" : "unverifiable");
-  return y;
+function dedupeMailboxMessages(messages, inboxPath, options) {
+  let ledger = mailboxLedger();
+  let seenIds = new Set();
+  let provenance = new Map();
+  for (let message of messages)
+    if (
+      message.msg_id !== undefined &&
+      !seenIds.has(message.msg_id) &&
+      ledger.wrote(inboxPath, message) &&
+      message.msg_id !== undefined
+    ) {
+      seenIds.add(message.msg_id);
+      provenance.set(message, "verified");
+    } else provenance.set(message, hasPaneTeammates(message.from, options) ? "forged" : "unverifiable");
+  return provenance;
 }
 //@ chunk-nw7jbebs.js:5062-5156 placement
-function setLeaderTeamName(e) {
-  if (swarmHostState().taskList.leaderTeamName === e) return;
-  swarmHostState().taskList.leaderTeamName = e;
+function setLeaderTeamName(teamName) {
+  if (swarmHostState().taskList.leaderTeamName === teamName) return;
+  swarmHostState().taskList.leaderTeamName = teamName;
   notifyTasksUpdated();
 }
 //@ chunk-nw7jbebs.js:5156-5248 placement
@@ -246,8 +273,8 @@ function setSessionListId(sessionListId) {
   notifyTasksUpdated();
 }
 //@ chunk-nw7jbebs.js:5248-5306 placement
-function onTaskListUpdated(e) {
-  return swarmHostState().taskList.updated.subscribe(e);
+function onTaskListUpdated(listener) {
+  return swarmHostState().taskList.updated.subscribe(listener);
 }
 export {
   onTaskListUpdated,

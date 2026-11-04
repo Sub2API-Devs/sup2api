@@ -5,11 +5,11 @@
  * pieces: chunk-hq88884p.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_util_uri_escape } from "../../util-uri-escape/dist-cjs/index.js";
 
 //@ chunk-hq88884p.js:5166-5498 cjs-fingerprint
-var require_querystring_builder = x(function (cjsExports) {
+var require_querystring_builder = __commonJS(function (cjsExports) {
   var import_util_uri_escape = require_util_uri_escape();
   function buildQueryString(query) {
     let parts = [];

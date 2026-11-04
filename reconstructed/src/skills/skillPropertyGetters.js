@@ -13,10 +13,10 @@
 /**
  * 定义惰性 getter 属性。
  */
-function defineLazyGetter(n, e, t) {
-  if (typeof t !== "function") return;
-  Object.defineProperty(n, e, {
-    get: t,
+function defineLazyGetter(target, key, getter) {
+  if (typeof getter !== "function") return;
+  Object.defineProperty(target, key, {
+    get: getter,
     enumerable: true,
     configurable: true,
   });
@@ -25,9 +25,9 @@ function defineLazyGetter(n, e, t) {
 /**
  * 定义惰性 getter 属性（另一份）。
  */
-function defineLazyGetterAlt(n, e, disableModelInvocation) {
+function defineLazyGetterAlt(target, key, disableModelInvocation) {
   if (typeof disableModelInvocation !== "function") return;
-  Object.defineProperty(n, e, {
+  Object.defineProperty(target, key, {
     get: disableModelInvocation,
     enumerable: true,
     configurable: true,
@@ -37,9 +37,9 @@ function defineLazyGetterAlt(n, e, disableModelInvocation) {
 /**
  * 定义 policyGate getter。
  */
-function definePolicyGate(n, policyGate) {
+function definePolicyGate(target, policyGate) {
   if (typeof policyGate !== "function") return;
-  Object.defineProperty(n, "policyGate", {
+  Object.defineProperty(target, "policyGate", {
     get: policyGate,
     enumerable: true,
     configurable: true,

@@ -15,9 +15,9 @@ import { normalizeAgentIdOrNull } from "../../utils/agentId.js";
 /**
  * 任务 running/pending 且不在前台。
  */
-function waitForTaskCompletion(e) {
-  if (e.status !== "running" && e.status !== "pending") return false;
-  return !TaskOutputResultDisplay(e);
+function waitForTaskCompletion(task) {
+  if (task.status !== "running" && task.status !== "pending") return false;
+  return !TaskOutputResultDisplay(task);
 }
 //@ chunk-6vnxsn99.js:24706-24772 file-last-pair
 /**
@@ -25,13 +25,6 @@ function waitForTaskCompletion(e) {
  */
 function TaskOutputResultDisplay(t0) {
   return "isBackgrounded" in t0 && t0.isBackgrounded === false;
-}
-//@ chunk-18hwfzwa.js:729446-729515 fingerprint = waitForTaskCompletion (0.87)
-/**
- * 任务状态为 running 或 pending。
- */
-function isTaskRunningOrPending(NS) {
-  return NS.status === "running" || NS.status === "pending";
 }
 //@ chunk-z4g2ta8k.js:4871-5081 fingerprint = getTaskOutputData (0.311)
 /**
@@ -48,5 +41,12 @@ function getTaskOutputData(task) {
     BROADCAST_AGENT_TYPES.has(task.agent_type) &&
     normalizeAgentIdOrNull(task.task_id) !== null
   );
+}
+//@ chunk-18hwfzwa.js:729446-729515 fingerprint = waitForTaskCompletion (0.87)
+/**
+ * 任务状态为 running 或 pending。
+ */
+function isTaskRunningOrPending(task) {
+  return task.status === "running" || task.status === "pending";
 }
 export { TaskOutputResultDisplay, waitForTaskCompletion, isTaskRunningOrPending, getTaskOutputData };

@@ -21,22 +21,22 @@ import { effectiveSystemPromptText } from "../../utils/systemPrompt.js";
 /**
  * 上下文超出上限的提示。
  */
-function contextOverflowNotice(o) {
-  let a = contextOverflowKind(o);
-  if (a === null) return null;
-  let n = formatTokens(o.totalTokens - o.rawMaxTokens);
-  let i = formatTokens(o.rawMaxTokens);
-  if (a === "hard_limit") {
-    let p = isEnvTruthy(process.env.DISABLE_COMPACT) ? "/clear" : "/compact or /clear";
-    return `Context exceeds the ${i}-token limit by ${n} tokens \u2014 run ${p} to continue.`;
+function contextOverflowNotice(usage) {
+  let kind = contextOverflowKind(usage);
+  if (kind === null) return null;
+  let overBy = formatTokens(usage.totalTokens - usage.rawMaxTokens);
+  let maxTokens = formatTokens(usage.rawMaxTokens);
+  if (kind === "hard_limit") {
+    let commandHint = isEnvTruthy(process.env.DISABLE_COMPACT) ? "/clear" : "/compact or /clear";
+    return `Context exceeds the ${maxTokens}-token limit by ${overBy} tokens \u2014 run ${commandHint} to continue.`;
   }
-  let m = isEnvTruthy(process.env.DISABLE_COMPACT) ? "/clear" : "/compact";
-  return `Context is ${n} tokens past the ${i}-token compaction window \u2014 run ${m} to reduce usage.`;
+  let compactCommand = isEnvTruthy(process.env.DISABLE_COMPACT) ? "/clear" : "/compact";
+  return `Context is ${overBy} tokens past the ${maxTokens}-token compaction window \u2014 run ${compactCommand} to reduce usage.`;
 }
 //@ chunk-6a3xjg89.js:865-993 placement
-function contextOverflowKind(o) {
-  if (o.totalTokens <= o.rawMaxTokens) return null;
-  return o.autocompactSource === "auto" ? "hard_limit" : "compaction_window";
+function contextOverflowKind(usage) {
+  if (usage.totalTokens <= usage.rawMaxTokens) return null;
+  return usage.autocompactSource === "auto" ? "hard_limit" : "compaction_window";
 }
 //@ chunk-6a3xjg89.js:993-3125 fingerprint = formatContextAsMarkdownTable (0.861)
 function formatContextAsMarkdownTable(data) {
@@ -61,9 +61,9 @@ function formatContextAsMarkdownTable(data) {
 `;
   output += `**Tokens:** ${formatTokens(totalTokens)} / ${formatTokens(rawMaxTokens)} (${percentage}%)
 `;
-  let d = contextOverflowNotice(data);
-  if (d)
-    output += `**Over limit:** ${d}
+  let notice = contextOverflowNotice(data);
+  if (notice)
+    output += `**Over limit:** ${notice}
 `;
   output += `
 `;
@@ -178,10 +178,10 @@ function formatContextAsMarkdownTable(data) {
     output += `|-------|--------|--------|
 `;
     for (let skill of skills.skillFrontmatter) {
-      let s =
+      let skillLines =
         getSourceDisplayName(skill.source) +
         (skill.pluginName && skill.source !== "syncedSkills" ? ` (${skill.pluginName})` : "");
-      output += `| ${skill.name} | ${s} | ${formatTokenEstimate(skill.tokens)} |
+      output += `| ${skill.name} | ${skillLines} | ${formatTokenEstimate(skill.tokens)} |
 `;
     }
     output += `
@@ -211,7 +211,7 @@ async function collectContextData(context) {
   } = context;
   let messages_2 = messagesSinceCompactBoundary(messages);
   let appState = getAppState();
-  let s = await analyzeContextUsage(
+  let analysis = await analyzeContextUsage(
     messages_2,
     mainLoopModel,
     async () => appState.toolPermissionContext,
@@ -240,17 +240,17 @@ async function collectContextData(context) {
   );
   return isHostedWorker(session)
     ? {
-        ...s,
+        ...analysis,
         deferredBuiltinTools: undefined,
         systemTools: undefined,
         systemPromptSections: undefined,
       }
-    : s;
+    : analysis;
 }
 //@ chunk-6a3xjg89.js:3849-4031 placement
 async function call(args, context) {
   let contextData = await collectContextData(context);
-  let m = isBridgeOrTransport(context.session)
+  let usage = isBridgeOrTransport(context.session)
     ? {
         ...contextData,
         memoryFiles: [],
@@ -261,57 +261,57 @@ async function call(args, context) {
     value: formatContextAsMarkdownTable(
       isHostedWorker(context.session)
         ? {
-            ...m,
+            ...usage,
             messageBreakdown: undefined,
           }
-        : m,
+        : usage,
     ),
-    contextUsage: buildContextUsage(m),
+    contextUsage: buildContextUsage(usage),
   };
 }
 //@ chunk-6a3xjg89.js:4031-4764 placement
-function buildContextUsage(o) {
-  let a = contextOverflowKind(o);
+function buildContextUsage(usage) {
+  let kind = contextOverflowKind(usage);
   return {
-    model: o.model,
-    total_tokens: o.totalTokens,
-    raw_max_tokens: o.rawMaxTokens,
-    percentage: o.percentage,
-    ...(a !== null && {
+    model: usage.model,
+    total_tokens: usage.totalTokens,
+    raw_max_tokens: usage.rawMaxTokens,
+    percentage: usage.percentage,
+    ...(kind !== null && {
       over_limit: {
-        tokens_over: o.totalTokens - o.rawMaxTokens,
-        kind: a,
+        tokens_over: usage.totalTokens - usage.rawMaxTokens,
+        kind,
       },
     }),
-    categories: o.categories.map((category) => ({
+    categories: usage.categories.map((category) => ({
       name: category.name,
       tokens: category.tokens,
       kind: category.kind,
     })),
-    mcp_tools: o.mcpTools.map((mcpTool) => ({
+    mcp_tools: usage.mcpTools.map((mcpTool) => ({
       name: mcpTool.name,
       server_name: mcpTool.serverName,
       tokens: mcpTool.tokens,
     })),
-    memory_files: o.memoryFiles.map((memoryFile) => ({
+    memory_files: usage.memoryFiles.map((memoryFile) => ({
       path: memoryFile.path,
       type: memoryFile.type,
       tokens: memoryFile.tokens,
     })),
-    agents: o.agents.map((agent) => ({
+    agents: usage.agents.map((agent) => ({
       agent_type: agent.agentType,
       source: agent.source,
       tokens: agent.tokens,
     })),
-    ...(o.skills &&
-      o.skills.skillFrontmatter.length > 0 && {
-        skills: o.skills.skillFrontmatter.map((n) => ({
-          name: n.name,
-          source: n.source,
-          ...(n.pluginName !== undefined && {
-            plugin_name: n.pluginName,
+    ...(usage.skills &&
+      usage.skills.skillFrontmatter.length > 0 && {
+        skills: usage.skills.skillFrontmatter.map((skill) => ({
+          name: skill.name,
+          source: skill.source,
+          ...(skill.pluginName !== undefined && {
+            plugin_name: skill.pluginName,
           }),
-          tokens: n.tokens,
+          tokens: skill.tokens,
         })),
       }),
   };
@@ -331,4 +331,11 @@ async function collectContextData_2(context) {
     appendSystemPrompt: context.options.appendSystemPrompt,
   });
 }
-export { contextOverflowNotice, formatContextAsMarkdownTable, collectContextData, collectContextData_2 };
+export {
+  contextOverflowNotice,
+  formatContextAsMarkdownTable,
+  collectContextData,
+  collectContextData_2,
+  buildContextUsage,
+  call,
+};

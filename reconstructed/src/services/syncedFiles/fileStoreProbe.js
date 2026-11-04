@@ -73,51 +73,51 @@ async function getManifestWithRetry(getRow, timing) {
  * 探测云会话同步文件存储是否可用：未开启则公布 off；否则取一次 manifest，能取到为 served、被拒为 refused；不可达时等待有行暂存后再试，并公布结论。
  */
 async function probeFileStore(probe, timing = PROBE_TIMING) {
-  let announce = (i) => {
+  let announce = (verdict) => {
     try {
-      probe.announceVerdict(i);
+      probe.announceVerdict(verdict);
     } catch {
       logForDiagnosticsNoPII("error", "file_store_verdict_publish_threw", {});
     }
-    return i;
+    return verdict;
   };
-  let o;
+  let enabled;
   try {
-    o = await probe.enabled();
+    enabled = await probe.enabled();
   } catch {
-    o = false;
+    enabled = false;
   }
-  if (!o) return announce("off");
+  if (!enabled) return announce("off");
   let wakeQueue = createWakeQueue(probe.onRowStaged ?? rowStagedSignal.subscribe);
-  let n = await probeOnce(probe, timing, announce, false);
+  let firstVerdict = await probeOnce(probe, timing, announce, false);
   (async () => {
-    let i = n;
-    while (i === null) {
+    let verdict = firstVerdict;
+    while (verdict === null) {
       await wakeQueue.next();
-      i = await probeOnce(probe, timing, announce, true);
+      verdict = await probeOnce(probe, timing, announce, true);
     }
     wakeQueue.close();
   })();
-  return n;
+  return firstVerdict;
 }
 //@ chunk-240k3fwa.js:4697-4848 placement
-function createWakeQueue(r) {
-  let e = false;
-  let t = null;
-  let close = r(() => {
-    if (t !== null) {
-      let s = t;
-      t = null;
-      s();
-    } else e = true;
+function createWakeQueue(onChange) {
+  let pendingWake = false;
+  let resolveNext = null;
+  let close = onChange(() => {
+    if (resolveNext !== null) {
+      let resolve = resolveNext;
+      resolveNext = null;
+      resolve();
+    } else pendingWake = true;
   });
   return {
     next: () =>
       new Promise((resolve) => {
-        if (e) {
-          e = false;
+        if (pendingWake) {
+          pendingWake = false;
           resolve();
-        } else t = resolve;
+        } else resolveNext = resolve;
       }),
     close,
   };
@@ -128,23 +128,23 @@ function createWakeQueue(r) {
  */
 async function probeOnce(probe, timing, announce, afterStage) {
   for (let i = 1; ; i++) {
-    let n;
+    let result;
     try {
-      n = await getManifestWithRetry(probe.getRow, timing);
+      result = await getManifestWithRetry(probe.getRow, timing);
     } catch {
-      n = {
+      result = {
         kind: "unreachable",
       };
     }
-    switch (n.kind) {
+    switch (result.kind) {
       case "answered":
         return announce("served");
       case "unreachable":
         return null;
       case "refused":
-        if (afterStage && n.errorKind === "auth") {
+        if (afterStage && result.errorKind === "auth") {
           logForDiagnosticsNoPII("warn", "file_store_probe_refused_after_stage", {
-            status: n.status,
+            status: result.status,
           });
           return null;
         }
@@ -155,12 +155,12 @@ async function probeOnce(probe, timing, announce, afterStage) {
           continue;
         }
         logForDiagnosticsNoPII("warn", "file_store_probe_refused", {
-          kind: n.errorKind,
-          status: n.status,
+          kind: result.errorKind,
+          status: result.status,
         });
         logFeatureSad("ccr_dir_sync_seed", "manifest_refused", {
-          status: n.status,
-          refusal: fromEnum(n.errorKind),
+          status: result.status,
+          refusal: fromEnum(result.errorKind),
         });
         return announce("refused");
     }
@@ -186,24 +186,25 @@ function _() {
 }
 //@ chunk-240k3fwa.js:5613-5680 placement
 function startFileStoreProbe(
-  r,
+  storage,
   probe = _(),
-  t = {
+  options = {
     git: isSettingsToCloudForcedOff(),
   },
-  o = t.git ? storageSlotOrNull(r) : null,
+  slot = options.git ? storageSlotOrNull(storage) : null,
 ) {
   probeFileStore(probe);
   return NOOP_TURN_HOOKS;
 }
 //@ chunk-240k3fwa.js:5680-5706 placement
-function storageSlotOrNull(r) {
+function storageSlotOrNull(storage) {
   return null;
 }
 //@ chunk-240k3fwa.js:5706-5865 placement
 function workerEpoch() {
   let CLAUDE_CODE_WORKER_EPOCH = getPreSettingsEnvSnapshot().CLAUDE_CODE_WORKER_EPOCH;
   if (CLAUDE_CODE_WORKER_EPOCH === undefined) return 1;
-  let e = Number.parseInt(CLAUDE_CODE_WORKER_EPOCH, 10);
-  return Number.isInteger(e) && e >= 1 ? e : Number.MAX_SAFE_INTEGER;
+  let epoch = Number.parseInt(CLAUDE_CODE_WORKER_EPOCH, 10);
+  return Number.isInteger(epoch) && epoch >= 1 ? epoch : Number.MAX_SAFE_INTEGER;
 }
+export { startFileStoreProbe };

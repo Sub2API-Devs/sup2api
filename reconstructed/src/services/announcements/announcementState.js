@@ -10,6 +10,7 @@
  */
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-3w159cb0.js:229-888 placement
 class AnnouncementState {
@@ -39,7 +40,10 @@ class AnnouncementState {
   }
 }
 //@ chunk-3w159cb0.js:888-914 placement
-var announcementStateByHost = new SessionRootSlot(() => new AnnouncementState());
+var announcementStateByHost; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3w159cb0.js:888", () => {
+  announcementStateByHost = new SessionRootSlot(() => new AnnouncementState());
+});
 //@ chunk-3w159cb0.js:914-947 placement
 function announcementState() {
   return announcementStateByHost.of(getRootSession());

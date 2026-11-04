@@ -5,10 +5,10 @@
  * pieces: chunk-na3pph4p.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-na3pph4p.js:55402-56876 cjs-fingerprint
-var require_base64_js = x(function (cjsExports) {
+var require_base64_js = __commonJS(function (cjsExports) {
   cjsExports.byteLength = byteLength;
   cjsExports.toByteArray = toByteArray;
   cjsExports.fromByteArray = fromByteArray;

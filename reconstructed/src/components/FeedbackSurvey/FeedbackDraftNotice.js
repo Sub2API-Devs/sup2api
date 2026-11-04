@@ -8,11 +8,17 @@
  * pieces: chunk-18hwfzwa.js (13)
  * attribution: placement 13
  */
-import { init_react_production, y, R, zt, P } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useLayoutEffect,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { measureText } from "../../utils/Cursor.js";
 import { plural } from "../../utils/stringUtils.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import {
   stripInvisibleCharsMultiLine,
@@ -52,16 +58,23 @@ import { useKeybinding } from "../../keybindings/useKeybinding.js";
 import { Byline } from "../design-system/Byline.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { StatusIcon } from "../design-system/StatusIcon.js";
-import { TEARDROP_ASTERISK } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { TEARDROP_ASTERISK } from "../../constants/figures.js";
 import { ShutdownRequestDisplay } from "../messages/ShutdownMessage.js";
 import { getEffortLevelIfSupported } from "../../utils/effort.js";
 import { getMainLoopModel } from "../../utils/model/model.js";
 import { useQueuedMessageText } from "../../context/QueuedMessageContext.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:981168-981172 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:981168", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:981172-981176 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:981172", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:981176-981186 placement
 var MAX_DRAFT_TURN_OFF_DECLINES = 2;
 //@ chunk-18hwfzwa.js:981186-981257 placement
@@ -71,17 +84,17 @@ function shouldShowTurnOffPrompt() {
 //@ chunk-18hwfzwa.js:981257-981374 placement
 function recordDraftTurnOffDecline(storageV5) {
   saveGlobalConfig(
-    (x) => ({
-      ...x,
-      feedbackDraftsTurnOffPromptDeclines: (x.feedbackDraftsTurnOffPromptDeclines ?? 0) + 1,
+    (config) => ({
+      ...config,
+      feedbackDraftsTurnOffPromptDeclines: (config.feedbackDraftsTurnOffPromptDeclines ?? 0) + 1,
     }),
     storageV5,
   );
 }
 //@ chunk-18hwfzwa.js:981374-981743 placement
-function feedbackDraftPreviewLines(h, columns, preview = false) {
-  if (h.trim() === "") return "Details empty.";
-  let lines = h.split(`
+function feedbackDraftPreviewLines(text, columns, preview = false) {
+  if (text.trim() === "") return "Details empty.";
+  let lines = text.split(`
 `);
   let max = Math.max(1, columns - 6);
   let flattened = lines.flatMap((line) => measureText(line, max).lines.map((line) => line.text));
@@ -89,40 +102,40 @@ function feedbackDraftPreviewLines(h, columns, preview = false) {
     preview
       ? `Draft preview, ${lines.length} ${plural(lines.length, "line")}:`
       : `${lines.length} ${plural(lines.length, "line")}:`,
-    ...flattened.map((Re) => `> ${Re}`),
+    ...flattened.map((line) => `> ${line}`),
     preview ? "End of preview. Review the full draft with /feedback." : "End of details.",
   ].join(`
 `);
 }
 //@ chunk-18hwfzwa.js:981743-982035 placement
-function truncateToWrappedLines(h, x, maxRows) {
-  let L = [];
-  let ee = 0;
-  for (let line of h.split(`
+function truncateToWrappedLines(text, width, maxRows) {
+  let kept = [];
+  let usedRows = 0;
+  for (let line of text.split(`
 `)) {
-    let lines = measureText(line, Math.max(1, x)).lines;
-    if (ee + lines.length <= maxRows) {
-      L.push(line);
-      ee += lines.length;
+    let lines = measureText(line, Math.max(1, width)).lines;
+    if (usedRows + lines.length <= maxRows) {
+      kept.push(line);
+      usedRows += lines.length;
       continue;
     }
-    let Be = maxRows - ee;
-    if (Be > 0) {
-      let startOffset = lines[Be]?.startOffset;
-      L.push(startOffset === undefined ? line : line.slice(0, startOffset).trimEnd());
+    let remainingRows = maxRows - usedRows;
+    if (remainingRows > 0) {
+      let startOffset = lines[remainingRows]?.startOffset;
+      kept.push(startOffset === undefined ? line : line.slice(0, startOffset).trimEnd());
     }
-    L.push("\u2026");
-    return L.join(`
+    kept.push("\u2026");
+    return kept.join(`
 `);
   }
-  return h;
+  return text;
 }
 //@ chunk-18hwfzwa.js:982035-982718 placement
 function WrappedTextBox(props) {
-  let $ = w(8);
-  let { value: x, bold, dim, columns, maxRows, preview } = props;
+  let $ = useMemoCache(8);
+  let { value, bold, dim, columns, maxRows, preview } = props;
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let We;
+  let box;
   if (
     $[0] !== bold ||
     $[1] !== columns ||
@@ -130,11 +143,12 @@ function WrappedTextBox(props) {
     $[3] !== isScreenReaderEnabled ||
     $[4] !== maxRows ||
     $[5] !== preview ||
-    $[6] !== x
+    $[6] !== value
   ) {
-    let ze = stripInvisibleCharsMultiLine(x);
-    let Xe = maxRows === undefined ? ze : truncateToWrappedLines(ze, Math.max(1, columns - 2), maxRows);
-    We = jsxProd_default(Box, {
+    let cleaned = stripInvisibleCharsMultiLine(value);
+    let text =
+      maxRows === undefined ? cleaned : truncateToWrappedLines(cleaned, Math.max(1, columns - 2), maxRows);
+    box = jsxProd_default(Box, {
       borderStyle: isScreenReaderEnabled ? undefined : "single",
       borderLeft: true,
       borderTop: false,
@@ -148,19 +162,19 @@ function WrappedTextBox(props) {
             bold,
             dimColor: dim,
             wrap: "wrap",
-            children: feedbackDraftPreviewLines(Xe, columns, preview),
+            children: feedbackDraftPreviewLines(text, columns, preview),
           })
         : sequential.level === 0
           ? jsxProd_default(Text, {
               bold,
               dimColor: dim,
               wrap: "wrap",
-              children: Xe,
+              children: text,
             })
           : jsxProd_default(MarkdownText_2, {
               promptMode: true,
               skipTokenCache: true,
-              children: Xe,
+              children: text,
             }),
     });
     $[0] = bold;
@@ -169,10 +183,10 @@ function WrappedTextBox(props) {
     $[3] = isScreenReaderEnabled;
     $[4] = maxRows;
     $[5] = preview;
-    $[6] = x;
-    $[7] = We;
-  } else We = $[7];
-  return We;
+    $[6] = value;
+    $[7] = box;
+  } else box = $[7];
+  return box;
 }
 //@ chunk-18hwfzwa.js:982718-982833 placement
 var FEEDBACK_KIND_LABELS = {
@@ -195,169 +209,180 @@ function FeedbackDraftNotice({ isLoading, surveyActive, setInputValue, onOpenFee
   let shortDraftValue = useShortDraftValue();
   let { rows, columns } = useTerminalSize();
   let clock = useClock();
-  let [At, It] = y("idle");
-  let [Ot, Et] = y(null);
-  let [Dt, Lt] = y(false);
-  let oo = R(false);
-  let draftIdRef = R(notice?.draftId ?? null);
-  let io = R(null);
-  let so = R(null);
-  let po = R(false);
-  let ao = R(null);
-  let co = isFeedbackDraftsEnabled();
-  let bo = getFeedbackDraftsSetting() === "quiet" || rows < MAX_TITLE_PREVIEW_CHARS;
-  let Ao = co && notice !== null;
-  let Bo = isLoading || surveyActive;
-  let Ro = At === "dismissPrompt" || At === "offConfirm";
-  let Ho = Ro || (Ao && !bo);
-  zt(() => {
-    onHoldsBandChange?.(Ho);
+  let [mode, setMode] = useState("idle");
+  let [errorText, setErrorText] = useState(null);
+  let [isOrgRefusal, setIsOrgRefusal] = useState(false);
+  let sendingRef = useRef(false);
+  let draftIdRef = useRef(notice?.draftId ?? null);
+  let sentTimerRef = useRef(null);
+  let offConfirmTimerRef = useRef(null);
+  let declinedTurnOffRef = useRef(false);
+  let dismissPromptAtRef = useRef(null);
+  let draftsEnabled = isFeedbackDraftsEnabled();
+  let isQuietMode = getFeedbackDraftsSetting() === "quiet" || rows < MAX_TITLE_PREVIEW_CHARS;
+  let hasNotice = draftsEnabled && notice !== null;
+  let isSuppressed = isLoading || surveyActive;
+  let isPromptMode = mode === "dismissPrompt" || mode === "offConfirm";
+  let holdsBand = isPromptMode || (hasNotice && !isQuietMode);
+  useLayoutEffect(() => {
+    onHoldsBandChange?.(holdsBand);
     return () => onHoldsBandChange?.(false);
-  }, [Ho, onHoldsBandChange]);
-  let [Io, Wo] = y(!Bo && !bo);
-  P(() => {
-    if (Bo || bo || Ro) {
-      Wo(false);
+  }, [holdsBand, onHoldsBandChange]);
+  let [isVisible, setIsVisible] = useState(!isSuppressed && !isQuietMode);
+  useEffect(() => {
+    if (isSuppressed || isQuietMode || isPromptMode) {
+      setIsVisible(false);
       return;
     }
-    if (Io) return;
-    return clock.setTimeout(() => Wo(true), NOTICE_SHOW_DELAY_MS);
-  }, [Bo, bo, Ro, Io, clock]);
-  function mn() {
-    if (io.current !== null) {
-      io.current();
-      io.current = null;
+    if (isVisible) return;
+    return clock.setTimeout(() => setIsVisible(true), NOTICE_SHOW_DELAY_MS);
+  }, [isSuppressed, isQuietMode, isPromptMode, isVisible, clock]);
+  function clearSentTimer() {
+    if (sentTimerRef.current !== null) {
+      sentTimerRef.current();
+      sentTimerRef.current = null;
     }
   }
-  function Cn() {
-    if (so.current !== null) {
-      so.current();
-      so.current = null;
+  function clearOffConfirmTimer() {
+    if (offConfirmTimerRef.current !== null) {
+      offConfirmTimerRef.current();
+      offConfirmTimerRef.current = null;
     }
   }
   if (notice !== null && notice.draftId !== draftIdRef.current) {
     draftIdRef.current = notice.draftId;
-    mn();
-    if (At !== "idle" && At !== "dismissPrompt" && At !== "offConfirm") {
-      It("idle");
-      Et(null);
-      Lt(false);
-      oo.current = false;
+    clearSentTimer();
+    if (mode !== "idle" && mode !== "dismissPrompt" && mode !== "offConfirm") {
+      setMode("idle");
+      setErrorText(null);
+      setIsOrgRefusal(false);
+      sendingRef.current = false;
     }
   }
-  P(() => {
+  useEffect(() => {
     if (
-      (isLoading || surveyActive || bo) &&
-      (At === "confirmSend" || At === "dismissPrompt" || At === "offConfirm")
+      (isLoading || surveyActive || isQuietMode) &&
+      (mode === "confirmSend" || mode === "dismissPrompt" || mode === "offConfirm")
     ) {
-      Cn();
-      It("idle");
+      clearOffConfirmTimer();
+      setMode("idle");
     }
-  }, [isLoading, surveyActive, bo, At]);
-  P(() => {
-    if (At === "dismissPrompt" && shortDraftValue !== "" && shortDraftValue.normalize("NFKC") !== "0") {
-      if (!(ao.current !== null && clock.now() - ao.current < DIGIT_HOTKEY_HOLD_MS) && !po.current) {
-        po.current = true;
+  }, [isLoading, surveyActive, isQuietMode, mode]);
+  useEffect(() => {
+    if (mode === "dismissPrompt" && shortDraftValue !== "" && shortDraftValue.normalize("NFKC") !== "0") {
+      if (
+        !(
+          dismissPromptAtRef.current !== null &&
+          clock.now() - dismissPromptAtRef.current < DIGIT_HOTKEY_HOLD_MS
+        ) &&
+        !declinedTurnOffRef.current
+      ) {
+        declinedTurnOffRef.current = true;
         recordDraftTurnOffDecline(storageV5);
         logEvent("tengu_feedback_turnoff_prompt_declined", {});
       }
-      It("idle");
+      setMode("idle");
     }
-  }, [At, shortDraftValue, storageV5, clock]);
-  P(() => {
-    if (!Ao || notice === null) return;
-    if (Bo || bo) return;
-    if (Ro) return;
-    if (!Io) return;
-    No(notice);
-  }, [Ao, bo, Bo, Io, Ro, notice]);
-  P(
+  }, [mode, shortDraftValue, storageV5, clock]);
+  useEffect(() => {
+    if (!hasNotice || notice === null) return;
+    if (isSuppressed || isQuietMode) return;
+    if (isPromptMode) return;
+    if (!isVisible) return;
+    logNoticeShown(notice);
+  }, [hasNotice, isQuietMode, isSuppressed, isVisible, isPromptMode, notice]);
+  useEffect(
     () => () => {
-      if (io.current !== null && draftIdRef.current !== null) {
-        mn();
+      if (sentTimerRef.current !== null && draftIdRef.current !== null) {
+        clearSentTimer();
         dismissFeedbackNotice_2(draftIdRef.current);
       }
-      Cn();
+      clearOffConfirmTimer();
     },
     [],
   );
-  function No(notice) {
+  function logNoticeShown(notice) {
     if (markDraftNoticeLogged(notice.draftId))
       logEvent("tengu_feedback_notice_shown", {
         type: fromEnum(notice.type),
       });
   }
-  function vo() {
+  function ensureNoticeLogged() {
     if (notice === null) return;
-    No(notice);
+    logNoticeShown(notice);
   }
-  function Yo(Kn) {
-    mn();
-    Cn();
-    if (Kn !== "sent")
-      logEvent(Kn === "dismiss" ? "tengu_feedback_notice_dismissed" : "tengu_feedback_notice_opened", {
+  function finishNotice(via) {
+    clearSentTimer();
+    clearOffConfirmTimer();
+    if (via !== "sent")
+      logEvent(via === "dismiss" ? "tengu_feedback_notice_dismissed" : "tengu_feedback_notice_opened", {
         type: fromEnum(notice?.type ?? "bug"),
-        via: fromEnum(Kn),
+        via: fromEnum(via),
       });
-    oo.current = false;
-    It("idle");
-    Et(null);
-    Lt(false);
+    sendingRef.current = false;
+    setMode("idle");
+    setErrorText(null);
+    setIsOrgRefusal(false);
     dismissFeedbackNotice();
   }
-  function kn() {
-    Yo("dismiss");
+  function dismissNotice() {
+    finishNotice("dismiss");
     if (shouldShowTurnOffPrompt()) {
-      ao.current = clock.now();
-      po.current = false;
+      dismissPromptAtRef.current = clock.now();
+      declinedTurnOffRef.current = false;
       logEvent("tengu_feedback_turnoff_prompt_shown", {});
-      It("dismissPrompt");
+      setMode("dismissPrompt");
     }
   }
-  function Fn() {
-    return ao.current !== null && clock.now() - ao.current < DIGIT_HOTKEY_HOLD_MS;
+  function isWithinDigitHold() {
+    return (
+      dismissPromptAtRef.current !== null && clock.now() - dismissPromptAtRef.current < DIGIT_HOTKEY_HOLD_MS
+    );
   }
-  function bn() {
-    return ao.current !== null && clock.now() - ao.current < DIGIT_HOTKEY_HOLD_MS + DIGIT_HOTKEY_DELAY_MS;
+  function isWithinDigitDoubleHold() {
+    return (
+      dismissPromptAtRef.current !== null &&
+      clock.now() - dismissPromptAtRef.current < DIGIT_HOTKEY_HOLD_MS + DIGIT_HOTKEY_DELAY_MS
+    );
   }
-  function Go() {
-    if (!Fn() && !po.current) {
-      po.current = true;
+  function declineTurnOff() {
+    if (!isWithinDigitHold() && !declinedTurnOffRef.current) {
+      declinedTurnOffRef.current = true;
       recordDraftTurnOffDecline(storageV5);
       logEvent("tengu_feedback_turnoff_prompt_declined", {});
     }
-    It("idle");
+    setMode("idle");
   }
-  function hn() {
+  function turnOffDrafts() {
     setFeedbackDraftsSetting("off", {
       storageV5,
       via: "card",
     });
     dismissFeedbackNotice();
-    Cn();
-    It("offConfirm");
-    so.current = clock.setTimeout(() => {
-      so.current = null;
-      It("idle");
+    clearOffConfirmTimer();
+    setMode("offConfirm");
+    offConfirmTimerRef.current = clock.setTimeout(() => {
+      offConfirmTimerRef.current = null;
+      setMode("idle");
     }, OFF_CONFIRM_RESET_MS);
   }
-  async function Mn(draftId) {
-    if (oo.current) return;
-    oo.current = true;
-    It("sending");
-    Et(null);
-    Lt(false);
-    let Wn;
+  async function sendDraft(draftId) {
+    if (sendingRef.current) return;
+    sendingRef.current = true;
+    setMode("sending");
+    setErrorText(null);
+    setIsOrgRefusal(false);
+    let submitResult;
     try {
       let { queued } = await listFeedbackDrafts(undefined, storageV5);
-      let found = queued.find((Un) => Un.draft_id === draftId);
+      let found = queued.find((draft) => draft.draft_id === draftId);
       if (!found) {
-        oo.current = false;
+        sendingRef.current = false;
         dismissFeedbackNotice_2(draftId);
-        if (draftIdRef.current === draftId) It("idle");
+        if (draftIdRef.current === draftId) setMode("idle");
         return;
       }
-      Wn = await submitFeedbackDraft({
+      submitResult = await submitFeedbackDraft({
         draft: found,
         includeTranscript: false,
         currentSessionMessages: [],
@@ -367,88 +392,92 @@ function FeedbackDraftNotice({ isLoading, surveyActive, setInputValue, onOpenFee
         credentials,
       });
     } catch {
-      Wn = {
+      submitResult = {
         success: false,
         error: "Couldn't send feedback.",
       };
     }
     logEvent("tengu_feedback_card_send", {
       type: fromEnum(notice?.type ?? "bug"),
-      success: fromNumber(Wn.success ? 1 : 0),
+      success: fromNumber(submitResult.success ? 1 : 0),
     });
     if (draftIdRef.current !== draftId) return;
-    if (!Wn.success) {
-      oo.current = false;
-      Et(Wn.error);
-      Lt(Wn.orgRefusalReason !== undefined);
-      It("error");
+    if (!submitResult.success) {
+      sendingRef.current = false;
+      setErrorText(submitResult.error);
+      setIsOrgRefusal(submitResult.orgRefusalReason !== undefined);
+      setMode("error");
       return;
     }
-    It("sent");
-    io.current = clock.setTimeout(() => Yo("sent"), SENT_STATUS_RESET_MS);
+    setMode("sent");
+    sentTimerRef.current = clock.setTimeout(() => finishNotice("sent"), SENT_STATUS_RESET_MS);
   }
   useDigitHotkeys({
     inputValue: shortDraftValue,
     enterConfirms: false,
-    isValidDigit: (Kn) =>
-      At === "dismissPrompt" ? Kn === "0" : Kn === "0" || Kn === "1" || (Kn === "2" && At !== "error"),
+    isValidDigit: (digit) =>
+      mode === "dismissPrompt"
+        ? digit === "0"
+        : digit === "0" || digit === "1" || (digit === "2" && mode !== "error"),
     enabled:
-      !bo &&
-      !Bo &&
-      ((Ao && (At === "idle" || At === "confirmSend" || At === "error")) || At === "dismissPrompt"),
-    onDigit: (Kn) => {
+      !isQuietMode &&
+      !isSuppressed &&
+      ((hasNotice && (mode === "idle" || mode === "confirmSend" || mode === "error")) ||
+        mode === "dismissPrompt"),
+    onDigit: (digit) => {
       setInputValue("");
-      if (At === "dismissPrompt") {
-        if (!bn()) hn();
+      if (mode === "dismissPrompt") {
+        if (!isWithinDigitDoubleHold()) turnOffDrafts();
         return;
       }
       if (notice === null) return;
-      vo();
-      if (Kn === "1") {
-        Yo("review");
+      ensureNoticeLogged();
+      if (digit === "1") {
+        finishNotice("review");
         onOpenFeedback();
-      } else if (Kn === "0") {
-        if (At === "confirmSend") It("idle");
-        else kn();
-      } else if (At === "idle") It("confirmSend");
-      else if (At === "confirmSend") Mn(notice.draftId);
+      } else if (digit === "0") {
+        if (mode === "confirmSend") setMode("idle");
+        else dismissNotice();
+      } else if (mode === "idle") setMode("confirmSend");
+      else if (mode === "confirmSend") sendDraft(notice.draftId);
     },
   });
-  let Sn = R(Bo ? null : clock.now());
-  P(() => {
-    if (!Bo) Sn.current = clock.now();
-  }, [Bo, clock]);
-  let $n = R(Ro);
-  P(() => {
-    let Kn = $n.current;
-    $n.current = Ro;
-    if (Kn && !Ro) Sn.current = clock.now();
-  }, [Ro, clock]);
+  let shownAtRef = useRef(isSuppressed ? null : clock.now());
+  useEffect(() => {
+    if (!isSuppressed) shownAtRef.current = clock.now();
+  }, [isSuppressed, clock]);
+  let previousPromptModeRef = useRef(isPromptMode);
+  useEffect(() => {
+    let wasPromptMode = previousPromptModeRef.current;
+    previousPromptModeRef.current = isPromptMode;
+    if (wasPromptMode && !isPromptMode) shownAtRef.current = clock.now();
+  }, [isPromptMode, clock]);
   useKeybinding(
     "chat:cancel",
     () => {
-      if (Sn.current !== null && clock.now() - Sn.current < DIGIT_HOTKEY_HOLD_MS) return;
-      if (At === "dismissPrompt") {
-        Go();
+      if (shownAtRef.current !== null && clock.now() - shownAtRef.current < DIGIT_HOTKEY_HOLD_MS) return;
+      if (mode === "dismissPrompt") {
+        declineTurnOff();
         return;
       }
-      vo();
-      if (At === "confirmSend") {
-        It("idle");
+      ensureNoticeLogged();
+      if (mode === "confirmSend") {
+        setMode("idle");
         return;
       }
-      kn();
+      dismissNotice();
     },
     {
       context: "Chat",
       isActive:
-        !bo &&
-        !Bo &&
+        !isQuietMode &&
+        !isSuppressed &&
         shortDraftValue === "" &&
-        (At === "dismissPrompt" || (Ao && At !== "sending" && At !== "sent" && At !== "offConfirm")),
+        (mode === "dismissPrompt" ||
+          (hasNotice && mode !== "sending" && mode !== "sent" && mode !== "offConfirm")),
     },
   );
-  if (At === "dismissPrompt")
+  if (mode === "dismissPrompt")
     return jsxProd_default(Box, {
       marginTop: 1,
       marginBottom: 1,
@@ -474,7 +503,7 @@ function FeedbackDraftNotice({ isLoading, surveyActive, setInputValue, onOpenFee
         ],
       }),
     });
-  if (At === "offConfirm")
+  if (mode === "offConfirm")
     return jsxProd_default(Box, {
       marginTop: 1,
       marginBottom: 1,
@@ -488,14 +517,15 @@ function FeedbackDraftNotice({ isLoading, surveyActive, setInputValue, onOpenFee
         ],
       }),
     });
-  if (!Ao || bo || notice === null) return null;
+  if (!hasNotice || isQuietMode || notice === null) return null;
   let max = Math.max(0, sessionDraftCount - 1);
-  let _o =
-    shortDraftValue === "" || (At === "error" ? /^[01]$/ : /^[012]$/).test(shortDraftValue.normalize("NFKC"));
-  let cn = FEEDBACK_KIND_LABELS[notice.type] ?? "Feedback";
+  let isDigitAnswerAllowed =
+    shortDraftValue === "" ||
+    (mode === "error" ? /^[01]$/ : /^[012]$/).test(shortDraftValue.normalize("NFKC"));
+  let kindLabel = FEEDBACK_KIND_LABELS[notice.type] ?? "Feedback";
   let children = stripInvisibleChars_3(notice.title);
-  let wn =
-    At === "confirmSend"
+  let statusText =
+    mode === "confirmSend"
       ? jsxProd_default_2(Text, {
           children: [
             "Send without reviewing",
@@ -510,28 +540,28 @@ function FeedbackDraftNotice({ isLoading, surveyActive, setInputValue, onOpenFee
               dimColor: true,
               children: jsxProd_default_2(Byline, {
                 children: [
-                  _o &&
+                  isDigitAnswerAllowed &&
                     jsxProd_default(KeyboardShortcutHint, {
                       chord: "2",
                       action: "send",
                     }),
-                  _o &&
+                  isDigitAnswerAllowed &&
                     jsxProd_default(KeyboardShortcutHint, {
                       chord: "escape",
                       action: "back",
                     }),
-                  !_o && "clear text to answer it",
+                  !isDigitAnswerAllowed && "clear text to answer it",
                 ],
               }),
             }),
           ],
         })
-      : At === "sending"
+      : mode === "sending"
         ? jsxProd_default(Text, {
             dimColor: true,
             children: "Sending\u2026",
           })
-        : At === "sent"
+        : mode === "sent"
           ? jsxProd_default_2(Text, {
               children: [
                 jsxProd_default(StatusIcon, {
@@ -541,7 +571,7 @@ function FeedbackDraftNotice({ isLoading, surveyActive, setInputValue, onOpenFee
                 "Sent",
               ],
             })
-          : At === "error"
+          : mode === "error"
             ? jsxProd_default_2(Text, {
                 children: [
                   jsxProd_default(StatusIcon, {
@@ -550,25 +580,25 @@ function FeedbackDraftNotice({ isLoading, surveyActive, setInputValue, onOpenFee
                   }),
                   jsxProd_default(Text, {
                     color: "error",
-                    children: Ot,
+                    children: errorText,
                   }),
                   " ",
                   jsxProd_default(Text, {
                     dimColor: true,
                     children: jsxProd_default_2(Byline, {
                       children: [
-                        _o &&
+                        isDigitAnswerAllowed &&
                           jsxProd_default(KeyboardShortcutHint, {
                             chord: "1",
-                            action: Dt ? "review or discard" : "review & retry",
+                            action: isOrgRefusal ? "review or discard" : "review & retry",
                           }),
-                        _o &&
+                        isDigitAnswerAllowed &&
                           jsxProd_default(KeyboardShortcutHint, {
                             chord: "escape",
                             action: "dismiss",
                           }),
-                        !_o &&
-                          (Dt
+                        !isDigitAnswerAllowed &&
+                          (isOrgRefusal
                             ? "clear text to open review or to dismiss"
                             : "clear text to open review or dismiss"),
                       ],
@@ -580,27 +610,27 @@ function FeedbackDraftNotice({ isLoading, surveyActive, setInputValue, onOpenFee
                 dimColor: true,
                 children: jsxProd_default_2(Byline, {
                   children: [
-                    _o &&
+                    isDigitAnswerAllowed &&
                       jsxProd_default(KeyboardShortcutHint, {
                         chord: "1",
                         action: "review",
                       }),
-                    _o &&
+                    isDigitAnswerAllowed &&
                       jsxProd_default(KeyboardShortcutHint, {
                         chord: "2",
                         action: "send",
                       }),
-                    _o &&
+                    isDigitAnswerAllowed &&
                       jsxProd_default(KeyboardShortcutHint, {
                         chord: "0",
                         action: "dismiss",
                       }),
-                    !_o && "clear text to review, send, or dismiss",
+                    !isDigitAnswerAllowed && "clear text to review, send, or dismiss",
                     max > 0 && `+${max} more queued`,
                   ],
                 }),
               });
-  let mr = jsxProd_default(Box, {
+  let noticeElement = jsxProd_default(Box, {
     flexShrink: 1,
     children: jsxProd_default_2(Text, {
       wrap: "truncate-end",
@@ -610,7 +640,7 @@ function FeedbackDraftNotice({ isLoading, surveyActive, setInputValue, onOpenFee
           "aria-hidden": true,
           children: [TEARDROP_ASTERISK, " "],
         }),
-        cn,
+        kindLabel,
         " drafted: ",
         jsxProd_default(Text, {
           bold: true,
@@ -619,13 +649,13 @@ function FeedbackDraftNotice({ isLoading, surveyActive, setInputValue, onOpenFee
       ],
     }),
   });
-  if (Bo) return null;
+  if (isSuppressed) return null;
   return jsxProd_default(Box, {
     marginTop: 1,
     marginBottom: 1,
     children: jsxProd_default_2(ShutdownRequestDisplay, {
       children: [
-        mr,
+        noticeElement,
         jsxProd_default(WrappedTextBox, {
           value: notice.detailsPreview,
           dim: true,
@@ -633,16 +663,19 @@ function FeedbackDraftNotice({ isLoading, surveyActive, setInputValue, onOpenFee
           maxRows: MAX_NOTICE_MODEL_CHARS,
           preview: true,
         }),
-        wn,
+        statusText,
       ],
     }),
   });
 }
 //@ chunk-18hwfzwa.js:988714-988718 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:988714", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:988718-988783 placement
-function buildEffortLevelTelemetry(h) {
-  let effortLevelIfSupported = getEffortLevelIfSupported(getMainLoopModel(), h);
+function buildEffortLevelTelemetry(level) {
+  let effortLevelIfSupported = getEffortLevelIfSupported(getMainLoopModel(), level);
   return effortLevelIfSupported
     ? {
         effort_level: fromEnum(effortLevelIfSupported),

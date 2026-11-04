@@ -23,15 +23,19 @@ import { StructuredDiffList } from "../../components/StructuredDiffList.js";
 import { CtrlOToExpand } from "../../components/CtrlOToExpand.js";
 import { stripSandboxViolations } from "../../components/FallbackToolUseErrorMessage.js";
 import { CWD_RESET_WARNING_RE } from "./utils.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { commandMovesWorkTree_2 } from "./bashEditDiff/snapshot.js";
 import { EARLY_RETURN_SENTINEL, MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { OutputLine } from "../../components/shell/OutputLine.js";
 import { KeyboardShortcutHint } from "../../components/design-system/KeyboardShortcutHint.js";
 import { ShellTimeDisplay } from "../../components/shell/ShellTimeDisplay.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-femza1ss.js:778-782 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-femza1ss.js:778", () => {
+  init_react_production();
+});
 //@ chunk-femza1ss.js:782-1015 sole-consumer
 /**
  * Bash 编辑 diff 显示用常量：预览行数、并发命令提示、git 步骤可能移动工作树的提示、首个 diff（用于只显示一次说明）。
@@ -64,18 +68,18 @@ function BashEditDiff({ diff, verbose, style, treeMoved }) {
       }),
     });
   firstShownDiff ??= diff;
-  let i =
+  let editDiffNote =
     verbose || firstShownDiff === diff
       ? "(files that changed while this command ran, by the command or by another process; a convenience view, not a review or audit of the command)"
       : null;
-  let u = diff.shared ? SHARED_DIFF_NOTE : null;
-  let y = (style === "condensed" || treeMoved) && !verbose;
+  let sharedDiffNote = diff.shared ? SHARED_DIFF_NOTE : null;
+  let isCondensed = (style === "condensed" || treeMoved) && !verbose;
   return jsxProd_default_2(Box, {
     flexDirection: "column",
     children: [
       diff.files.map((file) => {
         let flattened = file.hunks.flatMap((hunk) => hunk.lines);
-        let v = file.created ? "Created" : file.deleted ? "Deleted" : "Updated";
+        let changeLabel = file.created ? "Created" : file.deleted ? "Deleted" : "Updated";
         let { hunks, hiddenLines } = verbose
           ? {
               hunks: file.hunks,
@@ -90,7 +94,7 @@ function BashEditDiff({ diff, verbose, style, treeMoved }) {
               children: [
                 jsxProd_default_2(Text, {
                   children: [
-                    v,
+                    changeLabel,
                     " ",
                     jsxProd_default(Text, {
                       bold: true,
@@ -101,15 +105,15 @@ function BashEditDiff({ diff, verbose, style, treeMoved }) {
                       dimColor: true,
                       children: [
                         "(+",
-                        count(flattened, (a) => a.startsWith("+")),
+                        count(flattened, (line) => line.startsWith("+")),
                         " -",
-                        count(flattened, (a) => a.startsWith("-")),
+                        count(flattened, (line) => line.startsWith("-")),
                         ")",
                       ],
                     }),
                   ],
                 }),
-                y
+                isCondensed
                   ? null
                   : jsxProd_default(StructuredDiffList, {
                       hunks,
@@ -118,7 +122,7 @@ function BashEditDiff({ diff, verbose, style, treeMoved }) {
                       filePath: file.filePath,
                       firstLine: null,
                     }),
-                hiddenLines > 0 && !y
+                hiddenLines > 0 && !isCondensed
                   ? jsxProd_default_2(Text, {
                       dimColor: true,
                       children: ["\u2026 ", hiddenLines, " more lines ", jsxProd_default(CtrlOToExpand, {})],
@@ -158,19 +162,19 @@ function BashEditDiff({ diff, verbose, style, treeMoved }) {
             }),
           })
         : null,
-      u
+      sharedDiffNote
         ? jsxProd_default(MessageResponse, {
             children: jsxProd_default(Text, {
               dimColor: true,
-              children: u,
+              children: sharedDiffNote,
             }),
           })
         : null,
-      i
+      editDiffNote
         ? jsxProd_default(MessageResponse, {
             children: jsxProd_default(Text, {
               dimColor: true,
-              children: i,
+              children: editDiffNote,
             }),
           })
         : null,
@@ -185,28 +189,28 @@ function pluralizeFiles(moreFiles) {
   return `${moreFiles} ${moreFiles === 1 ? "file" : "files"}`;
 }
 //@ chunk-femza1ss.js:2915-3154 sole-consumer
-function truncateHunks(hunks, l) {
-  let o = [];
-  let c = 0;
-  let h = 0;
-  for (let i of hunks) {
-    let u = l - c;
-    if (u <= 0) h += i.lines.length;
-    else if (i.lines.length <= u) {
-      o.push(i);
-      c += i.lines.length;
+function truncateHunks(hunks, maxLines) {
+  let shownHunks = [];
+  let shownLineCount = 0;
+  let hiddenLineCount = 0;
+  for (let hunk of hunks) {
+    let remainingLines = maxLines - shownLineCount;
+    if (remainingLines <= 0) hiddenLineCount += hunk.lines.length;
+    else if (hunk.lines.length <= remainingLines) {
+      shownHunks.push(hunk);
+      shownLineCount += hunk.lines.length;
     } else {
-      o.push({
-        ...i,
-        lines: i.lines.slice(0, u),
+      shownHunks.push({
+        ...hunk,
+        lines: hunk.lines.slice(0, remainingLines),
       });
-      h += i.lines.length - u;
-      c = l;
+      hiddenLineCount += hunk.lines.length - remainingLines;
+      shownLineCount = maxLines;
     }
   }
   return {
-    hunks: o,
-    hiddenLines: h,
+    hunks: shownHunks,
+    hiddenLines: hiddenLineCount,
   };
 }
 //@ chunk-femza1ss.js:3154-3296 fingerprint = extractSandboxViolations (1)
@@ -244,7 +248,7 @@ function extractCwdResetWarning(stderr) {
  * Bash 结果渲染：剥离 <sandbox_violations> 和 "Shell cwd was reset" 行，分别显示 stdout/stderr、cwd 提示、编辑 diff，空输出显示 returnCodeInterpretation / Done / (No output)，后台任务显示 "Running in the background"。
  */
 function BashToolResultMessage(props) {
-  let $ = w(44);
+  let $ = useMemoCache(44);
   let { content, verbose, timeoutMs, style, command } = props;
   let {
     stdout,
@@ -257,23 +261,23 @@ function BashToolResultMessage(props) {
   } = content;
   let stdout_2 = stdout === undefined ? "" : stdout;
   let stdErrWithViolations = stderr === undefined ? "" : stderr;
-  let ee;
+  let treeMovedCache;
   if ($[0] !== bashEditDiff || $[1] !== command) {
-    ee = bashEditDiff !== undefined && command !== undefined && commandMovesWorkTree_2(command);
+    treeMovedCache = bashEditDiff !== undefined && command !== undefined && commandMovesWorkTree_2(command);
     $[0] = bashEditDiff;
     $[1] = command;
-    $[2] = ee;
-  } else ee = $[2];
-  let treeMoved = ee;
-  let x;
+    $[2] = treeMovedCache;
+  } else treeMovedCache = $[2];
+  let treeMoved = treeMovedCache;
+  let Container;
   let cwdResetWarning;
   let stderr_2;
   let flexDirection;
-  let T;
-  let D;
-  let z;
+  let stdoutElement;
+  let stderrElement;
+  let earlyReturn;
   if ($[3] !== isImage || $[4] !== stdErrWithViolations || $[5] !== stdout_2 || $[6] !== verbose) {
-    z = EARLY_RETURN_SENTINEL;
+    earlyReturn = EARLY_RETURN_SENTINEL;
     Fe: {
       let { cleanedStderr: stderrWithoutViolations } = extractSandboxViolations(stdErrWithViolations);
       ({ cleanedStderr: stderr_2, cwdResetWarning } = extractCwdResetWarning(stderrWithoutViolations));
@@ -289,13 +293,13 @@ function BashToolResultMessage(props) {
           });
           $[14] = t8;
         } else t8 = $[14];
-        z = t8;
+        earlyReturn = t8;
         break Fe;
       }
-      x = Box;
+      Container = Box;
       flexDirection = "column";
       if ($[15] !== stdout_2 || $[16] !== verbose) {
-        T =
+        stdoutElement =
           stdout_2 !== ""
             ? jsxProd_default(OutputLine, {
                 content: stdout_2,
@@ -304,9 +308,9 @@ function BashToolResultMessage(props) {
             : null;
         $[15] = stdout_2;
         $[16] = verbose;
-        $[17] = T;
-      } else T = $[17];
-      D =
+        $[17] = stdoutElement;
+      } else stdoutElement = $[17];
+      stderrElement =
         stderr_2.trim() !== ""
           ? jsxProd_default(OutputLine, {
               content: stderr_2,
@@ -319,26 +323,26 @@ function BashToolResultMessage(props) {
     $[4] = stdErrWithViolations;
     $[5] = stdout_2;
     $[6] = verbose;
-    $[7] = x;
+    $[7] = Container;
     $[8] = cwdResetWarning;
     $[9] = stderr_2;
     $[10] = flexDirection;
-    $[11] = T;
-    $[12] = D;
-    $[13] = z;
+    $[11] = stdoutElement;
+    $[12] = stderrElement;
+    $[13] = earlyReturn;
   } else {
-    x = $[7];
+    Container = $[7];
     cwdResetWarning = $[8];
     stderr_2 = $[9];
     flexDirection = $[10];
-    T = $[11];
-    D = $[12];
-    z = $[13];
+    stdoutElement = $[11];
+    stderrElement = $[12];
+    earlyReturn = $[13];
   }
-  if (z !== EARLY_RETURN_SENTINEL) return z;
-  let g;
+  if (earlyReturn !== EARLY_RETURN_SENTINEL) return earlyReturn;
+  let cwdResetElement;
   if ($[18] !== cwdResetWarning) {
-    g = cwdResetWarning
+    cwdResetElement = cwdResetWarning
       ? jsxProd_default(MessageResponse, {
           children: jsxProd_default(Text, {
             dimColor: true,
@@ -347,11 +351,11 @@ function BashToolResultMessage(props) {
         })
       : null;
     $[18] = cwdResetWarning;
-    $[19] = g;
-  } else g = $[19];
-  let C;
+    $[19] = cwdResetElement;
+  } else cwdResetElement = $[19];
+  let editDiffElement;
   if ($[20] !== bashEditDiff || $[21] !== style || $[22] !== treeMoved || $[23] !== verbose) {
-    C = bashEditDiff
+    editDiffElement = bashEditDiff
       ? jsxProd_default(BashEditDiff, {
           diff: bashEditDiff,
           verbose,
@@ -363,9 +367,9 @@ function BashToolResultMessage(props) {
     $[21] = style;
     $[22] = treeMoved;
     $[23] = verbose;
-    $[24] = C;
-  } else C = $[24];
-  let P;
+    $[24] = editDiffElement;
+  } else editDiffElement = $[24];
+  let summaryElement;
   if (
     $[25] !== backgroundTaskId ||
     $[26] !== bashEditDiff ||
@@ -375,7 +379,7 @@ function BashToolResultMessage(props) {
     $[30] !== stderr_2 ||
     $[31] !== stdout_2
   ) {
-    P =
+    summaryElement =
       backgroundTaskId || (stdout_2 === "" && stderr_2.trim() === "" && !cwdResetWarning && !bashEditDiff)
         ? jsxProd_default(MessageResponse, {
             height: 1,
@@ -404,11 +408,11 @@ function BashToolResultMessage(props) {
     $[29] = returnCodeInterpretation;
     $[30] = stderr_2;
     $[31] = stdout_2;
-    $[32] = P;
-  } else P = $[32];
-  let W;
+    $[32] = summaryElement;
+  } else summaryElement = $[32];
+  let timeoutElement;
   if ($[33] !== timeoutMs) {
-    W =
+    timeoutElement =
       timeoutMs &&
       jsxProd_default(MessageResponse, {
         children: jsxProd_default(ShellTimeDisplay, {
@@ -416,31 +420,38 @@ function BashToolResultMessage(props) {
         }),
       });
     $[33] = timeoutMs;
-    $[34] = W;
-  } else W = $[34];
+    $[34] = timeoutElement;
+  } else timeoutElement = $[34];
   let t11;
   if (
-    $[35] !== x ||
-    $[36] !== C ||
-    $[37] !== P ||
-    $[38] !== W ||
+    $[35] !== Container ||
+    $[36] !== editDiffElement ||
+    $[37] !== summaryElement ||
+    $[38] !== timeoutElement ||
     $[39] !== flexDirection ||
-    $[40] !== T ||
-    $[41] !== D ||
-    $[42] !== g
+    $[40] !== stdoutElement ||
+    $[41] !== stderrElement ||
+    $[42] !== cwdResetElement
   ) {
-    t11 = jsxProd_default_2(x, {
+    t11 = jsxProd_default_2(Container, {
       flexDirection,
-      children: [T, D, g, C, P, W],
+      children: [
+        stdoutElement,
+        stderrElement,
+        cwdResetElement,
+        editDiffElement,
+        summaryElement,
+        timeoutElement,
+      ],
     });
-    $[35] = x;
-    $[36] = C;
-    $[37] = P;
-    $[38] = W;
+    $[35] = Container;
+    $[36] = editDiffElement;
+    $[37] = summaryElement;
+    $[38] = timeoutElement;
     $[39] = flexDirection;
-    $[40] = T;
-    $[41] = D;
-    $[42] = g;
+    $[40] = stdoutElement;
+    $[41] = stderrElement;
+    $[42] = cwdResetElement;
     $[43] = t11;
   } else t11 = $[43];
   return t11;

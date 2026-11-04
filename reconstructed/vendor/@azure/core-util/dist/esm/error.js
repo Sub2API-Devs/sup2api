@@ -5,16 +5,16 @@
  * pieces: chunk-mrx6y2r5.js (1)
  * attribution: esm-fingerprint 1
  */
-import { tr } from "../../../../@typespec/ts-http-runtime/dist/esm/util/error.js";
+import { isError } from "../../../../@typespec/ts-http-runtime/dist/esm/util/error.js";
 
 //@ chunk-mrx6y2r5.js:56688-56876 esm-fingerprint
-function getErrorMessage(e) {
-  if (tr(e)) return e.message;
+function getErrorMessage(error) {
+  if (isError(error)) return error.message;
   else {
     let stringified;
     try {
-      if (typeof e === "object" && e) stringified = JSON.stringify(e);
-      else stringified = String(e);
+      if (typeof error === "object" && error) stringified = JSON.stringify(error);
+      else stringified = String(error);
     } catch (err) {
       stringified = "[unable to stringify input]";
     }

@@ -25,76 +25,76 @@ function createToolWindowTimingState() {
 /**
  * 根据当前帧（是否有活动工具、thinking 状态、当前时间）推进工具运行窗口与 thinking 爆发的起止时间，返回新状态。
  */
-function advanceToolWindowTiming(l, t) {
-  let { toolWindowStart, toolWindowEnd, thinkingBurstStart } = l;
-  if (t.hasActiveTools) {
-    if (t.toolWindowStartedAt !== null) toolWindowStart = Math.min(t.toolWindowStartedAt, t.now);
-    else if (toolWindowStart === null || toolWindowEnd !== null) toolWindowStart = t.now;
+function advanceToolWindowTiming(timing, state) {
+  let { toolWindowStart, toolWindowEnd, thinkingBurstStart } = timing;
+  if (state.hasActiveTools) {
+    if (state.toolWindowStartedAt !== null) toolWindowStart = Math.min(state.toolWindowStartedAt, state.now);
+    else if (toolWindowStart === null || toolWindowEnd !== null) toolWindowStart = state.now;
     toolWindowEnd = null;
-  } else if (toolWindowStart !== null && toolWindowEnd === null) toolWindowEnd = t.now;
-  if (!t.hasActiveTools && t.thinkingStatus !== null) {
+  } else if (toolWindowStart !== null && toolWindowEnd === null) toolWindowEnd = state.now;
+  if (!state.hasActiveTools && state.thinkingStatus !== null) {
     toolWindowStart = null;
     toolWindowEnd = null;
   }
-  if (t.isThinking) {
-    if (!l.wasThinking) thinkingBurstStart = t.now;
+  if (state.isThinking) {
+    if (!timing.wasThinking) thinkingBurstStart = state.now;
   } else thinkingBurstStart = null;
   return {
     toolWindowStart,
     toolWindowEnd,
     thinkingBurstStart,
-    wasThinking: t.isThinking,
+    wasThinking: state.isThinking,
   };
 }
 //@ chunk-3mec1atf.js:6460-7190 placement
-function toolWindowPhase(l, t) {
-  if (t.showToolCallTimer && t.hasActiveTools && l.toolWindowStart !== null) {
-    let u = t.now - l.toolWindowStart;
-    if (u >= 2000)
+function toolWindowPhase(timing, state) {
+  if (state.showToolCallTimer && state.hasActiveTools && timing.toolWindowStart !== null) {
+    let elapsedMs = state.now - timing.toolWindowStart;
+    if (elapsedMs >= 2000)
       return {
         kind: "tool-running",
-        toolMs: u,
+        toolMs: elapsedMs,
       };
   }
-  if (t.outputLimitRecovery !== null && !t.hasActiveTools)
+  if (state.outputLimitRecovery !== null && !state.hasActiveTools)
     return {
       kind: "recovering",
-      recovery: t.outputLimitRecovery,
+      recovery: state.outputLimitRecovery,
     };
   if (
-    t.showToolCallTimer &&
-    !t.hasActiveTools &&
-    t.thinkingStatus === null &&
-    l.toolWindowStart !== null &&
-    l.toolWindowEnd !== null
+    state.showToolCallTimer &&
+    !state.hasActiveTools &&
+    state.thinkingStatus === null &&
+    timing.toolWindowStart !== null &&
+    timing.toolWindowEnd !== null
   ) {
-    let u = l.toolWindowEnd - l.toolWindowStart;
-    if (u >= 2000)
+    let phase = timing.toolWindowEnd - timing.toolWindowStart;
+    if (phase >= 2000)
       return {
         kind: "tool-done",
-        toolMs: u,
+        toolMs: phase,
       };
   }
-  if (t.thinkingStatus === "thinking" && !t.hasActiveTools)
+  if (state.thinkingStatus === "thinking" && !state.hasActiveTools)
     return {
       kind: "thinking",
-      thinkingMs: l.thinkingBurstStart !== null ? t.now - l.thinkingBurstStart : 0,
+      thinkingMs: timing.thinkingBurstStart !== null ? state.now - timing.thinkingBurstStart : 0,
     };
-  if (typeof t.thinkingStatus === "number")
+  if (typeof state.thinkingStatus === "number")
     return {
       kind: "thought-for",
-      thoughtMs: t.thinkingStatus,
+      thoughtMs: state.thinkingStatus,
     };
   return {
     kind: "none",
   };
 }
 //@ chunk-3mec1atf.js:7190-7367 placement
-function thinkingBurstIntensity(l, t) {
-  if (t.hasActiveTools) return 0;
-  if (!t.isThinking || l.thinkingBurstStart === null) return 0;
-  let u = t.now - l.thinkingBurstStart;
-  return Math.min(Math.max((u - 1e4) / 1e4, 0), 1);
+function thinkingBurstIntensity(timing, state) {
+  if (state.hasActiveTools) return 0;
+  if (!state.isThinking || timing.thinkingBurstStart === null) return 0;
+  let intensity = state.now - timing.thinkingBurstStart;
+  return Math.min(Math.max((intensity - 1e4) / 1e4, 0), 1);
 }
 //@ chunk-3mec1atf.js:7367-7371 placement
 init_react_production();

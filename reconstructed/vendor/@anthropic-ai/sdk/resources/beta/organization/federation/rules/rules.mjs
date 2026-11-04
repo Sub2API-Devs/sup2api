@@ -8,7 +8,7 @@
 import { APIResource } from "../../../../../core/resource.mjs";
 import { Workspaces } from "./workspaces.mjs";
 import { buildHeaders } from "../../../../../internal/headers.mjs";
-import { I } from "../../../../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../../../../internal/utils/path.mjs";
 import { TokenPage } from "../../../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:123011-124222 esm-fingerprint
@@ -37,7 +37,7 @@ var Rules = (() => {
     }
     retrieve(federationRuleID, params = {}, options) {
       let { betas } = params ?? {};
-      return this._client.get(I`/v1/organizations/federation_rules/${federationRuleID}?beta=true`, {
+      return this._client.get(parseUrl_2`/v1/organizations/federation_rules/${federationRuleID}?beta=true`, {
         ...options,
         headers: buildHeaders([
           {
@@ -53,7 +53,7 @@ var Rules = (() => {
     }
     update(federationRuleID, params, options) {
       let { betas, ...body } = params;
-      return this._client.post(I`/v1/organizations/federation_rules/${federationRuleID}?beta=true`, {
+      return this._client.post(parseUrl_2`/v1/organizations/federation_rules/${federationRuleID}?beta=true`, {
         body,
         ...options,
         headers: buildHeaders([
@@ -87,19 +87,22 @@ var Rules = (() => {
     }
     archive(federationRuleID, params = {}, options) {
       let { betas } = params ?? {};
-      return this._client.post(I`/v1/organizations/federation_rules/${federationRuleID}/archive?beta=true`, {
-        ...options,
-        headers: buildHeaders([
-          {
-            ...(betas?.toString() != null
-              ? {
-                  "anthropic-beta": betas?.toString(),
-                }
-              : undefined),
-          },
-          options?.headers,
-        ]),
-      });
+      return this._client.post(
+        parseUrl_2`/v1/organizations/federation_rules/${federationRuleID}/archive?beta=true`,
+        {
+          ...options,
+          headers: buildHeaders([
+            {
+              ...(betas?.toString() != null
+                ? {
+                    "anthropic-beta": betas?.toString(),
+                  }
+                : undefined),
+            },
+            options?.headers,
+          ]),
+        },
+      );
     }
   }
   Rules.Workspaces = Workspaces;

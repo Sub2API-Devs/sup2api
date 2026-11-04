@@ -5,10 +5,10 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-vwj6ccer.js:23412-23571 cjs-fingerprint
-var require_NodeList_es6 = x(function (cjsExports, cjsModule) {
+var require_NodeList_es6 = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = class extends Array {
     constructor(a) {
       super((a && a.length) || 0);

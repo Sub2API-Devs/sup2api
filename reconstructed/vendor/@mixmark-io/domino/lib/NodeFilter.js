@@ -5,10 +5,10 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-vwj6ccer.js:67219-67604 cjs-fingerprint
-var require_NodeFilter = x(function (cjsExports, cjsModule) {
+var require_NodeFilter = __commonJS(function (cjsExports, cjsModule) {
   var NodeFilter = {
     FILTER_ACCEPT: 1,
     FILTER_REJECT: 2,

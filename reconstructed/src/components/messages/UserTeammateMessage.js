@@ -8,7 +8,7 @@
  * pieces: chunk-ah34pb7m.js (17), chunk-q7z2h94h.js (1)
  * attribution: placement 16, fingerprint 2
  */
-import { init_react_production, Kc } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, fragmentTypeExport } from "../../../vendor/react/cjs/react.production.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -17,7 +17,7 @@ import { CtrlOToExpandHint } from "../CtrlOToExpand.js";
 import { TEAMMATE_MESSAGE } from "../../constants/xml.js";
 import { PEER_MESSAGE_SUFFIXES, PEER_MESSAGE_PREFIXES } from "../../utils/crossSessionMessages.js";
 import { unescapeBasicHtmlEntities } from "../../utils/confusables.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppState, useAppStoreDirect } from "../../state/AppState.js";
 import {
   parseFrameForDisplay,
@@ -41,656 +41,8 @@ import { BriefTimestampNamespace } from "../../utils/formatBriefTimestamp.js";
 import { CollapsibleText } from "./CollapsedLines.js";
 import { MarkdownText_2 } from "../pluginUi/render/MarkdownBlock.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-ah34pb7m.js:88531-88535 placement
-init_react_production();
-//@ chunk-ah34pb7m.js:88535-88539 placement
-init_react_production();
-//@ chunk-ah34pb7m.js:88539-88581 placement
-function selectAgentNameRegistry(b) {
-  return b.agentNameRegistry;
-}
-//@ chunk-ah34pb7m.js:88581-88739 placement
-function renderTeammateMessageItem(L, N) {
-  return L.kind === "panel"
-    ? L.node
-    : jsxProd_default(
-        CtrlOToExpandHint,
-        {
-          displayName: L.senderName,
-          qualifier: L.isUnverified ? UNVERIFIED : undefined,
-          count: L.count,
-          fallbackLabel: "teammate",
-        },
-        N,
-      );
-}
-//@ chunk-ah34pb7m.js:88739-88759 placement
-var UNVERIFIED = "unverified";
-//@ chunk-ah34pb7m.js:88759-88795 placement
-function unverifiedSenderLabel(m) {
-  return `${m} (${UNVERIFIED})`;
-}
-//@ chunk-ah34pb7m.js:88795-88813 placement
-var TEAMMATE_MESSAGE_CLOSE_TAG = `</${TEAMMATE_MESSAGE}>`;
-//@ chunk-ah34pb7m.js:88813-89659 placement
-/**
- * 从文本中解析 teammate-message 标签列表与剩余文本。
- */
-function parseTeammateMessages(m) {
-  for (let f of PEER_MESSAGE_SUFFIXES)
-    if (m.endsWith(f)) {
-      m = m.slice(0, -f.length);
-      break;
-    }
-  for (let f of PEER_MESSAGE_PREFIXES)
-    if (m.startsWith(f) && m.startsWith(`<${TEAMMATE_MESSAGE} `, f.length)) {
-      m = m.slice(f.length);
-      break;
-    }
-  let regExp = new RegExp(
-    `<${TEAMMATE_MESSAGE}\\s+teammate_id="([^"]+)"(?:\\s+color="([^"]+)")?(?:\\s+summary="([^"]+)")?(?:\\s+verified="(false)")?>\\n?`,
-    "y",
-  );
-  let c = [];
-  let g = 0;
-  while (g < m.length) {
-    regExp.lastIndex = g;
-    let match = regExp.exec(m);
-    if (!match)
-      return {
-        messages: c,
-        unparsed: m.slice(g),
-      };
-    let h = g + match[0].length;
-    let M = -1;
-    let T = m.length;
-    for (
-      let index = m.indexOf(TEAMMATE_MESSAGE_CLOSE_TAG, h);
-      index !== -1;
-      index = m.indexOf(TEAMMATE_MESSAGE_CLOSE_TAG, index + 1)
-    ) {
-      let b = index + TEAMMATE_MESSAGE_CLOSE_TAG.length;
-      while (b < m.length && /\s/.test(m.charAt(b))) b++;
-      regExp.lastIndex = b;
-      if (b === m.length || regExp.test(m)) {
-        M = index;
-        T = b;
-        break;
-      }
-    }
-    if (M === -1) M = m.length;
-    let content = m.slice(h, M).trim();
-    c.push({
-      teammateId: unescapeBasicHtmlEntities(match[1] ?? ""),
-      color: match[2] ? unescapeBasicHtmlEntities(match[2]) : undefined,
-      summary: match[3] ? unescapeBasicHtmlEntities(match[3]) : undefined,
-      content,
-      ...(match[4] === "false" && {
-        isVerified: false,
-      }),
-    });
-    g = T;
-  }
-  return {
-    messages: c,
-    unparsed: "",
-  };
-}
-//@ chunk-ah34pb7m.js:89659-90115 placement
-/**
- * 收集进程内队友的显示颜色。
- */
-function useTeammateColors() {
-  let c = w(7);
-  let appState = useAppState(selectAgentNameRegistry);
-  let appStoreDirect = useAppStoreDirect();
-  let g;
-  if (c[0] !== appState || c[1] !== appStoreDirect) {
-    g = new Map();
-    let f;
-    if (c[3] !== appStoreDirect) {
-      f = Object.values(appStoreDirect.getState().tasks);
-      c[3] = appStoreDirect;
-      c[4] = f;
-    } else f = c[4];
-    for (const h of f) {
-      if (h.type === "in_process_teammate") g.set(h.id, h.identity.agentName);
-      else if (h.type === "local_agent") g.set(h.id, h.agentType);
-    }
-    for (const [M, T] of appState) g.set(T, M);
-    c[0] = appState;
-    c[1] = appStoreDirect;
-    c[2] = g;
-  } else g = c[2];
-  let x = g;
-  let f;
-  if (c[5] !== x) {
-    f = (k) => (k === "leader" ? "leader" : (x.get(k) ?? k));
-    c[5] = x;
-    c[6] = f;
-  } else f = c[6];
-  return f;
-}
-//@ chunk-ah34pb7m.js:90115-90405 placement
-/**
- * 合并相邻的同名队友消息为计数项（panel 项保留不合并）。
- */
-function coalesceTeammateMessages(m) {
-  let d = [];
-  for (let c of m) {
-    if (c.kind === "panel") {
-      d.push(c);
-      continue;
-    }
-    let last = d.at(-1);
-    if (last && last.kind === "coalesced" && last.displayName === c.displayName) last.count++;
-    else
-      d.push({
-        kind: "coalesced",
-        displayName: c.displayName,
-        senderName: c.senderName,
-        isUnverified: c.isUnverified,
-        count: 1,
-      });
-  }
-  return d;
-}
-//@ chunk-ah34pb7m.js:90405-90545 placement
-function filterDisplayableTeammateMessages(messages) {
-  return messages.filter((d) => {
-    if (d.summary?.trim()) return true;
-    if (d.isVerified === false) return true;
-    if (parseFrameForDisplay(ShutdownApprovedMessageSchema(), d.content)) return false;
-    return true;
-  });
-}
-//@ chunk-ah34pb7m.js:90545-90628 placement
-function hasNoDisplayableTeammateMessage(m) {
-  let { messages, unparsed } = parseTeammateMessages(m);
-  return filterDisplayableTeammateMessages(messages).length === 0 && !unparsed.trim();
-}
-//@ chunk-ah34pb7m.js:90628-90707 placement
-function capTeammateText(summary, transcriptMode) {
-  if (transcriptMode) return summary;
-  let c = capFrameFieldForDisplay(summary);
-  return c === summary.trim() ? c : `${c}\u2026`;
-}
-//@ chunk-ah34pb7m.js:90707-91432 placement
-/**
- * 渲染用户回合中的队友消息。
- */
-function UserTeammateMessage(m) {
-  let d = w(12);
-  let c;
-  let g;
-  if (d[0] !== m.param.text) {
-    let { messages, unparsed } = parseTeammateMessages(m.param.text);
-    c = filterDisplayableTeammateMessages(messages);
-    g = unparsed.trim();
-    d[0] = m.param.text;
-    d[1] = c;
-    d[2] = g;
-  } else {
-    c = d[1];
-    g = d[2];
-  }
-  let M = g;
-  if (c.length === 0 && !M) {
-    return null;
-  }
-  let T;
-  if (
-    d[3] !== c ||
-    d[4] !== m.addMargin ||
-    d[5] !== m.followsSpeakerLabel ||
-    d[6] !== m.isTranscriptMode ||
-    d[7] !== m.messageId ||
-    d[8] !== m.origin ||
-    d[9] !== m.verbose ||
-    d[10] !== M
-  ) {
-    T = jsxProd_default(TeammateMessageList, {
-      addMargin: m.addMargin,
-      verbose: m.verbose,
-      isTranscriptMode: m.isTranscriptMode,
-      messageId: m.messageId,
-      origin: m.origin,
-      followsSpeakerLabel: m.followsSpeakerLabel,
-      messages: c,
-      unparsedTrimmed: M,
-    });
-    d[3] = c;
-    d[4] = m.addMargin;
-    d[5] = m.followsSpeakerLabel;
-    d[6] = m.isTranscriptMode;
-    d[7] = m.messageId;
-    d[8] = m.origin;
-    d[9] = m.verbose;
-    d[10] = M;
-    d[11] = T;
-  } else T = d[11];
-  return T;
-}
-//@ chunk-ah34pb7m.js:91432-93961 placement
-/**
- * 队友消息列表（标签视图、展开）。
- */
-function TeammateMessageList(props) {
-  let L = w(30);
-  let {
-    addMargin,
-    verbose,
-    isTranscriptMode,
-    messageId,
-    origin,
-    followsSpeakerLabel,
-    messages,
-    unparsedTrimmed,
-  } = props;
-  let k = followsSpeakerLabel === undefined ? false : followsSpeakerLabel;
-  let teammateColors = useTeammateColors();
-  let transcriptMode = resolveTranscriptMode(verbose, isTranscriptMode);
-  let B = transcriptMode || k;
-  let N;
-  let W;
-  let U;
-  let K;
-  if (
-    L[0] !== teammateColors ||
-    L[1] !== k ||
-    L[2] !== messages ||
-    L[3] !== transcriptMode ||
-    L[4] !== unparsedTrimmed
-  ) {
-    let V;
-    if (L[9] !== teammateColors) {
-      V = (Y) => capIdFrameField(teammateColors(Y.teammateId), IDLE_ID_FIELD_RECEIVE_BOUND) || UNKNOWN_SENDER;
-      L[9] = teammateColors;
-      L[10] = V;
-    } else V = L[10];
-    let mapped = messages.map(V);
-    let mapped_2 = messages.map((message, ee) => {
-      let le = mapped[ee] ?? UNKNOWN_SENDER;
-      return message.isVerified === false ? unverifiedSenderLabel(le) : le;
-    });
-    let ae;
-    if (L[11] !== transcriptMode) {
-      ae = (pe) => (pe.summary ? capTeammateText(pe.summary, transcriptMode) : "");
-      L[11] = transcriptMode;
-      L[12] = ae;
-    } else ae = L[12];
-    let mapped_3 = messages.map(ae);
-    N = messages
-      .map((message, ue) =>
-        [
-          mapped_3[ue]?.trim() ? mapped_3[ue] : "",
-          capRawFrameTextForDisplay(message.content, message.teammateId),
-        ].filter(Boolean).join(`
-`),
-      )
-      .concat(unparsedTrimmed)
-      .filter(Boolean).join(`
-
-`);
-    let [J] = mapped_2;
-    U = J !== undefined && mapped_2.every((se) => se === J) ? J : undefined;
-    W = messages.map((message, Te) => {
-      let inkColor = toInkColor(message.color);
-      let be = mapped_2[Te] ?? UNKNOWN_SENDER;
-      let ve = mapped_3[Te] ?? "";
-      let Ue = ve.trim()
-        ? jsxProd_default_2(Box, {
-            children: [
-              jsxProd_default_2(Text, {
-                color: inkColor,
-                children: [
-                  "@ ",
-                  be,
-                  jsxProd_default(Text, {
-                    "aria-hidden": true,
-                    children: figures_default.pointer,
-                  }),
-                ],
-              }),
-              jsxProd_default_2(Text, {
-                children: [" ", ve],
-              }),
-            ],
-          })
-        : null;
-      let we = message.isVerified === false ? null : renderTaskRelatedMessage(message.content, be);
-      if (we) {
-        return {
-          kind: "panel",
-          node: jsxProd_default_2(
-            Kc,
-            {
-              children: [Ue, we],
-            },
-            Te,
-          ),
-        };
-      }
-      let $e =
-        message.isVerified === false
-          ? null
-          : parseFrameForDisplay(IdleNotificationMessageSchema(), message.content);
-      if ($e && !message.summary) {
-        return {
-          kind: "panel",
-          node: jsxProd_default(
-            TeammateResultMessage,
-            {
-              displayName: be,
-              inkColor,
-              idleReason: $e.idleReason,
-              failureReason: $e.failureReason,
-              summary: $e.summary,
-              completedTaskId: $e.completedTaskId,
-              result: $e.result,
-              expanded: transcriptMode,
-            },
-            Te,
-          ),
-        };
-      }
-      let De =
-        message.isVerified === false
-          ? null
-          : parseFrameForDisplay(TaskCompletedMessageSchema(), message.content);
-      if (De) {
-        let taskId = capIdFrameField(De.taskId, IDLE_ID_FIELD_RECEIVE_BOUND);
-        let taskSubject = De.taskSubject ? capIdFrameField(De.taskSubject, IDLE_SUMMARY_RECEIVE_BOUND) : "";
-        return {
-          kind: "panel",
-          node: jsxProd_default(
-            TaskAssignmentMessage,
-            {
-              displayName: be,
-              inkColor,
-              summary: ve,
-              taskId,
-              taskSubject,
-            },
-            Te,
-          ),
-        };
-      }
-      return {
-        kind: "text",
-        displayName: be,
-        senderName: mapped[Te] ?? UNKNOWN_SENDER,
-        isUnverified: message.isVerified === false,
-        inkColor,
-        content: capRawFrameTextForDisplay(message.content, message.teammateId),
-        summary: k ? ve : message.summary,
-      };
-    });
-    K = W.length === 1 && W[0]?.kind === "text" && !unparsedTrimmed && !mapped_3[0]?.trim();
-    L[0] = teammateColors;
-    L[1] = k;
-    L[2] = messages;
-    L[3] = transcriptMode;
-    L[4] = unparsedTrimmed;
-    L[5] = N;
-    L[6] = W;
-    L[7] = U;
-    L[8] = K;
-  } else {
-    N = L[5];
-    W = L[6];
-    U = L[7];
-    K = L[8];
-  }
-  let co = K;
-  let V;
-  if (L[13] !== U) {
-    V = U !== undefined && {
-      sender: {
-        name: U,
-      },
-    };
-    L[13] = U;
-    L[14] = V;
-  } else V = L[14];
-  let draw;
-  if (
-    L[15] !== addMargin ||
-    L[16] !== N ||
-    L[17] !== B ||
-    L[18] !== co ||
-    L[19] !== W ||
-    L[20] !== k ||
-    L[21] !== unparsedTrimmed
-  ) {
-    draw = (qe) =>
-      jsxProd_default(TeammateMessageItems, {
-        items:
-          qe !== N && co
-            ? W.map((Ke) =>
-                Ke.kind === "text"
-                  ? {
-                      ...Ke,
-                      content: qe,
-                    }
-                  : Ke,
-              )
-            : W,
-        unparsedTrimmed: qe !== N && W.length === 0 ? qe : unparsedTrimmed,
-        expanded: B,
-        labelView: k,
-        addMargin: addMargin && !k,
-      });
-    L[15] = addMargin;
-    L[16] = N;
-    L[17] = B;
-    L[18] = co;
-    L[19] = W;
-    L[20] = k;
-    L[21] = unparsedTrimmed;
-    L[22] = draw;
-  } else draw = L[22];
-  let Ro;
-  if (
-    L[23] !== N ||
-    L[24] !== B ||
-    L[25] !== messageId ||
-    L[26] !== origin ||
-    L[27] !== V ||
-    L[28] !== draw
-  ) {
-    Ro = {
-      messageId,
-      stored: origin,
-      text: N,
-      isExpanded: B,
-      ...V,
-      draw,
-    };
-    L[23] = N;
-    L[24] = B;
-    L[25] = messageId;
-    L[26] = origin;
-    L[27] = V;
-    L[28] = draw;
-    L[29] = Ro;
-  } else Ro = L[29];
-  return BriefTimestampNamespace.useUserMessageSite(Ro);
-}
-//@ chunk-ah34pb7m.js:93961-94605 placement
-/**
- * 队友消息条目渲染。
- */
-function TeammateMessageItems(props) {
-  let T = w(11);
-  let { items, unparsedTrimmed, expanded, labelView, addMargin } = props;
-  const marginTop = addMargin ? 1 : 0;
-  let x;
-  if (T[0] !== expanded || T[1] !== items || T[2] !== labelView) {
-    x = expanded
-      ? items.map((item, b) =>
-          item.kind === "panel"
-            ? item.node
-            : jsxProd_default(
-                TeammateMessageContent,
-                {
-                  displayName: item.displayName,
-                  inkColor: item.inkColor,
-                  content: item.content,
-                  summary: item.summary,
-                  labelView,
-                  headerless: labelView && b === 0,
-                },
-                b,
-              ),
-        )
-      : coalesceTeammateMessages(items).map(renderTeammateMessageItem);
-    T[0] = expanded;
-    T[1] = items;
-    T[2] = labelView;
-    T[3] = x;
-  } else x = T[3];
-  let E;
-  if (T[4] !== labelView || T[5] !== unparsedTrimmed) {
-    E =
-      unparsedTrimmed &&
-      (labelView
-        ? jsxProd_default(CollapsibleText, {
-            text: unparsedTrimmed,
-          })
-        : jsxProd_default(Box, {
-            children: jsxProd_default(Text, {
-              children: unparsedTrimmed,
-            }),
-          }));
-    T[4] = labelView;
-    T[5] = unparsedTrimmed;
-    T[6] = E;
-  } else E = T[6];
-  let B;
-  if (T[7] !== marginTop || T[8] !== x || T[9] !== E) {
-    B = jsxProd_default_2(Box, {
-      flexDirection: "column",
-      marginTop,
-      width: "100%",
-      children: [x, E],
-    });
-    T[7] = marginTop;
-    T[8] = x;
-    T[9] = E;
-    T[10] = B;
-  } else B = T[10];
-  return B;
-}
-//@ chunk-ah34pb7m.js:94605-95673 fingerprint = TeammateMessageContent (0.583)
-function TeammateMessageContent(props) {
-  let $ = w(23);
-  let { displayName, inkColor, content, summary, labelView, headerless } = props;
-  let T = labelView === undefined ? false : labelView;
-  let x = headerless === undefined ? false : headerless;
-  let b;
-  if ($[0] !== content || $[1] !== T) {
-    b = T
-      ? jsxProd_default(CollapsibleText, {
-          text: content,
-        })
-      : jsxProd_default(MarkdownText_2, {
-          stripPromptTags: false,
-          children: content,
-        });
-    $[0] = content;
-    $[1] = T;
-    $[2] = b;
-  } else b = $[2];
-  let E = b;
-  if (x) {
-    let B;
-    if ($[3] !== summary) {
-      B =
-        summary &&
-        jsxProd_default(Text, {
-          children: summary,
-        });
-      $[3] = summary;
-      $[4] = B;
-    } else B = $[4];
-    const L = content && E;
-    let N;
-    if ($[5] !== B || $[6] !== L) {
-      N = jsxProd_default_2(Box, {
-        flexDirection: "column",
-        paddingLeft: 2,
-        children: [B, L],
-      });
-      $[5] = B;
-      $[6] = L;
-      $[7] = N;
-    } else N = $[7];
-    return N;
-  }
-  let B;
-  if ($[8] === MEMO_CACHE_SENTINEL) {
-    B = jsxProd_default(Text, {
-      "aria-hidden": true,
-      children: figures_default.pointer,
-    });
-    $[8] = B;
-  } else B = $[8];
-  let L;
-  if ($[9] !== displayName || $[10] !== inkColor) {
-    L = jsxProd_default_2(Text, {
-      color: inkColor,
-      children: ["@ ", displayName, B],
-    });
-    $[9] = displayName;
-    $[10] = inkColor;
-    $[11] = L;
-  } else L = $[11];
-  let N;
-  if ($[12] !== summary) {
-    N =
-      summary &&
-      jsxProd_default_2(Text, {
-        children: [" ", summary],
-      });
-    $[12] = summary;
-    $[13] = N;
-  } else N = $[13];
-  let W;
-  if ($[14] !== L || $[15] !== N) {
-    W = jsxProd_default_2(Box, {
-      children: [L, N],
-    });
-    $[14] = L;
-    $[15] = N;
-    $[16] = W;
-  } else W = $[16];
-  let U;
-  if ($[17] !== E || $[18] !== content) {
-    U =
-      content &&
-      jsxProd_default(Box, {
-        paddingLeft: 2,
-        children: E,
-      });
-    $[17] = E;
-    $[18] = content;
-    $[19] = U;
-  } else U = $[19];
-  let t6;
-  if ($[20] !== W || $[21] !== U) {
-    t6 = jsxProd_default_2(Box, {
-      flexDirection: "column",
-      marginTop: 1,
-      children: [W, U],
-    });
-    $[20] = W;
-    $[21] = U;
-    $[22] = t6;
-  } else t6 = $[22];
-  return t6;
-}
 //@ chunk-q7z2h94h.js:1585-1737 fingerprint = parseTeammateMessages (0.361)
 var parseTeammateMessages_2 = (text) => ({
   started: ({ agentId, model, teammateId }) =>
@@ -703,6 +55,666 @@ var parseTeammateMessages_2 = (text) => ({
     }),
   [Symbol.dispose]: text[Symbol.dispose],
 });
+//@ chunk-ah34pb7m.js:88531-88535 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ah34pb7m.js:88531", () => {
+  init_react_production();
+});
+//@ chunk-ah34pb7m.js:88535-88539 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ah34pb7m.js:88535", () => {
+  init_react_production();
+});
+//@ chunk-ah34pb7m.js:88539-88581 placement
+function selectAgentNameRegistry(state) {
+  return state.agentNameRegistry;
+}
+//@ chunk-ah34pb7m.js:88581-88739 placement
+function renderTeammateMessageItem(item, key) {
+  return item.kind === "panel"
+    ? item.node
+    : jsxProd_default(
+        CtrlOToExpandHint,
+        {
+          displayName: item.senderName,
+          qualifier: item.isUnverified ? UNVERIFIED : undefined,
+          count: item.count,
+          fallbackLabel: "teammate",
+        },
+        key,
+      );
+}
+//@ chunk-ah34pb7m.js:88739-88759 placement
+var UNVERIFIED = "unverified";
+//@ chunk-ah34pb7m.js:88759-88795 placement
+function unverifiedSenderLabel(senderName) {
+  return `${senderName} (${UNVERIFIED})`;
+}
+//@ chunk-ah34pb7m.js:88795-88813 placement
+var TEAMMATE_MESSAGE_CLOSE_TAG = `</${TEAMMATE_MESSAGE}>`;
+//@ chunk-ah34pb7m.js:88813-89659 placement
+/**
+ * 从文本中解析 teammate-message 标签列表与剩余文本。
+ */
+function parseTeammateMessages(text) {
+  for (let suffix of PEER_MESSAGE_SUFFIXES)
+    if (text.endsWith(suffix)) {
+      text = text.slice(0, -suffix.length);
+      break;
+    }
+  for (let body of PEER_MESSAGE_PREFIXES)
+    if (text.startsWith(body) && text.startsWith(`<${TEAMMATE_MESSAGE} `, body.length)) {
+      text = text.slice(body.length);
+      break;
+    }
+  let regExp = new RegExp(
+    `<${TEAMMATE_MESSAGE}\\s+teammate_id="([^"]+)"(?:\\s+color="([^"]+)")?(?:\\s+summary="([^"]+)")?(?:\\s+verified="(false)")?>\\n?`,
+    "y",
+  );
+  let messages = [];
+  let segments = 0;
+  while (segments < text.length) {
+    regExp.lastIndex = segments;
+    let match = regExp.exec(text);
+    if (!match)
+      return {
+        messages,
+        unparsed: text.slice(segments),
+      };
+    let segment = segments + match[0].length;
+    let unparsed = -1;
+    let parts = text.length;
+    for (
+      let index = text.indexOf(TEAMMATE_MESSAGE_CLOSE_TAG, segment);
+      index !== -1;
+      index = text.indexOf(TEAMMATE_MESSAGE_CLOSE_TAG, index + 1)
+    ) {
+      let parsed = index + TEAMMATE_MESSAGE_CLOSE_TAG.length;
+      while (parsed < text.length && /\s/.test(text.charAt(parsed))) parsed++;
+      regExp.lastIndex = parsed;
+      if (parsed === text.length || regExp.test(text)) {
+        unparsed = index;
+        parts = parsed;
+        break;
+      }
+    }
+    if (unparsed === -1) unparsed = text.length;
+    let content = text.slice(segment, unparsed).trim();
+    messages.push({
+      teammateId: unescapeBasicHtmlEntities(match[1] ?? ""),
+      color: match[2] ? unescapeBasicHtmlEntities(match[2]) : undefined,
+      summary: match[3] ? unescapeBasicHtmlEntities(match[3]) : undefined,
+      content,
+      ...(match[4] === "false" && {
+        isVerified: false,
+      }),
+    });
+    segments = parts;
+  }
+  return {
+    messages,
+    unparsed: "",
+  };
+}
+//@ chunk-ah34pb7m.js:89659-90115 placement
+/**
+ * 收集进程内队友的显示颜色。
+ */
+function useTeammateColors() {
+  let $ = useMemoCache(7);
+  let appState = useAppState(selectAgentNameRegistry);
+  let appStoreDirect = useAppStoreDirect();
+  let merged;
+  if ($[0] !== appState || $[1] !== appStoreDirect) {
+    merged = new Map();
+    let seen;
+    if ($[3] !== appStoreDirect) {
+      seen = Object.values(appStoreDirect.getState().tasks);
+      $[3] = appStoreDirect;
+      $[4] = seen;
+    } else seen = $[4];
+    for (const message of seen) {
+      if (message.type === "in_process_teammate") merged.set(message.id, message.identity.agentName);
+      else if (message.type === "local_agent") merged.set(message.id, message.agentType);
+    }
+    for (const [key, existing] of appState) merged.set(existing, key);
+    $[0] = appState;
+    $[1] = appStoreDirect;
+    $[2] = merged;
+  } else merged = $[2];
+  let coalesced = merged;
+  let resolveName;
+  if ($[5] !== coalesced) {
+    resolveName = (name) => (name === "leader" ? "leader" : (coalesced.get(name) ?? name));
+    $[5] = coalesced;
+    $[6] = resolveName;
+  } else resolveName = $[6];
+  return resolveName;
+}
+//@ chunk-ah34pb7m.js:90115-90405 placement
+/**
+ * 合并相邻的同名队友消息为计数项（panel 项保留不合并）。
+ */
+function coalesceTeammateMessages(messages) {
+  let coalesced = [];
+  for (let message of messages) {
+    if (message.kind === "panel") {
+      coalesced.push(message);
+      continue;
+    }
+    let last = coalesced.at(-1);
+    if (last && last.kind === "coalesced" && last.displayName === message.displayName) last.count++;
+    else
+      coalesced.push({
+        kind: "coalesced",
+        displayName: message.displayName,
+        senderName: message.senderName,
+        isUnverified: message.isUnverified,
+        count: 1,
+      });
+  }
+  return coalesced;
+}
+//@ chunk-ah34pb7m.js:90405-90545 placement
+function filterDisplayableTeammateMessages(messages) {
+  return messages.filter((message) => {
+    if (message.summary?.trim()) return true;
+    if (message.isVerified === false) return true;
+    if (parseFrameForDisplay(ShutdownApprovedMessageSchema(), message.content)) return false;
+    return true;
+  });
+}
+//@ chunk-ah34pb7m.js:90545-90628 placement
+function hasNoDisplayableTeammateMessage(content) {
+  let { messages, unparsed } = parseTeammateMessages(content);
+  return filterDisplayableTeammateMessages(messages).length === 0 && !unparsed.trim();
+}
+//@ chunk-ah34pb7m.js:90628-90707 placement
+function capTeammateText(summary, transcriptMode) {
+  if (transcriptMode) return summary;
+  let summaryValue = capFrameFieldForDisplay(summary);
+  return summaryValue === summary.trim() ? summaryValue : `${summaryValue}\u2026`;
+}
+//@ chunk-ah34pb7m.js:90707-91432 placement
+/**
+ * 渲染用户回合中的队友消息。
+ */
+function UserTeammateMessage(props) {
+  let $ = useMemoCache(12);
+  let parsed;
+  let items;
+  if ($[0] !== props.param.text) {
+    let { messages, unparsed } = parseTeammateMessages(props.param.text);
+    parsed = filterDisplayableTeammateMessages(messages);
+    items = unparsed.trim();
+    $[0] = props.param.text;
+    $[1] = parsed;
+    $[2] = items;
+  } else {
+    parsed = $[1];
+    items = $[2];
+  }
+  let isExpanded = items;
+  if (parsed.length === 0 && !isExpanded) {
+    return null;
+  }
+  let teammateMessageListElement;
+  if (
+    $[3] !== parsed ||
+    $[4] !== props.addMargin ||
+    $[5] !== props.followsSpeakerLabel ||
+    $[6] !== props.isTranscriptMode ||
+    $[7] !== props.messageId ||
+    $[8] !== props.origin ||
+    $[9] !== props.verbose ||
+    $[10] !== isExpanded
+  ) {
+    teammateMessageListElement = jsxProd_default(TeammateMessageList, {
+      addMargin: props.addMargin,
+      verbose: props.verbose,
+      isTranscriptMode: props.isTranscriptMode,
+      messageId: props.messageId,
+      origin: props.origin,
+      followsSpeakerLabel: props.followsSpeakerLabel,
+      messages: parsed,
+      unparsedTrimmed: isExpanded,
+    });
+    $[3] = parsed;
+    $[4] = props.addMargin;
+    $[5] = props.followsSpeakerLabel;
+    $[6] = props.isTranscriptMode;
+    $[7] = props.messageId;
+    $[8] = props.origin;
+    $[9] = props.verbose;
+    $[10] = isExpanded;
+    $[11] = teammateMessageListElement;
+  } else teammateMessageListElement = $[11];
+  return teammateMessageListElement;
+}
+//@ chunk-ah34pb7m.js:91432-93961 placement
+/**
+ * 队友消息列表（标签视图、展开）。
+ */
+function TeammateMessageList(props) {
+  let $ = useMemoCache(30);
+  let {
+    addMargin,
+    verbose,
+    isTranscriptMode,
+    messageId,
+    origin,
+    followsSpeakerLabel,
+    messages,
+    unparsedTrimmed,
+  } = props;
+  let followsLabel = followsSpeakerLabel === undefined ? false : followsSpeakerLabel;
+  let teammateColors = useTeammateColors();
+  let transcriptMode = resolveTranscriptMode(verbose, isTranscriptMode);
+  let expanded = transcriptMode || followsLabel;
+  let plainText;
+  let items;
+  let commonSender;
+  let isSimple;
+  if (
+    $[0] !== teammateColors ||
+    $[1] !== followsLabel ||
+    $[2] !== messages ||
+    $[3] !== transcriptMode ||
+    $[4] !== unparsedTrimmed
+  ) {
+    let getName;
+    if ($[9] !== teammateColors) {
+      getName = (message) =>
+        capIdFrameField(teammateColors(message.teammateId), IDLE_ID_FIELD_RECEIVE_BOUND) || UNKNOWN_SENDER;
+      $[9] = teammateColors;
+      $[10] = getName;
+    } else getName = $[10];
+    let mapped = messages.map(getName);
+    let mapped_2 = messages.map((message, index) => {
+      let name = mapped[index] ?? UNKNOWN_SENDER;
+      return message.isVerified === false ? unverifiedSenderLabel(name) : name;
+    });
+    let getSummary;
+    if ($[11] !== transcriptMode) {
+      getSummary = (message) => (message.summary ? capTeammateText(message.summary, transcriptMode) : "");
+      $[11] = transcriptMode;
+      $[12] = getSummary;
+    } else getSummary = $[12];
+    let mapped_3 = messages.map(getSummary);
+    plainText = messages
+      .map((message, index) =>
+        [
+          mapped_3[index]?.trim() ? mapped_3[index] : "",
+          capRawFrameTextForDisplay(message.content, message.teammateId),
+        ].filter(Boolean).join(`
+`),
+      )
+      .concat(unparsedTrimmed)
+      .filter(Boolean).join(`
+
+`);
+    let [firstSender] = mapped_2;
+    commonSender =
+      firstSender !== undefined && mapped_2.every((name) => name === firstSender) ? firstSender : undefined;
+    items = messages.map((message, index) => {
+      let inkColor = toInkColor(message.color);
+      let displayName = mapped_2[index] ?? UNKNOWN_SENDER;
+      let summary = mapped_3[index] ?? "";
+      let summaryNode = summary.trim()
+        ? jsxProd_default_2(Box, {
+            children: [
+              jsxProd_default_2(Text, {
+                color: inkColor,
+                children: [
+                  "@ ",
+                  displayName,
+                  jsxProd_default(Text, {
+                    "aria-hidden": true,
+                    children: figures_default.pointer,
+                  }),
+                ],
+              }),
+              jsxProd_default_2(Text, {
+                children: [" ", summary],
+              }),
+            ],
+          })
+        : null;
+      let taskNode =
+        message.isVerified === false ? null : renderTaskRelatedMessage(message.content, displayName);
+      if (taskNode) {
+        return {
+          kind: "panel",
+          node: jsxProd_default_2(
+            fragmentTypeExport,
+            {
+              children: [summaryNode, taskNode],
+            },
+            index,
+          ),
+        };
+      }
+      let idleFrame =
+        message.isVerified === false
+          ? null
+          : parseFrameForDisplay(IdleNotificationMessageSchema(), message.content);
+      if (idleFrame && !message.summary) {
+        return {
+          kind: "panel",
+          node: jsxProd_default(
+            TeammateResultMessage,
+            {
+              displayName,
+              inkColor,
+              idleReason: idleFrame.idleReason,
+              failureReason: idleFrame.failureReason,
+              summary: idleFrame.summary,
+              completedTaskId: idleFrame.completedTaskId,
+              result: idleFrame.result,
+              expanded: transcriptMode,
+            },
+            index,
+          ),
+        };
+      }
+      let completedFrame =
+        message.isVerified === false
+          ? null
+          : parseFrameForDisplay(TaskCompletedMessageSchema(), message.content);
+      if (completedFrame) {
+        let taskId = capIdFrameField(completedFrame.taskId, IDLE_ID_FIELD_RECEIVE_BOUND);
+        let taskSubject = completedFrame.taskSubject
+          ? capIdFrameField(completedFrame.taskSubject, IDLE_SUMMARY_RECEIVE_BOUND)
+          : "";
+        return {
+          kind: "panel",
+          node: jsxProd_default(
+            TaskAssignmentMessage,
+            {
+              displayName,
+              inkColor,
+              summary,
+              taskId,
+              taskSubject,
+            },
+            index,
+          ),
+        };
+      }
+      return {
+        kind: "text",
+        displayName,
+        senderName: mapped[index] ?? UNKNOWN_SENDER,
+        isUnverified: message.isVerified === false,
+        inkColor,
+        content: capRawFrameTextForDisplay(message.content, message.teammateId),
+        summary: followsLabel ? summary : message.summary,
+      };
+    });
+    isSimple = items.length === 1 && items[0]?.kind === "text" && !unparsedTrimmed && !mapped_3[0]?.trim();
+    $[0] = teammateColors;
+    $[1] = followsLabel;
+    $[2] = messages;
+    $[3] = transcriptMode;
+    $[4] = unparsedTrimmed;
+    $[5] = plainText;
+    $[6] = items;
+    $[7] = commonSender;
+    $[8] = isSimple;
+  } else {
+    plainText = $[5];
+    items = $[6];
+    commonSender = $[7];
+    isSimple = $[8];
+  }
+  let isSimple_2 = isSimple;
+  let senderProp;
+  if ($[13] !== commonSender) {
+    senderProp = commonSender !== undefined && {
+      sender: {
+        name: commonSender,
+      },
+    };
+    $[13] = commonSender;
+    $[14] = senderProp;
+  } else senderProp = $[14];
+  let draw;
+  if (
+    $[15] !== addMargin ||
+    $[16] !== plainText ||
+    $[17] !== expanded ||
+    $[18] !== isSimple_2 ||
+    $[19] !== items ||
+    $[20] !== followsLabel ||
+    $[21] !== unparsedTrimmed
+  ) {
+    draw = (text) =>
+      jsxProd_default(TeammateMessageItems, {
+        items:
+          text !== plainText && isSimple_2
+            ? items.map((item) =>
+                item.kind === "text"
+                  ? {
+                      ...item,
+                      content: text,
+                    }
+                  : item,
+              )
+            : items,
+        unparsedTrimmed: text !== plainText && items.length === 0 ? text : unparsedTrimmed,
+        expanded,
+        labelView: followsLabel,
+        addMargin: addMargin && !followsLabel,
+      });
+    $[15] = addMargin;
+    $[16] = plainText;
+    $[17] = expanded;
+    $[18] = isSimple_2;
+    $[19] = items;
+    $[20] = followsLabel;
+    $[21] = unparsedTrimmed;
+    $[22] = draw;
+  } else draw = $[22];
+  let siteProps;
+  if (
+    $[23] !== plainText ||
+    $[24] !== expanded ||
+    $[25] !== messageId ||
+    $[26] !== origin ||
+    $[27] !== senderProp ||
+    $[28] !== draw
+  ) {
+    siteProps = {
+      messageId,
+      stored: origin,
+      text: plainText,
+      isExpanded: expanded,
+      ...senderProp,
+      draw,
+    };
+    $[23] = plainText;
+    $[24] = expanded;
+    $[25] = messageId;
+    $[26] = origin;
+    $[27] = senderProp;
+    $[28] = draw;
+    $[29] = siteProps;
+  } else siteProps = $[29];
+  return BriefTimestampNamespace.useUserMessageSite(siteProps);
+}
+//@ chunk-ah34pb7m.js:93961-94605 placement
+/**
+ * 队友消息条目渲染。
+ */
+function TeammateMessageItems(props) {
+  let $ = useMemoCache(11);
+  let { items, unparsedTrimmed, expanded, labelView, addMargin } = props;
+  const marginTop = addMargin ? 1 : 0;
+  let itemsElement;
+  if ($[0] !== expanded || $[1] !== items || $[2] !== labelView) {
+    itemsElement = expanded
+      ? items.map((item, index) =>
+          item.kind === "panel"
+            ? item.node
+            : jsxProd_default(
+                TeammateMessageContent,
+                {
+                  displayName: item.displayName,
+                  inkColor: item.inkColor,
+                  content: item.content,
+                  summary: item.summary,
+                  labelView,
+                  headerless: labelView && index === 0,
+                },
+                index,
+              ),
+        )
+      : coalesceTeammateMessages(items).map(renderTeammateMessageItem);
+    $[0] = expanded;
+    $[1] = items;
+    $[2] = labelView;
+    $[3] = itemsElement;
+  } else itemsElement = $[3];
+  let unparsedElement;
+  if ($[4] !== labelView || $[5] !== unparsedTrimmed) {
+    unparsedElement =
+      unparsedTrimmed &&
+      (labelView
+        ? jsxProd_default(CollapsibleText, {
+            text: unparsedTrimmed,
+          })
+        : jsxProd_default(Box, {
+            children: jsxProd_default(Text, {
+              children: unparsedTrimmed,
+            }),
+          }));
+    $[4] = labelView;
+    $[5] = unparsedTrimmed;
+    $[6] = unparsedElement;
+  } else unparsedElement = $[6];
+  let boxElement;
+  if ($[7] !== marginTop || $[8] !== itemsElement || $[9] !== unparsedElement) {
+    boxElement = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      marginTop,
+      width: "100%",
+      children: [itemsElement, unparsedElement],
+    });
+    $[7] = marginTop;
+    $[8] = itemsElement;
+    $[9] = unparsedElement;
+    $[10] = boxElement;
+  } else boxElement = $[10];
+  return boxElement;
+}
+//@ chunk-ah34pb7m.js:94605-95673 fingerprint = TeammateMessageContent (0.583)
+function TeammateMessageContent(props) {
+  let $ = useMemoCache(23);
+  let { displayName, inkColor, content, summary, labelView, headerless } = props;
+  let labelViewFlag = labelView === undefined ? false : labelView;
+  let headerlessFlag = headerless === undefined ? false : headerless;
+  let items;
+  if ($[0] !== content || $[1] !== labelViewFlag) {
+    items = labelViewFlag
+      ? jsxProd_default(CollapsibleText, {
+          text: content,
+        })
+      : jsxProd_default(MarkdownText_2, {
+          stripPromptTags: false,
+          children: content,
+        });
+    $[0] = content;
+    $[1] = labelViewFlag;
+    $[2] = items;
+  } else items = $[2];
+  let itemsElement = items;
+  if (headerlessFlag) {
+    let summaryElement;
+    if ($[3] !== summary) {
+      summaryElement =
+        summary &&
+        jsxProd_default(Text, {
+          children: summary,
+        });
+      $[3] = summary;
+      $[4] = summaryElement;
+    } else summaryElement = $[4];
+    const headerElement = content && itemsElement;
+    let bodyElement;
+    if ($[5] !== summaryElement || $[6] !== headerElement) {
+      bodyElement = jsxProd_default_2(Box, {
+        flexDirection: "column",
+        paddingLeft: 2,
+        children: [summaryElement, headerElement],
+      });
+      $[5] = summaryElement;
+      $[6] = headerElement;
+      $[7] = bodyElement;
+    } else bodyElement = $[7];
+    return bodyElement;
+  }
+  let containerElement;
+  if ($[8] === MEMO_CACHE_SENTINEL) {
+    containerElement = jsxProd_default(Text, {
+      "aria-hidden": true,
+      children: figures_default.pointer,
+    });
+    $[8] = containerElement;
+  } else containerElement = $[8];
+  let outerElement;
+  if ($[9] !== displayName || $[10] !== inkColor) {
+    outerElement = jsxProd_default_2(Text, {
+      color: inkColor,
+      children: ["@ ", displayName, containerElement],
+    });
+    $[9] = displayName;
+    $[10] = inkColor;
+    $[11] = outerElement;
+  } else outerElement = $[11];
+  let summaryElement;
+  if ($[12] !== summary) {
+    summaryElement =
+      summary &&
+      jsxProd_default_2(Text, {
+        children: [" ", summary],
+      });
+    $[12] = summary;
+    $[13] = summaryElement;
+  } else summaryElement = $[13];
+  let summaryText;
+  if ($[14] !== outerElement || $[15] !== summaryElement) {
+    summaryText = jsxProd_default_2(Box, {
+      children: [outerElement, summaryElement],
+    });
+    $[14] = outerElement;
+    $[15] = summaryElement;
+    $[16] = summaryText;
+  } else summaryText = $[16];
+  let teammateContainer;
+  if ($[17] !== itemsElement || $[18] !== content) {
+    teammateContainer =
+      content &&
+      jsxProd_default(Box, {
+        paddingLeft: 2,
+        children: itemsElement,
+      });
+    $[17] = itemsElement;
+    $[18] = content;
+    $[19] = teammateContainer;
+  } else teammateContainer = $[19];
+  let t6;
+  if ($[20] !== summaryText || $[21] !== teammateContainer) {
+    t6 = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      marginTop: 1,
+      children: [summaryText, teammateContainer],
+    });
+    $[20] = summaryText;
+    $[21] = teammateContainer;
+    $[22] = t6;
+  } else t6 = $[22];
+  return t6;
+}
 export {
   unverifiedSenderLabel,
   coalesceTeammateMessages,

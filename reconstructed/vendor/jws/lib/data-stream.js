@@ -5,12 +5,12 @@
  * pieces: chunk-82d8c88w.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_safe_buffer } from "../../safe-buffer/index.js";
 
 //@ chunk-82d8c88w.js:3287-4019 cjs-fingerprint
-var require_data_stream = x(function (cjsExports, cjsModule) {
-  var I = require_safe_buffer().Buffer;
+var require_data_stream = __commonJS(function (cjsExports, cjsModule) {
+  var BufferCtor = require_safe_buffer().Buffer;
   var Stream = importMetaRequire("stream");
   var util = importMetaRequire("util");
   function DataStream(data) {
@@ -18,11 +18,11 @@ var require_data_stream = x(function (cjsExports, cjsModule) {
     this.writable = true;
     this.readable = true;
     if (!data) {
-      this.buffer = I.alloc(0);
+      this.buffer = BufferCtor.alloc(0);
       return this;
     }
     if (typeof data.pipe === "function") {
-      this.buffer = I.alloc(0);
+      this.buffer = BufferCtor.alloc(0);
       data.pipe(this);
       return this;
     }
@@ -42,7 +42,7 @@ var require_data_stream = x(function (cjsExports, cjsModule) {
   }
   util.inherits(DataStream, Stream);
   DataStream.prototype.write = function (data) {
-    this.buffer = I.concat([this.buffer, I.from(data)]);
+    this.buffer = BufferCtor.concat([this.buffer, BufferCtor.from(data)]);
     this.emit("data", data);
   };
   DataStream.prototype.end = function (data) {

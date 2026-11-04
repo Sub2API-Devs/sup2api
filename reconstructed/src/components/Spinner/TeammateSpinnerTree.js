@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (1), chunk-v517dzda.js (1)
  * attribution: fingerprint 2
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { jsxProd_default_2 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../ink/components/Text.js";
@@ -20,20 +20,20 @@ function selectIsViewingAgentTask(s_0) {
 }
 //@ chunk-v517dzda.js:14478-14680 fingerprint = HideRow (0.818)
 function HideRow(props) {
-  let $ = w(3);
+  let $ = useMemoCache(3);
   let { isSelected } = props;
   const color = isSelected ? "suggestion" : undefined;
-  const d = isSelected ? `${figures_default.pointer} ` : "  ";
-  let C;
-  if ($[0] !== color || $[1] !== d) {
-    C = jsxProd_default_2(Text, {
+  const prefix = isSelected ? `${figures_default.pointer} ` : "  ";
+  let rowElement;
+  if ($[0] !== color || $[1] !== prefix) {
+    rowElement = jsxProd_default_2(Text, {
       color,
-      children: [d, WRITE_NEW_FEEDBACK_LABEL],
+      children: [prefix, WRITE_NEW_FEEDBACK_LABEL],
     });
     $[0] = color;
-    $[1] = d;
-    $[2] = C;
-  } else C = $[2];
-  return C;
+    $[1] = prefix;
+    $[2] = rowElement;
+  } else rowElement = $[2];
+  return rowElement;
 }
 export { selectIsViewingAgentTask, HideRow };

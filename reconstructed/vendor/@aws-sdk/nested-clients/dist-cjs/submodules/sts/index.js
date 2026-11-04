@@ -5,7 +5,7 @@
  * pieces: chunk-a8ee6x44.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_STSClient } from "./STSClient.js";
 import { require_client } from "../../../../../@smithy/core/dist-cjs/submodules/client/index.js";
 import { require_middleware_endpoint } from "../../../../../@smithy/middleware-endpoint/dist-cjs/index.js";
@@ -15,7 +15,7 @@ import { require_client as require_client_2 } from "../../../../core/dist-cjs/su
 import { require_region_config_resolver } from "../../../../region-config-resolver/dist-cjs/index.js";
 
 //@ chunk-a8ee6x44.js:12668-21063 cjs-fingerprint
-var require_sts = x(function (cjsExports) {
+var require_sts = __commonJS(function (cjsExports) {
   var STSClient = require_STSClient();
   var smithyClient = require_client();
   var middlewareEndpoint = require_middleware_endpoint();

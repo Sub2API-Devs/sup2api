@@ -5,18 +5,18 @@
  * pieces: chunk-ejvzjw0g.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-ejvzjw0g.js:226-122122 cjs-fingerprint
-var require_acorn = x(function (cjsExports, cjsModule) {
-  (function (b, factory) {
+var require_acorn = __commonJS(function (cjsExports, cjsModule) {
+  (function (root, factory) {
     if (typeof cjsExports === "object" && typeof cjsModule !== "undefined") factory(cjsExports);
     else if (typeof define === "function" && define.amd) define(["exports"], factory);
     else {
-      b = typeof globalThis !== "undefined" ? globalThis : b || self;
-      factory((b.acorn = {}));
+      root = typeof globalThis !== "undefined" ? globalThis : root || self;
+      factory((root.acorn = {}));
     }
-  })(cjsExports, function (b) {
+  })(cjsExports, function (acornExports) {
     var astralIdentifierCodes = [
       509, 0, 227, 0, 150, 4, 294, 9, 1368, 2, 2, 1, 6, 3, 41, 2, 5, 0, 166, 1, 574, 3, 9, 9, 7, 9, 32, 4,
       318, 1, 80, 3, 71, 10, 50, 3, 123, 2, 54, 14, 32, 10, 3, 1, 11, 3, 46, 10, 8, 0, 46, 9, 7, 2, 37, 13, 2,
@@ -291,8 +291,8 @@ var require_acorn = x(function (cjsExports, cjsModule) {
     }
     var nonASCIIwhitespace = /[\u1680\u2000-\u200a\u202f\u205f\u3000\ufeff]/;
     var skipWhiteSpace = /(?:\s|\/\/.*|\/\*[^]*?\*\/)*/g;
-    var Be = Object.prototype;
-    var { hasOwnProperty, toString } = Be;
+    var ref = Object.prototype;
+    var { hasOwnProperty, toString } = ref;
     var hasOwn =
       Object.hasOwn ||
       function (obj, propName) {
@@ -659,9 +659,9 @@ Defaulting to 2020, but this will stop working in the future.`);
       if (parens > -1)
         this.raiseRecoverable(parens, isAssign ? "Assigning to rvalue" : "Parenthesized pattern");
     };
-    pp$9.checkExpressionErrors = function (e, andThrow) {
-      if (!e) return false;
-      var { shorthandAssign, doubleProto } = e;
+    pp$9.checkExpressionErrors = function (refDestructuringErrors, andThrow) {
+      if (!refDestructuringErrors) return false;
+      var { shorthandAssign, doubleProto } = refDestructuringErrors;
       if (!andThrow) return shorthandAssign >= 0 || doubleProto >= 0;
       if (shorthandAssign >= 0)
         this.raise(
@@ -681,10 +681,10 @@ Defaulting to 2020, but this will stop working in the future.`);
     };
     var pp$8 = Parser.prototype;
     pp$8.parseTopLevel = function (node) {
-      var t = Object.create(null);
+      var exportsTable = Object.create(null);
       if (!node.body) node.body = [];
       while (this.type !== types$1.eof) {
-        var stmt = this.parseStatement(null, true, t);
+        var stmt = this.parseStatement(null, true, exportsTable);
         node.body.push(stmt);
       }
       if (this.inModule)
@@ -779,7 +779,7 @@ Defaulting to 2020, but this will stop working in the future.`);
     pp$8.isUsing = function (isFor) {
       return this.isUsingKeyword(false, isFor);
     };
-    pp$8.parseStatement = function (context, topLevel, i) {
+    pp$8.parseStatement = function (context, topLevel, exportsTable) {
       var starttype = this.type;
       var node = this.startNode();
       var kind;
@@ -846,7 +846,9 @@ Defaulting to 2020, but this will stop working in the future.`);
             if (!this.inModule)
               this.raise(this.start, "'import' and 'export' may appear only with 'sourceType: module'");
           }
-          return starttype === types$1._import ? this.parseImport(node) : this.parseExport(node, i);
+          return starttype === types$1._import
+            ? this.parseImport(node)
+            : this.parseExport(node, exportsTable);
         default:
           if (this.isAsyncFunction()) {
             if (context) this.unexpected();
@@ -1430,8 +1432,8 @@ Defaulting to 2020, but this will stop working in the future.`);
       return element.declared;
     };
     pp$8.exitClassBody = function () {
-      var e = this.privateNameStack.pop();
-      var { declared, used } = e;
+      var ref = this.privateNameStack.pop();
+      var { declared, used } = ref;
       if (!this.options.checkPrivateFields) return;
       var len = this.privateNameStack.length;
       var parent = len === 0 ? null : this.privateNameStack[len - 1];
@@ -1465,18 +1467,18 @@ Defaulting to 2020, but this will stop working in the future.`);
         return false;
       } else return true;
     }
-    function checkKeyName(e, name) {
-      var { computed, key } = e;
+    function checkKeyName(node, name) {
+      var { computed, key } = node;
       return (
         !computed &&
         ((key.type === "Identifier" && key.name === name) || (key.type === "Literal" && key.value === name))
       );
     }
-    pp$8.parseExportAllDeclaration = function (node, t) {
+    pp$8.parseExportAllDeclaration = function (node, exportsTable) {
       if (this.options.ecmaVersion >= 11)
         if (this.eatContextual("as")) {
           node.exported = this.parseModuleExportName();
-          this.checkExport(t, node.exported, this.lastTokStart);
+          this.checkExport(exportsTable, node.exported, this.lastTokStart);
         } else node.exported = null;
       this.expectContextual("from");
       if (this.type !== types$1.string) this.unexpected();
@@ -1485,32 +1487,32 @@ Defaulting to 2020, but this will stop working in the future.`);
       this.semicolon();
       return this.finishNode(node, "ExportAllDeclaration");
     };
-    pp$8.parseExport = function (node, t) {
+    pp$8.parseExport = function (node, exportsTable) {
       this.next();
-      if (this.eat(types$1.star)) return this.parseExportAllDeclaration(node, t);
+      if (this.eat(types$1.star)) return this.parseExportAllDeclaration(node, exportsTable);
       if (this.eat(types$1._default)) {
-        this.checkExport(t, "default", this.lastTokStart);
+        this.checkExport(exportsTable, "default", this.lastTokStart);
         node.declaration = this.parseExportDefaultDeclaration();
         return this.finishNode(node, "ExportDefaultDeclaration");
       }
       if (this.shouldParseExportStatement()) {
         node.declaration = this.parseExportDeclaration(node);
         if (node.declaration.type === "VariableDeclaration")
-          this.checkVariableExport(t, node.declaration.declarations);
-        else this.checkExport(t, node.declaration.id, node.declaration.id.start);
+          this.checkVariableExport(exportsTable, node.declaration.declarations);
+        else this.checkExport(exportsTable, node.declaration.id, node.declaration.id.start);
         node.specifiers = [];
         node.source = null;
         if (this.options.ecmaVersion >= 16) node.attributes = [];
       } else {
         node.declaration = null;
-        node.specifiers = this.parseExportSpecifiers(t);
+        node.specifiers = this.parseExportSpecifiers(exportsTable);
         if (this.eatContextual("from")) {
           if (this.type !== types$1.string) this.unexpected();
           node.source = this.parseExprAtom();
           if (this.options.ecmaVersion >= 16) node.attributes = this.parseWithClause();
         } else {
-          for (var i = 0, list = node.specifiers; i < list.length; i += 1) {
-            var spec = list[i];
+          for (var index = 0, list = node.specifiers; index < list.length; index += 1) {
+            var spec = list[index];
             this.checkUnreserved(spec.local);
             this.checkLocalExport(spec.local);
             if (spec.local.type === "Literal")
@@ -1545,34 +1547,34 @@ Defaulting to 2020, but this will stop working in the future.`);
         return declaration;
       }
     };
-    pp$8.checkExport = function (e, name, pos) {
-      if (!e) return;
+    pp$8.checkExport = function (exportsTable, name, pos) {
+      if (!exportsTable) return;
       if (typeof name !== "string") name = name.type === "Identifier" ? name.name : name.value;
-      if (hasOwn(e, name)) this.raiseRecoverable(pos, "Duplicate export '" + name + "'");
-      e[name] = true;
+      if (hasOwn(exportsTable, name)) this.raiseRecoverable(pos, "Duplicate export '" + name + "'");
+      exportsTable[name] = true;
     };
-    pp$8.checkPatternExport = function (e, pat) {
+    pp$8.checkPatternExport = function (exportsTable, pat) {
       var type = pat.type;
-      if (type === "Identifier") this.checkExport(e, pat, pat.start);
+      if (type === "Identifier") this.checkExport(exportsTable, pat, pat.start);
       else if (type === "ObjectPattern")
         for (var i = 0, list = pat.properties; i < list.length; i += 1) {
           var prop = list[i];
-          this.checkPatternExport(e, prop);
+          this.checkPatternExport(exportsTable, prop);
         }
       else if (type === "ArrayPattern")
         for (var i$1 = 0, list$1 = pat.elements; i$1 < list$1.length; i$1 += 1) {
           var elt = list$1[i$1];
-          if (elt) this.checkPatternExport(e, elt);
+          if (elt) this.checkPatternExport(exportsTable, elt);
         }
-      else if (type === "Property") this.checkPatternExport(e, pat.value);
-      else if (type === "AssignmentPattern") this.checkPatternExport(e, pat.left);
-      else if (type === "RestElement") this.checkPatternExport(e, pat.argument);
+      else if (type === "Property") this.checkPatternExport(exportsTable, pat.value);
+      else if (type === "AssignmentPattern") this.checkPatternExport(exportsTable, pat.left);
+      else if (type === "RestElement") this.checkPatternExport(exportsTable, pat.argument);
     };
-    pp$8.checkVariableExport = function (e, decls) {
-      if (!e) return;
-      for (var i = 0, list = decls; i < list.length; i += 1) {
-        var decl = list[i];
-        this.checkPatternExport(e, decl.id);
+    pp$8.checkVariableExport = function (exportsTable, decls) {
+      if (!exportsTable) return;
+      for (var index = 0, list = decls; index < list.length; index += 1) {
+        var decl = list[index];
+        this.checkPatternExport(exportsTable, decl.id);
       }
     };
     pp$8.shouldParseExportStatement = function () {
@@ -1585,14 +1587,14 @@ Defaulting to 2020, but this will stop working in the future.`);
         this.isAsyncFunction()
       );
     };
-    pp$8.parseExportSpecifier = function (e) {
+    pp$8.parseExportSpecifier = function (exportsTable) {
       var node = this.startNode();
       node.local = this.parseModuleExportName();
       node.exported = this.eatContextual("as") ? this.parseModuleExportName() : node.local;
-      this.checkExport(e, node.exported, node.exported.start);
+      this.checkExport(exportsTable, node.exported, node.exported.start);
       return this.finishNode(node, "ExportSpecifier");
     };
-    pp$8.parseExportSpecifiers = function (e) {
+    pp$8.parseExportSpecifiers = function (exportsTable) {
       var nodes = [];
       var first = true;
       this.expect(types$1.braceL);
@@ -1601,7 +1603,7 @@ Defaulting to 2020, but this will stop working in the future.`);
           this.expect(types$1.comma);
           if (this.afterTrailingComma(types$1.braceR)) break;
         } else first = false;
-        nodes.push(this.parseExportSpecifier(e));
+        nodes.push(this.parseExportSpecifier(exportsTable));
       }
       return nodes;
     };
@@ -3022,8 +3024,8 @@ Defaulting to 2020, but this will stop working in the future.`);
       }
       return elts;
     };
-    pp$5.checkUnreserved = function (e) {
-      var { start, end, name } = e;
+    pp$5.checkUnreserved = function (ref) {
+      var { start, end, name } = ref;
       if (this.inGenerator && name === "yield")
         this.raiseRecoverable(start, "Cannot use 'yield' as identifier inside a generator");
       if (this.inAsync && name === "await")
@@ -3300,9 +3302,9 @@ Defaulting to 2020, but this will stop working in the future.`);
       this.base = base || this;
     };
     BranchID.prototype.separatedFrom = function (alt) {
-      for (var i = this; i; i = i.parent)
+      for (var selfRef = this; selfRef; selfRef = selfRef.parent)
         for (var other = alt; other; other = other.parent)
-          if (i.base === other.base && i !== other) return true;
+          if (selfRef.base === other.base && selfRef !== other) return true;
       return false;
     };
     BranchID.prototype.sibling = function () {
@@ -5028,28 +5030,28 @@ Defaulting to 2020, but this will stop working in the future.`);
     function tokenizer(input, options) {
       return Parser.tokenizer(input, options);
     }
-    b.Node = Node;
-    b.Parser = Parser;
-    b.Position = Position;
-    b.SourceLocation = SourceLocation;
-    b.TokContext = TokContext;
-    b.Token = Token;
-    b.TokenType = TokenType;
-    b.defaultOptions = defaultOptions;
-    b.getLineInfo = getLineInfo;
-    b.isIdentifierChar = isIdentifierChar;
-    b.isIdentifierStart = isIdentifierStart;
-    b.isNewLine = isNewLine;
-    b.keywordTypes = keywords;
-    b.lineBreak = lineBreak;
-    b.lineBreakG = lineBreakG;
-    b.nonASCIIwhitespace = nonASCIIwhitespace;
-    b.parse = parse;
-    b.parseExpressionAt = parseExpressionAt;
-    b.tokContexts = types;
-    b.tokTypes = types$1;
-    b.tokenizer = tokenizer;
-    b.version = version;
+    acornExports.Node = Node;
+    acornExports.Parser = Parser;
+    acornExports.Position = Position;
+    acornExports.SourceLocation = SourceLocation;
+    acornExports.TokContext = TokContext;
+    acornExports.Token = Token;
+    acornExports.TokenType = TokenType;
+    acornExports.defaultOptions = defaultOptions;
+    acornExports.getLineInfo = getLineInfo;
+    acornExports.isIdentifierChar = isIdentifierChar;
+    acornExports.isIdentifierStart = isIdentifierStart;
+    acornExports.isNewLine = isNewLine;
+    acornExports.keywordTypes = keywords;
+    acornExports.lineBreak = lineBreak;
+    acornExports.lineBreakG = lineBreakG;
+    acornExports.nonASCIIwhitespace = nonASCIIwhitespace;
+    acornExports.parse = parse;
+    acornExports.parseExpressionAt = parseExpressionAt;
+    acornExports.tokContexts = types;
+    acornExports.tokTypes = types$1;
+    acornExports.tokenizer = tokenizer;
+    acornExports.version = version;
   });
 });
 export { require_acorn };

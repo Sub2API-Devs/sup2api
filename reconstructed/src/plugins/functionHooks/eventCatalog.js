@@ -60,6 +60,7 @@ import { withChainEnds } from "./classicHookBridge.js";
 import { wellFormedLeaves } from "./ui/validateTree.js";
 import { teeGeneratorResult, reportStreamChainFailure } from "./dispatch/streamChain.js";
 import { renderDraws } from "./ui/renderDispatch.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:82804-83527 placement
 var DESCRIBE_EVENT_NAMES = () => ({
@@ -96,42 +97,60 @@ var DESCRIBE_EVENT_NAMES = () => ({
 /**
  * 描述类事件
  */
-var DESCRIBE_EVENTS = new Set(["config.describe", "command.describe", "tool.describe", "agent.offer"]);
+var DESCRIBE_EVENTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:83527", () => {
+  DESCRIBE_EVENTS = new Set(["config.describe", "command.describe", "tool.describe", "agent.offer"]);
+});
 //@ chunk-e6aww6q8.js:83613-83706 placement
 /**
  * 不走钩子的事件
  */
-var NON_HOOKABLE_EVENTS = new Set([
-  "plugin.register",
-  "telemetry.log",
-  "telemetry.mark",
-  "ui.scroll",
-  "ui.focus",
-]);
+var NON_HOOKABLE_EVENTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:83613", () => {
+  NON_HOOKABLE_EVENTS = new Set([
+    "plugin.register",
+    "telemetry.log",
+    "telemetry.mark",
+    "ui.scroll",
+    "ui.focus",
+  ]);
+});
 //@ chunk-e6aww6q8.js:83706-83794 placement
 /**
  * 可由模块监听的事件
  */
-var HOOKABLE_EVENTS = new Set(
-  Object.keys(TOOL_SITE_BY_EVENT)
-    .filter(isHookEvent)
-    .filter((key) => !NON_HOOKABLE_EVENTS.has(key) && TOOL_SITE_BY_EVENT[key] !== undefined),
-);
+var HOOKABLE_EVENTS; // deferred: uses TOOL_SITE_BY_EVENT (./sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:83706", () => {
+  HOOKABLE_EVENTS = new Set(
+    Object.keys(TOOL_SITE_BY_EVENT)
+      .filter(isHookEvent)
+      .filter((key) => !NON_HOOKABLE_EVENTS.has(key) && TOOL_SITE_BY_EVENT[key] !== undefined),
+  );
+});
 //@ chunk-e6aww6q8.js:5049623-5049652 placement
 /**
  * prompt.mention 站点规则
  */
-var PROMPT_MENTION_RULES = UI_ENV_SITE_RULES["prompt.mention"];
+var PROMPT_MENTION_RULES; // deferred: uses UI_ENV_SITE_RULES (./sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:5049623", () => {
+  PROMPT_MENTION_RULES = UI_ENV_SITE_RULES["prompt.mention"];
+});
 //@ chunk-e6aww6q8.js:5049652-5049679 placement
 /**
  * session.send 站点规则
  */
-var SESSION_SEND_RULES = UI_ENV_SITE_RULES["session.send"];
+var SESSION_SEND_RULES; // deferred: uses UI_ENV_SITE_RULES (./sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:5049652", () => {
+  SESSION_SEND_RULES = UI_ENV_SITE_RULES["session.send"];
+});
 //@ chunk-e6aww6q8.js:5049679-5049703 placement
 /**
  * turn.step 站点规则
  */
-var TURN_STEP_RULES = UI_ENV_SITE_RULES["turn.step"];
+var TURN_STEP_RULES; // deferred: uses UI_ENV_SITE_RULES (./sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:5049679", () => {
+  TURN_STEP_RULES = UI_ENV_SITE_RULES["turn.step"];
+});
 //@ chunk-e6aww6q8.js:5049703-5050610 placement
 var FUNCTION_HOOK_EVENT_NAMES = () => ({
   "tool.call": TOOL_CALL_SITE_RULES,
@@ -177,109 +196,109 @@ var FUNCTION_HOOK_EVENT_NAMES = () => ({
 /**
  * 把处理器插入到为引擎作答的处理器之前（没有则放在末尾）。
  */
-function insertBeforeEngineAnswer(e, n) {
-  let index = e.findIndex((s) => s.answersForEngine === true);
-  return e.toSpliced(index === -1 ? e.length : index, 0, n);
+function insertBeforeEngineAnswer(handlers, handler) {
+  let index = handlers.findIndex((handler) => handler.answersForEngine === true);
+  return handlers.toSpliced(index === -1 ? handlers.length : index, 0, handler);
 }
 //@ chunk-e6aww6q8.js:5050718-5051725 placement
 /**
  * 提示文本：钩子链底没有核心处理器（调用点没有安装 core）。
  */
-var NO_CORE_AT_CHAIN_BOTTOM = (e, n) => (r) => {
-  let s = HOOKABLE_EVENTS.has(e) && !n.withoutModuleHandlers;
-  let h = EVENT_PAYLOAD_SHAPES[e](r);
-  let y = s
+var NO_CORE_AT_CHAIN_BOTTOM = (event, options) => (args) => {
+  let needsRespawnWait = HOOKABLE_EVENTS.has(event) && !options.withoutModuleHandlers;
+  let e = EVENT_PAYLOAD_SHAPES[event](args);
+  let respawn = needsRespawnWait
     ? waitForHooksRespawn(
         {
-          event: e,
-          e: h,
-          origin: n.origin,
-          only: n.only,
+          event,
+          e,
+          origin: options.origin,
+          only: options.only,
         },
-        n.signal,
+        options.signal,
       )
     : undefined;
-  if (y !== undefined) return y.then(() => NO_CORE_AT_CHAIN_BOTTOM(e, n)(r));
-  let S = hasCurrentDispatch();
-  let w = S ? undefined : (n.core?.[e] ?? DESCRIBE_EVENT_NAMES()[e]);
-  if (w === undefined && !S)
+  if (respawn !== undefined) return respawn.then(() => NO_CORE_AT_CHAIN_BOTTOM(event, options)(args));
+  let isDispatching = hasCurrentDispatch();
+  let core = isDispatching ? undefined : (options.core?.[event] ?? DESCRIBE_EVENT_NAMES()[event]);
+  if (core === undefined && !isDispatching)
     return Promise.reject(
       new HooksError(
-        `$.${e}: no core at the bottom of the chain (the site did not install one and the call supplied none)`,
+        `$.${event}: no core at the bottom of the chain (the site did not install one and the call supplied none)`,
       ),
     );
-  let L = FUNCTION_HOOK_EVENT_NAMES()[e];
-  let G = n.withoutModuleHandlers
+  let site = FUNCTION_HOOK_EVENT_NAMES()[event];
+  let members = options.withoutModuleHandlers
     ? []
-    : hookMembersFor(e, n.origin, {
-        only: n.only,
-        among: n.among?.(),
-        ...(L.pinnedKeys !== undefined && {
+    : hookMembersFor(event, options.origin, {
+        only: options.only,
+        among: options.among?.(),
+        ...(site.pinnedKeys !== undefined && {
           pinned: {
-            keys: L.pinnedKeys,
-            e: h,
+            keys: site.pinnedKeys,
+            e,
           },
         }),
       });
-  let q = S ? undefined : n.managed?.[e];
-  let Z = S ? n.withheldCore?.[e] : undefined;
-  let Se = S ? n.withheldFloor?.[e]?.(h) : undefined;
-  let ke = Z === undefined ? G : insertBeforeEngineAnswer(G, Z);
-  let we = withChainEnds(q, ke, w);
-  let Ee =
-    q !== undefined &&
-    G.length === 0 &&
-    L.pinnedKeys !== undefined &&
-    !n.withoutModuleHandlers &&
-    modulesHookingEvent(e, n.origin, {
-      only: n.only,
-      among: n.among?.(),
+  let managed = isDispatching ? undefined : options.managed?.[event];
+  let withheldCore = isDispatching ? options.withheldCore?.[event] : undefined;
+  let withheldFloor = isDispatching ? options.withheldFloor?.[event]?.(e) : undefined;
+  let withCore = withheldCore === undefined ? members : insertBeforeEngineAnswer(members, withheldCore);
+  let handlers = withChainEnds(managed, withCore, core);
+  let hasPinnedModules =
+    managed !== undefined &&
+    members.length === 0 &&
+    site.pinnedKeys !== undefined &&
+    !options.withoutModuleHandlers &&
+    modulesHookingEvent(event, options.origin, {
+      only: options.only,
+      among: options.among?.(),
     }).length > 0;
-  let Ae = reportChainFailure({
-    e: h,
-    handlers: Ee ? [q, ...we] : we,
-    site: L,
-    signal: n.signal,
-    cutAt: n.cutAt,
-    origin: hookOriginFromStack(n.engineRaised ? undefined : n.origin),
-    trace: n.trace,
-    ...(Se !== undefined && {
-      bottom: Se,
+  let runPromise = reportChainFailure({
+    e,
+    handlers: hasPinnedModules ? [managed, ...handlers] : handlers,
+    site,
+    signal: options.signal,
+    cutAt: options.cutAt,
+    origin: hookOriginFromStack(options.engineRaised ? undefined : options.origin),
+    trace: options.trace,
+    ...(withheldFloor !== undefined && {
+      bottom: withheldFloor,
     }),
   });
-  return DESCRIBE_EVENTS.has(e) ? Ae.then((Ie) => wellFormedLeaves(Ie)) : Ae;
+  return DESCRIBE_EVENTS.has(event) ? runPromise.then((value) => wellFormedLeaves(value)) : runPromise;
 };
 //@ chunk-e6aww6q8.js:5051725-5051930 placement
 function buildStreamChainArgs({ event, bottom, core, args }) {
-  let h = streamMembersFor(event, bottom.origin, {
+  let members = streamMembersFor(event, bottom.origin, {
     only: bottom.only,
   });
-  let y = core ? bottom.streamManaged?.[event] : undefined;
+  let managed = core ? bottom.streamManaged?.[event] : undefined;
   return {
     e: EVENT_PAYLOAD_SHAPES[event](args),
-    handlers: withChainEnds(y, h, core),
+    handlers: withChainEnds(managed, members, core),
     site: FUNCTION_HOOK_EVENT_NAMES()[event],
     signal: bottom.signal,
     origin: hookOriginFromStack(bottom.origin),
   };
 }
 //@ chunk-e6aww6q8.js:5051930-5052200 placement
-var createStreamEventCaller = (e, n) => (args) => {
-  let s = hasCurrentDispatch();
-  let h = s ? undefined : n.streamCore?.[e];
-  return h === undefined && !s
+var createStreamEventCaller = (event, options) => (args) => {
+  let isDispatching = hasCurrentDispatch();
+  let core = isDispatching ? undefined : options.streamCore?.[event];
+  return core === undefined && !isDispatching
     ? teeGeneratorResult(
         (async function* () {
           throw new HooksError(
-            `$.${e}: no core at the bottom of the chain (the site did not install one and the call supplied none)`,
+            `$.${event}: no core at the bottom of the chain (the site did not install one and the call supplied none)`,
           );
         })(),
       )
     : reportStreamChainFailure(
         buildStreamChainArgs({
-          event: e,
-          bottom: n,
-          core: h,
+          event,
+          bottom: options,
+          core,
           args,
         }),
       );
@@ -288,85 +307,85 @@ var createStreamEventCaller = (e, n) => (args) => {
 /**
  * 函数钩子全部事件名及其分组（tool.*、command.*、config.*、prompt.*、session.*、turn.*、ui.* 等）。
  */
-var FUNCTION_HOOK_EVENTS = (e, n) => ({
+var FUNCTION_HOOK_EVENTS = (options, chainOptions) => ({
   tool: {
-    call: NO_CORE_AT_CHAIN_BOTTOM("tool.call", e),
-    check: NO_CORE_AT_CHAIN_BOTTOM("tool.check", e),
-    describe: NO_CORE_AT_CHAIN_BOTTOM("tool.describe", e),
+    call: NO_CORE_AT_CHAIN_BOTTOM("tool.call", options),
+    check: NO_CORE_AT_CHAIN_BOTTOM("tool.check", options),
+    describe: NO_CORE_AT_CHAIN_BOTTOM("tool.describe", options),
   },
   command: {
-    run: NO_CORE_AT_CHAIN_BOTTOM("command.run", e),
-    describe: NO_CORE_AT_CHAIN_BOTTOM("command.describe", e),
+    run: NO_CORE_AT_CHAIN_BOTTOM("command.run", options),
+    describe: NO_CORE_AT_CHAIN_BOTTOM("command.describe", options),
   },
   config: {
-    set: NO_CORE_AT_CHAIN_BOTTOM("config.set", e),
-    describe: NO_CORE_AT_CHAIN_BOTTOM("config.describe", e),
+    set: NO_CORE_AT_CHAIN_BOTTOM("config.set", options),
+    describe: NO_CORE_AT_CHAIN_BOTTOM("config.describe", options),
   },
   telemetry: {
-    log: NO_CORE_AT_CHAIN_BOTTOM("telemetry.log", e),
-    mark: NO_CORE_AT_CHAIN_BOTTOM("telemetry.mark", e),
+    log: NO_CORE_AT_CHAIN_BOTTOM("telemetry.log", options),
+    mark: NO_CORE_AT_CHAIN_BOTTOM("telemetry.mark", options),
   },
   prompt: {
-    submit: NO_CORE_AT_CHAIN_BOTTOM("prompt.submit", e),
-    fill: NO_CORE_AT_CHAIN_BOTTOM("prompt.fill", e),
-    edit: NO_CORE_AT_CHAIN_BOTTOM("prompt.edit", e),
-    change: NO_CORE_AT_CHAIN_BOTTOM("prompt.change", e),
-    autocomplete: NO_CORE_AT_CHAIN_BOTTOM("prompt.autocomplete", e),
-    suggest: NO_CORE_AT_CHAIN_BOTTOM("prompt.suggest", e),
-    section: NO_CORE_AT_CHAIN_BOTTOM("prompt.section", e),
-    context: NO_CORE_AT_CHAIN_BOTTOM("prompt.context", e),
-    attachment: NO_CORE_AT_CHAIN_BOTTOM("prompt.attachment", e),
-    mention: NO_CORE_AT_CHAIN_BOTTOM("prompt.mention", e),
-    compose: NO_CORE_AT_CHAIN_BOTTOM("prompt.compose", e),
+    submit: NO_CORE_AT_CHAIN_BOTTOM("prompt.submit", options),
+    fill: NO_CORE_AT_CHAIN_BOTTOM("prompt.fill", options),
+    edit: NO_CORE_AT_CHAIN_BOTTOM("prompt.edit", options),
+    change: NO_CORE_AT_CHAIN_BOTTOM("prompt.change", options),
+    autocomplete: NO_CORE_AT_CHAIN_BOTTOM("prompt.autocomplete", options),
+    suggest: NO_CORE_AT_CHAIN_BOTTOM("prompt.suggest", options),
+    section: NO_CORE_AT_CHAIN_BOTTOM("prompt.section", options),
+    context: NO_CORE_AT_CHAIN_BOTTOM("prompt.context", options),
+    attachment: NO_CORE_AT_CHAIN_BOTTOM("prompt.attachment", options),
+    mention: NO_CORE_AT_CHAIN_BOTTOM("prompt.mention", options),
+    compose: NO_CORE_AT_CHAIN_BOTTOM("prompt.compose", options),
   },
   skill: {
-    prompt: NO_CORE_AT_CHAIN_BOTTOM("skill.prompt", e),
+    prompt: NO_CORE_AT_CHAIN_BOTTOM("skill.prompt", options),
   },
   attribution: {
-    text: NO_CORE_AT_CHAIN_BOTTOM("attribution.text", e),
+    text: NO_CORE_AT_CHAIN_BOTTOM("attribution.text", options),
   },
   agent: {
-    offer: NO_CORE_AT_CHAIN_BOTTOM("agent.offer", e),
-    spawn: NO_CORE_AT_CHAIN_BOTTOM("agent.spawn", e),
+    offer: NO_CORE_AT_CHAIN_BOTTOM("agent.offer", options),
+    spawn: NO_CORE_AT_CHAIN_BOTTOM("agent.spawn", options),
   },
   session: {
-    start: NO_CORE_AT_CHAIN_BOTTOM("session.start", e),
-    receive: NO_CORE_AT_CHAIN_BOTTOM("session.receive", e),
-    append: NO_CORE_AT_CHAIN_BOTTOM("session.append", e),
-    send: NO_CORE_AT_CHAIN_BOTTOM("session.send", e),
-    compact: NO_CORE_AT_CHAIN_BOTTOM("session.compact", e),
-    attach: NO_CORE_AT_CHAIN_BOTTOM("session.attach", e),
-    detach: NO_CORE_AT_CHAIN_BOTTOM("session.detach", e),
-    measure: NO_CORE_AT_CHAIN_BOTTOM("session.measure", e),
-    end: NO_CORE_AT_CHAIN_BOTTOM("session.end", e),
+    start: NO_CORE_AT_CHAIN_BOTTOM("session.start", options),
+    receive: NO_CORE_AT_CHAIN_BOTTOM("session.receive", options),
+    append: NO_CORE_AT_CHAIN_BOTTOM("session.append", options),
+    send: NO_CORE_AT_CHAIN_BOTTOM("session.send", options),
+    compact: NO_CORE_AT_CHAIN_BOTTOM("session.compact", options),
+    attach: NO_CORE_AT_CHAIN_BOTTOM("session.attach", options),
+    detach: NO_CORE_AT_CHAIN_BOTTOM("session.detach", options),
+    measure: NO_CORE_AT_CHAIN_BOTTOM("session.measure", options),
+    end: NO_CORE_AT_CHAIN_BOTTOM("session.end", options),
   },
   turn: {
-    start: NO_CORE_AT_CHAIN_BOTTOM("turn.start", e),
-    step: createStreamEventCaller("turn.step", e),
-    complete: NO_CORE_AT_CHAIN_BOTTOM("turn.complete", e),
+    start: NO_CORE_AT_CHAIN_BOTTOM("turn.start", options),
+    step: createStreamEventCaller("turn.step", options),
+    complete: NO_CORE_AT_CHAIN_BOTTOM("turn.complete", options),
   },
   ui: {
-    render: (r) => renderDraws.uiRender(r, n),
-    scroll: NO_CORE_AT_CHAIN_BOTTOM("ui.scroll", e),
-    focus: NO_CORE_AT_CHAIN_BOTTOM("ui.focus", e),
+    render: (tool) => renderDraws.uiRender(tool, chainOptions),
+    scroll: NO_CORE_AT_CHAIN_BOTTOM("ui.scroll", options),
+    focus: NO_CORE_AT_CHAIN_BOTTOM("ui.focus", options),
   },
 });
 //@ chunk-e6aww6q8.js:5053438-5053543 placement
 /**
  * 用给定 signal/origin 生成全部函数钩子事件的调用器表。
  */
-function createEventCallers(e = {}) {
-  let n = {
-    signal: e.signal ?? new AbortController().signal,
-    origin: e.origin,
+function createEventCallers(options = {}) {
+  let chainOptions = {
+    signal: options.signal ?? new AbortController().signal,
+    origin: options.origin,
   };
-  return FUNCTION_HOOK_EVENTS(e, n);
+  return FUNCTION_HOOK_EVENTS(options, chainOptions);
 }
 //@ chunk-e6aww6q8.js:5053543-5053563 placement
 /**
  * 各事件调用器
  */
-var eventCallersFor = (e) => createEventCallers(e);
+var eventCallersFor = (options) => createEventCallers(options);
 //@ chunk-e6aww6q8.js:5053563-5053575 placement
 /**
  * createEventCallers 引用
@@ -376,17 +395,17 @@ var createEventCallersRef = createEventCallers;
 /**
  * 包装的调用器
  */
-var eventCallersWrapper = (e) => createEventCallers(e);
+var eventCallersWrapper = (options) => createEventCallers(options);
 //@ chunk-e6aww6q8.js:5053595-5053615 placement
 /**
  * 各事件调用器
  */
-var eventCallersFor2 = (e) => createEventCallers(e);
+var eventCallersFor2 = (options) => createEventCallers(options);
 //@ chunk-e6aww6q8.js:5053615-5053635 placement
 /**
  * 包装的调用器
  */
-var eventCallersWrapper2 = (e) => createEventCallers(e);
+var eventCallersWrapper2 = (options) => createEventCallers(options);
 export {
   TURN_STEP_RULES,
   eventCallersWrapper2,

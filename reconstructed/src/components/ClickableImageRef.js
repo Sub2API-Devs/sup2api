@@ -8,7 +8,7 @@
  * pieces: chunk-ey2qag4x.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useAppStateSlice } from "../state/AppState.js";
 import { supportsHyperlinks } from "../ink/supports-hyperlinks.js";
 import { toSafeFileUrl } from "../services/mcp/xaa.js";
@@ -17,19 +17,19 @@ import { Text, Link } from "../ink/components/Text.js";
 
 //@ chunk-ey2qag4x.js:23011-23710 fingerprint = ClickableImageRef (0.889)
 function ClickableImageRef(props) {
-  let $ = w(15);
+  let $ = useMemoCache(15);
   let { imageId, backgroundColor, isSelected } = props;
   let isSelected_2 = isSelected === undefined ? false : isSelected;
-  let d = useAppStateSlice((f) => f.storedImagePaths.get(imageId) ?? null) ?? null;
+  let imagePath = useAppStateSlice((state) => state.storedImagePaths.get(imageId) ?? null) ?? null;
   let displayText = `[Image #${imageId}]`;
-  let c;
-  if ($[0] !== d) {
-    c = d && supportsHyperlinks() ? toSafeFileUrl(d) : null;
-    $[0] = d;
-    $[1] = c;
-  } else c = $[1];
-  let fileUrl = c;
-  if (fileUrl) {
+  let fileUrl;
+  if ($[0] !== imagePath) {
+    fileUrl = imagePath && supportsHyperlinks() ? toSafeFileUrl(imagePath) : null;
+    $[0] = imagePath;
+    $[1] = fileUrl;
+  } else fileUrl = $[1];
+  let fileUrl_2 = fileUrl;
+  if (fileUrl_2) {
     let fallback;
     let children;
     if ($[2] !== backgroundColor || $[3] !== displayText || $[4] !== isSelected_2) {
@@ -54,13 +54,13 @@ function ClickableImageRef(props) {
       children = $[6];
     }
     let t4;
-    if ($[7] !== fileUrl || $[8] !== fallback || $[9] !== children) {
+    if ($[7] !== fileUrl_2 || $[8] !== fallback || $[9] !== children) {
       t4 = jsxProd_default(Link, {
-        url: fileUrl,
+        url: fileUrl_2,
         fallback,
         children,
       });
-      $[7] = fileUrl;
+      $[7] = fileUrl_2;
       $[8] = fallback;
       $[9] = children;
       $[10] = t4;

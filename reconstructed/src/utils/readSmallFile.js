@@ -17,104 +17,104 @@ import { isSentinelInode } from "./slowOperations.js";
 import { getDevicePathRefusal } from "../tools/FileReadTool/FileReadTool.js";
 
 //@ chunk-qg0af0yq.js:9673-9827 placement
-async function readSmallFileOrNull(e, n, t) {
+async function readSmallFileOrNull(filePath, maxBytes, onUnreadable) {
   try {
-    let r = await lstat(e);
-    if (!r.isFile() || r.size > n) {
-      t?.();
+    let stats = await lstat(filePath);
+    if (!stats.isFile() || stats.size > maxBytes) {
+      onUnreadable?.();
       return null;
     }
-    return await readFile(e, "utf8");
+    return await readFile(filePath, "utf8");
   } catch (error) {
-    if (!isPathAbsent(error)) t?.();
+    if (!isPathAbsent(error)) onUnreadable?.();
     return null;
   }
 }
 //@ chunk-qg0af0yq.js:9827-9937 placement
-function readSmallFileOrNullSync(e, n) {
+function readSmallFileOrNullSync(filePath, maxBytes) {
   try {
-    let t = lstatSync(e);
-    if (!t.isFile() || t.size > n) return null;
-    return readFileSync(e, "utf8");
+    let stats = lstatSync(filePath);
+    if (!stats.isFile() || stats.size > maxBytes) return null;
+    return readFileSync(filePath, "utf8");
   } catch {
     return null;
   }
 }
 //@ chunk-qg0af0yq.js:9937-10119 placement
-async function readSmallFileChecked(fsImplementation, n, t, r) {
-  let { verdict, st } = await checkSmallFileReadable(fsImplementation, n, t);
+async function readSmallFileChecked(fsImplementation, filePath, maxBytes, onSkip) {
+  let { verdict, st } = await checkSmallFileReadable(fsImplementation, filePath, maxBytes);
   switch (verdict) {
     case "skip":
-      r?.(st);
+      onSkip?.(st);
       return null;
     case "empty":
       return "";
     case "read":
-      return await fsImplementation.readFile(n, {
+      return await fsImplementation.readFile(filePath, {
         encoding: "utf8",
       });
   }
 }
 //@ chunk-qg0af0yq.js:10119-10265 placement
-function readSmallFileCheckedSync(e, filePath, t) {
-  switch (checkSmallFileReadableSync(e, filePath, t).verdict) {
+function readSmallFileCheckedSync(fs, filePath, maxBytes) {
+  switch (checkSmallFileReadableSync(fs, filePath, maxBytes).verdict) {
     case "skip":
       return null;
     case "empty":
       return "";
     case "read":
-      return e.readFileSync(filePath, {
+      return fs.readFileSync(filePath, {
         encoding: "utf8",
       });
   }
 }
 //@ chunk-qg0af0yq.js:10265-10556 placement
-async function checkSmallFileReadable(fsImplementation, n, t) {
-  let r = {
-    leaf: await fsImplementation.lstat(n),
+async function checkSmallFileReadable(fsImplementation, filePath, maxBytes) {
+  let info = {
+    leaf: await fsImplementation.lstat(filePath),
   };
   for (;;) {
-    let smallFileChecked = readSmallFileChecked_2(n, t, r);
+    let smallFileChecked = readSmallFileChecked_2(filePath, maxBytes, info);
     if ("verdict" in smallFileChecked) return smallFileChecked;
     try {
       switch (smallFileChecked.ask) {
         case "target":
-          r.target = await fsImplementation.stat(n);
+          info.target = await fsImplementation.stat(filePath);
           break;
         case "resolved":
-          r.resolved = await fsImplementation.realpath(n);
+          info.resolved = await fsImplementation.realpath(filePath);
           break;
         case "named":
-          r.named = await fsImplementation.stat(smallFileChecked.at);
+          info.named = await fsImplementation.stat(smallFileChecked.at);
           break;
       }
     } catch (error) {
-      recordStatFailure(r, smallFileChecked.ask, error);
+      recordStatFailure(info, smallFileChecked.ask, error);
     }
   }
 }
 //@ chunk-qg0af0yq.js:10556-10833 placement
-function checkSmallFileReadableSync(e, n, t) {
-  let r = {
-    leaf: e.lstatSync(n),
+function checkSmallFileReadableSync(fs, filePath, maxBytes) {
+  let info = {
+    leaf: fs.lstatSync(filePath),
   };
   for (;;) {
-    let smallFileChecked = readSmallFileChecked_2(n, t, r);
+    let smallFileChecked = readSmallFileChecked_2(filePath, maxBytes, info);
     if ("verdict" in smallFileChecked) return smallFileChecked;
     try {
       switch (smallFileChecked.ask) {
         case "target":
-          r.target = e.statSync(n);
+          info.target = fs.statSync(filePath);
           break;
         case "resolved":
-          r.resolved = e.realpathSync(n);
+          info.resolved = fs.realpathSync(filePath);
           break;
         case "named":
-          r.named = e.statSync(smallFileChecked.at);
+          info.named = fs.statSync(smallFileChecked.at);
           break;
       }
     } catch (error) {
-      recordStatFailure(r, smallFileChecked.ask, error);
+      recordStatFailure(info, smallFileChecked.ask, error);
     }
   }
 }
@@ -123,73 +123,81 @@ var FD_PATH_RE = /^\/(?:dev|proc\/[^/]+)\/fd\/\d+$/;
 var DELETED_SUFFIX_RE = / \(deleted\)$/;
 var PROC_OR_SYS_PATH_RE = /^\/(?:proc\/(?!version$)|sys\/)/;
 //@ chunk-qg0af0yq.js:10931-11815 placement
-function readSmallFileChecked_2(e, n, t) {
-  let r = t.leaf.isSymbolicLink();
-  if (r && t.target === undefined)
+function readSmallFileChecked_2(filePath, maxBytes, info) {
+  let isLink = info.leaf.isSymbolicLink();
+  if (isLink && info.target === undefined)
     return {
       ask: "target",
     };
-  let i = t.target ?? t.leaf;
-  if (!i.isFile() || i.size > n)
+  let stats = info.target ?? info.leaf;
+  if (!stats.isFile() || stats.size > maxBytes)
     return {
       verdict: "skip",
-      st: i,
+      st: stats,
     };
-  if (getPlatform() === "windows" || (!r && (i.size !== 0 || i.nlink === 0)))
+  if (getPlatform() === "windows" || (!isLink && (stats.size !== 0 || stats.nlink === 0)))
     return {
       verdict: "read",
-      st: i,
+      st: stats,
     };
-  if (t.resolved === undefined && (r || !hasBackslash(e)))
+  if (info.resolved === undefined && (isLink || !hasBackslash(filePath)))
     return {
       ask: "resolved",
     };
-  let resolved = t.resolved ?? undefined;
-  if (r && resolved !== undefined) {
+  let resolved = info.resolved ?? undefined;
+  if (isLink && resolved !== undefined) {
     if (!resolved.startsWith("/") || FD_PATH_RE.test(resolved)) resolved = undefined;
-    else if (i.nlink === 0 || DELETED_SUFFIX_RE.test(resolved) || (i.size === 0 && hasBackslash(e))) {
-      if (isSentinelInode(i.ino)) resolved = undefined;
-      else if (t.named === undefined)
+    else if (
+      stats.nlink === 0 ||
+      DELETED_SUFFIX_RE.test(resolved) ||
+      (stats.size === 0 && hasBackslash(filePath))
+    ) {
+      if (isSentinelInode(stats.ino)) resolved = undefined;
+      else if (info.named === undefined)
         return {
           ask: "named",
           at: resolved,
         };
-      else if (t.named === null || t.named.ino !== i.ino || t.named.dev !== i.dev) resolved = undefined;
+      else if (info.named === null || info.named.ino !== stats.ino || info.named.dev !== stats.dev)
+        resolved = undefined;
     }
   }
   if (
-    getDevicePathRefusal(e, {
-      spellings: resolved === undefined ? [e] : [e, resolved],
+    getDevicePathRefusal(filePath, {
+      spellings: resolved === undefined ? [filePath] : [filePath, resolved],
       unresolved: false,
     }) !== undefined ||
     (resolved !== undefined && PROC_OR_SYS_PATH_RE.test(resolved))
   )
     return {
       verdict: "skip",
-      st: i,
+      st: stats,
     };
   if (resolved !== undefined)
     return {
       verdict: "read",
-      st: i,
+      st: stats,
     };
-  if (!r)
+  if (!isLink)
     return {
       verdict: "empty",
-      st: i,
+      st: stats,
     };
   return {
-    verdict: t.resolved === null && t.noNameLeft !== true && i.size !== 0 && i.nlink !== 0 ? "read" : "skip",
-    st: i,
+    verdict:
+      info.resolved === null && info.noNameLeft !== true && stats.size !== 0 && stats.nlink !== 0
+        ? "read"
+        : "skip",
+    st: stats,
   };
 }
 //@ chunk-qg0af0yq.js:11815-11972 placement
-function recordStatFailure(e, n, error) {
-  if (n === "target" || (e.leaf.isSymbolicLink() && !isFsInaccessible(error))) throw error;
-  if (n === "resolved") {
-    e.resolved = null;
-    e.noNameLeft = getErrnoCode(error) === "ENOENT";
-  } else e.named = null;
+function recordStatFailure(info, ask, error) {
+  if (ask === "target" || (info.leaf.isSymbolicLink() && !isFsInaccessible(error))) throw error;
+  if (ask === "resolved") {
+    info.resolved = null;
+    info.noNameLeft = getErrnoCode(error) === "ENOENT";
+  } else info.named = null;
 }
 export {
   readSmallFileChecked,

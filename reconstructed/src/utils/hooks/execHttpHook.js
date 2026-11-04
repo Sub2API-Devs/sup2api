@@ -23,27 +23,31 @@ import { createCombinedAbortSignal } from "../combinedAbortSignal.js";
 import { getUsableProxyUrl, shouldBypassProxy as shouldBypassProxy_2, getNoProxy } from "../proxy.js";
 import { externalHttp } from "../../services/http/externalHttp.js";
 import { errorMessage } from "../errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3405872-3406153 sole-consumer
-var NETWORK_ENV_KEYS = [
-  "NODE_EXTRA_CA_CERTS",
-  "CLAUDE_CODE_CERT_STORE",
-  "CLAUDE_CODE_DISABLE_LOOPED_CROSS_CERT_DROP",
-  "CLAUDE_CODE_DISABLE_SELF_NAMED_CERT_DROP",
-  "CLAUDE_CODE_CLIENT_CERT",
-  "CLAUDE_CODE_CLIENT_KEY",
-  "CLAUDE_CODE_CLIENT_KEY_PASSPHRASE",
-  ...TLS_ENV_VARS,
-  "LOCALDOMAIN",
-  "HOSTALIASES",
-  "RES_OPTIONS",
-];
+var NETWORK_ENV_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3405872", () => {
+  NETWORK_ENV_KEYS = [
+    "NODE_EXTRA_CA_CERTS",
+    "CLAUDE_CODE_CERT_STORE",
+    "CLAUDE_CODE_DISABLE_LOOPED_CROSS_CERT_DROP",
+    "CLAUDE_CODE_DISABLE_SELF_NAMED_CERT_DROP",
+    "CLAUDE_CODE_CLIENT_CERT",
+    "CLAUDE_CODE_CLIENT_KEY",
+    "CLAUDE_CODE_CLIENT_KEY_PASSPHRASE",
+    ...TLS_ENV_VARS,
+    "LOCALDOMAIN",
+    "HOSTALIASES",
+    "RES_OPTIONS",
+  ];
+});
 //@ chunk-e6aww6q8.js:3406153-3406459 fingerprint = getSandboxProxyConfig (0.683)
 /**
  * 沙箱网络开启时返回 HTTP 钩子使用的本地代理配置（127.0.0.1:port，带 srt 认证）。
  */
 async function getSandboxProxyConfig() {
-  let { SandboxManager } = await import("./chunk-y0my07fj.js");
+  let { SandboxManager } = await import("../sandbox/REFUSED_UNTIL_RESTART.lazy.js");
   if (!SandboxManager.isSandboxingEnabled()) return;
   await SandboxManager.waitForNetworkInitialization();
   let proxyPort = SandboxManager.getProxyPort();
@@ -80,10 +84,10 @@ function sanitizeHeaderValue(value) {
 /**
  * 在 header 值里插值 $VAR/${VAR}：不在 allowedEnvVars 的变量与凭证类变量替换为空串，结果去掉 CR/LF/NUL。
  */
-function interpolateEnvVars(value, allowedEnvVars, r, s, h) {
+function interpolateEnvVars(value, allowedEnvVars, adminVars, env, blockedKeys) {
   let interpolated = value.replace(
     /\$\{([A-Z_][A-Z0-9_]*)\}|\$([A-Z_][A-Z0-9_]*)/g,
-    (S, braced, unbraced) => {
+    (match, braced, unbraced) => {
       let varName = braced ?? unbraced;
       if (!allowedEnvVars.has(varName)) {
         logForDebugging(`Hooks: env var $${varName} not in allowedEnvVars, skipping interpolation`, {
@@ -91,8 +95,11 @@ function interpolateEnvVars(value, allowedEnvVars, r, s, h) {
         });
         return "";
       }
-      let q = (s ?? subprocessEnv())[varName];
-      if (isBlockedForExpansion_2(varName) || (!r.has(varName) && isBlockedForExpansion(varName, q, h))) {
+      let varValue = (env ?? subprocessEnv())[varName];
+      if (
+        isBlockedForExpansion_2(varName) ||
+        (!adminVars.has(varName) && isBlockedForExpansion(varName, varValue, blockedKeys))
+      ) {
         logForDebugging(
           `Hooks: env var $${varName} is a credential and is not interpolated into an HTTP hook header`,
           {
@@ -101,7 +108,7 @@ function interpolateEnvVars(value, allowedEnvVars, r, s, h) {
         );
         return "";
       }
-      return q ?? "";
+      return varValue ?? "";
     },
   );
   return sanitizeHeaderValue(interpolated);
@@ -126,7 +133,7 @@ async function execHttpHook(
   signal,
   timeoutMs = TOOL_HOOK_EXECUTION_TIMEOUT_MS,
   env,
-  S,
+  envContext,
 ) {
   if (isHttpMcpServeInvocation()) {
     logForDebugging("HTTP hook not sent: claude mcp serve --transport http never sends HTTP hooks.", {
@@ -172,27 +179,35 @@ async function execHttpHook(
     };
     if (hook.headers) {
       let hookVars = hook.allowedEnvVars ?? [];
-      let We =
+      let allowedHookVars =
         policy.allowedEnvVars !== undefined
           ? hookVars.filter((v) => policy.allowedEnvVars.includes(v))
           : hookVars;
-      let allowedEnvVars = new Set(We);
-      let lt = new Set(getMachineAdminTierSettings().flatMap((nt) => nt.httpHookAllowedEnvVars ?? []));
-      let Je = S?.blankList ?? scrubbedEnvKeys();
+      let allowedEnvVars = new Set(allowedHookVars);
+      let adminTierVars = new Set(
+        getMachineAdminTierSettings().flatMap((settings) => settings.httpHookAllowedEnvVars ?? []),
+      );
+      let blockedKeys = envContext?.blankList ?? scrubbedEnvKeys();
       for (let [name, value] of Object.entries(hook.headers))
-        headers[name] = interpolateEnvVars(value, allowedEnvVars, lt, env ?? S?.env, Je);
+        headers[name] = interpolateEnvVars(
+          value,
+          allowedEnvVars,
+          adminTierVars,
+          env ?? envContext?.env,
+          blockedKeys,
+        );
     }
     let sandboxProxy = await getSandboxProxyConfig();
     let envProxyActive = !sandboxProxy && getUsableProxyUrl() !== undefined && !shouldBypassProxy_2(hook.url);
     let usableProxyUrl = getUsableProxyUrl();
-    let Ee = env === undefined ? undefined : getUsableProxyUrl(env);
+    let envProxyUrl = env === undefined ? undefined : getUsableProxyUrl(env);
     if (
       env !== undefined &&
-      (usableProxyUrl !== Ee ||
-        ((usableProxyUrl !== undefined || Ee !== undefined) &&
+      (usableProxyUrl !== envProxyUrl ||
+        ((usableProxyUrl !== undefined || envProxyUrl !== undefined) &&
           shouldBypassProxy_2(hook.url, getNoProxy() ?? "") !==
             shouldBypassProxy_2(hook.url, getNoProxy(env) ?? "")) ||
-        NETWORK_ENV_KEYS.some((Me) => process.env[Me] !== env[Me]))
+        NETWORK_ENV_KEYS.some((key) => process.env[key] !== env[key]))
     ) {
       logForDebugging(
         "HTTP hook not sent: this process's proxy, TLS trust or resolver settings differ from the person's own environment",

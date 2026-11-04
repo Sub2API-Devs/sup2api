@@ -14,28 +14,29 @@ import { clampPositive, makeCoreEvent } from "./coreHandlers.js";
 import { surfaceComposer } from "./surfaceBinding.js";
 import { NO_CORE_AT_CHAIN_BOTTOM } from "./eventCatalog.js";
 import { logForDebugging } from "../../utils/debug.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:69575-69807 placement
-function sanitizeFillText(text, decorations) {
-  let r = decorations === undefined;
-  let s = sanitizePromptText()(text);
-  if (r)
+function sanitizeFillText(offsets, decorations) {
+  let hasNoDecorations = decorations === undefined;
+  let cleanText = sanitizePromptText()(offsets);
+  if (hasNoDecorations)
     return {
-      text: s,
+      text: cleanText,
     };
-  if (s === text)
+  if (cleanText === offsets)
     return {
-      text: s,
+      text: cleanText,
       decorations,
     };
-  let y = mapNormalizedOffsets(text, s);
-  let S = (w) => y[clampPositive(w, text.length)] ?? s.length;
+  let offsetMap = mapNormalizedOffsets(offsets, cleanText);
+  let mapOffset = (offset) => offsetMap[clampPositive(offset, offsets.length)] ?? cleanText.length;
   return {
-    text: s,
-    decorations: decorations.map((w) => ({
-      ...w,
-      start: S(w.start),
-      end: S(w.end),
+    text: cleanText,
+    decorations: decorations.map((decoration) => ({
+      ...decoration,
+      start: mapOffset(decoration.start),
+      end: mapOffset(decoration.end),
     })),
   };
 }
@@ -43,37 +44,37 @@ function sanitizeFillText(text, decorations) {
 /**
  * prompt.fill 核心：把文本写入当前输入框（清洗后、重映射装饰段），可经 attribute 标记来源；无输入框时拒绝。
  */
-async function fillPromptBox(e, answersPress) {
-  let r = surfaceComposer();
-  if (r === undefined)
+async function fillPromptBox(request, answersPress) {
+  let composer = surfaceComposer();
+  if (composer === undefined)
     return {
       isFilled: false,
       refusal: "no_composer",
     };
-  let s = sanitizeFillText(e.text, e.decorations);
-  let h = () =>
-    r.write(s.text, e.mode, {
-      decorations: s.decorations,
-      cursor: e.cursor,
+  let clean = sanitizeFillText(request.text, request.decorations);
+  let write = () =>
+    composer.write(clean.text, request.mode, {
+      decorations: clean.decorations,
+      cursor: request.cursor,
       answersPress,
     });
-  let { attribute } = r;
-  return attribute === undefined ? h() : attribute(e.origin, h);
+  let { attribute } = composer;
+  return attribute === undefined ? write() : attribute(request.origin, write);
 }
 //@ chunk-e6aww6q8.js:70070-70154 placement
 /**
  * prompt.fill 核心
  */
 var PROMPT_FILL_CORE = (text, mode, answersPress) =>
-  makeCoreEvent("prompt.fill", (s) =>
-    fillPromptBox(s, s.text === text && s.mode === mode ? answersPress : undefined),
+  makeCoreEvent("prompt.fill", (request) =>
+    fillPromptBox(request, request.text === text && request.mode === mode ? answersPress : undefined),
   ).core;
 //@ chunk-e6aww6q8.js:70154-70614 placement
 /**
  * $.prompt.fill 实现：经 prompt.fill 钩子链填入输入框（默认 replace 模式），记录结果。
  */
-async function promptFillOp(e) {
-  let { text, mode = "replace", decorations, cursor, origin, hookOrigin, signal, answersPress } = e;
+async function promptFillOp(request) {
+  let { text, mode = "replace", decorations, cursor, origin, hookOrigin, signal, answersPress } = request;
   let { isFilled, refusal } = await NO_CORE_AT_CHAIN_BOTTOM("prompt.fill", {
     origin: hookOrigin,
     signal,
@@ -110,5 +111,8 @@ async function promptFillOp(e) {
 /**
  * prompt.fill 事件
  */
-var promptFillEvent = makeCoreEvent("prompt.fill", fillPromptBox);
+var promptFillEvent; // deferred: uses makeCoreEvent (./coreHandlers.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:70614", () => {
+  promptFillEvent = makeCoreEvent("prompt.fill", fillPromptBox);
+});
 export { promptFillEvent, promptFillOp };

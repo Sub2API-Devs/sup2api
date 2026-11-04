@@ -116,8 +116,8 @@ function getLogoDisplayData() {
   };
 }
 //@ chunk-8jypjjdf.js:20174-20372 fingerprint = formatModelAndBilling (0.846)
-function formatModelAndBilling(modelName, billingType, availableWidth, l) {
-  if (bunStringWidth(l) + 3 + bunStringWidth(billingType) > availableWidth)
+function formatModelAndBilling(modelName, billingType, availableWidth, modelDisplay) {
+  if (bunStringWidth(modelDisplay) + 3 + bunStringWidth(billingType) > availableWidth)
     return {
       shouldSplit: true,
       truncatedModel: truncate(modelName, availableWidth),
@@ -130,16 +130,16 @@ function formatModelAndBilling(modelName, billingType, availableWidth, l) {
   };
 }
 //@ chunk-t3sg9e26.js:1126-1313 fingerprint = truncatePath (0.711)
-function truncatePath(e, n, t) {
+function truncatePath(env, keyName, includeCaseInsensitive) {
   let middleParts = [];
-  for (let [key, value] of Object.entries(e)) {
+  for (let [key, value] of Object.entries(env)) {
     if (value === undefined) continue;
-    if (key === n)
+    if (key === keyName)
       middleParts.unshift({
         name: key,
         value,
       });
-    else if (t && key.toUpperCase() === n)
+    else if (includeCaseInsensitive && key.toUpperCase() === keyName)
       middleParts.push({
         name: key,
         value,

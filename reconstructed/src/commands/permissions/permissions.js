@@ -38,18 +38,19 @@ var call = async (onDone, context) => {
       rulesRead: readCloudSessionRules(remoteCaps, context.abortController.signal),
     });
   }
-  let m = context.isMidTurn === true;
+  let isMidTurn = context.isMidTurn === true;
   return jsxProd_default(PermissionRuleList, {
     onExit: onDone,
-    isMidTurn: m,
-    onRetryDenials: (commands, f) => {
+    isMidTurn,
+    onRetryDenials: (commands, denials) => {
       context.applyMessageOp({
         type: "append",
         messages: [
-          createPermissionRetryMessage(commands, m),
-          ...f.map((commands) => createSystemMessage(stripAnsi(commands), "notice")),
+          createPermissionRetryMessage(commands, isMidTurn),
+          ...denials.map((commands) => createSystemMessage(stripAnsi(commands), "notice")),
         ],
       });
     },
   });
 };
+export { call };

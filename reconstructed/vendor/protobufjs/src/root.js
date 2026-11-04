@@ -5,7 +5,7 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS as x } from "../../../runtime/bun-runtime.js";
 import { zr } from "./namespace.js";
 import { Yt } from "./field.js";
 import { nt } from "./enum.js";
@@ -45,8 +45,8 @@ var xs = x(function (cjsExports, cjsModule) {
       callback = options;
       options = undefined;
     }
-    var s = this;
-    if (!callback) return util.asPromise(load, s, filename, options);
+    var owner = this;
+    if (!callback) return util.asPromise(load, owner, filename, options);
     var sync = callback === SYNC;
     function finish(err, root) {
       if (!callback) return;
@@ -64,48 +64,49 @@ var xs = x(function (cjsExports, cjsModule) {
       }
       return null;
     }
-    function l(filename, source) {
+    function loadFile(filename, source) {
       try {
         if (util.isString(source) && source.charAt(0) === "{") source = JSON.parse(source);
-        if (!util.isString(source)) s.setOptions(source.options).addJSON(source.nested);
+        if (!util.isString(source)) owner.setOptions(source.options).addJSON(source.nested);
         else {
           parse.filename = filename;
-          var parsed = parse(source, s, options);
+          var parsed = parse(source, owner, options);
           var resolved;
           var i = 0;
           if (parsed.imports) {
             for (; i < parsed.imports.length; ++i)
               if (
                 (resolved =
-                  getBundledFileName(parsed.imports[i]) || s.resolvePath(filename, parsed.imports[i]))
+                  getBundledFileName(parsed.imports[i]) || owner.resolvePath(filename, parsed.imports[i]))
               )
-                c(resolved);
+                loadOrFetch(resolved);
           }
           if (parsed.weakImports) {
             for (i = 0; i < parsed.weakImports.length; ++i)
               if (
                 (resolved =
-                  getBundledFileName(parsed.weakImports[i]) || s.resolvePath(filename, parsed.weakImports[i]))
+                  getBundledFileName(parsed.weakImports[i]) ||
+                  owner.resolvePath(filename, parsed.weakImports[i]))
               )
-                c(resolved, true);
+                loadOrFetch(resolved, true);
           }
         }
       } catch (err) {
         finish(err);
       }
-      if (!sync && !queued) finish(null, s);
+      if (!sync && !queued) finish(null, owner);
     }
-    function c(filename, weak) {
+    function loadOrFetch(filename, weak) {
       filename = getBundledFileName(filename) || filename;
-      if (s.files.indexOf(filename) > -1) return;
-      s.files.push(filename);
+      if (owner.files.indexOf(filename) > -1) return;
+      owner.files.push(filename);
       if (filename in common) {
-        if (sync) l(filename, common[filename]);
+        if (sync) loadFile(filename, common[filename]);
         else {
           ++queued;
           setTimeout(function () {
             --queued;
-            l(filename, common[filename]);
+            loadFile(filename, common[filename]);
           });
         }
         return;
@@ -118,31 +119,31 @@ var xs = x(function (cjsExports, cjsModule) {
           if (!weak) finish(err);
           return;
         }
-        l(filename, source);
+        loadFile(filename, source);
       } else {
         ++queued;
-        s.fetch(filename, function (err, source) {
+        owner.fetch(filename, function (err, source) {
           --queued;
           if (!callback) return;
           if (err) {
             if (!weak) finish(err);
-            else if (!queued) finish(null, s);
+            else if (!queued) finish(null, owner);
             return;
           }
-          l(filename, source);
+          loadFile(filename, source);
         });
       }
     }
     var queued = 0;
     if (util.isString(filename)) filename = [filename];
     for (var i = 0, resolved; i < filename.length; ++i)
-      if ((resolved = s.resolvePath("", filename[i]))) c(resolved);
+      if ((resolved = owner.resolvePath("", filename[i]))) loadOrFetch(resolved);
     if (sync) {
-      s.resolveAll();
-      return s;
+      owner.resolveAll();
+      return owner;
     }
-    if (!queued) finish(null, s);
-    return s;
+    if (!queued) finish(null, owner);
+    return owner;
   };
   Root.prototype.loadSync = function (filename, options) {
     if (!util.isNode) throw Error("not supported");
@@ -205,7 +206,7 @@ var xs = x(function (cjsExports, cjsModule) {
     } else if (object instanceof Enum) {
       if (exposeRe.test(object.name)) delete object.parent[object.name];
     } else if (object instanceof Namespace) {
-      for (var i = 0; i < object.nestedArray.length; ++i) this._handleRemove(object._nestedArray[i]);
+      for (var idx = 0; idx < object.nestedArray.length; ++idx) this._handleRemove(object._nestedArray[idx]);
       if (exposeRe.test(object.name)) delete object.parent[object.name];
     }
     delete this._fullyQualifiedObjects[object.fullName];

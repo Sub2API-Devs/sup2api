@@ -67,11 +67,11 @@ var HEARTH_START_THREAD_ALIASES = {
   start_thread: "start_thread_session",
 };
 //@ chunk-ptag3qm7.js:1124-1264 placement
-function toolNameAliasPairs(e, s) {
+function toolNameAliasPairs(canonicalNames, aliases) {
   return [
-    ...e.map((t) => [t, t]),
-    ...Object.entries(s).flatMap(([key, value]) => {
-      let found = e.find((a) => a === value);
+    ...canonicalNames.map((name) => [name, name]),
+    ...Object.entries(aliases).flatMap(([key, value]) => {
+      let found = canonicalNames.find((canonical) => canonical === value);
       return found === undefined ? [] : [[key, found]];
     }),
   ];
@@ -80,8 +80,8 @@ function toolNameAliasPairs(e, s) {
 /**
  * 把一组工具名按别名表解析成规范名。
  */
-function aliasCanonicalNames(e, s = HEARTH_TOOL_ALIASES) {
-  return toolNameAliasPairs(e, s).map(([t]) => t);
+function aliasCanonicalNames(names, aliases = HEARTH_TOOL_ALIASES) {
+  return toolNameAliasPairs(names, aliases).map(([alias]) => alias);
 }
 //@ chunk-ptag3qm7.js:1312-1351 placement = getMcpPrefix (1)
 function getMcpPrefix(serverName) {
@@ -91,9 +91,9 @@ function getMcpPrefix(serverName) {
 /**
  * 由规范工具名拼出 mcp__hearthbot__<name>。
  */
-function hearthToolName(e, s = HEARTH_TOOL_ALIASES) {
-  let [, t] = aliasCanonicalNames([e], s);
-  return getMcpPrefix(t ?? e);
+function hearthToolName(name, aliases = HEARTH_TOOL_ALIASES) {
+  let [, alias] = aliasCanonicalNames([name], aliases);
+  return getMcpPrefix(alias ?? name);
 }
 //@ chunk-ptag3qm7.js:1403-1655 placement
 /**
@@ -113,8 +113,8 @@ var HEARTH_READ_TOOLS = new Set(
 /**
  * 服务器的工具列表里是否有任一给定工具名或别名。
  */
-function serverHasAnyTool(e, s) {
-  return e.some((t) => s.some((_) => t.name === _ || t.aliases?.includes(_)));
+function serverHasAnyTool(tools, names) {
+  return tools.some((tool) => names.some((name) => tool.name === name || tool.aliases?.includes(name)));
 }
 //@ chunk-ptag3qm7.js:1740-1942 placement
 /**
@@ -139,23 +139,23 @@ var DEFAULT_HEARTH_TOOLS = {
  * 根据当前可用工具决定 hearthbot 回复/状态/读取各用哪个工具名：只有别名版 reply 存在时用它并标记回复即答案，读取类工具优先用实际存在的别名。
  */
 function resolveHearthToolNames(tools) {
-  let s = DEFAULT_HEARTH_TOOLS;
-  let t = (i) => {
-    let p = hearthToolName(i.slice(getMcpPrefix("").length));
-    return serverHasAnyTool(tools, [p]) && !serverHasAnyTool(tools, [i]) ? p : i;
+  let spec = DEFAULT_HEARTH_TOOLS;
+  let pickAlias = (name) => {
+    let aliasName = hearthToolName(name.slice(getMcpPrefix("").length));
+    return serverHasAnyTool(tools, [aliasName]) && !serverHasAnyTool(tools, [name]) ? aliasName : name;
   };
-  let _ =
+  let replyAlt =
     serverHasAnyTool(tools, [HEARTH_REPLY_TOOL_ALT]) &&
     !serverHasAnyTool(tools, [HEARTH_REPLY_TOOL, HEARTH_UPDATE_STATUS_TOOL, ...HEARTH_START_SESSION_TOOLS]);
-  let { messages, thread, timeline } = s.reads;
+  let { messages, thread, timeline } = spec.reads;
   return {
-    reply: _ ? HEARTH_REPLY_TOOL_ALT : s.reply,
-    postIsAnswer: _,
-    status: t(s.status),
+    reply: replyAlt ? HEARTH_REPLY_TOOL_ALT : spec.reply,
+    postIsAnswer: replyAlt,
+    status: pickAlias(spec.status),
     reads: {
-      messages: t(messages),
-      thread: t(thread),
-      timeline: t(timeline),
+      messages: pickAlias(messages),
+      thread: pickAlias(thread),
+      timeline: pickAlias(timeline),
     },
   };
 }

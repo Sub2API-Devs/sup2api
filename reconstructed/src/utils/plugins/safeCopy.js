@@ -14,109 +14,117 @@ import { pipeline } from "stream/promises";
 import { join } from "path";
 import { getPlatform } from "../platform.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, getErrnoCode } from "../errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-k176arn3.js:879-1450 placement
 /**
  * 不跟随符号链接地复制文件（O_NOFOLLOW），在 Windows 等不支持时先检查是普通文件。
  */
-async function copyFileNoFollow(e, t, n) {
+async function copyFileNoFollow(sourcePath, targetPath, options) {
   let O_NOFOLLOW = constants.O_NOFOLLOW;
   if (O_NOFOLLOW === undefined || getPlatform() === "windows") {
-    if (!(await lstat(e)).isFile()) throw fileSwappedError(e);
-    await copyFile(e, t, n?.exclusive ? constants.COPYFILE_EXCL : 0);
+    if (!(await lstat(sourcePath)).isFile()) throw fileSwappedError(sourcePath);
+    await copyFile(sourcePath, targetPath, options?.exclusive ? constants.COPYFILE_EXCL : 0);
     return;
   }
-  let o = await open(e, constants.O_RDONLY | O_NOFOLLOW | (n?.nonBlocking ? (constants.O_NONBLOCK ?? 0) : 0));
+  let handle = await open(
+    sourcePath,
+    constants.O_RDONLY | O_NOFOLLOW | (options?.nonBlocking ? (constants.O_NONBLOCK ?? 0) : 0),
+  );
   try {
-    let stats = await o.stat();
-    if (!stats.isFile()) throw fileSwappedError(e);
-    if (n?.exactMode) {
-      let s = await open(t, n.exclusive ? "wx" : "w", stats.mode);
+    let stats = await handle.stat();
+    if (!stats.isFile()) throw fileSwappedError(sourcePath);
+    if (options?.exactMode) {
+      let writer = await open(targetPath, options.exclusive ? "wx" : "w", stats.mode);
       try {
         await pipeline(
-          o.createReadStream(),
-          createWriteStream(t, {
-            fd: s.fd,
+          handle.createReadStream(),
+          createWriteStream(targetPath, {
+            fd: writer.fd,
             autoClose: false,
           }),
         );
-        await s.chmod(stats.mode & 4095);
+        await writer.chmod(stats.mode & 4095);
       } finally {
-        await s.close();
+        await writer.close();
       }
     } else
       await pipeline(
-        o.createReadStream(),
-        createWriteStream(t, {
+        handle.createReadStream(),
+        createWriteStream(targetPath, {
           mode: stats.mode,
-          flags: n?.exclusive ? "wx" : "w",
+          flags: options?.exclusive ? "wx" : "w",
         }),
       );
   } finally {
-    await o.close();
+    await handle.close();
   }
 }
 //@ chunk-k176arn3.js:1450-1624 placement
-function fileSwappedError(e) {
+function fileSwappedError(path) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-    `Refusing to copy ${e}: it is no longer a regular file (swapped during the copy).`,
+    `Refusing to copy ${path}: it is no longer a regular file (swapped during the copy).`,
     "plugin copy source swapped for a non-regular file mid-copy",
   );
 }
 //@ chunk-k176arn3.js:1624-1720 placement
-var RETRYABLE_COPY_ERRNOS = new Set([
-  "ENOENT",
-  "ENOTDIR",
-  "ELOOP",
-  "EMLINK",
-  "EFTYPE",
-  "EISDIR",
-  "ENAMETOOLONG",
-  "EINVAL",
-]);
+var RETRYABLE_COPY_ERRNOS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-k176arn3.js:1624", () => {
+  RETRYABLE_COPY_ERRNOS = new Set([
+    "ENOENT",
+    "ENOTDIR",
+    "ELOOP",
+    "EMLINK",
+    "EFTYPE",
+    "EISDIR",
+    "ENAMETOOLONG",
+    "EINVAL",
+  ]);
+});
 //@ chunk-k176arn3.js:1720-2277 placement
 /**
  * 原子写文件：在 .cc-writes 临时目录写好再重命名，处理跨设备与瞬时错误。
  */
-async function writeFileAtomically(e, t, n) {
-  let r = (error) => {
+async function writeFileAtomically(path, maxBytes, options) {
+  let onError = (error) => {
     let errnoCode = getErrnoCode(error);
-    if (n?.throwTransient && (errnoCode === undefined || !RETRYABLE_COPY_ERRNOS.has(errnoCode))) throw error;
+    if (options?.throwTransient && (errnoCode === undefined || !RETRYABLE_COPY_ERRNOS.has(errnoCode)))
+      throw error;
     return null;
   };
-  let o = getPlatform() === "windows";
-  let O_NOFOLLOW = o ? undefined : constants.O_NOFOLLOW;
-  let s = o ? 0 : (constants.O_NONBLOCK ?? 0);
+  let isWindows = getPlatform() === "windows";
+  let O_NOFOLLOW = isWindows ? undefined : constants.O_NOFOLLOW;
+  let nonBlock = isWindows ? 0 : (constants.O_NONBLOCK ?? 0);
   if (O_NOFOLLOW === undefined) {
-    let c = await lstat(e).catch(r);
-    if (c === null || !c.isFile()) return null;
+    let stat = await lstat(path).catch(onError);
+    if (stat === null || !stat.isFile()) return null;
   }
-  let f;
+  let handle;
   try {
-    f = await open(e, constants.O_RDONLY | (O_NOFOLLOW ?? 0) | s);
+    handle = await open(path, constants.O_RDONLY | (O_NOFOLLOW ?? 0) | nonBlock);
   } catch (error) {
-    return r(error);
+    return onError(error);
   }
   try {
-    let stats = await f.stat();
-    if (!stats.isFile() || stats.size > t) return null;
-    let { buffer, bytesRead } = await f.read(Buffer.alloc(t + 1), 0, t + 1, 0);
-    if (bytesRead > t) return null;
+    let stats = await handle.stat();
+    if (!stats.isFile() || stats.size > maxBytes) return null;
+    let { buffer, bytesRead } = await handle.read(Buffer.alloc(maxBytes + 1), 0, maxBytes + 1, 0);
+    if (bytesRead > maxBytes) return null;
     return buffer.subarray(0, bytesRead).toString("utf-8");
   } catch (error) {
-    return r(error);
+    return onError(error);
   } finally {
-    await f.close();
+    await handle.close();
   }
 }
 //@ chunk-k176arn3.js:2277-2414 placement
-async function isSameFilesystem(e, t) {
-  let n = join(e, t);
+async function isSameFilesystem(parentDir, name) {
+  let path = join(parentDir, name);
   try {
-    await readlink(n);
+    await readlink(path);
     return false;
   } catch (error) {
-    if (getErrnoCode(error) === "EINVAL") return !(await lstat(n)).isSymbolicLink();
+    if (getErrnoCode(error) === "EINVAL") return !(await lstat(path)).isSymbolicLink();
     throw error;
   }
 }
@@ -143,8 +151,12 @@ function shouldWriteInPlace({ served }) {
 /**
  * ATOMIC_WRITE_ERRNOS：原子写降级错误码。
  */
-var ATOMIC_WRITE_DIRNAME = ".cc-writes";
-var ATOMIC_WRITE_ERRNOS = new Set(["EXDEV", "EPERM", "EEXIST", "EBUSY"]);
+var ATOMIC_WRITE_DIRNAME; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ATOMIC_WRITE_ERRNOS;
+deferInit("chunk-k176arn3.js:2552", () => {
+  ATOMIC_WRITE_DIRNAME = ".cc-writes";
+  ATOMIC_WRITE_ERRNOS = new Set(["EXDEV", "EPERM", "EEXIST", "EBUSY"]);
+});
 //@ chunk-k176arn3.js:2619-2658 placement
 function isInPlaceWriteDefault() {
   return shouldWriteInPlace({
@@ -152,24 +164,27 @@ function isInPlaceWriteDefault() {
   });
 }
 //@ chunk-k176arn3.js:2658-2909 placement
-function hardlinkedRefusalText(e, t) {
-  return `Could not rewrite ${e} in place: this file has other names on disk (it is hard-linked, ${t} names in all), and writing it in place would change the file under every one of those names. Remove the extra links, then try again.`;
+function hardlinkedRefusalText(path, nlink) {
+  return `Could not rewrite ${path} in place: this file has other names on disk (it is hard-linked, ${nlink} names in all), and writing it in place would change the file under every one of those names. Remove the extra links, then try again.`;
 }
 //@ chunk-k176arn3.js:2909-3054 placement
-function hardlinkedRefusalError(e, nlink) {
+function hardlinkedRefusalError(path, nlink) {
   return Object.assign(
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      hardlinkedRefusalText(e, nlink),
+      hardlinkedRefusalText(path, nlink),
       "in-place write refused: the target has other names (a hard link)",
     ),
     {
       code: "EMLINK",
-      path: e,
+      path,
     },
   );
 }
 //@ chunk-k176arn3.js:3054-3097 placement
-var TRANSIENT_FS_ERRORS = new Set(["EPERM", "EBUSY", "EACCES"]);
+var TRANSIENT_FS_ERRORS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-k176arn3.js:3054", () => {
+  TRANSIENT_FS_ERRORS = new Set(["EPERM", "EBUSY", "EACCES"]);
+});
 export {
   ATOMIC_WRITE_DIRNAME,
   ATOMIC_WRITE_ERRNOS,

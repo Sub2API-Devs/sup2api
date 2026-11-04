@@ -44,19 +44,19 @@ async function loadAgentsForSession({
 }) {
   let tools = getTools(toolPermissionContext);
   if (applyCoordinatorFilter && isCoordinatorMode_2()) {
-    let { applyCoordinatorToolFilter } = await import("./chunk-7g8rqsne.js");
+    let { applyCoordinatorToolFilter } = await import("../../utils/toolPool.js");
     tools = applyCoordinatorToolFilter(tools);
   }
   onToolsLoaded?.();
   commandsPromise?.catch(() => {});
   agentDefsPromise?.catch(() => {});
-  let w = commandsPromise ?? getCommands(cwd, storageV5);
-  if (deferCommands) w.catch(() => {});
-  let [P, A] = await Promise.all([
-    deferCommands ? Promise.resolve([]) : w,
+  let commands = commandsPromise ?? getCommands(cwd, storageV5);
+  if (deferCommands) commands.catch(() => {});
+  let [loadedCommands, defs] = await Promise.all([
+    deferCommands ? Promise.resolve([]) : commands,
     agentDefsPromise ?? getAgentDefinitionsWithOverrides(cwd, storageV5),
   ]);
-  let se = [];
+  let cliAgents = [];
   if (
     agentsJson &&
     !isCustomizationDisabled("agents", {
@@ -65,7 +65,7 @@ async function loadAgentsForSession({
   )
     try {
       let agentsJson_2 = safeParseJSON(agentsJson);
-      if (agentsJson_2) se = parseAgentsFromJson(agentsJson_2, "flagSettings");
+      if (agentsJson_2) cliAgents = parseAgentsFromJson(agentsJson_2, "flagSettings");
     } catch (error) {
       logError(error);
     }
@@ -73,57 +73,59 @@ async function loadAgentsForSession({
     logForDebugging("--agents: ignored in safe mode (user-supplied custom agents are disabled)", {
       level: "warn",
     });
-  let q = rebuildAgentDefinitions(A, [...A.allAgents, ...se]);
-  let selectedAgent = findSelectedAgent(q.activeAgents, agentSetting);
+  let definitions = rebuildAgentDefinitions(defs, [...defs.allAgents, ...cliAgents]);
+  let selectedAgent = findSelectedAgent(definitions.activeAgents, agentSetting);
   setMainThreadAgentType(selectedAgent?.agentType);
   return {
     tools,
-    commands: P,
-    agentDefinitions: q,
+    commands: loadedCommands,
+    agentDefinitions: definitions,
     mainThreadAgentDefinition: selectedAgent,
-    cliAgents: se,
-    deferredCommandsPromise: deferCommands ? w : undefined,
+    cliAgents,
+    deferredCommandsPromise: deferCommands ? commands : undefined,
   };
 }
 //@ chunk-3wek6r2k.js:15773-16025 placement
-function findSelectedAgent(activeAgents, o) {
-  if (!o) return;
-  let n = excludeWebFetchAgent(activeAgents);
-  let r = n.find((u) => u.agentType === o) ?? n.find((u) => u.agentType.endsWith(`:${o}`));
-  if (!r)
+function findSelectedAgent(agents, setting) {
+  if (!setting) return;
+  let candidates = excludeWebFetchAgent(agents);
+  let found =
+    candidates.find((agent) => agent.agentType === setting) ??
+    candidates.find((agent) => agent.agentType.endsWith(`:${setting}`));
+  if (!found)
     logForDebugging(
-      `Warning: agent "${o}" not found. Available agents: ${activeAgents.map((u) => u.agentType).join(", ")}. Using default behavior.`,
+      `Warning: agent "${setting}" not found. Available agents: ${agents.map((agent) => agent.agentType).join(", ")}. Using default behavior.`,
     );
-  return r;
+  return found;
 }
 //@ chunk-3wek6r2k.js:16097-16179 placement
-function enableAppendSubagentPrompt(appendSubagentSystemPrompt, o = process.env) {
-  if (appendSubagentSystemPrompt) o.CLAUDE_CODE_ENABLE_APPEND_SUBAGENT_PROMPT = "1";
+function enableAppendSubagentPrompt(appendSubagentSystemPrompt, env = process.env) {
+  if (appendSubagentSystemPrompt) env.CLAUDE_CODE_ENABLE_APPEND_SUBAGENT_PROMPT = "1";
 }
 //@ chunk-3wek6r2k.js:16179-16735 placement
-async function readAppendSubagentPrompt(e) {
-  if (!e.appendSubagentSystemPromptFile)
+async function readAppendSubagentPrompt(options) {
+  if (!options.appendSubagentSystemPromptFile)
     return {
       ok: true,
-      prompt: e.appendSubagentSystemPrompt,
+      prompt: options.appendSubagentSystemPrompt,
     };
-  if (e.appendSubagentSystemPrompt)
+  if (options.appendSubagentSystemPrompt)
     return {
       ok: false,
       error:
         "Error: Cannot use both --append-subagent-system-prompt and --append-subagent-system-prompt-file. Please use only one.",
     };
-  let o = resolve(e.appendSubagentSystemPromptFile);
+  let path = resolve(options.appendSubagentSystemPromptFile);
   try {
     return {
       ok: true,
-      prompt: await readFile(o, "utf8"),
+      prompt: await readFile(path, "utf8"),
     };
   } catch (error) {
     if (getErrnoCode(error) === "ENOENT")
       return {
         ok: false,
-        error: `Error: Append subagent system prompt file not found: ${o}`,
+        error: `Error: Append subagent system prompt file not found: ${path}`,
       };
     return {
       ok: false,

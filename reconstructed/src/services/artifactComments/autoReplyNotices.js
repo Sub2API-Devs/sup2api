@@ -37,12 +37,12 @@ function canAutoReply() {
 /**
  * 导出函数 `subscribeAutoReplyChanges`：参数 e，返回 () => { (t(), n()); }。
  */
-function subscribeAutoReplyChanges(e) {
-  let t = onAttacherCapsChange(e);
-  let n = onRvSupervisorLinkChange(e);
+function subscribeAutoReplyChanges(host) {
+  let offCaps = onAttacherCapsChange(host);
+  let offLink = onRvSupervisorLinkChange(host);
   return () => {
-    t();
-    n();
+    offCaps();
+    offLink();
   };
 }
 //@ chunk-jh9jdn8w.js:550-659 placement
@@ -51,7 +51,7 @@ function subscribeAutoReplyChanges(e) {
  */
 function getAutoReactSlugs() {
   if (getLiveState().autoReact.enabledMemo !== true) return new Set();
-  return new Set(Array.from(iterateAutoReactSupervisors(), (e) => e.slug));
+  return new Set(Array.from(iterateAutoReactSupervisors(), (supervisor) => supervisor.slug));
 }
 //@ chunk-jh9jdn8w.js:659-996 placement
 /**
@@ -59,19 +59,22 @@ function getAutoReactSlugs() {
  */
 function getBootingAutoReactSlugs() {
   let { autoReact, durable, live, wakes } = getLiveState();
-  let i = new Set();
-  if (autoReact.enabledMemo === false || autoReact.userDisarmed) return i;
-  for (let [o, s] of live.bootingWiredArms) {
+  let seeded = new Set();
+  if (autoReact.enabledMemo === false || autoReact.userDisarmed) return seeded;
+  for (let [slug, arm] of live.bootingWiredArms) {
     if (
-      s.scanGeneration !== wakes.scanGeneration ||
-      live.retiredInFlightArms.has(o) ||
-      durable.stopLatches.isStopped(o)
+      arm.scanGeneration !== wakes.scanGeneration ||
+      live.retiredInFlightArms.has(slug) ||
+      durable.stopLatches.isStopped(slug)
     )
       continue;
-    if (!isSlugStopped(o) || (s.freshPublish && isSlugSwept(o) && s.stopGeneration === stopGeneration(o)))
-      i.add(o);
+    if (
+      !isSlugStopped(slug) ||
+      (arm.freshPublish && isSlugSwept(slug) && arm.stopGeneration === stopGeneration(slug))
+    )
+      seeded.add(slug);
   }
-  return i;
+  return seeded;
 }
 //@ chunk-jh9jdn8w.js:996-1116 placement
 function* iterateAutoReactSupervisors() {
@@ -87,10 +90,15 @@ function* iterateAutoReactSupervisors() {
 /**
  * 判断是否还有活跃的自动回复监听；重连时只算有定时器或在途订阅的监听。
  */
-function hasActiveAutoReactWatch(e) {
+function hasActiveAutoReactWatch(slug) {
   let { live } = getLiveState();
-  for (let n of iterateAutoReactSupervisors())
-    if (e?.reconnecting !== true || n.timer !== undefined || live.inFlightSubscribes.has(n.slug)) return true;
+  for (let supervisor of iterateAutoReactSupervisors())
+    if (
+      slug?.reconnecting !== true ||
+      supervisor.timer !== undefined ||
+      live.inFlightSubscribes.has(supervisor.slug)
+    )
+      return true;
   return false;
 }
 //@ chunk-jh9jdn8w.js:1260-1338 placement
@@ -109,28 +117,28 @@ function isAutoReactWatching() {
 /**
  * 停止并移除给定 slug 的监听器，清掉已收到版本与相关缓存，通知头部订阅源结束，并撤销仍在途的订阅启动。
  */
-function stopArtifactSupervisors(e) {
+function stopArtifactSupervisors(slugs) {
   let live = getLiveState().live;
-  for (let n of e) {
-    let r = live.supervisors.get(n);
-    if (r !== undefined) {
-      stopSupervisor(r);
-      live.supervisors.delete(n);
+  for (let slug of slugs) {
+    let supervisor = live.supervisors.get(slug);
+    if (supervisor !== undefined) {
+      stopSupervisor(supervisor);
+      live.supervisors.delete(slug);
     }
-    live.heardVersions.delete(n);
-    disposePresenceSlug(n);
-    getLiveState().liveDocWatch.headSinks.get(n)?.sourceEnded();
+    live.heardVersions.delete(slug);
+    disposePresenceSlug(slug);
+    getLiveState().liveDocWatch.headSinks.get(slug)?.sourceEnded();
   }
-  retireInFlightArms(e);
+  retireInFlightArms(slugs);
 }
 //@ chunk-jh9jdn8w.js:1546-1735 placement
-function retireInFlightArms(e) {
+function retireInFlightArms(slugs) {
   let live = getLiveState().live;
-  for (let n of e)
-    if (live.inFlightSubscribes.has(n) && !live.supervisors.has(n)) {
-      live.retiredInFlightArms.add(n);
-      live.bootingWiredArms.delete(n);
-      live.inFlightWiredIntent.delete(n);
+  for (let slug of slugs)
+    if (live.inFlightSubscribes.has(slug) && !live.supervisors.has(slug)) {
+      live.retiredInFlightArms.add(slug);
+      live.bootingWiredArms.delete(slug);
+      live.inFlightWiredIntent.delete(slug);
     }
 }
 //@ chunk-jh9jdn8w.js:1735-1747 placement
@@ -147,8 +155,8 @@ function unattendedReplies() {
  * 导出函数 `bumpUnattendedReply`：参数 e。
  */
 function bumpUnattendedReply(slug) {
-  let t = unattendedReplies();
-  t.set(slug, Math.min((t.get(slug) ?? 0) + 1, MAX_UNATTENDED_REPLY_COUNT));
+  let replies = unattendedReplies();
+  replies.set(slug, Math.min((replies.get(slug) ?? 0) + 1, MAX_UNATTENDED_REPLY_COUNT));
 }
 //@ chunk-jh9jdn8w.js:1865-1941 placement
 /**
@@ -156,19 +164,19 @@ function bumpUnattendedReply(slug) {
  */
 function addUnattendedReplies(slug, unattendedReplies_2) {
   if (unattendedReplies_2 > 0) {
-    let n = unattendedReplies();
-    n.set(slug, Math.min((n.get(slug) ?? 0) + unattendedReplies_2, MAX_UNATTENDED_REPLY_COUNT));
+    let replies = unattendedReplies();
+    replies.set(slug, Math.min((replies.get(slug) ?? 0) + unattendedReplies_2, MAX_UNATTENDED_REPLY_COUNT));
   }
 }
 //@ chunk-jh9jdn8w.js:1941-2002 placement
 /**
  * 导出函数 `takeUnattendedReplies`：参数 e，返回 (t.delete(e), n)。
  */
-function takeUnattendedReplies(e) {
-  let t = unattendedReplies();
-  let n = t.get(e) ?? 0;
-  t.delete(e);
-  return n;
+function takeUnattendedReplies(slug) {
+  let replies = unattendedReplies();
+  let count = replies.get(slug) ?? 0;
+  replies.delete(slug);
+  return count;
 }
 //@ chunk-jh9jdn8w.js:2002-2150 placement
 /**
@@ -179,16 +187,16 @@ function drainUnattendedReplies() {
   let unattendedReplies = autoReact.unattendedReplies;
   autoReact.unattendedReplies = new Map();
   let total = 0;
-  for (let r of unattendedReplies.values()) total += r;
+  for (let count of unattendedReplies.values()) total += count;
   return {
     total,
     bySlug: unattendedReplies,
   };
 }
 //@ chunk-jh9jdn8w.js:2150-2280 placement
-function formatAutoReplyNotice(e, { where, stop }) {
+function formatAutoReplyNotice(slug, { where, stop }) {
   return createInformationalSystemMessage(
-    `Claude auto-replied to ${e} ${plural(e, "comment")}${where} while you were away.${stop}`,
+    `Claude auto-replied to ${slug} ${plural(slug, "comment")}${where} while you were away.${stop}`,
     "notice",
   );
 }

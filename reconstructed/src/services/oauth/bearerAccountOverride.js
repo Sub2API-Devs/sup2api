@@ -9,23 +9,31 @@
  * attribution: placement 2
  */
 import { identity } from "../../utils/identity.js";
-import { pu } from "../../../vendor/@growthbook/growthbook/dist/bundles/esm.js";
+import { subscribe } from "../../../vendor/@growthbook/growthbook/dist/bundles/esm.js";
 import { hasManagedSettings } from "../../utils/settings/managedRestrictionKeys.js";
 import { claimedCredential, envDriftDetected } from "../../entrypoints/warmSpare/claimCredentials.js";
 import { computeContentHash } from "../../utils/commitAttribution.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-n96d6ab0.js:376-410 placement
 /**
  * 保存 bootstrap 返回的账号覆盖（可重置）。
  */
-var bearerAccountOverride = identity(pu(), (e) => e.set(null));
+var bearerAccountOverride; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-n96d6ab0.js:376", () => {
+  bearerAccountOverride = identity(subscribe(), (state) => state.set(null));
+});
 //@ chunk-n96d6ab0.js:410-514 placement
 /**
  * 托管设置使用 bearer 令牌且哈希匹配时，记录 bootstrap 返回的账号覆盖。
  */
-function recordBearerAccountOverride(fingerprint, o) {
-  let r = hasManagedSettings() ? claimedCredential() : null;
-  if (r?.kind === "bearer" && computeContentHash(r.token) === fingerprint && !envDriftDetected())
-    bearerAccountOverride.set(o ?? null);
+function recordBearerAccountOverride(fingerprint, account) {
+  let credential = hasManagedSettings() ? claimedCredential() : null;
+  if (
+    credential?.kind === "bearer" &&
+    computeContentHash(credential.token) === fingerprint &&
+    !envDriftDetected()
+  )
+    bearerAccountOverride.set(account ?? null);
 }
 export { recordBearerAccountOverride, bearerAccountOverride };

@@ -22,25 +22,22 @@ import { normalizeModelId } from "./modelCatalog/catalogEntries.js";
 var TENGU_MODEL_ERROR_OVERRIDES = "tengu-model-error-overrides";
 var EMPTY_OVERRIDES = {};
 //@ chunk-hwmsct5x.js:198444-198476 placement
-function plainObjectOrEmpty(e) {
-  return isPlainObject(e) ? e : EMPTY_OVERRIDES;
+function plainObjectOrEmpty(value) {
+  return isPlainObject(value) ? value : EMPTY_OVERRIDES;
 }
 //@ chunk-hwmsct5x.js:198476-198592 placement
-function getModelErrorOverride(e, n) {
-  if (typeof n !== "string" || n === "") return;
-  let r = plainObjectOrEmpty(e)[n];
-  return typeof r === "object" && r !== null ? r : undefined;
+function getModelErrorOverride(overrides, modelKey) {
+  if (typeof modelKey !== "string" || modelKey === "") return;
+  let override = plainObjectOrEmpty(overrides)[modelKey];
+  return typeof override === "object" && override !== null ? override : undefined;
 }
 //@ chunk-hwmsct5x.js:198592-198655 placement
 /**
  * 异步取动态配置中该模型的阻断说明文本。
  */
-async function blockedOverrideText(previousRequestId) {
-  let dynamicConfig_BLOCKS_ON_INIT = await getDynamicConfig_BLOCKS_ON_INIT(
-    TENGU_MODEL_ERROR_OVERRIDES,
-    EMPTY_OVERRIDES,
-  );
-  return blockTextFromOverride(getModelErrorOverride(dynamicConfig_BLOCKS_ON_INIT, previousRequestId));
+async function blockedOverrideText(modelKey) {
+  let overrides = await getDynamicConfig_BLOCKS_ON_INIT(TENGU_MODEL_ERROR_OVERRIDES, EMPTY_OVERRIDES);
+  return blockTextFromOverride(getModelErrorOverride(overrides, modelKey));
 }
 //@ chunk-hwmsct5x.js:198655-198690 placement
 function blockTextFromOverride(modelErrorOverride) {
@@ -50,19 +47,19 @@ function blockTextFromOverride(modelErrorOverride) {
 /**
  * 取该模型的错误覆盖：pickerHint 优先，其次 block；都没有返回 null。
  */
-function pickerHintFromOverride(canonicalName) {
+function pickerHintFromOverride(modelKey) {
   let modelErrorOverride = getModelErrorOverride(
     getDynamicConfig_CACHED_MAY_BE_STALE(TENGU_MODEL_ERROR_OVERRIDES, EMPTY_OVERRIDES),
-    canonicalName,
+    modelKey,
   );
-  let r = blockTextFromOverride(modelErrorOverride);
-  if (r === null) return null;
-  return trimmedNonEmptyOrNull(modelErrorOverride?.pickerHint) ?? r;
+  let blockText = blockTextFromOverride(modelErrorOverride);
+  if (blockText === null) return null;
+  return trimmedNonEmptyOrNull(modelErrorOverride?.pickerHint) ?? blockText;
 }
 //@ chunk-hwmsct5x.js:198787-198873 placement
-function trimmedNonEmptyOrNull(e) {
-  if (typeof e !== "string") return null;
-  let trimmed = e.trim();
+function trimmedNonEmptyOrNull(value) {
+  if (typeof value !== "string") return null;
+  let trimmed = value.trim();
   return trimmed === "" ? null : trimmed;
 }
 //@ chunk-hwmsct5x.js:198873-199295 placement
@@ -70,48 +67,53 @@ function trimmedNonEmptyOrNull(e) {
  * 把目录中的模型整理为去重的行（served 来源时可用行在前），每行带来源、规范 key、是否可选、族名与别名族。
  */
 function buildCatalogRows({ catalog, provenance }) {
-  let r = [];
-  let s = new Set();
-  let h = (R) => {
-    if (R === "" || s.has(R)) return false;
-    s.add(R);
+  let rows = [];
+  let seen = new Set();
+  let claimKey = (key) => {
+    if (key === "" || seen.has(key)) return false;
+    seen.add(key);
     return true;
   };
   let familyDefaults = getFamilyDefaults(catalog);
-  let w = new Map();
-  for (let R of MODEL_FAMILY_NAMES) {
-    let L = familyDefaults[R];
-    if (L !== undefined) w.set(modelIdentityKey(L), R);
+  let aliasFamilyByIdentity = new Map();
+  for (let family of MODEL_FAMILY_NAMES) {
+    let defaultModel = familyDefaults[family];
+    if (defaultModel !== undefined) aliasFamilyByIdentity.set(modelIdentityKey(defaultModel), family);
   }
-  let S = catalogModels(catalog);
-  let E = provenance === "served" ? [...S.filter((R) => !isOverflowRow(R)), ...S.filter(isOverflowRow)] : S;
-  for (let R of E) {
-    let L = normalizeModelId(R.id);
-    if (!h(L)) continue;
-    r.push({
+  let models = catalogModels(catalog);
+  let ordered =
+    provenance === "served"
+      ? [...models.filter((model) => !isOverflowRow(model)), ...models.filter(isOverflowRow)]
+      : models;
+  for (let row of ordered) {
+    let key = normalizeModelId(row.id);
+    if (!claimKey(key)) continue;
+    rows.push({
       provenance,
-      key: L,
-      row: R,
-      selectable: isCatalogRowSelectable(catalog, R),
-      family: getRowFamily(R),
-      aliasFamily: w.get(modelIdentityKey(R.id)),
+      key,
+      row,
+      selectable: isCatalogRowSelectable(catalog, row),
+      family: getRowFamily(row),
+      aliasFamily: aliasFamilyByIdentity.get(modelIdentityKey(row.id)),
     });
   }
-  return r;
+  return rows;
 }
 //@ chunk-hwmsct5x.js:199295-199365 placement
 /**
  * 列出可选的目录行 id。
  */
-function selectableRowIds(e) {
-  return buildCatalogRows(e).flatMap((n) => (n.selectable ? [n.row.id] : []));
+function selectableRowIds(registry) {
+  return buildCatalogRows(registry).flatMap((entry) => (entry.selectable ? [entry.row.id] : []));
 }
 //@ chunk-hwmsct5x.js:199365-199448 placement
 /**
  * 列出可选且非 overflow 分区的行 id。
  */
-function selectableNonOverflowRowIds(e) {
-  return buildCatalogRows(e).flatMap((n) => (n.selectable && !isOverflowRow(n.row) ? [n.row.id] : []));
+function selectableNonOverflowRowIds(registry) {
+  return buildCatalogRows(registry).flatMap((entry) =>
+    entry.selectable && !isOverflowRow(entry.row) ? [entry.row.id] : [],
+  );
 }
 //@ chunk-hwmsct5x.js:199448-199615 placement
 /**

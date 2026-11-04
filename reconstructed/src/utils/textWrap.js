@@ -19,50 +19,50 @@ var WORD_JOINER = "\u2060";
 /**
  * 把文本按宽度折行成行列表，折行结果与原文不一致时退回简单切分。
  */
-function wrapTextRows(text, columns, n = wrapAnsi) {
-  let s = text.search(ANSI_OR_C1_RE) === -1 ? text : expandTabs(text);
-  let lines = n(s, columns, {
+function wrapTextRows(text, maxWidth, wrap = wrapAnsi) {
+  let source = text.search(ANSI_OR_C1_RE) === -1 ? text : expandTabs(text);
+  let lines = wrap(source, maxWidth, {
     hard: true,
     trim: false,
   }).split(`
 `);
-  let u = [];
-  let d = 0;
+  let rows = [];
+  let offset = 0;
   let isPrecededByNewline = true;
   for (let line of lines) {
-    if (!s.startsWith(line, d))
+    if (!source.startsWith(line, offset))
       return {
-        rows: wrapByDisplayWidth(text, columns),
+        rows: wrapByDisplayWidth(text, maxWidth),
         degraded: true,
       };
-    let T = d + line.length;
-    let E = s.startsWith(
+    let lineEnd = offset + line.length;
+    let separatorLength = source.startsWith(
       `\r
 `,
-      T,
+      lineEnd,
     )
       ? 2
-      : s[T] ===
+      : source[lineEnd] ===
             `
-` || s[T] === "\r"
+` || source[lineEnd] === "\r"
         ? 1
         : 0;
-    u.push({
-      text: text.slice(d, T),
-      startOffset: d,
+    rows.push({
+      text: text.slice(offset, lineEnd),
+      startOffset: offset,
       isPrecededByNewline,
-      endsWithNewline: E > 0,
+      endsWithNewline: separatorLength > 0,
     });
-    isPrecededByNewline = E > 0;
-    d = T + E;
+    isPrecededByNewline = separatorLength > 0;
+    offset = lineEnd + separatorLength;
   }
-  return d === text.length
+  return offset === text.length
     ? {
-        rows: u,
+        rows,
         degraded: false,
       }
     : {
-        rows: wrapByDisplayWidth(text, columns),
+        rows: wrapByDisplayWidth(text, maxWidth),
         degraded: true,
       };
 }

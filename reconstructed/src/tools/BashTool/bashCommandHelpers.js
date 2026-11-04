@@ -36,75 +36,89 @@ function shouldDedupeSubcommandRules() {
 /**
  * 给重复的键加 " #2"、" #3" 后缀，返回键唯一的新 Map。
  */
-function dedupeMapKeys(e) {
-  let n = new Map();
-  for (let [r, s] of e) {
-    let h = r;
-    for (let idx = 2; n.has(h); idx++) h = `${r} #${idx}`;
-    n.set(h, s);
+function dedupeMapKeys(entries) {
+  let result = new Map();
+  for (let [key, value] of entries) {
+    let uniqueKey = key;
+    for (let idx = 2; result.has(uniqueKey); idx++) uniqueKey = `${key} #${idx}`;
+    result.set(uniqueKey, value);
   }
-  return n;
+  return result;
 }
 //@ chunk-e6aww6q8.js:1159327-1162254 fingerprint = segmentedCommandPermissionResult (0.634)
 /**
  * 管道分段的权限合成：逐段（去掉输出重定向后）检查，任一 deny 即拒；多个 cd、cd+git 组合、创建 git 内部文件再运行 git 都要求确认；全部 allow 才放行，否则 ask 并合并建议规则。
  */
-async function segmentedCommandPermissionResult(e, segments, pipeSegments, s, h, y, S, w) {
-  let L = new Map();
-  let G = [];
-  let q = shouldDedupeSubcommandRules();
+async function segmentedCommandPermissionResult(
+  input,
+  segments,
+  pipeSegments,
+  bashToolHasPermission,
+  checkers,
+  commands,
+  isCdGitCompoundApproved,
+  findExtraAsk,
+) {
+  let decisions = new Map();
+  let dedupeEntries = [];
+  let shouldDedupe = shouldDedupeSubcommandRules();
   for (let idx = 0; idx < segments.length; idx++) {
     let trimmed = segments[idx].trim();
     if (!trimmed) {
-      let Je = pipeSegments[idx];
-      let nt = await s({
-        ...e,
-        command: Je,
+      let pipeSegment = pipeSegments[idx];
+      let decision = await bashToolHasPermission({
+        ...input,
+        command: pipeSegment,
       });
-      let pt =
-        nt.behavior === "passthrough"
+      let segmentDecision =
+        decision.behavior === "passthrough"
           ? {
               behavior: "allow",
               updatedInput: {
-                ...e,
-                command: Je,
+                ...input,
+                command: pipeSegment,
               },
               decisionReason: {
                 type: "other",
                 reason: "Bare output redirection with no command; path layer approved",
               },
             }
-          : nt;
-      L.set(Je, pt);
-      G.push([Je, pt]);
+          : decision;
+      decisions.set(pipeSegment, segmentDecision);
+      dedupeEntries.push([pipeSegment, segmentDecision]);
       continue;
     }
-    let We = await s({
-      ...e,
+    let decision = await bashToolHasPermission({
+      ...input,
       command: trimmed,
     });
-    L.set(trimmed, We);
+    decisions.set(trimmed, decision);
     let trimmed_2 = pipeSegments[idx].trim();
-    let lt = We;
-    if (q && trimmed_2 !== trimmed && We.behavior === "allow" && isAllRuleReason(We.decisionReason)) {
-      let Je = await s({
-        ...e,
+    let segmentDecision = decision;
+    if (
+      shouldDedupe &&
+      trimmed_2 !== trimmed &&
+      decision.behavior === "allow" &&
+      isAllRuleReason(decision.decisionReason)
+    ) {
+      let withoutRedirection = await bashToolHasPermission({
+        ...input,
         command: trimmed_2,
       });
-      lt =
-        Je.behavior === "allow"
-          ? Je
+      segmentDecision =
+        withoutRedirection.behavior === "allow"
+          ? withoutRedirection
           : {
-              ...We,
+              ...decision,
               decisionReason: {
                 type: "subcommandResults",
                 reasons: new Map([
-                  [trimmed, We],
+                  [trimmed, decision],
                   [
                     trimmed_2,
                     {
                       behavior: "allow",
-                      updatedInput: We.updatedInput,
+                      updatedInput: decision.updatedInput,
                       decisionReason: {
                         type: "other",
                         reason:
@@ -116,60 +130,71 @@ async function segmentedCommandPermissionResult(e, segments, pipeSegments, s, h,
               },
             };
     }
-    G.push([trimmed_2, lt]);
+    dedupeEntries.push([trimmed_2, segmentDecision]);
   }
-  let found = Array.from(L.entries()).find(([, Ie]) => Ie.behavior === "deny");
+  let found = Array.from(decisions.entries()).find(
+    ([, segmentDecision]) => segmentDecision.behavior === "deny",
+  );
   if (found) {
-    let [Ie, Me] = found;
+    let [deniedCommand, deniedDecision] = found;
     return {
       behavior: "deny",
-      message: Me.behavior === "deny" ? Me.message : `Permission denied for: ${Ie}`,
+      message:
+        deniedDecision.behavior === "deny"
+          ? deniedDecision.message
+          : `Permission denied for: ${deniedCommand}`,
       decisionReason: {
         type: "subcommandResults",
-        reasons: L,
+        reasons: decisions,
       },
     };
   }
-  let Se = () => findCircuitBreakerAsk(L.values(), true) ?? w?.() ?? findCircuitBreakerAsk(L.values());
+  let findAsk = () =>
+    findCircuitBreakerAsk(decisions.values(), true) ??
+    findExtraAsk?.() ??
+    findCircuitBreakerAsk(decisions.values());
   if (
     segments.filter((segment) => {
       let trimmed = segment.trim();
-      return h.isNormalizedCdCommand(trimmed);
+      return checkers.isNormalizedCdCommand(trimmed);
     }).length > 1
   ) {
-    let Ie = Se();
-    if (Ie) return Ie;
-    let Me = {
+    let askDecision = findAsk();
+    if (askDecision) return askDecision;
+    let decisionReason = {
       type: "other",
       reason: "Multiple directory changes in one command require approval for clarity",
       bashMissKind: "multi-cd",
     };
     return {
       behavior: "ask",
-      decisionReason: Me,
-      message: createPermissionRequestMessage(BashTool.name, Me),
+      decisionReason,
+      message: createPermissionRequestMessage(BashTool.name, decisionReason),
     };
   }
   {
-    let Ie;
-    let Me;
-    if (y) {
-      Ie = y.some((ze) => h.isNormalizedCdCommand(ze.text));
-      Me = y.some((ze) => h.isNormalizedGitCommand(ze.text));
+    let hasCd;
+    let hasGit;
+    if (commands) {
+      hasCd = commands.some((command) => checkers.isNormalizedCdCommand(command.text));
+      hasGit = commands.some((command) => checkers.isNormalizedGitCommand(command.text));
     } else {
-      Ie = false;
-      Me = false;
+      hasCd = false;
+      hasGit = false;
       for (let segment of segments)
-        for (let lt of splitCommand(segment)) {
-          let trimmed = lt.trim();
-          if (h.isNormalizedCdCommand(trimmed)) Ie = true;
-          if (h.isNormalizedGitCommand(trimmed)) Me = true;
+        for (let subcommand of splitCommand(segment)) {
+          let trimmed = subcommand.trim();
+          if (checkers.isNormalizedCdCommand(trimmed)) hasCd = true;
+          if (checkers.isNormalizedGitCommand(trimmed)) hasGit = true;
         }
     }
-    if (Me && (y ? extractWriteTargets(y, getCwd()) : commandWritesToGitInternalPaths(e.command))) {
-      let ze = Se();
-      if (ze) return ze;
-      let lt = {
+    if (
+      hasGit &&
+      (commands ? extractWriteTargets(commands, getCwd()) : commandWritesToGitInternalPaths(input.command))
+    ) {
+      let askDecision = findAsk();
+      if (askDecision) return askDecision;
+      let decisionReason = {
         type: "other",
         reason:
           "This command creates git repository structure files (HEAD/objects/refs/hooks) and then runs git, which can execute hooks/fsmonitor from the created files.",
@@ -177,17 +202,18 @@ async function segmentedCommandPermissionResult(e, segments, pipeSegments, s, h,
       };
       return {
         behavior: "ask",
-        decisionReason: lt,
-        message: createPermissionRequestMessage(BashTool.name, lt),
+        decisionReason,
+        message: createPermissionRequestMessage(BashTool.name, decisionReason),
       };
     }
-    if (Ie && Me) {
-      let ze = [];
-      for (let segment of segments) for (let nt of splitCommand(segment)) ze.push(nt.trim());
-      if (!(S ? await S(ze) : false)) {
-        let Je = Se();
-        if (Je) return Je;
-        let nt = {
+    if (hasCd && hasGit) {
+      let subcommands = [];
+      for (let segment of segments)
+        for (let subcommand of splitCommand(segment)) subcommands.push(subcommand.trim());
+      if (!(isCdGitCompoundApproved ? await isCdGitCompoundApproved(subcommands) : false)) {
+        let askDecision = findAsk();
+        if (askDecision) return askDecision;
+        let decisionReason = {
           type: "other",
           reason:
             "This command changes directory before running a version-control command, which can pick up untrusted hooks or repository configuration from the target directory. Approve only if you trust it.",
@@ -195,28 +221,28 @@ async function segmentedCommandPermissionResult(e, segments, pipeSegments, s, h,
         };
         return {
           behavior: "ask",
-          decisionReason: nt,
-          message: createPermissionRequestMessage(BashTool.name, nt),
+          decisionReason,
+          message: createPermissionRequestMessage(BashTool.name, decisionReason),
         };
       }
     }
   }
-  if (Array.from(L.values()).every((result) => result.behavior === "allow"))
+  if (Array.from(decisions.values()).every((result) => result.behavior === "allow"))
     return {
       behavior: "allow",
-      updatedInput: e,
+      updatedInput: input,
       decisionReason: {
         type: "subcommandResults",
-        reasons: q ? dedupeMapKeys(G) : L,
+        reasons: shouldDedupe ? dedupeMapKeys(dedupeEntries) : decisions,
       },
     };
   let suggestions = [];
-  for (let [, result] of L)
+  for (let [, result] of decisions)
     if (result.behavior !== "allow" && "suggestions" in result && result.suggestions)
       suggestions.push(...result.suggestions);
   let decisionReason = {
     type: "subcommandResults",
-    reasons: L,
+    reasons: decisions,
   };
   return {
     behavior: "ask",
@@ -240,8 +266,8 @@ async function checkCommandOperatorPermissions(
   checkers,
   astRoot,
   commands,
-  y,
-  S,
+  isCdGitCompoundApproved,
+  findExtraAsk,
 ) {
   let parsed =
     astRoot && astRoot !== PARSE_ABORTED
@@ -258,31 +284,31 @@ async function checkCommandOperatorPermissions(
     checkers,
     parsed,
     commands,
-    y,
-    S,
+    isCdGitCompoundApproved,
+    findExtraAsk,
   );
 }
 //@ chunk-e6aww6q8.js:1162555-1163042 fingerprint = bashToolCheckCommandOperatorPermissions (0.845)
 async function bashToolCheckCommandOperatorPermissions(
-  e,
-  bashToolHasPermissionFn,
+  input,
+  bashToolHasPermission,
   checkers,
   parsed,
-  h,
-  y,
-  S,
+  commands,
+  isCdGitCompoundApproved,
+  findExtraAsk,
 ) {
   let { compoundStructure } = parsed.treeSitterAnalysis;
   if (compoundStructure.hasSubshell || compoundStructure.hasCommandGroup) {
-    let Z = {
+    let decisionReason = {
       type: "other",
       reason: "This command uses shell operators that require approval for safety",
       bashMissKind: "shell-operators",
     };
     return {
       behavior: "ask",
-      message: createPermissionRequestMessage(BashTool.name, Z),
-      decisionReason: Z,
+      message: createPermissionRequestMessage(BashTool.name, decisionReason),
+      decisionReason,
     };
   }
   let pipeSegments = parsed.getPipeSegments();
@@ -293,24 +319,30 @@ async function bashToolCheckCommandOperatorPermissions(
     };
   let segments = await Promise.all(pipeSegments.map((segment) => buildSegmentWithoutRedirections(segment)));
   return segmentedCommandPermissionResult(
-    e,
+    input,
     segments,
     pipeSegments,
-    bashToolHasPermissionFn,
+    bashToolHasPermission,
     checkers,
-    h,
-    y,
-    S,
+    commands,
+    isCdGitCompoundApproved,
+    findExtraAsk,
   );
 }
 //@ chunk-e6aww6q8.js:1163042-1163179 placement
 /**
  * 在权限结果中找出第一个由不可绕过的安全熔断引起的 ask（可排除由分类器处理的熔断）。
  */
-function findCircuitBreakerAsk(subcommandPermissionDecisions, n = false) {
-  let r = (s) => isBypassImmuneCircuitBreaker(s) && (!n || !isClassifierRoutedCircuitBreaker(s));
-  for (let s of subcommandPermissionDecisions)
-    if (s.behavior === "ask" && findSafetyCheckReason(s.decisionReason, r) !== undefined) return s;
+function findCircuitBreakerAsk(subcommandPermissionDecisions, skipClassifierRouted = false) {
+  let isCircuitBreaker = (reason) =>
+    isBypassImmuneCircuitBreaker(reason) &&
+    (!skipClassifierRouted || !isClassifierRoutedCircuitBreaker(reason));
+  for (let decision of subcommandPermissionDecisions)
+    if (
+      decision.behavior === "ask" &&
+      findSafetyCheckReason(decision.decisionReason, isCircuitBreaker) !== undefined
+    )
+      return decision;
   return;
 }
 export { dedupeMapKeys, checkCommandOperatorPermissions, shouldDedupeSubcommandRules, findCircuitBreakerAsk };

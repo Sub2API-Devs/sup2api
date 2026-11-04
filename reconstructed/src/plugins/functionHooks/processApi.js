@@ -33,49 +33,49 @@ import { surfaceComposer } from "./surfaceBinding.js";
 /**
  * 收集子进程输出流至多 n 字节，结束时返回 {text, isTruncated}。
  */
-function collectStreamCapped(e, n) {
-  if (!(e !== null && e !== undefined))
+function collectStreamCapped(stream, maxBytes) {
+  if (!(stream !== null && stream !== undefined))
     return Promise.resolve({
       text: "",
       isTruncated: false,
     });
   return new Promise((resolve) => {
-    let h = [];
-    let y = 0;
-    let S = false;
-    function w(G) {
-      let q = n - y;
-      let Z = G.byteLength > q;
-      if (Z) S = true;
-      if (q <= 0) return;
-      let Se = Z ? G.subarray(0, q) : G;
-      h.push(Se);
-      y += Se.byteLength;
+    let chunks = [];
+    let totalBytes = 0;
+    let isTruncated = false;
+    function onData(chunk) {
+      let room = maxBytes - totalBytes;
+      let overflows = chunk.byteLength > room;
+      if (overflows) isTruncated = true;
+      if (room <= 0) return;
+      let kept = overflows ? chunk.subarray(0, room) : chunk;
+      chunks.push(kept);
+      totalBytes += kept.byteLength;
     }
-    function L() {
-      e?.off("data", w);
-      let buffer = Buffer.concat(h);
+    function finish() {
+      stream?.off("data", onData);
+      let buffer = Buffer.concat(chunks);
       resolve({
-        text: S
+        text: isTruncated
           ? new TextDecoder().decode(buffer, {
               stream: true,
             })
           : buffer.toString("utf8"),
-        isTruncated: S,
+        isTruncated,
       });
     }
-    e?.on("data", w);
-    e?.once("end", L);
-    e?.once("error", L);
-    e?.once("close", L);
+    stream?.on("data", onData);
+    stream?.once("end", finish);
+    stream?.once("error", finish);
+    stream?.once("close", finish);
   });
 }
 //@ chunk-e6aww6q8.js:3986929-3986973 placement
 /**
  * 销毁所有流
  */
-function destroyStreams(e) {
-  for (let n of e) n?.destroy();
+function destroyStreams(streams) {
+  for (let stream of streams) stream?.destroy();
 }
 //@ chunk-e6aww6q8.js:3986973-3986985 placement
 /**
@@ -88,32 +88,32 @@ var KILL_GRACE_POLL_MS = 500;
  */
 var DEFAULT_KILL_GRACE_MS = 2000;
 //@ chunk-e6aww6q8.js:3986998-3987046 placement = killCaffeinate (0.805)
-function killCaffeinate(e, streams, r) {
-  killIfUnchanged(e, "SIGKILL");
+function killCaffeinate(processTokens, streams, done) {
+  killIfUnchanged(processTokens, "SIGKILL");
   destroyStreams(streams);
-  r();
+  done();
 }
 //@ chunk-e6aww6q8.js:3987046-3987372 placement
 /**
  * 结束插件子进程：对进程组发 SIGTERM，等待宽限期或关闭事件后强制清理剩余进程与流。
  */
-function terminateProcessTree(e, { streams, done: r, graceMs = DEFAULT_KILL_GRACE_MS }) {
-  let { pid } = e;
-  if (pid === undefined || e.exitCode !== null || e.signalCode !== null) {
+function terminateProcessTree(child, { streams, done, graceMs = DEFAULT_KILL_GRACE_MS }) {
+  let { pid } = child;
+  if (pid === undefined || child.exitCode !== null || child.signalCode !== null) {
     destroyStreams(streams);
     return;
   }
   let promise = new Promise((resolve) => {
-    e.once("close", () => resolve());
+    child.once("close", () => resolve());
   });
   return killProcessGroup_2(pid, "SIGTERM")
-    .then((w) => processStartTokens([pid, ...w]))
-    .then(async (w) => {
-      let L = sleep(graceMs, undefined, {
+    .then((pids) => processStartTokens([pid, ...pids]))
+    .then(async (tokenSet) => {
+      let graceTimer = sleep(graceMs, undefined, {
         unref: true,
       });
-      await (w.size <= 1 ? Promise.race([L, promise]) : L);
-      killCaffeinate(w, streams, r);
+      await (tokenSet.size <= 1 ? Promise.race([graceTimer, promise]) : graceTimer);
+      killCaffeinate(tokenSet, streams, done);
     });
 }
 //@ chunk-e6aww6q8.js:3987372-3987388 placement
@@ -136,16 +136,16 @@ var DEFAULT_PROCESS_TIMEOUT_MS = 30000;
  * 以插件身份启动子进程：合并环境变量（检查 Bun 选项）、git 命令走安全调用，放入插件 cgroup，stdout/stderr 管道。
  */
 function spawnPluginProcess({ command, args, cwd, env, hasInput, pluginId }) {
-  let S = subprocessEnv();
-  let w = {
-    ...S,
+  let baseEnv = subprocessEnv();
+  let mergedEnv = {
+    ...baseEnv,
     ...env,
   };
-  checkPluginBunOptions(pluginId, w, S);
-  let safeGitInvocation = buildSafeGitInvocation(command, args, w);
+  checkPluginBunOptions(pluginId, mergedEnv, baseEnv);
+  let safeGitInvocation = buildSafeGitInvocation(command, args, mergedEnv);
   return safeSpawn(command, safeGitInvocation?.args ?? args, {
     cwd,
-    env: safeGitInvocation?.env ?? w,
+    env: safeGitInvocation?.env ?? mergedEnv,
     extendEnv: false,
     stdin: hasInput ? "pipe" : "ignore",
     stdout: "pipe",
@@ -157,25 +157,25 @@ function spawnPluginProcess({ command, args, cwd, env, hasInput, pluginId }) {
 /**
  * 启动失败说明
  */
-function spawnFailureText(e) {
-  let errnoCode = getErrnoCode(e);
-  let r = errorMessage(e);
-  return `failed to start: ${errnoCode === undefined ? r : `${errnoCode}: ${r}`}`;
+function spawnFailureText(error) {
+  let errnoCode = getErrnoCode(error);
+  let message = errorMessage(error);
+  return `failed to start: ${errnoCode === undefined ? message : `${errnoCode}: ${message}`}`;
 }
 //@ chunk-e6aww6q8.js:3987803-3989180 placement
 /**
  * 插件 $.process.spawn：启动长期子进程并转发事件。
  */
-async function processSpawnForPlugin({ argv, init }, r, { signal: s, cwd: h, pluginId: y } = {}) {
-  let [S = "", ...w] = argv;
-  let L = h ?? getCwd();
-  let G = init?.cwd === undefined ? L : resolve_2(L, init.cwd);
+async function processSpawnForPlugin({ argv, init }, pluginName, { signal, cwd: baseCwd, pluginId } = {}) {
+  let [command = "", ...spawnArgs] = argv;
+  let startCwd = baseCwd ?? getCwd();
+  let cwd = init?.cwd === undefined ? startCwd : resolve_2(startCwd, init.cwd);
   let min = Math.min(init?.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS, MAX_PROCESS_TIMEOUT_MS);
-  let Z = `${PROCESS_RUN_LABEL} (${r})`;
-  let timeoutController = createTimeoutController(s, min);
+  let logLabel = `${PROCESS_RUN_LABEL} (${pluginName})`;
+  let timeoutController = createTimeoutController(signal, min);
   let now = Date.now();
-  let we = prefixedErrorCtor(r, PROCESS_RUN_LABEL, S);
-  let Ee = false;
+  let failWith = prefixedErrorCtor(pluginName, PROCESS_RUN_LABEL, command);
+  let isAborted = false;
   let done = () => {
     return;
   };
@@ -183,67 +183,70 @@ async function processSpawnForPlugin({ argv, init }, r, { signal: s, cwd: h, plu
     done = () => resolve(undefined);
   });
   try {
-    let lt = function () {
+    let onAbort = function () {
       if (
-        terminateProcessTree(pluginProcess, {
+        terminateProcessTree(child, {
           streams,
           done,
         }) !== undefined
       )
-        Ee = true;
+        isAborted = true;
     };
-    let pluginProcess = spawnPluginProcess({
-      command: S,
-      args: w,
-      cwd: G,
+    let child = spawnPluginProcess({
+      command,
+      args: spawnArgs,
+      cwd,
       env: init?.env,
       hasInput: init?.stdin !== undefined,
-      pluginId: y,
+      pluginId,
     });
-    let streams = [pluginProcess.stdout, pluginProcess.stderr];
-    logForDebugging(`${Z}: ${S} with ${w.length} args in ${G} (pid ${pluginProcess.pid ?? "?"})`);
+    let streams = [child.stdout, child.stderr];
+    logForDebugging(
+      `${logLabel}: ${command} with ${spawnArgs.length} args in ${cwd} (pid ${child.pid ?? "?"})`,
+    );
     let promise_2 = new Promise((resolve, reject) => {
-      pluginProcess.once("error", reject);
-      pluginProcess.once("close", (It) => resolve(It ?? 1));
+      child.once("error", reject);
+      child.once("close", (exitCode) => resolve(exitCode ?? 1));
     });
     promise_2.catch(() => {});
-    timeoutController.controller.signal.addEventListener("abort", lt, {
+    timeoutController.controller.signal.addEventListener("abort", onAbort, {
       once: true,
     });
-    if (timeoutController.controller.signal.aborted) lt();
-    if (init?.stdin !== undefined && pluginProcess.stdin !== null) {
-      pluginProcess.stdin.once("error", () => {});
-      pluginProcess.stdin.end(init.stdin);
+    if (timeoutController.controller.signal.aborted) onAbort();
+    if (init?.stdin !== undefined && child.stdin !== null) {
+      child.stdin.once("error", () => {});
+      child.stdin.end(init.stdin);
     }
     let winner = await Promise.race([
       Promise.all([
-        collectStreamCapped(pluginProcess.stdout, MAX_COLLECTED_OUTPUT_BYTES),
-        collectStreamCapped(pluginProcess.stderr, MAX_COLLECTED_OUTPUT_BYTES),
+        collectStreamCapped(child.stdout, MAX_COLLECTED_OUTPUT_BYTES),
+        collectStreamCapped(child.stderr, MAX_COLLECTED_OUTPUT_BYTES),
         promise_2,
       ]),
       promise,
     ]);
-    let nt = winner === undefined || Ee;
-    if (nt && timeoutController.timedOut()) throw we(`aborted: still running after ${min}ms`);
-    if (nt) throw we("aborted");
-    let [pt, Et, yt] = winner;
+    let isAbortedResult = winner === undefined || isAborted;
+    if (isAbortedResult && timeoutController.timedOut())
+      throw failWith(`aborted: still running after ${min}ms`);
+    if (isAbortedResult) throw failWith("aborted");
+    let [stdoutResult, stderrResult, exitCode] = winner;
     logForDebugging(
-      `${Z}: ${S} exited ${yt} in ${Date.now() - now}ms, ${pt.text.length} + ${Et.text.length} chars`,
+      `${logLabel}: ${command} exited ${exitCode} in ${Date.now() - now}ms, ${stdoutResult.text.length} + ${stderrResult.text.length} chars`,
     );
     return {
-      exitCode: yt,
-      stdout: pt.text,
-      stderr: Et.text,
-      isStdoutTruncated: pt.isTruncated,
-      isStderrTruncated: Et.isTruncated,
+      exitCode,
+      stdout: stdoutResult.text,
+      stderr: stderrResult.text,
+      isStdoutTruncated: stdoutResult.isTruncated,
+      isStderrTruncated: stderrResult.isTruncated,
     };
   } catch (error) {
     if (error instanceof HooksError) throw error;
     let failureText = spawnFailureText(error);
-    logForDebugging(`${Z}: ${S} ${failureText}`, {
+    logForDebugging(`${logLabel}: ${command} ${failureText}`, {
       level: "warn",
     });
-    throw we(failureText);
+    throw failWith(failureText);
   } finally {
     timeoutController.release();
   }
@@ -262,156 +265,162 @@ var PROCESS_SPAWN_LABEL = "$.process.spawn";
 /**
  * 插件 $.process.run：运行子进程并收集输出，支持中止。
  */
-async function* processRunForPlugin({ argv, cwd, env, input }, h, { signal: y, cwd: S, pluginId: w } = {}) {
-  let [L = "", ...G] = argv;
-  let q = S ?? getCwd();
-  let Z = cwd === undefined ? q : resolve_2(q, cwd);
-  let Se = `${PROCESS_SPAWN_LABEL} (${h})`;
+async function* processRunForPlugin(
+  { argv, cwd, env, input },
+  pluginName,
+  { signal, cwd: baseCwd, pluginId } = {},
+) {
+  let [command = "", ...spawnArgs] = argv;
+  let startCwd = baseCwd ?? getCwd();
+  let resolvedCwd = cwd === undefined ? startCwd : resolve_2(startCwd, cwd);
+  let logLabel = `${PROCESS_SPAWN_LABEL} (${pluginName})`;
   let now = Date.now();
-  let we = prefixedErrorCtor(h, PROCESS_SPAWN_LABEL, L);
-  let Ee = [];
-  let Ae = 0;
-  let Ie = false;
-  let Me = 0;
-  let We;
-  function ze(qt) {
-    Ee.push(qt);
-    We?.();
+  let failWith = prefixedErrorCtor(pluginName, PROCESS_SPAWN_LABEL, command);
+  let queue = [];
+  let queuedBytes = 0;
+  let isPaused = false;
+  let chunkCount = 0;
+  let wakeWaiter;
+  function enqueue(queuedItem) {
+    queue.push(queuedItem);
+    wakeWaiter?.();
   }
-  function lt(qt) {
-    let failureText = spawnFailureText(qt);
-    logForDebugging(`${Se}: ${L} ${failureText}`, {
+  function toFailure(error) {
+    let failureText = spawnFailureText(error);
+    logForDebugging(`${logLabel}: ${command} ${failureText}`, {
       level: "warn",
     });
-    return we(failureText);
+    return failWith(failureText);
   }
-  if (y?.aborted === true) throw we("aborted");
-  let Je;
+  if (signal?.aborted === true) throw failWith("aborted");
+  let child;
   try {
-    Je = spawnPluginProcess({
-      command: L,
-      args: G,
-      cwd: Z,
+    child = spawnPluginProcess({
+      command,
+      args: spawnArgs,
+      cwd: resolvedCwd,
       env,
       hasInput: input !== undefined,
-      pluginId: w,
+      pluginId,
     });
   } catch (error) {
-    throw lt(error);
+    throw toFailure(error);
   }
-  let nt = [Je.stdout, Je.stderr];
-  let pt;
-  let Et = false;
-  function yt(graceMs) {
-    if (!Et) {
-      Et = true;
-      pt = terminateProcessTree(Je, {
-        streams: nt,
+  let streams = [child.stdout, child.stderr];
+  let termination;
+  let isTerminating = false;
+  function terminate(graceMs) {
+    if (!isTerminating) {
+      isTerminating = true;
+      termination = terminateProcessTree(child, {
+        streams,
         done: () => {},
         graceMs,
       });
     }
-    return pt;
+    return termination;
   }
-  let gt = registerCleanup(async () => {
-    await yt(KILL_GRACE_POLL_MS);
+  let releaseCleanup = registerCleanup(async () => {
+    await terminate(KILL_GRACE_POLL_MS);
   });
-  logForDebugging(`${Se}: ${L} with ${G.length} args in ${Z} (pid ${Je.pid ?? "?"})`);
-  function At(qt) {
-    Ie = !qt;
-    for (let Zt of nt)
-      if (qt) Zt?.resume();
-      else Zt?.pause();
+  logForDebugging(
+    `${logLabel}: ${command} with ${spawnArgs.length} args in ${resolvedCwd} (pid ${child.pid ?? "?"})`,
+  );
+  function setPaused(shouldPause) {
+    isPaused = !shouldPause;
+    for (let stream of streams)
+      if (shouldPause) stream?.resume();
+      else stream?.pause();
   }
-  function It(qt, stream) {
-    qt?.setEncoding("utf8");
-    qt?.on("data", (rn) => {
-      if (rn === "") return;
-      Ae += rn.length;
-      ze({
+  function watchStream(sink, stream) {
+    sink?.setEncoding("utf8");
+    sink?.on("data", (text) => {
+      if (text === "") return;
+      queuedBytes += text.length;
+      enqueue({
         stream,
-        text: rn,
+        text,
       });
-      if (Ae > MAX_SPAWN_OUTPUT_BYTES && !Ie) At(false);
+      if (queuedBytes > MAX_SPAWN_OUTPUT_BYTES && !isPaused) setPaused(false);
     });
-    qt?.once("error", () => {});
+    sink?.once("error", () => {});
   }
-  It(Je.stdout, "stdout");
-  It(Je.stderr, "stderr");
-  Je.once("error", (qt) =>
-    ze({
-      failed: lt(qt),
+  watchStream(child.stdout, "stdout");
+  watchStream(child.stderr, "stderr");
+  child.once("error", (error) =>
+    enqueue({
+      failed: toFailure(error),
     }),
   );
-  Je.once("close", (code, signal) =>
-    ze({
+  child.once("close", (code, signal) =>
+    enqueue({
       ended: {
         code,
         signal,
       },
     }),
   );
-  function Yt() {
-    let qt = !Et && yt() !== undefined;
-    Ee.length = 0;
-    ze({
-      failed: we("aborted"),
+  function onAbort() {
+    let shouldTerminate = !isTerminating && terminate() !== undefined;
+    queue.length = 0;
+    enqueue({
+      failed: failWith("aborted"),
     });
-    if (qt) logForDebugging(`${Se}: ${L} stopped: the op was aborted`);
+    if (shouldTerminate) logForDebugging(`${logLabel}: ${command} stopped: the op was aborted`);
   }
-  y?.addEventListener("abort", Yt, {
+  signal?.addEventListener("abort", onAbort, {
     once: true,
   });
-  if (input !== undefined && Je.stdin !== null) {
-    Je.stdin.once("error", () => {});
-    Je.stdin.end(input);
+  if (input !== undefined && child.stdin !== null) {
+    child.stdin.once("error", () => {});
+    child.stdin.end(input);
   }
   try {
     while (true) {
-      let qt = Ee.shift();
-      if (qt === undefined) {
+      let nextItem = queue.shift();
+      if (nextItem === undefined) {
         await new Promise((resolve) => {
-          We = resolve;
+          wakeWaiter = resolve;
         });
-        We = undefined;
+        wakeWaiter = undefined;
         continue;
       }
-      if ("failed" in qt) throw qt.failed;
-      if ("ended" in qt) {
-        let { ended } = qt;
+      if ("failed" in nextItem) throw nextItem.failed;
+      if ("ended" in nextItem) {
+        let { ended } = nextItem;
         logForDebugging(
-          `${Se}: ${L} ended (${ended.code ?? ended.signal}) in ${Date.now() - now}ms, ${Me} chunks`,
+          `${logLabel}: ${command} ended (${ended.code ?? ended.signal}) in ${Date.now() - now}ms, ${chunkCount} chunks`,
         );
         return ended;
       }
-      Ae -= qt.text.length;
-      Me += 1;
-      if (Ie && Ae <= MAX_SPAWN_OUTPUT_BYTES) At(true);
-      yield qt;
+      queuedBytes -= nextItem.text.length;
+      chunkCount += 1;
+      if (isPaused && queuedBytes <= MAX_SPAWN_OUTPUT_BYTES) setPaused(true);
+      yield nextItem;
     }
   } finally {
-    y?.removeEventListener("abort", Yt);
-    gt();
-    if (!Et && yt() !== undefined)
-      logForDebugging(`${Se}: ${L} stopped after ${Date.now() - now}ms: the stream was let go`);
+    signal?.removeEventListener("abort", onAbort);
+    releaseCleanup();
+    if (!isTerminating && terminate() !== undefined)
+      logForDebugging(`${logLabel}: ${command} stopped after ${Date.now() - now}ms: the stream was let go`);
   }
 }
 //@ chunk-e6aww6q8.js:3991045-3991103 placement
 /**
  * 装饰段未变或文本相同
  */
-var decorationsUnchanged = (e, promptBoxForPlugin) =>
-  e.decorations.length === 0 || promptBoxForPlugin?.text === e.text;
+var decorationsUnchanged = (promptBox, promptBoxForPlugin) =>
+  promptBox.decorations.length === 0 || promptBoxForPlugin?.text === promptBox.text;
 //@ chunk-e6aww6q8.js:3991103-3991212 placement
 /**
  * $.prompt.paint：在当前绑定的输入框上绘制装饰段，无输入框时返回 {isPainted: false}。
  */
-async function promptPaintOp(e, plugin) {
-  let r = surfaceComposer();
-  if (r === undefined)
+async function promptPaintOp(box, plugin) {
+  let composer = surfaceComposer();
+  if (composer === undefined)
     return {
       isPainted: false,
     };
-  return r.paint(plugin, e.decorations, e.text);
+  return composer.paint(plugin, box.decorations, box.text);
 }
 export { decorationsUnchanged, promptPaintOp, processSpawnForPlugin, processRunForPlugin };

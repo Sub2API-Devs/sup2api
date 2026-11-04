@@ -12,7 +12,12 @@ import { isIPv4, isIPv6 } from "net";
 import { createHmac, X509Certificate } from "crypto";
 import { rootCertificates } from "tls";
 import { lookup as lookup_2 } from "dns/promises";
-import { rf, fF, vS, PS } from "../../../vendor/ip-address/dist/ipv4.js";
+import {
+  PRIVATE_NETWORKS,
+  NON_PUBLIC_NETWORKS,
+  RESERVED_NETWORKS,
+  DOCUMENTATION_NETWORKS,
+} from "../../../vendor/ip-address/dist/ipv4.js";
 import { ipInCidr } from "../../utils/cidr.js";
 import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -31,109 +36,135 @@ import { releaseGatewayHost, holdGatewayHostStrict } from "../../bootstrap/state
 import { getUsableProxyUrl, shouldBypassProxy, getProxyUrl } from "../../utils/proxy.js";
 import { GatewayHostCheckError, GatewayHostCheckRetryableError, queryGatewayHostCheck } from "./hostCheck.js";
 import { getHttpsHostname } from "../../tools/WebFetchTool/utils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:238905-239215 placement
 /**
  * 地址是否为内网或回环（含 IPv4 映射）
  */
-function isInternalAddress(e) {
-  let lower = e.replace(/%.*$/, "").toLowerCase();
-  if (isIPv4(lower)) return rf.some((h) => ipInCidr(lower, h));
+function isInternalAddress(address) {
+  let lower = address.replace(/%.*$/, "").toLowerCase();
+  if (isIPv4(lower)) return PRIVATE_NETWORKS.some((range) => ipInCidr(lower, range));
   if (!isIPv6(lower)) return false;
   let match = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(lower);
   if (match?.[1]) return isInternalAddress(match[1]);
   if (lower === "::1") return true;
-  let s = parseInt(/^([0-9a-f]{1,4}):/.exec(lower)?.[1] ?? "0", 16);
-  return (s >= 65152 && s <= 65215) || (s >= 64512 && s <= 65023);
+  let range = parseInt(/^([0-9a-f]{1,4}):/.exec(lower)?.[1] ?? "0", 16);
+  return (range >= 65152 && range <= 65215) || (range >= 64512 && range <= 65023);
 }
 //@ chunk-aepeg2w5.js:239215-239294 placement
 /**
  * 网关内部网络列表非法时的错误（带未解析的类型）。
  */
-class GatewayInternalNetworksError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  unresolved;
-  constructor(e, n, unresolved) {
-    super(e, n);
-    this.unresolved = unresolved;
-  }
-}
+let GatewayInternalNetworksError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:239215", () => {
+  GatewayInternalNetworksError = class GatewayInternalNetworksError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    unresolved;
+    constructor(message, telemetry, unresolved) {
+      super(message, telemetry);
+      this.unresolved = unresolved;
+    }
+  };
+});
 //@ chunk-aepeg2w5.js:239294-239314 placement
 /**
  * 网关设置/信任相关的通用错误类型。
  */
-class GatewayTrustError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {}
+let GatewayTrustError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:239294", () => {
+  GatewayTrustError = class GatewayTrustError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {};
+});
 //@ chunk-aepeg2w5.js:239314-239334 placement
 /**
  * 网关客户允许列表相关的错误类型。
  */
-class GatewayAllowlistError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {}
+let GatewayAllowlistError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:239314", () => {
+  GatewayAllowlistError = class GatewayAllowlistError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {};
+});
 //@ chunk-aepeg2w5.js:239334-239348 placement
 /**
- * 最多接受的内部网络块数（4）。
+ * 网关内部网络的校验常量：of 是允许的最短 CIDR 前缀 8（/8 到 /32）；ES 是最多接受的块数 4。
  */
-var MIN_INTERNAL_PREFIX = 8;
+var MIN_CIDR_PREFIX = 8;
 var MAX_INTERNAL_BLOCKS = 4;
 //@ chunk-aepeg2w5.js:239348-240670 placement
 /**
  * 解析托管设置 gatewayInternalNetworks（CIDR 列表，拒绝私有/保留/文档地址）。
  */
-function parseInternalNetworks(e) {
-  let n = (h) =>
+function parseInternalNetworks(rawEntries) {
+  let invalid = (problem) =>
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `gatewayInternalNetworks in managed settings ${h}.`,
+      `gatewayInternalNetworks in managed settings ${problem}.`,
       "gateway login: invalid gatewayInternalNetworks",
     );
-  if (e.includes(UNREADABLE_SETTING_MARKER))
-    throw n("is not a list of CIDR strings; sign-in is refused until it is fixed");
-  let mapped = e.map((h) => {
-    let trimmed = h.trim();
-    let [S = "", w = ""] = trimmed.split("/");
-    let R = Number(w);
-    let reduced = S.split(".").reduce((acc, G) => acc * 256 + Number(G), 0);
-    if (!isIPv4(S) || !ipInCidr(S, trimmed) || R < MIN_INTERNAL_PREFIX || reduced % 2 ** (32 - R) !== 0)
-      throw n(
-        `entry "${trimmed}" is not an IPv4 block written as first-address/prefix, /${MIN_INTERNAL_PREFIX} to /32 (like 203.0.113.0/24, but your own)`,
+  if (rawEntries.includes(UNREADABLE_SETTING_MARKER))
+    throw invalid("is not a list of CIDR strings; sign-in is refused until it is fixed");
+  let mapped = rawEntries.map((rawEntry) => {
+    let trimmed = rawEntry.trim();
+    let [address = "", prefixText = ""] = trimmed.split("/");
+    let prefix = Number(prefixText);
+    let reduced = address.split(".").reduce((acc, octet) => acc * 256 + Number(octet), 0);
+    if (
+      !isIPv4(address) ||
+      !ipInCidr(address, trimmed) ||
+      prefix < MIN_CIDR_PREFIX ||
+      reduced % 2 ** (32 - prefix) !== 0
+    )
+      throw invalid(
+        `entry "${trimmed}" is not an IPv4 block written as first-address/prefix, /${MIN_CIDR_PREFIX} to /32 (like 203.0.113.0/24, but your own)`,
       );
-    let P = `${S}/${R}`;
-    let found = [...rf, ...fF, ...vS].find((L) => ipInCidr(S, L) || ipInCidr(firstLineOf(L, "/"), P));
+    let normalized = `${address}/${prefix}`;
+    let found = [...PRIVATE_NETWORKS, ...NON_PUBLIC_NETWORKS, ...RESERVED_NETWORKS].find(
+      (reservedRange) =>
+        ipInCidr(address, reservedRange) || ipInCidr(firstLineOf(reservedRange, "/"), normalized),
+    );
     if (found)
-      throw n(
-        rf.includes(found)
+      throw invalid(
+        PRIVATE_NETWORKS.includes(found)
           ? `entry "${trimmed}" overlaps private address space (${found}), where /login accepts a gateway without this key; declare only the public block your network is numbered from`
-          : PS.includes(found)
+          : DOCUMENTATION_NETWORKS.includes(found)
             ? `entry "${trimmed}" overlaps ${found}, a documentation example range that is no one's network`
-            : vS.includes(found)
+            : RESERVED_NETWORKS.includes(found)
               ? `entry "${trimmed}" overlaps ${found}, reserved address space no network is numbered from`
               : `entry "${trimmed}" overlaps ${found}, which VPN and NAT64 clients use locally`,
       );
-    return P;
+    return normalized;
   });
-  let s = uniq(mapped);
-  if (s.length > MAX_INTERNAL_BLOCKS)
-    throw n(`lists ${s.length} blocks; at most ${MAX_INTERNAL_BLOCKS} are accepted`);
-  for (let [h, y] of s.entries()) {
-    let found = s.find(
-      (w, R) => R > h && (ipInCidr(firstLineOf(y, "/"), w) || ipInCidr(firstLineOf(w, "/"), y)),
+  let blocks = uniq(mapped);
+  if (blocks.length > MAX_INTERNAL_BLOCKS)
+    throw invalid(`lists ${blocks.length} blocks; at most ${MAX_INTERNAL_BLOCKS} are accepted`);
+  for (let [index, block] of blocks.entries()) {
+    let found = blocks.find(
+      (other, otherIndex) =>
+        otherIndex > index &&
+        (ipInCidr(firstLineOf(block, "/"), other) || ipInCidr(firstLineOf(other, "/"), block)),
     );
-    if (found) throw n(`entries "${y}" and "${found}" overlap; list disjoint blocks`);
+    if (found) throw invalid(`entries "${block}" and "${found}" overlap; list disjoint blocks`);
   }
-  return s;
+  return blocks;
 }
 //@ chunk-aepeg2w5.js:240670-241318 placement
 /**
  * 检查网关实际连接地址在声明的内网中。
  */
-function checkAddressInNetwork(e, n, localAddress, s) {
-  if (!ipInCidr(s, e))
+function checkAddressInNetwork(network, address, localAddress, localAddr) {
+  if (!ipInCidr(localAddr, network))
     return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${n} answered from ${s || "an unknown address"}, outside its declared network ${e}: the name resolved differently between lookup and connect. Try again.`,
+      `${address} answered from ${localAddr || "an unknown address"}, outside its declared network ${network}: the name resolved differently between lookup and connect. Try again.`,
       "gateway login: gateway address outside declared network",
     );
-  if (!ipInCidr(localAddress, e))
+  if (!ipInCidr(localAddress, network))
     return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Claude Code only signs in to ${n} from inside its declared network ${e} (managed settings), and this machine is connecting from ${localAddress || "an unknown address"}, outside it. Sign in ` +
+      `Claude Code only signs in to ${address} from inside its declared network ${network} (managed settings), and this machine is connecting from ${localAddress || "an unknown address"}, outside it. Sign in ` +
         "from the host OS on that network \u2014 not from a container, WSL2, or a " +
-        `VPN whose addresses sit outside ${e}.`,
+        `VPN whose addresses sit outside ${network}.`,
       "gateway login: this machine is outside the declared network",
     );
   return;
@@ -142,21 +173,25 @@ function checkAddressInNetwork(e, n, localAddress, s) {
 /**
  * 受信主机名集合。
  */
-var VOUCHED_HOSTS = ["claude.fedstart.com", "claude.palantirfedstart.com"];
-var vouchedHostSet = new Set([...VOUCHED_HOSTS]);
+var VOUCHED_HOSTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var vouchedHostSet;
+deferInit("chunk-aepeg2w5.js:241318", () => {
+  VOUCHED_HOSTS = ["claude.fedstart.com", "claude.palantirfedstart.com"];
+  vouchedHostSet = new Set([...VOUCHED_HOSTS]);
+});
 //@ chunk-aepeg2w5.js:241399-241436 placement
 /**
  * 判断主机名是否属于内置受信列表。
  */
-function isVouchedHost(e) {
-  return VOUCHED_HOSTS.includes(e);
+function isVouchedHost(host) {
+  return VOUCHED_HOSTS.includes(host);
 }
 //@ chunk-aepeg2w5.js:241436-241469 placement
 /**
  * 判断主机名是否在受信集合中。
  */
-function isVouchedHostSetMember(e) {
-  return vouchedHostSet.has(e);
+function isVouchedHostSetMember(host) {
+  return vouchedHostSet.has(host);
 }
 //@ chunk-aepeg2w5.js:241469-241549 placement
 /**
@@ -169,9 +204,9 @@ var customerAllowlistEntries = [];
  * 当前日期有效的客户允许列表条目。
  */
 function activeAllowlistEntries(
-  e = customerAllowlistEntries,
-  n = Date.now(),
-  r = Date.parse(
+  entries = customerAllowlistEntries,
+  nowMs = Date.now(),
+  buildTimeMs = Date.parse(
     {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -185,18 +220,18 @@ function activeAllowlistEntries(
     }.BUILD_TIME,
   ),
 ) {
-  return e.filter((s) => {
-    let h = /^\d{4}-\d{2}-\d{2}$/.test(s.notAfter) ? Date.parse(s.notAfter) : NaN;
-    return n < h && h <= r + 31622400000;
+  return entries.filter((entry) => {
+    let notAfterMs = /^\d{4}-\d{2}-\d{2}$/.test(entry.notAfter) ? Date.parse(entry.notAfter) : NaN;
+    return nowMs < notAfterMs && notAfterMs <= buildTimeMs + 31622400000;
   });
 }
 //@ chunk-aepeg2w5.js:242209-242264 placement
 /**
  * 取主机事实集合的哈希，用于允许列表判断。
  */
-function allowlistFactsHash(e) {
+function allowlistFactsHash(trust) {
   return computeContentHash(
-    e.facts.toSorted().join(`
+    trust.facts.toSorted().join(`
 `),
   );
 }
@@ -208,9 +243,9 @@ function allowlistFactHmac(fact) {
   return createHmac("sha256", ALLOWLIST_HMAC_KEY).update(fact).digest("hex");
 }
 //@ chunk-aepeg2w5.js:242326-242445 placement
-function caPublicKeyFact(e) {
+function caPublicKeyFact(pem) {
   try {
-    let publicKey = new X509Certificate(e).publicKey;
+    let publicKey = new X509Certificate(pem).publicKey;
     return `ca:${computeContentHash(
       publicKey.export({
         type: "spki",
@@ -225,15 +260,16 @@ function caPublicKeyFact(e) {
 /**
  * 判断证书是否来自公共 CA。
  */
-function describeCertificateIssuer(e, n = rootCertificates) {
+function describeCertificateIssuer(pem, roots = rootCertificates) {
   try {
-    let r = new X509Certificate(e);
-    let { asymmetricKeyType, asymmetricKeyDetails } = r.publicKey;
-    let y = caPublicKeyFact(e);
-    if (n.length === 0)
+    let cert = new X509Certificate(pem);
+    let { asymmetricKeyType, asymmetricKeyDetails } = cert.publicKey;
+    let fact = caPublicKeyFact(pem);
+    if (roots.length === 0)
       return "this runtime has no built-in root certificates, so Claude Code cannot tell a public CA from a private one and allowlists no root";
-    if (n.some((w) => caPublicKeyFact(w) === y)) return "a root the runtime bundles, so a public CA";
-    if (!r.ca || !r.verify(r.publicKey)) return "not a self-signed CA certificate";
+    if (roots.some((rootPem) => caPublicKeyFact(rootPem) === fact))
+      return "a root the runtime bundles, so a public CA";
+    if (!cert.ca || !cert.verify(cert.publicKey)) return "not a self-signed CA certificate";
     return (
       asymmetricKeyType === "rsa"
         ? (asymmetricKeyDetails?.modulusLength ?? 0) >= 2048
@@ -248,33 +284,34 @@ function describeCertificateIssuer(e, n = rootCertificates) {
   }
 }
 //@ chunk-aepeg2w5.js:243172-243464 placement
-function findListedRoots(e) {
-  let n = new Set(e.flatMap((r) => r.facts));
+function findListedRoots(entries) {
+  let listedFacts = new Set(entries.flatMap((entry) => entry.facts));
   return (getCACertificates() ?? [])
-    .flatMap((r) => r.match(PEM_CERT_BLOCK_RE) ?? [])
-    .map((r) => ({
-      fact: caPublicKeyFact(r),
-      pem: r,
+    .flatMap((block) => block.match(PEM_CERT_BLOCK_RE) ?? [])
+    .map((pem) => ({
+      fact: caPublicKeyFact(pem),
+      pem,
     }))
-    .filter((r) => n.has(allowlistFactHmac(r.fact)))
-    .filter((r) => {
-      let s = describeCertificateIssuer(r.pem);
-      if (s !== undefined) logForDebugging(`[gateway] customer allowlist: a listed root is skipped: ${s}`);
-      return s === undefined;
+    .filter((candidate) => listedFacts.has(allowlistFactHmac(candidate.fact)))
+    .filter((root) => {
+      let problem = describeCertificateIssuer(root.pem);
+      if (problem !== undefined)
+        logForDebugging(`[gateway] customer allowlist: a listed root is skipped: ${problem}`);
+      return problem === undefined;
     });
 }
 //@ chunk-aepeg2w5.js:243464-243708 placement
 function ipCidrFacts(remoteAddress = "") {
   let replaced = remoteAddress.replace(/^::ffff:/, "");
   if (!isIPv4(replaced)) return [];
-  let reduced = replaced.split(".").reduce((acc, h) => acc * 256 + Number(h), 0);
+  let reduced = replaced.split(".").reduce((acc, octet) => acc * 256 + Number(octet), 0);
   return Array.from(
     {
-      length: 33 - MIN_INTERNAL_PREFIX,
+      length: 33 - MIN_CIDR_PREFIX,
     },
-    (s, h) => {
-      let y = reduced - (reduced % 2 ** h);
-      return `cidr:${[24, 16, 8, 0].map((S) => (y >>> S) & 255).join(".")}/${32 - h}`;
+    (entry, offset) => {
+      let base = reduced - (reduced % 2 ** offset);
+      return `cidr:${[24, 16, 8, 0].map((shift) => (base >>> shift) & 255).join(".")}/${32 - offset}`;
     },
   );
 }
@@ -282,34 +319,36 @@ function ipCidrFacts(remoteAddress = "") {
 /**
  * 用客户允许列表核对网关。
  */
-async function checkCustomerAllowlist(e) {
-  if (customerAllowlistEntries.length === 0 || !e.startsWith("https:")) return;
-  let n = activeAllowlistEntries();
+async function checkCustomerAllowlist(gatewayUrl) {
+  if (customerAllowlistEntries.length === 0 || !gatewayUrl.startsWith("https:")) return;
+  let active = activeAllowlistEntries();
   logForDebugging(
-    `[gateway] customer allowlist: ${n.length} of ${customerAllowlistEntries.length} entries count on this date`,
+    `[gateway] customer allowlist: ${active.length} of ${customerAllowlistEntries.length} entries count on this date`,
   );
-  if (n.length === 0) return;
-  for (let r of [undefined, ...findListedRoots(n)]) {
-    let s = await fetchGatewayCertificate(e, 1e4, undefined, {
-      onlyRoot: r?.pem,
+  if (active.length === 0) return;
+  for (let root of [undefined, ...findListedRoots(active)]) {
+    let observed = await fetchGatewayCertificate(gatewayUrl, 1e4, undefined, {
+      onlyRoot: root?.pem,
     }).catch((error) => {
       logForDebugging(
-        `[gateway] customer allowlist: no usable connection to ${e}${r ? ", trusting only a listed root" : ""}: ${errorMessage(error)}`,
+        `[gateway] customer allowlist: no usable connection to ${gatewayUrl}${root ? ", trusting only a listed root" : ""}: ${errorMessage(error)}`,
       );
       return;
     });
-    if (s === undefined) continue;
-    let h = new Set(
-      [`host:${s.hostname}`, ...ipCidrFacts(s.remoteAddress), ...(r ? [r.fact] : [])].map(allowlistFactHmac),
+    if (observed === undefined) continue;
+    let facts = new Set(
+      [`host:${observed.hostname}`, ...ipCidrFacts(observed.remoteAddress), ...(root ? [root.fact] : [])].map(
+        allowlistFactHmac,
+      ),
     );
-    let found = n.find((S) => S.facts.every((fact) => h.has(fact)));
+    let trust = active.find((entry) => entry.facts.every((fact) => facts.has(fact)));
     logForDebugging(
-      `[gateway] customer allowlist: ${s.hostname}, answered from ${s.remoteAddress || "an unknown address"}${r ? ", verified under a listed root alone" : ""}: matches ${found ? "an" : "no"} entry`,
+      `[gateway] customer allowlist: ${observed.hostname}, answered from ${observed.remoteAddress || "an unknown address"}${root ? ", verified under a listed root alone" : ""}: matches ${trust ? "an" : "no"} entry`,
     );
-    if (found)
+    if (trust)
       return {
-        judged: s,
-        entry: allowlistFactsHash(found),
+        judged: observed,
+        entry: allowlistFactsHash(trust),
       };
   }
   return;
@@ -318,15 +357,15 @@ async function checkCustomerAllowlist(e) {
 /**
  * 取 URL 主机名（去掉 IPv6 方括号）。
  */
-function hostOf(e) {
-  return e.hostname.replace(/^\[|\]$/g, "");
+function hostOf(url) {
+  return url.hostname.replace(/^\[|\]$/g, "");
 }
 //@ chunk-aepeg2w5.js:244545-244587 placement
 /**
  * 主机是否受信（走内置列表）。
  */
-function isHostVouched(e) {
-  if (isVouchedHost(e)) return true;
+function isHostVouched(host) {
+  if (isVouchedHost(host)) return true;
   return false;
 }
 //@ chunk-aepeg2w5.js:244587-244858 placement
@@ -342,50 +381,50 @@ var NOT_SERVED_MESSAGE = "when asked, it did not name a recognized Claude gatewa
  * 可暂停的计时器（等待 helper 时不计时）。
  */
 function createPausableClock() {
-  let e = 0;
-  let n;
-  let r;
+  let pausedTotalMs = 0;
+  let pausedAtMs;
+  let pendingResume;
   return {
     clock: {
       pause() {
-        n = Date.now();
+        pausedAtMs = Date.now();
         return () => {
-          if (n !== undefined) {
-            e += Date.now() - n;
-            n = undefined;
+          if (pausedAtMs !== undefined) {
+            pausedTotalMs += Date.now() - pausedAtMs;
+            pausedAtMs = undefined;
           }
-          let h = r;
-          r = undefined;
-          h?.();
+          let resume = pendingResume;
+          pendingResume = undefined;
+          resume?.();
         };
       },
     },
-    race(h, y) {
+    race(promise, timeoutMs) {
       let now = Date.now();
       return new Promise((resolve, reject) => {
-        let x;
-        let P = () => {
-          if (n !== undefined) {
-            r = P;
+        let timer;
+        let checkDeadline = () => {
+          if (pausedAtMs !== undefined) {
+            pendingResume = checkDeadline;
             return;
           }
-          let F = y + e - (Date.now() - now);
-          if (F <= 0) {
+          let remainingMs = timeoutMs + pausedTotalMs - (Date.now() - now);
+          if (remainingMs <= 0) {
             reject(Error(VOUCH_TIMEOUT_MESSAGE));
             return;
           }
-          x = setTimeout(P, F);
+          timer = setTimeout(checkDeadline, remainingMs);
         };
-        P();
-        h.then(
-          (F) => {
-            clearTimeout(x);
-            r = undefined;
-            resolve(F);
+        checkDeadline();
+        promise.then(
+          (value) => {
+            clearTimeout(timer);
+            pendingResume = undefined;
+            resolve(value);
           },
           (error) => {
-            clearTimeout(x);
-            r = undefined;
+            clearTimeout(timer);
+            pendingResume = undefined;
             reject(error);
           },
         );
@@ -397,35 +436,37 @@ function createPausableClock() {
 var PROXY_NO_CREDENTIALS_MESSAGE =
   "Claude Code has no credentials this proxy accepts: configure them in the proxy address or a proxyAuthHelper.";
 //@ chunk-aepeg2w5.js:245370-245499 placement
-function isValidHostname(e) {
+function isValidHostname(hostname) {
   return (
-    e.length <= 253 &&
-    /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/.test(e)
+    hostname.length <= 253 &&
+    /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/.test(hostname)
   );
 }
 //@ chunk-aepeg2w5.js:245499-245581 placement
 /**
  * 是否是可信任的 https 主机（无端口、非 IP、主机名合法）。
  */
-function isVouchableHttpsHost(e, n) {
-  return e.protocol === "https:" && e.port === "" && !isIPv4(n) && !isIPv6(n) && isValidHostname(n);
+function isVouchableHttpsHost(url, host) {
+  return (
+    url.protocol === "https:" && url.port === "" && !isIPv4(host) && !isIPv6(host) && isValidHostname(host)
+  );
 }
 //@ chunk-aepeg2w5.js:245581-245777 placement
 /**
  * 判定网关可信依据，管理员可退回客户允许列表。
  */
-async function resolveGatewayTrustBasis(e, internalNetworks = [], namedBy = "developer") {
+async function resolveGatewayTrustBasis(url, internalNetworkEntries = [], namedBy = "developer") {
   try {
-    return await resolveGatewayBasis(e, internalNetworks, VOUCH_TIMEOUT_MS);
+    return await resolveGatewayBasis(url, internalNetworkEntries, VOUCH_TIMEOUT_MS);
   } catch (error) {
-    let h =
+    let detail =
       error instanceof GatewayAllowlistError && namedBy === "administrator"
-        ? await checkCustomerAllowlist(e)
+        ? await checkCustomerAllowlist(url)
         : undefined;
-    if (h === undefined) throw error;
+    if (detail === undefined) throw error;
     return {
       basis: "allowlisted",
-      ...h,
+      ...detail,
     };
   }
 }
@@ -434,94 +475,98 @@ async function resolveGatewayTrustBasis(e, internalNetworks = [], namedBy = "dev
  * 判定网关可信依据（已列出、内网、担保）。
  */
 async function resolveGatewayBasis(
-  e,
-  n,
-  r,
-  s,
-  h,
-  y = {
+  gatewayUrl,
+  internalNetworkEntries,
+  hostCheckTimeoutMs,
+  vouchTimeoutMs,
+  credentials,
+  voucherState = {
     voucherNamed: false,
   },
-  S,
+  options,
 ) {
-  let w = new URL(e);
-  let R = hostOf(w);
-  let x = isIPv4(R) || isIPv6(R);
-  if (w.protocol === "https:" && vouchedHostSet.has(R))
+  let parsedUrl = new URL(gatewayUrl);
+  let hostname = hostOf(parsedUrl);
+  let isIpLiteral = isIPv4(hostname) || isIPv6(hostname);
+  if (parsedUrl.protocol === "https:" && vouchedHostSet.has(hostname))
     return {
       basis: "listed",
     };
-  let P = w.protocol === "https:" ? parseInternalNetworks(n) : [];
-  let F = S === undefined ? undefined : s;
+  let declaredBlocks = parsedUrl.protocol === "https:" ? parseInternalNetworks(internalNetworkEntries) : [];
+  let vouchBudgetMs = options === undefined ? undefined : vouchTimeoutMs;
   let now = Date.now();
-  let G = {
+  let progress = {
     proxyChecked: false,
   };
   try {
-    let j = checkGatewayReachability(w, R, x, P, G);
-    let ee =
-      F === undefined
-        ? await j
-        : await withTimeout(j, F, LOOKUP_TIMEOUT_MESSAGE).catch((error) => {
+    let reachability = checkGatewayReachability(parsedUrl, hostname, isIpLiteral, declaredBlocks, progress);
+    let result =
+      vouchBudgetMs === undefined
+        ? await reachability
+        : await withTimeout(reachability, vouchBudgetMs, LOOKUP_TIMEOUT_MESSAGE).catch((error) => {
             if (error instanceof Error && error.message === LOOKUP_TIMEOUT_MESSAGE) {
-              let Q = G.proxyChecked ? `gateway host ${R}` : "the configured HTTP proxy";
+              let target = progress.proxyChecked ? `gateway host ${hostname}` : "the configured HTTP proxy";
               throw new GatewayInternalNetworksError(
-                `${Q} could not be resolved within ${Math.max(1, Math.round(F / 1000))} seconds. Try again.`,
+                `${target} could not be resolved within ${Math.max(1, Math.round(vouchBudgetMs / 1000))} seconds. Try again.`,
                 "gateway login: lookups did not finish in time",
-                G.proxyChecked ? "gateway" : "proxy",
+                progress.proxyChecked ? "gateway" : "proxy",
               );
             }
             throw error;
           });
-    releaseGatewayHost(R);
-    return ee === undefined
+    releaseGatewayHost(hostname);
+    return result === undefined
       ? {
           basis: "network",
         }
       : {
           basis: "network",
-          network: ee,
+          network: result,
         };
   } catch (error) {
     if (
       !(error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS) ||
       error instanceof GatewayTrustError ||
       (error instanceof GatewayInternalNetworksError && error.unresolved === "proxy") ||
-      !isVouchableHttpsHost(w, R)
+      !isVouchableHttpsHost(parsedUrl, hostname)
     )
       throw error;
-    let ee = getUsableProxyUrl() !== undefined && !shouldBypassProxy(e);
-    if (error instanceof GatewayInternalNetworksError && !ee) throw error;
+    let viaProxy = getUsableProxyUrl() !== undefined && !shouldBypassProxy(gatewayUrl);
+    if (error instanceof GatewayInternalNetworksError && !viaProxy) throw error;
     let pausableClock = createPausableClock();
     let hostCheckAnswer = fetchHostCheckAnswer(
-      R,
-      r,
-      ee,
-      h,
+      hostname,
+      hostCheckTimeoutMs,
+      viaProxy,
+      credentials,
       error instanceof GatewayInternalNetworksError ? undefined : errorMessage(error),
-      y,
+      voucherState,
       pausableClock.clock,
-      S,
+      options,
     );
-    let re = F === undefined ? s : Math.max(F - (Date.now() - now), r);
-    let se =
-      re === undefined
+    let remainingMs =
+      vouchBudgetMs === undefined
+        ? vouchTimeoutMs
+        : Math.max(vouchBudgetMs - (Date.now() - now), hostCheckTimeoutMs);
+    let voucher =
+      remainingMs === undefined
         ? await hostCheckAnswer
-        : await pausableClock.race(hostCheckAnswer, re).catch((error) => {
+        : await pausableClock.race(hostCheckAnswer, remainingMs).catch((error) => {
             if (error instanceof Error && error.message === VOUCH_TIMEOUT_MESSAGE) {
-              if (!y.voucherNamed)
-                y.notVouched = "it could not be asked in time whether it is a recognized Claude gateway host";
+              if (!voucherState.voucherNamed)
+                voucherState.notVouched =
+                  "it could not be asked in time whether it is a recognized Claude gateway host";
               throw new GatewayInternalNetworksError(
-                `${R} could not be confirmed as a recognized Claude gateway host ${F === undefined ? `within ${Math.max(1, Math.round(re / 1000))} seconds` : "in time"}. Try again.`,
+                `${hostname} could not be confirmed as a recognized Claude gateway host ${vouchBudgetMs === undefined ? `within ${Math.max(1, Math.round(remainingMs / 1000))} seconds` : "in time"}. Try again.`,
                 "gateway login: vouching did not finish in time",
-                y.voucherNamed ? "voucher" : "host",
+                voucherState.voucherNamed ? "voucher" : "host",
               );
             }
             throw error;
           });
-    if (se === undefined) throw error;
-    logForDebugging(`[gateway] ${R} accepted: vouched for by ${se}`);
-    holdGatewayHostStrict(R);
+    if (voucher === undefined) throw error;
+    logForDebugging(`[gateway] ${hostname} accepted: vouched for by ${voucher}`);
+    holdGatewayHostStrict(hostname);
     return {
       basis: "vouched",
     };
@@ -532,35 +577,37 @@ async function resolveGatewayBasis(
  * 通过代理或直连检查网关地址。
  */
 async function checkGatewayReachability(
-  e,
-  n,
-  r,
-  s,
-  h = {
+  url,
+  hostname,
+  isIpLiteral,
+  declaredBlocks,
+  progress = {
     proxyChecked: false,
   },
 ) {
-  let href = e.href;
-  let S = isIPv6(n) ? `[${n}]:${e.port || (e.protocol === "http:" ? "80" : "443")}` : n;
+  let href = url.href;
+  let hostPort = isIPv6(hostname)
+    ? `[${hostname}]:${url.port || (url.protocol === "http:" ? "80" : "443")}`
+    : hostname;
   let proxyUrl = getProxyUrl();
   if (proxyUrl && !shouldBypassProxy(href)) {
-    let F;
-    let L;
+    let proxyHost;
+    let proxyAddresses;
     try {
-      F = new URL(proxyUrl).hostname.replace(/^\[|\]$/g, "");
-      if (!F) throw Error("no hostname");
-      L =
-        isIPv4(F) || isIPv6(F)
-          ? [F]
+      proxyHost = new URL(proxyUrl).hostname.replace(/^\[|\]$/g, "");
+      if (!proxyHost) throw Error("no hostname");
+      proxyAddresses =
+        isIPv4(proxyHost) || isIPv6(proxyHost)
+          ? [proxyHost]
           : (
               await withTimeout(
-                lookup_2(F, {
+                lookup_2(proxyHost, {
                   all: true,
                 }),
                 1e4,
                 "DNS resolution timed out",
               )
-            ).map((ee) => ee.address);
+            ).map((entry) => entry.address);
     } catch {
       throw new GatewayInternalNetworksError(
         "Could not resolve the configured HTTP proxy. Connect to your organization's network and try again.",
@@ -568,56 +615,60 @@ async function checkGatewayReachability(
         "proxy",
       );
     }
-    if (L.length === 0 || L.some((j) => !isInternalAddress(j)))
+    if (proxyAddresses.length === 0 || proxyAddresses.some((address) => !isInternalAddress(address)))
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Gateway login would go through proxy ${F}, which is not on a private network. Add ${S} to NO_PROXY for a direct connection, or use a proxy on your organization's private network.`,
+        `Gateway login would go through proxy ${proxyHost}, which is not on a private network. Add ${hostPort} to NO_PROXY for a direct connection, or use a proxy on your organization's private network.`,
         "gateway login: HTTP proxy host is not private",
       );
   }
-  h.proxyChecked = true;
-  let R;
-  if (r) R = [n];
+  progress.proxyChecked = true;
+  let addresses;
+  if (isIpLiteral) addresses = [hostname];
   else
     try {
-      R = (
+      addresses = (
         await withTimeout(
-          lookup_2(n, {
+          lookup_2(hostname, {
             all: true,
           }),
           1e4,
           "DNS resolution timed out",
         )
-      ).map((F) => F.address);
+      ).map((entry) => entry.address);
     } catch {
       throw new GatewayInternalNetworksError(
-        `Could not resolve gateway host ${n}. Connect to your organization's network and try again.`,
+        `Could not resolve gateway host ${hostname}. Connect to your organization's network and try again.`,
         "gateway login: could not resolve gateway host",
         "gateway",
       );
     }
-  if (R.length === 0)
+  if (addresses.length === 0)
     throw new GatewayInternalNetworksError(
-      `Could not resolve gateway host ${n}.`,
+      `Could not resolve gateway host ${hostname}.`,
       "gateway login: gateway host resolved to zero addresses",
       "gateway",
     );
-  let found = s.find((F) => R.some((L) => ipInCidr(L, F)));
-  let found_2 = R.find((F) => (found ? !ipInCidr(F, found) : !isInternalAddress(F)));
+  let found = declaredBlocks.find((block) => addresses.some((address) => ipInCidr(address, block)));
+  let found_2 = addresses.find((address) =>
+    found ? !ipInCidr(address, found) : !isInternalAddress(address),
+  );
   if (found_2 !== undefined && found)
     throw new GatewayTrustError(
-      `Every address for gateway host ${n} must be inside its declared network ${found}, and it also resolves to ${found_2}. Publish only records inside ${found} for it.`,
+      `Every address for gateway host ${hostname} must be inside its declared network ${found}, and it also resolves to ${found_2}. Publish only records inside ${found} for it.`,
       "gateway login: gateway host resolves outside its declared network",
     );
   if (found_2 !== undefined) {
-    let any = R.some((L) => isInternalAddress(L));
+    let any = addresses.some((address) => isInternalAddress(address));
     throw new GatewayAllowlistError(
-      `Gateway hosts must be on your organization's private network; ${n} resolves to the public (or unrecognized) address ${found_2}` +
-        (s.length > 0 ? `, outside the networks declared in managed settings (${s.join(", ")})` : "") +
+      `Gateway hosts must be on your organization's private network; ${hostname} resolves to the public (or unrecognized) address ${found_2}` +
+        (declaredBlocks.length > 0
+          ? `, outside the networks declared in managed settings (${declaredBlocks.join(", ")})`
+          : "") +
         ". " +
         (any
           ? "Every address for a gateway host must be private \u2014 if this is " +
             "a dual-stack DNS name, publish only private records for it (for example, remove the public AAAA record)."
-          : r
+          : isIpLiteral
             ? "Use your gateway's private (internal) address or DNS name instead."
             : "Connect to your organization's network and try again."),
       "gateway login: gateway host resolves to a public address",
@@ -625,7 +676,7 @@ async function checkGatewayReachability(
   }
   if (found && proxyUrl && !shouldBypassProxy(href))
     throw new GatewayTrustError(
-      `${n} is on the declared network ${found}, which Claude Code checks over a direct connection, not through an HTTP proxy. Add ${S} to NO_PROXY and try again.`,
+      `${hostname} is on the declared network ${found}, which Claude Code checks over a direct connection, not through an HTTP proxy. Add ${hostPort} to NO_PROXY and try again.`,
       "gateway login: declared-network gateway behind a proxy",
     );
   return found;
@@ -633,7 +684,7 @@ async function checkGatewayReachability(
 //@ chunk-aepeg2w5.js:249760-249784 placement
 var HTTP_LOOPBACK = "http-loopback";
 //@ chunk-aepeg2w5.js:249784-250013 placement
-function hostCheckRetryHint(error, n) {
+function hostCheckRetryHint(error, hostError) {
   if (error instanceof GatewayHostCheckError) return "Try again in a few minutes.";
   switch (error instanceof GatewayHostCheckRetryableError ? error.kind : undefined) {
     case "proxy-auth":
@@ -642,57 +693,78 @@ function hostCheckRetryHint(error, n) {
       return "Try again in a few minutes.";
     case "no-answer":
     case undefined:
-      return n;
+      return hostError;
   }
 }
 //@ chunk-aepeg2w5.js:250013-251114 placement
 /**
  * 获取主机检查结果（可用担保方）。
  */
-async function fetchHostCheckAnswer(e, timeoutMs, r, s, h, y, helperClock, w) {
-  if (w !== undefined) return (await checkVoucher(w, e, timeoutMs, y, helperClock)) ? w : undefined;
-  let R = s !== undefined;
-  let x;
+async function fetchHostCheckAnswer(
+  hostname,
+  timeoutMs,
+  viaProxy,
+  authorization,
+  ownDeploymentNote,
+  voucherState,
+  helperClock,
+  voucher,
+) {
+  if (voucher !== undefined)
+    return (await checkVoucher(voucher, hostname, timeoutMs, voucherState, helperClock))
+      ? voucher
+      : undefined;
+  let withCertificate = authorization !== undefined;
+  let answer;
   try {
-    x = await queryGatewayHostCheck(e, e, {
+    answer = await queryGatewayHostCheck(hostname, hostname, {
       timeoutMs,
-      presentClientCertificate: R,
-      ...(R && {
-        authorization: s,
+      presentClientCertificate: withCertificate,
+      ...(withCertificate && {
+        authorization,
       }),
       helperClock,
     });
   } catch (error) {
     if (error instanceof GatewayHostCheckError) {
-      logForDebugging(`[gateway] ${e} not vouched: no host-check answer from it (${errorMessage(error)})`);
-      y.notVouched = `it did not say whether it is a recognized Claude gateway host (${errorMessage(error)})`;
+      logForDebugging(
+        `[gateway] ${hostname} not vouched: no host-check answer from it (${errorMessage(error)})`,
+      );
+      voucherState.notVouched = `it did not say whether it is a recognized Claude gateway host (${errorMessage(error)})`;
       return;
     }
-    logForDebugging(`[gateway] ${e} could not be asked which deployment serves it (${errorMessage(error)})`, {
-      level: "warn",
-    });
-    let L =
+    logForDebugging(
+      `[gateway] ${hostname} could not be asked which deployment serves it (${errorMessage(error)})`,
+      {
+        level: "warn",
+      },
+    );
+    let problem =
       "could not be asked " +
-      (r ? "through the configured proxy " : "") +
+      (viaProxy ? "through the configured proxy " : "") +
       `whether it is a recognized Claude gateway host (${errorMessage(error)})`;
-    y.notVouched = `it ${L}`;
+    voucherState.notVouched = `it ${problem}`;
     throw new GatewayInternalNetworksError(
-      `${e} ${L}. ` +
+      `${hostname} ${problem}. ` +
         hostCheckRetryHint(error, "Check your network connection and try again.") +
-        (h === undefined ? "" : ` Or, if your organization runs the gateway at ${e} itself: ${h}`),
+        (ownDeploymentNote === undefined
+          ? ""
+          : ` Or, if your organization runs the gateway at ${hostname} itself: ${ownDeploymentNote}`),
       "gateway login: could not learn which gateway deployment vouches for the host",
       "host",
     );
   }
-  let P = x.listed ? getHttpsHostname(x.canonical) : undefined;
-  if (P === undefined) {
+  let canonicalHost = answer.listed ? getHttpsHostname(answer.canonical) : undefined;
+  if (canonicalHost === undefined) {
     logForDebugging(
-      `[gateway] ${e} not vouched: its own host-check answer disowns it or names no vouching deployment`,
+      `[gateway] ${hostname} not vouched: its own host-check answer disowns it or names no vouching deployment`,
     );
-    y.notVouched = NOT_SERVED_MESSAGE;
+    voucherState.notVouched = NOT_SERVED_MESSAGE;
     return;
   }
-  return (await checkVoucher(P, e, timeoutMs, y, helperClock)) ? P : undefined;
+  return (await checkVoucher(canonicalHost, hostname, timeoutMs, voucherState, helperClock))
+    ? canonicalHost
+    : undefined;
 }
 export {
   isVouchedHostSetMember,

@@ -12,13 +12,18 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { OUTPUT_SIZE_LIMITS } from "../../constants/outputLimits.js";
 import { isSameAnswerInput } from "../../utils/permissions/permissionAnswer.js";
 import { displayText, hasSuspiciousText } from "../../utils/permissions/approvalPayloadSerialization.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-a91k35xs.js:859-946 placement
 /**
  * 把选择的答案列表用 “, ” 连成一行；含 “, ” 或双引号的项用 jsonStringify 加引号，避免歧义。
  */
-function formatSelectionList(e) {
-  return e.map((t) => (t.includes(", ") || t.includes('"') ? jsonStringify(t) : t)).join(", ");
+function formatSelectionList(selections) {
+  return selections
+    .map((selection) =>
+      selection.includes(", ") || selection.includes('"') ? jsonStringify(selection) : selection,
+    )
+    .join(", ");
 }
 //@ chunk-a91k35xs.js:946-1473 placement
 /**
@@ -57,9 +62,9 @@ function parseCommaSeparatedValues(input) {
       rest = rest.slice(closeIndex + 1);
     } else {
       let index = rest.indexOf(", ");
-      let i = index === -1 ? rest : rest.slice(0, index);
-      if (i.includes('"')) return null;
-      values.push(i);
+      let value = index === -1 ? rest : rest.slice(0, index);
+      if (value.includes('"')) return null;
+      values.push(value);
       rest = index === -1 ? "" : rest.slice(index);
     }
     if (rest === "") break;
@@ -70,15 +75,26 @@ function parseCommaSeparatedValues(input) {
   return values;
 }
 //@ chunk-a91k35xs.js:1473-1649 placement
-var MAX_ANSWER_CHARS = 32768;
-var MAX_NOTES_CHARS = 8192;
-var MAX_TEXT_CHARS = 32768;
-var SIZE_HEADROOM = 2000;
-var MAX_TOTAL_CHARS = OUTPUT_SIZE_LIMITS - SIZE_HEADROOM;
-var MAX_PREVIEW_COMPARE_CHARS = 2000;
-var UNANSWERED_REASONS = ["skipped", "replied_in_chat", "dismissed"];
-var ANSWER_FIELDS = new Set(["answers", "annotations", "response", "followUp"]);
-var AFKTIMEOUTMS = "afkTimeoutMs";
+var MAX_ANSWER_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_NOTES_CHARS;
+var MAX_TEXT_CHARS;
+var SIZE_HEADROOM;
+var MAX_TOTAL_CHARS;
+var MAX_PREVIEW_COMPARE_CHARS;
+var UNANSWERED_REASONS;
+var ANSWER_FIELDS;
+var AFKTIMEOUTMS;
+deferInit("chunk-a91k35xs.js:1473", () => {
+  MAX_ANSWER_CHARS = 32768;
+  MAX_NOTES_CHARS = 8192;
+  MAX_TEXT_CHARS = 32768;
+  SIZE_HEADROOM = 2000;
+  MAX_TOTAL_CHARS = OUTPUT_SIZE_LIMITS - SIZE_HEADROOM;
+  MAX_PREVIEW_COMPARE_CHARS = 2000;
+  UNANSWERED_REASONS = ["skipped", "replied_in_chat", "dismissed"];
+  ANSWER_FIELDS = new Set(["answers", "annotations", "response", "followUp"]);
+  AFKTIMEOUTMS = "afkTimeoutMs";
+});
 //@ chunk-a91k35xs.js:1649-1709 placement
 /**
  * 安全版 admitAnswerInput：宿主回传答案校验抛出异常时，按 “threw” 规则返回拒绝。
@@ -153,39 +169,45 @@ function admitAnswerInput(shownInput, reply) {
   let annotationsIn = getOwnPropertyOrUndefined(reply, "annotations");
   if (annotationsIn !== undefined) {
     if (!isPlainObject(annotationsIn)) return answerRefusal("annotations");
-    let d = Object.create(null);
+    let annotationsByQuestion = Object.create(null);
     for (let key of Object.keys(annotationsIn)) {
-      let T = questions.get(key);
-      let b = annotationsIn[key];
-      if (T === undefined || !isPlainObject(b)) return answerRefusal("annotations");
+      let annotationQuestion = questions.get(key);
+      let annotationObject = annotationsIn[key];
+      if (annotationQuestion === undefined || !isPlainObject(annotationObject))
+        return answerRefusal("annotations");
       answeredQuestions.add(key);
-      let y = {};
-      for (let key of Object.keys(b)) {
-        let g = b[key];
+      let sanitizedAnnotation = {};
+      for (let key of Object.keys(annotationObject)) {
+        let annotationFieldValue = annotationObject[key];
         switch (key) {
           case "preview":
-            if (typeof g !== "string" || !isShownPreview(T, g)) return answerRefusal("annotations");
-            extraChars += g.length;
-            y.preview = g;
+            if (
+              typeof annotationFieldValue !== "string" ||
+              !isShownPreview(annotationQuestion, annotationFieldValue)
+            )
+              return answerRefusal("annotations");
+            extraChars += annotationFieldValue.length;
+            sanitizedAnnotation.preview = annotationFieldValue;
             break;
           case "notes":
-            if (typeof g !== "string" || g.length > MAX_NOTES_CHARS) return answerRefusal("annotations");
-            textChars += g.length;
-            y.notes = g;
+            if (typeof annotationFieldValue !== "string" || annotationFieldValue.length > MAX_NOTES_CHARS)
+              return answerRefusal("annotations");
+            textChars += annotationFieldValue.length;
+            sanitizedAnnotation.notes = annotationFieldValue;
             break;
           case "unanswered": {
-            let found = UNANSWERED_REASONS.find((z) => z === g);
+            let found = UNANSWERED_REASONS.find((reason) => reason === annotationFieldValue);
             if (found === undefined) return answerRefusal("annotations");
-            y.unanswered = found;
+            sanitizedAnnotation.unanswered = found;
             break;
           }
           default:
             return answerRefusal("annotations");
         }
       }
-      d[key] = y;
+      annotationsByQuestion[key] = sanitizedAnnotation;
     }
-    admitted.annotations = d;
+    admitted.annotations = annotationsByQuestion;
   }
   let response = getOwnPropertyOrUndefined(reply, "response");
   if (response !== undefined) {
@@ -211,77 +233,94 @@ function admitAnswerInput(shownInput, reply) {
  * 把问题数组整理为 question→{multiSelect、选项数、预览集合}，并判断是否全部使用扩展格式（带 kind）。
  */
 function indexShownQuestions(ownPropertyOrUndefined) {
-  let t = new Map();
+  let questionsByText = new Map();
   if (!Array.isArray(ownPropertyOrUndefined))
     return {
-      questions: t,
+      questions: questionsByText,
       extended: false,
     };
-  let n = ownPropertyOrUndefined.length > 0;
-  for (let s of ownPropertyOrUndefined) {
-    if (!isPlainObject(s)) {
-      n = false;
+  let isExtended = ownPropertyOrUndefined.length > 0;
+  for (let question of ownPropertyOrUndefined) {
+    if (!isPlainObject(question)) {
+      isExtended = false;
       continue;
     }
-    if (typeof getOwnPropertyOrUndefined(s, "kind") !== "string") n = false;
-    let ownPropertyOrUndefined = getOwnPropertyOrUndefined(s, "question");
+    if (typeof getOwnPropertyOrUndefined(question, "kind") !== "string") isExtended = false;
+    let ownPropertyOrUndefined = getOwnPropertyOrUndefined(question, "question");
     if (typeof ownPropertyOrUndefined !== "string") continue;
-    let ownPropertyOrUndefined_2 = getOwnPropertyOrUndefined(s, "options");
-    let f = Array.isArray(ownPropertyOrUndefined_2) ? ownPropertyOrUndefined_2 : [];
-    let h = new Set();
-    for (let m of f) {
-      let l = isPlainObject(m) ? getOwnPropertyOrUndefined(m, "preview") : undefined;
-      if (typeof l === "string") h.add(l);
+    let ownPropertyOrUndefined_2 = getOwnPropertyOrUndefined(question, "options");
+    let options = Array.isArray(ownPropertyOrUndefined_2) ? ownPropertyOrUndefined_2 : [];
+    let previews = new Set();
+    for (let option of options) {
+      let preview = isPlainObject(option) ? getOwnPropertyOrUndefined(option, "preview") : undefined;
+      if (typeof preview === "string") previews.add(preview);
     }
-    t.set(ownPropertyOrUndefined, {
-      multiSelect: getOwnPropertyOrUndefined(s, "multiSelect") === true,
-      optionCount: f.length,
-      previews: h,
+    questionsByText.set(ownPropertyOrUndefined, {
+      multiSelect: getOwnPropertyOrUndefined(question, "multiSelect") === true,
+      optionCount: options.length,
+      previews,
     });
   }
   return {
-    questions: t,
-    extended: n,
+    questions: questionsByText,
+    extended: isExtended,
   };
 }
 //@ chunk-a91k35xs.js:4090-4419 placement
 /**
  * 比较两组问题，忽略补上的默认字段（kind=choice、multiSelect=false）后是否一致。
  */
-function questionsMatchIgnoringDefaults(e, t) {
-  if (!Array.isArray(e) || !Array.isArray(t) || e.length !== t.length) return false;
-  let mapped = t.map((s, i) => {
-    let r = e[i];
-    if (!isPlainObject(s) || !isPlainObject(r)) return s;
-    let f = {
-      ...s,
+function questionsMatchIgnoringDefaults(actualQuestions, defaultedQuestions) {
+  if (
+    !Array.isArray(actualQuestions) ||
+    !Array.isArray(defaultedQuestions) ||
+    actualQuestions.length !== defaultedQuestions.length
+  )
+    return false;
+  let mapped = defaultedQuestions.map((defaultedQuestion, idx) => {
+    let actualQuestion = actualQuestions[idx];
+    if (!isPlainObject(defaultedQuestion) || !isPlainObject(actualQuestion)) return defaultedQuestion;
+    let normalized = {
+      ...defaultedQuestion,
     };
-    if (getOwnPropertyOrUndefined(s, "kind") === "choice" && !Object.hasOwn(r, "kind")) delete f.kind;
-    if (getOwnPropertyOrUndefined(s, "multiSelect") === false && !Object.hasOwn(r, "multiSelect"))
-      delete f.multiSelect;
-    return f;
+    if (
+      getOwnPropertyOrUndefined(defaultedQuestion, "kind") === "choice" &&
+      !Object.hasOwn(actualQuestion, "kind")
+    )
+      delete normalized.kind;
+    if (
+      getOwnPropertyOrUndefined(defaultedQuestion, "multiSelect") === false &&
+      !Object.hasOwn(actualQuestion, "multiSelect")
+    )
+      delete normalized.multiSelect;
+    return normalized;
   });
-  return isSameAnswerInput(e, mapped);
+  return isSameAnswerInput(actualQuestions, mapped);
 }
 //@ chunk-a91k35xs.js:4419-4544 placement
-function isShownPreview(e, t) {
-  if (e.previews.has(t)) return true;
-  for (let n of e.previews)
-    if (n.length <= MAX_PREVIEW_COMPARE_CHARS && displayText(n) === t && !hasSuspiciousText(n)) return true;
+function isShownPreview(question, text) {
+  if (question.previews.has(text)) return true;
+  for (let shownPreview of question.previews)
+    if (
+      shownPreview.length <= MAX_PREVIEW_COMPARE_CHARS &&
+      displayText(shownPreview) === text &&
+      !hasSuspiciousText(shownPreview)
+    )
+      return true;
   return false;
 }
 //@ chunk-a91k35xs.js:4544-4687 placement
-function isPlainObject(e) {
-  if (typeof e !== "object" || e === null || Array.isArray(e)) return false;
-  let prototypeOf = Object.getPrototypeOf(e);
+function isPlainObject(value) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  let prototypeOf = Object.getPrototypeOf(value);
   return prototypeOf === Object.prototype || prototypeOf === null;
 }
 //@ chunk-a91k35xs.js:4687-4741 placement
 /**
  * 只读自有属性（Object.hasOwn），不存在或来自原型时返回 undefined；答案校验用它逐个读取 answers/annotations/response 等字段。
  */
-function getOwnPropertyOrUndefined(e, t) {
-  return Object.hasOwn(e, t) ? e[t] : undefined;
+function getOwnPropertyOrUndefined(object, key) {
+  return Object.hasOwn(object, key) ? object[key] : undefined;
 }
 //@ chunk-a91k35xs.js:4741-4785 placement
 /**

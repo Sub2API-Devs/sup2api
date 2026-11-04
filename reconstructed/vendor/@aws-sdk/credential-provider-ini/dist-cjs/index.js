@@ -5,28 +5,29 @@
  * pieces: chunk-hecvqqcj.js (12)
  * attribution: esm-layout 8, esm-fingerprint 4
  */
-import { Re } from "../../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_shared_ini_file_loader } from "../../../@smithy/shared-ini-file-loader/dist-cjs/index.js";
 import { require_property_provider } from "../../../@smithy/property-provider/dist-cjs/index.js";
 import { require_client } from "../../core/dist-cjs/submodules/client/index.js";
 import { fromLoginCredentials, import_client_2 } from "../../credential-provider-login/dist-cjs/index.js";
 
 //@ chunk-hecvqqcj.js:371-386 esm-layout
-var sharedIniFileLoader = Re(require_shared_ini_file_loader());
+var sharedIniFileLoader = __toESM(require_shared_ini_file_loader());
 //@ chunk-hecvqqcj.js:386-402 esm-layout
-var propertyProvider = Re(require_property_provider());
+var propertyProvider = __toESM(require_property_provider());
 //@ chunk-hecvqqcj.js:402-439 esm-layout
-var client = Re(require_client());
-var import_property_provider = Re(require_property_provider());
-var import_shared_ini_file_loader = Re(require_shared_ini_file_loader());
+var client = __toESM(require_client());
+var import_property_provider = __toESM(require_property_provider());
+var import_shared_ini_file_loader = __toESM(require_shared_ini_file_loader());
 //@ chunk-hecvqqcj.js:439-1426 esm-layout
-var import_client = Re(require_client());
-var import_property_provider_2 = Re(require_property_provider());
+var import_client = __toESM(require_client());
+var import_property_provider_2 = __toESM(require_property_provider());
 var resolveCredentialSource = (credentialSource, profileName, logger) => {
   let sourceProvidersMap = {
     EcsContainer: async (options) => {
-      let { fromHttp } = await import("./chunk-0c72454j.js");
-      let { fromContainerMetadata } = await import("./chunk-7bg2190x.js");
+      let { fromHttp } = await import("../../credential-provider-http/dist-cjs/fromHttp/fromHttp.js");
+      let { fromContainerMetadata } =
+        await import("../../../@smithy/credential-provider-imds/dist-cjs/ENV_CMDS_FULL_URI.lazy.js");
       logger?.debug("@aws-sdk/credential-provider-ini - credential_source is EcsContainer");
       return async () =>
         import_property_provider_2
@@ -35,12 +36,13 @@ var resolveCredentialSource = (credentialSource, profileName, logger) => {
     },
     Ec2InstanceMetadata: async (options) => {
       logger?.debug("@aws-sdk/credential-provider-ini - credential_source is Ec2InstanceMetadata");
-      let { fromInstanceMetadata } = await import("./chunk-7bg2190x.js");
+      let { fromInstanceMetadata } =
+        await import("../../../@smithy/credential-provider-imds/dist-cjs/ENV_CMDS_FULL_URI.lazy.js");
       return async () => fromInstanceMetadata(options)().then(setNamedProvider);
     },
     Environment: async (options) => {
       logger?.debug("@aws-sdk/credential-provider-ini - credential_source is Environment");
-      let { fromEnv } = await import("./chunk-vche1z6n.js");
+      let { fromEnv } = await import("../../credential-provider-env/dist-cjs/index.js");
       return async () => fromEnv(options)().then(setNamedProvider);
     },
   };
@@ -96,7 +98,9 @@ var resolveAssumeRoleCredentials = async (
   let profileData = profiles[profileName];
   let { source_profile, region } = profileData;
   if (!options.roleAssumer) {
-    let { getDefaultRoleAssumer } = await import("./chunk-my7fcfze.js").then((m) => Re(m.default));
+    let { getDefaultRoleAssumer } = await import("../../nested-clients/sts-default.js").then((mod) =>
+      __toESM(mod.default),
+    );
     options.roleAssumer = getDefaultRoleAssumer(
       {
         ...options.clientConfig,
@@ -164,7 +168,7 @@ var resolveAssumeRoleCredentials = async (
 };
 var isCredentialSourceWithoutRoleArn = (section) => !section.role_arn && !!section.credential_source;
 //@ chunk-hecvqqcj.js:9813-9968 esm-fingerprint
-var J = (e) => Boolean(e && e.login_session);
+var hasLoginSession = (options) => Boolean(options && options.login_session);
 var resolveLoginCredentials = async (profileName, options) => {
   let credentials = await fromLoginCredentials({
     ...options,
@@ -173,20 +177,20 @@ var resolveLoginCredentials = async (profileName, options) => {
   return import_client_2.setCredentialFeature(credentials, "CREDENTIALS_PROFILE_LOGIN", "AC");
 };
 //@ chunk-hecvqqcj.js:9968-10224 esm-layout
-var import_client_4 = Re(require_client());
+var import_client_4 = __toESM(require_client());
 var isProcessProfile = (arg) =>
   Boolean(arg) && typeof arg === "object" && typeof arg.credential_process === "string";
 var resolveProcessCredentials = async (options, profile) =>
-  import("./chunk-skhq176t.js").then(({ fromProcess }) =>
+  import("../../credential-provider-process/dist-cjs/index.js").then(({ fromProcess }) =>
     fromProcess({
       ...options,
       profile,
     })().then((creds) => import_client_4.setCredentialFeature(creds, "CREDENTIALS_PROFILE_PROCESS", "v")),
   );
 //@ chunk-hecvqqcj.js:10224-10769 esm-layout
-var import_client_5 = Re(require_client());
+var import_client_5 = __toESM(require_client());
 var resolveSsoCredentials = async (profile, profileData, options = {}) => {
-  let { fromSSO } = await import("./chunk-rs2k9kxx.js");
+  let { fromSSO } = await import("../../credential-provider-sso/dist-cjs/index.js");
   return fromSSO({
     profile,
     logger: options.logger,
@@ -206,7 +210,7 @@ var isSsoProfile = (arg) =>
     typeof arg.sso_region === "string" ||
     typeof arg.sso_role_name === "string");
 //@ chunk-hecvqqcj.js:10769-11416 esm-layout
-var import_client_6 = Re(require_client());
+var import_client_6 = __toESM(require_client());
 var isStaticCredsProfile = (arg) =>
   Boolean(arg) &&
   typeof arg === "object" &&
@@ -230,7 +234,7 @@ var resolveStaticCredentials = async (profile, options) => {
   return import_client_6.setCredentialFeature(credentials, "CREDENTIALS_PROFILE", "n");
 };
 //@ chunk-hecvqqcj.js:11416-11984 esm-layout
-var import_client_7 = Re(require_client());
+var import_client_7 = __toESM(require_client());
 var isWebIdentityProfile = (arg) =>
   Boolean(arg) &&
   typeof arg === "object" &&
@@ -238,7 +242,7 @@ var isWebIdentityProfile = (arg) =>
   typeof arg.role_arn === "string" &&
   ["undefined", "string"].indexOf(typeof arg.role_session_name) > -1;
 var resolveWebIdentityCredentials = async (profile, options) =>
-  import("./chunk-2pe5kgjj.js").then(({ fromTokenFile }) =>
+  import("../../credential-provider-web-identity/dist-cjs/fromTokenFile.lazy.js").then(({ fromTokenFile }) =>
     fromTokenFile({
       webIdentityTokenFile: profile.web_identity_token_file,
       roleArn: profile.role_arn,
@@ -273,7 +277,7 @@ var resolveProfileData = async (
   if (isWebIdentityProfile(data)) return resolveWebIdentityCredentials(data, options);
   if (isProcessProfile(data)) return resolveProcessCredentials(options, profileName);
   if (isSsoProfile(data)) return await resolveSsoCredentials(profileName, data, options);
-  if (J(data)) return resolveLoginCredentials(profileName, options);
+  if (hasLoginSession(data)) return resolveLoginCredentials(profileName, options);
   throw new propertyProvider.CredentialsProviderError(
     `Could not resolve credentials using profile: [${profileName}] in configuration/credentials file(s).`,
     {

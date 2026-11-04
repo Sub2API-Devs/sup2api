@@ -140,11 +140,11 @@ var applyBorderStyles = (node, style, resolvedStyle) => {
     node.setBorder(0, resolved.borderLeft !== false ? borderWidth : 0);
     node.setBorder(2, resolved.borderRight !== false ? borderWidth : 0);
   } else {
-    let p = resolveBorderStyle(resolved.borderStyle) ? 1 : 0;
-    if ("borderTop" in style) node.setBorder(1, style.borderTop === false ? 0 : p);
-    if ("borderBottom" in style) node.setBorder(3, style.borderBottom === false ? 0 : p);
-    if ("borderLeft" in style) node.setBorder(0, style.borderLeft === false ? 0 : p);
-    if ("borderRight" in style) node.setBorder(2, style.borderRight === false ? 0 : p);
+    let borderWidth = resolveBorderStyle(resolved.borderStyle) ? 1 : 0;
+    if ("borderTop" in style) node.setBorder(1, style.borderTop === false ? 0 : borderWidth);
+    if ("borderBottom" in style) node.setBorder(3, style.borderBottom === false ? 0 : borderWidth);
+    if ("borderLeft" in style) node.setBorder(0, style.borderLeft === false ? 0 : borderWidth);
+    if ("borderRight" in style) node.setBorder(2, style.borderRight === false ? 0 : borderWidth);
   }
 };
 var applyGapStyles = (node, style) => {
@@ -173,12 +173,12 @@ var ELLIPSIS = "\u2026";
 /**
  * 按显示宽度截取含 ANSI 的字符串：先 Bun.sliceAnsi，宽度超出时逐个缩短终点直到不超过 end-start 列。
  */
-function sliceAnsiToWidth(n, u, f) {
-  let m = Bun.sliceAnsi(n, u, f);
-  while (f > u && bunStringWidth(m) > f - u) {
-    f--;
-    m = Bun.sliceAnsi(n, u, f);
+function sliceAnsiToWidth(text, from, to) {
+  let sliced = Bun.sliceAnsi(text, from, to);
+  while (to > from && bunStringWidth(sliced) > to - from) {
+    to--;
+    sliced = Bun.sliceAnsi(text, from, to);
   }
-  return m;
+  return sliced;
 }
 export { ELLIPSIS, applyAllStylesAlias, sliceAnsiToWidth };

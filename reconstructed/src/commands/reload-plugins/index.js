@@ -20,7 +20,7 @@ var reloadPluginsCommandDefinition = {
   supportsNonInteractive: true,
   terminalOriented: true,
   thinClientDispatch: "control-request",
-  load: () => import("./chunk-8vqp1nqq.js"),
+  load: () => import("./HEADLESS_MCP_PENDING_NOTE.lazy.js"),
 };
 var reloadPluginsCommand = reloadPluginsCommandDefinition;
 export { reloadPluginsCommand };

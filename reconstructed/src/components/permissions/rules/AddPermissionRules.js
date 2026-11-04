@@ -16,7 +16,7 @@ import { Box, Text } from "../../../ink/components/Text.js";
 import { formatPermissionRule } from "../../../utils/permissions/disallowedToolsFlag.js";
 import { PermissionRuleDescription } from "./PermissionRuleDescription.js";
 import { getRelativeSettingsFilePathForSource } from "../../../utils/settings/settings.js";
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../../design-system/ThemeProvider.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import { SOURCES } from "../../../utils/settings/constants.js";
@@ -75,7 +75,7 @@ function optionForPermissionSaveDestination(saveDestination) {
 }
 //@ chunk-p2qwpk2k.js:22727-24428 fingerprint = AddPermissionRules (0.948)
 function AddPermissionRules(props) {
-  let $ = w(27);
+  let $ = useMemoCache(27);
   let { onAddRules, onCancel, ruleValues, ruleBehavior, initialContext, setToolPermissionContext } = props;
   let { storageV5 } = useTheme_2();
   let t1;
@@ -125,10 +125,11 @@ function AddPermissionRules(props) {
           SandboxManager.isSandboxingEnabled() && SandboxManager.isAutoAllowBashIfSandboxedEnabled();
         let newUnreachable = detectUnreachableRules(updatedContext, {
           sandboxAutoAllowEnabled,
-        }).filter((B) =>
+        }).filter((unreachableRule) =>
           ruleValues.some(
             (rv) =>
-              rv.toolName === B.rule.ruleValue.toolName && rv.ruleContent === B.rule.ruleValue.ruleContent,
+              rv.toolName === unreachableRule.rule.ruleValue.toolName &&
+              rv.ruleContent === unreachableRule.rule.ruleValue.ruleContent,
           ),
         );
         onAddRules(rules, newUnreachable);
@@ -157,16 +158,16 @@ function AddPermissionRules(props) {
     $[11] = ruleValues;
     $[12] = children;
   } else children = $[12];
-  let ye;
+  let dialogBox;
   if ($[13] !== children) {
-    ye = jsxProd_default(Box, {
+    dialogBox = jsxProd_default(Box, {
       flexDirection: "column",
       paddingX: 2,
       children,
     });
     $[13] = children;
-    $[14] = ye;
-  } else ye = $[14];
+    $[14] = dialogBox;
+  } else dialogBox = $[14];
   const children_2 =
     ruleValues.length === 1 ? "Where should this rule be saved?" : "Where should these rules be saved?";
   let t7;
@@ -198,15 +199,15 @@ function AddPermissionRules(props) {
     $[21] = t9;
   } else t9 = $[21];
   let t10;
-  if ($[22] !== onCancel || $[23] !== ye || $[24] !== t9 || $[25] !== title) {
+  if ($[22] !== onCancel || $[23] !== dialogBox || $[24] !== t9 || $[25] !== title) {
     t10 = jsxProd_default_2(Dialog, {
       title,
       onCancel,
       color: "permission",
-      children: [ye, t9],
+      children: [dialogBox, t9],
     });
     $[22] = onCancel;
-    $[23] = ye;
+    $[23] = dialogBox;
     $[24] = t9;
     $[25] = title;
     $[26] = t10;

@@ -21,57 +21,67 @@ import {
 } from "../permissions/permissionRuleParser.js";
 import { normalizeNameForMCP } from "../../services/mcp/normalization.js";
 import { HooksError } from "../../plugins/functionHooks/hooksErrors.js";
+import { deferInit, runDeferredInits } from "../../../runtime/deferred-init.js";
 
 //@ chunk-52dd7zdd.js:534-544 affinity
-var matcherLoggerHolder = createLogSinkRef();
+var matcherLoggerHolder; // deferred: uses createLogSinkRef (../../components/LogSelector.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-52dd7zdd.js:534", () => {
+  matcherLoggerHolder = createLogSinkRef();
+});
 //@ chunk-52dd7zdd.js:544-557 placement
 /**
  * 取匹配器日志器实例。
  */
-var matcherLog = matcherLoggerHolder.get;
+var matcherLog; // deferred: uses matcherLoggerHolder of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-52dd7zdd.js:544", () => {
+  matcherLog = matcherLoggerHolder.get;
+});
 //@ chunk-52dd7zdd.js:557-571 placement
 /**
  * 设置匹配器日志器。
  */
-var setMatcherLog = matcherLoggerHolder.set;
+var setMatcherLog; // deferred: uses matcherLoggerHolder of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-52dd7zdd.js:557", () => {
+  setMatcherLog = matcherLoggerHolder.set;
+});
 //@ chunk-52dd7zdd.js:571-692 placement
-function isPlainDataObject(o) {
-  if (!isPlainObject(o)) return false;
-  let prototypeOf = Object.getPrototypeOf(o);
+function isPlainDataObject(value) {
+  if (!isPlainObject(value)) return false;
+  let prototypeOf = Object.getPrototypeOf(value);
   return (
     prototypeOf === null || (!isUntrustedObject(prototypeOf) && Object.getPrototypeOf(prototypeOf) === null)
   );
 }
 //@ chunk-52dd7zdd.js:692-932 placement
-function pushFreezeFrame(o, r, t) {
-  if (typeof o !== "object" || !o || r.has(o)) return t;
-  if (isUntrustedObject(o)) return t;
-  let e = (t?.depth ?? 0) + 1;
-  if (e > MAX_NESTING_DEPTH) throw RangeError(NESTING_TOO_DEEP_MESSAGE);
-  r.add(o);
-  let n = Array.isArray(o);
-  return n || isPlainDataObject(o)
+function pushFreezeFrame(value, seen, parent) {
+  if (typeof value !== "object" || !value || seen.has(value)) return parent;
+  if (isUntrustedObject(value)) return parent;
+  let depth = (parent?.depth ?? 0) + 1;
+  if (depth > MAX_NESTING_DEPTH) throw RangeError(NESTING_TOO_DEEP_MESSAGE);
+  seen.add(value);
+  let isArray = Array.isArray(value);
+  return isArray || isPlainDataObject(value)
     ? {
-        node: o,
-        keys: n ? [] : Object.keys(o),
+        node: value,
+        keys: isArray ? [] : Object.keys(value),
         at: 0,
-        depth: e,
-        below: t,
+        depth,
+        below: parent,
       }
-    : t;
+    : parent;
 }
 //@ chunk-52dd7zdd.js:932-1123 placement
-function deepFreeze(o, r) {
-  let t = pushFreezeFrame(o, r, undefined);
-  while (t !== undefined) {
-    let { node, keys, at } = t;
-    let a = Array.isArray(node);
-    if (at < (a ? node : keys).length) {
-      t.at = at + 1;
-      t = pushFreezeFrame(a ? node[at] : node[keys[at] ?? ""], r, t);
+function deepFreeze(value, seen) {
+  let frame = pushFreezeFrame(value, seen, undefined);
+  while (frame !== undefined) {
+    let { node, keys, at } = frame;
+    let isArray = Array.isArray(node);
+    if (at < (isArray ? node : keys).length) {
+      frame.at = at + 1;
+      frame = pushFreezeFrame(isArray ? node[at] : node[keys[at] ?? ""], seen, frame);
     } else {
       Object.freeze(node);
-      t = t.below;
+      frame = frame.below;
     }
   }
 }
@@ -79,17 +89,17 @@ function deepFreeze(o, r) {
 /**
  * 原地深冻结对象（带已访问集合防循环）。
  */
-function deepFreezeInPlace(o) {
-  deepFreeze(o, new Set());
-  return o;
+function deepFreezeInPlace(value) {
+  deepFreeze(value, new Set());
+  return value;
 }
 //@ chunk-52dd7zdd.js:1163-1358 placement
-function matchesSingleKeyFilter(o, r, t) {
-  if (o === undefined) return true;
-  if (Array.isArray(o)) return o.some((n) => matchesSingleKeyFilter(n, r, t));
-  if (!isPlainDataObject(o) || Object.keys(o).join() !== r) return false;
-  let e = o[r];
-  return Array.isArray(e) ? e.includes(t) : e === t;
+function matchesSingleKeyFilter(matcher, key, wanted) {
+  if (matcher === undefined) return true;
+  if (Array.isArray(matcher)) return matcher.some((branch) => matchesSingleKeyFilter(branch, key, wanted));
+  if (!isPlainDataObject(matcher) || Object.keys(matcher).join() !== key) return false;
+  let expected = matcher[key];
+  return Array.isArray(expected) ? expected.includes(wanted) : expected === wanted;
 }
 //@ chunk-52dd7zdd.js:1358-1368 placement
 /**
@@ -107,20 +117,20 @@ var MAX_MATCHER_KEYS = 256;
  */
 var MAX_MATCHER_CHARS = 65536;
 //@ chunk-52dd7zdd.js:1394-1645 placement
-function describeValueType(o) {
-  if (o === undefined) return "undefined";
-  if (typeof o === "function") return "a function";
-  if (typeof o === "object" && o) {
-    let replaced = Object.prototype.toString.call(o).replace(/^\[object |\]$/g, "");
+function describeValueType(value) {
+  if (value === undefined) return "undefined";
+  if (typeof value === "function") return "a function";
+  if (typeof value === "object" && value) {
+    let replaced = Object.prototype.toString.call(value).replace(/^\[object |\]$/g, "");
     return replaced === "Object" ? "an object" : `a ${replaced}`;
   }
-  return `a ${typeof o}`;
+  return `a ${typeof value}`;
 }
 //@ chunk-52dd7zdd.js:1645-1766 placement
-function isRegExpLike(o) {
-  if (typeof o !== "object" || !o) return false;
+function isRegExpLike(value) {
+  if (typeof value !== "object" || !value) return false;
   try {
-    Reflect.get(RegExp.prototype, "source", o);
+    Reflect.get(RegExp.prototype, "source", value);
     return true;
   } catch {
     return false;
@@ -130,94 +140,108 @@ function isRegExpLike(o) {
 /**
  * 判断是否为可当作 matcher 的普通对象（非正则）。
  */
-var isPlainMatcherObject = (o) => isPlainDataObject(o) && !isRegExpLike(o);
+var isPlainMatcherObject = (value) => isPlainDataObject(value) && !isRegExpLike(value);
 //@ chunk-52dd7zdd.js:1792-1841 placement
-var hasEmptyPathEntry = (o) => o?.paths.some((path) => path.length === 0) === true;
+var hasEmptyPathEntry = (names) => names?.paths.some((path) => path.length === 0) === true;
 //@ chunk-52dd7zdd.js:1841-1861 placement
 /**
  * 匹配器对象中禁止保留的键 "__proto__"。
  */
 var PROTO_KEY = "__proto__";
 //@ chunk-52dd7zdd.js:1861-1972 placement
-function filterEntriesToNullProto(o, r) {
-  let t = Object.create(null);
-  for (let [key, value] of Object.entries(o)) if (key !== PROTO_KEY && r(value, key)) t[key] = value;
-  return t;
+function filterEntriesToNullProto(source, keep) {
+  let target = Object.create(null);
+  for (let [key, value] of Object.entries(source))
+    if (key !== PROTO_KEY && keep(value, key)) target[key] = value;
+  return target;
 }
 //@ chunk-52dd7zdd.js:1972-2039 placement
 /**
  * 冻结只保留字符串值的条目（用无原型对象）。
  */
-var freezeStringEntries = (o) =>
-  Object.freeze(filterEntriesToNullProto(isPlainObject(o) ? o : {}, (r) => typeof r === "string"));
+var freezeStringEntries = (table) =>
+  Object.freeze(
+    filterEntriesToNullProto(isPlainObject(table) ? table : {}, (value) => typeof value === "string"),
+  );
 //@ chunk-52dd7zdd.js:2039-2169 placement
-function toolNameAliasesFor(table, r) {
-  let t = uniq([r, canonicalToolName(r)].flatMap((e) => toolNameVariants(e, table)));
-  return uniq(t.concat(t.flatMap((e) => aliasesFor(e, table))).flatMap((e) => [e, ...legacyToolNamesFor(e)]));
+function toolNameAliasesFor(table, name) {
+  let names = uniq([name, canonicalToolName(name)].flatMap((name) => toolNameVariants(name, table)));
+  return uniq(
+    names
+      .concat(names.flatMap((name) => aliasesFor(name, table)))
+      .flatMap((alias) => [alias, ...legacyToolNamesFor(alias)]),
+  );
 }
 //@ chunk-52dd7zdd.js:2169-2300 placement
-function filterNameTableByTool(o, r) {
-  return o.paths.some((path) => path[0] === r)
+function filterNameTableByTool(names, toolName) {
+  return names.paths.some((path) => path[0] === toolName)
     ? {
-        table: o.table,
-        paths: o.paths.filter((path) => path[0] === r).map((path) => path.slice(1)),
+        table: names.table,
+        paths: names.paths.filter((path) => path[0] === toolName).map((path) => path.slice(1)),
       }
     : undefined;
 }
 //@ chunk-52dd7zdd.js:2300-2326 placement
-var JUi = Object.freeze({});
+var EMPTY_MATCHER_TABLE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-52dd7zdd.js:2300", () => {
+  EMPTY_MATCHER_TABLE = Object.freeze({});
+});
 //@ chunk-52dd7zdd.js:2326-2822 placement
-var b = Object.freeze({
-  "tool.call": [["tool"]],
-  "tool.check": [["tool"]],
-  "tool.describe": [["tool"]],
-  "classic.PreToolUse": [["tool"]],
-  "classic.PostToolUse": [["tool_name"]],
-  "classic.PostToolUseFailure": [["tool_name"]],
-  "classic.PermissionRequest": [["tool_name"]],
-  "classic.PermissionDenied": [["tool_name"]],
-  "classic.PostToolBatch": [["tool_calls", "tool_name"]],
-  "session.append": [["origin", "tool"]],
-  "session.compact": [["messages", "toolUses", "tool"]],
-  "ui.render": [
-    ["props", "tool"],
-    ["props", "calls", "tool"],
-  ],
+var DEFAULT_MATCHER_FIELDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-52dd7zdd.js:2326", () => {
+  DEFAULT_MATCHER_FIELDS = Object.freeze({
+    "tool.call": [["tool"]],
+    "tool.check": [["tool"]],
+    "tool.describe": [["tool"]],
+    "classic.PreToolUse": [["tool"]],
+    "classic.PostToolUse": [["tool_name"]],
+    "classic.PostToolUseFailure": [["tool_name"]],
+    "classic.PermissionRequest": [["tool_name"]],
+    "classic.PermissionDenied": [["tool_name"]],
+    "classic.PostToolBatch": [["tool_calls", "tool_name"]],
+    "session.append": [["origin", "tool"]],
+    "session.compact": [["messages", "toolUses", "tool"]],
+    "ui.render": [
+      ["props", "tool"],
+      ["props", "calls", "tool"],
+    ],
+  });
 });
 //@ chunk-52dd7zdd.js:2822-2866 placement
 /**
  * 从冻结的工具别名表中取值。
  */
-var frozenToolTableEntry = (o) => (Object.hasOwn(b, o) ? b[o] : undefined);
+var frozenToolTableEntry = (toolName) =>
+  Object.hasOwn(DEFAULT_MATCHER_FIELDS, toolName) ? DEFAULT_MATCHER_FIELDS[toolName] : undefined;
 //@ chunk-52dd7zdd.js:2866-2954 placement
-var matchesToolAlias = (names, r, t) =>
+var matchesToolAlias = (names, value, name) =>
   hasEmptyPathEntry(names) &&
-  typeof r === "string" &&
-  typeof t === "string" &&
-  toolNameAliasesFor(names.table, t).includes(r);
+  typeof value === "string" &&
+  typeof name === "string" &&
+  toolNameAliasesFor(names.table, name).includes(value);
 //@ chunk-52dd7zdd.js:2954-3183 placement
-function describeMatcher(o) {
-  let r = typeof o === "function";
-  return isRegExpLike(o)
-    ? String(o)
-    : Array.isArray(o)
-      ? o.map(describeMatcher).join("|")
-      : isPlainMatcherObject(o)
-        ? `{${Object.entries(o)
+function describeMatcher(matcher) {
+  let isFunction = typeof matcher === "function";
+  return isRegExpLike(matcher)
+    ? String(matcher)
+    : Array.isArray(matcher)
+      ? matcher.map(describeMatcher).join("|")
+      : isPlainMatcherObject(matcher)
+        ? `{${Object.entries(matcher)
             .map(([key, value]) =>
               isPlainMatcherObject(value)
                 ? `${key} has ${describeMatcher(value)}`
                 : `${key}=${describeMatcher(value)}`,
             )
             .join(", ")}}`
-        : r
+        : isFunction
           ? "function"
-          : String(o);
+          : String(matcher);
 }
 //@ chunk-52dd7zdd.js:3183-3308 placement
-var regExpSourceAndFlags = (o) => ({
-  source: String(Reflect.get(RegExp.prototype, "source", o)),
-  flags: String(Reflect.get(RegExp.prototype, "flags", o)),
+var regExpSourceAndFlags = (regexp) => ({
+  source: String(Reflect.get(RegExp.prototype, "source", regexp)),
+  flags: String(Reflect.get(RegExp.prototype, "flags", regexp)),
 });
 //@ chunk-52dd7zdd.js:3308-3370 placement
 /**
@@ -228,66 +252,76 @@ var ANCHORED_ALTERNATION_RE = /^\^?(?:\((?:\?:)?)?\^?\w+\$?(?:\|\^?\w+\$?)*\)?\$
 var NORMALIZED_NAME_MARK = "w";
 //@ chunk-52dd7zdd.js:3380-3433 placement
 var normalizeMCPNameChars = (source) =>
-  Array.from(source, (r) => (normalizeNameForMCP(r) === r ? NORMALIZED_NAME_MARK : r)).join("");
+  Array.from(source, (char) => (normalizeNameForMCP(char) === char ? NORMALIZED_NAME_MARK : char)).join("");
 //@ chunk-52dd7zdd.js:3433-3620 placement
-function isAnchoredAlternation(o) {
-  let r = o.source.startsWith("^(") && o.source.endsWith(")$");
+function isAnchoredAlternation(regexp) {
+  let isWrapped = regexp.source.startsWith("^(") && regexp.source.endsWith(")$");
   return (
-    o.flags === "" &&
-    ANCHORED_ALTERNATION_RE.test(normalizeMCPNameChars(o.source)) &&
-    (r || o.source.split("|").every((t) => t.startsWith("^") && t.endsWith("$")))
+    regexp.flags === "" &&
+    ANCHORED_ALTERNATION_RE.test(normalizeMCPNameChars(regexp.source)) &&
+    (isWrapped || regexp.source.split("|").every((branch) => branch.startsWith("^") && branch.endsWith("$")))
   );
 }
 //@ chunk-52dd7zdd.js:3620-3719 placement
-var matchesAliasAlternation = (o, r, t) =>
-  hasEmptyPathEntry(o.names) &&
-  typeof t === "string" &&
-  isAnchoredAlternation(regExpSourceAndFlags(r)) &&
-  toolNameAliasesFor(o.names.table, t).some((e) => o.test(r, e));
+var matchesAliasAlternation = (names, matcher, value) =>
+  hasEmptyPathEntry(names.names) &&
+  typeof value === "string" &&
+  isAnchoredAlternation(regExpSourceAndFlags(matcher)) &&
+  toolNameAliasesFor(names.names.table, value).some((alias) => names.test(matcher, alias));
 //@ chunk-52dd7zdd.js:3719-3794 placement
-function narrowNameTable(o, r) {
-  return o.names === undefined
-    ? o
+function narrowNameTable(names, toolName) {
+  return names.names === undefined
+    ? names
     : {
-        test: o.test,
-        names: filterNameTableByTool(o.names, r),
+        test: names.test,
+        names: filterNameTableByTool(names.names, toolName),
       };
 }
 //@ chunk-52dd7zdd.js:3794-4204 placement
 /**
  * 递归匹配函数钩子的 matcher 与事件值：数组任一匹配即可；原始值相等或经工具名别名表匹配；对象 matcher 要求每个键都存在且匹配；RegExp 用给定测试函数（或名称表）匹配。
  */
-function matchesMatcher(o, r, t) {
-  if (Array.isArray(o)) return Array.prototype.some.call(o, (e) => matchesMatcher(e, r, t));
-  if (Array.isArray(r)) return Array.prototype.some.call(r, (e) => matchesMatcher(o, e, t));
-  if (typeof o !== "object" || o === null) return o === r || matchesToolAlias(t.names, o, r);
-  if (isPlainDataObject(o)) {
-    if (typeof r !== "object" || !r) return false;
-    for (let key of Object.keys(o))
-      if (!Object.hasOwn(r, key) || !matchesMatcher(o[key], r[key], narrowNameTable(t, key))) return false;
+function matchesMatcher(pattern, value, context) {
+  if (Array.isArray(pattern))
+    return Array.prototype.some.call(pattern, (branch) => matchesMatcher(branch, value, context));
+  if (Array.isArray(value))
+    return Array.prototype.some.call(value, (branch) => matchesMatcher(pattern, branch, context));
+  if (typeof pattern !== "object" || pattern === null)
+    return pattern === value || matchesToolAlias(context.names, pattern, value);
+  if (isPlainDataObject(pattern)) {
+    if (typeof value !== "object" || !value) return false;
+    for (let key of Object.keys(pattern))
+      if (
+        !Object.hasOwn(value, key) ||
+        !matchesMatcher(pattern[key], value[key], narrowNameTable(context, key))
+      )
+        return false;
     return true;
   }
-  return isRegExpLike(o) && (t.test(o, String(r)) || matchesAliasAlternation(t, o, r));
+  return (
+    isRegExpLike(pattern) &&
+    (context.test(pattern, String(value)) || matchesAliasAlternation(context, pattern, value))
+  );
 }
 //@ chunk-52dd7zdd.js:4204-4854 placement
 /**
  * 在匹配器与示例值之间查找永远无法匹配的嵌套对象匹配器，返回其路径和实际类型。
  */
 function findImpossibleObjectMatcher(pattern, value, path = "") {
-  let e;
+  let found;
   if (Array.isArray(pattern)) {
-    Array.prototype.some.call(pattern, (n) => {
-      e = findImpossibleObjectMatcher(n, value, path);
-      return e !== undefined;
+    Array.prototype.some.call(pattern, (branch) => {
+      found = findImpossibleObjectMatcher(branch, value, path);
+      return found !== undefined;
     });
-    return e;
+    return found;
   }
   if (Array.isArray(value)) {
-    Array.prototype.some.call(value, (n) => {
-      e = findImpossibleObjectMatcher(pattern, n, path);
-      return e !== undefined;
+    Array.prototype.some.call(value, (branch) => {
+      found = findImpossibleObjectMatcher(pattern, branch, path);
+      return found !== undefined;
     });
-    return e;
+    return found;
   }
   if (!isPlainMatcherObject(pattern)) return;
   if (value === null)
@@ -325,8 +359,8 @@ function findImpossibleObjectMatcher(pattern, value, path = "") {
   }
   for (let key of Object.keys(pattern)) {
     if (!Object.hasOwn(value, key)) continue;
-    e = findImpossibleObjectMatcher(pattern[key], value[key], path === "" ? key : `${path}.${key}`);
-    if (e !== undefined) return e;
+    found = findImpossibleObjectMatcher(pattern[key], value[key], path === "" ? key : `${path}.${key}`);
+    if (found !== undefined) return found;
   }
   return;
 }
@@ -334,9 +368,9 @@ function findImpossibleObjectMatcher(pattern, value, path = "") {
 /**
  * 生成嵌套对象匹配器永远无法匹配时的错误说明。
  */
-function impossibleMatcherMessage(o, r, t) {
-  let e = t.path.split(".").at(-1) ?? t.path;
-  return `hooks module ${o}: on('${r}') matcher at ${t.path} is a nested object, but e.${t.path} is a ${t.kind} there, which an object matcher can never match (a matcher has no operator keys); the hook will not run for it. A ${t.kind} is matched by the literal value or, as a string, by a RegExp, e.g. { ${e}: /^prefix/ }`;
+function impossibleMatcherMessage(moduleName, event, reason) {
+  let leafKey = reason.path.split(".").at(-1) ?? reason.path;
+  return `hooks module ${moduleName}: on('${event}') matcher at ${reason.path} is a nested object, but e.${reason.path} is a ${reason.kind} there, which an object matcher can never match (a matcher has no operator keys); the hook will not run for it. A ${reason.kind} is matched by the literal value or, as a string, by a RegExp, e.g. { ${leafKey}: /^prefix/ }`;
 }
 //@ chunk-52dd7zdd.js:5233-5244 placement
 /**
@@ -349,55 +383,62 @@ var REGEX_MARKER_KEY = "$$regex";
 /**
  * 把序列化的匹配器还原为运行时值（数组递归、正则对象还原为 RegExp）。
  */
-function reviveMatcher(o, r, t) {
-  if (Array.isArray(o)) return Array.prototype.map.call(o, (e, n) => reviveMatcher(e, r, `${t}[${n}]`));
-  if (isPlainMatcherObject(o)) {
-    let e = t === "" ? "" : ` at ${t}`;
-    let n = o[REGEX_MARKER_KEY];
-    if (typeof n === "string" && typeof o.flags === "string" && Object.keys(o).length === 2) {
+function reviveMatcher(matcher, where, path) {
+  if (Array.isArray(matcher))
+    return Array.prototype.map.call(matcher, (item, itemIndex) =>
+      reviveMatcher(item, where, `${path}[${itemIndex}]`),
+    );
+  if (isPlainMatcherObject(matcher)) {
+    let at = path === "" ? "" : ` at ${path}`;
+    let source = matcher[REGEX_MARKER_KEY];
+    if (
+      typeof source === "string" &&
+      typeof matcher.flags === "string" &&
+      Object.keys(matcher).length === 2
+    ) {
       assertSafeRegExp({
-        source: n,
-        flags: o.flags,
-        where: r,
-        at: e,
+        source,
+        flags: matcher.flags,
+        where,
+        at,
       });
-      return new RegExp(n, o.flags);
+      return new RegExp(source, matcher.flags);
     }
-    assertNoReservedMatcherKey(o, r, e);
-    let a = {};
-    for (let [key, value] of Object.entries(o))
-      a[key] = reviveMatcher(value, r, t === "" ? key : `${t}.${key}`);
-    return a;
+    assertNoReservedMatcherKey(matcher, where, at);
+    let result = {};
+    for (let [key, value] of Object.entries(matcher))
+      result[key] = reviveMatcher(value, where, path === "" ? key : `${path}.${key}`);
+    return result;
   }
-  return o;
+  return matcher;
 }
 //@ chunk-52dd7zdd.js:5654-5864 placement
-function serializeMatcher(o) {
-  if (isRegExpLike(o)) {
-    let { source, flags } = regExpSourceAndFlags(o);
+function serializeMatcher(matcher) {
+  if (isRegExpLike(matcher)) {
+    let { source, flags } = regExpSourceAndFlags(matcher);
     return {
       [REGEX_MARKER_KEY]: source,
       flags,
     };
   }
-  if (Array.isArray(o)) return Array.prototype.map.call(o, serializeMatcher);
-  if (isPlainMatcherObject(o)) {
-    let r = {};
-    for (let [key, value] of Object.entries(o)) r[key] = serializeMatcher(value);
-    return r;
+  if (Array.isArray(matcher)) return Array.prototype.map.call(matcher, serializeMatcher);
+  if (isPlainMatcherObject(matcher)) {
+    let serialized = {};
+    for (let [key, value] of Object.entries(matcher)) serialized[key] = serializeMatcher(value);
+    return serialized;
   }
-  return o;
+  return matcher;
 }
 //@ chunk-52dd7zdd.js:5864-5937 placement
 /**
  * 把 matcher 列表序列化（正则可序列化形式）。
  */
 var serializeMatcherList = (registered) =>
-  registered.map(({ matcher, ...t }) =>
+  registered.map(({ matcher, ...rest }) =>
     matcher === undefined
-      ? t
+      ? rest
       : {
-          ...t,
+          ...rest,
           matcher: serializeMatcher(matcher),
         },
   );
@@ -410,10 +451,10 @@ var unsafeRegExpFlag = (flags) => (flags.includes("g") ? "g" : flags.includes("y
  * 拒绝不安全的正则匹配器：带状态的 g/y 标志或可能灾难性回溯的模式。
  */
 function assertSafeRegExp({ source, flags, where, at }) {
-  let n = unsafeRegExpFlag(flags);
-  if (n)
+  let flag = unsafeRegExpFlag(flags);
+  if (flag)
     throw new HooksError(
-      `${where}: matcher${at} is a RegExp with the ${n} flag, which keeps state between tests; drop it`,
+      `${where}: matcher${at} is a RegExp with the ${flag} flag, which keeps state between tests; drop it`,
     );
   if (CATASTROPHIC_REPEAT_RE(source))
     throw new HooksError(
@@ -421,34 +462,36 @@ function assertSafeRegExp({ source, flags, where, at }) {
     );
 }
 //@ chunk-52dd7zdd.js:6341-6467 placement
-function assertNoReservedMatcherKey(o, r, t) {
-  if (Object.hasOwn(o, PROTO_KEY))
-    throw new HooksError(`${r}: matcher${t} has the key ${PROTO_KEY}, which a matcher does not keep`);
+function assertNoReservedMatcherKey(matcher, where, at) {
+  if (Object.hasOwn(matcher, PROTO_KEY))
+    throw new HooksError(`${where}: matcher${at} has the key ${PROTO_KEY}, which a matcher does not keep`);
 }
 //@ chunk-52dd7zdd.js:6467-7323 placement
 /**
  * 校验 hooks 模块 on() 的 matcher：RegExp 不能带有状态标志或嵌套量词，对象不能用保留键，字符串长度、类型等受限，非法时抛 HooksError。
  */
 function validateMatcherValue(value, where, path) {
-  let e = path === "" ? "" : ` at ${path}`;
+  let at = path === "" ? "" : ` at ${path}`;
   if (isRegExpLike(value)) {
     assertSafeRegExp({
       ...regExpSourceAndFlags(value),
       where,
-      at: e,
+      at,
     });
     return;
   }
   if (Array.isArray(value)) {
-    Array.prototype.forEach.call(value, (n, s) => validateMatcherValue(n, where, `${path}[${s}]`));
+    Array.prototype.forEach.call(value, (branch, branchIndex) =>
+      validateMatcherValue(branch, where, `${path}[${branchIndex}]`),
+    );
     return;
   }
   if (isPlainMatcherObject(value)) {
     if (Object.hasOwn(value, REGEX_MARKER_KEY))
       throw new HooksError(
-        `${where}: matcher${e} uses the reserved key ${REGEX_MARKER_KEY} (how a RegExp crosses the worker boundary); a RegExp goes in as a RegExp`,
+        `${where}: matcher${at} uses the reserved key ${REGEX_MARKER_KEY} (how a RegExp crosses the worker boundary); a RegExp goes in as a RegExp`,
       );
-    assertNoReservedMatcherKey(value, where, e);
+    assertNoReservedMatcherKey(value, where, at);
     for (let [key, value_2] of Object.entries(value))
       validateMatcherValue(value_2, where, path === "" ? key : `${path}.${key}`);
     return;
@@ -457,7 +500,7 @@ function validateMatcherValue(value, where, path) {
     case "string":
       if (value.length > MAX_MATCHER_CHARS)
         throw new HooksError(
-          `${where}: matcher${e} is a string longer than ${MAX_MATCHER_CHARS} characters, which cannot match`,
+          `${where}: matcher${at} is a string longer than ${MAX_MATCHER_CHARS} characters, which cannot match`,
         );
       return;
     case "number":
@@ -477,33 +520,33 @@ function validateMatcherValue(value, where, path) {
   );
 }
 //@ chunk-52dd7zdd.js:7323-7574 placement
-function testRegExpMatcher(o, r) {
-  if (r.length > MAX_MATCHER_CHARS) {
+function testRegExpMatcher(regexp, value) {
+  if (value.length > MAX_MATCHER_CHARS) {
     matcherLog().log(
-      `matcher: a value of ${r.length} characters is past the ${MAX_MATCHER_CHARS} a RegExp matcher reads; it matches, so the hook decides`,
+      `matcher: a value of ${value.length} characters is past the ${MAX_MATCHER_CHARS} a RegExp matcher reads; it matches, so the hook decides`,
     );
     return true;
   }
-  if (unsafeRegExpFlag(regExpSourceAndFlags(o).flags)) o.lastIndex = 0;
-  return RegExp.prototype.exec.call(o, r) !== null;
+  if (unsafeRegExpFlag(regExpSourceAndFlags(regexp).flags)) regexp.lastIndex = 0;
+  return RegExp.prototype.exec.call(regexp, value) !== null;
 }
 //@ chunk-52dd7zdd.js:7574-7687 placement
-function validateObjectMatcher(o, where) {
-  if (!isPlainMatcherObject(o))
+function validateObjectMatcher(matcher, where) {
+  if (!isPlainMatcherObject(matcher))
     throw new HooksError(`${where}: the matcher must be a plain object (a partial of e)`);
-  validateMatcherValue(o, where, "");
+  validateMatcherValue(matcher, where, "");
 }
 //@ chunk-52dd7zdd.js:7687-7722 placement
 /**
  * 反序列化 matcher 的默认入口（键名 "matcher"）。
  */
-var reviveMatcherDefault = (matcher, r = "matcher") => reviveMatcher(matcher, r, "");
+var reviveMatcherDefault = (matcher, where = "matcher") => reviveMatcher(matcher, where, "");
 //@ chunk-52dd7zdd.js:7722-7767 placement
 /**
  * 用正则语义判定 matcher 是否匹配（含工具别名表）。
  */
-var matchesRegExpMatcher = (matcher, r, names) =>
-  matchesMatcher(matcher, r, {
+var matchesRegExpMatcher = (matcher, value, names) =>
+  matchesMatcher(matcher, value, {
     test: testRegExpMatcher,
     names,
   });
@@ -511,42 +554,46 @@ var matchesRegExpMatcher = (matcher, r, names) =>
 /**
  * 用恒真测试判定字面 matcher 是否匹配（含工具别名表）。
  */
-var matchesLiteralMatcher = (o, r, names) =>
-  matchesMatcher(o, r, {
+var matchesLiteralMatcher = (matcher, value, names) =>
+  matchesMatcher(matcher, value, {
     test: () => true,
     names,
   });
 //@ chunk-52dd7zdd.js:7815-7930 placement
-var fieldMatches = (o, r, names) =>
-  Array.isArray(o)
-    ? o.some((e) => fieldMatches(e, r, names))
-    : !isPlainDataObject(o) ||
-      !Object.hasOwn(o, r.field) ||
-      matchesLiteralMatcher(o[r.field], r.value, names);
+var fieldMatches = (pattern, probe, names) =>
+  Array.isArray(pattern)
+    ? pattern.some((branch) => fieldMatches(branch, probe, names))
+    : !isPlainDataObject(pattern) ||
+      !Object.hasOwn(pattern, probe.field) ||
+      matchesLiteralMatcher(pattern[probe.field], probe.value, names);
 //@ chunk-52dd7zdd.js:7930-8014 placement
 /**
  * 判断对象字段是否全部匹配给定键值。
  */
-var matchesFields = (o, r, pathTable) =>
-  Object.entries(r).every(([key, value]) =>
+var matchesFields = (value, fields, names) =>
+  Object.entries(fields).every(([key, value_2]) =>
     fieldMatches(
-      o,
+      value,
       {
         field: key,
-        value,
+        value: value_2,
       },
-      pathTable && filterNameTableByTool(pathTable, key),
+      names && filterNameTableByTool(names, key),
     ),
   );
 //@ chunk-52dd7zdd.js:8014-8054 placement
 /**
  * 判断单个字段是否匹配给定值。
  */
-var matchesField = (o, field, value) =>
-  fieldMatches(o, {
+var matchesField = (value, field, value_2) =>
+  fieldMatches(value, {
     field,
-    value,
+    value: value_2,
   });
+
+// The import cycle this module closes (3677 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("worker:src/utils/hooks/functionHookMatchers.js");
 export {
   filterEntriesToNullProto,
   matchesSingleKeyFilter,
@@ -576,5 +623,5 @@ export {
   matchesLiteralMatcher,
   freezeStringEntries,
   frozenToolTableEntry,
-  JUi,
+  EMPTY_MATCHER_TABLE,
 };

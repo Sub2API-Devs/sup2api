@@ -5,14 +5,14 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_forge } from "./forge.js";
 import { require_cipher } from "./cipher.js";
 import { require_cipherModes } from "./cipherModes.js";
 import { require_util } from "./util.js";
 
 //@ chunk-fq0cr76a.js:70895-79887 cjs-fingerprint
-var require_des = x(function (cjsExports, cjsModule) {
+var require_des = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_cipher();
   require_cipherModes();
@@ -55,20 +55,20 @@ var require_des = x(function (cjsExports, cjsModule) {
     });
   };
   forge.des.Algorithm = function (name, mode) {
-    var r = this;
-    r.name = name;
-    r.mode = new mode({
+    var selfRef = this;
+    selfRef.name = name;
+    selfRef.mode = new mode({
       blockSize: 8,
       cipher: {
         encrypt: function (inBlock, outBlock) {
-          return _updateBlock(r._keys, inBlock, outBlock, false);
+          return _updateBlock(selfRef._keys, inBlock, outBlock, false);
         },
         decrypt: function (inBlock, outBlock) {
-          return _updateBlock(r._keys, inBlock, outBlock, true);
+          return _updateBlock(selfRef._keys, inBlock, outBlock, true);
         },
       },
     });
-    r._init = false;
+    selfRef._init = false;
   };
   forge.des.Algorithm.prototype.initialize = function (options) {
     if (this._init) return;

@@ -8,7 +8,7 @@
 import { APIResource } from "../../../core/resource.mjs";
 import { Work } from "./work.mjs";
 import { buildHeaders } from "../../../internal/headers.mjs";
-import { I } from "../../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../../internal/utils/path.mjs";
 import { TokenPage } from "../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:82182-83882 esm-fingerprint
@@ -38,7 +38,7 @@ var Environments = (() => {
     }
     retrieve(environmentID, params = {}, options) {
       let { betas, workspace_id } = params ?? {};
-      return this._client.get(I`/v1/environments/${environmentID}?beta=true`, {
+      return this._client.get(parseUrl_2`/v1/environments/${environmentID}?beta=true`, {
         ...options,
         headers: buildHeaders([
           {
@@ -55,7 +55,7 @@ var Environments = (() => {
     }
     update(environmentID, params, options) {
       let { betas, workspace_id, ...body } = params;
-      return this._client.post(I`/v1/environments/${environmentID}?beta=true`, {
+      return this._client.post(parseUrl_2`/v1/environments/${environmentID}?beta=true`, {
         body,
         ...options,
         headers: buildHeaders([
@@ -91,7 +91,7 @@ var Environments = (() => {
     }
     delete(environmentID, params = {}, options) {
       let { betas, workspace_id } = params ?? {};
-      return this._client.delete(I`/v1/environments/${environmentID}?beta=true`, {
+      return this._client.delete(parseUrl_2`/v1/environments/${environmentID}?beta=true`, {
         ...options,
         headers: buildHeaders([
           {
@@ -108,7 +108,7 @@ var Environments = (() => {
     }
     archive(environmentID, params = {}, options) {
       let { betas, workspace_id } = params ?? {};
-      return this._client.post(I`/v1/environments/${environmentID}/archive?beta=true`, {
+      return this._client.post(parseUrl_2`/v1/environments/${environmentID}/archive?beta=true`, {
         ...options,
         headers: buildHeaders([
           {

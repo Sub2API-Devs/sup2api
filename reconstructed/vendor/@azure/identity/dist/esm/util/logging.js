@@ -5,10 +5,10 @@
  * pieces: chunk-mrx6y2r5.js (6)
  * attribution: esm-fingerprint 6
  */
-import { Pt } from "../../../../logger/dist/esm/index.js";
+import { createClientLogger_2 } from "../../../../logger/dist/esm/index.js";
 
 //@ chunk-mrx6y2r5.js:26851-26873 esm-fingerprint
-var logger = Pt("identity");
+var logger = createClientLogger_2("identity");
 //@ chunk-mrx6y2r5.js:26873-27008 esm-fingerprint
 function processEnvVars(supportedEnvVars) {
   return supportedEnvVars.reduce(

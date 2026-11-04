@@ -11,7 +11,7 @@ var UNDEFINED_CODE_POINTS = new Set([
   458751, 524286, 524287, 589822, 589823, 655358, 655359, 720894, 720895, 786430, 786431, 851966, 851967,
   917502, 917503, 983038, 983039, 1048574, 1048575, 1114110, 1114111,
 ]);
-var m = "\uFFFD";
+var REPLACEMENT_CHARACTER = "\uFFFD";
 var CODE_POINTS;
 //@ chunk-6ja29j2n.js:462-1377 esm-fingerprint
 (function (CODE_POINTS) {
@@ -81,6 +81,6 @@ export {
   isSurrogate,
   isControlCodePoint,
   isUndefinedCodePoint,
-  m,
+  REPLACEMENT_CHARACTER,
   SEQUENCES,
 };

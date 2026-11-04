@@ -12,6 +12,7 @@ import { createSignal } from "./signal.js";
 import { truncateAtWord, cleanForDisplay } from "./stringUtils.js";
 import { HostScoped } from "./hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:320397-320425 affinity
 /**
@@ -48,16 +49,16 @@ class AwsAuthStatusManager {
     };
     this.changed.emit(this.getStatus());
   }
-  addOutput(e) {
-    let n = truncateAtWord(cleanForDisplay(e), MAX_AWS_STATUS_LINE_CHARS);
-    if (!n) return;
-    this.status.output = [...this.status.output.slice(1 - MAX_AWS_STATUS_LINES), n];
+  addOutput(line) {
+    let cleanLine = truncateAtWord(cleanForDisplay(line), MAX_AWS_STATUS_LINE_CHARS);
+    if (!cleanLine) return;
+    this.status.output = [...this.status.output.slice(1 - MAX_AWS_STATUS_LINES), cleanLine];
     this.changed.emit(this.getStatus());
   }
-  setError(e) {
-    let n = truncateAtWord(cleanForDisplay(e), MAX_AWS_STATUS_LINE_CHARS);
-    if (!n) return;
-    this.status.error = n;
+  setError(message) {
+    let cleanMessage = truncateAtWord(cleanForDisplay(message), MAX_AWS_STATUS_LINE_CHARS);
+    if (!cleanMessage) return;
+    this.status.error = cleanMessage;
     this.changed.emit(this.getStatus());
   }
   endAuthentication(success) {
@@ -91,7 +92,10 @@ class AwsAuthStatusManager {
   }
 }
 //@ chunk-aepeg2w5.js:321468-321493 sole-consumer
-var awsAuthStatusManagerByHost = new HostScoped(() => new AwsAuthStatusManager());
+var awsAuthStatusManagerByHost; // deferred: uses AwsAuthStatusManager of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:321468", () => {
+  awsAuthStatusManagerByHost = new HostScoped(() => new AwsAuthStatusManager());
+});
 //@ chunk-aepeg2w5.js:321493-321530 sole-consumer
 function getAwsAuthStatusManager() {
   return awsAuthStatusManagerByHost.of(getRootSession().host);

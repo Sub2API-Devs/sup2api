@@ -101,12 +101,12 @@ import {
   array,
   zodStrictObject,
   _enum,
-  E,
-  M,
-  string,
-  u,
+  numberSchema,
+  booleanSchema,
+  stringSchema,
+  objectSchema,
   literal,
-  qne,
+  anySchema,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { PROGRAM_CATEGORIES, classifyBashCommand } from "./commandClassification.js";
 import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
@@ -271,6 +271,7 @@ import { leftoverProcessTracker } from "../../utils/shell/cpuReport.js";
 import { stripShellUsageUnlessBackgrounded } from "../../utils/ShellCommand.js";
 import { TaskOutput } from "../../utils/task/TaskOutput.js";
 import { emitTaskNotification } from "../../utils/task/taskNotifications.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:190349-190446 placement
 /**
@@ -286,29 +287,34 @@ var REFUSED_INPUT_FIELDS_WHEN_SANDBOX_REQUIRED = [
 /**
  * 宿主策略禁止非沙箱命令时，从 Bash 输入 schema 中去掉相关字段。
  */
-function omitUnsandboxedFields(e, n) {
-  if (!getHostAgentPolicy().unsandboxedCommandsDisabled) return e;
-  let r = Object.fromEntries(n.filter((s) => s in e.shape).map((s) => [s, true]));
-  return e.omit(r);
+function omitUnsandboxedFields(schema, fieldNames) {
+  if (!getHostAgentPolicy().unsandboxedCommandsDisabled) return schema;
+  let omitShape = Object.fromEntries(
+    fieldNames.filter((fieldName) => fieldName in schema.shape).map((fieldName) => [fieldName, true]),
+  );
+  return schema.omit(omitShape);
 }
 //@ chunk-e6aww6q8.js:1178453-1178560 fingerprint = BASH_SEMANTIC_NEUTRAL_COMMANDS (0.59)
 /**
  * 不读写文件的命令集合（echo/printf/test/[/which/type/basename/dirname/df 等）；沙箱"读封锁"检查（chunk-e6aww6q8.js#kDo）遇到这些命令直接放过。
  */
-var READ_BLOCK_EXEMPT_COMMANDS = new Set([
-  "echo",
-  "printf",
-  "test",
-  "[",
-  "[[",
-  "true",
-  "false",
-  "which",
-  "type",
-  "basename",
-  "dirname",
-  "df",
-]);
+var READ_BLOCK_EXEMPT_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:1178453", () => {
+  READ_BLOCK_EXEMPT_COMMANDS = new Set([
+    "echo",
+    "printf",
+    "test",
+    "[",
+    "[[",
+    "true",
+    "false",
+    "which",
+    "type",
+    "basename",
+    "dirname",
+    "df",
+  ]);
+});
 //@ chunk-e6aww6q8.js:3105251-3105639 fingerprint = COMMON_BACKGROUND_COMMANDS (0.602)
 /**
  * 常见长时间运行/构建类命令前缀（npm、cargo、docker、pytest、gh、bazel、nix…），与 wget 合成遥测里的 command_type 白名单；也被后台任务模块使用。
@@ -367,31 +373,31 @@ var COMMON_BACKGROUND_COMMANDS = [
 /**
  * 把 Bash 输入中的别名字段规范化：timeout_ms → timeout，command_description → description（已有 description 时丢弃），返回改写结果与形状标签。
  */
-function normalizeBashInputAliases(e) {
-  if (!isPlainObject_5(e)) return null;
-  let n = {
-    ...e,
+function normalizeBashInputAliases(input) {
+  if (!isPlainObject_5(input)) return null;
+  let normalized = {
+    ...input,
   };
-  let r = [];
-  if ("timeout_ms" in n && !("timeout" in n)) {
-    let timeoutMs = n.timeout_ms;
+  let aliasedFields = [];
+  if ("timeout_ms" in normalized && !("timeout" in normalized)) {
+    let timeoutMs = normalized.timeout_ms;
     if (typeof timeoutMs === "number" || (typeof timeoutMs === "string" && /^\d+$/.test(timeoutMs))) {
-      n.timeout = timeoutMs;
-      delete n.timeout_ms;
-      r.push("timeout_ms");
+      normalized.timeout = timeoutMs;
+      delete normalized.timeout_ms;
+      aliasedFields.push("timeout_ms");
     }
   }
-  if ("command_description" in n) {
-    if (!("description" in n) && typeof n.command_description === "string") {
-      n.description = n.command_description;
-      r.push("command_description");
-    } else r.push("command_description_dropped");
-    delete n.command_description;
+  if ("command_description" in normalized) {
+    if (!("description" in normalized) && typeof normalized.command_description === "string") {
+      normalized.description = normalized.command_description;
+      aliasedFields.push("command_description");
+    } else aliasedFields.push("command_description_dropped");
+    delete normalized.command_description;
   }
-  return r.length
+  return aliasedFields.length
     ? {
-        input: n,
-        shapeClass: r.join(","),
+        input: normalized,
+        shapeClass: aliasedFields.join(","),
       }
     : null;
 }
@@ -410,25 +416,25 @@ var BENIGN_SHELL_COMMAND_RE = /^\s*(echo|printf|true|:)\b/;
  */
 function extractReadOnlyFileReads(command) {
   if (/[|<>]/.test(command)) return [];
-  let n;
+  let subcommands;
   try {
-    n = splitCommand(command);
+    subcommands = splitCommand(command);
   } catch {
     return [];
   }
-  if (n.length === 0) return [];
-  let r = [];
-  for (let s of n) {
-    let h =
-      parseSedReadArgs(s) ??
-      parseCatRead(s) ??
-      parseHeadRead(s) ??
-      parseTailRead(s) ??
-      (n.length === 1 ? parseGrepReadArgs(s) : null);
-    if (h) r.push(h);
-    else if (n.length > 1 && !BENIGN_SHELL_COMMAND_RE.test(s)) return [];
+  if (subcommands.length === 0) return [];
+  let reads = [];
+  for (let subcommand of subcommands) {
+    let read =
+      parseSedReadArgs(subcommand) ??
+      parseCatRead(subcommand) ??
+      parseHeadRead(subcommand) ??
+      parseTailRead(subcommand) ??
+      (subcommands.length === 1 ? parseGrepReadArgs(subcommand) : null);
+    if (read) reads.push(read);
+    else if (subcommands.length > 1 && !BENIGN_SHELL_COMMAND_RE.test(subcommand)) return [];
   }
-  return r;
+  return reads;
 }
 //@ chunk-e6aww6q8.js:4766686-4767150 sole-consumer
 /**
@@ -441,11 +447,11 @@ function sliceFileViewContent(fileContent, viewSpec) {
     if (lines.length > 0 && lines.at(-1) === "") lines.pop();
     if (lines.length === 0) return null;
     let min = Math.min(viewSpec.tailLines, lines.length);
-    let w = lines.length - min + 1;
+    let startLine = lines.length - min + 1;
     return {
-      content: lines.slice(w - 1).join(`
+      content: lines.slice(startLine - 1).join(`
 `),
-      offset: w,
+      offset: startLine,
       limit: min,
     };
   }
@@ -468,16 +474,16 @@ function sliceFileViewContent(fileContent, viewSpec) {
   };
 }
 //@ chunk-e6aww6q8.js:4767150-4767252 sole-consumer
-function stripLineNumberPrefix(e) {
-  let match = /^[ \t]*\d+[ \t]/.exec(e);
-  return match ? e.slice(match[0].length) : /^[ \t]*$/.test(e) ? "" : e;
+function stripLineNumberPrefix(line) {
+  let match = /^[ \t]*\d+[ \t]/.exec(line);
+  return match ? line.slice(match[0].length) : /^[ \t]*$/.test(line) ? "" : line;
 }
 //@ chunk-e6aww6q8.js:4767252-4767414 affinity
 /**
  * 判断命令的模型可见输出是否真的包含这段文件内容（统一 CRLF；numbered 时逐行去掉行号前缀再比）。用来避免把没展示给模型的内容记成"已读"。
  */
 function outputContainsFileView(commandOutput, viewContent, isNumbered) {
-  let s = viewContent.replace(/^(\s*\n)+/, "").trimEnd();
+  let normalizedViewContent = viewContent.replace(/^(\s*\n)+/, "").trimEnd();
   let replaced = commandOutput.replaceAll(
     `\r
 `,
@@ -485,7 +491,7 @@ function outputContainsFileView(commandOutput, viewContent, isNumbered) {
 `,
   );
   return (
-    replaced.includes(s) ||
+    replaced.includes(normalizedViewContent) ||
     (isNumbered === true &&
       replaced
         .split(
@@ -497,7 +503,7 @@ function outputContainsFileView(commandOutput, viewContent, isNumbered) {
           `
 `,
         )
-        .includes(s))
+        .includes(normalizedViewContent))
   );
 }
 //@ chunk-e6aww6q8.js:4767414-4768090 fingerprint = applySedEdit (0.531)
@@ -512,12 +518,12 @@ async function recordShellFileReadsInReadState(
   modelVisibleOutput,
   memoryTriggerContext,
 ) {
-  let filtered = extractReadOnlyFileReads(command).filter((L) => !L.requiresExitZero || exitCode === 0);
+  let filtered = extractReadOnlyFileReads(command).filter((read) => !read.requiresExitZero || exitCode === 0);
   if (filtered.length === 0) return;
   let fs = getFsImplementation();
   await Promise.all(
-    filtered.map(async (L) => {
-      let encoding = expandPath(L.filePath);
+    filtered.map(async (read) => {
+      let encoding = expandPath(read.filePath);
       try {
         if (readFileState.get(encoding)) {
           noteFileReadForMemoryTriggers(memoryTriggerContext, encoding);
@@ -530,20 +536,20 @@ async function recordShellFileReadsInReadState(
           encoding: "utf8",
         });
         let endings = stripBomAndCarriageReturn(content);
-        let ke = sliceFileViewContent(endings, L);
-        if (ke === null || (!ke.content.trim() && endings.trim())) return;
+        let fileView = sliceFileViewContent(endings, read);
+        if (fileView === null || (!fileView.content.trim() && endings.trim())) return;
         if (
           modelVisibleOutput !== undefined &&
-          !L.contentNotInModelContext &&
-          !outputContainsFileView(modelVisibleOutput, ke.content, L.numbered)
+          !read.contentNotInModelContext &&
+          !outputContainsFileView(modelVisibleOutput, fileView.content, read.numbered)
         )
           return;
         readFileState.set(encoding, {
-          content: ke.content,
+          content: fileView.content,
           timestamp: Math.floor(stats.mtimeMs),
-          offset: ke.offset,
-          limit: ke.limit,
-          ...((L.contentNotInModelContext || modelVisibleOutput === undefined) && {
+          offset: fileView.offset,
+          limit: fileView.limit,
+          ...((read.contentNotInModelContext || modelVisibleOutput === undefined) && {
             contentNotInModelContext: true,
           }),
         });
@@ -570,29 +576,29 @@ var DISK_PROBE_TIMEOUT_MS = 2000;
  * 构造 Bash 工具 prompt 时，若可用工具里有 Skill，则列出本项目目录下已按允许清单过滤的技能命令。
  */
 async function listPromptSkillCommands(tools) {
-  if (!tools.some((n) => toolMatchesName(n, SKILL))) return [];
+  if (!tools.some((tool) => toolMatchesName(tool, SKILL))) return [];
   return getSessionSkillCommands(getProjectRootOrNull());
 }
 //@ chunk-e6aww6q8.js:4768977-4769315 placement
 /**
  * 查找同一代理、同一目录下正在后台运行的相同 Bash 命令任务，用于避免重复启动。
  */
-function findDuplicateBackgroundCommand(e, taskRegistry) {
-  if (!isPlainToolUseId(e.toolUseId)) return;
-  let trimmed = e.command.trim();
+function findDuplicateBackgroundCommand(input, taskRegistry) {
+  if (!isPlainToolUseId(input.toolUseId)) return;
+  let trimmed = input.command.trim();
   return Object.values(taskRegistry.all())
     .filter(isLocalShellTask)
     .find(
-      (s) =>
-        s.isBackgrounded &&
-        s.status === "running" &&
-        s.shellCommand?.status === "backgrounded" &&
-        (s.caller === "turn" || s.caller === "agent") &&
-        isPlainToolUseId(s.toolUseId) &&
-        s.shell === "bash" &&
-        s.agentId === e.agentId &&
-        s.cwd === e.cwd &&
-        s.command.trim() === trimmed,
+      (task) =>
+        task.isBackgrounded &&
+        task.status === "running" &&
+        task.shellCommand?.status === "backgrounded" &&
+        (task.caller === "turn" || task.caller === "agent") &&
+        isPlainToolUseId(task.toolUseId) &&
+        task.shell === "bash" &&
+        task.agentId === input.agentId &&
+        task.cwd === input.cwd &&
+        task.command.trim() === trimmed,
     );
 }
 //@ chunk-e6aww6q8.js:4769315-4769394 placement
@@ -633,21 +639,22 @@ var OUTPUT_CUT_MARKER = `
 /**
  * 把输出截到最大长度，插入 OUTPUT_CUT_MARKER 和“完整输出已保存到文件”的说明，作为最终展示文本。
  */
-function interleaveOutputCutMarker(e, n) {
-  let r = getMaxOutputLength() - OUTPUT_CUT_MARKER.length - n.length;
-  return `${truncateToLength(e, Math.max(0, r))}${OUTPUT_CUT_MARKER}${n}`;
+function interleaveOutputCutMarker(head, tail) {
+  let headBudget = getMaxOutputLength() - OUTPUT_CUT_MARKER.length - tail.length;
+  return `${truncateToLength(head, Math.max(0, headBudget))}${OUTPUT_CUT_MARKER}${tail}`;
 }
 //@ chunk-e6aww6q8.js:4769720-4769859 placement
-function splitOutputAtMarker(e) {
-  let index = e.lastIndexOf(OUTPUT_CUT_MARKER);
+function splitOutputAtMarker(output) {
+  let index = output.lastIndexOf(OUTPUT_CUT_MARKER);
   return index === -1
     ? {
-        start: e,
+        start: output,
         end: undefined,
       }
     : {
-        start: e.slice(0, index),
-        end: takeLastChars(e.slice(index + OUTPUT_CUT_MARKER.length), OUTPUT_CUT_TAIL_CHARS) || undefined,
+        start: output.slice(0, index),
+        end:
+          takeLastChars(output.slice(index + OUTPUT_CUT_MARKER.length), OUTPUT_CUT_TAIL_CHARS) || undefined,
       };
 }
 //@ chunk-e6aww6q8.js:4769859-4769872 placement
@@ -659,32 +666,32 @@ var OUTPUT_TAIL_MAX_BYTES = 6000;
 /**
  * 把后台任务输出文件持久化到工具结果目录（v5 存储或本地快照，大小有上限），返回 {path, size}；失败时回调 copyFailed。
  */
-async function persistBashOutput({ outputFilePath, outputTaskId }, r, s, h) {
+async function persistBashOutput({ outputFilePath, outputTaskId }, session, storageV5, onPersistFailed) {
   if (!outputFilePath || !outputTaskId) return;
-  let y;
+  let toolResultsDir;
   try {
-    let originalCwd = getOriginalCwd_2(r);
-    y = await ensureToolResultsDir(originalCwd, s);
+    let originalCwd = getOriginalCwd_2(session);
+    toolResultsDir = await ensureToolResultsDir(originalCwd, storageV5);
     let toolResultFilePath = getToolResultFilePath(originalCwd, outputTaskId, false);
-    let L =
-      isStorageV5Enabled() && s !== undefined
+    let storageKey =
+      isStorageV5Enabled() && storageV5 !== undefined
         ? toolResultsKey(dirname(toolResultFilePath), basename(toolResultFilePath))
         : undefined;
-    if (isStorageV5Enabled() && s !== undefined && L !== undefined) {
-      let q = await persistShellOutput(
-        s,
-        L,
+    if (isStorageV5Enabled() && storageV5 !== undefined && storageKey !== undefined) {
+      let persistedSize = await persistShellOutput(
+        storageV5,
+        storageKey,
         outputFilePath,
         MAX_PERSISTED_OUTPUT_BYTES,
         getTaskOutputRootDir(),
       );
-      if (typeof q === "number")
+      if (typeof persistedSize === "number")
         return {
           path: toolResultFilePath,
-          size: q,
+          size: persistedSize,
         };
-      if (q === undefined) {
-        h?.copyFailed(undefined, y);
+      if (persistedSize === undefined) {
+        onPersistFailed?.copyFailed(undefined, toolResultsDir);
         return;
       }
     }
@@ -698,7 +705,7 @@ async function persistBashOutput({ outputFilePath, outputTaskId }, r, s, h) {
       size,
     };
   } catch (error) {
-    h?.copyFailed(error, y);
+    onPersistFailed?.copyFailed(error, toolResultsDir);
     return;
   }
 }
@@ -706,18 +713,34 @@ async function persistBashOutput({ outputFilePath, outputTaskId }, r, s, h) {
 /**
  * 输出很大时读取任务输出文件的尾部用于预览（跳过不完整的首行），读不到时记 warn 或错误。
  */
-async function readOutputTail({ outputTaskId, outputFileSize = 0 }, r, s, h, y = false) {
-  let min = Math.min(h, getMaxOutputLength() - s - (y ? OUTPUT_CUT_MARKER.length : 0));
-  let w = y ? getMaxOutputLength() : (r.length - stripHintsAndLeadingBlankLines(r).length + s) * 3;
-  if (!outputTaskId || min <= 0 || outputFileSize >= MAX_PERSISTED_OUTPUT_BYTES || outputFileSize <= w + min)
+async function readOutputTail(
+  { outputTaskId, outputFileSize = 0 },
+  stdout,
+  hintChars,
+  maxTailBytes,
+  withMarker = false,
+) {
+  let min = Math.min(
+    maxTailBytes,
+    getMaxOutputLength() - hintChars - (withMarker ? OUTPUT_CUT_MARKER.length : 0),
+  );
+  let minOmittedBytes = withMarker
+    ? getMaxOutputLength()
+    : (stdout.length - stripHintsAndLeadingBlankLines(stdout).length + hintChars) * 3;
+  if (
+    !outputTaskId ||
+    min <= 0 ||
+    outputFileSize >= MAX_PERSISTED_OUTPUT_BYTES ||
+    outputFileSize <= minOmittedBytes + min
+  )
     return;
   try {
     let { content, omittedBytes } = await getVerifiedTaskOutputTail(outputTaskId, min + 1, outputFileSize);
-    if (omittedBytes < w) return;
+    if (omittedBytes < minOmittedBytes) return;
     let index = content.indexOf(`
 `);
-    let Z = index !== -1 && index < content.length / 2 ? content.slice(index + 1) : content;
-    return stripHintsAndLeadingBlankLines(Z).trimEnd() || undefined;
+    let tailAfterFirstLine = index !== -1 && index < content.length / 2 ? content.slice(index + 1) : content;
+    return stripHintsAndLeadingBlankLines(tailAfterFirstLine).trimEnd() || undefined;
   } catch (error) {
     if (isENOENT(error) || isSadResourceErrno(error) || isEnvFsErrno(error) || isTaskOutputSwapRefusal(error))
       logForDebugging(
@@ -733,23 +756,24 @@ async function readOutputTail({ outputTaskId, outputFileSize = 0 }, r, s, h, y =
 //@ chunk-e6aww6q8.js:4770768-4771011 placement
 async function buildLargeOutputMessage(execResult, stdout, session, storageV5) {
   let outputTail = await readOutputTail(execResult, stdout, PREVIEW_SIZE_CHARS, OUTPUT_TAIL_MAX_BYTES);
-  let y = outputTail === undefined ? undefined : await persistBashOutput(execResult, session, storageV5);
-  if (y === undefined) return;
+  let persisted =
+    outputTail === undefined ? undefined : await persistBashOutput(execResult, session, storageV5);
+  if (persisted === undefined) return;
   return buildLargeToolResultMessage({
-    filepath: y.path,
-    originalSize: y.size,
+    filepath: persisted.path,
+    originalSize: persisted.size,
     isJson: false,
     ...generatePreview(stripHintsAndLeadingBlankLines(stdout), PREVIEW_SIZE_CHARS),
     previewEnd: outputTail,
-    truncatedAtBytes: y.size >= MAX_PERSISTED_OUTPUT_BYTES ? MAX_PERSISTED_OUTPUT_BYTES : undefined,
+    truncatedAtBytes: persisted.size >= MAX_PERSISTED_OUTPUT_BYTES ? MAX_PERSISTED_OUTPUT_BYTES : undefined,
   });
 }
 //@ chunk-e6aww6q8.js:4771011-4771065 placement
 /**
  * 去掉 Claude Code 注入的提示行并裁掉开头的空行；比较输出是否重复、生成预览、计算省略字节数前都先过它。
  */
-function stripHintsAndLeadingBlankLines(e) {
-  return stripClaudeCodeHints(e).replace(/^(\s*\n)+/, "");
+function stripHintsAndLeadingBlankLines(output) {
+  return stripClaudeCodeHints(output).replace(/^(\s*\n)+/, "");
 }
 //@ chunk-e6aww6q8.js:4814999-4815017 placement
 /**
@@ -759,16 +783,20 @@ class OomKillNoteState {
   shown = 0;
 }
 //@ chunk-e6aww6q8.js:4815017-4815161 placement
-function maybeShowBashNote(e, n) {
-  let r = hasNewOomKills(e) === true;
-  if (!r || n.shown >= MAX_OOM_NOTES || !getFeatureValue_CACHED_MAY_BE_STALE("tengu_wiggly_gray", false))
+function maybeShowBashNote(toolResult, noteState) {
+  let hasOomKills = hasNewOomKills(toolResult) === true;
+  if (
+    !hasOomKills ||
+    noteState.shown >= MAX_OOM_NOTES ||
+    !getFeatureValue_CACHED_MAY_BE_STALE("tengu_wiggly_gray", false)
+  )
     return {
-      hit: r,
+      hit: hasOomKills,
       note: undefined,
     };
-  n.shown++;
+  noteState.shown++;
   return {
-    hit: r,
+    hit: hasOomKills,
     note: OOM_KILL_NOTE,
   };
 }
@@ -776,24 +804,29 @@ function maybeShowBashNote(e, n) {
 /**
  * Bash 触发提示规则的常量与 schema：规则数上限、输出筛选类命令、每条规则的触发类型、最短时长、提示文本与每会话上限。
  */
-var MAX_NOTE_RULES = 8;
-var FILTER_COMMANDS = new Set(["tail", "head", "grep", "egrep", "fgrep", "rg", "ag", "wc"]);
-var bashNoteRulesSchema = DoctorLazy(() =>
-  array(
-    zodStrictObject({
-      kinds: array(_enum(PROGRAM_CATEGORIES)).min(1).max(PROGRAM_CATEGORIES.length),
-      allKinds: array(_enum(PROGRAM_CATEGORIES)).min(1).max(PROGRAM_CATEGORIES.length).optional(),
-      minSeconds: E().min(0),
-      filtered: M().optional(),
-      failed: M().optional(),
-      text: string()
-        .max(400)
-        .regex(/^[!-;=-Z\\^-~](?:[ -;=-Z\\^-~]*[!-;=-Z\\^-~])?$/),
-      maxPerSession: E().int().min(1).max(5),
-      show: M(),
-    }),
-  ).max(MAX_NOTE_RULES),
-);
+var MAX_NOTE_RULES; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var FILTER_COMMANDS;
+var bashNoteRulesSchema;
+deferInit("chunk-e6aww6q8.js:4815161", () => {
+  MAX_NOTE_RULES = 8;
+  FILTER_COMMANDS = new Set(["tail", "head", "grep", "egrep", "fgrep", "rg", "ag", "wc"]);
+  bashNoteRulesSchema = DoctorLazy(() =>
+    array(
+      zodStrictObject({
+        kinds: array(_enum(PROGRAM_CATEGORIES)).min(1).max(PROGRAM_CATEGORIES.length),
+        allKinds: array(_enum(PROGRAM_CATEGORIES)).min(1).max(PROGRAM_CATEGORIES.length).optional(),
+        minSeconds: numberSchema().min(0),
+        filtered: booleanSchema().optional(),
+        failed: booleanSchema().optional(),
+        text: stringSchema()
+          .max(400)
+          .regex(/^[!-;=-Z\\^-~](?:[ -;=-Z\\^-~]*[!-;=-Z\\^-~])?$/),
+        maxPerSession: numberSchema().int().min(1).max(5),
+        show: booleanSchema(),
+      }),
+    ).max(MAX_NOTE_RULES),
+  );
+});
 //@ chunk-e6aww6q8.js:4815549-4815579 placement
 /**
  * 保存 Bash 结果提示规则列表与每条规则的已显示次数；matchBashNoteRule 按配置匹配并限次。
@@ -806,13 +839,13 @@ class BashNoteSessionState {
 /**
  * 按 tengu_temporal_kazoo 配置的规则给 Bash 结果附加提示：匹配耗时、失败状态、命令种类、是否经过滤管道，每条规则每会话有显示上限。
  */
-function matchBashNoteRule(command, shellUsage, r, s) {
-  let h = (s.rules ??= loadBashNoteRules());
-  let mapped = h.map(
-    (Ee) =>
+function matchBashNoteRule(command, shellUsage, failed, noteState) {
+  let rules = (noteState.rules ??= loadBashNoteRules());
+  let mapped = rules.map(
+    (rule) =>
       shellUsage !== undefined &&
-      shellUsage.wallMs >= Ee.minSeconds * 1000 &&
-      (Ee.failed === undefined || Ee.failed === r),
+      shellUsage.wallMs >= rule.minSeconds * 1000 &&
+      (rule.failed === undefined || rule.failed === failed),
   );
   if (!mapped.includes(true)) return;
   let {
@@ -822,26 +855,27 @@ function matchBashNoteRule(command, shellUsage, r, s) {
     has_redirect: hasRedirect,
   } = classifyBashCommand(command);
   let parts = bashCommandKinds.split(",");
-  let Z = hasPipe && !hasRedirect && FILTER_COMMANDS.has(bashLastArgv0) && !/\btee\b/.test(command);
-  let index = h.findIndex(
-    (Ee, Ae) =>
-      mapped[Ae] === true &&
-      Ee.kinds.some((kind) => parts.includes(kind)) &&
-      (Ee.allKinds === undefined || Ee.allKinds.every((kind) => parts.includes(kind))) &&
-      (Ee.filtered === undefined || (Ee.filtered ? Z : !hasPipe)),
+  let isFilterPipeline =
+    hasPipe && !hasRedirect && FILTER_COMMANDS.has(bashLastArgv0) && !/\btee\b/.test(command);
+  let index = rules.findIndex(
+    (rule, idx) =>
+      mapped[idx] === true &&
+      rule.kinds.some((kind) => parts.includes(kind)) &&
+      (rule.allKinds === undefined || rule.allKinds.every((kind) => parts.includes(kind))) &&
+      (rule.filtered === undefined || (rule.filtered ? isFilterPipeline : !hasPipe)),
   );
-  let ke = h[index];
-  if (ke === undefined) return;
-  let we = s.shown.get(index) ?? 0;
-  if (!ke.show || we >= ke.maxPerSession)
+  let rule = rules[index];
+  if (rule === undefined) return;
+  let shownCount = noteState.shown.get(index) ?? 0;
+  if (!rule.show || shownCount >= rule.maxPerSession)
     return {
       rule: index + 1,
       note: undefined,
     };
-  s.shown.set(index, we + 1);
+  noteState.shown.set(index, shownCount + 1);
   return {
     rule: index + 1,
-    note: `[${ke.text}]`,
+    note: `[${rule.text}]`,
   };
 }
 //@ chunk-e6aww6q8.js:4816237-4816646 placement
@@ -851,17 +885,17 @@ function matchBashNoteRule(command, shellUsage, r, s) {
 function loadBashNoteRules() {
   let featureValue_SESSION_PINNED = getFeatureValue_SESSION_PINNED("tengu_temporal_kazoo", null);
   if (featureValue_SESSION_PINNED === null) return [];
-  let n =
+  let parsed =
     Array.isArray(featureValue_SESSION_PINNED) && featureValue_SESSION_PINNED.length > MAX_NOTE_RULES
       ? undefined
       : bashNoteRulesSchema().safeParse(featureValue_SESSION_PINNED);
-  if (n?.success) {
+  if (parsed?.success) {
     logFeatureOk("bash_triggered_notes");
-    return n.data;
+    return parsed.data;
   }
   logFeatureSad("bash_triggered_notes", "invalid_value");
   logForDebugging(
-    `Bash: tengu_temporal_kazoo is not a valid list of note rules, so this session adds no notes: ${n === undefined ? `more than ${MAX_NOTE_RULES} rules` : prettifyError(n.error)}`,
+    `Bash: tengu_temporal_kazoo is not a valid list of note rules, so this session adds no notes: ${parsed === undefined ? `more than ${MAX_NOTE_RULES} rules` : prettifyError(parsed.error)}`,
     {
       level: "error",
     },
@@ -872,11 +906,15 @@ function loadBashNoteRules() {
 /**
  * tengu_jiggly_harp 已知文本的 sha256 白名单；isPinnedPromptInSystemPrompt 用哈希+包含匹配判断这些文本是否出现在本次系统提示里并上报遥测。
  */
-var TENGU_JIGGLY_HARP = "tengu_jiggly_harp";
-var PINNED_PROMPT_TEXT_HASHES = new Set([
-  "2ae3ca8d81740b53d923a0885aca50d83cf055d760d4673deab302aea4b65633",
-  "6089b336d7aa1867d84a6ecc55f514623dbe706909b5491033a7504571f20409",
-]);
+var TENGU_JIGGLY_HARP; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var PINNED_PROMPT_TEXT_HASHES;
+deferInit("chunk-e6aww6q8.js:4816646", () => {
+  TENGU_JIGGLY_HARP = "tengu_jiggly_harp";
+  PINNED_PROMPT_TEXT_HASHES = new Set([
+    "2ae3ca8d81740b53d923a0885aca50d83cf055d760d4673deab302aea4b65633",
+    "6089b336d7aa1867d84a6ecc55f514623dbe706909b5491033a7504571f20409",
+  ]);
+});
 //@ chunk-e6aww6q8.js:4816823-4817273 placement
 /**
  * 判断 tengu_jiggly_harp 配置的已知文本（按哈希白名单）是否出现在本次请求的系统提示中，用于遥测。
@@ -891,10 +929,12 @@ function isPinnedPromptInSystemPrompt(shellCallContext) {
       TOOLU_PLUGIN(toolUseId)
     )
       return;
-    let r = shellCallContext.messages();
-    let lastIndex = r.findLastIndex((S) => S.type === "system" && S.subtype === "compact_boundary");
+    let messages = shellCallContext.messages();
+    let lastIndex = messages.findLastIndex(
+      (message) => message.type === "system" && message.subtype === "compact_boundary",
+    );
     let systemPrompt = promptSnapshotUnlessRenderPoint(
-      lastIndex === -1 ? r : r.slice(lastIndex),
+      lastIndex === -1 ? messages : messages.slice(lastIndex),
       shellCallContext,
     )?.systemPrompt;
     if (systemPrompt === undefined) return;
@@ -903,9 +943,12 @@ function isPinnedPromptInSystemPrompt(shellCallContext) {
         peekSessionPinnedFeatureValue(TENGU_JIGGLY_HARP),
         getGlobalConfig().cachedGrowthBookFeatures?.[TENGU_JIGGLY_HARP],
       ]),
-    ].some((S) => {
-      let w = typeof S === "string" ? S.trim() : "";
-      return PINNED_PROMPT_TEXT_HASHES.has(computeContentHash(w)) && systemPrompt.some((L) => L.includes(w));
+    ].some((candidate) => {
+      let candidateText = typeof candidate === "string" ? candidate.trim() : "";
+      return (
+        PINNED_PROMPT_TEXT_HASHES.has(computeContentHash(candidateText)) &&
+        systemPrompt.some((promptBlock) => promptBlock.includes(candidateText))
+      );
     });
   } catch (error) {
     logError(error);
@@ -916,52 +959,63 @@ function isPinnedPromptInSystemPrompt(shellCallContext) {
 /**
  * Bash 工具常量：换行、进度阈值 2000ms，以及搜索/读/列目录/中性/静默命令集合（用于折叠显示 isSearchOrReadCommand 与 noOutputExpected）。
  */
-var NEWLINE = `
+var NEWLINE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var PROGRESS_THRESHOLD_MS;
+var BASH_SEARCH_COMMANDS;
+var BASH_READ_COMMANDS;
+var BASH_LIST_COMMANDS;
+var BASH_SEMANTIC_NEUTRAL_COMMANDS;
+var BASH_COLLAPSIBLE_COMMANDS;
+var FIRST_COMMAND_WORD_RE;
+var BASH_SILENT_COMMANDS;
+deferInit("chunk-e6aww6q8.js:4819586", () => {
+  NEWLINE = `
 `;
-var PROGRESS_THRESHOLD_MS = 2000;
-var BASH_SEARCH_COMMANDS = new Set(["find", "grep", "rg", "ag", "ack", "locate", "which", "whereis"]);
-var BASH_READ_COMMANDS = new Set([
-  "cat",
-  "head",
-  "tail",
-  "less",
-  "more",
-  "wc",
-  "stat",
-  "file",
-  "strings",
-  "jq",
-  "awk",
-  "cut",
-  "sort",
-  "uniq",
-  "tr",
-]);
-var BASH_LIST_COMMANDS = new Set(["ls", "tree", "du"]);
-var BASH_SEMANTIC_NEUTRAL_COMMANDS = new Set(["echo", "printf", "true", "false", ":"]);
-var BASH_COLLAPSIBLE_COMMANDS = new Set([
-  ...BASH_SEARCH_COMMANDS,
-  ...BASH_READ_COMMANDS,
-  ...BASH_LIST_COMMANDS,
-  ...BASH_SEMANTIC_NEUTRAL_COMMANDS,
-]);
-var FIRST_COMMAND_WORD_RE = /^\s*(?:(?:#[^\n]*|\\)\n\s*)*([^\s|&;<>()]+)/;
-var BASH_SILENT_COMMANDS = new Set([
-  "mv",
-  "cp",
-  "rm",
-  "mkdir",
-  "rmdir",
-  "chmod",
-  "chown",
-  "chgrp",
-  "touch",
-  "ln",
-  "cd",
-  "export",
-  "unset",
-  "wait",
-]);
+  PROGRESS_THRESHOLD_MS = 2000;
+  BASH_SEARCH_COMMANDS = new Set(["find", "grep", "rg", "ag", "ack", "locate", "which", "whereis"]);
+  BASH_READ_COMMANDS = new Set([
+    "cat",
+    "head",
+    "tail",
+    "less",
+    "more",
+    "wc",
+    "stat",
+    "file",
+    "strings",
+    "jq",
+    "awk",
+    "cut",
+    "sort",
+    "uniq",
+    "tr",
+  ]);
+  BASH_LIST_COMMANDS = new Set(["ls", "tree", "du"]);
+  BASH_SEMANTIC_NEUTRAL_COMMANDS = new Set(["echo", "printf", "true", "false", ":"]);
+  BASH_COLLAPSIBLE_COMMANDS = new Set([
+    ...BASH_SEARCH_COMMANDS,
+    ...BASH_READ_COMMANDS,
+    ...BASH_LIST_COMMANDS,
+    ...BASH_SEMANTIC_NEUTRAL_COMMANDS,
+  ]);
+  FIRST_COMMAND_WORD_RE = /^\s*(?:(?:#[^\n]*|\\)\n\s*)*([^\s|&;<>()]+)/;
+  BASH_SILENT_COMMANDS = new Set([
+    "mv",
+    "cp",
+    "rm",
+    "mkdir",
+    "rmdir",
+    "chmod",
+    "chown",
+    "chgrp",
+    "touch",
+    "ln",
+    "cd",
+    "export",
+    "unset",
+    "wait",
+  ]);
+});
 //@ chunk-e6aww6q8.js:4820079-4820479 fingerprint = isSearchOrReadBashCommand (1)
 /**
  * 判断命令是否全部由搜索（find/grep/rg…）、读（cat/head/jq…）、列目录（ls/tree/du）命令组成（echo 等中性命令忽略），返回 {isSearch,isRead,isList}，供界面折叠显示。
@@ -1011,30 +1065,39 @@ function isSearchOrReadBashCommand(command) {
 function isSilentBashCommand(command) {
   let partsWithOperators = splitCommand(command);
   if (partsWithOperators.length === 0) return false;
-  let r = false;
+  let sawCommand = false;
   for (let part of partsWithOperators) {
     let baseCommand = part.trim().split(/\s+/)[0];
     if (!baseCommand) continue;
-    r = true;
+    sawCommand = true;
     if (!BASH_SILENT_COMMANDS.has(baseCommand)) return false;
   }
-  return r;
+  return sawCommand;
 }
 //@ chunk-e6aww6q8.js:4820641-4822292 fingerprint = fullInputSchema (0.509)
 /**
  * Bash 输入 schema：command（拒绝会在审批框里隐藏的控制字符）、timeout、description、run_in_background、dangerouslyDisableSandbox，以及条件附加的字段；后台任务被禁用时去掉 run_in_background。
  */
-var DISALLOWED_AUTO_BACKGROUND_COMMANDS = ["sleep"];
-var HIDDEN_CONTROL_CHARS_MESSAGE =
-  "command contains control characters that would be hidden in the approval dialog";
-var fullInputSchema = DoctorLazy(() =>
-  zodStrictObject({
-    command: string().refine(isAllPrintable, HIDDEN_CONTROL_CHARS_MESSAGE).describe("The command to execute"),
-    timeout: coercedNumberSchema(E().optional()).describe(
-      `Optional timeout in milliseconds (max ${getMaxBashTimeout()} for a foreground command)`,
-    ),
-    description: string().optional()
-      .describe(`Clear, concise description of what this command does in active voice. Never use words like "complex" or "risk" in the description - just describe what it does.
+var DISALLOWED_AUTO_BACKGROUND_COMMANDS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var HIDDEN_CONTROL_CHARS_MESSAGE;
+var fullInputSchema;
+var coercedInputSchema;
+var inputSchema;
+var LOGGED_COMMAND_TYPES;
+deferInit("chunk-e6aww6q8.js:4820641", () => {
+  DISALLOWED_AUTO_BACKGROUND_COMMANDS = ["sleep"];
+  HIDDEN_CONTROL_CHARS_MESSAGE =
+    "command contains control characters that would be hidden in the approval dialog";
+  fullInputSchema = DoctorLazy(() =>
+    zodStrictObject({
+      command: stringSchema()
+        .refine(isAllPrintable, HIDDEN_CONTROL_CHARS_MESSAGE)
+        .describe("The command to execute"),
+      timeout: coercedNumberSchema(numberSchema().optional()).describe(
+        `Optional timeout in milliseconds (max ${getMaxBashTimeout()} for a foreground command)`,
+      ),
+      description: stringSchema().optional()
+        .describe(`Clear, concise description of what this command does in active voice. Never use words like "complex" or "risk" in the description - just describe what it does.
 
 Say what the command does in plain words: do not echo the command's text, its flags, or file paths - the user reads this description, often without seeing the command.
 
@@ -1047,27 +1110,30 @@ For commands that are harder to parse at a glance (piped commands, obscure flags
 - find . -name "*.tmp" -exec rm {} \\; \u2192 "Find and delete all .tmp files recursively"
 - git reset --hard origin/main \u2192 "Discard all local changes and match remote main"
 - curl -s url | jq '.data[]' \u2192 "Fetch JSON from URL and extract data array elements"`),
-    run_in_background: booleanishSchema(M().optional()).describe(getRunInBackgroundDescription()),
-    dangerouslyDisableSandbox: booleanishSchema(M().optional()).describe(
-      "Set this to true to dangerously override sandbox mode and run commands without sandboxing.",
-    ),
-    ...false,
-    ...(areCommandNetworkListsOffered_2() && allowedDomainsInputSchema()),
-    ...attachedMachineInputField(),
-  }),
-);
-var coercedInputSchema = DoctorLazy(() => omitUnsandboxedFields(fullInputSchema(), UNSANDBOXED_INPUT_FIELDS));
-var inputSchema = DoctorLazy(() =>
-  (isBackgroundShellDisabled()
-    ? coercedInputSchema().omit({
-        run_in_background: true,
-      })
-    : coercedInputSchema()
-  ).superRefine((e, n) => {}),
-);
-var LOGGED_COMMAND_TYPES = [...COMMON_BACKGROUND_COMMANDS, "wget"];
+      run_in_background: booleanishSchema(booleanSchema().optional()).describe(
+        getRunInBackgroundDescription(),
+      ),
+      dangerouslyDisableSandbox: booleanishSchema(booleanSchema().optional()).describe(
+        "Set this to true to dangerously override sandbox mode and run commands without sandboxing.",
+      ),
+      ...false,
+      ...(areCommandNetworkListsOffered_2() && allowedDomainsInputSchema()),
+      ...attachedMachineInputField(),
+    }),
+  );
+  coercedInputSchema = DoctorLazy(() => omitUnsandboxedFields(fullInputSchema(), UNSANDBOXED_INPUT_FIELDS));
+  inputSchema = DoctorLazy(() =>
+    (isBackgroundShellDisabled()
+      ? coercedInputSchema().omit({
+          run_in_background: true,
+        })
+      : coercedInputSchema()
+    ).superRefine((value, ctx) => {}),
+  );
+  LOGGED_COMMAND_TYPES = [...COMMON_BACKGROUND_COMMANDS, "wget"];
+});
 //@ chunk-e6aww6q8.js:4822292-4822317 affinity
-function getExtraCommandLogFields(e) {
+function getExtraCommandLogFields(input) {
   return {};
 }
 //@ chunk-e6aww6q8.js:4822395-4822538 affinity
@@ -1096,8 +1162,8 @@ function getCommandTypeForLogging(command) {
   let parts = splitCommand(command);
   if (parts.length === 0) return lit_2("other");
   for (let part of parts) {
-    let s = firstLineOf(part, " ");
-    let found = LOGGED_COMMAND_TYPES.find((y) => y === s);
+    let firstToken = firstLineOf(part, " ");
+    let found = LOGGED_COMMAND_TYPES.find((loggedType) => loggedType === firstToken);
     if (found) return fromEnum(found);
   }
   return lit_2("other");
@@ -1106,133 +1172,139 @@ function getCommandTypeForLogging(command) {
 /**
  * Bash 输出 schema：stdout/stderr/interrupted/isImage、后台任务相关（backgroundTaskId、timedOutAfterMs、backgroundedBy*）、持久化输出、沙箱、各种给模型的提示（memoryLimitNote/triggeredNote/staleReadFileStateHint/ghRateLimitHint）、gitOperation 与 bashEditDiff。
  */
-var outputSchema = DoctorLazy(() =>
-  u({
-    stdout: string().describe("The standard output of the command"),
-    stderr: string().describe("The standard error output of the command"),
-    rawOutputPath: string().optional().describe("Path to raw output file for large MCP tool outputs"),
-    interrupted: M().describe("Whether the command was interrupted"),
-    isImage: M().optional().describe("Flag to indicate if stdout contains image data"),
-    backgroundTaskId: string()
-      .optional()
-      .describe("ID of the background task if command is running in background"),
-    backgroundOutputPath: string()
-      .optional()
-      .describe(
-        "@internal Path of the background task's output file on the machine that keeps the command, when that is not this process",
-      ),
-    backgroundedByUser: M()
-      .optional()
-      .describe("True if the user manually backgrounded the command with Ctrl+B"),
-    backgroundedByTurnAbort: M()
-      .optional()
-      .describe("@internal True if a plugin's turn abort moved the running command to the background"),
-    backgroundedToDeliverMessage: M()
-      .optional()
-      .describe(
-        "@internal True if the command was moved to the background so a message queued for the model could reach it",
-      ),
-    timedOutAfterMs: E()
-      .optional()
-      .describe("Set when the command hit its timeout and was auto-backgrounded; the timeout value in ms"),
-    subagentCapApplied: literal(true)
-      .optional()
-      .describe("@internal True if the async subagent foreground cap shortened the command's timeout"),
-    backgroundCwdHint: string()
-      .optional()
-      .describe(
-        "Model-facing note that the session cwd was not changed by a backgrounded command containing a directory-change builtin (cd/pushd/popd/chdir)",
-      ),
-    backgroundEndsWithFinalResponse: literal(true)
-      .optional()
-      .describe(
-        "True when this backgrounded command is terminated at its caller's final response, so no completion notification can follow (a synchronous subagent's command, or a headless session that takes no further input and is not waiting for background commands); absent when the command survives",
-      ),
-    backgroundWakesOwner: literal(true)
-      .optional()
-      .describe(
-        "True when the subagent that owns this backgrounded command parks for its end and is woken by it",
-      ),
-    dangerouslyDisableSandbox: M().optional().describe("Flag to indicate if sandbox mode was overridden"),
-    returnCodeInterpretation: string()
-      .optional()
-      .describe("Semantic interpretation for non-error exit codes with special meaning"),
-    noOutputExpected: M()
-      .optional()
-      .describe("Whether the command is expected to produce no output on success"),
-    structuredContent: array(qne()).optional().describe("Structured content blocks"),
-    persistedOutputPath: string()
-      .optional()
-      .describe(
-        "Path to the persisted full output in tool-results dir (set when output is too large for inline)",
-      ),
-    persistedOutputSize: E()
-      .optional()
-      .describe("Total size of the output in bytes (set when output is too large for inline)"),
-    stdoutHoldsOutputEnd: M()
-      .optional()
-      .describe(
-        "@internal True when stdout holds the first part of the persisted output, a line saying that the middle was left out, and then its last lines",
-      ),
-    memoryLimitNote: string()
-      .optional()
-      .describe(
-        "@internal Tells the model that the kernel killed a process for lack of memory while the command ran",
-      ),
-    triggeredNote: string()
-      .optional()
-      .describe(
-        "@internal One line of advice for the model after a finished command, set by a rule in a feature flag",
-      ),
-    staleReadFileStateHint: string()
-      .optional()
-      .describe(
-        "Model-facing note listing readFileState entries whose mtime bumped during this command (set when WRITE_COMMAND_MARKERS matches)",
-      ),
-    ghRateLimitHint: string()
-      .optional()
-      .describe(
-        "Model-facing system-reminder appended when a gh command reports a GitHub API rate-limit error",
-      ),
-    gitOperation: gitOperationSchema()
-      .optional()
-      .describe(
-        "Structured classification of git/gh operations detected in this command (commit/push/merge/rebase/PR). Client-facing \u2014 lets clients render git activity without re-parsing stdout; not surfaced to the model.",
-      ),
-    bashEditDiff: u({
-      files: array(
-        u({
-          filePath: string(),
-          hunks: array(hunkSchema()),
-          created: literal(true).optional(),
-          deleted: literal(true).optional(),
-        }),
-      ),
-      moreFiles: E(),
-      changedFiles: array(string()).optional(),
-      unavailable: literal(true).optional(),
-      skipped: literal(true).optional(),
-      shared: literal(true).optional(),
-    })
-      .optional()
-      .describe(
-        "@internal Per-file diff of the working-tree changes this command made, for rendering and for PostToolUse Bash hooks (changedFiles: absolute paths of every changed file known, shown or not, at most 200; cut when shorter than files.length + moreFiles); not surfaced to the model.",
-      ),
-  }),
-);
-var BACKGROUND_CWD_NOTE_SUFFIX =
-  "directory changes made by the backgrounded command do not apply to subsequent commands.";
+var outputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var BACKGROUND_CWD_NOTE_SUFFIX;
+deferInit("chunk-e6aww6q8.js:4822689", () => {
+  outputSchema = DoctorLazy(() =>
+    objectSchema({
+      stdout: stringSchema().describe("The standard output of the command"),
+      stderr: stringSchema().describe("The standard error output of the command"),
+      rawOutputPath: stringSchema().optional().describe("Path to raw output file for large MCP tool outputs"),
+      interrupted: booleanSchema().describe("Whether the command was interrupted"),
+      isImage: booleanSchema().optional().describe("Flag to indicate if stdout contains image data"),
+      backgroundTaskId: stringSchema()
+        .optional()
+        .describe("ID of the background task if command is running in background"),
+      backgroundOutputPath: stringSchema()
+        .optional()
+        .describe(
+          "@internal Path of the background task's output file on the machine that keeps the command, when that is not this process",
+        ),
+      backgroundedByUser: booleanSchema()
+        .optional()
+        .describe("True if the user manually backgrounded the command with Ctrl+B"),
+      backgroundedByTurnAbort: booleanSchema()
+        .optional()
+        .describe("@internal True if a plugin's turn abort moved the running command to the background"),
+      backgroundedToDeliverMessage: booleanSchema()
+        .optional()
+        .describe(
+          "@internal True if the command was moved to the background so a message queued for the model could reach it",
+        ),
+      timedOutAfterMs: numberSchema()
+        .optional()
+        .describe("Set when the command hit its timeout and was auto-backgrounded; the timeout value in ms"),
+      subagentCapApplied: literal(true)
+        .optional()
+        .describe("@internal True if the async subagent foreground cap shortened the command's timeout"),
+      backgroundCwdHint: stringSchema()
+        .optional()
+        .describe(
+          "Model-facing note that the session cwd was not changed by a backgrounded command containing a directory-change builtin (cd/pushd/popd/chdir)",
+        ),
+      backgroundEndsWithFinalResponse: literal(true)
+        .optional()
+        .describe(
+          "True when this backgrounded command is terminated at its caller's final response, so no completion notification can follow (a synchronous subagent's command, or a headless session that takes no further input and is not waiting for background commands); absent when the command survives",
+        ),
+      backgroundWakesOwner: literal(true)
+        .optional()
+        .describe(
+          "True when the subagent that owns this backgrounded command parks for its end and is woken by it",
+        ),
+      dangerouslyDisableSandbox: booleanSchema()
+        .optional()
+        .describe("Flag to indicate if sandbox mode was overridden"),
+      returnCodeInterpretation: stringSchema()
+        .optional()
+        .describe("Semantic interpretation for non-error exit codes with special meaning"),
+      noOutputExpected: booleanSchema()
+        .optional()
+        .describe("Whether the command is expected to produce no output on success"),
+      structuredContent: array(anySchema()).optional().describe("Structured content blocks"),
+      persistedOutputPath: stringSchema()
+        .optional()
+        .describe(
+          "Path to the persisted full output in tool-results dir (set when output is too large for inline)",
+        ),
+      persistedOutputSize: numberSchema()
+        .optional()
+        .describe("Total size of the output in bytes (set when output is too large for inline)"),
+      stdoutHoldsOutputEnd: booleanSchema()
+        .optional()
+        .describe(
+          "@internal True when stdout holds the first part of the persisted output, a line saying that the middle was left out, and then its last lines",
+        ),
+      memoryLimitNote: stringSchema()
+        .optional()
+        .describe(
+          "@internal Tells the model that the kernel killed a process for lack of memory while the command ran",
+        ),
+      triggeredNote: stringSchema()
+        .optional()
+        .describe(
+          "@internal One line of advice for the model after a finished command, set by a rule in a feature flag",
+        ),
+      staleReadFileStateHint: stringSchema()
+        .optional()
+        .describe(
+          "Model-facing note listing readFileState entries whose mtime bumped during this command (set when WRITE_COMMAND_MARKERS matches)",
+        ),
+      ghRateLimitHint: stringSchema()
+        .optional()
+        .describe(
+          "Model-facing system-reminder appended when a gh command reports a GitHub API rate-limit error",
+        ),
+      gitOperation: gitOperationSchema()
+        .optional()
+        .describe(
+          "Structured classification of git/gh operations detected in this command (commit/push/merge/rebase/PR). Client-facing \u2014 lets clients render git activity without re-parsing stdout; not surfaced to the model.",
+        ),
+      bashEditDiff: objectSchema({
+        files: array(
+          objectSchema({
+            filePath: stringSchema(),
+            hunks: array(hunkSchema()),
+            created: literal(true).optional(),
+            deleted: literal(true).optional(),
+          }),
+        ),
+        moreFiles: numberSchema(),
+        changedFiles: array(stringSchema()).optional(),
+        unavailable: literal(true).optional(),
+        skipped: literal(true).optional(),
+        shared: literal(true).optional(),
+      })
+        .optional()
+        .describe(
+          "@internal Per-file diff of the working-tree changes this command made, for rendering and for PostToolUse Bash hooks (changedFiles: absolute paths of every changed file known, shown or not, at most 200; cut when shorter than files.length + moreFiles); not surfaced to the model.",
+        ),
+    }),
+  );
+  BACKGROUND_CWD_NOTE_SUFFIX =
+    "directory changes made by the backgrounded command do not apply to subsequent commands.";
+});
 //@ chunk-e6aww6q8.js:4827035-4827092 layout
-function formatBackgroundCwdHint(e) {
-  return `Session cwd remains ${e}; ${BACKGROUND_CWD_NOTE_SUFFIX}`;
+function formatBackgroundCwdHint(cwd) {
+  return `Session cwd remains ${cwd}; ${BACKGROUND_CWD_NOTE_SUFFIX}`;
 }
 //@ chunk-e6aww6q8.js:4827092-4827227 layout
 /**
  * 清洗跨进程传来的 backgroundCwdHint：只有形如本进程生成的 "Session cwd remains <合法路径>; …" 才保留，否则换成通用说法。
  */
 function sanitizeBackgroundCwdHint(backgroundCwdHint) {
-  let n = /^Session cwd remains ([^;]+); /.exec(backgroundCwdHint)?.[1] ?? "";
-  return isPlainAbsolutePath(n) && backgroundCwdHint === formatBackgroundCwdHint(n)
+  let capturedCwd = /^Session cwd remains ([^;]+); /.exec(backgroundCwdHint)?.[1] ?? "";
+  return isPlainAbsolutePath(capturedCwd) && backgroundCwdHint === formatBackgroundCwdHint(capturedCwd)
     ? backgroundCwdHint
     : `Session cwd is as it was; ${BACKGROUND_CWD_NOTE_SUFFIX}`;
 }
@@ -1240,37 +1312,41 @@ function sanitizeBackgroundCwdHint(backgroundCwdHint) {
 /**
  * 跨进程（远程/另一台机器执行）结果的输出 schema：只挑选安全字段；后台任务 id 和输出路径只有在本地能对上时才保留。
  */
-var outputSchemaAcrossProcesses = DoctorLazy(() =>
-  outputSchema()
-    .pick({
-      stdout: true,
-      stderr: true,
-      interrupted: true,
-      isImage: true,
-      timedOutAfterMs: true,
-      noOutputExpected: true,
-      ...BACKGROUND_OUTPUT_FIELDS,
-    })
-    .strip()
-    .transform((e) => {
-      let backgroundOutputFieldNames = getBackgroundOutputFieldNames(e);
-      let { backgroundTaskId, backgroundOutputPath, backgroundEndsWithFinalResponse, backgroundCwdHint } = e;
-      return backgroundTaskId === undefined ||
-        backgroundOutputPath === undefined ||
-        !isTaskIdOfType("local_bash", backgroundTaskId) ||
-        !isTaskOutputPathFor(backgroundTaskId, backgroundOutputPath)
-        ? backgroundOutputFieldNames
-        : {
-            ...backgroundOutputFieldNames,
-            backgroundTaskId,
-            backgroundOutputPath,
-            backgroundEndsWithFinalResponse,
-            ...(backgroundCwdHint !== undefined && {
-              backgroundCwdHint: sanitizeBackgroundCwdHint(backgroundCwdHint),
-            }),
-          };
-    }),
-);
+var outputSchemaAcrossProcesses; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:4827227", () => {
+  outputSchemaAcrossProcesses = DoctorLazy(() =>
+    outputSchema()
+      .pick({
+        stdout: true,
+        stderr: true,
+        interrupted: true,
+        isImage: true,
+        timedOutAfterMs: true,
+        noOutputExpected: true,
+        ...BACKGROUND_OUTPUT_FIELDS,
+      })
+      .strip()
+      .transform((output) => {
+        let backgroundOutputFieldNames = getBackgroundOutputFieldNames(output);
+        let { backgroundTaskId, backgroundOutputPath, backgroundEndsWithFinalResponse, backgroundCwdHint } =
+          output;
+        return backgroundTaskId === undefined ||
+          backgroundOutputPath === undefined ||
+          !isTaskIdOfType("local_bash", backgroundTaskId) ||
+          !isTaskOutputPathFor(backgroundTaskId, backgroundOutputPath)
+          ? backgroundOutputFieldNames
+          : {
+              ...backgroundOutputFieldNames,
+              backgroundTaskId,
+              backgroundOutputPath,
+              backgroundEndsWithFinalResponse,
+              ...(backgroundCwdHint !== undefined && {
+                backgroundCwdHint: sanitizeBackgroundCwdHint(backgroundCwdHint),
+              }),
+            };
+      }),
+  );
+});
 //@ chunk-e6aww6q8.js:4827676-4827802 file-local
 /**
  * 首个子命令不是 sleep 时允许超时自动转后台。
@@ -1298,8 +1374,10 @@ function detectBlockedSleepPattern(command) {
   return rest ? `sleep ${secs} followed by: ${rest}` : `standalone sleep ${secs}`;
 }
 //@ chunk-e6aww6q8.js:4828082-4828128 layout
-function getSessionEnvVarKeys(e) {
-  return e === undefined ? getLastCheckedSessionEnvVarKeys() : sessionEnvVarNameSet(e);
+function getSessionEnvVarKeys(sandboxedCommand) {
+  return sandboxedCommand === undefined
+    ? getLastCheckedSessionEnvVarKeys()
+    : sessionEnvVarNameSet(sandboxedCommand);
 }
 //@ chunk-e6aww6q8.js:4828128-4828224 layout
 /**
@@ -1314,13 +1392,13 @@ function isReadOnlyBashInput(input, sessionEnvVarKeys) {
   );
 }
 //@ chunk-e6aww6q8.js:4828224-4828311 layout
-function isReadOnlyCommandOfflineEstimate(e) {
+function isReadOnlyCommandOfflineEstimate(command) {
   return (
     checkReadOnlyConstraints(
       {
-        command: e,
+        command,
       },
-      commandHasAnyCd(e),
+      commandHasAnyCd(command),
       {
         offlineEstimate: true,
       },
@@ -1331,118 +1409,118 @@ function isReadOnlyCommandOfflineEstimate(e) {
 /**
  * 把工具实例上下文 e 与单次调用信息 n 合成一个 getter 视图：toolUseId、abortController、shellPermission（带本次 signal）、remoteCall、shellWallCapMs 等都取自本次调用。
  */
-function makeShellCallContext(e, n) {
+function makeShellCallContext(baseContext, callOptions) {
   return {
     get session() {
-      return e.session;
+      return baseContext.session;
     },
     get storageV5() {
-      return e.storageV5;
+      return baseContext.storageV5;
     },
     get agentId() {
-      return e.agentId;
+      return baseContext.agentId;
     },
     get agentContext() {
-      return e.agentContext;
+      return baseContext.agentContext;
     },
     get agentWorktree() {
-      return e.agentWorktree;
+      return baseContext.agentWorktree;
     },
     get hookCaller() {
-      return e.hookCaller;
+      return baseContext.hookCaller;
     },
     get hookServesModel() {
-      return e.hookServesModel;
+      return baseContext.hookServesModel;
     },
     get pluginUnnamed() {
-      return e.pluginUnnamed;
+      return baseContext.pluginUnnamed;
     },
     get taskRegistry() {
-      return e.taskRegistry;
+      return baseContext.taskRegistry;
     },
     get toolState() {
-      return e.toolState;
+      return baseContext.toolState;
     },
     get tools() {
-      return e.tools;
+      return baseContext.tools;
     },
     get readFileState() {
-      return e.readFileState;
+      return baseContext.readFileState;
     },
     get nestedMemoryAttachmentTriggers() {
-      return e.nestedMemoryAttachmentTriggers;
+      return baseContext.nestedMemoryAttachmentTriggers;
     },
     get applyFileHistoryOp() {
-      return e.applyFileHistoryOp;
+      return baseContext.applyFileHistoryOp;
     },
     get sessionEnvVars() {
-      return e.sessionEnvVars;
+      return baseContext.sessionEnvVars;
     },
     get markPrResolvedThisSession() {
-      return e.markPrResolvedThisSession;
+      return baseContext.markPrResolvedThisSession;
     },
-    emitToolProgress: e.emitToolProgress,
+    emitToolProgress: baseContext.emitToolProgress,
     get shellPermission() {
       return {
-        ...e.shellPermission,
+        ...baseContext.shellPermission,
         abortController: {
-          signal: n.signal,
+          signal: callOptions.signal,
         },
-        toolUseId: n.toolUseId,
+        toolUseId: callOptions.toolUseId,
       };
     },
     get mainLoopModel() {
-      return e.mainLoopModel;
+      return baseContext.mainLoopModel;
     },
     get effort() {
-      return e.effort;
+      return baseContext.effort;
     },
     get effortLayerOverride() {
-      return e.effortLayerOverride;
+      return baseContext.effortLayerOverride;
     },
     get permissions() {
-      return e.permissions;
+      return baseContext.permissions;
     },
     get unlayeredPermissions() {
-      return e.unlayeredPermissions;
+      return baseContext.unlayeredPermissions;
     },
     get messages() {
-      return e.messages;
+      return baseContext.messages;
     },
     get systemPromptSnapshot() {
-      return e.systemPromptSnapshot;
+      return baseContext.systemPromptSnapshot;
     },
     get hasSpendCap() {
-      return e.hasSpendCap;
+      return baseContext.hasSpendCap;
     },
     get toolUseId() {
-      return n.toolUseId;
+      return callOptions.toolUseId;
     },
     get userTypedShellDispatch() {
-      return n.userTypedShellDispatch === true;
+      return callOptions.userTypedShellDispatch === true;
     },
     get abortController() {
       return {
-        signal: n.signal,
+        signal: callOptions.signal,
       };
     },
     get remoteCall() {
-      return n.remoteCall;
+      return callOptions.remoteCall;
     },
     get keptBackgroundShells() {
-      return n.keptBackgroundShells;
+      return callOptions.keptBackgroundShells;
     },
     get inputFromAnotherMachine() {
-      return n.inputFromAnotherMachine;
+      return callOptions.inputFromAnotherMachine;
     },
     get innerCall() {
-      return n.innerCall;
+      return callOptions.innerCall;
     },
     get shellWallCapMs() {
-      return n.shellWallCapMs;
+      return callOptions.shellWallCapMs;
     },
     get promptShellPluginId() {
-      return n.promptShellPluginId;
+      return callOptions.promptShellPluginId;
     },
   };
 }
@@ -1450,30 +1528,33 @@ function makeShellCallContext(e, n) {
 /**
  * "可能改写文件"的命令标记（--write/--fix/sed -i/prettier/black/cargo fmt/go fmt…），命中后才检查已读文件是否被改。
  */
-var WRITE_COMMAND_MARKERS = new RegExp(
-  [
-    "--write",
-    "--fix",
-    "--in-place",
-    "--auto-correct",
-    "\\bg?sed\\b.*\\s-[a-zA-Z]*i",
-    "\\brun\\s+format\\b",
-    "\\brun\\s+fix\\b",
-    "\\b(yarn|pnpm)\\s+format\\b",
-    "\\blint:file\\b",
-    "\\blint:fix\\b",
-    "\\bblack\\b",
-    "\\bisort\\b",
-    "\\bruff\\s+format\\b",
-    "\\bcargo\\s+(fmt|fix)\\b",
-    "\\brustfmt\\b",
-    "\\bgo\\s+fmt\\b",
-    "\\bterraform\\s+fmt\\b",
-    "\\bdprint\\s+fmt\\b",
-    "\\bswiftformat\\b",
-    "\\bphpcbf\\b",
-  ].join("|"),
-);
+var WRITE_COMMAND_MARKERS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4830001", () => {
+  WRITE_COMMAND_MARKERS = new RegExp(
+    [
+      "--write",
+      "--fix",
+      "--in-place",
+      "--auto-correct",
+      "\\bg?sed\\b.*\\s-[a-zA-Z]*i",
+      "\\brun\\s+format\\b",
+      "\\brun\\s+fix\\b",
+      "\\b(yarn|pnpm)\\s+format\\b",
+      "\\blint:file\\b",
+      "\\blint:fix\\b",
+      "\\bblack\\b",
+      "\\bisort\\b",
+      "\\bruff\\s+format\\b",
+      "\\bcargo\\s+(fmt|fix)\\b",
+      "\\brustfmt\\b",
+      "\\bgo\\s+fmt\\b",
+      "\\bterraform\\s+fmt\\b",
+      "\\bdprint\\s+fmt\\b",
+      "\\bswiftformat\\b",
+      "\\bphpcbf\\b",
+    ].join("|"),
+  );
+});
 //@ chunk-e6aww6q8.js:4830411-4830635 layout
 /**
  * 命令匹配写入标记时，并发 stat readFileState 里的文件，找出 mtime 晚于命令开始且晚于记录时间的文件，用来生成"请先 Read 再编辑"的提示。
@@ -1484,1101 +1565,1204 @@ async function findStaleReadFileStateEntries(command, readFileState, commandStar
     return [];
   }
   if (!WRITE_COMMAND_MARKERS.test(command)) return [];
-  let s = [];
+  let stalePaths = [];
   await Promise.all(
-    Array.from(readFileState.entries(), ([h, y]) =>
-      getFileModificationTimeAsync(h)
+    Array.from(readFileState.entries(), ([filePath, readState]) =>
+      getFileModificationTimeAsync(filePath)
         .then((fileModificationTime) => {
-          if (fileModificationTime > commandStartMs && fileModificationTime > y.timestamp) s.push(h);
+          if (fileModificationTime > commandStartMs && fileModificationTime > readState.timestamp)
+            stalePaths.push(filePath);
         })
         .catch(() => {}),
     ),
   );
-  return s;
+  return stalePaths;
 }
 //@ chunk-e6aww6q8.js:4830635-4848828 facade-exports = BashTool (0.388)
 /**
  * Bash 工具定义（name=Bash）。只读命令并发安全；checkPermissions 委托 bashPermissions；call 负责沙箱决策、执行（runShellCommand）、进度、错误转 ShellError、输出持久化/图片、git 操作识别、编辑 diff、已读文件过期提示和遥测。
  */
-var BashTool = buildTool({
-  name: BASH_TOOL_NAME,
-  enablesCodeExecution: true,
-  ruleContentField: "command",
-  searchHint: "execute shell commands",
-  remoteExecution: {
-    supported: true,
-    refusedInputFields: REFUSED_INPUT_FIELDS_WHEN_SANDBOX_REQUIRED,
-    decidingInputFields: ["command", "run_in_background", "dangerouslyDisableSandbox"],
-  },
-  backgrounding: "self",
-  get maxResultSizeChars() {
-    return getConfiguredBashOutputMaxChars();
-  },
-  persistenceThresholdCeiling: MAX_CONTEXT_TOKENS,
-  strict: true,
-  async description({ description }) {
-    return description || "Run shell command";
-  },
-  async prompt({ model, tools, leanPrompt, bashFirstTrimmed, leanRewrite }) {
-    return getSimplePrompt(
-      model,
-      await listPromptSkillCommands(tools),
-      tools,
-      leanPrompt,
-      bashFirstTrimmed,
-      leanRewrite,
-    );
-  },
-  isConcurrencySafe(e) {
-    return this.isReadOnly?.(e) ?? false;
-  },
-  suppressesAllPermissionUpdates(e) {
-    let n = e?.[HOST_TOOL_INPUT_FIELD];
-    return typeof n === "string" && n.trim() !== "" && !isReservedMachineNameExact(n.trim());
-  },
-  isReadOnly(e, n) {
-    return !isRemoteOnlyCheck(BASH_TOOL_NAME) && isReadOnlyBashInput(e, getSessionEnvVarKeys(n));
-  },
-  notReadOnlyReason(e, n) {
-    if (isRemoteOnlyCheck(BASH_TOOL_NAME))
-      return {
-        message:
-          "This session runs shell commands only in its cloud environment, so none can be verified as read-only here",
-        everyInput: true,
-      };
-    let r = checkReadOnlyConstraints(e, commandHasAnyCd(e.command), {
-      sessionEnvVarKeys: getSessionEnvVarKeys(n),
-    });
-    if (r.behavior === "allow") return;
-    return "notReadOnlyCommand" in r
-      ? {
-          message: r.message,
-          part: r.notReadOnlyCommand,
-        }
-      : {
-          message: r.message,
-        };
-  },
-  sandboxNetworkLists(e) {
-    return getCommandNetworkLists(e);
-  },
-  toAutoClassifierInput(e) {
-    let dangerouslyDisableSandbox = e.dangerouslyDisableSandbox;
-    let r = false;
-    let requested = isRemoteToolForwardingSwitchOn() ? splitHostField(e).requested : undefined;
-    let h =
-      requested !== undefined && !isReservedMachineNameExact(requested)
-        ? machineLabelForMessage(requested) || undefined
-        : undefined;
-    let y = commandNetworkListsInput(e);
-    if (h !== undefined || y !== undefined)
-      return {
-        command: e.command,
-        ...false,
-        ...(h !== undefined && {
-          [HOST_TOOL_INPUT_FIELD]: h,
-        }),
-        ...y,
-      };
-    return e.command;
-  },
-  async preparePermissionMatcher({ command }) {
-    return buildRuleRelevanceFilter(command);
-  },
-  isSearchOrReadCommand(input) {
-    let parsed = inputSchema().safeParse(input);
-    if (!parsed.success)
-      return {
-        isSearch: false,
-        isRead: false,
-        isList: false,
-      };
-    return isSearchOrReadBashCommand(parsed.data.command);
-  },
-  get inputSchema() {
-    return inputSchema();
-  },
-  coerceInput: normalizeBashInputAliases,
-  get outputSchema() {
-    return outputSchema();
-  },
-  get outputSchemaAcrossProcesses() {
-    return outputSchemaAcrossProcesses();
-  },
-  fromAnotherProcess(e, n) {
-    if (!e.interrupted && e.timedOutAfterMs === undefined && e.backgroundTaskId === undefined)
-      countGitOpsFromCommand(String(n.command ?? ""));
-    return {};
-  },
-  userFacingName(e) {
-    if (!e) return "Bash";
-    return env.CLAUDE_CODE_BASH_SANDBOX_SHOW_INDICATOR && shouldUseSandbox(e) ? "SandboxedBash" : "Bash";
-  },
-  getToolUseSummary(input) {
-    if (!input?.command) return null;
-    let { command, description } = input;
-    if (description) return description;
-    return truncate(command, MAX_DESCRIPTION_CHARS);
-  },
-  getActivityDescription(input) {
-    if (!input?.command) return "Running command";
-    return `Running ${input.description ?? truncate(input.command, MAX_DESCRIPTION_CHARS)}`;
-  },
-  extractSearchText({ stdout, stderr }) {
-    return stderr
-      ? `${stdout}
-${stderr}`
-      : stdout;
-  },
-  stripForStorage(e, n) {
-    if (!n) return e;
-    if (typeof e !== "object" || e === null || typeof e.stdout !== "string" || typeof e.stderr !== "string")
-      return e;
-    if (e.stdout === "" && e.stderr === "") return e;
-    return {
-      ...e,
-      stdout: "",
-      stderr: "",
-    };
-  },
-  mapToolResultToToolResultBlockParam(
-    {
-      interrupted,
-      stdout,
-      stderr,
-      isImage,
-      backgroundTaskId,
-      backgroundOutputPath,
-      backgroundedByUser,
-      backgroundedToDeliverMessage,
-      backgroundedByTurnAbort,
-      timedOutAfterMs,
-      subagentCapApplied,
-      backgroundEndsWithFinalResponse,
-      backgroundWakesOwner,
-      backgroundCwdHint,
-      structuredContent,
-      persistedOutputPath,
-      persistedOutputSize,
-      stdoutHoldsOutputEnd,
-      memoryLimitNote,
-      triggeredNote,
-      staleReadFileStateHint,
-      ghRateLimitHint,
+var BashTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:4830635", () => {
+  BashTool = buildTool({
+    name: BASH_TOOL_NAME,
+    enablesCodeExecution: true,
+    ruleContentField: "command",
+    searchHint: "execute shell commands",
+    remoteExecution: {
+      supported: true,
+      refusedInputFields: REFUSED_INPUT_FIELDS_WHEN_SANDBOX_REQUIRED,
+      decidingInputFields: ["command", "run_in_background", "dangerouslyDisableSandbox"],
     },
-    toolUseId,
-  ) {
-    if (structuredContent && structuredContent.length > 0)
-      return {
-        tool_use_id: toolUseId,
-        type: "tool_result",
-        content: structuredContent,
-      };
-    if (isImage) {
-      let imageToolResult = buildImageToolResult(stdout, toolUseId);
-      if (imageToolResult) {
-        let joined = [typeof stderr === "string" ? stderr.trim() : "", memoryLimitNote].filter(Boolean).join(`
-`);
-        if (joined)
-          return {
-            ...imageToolResult,
-            content: [
-              ...(Array.isArray(imageToolResult.content) ? imageToolResult.content : []),
-              {
-                type: "text",
-                text: joined,
-              },
-            ],
-          };
-        return imageToolResult;
-      }
-    }
-    let nt = stdout;
-    if (stdout) {
-      nt = stdout.replace(/^(\s*\n)+/, "");
-      nt = nt.trimEnd();
-    }
-    if (persistedOutputPath) {
-      let { start, end } =
-        stdoutHoldsOutputEnd === true
-          ? splitOutputAtMarker(nt)
-          : {
-              start: nt,
-              end: undefined,
-            };
-      let preview = generatePreview(
-        start,
-        end === undefined ? PREVIEW_SIZE_CHARS : PREVIEW_SIZE_CHARS - OUTPUT_CUT_TAIL_CHARS,
+    backgrounding: "self",
+    get maxResultSizeChars() {
+      return getConfiguredBashOutputMaxChars();
+    },
+    persistenceThresholdCeiling: MAX_CONTEXT_TOKENS,
+    strict: true,
+    async description({ description }) {
+      return description || "Run shell command";
+    },
+    async prompt({ model, tools, leanPrompt, bashFirstTrimmed, leanRewrite }) {
+      return getSimplePrompt(
+        model,
+        await listPromptSkillCommands(tools),
+        tools,
+        leanPrompt,
+        bashFirstTrimmed,
+        leanRewrite,
       );
-      nt = buildPersistedOutputMessage({
-        filepath: persistedOutputPath,
-        originalSize: persistedOutputSize ?? 0,
-        isJson: false,
-        preview: preview.preview,
-        hasMore: preview.hasMore,
-        previewEnd: end,
-        truncatedAtBytes:
-          (persistedOutputSize ?? 0) >= MAX_PERSISTED_OUTPUT_BYTES ? MAX_PERSISTED_OUTPUT_BYTES : undefined,
+    },
+    isConcurrencySafe(input) {
+      return this.isReadOnly?.(input) ?? false;
+    },
+    suppressesAllPermissionUpdates(input) {
+      let requestedHost = input?.[HOST_TOOL_INPUT_FIELD];
+      return (
+        typeof requestedHost === "string" &&
+        requestedHost.trim() !== "" &&
+        !isReservedMachineNameExact(requestedHost.trim())
+      );
+    },
+    isReadOnly(input, toolUseContext) {
+      return (
+        !isRemoteOnlyCheck(BASH_TOOL_NAME) && isReadOnlyBashInput(input, getSessionEnvVarKeys(toolUseContext))
+      );
+    },
+    notReadOnlyReason(input, toolUseContext) {
+      if (isRemoteOnlyCheck(BASH_TOOL_NAME))
+        return {
+          message:
+            "This session runs shell commands only in its cloud environment, so none can be verified as read-only here",
+          everyInput: true,
+        };
+      let readOnlyResult = checkReadOnlyConstraints(input, commandHasAnyCd(input.command), {
+        sessionEnvVarKeys: getSessionEnvVarKeys(toolUseContext),
       });
-    }
-    let trimmed = stderr.trim();
-    if (interrupted) {
-      if (stderr) trimmed += NEWLINE;
-      trimmed += "<error>Command was aborted before completion</error>";
-    }
-    let Et = "";
-    if (backgroundTaskId) {
-      Et = formatBackgroundTaskMessage({
+      if (readOnlyResult.behavior === "allow") return;
+      return "notReadOnlyCommand" in readOnlyResult
+        ? {
+            message: readOnlyResult.message,
+            part: readOnlyResult.notReadOnlyCommand,
+          }
+        : {
+            message: readOnlyResult.message,
+          };
+    },
+    sandboxNetworkLists(input) {
+      return getCommandNetworkLists(input);
+    },
+    toAutoClassifierInput(input) {
+      let dangerouslyDisableSandbox = input.dangerouslyDisableSandbox;
+      let hasOtherFields = false;
+      let requested = isRemoteToolForwardingSwitchOn() ? splitHostField(input).requested : undefined;
+      let hostLabel =
+        requested !== undefined && !isReservedMachineNameExact(requested)
+          ? machineLabelForMessage(requested) || undefined
+          : undefined;
+      let networkLists = commandNetworkListsInput(input);
+      if (hostLabel !== undefined || networkLists !== undefined)
+        return {
+          command: input.command,
+          ...false,
+          ...(hostLabel !== undefined && {
+            [HOST_TOOL_INPUT_FIELD]: hostLabel,
+          }),
+          ...networkLists,
+        };
+      return input.command;
+    },
+    async preparePermissionMatcher({ command }) {
+      return buildRuleRelevanceFilter(command);
+    },
+    isSearchOrReadCommand(input) {
+      let parsed = inputSchema().safeParse(input);
+      if (!parsed.success)
+        return {
+          isSearch: false,
+          isRead: false,
+          isList: false,
+        };
+      return isSearchOrReadBashCommand(parsed.data.command);
+    },
+    get inputSchema() {
+      return inputSchema();
+    },
+    coerceInput: normalizeBashInputAliases,
+    get outputSchema() {
+      return outputSchema();
+    },
+    get outputSchemaAcrossProcesses() {
+      return outputSchemaAcrossProcesses();
+    },
+    fromAnotherProcess(result, input) {
+      if (
+        !result.interrupted &&
+        result.timedOutAfterMs === undefined &&
+        result.backgroundTaskId === undefined
+      )
+        countGitOpsFromCommand(String(input.command ?? ""));
+      return {};
+    },
+    userFacingName(input) {
+      if (!input) return "Bash";
+      return env.CLAUDE_CODE_BASH_SANDBOX_SHOW_INDICATOR && shouldUseSandbox(input)
+        ? "SandboxedBash"
+        : "Bash";
+    },
+    getToolUseSummary(input) {
+      if (!input?.command) return null;
+      let { command, description } = input;
+      if (description) return description;
+      return truncate(command, MAX_DESCRIPTION_CHARS);
+    },
+    getActivityDescription(input) {
+      if (!input?.command) return "Running command";
+      return `Running ${input.description ?? truncate(input.command, MAX_DESCRIPTION_CHARS)}`;
+    },
+    extractSearchText({ stdout, stderr }) {
+      return stderr
+        ? `${stdout}
+${stderr}`
+        : stdout;
+    },
+    stripForStorage(result, shouldStore) {
+      if (!shouldStore) return result;
+      if (
+        typeof result !== "object" ||
+        result === null ||
+        typeof result.stdout !== "string" ||
+        typeof result.stderr !== "string"
+      )
+        return result;
+      if (result.stdout === "" && result.stderr === "") return result;
+      return {
+        ...result,
+        stdout: "",
+        stderr: "",
+      };
+    },
+    mapToolResultToToolResultBlockParam(
+      {
+        interrupted,
+        stdout,
+        stderr,
+        isImage,
         backgroundTaskId,
-        outputPath: backgroundOutputPath ?? getTaskOutputPath(backgroundTaskId),
+        backgroundOutputPath,
         backgroundedByUser,
         backgroundedToDeliverMessage,
         backgroundedByTurnAbort,
         timedOutAfterMs,
         subagentCapApplied,
-        noOutputSeenAtTimeout: timedOutAfterMs !== undefined && !nt,
-        reapedAtFinalResponse: backgroundEndsWithFinalResponse,
-        wakesItsOwner: backgroundWakesOwner,
-        readToolName: FILE_READ_TOOL_NAME,
-      });
-      if (backgroundCwdHint)
-        Et += `
-${backgroundCwdHint}`;
-      if (isInputHoldOn())
-        return {
-          tool_use_id: toolUseId,
-          type: "tool_result",
-          content: backgroundTaskNotice(
-            backgroundTaskId,
-            [trimmed, Et].filter(Boolean).join(`
-`),
-            {
-              backgroundedByUser,
-              ending: backgroundEndsWithFinalResponse ? "final_response" : undefined,
-            },
-          ),
-        };
-    }
-    return {
-      tool_use_id: toolUseId,
-      type: "tool_result",
-      content: [
-        nt,
-        trimmed,
-        Et,
-        (memoryLimitNote || triggeredNote) &&
-          !nt &&
-          !trimmed &&
-          !Et &&
-          `(${BASH_TOOL_NAME} completed with no output)`,
+        backgroundEndsWithFinalResponse,
+        backgroundWakesOwner,
+        backgroundCwdHint,
+        structuredContent,
+        persistedOutputPath,
+        persistedOutputSize,
+        stdoutHoldsOutputEnd,
         memoryLimitNote,
         triggeredNote,
         staleReadFileStateHint,
         ghRateLimitHint,
-      ].filter(Boolean).join(`
-`),
-      is_error: interrupted,
-    };
-  },
-  create(e) {
-    return {
-      async validateInput(n, r) {
-        let s = r;
-        if (canRunToolsOnThisMachine() && splitHostField(n).requested !== undefined)
-          return {
-            result: false,
-            message: hostFieldNotForwardedMessage(),
-            errorCode: 11,
-          };
-        let h = shouldUseSandbox(n);
-        let y = sandboxPolicyRefusal(h, n.command, false, "bash");
-        if (y !== null) {
-          logFeatureSad("sandbox_exec", "sandbox_policy_refusal", {
-            tool: lit_2("bash"),
-          });
-          return {
-            result: false,
-            message: y,
-            errorCode: 14,
-          };
-        }
-        if (
-          !isBackgroundTasksOff() &&
-          backgroundCompletionNoticeEnabled() &&
-          s.remoteCall?.constraints.background !== "forbidden" &&
-          !n.run_in_background &&
-          s.shellWallCapMs === undefined
-        ) {
-          let blockedSleepPattern = detectBlockedSleepPattern(n.command);
-          if (blockedSleepPattern !== null)
-            return {
-              result: false,
-              message: `Blocked: ${blockedSleepPattern}. To wait for a condition, use Monitor with an until-loop (e.g. \`until <check>; do sleep 2; done\`). To wait for a command you started, use run_in_background: true. Do not chain shorter sleeps to work around this block.`,
-              errorCode: 10,
-            };
-        }
-        let duplicateBackgroundCommand = findDuplicateBackgroundCommand(
-          {
-            command: n.command,
-            cwd: getCwd(),
-            agentId: e.agentId,
-            toolUseId: r.toolUseId,
-          },
-          e.taskRegistry,
-        );
-        if (
-          duplicateBackgroundCommand !== undefined &&
-          findToolByName(e.tools, TASKSTOP) !== undefined &&
-          isWoollyToastGateOn()
-        )
-          return {
-            result: false,
-            errorCode: 15,
-            message: `Not started: this same command, in this directory, was moved to the background and has been running for ${formatDuration(
-              Date.now() - duplicateBackgroundCommand.startTime,
-              {
-                mostSignificantOnly: true,
-              },
-            )} (ID: ${duplicateBackgroundCommand.id}). Its output is being written to: ${duplicateBackgroundCommand.outputFile}. Let it finish, or, to run it again now, stop it first with ${TASKSTOP}.`,
-          };
-        let w = n.run_in_background ? s.remoteCall?.backgroundShells?.reserve() : undefined;
-        if (w !== undefined)
-          return {
-            result: false,
-            message: w,
-            errorCode: 12,
-          };
-        let L = checkAllowedDomainsInput(n, h);
-        if (L !== undefined) return L;
-        return (
-          (await guardSyncedMemoryRemoval(memoryWatchers.of(e.session.host), () =>
-            extractLiteralRmTargets(n.command, getCwd()),
-          )) ?? {
-            result: true,
-          }
-        );
       },
-      permissionCheckFailureDecision(n, r) {
-        let shellCallContext = makeShellCallContext(e, r);
-        return denyCrashedCheckUnderCommandClamp(BASH_TOOL_NAME, shellCallContext.shellPermission);
-      },
-      async checkPermissions(n, r) {
-        let shellCallContext = makeShellCallContext(e, r);
-        return mergeBashSubcommandVerdicts(
-          n,
-          shellCallContext.shellPermission,
-          await bashToolHasPermissionTwoPass(n, shellCallContext.shellPermission, undefined, (h) =>
-            mergeBashSubcommandVerdicts(n, shellCallContext.shellPermission, h, "eachVerdict"),
-          ),
-          "chosenVerdict",
-        );
-      },
-      async call(n, r) {
-        let shellCallContext = makeShellCallContext(e, r);
-        let { parentMessage, onProgress } = r;
-        let model = safeRequestedModelName(parentMessage, shellCallContext.mainLoopModel());
-        let commandStartMs = Math.floor(Date.now() / 1000) * 1000;
-        let sameAsRunningBackground =
-          findDuplicateBackgroundCommand(
-            {
-              command: n.command,
-              cwd: getCwd(),
-              agentId: shellCallContext.agentId,
-              toolUseId: shellCallContext.toolUseId,
-            },
-            shellCallContext.taskRegistry,
-          ) !== undefined;
-        using G = shellCallContext.toolState.get(BashRepeatMeter).begin({
-          input: n,
-          cwd: getCwd(),
-          agentId: shellCallContext.agentId,
-          toolUseId:
-            isPlainToolUseId(shellCallContext.toolUseId) && shellCallContext.innerCall !== true
-              ? shellCallContext.toolUseId
-              : undefined,
-          messages: shellCallContext.messages(),
-          taskRegistry: shellCallContext.taskRegistry,
-          isReadOnly: isReadOnlyCommandOfflineEstimate,
-        });
-        let q = 0;
-        try {
-          q = getAgentProxyFailures();
-        } catch (error) {
-          logError(error);
-        }
-        let { abortController, emitToolProgress } = shellCallContext;
-        let outputAccumulator = new EndTruncatingAccumulator();
-        let we = "";
-        let Ee = "";
-        let cwd;
-        let commandInterpretation;
-        let Me = 0;
-        let interrupted = false;
-        let hadSandboxViolation = false;
-        let lt;
-        let execResult;
-        await using nt = copyShellOutputFile(shellCallContext.taskRegistry);
-        let output;
-        let Et;
-        let bashTestOutcome;
-        let isMainThread = !shellCallContext.agentId;
-        let constraints = shellCallContext.remoteCall?.constraints;
-        let sandboxRequired = constraints?.sandbox === "required";
-        let preventCwdChanges = !isMainThread || constraints?.pinCwd === true;
-        let qt =
-          !shellCallContext.userTypedShellDispatch &&
-          shellCallContext.innerCall !== true &&
-          shellCallContext.remoteCall === undefined;
-        let Zt = qt && shellCallContext.inputFromAnotherMachine !== true;
-        let rn = Zt ? currentOomKillCount() : undefined;
-        let pn;
-        let userTypedShellDispatch = shellCallContext.userTypedShellDispatch;
-        let useSandbox = shouldUseSandbox(n, {
-          disableUnsandboxedCommands: sandboxRequired,
-          userTypedShellDispatch,
-        });
-        let ho = sandboxPolicyRefusal(
-          useSandbox,
-          n.command,
-          userTypedShellDispatch && n.dangerouslyDisableSandbox === true,
-          "bash",
-        );
-        if (ho !== null) {
-          logFeatureSad("sandbox_exec", "sandbox_policy_refusal", {
-            tool: lit_2("bash"),
-          });
-          throw new SandboxPolicyRefusalError(ho);
-        }
-        let sandboxEnabled = SandboxManager.isSandboxingEnabled();
-        let effectiveFilesystemPolicy = getEffectiveFilesystemPolicy();
-        if (sandboxRequired) {
-          let nr =
-            !useSandbox || effectiveFilesystemPolicy !== "strict" || isScrubEnabled()
-              ? {
-                  confined: false,
-                  reason: "sandbox_unconfined",
-                }
-              : await ensureDeviceSandboxPosture();
-          if (!nr.confined) {
-            logFeatureSad("sandbox_exec", "remote_floor_refusal");
-            throw new SandboxPolicyRefusalError(
-              "This call must run inside a fully confining sandbox and none is available here. The command was not run.",
-              nr.reason,
-            );
-          }
-        }
-        let sandboxed = useSandbox;
-        let destructiveCategory = getDestructiveTargetCategory(n.command);
-        let toolUseId = parentTaskId(shellCallContext.toolUseId);
-        let zshNoteInPrompt = isPinnedPromptInSystemPrompt(shellCallContext);
-        let vn =
-          isBashEditDiffEnabled(shellCallContext.permissions().mode) &&
-          !n.run_in_background &&
-          !isReadOnlyBashInput(n, sessionEnvVarNameSet(shellCallContext));
-        let co =
-          vn && shouldSkipEditDiff(shellCallContext.toolState, r.outsideResultReader, hasLiveRootObserver());
-        let So = co && commandMovesWorkTree(n.command);
-        let ko =
-          co && !So && shellCallContext.toolUseId !== undefined && isLinux()
-            ? (findGitRootRecheckingNegative(getCwd()) ?? findGitRootRecheckingNegative(getOriginalCwd()))
-            : null;
-        let un = ko !== null && startWriteObserver(ko) === "ready" ? ko : null;
-        if (un !== null) await flushObservedWrites(un);
-        let ao = un !== null && shellCallContext.toolUseId !== undefined && (await startEditRecorder(un));
-        if (ao && un && shellCallContext.toolUseId !== undefined)
-          beginCommandObservation(shellCallContext.toolUseId, un);
-        let now = Date.now();
-        let yo = un !== null && !ao && !isRepoSnapshotGivenUp(un);
-        let now_2 = Date.now();
-        let before =
-          co && !So && !ao
-            ? yo
-              ? "unavailable"
-              : ((await takeBashSnapshot(getCwd())) ?? (await takeBashSnapshot(getOriginalCwd())))
-            : null;
-        let br = Date.now() - now_2;
-        let Hr = before === "unavailable" ? isSharedSnapshotEnabled() : before?.sharesTreeReads === true;
-        let Fr = vn
-          ? (un ??
-            (before && before !== "unavailable"
-              ? before.repoRoot
-              : (findGitRootRecheckingNegative(getCwd()) ?? findGitRootRecheckingNegative(getOriginalCwd()))))
-          : null;
-        let cs = Fr !== null ? registerConcurrentCommand(Fr) : null;
-        let _r = false;
-        let Cr = null;
-        let Vr;
-        let Oo = false;
-        try {
-          let nr = runShellCommand({
-            input: n,
-            useSandbox,
-            networkLists: takeCommandNetworkLists(shellCallContext.toolUseId, n.command),
-            constraints,
-            backgroundHeld: () => shouldHoldForPlugin(shellCallContext),
-            onHeldEnd: () => {
-              Oo = true;
-            },
-            servedBackground:
-              shellCallContext.remoteCall?.backgroundShells ?? shellCallContext.keptBackgroundShells,
-            keptStarter: shellCallContext.keptBackgroundShells,
-            onNote: shellCallContext.remoteCall?.onNote,
-            abortController,
-            taskRegistry: shellCallContext.taskRegistry,
-            emitToolProgress,
-            session: shellCallContext.session,
-            preventCwdChanges,
-            isMainThread,
-            subagentCapMs: getSubagentForegroundCapMs(shellCallContext),
-            toolUseId: shellCallContext.toolUseId,
-            toolState: shellCallContext.toolState,
-            attributionMessageId: parentMessage?.message.id,
-            callTiming: r.timing,
-            agentId: shellCallContext.agentId,
-            caller: abortScopeOf(shellCallContext),
-            shellWallCapMs: shellCallContext.shellWallCapMs,
-            promptShellPluginId: shellCallContext.promptShellPluginId,
-            agentWorktree: shellCallContext.agentWorktree,
-            isolationRoot: isolationWorktreeFor(shellCallContext),
-            sessionEnvVars: shellCallContext.sessionEnvVars,
-            storageV5: shellCallContext.storageV5,
-            effortLevel: modelSupportsEffort(shellCallContext.mainLoopModel())
-              ? getEffortLevelOrHigh(
-                  shellCallContext.mainLoopModel(),
-                  shellCallContext.effort(),
-                  shellCallContext.effortLayerOverride(),
-                )
-              : undefined,
-          });
-          let Ti = shouldUseShellTool(shellCallContext.remoteCall !== undefined, shellCallContext.hasSpendCap)
-            ? onProgress
-            : undefined;
-          let Vs;
-          do {
-            Vs = await nr.next();
-            if (!Vs.done && Ti) {
-              let Kr = Vs.value;
-              Ti({
-                type: "progress",
-                toolUseID: `bash-progress-${Me++}`,
-                data: {
-                  type: "bash_progress",
-                  output: Kr.output,
-                  fullOutput: Kr.fullOutput,
-                  elapsedTimeSeconds: Kr.elapsedTimeSeconds,
-                  totalLines: Kr.totalLines,
-                  totalBytes: Kr.totalBytes,
-                  taskId: Kr.taskId,
-                  timeoutMs: Kr.timeoutMs,
-                },
-              });
-            }
-          } while (!Vs.done);
-          execResult = Vs.value;
-          if (
-            execResult.backgroundTaskId !== undefined &&
-            execResult.timedOutAfterMs !== undefined &&
-            shellCallContext.innerCall !== true
-          )
-            execResult = {
-              ...execResult,
-              stdout: await readShellOutputSoFar(execResult.backgroundTaskId, PREVIEW_SIZE_CHARS),
-            };
-          nt.track(execResult);
-          if (execResult.intercepted) sandboxed = false;
-          output = await withSpilledOutputTail(execResult.stdout, execResult.outputFilePath);
-          Et = classifyBashCommand(n.command);
-          bashTestOutcome = fromEnumOpt(classifyTestOutcome(Et, output, execResult));
-          if (
-            !execResult.backgroundTaskId &&
-            trackGitOperations(shellCallContext.session.host, n.command, execResult.code, output).prResolved
-          )
-            shellCallContext.markPrResolvedThisSession();
-          let _i = unwrapAbortReason(abortController.signal.reason);
-          let jo = execResult.interrupted && _i === "interrupt";
-          let interrupted_2 = execResult.interrupted && isUserInitiatedAbortReason(_i);
-          if (execResult.interrupted && _i === "background") throw new AbortError_2();
-          outputAccumulator.append((execResult.stdout || "").trimEnd() + NEWLINE);
-          commandInterpretation = DEFAULT_SEMANTIC_2(n.command, execResult.code, execResult.stdout || "", "");
-          if (output.includes(".git/index.lock': File exists")) logEvent("tengu_git_index_lock_error", {});
-          if (commandInterpretation.isError && !jo) {
-            if (execResult.code !== 0) outputAccumulator.append(`Exit code ${execResult.code}`);
-          }
-          cwd = getSessionProject(shellCallContext.session).cwd;
-          if (!preventCwdChanges) {
-            if (
-              resetCwdIfOutsideProject(shellCallContext.session, shellCallContext.unlayeredPermissions()) ||
-              execResult.cwdChangeRefused
-            )
-              we = stdErrAppendShellResetMessage("");
-          }
-          let stdout = execResult.stdout || "";
-          let Ri = sandboxed
-            ? SandboxManager.annotateStderrWithSandboxFailures(
-                shellCallContext.toolUseId ?? n.command,
-                stdout,
-              )
-            : stdout;
-          hadSandboxViolation = Ri !== stdout;
-          if (sandboxed && execResult.backgroundTaskId === undefined)
-            lt = getParsedSandboxViolations(shellCallContext.toolUseId ?? n.command);
-          if (hadSandboxViolation) Ee = Ri.slice(stdout.length).trim();
-          if (execResult.preSpawnError) {
-            if (/null bytes/.test(execResult.preSpawnError))
-              throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-                execResult.preSpawnError,
-                "Bash: command contained null bytes (argv echo redacted)",
-              );
-            let Kr = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              execResult.preSpawnError,
-              "Bash: pre-spawn error (cwd/argv redacted)",
-            );
-            throw execResult.preSpawnErrorCode === "e2big"
-              ? tagObject(Kr, {
-                  kind: "spawn_arg_limit",
-                })
-              : Kr;
-          }
-          if (Zt && execResult.backgroundTaskId === undefined && !execResult.intercepted)
-            pn = maybeShowBashNote(rn, shellCallContext.toolState.get(OomKillNoteState));
-          let Ja =
-            execResult.interrupted ||
-            execResult.timedOut === true ||
-            execResult.timedOutAfterMs !== undefined;
-          if (sandboxed && shellCallContext.remoteCall !== undefined && (hadSandboxViolation || !Ja))
-            shellCallContext.remoteCall.onNote(
-              buildSandboxFailureHint({
-                command: n.command,
-                output: output + Ee,
-                failed: commandInterpretation.isError && !Ja,
-                violationRecorded: hadSandboxViolation,
-                filesystemPolicy: effectiveFilesystemPolicy,
-                additionalDenyRead: () => constraints?.additionalDenyRead ?? [],
-              }),
-            );
-          if (commandInterpretation.isError && !jo) {
-            let Kr =
-              qt &&
-              !execResult.interrupted &&
-              execResult.outputFilePath !== undefined &&
-              !isBase64DataUri(trimBlankEdgeLines(stdout)) &&
-              shouldBuildLargeOutputMessage()
-                ? await buildLargeOutputMessage(
-                    execResult,
-                    stdout,
-                    shellCallContext.session,
-                    shellCallContext.storageV5,
-                  )
-                : undefined;
-            let Li =
-              qt &&
-              !execResult.interrupted &&
-              execResult.timedOut !== true &&
-              execResult.backgroundTaskId === undefined
-                ? matchBashNoteRule(
-                    n.command,
-                    execResult.shellUsage,
-                    true,
-                    shellCallContext.toolState.get(BashNoteSessionState),
-                  )
-                : undefined;
-            logEvent("tengu_bash_tool_command_failed", {
-              model,
-              command_type: getCommandTypeForLogging(n.command),
-              ...Et,
-              stdout_length: stdout.length,
-              stderr_length: 0,
-              exit_code: execResult.code,
-              interrupted: execResult.interrupted,
-              output_end_shown: Kr !== undefined,
-              triggered_note_rule: Li?.rule ?? 0,
-              triggered_note_shown: Li?.note !== undefined,
-              oom_kill_during_command: pn?.hit === true,
-              oom_kill_note_shown: pn?.note !== undefined,
-              ...buildCommandTimingFields(execResult.shellUsage),
-              zsh_note_in_prompt: zshNoteInPrompt,
-              executor_shell: await getExecutorShellForAnalytics(),
-              executor_shell_overridden: Boolean(process.env.CLAUDE_CODE_SHELL),
-              ...detectShellDialectIssues(n.command, output),
-              bash_test_outcome: bashTestOutcome,
-              sandboxed,
-              sandbox_enabled: sandboxEnabled,
-              dangerously_disable_sandbox: n.dangerouslyDisableSandbox ?? false,
-              user_typed_shell_dispatch: userTypedShellDispatch,
-              filesystem_policy: fromEnum(effectiveFilesystemPolicy),
-              call_origin: fromEnum(constraints ? "remote" : "local"),
-              ...getExtraCommandLogFields(n),
-              had_sandbox_violation: sandboxed && hadSandboxViolation,
-              same_as_running_background: sameAsRunningBackground,
-              tool_use_id: toolUseId,
-              destructive_category: fromEnum(destructiveCategory ?? "none"),
-              destructive_target_scope: fromEnum(
-                classifyDestructiveTargetScope(n.command, getCwd(), destructiveCategory),
-              ),
-              git_destructive_target: fromEnum(classifyGitDestructiveTarget(n.command, destructiveCategory)),
-              permission_mode: fromEnum(shellCallContext.permissions().mode),
-              ...G.ended(execResult, true, false),
-              reads_own_output: classifySavedOutputPath(n.command, shellCallContext.session),
-            });
-            let Qs;
-            try {
-              Qs = describeAgentProxyFailures(q);
-            } catch (error) {
-              logError(error);
-            }
-            throw new ShellError({
-              stdout: "",
-              stderr: [Qs, Oo ? ENDED_INSTEAD_OF_BACKGROUND_MESSAGE : undefined, pn?.note, Li?.note].reduce(
-                (acc, Xa) => (Xa === undefined ? acc : `${acc.trimEnd()}${NEWLINE}${NEWLINE}${Xa}`),
-                Kr === undefined ? Ri : Kr + Ee,
-              ),
-              code: execResult.code,
-              interrupted: interrupted_2,
-              hadSandboxViolation,
-              sandboxViolations: lt,
-              sandboxed,
-            });
-          }
-          interrupted = execResult.interrupted;
-          Cr =
-            ao && un && shellCallContext.toolUseId
-              ? await collectWatchedEditDiff(
-                  un,
-                  shellCallContext.toolUseId,
-                  Boolean(execResult.backgroundTaskId),
-                  interrupted,
-                  shellCallContext.readFileState,
-                  now,
-                )
-              : null;
-          let now_2 = Date.now();
-          let onRead = () => {
-            if (cs && Fr !== null) unregisterConcurrentCommand(Fr, cs);
-          };
-          Vr =
-            !execResult.backgroundTaskId && !So && !Cr && before && before !== "unavailable" && !interrupted
-              ? await diffAfterCommand(
-                  before,
-                  onRead,
-                  before.sharesTreeReads &&
-                    getAutoModeClassifierRole(shellCallContext.permissions().mode, {
-                      peek: true,
-                    }) !== "off"
-                    ? {
-                        signal: abortController.signal,
-                        onReadFailed: onRead,
-                      }
-                    : undefined,
-                )
-              : undefined;
-          br += Date.now() - now_2;
-        } catch (error) {
-          if (ao && shellCallContext.toolUseId !== undefined) {
-            let Ti = await endCommandObservation(shellCallContext.toolUseId);
-            if (un && (Ti === null || Ti.paths.length > 0 || Ti.overflow || Ti.watchEnds)) forgetRecorder(un);
-          }
-          throw error;
-        } finally {
-          if (cs && Fr !== null) _r = unregisterConcurrentCommand(Fr, cs);
-          if (before && !yo) logEditDiffWait(br, Hr);
-          if (before && before !== "unavailable" && Vr !== null) forgetRecorder(before.repoRoot);
-          if (vn && !co && Fr !== null) forgetRecorder(Fr);
-          if (So) {
-            let nr =
-              findGitRootRecheckingNegative(getCwd()) ?? findGitRootRecheckingNegative(getOriginalCwd());
-            if (nr !== null) forgetRecorder(nr);
-          }
-          if (shellCallContext.toolUseId)
-            emitToolProgress?.({
-              kind: "clear",
-              toolUseId: shellCallContext.toolUseId,
-            });
-          if (!isReadOnlyBashInput(n, sessionEnvVarNameSet(shellCallContext))) {
-            shellCallContext.applyFileHistoryOp({
-              kind: "touch",
-            });
-            G.mayHaveWritten = true;
-          }
-        }
-        let str = outputAccumulator.toString();
-        let persistedOutput = await persistBashOutput(
-          execResult,
-          shellCallContext.session,
-          shellCallContext.storageV5,
-          nt,
-        );
-        let path = persistedOutput?.path;
-        let size = persistedOutput?.size;
-        let rs =
-          persistedOutput !== undefined &&
-          Zt &&
-          !interrupted &&
-          !isBase64DataUri(trimBlankEdgeLines(str)) &&
-          shouldShowOutputTail()
-            ? await readOutputTail(
-                execResult,
-                str,
-                PREVIEW_SIZE_CHARS - OUTPUT_CUT_TAIL_CHARS,
-                OUTPUT_CUT_TAIL_CHARS,
-                true,
-              )
-            : undefined;
-        let Es =
-          Zt &&
-          !interrupted &&
-          execResult.backgroundTaskId === undefined &&
-          !isBase64DataUri(trimBlankEdgeLines(str))
-            ? matchBashNoteRule(
-                n.command,
-                execResult.shellUsage,
-                false,
-                shellCallContext.toolState.get(BashNoteSessionState),
-              )
-            : undefined;
-        logEvent("tengu_bash_tool_command_executed", {
-          model,
-          command_type: getCommandTypeForLogging(n.command),
-          ...Et,
-          stdout_length: str.length,
-          stderr_length: 0,
-          exit_code: execResult.code,
-          interrupted,
-          output_end_shown: rs !== undefined,
-          triggered_note_rule: Es?.rule ?? 0,
-          triggered_note_shown: Es?.note !== undefined,
-          oom_kill_during_command: pn?.hit === true,
-          oom_kill_note_shown: pn?.note !== undefined,
-          ...buildCommandTimingFields(execResult.shellUsage),
-          zsh_note_in_prompt: zshNoteInPrompt,
-          executor_shell: await getExecutorShellForAnalytics(),
-          executor_shell_overridden: Boolean(process.env.CLAUDE_CODE_SHELL),
-          ...detectShellDialectIssues(n.command, output),
-          bash_test_outcome: bashTestOutcome,
-          sandboxed,
-          sandbox_enabled: sandboxEnabled,
-          dangerously_disable_sandbox: n.dangerouslyDisableSandbox ?? false,
-          user_typed_shell_dispatch: userTypedShellDispatch,
-          filesystem_policy: fromEnum(effectiveFilesystemPolicy),
-          call_origin: fromEnum(constraints ? "remote" : "local"),
-          ...getExtraCommandLogFields(n),
-          had_sandbox_violation: sandboxed && hadSandboxViolation,
-          was_backgrounded: Boolean(execResult.backgroundTaskId),
-          same_as_running_background: sameAsRunningBackground,
+      toolUseId,
+    ) {
+      if (structuredContent && structuredContent.length > 0)
+        return {
           tool_use_id: toolUseId,
-          destructive_category: fromEnum(destructiveCategory ?? "none"),
-          destructive_target_scope: fromEnum(
-            classifyDestructiveTargetScope(n.command, getCwd(), destructiveCategory),
-          ),
-          git_destructive_target: fromEnum(classifyGitDestructiveTarget(n.command, destructiveCategory)),
-          permission_mode: fromEnum(shellCallContext.permissions().mode),
-          ...G.ended(execResult, false, path !== undefined),
-          reads_own_output: classifySavedOutputPath(n.command, shellCallContext.session),
+          type: "tool_result",
+          content: structuredContent,
+        };
+      if (isImage) {
+        let imageToolResult = buildImageToolResult(stdout, toolUseId);
+        if (imageToolResult) {
+          let joined = [typeof stderr === "string" ? stderr.trim() : "", memoryLimitNote].filter(Boolean)
+            .join(`
+`);
+          if (joined)
+            return {
+              ...imageToolResult,
+              content: [
+                ...(Array.isArray(imageToolResult.content) ? imageToolResult.content : []),
+                {
+                  type: "text",
+                  text: joined,
+                },
+              ],
+            };
+          return imageToolResult;
+        }
+      }
+      let stdoutTrimmed = stdout;
+      if (stdout) {
+        stdoutTrimmed = stdout.replace(/^(\s*\n)+/, "");
+        stdoutTrimmed = stdoutTrimmed.trimEnd();
+      }
+      if (persistedOutputPath) {
+        let { start, end } =
+          stdoutHoldsOutputEnd === true
+            ? splitOutputAtMarker(stdoutTrimmed)
+            : {
+                start: stdoutTrimmed,
+                end: undefined,
+              };
+        let preview = generatePreview(
+          start,
+          end === undefined ? PREVIEW_SIZE_CHARS : PREVIEW_SIZE_CHARS - OUTPUT_CUT_TAIL_CHARS,
+        );
+        stdoutTrimmed = buildPersistedOutputMessage({
+          filepath: persistedOutputPath,
+          originalSize: persistedOutputSize ?? 0,
+          isJson: false,
+          preview: preview.preview,
+          hasMore: preview.hasMore,
+          previewEnd: end,
+          truncatedAtBytes:
+            (persistedOutputSize ?? 0) >= MAX_PERSISTED_OUTPUT_BYTES ? MAX_PERSISTED_OUTPUT_BYTES : undefined,
         });
-        let codeIndexingFromCommand = detectCodeIndexingFromCommand(n.command);
-        if (codeIndexingFromCommand)
-          logEvent("tengu_code_indexing_tool_used", {
-            tool: fromEnum(codeIndexingFromCommand),
-            source: lit_2("cli"),
-            success: execResult.code === 0,
-          });
-        let stdout = trimBlankEdgeLines(str);
-        stdout = consumeClaudeCodeHints(stdout, {
-          command: n.command,
-          pendingHint: shellCallContext.session.pendingHint,
-          isMainThread,
-          surface: "shell",
+      }
+      let trimmed = stderr.trim();
+      if (interrupted) {
+        if (stderr) trimmed += NEWLINE;
+        trimmed += "<error>Command was aborted before completion</error>";
+      }
+      let backgroundMessage = "";
+      if (backgroundTaskId) {
+        backgroundMessage = formatBackgroundTaskMessage({
+          backgroundTaskId,
+          outputPath: backgroundOutputPath ?? getTaskOutputPath(backgroundTaskId),
+          backgroundedByUser,
+          backgroundedToDeliverMessage,
+          backgroundedByTurnAbort,
+          timedOutAfterMs,
+          subagentCapApplied,
+          noOutputSeenAtTimeout: timedOutAfterMs !== undefined && !stdoutTrimmed,
+          reapedAtFinalResponse: backgroundEndsWithFinalResponse,
+          wakesItsOwner: backgroundWakesOwner,
+          readToolName: FILE_READ_TOOL_NAME,
         });
-        let fs = execResult.timedOutAfterMs === undefined && isBase64DataUri(stdout);
-        let as = stdout;
-        if (fs) {
-          let nr = await resizeShellImageOutput(
-            stdout,
-            execResult.outputFilePath,
-            size,
-            imageLimitsForModel(shellCallContext.mainLoopModel()),
-          );
-          if (nr) as = nr;
-          else fs = false;
-        }
-        let ghRateLimitHint = execResult.backgroundTaskId
-          ? undefined
-          : GITHUB_RATE_LIMIT_REMINDER(n.command, output, shellCallContext.toolState.get(PrLinkBackoffState));
-        let backgroundCwdHint =
-          execResult.backgroundTaskId && commandHasAnyCd(n.command)
-            ? formatBackgroundCwdHint(getCwd())
-            : undefined;
-        let backgroundEndsWithFinalResponse =
-          execResult.backgroundTaskId !== undefined &&
-          (reapsShellsOnExit(shellCallContext.agentContext) ||
-            (shellCallContext.agentId === undefined && isPrintWithoutTidySloth()))
-            ? true
-            : undefined;
-        let gitOperation;
-        if (!execResult.backgroundTaskId) {
-          let gitOperation_2 = detectGitOperation(n.command, output);
-          if (Object.keys(gitOperation_2).length > 0) gitOperation = gitOperation_2;
-          if (!shellCallContext.remoteCall)
-            emitVcsStateChanges(gitOperation_2, output, {
-              command: n.command,
-              exitCode: execResult.code,
-              cwd,
-            });
-        }
-        let staleReadFileStateHint;
-        if (!interrupted && !fs && !execResult.backgroundTaskId) {
-          let staleReadFileStateEntries = await findStaleReadFileStateEntries(
-            n.command,
-            shellCallContext.readFileState,
-            commandStartMs,
-          );
-          if (staleReadFileStateEntries.length > 0) {
-            let cwd = getCwd();
-            let Vs = 5;
-            let joined = staleReadFileStateEntries
-              .slice(0, 5)
-              .map(
-                (staleReadFileStateEntry) =>
-                  relative(cwd, staleReadFileStateEntry) || staleReadFileStateEntry,
-              )
-              .join(", ");
-            let jo =
-              staleReadFileStateEntries.length > 5 ? ` and ${staleReadFileStateEntries.length - 5} more` : "";
-            let Qr = canonicalToolName_2(FILE_READ_TOOL_NAME, shellCallContext.tools);
-            staleReadFileStateHint = `[This command modified ${staleReadFileStateEntries.length} ${plural(staleReadFileStateEntries.length, "file")} you've previously read: ${joined}${jo}. Call ${Qr} before editing.]`;
-          }
-        }
-        let hr = execResult.backgroundTaskId
-          ? undefined
-          : So
-            ? {
-                files: [],
-                moreFiles: 0,
-                skipped: true,
-              }
-            : Cr
-              ? (Cr.diff ?? undefined)
-              : before === "unavailable"
-                ? {
-                    files: [],
-                    moreFiles: 0,
-                    unavailable: true,
-                  }
-                : before && interrupted
-                  ? undefined
-                  : before
-                    ? (Vr ??
-                      (_r
-                        ? {
-                            files: [],
-                            moreFiles: 0,
-                            shared: true,
-                          }
-                        : undefined))
-                    : undefined;
-        let bashEditDiff =
-          hr && _r && !hr.skipped
-            ? {
-                ...hr,
-                shared: true,
-              }
-            : hr;
-        G.sawEditDiff(bashEditDiff, !execResult.backgroundTaskId && (Cr !== null || Vr !== undefined));
-        if (bashEditDiff?.unavailable)
-          logFeatureSad(
-            Hr ? "bash_edit_diff_shared" : "bash_edit_diff",
-            interrupted ? "interrupted" : "unavailable",
-          );
-        else if (bashEditDiff && !bashEditDiff.skipped)
-          logFeatureOk(Hr ? "bash_edit_diff_shared" : "bash_edit_diff");
-        if (!interrupted && !fs && !execResult.backgroundTaskId) {
-          let reduced = [we, Ee, pn?.note, Es?.note, staleReadFileStateHint, ghRateLimitHint].reduce(
-            (acc, _i) => acc + (_i ? _i.length + NEWLINE.length : 0),
-            0,
-          );
-          let Ti =
-            path !== undefined ||
-            str.length > getMaxOutputLength() ||
-            shellCallContext.innerCall === true ||
-            as.length + reduced >
-              getPersistenceThreshold(BASH_TOOL_NAME, getConfiguredBashOutputMaxChars(), MAX_CONTEXT_TOKENS);
-          await recordShellFileReadsInReadState(
-            n.command,
-            shellCallContext.readFileState,
-            abortController.signal,
-            execResult.code,
-            Ti ? undefined : as,
-            shellCallContext.remoteCall === undefined && shellCallContext.nestedMemoryAttachmentTriggers
-              ? {
-                  triggers: shellCallContext.nestedMemoryAttachmentTriggers,
-                  permissions: shellCallContext.permissions,
-                }
-              : undefined,
-          );
-        }
-        let Ha = rs !== undefined && !fs && as !== "";
-        let resultData = {
-          stdout: Ha ? interleaveOutputCutMarker(as, rs) : as,
-          stderr: Ee ? [we, Ee].filter(Boolean).join(NEWLINE) : we,
-          interrupted,
-          isImage: fs,
-          returnCodeInterpretation: commandInterpretation?.message,
-          noOutputExpected: isSilentBashCommand(n.command),
-          backgroundTaskId: execResult.backgroundTaskId,
-          ...(execResult.backgroundTaskId !== undefined &&
-            shellCallContext.keptBackgroundShells !== undefined && {
-              backgroundOutputPath: getTaskOutputPath(execResult.backgroundTaskId),
-            }),
-          backgroundedByUser: execResult.backgroundedByUser,
-          backgroundedByTurnAbort: execResult.backgroundedByTurnAbort,
-          backgroundedToDeliverMessage: execResult.backgroundedToDeliverMessage,
-          timedOutAfterMs: execResult.timedOutAfterMs,
-          subagentCapApplied: execResult.subagentCapApplied,
-          backgroundEndsWithFinalResponse,
-          backgroundCwdHint,
-          dangerouslyDisableSandbox:
-            "dangerouslyDisableSandbox" in n ? n.dangerouslyDisableSandbox : undefined,
-          persistedOutputPath: path,
-          persistedOutputSize: size,
-          ...(Ha && {
-            stdoutHoldsOutputEnd: Ha,
-          }),
-          memoryLimitNote: pn?.note,
-          triggeredNote: Es?.note,
+        if (backgroundCwdHint)
+          backgroundMessage += `
+${backgroundCwdHint}`;
+        if (isInputHoldOn())
+          return {
+            tool_use_id: toolUseId,
+            type: "tool_result",
+            content: backgroundTaskNotice(
+              backgroundTaskId,
+              [trimmed, backgroundMessage].filter(Boolean).join(`
+`),
+              {
+                backgroundedByUser,
+                ending: backgroundEndsWithFinalResponse ? "final_response" : undefined,
+              },
+            ),
+          };
+      }
+      return {
+        tool_use_id: toolUseId,
+        type: "tool_result",
+        content: [
+          stdoutTrimmed,
+          trimmed,
+          backgroundMessage,
+          (memoryLimitNote || triggeredNote) &&
+            !stdoutTrimmed &&
+            !trimmed &&
+            !backgroundMessage &&
+            `(${BASH_TOOL_NAME} completed with no output)`,
+          memoryLimitNote,
+          triggeredNote,
           staleReadFileStateHint,
           ghRateLimitHint,
-          gitOperation,
-          bashEditDiff,
-        };
-        if (resultData.backgroundTaskId !== undefined && isInputHoldOn())
-          logEvent("tengu_bash_task_ack", {
-            trigger: resultData.backgroundedByUser
-              ? lit_2("user")
-              : resultData.backgroundedByTurnAbort
-                ? lit_2("turn_abort")
-                : resultData.backgroundedToDeliverMessage
-                  ? lit_2("deliver_message")
-                  : resultData.timedOutAfterMs !== undefined
-                    ? lit_2("timeout")
-                    : lit_2("explicit"),
-            ends_with_final_response: resultData.backgroundEndsWithFinalResponse === true,
-            shell: lit_2("bash"),
-          });
-        return {
-          data: resultData,
-          ...(lt !== undefined && {
-            sandboxViolations: lt,
-          }),
-          sandboxed,
-          ...(hadSandboxViolation &&
-            !interrupted && {
-              remedy: {
-                kind: "sandbox_violation",
+        ].filter(Boolean).join(`
+`),
+        is_error: interrupted,
+      };
+    },
+    create(sessionCtx) {
+      return {
+        async validateInput(input, callCtx) {
+          let toolCallCtx = callCtx;
+          if (canRunToolsOnThisMachine() && splitHostField(input).requested !== undefined)
+            return {
+              result: false,
+              message: hostFieldNotForwardedMessage(),
+              errorCode: 11,
+            };
+          let useSandbox = shouldUseSandbox(input);
+          let refusal = sandboxPolicyRefusal(useSandbox, input.command, false, "bash");
+          if (refusal !== null) {
+            logFeatureSad("sandbox_exec", "sandbox_policy_refusal", {
+              tool: lit_2("bash"),
+            });
+            return {
+              result: false,
+              message: refusal,
+              errorCode: 14,
+            };
+          }
+          if (
+            !isBackgroundTasksOff() &&
+            backgroundCompletionNoticeEnabled() &&
+            toolCallCtx.remoteCall?.constraints.background !== "forbidden" &&
+            !input.run_in_background &&
+            toolCallCtx.shellWallCapMs === undefined
+          ) {
+            let blockedSleepPattern = detectBlockedSleepPattern(input.command);
+            if (blockedSleepPattern !== null)
+              return {
+                result: false,
+                message: `Blocked: ${blockedSleepPattern}. To wait for a condition, use Monitor with an until-loop (e.g. \`until <check>; do sleep 2; done\`). To wait for a command you started, use run_in_background: true. Do not chain shorter sleeps to work around this block.`,
+                errorCode: 10,
+              };
+          }
+          let duplicateBackgroundCommand = findDuplicateBackgroundCommand(
+            {
+              command: input.command,
+              cwd: getCwd(),
+              agentId: sessionCtx.agentId,
+              toolUseId: callCtx.toolUseId,
+            },
+            sessionCtx.taskRegistry,
+          );
+          if (
+            duplicateBackgroundCommand !== undefined &&
+            findToolByName(sessionCtx.tools, TASKSTOP) !== undefined &&
+            isWoollyToastGateOn()
+          )
+            return {
+              result: false,
+              errorCode: 15,
+              message: `Not started: this same command, in this directory, was moved to the background and has been running for ${formatDuration(
+                Date.now() - duplicateBackgroundCommand.startTime,
+                {
+                  mostSignificantOnly: true,
+                },
+              )} (ID: ${duplicateBackgroundCommand.id}). Its output is being written to: ${duplicateBackgroundCommand.outputFile}. Let it finish, or, to run it again now, stop it first with ${TASKSTOP}.`,
+            };
+          let reservationMessage = input.run_in_background
+            ? toolCallCtx.remoteCall?.backgroundShells?.reserve()
+            : undefined;
+          if (reservationMessage !== undefined)
+            return {
+              result: false,
+              message: reservationMessage,
+              errorCode: 12,
+            };
+          let domainsCheck = checkAllowedDomainsInput(input, useSandbox);
+          if (domainsCheck !== undefined) return domainsCheck;
+          return (
+            (await guardSyncedMemoryRemoval(memoryWatchers.of(sessionCtx.session.host), () =>
+              extractLiteralRmTargets(input.command, getCwd()),
+            )) ?? {
+              result: true,
+            }
+          );
+        },
+        permissionCheckFailureDecision(input, callCtx) {
+          let shellCallContext = makeShellCallContext(sessionCtx, callCtx);
+          return denyCrashedCheckUnderCommandClamp(BASH_TOOL_NAME, shellCallContext.shellPermission);
+        },
+        async checkPermissions(input, callCtx) {
+          let shellCallContext = makeShellCallContext(sessionCtx, callCtx);
+          return mergeBashSubcommandVerdicts(
+            input,
+            shellCallContext.shellPermission,
+            await bashToolHasPermissionTwoPass(
+              input,
+              shellCallContext.shellPermission,
+              undefined,
+              (verdict) =>
+                mergeBashSubcommandVerdicts(input, shellCallContext.shellPermission, verdict, "eachVerdict"),
+            ),
+            "chosenVerdict",
+          );
+        },
+        async call(input, callCtx) {
+          let shellCallContext = makeShellCallContext(sessionCtx, callCtx);
+          let { parentMessage, onProgress } = callCtx;
+          let model = safeRequestedModelName(parentMessage, shellCallContext.mainLoopModel());
+          let commandStartMs = Math.floor(Date.now() / 1000) * 1000;
+          let sameAsRunningBackground =
+            findDuplicateBackgroundCommand(
+              {
+                command: input.command,
+                cwd: getCwd(),
+                agentId: shellCallContext.agentId,
+                toolUseId: shellCallContext.toolUseId,
               },
+              shellCallContext.taskRegistry,
+            ) !== undefined;
+          using repeatMeter = shellCallContext.toolState.get(BashRepeatMeter).begin({
+            input,
+            cwd: getCwd(),
+            agentId: shellCallContext.agentId,
+            toolUseId:
+              isPlainToolUseId(shellCallContext.toolUseId) && shellCallContext.innerCall !== true
+                ? shellCallContext.toolUseId
+                : undefined,
+            messages: shellCallContext.messages(),
+            taskRegistry: shellCallContext.taskRegistry,
+            isReadOnly: isReadOnlyCommandOfflineEstimate,
+          });
+          let proxyFailureSeq = 0;
+          try {
+            proxyFailureSeq = getAgentProxyFailures();
+          } catch (error) {
+            logError(error);
+          }
+          let { abortController, emitToolProgress } = shellCallContext;
+          let outputAccumulator = new EndTruncatingAccumulator();
+          let cwdResetMessage = "";
+          let sandboxViolationText = "";
+          let cwd;
+          let commandInterpretation;
+          let progressIndex = 0;
+          let interrupted = false;
+          let hadSandboxViolation = false;
+          let sandboxViolations;
+          let execResult;
+          await using outputFileCopier = copyShellOutputFile(shellCallContext.taskRegistry);
+          let output;
+          let commandClass;
+          let bashTestOutcome;
+          let isMainThread = !shellCallContext.agentId;
+          let constraints = shellCallContext.remoteCall?.constraints;
+          let sandboxRequired = constraints?.sandbox === "required";
+          let preventCwdChanges = !isMainThread || constraints?.pinCwd === true;
+          let isPlainLocalCall =
+            !shellCallContext.userTypedShellDispatch &&
+            shellCallContext.innerCall !== true &&
+            shellCallContext.remoteCall === undefined;
+          let isTrackedCall = isPlainLocalCall && shellCallContext.inputFromAnotherMachine !== true;
+          let initialOomKillCount = isTrackedCall ? currentOomKillCount() : undefined;
+          let oomNoteResult;
+          let userTypedShellDispatch = shellCallContext.userTypedShellDispatch;
+          let useSandbox = shouldUseSandbox(input, {
+            disableUnsandboxedCommands: sandboxRequired,
+            userTypedShellDispatch,
+          });
+          let refusal = sandboxPolicyRefusal(
+            useSandbox,
+            input.command,
+            userTypedShellDispatch && input.dangerouslyDisableSandbox === true,
+            "bash",
+          );
+          if (refusal !== null) {
+            logFeatureSad("sandbox_exec", "sandbox_policy_refusal", {
+              tool: lit_2("bash"),
+            });
+            throw new SandboxPolicyRefusalError(refusal);
+          }
+          let sandboxEnabled = SandboxManager.isSandboxingEnabled();
+          let effectiveFilesystemPolicy = getEffectiveFilesystemPolicy();
+          if (sandboxRequired) {
+            let posture =
+              !useSandbox || effectiveFilesystemPolicy !== "strict" || isScrubEnabled()
+                ? {
+                    confined: false,
+                    reason: "sandbox_unconfined",
+                  }
+                : await ensureDeviceSandboxPosture();
+            if (!posture.confined) {
+              logFeatureSad("sandbox_exec", "remote_floor_refusal");
+              throw new SandboxPolicyRefusalError(
+                "This call must run inside a fully confining sandbox and none is available here. The command was not run.",
+                posture.reason,
+              );
+            }
+          }
+          let sandboxed = useSandbox;
+          let destructiveCategory = getDestructiveTargetCategory(input.command);
+          let toolUseId = parentTaskId(shellCallContext.toolUseId);
+          let zshNoteInPrompt = isPinnedPromptInSystemPrompt(shellCallContext);
+          let editDiffWanted =
+            isBashEditDiffEnabled(shellCallContext.permissions().mode) &&
+            !input.run_in_background &&
+            !isReadOnlyBashInput(input, sessionEnvVarNameSet(shellCallContext));
+          let editDiffSkipped =
+            editDiffWanted &&
+            shouldSkipEditDiff(
+              shellCallContext.toolState,
+              callCtx.outsideResultReader,
+              hasLiveRootObserver(),
+            );
+          let commandMovesTree = editDiffSkipped && commandMovesWorkTree(input.command);
+          let gitRoot =
+            editDiffSkipped && !commandMovesTree && shellCallContext.toolUseId !== undefined && isLinux()
+              ? (findGitRootRecheckingNegative(getCwd()) ?? findGitRootRecheckingNegative(getOriginalCwd()))
+              : null;
+          let observerRoot = gitRoot !== null && startWriteObserver(gitRoot) === "ready" ? gitRoot : null;
+          if (observerRoot !== null) await flushObservedWrites(observerRoot);
+          let hasEditRecorder =
+            observerRoot !== null &&
+            shellCallContext.toolUseId !== undefined &&
+            (await startEditRecorder(observerRoot));
+          if (hasEditRecorder && observerRoot && shellCallContext.toolUseId !== undefined)
+            beginCommandObservation(shellCallContext.toolUseId, observerRoot);
+          let now = Date.now();
+          let snapshotGivenUp =
+            observerRoot !== null && !hasEditRecorder && !isRepoSnapshotGivenUp(observerRoot);
+          let now_2 = Date.now();
+          let before =
+            editDiffSkipped && !commandMovesTree && !hasEditRecorder
+              ? snapshotGivenUp
+                ? "unavailable"
+                : ((await takeBashSnapshot(getCwd())) ?? (await takeBashSnapshot(getOriginalCwd())))
+              : null;
+          let editDiffWaitMs = Date.now() - now_2;
+          let isSharedSnapshot =
+            before === "unavailable" ? isSharedSnapshotEnabled() : before?.sharesTreeReads === true;
+          let concurrentRepoRoot = editDiffWanted
+            ? (observerRoot ??
+              (before && before !== "unavailable"
+                ? before.repoRoot
+                : (findGitRootRecheckingNegative(getCwd()) ??
+                  findGitRootRecheckingNegative(getOriginalCwd()))))
+            : null;
+          let concurrentToken =
+            concurrentRepoRoot !== null ? registerConcurrentCommand(concurrentRepoRoot) : null;
+          let stayedConcurrent = false;
+          let watchedEditDiff = null;
+          let postCommandDiff;
+          let endedOnHold = false;
+          try {
+            let shellRun = runShellCommand({
+              input,
+              useSandbox,
+              networkLists: takeCommandNetworkLists(shellCallContext.toolUseId, input.command),
+              constraints,
+              backgroundHeld: () => shouldHoldForPlugin(shellCallContext),
+              onHeldEnd: () => {
+                endedOnHold = true;
+              },
+              servedBackground:
+                shellCallContext.remoteCall?.backgroundShells ?? shellCallContext.keptBackgroundShells,
+              keptStarter: shellCallContext.keptBackgroundShells,
+              onNote: shellCallContext.remoteCall?.onNote,
+              abortController,
+              taskRegistry: shellCallContext.taskRegistry,
+              emitToolProgress,
+              session: shellCallContext.session,
+              preventCwdChanges,
+              isMainThread,
+              subagentCapMs: getSubagentForegroundCapMs(shellCallContext),
+              toolUseId: shellCallContext.toolUseId,
+              toolState: shellCallContext.toolState,
+              attributionMessageId: parentMessage?.message.id,
+              callTiming: callCtx.timing,
+              agentId: shellCallContext.agentId,
+              caller: abortScopeOf(shellCallContext),
+              shellWallCapMs: shellCallContext.shellWallCapMs,
+              promptShellPluginId: shellCallContext.promptShellPluginId,
+              agentWorktree: shellCallContext.agentWorktree,
+              isolationRoot: isolationWorktreeFor(shellCallContext),
+              sessionEnvVars: shellCallContext.sessionEnvVars,
+              storageV5: shellCallContext.storageV5,
+              effortLevel: modelSupportsEffort(shellCallContext.mainLoopModel())
+                ? getEffortLevelOrHigh(
+                    shellCallContext.mainLoopModel(),
+                    shellCallContext.effort(),
+                    shellCallContext.effortLayerOverride(),
+                  )
+                : undefined,
+            });
+            let onProgressFn = shouldUseShellTool(
+              shellCallContext.remoteCall !== undefined,
+              shellCallContext.hasSpendCap,
+            )
+              ? onProgress
+              : undefined;
+            let nextResult;
+            do {
+              nextResult = await shellRun.next();
+              if (!nextResult.done && onProgressFn) {
+                let progressEvent = nextResult.value;
+                onProgressFn({
+                  type: "progress",
+                  toolUseID: `bash-progress-${progressIndex++}`,
+                  data: {
+                    type: "bash_progress",
+                    output: progressEvent.output,
+                    fullOutput: progressEvent.fullOutput,
+                    elapsedTimeSeconds: progressEvent.elapsedTimeSeconds,
+                    totalLines: progressEvent.totalLines,
+                    totalBytes: progressEvent.totalBytes,
+                    taskId: progressEvent.taskId,
+                    timeoutMs: progressEvent.timeoutMs,
+                  },
+                });
+              }
+            } while (!nextResult.done);
+            execResult = nextResult.value;
+            if (
+              execResult.backgroundTaskId !== undefined &&
+              execResult.timedOutAfterMs !== undefined &&
+              shellCallContext.innerCall !== true
+            )
+              execResult = {
+                ...execResult,
+                stdout: await readShellOutputSoFar(execResult.backgroundTaskId, PREVIEW_SIZE_CHARS),
+              };
+            outputFileCopier.track(execResult);
+            if (execResult.intercepted) sandboxed = false;
+            output = await withSpilledOutputTail(execResult.stdout, execResult.outputFilePath);
+            commandClass = classifyBashCommand(input.command);
+            bashTestOutcome = fromEnumOpt(classifyTestOutcome(commandClass, output, execResult));
+            if (
+              !execResult.backgroundTaskId &&
+              trackGitOperations(shellCallContext.session.host, input.command, execResult.code, output)
+                .prResolved
+            )
+              shellCallContext.markPrResolvedThisSession();
+            let abortReason = unwrapAbortReason(abortController.signal.reason);
+            let isInterruptAbort = execResult.interrupted && abortReason === "interrupt";
+            let interrupted_2 = execResult.interrupted && isUserInitiatedAbortReason(abortReason);
+            if (execResult.interrupted && abortReason === "background") throw new AbortError_2();
+            outputAccumulator.append((execResult.stdout || "").trimEnd() + NEWLINE);
+            commandInterpretation = DEFAULT_SEMANTIC_2(
+              input.command,
+              execResult.code,
+              execResult.stdout || "",
+              "",
+            );
+            if (output.includes(".git/index.lock': File exists")) logEvent("tengu_git_index_lock_error", {});
+            if (commandInterpretation.isError && !isInterruptAbort) {
+              if (execResult.code !== 0) outputAccumulator.append(`Exit code ${execResult.code}`);
+            }
+            cwd = getSessionProject(shellCallContext.session).cwd;
+            if (!preventCwdChanges) {
+              if (
+                resetCwdIfOutsideProject(shellCallContext.session, shellCallContext.unlayeredPermissions()) ||
+                execResult.cwdChangeRefused
+              )
+                cwdResetMessage = stdErrAppendShellResetMessage("");
+            }
+            let stdout = execResult.stdout || "";
+            let annotatedStdout = sandboxed
+              ? SandboxManager.annotateStderrWithSandboxFailures(
+                  shellCallContext.toolUseId ?? input.command,
+                  stdout,
+                )
+              : stdout;
+            hadSandboxViolation = annotatedStdout !== stdout;
+            if (sandboxed && execResult.backgroundTaskId === undefined)
+              sandboxViolations = getParsedSandboxViolations(shellCallContext.toolUseId ?? input.command);
+            if (hadSandboxViolation) sandboxViolationText = annotatedStdout.slice(stdout.length).trim();
+            if (execResult.preSpawnError) {
+              if (/null bytes/.test(execResult.preSpawnError))
+                throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+                  execResult.preSpawnError,
+                  "Bash: command contained null bytes (argv echo redacted)",
+                );
+              let preSpawnError = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+                execResult.preSpawnError,
+                "Bash: pre-spawn error (cwd/argv redacted)",
+              );
+              throw execResult.preSpawnErrorCode === "e2big"
+                ? tagObject(preSpawnError, {
+                    kind: "spawn_arg_limit",
+                  })
+                : preSpawnError;
+            }
+            if (isTrackedCall && execResult.backgroundTaskId === undefined && !execResult.intercepted)
+              oomNoteResult = maybeShowBashNote(
+                initialOomKillCount,
+                shellCallContext.toolState.get(OomKillNoteState),
+              );
+            let isAbortedRun =
+              execResult.interrupted ||
+              execResult.timedOut === true ||
+              execResult.timedOutAfterMs !== undefined;
+            if (
+              sandboxed &&
+              shellCallContext.remoteCall !== undefined &&
+              (hadSandboxViolation || !isAbortedRun)
+            )
+              shellCallContext.remoteCall.onNote(
+                buildSandboxFailureHint({
+                  command: input.command,
+                  output: output + sandboxViolationText,
+                  failed: commandInterpretation.isError && !isAbortedRun,
+                  violationRecorded: hadSandboxViolation,
+                  filesystemPolicy: effectiveFilesystemPolicy,
+                  additionalDenyRead: () => constraints?.additionalDenyRead ?? [],
+                }),
+              );
+            if (commandInterpretation.isError && !isInterruptAbort) {
+              let largeOutputMessage =
+                isPlainLocalCall &&
+                !execResult.interrupted &&
+                execResult.outputFilePath !== undefined &&
+                !isBase64DataUri(trimBlankEdgeLines(stdout)) &&
+                shouldBuildLargeOutputMessage()
+                  ? await buildLargeOutputMessage(
+                      execResult,
+                      stdout,
+                      shellCallContext.session,
+                      shellCallContext.storageV5,
+                    )
+                  : undefined;
+              let failureNote =
+                isPlainLocalCall &&
+                !execResult.interrupted &&
+                execResult.timedOut !== true &&
+                execResult.backgroundTaskId === undefined
+                  ? matchBashNoteRule(
+                      input.command,
+                      execResult.shellUsage,
+                      true,
+                      shellCallContext.toolState.get(BashNoteSessionState),
+                    )
+                  : undefined;
+              logEvent("tengu_bash_tool_command_failed", {
+                model,
+                command_type: getCommandTypeForLogging(input.command),
+                ...commandClass,
+                stdout_length: stdout.length,
+                stderr_length: 0,
+                exit_code: execResult.code,
+                interrupted: execResult.interrupted,
+                output_end_shown: largeOutputMessage !== undefined,
+                triggered_note_rule: failureNote?.rule ?? 0,
+                triggered_note_shown: failureNote?.note !== undefined,
+                oom_kill_during_command: oomNoteResult?.hit === true,
+                oom_kill_note_shown: oomNoteResult?.note !== undefined,
+                ...buildCommandTimingFields(execResult.shellUsage),
+                zsh_note_in_prompt: zshNoteInPrompt,
+                executor_shell: await getExecutorShellForAnalytics(),
+                executor_shell_overridden: Boolean(process.env.CLAUDE_CODE_SHELL),
+                ...detectShellDialectIssues(input.command, output),
+                bash_test_outcome: bashTestOutcome,
+                sandboxed,
+                sandbox_enabled: sandboxEnabled,
+                dangerously_disable_sandbox: input.dangerouslyDisableSandbox ?? false,
+                user_typed_shell_dispatch: userTypedShellDispatch,
+                filesystem_policy: fromEnum(effectiveFilesystemPolicy),
+                call_origin: fromEnum(constraints ? "remote" : "local"),
+                ...getExtraCommandLogFields(input),
+                had_sandbox_violation: sandboxed && hadSandboxViolation,
+                same_as_running_background: sameAsRunningBackground,
+                tool_use_id: toolUseId,
+                destructive_category: fromEnum(destructiveCategory ?? "none"),
+                destructive_target_scope: fromEnum(
+                  classifyDestructiveTargetScope(input.command, getCwd(), destructiveCategory),
+                ),
+                git_destructive_target: fromEnum(
+                  classifyGitDestructiveTarget(input.command, destructiveCategory),
+                ),
+                permission_mode: fromEnum(shellCallContext.permissions().mode),
+                ...repeatMeter.ended(execResult, true, false),
+                reads_own_output: classifySavedOutputPath(input.command, shellCallContext.session),
+              });
+              let proxyFailureNote;
+              try {
+                proxyFailureNote = describeAgentProxyFailures(proxyFailureSeq);
+              } catch (error) {
+                logError(error);
+              }
+              throw new ShellError({
+                stdout: "",
+                stderr: [
+                  proxyFailureNote,
+                  endedOnHold ? ENDED_INSTEAD_OF_BACKGROUND_MESSAGE : undefined,
+                  oomNoteResult?.note,
+                  failureNote?.note,
+                ].reduce(
+                  (acc, stderrPart) =>
+                    stderrPart === undefined ? acc : `${acc.trimEnd()}${NEWLINE}${NEWLINE}${stderrPart}`,
+                  largeOutputMessage === undefined
+                    ? annotatedStdout
+                    : largeOutputMessage + sandboxViolationText,
+                ),
+                code: execResult.code,
+                interrupted: interrupted_2,
+                hadSandboxViolation,
+                sandboxViolations,
+                sandboxed,
+              });
+            }
+            interrupted = execResult.interrupted;
+            watchedEditDiff =
+              hasEditRecorder && observerRoot && shellCallContext.toolUseId
+                ? await collectWatchedEditDiff(
+                    observerRoot,
+                    shellCallContext.toolUseId,
+                    Boolean(execResult.backgroundTaskId),
+                    interrupted,
+                    shellCallContext.readFileState,
+                    now,
+                  )
+                : null;
+            let now_2 = Date.now();
+            let onRead = () => {
+              if (concurrentToken && concurrentRepoRoot !== null)
+                unregisterConcurrentCommand(concurrentRepoRoot, concurrentToken);
+            };
+            postCommandDiff =
+              !execResult.backgroundTaskId &&
+              !commandMovesTree &&
+              !watchedEditDiff &&
+              before &&
+              before !== "unavailable" &&
+              !interrupted
+                ? await diffAfterCommand(
+                    before,
+                    onRead,
+                    before.sharesTreeReads &&
+                      getAutoModeClassifierRole(shellCallContext.permissions().mode, {
+                        peek: true,
+                      }) !== "off"
+                      ? {
+                          signal: abortController.signal,
+                          onReadFailed: onRead,
+                        }
+                      : undefined,
+                  )
+                : undefined;
+            editDiffWaitMs += Date.now() - now_2;
+          } catch (error) {
+            if (hasEditRecorder && shellCallContext.toolUseId !== undefined) {
+              let observation = await endCommandObservation(shellCallContext.toolUseId);
+              if (
+                observerRoot &&
+                (observation === null ||
+                  observation.paths.length > 0 ||
+                  observation.overflow ||
+                  observation.watchEnds)
+              )
+                forgetRecorder(observerRoot);
+            }
+            throw error;
+          } finally {
+            if (concurrentToken && concurrentRepoRoot !== null)
+              stayedConcurrent = unregisterConcurrentCommand(concurrentRepoRoot, concurrentToken);
+            if (before && !snapshotGivenUp) logEditDiffWait(editDiffWaitMs, isSharedSnapshot);
+            if (before && before !== "unavailable" && postCommandDiff !== null)
+              forgetRecorder(before.repoRoot);
+            if (editDiffWanted && !editDiffSkipped && concurrentRepoRoot !== null)
+              forgetRecorder(concurrentRepoRoot);
+            if (commandMovesTree) {
+              let gitRoot =
+                findGitRootRecheckingNegative(getCwd()) ?? findGitRootRecheckingNegative(getOriginalCwd());
+              if (gitRoot !== null) forgetRecorder(gitRoot);
+            }
+            if (shellCallContext.toolUseId)
+              emitToolProgress?.({
+                kind: "clear",
+                toolUseId: shellCallContext.toolUseId,
+              });
+            if (!isReadOnlyBashInput(input, sessionEnvVarNameSet(shellCallContext))) {
+              shellCallContext.applyFileHistoryOp({
+                kind: "touch",
+              });
+              repeatMeter.mayHaveWritten = true;
+            }
+          }
+          let stdout = outputAccumulator.toString();
+          let persistedOutput = await persistBashOutput(
+            execResult,
+            shellCallContext.session,
+            shellCallContext.storageV5,
+            outputFileCopier,
+          );
+          let path = persistedOutput?.path;
+          let size = persistedOutput?.size;
+          let outputTail =
+            persistedOutput !== undefined &&
+            isTrackedCall &&
+            !interrupted &&
+            !isBase64DataUri(trimBlankEdgeLines(stdout)) &&
+            shouldShowOutputTail()
+              ? await readOutputTail(
+                  execResult,
+                  stdout,
+                  PREVIEW_SIZE_CHARS - OUTPUT_CUT_TAIL_CHARS,
+                  OUTPUT_CUT_TAIL_CHARS,
+                  true,
+                )
+              : undefined;
+          let successNote =
+            isTrackedCall &&
+            !interrupted &&
+            execResult.backgroundTaskId === undefined &&
+            !isBase64DataUri(trimBlankEdgeLines(stdout))
+              ? matchBashNoteRule(
+                  input.command,
+                  execResult.shellUsage,
+                  false,
+                  shellCallContext.toolState.get(BashNoteSessionState),
+                )
+              : undefined;
+          logEvent("tengu_bash_tool_command_executed", {
+            model,
+            command_type: getCommandTypeForLogging(input.command),
+            ...commandClass,
+            stdout_length: stdout.length,
+            stderr_length: 0,
+            exit_code: execResult.code,
+            interrupted,
+            output_end_shown: outputTail !== undefined,
+            triggered_note_rule: successNote?.rule ?? 0,
+            triggered_note_shown: successNote?.note !== undefined,
+            oom_kill_during_command: oomNoteResult?.hit === true,
+            oom_kill_note_shown: oomNoteResult?.note !== undefined,
+            ...buildCommandTimingFields(execResult.shellUsage),
+            zsh_note_in_prompt: zshNoteInPrompt,
+            executor_shell: await getExecutorShellForAnalytics(),
+            executor_shell_overridden: Boolean(process.env.CLAUDE_CODE_SHELL),
+            ...detectShellDialectIssues(input.command, output),
+            bash_test_outcome: bashTestOutcome,
+            sandboxed,
+            sandbox_enabled: sandboxEnabled,
+            dangerously_disable_sandbox: input.dangerouslyDisableSandbox ?? false,
+            user_typed_shell_dispatch: userTypedShellDispatch,
+            filesystem_policy: fromEnum(effectiveFilesystemPolicy),
+            call_origin: fromEnum(constraints ? "remote" : "local"),
+            ...getExtraCommandLogFields(input),
+            had_sandbox_violation: sandboxed && hadSandboxViolation,
+            was_backgrounded: Boolean(execResult.backgroundTaskId),
+            same_as_running_background: sameAsRunningBackground,
+            tool_use_id: toolUseId,
+            destructive_category: fromEnum(destructiveCategory ?? "none"),
+            destructive_target_scope: fromEnum(
+              classifyDestructiveTargetScope(input.command, getCwd(), destructiveCategory),
+            ),
+            git_destructive_target: fromEnum(
+              classifyGitDestructiveTarget(input.command, destructiveCategory),
+            ),
+            permission_mode: fromEnum(shellCallContext.permissions().mode),
+            ...repeatMeter.ended(execResult, false, path !== undefined),
+            reads_own_output: classifySavedOutputPath(input.command, shellCallContext.session),
+          });
+          let codeIndexingFromCommand = detectCodeIndexingFromCommand(input.command);
+          if (codeIndexingFromCommand)
+            logEvent("tengu_code_indexing_tool_used", {
+              tool: fromEnum(codeIndexingFromCommand),
+              source: lit_2("cli"),
+              success: execResult.code === 0,
+            });
+          let stdout_2 = trimBlankEdgeLines(stdout);
+          stdout_2 = consumeClaudeCodeHints(stdout_2, {
+            command: input.command,
+            pendingHint: shellCallContext.session.pendingHint,
+            isMainThread,
+            surface: "shell",
+          });
+          let isImageOutput = execResult.timedOutAfterMs === undefined && isBase64DataUri(stdout_2);
+          let outputText = stdout_2;
+          if (isImageOutput) {
+            let resizedImage = await resizeShellImageOutput(
+              stdout_2,
+              execResult.outputFilePath,
+              size,
+              imageLimitsForModel(shellCallContext.mainLoopModel()),
+            );
+            if (resizedImage) outputText = resizedImage;
+            else isImageOutput = false;
+          }
+          let ghRateLimitHint = execResult.backgroundTaskId
+            ? undefined
+            : GITHUB_RATE_LIMIT_REMINDER(
+                input.command,
+                output,
+                shellCallContext.toolState.get(PrLinkBackoffState),
+              );
+          let backgroundCwdHint =
+            execResult.backgroundTaskId && commandHasAnyCd(input.command)
+              ? formatBackgroundCwdHint(getCwd())
+              : undefined;
+          let backgroundEndsWithFinalResponse =
+            execResult.backgroundTaskId !== undefined &&
+            (reapsShellsOnExit(shellCallContext.agentContext) ||
+              (shellCallContext.agentId === undefined && isPrintWithoutTidySloth()))
+              ? true
+              : undefined;
+          let gitOperation;
+          if (!execResult.backgroundTaskId) {
+            let gitOperation_2 = detectGitOperation(input.command, output);
+            if (Object.keys(gitOperation_2).length > 0) gitOperation = gitOperation_2;
+            if (!shellCallContext.remoteCall)
+              emitVcsStateChanges(gitOperation_2, output, {
+                command: input.command,
+                exitCode: execResult.code,
+                cwd,
+              });
+          }
+          let staleReadFileStateHint;
+          if (!interrupted && !isImageOutput && !execResult.backgroundTaskId) {
+            let staleReadFileStateEntries = await findStaleReadFileStateEntries(
+              input.command,
+              shellCallContext.readFileState,
+              commandStartMs,
+            );
+            if (staleReadFileStateEntries.length > 0) {
+              let cwd = getCwd();
+              let maxListedFiles = 5;
+              let joined = staleReadFileStateEntries
+                .slice(0, 5)
+                .map(
+                  (staleReadFileStateEntry) =>
+                    relative(cwd, staleReadFileStateEntry) || staleReadFileStateEntry,
+                )
+                .join(", ");
+              let moreSuffix =
+                staleReadFileStateEntries.length > 5
+                  ? ` and ${staleReadFileStateEntries.length - 5} more`
+                  : "";
+              let readToolName = canonicalToolName_2(FILE_READ_TOOL_NAME, shellCallContext.tools);
+              staleReadFileStateHint = `[This command modified ${staleReadFileStateEntries.length} ${plural(staleReadFileStateEntries.length, "file")} you've previously read: ${joined}${moreSuffix}. Call ${readToolName} before editing.]`;
+            }
+          }
+          let diffResult = execResult.backgroundTaskId
+            ? undefined
+            : commandMovesTree
+              ? {
+                  files: [],
+                  moreFiles: 0,
+                  skipped: true,
+                }
+              : watchedEditDiff
+                ? (watchedEditDiff.diff ?? undefined)
+                : before === "unavailable"
+                  ? {
+                      files: [],
+                      moreFiles: 0,
+                      unavailable: true,
+                    }
+                  : before && interrupted
+                    ? undefined
+                    : before
+                      ? (postCommandDiff ??
+                        (stayedConcurrent
+                          ? {
+                              files: [],
+                              moreFiles: 0,
+                              shared: true,
+                            }
+                          : undefined))
+                      : undefined;
+          let bashEditDiff =
+            diffResult && stayedConcurrent && !diffResult.skipped
+              ? {
+                  ...diffResult,
+                  shared: true,
+                }
+              : diffResult;
+          repeatMeter.sawEditDiff(
+            bashEditDiff,
+            !execResult.backgroundTaskId && (watchedEditDiff !== null || postCommandDiff !== undefined),
+          );
+          if (bashEditDiff?.unavailable)
+            logFeatureSad(
+              isSharedSnapshot ? "bash_edit_diff_shared" : "bash_edit_diff",
+              interrupted ? "interrupted" : "unavailable",
+            );
+          else if (bashEditDiff && !bashEditDiff.skipped)
+            logFeatureOk(isSharedSnapshot ? "bash_edit_diff_shared" : "bash_edit_diff");
+          if (!interrupted && !isImageOutput && !execResult.backgroundTaskId) {
+            let reduced = [
+              cwdResetMessage,
+              sandboxViolationText,
+              oomNoteResult?.note,
+              successNote?.note,
+              staleReadFileStateHint,
+              ghRateLimitHint,
+            ].reduce((acc, part) => acc + (part ? part.length + NEWLINE.length : 0), 0);
+            let persistenceExceeded =
+              path !== undefined ||
+              stdout.length > getMaxOutputLength() ||
+              shellCallContext.innerCall === true ||
+              outputText.length + reduced >
+                getPersistenceThreshold(
+                  BASH_TOOL_NAME,
+                  getConfiguredBashOutputMaxChars(),
+                  MAX_CONTEXT_TOKENS,
+                );
+            await recordShellFileReadsInReadState(
+              input.command,
+              shellCallContext.readFileState,
+              abortController.signal,
+              execResult.code,
+              persistenceExceeded ? undefined : outputText,
+              shellCallContext.remoteCall === undefined && shellCallContext.nestedMemoryAttachmentTriggers
+                ? {
+                    triggers: shellCallContext.nestedMemoryAttachmentTriggers,
+                    permissions: shellCallContext.permissions,
+                  }
+                : undefined,
+            );
+          }
+          let hasOutputEnd = outputTail !== undefined && !isImageOutput && outputText !== "";
+          let resultData = {
+            stdout: hasOutputEnd ? interleaveOutputCutMarker(outputText, outputTail) : outputText,
+            stderr: sandboxViolationText
+              ? [cwdResetMessage, sandboxViolationText].filter(Boolean).join(NEWLINE)
+              : cwdResetMessage,
+            interrupted,
+            isImage: isImageOutput,
+            returnCodeInterpretation: commandInterpretation?.message,
+            noOutputExpected: isSilentBashCommand(input.command),
+            backgroundTaskId: execResult.backgroundTaskId,
+            ...(execResult.backgroundTaskId !== undefined &&
+              shellCallContext.keptBackgroundShells !== undefined && {
+                backgroundOutputPath: getTaskOutputPath(execResult.backgroundTaskId),
+              }),
+            backgroundedByUser: execResult.backgroundedByUser,
+            backgroundedByTurnAbort: execResult.backgroundedByTurnAbort,
+            backgroundedToDeliverMessage: execResult.backgroundedToDeliverMessage,
+            timedOutAfterMs: execResult.timedOutAfterMs,
+            subagentCapApplied: execResult.subagentCapApplied,
+            backgroundEndsWithFinalResponse,
+            backgroundCwdHint,
+            dangerouslyDisableSandbox:
+              "dangerouslyDisableSandbox" in input ? input.dangerouslyDisableSandbox : undefined,
+            persistedOutputPath: path,
+            persistedOutputSize: size,
+            ...(hasOutputEnd && {
+              stdoutHoldsOutputEnd: hasOutputEnd,
             }),
-        };
-      },
-    };
-  },
+            memoryLimitNote: oomNoteResult?.note,
+            triggeredNote: successNote?.note,
+            staleReadFileStateHint,
+            ghRateLimitHint,
+            gitOperation,
+            bashEditDiff,
+          };
+          if (resultData.backgroundTaskId !== undefined && isInputHoldOn())
+            logEvent("tengu_bash_task_ack", {
+              trigger: resultData.backgroundedByUser
+                ? lit_2("user")
+                : resultData.backgroundedByTurnAbort
+                  ? lit_2("turn_abort")
+                  : resultData.backgroundedToDeliverMessage
+                    ? lit_2("deliver_message")
+                    : resultData.timedOutAfterMs !== undefined
+                      ? lit_2("timeout")
+                      : lit_2("explicit"),
+              ends_with_final_response: resultData.backgroundEndsWithFinalResponse === true,
+              shell: lit_2("bash"),
+            });
+          return {
+            data: resultData,
+            ...(sandboxViolations !== undefined && {
+              sandboxViolations,
+            }),
+            sandboxed,
+            ...(hadSandboxViolation &&
+              !interrupted && {
+                remedy: {
+                  kind: "sandbox_violation",
+                },
+              }),
+          };
+        },
+      };
+    },
+  });
 });
 //@ chunk-e6aww6q8.js:4848828-4854744 fingerprint = runShellCommand (0.466)
 /**
@@ -2647,7 +2831,7 @@ async function* runShellCommand({
       requestedMs: timeout,
       appliedMs: maxTimeoutMs,
     });
-  let yn = claimViolationReport(BASH_TOOL_NAME, command, toolState, {
+  let releaseViolationClaim = claimViolationReport(BASH_TOOL_NAME, command, toolState, {
     useSandbox,
   });
   let fullOutput = "";
@@ -2715,27 +2899,27 @@ async function* runShellCommand({
       effortLevel,
       storageV5,
       ...(isNpmPluginSourcePath(promptShellPluginId) && {
-        bunOptionsFor: (zo) => bunOptionsGuard(promptShellPluginId, zo),
+        bunOptionsFor: (pluginPath) => bunOptionsGuard(promptShellPluginId, pluginPath),
       }),
     });
   } catch (error) {
-    yn?.();
+    releaseViolationClaim?.();
     throw error;
   }
   let subagentCapApplied = isMainThread !== true && effectiveTimeoutMs < maxTimeoutMs ? true : undefined;
-  if (shellCommand.status === "killed") yn?.();
+  if (shellCommand.status === "killed") releaseViolationClaim?.();
   let resultPromise = shellCommand.result;
   if (toolUseId !== undefined)
     resultPromise
-      .then((zo) => {
-        if (zo.leftRunningPgid !== undefined)
-          leftoverProcessTracker.noteCommandLeftProcesses(zo.leftRunningPgid, toolUseId);
+      .then((result) => {
+        if (result.leftRunningPgid !== undefined)
+          leftoverProcessTracker.noteCommandLeftProcesses(result.leftRunningPgid, toolUseId);
       })
       .catch(() => {});
-  if (yn)
+  if (releaseViolationClaim)
     resultPromise
-      .then((zo) => {
-        if (zo.preSpawnError) yn();
+      .then((result) => {
+        if (result.preSpawnError) releaseViolationClaim();
       })
       .catch(() => {});
   async function spawnBackgroundTask(eventName, backgroundFn) {
@@ -2758,7 +2942,7 @@ async function* runShellCommand({
       )
     ).taskId;
   }
-  function moveToBackground(eventName, rs, Es, Nr, backgroundFn) {
+  function moveToBackground(eventName, reason, note, extra, backgroundFn) {
     if (backgroundHeld?.() === true) {
       onHeldEnd?.();
       shellCommand.kill();
@@ -2774,15 +2958,15 @@ async function* runShellCommand({
         shellCommand.kill();
         return;
       }
-      Vr?.();
-      let fs = resolveProgress;
-      if (fs) {
+      resolveAbortWait?.();
+      let resolveProgressFn = resolveProgress;
+      if (resolveProgressFn) {
         resolveProgress = null;
-        fs();
+        resolveProgressFn();
       }
       logEvent(eventName, {
         command_type: getCommandTypeForLogging(command),
-        ...Nr,
+        ...extra,
       });
       return;
     }
@@ -2795,19 +2979,19 @@ async function* runShellCommand({
           taskRegistry,
           toolUseId,
           undefined,
-          rs,
+          reason,
         )
       )
         return;
       backgroundTaskId = foregroundTaskId;
       logEvent(eventName, {
         command_type: getCommandTypeForLogging(command),
-        ...Nr,
+        ...extra,
       });
-      Es?.(foregroundTaskId);
+      note?.(foregroundTaskId);
       return;
     }
-    spawnBackgroundTask(rs).then((shellId) => {
+    spawnBackgroundTask(reason).then((shellId) => {
       backgroundTaskId = shellId;
       let resolve = resolveProgress;
       if (resolve) {
@@ -2816,12 +3000,12 @@ async function* runShellCommand({
       }
       logEvent(eventName, {
         command_type: getCommandTypeForLogging(command),
-        ...Nr,
+        ...extra,
       });
-      if (Es) Es(shellId);
+      if (note) note(shellId);
     });
   }
-  let Fr = keptShellStarter?.listMove?.((backgroundFn) => {
+  let listMoveResult = keptShellStarter?.listMove?.((backgroundFn) => {
     if (backgroundHeld?.() === true) return false;
     moveToBackground(
       "tengu_bash_command_moved_on_request",
@@ -2832,7 +3016,7 @@ async function* runShellCommand({
     );
     return backgroundTaskId !== undefined;
   });
-  if (Fr !== undefined) shellCommand.result.then(Fr, Fr);
+  if (listMoveResult !== undefined) shellCommand.result.then(listMoveResult, listMoveResult);
   if (shellCommand.onTimeout && shouldAutoBackground)
     shellCommand.onTimeout((backgroundFn) => {
       timedOutAfterMs = effectiveTimeoutMs;
@@ -2844,11 +3028,11 @@ async function* runShellCommand({
     });
   if (runInBackground && shellCommand.status !== "killed") {
     if (shellCommand.status === "completed") {
-      let Es = await resultPromise;
-      if (Es.preSpawnError) return Es;
+      let completedResult = await resultPromise;
+      if (completedResult.preSpawnError) return completedResult;
       if (servedBackground !== undefined) {
         shellCommand.cleanup();
-        return Es;
+        return completedResult;
       }
     }
     let backgroundFn = timeoutWhenPositive(timeout, maxTimeoutMs);
@@ -2871,28 +3055,28 @@ async function* runShellCommand({
   let startTime = Date.now();
   let foregroundTaskId = undefined;
   let turnAborted = false;
-  let Vr = null;
+  let resolveAbortWait = null;
   let isTurnAbortPending = () =>
     abortController.signal.aborted && isTurnLevelAbort(abortController.signal.reason, caller);
-  let jr = () => {
+  let onTurnAbort = () => {
     if (!isTurnAbortPending()) return;
-    Vr?.();
-    let zo = resolveProgress;
-    if (zo) {
+    resolveAbortWait?.();
+    let resolvePending = resolveProgress;
+    if (resolvePending) {
       resolveProgress = null;
-      zo();
+      resolvePending();
     }
   };
-  using Or = onAbortDisposable(abortController.signal, jr);
+  using abortDisposable = onAbortDisposable(abortController.signal, onTurnAbort);
   {
     let initialResult = await Promise.race([
       resultPromise,
       new Promise((resolve) => {
-        setTimeout((Nr) => Nr(null), PROGRESS_THRESHOLD_MS, resolve).unref();
+        setTimeout((settle) => settle(null), PROGRESS_THRESHOLD_MS, resolve).unref();
       }),
       new Promise((resolve) => {
         if (isTurnAbortPending()) resolve(null);
-        else Vr = () => resolve(null);
+        else resolveAbortWait = () => resolve(null);
       }),
     ]);
     if (initialResult !== null) {
@@ -3064,34 +3248,41 @@ async function* runShellCommand({
 /**
  * 根据文件监视记录生成本次命令的编辑 diff（bashEditDiff）；后台化或中断时标记 unavailable 并停止监视。
  */
-async function collectWatchedEditDiff(e, toolUseId, r, interrupted, readFileState, y) {
-  let S = {
+async function collectWatchedEditDiff(cwd, toolUseId, isBackground, interrupted, snapshotTakenAt, nowMs) {
+  let unavailableDiff = {
     diff: {
       files: [],
       moreFiles: 0,
       unavailable: true,
     },
   };
-  if (r) {
+  if (isBackground) {
     forgetObservedRepo(toolUseId);
-    forgetRecorder(e);
-    return S;
+    forgetRecorder(cwd);
+    return unavailableDiff;
   }
-  let w = await endCommandObservation(toolUseId);
-  if (w === null) {
-    forgetRecorder(e);
-    return S;
+  let observation = await endCommandObservation(toolUseId);
+  if (observation === null) {
+    forgetRecorder(cwd);
+    return unavailableDiff;
   }
   if (interrupted) {
-    if (w.paths.length === 0 && !w.overflow && !w.watchEnds)
+    if (observation.paths.length === 0 && !observation.overflow && !observation.watchEnds)
       return {
         diff: null,
       };
-    forgetRecorder(e);
-    return S;
+    forgetRecorder(cwd);
+    return unavailableDiff;
   }
-  let diff = await recordEditedFilesSerially(e, w.paths, w.overflow, readFileState, y, w.shared);
-  if (w.watchEnds) forgetRecorder(e);
+  let diff = await recordEditedFilesSerially(
+    cwd,
+    observation.paths,
+    observation.overflow,
+    snapshotTakenAt,
+    nowMs,
+    observation.shared,
+  );
+  if (observation.watchEnds) forgetRecorder(cwd);
   return {
     diff,
   };

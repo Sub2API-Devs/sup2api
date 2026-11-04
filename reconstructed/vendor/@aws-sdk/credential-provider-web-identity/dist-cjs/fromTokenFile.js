@@ -45,3 +45,4 @@ var fromTokenFile =
       import_client.setCredentialFeature(credentials, "CREDENTIALS_ENV_VARS_STS_WEB_ID_TOKEN", "h");
     return credentials;
   };
+export { fromTokenFile };

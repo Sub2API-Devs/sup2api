@@ -29,71 +29,77 @@ import { plural } from "../stringUtils.js";
 import { jsonStringify } from "../slowOperations.js";
 import { isEnvTruthy } from "../envUtils.js";
 import { SETTING_ALIASES } from "./marketplaceSettingsAliases.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-dcmhvw5a.js:388586-388597 placement
 var MAX_OTEL_HEADER_NAME_LENGTH = 120;
 //@ chunk-dcmhvw5a.js:388597-388834 placement
-function sanitizeEndpointUrl(e) {
-  if (/[\\\s\x00-\x1f\x7f]/.test(e)) return;
-  let n;
+function sanitizeEndpointUrl(value) {
+  if (/[\\\s\x00-\x1f\x7f]/.test(value)) return;
+  let url;
   try {
-    n = new URL(e);
+    url = new URL(value);
   } catch {
     return;
   }
-  if ((n.protocol !== "http:" && n.protocol !== "https:") || !n.host) return;
-  if (URL_AUTHORITY_ESCAPE_RE.test(n.pathname)) return;
-  let r = safeOriginUrlRedacted(e);
-  return r !== null && r.length <= MAX_OTEL_HEADER_NAME_LENGTH ? r : undefined;
+  if ((url.protocol !== "http:" && url.protocol !== "https:") || !url.host) return;
+  if (URL_AUTHORITY_ESCAPE_RE.test(url.pathname)) return;
+  let redacted = safeOriginUrlRedacted(value);
+  return redacted !== null && redacted.length <= MAX_OTEL_HEADER_NAME_LENGTH ? redacted : undefined;
 }
 //@ chunk-dcmhvw5a.js:388834-389022 placement
-var SCHEME_PREFIX_PATTERN = /^\w{1,8}:\/\//;
-var GRPC_RESOLVER_SCHEMES = new Set(["dns", "unix", "ipv4", "ipv6"]);
-var KNOWN_URL_SCHEMES = new Set([
-  ...GRPC_RESOLVER_SCHEMES,
-  "http",
-  "https",
-  "ws",
-  "wss",
-  "ftp",
-  "file",
-  "grpc",
-  "grpcs",
-  "otlp",
-  "xds",
-  "tcp",
-  "udp",
-  "tls",
-  "h2",
-  "h2c",
-  "http2",
-]);
+var SCHEME_PREFIX_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var GRPC_RESOLVER_SCHEMES;
+var KNOWN_URL_SCHEMES;
+deferInit("chunk-dcmhvw5a.js:388834", () => {
+  SCHEME_PREFIX_PATTERN = /^\w{1,8}:\/\//;
+  GRPC_RESOLVER_SCHEMES = new Set(["dns", "unix", "ipv4", "ipv6"]);
+  KNOWN_URL_SCHEMES = new Set([
+    ...GRPC_RESOLVER_SCHEMES,
+    "http",
+    "https",
+    "ws",
+    "wss",
+    "ftp",
+    "file",
+    "grpc",
+    "grpcs",
+    "otlp",
+    "xds",
+    "tcp",
+    "udp",
+    "tls",
+    "h2",
+    "h2c",
+    "http2",
+  ]);
+});
 //@ chunk-dcmhvw5a.js:389022-389265 placement
-function endpointHostForDisplay(e) {
-  let urlOrNull = parseUrlOrNull(`https://${e}`);
-  if (SCHEME_PREFIX_PATTERN.test(e)) {
-    let urlOrNull = parseUrlOrNull(e);
+function endpointHostForDisplay(value) {
+  let urlOrNull = parseUrlOrNull(`https://${value}`);
+  if (SCHEME_PREFIX_PATTERN.test(value)) {
+    let urlOrNull = parseUrlOrNull(value);
     return urlOrNull && urlOrNull.port !== "" && GRPC_RESOLVER_SCHEMES.has(urlOrNull.hostname)
       ? undefined
-      : sanitizeEndpointUrl(e);
+      : sanitizeEndpointUrl(value);
   }
-  if (parseUrlOrNull(e)?.host) return urlOrNull === null ? sanitizeEndpointUrl(e) : undefined;
+  if (parseUrlOrNull(value)?.host) return urlOrNull === null ? sanitizeEndpointUrl(value) : undefined;
   return urlOrNull &&
     !KNOWN_URL_SCHEMES.has(trimTrailingDots(urlOrNull.hostname)) &&
-    sanitizeEndpointUrl(`https://${e}`) !== undefined
+    sanitizeEndpointUrl(`https://${value}`) !== undefined
     ? urlOrNull.host
     : undefined;
 }
 //@ chunk-dcmhvw5a.js:389265-389343 placement
 function trimTrailingDots(hostname) {
-  let n = hostname.length;
-  while (n > 0 && hostname[n - 1] === ".") n--;
-  return hostname.slice(0, n);
+  let end = hostname.length;
+  while (end > 0 && hostname[end - 1] === ".") end--;
+  return hostname.slice(0, end);
 }
 //@ chunk-dcmhvw5a.js:389343-389399 placement
-function parseUrlOrNull(e) {
+function parseUrlOrNull(text) {
   try {
-    return new URL(e);
+    return new URL(text);
   } catch {
     return null;
   }
@@ -112,12 +118,14 @@ function truncateEndpointValue(text) {
   return truncateWithNotShown(text, MAX_OTEL_ENDPOINT_LENGTH);
 }
 //@ chunk-dcmhvw5a.js:389520-389615 placement
-function truncateWithNotShown(e, n) {
-  return e.length <= n ? e : `${e.slice(0, n)}\u2026 (+${e.length - n} chars NOT SHOWN)`;
+function truncateWithNotShown(text, maxLength) {
+  return text.length <= maxLength
+    ? text
+    : `${text.slice(0, maxLength)}\u2026 (+${text.length - maxLength} chars NOT SHOWN)`;
 }
 //@ chunk-dcmhvw5a.js:389615-389716 placement
-function maskEnvName(e) {
-  let replaced = e.replace(/[^A-Za-z0-9_]+/g, "?");
+function maskEnvName(name) {
+  let replaced = name.replace(/[^A-Za-z0-9_]+/g, "?");
   return replaced.length <= MAX_OTEL_ATTRIBUTE_LENGTH
     ? replaced
     : `${replaced.slice(0, MAX_OTEL_ATTRIBUTE_LENGTH)}\u2026`;
@@ -131,84 +139,90 @@ var MAX_ENDPOINT_QUERY_LENGTH = 32;
 /**
  * 非 ASCII 替换为 ?。
  */
-function asciiOnly(e) {
-  return e.replace(/[^\x20-\x7e]/gu, "?");
+function asciiOnly(text) {
+  return text.replace(/[^\x20-\x7e]/gu, "?");
 }
 //@ chunk-dcmhvw5a.js:389801-390244 placement
 /**
  * 解析 helper 设置值。
  */
-function parseHelperSetting(e, n) {
-  let r = safeParseJSON(e, false);
-  if (!Array.isArray(r)) return;
-  let [s, a, c] = r;
-  let g;
-  if (typeof s === "string" && s) g = quoteHelperSetting(s);
-  else if (isInlineScriptHelper(s)) {
-    let f = n ? ` (${n.bytes} ${plural(n.bytes, "byte")}, ${n.lines} ${plural(n.lines, "line")})` : "";
-    g = `script for ${s.interpreter}${f} sha256:${s.script.slice(0, MAX_ENDPOINT_QUERY_LENGTH)}`;
+function parseHelperSetting(raw, sizes) {
+  let parsed = safeParseJSON(raw, false);
+  if (!Array.isArray(parsed)) return;
+  let [helper, timeout, refresh] = parsed;
+  let label;
+  if (typeof helper === "string" && helper) label = quoteHelperSetting(helper);
+  else if (isInlineScriptHelper(helper)) {
+    let sizeText = sizes
+      ? ` (${sizes.bytes} ${plural(sizes.bytes, "byte")}, ${sizes.lines} ${plural(sizes.lines, "line")})`
+      : "";
+    label = `script for ${helper.interpreter}${sizeText} sha256:${helper.script.slice(0, MAX_ENDPOINT_QUERY_LENGTH)}`;
   } else return;
-  let m = [];
-  for (let [f, h] of [
-    ["timeout", a],
-    ["refresh", c],
+  let parts = [];
+  for (let [key, value] of [
+    ["timeout", timeout],
+    ["refresh", refresh],
   ])
-    if (h != null) m.push(`${f} ${typeof h === "number" ? `${h}ms` : "?"}`);
-  return m.length ? `${g} (${m.join(", ")})` : g;
+    if (value != null) parts.push(`${key} ${typeof value === "number" ? `${value}ms` : "?"}`);
+  return parts.length ? `${label} (${parts.join(", ")})` : label;
 }
 //@ chunk-dcmhvw5a.js:390244-390456 placement
-function quoteHelperSetting(e) {
-  let n = asciiOnly(e);
-  let r = n.length > MAX_ENDPOINT_SCHEME_LENGTH;
-  let s;
-  if (!r) s = jsonStringify(n);
+function quoteHelperSetting(text) {
+  let ascii = asciiOnly(text);
+  let tooLong = ascii.length > MAX_ENDPOINT_SCHEME_LENGTH;
+  let quoted;
+  if (!tooLong) quoted = jsonStringify(ascii);
   else {
-    let a = n.length - MAX_ENDPOINT_HOST_LENGTH - MAX_ENDPOINT_PATH_LENGTH;
-    s = jsonStringify(
-      `${n.slice(0, MAX_ENDPOINT_HOST_LENGTH)}\u2026(${a} chars omitted)\u2026${n.slice(-MAX_ENDPOINT_PATH_LENGTH)}`,
+    let omitted = ascii.length - MAX_ENDPOINT_HOST_LENGTH - MAX_ENDPOINT_PATH_LENGTH;
+    quoted = jsonStringify(
+      `${ascii.slice(0, MAX_ENDPOINT_HOST_LENGTH)}\u2026(${omitted} chars omitted)\u2026${ascii.slice(-MAX_ENDPOINT_PATH_LENGTH)}`,
     );
   }
-  if (r || n !== e) s = `${s} sha256:${normalizePathText(e).slice(0, MAX_ENDPOINT_QUERY_LENGTH)}`;
-  return s;
+  if (tooLong || ascii !== text)
+    quoted = `${quoted} sha256:${normalizePathText(text).slice(0, MAX_ENDPOINT_QUERY_LENGTH)}`;
+  return quoted;
 }
 //@ chunk-dcmhvw5a.js:390456-390627 placement
-function describeEnvRows(e) {
-  let mapped = Object.entries(e.envVars).map(([key, value]) => describeEnvVar(key, value, ""));
-  for (let [r, s] of riskyPayloadSlots(e))
-    for (let [key, value] of Object.entries(s.envVars)) mapped.push(describeEnvVar(key, value, `${r}.env.`));
+function describeEnvRows(doc) {
+  let mapped = Object.entries(doc.envVars).map(([key, value]) => describeEnvVar(key, value, ""));
+  for (let [prefix, slot] of riskyPayloadSlots(doc))
+    for (let [key, value] of Object.entries(slot.envVars))
+      mapped.push(describeEnvVar(key, value, `${prefix}.env.`));
   return mapped;
 }
 //@ chunk-dcmhvw5a.js:390627-390910 placement
-function describeEnvVar(e, n, r) {
-  if (!OTEL_HEADER_NAME_RE.test(e))
+function describeEnvVar(name, value, prefix) {
+  if (!OTEL_HEADER_NAME_RE.test(name))
     return {
-      key: e,
-      text: `${r}${maskEnvName(e)}`,
+      key: name,
+      text: `${prefix}${maskEnvName(name)}`,
     };
-  if (ENHANCED_TELEMETRY_VARS.has(e) && isEnvTruthy(n))
+  if (ENHANCED_TELEMETRY_VARS.has(name) && isEnvTruthy(value))
     return {
-      key: e,
-      text: `${r}${e} (adds traces to the telemetry export)`,
+      key: name,
+      text: `${prefix}${name} (adds traces to the telemetry export)`,
       tracesSwitch: true,
     };
-  let s = OTLP_ANY_ENDPOINT_RE.test(e.toUpperCase()) ? endpointHostForDisplay(n) : sanitizeEndpointUrl(n);
-  return s
+  let display = OTLP_ANY_ENDPOINT_RE.test(name.toUpperCase())
+    ? endpointHostForDisplay(value)
+    : sanitizeEndpointUrl(value);
+  return display
     ? {
-        key: e,
-        text: `${r}${e}=${s}`,
-        url: s,
+        key: name,
+        text: `${prefix}${name}=${display}`,
+        url: display,
       }
     : {
-        key: e,
-        text: `${r}${e}`,
+        key: name,
+        text: `${prefix}${name}`,
       };
 }
 //@ chunk-dcmhvw5a.js:390910-391083 placement
 /**
  * 取出 shell helper 设置校验结果中给安全对话框展示的各组行（命令、沙箱、隔离、环境变量、类别）。
  */
-function shellHelperRows(e) {
-  let { commandRows, sandboxRows, isolationRows, envRows, categoryRows } = validateShellHelperSettings(e);
+function shellHelperRows(doc) {
+  let { commandRows, sandboxRows, isolationRows, envRows, categoryRows } = validateShellHelperSettings(doc);
   return {
     commandRows,
     sandboxRows,
@@ -221,36 +235,36 @@ function shellHelperRows(e) {
 /**
  * 校验 shell helper 设置。
  */
-function validateShellHelperSettings(e) {
-  let n = [];
-  for (let [key, value] of Object.entries(e.shellSettings)) {
+function validateShellHelperSettings(doc) {
+  let rows = [];
+  for (let [key, value] of Object.entries(doc.shellSettings)) {
     if (value === undefined) continue;
     if (isPolicyHelperName(key)) {
-      let helperSetting = parseHelperSetting(value, e.inlineHelperScriptSizes?.[key]);
-      n.push(helperSetting ? `${key}=${helperSetting}` : key);
+      let helperSetting = parseHelperSetting(value, doc.inlineHelperScriptSizes?.[key]);
+      rows.push(helperSetting ? `${key}=${helperSetting}` : key);
       continue;
     }
-    n.push(describeHelperSettingPath(key, value, ""));
+    rows.push(describeHelperSettingPath(key, value, ""));
   }
-  for (let [g, m] of riskyPayloadSlots(e))
-    for (let [key, value] of Object.entries(m.shellSettings)) {
+  for (let [prefix, slot] of riskyPayloadSlots(doc))
+    for (let [key, value] of Object.entries(slot.shellSettings)) {
       if (value === undefined) continue;
-      n.push(describeHelperSettingPath(key, value, `${g}.`));
+      rows.push(describeHelperSettingPath(key, value, `${prefix}.`));
     }
-  let keys = Object.keys(e.sandboxSettings);
-  for (let [g, m] of riskyPayloadSlots(e))
-    for (let key of Object.keys(m.sandboxSettings)) keys.push(`${g}.${key}`);
-  let keys_2 = Object.keys(e.isolationSettings);
-  for (let [g, m] of riskyPayloadSlots(e))
-    for (let key of Object.keys(m.isolationSettings)) keys_2.push(`${g}.${key}`);
-  let a = [];
-  for (let g of describeEnvRows(e)) a.push(g.text);
-  let categoryRows = e.hasHooks ? ["hooks"] : [];
+  let keys = Object.keys(doc.sandboxSettings);
+  for (let [prefix, slot] of riskyPayloadSlots(doc))
+    for (let key of Object.keys(slot.sandboxSettings)) keys.push(`${prefix}.${key}`);
+  let keys_2 = Object.keys(doc.isolationSettings);
+  for (let [prefix, slot] of riskyPayloadSlots(doc))
+    for (let key of Object.keys(slot.isolationSettings)) keys_2.push(`${prefix}.${key}`);
+  let envRows = [];
+  for (let row of describeEnvRows(doc)) envRows.push(row.text);
+  let categoryRows = doc.hasHooks ? ["hooks"] : [];
   return {
-    commandRows: n,
+    commandRows: rows,
     sandboxRows: keys,
     isolationRows: keys_2,
-    envRows: a,
+    envRows,
     categoryRows,
   };
 }
@@ -258,34 +272,34 @@ function validateShellHelperSettings(e) {
 /**
  * 描述 helper 设置位置。
  */
-function describeHelperSettingPath(e, n, r) {
-  let s = truncateResourceValue(escapeNonPrintable(`${r}${e}`).text);
-  if (e.startsWith("extraKnownMarketplaces[")) {
-    if (e.endsWith(".headersHelper")) {
-      let headersHelperCommand = parseHeadersHelperCommand(n);
+function describeHelperSettingPath(key, value, prefix) {
+  let label = truncateResourceValue(escapeNonPrintable(`${prefix}${key}`).text);
+  if (key.startsWith("extraKnownMarketplaces[")) {
+    if (key.endsWith(".headersHelper")) {
+      let headersHelperCommand = parseHeadersHelperCommand(value);
       if (headersHelperCommand !== undefined) {
-        let c =
+        let url =
           headersHelperCommand.url === undefined
             ? null
             : (displaySafeUrl(headersHelperCommand.url) ??
               (parseUrlOrNull(headersHelperCommand.url)?.host ? REDACTED_URL : null));
-        return `${s}: ${truncateEndpointValue(escapeNonPrintable(headersHelperCommand.command).text)}${c === null ? "" : ` \u2192 ${truncateEndpointValue(escapeNonPrintable(c).text)}`}`;
+        return `${label}: ${truncateEndpointValue(escapeNonPrintable(headersHelperCommand.command).text)}${url === null ? "" : ` \u2192 ${truncateEndpointValue(escapeNonPrintable(url).text)}`}`;
       }
-    } else if (e.endsWith(".pluginDigests")) return `${s}: code from your organization will run`;
-    else if (e.endsWith(".source.command"))
-      return `${s}: ${truncateEndpointValue(escapeNonPrintable(n).text)}`;
+    } else if (key.endsWith(".pluginDigests")) return `${label}: code from your organization will run`;
+    else if (key.endsWith(".source.command"))
+      return `${label}: ${truncateEndpointValue(escapeNonPrintable(value).text)}`;
   }
-  return s;
+  return label;
 }
 //@ chunk-dcmhvw5a.js:392265-392501 placement
-function extraMarketplacesOf(e) {
-  let extraKnownMarketplaces = e.extraKnownMarketplaces;
+function extraMarketplacesOf(doc) {
+  let extraKnownMarketplaces = doc.extraKnownMarketplaces;
   if (extraKnownMarketplaces !== undefined && extraKnownMarketplaces !== null) return extraKnownMarketplaces;
-  let r = e;
+  let target = doc;
   for (let { alias, canonical } of SETTING_ALIASES) {
     if (canonical !== "extraKnownMarketplaces") continue;
-    let c = r[alias];
-    if (c !== undefined && c !== null && typeof c === "object") return c;
+    let value = target[alias];
+    if (value !== undefined && value !== null && typeof value === "object") return value;
   }
   return;
 }

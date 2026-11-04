@@ -344,3 +344,11 @@ Not an exception, so still judged as above: the tail asks the user a question, o
 \u2192 {"state":"blocked","detail":"PR #212 ready to merge; two decisions open","tempo":"blocked","needs":"the two decisions from the last message","output":{}}
   (an earlier question still waits for an answer \u2192 blocked, as above)
 `;
+export {
+  CHAT_THREAD_GUIDE,
+  HANDED_OVER_GUIDE,
+  OPENING_ASK_GUIDE,
+  CLASSIFIER_SYSTEM_PROMPT,
+  PROJECT_OPENING_ASK_GUIDE,
+  PROJECT_THREAD_CARD_PROMPT,
+};

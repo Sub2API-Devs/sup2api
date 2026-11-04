@@ -8,7 +8,7 @@
  * pieces: chunk-7ga9pgfv.js (1)
  * attribution: placement 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -20,38 +20,38 @@ import { Text, Box } from "../../ink/components/Text.js";
  * 标题组件：粗体标题加可选副标题。
  */
 function Title(props) {
-  let $ = w(7);
+  let $ = useMemoCache(7);
   let { children, subtitle } = props;
-  let o;
+  let titleText;
   if ($[0] !== children) {
-    o = jsxProd_default(Text, {
+    titleText = jsxProd_default(Text, {
       bold: true,
       children,
     });
     $[0] = children;
-    $[1] = o;
-  } else o = $[1];
-  let c;
+    $[1] = titleText;
+  } else titleText = $[1];
+  let subtitleText;
   if ($[2] !== subtitle) {
-    c =
+    subtitleText =
       subtitle &&
       jsxProd_default(Text, {
         dimColor: true,
         children: subtitle,
       });
     $[2] = subtitle;
-    $[3] = c;
-  } else c = $[3];
-  let a;
-  if ($[4] !== o || $[5] !== c) {
-    a = jsxProd_default_2(Box, {
+    $[3] = subtitleText;
+  } else subtitleText = $[3];
+  let layout;
+  if ($[4] !== titleText || $[5] !== subtitleText) {
+    layout = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [o, c],
+      children: [titleText, subtitleText],
     });
-    $[4] = o;
-    $[5] = c;
-    $[6] = a;
-  } else a = $[6];
-  return a;
+    $[4] = titleText;
+    $[5] = subtitleText;
+    $[6] = layout;
+  } else layout = $[6];
+  return layout;
 }
 export { Title };

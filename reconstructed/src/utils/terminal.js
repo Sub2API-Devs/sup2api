@@ -73,14 +73,14 @@ function wrapText_2(content, terminalWidth, suppressExpandHint = false) {
   let estimatedRemaining = remainingLines;
   if (preTruncated) {
     let position = 0;
-    let f = -1;
+    let newlineIndex = -1;
     for (;;) {
-      f = trimmedContent.indexOf(
+      newlineIndex = trimmedContent.indexOf(
         `
 `,
-        f + 1,
+        newlineIndex + 1,
       );
-      if (f === -1) break;
+      if (newlineIndex === -1) break;
       position++;
     }
     let max = Math.max(position + 1, Math.ceil(trimmedContent.length / wrapWidth));
@@ -100,70 +100,67 @@ function wrapText_2(content, terminalWidth, suppressExpandHint = false) {
 /**
  * 文本按宽度换行后是否超过显示行数上限。
  */
-function exceedsLineLimit(r, columns) {
-  if (typeof r !== "string") return false;
-  let t = r.trimEnd();
-  let n = 0;
-  let e = 0;
+function exceedsLineLimit(content, columns) {
+  if (typeof content !== "string") return false;
+  let trimmed = content.trimEnd();
+  let lines = 0;
+  let overlong = 0;
   for (let j = 0; j <= MAX_TRUNCATION_LINES; j++) {
-    n = t.indexOf(
+    lines = trimmed.indexOf(
       `
 `,
-      n,
+      lines,
     );
-    if (n === -1) break;
-    e++;
-    n++;
+    if (lines === -1) break;
+    overlong++;
+    lines++;
   }
-  if (n !== -1 && n < t.length) return true;
+  if (lines !== -1 && lines < trimmed.length) return true;
   if (columns === undefined) return false;
   let max = Math.max(columns - MIN_WRAP_WIDTH, 10);
-  let s = MAX_TRUNCATION_LINES + 1;
-  let a = MAX_TRUNCATION_LINES * max * 4;
-  if (t.length > a) return true;
-  if (e === 0) {
-    let l = s * max;
-    if (t.length <= l) return false;
-    return bunStringWidth(t) > l;
+  let maxLines = MAX_TRUNCATION_LINES + 1;
+  let lineBudgetChars = MAX_TRUNCATION_LINES * max * 4;
+  if (trimmed.length > lineBudgetChars) return true;
+  if (overlong === 0) {
+    let lineBudgetChars = maxLines * max;
+    if (trimmed.length <= lineBudgetChars) return false;
+    return bunStringWidth(trimmed) > lineBudgetChars;
   }
-  let c = 0;
-  for (let line of t.split(`
+  let wrappedLineCount = 0;
+  for (let line of trimmed.split(`
 `)) {
-    c += Math.max(1, Math.ceil(bunStringWidth(line) / max));
-    if (c > s) return true;
+    wrappedLineCount += Math.max(1, Math.ceil(bunStringWidth(line) / max));
+    if (wrappedLineCount > maxLines) return true;
   }
   return false;
 }
 //@ chunk-ah34pb7m.js:54284-54747 fingerprint = renderTruncatedContent (0.433)
 function renderTruncatedContent(
-  m,
-  {
-    maxChars: d = HOOK_FEEDBACK_MAX_WIDTH,
-    maxLines: c = HOOK_FEEDBACK_MAX_LINES + 1,
-    preserveLayout: g = false,
-  } = {},
+  content,
+  { maxChars = HOOK_FEEDBACK_MAX_WIDTH, maxLines = HOOK_FEEDBACK_MAX_LINES + 1, preserveLayout = false } = {},
 ) {
-  let f;
-  if (g) {
-    let lines = m.split(`
+  let lines;
+  if (preserveLayout) {
+    let lines_2 = content.split(`
 `);
-    let index = lines.findIndex((line) => line.trim() !== "");
-    let lastIndex = lines.findLastIndex((line) => line.trim() !== "");
-    f = index === -1 ? [] : lines.slice(index, lastIndex + 1).map((line) => line.trimEnd() || " ");
+    let index = lines_2.findIndex((line) => line.trim() !== "");
+    let lastIndex = lines_2.findLastIndex((line) => line.trim() !== "");
+    lines = index === -1 ? [] : lines_2.slice(index, lastIndex + 1).map((line) => line.trimEnd() || " ");
   } else
-    f = m
+    lines = content
       .split(
         `
 `,
       )
       .map((line) => line.trim())
-      .filter((T) => T.length > 0);
-  let mapped = f.slice(0, c).map((T) => {
-    let x = truncateToLength(T, d);
-    return x.length < T.length ? `${x}\u2026` : T;
+      .filter((line) => line.length > 0);
+  let mapped = lines.slice(0, maxLines).map((line) => {
+    let truncatedLine = truncateToLength(line, maxChars);
+    return truncatedLine.length < line.length ? `${truncatedLine}\u2026` : line;
   });
-  let M = f.length - mapped.length;
-  if (M > 0) mapped.push(`\u2026 +${M} more ${M === 1 ? "line" : "lines"}`);
+  let hiddenLineCount = lines.length - mapped.length;
+  if (hiddenLineCount > 0)
+    mapped.push(`\u2026 +${hiddenLineCount} more ${hiddenLineCount === 1 ? "line" : "lines"}`);
   return mapped;
 }
 export { exceedsLineLimit, renderTruncatedContent, wrapText_2 };

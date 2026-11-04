@@ -13,6 +13,7 @@ import { readFlagWithOverride } from "../../../services/analytics/flagOverrides.
 import { isVersionOnlyFlag } from "../../bash/parser.js";
 import { INTERPRETER_NAME_PATTERN } from "../hookCommandAnalysis.js";
 import { TENGU_FEDERATED_HEARTH } from "./commandReach.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-mthxbav8.js:49944-50122 placement
 function isAnchoredPath(program) {
@@ -26,176 +27,205 @@ function isAnchoredPath(program) {
 /**
  * 路径参数的解析规则集：哪些选项取下一个词、哪些启动器/带值选项、是否按 su 语义处理 runuser 等。
  */
-var PATH_ARG_RULES = {
-  anchored: isAnchoredPath,
-  takesNext: (e, n) =>
-    e(n) || (!n.startsWith("--") && Array.from(n).findIndex((r, s) => s > 0 && e("-" + r)) === n.length - 1),
-  alsoLaunchers: new Set(["ionice", "chrt", "taskset", "xvfb-run"]),
-  alsoValued: {
-    sudo: new Set(["-r", "-t"]),
-  },
-  runuserIsSu: true,
-};
-var PATH_ARG_RULESET = [
-  {
-    anchored: (e) => e.text.startsWith("/"),
-    takesNext: (e, n) => !n.includes("=") && (e(n) || (/^-[a-zA-Z]{2,}$/.test(n) && e("-" + n.at(-1)))),
-    alsoLaunchers: new Set(),
-    alsoValued: {},
-    runuserIsSu: false,
-  },
-  PATH_ARG_RULES,
-  {
-    ...PATH_ARG_RULES,
+var PATH_ARG_RULES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var PATH_ARG_RULESET;
+deferInit("chunk-mthxbav8.js:50122", () => {
+  PATH_ARG_RULES = {
+    anchored: isAnchoredPath,
+    takesNext: (isAnchored, arg) =>
+      isAnchored(arg) ||
+      (!arg.startsWith("--") &&
+        Array.from(arg).findIndex((char, charIndex) => charIndex > 0 && isAnchored("-" + char)) ===
+          arg.length - 1),
+    alsoLaunchers: new Set(["ionice", "chrt", "taskset", "xvfb-run"]),
     alsoValued: {
-      ...PATH_ARG_RULES.alsoValued,
-      time: new Set(["-f", "--format", "-o", "--output"]),
-      strace: new Set(["-I", "-b"]),
-      xargs: new Set(["-J"]),
+      sudo: new Set(["-r", "-t"]),
     },
-  },
-  {
-    ...PATH_ARG_RULES,
-    stepsPastVariable: true,
-  },
-];
+    runuserIsSu: true,
+  };
+  PATH_ARG_RULESET = [
+    {
+      anchored: (arg) => arg.text.startsWith("/"),
+      takesNext: (isAnchored, arg) =>
+        !arg.includes("=") &&
+        (isAnchored(arg) || (/^-[a-zA-Z]{2,}$/.test(arg) && isAnchored("-" + arg.at(-1)))),
+      alsoLaunchers: new Set(),
+      alsoValued: {},
+      runuserIsSu: false,
+    },
+    PATH_ARG_RULES,
+    {
+      ...PATH_ARG_RULES,
+      alsoValued: {
+        ...PATH_ARG_RULES.alsoValued,
+        time: new Set(["-f", "--format", "-o", "--output"]),
+        strace: new Set(["-I", "-b"]),
+        xargs: new Set(["-J"]),
+      },
+    },
+    {
+      ...PATH_ARG_RULES,
+      stepsPastVariable: true,
+    },
+  ];
+});
 //@ chunk-mthxbav8.js:50711-50781 placement
-function isLauncherCommand(e) {
-  return COMMAND_WRAPPERS_2.has(e) || PATH_ARG_RULESET.some((n) => n.alsoLaunchers.has(e));
+function isLauncherCommand(name) {
+  return COMMAND_WRAPPERS_2.has(name) || PATH_ARG_RULESET.some((rules) => rules.alsoLaunchers.has(name));
 }
 //@ chunk-mthxbav8.js:50781-50952 placement
-function computeUserOptionFill(e) {
-  let n = Array(e.length + 1).fill(false);
-  for (let r = e.length - 1; r >= 0; r -= 1) {
-    let text = e[r].text;
-    n[r] = text !== "--" && (/^(?:-[flmpPT]*u|--user(?:=|$))/.test(text) || n[r + 1]);
+function computeUserOptionFill(words) {
+  let filled = Array(words.length + 1).fill(false);
+  for (let wordIndex = words.length - 1; wordIndex >= 0; wordIndex -= 1) {
+    let text = words[wordIndex].text;
+    filled[wordIndex] =
+      text !== "--" && (/^(?:-[flmpPT]*u|--user(?:=|$))/.test(text) || filled[wordIndex + 1]);
   }
-  return n;
+  return filled;
 }
 //@ chunk-mthxbav8.js:50952-51596 placement
 /**
  * shell 解析用关键字集合（then/do/else/if 等）、块结束词（fi/done/esac）、控制词、赋值词正则、命令替换嵌套上限与若干转义/续行正则。
  */
-var SHELL_KEYWORDS = new Set(["then", "do", "else", "elif", "if", "while", "until", "!"]);
-var SHELL_BLOCK_CLOSERS = new Set(["fi", "done", "esac", "}", "]]"]);
-var TENGU_EVENTUAL_DRAGONFLY = "tengu_eventual_dragonfly";
-var SHELL_CONTROL_WORDS = new Set(["time", "coproc", "function", "fi", "done", "esac"]);
-var SHELL_COMPOUND_OPENERS = new Set(["coproc", "function"]);
-var ASSIGNMENT_WORD_RE = /^[A-Za-z_][A-Za-z0-9_]*(?:\[[^\]]*\])?\+?=/;
-var MAX_SUBSTITUTION_DEPTH = 6;
-var WHITESPACE_CHARS = " \t";
-var SHELL_META_CHARS = ` 	
+var SHELL_KEYWORDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SHELL_BLOCK_CLOSERS;
+var TENGU_EVENTUAL_DRAGONFLY;
+var SHELL_CONTROL_WORDS;
+var SHELL_COMPOUND_OPENERS;
+var ASSIGNMENT_WORD_RE;
+var MAX_SUBSTITUTION_DEPTH;
+var WHITESPACE_CHARS;
+var SHELL_META_CHARS;
+var IDENTIFIER_RE;
+var TENGU_TRANQUIL_DUCKLING;
+var BOT_PROTECTED_TENGU_SABLE_THIMBLE;
+var CASE_FOLLOW_UNSUPPORTED_TEXT;
+var PIPE_TERMINATORS;
+var BACKTICK;
+var CONTINUED_LINE_RE;
+var TRAILING_BACKSLASH_RE;
+deferInit("chunk-mthxbav8.js:50952", () => {
+  SHELL_KEYWORDS = new Set(["then", "do", "else", "elif", "if", "while", "until", "!"]);
+  SHELL_BLOCK_CLOSERS = new Set(["fi", "done", "esac", "}", "]]"]);
+  TENGU_EVENTUAL_DRAGONFLY = "tengu_eventual_dragonfly";
+  SHELL_CONTROL_WORDS = new Set(["time", "coproc", "function", "fi", "done", "esac"]);
+  SHELL_COMPOUND_OPENERS = new Set(["coproc", "function"]);
+  ASSIGNMENT_WORD_RE = /^[A-Za-z_][A-Za-z0-9_]*(?:\[[^\]]*\])?\+?=/;
+  MAX_SUBSTITUTION_DEPTH = 6;
+  WHITESPACE_CHARS = " \t";
+  SHELL_META_CHARS = ` 	
 ;&|()<>`;
-var IDENTIFIER_RE = /^[A-Za-z_\u0080-\uffff][A-Za-z0-9_\u0080-\uffff]*$/;
-var TENGU_TRANQUIL_DUCKLING = "tengu_tranquil_duckling";
-var BOT_PROTECTED_TENGU_SABLE_THIMBLE = "bot_protected_tengu_sable_thimble";
-var CASE_FOLLOW_UNSUPPORTED_TEXT =
-  "a case statement this check cannot follow, such as one with parentheses or the word esac inside a pattern";
-var PIPE_TERMINATORS = ` 	
+  IDENTIFIER_RE = /^[A-Za-z_\u0080-\uffff][A-Za-z0-9_\u0080-\uffff]*$/;
+  TENGU_TRANQUIL_DUCKLING = "tengu_tranquil_duckling";
+  BOT_PROTECTED_TENGU_SABLE_THIMBLE = "bot_protected_tengu_sable_thimble";
+  CASE_FOLLOW_UNSUPPORTED_TEXT =
+    "a case statement this check cannot follow, such as one with parentheses or the word esac inside a pattern";
+  PIPE_TERMINATORS = ` 	
 ;`;
-var Ge = String.fromCharCode(96);
-var CONTINUED_LINE_RE = /(?:^|[^\\])(?:\\\\)*\\\n/;
-var TRAILING_BACKSLASH_RE = /(?:^|[^\\])(?:\\\\)*\\$/;
+  BACKTICK = String.fromCharCode(96);
+  CONTINUED_LINE_RE = /(?:^|[^\\])(?:\\\\)*\\\n/;
+  TRAILING_BACKSLASH_RE = /(?:^|[^\\])(?:\\\\)*\\$/;
+});
 //@ chunk-mthxbav8.js:51596-51667 placement
-function skipLineContinuations(e, n) {
-  let r = n;
+function skipLineContinuations(text, index) {
+  let cursor = index;
   while (
-    e[r] === "\\" &&
-    e[r + 1] ===
+    text[cursor] === "\\" &&
+    text[cursor + 1] ===
       `
 `
   )
-    r += 2;
-  return r;
+    cursor += 2;
+  return cursor;
 }
 //@ chunk-mthxbav8.js:51667-51911 placement
 function joinLineContinuations(raw) {
   if (!raw.includes("\\\n")) return raw;
-  let n = [];
-  let r = 0;
-  let s = -1;
-  for (let u = 0; u < raw.length; u += 1) {
-    let S = raw[u];
-    if (S === "\\") {
-      if (s === -1) s = u;
+  let parts = [];
+  let start = 0;
+  let backslashAt = -1;
+  for (let index = 0; index < raw.length; index += 1) {
+    let char = raw[index];
+    if (char === "\\") {
+      if (backslashAt === -1) backslashAt = index;
       continue;
     }
     if (
-      S ===
+      char ===
         `
 ` &&
-      s !== -1 &&
-      (u - s) % 2 === 1
+      backslashAt !== -1 &&
+      (index - backslashAt) % 2 === 1
     ) {
-      n.push(raw.slice(r, u - 1));
-      r = u + 1;
+      parts.push(raw.slice(start, index - 1));
+      start = index + 1;
     }
-    s = -1;
+    backslashAt = -1;
   }
-  n.push(raw.slice(r));
-  return n.join("");
+  parts.push(raw.slice(start));
+  return parts.join("");
 }
 //@ chunk-mthxbav8.js:51911-52140 placement
-function unescapeDoubleQuoted(e) {
-  if (!e.includes("\\")) return e;
-  let n = "";
-  let r = 0;
-  for (let s = 0; s < e.length; s += 1) {
-    if (e[s] !== "\\") continue;
-    let u = e[s + 1];
+function unescapeDoubleQuoted(text) {
+  if (!text.includes("\\")) return text;
+  let out = "";
+  let copied = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] !== "\\") continue;
+    let next = text[index + 1];
     if (
-      u === "$" ||
-      u === Ge ||
-      u === "\\" ||
-      u ===
+      next === "$" ||
+      next === BACKTICK ||
+      next === "\\" ||
+      next ===
         `
 `
     ) {
-      n += e.slice(r, s);
-      r =
-        u ===
+      out += text.slice(copied, index);
+      copied =
+        next ===
         `
 `
-          ? s + 2
-          : s + 1;
-      s += 1;
+          ? index + 2
+          : index + 1;
+      index += 1;
     }
   }
-  return r === 0 ? e : n + e.slice(r);
+  return copied === 0 ? text : out + text.slice(copied);
 }
 //@ chunk-mthxbav8.js:52140-52193 placement
 var WHITESPACE_OR_PIPE_RE = /[ \t\n|]/;
 var PARAMETER_EXPANSION_RE = /@P\}/;
 var QUOTED_BACKSLASH_RE = /\$'[^']*\\|"[^"]*\\/;
 //@ chunk-mthxbav8.js:52193-52402 placement
-function parseShellCommands(e, n = {}) {
-  let r = new ShellReader(
-    e,
-    n.make === true,
-    n.quotedBackslashKept !== false,
-    n.substitutionHeredocs !== false,
+function parseShellCommands(text, options = {}) {
+  let reader = new ShellReader(
+    text,
+    options.make === true,
+    options.quotedBackslashKept !== false,
+    options.substitutionHeredocs !== false,
   );
-  let s = r.tokens("eof", 0);
-  let u = [];
-  for (let S of [s, ...r.bodies]) splitPipeline(S, n, u);
+  let tokens = reader.tokens("eof", 0);
+  let commands = [];
+  for (let tokenList of [tokens, ...reader.bodies]) splitPipeline(tokenList, options, commands);
   return {
-    commands: u,
-    unreadable: r.unreadable,
+    commands,
+    unreadable: reader.unreadable,
   };
 }
 //@ chunk-mthxbav8.js:52402-52507 placement
-function shellComments(e, n = {}) {
-  let r = new ShellReader(e, false, n.quotedBackslashKept !== false, false);
-  r.tokens("eof", 0);
-  return r.comments;
+function shellComments(text, options = {}) {
+  let reader = new ShellReader(text, false, options.quotedBackslashKept !== false, false);
+  reader.tokens("eof", 0);
+  return reader.comments;
 }
 //@ chunk-mthxbav8.js:52507-52607 placement
-function hasNonNewlineTokenAfter(e, n, r) {
-  for (let s = n; s < r; s += 1) {
-    let u = e[s];
+function hasNonNewlineTokenAfter(tokens, from, to) {
+  for (let index = from; index < to; index += 1) {
+    let token = tokens[index];
     if (
-      u?.kind !== "op" ||
-      u.op !==
+      token?.kind !== "op" ||
+      token.op !==
         `
 `
     )
@@ -204,86 +234,86 @@ function hasNonNewlineTokenAfter(e, n, r) {
   return false;
 }
 //@ chunk-mthxbav8.js:52607-54329 placement
-function splitPipeline(e, n, r) {
-  let s = 0;
-  let u = 0;
-  let S = false;
-  let w = false;
-  let h = 0;
-  let v = 0;
-  while (s < e.length) {
-    let y = e[s];
-    if (S) {
+function splitPipeline(tokens, options, commands) {
+  let index = 0;
+  let caseDepth = 0;
+  let skipToEsac = false;
+  let afterPipe = false;
+  let groupStart = 0;
+  let parenDepth = 0;
+  while (index < tokens.length) {
+    let token = tokens[index];
+    if (skipToEsac) {
       if (
-        y.kind === "op" &&
-        y.op ===
+        token.kind === "op" &&
+        token.op ===
           `
 `
       ) {
-        s += 1;
+        index += 1;
         continue;
       }
-      if (y.kind === "word" && y.word.text === "esac" && !y.word.quoted) {
-        u -= 1;
-        S = false;
-        s += 1;
+      if (token.kind === "word" && token.word.text === "esac" && !token.word.quoted) {
+        caseDepth -= 1;
+        skipToEsac = false;
+        index += 1;
         continue;
       }
-      while (s < e.length) {
-        let P = e[s];
+      while (index < tokens.length) {
+        let token = tokens[index];
         if (
-          (P.kind === "op" && P.op === ")") ||
-          (P.kind === "word" && P.word.text === "esac" && !P.word.quoted)
+          (token.kind === "op" && token.op === ")") ||
+          (token.kind === "word" && token.word.text === "esac" && !token.word.quoted)
         )
           break;
-        s += 1;
+        index += 1;
       }
-      if (e[s]?.kind === "op") s += 1;
-      S = false;
-      w = false;
+      if (tokens[index]?.kind === "op") index += 1;
+      skipToEsac = false;
+      afterPipe = false;
       continue;
     }
-    if (y.kind === "op") {
-      if (u > 0 && /^;[;&]|^;;&$/.test(y.op)) S = true;
-      if (y.op === "(" || y.op === "{") {
-        v += 1;
-        if (w && h === 0) h = v;
-      } else if (y.op === ")" || y.op === "}") {
-        if (v === h) h = 0;
-        v = Math.max(0, v - 1);
+    if (token.kind === "op") {
+      if (caseDepth > 0 && /^;[;&]|^;;&$/.test(token.op)) skipToEsac = true;
+      if (token.op === "(" || token.op === "{") {
+        parenDepth += 1;
+        if (afterPipe && groupStart === 0) groupStart = parenDepth;
+      } else if (token.op === ")" || token.op === "}") {
+        if (parenDepth === groupStart) groupStart = 0;
+        parenDepth = Math.max(0, parenDepth - 1);
       }
-      if (y.op === "|" || y.op === "|&") w = true;
+      if (token.op === "|" || token.op === "|&") afterPipe = true;
       else if (
-        y.op !==
+        token.op !==
           `
 ` &&
-        y.op !== "(" &&
-        y.op !== "{"
+        token.op !== "(" &&
+        token.op !== "{"
       )
-        w = false;
-      s += 1;
+        afterPipe = false;
+      index += 1;
       continue;
     }
-    let C = [];
-    let O = [];
-    let x;
-    while (s < e.length && e[s].kind !== "op") {
-      let P = e[s];
-      if (P.kind === "word") C.push(P.word);
-      else if (P.kind === "redirect")
-        O.push({
-          op: P.op,
-          target: P.word,
+    let words = [];
+    let redirects = [];
+    let heredoc;
+    while (index < tokens.length && tokens[index].kind !== "op") {
+      let token = tokens[index];
+      if (token.kind === "word") words.push(token.word);
+      else if (token.kind === "redirect")
+        redirects.push({
+          op: token.op,
+          target: token.word,
         });
-      else if (P.kind === "heredoc" && P.body !== null) x = (x ?? "") + P.body;
-      s += 1;
+      else if (token.kind === "heredoc" && token.body !== null) heredoc = (heredoc ?? "") + token.body;
+      index += 1;
     }
-    let piped = w || h > 0;
-    w = false;
-    let [j, ...M] = collectAllHeredocCommands(C, n);
-    let q =
-      j ??
-      (O.length > 0 || x !== undefined
+    let piped = afterPipe || groupStart > 0;
+    afterPipe = false;
+    let [first, ...rest] = collectAllHeredocCommands(words, options);
+    let command =
+      first ??
+      (redirects.length > 0 || heredoc !== undefined
         ? {
             program: {
               text: ":",
@@ -294,20 +324,21 @@ function splitPipeline(e, n, r) {
             assignments: [],
           }
         : undefined);
-    if (q === undefined) continue;
-    let text = q.program.text;
-    if (!q.program.quoted) {
+    if (command === undefined) continue;
+    let text = command.program.text;
+    if (!command.program.quoted) {
       if (text === "case") {
-        u += 1;
-        let P = e[s];
-        if (P?.kind === "op" && P.op === ")" && q.args.some((arg) => arg.text === "in")) s += 1;
-        else S = true;
+        caseDepth += 1;
+        let token = tokens[index];
+        if (token?.kind === "op" && token.op === ")" && command.args.some((arg) => arg.text === "in"))
+          index += 1;
+        else skipToEsac = true;
         continue;
       }
       if (text === "esac") {
-        u = Math.max(0, u - 1);
+        caseDepth = Math.max(0, caseDepth - 1);
         if (
-          (O.length === 0 && x === undefined) ||
+          (redirects.length === 0 && heredoc === undefined) ||
           !readFlagWithOverride(TENGU_EVENTUAL_DRAGONFLY, {
             safe: true,
           })
@@ -315,26 +346,26 @@ function splitPipeline(e, n, r) {
           continue;
       }
       if (text === "[[") {
-        if (!C.some((P) => P.text === "]]" && !P.quoted)) {
-          while (s < e.length) {
-            let P = e[s];
+        if (!words.some((word) => word.text === "]]" && !word.quoted)) {
+          while (index < tokens.length) {
+            let token = tokens[index];
             if (
-              (P.kind === "word" && P.word.text === "]]") ||
-              (P.kind === "op" &&
-                P.op ===
+              (token.kind === "word" && token.word.text === "]]") ||
+              (token.kind === "op" &&
+                token.op ===
                   `
 `)
             )
               break;
-            s += 1;
+            index += 1;
           }
-          if (e[s]?.kind === "word") s += 1;
+          if (tokens[index]?.kind === "word") index += 1;
         }
         continue;
       }
       if (SHELL_BLOCK_CLOSERS.has(text)) {
-        if (O.length > 0 || x !== undefined)
-          r.push({
+        if (redirects.length > 0 || heredoc !== undefined)
+          commands.push({
             program: {
               text: ":",
               quoted: false,
@@ -342,43 +373,43 @@ function splitPipeline(e, n, r) {
             },
             args: [],
             assignments: [],
-            redirects: O,
+            redirects,
             piped,
-            ...(x !== undefined && {
-              heredoc: x,
+            ...(heredoc !== undefined && {
+              heredoc,
             }),
           });
         continue;
       }
     }
-    for (let P of [q, ...M])
-      r.push({
-        ...P,
-        redirects: O,
+    for (let command_2 of [command, ...rest])
+      commands.push({
+        ...command_2,
+        redirects,
         piped,
-        ...(x !== undefined && {
-          heredoc: x,
+        ...(heredoc !== undefined && {
+          heredoc,
         }),
       });
   }
 }
 //@ chunk-mthxbav8.js:54329-56016 placement
-function collectHeredocBodies(e, n, r) {
-  let s = [];
-  let u;
-  let S = false;
-  let w;
-  let h = 0;
+function collectHeredocBodies(words, options, rules) {
+  let kept = [];
+  let userFill;
+  let sawWrapper = false;
+  let saved;
+  let index = 0;
   for (;;) {
-    while (h < e.length) {
-      let R = e[h];
-      if (ASSIGNMENT_WORD_RE.test(joinLineContinuations(R.raw))) s.push(R);
-      else if (!(!R.quoted && SHELL_KEYWORDS.has(R.text))) break;
-      h += 1;
+    while (index < words.length) {
+      let word = words[index];
+      if (ASSIGNMENT_WORD_RE.test(joinLineContinuations(word.raw))) kept.push(word);
+      else if (!(!word.quoted && SHELL_KEYWORDS.has(word.text))) break;
+      index += 1;
     }
-    let v = e[h];
-    if (v === undefined)
-      return s.length > 0
+    let word = words[index];
+    if (word === undefined)
+      return kept.length > 0
         ? {
             program: {
               text: ":",
@@ -386,103 +417,113 @@ function collectHeredocBodies(e, n, r) {
               raw: ":",
             },
             args: [],
-            assignments: s,
+            assignments: kept,
           }
         : undefined;
-    if (n.make && !v.quoted && /^[@+-]+./.test(v.text)) {
-      let replaced = v.text.replace(/^[@+-]+/, "");
-      v = {
-        ...v,
+    if (options.make && !word.quoted && /^[@+-]+./.test(word.text)) {
+      let replaced = word.text.replace(/^[@+-]+/, "");
+      word = {
+        ...word,
         text: replaced,
         raw: replaced,
       };
     }
-    let lower = v.text.slice(v.text.lastIndexOf("/") + 1).toLowerCase();
+    let lower = word.text.slice(word.text.lastIndexOf("/") + 1).toLowerCase();
     if (
-      !(COMMAND_WRAPPERS_2.has(lower) || r.alsoLaunchers.has(lower)) ||
-      /[ \t]/.test(v.text) ||
-      (v.text.includes("/") && !r.anchored(v))
+      !(COMMAND_WRAPPERS_2.has(lower) || rules.alsoLaunchers.has(lower)) ||
+      /[ \t]/.test(word.text) ||
+      (word.text.includes("/") && !rules.anchored(word))
     ) {
-      if (r.stepsPastVariable === true && S && v.text.startsWith("$") && e[h + 1] !== undefined) {
-        w ??= {
-          k: h,
-          kept: s.length,
+      if (
+        rules.stepsPastVariable === true &&
+        sawWrapper &&
+        word.text.startsWith("$") &&
+        words[index + 1] !== undefined
+      ) {
+        saved ??= {
+          k: index,
+          kept: kept.length,
         };
-        s.push(v);
-        h += 1;
+        kept.push(word);
+        index += 1;
         continue;
       }
-      let R = v.text.startsWith("$") && !/^\$\((?:\u2026|\(\u2026\))\)/.test(v.text);
-      if (w !== undefined && (v.text.startsWith("-") || (!R && (v.quoted || v.expands === true))))
+      let isDollarVar = word.text.startsWith("$") && !/^\$\((?:\u2026|\(\u2026\))\)/.test(word.text);
+      if (
+        saved !== undefined &&
+        (word.text.startsWith("-") || (!isDollarVar && (word.quoted || word.expands === true)))
+      )
         return {
-          program: e[w.k],
-          args: e.slice(w.k + 1),
-          assignments: s.slice(0, w.kept),
+          program: words[saved.k],
+          args: words.slice(saved.k + 1),
+          assignments: kept.slice(0, saved.kept),
         };
       return {
-        program: v,
-        args: e.slice(h + 1),
-        assignments: s,
+        program: word,
+        args: words.slice(index + 1),
+        assignments: kept,
       };
     }
     if (lower === "command") {
-      let R = false;
-      for (let j = h + 1; e[j]?.text.startsWith("-") === true; j += 1) R ||= isVersionOnlyFlag(e[j].text);
-      if (R)
+      let anyVersionFlag = false;
+      for (let index_2 = index + 1; words[index_2]?.text.startsWith("-") === true; index_2 += 1)
+        anyVersionFlag ||= isVersionOnlyFlag(words[index_2].text);
+      if (anyVersionFlag)
         return {
-          program: v,
-          args: e.slice(h + 1),
-          assignments: s,
+          program: word,
+          args: words.slice(index + 1),
+          assignments: kept,
         };
     }
-    if (lower === "runuser" && r.runuserIsSu) {
-      u ??= computeUserOptionFill(e);
-      if (!u[h + 1])
+    if (lower === "runuser" && rules.runuserIsSu) {
+      userFill ??= computeUserOptionFill(words);
+      if (!userFill[index + 1])
         return {
-          program: v,
-          args: e.slice(h + 1),
-          assignments: s,
+          program: word,
+          args: words.slice(index + 1),
+          assignments: kept,
         };
     }
     if (lower === "busybox") {
-      s.push(v);
-      h += 1;
+      kept.push(word);
+      index += 1;
       continue;
     }
-    s.push(v);
-    S = true;
-    w = undefined;
-    h += 1;
-    let C = WRAPPERS_WITH_TIMEOUT[lower] ?? 0;
-    let O = (R) => (WRAPPER_VALUE_OPTIONS[lower]?.has(R) ?? false) || (r.alsoValued[lower]?.has(R) ?? false);
-    let x = false;
-    while (h < e.length) {
-      let text = e[h].text;
-      if (!x && text === "--") {
-        s.push(e[h]);
-        x = true;
-        h += 1;
+    kept.push(word);
+    sawWrapper = true;
+    saved = undefined;
+    index += 1;
+    let valuesLeft = WRAPPERS_WITH_TIMEOUT[lower] ?? 0;
+    let takesValue = (text) =>
+      (WRAPPER_VALUE_OPTIONS[lower]?.has(text) ?? false) || (rules.alsoValued[lower]?.has(text) ?? false);
+    let sawDoubleDash = false;
+    while (index < words.length) {
+      let text = words[index].text;
+      if (!sawDoubleDash && text === "--") {
+        kept.push(words[index]);
+        sawDoubleDash = true;
+        index += 1;
         continue;
       }
-      if (!x && lower === "env" && text === "-") {
-        s.push({
-          ...e[h],
+      if (!sawDoubleDash && lower === "env" && text === "-") {
+        kept.push({
+          ...words[index],
           text: "-i",
         });
-        h += 1;
+        index += 1;
         continue;
       }
-      if (!x && text.startsWith("-") && text !== "-") {
-        let j = r.takesNext(O, text);
-        s.push(e[h]);
-        if (j && e[h + 1] !== undefined) s.push(e[h + 1]);
-        h += j ? 2 : 1;
+      if (!sawDoubleDash && text.startsWith("-") && text !== "-") {
+        let takesNext = rules.takesNext(takesValue, text);
+        kept.push(words[index]);
+        if (takesNext && words[index + 1] !== undefined) kept.push(words[index + 1]);
+        index += takesNext ? 2 : 1;
         continue;
       }
-      if (C > 0 && (lower !== "chrt" || /^\d+$/.test(text))) {
-        s.push(e[h]);
-        C -= 1;
-        h += 1;
+      if (valuesLeft > 0 && (lower !== "chrt" || /^\d+$/.test(text))) {
+        kept.push(words[index]);
+        valuesLeft -= 1;
+        index += 1;
         continue;
       }
       break;
@@ -490,17 +531,20 @@ function collectHeredocBodies(e, n, r) {
   }
 }
 //@ chunk-mthxbav8.js:56016-56200 placement
-function collectAllHeredocCommands(e, n) {
-  return PATH_ARG_RULESET.flatMap((r) => {
-    let heredocBodies = collectHeredocBodies(e, n, r);
+function collectAllHeredocCommands(words, options) {
+  return PATH_ARG_RULESET.flatMap((rules) => {
+    let heredocBodies = collectHeredocBodies(words, options, rules);
     return heredocBodies === undefined ? [] : [heredocBodies];
   }).filter(
-    (r, s, u) => u.findIndex((S) => S.program.raw === r.program.raw && S.args.length === r.args.length) === s,
+    (command, commandIndex, all) =>
+      all.findIndex(
+        (other) => other.program.raw === command.program.raw && other.args.length === command.args.length,
+      ) === commandIndex,
   );
 }
 //@ chunk-mthxbav8.js:56200-56231 placement
-function parseShellWords(e) {
-  return collectAllHeredocCommands(e, {});
+function parseShellWords(words) {
+  return collectAllHeredocCommands(words, {});
 }
 //@ chunk-mthxbav8.js:56231-69518 placement
 /**
@@ -524,17 +568,17 @@ class ShellReader {
     this.quotedBackslashKept = quotedBackslashKept;
     this.substitutionHeredocs = substitutionHeredocs;
   }
-  fail(e) {
-    this.unreadable ??= e;
+  fail(reason) {
+    this.unreadable ??= reason;
   }
-  failUnlessSubscriptHoldsOff(e) {
+  failUnlessSubscriptHoldsOff(reason) {
     if (
       this.unreadable === null &&
       readFlagWithOverride(TENGU_TRANQUIL_DUCKLING, {
         safe: true,
       })
     )
-      this.fail(e);
+      this.fail(reason);
   }
   failUnlessCasePatternGroupHoldOff() {
     if (
@@ -545,71 +589,72 @@ class ShellReader {
     )
       this.fail(CASE_FOLLOW_UNSUPPORTED_TEXT);
   }
-  pastContinuations(e, n = false) {
+  pastContinuations(index, skipSpaces = false) {
     for (;;) {
-      let r = skipLineContinuations(this.text, e);
-      if (r !== e) e = r;
-      else if (n && e < this.text.length && WHITESPACE_CHARS.includes(this.text[e])) e += 1;
-      else return e;
+      let next = skipLineContinuations(this.text, index);
+      if (next !== index) index = next;
+      else if (skipSpaces && index < this.text.length && WHITESPACE_CHARS.includes(this.text[index]))
+        index += 1;
+      else return index;
     }
   }
-  tooDeep(e) {
-    if (e < MAX_SUBSTITUTION_DEPTH) return false;
+  tooDeep(depth) {
+    if (depth < MAX_SUBSTITUTION_DEPTH) return false;
     this.fail("command substitutions nested too deeply");
-    let n = 1;
-    while (this.pos < this.text.length && n > 0) {
-      let r = this.text[this.pos];
-      if (r === "(") n += 1;
-      else if (r === ")") n -= 1;
+    let open = 1;
+    while (this.pos < this.text.length && open > 0) {
+      let char = this.text[this.pos];
+      if (char === "(") open += 1;
+      else if (char === ")") open -= 1;
       this.pos += 1;
     }
     return true;
   }
-  tokens(e, n) {
+  tokens(mode, depth) {
     let text = this.text;
-    let s = text.length;
-    let u = [];
+    let end = text.length;
+    let out = [];
     let pending = this.pending;
-    let w = 0;
-    let h = 0;
-    let v = false;
-    let y = false;
-    let C = [];
-    let O = 0;
-    let x = false;
-    let R = true;
-    let j = false;
-    while (this.pos < s) {
-      let M = text[this.pos];
-      if (WHITESPACE_CHARS.includes(M)) {
+    let parenClosers = 0;
+    let caseDepth = 0;
+    let sawCaseKeyword = false;
+    let inCasePatterns = false;
+    let parenDepthStack = [];
+    let patternStart = 0;
+    let inCaseParen = false;
+    let atCommandStart = true;
+    let sawCompoundOpener = false;
+    while (this.pos < end) {
+      let char = text[this.pos];
+      if (WHITESPACE_CHARS.includes(char)) {
         this.pos += 1;
         continue;
       }
       if (
-        M ===
+        char ===
         `
 `
       ) {
         this.pos += 1;
         if (pending.length > 0) {
-          let B = e === "array" ? n - 1 : n;
-          if (this.substitutionHeredocs && pending[0].depth < B)
+          let maxDepth = mode === "array" ? depth - 1 : depth;
+          if (this.substitutionHeredocs && pending[0].depth < maxDepth)
             this.fail(
               "a $( \u2026 ) or <( \u2026 ) that runs on past the end of a line which opened a heredoc of its own",
             );
-          this.readHeredocBodies(pending.splice(0), n);
+          this.readHeredocBodies(pending.splice(0), depth);
         }
-        if (e === "array") continue;
-        u.push({
+        if (mode === "array") continue;
+        out.push({
           kind: "op",
           op: `
 `,
         });
-        R = true;
+        atCommandStart = true;
         continue;
       }
       if (
-        M === "\\" &&
+        char === "\\" &&
         text[this.pos + 1] ===
           `
 `
@@ -617,264 +662,272 @@ class ShellReader {
         this.pos += 2;
         continue;
       }
-      if (M === "#") {
+      if (char === "#") {
         let index = text.indexOf(
           `
 `,
           this.pos,
         );
-        let Q = index === -1 ? s : index;
-        this.comments.push([this.pos, Q]);
-        this.pos = Q;
+        let lineEnd = index === -1 ? end : index;
+        this.comments.push([this.pos, lineEnd]);
+        this.pos = lineEnd;
         continue;
       }
-      if (e === "array") {
-        if (M === ")") {
+      if (mode === "array") {
+        if (char === ")") {
           this.pos += 1;
-          return u;
+          return out;
         }
-        if (";&|<>".includes(M) || M === "(") {
+        if (";&|<>".includes(char) || char === "(") {
           this.fail("an array assignment holds something other than words");
           this.pos += 1;
           continue;
         }
-        u.push({
+        out.push({
           kind: "word",
-          word: this.readWord(n, false, true),
+          word: this.readWord(depth, false, true),
         });
         continue;
       }
-      let q = this.pastContinuations(this.pos + 1);
-      let T = M + (text[q] ?? "");
-      let P = this.pastContinuations(q + 1);
-      if (T === ";;" && text[P] === "&") {
-        u.push({
+      let nextIndex = this.pastContinuations(this.pos + 1);
+      let pair = char + (text[nextIndex] ?? "");
+      let afterPair = this.pastContinuations(nextIndex + 1);
+      if (pair === ";;" && text[afterPair] === "&") {
+        out.push({
           kind: "op",
           op: ";;&",
         });
-        this.pos = P + 1;
-        y = h > 0;
-        O = u.length;
-        R = true;
+        this.pos = afterPair + 1;
+        inCasePatterns = caseDepth > 0;
+        patternStart = out.length;
+        atCommandStart = true;
         continue;
       }
-      if (T === "&&" || T === "||" || T === ";;" || T === ";&" || T === "|&") {
-        u.push({
+      if (pair === "&&" || pair === "||" || pair === ";;" || pair === ";&" || pair === "|&") {
+        out.push({
           kind: "op",
-          op: T,
+          op: pair,
         });
-        this.pos = q + 1;
-        if ((T === ";;" || T === ";&") && h > 0) {
-          y = true;
-          O = u.length;
+        this.pos = nextIndex + 1;
+        if ((pair === ";;" || pair === ";&") && caseDepth > 0) {
+          inCasePatterns = true;
+          patternStart = out.length;
         }
-        R = true;
+        atCommandStart = true;
         continue;
       }
-      if (M === "(" && y && (T === "((" || x || hasNonNewlineTokenAfter(u, O, u.length)))
+      if (
+        char === "(" &&
+        inCasePatterns &&
+        (pair === "((" || inCaseParen || hasNonNewlineTokenAfter(out, patternStart, out.length))
+      )
         this.failUnlessCasePatternGroupHoldOff();
-      if (T === "((" && R) {
-        let B = q + 1;
-        let arithmeticClose = findArithmeticClose(text, B);
+      if (pair === "((" && atCommandStart) {
+        let bodyStart = nextIndex + 1;
+        let arithmeticClose = findArithmeticClose(text, bodyStart);
         if (arithmeticClose !== -1) {
-          this.collectExpansions(text.slice(B, arithmeticClose - 2), n);
+          this.collectExpansions(text.slice(bodyStart, arithmeticClose - 2), depth);
           this.pos = arithmeticClose;
-          R = false;
+          atCommandStart = false;
           continue;
         }
       }
-      if (M === "(") {
+      if (char === "(") {
         this.pos += 1;
-        if (y) {
-          x = true;
+        if (inCasePatterns) {
+          inCaseParen = true;
           continue;
         }
-        w += 1;
-        u.push({
+        parenClosers += 1;
+        out.push({
           kind: "op",
           op: "(",
         });
-        R = true;
+        atCommandStart = true;
         continue;
       }
-      if (M === ")") {
+      if (char === ")") {
         this.pos += 1;
-        if (y) {
-          u.push({
+        if (inCasePatterns) {
+          out.push({
             kind: "op",
             op: ")",
           });
-          y = false;
-          let B =
+          inCasePatterns = false;
+          let nextChar =
             text[this.pastContinuations(this.pos)] ??
             `
 `;
-          if (text[this.pastContinuations(this.pos, true)] === "|" || (x && !PIPE_TERMINATORS.includes(B)))
+          if (
+            text[this.pastContinuations(this.pos, true)] === "|" ||
+            (inCaseParen && !PIPE_TERMINATORS.includes(nextChar))
+          )
             this.failUnlessCasePatternGroupHoldOff();
-          x = false;
-          R = true;
+          inCaseParen = false;
+          atCommandStart = true;
           continue;
         }
-        if (C.at(-1) === w) this.failUnlessCasePatternGroupHoldOff();
-        if (w > 0) {
-          w -= 1;
-          u.push({
+        if (parenDepthStack.at(-1) === parenClosers) this.failUnlessCasePatternGroupHoldOff();
+        if (parenClosers > 0) {
+          parenClosers -= 1;
+          out.push({
             kind: "op",
             op: ")",
           });
-          R = true;
+          atCommandStart = true;
           continue;
         }
-        if (e === "paren") {
-          if (this.substitutionHeredocs && (pending.at(-1)?.depth ?? -1) >= n)
+        if (mode === "paren") {
+          if (this.substitutionHeredocs && (pending.at(-1)?.depth ?? -1) >= depth)
             this.fail(
               "a heredoc opened inside $( \u2026 ) or <( \u2026 ) whose closing ')' comes on the same line, before the heredoc's lines",
             );
-          return u;
+          return out;
         }
         this.fail("a closing parenthesis that closes nothing");
-        u.push({
+        out.push({
           kind: "op",
           op: ")",
         });
         continue;
       }
-      if (M === "&" && text[q] === ">") {
-        this.pos = text[P] === ">" ? P + 1 : q + 1;
+      if (char === "&" && text[nextIndex] === ">") {
+        this.pos = text[afterPair] === ">" ? afterPair + 1 : nextIndex + 1;
         this.pos = this.pastContinuations(this.pos, true);
         if (
-          this.pos < s &&
+          this.pos < end &&
           !`
 ;&|()`.includes(text[this.pos])
         )
-          u.push({
+          out.push({
             kind: "redirect",
             op: "&>",
-            word: this.readWord(n),
+            word: this.readWord(depth),
           });
-        R = false;
+        atCommandStart = false;
         continue;
       }
-      if (M === ";" || M === "&" || M === "|") {
-        if (T === ";|" && h > 0) this.failUnlessCasePatternGroupHoldOff();
-        u.push({
+      if (char === ";" || char === "&" || char === "|") {
+        if (pair === ";|" && caseDepth > 0) this.failUnlessCasePatternGroupHoldOff();
+        out.push({
           kind: "op",
-          op: M,
+          op: char,
         });
         this.pos += 1;
-        R = true;
+        atCommandStart = true;
         continue;
       }
-      if (M === "<" || M === ">") {
-        if (y && T === "<<") this.failUnlessCasePatternGroupHoldOff();
-        if (text[q] === "(") {
-          u.push({
+      if (char === "<" || char === ">") {
+        if (inCasePatterns && pair === "<<") this.failUnlessCasePatternGroupHoldOff();
+        if (text[nextIndex] === "(") {
+          out.push({
             kind: "word",
-            word: this.readWord(n),
+            word: this.readWord(depth),
           });
-          R = false;
+          atCommandStart = false;
           continue;
         }
-        let B = q;
-        let Q = T;
-        let ee = Q === "<<" ? this.pastContinuations(B + 1) : B;
-        if (Q === "<<" && text[ee] !== "<") {
-          this.pos = ee;
+        let at = nextIndex;
+        let op = pair;
+        let heredocStart = op === "<<" ? this.pastContinuations(at + 1) : at;
+        if (op === "<<" && text[heredocStart] !== "<") {
+          this.pos = heredocStart;
           let strip = false;
           if (text[this.pos] === "-") {
-            if (ee !== B + 1)
+            if (heredocStart !== at + 1)
               this.fail('a heredoc "-" that only a joined line continuation puts next to the <<');
             strip = true;
             this.pos = this.pastContinuations(this.pos + 1);
           }
           this.pos = this.pastContinuations(this.pos, true);
-          let word = this.readWord(n, true);
+          let word = this.readWord(depth, true);
           if (word.raw !== "") {
             if (QUOTED_BACKSLASH_RE.test(joinLineContinuations(word.raw)))
               this.fail("a heredoc delimiter this reading cannot spell as the shell does");
             if (word.text === "" && !word.quoted) this.fail("a heredoc delimiter that reads as empty");
-            let Z = {
+            let token = {
               kind: "heredoc",
               body: null,
             };
-            u.push(Z);
-            R = false;
+            out.push(token);
+            atCommandStart = false;
             pending.push({
-              token: Z,
+              token,
               delimiter: word.text,
               strip,
               expand: !word.quoted,
-              depth: n,
+              depth,
             });
           }
           continue;
         }
-        let D = Q === "<<" ? "<<<" : [">>", ">&", "<&", ">|", "<>"].includes(Q) ? Q : M;
-        this.pos = D === "<<<" ? ee + 1 : D.length === 2 ? B + 1 : this.pos + 1;
+        let redirectOp = op === "<<" ? "<<<" : [">>", ">&", "<&", ">|", "<>"].includes(op) ? op : char;
+        this.pos = redirectOp === "<<<" ? heredocStart + 1 : redirectOp.length === 2 ? at + 1 : this.pos + 1;
         this.pos = this.pastContinuations(this.pos, true);
         if (
-          this.pos < s &&
+          this.pos < end &&
           !`
 ;&|()`.includes(text[this.pos])
         )
-          u.push({
+          out.push({
             kind: "redirect",
-            op: D,
-            word: this.readWord(n),
+            op: redirectOp,
+            word: this.readWord(depth),
           });
-        R = false;
+        atCommandStart = false;
         continue;
       }
-      if (M === "{" || M === "}") {
-        let B = this.pastContinuations(this.pos + 1);
-        let Q =
-          B >= s ||
+      if (char === "{" || char === "}") {
+        let nextIndex = this.pastContinuations(this.pos + 1);
+        let endsToken =
+          nextIndex >= end ||
           (
             WHITESPACE_CHARS +
             `
 ;&|()<>`
-          ).includes(text[B]);
-        if (Q && R) {
-          u.push({
+          ).includes(text[nextIndex]);
+        if (endsToken && atCommandStart) {
+          out.push({
             kind: "op",
-            op: M,
+            op: char,
           });
           this.pos += 1;
-          R = true;
+          atCommandStart = true;
           continue;
         }
-        if (Q && M === "{") this.fail("a { that may open a group or may be an argument");
+        if (endsToken && char === "{") this.fail("a { that may open a group or may be an argument");
       }
       let match = /^[A-Za-z_][A-Za-z0-9_]*\+?=\(/.exec(text.slice(this.pos, this.pos + 256));
       if (match !== null) {
-        if (y) this.failUnlessCasePatternGroupHoldOff();
+        if (inCasePatterns) this.failUnlessCasePatternGroupHoldOff();
         let pos = this.pos;
         this.pos += match[0].length;
-        if (!this.tooDeep(n + 1)) {
-          this.tokens("array", n + 1);
-          let ee = this.pastContinuations(this.pos);
-          let D =
-            text[ee] ??
+        if (!this.tooDeep(depth + 1)) {
+          this.tokens("array", depth + 1);
+          let afterArray = this.pastContinuations(this.pos);
+          let nextChar =
+            text[afterArray] ??
             `
 `;
-          let G = (D === "<" || D === ">") && text[this.pastContinuations(ee + 1)] === "(";
-          let Y =
-            D ===
+          let nextIsSubscript =
+            (nextChar === "<" || nextChar === ">") && text[this.pastContinuations(afterArray + 1)] === "(";
+          let endsLine =
+            nextChar ===
               `
 ` ||
-            (D === "\r" &&
-              (text[ee + 1] ??
+            (nextChar === "\r" &&
+              (text[afterArray + 1] ??
                 `
 `) ===
                 `
 `);
-          if (G || !(Y || `${WHITESPACE_CHARS};&|<>)`.includes(D)))
+          if (nextIsSubscript || !(endsLine || `${WHITESPACE_CHARS};&|<>)`.includes(nextChar)))
             this.failUnlessSubscriptHoldsOff(
               "text straight after the ) that closes name=( \u2026 ), which the shells read in different ways or refuse",
             );
         }
         let sliced = text.slice(pos, this.pos);
-        u.push({
+        out.push({
           kind: "word",
           word: {
             text: sliced,
@@ -882,10 +935,10 @@ class ShellReader {
             raw: sliced,
           },
         });
-        R = false;
+        atCommandStart = false;
         continue;
       }
-      let word = this.readWord(n);
+      let word = this.readWord(depth);
       if (word.raw === "") {
         this.pos += 1;
         continue;
@@ -895,323 +948,354 @@ class ShellReader {
         (text[this.pos] === "<" || text[this.pos] === ">")
       )
         continue;
-      u.push({
+      out.push({
         kind: "word",
         word,
       });
       if (!word.quoted) {
-        if (R && word.text === "case") {
-          v = true;
-          if (y || j) this.failUnlessCasePatternGroupHoldOff();
-        } else if (v && word.text === "in") {
-          v = false;
-          h += 1;
-          C.push(w);
-          y = true;
-          O = u.length;
-        } else if (word.text === "esac" && h > 0 && (R || y)) {
+        if (atCommandStart && word.text === "case") {
+          sawCaseKeyword = true;
+          if (inCasePatterns || sawCompoundOpener) this.failUnlessCasePatternGroupHoldOff();
+        } else if (sawCaseKeyword && word.text === "in") {
+          sawCaseKeyword = false;
+          caseDepth += 1;
+          parenDepthStack.push(parenClosers);
+          inCasePatterns = true;
+          patternStart = out.length;
+        } else if (word.text === "esac" && caseDepth > 0 && (atCommandStart || inCasePatterns)) {
           if (
-            y &&
-            (x ||
+            inCasePatterns &&
+            (inCaseParen ||
               "(<>".includes(text[this.pastContinuations(this.pos)] ?? " ") ||
-              hasNonNewlineTokenAfter(u, O, u.length - 1))
+              hasNonNewlineTokenAfter(out, patternStart, out.length - 1))
           )
             this.failUnlessCasePatternGroupHoldOff();
-          h -= 1;
-          C.pop();
-          y = false;
-          x = false;
+          caseDepth -= 1;
+          parenDepthStack.pop();
+          inCasePatterns = false;
+          inCaseParen = false;
         }
       }
-      let F = R;
-      let X = j;
-      j = F && !word.quoted && SHELL_COMPOUND_OPENERS.has(word.text);
-      R = X || (F && !word.quoted && (SHELL_KEYWORDS.has(word.text) || SHELL_CONTROL_WORDS.has(word.text)));
+      let wasAtCommandStart = atCommandStart;
+      let wasCompoundOpener = sawCompoundOpener;
+      sawCompoundOpener = wasAtCommandStart && !word.quoted && SHELL_COMPOUND_OPENERS.has(word.text);
+      atCommandStart =
+        wasCompoundOpener ||
+        (wasAtCommandStart &&
+          !word.quoted &&
+          (SHELL_KEYWORDS.has(word.text) || SHELL_CONTROL_WORDS.has(word.text)));
     }
-    if (e === "eof") pending.splice(0);
-    if (h > 0 || y) this.fail("a case statement that is never closed");
-    if (e !== "eof")
+    if (mode === "eof") pending.splice(0);
+    if (caseDepth > 0 || inCasePatterns) this.fail("a case statement that is never closed");
+    if (mode !== "eof")
       this.fail(
-        e === "array" ? "an array assignment that is never closed" : "a $( or ( that is never closed",
+        mode === "array" ? "an array assignment that is never closed" : "a $( or ( that is never closed",
       );
-    return u;
+    return out;
   }
-  readWord(e, n = false, r = false) {
+  readWord(depth, noSubstitutions = false, requireIdentifier = false) {
     let text = this.text;
-    let u = text.length;
+    let end = text.length;
     let pos = this.pos;
-    let w = "";
-    let h = false;
-    let v = false;
-    let y = 0;
-    let C = false;
-    let O = 0;
-    let x;
-    while (this.pos < u) {
-      let j = text[this.pos];
-      if (j === "'") {
-        h = true;
+    let value = "";
+    let quoted = false;
+    let expands = false;
+    let bracketDepth = 0;
+    let sawBracket = false;
+    let subscriptEnd = 0;
+    let beforeEquals;
+    while (this.pos < end) {
+      let char = text[this.pos];
+      if (char === "'") {
+        quoted = true;
         let index = text.indexOf("'", this.pos + 1);
         if (index === -1) {
           this.fail("a single quote that is never closed");
-          w += text.slice(this.pos + 1);
-          this.pos = u;
+          value += text.slice(this.pos + 1);
+          this.pos = end;
           break;
         }
-        w += text.slice(this.pos + 1, index);
+        value += text.slice(this.pos + 1, index);
         this.pos = index + 1;
         continue;
       }
-      if (j === "$" && text[this.pos + 1] === "'") {
-        h = true;
+      if (char === "$" && text[this.pos + 1] === "'") {
+        quoted = true;
         {
           let index = text.indexOf("'", this.pos + 2);
-          if (text.slice(this.pos + 2, index === -1 ? u : index).includes("\\")) v = true;
+          if (text.slice(this.pos + 2, index === -1 ? end : index).includes("\\")) expands = true;
         }
         this.pos += 2;
-        while (this.pos < u && text[this.pos] !== "'")
-          if (text[this.pos] === "\\" && this.pos + 1 < u) {
-            w += text[this.pos + 1];
+        while (this.pos < end && text[this.pos] !== "'")
+          if (text[this.pos] === "\\" && this.pos + 1 < end) {
+            value += text[this.pos + 1];
             this.pos += 2;
           } else {
-            w += text[this.pos];
+            value += text[this.pos];
             this.pos += 1;
           }
-        if (this.pos >= u) {
+        if (this.pos >= end) {
           this.fail("a $' quote that is never closed");
           break;
         }
         this.pos += 1;
         continue;
       }
-      if (j === '"' || (j === "$" && text[this.pos + 1] === '"')) {
-        h = true;
-        this.pos += j === "$" ? 2 : 1;
-        while (this.pos < u && text[this.pos] !== '"') {
-          let M = text[this.pos];
-          if (M === "\\" && this.pos + 1 < u) {
-            let q = text[this.pos + 1];
-            w +=
-              q ===
+      if (char === '"' || (char === "$" && text[this.pos + 1] === '"')) {
+        quoted = true;
+        this.pos += char === "$" ? 2 : 1;
+        while (this.pos < end && text[this.pos] !== '"') {
+          let char = text[this.pos];
+          if (char === "\\" && this.pos + 1 < end) {
+            let nextChar = text[this.pos + 1];
+            value +=
+              nextChar ===
               `
 `
                 ? ""
-                : q === "$" || q === Ge || q === '"' || q === "\\"
-                  ? q
+                : nextChar === "$" || nextChar === BACKTICK || nextChar === '"' || nextChar === "\\"
+                  ? nextChar
                   : this.quotedBackslashKept
-                    ? M + q
-                    : q;
+                    ? char + nextChar
+                    : nextChar;
             this.pos += 2;
-          } else if (!n && M === "$" && text[this.pastContinuations(this.pos + 1)] === "(")
-            w += this.readDollarParen(e, this.pastContinuations(this.pos + 1));
-          else if (!n && M === Ge) w += this.readBackticks(e);
-          else if (M === "$" && text[this.pastContinuations(this.pos + 1)] === "{") {
-            w += this.readParameterExpansion(e, this.pastContinuations(this.pos + 1));
-            v = true;
+          } else if (!noSubstitutions && char === "$" && text[this.pastContinuations(this.pos + 1)] === "(")
+            value += this.readDollarParen(depth, this.pastContinuations(this.pos + 1));
+          else if (!noSubstitutions && char === BACKTICK) value += this.readBackticks(depth);
+          else if (char === "$" && text[this.pastContinuations(this.pos + 1)] === "{") {
+            value += this.readParameterExpansion(depth, this.pastContinuations(this.pos + 1));
+            expands = true;
           } else {
-            if (M === "$") v = true;
-            w += M;
+            if (char === "$") expands = true;
+            value += char;
             this.pos += 1;
           }
         }
-        if (this.pos >= u) {
+        if (this.pos >= end) {
           this.fail("a double quote that is never closed");
           break;
         }
         this.pos += 1;
         continue;
       }
-      if (j === "\\" && this.pos + 1 < u) {
+      if (char === "\\" && this.pos + 1 < end) {
         if (
           text[this.pos + 1] !==
           `
 `
         ) {
-          w += text[this.pos + 1];
-          h = true;
+          value += text[this.pos + 1];
+          quoted = true;
         }
         this.pos += 2;
         continue;
       }
-      if (j === "$" && text[this.pastContinuations(this.pos + 1)] === "{") {
-        w += this.readParameterExpansion(e, this.pastContinuations(this.pos + 1));
-        v = true;
+      if (char === "$" && text[this.pastContinuations(this.pos + 1)] === "{") {
+        value += this.readParameterExpansion(depth, this.pastContinuations(this.pos + 1));
+        expands = true;
         continue;
       }
-      if (!n && j === "$" && text[this.pastContinuations(this.pos + 1)] !== "(") v = true;
-      if (!n && j === "$" && text[this.pastContinuations(this.pos + 1)] === "(") {
-        w += this.readDollarParen(e, this.pastContinuations(this.pos + 1));
-        h = true;
-        v = true;
+      if (!noSubstitutions && char === "$" && text[this.pastContinuations(this.pos + 1)] !== "(")
+        expands = true;
+      if (!noSubstitutions && char === "$" && text[this.pastContinuations(this.pos + 1)] === "(") {
+        value += this.readDollarParen(depth, this.pastContinuations(this.pos + 1));
+        quoted = true;
+        expands = true;
         continue;
       }
-      if (!n && j === Ge) {
-        w += this.readBackticks(e);
-        h = true;
-        v = true;
+      if (!noSubstitutions && char === BACKTICK) {
+        value += this.readBackticks(depth);
+        quoted = true;
+        expands = true;
         continue;
       }
-      if (!n && (j === "<" || j === ">") && text[this.pastContinuations(this.pos + 1)] === "(") {
+      if (
+        !noSubstitutions &&
+        (char === "<" || char === ">") &&
+        text[this.pastContinuations(this.pos + 1)] === "("
+      ) {
         this.pos = this.pastContinuations(this.pos + 1) + 1;
-        if (!this.tooDeep(e + 1)) this.bodies.push(this.tokens("paren", e + 1));
-        w += j + "(\u2026)";
-        h = true;
+        if (!this.tooDeep(depth + 1)) this.bodies.push(this.tokens("paren", depth + 1));
+        value += char + "(\u2026)";
+        quoted = true;
         continue;
       }
-      if (SHELL_META_CHARS.includes(j)) {
-        if (y > 0)
+      if (SHELL_META_CHARS.includes(char)) {
+        if (bracketDepth > 0)
           this.failUnlessSubscriptHoldsOff(
             "a [ still open at a space, tab, line break or one of ; & | < > ( ), where bash may read on to its ] and other shells end the word",
           );
-        else if (j === "(" && O > 0 && /^\+?=/.test(w.slice(O)) && w.endsWith("="))
+        else if (
+          char === "(" &&
+          subscriptEnd > 0 &&
+          /^\+?=/.test(value.slice(subscriptEnd)) &&
+          value.endsWith("=")
+        )
           this.failUnlessSubscriptHoldsOff(
             "an opening parenthesis after [\u2026]= or [\u2026]+= in the same word, as in a[1]=(x), which the shells read in different ways or refuse",
           );
-        else if (j === "(" && !n && !r && x === true && w.endsWith("="))
+        else if (
+          char === "(" &&
+          !noSubstitutions &&
+          !requireIdentifier &&
+          beforeEquals === true &&
+          value.endsWith("=")
+        )
           this.failUnlessSubscriptHoldsOff(
             "name=( that this reading did not take as an array, such as one with a line continuation or a second = before the parenthesis, a name hundreds of characters long or a non-ASCII name, which the shells read in different ways or refuse",
           );
         break;
       }
-      if (j === "[") {
-        if (y > 0) y += 1;
-        else if (!C) {
-          C = true;
-          if (!n && !h && (r ? w === "" : IDENTIFIER_RE.test(w))) y = 1;
+      if (char === "[") {
+        if (bracketDepth > 0) bracketDepth += 1;
+        else if (!sawBracket) {
+          sawBracket = true;
+          if (!noSubstitutions && !quoted && (requireIdentifier ? value === "" : IDENTIFIER_RE.test(value)))
+            bracketDepth = 1;
         }
-      } else if (j === "]" && y > 0) {
-        y -= 1;
-        if (y === 0) O = w.length + 1;
-      } else if (j === "=" && x === undefined)
-        x = !h && IDENTIFIER_RE.test(w.endsWith("+") ? w.slice(0, -1) : w);
-      w += j;
+      } else if (char === "]" && bracketDepth > 0) {
+        bracketDepth -= 1;
+        if (bracketDepth === 0) subscriptEnd = value.length + 1;
+      } else if (char === "=" && beforeEquals === undefined)
+        beforeEquals = !quoted && IDENTIFIER_RE.test(value.endsWith("+") ? value.slice(0, -1) : value);
+      value += char;
       this.pos += 1;
     }
     let sliced = text.slice(pos, this.pos);
-    if (/\{[^{}'"]*(?:,|\.\.)[^{}'"]*\}/.test(sliced.replace(/'[^']*'|"[^"]*"/g, ""))) v = true;
+    if (/\{[^{}'"]*(?:,|\.\.)[^{}'"]*\}/.test(sliced.replace(/'[^']*'|"[^"]*"/g, ""))) expands = true;
     return {
-      text: w,
-      quoted: h,
+      text: value,
+      quoted,
       raw: sliced,
-      ...(v && {
-        expands: v,
+      ...(expands && {
+        expands,
       }),
     };
   }
-  readParameterExpansion(e, n = this.pos + 1) {
+  readParameterExpansion(depth, start = this.pos + 1) {
     let text = this.text;
-    let s = text.length;
-    this.pos = n + 1;
-    let u = (pos) => WHITESPACE_OR_PIPE_RE.test(text[this.pastContinuations(pos)] ?? "");
-    if (u(this.pos)) this.fail("a ${ \u2026; } command substitution");
-    let S = 1;
-    let w = false;
-    while (this.pos < s && S > 0) {
-      let v = text[this.pos];
-      if (v === "\\") this.pos += 2;
-      else if (v === '"') {
-        w = !w;
+    let end = text.length;
+    this.pos = start + 1;
+    let isSemicolonAfter = (pos) => WHITESPACE_OR_PIPE_RE.test(text[this.pastContinuations(pos)] ?? "");
+    if (isSemicolonAfter(this.pos)) this.fail("a ${ \u2026; } command substitution");
+    let nesting = 1;
+    let inDoubleQuotes = false;
+    while (this.pos < end && nesting > 0) {
+      let char = text[this.pos];
+      if (char === "\\") this.pos += 2;
+      else if (char === '"') {
+        inDoubleQuotes = !inDoubleQuotes;
         this.pos += 1;
-      } else if (v === "'" && !w) {
+      } else if (char === "'" && !inDoubleQuotes) {
         let index = text.indexOf("'", this.pos + 1);
-        let C = index === -1 ? s : index;
-        this.collectExpansions(text.slice(this.pos + 1, C), e);
-        this.pos = index === -1 ? s : index + 1;
-      } else if (v === "'") this.pos += 1;
-      else if (v === "$" && text[this.pastContinuations(this.pos + 1)] === "(")
-        this.readDollarParen(e, this.pastContinuations(this.pos + 1));
-      else if (v === Ge) this.readBackticks(e);
-      else if (v === "$" && text[this.pastContinuations(this.pos + 1)] === "{") {
-        S += 1;
+        let quoteEnd = index === -1 ? end : index;
+        this.collectExpansions(text.slice(this.pos + 1, quoteEnd), depth);
+        this.pos = index === -1 ? end : index + 1;
+      } else if (char === "'") this.pos += 1;
+      else if (char === "$" && text[this.pastContinuations(this.pos + 1)] === "(")
+        this.readDollarParen(depth, this.pastContinuations(this.pos + 1));
+      else if (char === BACKTICK) this.readBackticks(depth);
+      else if (char === "$" && text[this.pastContinuations(this.pos + 1)] === "{") {
+        nesting += 1;
         this.pos = this.pastContinuations(this.pos + 1) + 1;
-        if (u(this.pos)) this.fail("a ${ \u2026; } command substitution");
+        if (isSemicolonAfter(this.pos)) this.fail("a ${ \u2026; } command substitution");
       } else {
-        if (v === "}" && !w) S -= 1;
+        if (char === "}" && !inDoubleQuotes) nesting -= 1;
         this.pos += 1;
       }
     }
-    if (S > 0) this.fail("a ${ that is never closed");
-    let h = joinLineContinuations(text.slice(n, this.pos));
-    if (PARAMETER_EXPANSION_RE.test(h)) this.fail("a ${ \u2026@P } expansion");
-    return "$" + h;
+    if (nesting > 0) this.fail("a ${ that is never closed");
+    let body = joinLineContinuations(text.slice(start, this.pos));
+    if (PARAMETER_EXPANSION_RE.test(body)) this.fail("a ${ \u2026@P } expansion");
+    return "$" + body;
   }
-  readDollarParen(e, n = this.pos + 1) {
+  readDollarParen(depth, start = this.pos + 1) {
     let text = this.text;
-    if (text[n + 1] === "(") {
-      let arithmeticClose = findArithmeticClose(text, n + 2);
+    if (text[start + 1] === "(") {
+      let arithmeticClose = findArithmeticClose(text, start + 2);
       if (arithmeticClose !== -1) {
-        this.collectExpansions(text.slice(n + 2, arithmeticClose - 2), e);
+        this.collectExpansions(text.slice(start + 2, arithmeticClose - 2), depth);
         this.pos = arithmeticClose;
         return "$((\u2026))";
       }
     }
-    this.pos = n + 1;
-    if (this.tooDeep(e + 1)) return "$(\u2026)";
+    this.pos = start + 1;
+    if (this.tooDeep(depth + 1)) return "$(\u2026)";
     let pos = this.pos;
-    let u = this.tokens("paren", e + 1);
+    let tokens = this.tokens("paren", depth + 1);
     if (this.make) {
-      let S = u[0];
-      if (S?.kind === "word" && /^(?:shell|eval|call)$/.test(S.word.text)) {
-        this.bodies.push(u.slice(1));
+      let first = tokens[0];
+      if (first?.kind === "word" && /^(?:shell|eval|call)$/.test(first.word.text)) {
+        this.bodies.push(tokens.slice(1));
         return "$(\u2026)";
       }
       return "$(" + this.text.slice(pos, Math.max(pos, this.pos - 1)) + ")";
     }
-    this.bodies.push(u);
+    this.bodies.push(tokens);
     return "$(\u2026)";
   }
-  readBackticks(e) {
+  readBackticks(depth) {
     let text = this.text;
-    let r = text.length;
-    let s = this.pos + 1;
-    while (s < r && text[s] !== Ge) s += text[s] === "\\" ? 2 : 1;
-    if (s >= r) this.fail("a backtick that is never closed");
-    let u = new ShellReader(
-      text.slice(this.pos + 1, Math.min(s, r)).replace(/\\([$\x60\\])/g, "$1"),
+    let end = text.length;
+    let closeAt = this.pos + 1;
+    while (closeAt < end && text[closeAt] !== BACKTICK) closeAt += text[closeAt] === "\\" ? 2 : 1;
+    if (closeAt >= end) this.fail("a backtick that is never closed");
+    let nested = new ShellReader(
+      text.slice(this.pos + 1, Math.min(closeAt, end)).replace(/\\([$\x60\\])/g, "$1"),
       this.make,
       this.quotedBackslashKept,
       this.substitutionHeredocs,
     );
-    if (e + 1 > MAX_SUBSTITUTION_DEPTH) this.fail("command substitutions nested too deeply");
+    if (depth + 1 > MAX_SUBSTITUTION_DEPTH) this.fail("command substitutions nested too deeply");
     else {
-      this.bodies.push(u.tokens("eof", e + 1), ...u.bodies);
-      if (u.unreadable !== null) this.fail(u.unreadable);
+      this.bodies.push(nested.tokens("eof", depth + 1), ...nested.bodies);
+      if (nested.unreadable !== null) this.fail(nested.unreadable);
     }
-    this.pos = Math.min(s + 1, r);
+    this.pos = Math.min(closeAt + 1, end);
     return "$(\u2026)";
   }
-  collectExpansions(e, n) {
-    if (PARAMETER_EXPANSION_RE.test(joinLineContinuations(e))) this.fail("a ${ \u2026@P } expansion");
-    let r = 0;
-    while (r < e.length) {
-      let s = e[r];
-      let u = s === "$" ? skipLineContinuations(e, r + 1) : r + 1;
-      if (s === "$" && e[u] === "(") {
-        let S = new ShellReader(e.slice(r), this.make, this.quotedBackslashKept, this.substitutionHeredocs);
-        S.readDollarParen(n, u - r);
-        this.bodies.push(...S.bodies);
-        if (S.unreadable !== null) this.fail(S.unreadable);
-        r += Math.max(S.pos, 1);
+  collectExpansions(text, depth) {
+    if (PARAMETER_EXPANSION_RE.test(joinLineContinuations(text))) this.fail("a ${ \u2026@P } expansion");
+    let index = 0;
+    while (index < text.length) {
+      let char = text[index];
+      let afterDollar = char === "$" ? skipLineContinuations(text, index + 1) : index + 1;
+      if (char === "$" && text[afterDollar] === "(") {
+        let nested = new ShellReader(
+          text.slice(index),
+          this.make,
+          this.quotedBackslashKept,
+          this.substitutionHeredocs,
+        );
+        nested.readDollarParen(depth, afterDollar - index);
+        this.bodies.push(...nested.bodies);
+        if (nested.unreadable !== null) this.fail(nested.unreadable);
+        index += Math.max(nested.pos, 1);
         continue;
       }
-      if (s === "$" && e[u] === "{") {
-        if (WHITESPACE_OR_PIPE_RE.test(e[skipLineContinuations(e, u + 1)] ?? ""))
+      if (char === "$" && text[afterDollar] === "{") {
+        if (WHITESPACE_OR_PIPE_RE.test(text[skipLineContinuations(text, afterDollar + 1)] ?? ""))
           this.fail("a ${ \u2026; } command substitution");
       }
-      if (s === "\\") r += 2;
-      else if (s === Ge) {
-        let S = new ShellReader(e.slice(r), this.make, this.quotedBackslashKept, this.substitutionHeredocs);
-        S.readBackticks(n);
-        this.bodies.push(...S.bodies);
-        if (S.unreadable !== null) this.fail(S.unreadable);
-        r += Math.max(S.pos, 1);
-      } else r += 1;
+      if (char === "\\") index += 2;
+      else if (char === BACKTICK) {
+        let nested = new ShellReader(
+          text.slice(index),
+          this.make,
+          this.quotedBackslashKept,
+          this.substitutionHeredocs,
+        );
+        nested.readBackticks(depth);
+        this.bodies.push(...nested.bodies);
+        if (nested.unreadable !== null) this.fail(nested.unreadable);
+        index += Math.max(nested.pos, 1);
+      } else index += 1;
     }
   }
-  readHeredocBodies(e, n) {
-    for (let r of e) {
-      let line = this.findLine(r.delimiter, this.pos, r.strip);
-      let u =
+  readHeredocBodies(pending, depth) {
+    for (let item of pending) {
+      let line = this.findLine(item.delimiter, this.pos, item.strip);
+      let lineEnd =
         line === -1
           ? -1
           : this.text.indexOf(
@@ -1220,107 +1304,107 @@ class ShellReader {
               line,
             );
       if (
-        r.expand &&
+        item.expand &&
         line !== -1 &&
         this.unreadable === null &&
         CONTINUED_LINE_RE.test(this.text.slice(this.pos, line))
       )
-        ({ at: line, lineEnd: u } = this.findJoinedLine(r.delimiter, this.pos, r.strip));
+        ({ at: line, lineEnd } = this.findJoinedLine(item.delimiter, this.pos, item.strip));
       if (line === -1) {
         this.fail("a heredoc is never terminated");
         break;
       }
-      let sliced = this.text.slice(this.pos, line);
-      if (r.expand) this.collectExpansions(joinLineContinuations(sliced), n);
-      r.token.body = r.expand ? unescapeDoubleQuoted(sliced) : sliced;
-      this.pos = u === -1 ? this.text.length : u + 1;
+      let text = this.text.slice(this.pos, line);
+      if (item.expand) this.collectExpansions(joinLineContinuations(text), depth);
+      item.token.body = item.expand ? unescapeDoubleQuoted(text) : text;
+      this.pos = lineEnd === -1 ? this.text.length : lineEnd + 1;
     }
   }
-  findJoinedLine(e, n, r) {
+  findJoinedLine(delimiter, start, strip) {
     let text = this.text;
-    let u = n;
-    while (u <= text.length) {
-      let S = "";
-      let w = u;
-      let h = -1;
+    let candidateStart = start;
+    while (candidateStart <= text.length) {
+      let joined = "";
+      let from = candidateStart;
+      let lineEnd = -1;
       for (;;) {
-        h = text.indexOf(
+        lineEnd = text.indexOf(
           `
 `,
-          w,
+          from,
         );
-        let sliced = text.slice(w, h === -1 ? text.length : h);
-        let y = h !== -1 && TRAILING_BACKSLASH_RE.test(sliced);
-        S += y ? sliced.slice(0, -1) : sliced;
-        if (!y) break;
-        w = h + 1;
+        let sliced = text.slice(from, lineEnd === -1 ? text.length : lineEnd);
+        let continues = lineEnd !== -1 && TRAILING_BACKSLASH_RE.test(sliced);
+        joined += continues ? sliced.slice(0, -1) : sliced;
+        if (!continues) break;
+        from = lineEnd + 1;
       }
-      if ((r ? S.replace(/^\t+/, "") : S) === e)
+      if ((strip ? joined.replace(/^\t+/, "") : joined) === delimiter)
         return {
-          at: u,
-          lineEnd: h,
+          at: candidateStart,
+          lineEnd,
         };
-      if (h === -1)
+      if (lineEnd === -1)
         return {
           at: -1,
           lineEnd: -1,
         };
-      u = h + 1;
+      candidateStart = lineEnd + 1;
     }
     return {
       at: -1,
       lineEnd: -1,
     };
   }
-  findLine(e, n, r) {
+  findLine(delimiter, from, strip) {
     if (this.lineIndex === null) {
-      let w = new Map();
-      let h = new Map();
-      let v = 0;
+      let exactIndex = new Map();
+      let strippedIndex = new Map();
+      let offset = 0;
       for (let line of this.text.split(`
 `)) {
-        let C = (O, x) => {
-          let R = O.get(x);
-          if (R === undefined) O.set(x, [v]);
-          else R.push(v);
+        let addLine = (index, lineText) => {
+          let list = index.get(lineText);
+          if (list === undefined) index.set(lineText, [offset]);
+          else list.push(offset);
         };
-        C(w, line);
-        C(h, line.replace(/^\t+/, ""));
-        v += line.length + 1;
+        addLine(exactIndex, line);
+        addLine(strippedIndex, line.replace(/^\t+/, ""));
+        offset += line.length + 1;
       }
-      this.lineIndex = w;
-      this.strippedLineIndex = h;
+      this.lineIndex = exactIndex;
+      this.strippedLineIndex = strippedIndex;
     }
-    let s = (r ? this.strippedLineIndex : this.lineIndex).get(e);
-    if (s === undefined) return -1;
-    let u = 0;
-    let S = s.length;
-    while (u < S) {
-      let w = (u + S) >> 1;
-      if (s[w] < n) u = w + 1;
-      else S = w;
+    let offsets = (strip ? this.strippedLineIndex : this.lineIndex).get(delimiter);
+    if (offsets === undefined) return -1;
+    let low = 0;
+    let high = offsets.length;
+    while (low < high) {
+      let mid = (low + high) >> 1;
+      if (offsets[mid] < from) low = mid + 1;
+      else high = mid;
     }
-    return u < s.length ? s[u] : -1;
+    return low < offsets.length ? offsets[low] : -1;
   }
 }
 //@ chunk-mthxbav8.js:69518-69753 placement
-function findArithmeticClose(text, n) {
-  let min = Math.min(text.length, n + 4096);
-  let s = n;
-  let u = 0;
-  while (s < min) {
-    let S = text[s];
-    if (S === "'" || S === '"') {
-      let index = text.indexOf(S, s + 1);
-      s = index === -1 ? min : index + 1;
+function findArithmeticClose(text, start) {
+  let min = Math.min(text.length, start + 4096);
+  let index = start;
+  let depth = 0;
+  while (index < min) {
+    let char = text[index];
+    if (char === "'" || char === '"') {
+      let index_2 = text.indexOf(char, index + 1);
+      index = index_2 === -1 ? min : index_2 + 1;
       continue;
     }
-    if (S === "(") u += 1;
-    else if (S === ")") {
-      if (u === 0) return text[s + 1] === ")" ? s + 2 : -1;
-      u -= 1;
+    if (char === "(") depth += 1;
+    else if (char === ")") {
+      if (depth === 0) return text[index + 1] === ")" ? index + 2 : -1;
+      depth -= 1;
     }
-    s += 1;
+    index += 1;
   }
   return -1;
 }
@@ -1328,336 +1412,360 @@ function findArithmeticClose(text, n) {
 /**
  * 会影响工具行为的敏感环境变量名单（编辑器、分页器、预加载、Go/Rust/JVM 相关），以及其前缀/精确名匹配正则。
  */
-var TOOL_ENV_VARS = new Set([
-  "DEVELOPER_DIR",
-  "MAKEFILES",
-  "MAKEFLAGS",
-  "GNUMAKEFLAGS",
-  "AWKPATH",
-  "AWKLIBPATH",
-  "GOFLAGS",
-  "RUSTFLAGS",
-  "GIT_EDITOR",
-  "GIT_SEQUENCE_EDITOR",
-  "GIT_EXTERNAL_DIFF",
-  "GIT_PROXY_COMMAND",
-  "SUDO_ASKPASS",
-  "ZDOTDIR",
-  "CDPATH",
-  "GCONV_PATH",
-  "NLSPATH",
-  "DOTNET_STARTUP_HOOKS",
-  "npm_config_node_options",
-  "NPM_CONFIG_NODE_OPTIONS",
-  "LESSOPEN",
-  "LESSCLOSE",
-  "MANPAGER",
-  "MAVEN_OPTS",
-  "GRADLE_OPTS",
-  "OPENSSL_ENGINES",
-  "SHELLOPTS",
-  "BASHOPTS",
-  "PS4",
-  "PROMPT_COMMAND",
-  "GIT_SSH_COMMAND",
-  "GIT_SSH",
-  "GIT_EXEC_PATH",
-  "GIT_ASKPASS",
-  "SSH_ASKPASS",
-  "GIT_PAGER",
-  "PAGER",
-  "EDITOR",
-  "VISUAL",
-  "BROWSER",
-  "PYTHONWARNINGS",
-  "PYTHONBREAKPOINT",
-  "PERL5DB",
-  "NODE_REPL_EXTERNAL_MODULE",
-  "JAVA_TOOL_OPTIONS",
-  "_JAVA_OPTIONS",
-  "JDK_JAVA_OPTIONS",
-  "NODE_OPTIONS",
-  "NODE_COMPILE_CACHE",
-  "PYTHONSTARTUP",
-  "PYTHONHOME",
-  "PYTHONUSERBASE",
-  "BASH_ENV",
-  "ENV",
-  "PERL5OPT",
-  "RUBYOPT",
-  "GEM_HOME",
-  "RUBYGEMS_GEMDEPS",
-  "BUNDLE_GEMFILE",
-  "OPENSSL_CONF",
-  "OPENSSL_MODULES",
-  "DYLD_INSERT_LIBRARIES",
-  "LD_PRELOAD",
-  "LD_AUDIT",
-]);
-var TOOL_ENV_PREFIX_RE = /^(?:DYLD_|LD_|BASH_FUNC_|GIT_CONFIG_|LUA_C?PATH)/;
-var NULL_COMMAND_ENV_VARS = new Set(["NULLCMD", "READNULLCMD"]);
-var TOOL_ENV_EXACT_RE =
-  /^(?:GH_BROWSER|RSYNC_RSH|CVS_RSH|SOPS_GPG_EXEC|PERL5SHELL|RUBYSHELL|JAVACMD|CLOUDSDK_PYTHON|UV_PYTHON|RUSTC_WRAPPER|RUSTC_WORKSPACE_WRAPPER|npm_config_script_shell|NPM_CONFIG_SCRIPT_SHELL|R_(?:PROFILE|ENVIRON)(?:_USER)?|TAR_OPTIONS|BUN_OPTIONS|TF_CLI_ARGS\w*|CARGO_ALIAS_\w+|[A-Z0-9][A-Z0-9_]*_(?:EXTERNAL_DIFF|PAGER|EDITOR))$/;
-var SCRIPT_PATH_RE =
-  /^(?!-)(?:[^\s]*\/[^\s]*|[^\s\/]+\.(?:sh|bash|zsh|fish|py|rb|pl|js|mjs|cjs|ts|php|lua|R|r|ps1|awk|tcl|exs?|jl))$/;
+var TOOL_ENV_VARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var TOOL_ENV_PREFIX_RE;
+var NULL_COMMAND_ENV_VARS;
+var TOOL_ENV_EXACT_RE;
+var SCRIPT_PATH_RE;
+deferInit("chunk-mthxbav8.js:69753", () => {
+  TOOL_ENV_VARS = new Set([
+    "DEVELOPER_DIR",
+    "MAKEFILES",
+    "MAKEFLAGS",
+    "GNUMAKEFLAGS",
+    "AWKPATH",
+    "AWKLIBPATH",
+    "GOFLAGS",
+    "RUSTFLAGS",
+    "GIT_EDITOR",
+    "GIT_SEQUENCE_EDITOR",
+    "GIT_EXTERNAL_DIFF",
+    "GIT_PROXY_COMMAND",
+    "SUDO_ASKPASS",
+    "ZDOTDIR",
+    "CDPATH",
+    "GCONV_PATH",
+    "NLSPATH",
+    "DOTNET_STARTUP_HOOKS",
+    "npm_config_node_options",
+    "NPM_CONFIG_NODE_OPTIONS",
+    "LESSOPEN",
+    "LESSCLOSE",
+    "MANPAGER",
+    "MAVEN_OPTS",
+    "GRADLE_OPTS",
+    "OPENSSL_ENGINES",
+    "SHELLOPTS",
+    "BASHOPTS",
+    "PS4",
+    "PROMPT_COMMAND",
+    "GIT_SSH_COMMAND",
+    "GIT_SSH",
+    "GIT_EXEC_PATH",
+    "GIT_ASKPASS",
+    "SSH_ASKPASS",
+    "GIT_PAGER",
+    "PAGER",
+    "EDITOR",
+    "VISUAL",
+    "BROWSER",
+    "PYTHONWARNINGS",
+    "PYTHONBREAKPOINT",
+    "PERL5DB",
+    "NODE_REPL_EXTERNAL_MODULE",
+    "JAVA_TOOL_OPTIONS",
+    "_JAVA_OPTIONS",
+    "JDK_JAVA_OPTIONS",
+    "NODE_OPTIONS",
+    "NODE_COMPILE_CACHE",
+    "PYTHONSTARTUP",
+    "PYTHONHOME",
+    "PYTHONUSERBASE",
+    "BASH_ENV",
+    "ENV",
+    "PERL5OPT",
+    "RUBYOPT",
+    "GEM_HOME",
+    "RUBYGEMS_GEMDEPS",
+    "BUNDLE_GEMFILE",
+    "OPENSSL_CONF",
+    "OPENSSL_MODULES",
+    "DYLD_INSERT_LIBRARIES",
+    "LD_PRELOAD",
+    "LD_AUDIT",
+  ]);
+  TOOL_ENV_PREFIX_RE = /^(?:DYLD_|LD_|BASH_FUNC_|GIT_CONFIG_|LUA_C?PATH)/;
+  NULL_COMMAND_ENV_VARS = new Set(["NULLCMD", "READNULLCMD"]);
+  TOOL_ENV_EXACT_RE =
+    /^(?:GH_BROWSER|RSYNC_RSH|CVS_RSH|SOPS_GPG_EXEC|PERL5SHELL|RUBYSHELL|JAVACMD|CLOUDSDK_PYTHON|UV_PYTHON|RUSTC_WRAPPER|RUSTC_WORKSPACE_WRAPPER|npm_config_script_shell|NPM_CONFIG_SCRIPT_SHELL|R_(?:PROFILE|ENVIRON)(?:_USER)?|TAR_OPTIONS|BUN_OPTIONS|TF_CLI_ARGS\w*|CARGO_ALIAS_\w+|[A-Z0-9][A-Z0-9_]*_(?:EXTERNAL_DIFF|PAGER|EDITOR))$/;
+  SCRIPT_PATH_RE =
+    /^(?!-)(?:[^\s]*\/[^\s]*|[^\s\/]+\.(?:sh|bash|zsh|fish|py|rb|pl|js|mjs|cjs|ts|php|lua|R|r|ps1|awk|tcl|exs?|jl))$/;
+});
 //@ chunk-mthxbav8.js:71241-71301 placement
-function isToolEnvVar(e, n) {
-  return TOOL_ENV_VARS.has(e) || TOOL_ENV_PREFIX_RE.test(e) || (n && NULL_COMMAND_ENV_VARS.has(e));
+function isToolEnvVar(name, nullCommandHeld) {
+  return (
+    TOOL_ENV_VARS.has(name) ||
+    TOOL_ENV_PREFIX_RE.test(name) ||
+    (nullCommandHeld && NULL_COMMAND_ENV_VARS.has(name))
+  );
 }
 //@ chunk-mthxbav8.js:71301-71402 placement
-function splitQuotedWords(e) {
-  return (e.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? []).map((n) => n.replace(/["']/g, ""));
+function splitQuotedWords(text) {
+  return (text.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? []).map((word) => word.replace(/["']/g, ""));
 }
 //@ chunk-mthxbav8.js:71402-71665 placement
-function pathPrefixes(e, n) {
-  let replaced = e.replace(/\/+$/, "");
+function pathPrefixes(path, home) {
+  let replaced = path.replace(/\/+$/, "");
   if (!replaced.startsWith("/") || replaced === "") return [];
-  let s =
-    n !== "" && n !== "/" && (replaced === n || replaced.startsWith(`${n}/`))
-      ? replaced.slice(n.length)
+  let underHome =
+    home !== "" && home !== "/" && (replaced === home || replaced.startsWith(`${home}/`))
+      ? replaced.slice(home.length)
       : null;
-  let u = s === "" ? "/" : s;
-  return s === null
+  let tail = underHome === "" ? "/" : underHome;
+  return underHome === null
     ? [replaced]
-    : [replaced, `~${u}`, `$HOME${u}`, `$HOME"${u}`, `\${HOME}${u}`, `\${HOME}"${u}`];
+    : [replaced, `~${tail}`, `$HOME${tail}`, `$HOME"${tail}`, `\${HOME}${tail}`, `\${HOME}"${tail}`];
 }
 //@ chunk-mthxbav8.js:71665-74438 placement
 /**
  * 均依赖 cwd 的命令模式（相对路径、process.cwd()、pwd、git rev-parse --show-toplevel 等），以及 shell 名、脚本解释器、构建工具与解释器取值选项表。
  */
-var CWD_DEPENDENCE_PATTERN =
-  /(?:^|[\s"'=(`:;&|<>])\.\.?\/|\bprocess\.cwd\(\)|\bos\.getcwd\(\)|\bPath\.cwd\(\)|\bDir\.pwd\b|\bgit\b[^\n]{0,12}\brev-parse\b[^\n]{0,6}--show-toplevel\b/im;
-var PWD_REFERENCE_RE = /\$PWD\b|\$\{PWD\b|\$\(pwd(?:[ \t]+-[LP])?\)|`pwd`/im;
-var HISTCHARS_RE = /histchars|HISTCHARS/;
-var SHELL_NAME_RE =
-  /^(?:bash|sh|zsh|dash|ash|(?:pd|lo|o|m|r)?ksh[0-9]*|rbash|fish|csh|tcsh|yash|posh|[oy]sh)$/i;
-var SHELL_PROGRAMS = new Set([
-  "bash",
-  "sh",
-  "zsh",
-  "dash",
-  "ash",
-  "ksh",
-  "mksh",
-  "rbash",
-  "fish",
-  "csh",
-  "tcsh",
-  "pwsh",
-  "yash",
-  "posh",
-  "osh",
-  "ysh",
-  "pdksh",
-  "loksh",
-  "oksh",
-]);
-var SCRIPT_INTERPRETERS = new Set([
-  "python",
-  "pypy",
-  "node",
-  "nodejs",
-  "ruby",
-  "perl",
-  "php",
-  "lua",
-  "tsx",
-  "ts-node",
-  "bb",
-  "awk",
-  "gawk",
-  "osascript",
-  "expect",
-  "tclsh",
-  "wish",
-  "rscript",
-  "irb",
-  "erb",
-  "nawk",
-  "mawk",
-  "sed",
-  "gsed",
-  "m4",
-]);
-var EXTENSION_INTERPRETERS = {
-  julia: /\.jl$/,
-  elixir: /\.exs?$/,
-  groovy: /\.groovy$/,
-  racket: /\.rkt$/,
-  guile: /\.scm$/,
-  sbcl: /\.(?:lisp|cl)$/,
-};
-var BUILD_TOOL_PROGRAMS = new Set([
-  "bmake",
-  "pmake",
-  "gnumake",
-  "make",
-  "gmake",
-  "ninja",
-  "nix-build",
-  "nix-instantiate",
-  "nix-env",
-  "ctest",
-  "meson",
-  "cmake",
-  "bazel",
-  "bazelisk",
-  "npm",
-  "npx",
-  "pnpm",
-  "yarn",
-  "bun",
-  "bunx",
-  "lint-staged",
-  "npm-run-all",
-  "run-p",
-  "run-s",
-  "turbo",
-  "nx",
-  "lerna",
-  "lefthook",
-  "gulp",
-  "grunt",
-  "eslint",
-  "prettier",
-  "jest",
-  "vitest",
-  "mocha",
-  "ava",
-  "playwright",
-  "cypress",
-  "webpack",
-  "rollup",
-  "vite",
-  "babel",
-  "postcss",
-  "tailwindcss",
-  "next",
-  "tsc",
-  "commitlint",
-  "stylelint",
-  "uv",
-  "pip",
-  "pip3",
-  "poetry",
-  "pipenv",
-  "hatch",
-  "pdm",
-  "rye",
-  "pytest",
-  "tox",
-  "nox",
-  "pylint",
-  "flake8",
-  "mypy",
-  "pre-commit",
-  "cargo",
-  "rake",
-  "bundle",
-  "rspec",
-  "rubocop",
-  "rails",
-  "composer",
-  "phpunit",
-  "phpstan",
-  "psalm",
-  "gradle",
-  "gradlew",
-  "mvn",
-  "mvnw",
-  "scons",
-  "ant",
-  "hg",
-  "sbt",
-  "lein",
-  "clj",
-  "clojure",
-  "stack",
-  "cabal",
-  "mix",
-  "dotnet",
-  "msbuild",
-  "swift",
-  "xcodebuild",
-  "pod",
-  "fastlane",
-  "just",
-  "task",
-  "terraform",
-  "tofu",
-  "terragrunt",
-  "snakemake",
-  "vagrant",
-  "docker-compose",
-  "podman-compose",
-  "devbox",
-  "mise",
-  "asdf",
-]);
-var VERSION_OR_HELP_FLAG_RE = /^--(?:version|help)$/;
-var BUILD_SUBCOMMANDS = {
-  go: new Set(["generate", "run", "test", "build", "install", "get", "vet", "tool"]),
-  deno: new Set(["task", "test", "bench", "lint", "fmt", "check"]),
-  docker: new Set(["compose", "build", "buildx"]),
-  podman: new Set(["compose", "build"]),
-  nix: new Set([
-    "develop",
-    "run",
-    "build",
-    "shell",
-    "flake",
-    "eval",
-    "profile",
+var CWD_DEPENDENCE_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var PWD_REFERENCE_RE;
+var HISTCHARS_RE;
+var SHELL_NAME_RE;
+var SHELL_PROGRAMS;
+var SCRIPT_INTERPRETERS;
+var EXTENSION_INTERPRETERS;
+var BUILD_TOOL_PROGRAMS;
+var VERSION_OR_HELP_FLAG_RE;
+var BUILD_SUBCOMMANDS;
+var INTERPRETER_EVAL_FLAGS;
+deferInit("chunk-mthxbav8.js:71665", () => {
+  CWD_DEPENDENCE_PATTERN =
+    /(?:^|[\s"'=(`:;&|<>])\.\.?\/|\bprocess\.cwd\(\)|\bos\.getcwd\(\)|\bPath\.cwd\(\)|\bDir\.pwd\b|\bgit\b[^\n]{0,12}\brev-parse\b[^\n]{0,6}--show-toplevel\b/im;
+  PWD_REFERENCE_RE = /\$PWD\b|\$\{PWD\b|\$\(pwd(?:[ \t]+-[LP])?\)|`pwd`/im;
+  HISTCHARS_RE = /histchars|HISTCHARS/;
+  SHELL_NAME_RE =
+    /^(?:bash|sh|zsh|dash|ash|(?:pd|lo|o|m|r)?ksh[0-9]*|rbash|fish|csh|tcsh|yash|posh|[oy]sh)$/i;
+  SHELL_PROGRAMS = new Set([
+    "bash",
+    "sh",
+    "zsh",
+    "dash",
+    "ash",
+    "ksh",
+    "mksh",
+    "rbash",
+    "fish",
+    "csh",
+    "tcsh",
+    "pwsh",
+    "yash",
+    "posh",
+    "osh",
+    "ysh",
+    "pdksh",
+    "loksh",
+    "oksh",
+  ]);
+  SCRIPT_INTERPRETERS = new Set([
+    "python",
+    "pypy",
+    "node",
+    "nodejs",
+    "ruby",
+    "perl",
+    "php",
+    "lua",
+    "tsx",
+    "ts-node",
+    "bb",
+    "awk",
+    "gawk",
+    "osascript",
+    "expect",
+    "tclsh",
+    "wish",
+    "rscript",
+    "irb",
+    "erb",
+    "nawk",
+    "mawk",
+    "sed",
+    "gsed",
+    "m4",
+  ]);
+  EXTENSION_INTERPRETERS = {
+    julia: /\.jl$/,
+    elixir: /\.exs?$/,
+    groovy: /\.groovy$/,
+    racket: /\.rkt$/,
+    guile: /\.scm$/,
+    sbcl: /\.(?:lisp|cl)$/,
+  };
+  BUILD_TOOL_PROGRAMS = new Set([
+    "bmake",
+    "pmake",
+    "gnumake",
+    "make",
+    "gmake",
+    "ninja",
+    "nix-build",
+    "nix-instantiate",
+    "nix-env",
+    "ctest",
+    "meson",
+    "cmake",
+    "bazel",
+    "bazelisk",
+    "npm",
+    "npx",
+    "pnpm",
+    "yarn",
+    "bun",
+    "bunx",
+    "lint-staged",
+    "npm-run-all",
+    "run-p",
+    "run-s",
+    "turbo",
+    "nx",
+    "lerna",
+    "lefthook",
+    "gulp",
+    "grunt",
+    "eslint",
+    "prettier",
+    "jest",
+    "vitest",
+    "mocha",
+    "ava",
+    "playwright",
+    "cypress",
+    "webpack",
+    "rollup",
+    "vite",
+    "babel",
+    "postcss",
+    "tailwindcss",
+    "next",
+    "tsc",
+    "commitlint",
+    "stylelint",
+    "uv",
+    "pip",
+    "pip3",
+    "poetry",
+    "pipenv",
+    "hatch",
+    "pdm",
+    "rye",
+    "pytest",
+    "tox",
+    "nox",
+    "pylint",
+    "flake8",
+    "mypy",
+    "pre-commit",
+    "cargo",
+    "rake",
     "bundle",
-    "print-dev-env",
-    "fmt",
-    "repl",
-  ]),
-  node: new Set(["--run", "--test"]),
-};
-var INTERPRETER_EVAL_FLAGS = {
-  python: new Set(["-W", "-X", "--check-hash-based-pycs"]),
-  pypy: new Set(["-W", "-X"]),
-  node: new Set([
-    "-e",
-    "--eval",
-    "-p",
-    "--print",
-    "-r",
-    "--require",
-    "--import",
-    "--loader",
-    "--experimental-loader",
-    "-C",
-    "--conditions",
-    "--input-type",
-    "--title",
-  ]),
-  ruby: new Set(["-e", "-r", "--require", "-I", "-C", "-E"]),
-  perl: new Set(["-e", "-E", "-M", "-m", "-I"]),
-  php: new Set([
-    "-r",
-    "-d",
-    "--define",
-    "-c",
-    "--php-ini",
-    "-B",
-    "-R",
-    "-F",
-    "-E",
-    "-z",
-    "--zend-extension",
-    "-f",
-    "--file",
-  ]),
-  osascript: new Set(["-l", "-s"]),
-  lua: new Set(["-e", "-l"]),
-  tsx: new Set(["-e", "--eval", "-r", "--require", "--import", "--tsconfig"]),
-  "ts-node": new Set(["-e", "--eval", "-r", "--require", "-P", "--project", "-O", "--compilerOptions"]),
-};
+    "rspec",
+    "rubocop",
+    "rails",
+    "composer",
+    "phpunit",
+    "phpstan",
+    "psalm",
+    "gradle",
+    "gradlew",
+    "mvn",
+    "mvnw",
+    "scons",
+    "ant",
+    "hg",
+    "sbt",
+    "lein",
+    "clj",
+    "clojure",
+    "stack",
+    "cabal",
+    "mix",
+    "dotnet",
+    "msbuild",
+    "swift",
+    "xcodebuild",
+    "pod",
+    "fastlane",
+    "just",
+    "task",
+    "terraform",
+    "tofu",
+    "terragrunt",
+    "snakemake",
+    "vagrant",
+    "docker-compose",
+    "podman-compose",
+    "devbox",
+    "mise",
+    "asdf",
+  ]);
+  VERSION_OR_HELP_FLAG_RE = /^--(?:version|help)$/;
+  BUILD_SUBCOMMANDS = {
+    go: new Set(["generate", "run", "test", "build", "install", "get", "vet", "tool"]),
+    deno: new Set(["task", "test", "bench", "lint", "fmt", "check"]),
+    docker: new Set(["compose", "build", "buildx"]),
+    podman: new Set(["compose", "build"]),
+    nix: new Set([
+      "develop",
+      "run",
+      "build",
+      "shell",
+      "flake",
+      "eval",
+      "profile",
+      "bundle",
+      "print-dev-env",
+      "fmt",
+      "repl",
+    ]),
+    node: new Set(["--run", "--test"]),
+  };
+  INTERPRETER_EVAL_FLAGS = {
+    python: new Set(["-W", "-X", "--check-hash-based-pycs"]),
+    pypy: new Set(["-W", "-X"]),
+    node: new Set([
+      "-e",
+      "--eval",
+      "-p",
+      "--print",
+      "-r",
+      "--require",
+      "--import",
+      "--loader",
+      "--experimental-loader",
+      "-C",
+      "--conditions",
+      "--input-type",
+      "--title",
+    ]),
+    ruby: new Set(["-e", "-r", "--require", "-I", "-C", "-E"]),
+    perl: new Set(["-e", "-E", "-M", "-m", "-I"]),
+    php: new Set([
+      "-r",
+      "-d",
+      "--define",
+      "-c",
+      "--php-ini",
+      "-B",
+      "-R",
+      "-F",
+      "-E",
+      "-z",
+      "--zend-extension",
+      "-f",
+      "--file",
+    ]),
+    osascript: new Set(["-l", "-s"]),
+    lua: new Set(["-e", "-l"]),
+    tsx: new Set(["-e", "--eval", "-r", "--require", "--import", "--tsconfig"]),
+    "ts-node": new Set(["-e", "--eval", "-r", "--require", "-P", "--project", "-O", "--compilerOptions"]),
+  };
+});
 //@ chunk-mthxbav8.js:74438-74899 placement
-function isEvalFlag(e, text) {
-  switch (e) {
+function isEvalFlag(interpreterName, text) {
+  switch (interpreterName) {
     case "node":
     case "nodejs":
     case "tsx":
@@ -1695,12 +1803,12 @@ function commandBaseName(program) {
   return text.slice(text.lastIndexOf("/") + 1).toLowerCase();
 }
 //@ chunk-mthxbav8.js:75077-75187 placement
-function normalizeInterpreterName(e) {
-  return e.replace(/^(python|pypy|perl|ruby|php|lua|node|nodejs|ksh|tclsh|wish)[0-9.]+t?$/, "$1");
+function normalizeInterpreterName(name) {
+  return name.replace(/^(python|pypy|perl|ruby|php|lua|node|nodejs|ksh|tclsh|wish)[0-9.]+t?$/, "$1");
 }
 //@ chunk-mthxbav8.js:75187-75243 placement
-function isKnownInterpreter(e) {
-  return SHELL_PROGRAMS.has(e) || SCRIPT_INTERPRETERS.has(e) || INTERPRETER_NAME_PATTERN.test(e);
+function isKnownInterpreter(name) {
+  return SHELL_PROGRAMS.has(name) || SCRIPT_INTERPRETERS.has(name) || INTERPRETER_NAME_PATTERN.test(name);
 }
 //@ chunk-mthxbav8.js:75243-75306 placement
 /**
@@ -1710,22 +1818,22 @@ var ABSOLUTE_PATH_PATTERN = /^[\/$]|^~(?=\/|$)/;
 var ABSOLUTE_LIKE_PATH_RE = /^[\/$]|^~(?![+-])/;
 var PATH_PREFIX_CHARS_RE = /^[\/~$]/;
 //@ chunk-mthxbav8.js:75306-75374 placement
-function isAbsoluteLike(e, n = ABSOLUTE_LIKE_PATH_RE) {
+function isAbsoluteLike(text, extraPattern = ABSOLUTE_LIKE_PATH_RE) {
   return (
-    ABSOLUTE_PATH_PATTERN.test(e) ||
-    (n.test(e) &&
+    ABSOLUTE_PATH_PATTERN.test(text) ||
+    (extraPattern.test(text) &&
       !readFlagWithOverride(TENGU_FEDERATED_HEARTH, {
         safe: true,
       }))
   );
 }
 //@ chunk-mthxbav8.js:75374-75431 placement
-function isPathWord(e) {
-  return isAbsoluteLike(e.text) || /^[<>]\(/.test(e.text);
+function isPathWord(word) {
+  return isAbsoluteLike(word.text) || /^[<>]\(/.test(word.text);
 }
 //@ chunk-mthxbav8.js:75431-75510 placement
-function isPlainArgument(e) {
-  return e !== undefined && e.text !== "" && !isPathWord(e) && !e.text.startsWith("-");
+function isPlainArgument(word) {
+  return word !== undefined && word.text !== "" && !isPathWord(word) && !word.text.startsWith("-");
 }
 export {
   commandBaseName,

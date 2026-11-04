@@ -17,19 +17,19 @@ import { errorMessage } from "../../utils/errors.js";
 /**
  * 在后台作业的状态行上记下 stopped（已结束、已停或 exec 启动的作业跳过），失败时记日志。
  */
-async function markJobStoppedOnRow(r, o) {
+async function markJobStoppedOnRow(jobDir, storageV5) {
   if (!isColorCommandForceHidden()) return;
   try {
-    let jobState = await readJobState(r, o);
+    let jobState = await readJobState(jobDir, storageV5);
     if (!jobState || !isSettled(jobState) || jobState.state === "stopped" || isExecLaunch(jobState)) return;
     await writeStateAtomic(
-      r,
+      jobDir,
       {
         ...jobState,
         state: "stopped",
         updatedAt: new Date().toISOString(),
       },
-      o,
+      storageV5,
     );
   } catch (error) {
     logForDebugging(`stop not recorded on the job's row: ${errorMessage(error)}`, {

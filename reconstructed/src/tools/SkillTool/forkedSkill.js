@@ -85,7 +85,7 @@ import { emitTaskNotification } from "../../utils/task/taskNotifications.js";
  */
 var MAX_REGISTERED_SKILL_VARIANTS = 100;
 //@ chunk-0fs3a553.js:1516-2092 placement
-async function nestedSkillsForChangedFiles(o) {
+async function nestedSkillsForChangedFiles(changedPath) {
   if (
     isCustomizationDisabled("skills") ||
     !isSettingSourceEnabled("projectSettings") ||
@@ -94,11 +94,11 @@ async function nestedSkillsForChangedFiles(o) {
     isDiskless()
   )
     return [];
-  let gitRoot = findGitRoot(o);
+  let gitRoot = findGitRoot(changedPath);
   if (gitRoot === null) return [];
   let filterNeutralizingArgs = await buildFilterNeutralizingArgs(gitRoot);
   if (!filterNeutralizingArgs.ok) return [];
-  let i = await runGitReadOnly(gitRoot, [
+  let statusResult = await runGitReadOnly(gitRoot, [
     ...filterNeutralizingArgs.args,
     "status",
     "--porcelain",
@@ -106,74 +106,89 @@ async function nestedSkillsForChangedFiles(o) {
     IGNORE_SUBMODULES_DIRTY_FLAG,
     "--untracked-files=normal",
   ]);
-  if (!i.ok) return [];
-  let parts = i.stdout.split("\x00");
-  let s = new Map();
+  if (!statusResult.ok) return [];
+  let parts = statusResult.stdout.split("\x00");
+  let dirs = new Map();
   for (let j = 0; j < parts.length; j++) {
-    let u = parts[j] ?? "";
-    if (u.length < 4) continue;
-    let c = [u.slice(3)];
-    if (/[RC]/.test(u.slice(0, 2))) {
+    let entry = parts[j] ?? "";
+    if (entry.length < 4) continue;
+    let entryPaths = [entry.slice(3)];
+    if (/[RC]/.test(entry.slice(0, 2))) {
       j++;
-      c.push(parts[j] ?? "");
+      entryPaths.push(parts[j] ?? "");
     }
-    for (let p of c) {
-      let d = resolve(gitRoot, p);
+    for (let entryPath of entryPaths) {
+      let absolutePath = resolve(gitRoot, entryPath);
       if (
-        p !== "" &&
-        d !== gitRoot &&
-        s.size < MAX_REGISTERED_SKILL_VARIANTS &&
-        isPathWithin(gitRoot, d, {
+        entryPath !== "" &&
+        absolutePath !== gitRoot &&
+        dirs.size < MAX_REGISTERED_SKILL_VARIANTS &&
+        isPathWithin(gitRoot, absolutePath, {
           alreadyComparable: true,
         })
       )
-        s.set(dirname(d), d);
+        dirs.set(dirname(absolutePath), absolutePath);
     }
   }
-  return [...s.values()];
+  return [...dirs.values()];
 }
 //@ chunk-0fs3a553.js:2092-2228 placement
 /**
  * 找出与给定未限定名匹配、可由 Skill 工具调用的技能变体（排除正在派生自身的 fork 技能）。
  */
-function matchingSkillVariants(commands, r, spawnedBySkill) {
+function matchingSkillVariants(commands, bareName, spawnedBySkill) {
   return commands.filter(
-    (i) =>
-      i.type === "prompt" &&
-      matchesUnqualifiedName(i, r) &&
-      isSkillToolCommand(i) &&
-      isNonEmptyIdentifier(i.name) &&
-      !(i.context === "fork" && spawnedBySkill !== undefined && getBareCommandName(i) === spawnedBySkill),
+    (command) =>
+      command.type === "prompt" &&
+      matchesUnqualifiedName(command, bareName) &&
+      isSkillToolCommand(command) &&
+      isNonEmptyIdentifier(command.name) &&
+      !(
+        command.context === "fork" &&
+        spawnedBySkill !== undefined &&
+        getBareCommandName(command) === spawnedBySkill
+      ),
   );
 }
 //@ chunk-0fs3a553.js:2228-3438 placement
-async function scopedSkillVariantNote(o, r, n) {
-  if (o.type !== "prompt" || o.unqualifiedName != null) return null;
-  if (r !== null && n.session !== undefined && slashTestPattern(o.name) !== null)
+async function scopedSkillVariantNote(command, projectRoot, toolContext) {
+  if (command.type !== "prompt" || command.unqualifiedName != null) return null;
+  if (projectRoot !== null && toolContext.session !== undefined && slashTestPattern(command.name) !== null)
     try {
-      let s = await nestedSkillsForChangedFiles(r);
-      if (s.length > 0)
-        await addSkillDirectories(await discoverSkillDirsForPaths(n.session.host, s, r, n.storageV5));
+      let changedDirs = await nestedSkillsForChangedFiles(projectRoot);
+      if (changedDirs.length > 0)
+        await addSkillDirectories(
+          await discoverSkillDirsForPaths(
+            toolContext.session.host,
+            changedDirs,
+            projectRoot,
+            toolContext.storageV5,
+          ),
+        );
     } catch (error) {
       if (isSyscallError(error))
         logForDebugging(`[skills] Changed files not searched for nested skills: ${error}`);
       else logError(error);
     }
   if (getDynamicSkills().length === 0 && getAdditionalDirectoriesForClaudeMd().length === 0) return null;
-  if (!n.options.tools.some((tool) => toolMatchesName(tool, SKILL))) return null;
-  let i = matchingSkillVariants(await getCommands(r, n.storageV5), o.name, n.options.spawnedBySkill);
-  if (i.length === 0) return null;
-  let mapped = i.map((s) => {
-    let sliced = s.name.slice(0, s.name.length - o.name.length - 1);
-    return `- \`${s.name}\` \u2014 for files under ${sliced}/`;
+  if (!toolContext.options.tools.some((tool) => toolMatchesName(tool, SKILL))) return null;
+  let variants = matchingSkillVariants(
+    await getCommands(projectRoot, toolContext.storageV5),
+    command.name,
+    toolContext.options.spawnedBySkill,
+  );
+  if (variants.length === 0) return null;
+  let mapped = variants.map((variant) => {
+    let sliced = variant.name.slice(0, variant.name.length - command.name.length - 1);
+    return `- \`${variant.name}\` \u2014 for files under ${sliced}/`;
   });
   logEvent("tengu_skill_scoped_variant_note", {
-    variant_count: i.length,
+    variant_count: variants.length,
   });
   return createUserMessage({
     content: wrapInSystemReminder(
       [
-        `Directory-scoped variants of the "${o.name}" skill exist in this repo:`,
+        `Directory-scoped variants of the "${command.name}" skill exist in this repo:`,
         ...mapped,
         `The bare name always resolves to this unscoped skill; the variants are reachable only by their exact qualified names. If the files you are working on are under a variant's directory, invoke that variant now with the ${SKILL} tool and follow it instead \u2014 it carries that subtree's own instructions. If your changes span more than one variant's directory, run each matching variant.`,
       ].join(`
@@ -186,15 +201,15 @@ async function scopedSkillVariantNote(o, r, n) {
 /**
  * 判断 fork 技能是否在后台运行：非交互、工作流内或已指定前台时为否，否则按技能的 background 设置（默认是）。
  */
-function shouldBackgroundForkedSkill(o, r, n) {
+function shouldBackgroundForkedSkill(input, toolContext, forceForeground) {
   if (
-    n ||
-    r.spawnedByWorkflowRunId !== undefined ||
+    forceForeground ||
+    toolContext.spawnedByWorkflowRunId !== undefined ||
     isForegroundAgentMoveOff() ||
     getIsNonInteractiveSession()
   )
     return false;
-  return o.background ?? true;
+  return input.background ?? true;
 }
 //@ chunk-0fs3a553.js:3543-6441 placement = updateMagicDoc (0.152)
 async function runForkedAgent({
@@ -218,31 +233,35 @@ async function runForkedAgent({
   let { taskRegistry } = context;
   let startTime = Date.now();
   let description_2 = description.length > 50 ? truncateToLength(description, 49) + "\u2026" : description;
-  let C = getAgentDepth(context.agentContext) + 1;
+  let depth = getAgentDepth(context.agentContext) + 1;
   let agentModel = getAgentModel(
     agentDefinition.model,
     getMainLoopModel(context),
     command.model,
     getToolPermissionContext(context).mode,
   );
-  let M = () => {
+  let hasLiveDuplicate = () => {
     if (context.abortController.signal.aborted) {
       if (unwrapAbortReason(context.abortController.signal.reason) !== "interrupt") throw new AbortError();
     }
-    for (let k of Object.values(taskRegistry.all()))
-      if (k.type === "local_agent" && !isTerminalTaskStatus(k.status) && k.forkedSkillName === command.name) {
+    for (let task of Object.values(taskRegistry.all()))
+      if (
+        task.type === "local_agent" &&
+        !isTerminalTaskStatus(task.status) &&
+        task.forkedSkillName === command.name
+      ) {
         logFeatureSad("subagent_launch", "forked_skill_live_duplicate");
         return true;
       }
     return false;
   };
-  if (M()) return null;
+  if (hasLiveDuplicate()) return null;
   let maxSubagentSpawnDepth = getMaxSubagentSpawnDepth();
-  if (C > maxSubagentSpawnDepth) {
+  if (depth > maxSubagentSpawnDepth) {
     logFeatureSad("subagent_launch", "forked_skill_depth_cap");
     return null;
   }
-  let R = {
+  let scopingRecord = {
     skillName: command.name,
     attributionName: spawnedBySkill,
     ...(agentDefinition.effort !== undefined && {
@@ -253,27 +272,27 @@ async function runForkedAgent({
         frozenCommandDenies: [...frozenCommandDenies],
       }),
   };
-  if (!FORKED_SKILL_SCOPING_SCHEMA().safeParse(R).success) {
+  if (!FORKED_SKILL_SCOPING_SCHEMA().safeParse(scopingRecord).success) {
     logFeatureSad("subagent_launch", "forked_skill_scoping_unpersistable");
     return null;
   }
   try {
-    await writeForkedSkillScoping(identityAgentId2(agentId), R, context.storageV5);
+    await writeForkedSkillScoping(identityAgentId2(agentId), scopingRecord, context.storageV5);
   } catch (error) {
     spawnForkedSkill(error);
     logFeatureSad("subagent_launch", "forked_skill_scoping_write_failed");
     return null;
   }
-  if (M()) return null;
-  let D = resolveVisibleSubagentId(context.agentId, taskRegistry) ?? mainAgentId();
-  let ownToolSurface = getOwnToolSurface(context, D);
+  if (hasLiveDuplicate()) return null;
+  let ownerAgentId = resolveVisibleSubagentId(context.agentId, taskRegistry) ?? mainAgentId();
+  let ownToolSurface = getOwnToolSurface(context, ownerAgentId);
   let detected = registerAsyncAgent({
     outputFileReadable: willToolsLoseSessionState(context.options.tools),
     ownerCanContinueAgents: ownToolSurface,
     agentId,
-    ownerAgentId: D,
+    ownerAgentId,
     parentAgentId: context.agentId,
-    spawnDepth: C,
+    spawnDepth: depth,
     description: description_2,
     prompt,
     model: agentModel,
@@ -284,17 +303,17 @@ async function runForkedAgent({
     sessionScratch: context.session.sessionScratch,
   });
   let abortController = detected.abortController;
-  let b = context.agentLifecycle.allocateName(command.name);
-  context.agentLifecycle.registerName(b, identityAgentId2(agentId));
+  let displayName = context.agentLifecycle.allocateName(command.name);
+  context.agentLifecycle.registerName(displayName, identityAgentId2(agentId));
   addAgentKeepaliveReason(
     resolveVisibleSubagentId(context.agentId, taskRegistry),
     `agent:${agentId}`,
     taskRegistry,
   );
-  let F = {
+  let agentContext = {
     agentId,
     parentAgentId: context.agentId,
-    depth: C,
+    depth,
     ...(alwaysFalse(context) && {
       spawnedByMainThread: true,
     }),
@@ -302,26 +321,26 @@ async function runForkedAgent({
     agentType: "subagent",
     subagentName: agentDefinition.agentType,
     isBuiltIn: isBuiltInAgent(agentDefinition),
-    displayName: b,
+    displayName,
     isAsync: true,
     isBackgroundAgent: true,
     invocationKind: "spawn",
     invocationEmitted: false,
     ...getWorkflowRunFields(context.agentContext),
   };
-  let L = {
+  let agentLaunchOptions = {
     prompt,
     resolvedAgentModel: agentModel,
     isBuiltInAgent: isBuiltInAgent(agentDefinition),
     startTime,
     agentType: agentDefinition.agentType,
     isAsync: true,
-    agentDepth: C,
+    agentDepth: depth,
     callerCanContinueAgents: ownToolSurface,
     source: agentDefinition.source,
   };
   let { onToolPool, reviewTools } = createDeferredReviewTools(context.options.tools);
-  runWithCwdOverride(F, () =>
+  runWithCwdOverride(agentContext, () =>
     runAsyncAgentLifecycle({
       taskId: detected.agentId,
       abortController,
@@ -346,7 +365,7 @@ async function runForkedAgent({
           webFetchReadmissionAllowed,
           override: {
             agentId: identityAgentId2(agentId),
-            agentContext: F,
+            agentContext,
             abortController,
             readFileState,
           },
@@ -355,11 +374,11 @@ async function runForkedAgent({
           onStreamTokenEstimate,
           onToolPool,
           description: description_2,
-          name: b,
+          name: displayName,
         }),
       metadata: {
-        ...L,
-        agentContext: F,
+        ...agentLaunchOptions,
+        agentContext,
       },
       description: description_2,
       toolUseContext: context,
@@ -374,7 +393,7 @@ async function runForkedAgent({
   logFeatureOk("subagent_launch");
   return {
     agentId,
-    name: b,
+    name: displayName,
   };
 }
 //@ chunk-0fs3a553.js:6441-6511 placement
@@ -421,12 +440,12 @@ function registerForkedSkillTask({
   taskRegistry.register(taskState);
   return {
     abortController,
-    remove(T) {
+    remove(finalStatus) {
       detachRelay();
       unregisterLoop();
       taskRegistry.remove(agentId);
       evictTaskOutput(agentId);
-      emitTaskNotification(agentId, abortController.signal.aborted ? "stopped" : T, {
+      emitTaskNotification(agentId, abortController.signal.aborted ? "stopped" : finalStatus, {
         toolUseId,
         summary: description,
         outputFile: taskState.outputFile,

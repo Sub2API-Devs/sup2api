@@ -9,7 +9,7 @@
  * attribution: placement 2
  */
 import { useNotifications } from "../../context/notifications.js";
-import { P } from "../../../vendor/react/cjs/react.production.js";
+import { useEffect } from "../../../vendor/react/cjs/react.production.js";
 import {
   getFeatureValue_CACHED_MAY_BE_STALE,
   onGrowthBookRefresh,
@@ -23,12 +23,12 @@ var STARTUP_NOTICE_KEY = "startup-notice";
  */
 function useStartupNotice() {
   let { addNotification, removeNotification } = useNotifications();
-  P(() => {
-    let D = "";
-    let L = () => {
+  useEffect(() => {
+    let lastNoticeText = "";
+    let refreshNotice = () => {
       let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_startup_notice", "");
-      if (featureValue_CACHED_MAY_BE_STALE === D) return;
-      D = featureValue_CACHED_MAY_BE_STALE;
+      if (featureValue_CACHED_MAY_BE_STALE === lastNoticeText) return;
+      lastNoticeText = featureValue_CACHED_MAY_BE_STALE;
       if (!featureValue_CACHED_MAY_BE_STALE) {
         removeNotification(STARTUP_NOTICE_KEY);
         return;
@@ -39,11 +39,11 @@ function useStartupNotice() {
         color: "warning",
         priority: "high",
         timeoutMs: 30000,
-        fold: (ke, Re) => Re,
+        fold: (previousNotice, nextNotice) => nextNotice,
       });
     };
-    L();
-    return onGrowthBookRefresh(L);
+    refreshNotice();
+    return onGrowthBookRefresh(refreshNotice);
   }, [addNotification, removeNotification]);
 }
 export { useStartupNotice };

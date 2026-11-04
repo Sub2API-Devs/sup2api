@@ -5,10 +5,10 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-1ny7cxrt.js:19351-20896 cjs-fingerprint
-var require_package = x(function (cjsExports, cjsModule) {
+var require_package = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = {
     name: "openid-client",
     version: "5.7.1",

@@ -5,11 +5,11 @@
  * pieces: chunk-t4ksmxzx.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_ral } from "./ral.js";
 
 //@ chunk-t4ksmxzx.js:17959-18920 cjs-fingerprint
-var require_semaphore = x(function (cjsExports) {
+var require_semaphore = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

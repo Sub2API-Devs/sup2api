@@ -12,15 +12,15 @@
 //@ chunk-fq0cr76a.js:901792-901811 affinity
 var weakSet = new WeakSet();
 //@ chunk-fq0cr76a.js:901811-901980 fingerprint = SandboxFilesystemConfigSchema (0.466)
-function SandboxFilesystemConfigSchema(e) {
-  if (weakSet.has(e)) return true;
-  let { denyRead, allowRead, allowWrite, denyWrite } = e.filesystem;
-  let all = [denyRead, allowRead ?? [], allowWrite, denyWrite].every((b) => b.every(isString));
-  if (all) weakSet.add(e);
+function SandboxFilesystemConfigSchema(config) {
+  if (weakSet.has(config)) return true;
+  let { denyRead, allowRead, allowWrite, denyWrite } = config.filesystem;
+  let all = [denyRead, allowRead ?? [], allowWrite, denyWrite].every((list) => list.every(isString));
+  if (all) weakSet.add(config);
   return all;
 }
 //@ chunk-fq0cr76a.js:901980-902023 affinity
-function isString(e) {
-  return typeof e === "string";
+function isString(value) {
+  return typeof value === "string";
 }
 export { SandboxFilesystemConfigSchema };

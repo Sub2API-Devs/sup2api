@@ -5,10 +5,10 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-1ny7cxrt.js:20896-21000 cjs-fingerprint
-var require_consts = x(function (cjsExports, cjsModule) {
+var require_consts = __commonJS(function (cjsExports, cjsModule) {
   var HTTP_OPTIONS = Symbol();
   var CLOCK_TOLERANCE = Symbol();
   cjsModule.exports = {

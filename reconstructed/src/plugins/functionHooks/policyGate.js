@@ -39,15 +39,15 @@ import { env } from "../../utils/env.js";
 /**
  * 按键排序的条目
  */
-var sortedEntries = (e) => Object.fromEntries(Object.entries(e ?? {}).toSorted());
+var sortedEntries = (record) => Object.fromEntries(Object.entries(record ?? {}).toSorted());
 //@ chunk-e6aww6q8.js:4118103-4118220 placement
 /**
  * 读取某设置来源里与插件有关的部分（enabledPlugins、pluginConfigs，键排序）。
  */
-function readSourcePluginSettings(e) {
-  let settingsForSource = getSettingsForSource(e);
+function readSourcePluginSettings(source) {
+  let settingsForSource = getSettingsForSource(source);
   return {
-    source: e,
+    source,
     enabledPlugins: sortedEntries(settingsForSource?.enabledPlugins),
     pluginConfigs: sortedEntries(settingsForSource?.pluginConfigs),
   };
@@ -104,7 +104,8 @@ var managedHooksPolicyStamp = () => jsonStringify(readManagedHooksPolicy());
 /**
  * 策略快照是否仍然一致
  */
-var isPolicyStampCurrent = (e) => e.readUnder === undefined || e.readUnder === managedHooksPolicyStamp();
+var isPolicyStampCurrent = (policy) =>
+  policy.readUnder === undefined || policy.readUnder === managedHooksPolicyStamp();
 //@ chunk-e6aww6q8.js:4119268-4119278 placement
 /**
  * 2
@@ -114,9 +115,11 @@ var POLICY_REREAD_TRIES = 2;
 /**
  * 读到策略稳定为止
  */
-async function readStablePolicy(e, n = POLICY_REREAD_TRIES) {
-  let r = await e.read();
-  return isPolicyStampCurrent(r) || n === 0 ? r : readStablePolicy(await rereadPluginSettings(e, r), n - 1);
+async function readStablePolicy(policy, triesLeft = POLICY_REREAD_TRIES) {
+  let read = await policy.read();
+  return isPolicyStampCurrent(read) || triesLeft === 0
+    ? read
+    : readStablePolicy(await rereadPluginSettings(policy, read), triesLeft - 1);
 }
 //@ chunk-e6aww6q8.js:4119374-4119384 placement
 /**

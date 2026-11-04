@@ -5,7 +5,7 @@
  * pieces: chunk-ke7ft91e.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_middleware_stack } from "../../../../middleware-stack/dist-cjs/index.js";
 import { require_protocols } from "../protocols/index.js";
 import { require_types } from "../../../../types/dist-cjs/index.js";
@@ -13,12 +13,12 @@ import { require_schema } from "../schema/index.js";
 import { require_serde } from "../serde/index.js";
 
 //@ chunk-ke7ft91e.js:3961-12613 cjs-fingerprint
-var require_client = x(function (cjsExports) {
+var require_client = __commonJS(function (cjsExports) {
   var constructStack = require_middleware_stack();
-  var T = require_protocols();
+  var protocols = require_protocols();
   var AlgorithmId = require_types();
   var NormalizedSchema = require_schema();
-  var D = require_serde();
+  var serde = require_serde();
   class Client {
     config;
     middlewareStack = constructStack.constructStack();
@@ -220,11 +220,11 @@ var require_client = x(function (cjsExports) {
     }
   }
   var SENSITIVE_STRING = "***SensitiveInformation***";
-  var createAggregatedClient = (e, t) => {
-    for (let key of Object.keys(e)) {
-      let n = e[key];
-      let a = async function (args, optionsOrCb, cb) {
-        let command = new n(args);
+  var createAggregatedClient = (commands, client) => {
+    for (let key of Object.keys(commands)) {
+      let CommandCtor = commands[key];
+      let commandImpl = async function (args, optionsOrCb, cb) {
+        let command = new CommandCtor(args);
         if (typeof optionsOrCb === "function") this.send(command, optionsOrCb);
         else if (typeof cb === "function") {
           if (typeof optionsOrCb !== "object")
@@ -233,7 +233,7 @@ var require_client = x(function (cjsExports) {
         } else return this.send(command, optionsOrCb);
       };
       let methodName = (key[0].toLowerCase() + key.slice(1)).replace(/Command$/, "");
-      t.prototype[methodName] = a;
+      client.prototype[methodName] = commandImpl;
     }
   };
   class ServiceException extends Error {
@@ -360,7 +360,7 @@ var require_client = x(function (cjsExports) {
       },
     };
   };
-  var ae = (clientConfig) => {
+  var collectChecksumConfiguration = (clientConfig) => {
     let runtimeConfig = {};
     clientConfig.checksumAlgorithms().forEach((checksumAlgorithm) => {
       runtimeConfig[checksumAlgorithm.algorithmId()] = checksumAlgorithm.checksumConstructor();
@@ -383,7 +383,8 @@ var require_client = x(function (cjsExports) {
   var getDefaultExtensionConfiguration = (runtimeConfig) =>
     Object.assign(getChecksumConfiguration(runtimeConfig), getRetryConfiguration(runtimeConfig));
   var getDefaultClientConfiguration = getDefaultExtensionConfiguration;
-  var resolveDefaultRuntimeConfig = (config) => Object.assign(ae(config), resolveRetryRuntimeConfig(config));
+  var resolveDefaultRuntimeConfig = (config) =>
+    Object.assign(collectChecksumConfiguration(config), resolveRetryRuntimeConfig(config));
   var getArrayIfSingleItem = (mayBeArray) => (Array.isArray(mayBeArray) ? mayBeArray : [mayBeArray]);
   var getValueFromTextNode = (obj) => {
     for (let key in obj)
@@ -500,19 +501,19 @@ var require_client = x(function (cjsExports) {
   Object.defineProperty(cjsExports, "collectBody", {
     enumerable: true,
     get: function () {
-      return T.collectBody;
+      return protocols.collectBody;
     },
   });
   Object.defineProperty(cjsExports, "extendedEncodeURIComponent", {
     enumerable: true,
     get: function () {
-      return T.extendedEncodeURIComponent;
+      return protocols.extendedEncodeURIComponent;
     },
   });
   Object.defineProperty(cjsExports, "resolvedPath", {
     enumerable: true,
     get: function () {
-      return T.resolvedPath;
+      return protocols.resolvedPath;
     },
   });
   cjsExports.Client = Client;
@@ -538,12 +539,12 @@ var require_client = x(function (cjsExports) {
   cjsExports.take = take;
   cjsExports.throwDefaultError = throwDefaultError;
   cjsExports.withBaseException = withBaseException;
-  Object.keys(D).forEach(function (key) {
+  Object.keys(serde).forEach(function (key) {
     if (key !== "default" && !Object.prototype.hasOwnProperty.call(cjsExports, key))
       Object.defineProperty(cjsExports, key, {
         enumerable: true,
         get: function () {
-          return D[key];
+          return serde[key];
         },
       });
   });

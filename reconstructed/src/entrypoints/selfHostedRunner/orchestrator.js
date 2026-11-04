@@ -40,213 +40,213 @@ import { ageMs, workOrderClaims } from "./runnerConfig.js";
 /**
  * 把 orchestrator 健康状态渲染为 Prometheus 文本格式（/metrics）。
  */
-function renderRunnerMetrics(e, t = Date.now()) {
-  let r = e.last_poll_at > 0 ? (t - e.last_poll_at) / 1000 : 0;
-  let n = `version="${escapeLabelValue(e.version)}",pool_id="${escapeLabelValue(e.pool_id)}",orchestrator_uuid="${escapeLabelValue(e.orchestratorUuid)}",hostname="${escapeLabelValue(e.hostname)}"`;
-  let h = "claude_code_self_hosted_orchestrator";
-  let o = "";
-  o += `# HELP claude_code_self_hosted_orchestrator_info Self-hosted orchestrator identity (info-style gauge; value is always 1).
+function renderRunnerMetrics(state, now = Date.now()) {
+  let pollAgeSec = state.last_poll_at > 0 ? (now - state.last_poll_at) / 1000 : 0;
+  let labelSet = `version="${escapeLabelValue(state.version)}",pool_id="${escapeLabelValue(state.pool_id)}",orchestrator_uuid="${escapeLabelValue(state.orchestratorUuid)}",hostname="${escapeLabelValue(state.hostname)}"`;
+  let prefix = "claude_code_self_hosted_orchestrator";
+  let out = "";
+  out += `# HELP claude_code_self_hosted_orchestrator_info Self-hosted orchestrator identity (info-style gauge; value is always 1).
 `;
-  o += `# TYPE claude_code_self_hosted_orchestrator_info gauge
+  out += `# TYPE claude_code_self_hosted_orchestrator_info gauge
 `;
-  o += `claude_code_self_hosted_orchestrator_info{${n}} 1
+  out += `claude_code_self_hosted_orchestrator_info{${labelSet}} 1
 `;
-  o += `# HELP claude_code_self_hosted_orchestrator_connected 1 when the last PollSpawnHints returned successfully; 0 on transport/5xx error.
+  out += `# HELP claude_code_self_hosted_orchestrator_connected 1 when the last PollSpawnHints returned successfully; 0 on transport/5xx error.
 `;
-  o += `# TYPE claude_code_self_hosted_orchestrator_connected gauge
+  out += `# TYPE claude_code_self_hosted_orchestrator_connected gauge
 `;
-  o += `claude_code_self_hosted_orchestrator_connected ${e.connected ? 1 : 0}
+  out += `claude_code_self_hosted_orchestrator_connected ${state.connected ? 1 : 0}
 `;
-  o += `# HELP claude_code_self_hosted_orchestrator_last_poll_age_seconds Seconds since the last PollSpawnHints attempt (success or failure).
+  out += `# HELP claude_code_self_hosted_orchestrator_last_poll_age_seconds Seconds since the last PollSpawnHints attempt (success or failure).
 `;
-  o += `# TYPE claude_code_self_hosted_orchestrator_last_poll_age_seconds gauge
+  out += `# TYPE claude_code_self_hosted_orchestrator_last_poll_age_seconds gauge
 `;
-  o += `claude_code_self_hosted_orchestrator_last_poll_age_seconds ${r}
+  out += `claude_code_self_hosted_orchestrator_last_poll_age_seconds ${pollAgeSec}
 `;
-  o += `# HELP claude_code_self_hosted_orchestrator_queue_pending_sessions Spawn-hint queue rows claimable right now (eta < now, unclaimed, not circuit-broken). Server-side aggregate for this environment.
+  out += `# HELP claude_code_self_hosted_orchestrator_queue_pending_sessions Spawn-hint queue rows claimable right now (eta < now, unclaimed, not circuit-broken). Server-side aggregate for this environment.
 `;
-  o += `# TYPE claude_code_self_hosted_orchestrator_queue_pending_sessions gauge
+  out += `# TYPE claude_code_self_hosted_orchestrator_queue_pending_sessions gauge
 `;
-  if (e.queue_counts !== null)
-    o += `claude_code_self_hosted_orchestrator_queue_pending_sessions ${e.queue_counts.pending}
+  if (state.queue_counts !== null)
+    out += `claude_code_self_hosted_orchestrator_queue_pending_sessions ${state.queue_counts.pending}
 `;
-  o += `# HELP claude_code_self_hosted_orchestrator_queue_backing_off_sessions Spawn-hint queue rows in retry backoff (nacked retryable; eta in the future). Server-side aggregate for this environment.
+  out += `# HELP claude_code_self_hosted_orchestrator_queue_backing_off_sessions Spawn-hint queue rows in retry backoff (nacked retryable; eta in the future). Server-side aggregate for this environment.
 `;
-  o += `# TYPE claude_code_self_hosted_orchestrator_queue_backing_off_sessions gauge
+  out += `# TYPE claude_code_self_hosted_orchestrator_queue_backing_off_sessions gauge
 `;
-  if (e.queue_counts !== null)
-    o += `claude_code_self_hosted_orchestrator_queue_backing_off_sessions ${e.queue_counts.backing_off}
+  if (state.queue_counts !== null)
+    out += `claude_code_self_hosted_orchestrator_queue_backing_off_sessions ${state.queue_counts.backing_off}
 `;
-  o += `# HELP claude_code_self_hosted_orchestrator_queue_circuit_broken_sessions Spawn-hint queue rows circuit-broken (nacked non-retryable; operator must RetrySpawnHint to re-admit). Server-side aggregate for this environment.
+  out += `# HELP claude_code_self_hosted_orchestrator_queue_circuit_broken_sessions Spawn-hint queue rows circuit-broken (nacked non-retryable; operator must RetrySpawnHint to re-admit). Server-side aggregate for this environment.
 `;
-  o += `# TYPE claude_code_self_hosted_orchestrator_queue_circuit_broken_sessions gauge
+  out += `# TYPE claude_code_self_hosted_orchestrator_queue_circuit_broken_sessions gauge
 `;
-  if (e.queue_counts !== null)
-    o += `claude_code_self_hosted_orchestrator_queue_circuit_broken_sessions ${e.queue_counts.circuit_broken}
+  if (state.queue_counts !== null)
+    out += `claude_code_self_hosted_orchestrator_queue_circuit_broken_sessions ${state.queue_counts.circuit_broken}
 `;
-  o += `# HELP claude_code_self_hosted_orchestrator_pool_pending_sessions Total sessions currently waiting on a runner for this environment (the UI "N ahead of you" number). Autoscale on this, not on queue_pending_sessions.
+  out += `# HELP claude_code_self_hosted_orchestrator_pool_pending_sessions Total sessions currently waiting on a runner for this environment (the UI "N ahead of you" number). Autoscale on this, not on queue_pending_sessions.
 `;
-  o += `# TYPE claude_code_self_hosted_orchestrator_pool_pending_sessions gauge
+  out += `# TYPE claude_code_self_hosted_orchestrator_pool_pending_sessions gauge
 `;
-  if (e.pool_pending_session_count !== null)
-    o += `claude_code_self_hosted_orchestrator_pool_pending_sessions ${e.pool_pending_session_count}
+  if (state.pool_pending_session_count !== null)
+    out += `claude_code_self_hosted_orchestrator_pool_pending_sessions ${state.pool_pending_session_count}
 `;
-  o += `# HELP ${"claude_code_self_hosted_orchestrator"}_pool_active_sessions Sessions currently assigned to an alive runner in this environment (the server's environment-wide sum of the per-runner _active_sessions gauges). Environment-wide aggregate \u2014 identical on every orchestrator for one environment; use MAX not SUM across orchestrator instances.
+  out += `# HELP ${"claude_code_self_hosted_orchestrator"}_pool_active_sessions Sessions currently assigned to an alive runner in this environment (the server's environment-wide sum of the per-runner _active_sessions gauges). Environment-wide aggregate \u2014 identical on every orchestrator for one environment; use MAX not SUM across orchestrator instances.
 `;
-  o += `# TYPE claude_code_self_hosted_orchestrator_pool_active_sessions gauge
+  out += `# TYPE claude_code_self_hosted_orchestrator_pool_active_sessions gauge
 `;
-  if (e.pool_active_session_count !== null)
-    o += `claude_code_self_hosted_orchestrator_pool_active_sessions ${e.pool_active_session_count}
+  if (state.pool_active_session_count !== null)
+    out += `claude_code_self_hosted_orchestrator_pool_active_sessions ${state.pool_active_session_count}
 `;
-  o += `# HELP claude_code_self_hosted_orchestrator_warm_hints_dispatched_total Standby (warm) hints dispatched since process start.
+  out += `# HELP claude_code_self_hosted_orchestrator_warm_hints_dispatched_total Standby (warm) hints dispatched since process start.
 `;
-  o += `# TYPE claude_code_self_hosted_orchestrator_warm_hints_dispatched_total counter
+  out += `# TYPE claude_code_self_hosted_orchestrator_warm_hints_dispatched_total counter
 `;
-  o += `claude_code_self_hosted_orchestrator_warm_hints_dispatched_total ${e.warm_hints_dispatched}
+  out += `claude_code_self_hosted_orchestrator_warm_hints_dispatched_total ${state.warm_hints_dispatched}
 `;
-  o += `# HELP ${"claude_code_self_hosted_orchestrator"}_spawn_hooks_total spawn-runner hook outcomes since process start (exit-code contract: ok=0, retryable=1/timeout/signal, non_retryable=>=2/ENOENT/EACCES). Counts orchestrator hook invocations (seat + warm), NOT runner child spawns \u2014 NOT comparable to the runner's sessions_started_total (capacity>1, warm environments, and per-runner re-spawns all diverge them).
+  out += `# HELP ${"claude_code_self_hosted_orchestrator"}_spawn_hooks_total spawn-runner hook outcomes since process start (exit-code contract: ok=0, retryable=1/timeout/signal, non_retryable=>=2/ENOENT/EACCES). Counts orchestrator hook invocations (seat + warm), NOT runner child spawns \u2014 NOT comparable to the runner's sessions_started_total (capacity>1, warm environments, and per-runner re-spawns all diverge them).
 `;
-  o += `# TYPE claude_code_self_hosted_orchestrator_spawn_hooks_total counter
+  out += `# TYPE claude_code_self_hosted_orchestrator_spawn_hooks_total counter
 `;
-  o += `claude_code_self_hosted_orchestrator_spawn_hooks_total{result="ok"} ${e.spawnHooks.ok}
+  out += `claude_code_self_hosted_orchestrator_spawn_hooks_total{result="ok"} ${state.spawnHooks.ok}
 `;
-  o += `claude_code_self_hosted_orchestrator_spawn_hooks_total{result="retryable"} ${e.spawnHooks.retryable}
+  out += `claude_code_self_hosted_orchestrator_spawn_hooks_total{result="retryable"} ${state.spawnHooks.retryable}
 `;
-  o += `claude_code_self_hosted_orchestrator_spawn_hooks_total{result="non_retryable"} ${e.spawnHooks.nonRetryable}
+  out += `claude_code_self_hosted_orchestrator_spawn_hooks_total{result="non_retryable"} ${state.spawnHooks.nonRetryable}
 `;
-  o += `# HELP claude_code_self_hosted_orchestrator_spawn_hook_duration_seconds Wall-clock seconds per spawn-runner hook run (all outcomes; seat + warm).
+  out += `# HELP claude_code_self_hosted_orchestrator_spawn_hook_duration_seconds Wall-clock seconds per spawn-runner hook run (all outcomes; seat + warm).
 `;
-  o += `# TYPE claude_code_self_hosted_orchestrator_spawn_hook_duration_seconds histogram
+  out += `# TYPE claude_code_self_hosted_orchestrator_spawn_hook_duration_seconds histogram
 `;
-  let spawnHookDurations = e.spawnHookDurations;
+  let spawnHookDurations = state.spawnHookDurations;
   for (let j = 0; j < BACKOFF_SCHEDULE.length; j++)
-    o += `claude_code_self_hosted_orchestrator_spawn_hook_duration_seconds_bucket{le="${BACKOFF_SCHEDULE[j]}"} ${spawnHookDurations.buckets[j]}
+    out += `claude_code_self_hosted_orchestrator_spawn_hook_duration_seconds_bucket{le="${BACKOFF_SCHEDULE[j]}"} ${spawnHookDurations.buckets[j]}
 `;
-  o += `claude_code_self_hosted_orchestrator_spawn_hook_duration_seconds_bucket{le="+Inf"} ${spawnHookDurations.count}
+  out += `claude_code_self_hosted_orchestrator_spawn_hook_duration_seconds_bucket{le="+Inf"} ${spawnHookDurations.count}
 `;
-  o += `claude_code_self_hosted_orchestrator_spawn_hook_duration_seconds_sum ${spawnHookDurations.sum}
+  out += `claude_code_self_hosted_orchestrator_spawn_hook_duration_seconds_sum ${spawnHookDurations.sum}
 `;
-  o += `claude_code_self_hosted_orchestrator_spawn_hook_duration_seconds_count ${spawnHookDurations.count}
+  out += `claude_code_self_hosted_orchestrator_spawn_hook_duration_seconds_count ${spawnHookDurations.count}
 `;
-  o += `# HELP claude_code_self_hosted_orchestrator_session_queue_wait_seconds Seconds each session waited in the queue before the orchestrator claimed it for spawn (HTTP Date header - SpawnHint.queue_wait_started_at; seat hints only). For p50/p99 queue-time SLOs and "queue wait > N" alerting.
+  out += `# HELP claude_code_self_hosted_orchestrator_session_queue_wait_seconds Seconds each session waited in the queue before the orchestrator claimed it for spawn (HTTP Date header - SpawnHint.queue_wait_started_at; seat hints only). For p50/p99 queue-time SLOs and "queue wait > N" alerting.
 `;
-  o += `# TYPE claude_code_self_hosted_orchestrator_session_queue_wait_seconds histogram
+  out += `# TYPE claude_code_self_hosted_orchestrator_session_queue_wait_seconds histogram
 `;
-  let sessionQueueWaits = e.sessionQueueWaits;
+  let sessionQueueWaits = state.sessionQueueWaits;
   for (let j = 0; j < SPAWN_SECONDS_BUCKETS.length; j++)
-    o += `claude_code_self_hosted_orchestrator_session_queue_wait_seconds_bucket{le="${SPAWN_SECONDS_BUCKETS[j]}"} ${sessionQueueWaits.buckets[j]}
+    out += `claude_code_self_hosted_orchestrator_session_queue_wait_seconds_bucket{le="${SPAWN_SECONDS_BUCKETS[j]}"} ${sessionQueueWaits.buckets[j]}
 `;
-  o += `claude_code_self_hosted_orchestrator_session_queue_wait_seconds_bucket{le="+Inf"} ${sessionQueueWaits.count}
+  out += `claude_code_self_hosted_orchestrator_session_queue_wait_seconds_bucket{le="+Inf"} ${sessionQueueWaits.count}
 `;
-  o += `claude_code_self_hosted_orchestrator_session_queue_wait_seconds_sum ${sessionQueueWaits.sum}
+  out += `claude_code_self_hosted_orchestrator_session_queue_wait_seconds_sum ${sessionQueueWaits.sum}
 `;
-  o += `claude_code_self_hosted_orchestrator_session_queue_wait_seconds_count ${sessionQueueWaits.count}
+  out += `claude_code_self_hosted_orchestrator_session_queue_wait_seconds_count ${sessionQueueWaits.count}
 `;
-  o += `# HELP claude_code_self_hosted_orchestrator_poll_errors_total PollSpawnHints request failures by error kind (transport=no HTTP response; timeout=client deadline; 5xx/429/4xx by status). All five series present from process start so rate() works and absent() means process-down.
+  out += `# HELP claude_code_self_hosted_orchestrator_poll_errors_total PollSpawnHints request failures by error kind (transport=no HTTP response; timeout=client deadline; 5xx/429/4xx by status). All five series present from process start so rate() works and absent() means process-down.
 `;
-  o += `# TYPE claude_code_self_hosted_orchestrator_poll_errors_total counter
+  out += `# TYPE claude_code_self_hosted_orchestrator_poll_errors_total counter
 `;
-  for (let c of RUNNER_ERROR_CATEGORIES)
-    o += `claude_code_self_hosted_orchestrator_poll_errors_total{error_kind="${c}"} ${e.pollErrors[c]}
+  for (let category of RUNNER_ERROR_CATEGORIES)
+    out += `claude_code_self_hosted_orchestrator_poll_errors_total{error_kind="${category}"} ${state.pollErrors[category]}
 `;
-  o += `# HELP claude_code_self_hosted_orchestrator_clock_skew_seconds Local-minus-server clock skew from the most recent PollSpawnHints Date header. Sample omitted until measured.
+  out += `# HELP claude_code_self_hosted_orchestrator_clock_skew_seconds Local-minus-server clock skew from the most recent PollSpawnHints Date header. Sample omitted until measured.
 `;
-  o += `# TYPE claude_code_self_hosted_orchestrator_clock_skew_seconds gauge
+  out += `# TYPE claude_code_self_hosted_orchestrator_clock_skew_seconds gauge
 `;
-  if (e.clock_skew_ms !== null)
-    o += `claude_code_self_hosted_orchestrator_clock_skew_seconds ${e.clock_skew_ms / 1000}
+  if (state.clock_skew_ms !== null)
+    out += `claude_code_self_hosted_orchestrator_clock_skew_seconds ${state.clock_skew_ms / 1000}
 `;
-  o += `# HELP claude_code_self_hosted_orchestrator_scm_connector_connected 1 when the standing SCM connector WebSocket is OPEN; 0 when dialing/backing off. Series absent when --scm-connector-host is not set.
+  out += `# HELP claude_code_self_hosted_orchestrator_scm_connector_connected 1 when the standing SCM connector WebSocket is OPEN; 0 when dialing/backing off. Series absent when --scm-connector-host is not set.
 `;
-  o += `# TYPE claude_code_self_hosted_orchestrator_scm_connector_connected gauge
+  out += `# TYPE claude_code_self_hosted_orchestrator_scm_connector_connected gauge
 `;
-  if (e.scm_connector !== null)
-    o += `claude_code_self_hosted_orchestrator_scm_connector_connected ${e.scm_connector.connected ? 1 : 0}
+  if (state.scm_connector !== null)
+    out += `claude_code_self_hosted_orchestrator_scm_connector_connected ${state.scm_connector.connected ? 1 : 0}
 `;
-  o += `# HELP claude_code_self_hosted_orchestrator_scm_connector_requests_forwarded_total Cumulative HTTP requests proxied to the configured SCM host since process start.
+  out += `# HELP claude_code_self_hosted_orchestrator_scm_connector_requests_forwarded_total Cumulative HTTP requests proxied to the configured SCM host since process start.
 `;
-  o += `# TYPE claude_code_self_hosted_orchestrator_scm_connector_requests_forwarded_total counter
+  out += `# TYPE claude_code_self_hosted_orchestrator_scm_connector_requests_forwarded_total counter
 `;
-  if (e.scm_connector !== null)
-    o += `claude_code_self_hosted_orchestrator_scm_connector_requests_forwarded_total ${e.scm_connector.requests_forwarded}
+  if (state.scm_connector !== null)
+    out += `claude_code_self_hosted_orchestrator_scm_connector_requests_forwarded_total ${state.scm_connector.requests_forwarded}
 `;
-  return o;
+  return out;
 }
 //@ chunk-2cbdmxy9.js:33681-35678 placement
-function startRunnerHealthServer(healthPort, t, r) {
-  let server = createServer((o, l) => {
-    if (o.method === "GET" && o.url === "/metrics") {
-      let c = renderRunnerMetrics(t);
-      l.writeHead(200, {
+function startRunnerHealthServer(healthPort, state, log) {
+  let server = createServer((req, res) => {
+    if (req.method === "GET" && req.url === "/metrics") {
+      let metricsText = renderRunnerMetrics(state);
+      res.writeHead(200, {
         "Content-Type": "text/plain; version=0.0.4; charset=utf-8",
-        "Content-Length": Buffer.byteLength(c),
+        "Content-Length": Buffer.byteLength(metricsText),
       });
-      l.end(c);
+      res.end(metricsText);
       return;
     }
-    if (o.method !== "GET" || o.url !== "/healthz") {
-      l.writeHead(404, {
+    if (req.method !== "GET" || req.url !== "/healthz") {
+      res.writeHead(404, {
         "Content-Type": "text/plain",
       });
-      l.end(`not found
+      res.end(`not found
 `);
       return;
     }
-    let g = jsonStringify({
+    let healthBody = jsonStringify({
       status: "ok",
-      orchestrator_uuid: t.orchestratorUuid,
-      hostname: t.hostname,
-      version: t.version,
-      pool_id: t.pool_id,
-      connected: t.connected,
-      last_poll_at: t.last_poll_at > 0 ? new Date(t.last_poll_at).toISOString() : null,
-      last_hint_at: t.last_hint_at > 0 ? new Date(t.last_hint_at).toISOString() : null,
-      last_hook_ok_at: t.last_hook_ok_at > 0 ? new Date(t.last_hook_ok_at).toISOString() : null,
+      orchestrator_uuid: state.orchestratorUuid,
+      hostname: state.hostname,
+      version: state.version,
+      pool_id: state.pool_id,
+      connected: state.connected,
+      last_poll_at: state.last_poll_at > 0 ? new Date(state.last_poll_at).toISOString() : null,
+      last_hint_at: state.last_hint_at > 0 ? new Date(state.last_hint_at).toISOString() : null,
+      last_hook_ok_at: state.last_hook_ok_at > 0 ? new Date(state.last_hook_ok_at).toISOString() : null,
       last_warm_hook_ok_at:
-        t.last_warm_hook_ok_at > 0 ? new Date(t.last_warm_hook_ok_at).toISOString() : null,
-      last_error: t.last_error,
-      clock_skew_ms: t.clock_skew_ms,
-      queue_counts: t.queue_counts,
-      pool_pending_session_count: t.pool_pending_session_count,
-      pool_active_session_count: t.pool_active_session_count,
-      warm_hints_dispatched: t.warm_hints_dispatched,
-      scm_connector_connected: t.scm_connector?.connected ?? null,
-      scm_connector: t.scm_connector
+        state.last_warm_hook_ok_at > 0 ? new Date(state.last_warm_hook_ok_at).toISOString() : null,
+      last_error: state.last_error,
+      clock_skew_ms: state.clock_skew_ms,
+      queue_counts: state.queue_counts,
+      pool_pending_session_count: state.pool_pending_session_count,
+      pool_active_session_count: state.pool_active_session_count,
+      warm_hints_dispatched: state.warm_hints_dispatched,
+      scm_connector_connected: state.scm_connector?.connected ?? null,
+      scm_connector: state.scm_connector
         ? {
-            connected: t.scm_connector.connected,
+            connected: state.scm_connector.connected,
             last_connected_at:
-              t.scm_connector.last_connected_at > 0
-                ? new Date(t.scm_connector.last_connected_at).toISOString()
+              state.scm_connector.last_connected_at > 0
+                ? new Date(state.scm_connector.last_connected_at).toISOString()
                 : null,
-            last_error: t.scm_connector.last_error,
-            reconnects: t.scm_connector.reconnects,
-            requests_forwarded: t.scm_connector.requests_forwarded,
+            last_error: state.scm_connector.last_error,
+            reconnects: state.scm_connector.reconnects,
+            requests_forwarded: state.scm_connector.requests_forwarded,
           }
         : null,
     });
-    l.writeHead(200, {
+    res.writeHead(200, {
       "Content-Type": "application/json",
-      "Content-Length": Buffer.byteLength(g),
+      "Content-Length": Buffer.byteLength(healthBody),
     });
-    l.end(g);
+    res.end(healthBody);
   });
   server.unref();
-  let h = 0;
-  server.on("error", (o) => {
-    if (o.code === "EADDRINUSE" && h === 0) {
-      h++;
-      r(`[runner:warn] /healthz port ${healthPort} busy, retrying in ${HANDSHAKE_POLL_MS}ms`);
-      setTimeout((l, g) => l.listen(g), HANDSHAKE_POLL_MS, server, healthPort).unref();
+  let nextPort = 0;
+  server.on("error", (error) => {
+    if (error.code === "EADDRINUSE" && nextPort === 0) {
+      nextPort++;
+      log(`[runner:warn] /healthz port ${healthPort} busy, retrying in ${HANDSHAKE_POLL_MS}ms`);
+      setTimeout((server_, port) => server_.listen(port), HANDSHAKE_POLL_MS, server, healthPort).unref();
       return;
     }
-    r(
-      `[runner:warn] /healthz listener failed on port ${healthPort}: ${o.message} \u2014 continuing without health endpoint`,
+    log(
+      `[runner:warn] /healthz listener failed on port ${healthPort}: ${error.message} \u2014 continuing without health endpoint`,
     );
   });
   server.on("listening", () => {
-    let o = server.address();
-    let l = typeof o === "object" && o ? o.port : healthPort;
-    r(`[runner:health] orchestrator /healthz and /metrics listening on :${l}`);
+    let address = server.address();
+    let boundPort = typeof address === "object" && address ? address.port : healthPort;
+    log(`[runner:health] orchestrator /healthz and /metrics listening on :${boundPort}`);
   });
   server.listen(healthPort);
   return server;
@@ -259,13 +259,13 @@ function jitteredValue(pollIntervalMs, random) {
 /**
  * self-hosted runner 轮询主循环：向服务器领取工作单、调用 spawn-runner 钩子启动会话、处理排空与停止。
  */
-async function runOrchestratorLoop(e, signal) {
+async function runOrchestratorLoop(args, signal) {
   let {
     apiClient,
     healthState,
     onStatus,
     onDebug,
-    args,
+    args: args_2,
     hookPath,
     runHook = runSpawnRunnerHook,
     fatalExit = errorLogger,
@@ -275,11 +275,11 @@ async function runOrchestratorLoop(e, signal) {
     random = Math.random,
     drain,
     now = () => performance.now(),
-  } = e;
+  } = args;
   let stopSignal = drain?.stopSignal ?? signal;
-  let D = () =>
+  let now_2 = () =>
     drain && stopSignal.aborted && !signal.aborted ? AbortSignal.timeout(ENV_MAX_TIMEOUT_MS) : signal;
-  let w = {
+  let state = {
     at: undefined,
     pollInFlight: false,
     hooksRunning: 0,
@@ -291,130 +291,130 @@ async function runOrchestratorLoop(e, signal) {
     hooksStopped: 0,
     nacksFailed: 0,
   };
-  let x = false;
-  let O = 0;
-  let I = () => {
-    w.at = now();
-    w.pollInFlight = x;
-    w.hooksRunning = O;
+  let isStopping = false;
+  let pollCount = 0;
+  let onStop = () => {
+    state.at = now();
+    state.pollInFlight = isStopping;
+    state.hooksRunning = pollCount;
   };
   if (drain) {
-    drain.stopSignal.addEventListener("abort", I, {
+    drain.stopSignal.addEventListener("abort", onStop, {
       once: true,
     });
-    if (drain.stopSignal.aborted) I();
+    if (drain.stopSignal.aborted) onStop();
   }
-  let G = MIN_BACKOFF_MS;
-  let L = new Set();
-  let hookConcurrency = args.hookConcurrency;
-  let q = -1 / 0;
-  let b = -1 / 0;
-  let K = false;
-  let m = 0;
+  let backoffMs = MIN_BACKOFF_MS;
+  let pendingHooks = new Set();
+  let hookConcurrency = args_2.hookConcurrency;
+  let lastPollAt = -1 / 0;
+  let lastOkAt = -1 / 0;
+  let connected = false;
+  let consecutiveFailures = 0;
   while (!stopSignal.aborted && !signal.aborted) {
-    if (L.size >= hookConcurrency) {
-      await Promise.race(L);
+    if (pendingHooks.size >= hookConcurrency) {
+      await Promise.race(pendingHooks);
       continue;
     }
     let startTime = performance.now();
-    if (K && startTime - q < pollIntervalMs && startTime - b < pollIntervalMs) {
-      await sleep(pollIntervalMs - (startTime - b), stopSignal);
+    if (connected && startTime - lastPollAt < pollIntervalMs && startTime - lastOkAt < pollIntervalMs) {
+      await sleep(pollIntervalMs - (startTime - lastOkAt), stopSignal);
       continue;
     }
-    let R = hookConcurrency - L.size;
+    let freeSlots = hookConcurrency - pendingHooks.size;
     healthState.last_poll_at = Date.now();
-    b = startTime;
-    x = true;
-    let k;
+    lastOkAt = startTime;
+    isStopping = true;
+    let poll;
     try {
-      k = await apiClient.pollSpawnHints(
+      poll = await apiClient.pollSpawnHints(
         {
           orchestrator_uuid: healthState.orchestratorUuid,
           hostname: healthState.hostname,
           client_version: RUNNER_CLIENT_VERSION,
-          max: R,
-          expected_spawn_seconds: args.expectedSpawnSeconds,
-          ...(args.minIdle > 0 && {
-            min_idle: args.minIdle,
+          max: freeSlots,
+          expected_spawn_seconds: args_2.expectedSpawnSeconds,
+          ...(args_2.minIdle > 0 && {
+            min_idle: args_2.minIdle,
           }),
         },
         signal,
       );
-      x = false;
+      isStopping = false;
     } catch (error) {
-      x = false;
+      isStopping = false;
       if (signal.aborted) break;
       healthState.pollErrors[classifyRunnerError(error)]++;
       let httpStatus = getHttpStatus(error);
-      let Y = redactSecretsInText(errorMessage(error));
+      let errorText = redactSecretsInText(errorMessage(error));
       if (stopSignal.aborted) {
         healthState.connected = false;
-        healthState.last_error = Y;
+        healthState.last_error = errorText;
         onStatus(
-          `[runner:orchestrator] stop: the poll in flight failed${httpStatus ? ` (HTTP ${httpStatus})` : ""}: ${Y}. If the server had claimed a session for this poll, that session is requested again only after --expected-spawn-seconds`,
+          `[runner:orchestrator] stop: the poll in flight failed${httpStatus ? ` (HTTP ${httpStatus})` : ""}: ${errorText}. If the server had claimed a session for this poll, that session is requested again only after --expected-spawn-seconds`,
         );
         break;
       }
       if (httpStatus !== undefined && RETRYABLE_STATUS.has(httpStatus)) {
         healthState.connected = false;
-        healthState.last_error = Y;
-        if (L.size > 0) {
+        healthState.last_error = errorText;
+        if (pendingHooks.size > 0) {
           onStatus(
-            `[runner:orchestrator] poll rejected (HTTP ${httpStatus}): waiting for ${L.size} running hook(s) to end, then exiting`,
+            `[runner:orchestrator] poll rejected (HTTP ${httpStatus}): waiting for ${pendingHooks.size} running hook(s) to end, then exiting`,
           );
-          await Promise.allSettled(L);
+          await Promise.allSettled(pendingHooks);
         }
         fatalExit(
           httpStatus === 426
-            ? `orchestrator version too old (HTTP 426): ${Y} \u2014 upgrade and restart`
-            : `PollSpawnHints rejected (HTTP ${httpStatus}): ${Y}`,
+            ? `orchestrator version too old (HTTP 426): ${errorText} \u2014 upgrade and restart`
+            : `PollSpawnHints rejected (HTTP ${httpStatus}): ${errorText}`,
         );
       }
       healthState.connected = false;
-      healthState.last_error = Y;
+      healthState.last_error = errorText;
       onStatus(
-        `[runner:orchestrator] poll failed${httpStatus ? ` (HTTP ${httpStatus})` : ""}: ${Y} \u2014 retrying in ${Math.round(G / 1000)}s`,
+        `[runner:orchestrator] poll failed${httpStatus ? ` (HTTP ${httpStatus})` : ""}: ${errorText} \u2014 retrying in ${Math.round(backoffMs / 1000)}s`,
       );
-      await sleep(G, stopSignal);
-      G = Math.min(G * 2, BACKOFF_MAX_MS);
+      await sleep(backoffMs, stopSignal);
+      backoffMs = Math.min(backoffMs * 2, BACKOFF_MAX_MS);
       continue;
     }
     healthState.connected = true;
     healthState.last_error = null;
-    G = MIN_BACKOFF_MS;
-    a(k.server_date);
+    backoffMs = MIN_BACKOFF_MS;
+    dateSetter(poll.server_date);
     healthState.queue_counts = {
-      pending: k.pending_count,
-      backing_off: k.backing_off_count,
-      circuit_broken: k.circuit_broken_count,
+      pending: poll.pending_count,
+      backing_off: poll.backing_off_count,
+      circuit_broken: poll.circuit_broken_count,
     };
-    healthState.pool_pending_session_count = k.pool_pending_session_count ?? null;
-    healthState.pool_active_session_count = k.pool_active_session_count ?? null;
+    healthState.pool_pending_session_count = poll.pool_pending_session_count ?? null;
+    healthState.pool_active_session_count = poll.pool_active_session_count ?? null;
     {
-      let v = k.server_date !== null ? Date.parse(k.server_date) : Date.now();
-      let M = Number.isFinite(v) ? v : Date.now();
-      for (let hint of k.hints) {
+      let serverEpoch = poll.server_date !== null ? Date.parse(poll.server_date) : Date.now();
+      let serverDateMs = Number.isFinite(serverEpoch) ? serverEpoch : Date.now();
+      for (let hint of poll.hints) {
         if (typeof hint.queue_wait_started_at !== "string") continue;
         let timestamp = Date.parse(hint.queue_wait_started_at);
         if (!Number.isFinite(timestamp)) continue;
-        observeSpawnSeconds(healthState.sessionQueueWaits, (M - timestamp) / 1000);
+        observeSpawnSeconds(healthState.sessionQueueWaits, (serverDateMs - timestamp) / 1000);
       }
     }
-    let sliced = k.hints.slice(0, R);
-    let sliced_2 = k.hints.slice(R);
-    for (let v of sliced_2) {
+    let sliced = poll.hints.slice(0, freeSlots);
+    let sliced_2 = poll.hints.slice(freeSlots);
+    for (let hint of sliced_2) {
       onStatus(
-        `[runner:orchestrator] server over-returned hint session=${v.session_uuid} (got ${k.hints.length}, max=${R}) \u2014 nacking retryably`,
+        `[runner:orchestrator] server over-returned hint session=${hint.session_uuid} (got ${poll.hints.length}, max=${freeSlots}) \u2014 nacking retryably`,
       );
       await apiClient
         .nackSpawnHint(
           {
-            session_uuid: v.session_uuid,
-            attempt: v.attempt,
+            session_uuid: hint.session_uuid,
+            attempt: hint.attempt,
             error: "orchestrator: server over-returned hints (>max)",
             retryable: true,
           },
-          D(),
+          now_2(),
         )
         .catch((error) =>
           onStatus(
@@ -422,72 +422,81 @@ async function runOrchestratorLoop(e, signal) {
           ),
         );
     }
-    let max = Math.max(0, R - sliced.length);
-    let P = args.minIdle > 0 ? k.warm_hints.slice(0, max) : [];
-    if (k.warm_hints.length > P.length)
+    let max = Math.max(0, freeSlots - sliced.length);
+    let idleHints = args_2.minIdle > 0 ? poll.warm_hints.slice(0, max) : [];
+    if (poll.warm_hints.length > idleHints.length)
       onDebug(
-        `[runner:orchestrator] dropping ${k.warm_hints.length - P.length} warm hint(s) (budget=${max}, minIdle=${args.minIdle})`,
+        `[runner:orchestrator] dropping ${poll.warm_hints.length - idleHints.length} warm hint(s) (budget=${max}, minIdle=${args_2.minIdle})`,
       );
     let aborted = drain !== undefined && stopSignal.aborted;
-    let A = drain?.abortAt();
-    let C = A === undefined ? 0 : A - now();
-    let V = !aborted || (!signal.aborted && C >= args.hookTimeoutMs + 2 * ORCHESTRATOR_DEBUG_LIMITS);
-    let X = V ? sliced : [];
-    let ie = V ? [] : sliced;
-    let ee = V ? P : [];
+    let drainAt = drain?.abortAt();
+    let remainingMs = drainAt === undefined ? 0 : drainAt - now();
+    let isIdlePass =
+      !aborted || (!signal.aborted && remainingMs >= args_2.hookTimeoutMs + 2 * ORCHESTRATOR_DEBUG_LIMITS);
+    let sessionHints = isIdlePass ? sliced : [];
+    let standbyHints = isIdlePass ? [] : sliced;
+    let extraIdleHints = isIdlePass ? idleHints : [];
     if (aborted) {
-      w.started += X.length + ee.length;
-      for (let v of X)
+      state.started += sessionHints.length + extraIdleHints.length;
+      for (let hint of sessionHints)
         onStatus(
-          `[runner:orchestrator] stop: starting session=${v.session_uuid} attempt=${v.attempt} jti=${v.jti}, which the poll in flight brought: ${Math.floor(C / 1000)}s of the shutdown drain are left`,
+          `[runner:orchestrator] stop: starting session=${hint.session_uuid} attempt=${hint.attempt} jti=${hint.jti}, which the poll in flight brought: ${Math.floor(remainingMs / 1000)}s of the shutdown drain are left`,
         );
-      if (!V && P.length > 0) {
-        w.standbyDropped += P.length;
+      if (!isIdlePass && idleHints.length > 0) {
+        state.standbyDropped += idleHints.length;
         onStatus(
-          `[runner:orchestrator] stop: not starting ${P.length} standby runner(s) that the poll in flight brought: too little of the shutdown drain is left. The server asks for them again once their lease has ended`,
+          `[runner:orchestrator] stop: not starting ${idleHints.length} standby runner(s) that the poll in flight brought: too little of the shutdown drain is left. The server asks for them again once their lease has ended`,
         );
       }
     }
-    if (X.length > 0)
-      onStatus(`[runner:orchestrator] dispatching ${X.length} hint(s) (concurrency=${args.hookConcurrency})`);
-    if (ee.length > 0)
-      onStatus(`[runner:orchestrator] dispatching ${ee.length} warm hint(s) (min_idle=${args.minIdle})`);
-    let he = [
-      ...X.map((v) => ({
-        hint: v,
-        hook: f(v, k.server_date, false),
+    if (sessionHints.length > 0)
+      onStatus(
+        `[runner:orchestrator] dispatching ${sessionHints.length} hint(s) (concurrency=${args_2.hookConcurrency})`,
+      );
+    if (extraIdleHints.length > 0)
+      onStatus(
+        `[runner:orchestrator] dispatching ${extraIdleHints.length} warm hint(s) (min_idle=${args_2.minIdle})`,
+      );
+    let preparedHooks = [
+      ...sessionHints.map((hint) => ({
+        hint,
+        hook: sessionHook(hint, poll.server_date, false),
       })),
-      ...ie.map((v) => ({
-        hint: v,
-        hook: N(v),
+      ...standbyHints.map((hint) => ({
+        hint,
+        hook: standbyHook(hint),
       })),
-      ...ee.map((v) => ({
-        hint: v,
-        hook: f(v, k.server_date, true),
+      ...extraIdleHints.map((hint) => ({
+        hint,
+        hook: sessionHook(hint, poll.server_date, true),
       })),
     ];
-    let ae = undefined;
-    hookConcurrency = Math.min(args.hookConcurrency, ae ?? args.hookConcurrency);
-    K = ae !== undefined;
-    if (ae === undefined) await Promise.all([...he.map((v) => v.hook), ...L]);
+    let abortReason = undefined;
+    hookConcurrency = Math.min(args_2.hookConcurrency, abortReason ?? args_2.hookConcurrency);
+    connected = abortReason !== undefined;
+    if (abortReason === undefined)
+      await Promise.all([...preparedHooks.map((entry) => entry.hook), ...pendingHooks]);
     else {
-      let v = [...L];
-      let M = [];
-      for (let { hint, hook } of he) {
-        let ce = hook
+      let pendingSnapshot = [...pendingHooks];
+      let results = [];
+      for (let { hint, hook } of preparedHooks) {
+        let hook_2 = hook
           .catch((error) => {
             healthState.last_error = redactSecretsInText(errorMessage(error));
             onStatus(
               `[runner:orchestrator] hint dispatch threw session=${hint.session_uuid} jti=${hint.jti}: ${healthState.last_error} \u2014 not retried here; the server's state is whatever its hook or nack already set`,
             );
           })
-          .finally(() => L.delete(ce));
-        L.add(ce);
-        M.push(ce);
+          .finally(() => pendingHooks.delete(hook_2));
+        pendingHooks.add(hook_2);
+        results.push(hook_2);
       }
       if (sliced.length > 0) {
-        if (M.length >= Math.min(R, hookConcurrency) && m < fullAnswerSettleMs)
-          await withDeadline(Promise.race([Promise.all(M), ...v]), fullAnswerSettleMs);
+        if (
+          results.length >= Math.min(freeSlots, hookConcurrency) &&
+          consecutiveFailures < fullAnswerSettleMs
+        )
+          await withDeadline(Promise.race([Promise.all(results), ...pendingSnapshot]), fullAnswerSettleMs);
         await sleep(
           Math.min(minPollGapMs, Math.max(0, minPollGapMs - (Date.now() - healthState.last_poll_at))),
           stopSignal,
@@ -497,42 +506,42 @@ async function runOrchestratorLoop(e, signal) {
     }
     await sleep(jitteredValue(pollIntervalMs, random), stopSignal);
   }
-  await Promise.all(L);
-  drain?.stopSignal.removeEventListener("abort", I);
-  if (w.at !== undefined)
+  await Promise.all(pendingHooks);
+  drain?.stopSignal.removeEventListener("abort", onStop);
+  if (state.at !== undefined)
     onStatus(
-      `[runner:orchestrator] stop summary: poll_in_flight=${w.pollInFlight ? 1 : 0} hooks_running=${w.hooksRunning} started_after_stop=${w.started} handed_back=${w.handedBack} standby_dropped=${w.standbyDropped} hooks_ok=${w.hooksOk} hooks_failed=${w.hooksFailed} hooks_stopped=${w.hooksStopped} nacks_failed=${w.nacksFailed} aborted=${signal.aborted ? 1 : 0} seconds=${((now() - w.at) / 1000).toFixed(1)}`,
+      `[runner:orchestrator] stop summary: poll_in_flight=${state.pollInFlight ? 1 : 0} hooks_running=${state.hooksRunning} started_after_stop=${state.started} handed_back=${state.handedBack} standby_dropped=${state.standbyDropped} hooks_ok=${state.hooksOk} hooks_failed=${state.hooksFailed} hooks_stopped=${state.hooksStopped} nacks_failed=${state.nacksFailed} aborted=${signal.aborted ? 1 : 0} seconds=${((now() - state.at) / 1000).toFixed(1)}`,
     );
-  function a(serverDate) {
-    let R = ageMs(serverDate);
-    if (R === null) return;
-    healthState.clock_skew_ms = R;
-    if (Math.abs(R) > SCM_TIMEOUT_MS)
+  function dateSetter(timestamp) {
+    let serverAgeMs = ageMs(timestamp);
+    if (serverAgeMs === null) return;
+    healthState.clock_skew_ms = serverAgeMs;
+    if (Math.abs(serverAgeMs) > SCM_TIMEOUT_MS)
       onStatus(
-        `[runner:warn] clock skew ${Math.round(R / 1000)}s vs server \u2014 check NTP (work-order exp checks may fail)`,
+        `[runner:warn] clock skew ${Math.round(serverAgeMs / 1000)}s vs server \u2014 check NTP (work-order exp checks may fail)`,
       );
   }
-  async function f(p, serverDate, k) {
+  async function sessionHook(hint, serverTime, isIdle) {
     healthState.last_hint_at = Date.now();
-    if (k) healthState.warm_hints_dispatched++;
-    let E;
-    let F = false;
-    O++;
+    if (isIdle) healthState.warm_hints_dispatched++;
+    let hookResult;
+    let sawRetryable = false;
+    pollCount++;
     try {
-      let claims = workOrderClaims(p, serverDate);
-      E = await runHook({
+      let claims = workOrderClaims(hint, serverTime);
+      hookResult = await runHook({
         hookPath,
-        jwt: p.work_order_jwt,
+        jwt: hint.work_order_jwt,
         claims,
-        timeoutMs: args.hookTimeoutMs,
-        debugDir: args.debugDir,
+        timeoutMs: args_2.hookTimeoutMs,
+        debugDir: args_2.debugDir,
         signal,
         onStatus,
         onDebug,
       });
-      F = true;
+      sawRetryable = true;
     } catch (error) {
-      E = {
+      hookResult = {
         ok: false,
         exitCode: 1,
         timedOut: false,
@@ -541,108 +550,116 @@ async function runOrchestratorLoop(e, signal) {
         durationMs: 0,
       };
     }
-    O--;
-    m = E.durationMs;
-    observeDuration(healthState.spawnHookDurations, E.durationMs / 1000);
-    if (E.ok) {
+    pollCount--;
+    consecutiveFailures = hookResult.durationMs;
+    observeDuration(healthState.spawnHookDurations, hookResult.durationMs / 1000);
+    if (hookResult.ok) {
       healthState.spawnHooks.ok++;
       healthState.last_hook_ok_at = Date.now();
-      if (k) healthState.last_warm_hook_ok_at = healthState.last_hook_ok_at;
+      if (isIdle) healthState.last_warm_hook_ok_at = healthState.last_hook_ok_at;
       onDebug(
-        `[runner:orchestrator] ok session=${p.session_uuid} attempt=${p.attempt} jti=${p.jti} (${E.durationMs}ms)`,
+        `[runner:orchestrator] ok session=${hint.session_uuid} attempt=${hint.attempt} jti=${hint.jti} (${hookResult.durationMs}ms)`,
       );
-      if (w.at !== undefined) {
-        w.hooksOk++;
+      if (state.at !== undefined) {
+        state.hooksOk++;
         onStatus(
-          `[runner:orchestrator] stop: hook ended ok session=${p.session_uuid} attempt=${p.attempt} jti=${p.jti} (${E.durationMs}ms)`,
+          `[runner:orchestrator] stop: hook ended ok session=${hint.session_uuid} attempt=${hint.attempt} jti=${hint.jti} (${hookResult.durationMs}ms)`,
         );
       }
       return;
     }
-    let Q = !E.timedOut && !E.execError && (E.exitCode === null || (E.exitCode > 128 && E.exitCode <= 159));
-    if (w.at !== undefined)
-      if (Q) w.hooksStopped++;
-      else w.hooksFailed++;
-    let P = redactSecretsInText(
-      E.stderrTail ||
-        (E.exitCode === null ? "hook killed by external signal (no stderr)" : `exit ${E.exitCode}`),
+    let nackText =
+      !hookResult.timedOut &&
+      !hookResult.execError &&
+      (hookResult.exitCode === null || (hookResult.exitCode > 128 && hookResult.exitCode <= 159));
+    if (state.at !== undefined)
+      if (nackText) state.hooksStopped++;
+      else state.hooksFailed++;
+    let stderrTail = redactSecretsInText(
+      hookResult.stderrTail ||
+        (hookResult.exitCode === null
+          ? "hook killed by external signal (no stderr)"
+          : `exit ${hookResult.exitCode}`),
     );
-    let y = E.exitCode === 1 || E.timedOut || (E.exitCode === null && !E.execError);
-    let A = !F
+    let outcome =
+      hookResult.exitCode === 1 ||
+      hookResult.timedOut ||
+      (hookResult.exitCode === null && !hookResult.execError);
+    let isFinal = !sawRetryable
       ? undefined
-      : E.timedOut
+      : hookResult.timedOut
         ? "SESSION_FAILURE_KIND_SPAWN_TIMEOUT"
         : "SESSION_FAILURE_KIND_SPAWN_HOOK_ERROR";
-    if (y) healthState.spawnHooks.retryable++;
+    if (outcome) healthState.spawnHooks.retryable++;
     else healthState.spawnHooks.nonRetryable++;
-    healthState.last_error = `spawn-runner hook failed: ${P}`;
-    if (k) {
+    healthState.last_error = `spawn-runner hook failed: ${stderrTail}`;
+    if (isIdle) {
       onStatus(
-        `[runner:orchestrator] warm hook failed jti=${p.jti} exit=${E.exitCode} timedOut=${E.timedOut}: ${P} \u2014 lease expiry will re-mint`,
+        `[runner:orchestrator] warm hook failed jti=${hint.jti} exit=${hookResult.exitCode} timedOut=${hookResult.timedOut}: ${stderrTail} \u2014 lease expiry will re-mint`,
       );
       return;
     }
-    if (drain && stopSignal.aborted && !signal.aborted && Q) {
-      w.nacksFailed++;
+    if (drain && stopSignal.aborted && !signal.aborted && nackText) {
+      state.nacksFailed++;
       onStatus(
-        `[runner:orchestrator] stop: no nack for session=${p.session_uuid} attempt=${p.attempt} jti=${p.jti} exit=${E.exitCode}: a signal ended its hook during the shutdown drain, and the hook may already have submitted its runner \u2014 if it had not, lease expiry will re-admit`,
+        `[runner:orchestrator] stop: no nack for session=${hint.session_uuid} attempt=${hint.attempt} jti=${hint.jti} exit=${hookResult.exitCode}: a signal ended its hook during the shutdown drain, and the hook may already have submitted its runner \u2014 if it had not, lease expiry will re-admit`,
       );
       return;
     }
-    q = performance.now();
+    lastPollAt = performance.now();
     onStatus(
-      `[runner:orchestrator] nack session=${p.session_uuid} attempt=${p.attempt} exit=${E.exitCode} timedOut=${E.timedOut} retryable=${y}: ${P}`,
+      `[runner:orchestrator] nack session=${hint.session_uuid} attempt=${hint.attempt} exit=${hookResult.exitCode} timedOut=${hookResult.timedOut} retryable=${outcome}: ${stderrTail}`,
     );
     try {
       await apiClient.nackSpawnHint(
         {
-          session_uuid: p.session_uuid,
-          attempt: p.attempt,
-          error: P,
-          retryable: y,
-          ...(A && {
-            failure_kind: A,
+          session_uuid: hint.session_uuid,
+          attempt: hint.attempt,
+          error: stderrTail,
+          retryable: outcome,
+          ...(isFinal && {
+            failure_kind: isFinal,
           }),
         },
-        D(),
+        now_2(),
       );
     } catch (error) {
-      if (w.at !== undefined) w.nacksFailed++;
+      if (state.at !== undefined) state.nacksFailed++;
       onStatus(
-        `[runner:orchestrator] nack failed session=${p.session_uuid}: ${errorMessage(error)} \u2014 lease expiry will re-admit`,
+        `[runner:orchestrator] nack failed session=${hint.session_uuid}: ${errorMessage(error)} \u2014 lease expiry will re-admit`,
       );
     }
   }
-  async function N(p) {
-    w.handedBack++;
+  async function standbyHook(hint) {
+    state.handedBack++;
     onStatus(
-      `[runner:orchestrator] stop: handing back session=${p.session_uuid} attempt=${p.attempt} jti=${p.jti}, which the poll in flight brought: too little of the shutdown drain is left to run its hook`,
+      `[runner:orchestrator] stop: handing back session=${hint.session_uuid} attempt=${hint.attempt} jti=${hint.jti}, which the poll in flight brought: too little of the shutdown drain is left to run its hook`,
     );
     try {
       await apiClient.nackSpawnHint(
         {
-          session_uuid: p.session_uuid,
-          attempt: p.attempt,
+          session_uuid: hint.session_uuid,
+          attempt: hint.attempt,
           error: "orchestrator is shutting down: the spawn-runner hook was not run",
           retryable: true,
         },
         AbortSignal.timeout(ENV_MAX_TIMEOUT_MS),
       );
     } catch (error) {
-      w.nacksFailed++;
+      state.nacksFailed++;
       onStatus(
-        `[runner:orchestrator] nack failed session=${p.session_uuid}: ${errorMessage(error)} \u2014 lease expiry will re-admit`,
+        `[runner:orchestrator] nack failed session=${hint.session_uuid}: ${errorMessage(error)} \u2014 lease expiry will re-admit`,
       );
     }
   }
 }
 //@ chunk-2cbdmxy9.js:44043-44165 placement
-function fatalExitWith(e) {
-  return (t) => {
-    e(`${new Date().toISOString()} [self-hosted-runner] [runner:fatal] ${redactSecretsInText(t)}`);
+function fatalExitWith(emit) {
+  return (message) => {
+    emit(`${new Date().toISOString()} [self-hosted-runner] [runner:fatal] ${redactSecretsInText(message)}`);
     process.exit(1);
   };
 }
 //@ chunk-2cbdmxy9.js:44165-44198 placement
-var errorLogger = fatalExitWith((e) => console.error(e));
+var errorLogger = fatalExitWith((message) => console.error(message));
 export { startRunnerHealthServer, runOrchestratorLoop, fatalExitWith };

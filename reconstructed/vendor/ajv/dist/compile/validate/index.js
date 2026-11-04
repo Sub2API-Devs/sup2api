@@ -5,7 +5,7 @@
  * pieces: chunk-s82q9s4x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_boolSchema } from "./boolSchema.js";
 import { require_dataType_2 } from "./dataType.js";
 import { require_applicability } from "./applicability.js";
@@ -19,7 +19,7 @@ import { require_util_2 } from "../util.js";
 import { require_errors } from "../errors.js";
 
 //@ chunk-s82q9s4x.js:41944-51973 cjs-fingerprint
-var require_validate_2 = x(function (cjsExports) {
+var require_validate_2 = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -141,9 +141,9 @@ var require_validate_2 = x(function (cjsExports) {
     }
     boolSchema_1.boolOrEmptySchema(it, valid);
   }
-  function schemaCxtHasRules({ schema, self: t }) {
+  function schemaCxtHasRules({ schema, self: ajvInstance }) {
     if (typeof schema == "boolean") return !schema;
-    for (let key in schema) if (t.RULES.all[key]) return true;
+    for (let key in schema) if (ajvInstance.RULES.all[key]) return true;
     return false;
   }
   function isSchemaObj(it) {
@@ -169,9 +169,9 @@ var require_validate_2 = x(function (cjsExports) {
     schemaKeywords(it, types, !checkedTypes, errsCount);
   }
   function checkRefsAndKeywords(it) {
-    let { schema, errSchemaPath, opts, self: n } = it;
-    if (schema.$ref && opts.ignoreKeywordsWithRef && util_1.schemaHasRulesButRef(schema, n.RULES))
-      n.logger.warn(`$ref: keywords ignored in schema at path "${errSchemaPath}"`);
+    let { schema, errSchemaPath, opts, self: ajvInstance } = it;
+    if (schema.$ref && opts.ignoreKeywordsWithRef && util_1.schemaHasRulesButRef(schema, ajvInstance.RULES))
+      ajvInstance.logger.warn(`$ref: keywords ignored in schema at path "${errSchemaPath}"`);
   }
   function checkNoDefault(it) {
     let { schema, opts } = it;
@@ -215,8 +215,8 @@ var require_validate_2 = x(function (cjsExports) {
     if (items instanceof codegen_1.Name) gen.assign(codegen_1._`${evaluated}.items`, items);
   }
   function schemaKeywords(it, types, typeErrors, errsCount) {
-    let { gen, schema, data, allErrors, opts, self: u } = it;
-    let { RULES } = u;
+    let { gen, schema, data, allErrors, opts, self: ajvInstance } = it;
+    let { RULES } = ajvInstance;
     if (schema.$ref && (opts.ignoreKeywordsWithRef || !util_1.schemaHasRulesButRef(schema, RULES))) {
       gen.block(() => keywordCode(it, "$ref", RULES.all.$ref.definition));
       return;
@@ -289,8 +289,8 @@ var require_validate_2 = x(function (cjsExports) {
   function hasApplicableType(schTs, kwdT) {
     return schTs.includes(kwdT) || (kwdT === "number" && schTs.includes("integer"));
   }
-  function includesType(ts, t) {
-    return ts.includes(t) || (t === "integer" && ts.includes("number"));
+  function includesType(ts, kwd) {
+    return ts.includes(kwd) || (kwd === "integer" && ts.includes("number"));
   }
   function narrowSchemaTypes(it, withTypes) {
     let ts = [];

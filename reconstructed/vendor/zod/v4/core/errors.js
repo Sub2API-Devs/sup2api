@@ -6,7 +6,7 @@
  * attribution: esm-fingerprint 8
  */
 import { jsonStringifyReplacer } from "./util.js";
-import { Fr } from "./core.js";
+import { $constructor } from "./core.js";
 
 //@ chunk-7vp249v4.js:433-531 esm-fingerprint
 function _getMessage() {
@@ -61,8 +61,8 @@ var initializer = (inst, def) => {
     });
   }
 };
-var $ZodError = Fr("$ZodError", initializer);
-var $ZodRealError = Fr("$ZodError", initializer, undefined, {
+var $ZodError = $constructor("$ZodError", initializer);
+var $ZodRealError = $constructor("$ZodError", initializer, undefined, {
   Parent: Error,
 });
 //@ chunk-7vp249v4.js:1225-1416 esm-fingerprint

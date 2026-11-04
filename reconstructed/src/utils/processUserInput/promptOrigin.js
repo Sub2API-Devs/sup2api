@@ -23,36 +23,41 @@ import { currentSurfaceBinding } from "../../plugins/functionHooks/surfaceBindin
 function promptOriginKind(content) {
   if (hasSeededComment(content)) return "seeded-comment";
   return (Array.isArray(content) ? content.map(textOf) : [content]).some(
-    (n) => typeof n === "string" && isTeammateMessageText(n),
+    (part) => typeof part === "string" && isTeammateMessageText(part),
   )
     ? "teammate-reply"
     : undefined;
 }
 //@ chunk-xx1vmpsq.js:30358-30436 placement
-function textOf(e) {
-  return typeof e === "object" && e !== null && "text" in e ? e.text : undefined;
+function textOf(block) {
+  return typeof block === "object" && block !== null && "text" in block ? block.text : undefined;
 }
 //@ chunk-xx1vmpsq.js:30436-30498 placement
-function isUserTypedPrompt(e, origin, n) {
-  let y = !n && promptOriginKind(e) === undefined;
-  return isHumanOrUnset(origin) && y;
+function isUserTypedPrompt(content, origin, isHidden) {
+  let isPlainText = !isHidden && promptOriginKind(content) === undefined;
+  return isHumanOrUnset(origin) && isPlainText;
 }
 //@ chunk-xx1vmpsq.js:30498-30826 placement
 /**
  * 记录提示是否由人亲自输入（排除中继、外来与已发送过的），据此更新输入暂扣状态。
  */
-var notePromptOrigin = (e) =>
+var notePromptOrigin = (note) =>
   runIgnoringAbort(() => {
-    let { uuid, origin, isHidden, isStopped, input } = e;
+    let { uuid, origin, isHidden, isStopped, input } = note;
     let sentBefore = pluginInputHoldSlot.get()?.sentBefore;
-    let C = uuid !== undefined && sentBefore?.has(uuid) === true;
-    let I = !e.isRelayed && e.foreignWord === undefined && !C && isUserTypedPrompt(input, origin, isHidden);
-    let M =
-      e.ownWordUuids?.some(
+    let alreadySent = uuid !== undefined && sentBefore?.has(uuid) === true;
+    let isUserTyped =
+      !note.isRelayed &&
+      note.foreignWord === undefined &&
+      !alreadySent &&
+      isUserTypedPrompt(input, origin, isHidden);
+    let shouldRelease =
+      note.ownWordUuids?.some(
         (ownWordUuid) => ownWordUuid !== undefined && sentBefore?.has(ownWordUuid) !== true,
-      ) ?? I;
-    let R = pluginInputHoldSlot.get()?.session.deref();
-    if (R !== undefined && R === currentSurfaceBinding() && !isStopped && M) clearHeldInputAndReason();
-    else if (!isStopped && M) releaseHeldInput();
+      ) ?? isUserTyped;
+    let session = pluginInputHoldSlot.get()?.session.deref();
+    if (session !== undefined && session === currentSurfaceBinding() && !isStopped && shouldRelease)
+      clearHeldInputAndReason();
+    else if (!isStopped && shouldRelease) releaseHeldInput();
   });
 export { promptOriginKind, notePromptOrigin, isUserTypedPrompt };

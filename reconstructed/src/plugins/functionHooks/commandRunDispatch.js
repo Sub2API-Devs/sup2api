@@ -32,6 +32,7 @@ import { commandsDiscardedSignal, commandsConsumedSignal } from "../../utils/mes
 import { identity as identity_2 } from "../../utils/identity.js";
 import { createValueSlot } from "../../utils/valueSlot.js";
 import { createSignal, createLazySignal } from "../../utils/signal.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:5045155-5046561 placement
 /**
@@ -41,7 +42,7 @@ async function dispatchCommandRunHooks({ input, engine, queued, ahead, signal })
   let { core, runs } = createDeltaStepRecorder(engine);
   let joined = ahead?.join(input, core, signal);
   if (joined === undefined) await releaseServerHold(pluginCommandRegistry.ownerOf(input.command));
-  let L =
+  let matches =
     joined === undefined
       ? pluginsMatchingEvent(
           "command.run",
@@ -51,18 +52,18 @@ async function dispatchCommandRunHooks({ input, engine, queued, ahead, signal })
           queued?.origin,
         )
       : await joined.hooking;
-  if (!(joined !== undefined || queued?.origin !== undefined || L.length > 0)) {
-    let gt = await engine.run(input.args);
-    queued?.settle(commandRunResult(engine.textOf(gt), engine.contextOf(gt)));
+  if (!(joined !== undefined || queued?.origin !== undefined || matches.length > 0)) {
+    let ran = await engine.run(input.args);
+    queued?.settle(commandRunResult(engine.textOf(ran), engine.contextOf(ran)));
     return {
       kind: "engine",
-      ran: gt,
+      ran,
     };
   }
-  let q = areBuiltinModulesLoaded(L);
-  let Z;
+  let builtinsLoaded = areBuiltinModulesLoaded(matches);
+  let answer;
   try {
-    Z = await (joined?.answer ??
+    answer = await (joined?.answer ??
       NO_CORE_AT_CHAIN_BOTTOM("command.run", {
         core: {
           "command.run": core,
@@ -74,46 +75,53 @@ async function dispatchCommandRunHooks({ input, engine, queued, ahead, signal })
     queued?.fail(toError(error));
     throw error;
   }
-  let Se = Z.text !== undefined && !q;
-  let ke = Se ? L.map(sourceLabel).join("+") : undefined;
-  let we = Se ? `${ke}: ${Z.text}` : Z.text;
-  let Ee = runs.of(Z.ref);
-  let Ae = Ee ?? runs.last();
-  let { exitCode } = Z;
-  if (!Ae) {
-    queued?.settle(commandRunResult(Z.text, Z.context, exitCode));
+  let takesText = answer.text !== undefined && !builtinsLoaded;
+  let pluginLabel = takesText ? matches.map(sourceLabel).join("+") : undefined;
+  let text = takesText ? `${pluginLabel}: ${answer.text}` : answer.text;
+  let ownRun = runs.of(answer.ref);
+  let lastRun = ownRun ?? runs.last();
+  let { exitCode } = answer;
+  if (!lastRun) {
+    queued?.settle(commandRunResult(answer.text, answer.context, exitCode));
     return withExitCode(
       {
         kind: "answered",
-        text: we,
-        plugin: ke,
-        context: Z.context,
+        text,
+        plugin: pluginLabel,
+        context: answer.context,
       },
       exitCode,
     );
   }
-  let Me = we === undefined || (Ee !== undefined && Ee.made.text === Z.text);
-  let We =
-    Z.context === undefined || stableStringifySafe(Z.context) === stableStringifySafe(Ae.made.context ?? []);
-  let ze = {
-    text: Me ? undefined : we,
-    plugin: Me ? undefined : ke,
-    context: We ? undefined : Z.context,
+  let isTextUnchanged = text === undefined || (ownRun !== undefined && ownRun.made.text === answer.text);
+  let isContextUnchanged =
+    answer.context === undefined ||
+    stableStringifySafe(answer.context) === stableStringifySafe(lastRun.made.context ?? []);
+  let delta = {
+    text: isTextUnchanged ? undefined : text,
+    plugin: isTextUnchanged ? undefined : pluginLabel,
+    context: isContextUnchanged ? undefined : answer.context,
   };
-  let lt = Me && We;
-  let Je = lt ? undefined : engine.retell(Ae.made.ran, ze);
-  if (!lt && Je === undefined)
+  let isNoChange = isTextUnchanged && isContextUnchanged;
+  let retold = isNoChange ? undefined : engine.retell(lastRun.made.ran, delta);
+  if (!isNoChange && retold === undefined)
     logForDebugging(
-      `command.run /${input.command}: a hook's own answer after next() dropped; the command ran and its effect is not a record the answer can stand on (hooked by ${L.join("+")})`,
+      `command.run /${input.command}: a hook's own answer after next() dropped; the command ran and its effect is not a record the answer can stand on (hooked by ${matches.join("+")})`,
     );
-  let pt = Je !== undefined;
-  let Et = pt && ze.text !== undefined;
-  let yt = pt && ze.context !== undefined;
-  queued?.settle(commandRunResult(Et ? Z.text : Ae.made.text, yt ? Z.context : Ae.made.context, exitCode));
+  let isRetold = retold !== undefined;
+  let hasNewText = isRetold && delta.text !== undefined;
+  let hasNewContext = isRetold && delta.context !== undefined;
+  queued?.settle(
+    commandRunResult(
+      hasNewText ? answer.text : lastRun.made.text,
+      hasNewContext ? answer.context : lastRun.made.context,
+      exitCode,
+    ),
+  );
   return withExitCode(
     {
       kind: "engine",
-      ran: Je ?? Ae.made.ran,
+      ran: retold ?? lastRun.made.ran,
     },
     exitCode,
   );
@@ -122,7 +130,10 @@ async function dispatchCommandRunHooks({ input, engine, queued, ahead, signal })
 /**
  * command.run 的站点规则
  */
-var COMMAND_RUN_SITE_RULES = UI_ENV_SITE_RULES["command.run"];
+var COMMAND_RUN_SITE_RULES; // deferred: uses UI_ENV_SITE_RULES (./sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:5046561", () => {
+  COMMAND_RUN_SITE_RULES = UI_ENV_SITE_RULES["command.run"];
+});
 //@ chunk-e6aww6q8.js:5046587-5046674 placement
 /**
  * 构造 command.run 事件
@@ -145,11 +156,11 @@ var TURN_INTERRUPTED_TEXT = "the turn was interrupted before the command ran";
  * 命令被中断时的处理结果：插件排队或关闭时不留消息，静默中止只留输入，否则加中断标记；不查询模型。
  */
 function interruptedCommandResult({ signal, typed, marker, isQueuedByPlugin }) {
-  let h = unwrapAbortReason(signal.reason);
-  let y = isQueuedByPlugin || h === "shutdown";
-  let S = isSilentAbortReason(h);
+  let reason = unwrapAbortReason(signal.reason);
+  let isSilent = isQueuedByPlugin || reason === "shutdown";
+  let isSilentReason = isSilentAbortReason(reason);
   return {
-    messages: y ? [] : S ? typed : [...typed, marker],
+    messages: isSilent ? [] : isSilentReason ? typed : [...typed, marker],
     shouldQuery: false,
   };
 }
@@ -160,70 +171,77 @@ var COMMAND_DID_NOT_RUN_MESSAGE =
 /**
  * 命令监视状态
  */
-var commandWatchState = new HostScoped(() => ({
-  watching: false,
-}));
+var commandWatchState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:5047022", () => {
+  commandWatchState = new HostScoped(() => ({
+    watching: false,
+  }));
+});
 //@ chunk-e6aww6q8.js:5047057-5047470 placement
 /**
  * 排队命令的等待者表：按 uuid 登记，命令丢弃时以错误结算。
  */
 function createQueuedCommandWaiters() {
-  let e = new Map();
-  function n(uuid) {
-    let h = e.get(uuid);
-    e.delete(uuid);
-    return h;
+  let waiters = new Map();
+  function take(uuid) {
+    let waiter = waiters.get(uuid);
+    waiters.delete(uuid);
+    return waiter;
   }
-  function r(s, h) {
-    for (let y of s) if (y.uuid !== undefined) n(y.uuid)?.fail(new HooksError(h));
+  function failAll(commands, reason) {
+    for (let command of commands)
+      if (command.uuid !== undefined) take(command.uuid)?.fail(new HooksError(reason));
   }
   return {
-    record: (s, h) => {
-      let y = onProcessRootHost(commandWatchState);
-      if (!y.watching) {
-        y.watching = true;
-        commandsDiscardedSignal.subscribe((S) =>
-          r(S, "the command was removed from the queue before it ran"),
+    record: (uuid, waiter) => {
+      let watchState = onProcessRootHost(commandWatchState);
+      if (!watchState.watching) {
+        watchState.watching = true;
+        commandsDiscardedSignal.subscribe((commands) =>
+          failAll(commands, "the command was removed from the queue before it ran"),
         );
-        commandsConsumedSignal.subscribe((S) =>
-          r(S, "the command left the queue as text for the model; it did not run"),
+        commandsConsumedSignal.subscribe((commands) =>
+          failAll(commands, "the command left the queue as text for the model; it did not run"),
         );
       }
-      e.set(s, h);
+      waiters.set(uuid, waiter);
     },
-    take: n,
+    take,
   };
 }
 //@ chunk-e6aww6q8.js:5047470-5047484 placement
 /**
  * 排队命令的等待者
  */
-var queuedCommandWaiters = createQueuedCommandWaiters();
+var queuedCommandWaiters; // deferred: uses createQueuedCommandWaiters of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:5047470", () => {
+  queuedCommandWaiters = createQueuedCommandWaiters();
+});
 //@ chunk-e6aww6q8.js:5047484-5047815 placement
 /**
  * 取出排队命令对应的等待者，提供 settle/fail/handOn；释放时未结算则以"未经 command.run"失败。
  */
-function takeQueuedCommandWaiter(e) {
-  let n = e === undefined ? undefined : queuedCommandWaiters.take(e);
-  let r = false;
+function takeQueuedCommandWaiter(uuid) {
+  let waiter = uuid === undefined ? undefined : queuedCommandWaiters.take(uuid);
+  let isSettled = false;
   return {
-    origin: n?.origin,
-    settle(s) {
-      r = true;
-      n?.settle(s);
+    origin: waiter?.origin,
+    settle(result) {
+      isSettled = true;
+      waiter?.settle(result);
     },
-    fail(s) {
-      r = true;
-      n?.fail(s);
+    fail(error) {
+      isSettled = true;
+      waiter?.fail(error);
     },
-    handOn(s) {
-      if (r || n === undefined || e === undefined) return;
-      r = true;
-      queuedCommandWaiters.record(e, n);
-      s.addEventListener(
+    handOn(signal) {
+      if (isSettled || waiter === undefined || uuid === undefined) return;
+      isSettled = true;
+      queuedCommandWaiters.record(uuid, waiter);
+      signal.addEventListener(
         "abort",
         () => {
-          queuedCommandWaiters.take(e)?.fail(new HooksError(TURN_INTERRUPTED_TEXT));
+          queuedCommandWaiters.take(uuid)?.fail(new HooksError(TURN_INTERRUPTED_TEXT));
         },
         {
           once: true,
@@ -231,9 +249,9 @@ function takeQueuedCommandWaiter(e) {
       );
     },
     [Symbol.dispose]() {
-      if (!r) {
-        r = true;
-        n?.fail(new HooksError(COMMAND_DID_NOT_RUN_MESSAGE));
+      if (!isSettled) {
+        isSettled = true;
+        waiter?.fail(new HooksError(COMMAND_DID_NOT_RUN_MESSAGE));
       }
     },
   };
@@ -242,37 +260,40 @@ function takeQueuedCommandWaiter(e) {
 /**
  * 同参命令分发表
  */
-var inflightCommandRuns = identity_2(new Map(), (e) => e.clear());
+var inflightCommandRuns; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:5047815", () => {
+  inflightCommandRuns = identity_2(new Map(), (map) => map.clear());
+});
 //@ chunk-e6aww6q8.js:5047850-5047906 placement
 /**
  * 取出进行中的同参分发
  */
-function takeInflightRun(e) {
-  let n = inflightCommandRuns.get(e);
-  inflightCommandRuns.delete(e);
-  return n;
+function takeInflightRun(command) {
+  let run = inflightCommandRuns.get(command);
+  inflightCommandRuns.delete(command);
+  return run;
 }
 //@ chunk-e6aww6q8.js:5047906-5048261 placement
 /**
  * 若当前有同名同参的 command.run 分发在等，返回它以加入；释放时未加入则停止该分发。
  */
-function joinCommandRunDispatch(e) {
-  let n = e === undefined ? undefined : takeInflightRun(e);
-  let r = false;
+function joinCommandRunDispatch(key) {
+  let run = key === undefined ? undefined : takeInflightRun(key);
+  let joined = false;
   return {
-    join(s, h, y) {
-      let S = n?.input.command === s.command && n.input.args === s.args;
-      if (n === undefined || !S) return;
-      r = true;
-      n.seat(h);
-      if (y?.aborted) n.stop(y.reason);
-      y?.addEventListener("abort", () => n.stop(y.reason), {
+    join(input, core, signal) {
+      let isSameInput = run?.input.command === input.command && run.input.args === input.args;
+      if (run === undefined || !isSameInput) return;
+      joined = true;
+      run.seat(core);
+      if (signal?.aborted) run.stop(signal.reason);
+      signal?.addEventListener("abort", () => run.stop(signal.reason), {
         once: true,
       });
-      return n;
+      return run;
     },
     [Symbol.dispose]() {
-      if (!r) n?.stop("the dispatch ended without running the command");
+      if (!joined) run?.stop("the dispatch ended without running the command");
     },
   };
 }
@@ -280,9 +301,9 @@ function joinCommandRunDispatch(e) {
 /**
  * 等待命令结算
  */
-var waitForCommandSettle = (e, origin) =>
+var waitForCommandSettle = (uuid, origin) =>
   new Promise((resolve, reject) => {
-    queuedCommandWaiters.record(e, {
+    queuedCommandWaiters.record(uuid, {
       origin,
       settle: resolve,
       fail: reject,
@@ -292,17 +313,26 @@ var waitForCommandSettle = (e, origin) =>
 /**
  * 命令集合信号 A
  */
-var commandSetSignalA = identity_2(createValueSlot(), (e) => e.set(undefined));
+var commandSetSignalA; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:5048339", () => {
+  commandSetSignalA = identity_2(createValueSlot(), (slot) => slot.set(undefined));
+});
 //@ chunk-e6aww6q8.js:5048374-5048410 placement
 /**
  * 命令集合信号 B
  */
-var commandSetSignalB = identity_2(createValueSlot(), (e) => e.set(undefined));
+var commandSetSignalB; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:5048374", () => {
+  commandSetSignalB = identity_2(createValueSlot(), (slot) => slot.set(undefined));
+});
 //@ chunk-e6aww6q8.js:5048410-5048434 placement
 /**
  * 命令运行信号槽
  */
-var commandRunSignalSlot = new HostScoped(() => createSignal());
+var commandRunSignalSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:5048410", () => {
+  commandRunSignalSlot = new HostScoped(() => createSignal());
+});
 //@ chunk-e6aww6q8.js:5048434-5048473 placement
 /**
  * 取命令运行信号
@@ -314,7 +344,10 @@ function commandRunSignal() {
 /**
  * 惰性信号
  */
-var lazyCommandRunSignal = createLazySignal(commandRunSignal);
+var lazyCommandRunSignal; // deferred: uses commandRunSignal of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:5048473", () => {
+  lazyCommandRunSignal = createLazySignal(commandRunSignal);
+});
 export {
   commandSetSignalA,
   commandSetSignalB,

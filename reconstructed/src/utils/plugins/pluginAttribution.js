@@ -10,7 +10,7 @@
  */
 import { INVISIBLE_CHAR_CLASS_SOURCE } from "../sanitization.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   pluginAvailabilitySchema,
   pluginOriginSchema,
@@ -22,115 +22,130 @@ import { jsonParse } from "../slowOperations.js";
 import { logForDebugging } from "../debug.js";
 import { env } from "../env.js";
 import { parseJsonRegistryFile, normalizeRegistryKey } from "./localMarketplacePaths.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-f3qhjfah.js:38283-38467 placement
-var PLUGIN_META_SUFFIX = ".meta.json";
-var SERVER_PLUGIN_ID = "server_plugin_id";
-var MARKETPLACE_NAME = "marketplace_name";
-var INSTALLATION_PREFERENCE = "installation_preference";
-var MARKETPLACE_KIND = "marketplace_kind";
-var regExp = new RegExp(`^(?!\\s)(?![\\s\\S]*\\s$)[^@${INVISIBLE_CHAR_CLASS_SOURCE}]{1,128}$`, "u");
+var PLUGIN_META_SUFFIX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SERVER_PLUGIN_ID;
+var MARKETPLACE_NAME;
+var INSTALLATION_PREFERENCE;
+var MARKETPLACE_KIND;
+var regExp;
+deferInit("chunk-f3qhjfah.js:38283", () => {
+  PLUGIN_META_SUFFIX = ".meta.json";
+  SERVER_PLUGIN_ID = "server_plugin_id";
+  MARKETPLACE_NAME = "marketplace_name";
+  INSTALLATION_PREFERENCE = "installation_preference";
+  MARKETPLACE_KIND = "marketplace_kind";
+  regExp = new RegExp(`^(?!\\s)(?![\\s\\S]*\\s$)[^@${INVISIBLE_CHAR_CLASS_SOURCE}]{1,128}$`, "u");
+});
 //@ chunk-f3qhjfah.js:38467-38501 placement
 /**
  * isAttributionNameValid：归属市场名格式合法。
  */
-function isAttributionNameValid(e) {
-  return regExp.test(e);
+function isAttributionNameValid(name) {
+  return regExp.test(name);
 }
 //@ chunk-f3qhjfah.js:38501-38558 placement
 var SERVER_PLUGIN_ID_PATTERN = /^plugin_(?:staging_|local_)?[A-Za-z0-9]{1,64}$/;
 //@ chunk-f3qhjfah.js:38558-38593 placement
-function isServerPluginId(e) {
-  return SERVER_PLUGIN_ID_PATTERN.test(e);
+function isServerPluginId(id) {
+  return SERVER_PLUGIN_ID_PATTERN.test(id);
 }
 //@ chunk-f3qhjfah.js:38593-38786 placement
 /**
- * pluginAttributionSchema：插件归属 sidecar schema。
+ * 插件归属 sidecar：un 是侧车文件的 schema（四个可选字段，键来自常量，解析失败按缺省忽略）；dZo 是读取该文件时 4096 字节的上限。
  */
-var PluginAttributionSchema = DoctorLazy(() =>
-  u({
-    [SERVER_PLUGIN_ID]: string().regex(SERVER_PLUGIN_ID_PATTERN).optional().catch(undefined),
-    [MARKETPLACE_NAME]: string().regex(regExp).optional().catch(undefined),
-    [INSTALLATION_PREFERENCE]: pluginAvailabilitySchema().optional().catch(undefined),
-    [MARKETPLACE_KIND]: pluginOriginSchema().optional().catch(undefined),
-  }),
-);
-var pluginAttributionSchema = 4096;
+var PluginAttributionSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_ATTRIBUTION_FILE_BYTES;
+deferInit("chunk-f3qhjfah.js:38593", () => {
+  PluginAttributionSchema = DoctorLazy(() =>
+    objectSchema({
+      [SERVER_PLUGIN_ID]: stringSchema().regex(SERVER_PLUGIN_ID_PATTERN).optional().catch(undefined),
+      [MARKETPLACE_NAME]: stringSchema().regex(regExp).optional().catch(undefined),
+      [INSTALLATION_PREFERENCE]: pluginAvailabilitySchema().optional().catch(undefined),
+      [MARKETPLACE_KIND]: pluginOriginSchema().optional().catch(undefined),
+    }),
+  );
+  MAX_ATTRIBUTION_FILE_BYTES = 4096;
+});
 //@ chunk-f3qhjfah.js:38786-39029 placement
-async function readPluginAttributionSidecar(e) {
-  let n = e + PLUGIN_META_SUFFIX;
-  let r = false;
-  let smallFileOrNull = await readSmallFileOrNull(n, pluginAttributionSchema, () => {
-    r = true;
+async function readPluginAttributionSidecar(pluginPath) {
+  let sidecarPath = pluginPath + PLUGIN_META_SUFFIX;
+  let unread = false;
+  let smallFileOrNull = await readSmallFileOrNull(sidecarPath, MAX_ATTRIBUTION_FILE_BYTES, () => {
+    unread = true;
   });
   if (smallFileOrNull === null)
-    return r
+    return unread
       ? {
           unread: true,
         }
       : {};
-  let a;
+  let parsed;
   try {
-    a = jsonParse(smallFileOrNull);
+    parsed = jsonParse(smallFileOrNull);
   } catch {
-    logForDebugging(`Ignoring plugin attribution sidecar at ${n}: not valid JSON`);
+    logForDebugging(`Ignoring plugin attribution sidecar at ${sidecarPath}: not valid JSON`);
     return {
       unread: true,
     };
   }
-  return parsePluginAttribution(a, `sidecar at ${n}`);
+  return parsePluginAttribution(parsed, `sidecar at ${sidecarPath}`);
 }
 //@ chunk-f3qhjfah.js:39029-39691 placement
 /**
  * 校验一条插件归属：取合法的 serverPluginId、marketplaceName、installationPreference、marketplaceKind； 存在但非法的字段记调试日志，市场名非法时标记 unread。整体不是对象时返回 {unread:true}。
  */
-function parsePluginAttribution(e, n) {
-  let r = PluginAttributionSchema().safeParse(e);
-  if (!r.success) {
-    logForDebugging(`Ignoring plugin attribution ${n}: not a JSON object`);
+function parsePluginAttribution(raw, label) {
+  let parseResult = PluginAttributionSchema().safeParse(raw);
+  if (!parseResult.success) {
+    logForDebugging(`Ignoring plugin attribution ${label}: not a JSON object`);
     return {
       unread: true,
     };
   }
-  let s = {};
-  let a = r.data[SERVER_PLUGIN_ID];
-  if (typeof a === "string" && isServerPluginId(a)) s.serverPluginId = a;
-  let c = r.data[MARKETPLACE_NAME];
-  if (typeof c === "string" && isAttributionNameValid(c)) s.marketplaceName = c;
-  let pluginAvailability = parsePluginAvailability(r.data[INSTALLATION_PREFERENCE]);
-  if (pluginAvailability !== undefined) s.installationPreference = pluginAvailability;
-  let pluginOriginKind = parsePluginOriginKind(r.data[MARKETPLACE_KIND]);
-  if (pluginOriginKind !== undefined) s.marketplaceKind = pluginOriginKind;
-  if (typeof e === "object" && e !== null) {
-    for (let [f, m] of [
-      [SERVER_PLUGIN_ID, s.serverPluginId],
-      [MARKETPLACE_NAME, s.marketplaceName],
-      [INSTALLATION_PREFERENCE, s.installationPreference],
-      [MARKETPLACE_KIND, s.marketplaceKind],
+  let result = {};
+  let serverPluginId = parseResult.data[SERVER_PLUGIN_ID];
+  if (typeof serverPluginId === "string" && isServerPluginId(serverPluginId))
+    result.serverPluginId = serverPluginId;
+  let marketplaceName = parseResult.data[MARKETPLACE_NAME];
+  if (typeof marketplaceName === "string" && isAttributionNameValid(marketplaceName))
+    result.marketplaceName = marketplaceName;
+  let pluginAvailability = parsePluginAvailability(parseResult.data[INSTALLATION_PREFERENCE]);
+  if (pluginAvailability !== undefined) result.installationPreference = pluginAvailability;
+  let pluginOriginKind = parsePluginOriginKind(parseResult.data[MARKETPLACE_KIND]);
+  if (pluginOriginKind !== undefined) result.marketplaceKind = pluginOriginKind;
+  if (typeof raw === "object" && raw !== null) {
+    for (let [field, value] of [
+      [SERVER_PLUGIN_ID, result.serverPluginId],
+      [MARKETPLACE_NAME, result.marketplaceName],
+      [INSTALLATION_PREFERENCE, result.installationPreference],
+      [MARKETPLACE_KIND, result.marketplaceKind],
     ])
-      if (f in e && m === undefined) {
-        logForDebugging(`Ignoring plugin attribution field (${n}): invalid ${f}`);
-        if (f === MARKETPLACE_NAME) s.unread = true;
+      if (field in raw && value === undefined) {
+        logForDebugging(`Ignoring plugin attribution field (${label}): invalid ${field}`);
+        if (field === MARKETPLACE_NAME) result.unread = true;
       }
   }
-  return s;
+  return result;
 }
 //@ chunk-f3qhjfah.js:39691-39704 placement
-var MAX_ATTRIBUTION_FILE_BYTES = 65536;
+var MAX_ATTRIBUTION_FILE_BYTES_2 = 65536;
 //@ chunk-f3qhjfah.js:39704-39891 placement
-function getEnvPluginAttribution(e) {
+function getEnvPluginAttribution(pluginKey) {
   let CLAUDE_CODE_PLUGIN_ATTRIBUTION = env.CLAUDE_CODE_PLUGIN_ATTRIBUTION;
   if (CLAUDE_CODE_PLUGIN_ATTRIBUTION === undefined) return;
   return parseJsonRegistryFile(
     "CLAUDE_CODE_PLUGIN_ATTRIBUTION",
     CLAUDE_CODE_PLUGIN_ATTRIBUTION,
-    MAX_ATTRIBUTION_FILE_BYTES,
-    (r) => parsePluginAttribution(r, "CLAUDE_CODE_PLUGIN_ATTRIBUTION entry"),
-  ).get(normalizeRegistryKey(e));
+    MAX_ATTRIBUTION_FILE_BYTES_2,
+    (entry) => parsePluginAttribution(entry, "CLAUDE_CODE_PLUGIN_ATTRIBUTION entry"),
+  ).get(normalizeRegistryKey(pluginKey));
 }
 //@ chunk-f3qhjfah.js:39891-39940 placement
-async function getPluginAttribution(e) {
-  return getEnvPluginAttribution(e) ?? (await readPluginAttributionSidecar(e));
+async function getPluginAttribution(pluginPath) {
+  return getEnvPluginAttribution(pluginPath) ?? (await readPluginAttributionSidecar(pluginPath));
 }
 export {
   getPluginAttribution,
@@ -142,6 +157,6 @@ export {
   MARKETPLACE_NAME,
   INSTALLATION_PREFERENCE,
   MARKETPLACE_KIND,
-  pluginAttributionSchema,
+  MAX_ATTRIBUTION_FILE_BYTES,
   readPluginAttributionSidecar,
 };

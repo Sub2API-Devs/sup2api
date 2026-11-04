@@ -66,17 +66,17 @@ async function readMarketplaceJsonContent(dir) {
 /**
  * zip 缓存模式下把已知市场的 marketplace.json 同步到 zip 缓存目录。
  */
-async function syncMarketplacesToZipCache(n) {
-  let knownMarketplaces = await loadKnownMarketplacesSafe(n);
+async function syncMarketplacesToZipCache(storageV5) {
+  let knownMarketplaces = await loadKnownMarketplacesSafe(storageV5);
   let filtered = Object.entries(omitPluginDirectoryEntries(knownMarketplaces)).filter(
     ([key, value]) =>
       validateReservedMarketplaceEntry(key, value) === null &&
       !isImpersonatingOfficialMarketplace(key, value),
   );
-  for (let [marketplaceName, c] of filtered) {
-    if (!c.installLocation) continue;
+  for (let [marketplaceName, entry] of filtered) {
+    if (!entry.installLocation) continue;
     try {
-      await syncMarketplaceJsonToZipCache(marketplaceName, c.installLocation);
+      await syncMarketplaceJsonToZipCache(marketplaceName, entry.installLocation);
     } catch (error) {
       logForDebugging(`Failed to save marketplace JSON for ${marketplaceName}: ${error}`);
     }

@@ -10,7 +10,13 @@
  */
 import { randomUUID } from "crypto";
 import { DoctorLazy } from "./handlers/util.js";
-import { looseObject, literal, string, unknown, M } from "../../vendor/zod/v4/classic/schemas.js";
+import {
+  looseObject,
+  literal,
+  stringSchema,
+  unknown,
+  booleanSchema,
+} from "../../vendor/zod/v4/classic/schemas.js";
 import { jsonParseRaw } from "../utils/slowOperations.js";
 import { originKindForWakeup } from "../utils/promptSource.js";
 import { hasNonHumanOrigin } from "../utils/messageProvenance.js";
@@ -48,68 +54,73 @@ import { applySafeConfigEnvironmentVariables } from "../utils/managedEnvApply.js
 import { eventRecordQueue } from "../utils/telemetry/thirdPartyEventRecords.js";
 import { printCliError, flushAnalyticsBeforeExit, cliExit, cliError } from "./exit.js";
 import { emitManagedConfigReadyAtExit } from "../services/policyLimits/startupGate.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-y43msawm.js:959-1154 placement
 /**
  * 拒绝消息发送超时与首条用户消息 schema
  */
-var REFUSAL_SEND_TIMEOUT_MS = 1000;
-var userMessageLineSchema = DoctorLazy(() =>
-  looseObject({
-    type: literal("user"),
-    initiator: string().optional(),
-    origin: unknown().optional(),
-    isSynthetic: M().optional(),
-    is_meta: M().optional(),
-    seeded_summon: M().optional(),
-    shouldQuery: M().optional(),
-  }),
-);
+var REFUSAL_SEND_TIMEOUT_MS; // deferred: uses DoctorLazy (./handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var userMessageLineSchema;
+deferInit("chunk-y43msawm.js:959", () => {
+  REFUSAL_SEND_TIMEOUT_MS = 1000;
+  userMessageLineSchema = DoctorLazy(() =>
+    looseObject({
+      type: literal("user"),
+      initiator: stringSchema().optional(),
+      origin: unknown().optional(),
+      isSynthetic: booleanSchema().optional(),
+      is_meta: booleanSchema().optional(),
+      seeded_summon: booleanSchema().optional(),
+      shouldQuery: booleanSchema().optional(),
+    }),
+  );
+});
 //@ chunk-y43msawm.js:1154-1369 placement
 /**
  * stdin 行是否为需要应答的用户消息
  */
-function isPromptBearingUserLine(e) {
+function isPromptBearingUserLine(line) {
   try {
-    let r = userMessageLineSchema().safeParse(jsonParseRaw(e));
+    let parsed = userMessageLineSchema().safeParse(jsonParseRaw(line));
     return (
-      r.success &&
-      originKindForWakeup(r.data.initiator) === undefined &&
-      !hasNonHumanOrigin(r.data.origin, r.data.isSynthetic) &&
-      !r.data.is_meta &&
-      !r.data.seeded_summon &&
-      r.data.shouldQuery !== false
+      parsed.success &&
+      originKindForWakeup(parsed.data.initiator) === undefined &&
+      !hasNonHumanOrigin(parsed.data.origin, parsed.data.isSynthetic) &&
+      !parsed.data.is_meta &&
+      !parsed.data.seeded_summon &&
+      parsed.data.shouldQuery !== false
     );
   } catch {
     return false;
   }
 }
 //@ chunk-y43msawm.js:1369-1607 placement = returnValue (0.8)
-async function returnValue(e, r) {
-  let a = (async () => {
-    let s = "";
+async function returnValue(stream, timeoutMs) {
+  let pending = (async () => {
+    let buffer = "";
     for (;;) {
-      let { done: d, value: n } = await e.next();
-      if (d) return false;
-      s += n;
+      let { done, value: chunk } = await stream.next();
+      if (done) return false;
+      buffer += chunk;
       if (
-        !n.includes(`
+        !chunk.includes(`
 `)
       )
         continue;
-      let lines = s.split(`
+      let lines = buffer.split(`
 `);
-      s = lines.pop() ?? "";
+      buffer = lines.pop() ?? "";
       if (lines.some(isPromptBearingUserLine)) return true;
     }
   })().catch(() => false);
-  return (await withDeadline(a, r)) ?? false;
+  return (await withDeadline(pending, timeoutMs)) ?? false;
 }
 //@ chunk-y43msawm.js:1607-2255 placement
 /**
  * stream-json 下把未启动的拒绝作为一回合发回
  */
-async function sendStartupRefusalTurn(message, r = REFUSAL_SEND_TIMEOUT_MS) {
+async function sendStartupRefusalTurn(message, lines = REFUSAL_SEND_TIMEOUT_MS) {
   if (
     getGatewayAuth()?.hostVerdict === undefined ||
     !isDesktopNonClaudecode() ||
@@ -118,27 +129,27 @@ async function sendStartupRefusalTurn(message, r = REFUSAL_SEND_TIMEOUT_MS) {
     eagerParseCliFlag("--input-format") !== "stream-json" ||
     eagerHasCliFlag("--no-session-persistence") ||
     env.CLAUDE_BRIDGE_REATTACH_SESSION !== undefined ||
-    !(await returnValue(adoptStdinStream() ?? readStreamJsonStdin(), r))
+    !(await returnValue(adoptStdinStream() ?? readStreamJsonStdin(), lines))
   )
     return false;
-  let a = startupResultSessionId(getSessionId());
-  let s = `Claude Code didn't start. ${message.replace(/\s+/g, " ").replace(/(?:[a-z][a-z\d+.-]*:\/\/|www\.|[\w.+-]+@)[^\s<`]*[^\s<`.,;:)]|[\\`*_[\]<]/gi, (l) => (l.length > 1 ? `\`${l}\`` : l === "<" ? "&lt;" : `\\${l}`))}`;
-  let { errors, ...n } = emitLoadError(a, []);
+  let sessionId = startupResultSessionId(getSessionId());
+  let text = `Claude Code didn't start. ${message.replace(/\s+/g, " ").replace(/(?:[a-z][a-z\d+.-]*:\/\/|www\.|[\w.+-]+@)[^\s<`]*[^\s<`.,;:)]|[\\`*_[\]<]/gi, (char) => (char.length > 1 ? `\`${char}\`` : char === "<" ? "&lt;" : `\\${char}`))}`;
+  let { errors, ...errorList } = emitLoadError(sessionId, []);
   return writeStartupFrames([
     {
       type: "assistant",
       message: createAssistantMessage({
-        content: s,
+        content: text,
       }).message,
       parent_tool_use_id: null,
-      session_id: a,
+      session_id: sessionId,
       uuid: randomUUID(),
     },
     {
-      ...n,
+      ...errorList,
       subtype: "success",
       is_error: false,
-      result: s,
+      result: text,
       terminal_reason: "turn_setup_failed",
     },
   ]);
@@ -146,9 +157,9 @@ async function sendStartupRefusalTurn(message, r = REFUSAL_SEND_TIMEOUT_MS) {
 //@ chunk-y43msawm.js:2255-2266 placement
 var REFUSAL_FLUSH_TIMEOUT_MS = 2000;
 //@ chunk-y43msawm.js:2266-2405 placement
-async function sendManagedSettingsRefusal(e) {
+async function sendManagedSettingsRefusal(reason) {
   try {
-    logManagedSettingsRefused(e);
+    logManagedSettingsRefused(reason);
     if (isOtlpLogsConfigured() || isOtlpLogsConfiguredByPolicy()) await flushRefusalTelemetry();
   } catch {
     logForDebugging("[3P telemetry] managed-settings refusal send failed", {
@@ -157,13 +168,14 @@ async function sendManagedSettingsRefusal(e) {
   }
 }
 //@ chunk-y43msawm.js:2405-2553 placement
-async function sendOrgValidationRefusal(e) {
-  if (e.policyUnreadable) await sendManagedSettingsRefusal("policy_invalid");
-  else if (e.reason === "provider_not_allowed") await sendManagedSettingsRefusal("provider_not_allowed");
+async function sendOrgValidationRefusal(refusal) {
+  if (refusal.policyUnreadable) await sendManagedSettingsRefusal("policy_invalid");
+  else if (refusal.reason === "provider_not_allowed")
+    await sendManagedSettingsRefusal("provider_not_allowed");
 }
 //@ chunk-y43msawm.js:2553-2614 placement
-function recordManagedSettingsRefusal(e) {
-  logManagedSettingsRefused(e);
+function recordManagedSettingsRefusal(reason) {
+  logManagedSettingsRefused(reason);
   if (getEventLogger() === null && (isOtlpLogsConfigured() || isOtlpLogsConfiguredByPolicy()))
     registerCleanup(flushRefusalTelemetry);
 }
@@ -198,8 +210,8 @@ async function exitRefusingManagedConfig({ message, reason, errorType, print, be
   if (print === undefined) printCliError(message);
   else await print(message);
   if (errorType !== undefined) await sendManagedSettingsRefusal(errorType);
-  let n = await sendStartupRefusalTurn(message);
-  if (!n)
+  let getResult = await sendStartupRefusalTurn(message);
+  if (!getResult)
     await writeStartupFailureResult({
       sessionId: getSessionId(),
       message,
@@ -208,11 +220,13 @@ async function exitRefusingManagedConfig({ message, reason, errorType, print, be
   await beforeExit?.();
   await emitManagedConfigReadyAtExit();
   await flushAnalyticsBeforeExit();
-  return n ? cliExit(0) : cliError(undefined, print === undefined ? "cli_error" : "exit_with_message");
+  return getResult
+    ? cliExit(0)
+    : cliError(undefined, print === undefined ? "cli_error" : "exit_with_message");
 }
 export {
-  sendManagedSettingsRefusal,
   sendOrgValidationRefusal,
   recordManagedSettingsRefusal,
+  sendManagedSettingsRefusal,
   exitRefusingManagedConfig,
 };

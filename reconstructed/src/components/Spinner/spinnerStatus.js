@@ -8,13 +8,19 @@
  * pieces: chunk-hbc3mvx0.js (37)
  * attribution: placement 37
  */
-import { init_react_production, qt, R, Se, yt } from "../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import {
+  init_react_production,
+  createContext,
+  useRef,
+  useContext,
+  useSyncExternalStore,
+} from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { createSignal } from "../../utils/signal.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { s9e, ME } from "../../../vendor/lodash-es/toString.js";
-import { Jve } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { import_arrayMap, isArrayAlias } from "../../../vendor/lodash-es/toString.js";
+import { keysAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { logError } from "../../utils/log.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../../utils/errors.js";
 import { createStore } from "../../state/store.js";
@@ -22,99 +28,109 @@ import { getSpinnerVerbs } from "../../constants/spinnerVerbs.js";
 import { SESSION_START_HOOKS_MESSAGE } from "../../utils/processUserInput/processSlashCommand.js";
 import { mainAgentId } from "../../bootstrap/state.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hbc3mvx0.js:708-712 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hbc3mvx0.js:708", () => {
+  init_react_production();
+});
 //@ chunk-hbc3mvx0.js:712-732 placement
-var spinnerStatusSlot = qt(null);
-var SPINNER_STATUS_MAX_MS = 20;
+var spinnerStatusSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SPINNER_STATUS_MAX_MS;
+deferInit("chunk-hbc3mvx0.js:712", () => {
+  spinnerStatusSlot = createContext(null);
+  SPINNER_STATUS_MAX_MS = 20;
+});
 //@ chunk-hbc3mvx0.js:732-1331 placement
 function AutoModeDenialsProvider(props) {
-  let o = w(8);
+  let $ = useMemoCache(8);
   let { children } = props;
-  let g;
-  if (o[0] === MEMO_CACHE_SENTINEL) {
-    g = [];
-    o[0] = g;
-  } else g = o[0];
-  let s = R(g);
-  let p;
-  if (o[1] === MEMO_CACHE_SENTINEL) {
-    p = createSignal();
-    o[1] = p;
-  } else p = o[1];
-  let n = p;
+  let initialDenials;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    initialDenials = [];
+    $[0] = initialDenials;
+  } else initialDenials = $[0];
+  let denialsRef = useRef(initialDenials);
+  let signal;
+  if ($[1] === MEMO_CACHE_SENTINEL) {
+    signal = createSignal();
+    $[1] = signal;
+  } else signal = $[1];
+  let statusSignal = signal;
   let getDenials;
   let recordDenial;
   let removeDenial;
-  if (o[2] === MEMO_CACHE_SENTINEL) {
-    getDenials = () => s.current;
-    recordDenial = (T) => {
-      s.current = [T, ...s.current.slice(0, SPINNER_STATUS_MAX_MS - 1)];
-      n.emit();
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    getDenials = () => denialsRef.current;
+    recordDenial = (denial) => {
+      denialsRef.current = [denial, ...denialsRef.current.slice(0, SPINNER_STATUS_MAX_MS - 1)];
+      statusSignal.emit();
     };
-    removeDenial = (y) => {
-      s.current = s.current.filter((h) => h.toolName !== y.toolName || h.inputKey !== y.inputKey);
-      n.emit();
+    removeDenial = (denial) => {
+      denialsRef.current = denialsRef.current.filter(
+        (state) => state.toolName !== denial.toolName || state.inputKey !== denial.inputKey,
+      );
+      statusSignal.emit();
     };
-    o[2] = getDenials;
-    o[3] = recordDenial;
-    o[4] = removeDenial;
+    $[2] = getDenials;
+    $[3] = recordDenial;
+    $[4] = removeDenial;
   } else {
-    getDenials = o[2];
-    recordDenial = o[3];
-    removeDenial = o[4];
+    getDenials = $[2];
+    recordDenial = $[3];
+    removeDenial = $[4];
   }
-  let x;
-  if (o[5] === MEMO_CACHE_SENTINEL) {
-    x = {
+  let statusValue;
+  if ($[5] === MEMO_CACHE_SENTINEL) {
+    statusValue = {
       getDenials,
       recordDenial,
       removeDenial,
-      subscribe: n.subscribe,
+      subscribe: statusSignal.subscribe,
       rowTexts: new WeakMap(),
     };
-    o[5] = x;
-  } else x = o[5];
-  let value = x;
-  let A;
-  if (o[6] !== children) {
-    A = jsxProd_default(spinnerStatusSlot.Provider, {
+    $[5] = statusValue;
+  } else statusValue = $[5];
+  let value = statusValue;
+  let spinnerStatusSlotElement;
+  if ($[6] !== children) {
+    spinnerStatusSlotElement = jsxProd_default(spinnerStatusSlot.Provider, {
       value,
       children,
     });
-    o[6] = children;
-    o[7] = A;
-  } else A = o[7];
-  return A;
+    $[6] = children;
+    $[7] = spinnerStatusSlotElement;
+  } else spinnerStatusSlotElement = $[7];
+  return spinnerStatusSlotElement;
 }
 //@ chunk-hbc3mvx0.js:1331-1357 placement
 function noopUnsubscribe() {
   return () => {};
 }
 //@ chunk-hbc3mvx0.js:1357-1549 placement
-function useHasAutoModeDenialFor(t) {
-  let o = w(3);
-  let r = Se(spinnerStatusSlot);
-  let g;
-  if (o[0] !== t || o[1] !== r) {
-    g = () => r?.getDenials().some((s) => t.includes(s.toolUseId)) ?? false;
-    o[0] = t;
-    o[1] = r;
-    o[2] = g;
-  } else g = o[2];
-  let p = g;
-  return yt(r?.subscribe ?? noopUnsubscribe, p, p);
+function useHasAutoModeDenialFor(agentId) {
+  let $ = useMemoCache(3);
+  let store = useContext(spinnerStatusSlot);
+  let hasDenial;
+  if ($[0] !== agentId || $[1] !== store) {
+    hasDenial = () => store?.getDenials().some((state) => agentId.includes(state.toolUseId)) ?? false;
+    $[0] = agentId;
+    $[1] = store;
+    $[2] = hasDenial;
+  } else hasDenial = $[2];
+  let denial = hasDenial;
+  return useSyncExternalStore(store?.subscribe ?? noopUnsubscribe, denial, denial);
 }
 //@ chunk-hbc3mvx0.js:1549-1748 placement
 function useAutoModeDenialsContext() {
-  let t = Se(spinnerStatusSlot);
-  if (!t) {
+  let store = useContext(spinnerStatusSlot);
+  if (!store) {
     throw ReferenceError(
       "useAutoModeDenials and useDenialRowTexts cannot be called outside of an <AutoModeDenialsProvider /> (mounted by <AppStateProvider />)",
     );
   }
-  return t;
+  return store;
 }
 //@ chunk-hbc3mvx0.js:1748-1774 placement
 /**
@@ -133,42 +149,42 @@ function statusRowTexts() {
 //@ chunk-hbc3mvx0.js:1809-1838 placement
 var { floor, random } = Math;
 //@ chunk-hbc3mvx0.js:1838-1881 placement
-function randomIntInclusive(t, r) {
-  return t + floor(random() * (r - t + 1));
+function randomIntInclusive(min, max) {
+  return min + floor(random() * (max - min + 1));
 }
 //@ chunk-hbc3mvx0.js:1881-1890 placement
 var randomInt = randomIntInclusive;
 //@ chunk-hbc3mvx0.js:1890-1948 placement
-function sampleOne(t) {
-  var r = t.length;
-  return r ? t[randomInt(0, r - 1)] : undefined;
+function sampleOne(items) {
+  var length = items.length;
+  return length ? items[randomInt(0, length - 1)] : undefined;
 }
 //@ chunk-hbc3mvx0.js:1948-1957 placement
 var sample = sampleOne;
 //@ chunk-hbc3mvx0.js:1957-2013 placement
-function mapIndices(t, r) {
-  return s9e(r, function (o) {
-    return t[o];
+function mapIndices(values, indices) {
+  return import_arrayMap(indices, function (index) {
+    return values[index];
   });
 }
 //@ chunk-hbc3mvx0.js:2013-2022 placement
 var mapValues = mapIndices;
 //@ chunk-hbc3mvx0.js:2022-2067 placement
-function valuesArray(t) {
-  return t == null ? [] : mapValues(t, Jve(t));
+function valuesArray(record) {
+  return record == null ? [] : mapValues(record, keysAlias(record));
 }
 //@ chunk-hbc3mvx0.js:2067-2076 placement
 var values = valuesArray;
 //@ chunk-hbc3mvx0.js:2076-2106 placement
-function sampleValue(t) {
-  return sample(values(t));
+function sampleValue(record) {
+  return sample(values(record));
 }
 //@ chunk-hbc3mvx0.js:2106-2115 placement
 var sampleValueAlias = sampleValue;
 //@ chunk-hbc3mvx0.js:2115-2158 placement
-function sampleBy(t) {
-  var r = ME(t) ? sample : sampleValueAlias;
-  return r(t);
+function sampleBy(value) {
+  var sampler = isArrayAlias(value) ? sample : sampleValueAlias;
+  return sampler(value);
 }
 //@ chunk-hbc3mvx0.js:2158-2168 placement
 /**
@@ -176,31 +192,39 @@ function sampleBy(t) {
  */
 var sampleAlias = sampleBy;
 //@ chunk-hbc3mvx0.js:2168-2172 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hbc3mvx0.js:2168", () => {
+  init_react_production();
+});
 //@ chunk-hbc3mvx0.js:4751-4771 placement
 /**
  * 导出值：API_ERROR_TEXT（"API error"）。
  */
 var API_ERROR_TEXT = "API error";
 //@ chunk-hbc3mvx0.js:4771-5263 placement
-function classifyRetryStatus(t) {
+function classifyRetryStatus(spinnerState) {
   try {
-    let retryStatus = readRetryStatus(t);
-    if (retryStatus === null || retryStatus === "not_a_retry_status" || t === null || t.kind !== "retrying")
+    let retryStatus = readRetryStatus(spinnerState);
+    if (
+      retryStatus === null ||
+      retryStatus === "not_a_retry_status" ||
+      spinnerState === null ||
+      spinnerState.kind !== "retrying"
+    )
       return {
-        status: retryStatus === null ? t : null,
+        status: retryStatus === null ? spinnerState : null,
         malformed: retryStatus,
       };
-    if (![t.attempt, t.maxRetries, t.deadline].every(Number.isFinite))
+    if (![spinnerState.attempt, spinnerState.maxRetries, spinnerState.deadline].every(Number.isFinite))
       return {
         status: null,
         malformed: "counters_are_not_numbers",
       };
-    let error = t.error;
+    let error = spinnerState.error;
     let status = typeof error === "object" && error !== null && "status" in error ? error.status : undefined;
     return {
       status: {
-        ...t,
+        ...spinnerState,
         error: {
           ...EMPTY_RETRY_STATUS,
           status: typeof status === "number" && Number.isFinite(status) ? status : undefined,
@@ -216,8 +240,8 @@ function classifyRetryStatus(t) {
   }
 }
 //@ chunk-hbc3mvx0.js:5263-5293 placement
-function reportIgnoredRetryStatus(t) {
-  logError(new MalformedRetryStatusError(RETRY_STATUS_IGNORE_REASONS[t]));
+function reportIgnoredRetryStatus(reason) {
+  logError(new MalformedRetryStatusError(RETRY_STATUS_IGNORE_REASONS[reason]));
 }
 //@ chunk-hbc3mvx0.js:5293-6744 placement
 /**
@@ -265,19 +289,24 @@ var RETRY_STATUS_IGNORE_REASONS = {
   error_is_another_object: REPLACED_STATUS_PREFIX + "error.formatted is undefined on another kind of object",
 };
 //@ chunk-hbc3mvx0.js:6744-6825 placement
-class MalformedRetryStatusError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  constructor(message) {
-    super(message);
-    this.name = "MalformedRetryStatusError";
-  }
-}
+let MalformedRetryStatusError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hbc3mvx0.js:6744", () => {
+  MalformedRetryStatusError = class MalformedRetryStatusError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    constructor(message) {
+      super(message);
+      this.name = "MalformedRetryStatusError";
+    }
+  };
+});
 //@ chunk-hbc3mvx0.js:6825-7782 placement
-function readRetryStatus(t) {
-  if (t === null) return null;
-  let kind = typeof t === "object" && "kind" in t ? t.kind : undefined;
+function readRetryStatus(value) {
+  if (value === null) return null;
+  let kind = typeof value === "object" && "kind" in value ? value.kind : undefined;
   if (!isKnownStatusKind(kind)) return "not_a_retry_status";
   if (!RETRY_STATUS_KINDS[kind]) return null;
-  let error = typeof t === "object" && "error" in t ? t.error : undefined;
+  let error = typeof value === "object" && "error" in value ? value.error : undefined;
   if (error === undefined || error === null) return "error_is_nullish";
   if (typeof error === "string") return "error_is_a_string";
   if (typeof error !== "object") return "error_is_not_an_object";
@@ -310,153 +339,156 @@ function isKnownStatusKind(kind) {
   return typeof kind === "string" && Object.hasOwn(RETRY_STATUS_KINDS, kind);
 }
 //@ chunk-hbc3mvx0.js:7844-8182 placement
-var RESPONDING_STATE = Object.freeze({
-  mode: "responding",
-  overrideMessage: null,
-  overrideHeading: null,
-  overrideColor: null,
-  overrideShimmerColor: null,
-  isCompacting: false,
-  isResponseHeld: false,
-  compactingHintText: null,
-  compactingStartTime: null,
-  turnEffort: null,
-  turnModel: null,
-  sentEffort: null,
-  retryStatus: null,
-  thinkingStartedAt: null,
-  outputLimitRecovery: null,
-  defaultVerb: "",
+var RESPONDING_STATE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hbc3mvx0.js:7844", () => {
+  RESPONDING_STATE = Object.freeze({
+    mode: "responding",
+    overrideMessage: null,
+    overrideHeading: null,
+    overrideColor: null,
+    overrideShimmerColor: null,
+    isCompacting: false,
+    isResponseHeld: false,
+    compactingHintText: null,
+    compactingStartTime: null,
+    turnEffort: null,
+    turnModel: null,
+    sentEffort: null,
+    retryStatus: null,
+    thinkingStartedAt: null,
+    outputLimitRecovery: null,
+    defaultVerb: "",
+  });
 });
 //@ chunk-hbc3mvx0.js:8182-11886 placement
 /**
  * Spinner 状态存储（requesting/thinking/重试等，畸形重试状态回调，约 3.7 KB）。
  */
-function createSpinnerStatusStore({ onMalformedRetryStatus: t = reportIgnoredRetryStatus } = {}) {
+function createSpinnerStatusStore({ onMalformedRetryStatus = reportIgnoredRetryStatus } = {}) {
   let store = createStore({});
-  let o = new Set();
-  function g(n, d, { materialize: _ = true } = {}) {
-    store.setState((c) => {
-      let T = n in c;
-      if (!T && !_) return c;
-      let y = c[n] ?? {
+  let seen = new Set();
+  function updateEntry(key, updater, { materialize = true } = {}) {
+    store.setState((state) => {
+      let hasKey = key in state;
+      if (!hasKey && !materialize) return state;
+      let entry = state[key] ?? {
         ...RESPONDING_STATE,
         defaultVerb: sampleAlias(getSpinnerVerbs()) ?? "",
       };
-      let h = d(y);
-      if (h === y && T) return c;
+      let nextEntry = updater(entry);
+      if (nextEntry === entry && hasKey) return state;
       return {
-        ...c,
-        [n]: h,
+        ...state,
+        [key]: nextEntry,
       };
     });
   }
-  function s(n) {
-    function d(i, a) {
+  function makeUpdater(key) {
+    function setMode(mode, recovery) {
       let now = Date.now();
-      let m = i === "requesting" ? (a ?? null) : null;
-      g(n, (v) =>
-        v.mode === i && v.outputLimitRecovery === m
-          ? v
+      let outputLimitRecovery = mode === "requesting" ? (recovery ?? null) : null;
+      updateEntry(key, (entry) =>
+        entry.mode === mode && entry.outputLimitRecovery === outputLimitRecovery
+          ? entry
           : {
-              ...v,
-              mode: i,
-              thinkingStartedAt: i === "thinking" ? now : null,
-              outputLimitRecovery: m,
+              ...entry,
+              mode,
+              thinkingStartedAt: mode === "thinking" ? now : null,
+              outputLimitRecovery,
             },
       );
     }
-    function _(i, a = null) {
-      g(n, (u) =>
-        u.overrideMessage === i &&
-        u.overrideHeading?.words === a?.words &&
-        u.overrideHeading?.detail === a?.detail
-          ? u
+    function setOverrideMessage(message, heading = null) {
+      updateEntry(key, (entry) =>
+        entry.overrideMessage === message &&
+        entry.overrideHeading?.words === heading?.words &&
+        entry.overrideHeading?.detail === heading?.detail
+          ? entry
           : {
-              ...u,
-              overrideMessage: i,
-              overrideHeading: a,
+              ...entry,
+              overrideMessage: message,
+              overrideHeading: heading,
             },
       );
     }
-    function c(i, a) {
-      g(n, (u) =>
-        u.overrideColor === i && u.overrideShimmerColor === a
-          ? u
+    function setOverrideColors(color, shimmerColor) {
+      updateEntry(key, (state) =>
+        state.overrideColor === color && state.overrideShimmerColor === shimmerColor
+          ? state
           : {
-              ...u,
-              overrideColor: i,
-              overrideShimmerColor: a,
+              ...state,
+              overrideColor: color,
+              overrideShimmerColor: shimmerColor,
             },
       );
     }
-    function T(i, a = null) {
-      g(
-        n,
-        (u) =>
-          u.turnEffort === i && u.turnModel === a
-            ? u
+    function setTurnEffort(effort, model = null) {
+      updateEntry(
+        key,
+        (entry) =>
+          entry.turnEffort === effort && entry.turnModel === model
+            ? entry
             : {
-                ...u,
-                turnEffort: i,
-                turnModel: a,
+                ...entry,
+                turnEffort: effort,
+                turnModel: model,
               },
         {
-          materialize: i !== null || a !== null,
+          materialize: effort !== null || model !== null,
         },
       );
     }
-    function y(i) {
-      g(n, (a) =>
-        a.sentEffort === i
-          ? a
+    function setSentEffort(effort) {
+      updateEntry(key, (entry) =>
+        entry.sentEffort === effort
+          ? entry
           : {
-              ...a,
-              sentEffort: i,
+              ...entry,
+              sentEffort: effort,
             },
       );
     }
-    function h(i) {
-      let { status, malformed } = classifyRetryStatus(i);
-      if (malformed !== null && !o.has(malformed)) {
-        o.add(malformed);
+    function setRetryStatus(rawStatus) {
+      let { status, malformed } = classifyRetryStatus(rawStatus);
+      if (malformed !== null && !seen.has(malformed)) {
+        seen.add(malformed);
         try {
-          t(malformed);
+          onMalformedRetryStatus(malformed);
         } catch {}
       }
-      g(n, (m) =>
-        m.retryStatus === status
-          ? m
+      updateEntry(key, (entry) =>
+        entry.retryStatus === status
+          ? entry
           : {
-              ...m,
+              ...entry,
               retryStatus: status,
             },
       );
     }
-    function x(i, a = null) {
+    function setCompacting(compacting, hintText = null) {
       let now = Date.now();
-      g(n, (m) => {
-        if (m.isCompacting === i && m.compactingHintText === a) return m;
-        let compactingStartTime = i ? (m.compactingStartTime ?? now) : null;
+      updateEntry(key, (entry) => {
+        if (entry.isCompacting === compacting && entry.compactingHintText === hintText) return entry;
+        let compactingStartTime = compacting ? (entry.compactingStartTime ?? now) : null;
         return {
-          ...m,
-          isCompacting: i,
-          compactingHintText: a,
+          ...entry,
+          isCompacting: compacting,
+          compactingHintText: hintText,
           compactingStartTime,
         };
       });
     }
-    function L() {
-      g(n, (i) =>
-        i.overrideMessage === null &&
-        i.overrideColor === null &&
-        i.overrideShimmerColor === null &&
-        !i.isCompacting &&
-        i.compactingHintText === null &&
-        i.compactingStartTime === null
-          ? i
+    function resetCompacting() {
+      updateEntry(key, (entry) =>
+        entry.overrideMessage === null &&
+        entry.overrideColor === null &&
+        entry.overrideShimmerColor === null &&
+        !entry.isCompacting &&
+        entry.compactingHintText === null &&
+        entry.compactingStartTime === null
+          ? entry
           : {
-              ...i,
+              ...entry,
               overrideMessage: null,
               overrideHeading: null,
               overrideColor: null,
@@ -467,20 +499,20 @@ function createSpinnerStatusStore({ onMalformedRetryStatus: t = reportIgnoredRet
             },
       );
     }
-    function A(i) {
-      g(n, (a) =>
-        a.isResponseHeld === i
-          ? a
+    function setResponseHeld(held) {
+      updateEntry(key, (entry) =>
+        entry.isResponseHeld === held
+          ? entry
           : {
-              ...a,
-              isResponseHeld: i,
+              ...entry,
+              isResponseHeld: held,
             },
       );
     }
-    function ee() {
+    function resetAll() {
       let defaultVerb = sampleAlias(getSpinnerVerbs()) ?? "";
-      g(n, (a) => ({
-        ...a,
+      updateEntry(key, (entry) => ({
+        ...entry,
         overrideMessage: null,
         overrideHeading: null,
         overrideColor: null,
@@ -497,88 +529,88 @@ function createSpinnerStatusStore({ onMalformedRetryStatus: t = reportIgnoredRet
         defaultVerb,
       }));
     }
-    function te(i) {
-      switch (i.type) {
+    function applyCompactProgress(progress) {
+      switch (progress.type) {
         case "hooks_start":
-          c("claudeBlue_FOR_SYSTEM_SPINNER", "claudeBlueShimmer_FOR_SYSTEM_SPINNER");
-          _(
-            i.hookType === "pre_compact"
+          setOverrideColors("claudeBlue_FOR_SYSTEM_SPINNER", "claudeBlueShimmer_FOR_SYSTEM_SPINNER");
+          setOverrideMessage(
+            progress.hookType === "pre_compact"
               ? "Running PreCompact hooks\u2026"
-              : i.hookType === "post_compact"
+              : progress.hookType === "post_compact"
                 ? "Running PostCompact hooks\u2026"
                 : SESSION_START_HOOKS_MESSAGE,
           );
           return;
         case "compact_start":
-          _("Compacting conversation");
-          x(true, i.hintText ?? null);
+          setOverrideMessage("Compacting conversation");
+          setCompacting(true, progress.hintText ?? null);
           return;
         case "compact_end":
-          L();
+          resetCompacting();
           return;
       }
     }
     return {
-      setMode: d,
-      setMessage: _,
-      setColors: c,
-      setTurnEffort: T,
-      setSentEffort: y,
-      setRetryStatus: h,
-      setCompacting: x,
-      setResponseHeld: A,
-      resetOverrides: ee,
-      applyCompactProgress: te,
+      setMode,
+      setMessage: setOverrideMessage,
+      setColors: setOverrideColors,
+      setTurnEffort,
+      setSentEffort,
+      setRetryStatus,
+      setCompacting,
+      setResponseHeld,
+      resetOverrides: resetAll,
+      applyCompactProgress,
     };
   }
-  let p = {
-    setMode: (n, d) => s(mainAgentId()).setMode(n, d),
-    setMessage: (n, d) => s(mainAgentId()).setMessage(n, d),
-    setColors: (n, d) => s(mainAgentId()).setColors(n, d),
-    setTurnEffort: (n, d) => s(mainAgentId()).setTurnEffort(n, d),
-    setSentEffort: (n) => s(mainAgentId()).setSentEffort(n),
-    setRetryStatus: (n) => s(mainAgentId()).setRetryStatus(n),
-    setCompacting: (n, d) => s(mainAgentId()).setCompacting(n, d),
-    setResponseHeld: (n) => s(mainAgentId()).setResponseHeld(n),
-    resetOverrides: () => s(mainAgentId()).resetOverrides(),
-    applyCompactProgress: (n) => s(mainAgentId()).applyCompactProgress(n),
+  let main = {
+    setMode: (mode, recovery) => makeUpdater(mainAgentId()).setMode(mode, recovery),
+    setMessage: (message, heading) => makeUpdater(mainAgentId()).setMessage(message, heading),
+    setColors: (color, shimmerColor) => makeUpdater(mainAgentId()).setColors(color, shimmerColor),
+    setTurnEffort: (effort, model) => makeUpdater(mainAgentId()).setTurnEffort(effort, model),
+    setSentEffort: (effort) => makeUpdater(mainAgentId()).setSentEffort(effort),
+    setRetryStatus: (status) => makeUpdater(mainAgentId()).setRetryStatus(status),
+    setCompacting: (compacting, hintText) => makeUpdater(mainAgentId()).setCompacting(compacting, hintText),
+    setResponseHeld: (held) => makeUpdater(mainAgentId()).setResponseHeld(held),
+    resetOverrides: () => makeUpdater(mainAgentId()).resetOverrides(),
+    applyCompactProgress: (progress) => makeUpdater(mainAgentId()).applyCompactProgress(progress),
   };
   return {
     getSnapshot: store.getSnapshot,
     getState: store.getState,
     setState: store.setState,
     subscribe: store.subscribe,
-    get(n) {
-      return store.getState()[n ?? mainAgentId()] ?? RESPONDING_STATE;
+    get(key) {
+      return store.getState()[key ?? mainAgentId()] ?? RESPONDING_STATE;
     },
-    bind: s,
-    main: p,
-    evict(n) {
-      store.setState((d) => {
-        if (!(n in d)) return d;
-        let { [n]: _, ...c } = d;
-        return c;
+    bind: makeUpdater,
+    main,
+    evict(key) {
+      store.setState((state) => {
+        if (!(key in state)) return state;
+        let { [key]: removed, ...next } = state;
+        return next;
       });
     },
-    applyEvent(n) {
-      switch (n.kind) {
+    applyEvent(event) {
+      switch (event.kind) {
         case "agent-mode":
-          s(n.agentId).setMode(n.mode, n.outputLimitRecovery);
+          makeUpdater(event.agentId).setMode(event.mode, event.outputLimitRecovery);
           return;
         case "agent-retry-status":
-          s(n.agentId).setRetryStatus(n.retryStatus);
+          makeUpdater(event.agentId).setRetryStatus(event.retryStatus);
           return;
         case "agent-turn-effort":
-          s(n.agentId).setTurnEffort(n.turnEffort, n.turnModel);
+          makeUpdater(event.agentId).setTurnEffort(event.turnEffort, event.turnModel);
           return;
         case "main-message":
-          p.setMessage(n.message);
+          main.setMessage(event.message);
           return;
         case "main-colors":
-          p.setColors(n.color, n.shimmerColor);
+          main.setColors(event.color, event.shimmerColor);
           return;
         case "main-response-held":
-          p.setResponseHeld(n.held);
+          main.setResponseHeld(event.held);
           return;
       }
     },
@@ -588,45 +620,51 @@ function createSpinnerStatusStore({ onMalformedRetryStatus: t = reportIgnoredRet
 /**
  * 导出值：statusOverrideSlot（状态覆盖槽）。
  */
-var statusOverrideSlot = qt(null);
+var statusOverrideSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hbc3mvx0.js:11886", () => {
+  statusOverrideSlot = createContext(null);
+});
 //@ chunk-hbc3mvx0.js:11903-12080 placement
 function useSpinnerStore() {
-  let t = Se(statusOverrideSlot);
-  if (!t)
+  let store = useContext(statusOverrideSlot);
+  if (!store)
     throw ReferenceError(
       "useSpinnerStore cannot be called outside of a SpinnerStoreContext provider (mounted by <AppStateProvider />)",
     );
-  return t;
+  return store;
 }
 //@ chunk-hbc3mvx0.js:12080-12140 placement
 /**
  * 函数 useSpinnerStatus（取某会话的 spinner 状态）。
  */
 function useSpinnerStatus(agentId) {
-  let r = agentId ?? mainAgentId();
-  return useStoreSelector(useSpinnerStore(), (o) => o[r] ?? RESPONDING_STATE);
+  let targetAgentId = agentId ?? mainAgentId();
+  return useStoreSelector(useSpinnerStore(), (states) => states[targetAgentId] ?? RESPONDING_STATE);
 }
 //@ chunk-hbc3mvx0.js:12140-12206 placement
 /**
  * 函数 useThinkingStartedAt（思考开始时间）。
  */
-function useThinkingStartedAt(t) {
-  return useStoreSelector(useSpinnerStore(), (r) => (r[t] ?? RESPONDING_STATE).thinkingStartedAt);
+function useThinkingStartedAt(agentId) {
+  return useStoreSelector(
+    useSpinnerStore(),
+    (states) => (states[agentId] ?? RESPONDING_STATE).thinkingStartedAt,
+  );
 }
 //@ chunk-hbc3mvx0.js:12206-12266 placement
 /**
  * 函数 useRetryStatus（重试状态）。
  */
 function useRetryStatus(agentId) {
-  return useStoreSelector(useSpinnerStore(), (r) => (r[agentId] ?? RESPONDING_STATE).retryStatus);
+  return useStoreSelector(useSpinnerStore(), (state) => (state[agentId] ?? RESPONDING_STATE).retryStatus);
 }
 //@ chunk-hbc3mvx0.js:12266-12328 placement
 /**
  * 函数 useStatusField（取状态的某个字段）。
  */
-function useStatusField(t) {
-  let r = mainAgentId();
-  return useStoreSelector(useSpinnerStore(), (o) => (o[r] ?? RESPONDING_STATE)[t]);
+function useStatusField(field) {
+  let agentId = mainAgentId();
+  return useStoreSelector(useSpinnerStore(), (states) => (states[agentId] ?? RESPONDING_STATE)[field]);
 }
 export {
   useStatusField,

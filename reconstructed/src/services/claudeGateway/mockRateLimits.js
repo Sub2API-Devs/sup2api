@@ -20,42 +20,42 @@ var MOCK_UTILIZATION_STEPS = [0.95, 0.75];
 /**
  * 由花费记录生成模拟限速状态（最严重的一条 + 响应头）。
  */
-function mockLimitsFromSpend(e, date = new Date()) {
-  let n = mostSevereLimit(e.map((o) => withLimitStatus(o, date)));
+function mockLimitsFromSpend(limits, date = new Date()) {
+  let binding = mostSevereLimit(limits.map((limit) => withLimitStatus(limit, date)));
   return {
-    binding: n,
-    headers: n ? buildOverageMockHeaders(n, date) : {},
+    binding,
+    headers: binding ? buildOverageMockHeaders(binding, date) : {},
   };
 }
 //@ chunk-1ny7cxrt.js:1450925-1451069 placement
 /**
  * 花费记录补上是否超限、使用率与重置时间。
  */
-function withLimitStatus(e, t) {
-  let n = Number(e.cap_cents);
-  let exceeded = e.spent_cents >= n;
+function withLimitStatus(limit, date) {
+  let capCents = Number(limit.cap_cents);
+  let exceeded = limit.spent_cents >= capCents;
   return {
-    ...e,
+    ...limit,
     exceeded,
-    utilization: n > 0 ? e.spent_cents / n : 1,
-    resetsAt: periodResetsAt(e.period, t),
+    utilization: capCents > 0 ? limit.spent_cents / capCents : 1,
+    resetsAt: periodResetsAt(limit.period, date),
   };
 }
 //@ chunk-1ny7cxrt.js:1451069-1451134 placement
 /**
  * 从多条限额里挑最严重的一条（严重度按 pickMoreSevereLimit）。
  */
-function mostSevereLimit(e) {
-  let t = null;
-  for (let n of e) t = t ? pickMoreSevereLimit(t, n) : n;
-  return t;
+function mostSevereLimit(limits) {
+  let worst = null;
+  for (let limit of limits) worst = worst ? pickMoreSevereLimit(worst, limit) : limit;
+  return worst;
 }
 //@ chunk-1ny7cxrt.js:1451134-1451226 placement
 /**
  * 使用率保留两位小数；未超限时封顶 0.99。
  */
-function roundUtilization(e) {
-  let t = Math.round(e.utilization * 100) / 100;
-  return e.exceeded ? t : Math.min(t, 0.99);
+function roundUtilization(limit) {
+  let rounded = Math.round(limit.utilization * 100) / 100;
+  return limit.exceeded ? rounded : Math.min(rounded, 0.99);
 }
 export { mockLimitsFromSpend, withLimitStatus, mostSevereLimit, roundUtilization, MOCK_UTILIZATION_STEPS };

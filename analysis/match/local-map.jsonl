@@ -366,7 +366,7 @@
 {"id":"chunk-e6aww6q8.js#JWr","ref":"utils/worktree.ts#generateTmuxSessionName","refName":"generateTmuxSessionName","refFile":"utils/worktree.ts","score":1,"method":"file-local"}
 {"id":"chunk-e6aww6q8.js#Fot","ref":"utils/worktree.ts#flattenSlug","refName":"flattenSlug","refFile":"utils/worktree.ts","score":1,"method":"file-local"}
 {"id":"chunk-e6aww6q8.js#Vpn","ref":"utils/worktree.ts#parsePRReference","refName":"parsePRReference","refFile":"utils/worktree.ts","score":1,"method":"file-local"}
-{"id":"chunk-e6aww6q8.js#_Xn","ref":"utils/worktree.ts#worktreesDir","refName":"worktreesDir","refFile":"utils/worktree.ts","score":0.289,"method":"file-local"}
+{"id":"chunk-e6aww6q8.js#BTr","ref":"utils/worktree.ts#worktreesDir","refName":"worktreesDir","refFile":"utils/worktree.ts","score":0.314,"method":"file-local"}
 {"id":"chunk-e6aww6q8.js#cfe","ref":"utils/worktree.ts#removeAgentWorktree","refName":"removeAgentWorktree","refFile":"utils/worktree.ts","score":0.202,"method":"file-local"}
 {"id":"chunk-ag5x7vhf.js#aC","ref":"components/FullscreenLayout.tsx#assistantHasVisibleText","refName":"assistantHasVisibleText","refFile":"components/FullscreenLayout.tsx","score":1,"method":"file-local"}
 {"id":"chunk-ag5x7vhf.js#td","ref":"components/FullscreenLayout.tsx#useUnseenDivider","refName":"useUnseenDivider","refFile":"components/FullscreenLayout.tsx","score":0.152,"method":"file-local"}

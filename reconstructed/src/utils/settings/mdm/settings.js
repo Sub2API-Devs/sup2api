@@ -10,18 +10,21 @@
  */
 import { dirname, join } from "path";
 import { lstat } from "fs/promises";
+import { clone } from "../../slowOperations.js";
+import {
+  dropManagedOnlyKeys,
+  MANAGED_ONLY_KEYS,
+  isInertManagedMcpServersNotice,
+  parsePolicyObjectTolerant,
+  accountCouldChangeDocument,
+} from "../managedFileSettings.js";
+import { validateSettingsDocument } from "../hooksValidation.js";
+import { getSettingsSchemaForDocument, readWslInheritFlag } from "../types.js";
+import { formatZodError } from "../validation.js";
 import { getMdmRawReadPromise, fireRawRead } from "./rawRead.js";
 import { logForDebugging } from "../../debug.js";
 import { logEvent } from "../../../services/analytics/index.js";
-import {
-  mdmResult,
-  withAskedWhere,
-  mdmLoader,
-  PLUGIN_ORDER_KEYS,
-  isPlainRecord,
-  BUILTIN_PLUGIN_TIER,
-  hasMdmResult,
-} from "../managedPluginTiers.js";
+import { mdmResult, withAskedWhere, mdmLoader, hasMdmResult } from "./mdmLoader.js";
 import { logForDiagnosticsNoPII } from "../../diagLogs.js";
 import { safeParseJSON } from "../../json.js";
 import { isPlainObject } from "../../isPlainObject.js";
@@ -30,20 +33,13 @@ import {
   unreadableWslFlagWithoutPolicyError,
   parseSettingsContent,
 } from "../settingsFileParsing.js";
-import {
-  MANAGED_ONLY_KEYS,
-  isInertManagedMcpServersNotice,
-  parsePolicyObjectTolerant,
-  accountCouldChangeDocument,
-  dropManagedOnlyKeys,
-} from "../managedFileSettings.js";
+import { PLUGIN_ORDER_KEYS, isPlainRecord, BUILTIN_PLUGIN_TIER } from "../managedPluginTiers.js";
 import { pickByHelper } from "../../git/gitSafeEnv.js";
 import { lit, fromEnum } from "../../../services/analytics/safeMetadata.js";
 import { isWsl, isCoworkCloudEntrypoint, WSL_REG_EXE_PATH, WSL_MANAGED_SETTINGS_DIR } from "./wslRegistry.js";
 import { hasPolicyContent, adminDocumentPresent, combinedLoadState, loadStateOf } from "../policySettings.js";
 import { WINDOWS_REGISTRY_KEY_PATH_HKLM, SETTINGS, WINDOWS_REGISTRY_KEY_PATH_HKCU } from "./constants.js";
 import { SettingsCacheStore } from "../../../bootstrap/stateSlices.js";
-import { readWslInheritFlag, getSettingsSchemaForDocument } from "../types.js";
 import {
   loadManagedSettingsFile,
   hasManagedSettingsDocument,
@@ -60,19 +56,44 @@ import {
 import { getManagedFilePath, getManagedFilePathOverride } from "../managedPath.js";
 import { isENOENT } from "../../errors.js";
 import { getFsImplementation } from "../../fsOperations.js";
-import { clone } from "../../slowOperations.js";
-import { validateSettingsDocument } from "../hooksValidation.js";
-import { formatZodError } from "../validation.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
+//@ chunk-dcmhvw5a.js:470165-470468 callgraph-fingerprint = parseCommandOutputAsSettings (0.209)
+function parseCommandOutputAsSettings(stdout) {
+  let data = clone(stdout);
+  let issues = [
+    ...dropManagedOnlyKeys(data, "SDK inline settings"),
+    ...validateSettingsDocument(data, "SDK inline settings"),
+  ];
+  let parseResult = getSettingsSchemaForDocument(data).safeParse(data);
+  if (!parseResult.success)
+    return {
+      settings: null,
+      errors: [...issues, ...formatZodError(parseResult.error, "SDK inline settings")],
+    };
+  if (issues.some((issue) => issue.severity === "fatal"))
+    return {
+      settings: null,
+      errors: issues,
+    };
+  return {
+    settings: parseResult.data,
+    errors: issues,
+  };
+}
 //@ chunk-q8cqcff6.js:9000-9107 fingerprint = EMPTY_RESULT (0.729)
-var EMPTY_MDM_RESULT = Object.freeze({
-  settings: {},
-  errors: [],
-  loadState: "absent",
-});
-var me = Object.freeze({
-  settings: {},
-  errors: [],
+var EMPTY_MDM_RESULT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var EMPTY_MDM_SETTINGS;
+deferInit("chunk-q8cqcff6.js:9000", () => {
+  EMPTY_MDM_RESULT = Object.freeze({
+    settings: {},
+    errors: [],
+    loadState: "absent",
+  });
+  EMPTY_MDM_SETTINGS = Object.freeze({
+    settings: {},
+    errors: [],
+  });
 });
 //@ chunk-q8cqcff6.js:9107-9983 fingerprint = startMdmSettingsLoad (0.742)
 /**
@@ -85,22 +106,22 @@ class MdmSettingsLoader {
   whereAsked = undefined;
   readOutcomes = null;
   loadPromise = null;
-  startLoad(e) {
+  startLoad(options) {
     if (this.loadPromise) return;
     this.loadPromise = (async () => {
       let startTime = Date.now();
-      let s = await (getMdmRawReadPromise() ?? fireRawRead());
-      let { mdm, hkcu, wslInherits, whereAsked } = await resolveMdmReadResult(s, e);
+      let raw = await (getMdmRawReadPromise() ?? fireRawRead());
+      let { mdm, hkcu, wslInherits, whereAsked } = await resolveMdmReadResult(raw, options);
       this.replace(mdm, hkcu, wslInherits, whereAsked);
-      this.readOutcomes = s.outcomes;
+      this.readOutcomes = raw.outcomes;
       let duration = Date.now() - startTime;
       logForDebugging(`MDM settings load completed in ${duration}ms`);
       try {
-        logEvent("tengu_managed_settings_os_read", buildMdmReadTelemetry(s, duration));
+        logEvent("tengu_managed_settings_os_read", buildMdmReadTelemetry(raw, duration));
       } catch {}
-      let O = mdmResult();
-      if (Object.keys(O.settings).length > 0) {
-        logForDebugging(`MDM settings found: ${Object.keys(O.settings).join(", ")}`);
+      let result = mdmResult();
+      if (Object.keys(result.settings).length > 0) {
+        logForDebugging(`MDM settings found: ${Object.keys(result.settings).join(", ")}`);
         try {
           logForDiagnosticsNoPII("info", "mdm_settings_loaded", {
             duration_ms: duration,
@@ -137,8 +158,8 @@ function wslInheritsSettings() {
 /**
  * replaceMdmSetting：替换 MDM 设置。
  */
-function replaceMdmSetting(e, hkcu, wslInherits, whereAsked) {
-  mdmLoader().replace(e, hkcu, wslInherits, whereAsked);
+function replaceMdmSetting(mdm, hkcu, wslInherits, whereAsked) {
+  mdmLoader().replace(mdm, hkcu, wslInherits, whereAsked);
 }
 //@ chunk-q8cqcff6.js:10764-10885 placement
 /**
@@ -148,7 +169,7 @@ function mdmReadSnapshot() {
   let { mdm, hkcu, wslInherits, whereAsked } = mdmLoader();
   return {
     mdm: mdm ?? EMPTY_MDM_RESULT,
-    hkcu: hkcu ?? me,
+    hkcu: hkcu ?? EMPTY_MDM_SETTINGS,
     wslInherits,
     whereAsked,
   };
@@ -157,85 +178,88 @@ function mdmReadSnapshot() {
 /**
  * readMdmSnapshot：读取 MDM 设置快照。
  */
-async function readMdmSnapshot(e) {
-  let n = await fireRawRead();
+async function readMdmSnapshot(options) {
+  let raw = await fireRawRead();
   return {
-    ...(await resolveMdmReadResult(n, e)),
-    readOutcomes: n.outcomes,
+    ...(await resolveMdmReadResult(raw, options)),
+    readOutcomes: raw.outcomes,
   };
 }
 //@ chunk-q8cqcff6.js:10974-12545 placement
-function checkManagedOnlySettings(e, n, { userWritable: r = false } = {}) {
-  let s = safeParseJSON(e, false);
-  if (!isPlainObject(s))
+function checkManagedOnlySettings(text, label, { userWritable = false } = {}) {
+  let parsed = safeParseJSON(text, false);
+  if (!isPlainObject(parsed))
     return {
       settings: {},
       errors: [
-        unparseablePolicyDocumentError(n, {
-          userWritable: r,
+        unparseablePolicyDocumentError(label, {
+          userWritable,
         }),
       ],
       documentHasPolicyContent: false,
       loadState: "didNotLoad",
     };
-  let S = [];
-  let E = s;
-  for (let M of r ? MANAGED_ONLY_KEYS : []) {
-    if (!(M in E)) continue;
-    E =
-      E === s
+  let issues = [];
+  let working = parsed;
+  for (let key of userWritable ? MANAGED_ONLY_KEYS : []) {
+    if (!(key in working)) continue;
+    working =
+      working === parsed
         ? {
-            ...s,
+            ...parsed,
           }
-        : E;
-    delete E[M];
-    if (!isInertManagedMcpServersNotice(M))
-      S.push({
-        file: n,
-        path: M,
-        message: `"${M}" is only honored from administrator-controlled managed settings and was ignored in ${n}, which the user account can write.`,
+        : working;
+    delete working[key];
+    if (!isInertManagedMcpServersNotice(key))
+      issues.push({
+        file: label,
+        path: key,
+        message: `"${key}" is only honored from administrator-controlled managed settings and was ignored in ${label}, which the user account can write.`,
         severity: "warning",
         statusOnly: true,
       });
   }
-  if (r) {
-    for (let x of PLUGIN_ORDER_KEYS) {
-      if (!(x in E)) continue;
-      E =
-        E === s
+  if (userWritable) {
+    for (let key of PLUGIN_ORDER_KEYS) {
+      if (!(key in working)) continue;
+      working =
+        working === parsed
           ? {
-              ...s,
+              ...parsed,
             }
-          : E;
-      delete E[x];
-      S.push({
-        file: n,
-        path: x,
-        message: `"${x}" is only honored from administrator-controlled managed settings and was ignored in ${n}, which the user account can write.`,
+          : working;
+      delete working[key];
+      issues.push({
+        file: label,
+        path: key,
+        message: `"${key}" is only honored from administrator-controlled managed settings and was ignored in ${label}, which the user account can write.`,
         severity: "warning",
         statusOnly: true,
       });
     }
-    let enabledPlugins = E.enabledPlugins;
+    let enabledPlugins = working.enabledPlugins;
     if (isPlainRecord(enabledPlugins)) {
       if (
         Object.entries(enabledPlugins).filter(
           ([key, value]) => key.endsWith(BUILTIN_PLUGIN_TIER) || value !== false,
         ).length > 0
       ) {
-        E =
-          E === s
+        working =
+          working === parsed
             ? {
-                ...s,
+                ...parsed,
               }
-            : E;
-        let L = pickByHelper(enabledPlugins, (G, q) => !q.endsWith(BUILTIN_PLUGIN_TIER) && G === false);
-        if (Object.keys(L).length > 0) E.enabledPlugins = L;
-        else delete E.enabledPlugins;
-        S.push({
-          file: n,
+            : working;
+        let kept = pickByHelper(
+          enabledPlugins,
+          (value, key) => !key.endsWith(BUILTIN_PLUGIN_TIER) && value === false,
+        );
+        if (Object.keys(kept).length > 0) working.enabledPlugins = kept;
+        else delete working.enabledPlugins;
+        issues.push({
+          file: label,
           path: "enabledPlugins",
-          message: `"enabledPlugins" entries that enable a plugin, or name a built-in, are only honored from administrator-controlled managed settings and were ignored in ${n}, which the user account can write.`,
+          message: `"enabledPlugins" entries that enable a plugin, or name a built-in, are only honored from administrator-controlled managed settings and were ignored in ${label}, which the user account can write.`,
           severity: "warning",
           statusOnly: true,
         });
@@ -243,24 +267,24 @@ function checkManagedOnlySettings(e, n, { userWritable: r = false } = {}) {
     }
   }
   let { settings, errors, documentHasPolicyContent, loadState, onlySubstitutes } = parsePolicyObjectTolerant(
-    E,
-    n,
+    working,
+    label,
   );
-  let v = [...S, ...errors];
+  let allErrors = [...issues, ...errors];
   return {
     settings: settings ?? {},
-    errors: r
-      ? v.map((M) => ({
-          ...(M.severity === "warning" && !M.startupFatal
-            ? M
+    errors: userWritable
+      ? allErrors.map((issue) => ({
+          ...(issue.severity === "warning" && !issue.startupFatal
+            ? issue
             : {
-                ...omitStartupFlags(M),
+                ...omitStartupFlags(issue),
                 severity: "warning",
                 statusOnly: true,
               }),
           userWritable: true,
         }))
-      : v,
+      : allErrors,
     documentHasPolicyContent,
     loadState,
     ...(onlySubstitutes && {
@@ -269,22 +293,22 @@ function checkManagedOnlySettings(e, n, { userWritable: r = false } = {}) {
   };
 }
 //@ chunk-q8cqcff6.js:12545-12614 placement
-function omitStartupFlags({ startupFatal, loadedWithoutGuardHook, ...r }) {
-  return r;
+function omitStartupFlags({ startupFatal, loadedWithoutGuardHook, ...rest }) {
+  return rest;
 }
 //@ chunk-q8cqcff6.js:12614-12878 layout
-function managedDocumentUnreadableError(e, n, r, unreadErrno) {
+function managedDocumentUnreadableError(label, reason, userWritable, unreadErrno) {
   return {
-    file: e,
+    file: label,
     path: "",
-    message: `Managed settings document (${e}) could not be read: ${n}; none of its settings are in effect.`,
-    severity: r ? "warning" : "fatal",
+    message: `Managed settings document (${label}) could not be read: ${reason}; none of its settings are in effect.`,
+    severity: userWritable ? "warning" : "fatal",
     statusOnly: true,
     errorClass: "unreadable",
     ...(unreadErrno !== undefined && {
       errno: unreadErrno,
     }),
-    ...(r && {
+    ...(userWritable && {
       userWritable: true,
     }),
   };
@@ -296,29 +320,33 @@ function managedDocumentUnreadableError(e, n, r, unreadErrno) {
 function parseRegQueryStdout(stdout, valueName = "Settings") {
   let lines = valueName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   let regExp = new RegExp(`^[ \\t]+${lines}[ \\t]+REG_(?:EXPAND_)?SZ[ \\t]+([\\s\\S]*)`, "im");
-  let S = stdout.match(regExp)?.[1]?.trimEnd();
-  return S ? S : null;
+  let match = stdout.match(regExp)?.[1]?.trimEnd();
+  return match ? match : null;
 }
 //@ chunk-q8cqcff6.js:13074-13446 layout
 /**
  * MDM 读取遥测中允许上报的 errno 与信号名映射。
  */
-var ERRNO_TELEMETRY_VALUES = new Map([
-  ["ENOENT", lit("ENOENT")],
-  ["EACCES", lit("EACCES")],
-  ["EPERM", lit("EPERM")],
-  ["ENOEXEC", lit("ENOEXEC")],
-  ["EAGAIN", lit("EAGAIN")],
-  ["EMFILE", lit("EMFILE")],
-  ["ENOMEM", lit("ENOMEM")],
-  ["ETIMEDOUT", lit("ETIMEDOUT")],
-  ["ERR_CHILD_PROCESS_STDIO_MAXBUFFER", lit("ERR_CHILD_PROCESS_STDIO_MAXBUFFER")],
-]);
-var SIGNAL_TELEMETRY_VALUES = new Map([
-  ["SIGTERM", lit("SIGTERM")],
-  ["SIGKILL", lit("SIGKILL")],
-  ["SIGINT", lit("SIGINT")],
-]);
+var ERRNO_TELEMETRY_VALUES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SIGNAL_TELEMETRY_VALUES;
+deferInit("chunk-q8cqcff6.js:13074", () => {
+  ERRNO_TELEMETRY_VALUES = new Map([
+    ["ENOENT", lit("ENOENT")],
+    ["EACCES", lit("EACCES")],
+    ["EPERM", lit("EPERM")],
+    ["ENOEXEC", lit("ENOEXEC")],
+    ["EAGAIN", lit("EAGAIN")],
+    ["EMFILE", lit("EMFILE")],
+    ["ENOMEM", lit("ENOMEM")],
+    ["ETIMEDOUT", lit("ETIMEDOUT")],
+    ["ERR_CHILD_PROCESS_STDIO_MAXBUFFER", lit("ERR_CHILD_PROCESS_STDIO_MAXBUFFER")],
+  ]);
+  SIGNAL_TELEMETRY_VALUES = new Map([
+    ["SIGTERM", lit("SIGTERM")],
+    ["SIGKILL", lit("SIGKILL")],
+    ["SIGINT", lit("SIGINT")],
+  ]);
+});
 //@ chunk-q8cqcff6.js:13446-13503 layout
 function errnoTelemetryValue(errno) {
   if (!errno) return;
@@ -330,38 +358,38 @@ function signalTelemetryValue(signal) {
   return SIGNAL_TELEMETRY_VALUES.get(signal) ?? lit("other");
 }
 //@ chunk-q8cqcff6.js:13560-13756 layout
-function mdmReadFields(e, n) {
-  if (!n) return {};
+function mdmReadFields(prefix, outcome) {
+  if (!outcome) return {};
   return {
-    [`${e}_status`]: fromEnum(n.status),
-    [`${e}_exit_code`]: n.exitCode ?? undefined,
-    [`${e}_errno`]: errnoTelemetryValue(n.errno),
-    [`${e}_signal`]: signalTelemetryValue(n.signal),
-    [`${e}_duration_ms`]: n.durationMs,
+    [`${prefix}_status`]: fromEnum(outcome.status),
+    [`${prefix}_exit_code`]: outcome.exitCode ?? undefined,
+    [`${prefix}_errno`]: errnoTelemetryValue(outcome.errno),
+    [`${prefix}_signal`]: signalTelemetryValue(outcome.signal),
+    [`${prefix}_duration_ms`]: outcome.durationMs,
   };
 }
 //@ chunk-q8cqcff6.js:13756-13865 layout
-function buildMdmReadTelemetry(e, awaitMs) {
+function buildMdmReadTelemetry(raw, awaitMs) {
   return {
     is_wsl: isWsl(),
     await_ms: awaitMs,
-    ...mdmReadFields("hklm", e.outcomes.hklm),
-    ...mdmReadFields("hkcu", e.outcomes.hkcu),
+    ...mdmReadFields("hklm", raw.outcomes.hklm),
+    ...mdmReadFields("hkcu", raw.outcomes.hkcu),
   };
 }
 //@ chunk-q8cqcff6.js:13865-16864 layout
-async function resolveMdmReadResult(e, n, r = false) {
-  let s = [];
-  let S = false;
-  let E = "absent";
-  for (let K of e.plistStdouts ?? []) {
-    let { label, userWritable } = K;
-    if (userWritable && S) continue;
-    let Z =
-      K.stdout === null
+async function resolveMdmReadResult(raw, store, nested = false) {
+  let errors = [];
+  let adminSeen = false;
+  let loadState = "absent";
+  for (let doc of raw.plistStdouts ?? []) {
+    let { label, userWritable } = doc;
+    if (userWritable && adminSeen) continue;
+    let result =
+      doc.stdout === null
         ? {
             settings: {},
-            errors: [managedDocumentUnreadableError(label, K.unreadReason, userWritable, K.unreadErrno)],
+            errors: [managedDocumentUnreadableError(label, doc.unreadReason, userWritable, doc.unreadErrno)],
             documentHasPolicyContent: false,
             loadState: "didNotLoad",
             ...(userWritable && {
@@ -369,40 +397,40 @@ async function resolveMdmReadResult(e, n, r = false) {
             }),
           }
         : {
-            ...checkManagedOnlySettings(K.stdout, label, {
+            ...checkManagedOnlySettings(doc.stdout, label, {
               userWritable,
             }),
             ...(userWritable && {
               userWritable,
             }),
           };
-    if (userWritable ? hasPolicyContent(Z.settings) : Z.documentHasPolicyContent)
+    if (userWritable ? hasPolicyContent(result.settings) : result.documentHasPolicyContent)
       return {
         mdm: {
-          ...Z,
-          errors: [...s, ...Z.errors],
+          ...result,
+          errors: [...errors, ...result.errors],
           documentHasPolicyContent: true,
         },
-        hkcu: me,
+        hkcu: EMPTY_MDM_SETTINGS,
         wslInherits: false,
       };
-    S ||= adminDocumentPresent(Z);
-    s.push(...Z.errors);
-    if (!userWritable) E = combinedLoadState(E, Z.loadState);
+    adminSeen ||= adminDocumentPresent(result);
+    errors.push(...result.errors);
+    if (!userWritable) loadState = combinedLoadState(loadState, result.loadState);
   }
-  let h = `Registry: ${WINDOWS_REGISTRY_KEY_PATH_HKLM}\\${SETTINGS}`;
-  let y = null;
-  let P = "disarmed";
-  let O = `Registry: ${WINDOWS_REGISTRY_KEY_PATH_HKCU}\\${SETTINGS}`;
+  let hklmLabel = `Registry: ${WINDOWS_REGISTRY_KEY_PATH_HKLM}\\${SETTINGS}`;
+  let hklmResult = null;
+  let wslFlag = "disarmed";
+  let hkcuLabel = `Registry: ${WINDOWS_REGISTRY_KEY_PATH_HKCU}\\${SETTINGS}`;
   if (
-    !r &&
-    (e.hklmStdout !== null || e.hklmUnreadReason !== undefined || e.hkcuStdout !== null) &&
+    !nested &&
+    (raw.hklmStdout !== null || raw.hklmUnreadReason !== undefined || raw.hkcuStdout !== null) &&
     true &&
     isCoworkCloudEntrypoint()
   ) {
-    let [K, U] = await Promise.all(
-      [WSL_REG_EXE_PATH, dirname(WSL_REG_EXE_PATH)].map((Z) =>
-        lstat(Z).then(
+    let [regStats, regDirStats] = await Promise.all(
+      [WSL_REG_EXE_PATH, dirname(WSL_REG_EXE_PATH)].map((path) =>
+        lstat(path).then(
           ({ uid, gid, mode }) => ({
             uid,
             gid,
@@ -414,44 +442,52 @@ async function resolveMdmReadResult(e, n, r = false) {
         ),
       ),
     );
-    let j = true;
+    let canChange = true;
     try {
-      j = accountCouldChangeDocument(new SettingsCacheStore(), WSL_REG_EXE_PATH, K, U);
+      canChange = accountCouldChangeDocument(
+        new SettingsCacheStore(),
+        WSL_REG_EXE_PATH,
+        regStats,
+        regDirStats,
+      );
     } catch (error) {
       logForDebugging(`registry tool: could not be asked about, held: ${error}`, {
         level: "error",
       });
     }
-    if (j) {
-      let Z = [];
-      if (e.hklmStdout !== null)
-        Z.push([h, checkManagedOnlySettings(parseRegQueryStdout(e.hklmStdout) ?? "", h)]);
-      else if (e.hklmUnreadReason !== undefined)
-        Z.push([
-          h,
+    if (canChange) {
+      let heldDocs = [];
+      if (raw.hklmStdout !== null)
+        heldDocs.push([
+          hklmLabel,
+          checkManagedOnlySettings(parseRegQueryStdout(raw.hklmStdout) ?? "", hklmLabel),
+        ]);
+      else if (raw.hklmUnreadReason !== undefined)
+        heldDocs.push([
+          hklmLabel,
           {
             settings: {},
-            errors: [managedDocumentUnreadableError(h, e.hklmUnreadReason, false)],
+            errors: [managedDocumentUnreadableError(hklmLabel, raw.hklmUnreadReason, false)],
             documentHasPolicyContent: false,
             loadState: "didNotLoad",
           },
         ]);
-      if (e.hkcuStdout !== null)
-        Z.push([
-          O,
-          checkManagedOnlySettings(parseRegQueryStdout(e.hkcuStdout) ?? "", O, {
+      if (raw.hkcuStdout !== null)
+        heldDocs.push([
+          hkcuLabel,
+          checkManagedOnlySettings(parseRegQueryStdout(raw.hkcuStdout) ?? "", hkcuLabel, {
             userWritable: true,
           }),
         ]);
-      let mdmReadResult = await resolveMdmReadResult(e, n, true);
+      let mdmReadResult = await resolveMdmReadResult(raw, store, true);
       let mdmReadResult_2 = await resolveMdmReadResult(
         {
-          ...e,
+          ...raw,
           hklmStdout: null,
           hklmUnreadReason: undefined,
           hkcuStdout: null,
         },
-        n,
+        store,
         true,
       );
       return {
@@ -460,11 +496,11 @@ async function resolveMdmReadResult(e, n, r = false) {
           ...mdmReadResult_2,
           mdm: {
             ...mdmReadResult_2.mdm,
-            heldDocuments: Z.map(([re, ee]) => ({
-              path: re,
+            heldDocuments: heldDocs.map(([label, result]) => ({
+              path: label,
               parsed: {
-                ...ee,
-                settings: ee.loadState === "loaded" ? ee.settings : null,
+                ...result,
+                settings: result.loadState === "loaded" ? result.settings : null,
               },
             })),
           },
@@ -472,144 +508,144 @@ async function resolveMdmReadResult(e, n, r = false) {
       };
     }
   }
-  if (e.hklmStdout !== null) {
-    let K = parseRegQueryStdout(e.hklmStdout) ?? "";
-    y = checkManagedOnlySettings(K, h);
-    let U = safeParseJSON(K, false);
-    if (isPlainObject(U)) P = readWslInheritFlag(U);
-  } else if (e.hklmUnreadReason !== undefined)
-    y = {
+  if (raw.hklmStdout !== null) {
+    let text = parseRegQueryStdout(raw.hklmStdout) ?? "";
+    hklmResult = checkManagedOnlySettings(text, hklmLabel);
+    let parsed = safeParseJSON(text, false);
+    if (isPlainObject(parsed)) wslFlag = readWslInheritFlag(parsed);
+  } else if (raw.hklmUnreadReason !== undefined)
+    hklmResult = {
       settings: {},
-      errors: [managedDocumentUnreadableError(h, e.hklmUnreadReason, false)],
+      errors: [managedDocumentUnreadableError(hklmLabel, raw.hklmUnreadReason, false)],
       documentHasPolicyContent: false,
       loadState: "didNotLoad",
     };
-  let T = y !== null && adminDocumentPresent(y);
-  if (y) {
-    s.push(...y.errors);
-    E = combinedLoadState(E, y.loadState);
+  let adminPresent = hklmResult !== null && adminDocumentPresent(hklmResult);
+  if (hklmResult) {
+    errors.push(...hklmResult.errors);
+    loadState = combinedLoadState(loadState, hklmResult.loadState);
   }
-  let v = isWsl();
-  let M = "disarmed";
-  let x = h;
-  let L = [];
-  if (v) {
-    M = P;
-    if (M !== "armed") {
-      let managedSettingsFile = await loadManagedSettingsFile(n);
-      L = managedSettingsFile.links;
-      if (managedSettingsFile.flag === "armed" || M === "disarmed") {
-        M = managedSettingsFile.flag;
-        x = managedSettingsFile.unreadableFlagPath ?? WSL_MANAGED_SETTINGS_DIR;
+  let isWslEnv = isWsl();
+  let flag = "disarmed";
+  let flagPath = hklmLabel;
+  let links = [];
+  if (isWslEnv) {
+    flag = wslFlag;
+    if (flag !== "armed") {
+      let managedSettingsFile = await loadManagedSettingsFile(store);
+      links = managedSettingsFile.links;
+      if (managedSettingsFile.flag === "armed" || flag === "disarmed") {
+        flag = managedSettingsFile.flag;
+        flagPath = managedSettingsFile.unreadableFlagPath ?? WSL_MANAGED_SETTINGS_DIR;
       }
-      if (M === "disarmed") {
-        s.push(...managedSettingsFile.records);
-        E = combinedLoadState(E, managedSettingsFile.loadState);
+      if (flag === "disarmed") {
+        errors.push(...managedSettingsFile.records);
+        loadState = combinedLoadState(loadState, managedSettingsFile.loadState);
       }
     }
   }
-  let G = M !== "disarmed";
-  let q = {
+  let armed = flag !== "disarmed";
+  let baseResult = {
     settings: {},
-    errors: s,
-    loadState: E,
+    errors,
+    loadState,
   };
-  if (v && !G) {
-    let K = new Set(y?.errors.filter((error) => error.severity === "warning"));
+  if (isWslEnv && !armed) {
+    let warnings = new Set(hklmResult?.errors.filter((error) => error.severity === "warning"));
     return {
       mdm: {
-        ...q,
-        errors: q.errors.map((error) =>
-          K.has(error)
+        ...baseResult,
+        errors: baseResult.errors.map((error) =>
+          warnings.has(error)
             ? {
                 ...error,
                 wslIgnored: true,
               }
             : error,
         ),
-        ...(L.length > 0 && {
-          managedDocumentLinks: L,
+        ...(links.length > 0 && {
+          managedDocumentLinks: links,
         }),
       },
-      hkcu: me,
+      hkcu: EMPTY_MDM_SETTINGS,
       wslInherits: false,
     };
   }
-  if (y && T)
+  if (hklmResult && adminPresent)
     return {
-      mdm: y,
-      hkcu: me,
-      wslInherits: G,
+      mdm: hklmResult,
+      hkcu: EMPTY_MDM_SETTINGS,
+      wslInherits: armed,
     };
-  if (M === "unreadable") {
-    let K = await hasManagedSettingsDocument(WSL_MANAGED_SETTINGS_DIR, n);
-    let U = unreadableWslFlagWithoutPolicyError(x);
+  if (flag === "unreadable") {
+    let hasDoc = await hasManagedSettingsDocument(WSL_MANAGED_SETTINGS_DIR, store);
+    let flagRecord = unreadableWslFlagWithoutPolicyError(flagPath);
     return {
       mdm: {
-        ...q,
-        errors: K ? q.errors : [...q.errors, U],
-        ...(K && {
-          withheldFlagRecord: U,
+        ...baseResult,
+        errors: hasDoc ? baseResult.errors : [...baseResult.errors, flagRecord],
+        ...(hasDoc && {
+          withheldFlagRecord: flagRecord,
         }),
         documentHasPolicyContent: true,
-        loadState: combinedLoadState(q.loadState, "loaded"),
+        loadState: combinedLoadState(baseResult.loadState, "loaded"),
       },
-      hkcu: me,
-      wslInherits: G,
+      hkcu: EMPTY_MDM_SETTINGS,
+      wslInherits: armed,
     };
   }
-  if (e.hkcuStdout !== null && !isDiskless() && !(await hasWslManagedSettings(G, n))) {
-    let K = checkManagedOnlySettings(parseRegQueryStdout(e.hkcuStdout) ?? "", O, {
+  if (raw.hkcuStdout !== null && !isDiskless() && !(await hasWslManagedSettings(armed, store))) {
+    let hkcuResult = checkManagedOnlySettings(parseRegQueryStdout(raw.hkcuStdout) ?? "", hkcuLabel, {
       userWritable: true,
     });
-    if (!v || K.settings.wslInheritsWindowsSettings === true) {
-      let { wslInheritsWindowsSettings, managedSourcesBehavior, ...Z } = K.settings;
+    if (!isWslEnv || hkcuResult.settings.wslInheritsWindowsSettings === true) {
+      let { wslInheritsWindowsSettings, managedSourcesBehavior, ...hkcuSettings } = hkcuResult.settings;
       return {
-        mdm: q,
+        mdm: baseResult,
         hkcu: {
-          settings: Z,
-          errors: K.errors,
+          settings: hkcuSettings,
+          errors: hkcuResult.errors,
         },
-        wslInherits: G,
+        wslInherits: armed,
       };
     }
-    if (K.errors.length > 0)
+    if (hkcuResult.errors.length > 0)
       return {
-        mdm: q,
+        mdm: baseResult,
         hkcu: {
           settings: {},
-          errors: K.errors,
+          errors: hkcuResult.errors,
         },
-        wslInherits: G,
+        wslInherits: armed,
       };
   }
   return {
-    mdm: q,
-    hkcu: me,
-    wslInherits: G,
+    mdm: baseResult,
+    hkcu: EMPTY_MDM_SETTINGS,
+    wslInherits: armed,
   };
 }
 //@ chunk-q8cqcff6.js:16864-16953 layout
-async function readManagedDocumentText(e, n) {
-  if (isStorageV5Enabled() && n !== undefined)
-    return (await readFileChecked(e, MAX_SETTINGS_JSON_BYTES)).content;
-  return readFileSync(e, MAX_SETTINGS_JSON_BYTES);
+async function readManagedDocumentText(path, store) {
+  if (isStorageV5Enabled() && store !== undefined)
+    return (await readFileChecked(path, MAX_SETTINGS_JSON_BYTES)).content;
+  return readFileSync(path, MAX_SETTINGS_JSON_BYTES);
 }
 //@ chunk-q8cqcff6.js:16953-17024 layout
-async function hasWslManagedSettings(e, n) {
-  if (e && (await hasManagedSettingsDocument(WSL_MANAGED_SETTINGS_DIR, n))) return true;
-  return hasManagedSettingsDocument(getManagedFilePath(), n);
+async function hasWslManagedSettings(armed, store) {
+  if (armed && (await hasManagedSettingsDocument(WSL_MANAGED_SETTINGS_DIR, store))) return true;
+  return hasManagedSettingsDocument(getManagedFilePath(), store);
 }
 //@ chunk-q8cqcff6.js:17024-17167 layout
-async function managedFileHasContent(e, n) {
-  let r;
+async function managedFileHasContent(path, store) {
+  let content;
   try {
-    r = await readManagedDocumentText(e, n);
+    content = await readManagedDocumentText(path, store);
   } catch (error) {
     return !isENOENT(error);
   }
   try {
-    let settingsContent = parseSettingsContent(r, e, true);
+    let settingsContent = parseSettingsContent(content, path, true);
     return adminDocumentPresent({
       ...settingsContent,
       loadState: loadStateOf(settingsContent),
@@ -619,60 +655,40 @@ async function managedFileHasContent(e, n) {
   }
 }
 //@ chunk-q8cqcff6.js:17167-17659 fingerprint = hasManagedSettingsFile (0.617)
-async function hasManagedSettingsFile(e) {
+async function hasManagedSettingsFile(store) {
   if (!isWsl() || !mdmLoader().wslInherits) return "";
-  let n = [];
+  let parts = [];
   try {
-    n.push(await readManagedDocumentText(join(WSL_MANAGED_SETTINGS_DIR, "managed-settings.json"), e));
+    parts.push(await readManagedDocumentText(join(WSL_MANAGED_SETTINGS_DIR, "managed-settings.json"), store));
   } catch (error) {
-    n.push(unreadableMarker(error));
+    parts.push(unreadableMarker(error));
   }
   try {
     let dropInDir = join(WSL_MANAGED_SETTINGS_DIR, "managed-settings.d");
     let sorted = (await getFsImplementation().readdir(dropInDir))
       .filter(
-        (S) => (S.isFile() || S.isSymbolicLink()) && S.name.endsWith(".json") && !S.name.startsWith("."),
+        (dirent) =>
+          (dirent.isFile() || dirent.isSymbolicLink()) &&
+          dirent.name.endsWith(".json") &&
+          !dirent.name.startsWith("."),
       )
-      .map((S) => S.name)
+      .map((dirent) => dirent.name)
       .sort();
-    for (let S of sorted)
+    for (let name of sorted)
       try {
-        n.push(`${S}\x00${await readManagedDocumentText(join(dropInDir, S), e)}`);
+        parts.push(`${name}\x00${await readManagedDocumentText(join(dropInDir, name), store)}`);
       } catch (error) {
-        n.push(`${S}\x00${unreadableMarker(error)}`);
+        parts.push(`${name}\x00${unreadableMarker(error)}`);
       }
   } catch (error) {
     let content = unreadableMarker(error);
-    if (content !== "") n.push(content);
+    if (content !== "") parts.push(content);
   }
-  return n.join("\x01");
+  return parts.join("\x01");
 }
 //@ chunk-q8cqcff6.js:17659-17707 sole-consumer
 function unreadableMarker(error) {
   return isNotFoundErrno_5(error) ? "" : "\x00unreadable";
-}
-//@ chunk-dcmhvw5a.js:470165-470468 callgraph-fingerprint = parseCommandOutputAsSettings (0.209)
-function parseCommandOutputAsSettings(stdout) {
-  let data = clone(stdout);
-  let r = [
-    ...dropManagedOnlyKeys(data, "SDK inline settings"),
-    ...validateSettingsDocument(data, "SDK inline settings"),
-  ];
-  let parseResult = getSettingsSchemaForDocument(data).safeParse(data);
-  if (!parseResult.success)
-    return {
-      settings: null,
-      errors: [...r, ...formatZodError(parseResult.error, "SDK inline settings")],
-    };
-  if (r.some((a) => a.severity === "fatal"))
-    return {
-      settings: null,
-      errors: r,
-    };
-  return {
-    settings: parseResult.data,
-    errors: r,
-  };
 }
 //@ chunk-yhvmbyx2.js:273-590 placement
 function describeMdmSettingsState() {
@@ -689,8 +705,8 @@ export {
   replaceMdmSetting,
   mdmReadSnapshot,
   describeMdmSettingsState,
+  EMPTY_MDM_SETTINGS,
   hasManagedSettingsFile,
-  me,
   parseCommandOutputAsSettings,
   MdmSettingsLoader,
   EMPTY_MDM_RESULT,

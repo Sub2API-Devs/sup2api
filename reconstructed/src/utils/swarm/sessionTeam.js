@@ -57,25 +57,25 @@ function getAssistantTeamName() {
 /**
  * 未继承团队名时把会话团队移到当前。
  */
-async function moveSessionTeamUnlessInherited(a) {
-  return getInheritedTeamName() ? undefined : moveSessionTeamToCurrent(a);
+async function moveSessionTeamUnlessInherited(options) {
+  return getInheritedTeamName() ? undefined : moveSessionTeamToCurrent(options);
 }
 //@ chunk-6cc2zqkz.js:4277-4319 placement
 /**
  * 清掉继承的团队名再移动会话团队。
  */
-async function resetAndMoveSessionTeam(a) {
+async function resetAndMoveSessionTeam(options) {
   setInheritedTeamName(null);
-  return moveSessionTeamToCurrent(a);
+  return moveSessionTeamToCurrent(options);
 }
 //@ chunk-6cc2zqkz.js:4319-5143 placement
-async function moveSessionTeamToCurrent(storageV5) {
+async function moveSessionTeamToCurrent(options) {
   let { leaderTeamName, sessionListId } = swarmHostState().taskList;
   let sessionId = getSessionId();
   let teamName = sessionTeamName(sessionId);
   if (!leaderTeamName) return;
   try {
-    let teamFile = await readTeamFileAsync(leaderTeamName, storageV5);
+    let teamFile = await readTeamFileAsync(leaderTeamName, options);
     if (
       !leaderTeamName.startsWith(`${SESSION_TEAM_NAME_PREFIX}-`) ||
       !teamFile ||
@@ -83,19 +83,19 @@ async function moveSessionTeamToCurrent(storageV5) {
     )
       return;
     if (leaderTeamName === teamName) {
-      setSessionListId(await resolveSessionListId(sessionId, storageV5));
+      setSessionListId(await resolveSessionListId(sessionId, options));
       return;
     }
-    let teamFile_2 = await readTeamFileAsync(teamName, storageV5);
+    let teamFile_2 = await readTeamFileAsync(teamName, options);
     if (
       !(teamFile_2
-        ? await reclaimDeadLeadProcess(teamName, teamFile_2, storageV5)
+        ? await reclaimDeadLeadProcess(teamName, teamFile_2, options)
         : await mkdir(getTeamDir(teamName)).then(
             () => true,
             () => false,
           ))
     ) {
-      setSessionListId((await resolveSessionListId(sessionId, storageV5)) ?? teamName);
+      setSessionListId((await resolveSessionListId(sessionId, options)) ?? teamName);
       await rmdir(getTaskOutputDir(leaderTeamName)).catch(() => {});
       return;
     }
@@ -104,13 +104,13 @@ async function moveSessionTeamToCurrent(storageV5) {
       {
         keepSessionKeyedTaskList: true,
       },
-      storageV5,
+      options,
     );
-    setSessionListId(await resolveSessionListId(sessionId, storageV5));
+    setSessionListId(await resolveSessionListId(sessionId, options));
     await Promise.allSettled(
       (teamFile_2?.members ?? [])
-        .filter((r) => r.name !== TEAM_LEAD && r.backendType === "in-process")
-        .map((r) => unassignTeammateTasks(teamName, r.agentId, r.name, "terminated", storageV5)),
+        .filter((member) => member.name !== TEAM_LEAD && member.backendType === "in-process")
+        .map((member) => unassignTeammateTasks(teamName, member.agentId, member.name, "terminated", options)),
     );
     getSessionCreatedTeams().delete(leaderTeamName);
     await cleanupTeamDirectories(leaderTeamName).catch(() => {});
@@ -129,22 +129,22 @@ async function moveSessionTeamToCurrent(storageV5) {
   }
 }
 //@ chunk-6cc2zqkz.js:5143-5352 placement
-async function resolveSessionListId(sessionId, n) {
-  let o = sessionTeamName(sessionId);
-  if ((await listTasks(o, n)).length > 0) return;
-  let taskOutputDir = getTaskOutputDir(o);
-  let s =
+async function resolveSessionListId(sessionId, storageV5) {
+  let listName = sessionTeamName(sessionId);
+  if ((await listTasks(listName, storageV5)).length > 0) return;
+  let taskOutputDir = getTaskOutputDir(listName);
+  let note =
     (await readPluginFileSafe(dirname(dirname(taskOutputDir)), taskOutputDir)) === "ok"
       ? await writeFileAtomically(join(taskOutputDir, SESSION_LIST_NOTE_FILE), SESSION_LIST_NOTE_MAX_BYTES)
       : null;
-  if (s !== null && isSessionListId(s)) return s;
-  return (await listTasks(sessionId, n)).length > 0 ? sessionId : undefined;
+  if (note !== null && isSessionListId(note)) return note;
+  return (await listTasks(sessionId, storageV5)).length > 0 ? sessionId : undefined;
 }
 //@ chunk-6cc2zqkz.js:5496-5891 placement
 /**
  * 回收已退出的团队负责人进程记录（同一 pid 空间且进程确已结束）。
  */
-async function reclaimDeadLeadProcess(a, teamFile, o) {
+async function reclaimDeadLeadProcess(teamName, teamFile, storageV5) {
   let leadProcess = teamFile.leadProcess;
   if (!leadProcess || leadProcess.pidSpace !== ownPidSpace()) return false;
   if (!(
@@ -159,18 +159,21 @@ async function reclaimDeadLeadProcess(a, teamFile, o) {
   let leadProcess_2 = await countConcurrentSessions_2();
   return (
     (await updateTeamFile(
-      a,
-      (l) => {
-        if (l.leadProcess?.pid !== leadProcess.pid || l.leadProcess.claimedAt !== leadProcess.claimedAt)
+      teamName,
+      (latest) => {
+        if (
+          latest.leadProcess?.pid !== leadProcess.pid ||
+          latest.leadProcess.claimedAt !== leadProcess.claimedAt
+        )
           return false;
-        l.leadProcess = leadProcess_2;
+        latest.leadProcess = leadProcess_2;
         return true;
       },
       undefined,
-      o,
+      storageV5,
     ).catch(() => {
       return;
     })) === true
   );
 }
-export { getAssistantTeamName };
+export { getAssistantTeamName, moveSessionTeamUnlessInherited, resetAndMoveSessionTeam };

@@ -47,6 +47,7 @@ import { formatTaskNotification } from "../../../utils/xmlTags.js";
 import { escapeXml_2 as escapeXml } from "../../../utils/confusables.js";
 import { commentsWaitingNotice } from "../../../tools/ArtifactTool/artifactNotices.js";
 import { buildMissedCommentPrompt } from "./threadPrompts.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-9tgt55am.js:15307-15348 placement
 /**
@@ -68,7 +69,10 @@ class ThreadAgentState {
   watching = false;
 }
 //@ chunk-9tgt55am.js:15439-15465 placement
-var threadAgentSlot = new SessionRootSlot(() => new ThreadAgentState());
+var threadAgentSlot; // deferred: uses SessionRootSlot (../../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-9tgt55am.js:15439", () => {
+  threadAgentSlot = new SessionRootSlot(() => new ThreadAgentState());
+});
 //@ chunk-9tgt55am.js:15465-15497 placement
 function threadAgentState() {
   return threadAgentSlot.of(getRootSession());
@@ -81,27 +85,30 @@ function threadKey(slug, threadId) {
 /**
  * 后台评论 agent 权限包装里禁止它再调用的工具（Agent、SendMessage、Monitor、workflow、定时任务等）。
  */
-var FORBIDDEN_FROM_THREAD_AGENT = [
-  AGENT,
-  SENDMESSAGE,
-  MONITOR,
-  WORKFLOW_TOOL_NAME,
-  SCHEDULE_WAKEUP_TOOL_NAME,
-  CRON_CREATE_TOOL_NAME,
-  CRON_DELETE_TOOL_NAME,
-  REMOTETRIGGER,
-];
+var FORBIDDEN_FROM_THREAD_AGENT; // deferred: uses AGENT (../../../tools/AgentTool/constants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-9tgt55am.js:15560", () => {
+  FORBIDDEN_FROM_THREAD_AGENT = [
+    AGENT,
+    SENDMESSAGE,
+    MONITOR,
+    WORKFLOW_TOOL_NAME,
+    SCHEDULE_WAKEUP_TOOL_NAME,
+    CRON_CREATE_TOOL_NAME,
+    CRON_DELETE_TOOL_NAME,
+    REMOTETRIGGER,
+  ];
+});
 //@ chunk-9tgt55am.js:15593-16153 placement
 /**
  * 后台评论 agent 的权限包装：禁止其再派生后台任务等。
  */
-function makeBackgroundAgentPermissionGate(e) {
-  return async (t, n, a, r, s, d) => {
-    let h = t.mcpInfo === undefined;
-    let y =
-      (toolMatchesName(t, BASH_TOOL_NAME) || toolMatchesName(t, POWERSHELL_TOOL_NAME)) &&
-      coerceBooleanString(n.run_in_background) === true;
-    if (h && (y || FORBIDDEN_FROM_THREAD_AGENT.some((C) => toolMatchesName(t, C))))
+function makeBackgroundAgentPermissionGate(options) {
+  return async (tool, input, toolUseContext, message, toolUseID, permissionResult) => {
+    let isLocalTool = tool.mcpInfo === undefined;
+    let forbidden =
+      (toolMatchesName(tool, BASH_TOOL_NAME) || toolMatchesName(tool, POWERSHELL_TOOL_NAME)) &&
+      coerceBooleanString(input.run_in_background) === true;
+    if (isLocalTool && (forbidden || FORBIDDEN_FROM_THREAD_AGENT.some((name) => toolMatchesName(tool, name))))
       return {
         behavior: "deny",
         message:
@@ -111,28 +118,28 @@ function makeBackgroundAgentPermissionGate(e) {
           reason: "artifact comment agent scope",
         },
       };
-    return e(t, n, a, r, s, d);
+    return options(tool, input, toolUseContext, message, toolUseID, permissionResult);
   };
 }
 //@ chunk-9tgt55am.js:16153-16206 placement
-function keepsLocalAgentAlive(e) {
-  return useTeammateLifecycleNotification(e) || (isLocalAgent(e) && e.resuming === true);
+function keepsLocalAgentAlive(state) {
+  return useTeammateLifecycleNotification(state) || (isLocalAgent(state) && state.resuming === true);
 }
 //@ chunk-9tgt55am.js:16206-16515 placement
 /**
  * 判断已完成的本地代理是否仍有存活理由：工作流、未跳过记录的 monitor 任务，或非技能 fork 的子代理在保活它。
  */
-function hasLiveKeepalive(e, taskRegistry) {
-  if (!isLocalAgent(e) || e.status !== "completed") return false;
-  for (let n of keepaliveReasons(e)) {
-    if (n.startsWith("workflow:")) return true;
-    if (n.startsWith("monitor:")) {
-      let a = taskRegistry.get(n.slice(8));
-      if (a === undefined || !skipsTranscript(a)) return true;
+function hasLiveKeepalive(state, taskRegistry) {
+  if (!isLocalAgent(state) || state.status !== "completed") return false;
+  for (let reason of keepaliveReasons(state)) {
+    if (reason.startsWith("workflow:")) return true;
+    if (reason.startsWith("monitor:")) {
+      let taskId = taskRegistry.get(reason.slice(8));
+      if (taskId === undefined || !skipsTranscript(taskId)) return true;
     }
-    if (n.startsWith("agent:")) {
-      let a = taskRegistry.get(n.slice(6));
-      if (isLocalAgent(a) && a.forkedSkillName === undefined) return true;
+    if (reason.startsWith("agent:")) {
+      let taskId = taskRegistry.get(reason.slice(6));
+      if (isLocalAgent(taskId) && taskId.forkedSkillName === undefined) return true;
     }
   }
   return false;
@@ -141,36 +148,36 @@ function hasLiveKeepalive(e, taskRegistry) {
 /**
  * 取某评论线程对应的后台代理；代理已不在运行时移除记录并把挂着的评论标为 cancelled。
  */
-function getLiveThreadAgent(e, t) {
-  let n = e.byThread.get(t);
-  if (n === undefined) return;
-  if (keepsLocalAgentAlive(n.taskRegistry.get(n.agentId))) return n;
-  e.byThread.delete(t);
-  settleComments(n.comments, "cancelled");
+function getLiveThreadAgent(state, threadId) {
+  let entry = state.byThread.get(threadId);
+  if (entry === undefined) return;
+  if (keepsLocalAgentAlive(entry.taskRegistry.get(entry.agentId))) return entry;
+  state.byThread.delete(threadId);
+  settleComments(entry.comments, "cancelled");
   return;
 }
 //@ chunk-9tgt55am.js:16678-16877 placement
 /**
  * 判断某 artifact 是否有正在启动或运行的评论线程后台代理。
  */
-function hasThreadAgentForSlug(e) {
-  let t = threadAgentState();
-  let n = `${e.toLowerCase()}:`;
-  for (let key of t.spawning.keys()) if (key.startsWith(n)) return true;
-  for (let key of [...t.byThread.keys()])
-    if (key.startsWith(n) && getLiveThreadAgent(t, key) !== undefined) return true;
+function hasThreadAgentForSlug(slug) {
+  let state = threadAgentState();
+  let prefix = `${slug.toLowerCase()}:`;
+  for (let key of state.spawning.keys()) if (key.startsWith(prefix)) return true;
+  for (let key of [...state.byThread.keys()])
+    if (key.startsWith(prefix) && getLiveThreadAgent(state, key) !== undefined) return true;
   return false;
 }
 //@ chunk-9tgt55am.js:16877-17027 placement
-function countThreadAgents(e) {
-  let t = 0;
-  for (let key of e.spawning.keys()) if (!e.byThread.has(key)) t += 1;
-  for (let key of [...e.byThread.keys()]) if (getLiveThreadAgent(e, key) !== undefined) t += 1;
-  return t;
+function countThreadAgents(slug) {
+  let count = 0;
+  for (let key of slug.spawning.keys()) if (!slug.byThread.has(key)) count += 1;
+  for (let key of [...slug.byThread.keys()]) if (getLiveThreadAgent(slug, key) !== undefined) count += 1;
+  return count;
 }
 //@ chunk-9tgt55am.js:17027-17138 placement
 async function canForkThreadAgent() {
-  let { getLastCacheSafeParams } = await import("./chunk-qnggsbt9.js");
+  let { getLastCacheSafeParams } = await import("../../../utils/forkedAgent.js");
   return getLastCacheSafeParams() !== null && !isCoordinatorMode_2();
 }
 //@ chunk-9tgt55am.js:17138-17258 placement
@@ -178,269 +185,282 @@ async function canForkThreadAgent() {
  * 判断能否把评论线程交给后台代理：该线程已有在启动/运行的代理，或代理总数未达上限且可以 fork。
  */
 async function canHandToThreadAgent(slug, id) {
-  let n = threadAgentState();
-  let a = threadKey(slug, id);
-  if (n.spawning.has(a) || getLiveThreadAgent(n, a) !== undefined) return true;
-  return countThreadAgents(n) < MAX_THREAD_AGENTS && (await canForkThreadAgent());
+  let state = threadAgentState();
+  let key = threadKey(slug, id);
+  if (state.spawning.has(key) || getLiveThreadAgent(state, key) !== undefined) return true;
+  return countThreadAgents(state) < MAX_THREAD_AGENTS && (await canForkThreadAgent());
 }
 //@ chunk-9tgt55am.js:17258-17586 placement
-async function spawnOrJoinThreadAgent(e) {
-  let t = threadAgentState();
-  let n = threadKey(e.slug, e.threadId);
-  for (let s = t.spawning.get(n); s !== undefined; s = t.spawning.get(n)) {
-    let d = await s;
-    if (d.outcome === "fallback") return d;
+async function spawnOrJoinThreadAgent(request) {
+  let state = threadAgentState();
+  let key = threadKey(request.slug, request.threadId);
+  for (let pending = state.spawning.get(key); pending !== undefined; pending = state.spawning.get(key)) {
+    let agent = await pending;
+    if (agent.outcome === "fallback") return agent;
   }
-  let liveThreadAgent = getLiveThreadAgent(t, n);
-  if (liveThreadAgent !== undefined) return joinThreadAgent(t, liveThreadAgent, e);
-  if (countThreadAgents(t) >= MAX_THREAD_AGENTS) return fallbackFromFork(e, "cap");
-  let r = forkThreadAgent(t, n, e);
-  t.spawning.set(n, r);
+  let liveThreadAgent = getLiveThreadAgent(state, key);
+  if (liveThreadAgent !== undefined) return joinThreadAgent(state, liveThreadAgent, request);
+  if (countThreadAgents(state) >= MAX_THREAD_AGENTS) return fallbackFromFork(request, "cap");
+  let entry = forkThreadAgent(state, key, request);
+  state.spawning.set(key, entry);
   try {
-    return await r;
+    return await entry;
   } finally {
-    t.spawning.delete(n);
+    state.spawning.delete(key);
   }
 }
 //@ chunk-9tgt55am.js:17586-17964 placement
 /**
  * 把新评论并入已在运行的线程代理：不是同一召唤时追加跟进消息并恢复代理；登记评论回调并打点 joined。
  */
-function joinThreadAgent(e, liveThreadAgent, n) {
-  let gestureAt = n.summon?.gestureAt;
+function joinThreadAgent(state, thread, key) {
+  let gestureAt = key.summon?.gestureAt;
   if (!(
-    gestureAt !== undefined &&
-    liveThreadAgent.comments.some((comment) => comment.summon?.gestureAt === gestureAt)
+    gestureAt !== undefined && thread.comments.some((comment) => comment.summon?.gestureAt === gestureAt)
   )) {
-    sendMessageToAgent(liveThreadAgent.agentId, n.followUp, liveThreadAgent.taskRegistry);
-    liveThreadAgent.followUps.add(n.followUp);
-    resumeThreadAgent(e, liveThreadAgent, n);
+    sendMessageToAgent(thread.agentId, key.followUp, thread.taskRegistry);
+    thread.followUps.add(key.followUp);
+    resumeThreadAgent(state, thread, key);
   }
-  liveThreadAgent.comments.push({
-    summon: n.summon,
-    onSettled: n.onSettled,
+  thread.comments.push({
+    summon: key.summon,
+    onSettled: key.onSettled,
   });
   logFeatureOk("artifact_comments_autoreact", {
     handed_to_fork: true,
     joined: true,
-    seeded: n.route === "seeded",
+    seeded: key.route === "seeded",
   });
   return {
     outcome: "joined",
-    agentId: liveThreadAgent.agentId,
+    agentId: thread.agentId,
   };
 }
 //@ chunk-9tgt55am.js:17964-19321 placement
-function resumeThreadAgent(e, t, n) {
-  if (!getIsNonInteractiveSession() || !hasPendingAgentMessages(t)) return;
+function resumeThreadAgent(request, thread, threadState) {
+  if (!getIsNonInteractiveSession() || !hasPendingAgentMessages(thread)) return;
   (async () => {
-    let a;
+    let agent;
     try {
       let [
-        { getLastCacheSafeParams: r },
+        { getLastCacheSafeParams: getCacheSafeParams },
         {
-          resumeAgentBackground: s,
-          isResumeDenied: d,
-          ResumeAgentStateError: h,
-          AgentResumeInProgressError: y,
-          AgentResumeTransientError: C,
+          resumeAgentBackground,
+          isResumeDenied,
+          ResumeAgentStateError,
+          AgentResumeInProgressError,
+          AgentResumeTransientError,
         },
-        { isShuttingDown: R },
-        { isTerminalShutdown: b },
-        { contextAfterTurn: N },
+        { isShuttingDown },
+        { isTerminalShutdown },
+        { contextAfterTurn },
       ] = await Promise.all([
-        import("./chunk-qnggsbt9.js"),
-        import("./chunk-sz4rbr30.js"),
-        import("./chunk-r3wdn2dp.js"),
-        import("./chunk-7wcekf6q.js"),
-        import("./chunk-bvy3yerb.js"),
+        import("../../../utils/forkedAgent.js"),
+        import("../../../tools/AgentTool/resumeAgent.js"),
+        import("../../../utils/gracefulShutdown.js"),
+        import("../../../utils/terminalShutdown.js"),
+        import("../../../utils/permissions/toolPermissionContext.js"),
       ]);
-      let S = r();
-      if (S === null || R() || b() || !hasPendingAgentMessages(t)) return;
-      let [w, ...L] = drainPendingMessages(t.agentId, t.taskRegistry);
-      if (w === undefined) return;
-      a = w;
-      queuePendingMessage(t.agentId, L, t.taskRegistry);
-      let P;
+      let snapshot = getCacheSafeParams();
+      if (snapshot === null || isShuttingDown() || isTerminalShutdown() || !hasPendingAgentMessages(thread))
+        return;
+      let [firstMessage, ...restMessages] = drainPendingMessages(thread.agentId, thread.taskRegistry);
+      if (firstMessage === undefined) return;
+      agent = firstMessage;
+      queuePendingMessage(thread.agentId, restMessages, thread.taskRegistry);
+      let resumed;
       try {
-        P = await s({
-          agentId: t.agentId,
-          prompt: w.text,
-          promptOrigin: w.origin,
-          promptToolsUsed: w.toolsUsed,
-          promptIsMeta: w.isMeta,
-          toolUseContext: N(S.toolUseContext),
-          canUseTool: n.canUseTool,
+        resumed = await resumeAgentBackground({
+          agentId: thread.agentId,
+          prompt: firstMessage.text,
+          promptOrigin: firstMessage.origin,
+          promptToolsUsed: firstMessage.toolsUsed,
+          promptIsMeta: firstMessage.isMeta,
+          toolUseContext: contextAfterTurn(snapshot.toolUseContext),
+          canUseTool: threadState.canUseTool,
         });
       } catch (error) {
         queuePendingMessage(
-          t.agentId,
-          [w, ...drainPendingMessages(t.agentId, t.taskRegistry)],
-          t.taskRegistry,
+          thread.agentId,
+          [firstMessage, ...drainPendingMessages(thread.agentId, thread.taskRegistry)],
+          thread.taskRegistry,
         );
-        a = undefined;
-        if (error instanceof y || error instanceof C) {
+        agent = undefined;
+        if (error instanceof AgentResumeInProgressError || error instanceof AgentResumeTransientError) {
           logFeatureSad("artifact_comments_autoreact", "fork_resume_parked_busy");
           return;
         }
-        if (error instanceof h) {
-          let G = threadKey(n.slug, n.threadId);
-          if (e.byThread.get(G) === t) e.byThread.delete(G);
+        if (error instanceof ResumeAgentStateError) {
+          let key = threadKey(threadState.slug, threadState.threadId);
+          if (request.byThread.get(key) === thread) request.byThread.delete(key);
           logFeatureBad("artifact_comments_autoreact", "fork_resume_parked_refused");
-          notifyThreadAgentHandoff(t.request, t.comments);
+          notifyThreadAgentHandoff(thread.request, thread.comments);
           return;
         }
         throw error;
       }
-      if (d(P)) {
-        a = undefined;
-        dropDeniedResumeMessages(t.agentId, t.taskRegistry, [w, ...L], P);
+      if (isResumeDenied(resumed)) {
+        agent = undefined;
+        dropDeniedResumeMessages(
+          thread.agentId,
+          thread.taskRegistry,
+          [firstMessage, ...restMessages],
+          resumed,
+        );
       }
     } catch (error) {
-      if (a !== undefined) queuePendingMessage(t.agentId, [a], t.taskRegistry);
+      if (agent !== undefined) queuePendingMessage(thread.agentId, [agent], thread.taskRegistry);
       if (!isAbortError(error)) logError(error);
       logFeatureBad("artifact_comments_autoreact", "fork_resume_parked_failed");
     }
   })();
 }
 //@ chunk-9tgt55am.js:19321-19460 placement
-function hasPendingAgentMessages(e) {
-  let t = e.taskRegistry.get(e.agentId);
+function hasPendingAgentMessages(state) {
+  let task = state.taskRegistry.get(state.agentId);
   return (
-    isLocalAgent(t) &&
-    t.status !== "running" &&
-    t.resuming !== true &&
-    t.pendingMessages.length > 0 &&
-    useTeammateLifecycleNotification(t)
+    isLocalAgent(task) &&
+    task.status !== "running" &&
+    task.resuming !== true &&
+    task.pendingMessages.length > 0 &&
+    useTeammateLifecycleNotification(task)
   );
 }
 //@ chunk-9tgt55am.js:19460-20499 placement
-async function forkThreadAgent(e, t, n) {
-  let a;
-  let r;
-  let s;
+async function forkThreadAgent(state, threadKey, request) {
+  let context;
+  let forkMessages;
+  let extra;
   try {
-    let [{ getLastCacheSafeParams: d }, { spawnForkFromDirective: h }, { contextAfterTurn: y }] =
+    let [{ getLastCacheSafeParams: getCacheSafeParams }, { spawnForkFromDirective }, { contextAfterTurn }] =
       await Promise.all([
-        import("./chunk-qnggsbt9.js"),
-        import("./chunk-7xjkha9c.js"),
-        import("./chunk-bvy3yerb.js"),
+        import("../../../utils/forkedAgent.js"),
+        import("../../../tools/AgentTool/forkDirective.js"),
+        import("../../../utils/permissions/toolPermissionContext.js"),
       ]);
-    let C = d();
-    if (C === null) return fallbackFromFork(n, "no_snapshot");
-    a = {
-      ...y(C.toolUseContext),
-      messages: C.forkContextMessages,
-      renderedSystemPrompt: C.systemPrompt,
+    let snapshot = getCacheSafeParams();
+    if (snapshot === null) return fallbackFromFork(request, "no_snapshot");
+    context = {
+      ...contextAfterTurn(snapshot.toolUseContext),
+      messages: snapshot.forkContextMessages,
+      renderedSystemPrompt: snapshot.systemPrompt,
     };
-    r = C.forkContextMessages;
-    watchThreadAgents(e);
-    let R = await h(n.directive, a, n.canUseTool, {
-      nameHint: `comment ${n.slug.slice(0, 8)}`,
-      description: `Comment on ${n.artifactName}`,
+    forkMessages = snapshot.forkContextMessages;
+    watchThreadAgents(state);
+    let forked = await spawnForkFromDirective(request.directive, context, request.canUseTool, {
+      nameHint: `comment ${request.slug.slice(0, 8)}`,
+      description: `Comment on ${request.artifactName}`,
       narrowCanUseTool: makeBackgroundAgentPermissionGate,
     });
-    if (R === null) return fallbackFromFork(n, "fork_refused");
-    s = R.agentId;
+    if (forked === null) return fallbackFromFork(request, "fork_refused");
+    extra = forked.agentId;
   } catch (error) {
     if (!isAbortError(error)) logError(error);
-    return fallbackFromFork(n, "fork_error");
+    return fallbackFromFork(request, "fork_error");
   }
-  e.byThread.set(t, {
-    agentId: s,
-    request: n,
-    taskRegistry: a.taskRegistry,
+  state.byThread.set(threadKey, {
+    agentId: extra,
+    request,
+    taskRegistry: context.taskRegistry,
     comments: [
       {
-        summon: n.summon,
-        onSettled: n.onSettled,
+        summon: request.summon,
+        onSettled: request.onSettled,
       },
     ],
     followUps: new Set(),
   });
   try {
-    propagateReadVersion(a, r, n.slug, s);
-    a.appendSystemMessage?.(
+    propagateReadVersion(context, forkMessages, request.slug, extra);
+    context.appendSystemMessage?.(
       createInformationalSystemMessage(
-        `Comment on ${n.artifactName}: handling it in a background agent`,
+        `Comment on ${request.artifactName}: handling it in a background agent`,
         "notice",
       ),
     );
     logFeatureOk("artifact_comments_autoreact", {
       handed_to_fork: true,
-      seeded: n.route === "seeded",
+      seeded: request.route === "seeded",
     });
   } catch (error) {
     logError(error);
   }
   return {
     outcome: "spawned",
-    agentId: s,
+    agentId: extra,
   };
 }
 //@ chunk-9tgt55am.js:20499-20772 placement
-function propagateReadVersion(e, t, slug, a) {
-  let artifactReadObservation = e.getArtifactReadObservation(slug);
+function propagateReadVersion(agentContext, messages, slug, replyId) {
+  let artifactReadObservation = agentContext.getArtifactReadObservation(slug);
   let main = artifactReadObservation.observers?.main;
   if (artifactReadObservation.ver === undefined || main === undefined) return;
-  if (!(main === "" ? !isForegroundBusy() : t.some((h) => h.type === "assistant" && h.message.id === main)))
+  if (
+    !(main === ""
+      ? !isForegroundBusy()
+      : messages.some((message) => message.type === "assistant" && message.message.id === main))
+  )
     return;
-  e.setArtifactReadVersion(
+  agentContext.setArtifactReadVersion(
     slug,
     artifactReadObservation.ver,
     observationStamp(
-      a,
+      replyId,
       main === "" ? undefined : main,
       sourcelessObservation(undefined, slug, artifactReadObservation.ver, main),
     ),
   );
 }
 //@ chunk-9tgt55am.js:20772-20928 placement
-function fallbackFromFork(e, t) {
-  (t === "fork_error" ? logFeatureBad : logFeatureSad)("artifact_comments_autoreact", `fork_fallback_${t}`, {
-    seeded: e.route === "seeded",
-  });
+function fallbackFromFork(agentId, key) {
+  (key === "fork_error" ? logFeatureBad : logFeatureSad)(
+    "artifact_comments_autoreact",
+    `fork_fallback_${key}`,
+    {
+      seeded: agentId.route === "seeded",
+    },
+  );
   return {
     outcome: "fallback",
-    reason: t,
+    reason: key,
   };
 }
 //@ chunk-9tgt55am.js:20928-20999 placement
-function settleComments(comments, t = "completed") {
-  for (let n of comments.splice(0)) n.onSettled?.(t);
+function settleComments(comments, outcome = "completed") {
+  for (let comment of comments.splice(0)) comment.onSettled?.(outcome);
 }
 //@ chunk-9tgt55am.js:20999-21248 placement
 /**
  * 只订阅一次后台代理的结束与恢复失败事件：结束时处理线程代理收尾，终止性恢复失败时交回主会话，消息无法投递时提示。
  */
-function watchThreadAgents(e) {
-  if (e.watching) return;
-  e.watching = true;
-  getTaskRunState().agentSettled.subscribe((t, n, a) => {
+function watchThreadAgents(host) {
+  if (host.watching) return;
+  host.watching = true;
+  getTaskRunState().agentSettled.subscribe((agentId, threadKey, reason) => {
     try {
-      onThreadAgentSettled(e, t, n, a?.stranded === true);
+      onThreadAgentSettled(host, agentId, threadKey, reason?.stranded === true);
     } catch (error) {
       logError(error);
     }
   });
-  getTaskRunState().agentResumeFailed.subscribe((t, n) => {
+  getTaskRunState().agentResumeFailed.subscribe((agentId, error) => {
     try {
-      if (n.terminal) handBackOnResumeFailure(e, t);
-      else notifyResumeDenied(e, t, n.undeliverable);
+      if (error.terminal) handBackOnResumeFailure(host, agentId);
+      else notifyResumeDenied(host, agentId, error.undeliverable);
     } catch (error) {
       logError(error);
     }
   });
 }
 //@ chunk-9tgt55am.js:21248-21327 placement
-function findThreadAgentByAgentId(e, t) {
-  for (let [n, a] of e.byThread) if (a.agentId === t) return [n, a];
+function findThreadAgentByAgentId(state, agentId) {
+  for (let [threadKey, entry] of state.byThread) if (entry.agentId === agentId) return [threadKey, entry];
   return;
 }
 //@ chunk-9tgt55am.js:21327-21497 placement
-function settleSummonStatuses(comments, t) {
-  let n =
-    t === "failed"
+function settleSummonStatuses(comments, outcome) {
+  let statuses =
+    outcome === "failed"
       ? {
           status: "failed",
           reason: "post_failed",
@@ -449,94 +469,109 @@ function settleSummonStatuses(comments, t) {
           status: "declined",
           reason: "auto_reply_off",
         };
-  for (let a of comments) if (a.summon !== undefined) emitArtifactSummonStatus(a.summon, n);
+  for (let comment of comments)
+    if (comment.summon !== undefined) emitArtifactSummonStatus(comment.summon, statuses);
 }
 //@ chunk-9tgt55am.js:21497-22296 placement
-function onThreadAgentSettled(e, t, n, a) {
-  let threadAgentByAgentId = findThreadAgentByAgentId(e, t);
+function onThreadAgentSettled(request, agentId, taskRegistry, settledNormally) {
+  let threadAgentByAgentId = findThreadAgentByAgentId(request, agentId);
   if (threadAgentByAgentId === undefined) return;
-  let [s, d] = threadAgentByAgentId;
-  let h = d.taskRegistry.get(t);
-  let y =
-    n === "completed" &&
-    !a &&
-    !(isLocalAgent(h) && h.quietlyParked === true) &&
-    hasLiveKeepalive(h, d.taskRegistry);
-  if (n === "completed" && !y && (keepsLocalAgentAlive(h) || (a && !getIsNonInteractiveSession()))) {
-    if (a) resumeThreadAgent(e, d, d.request);
+  let [threadAgent, threadState] = threadAgentByAgentId;
+  let task = threadState.taskRegistry.get(agentId);
+  let shown =
+    taskRegistry === "completed" &&
+    !settledNormally &&
+    !(isLocalAgent(task) && task.quietlyParked === true) &&
+    hasLiveKeepalive(task, threadState.taskRegistry);
+  if (
+    taskRegistry === "completed" &&
+    !shown &&
+    (keepsLocalAgentAlive(task) || (settledNormally && !getIsNonInteractiveSession()))
+  ) {
+    if (settledNormally) resumeThreadAgent(request, threadState, threadState.request);
     return;
   }
-  e.byThread.delete(s);
-  if (n !== "completed") {
-    settleSummonStatuses(d.comments, n);
-    settleComments(d.comments, "cancelled");
+  request.byThread.delete(threadAgent);
+  if (taskRegistry !== "completed") {
+    settleSummonStatuses(threadState.comments, taskRegistry);
+    settleComments(threadState.comments, "cancelled");
     return;
   }
-  if (isLocalAgent(h) && h.quietlyParked === true) {
-    settleSummonStatuses(d.comments, "killed");
-    settleComments(d.comments, "cancelled");
+  if (isLocalAgent(task) && task.quietlyParked === true) {
+    settleSummonStatuses(threadState.comments, "killed");
+    settleComments(threadState.comments, "cancelled");
     return;
   }
-  let C = isLocalAgent(h) ? count(h.pendingMessages, (b) => d.followUps.has(b.text)) : 0;
-  let R = a ? d.comments.splice(Math.max(1, d.comments.length - C)) : [];
-  if (R.length > 0) {
-    let filtered = drainPendingMessages(t, d.taskRegistry).filter((N) => !d.followUps.has(N.text));
-    queuePendingMessage(t, filtered, d.taskRegistry);
-    settleComments(d.comments);
-    rehandToThreadAgent(d.request, R);
+  let followUpCount = isLocalAgent(task)
+    ? count(task.pendingMessages, (message) => threadState.followUps.has(message.text))
+    : 0;
+  let dropped = settledNormally
+    ? threadState.comments.splice(Math.max(1, threadState.comments.length - followUpCount))
+    : [];
+  if (dropped.length > 0) {
+    let filtered = drainPendingMessages(agentId, threadState.taskRegistry).filter(
+      (message) => !threadState.followUps.has(message.text),
+    );
+    queuePendingMessage(agentId, filtered, threadState.taskRegistry);
+    settleComments(threadState.comments);
+    rehandToThreadAgent(threadState.request, dropped);
     return;
   }
-  settleComments(d.comments);
-  if (y) {
+  settleComments(threadState.comments);
+  if (shown) {
     logFeatureBad("artifact_comments_autoreact", "fork_parked_on_refused_work");
-    killAsyncAgent(t, d.taskRegistry, "system");
+    killAsyncAgent(agentId, threadState.taskRegistry, "system");
   }
 }
 //@ chunk-9tgt55am.js:22296-22459 placement
-function handBackOnResumeFailure(e, t) {
-  let threadAgentByAgentId = findThreadAgentByAgentId(e, t);
+function handBackOnResumeFailure(agentId, threadKey) {
+  let threadAgentByAgentId = findThreadAgentByAgentId(agentId, threadKey);
   if (threadAgentByAgentId === undefined) return;
-  let [a, r] = threadAgentByAgentId;
-  e.byThread.delete(a);
+  let [agentIdArg, entry] = threadAgentByAgentId;
+  agentId.byThread.delete(agentIdArg);
   logFeatureBad("artifact_comments_autoreact", "fork_resume_failed");
-  notifyThreadAgentHandoff(r.request, r.comments);
+  notifyThreadAgentHandoff(entry.request, entry.comments);
 }
 //@ chunk-9tgt55am.js:22459-22659 placement
-function notifyResumeDenied(e, t, undeliverable) {
-  let a = findThreadAgentByAgentId(e, t)?.[1];
-  if (a === undefined || a.comments.length === 0 || !undeliverable.some((r) => a.followUps.has(r.text)))
+function notifyResumeDenied(agentId, threadKey, undeliverable) {
+  let entry = findThreadAgentByAgentId(agentId, threadKey)?.[1];
+  if (
+    entry === undefined ||
+    entry.comments.length === 0 ||
+    !undeliverable.some((message) => entry.followUps.has(message.text))
+  )
     return;
   logFeatureSad("artifact_comments_autoreact", "fork_resume_denied");
-  notifyThreadAgentHandoff(a.request, a.comments);
+  notifyThreadAgentHandoff(entry.request, entry.comments);
 }
 //@ chunk-9tgt55am.js:22659-23007 placement
 /**
  * 重新把评论交给线程代理；回退时打点（区分达到上限）并通知主会话接手，异常时把评论标为失败。
  */
-async function rehandToThreadAgent(request, t) {
+async function rehandToThreadAgent(request, rehandRequest) {
   try {
-    let n = await spawnOrJoinThreadAgent({
+    let agent = await spawnOrJoinThreadAgent({
       ...request,
       summon: undefined,
       onSettled: undefined,
     });
-    if (n.outcome !== "fallback") {
+    if (agent.outcome !== "fallback") {
       threadAgentState()
         .byThread.get(threadKey(request.slug, request.threadId))
-        ?.comments.push(...t);
+        ?.comments.push(...rehandRequest);
       return;
     }
-    if (n.reason === "cap") logFeatureSad("artifact_comments_autoreact", "fork_rehand_fallback_cap");
+    if (agent.reason === "cap") logFeatureSad("artifact_comments_autoreact", "fork_rehand_fallback_cap");
     else logFeatureBad("artifact_comments_autoreact", "fork_rehand_fallback");
-    notifyThreadAgentHandoff(request, t);
+    notifyThreadAgentHandoff(request, rehandRequest);
   } catch (error) {
     logError(error);
-    settleComments(t);
+    settleComments(rehandRequest);
   }
 }
 //@ chunk-9tgt55am.js:23007-23392 placement
 function notifyThreadAgentHandoff(request, comments) {
-  let summon = comments.findLast((a) => a.summon !== undefined)?.summon;
+  let summon = comments.findLast((comment) => comment.summon !== undefined)?.summon;
   markAutoReactNoticePending(request.slug);
   enqueuePendingNotification({
     value: formatTaskNotification({

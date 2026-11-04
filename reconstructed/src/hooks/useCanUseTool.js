@@ -19,7 +19,7 @@ import { logError } from "../utils/log.js";
 import { statusSnapshot } from "../components/Spinner/spinnerStatus.js";
 import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
 import { useNotifications, GAUGE_DECAY_MS } from "../context/notifications.js";
-import { R, Q, ce } from "../../vendor/react/cjs/react.production.js";
+import { useRef, useMemo, useCallback } from "../../vendor/react/cjs/react.production.js";
 import { useSetAppState, useAppStoreDirect } from "../state/AppState.js";
 import {
   makeClassifierApprovalsSetter,
@@ -57,13 +57,13 @@ import { setPermissionPromptPerson } from "../utils/permissions/permissionPrompt
 var EXCLUDED_BASH_INPUT_KEYS = ["description", "timeout"];
 var FALSE_ALLOWED_BASH_KEYS = ["dangerouslyDisableSandbox", "run_in_background"];
 //@ chunk-18hwfzwa.js:1647298-1647391 sole-consumer
-function sanitizeBashInput(h) {
+function sanitizeBashInput(input) {
   return pickByHelper(
-    h,
-    (x, D) =>
-      x !== undefined &&
-      !EXCLUDED_BASH_INPUT_KEYS.includes(D) &&
-      !(x === false && FALSE_ALLOWED_BASH_KEYS.includes(D)),
+    input,
+    (value, key) =>
+      value !== undefined &&
+      !EXCLUDED_BASH_INPUT_KEYS.includes(key) &&
+      !(value === false && FALSE_ALLOWED_BASH_KEYS.includes(key)),
   );
 }
 //@ chunk-18hwfzwa.js:1647391-1647416 sole-consumer
@@ -74,15 +74,15 @@ function returnFalsePlaceholder(tool) {
 /**
  * 把被 auto 模式拒绝的工具调用序列化成去重键：MCP 工具带 "mcp:" 前缀与服务器名，shell 工具先规范化命令；无法序列化时记错误并返回 unserializable 键。
  */
-function serializeAutoModeDenialKey(tool, x) {
+function serializeAutoModeDenialKey(tool, input) {
   try {
-    let [D, L] = tool.mcpInfo
-      ? ["mcp:", [tool.mcpInfo.serverName, x]]
+    let [prefix, payload] = tool.mcpInfo
+      ? ["mcp:", [tool.mcpInfo.serverName, input]]
       : SHELL_TOOL_NAMES.includes(tool.name)
-        ? ["", sanitizeBashInput(x)]
-        : ["", x];
-    let ee = serializePayloadSafely(L, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY);
-    if (ee !== undefined) return `${D}${ee}`;
+        ? ["", sanitizeBashInput(input)]
+        : ["", input];
+    let serialized = serializePayloadSafely(payload, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY);
+    if (serialized !== undefined) return `${prefix}${serialized}`;
   } catch {}
   logError(Error("Auto mode denial input could not be serialized"));
   return `unserializable:${tool.mcpInfo?.serverName ?? ""}`;
@@ -98,25 +98,27 @@ function useCanUseTool() {
   let { recordDenial, getDenials, removeDenial } = statusSnapshot();
   let { storageV5 } = useTheme_2();
   let { addNotification } = useNotifications();
-  let ke = R({
+  let denialGaugeRef = useRef({
     count: 0,
     lastAt: 0,
   });
   let setAppState = useSetAppState();
   let appStoreDirect = useAppStoreDirect();
-  let permissionUpdater = Q(() => makeClassifierApprovalsSetter(setAppState), [setAppState]);
-  let canUseTool = ce(
+  let permissionUpdater = useMemo(() => makeClassifierApprovalsSetter(setAppState), [setAppState]);
+  let canUseTool = useCallback(
     async (tool, input, toolUseContext, assistantMessage, toolUseID, forceDecision) => {
-      let Ot;
+      let matchingDenial;
       let denials = getDenials();
       if (denials.length > 0) {
-        let Lt = serializeAutoModeDenialKey(tool, input);
-        Ot = denials.find((resolve) => resolve.toolName === tool.name && resolve.inputKey === Lt);
+        let inputKey = serializeAutoModeDenialKey(tool, input);
+        matchingDenial = denials.find(
+          (resolve) => resolve.toolName === tool.name && resolve.inputKey === inputKey,
+        );
       }
       let promise = new Promise((resolve) => {
-        let oo = (so) => {
+        let resolveOnce = (decision) => {
           toolUseContext.session.outsideReadPrompt.closeFor(toolUseID);
-          resolve(so);
+          resolve(decision);
         };
         let permissionContext = createPermissionContext(
           tool,
@@ -126,7 +128,7 @@ function useCanUseTool() {
           toolUseID,
           permissionUpdater,
         );
-        if (permissionContext.resolveIfAborted(oo)) return;
+        if (permissionContext.resolveIfAborted(resolveOnce)) return;
         return (
           forceDecision !== undefined
             ? Promise.resolve(forceDecision)
@@ -141,67 +143,73 @@ function useCanUseTool() {
                 permissionUpdater,
               )
         )
-          .then(async (so) => {
-            if (so.behavior === "allow") {
-              if (permissionContext.resolveIfAborted(oo)) return;
-              if (so.decisionReason?.type === "classifier" && so.decisionReason.classifier === "auto-mode")
-                setClassifierApproval(permissionUpdater, toolUseID, so.decisionReason.reason);
+          .then(async (permissionResult) => {
+            if (permissionResult.behavior === "allow") {
+              if (permissionContext.resolveIfAborted(resolveOnce)) return;
+              if (
+                permissionResult.decisionReason?.type === "classifier" &&
+                permissionResult.decisionReason.classifier === "auto-mode"
+              )
+                setClassifierApproval(permissionUpdater, toolUseID, permissionResult.decisionReason.reason);
               permissionContext.logDecision(
                 {
                   decision: "accept",
                   source: "config",
-                  decisionReason: so.decisionReason,
+                  decisionReason: permissionResult.decisionReason,
                   surface: decisionReasonToString(
                     toolUseContext.session,
-                    so.decisionReason,
+                    permissionResult.decisionReason,
                     getToolPermissionContext(toolUseContext),
                   ),
                 },
                 {
-                  input: so.updatedInput ?? input,
+                  input: permissionResult.updatedInput ?? input,
                 },
               );
-              oo(
-                permissionContext.buildAllow(so.updatedInput ?? input, {
-                  decisionReason: so.decisionReason,
-                  matchedAskRule: so.matchedAskRule,
+              resolveOnce(
+                permissionContext.buildAllow(permissionResult.updatedInput ?? input, {
+                  decisionReason: permissionResult.decisionReason,
+                  matchedAskRule: permissionResult.matchedAskRule,
                 }),
               );
               return;
             }
             let toolPermissionContext = getToolPermissionContext(toolUseContext);
-            let ao = await tool.description(input, {
+            let description = await tool.description(input, {
               isNonInteractiveSession: toolUseContext.options.isNonInteractiveSession,
               toolPermissionContext,
               tools: toolUseContext.options.tools,
             });
-            if (permissionContext.resolveIfAborted(oo)) return;
-            let co = (bo) => {
+            if (permissionContext.resolveIfAborted(resolveOnce)) return;
+            let onClassifierDeny = (denied) => {
               if (
-                bo.decisionReason?.type !== "classifier" ||
-                bo.decisionReason.classifier !== "auto-mode" ||
-                classifierDenyKind(bo.decisionReason) !== "block"
+                denied.decisionReason?.type !== "classifier" ||
+                denied.decisionReason.classifier !== "auto-mode" ||
+                classifierDenyKind(denied.decisionReason) !== "block"
               )
                 return;
-              let noReasonProvided = ensureNoReasonProvided(bo.decisionReason.reason ?? "");
-              let Bo = returnFalsePlaceholder(tool);
-              let Ro = undefined;
-              let Ho = tool.mcpInfo
+              let noReasonProvided = ensureNoReasonProvided(denied.decisionReason.reason ?? "");
+              let commandFieldName = returnFalsePlaceholder(tool);
+              let commandText = undefined;
+              let command = tool.mcpInfo
                 ? undefined
                 : SHELL_TOOL_NAMES.includes(tool.name)
                   ? input.command
                   : undefined;
-              let Io = typeof Ho === "string" && Ho !== "";
-              let Wo = !Io && !tool.mcpInfo && (SHELL_TOOL_NAMES.includes(tool.name) || Bo);
-              let mn =
+              let hasCommand = typeof command === "string" && command !== "";
+              let isEmptyCommand =
+                !hasCommand && !tool.mcpInfo && (SHELL_TOOL_NAMES.includes(tool.name) || commandFieldName);
+              let hasOtherFields =
                 !tool.mcpInfo &&
                 SHELL_TOOL_NAMES.includes(tool.name) &&
                 Object.keys(sanitizeBashInput(input)).some((key) => key !== "command");
-              let Cn = serializeAutoModeDenialKey(tool, input);
-              let found = getDenials().find((wn) => wn.toolName === tool.name && wn.inputKey === Cn);
+              let inputKey = serializeAutoModeDenialKey(tool, input);
+              let found = getDenials().find(
+                (denial) => denial.toolName === tool.name && denial.inputKey === inputKey,
+              );
               if (found) removeDenial(found);
-              let vo = Wo ? `Empty ${identity_3(tool.name)} command` : ao;
-              let Yo = {
+              let display = isEmptyCommand ? `Empty ${identity_3(tool.name)} command` : description;
+              let payload = {
                 ...(tool.mcpInfo
                   ? {
                       server: tool.mcpInfo.serverName,
@@ -210,45 +218,45 @@ function useCanUseTool() {
                   : {
                       tool: tool.name,
                     }),
-                input: Wo
+                input: isEmptyCommand
                   ? {
-                      [Bo ? "code" : "command"]: Ho,
+                      [commandFieldName ? "code" : "command"]: command,
                     }
                   : input,
               };
-              let kn = serializePayloadSafely(Yo, MAX_INLINE_GRAPHEME_CHARS);
-              let Fn = serializeApprovalPayload(kn, {
+              let serialized = serializePayloadSafely(payload, MAX_INLINE_GRAPHEME_CHARS);
+              let scrubbed = serializeApprovalPayload(serialized, {
                 scrub: "key",
                 maxUnits: MAX_INLINE_GRAPHEME_CHARS,
               });
-              let bn =
-                Io && !mn
+              let displayParts =
+                hasCommand && !hasOtherFields
                   ? {
-                      command: Ho,
+                      command,
                     }
                   : {
-                      input: Fn,
-                      rawInput: Fn.kind === "withheld" ? undefined : kn,
+                      input: scrubbed,
+                      rawInput: scrubbed.kind === "withheld" ? undefined : serialized,
                     };
-              let Go =
-                bn.input === undefined
-                  ? bn.command.slice(0, MAX_PAYLOAD_UNITS)
-                  : bn.input.kind === "withheld"
+              let scrubText =
+                displayParts.input === undefined
+                  ? displayParts.command.slice(0, MAX_PAYLOAD_UNITS)
+                  : displayParts.input.kind === "withheld"
                     ? ""
-                    : `${bn.input.text}
-${bn.rawInput}`;
-              let hn = true;
+                    : `${displayParts.input.text}
+${displayParts.rawInput}`;
+              let containsSecret = true;
               try {
-                let wn = `${vo.slice(0, MAX_PAYLOAD_UNITS)}
+                let candidateText = `${display.slice(0, MAX_PAYLOAD_UNITS)}
 ${noReasonProvided}
-${Go}`;
-                let replaced = wn.replace(
+${scrubText}`;
+                let replaced = candidateText.replace(
                   /\\+(?:u[0-9a-fA-F]{4}|[^]|$)|%(?:[0-9a-fA-F]{2})?|[^\w+/=.~\\%-]+/g,
                   `
 `,
                 );
-                hn =
-                  scanForSecrets(`${wn}
+                containsSecret =
+                  scanForSecrets(`${candidateText}
 ${replaced}
 ${replaced.replace(
   /[./~]+/g,
@@ -258,14 +266,14 @@ ${replaced.replace(
               } catch {
                 logError(Error("Auto mode denial text could not be checked"));
               }
-              let Mn = hn ? "" : noReasonProvided;
+              let retainedReason = containsSecret ? "" : noReasonProvided;
               recordDenial({
                 toolUseId: toolUseID,
                 toolName: tool.name,
-                display: hn ? "" : vo,
-                ...(!hn && bn),
-                inputKey: Cn,
-                reason: Mn,
+                display: containsSecret ? "" : display,
+                ...(!containsSecret && displayParts),
+                inputKey,
+                reason: retainedReason,
                 timestamp: Date.now(),
               });
               saveGlobalConfig((result) => {
@@ -279,26 +287,28 @@ ${replaced.replace(
                   },
                 };
               }, storageV5);
-              let speculativePromise = cleanTaskDescription(Mn);
-              let Sn = speculativePromise
+              let speculativePromise = cleanTaskDescription(retainedReason);
+              let speculativeHint = speculativePromise
                 ? truncateToWidth(`${AUTO_MODE_PREFIX}${speculativePromise}`, AUTO_MODE_NOTICE_MAX_COLUMNS)
                 : "";
               let now = Date.now();
-              let on = ke.current;
-              let { current: _o, queue } = appStoreDirect.getState().notifications;
-              let Dn = _o?.key === AUTO_MODE_DENIED || queue.some((error) => error.key === AUTO_MODE_DENIED);
-              on.count = Dn || now - on.lastAt < GAUGE_DECAY_MS ? on.count + 1 : 1;
-              on.lastAt = now;
+              let gauge = denialGaugeRef.current;
+              let { current: currentNotice, queue } = appStoreDirect.getState().notifications;
+              let isNoticePending =
+                currentNotice?.key === AUTO_MODE_DENIED ||
+                queue.some((error) => error.key === AUTO_MODE_DENIED);
+              gauge.count = isNoticePending || now - gauge.lastAt < GAUGE_DECAY_MS ? gauge.count + 1 : 1;
+              gauge.lastAt = now;
               addNotification({
                 key: AUTO_MODE_DENIED,
                 kind: "warning",
                 priority: "immediate",
-                fold: (wn, mr) => mr,
+                fold: (previousNotice, nextNotice) => nextNotice,
                 segments: [
                   {
                     text:
-                      on.count > 1
-                        ? `${on.count} recent blocks by auto mode`
+                      gauge.count > 1
+                        ? `${gauge.count} recent blocks by auto mode`
                         : `${(
                             tool.userFacingName(
                               input,
@@ -320,10 +330,10 @@ ${replaced.replace(
                           dim: true,
                         },
                       ]),
-                  ...(Sn
+                  ...(speculativeHint
                     ? [
                         {
-                          text: ` \xB7 ${Sn}`,
+                          text: ` \xB7 ${speculativeHint}`,
                           dim: true,
                         },
                       ]
@@ -331,67 +341,67 @@ ${replaced.replace(
                 ],
               });
             };
-            switch (so.behavior) {
+            switch (permissionResult.behavior) {
               case "deny": {
                 permissionContext.logDecision({
                   decision: "reject",
                   source: "config",
-                  decisionReason: so.decisionReason,
+                  decisionReason: permissionResult.decisionReason,
                 });
-                co(so);
-                oo(so);
+                onClassifierDeny(permissionResult);
+                resolveOnce(permissionResult);
                 return;
               }
               case "ask": {
                 if (toolPermissionContext.awaitAutomatedChecksBeforeDialog) {
-                  let Bo = await handleCoordinatorPermission({
+                  let coordinatorResult = await handleCoordinatorPermission({
                     ctx: permissionContext,
-                    updatedInput: so.updatedInput,
-                    suggestions: so.suggestions,
+                    updatedInput: permissionResult.updatedInput,
+                    suggestions: permissionResult.suggestions,
                     permissionMode: toolPermissionContext.mode,
-                    askSuppressesAlwaysAllowRule: so.suppressAlwaysAllowRule === true,
-                    askIsPersonOnly: so.personOnly === true,
+                    askSuppressesAlwaysAllowRule: permissionResult.suppressAlwaysAllowRule === true,
+                    askIsPersonOnly: permissionResult.personOnly === true,
                   });
-                  if (Bo) {
-                    oo(Bo);
+                  if (coordinatorResult) {
+                    resolveOnce(coordinatorResult);
                     return;
                   }
                 }
-                if (permissionContext.resolveIfAborted(oo)) return;
-                let bo =
-                  so.localDisplayOnly ||
-                  so.metadata?.mcpSkill !== undefined ||
-                  so.forcedByCaller === true ||
-                  so.denialLimitFallback !== undefined ||
-                  so.autoDenyWindow !== undefined ||
-                  so.oneTimeAnswersOnly === true ||
+                if (permissionContext.resolveIfAborted(resolveOnce)) return;
+                let swarmResult =
+                  permissionResult.localDisplayOnly ||
+                  permissionResult.metadata?.mcpSkill !== undefined ||
+                  permissionResult.forcedByCaller === true ||
+                  permissionResult.denialLimitFallback !== undefined ||
+                  permissionResult.autoDenyWindow !== undefined ||
+                  permissionResult.oneTimeAnswersOnly === true ||
                   toolUseContext.forRemoteExecution === true
                     ? null
                     : await handleSwarmWorkerPermission({
                         ctx: permissionContext,
-                        description: ao,
-                        updatedInput: so.updatedInput,
-                        suggestions: so.suggestions,
-                        askSuppressesAlwaysAllowRule: so.suppressAlwaysAllowRule === true,
-                        matchedAskRule: so.matchedAskRule,
+                        description,
+                        updatedInput: permissionResult.updatedInput,
+                        suggestions: permissionResult.suggestions,
+                        askSuppressesAlwaysAllowRule: permissionResult.suppressAlwaysAllowRule === true,
+                        matchedAskRule: permissionResult.matchedAskRule,
                       });
-                if (bo) {
-                  oo(bo);
+                if (swarmResult) {
+                  resolveOnce(swarmResult);
                   return;
                 }
                 let permissionRelays = toolUseContext.permissionRelays;
                 return repromptFilePermission(
                   {
                     ctx: permissionContext,
-                    description: ao,
-                    result: so,
+                    description,
+                    result: permissionResult,
                     awaitAutomatedChecksBeforeDialog: toolPermissionContext.awaitAutomatedChecksBeforeDialog,
                     bridgeCallbacks: permissionRelays.bridge?.permission,
                     bridgeDialogCallbacks: permissionRelays.bridge?.dialog,
                     channelCallbacks: permissionRelays.channel,
-                    onClassifierDenyDelivered: co,
+                    onClassifierDenyDelivered: onClassifierDeny,
                   },
-                  oo,
+                  resolveOnce,
                 );
               }
             }
@@ -402,28 +412,28 @@ ${replaced.replace(
                 `Permission check threw ${error.constructor.name} for tool=${tool.name}: ${error.message}`,
               );
               permissionContext.logCancelled();
-              oo(permissionContext.cancelAndAbort(undefined, true));
+              resolveOnce(permissionContext.cancelAndAbort(undefined, true));
             } else {
               logError(withTelemetryMessage(toError(error), "useCanUseTool permission flow failed"));
-              oo(permissionContext.cancelAndAbort(undefined, true));
+              resolveOnce(permissionContext.cancelAndAbort(undefined, true));
             }
           })
           .finally(() => {
             clearClassifierChecking(permissionUpdater, toolUseID);
           });
       });
-      if (Ot) {
-        let Lt = Ot;
-        promise.then((oo) => {
-          if (oo.behavior === "allow") {
+      if (matchingDenial) {
+        let priorDenial = matchingDenial;
+        promise.then((result) => {
+          if (result.behavior === "allow") {
             logEvent("tengu_auto_mode_subsequent_approval", {
               toolName: sanitizeToolNameForAnalytics(tool.name),
               isMcp: tool.isMcp ?? false,
               ...mcpToolLogFields(tool, toolUseContext.options.mcpClients),
-              msSinceDeny: Date.now() - Lt.timestamp,
-              allowReasonType: fromEnumOpt(oo.decisionReason?.type),
+              msSinceDeny: Date.now() - priorDenial.timestamp,
+              allowReasonType: fromEnumOpt(result.decisionReason?.type),
             });
-            removeDenial(Lt);
+            removeDenial(priorDenial);
           }
         });
       }

@@ -5,12 +5,12 @@
  * pieces: chunk-wr8v03d0.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_fromBase64 } from "../../../@smithy/util-base64/dist-cjs/fromBase64.js";
 import { require_toBase64 } from "../../../@smithy/util-base64/dist-cjs/toBase64.js";
 
 //@ chunk-wr8v03d0.js:2388-2765 cjs-fingerprint
-var base64Module = x(function (cjsExports) {
+var base64Module = __commonJS(function (cjsExports) {
   var fromTokenFile = require_fromBase64();
   var fromWebToken = require_toBase64();
   Object.keys(fromTokenFile).forEach(function (k) {

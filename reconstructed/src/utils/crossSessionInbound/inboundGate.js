@@ -28,8 +28,8 @@ import { RELAY_SOURCE_KINDS_2, SLACK_BOT } from "../../services/projectsRelay/re
 import { fragmentForLog } from "../udsMessaging/peerGuard.js";
 
 //@ chunk-q40vccff.js:3208-3376 placement
-function settingToInboundPolicy(e) {
-  switch (e) {
+function settingToInboundPolicy(setting) {
+  switch (setting) {
     case "accept":
       return {
         policy: "accept",
@@ -63,26 +63,26 @@ function killSwitchInboundPolicy() {
  * 计算当前跨会话入站策略：总开关优先，其次显式设置；否则读取当前权限模式（读不到或未知模式时暂扣），绕过默认时暂扣，其余接受。
  */
 function getCurrentInboundPolicy() {
-  let e = killSwitchInboundPolicy();
-  if (e) return e;
-  let n = currentInboundSetting();
-  if (n !== undefined) return settingToInboundPolicy(n);
-  let currentPermissionMode = readCurrentPermissionMode();
-  if (currentPermissionMode === null)
+  let killSwitch = killSwitchInboundPolicy();
+  if (killSwitch) return killSwitch;
+  let setting = currentInboundSetting();
+  if (setting !== undefined) return settingToInboundPolicy(setting);
+  let permissions = readCurrentPermissionMode();
+  if (permissions === null)
     return {
       policy: "hold",
       holdCause: "mode-unknown",
     };
-  if (!PERMISSION_MODE_SET.has(currentPermissionMode.mode)) {
+  if (!PERMISSION_MODE_SET.has(permissions.mode)) {
     logForDebugging(
-      `[cross-session-inbound] unrecognized permission mode '${currentPermissionMode.mode}' (fail-closed \u2192 hold)`,
+      `[cross-session-inbound] unrecognized permission mode '${permissions.mode}' (fail-closed \u2192 hold)`,
     );
     return {
       policy: "hold",
       holdCause: "mode-unknown",
     };
   }
-  return isBypassMode(currentPermissionMode)
+  return isBypassMode(permissions)
     ? {
         policy: "hold",
         holdCause: "bypass-default",
@@ -95,26 +95,26 @@ function getCurrentInboundPolicy() {
 /**
  * 计算当前入站策略：总开关优先，否则按来源的显式设置。
  */
-function currentInboundPolicy(peerOriginInfo) {
-  let n = killSwitchInboundPolicy();
-  if (n) return n;
-  return getPeerMessagePolicy(peerOriginInfo, false);
+function currentInboundPolicy(originInfo) {
+  let killSwitch = killSwitchInboundPolicy();
+  if (killSwitch) return killSwitch;
+  return getPeerMessagePolicy(originInfo, false);
 }
 //@ chunk-q40vccff.js:3893-3922 placement
 /**
  * 计算某对等来源的入站策略（显式设置、自己发的、未知模式、对方声明模式）。
  */
-function peerInboundPolicy(peerOriginInfo) {
-  return getPeerMessagePolicy(peerOriginInfo, true);
+function peerInboundPolicy(originInfo) {
+  return getPeerMessagePolicy(originInfo, true);
 }
 //@ chunk-q40vccff.js:3922-4422 placement
 /**
  * 计算某条对等消息的入站策略：显式设置优先；自己发的接受；未知模式暂扣；对方声明的模式须与本端一致，未声明时本端为绕过模式则暂扣。
  */
-function getPeerMessagePolicy(e, n) {
+function getPeerMessagePolicy(originInfo, fromMode) {
   let setting = currentInboundSetting();
   if (setting !== undefined) return settingToInboundPolicy(setting);
-  if (e?.selfSent)
+  if (originInfo?.selfSent)
     return {
       policy: "accept",
     };
@@ -130,7 +130,7 @@ function getPeerMessagePolicy(e, n) {
     };
   }
   let modeClass = modeClass_2(currentMode);
-  let assertedMode = n || isModeEmitFlagOn() ? e?.fromMode : undefined;
+  let assertedMode = fromMode || isModeEmitFlagOn() ? originInfo?.fromMode : undefined;
   if (assertedMode !== undefined)
     return assertedMode === modeClass
       ? {
@@ -153,18 +153,18 @@ function getPeerMessagePolicy(e, n) {
 /**
  * 判断权限模式是否为绕过（含计划模式绕过）。
  */
-function isBypassMode(currentPermissionMode) {
+function isBypassMode(permissions) {
   return (
-    currentPermissionMode.mode === "bypassPermissions" ||
-    isPlanBypass(currentPermissionMode.mode, currentPermissionMode.isBypassPermissionsModeAvailable)
+    permissions.mode === "bypassPermissions" ||
+    isPlanBypass(permissions.mode, permissions.isBypassPermissionsModeAvailable)
   );
 }
 //@ chunk-q40vccff.js:4519-4568 placement
 /**
  * 把权限模式归为 bypass 或 prompting。
  */
-function modeClass_2(e) {
-  return isBypassMode(e) ? "bypass" : "prompting";
+function modeClass_2(mode) {
+  return isBypassMode(mode) ? "bypass" : "prompting";
 }
 //@ chunk-q40vccff.js:4568-4601 placement
 /**
@@ -202,9 +202,9 @@ function readCurrentPermissionMode() {
  */
 function isBypassDefaultHold() {
   if (currentInboundSetting() !== undefined) return false;
-  let currentPermissionMode = readCurrentPermissionMode();
-  if (currentPermissionMode === null || !PERMISSION_MODE_SET.has(currentPermissionMode.mode)) return false;
-  return isBypassMode(currentPermissionMode);
+  let permissions = readCurrentPermissionMode();
+  if (permissions === null || !PERMISSION_MODE_SET.has(permissions.mode)) return false;
+  return isBypassMode(permissions);
 }
 //@ chunk-q40vccff.js:5015-5051 placement
 /**
@@ -214,8 +214,8 @@ function gatedPolicyFor(message) {
   return applyInboundPolicy(message, currentInboundPolicy(getPeerOriginInfo(message)));
 }
 //@ chunk-q40vccff.js:5051-5158 placement
-function getPeerOriginInfo(e) {
-  let origin = e.origin;
+function getPeerOriginInfo(message) {
+  let origin = message.origin;
   if (!origin || origin.kind !== "peer") return;
   return {
     fromMode: origin.fromMode,
@@ -226,25 +226,25 @@ function getPeerOriginInfo(e) {
 /**
  * 让对等消息经过入口守卫：未准入时发送 dropped 回执并返回 false，准入则记录通信方。
  */
-function admitPeerMessage(e) {
-  let n;
-  if (e.priority === "later") {
-    let { priority, ...s } = e;
-    n = enqueueReportingAdmission(s, {
+function admitPeerMessage(message) {
+  let admission;
+  if (message.priority === "later") {
+    let { priority, ...rest } = message;
+    admission = enqueueReportingAdmission(rest, {
       receipt: "caller",
     });
   } else
-    n = enqueueReportingAdmission(e, {
+    admission = enqueueReportingAdmission(message, {
       receipt: "caller",
     });
-  if (!n.admitted) {
-    swarmHostState().inbound.sendPeerReceipt?.(e, "dropped", {
-      dropReason: n.reason,
+  if (!admission.admitted) {
+    swarmHostState().inbound.sendPeerReceipt?.(message, "dropped", {
+      dropReason: admission.reason,
       droppedMsgIds: [],
     });
     return false;
   }
-  swarmHostState().inbound.recordCorrespondent?.(e);
+  swarmHostState().inbound.recordCorrespondent?.(message);
   return true;
 }
 //@ chunk-q40vccff.js:5443-6442 placement
@@ -278,13 +278,13 @@ function applyInboundPolicy(message, policy) {
         return "refused";
       }
       if (inbound.held.length >= MAX_POLICY_SETTING_CHARS) {
-        let i = inbound.held.shift();
-        if (i) {
+        let evicted = inbound.held.shift();
+        if (evicted) {
           logForDebugging(
-            `[cross-session-inbound] hold buffer full \u2014 evicted oldest as expired: ${describePeerMessage(i)}`,
+            `[cross-session-inbound] hold buffer full \u2014 evicted oldest as expired: ${describePeerMessage(evicted)}`,
           );
-          inbound.sendPeerReceipt?.(i, "expired");
-          inbound.onPeerHoldDropped?.(i, "expired");
+          inbound.sendPeerReceipt?.(evicted, "expired");
+          inbound.onPeerHoldDropped?.(evicted, "expired");
         }
       }
       inbound.held.push(message);
@@ -306,10 +306,11 @@ function applyInboundPolicy(message, policy) {
 /**
  * 把入站消息来源分类为 peer、host-injected、coordinator 或 ungated。
  */
-function classifyInboundOrigin(e) {
-  if (!e) return "ungated";
-  if (e.kind === "peer") return "hostInjected" in e && e.hostInjected === true ? "host-injected" : "peer";
-  if (e.kind === "task-notification" && "subkind" in e && e.subkind === "peer-send-message")
+function classifyInboundOrigin(origin) {
+  if (!origin) return "ungated";
+  if (origin.kind === "peer")
+    return "hostInjected" in origin && origin.hostInjected === true ? "host-injected" : "peer";
+  if (origin.kind === "task-notification" && "subkind" in origin && origin.subkind === "peer-send-message")
     return "coordinator";
   return "ungated";
 }
@@ -338,14 +339,14 @@ function isSlackBotPeer(ingressOrigin) {
 /**
  * 按入站来源选择把关策略，ungated 直接接受。
  */
-function gateInboundByOrigin(e, n) {
-  switch (classifyInboundOrigin(e)) {
+function gateInboundByOrigin(origin, message) {
+  switch (classifyInboundOrigin(origin)) {
     case "peer":
-      return gatedPolicyFor(n);
+      return gatedPolicyFor(message);
     case "host-injected":
-      return gatedPeerPolicy(n);
+      return gatedPeerPolicy(message);
     case "coordinator":
-      return gatedSettingPolicy(n);
+      return gatedSettingPolicy(message);
     case "ungated":
       return "accept";
   }
@@ -354,8 +355,8 @@ function gateInboundByOrigin(e, n) {
 /**
  * 按入站来源给出拒收原因（peer 取当前原因，coordinator/host-injected 在拒收设置下为 opt-out）。
  */
-function getInboundRefuseCause(e) {
-  switch (classifyInboundOrigin(e)) {
+function getInboundRefuseCause(origin) {
+  switch (classifyInboundOrigin(origin)) {
     case "peer":
       return inboundRefuseCause();
     case "coordinator":
@@ -379,9 +380,9 @@ function inboundRefuseCause() {
  * 把设置值转成策略，未设置时用 accept。
  */
 function settingOrAcceptPolicy() {
-  let e = currentInboundSetting();
-  return e !== undefined
-    ? settingToInboundPolicy(e)
+  let setting = currentInboundSetting();
+  return setting !== undefined
+    ? settingToInboundPolicy(setting)
     : {
         policy: "accept",
       };
@@ -391,9 +392,9 @@ function settingOrAcceptPolicy() {
  * 把设置值转成策略并按来源把关。
  */
 function gatedSettingPolicy(message) {
-  let n = currentInboundSetting();
-  if (n === undefined) return "accept";
-  return applyInboundPolicy(message, settingToInboundPolicy(n));
+  let setting = currentInboundSetting();
+  if (setting === undefined) return "accept";
+  return applyInboundPolicy(message, settingToInboundPolicy(setting));
 }
 //@ chunk-q40vccff.js:7450-7486 placement
 /**
@@ -406,43 +407,43 @@ function gatedPeerPolicy(message) {
 /**
  * 记录入站 peer 消息被拒（区分 kill switch），并上报把关失败。
  */
-function logInboundRefused(e, n) {
+function logInboundRefused(description, cause) {
   publishInboundAvailability();
-  if (n === "kill-switch") {
+  if (cause === "kill-switch") {
     logForDebugging(
-      `[cross-session-inbound] refused inbound peer message \u2014 cross-session messaging disabled (kill switch) (${e})`,
+      `[cross-session-inbound] refused inbound peer message \u2014 cross-session messaging disabled (kill switch) (${description})`,
     );
     logFeatureSad("peer_inbound_gate", "kill_switch");
     return;
   }
-  logForDebugging(`[cross-session-inbound] refused inbound peer message (${e})`);
+  logForDebugging(`[cross-session-inbound] refused inbound peer message (${description})`);
   logFeatureSad("peer_inbound_gate", "refused");
 }
 //@ chunk-q40vccff.js:7793-7827 placement
 /**
  * 刷新入站可用性并重新评估暂扣消息。
  */
-function refreshAndReevaluateHeld(e) {
+function refreshAndReevaluateHeld(origin) {
   publishInboundAvailability();
-  return reevaluateHeldMessages(e);
+  return reevaluateHeldMessages(origin);
 }
 //@ chunk-q40vccff.js:7827-7968 placement
-function getHeldMessagePolicy(e) {
-  switch (classifyInboundOrigin(e.origin)) {
+function getHeldMessagePolicy(message) {
+  switch (classifyInboundOrigin(message.origin)) {
     case "coordinator":
       return settingOrAcceptPolicy();
     case "host-injected":
-      return peerInboundPolicy(getPeerOriginInfo(e));
+      return peerInboundPolicy(getPeerOriginInfo(message));
     case "peer":
     case "ungated":
-      return currentInboundPolicy(getPeerOriginInfo(e));
+      return currentInboundPolicy(getPeerOriginInfo(message));
   }
 }
 //@ chunk-q40vccff.js:7968-9034 placement
 /**
  * 策略变化后重新评估暂扣的对等消息：拒绝的发回执并丢弃，仍暂扣的在原因变化时重新通知，可接受的经入口守卫放行并发 delivered 回执。返回放行数。
  */
-function reevaluateHeldMessages(e) {
+function reevaluateHeldMessages(origin) {
   let inbound = swarmHostState().inbound;
   let held = inbound.held;
   if (held.length === 0) return 0;
@@ -451,25 +452,25 @@ function reevaluateHeldMessages(e) {
   let reannounce = [];
   let refusedCount = 0;
   let killSwitchCount = 0;
-  for (let r of held) {
-    let heldMessagePolicy = getHeldMessagePolicy(r);
-    if (heldMessagePolicy.policy === "accept") releasable.push(r);
+  for (let message of held) {
+    let heldMessagePolicy = getHeldMessagePolicy(message);
+    if (heldMessagePolicy.policy === "accept") releasable.push(message);
     else if (heldMessagePolicy.policy === "refuse") {
       refusedCount += 1;
       if (heldMessagePolicy.refuseCause === "kill-switch") killSwitchCount += 1;
-      inbound.sendPeerReceipt?.(r, "refused");
-      inbound.onPeerHoldDropped?.(r, "refused");
+      inbound.sendPeerReceipt?.(message, "refused");
+      inbound.onPeerHoldDropped?.(message, "refused");
     } else {
-      stillHeld.push(r);
-      if (inbound.announced.get(r) !== heldMessagePolicy.holdCause)
-        reannounce.push([r, heldMessagePolicy.holdCause]);
+      stillHeld.push(message);
+      if (inbound.announced.get(message) !== heldMessagePolicy.holdCause)
+        reannounce.push([message, heldMessagePolicy.holdCause]);
     }
   }
   held.length = 0;
   held.push(...stillHeld);
-  for (let [r, l] of reannounce) {
-    inbound.announced.set(r, l);
-    inbound.onPeerHeld?.(r, held.length, l);
+  for (let [message, holdCause] of reannounce) {
+    inbound.announced.set(message, holdCause);
+    inbound.onPeerHeld?.(message, held.length, holdCause);
   }
   if (refusedCount > 0)
     logForDebugging(
@@ -479,16 +480,16 @@ function reevaluateHeldMessages(e) {
     );
   if (releasable.length === 0) return 0;
   let admitted = [];
-  for (let r of releasable)
-    if (admitPeerMessage(r)) {
-      admitted.push(r);
+  for (let message of releasable)
+    if (admitPeerMessage(message)) {
+      admitted.push(message);
       logFeatureOk("peer_inbound_gate");
-    } else inbound.onPeerHoldDropped?.(r, "dropped");
+    } else inbound.onPeerHoldDropped?.(message, "dropped");
   logForDebugging(
-    `[cross-session-inbound] released ${releasable.length} held peer message(s) (${e}) \u2014 ${admitted.length} admitted by the ingress guard; ${held.length} still held`,
+    `[cross-session-inbound] released ${releasable.length} held peer message(s) (${origin}) \u2014 ${admitted.length} admitted by the ingress guard; ${held.length} still held`,
   );
-  if (admitted.length > 0) inbound.onPeerHoldReleased?.(admitted, e);
-  for (let r of admitted) inbound.sendPeerReceipt?.(r, "delivered");
+  if (admitted.length > 0) inbound.onPeerHoldReleased?.(admitted, origin);
+  for (let message of admitted) inbound.sendPeerReceipt?.(message, "delivered");
   return releasable.length;
 }
 //@ chunk-q40vccff.js:9034-10030 placement
@@ -559,8 +560,8 @@ function describePeerMessage(message) {
     message.origin?.kind === "peer" && typeof message.origin.from === "string"
       ? message.origin.from
       : "unknown";
-  let o = typeof message.value === "string" ? message.value : "[blocks]";
-  return `from=${fragmentForLog(from)} "${fragmentForLog(o, 60)}"`;
+  let text = typeof message.value === "string" ? message.value : "[blocks]";
+  return `from=${fragmentForLog(from)} "${fragmentForLog(text, 60)}"`;
 }
 export {
   inboundRefuseCause,

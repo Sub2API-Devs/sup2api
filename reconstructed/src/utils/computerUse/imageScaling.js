@@ -19,38 +19,42 @@ var IMAGE_SCALING_DEFAULTS = {
 /**
  * 向上取整的除法（计算每边分块数）。
  */
-function ceilDiv(o, r) {
-  return Math.floor((o - 1) / r) + 1;
+function ceilDiv(numerator, denominator) {
+  return Math.floor((numerator - 1) / denominator) + 1;
 }
 //@ chunk-hrs3dad1.js:4979-5018 placement
 /**
  * 按每 token 像素数计算图片的 token 数。
  */
-function tokenCountForImage(o, r, pxPerToken) {
-  return ceilDiv(o, pxPerToken) * ceilDiv(r, pxPerToken);
+function tokenCountForImage(width, height, denominator) {
+  return ceilDiv(width, denominator) * ceilDiv(height, denominator);
 }
 //@ chunk-hrs3dad1.js:5018-5331 placement
 /**
  * 按每 token 像素与最大边长/最大 token 计算截图缩放后的尺寸。
  */
-function scaledImageSize(o, r, s) {
-  let { pxPerToken, maxTargetPx, maxTargetTokens } = s;
-  if (o <= maxTargetPx && r <= maxTargetPx && tokenCountForImage(o, r, pxPerToken) <= maxTargetTokens)
-    return [o, r];
-  if (r > o) {
-    let [n, i] = scaledImageSize(r, o, s);
-    return [i, n];
+function scaledImageSize(width, height, limits) {
+  let { pxPerToken, maxTargetPx, maxTargetTokens } = limits;
+  if (
+    width <= maxTargetPx &&
+    height <= maxTargetPx &&
+    tokenCountForImage(width, height, pxPerToken) <= maxTargetTokens
+  )
+    return [width, height];
+  if (height > width) {
+    let [scaledHeight, scaledWidth] = scaledImageSize(height, width, limits);
+    return [scaledWidth, scaledHeight];
   }
-  let f = o / r;
-  let g = o;
-  let e = 1;
+  let aspectRatio = width / height;
+  let high = width;
+  let low = 1;
   for (;;) {
-    if (e + 1 === g) return [e, Math.max(Math.round(e / f), 1)];
-    let floored = Math.floor((e + g) / 2);
-    let max = Math.max(Math.round(floored / f), 1);
+    if (low + 1 === high) return [low, Math.max(Math.round(low / aspectRatio), 1)];
+    let floored = Math.floor((low + high) / 2);
+    let max = Math.max(Math.round(floored / aspectRatio), 1);
     if (floored <= maxTargetPx && tokenCountForImage(floored, max, pxPerToken) <= maxTargetTokens)
-      e = floored;
-    else g = floored;
+      low = floored;
+    else high = floored;
   }
 }
 //@ chunk-hrs3dad1.js:5331-5345 placement

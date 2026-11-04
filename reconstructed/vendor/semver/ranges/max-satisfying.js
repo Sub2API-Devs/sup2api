@@ -5,12 +5,12 @@
  * pieces: chunk-bwbq4xvm.js (2)
  * attribution: cjs-fingerprint 2
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_semver } from "../classes/semver.js";
 import { require_range } from "../classes/range.js";
 
 //@ chunk-bwbq4xvm.js:21935-22158 cjs-fingerprint
-var require_max_satisfying = x(function (cjsExports, cjsModule) {
+var require_max_satisfying = __commonJS(function (cjsExports, cjsModule) {
   var SemVer = require_semver();
   var Range = require_range();
   var maxSatisfying = (versions, range, options) => {
@@ -35,7 +35,7 @@ var require_max_satisfying = x(function (cjsExports, cjsModule) {
   cjsModule.exports = maxSatisfying;
 });
 //@ chunk-bwbq4xvm.js:22158-22380 cjs-fingerprint
-var require_max_satisfying_2 = x(function (cjsExports, cjsModule) {
+var require_max_satisfying_2 = __commonJS(function (cjsExports, cjsModule) {
   var SemVer = require_semver();
   var Range = require_range();
   var maxSatisfying = (versions, range, options) => {

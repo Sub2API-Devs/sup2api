@@ -10,7 +10,7 @@
  */
 
 //@ chunk-s61vbvea.js:460861-460923 fingerprint = useVoiceEnabled (0.591)
-function useVoiceEnabled(e) {
-  return (e.voice?.enabled ?? e.voiceEnabled) === true;
+function useVoiceEnabled(settings) {
+  return (settings.voice?.enabled ?? settings.voiceEnabled) === true;
 }
 export { useVoiceEnabled };

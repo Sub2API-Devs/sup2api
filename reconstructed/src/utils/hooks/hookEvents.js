@@ -13,7 +13,18 @@ import { HOOK_EVENTS, emitHookProgress } from "../../entrypoints/sdk/coreSchemas
 import { isSyncHookJSONOutput } from "../../types/hooks.js";
 import { renderTerminalSequences } from "./terminalSequence.js";
 import { logForDebugging } from "../debug.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-63641kq7.js:5985-6066 fingerprint = ALWAYS_EMITTED_HOOK_EVENTS (1)
+/**
+ * 钩子时间常量：默认超时 600000ms（10 分钟）、总是发 SDK 事件的事件（SessionStart/Setup）、UserPromptSubmit 超时 30s 等。
+ */
+var TOOL_HOOK_EXECUTION_TIMEOUT_MS = 600000;
+var ALWAYS_EMITTED_HOOK_EVENTS = ["SessionStart", "Setup"];
+var USER_PROMPT_SUBMIT_HOOK_TIMEOUT_MS = 30000;
+var HOOK_PROGRESS_INTERVAL_MS = 6000;
+var HOOK_STARTED_GRACE_MS = 30000;
+var HOOK_RESPONSE_POLL_MS = 5000;
 //@ chunk-e6aww6q8.js:935830-935924 placement
 /**
  * 该钩子事件是否要作为 SDK 消息发出（默认集合，或开启全部时的所有钩子事件）。
@@ -47,42 +58,36 @@ function startHookProgressInterval(params) {
   return () => clearInterval(interval);
 }
 //@ chunk-e6aww6q8.js:1291653-1291797 placement
-var TOOL_HOOK_EVENTS = new Set([
-  "PreToolUse",
-  "PostToolUse",
-  "PostToolUseFailure",
-  "PermissionRequest",
-  "PermissionDenied",
-]);
-var TOOL_AND_BATCH_HOOK_EVENTS = new Set([...TOOL_HOOK_EVENTS, "PostToolBatch"]);
+var TOOL_HOOK_EVENTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var TOOL_AND_BATCH_HOOK_EVENTS;
+deferInit("chunk-e6aww6q8.js:1291653", () => {
+  TOOL_HOOK_EVENTS = new Set([
+    "PreToolUse",
+    "PostToolUse",
+    "PostToolUseFailure",
+    "PermissionRequest",
+    "PermissionDenied",
+  ]);
+  TOOL_AND_BATCH_HOOK_EVENTS = new Set([...TOOL_HOOK_EVENTS, "PostToolBatch"]);
+});
 //@ chunk-e6aww6q8.js:3558143-3558460 fingerprint = emitHookResponse (0.353)
 /**
  * 处理钩子 JSON 里的 terminalSequence（只允许 OSC 0/1/2/9/99/777 与 BEL），通过则写到终端。
  */
-function emitHookResponse_2(json, n) {
+function emitHookResponse_2(json, label) {
   if (!json || !isSyncHookJSONOutput(json) || !json.terminalSequence) return;
-  let r = renderTerminalSequences(json.terminalSequence);
-  if (r !== null) writeHistoryEntry(r);
+  let rendered = renderTerminalSequences(json.terminalSequence);
+  if (rendered !== null) writeHistoryEntry(rendered);
   else
     logForDebugging(
-      `Hook ${n} returned a terminalSequence that was rejected by the allowlist (only OSC 0/1/2/9/99/777 and BEL are permitted, and OSC 9 bodies may not begin with a digit unless in the 9;4 progress form)`,
+      `Hook ${label} returned a terminalSequence that was rejected by the allowlist (only OSC 0/1/2/9/99/777 and BEL are permitted, and OSC 9 bodies may not begin with a digit unless in the 9;4 progress form)`,
     );
 }
-//@ chunk-63641kq7.js:5985-6066 fingerprint = ALWAYS_EMITTED_HOOK_EVENTS (1)
-/**
- * 钩子时间常量：默认超时 600000ms（10 分钟）、总是发 SDK 事件的事件（SessionStart/Setup）、UserPromptSubmit 超时 30s 等。
- */
-var TOOL_HOOK_EXECUTION_TIMEOUT_MS = 600000;
-var ALWAYS_EMITTED_HOOK_EVENTS = ["SessionStart", "Setup"];
-var USER_PROMPT_SUBMIT_HOOK_TIMEOUT_MS = 30000;
-var HOOK_PROGRESS_INTERVAL_MS = 6000;
-var HOOK_STARTED_GRACE_MS = 30000;
-var HOOK_RESPONSE_POLL_MS = 5000;
 //@ chunk-fe6rs39h.js:129512-129617 fingerprint = emitHookStarted (0.349)
 /**
  * 钩子开始事件的占位实现（316 中为空函数）。
  */
-async function emitHookStarted(id, abortController, s, laptop = {}) {
+async function emitHookStarted(id, abortController, hookName, laptop = {}) {
   if (false)
     switch (w.state()) {
       case "started":

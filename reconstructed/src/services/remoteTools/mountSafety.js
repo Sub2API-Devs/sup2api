@@ -47,125 +47,143 @@ import {
 import { foldCaseBasic } from "../../utils/pathIdentity.js";
 import { identity } from "../../utils/identity.js";
 import { getErrnoCode } from "../../utils/errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e2fknt7w.js:18342-19169 placement
-function classifyMountForServing(dir, n) {
-  let o = homedir();
+function classifyMountForServing(cwd, otherSide) {
+  let homeDir = homedir();
   let claudeConfigDir = getClaudeConfigDir();
   let projectDirsUpToHome = getProjectDirsUpToHome();
   if (
-    !isAbsolutePlatformPath(o) ||
+    !isAbsolutePlatformPath(homeDir) ||
     !isAbsolutePlatformPath(claudeConfigDir) ||
     !isAbsolutePlatformPath(projectDirsUpToHome)
   )
     return true;
-  let u = servingBasesFor(dir);
-  if (u === "refused_outright") return true;
-  if (touchesWindowsRootFromWsl(u, n) || mountsUnderLaunch(u, n)) return true;
-  let wslWindowsUserDirs = getWslWindowsUserDirs(u);
-  let a = realpathOrSpelling_2(o);
-  let bases = [o, a];
-  let w = [...bases, ...wslWindowsUserDirs];
-  let E = filterWslMountedPaths(bases);
-  let Z = withPathAliases(getClaudeConfigDirs());
-  let Q = getPlatform() === "windows" ? Z.map((p) => realpathOrSpelling_2(p)) : [];
-  let C = uniq([...Z, ...Q]);
+  let bases = servingBasesFor(cwd);
+  if (bases === "refused_outright") return true;
+  if (touchesWindowsRootFromWsl(bases, otherSide) || mountsUnderLaunch(bases, otherSide)) return true;
+  let wslWindowsUserDirs = getWslWindowsUserDirs(bases);
+  let homeReal = realpathOrSpelling_2(homeDir);
+  let homeBases = [homeDir, homeReal];
+  let homeBases_2 = [...homeBases, ...wslWindowsUserDirs];
+  let mountedHomeBases = filterWslMountedPaths(homeBases);
+  let configDirs = withPathAliases(getClaudeConfigDirs());
+  let configRealDirs = getPlatform() === "windows" ? configDirs.map((dir) => realpathOrSpelling_2(dir)) : [];
+  let allConfigDirs = uniq([...configDirs, ...configRealDirs]);
   if (
     getPlatform() === "windows" &&
-    ([...w, ...C].some((p) => {
-      let R = classifyUncPath(normalizeCommandForPlatform(p));
-      return R === "own_host" || R === "wsl_host";
+    ([...homeBases_2, ...allConfigDirs].some((path) => {
+      let uncKind = classifyUncPath(normalizeCommandForPlatform(path));
+      return uncKind === "own_host" || uncKind === "wsl_host";
     }) ||
-      [a, ...Q].some((p) => classifyUncPath(normalizeCommandForPlatform(p)) === "short_name"))
+      [homeReal, ...configRealDirs].some(
+        (path) => classifyUncPath(normalizeCommandForPlatform(path)) === "short_name",
+      ))
   )
     return true;
-  let mapped = bases.map((p) => normalizeCommandForPlatform(p));
-  let T = uniq(u.flatMap(pathWithMountAliases));
+  let mapped = homeBases.map((base) => normalizeCommandForPlatform(base));
+  let aliasedBases = uniq(bases.flatMap(pathWithMountAliases));
   return (
-    [...w, ...C.flatMap(pathWithMountAliases)].some((p) => u.some((R) => isSameOrUnder(p, R))) ||
-    T.some((p) => C.some((R) => isSameOrUnder(p, R))) ||
-    T.some(
-      (p) =>
-        [p, uncAdminShareToDrive(p)].some((R) => isUnderAny(R, bases, E)) ||
-        mapped.some((R) => isUnderAny(rewriteUncHostFromReference(normalizeCommandForPlatform(p), R), [R])),
+    [...homeBases_2, ...allConfigDirs.flatMap(pathWithMountAliases)].some((path) =>
+      bases.some((base) => isSameOrUnder(path, base)),
     ) ||
-    profileMountPointsUnder(bases, n).some((p) =>
-      T.some((R) => isOnSameWslMount(R, p) || isOnSameWslMount(p, R)),
+    aliasedBases.some((aliased) => allConfigDirs.some((configDir) => isSameOrUnder(aliased, configDir))) ||
+    aliasedBases.some(
+      (aliased) =>
+        [aliased, uncAdminShareToDrive(aliased)].some((candidate) =>
+          isUnderAny(candidate, homeBases, mountedHomeBases),
+        ) ||
+        mapped.some((mappedBase) =>
+          isUnderAny(rewriteUncHostFromReference(normalizeCommandForPlatform(aliased), mappedBase), [
+            mappedBase,
+          ]),
+        ),
     ) ||
-    windowsRootMountPoints(n).some(({ mountPoint, place }) =>
-      T.some(
-        (J) =>
-          isOnSameWslMount(mountPoint, J) ||
-          normalizedVolumePaths(J, mountPoint).some((ke) =>
-            isRootOrSensitiveProfileAncestor(posix.join(place, ...ke)),
+    profileMountPointsUnder(homeBases, otherSide).some((mountPoint) =>
+      aliasedBases.some(
+        (aliased) => isOnSameWslMount(aliased, mountPoint) || isOnSameWslMount(mountPoint, aliased),
+      ),
+    ) ||
+    windowsRootMountPoints(otherSide).some(({ mountPoint, place }) =>
+      aliasedBases.some(
+        (aliased) =>
+          isOnSameWslMount(mountPoint, aliased) ||
+          normalizedVolumePaths(aliased, mountPoint).some((relativeParts) =>
+            isRootOrSensitiveProfileAncestor(posix.join(place, ...relativeParts)),
           ),
       ),
     ) ||
-    anyPairSameOrUnder([...windowsPowerShellProfileDirs(), ...windowsAutoRunDirs()], u)
+    anyPairSameOrUnder([...windowsPowerShellProfileDirs(), ...windowsAutoRunDirs()], bases)
   );
 }
 //@ chunk-e2fknt7w.js:19169-19284 placement = execTmux (0.805)
-function filterWslMountedPaths(e) {
+function filterWslMountedPaths(paths) {
   return getPlatform() === "wsl"
-    ? e.filter((n) => {
-        let normalized = posix.normalize(n);
+    ? paths.filter((path) => {
+        let normalized = posix.normalize(path);
         return driveMountsForPath(normalized).length > 0 || otherWindowsMountsForPath(normalized).length > 0;
       })
     : [];
 }
 //@ chunk-e2fknt7w.js:19284-19486 placement
 function profileMountPointsUnder(bases, scope) {
-  let o = filterWslMountedPaths(bases);
+  let mountedBases = filterWslMountedPaths(bases);
   return uniq([
-    ...bases.flatMap((base) => pathWithMountAliases(base).slice(1)).filter((r) => isUnderAny(r, bases, o)),
+    ...bases
+      .flatMap((base) => pathWithMountAliases(base).slice(1))
+      .filter((alias) => isUnderAny(alias, bases, mountedBases)),
     ...pathWithMountAliases("/")
       .slice(1)
-      .filter((r) =>
-        windowsProfileRoots(r, scope).some(
-          (s) => posix.normalize(s) !== "/" && isUnderSensitiveProfileDir(s, ["/"], "windows_on_wsl"),
+      .filter((mountPoint) =>
+        windowsProfileRoots(mountPoint, scope).some(
+          (root) =>
+            posix.normalize(root) !== "/" && isUnderSensitiveProfileDir(root, ["/"], "windows_on_wsl"),
         ),
       ),
   ]);
 }
 //@ chunk-e2fknt7w.js:19486-19634 placement
-function windowsRootMountPoints(e) {
+function windowsRootMountPoints(scope) {
   return pathWithMountAliases("/")
     .slice(1)
-    .flatMap((n) =>
-      windowsProfileRoots(n, e)
-        .filter((o) => o === "/" || isAncestorOfSensitiveProfileDir(o, ["/"], "windows_on_wsl"))
+    .flatMap((mountPoint) =>
+      windowsProfileRoots(mountPoint, scope)
+        .filter((place) => place === "/" || isAncestorOfSensitiveProfileDir(place, ["/"], "windows_on_wsl"))
         .map((place) => ({
-          mountPoint: n,
+          mountPoint,
           place,
         })),
     );
 }
 //@ chunk-e2fknt7w.js:19634-19737 placement
-function isUnderAny(e, n, o = []) {
+function isUnderAny(path, bases, mountedBases = []) {
   return (
-    isUnderSensitiveProfileDir(e, n) ||
-    (getPlatform() === "windows" && isAncestorOfSensitiveProfileDir(e, n)) ||
-    (o.length > 0 && isUnderSensitiveProfileDir(e, o, "windows_on_wsl"))
+    isUnderSensitiveProfileDir(path, bases) ||
+    (getPlatform() === "windows" && isAncestorOfSensitiveProfileDir(path, bases)) ||
+    (mountedBases.length > 0 && isUnderSensitiveProfileDir(path, mountedBases, "windows_on_wsl"))
   );
 }
 //@ chunk-e2fknt7w.js:19737-19844 placement
-function isSameOrUnder(e, n) {
-  let o = normalizeCommandForPlatform(n);
-  let r = rewriteUncHostFromReference(normalizeCommandForPlatform(e), o);
+function isSameOrUnder(first, second) {
+  let normalizedSecond = normalizeCommandForPlatform(second);
+  let rewrittenFirst = rewriteUncHostFromReference(normalizeCommandForPlatform(first), normalizedSecond);
   return (
-    isPathUnderForPlatform(r, o) ||
-    (getPlatform() === "windows" && (differsByUncPrefix(r, o) || isSameUncHostShortNamePair(r, o))) ||
-    isOnSameWslMount(e, n)
+    isPathUnderForPlatform(rewrittenFirst, normalizedSecond) ||
+    (getPlatform() === "windows" &&
+      (differsByUncPrefix(rewrittenFirst, normalizedSecond) ||
+        isSameUncHostShortNamePair(rewrittenFirst, normalizedSecond))) ||
+    isOnSameWslMount(first, second)
   );
 }
 //@ chunk-e2fknt7w.js:19844-20000 placement
-function isRemoteUncHost(e) {
-  switch (classifyUncPath(e)) {
+function isRemoteUncHost(path) {
+  switch (classifyUncPath(path)) {
     case undefined:
     case "webdav_host":
       return false;
     case "numeric_host":
-      return !IPV4_PATTERN.test(/^\\\\([^\\@]+)/.exec(e)?.[1] ?? "");
+      return !IPV4_PATTERN.test(/^\\\\([^\\@]+)/.exec(path)?.[1] ?? "");
     default:
       return true;
   }
@@ -181,65 +199,72 @@ function touchesWindowsRootFromWsl(args, opts) {
 /**
  * 路径是根目录，或是敏感用户目录的祖先/包含者。
  */
-function isRootOrSensitiveProfileAncestor(e) {
+function isRootOrSensitiveProfileAncestor(path) {
   return (
-    e === "/" ||
-    isUnderSensitiveProfileDir(e, ["/"], "windows_on_wsl") ||
-    isAncestorOfSensitiveProfileDir(e, ["/"], "windows_on_wsl")
+    path === "/" ||
+    isUnderSensitiveProfileDir(path, ["/"], "windows_on_wsl") ||
+    isAncestorOfSensitiveProfileDir(path, ["/"], "windows_on_wsl")
   );
 }
 //@ chunk-e2fknt7w.js:20545-20727 placement
-function windowsProfileRoots(e, n) {
-  let normalized = posix.normalize(e);
+function windowsProfileRoots(path, scope) {
+  let normalized = posix.normalize(path);
   return (
-    n === "all"
+    scope === "all"
       ? [...driveMountsForPath(normalized), ...otherWindowsMountsForPath(normalized)]
       : driveMountsForPath(normalized)
-  ).flatMap((s) =>
-    profileSpellings(s.beneath).flatMap((u) =>
-      u.length >= 2 && WINDOWS_PROFILE_FOLDER_NAMES(u[0]) ? [`/${u.slice(2).join("/")}`] : [],
+  ).flatMap((mount) =>
+    profileSpellings(mount.beneath).flatMap((parts) =>
+      parts.length >= 2 && WINDOWS_PROFILE_FOLDER_NAMES(parts[0]) ? [`/${parts.slice(2).join("/")}`] : [],
     ),
   );
 }
 //@ chunk-e2fknt7w.js:20727-21443 placement
-function mountsUnderLaunch(e, n) {
+function mountsUnderLaunch(bases, scope) {
   if (getPlatform() !== "wsl") return false;
-  return e.some((o) => {
-    let normalized = posix.normalize(o);
-    let s = driveMountsForPath(normalized);
-    let u =
-      n === "all"
-        ? otherWindowsMountsForPath(normalized).filter(
-            (d) =>
-              !s.some((a) => a.within === "" && a.mountPoint === d.mountPoint && a.beneath === d.beneath),
+  return bases.some((base) => {
+    let dir = posix.normalize(base);
+    let driveMounts = driveMountsForPath(dir);
+    let otherMounts =
+      scope === "all"
+        ? otherWindowsMountsForPath(dir).filter(
+            (otherMount) =>
+              !driveMounts.some(
+                (driveMount) =>
+                  driveMount.within === "" &&
+                  driveMount.mountPoint === otherMount.mountPoint &&
+                  driveMount.beneath === otherMount.beneath,
+              ),
           )
         : [];
     return (
-      ROOT_MOUNT_POINTS.has(
-        foldCaseBasic(normalized.length > 1 ? normalized.replace(/\/+$/, "") : normalized),
-      ) ||
-      [...s, ...u].some((d) => {
-        let a = foldedPathSegments(d.beneath);
-        return a.length === 1 && WINDOWS_PROFILE_FOLDER_NAMES(a[0]);
+      ROOT_MOUNT_POINTS.has(foldCaseBasic(dir.length > 1 ? dir.replace(/\/+$/, "") : dir)) ||
+      [...driveMounts, ...otherMounts].some((mount) => {
+        let segments = foldedPathSegments(mount.beneath);
+        return segments.length === 1 && WINDOWS_PROFILE_FOLDER_NAMES(segments[0]);
       }) ||
-      driveMountsUnder(normalized).some((d) => startsWithWindowsProfileFolder(d.within)) ||
-      (n === "all" &&
-        otherWindowsMountsUnder(normalized).some((d) => startsWithWindowsProfileFolder(d.within))) ||
-      driveMountsUnder(normalized).some(
-        (d) => hasNoWindowsProfilePath(d.within) && hasWindowsUserProfileDirs(d.mountPoint),
+      driveMountsUnder(dir).some((mount) => startsWithWindowsProfileFolder(mount.within)) ||
+      (scope === "all" &&
+        otherWindowsMountsUnder(dir).some((otherMount) =>
+          startsWithWindowsProfileFolder(otherMount.within),
+        )) ||
+      driveMountsUnder(dir).some(
+        (mount) => hasNoWindowsProfilePath(mount.within) && hasWindowsUserProfileDirs(mount.mountPoint),
       ) ||
-      s.some((d) => hasNoWindowsProfilePath(d.beneath) && hasWindowsUserProfileDirs(d.mountPoint)) ||
-      u.some((d) => {
-        if (!hasNoWindowsProfilePath(d.beneath)) return false;
-        let otherWindowsMountLines = getOtherWindowsMountLines(d.mountPoint);
-        if (otherWindowsMountLines === undefined) return hasWindowsUserProfileDirs(d.mountPoint);
-        let m = `${d.mountPoint}
+      driveMounts.some(
+        (mount) => hasNoWindowsProfilePath(mount.beneath) && hasWindowsUserProfileDirs(mount.mountPoint),
+      ) ||
+      otherMounts.some((otherMount) => {
+        if (!hasNoWindowsProfilePath(otherMount.beneath)) return false;
+        let otherWindowsMountLines = getOtherWindowsMountLines(otherMount.mountPoint);
+        if (otherWindowsMountLines === undefined) return hasWindowsUserProfileDirs(otherMount.mountPoint);
+        let cacheKey = `${otherMount.mountPoint}
 ${otherWindowsMountLines}`;
-        let w = windowsProfileMountCache.get(m);
-        if (w !== undefined) return w;
-        let E = hasWindowsUserProfileDirs(d.mountPoint);
-        windowsProfileMountCache.set(m, E);
-        return E;
+        let cached = windowsProfileMountCache.get(cacheKey);
+        if (cached !== undefined) return cached;
+        let hasProfileDirs = hasWindowsUserProfileDirs(otherMount.mountPoint);
+        windowsProfileMountCache.set(cacheKey, hasProfileDirs);
+        return hasProfileDirs;
       })
     );
   });
@@ -248,28 +273,32 @@ ${otherWindowsMountLines}`;
 /**
  * 路径里没有 Windows 用户目录片段。
  */
-function hasNoWindowsProfilePath(e) {
-  return foldedPathSegments(e).length === 0;
+function hasNoWindowsProfilePath(within) {
+  return foldedPathSegments(within).length === 0;
 }
 //@ chunk-e2fknt7w.js:21482-21539 placement
 /**
  * 路径首个片段是 Windows 用户目录名。
  */
 function startsWithWindowsProfileFolder(within) {
-  let n = foldedPathSegments(within);
-  return n.length > 0 && WINDOWS_PROFILE_FOLDER_NAMES(n[0]);
+  let segments = foldedPathSegments(within);
+  return segments.length > 0 && WINDOWS_PROFILE_FOLDER_NAMES(segments[0]);
 }
 //@ chunk-e2fknt7w.js:21539-21598 placement
 /**
  * WSL 挂载安全检查的辅助常量：Windows 用户目录判定缓存，以及直接当作根挂载的路径集合。
  */
-var windowsProfileMountCache = identity(new Map(), (e) => e.clear());
-var ROOT_MOUNT_POINTS = new Set(["/", "/mnt"]);
+var windowsProfileMountCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ROOT_MOUNT_POINTS;
+deferInit("chunk-e2fknt7w.js:21539", () => {
+  windowsProfileMountCache = identity(new Map(), (cache) => cache.clear());
+  ROOT_MOUNT_POINTS = new Set(["/", "/mnt"]);
+});
 //@ chunk-e2fknt7w.js:21598-21732 placement = isRealPathWithinTeamDir (1)
 function hasWindowsUserProfileDirs(realCandidate) {
-  return WINDOWS_PROFILE_ROOT_NAMES.some((n) => {
+  return WINDOWS_PROFILE_ROOT_NAMES.some((name) => {
     try {
-      return statSync(`${realCandidate}/${n}`).isDirectory();
+      return statSync(`${realCandidate}/${name}`).isDirectory();
     } catch (error) {
       let code = getErrnoCode(error);
       return code !== "ENOENT" && code !== "ENOTDIR";
@@ -279,7 +308,9 @@ function hasWindowsUserProfileDirs(realCandidate) {
 //@ chunk-e2fknt7w.js:21732-21804 placement
 var WINDOWS_PROFILE_ROOT_NAMES = ["Users", "Documents and Settings", "Dokumente und Einstellungen"];
 //@ chunk-e2fknt7w.js:21804-21869 placement
-function anyPairSameOrUnder(e, n) {
-  return e.some((o) => n.some((r) => isSameOrUnder(r, o) || isSameOrUnder(o, r)));
+function anyPairSameOrUnder(first, second) {
+  return first.some((left) =>
+    second.some((right) => isSameOrUnder(right, left) || isSameOrUnder(left, right)),
+  );
 }
 export { classifyMountForServing, isRemoteUncHost, profileMountPointsUnder, windowsRootMountPoints };

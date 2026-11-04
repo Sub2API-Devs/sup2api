@@ -5,20 +5,20 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_Node } from "./Node.js";
 import { require_LinkedList } from "./LinkedList.js";
 
 //@ chunk-vwj6ccer.js:42755-44212 cjs-fingerprint
-var require_ChildNode = x(function (cjsExports, cjsModule) {
+var require_ChildNode = __commonJS(function (cjsExports, cjsModule) {
   var Node = require_Node();
   var LinkedList = require_LinkedList();
-  var createDocumentFragmentFromArguments = function (e, args) {
-    var docFrag = e.createDocumentFragment();
+  var createDocumentFragmentFromArguments = function (doc, args) {
+    var docFrag = doc.createDocumentFragment();
     for (var i = 0; i < args.length; i++) {
       var argItem = args[i];
       var isNode = argItem instanceof Node;
-      docFrag.appendChild(isNode ? argItem : e.createTextNode(String(argItem)));
+      docFrag.appendChild(isNode ? argItem : doc.createTextNode(String(argItem)));
     }
     return docFrag;
   };

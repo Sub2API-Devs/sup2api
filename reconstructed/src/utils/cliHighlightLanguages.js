@@ -198,6 +198,7 @@ import { require_zephir } from "../../vendor/highlight.js/lib/languages/zephir.j
 import { require_core } from "../../vendor/highlight.js/lib/core.js";
 import { canonicalLanguageName, pluginHighlightLanguages } from "./highlight/pluginLanguages.js";
 import { HIGHLIGHT_LANGUAGE_ALIASES } from "./cliHighlight.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-egr0twnb.js:586332-589295 placement
 var HIGHLIGHT_LANGUAGE_LOADERS = {
@@ -392,15 +393,20 @@ var HIGHLIGHT_LANGUAGE_LOADERS = {
 /**
  * 高亮库加载器（核心、语言 id 解析、语言加载器、子语言依赖）。
  */
-var HIGHLIGHT_LOADER = {
-  loadCore() {
-    let e = require_core();
-    return "default" in e && e.default ? e.default : e;
-  },
-  resolveId: canonicalLanguageName,
-  loaders: HIGHLIGHT_LANGUAGE_LOADERS,
-  subLanguageDeps: HIGHLIGHT_LANGUAGE_ALIASES,
-};
+var HIGHLIGHT_LOADER; // deferred: uses LANGUAGE_NAMES (./cliHighlight.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-egr0twnb.js:589295", () => {
+  HIGHLIGHT_LOADER = {
+    loadCore() {
+      let highlightModule = require_core();
+      return "default" in highlightModule && highlightModule.default
+        ? highlightModule.default
+        : highlightModule;
+    },
+    resolveId: canonicalLanguageName,
+    loaders: HIGHLIGHT_LANGUAGE_LOADERS,
+    subLanguageDeps: HIGHLIGHT_LANGUAGE_ALIASES,
+  };
+});
 //@ chunk-egr0twnb.js:589415-589450 placement
 /**
  * 用共享加载器做基础高亮。
@@ -412,14 +418,14 @@ function highlightCore() {
 /**
  * 以消息样式作为背景做高亮。
  */
-function highlightUnderMessage(work, t) {
-  return pluginHighlightLanguages.highlightUnderMessage(HIGHLIGHT_LOADER, work, t);
+function highlightUnderMessage(work, language) {
+  return pluginHighlightLanguages.highlightUnderMessage(HIGHLIGHT_LOADER, work, language);
 }
 //@ chunk-egr0twnb.js:589509-589557 placement
 /**
  * 按需加载（并确认）高亮语言。
  */
-function ensureHighlightLanguage(e) {
-  return pluginHighlightLanguages.ensureLanguage(e, HIGHLIGHT_LOADER);
+function ensureHighlightLanguage(language) {
+  return pluginHighlightLanguages.ensureLanguage(language, HIGHLIGHT_LOADER);
 }
 export { ensureHighlightLanguage, highlightUnderMessage, highlightCore };

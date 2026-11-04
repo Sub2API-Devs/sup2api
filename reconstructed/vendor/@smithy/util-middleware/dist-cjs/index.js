@@ -5,14 +5,14 @@
  * pieces: chunk-jn3x3dnx.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_types } from "../../types/dist-cjs/index.js";
 
 //@ chunk-jn3x3dnx.js:263-482 cjs-fingerprint
-var require_util_middleware = x(function (cjsExports) {
+var require_util_middleware = __commonJS(function (cjsExports) {
   var import_types = require_types();
-  var getSmithyContext = (e) =>
-    e[import_types.SMITHY_CONTEXT_KEY] || (e[import_types.SMITHY_CONTEXT_KEY] = {});
+  var getSmithyContext = (context) =>
+    context[import_types.SMITHY_CONTEXT_KEY] || (context[import_types.SMITHY_CONTEXT_KEY] = {});
   var normalizeProvider = (input) => {
     if (typeof input === "function") return input;
     let promisified = Promise.resolve(input);

@@ -8,44 +8,49 @@
  * pieces: chunk-x35ttgf3.js (2)
  * attribution: placement 2
  */
-import { init_react_production, y, ce, P } from "../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useCallback,
+  useEffect,
+} from "../../vendor/react/cjs/react.production.js";
 
 //@ chunk-x35ttgf3.js:233-237 placement
 init_react_production();
 //@ chunk-x35ttgf3.js:237-557 placement
-function useRefusableAnswer(r) {
-  let [t, n] = y({
+function useRefusableAnswer(isAnswerAccepted) {
+  let [state, setState] = useState({
     attempts: 0,
     refused: null,
   });
-  let s = ce((refused) => {
-    n((a) => ({
-      attempts: a.attempts + 1,
+  let refuse = useCallback((refused) => {
+    setState((previous) => ({
+      attempts: previous.attempts + 1,
       refused,
     }));
   }, []);
-  let answer = ce(
-    (e) => {
-      if (r(e) === false) {
-        s(e);
+  let answer = useCallback(
+    (value) => {
+      if (isAnswerAccepted(value) === false) {
+        refuse(value);
         return false;
       }
       return true;
     },
-    [r, s],
+    [isAnswerAccepted, refuse],
   );
-  P(() => {
-    if (t.refused !== null)
-      n((e) => ({
-        attempts: e.attempts,
+  useEffect(() => {
+    if (state.refused !== null)
+      setState((previous) => ({
+        attempts: previous.attempts,
         refused: null,
       }));
-  }, [t.refused]);
+  }, [state.refused]);
   return {
     answer,
-    refuse: s,
-    refused: t.refused,
-    attempts: t.attempts,
+    refuse,
+    refused: state.refused,
+    attempts: state.attempts,
   };
 }
 export { useRefusableAnswer };

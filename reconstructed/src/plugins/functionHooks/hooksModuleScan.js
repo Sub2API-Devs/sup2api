@@ -33,205 +33,220 @@ import {
  * 扫描图里任一文件是否使用动态 import()。
  */
 function hasDynamicImport(graph) {
-  let n = false;
+  let found = false;
   for (let { scanned } of graph.files.values())
     walkAst(
       scanned.program,
-      (s) => {
-        if (s.node.type === "ImportExpression") n = true;
+      (visit) => {
+        if (visit.node.type === "ImportExpression") found = true;
       },
-      () => n,
+      () => found,
     );
-  return n;
+  return found;
 }
 //@ chunk-e6aww6q8.js:737029-737608 placement
-function scanDefaultExport(program, n, r) {
-  let s = new Set();
-  for (let h of program.body) {
-    if (h.type === "ExportDefaultDeclaration") {
-      let { declaration } = h;
+function scanDefaultExport(program, declaration, name) {
+  let seen = new Set();
+  for (let statement of program.body) {
+    if (statement.type === "ExportDefaultDeclaration") {
+      let { declaration: declaration_2 } = statement;
       if (
-        declaration === n ||
-        (declaration.type === "Identifier" && r !== undefined && declaration.name === r)
+        declaration_2 === declaration ||
+        (declaration_2.type === "Identifier" && name !== undefined && declaration_2.name === name)
       )
-        s.add("default");
+        seen.add("default");
       continue;
     }
-    if (h.type !== "ExportNamedDeclaration") continue;
-    let { declaration, source, specifiers } = h;
-    if (declaration?.type === "FunctionDeclaration" && declaration === n) s.add(declaration.id.name);
-    if (declaration?.type === "VariableDeclaration") {
-      for (let declaration_2 of declaration.declarations)
-        if (declaration_2.init === n && declaration_2.id.type === "Identifier") s.add(declaration_2.id.name);
+    if (statement.type !== "ExportNamedDeclaration") continue;
+    let { declaration: declaration_2, source, specifiers } = statement;
+    if (declaration_2?.type === "FunctionDeclaration" && declaration_2 === declaration)
+      seen.add(declaration_2.id.name);
+    if (declaration_2?.type === "VariableDeclaration") {
+      for (let declaration_3 of declaration_2.declarations)
+        if (declaration_3.init === declaration && declaration_3.id.type === "Identifier")
+          seen.add(declaration_3.id.name);
     }
     if (source !== null && source !== undefined) continue;
     for (let specifier of specifiers)
-      if (r !== undefined && exportNameText(specifier.local) === r) s.add(exportNameText(specifier.exported));
+      if (name !== undefined && exportNameText(specifier.local) === name)
+        seen.add(exportNameText(specifier.exported));
   }
-  return s;
+  return seen;
 }
 //@ chunk-e6aww6q8.js:737608-738706 placement
 /**
  * 静态扫描 hooks 模块的 import/export 声明，找出它引用的 $ 能力。
  */
-function scanHooksModuleImports(e, n) {
-  let r = e.holderFiles.get(n);
-  if (r === undefined) return;
-  let { scanned } = r;
-  let h = [...scanned.names.functions].find(([, L]) => L === n)?.[0];
-  let y = h === undefined ? [] : (scanned.names.read.get(h) ?? []);
-  let S = scanDefaultExport(scanned.program, n, h);
-  let w = [];
-  for (let L of y)
-    if (scanned.parentOf(L)?.type !== "ExportDefaultDeclaration")
-      w.push({
-        reference: L,
+function scanHooksModuleImports(graph, file) {
+  let holder = graph.holderFiles.get(file);
+  if (holder === undefined) return;
+  let { scanned } = holder;
+  let holderName = [...scanned.names.functions].find(([, value]) => value === file)?.[0];
+  let holders = holderName === undefined ? [] : (scanned.names.read.get(holderName) ?? []);
+  let defaults = scanDefaultExport(scanned.program, file, holderName);
+  let assignees = [];
+  for (let exportName of holders)
+    if (scanned.parentOf(exportName)?.type !== "ExportDefaultDeclaration")
+      assignees.push({
+        reference: exportName,
         scanned,
       });
-  for (let file of e.graph.files.values())
-    for (let G of file.scanned.program.body) {
+  for (let file of graph.graph.files.values())
+    for (let target of file.scanned.program.body) {
       let source =
-        G.type === "ImportDeclaration" ||
-        G.type === "ExportAllDeclaration" ||
-        G.type === "ExportNamedDeclaration"
-          ? G.source
+        target.type === "ImportDeclaration" ||
+        target.type === "ExportAllDeclaration" ||
+        target.type === "ExportNamedDeclaration"
+          ? target.source
           : undefined;
       if (!(
-        S.size > 0 &&
+        defaults.size > 0 &&
         source !== null &&
         source !== undefined &&
         file.links.get(String(source.value)) === scanned.file
       ))
         continue;
       if (
-        G.type === "ExportAllDeclaration" ||
-        (G.type === "ExportNamedDeclaration" &&
-          G.specifiers.some((specifier) => S.has(exportNameText(specifier.local)))) ||
-        (G.type === "ImportDeclaration" &&
-          G.specifiers.some((specifier) => specifier.type === "ImportNamespaceSpecifier"))
+        target.type === "ExportAllDeclaration" ||
+        (target.type === "ExportNamedDeclaration" &&
+          target.specifiers.some((specifier) => defaults.has(exportNameText(specifier.local)))) ||
+        (target.type === "ImportDeclaration" &&
+          target.specifiers.some((specifier) => specifier.type === "ImportNamespaceSpecifier"))
       )
         return;
-      let specifiers = G.type === "ImportDeclaration" ? G.specifiers : [];
+      let specifiers = target.type === "ImportDeclaration" ? target.specifiers : [];
       for (let specifier of specifiers) {
-        let Me = specifier.type === "ImportSpecifier" ? exportNameText(specifier.imported) : "default";
-        let We = specifier.local.name;
-        if (!S.has(Me)) continue;
-        if (exportsName_2(file.scanned.program, We)) return;
-        for (let reference of file.scanned.names.read.get(We) ?? [])
-          w.push({
+        let target = specifier.type === "ImportSpecifier" ? exportNameText(specifier.imported) : "default";
+        let secondTarget = specifier.local.name;
+        if (!defaults.has(target)) continue;
+        if (exportsName_2(file.scanned.program, secondTarget)) return;
+        for (let reference of file.scanned.names.read.get(secondTarget) ?? [])
+          assignees.push({
             reference,
             scanned: file.scanned,
           });
       }
     }
-  return w;
+  return assignees;
 }
 //@ chunk-e6aww6q8.js:738706-739383 placement
-function scanCallExpressions(e) {
-  let n = new Map();
-  let r = new Map();
-  let s = Map.groupBy(e.holderCalls, (w) => w.call);
-  let h;
-  function y({ reference, scanned }, G, q) {
-    let Z = scanned.parentOf(reference);
-    return (Z?.type === "CallExpression" && Z.callee === reference ? (s.get(Z) ?? []) : []).some(
-      (ke) => ke.callee === G && ke.position === q && S(ke.caller, ke.callerPosition),
+function scanCallExpressions(graph) {
+  let name = new Map();
+  let file = new Map();
+  let seen = Map.groupBy(graph.holderCalls, (holder) => holder.call);
+  let holderName;
+  function holders({ reference, scanned }, defaults, index) {
+    let entry = scanned.parentOf(reference);
+    return (
+      entry?.type === "CallExpression" && entry.callee === reference ? (seen.get(entry) ?? []) : []
+    ).some(
+      (value) =>
+        value.callee === defaults &&
+        value.position === index &&
+        secondDefaults(value.caller, value.callerPosition),
     );
   }
-  function S(caller, callerPosition) {
-    h ??= hasDynamicImport(e.graph);
-    let G = n.get(caller)?.get(callerPosition);
-    let q = r.get(caller)?.has(callerPosition) === true;
-    if (h || q || G !== undefined) return G ?? false;
-    r.set(caller, (r.get(caller) ?? new Set()).add(callerPosition));
-    let Se =
+  function secondDefaults(caller, index) {
+    holderName ??= hasDynamicImport(graph.graph);
+    let index_2 = name.get(caller)?.get(index);
+    let entry = file.get(caller)?.has(index) === true;
+    if (holderName || entry || index_2 !== undefined) return index_2 ?? false;
+    file.set(caller, (file.get(caller) ?? new Set()).add(index));
+    let value =
       caller.type === "FunctionExpression" && caller.id !== null && caller.id !== undefined
         ? undefined
-        : scanHooksModuleImports(e, caller);
-    let ke = caller === e.register && callerPosition === 0;
-    let we = Se !== undefined && (Se.length > 0 || ke) && Se.every((Ee) => y(Ee, caller, callerPosition));
-    n.set(caller, (n.get(caller) ?? new Map()).set(callerPosition, we));
-    r.get(caller)?.delete(callerPosition);
-    return we;
+        : scanHooksModuleImports(graph, caller);
+    let secondValue = caller === graph.register && index === 0;
+    let thirdValue =
+      value !== undefined &&
+      (value.length > 0 || secondValue) &&
+      value.every((target) => holders(target, caller, index));
+    name.set(caller, (name.get(caller) ?? new Map()).set(index, thirdValue));
+    file.get(caller)?.delete(index);
+    return thirdValue;
   }
-  return S;
+  return secondDefaults;
 }
 //@ chunk-e6aww6q8.js:739383-739551 placement
 /**
  * 判断 on(...) 调用是否紧跟 .catch 成员访问。
  */
-function isCatchMember(e, linked) {
-  let r = linked.scanned.parentOf(e);
+function isCatchMember(graph, linked) {
+  let file = linked.scanned.parentOf(graph);
   return (
-    r?.type === "MemberExpression" &&
-    r.object === e &&
-    !r.computed &&
-    r.property.type === "Identifier" &&
-    r.property.name === "catch"
+    file?.type === "MemberExpression" &&
+    file.object === graph &&
+    !file.computed &&
+    file.property.type === "Identifier" &&
+    file.property.name === "catch"
   );
 }
 //@ chunk-e6aww6q8.js:739551-739862 placement
 /**
  * 判断钩子函数是否可能使用第三个参数（next）或 eval（无法静态确定时视为可能）。
  */
-function mayRewriteNext(linked, n) {
-  let s = n.type === "Identifier" ? linked.scanned.names.functions.get(n.name) : n;
+function mayRewriteNext(linked, node) {
+  let local = node.type === "Identifier" ? linked.scanned.names.functions.get(node.name) : node;
   if (!(
-    s?.type === "FunctionExpression" ||
-    s?.type === "ArrowFunctionExpression" ||
-    s?.type === "FunctionDeclaration"
+    local?.type === "FunctionExpression" ||
+    local?.type === "ArrowFunctionExpression" ||
+    local?.type === "FunctionDeclaration"
   ))
     return true;
-  let [, , y] = s.params;
+  let [, , holder] = local.params;
   return (
-    (y !== undefined && (y.type !== "Identifier" || findReferences(s, y.name).length > 0)) ||
-    findReferences(s, "eval").length > 0
+    (holder !== undefined &&
+      (holder.type !== "Identifier" || findReferences(local, holder.name).length > 0)) ||
+    findReferences(local, "eval").length > 0
   );
 }
 //@ chunk-e6aww6q8.js:739862-740163 placement
 /**
  * 判断 command.run 注册是否只针对本插件登记的命令且不会把事件传下去。
  */
-function isOwnCommandRunHook(e, n, registeredCommands) {
-  let { parentOf } = n.linked.scanned;
-  let h = isCatchMember(e, n.linked) ? parentOf(e) : undefined;
-  let y = h === undefined ? undefined : parentOf(h);
-  let S = [...e.arguments.slice(-1), ...(y?.type === "CallExpression" ? y.arguments : [])];
-  let w = readCommandList(n.matcher) ?? [];
+function isOwnCommandRunHook(member, registration, registeredCommands) {
+  let { parentOf } = registration.linked.scanned;
+  let catchParent = isCatchMember(member, registration.linked) ? parentOf(member) : undefined;
+  let callParent = catchParent === undefined ? undefined : parentOf(catchParent);
+  let receiver = [
+    ...member.arguments.slice(-1),
+    ...(callParent?.type === "CallExpression" ? callParent.arguments : []),
+  ];
+  let hooksCall = readCommandList(registration.matcher) ?? [];
   return (
-    n.event === "command.run" &&
-    !S.some((L) => mayRewriteNext(n.linked, L)) &&
-    w.length > 0 &&
-    w.every((L) => registeredCommands.has(L))
+    registration.event === "command.run" &&
+    !receiver.some((call) => mayRewriteNext(registration.linked, call)) &&
+    hooksCall.length > 0 &&
+    hooksCall.every((arg) => registeredCommands.has(arg))
   );
 }
 //@ chunk-e6aww6q8.js:740163-740645 placement
 /**
  * 判断某名字的读取点是顶层 const 声明还是某注册的 matcher 位置。
  */
-function classifyMatcherHolder(e, scanned, r) {
-  let s = scanned.climbs.heldAt(r);
-  if (s === undefined) return;
-  let { value: h, parent } = s;
-  if (parent.type === "VariableDeclarator" && parent.init === h) {
+function classifyMatcherHolder(graph, scanned, node) {
+  let held = scanned.climbs.heldAt(node);
+  if (held === undefined) return;
+  let { value, parent } = held;
+  if (parent.type === "VariableDeclarator" && parent.init === value) {
     let { id } = parent;
-    let q = scanned.parentOf(parent);
-    let Z = q && scanned.parentOf(q);
+    let kind = scanned.parentOf(parent);
+    let name = kind && scanned.parentOf(kind);
     return id.type === "Identifier" &&
-      q?.type === "VariableDeclaration" &&
-      q.kind === "const" &&
-      (Z?.type === "Program" || Z?.type === "ExportNamedDeclaration")
+      kind?.type === "VariableDeclaration" &&
+      kind.kind === "const" &&
+      (name?.type === "Program" || name?.type === "ExportNamedDeclaration")
       ? {
           kind: "const",
           name: id.name,
         }
       : undefined;
   }
-  let w = parent.type === "CallExpression" ? e.registrations.get(parent) : undefined;
-  return w !== undefined && w.matcher === h
+  let name = parent.type === "CallExpression" ? graph.registrations.get(parent) : undefined;
+  return name !== undefined && name.matcher === value
     ? {
         kind: "matcher",
-        held: w,
+        held: name,
       }
     : undefined;
 }
@@ -239,139 +254,141 @@ function classifyMatcherHolder(e, scanned, r) {
 /**
  * 生成"名字是否只被用作 matcher（密封）"的递归判断（带缓存与环检测）。
  */
-function createSealedNameChecker(e, n) {
-  let r = new Map();
-  let s = new Map();
-  function h(y, name) {
-    let w = r.get(y)?.get(name);
-    if (s.get(y)?.has(name) === true || w !== undefined) return w ?? false;
-    s.set(y, (s.get(y) ?? new Set()).add(name));
-    let { scanned } = y;
-    let q = scanned.names.read.get(name) ?? [];
-    let Z =
+function createSealedNameChecker(graph, isSealedHolder) {
+  let cache = new Map();
+  let inProgress = new Map();
+  function isSealedName(linked, name) {
+    let cached = cache.get(linked)?.get(name);
+    if (inProgress.get(linked)?.has(name) === true || cached !== undefined) return cached ?? false;
+    inProgress.set(linked, (inProgress.get(linked) ?? new Set()).add(name));
+    let { scanned } = linked;
+    let reads = scanned.names.read.get(name) ?? [];
+    let sealed =
       !exportsName_2(scanned.program, name) &&
-      q.length > 0 &&
-      q.every((Se) => {
-        let ke = classifyMatcherHolder(e, scanned, Se);
-        switch (ke?.kind) {
+      reads.length > 0 &&
+      reads.every((read) => {
+        let holder = classifyMatcherHolder(graph, scanned, read);
+        switch (holder?.kind) {
           case "matcher":
-            return n(ke.held.holder, ke.held.position);
+            return isSealedHolder(holder.held.holder, holder.held.position);
           case "const":
-            return h(y, ke.name);
+            return isSealedName(linked, holder.name);
           case undefined:
             return false;
         }
       });
-    r.set(y, (r.get(y) ?? new Map()).set(name, Z));
-    s.get(y)?.delete(name);
-    return Z;
+    cache.set(linked, (cache.get(linked) ?? new Map()).set(name, sealed));
+    inProgress.get(linked)?.delete(name);
+    return sealed;
   }
-  return h;
+  return isSealedName;
 }
 //@ chunk-e6aww6q8.js:741127-741699 placement
 /**
  * 汇总扫描到的注册：注册描述、ui.render 的字面 matcher、catch 与 command.run 自有命令信息。
  */
-function collectRegistrationFacts(e) {
-  let sealedNameChecker = createSealedNameChecker(e, scanCallExpressions(e));
-  let r = new Map();
-  let s = [];
-  let h = [];
-  let y = [];
-  for (let [S, w] of e.registrations) {
-    let { event, matcher, linked } = w;
+function collectRegistrationFacts(graph) {
+  let sealedNameChecker = createSealedNameChecker(graph, scanCallExpressions(graph));
+  let scannedByFile = new Map();
+  let registrations = [];
+  let renderMatchers = [];
+  let catchReads = [];
+  for (let [index, registration] of graph.registrations) {
+    let { event, matcher, linked } = registration;
     let { program, parentOf, names } = linked.scanned;
-    let we = r.get(linked) ?? {
+    let scanned = scannedByFile.get(linked) ?? {
       program,
       parentOf,
       shadowOf: names.shadowOf,
-      isSealed: (Ie) => sealedNameChecker(linked, Ie),
+      isSealed: (name) => sealedNameChecker(linked, name),
     };
-    r.set(linked, we);
-    let Ee = appendLiteral(event, matcher, we);
-    let Ae = event === "command.run";
-    s.push(Ee);
-    y.push({
-      registration: Ee,
+    scannedByFile.set(linked, scanned);
+    let appended = appendLiteral(event, matcher, scanned);
+    let isCommandRun = event === "command.run";
+    registrations.push(appended);
+    catchReads.push({
+      registration: appended,
       pattern: event,
-      hasCatch: isCatchMember(S, linked),
-      isOwnCommand: isOwnCommandRunHook(S, w, e.registeredCommands),
-      commands: (Ae ? readCommandList(matcher) : undefined) ?? [],
+      hasCatch: isCatchMember(index, linked),
+      isOwnCommand: isOwnCommandRunHook(index, registration, graph.registeredCommands),
+      commands: (isCommandRun ? readCommandList(matcher) : undefined) ?? [],
     });
     if (event === "ui.render" && matcher !== undefined)
-      h.push({
-        registration: Ee,
-        matcher: evaluateLiteral(matcher, we),
+      renderMatchers.push({
+        registration: appended,
+        matcher: evaluateLiteral(matcher, scanned),
       });
   }
   return {
-    registrations: s,
-    renderMatchers: h,
-    catchReads: y,
+    registrations,
+    renderMatchers,
+    catchReads,
   };
 }
 //@ chunk-e6aww6q8.js:741699-741818 placement
 /**
  * 列出只经由辅助函数间接发生的 $ 调用（按调用名排序）。
  */
-function collectHelperCalls(graph, n) {
-  let { via, direct } = scanRegistrations(graph, n);
-  let h = new Map();
-  for (let [y, S] of via) if (!direct.has(y)) h.set(y, [...S].sort());
-  return h;
+function collectHelperCalls(graph, secondGraph) {
+  let { via, direct } = scanRegistrations(graph, secondGraph);
+  let calls = new Map();
+  for (let [from, secondVia] of via) if (!direct.has(from)) calls.set(from, [...secondVia].sort());
+  return calls;
 }
 //@ chunk-e6aww6q8.js:741818-742025 placement
 /**
  * 插件校验用：加载 hooks 模块图并返回扫描结果、注册、ui.render matcher、catch 信息与辅助调用。
  */
-async function scanHooksModuleForValidation(e, n, r) {
-  let { graph } = await loadHooksModuleGraph(e, n, r);
-  let { registrations, renderMatchers, catchReads } = collectRegistrationFacts(scanRegistrations(graph, r));
+async function scanHooksModuleForValidation(modulePath, pluginRoot, pluginName) {
+  let { graph } = await loadHooksModuleGraph(modulePath, pluginRoot, pluginName);
+  let { registrations, renderMatchers, catchReads } = collectRegistrationFacts(
+    scanRegistrations(graph, pluginName),
+  );
   return {
-    scan: scanHooksModuleCached(graph, r),
+    scan: scanHooksModuleCached(graph, pluginName),
     registrations,
     renderMatchers,
     catchReads,
-    helperCalls: collectHelperCalls(graph, r),
+    helperCalls: collectHelperCalls(graph, pluginName),
   };
 }
 //@ chunk-e6aww6q8.js:742025-742275 placement
 /**
  * 把模块图转成加载结果：入口源码、其余链接文件、链接关系与扫描结果。
  */
-var toModuleLoadResult = (e, n, r) => ({
-  source: n.source,
-  linked: [...n.graph.files]
-    .filter((file) => file[0] !== e)
+var toModuleLoadResult = (modulePath, loaded, extra) => ({
+  source: loaded.source,
+  linked: [...loaded.graph.files]
+    .filter((file) => file[0] !== modulePath)
     .map((file) => ({
       file: file[0],
       source: file[1].source,
     })),
-  links: [...n.graph.files].flatMap((file) =>
+  links: [...loaded.graph.files].flatMap((file) =>
     [...file[1].links].map((link) => ({
       from: file[0],
       spelled: link[0],
       file: link[1],
     })),
   ),
-  scan: scanHooksModuleCached(n.graph, r),
+  scan: scanHooksModuleCached(loaded.graph, extra),
 });
 //@ chunk-e6aww6q8.js:742275-742468 placement
 /**
  * 列出模块图里入口之外的文件（含源码）及所有链接关系。
  */
-var listLinkedFiles = (graph, n) => ({
+var listLinkedFiles = (graph, thirdGraph) => ({
   linked: [...graph.files]
-    .filter(([r]) => r !== n)
-    .map(([r, s]) => ({
-      file: r,
-      source: s.source,
+    .filter(([file]) => file !== thirdGraph)
+    .map(([file, entry]) => ({
+      file,
+      source: entry.source,
     })),
-  links: [...graph.files].flatMap(([r, s]) =>
-    [...s.links].map(([h, y]) => ({
-      from: r,
-      spelled: h,
-      file: y,
+  links: [...graph.files].flatMap(([file, entry]) =>
+    [...entry.links].map(([secondFile, entry]) => ({
+      from: file,
+      spelled: secondFile,
+      file: entry,
     })),
   ),
 });
@@ -379,70 +396,74 @@ var listLinkedFiles = (graph, n) => ({
 /**
  * 扫描 hooks 模块：有构建内置的扫描结果则直接用，否则加载模块图并扫描。
  */
-async function scanHooksModule(e, n, r) {
-  let s = builtinSourceRegistry.scan(e);
-  return s === undefined
-    ? toModuleLoadResult(e, await loadHooksModuleGraph(e, n, r), r)
+async function scanHooksModule(modulePath, pluginRoot, pluginName) {
+  let sealed = builtinSourceRegistry.scan(modulePath);
+  return sealed === undefined
+    ? toModuleLoadResult(
+        modulePath,
+        await loadHooksModuleGraph(modulePath, pluginRoot, pluginName),
+        pluginName,
+      )
     : {
         source: "",
         linked: [],
         links: [],
-        scan: s,
+        scan: sealed,
       };
 }
 //@ chunk-e6aww6q8.js:742684-742851 placement
 /**
  * 为密封插件创建模块解析器：只从给定文本表里取源码，找不到时报错。
  */
-var createSealedResolver = (pluginRoot, pluginName, texts) => async (s, h) => {
-  for (let y of candidateSourcePaths(resolveImportSpec(s, h))) {
-    let S = texts.get(relative(pluginRoot, y).split(sep).join("/"));
-    if (S !== undefined)
+var createSealedResolver = (pluginRoot, pluginName, texts) => async (specifier, fromFile) => {
+  for (let candidate of candidateSourcePaths(resolveImportSpec(specifier, fromFile))) {
+    let source = texts.get(relative(pluginRoot, candidate).split(sep).join("/"));
+    if (source !== undefined)
       return {
-        file: y,
-        source: S,
+        file: candidate,
+        source,
       };
   }
-  throw bareImportError(pluginName, s, relative(pluginRoot, h) || h);
+  throw bareImportError(pluginName, specifier, relative(pluginRoot, fromFile) || fromFile);
 };
 //@ chunk-e6aww6q8.js:742851-743173 placement
 /**
  * 用密封文本（组织下发的插件）构建模块图并扫描，入口不在文本表中时报错。
  */
-async function scanSealedHooksModule(e) {
-  let n = e.texts.get(relative(e.pluginRoot, e.modulePath).split(sep).join("/"));
-  if (n === undefined) throw bareImportError(e.pluginName, e.modulePath, e.pluginName);
+async function scanSealedHooksModule(options) {
+  let source = options.texts.get(relative(options.pluginRoot, options.modulePath).split(sep).join("/"));
+  if (source === undefined) throw bareImportError(options.pluginName, options.modulePath, options.pluginName);
   return toModuleLoadResult(
-    e.modulePath,
+    options.modulePath,
     {
-      source: n,
+      source,
       graph: await buildModuleGraph(
         {
-          file: e.modulePath,
-          source: n,
-          root: e.pluginRoot,
+          file: options.modulePath,
+          source,
+          root: options.pluginRoot,
         },
-        e.pluginName,
-        createSealedResolver(e.pluginRoot, e.pluginName, e.texts),
+        options.pluginName,
+        createSealedResolver(options.pluginRoot, options.pluginName, options.texts),
       ),
     },
-    e.pluginName,
+    options.pluginName,
   );
 }
 //@ chunk-e6aww6q8.js:743173-743529 placement
 /**
  * 非内置插件的遥测钩子落在 anthropic 流上时返回拒绝说明（应指定 to: "collector"）。
  */
-function telemetryStreamRefusal(e, n) {
-  if (!(!n.isBuiltin && e.telemetry?.includes(ANTHROPIC) === true)) return;
+function telemetryStreamRefusal(scan, ctx) {
+  if (!(!ctx.isBuiltin && scan.telemetry?.includes(ANTHROPIC) === true)) return;
   return `its hooks stand on the telemetry stream "${ANTHROPIC}" (a matcher names it, or a telemetry hook names no "to" and so stands on every stream), which is for the plugins built into the CLI; name the collector on each telemetry hook: on("telemetry.log", { to: "collector" }, hook)`;
 }
 //@ chunk-e6aww6q8.js:743529-743601 placement
 /**
  * 遥测引用摘要
  */
-function telemetryRefSummary(e) {
-  let joined = e.telemetry?.join(", ");
+function telemetryRefSummary(scan) {
+  let joined = scan.telemetry?.join(", ");
   return joined === "" ? "nothing" : joined;
 }
 export {

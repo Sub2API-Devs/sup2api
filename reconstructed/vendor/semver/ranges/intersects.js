@@ -5,11 +5,11 @@
  * pieces: chunk-bwbq4xvm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_range } from "../classes/range.js";
 
 //@ chunk-bwbq4xvm.js:23951-24064 cjs-fingerprint
-var require_intersects = x(function (cjsExports, cjsModule) {
+var require_intersects = __commonJS(function (cjsExports, cjsModule) {
   var Range = require_range();
   var intersects = (r1, r2, options) => {
     r1 = new Range(r1, options);

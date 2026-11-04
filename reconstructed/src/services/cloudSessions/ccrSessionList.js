@@ -22,93 +22,97 @@ var CCR_SESSION_ID_RE = /^(?:session|cse)_[A-Za-z0-9_-]+$/;
 /**
  * 判断会话标题是否可展示（非空且不是内部占位标题）。
  */
-function hasDisplayTitle(e) {
-  let trimmed = (e.title ?? "").trim();
-  return trimmed !== "" && !isInternalHuskTitle(trimmed);
+function hasDisplayTitle(session) {
+  let title = (session.title ?? "").trim();
+  return title !== "" && !isInternalHuskTitle(title);
 }
 //@ chunk-2ny09dd0.js:381-476 placement
-function isInternalHuskTitle(e) {
-  return e.includes("__CBU_POOLED__") || e === "__warming__" || e.startsWith("ditto:");
+function isInternalHuskTitle(title) {
+  return title.includes("__CBU_POOLED__") || title === "__warming__" || title.startsWith("ditto:");
 }
 //@ chunk-2ny09dd0.js:476-2254 placement
 /**
  * 分页遍历 /v1/code/sessions 云会话列表，过滤已归档、桥接与内部占位会话，超出页数预算时标注截断。
  */
-async function walkCcrSessionList(e) {
+async function walkCcrSessionList(options) {
   if (getAPIProvider() !== "firstParty") return [];
   try {
-    await import("./chunk-eg58qykf.js");
+    await import("./chunk-eg58qykf.lazy.js");
     let { axiosGetWithRetry, prepareApiRequest, getOAuthRequestHeaders } =
-      await import("./chunk-6phxatm7.js");
-    let { getOauthConfig } = await import("./chunk-pcmb1mv7.js");
-    let { accessToken } = await prepareApiRequest(e?.credentials);
-    let joined = (e?.statuses ?? []).map((c) => `&statuses=${c}`).join("");
-    let m = `${getOauthConfig().BASE_API_URL}/v1/code/sessions?limit=100${joined}`;
+      await import("../../utils/teleport/api.js");
+    let { getOauthConfig } = await import("../../constants/oauth.js");
+    let { accessToken } = await prepareApiRequest(options?.credentials);
+    let joined = (options?.statuses ?? []).map((status) => `&statuses=${status}`).join("");
+    let baseUrl = `${getOauthConfig().BASE_API_URL}/v1/code/sessions?limit=100${joined}`;
     let headers = {
       ...getOAuthRequestHeaders(accessToken),
-      ...(e?.requestReason && {
-        "anthropic-client-request-reason": e.requestReason,
+      ...(options?.requestReason && {
+        "anthropic-client-request-reason": options.requestReason,
       }),
     };
-    let g = new Set();
-    let n = [];
-    let h = 0;
-    let s = null;
-    let a = 0;
-    for (; a < MAX_LIST_PAGES; a++) {
-      let c = s ? `${m}&cursor=${encodeURIComponent(s)}` : m;
-      let i;
+    let seenIds = new Set();
+    let sessions = [];
+    let fetchedCount = 0;
+    let cursor = null;
+    let page = 0;
+    for (; page < MAX_LIST_PAGES; page++) {
+      let pageUrl = cursor ? `${baseUrl}&cursor=${encodeURIComponent(cursor)}` : baseUrl;
+      let pageResponse;
       try {
-        i = await axiosGetWithRetry(c, {
+        pageResponse = await axiosGetWithRetry(pageUrl, {
           headers,
           timeout: 15000,
         });
       } catch (error) {
-        if (e?.throwOnError) throw error;
-        let { logForDebugging } = await import("./chunk-cgjee2k6.js");
-        logForDebugging(`[ccr:list] page ${a} failed (${n.length} rows so far): ${errorMessage(error)}`);
+        if (options?.throwOnError) throw error;
+        let { logForDebugging } = await import("../../utils/debug.js");
+        logForDebugging(
+          `[ccr:list] page ${page} failed (${sessions.length} rows so far): ${errorMessage(error)}`,
+        );
         break;
       }
-      h += i.data.data.length;
-      for (let t of i.data.data) {
-        if (g.has(t.id)) continue;
-        g.add(t.id);
+      fetchedCount += pageResponse.data.data.length;
+      for (let session of pageResponse.data.data) {
+        if (seenIds.has(session.id)) continue;
+        seenIds.add(session.id);
         if (
-          t.status !== "archived" &&
-          (e?.includeBridgeKind || t.environment_kind !== "bridge") &&
-          CCR_SESSION_ID_RE.test(t.id) &&
-          (e?.includeBridgeKind && t.environment_kind === "bridge"
-            ? !isInternalHuskTitle((t.title ?? "").trim())
-            : hasDisplayTitle(t)) &&
-          (e?.accept?.(t) ?? true)
+          session.status !== "archived" &&
+          (options?.includeBridgeKind || session.environment_kind !== "bridge") &&
+          CCR_SESSION_ID_RE.test(session.id) &&
+          (options?.includeBridgeKind && session.environment_kind === "bridge"
+            ? !isInternalHuskTitle((session.title ?? "").trim())
+            : hasDisplayTitle(session)) &&
+          (options?.accept?.(session) ?? true)
         )
-          n.push(t);
+          sessions.push(session);
       }
-      s = i.data.next_cursor ?? null;
-      let last = i.data.data.at(-1);
-      let _ = last ? Date.parse(last.last_event_at ?? last.created_at) : Number.NaN;
+      cursor = pageResponse.data.next_cursor ?? null;
+      let last = pageResponse.data.data.at(-1);
+      let lastEventMs = last ? Date.parse(last.last_event_at ?? last.created_at) : Number.NaN;
       if (
-        !s ||
-        (!e?.exhaustive && n.length >= CCR_LIST_TARGET_VISIBLE) ||
-        (e?.stopWhenOlderThan !== undefined && !Number.isNaN(_) && _ < e.stopWhenOlderThan)
+        !cursor ||
+        (!options?.exhaustive && sessions.length >= CCR_LIST_TARGET_VISIBLE) ||
+        (options?.stopWhenOlderThan !== undefined &&
+          !Number.isNaN(lastEventMs) &&
+          lastEventMs < options.stopWhenOlderThan)
       )
         break;
     }
-    let { logForDebugging } = await import("./chunk-cgjee2k6.js");
-    let p = a >= MAX_LIST_PAGES && s !== null;
-    if (e?.status) {
-      e.status.truncated = p;
-      e.status.moreRemain = Boolean(s);
+    let { logForDebugging } = await import("../../utils/debug.js");
+    let truncated = page >= MAX_LIST_PAGES && cursor !== null;
+    if (options?.status) {
+      options.status.truncated = truncated;
+      options.status.moreRemain = Boolean(cursor);
     }
     logForDebugging(
-      `[ccr:list]: ${h} fetched, ${n.length} after archive/bridge/husk${e?.accept ? "/accept" : ""} filter${p ? ` (TRUNCATED: ${MAX_LIST_PAGES}-page budget exhausted with more remaining)` : ""}`,
+      `[ccr:list]: ${fetchedCount} fetched, ${sessions.length} after archive/bridge/husk${options?.accept ? "/accept" : ""} filter${truncated ? ` (TRUNCATED: ${MAX_LIST_PAGES}-page budget exhausted with more remaining)` : ""}`,
     );
-    return n;
+    return sessions;
   } catch (error) {
-    if (e?.throwOnError) throw error;
-    let { logForDebugging } = await import("./chunk-cgjee2k6.js");
+    if (options?.throwOnError) throw error;
+    let { logForDebugging } = await import("../../utils/debug.js");
     logForDebugging(`[ccr:list] failed: ${errorMessage(error)}`);
   }
   return [];
 }
-export { isInternalHuskTitle, CCR_SESSION_ID_RE, CCR_LIST_TARGET_VISIBLE };
+export { isInternalHuskTitle, CCR_SESSION_ID_RE, CCR_LIST_TARGET_VISIBLE, walkCcrSessionList };

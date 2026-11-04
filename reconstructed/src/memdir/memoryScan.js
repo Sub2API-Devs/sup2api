@@ -9,7 +9,7 @@
  * attribution: placement 20
  */
 import { join, sep, resolve, basename, relative, isAbsolute } from "path";
-import { lstat, readdir } from "fs/promises";
+import { lstat as lstat_2, readdir } from "fs/promises";
 import { parseMemoryStoresEnv } from "../services/orgMemory/memoryStores.js";
 import { getAutoMemPath } from "./paths.js";
 import { normalizeKeySegment, isExcludedMemoryKey } from "../services/memoryStore/memoryKeys.js";
@@ -31,6 +31,7 @@ import {
 } from "../utils/errors.js";
 import { logForDebugging } from "../utils/debug.js";
 import { formatStorageError } from "../utils/storage/storageErrors.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:417201-417225 placement
 /**
@@ -43,53 +44,57 @@ var ACCOUNT = "account";
  * 根据 CLAUDE_MEMORY_STORES 计算扫描时要排除的索引文件（各 store 的 promptIndex、MEMORY.md）和 skills 目录前缀。
  */
 function loadedIndexExclusions() {
-  let e;
+  let stores;
   try {
-    e = parseMemoryStoresEnv();
+    stores = parseMemoryStoresEnv();
   } catch {
     return null;
   }
-  if (e === null) return null;
-  let n = new Set(["MEMORY.md"]);
-  let r = [];
-  for (let s of e) {
-    for (let y of s.skillsDirs ?? []) {
-      let parts = y.split("/");
-      r.push((s.scope === "user" ? join(...parts) : join("team", s.mount, ...parts)) + sep);
+  if (stores === null) return null;
+  let excluded = new Set(["MEMORY.md"]);
+  let excludedPrefixes = [];
+  for (let store of stores) {
+    for (let skillsDir of store.skillsDirs ?? []) {
+      let parts = skillsDir.split("/");
+      excludedPrefixes.push(
+        (store.scope === "user" ? join(...parts) : join("team", store.mount, ...parts)) + sep,
+      );
     }
-    if (s.promptIndex === undefined) continue;
-    let parts = s.promptIndex.split("/");
-    n.add(s.scope === "user" ? join(...parts) : join("team", s.mount, ...parts));
+    if (store.promptIndex === undefined) continue;
+    let parts = store.promptIndex.split("/");
+    excluded.add(store.scope === "user" ? join(...parts) : join("team", store.mount, ...parts));
   }
   return {
-    excluded: n,
-    excludedPrefixes: r,
+    excluded,
+    excludedPrefixes,
   };
 }
 //@ chunk-s61vbvea.js:417624-417778 placement = isTeamSubscriber (0.758)
-function recallVisibleTeamMounts(e) {
-  if (resolve(e) !== resolve(getAutoMemPath())) return null;
-  let n = new Set();
+function recallVisibleTeamMounts(dir) {
+  if (resolve(dir) !== resolve(getAutoMemPath())) return null;
+  let mounts = new Set();
   try {
-    for (let r of parseMemoryStoresEnv() ?? []) if (r.scope === "team" && r.mount !== ACCOUNT) n.add(r.mount);
+    for (let store of parseMemoryStoresEnv() ?? [])
+      if (store.scope === "team" && store.mount !== ACCOUNT) mounts.add(store.mount);
   } catch {}
-  return n;
+  return mounts;
 }
 //@ chunk-s61vbvea.js:417778-417916 placement = isTeamSubscriber (1)
-function isRecallVisiblePath(e, n) {
-  if (n === null) return true;
-  let parts = e.split(/[\\/]/);
-  if (normalizeKeySegment(parts[0]) === "team") return parts.length < 3 || n.has(parts[1]);
+function isRecallVisiblePath(relativePath, teamMounts) {
+  if (teamMounts === null) return true;
+  let parts = relativePath.split(/[\\/]/);
+  if (normalizeKeySegment(parts[0]) === "team") return parts.length < 3 || teamMounts.has(parts[1]);
   return !isExcludedMemoryKey(parts.join("/"));
 }
 //@ chunk-s61vbvea.js:417916-418062 placement
-function isRecallableMemoryFile(e, n, r) {
+function isRecallableMemoryFile(relativePath, exclusions, teamMounts) {
   return (
-    e.endsWith(".md") &&
-    (n
-      ? !n.excluded.has(e) && !n.excludedPrefixes.some((excludedPrefix) => e.startsWith(excludedPrefix))
-      : basename(e) !== "MEMORY.md") &&
-    isRecallVisiblePath(e, r)
+    relativePath.endsWith(".md") &&
+    (exclusions
+      ? !exclusions.excluded.has(relativePath) &&
+        !exclusions.excludedPrefixes.some((excludedPrefix) => relativePath.startsWith(excludedPrefix))
+      : basename(relativePath) !== "MEMORY.md") &&
+    isRecallVisiblePath(relativePath, teamMounts)
   );
 }
 //@ chunk-s61vbvea.js:418062-418173 placement = isSessionPlanFile (1)
@@ -121,44 +126,46 @@ function firstHeadingOrLine(body) {
 /**
  * 扫描记忆目录下的 .md 文件（排除 MEMORY.md 与 memory store 的索引/skills），读取头部 frontmatter 得到 filename/description/type/mtime；可要求 no-follow 打开且单硬链接。
  */
-async function scanMemoryHeaders(e, n, r = {}, s) {
-  if (s) {
-    let x = projectKeyFromMemoryDir(e);
-    if (x !== undefined && (await isTeamMemoryDirAbsent(e)))
-      return await readMemoryHeads(s, x, e, n, r.regularFilesOnly ?? false);
+async function scanMemoryHeaders(dir, client, options = {}, storeClient) {
+  if (storeClient) {
+    let projectKey = projectKeyFromMemoryDir(dir);
+    if (projectKey !== undefined && (await isTeamMemoryDirAbsent(dir)))
+      return await readMemoryHeads(storeClient, projectKey, dir, client, options.regularFilesOnly ?? false);
   }
-  let h = loadedIndexExclusions();
-  let y = recallVisibleTeamMounts(e);
-  let mdFiles = (await readMemoryDirEntries(e, r.regularFilesOnly ?? false)).filter((x) =>
-    isRecallableMemoryFile(x, h, y),
+  let exclusions = loadedIndexExclusions();
+  let teamMounts = recallVisibleTeamMounts(dir);
+  let mdFiles = (await readMemoryDirEntries(dir, options.regularFilesOnly ?? false)).filter((relativePath) =>
+    isRecallableMemoryFile(relativePath, exclusions, teamMounts),
   );
   return (
     await Promise.allSettled(
       mdFiles.map(async (relativePath) => {
-        let filePath = join(e, relativePath);
-        let j;
-        if (r.regularFilesOnly ?? false) {
+        let filePath = join(dir, relativePath);
+        let handle;
+        if (options.regularFilesOnly ?? false) {
           let noFollow = await openNoFollow_2(filePath);
           if (!noFollow.ok) throw Error("not opened no-follow for the head read");
-          j = noFollow.value;
+          handle = noFollow.value;
         }
         try {
-          let G = j ? await j.stat() : undefined;
-          if (G && (!G.isFile() || G.nlink !== 1))
+          let handleStat = handle ? await handle.stat() : undefined;
+          if (handleStat && (!handleStat.isFile() || handleStat.nlink !== 1))
             throw Error("not a single-named regular file at read time");
-          if (j && NOFOLLOW_NONBLOCK_FLAGS === 0) {
-            let [se, re] = await Promise.all([
-              j.stat({
+          if (handle && NOFOLLOW_NONBLOCK_FLAGS === 0) {
+            let [fstat, lstat] = await Promise.all([
+              handle.stat({
                 bigint: true,
               }),
-              lstat(filePath, {
+              lstat_2(filePath, {
                 bigint: true,
               }),
             ]);
             if (!(
-              se.isFile() &&
-              re.isFile() &&
-              (!hasInode(se.ino) || !hasInode(re.ino) || (se.dev === re.dev && se.ino === re.ino))
+              fstat.isFile() &&
+              lstat.isFile() &&
+              (!hasInode(fstat.ino) ||
+                !hasInode(lstat.ino) ||
+                (fstat.dev === lstat.dev && fstat.ino === lstat.ino))
             ))
               throw Error("not the regular file at the name at read time");
           }
@@ -167,38 +174,41 @@ async function scanMemoryHeaders(e, n, r = {}, s) {
             0,
             MAX_UNTRUSTED_FRONTMATTER_LINES,
             MAX_UNTRUSTED_FRONTMATTER_BYTES,
-            n,
+            client,
             {
               truncateOnByteLimit: true,
-              handle: j,
-              handleStats: G,
+              handle,
+              handleStats: handleStat,
             },
           );
           let { frontmatter, body } = parseMemoryFile(content, filePath);
           let memoryMetadata = getMemoryMetadata(frontmatter, "modified");
-          let ae = memoryMetadata === null ? NaN : Date.parse(memoryMetadata);
+          let modifiedMs = memoryMetadata === null ? NaN : Date.parse(memoryMetadata);
           return {
             filename: relativePath,
             filePath,
             mtimeMs,
-            modifiedMs: Number.isNaN(ae) ? mtimeMs : ae,
-            description: frontmatter.description ?? (h ? firstHeadingOrLine(body) : null),
+            modifiedMs: Number.isNaN(modifiedMs) ? mtimeMs : modifiedMs,
+            description: frontmatter.description ?? (exclusions ? firstHeadingOrLine(body) : null),
             type: parseMemoryType(getMemoryMetadata(frontmatter, "type")),
           };
         } finally {
-          await j?.close().catch(() => {});
+          await handle?.close().catch(() => {});
         }
       }),
     )
   )
-    .filter((x) => x.status === "fulfilled")
-    .map((x) => x.value)
-    .sort((x, P) => P.mtimeMs - x.mtimeMs);
+    .filter((settled) => settled.status === "fulfilled")
+    .map((settled) => settled.value)
+    .sort((headA, headB) => headB.mtimeMs - headA.mtimeMs);
 }
 //@ chunk-s61vbvea.js:419514-419730 placement
-async function scanMemoryFiles(e, n, r, s = {}) {
+async function scanMemoryFiles(memoryDir, signal, storageV5, options = {}) {
   try {
-    let sliced = (await scanMemoryHeaders(e, n, s, r)).slice(0, MAX_RECALL_HEADERS);
+    let sliced = (await scanMemoryHeaders(memoryDir, signal, options, storageV5)).slice(
+      0,
+      MAX_RECALL_HEADERS,
+    );
     logFeatureOk("memory_scan");
     return sliced;
   } catch (error) {
@@ -213,8 +223,8 @@ async function scanMemoryFiles(e, n, r, s = {}) {
 /**
  * 按是否只要普通文件决定用归一化读取还是递归 readdir 列出记忆目录。
  */
-async function readMemoryDirEntries(source, n) {
-  return n
+async function readMemoryDirEntries(source, normalize) {
+  return normalize
     ? await normalizeSource_3(source, "")
     : await readdir(source, {
         recursive: true,
@@ -225,43 +235,51 @@ async function readMemoryDirEntries(source, n) {
  * 读目录项（名字配错）。
  */
 async function normalizeSource_3(source, projectRoot) {
-  let r = await readdir(join(source, projectRoot), {
+  let dirents = await readdir(join(source, projectRoot), {
     withFileTypes: true,
   });
   return (
     await Promise.all(
-      r.map(async (h) => {
-        let projectRoot_2 = projectRoot ? join(projectRoot, h.name) : h.name;
-        let S = await entryKind(source, projectRoot_2, h);
-        if (S === "directory") return await normalizeSource_3(source, projectRoot_2).catch(skipUnreadableDir);
-        return S === "file" ? [projectRoot_2] : [];
+      dirents.map(async (dirent) => {
+        let relativePath = projectRoot ? join(projectRoot, dirent.name) : dirent.name;
+        let kind = await entryKind(source, relativePath, dirent);
+        if (kind === "directory")
+          return await normalizeSource_3(source, relativePath).catch(skipUnreadableDir);
+        return kind === "file" ? [relativePath] : [];
       }),
     )
   ).flat();
 }
 //@ chunk-s61vbvea.js:420044-420152 placement
-function skipUnreadableDir(e) {
-  if (isFsInaccessible(e)) {
-    if (!isENOENT(e)) logForDebugging(`memory scan: skipping unreadable subfolder: ${errorMessage(e)}`);
+function skipUnreadableDir(error) {
+  if (isFsInaccessible(error)) {
+    if (!isENOENT(error))
+      logForDebugging(`memory scan: skipping unreadable subfolder: ${errorMessage(error)}`);
     return [];
   }
-  throw e;
+  throw error;
 }
 //@ chunk-s61vbvea.js:420152-420492 placement
 /**
  * 判定目录项类型（file/directory/other）；Dirent 类型未知时用 lstat 再判断，文件已消失返回 other。
  */
-async function entryKind(source, n, r) {
-  if (r.isFile()) return "file";
-  if (r.isDirectory()) return "directory";
-  if (r.isSymbolicLink() || r.isBlockDevice() || r.isCharacterDevice() || r.isFIFO() || r.isSocket())
+async function entryKind(source, relativePath, dirent) {
+  if (dirent.isFile()) return "file";
+  if (dirent.isDirectory()) return "directory";
+  if (
+    dirent.isSymbolicLink() ||
+    dirent.isBlockDevice() ||
+    dirent.isCharacterDevice() ||
+    dirent.isFIFO() ||
+    dirent.isSocket()
+  )
     return "other";
-  let s = await lstat(join(source, n)).catch((error) => {
+  let entryStat = await lstat_2(join(source, relativePath)).catch((error) => {
     if (isENOENT(error)) return null;
     throw error;
   });
-  if (!s) return "other";
-  return s.isFile() ? "file" : s.isDirectory() ? "directory" : "other";
+  if (!entryStat) return "other";
+  return entryStat.isFile() ? "file" : entryStat.isDirectory() ? "directory" : "other";
 }
 //@ chunk-s61vbvea.js:420492-420509 placement
 /**
@@ -272,138 +290,143 @@ var MAX_FRONTMATTER_READ_BYTES = 4 * MAX_UNTRUSTED_FRONTMATTER_BYTES + 256;
 /**
  * 记忆扫描失败时抛出的错误类型（区分存储列表失败与 readdir 失败）。
  */
-class MemoryScanError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {}
+let MemoryScanError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:420509", () => {
+  MemoryScanError = class MemoryScanError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {};
+});
 //@ chunk-s61vbvea.js:420529-420955 placement
 /**
  * 通过存储接口列出记忆目录
  */
-async function listMemoryFiles(e, projectKey, r) {
-  let s = [];
-  let h;
+async function listMemoryFiles(storeClient, projectKey, skipSymlinks) {
+  let files = [];
+  let cursor;
   do {
-    let y = await e.listRecursive(
+    let page = await storeClient.listRecursive(
       {
         namespace: "memory",
         projectKey,
       },
       {
-        cursor: h,
+        cursor,
         skipKeyStats: true,
       },
     );
-    if (!y.ok)
+    if (!page.ok)
       throw new MemoryScanError(
-        `memory scan listing failed: ${formatStorageError(y.error)}`,
+        `memory scan listing failed: ${formatStorageError(page.error)}`,
         "memory scan listing failed (storage v5)",
       );
-    for (let item of y.value.items) {
-      if (item.key.namespace !== "memory" || (r && item.viaSymlink === true)) continue;
-      s.push({
+    for (let item of page.value.items) {
+      if (item.key.namespace !== "memory" || (skipSymlinks && item.viaSymlink === true)) continue;
+      files.push({
         relativePath: join(...item.key.relPath),
         key: item.key,
       });
     }
-    h = y.value.cursor;
-  } while (h !== undefined);
-  return s;
+    cursor = page.value.cursor;
+  } while (cursor !== undefined);
+  return files;
 }
 //@ chunk-s61vbvea.js:420955-421449 placement
 /**
  * 从不可信记忆文件的字节中取出前若干行（去 BOM、去行尾 \r），总字节不超过上限；内容被截断时最后一行不完整则丢弃。
  */
-function parseUntrustedFrontmatter(e, totalBytes) {
-  let r = totalBytes <= e.byteLength;
-  let str = Buffer.from(e.buffer, e.byteOffset, e.byteLength).toString("utf8");
-  let y = str.charCodeAt(0) === 65279 ? str.slice(1) : str;
-  let S = [];
-  let w = 0;
-  let R = false;
-  function x(L) {
-    let q = S.length > 0 ? 1 : 0;
-    let Q = w + q + Buffer.byteLength(L);
-    if (Q > MAX_UNTRUSTED_FRONTMATTER_BYTES) {
-      R = true;
+function parseUntrustedFrontmatter(buffer, totalBytes) {
+  let fitsInBuffer = totalBytes <= buffer.byteLength;
+  let str = Buffer.from(buffer.buffer, buffer.byteOffset, buffer.byteLength).toString("utf8");
+  let text = str.charCodeAt(0) === 65279 ? str.slice(1) : str;
+  let lines = [];
+  let byteCount = 0;
+  let overflowed = false;
+  function pushLine(line) {
+    let separatorBytes = lines.length > 0 ? 1 : 0;
+    let nextByteCount = byteCount + separatorBytes + Buffer.byteLength(line);
+    if (nextByteCount > MAX_UNTRUSTED_FRONTMATTER_BYTES) {
+      overflowed = true;
       return;
     }
-    w = Q;
-    S.push(L);
+    byteCount = nextByteCount;
+    lines.push(line);
   }
-  let P = 0;
-  let j = 0;
-  let G;
+  let lineIndex = 0;
+  let lineStart = 0;
+  let newlineIndex;
   while (
-    (G = y.indexOf(
+    (newlineIndex = text.indexOf(
       `
 `,
-      j,
+      lineStart,
     )) !== -1
   ) {
-    if (P < MAX_UNTRUSTED_FRONTMATTER_LINES && !R) {
-      let sliced = y.slice(j, G);
-      if (sliced.endsWith("\r")) sliced = sliced.slice(0, -1);
-      x(sliced);
+    if (lineIndex < MAX_UNTRUSTED_FRONTMATTER_LINES && !overflowed) {
+      let line = text.slice(lineStart, newlineIndex);
+      if (line.endsWith("\r")) line = line.slice(0, -1);
+      pushLine(line);
     }
-    P++;
-    j = G + 1;
+    lineIndex++;
+    lineStart = newlineIndex + 1;
   }
-  if (P < MAX_UNTRUSTED_FRONTMATTER_LINES && !R)
-    if (r) {
-      let sliced = y.slice(j);
-      if (sliced.endsWith("\r")) sliced = sliced.slice(0, -1);
-      x(sliced);
-    } else R = true;
-  return S.join(`
+  if (lineIndex < MAX_UNTRUSTED_FRONTMATTER_LINES && !overflowed)
+    if (fitsInBuffer) {
+      let line = text.slice(lineStart);
+      if (line.endsWith("\r")) line = line.slice(0, -1);
+      pushLine(line);
+    } else overflowed = true;
+  return lines.join(`
 `);
 }
 //@ chunk-s61vbvea.js:421449-422368 placement
 /**
  * 读取记忆文件头（frontmatter），处理文件在列出与读取间消失
  */
-async function readMemoryHeads(e, projectKey, r, s, h) {
-  let y = loadedIndexExclusions();
-  let S = recallVisibleTeamMounts(r);
-  let filtered = (await listMemoryFiles(e, projectKey, h)).filter((P) =>
-    isRecallableMemoryFile(P.relativePath, y, S),
+async function readMemoryHeads(storeClient, projectKey, memoryDir, signal, includeSymlinks) {
+  let exclusions = loadedIndexExclusions();
+  let visibleTeamMounts = recallVisibleTeamMounts(memoryDir);
+  let filtered = (await listMemoryFiles(storeClient, projectKey, includeSymlinks)).filter((file) =>
+    isRecallableMemoryFile(file.relativePath, exclusions, visibleTeamMounts),
   );
   return (
     await Promise.allSettled(
-      filtered.map(async (P) => {
-        s.throwIfAborted();
-        let j = join(r, P.relativePath);
-        let G = await e.read([
+      filtered.map(async (file) => {
+        signal.throwIfAborted();
+        let filePath = join(memoryDir, file.relativePath);
+        let readResult = await storeClient.read([
           {
-            key: P.key,
+            key: file.key,
             offset: 0,
             length: MAX_FRONTMATTER_READ_BYTES,
           },
         ]);
-        s.throwIfAborted();
-        if (!G.ok)
+        signal.throwIfAborted();
+        if (!readResult.ok)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `memory head read failed: ${formatStorageError(G.error)}`,
+            `memory head read failed: ${formatStorageError(readResult.error)}`,
             "memory head read failed (storage v5)",
           );
-        let L = G.value.items[0];
-        if (!L.found) throw Error("memory file vanished between list and read");
-        if (!Number.isFinite(L.mtimeMs)) throw Error("memory head read carried no mtime");
-        let untrustedFrontmatter = parseUntrustedFrontmatter(L.value, L.totalBytes);
-        let { frontmatter, body } = parseMemoryFile(untrustedFrontmatter, j);
+        let head = readResult.value.items[0];
+        if (!head.found) throw Error("memory file vanished between list and read");
+        if (!Number.isFinite(head.mtimeMs)) throw Error("memory head read carried no mtime");
+        let untrustedFrontmatter = parseUntrustedFrontmatter(head.value, head.totalBytes);
+        let { frontmatter, body } = parseMemoryFile(untrustedFrontmatter, filePath);
         let memoryMetadata = getMemoryMetadata(frontmatter, "modified");
-        let ae = memoryMetadata === null ? NaN : Date.parse(memoryMetadata);
+        let modifiedMs = memoryMetadata === null ? NaN : Date.parse(memoryMetadata);
         return {
-          filename: P.relativePath,
-          filePath: j,
-          mtimeMs: L.mtimeMs,
-          modifiedMs: Number.isNaN(ae) ? L.mtimeMs : ae,
-          description: frontmatter.description ?? (y ? firstHeadingOrLine(body) : null),
+          filename: file.relativePath,
+          filePath,
+          mtimeMs: head.mtimeMs,
+          modifiedMs: Number.isNaN(modifiedMs) ? head.mtimeMs : modifiedMs,
+          description: frontmatter.description ?? (exclusions ? firstHeadingOrLine(body) : null),
           type: parseMemoryType(getMemoryMetadata(frontmatter, "type")),
         };
       }),
     )
   )
-    .filter((P) => P.status === "fulfilled")
-    .map((P) => P.value)
-    .sort((P, j) => j.mtimeMs - P.mtimeMs);
+    .filter((settled) => settled.status === "fulfilled")
+    .map((fulfilled) => fulfilled.value)
+    .sort((memoryA, memoryB) => memoryB.mtimeMs - memoryA.mtimeMs);
 }
 //@ chunk-s61vbvea.js:422368-422561 placement = formatMemoryManifest (1)
 /**
@@ -413,8 +436,8 @@ function formatMemoryManifest(memories) {
   return memories.map((m) => {
     let tag = m.type ? `[${m.type}] ` : "";
     let ts = new Date(m.mtimeMs).toISOString();
-    let h = `- ${tag}${m.filename} (${ts})`;
-    return m.description ? `${h}: ${m.description}` : h;
+    let prefix = `- ${tag}${m.filename} (${ts})`;
+    return m.description ? `${prefix}: ${m.description}` : prefix;
   }).join(`
 `);
 }

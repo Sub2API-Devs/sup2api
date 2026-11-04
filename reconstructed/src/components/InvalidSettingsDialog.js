@@ -8,7 +8,7 @@
  * pieces: chunk-td6byj4s.js (5)
  * attribution: sole-consumer 3, affinity 1, fingerprint 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { isBlockingSettingsIssue } from "../utils/settings/validation.js";
 import {
   jsxProd_default,
@@ -20,28 +20,28 @@ import { ModelSelector } from "./agents/ModelSelector.js";
 import { Dialog } from "./design-system/Dialog.js";
 
 //@ chunk-td6byj4s.js:15306-15353 sole-consumer
-function isNotWarning(Ce) {
-  return Ce.severity !== "warning";
+function isNotWarning(error) {
+  return error.severity !== "warning";
 }
 //@ chunk-td6byj4s.js:15353-15402 sole-consumer
-function loadedWithoutGuard(be) {
-  return be.loadedWithoutGuardHook;
+function loadedWithoutGuard(error) {
+  return error.loadedWithoutGuardHook;
 }
 //@ chunk-td6byj4s.js:15402-15440 sole-consumer
-function isSubstituted(Ve) {
-  return Ve.substituted;
+function isSubstituted(error) {
+  return error.substituted;
 }
 //@ chunk-td6byj4s.js:15440-15487 affinity
-function isWarning(Pe) {
-  return Pe.severity === "warning";
+function isWarning(error) {
+  return error.severity === "warning";
 }
 //@ chunk-td6byj4s.js:15487-17218 fingerprint = InvalidSettingsDialog (0.523)
 function InvalidSettingsDialog(props) {
-  let $ = w(21);
+  let $ = useMemoCache(21);
   let { settingsErrors, onContinue, onFix, onExit } = props;
-  let S;
+  let onChange;
   if ($[0] !== onContinue || $[1] !== onExit || $[2] !== onFix) {
-    S = function handleSelect(value) {
+    onChange = function handleSelect(value) {
       if (value === "exit") onExit();
       else if (value === "fix") onFix();
       else onContinue();
@@ -49,30 +49,30 @@ function InvalidSettingsDialog(props) {
     $[0] = onContinue;
     $[1] = onExit;
     $[2] = onFix;
-    $[3] = S;
-  } else S = $[3];
-  let onChange = S;
-  let x;
+    $[3] = onChange;
+  } else onChange = $[3];
+  let onChange_2 = onChange;
+  let hasNonWarning;
   if ($[4] !== settingsErrors) {
-    x = settingsErrors.some(isNotWarning);
+    hasNonWarning = settingsErrors.some(isNotWarning);
     $[4] = settingsErrors;
-    $[5] = x;
-  } else x = $[5];
-  let u = x;
+    $[5] = hasNonWarning;
+  } else hasNonWarning = $[5];
+  let hasBlocking = hasNonWarning;
   let any = settingsErrors.some(isBlockingSettingsIssue);
   let any_2 = settingsErrors.some(loadedWithoutGuard);
-  let D = settingsErrors.some(isSubstituted)
+  let substitutionNote = settingsErrors.some(isSubstituted)
     ? "The values listed above were replaced with their restrictive reading or skipped as noted; the rest of the file is in effect."
     : "The values listed above were skipped; the rest of the file is in effect.";
-  let y = settingsErrors.some(isWarning)
-    ? `The hooks listed above are not loaded; no file is skipped on their account. ${D}`
+  let hookNote = settingsErrors.some(isWarning)
+    ? `The hooks listed above are not loaded; no file is skipped on their account. ${substitutionNote}`
     : "The hooks listed above are not loaded; no file is skipped on their account.";
-  let z = any_2
+  let skipNote = any_2
     ? "Files with errors are skipped entirely, not just the invalid settings, unless the error says otherwise."
     : "Files with errors are skipped entirely, not just the invalid settings.";
-  let E;
-  if ($[6] !== u) {
-    E = u
+  let options;
+  if ($[6] !== hasBlocking) {
+    options = hasBlocking
       ? [
           {
             label: "Fix with Claude",
@@ -101,55 +101,62 @@ function InvalidSettingsDialog(props) {
             value: "exit",
           },
         ];
-    $[6] = u;
-    $[7] = E;
-  } else E = $[7];
-  let options = E;
-  const title = u ? "Settings Error" : "Settings Warning";
-  const onCancel = u ? onExit : onContinue;
-  let F;
+    $[6] = hasBlocking;
+    $[7] = options;
+  } else options = $[7];
+  let options_2 = options;
+  const title = hasBlocking ? "Settings Error" : "Settings Warning";
+  const onCancel = hasBlocking ? onExit : onContinue;
+  let errorsList;
   if ($[8] !== settingsErrors) {
-    F = jsxProd_default(ValidationErrorsList, {
+    errorsList = jsxProd_default(ValidationErrorsList, {
       errors: settingsErrors,
     });
     $[8] = settingsErrors;
-    $[9] = F;
-  } else F = $[9];
-  const children = any ? z : any_2 ? y : D;
-  let p;
+    $[9] = errorsList;
+  } else errorsList = $[9];
+  const children = any ? skipNote : any_2 ? hookNote : substitutionNote;
+  let noteText;
   if ($[10] !== children) {
-    p = jsxProd_default(Text, {
+    noteText = jsxProd_default(Text, {
       dimColor: true,
       children,
     });
     $[10] = children;
-    $[11] = p;
-  } else p = $[11];
-  let b;
-  if ($[12] !== onChange || $[13] !== options) {
-    b = jsxProd_default(ModelSelector, {
-      options,
-      onChange,
+    $[11] = noteText;
+  } else noteText = $[11];
+  let selector;
+  if ($[12] !== onChange_2 || $[13] !== options_2) {
+    selector = jsxProd_default(ModelSelector, {
+      options: options_2,
+      onChange: onChange_2,
     });
-    $[12] = onChange;
-    $[13] = options;
-    $[14] = b;
-  } else b = $[14];
+    $[12] = onChange_2;
+    $[13] = options_2;
+    $[14] = selector;
+  } else selector = $[14];
   let t6;
-  if ($[15] !== title || $[16] !== onCancel || $[17] !== F || $[18] !== p || $[19] !== b) {
+  if (
+    $[15] !== title ||
+    $[16] !== onCancel ||
+    $[17] !== errorsList ||
+    $[18] !== noteText ||
+    $[19] !== selector
+  ) {
     t6 = jsxProd_default_2(Dialog, {
       title,
       onCancel,
       exitOnCtrlCD: true,
       color: "warning",
-      children: [F, p, b],
+      children: [errorsList, noteText, selector],
     });
     $[15] = title;
     $[16] = onCancel;
-    $[17] = F;
-    $[18] = p;
-    $[19] = b;
+    $[17] = errorsList;
+    $[18] = noteText;
+    $[19] = selector;
     $[20] = t6;
   } else t6 = $[20];
   return t6;
 }
+export { InvalidSettingsDialog };

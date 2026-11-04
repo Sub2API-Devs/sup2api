@@ -20,58 +20,73 @@ import { errorMessage } from "../../utils/errors.js";
 //@ chunk-18hwfzwa.js:1773348-1775970 fingerprint = usePluginAutoupdateNotification (0.325)
 var usePluginAutoupdateNotification = {
   id: "plugin-autoupdate",
-  deps: (h) => [h.store, h.storageV5, h.credentials],
+  deps: (noticeState) => [noticeState.store, noticeState.storageV5, noticeState.credentials],
   setup() {
-    let h = 0;
-    let x = [];
+    let reloadGeneration = 0;
+    let trackedErrors = [];
     let weakSet = new WeakSet();
-    return ({ store, storageV5, credentials }, Re) => {
+    return ({ store, storageV5, credentials }, noticeState) => {
       if (isRemoteSessionAvailable()) return;
-      let Be = onPluginsAutoUpdated((ze, Xe, rt, kt) => {
+      let unsubscribe = onPluginsAutoUpdated((updatedIds, skippedErrors, reresolved, anySkipped) => {
         logForDebugging(
-          `Plugin autoupdate notification: ${ze.length} plugin(s) updated (${rt.length} re-resolved), ${Xe.length} skipped (pinned, deferred or refused)`,
+          `Plugin autoupdate notification: ${updatedIds.length} plugin(s) updated (${reresolved.length} re-resolved), ${skippedErrors.length} skipped (pinned, deferred or refused)`,
         );
-        let At = (Lt, oo = new Set()) =>
-          store.setState((Xt) => {
-            let io = new Set(Lt.map(pluginErrorKey));
-            let filtered = Xt.plugins.errors.filter(
+        let syncPluginErrors = (nextErrors, droppedKeys = new Set()) =>
+          store.setState((state) => {
+            let nextErrorKeys = new Set(nextErrors.map(pluginErrorKey));
+            let filtered = state.plugins.errors.filter(
               (error) =>
                 error.type !== "autoupdate-blocked-by-pinner" &&
                 error.type !== "autoupdate-deferred-entry-helper" &&
                 error.type !== "autoupdate-disabled-by-policy" &&
-                !(weakSet.has(error) && (io.has(pluginErrorKey(error)) || oo.has(pluginErrorKey(error)))),
+                !(
+                  weakSet.has(error) &&
+                  (nextErrorKeys.has(pluginErrorKey(error)) || droppedKeys.has(pluginErrorKey(error)))
+                ),
             );
-            for (let ao of Lt) weakSet.add(ao);
-            let po = [...filtered, ...Lt];
-            if (po.length === Xt.plugins.errors.length && po.every((ao, co) => ao === Xt.plugins.errors[co]))
-              return Xt;
+            for (let pluginError of nextErrors) weakSet.add(pluginError);
+            let mergedErrors = [...filtered, ...nextErrors];
+            if (
+              mergedErrors.length === state.plugins.errors.length &&
+              mergedErrors.every((candidate, index) => candidate === state.plugins.errors[index])
+            )
+              return state;
             return {
-              ...Xt,
+              ...state,
               plugins: {
-                ...Xt.plugins,
-                errors: po,
+                ...state.plugins,
+                errors: mergedErrors,
               },
             };
           });
-        let It = new Set(Xe.map(pluginErrorKey));
-        let Ot = new Set(ze);
-        let Et = new Set(x.filter((Lt) => Ot.has(Lt.source)).map(pluginErrorKey));
-        x = [...x.filter((Lt) => !It.has(pluginErrorKey(Lt)) && !Ot.has(Lt.source)), ...Xe];
-        At(x, Et);
-        let Dt = ++h;
-        if (rt.length === 0) {
-          if (kt) We(ze, "skipped");
+        let skippedKeys = new Set(skippedErrors.map(pluginErrorKey));
+        let updatedIdSet = new Set(updatedIds);
+        let staleKeys = new Set(
+          trackedErrors.filter((pluginError) => updatedIdSet.has(pluginError.source)).map(pluginErrorKey),
+        );
+        trackedErrors = [
+          ...trackedErrors.filter(
+            (pluginError) =>
+              !skippedKeys.has(pluginErrorKey(pluginError)) && !updatedIdSet.has(pluginError.source),
+          ),
+          ...skippedErrors,
+        ];
+        syncPluginErrors(trackedErrors, staleKeys);
+        let generation = ++reloadGeneration;
+        if (reresolved.length === 0) {
+          if (anySkipped) notifyAutoupdate(updatedIds, "skipped");
           return;
         }
-        He().then((Lt) => {
-          if (Lt === "ok" || Lt === "with-errors") At(x);
-          if (Dt !== h && (Lt === "ok" || Lt === "skipped")) return;
-          We(ze, Lt);
+        checkReloadImpact().then((reloadOutcome) => {
+          if (reloadOutcome === "ok" || reloadOutcome === "with-errors") syncPluginErrors(trackedErrors);
+          if (generation !== reloadGeneration && (reloadOutcome === "ok" || reloadOutcome === "skipped"))
+            return;
+          notifyAutoupdate(updatedIds, reloadOutcome);
         });
       });
-      async function He() {
+      async function checkReloadImpact() {
         try {
-          let { mainLoopModel, dynamicMcpConfig } = Re();
+          let { mainLoopModel, dynamicMcpConfig } = noticeState();
           if (
             (
               await computePluginReloadImpact({
@@ -103,52 +118,52 @@ var usePluginAutoupdateNotification = {
           return "failed";
         }
       }
-      function We(ze, Xe) {
+      function notifyAutoupdate(pluginIds, outcome) {
         if (isRemoteSessionAvailable()) return;
-        if (ze.length === 0) return;
-        let mapped = ze.map((id) => {
+        if (pluginIds.length === 0) return;
+        let mapped = pluginIds.map((id) => {
           let atIndex = id.indexOf("@");
           return atIndex > 0 ? id.substring(0, atIndex) : id;
         });
-        let kt = mapped.length <= 2 ? mapped.join(" and ") : `${mapped.length} plugins`;
-        let At;
-        let It;
-        switch (Xe) {
+        let label = mapped.length <= 2 ? mapped.join(" and ") : `${mapped.length} plugins`;
+        let noticeKey;
+        let noticeHint;
+        switch (outcome) {
           case "ok":
-            At = "plugin-autoupdate-reloaded";
-            It = " \xB7 reloaded for this session";
+            noticeKey = "plugin-autoupdate-reloaded";
+            noticeHint = " \xB7 reloaded for this session";
             break;
           case "with-errors":
-            At = "plugin-autoupdate-reload-errors";
-            It = " \xB7 reloaded with errors \u2014 see /plugin";
+            noticeKey = "plugin-autoupdate-reload-errors";
+            noticeHint = " \xB7 reloaded with errors \u2014 see /plugin";
             break;
           case "failed":
-            At = "plugin-autoupdate-reload-errors";
-            It = " \xB7 Run /reload-plugins to apply";
+            noticeKey = "plugin-autoupdate-reload-errors";
+            noticeHint = " \xB7 Run /reload-plugins to apply";
             break;
           case "skipped":
-            At = "plugin-autoupdate-restart";
-            It = " \xB7 Run /reload-plugins to apply";
+            noticeKey = "plugin-autoupdate-restart";
+            noticeHint = " \xB7 Run /reload-plugins to apply";
             break;
         }
-        Re().addNotification({
-          key: At,
+        noticeState().addNotification({
+          key: noticeKey,
           segments: [
             {
-              text: `${mapped.length === 1 ? "Plugin" : "Plugins"} updated: ${kt}`,
-              color: Xe === "with-errors" ? "warning" : "success",
+              text: `${mapped.length === 1 ? "Plugin" : "Plugins"} updated: ${label}`,
+              color: outcome === "with-errors" ? "warning" : "success",
             },
             {
-              text: It,
+              text: noticeHint,
               dim: true,
             },
           ],
           priority: "low",
           timeoutMs: 1e4,
         });
-        logForDebugging(`Plugin autoupdate notice ${At} for: ${mapped.join(", ")}`);
+        logForDebugging(`Plugin autoupdate notice ${noticeKey} for: ${mapped.join(", ")}`);
       }
-      return Be;
+      return unsubscribe;
     };
   },
 };

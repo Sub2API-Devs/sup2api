@@ -46,9 +46,9 @@ async function startGuestVitals(options) {
     }
     let vitalsEmitter = await resolveVitalsEmitter(options);
     if (!vitalsEmitter) return null;
-    let s = new GuestVitalsEmitter(vitalsEmitter.binary, vitalsEmitter.viaFallback, options);
-    await s.launch();
-    return s.disabled ? null : s;
+    let emitter = new GuestVitalsEmitter(vitalsEmitter.binary, vitalsEmitter.viaFallback, options);
+    await emitter.launch();
+    return emitter.disabled ? null : emitter;
   } catch (error) {
     log(`[vitals] not started: ${errorMessage(error)}`);
     return null;
@@ -76,10 +76,10 @@ async function resolveVitalsEmitter({ binaryResolution, log }) {
         viaFallback: false,
       };
     case "search": {
-      let s = VITALS_EMITTER_BIN || (await whichAsync(VITALS_EMITTER_GUEST));
-      return s
+      let binary = VITALS_EMITTER_BIN || (await whichAsync(VITALS_EMITTER_GUEST));
+      return binary
         ? {
-            binary: s,
+            binary,
             viaFallback: false,
           }
         : {
@@ -123,16 +123,16 @@ class GuestVitalsEmitter {
       child.once("error", () => resolve());
     });
     child.kill("SIGTERM");
-    let timer = setTimeout((s) => s.kill("SIGKILL"), VITALS_KILL_GRACE_MS, child);
+    let timer = setTimeout((child) => child.kill("SIGKILL"), VITALS_KILL_GRACE_MS, child);
     timer.unref();
     await withDeadline(promise, 2 * VITALS_KILL_GRACE_MS);
     clearTimeout(timer);
   }
   async launch() {
     let { sessionId, apiBaseUrl, tokenFilePath, log } = this.options;
-    let r;
+    let child;
     try {
-      r = spawn(
+      child = spawn(
         this.binary,
         ["--session-id", sessionId, "--api-url", apiBaseUrl, "--token-file", tokenFilePath],
         {
@@ -147,39 +147,41 @@ class GuestVitalsEmitter {
       this.disabled = true;
       return;
     }
-    moveKeeperPid(r.pid);
-    this.child = r;
+    moveKeeperPid(child.pid);
+    this.child = child;
     this.spawnedAt = Date.now();
-    r.stdin?.on("error", () => {});
-    r.on("error", (a) => this.onChildGone(r, a));
-    r.on("exit", (a, u) => this.onChildGone(r, null, `exited (code=${a} signal=${u})`));
-    r.on("spawn", () => {
-      log(`[vitals] spawned ${this.binary} pid=${r.pid}`);
+    child.stdin?.on("error", () => {});
+    child.on("error", (error) => this.onChildGone(child, error));
+    child.on("exit", (code, signal) =>
+      this.onChildGone(child, null, `exited (code=${code} signal=${signal})`),
+    );
+    child.on("spawn", () => {
+      log(`[vitals] spawned ${this.binary} pid=${child.pid}`);
       if (!this.reportedOk) {
         this.reportedOk = true;
         logFeatureOk("ccr_vitals_emitter");
       }
     });
-    if (r.stderr)
+    if (child.stderr)
       createInterface({
-        input: r.stderr,
-      }).on("line", (a) => log(`[vitals] ${a}`));
+        input: child.stderr,
+      }).on("line", (line) => log(`[vitals] ${line}`));
     await new Promise((resolve) => {
-      r.once("spawn", () => resolve());
-      r.once("error", () => resolve());
+      child.once("spawn", () => resolve());
+      child.once("error", () => resolve());
     });
   }
-  onChildGone(e, n, t = `spawn error: ${n?.message}`) {
-    if (this.child !== e) return;
+  onChildGone(child, error, reason = `spawn error: ${error?.message}`) {
+    if (this.child !== child) return;
     this.child = null;
-    e.stdin?.destroy();
+    child.stdin?.destroy();
     let { log } = this.options;
     if (this.stopping) {
-      log(`[vitals] emitter stopped (${t})`);
+      log(`[vitals] emitter stopped (${reason})`);
       return;
     }
-    if (n) {
-      let errnoCode = getErrnoCode(n);
+    if (error) {
+      let errnoCode = getErrnoCode(error);
       if (errnoCode === "EAGAIN" || errnoCode === "ENOMEM") {
         log(`[vitals] transient spawn failure (${errnoCode}); respawning`);
         this.scheduleRespawn();
@@ -189,12 +191,12 @@ class GuestVitalsEmitter {
       if (errnoCode === "ENOENT" || (errnoCode === "EACCES" && this.binaryViaFallback))
         log(`[vitals] ${this.binary} not found; guest vitals disabled for this session`);
       else {
-        log(`[vitals] ${t}; guest vitals disabled for this session`);
+        log(`[vitals] ${reason}; guest vitals disabled for this session`);
         logFeatureBad("ccr_vitals_emitter", "spawn_failed");
       }
       return;
     }
-    log(`[vitals] emitter ${t}`);
+    log(`[vitals] emitter ${reason}`);
     if (!this.reportedUnexpectedExit) {
       this.reportedUnexpectedExit = true;
       logFeatureSad("ccr_vitals_emitter", "exited_unexpectedly");
@@ -218,7 +220,7 @@ class GuestVitalsEmitter {
  * 构造 vitals 上报进程的环境变量（版本、包名、问题反馈地址等）。
  */
 function buildVitalsEmitterEnv() {
-  let e = {
+  let envObject = {
     USER_TYPE: "external",
     NODE_ENV: "production",
     VITALS_CLI_VERSION: {
@@ -233,7 +235,7 @@ function buildVitalsEmitterEnv() {
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
   };
-  let n = {
+  let inheritedVars = {
     PATH: env.PATH,
     HOME: env.HOME,
     TMPDIR: env.TMPDIR,
@@ -245,8 +247,8 @@ function buildVitalsEmitterEnv() {
     no_proxy: env.no_proxy,
     SSL_CERT_FILE: env.SSL_CERT_FILE,
   };
-  for (let [key, value] of Object.entries(n)) if (value !== undefined) e[key] = value;
-  return e;
+  for (let [key, value] of Object.entries(inheritedVars)) if (value !== undefined) envObject[key] = value;
+  return envObject;
 }
 //@ chunk-ar4s2yky.js:1458-1842 placement
 /**
@@ -272,4 +274,4 @@ async function startWorkerGuestVitals({ sessionId, sdkUrl }) {
     logForDebugging(`[vitals] not started: ${errorMessage(error)}`);
   }
 }
-export { startGuestVitals };
+export { startGuestVitals, startWorkerGuestVitals };

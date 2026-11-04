@@ -32,29 +32,29 @@ import { setWorking } from "../../services/artifacts/artifactPresence.js";
  * 在主线程等待限流重置时定期向 SDK 宿主发送 usage_limit_wait_heartbeat。
  */
 function createUsageLimitWaitHeartbeat({ readMainLoopModel, emit }) {
-  let r;
-  let s = false;
-  function h() {
-    if (r !== undefined) {
-      clearInterval(r);
-      r = undefined;
-      s = false;
+  let interval;
+  let reported = false;
+  function stop() {
+    if (interval !== undefined) {
+      clearInterval(interval);
+      interval = undefined;
+      reported = false;
     }
   }
-  function y() {
+  function tick() {
     try {
       let now = Date.now();
-      let P = usageLimitWaitsAfter(now);
-      if (P.length === 0) {
-        h();
+      let waits = usageLimitWaitsAfter(now);
+      if (waits.length === 0) {
+        stop();
         return;
       }
       if (!isUsageLimitWaitNoticeEnabled()) return;
-      let L = earliestRateLimitRetry(P, readMainLoopModel(), now);
-      if (L) {
-        emit(L);
-        if (!s) {
-          s = true;
+      let notice = earliestRateLimitRetry(waits, readMainLoopModel(), now);
+      if (notice) {
+        emit(notice);
+        if (!reported) {
+          reported = true;
           logFeatureOk("usage_limit_wait_heartbeat");
         }
       }
@@ -62,45 +62,45 @@ function createUsageLimitWaitHeartbeat({ readMainLoopModel, emit }) {
       logError(error);
     }
   }
-  function S() {
-    let w = usageLimitWaitsAfter(Date.now()).length > 0;
-    if (w && r === undefined) {
-      r = setInterval(y, PERSISTENT_WAIT_CHUNK_MS);
-      r.unref?.();
-      y();
-    } else if (w && !s) y();
-    else if (!w) h();
+  function check() {
+    let hasWaits = usageLimitWaitsAfter(Date.now()).length > 0;
+    if (hasWaits && interval === undefined) {
+      interval = setInterval(tick, PERSISTENT_WAIT_CHUNK_MS);
+      interval.unref?.();
+      tick();
+    } else if (hasWaits && !reported) tick();
+    else if (!hasWaits) stop();
   }
-  let R = onUsageLimitWaitsChanged(S);
-  S();
+  let unsubscribe = onUsageLimitWaitsChanged(check);
+  check();
   return () => {
-    R();
-    h();
+    unsubscribe();
+    stop();
   };
 }
 //@ chunk-tyg7f3ek.js:614422-614749 placement
-function earliestRateLimitRetry(e, mainLoopModel, r) {
-  let s;
-  for (let h of e) {
-    if (h.route === "main_thread") return;
-    if (!isMainOrAgentQuerySource(h.querySource)) continue;
-    if (!limitAppliesToModelOrCanonical(h, mainLoopModel)) continue;
-    if (!s || h.retryAtMs < s.retryAtMs) s = h;
+function earliestRateLimitRetry(waits, model, now) {
+  let earliest;
+  for (let wait of waits) {
+    if (wait.route === "main_thread") return;
+    if (!isMainOrAgentQuerySource(wait.querySource)) continue;
+    if (!limitAppliesToModelOrCanonical(wait, model)) continue;
+    if (!earliest || wait.retryAtMs < earliest.retryAtMs) earliest = wait;
   }
-  if (!s) return;
+  if (!earliest) return;
   return {
     type: "system",
     subtype: "api_retry",
-    attempt: s.attempt,
-    max_retries: s.maxRetries,
-    retry_delay_ms: s.retryAtMs - r,
+    attempt: earliest.attempt,
+    max_retries: earliest.maxRetries,
+    retry_delay_ms: earliest.retryAtMs - now,
     error_status: 429,
     error: "rate_limit",
   };
 }
 //@ chunk-tyg7f3ek.js:614749-614804 placement
-function usageLimitWaitsAfter(e) {
-  return usageLimitWaits().filter((n) => n.retryAtMs > e);
+function usageLimitWaitsAfter(now) {
+  return usageLimitWaits().filter((wait) => wait.retryAtMs > now);
 }
 //@ chunk-tyg7f3ek.js:614804-614884 placement
 function isUsageLimitWaitNoticeEnabled() {
@@ -108,15 +108,15 @@ function isUsageLimitWaitNoticeEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_rustling_sunset", true);
 }
 //@ chunk-tyg7f3ek.js:614884-614989 placement
-function teardownAutoReactAndRooms(e) {
-  stopAllRunningTasks(e);
-  let n = killAutoReactSubscriptions(e.taskRegistry, {
+function teardownAutoReactAndRooms(options) {
+  stopAllRunningTasks(options);
+  let killed = killAutoReactSubscriptions(options.taskRegistry, {
     durable: false,
   });
-  let r = drainQueuedTaskNotifications(commandQueueManager(), {
+  let drained = drainQueuedTaskNotifications(commandQueueManager(), {
     leaveArtifactRooms: true,
   });
-  artifactWatchStopNotice(n, r);
+  artifactWatchStopNotice(killed, drained);
 }
 //@ chunk-tyg7f3ek.js:614989-615051 placement
 var WAITING_STATE_NAMES = {
@@ -126,42 +126,42 @@ var WAITING_STATE_NAMES = {
 };
 //@ chunk-tyg7f3ek.js:615051-615317 placement
 function createWaitingStatusReporter(storageV5) {
-  let n;
-  return (r, s) => {
+  let last;
+  return (state, details) => {
     {
-      let h = WAITING_STATE_NAMES[r];
-      let y =
-        h !== "waiting"
+      let name = WAITING_STATE_NAMES[state];
+      let waitingFor =
+        name !== "waiting"
           ? undefined
-          : s?.tool_name === ASKUSERQUESTION || s?.tool_name.startsWith("dialog:")
+          : details?.tool_name === ASKUSERQUESTION || details?.tool_name.startsWith("dialog:")
             ? "input needed"
             : "permission prompt";
-      let S = `${h}
-${y ?? ""}`;
-      if (S === n) return;
-      n = S;
+      let text = `${name}
+${waitingFor ?? ""}`;
+      if (text === last) return;
+      last = text;
       updateSessionActivity(
         {
-          status: h,
-          waitingFor: y,
+          status: name,
+          waitingFor,
         },
         storageV5,
-      ).then((R) => {
-        if (!R && n === S) n = undefined;
+      ).then((ok) => {
+        if (!ok && last === text) last = undefined;
       });
     }
   };
 }
 //@ chunk-tyg7f3ek.js:615317-615453 placement
-function createUserDecisionReporter(e, sessionState) {
-  let r = false;
-  function s() {
-    setWorking(e, r && !sessionState.userDecisionPending);
+function createUserDecisionReporter(host, sessionState) {
+  let pending = false;
+  function update() {
+    setWorking(host, pending && !sessionState.userDecisionPending);
   }
-  sessionState.userDecisionPendingChanged.subscribe(s);
-  return (h) => {
-    r = h;
-    s();
+  sessionState.userDecisionPendingChanged.subscribe(update);
+  return (next) => {
+    pending = next;
+    update();
   };
 }
 export {

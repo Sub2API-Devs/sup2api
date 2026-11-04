@@ -7,10 +7,10 @@
  */
 //@ chunk-e7naa6k8.js:373-453 esm-fingerprint
 var startsWithSchemeRegexp = /^[a-z][a-z0-9+.-]*:/i;
-var D = (url) => startsWithSchemeRegexp.test(url);
+var isAbsoluteURL = (url) => startsWithSchemeRegexp.test(url);
 var isArray = (val) => {
   isArray = Array.isArray;
   return isArray(val);
 };
 var isArray_default = isArray;
-export { isArray_default, D };
+export { isArray_default, isAbsoluteURL };

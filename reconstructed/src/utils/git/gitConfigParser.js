@@ -19,40 +19,40 @@ import { isPathAbsent } from "../errors.js";
 /**
  * 是否含 NUL 字节。
  */
-function hasNulByte(e) {
-  return e.includes("\x00");
+function hasNulByte(text) {
+  return text.includes("\x00");
 }
 //@ chunk-t0gq9gyw.js:66516-66597 placement
 /**
  * 异步读取 git 配置中的某个值；文件不可读返回 null。
  */
-async function readGitConfigValueAsync(e, n, r, o) {
-  let gitConfigFile = await readGitConfigFile(e);
-  return gitConfigFile.ok ? firstGitConfigValue(gitConfigFile.text, n, r, o) : null;
+async function readGitConfigValueAsync(cwd, section, subsection, key) {
+  let gitConfigFile = await readGitConfigFile(cwd);
+  return gitConfigFile.ok ? firstGitConfigValue(gitConfigFile.text, section, subsection, key) : null;
 }
 //@ chunk-t0gq9gyw.js:66597-67078 placement
 /**
  * 读取 .git/config（大小上限、NUL 检查）。
  */
-async function readGitConfigFile(e) {
+async function readGitConfigFile(cwd) {
   try {
-    let n = await open(join(e, "config"), "r");
+    let handle = await open(join(cwd, "config"), "r");
     try {
-      let o = Buffer.allocUnsafe(1e6);
-      let s = 0;
-      while (s < 1e6) {
-        let { bytesRead } = await n.read(o, s, 1e6 - s, s);
+      let buffer = Buffer.allocUnsafe(1e6);
+      let bytesReadTotal = 0;
+      while (bytesReadTotal < 1e6) {
+        let { bytesRead } = await handle.read(buffer, bytesReadTotal, 1e6 - bytesReadTotal, bytesReadTotal);
         if (bytesRead === 0) break;
-        s += bytesRead;
+        bytesReadTotal += bytesRead;
       }
-      let a = false;
-      if (s === 1e6) {
-        let u = Buffer.allocUnsafe(1);
-        let { bytesRead } = await n.read(u, 0, 1, s);
-        a = bytesRead > 0;
+      let isTruncated = false;
+      if (bytesReadTotal === 1e6) {
+        let probe = Buffer.allocUnsafe(1);
+        let { bytesRead } = await handle.read(probe, 0, 1, bytesReadTotal);
+        isTruncated = bytesRead > 0;
       }
-      let str = o.subarray(0, s).toString("utf-8");
-      if (a) {
+      let str = buffer.subarray(0, bytesReadTotal).toString("utf-8");
+      if (isTruncated) {
         let index = str.lastIndexOf(`
 `);
         str = index === -1 ? "" : str.slice(0, index);
@@ -67,7 +67,7 @@ async function readGitConfigFile(e) {
             text: str,
           };
     } finally {
-      await n.close();
+      await handle.close();
     }
   } catch {
     return {
@@ -80,8 +80,8 @@ async function readGitConfigFile(e) {
 /**
  * 返回 git 配置中指定节/键的第一个值。
  */
-function firstGitConfigValue(config, section, subsection, key) {
-  for (let s of iterGitConfigValues(config, section, subsection, key)) return s;
+function firstGitConfigValue(text, section, subsection, key) {
+  for (let value of iterGitConfigValues(text, section, subsection, key)) return value;
   return null;
 }
 //@ chunk-t0gq9gyw.js:67146-67191 placement
@@ -104,7 +104,7 @@ var BARE_VALUE_LINE_RE = /^([A-Za-z][A-Za-z0-9-]*)\s*(?:[#;].*)?$/;
 /**
  * 遍历 git 配置中指定节/键的值。
  */
-function* iterGitConfigValues(config, section, subsection, key, s) {
+function* iterGitConfigValues(config, section, subsection, key, bareValue) {
   let lines = config.split(`
 `);
   let sectionLower = section.toLowerCase();
@@ -120,7 +120,8 @@ function* iterGitConfigValues(config, section, subsection, key, s) {
     if (!inSection) continue;
     let parsed = parseKeyValue(trimmed);
     if (parsed && parsed.key.toLowerCase() === keyLower) yield parsed.value;
-    else if (s !== undefined && BARE_VALUE_LINE_RE.exec(trimmed)?.[1]?.toLowerCase() === keyLower) yield s;
+    else if (bareValue !== undefined && BARE_VALUE_LINE_RE.exec(trimmed)?.[1]?.toLowerCase() === keyLower)
+      yield bareValue;
   }
 }
 //@ chunk-t0gq9gyw.js:67626-68091 placement
@@ -128,15 +129,15 @@ function* iterGitConfigValues(config, section, subsection, key, s) {
  * 解析 git 配置的节与条目。
  */
 function parseGitConfigSections(contents) {
-  let n = [];
-  let r = [];
-  let o = null;
+  let includes = [];
+  let files = [];
+  let sectionKind = null;
   for (let line of contents.split(`
 `)) {
     let line_2 = line.trim();
     if (line_2.length === 0 || line_2[0] === "#" || line_2[0] === ";") continue;
     if (line_2[0] === "[") {
-      o =
+      sectionKind =
         isConfigSection(line_2, "include", null) || INCLUDEIF_SECTION_RE.test(line_2)
           ? "include"
           : isConfigSection(line_2, "core", null)
@@ -144,15 +145,16 @@ function parseGitConfigSections(contents) {
             : null;
       continue;
     }
-    let c = o === null ? null : parseKeyValue(line_2);
-    if (!c || c.value.length === 0) continue;
-    let lower = c.key.toLowerCase();
-    if (o === "include" && lower === "path") n.push(c.value);
-    else if (o === "core" && (lower === "excludesfile" || lower === "attributesfile")) r.push(c.value);
+    let parsed = sectionKind === null ? null : parseKeyValue(line_2);
+    if (!parsed || parsed.value.length === 0) continue;
+    let lower = parsed.key.toLowerCase();
+    if (sectionKind === "include" && lower === "path") includes.push(parsed.value);
+    else if (sectionKind === "core" && (lower === "excludesfile" || lower === "attributesfile"))
+      files.push(parsed.value);
   }
   return {
-    includes: n,
-    files: r,
+    includes,
+    files,
   };
 }
 //@ chunk-t0gq9gyw.js:68091-68139 placement
@@ -182,14 +184,14 @@ function parseGitConfigValue(line, start) {
   let inQuote = false;
   let i = start;
   while (i < line.length) {
-    let a = line[i];
-    if (!inQuote && (a === "#" || a === ";")) break;
-    if (a === '"') {
+    let char = line[i];
+    if (!inQuote && (char === "#" || char === ";")) break;
+    if (char === '"') {
       inQuote = !inQuote;
       i++;
       continue;
     }
-    if (a === "\\" && i + 1 < line.length) {
+    if (char === "\\" && i + 1 < line.length) {
       let next = line[i + 1];
       if (inQuote) {
         switch (next) {
@@ -222,7 +224,7 @@ function parseGitConfigValue(line, start) {
         continue;
       }
     }
-    result += a;
+    result += char;
     i++;
   }
   if (!inQuote) result = trimTrailingWhitespace(result);
@@ -235,57 +237,69 @@ function trimTrailingWhitespace(s) {
   return s.slice(0, end);
 }
 //@ chunk-t0gq9gyw.js:68895-68980 placement
-function isConfigSection(e, n, r) {
-  let gitConfigSectionHeader = parseGitConfigSectionHeader(e);
+function isConfigSection(line, sectionLower, subsection) {
+  let gitConfigSectionHeader = parseGitConfigSectionHeader(line);
   return (
     gitConfigSectionHeader !== null &&
-    gitConfigSectionHeader.sectionLower === n &&
-    gitConfigSectionHeader.subsection === r
+    gitConfigSectionHeader.sectionLower === sectionLower &&
+    gitConfigSectionHeader.subsection === subsection
   );
 }
 //@ chunk-t0gq9gyw.js:68980-69534 placement
 /**
  * 解析 git 配置节头。
  */
-function parseGitConfigSectionHeader(e) {
-  let n = 1;
-  while (n < e.length && e[n] !== "]" && e[n] !== " " && e[n] !== "\t" && e[n] !== '"') n++;
-  let sectionLower = e.slice(1, n).toLowerCase();
-  if (n < e.length && e[n] === "]")
+function parseGitConfigSectionHeader(line) {
+  let index = 1;
+  while (
+    index < line.length &&
+    line[index] !== "]" &&
+    line[index] !== " " &&
+    line[index] !== "\t" &&
+    line[index] !== '"'
+  )
+    index++;
+  let sectionLower = line.slice(1, index).toLowerCase();
+  if (index < line.length && line[index] === "]")
     return {
       sectionLower,
       subsection: null,
     };
-  while (n < e.length && (e[n] === " " || e[n] === "\t")) n++;
-  if (n >= e.length || e[n] !== '"') return null;
-  n++;
-  let o = "";
-  while (n < e.length && e[n] !== '"') {
-    if (e[n] === "\\" && n + 1 < e.length) {
-      let s = e[n + 1];
-      if (s === "\\" || s === '"') {
-        o += s;
-        n += 2;
+  while (index < line.length && (line[index] === " " || line[index] === "\t")) index++;
+  if (index >= line.length || line[index] !== '"') return null;
+  index++;
+  let subsection = "";
+  while (index < line.length && line[index] !== '"') {
+    if (line[index] === "\\" && index + 1 < line.length) {
+      let char = line[index + 1];
+      if (char === "\\" || char === '"') {
+        subsection += char;
+        index += 2;
         continue;
       }
-      o += s;
-      n += 2;
+      subsection += char;
+      index += 2;
       continue;
     }
-    o += e[n];
-    n++;
+    subsection += line[index];
+    index++;
   }
-  if (n >= e.length || e[n] !== '"') return null;
-  n++;
-  if (n >= e.length || e[n] !== "]") return null;
+  if (index >= line.length || line[index] !== '"') return null;
+  index++;
+  if (index >= line.length || line[index] !== "]") return null;
   return {
     sectionLower,
-    subsection: o,
+    subsection,
   };
 }
 //@ chunk-t0gq9gyw.js:69534-69612 placement
-function isConfigNameChar(e) {
-  return (e >= "a" && e <= "z") || (e >= "A" && e <= "Z") || (e >= "0" && e <= "9") || e === "-";
+function isConfigNameChar(char) {
+  return (
+    (char >= "a" && char <= "z") ||
+    (char >= "A" && char <= "Z") ||
+    (char >= "0" && char <= "9") ||
+    char === "-"
+  );
 }
 //@ chunk-t0gq9gyw.js:80083-80246 fingerprint = parseGitConfigValue (0.794)
 /**
@@ -293,111 +307,111 @@ function isConfigNameChar(e) {
  */
 function parseGitConfigValue_2(cwd) {
   try {
-    let n = isUsableGitEntry(join(cwd, ".git"), cwd);
-    let r = join(n ? join(cwd, ".git") : cwd, "config");
-    if (readPositionIsUnsafe(r, cwd)) return REPO_UNREADABLE_RESULT;
-    let file = readFileSync(r, "utf-8");
+    let gitDirPath = isUsableGitEntry(join(cwd, ".git"), cwd);
+    let configPath = join(gitDirPath ? join(cwd, ".git") : cwd, "config");
+    if (readPositionIsUnsafe(configPath, cwd)) return REPO_UNREADABLE_RESULT;
+    let file = readFileSync(configPath, "utf-8");
     return hasNulByte(file) ? REPO_UNREADABLE_RESULT : file;
   } catch (error) {
     return isPathAbsent(error) ? REPO_NEGATIVE_RESULT : REPO_UNREADABLE_RESULT;
   }
 }
 //@ chunk-8y336ebc.js:191-358 placement
-function gitConfigEntries(e, { maxLines: l = 2000 } = {}) {
-  let n = [];
+function gitConfigEntries(text, { maxLines = 2000 } = {}) {
+  let urls = [];
   parseGitConfig(
-    e,
+    text,
     {
-      entry(c, a, u) {
+      entry(section, key, value) {
         if (
-          u !== undefined &&
-          u !== "" &&
-          c !== null &&
-          isRemoteSection(c) &&
-          (a === "url" || a === "pushurl")
+          value !== undefined &&
+          value !== "" &&
+          section !== null &&
+          isRemoteSection(section) &&
+          (key === "url" || key === "pushurl")
         )
-          n.push(u);
+          urls.push(value);
       },
     },
     {
-      maxLines: l,
+      maxLines,
     },
   );
-  return n;
+  return urls;
 }
 //@ chunk-8y336ebc.js:358-498 placement
-function isRemoteSection({ name: e, quoted }) {
-  if (quoted) return e === "remote" || e.startsWith("remote.");
-  let index = e.indexOf(".");
-  return index !== -1 && e.slice(0, index) === "remote";
+function isRemoteSection({ name, quoted }) {
+  if (quoted) return name === "remote" || name.startsWith("remote.");
+  let index = name.indexOf(".");
+  return index !== -1 && name.slice(0, index) === "remote";
 }
 //@ chunk-8y336ebc.js:498-1220 placement
 /**
  * 逐行解析 git config 文本（节、子节、键值、续行、引号转义），以回调输出条目。
  */
-function parseGitConfig(e, l, { maxLines: n = 2000, keepsBlanksAsWritten: c = false } = {}) {
-  let sliced = (e.codePointAt(0) === 65279 ? e.slice(1) : e).split(/\r\n|\n/).slice(0, n);
-  let i = null;
-  let s = () => {
-    i = null;
-    l.malformed?.();
+function parseGitConfig(text, handlers, { maxLines = 2000, keepsBlanksAsWritten = false } = {}) {
+  let lines = (text.codePointAt(0) === 65279 ? text.slice(1) : text).split(/\r\n|\n/).slice(0, maxLines);
+  let currentSection = null;
+  let reportMalformed = () => {
+    currentSection = null;
+    handlers.malformed?.();
   };
-  let f = 0;
-  while (f < sliced.length) {
-    let line = sliced[f] ?? "";
-    f++;
-    let value = parseValue(line, 0);
-    let g = false;
-    while (line[value] === "[") {
-      let sectionName = readSectionName(line, value);
+  let lineIndex = 0;
+  while (lineIndex < lines.length) {
+    let line = lines[lineIndex] ?? "";
+    lineIndex++;
+    let openIndex = parseValue(line, 0);
+    let headerFailed = false;
+    while (line[openIndex] === "[") {
+      let sectionName = readSectionName(line, openIndex);
       if (sectionName === null) {
-        s();
-        g = true;
+        reportMalformed();
+        headerFailed = true;
         break;
       }
-      let { end, ...w } = sectionName;
-      i = w;
-      l.header?.(i);
-      value = parseValue(line, end);
+      let { end, ...section } = sectionName;
+      currentSection = section;
+      handlers.header?.(currentSection);
+      openIndex = parseValue(line, end);
     }
-    if (g) continue;
-    let o = line[value];
-    if (o === undefined || o === "#" || o === ";") continue;
-    if (!isAsciiLetter(o)) {
-      s();
+    if (headerFailed) continue;
+    let firstChar = line[openIndex];
+    if (firstChar === undefined || firstChar === "#" || firstChar === ";") continue;
+    if (!isAsciiLetter(firstChar)) {
+      reportMalformed();
       continue;
     }
-    let d = value;
-    while (value < line.length && isConfigNameCharQuick(line[value] ?? "")) value++;
-    let lower = line.slice(d, value).toLowerCase();
-    while (value < line.length && (line[value] === " " || line[value] === "\t")) value++;
-    if (value >= line.length) {
-      l.entry?.(i, lower, undefined);
+    let keyStart = openIndex;
+    while (openIndex < line.length && isConfigNameCharQuick(line[openIndex] ?? "")) openIndex++;
+    let lower = line.slice(keyStart, openIndex).toLowerCase();
+    while (openIndex < line.length && (line[openIndex] === " " || line[openIndex] === "\t")) openIndex++;
+    if (openIndex >= line.length) {
+      handlers.entry?.(currentSection, lower, undefined);
       continue;
     }
-    if (line[value] !== "=") {
-      s();
+    if (line[openIndex] !== "=") {
+      reportMalformed();
       continue;
     }
-    let configValue = readConfigValue(line, value + 1, sliced, f, c);
-    f = configValue.nextLineIndex;
+    let configValue = readConfigValue(line, openIndex + 1, lines, lineIndex, keepsBlanksAsWritten);
+    lineIndex = configValue.nextLineIndex;
     if (configValue.value === null) {
-      s();
+      reportMalformed();
       continue;
     }
-    l.entry?.(i, lower, configValue.value);
+    handlers.entry?.(currentSection, lower, configValue.value);
   }
 }
 //@ chunk-8y336ebc.js:1220-1729 placement
-function readSectionName(line, l) {
-  let start = l + 1;
-  let c = start;
+function readSectionName(line, openIndex) {
+  let start = openIndex + 1;
+  let nameStart = start;
   while (start < line.length) {
-    let i = line[start];
-    if (i === undefined || !(isConfigNameCharQuick(i) || i === ".")) break;
+    let char = line[start];
+    if (char === undefined || !(isConfigNameCharQuick(char) || char === ".")) break;
     start++;
   }
-  let sliced = line.slice(c, start);
+  let sliced = line.slice(nameStart, start);
   if (line[start] === "]") {
     if (sliced === "") return null;
     return {
@@ -410,105 +424,105 @@ function readSectionName(line, l) {
   start = parseValue(line, start);
   if (line[start] !== '"') return null;
   start++;
-  let u = "";
+  let subsection = "";
   while (true) {
     if (start >= line.length) return null;
-    let i = line[start];
-    if (i === "\\") {
-      u += line[start + 1] ?? "";
+    let char = line[start];
+    if (char === "\\") {
+      subsection += line[start + 1] ?? "";
       start += 2;
       continue;
     }
     start++;
-    if (i === '"') break;
-    u += i ?? "";
+    if (char === '"') break;
+    subsection += char ?? "";
   }
   if (line[start] !== "]") return null;
   return {
     name: sliced.toLowerCase(),
     quoted: true,
-    subsection: u,
+    subsection,
     end: start + 1,
   };
 }
 //@ chunk-8y336ebc.js:1729-2390 placement
-function readConfigValue(e, l, n, c, a) {
-  let u = e;
-  let i = c;
-  let s = "";
-  let f = "";
-  let r = false;
-  let t = l;
+function readConfigValue(line, start, lines, nextLineIndex, keepsBlanksAsWritten) {
+  let currentLine = line;
+  let lineIndex = nextLineIndex;
+  let value = "";
+  let pendingSpace = "";
+  let inQuote = false;
+  let position = start;
   while (true) {
-    if (t >= u.length) {
-      if (r)
+    if (position >= currentLine.length) {
+      if (inQuote)
         return {
           value: null,
-          nextLineIndex: i,
+          nextLineIndex: lineIndex,
         };
       break;
     }
-    let o = u[t];
-    if (!r && (o === " " || o === "\t" || o === "\r")) {
-      if (s !== "") f += a ? o : " ";
-      t++;
+    let char = currentLine[position];
+    if (!inQuote && (char === " " || char === "\t" || char === "\r")) {
+      if (value !== "") pendingSpace += keepsBlanksAsWritten ? char : " ";
+      position++;
       continue;
     }
-    if (!r && (o === ";" || o === "#")) break;
-    s += f;
-    f = "";
-    if (o === "\\") {
-      if (t + 1 >= u.length) {
-        if (i >= n.length)
+    if (!inQuote && (char === ";" || char === "#")) break;
+    value += pendingSpace;
+    pendingSpace = "";
+    if (char === "\\") {
+      if (position + 1 >= currentLine.length) {
+        if (lineIndex >= lines.length)
           return {
             value: null,
-            nextLineIndex: i,
+            nextLineIndex: lineIndex,
           };
-        u = n[i] ?? "";
-        i++;
-        t = 0;
+        currentLine = lines[lineIndex] ?? "";
+        lineIndex++;
+        position = 0;
         continue;
       }
-      let d;
-      switch (u[t + 1]) {
+      let escaped;
+      switch (currentLine[position + 1]) {
         case "\\":
-          d = "\\";
+          escaped = "\\";
           break;
         case '"':
-          d = '"';
+          escaped = '"';
           break;
         case "n":
-          d = `
+          escaped = `
 `;
           break;
         case "t":
-          d = "\t";
+          escaped = "\t";
           break;
         case "b":
-          d = "\b";
+          escaped = "\b";
           break;
         default:
           return {
             value: null,
-            nextLineIndex: i,
+            nextLineIndex: lineIndex,
           };
       }
-      s += d;
-      t += 2;
+      value += escaped;
+      position += 2;
       continue;
     }
-    if (o === '"') {
-      r = !r;
-      t++;
+    if (char === '"') {
+      inQuote = !inQuote;
+      position++;
       continue;
     }
-    s += o;
-    t++;
+    value += char;
+    position++;
   }
-  let index = s.indexOf("\x00");
+  let index = value.indexOf("\x00");
   return {
-    value: index === -1 ? s : s.slice(0, index),
-    nextLineIndex: i,
+    value: index === -1 ? value : value.slice(0, index),
+    nextLineIndex: lineIndex,
   };
 }
 //@ chunk-8y336ebc.js:2390-2476 placement
@@ -518,12 +532,12 @@ function parseValue(line, start) {
   return start;
 }
 //@ chunk-8y336ebc.js:2476-2528 placement
-function isAsciiLetter(e) {
-  return (e >= "a" && e <= "z") || (e >= "A" && e <= "Z");
+function isAsciiLetter(char) {
+  return (char >= "a" && char <= "z") || (char >= "A" && char <= "Z");
 }
 //@ chunk-8y336ebc.js:2528-2579 placement
-function isConfigNameCharQuick(e) {
-  return isAsciiLetter(e) || (e >= "0" && e <= "9") || e === "-";
+function isConfigNameCharQuick(char) {
+  return isAsciiLetter(char) || (char >= "0" && char <= "9") || char === "-";
 }
 export {
   hasNulByte,

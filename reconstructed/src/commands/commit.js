@@ -26,15 +26,24 @@ import { isBashAvailable } from "../utils/shell/shellToolUtils.js";
 import { registerBundledSkill } from "../skills/bundledSkills.js";
 import { COMMIT } from "../skills/bundled/bundledSkillNames.js";
 import { isCommitSkillRolloutOn } from "../services/projectsRelay/relayGates.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-dcmhvw5a.js:422424-422494 fingerprint = getPromptContent (0.303)
+function getPromptContent(args) {
+  return args !== undefined && (args.commit !== undefined || args.pr !== undefined);
+}
 //@ chunk-hantmvxa.js:95240-95355 placement
-var COMMIT_GIT_COMMANDS = ["git add *", "git status *", "git commit -m *"];
-var COMMIT_ALLOWED_TOOLS = [
-  `Bash(${CERTIFIED_GIT_ADD})`,
-  `Bash(${CERTIFIED_GIT_STATUS})`,
-  `Bash(${CERTIFIED_GIT_COMMIT})`,
-  ...toPowerShellRules(COMMIT_GIT_COMMANDS),
-];
+var COMMIT_GIT_COMMANDS; // deferred: uses toPowerShellRules (../utils/git.js) of its import cycle while loading; runs once the cycle is complete
+var COMMIT_ALLOWED_TOOLS;
+deferInit("chunk-hantmvxa.js:95240", () => {
+  COMMIT_GIT_COMMANDS = ["git add *", "git status *", "git commit -m *"];
+  COMMIT_ALLOWED_TOOLS = [
+    `Bash(${CERTIFIED_GIT_ADD})`,
+    `Bash(${CERTIFIED_GIT_STATUS})`,
+    `Bash(${CERTIFIED_GIT_COMMIT})`,
+    ...toPowerShellRules(COMMIT_GIT_COMMANDS),
+  ];
+});
 //@ chunk-hantmvxa.js:95355-95378 layout
 /**
  * getExtraCommitTools：构建期返回 []。
@@ -43,18 +52,21 @@ function emptyList() {
   return [];
 }
 //@ chunk-hantmvxa.js:95378-95419 layout
-var COMMIT_ALLOWED_TOOLS_2 = [
-  ...bashAndPowerShellRules([...GIT_ADD_FORCE_RULES, ...GIT_COMMIT_FILE_ARG_RULES]),
-  ...emptyList(),
-];
+var COMMIT_ALLOWED_TOOLS_2; // deferred: uses emptyList of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hantmvxa.js:95378", () => {
+  COMMIT_ALLOWED_TOOLS_2 = [
+    ...bashAndPowerShellRules([...GIT_ADD_FORCE_RULES, ...GIT_COMMIT_FILE_ARG_RULES]),
+    ...emptyList(),
+  ];
+});
 //@ chunk-hantmvxa.js:95419-98758 layout
 /**
  * getCommitPromptContent：/commit 内建技能提示词。
  */
-async function getCommitPromptContent(e) {
+async function getCommitPromptContent(guidance) {
   let { commit } = await buildSessionAttributionTexts();
-  let s = escapeShellBangs(commit);
-  let r = escapeShellBangs(e.trim());
+  let commitAttr = escapeShellBangs(commit);
+  let guidanceText = escapeShellBangs(guidance.trim());
   return `## Context
 
 - Current git status: !\`git status\`
@@ -62,9 +74,9 @@ async function getCommitPromptContent(e) {
 - Current branch: !\`git branch --show-current\`
 - Recent commits: !\`git log --oneline -10\`
 ${
-  r
+  guidanceText
     ? `
-User guidance for this commit: ${r}
+User guidance for this commit: ${guidanceText}
 `
     : ""
 }
@@ -97,10 +109,10 @@ ${
     ? `\`\`\`
 git commit -m "$(cat <<'EOF'
 Commit message here.${
-        s
+        commitAttr
           ? `
 
-${s}`
+${commitAttr}`
           : ""
       }
 EOF
@@ -109,10 +121,10 @@ EOF
     : `\`\`\`
 git commit -m @'
 Commit message here.${
-        s
+        commitAttr
           ? `
 
-${s}`
+${commitAttr}`
           : ""
       }
 '@
@@ -139,17 +151,17 @@ function command() {
     userInvocable: true,
     isEnabled: () => isCommitSkillRolloutOn(),
     progressMessage: "creating commit",
-    async getPromptForCommand(e, n) {
-      let commitPromptContent = await getCommitPromptContent(e);
+    async getPromptForCommand(args, context) {
+      let commitPromptContent = await getCommitPromptContent(args);
       return [
         {
           type: "text",
           text: await executeShellCommandsInPrompt(
             commitPromptContent,
             {
-              ...n,
+              ...context,
               permissionLayers: [
-                ...(n.permissionLayers ?? []),
+                ...(context.permissionLayers ?? []),
                 {
                   kind: "allowed_tools",
                   allowedTools: COMMIT_ALLOWED_TOOLS,
@@ -162,9 +174,5 @@ function command() {
       ];
     },
   });
-}
-//@ chunk-dcmhvw5a.js:422424-422494 fingerprint = getPromptContent (0.303)
-function getPromptContent(e) {
-  return e !== undefined && (e.commit !== undefined || e.pr !== undefined);
 }
 export { getPromptContent, command, emptyList };

@@ -78,109 +78,112 @@ async function promptWorkspaceTrustForRemoteControl({
   answerTimeoutMs,
   screen = getTerminalSize(),
 }) {
-  let i = escapePathForDisplay(dir);
-  let y = truncatePathForDisplay(i);
-  let S = truncatePathForDisplay_2(i);
-  let a =
+  let displayPath = escapePathForDisplay(dir);
+  let shortPath = truncatePathForDisplay(displayPath);
+  let promptPath = truncatePathForDisplay_2(displayPath);
+  let untrustedMessage =
     (isHomeDir
-      ? `Error: Workspace not trusted. ${i} is your home directory, and for security home-directory trust is never saved, so running \`claude\` here first won't help. Run \`${asker.command}\` from a project directory instead (run \`claude\` there once to accept the trust dialog).`
-      : `Error: Workspace not trusted. Please run \`claude\` in ${i} first to review and accept the workspace trust dialog.`) +
+      ? `Error: Workspace not trusted. ${displayPath} is your home directory, and for security home-directory trust is never saved, so running \`claude\` here first won't help. Run \`${asker.command}\` from a project directory instead (run \`claude\` there once to accept the trust dialog).`
+      : `Error: Workspace not trusted. Please run \`claude\` in ${displayPath} first to review and accept the workspace trust dialog.`) +
     asker.unattendedRemedy;
   if (!canPrompt) {
     logFeatureBad(asker.feature, "cannot_ask");
     return {
       trusted: false,
       reason: "no_prompt",
-      message: a,
+      message: untrustedMessage,
     };
   }
-  let u = uncachedStorageRootFor(dir);
-  let d = !isHomeDir && u !== null && !samePath(u, identity(dir));
-  let w = [
+  let repoRoot = uncachedStorageRootFor(dir);
+  let isInsideRepo = !isHomeDir && repoRoot !== null && !samePath(repoRoot, identity(dir));
+  let preambleLines = [
     "",
     asker.opening,
-    `  ${y}`,
+    `  ${shortPath}`,
     "",
     `Quick safety check: is this a project you created or one you trust? ${asker.grant}`,
   ];
-  let c = [
-    ...(d
+  let noteLines = [
+    ...(isInsideRepo
       ? [
-          `This folder is part of the repository at ${truncatePathForDisplay(u)}; trusting it trusts that whole repository, including when you run \`claude\` there.`,
+          `This folder is part of the repository at ${truncatePathForDisplay(repoRoot)}; trusting it trusts that whole repository, including when you run \`claude\` there.`,
         ]
       : []),
     ...(isHomeDir ? ["This is your home directory, so trust lasts for this run only and is not saved."] : []),
     "Security guide: https://code.claude.com/docs/en/security",
   ];
-  let _ = `Trust ${S}?`;
-  let v = fitTrustWarnings(
+  let question = `Trust ${promptPath}?`;
+  let fittedWarnings = fitTrustWarnings(
     workspaceTrustWarnings(dir),
     screen,
     screen === undefined
       ? 0
-      : countWrappedRows([...w, ...c, TOO_FAST_ANSWER_TEXT, `${_} [y/N] `], screen.columns),
+      : countWrappedRows(
+          [...preambleLines, ...noteLines, TOO_FAST_ANSWER_TEXT, `${question} [y/N] `],
+          screen.columns,
+        ),
   );
-  if (v === "too_small" && screen !== undefined) {
+  if (fittedWarnings === "too_small" && screen !== undefined) {
     logFeatureBad(asker.feature, "terminal_too_small");
     return {
       trusted: false,
       reason: "no_prompt",
-      message: formatTerminalTooSmallError(screen, i, isHomeDir, asker.command),
+      message: formatTerminalTooSmallError(screen, displayPath, isHomeDir, asker.command),
     };
   }
-  let E = v === "too_small" ? [] : v;
-  let joined = [...w, ...E, ...c]
+  let warningLines = fittedWarnings === "too_small" ? [] : fittedWarnings;
+  let joined = [...preambleLines, ...warningLines, ...noteLines]
     .map(
-      (R) => `${R}
+      (line) => `${line}
 `,
     )
     .join("");
   process.stdout.write(joined);
-  let k =
+  let timeout =
     answerTimeoutMs === undefined
       ? undefined
       : createCombinedAbortSignal(undefined, {
           timeoutMs: answerTimeoutMs,
           refTimer: true,
         });
-  let A = await confirmPrompt(_, input, {
+  let didTrust = await confirmPrompt(question, input, {
     ignoreAnswersWithinMs: answerGraceMs,
     reaskPreamble: joined,
-    signal: k?.signal,
-  }).finally(() => k?.cleanup());
-  if (k?.signal.aborted === true) {
+    signal: timeout?.signal,
+  }).finally(() => timeout?.cleanup());
+  if (timeout?.signal.aborted === true) {
     logFeatureBad(asker.feature, "no_answer");
     return {
       trusted: false,
       reason: "no_prompt",
       message: `
 No answer in time.
-${a}`,
+${untrustedMessage}`,
     };
   }
-  if (!A) {
+  if (!didTrust) {
     logFeatureSad(asker.feature, "declined");
     return {
       trusted: false,
       reason: "declined",
-      message: `${asker.name} did not start: ${i} is not trusted. Run \`${asker.command}\` again to trust it.`,
+      message: `${asker.name} did not start: ${displayPath} is not trusted. Run \`${asker.command}\` again to trust it.`,
     };
   }
-  let x = await recordDirectoryTrust(dir, storageV5).catch((error) => {
+  let didSave = await recordDirectoryTrust(dir, storageV5).catch((error) => {
     logForDebugging(`[bridge:init] persisting workspace trust failed: ${error}`, {
       level: "error",
     });
     return false;
   });
-  let M = isHomeDir || getHomeTrustDialogAccepted();
-  if (!x && !M) {
+  let isHomeTrustAccepted = isHomeDir || getHomeTrustDialogAccepted();
+  if (!didSave && !isHomeTrustAccepted) {
     process.stderr
       .write(`Couldn't save that choice to your Claude Code config, so you'll be asked again next time.
 `);
     logFeatureSad(asker.feature, "not_saved");
   } else
     logFeatureOk(asker.feature, {
-      saved: x,
+      saved: didSave,
     });
   setSessionTrustAccepted(true);
   return {
@@ -188,79 +191,83 @@ ${a}`,
   };
 }
 //@ chunk-p3rkx9n6.js:14945-16666 placement
-function workspaceTrustWarnings(dir) {
-  let otelHeadersHelperSources = getOtelHeadersHelperSources(dir);
-  let s = projectSettingsAliasesUserSettings();
-  let { allowRules, additionalDirectories, hookSources, commandHelperSources } = s
+function workspaceTrustWarnings(cwd) {
+  let otelHeadersHelperSources = getOtelHeadersHelperSources(cwd);
+  let projectAliasesUser = projectSettingsAliasesUserSettings();
+  let { allowRules, additionalDirectories, hookSources, commandHelperSources } = projectAliasesUser
     ? dropSourceOnlyWarnings(otelHeadersHelperSources)
     : otelHeadersHelperSources;
-  let h = (hooksSources) =>
-    s ? hooksSources.filter((_) => _ !== PROJECT_SETTINGS_RELATIVE_PATH) : hooksSources;
+  let withoutProjectSettings = (hooksSources) =>
+    projectAliasesUser
+      ? hooksSources.filter((source) => source !== PROJECT_SETTINGS_RELATIVE_PATH)
+      : hooksSources;
   let bashAndMcpPermissionSources = getBashAndMcpPermissionSources();
   let keys = Object.keys(
     getMcpConfigsByScope("project", {
       expandVars: false,
     }).servers,
   );
-  let filtered = keys.map(truncateTrustLine).filter((c) => c.length > 0);
-  let S = h(getHooksSources_10());
-  let a = h(getHooksSources_5());
-  let u = [];
-  let d = (text) =>
-    u.push({
+  let filtered = keys.map(truncateTrustLine).filter((name) => name.length > 0);
+  let envHookSources = withoutProjectSettings(getHooksSources_10());
+  let memoryHookSources = withoutProjectSettings(getHooksSources_5());
+  let warnings = [];
+  let addInlineWarning = (text) =>
+    warnings.push({
       text,
       endsInList: false,
     });
-  let w = (text) =>
-    u.push({
+  let addListWarning = (text) =>
+    warnings.push({
       text,
       endsInList: true,
     });
   if (commandHelperSources.length > 0)
-    d(
+    addInlineWarning(
       `This folder runs credential helper commands (apiKeyHelper, awsAuthRefresh and the like), declared in ${formatListWithAnd_2(commandHelperSources)}`,
     );
   if (bashAndMcpPermissionSources.length > 0)
-    d(
+    addInlineWarning(
       `This folder runs commands to mint HTTP headers (headersHelper), declared in ${formatListWithAnd_2(bashAndMcpPermissionSources)}`,
     );
-  if (S.length > 0)
-    d(
-      `This folder sets environment variables for every session here (they can redirect requests and credentials, or change which programs run), declared in ${formatListWithAnd_2(S)}`,
+  if (envHookSources.length > 0)
+    addInlineWarning(
+      `This folder sets environment variables for every session here (they can redirect requests and credentials, or change which programs run), declared in ${formatListWithAnd_2(envHookSources)}`,
     );
   if (hookSources.length > 0)
-    d(`This folder configures hooks that run commands, declared in ${formatListWithAnd_2(hookSources)}`);
+    addInlineWarning(
+      `This folder configures hooks that run commands, declared in ${formatListWithAnd_2(hookSources)}`,
+    );
   if (keys.length > 0)
-    w(
+    addListWarning(
       `Sessions started here launch, without asking, ${keys.length} ${plural(keys.length, "MCP server")} from .mcp.json files in this folder or above it: ` +
         (filtered.length > 0
           ? formatListWithAnd_2(filtered, 8)
           : "(server names contain unprintable characters)"),
     );
   if (allowRules.sources.length > 0)
-    w(
+    addListWarning(
       `This folder pre-approves ${allowRules.rawCount} ${plural(allowRules.rawCount, "tool permission")} in ${formatListWithAnd_2(allowRules.sources)}: ` +
         (allowRules.rules.length > 0
           ? formatListWithAnd_2(allowRules.rules, 8)
           : "(rule names contain unprintable characters)"),
     );
   if (additionalDirectories.sources.length > 0)
-    w(
+    addListWarning(
       `This folder adds ${additionalDirectories.rawCount} ${plural(additionalDirectories.rawCount, "directory", "directories")} to the workspace in ${formatListWithAnd_2(additionalDirectories.sources)}: ` +
         (additionalDirectories.dirs.length > 0
           ? formatListWithAnd_2(additionalDirectories.dirs, 6)
           : "(directory names contain unprintable characters)"),
     );
-  if (a.length > 0)
-    d(
-      `This folder changes where automatic memory is written (autoMemoryDirectory), declared in ${formatListWithAnd_2(a)}`,
+  if (memoryHookSources.length > 0)
+    addInlineWarning(
+      `This folder changes where automatic memory is written (autoMemoryDirectory), declared in ${formatListWithAnd_2(memoryHookSources)}`,
     );
-  return u.length === 0
+  return warnings.length === 0
     ? []
     : [
-        ...u.map((c) => ({
-          ...c,
-          text: `  ${figures_default.warning} ${c.text}`,
+        ...warnings.map((warning) => ({
+          ...warning,
+          text: `  ${figures_default.warning} ${warning.text}`,
         })),
         {
           text: TRUST_PROMPT_FOOTNOTE,
@@ -292,22 +299,22 @@ function getTerminalSize() {
 /**
  * 终端太小（或尺寸未知）无法完整显示信任警告时的错误文本。
  */
-function formatTerminalTooSmallError(screen, o, isHomeDir, command) {
-  let e = isHomeDir ? "." : ", or run `claude` there once to review the trust dialog.";
+function formatTerminalTooSmallError(screen, displayPath, isHomeDir, command) {
+  let nextStep = isHomeDir ? "." : ", or run `claude` there once to review the trust dialog.";
   return screen.assumed === true
-    ? `Error: Workspace not trusted. This terminal did not report its size, so the warnings for ${o} can't be fitted to the screen. Run \`${command}\` again in a normal terminal window${e}`
-    : `Error: Workspace not trusted. This terminal (${screen.columns} columns \xD7 ${screen.rows} rows) is too small to show what trusting ${o} turns on. Enlarge it and run \`${command}\` again${e}`;
+    ? `Error: Workspace not trusted. This terminal did not report its size, so the warnings for ${displayPath} can't be fitted to the screen. Run \`${command}\` again in a normal terminal window${nextStep}`
+    : `Error: Workspace not trusted. This terminal (${screen.columns} columns \xD7 ${screen.rows} rows) is too small to show what trusting ${displayPath} turns on. Enlarge it and run \`${command}\` again${nextStep}`;
 }
 //@ chunk-p3rkx9n6.js:17374-17470 placement
-function countWrappedRows(r, columns) {
+function countWrappedRows(lines, columns) {
   let max = Math.max(1, columns - 1);
-  return r.reduce((acc, e) => acc + Math.max(1, Math.ceil(textWidth(e) / max)), 0);
+  return lines.reduce((acc, line) => acc + Math.max(1, Math.ceil(textWidth(line) / max)), 0);
 }
 //@ chunk-p3rkx9n6.js:17470-17559 placement
-function textWidth(r) {
-  let o = 0;
-  for (let s of r) o += s.charCodeAt(0) < 128 ? 1 : 2;
-  return Math.max(o, bunStringWidth(r));
+function textWidth(text) {
+  let width = 0;
+  for (let char of text) width += char.charCodeAt(0) < 128 ? 1 : 2;
+  return Math.max(width, bunStringWidth(text));
 }
 //@ chunk-p3rkx9n6.js:17559-17567 placement
 var MAX_LIST_ITEM_ROWS = 3;
@@ -315,44 +322,46 @@ var MAX_LIST_ITEM_ROWS = 3;
 /**
  * 逐步缩短文本直到折行后不超过指定行数。
  */
-function truncateToFitRows(text, o, columns) {
-  let n = o * Math.max(1, columns - 1) - 1;
-  let e = truncateToWidth(text, n);
-  while (countWrappedRows([e], columns) > o && n > 1) {
-    n -= Math.max(1, Math.ceil(n / 10));
-    e = truncateToWidth(text, n);
+function truncateToFitRows(text, maxRows, columns) {
+  let maxWidth = maxRows * Math.max(1, columns - 1) - 1;
+  let truncated = truncateToWidth(text, maxWidth);
+  while (countWrappedRows([truncated], columns) > maxRows && maxWidth > 1) {
+    maxWidth -= Math.max(1, Math.ceil(maxWidth / 10));
+    truncated = truncateToWidth(text, maxWidth);
   }
-  return e;
+  return truncated;
 }
 //@ chunk-p3rkx9n6.js:17693-18429 placement
-function fitTrustWarnings(r, screen, s) {
-  if (screen === undefined) return r.map((a) => a.text);
+function fitTrustWarnings(warnings, screen, reservedRows) {
+  if (screen === undefined) return warnings.map((warning) => warning.text);
   let { rows, columns } = screen;
-  if (s > rows || (screen.assumed === true && r.length > 0)) return "too_small";
-  if (r.length === 0) return [];
-  let text = r.at(-1).text;
-  let mapped = r
+  if (reservedRows > rows || (screen.assumed === true && warnings.length > 0)) return "too_small";
+  if (warnings.length === 0) return [];
+  let text = warnings.at(-1).text;
+  let mapped = warnings
     .slice(0, -1)
-    .map((a) => (a.endsInList ? truncateToFitRows(a.text, MAX_LIST_ITEM_ROWS, columns) : a.text));
-  let h = rows - s - countWrappedRows([text], columns);
-  let l = (a) =>
-    `  ${figures_default.warning} ${a} more ${a === 1 ? "warning doesn't" : "warnings don't"} fit on this screen: read this folder's .claude/settings.json and .claude/settings.local.json, and the .mcp.json files here or above, before answering`;
-  let i = [];
-  let y = 0;
-  for (let [a, u] of mapped.entries()) {
-    let sliced = mapped.slice(a);
-    if (y + countWrappedRows(sliced, columns) <= h) {
-      i.push(...sliced);
+    .map((warning) =>
+      warning.endsInList ? truncateToFitRows(warning.text, MAX_LIST_ITEM_ROWS, columns) : warning.text,
+    );
+  let availableRows = rows - reservedRows - countWrappedRows([text], columns);
+  let overflowLine = (count) =>
+    `  ${figures_default.warning} ${count} more ${count === 1 ? "warning doesn't" : "warnings don't"} fit on this screen: read this folder's .claude/settings.json and .claude/settings.local.json, and the .mcp.json files here or above, before answering`;
+  let kept = [];
+  let usedRows = 0;
+  for (let [index, warning] of mapped.entries()) {
+    let sliced = mapped.slice(index);
+    if (usedRows + countWrappedRows(sliced, columns) <= availableRows) {
+      kept.push(...sliced);
       break;
     }
-    let w = countWrappedRows([l(sliced.length - 1)], columns);
-    if (y + countWrappedRows([u], columns) + w > h) break;
-    i.push(u);
-    y += countWrappedRows([u], columns);
+    let overflowRows = countWrappedRows([overflowLine(sliced.length - 1)], columns);
+    if (usedRows + countWrappedRows([warning], columns) + overflowRows > availableRows) break;
+    kept.push(warning);
+    usedRows += countWrappedRows([warning], columns);
   }
-  if (i.length === 0) return "too_small";
-  let S = mapped.length - i.length;
-  return [...i, ...(S > 0 ? [l(S)] : []), text];
+  if (kept.length === 0) return "too_small";
+  let droppedCount = mapped.length - kept.length;
+  return [...kept, ...(droppedCount > 0 ? [overflowLine(droppedCount)] : []), text];
 }
 //@ chunk-p3rkx9n6.js:18429-18459 placement
 var PROJECT_SETTINGS_RELATIVE_PATH = ".claude/settings.json";
@@ -361,24 +370,26 @@ var PROJECT_SETTINGS_RELATIVE_PATH = ".claude/settings.json";
  * 去掉只来自某个来源的 allow 规则、附加目录，以及该来源的钩子/命令助手来源。
  */
 function dropSourceOnlyWarnings(otelHeadersHelperSources) {
-  let o = (sources) => sources.length > 0 && sources.every((e) => e === PROJECT_SETTINGS_RELATIVE_PATH);
-  let s = (n) => n !== PROJECT_SETTINGS_RELATIVE_PATH;
+  let isProjectOnly = (sources) =>
+    sources.length > 0 && sources.every((source) => source === PROJECT_SETTINGS_RELATIVE_PATH);
+  let notProject = (source) => source !== PROJECT_SETTINGS_RELATIVE_PATH;
   return {
-    allowRules: o(otelHeadersHelperSources.allowRules.sources)
+    allowRules: isProjectOnly(otelHeadersHelperSources.allowRules.sources)
       ? {
           rules: [],
           sources: [],
           rawCount: 0,
         }
       : otelHeadersHelperSources.allowRules,
-    additionalDirectories: o(otelHeadersHelperSources.additionalDirectories.sources)
+    additionalDirectories: isProjectOnly(otelHeadersHelperSources.additionalDirectories.sources)
       ? {
           dirs: [],
           sources: [],
           rawCount: 0,
         }
       : otelHeadersHelperSources.additionalDirectories,
-    hookSources: otelHeadersHelperSources.hookSources.filter(s),
-    commandHelperSources: otelHeadersHelperSources.commandHelperSources.filter(s),
+    hookSources: otelHeadersHelperSources.hookSources.filter(notProject),
+    commandHelperSources: otelHeadersHelperSources.commandHelperSources.filter(notProject),
   };
 }
+export { canPromptInteractively, promptWorkspaceTrustForRemoteControl };

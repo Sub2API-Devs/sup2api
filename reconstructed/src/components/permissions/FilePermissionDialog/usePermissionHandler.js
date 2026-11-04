@@ -32,10 +32,12 @@ import { generateSuggestions } from "../../../utils/permissions/filesystem.js";
 
 //@ chunk-18hwfzwa.js:1367850-1369049 callgraph-fingerprint = handleAcceptSession (0.255)
 function handleAcceptSession(filePath, operationType, toolPermissionContext) {
-  let L = isInClaudeFolder(filePath);
-  let ee = isInGlobalClaudeFolder(filePath);
-  if ((L || ee) && operationType !== "read") {
-    let rt = ee ? GLOBAL_CLAUDE_FOLDER_PERMISSION_PATTERN : CLAUDE_FOLDER_PERMISSION_PATTERN;
+  let isProjectClaudeFolder = isInClaudeFolder(filePath);
+  let isGlobalClaudeFolder = isInGlobalClaudeFolder(filePath);
+  if ((isProjectClaudeFolder || isGlobalClaudeFolder) && operationType !== "read") {
+    let rulePattern = isGlobalClaudeFolder
+      ? GLOBAL_CLAUDE_FOLDER_PERMISSION_PATTERN
+      : CLAUDE_FOLDER_PERMISSION_PATTERN;
     let consentSuggestions = parseConsentSuggestions(
       [
         {
@@ -43,7 +45,7 @@ function handleAcceptSession(filePath, operationType, toolPermissionContext) {
           rules: [
             {
               toolName: FILE_EDIT_TOOL_NAME,
-              ruleContent: rt,
+              ruleContent: rulePattern,
             },
           ],
           behavior: "allow",
@@ -52,17 +54,17 @@ function handleAcceptSession(filePath, operationType, toolPermissionContext) {
       ],
       {
         displayedTypes: FILE_RULE_UPDATE_TYPES,
-        renderLabel: (At) => {
-          let It = At.length === 1 ? At[0] : undefined;
+        renderLabel: (updates) => {
+          let update = updates.length === 1 ? updates[0] : undefined;
           if (
-            It === undefined ||
-            It.type !== "addRules" ||
-            It.rules.length !== 1 ||
-            It.rules[0]?.toolName !== FILE_EDIT_TOOL_NAME ||
-            It.rules[0]?.ruleContent !== rt
+            update === undefined ||
+            update.type !== "addRules" ||
+            update.rules.length !== 1 ||
+            update.rules[0]?.toolName !== FILE_EDIT_TOOL_NAME ||
+            update.rules[0]?.ruleContent !== rulePattern
           )
             return null;
-          return ee
+          return isGlobalClaudeFolder
             ? "Yes, and allow Claude to edit files in its ~/.claude folder for this session"
             : "Yes, and allow Claude to edit files in this project's .claude folder for this session";
         },
@@ -76,42 +78,42 @@ function handleAcceptSession(filePath, operationType, toolPermissionContext) {
         };
   }
   let suggestions = generateSuggestions(filePath, operationType, toolPermissionContext);
-  let Re = [];
+  let rows = [];
   let found = suggestions.find((suggestion) => suggestion.type === "setMode");
   if (found?.type === "setMode" && found.mode === "acceptEdits") {
-    let rt = modeSwitchRow("acceptEdits");
-    if (rt !== null) Re.push(rt);
+    let acceptEditsRow = modeSwitchRow("acceptEdits");
+    if (acceptEditsRow !== null) rows.push(acceptEditsRow);
   }
   let found_2 = suggestions.find((suggestion) => suggestion.type === "addDirectories");
   if (found_2?.type === "addDirectories") {
     let modeSuggestions = parseModeSuggestions(found_2.directories);
-    if (modeSuggestions !== null) Re.push(modeSuggestions);
+    if (modeSuggestions !== null) rows.push(modeSuggestions);
   }
   let filtered = suggestions.filter((suggestion) => suggestion.type === "addRules");
   if (filtered.length > 0) {
     let consentSuggestions = parseConsentSuggestions(filtered, {
       displayedTypes: FILE_RULE_UPDATE_TYPES,
-      labelPredicate: (kt) => ruleMatchesTool(kt, FILE_FAMILY_TOOLTIP),
+      labelPredicate: (rule) => ruleMatchesTool(rule, FILE_FAMILY_TOOLTIP),
       renderLabel: buildReadRuleConsentLabel,
     });
-    if (consentSuggestions !== null) Re.push(consentSuggestions);
+    if (consentSuggestions !== null) rows.push(consentSuggestions);
   }
-  let [ze, ...Xe] = Re;
-  if (ze === undefined) return null;
+  let [firstRow, ...restRows] = rows;
+  if (firstRow === undefined) return null;
   return {
-    row: Xe.length === 0 ? ze : combineRows(ze, ...Xe),
+    row: restRows.length === 0 ? firstRow : combineRows(firstRow, ...restRows),
     value: "yes-session",
   };
 }
 //@ chunk-18hwfzwa.js:1378346-1378871 fingerprint = PERMISSION_HANDLERS (0.396)
-function PERMISSION_HANDLERS(option, payload, D) {
+function PERMISSION_HANDLERS(option, payload, feedback) {
   switch (option.type) {
     case "accept-once":
       return {
         behavior: "allow",
         updatedInput: payload.input,
-        ...(D && {
-          feedback: D,
+        ...(feedback && {
+          feedback,
         }),
       };
     case "accept-session": {
@@ -129,8 +131,8 @@ function PERMISSION_HANDLERS(option, payload, D) {
     case "reject":
       return {
         behavior: "deny",
-        ...(D && {
-          feedback: D,
+        ...(feedback && {
+          feedback,
         }),
       };
     case "block-outside-reads":
@@ -142,8 +144,8 @@ function PERMISSION_HANDLERS(option, payload, D) {
       return {
         behavior: "allow",
         updatedInput: payload.input,
-        ...(D && {
-          feedback: D,
+        ...(feedback && {
+          feedback,
         }),
         askAgainOutsideReads: true,
       };

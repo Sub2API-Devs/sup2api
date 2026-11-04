@@ -12,61 +12,62 @@ import {
   InitializeResultSchema,
   SUPPORTED_PROTOCOL_VERSIONS,
   ListToolsResultSchema,
-  JSONRPCMessageSchema,
+  JSONRPCMessageSchema as JSONRPCMessageSchema_2,
 } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/types.js";
 import { logMCPDebug } from "../../utils/log.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
 
 //@ chunk-z1n5m6nf.js:155462-155558 placement = countToolCallsSince (1)
-function getFirstToolUseId_2(e) {
-  if (e.message.content[0]?.type !== "tool_use") return;
-  return e.message.content[0].id;
+function getFirstToolUseId_2(message) {
+  if (message.message.content[0]?.type !== "tool_use") return;
+  return message.message.content[0].id;
 }
 //@ chunk-z1n5m6nf.js:155558-156534 placement
-function validateHostManifest_2(e, r) {
-  if (r === undefined) return;
-  let n = InitializeResultSchema.safeParse(r.initializeResult);
+function validateHostManifest_2(serverName, manifest) {
+  if (manifest === undefined) return;
+  let parseResult = InitializeResultSchema.safeParse(manifest.initializeResult);
   if (
-    !n.success ||
-    !SUPPORTED_PROTOCOL_VERSIONS.includes(n.data.protocolVersion) ||
-    !isValidJsonRpcResult(r.initializeResult)
+    !parseResult.success ||
+    !SUPPORTED_PROTOCOL_VERSIONS.includes(parseResult.data.protocolVersion) ||
+    !isValidJsonRpcResult(manifest.initializeResult)
   ) {
     logMCPDebug(
-      e,
+      serverName,
       "Host manifest initializeResult is not a valid InitializeResult for this client \u2014 handshaking over the control channel instead",
     );
     logFeatureSad("mcp_sdk_manifest", "mcp_sdk_manifest_invalid_initialize");
     return;
   }
   if (
-    r.toolsListResult !== undefined &&
-    (!ListToolsResultSchema.safeParse(r.toolsListResult).success || !isValidJsonRpcResult(r.toolsListResult))
+    manifest.toolsListResult !== undefined &&
+    (!ListToolsResultSchema.safeParse(manifest.toolsListResult).success ||
+      !isValidJsonRpcResult(manifest.toolsListResult))
   ) {
     logMCPDebug(
-      e,
+      serverName,
       "Host manifest toolsListResult is not a valid ListToolsResult \u2014 handshaking over the control channel instead",
     );
     logFeatureSad("mcp_sdk_manifest", "mcp_sdk_manifest_invalid_tools_list");
     return;
   }
-  if (r.toolsListResult !== undefined && r.toolsListResult.nextCursor !== undefined) {
+  if (manifest.toolsListResult !== undefined && manifest.toolsListResult.nextCursor !== undefined) {
     logMCPDebug(
-      e,
+      serverName,
       "Host manifest toolsListResult is paginated (nextCursor) \u2014 replaying initialize only and listing tools over the control channel",
     );
     logFeatureSad("mcp_sdk_manifest", "mcp_sdk_manifest_paginated_tools_list");
     return {
-      initializeResult: r.initializeResult,
+      initializeResult: manifest.initializeResult,
     };
   }
-  return r;
+  return manifest;
 }
 //@ chunk-z1n5m6nf.js:156534-156608 placement
 /**
  * 校验对象是否为合法 JSON-RPC 结果（v1 副本）。
  */
 function isValidJsonRpcResult(result) {
-  return JSONRPCMessageSchema.safeParse({
+  return JSONRPCMessageSchema_2.safeParse({
     jsonrpc: "2.0",
     id: 0,
     result,
@@ -76,13 +77,13 @@ function isValidJsonRpcResult(result) {
 /**
  * 记录 SDK 宿主 MCP 清单的结果（v1 副本）。
  */
-function logManifestOutcomeV1(manifestOutcome, r) {
+function logManifestOutcomeV1(manifestOutcome, ok) {
   switch (manifestOutcome) {
     case "none":
     case "pending":
       return;
     case "replayed":
-      if (r) logFeatureOk("mcp_sdk_manifest");
+      if (ok) logFeatureOk("mcp_sdk_manifest");
       else logFeatureBad("mcp_sdk_manifest", "mcp_sdk_manifest_replay_failed");
       return;
     case "protocol_version_mismatch":

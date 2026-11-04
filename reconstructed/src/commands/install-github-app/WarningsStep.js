@@ -14,7 +14,7 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { BulletRow } from "../../components/design-system/BulletRow.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useKeybinding } from "../../keybindings/useKeybinding.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
@@ -64,7 +64,7 @@ function renderWarning(warning, index) {
 }
 //@ chunk-4v9zy7gn.js:47961-48997 fingerprint = WarningsStep (0.398)
 function WarningsStep(props) {
-  let $ = w(9);
+  let $ = useMemoCache(9);
   let { warnings, onContinue } = props;
   let t1;
   if ($[0] === MEMO_CACHE_SENTINEL) {
@@ -98,24 +98,24 @@ function WarningsStep(props) {
     $[2] = warnings;
     $[3] = t3;
   } else t3 = $[3];
-  let v;
+  let continueHint;
   if ($[4] === MEMO_CACHE_SENTINEL) {
-    v = jsxProd_default(KeyboardShortcutHint, {
+    continueHint = jsxProd_default(KeyboardShortcutHint, {
       chord: "enter",
       action: "continue anyway",
     });
-    $[4] = v;
-  } else v = $[4];
-  let A;
+    $[4] = continueHint;
+  } else continueHint = $[4];
+  let memo;
   if ($[5] === MEMO_CACHE_SENTINEL) {
-    A = jsxProd_default(Box, {
+    memo = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default_2(Text, {
         bold: true,
         color: "permission",
         children: [
           "Press ",
-          v,
+          continueHint,
           ", or",
           " ",
           jsxProd_default(KeyboardShortcutHint, {
@@ -129,8 +129,8 @@ function WarningsStep(props) {
         ],
       }),
     });
-    $[5] = A;
-  } else A = $[5];
+    $[5] = memo;
+  } else memo = $[5];
   let t5;
   if ($[6] === MEMO_CACHE_SENTINEL) {
     t5 = jsxProd_default(Box, {
@@ -153,7 +153,7 @@ function WarningsStep(props) {
   if ($[7] !== t3) {
     t6 = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [t2, t3, A, t5],
+      children: [t2, t3, memo, t5],
     });
     $[7] = t3;
     $[8] = t6;

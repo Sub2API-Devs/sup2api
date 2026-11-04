@@ -33,31 +33,32 @@ var MAX_UPLOAD_DETAIL_CHARS = 300;
 /**
  * 解析 sync_files 调用参数：进度上限、是否上传、等待时长（有上限）、作业 id 与同步点提议。
  */
-function parseSyncFilesArgs(e) {
-  let upTo = typeof e.up_to === "number" && Number.isSafeInteger(e.up_to) && e.up_to >= 0 ? e.up_to : 0;
+function parseSyncFilesArgs(args) {
+  let upTo =
+    typeof args.up_to === "number" && Number.isSafeInteger(args.up_to) && args.up_to >= 0 ? args.up_to : 0;
   let waitMs =
-    typeof e.wait_ms === "number" && Number.isFinite(e.wait_ms) && e.wait_ms >= 0
-      ? Math.min(e.wait_ms, MAX_SYNC_WAIT_MS)
+    typeof args.wait_ms === "number" && Number.isFinite(args.wait_ms) && args.wait_ms >= 0
+      ? Math.min(args.wait_ms, MAX_SYNC_WAIT_MS)
       : DEFAULT_SYNC_WAIT_MS;
-  let job = typeof e.job === "string" && /^[A-Za-z0-9-]{1,64}$/.test(e.job) ? e.job : undefined;
-  let r = branchOfferPayload(e);
+  let job = typeof args.job === "string" && /^[A-Za-z0-9-]{1,64}$/.test(args.job) ? args.job : undefined;
+  let offer = branchOfferPayload(args);
   return {
     upTo,
-    upload: e.upload === true,
+    upload: args.upload === true,
     waitMs,
     job,
-    ...(r !== null && {
-      offer: r,
+    ...(offer !== null && {
+      offer,
     }),
   };
 }
 //@ chunk-2s19t0f2.js:15740-15930 placement
-function truncateUploadDetail(e) {
-  let { upload } = e;
+function truncateUploadDetail(result) {
+  let { upload } = result;
   switch (upload.kind) {
     case "kept_here":
       return {
-        ...e,
+        ...result,
         upload: {
           ...upload,
           detail: truncateCodePoints(upload.detail, MAX_UPLOAD_DETAIL_CHARS),
@@ -65,14 +66,14 @@ function truncateUploadDetail(e) {
       };
     case "failed":
       return {
-        ...e,
+        ...result,
         upload: {
           ...upload,
           reason: truncateCodePoints(upload.reason, MAX_UPLOAD_DETAIL_CHARS),
         },
       };
     default:
-      return e;
+      return result;
   }
 }
 //@ chunk-2s19t0f2.js:15930-17269 placement
@@ -80,58 +81,60 @@ function truncateUploadDetail(e) {
  * 设备同步文件的作业管理：按 job id 或"未完成且覆盖相同进度"复用作业；否则检查同步引擎状态后启动追赶（catchUp）或同步点上传（syncPoint），在等待时长内返回 done，否则返回 running 与 job id。
  */
 function createSyncFilesRunner(getEngine, maxWaitMs = MAX_SYNC_WAIT_MS, acceptOffer) {
-  let o = new Map();
-  let r = (t) => {
-    o.set(t.id, t);
-    while (o.size > MAX_TRACKED_SYNC_JOBS) {
-      let d = [...o.values()].find((u) => u.settled) ?? o.values().next().value;
-      if (d === undefined) break;
-      o.delete(d.id);
+  let jobs = new Map();
+  let track = (job) => {
+    jobs.set(job.id, job);
+    while (jobs.size > MAX_TRACKED_SYNC_JOBS) {
+      let oldest = [...jobs.values()].find((candidate) => candidate.settled) ?? jobs.values().next().value;
+      if (oldest === undefined) break;
+      jobs.delete(oldest.id);
     }
   };
-  return async (t, d) => {
-    let u =
-      t.job !== undefined
-        ? o.get(t.job)
-        : t.upload
+  return async (request, signal) => {
+    let existing =
+      request.job !== undefined
+        ? jobs.get(request.job)
+        : request.upload
           ? undefined
-          : [...o.values()].find((i) => !i.settled && !i.upload && i.upTo >= t.upTo);
-    if (t.job !== undefined && u === undefined)
+          : [...jobs.values()].find((job) => !job.settled && !job.upload && job.upTo >= request.upTo);
+    if (request.job !== undefined && existing === undefined)
       return {
         state: "refused",
         reason: "unknown_job",
       };
-    let n;
-    if (u !== undefined) n = u;
+    let job;
+    if (existing !== undefined) job = existing;
     else {
-      let i =
+      let engine =
         getEngine() ??
-        (t.offer !== undefined && acceptOffer !== undefined && (await acceptOffer(t.offer, d))
+        (request.offer !== undefined &&
+        acceptOffer !== undefined &&
+        (await acceptOffer(request.offer, signal))
           ? getEngine()
           : undefined);
-      if (i === undefined)
+      if (engine === undefined)
         return {
           state: "refused",
           reason: "no_engine",
         };
-      let { state } = i.state();
+      let { state } = engine.state();
       if (state !== "armed" && state !== "seeding")
         return {
           state: "refused",
           reason: "not_syncing",
         };
-      let { catchUp, syncPoint } = i;
+      let { catchUp, syncPoint } = engine;
       if (catchUp === undefined || syncPoint === undefined)
         return {
           state: "refused",
           reason: "unsupported",
         };
-      if (count([...o.values()], (p) => !p.settled) >= MAX_CONCURRENT_SYNC_JOBS)
+      if (count([...jobs.values()], (job) => !job.settled) >= MAX_CONCURRENT_SYNC_JOBS)
         return {
           state: "refused",
           reason: "too_many_concurrent",
         };
-      let P = () => ({
+      let crashed = () => ({
         apply: {
           kind: "failed",
           reason: "crashed",
@@ -140,58 +143,58 @@ function createSyncFilesRunner(getEngine, maxWaitMs = MAX_SYNC_WAIT_MS, acceptOf
           kind: "not_attempted",
         },
       });
-      let v = (
-        t.upload
-          ? syncPoint.call(i, t.upTo).then(truncateUploadDetail)
-          : catchUp.call(i, t.upTo).then((apply) => ({
+      let done = (
+        request.upload
+          ? syncPoint.call(engine, request.upTo).then(truncateUploadDetail)
+          : catchUp.call(engine, request.upTo).then((apply) => ({
               apply,
               upload: {
                 kind: "not_attempted",
               },
             }))
-      ).catch(P);
-      let h = {
+      ).catch(crashed);
+      let job_2 = {
         id: randomUUID(),
-        upTo: t.upTo,
-        upload: t.upload,
-        done: v,
+        upTo: request.upTo,
+        upload: request.upload,
+        done,
         settled: false,
       };
-      v.finally(() => {
-        h.settled = true;
+      done.finally(() => {
+        job_2.settled = true;
       });
-      n = h;
-      r(n);
+      job = job_2;
+      track(job);
     }
     let winner = await Promise.race([
-      n.done.then((outcome) => ({
+      job.done.then((outcome) => ({
         outcome,
       })),
-      sleep(Math.min(t.waitMs, maxWaitMs), d).then(() => "waiting"),
+      sleep(Math.min(request.waitMs, maxWaitMs), signal).then(() => "waiting"),
     ]);
     if (winner === "waiting")
       return {
         state: "running",
-        job: n.id,
+        job: job.id,
       };
     return {
       state: "done",
-      job: n.id,
+      job: job.id,
       outcome: winner.outcome,
     };
   };
 }
 //@ chunk-2s19t0f2.js:17269-17373 placement
-function toToolResult(e) {
+function toToolResult(result) {
   return {
     content: [
       {
         type: "text",
-        text: jsonStringify(e),
+        text: jsonStringify(result),
       },
     ],
-    structuredContent: e,
-    isError: e.state === "refused",
+    structuredContent: result,
+    isError: result.state === "refused",
   };
 }
 //@ chunk-2s19t0f2.js:17373-17406 placement
@@ -222,34 +225,34 @@ function createDeviceSyncFilesServer(host) {
 function createSyncFilesServer(
   host,
   getEngine = () => dirSyncSession().syncOf(host),
-  acceptOffer = (o, r) =>
+  acceptOffer = (offer, signal) =>
     dirSyncSession()
       .attachSyncs.of(host)
-      ?.accept(o, r)
-      .then((t) => t.kind === "armed") ?? Promise.resolve(false),
+      ?.accept(offer, signal)
+      .then((result) => result.kind === "armed") ?? Promise.resolve(false),
 ) {
   let syncFilesRunner = createSyncFilesRunner(getEngine, undefined, acceptOffer);
   return {
-    async serve(r, t) {
-      if (r.name !== SYNC_FILES)
+    async serve(request, signal) {
+      if (request.name !== SYNC_FILES)
         return {
-          result: unknownPlumbingToolResult(r.name),
+          result: unknownPlumbingToolResult(request.name),
         };
-      let syncFilesArgs = parseSyncFilesArgs(r.args);
+      let syncFilesArgs = parseSyncFilesArgs(request.args);
       let now = Date.now();
-      let n = await syncFilesRunner(syncFilesArgs, t);
+      let result = await syncFilesRunner(syncFilesArgs, signal);
       logEvent("tengu_dir_sync_device_sync_files", {
         transport: lit("session"),
         upload: syncFilesArgs.upload,
         rejoined: syncFilesArgs.job !== undefined,
-        state: fromEnum(n.state),
-        refused: fromEnumOpt(n.state === "refused" ? n.reason : undefined),
-        catch_up: fromEnumOpt(n.state === "done" ? n.outcome.apply.kind : undefined),
-        push: fromEnumOpt(n.state === "done" ? n.outcome.upload.kind : undefined),
+        state: fromEnum(result.state),
+        refused: fromEnumOpt(result.state === "refused" ? result.reason : undefined),
+        catch_up: fromEnumOpt(result.state === "done" ? result.outcome.apply.kind : undefined),
+        push: fromEnumOpt(result.state === "done" ? result.outcome.upload.kind : undefined),
         duration_ms: Date.now() - now,
       });
       return {
-        result: toToolResult(n),
+        result: toToolResult(result),
       };
     },
   };
@@ -269,3 +272,4 @@ function unknownPlumbingToolResult(name) {
     isError: true,
   };
 }
+export { createDeviceSyncFilesServer };

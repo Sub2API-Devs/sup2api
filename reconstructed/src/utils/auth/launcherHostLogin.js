@@ -48,13 +48,14 @@ import { logForDebugging } from "../debug.js";
 import { servedSettingsLoadLeftNoAnswer } from "../../services/remoteManagedSettings/remoteSettingsState.js";
 import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { computeContentHash } from "../commitAttribution.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-30p0tvt0.js:991-1030 placement
 /**
  * 判断是否设置了任一的第三方提供方环境变量。
  */
 function hasProviderEnvFlag() {
-  return PROVIDER_ENV_FLAGS.some((e) => env[e]);
+  return PROVIDER_ENV_FLAGS.some((flagName) => env[flagName]);
 }
 //@ chunk-30p0tvt0.js:1030-1101 placement
 /**
@@ -65,8 +66,8 @@ var LAUNCHER_END_REASONS = ["signed_out", "identity_changed", "transient", "refr
 /**
  * 判断字符串是否为已知的登录结束原因。
  */
-function isLauncherEndReason(e) {
-  return LAUNCHER_END_REASONS.some((n) => n === e);
+function isLauncherEndReason(endReason) {
+  return LAUNCHER_END_REASONS.some((reason) => reason === endReason);
 }
 //@ chunk-30p0tvt0.js:1145-1155 placement
 /**
@@ -129,36 +130,43 @@ class LauncherHostLoginState {
 /**
  * 启动器宿主登录的按会话状态、读取相关环境变量的访问器，以及身份重问间隔、续期重试间隔与续期暂停时长。
  */
-var launcherHostLoginStates = new HostScoped(() => new LauncherHostLoginState());
-var launcherEnv = createEnvAccessor(
-  Object.fromEntries(
-    [
-      ...PROVIDER_SELECTION_ENV_VARS,
-      ...PROVIDER_CREDENTIAL_ENV_VARS,
-      ...TOKEN_FD_ENV_VARS,
-      ...HOST_SERVICE_BASE_URL_VARS,
-      "ANTHROPIC_UNIX_SOCKET",
-      "CLAUDE_CODE_CUSTOM_OAUTH_URL",
-      "ANTHROPIC_BASE_URL",
-      "ANTHROPIC_CUSTOM_HEADERS",
-      "CLAUDE_CODE_HOST_CREDS_FILE",
-      "CLAUDE_SESSION_INGRESS_TOKEN_FILE",
-      ...TLS_ENV_VARS,
-    ].map((e) => [e, ENV_PARSERS.rawStr()]),
-  ),
-  null,
-);
-var IDENTITY_REASK_MS = 60000;
-var RENEWAL_RETRY_DELAYS_MS = [5000, 30000, 120000];
-var RENEWAL_HOLD_OFF_MS = 600000;
+var launcherHostLoginStates; // deferred: uses LauncherHostLoginState of its import cycle while loading; runs once the cycle is complete
+var launcherEnv;
+var IDENTITY_REASK_MS;
+var RENEWAL_RETRY_DELAYS_MS;
+var RENEWAL_HOLD_OFF_MS;
+deferInit("chunk-30p0tvt0.js:1576", () => {
+  launcherHostLoginStates = new HostScoped(() => new LauncherHostLoginState());
+  launcherEnv = createEnvAccessor(
+    Object.fromEntries(
+      [
+        ...PROVIDER_SELECTION_ENV_VARS,
+        ...PROVIDER_CREDENTIAL_ENV_VARS,
+        ...TOKEN_FD_ENV_VARS,
+        ...HOST_SERVICE_BASE_URL_VARS,
+        "ANTHROPIC_UNIX_SOCKET",
+        "CLAUDE_CODE_CUSTOM_OAUTH_URL",
+        "ANTHROPIC_BASE_URL",
+        "ANTHROPIC_CUSTOM_HEADERS",
+        "CLAUDE_CODE_HOST_CREDS_FILE",
+        "CLAUDE_SESSION_INGRESS_TOKEN_FILE",
+        ...TLS_ENV_VARS,
+      ].map((envVarName) => [envVarName, ENV_PARSERS.rawStr()]),
+    ),
+    null,
+  );
+  IDENTITY_REASK_MS = 60000;
+  RENEWAL_RETRY_DELAYS_MS = [5000, 30000, 120000];
+  RENEWAL_HOLD_OFF_MS = 600000;
+});
 //@ chunk-30p0tvt0.js:1898-2154 placement
 function isLauncherStartedProcess() {
-  let e = launcherHostLoginStates.of(getRootSession().host);
-  e.wasLauncherStarted ||= Boolean(
+  let state = launcherHostLoginStates.of(getRootSession().host);
+  state.wasLauncherStarted ||= Boolean(
     env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST && env.CLAUDE_CODE_HOST_AUTH_ENV_VAR,
   );
-  e.wasOpenToSignIn ||= e.wasLauncherStarted && env.CLAUDE_CODE_ENTRYPOINT !== "claude-desktop-3p";
-  return e.wasLauncherStarted;
+  state.wasOpenToSignIn ||= state.wasLauncherStarted && env.CLAUDE_CODE_ENTRYPOINT !== "claude-desktop-3p";
+  return state.wasLauncherStarted;
 }
 //@ chunk-30p0tvt0.js:2154-2212 placement
 function mayHaveLauncherHostLoginInMemory() {
@@ -167,9 +175,9 @@ function mayHaveLauncherHostLoginInMemory() {
 }
 //@ chunk-30p0tvt0.js:2212-2298 placement
 function readLauncherStartAtClaim() {
-  let e = launcherHostLoginStates.of(getRootSession().host);
-  e.wasLauncherStarted = false;
-  e.wasOpenToSignIn = false;
+  let state = launcherHostLoginStates.of(getRootSession().host);
+  state.wasLauncherStarted = false;
+  state.wasOpenToSignIn = false;
   isLauncherStartedProcess();
 }
 //@ chunk-30p0tvt0.js:2298-3532 placement
@@ -180,11 +188,11 @@ function launcherHostLoginRefusal() {
   if (isGatewayLoginForced()) return "gateway_mandate";
   if (getHostPolicyLoginPins().forceLoginMethod === "console") return "login_method_pin";
   if (!isActualFirstPartyAnthropicBaseUrl()) return "custom_base_url";
-  let e = launcherEnvRefusal((n) => {
-    let o = launcherEnv[n];
-    return typeof o === "string" ? o : undefined;
+  let envRefusal = launcherEnvRefusal((envVarName) => {
+    let envValue = launcherEnv[envVarName];
+    return typeof envValue === "string" ? envValue : undefined;
   });
-  if (e !== null) return e;
+  if (envRefusal !== null) return envRefusal;
   try {
     if (!isHttpsAnthropicHost(getOauthConfig().BASE_API_URL)) return "api_base_not_anthropic";
   } catch {
@@ -195,15 +203,15 @@ function launcherHostLoginRefusal() {
     hasBgAuthSnapshotPending() ||
     getOAuthTokenFromFileDescriptor() ||
     getApiKeyFromFileDescriptor() ||
-    [...TOKEN_FD_ENV_VARS, "CLAUDE_BG_AUTH_SNAPSHOT_PATH"].some((n) =>
-      wasDescriptorAnnouncementConsumed(n),
+    [...TOKEN_FD_ENV_VARS, "CLAUDE_BG_AUTH_SNAPSHOT_PATH"].some((envVarName) =>
+      wasDescriptorAnnouncementConsumed(envVarName),
     ) ||
     (isBareMode() && getSettingsForSource("flagSettings")?.apiKeyHelper)
   )
     return "launcher_credential";
   try {
     let { envs, apiKeyHelper, unread } = getMachineAdminCredentialInputs();
-    if (apiKeyHelper || envs.some((env) => launcherEnvRefusal((s) => env[s]) !== null))
+    if (apiKeyHelper || envs.some((env) => launcherEnvRefusal((envVarName) => env[envVarName]) !== null))
       return "machine_policy_credential";
     if (envs.some((env) => isEnvTruthy(env.CLAUDE_CODE_DISABLE_LAUNCHER_SIGN_IN))) return "switched_off";
     if (unread) return "machine_policy_unread";
@@ -227,19 +235,19 @@ function launcherHostLoginRefusal() {
 //@ chunk-30p0tvt0.js:3532-3636 placement
 function usableLauncherHostLoginToken() {
   if (!isLauncherStartedProcess()) return null;
-  let e = launcherHostLoginStates.of(getRootSession().host);
-  return e.token !== null && dropRefusedToken(e) === null ? e.token : null;
+  let state = launcherHostLoginStates.of(getRootSession().host);
+  return state.token !== null && dropRefusedToken(state) === null ? state.token : null;
 }
 //@ chunk-30p0tvt0.js:3636-3841 placement
 function takeLauncherHostLoginEnd() {
-  let e = launcherHostLoginStates.of(getRootSession().host);
-  if (e.token !== null) dropRefusedToken(e);
-  if (e.endedAtRead !== null) {
-    e.endedAtRead = null;
+  let state = launcherHostLoginStates.of(getRootSession().host);
+  if (state.token !== null) dropRefusedToken(state);
+  if (state.endedAtRead !== null) {
+    state.endedAtRead = null;
     logFeatureBad("auth_launcher_host_login", "refused_while_held");
   }
-  let hasEndToSettle = e.hasEndToSettle;
-  e.hasEndToSettle = false;
+  let hasEndToSettle = state.hasEndToSettle;
+  state.hasEndToSettle = false;
   return hasEndToSettle;
 }
 //@ chunk-30p0tvt0.js:3841-3883 placement
@@ -253,19 +261,19 @@ function setLauncherHostLoginReplacementJudge(judgeReplacement) {
 //@ chunk-30p0tvt0.js:3933-4041 placement
 function holdStartupLauncherHostLogin(token) {
   if (!token || launcherHostLoginRefusal() !== null) return false;
-  let n = launcherHostLoginStates.of(getRootSession().host);
-  n.token = token;
-  n.everHeld.add(computeContentHash(token));
+  let state = launcherHostLoginStates.of(getRootSession().host);
+  state.token = token;
+  state.everHeld.add(computeContentHash(token));
   return true;
 }
 //@ chunk-30p0tvt0.js:4041-4117 placement
-function wasLauncherHostLoginToken(e) {
+function wasLauncherHostLoginToken(token) {
   let everHeld = launcherHostLoginStates.of(getRootSession().host).everHeld;
-  return everHeld.size > 0 && everHeld.has(computeContentHash(e));
+  return everHeld.size > 0 && everHeld.has(computeContentHash(token));
 }
 //@ chunk-30p0tvt0.js:4117-4160 placement
-function isLauncherHostLoginRefusedNow(e) {
-  return wasLauncherHostLoginToken(e) && usableLauncherHostLoginToken() === null;
+function isLauncherHostLoginRefusedNow(token) {
+  return wasLauncherHostLoginToken(token) && usableLauncherHostLoginToken() === null;
 }
 //@ chunk-30p0tvt0.js:4160-4219 placement
 function loginToHandOn(claudeAIOAuthTokens) {
@@ -274,29 +282,29 @@ function loginToHandOn(claudeAIOAuthTokens) {
     : claudeAIOAuthTokens;
 }
 //@ chunk-30p0tvt0.js:4219-4643 placement
-function learnLauncherHostLoginIdentity(e) {
-  let n = launcherHostLoginStates.of(getRootSession().host);
-  n.identityOf = e;
-  if (n.identity !== null && !n.hasIdentitySaidNothing) return n.identity;
-  let o = usableLauncherHostLoginToken();
-  if (o === null) return n.identity ?? Promise.resolve(null);
-  let r = e(o).catch(() => null);
-  n.identity = r;
-  n.hasIdentitySaidNothing = false;
-  r.then((u) => {
-    if (u !== null || n.identity !== r) return;
-    n.hasIdentitySaidNothing = true;
-    let s = RENEWAL_RETRY_DELAYS_MS[n.identityReasksMade] ?? RENEWAL_HOLD_OFF_MS;
-    n.identityReasksMade += 1;
-    setTimeout(reaskIdentityIfCurrent, s, n, r, e).unref();
+function learnLauncherHostLoginIdentity(identityOf) {
+  let state = launcherHostLoginStates.of(getRootSession().host);
+  state.identityOf = identityOf;
+  if (state.identity !== null && !state.hasIdentitySaidNothing) return state.identity;
+  let token = usableLauncherHostLoginToken();
+  if (token === null) return state.identity ?? Promise.resolve(null);
+  let identityPromise = identityOf(token).catch(() => null);
+  state.identity = identityPromise;
+  state.hasIdentitySaidNothing = false;
+  identityPromise.then((identity) => {
+    if (identity !== null || state.identity !== identityPromise) return;
+    state.hasIdentitySaidNothing = true;
+    let delayMs = RENEWAL_RETRY_DELAYS_MS[state.identityReasksMade] ?? RENEWAL_HOLD_OFF_MS;
+    state.identityReasksMade += 1;
+    setTimeout(reaskIdentityIfCurrent, delayMs, state, identityPromise, identityOf).unref();
   });
-  return r;
+  return identityPromise;
 }
 //@ chunk-30p0tvt0.js:4643-4800 placement
-function reaskIdentityIfCurrent(e, n, o) {
+function reaskIdentityIfCurrent(state, identityPromise, identityOf) {
   try {
-    if (e.identity === n && launcherHostLoginStates.of(getRootSession().host) === e)
-      learnLauncherHostLoginIdentity(o);
+    if (state.identity === identityPromise && launcherHostLoginStates.of(getRootSession().host) === state)
+      learnLauncherHostLoginIdentity(identityOf);
   } catch {
     logForDebugging("[launcher-host-login] asking again whose sign-in this is threw", {
       level: "warn",
@@ -326,65 +334,65 @@ function isLauncherStartupAsk(requestId) {
 }
 //@ chunk-30p0tvt0.js:5077-5173 placement
 function forgetLauncherHostLogin() {
-  let e = launcherHostLoginStates.of(getRootSession().host);
-  let n = e.token !== null;
-  e.token = null;
-  e.hasEndToSettle ||= n;
-  return n;
+  let state = launcherHostLoginStates.of(getRootSession().host);
+  let hadToken = state.token !== null;
+  state.token = null;
+  state.hasEndToSettle ||= hadToken;
+  return hadToken;
 }
 //@ chunk-30p0tvt0.js:5173-5405 placement
-function dropRefusedToken(e) {
-  let n = launcherHostLoginRefusal();
-  if (n !== null && e.token !== null) {
-    e.token = null;
-    e.endedAtRead = n;
-    e.hasEndToSettle = true;
+function dropRefusedToken(state) {
+  let refusal = launcherHostLoginRefusal();
+  if (refusal !== null && state.token !== null) {
+    state.token = null;
+    state.endedAtRead = refusal;
+    state.hasEndToSettle = true;
     logForDebugging(
-      `[launcher-host-login] the desktop app's sign-in is over for this process (refused_while_held: ${n})`,
+      `[launcher-host-login] the desktop app's sign-in is over for this process (refused_while_held: ${refusal})`,
       {
         level: "warn",
       },
     );
   }
-  return n;
+  return refusal;
 }
 //@ chunk-30p0tvt0.js:5405-5465 placement
-function renewLauncherHostLogin(e) {
-  let n = launcherHostLoginStates.of(getRootSession().host);
-  return chainReplacement(n, () => renewLauncherHostLoginToken(n, e));
+function renewLauncherHostLogin(token) {
+  let state = launcherHostLoginStates.of(getRootSession().host);
+  return chainReplacement(state, () => renewLauncherHostLoginToken(state, token));
 }
 //@ chunk-30p0tvt0.js:5465-5715 placement
-function holdPushedLauncherHostLogin(e) {
-  let n = launcherHostLoginStates.of(getRootSession().host);
-  let o;
+function holdPushedLauncherHostLogin(token) {
+  let state = launcherHostLoginStates.of(getRootSession().host);
+  let refusal;
   try {
-    o = dropRefusedToken(n);
+    refusal = dropRefusedToken(state);
   } catch (error) {
     logReplaceThrew(error);
     return null;
   }
-  if (!e || n.token === null || o !== null) {
+  if (!token || state.token === null || refusal !== null) {
     logForDebugging(
-      `[launcher-host-login] refused a pushed claude.ai token (${o ?? (e ? "none_held" : "empty")})`,
+      `[launcher-host-login] refused a pushed claude.ai token (${refusal ?? (token ? "none_held" : "empty")})`,
       {
         level: "warn",
       },
     );
     return null;
   }
-  return chainReplacement(n, () => judgeReplacementToken(n, e));
+  return chainReplacement(state, () => judgeReplacementToken(state, token));
 }
 //@ chunk-30p0tvt0.js:5715-5802 placement
 /**
  * 串行执行令牌替换任务，失败时记日志并返回 false。
  */
-function chainReplacement(e, n) {
-  let o = e.replacing.then(n).catch((error) => {
+function chainReplacement(state, replace) {
+  let chained = state.replacing.then(replace).catch((error) => {
     logReplaceThrew(error);
     return false;
   });
-  e.replacing = o;
-  return o;
+  state.replacing = chained;
+  return chained;
 }
 //@ chunk-30p0tvt0.js:5802-5931 placement
 function logReplaceThrew(error) {
@@ -396,15 +404,15 @@ function logReplaceThrew(error) {
   );
 }
 //@ chunk-30p0tvt0.js:5931-6648 placement
-async function renewLauncherHostLoginToken(e, n) {
-  if (e.token === null || dropRefusedToken(e) !== null) return false;
-  if (e.token !== n) return true;
+async function renewLauncherHostLoginToken(state, expectedToken) {
+  if (state.token === null || dropRefusedToken(state) !== null) return false;
+  if (state.token !== expectedToken) return true;
   let sdkOAuthTokenRefreshCallback = getSdkOAuthTokenRefreshCallback();
-  if (!sdkOAuthTokenRefreshCallback || Date.now() < e.renewalHoldOffUntilMs) return false;
+  if (!sdkOAuthTokenRefreshCallback || Date.now() < state.renewalHoldOffUntilMs) return false;
   let launcherLoginGeneration = getLauncherLoginGeneration();
-  let u;
+  let newToken;
   try {
-    u = await sdkOAuthTokenRefreshCallback();
+    newToken = await sdkOAuthTokenRefreshCallback();
   } catch (error) {
     logForDebugging(
       `[launcher-host-login] oauth_token_refresh failed (${error instanceof Error ? error.name : "unknown"})`,
@@ -412,41 +420,41 @@ async function renewLauncherHostLoginToken(e, n) {
         level: "warn",
       },
     );
-    e.renewalHoldOffUntilMs = Date.now() + IDENTITY_REASK_MS;
+    state.renewalHoldOffUntilMs = Date.now() + IDENTITY_REASK_MS;
     logFeatureBad("auth_launcher_host_login", "request_failed");
     return false;
   }
-  if (e.token === null) return false;
+  if (state.token === null) return false;
   if (launcherHostLoginRefusal() !== null) {
-    endLauncherHostLogin(e, "refused_after_answer");
+    endLauncherHostLogin(state, "refused_after_answer");
     return false;
   }
-  if (!u) {
+  if (!newToken) {
     let launcherLoginEnd = getLauncherLoginEnd();
     if (
       launcherLoginEnd !== undefined &&
       launcherLoginEnd.generation > launcherLoginGeneration &&
       launcherLoginEnd.reason === "identity_changed"
     ) {
-      endLauncherHostLogin(e, "identity_changed");
+      endLauncherHostLogin(state, "identity_changed");
       return false;
     }
     logFeatureBad("auth_launcher_host_login", "no_token");
     return false;
   }
-  if (u === n) {
+  if (newToken === expectedToken) {
     logFeatureBad("auth_launcher_host_login", "same_token");
     return false;
   }
-  return judgeReplacementToken(e, u, true);
+  return judgeReplacementToken(state, newToken, true);
 }
 //@ chunk-30p0tvt0.js:6648-7368 placement
-async function judgeReplacementToken(e, n, o = false) {
-  if (e.token === null || dropRefusedToken(e) !== null) return false;
-  if (n === e.token) return true;
-  let r = "refused";
+async function judgeReplacementToken(state, candidateToken, afterRefresh = false) {
+  if (state.token === null || dropRefusedToken(state) !== null) return false;
+  if (candidateToken === state.token) return true;
+  let verdict = "refused";
   try {
-    if (e.judgeReplacement !== null) r = await e.judgeReplacement(n);
+    if (state.judgeReplacement !== null) verdict = await state.judgeReplacement(candidateToken);
   } catch (error) {
     logForDebugging(
       `[launcher-host-login] the replacement could not be judged (${error instanceof Error ? error.name : "unknown"})`,
@@ -455,58 +463,63 @@ async function judgeReplacementToken(e, n, o = false) {
       },
     );
   }
-  if (e.token === null) return false;
-  if (r === "held_unknown" && o) {
-    endLauncherHostLogin(e, "identity_never_learned");
+  if (state.token === null) return false;
+  if (verdict === "held_unknown" && afterRefresh) {
+    endLauncherHostLogin(state, "identity_never_learned");
     return false;
   }
-  if (r === "unverified" || r === "held_unknown") {
-    e.renewalHoldOffUntilMs = Date.now() + IDENTITY_REASK_MS;
+  if (verdict === "unverified" || verdict === "held_unknown") {
+    state.renewalHoldOffUntilMs = Date.now() + IDENTITY_REASK_MS;
     logFeatureBad("auth_launcher_host_login", "replacement_unverified");
     return false;
   }
-  if (r === "allowed" && launcherHostLoginRefusal() === null) {
-    e.token = n;
-    e.everHeld.add(computeContentHash(n));
+  if (verdict === "allowed" && launcherHostLoginRefusal() === null) {
+    state.token = candidateToken;
+    state.everHeld.add(computeContentHash(candidateToken));
     setAuthenticatedAccount(null);
     logFeatureOk("auth_launcher_host_login");
     return true;
   }
-  endLauncherHostLogin(e, r === "allowed" ? "refused_after_answer" : "replacement_refused");
+  endLauncherHostLogin(state, verdict === "allowed" ? "refused_after_answer" : "replacement_refused");
   return false;
 }
 //@ chunk-30p0tvt0.js:7368-7549 placement
-function endLauncherHostLogin(e, n) {
-  e.token = null;
-  e.hasEndToSettle = true;
-  logForDebugging(`[launcher-host-login] the desktop app's sign-in is over for this process (${n})`, {
+function endLauncherHostLogin(state, reason) {
+  state.token = null;
+  state.hasEndToSettle = true;
+  logForDebugging(`[launcher-host-login] the desktop app's sign-in is over for this process (${reason})`, {
     level: "warn",
   });
-  logFeatureBad("auth_launcher_host_login", n);
+  logFeatureBad("auth_launcher_host_login", reason);
 }
 //@ chunk-30p0tvt0.js:7549-8235 placement
 /**
  * 检查环境是否不允许使用桌面应用下发的登录：非一方提供方、Unix socket、自定义 OAuth、不安全的 base URL、端点覆盖、启动器凭据或关闭了 TLS 校验。
  */
 function launcherEnvRefusal(readEnv) {
-  if (PROVIDER_SELECTION_ENV_VARS.some((o) => o.startsWith("CLAUDE_CODE_USE_") && isEnvTruthy(readEnv(o))))
+  if (
+    PROVIDER_SELECTION_ENV_VARS.some(
+      (envVarName) => envVarName.startsWith("CLAUDE_CODE_USE_") && isEnvTruthy(readEnv(envVarName)),
+    )
+  )
     return "not_first_party";
   if (readEnv("ANTHROPIC_UNIX_SOCKET")?.trim()) return "unix_socket";
   if (readEnv("CLAUDE_CODE_CUSTOM_OAUTH_URL")?.trim()) return "custom_oauth_deployment";
   let baseUrl = readEnv("ANTHROPIC_BASE_URL")?.trim();
   if (baseUrl && !isHttpsAnthropicHost(baseUrl)) return "insecure_base_url";
-  if (HOST_SERVICE_BASE_URL_VARS.some((o) => readEnv(o)?.trim())) return "endpoint_override";
+  if (HOST_SERVICE_BASE_URL_VARS.some((envVarName) => readEnv(envVarName)?.trim()))
+    return "endpoint_override";
   if (
     readEnv("ANTHROPIC_CUSTOM_HEADERS")?.trim() ||
     readEnv("CLAUDE_CODE_HOST_CREDS_FILE")?.trim() ||
     readEnv("CLAUDE_SESSION_INGRESS_TOKEN_FILE")?.trim() ||
-    PROVIDER_CREDENTIAL_ENV_VARS.some((o) => readEnv(o)?.trim()) ||
-    TOKEN_FD_ENV_VARS.some((o) => readEnv(o)?.trim())
+    PROVIDER_CREDENTIAL_ENV_VARS.some((envVarName) => readEnv(envVarName)?.trim()) ||
+    TOKEN_FD_ENV_VARS.some((envVarName) => readEnv(envVarName)?.trim())
   )
     return "launcher_credential";
   if (
-    TLS_ENV_VARS.some((o) => {
-      let env = readEnv(o);
+    TLS_ENV_VARS.some((envVarName) => {
+      let env = readEnv(envVarName);
       return env !== undefined && env !== "1";
     })
   )
@@ -517,8 +530,8 @@ function launcherEnvRefusal(readEnv) {
 /**
  * 判断 URL 是否为 https 的 Anthropic 主机。
  */
-function isHttpsAnthropicHost(e) {
-  return isFirstPartyAnthropicHost(e) && new URL(e).protocol === "https:";
+function isHttpsAnthropicHost(url) {
+  return isFirstPartyAnthropicHost(url) && new URL(url).protocol === "https:";
 }
 export {
   LAUNCHER_END_REASONS,

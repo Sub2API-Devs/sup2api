@@ -64,24 +64,24 @@ import { logForDebugging } from "../../utils/debug.js";
 import { pickByHelper } from "../../utils/git/gitSafeEnv.js";
 
 //@ chunk-xqfbbyzk.js:15601-15777 placement
-function subscribeMcpConfigChanges(o, servedSettingsChanged) {
+function subscribeMcpConfigChanges(onChange, servedSettingsChanged) {
   let mcpConfigFingerprint = getMcpConfigFingerprint();
-  let D = [
-    settingsChangeDetector.subscribe(() => o()),
-    servedSettingsChanged?.subscribe(() => o()) ?? (() => {}),
+  let unsubscribes = [
+    settingsChangeDetector.subscribe(() => onChange()),
+    servedSettingsChanged?.subscribe(() => onChange()) ?? (() => {}),
     subscribeGlobalConfigInstalled(() => {
       try {
         let mcpConfigFingerprint_2 = getMcpConfigFingerprint();
         if (mcpConfigFingerprint_2 !== mcpConfigFingerprint) {
           mcpConfigFingerprint = mcpConfigFingerprint_2;
-          o();
+          onChange();
         }
       } catch (error) {
         logError(toError(error));
       }
     }),
   ];
-  return () => D.forEach((u) => u());
+  return () => unsubscribes.forEach((unsubscribe) => unsubscribe());
 }
 //@ chunk-xqfbbyzk.js:15777-15929 placement = isMcpServerDisabled (0.857)
 /**
@@ -107,12 +107,12 @@ var DEVICE_MCP_CONSENT = "device-mcp-consent";
 /**
  * 用户选择"暂不"后关于本机 MCP 不共享的说明。
  */
-function notNowConsentMessage(o, d) {
-  if (d)
-    return o
+function notNowConsentMessage(hadQuestion, putOff) {
+  if (putOff)
+    return hadQuestion
       ? "You chose Not now, so this machine's MCP servers aren't shared with cloud sessions. You'll be asked again when you add an MCP server."
       : `You chose Not now, so this machine's MCP servers aren't shared with cloud sessions. To be asked again, ${deleteNotNowHint()}.`;
-  return o
+  return hadQuestion
     ? "This machine's MCP servers aren't shared with cloud sessions until you allow it here."
     : "This machine's MCP servers aren't shared with cloud sessions until you allow it. To choose, start a new claude --cloud session from a terminal.";
 }
@@ -134,310 +134,327 @@ var DEVICE_MCP_RECONSENT = "device-mcp-reconsent";
 /**
  * MCP 服务器工具变化后需重新同意的说明。
  */
-function toolsChangedMessage(o, d) {
-  let joined = o.slice(0, 4).map(shortServerLabel).join(", ");
-  let D = o.length > 4 ? ` and ${o.length - 4} more` : "";
-  let u = o.length === 1;
-  return `MCP ${plural(o.length, "server")} ${joined}${D} changed the tools ${u ? "it lists" : "they list"} since you approved offering ${u ? "it" : "them"}; not offered to cloud sessions until re-approved${d ? "." : " (claude --cloud asks at the next start)."}`;
+function toolsChangedMessage(serverNames, hasQuestion) {
+  let joined = serverNames.slice(0, 4).map(shortServerLabel).join(", ");
+  let moreNote = serverNames.length > 4 ? ` and ${serverNames.length - 4} more` : "";
+  let isSingle = serverNames.length === 1;
+  return `MCP ${plural(serverNames.length, "server")} ${joined}${moreNote} changed the tools ${isSingle ? "it lists" : "they list"} since you approved offering ${isSingle ? "it" : "them"}; not offered to cloud sessions until re-approved${hasQuestion ? "." : " (claude --cloud asks at the next start)."}`;
 }
 //@ chunk-xqfbbyzk.js:17506-17556 placement
 /**
  * 同意状态是否属于未接受（declined/unset）。
  */
-function isDeclinedOrUnset(o) {
-  return o === "declined" || o === "unset";
+function isDeclinedOrUnset(consent) {
+  return consent === "declined" || consent === "unset";
 }
 //@ chunk-xqfbbyzk.js:17556-25038 placement
 /**
  * 把本机 MCP 服务器提供给云会话（同意检查、策略拒绝、工具变化重新同意、通知）。
  */
-function passthroughServingGroupProvider(o = {}) {
-  return (d) => {
-    if (!(d.serving !== undefined ? d.serving.offReason === undefined : isRemoteToolServingSwitchOn()))
+function passthroughServingGroupProvider(overrides = {}) {
+  return (input) => {
+    if (
+      !(input.serving !== undefined ? input.serving.offReason === undefined : isRemoteToolServingSwitchOn())
+    )
       return;
-    let { registry, onNotice, storageV5 } = d;
-    let U = d.deviceMcpQuestion !== undefined;
-    let Ne = o.readConsent ?? (() => readDeviceMcpConsent(deviceMcpConsentStore(storageV5)));
-    let ce = false;
-    let Q = async () => (ce ? "declined" : Ne());
-    let ae =
-      o.resolveOffer ??
+    let { registry, onNotice, storageV5 } = input;
+    let hasQuestion = input.deviceMcpQuestion !== undefined;
+    let readConsent = overrides.readConsent ?? (() => readDeviceMcpConsent(deviceMcpConsentStore(storageV5)));
+    let declined = false;
+    let currentConsent = async () => (declined ? "declined" : readConsent());
+    let resolveOffer =
+      overrides.resolveOffer ??
       (() =>
         getDeviceBridgeMcpConfigs_2({
           storageV5,
         }));
-    let Te = o.readNotNow ?? (() => readDeviceMcpNotNow(deviceMcpNotNowStore(storageV5)));
-    let de = async (e) => containsAll(await Te().catch(() => []), e);
-    let Re =
-      o.createPool ??
+    let readNotNow = overrides.readNotNow ?? (() => readDeviceMcpNotNow(deviceMcpNotNowStore(storageV5)));
+    let isAllPutOff = async (servers) => containsAll(await readNotNow().catch(() => []), servers);
+    let createPool =
+      overrides.createPool ??
       ((configs) =>
         createPassthroughMcpBridge({
           configs,
           storageV5,
         }));
-    let kitFor = o.kitFor ?? servingKitFor;
-    let servingDenied = o.servingDenied ?? isDeviceMcpDenied;
-    let y = kitFor(d);
-    let Z = o.snapshotDeps ?? createSnapshotStore(storageV5);
-    let A;
-    let le = true;
-    let M;
-    let z;
-    let p = false;
-    let T = false;
-    let ke = y.onRedescribed(() => {
-      if (T) I("tools_changed").catch((error) => logError(toError(error)));
+    let kitFor = overrides.kitFor ?? servingKitFor;
+    let servingDenied = overrides.servingDenied ?? isDeviceMcpDenied;
+    let kit = kitFor(input);
+    let snapshotStore = overrides.snapshotDeps ?? createSnapshotStore(storageV5);
+    let carriedSnapshot;
+    let snapshotWritable = true;
+    let pool;
+    let unsubscribePool;
+    let disposed = false;
+    let settled = false;
+    let offRedescribed = kit.onRedescribed(() => {
+      if (settled) refreshAnnouncement("tools_changed").catch((error) => logError(toError(error)));
     });
-    let F;
-    let J;
-    let pe;
-    let x;
-    let ee = false;
-    let I = async (e) => {
-      if (F !== undefined) {
-        J = e;
-        return F;
+    let refreshPromise;
+    let pendingReason;
+    let announcedServerKey;
+    let rereadPromise;
+    let rereadAgain = false;
+    let refreshAnnouncement = async (reason) => {
+      if (refreshPromise !== undefined) {
+        pendingReason = reason;
+        return refreshPromise;
       }
-      F = (async () => {
+      refreshPromise = (async () => {
         try {
-          await fe(e);
-          while (J !== undefined && !p) {
-            let n = J;
-            J = undefined;
-            await fe(n);
+          await applyAnnouncement(reason);
+          while (pendingReason !== undefined && !disposed) {
+            let reason = pendingReason;
+            pendingReason = undefined;
+            await applyAnnouncement(reason);
           }
         } finally {
-          F = undefined;
+          refreshPromise = undefined;
         }
       })();
-      return F;
+      return refreshPromise;
     };
-    let fe = async (e) => {
-      if (M === undefined || !T || p) return;
+    let applyAnnouncement = async (reason) => {
+      if (pool === undefined || !settled || disposed) return;
       if (servingDenied()) {
-        W();
+        onPolicyDenied();
         return;
       }
-      let n = M;
-      let r = K;
-      let i = await Q();
-      if (isDeclinedOrUnset(i) || (Y && i !== "accepted")) {
-        ne();
+      let currentPool = pool;
+      let generation = servingGeneration;
+      let consent = await currentConsent();
+      if (isDeclinedOrUnset(consent) || (revoked && consent !== "accepted")) {
+        onRevoked();
         return;
       }
-      let servers = n.servers().filter((v) => isDeviceScopeEnabled(v.name, v));
-      let S = servedPermissionContext({
-        stance: y.policy.stance,
-        launchDir: y.deps.launchDir,
-        userSettings: y.deps.userSettingsAtAttach?.(),
+      let servers = currentPool.servers().filter((server) => isDeviceScopeEnabled(server.name, server));
+      let permissionContext = servedPermissionContext({
+        stance: kit.policy.stance,
+        launchDir: kit.deps.launchDir,
+        userSettings: kit.deps.userSettingsAtAttach?.(),
       });
-      let w = new Map();
+      let servedByLocalName = new Map();
       let [passthroughAnnouncement, deviceMcpSnapshot] = await Promise.all([
         buildPassthroughAnnouncement(servers, {
-          target: y.description,
-          configured: G.map(([v, k]) => ({
-            name: v,
-            scope: k.scope,
+          target: kit.description,
+          configured: forwardableEntries.map(([name, entry]) => ({
+            name,
+            scope: entry.scope,
           })),
-          isDenied: (v) => getDenyRuleForTool(S, v) !== null,
-          serve: (v) => Ie(v, y, n, w),
+          isDenied: (tool) => getDenyRuleForTool(permissionContext, tool) !== null,
+          serve: (served) => serveTool(served, kit, currentPool, servedByLocalName),
         }),
-        readDeviceMcpSnapshot(Z),
+        readDeviceMcpSnapshot(snapshotStore),
       ]);
-      let _e = deviceMcpSnapshot !== "unreadable" ? mergeSnapshot(deviceMcpSnapshot, A) : A;
-      if (_e === undefined) {
-        if (p || K !== r || M !== n || !T) return;
-        R = new Set(passthroughAnnouncement.byServer.keys());
-        registry.setGroup(MCP_PASSTHROUGH_2, [], e);
-        q(new Map());
-        if (!h.has("snapshot_unreadable")) {
-          h.add("snapshot_unreadable");
+      let basis =
+        deviceMcpSnapshot !== "unreadable"
+          ? mergeSnapshot(deviceMcpSnapshot, carriedSnapshot)
+          : carriedSnapshot;
+      if (basis === undefined) {
+        if (disposed || servingGeneration !== generation || pool !== currentPool || !settled) return;
+        withheldNames = new Set(passthroughAnnouncement.byServer.keys());
+        registry.setGroup(MCP_PASSTHROUGH_2, [], reason);
+        setServedTools(new Map());
+        if (!seenEvents.has("snapshot_unreadable")) {
+          seenEvents.add("snapshot_unreadable");
           onNotice?.(DEVICE_MCP_RECONSENT, DEVICE_MCP_UNREADABLE_MESSAGE);
         }
         return;
       }
-      let L = reconcileSnapshot(passthroughAnnouncement.byServer, _e);
-      let Ce = new Set(L.withheld.keys());
-      let Ge = new Set(
-        [...Ce].flatMap((v) => (passthroughAnnouncement.byServer.get(v) ?? []).map((k) => k.name)),
+      let reconciliation = reconcileSnapshot(passthroughAnnouncement.byServer, basis);
+      let withheldServers = new Set(reconciliation.withheld.keys());
+      let withheldToolNames = new Set(
+        [...withheldServers].flatMap((server) =>
+          (passthroughAnnouncement.byServer.get(server) ?? []).map((tool) => tool.name),
+        ),
       );
-      let filtered = passthroughAnnouncement.tools.filter((tool) => !Ge.has(tool.definition.name));
-      if (p || K !== r || M !== n || !T) return;
+      let tools = passthroughAnnouncement.tools.filter(
+        (tool) => !withheldToolNames.has(tool.definition.name),
+      );
+      if (disposed || servingGeneration !== generation || pool !== currentPool || !settled) return;
       if (servingDenied()) {
-        W();
+        onPolicyDenied();
         return;
       }
-      Y = false;
-      h.delete("policy_denied");
-      R = Ce;
-      A = L.next;
-      q(
+      revoked = false;
+      seenEvents.delete("policy_denied");
+      withheldNames = withheldServers;
+      carriedSnapshot = reconciliation.next;
+      setServedTools(
         new Map(
-          filtered.flatMap((v) => {
-            let k = w.get(v.definition.name);
-            return k === undefined ? [] : [[k.localName, k]];
+          tools.flatMap((tool) => {
+            let served = servedByLocalName.get(tool.definition.name);
+            return served === undefined ? [] : [[served.localName, served]];
           }),
         ),
       );
-      registry.setGroup(MCP_PASSTHROUGH_2, filtered, e);
-      je(filtered, passthroughAnnouncement.dropped, e);
-      Ae(L.next.withheld);
-      if ((L.changed || !le) && deviceMcpSnapshot !== "unreadable")
-        le = await writeDeviceMcpSnapshot(L.next, Z);
+      registry.setGroup(MCP_PASSTHROUGH_2, tools, reason);
+      reportServing(tools, passthroughAnnouncement.dropped, reason);
+      reportWithheld(reconciliation.next.withheld);
+      if ((reconciliation.changed || !snapshotWritable) && deviceMcpSnapshot !== "unreadable")
+        snapshotWritable = await writeDeviceMcpSnapshot(reconciliation.next, snapshotStore);
     };
-    let R = new Set();
-    let Ae = (withheld) => {
+    let withheldNames = new Set();
+    let reportWithheld = (withheld) => {
       let keys = Object.keys(withheld);
-      if (keys.length === 0 || h.has(DEVICE_MCP_RECONSENT)) return;
-      h.add(DEVICE_MCP_RECONSENT);
+      if (keys.length === 0 || seenEvents.has(DEVICE_MCP_RECONSENT)) return;
+      seenEvents.add(DEVICE_MCP_RECONSENT);
       logEvent("tengu_device_mcp_serving", {
         event: lit("snapshot_changed"),
         announced_count: 0,
         dropped_count: keys.length,
-        policy: fromEnum(y.policy.name),
+        policy: fromEnum(kit.policy.name),
       });
-      onNotice?.(DEVICE_MCP_RECONSENT, toolsChangedMessage(keys, U));
+      onNotice?.(DEVICE_MCP_RECONSENT, toolsChangedMessage(keys, hasQuestion));
     };
-    let G = [];
-    let Ie = (e, n, deps, i) => {
-      let passthroughCall = makePassthroughCall(deps, e.server, e.rawName, e.wireArguments);
+    let forwardableEntries = [];
+    let serveTool = (toolEntry, deps, deps_2, servedTools) => {
+      let passthroughCall = makePassthroughCall(
+        deps_2,
+        toolEntry.server,
+        toolEntry.rawName,
+        toolEntry.wireArguments,
+      );
       let tool = {
-        ...e.tool,
-        validateInput: async (w, C) => {
-          let P = await ge(e.server);
-          if (P !== undefined) return refuseNotServedValidation(C.remoteCall, P);
+        ...toolEntry.tool,
+        validateInput: async (input, context) => {
+          let refusal = await checkNotServed(toolEntry.server);
+          if (refusal !== undefined) return refuseNotServedValidation(context.remoteCall, refusal);
           return (
-            e.tool.validateInput?.(w, C) ?? {
+            toolEntry.tool.validateInput?.(input, context) ?? {
               result: true,
             }
           );
         },
-        call: async (w, C) => {
-          let P = await ge(e.server);
-          if (P !== undefined) throwNotServed(C.remoteCall, P.message, P.telemetry);
-          return passthroughCall(w, C);
+        call: async (input, context) => {
+          let refusal = await checkNotServed(toolEntry.server);
+          if (refusal !== undefined) throwNotServed(context.remoteCall, refusal.message, refusal.telemetry);
+          return passthroughCall(input, context);
         },
       };
-      i.set(e.name, {
-        localName: e.tool.name,
+      servedTools.set(toolEntry.name, {
+        localName: toolEntry.tool.name,
         tool,
-        wireArguments: e.wireArguments,
+        wireArguments: toolEntry.wireArguments,
       });
       return {
-        definition: e.definition,
+        definition: toolEntry.definition,
         analyticsName: MCP_PASSTHROUGH,
         senderJudgedBy: "handler",
-        call: (w, C) => admitServedCall(e.tool.name, w, C, n.deps, "bridge"),
+        call: (input, context) => admitServedCall(toolEntry.tool.name, input, context, deps.deps, "bridge"),
       };
     };
-    let ge = async (server) => {
+    let checkNotServed = async (server) => {
       if (servingDenied()) {
-        W();
+        onPolicyDenied();
         return POLICY_DENIED_RESULT;
       }
-      let n = await Q();
-      if (isDeclinedOrUnset(n) || (Y && n !== "accepted")) {
-        ne();
+      let consent = await currentConsent();
+      if (isDeclinedOrUnset(consent) || (revoked && consent !== "accepted")) {
+        onRevoked();
         return {
           message: "This machine no longer offers its MCP servers to cloud sessions; the call did not run",
           telemetry: "MCP passthrough consent withdrawn since the announce",
         };
       }
       if (isMcpServerDisabled(server)) {
-        q(new Map([...he].filter(([, s]) => s.tool.mcpInfo?.serverName !== server)));
-        I("tools_changed").catch((error) => logError(toError(error)));
+        setServedTools(
+          new Map([...servedToolsMap].filter(([, served]) => served.tool.mcpInfo?.serverName !== server)),
+        );
+        refreshAnnouncement("tools_changed").catch((error) => logError(toError(error)));
         return {
           message: `MCP server "${server}" was turned off on this machine since it was offered; the call did not run`,
           telemetry: "MCP passthrough server turned off since the announce",
         };
       }
-      if (R.has(server))
+      if (withheldNames.has(server))
         return {
           message: `MCP server "${shortServerLabel(server)}" changed the tools it lists since you approved offering it; the call did not run (claude --cloud asks at the next start)`,
           telemetry: "MCP passthrough server withheld: snapshot changed",
         };
-      let deviceMcpSnapshot = await readDeviceMcpSnapshot(Z);
-      let i = deviceMcpSnapshot !== "unreadable" ? deviceMcpSnapshot : A;
-      if (i === undefined) {
-        R = new Set([...R, server]);
+      let deviceMcpSnapshot = await readDeviceMcpSnapshot(snapshotStore);
+      let basis = deviceMcpSnapshot !== "unreadable" ? deviceMcpSnapshot : carriedSnapshot;
+      if (basis === undefined) {
+        withheldNames = new Set([...withheldNames, server]);
         return {
           message: `MCP server "${shortServerLabel(server)}" is temporarily unavailable; the call did not run`,
           telemetry: "MCP passthrough server withheld: no readable basis",
         };
       }
-      if (Object.hasOwn(i.servers, server) && i.servers[server] === "declined") {
-        R = new Set([...R, server]);
-        if (deviceMcpSnapshot !== "unreadable") A = mergeSnapshot(deviceMcpSnapshot, A);
-        I("tools_changed").catch((error) => logError(toError(error)));
+      if (Object.hasOwn(basis.servers, server) && basis.servers[server] === "declined") {
+        withheldNames = new Set([...withheldNames, server]);
+        if (deviceMcpSnapshot !== "unreadable")
+          carriedSnapshot = mergeSnapshot(deviceMcpSnapshot, carriedSnapshot);
+        refreshAnnouncement("tools_changed").catch((error) => logError(toError(error)));
         return {
           message: `MCP server "${shortServerLabel(server)}" is no longer offered to cloud sessions from this machine; the call did not run`,
           telemetry: "MCP passthrough server withheld: declined since announce",
         };
       }
       if (servingDenied()) {
-        W();
+        onPolicyDenied();
         return POLICY_DENIED_RESULT;
       }
       return;
     };
-    let he = new Map();
-    let q = (e) => {
-      he = e;
-      y.setServedMcp(
-        new Map([...e].map(([n, r]) => [n, r.tool])),
-        new Map([...e].map(([n, r]) => [n, r.wireArguments])),
+    let servedToolsMap = new Map();
+    let setServedTools = (next) => {
+      servedToolsMap = next;
+      kit.setServedMcp(
+        new Map([...next].map(([name, served]) => [name, served.tool])),
+        new Map([...next].map(([name, served]) => [name, served.wireArguments])),
       );
     };
-    let V = () => {
-      q(new Map());
+    let withdraw = () => {
+      setServedTools(new Map());
       registry.setGroup(MCP_PASSTHROUGH_2, []);
-      oe = undefined;
+      lastAnalysis = undefined;
     };
-    let Y = false;
-    let K = 0;
-    let W = () => {
-      K++;
-      V();
-      if (G.some(([e, n]) => isForwardableDeviceMcp(e, n)))
-        H({
+    let revoked = false;
+    let servingGeneration = 0;
+    let onPolicyDenied = () => {
+      servingGeneration++;
+      withdraw();
+      if (forwardableEntries.some(([name, entry]) => isForwardableDeviceMcp(name, entry)))
+        reportConsentProblem({
           event: "policy_denied",
         });
     };
-    let ne = () => {
-      K++;
-      V();
-      if (!Y) {
-        Y = true;
+    let onRevoked = () => {
+      servingGeneration++;
+      withdraw();
+      if (!revoked) {
+        revoked = true;
         logEvent("tengu_device_mcp_serving", {
           event: lit("revoked"),
           announced_count: 0,
           dropped_count: 0,
-          policy: fromEnum(y.policy.name),
+          policy: fromEnum(kit.policy.name),
         });
       }
     };
-    let h = new Set();
-    let te = false;
-    let oe;
-    let je = (e, dropped, r) => {
-      let i = jsonStringify([e.map((s) => s.definition), dropped]);
-      if (r === "tools_changed" && i === oe) return;
-      oe = i;
-      if (!te) logFeatureOk("device_mcp_serving");
-      te = true;
+    let seenEvents = new Set();
+    let servingLogged = false;
+    let lastAnalysis;
+    let reportServing = (tools, dropped, reason) => {
+      let fingerprint = jsonStringify([tools.map((tool) => tool.definition), dropped]);
+      if (reason === "tools_changed" && fingerprint === lastAnalysis) return;
+      lastAnalysis = fingerprint;
+      if (!servingLogged) logFeatureOk("device_mcp_serving");
+      servingLogged = true;
       logEvent("tengu_device_mcp_serving", {
-        event: lit(r === "tools_settled" ? "announced" : "changed"),
-        announced_count: e.length,
+        event: lit(reason === "tools_settled" ? "announced" : "changed"),
+        announced_count: tools.length,
         dropped_count: dropped.length,
-        policy: fromEnum(y.policy.name),
+        policy: fromEnum(kit.policy.name),
       });
-      if (dropped.length > 0 && !h.has(DEVICE_MCP_DROPPED)) {
-        h.add(DEVICE_MCP_DROPPED);
+      if (dropped.length > 0 && !seenEvents.has(DEVICE_MCP_DROPPED)) {
+        seenEvents.add(DEVICE_MCP_DROPPED);
         let joined = dropped
           .slice(0, 6)
           .map(
-            (S) =>
-              `${shortServerLabel(S.server)}/${shortServerLabel(S.tool)} (${S.reason.replace(/_/g, " ")})`,
+            (dropped) =>
+              `${shortServerLabel(dropped.server)}/${shortServerLabel(dropped.tool)} (${dropped.reason.replace(/_/g, " ")})`,
           )
           .join(", ");
         onNotice?.(
@@ -446,177 +463,183 @@ function passthroughServingGroupProvider(o = {}) {
         );
       }
     };
-    let H = (e) => {
-      if (h.has(e.event)) {
-        if (e.event === "consent_unset" && !e.putOff && h.delete(DEVICE_MCP_NOT_NOW_NOTICE_KEY))
-          onNotice?.(DEVICE_MCP_CONSENT, notNowConsentMessage(U, false));
+    let reportConsentProblem = (problem) => {
+      if (seenEvents.has(problem.event)) {
+        if (
+          problem.event === "consent_unset" &&
+          !problem.putOff &&
+          seenEvents.delete(DEVICE_MCP_NOT_NOW_NOTICE_KEY)
+        )
+          onNotice?.(DEVICE_MCP_CONSENT, notNowConsentMessage(hasQuestion, false));
         return;
       }
-      h.add(e.event);
-      logFeatureSad("device_mcp_serving", e.event);
+      seenEvents.add(problem.event);
+      logFeatureSad("device_mcp_serving", problem.event);
       logEvent("tengu_device_mcp_serving", {
-        event: fromEnum(e.event),
+        event: fromEnum(problem.event),
         announced_count: 0,
         dropped_count: 0,
-        policy: fromEnum(y.policy.name),
+        policy: fromEnum(kit.policy.name),
       });
-      if (e.event === "consent_unset") {
-        let n = e.putOff && !U ? DEVICE_MCP_NOT_NOW_NOTICE_KEY : DEVICE_MCP_CONSENT;
-        h.add(n);
-        onNotice?.(n, notNowConsentMessage(U, e.putOff));
+      if (problem.event === "consent_unset") {
+        let noticeKey = problem.putOff && !hasQuestion ? DEVICE_MCP_NOT_NOW_NOTICE_KEY : DEVICE_MCP_CONSENT;
+        seenEvents.add(noticeKey);
+        onNotice?.(noticeKey, notNowConsentMessage(hasQuestion, problem.putOff));
       }
-      if (e.event === "policy_denied") onNotice?.(DEVICE_MCP_POLICY, POLICY_DENIED_MESSAGE);
+      if (problem.event === "policy_denied") onNotice?.(DEVICE_MCP_POLICY, POLICY_DENIED_MESSAGE);
     };
-    let me = () => {
-      if (x !== undefined) {
-        ee = true;
-        return x;
+    let ensureFresh = () => {
+      if (rereadPromise !== undefined) {
+        rereadAgain = true;
+        return rereadPromise;
       }
-      x = (async () => {
+      rereadPromise = (async () => {
         try {
           do {
-            ee = false;
-            await Be();
-          } while (ee);
+            rereadAgain = false;
+            await reread();
+          } while (rereadAgain);
         } finally {
-          x = undefined;
+          rereadPromise = undefined;
         }
       })();
-      return x;
+      return rereadPromise;
     };
-    let Be = async () => {
-      if (p) return;
-      let e = M;
+    let reread = async () => {
+      if (disposed) return;
+      let activePool = pool;
       try {
-        await (e === undefined ? Fe() : xe(e));
-        h.delete("start_failed");
+        await (activePool === undefined ? startFirst() : restartWith(activePool));
+        seenEvents.delete("start_failed");
       } catch (error) {
-        if (e !== undefined) logFeatureSad("device_mcp_serving", "reread_failed");
-        else if (!h.has("start_failed")) {
-          h.add("start_failed");
+        if (activePool !== undefined) logFeatureSad("device_mcp_serving", "reread_failed");
+        else if (!seenEvents.has("start_failed")) {
+          seenEvents.add("start_failed");
           logFeatureBad("device_mcp_serving", "start_failed");
         }
         logError(toError(error));
-        if (M === undefined) V();
+        if (pool === undefined) withdraw();
       }
     };
-    let Fe = async () => {
-      let e = await Q();
-      let n = e === "unreadable" ? "unset" : e;
-      if (n === "declined") {
-        H({
+    let startFirst = async () => {
+      let consent = await currentConsent();
+      let state = consent === "unreadable" ? "unset" : consent;
+      if (state === "declined") {
+        reportConsentProblem({
           event: "declined",
         });
         return;
       }
-      let { configs, deniedBySettings } = await ae();
-      G = Object.entries(configs);
-      let filtered = G.filter(([S, w]) => isForwardableDeviceMcp(S, w));
-      if (p || filtered.length === 0) return;
+      let { configs, deniedBySettings } = await resolveOffer();
+      forwardableEntries = Object.entries(configs);
+      let filtered = forwardableEntries.filter(([name, entry]) => isForwardableDeviceMcp(name, entry));
+      if (disposed || filtered.length === 0) return;
       if (deniedBySettings) {
-        H({
+        reportConsentProblem({
           event: "policy_denied",
         });
         return;
       }
-      if (n === "unset") {
-        let putOff = await de(filtered.map(([w]) => w));
-        if (!p)
-          H({
+      if (state === "unset") {
+        let putOff = await isAllPutOff(filtered.map(([entry]) => entry));
+        if (!disposed)
+          reportConsentProblem({
             event: "consent_unset",
             putOff,
           });
         return;
       }
-      await ve(configs);
+      await startPool(configs);
     };
-    let xe = async (e) => {
-      let n = await ae();
-      if (p) return;
-      G = Object.entries(n.configs);
-      if (n.deniedBySettings) W();
-      let configs = n.deniedBySettings ? {} : n.configs;
-      if (stableServerKeys(forwardableServers(configs)) === pe) {
-        await I("tools_changed");
+    let restartWith = async (previousPool) => {
+      let resolved = await resolveOffer();
+      if (disposed) return;
+      forwardableEntries = Object.entries(resolved.configs);
+      if (resolved.deniedBySettings) onPolicyDenied();
+      let configs = resolved.deniedBySettings ? {} : resolved.configs;
+      if (stableServerKeys(forwardableServers(configs)) === announcedServerKey) {
+        await refreshAnnouncement("tools_changed");
         return;
       }
-      z?.();
-      z = undefined;
-      T = false;
-      await e.stop().catch((error) => logError(toError(error)));
-      M = undefined;
-      if (p) return;
-      let i = await Q();
-      if (p) return;
-      if (i === "declined") {
-        ne();
+      unsubscribePool?.();
+      unsubscribePool = undefined;
+      settled = false;
+      await previousPool.stop().catch((error) => logError(toError(error)));
+      pool = undefined;
+      if (disposed) return;
+      let consent = await currentConsent();
+      if (disposed) return;
+      if (consent === "declined") {
+        onRevoked();
         return;
       }
-      if (i !== "accepted") {
-        V();
+      if (consent !== "accepted") {
+        withdraw();
         let keys = Object.keys(forwardableServers(configs));
-        if (i === "unset" && keys.length > 0) {
-          let putOff = await de(keys);
-          if (!p)
-            H({
+        if (consent === "unset" && keys.length > 0) {
+          let putOff = await isAllPutOff(keys);
+          if (!disposed)
+            reportConsentProblem({
               event: "consent_unset",
               putOff,
             });
         }
         return;
       }
-      await ve(servingDenied() ? {} : configs);
+      await startPool(servingDenied() ? {} : configs);
     };
-    let ve = async (configs) => {
-      let n = forwardableServers(configs);
-      let r = Re(n);
-      M = r;
-      pe = stableServerKeys(n);
-      z = r.subscribe(() => {
-        if (T && M === r) I("tools_changed").catch((error) => logError(toError(error)));
+    let startPool = async (configs) => {
+      let forwardable = forwardableServers(configs);
+      let newPool = createPool(forwardable);
+      pool = newPool;
+      announcedServerKey = stableServerKeys(forwardable);
+      unsubscribePool = newPool.subscribe(() => {
+        if (settled && pool === newPool)
+          refreshAnnouncement("tools_changed").catch((error) => logError(toError(error)));
       });
-      let settled = await r.settled;
-      T = true;
+      let settled_2 = await newPool.settled;
+      settled = true;
       logForDebugging(
-        `[deviceBridge] MCP servers for the cloud session settled: ${settled.connected} connected, ${settled.cached} cached, ${settled.failed} failed, ${settled.needsAuth} need login, ${settled.unreported} still starting (${settled.settleMs} ms)`,
+        `[deviceBridge] MCP servers for the cloud session settled: ${settled_2.connected} connected, ${settled_2.cached} cached, ${settled_2.failed} failed, ${settled_2.needsAuth} need login, ${settled_2.unreported} still starting (${settled_2.settleMs} ms)`,
       );
-      if (p) {
-        await r.stop();
+      if (disposed) {
+        await newPool.stop();
         return;
       }
-      await I("tools_settled");
+      await refreshAnnouncement("tools_settled");
     };
-    let ye = () => {};
-    let Se = () => {
-      if (p) return;
-      ye = (
-        o.subscribeConfigurationChanges ?? ((e) => subscribeMcpConfigChanges(e, d.servedSettingsChanged))
-      )(() => void me());
-      me();
+    let unsubscribeConfig = () => {};
+    let startListening = () => {
+      if (disposed) return;
+      unsubscribeConfig = (
+        overrides.subscribeConfigurationChanges ??
+        ((listener) => subscribeMcpConfigChanges(listener, input.servedSettingsChanged))
+      )(() => void ensureFresh());
+      ensureFresh();
     };
-    if (d.deviceMcpQuestion === undefined) Se();
+    if (input.deviceMcpQuestion === undefined) startListening();
     else
-      d.deviceMcpQuestion
-        .then((e) => {
-          ce = e === "declined";
-          Se();
+      input.deviceMcpQuestion
+        .then((answer) => {
+          declined = answer === "declined";
+          startListening();
         })
         .catch((error) => logError(toError(error)));
     return () => {
-      p = true;
-      ke();
-      ye();
-      z?.();
-      V();
-      y.dispose();
-      if (te)
+      disposed = true;
+      offRedescribed();
+      unsubscribeConfig();
+      unsubscribePool?.();
+      withdraw();
+      kit.dispose();
+      if (servingLogged)
         logEvent("tengu_device_mcp_serving", {
           event: lit("withdrawn"),
           announced_count: 0,
           dropped_count: 0,
-          policy: fromEnum(y.policy.name),
+          policy: fromEnum(kit.policy.name),
         });
-      M?.stop().catch((error) => logError(toError(error)));
+      pool?.stop().catch((error) => logError(toError(error)));
     };
   };
 }
@@ -625,16 +648,17 @@ function passthroughServingGroupProvider(o = {}) {
  * 过滤出可转发给远程设备的 MCP 服务器。
  */
 function forwardableServers(configs) {
-  return pickByHelper(configs, (d, E) => isForwardableDeviceMcp(E, d));
+  return pickByHelper(configs, (name, entry) => isForwardableDeviceMcp(entry, name));
 }
 //@ chunk-xqfbbyzk.js:25082-25148 placement
 /**
  * 把服务器映射转成稳定的键顺序 JSON（用于比较变化）。
  */
-function stableServerKeys(o) {
+function stableServerKeys(servers) {
   return jsonStringify(
-    Object.keys(o)
+    Object.keys(servers)
       .sort()
-      .map((key) => [key, o[key]]),
+      .map((key) => [key, servers[key]]),
   );
 }
+export { passthroughServingGroupProvider };

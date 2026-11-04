@@ -5,12 +5,12 @@
  * pieces: chunk-bwbq4xvm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_satisfies } from "../functions/satisfies.js";
 import { require_compare } from "../functions/compare.js";
 
 //@ chunk-bwbq4xvm.js:24064-24544 cjs-fingerprint
-var require_simplify = x(function (cjsExports, cjsModule) {
+var require_simplify = __commonJS(function (cjsExports, cjsModule) {
   var satisfies = require_satisfies();
   var compare = require_compare();
   cjsModule.exports = (versions, range, options) => {

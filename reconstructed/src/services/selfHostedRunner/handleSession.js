@@ -235,7 +235,7 @@ import {
 } from "./runnerDeclaration.js";
 import { normalizeToolsArg, hasDisallowedToolSpec } from "./runnerToolNames.js";
 import { appendServerArgs } from "./childArgs.js";
-import { wi } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_reject } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { isEnvTruthy } from "../../utils/envUtils.js";
 import { sanitizeMetricLabel } from "../../entrypoints/selfHostedRunner/metrics.js";
 import { decodeTaggedUuid } from "../mcp/serverIdentity.js";
@@ -255,13 +255,14 @@ import {
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { normalizeHost, HOST_LABEL_RE, isGithubDotCom, GITHUB_HOST } from "../../utils/git/githubUrl.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hm0ce8vc.js:58886-59069 placement
 /**
  * getRemoteSessionOrigin：environment_variables.CLAUDE_CODE_REMOTE_SESSION_ORIGIN。
  */
-function getRemoteSessionOrigin(e) {
-  let environmentVariables = e.environment_variables ?? {};
+function getRemoteSessionOrigin(joinResponse) {
+  let environmentVariables = joinResponse.environment_variables ?? {};
   let CLAUDE_CODE_REMOTE_SESSION_ORIGIN = Object.hasOwn(
     environmentVariables,
     "CLAUDE_CODE_REMOTE_SESSION_ORIGIN",
@@ -276,14 +277,14 @@ function getRemoteSessionOrigin(e) {
 /**
  * isReviewOriginSession：旧版名 review 配错。
  */
-function isReviewOriginSession(e) {
-  return getRemoteSessionOrigin(e) === "review";
+function isReviewOriginSession(joinResponse) {
+  return getRemoteSessionOrigin(joinResponse) === "review";
 }
 //@ chunk-hm0ce8vc.js:82431-140444 placement
 /**
  * 处理一个会话工单：准备目录/配置/仓库、合成环境、启动子进程并在结束后发布结果与清理（约 58 KB）。
  */
-async function handleSelfHostedSession(e, n, r) {
+async function handleSelfHostedSession(sessionId, options, signal) {
   let {
     apiClient,
     getRunnerToken,
@@ -339,174 +340,184 @@ async function handleSelfHostedSession(e, n, r) {
     getHealthzClaimVisibleMs,
     moveWatch,
     clock = systemClock,
-  } = n;
-  let zn = undefined;
+  } = options;
+  let unusedSlot = undefined;
   let otherSessionsShareTheAccount = capacity > 1;
-  let Xn = configureGitHookStubs !== undefined && !otherSessionsShareTheAccount;
-  onDebug(`[runner:session] Handling session ${e}`);
-  let Pt = false;
-  let Wt = false;
-  let $n = false;
-  let lt;
+  let ownsHookStubs = configureGitHookStubs !== undefined && !otherSessionsShareTheAccount;
+  onDebug(`[runner:session] Handling session ${sessionId}`);
+  let unusedFlagA = false;
+  let serializeEventPosts = false;
+  let unusedFlagB = false;
+  let startupProbe;
   let prepTimer = createPrepTimer();
-  let Mn;
-  let ir = false;
-  let Hn = false;
-  let de = {
+  let initStartMs;
+  let childInitSeen = false;
+  let exitBeforeInitFailed = false;
+  let tokenRef = {
     current: undefined,
   };
-  let Yt = {
+  let tokenHistory = {
     current: undefined,
     previous: undefined,
     held: [],
   };
-  let qn = (Qe) => {
-    Yt.held = [...Yt.held.filter((gt) => gt !== Qe && isSessionJwtFresh(gt)), ...(Qe ? [Qe] : [])].slice(-32);
+  let recordHeldToken = (heldToken) => {
+    tokenHistory.held = [
+      ...tokenHistory.held.filter(
+        (previousToken) => previousToken !== heldToken && isSessionJwtFresh(previousToken),
+      ),
+      ...(heldToken ? [heldToken] : []),
+    ].slice(-32);
   };
-  let q;
-  let Pe = "failed";
-  let En = false;
-  let ft = false;
-  let he;
-  let De;
-  let Vt;
-  let P;
-  let Z;
-  let re = [];
-  let be = [];
-  let sessionClaudeConfigDir = getSessionClaudeConfigDir(baseDir, e);
-  let Re =
+  let remoteConfig;
+  let result = "failed";
+  let restartingForUpdate = false;
+  let failedOnUpdateBuild = false;
+  let failureReason;
+  let setupFailureKind;
+  let failureKind;
+  let mcpConfigPath;
+  let launcherSettingsPath;
+  let launcherStagedPaths = [];
+  let stagedPaths = [];
+  let sessionClaudeConfigDir = getSessionClaudeConfigDir(baseDir, sessionId);
+  let gitConfigPins =
     configureGitSigningArtifacts === undefined
       ? lifecycleHookGitConfig(operatorGitSnapshot, hookGitPrograms)
       : undefined;
-  let Ue;
-  let ht = join(baseDir, "_sessions", `${e}.gitconfig`);
-  let wn;
-  let trustBundlePath = join(baseDir, "_sessions", `${e}.git-ca-bundle.pem`);
-  let Ct = join(baseDir, "_sessions", `${e}.git-ca-bundle.child.pem`);
-  let St;
-  let Or = join(baseDir, "_sessions", `${e}.gh`);
-  let Ar = join(baseDir, "_sessions", `${e}.gitrules`);
-  let Gr = join(baseDir, "_sessions", `${e}.uploads`);
-  let pr = join(baseDir, "_sessions", `${e}.diff-copies`);
-  let Bn = false;
-  let un = join(sessionClaudeConfigDir, "claude-code-debug.txt");
-  let We;
-  let se;
-  let ke;
-  let jt;
-  let cn = () => [ke, jt].filter((Qe) => Qe !== undefined);
-  let Pn = [];
-  let Jt = false;
-  let In = false;
-  let nn = false;
+  let sessionGitConfigFiles;
+  let governedGitConfigPath = join(baseDir, "_sessions", `${sessionId}.gitconfig`);
+  let childGitEnvironment;
+  let caBundlePath = join(baseDir, "_sessions", `${sessionId}.git-ca-bundle.pem`);
+  let childTrustBundlePath = join(baseDir, "_sessions", `${sessionId}.git-ca-bundle.child.pem`);
+  let governedGitState;
+  let ghRouteDir = join(baseDir, "_sessions", `${sessionId}.gh`);
+  let sessionGitRulesPath = join(baseDir, "_sessions", `${sessionId}.gitrules`);
+  let stageFileRoot = join(baseDir, "_sessions", `${sessionId}.uploads`);
+  let diffCopyRoot = join(baseDir, "_sessions", `${sessionId}.diff-copies`);
+  let sessionDirsCreated = false;
+  let debugFile = join(sessionClaudeConfigDir, "claude-code-debug.txt");
+  let workerEpoch;
+  let sessionDir;
+  let ingressTokenFile;
+  let toolServerTokenFile;
+  let tokenFilePaths = () =>
+    [ingressTokenFile, toolServerTokenFile].filter((tokenFile) => tokenFile !== undefined);
+  let extraTokenFiles = [];
+  let hostConfigFailed = false;
+  let unusedFlagC = false;
+  let agentProxyRefused = false;
   let resolved = Promise.resolve();
-  let R = false;
+  let tokenWriteMissed = false;
   let resolved_2 = Promise.resolve();
-  let It = false;
-  let Ie;
-  let ye = [];
-  let Xe = [];
-  let qe = [];
-  let Nt = [];
-  let Je;
-  let fn;
-  let Wn = [];
-  let Dn = (sources, mountBaseUrl, directUpstreams) => {
+  let removingTokenFiles = false;
+  let rewriteTokenFiles;
+  let sessionWorktrees = [];
+  let hookCheckouts = [];
+  let gitProxyCredPaths = [];
+  let mountReadWiring = [];
+  let ghRoute;
+  let sessionGitRules;
+  let sessionGitRuleList = [];
+  let splitSourcesByMount = (governedRepo, directUpstreams, hasDirectUpstreams) => {
     try {
-      return splitMountRouting(sources, Wn, mountBaseUrl, directUpstreams);
+      return splitMountRouting(governedRepo, sessionGitRuleList, directUpstreams, hasDirectUpstreams);
     } catch (error) {
       onDebug(
-        `[runner:session] session git rules: the sources in a /remote reply for ${e} could not be used (${errorMessage(error)}); which repositories are fetched through the git mount is unchanged, and the next reply is read anew`,
+        `[runner:session] session git rules: the sources in a /remote reply for ${sessionId} could not be used (${errorMessage(error)}); which repositories are fetched through the git mount is unchanged, and the next reply is read anew`,
       );
       return;
     }
   };
-  let Zt;
-  let hn;
+  let pushUrlReconciler;
+  let representRetrySender;
   let abortController = new AbortController();
-  let Dt = AbortSignal.any([r, abortController.signal]);
-  let Cr = [];
-  let pt;
-  let Lt = false;
-  let Ke = false;
+  let childSignal = AbortSignal.any([signal, abortController.signal]);
+  let workspacePaths = [];
+  let initBaseDir;
+  let childStarted = false;
+  let epochStale = false;
   let envSelfHostedRunnerHooksDir = process.env.SELF_HOSTED_RUNNER_HOOKS_DIR;
-  let V = [];
-  let ue = false;
-  let U = gitConfigOwnershipLabel(spawnedSessionIds, e);
-  let nt = new Map();
-  let Tt = new Set();
-  let xn = [];
-  let Kn;
-  let wr;
-  let Jn;
-  let es;
-  let ts = false;
-  let yo;
-  let Hr;
-  let vs = async () => {
+  let outcomeBranches = [];
+  let skipOutcomePush = false;
+  let gitConfigOwnership = gitConfigOwnershipLabel(spawnedSessionIds, sessionId);
+  let preparedCheckouts = new Map();
+  let sanitizedRepos = new Set();
+  let handOvers = [];
+  let prepHeartbeat;
+  let stopTokenWait;
+  let tokenWaitAbort;
+  let tokenWaitPromise;
+  let tokenWaitSettled = false;
+  let resetEarlyRemote;
+  let tokenWaitDeadline;
+  let awaitTokenWrites = async () => {
     for (;;) {
-      while (Jn !== undefined) {
-        Hr ??= performance.now() + INGRESS_TOKEN_DEADLINE_MS;
-        let gt = Hr - performance.now();
-        if (gt <= 0) break;
-        let Qt = es;
-        await withDeadline(Qt ?? Promise.resolve(), gt);
-        if (es === Qt) break;
+      while (tokenWaitAbort !== undefined) {
+        tokenWaitDeadline ??= performance.now() + INGRESS_TOKEN_DEADLINE_MS;
+        let waitRemainingMs = tokenWaitDeadline - performance.now();
+        if (waitRemainingMs <= 0) break;
+        let previousWait = tokenWaitPromise;
+        await withDeadline(previousWait ?? Promise.resolve(), waitRemainingMs);
+        if (tokenWaitPromise === previousWait) break;
       }
-      let Qe = es;
-      if (ts) await resolved;
-      if (es === Qe) return;
+      let observedWait = tokenWaitPromise;
+      if (tokenWaitSettled) await resolved;
+      if (tokenWaitPromise === observedWait) return;
     }
   };
-  let Br = () => {
-    wr?.();
-    wr = undefined;
-    Jn?.abort();
-    Jn = undefined;
+  let abortTokenWait = () => {
+    stopTokenWait?.();
+    stopTokenWait = undefined;
+    tokenWaitAbort?.abort();
+    tokenWaitAbort = undefined;
   };
   let resolved_3 = Promise.resolve();
-  let pn;
-  let ns = false;
-  let rs = async () => {
+  let eventPostError;
+  let eventPostFenced = false;
+  let flushEventPosts = async () => {
     await resolved_3;
-    ns = true;
-    if (pn !== undefined) throw pn;
+    eventPostFenced = true;
+    if (eventPostError !== undefined) throw eventPostError;
   };
   try {
-    Mn = Date.now();
+    initStartMs = Date.now();
     onInitPhase?.({
       kind: "start",
     });
-    if (!e || !/^[a-zA-Z0-9_-]+$/.test(e)) throw Error("Invalid session_id: contains unsafe characters");
-    Bn = true;
-    se = join(baseDir, "_sessions", e);
-    let Qe = await retryWithBackoff(() => apiClient.issueSessionToken(getRunnerToken(), e, r), {
-      initialDelayMs: 500,
-      maxDelayMs: 8000,
-      maxAttempts: 5,
-      shouldRetry: isRetryableRunnerError,
-      signal: r,
-      onRetry: (ne, mt) => {
-        onDebug(
-          `[runner:session] issueSessionToken attempt ${ne} transient failure (${mt instanceof Error ? mt.message : mt}) \u2014 retrying`,
-        );
+    if (!sessionId || !/^[a-zA-Z0-9_-]+$/.test(sessionId))
+      throw Error("Invalid session_id: contains unsafe characters");
+    sessionDirsCreated = true;
+    sessionDir = join(baseDir, "_sessions", sessionId);
+    let issuedToken = await retryWithBackoff(
+      () => apiClient.issueSessionToken(getRunnerToken(), sessionId, signal),
+      {
+        initialDelayMs: 500,
+        maxDelayMs: 8000,
+        maxAttempts: 5,
+        shouldRetry: isRetryableRunnerError,
+        signal,
+        onRetry: (attempt, retryError) => {
+          onDebug(
+            `[runner:session] issueSessionToken attempt ${attempt} transient failure (${retryError instanceof Error ? retryError.message : retryError}) \u2014 retrying`,
+          );
+        },
       },
-    });
-    if (!Qe)
+    );
+    if (!issuedToken)
       return {
         result: "abandoned",
       };
-    de.current = Qe.session_token;
-    let toolsHost = Qe.tools_host;
+    tokenRef.current = issuedToken.session_token;
+    let toolsHost = issuedToken.tools_host;
     if (toolsHost !== undefined) {
-      moveWatch?.holdOff(e);
-      sessionClaudeConfigDir = getToolServerConfigDir(baseDir, e);
-      un = join(sessionClaudeConfigDir, "claude-code-debug.txt");
+      moveWatch?.holdOff(sessionId);
+      sessionClaudeConfigDir = getToolServerConfigDir(baseDir, sessionId);
+      debugFile = join(sessionClaudeConfigDir, "claude-code-debug.txt");
     }
-    let Qt =
+    let getRemoteConfig =
       toolsHost === undefined
-        ? (...ne) => apiClient.getSessionRemoteConfig(...ne)
+        ? (...remoteConfigArgs) => apiClient.getSessionRemoteConfig(...remoteConfigArgs)
         : async () => ({
             sources: [],
             push_targets: [],
@@ -517,17 +528,18 @@ async function handleSelfHostedSession(e, n, r) {
               cwd: toolsHost.cwd,
             }),
           });
-    if (Xn) await restoreHookStubs(configureGitHookStubs, configureGitSigningArtifacts, onDebug);
+    if (ownsHookStubs) await restoreHookStubs(configureGitHookStubs, configureGitSigningArtifacts, onDebug);
     if (useAnthropicGitProxy) {
-      if (Qe.tools_host === undefined) process.env.CLAUDE_CODE_SESSION_ACCESS_TOKEN = Qe.session_token;
+      if (issuedToken.tools_host === undefined)
+        process.env.CLAUDE_CODE_SESSION_ACCESS_TOKEN = issuedToken.session_token;
       if (gitProxyGlobalConfigSnapshot !== undefined && gitProxyGlobalConfigPath) {
-        let ne = process.env.XDG_CONFIG_HOME || join(homedir(), ".config");
+        let xdgConfigHome = process.env.XDG_CONFIG_HOME || join(homedir(), ".config");
         await ignoreLocalSettingsInGit(
           {
             globalConfigPath: gitProxyGlobalConfigPath,
             globalConfigSnapshot: gitProxyGlobalConfigSnapshot,
             homeGitconfigPath: join(homedir(), ".gitconfig"),
-            xdgConfigPath: join(ne, "git", "config"),
+            xdgConfigPath: join(xdgConfigHome, "git", "config"),
             credHelper: gitProxyCredHelper,
             signingArtifacts: configureGitSigningArtifacts,
           },
@@ -536,290 +548,321 @@ async function handleSelfHostedSession(e, n, r) {
         );
       }
     }
-    onSessionTokenIssued?.(Qe.session_token);
-    if (r.aborted) {
-      onDebug(`[runner:session] Aborted after issueSessionToken for ${e} \u2014 skipping registration`);
+    onSessionTokenIssued?.(issuedToken.session_token);
+    if (signal.aborted) {
+      onDebug(
+        `[runner:session] Aborted after issueSessionToken for ${sessionId} \u2014 skipping registration`,
+      );
       return {
         result: "abandoned",
       };
     }
-    onDebug(`[runner:session] Issued session_token for ${e}`);
-    q = await retryWithBackoff(() => Qt(e, de.current, r), {
+    onDebug(`[runner:session] Issued session_token for ${sessionId}`);
+    remoteConfig = await retryWithBackoff(() => getRemoteConfig(sessionId, tokenRef.current, signal), {
       initialDelayMs: 500,
       maxDelayMs: 8000,
       maxAttempts: 5,
       shouldRetry: isRetryableRunnerError,
-      signal: r,
-      onRetry: (ne, mt) => {
+      signal,
+      onRetry: (attempt, retryError) => {
         onDebug(
-          `[runner:session] getSessionRemoteConfig attempt ${ne} transient failure (${mt instanceof Error ? mt.message : mt}) \u2014 retrying`,
+          `[runner:session] getSessionRemoteConfig attempt ${attempt} transient failure (${retryError instanceof Error ? retryError.message : retryError}) \u2014 retrying`,
         );
       },
     });
-    if (!q)
+    if (!remoteConfig)
       return {
         result: "abandoned",
       };
     onDebug(
-      `[runner:session] Fetched remote config: ${q.sources.length} source(s), ${q.push_targets.length} push target(s), api_base_url=${q.api_base_url}`,
+      `[runner:session] Fetched remote config: ${remoteConfig.sources.length} source(s), ${remoteConfig.push_targets.length} push target(s), api_base_url=${remoteConfig.api_base_url}`,
     );
-    if (r.aborted) {
-      onDebug(`[runner:session] Aborted after getSessionRemoteConfig for ${e} \u2014 skipping registration`);
+    if (signal.aborted) {
+      onDebug(
+        `[runner:session] Aborted after getSessionRemoteConfig for ${sessionId} \u2014 skipping registration`,
+      );
       return {
         result: "abandoned",
       };
     }
-    let yt = isReviewOriginSession(q);
-    let $r = false;
-    let ar;
-    if (yt)
-      disableCoreDumps((ne) => {
-        ar = ne;
+    let isReviewSession = isReviewOriginSession(remoteConfig);
+    let reviewTokensHandedOver = false;
+    let dumpableError;
+    if (isReviewSession)
+      disableCoreDumps((coreDumpError) => {
+        dumpableError = coreDumpError;
       });
-    if (yt && debugTokenDir !== undefined) {
+    if (isReviewSession && debugTokenDir !== undefined) {
       logFeatureBad("self_hosted_review_session", "debug_token_dir");
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Session ${e} is a code review, which this runner does not start while --debug-token-dir keeps tokens in files. Restart the runner without --debug-token-dir to take code reviews.`,
+        `Session ${sessionId} is a code review, which this runner does not start while --debug-token-dir keeps tokens in files. Restart the runner without --debug-token-dir to take code reviews.`,
         "a code review is not started while --debug-token-dir keeps tokens in files",
       );
     }
     if (debugTokenDir && toolsHost === undefined)
-      writeBestEffort(debugTokenDir, `session_token_${e}.jwt`, Qe.session_token, onStatus);
-    if (yt && getPlatform() === "windows") {
+      writeBestEffort(debugTokenDir, `session_token_${sessionId}.jwt`, issuedToken.session_token, onStatus);
+    if (isReviewSession && getPlatform() === "windows") {
       logFeatureBad("self_hosted_review_session", "windows");
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Session ${e} is a code review, which a runner on Windows does not start: it cannot hand the child its tokens on descriptors. Nothing on this runner needs changing.`,
+        `Session ${sessionId} is a code review, which a runner on Windows does not start: it cannot hand the child its tokens on descriptors. Nothing on this runner needs changing.`,
         "a code review is not started by a runner on Windows",
       );
     }
-    if (yt && capacity > 1) {
+    if (isReviewSession && capacity > 1) {
       logFeatureBad("self_hosted_review_session", "capacity");
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Session ${e} is a code review, which a runner started with --capacity ${capacity} does not take: the commands of its other sessions run as the same user, and could take the review's tokens while Claude Code starts. To take code reviews, run every runner of this environment with --capacity 1.`,
+        `Session ${sessionId} is a code review, which a runner started with --capacity ${capacity} does not take: the commands of its other sessions run as the same user, and could take the review's tokens while Claude Code starts. To take code reviews, run every runner of this environment with --capacity 1.`,
         "a code review is not started by a runner with --capacity above 1",
       );
     }
-    let ss = yt && q.launcher_hooks !== undefined ? validateLauncherHooks(q.launcher_hooks) : undefined;
-    if (ss !== undefined) {
+    let launcherHookProblem =
+      isReviewSession && remoteConfig.launcher_hooks !== undefined
+        ? validateLauncherHooks(remoteConfig.launcher_hooks)
+        : undefined;
+    if (launcherHookProblem !== undefined) {
       logFeatureBad("self_hosted_review_session", "launcher_hooks");
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Session ${e} is a code review and is not started: the service sent launcher hooks that this runner cannot accept (${ss}), and a code review needs them. That is a fault of the service, or an event newer than this runner's build.`,
+        `Session ${sessionId} is a code review and is not started: the service sent launcher hooks that this runner cannot accept (${launcherHookProblem}), and a code review needs them. That is a fault of the service, or an event newer than this runner's build.`,
         "a code review is not started without the hooks that the service sent for it",
       );
     }
-    if (yt) {
-      if (ar !== undefined) {
+    if (isReviewSession) {
+      if (dumpableError !== undefined) {
         logFeatureBad("self_hosted_review_session", "dumpable");
-        onStatus(`[runner:session] ${e} the runner could not make itself non-dumpable: ${ar}`);
+        onStatus(
+          `[runner:session] ${sessionId} the runner could not make itself non-dumpable: ${dumpableError}`,
+        );
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `Session ${e} is a code review, which this runner does not start: it could not make itself non-dumpable, so the review's commands could read the session's tokens from the runner's memory. To take code reviews, run the released claude binary, and allow prctl(PR_SET_DUMPABLE) in any sandbox or seccomp profile around the runner.`,
+          `Session ${sessionId} is a code review, which this runner does not start: it could not make itself non-dumpable, so the review's commands could read the session's tokens from the runner's memory. To take code reviews, run the released claude binary, and allow prctl(PR_SET_DUMPABLE) in any sandbox or seccomp profile around the runner.`,
           "a code review is not started by a runner that cannot make itself non-dumpable",
         );
       }
       onStatus(
-        `[runner:session] ${e} is a code review: its child gets no repository as --add-dir, no user, project or local settings (so nothing from this machine's Claude Code config), no session token file, and its session and inference tokens on file descriptors 4 and 5 instead of in its environment`,
+        `[runner:session] ${sessionId} is a code review: its child gets no repository as --add-dir, no user, project or local settings (so nothing from this machine's Claude Code config), no session token file, and its session and inference tokens on file descriptors 4 and 5 instead of in its environment`,
       );
     }
-    let Q = undefined;
-    let N = Q === undefined ? undefined : await getProcessStartTimeAsync(process.pid);
-    if (toolsHost !== undefined && (Q === undefined || N === undefined)) {
+    let toolServerHosting = undefined;
+    let procStart = toolServerHosting === undefined ? undefined : await getProcessStartTimeAsync(process.pid);
+    if (toolsHost !== undefined && (toolServerHosting === undefined || procStart === undefined)) {
       logFeatureBad("self_hosted_tools_host", "cannot_host");
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Session ${e} needs a tool server, which this runner cannot host`,
+        `Session ${sessionId} needs a tool server, which this runner cannot host`,
         "session needs a tool server, which this runner cannot host",
       );
     }
-    let x = isLoopbackHttpUrl(
-      q.governed_git,
+    let governedGit = isLoopbackHttpUrl(
+      remoteConfig.governed_git,
       () => {
-        let ne = de.current;
-        if (!ne)
+        let sessionToken = tokenRef.current;
+        if (!sessionToken)
           throw Error(
             "governed git credential requested but no session token is available \u2014 token issue/refresh failed?",
           );
-        return ne;
+        return sessionToken;
       },
       onStatus,
       undefined,
     );
     let childIsOwnBinary = execPath === process.execPath || execPath === updatedChildBin;
-    let xt = agentProxyStandaloneRefusal({
-      sessionId: e,
-      serverEnv: q.environment_variables,
+    let agentProxyRefusal = agentProxyStandaloneRefusal({
+      sessionId,
+      serverEnv: remoteConfig.environment_variables,
       runnerProxyUrl: env.SELF_HOSTED_RUNNER_AGENT_PROXY_URL,
       runnerProxySetting: RUNNER_AGENT_PROXY_URL_SETTING,
-      governedGit: x?.toolConfig.gitConfig === true || x?.toolConfig.ghPathShim === true ? "on" : "off",
+      governedGit:
+        governedGit?.toolConfig.gitConfig === true || governedGit?.toolConfig.ghPathShim === true
+          ? "on"
+          : "off",
       egressListener: isEgressProxyActive() !== undefined,
-      gitConfigArmed: x?.toolConfig.gitConfig === true,
+      gitConfigArmed: governedGit?.toolConfig.gitConfig === true,
     });
-    if (xt) {
-      onStatus(`[runner:error] ${xt.message}`);
-      throw xt;
+    if (agentProxyRefusal) {
+      onStatus(`[runner:error] ${agentProxyRefusal.message}`);
+      throw agentProxyRefusal;
     }
-    let Yn =
+    let needsSessionHooks =
       otherSessionsShareTheAccount &&
-      x?.toolConfig.gitConfig === true &&
+      governedGit?.toolConfig.gitConfig === true &&
       (configureGitHookStubs !== undefined || configureGitSigningArtifacts !== undefined);
-    let Zn = Yn && operatorGitSnapshot?.hooksPath !== undefined;
-    if (x) {
-      let hostSplit = x.toolConfig.hostSplit;
-      let mt = hostSplit
+    let operatorHooksApply = needsSessionHooks && operatorGitSnapshot?.hooksPath !== undefined;
+    if (governedGit) {
+      let hostSplit = governedGit.toolConfig.hostSplit;
+      let hostSplitDetail = hostSplit
         ? `; per-host routing \u2014 governed hosts: ${hostSplit.governed.join(", ") || "(none)"} (git mount + session relay); direct hosts: ${hostSplit.direct.join(", ") || "(none)"} (this machine's own git rewrite and credentials)`
         : "";
       onStatus(
-        `[runner:session] governed git ACTIVE for ${e}: pre-CLI clone via git mount, in-session git/gh via the session relay (git_config=${x.toolConfig.gitConfig}, gh_path_shim=${x.toolConfig.ghPathShim})` +
-          mt +
+        `[runner:session] governed git ACTIVE for ${sessionId}: pre-CLI clone via git mount, in-session git/gh via the session relay (git_config=${governedGit.toolConfig.gitConfig}, gh_path_shim=${governedGit.toolConfig.ghPathShim})` +
+          hostSplitDetail +
           (otherSessionsShareTheAccount
             ? " \u2014 capacity>1: shared-canonical prep relies on per-invocation git hardening (no cross-session sanitize)"
             : ""),
       );
       if (hostSplit) {
-        let rn = formatSourcesOnHostWarning(
+        let sourcesWarning = formatSourcesOnHostWarning(
           hostSplit,
           !!useAnthropicGitProxy,
-          q.sources.map((source) =>
+          remoteConfig.sources.map((source) =>
             source.type === "git_repository" && source.url ? getRemoteHostname(source.url) : undefined,
           ),
         );
-        if (rn) onStatus(rn);
-        let _t = formatAskpassWarning(hostSplit, Boolean(env.GIT_ASKPASS));
-        if (_t) onStatus(_t);
+        if (sourcesWarning) onStatus(sourcesWarning);
+        let askpassWarning = formatAskpassWarning(hostSplit, Boolean(env.GIT_ASKPASS));
+        if (askpassWarning) onStatus(askpassWarning);
       }
       if (useAnthropicGitProxy)
         onDebug(
-          `[runner:session] ${e}: governed git delivered for this session (requested with --use-anthropic-git-proxy); the flag's older clone-URL proxy rewrite is skipped`,
+          `[runner:session] ${sessionId}: governed git delivered for this session (requested with --use-anthropic-git-proxy); the flag's older clone-URL proxy rewrite is skipped`,
         );
       if (pushOutcomeOnRelease)
         onStatus(
           "[runner:warn] --push-outcome-on-release under governed git pushes to the PLAIN upstream URL with customer-managed credentials (the runner's release-time push does not use the session's git-mount push URL, and the session relay ends with the child). If no ambient git credential covers the push target, the release-time push will fail naming this flag.",
         );
     }
-    let yn = x ? undefined : useAnthropicGitProxy;
-    if (useAnthropicGitProxy && !x && !q.governed_git && toolsHost === undefined)
+    let gitProxyConfig = governedGit ? undefined : useAnthropicGitProxy;
+    if (useAnthropicGitProxy && !governedGit && !remoteConfig.governed_git && toolsHost === undefined)
       onStatus(
-        `[runner:warn] ${e}: --use-anthropic-git-proxy is set but the server withheld ` +
+        `[runner:warn] ${sessionId}: --use-anthropic-git-proxy is set but the server withheld ` +
           "Anthropic-managed git for this session (the reason is logged server-side \u2014 for example a " +
           "source host the server does not route through Anthropic-managed git, or a server that predates the opt-in); falling back to the legacy clone-URL git proxy for this session (deprecated; this fallback will be removed in a future runner release).",
       );
     try {
-      let ne;
-      if (Q !== undefined && N !== undefined) {
-        onDebug(`[runner:session] ${e} hosts tools only, no worker`);
-        ne = {
+      let hosting;
+      if (toolServerHosting !== undefined && procStart !== undefined) {
+        onDebug(`[runner:session] ${sessionId} hosts tools only, no worker`);
+        hosting = {
           kind: "tool-server",
-          hosting: Q,
+          hosting: toolServerHosting,
           runner: {
             pid: process.pid,
-            proc_start: N,
+            proc_start: procStart,
           },
         };
       } else {
-        We = await retryWithBackoff(() => apiClient.registerWorker(q.api_base_url, e, de.current, r), {
-          initialDelayMs: 500,
-          maxDelayMs: 8000,
-          maxAttempts: 5,
-          shouldRetry: isRetryableRunnerError,
-          signal: r,
-          onRetry: (X, j) => {
-            onDebug(
-              `[runner:session] registerWorker attempt ${X} transient failure (${j instanceof Error ? j.message : j}) \u2014 retrying`,
-            );
-          },
-        });
-        if (We === undefined)
-          return {
-            result: "interrupted",
-          };
-        onDebug(`[runner:session] Registered worker, epoch=${We}`);
-        let M = We;
-        await retryWithBackoff(
-          () => apiClient.updateSessionWorkerState(q.api_base_url, e, de.current, M, undefined, r),
+        workerEpoch = await retryWithBackoff(
+          () => apiClient.registerWorker(remoteConfig.api_base_url, sessionId, tokenRef.current, signal),
           {
             initialDelayMs: 500,
             maxDelayMs: 8000,
             maxAttempts: 5,
             shouldRetry: isRetryableRunnerError,
-            signal: r,
-            onRetry: (X, j) => {
+            signal,
+            onRetry: (attempt, retryError) => {
               onDebug(
-                `[runner:session] updateSessionWorkerState attempt ${X} transient failure (${j instanceof Error ? j.message : j}) \u2014 retrying`,
+                `[runner:session] registerWorker attempt ${attempt} transient failure (${retryError instanceof Error ? retryError.message : retryError}) \u2014 retrying`,
               );
             },
           },
         );
-        if (r.aborted)
+        if (workerEpoch === undefined)
           return {
             result: "interrupted",
           };
-        ne = {
+        onDebug(`[runner:session] Registered worker, epoch=${workerEpoch}`);
+        let epoch = workerEpoch;
+        await retryWithBackoff(
+          () =>
+            apiClient.updateSessionWorkerState(
+              remoteConfig.api_base_url,
+              sessionId,
+              tokenRef.current,
+              epoch,
+              undefined,
+              signal,
+            ),
+          {
+            initialDelayMs: 500,
+            maxDelayMs: 8000,
+            maxAttempts: 5,
+            shouldRetry: isRetryableRunnerError,
+            signal,
+            onRetry: (attempt, retryError) => {
+              onDebug(
+                `[runner:session] updateSessionWorkerState attempt ${attempt} transient failure (${retryError instanceof Error ? retryError.message : retryError}) \u2014 retrying`,
+              );
+            },
+          },
+        );
+        if (signal.aborted)
+          return {
+            result: "interrupted",
+          };
+        hosting = {
           kind: "agent-loop",
-          workerEpoch: We,
+          workerEpoch,
         };
       }
-      let mt = sessionHostingKey(ne);
-      let rn = [sessionClaudeConfigDir];
-      let [_t] = await withBoundedTimeout(
-        ensureSessionConfigDirs(dirname(sessionClaudeConfigDir), rn),
+      let hostingKey = sessionHostingKey(hosting);
+      let dirsToEnsure = [sessionClaudeConfigDir];
+      let [dirState] = await withBoundedTimeout(
+        ensureSessionConfigDirs(dirname(sessionClaudeConfigDir), dirsToEnsure),
         INGRESS_TOKEN_FILE_TIMEOUT_MS,
         `[runner:stuck] session config dir check ${sessionClaudeConfigDir} (check NFS/CSI mount health)`,
       ).catch((error) => {
         if (isHostConfigSnapshotError(error)) {
-          Jt = true;
+          hostConfigFailed = true;
           onStatus(`[runner:error] ${error.message}`);
         }
         throw error;
       });
-      if (yt && (isGreaterThanOne(We) || _t !== "made" || spawnedSessionIds?.has(e) === true)) {
-        Jt = true;
+      if (
+        isReviewSession &&
+        (isGreaterThanOne(workerEpoch) || dirState !== "made" || spawnedSessionIds?.has(sessionId) === true)
+      ) {
+        hostConfigFailed = true;
         logFeatureBad("self_hosted_review_session", "second_start");
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `Session ${e} is a code review that a worker took before, here or on another runner, perhaps a worker that failed before it started Claude Code. A code review is started only by its first worker, in a config directory that the runner has just created. Nothing on this runner needs changing.`,
+          `Session ${sessionId} is a code review that a worker took before, here or on another runner, perhaps a worker that failed before it started Claude Code. A code review is started only by its first worker, in a config directory that the runner has just created. Nothing on this runner needs changing.`,
           "a code review is started only once",
         );
       }
-      if (x) {
-        let hostSplit = x.toolConfig.hostSplit;
-        St = createGovernedGitState(
+      if (governedGit) {
+        let hostSplit = governedGit.toolConfig.hostSplit;
+        governedGitState = createGovernedGitState(
           process.env,
           getPlatform() === "windows",
           hostSplit
             ? {
                 governedHosts: hostSplit.governed,
                 directHosts: hostSplit.direct,
-                mountBaseUrl: x.mountBaseUrl,
-                pushBaseUrl: x.pushBaseUrl,
+                mountBaseUrl: governedGit.mountBaseUrl,
+                pushBaseUrl: governedGit.pushBaseUrl,
               }
             : undefined,
-          trustBundlePath,
+          caBundlePath,
           otherSessionsShareTheAccount,
         );
-        await withFsOpTimeout(buildGitTrustBundle(St, readTrustBundleSource), "build the trust bundle").catch(
-          (error) => {
-            onDebug(
-              `[runner:session] governed git: the trust bundle could not be built (${errorMessage(error)}); the runner's own git keeps GIT_SSL_CAINFO`,
-            );
-          },
+        await withFsOpTimeout(
+          buildGitTrustBundle(governedGitState, readTrustBundleSource),
+          "build the trust bundle",
+        ).catch((error) => {
+          onDebug(
+            `[runner:session] governed git: the trust bundle could not be built (${errorMessage(error)}); the runner's own git keeps GIT_SSL_CAINFO`,
+          );
+        });
+        let serverGitSslVars = readServerGitSslVars(
+          remoteConfig.environment_variables,
+          getPlatform() === "windows",
         );
-        let serverGitSslVars = readServerGitSslVars(q.environment_variables, getPlatform() === "windows");
-        let j = "";
-        let childGitEnvironment = await resolveChildGitEnvironment(
-          St,
+        let rawGitVersion = "";
+        let childGitEnvironment_2 = await resolveChildGitEnvironment(
+          governedGitState,
           {
             ...serverGitSslVars,
-            gitConfigArm: x.toolConfig.gitConfig,
-            serverValueTrustBundlePath: Ct,
+            gitConfigArm: governedGit.toolConfig.gitConfig,
+            serverValueTrustBundlePath: childTrustBundlePath,
           },
           async () => {
-            j = (await withFsOpTimeout(readGitVersion(), "git --version").catch(() => "")).trim();
-            let gitVersion = parseGitVersion(j);
-            let [rt, tn] = MIN_GIT_VERSION_FOR_TRUST;
+            rawGitVersion = (await withFsOpTimeout(readGitVersion(), "git --version").catch(() => "")).trim();
+            let gitVersion = parseGitVersion(rawGitVersion);
+            let [minMajor, minMinor] = MIN_GIT_VERSION_FOR_TRUST;
             return (
-              gitVersion !== null && (gitVersion[0] > rt || (gitVersion[0] === rt && gitVersion[1] >= tn))
+              gitVersion !== null &&
+              (gitVersion[0] > minMajor || (gitVersion[0] === minMajor && gitVersion[1] >= minMinor))
             );
           },
-          (ce, rt) =>
+          (bundlePath, bundleDest) =>
             withFsOpTimeout(
-              readTrustBundleSource(ce, rt),
+              readTrustBundleSource(bundlePath, bundleDest),
               "build the trust bundle from the server's GIT_SSL_CAINFO",
             ).catch((error) => {
               onDebug(
@@ -831,38 +874,43 @@ async function handleSelfHostedSession(e, n, r) {
               };
             }),
         );
-        wn = childGitEnvironment.answer;
-        let Se = formatCertificatesLeftOutWarning([St.trustBundle, childGitEnvironment.trustBundle]);
-        if (Se) onStatus(Se);
-        for (let ce of formatGovernedGitDecisionWarnings({
+        childGitEnvironment = childGitEnvironment_2.answer;
+        let leftOutWarning = formatCertificatesLeftOutWarning([
+          governedGitState.trustBundle,
+          childGitEnvironment_2.trustBundle,
+        ]);
+        if (leftOutWarning) onStatus(leftOutWarning);
+        for (let decisionWarning of formatGovernedGitDecisionWarnings({
           governedHosts: hostSplit?.governed ?? [],
-          gitConfigArm: x.toolConfig.gitConfig,
-          child: childGitEnvironment.answer.decision,
-          childTrustBundle: childGitEnvironment.trustBundle,
+          gitConfigArm: governedGit.toolConfig.gitConfig,
+          child: childGitEnvironment_2.answer.decision,
+          childTrustBundle: childGitEnvironment_2.trustBundle,
           serverSetsCertificateFile: typeof serverGitSslVars.serverCertificateFile === "string",
-          runnerMountGit: gitTrustDecisionForRole(St, "prep", {
-            url: x.mountBaseUrl,
+          runnerMountGit: gitTrustDecisionForRole(governedGitState, "prep", {
+            url: governedGit.mountBaseUrl,
             mountRouted: true,
           }),
-          rawGitVersion: j,
+          rawGitVersion,
           clientCertificateVariablesSet: ["GIT_SSL_CERT", "GIT_SSL_KEY"].filter(
-            (rt) => process.env[rt] !== undefined,
+            (envName) => process.env[envName] !== undefined,
           ),
           hostsCoveredByNoProxy: governedNoProxyHosts(hostSplit, getNoProxy()),
         }))
-          onStatus(ce);
+          onStatus(decisionWarning);
       }
-      ke =
-        ne.kind === "agent-loop" && !yt ? getIngressTokenTempPrefix(sessionClaudeConfigDir, mt) : undefined;
-      if (ne.kind === "tool-server") {
-        for (let M of [getSessionClaudeConfigDir(baseDir, e), sessionClaudeConfigDir])
+      ingressTokenFile =
+        hosting.kind === "agent-loop" && !isReviewSession
+          ? getIngressTokenTempPrefix(sessionClaudeConfigDir, hostingKey)
+          : undefined;
+      if (hosting.kind === "tool-server") {
+        for (let dirToRemove of [getSessionClaudeConfigDir(baseDir, sessionId), sessionClaudeConfigDir])
           await withBoundedTimeout(
-            rm(M, {
+            rm(dirToRemove, {
               recursive: true,
               force: true,
             }),
             LAUNCHER_HOOK_DEFAULT_TIMEOUT_MS,
-            `[runner:stuck] rm ${M} (check NFS/CSI mount health)`,
+            `[runner:stuck] rm ${dirToRemove} (check NFS/CSI mount health)`,
           );
         await withBoundedTimeout(
           mkdir(dirname(sessionClaudeConfigDir), {
@@ -880,100 +928,135 @@ async function handleSelfHostedSession(e, n, r) {
           `[runner:stuck] mkdir ${sessionClaudeConfigDir}`,
         );
       }
-      let bt = ke;
-      let en = (M) => {
-        R = true;
-        let X = M.catch(() => {});
-        resolved_2 = Promise.all([resolved_2, X]).then(() => {});
-        X.then(() => {
-          if (It || bt === undefined) return;
-          let j = de.current;
-          if (!j) return;
-          for (let _e of cn())
+      let newIngressTokenFile = ingressTokenFile;
+      let rewriteTokens = (writePromise) => {
+        tokenWriteMissed = true;
+        let writeSettled = writePromise.catch(() => {});
+        resolved_2 = Promise.all([resolved_2, writeSettled]).then(() => {});
+        writeSettled.then(() => {
+          if (removingTokenFiles || newIngressTokenFile === undefined) return;
+          let sessionToken = tokenRef.current;
+          if (!sessionToken) return;
+          for (let tokenFile of tokenFilePaths())
             resolved = resolved.then(() =>
-              writeSessionIngressTokenFile(_e, j, onStatus, en, tokenFileOpTimeoutMs),
+              writeSessionIngressTokenFile(
+                tokenFile,
+                sessionToken,
+                onStatus,
+                rewriteTokens,
+                tokenFileOpTimeoutMs,
+              ),
             );
         });
       };
-      Ie = en;
-      if (bt !== undefined)
-        resolved = writeSessionIngressTokenFile(bt, Qe.session_token, onStatus, en, tokenFileOpTimeoutMs);
+      rewriteTokenFiles = rewriteTokens;
+      if (newIngressTokenFile !== undefined)
+        resolved = writeSessionIngressTokenFile(
+          newIngressTokenFile,
+          issuedToken.session_token,
+          onStatus,
+          rewriteTokens,
+          tokenFileOpTimeoutMs,
+        );
       await resolved;
-      onDebug(`[runner:session] Epoch fence passed for ${e} (epoch=${We})`);
-      Kn = createDebouncedSender({
+      onDebug(`[runner:session] Epoch fence passed for ${sessionId} (epoch=${workerEpoch})`);
+      prepHeartbeat = createDebouncedSender({
         intervalMs: 30000,
         refresh: async () => {
-          if (We === undefined || !de.current) return;
-          await apiClient.heartbeat(q.api_base_url, e, de.current, We, r);
-          onDebug(`[runner:session] prep heartbeat sent for ${e}`);
+          if (workerEpoch === undefined || !tokenRef.current) return;
+          await apiClient.heartbeat(
+            remoteConfig.api_base_url,
+            sessionId,
+            tokenRef.current,
+            workerEpoch,
+            signal,
+          );
+          onDebug(`[runner:session] prep heartbeat sent for ${sessionId}`);
           return;
         },
-        onError: (M) => {
-          onDebug(`[runner:session] prep heartbeat failed: ${M}`);
+        onError: (heartbeatError) => {
+          onDebug(`[runner:session] prep heartbeat failed: ${heartbeatError}`);
         },
-        signal: r,
+        signal,
       });
-      let Me = (M) => {
-        de.current = M;
-        if (useAnthropicGitProxy && !$r) process.env.CLAUDE_CODE_SESSION_ACCESS_TOKEN = M;
-        for (let X of cn())
+      let setSessionToken = (nextToken) => {
+        tokenRef.current = nextToken;
+        if (useAnthropicGitProxy && !reviewTokensHandedOver)
+          process.env.CLAUDE_CODE_SESSION_ACCESS_TOKEN = nextToken;
+        for (let tokenFile of tokenFilePaths())
           resolved = resolved.then(() =>
-            writeSessionIngressTokenFile(X, M, onStatus, Ie, tokenFileOpTimeoutMs),
+            writeSessionIngressTokenFile(
+              tokenFile,
+              nextToken,
+              onStatus,
+              rewriteTokenFiles,
+              tokenFileOpTimeoutMs,
+            ),
           );
       };
-      let gr = [];
-      let er = (M, X) => {
-        if (We === undefined || !de.current) return Promise.resolve();
-        let j = We;
-        let _e = de.current;
-        let Se = X.withDeferred ? gr.splice(0) : [];
-        let ce = async () => {
+      let deferredEvents = [];
+      let postEvent = (event, eventOptions) => {
+        if (workerEpoch === undefined || !tokenRef.current) return Promise.resolve();
+        let epoch = workerEpoch;
+        let sessionToken = tokenRef.current;
+        let flushedDeferred = eventOptions.withDeferred ? deferredEvents.splice(0) : [];
+        let send = async () => {
           try {
-            await apiClient.postWorkerEvents(q.api_base_url, e, _e, j, [...Se, M], r);
+            await apiClient.postWorkerEvents(
+              remoteConfig.api_base_url,
+              sessionId,
+              sessionToken,
+              epoch,
+              [...flushedDeferred, event],
+              signal,
+            );
           } catch (error) {
             if (isEpochMismatchError(error)) throw error;
-            let zt = Se.length > 0 ? ` (${Se.length} deferred step event(s) dropped with it)` : "";
-            onDebug(`[runner:session] ${X.kind} event post failed${zt}: ${error}`);
+            let droppedNote =
+              flushedDeferred.length > 0
+                ? ` (${flushedDeferred.length} deferred step event(s) dropped with it)`
+                : "";
+            onDebug(`[runner:session] ${eventOptions.kind} event post failed${droppedNote}: ${error}`);
           }
         };
-        if (!Wt) return ce();
-        let rt = () => (pn === undefined ? ce() : Promise.resolve());
-        if (ns) return rt();
-        if (!X.withDeferred) return resolved_3.then(rt);
+        if (!serializeEventPosts) return send();
+        let sendUnlessFailed = () => (eventPostError === undefined ? send() : Promise.resolve());
+        if (eventPostFenced) return sendUnlessFailed();
+        if (!eventOptions.withDeferred) return resolved_3.then(sendUnlessFailed);
         resolved_3 = resolved_3.then(() =>
-          rt().catch((error) => {
-            pn = error;
-            Kn?.cancel();
+          sendUnlessFailed().catch((error) => {
+            eventPostError = error;
+            prepHeartbeat?.cancel();
           }),
         );
         return Promise.resolve();
       };
-      let xi = (message) =>
-        er(makeInitMilestoneMessage(message), {
+      let postActivity = (message) =>
+        postEvent(makeInitMilestoneMessage(message), {
           kind: "activity",
           withDeferred: true,
         });
-      let Wr = (stepId, X, content, _e) =>
-        er(logEnvManager(stepId, X, content, _e), {
+      let postStep = (stepId, stepName, content, stepDetail) =>
+        postEvent(logEnvManager(stepId, stepName, content, stepDetail), {
           kind: "step",
           withDeferred: true,
         });
-      let Fu = (...M) => {
-        if (We === undefined || !de.current) return;
-        gr.push(logEnvManager(...M));
+      let queueEvent = (...event) => {
+        if (workerEpoch === undefined || !tokenRef.current) return;
+        deferredEvents.push(logEnvManager(...event));
       };
-      let Fi;
-      yo = () => {
-        Fi = undefined;
+      let earlyRemotePromise;
+      resetEarlyRemote = () => {
+        earlyRemotePromise = undefined;
       };
-      let bo = () =>
-        (Fi ??= (async () => {
+      let fetchEarlyRemote = () =>
+        (earlyRemotePromise ??= (async () => {
           let armedAt = performance.now();
-          let X = de.current;
+          let presentedToken = tokenRef.current;
           return {
-            config: await Qt(e, X, r),
+            config: await getRemoteConfig(sessionId, presentedToken, signal),
             armedAt,
-            presentedToken: X,
+            presentedToken,
           };
         })().catch((error) => {
           onDebug(
@@ -981,34 +1064,34 @@ async function handleSelfHostedSession(e, n, r) {
           );
           return;
         }));
-      let _r = classifySourceRouting(
-        q.sources,
+      let mappedSources = classifySourceRouting(
+        remoteConfig.sources,
         gitSshRewriteHosts,
         gitHostRewrites,
         onDebug,
-        yn
+        gitProxyConfig
           ? {
-              apiBaseUrl: yn,
-              sessionId: e,
+              apiBaseUrl: gitProxyConfig,
+              sessionId,
             }
           : undefined,
-        x,
+        governedGit,
         onStatus,
       );
-      if (St && applyMountGitEnvironment(St, _r)) {
-        let M = formatTrustBundleWarning(St);
-        if (M) onStatus(M);
+      if (governedGitState && applyMountGitEnvironment(governedGitState, mappedSources)) {
+        let trustWarning = formatTrustBundleWarning(governedGitState);
+        if (trustWarning) onStatus(trustWarning);
       }
-      await Wr("provision", "completed", "Runner registered", {
-        expected_steps: _r.length > 0 ? "provision,clone,start_cc" : "provision,start_cc",
+      await postStep("provision", "completed", "Runner registered", {
+        expected_steps: mappedSources.length > 0 ? "provision,clone,start_cc" : "provision,start_cc",
       });
-      let Gi = branchesByRepo(gitRepositorySources(q.push_targets));
+      let branchMap = branchesByRepo(gitRepositorySources(remoteConfig.push_targets));
       await withBoundedTimeout(
-        mkdir(se, {
+        mkdir(sessionDir, {
           recursive: true,
         }),
         INGRESS_TOKEN_FILE_TIMEOUT_MS,
-        `[runner:stuck] mkdir ${se} (check NFS/CSI mount health)`,
+        `[runner:stuck] mkdir ${sessionDir} (check NFS/CSI mount health)`,
       );
       await withBoundedTimeout(
         mkdir(sessionClaudeConfigDir, {
@@ -1018,29 +1101,29 @@ async function handleSelfHostedSession(e, n, r) {
         INGRESS_TOKEN_FILE_TIMEOUT_MS,
         `[runner:stuck] mkdir ${sessionClaudeConfigDir}`,
       );
-      let Oo = customOauthUrlSuffix(q.api_base_url);
+      let configSuffix = customOauthUrlSuffix(remoteConfig.api_base_url);
       if (hostConfig?.notApplied)
-        await er(formatHostConfigNotAppliedNotice(e, hostConfig.notApplied), {
+        await postEvent(formatHostConfigNotAppliedNotice(sessionId, hostConfig.notApplied), {
           kind: "notice",
           withDeferred: true,
         });
       try {
-        let M =
-          ne.kind === "agent-loop"
+        let seedResult =
+          hosting.kind === "agent-loop"
             ? await seedHostConfigForSession(
                 sessionClaudeConfigDir,
                 hostConfig?.snapshot,
                 onDebug,
                 onStatus,
-                Oo,
+                configSuffix,
               )
             : undefined;
-        if (M?.outcome === "partial" && hostConfig?.snapshot)
-          await er(
+        if (seedResult?.outcome === "partial" && hostConfig?.snapshot)
+          await postEvent(
             formatHostConfigPartiallyAppliedNotice(
-              e,
+              sessionId,
               hostConfig.snapshot.sourceDir,
-              redactSecretsInText(M.error),
+              redactSecretsInText(seedResult.error),
             ),
             {
               kind: "notice",
@@ -1049,139 +1132,158 @@ async function handleSelfHostedSession(e, n, r) {
           );
       } catch (error) {
         if (isHostConfigSnapshotError(error))
-          await Wr("host_config", "failed", redactSecretsInText(error.message), {
+          await postStep("host_config", "failed", redactSecretsInText(error.message), {
             step_label: "Apply runner host config",
           });
         throw error;
       }
       if (configureGitSigningArtifacts !== undefined) {
-        Ue = await materializeSessionGitConfig({
+        sessionGitConfigFiles = await materializeSessionGitConfig({
           configDir: sessionClaudeConfigDir,
           baseDir,
-          hookStubs: Yn && !Zn && configureGitHookStubs !== undefined ? configureGitHookStubs : [],
+          hookStubs:
+            needsSessionHooks && !operatorHooksApply && configureGitHookStubs !== undefined
+              ? configureGitHookStubs
+              : [],
           signingArtifacts: configureGitSigningArtifacts,
           onDebug,
           onStatus,
         });
-        Re = sessionGitConfig(Ue, operatorGitSnapshot, hookGitPrograms);
+        gitConfigPins = sessionGitConfig(sessionGitConfigFiles, operatorGitSnapshot, hookGitPrograms);
       }
-      if (x?.toolConfig.gitConfig) {
-        await writeFileAtomicDefaultMode(ht, (governedGitConfigSeed ?? "") + (wn?.fileSeedLines ?? ""));
-        let M;
-        if (Xn) M = configureGitGovernedEntries(baseDir);
-        else if (Yn) {
-          if (configureGitHookStubs === undefined || Ue === undefined)
+      if (governedGit?.toolConfig.gitConfig) {
+        await writeFileAtomicDefaultMode(
+          governedGitConfigPath,
+          (governedGitConfigSeed ?? "") + (childGitEnvironment?.fileSeedLines ?? ""),
+        );
+        let configEntries;
+        if (ownsHookStubs) configEntries = configureGitGovernedEntries(baseDir);
+        else if (needsSessionHooks) {
+          if (configureGitHookStubs === undefined || sessionGitConfigFiles === undefined)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `--configure-git: a governed session at capacity>1 needs both the hook stubs and the code-sign artifacts (hook stubs ${configureGitHookStubs === undefined ? "missing" : "present"}, session copy ${Ue === undefined ? "not written" : "written"}); the session was stopped rather than run with unsigned commits`,
+              `--configure-git: a governed session at capacity>1 needs both the hook stubs and the code-sign artifacts (hook stubs ${configureGitHookStubs === undefined ? "missing" : "present"}, session copy ${sessionGitConfigFiles === undefined ? "not written" : "written"}); the session was stopped rather than run with unsigned commits`,
               "--configure-git: incomplete startup artifacts for a governed session at capacity>1",
             );
-          M = overlayEntriesWithoutHooks(Ue, Zn);
+          configEntries = overlayEntriesWithoutHooks(sessionGitConfigFiles, operatorHooksApply);
         }
-        if (M !== undefined) {
-          await rm(ht + ".lock", {
+        if (configEntries !== undefined) {
+          await rm(governedGitConfigPath + ".lock", {
             force: true,
           }).catch(() => {});
           try {
-            for (let [X, j] of M) await runGit(["config", "--file", ht, "--replace-all", X, j]);
+            for (let [configKey, configValue] of configEntries)
+              await runGit([
+                "config",
+                "--file",
+                governedGitConfigPath,
+                "--replace-all",
+                configKey,
+                configValue,
+              ]);
           } catch (error) {
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `--configure-git: could not write the commit-signing settings into this session's git config (${ht}): ${errorMessage(error)}. The session was stopped rather than run with unsigned commits. Check that ${join(baseDir, "_sessions")} is writable and holds no leftover ${e}.gitconfig.lock`,
+              `--configure-git: could not write the commit-signing settings into this session's git config (${governedGitConfigPath}): ${errorMessage(error)}. The session was stopped rather than run with unsigned commits. Check that ${join(baseDir, "_sessions")} is writable and holds no leftover ${sessionId}.gitconfig.lock`,
               "--configure-git: could not write commit-signing settings into the governed per-session gitconfig",
             );
           }
         }
       }
-      let gn = se;
-      let tr = [];
-      let Ge = [];
+      let childCwd = sessionDir;
+      let addDirs = [];
+      let preparedRepos = [];
       let hook = await findHook(envSelfHostedRunnerHooksDir, "checkout");
       if (hook && pushOutcomeOnRelease)
         onStatus(
           `[runner:warn] --push-outcome-on-release does not push repos checked out via the checkout lifecycle hook (${hook}); use the post-session hook to snapshot those`,
         );
-      let Gu;
-      let Vh = x?.toolConfig.ghPathShim === true || x?.toolConfig.gitConfig === true;
-      let Hu = q;
-      let jh;
-      let zh;
-      let Xh = [];
-      let Hi = pt ?? baseDir;
-      let Jh = false;
-      let Zh = false;
-      let Bi = async () => {};
-      if (_r.length > 0) {
+      let unusedPrewarmState;
+      let usesGovernedGit =
+        governedGit?.toolConfig.ghPathShim === true || governedGit?.toolConfig.gitConfig === true;
+      let configSnapshot = remoteConfig;
+      let unusedGitStateA;
+      let unusedGitStateB;
+      let unusedGitList = [];
+      let checkoutBaseDir = initBaseDir ?? baseDir;
+      let unusedGitFlagA = false;
+      let unusedGitFlagB = false;
+      let resetToRelease = async () => {};
+      if (mappedSources.length > 0) {
         onDebug(
-          `[runner:session] Preparing ${_r.length} git ${_r.length === 1 ? "repository" : "repositories"} (${otherSessionsShareTheAccount ? "worktree" : "canonical-direct"} mode)`,
+          `[runner:session] Preparing ${mappedSources.length} git ${mappedSources.length === 1 ? "repository" : "repositories"} (${otherSessionsShareTheAccount ? "worktree" : "canonical-direct"} mode)`,
         );
-        let M = [];
-        let X = [];
-        let j = [];
-        let _e;
-        let Se;
-        let ce = [];
-        let rt = (b) => (hook ? "hook" : "builtin");
-        let zt = false;
-        let ds = (b) => (rt(b) !== "builtin" && hook ? "hook" : "git");
-        let found = _r.find((b) => isPreparableRepoType(b.type) && ds(b) === "git");
+        let repoSlugs = [];
+        let sources = [];
+        let sourceUrls = [];
+        let firstError;
+        let throttleError;
+        let skippedSources = [];
+        let prepKind = (prepKindOf) => (hook ? "hook" : "builtin");
+        let runReposInParallel = false;
+        let repoKind = (source) => (prepKind(source) !== "builtin" && hook ? "hook" : "git");
+        let found = mappedSources.find(
+          (source) => isPreparableRepoType(source.type) && repoKind(source) === "git",
+        );
         let git = DEFAULT_GIT_SLOTS;
         let resolved = Promise.resolve();
-        let bs = (b) => {
-          let le = resolved.then(b);
-          resolved = le.catch(() => {});
-          return le;
+        let serialize = (task) => {
+          let queued = resolved.then(task);
+          resolved = queued.catch(() => {});
+          return queued;
         };
-        let Zi = (repo) =>
-          bs(async () => {
-            await xi(`Preparing ${repo}...`);
-            await Wr("clone", "started", `Preparing ${repo}`, {
+        let announceRepo = (repo) =>
+          serialize(async () => {
+            await postActivity(`Preparing ${repo}...`);
+            await postStep("clone", "started", `Preparing ${repo}`, {
               step_detail: repo,
             });
           });
-        let No = (b, repo, Ee) => {
-          if (!zt) {
-            Fu("clone", "completed", `Prepared ${repo}`, Ee);
+        let finishRepo = (slot, repo, stepDetail) => {
+          if (!runReposInParallel) {
+            queueEvent("clone", "completed", `Prepared ${repo}`, stepDetail);
             return Promise.resolve();
           }
-          b.leave();
-          return bs(() => Wr("clone", "completed", `Prepared ${repo}`, Ee));
+          slot.leave();
+          return serialize(() => postStep("clone", "completed", `Prepared ${repo}`, stepDetail));
         };
-        let Os = se;
-        let Et = async (b, le) => {
-          if (!isPreparableRepoType(b.type)) return;
-          let Ee = repoCheckoutDir(Hi, b);
-          let ot = repoDirSlug(b);
-          let wt = getUpstreamUrl(b) ?? b.url;
-          if (!Ee || !ot)
+        let checkoutRoot = sessionDir;
+        let prepareSource = async (source, slot) => {
+          if (!isPreparableRepoType(source.type)) return;
+          let canonicalDir = repoCheckoutDir(checkoutBaseDir, source);
+          let repoSlug = repoDirSlug(source);
+          let repoUrl = getUpstreamUrl(source) ?? source.url;
+          if (!canonicalDir || !repoSlug)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `Source '${b.url}' resolved to an unsafe repo path (slug='${b.repo}'). Check for path traversal in the URL.`,
+              `Source '${source.url}' resolved to an unsafe repo path (slug='${source.repo}'). Check for path traversal in the URL.`,
               "source URL resolved to an unsafe repo path",
             );
-          await Zi(b.repo);
-          if (await le.take()) await bs(() => xi(`Preparing ${b.repo}...`));
-          let qt = (Gi.get(lowercaseRepoName(b.repo))?.length ?? 0) > 0;
-          let Le = join(Os, ot);
-          let $t = rt(b);
-          let Ot = $t === "builtin" ? null : hook;
-          let nr = !Ot && !qt && b !== _r[0];
-          let vr = async () => {
-            if (!Ot) return;
-            if (Ge.includes(Le)) {
-              onDebug(`[runner:hook] not removing ${Le}: a prepared checkout (in use)`);
+          await announceRepo(source.repo);
+          if (await slot.take()) await serialize(() => postActivity(`Preparing ${source.repo}...`));
+          let hasWorkBranch = (branchMap.get(lowercaseRepoName(source.repo))?.length ?? 0) > 0;
+          let checkoutPath = join(checkoutRoot, repoSlug);
+          let requirement = prepKind(source);
+          let checkoutHook = requirement === "builtin" ? null : hook;
+          let isContextSource = !checkoutHook && !hasWorkBranch && source !== mappedSources[0];
+          let removeSkippedCheckout = async () => {
+            if (!checkoutHook) return;
+            if (preparedRepos.includes(checkoutPath)) {
+              onDebug(`[runner:hook] not removing ${checkoutPath}: a prepared checkout (in use)`);
               return;
             }
-            let found = Ge.find((Ft) => nfcLower(Ft) === nfcLower(Le));
+            let found = preparedRepos.find(
+              (preparedTwin) => nfcLower(preparedTwin) === nfcLower(checkoutPath),
+            );
             if (found !== undefined) {
               onDebug(
-                `[runner:hook] not removing ${Le}: same name as prepared checkout ${found} modulo case`,
+                `[runner:hook] not removing ${checkoutPath}: same name as prepared checkout ${found} modulo case`,
               );
-              Xe.push(Le);
+              hookCheckouts.push(checkoutPath);
               return {
                 cause: "kept_prepared_twin",
-                warn: `[runner:warn] not removing ${Le} for skipped context source ${b.repo}: same name as the prepared checkout ${found} modulo case (one directory on a case-insensitive filesystem); whatever the hook wrote there may remain visible to this session. Removal is retried when the session ends.`,
+                warn: `[runner:warn] not removing ${checkoutPath} for skipped context source ${source.repo}: same name as the prepared checkout ${found} modulo case (one directory on a case-insensitive filesystem); whatever the hook wrote there may remain visible to this session. Removal is retried when the session ends.`,
               };
             }
-            let vt = await withBoundedTimeout(
-              rm(Le, {
+            let rmFailure = await withBoundedTimeout(
+              rm(checkoutPath, {
                 recursive: true,
                 force: true,
               }).then(
@@ -1191,175 +1293,193 @@ async function handleSelfHostedSession(e, n, r) {
                 (error) => error,
               ),
               LAUNCHER_HOOK_DEFAULT_TIMEOUT_MS,
-              `[runner:hook] rm -rf ${Le}`,
+              `[runner:hook] rm -rf ${checkoutPath}`,
             );
-            if (vt === undefined) return;
-            Xe.push(Le);
+            if (rmFailure === undefined) return;
+            hookCheckouts.push(checkoutPath);
             return {
               cause: "rm_failed",
-              warn: `[runner:warn] could not remove the partial checkout the hook left for skipped context source ${b.repo} at ${Le} (${errorMessage(vt)}); the session may still be able to read it. Removal is retried when the session ends.`,
+              warn: `[runner:warn] could not remove the partial checkout the hook left for skipped context source ${source.repo} at ${checkoutPath} (${errorMessage(rmFailure)}); the session may still be able to read it. Removal is retried when the session ends.`,
             };
           };
           try {
-            if (Ot) {
-              if (b.ref && !isSafeRefName(b.ref))
+            if (checkoutHook) {
+              if (source.ref && !isSafeRefName(source.ref))
                 throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-                  `[runner:session] refusing to pass unsafe ref to checkout hook: ${b.ref}`,
+                  `[runner:session] refusing to pass unsafe ref to checkout hook: ${source.ref}`,
                   "refusing to pass unsafe ref to checkout hook",
                 );
-              if (!wt || !isGitRemoteUrl(wt))
+              if (!repoUrl || !isGitRemoteUrl(repoUrl))
                 throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-                  `[runner:session] refusing to pass unsafe repo URL to checkout hook: ${wt}`,
+                  `[runner:session] refusing to pass unsafe repo URL to checkout hook: ${repoUrl}`,
                   "refusing to pass unsafe repo URL to checkout hook",
                 );
-              let Ft = undefined;
+              let stderrReader = undefined;
               let startTime = performance.now();
-              if (false) nt.set(Le, true);
+              if (false) preparedCheckouts.set(checkoutPath, true);
               else
                 await runCheckoutHook({
-                  hookPath: Ot,
-                  gitConfigPins: Re,
+                  hookPath: checkoutHook,
+                  gitConfigPins,
                   gitConfigLegacyParams: hookGitLegacyParams,
-                  cwd: Os,
-                  sessionId: e,
-                  repoUrl: wt,
-                  repoRef: b.ref,
-                  checkoutPath: Le,
-                  sessionAccessToken: de.current,
-                  apiBaseUrl: Hu.api_base_url,
-                  gitMountUrl: governedMountUrlOf(b),
-                  gitEnvironment: St && gitEnvironmentForSourceHook(St, b),
+                  cwd: checkoutRoot,
+                  sessionId,
+                  repoUrl,
+                  repoRef: source.ref,
+                  checkoutPath,
+                  sessionAccessToken: tokenRef.current,
+                  apiBaseUrl: configSnapshot.api_base_url,
+                  gitMountUrl: governedMountUrlOf(source),
+                  gitEnvironment: governedGitState && gitEnvironmentForSourceHook(governedGitState, source),
                   clientPlatform,
                   onStatus,
                   onDebug,
-                  onStderrLine: Ft?.read,
-                  signal: r,
-                  timeoutMs: n.checkoutHookTimeoutMs ?? CHECKOUT_HOOK_TIMEOUT_MS,
+                  onStderrLine: stderrReader?.read,
+                  signal,
+                  timeoutMs: options.checkoutHookTimeoutMs ?? CHECKOUT_HOOK_TIMEOUT_MS,
                 });
               let rounded = Math.round(performance.now() - startTime);
-              Xe.push(Le);
-              await No(le, b.repo, {
-                step_detail: b.repo,
+              hookCheckouts.push(checkoutPath);
+              await finishRepo(slot, source.repo, {
+                step_detail: source.repo,
                 ...false,
               });
               return {
-                prepared: Le,
-                src: b,
+                prepared: checkoutPath,
+                src: source,
               };
             }
-            let we = otherSessionsShareTheAccount ? join(Os, ot) : Ee;
+            let worktreePath = otherSessionsShareTheAccount ? join(checkoutRoot, repoSlug) : canonicalDir;
             let handOver;
-            await serializeByKey(canonicalLocks, Ee, async () => {
-              let Ft = nt.get(Ee);
-              let qs = {
-                canonical: Ee,
-                repo: b.repo,
-                sessionId: e,
+            await serializeByKey(canonicalLocks, canonicalDir, async () => {
+              let inUse = preparedCheckouts.get(canonicalDir);
+              let prepContext = {
+                canonical: canonicalDir,
+                repo: source.repo,
+                sessionId,
                 onStatus,
               };
-              let Yu = undefined;
-              let $o = false;
+              let unusedTrustResult = undefined;
+              let prewarmTrusted = false;
               if (
-                nr &&
-                $o &&
-                (await lstat(join(Ee, ".git"))
-                  .then((Rr) => (Rr.isDirectory() ? lstat(join(Ee, ".git", "index")) : Rr))
+                isContextSource &&
+                prewarmTrusted &&
+                (await lstat(join(canonicalDir, ".git"))
+                  .then((gitEntryStats) =>
+                    gitEntryStats.isDirectory() ? lstat(join(canonicalDir, ".git", "index")) : gitEntryStats,
+                  )
                   .then(
                     () => true,
                     (error) => getErrnoCode(error) !== "ENOENT",
                   ))
               )
-                nr = false;
-              let Mo = false;
-              if (undefined?.sanitize || yn || (x && !otherSessionsShareTheAccount)) {
-                if (undefined?.sanitize || (!$o && shouldSanitizeCanonical(onStatus, Ee, U))) {
-                  await sanitizeCanonicalRepo(Ee, onDebug, wt);
-                  Mo = true;
+                isContextSource = false;
+              let sanitized = false;
+              if (undefined?.sanitize || gitProxyConfig || (governedGit && !otherSessionsShareTheAccount)) {
+                if (
+                  undefined?.sanitize ||
+                  (!prewarmTrusted && shouldSanitizeCanonical(onStatus, canonicalDir, gitConfigOwnership))
+                ) {
+                  await sanitizeCanonicalRepo(canonicalDir, onDebug, repoUrl);
+                  sanitized = true;
                 }
-              } else await runGitConfigLocal(Ee, onDebug, !otherSessionsShareTheAccount);
+              } else await runGitConfigLocal(canonicalDir, onDebug, !otherSessionsShareTheAccount);
               await prepareRepositories({
-                baseDir: Hi,
+                baseDir: checkoutBaseDir,
                 sources: [
                   {
-                    ...b,
-                    ...(Mo && {
+                    ...source,
+                    ...(sanitized && {
                       sanitized: {
                         onIndexFromHead: () => {
-                          Tt.add(Ee);
+                          sanitizedRepos.add(canonicalDir);
                         },
                       },
                     }),
-                    ...(nr && {
-                      skippedIfThrottled: nr,
+                    ...(isContextSource && {
+                      skippedIfThrottled: isContextSource,
                     }),
                     ...false,
                   },
                 ],
                 alwaysFetch: true,
                 skipReset: otherSessionsShareTheAccount,
-                initWithoutTemplate: pt !== undefined,
+                initWithoutTemplate: initBaseDir !== undefined,
                 skipValidation:
                   antEnv.CLAUDE_RUNNER_TRUST_CANONICAL_PREWARM &&
                   !otherSessionsShareTheAccount &&
-                  Gu === undefined,
+                  unusedPrewarmState === undefined,
                 onDebug,
-                onPhase: (Rr, Vn, Po) => {
-                  if (We === undefined || !de.current) return;
-                  let Vu = We;
-                  let ju = de.current;
-                  let zu = [logCloneStep(b.repo, Rr, Vn, Po)];
-                  let Qi = () =>
-                    pn !== undefined
+                onPhase: (phase, phaseDetail, phaseMessage) => {
+                  if (workerEpoch === undefined || !tokenRef.current) return;
+                  let epoch = workerEpoch;
+                  let sessionToken = tokenRef.current;
+                  let phaseEvents = [logCloneStep(source.repo, phase, phaseDetail, phaseMessage)];
+                  let postPhase = () =>
+                    eventPostError !== undefined
                       ? Promise.resolve()
-                      : apiClient.postWorkerEvents(q.api_base_url, e, ju, Vu, zu, r);
-                  (Wt ? resolved_3.then(Qi) : Qi()).catch((error) =>
+                      : apiClient.postWorkerEvents(
+                          remoteConfig.api_base_url,
+                          sessionId,
+                          sessionToken,
+                          epoch,
+                          phaseEvents,
+                          signal,
+                        );
+                  (serializeEventPosts ? resolved_3.then(postPhase) : postPhase()).catch((error) =>
                     onDebug(`[runner:session] prep-phase event post failed: ${error}`),
                   );
                 },
-                onProgress: (cloneSub, Vn) => {
-                  let Po = Vn.total !== undefined ? ` (${Vn.done}/${Vn.total})` : "";
-                  er(
-                    logEnvManager("clone", "started", `${b.repo} \u2014 ${Vn.label} ${Vn.pct}%${Po}`, {
-                      step_detail: b.repo,
-                      clone_sub: cloneSub,
-                      progress_label: Vn.label,
-                      progress_pct: String(Vn.pct),
-                      ...(Vn.done !== undefined && {
-                        progress_done: String(Vn.done),
-                      }),
-                      ...(Vn.total !== undefined && {
-                        progress_total: String(Vn.total),
-                      }),
-                    }),
+                onProgress: (cloneSub, progress) => {
+                  let progressDetail =
+                    progress.total !== undefined ? ` (${progress.done}/${progress.total})` : "";
+                  postEvent(
+                    logEnvManager(
+                      "clone",
+                      "started",
+                      `${source.repo} \u2014 ${progress.label} ${progress.pct}%${progressDetail}`,
+                      {
+                        step_detail: source.repo,
+                        clone_sub: cloneSub,
+                        progress_label: progress.label,
+                        progress_pct: String(progress.pct),
+                        ...(progress.done !== undefined && {
+                          progress_done: String(progress.done),
+                        }),
+                        ...(progress.total !== undefined && {
+                          progress_total: String(progress.total),
+                        }),
+                      },
+                    ),
                     {
                       kind: "progress",
                       withDeferred: false,
                     },
                   ).catch(() => {});
                 },
-                signal: r,
+                signal,
               });
               if (otherSessionsShareTheAccount)
                 await addSessionWorktree({
-                  canonicalRepoPath: Ee,
-                  worktreePath: we,
-                  ref: b.ref,
+                  canonicalRepoPath: canonicalDir,
+                  worktreePath,
+                  ref: source.ref,
                   onDebug,
-                  signal: r,
-                  gitEnvironment: b.gitEnvironment,
+                  signal,
+                  gitEnvironment: source.gitEnvironment,
                 });
             });
             if (otherSessionsShareTheAccount)
-              ye.push({
-                canonicalRepoPath: Ee,
-                worktreePath: we,
+              sessionWorktrees.push({
+                canonicalRepoPath: canonicalDir,
+                worktreePath,
               });
-            await No(le, b.repo, {
-              step_detail: b.repo,
+            await finishRepo(slot, source.repo, {
+              step_detail: source.repo,
             });
             return {
-              prepared: we,
-              src: b,
+              prepared: worktreePath,
+              src: source,
               handOver,
             };
           } catch (error) {
@@ -1367,95 +1487,105 @@ async function handleSelfHostedSession(e, n, r) {
               error instanceof FetchRefNotFoundError ||
               (error instanceof CheckoutHookFailedError && isFetchRefNotFound(error.message))
             ) {
-              if (!qt && $t !== "required") {
-                let vt = b.ref ? `'${b.ref}'` : "the configured ref";
+              if (!hasWorkBranch && requirement !== "required") {
+                let refLabel = source.ref ? `'${source.ref}'` : "the configured ref";
                 onDebug(
-                  `[runner:session] context source ${b.repo} ref ${vt} permanently not found on remote; ` +
+                  `[runner:session] context source ${source.repo} ref ${refLabel} permanently not found on remote; ` +
                     "skipping (not a work repo \u2014 no push_targets entry)",
                 );
-                let Ft = await vr();
-                if (Ft) onStatus(Ft.warn);
+                let skipInfo = await removeSkippedCheckout();
+                if (skipInfo) onStatus(skipInfo.warn);
                 return {
                   skipped: {
-                    repo: b.repo,
-                    sads: Ft ? [CHECKOUT_FAILURE_NOTES[Ft.cause].sad] : [],
+                    repo: source.repo,
+                    sads: skipInfo ? [CHECKOUT_FAILURE_NOTES[skipInfo.cause].sad] : [],
                     step:
-                      `Skipped ${b.repo} \u2014 source ref ${vt} no longer exists on remote; continuing without this context repo` +
-                      (Ft ? CHECKOUT_FAILURE_NOTES[Ft.cause].note : ""),
+                      `Skipped ${source.repo} \u2014 source ref ${refLabel} no longer exists on remote; continuing without this context repo` +
+                      (skipInfo ? CHECKOUT_FAILURE_NOTES[skipInfo.cause].note : ""),
                   },
-                  error: new SourceRefNotFoundError(b.repo, b.ref),
+                  error: new SourceRefNotFoundError(source.repo, source.ref),
                 };
               }
-              throw new SourceRefNotFoundError(b.repo, b.ref);
+              throw new SourceRefNotFoundError(source.repo, source.ref);
             }
-            if (Ot && $t !== "required" && !qt && error instanceof CheckoutHookFailedError && !r.aborted) {
+            if (
+              checkoutHook &&
+              requirement !== "required" &&
+              !hasWorkBranch &&
+              error instanceof CheckoutHookFailedError &&
+              !signal.aborted
+            ) {
               onStatus(
-                `[runner:warn] checkout hook failed for context source ${b.repo} (${error.telemetryMessage}); not a work repo (no push_targets entry), skipping it: ` +
+                `[runner:warn] checkout hook failed for context source ${source.repo} (${error.telemetryMessage}); not a work repo (no push_targets entry), skipping it: ` +
                   redactSecretsInText(error.message),
               );
-              let vt = await vr();
-              if (vt) onStatus(vt.warn);
+              let skipInfo = await removeSkippedCheckout();
+              if (skipInfo) onStatus(skipInfo.warn);
               return {
                 error,
                 skipped: {
-                  repo: b.repo,
+                  repo: source.repo,
                   sads: [
                     "context_source_checkout_hook_failed",
-                    ...(vt ? [CHECKOUT_FAILURE_NOTES[vt.cause].sad] : []),
+                    ...(skipInfo ? [CHECKOUT_FAILURE_NOTES[skipInfo.cause].sad] : []),
                   ],
                   step:
-                    `Skipped ${b.repo} \u2014 its checkout hook ${error.telemetryMessage}; continuing without this context repo` +
-                    (vt ? CHECKOUT_FAILURE_NOTES[vt.cause].note : ""),
+                    `Skipped ${source.repo} \u2014 its checkout hook ${error.telemetryMessage}; continuing without this context repo` +
+                    (skipInfo ? CHECKOUT_FAILURE_NOTES[skipInfo.cause].note : ""),
                 },
               };
             }
             if (
-              !Ot &&
-              !qt &&
+              !checkoutHook &&
+              !hasWorkBranch &&
               error instanceof RepositoryAccessError &&
               error.denial !== undefined &&
-              !r.aborted
+              !signal.aborted
             ) {
-              let vt = b.getAuthToken ? (b.governedMount ? "git mount" : "git proxy") : undefined;
-              let Ft = REPO_ACCESS_FAILURE_LABELS[error.denial];
+              let authLabel = source.getAuthToken
+                ? source.governedMount
+                  ? "git mount"
+                  : "git proxy"
+                : undefined;
+              let accessLabel = REPO_ACCESS_FAILURE_LABELS[error.denial];
               onStatus(
-                `[runner:warn] could not access context source ${b.repo} (${Ft}; auth: ` +
-                  (vt ? `session token via the ${vt}` : "this runner's own git credentials") +
+                `[runner:warn] could not access context source ${source.repo} (${accessLabel}; auth: ` +
+                  (authLabel ? `session token via the ${authLabel}` : "this runner's own git credentials") +
                   "); not a work repo (no push_targets entry), skipping it: " +
                   redactSecretsInText(error.message).replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]+/gu, " | "),
               );
               return {
                 error,
                 skipped: {
-                  repo: b.repo,
+                  repo: source.repo,
                   sads: ["context_source_access_denied"],
-                  step: vt
-                    ? `Skipped ${b.repo} \u2014 this session couldn't read it ` +
-                      `(${Ft}). Check that you've connected a GitHub account that can open it. If so, ask an admin to check that your organization gives Claude access to it.`
-                    : `Skipped ${b.repo} \u2014 this runner couldn't read it ` +
-                      `(${Ft}). Ask the team that manages your runners to check this runner's access.`,
+                  step: authLabel
+                    ? `Skipped ${source.repo} \u2014 this session couldn't read it ` +
+                      `(${accessLabel}). Check that you've connected a GitHub account that can open it. If so, ask an admin to check that your organization gives Claude access to it.`
+                    : `Skipped ${source.repo} \u2014 this runner couldn't read it ` +
+                      `(${accessLabel}). Ask the team that manages your runners to check this runner's access.`,
                   skipKind: "context_source_access_denied",
                   skipReason: error.denial,
                 },
               };
             }
             if (
-              nr &&
+              isContextSource &&
               (error instanceof RepositoryAccessError || error instanceof FetchThrottledError) &&
               error.throttle !== undefined &&
-              !r.aborted
+              !signal.aborted
             ) {
               onStatus(
-                `[runner:warn] could not read context source ${b.repo} (told to try again later: ${FETCH_REFUSAL_REASONS[error.throttle]}); not a work repo (no push_targets entry), skipping it: ` +
+                `[runner:warn] could not read context source ${source.repo} (told to try again later: ${FETCH_REFUSAL_REASONS[error.throttle]}); not a work repo (no push_targets entry), skipping it: ` +
                   redactSecretsInText(error.message).replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]+/gu, " | "),
               );
               return {
                 error,
                 skipped: {
-                  repo: b.repo,
+                  repo: source.repo,
                   sads: ["context_source_throttled"],
                   step:
-                    `Skipped ${b.repo} \u2014 after several tries this runner was ` +
+                    `Skipped ${source.repo} \u2014 after several tries this runner was ` +
                     "still told to try again later; a rate limit is the usual cause. This session runs without it. It is tried again the next time this session starts.",
                   skipKind: "context_source_throttled",
                   skipReason: error.throttle,
@@ -1465,307 +1595,328 @@ async function handleSelfHostedSession(e, n, r) {
             throw classifySourcePrepFailure(error);
           }
         };
-        let bn = (b) => {
-          if (b === undefined) return;
-          if ("skipped" in b) {
-            ce.push(b.skipped);
-            _e ??= b.error;
-            if (b.skipped.skipKind === "context_source_throttled") Se ??= b.error;
+        let collectPrep = (prepResult) => {
+          if (prepResult === undefined) return;
+          if ("skipped" in prepResult) {
+            skippedSources.push(prepResult.skipped);
+            firstError ??= prepResult.error;
+            if (prepResult.skipped.skipKind === "context_source_throttled")
+              throttleError ??= prepResult.error;
             return;
           }
-          Ge.push(b.prepared);
-          M.push(b.src.repo);
-          X.push(b.src);
-          j.push(b.src.url ?? "");
-          if (b.handOver) xn.push(b.handOver);
+          preparedRepos.push(prepResult.prepared);
+          repoSlugs.push(prepResult.src.repo);
+          sources.push(prepResult.src);
+          sourceUrls.push(prepResult.src.url ?? "");
+          if (prepResult.handOver) handOvers.push(prepResult.handOver);
         };
-        if (zt)
+        if (runReposInParallel)
           (
             await runWithSlots(
-              _r.map(ds),
+              mappedSources.map(repoKind),
               {
                 git,
                 hook: DEFAULT_HOOK_SLOTS,
               },
-              (le, Ee) => Et(_r[le], Ee),
+              (index, slot) => prepareSource(mappedSources[index], slot),
               isEpochMismatchError,
             )
-          ).forEach(bn);
-        else for (let b of _r) bn(await Et(b, NO_SLOTS_AVAILABLE));
-        if (Ge.length === 0 && _e) throw classifySourcePrepFailure(Se ?? _e);
-        for (let b of ce) {
-          for (let sad of b.sads) logFeatureSad("self_hosted_session_handle", sad);
-          await Wr("clone", "completed", b.step, {
-            step_detail: b.repo,
-            ...(b.skipKind && {
-              skip_kind: b.skipKind,
+          ).forEach(collectPrep);
+        else for (let source of mappedSources) collectPrep(await prepareSource(source, NO_SLOTS_AVAILABLE));
+        if (preparedRepos.length === 0 && firstError)
+          throw classifySourcePrepFailure(throttleError ?? firstError);
+        for (let skipped of skippedSources) {
+          for (let sad of skipped.sads) logFeatureSad("self_hosted_session_handle", sad);
+          await postStep("clone", "completed", skipped.step, {
+            step_detail: skipped.repo,
+            ...(skipped.skipKind && {
+              skip_kind: skipped.skipKind,
             }),
-            ...(b.skipReason && {
-              skip_reason: b.skipReason,
+            ...(skipped.skipReason && {
+              skip_reason: skipped.skipReason,
             }),
           });
         }
-        await Wr("clone", "completed", "Finished preparing sources");
+        await postStep("clone", "completed", "Finished preparing sources");
         prepTimer.start();
-        bo();
-        if (yn) {
-          let origin = new URL(yn).origin;
-          for (let idx = 0; idx < Ge.length; idx++) {
-            if (!X[idx]?.getAuthToken) continue;
-            if (Xe.includes(Ge[idx])) continue;
-            qe.push({
-              path: Ge[idx],
+        fetchEarlyRemote();
+        if (gitProxyConfig) {
+          let origin = new URL(gitProxyConfig).origin;
+          for (let idx = 0; idx < preparedRepos.length; idx++) {
+            if (!sources[idx]?.getAuthToken) continue;
+            if (hookCheckouts.includes(preparedRepos[idx])) continue;
+            gitProxyCredPaths.push({
+              path: preparedRepos[idx],
               origin,
             });
-            await setCredentialHelper(Ge[idx], yn, onDebug, r);
+            await setCredentialHelper(preparedRepos[idx], gitProxyConfig, onDebug, signal);
           }
         }
         prepTimer.mark("runner_prep_git_proxy_config_ms");
-        if (x) {
-          let b = new Set();
-          let le = [];
-          let Ee = [];
-          let ot = [];
-          let wt = [];
-          let qt;
-          for (let idx = 0; idx < Ge.length; idx++) {
-            let $t = X[idx];
-            let Ot = $t && getUpstreamUrl($t);
-            if (!$t || !Ot) continue;
-            if (Xe.includes(Ge[idx])) continue;
-            let vr = ye.find((we) => we.worktreePath === Ge[idx])?.canonicalRepoPath ?? Ge[idx];
-            if (b.has(vr)) continue;
-            b.add(vr);
-            wt.push(await getRemoteOriginUrls(vr, Ot, onDebug, r));
-            if ($t.fetchViaMount && $t.url) {
+        if (governedGit) {
+          let seenCanonical = new Set();
+          let capacitySkippedRepos = [];
+          let oldGitSkippedRepos = [];
+          let mountFetchedRepos = [];
+          let originChecks = [];
+          let gitVersionInfo;
+          for (let idx = 0; idx < preparedRepos.length; idx++) {
+            let source = sources[idx];
+            let upstreamUrl = source && getUpstreamUrl(source);
+            if (!source || !upstreamUrl) continue;
+            if (hookCheckouts.includes(preparedRepos[idx])) continue;
+            let canonicalDir =
+              sessionWorktrees.find((worktree) => worktree.worktreePath === preparedRepos[idx])
+                ?.canonicalRepoPath ?? preparedRepos[idx];
+            if (seenCanonical.has(canonicalDir)) continue;
+            seenCanonical.add(canonicalDir);
+            originChecks.push(await getRemoteOriginUrls(canonicalDir, upstreamUrl, onDebug, signal));
+            if (source.fetchViaMount && source.url) {
               if (otherSessionsShareTheAccount) {
-                le.push($t.repo);
+                capacitySkippedRepos.push(source.repo);
                 continue;
               }
-              if (qt === undefined) {
-                let trimmed = (
+              if (gitVersionInfo === undefined) {
+                let output = (
                   await withFsOpTimeout(readGitVersion(), "git --version").catch(() => "")
                 ).trim();
-                let gitVersion = parseGitVersion(trimmed);
-                let [Ft, qs] = MIN_GIT_VERSION_FOR_MOUNT;
-                qt = {
-                  raw: trimmed,
+                let gitVersion = parseGitVersion(output);
+                let [minMajor, minMinor] = MIN_GIT_VERSION_FOR_MOUNT;
+                gitVersionInfo = {
+                  raw: output,
                   ok:
                     gitVersion !== null &&
-                    (gitVersion[0] > Ft || (gitVersion[0] === Ft && gitVersion[1] >= qs)),
+                    (gitVersion[0] > minMajor || (gitVersion[0] === minMajor && gitVersion[1] >= minMinor)),
                 };
               }
-              if (!qt.ok) {
-                Ee.push($t.repo);
+              if (!gitVersionInfo.ok) {
+                oldGitSkippedRepos.push(source.repo);
                 continue;
               }
-              ot.push($t.repo);
-              Nt.push({
-                path: vr,
-                mountUrl: $t.url,
-                mountBaseUrl: x.mountBaseUrl,
+              mountFetchedRepos.push(source.repo);
+              mountReadWiring.push({
+                path: canonicalDir,
+                mountUrl: source.url,
+                mountBaseUrl: governedGit.mountBaseUrl,
               });
               try {
-                await setHostCredentialHelper(vr, $t.url, Ot, x.mountBaseUrl, onDebug, r);
+                await setHostCredentialHelper(
+                  canonicalDir,
+                  source.url,
+                  upstreamUrl,
+                  governedGit.mountBaseUrl,
+                  onDebug,
+                  signal,
+                );
               } catch (error) {
                 logFeatureBad("self_hosted_governed_mount_read", "config_write_failed");
                 throw error;
               }
             }
           }
-          if (wt.includes("not_upstream")) logFeatureSad("self_hosted_governed_origin_check", "not_upstream");
-          else if (wt.includes("read_failed"))
+          if (originChecks.includes("not_upstream"))
+            logFeatureSad("self_hosted_governed_origin_check", "not_upstream");
+          else if (originChecks.includes("read_failed"))
             logFeatureSad("self_hosted_governed_origin_check", "read_failed");
-          else if (wt.length > 0) logFeatureOk("self_hosted_governed_origin_check");
-          if (le.length > 0) {
+          else if (originChecks.length > 0) logFeatureOk("self_hosted_governed_origin_check");
+          if (capacitySkippedRepos.length > 0) {
             onStatus(
-              `[runner:warn] governed git: ${le.join(", ")} ${plural(le.length, "is", "are")} outside the runner's list of directly reachable upstreams, but at --capacity ${capacity} sessions share one git config per repository, so ${plural(le.length, "its", "their")} in-session fetches are NOT routed through the git mount and will fail unless this machine can reach the upstream host. Run with --capacity 1 to route such fetches through the mount.`,
+              `[runner:warn] governed git: ${capacitySkippedRepos.join(", ")} ${plural(capacitySkippedRepos.length, "is", "are")} outside the runner's list of directly reachable upstreams, but at --capacity ${capacity} sessions share one git config per repository, so ${plural(capacitySkippedRepos.length, "its", "their")} in-session fetches are NOT routed through the git mount and will fail unless this machine can reach the upstream host. Run with --capacity 1 to route such fetches through the mount.`,
             );
             logFeatureSad("self_hosted_governed_mount_read", "skipped_capacity_gt1");
-          } else if (Ee.length > 0) {
+          } else if (oldGitSkippedRepos.length > 0) {
             onStatus(
-              `[runner:warn] governed git: ${Ee.join(", ")} ${plural(Ee.length, "is", "are")} outside the runner's list of directly reachable upstreams, but this machine's git (${qt?.raw || "version not readable"}) could not be confirmed as ${MIN_GIT_VERSION_FOR_MOUNT.join(".")} or newer, which the mount's path-scoped credential needs, so ${plural(Ee.length, "its", "their")} in-session fetches are NOT routed through the git mount and will fail unless this machine can reach the upstream host. Upgrade git to route such fetches through the mount.`,
+              `[runner:warn] governed git: ${oldGitSkippedRepos.join(", ")} ${plural(oldGitSkippedRepos.length, "is", "are")} outside the runner's list of directly reachable upstreams, but this machine's git (${gitVersionInfo?.raw || "version not readable"}) could not be confirmed as ${MIN_GIT_VERSION_FOR_MOUNT.join(".")} or newer, which the mount's path-scoped credential needs, so ${plural(oldGitSkippedRepos.length, "its", "their")} in-session fetches are NOT routed through the git mount and will fail unless this machine can reach the upstream host. Upgrade git to route such fetches through the mount.`,
             );
             logFeatureSad("self_hosted_governed_mount_read", "skipped_git_too_old");
-          } else if (ot.length > 0) {
+          } else if (mountFetchedRepos.length > 0) {
             onStatus(
-              `[runner:session] governed git: ${ot.join(", ")} ${plural(ot.length, "is", "are")} fetched through the git mount for ${e} (not directly reachable from this runner) \u2014 origin keeps its upstream URL; a repo-local insteadOf sends in-session fetches to the mount with the session token`,
+              `[runner:session] governed git: ${mountFetchedRepos.join(", ")} ${plural(mountFetchedRepos.length, "is", "are")} fetched through the git mount for ${sessionId} (not directly reachable from this runner) \u2014 origin keeps its upstream URL; a repo-local insteadOf sends in-session fetches to the mount with the session token`,
             );
             logFeatureOk("self_hosted_governed_mount_read");
           }
         }
-        if (x?.pushBaseUrl !== undefined) {
-          let b = [];
-          let le = new Set();
-          let Ee = 0;
-          for (let idx = 0; idx < Ge.length; idx++) {
-            let wt = X[idx];
-            if (!wt?.governedMount || !wt.upstreamUrl) continue;
-            if (Xe.includes(Ge[idx])) continue;
-            if (!wt.governedPushUrl) {
-              Ee++;
+        if (governedGit?.pushBaseUrl !== undefined) {
+          let pushWirings = [];
+          let seenPushCanonical = new Set();
+          let notGithubCount = 0;
+          for (let idx = 0; idx < preparedRepos.length; idx++) {
+            let source = sources[idx];
+            if (!source?.governedMount || !source.upstreamUrl) continue;
+            if (hookCheckouts.includes(preparedRepos[idx])) continue;
+            if (!source.governedPushUrl) {
+              notGithubCount++;
               continue;
             }
-            let Le = ye.find(($t) => $t.worktreePath === Ge[idx])?.canonicalRepoPath ?? Ge[idx];
-            if (le.has(Le)) continue;
-            le.add(Le);
-            b.push({
-              canonicalPath: Le,
-              mountPath: wt.governedPushUrl.slice(x.pushBaseUrl.length + 1),
-              upstreamUrl: wt.upstreamUrl,
+            let canonicalPath =
+              sessionWorktrees.find((worktree) => worktree.worktreePath === preparedRepos[idx])
+                ?.canonicalRepoPath ?? preparedRepos[idx];
+            if (seenPushCanonical.has(canonicalPath)) continue;
+            seenPushCanonical.add(canonicalPath);
+            pushWirings.push({
+              canonicalPath,
+              mountPath: source.governedPushUrl.slice(governedGit.pushBaseUrl.length + 1),
+              upstreamUrl: source.upstreamUrl,
             });
           }
-          if (Ee > 0) logFeatureSad("self_hosted_governed_push_url", "host_not_github");
-          if (b.length === 0);
+          if (notGithubCount > 0) logFeatureSad("self_hosted_governed_push_url", "host_not_github");
+          if (pushWirings.length === 0);
           else if (otherSessionsShareTheAccount) {
             onStatus(
               `[runner:warn] governed git: the work item carries a git-mount push URL but this runner runs with --capacity ${capacity} (per-session worktrees share one canonical git config), so the push URL is NOT applied and session pushes keep going to the upstream remote. Run with --capacity 1 to route session pushes through the git mount.`,
             );
             logFeatureSad("self_hosted_governed_push_url", "skipped_capacity_gt1");
           } else {
-            let ot = reconcileGovernedPushUrls({
-              sessionId: e,
-              pushBaseUrl: x.pushBaseUrl,
-              wirings: b,
-              getCurrentToken: () => de.current,
+            let pushWiring = reconcileGovernedPushUrls({
+              sessionId,
+              pushBaseUrl: governedGit.pushBaseUrl,
+              wirings: pushWirings,
+              getCurrentToken: () => tokenRef.current,
               onStatus,
               onDebug,
-              signal: r,
+              signal,
             });
-            Zt = ot;
+            pushUrlReconciler = pushWiring;
             try {
-              await ot.apply();
+              await pushWiring.apply();
             } catch (error) {
               logFeatureBad("self_hosted_governed_push_url", "config_write_failed");
               throw error;
             }
             onStatus(
-              `[runner:session] governed git: push URL ACTIVE for ${e} \u2014 session git pushes go through the ` +
-                `git mount (${b.length} ${plural(b.length, "repository", "repositories")}, origin ${new URL(x.pushBaseUrl).origin})` +
-                (Nt.length > 0 ? "" : "; fetches stay on the upstream remote"),
+              `[runner:session] governed git: push URL ACTIVE for ${sessionId} \u2014 session git pushes go through the ` +
+                `git mount (${pushWirings.length} ${plural(pushWirings.length, "repository", "repositories")}, origin ${new URL(governedGit.pushBaseUrl).origin})` +
+                (mountReadWiring.length > 0 ? "" : "; fetches stay on the upstream remote"),
             );
             logFeatureOk("self_hosted_governed_push_url");
           }
         }
-        await Bi();
+        await resetToRelease();
         prepTimer.mark("runner_prep_reset_remote_ms");
-        for (let idx = 0; idx < Ge.length; idx++) {
-          let le = Gi.get(lowercaseRepoName(M[idx]));
-          if (!le || le.length === 0) continue;
-          let [Ee, ...ot] = le;
-          let found = ye.find((Ot) => Ot.worktreePath === Ge[idx]);
-          let qt = found?.canonicalRepoPath ?? Ge[idx];
-          let Le = false;
-          if (ot.length > 0 && !Le) {
-            let Ot = X[idx];
-            let nr = Ot?.getAuthToken && !Xe.includes(Ge[idx]);
+        for (let idx = 0; idx < preparedRepos.length; idx++) {
+          let branches = branchMap.get(lowercaseRepoName(repoSlugs[idx]));
+          if (!branches || branches.length === 0) continue;
+          let [branch, ...extraBranches] = branches;
+          let found = sessionWorktrees.find((worktree) => worktree.worktreePath === preparedRepos[idx]);
+          let canonicalPath = found?.canonicalRepoPath ?? preparedRepos[idx];
+          let skipped = false;
+          if (extraBranches.length > 0 && !skipped) {
+            let source = sources[idx];
+            let canUseToken = source?.getAuthToken && !hookCheckouts.includes(preparedRepos[idx]);
             await fetchOutcomeBranches(
-              Ge[idx],
-              ot,
+              preparedRepos[idx],
+              extraBranches,
               onDebug,
-              r,
+              signal,
               undefined,
-              j[idx].startsWith("file://"),
-              yn && nr ? Ot.url : undefined,
-              Ot?.governedMount && nr
+              sourceUrls[idx].startsWith("file://"),
+              gitProxyConfig && canUseToken ? source.url : undefined,
+              source?.governedMount && canUseToken
                 ? {
-                    url: Ot.url,
-                    getToken: Ot.getAuthToken,
+                    url: source.url,
+                    getToken: source.getAuthToken,
                   }
                 : undefined,
-              Ot?.governedMount && nr ? Ot.gitEnvironment : undefined,
+              source?.governedMount && canUseToken ? source.gitEnvironment : undefined,
             );
           }
-          let $t;
-          if (pushOutcomeOnRelease && mt > 1 && !Le && !Xe.includes(Ge[idx])) {
+          let createdSha;
+          if (
+            pushOutcomeOnRelease &&
+            hostingKey > 1 &&
+            !skipped &&
+            !hookCheckouts.includes(preparedRepos[idx])
+          ) {
             if (
               await resumePushOnRelease(
-                qt,
-                Ee,
-                X[idx],
+                canonicalPath,
+                branch,
+                sources[idx],
                 PUSH_ON_RELEASE_TIMEOUT_MS,
                 onDebug,
-                r,
-                X[idx].gitEnvironment,
+                signal,
+                sources[idx].gitEnvironment,
               )
             )
-              $t = `refs/remotes/origin/${Ee}`;
+              createdSha = `refs/remotes/origin/${branch}`;
           }
-          if (!Le)
+          if (!skipped)
             await fetchSourceBranch(
-              Ge[idx],
-              Ee,
+              preparedRepos[idx],
+              branch,
               onDebug,
-              r,
-              !!useAnthropicGitProxy || (Tt.has(qt) && "checkout"),
-              $t,
+              signal,
+              !!useAnthropicGitProxy || (sanitizedRepos.has(canonicalPath) && "checkout"),
+              createdSha,
               undefined,
-              X[idx].gitEnvironment,
+              sources[idx].gitEnvironment,
             );
-          if (Xe.includes(Ge[idx])) continue;
-          V.push({
-            canonicalPath: qt,
-            branch: Ee,
+          if (hookCheckouts.includes(preparedRepos[idx])) continue;
+          outcomeBranches.push({
+            canonicalPath,
+            branch,
             needsDetach: !found,
             createdSha:
-              pushOutcomeOnRelease && !Le ? await revParseVerify(qt, `refs/heads/${Ee}`) : undefined,
-            source: X[idx],
+              pushOutcomeOnRelease && !skipped
+                ? await revParseVerify(canonicalPath, `refs/heads/${branch}`)
+                : undefined,
+            source: sources[idx],
           });
         }
         prepTimer.mark("runner_prep_outcome_branch_ms");
-        Cr.push(...Ge);
-      } else await Bi();
+        workspacePaths.push(...preparedRepos);
+      } else await resetToRelease();
       prepTimer.start();
-      bo();
-      ({ childCwd: gn, addDirs: tr } = chooseChildCwd(se, Ge, q.cwd, yt));
-      if (q.cwd) {
-        let inside = resolveInside(se, q.cwd);
+      fetchEarlyRemote();
+      ({ childCwd, addDirs } = chooseChildCwd(sessionDir, preparedRepos, remoteConfig.cwd, isReviewSession));
+      if (remoteConfig.cwd) {
+        let inside = resolveInside(sessionDir, remoteConfig.cwd);
         if (!(
           inside !== null &&
           (await withBoundedTimeout(
-            ensureDirsNoSymlinks(se, inside),
+            ensureDirsNoSymlinks(sessionDir, inside),
             INGRESS_TOKEN_FILE_TIMEOUT_MS,
             `[runner:stuck] mkdir ${inside} (check NFS/CSI mount health)`,
           ).catch(() => false)) &&
           (await withBoundedTimeout(
-            isRealpathInside(se, inside),
+            isRealpathInside(sessionDir, inside),
             FS_OP_TIMEOUT_MS,
             `[runner:stuck] realpath ${inside} (check NFS/CSI mount health)`,
           ).catch(() => false))
         )) {
           onDebug(
-            `[runner:session] config.cwd=${q.cwd} rejected (not under ${se}, a segment is a symlink, or fs op timed out)`,
+            `[runner:session] config.cwd=${remoteConfig.cwd} rejected (not under ${sessionDir}, a segment is a symlink, or fs op timed out)`,
           );
-          ({ childCwd: gn, addDirs: tr } = chooseChildCwd(se, Ge, undefined, yt));
+          ({ childCwd, addDirs } = chooseChildCwd(sessionDir, preparedRepos, undefined, isReviewSession));
         }
       }
-      let Qh = undefined;
-      if (tr.length > 0) onDebug(`[runner:session] cwd=${gn} + ${tr.length} --add-dir`);
-      checkSessionDirOutsideWriteScope(sessionClaudeConfigDir, "config dir", gn, tr);
-      checkSessionDirOutsideWriteScope(Gr, "stage-file root", gn, tr);
-      checkSessionDirOutsideWriteScope(pr, "diff copy root", gn, tr);
-      checkSessionDirOutsideWriteScope(Or, "gh route dir", gn, tr);
+      let unusedChildCwd = undefined;
+      if (addDirs.length > 0) onDebug(`[runner:session] cwd=${childCwd} + ${addDirs.length} --add-dir`);
+      checkSessionDirOutsideWriteScope(sessionClaudeConfigDir, "config dir", childCwd, addDirs);
+      checkSessionDirOutsideWriteScope(stageFileRoot, "stage-file root", childCwd, addDirs);
+      checkSessionDirOutsideWriteScope(diffCopyRoot, "diff copy root", childCwd, addDirs);
+      checkSessionDirOutsideWriteScope(ghRouteDir, "gh route dir", childCwd, addDirs);
       let snapshotDir =
         hostConfig?.snapshot?.storage.mode === "disk" ? hostConfig.snapshot.storage.snapshotDir : undefined;
       if (snapshotDir !== undefined)
-        checkSessionDirOutsideWriteScope(snapshotDir, "host config snapshot dir", gn, tr);
-      let Hs = [];
-      let Bs = false;
-      let Wi = false;
-      let Ki = {};
+        checkSessionDirOutsideWriteScope(snapshotDir, "host config snapshot dir", childCwd, addDirs);
+      let repoSettingEntries = [];
+      let confineFailed = false;
+      let confineScanThrew = false;
+      let repoFindings = {};
       if (confineRepoSettings !== "off") {
         try {
-          Hs = await checkRepoCommittedSettings(gn, Ge, Ki);
+          repoSettingEntries = await checkRepoCommittedSettings(childCwd, preparedRepos, repoFindings);
         } catch (error) {
           if (confineRepoSettings === "warn") {
-            let _e = error instanceof Error ? error.message : String(error);
+            let message = error instanceof Error ? error.message : String(error);
             let kind = error instanceof RepoSettingsRejectedError ? error.entry.kind : "unknown";
-            onStatus(`[runner:confine] WARN (would refuse): ${_e}`);
+            onStatus(`[runner:confine] WARN (would refuse): ${message}`);
             logFeatureBad("self_hosted_confine", "self_hosted_confine_scan_threw_warn", {
               confine_kind: fromEnum(kind),
             });
-            Bs = true;
-            Wi = true;
+            confineFailed = true;
+            confineScanThrew = true;
           } else {
             let kind = error instanceof RepoSettingsRejectedError ? error.entry.kind : "unknown";
             logFeatureBad("self_hosted_confine", "self_hosted_confine_scan_threw_enforce", {
@@ -1774,74 +1925,79 @@ async function handleSelfHostedSession(e, n, r) {
             throw error;
           }
         }
-        let M = [...tr, ...Hs.map((j) => j.path)];
-        let X = () => {
-          checkSessionDirOutsideWriteScope(sessionClaudeConfigDir, "config dir", gn, M);
-          checkSessionDirOutsideWriteScope(Gr, "stage-file root", gn, M);
-          checkSessionDirOutsideWriteScope(pr, "diff copy root", gn, M);
-          checkSessionDirOutsideWriteScope(Or, "gh route dir", gn, M);
+        let allowedRoots = [...addDirs, ...repoSettingEntries.map((entry) => entry.path)];
+        let checkRoots = () => {
+          checkSessionDirOutsideWriteScope(sessionClaudeConfigDir, "config dir", childCwd, allowedRoots);
+          checkSessionDirOutsideWriteScope(stageFileRoot, "stage-file root", childCwd, allowedRoots);
+          checkSessionDirOutsideWriteScope(diffCopyRoot, "diff copy root", childCwd, allowedRoots);
+          checkSessionDirOutsideWriteScope(ghRouteDir, "gh route dir", childCwd, allowedRoots);
           if (snapshotDir !== undefined)
-            checkSessionDirOutsideWriteScope(snapshotDir, "host config snapshot dir", gn, M);
+            checkSessionDirOutsideWriteScope(snapshotDir, "host config snapshot dir", childCwd, allowedRoots);
         };
         if (confineRepoSettings === "warn")
           try {
-            X();
+            checkRoots();
           } catch (error) {
-            let _e = error instanceof Error ? error.message : String(error);
-            onStatus(`[runner:confine] WARN (would refuse under enforce): ${_e}`);
+            let message = error instanceof Error ? error.message : String(error);
+            onStatus(`[runner:confine] WARN (would refuse under enforce): ${message}`);
             logFeatureBad("self_hosted_confine", "self_hosted_confine_overlap_warn");
-            Bs = true;
+            confineFailed = true;
           }
         else
           try {
-            X();
+            checkRoots();
           } catch (error) {
             logFeatureBad("self_hosted_confine", "self_hosted_confine_overlap_enforce");
             throw tagFailureStage(error, "SETUP_FAILURE_KIND_REPO_SETTINGS_REJECTED");
           }
       }
-      if (Hs.length > 0) {
-        let M = (Se) => Se;
-        let X = new Set();
-        let j = false;
-        for (let Se of [gn, ...tr]) {
-          X.add(M(Se));
-          X.add(M(Se.normalize("NFC")));
-          let ce = await withFsOpTimeout(
-            realpath(Se).catch((error) => {
-              j ||= !isPathAbsent(error);
+      if (repoSettingEntries.length > 0) {
+        let normalizePath = (value) => value;
+        let allowedRoots = new Set();
+        let statError = false;
+        for (let rootPath of [childCwd, ...addDirs]) {
+          allowedRoots.add(normalizePath(rootPath));
+          allowedRoots.add(normalizePath(rootPath.normalize("NFC")));
+          let realRoot = await withFsOpTimeout(
+            realpath(rootPath).catch((error) => {
+              statError ||= !isPathAbsent(error);
               return;
             }),
-            `realpath ${Se}`,
+            `realpath ${rootPath}`,
           );
-          if (ce !== undefined) {
-            X.add(M(ce));
-            X.add(M(ce.normalize("NFC")));
+          if (realRoot !== undefined) {
+            allowedRoots.add(normalizePath(realRoot));
+            allowedRoots.add(normalizePath(realRoot.normalize("NFC")));
           }
         }
-        let _e = (Se) => {
-          for (let ce of X) if (Se === ce || Se.startsWith(ce.endsWith(sep) ? ce : ce + sep)) return true;
+        let isUnderAllowedRoot = (candidatePath) => {
+          for (let allowedRoot of allowedRoots)
+            if (
+              candidatePath === allowedRoot ||
+              candidatePath.startsWith(allowedRoot.endsWith(sep) ? allowedRoot : allowedRoot + sep)
+            )
+              return true;
           return false;
         };
-        for (let Se of Hs)
-          if (!_e(M(Se.path))) {
-            let ce = new RepoSettingsRejectedError(
-              Se,
-              Se.kind === "permissions.allow (bare write-tool rule)"
-                ? `grants unbounded file-tool writes (toolAlwaysAllowedRule matches a bare ${Se.raw} rule for ANY path). defaultMode:"acceptEdits" already auto-allows in-workspace edits; drop the bare rule, or use "Edit(/**)" / "Write(/**)" for an explicit workspace-scoped rule, or move it to the operator's user-level settings.json`
+        for (let entry of repoSettingEntries)
+          if (!isUnderAllowedRoot(normalizePath(entry.path))) {
+            let rejection = new RepoSettingsRejectedError(
+              entry,
+              entry.kind === "permissions.allow (bare write-tool rule)"
+                ? `grants unbounded file-tool writes (toolAlwaysAllowedRule matches a bare ${entry.raw} rule for ANY path). defaultMode:"acceptEdits" already auto-allows in-workspace edits; drop the bare rule, or use "Edit(/**)" / "Write(/**)" for an explicit workspace-scoped rule, or move it to the operator's user-level settings.json`
                 : "resolves outside this session's own workspace",
             );
             if (confineRepoSettings === "warn") {
-              onStatus(`[runner:confine] WARN (would refuse): ${ce.message}`);
+              onStatus(`[runner:confine] WARN (would refuse): ${rejection.message}`);
               logFeatureBad("self_hosted_confine", "self_hosted_confine_violation_warn");
-              Bs = true;
+              confineFailed = true;
               continue;
             }
             logFeatureBad("self_hosted_confine", "self_hosted_confine_violation_enforce");
-            throw j ? tagFailureStage(ce, "SETUP_FAILURE_KIND_FILESYSTEM_ERROR") : ce;
+            throw statError ? tagFailureStage(rejection, "SETUP_FAILURE_KIND_FILESYSTEM_ERROR") : rejection;
           }
       }
-      if (confineRepoSettings !== "off" && !Bs) logFeatureOk("self_hosted_confine");
+      if (confineRepoSettings !== "off" && !confineFailed) logFeatureOk("self_hosted_confine");
       checkSessionDirOutsideWriteScope(
         sessionClaudeConfigDir,
         "config dir",
@@ -1850,123 +2006,145 @@ async function handleSelfHostedSession(e, n, r) {
       );
       prepTimer.mark("runner_prep_repo_settings_ms");
       if (trustWorkspace) {
-        let M = {};
-        for (let _e of new Set([gn, ...Ge, ...ye.map((Se) => Se.canonicalRepoPath)])) {
-          let Se = normalize(_e);
-          let ce = await withFsOpTimeout(
-            realpath(_e).catch(() => {
+        let projects = {};
+        for (let dirPath of new Set([
+          childCwd,
+          ...preparedRepos,
+          ...sessionWorktrees.map((worktree) => worktree.canonicalRepoPath),
+        ])) {
+          let normalized = normalize(dirPath);
+          let realPath = await withFsOpTimeout(
+            realpath(dirPath).catch(() => {
               return;
             }),
-            `realpath ${_e}`,
+            `realpath ${dirPath}`,
           );
-          for (let rt of [Se, Se.normalize("NFC"), ...(ce !== undefined ? [ce, ce.normalize("NFC")] : [])])
-            M[rt] = {
+          for (let trustKey of [
+            normalized,
+            normalized.normalize("NFC"),
+            ...(realPath !== undefined ? [realPath, realPath.normalize("NFC")] : []),
+          ])
+            projects[trustKey] = {
               hasTrustDialogAccepted: true,
             };
         }
-        let X = await jsonStringify({
-          ...(ne.kind === "agent-loop" &&
+        let settingsContent = await jsonStringify({
+          ...(hosting.kind === "agent-loop" &&
             hostConfig?.snapshot?.mcpServers && {
               mcpServers: hostConfig.snapshot.mcpServers,
             }),
-          projects: M,
+          projects,
         });
-        let j = join(sessionClaudeConfigDir, `.claude${Oo}.json`);
+        let settingsPath = join(sessionClaudeConfigDir, `.claude${configSuffix}.json`);
         await withBoundedTimeout(
-          writeSessionFileAtomically(sessionClaudeConfigDir, `.claude${Oo}.json`, X, 384),
+          writeSessionFileAtomically(
+            sessionClaudeConfigDir,
+            `.claude${configSuffix}.json`,
+            settingsContent,
+            384,
+          ),
           INGRESS_TOKEN_FILE_TIMEOUT_MS,
-          `[runner:stuck] write ${j} (check NFS/CSI mount health)`,
+          `[runner:stuck] write ${settingsPath} (check NFS/CSI mount health)`,
         ).catch((error) => {
           if (isHostConfigSnapshotError(error)) onStatus(`[runner:error] ${error.message}`);
           throw error;
         });
-        onDebug(`[runner:session] Seeded persisted trust for ${Object.keys(M).length} path(s) in ${j}`);
+        onDebug(
+          `[runner:session] Seeded persisted trust for ${Object.keys(projects).length} path(s) in ${settingsPath}`,
+        );
       }
-      let Yi = EMPTY_MCP_CONFIG_JSON;
-      if (q.mcp_config?.content) {
-        let str = Buffer.from(q.mcp_config.content, "base64").toString("utf-8");
-        P = join(sessionClaudeConfigDir, "mcp-config.json");
-        await withFsOpTimeout(unlink(P), `unlink ${P}`).catch(() => {});
+      let mcpConfigContent = EMPTY_MCP_CONFIG_JSON;
+      if (remoteConfig.mcp_config?.content) {
+        let str = Buffer.from(remoteConfig.mcp_config.content, "base64").toString("utf-8");
+        mcpConfigPath = join(sessionClaudeConfigDir, "mcp-config.json");
+        await withFsOpTimeout(unlink(mcpConfigPath), `unlink ${mcpConfigPath}`).catch(() => {});
         await withFsOpTimeout(
-          writeFile(P, str, {
+          writeFile(mcpConfigPath, str, {
             flag: "wx",
             mode: 384,
           }),
-          `writeFile ${P}`,
+          `writeFile ${mcpConfigPath}`,
         );
-        onDebug(`[runner:session] Wrote MCP config to ${P} (${str.length} bytes)`);
-        Yi = str;
+        onDebug(`[runner:session] Wrote MCP config to ${mcpConfigPath} (${str.length} bytes)`);
+        mcpConfigContent = str;
       }
-      let Vi = join(sessionClaudeConfigDir, MCP_CONFIG_DELIVERED_JSON);
-      be.push(Vi);
-      let ji = {
+      let deliveredMcpPath = join(sessionClaudeConfigDir, MCP_CONFIG_DELIVERED_JSON);
+      stagedPaths.push(deliveredMcpPath);
+      let writeState = {
         cancelled: false,
       };
       await withBoundedTimeout(
-        writeSessionFileAtomically(sessionClaudeConfigDir, MCP_CONFIG_DELIVERED_JSON, Yi, 384, ji),
+        writeSessionFileAtomically(
+          sessionClaudeConfigDir,
+          MCP_CONFIG_DELIVERED_JSON,
+          mcpConfigContent,
+          384,
+          writeState,
+        ),
         INGRESS_TOKEN_FILE_TIMEOUT_MS,
-        `[runner:stuck] write ${Vi} (check NFS/CSI mount health)`,
+        `[runner:stuck] write ${deliveredMcpPath} (check NFS/CSI mount health)`,
       ).catch((error) => {
-        ji.cancelled = true;
+        writeState.cancelled = true;
         if (isHostConfigSnapshotError(error)) onStatus(`[runner:error] ${error.message}`);
         throw error;
       });
       prepTimer.mark("runner_prep_config_seed_ms");
       onDebug(
-        isCcrAutoModeApplySet(q)
-          ? `[runner:session] ${e}: the server asked this runner to apply the auto mode lists it sends (${CCR_AUTO_MODE_APPLY}=1 in /remote)`
-          : `[runner:session] ${e}: the server did not ask this runner to apply the auto mode lists it sends (no ${CCR_AUTO_MODE_APPLY}=1 in /remote), so none is read; nothing on this runner needs changing`,
+        isCcrAutoModeApplySet(remoteConfig)
+          ? `[runner:session] ${sessionId}: the server asked this runner to apply the auto mode lists it sends (${CCR_AUTO_MODE_APPLY}=1 in /remote)`
+          : `[runner:session] ${sessionId}: the server did not ask this runner to apply the auto mode lists it sends (no ${CCR_AUTO_MODE_APPLY}=1 in /remote), so none is read; nothing on this runner needs changing`,
       );
-      let os = applyAutoModePreset(autoModeConfigHandler(q), serverAutoModeLists);
-      let zi = serverAutoModeLists === NO_ALLOW;
-      let allowWithheldBySetting = os.withheld.includes("allow");
-      if (os.withheld.length > 0) {
-        let mapped = os.withheld.map((j) => `autoMode.${j}`);
-        let X =
+      let presetResult = applyAutoModePreset(autoModeConfigHandler(remoteConfig), serverAutoModeLists);
+      let isNoAllow = serverAutoModeLists === NO_ALLOW;
+      let allowWithheldBySetting = presetResult.withheld.includes("allow");
+      if (presetResult.withheld.length > 0) {
+        let mapped = presetResult.withheld.map((listName) => `autoMode.${listName}`);
+        let listLabel =
           mapped.length > 1
             ? `${mapped.slice(0, -1).join(", ")} and ${mapped.at(-1)} lists`
             : `${mapped[0]} list`;
-        if (zi)
+        if (isNoAllow)
           onDebug(
-            `[runner:session] ${e}: not applying the server's ${X} for this session (--server-auto-mode-lists is ${serverAutoModeLists}, the default; set it to all to apply allow)`,
+            `[runner:session] ${sessionId}: not applying the server's ${listLabel} for this session (--server-auto-mode-lists is ${serverAutoModeLists}, the default; set it to all to apply allow)`,
           );
         else
           onStatus(
-            `[runner:session] ${e}: not applying the server's ${X} for this session, because this runner is set to --server-auto-mode-lists ${serverAutoModeLists}`,
+            `[runner:session] ${sessionId}: not applying the server's ${listLabel} for this session, because this runner is set to --server-auto-mode-lists ${serverAutoModeLists}`,
           );
       }
-      let serverAutoModeRules = readServerAutoModeRules(os.carried);
-      for (let statusLine of serverAutoModeRules.statusLines) onStatus(`[runner:warn] ${e}: ${statusLine}`);
-      let is = false;
-      if (q.launcher_hooks !== undefined || serverAutoModeRules.autoMode !== undefined) {
-        let M = await writeLauncherSettings(
+      let serverAutoModeRules = readServerAutoModeRules(presetResult.carried);
+      for (let statusLine of serverAutoModeRules.statusLines)
+        onStatus(`[runner:warn] ${sessionId}: ${statusLine}`);
+      let autoModeWritten = false;
+      if (remoteConfig.launcher_hooks !== undefined || serverAutoModeRules.autoMode !== undefined) {
+        let launcherResult = await writeLauncherSettings(
           sessionClaudeConfigDir,
           {
-            hooks: q.launcher_hooks === undefined ? [] : q.launcher_hooks,
+            hooks: remoteConfig.launcher_hooks === undefined ? [] : remoteConfig.launcher_hooks,
             autoMode: serverAutoModeRules.autoMode,
           },
-          re,
+          launcherStagedPaths,
           onDebug,
           onStatus,
         );
-        if (M) {
-          Z = M.settingsPath;
-          is = M.autoModeWritten;
+        if (launcherResult) {
+          launcherSettingsPath = launcherResult.settingsPath;
+          autoModeWritten = launcherResult.autoModeWritten;
         }
         if (
-          yt &&
-          q.launcher_hooks !== undefined &&
-          !(Array.isArray(q.launcher_hooks) && q.launcher_hooks.length === 0) &&
-          M?.hooksRegistered !== true
+          isReviewSession &&
+          remoteConfig.launcher_hooks !== undefined &&
+          !(Array.isArray(remoteConfig.launcher_hooks) && remoteConfig.launcher_hooks.length === 0) &&
+          launcherResult?.hooksRegistered !== true
         ) {
           logFeatureBad("self_hosted_review_session", "launcher_hooks");
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `Session ${e} is a code review and is not started: the launcher hooks that the service sent for it could not be set up, and a code review does not go on without them. The [runner:session] line before this one says why.`,
+            `Session ${sessionId} is a code review and is not started: the launcher hooks that the service sent for it could not be set up, and a code review does not go on without them. The [runner:session] line before this one says why.`,
             "a code review is not started without the hooks that the service sent for it",
           );
         }
-        if (M?.hooksRegistered)
-          if (Ki.repoDisablesAllHooks && !yt) {
+        if (launcherResult?.hooksRegistered)
+          if (repoFindings.repoDisablesAllHooks && !isReviewSession) {
             onStatus(
               "[runner:session] launcher_hooks materialized, but a repo .claude/settings.json or settings.local.json carries disableAllHooks:true \u2014 the child will drop every flagSettings hook (CCR-supplied Stop reply-gate included)",
             );
@@ -1974,45 +2152,45 @@ async function handleSelfHostedSession(e, n, r) {
               "self_hosted_launcher_hooks",
               "self_hosted_launcher_hooks_disabled_by_repo_disableAllHooks",
             );
-          } else if (Wi)
+          } else if (confineScanThrew)
             logFeatureSad("self_hosted_launcher_hooks", "self_hosted_launcher_hooks_confine_scan_aborted");
           else logFeatureOk("self_hosted_launcher_hooks");
       }
-      let ks = {
+      let refusedCounts = {
         ...serverAutoModeRules.refusedCounts,
         allow_withheld_by_setting: allowWithheldBySetting,
       };
-      if (!is && serverAutoModeRules.autoMode !== undefined)
-        logFeatureBad("self_hosted_auto_mode_lists", "settings_too_large", ks);
+      if (!autoModeWritten && serverAutoModeRules.autoMode !== undefined)
+        logFeatureBad("self_hosted_auto_mode_lists", "settings_too_large", refusedCounts);
       else if (serverAutoModeRules.grantsWithheld) {
-        if (is) logFeatureSad("self_hosted_auto_mode_lists", "grants_withheld", ks);
-        else logFeatureBad("self_hosted_auto_mode_lists", "grants_withheld", ks);
+        if (autoModeWritten) logFeatureSad("self_hosted_auto_mode_lists", "grants_withheld", refusedCounts);
+        else logFeatureBad("self_hosted_auto_mode_lists", "grants_withheld", refusedCounts);
       } else if (serverAutoModeRules.statusLines.length > 0) {
-        if (is) logFeatureSad("self_hosted_auto_mode_lists", "list_ignored", ks);
-        else logFeatureBad("self_hosted_auto_mode_lists", "all_lists_ignored", ks);
-      } else if (os.withheld.length > 0 && !zi)
+        if (autoModeWritten) logFeatureSad("self_hosted_auto_mode_lists", "list_ignored", refusedCounts);
+        else logFeatureBad("self_hosted_auto_mode_lists", "all_lists_ignored", refusedCounts);
+      } else if (presetResult.withheld.length > 0 && !isNoAllow)
         logFeatureSad("self_hosted_auto_mode_lists", "operator_withheld", {
           allow_withheld_by_setting: allowWithheldBySetting,
         });
-      else if (os.withheld.length > 0 || is)
+      else if (presetResult.withheld.length > 0 || autoModeWritten)
         logFeatureOk("self_hosted_auto_mode_lists", {
           allow_withheld_by_setting: allowWithheldBySetting,
-          lists_written: is,
+          lists_written: autoModeWritten,
         });
-      if (r.aborted) {
-        onDebug(`[runner:session] Aborted after git prep for ${e} \u2014 bailing before spawn`);
+      if (signal.aborted) {
+        onDebug(`[runner:session] Aborted after git prep for ${sessionId} \u2014 bailing before spawn`);
         return {
           result: "abandoned",
         };
       }
-      let Ts;
-      let as = new Map();
-      let Xi = new Map();
-      let ys = false;
-      let qi =
+      let writeStdin;
+      let pendingAcks = new Map();
+      let tokenAckWaiters = new Map();
+      let sessionGoneSent = false;
+      let endSessionMessage =
         jsonStringify({
           type: "control_request",
-          request_id: `runner-session-gone-${e}`,
+          request_id: `runner-session-gone-${sessionId}`,
           request: {
             subtype: "end_session",
             reason: "session_not_found",
@@ -2020,411 +2198,445 @@ async function handleSelfHostedSession(e, n, r) {
         }) +
         `
 `;
-      let Ws = (error, X) => {
+      let handleSessionGone = (error, source) => {
         if (!isNotFoundOrInactive(error)) return false;
-        if (ys) return true;
-        ys = true;
+        if (sessionGoneSent) return true;
+        sessionGoneSent = true;
         onStatus(
-          `[runner:session] ${e} ${X} says session gone server-side \u2014 sending end_session to child`,
+          `[runner:session] ${sessionId} ${source} says session gone server-side \u2014 sending end_session to child`,
         );
-        Ts?.(qi);
+        writeStdin?.(endSessionMessage);
         return true;
       };
-      let Ks = async (M, X) => {
-        let governedGit = M.governed_git;
-        await Zt?.reconcile(governedGit, X);
-        if (fn !== undefined && x?.directUpstreams !== undefined) {
-          let _e = governedGit === undefined || governedGit.git_mount_push_base_url !== undefined;
-          let Se = governedGit === undefined ? undefined : Dn(M.sources, x.mountBaseUrl, x.directUpstreams);
+      let reconcileRemote = async (config, token) => {
+        let governedGit_2 = config.governed_git;
+        await pushUrlReconciler?.reconcile(governedGit_2, token);
+        if (sessionGitRules !== undefined && governedGit?.directUpstreams !== undefined) {
+          let keepPushWiring =
+            governedGit_2 === undefined || governedGit_2.git_mount_push_base_url !== undefined;
+          let fetchLines =
+            governedGit_2 === undefined
+              ? undefined
+              : splitSourcesByMount(config.sources, governedGit.mountBaseUrl, governedGit.directUpstreams);
           await withFsOpTimeout(
-            fn.reconcile({
-              ...(_e && {
+            sessionGitRules.reconcile({
+              ...(keepPushWiring && {
                 push: {
-                  baseUrl: isLoopbackUrl(governedGit?.git_mount_push_base_url, onDebug),
+                  baseUrl: isLoopbackUrl(governedGit_2?.git_mount_push_base_url, onDebug),
                 },
               }),
-              ...(Se !== undefined && {
-                fetchLines: Se,
+              ...(fetchLines !== undefined && {
+                fetchLines,
               }),
-              presentedToken: X,
+              presentedToken: token,
             }),
             "session git rules rewrite",
           ).catch((error) => {
             onDebug(`[runner:session] session git rules: ${errorMessage(error)} (ignored)`);
           });
         }
-        if (governedGit !== undefined && governedGit.rest_mount_base_url === undefined) return;
-        await Je?.reconcile(
-          isLoopbackUrl(governedGit?.rest_mount_base_url, onDebug, BAD_REST_MOUNT_WARNING),
-          X,
+        if (governedGit_2 !== undefined && governedGit_2.rest_mount_base_url === undefined) return;
+        await ghRoute?.reconcile(
+          isLoopbackUrl(governedGit_2?.rest_mount_base_url, onDebug, BAD_REST_MOUNT_WARNING),
+          token,
         );
       };
-      let Bu = async (M, X) => {
-        de.current = M;
-        let j = X === undefined ? null : decodeSessionJwt(X);
-        let _e = governedPushRepresentRetryMs * GOVERNED_REPRESENT_RETRY_STEPS;
+      let representToken = async (token, tokenExpiry) => {
+        tokenRef.current = token;
+        let expiryEpoch = tokenExpiry === undefined ? null : decodeSessionJwt(tokenExpiry);
+        let maxBudgetMs = governedPushRepresentRetryMs * GOVERNED_REPRESENT_RETRY_STEPS;
         let deadlineMs =
-          j === null
-            ? _e
-            : Math.max(0, Math.min(_e, j * 1000 - Date.now() - GOVERNED_REPRESENT_RETRY_SLACK_MS));
-        let ce = await retryGitOperation({
+          expiryEpoch === null
+            ? maxBudgetMs
+            : Math.max(
+                0,
+                Math.min(maxBudgetMs, expiryEpoch * 1000 - Date.now() - GOVERNED_REPRESENT_RETRY_SLACK_MS),
+              );
+        let representOutcome = await retryGitOperation({
           represent: () =>
-            de.current === M ? Qt(e, M, Dt) : Promise.reject(Error("a newer session token is in use")),
-          isTransient: (zt) => de.current === M && isRetryableRunnerError(zt),
+            tokenRef.current === token
+              ? getRemoteConfig(sessionId, token, childSignal)
+              : Promise.reject(Error("a newer session token is in use")),
+          isTransient: (error) => tokenRef.current === token && isRetryableRunnerError(error),
           retryDelayMs: governedPushRepresentRetryMs,
           deadlineMs,
-          signal: Dt,
+          signal: childSignal,
           onDebug,
         });
-        if (Dt.aborted) return;
-        if (de.current !== M) return;
-        if (ce.outcome === "presented") {
-          hn?.cancel();
-          hn = undefined;
-          await Ks(ce.config, M);
+        if (childSignal.aborted) return;
+        if (tokenRef.current !== token) return;
+        if (representOutcome.outcome === "presented") {
+          representRetrySender?.cancel();
+          representRetrySender = undefined;
+          await reconcileRemote(representOutcome.config, token);
           return;
         }
-        if (ce.reason === "permanent" && Ws(ce.error, "/remote (token re-present)")) return;
+        if (
+          representOutcome.reason === "permanent" &&
+          handleSessionGone(representOutcome.error, "/remote (token re-present)")
+        )
+          return;
         onStatus(
-          `[runner:warn] governed git: could not re-present the refreshed session token on /remote for ${e} (${ce.reason === "budget" ? "still failing when the retry budget ran out" : "the request was refused"}); the child gets the token anyway. Session traffic through CCR's mounts (git pushes and fetches, gh writes) may be refused (git_token_mismatch) until a /remote call with this token succeeds` +
-            (ce.reason === "budget" ? " \u2014 retrying in the background." : "."),
+          `[runner:warn] governed git: could not re-present the refreshed session token on /remote for ${sessionId} (${representOutcome.reason === "budget" ? "still failing when the retry budget ran out" : "the request was refused"}); the child gets the token anyway. Session traffic through CCR's mounts (git pushes and fetches, gh writes) may be refused (git_token_mismatch) until a /remote call with this token succeeds` +
+            (representOutcome.reason === "budget" ? " \u2014 retrying in the background." : "."),
         );
-        if (Zt !== undefined) logFeatureSad("self_hosted_governed_push_url", "represent_failed");
-        if (Nt.length > 0) logFeatureSad("self_hosted_governed_mount_read", "represent_failed");
-        if (Je !== undefined) logFeatureSad("self_hosted_governed_gh_route", "represent_failed");
-        if (fn !== undefined) logFeatureSad("self_hosted_session_git_rules", "represent_failed");
-        hn?.cancel();
-        hn = undefined;
-        if (ce.reason !== "budget") return;
-        let rt = undefined;
-        let tn = () => {
-          rt?.cancel();
-          if (hn === rt) hn = undefined;
+        if (pushUrlReconciler !== undefined)
+          logFeatureSad("self_hosted_governed_push_url", "represent_failed");
+        if (mountReadWiring.length > 0) logFeatureSad("self_hosted_governed_mount_read", "represent_failed");
+        if (ghRoute !== undefined) logFeatureSad("self_hosted_governed_gh_route", "represent_failed");
+        if (sessionGitRules !== undefined) logFeatureSad("self_hosted_session_git_rules", "represent_failed");
+        representRetrySender?.cancel();
+        representRetrySender = undefined;
+        if (representOutcome.reason !== "budget") return;
+        let retrySender = undefined;
+        let stopRetrySender = () => {
+          retrySender?.cancel();
+          if (representRetrySender === retrySender) representRetrySender = undefined;
         };
-        rt = createDebouncedSender({
+        retrySender = createDebouncedSender({
           intervalMs: governedPushRepresentRetryMs * 4,
           errorRetryMs: governedPushRepresentRetryMs * 4,
-          signal: Dt,
+          signal: childSignal,
           refresh: async () => {
-            let zt = de.current;
-            let ds = await Qt(e, zt, Dt);
-            if (Dt.aborted) return;
-            if (zt === de.current) {
-              tn();
+            let token = tokenRef.current;
+            let config = await getRemoteConfig(sessionId, token, childSignal);
+            if (childSignal.aborted) return;
+            if (token === tokenRef.current) {
+              stopRetrySender();
               onStatus(
-                `[runner:session] governed git: refreshed session token re-presented on /remote for ${e}`,
+                `[runner:session] governed git: refreshed session token re-presented on /remote for ${sessionId}`,
               );
-              await Ks(ds, zt);
+              await reconcileRemote(config, token);
             }
             return;
           },
-          onError: (zt) => {
-            if (Dt.aborted) return;
-            if (Ws(zt, "/remote (token re-present)")) {
-              tn();
+          onError: (error) => {
+            if (childSignal.aborted) return;
+            if (handleSessionGone(error, "/remote (token re-present)")) {
+              stopRetrySender();
               return;
             }
-            if (!isRetryableRunnerError(zt)) {
-              tn();
+            if (!isRetryableRunnerError(error)) {
+              stopRetrySender();
               onStatus(
-                `[runner:warn] governed git: background re-present of the session token for ${e} refused: ${errorMessage(zt)}; giving up until the next scheduled /remote read`,
+                `[runner:warn] governed git: background re-present of the session token for ${sessionId} refused: ${errorMessage(error)}; giving up until the next scheduled /remote read`,
               );
               return;
             }
             onDebug(
-              `[runner:session] governed git: background /remote re-present failed: ${errorMessage(zt)}; retrying`,
+              `[runner:session] governed git: background /remote re-present failed: ${errorMessage(error)}; retrying`,
             );
           },
         });
-        hn = rt;
+        representRetrySender = retrySender;
       };
-      let Wu = (M) => {
-        Me(M);
-        Yt.previous = Yt.current;
-        Yt.current = M;
-        qn(M);
+      let onTokenRefreshed = (token) => {
+        setSessionToken(token);
+        tokenHistory.previous = tokenHistory.current;
+        tokenHistory.current = token;
+        recordHeldToken(token);
         warnTokenUpdateNotAcked({
-          pendingAcks: as,
-          sessionId: e,
+          pendingAcks,
+          sessionId,
           onStatus,
         });
         deliverRefreshedToken({
-          write: Ts,
+          write: writeStdin,
           envVar: "CLAUDE_CODE_SESSION_ACCESS_TOKEN",
-          token: M,
-          sessionId: e,
+          token,
+          sessionId,
           label: "session_token",
           onStatus,
-          pendingAcks: as,
+          pendingAcks,
         });
       };
       let jwtExpiry = getJwtExpiry({
         getAccessToken: async () => {
-          let M = de.current;
-          let X;
+          let token = tokenRef.current;
+          let newToken;
           try {
-            ({ token: X } = await apiClient.refreshToken(M));
+            ({ token: newToken } = await apiClient.refreshToken(token));
           } catch (error) {
-            if (Ws(error, "refreshToken")) jwtExpiry.cancel(e);
+            if (handleSessionGone(error, "refreshToken")) jwtExpiry.cancel(sessionId);
             throw error;
           }
-          if (de.current !== M) return;
-          if (Zt !== undefined || Nt.length > 0 || Je !== undefined || fn !== undefined) {
-            await Bu(X, M);
-            if (de.current !== X) return;
+          if (tokenRef.current !== token) return;
+          if (
+            pushUrlReconciler !== undefined ||
+            mountReadWiring.length > 0 ||
+            ghRoute !== undefined ||
+            sessionGitRules !== undefined
+          ) {
+            await representToken(newToken, token);
+            if (tokenRef.current !== newToken) return;
           }
-          return X;
+          return newToken;
         },
-        onRefresh: (M, X) => Wu(X),
+        onRefresh: (refreshError, refreshedToken) => onTokenRefreshed(refreshedToken),
         label: "self-hosted-runner-session",
       });
-      if (Q === undefined) jwtExpiry.schedule(e, de.current);
-      let sn;
-      let Ji;
+      if (toolServerHosting === undefined) jwtExpiry.schedule(sessionId, tokenRef.current);
+      let childResult;
+      let lifecycleStatus;
       try {
         prepTimer.lap();
-        let M = await bo();
-        if (Wt && pn !== undefined) throw pn;
-        let X = M === undefined ? undefined : Math.round(performance.now() - M.armedAt);
-        let j;
-        let _e;
-        if (M !== undefined && X !== undefined && X <= POST_HOOK_TIMEOUT_MS) {
-          j = M.config;
-          _e = M.presentedToken;
+        let earlyRemote = await fetchEarlyRemote();
+        if (serializeEventPosts && eventPostError !== undefined) throw eventPostError;
+        let earlyRemoteAgeMs =
+          earlyRemote === undefined ? undefined : Math.round(performance.now() - earlyRemote.armedAt);
+        let refetchedConfig;
+        let presentedToken;
+        if (
+          earlyRemote !== undefined &&
+          earlyRemoteAgeMs !== undefined &&
+          earlyRemoteAgeMs <= POST_HOOK_TIMEOUT_MS
+        ) {
+          refetchedConfig = earlyRemote.config;
+          presentedToken = earlyRemote.presentedToken;
         } else {
-          if (X !== undefined)
+          if (earlyRemoteAgeMs !== undefined)
             onDebug(
-              `[runner:session] early /remote result is ${X}ms old (> ${POST_HOOK_TIMEOUT_MS}ms) \u2014 re-fetching for a fresh inference token`,
+              `[runner:session] early /remote result is ${earlyRemoteAgeMs}ms old (> ${POST_HOOK_TIMEOUT_MS}ms) \u2014 re-fetching for a fresh inference token`,
             );
-          j = await retryWithBackoff(
+          refetchedConfig = await retryWithBackoff(
             () => {
-              _e = de.current;
-              return Qt(e, _e, r);
+              presentedToken = tokenRef.current;
+              return getRemoteConfig(sessionId, presentedToken, signal);
             },
             {
               initialDelayMs: 1000,
               maxDelayMs: 30000,
-              signal: r,
-              ...(Wt && {
-                shouldRetry: () => pn === undefined,
+              signal,
+              ...(serializeEventPosts && {
+                shouldRetry: () => eventPostError === undefined,
               }),
-              onRetry: (Et, bn) => {
-                onDebug(`[runner:session] /remote re-fetch attempt ${Et} failed: ${bn}. Retrying.`);
+              onRetry: (attempt, error) => {
+                onDebug(`[runner:session] /remote re-fetch attempt ${attempt} failed: ${error}. Retrying.`);
               },
             },
           );
         }
-        if (j) {
-          if (isReviewOriginSession(j) !== yt) {
+        if (refetchedConfig) {
+          if (isReviewOriginSession(refetchedConfig) !== isReviewSession) {
             logFeatureBad("self_hosted_review_session", "marker_changed");
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `Session ${e}: two /remote responses disagree on whether it is a code review (a server-side fault: nothing on this runner needs changing)`,
+              `Session ${sessionId}: two /remote responses disagree on whether it is a code review (a server-side fault: nothing on this runner needs changing)`,
               "two /remote responses disagree on whether the session is a code review",
             );
           }
-          q = j;
-          let Et = agentProxyStandaloneRefusal({
-            sessionId: e,
-            serverEnv: q.environment_variables,
+          remoteConfig = refetchedConfig;
+          let proxyRefusal = agentProxyStandaloneRefusal({
+            sessionId,
+            serverEnv: remoteConfig.environment_variables,
             runnerProxyUrl: env.SELF_HOSTED_RUNNER_AGENT_PROXY_URL,
             runnerProxySetting: RUNNER_AGENT_PROXY_URL_SETTING,
-            governedGit: x?.toolConfig.gitConfig === true || x?.toolConfig.ghPathShim === true ? "on" : "off",
+            governedGit:
+              governedGit?.toolConfig.gitConfig === true || governedGit?.toolConfig.ghPathShim === true
+                ? "on"
+                : "off",
             egressListener: isEgressProxyActive() !== undefined,
-            gitConfigArmed: x?.toolConfig.gitConfig === true,
+            gitConfigArmed: governedGit?.toolConfig.gitConfig === true,
           });
-          if (Et) {
-            onStatus(`[runner:error] ${Et.message}`);
-            nn = true;
-            throw Et;
+          if (proxyRefusal) {
+            onStatus(`[runner:error] ${proxyRefusal.message}`);
+            agentProxyRefused = true;
+            throw proxyRefusal;
           }
           onDebug(
-            `[runner:session] Re-fetched /remote for fresh inference token (expires_in=${q.inference_auth?.expires_in_seconds}s)`,
+            `[runner:session] Re-fetched /remote for fresh inference token (expires_in=${remoteConfig.inference_auth?.expires_in_seconds}s)`,
           );
-          await Ks(q, _e);
+          await reconcileRemote(remoteConfig, presentedToken);
         } else
           onDebug(
             "[runner:session] /remote re-fetch failed after retries \u2014 using stale step-2 token. Interval refresher will converge.",
           );
         prepTimer.mark("runner_prep_remote_refetch_ms");
-        let Se = [];
+        let stagedArgs = [];
         let subagentPromptInline = Object.hasOwn(
           await writeSystemPromptFile({
-            args: Se,
-            claudeCodeArgs: q.claude_code_args,
+            args: stagedArgs,
+            claudeCodeArgs: remoteConfig.claude_code_args,
             configDir: sessionClaudeConfigDir,
-            stagedPaths: be,
+            stagedPaths,
             childIsOwnBinary,
             onDebug,
           }),
           APPEND_SUBAGENT_SYSTEM_PROMPT,
         );
         await writeSessionAgentsFile({
-          args: Se,
-          agentFiles: q.agent_files ?? [],
-          serverAgentsArg: q.claude_code_args.agents,
+          args: stagedArgs,
+          agentFiles: remoteConfig.agent_files ?? [],
+          serverAgentsArg: remoteConfig.claude_code_args.agents,
           configDir: sessionClaudeConfigDir,
-          stagedPaths: be,
+          stagedPaths,
           onDebug,
         });
-        if (debugTokenDir && q.inference_auth?.access_token)
-          writeBestEffort(debugTokenDir, `inference_token_${e}.txt`, q.inference_auth.access_token, onStatus);
-        let rt = undefined;
+        if (debugTokenDir && remoteConfig.inference_auth?.access_token)
+          writeBestEffort(
+            debugTokenDir,
+            `inference_token_${sessionId}.txt`,
+            remoteConfig.inference_auth.access_token,
+            onStatus,
+          );
+        let inferenceRefresher = undefined;
         let debouncedSender = createDebouncedSender({
-          intervalMs: tokenRefreshIntervalMs(q.inference_auth?.expires_in_seconds),
-          ttlMs: ttlMsFromSeconds(q.inference_auth?.expires_in_seconds),
+          intervalMs: tokenRefreshIntervalMs(remoteConfig.inference_auth?.expires_in_seconds),
+          ttlMs: ttlMsFromSeconds(remoteConfig.inference_auth?.expires_in_seconds),
           ...TOKEN_REFRESH_TIMING,
           isTransient: isTransientRunnerError,
           refresh: async () => {
-            if (Q !== undefined) return;
-            let Et = de.current;
-            let bn = rt?.onRemoteCallStarted();
-            let b = await Qt(e, Et, r, {
+            if (toolServerHosting !== undefined) return;
+            let token = tokenRef.current;
+            let finishRemoteCall = inferenceRefresher?.onRemoteCallStarted();
+            let config = await getRemoteConfig(sessionId, token, signal, {
               timeoutMs: SESSION_POLL_MS,
             });
-            bn?.();
-            await Ks(b, Et);
-            let accessToken = b.inference_auth?.access_token;
+            finishRemoteCall?.();
+            await reconcileRemote(config, token);
+            let accessToken = config.inference_auth?.access_token;
             if (!accessToken) throw new RemoteConfigWithoutInferenceAuthError();
             warnTokenUpdateNotAcked({
-              pendingAcks: as,
-              sessionId: e,
+              pendingAcks,
+              sessionId,
               onStatus,
             });
             deliverRefreshedToken({
-              write: Ts,
+              write: writeStdin,
               envVar: "CLAUDE_CODE_OAUTH_TOKEN",
               token: accessToken,
-              sessionId: e,
+              sessionId,
               label: "inference_token",
               onStatus,
-              expiresInSeconds: b.inference_auth?.expires_in_seconds,
-              pendingAcks: as,
+              expiresInSeconds: config.inference_auth?.expires_in_seconds,
+              pendingAcks,
             });
-            let expiresInSeconds = b.inference_auth?.expires_in_seconds;
+            let expiresInSeconds = config.inference_auth?.expires_in_seconds;
             return {
               intervalMs: tokenRefreshIntervalMs(expiresInSeconds),
               ttlMs: ttlMsFromSeconds(expiresInSeconds),
-              nextInMs: rt?.takeFollowUpInMs(),
+              nextInMs: inferenceRefresher?.takeFollowUpInMs(),
             };
           },
-          onError: (Et, bn) => {
-            if (Ws(Et, "/remote")) {
+          onError: (error, details) => {
+            if (handleSessionGone(error, "/remote")) {
               debouncedSender.cancel();
               return;
             }
-            let b =
-              bn.delayMs >= 120000
-                ? `${Math.round(bn.delayMs / 60000)}m`
-                : `${Math.round(bn.delayMs / 1000)}s`;
-            let le = bn.transient
-              ? `Retrying shortly (in ${b})`
-              : `Not retrying early (${Et instanceof RemoteConfigWithoutInferenceAuthError ? "CCR answered without an inference token" : `HTTP ${getHttpStatus(Et) ?? "none"}: the request or the session, not the network, is the problem`}); next scheduled attempt in ${b}`;
-            let Ee = bn.expired
+            let delayLabel =
+              details.delayMs >= 120000
+                ? `${Math.round(details.delayMs / 60000)}m`
+                : `${Math.round(details.delayMs / 1000)}s`;
+            let retryNote = details.transient
+              ? `Retrying shortly (in ${delayLabel})`
+              : `Not retrying early (${error instanceof RemoteConfigWithoutInferenceAuthError ? "CCR answered without an inference token" : `HTTP ${getHttpStatus(error) ?? "none"}: the request or the session, not the network, is the problem`}); next scheduled attempt in ${delayLabel}`;
+            let expiryNote = details.expired
               ? " The child's current token has expired or is within a minute of expiring; its turns will fail until a refresh succeeds."
               : "";
-            onStatus(`[runner:session] inference_token refresh failed for ${e}: ${Et}. ${le}.${Ee}`);
+            onStatus(
+              `[runner:session] inference_token refresh failed for ${sessionId}: ${error}. ${retryNote}.${expiryNote}`,
+            );
           },
-          signal: r,
+          signal,
         });
-        let zt;
-        let ds = (
-          Et,
-          { force: bn } = {
+        let retryAbort;
+        let refreshInferenceToken = (
+          reason,
+          { force } = {
             force: false,
           },
         ) => {
-          let b = debouncedSender.refreshNow({
-            force: bn,
+          let outcome = debouncedSender.refreshNow({
+            force,
           });
-          if (b === "fired") {
+          if (outcome === "fired") {
             onStatus(
-              `[runner:session] ${Et} for ${e} \u2014 requesting a fresh inference_token from CCR now`,
+              `[runner:session] ${reason} for ${sessionId} \u2014 requesting a fresh inference_token from CCR now`,
             );
-            return b;
+            return outcome;
           }
           onDebug(
-            `[runner:session] ${Et} for ${e} \u2014 ${b === "in_flight" ? "an inference_token refresh is already in progress" : b === "debounced" ? `an inference_token refresh started under ${TOKEN_REFRESH_TIMING.minRefreshGapMs / 1000}s ago; not starting another` : "the session is ending; not refreshing"}`,
+            `[runner:session] ${reason} for ${sessionId} \u2014 ${outcome === "in_flight" ? "an inference_token refresh is already in progress" : outcome === "debounced" ? `an inference_token refresh started under ${TOKEN_REFRESH_TIMING.minRefreshGapMs / 1000}s ago; not starting another` : "the session is ending; not refreshing"}`,
           );
-          return b;
+          return outcome;
         };
-        let Ku = await withBoundedTimeout(
-          lt ?? Promise.resolve(undefined),
+        let probeResult = await withBoundedTimeout(
+          startupProbe ?? Promise.resolve(undefined),
           CHECKOUT_DISPLAY_LIMIT,
           "startup probe",
         ).catch(() => {
           return;
         });
-        let js = false;
-        let zs;
-        let Xs;
-        let bs;
-        let Zi;
-        let No = undefined;
-        let Os;
+        let inPrivateCheckout = false;
+        let guestVitals;
+        let stopChildUpdate;
+        let unusedCleanupA;
+        let unusedCleanupB;
+        let unusedChildHandle = undefined;
+        let unusedChildStopper;
         try {
-          await vs();
-          await Wr("start_cc", "started", "Starting Claude Code");
-          if (Wt) await rs();
-          await vs();
-          r.throwIfAborted();
-          Kn?.cancel();
-          Br();
-          Lt = true;
+          await awaitTokenWrites();
+          await postStep("start_cc", "started", "Starting Claude Code");
+          if (serializeEventPosts) await flushEventPosts();
+          await awaitTokenWrites();
+          signal.throwIfAborted();
+          prepHeartbeat?.cancel();
+          abortTokenWait();
+          childStarted = true;
           let runnerStartupTiming = undefined;
-          zs =
-            ne.kind === "agent-loop" && ke !== undefined
+          guestVitals =
+            hosting.kind === "agent-loop" && ingressTokenFile !== undefined
               ? startGuestVitals({
-                  sessionId: e,
-                  apiBaseUrl: new URL(isLocalhostUrl(q.api_base_url, e).sdkUrl).origin,
-                  tokenFilePath: ke,
+                  sessionId,
+                  apiBaseUrl: new URL(isLocalhostUrl(remoteConfig.api_base_url, sessionId).sdkUrl).origin,
+                  tokenFilePath: ingressTokenFile,
                   binaryResolution: "pinned",
                   log: onDebug,
                 })
               : undefined;
-          Yt.current = de.current;
-          qn(Yt.current);
-          let bn;
-          spawnedSessionIds?.add(e);
-          if (yt) {
-            $r = true;
+          tokenHistory.current = tokenRef.current;
+          recordHeldToken(tokenHistory.current);
+          let unusedChildRunner;
+          spawnedSessionIds?.add(sessionId);
+          if (isReviewSession) {
+            reviewTokensHandedOver = true;
             env.unset("CLAUDE_CODE_SESSION_ACCESS_TOKEN");
           }
-          sn = await runSessionChild({
+          childResult = await runSessionChild({
             execPath,
             execArgs,
             updatedChildBin,
-            childUpdateBin: js || yt ? undefined : childUpdateBin,
-            onChildUpdateReady: js || yt ? undefined : onChildUpdateReady,
-            config: q,
-            inPrivateCheckout: js,
-            sessionId: e,
-            sessionToken: de.current,
-            child: ne,
+            childUpdateBin: inPrivateCheckout || isReviewSession ? undefined : childUpdateBin,
+            onChildUpdateReady: inPrivateCheckout || isReviewSession ? undefined : onChildUpdateReady,
+            config: remoteConfig,
+            inPrivateCheckout,
+            sessionId,
+            sessionToken: tokenRef.current,
+            child: hosting,
             trustWorkspace: trustWorkspace === true,
-            ghRoutePath: Je?.path,
-            ghRouteBasePath: Je?.basePath,
-            sessionGitRulesPath: fn && Ar,
+            ghRoutePath: ghRoute?.path,
+            ghRouteBasePath: ghRoute?.basePath,
+            sessionGitRulesPath: sessionGitRules && sessionGitRulesPath,
             runnerStartupTiming,
             ...false,
             capacity,
             healthPort,
             clientPlatform,
-            cwd: gn,
+            cwd: childCwd,
             configDir: sessionClaudeConfigDir,
             diffFindsNestedRepository,
-            freshMachinePerSession: freshMachinePerSession && U !== "another",
-            diffCopyRoot: pr,
-            noRepositoryCheckedOut: Ge.length === 0,
-            stageFileRoot: Gr,
-            stagedFileArgs: Se,
+            freshMachinePerSession: freshMachinePerSession && gitConfigOwnership !== "another",
+            diffCopyRoot,
+            noRepositoryCheckedOut: preparedRepos.length === 0,
+            stageFileRoot,
+            stagedFileArgs: stagedArgs,
             subagentPromptInline,
-            governedGit: x,
-            governedGitConfigPath: ht,
-            childGitEnvironment: wn,
-            debugFile: un,
-            mcpConfigPath: P,
-            launcherSettingsPath: Z,
-            addDirs: tr,
+            governedGit,
+            governedGitConfigPath,
+            childGitEnvironment,
+            debugFile,
+            mcpConfigPath,
+            launcherSettingsPath,
+            addDirs,
             onDebug,
             onStatus,
             onSessionActivity,
@@ -2432,81 +2644,83 @@ async function handleSelfHostedSession(e, n, r) {
             onBgFollowupPending,
             onPostTurnSettle,
             onChildLifecycle: onChildLifecycle
-              ? (b) => {
-                  if (b === "spawned") onChildLifecycle(b);
-                  else Ji = b;
+              ? (lifecycle) => {
+                  if (lifecycle === "spawned") onChildLifecycle(lifecycle);
+                  else lifecycleStatus = lifecycle;
                 }
               : undefined,
             onChildInit: () => {
-              ir = true;
+              childInitSeen = true;
               onInitPhase?.({
                 kind: "end",
-                durationSec: (Date.now() - Mn) / 1000,
+                durationSec: (Date.now() - initStartMs) / 1000,
               });
             },
             onSessionStartHookError,
             onMaxLifetime,
             onChildTerminating,
-            postSessionHookTimeoutMs: n.postSessionHookTimeoutMs ?? POST_SESSION_HOOK_TIMEOUT_MS,
+            postSessionHookTimeoutMs: options.postSessionHookTimeoutMs ?? POST_SESSION_HOOK_TIMEOUT_MS,
             pushOutcomeOnRelease: pushOutcomeOnRelease ?? false,
-            signal: r,
-            onTokenAck: (b) => {
-              Xi.get(b)?.(true);
-              let le = as.get(b);
-              if (le) {
-                as.delete(b);
+            signal,
+            onTokenAck: (ackId) => {
+              tokenAckWaiters.get(ackId)?.(true);
+              let pendingAck = pendingAcks.get(ackId);
+              if (pendingAck) {
+                pendingAcks.delete(ackId);
                 onStatus(
-                  `[runner:session] ${le.label} update ${b} acked by child (${Date.now() - le.sentAtMs}ms)`,
+                  `[runner:session] ${pendingAck.label} update ${ackId} acked by child (${Date.now() - pendingAck.sentAtMs}ms)`,
                 );
               }
             },
-            onResultApiError: (b) => {
-              if (b === 401 || b === 403) ds(`child turn ended with HTTP ${b} from the model API`);
+            onResultApiError: (httpStatus) => {
+              if (httpStatus === 401 || httpStatus === 403)
+                refreshInferenceToken(`child turn ended with HTTP ${httpStatus} from the model API`);
             },
             onProxyRefusal: undefined,
-            onChildStdinReady: (b) => {
-              Ts = b;
-              if (ys) b(qi);
+            onChildStdinReady: (writeFn) => {
+              writeStdin = writeFn;
+              if (sessionGoneSent) writeFn(endSessionMessage);
             },
           });
-          rt?.onChildExited(sn.result);
+          inferenceRefresher?.onChildExited(childResult.result);
         } finally {
-          Xs?.();
-          bs?.();
-          Os?.();
-          for (let Et of Xi.values()) Et(false);
-          zt?.abort();
-          zt = undefined;
+          stopChildUpdate?.();
+          unusedCleanupA?.();
+          unusedChildStopper?.();
+          for (let waiter of tokenAckWaiters.values()) waiter(false);
+          retryAbort?.abort();
+          retryAbort = undefined;
           debouncedSender.cancel();
-          Ts = undefined;
-          zs?.then((Et) => Et?.stop());
+          writeStdin = undefined;
+          guestVitals?.then((vitals) => vitals?.stop());
         }
       } finally {
         jwtExpiry.cancelAll();
         abortController.abort();
       }
-      Pe = sn.result;
-      let Ys = rewriteContractionError(sn.stderrTail);
-      let reason = typeof r.reason === "string" ? r.reason : undefined;
-      if (sn.result === "failed") {
-        he = sn.startError
-          ? `child failed to start (${sn.startError.class}): ${Ys}`
-          : `child exited ${sn.exitCode ?? "null"}: ${Ys}`;
-        Vt =
-          sn.startError?.class === "e2big"
+      result = childResult.result;
+      let stderrTail = rewriteContractionError(childResult.stderrTail);
+      let reason = typeof signal.reason === "string" ? signal.reason : undefined;
+      if (childResult.result === "failed") {
+        failureReason = childResult.startError
+          ? `child failed to start (${childResult.startError.class}): ${stderrTail}`
+          : `child exited ${childResult.exitCode ?? "null"}: ${stderrTail}`;
+        failureKind =
+          childResult.startError?.class === "e2big"
             ? "SESSION_FAILURE_KIND_SESSION_CONFIG_ERROR"
             : "SESSION_FAILURE_KIND_RUNNER_CRASH";
-        Hn = true;
-      } else if (sn.result === "interrupted") he = `child interrupted (SIGTERM/watchdog): ${Ys}`;
-      onDebug(`[runner:session] Session ${e} completed: ${Pe}`);
-      ft = false;
-      En = reason === "update";
-      if ((En || ft) && We !== undefined) {
-        let M = We;
-        let apiBaseUrl = q.api_base_url;
+        exitBeforeInitFailed = true;
+      } else if (childResult.result === "interrupted")
+        failureReason = `child interrupted (SIGTERM/watchdog): ${stderrTail}`;
+      onDebug(`[runner:session] Session ${sessionId} completed: ${result}`);
+      failedOnUpdateBuild = false;
+      restartingForUpdate = reason === "update";
+      if ((restartingForUpdate || failedOnUpdateBuild) && workerEpoch !== undefined) {
+        let epoch = workerEpoch;
+        let apiBaseUrl = remoteConfig.api_base_url;
         await retryWithBackoff(
           () =>
-            apiClient.updateSessionWorkerState(apiBaseUrl, e, de.current, M, {
+            apiClient.updateSessionWorkerState(apiBaseUrl, sessionId, tokenRef.current, epoch, {
               connectionStatus: "disconnected",
             }),
           {
@@ -2517,256 +2731,277 @@ async function handleSelfHostedSession(e, n, r) {
           },
         ).catch((error) => {
           onDebug(
-            `[runner:session] ${e} disconnect before the update restart failed: ${errorMessage(error)}`,
+            `[runner:session] ${sessionId} disconnect before the update restart failed: ${errorMessage(error)}`,
           );
-          if (!isRetryableRunnerError(error)) ft = false;
+          if (!isRetryableRunnerError(error)) failedOnUpdateBuild = false;
         });
       }
-      if ((Pe === "failed" || Pe === "interrupted") && We !== undefined && !En && !ft) {
-        let M = await postSessionFailureResult({
+      if (
+        (result === "failed" || result === "interrupted") &&
+        workerEpoch !== undefined &&
+        !restartingForUpdate &&
+        !failedOnUpdateBuild
+      ) {
+        let failureOutcome = await postSessionFailureResult({
           apiClient,
-          apiBaseUrl: q.api_base_url,
-          sessionId: e,
-          sessionToken: de.current,
-          workerEpoch: We,
-          exitCode: sn.exitCode,
-          exitSignal: sn.exitSignal,
-          stderrTail: Ys,
-          startError: sn.startError,
-          refusedByHostPolicy: !ir && sn.stderrTail.includes(SIDELOAD_FLAGS_BLOCKED_PHRASE),
+          apiBaseUrl: remoteConfig.api_base_url,
+          sessionId,
+          sessionToken: tokenRef.current,
+          workerEpoch,
+          exitCode: childResult.exitCode,
+          exitSignal: childResult.exitSignal,
+          stderrTail,
+          startError: childResult.startError,
+          refusedByHostPolicy:
+            !childInitSeen && childResult.stderrTail.includes(SIDELOAD_FLAGS_BLOCKED_PHRASE),
           onDebug,
           onStatus,
-          signal: r,
+          signal,
         });
-        if (M === "session_gone") ys = true;
-        else if (M === "epoch_stale") {
-          Ke = true;
-          Vt = undefined;
+        if (failureOutcome === "session_gone") sessionGoneSent = true;
+        else if (failureOutcome === "epoch_stale") {
+          epochStale = true;
+          failureKind = undefined;
         }
       }
       if (
-        Pe === "failed" &&
-        ys &&
-        (sn.stderrTail.includes("SDKStartup: exiting without result") ||
-          sn.stderrTail.includes("RemoteIO: transport closed permanently") ||
-          sn.stderrTail.includes("worker epoch mismatch (409)"))
+        result === "failed" &&
+        sessionGoneSent &&
+        (childResult.stderrTail.includes("SDKStartup: exiting without result") ||
+          childResult.stderrTail.includes("RemoteIO: transport closed permanently") ||
+          childResult.stderrTail.includes("worker epoch mismatch (409)"))
       ) {
         onStatus(
-          `[runner:session] ${e} child exit ${sn.exitCode ?? "null"} after server end_session \u2014 session archived/deleted; clean close, not a runner failure`,
+          `[runner:session] ${sessionId} child exit ${childResult.exitCode ?? "null"} after server end_session \u2014 session archived/deleted; clean close, not a runner failure`,
         );
-        Pe = "completed";
-        he = undefined;
-        Vt = undefined;
-        ft = false;
-        Hn = false;
+        result = "completed";
+        failureReason = undefined;
+        failureKind = undefined;
+        failedOnUpdateBuild = false;
+        exitBeforeInitFailed = false;
       }
-      if (Pe === "failed") logFeatureBad("self_hosted_session_handle", "self_hosted_session_child_failed");
-      else if (Pe === "completed") logFeatureOk("self_hosted_session_handle");
-      if (Ji !== undefined && (Pe === "completed" || Pe === "failed")) onChildLifecycle?.(Pe);
-      else if (Pe === "interrupted")
+      if (result === "failed")
+        logFeatureBad("self_hosted_session_handle", "self_hosted_session_child_failed");
+      else if (result === "completed") logFeatureOk("self_hosted_session_handle");
+      if (lifecycleStatus !== undefined && (result === "completed" || result === "failed"))
+        onChildLifecycle?.(result);
+      else if (result === "interrupted")
         onChildLifecycle?.(
           reason === "idle-release" || reason === "deassign" || reason === "update"
             ? "completed"
             : "interrupted",
         );
     } catch (error) {
-      Kn?.cancel();
-      if (r.aborted) {
-        let reason = typeof r.reason === "string" ? r.reason : "unspecified";
-        onDebug(`[runner:session] ${e} aborted during setup (reason=${String(reason)}) \u2014 not a failure`);
-        Pe = "interrupted";
+      prepHeartbeat?.cancel();
+      if (signal.aborted) {
+        let reason = typeof signal.reason === "string" ? signal.reason : "unspecified";
+        onDebug(
+          `[runner:session] ${sessionId} aborted during setup (reason=${String(reason)}) \u2014 not a failure`,
+        );
+        result = "interrupted";
         return {
           result: "interrupted",
         };
       }
-      let mt = Wt
-        ? await rs().then(
+      let epochRejected = serializeEventPosts
+        ? await flushEventPosts().then(
             () => false,
             (error) => isEpochMismatchError(error),
           )
         : false;
-      if (isEpochMismatchError(error) || mt) {
-        let Me =
-          mt && !isEpochMismatchError(error)
+      if (isEpochMismatchError(error) || epochRejected) {
+        let setupErrorNote =
+          epochRejected && !isEpochMismatchError(error)
             ? ` Setup had meanwhile thrown: ${redactSecretsInText(error instanceof Error ? error.message : String(error))}`
             : "";
         onDebug(
-          `[runner:session] epoch fence tripped \u2014 another runner has taken ${e} (we got epoch ${We} but server rejected). Aborting before spawn.${Me}`,
+          `[runner:session] epoch fence tripped \u2014 another runner has taken ${sessionId} (we got epoch ${workerEpoch} but server rejected). Aborting before spawn.${setupErrorNote}`,
         );
-        Ke = true;
-        Pe = "abandoned";
+        epochStale = true;
+        result = "abandoned";
         return {
           result: "abandoned",
         };
       }
-      let rn = false;
-      let _t = !rn && (error instanceof SourceRefNotFoundError || error instanceof FetchRefNotFoundError);
-      let bt = redactSecretsInText(error instanceof Error ? error.message : String(error));
-      let en = _t ? bt : rewriteContractionError(bt);
-      he = `setup threw: ${en}`;
+      let setupTerminal = false;
+      let isRefNotFound =
+        !setupTerminal && (error instanceof SourceRefNotFoundError || error instanceof FetchRefNotFoundError);
+      let errorMessageText = redactSecretsInText(error instanceof Error ? error.message : String(error));
+      let redactedMessage = isRefNotFound ? errorMessageText : rewriteContractionError(errorMessageText);
+      failureReason = `setup threw: ${redactedMessage}`;
       {
         let httpStatus = getHttpStatus(error);
         if (httpStatus !== undefined && httpStatus >= 500)
-          Vt = "SESSION_FAILURE_KIND_ANTHROPIC_CONTROL_PLANE_5XX";
-        else if (_t) Vt = "SESSION_FAILURE_KIND_SESSION_CONFIG_ERROR";
+          failureKind = "SESSION_FAILURE_KIND_ANTHROPIC_CONTROL_PLANE_5XX";
+        else if (isRefNotFound) failureKind = "SESSION_FAILURE_KIND_SESSION_CONFIG_ERROR";
       }
-      if (_t) De = "SETUP_FAILURE_KIND_SOURCE_REF_NOT_FOUND";
-      else if (rn) De = "SETUP_FAILURE_KIND_CHECKOUT_HOOK_TERMINAL";
-      else if (error instanceof CheckoutHookTimedOutError) De = "SETUP_FAILURE_KIND_CHECKOUT_HOOK_TIMEOUT";
-      else if (!Lt) De = setupFailureKindOf(error);
-      Hn = true;
+      if (isRefNotFound) setupFailureKind = "SETUP_FAILURE_KIND_SOURCE_REF_NOT_FOUND";
+      else if (setupTerminal) setupFailureKind = "SETUP_FAILURE_KIND_CHECKOUT_HOOK_TERMINAL";
+      else if (error instanceof CheckoutHookTimedOutError)
+        setupFailureKind = "SETUP_FAILURE_KIND_CHECKOUT_HOOK_TIMEOUT";
+      else if (!childStarted) setupFailureKind = setupFailureKindOf(error);
+      exitBeforeInitFailed = true;
       logFeatureBad("self_hosted_session_handle", "self_hosted_session_setup_failed");
-      onDebug(`[runner:session] Session ${e} threw: ${en}`);
-      if (We === undefined)
+      onDebug(`[runner:session] Session ${sessionId} threw: ${redactedMessage}`);
+      if (workerEpoch === undefined)
         onDebug(
-          `[runner:session] Session ${e} setup failed at/before registerWorker \u2014 skipping best-effort UI failure post (no valid epoch)`,
+          `[runner:session] Session ${sessionId} setup failed at/before registerWorker \u2014 skipping best-effort UI failure post (no valid epoch)`,
         );
-      else if (nn)
+      else if (agentProxyRefused)
         onDebug(
-          `[runner:session] Session ${e} is refused for the agent proxy mode and left to another runner \u2014 no failure result is posted`,
+          `[runner:session] Session ${sessionId} is refused for the agent proxy mode and left to another runner \u2014 no failure result is posted`,
         );
       else if (
         (await postSessionFailureResult({
           apiClient,
-          apiBaseUrl: q.api_base_url,
-          sessionId: e,
-          sessionToken: de.current,
-          workerEpoch: We,
+          apiBaseUrl: remoteConfig.api_base_url,
+          sessionId,
+          sessionToken: tokenRef.current,
+          workerEpoch,
           exitCode: null,
           exitSignal: null,
-          stderrTail: en,
-          setupTerminal: rn,
-          setupFailureKind: De,
-          insteadOfRetryHint: _t
+          stderrTail: redactedMessage,
+          setupTerminal,
+          setupFailureKind,
+          insteadOfRetryHint: isRefNotFound
             ? "Retrying will fail the same way until you fix the missing branch described below."
             : REPO_NOT_FOUND_REASON(error),
           onDebug,
           onStatus,
-          signal: r,
+          signal,
         })) === "epoch_stale"
       )
-        Ke = true;
-      Pe = "failed";
+        epochStale = true;
+      result = "failed";
     }
   } catch (error) {
-    if (r.aborted) {
-      onDebug(`[runner:session] ${e} aborted during pre-spawn \u2014 not a failure`);
+    if (signal.aborted) {
+      onDebug(`[runner:session] ${sessionId} aborted during pre-spawn \u2014 not a failure`);
       return {
         result: "interrupted",
       };
     }
-    let gt = rewriteContractionError(
+    let redactedMessage = rewriteContractionError(
       redactSecretsInText(error instanceof Error ? error.message : String(error)),
     );
-    he = `pre-spawn threw: ${gt}`;
+    failureReason = `pre-spawn threw: ${redactedMessage}`;
     {
       let httpStatus = getHttpStatus(error);
       if (httpStatus !== undefined && httpStatus >= 500)
-        Vt = "SESSION_FAILURE_KIND_ANTHROPIC_CONTROL_PLANE_5XX";
+        failureKind = "SESSION_FAILURE_KIND_ANTHROPIC_CONTROL_PLANE_5XX";
     }
-    De ??= setupFailureKindOf(error);
-    Hn = true;
+    setupFailureKind ??= setupFailureKindOf(error);
+    exitBeforeInitFailed = true;
     logFeatureBad("self_hosted_session_handle", "self_hosted_session_prespawn_failed");
-    if (de.current && q)
+    if (tokenRef.current && remoteConfig)
       onDebug(
-        `[runner:session] FATAL pre-spawn: ${e}: ${gt} \u2014 cannot post failure to UI: no worker epoch obtained`,
+        `[runner:session] FATAL pre-spawn: ${sessionId}: ${redactedMessage} \u2014 cannot post failure to UI: no worker epoch obtained`,
       );
-    else if (de.current)
+    else if (tokenRef.current)
       onDebug(
-        `[runner:session] FATAL pre-spawn: ${e}: ${gt} \u2014 cannot post failure to UI: config not yet fetched`,
+        `[runner:session] FATAL pre-spawn: ${sessionId}: ${redactedMessage} \u2014 cannot post failure to UI: config not yet fetched`,
       );
     else
       onDebug(
-        `[runner:session] FATAL pre-spawn: ${e}: ${gt} \u2014 cannot post failure to UI: no session_token obtained`,
+        `[runner:session] FATAL pre-spawn: ${sessionId}: ${redactedMessage} \u2014 cannot post failure to UI: no session_token obtained`,
       );
-    Pe = "failed";
+    result = "failed";
   } finally {
-    moveWatch?.release(e);
-    Br();
-    let timeoutMs = n.postSessionHookTimeoutMs ?? POST_SESSION_HOOK_TIMEOUT_MS;
-    let gt = Date.now() + SETUP_STEP_DEADLINE_MS;
-    for (let Q of Nt) {
-      let N = gt - Date.now();
-      if (N <= 0) {
+    moveWatch?.release(sessionId);
+    abortTokenWait();
+    let timeoutMs = options.postSessionHookTimeoutMs ?? POST_SESSION_HOOK_TIMEOUT_MS;
+    let deadline = Date.now() + SETUP_STEP_DEADLINE_MS;
+    for (let wiring of mountReadWiring) {
+      let remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) {
         onStatus(
-          `[runner:warn] governed git: mount-read cleanup budget exhausted; the repo-local mount rewrite stays in ${Q.path}, so the post-session hook's fetches of that repository still address the mount (best-effort; the next prep drops it)`,
+          `[runner:warn] governed git: mount-read cleanup budget exhausted; the repo-local mount rewrite stays in ${wiring.path}, so the post-session hook's fetches of that repository still address the mount (best-effort; the next prep drops it)`,
         );
         continue;
       }
-      await setUrlInsteadOf(Q.path, Q.mountUrl, Q.mountBaseUrl, onDebug, N);
+      await setUrlInsteadOf(wiring.path, wiring.mountUrl, wiring.mountBaseUrl, onDebug, remainingMs);
     }
-    let Qt = false;
-    let yt = async () => {
-      if (!St || Qt) return;
-      Qt = true;
-      await withFsOpTimeout(buildGitTrustBundle(St, readTrustBundleSource), "rebuild the trust bundle").catch(
-        (error) => {
-          onDebug(
-            `[runner:session] governed git: the trust bundle could not be rebuilt (${errorMessage(error)}); the runner's own git keeps GIT_SSL_CAINFO`,
-          );
-        },
-      );
+    let rebuilt = false;
+    let rebuildTrustBundle = async () => {
+      if (!governedGitState || rebuilt) return;
+      rebuilt = true;
+      await withFsOpTimeout(
+        buildGitTrustBundle(governedGitState, readTrustBundleSource),
+        "rebuild the trust bundle",
+      ).catch((error) => {
+        onDebug(
+          `[runner:session] governed git: the trust bundle could not be rebuilt (${errorMessage(error)}); the runner's own git keeps GIT_SSL_CAINFO`,
+        );
+      });
     };
     if (
       pushOutcomeOnRelease &&
-      Lt &&
-      !(q !== undefined && isReviewOriginSession(q)) &&
-      Pe !== "completed" &&
-      r.reason !== "deassign" &&
-      !Ke &&
-      V.length > 0
+      childStarted &&
+      !(remoteConfig !== undefined && isReviewOriginSession(remoteConfig)) &&
+      result !== "completed" &&
+      signal.reason !== "deassign" &&
+      !epochStale &&
+      outcomeBranches.length > 0
     ) {
       onStatus(
-        `[runner:session] ${e} ${Pe}: --push-outcome-on-release pushing ${V.length} outcome branch(es) to the source remote`,
+        `[runner:session] ${sessionId} ${result}: --push-outcome-on-release pushing ${outcomeBranches.length} outcome branch(es) to the source remote`,
       );
-      let Q = Date.now() + PUSH_ON_RELEASE_TIMEOUT_MS;
-      if (V.some((N) => needsMountFetchWithoutUpstream(N.source))) await yt();
-      for (let N of V) {
-        let x = Q - Date.now();
-        if (x <= 0) {
-          onDebug(`[runner:session] push-on-release budget exhausted; skipping '${N.branch}' (best-effort)`);
+      let deadline = Date.now() + PUSH_ON_RELEASE_TIMEOUT_MS;
+      if (outcomeBranches.some((branch) => needsMountFetchWithoutUpstream(branch.source)))
+        await rebuildTrustBundle();
+      for (let branch of outcomeBranches) {
+        let remainingMs = deadline - Date.now();
+        if (remainingMs <= 0) {
+          onDebug(
+            `[runner:session] push-on-release budget exhausted; skipping '${branch.branch}' (best-effort)`,
+          );
           continue;
         }
-        if (N.createdSha) {
-          if ((await revParseVerify(N.canonicalPath, `refs/heads/${N.branch}`, x)) === N.createdSha) {
+        if (branch.createdSha) {
+          if (
+            (await revParseVerify(branch.canonicalPath, `refs/heads/${branch.branch}`, remainingMs)) ===
+            branch.createdSha
+          ) {
             onDebug(
-              `[runner:session] push-on-release '${N.branch}' has no commits since creation; skipping (best-effort)`,
+              `[runner:session] push-on-release '${branch.branch}' has no commits since creation; skipping (best-effort)`,
             );
             continue;
           }
         }
-        if (N.source.fetchViaMount) {
+        if (branch.source.fetchViaMount) {
           onStatus(
-            `[runner:warn] push-on-release: '${N.branch}' NOT pushed \u2014 ${N.source.repo} is reachable from this runner only through the session's git mount and the release push addresses the plain upstream; its commits exist only in this runner's checkout, so push from inside the session (those pushes use the mount) or preserve them in a post-session hook`,
+            `[runner:warn] push-on-release: '${branch.branch}' NOT pushed \u2014 ${branch.source.repo} is reachable from this runner only through the session's git mount and the release push addresses the plain upstream; its commits exist only in this runner's checkout, so push from inside the session (those pushes use the mount) or preserve them in a post-session hook`,
           );
           continue;
         }
-        let xe = Q - Date.now();
-        if (xe <= 0) {
-          onDebug(`[runner:session] push-on-release budget exhausted; skipping '${N.branch}' (best-effort)`);
+        let pushRemainingMs = deadline - Date.now();
+        if (pushRemainingMs <= 0) {
+          onDebug(
+            `[runner:session] push-on-release budget exhausted; skipping '${branch.branch}' (best-effort)`,
+          );
           continue;
         }
-        let xt = hasGovernedMountAndUpstream(N.source);
+        let mountOnly = hasGovernedMountAndUpstream(branch.source);
         await pushOnRelease(
-          N.canonicalPath,
-          N.branch,
-          N.source,
-          xe,
+          branch.canonicalPath,
+          branch.branch,
+          branch.source,
+          pushRemainingMs,
           onDebug,
-          St && N.source.url
-            ? gitEnvironmentForRole(St, "outcome", {
-                url: xt ? N.source.upstreamUrl : N.source.url,
-                mountRouted: N.source.governedMount === true && !xt,
+          governedGitState && branch.source.url
+            ? gitEnvironmentForRole(governedGitState, "outcome", {
+                url: mountOnly ? branch.source.upstreamUrl : branch.source.url,
+                mountRouted: branch.source.governedMount === true && !mountOnly,
               })
             : undefined,
         );
       }
     }
-    let $r = En || ft;
-    if (Lt) {
+    let skippedCleanup = restartingForUpdate || failedOnUpdateBuild;
+    if (childStarted) {
       let hook = await findHook(envSelfHostedRunnerHooksDir, "post-session");
       if (hook) {
-        if (Ue !== undefined && configureGitSigningArtifacts !== undefined)
+        if (sessionGitConfigFiles !== undefined && configureGitSigningArtifacts !== undefined)
           await withBoundedTimeout(
             materializeSessionGitConfig({
               configDir: sessionClaudeConfigDir,
@@ -2779,24 +3014,26 @@ async function handleSelfHostedSession(e, n, r) {
             GIT_ARTIFACTS_REFRESH_TIMEOUT_MS,
             "[runner:session] refresh session-scoped git artifacts",
           ).catch((error) => {
-            Re = lifecycleHookGitConfig(operatorGitSnapshot, hookGitPrograms);
+            gitConfigPins = lifecycleHookGitConfig(operatorGitSnapshot, hookGitPrograms);
             onStatus(
               `[runner:session] could not refresh session-scoped git artifacts before the post-session hook (${errorMessage(error)}); its git runs with commit signing OFF instead`,
             );
           });
         await runPostSessionHook({
           hookPath: hook,
-          gitConfigPins: Re,
+          gitConfigPins,
           gitConfigLegacyParams: hookGitLegacyParams,
-          gitEnvironment: St && gitEnvironmentForSessionHook(St),
-          cwd: se ?? baseDir,
-          sessionId: e,
-          exitReason: Pe,
-          debugLogPath: un,
-          workspacePaths: Cr,
+          gitEnvironment: governedGitState && gitEnvironmentForSessionHook(governedGitState),
+          cwd: sessionDir ?? baseDir,
+          sessionId,
+          exitReason: result,
+          debugLogPath: debugFile,
+          workspacePaths,
           sessionAccessToken:
-            We === undefined || (q !== undefined && isReviewOriginSession(q)) ? undefined : de.current,
-          apiBaseUrl: q?.api_base_url,
+            workerEpoch === undefined || (remoteConfig !== undefined && isReviewOriginSession(remoteConfig))
+              ? undefined
+              : tokenRef.current,
+          apiBaseUrl: remoteConfig?.api_base_url,
           clientPlatform,
           timeoutMs,
           onStatus,
@@ -2806,211 +3043,230 @@ async function handleSelfHostedSession(e, n, r) {
         });
       }
     }
-    if (Bn)
+    if (sessionDirsCreated)
       await removeSessionState({
-        sessionId: e,
+        sessionId,
         targets: [
           {
-            path: pr,
+            path: diffCopyRoot,
             recursive: true,
           },
         ],
         onStatus,
         label: "removing the Changes pane's copies of git settings (they can hold a secret)",
       });
-    let ar = false;
-    if (!Jt && We !== undefined && de.current && q?.api_base_url)
-      ar = await forwardLogFile({
+    let logForwarded = false;
+    if (!hostConfigFailed && workerEpoch !== undefined && tokenRef.current && remoteConfig?.api_base_url)
+      logForwarded = await forwardLogFile({
         apiClient,
-        apiBaseUrl: q.api_base_url,
-        sessionId: e,
-        sessionToken: de.current,
-        workerEpoch: We,
-        debugFile: un,
+        apiBaseUrl: remoteConfig.api_base_url,
+        sessionId,
+        sessionToken: tokenRef.current,
+        workerEpoch,
+        debugFile,
         onDebug,
       }).catch((error) => {
         onDebug(`[runner:session] debug log flush failed (best-effort): ${error}`);
         return false;
       });
-    if (Jt);
-    else if (Pe === "completed") await withFsOpTimeout(unlink(un), `unlink ${un}`).catch(() => {});
-    else if (removeSessionState_2 && Bn) {
-      let Q = await withFsOpTimeout(unlink(un), `unlink ${un}`).then(
+    if (hostConfigFailed);
+    else if (result === "completed")
+      await withFsOpTimeout(unlink(debugFile), `unlink ${debugFile}`).catch(() => {});
+    else if (removeSessionState_2 && sessionDirsCreated) {
+      let unlinked = await withFsOpTimeout(unlink(debugFile), `unlink ${debugFile}`).then(
         () => true,
         (error) => isENOENT(error),
       );
-      if (Lt)
+      if (childStarted)
         onStatus(
-          `[runner:session] ${e} ${Pe} \u2014 child debug log ${ar ? "tail forwarded to the session diagnostics on the server" : "NOT forwarded (no log, no worker registration, or the upload failed)"}; ${Q ? "not kept on disk" : "could not be unlinked, left to the directory removal below"} (--remove-session-state)`,
+          `[runner:session] ${sessionId} ${result} \u2014 child debug log ${logForwarded ? "tail forwarded to the session diagnostics on the server" : "NOT forwarded (no log, no worker registration, or the upload failed)"}; ${unlinked ? "not kept on disk" : "could not be unlinked, left to the directory removal below"} (--remove-session-state)`,
         );
-    } else onStatus(`[runner:session] ${e} ${Pe} \u2014 child debug log preserved at ${un}`);
-    if (P) await withFsOpTimeout(unlink(P), `unlink ${P}`).catch(() => {});
-    for (let Q of [...(Z ? [Z] : []), ...re, ...be])
-      await withFsOpTimeout(unlink(Q), `unlink ${Q}`).catch(() => {});
-    if (ye.length > 0)
+    } else
+      onStatus(`[runner:session] ${sessionId} ${result} \u2014 child debug log preserved at ${debugFile}`);
+    if (mcpConfigPath)
+      await withFsOpTimeout(unlink(mcpConfigPath), `unlink ${mcpConfigPath}`).catch(() => {});
+    for (let path of [
+      ...(launcherSettingsPath ? [launcherSettingsPath] : []),
+      ...launcherStagedPaths,
+      ...stagedPaths,
+    ])
+      await withFsOpTimeout(unlink(path), `unlink ${path}`).catch(() => {});
+    if (sessionWorktrees.length > 0)
       await removeSessionWorktree({
-        worktrees: ye,
+        worktrees: sessionWorktrees,
         onDebug,
       }).catch((error) => {
         onDebug(`[runner:session] worktree cleanup failed: ${error}`);
       });
-    let ss = ue || $r ? [] : V;
-    if (ss.some((Q) => isOnGovernedMount(Q.source))) await yt();
-    for (let Q of ss)
+    let storedBranches = skipOutcomePush || skippedCleanup ? [] : outcomeBranches;
+    if (storedBranches.some((branch) => isOnGovernedMount(branch.source))) await rebuildTrustBundle();
+    for (let branch of storedBranches)
       await runGitQuiet(
-        Q.canonicalPath,
-        Q.branch,
-        Q.needsDetach,
+        branch.canonicalPath,
+        branch.branch,
+        branch.needsDetach,
         onDebug,
-        !!useAnthropicGitProxy || (Tt.has(Q.canonicalPath) && "checkout"),
+        !!useAnthropicGitProxy || (sanitizedRepos.has(branch.canonicalPath) && "checkout"),
         undefined,
         undefined,
-        St && Q.source.governedMount && Q.source.url
-          ? gitEnvironmentForRole(St, "outcome", {
-              url: Q.source.url,
+        governedGitState && branch.source.governedMount && branch.source.url
+          ? gitEnvironmentForRole(governedGitState, "outcome", {
+              url: branch.source.url,
               mountRouted: true,
             })
           : undefined,
       );
-    if (Bn)
+    if (sessionDirsCreated)
       await withFsOpTimeout(
-        Promise.all([removeFileIfExists(trustBundlePath), removeFileIfExists(Ct)]),
+        Promise.all([removeFileIfExists(caBundlePath), removeFileIfExists(childTrustBundlePath)]),
         "remove the trust bundle",
       ).catch((error) => {
         onDebug(
           `[runner:session] governed git: the trust bundle could not be removed (${errorMessage(error)})`,
         );
       });
-    for (let Q of qe)
-      for (let N of [["credential.helper", "^$"], [`credential.${Q.origin}.helper`]])
+    for (let credPath of gitProxyCredPaths)
+      for (let configArgs of [["credential.helper", "^$"], [`credential.${credPath.origin}.helper`]])
         await new Promise((resolve) => {
-          let xe = spawn("git", ["-C", Q.path, "config", "--local", "--unset-all", ...N], {
+          let child = spawn("git", ["-C", credPath.path, "config", "--local", "--unset-all", ...configArgs], {
             cwd: undefined,
             stdio: "ignore",
             windowsHide: true,
             ...cgroupSpawnOptions("helper"),
           });
-          let timer = setTimeout((Zn) => Zn.kill("SIGKILL"), SIGKILL_DELAY_MS, xe);
-          let Yn = () => {
+          let timer = setTimeout((spawned) => spawned.kill("SIGKILL"), SIGKILL_DELAY_MS, child);
+          let onExit = () => {
             clearTimeout(timer);
             resolve();
           };
-          xe.on("close", Yn);
-          xe.on("error", Yn);
+          child.on("close", onExit);
+          child.on("error", onExit);
         });
     abortController.abort();
-    hn?.cancel();
-    await Zt?.cleanup();
-    if (fn)
+    representRetrySender?.cancel();
+    await pushUrlReconciler?.cleanup();
+    if (sessionGitRules)
       await withBoundedTimeout(
-        fn.remove(),
+        sessionGitRules.remove(),
         LAUNCHER_HOOK_DEFAULT_TIMEOUT_MS,
         "[runner:stuck] session git rules removal (check the session directory mount)",
       ).catch((error) => {
         onDebug(`[runner:session] session git rules: ${errorMessage(error)} (ignored)`);
       });
-    if (Je)
+    if (ghRoute)
       await withBoundedTimeout(
-        Je.close(),
+        ghRoute.close(),
         LAUNCHER_HOOK_DEFAULT_TIMEOUT_MS,
         "[runner:stuck] gh route teardown (check the session directory mount)",
       ).catch((error) => {
         onDebug(`[runner:session] gh route: ${errorMessage(error)} (ignored)`);
       });
-    for (let Q of $r ? [] : Xe)
+    for (let path of skippedCleanup ? [] : hookCheckouts)
       await withBoundedTimeout(
-        rm(Q, {
+        rm(path, {
           recursive: true,
           force: true,
         }),
         LAUNCHER_HOOK_DEFAULT_TIMEOUT_MS,
-        `[runner:hook] rm -rf ${Q}`,
+        `[runner:hook] rm -rf ${path}`,
       ).catch((error) => {
-        onDebug(`[runner:hook] cleanup ${Q} failed: ${error}`);
+        onDebug(`[runner:hook] cleanup ${path} failed: ${error}`);
       });
-    if (Ue !== undefined) {
-      let Q = Ue;
+    if (sessionGitConfigFiles !== undefined) {
+      let dir = sessionGitConfigFiles;
       await withBoundedTimeout(
-        isHooksDirSafe(sessionClaudeConfigDir, onStatus).then((N) =>
-          N
-            ? rm(Q, {
+        isHooksDirSafe(sessionClaudeConfigDir, onStatus).then((dirSafe) =>
+          dirSafe
+            ? rm(dir, {
                 recursive: true,
                 force: true,
               })
             : undefined,
         ),
         LAUNCHER_HOOK_DEFAULT_TIMEOUT_MS,
-        `[runner:session] rm -rf ${Q}`,
+        `[runner:session] rm -rf ${dir}`,
       ).catch((error) => {
-        onDebug(`[runner:session] cleanup ${Q} failed: ${error}`);
+        onDebug(`[runner:session] cleanup ${dir} failed: ${error}`);
       });
     }
     if (useAnthropicGitProxy) delete process.env.CLAUDE_CODE_SESSION_ACCESS_TOKEN;
-    if (ke) {
-      It = true;
+    if (ingressTokenFile) {
+      removingTokenFiles = true;
       await resolved;
-      let Q = cn();
-      for (let N of Q)
-        await cleanupSessionIngressTokenFiles(N, onStatus, Ie, tokenFileOpTimeoutMs).catch(() => {});
+      let tokenFiles = tokenFilePaths();
+      for (let tokenFile of tokenFiles)
+        await cleanupSessionIngressTokenFiles(
+          tokenFile,
+          onStatus,
+          rewriteTokenFiles,
+          tokenFileOpTimeoutMs,
+        ).catch(() => {});
       await Promise.all(
-        Pn.map((N) => cleanupSessionIngressTokenFiles(N, onStatus, Ie, tokenFileOpTimeoutMs).catch(() => {})),
+        extraTokenFiles.map((tokenFile) =>
+          cleanupSessionIngressTokenFiles(tokenFile, onStatus, rewriteTokenFiles, tokenFileOpTimeoutMs).catch(
+            () => {},
+          ),
+        ),
       );
-      if (R)
+      if (tokenWriteMissed)
         resolved_2
           .then(async () => {
-            for (let N of [...Q, ...Pn])
-              await cleanupSessionIngressTokenFiles(N, onStatus, undefined, tokenFileOpTimeoutMs).catch(
-                () => {},
-              );
+            for (let tokenFile of [...tokenFiles, ...extraTokenFiles])
+              await cleanupSessionIngressTokenFiles(
+                tokenFile,
+                onStatus,
+                undefined,
+                tokenFileOpTimeoutMs,
+              ).catch(() => {});
           })
           .catch(() => {});
     }
-    if (removeSessionState_2 && Bn && se) {
+    if (removeSessionState_2 && sessionDirsCreated && sessionDir) {
       let mapped = [
-        getSessionClaudeConfigDir(baseDir, e),
-        getToolServerConfigDir(baseDir, e),
-        Gr,
-        se,
-        ht,
-        ht + ".lock",
-        trustBundlePath,
-        Ct,
+        getSessionClaudeConfigDir(baseDir, sessionId),
+        getToolServerConfigDir(baseDir, sessionId),
+        stageFileRoot,
+        sessionDir,
+        governedGitConfigPath,
+        governedGitConfigPath + ".lock",
+        caBundlePath,
+        childTrustBundlePath,
       ].map((path) => ({
         path,
         recursive: true,
       }));
-      let N = await removeSessionState({
-        sessionId: e,
+      let removedCount = await removeSessionState({
+        sessionId,
         targets: mapped,
         onStatus,
       });
       onDebug(
-        `[runner:session] ${e}: --remove-session-state removed (or found absent) ${N.length}/${mapped.length} per-session paths${N.length > 0 ? `: ${N.join(", ")}` : ""}`,
+        `[runner:session] ${sessionId}: --remove-session-state removed (or found absent) ${removedCount.length}/${mapped.length} per-session paths${removedCount.length > 0 ? `: ${removedCount.join(", ")}` : ""}`,
       );
     }
-    if (Mn !== undefined && !ir)
+    if (initStartMs !== undefined && !childInitSeen)
       onInitPhase?.({
         kind: "exit-before-init",
-        failed: Hn,
+        failed: exitBeforeInitFailed,
       });
   }
   return {
-    result: Pe,
-    failureReason: he,
-    setupFailureKind: De,
-    failureKind: Vt,
-    failedOnUpdateBuild: ft,
+    result,
+    failureReason,
+    setupFailureKind,
+    failureKind,
+    failedOnUpdateBuild,
   };
 }
 //@ chunk-hm0ce8vc.js:140444-140512 placement
-function sessionHostingKey(e) {
-  return e.kind === "agent-loop" ? e.workerEpoch : e.hosting;
+function sessionHostingKey(hosting) {
+  return hosting.kind === "agent-loop" ? hosting.workerEpoch : hosting.hosting;
 }
 //@ chunk-hm0ce8vc.js:140512-159381 placement
 /**
  * 启动并监管会话子进程：转发 stdin 控制、活动心跳、令牌刷新、输出转发与退出处理。
  */
-function runSessionChild(e) {
+function runSessionChild(options) {
   let {
     execPath,
     execArgs = [],
@@ -3061,25 +3317,27 @@ function runSessionChild(e) {
     onMaxLifetime,
     onChildTerminating,
     runnerStartupTiming,
-  } = e;
-  let An = {
+  } = options;
+  let watchdog = {
     current: undefined,
   };
   let workerEpoch = child.kind === "agent-loop" ? child.workerEpoch : undefined;
-  let kt =
-    e.onSessionActivity === undefined
+  let reportActivity =
+    options.onSessionActivity === undefined
       ? undefined
-      : (V, ue) => {
-          if (V !== "activity" && An.current?.terminationRequested) {
-            onDebug(`[runner:session] ${sessionId} ignoring '${V}' from a child that is being terminated`);
+      : (activityKind, details) => {
+          if (activityKind !== "activity" && watchdog.current?.terminationRequested) {
+            onDebug(
+              `[runner:session] ${sessionId} ignoring '${activityKind}' from a child that is being terminated`,
+            );
             return;
           }
-          e.onSessionActivity?.(V, ue);
+          options.onSessionActivity?.(activityKind, details);
         };
-  let Cn = env.CLAUDE_RUNNER_DISABLE_TURN_BEGAN_BEFORE_INIT ? 0 : getStartupTimeoutMs();
+  let startupTimeoutMs = env.CLAUDE_RUNNER_DISABLE_TURN_BEGAN_BEFORE_INIT ? 0 : getStartupTimeoutMs();
   let { sdkUrl, resumeUrl } = isLocalhostUrl(config.api_base_url, sessionId);
-  let Nn = isReviewOriginSession(config);
-  let zn = [
+  let isReviewSession = isReviewOriginSession(config);
+  let declarations = [
     ...(diffFindsNestedRepository && capacity === 1
       ? [
           DECLARES_DIFF_FINDS_NESTED_REPOSITORY,
@@ -3088,9 +3346,9 @@ function runSessionChild(e) {
       : []),
     ...[],
   ];
-  let ze = [
+  let childArgs = [
     ...execArgs,
-    ...(zn.length > 0 ? [runnerDeclarationArgument(zn)] : []),
+    ...(declarations.length > 0 ? [runnerDeclarationArgument(declarations)] : []),
     "--print",
     "--sdk-url",
     sdkUrl,
@@ -3103,32 +3361,36 @@ function runSessionChild(e) {
     "--debug-file",
     debugFile,
   ];
-  if (mcpConfigPath) ze.push("--mcp-config", mcpConfigPath);
-  if (launcherSettingsPath) ze.push("--settings", launcherSettingsPath);
-  for (let V of addDirs ?? []) ze.push("--add-dir", V);
-  ze.push(...stagedFileArgs);
-  let Xn = normalizeToolsArg(config.claude_code_args);
+  if (mcpConfigPath) childArgs.push("--mcp-config", mcpConfigPath);
+  if (launcherSettingsPath) childArgs.push("--settings", launcherSettingsPath);
+  for (let dir of addDirs ?? []) childArgs.push("--add-dir", dir);
+  childArgs.push(...stagedFileArgs);
+  let normalizedArgs = normalizeToolsArg(config.claude_code_args);
   if (hasDisallowedToolSpec(config.claude_code_args.tools)) {
     onDebug(
       "[runner:session] Stripped self-hosted-runner operator tool names from the server-supplied tools arg",
     );
-    if (Xn.tools === "")
+    if (normalizedArgs.tools === "")
       onDebug(
         "[runner:warn] server-supplied tools arg contained ONLY self-hosted-runner operator tool names; dropping --tools and using the default pool",
       );
   }
-  let Pt = appendServerArgs(
-    ze,
+  let forwardedCount = appendServerArgs(
+    childArgs,
     stripSystemPromptFileArgs(
-      Nn ? wi(Xn, (V, ue) => CHILD_EXTRA_FORWARDED_FLAGS.has(ue)) : Xn,
+      isReviewSession
+        ? import_reject(normalizedArgs, (key, value) => CHILD_EXTRA_FORWARDED_FLAGS.has(value))
+        : normalizedArgs,
       subagentPromptInline,
     ),
     CHILD_FORWARDED_FLAGS,
-    (V, ue) => onDebug(`[runner:session] Skipping ${V} claude_code_arg: ${ue}`),
+    (reason, detail) => onDebug(`[runner:session] Skipping ${reason} claude_code_arg: ${detail}`),
   );
-  if (Pt > 0)
-    onDebug(`[runner:session] Added ${Pt}/${Object.keys(config.claude_code_args).length} claude_code_args`);
-  if (Nn) ze.push("--setting-sources=");
+  if (forwardedCount > 0)
+    onDebug(
+      `[runner:session] Added ${forwardedCount}/${Object.keys(config.claude_code_args).length} claude_code_args`,
+    );
+  if (isReviewSession) childArgs.push("--setting-sources=");
   let inferenceAuth = config.inference_auth;
   if (child.kind === "agent-loop" && !inferenceAuth?.access_token)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -3141,7 +3403,7 @@ function runSessionChild(e) {
   let replaced = sessionId.replace(/^cse_/, "session_");
   let OTEL_RESOURCE_ATTRIBUTES =
     config.environment_variables.OTEL_RESOURCE_ATTRIBUTES ?? env.OTEL_RESOURCE_ATTRIBUTES;
-  let Kt =
+  let otelEnv =
     capacity > 1 && healthPort !== undefined && healthPort > 0 && env.OTEL_METRICS_EXPORTER === "prometheus"
       ? {
           OTEL_METRICS_EXPORTER: "otlp",
@@ -3163,24 +3425,24 @@ function runSessionChild(e) {
     onStatus(
       "[runner:warn] governed git: the session's PATH changed after the GitHub API route was set up; the session runs with the earlier PATH, so gh stays routed, and the new PATH is not used",
     );
-  let ir = child.kind === "agent-loop" ? sessionToken : undefined;
-  let Hn = env.SELF_HOSTED_RUNNER_AGENT_PROXY_URL !== undefined;
-  let de = runnerUsesAgentProxyStandalone(
+  let sessionTokenEnv = child.kind === "agent-loop" ? sessionToken : undefined;
+  let proxyUrlSet = env.SELF_HOSTED_RUNNER_AGENT_PROXY_URL !== undefined;
+  let usesStandaloneProxy = runnerUsesAgentProxyStandalone(
     config.environment_variables?.CCR_AGENT_PROXY_RELAY_MODE,
     env.SELF_HOSTED_RUNNER_AGENT_PROXY_URL,
   );
-  let Yt = (workerEpoch ?? 0) > 1 && env.CLAUDE_CODE_RESUME_SHOWS_CUT_OFF_CALLS !== false;
+  let showsCutOffCalls = (workerEpoch ?? 0) > 1 && env.CLAUDE_CODE_RESUME_SHOWS_CUT_OFF_CALLS !== false;
   let enforcedEnv = {
-    CLAUDE_CODE_SESSION_ACCESS_TOKEN: ir,
+    CLAUDE_CODE_SESSION_ACCESS_TOKEN: sessionTokenEnv,
     ...(child.kind === "tool-server" && {
       CLAUDE_CODE_MCP_SERVE_SETTINGS: "{}",
     }),
     CLAUDE_SESSION_INGRESS_TOKEN_FILE:
-      child.kind === "agent-loop" && !Nn
+      child.kind === "agent-loop" && !isReviewSession
         ? getIngressTokenTempPrefix(configDir, sessionHostingKey(child))
         : undefined,
     CLAUDE_CODE_OAUTH_TOKEN: inferenceAuth?.access_token,
-    ...(Nn && buildClearedAuthEnv()),
+    ...(isReviewSession && buildClearedAuthEnv()),
     CLAUDE_CODE_OAUTH_SCOPES: "user:inference user:ccr_inference user:file_upload",
     CLAUDE_CONFIG_DIR: configDir,
     CLAUDE_STAGE_FILE_ROOT: stageFileRoot,
@@ -3200,11 +3462,11 @@ function runSessionChild(e) {
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC,
     DISABLE_ERROR_REPORTING: process.env.DISABLE_ERROR_REPORTING,
     DISABLE_GROWTHBOOK: process.env.DISABLE_GROWTHBOOK,
-    ...Kt,
+    ...otelEnv,
     CLAUDE_CODE_OTEL_DIAG_STDERR: "1",
     CLAUDE_CODE_TEE_SDK_STDOUT: "1",
     CLAUDE_RUNNER_ACTIVITY_FD: "3",
-    CLAUDE_RUNNER_ALIVE_EVERY_MS: String(silenceStretchMs(Cn) || ""),
+    CLAUDE_RUNNER_ALIVE_EVERY_MS: String(silenceStretchMs(startupTimeoutMs) || ""),
     CLAUDE_CODE_REMOTE: "true",
     CLAUDE_CODE_REMOTE_MCP_CONFIG: join(configDir, MCP_CONFIG_DELIVERED_JSON),
     CLAUDE_CODE_RETRY_WATCHDOG: "1",
@@ -3215,9 +3477,9 @@ function runSessionChild(e) {
     CLAUDE_ENABLE_STREAM_WATCHDOG: "1",
     CLAUDE_RUNNER_CLAUDE_BIN: updatedChildBin ?? process.execPath,
     CLAUDE_RUNNER_UPDATE_BIN: childUpdateBin ?? "",
-    CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD: Nn ? undefined : "1",
+    CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD: isReviewSession ? undefined : "1",
     [CLAUDE_CODE_REMOTE_SESSION_ORIGIN]: getRemoteSessionOrigin(config),
-    ...(Nn && {
+    ...(isReviewSession && {
       CLAUDE_CODE_RESUME_SESSIONSTART_HOOKS_WAIT_MS: undefined,
     }),
     CLAUDE_CODE_REMOTE_SESSION_ID: sessionId,
@@ -3261,13 +3523,13 @@ function runSessionChild(e) {
     AGENT_PROXY_URL: undefined,
     AGENT_PROXY_AUTH_TOKEN: undefined,
     CCR_AGENT_PROXY_STANDALONE_URL: undefined,
-    ...((Hn || child.kind === "agent-loop") && {
+    ...((proxyUrlSet || child.kind === "agent-loop") && {
       CCR_AGENT_PROXY_RELAY_MODE: childRelayEnvValue(
         config.environment_variables?.CCR_AGENT_PROXY_RELAY_MODE,
         env.SELF_HOSTED_RUNNER_AGENT_PROXY_URL,
       ),
     }),
-    ...(de && agentProxyStandaloneRunnerEnv(process.env)),
+    ...(usesStandaloneProxy && agentProxyStandaloneRunnerEnv(process.env)),
     SELF_HOSTED_RUNNER_POOL_SECRET: undefined,
     SELF_HOSTED_RUNNER_ENVIRONMENT_SECRET: undefined,
     ...egressProxyChildEnv(),
@@ -3287,8 +3549,8 @@ function runSessionChild(e) {
     ...{},
     CLAUDE_CODE_WORKER_EPOCH: workerEpoch?.toString(),
     CLAUDE_CODE_RESUME_INTERRUPTED_TURN: (workerEpoch ?? 0) > 1 ? "1" : undefined,
-    CLAUDE_CODE_RESUME_SHOWS_CUT_OFF_CALLS: Yt ? "1" : undefined,
-    CLAUDE_CODE_RESUME_PROMPT: Yt
+    CLAUDE_CODE_RESUME_SHOWS_CUT_OFF_CALLS: showsCutOffCalls ? "1" : undefined,
+    CLAUDE_CODE_RESUME_PROMPT: showsCutOffCalls
       ? SESSION_MOVED_TAIL_PROMPT
       : (workerEpoch ?? 0) > 1
         ? SESSION_MOVED_CONTINUE_PROMPT
@@ -3298,7 +3560,7 @@ function runSessionChild(e) {
     [CCR_SHR_START_MARKS]: undefined,
     ...false,
   };
-  let q =
+  let spawnArgs =
     child.kind === "tool-server"
       ? [
           ...execArgs,
@@ -3312,69 +3574,72 @@ function runSessionChild(e) {
           "rendered",
           "--session-tunnel",
         ]
-      : ze;
-  let Pe = mergeSessionEnv({
+      : childArgs;
+  let childEnv = mergeSessionEnv({
     inheritedEnv: process.env,
     serverEnv: config.environment_variables,
     enforcedEnv,
-    onDropped: (V, ue, U) => onDebug(`[runner:session] Skipping ${U} environment name ${V}: ${ue}`),
+    onDropped: (reason, advice, name) =>
+      onDebug(`[runner:session] Skipping ${name} environment name ${reason}: ${advice}`),
   });
   onDebug(
-    `[runner:session] Spawning child: ${[execPath, ...execArgs].join(" ")} (${q.length - execArgs.length} args) ANTHROPIC_BASE_URL=${config.api_base_url} CLAUDE_CODE_WORKER_EPOCH=${workerEpoch} cwd=${cwd}`,
+    `[runner:session] Spawning child: ${[execPath, ...execArgs].join(" ")} (${spawnArgs.length - execArgs.length} args) ANTHROPIC_BASE_URL=${config.api_base_url} CLAUDE_CODE_WORKER_EPOCH=${workerEpoch} cwd=${cwd}`,
   );
-  let En = (V) => {
-    let ue = describeSpawnFailure(V, [execPath, ...q], Pe);
+  let spawnFailure = (error) => {
+    let description = describeSpawnFailure(error, [execPath, ...spawnArgs], childEnv);
     onDebug(
-      `[runner:session] ${sessionId} spawn error (${ue.class}): ${V instanceof Error ? V.message : String(V)}`,
+      `[runner:session] ${sessionId} spawn error (${description.class}): ${error instanceof Error ? error.message : String(error)}`,
     );
     return {
       result: "failed",
       exitCode: null,
       exitSignal: null,
-      stderrTail: ue.description,
-      startError: ue,
+      stderrTail: description.description,
+      startError: description,
     };
   };
-  let ft = {
+  let spawnOptions = {
     cwd,
-    stdio: Nn ? [...CHILD_STDIO_MODES] : ["pipe", "pipe", "pipe", "pipe"],
-    env: Pe,
+    stdio: isReviewSession ? [...CHILD_STDIO_MODES] : ["pipe", "pipe", "pipe", "pipe"],
+    env: childEnv,
     windowsHide: true,
     detached: true,
   };
-  let he;
+  let childProcess;
   try {
-    he = spawn(execPath, q, ft);
+    childProcess = spawn(execPath, spawnArgs, spawnOptions);
   } catch (error) {
-    return Promise.resolve(En(error));
+    return Promise.resolve(spawnFailure(error));
   }
-  let De;
+  let activityPipe;
   try {
-    De = he.stdio[3];
-    De?.on?.("error", (V) => {
-      onDebug(`[runner:session] activity pipe error (${V.message}); falling back to stdout readline`);
-      De = undefined;
+    activityPipe = childProcess.stdio[3];
+    activityPipe?.on?.("error", (pipeError) => {
+      onDebug(`[runner:session] activity pipe error (${pipeError.message}); falling back to stdout readline`);
+      activityPipe = undefined;
     });
   } catch (error) {
     onDebug(
       `[runner:session] activity pipe unavailable (${error instanceof Error ? error.message : String(error)}); falling back to stdout readline`,
     );
-    De = undefined;
+    activityPipe = undefined;
   }
-  onStatus(`[runner:session] ${sessionId} child spawned pid=${he.pid} cwd=${cwd}`);
+  onStatus(`[runner:session] ${sessionId} child spawned pid=${childProcess.pid} cwd=${cwd}`);
   onChildLifecycle?.("spawned");
-  if (Nn && he.pid !== undefined) {
+  if (isReviewSession && childProcess.pid !== undefined) {
     let accessToken = inferenceAuth?.access_token;
     if (
       accessToken !== undefined &&
       writeChildSessionTokens(
-        he,
+        childProcess,
         {
           sessionToken,
           inferenceToken: accessToken,
         },
-        (U) =>
-          onDebug(`[runner:session] ${sessionId} writing a token to its descriptor failed (${U.message})`),
+        (writeError) =>
+          onDebug(
+            `[runner:session] ${sessionId} writing a token to its descriptor failed (${writeError.message})`,
+          ),
       )
     )
       logFeatureOk("self_hosted_review_session");
@@ -3384,29 +3649,30 @@ function runSessionChild(e) {
         `[runner:session] ${sessionId} could not be handed its tokens on descriptors; ending its child. The session fails. Nothing on this runner needs changing.`,
       );
       try {
-        if (he.pid === undefined || he.pid <= 1) throw Error("no process group to signal");
-        process.kill(-he.pid, "SIGKILL");
+        if (childProcess.pid === undefined || childProcess.pid <= 1)
+          throw Error("no process group to signal");
+        process.kill(-childProcess.pid, "SIGKILL");
       } catch {
-        he.kill("SIGKILL");
+        childProcess.kill("SIGKILL");
       }
     }
   }
-  kt?.("startup");
-  let Vt = new SilenceWatchdog({
-    limitMs: Cn,
+  reportActivity?.("startup");
+  let startupSilenceWatchdog = new SilenceWatchdog({
+    limitMs: startupTimeoutMs,
     onSilent: () =>
-      kt?.("startup", {
-        ...Bn(),
+      reportActivity?.("startup", {
+        ...ledgerSnapshot(),
         childSilent: true,
       }),
   });
   if (child.kind === "tool-server") {
-    he.stdin?.on("error", (V) => {
+    childProcess.stdin?.on("error", (stdinError) => {
       onDebug(
-        `[runner:session] ${sessionId} tool server's standard input closed before its line was read (${V.message})`,
+        `[runner:session] ${sessionId} tool server's standard input closed before its line was read (${stdinError.message})`,
       );
     });
-    he.stdin?.write(
+    childProcess.stdin?.write(
       jsonStringify({
         v: 1,
         session_id: sessionId,
@@ -3418,25 +3684,25 @@ function runSessionChild(e) {
 `,
     );
   } else
-    onChildStdinReady?.((V) => {
-      if (he.stdin && !he.stdin.destroyed) {
-        he.stdin.write(V);
+    onChildStdinReady?.((write) => {
+      if (childProcess.stdin && !childProcess.stdin.destroyed) {
+        childProcess.stdin.write(write);
         return true;
       }
       return false;
     });
-  let P = new SessionLifetimeWatchdog({
-    child: he,
+  let lifetimeWatchdog = new SessionLifetimeWatchdog({
+    child: childProcess,
     sessionId,
-    startTokenStale: e.startTokenStale,
-    stuckExitCode: e.stuckExitCode,
+    startTokenStale: options.startTokenStale,
+    stuckExitCode: options.stuckExitCode,
     maxLifetimeMs: envPositiveMs("SELF_HOSTED_RUNNER_MAX_LIFETIME_MS"),
     maxLifetimeGraceMs: envPositiveMs("SELF_HOSTED_RUNNER_MAX_LIFETIME_GRACE_MS") || MAX_LIFETIME_GRACE_MS,
     sigkillGraceMs: Math.min(
       Math.max(
         envPositiveMs("SELF_HOSTED_RUNNER_SIGKILL_GRACE_MS") || 30000,
-        e.postSessionHookTimeoutMs +
-          (e.pushOutcomeOnRelease ? PUSH_ON_RELEASE_TIMEOUT_MS : 0) +
+        options.postSessionHookTimeoutMs +
+          (options.pushOutcomeOnRelease ? PUSH_ON_RELEASE_TIMEOUT_MS : 0) +
           SIGKILL_GRACE_BASE_MS,
       ),
       2147483647,
@@ -3446,508 +3712,526 @@ function runSessionChild(e) {
       SessionLifetimeWatchdog.SIGKILL_TIMEOUT_DEFAULT_MS,
     onMaxLifetime,
     onTerminating: () => {
-      Vt.end();
+      startupSilenceWatchdog.end();
       onChildTerminating?.();
     },
     onDebug,
     onStatus,
   });
-  An.current = P;
-  let Z = () => P.terminate();
-  signal.addEventListener("abort", Z, {
+  watchdog.current = lifetimeWatchdog;
+  let onAbort = () => lifetimeWatchdog.terminate();
+  signal.addEventListener("abort", onAbort, {
     once: true,
   });
-  if (signal.aborted) P.terminate();
-  let re = new Map();
-  let be = () => {
-    let V = 0;
-    for (let ue of re.values()) if (ue !== "monitor_mcp" && ue !== "monitor_ws") V++;
-    return V;
+  if (signal.aborted) lifetimeWatchdog.terminate();
+  let liveTasks = new Map();
+  let countLiveTasks = () => {
+    let count = 0;
+    for (let kind of liveTasks.values()) if (kind !== "monitor_mcp" && kind !== "monitor_ws") count++;
+    return count;
   };
-  let ee = null;
-  let Re;
-  let Ue = false;
-  let ht = false;
-  let wn = false;
-  let et = false;
-  let Ct = false;
-  let St = false;
-  let Or = false;
-  let Ar = false;
-  let Gr = 120000;
-  let pr = () => ee !== null && Date.now() < ee;
-  let Bn = () => ({
-    liveTasks: re.size,
-    liveTaskIds: Array.from(re, ([V, ue]) => `${V}:${ue}`),
-    wakeupInMs: ee !== null ? Math.max(0, ee - Date.now()) : undefined,
-    bgResultAwaitingFollowup: pe,
+  let wakeupAt = null;
+  let turnEndTimer;
+  let turnOpen = false;
+  let sawWaitingOnUser = false;
+  let turnIsFollowup = false;
+  let awaitingUser = false;
+  let sawInit = false;
+  let sawSessionState = false;
+  let sawRequiresAction = false;
+  let sawResult = false;
+  let wakeupSlackMs = 120000;
+  let wakeupPending = () => wakeupAt !== null && Date.now() < wakeupAt;
+  let ledgerSnapshot = () => ({
+    liveTasks: liveTasks.size,
+    liveTaskIds: Array.from(liveTasks, ([taskId, taskKind]) => `${taskId}:${taskKind}`),
+    wakeupInMs: wakeupAt !== null ? Math.max(0, wakeupAt - Date.now()) : undefined,
+    bgResultAwaitingFollowup: followupPending,
   });
-  let un = envPositiveMs("SELF_HOSTED_RUNNER_BG_RESULT_GRACE_MS") || BG_RESULT_GRACE_MS;
-  let We = envPositiveMs("SELF_HOSTED_RUNNER_POST_TURN_SETTLE_MS") || POST_TURN_SETTLE_MS;
-  let se = false;
-  let ke = 0;
-  let jt;
-  let cn = (V = false) => {
-    if (jt !== undefined) {
-      clearTimeout(jt);
-      jt = undefined;
+  let followupGraceMs = envPositiveMs("SELF_HOSTED_RUNNER_BG_RESULT_GRACE_MS") || BG_RESULT_GRACE_MS;
+  let settleMs = envPositiveMs("SELF_HOSTED_RUNNER_POST_TURN_SETTLE_MS") || POST_TURN_SETTLE_MS;
+  let settleOpen = false;
+  let settleDeadline = 0;
+  let settleTimer;
+  let closeSettle = (terminated = false) => {
+    if (settleTimer !== undefined) {
+      clearTimeout(settleTimer);
+      settleTimer = undefined;
     }
-    if (se) {
-      se = false;
-      onPostTurnSettle?.(false, V);
+    if (settleOpen) {
+      settleOpen = false;
+      onPostTurnSettle?.(false, terminated);
     }
   };
-  let Pn = (V) => {
-    let min = Math.min(Date.now() + V, ke);
-    if (jt !== undefined) clearTimeout(jt);
-    jt = setTimeout(cn, Math.max(0, min - Date.now()));
+  let scheduleSettleClose = (delayMs) => {
+    let min = Math.min(Date.now() + delayMs, settleDeadline);
+    if (settleTimer !== undefined) clearTimeout(settleTimer);
+    settleTimer = setTimeout(closeSettle, Math.max(0, min - Date.now()));
   };
-  let Jt = () => {
-    ke = Date.now() + We;
-    if (!se) {
-      se = true;
+  let noteTurnSettled = () => {
+    settleDeadline = Date.now() + settleMs;
+    if (!settleOpen) {
+      settleOpen = true;
       onPostTurnSettle?.(true);
     }
-    Pn(We);
+    scheduleSettleClose(settleMs);
   };
-  let In = new Set();
-  let nn = false;
-  let tt = new Set();
-  let R = new Set();
-  let pe = false;
-  let It;
-  let Ie = () => {
-    if (It !== undefined) {
-      clearTimeout(It);
-      It = undefined;
+  let endedTaskIds = new Set();
+  let turnHadTasks = false;
+  let notifiedTaskIds = new Set();
+  let subagentTasks = new Set();
+  let followupPending = false;
+  let followupGraceTimer;
+  let clearFollowupGrace = () => {
+    if (followupGraceTimer !== undefined) {
+      clearTimeout(followupGraceTimer);
+      followupGraceTimer = undefined;
     }
   };
-  let ye = (V, ue = false, U = false) => {
-    if (!ue) {
-      Ie();
-      nn = false;
-      tt.clear();
+  let clearFollowup = (reason, keepTurnOpen = false, terminated = false) => {
+    if (!keepTurnOpen) {
+      clearFollowupGrace();
+      turnHadTasks = false;
+      notifiedTaskIds.clear();
     }
-    if (pe) {
-      pe = false;
-      onDebug(`[runner:session] ${sessionId} background-result follow-up cleared (${V})`);
-      onBgFollowupPending?.(false, U || An.current?.terminationRequested === true);
+    if (followupPending) {
+      followupPending = false;
+      onDebug(`[runner:session] ${sessionId} background-result follow-up cleared (${reason})`);
+      onBgFollowupPending?.(false, terminated || watchdog.current?.terminationRequested === true);
     }
   };
-  let Xe = () => {
-    Ie();
-    It = setTimeout(() => {
-      It = undefined;
+  let armFollowupGrace = () => {
+    clearFollowupGrace();
+    followupGraceTimer = setTimeout(() => {
+      followupGraceTimer = undefined;
       onStatus(
-        `[runner:session] ${sessionId} no follow-up turn within ${formatDuration(un)} of the background task finishing \u2014 ` +
+        `[runner:session] ${sessionId} no follow-up turn within ${formatDuration(followupGraceMs)} of the background task finishing \u2014 ` +
           "releasing the follow-up hold",
       );
-      ye("grace elapsed");
-      fn();
-    }, un);
+      clearFollowup("grace elapsed");
+      maybeEndTurn();
+    }, followupGraceMs);
   };
-  let qe = () => {
-    if (!pe) {
-      pe = true;
+  let markFollowupPending = () => {
+    if (!followupPending) {
+      followupPending = true;
       onStatus(
         `[runner:session] ${sessionId} background task finished; follow-up turn ` +
           "pending \u2014 session still counted as busy (grace " +
-          `${formatDuration(un)})`,
+          `${formatDuration(followupGraceMs)})`,
       );
       onBgFollowupPending?.(true);
     }
-    if (!Ue) Xe();
+    if (!turnOpen) armFollowupGrace();
   };
-  let Nt = (V) => {
-    In.delete(V);
-    R.delete(V);
-    if (nn && be() === 0 && !et && !Ue) qe();
+  let finishTask = (taskId) => {
+    endedTaskIds.delete(taskId);
+    subagentTasks.delete(taskId);
+    if (turnHadTasks && countLiveTasks() === 0 && !awaitingUser && !turnOpen) markFollowupPending();
   };
-  let Je = (taskId) => {
-    if (R.has(taskId)) {
-      Nt(taskId);
+  let handleTaskEnded = (taskId) => {
+    if (subagentTasks.has(taskId)) {
+      finishTask(taskId);
       return;
     }
-    if (In.delete(taskId)) {
-      nn = true;
-      tt.add(taskId);
+    if (endedTaskIds.delete(taskId)) {
+      turnHadTasks = true;
+      notifiedTaskIds.add(taskId);
     }
-    if (be() > 0) return;
-    if (et) return;
-    if (!(nn || !Ue)) return;
-    nn = true;
-    tt.add(taskId);
-    qe();
+    if (countLiveTasks() > 0) return;
+    if (awaitingUser) return;
+    if (!(turnHadTasks || !turnOpen)) return;
+    turnHadTasks = true;
+    notifiedTaskIds.add(taskId);
+    markFollowupPending();
   };
-  let fn = () => {
-    if (Ue || re.size > 0 || pr() || pe) return;
-    if (Re !== undefined) {
-      clearTimeout(Re);
-      Re = undefined;
+  let maybeEndTurn = () => {
+    if (turnOpen || liveTasks.size > 0 || wakeupPending() || followupPending) return;
+    if (turnEndTimer !== undefined) {
+      clearTimeout(turnEndTimer);
+      turnEndTimer = undefined;
     }
-    kt?.("turn-end");
+    reportActivity?.("turn-end");
   };
-  let Wn = () => {
-    for (let key of re.keys()) In.add(key);
-    kt?.("turn-end-deferred", Bn());
-    if (pe) Xe();
-    if (Re !== undefined) clearTimeout(Re);
-    if (ee !== null)
-      Re = setTimeout(
+  let endTurnDeferred = () => {
+    for (let key of liveTasks.keys()) endedTaskIds.add(key);
+    reportActivity?.("turn-end-deferred", ledgerSnapshot());
+    if (followupPending) armFollowupGrace();
+    if (turnEndTimer !== undefined) clearTimeout(turnEndTimer);
+    if (wakeupAt !== null)
+      turnEndTimer = setTimeout(
         () => {
-          Re = undefined;
-          ee = null;
-          fn();
+          turnEndTimer = undefined;
+          wakeupAt = null;
+          maybeEndTurn();
         },
-        Math.max(0, ee - Date.now()),
+        Math.max(0, wakeupAt - Date.now()),
       );
   };
-  let Dn;
-  let Zt = false;
-  let hn = (V) => {
-    if (Ct || (V === "stderr" && Dn !== undefined) || env.CLAUDE_RUNNER_DISABLE_TURN_BEGAN_BEFORE_INIT)
+  let turnSignalSource;
+  let everStartedTurn = false;
+  let onTurnStarted = (source) => {
+    if (
+      sawInit ||
+      (source === "stderr" && turnSignalSource !== undefined) ||
+      env.CLAUDE_RUNNER_DISABLE_TURN_BEGAN_BEFORE_INIT
+    )
       return;
-    if (Dn === undefined)
+    if (turnSignalSource === undefined)
       onStatus(
-        `[runner:session] ${sessionId} a turn started (signal on ${V === "tee" ? "the activity channel" : "stderr"})${Cn > 0 ? ": until the child has initialized, --startup-timeout-min now counts from its last line on the activity channel" : ""}`,
+        `[runner:session] ${sessionId} a turn started (signal on ${source === "tee" ? "the activity channel" : "stderr"})${startupTimeoutMs > 0 ? ": until the child has initialized, --startup-timeout-min now counts from its last line on the activity channel" : ""}`,
       );
-    if (V === "tee" && Dn === "stderr")
+    if (source === "tee" && turnSignalSource === "stderr")
       onDebug(
         `[runner:session] ${sessionId} a turn started: signal also read on the activity channel, after stderr (both channels work; no action needed)`,
       );
-    Dn = V;
-    Vt.arm();
-    if (V === "stderr") {
-      kt?.("init-observed");
+    turnSignalSource = source;
+    startupSilenceWatchdog.arm();
+    if (source === "stderr") {
+      reportActivity?.("init-observed");
       return;
     }
-    let ue = !Ue;
-    Ue = true;
-    Zt = true;
-    P.noteTurnStart();
-    kt?.("activity");
-    if (ue) {
-      ee = null;
-      if (Re !== undefined) {
-        clearTimeout(Re);
-        Re = undefined;
+    let wasIdle = !turnOpen;
+    turnOpen = true;
+    everStartedTurn = true;
+    lifetimeWatchdog.noteTurnStart();
+    reportActivity?.("activity");
+    if (wasIdle) {
+      wakeupAt = null;
+      if (turnEndTimer !== undefined) {
+        clearTimeout(turnEndTimer);
+        turnEndTimer = undefined;
       }
-      ye("follow-up turn opened");
+      clearFollowup("follow-up turn opened");
     }
   };
-  let Ln = (V) => {
-    let ue;
+  let onChildLine = (line) => {
+    let message;
     try {
-      ue = jsonParse(V);
+      message = jsonParse(line);
     } catch {
       return;
     }
-    if (!ue || typeof ue !== "object") return;
-    let U = ue;
-    if (typeof U.type === "string") Vt.heard();
-    if (U.type === "control_response") {
-      let requestId = U.response?.request_id;
+    if (!message || typeof message !== "object") return;
+    let record = message;
+    if (typeof record.type === "string") startupSilenceWatchdog.heard();
+    if (record.type === "control_response") {
+      let requestId = record.response?.request_id;
       if (typeof requestId === "string" && requestId.startsWith("shr-token-")) onTokenAck?.(requestId);
     }
-    if (U.type === "assistant") onDebug("[runner:session] Activity: assistant message");
-    else if (U.type === "result") {
-      onDebug(`[runner:session] Result: subtype=${U.subtype}`);
-      if (U.is_error === true && typeof U.api_error_status === "number")
-        onResultApiError?.(U.api_error_status);
+    if (record.type === "assistant") onDebug("[runner:session] Activity: assistant message");
+    else if (record.type === "result") {
+      onDebug(`[runner:session] Result: subtype=${record.subtype}`);
+      if (record.is_error === true && typeof record.api_error_status === "number")
+        onResultApiError?.(record.api_error_status);
     }
-    if (U.type === "system" && U.subtype === "task_started") {
-      if (typeof U.task_id === "string" && U.task_type !== "in_process_teammate") {
-        re.set(U.task_id, typeof U.task_type === "string" ? U.task_type : "unknown");
-        if (U.owned_by_subagent === true) R.add(U.task_id);
-        else R.delete(U.task_id);
-        onBgTaskLedger?.(be());
+    if (record.type === "system" && record.subtype === "task_started") {
+      if (typeof record.task_id === "string" && record.task_type !== "in_process_teammate") {
+        liveTasks.set(record.task_id, typeof record.task_type === "string" ? record.task_type : "unknown");
+        if (record.owned_by_subagent === true) subagentTasks.add(record.task_id);
+        else subagentTasks.delete(record.task_id);
+        onBgTaskLedger?.(countLiveTasks());
       }
       return;
     }
-    if (U.type === "system" && U.subtype === "task_updated") {
-      let patch = U.patch;
+    if (record.type === "system" && record.subtype === "task_updated") {
+      let patch = record.patch;
       let status = patch?.status;
-      if (typeof U.task_id === "string" && patch?.is_backgrounded === true && re.has(U.task_id))
-        In.add(U.task_id);
       if (
-        typeof U.task_id === "string" &&
+        typeof record.task_id === "string" &&
+        patch?.is_backgrounded === true &&
+        liveTasks.has(record.task_id)
+      )
+        endedTaskIds.add(record.task_id);
+      if (
+        typeof record.task_id === "string" &&
         (status === "completed" || status === "failed" || status === "killed") &&
-        re.delete(U.task_id)
+        liveTasks.delete(record.task_id)
       ) {
-        Je(U.task_id);
-        onBgTaskLedger?.(be());
-        fn();
+        handleTaskEnded(record.task_id);
+        onBgTaskLedger?.(countLiveTasks());
+        maybeEndTurn();
       }
       return;
     }
-    if (U.type === "system" && U.subtype === "task_notification") {
-      if (typeof U.task_id === "string" && re.delete(U.task_id)) {
-        if (U.status === "stopped") Nt(U.task_id);
-        else Je(U.task_id);
-        onBgTaskLedger?.(be());
-        fn();
+    if (record.type === "system" && record.subtype === "task_notification") {
+      if (typeof record.task_id === "string" && liveTasks.delete(record.task_id)) {
+        if (record.status === "stopped") finishTask(record.task_id);
+        else handleTaskEnded(record.task_id);
+        onBgTaskLedger?.(countLiveTasks());
+        maybeEndTurn();
       }
       return;
     }
-    if (U.type === "system" && U.subtype === "background_tasks_changed") {
-      let tasks = U.tasks;
+    if (record.type === "system" && record.subtype === "background_tasks_changed") {
+      let tasks = record.tasks;
       if (Array.isArray(tasks))
         for (let task of tasks) {
           let taskId = task?.task_id;
-          if (typeof taskId === "string") In.add(taskId);
+          if (typeof taskId === "string") endedTaskIds.add(taskId);
         }
       return;
     }
     if (
-      U.type === "system" &&
-      U.subtype === "hook_response" &&
-      U.hook_event === "SessionStart" &&
-      U.outcome === "error"
+      record.type === "system" &&
+      record.subtype === "hook_response" &&
+      record.hook_event === "SessionStart" &&
+      record.outcome === "error"
     ) {
       onSessionStartHookError?.();
       return;
     }
-    if (U.type === "system" && U.subtype === "init") {
-      if (!Ct) {
-        Ct = true;
-        Vt.end();
+    if (record.type === "system" && record.subtype === "init") {
+      if (!sawInit) {
+        sawInit = true;
+        startupSilenceWatchdog.end();
         onChildInit?.();
         if (child.kind === "tool-server") logFeatureOk("self_hosted_tools_host");
       }
-      kt?.(child.kind === "tool-server" ? "init-observed" : "activity");
+      reportActivity?.(child.kind === "tool-server" ? "init-observed" : "activity");
       return;
     }
-    if (U.type === "system" && U.subtype === "turn_began_before_init") {
-      hn("tee");
+    if (record.type === "system" && record.subtype === "turn_began_before_init") {
+      onTurnStarted("tee");
       return;
     }
-    if (U.type === "system" && U.subtype === "turn_starting") {
-      if (!Ct) return;
-      wn = true;
-      kt?.("activity");
+    if (record.type === "system" && record.subtype === "turn_starting") {
+      if (!sawInit) return;
+      turnIsFollowup = true;
+      reportActivity?.("activity");
       if (
-        U.mode === undefined ||
-        (U.mode === "task-notification" && !("task_id" in U)) ||
-        (U.mode === "task-notification" && typeof U.task_id === "string" && tt.has(U.task_id))
+        record.mode === undefined ||
+        (record.mode === "task-notification" && !("task_id" in record)) ||
+        (record.mode === "task-notification" &&
+          typeof record.task_id === "string" &&
+          notifiedTaskIds.has(record.task_id))
       )
-        ye("follow-up turn starting");
+        clearFollowup("follow-up turn starting");
       else {
-        ye("non-follow-up turn starting", true);
-        Ie();
+        clearFollowup("non-follow-up turn starting", true);
+        clearFollowupGrace();
       }
       return;
     }
-    if (U.type === "system" && U.subtype === "session_state_changed") {
-      St = true;
-      if (se) Pn(SESSION_STATE_IDLE_SETTLE_MS);
-      if (typeof U.waiting_on_user === "boolean") {
-        ht = true;
-        et = U.waiting_on_user;
+    if (record.type === "system" && record.subtype === "session_state_changed") {
+      sawSessionState = true;
+      if (settleOpen) scheduleSettleClose(SESSION_STATE_IDLE_SETTLE_MS);
+      if (typeof record.waiting_on_user === "boolean") {
+        sawWaitingOnUser = true;
+        awaitingUser = record.waiting_on_user;
       }
-      if (U.state === "idle") {
-        if (!Ar || (Zt && !Ct)) {
-          P.noteTurnEnd();
-          Ue = false;
-          Zt = false;
-          if (Ar && nn && be() === 0 && !et) qe();
-          if (Ar && (re.size > 0 || pr() || pe)) Wn();
-          else kt?.("turn-end");
+      if (record.state === "idle") {
+        if (!sawResult || (everStartedTurn && !sawInit)) {
+          lifetimeWatchdog.noteTurnEnd();
+          turnOpen = false;
+          everStartedTurn = false;
+          if (sawResult && turnHadTasks && countLiveTasks() === 0 && !awaitingUser) markFollowupPending();
+          if (sawResult && (liveTasks.size > 0 || wakeupPending() || followupPending)) endTurnDeferred();
+          else reportActivity?.("turn-end");
         }
         return;
       }
-      if (!Ct) {
-        if (typeof U.waiting_on_user === "boolean" ? U.waiting_on_user : U.state === "requires_action")
-          Or = true;
-        else if (!Or) return;
+      if (!sawInit) {
+        if (
+          typeof record.waiting_on_user === "boolean"
+            ? record.waiting_on_user
+            : record.state === "requires_action"
+        )
+          sawRequiresAction = true;
+        else if (!sawRequiresAction) return;
       }
-      if (typeof U.waiting_on_user === "boolean") {
-        kt?.(U.waiting_on_user ? "awaiting-action" : "activity");
-        ye(U.waiting_on_user ? "child parked at a prompt" : "child running", true);
-      } else if (U.state === "requires_action") {
-        kt?.("awaiting-action");
-        ye("child parked at a prompt", true);
-      } else if (U.state === "running") {
-        kt?.("activity");
-        ye("child running", true);
+      if (typeof record.waiting_on_user === "boolean") {
+        reportActivity?.(record.waiting_on_user ? "awaiting-action" : "activity");
+        clearFollowup(record.waiting_on_user ? "child parked at a prompt" : "child running", true);
+      } else if (record.state === "requires_action") {
+        reportActivity?.("awaiting-action");
+        clearFollowup("child parked at a prompt", true);
+      } else if (record.state === "running") {
+        reportActivity?.("activity");
+        clearFollowup("child running", true);
       }
       return;
     }
-    if (U.type === "assistant") {
-      let content = U.message?.content;
+    if (record.type === "assistant") {
+      let content = record.message?.content;
       if (Array.isArray(content)) {
-        for (let Tt of content)
+        for (let contentBlock of content)
           if (
-            Tt &&
-            typeof Tt === "object" &&
-            Tt.type === "tool_use" &&
-            Tt.name === SCHEDULE_WAKEUP_TOOL_NAME
+            contentBlock &&
+            typeof contentBlock === "object" &&
+            contentBlock.type === "tool_use" &&
+            contentBlock.name === SCHEDULE_WAKEUP_TOOL_NAME
           ) {
-            let input = Tt.input;
-            let Kn = Number(input?.delaySeconds);
-            if (Number.isFinite(Kn)) {
-              let min = Math.min(3600, Math.max(60, Kn));
-              ee = Date.now() + min * 1000 + Gr;
+            let input = contentBlock.input;
+            let delaySeconds = Number(input?.delaySeconds);
+            if (Number.isFinite(delaySeconds)) {
+              let min = Math.min(3600, Math.max(60, delaySeconds));
+              wakeupAt = Date.now() + min * 1000 + wakeupSlackMs;
             }
           }
       }
     }
-    if (U.type === "result") {
-      Jt();
-      P.noteTurnEnd();
-      Ue = false;
-      Zt = false;
-      Ar = true;
-      if (nn && be() === 0 && !et) qe();
-      if (re.size === 0 && !pr() && !pe) kt?.("turn-end");
-      else if (et && !env.CLAUDE_RUNNER_DISABLE_AWAITING_ACTION_OVERRIDE) {
-        kt?.("awaiting-action", Bn());
-        ye("child parked at a prompt", true);
-      } else Wn();
-    } else if (U.type === "user" || U.type === "assistant") {
-      if (U.from_subagent === true) return;
-      if (Dn === undefined && !Ct && !St && !Ar) {
-        kt?.("startup", {
-          ...Bn(),
+    if (record.type === "result") {
+      noteTurnSettled();
+      lifetimeWatchdog.noteTurnEnd();
+      turnOpen = false;
+      everStartedTurn = false;
+      sawResult = true;
+      if (turnHadTasks && countLiveTasks() === 0 && !awaitingUser) markFollowupPending();
+      if (liveTasks.size === 0 && !wakeupPending() && !followupPending) reportActivity?.("turn-end");
+      else if (awaitingUser && !env.CLAUDE_RUNNER_DISABLE_AWAITING_ACTION_OVERRIDE) {
+        reportActivity?.("awaiting-action", ledgerSnapshot());
+        clearFollowup("child parked at a prompt", true);
+      } else endTurnDeferred();
+    } else if (record.type === "user" || record.type === "assistant") {
+      if (record.from_subagent === true) return;
+      if (turnSignalSource === undefined && !sawInit && !sawSessionState && !sawResult) {
+        reportActivity?.("startup", {
+          ...ledgerSnapshot(),
           childAlive: true,
         });
         return;
       }
-      P.noteTurnStart();
-      if (!Ue && U.type === "user") ee = null;
-      let nt = !Ue;
-      Ue = true;
-      if (Re !== undefined) {
-        clearTimeout(Re);
-        Re = undefined;
+      lifetimeWatchdog.noteTurnStart();
+      if (!turnOpen && record.type === "user") wakeupAt = null;
+      let wasIdle = !turnOpen;
+      turnOpen = true;
+      if (turnEndTimer !== undefined) {
+        clearTimeout(turnEndTimer);
+        turnEndTimer = undefined;
       }
-      if (!ht) kt?.("activity");
-      if (nt) {
-        ye("follow-up turn opened", wn);
-        if (wn) Ie();
+      if (!sawWaitingOnUser) reportActivity?.("activity");
+      if (wasIdle) {
+        clearFollowup("follow-up turn opened", turnIsFollowup);
+        if (turnIsFollowup) clearFollowupGrace();
       }
     }
   };
-  if (he.stdout)
+  if (childProcess.stdout)
     createInterface({
-      input: he.stdout,
-    }).on("line", Ln);
-  if (De)
+      input: childProcess.stdout,
+    }).on("line", onChildLine);
+  if (activityPipe)
     createInterface({
-      input: De,
-    }).on("line", Ln);
-  let Dt = 50;
-  let Cr = 500;
-  let pt = [];
-  let Lt = 9;
-  let Ke = 0;
-  if (he.stderr)
+      input: activityPipe,
+    }).on("line", onChildLine);
+  let maxStderrLines = 50;
+  let maxStderrChars = 500;
+  let stderrTail = [];
+  let maxPaneProblems = 9;
+  let paneProblemCount = 0;
+  if (childProcess.stderr)
     createInterface({
-      input: he.stderr,
-    }).on("line", (ue) => {
-      if (!Ct && ue.startsWith("SDKStartup: phase=system_init_emitted")) {
-        Ct = true;
-        Vt.end();
+      input: childProcess.stderr,
+    }).on("line", (line) => {
+      if (!sawInit && line.startsWith("SDKStartup: phase=system_init_emitted")) {
+        sawInit = true;
+        startupSilenceWatchdog.end();
         onChildInit?.();
-        kt?.("init-observed");
+        reportActivity?.("init-observed");
         onDebug(`[runner:session] ${sessionId} sawInit latched via stderr SDKStartup marker`);
       }
-      if (/^SDKStartup: phase=turn_began_before_init(?: |$)/.test(ue)) hn("stderr");
-      let U = redactAndTruncate(ue, Cr);
-      if (U.startsWith(OTEL_DIAG_ERROR_PREFIX)) onStatus(`[runner:session] stderr: ${U}`);
-      else if (diffFindsNestedRepository && isChangesPaneProblemMessage(U) && Ke < Lt) {
-        Ke++;
-        onStatus(`[runner:session] ${sessionId} ${U}`);
-      } else onDebug(`[runner:session] stderr: ${U}`);
-      pt.push(U);
-      if (pt.length > Dt) pt.shift();
+      if (/^SDKStartup: phase=turn_began_before_init(?: |$)/.test(line)) onTurnStarted("stderr");
+      let safeLine = redactAndTruncate(line, maxStderrChars);
+      if (safeLine.startsWith(OTEL_DIAG_ERROR_PREFIX)) onStatus(`[runner:session] stderr: ${safeLine}`);
+      else if (
+        diffFindsNestedRepository &&
+        isChangesPaneProblemMessage(safeLine) &&
+        paneProblemCount < maxPaneProblems
+      ) {
+        paneProblemCount++;
+        onStatus(`[runner:session] ${sessionId} ${safeLine}`);
+      } else onDebug(`[runner:session] stderr: ${safeLine}`);
+      stderrTail.push(safeLine);
+      if (stderrTail.length > maxStderrLines) stderrTail.shift();
     });
-  let Ut = false;
+  let lifecycleReported = false;
   return new Promise((resolve) => {
-    he.on("close", (ue, U) => {
-      signal.removeEventListener("abort", Z);
-      P.stop();
-      Vt.end();
-      if (Re !== undefined) {
-        clearTimeout(Re);
-        Re = undefined;
+    childProcess.on("close", (exitCode, exitSignal) => {
+      signal.removeEventListener("abort", onAbort);
+      lifetimeWatchdog.stop();
+      startupSilenceWatchdog.end();
+      if (turnEndTimer !== undefined) {
+        clearTimeout(turnEndTimer);
+        turnEndTimer = undefined;
       }
-      if (re.size > 0) {
-        re.clear();
-        R.clear();
+      if (liveTasks.size > 0) {
+        liveTasks.clear();
+        subagentTasks.clear();
         onBgTaskLedger?.(0);
       }
-      ye("child exited", false, true);
-      cn(true);
-      let stderrTail = pt.join(`
+      clearFollowup("child exited", false, true);
+      closeSettle(true);
+      let stderrTail_2 = stderrTail.join(`
 `);
-      if (P.terminationRequested) {
+      if (lifetimeWatchdog.terminationRequested) {
         onStatus(
-          `[runner:session] ${sessionId} child exited pid=${he.pid} code=${ue} signal=${U} (interrupted \u2014 we asked)`,
+          `[runner:session] ${sessionId} child exited pid=${childProcess.pid} code=${exitCode} signal=${exitSignal} (interrupted \u2014 we asked)`,
         );
-        P.descendantsReaped.then(() =>
+        lifetimeWatchdog.descendantsReaped.then(() =>
           resolve({
             result: "interrupted",
-            exitCode: ue,
-            exitSignal: U,
-            stderrTail,
+            exitCode,
+            exitSignal,
+            stderrTail: stderrTail_2,
           }),
         );
-      } else if (U === "SIGTERM" || U === "SIGINT") {
+      } else if (exitSignal === "SIGTERM" || exitSignal === "SIGINT") {
         onStatus(
-          `[runner:session] ${sessionId} child exited pid=${he.pid} code=${ue} signal=${U} (interrupted)`,
+          `[runner:session] ${sessionId} child exited pid=${childProcess.pid} code=${exitCode} signal=${exitSignal} (interrupted)`,
         );
         resolve({
           result: "interrupted",
-          exitCode: ue,
-          exitSignal: U,
-          stderrTail,
+          exitCode,
+          exitSignal,
+          stderrTail: stderrTail_2,
         });
-      } else if (ue === 0) {
-        onStatus(`[runner:session] ${sessionId} child exited pid=${he.pid} code=0 (completed)`);
-        if (!Ut) {
-          Ut = true;
+      } else if (exitCode === 0) {
+        onStatus(`[runner:session] ${sessionId} child exited pid=${childProcess.pid} code=0 (completed)`);
+        if (!lifecycleReported) {
+          lifecycleReported = true;
           onChildLifecycle?.("completed");
         }
         resolve({
           result: "completed",
           exitCode: 0,
           exitSignal: null,
-          stderrTail,
+          stderrTail: stderrTail_2,
         });
       } else {
         onStatus(
-          `[runner:session] ${sessionId} child exited pid=${he.pid} code=${ue} signal=${U} (failed) \u2014 debug log at ${debugFile}`,
+          `[runner:session] ${sessionId} child exited pid=${childProcess.pid} code=${exitCode} signal=${exitSignal} (failed) \u2014 debug log at ${debugFile}`,
         );
-        if (!Ut) {
-          Ut = true;
+        if (!lifecycleReported) {
+          lifecycleReported = true;
           onChildLifecycle?.("failed");
         }
         resolve({
           result: "failed",
-          exitCode: ue,
-          exitSignal: U,
-          stderrTail,
+          exitCode,
+          exitSignal,
+          stderrTail: stderrTail_2,
         });
       }
     });
-    he.on("error", (ue) => {
-      signal.removeEventListener("abort", Z);
-      P.stop();
-      Vt.end();
-      if (!Ut) {
-        Ut = true;
+    childProcess.on("error", (error) => {
+      signal.removeEventListener("abort", onAbort);
+      lifetimeWatchdog.stop();
+      startupSilenceWatchdog.end();
+      if (!lifecycleReported) {
+        lifecycleReported = true;
         onChildLifecycle?.("failed");
       }
-      if (he.pid === undefined) {
-        resolve(En(ue));
+      if (childProcess.pid === undefined) {
+        resolve(spawnFailure(error));
         return;
       }
-      onDebug(`[runner:session] ${sessionId} spawn error: ${ue.message}`);
+      onDebug(`[runner:session] ${sessionId} spawn error: ${error.message}`);
       resolve({
         result: "failed",
         exitCode: null,
         exitSignal: null,
-        stderrTail: `spawn error: ${ue.message}`,
+        stderrTail: `spawn error: ${error.message}`,
       });
     });
   });
@@ -3966,11 +4250,11 @@ function getCheckoutHookTimeoutMs() {
     envSelfHostedRunnerCheckoutHookTimeoutMs === ""
   )
     return CHECKOUT_HOOK_TIMEOUT_MS;
-  let n = envPositiveMs("SELF_HOSTED_RUNNER_CHECKOUT_HOOK_TIMEOUT_MS");
-  return n > 0 ||
+  let timeoutMs = envPositiveMs("SELF_HOSTED_RUNNER_CHECKOUT_HOOK_TIMEOUT_MS");
+  return timeoutMs > 0 ||
     (envSelfHostedRunnerCheckoutHookTimeoutMs.trim() !== "" &&
       Number(envSelfHostedRunnerCheckoutHookTimeoutMs) === 0)
-    ? n
+    ? timeoutMs
     : CHECKOUT_HOOK_TIMEOUT_MS;
 }
 //@ chunk-hm0ce8vc.js:159615-159693 placement
@@ -3987,13 +4271,18 @@ var STOP_SIGKILL_WAIT_MS = 1500;
 var SIGKILL_GRACE_BASE_MS = 15000;
 var GIT_ARTIFACTS_REFRESH_TIMEOUT_MS = 1000;
 //@ chunk-hm0ce8vc.js:159693-159760 placement
-function graceSeconds(e, n, r = 0, s = 0, a = 0) {
-  return Math.ceil((e + n + r + s + a + SIGKILL_GRACE_BASE_MS) / 1000);
+function graceSeconds(postSessionHookMs, pushReleaseMs, sigkillGraceMs = 0, drainWaitMs = 0, maxHoldMs = 0) {
+  return Math.ceil(
+    (postSessionHookMs + pushReleaseMs + sigkillGraceMs + drainWaitMs + maxHoldMs + SIGKILL_GRACE_BASE_MS) /
+      1000,
+  );
 }
 //@ chunk-hm0ce8vc.js:159760-159854 placement
-function redactAndTruncate(e, n) {
-  let r = redactSecretsInText(e);
-  return r.length > n ? r.slice(0, n) + ` \u2026[+${r.length - n} chars]` : r;
+function redactAndTruncate(text, maxChars) {
+  let redacted = redactSecretsInText(text);
+  return redacted.length > maxChars
+    ? redacted.slice(0, maxChars) + ` \u2026[+${redacted.length - maxChars} chars]`
+    : redacted;
 }
 //@ chunk-hm0ce8vc.js:159854-159868 placement
 var MAX_LIFETIME_GRACE_MS = 900000;
@@ -4027,18 +4316,18 @@ class SessionLifetimeWatchdog {
   onMaxLifetime;
   onTerminating;
   static SIGKILL_TIMEOUT_DEFAULT_MS = SIGKILL_TIMEOUT_DEFAULT_MS;
-  constructor(e) {
-    this.child = e.child;
-    this.sessionId = e.sessionId;
-    this.maxLifetimeGraceMs = e.maxLifetimeGraceMs;
-    this.sigkillTimeoutMs = e.sigkillTimeoutMs;
-    this.sigkillGraceMs = e.sigkillGraceMs;
-    this.onMaxLifetime = e.onMaxLifetime;
-    this.startTokenStale = e.startTokenStale;
-    this.stuckExitCode = e.stuckExitCode;
-    this.onTerminating = e.onTerminating;
-    this.onDebug = e.onDebug;
-    this.onStatus = e.onStatus;
+  constructor(options) {
+    this.child = options.child;
+    this.sessionId = options.sessionId;
+    this.maxLifetimeGraceMs = options.maxLifetimeGraceMs;
+    this.sigkillTimeoutMs = options.sigkillTimeoutMs;
+    this.sigkillGraceMs = options.sigkillGraceMs;
+    this.onMaxLifetime = options.onMaxLifetime;
+    this.startTokenStale = options.startTokenStale;
+    this.stuckExitCode = options.stuckExitCode;
+    this.onTerminating = options.onTerminating;
+    this.onDebug = options.onDebug;
+    this.onStatus = options.onStatus;
     if (this.child.pid !== undefined)
       getProcessStartTimeAsync(this.child.pid, {
         skipCache: true,
@@ -4048,51 +4337,51 @@ class SessionLifetimeWatchdog {
         },
         () => {},
       );
-    if (e.maxLifetimeMs > 0) {
-      let maxLifetimeMs = e.maxLifetimeMs;
+    if (options.maxLifetimeMs > 0) {
+      let maxLifetimeMs = options.maxLifetimeMs;
       this.maxLifetimeTimer = setTimeout(
-        (r) => {
+        (maxLifetimeMs) => {
           if (this.stopped || this.terminating) return;
-          let s;
+          let decision;
           try {
-            s = this.onMaxLifetime?.();
+            decision = this.onMaxLifetime?.();
           } catch (error) {
             this.onStatus(
               `[runner:session] ${this.sessionId} max-lifetime hook threw (${error instanceof Error ? error.message : String(error)}) \u2014 falling back to the watchdog's own decision`,
             );
           }
-          this.maxLifetimeDecidedByHook = s !== undefined;
-          s ??= this.turnInFlight ? "wait" : "kill";
-          if (s === "kill") {
+          this.maxLifetimeDecidedByHook = decision !== undefined;
+          decision ??= this.turnInFlight ? "wait" : "kill";
+          if (decision === "kill") {
             this.onDebug(
-              `[runner:stuck] Session ${this.sessionId} exceeded max lifetime of ${r}ms \u2014 aborting child pid=${this.child.pid}`,
+              `[runner:stuck] Session ${this.sessionId} exceeded max lifetime of ${maxLifetimeMs}ms \u2014 aborting child pid=${this.child.pid}`,
             );
             this.terminate();
             return;
           }
           this.maxLifetimeDeferred = true;
           this.onStatus(
-            s === "release"
-              ? `[runner:session] ${this.sessionId} max session age reached (${r}ms) while not mid-turn \u2014 handing to the poll loop's release instead of terminating (hard stop in ${this.maxLifetimeGraceMs}ms if it is still alive)`
+            decision === "release"
+              ? `[runner:session] ${this.sessionId} max session age reached (${maxLifetimeMs}ms) while not mid-turn \u2014 handing to the poll loop's release instead of terminating (hard stop in ${this.maxLifetimeGraceMs}ms if it is still alive)`
               : this.maxLifetimeDecidedByHook
-                ? `[runner:session] ${this.sessionId} max session age reached (${r}ms) \u2014 waiting up to ${this.maxLifetimeGraceMs}ms for the in-flight turn to park or finish (it is then released; terminated at the hard stop otherwise)`
-                : `[runner:session] ${this.sessionId} max session age reached (${r}ms) \u2014 waiting up to ${this.maxLifetimeGraceMs}ms for in-flight turn to finish before terminating`,
+                ? `[runner:session] ${this.sessionId} max session age reached (${maxLifetimeMs}ms) \u2014 waiting up to ${this.maxLifetimeGraceMs}ms for the in-flight turn to park or finish (it is then released; terminated at the hard stop otherwise)`
+                : `[runner:session] ${this.sessionId} max session age reached (${maxLifetimeMs}ms) \u2014 waiting up to ${this.maxLifetimeGraceMs}ms for in-flight turn to finish before terminating`,
           );
           this.maxLifetimeGraceTimer = setTimeout(
-            (a) => {
+            (maxLifetimeMs) => {
               if (this.stopped || this.terminating) return;
               if (this.maxLifetimeDecidedByHook)
                 this.onStatus(
-                  `[runner:session] ${this.sessionId} still mid-turn, or its release was not accepted, within ${this.maxLifetimeGraceMs}ms of the max session age (${a}ms) \u2014 terminating (hard stop) pid=${this.child.pid}`,
+                  `[runner:session] ${this.sessionId} still mid-turn, or its release was not accepted, within ${this.maxLifetimeGraceMs}ms of the max session age (${maxLifetimeMs}ms) \u2014 terminating (hard stop) pid=${this.child.pid}`,
                 );
               else
                 this.onDebug(
-                  `[runner:stuck] Session ${this.sessionId} still mid-turn ${this.maxLifetimeGraceMs}ms after max lifetime of ${a}ms \u2014 aborting child pid=${this.child.pid}`,
+                  `[runner:stuck] Session ${this.sessionId} still mid-turn ${this.maxLifetimeGraceMs}ms after max lifetime of ${maxLifetimeMs}ms \u2014 aborting child pid=${this.child.pid}`,
                 );
               this.terminate();
             },
             this.maxLifetimeGraceMs,
-            r,
+            maxLifetimeMs,
           );
         },
         maxLifetimeMs,
@@ -4113,67 +4402,67 @@ class SessionLifetimeWatchdog {
       this.terminate();
     }
   }
-  signalGroup(e) {
+  signalGroup(signalName) {
     let pid = this.child.pid;
     if (pid === undefined) {
-      this.child.kill(e);
+      this.child.kill(signalName);
       return;
     }
     if (pid <= 1) return;
     try {
-      process.kill(-pid, e);
+      process.kill(-pid, signalName);
     } catch {
-      this.child.kill(e);
+      this.child.kill(signalName);
     }
   }
-  reapDescendants(e) {
+  reapDescendants(graceMs) {
     let treeSnapshot = this.treeSnapshot;
     if (treeSnapshot === undefined) return;
     this.treeSnapshot = undefined;
     let pid = this.child.pid;
-    let s = (async () => {
-      let a = await treeSnapshot;
-      if (a === undefined) {
+    let reapPromise = (async () => {
+      let tree = await treeSnapshot;
+      if (tree === undefined) {
         this.onStatus(
           `[runner:session] ${this.sessionId} could not list the child's process tree \u2014 signals reached its process group only; detached tool trees may survive`,
         );
         return;
       }
-      if (a.rootRecycled) {
+      if (tree.rootRecycled) {
         this.onStatus(
           `[runner:session] ${this.sessionId} child pid=${pid} now names another process \u2014 no process-tree reap; detached tool trees may survive`,
         );
         return;
       }
-      let o;
-      if (e > 0) {
-        let { live, incomplete } = await countLiveProcesses(a);
+      let killResult;
+      if (graceMs > 0) {
+        let { live, incomplete } = await countLiveProcesses(tree);
         if (live > 0 || incomplete) {
-          await sleep(e);
-          o = await killProcessTree(a, "SIGKILL");
+          await sleep(graceMs);
+          killResult = await killProcessTree(tree, "SIGKILL");
         }
-      } else o = await killProcessTree(a, "SIGKILL");
-      if (o?.incomplete) {
+      } else killResult = await killProcessTree(tree, "SIGKILL");
+      if (killResult?.incomplete) {
         this.onStatus(
-          `[runner:session] ${this.sessionId} process-tree identity check did not complete \u2014 ${a.pinned.size - o.proven} of ${a.pinned.size} descendant(s) unverified and not signalled; they may survive`,
+          `[runner:session] ${this.sessionId} process-tree identity check did not complete \u2014 ${tree.pinned.size - killResult.proven} of ${tree.pinned.size} descendant(s) unverified and not signalled; they may survive`,
         );
         return;
       }
-      let pids = o?.pids ?? 0;
-      let groups = o?.groups ?? 0;
-      if (a.degraded || a.truncated || a.unpinned > 0) {
+      let pids = killResult?.pids ?? 0;
+      let groups = killResult?.groups ?? 0;
+      if (tree.degraded || tree.truncated || tree.unpinned > 0) {
         this.onStatus(
-          `[runner:session] ${this.sessionId} process-tree listing incomplete (partial=${a.degraded} truncated=${a.truncated}) \u2014 SIGKILLed ${pids} of ${a.pinned.size} identified descendant(s) and ${groups} group(s); ${a.unpinned} descendant(s) could not be identified and were not signalled; they, and any unlisted tool trees, may survive`,
+          `[runner:session] ${this.sessionId} process-tree listing incomplete (partial=${tree.degraded} truncated=${tree.truncated}) \u2014 SIGKILLed ${pids} of ${tree.pinned.size} identified descendant(s) and ${groups} group(s); ${tree.unpinned} descendant(s) could not be identified and were not signalled; they, and any unlisted tool trees, may survive`,
         );
         return;
       }
       this.onDebug(
-        o === undefined
-          ? `[runner:session] process tree pid=${pid}: ${a.pinned.size} descendant(s) at SIGTERM (${a.unpinned} unidentifiable), none outlived the child`
-          : `[runner:session] process tree pid=${pid}: ${a.pinned.size} descendant(s) at SIGTERM (${a.unpinned} unidentifiable); ${pids} outlived the child and were SIGKILLed, with ${groups} tool-tree group(s)`,
+        killResult === undefined
+          ? `[runner:session] process tree pid=${pid}: ${tree.pinned.size} descendant(s) at SIGTERM (${tree.unpinned} unidentifiable), none outlived the child`
+          : `[runner:session] process tree pid=${pid}: ${tree.pinned.size} descendant(s) at SIGTERM (${tree.unpinned} unidentifiable); ${pids} outlived the child and were SIGKILLed, with ${groups} tool-tree group(s)`,
       );
     })().catch(() => {});
-    this.reap = withDeadline(s, e + DESCENDANT_REAP_GRACE_MS).then(() => {});
+    this.reap = withDeadline(reapPromise, graceMs + DESCENDANT_REAP_GRACE_MS).then(() => {});
   }
   get descendantsReaped() {
     return this.reap;
@@ -4202,10 +4491,10 @@ class SessionLifetimeWatchdog {
       );
       this.signalGroup("SIGTERM");
       this.sigkillTimer = setTimeout(
-        (n) => {
+        (timeoutMs) => {
           if (!this.stopped) {
             this.onDebug(
-              `[runner:session] Child still running after ${n}ms, sending SIGKILL to process group pgid=${this.child.pid} and reaping its process tree`,
+              `[runner:session] Child still running after ${timeoutMs}ms, sending SIGKILL to process group pgid=${this.child.pid} and reaping its process tree`,
             );
             this.signalGroup("SIGKILL");
             this.reapDescendants(0);
@@ -4244,18 +4533,18 @@ class SessionLifetimeWatchdog {
  */
 async function retryWithBackoff(fn, options) {
   let initialDelayMs = options.initialDelayMs;
-  let s = 0;
+  let attempt = 0;
   for (;;) {
     if (options.signal?.aborted) return;
-    s++;
+    attempt++;
     try {
       return await fn();
     } catch (error) {
       if (options.shouldRetry && !options.shouldRetry(error)) throw error;
-      if (options.maxAttempts !== undefined && s >= options.maxAttempts) throw error;
-      options.onRetry?.(s, error);
-      let o = initialDelayMs * (0.75 + Math.random() * 0.5);
-      await sleep(o, options.signal);
+      if (options.maxAttempts !== undefined && attempt >= options.maxAttempts) throw error;
+      options.onRetry?.(attempt, error);
+      let delayMs = initialDelayMs * (0.75 + Math.random() * 0.5);
+      await sleep(delayMs, options.signal);
       initialDelayMs = Math.min(initialDelayMs * 2, options.maxDelayMs);
     }
   }
@@ -4274,7 +4563,10 @@ class TokenCounter {
 /**
  * 按 host 保存的计数器实例。
  */
-var tokenCounters = new HostScoped(() => new TokenCounter());
+var tokenCounters; // deferred: uses TokenCounter of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hm0ce8vc.js:166657", () => {
+  tokenCounters = new HostScoped(() => new TokenCounter());
+});
 //@ chunk-hm0ce8vc.js:166682-166719 placement
 function nextTokenCounter() {
   return tokenCounters.of(getRootSession().host);
@@ -4283,169 +4575,169 @@ function nextTokenCounter() {
 /**
  * 把刷新的会话令牌写入子进程 stdin（未接好时记录未投递）。
  */
-function deliverRefreshedToken(e) {
-  let n = e.expiresInSeconds !== undefined ? ` (expires_in=${e.expiresInSeconds}s)` : "";
-  if (!e.write) {
-    e.onStatus(
-      `[runner:session] ${e.label} refreshed for ${e.sessionId} but child stdin is not wired yet \u2014 token NOT delivered; next interval will retry${n}`,
+function deliverRefreshedToken(options) {
+  let expiryNote = options.expiresInSeconds !== undefined ? ` (expires_in=${options.expiresInSeconds}s)` : "";
+  if (!options.write) {
+    options.onStatus(
+      `[runner:session] ${options.label} refreshed for ${options.sessionId} but child stdin is not wired yet \u2014 token NOT delivered; next interval will retry${expiryNote}`,
     );
     return;
   }
-  let r;
-  if (e.pendingAcks) {
-    r = `shr-token-${e.label}-${nextTokenCounter().next()}`;
-    e.pendingAcks.set(r, {
-      label: e.label,
-      sentAtMs: e.nowMs ?? Date.now(),
+  let requestId;
+  if (options.pendingAcks) {
+    requestId = `shr-token-${options.label}-${nextTokenCounter().next()}`;
+    options.pendingAcks.set(requestId, {
+      label: options.label,
+      sentAtMs: options.nowMs ?? Date.now(),
     });
   }
-  e.write(
+  options.write(
     jsonStringify({
       type: "update_environment_variables",
       variables: {
-        [e.envVar]: e.token,
+        [options.envVar]: options.token,
       },
-      ...(r && {
-        request_id: r,
+      ...(requestId && {
+        request_id: requestId,
       }),
     }) +
       `
 `,
   );
-  e.onStatus(
-    `[runner:session] ${e.label} refreshed for ${e.sessionId} \u2014 pushed to child via stdin${n}${r ? ` [${r}]` : ""}`,
+  options.onStatus(
+    `[runner:session] ${options.label} refreshed for ${options.sessionId} \u2014 pushed to child via stdin${expiryNote}${requestId ? ` [${requestId}]` : ""}`,
   );
 }
 //@ chunk-hm0ce8vc.js:167351-167833 placement
-function warnTokenUpdateNotAcked(e) {
-  let n = e.nowMs ?? Date.now();
-  let graceMs = e.graceMs ?? 90000;
-  for (let [s, a] of e.pendingAcks)
-    if (n - a.sentAtMs >= graceMs) {
-      e.onStatus(
-        `[runner:session] WARNING: ${a.label} update ${s} for ${e.sessionId} was never acked by the child \u2014 the stdin control channel may be severed (wrapper backgrounding without <&0?). Token rotation is NOT reaching the child; it will 401 at token TTL. See docs/self-hosted-runners-guide.md \xA7 "The child must keep the runner's stdin".`,
+function warnTokenUpdateNotAcked(options) {
+  let nowMs = options.nowMs ?? Date.now();
+  let graceMs = options.graceMs ?? 90000;
+  for (let [requestId, pendingAck] of options.pendingAcks)
+    if (nowMs - pendingAck.sentAtMs >= graceMs) {
+      options.onStatus(
+        `[runner:session] WARNING: ${pendingAck.label} update ${requestId} for ${options.sessionId} was never acked by the child \u2014 the stdin control channel may be severed (wrapper backgrounding without <&0?). Token rotation is NOT reaching the child; it will 401 at token TTL. See docs/self-hosted-runners-guide.md \xA7 "The child must keep the runner's stdin".`,
       );
-      e.pendingAcks.delete(s);
+      options.pendingAcks.delete(requestId);
     }
 }
 //@ chunk-hm0ce8vc.js:167833-169415 placement
-function createDebouncedSender(e) {
-  let errorRetryMs = e.errorRetryMs ?? 30000;
-  let max = Math.max(errorRetryMs, e.errorRetryMaxMs ?? 0);
-  let jitter = e.jitter ?? 0;
-  let expiryMarginMs = e.expiryMarginMs ?? 60000;
-  let o = e.expiredRetryMs ?? {
+function createDebouncedSender(options) {
+  let errorRetryMs = options.errorRetryMs ?? 30000;
+  let max = Math.max(errorRetryMs, options.errorRetryMaxMs ?? 0);
+  let jitter = options.jitter ?? 0;
+  let expiryMarginMs = options.expiryMarginMs ?? 60000;
+  let expiredJitter = options.expiredRetryMs ?? {
     minMs: 30000,
     maxMs: 60000,
   };
-  let minRefreshGapMs = e.minRefreshGapMs ?? 30000;
-  let now = e.now ?? Date.now;
-  let random = e.random ?? Math.random;
-  let p;
-  let S = false;
-  let T = false;
-  let { intervalMs, ttlMs } = e;
-  let w = ttlMs === undefined ? undefined : now() + ttlMs;
-  let E;
-  let A = 0;
-  let G = false;
-  let K = () => L();
-  e.signal.addEventListener("abort", K, {
+  let minRefreshGapMs = options.minRefreshGapMs ?? 30000;
+  let now = options.now ?? Date.now;
+  let random = options.random ?? Math.random;
+  let timer;
+  let cancelled = false;
+  let inFlight = false;
+  let { intervalMs, ttlMs } = options;
+  let expiresAt = ttlMs === undefined ? undefined : now() + ttlMs;
+  let lastFiredAt;
+  let errorCount = 0;
+  let retryImmediately = false;
+  let onAbort = () => cancel();
+  options.signal.addEventListener("abort", onAbort, {
     once: true,
   });
-  function L() {
-    S = true;
-    if (p) clearTimeout(p);
-    e.signal.removeEventListener("abort", K);
+  function cancel() {
+    cancelled = true;
+    if (timer) clearTimeout(timer);
+    options.signal.removeEventListener("abort", onAbort);
   }
-  function D(Ne) {
-    let me = w !== undefined && now() >= w - expiryMarginMs;
-    if (!Ne)
+  function retryPlan(transient) {
+    let isExpired = expiresAt !== undefined && now() >= expiresAt - expiryMarginMs;
+    if (!transient)
       return {
         delayMs: intervalMs,
-        expired: me,
-        transient: Ne,
+        expired: isExpired,
+        transient,
       };
-    let Te;
-    if (me) {
-      let { minMs, maxMs } = o;
-      Te = Math.round(minMs + random() * Math.max(0, maxMs - minMs));
+    let delayMs;
+    if (isExpired) {
+      let { minMs, maxMs } = expiredJitter;
+      delayMs = Math.round(minMs + random() * Math.max(0, maxMs - minMs));
     } else {
-      let min = Math.min(max, errorRetryMs * 2 ** A);
-      Te = Math.round(min * (1 - jitter + 2 * jitter * random()));
+      let min = Math.min(max, errorRetryMs * 2 ** errorCount);
+      delayMs = Math.round(min * (1 - jitter + 2 * jitter * random()));
     }
     return {
-      delayMs: Math.min(Te, intervalMs),
-      expired: me,
-      transient: Ne,
+      delayMs: Math.min(delayMs, intervalMs),
+      expired: isExpired,
+      transient,
     };
   }
-  function oe() {
-    if (S || e.signal.aborted || T) return;
-    T = true;
-    let Ne = now();
-    E = Ne;
-    let me;
-    let Te;
+  function fire() {
+    if (cancelled || options.signal.aborted || inFlight) return;
+    inFlight = true;
+    let startedAt = now();
+    lastFiredAt = startedAt;
+    let plan;
+    let nextInMs;
     Promise.resolve()
-      .then(() => e.refresh())
-      .then((Ye) => {
-        A = 0;
-        let He =
-          typeof Ye === "number"
+      .then(() => options.refresh())
+      .then((result) => {
+        errorCount = 0;
+        let timing =
+          typeof result === "number"
             ? {
-                intervalMs: Ye,
+                intervalMs: result,
               }
-            : (Ye ?? {});
-        if (He.intervalMs !== undefined && He.intervalMs > 0) intervalMs = He.intervalMs;
-        if (He.ttlMs !== undefined && He.ttlMs > 0) ttlMs = He.ttlMs;
-        if (ttlMs !== undefined) w = Ne + ttlMs;
-        if (He.nextInMs !== undefined && He.nextInMs > 0) Te = He.nextInMs;
+            : (result ?? {});
+        if (timing.intervalMs !== undefined && timing.intervalMs > 0) intervalMs = timing.intervalMs;
+        if (timing.ttlMs !== undefined && timing.ttlMs > 0) ttlMs = timing.ttlMs;
+        if (ttlMs !== undefined) expiresAt = startedAt + ttlMs;
+        if (timing.nextInMs !== undefined && timing.nextInMs > 0) nextInMs = timing.nextInMs;
       })
       .catch((error) => {
-        if (S || e.signal.aborted) return;
-        me = D(e.isTransient?.(error) ?? true);
-        if (G)
-          me = {
-            ...me,
+        if (cancelled || options.signal.aborted) return;
+        plan = retryPlan(options.isTransient?.(error) ?? true);
+        if (retryImmediately)
+          plan = {
+            ...plan,
             delayMs: 0,
           };
-        A++;
-        e.onError(error, me);
+        errorCount++;
+        options.onError(error, plan);
       })
       .finally(() => {
-        T = false;
-        if (S || e.signal.aborted) return;
-        if (G) {
-          G = false;
-          oe();
+        inFlight = false;
+        if (cancelled || options.signal.aborted) return;
+        if (retryImmediately) {
+          retryImmediately = false;
+          fire();
           return;
         }
-        p = setTimeout(oe, me?.delayMs ?? Te ?? intervalMs);
+        timer = setTimeout(fire, plan?.delayMs ?? nextInMs ?? intervalMs);
       });
   }
-  function ge(
-    { force: Ne } = {
+  function refreshNow(
+    { force } = {
       force: false,
     },
   ) {
-    if (S || e.signal.aborted) return "cancelled";
-    if (T) {
-      G ||= Ne;
+    if (cancelled || options.signal.aborted) return "cancelled";
+    if (inFlight) {
+      retryImmediately ||= force;
       return "in_flight";
     }
-    if (!Ne && E !== undefined && now() - E < minRefreshGapMs) return "debounced";
-    if (p) {
-      clearTimeout(p);
-      p = undefined;
+    if (!force && lastFiredAt !== undefined && now() - lastFiredAt < minRefreshGapMs) return "debounced";
+    if (timer) {
+      clearTimeout(timer);
+      timer = undefined;
     }
-    oe();
+    fire();
     return "fired";
   }
-  p = setTimeout(oe, intervalMs);
+  timer = setTimeout(fire, intervalMs);
   return {
-    cancel: L,
-    refreshNow: ge,
+    cancel,
+    refreshNow,
   };
 }
 //@ chunk-hm0ce8vc.js:169415-169529 placement
@@ -4479,19 +4771,19 @@ class RemoteConfigWithoutInferenceAuthError extends Error {
   }
 }
 //@ chunk-hm0ce8vc.js:169886-169967 placement
-function isTransientRunnerError(e) {
-  let httpStatus = getHttpStatus(e);
+function isTransientRunnerError(error) {
+  let httpStatus = getHttpStatus(error);
   return (
-    !(e instanceof RemoteConfigWithoutInferenceAuthError) &&
-    (isRetryableRunnerError(e) || httpStatus === 401 || httpStatus === 403)
+    !(error instanceof RemoteConfigWithoutInferenceAuthError) &&
+    (isRetryableRunnerError(error) || httpStatus === 401 || httpStatus === 403)
   );
 }
 //@ chunk-hm0ce8vc.js:169967-170087 placement
-function normalizeGovernedHost(e) {
-  if (typeof e !== "string") return;
-  let n = normalizeHost(e);
-  if (n === "" || n.length > 255 || !HOST_LABEL_RE.test(n)) return;
-  return isGithubDotCom(n) ? GITHUB_HOST : n;
+function normalizeGovernedHost(host) {
+  if (typeof host !== "string") return;
+  let normalizedHost = normalizeHost(host);
+  if (normalizedHost === "" || normalizedHost.length > 255 || !HOST_LABEL_RE.test(normalizedHost)) return;
+  return isGithubDotCom(normalizedHost) ? GITHUB_HOST : normalizedHost;
 }
 export {
   normalizeGovernedHost,

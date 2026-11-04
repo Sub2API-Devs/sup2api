@@ -24,17 +24,18 @@ import { logForDebugging } from "../../utils/debug.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { is1PEventLoggingEnabled } from "../analytics/firstPartyEventLogger.js";
 import { logFeatureOk } from "../analytics/featureTelemetry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-vjr65ep9.js:504-558 placement
 var TEAM_ARTIFACT_DIRS = [".claude/skills", ".claude/commands"];
 var MAX_TEAM_ARTIFACT_OVERFLOW = 3;
-var _ = 100;
+var TEAM_ARTIFACT_HISTORY_LIMIT = 100;
 //@ chunk-vjr65ep9.js:558-981 placement
 /**
  * 解析 .claude/ 下的团队产物路径：skills/<名>/SKILL.md 为技能，commands/…/*.md（或 …/skill.md）为命令（子目录用冒号连接）；其他返回 null。
  */
-function parseTeamArtifactPath(n) {
-  let parts = n.split("/");
+function parseTeamArtifactPath(relativePath) {
+  let parts = relativePath.split("/");
   if (parts[0] !== ".claude" || parts.length < 3) return null;
   switch (parts[1]) {
     case "skills":
@@ -67,19 +68,22 @@ function parseTeamArtifactPath(n) {
 class TeamArtifactScanner {
   inFlight = undefined;
   resolved = undefined;
-  get(n) {
-    this.inFlight ??= this.scan(n);
+  get(storageV5) {
+    this.inFlight ??= this.scan(storageV5);
     return this.inFlight;
   }
-  teammateAuthorOf(n) {
-    return this.resolved?.find((e) => !e.byCurrentUser && e.name === n)?.author || null;
+  teammateAuthorOf(skillName) {
+    return (
+      this.resolved?.find((artifact) => !artifact.byCurrentUser && artifact.name === skillName)?.author ||
+      null
+    );
   }
-  async scan(n) {
+  async scan(storageV5) {
     if (!checkHasTrustDialogAccepted()) return [];
-    let e = preferRemoteValue(getCwd(), getOriginalCwd());
-    let gitRoot = findGitRoot(e);
+    let cwd = preferRemoteValue(getCwd(), getOriginalCwd());
+    let gitRoot = findGitRoot(cwd);
     if (!gitRoot) return [];
-    let [{ stdout: o, code: m }, s] = await Promise.all([
+    let [{ stdout, code: exitCode }, gitEmail] = await Promise.all([
       execFileNoThrowWithCwd(
         gitExe(),
         [
@@ -106,28 +110,28 @@ class TeamArtifactScanner {
           timeout: 5000,
         },
       ),
-      runInRemoteCallFrameMain(e, getGitEmail),
+      runInRemoteCallFrameMain(cwd, getGitEmail),
     ]);
-    if (m !== 0) return [];
-    let lower = s?.toLowerCase();
-    let l = [];
-    let A = new Set();
+    if (exitCode !== 0) return [];
+    let lower = gitEmail?.toLowerCase();
+    let artifacts = [];
+    let seenPaths = new Set();
     let author = "";
-    let h = "";
-    for (let line of o.split(`
+    let authorEmail = "";
+    for (let line of stdout.split(`
 `)) {
       if (line.startsWith("COMMIT\x00")) {
         let parts = line.split("\x00");
         author = parts[1] ?? "";
-        h = (parts[2] ?? "").toLowerCase();
+        authorEmail = (parts[2] ?? "").toLowerCase();
         continue;
       }
-      if (!line || A.has(line)) continue;
-      A.add(line);
+      if (!line || seenPaths.has(line)) continue;
+      seenPaths.add(line);
       let teamArtifactPath = parseTeamArtifactPath(line);
       if (teamArtifactPath) {
-        let byCurrentUser = Boolean(lower && h === lower);
-        l.push({
+        let byCurrentUser = Boolean(lower && authorEmail === lower);
+        artifacts.push({
           path: line,
           author,
           byCurrentUser,
@@ -135,67 +139,70 @@ class TeamArtifactScanner {
         });
       }
     }
-    this.resolved = l;
+    this.resolved = artifacts;
     let currentProjectConfig = getCurrentProjectConfig();
-    let E = new Set(currentProjectConfig.seenTeamArtifactPaths ?? []);
-    let any = l.some((r) => !r.byCurrentUser && !E.has(r.path));
-    let U = new Set(currentProjectConfig.loggedAuthoredArtifactPaths ?? []);
-    let filtered = l.filter((r) => r.byCurrentUser && !U.has(r.path));
-    for (let r of filtered)
+    let alreadySeenPaths = new Set(currentProjectConfig.seenTeamArtifactPaths ?? []);
+    let any = artifacts.some((artifact) => !artifact.byCurrentUser && !alreadySeenPaths.has(artifact.path));
+    let loggedPaths = new Set(currentProjectConfig.loggedAuthoredArtifactPaths ?? []);
+    let filtered = artifacts.filter((artifact) => artifact.byCurrentUser && !loggedPaths.has(artifact.path));
+    for (let artifact of filtered)
       logEvent("tengu_skill_authored", {
-        is_skill: r.kind === "skill",
+        is_skill: artifact.kind === "skill",
       });
     try {
-      await saveCurrentProjectConfig((r) => {
-        let d = r.hasUnseenTeamArtifacts === any;
-        if (filtered.length === 0 && d) return r;
-        let f = d
-          ? r
+      await saveCurrentProjectConfig((config) => {
+        let isUnchangedFlag = config.hasUnseenTeamArtifacts === any;
+        if (filtered.length === 0 && isUnchangedFlag) return config;
+        let withFlag = isUnchangedFlag
+          ? config
           : {
-              ...r,
+              ...config,
               hasUnseenTeamArtifacts: any,
             };
-        if (filtered.length === 0) return f;
-        let loggedAuthoredArtifactPaths = f.loggedAuthoredArtifactPaths ?? [];
-        let mapped = filtered.map((T) => T.path);
-        let B = new Set(mapped);
+        if (filtered.length === 0) return withFlag;
+        let loggedAuthoredArtifactPaths = withFlag.loggedAuthoredArtifactPaths ?? [];
+        let mapped = filtered.map((artifact) => artifact.path);
+        let newPaths = new Set(mapped);
         let loggedAuthoredArtifactPaths_2 = [
           ...loggedAuthoredArtifactPaths.filter(
-            (loggedAuthoredArtifactPath) => !B.has(loggedAuthoredArtifactPath),
+            (loggedAuthoredArtifactPath) => !newPaths.has(loggedAuthoredArtifactPath),
           ),
           ...mapped,
-        ].slice(-_);
+        ].slice(-TEAM_ARTIFACT_HISTORY_LIMIT);
         return {
-          ...f,
+          ...withFlag,
           loggedAuthoredArtifactPaths: loggedAuthoredArtifactPaths_2,
         };
-      }, n);
+      }, storageV5);
     } catch (error) {
       logForDebugging(`team-artifact eligibility persist failed: ${error}`);
     }
-    return l;
+    return artifacts;
   }
 }
 //@ chunk-vjr65ep9.js:2549-2573 placement
 /**
  * 按会话保存的团队产物扫描器。
  */
-var teamArtifactScannerSlots = new SessionRootSlot(() => new TeamArtifactScanner());
+var teamArtifactScannerSlots; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-vjr65ep9.js:2549", () => {
+  teamArtifactScannerSlots = new SessionRootSlot(() => new TeamArtifactScanner());
+});
 //@ chunk-vjr65ep9.js:2573-2611 placement
 /**
  * 查找某技能/命令的队友作者（团队 artifact 提示用）。
  */
-function teammateAuthorOfSkill(n, e) {
-  return teamArtifactScannerSlots.of(n).get(e);
+function teammateAuthorOfSkill(session, storageV5) {
+  return teamArtifactScannerSlots.of(session).get(storageV5);
 }
 //@ chunk-vjr65ep9.js:2611-2734 placement
 /**
  * 团队 artifact 提示开启时，查找项目设置中某技能/命令的队友作者，否则返回 null。
  */
-function getTeammateAuthor(session, e, skillName) {
-  if (e !== "projectSettings" || !getFeatureValue_CACHED_MAY_BE_STALE("tengu_tussock_oriole", false))
+function getTeammateAuthor(session, source, path) {
+  if (source !== "projectSettings" || !getFeatureValue_CACHED_MAY_BE_STALE("tengu_tussock_oriole", false))
     return null;
-  return teamArtifactScannerSlots.of(session).teammateAuthorOf(skillName);
+  return teamArtifactScannerSlots.of(session).teammateAuthorOf(path);
 }
 //@ chunk-vjr65ep9.js:2734-2863 placement
 /**
@@ -211,10 +218,10 @@ function hasUnseenTeamArtifacts(session, storageV5) {
  * 列出不是当前用户创建且尚未看过的团队技能/命令。
  */
 async function listUnseenTeamArtifacts(session, storageV5) {
-  let i = await teammateAuthorOfSkill(session, storageV5);
-  if (i.length === 0) return [];
-  let o = new Set(getCurrentProjectConfig().seenTeamArtifactPaths ?? []);
-  return i.filter((m) => !m.byCurrentUser && !o.has(m.path));
+  let artifacts = await teammateAuthorOfSkill(session, storageV5);
+  if (artifacts.length === 0) return [];
+  let seenPaths = new Set(getCurrentProjectConfig().seenTeamArtifactPaths ?? []);
+  return artifacts.filter((artifact) => !artifact.byCurrentUser && !seenPaths.has(artifact.path));
 }
 //@ chunk-vjr65ep9.js:3032-3389 placement
 /**
@@ -222,23 +229,23 @@ async function listUnseenTeamArtifacts(session, storageV5) {
  */
 async function markTeamArtifactsSeen(session, storageV5) {
   let mapped = (await teammateAuthorOfSkill(session, storageV5))
-    .filter((s) => !s.byCurrentUser)
-    .map((s) => s.path);
-  let m = new Set(mapped);
-  await saveCurrentProjectConfig((s) => {
-    let seenTeamArtifactPaths = s.seenTeamArtifactPaths ?? [];
+    .filter((artifact) => !artifact.byCurrentUser)
+    .map((artifact) => artifact.path);
+  let newPaths = new Set(mapped);
+  await saveCurrentProjectConfig((config) => {
+    let seenTeamArtifactPaths = config.seenTeamArtifactPaths ?? [];
     let sliced = [
-      ...seenTeamArtifactPaths.filter((seenTeamArtifactPath) => !m.has(seenTeamArtifactPath)),
+      ...seenTeamArtifactPaths.filter((seenTeamArtifactPath) => !newPaths.has(seenTeamArtifactPath)),
       ...mapped,
-    ].slice(-_);
+    ].slice(-TEAM_ARTIFACT_HISTORY_LIMIT);
     if (
       sliced.length === seenTeamArtifactPaths.length &&
-      sliced.every((u, h) => u === seenTeamArtifactPaths[h]) &&
-      s.hasUnseenTeamArtifacts === false
+      sliced.every((path, index) => path === seenTeamArtifactPaths[index]) &&
+      config.hasUnseenTeamArtifacts === false
     )
-      return s;
+      return config;
     return {
-      ...s,
+      ...config,
       seenTeamArtifactPaths: sliced,
       hasUnseenTeamArtifacts: false,
     };
@@ -248,28 +255,28 @@ async function markTeamArtifactsSeen(session, storageV5) {
 /**
  * 团队 artifact 提示展示时打点（技能、命令数量与超出显示的数量）。
  */
-function logTeamArtifactTipShown(n) {
-  let e = {
+function logTeamArtifactTipShown(artifacts) {
+  let counts = {
     skill: 0,
     command: 0,
   };
-  for (let i of n) e[i.kind]++;
+  for (let artifact of artifacts) counts[artifact.kind]++;
   logFeatureOk("tips_team_artifact_show");
   logEvent("tengu_team_artifact_tip_shown", {
-    skill_count: e.skill,
-    command_count: e.command,
-    overflow_count: Math.max(0, n.length - MAX_TEAM_ARTIFACT_OVERFLOW),
+    skill_count: counts.skill,
+    command_count: counts.command,
+    overflow_count: Math.max(0, artifacts.length - MAX_TEAM_ARTIFACT_OVERFLOW),
   });
 }
 //@ chunk-vjr65ep9.js:3606-3738 placement
 /**
  * 生成使用项目设置中技能/命令时的归因字段：是否是通过团队提示发现的。
  */
-function getTeamTipAttribution(n, e) {
-  if (n !== "projectSettings") return {};
+function getTeamTipAttribution(source, skillName) {
+  if (source !== "projectSettings") return {};
   return {
     via_team_tip: (getCurrentProjectConfig().seenTeamArtifactPaths ?? []).some(
-      (o) => parseTeamArtifactPath(o)?.name === e,
+      (seenPath) => parseTeamArtifactPath(seenPath)?.name === skillName,
     ),
   };
 }
@@ -277,14 +284,14 @@ function getTeamTipAttribution(n, e) {
 /**
  * 生成"团队新增"提示：列出队友新增的若干技能/命令（/名 (作者)），超出部分写"plus N more"。
  */
-function formatTeamArtifactTip(n) {
-  let filtered = n.filter((c) => !c.byCurrentUser);
+function formatTeamArtifactTip(artifacts) {
+  let filtered = artifacts.filter((artifact) => !artifact.byCurrentUser);
   if (filtered.length === 0) return "";
   let sliced = filtered.slice(0, MAX_TEAM_ARTIFACT_OVERFLOW);
-  let mapped = sliced.map((c) => `/${c.name} (${c.author || "a teammate"})`);
-  let m = mapped.length === 1 ? mapped[0] : `${mapped.slice(0, -1).join(", ")} and ${mapped.at(-1)}`;
-  let s = filtered.length - sliced.length;
-  return `New from your team: ${m}${s > 0 ? `, plus ${s} more` : ""}`;
+  let mapped = sliced.map((artifact) => `/${artifact.name} (${artifact.author || "a teammate"})`);
+  let joined = mapped.length === 1 ? mapped[0] : `${mapped.slice(0, -1).join(", ")} and ${mapped.at(-1)}`;
+  let remainingCount = filtered.length - sliced.length;
+  return `New from your team: ${joined}${remainingCount > 0 ? `, plus ${remainingCount} more` : ""}`;
 }
 export {
   getTeammateAuthor,

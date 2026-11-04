@@ -52,20 +52,25 @@ import {
 } from "./stateSlices.js";
 import { SESSION_URL_HASH_SALT } from "../utils/sessionUrl.js";
 import { isStorageV5Enabled } from "../utils/hoverRest.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ndmse9kj.js:36671-36750 placement
 /**
  * 判断是否为压缩时插入的虚拟会话消息：type 为 user/assistant 且 isVirtual 为 true。
  */
-function isVirtualConversationMessage(e) {
-  return (e.type === "user" || e.type === "assistant") && e.isVirtual === true;
+function isVirtualConversationMessage(message) {
+  return (message.type === "user" || message.type === "assistant") && message.isVirtual === true;
 }
 //@ chunk-ndmse9kj.js:36750-36843 placement
 /**
  * 判断是否为合成模型的 API 错误消息：assistant 且 isApiErrorMessage 为真、message.model 为 SYNTHETIC_MODEL。
  */
-function isSyntheticModelApiErrorMessage(e) {
-  return e.type === "assistant" && e.isApiErrorMessage === true && e.message?.model === SYNTHETIC_MODEL;
+function isSyntheticModelApiErrorMessage(message) {
+  return (
+    message.type === "assistant" &&
+    message.isApiErrorMessage === true &&
+    message.message?.model === SYNTHETIC_MODEL
+  );
 }
 //@ chunk-ndmse9kj.js:36843-36912 placement = isSystemLocalCommandMessage (1)
 function isSystemLocalCommandMessage(message) {
@@ -75,19 +80,19 @@ function isSystemLocalCommandMessage(message) {
 /**
  * 判断消息是否不属于发给 API 的对话内容：progress、非本地命令的 system、若干内部附件（thinking_drop、credential_org、prompt_snapshot、prompt_render_point、deferred_tools_record）等返回 true；api_system 返回 false。
  */
-function isNonConversationMessage(e) {
-  if (e.type === "api_system") return false;
+function isNonConversationMessage(message) {
+  if (message.type === "api_system") return false;
   return (
-    e.type === "progress" ||
-    (e.type === "system" && !isSystemLocalCommandMessage(e)) ||
-    isVirtualConversationMessage(e) ||
-    isSyntheticModelApiErrorMessage(e) ||
-    (e.type === "attachment" &&
-      (e.attachment?.type === "thinking_drop" ||
-        e.attachment?.type === "credential_org" ||
-        e.attachment?.type === "prompt_snapshot" ||
-        e.attachment?.type === "prompt_render_point" ||
-        e.attachment?.type === "deferred_tools_record"))
+    message.type === "progress" ||
+    (message.type === "system" && !isSystemLocalCommandMessage(message)) ||
+    isVirtualConversationMessage(message) ||
+    isSyntheticModelApiErrorMessage(message) ||
+    (message.type === "attachment" &&
+      (message.attachment?.type === "thinking_drop" ||
+        message.attachment?.type === "credential_org" ||
+        message.attachment?.type === "prompt_snapshot" ||
+        message.attachment?.type === "prompt_render_point" ||
+        message.attachment?.type === "deferred_tools_record"))
   );
 }
 //@ chunk-ndmse9kj.js:37262-37361 placement
@@ -111,88 +116,88 @@ class AgentSidecarSlice {
   sidecarIo = Promise.resolve();
   rehydrateAttemptedSessions = new Set();
   sidecarReadsAhead = new Map();
-  get(e) {
-    return this.byAgent.get(e);
+  get(agentId) {
+    return this.byAgent.get(agentId);
   }
-  has(e) {
-    return this.byAgent.has(e);
+  has(agentId) {
+    return this.byAgent.has(agentId);
   }
-  put(e, n) {
-    this.byAgent.set(e, n);
+  put(agentId, sidecar) {
+    this.byAgent.set(agentId, sidecar);
   }
-  remove(e) {
-    this.byAgent.delete(e);
+  remove(agentId) {
+    this.byAgent.delete(agentId);
   }
-  nextAttemptNumber(e) {
-    let n = (this.attemptsByAgent.get(e) ?? 0) + 1;
-    this.attemptsByAgent.set(e, n);
-    return n;
+  nextAttemptNumber(agentId) {
+    let attemptNumber = (this.attemptsByAgent.get(agentId) ?? 0) + 1;
+    this.attemptsByAgent.set(agentId, attemptNumber);
+    return attemptNumber;
   }
-  consecutiveCountedFailures(e) {
-    return this.cappedFailuresByAgent.get(e) ?? 0;
+  consecutiveCountedFailures(agentId) {
+    return this.cappedFailuresByAgent.get(agentId) ?? 0;
   }
-  recordCountedFailure(e) {
-    let n = (this.cappedFailuresByAgent.get(e) ?? 0) + 1;
-    this.cappedFailuresByAgent.set(e, n);
-    return n;
+  recordCountedFailure(agentId) {
+    let failureCount = (this.cappedFailuresByAgent.get(agentId) ?? 0) + 1;
+    this.cappedFailuresByAgent.set(agentId, failureCount);
+    return failureCount;
   }
-  clearCountedFailures(e) {
-    this.cappedFailuresByAgent.delete(e);
+  clearCountedFailures(agentId) {
+    this.cappedFailuresByAgent.delete(agentId);
   }
-  recordVeto(e, n) {
-    this.vetoedUnderPrompt.set(e, n);
+  recordVeto(agentId, promptId) {
+    this.vetoedUnderPrompt.set(agentId, promptId);
   }
-  isVetoedUnder(e, n) {
-    return this.vetoedUnderPrompt.get(e) === n;
+  isVetoedUnder(agentId, promptId) {
+    return this.vetoedUnderPrompt.get(agentId) === promptId;
   }
-  latchArmGateEvent(e) {
-    if (this.armGateEventEmitted.has(e)) return false;
-    this.armGateEventEmitted.add(e);
+  latchArmGateEvent(gateKey) {
+    if (this.armGateEventEmitted.has(gateKey)) return false;
+    this.armGateEventEmitted.add(gateKey);
     return true;
   }
-  enqueueSidecarIo(e, n) {
-    this.sidecarIo = this.sidecarIo.then(e, e).catch(n);
+  enqueueSidecarIo(runIo, onError) {
+    this.sidecarIo = this.sidecarIo.then(runIo, runIo).catch(onError);
     return this.sidecarIo;
   }
   sidecarIoSettled() {
     return this.sidecarIo;
   }
-  hasAttemptedRehydrate(e) {
-    return this.rehydrateAttemptedSessions.has(e);
+  hasAttemptedRehydrate(sessionId) {
+    return this.rehydrateAttemptedSessions.has(sessionId);
   }
-  markRehydrateAttempted(e) {
-    this.rehydrateAttemptedSessions.add(e);
+  markRehydrateAttempted(sessionId) {
+    this.rehydrateAttemptedSessions.add(sessionId);
   }
-  keepSidecarReadAhead(e, n) {
-    this.sidecarReadsAhead.delete(e);
+  keepSidecarReadAhead(agentId, value) {
+    this.sidecarReadsAhead.delete(agentId);
     while (this.sidecarReadsAhead.size >= SIDECAR_READAHEAD_LIMIT) {
-      let o = this.sidecarReadsAhead.keys().next().value;
-      if (o === undefined) break;
-      this.sidecarReadsAhead.delete(o);
+      let oldestAgentId = this.sidecarReadsAhead.keys().next().value;
+      if (oldestAgentId === undefined) break;
+      this.sidecarReadsAhead.delete(oldestAgentId);
     }
-    this.sidecarReadsAhead.set(e, n);
+    this.sidecarReadsAhead.set(agentId, value);
   }
-  takeSidecarReadAhead(e) {
-    let n = this.sidecarReadsAhead.get(e);
-    this.sidecarReadsAhead.delete(e);
-    return n;
+  takeSidecarReadAhead(agentId) {
+    let value = this.sidecarReadsAhead.get(agentId);
+    this.sidecarReadsAhead.delete(agentId);
+    return value;
   }
-  dropSidecarReadAhead(e) {
-    this.sidecarReadsAhead.delete(e);
+  dropSidecarReadAhead(agentId) {
+    this.sidecarReadsAhead.delete(agentId);
   }
-  forgetSubagentTelemetry(e) {
-    this.attemptsByAgent.delete(e);
-    this.cappedFailuresByAgent.delete(e);
-    this.vetoedUnderPrompt.delete(e);
-    for (let n of ARM_GATE_EVENT_KINDS) this.armGateEventEmitted.delete(`${e}:${n}`);
+  forgetSubagentTelemetry(agentId) {
+    this.attemptsByAgent.delete(agentId);
+    this.cappedFailuresByAgent.delete(agentId);
+    this.vetoedUnderPrompt.delete(agentId);
+    for (let eventKind of ARM_GATE_EVENT_KINDS) this.armGateEventEmitted.delete(`${agentId}:${eventKind}`);
   }
 }
 //@ chunk-ndmse9kj.js:39133-39166 placement
 /**
  * agentId 为空时归到 "main"，用于侧车状态与否决记录的分键。
  */
-function agentIdOrDefault(e) {
-  return e ?? "main";
+function agentIdOrDefault(agentId) {
+  return agentId ?? "main";
 }
 //@ chunk-ndmse9kj.js:39166-39274 placement
 /**
@@ -210,82 +215,83 @@ function createCompactSeenState({ messages, rowUuids }, lastUuid) {
  * 校验压缩边界：边界 uuid、被覆盖消息、保留消息是否仍一致，不一致时拒绝
  */
 function checkCompactBoundaryCoverage({ coverage, kept, sent, received, instructions, fit }) {
-  let a = ({ uuid }) => coverage.seenUuids.has(uuid);
-  let l = new Set(sent.messages.map((message) => message.uuid));
-  if (!l.has(coverage.lastUuid))
+  let isSeenUuid = ({ uuid }) => coverage.seenUuids.has(uuid);
+  let sentUuidSet = new Set(sent.messages.map((message) => message.uuid));
+  if (!sentUuidSet.has(coverage.lastUuid))
     return {
       kind: "refuse",
       reason: "boundary_uuid_missing",
     };
-  if (!coverage.rowUuids.every((rowUuid) => l.has(rowUuid)))
+  if (!coverage.rowUuids.every((rowUuid) => sentUuidSet.has(rowUuid)))
     return {
       kind: "refuse",
       reason: "covered_messages_changed",
     };
-  if (kept.some((d) => a(d) && !l.has(d.uuid)))
+  if (kept.some((keptMessage) => isSeenUuid(keptMessage) && !sentUuidSet.has(keptMessage.uuid)))
     return {
       kind: "refuse",
       reason: "kept_message_missing",
     };
   if (
     sent.messages
-      .slice(0, sent.messages.findLastIndex(a))
+      .slice(0, sent.messages.findLastIndex(isSeenUuid))
       .some(
-        (message) => message.type === "assistant" && !isVirtualConversationMessage(message) && !a(message),
+        (message) =>
+          message.type === "assistant" && !isVirtualConversationMessage(message) && !isSeenUuid(message),
       )
   )
     return {
       kind: "refuse",
       reason: "unseen_reply",
     };
-  let sliced = sent.rowUuids.slice(
+  let otherRowUuids = sent.rowUuids.slice(
     0,
     sent.rowUuids.findLastIndex((rowUuid) => coverage.seenUuids.has(rowUuid)) + 1,
   );
   if (
     instructions ||
     !received.messages.some(({ uuid }) => uuid === coverage.lastUuid) ||
-    !arraysEqual(received.rowUuids, sliced)
+    !arraysEqual(received.rowUuids, otherRowUuids)
   )
     return {
       kind: "refuse",
       reason: "hook_rewrite",
     };
-  let lastIndex = received.messages.findLastIndex(a);
-  let flattened = received.messages.flatMap((message, w) =>
-    message.type === "progress" || a(message)
+  let lastIndex = received.messages.findLastIndex(isSeenUuid);
+  let flattened = received.messages.flatMap((message, messageIndex) =>
+    message.type === "progress" || isSeenUuid(message)
       ? []
       : [
           {
             message,
-            isEarly: w < lastIndex,
+            isEarly: messageIndex < lastIndex,
           },
         ],
   );
-  let m = ({ message, isEarly }) => isEarly && isVirtualConversationMessage(message);
-  let h = new Set(flattened.filter(m).map(({ message }) => message));
-  let filtered = flattened.filter((d) => !m(d));
+  let isEarlyVirtual = ({ message, isEarly }) => isEarly && isVirtualConversationMessage(message);
+  let earlyVirtualSet = new Set(flattened.filter(isEarlyVirtual).map(({ message }) => message));
+  let filtered = flattened.filter((entry) => !isEarlyVirtual(entry));
   let mapped = filtered.map(({ message }) => message);
-  let x =
+  let swapResult =
     fit &&
     evaluateCompactSwap(
       fit,
-      received.messages.filter((message) => !h.has(message)),
+      received.messages.filter((message) => !earlyVirtualSet.has(message)),
       [...kept, ...mapped],
     );
-  if (x?.givesWay)
+  if (swapResult?.givesWay)
     return {
       kind: "refuse",
       reason: "would_not_fit",
-      sizes: x.sizes,
+      sizes: swapResult.sizes,
     };
   return {
     kind: "reuse",
     tail: mapped,
     earlyTailCount: count(filtered, ({ isEarly }) => isEarly),
-    displayOnlyLeftOutCount: h.size,
+    displayOnlyLeftOutCount: earlyVirtualSet.size,
     headReordered: !arraysEqual(received.rowUuids, coverage.rowUuids),
-    sizes: x?.sizes,
+    sizes: swapResult?.sizes,
   };
 }
 //@ chunk-ndmse9kj.js:40544-40928 placement
@@ -294,27 +300,28 @@ function checkCompactBoundaryCoverage({ coverage, kept, sent, received, instruct
  */
 function evaluateCompactSwap(
   { thresholdTokens, windowTokens, liveTokens, madeFromTokens, summary, sizeOf },
-  a,
-  l,
+  currentMessages,
+  proposedTail,
 ) {
-  let p = new Set(l.map((g) => g.uuid));
-  let f = new Set(a.map((g) => g.uuid));
-  let filtered = a.filter((g) => !p.has(g.uuid));
-  let filtered_2 = a.filter((g) => p.has(g.uuid));
-  let filtered_3 = l.filter((g) => !f.has(g.uuid));
-  let h = Math.max(liveTokens - sizeOf(filtered), sizeOf(filtered_2)) + sizeOf([...summary, ...filtered_3]);
+  let proposedUuidSet = new Set(proposedTail.map((message) => message.uuid));
+  let currentUuidSet = new Set(currentMessages.map((message) => message.uuid));
+  let filtered = currentMessages.filter((message) => !proposedUuidSet.has(message.uuid));
+  let filtered_2 = currentMessages.filter((message) => proposedUuidSet.has(message.uuid));
+  let filtered_3 = proposedTail.filter((message) => !currentUuidSet.has(message.uuid));
+  let postSwapTokens =
+    Math.max(liveTokens - sizeOf(filtered), sizeOf(filtered_2)) + sizeOf([...summary, ...filtered_3]);
   return {
     sizes: {
-      postSwapTokens: h,
+      postSwapTokens,
       thresholdTokens,
       windowTokens,
     },
-    givesWay: h >= thresholdTokens && madeFromTokens < windowTokens,
+    givesWay: postSwapTokens >= thresholdTokens && madeFromTokens < windowTokens,
   };
 }
 //@ chunk-ndmse9kj.js:40928-40977 placement
-function arraysEqual(rowUuids, n) {
-  return n.every((o, r) => rowUuids[r] === o);
+function arraysEqual(rowUuids, otherRowUuids) {
+  return otherRowUuids.every((rowUuid, index) => rowUuids[index] === rowUuid);
 }
 //@ chunk-ndmse9kj.js:40977-41173 placement = isHumanTurn (0.802)
 /**
@@ -323,11 +330,12 @@ function arraysEqual(rowUuids, n) {
 function findLastHumanPromptUuid(m) {
   return (
     m.findLast(
-      (o) =>
-        o.type === "user" &&
-        !o.isMeta &&
-        o.toolUseResult === undefined &&
-        (typeof o.message.content === "string" || !o.message.content.some((r) => r.type === "tool_result")),
+      (message) =>
+        message.type === "user" &&
+        !message.isMeta &&
+        message.toolUseResult === undefined &&
+        (typeof message.message.content === "string" ||
+          !message.message.content.some((contentPart) => contentPart.type === "tool_result")),
     )?.uuid ?? ""
   );
 }
@@ -341,23 +349,23 @@ class EngineStoreHolder {
   get current() {
     return this.#e;
   }
-  adopt(e) {
-    this.#e = e;
+  adopt(engineStore) {
+    this.#e = engineStore;
   }
 }
 //@ chunk-ndmse9kj.js:41289-41420 placement
 class SessionIdentitySlice {
   #e = null;
   #t = null;
-  mainAgentId(e) {
-    this.#e ??= identityAgentId2(e);
+  mainAgentId(session) {
+    this.#e ??= identityAgentId2(session);
     return this.#e;
   }
   projectDir() {
     return this.#t;
   }
-  replaceProjectDir(e) {
-    this.#t = e;
+  replaceProjectDir(projectDir) {
+    this.#t = projectDir;
   }
 }
 //@ chunk-ndmse9kj.js:41420-41740 placement
@@ -373,14 +381,14 @@ class OpenToolUseQuestionSlice {
   markAnswered() {
     this.answeredThisSession = true;
   }
-  isOpenElsewhere(e) {
-    return this.openToolUseId !== undefined && this.openToolUseId !== e;
+  isOpenElsewhere(toolUseId) {
+    return this.openToolUseId !== undefined && this.openToolUseId !== toolUseId;
   }
   open(openToolUseId) {
     this.openToolUseId = openToolUseId;
   }
-  closeFor(e) {
-    if (e !== undefined && this.openToolUseId === e) this.openToolUseId = undefined;
+  closeFor(toolUseId) {
+    if (toolUseId !== undefined && this.openToolUseId === toolUseId) this.openToolUseId = undefined;
   }
 }
 //@ chunk-ndmse9kj.js:41740-41817 placement
@@ -442,11 +450,11 @@ class CloudSyncSlice {
     this.reloadHeld = true;
     this.holdsSet++;
   }
-  endHoldSetBefore(e) {
-    this.reloadHeld &&= this.holdsSet !== e;
+  endHoldSetBefore(holdCount) {
+    this.reloadHeld &&= this.holdsSet !== holdCount;
   }
-  reloaded(e) {
-    this.changesReloaded = Math.max(this.changesReloaded, e);
+  reloaded(changeCount) {
+    this.changesReloaded = Math.max(this.changesReloaded, changeCount);
     this.reloadsCompleted++;
   }
 }
@@ -475,15 +483,15 @@ class CcrSessionLatchSlice {
   ccrSessionID() {
     return this.#e;
   }
-  latchCcrSessionID(e) {
-    this.#e = e;
+  latchCcrSessionID(sessionId) {
+    this.#e = sessionId;
   }
   syncEnabled() {
     return this.#t;
   }
-  latchSyncEnabled(e) {
-    this.#t = e;
-    return e;
+  latchSyncEnabled(enabled) {
+    this.#t = enabled;
+    return enabled;
   }
 }
 //@ chunk-ndmse9kj.js:43034-43178 placement
@@ -504,17 +512,17 @@ class SideQuestionSlice {
   replace(exchanges) {
     this.exchanges = exchanges;
   }
-  append(question, response, o, r) {
+  append(question, response, fallbackNotice, agentId) {
     this.exchanges = [
       ...this.exchanges,
       {
         question,
         response,
-        ...(o && {
-          fallbackNotice: o,
+        ...(fallbackNotice && {
+          fallbackNotice,
         }),
-        ...(r && {
-          agentId: r,
+        ...(agentId && {
+          agentId,
         }),
       },
     ].slice(-20);
@@ -524,24 +532,24 @@ class SideQuestionSlice {
   get reopenPending() {
     return this.pendingReopen !== null;
   }
-  armReopen(e, n) {
+  armReopen(ownerId, makeCancel) {
     if (this.pendingReopen) {
-      this.pendingReopen.owners.add(e);
+      this.pendingReopen.owners.add(ownerId);
       return;
     }
     this.pendingReopen = {
-      owners: new Set([e]),
-      cancel: n(),
+      owners: new Set([ownerId]),
+      cancel: makeCancel(),
     };
   }
-  clearPendingReopen(e) {
+  clearPendingReopen(ownerId) {
     let pendingReopen = this.pendingReopen;
     if (!pendingReopen) {
       this.reopenAway = false;
       return;
     }
-    if (e !== undefined) {
-      pendingReopen.owners.delete(e);
+    if (ownerId !== undefined) {
+      pendingReopen.owners.delete(ownerId);
       if (pendingReopen.owners.size > 0) return;
     }
     pendingReopen.cancel();
@@ -565,12 +573,15 @@ class SideQuestionSlice {
   pendingBesidesTop() {
     return this.inFlightQuestions.slice(0, -1);
   }
-  setInFlight(e) {
-    if (!this.inFlightQuestions.includes(e)) this.inFlightQuestions = [...this.inFlightQuestions, e];
+  setInFlight(question) {
+    if (!this.inFlightQuestions.includes(question))
+      this.inFlightQuestions = [...this.inFlightQuestions, question];
   }
-  clearInFlight(e) {
-    if (this.inFlightQuestions.includes(e))
-      this.inFlightQuestions = this.inFlightQuestions.filter((inFlightQuestion) => inFlightQuestion !== e);
+  clearInFlight(question) {
+    if (this.inFlightQuestions.includes(question))
+      this.inFlightQuestions = this.inFlightQuestions.filter(
+        (inFlightQuestion) => inFlightQuestion !== question,
+      );
   }
 }
 //@ chunk-ndmse9kj.js:44268-44278 placement
@@ -588,10 +599,10 @@ class PendingOfferSlice {
   subscribe = this.changed.subscribe;
   getSnapshot = () => this.pending;
   subscribeSubmitted = this.submittedChanged.subscribe;
-  submit(e) {
+  submit(offer) {
     if (this.shownThisSession) return;
     if (this.submitted.length >= SUBMITTED_QUEUE_LIMIT) this.submitted.shift();
-    this.submitted.push(e);
+    this.submitted.push(offer);
     this.submittedChanged.emit();
   }
   takeSubmitted() {
@@ -618,7 +629,10 @@ class PendingOfferSlice {
 /**
  * 权限暂存通道 consume() 的哨兵值：该条目已被淘汰时返回此 Symbol，调用方据此当作未命中处理。
  */
-var PERMISSION_STASH_EVICTED_SYMBOL = Symbol("permission-stash-evicted");
+var PERMISSION_STASH_EVICTED_SYMBOL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ndmse9kj.js:44876", () => {
+  PERMISSION_STASH_EVICTED_SYMBOL = Symbol("permission-stash-evicted");
+});
 //@ chunk-ndmse9kj.js:44919-46770 placement
 /**
  * 会话状态切片：按读/写两条通道暂存文件状态（容量上限、淘汰集合、溢出后标记 poisoned），并按会话记录文件 dev/ino 身份，consume 时清理前缀并返回被淘汰标记。
@@ -645,100 +659,111 @@ class FileStateStashSlice {
     this.entriesCap = entriesCap;
     this.evictedKeysCap = evictedKeysCap;
   }
-  stash(e, n, o, r = "write") {
-    if (e === undefined) return;
-    let i = this.lanes[r];
-    let s = this.evicted[r];
-    let a = fileLaneKey(e, n);
-    if (s.has(a)) return;
-    let l = i.get(a);
-    if (l !== undefined) {
-      let p = new Set(o);
-      i.set(
-        a,
-        l.filter((f) => p.has(f)),
+  stash(sessionId, toolUseId, filePaths, lane = "write") {
+    if (sessionId === undefined) return;
+    let laneMap = this.lanes[lane];
+    let evictedSet = this.evicted[lane];
+    let laneKey = fileLaneKey(sessionId, toolUseId);
+    if (evictedSet.has(laneKey)) return;
+    let existingPaths = laneMap.get(laneKey);
+    if (existingPaths !== undefined) {
+      let keepSet = new Set(filePaths);
+      laneMap.set(
+        laneKey,
+        existingPaths.filter((filePath) => keepSet.has(filePath)),
       );
       return;
     }
-    if (i.size >= this.entriesCap) {
-      let p = i.keys().next().value;
-      if (p !== undefined) {
-        i.delete(p);
-        s.add(p);
-        if (s.size > this.evictedKeysCap) {
-          this.poisoned[r] = true;
-          let f = s.values().next().value;
-          if (f !== undefined) s.delete(f);
+    if (laneMap.size >= this.entriesCap) {
+      let oldestKey = laneMap.keys().next().value;
+      if (oldestKey !== undefined) {
+        laneMap.delete(oldestKey);
+        evictedSet.add(oldestKey);
+        if (evictedSet.size > this.evictedKeysCap) {
+          this.poisoned[lane] = true;
+          let oldestEvictedKey = evictedSet.values().next().value;
+          if (oldestEvictedKey !== undefined) evictedSet.delete(oldestEvictedKey);
         }
       }
     }
-    i.set(a, o);
+    laneMap.set(laneKey, filePaths);
   }
-  holds(e, n, o = "write") {
-    return e !== undefined && this.lanes[o].has(fileLaneKey(e, n));
+  holds(sessionId, toolUseId, lane = "write") {
+    return sessionId !== undefined && this.lanes[lane].has(fileLaneKey(sessionId, toolUseId));
   }
-  stashIdentity(e, n, o) {
-    if (e === undefined) return;
-    let r = this.identities.get(e);
-    let i = r?.get(n);
-    if (r !== undefined && i !== undefined) {
-      if (i === null || o === null || i.dev !== o.dev || i.ino !== o.ino) r.set(n, null);
+  stashIdentity(sessionId, toolUseId, identity) {
+    if (sessionId === undefined) return;
+    let toolUseIdMap = this.identities.get(sessionId);
+    let existingIdentity = toolUseIdMap?.get(toolUseId);
+    if (toolUseIdMap !== undefined && existingIdentity !== undefined) {
+      if (
+        existingIdentity === null ||
+        identity === null ||
+        existingIdentity.dev !== identity.dev ||
+        existingIdentity.ino !== identity.ino
+      )
+        toolUseIdMap.set(toolUseId, null);
       return;
     }
-    let s = this.identitiesEvicted.has(e) || this.identitiesPoisoned;
-    if (r === undefined) {
-      if (!s && this.identities.size >= this.entriesCap) {
-        let a = this.identities.keys().next().value;
-        if (a !== undefined) {
-          this.identities.delete(a);
-          this.identitiesEvicted.add(a);
+    let evictedOrPoisoned = this.identitiesEvicted.has(sessionId) || this.identitiesPoisoned;
+    if (toolUseIdMap === undefined) {
+      if (!evictedOrPoisoned && this.identities.size >= this.entriesCap) {
+        let oldestSessionId = this.identities.keys().next().value;
+        if (oldestSessionId !== undefined) {
+          this.identities.delete(oldestSessionId);
+          this.identitiesEvicted.add(oldestSessionId);
           if (this.identitiesEvicted.size > this.evictedKeysCap) {
             this.identitiesPoisoned = true;
-            let l = this.identitiesEvicted.values().next().value;
-            if (l !== undefined) this.identitiesEvicted.delete(l);
+            let oldestEvictedSessionId = this.identitiesEvicted.values().next().value;
+            if (oldestEvictedSessionId !== undefined) this.identitiesEvicted.delete(oldestEvictedSessionId);
           }
         }
       }
-      r = new Map();
-      this.identities.set(e, r);
+      toolUseIdMap = new Map();
+      this.identities.set(sessionId, toolUseIdMap);
     }
-    r.set(n, s ? null : o);
+    toolUseIdMap.set(toolUseId, evictedOrPoisoned ? null : identity);
   }
-  takeIdentity(e, n) {
-    if (e === undefined) return;
-    let o = this.identities.get(e);
-    let r = o?.get(n);
-    if (o?.delete(n) && o.size === 0) this.identities.delete(e);
-    return r;
+  takeIdentity(sessionId, toolUseId) {
+    if (sessionId === undefined) return;
+    let toolUseIdMap = this.identities.get(sessionId);
+    let identity = toolUseIdMap?.get(toolUseId);
+    if (toolUseIdMap?.delete(toolUseId) && toolUseIdMap.size === 0) this.identities.delete(sessionId);
+    return identity;
   }
-  consume(e, n, o = "write") {
-    if (e === undefined) return;
-    let r = this.lanes[o];
-    let i = fileLaneKey(e, n);
-    let s = r.get(i);
-    let a = s === undefined && (this.evicted[o].delete(i) || this.poisoned[o]);
-    let l = `${e}\x00`;
-    for (let key of r.keys()) if (key.startsWith(l)) r.delete(key);
-    if (o === "read") {
-      this.identities.delete(e);
-      this.identitiesEvicted.delete(e);
+  consume(sessionId, toolUseId, lane = "write") {
+    if (sessionId === undefined) return;
+    let laneMap = this.lanes[lane];
+    let laneKey = fileLaneKey(sessionId, toolUseId);
+    let stashedPaths = laneMap.get(laneKey);
+    let wasEvicted =
+      stashedPaths === undefined && (this.evicted[lane].delete(laneKey) || this.poisoned[lane]);
+    let sessionPrefix = `${sessionId}\x00`;
+    for (let key of laneMap.keys()) if (key.startsWith(sessionPrefix)) laneMap.delete(key);
+    if (lane === "read") {
+      this.identities.delete(sessionId);
+      this.identitiesEvicted.delete(sessionId);
     }
-    if (a) return PERMISSION_STASH_EVICTED_SYMBOL;
-    return s;
+    if (wasEvicted) return PERMISSION_STASH_EVICTED_SYMBOL;
+    return stashedPaths;
   }
 }
 //@ chunk-ndmse9kj.js:46770-46808 placement
-function fileLaneKey(e, n) {
-  return `${e}\x00${n}`;
+function fileLaneKey(sessionId, toolUseId) {
+  return `${sessionId}\x00${toolUseId}`;
 }
 //@ chunk-ndmse9kj.js:46808-46860 placement
-var NOPROJECTDIRECTORYERROR = "NoProjectDirectoryError";
-var projectDirectoryErrorReporterSlot = new HostScoped(() => ({}));
+var NOPROJECTDIRECTORYERROR; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var projectDirectoryErrorReporterSlot;
+deferInit("chunk-ndmse9kj.js:46808", () => {
+  NOPROJECTDIRECTORYERROR = "NoProjectDirectoryError";
+  projectDirectoryErrorReporterSlot = new HostScoped(() => ({}));
+});
 //@ chunk-ndmse9kj.js:46860-46874 placement
 var onProjectDirectoryError = () => {};
 //@ chunk-ndmse9kj.js:46874-46894 placement
-function setProjectDirectoryErrorHandler(e) {
-  onProjectDirectoryError = e;
+function setProjectDirectoryErrorHandler(handler) {
+  onProjectDirectoryError = handler;
 }
 //@ chunk-ndmse9kj.js:46894-47009 placement
 /**
@@ -768,8 +793,8 @@ function isNoProjectDirectoryError(error) {
 /**
  * 取会话的 project；project 为 null 时抛 NoProjectDirectoryError。同文件另有 forkRootSessionWithProject 等派生辅助。
  */
-function getSessionProject(session) {
-  let { project } = session;
+function getSessionProject(sessionRecord) {
+  let { project } = sessionRecord;
   if (project === null) throw new NoProjectDirectoryError();
   return project;
 }
@@ -777,26 +802,26 @@ function getSessionProject(session) {
 /**
  * 以 root 会话描述（host、id、parentId）和项目信息派生带项目的会话。
  */
-function forkRootSessionWithProject(e) {
+function forkRootSessionWithProject(root) {
   return forkSessionWithProject(
     {
       kind: "root",
-      host: e.host,
-      id: e.id,
-      parentId: e.parentId,
+      host: root.host,
+      id: root.id,
+      parentId: root.parentId,
     },
-    e.project,
-    e.project?.isolationRoot,
+    root.project,
+    root.project?.isolationRoot,
   );
 }
 //@ chunk-ndmse9kj.js:47266-47521 placement
 /**
  * 用新值覆盖旧的 originalCwd/projectRoot/cwd 三元组并规范化；三者都缺返回 null，只缺一部分抛 NoProjectDirectoryError。
  */
-function mergeProjectDirs(project, n) {
-  let originalCwd = n.originalCwd ?? project?.originalCwd;
-  let projectRoot = n.projectRoot ?? project?.projectRoot;
-  let cwd = n.cwd ?? project?.cwd;
+function mergeProjectDirs(project, patch) {
+  let originalCwd = patch.originalCwd ?? project?.originalCwd;
+  let projectRoot = patch.projectRoot ?? project?.projectRoot;
+  let cwd = patch.cwd ?? project?.cwd;
   if (originalCwd === undefined && projectRoot === undefined && cwd === undefined) return null;
   if (originalCwd === undefined || projectRoot === undefined || cwd === undefined)
     throw new NoProjectDirectoryError();
@@ -810,150 +835,154 @@ function mergeProjectDirs(project, n) {
 /**
  * 以 withProject 方式派生会话，处理 fork/parentId 并拒绝无法重新标识的会话
  */
-function forkSessionWithProject(e, n, o) {
-  let r = {
-    project: n === null ? null : mergeProjectDirs(null, n),
+function forkSessionWithProject(source, project, isolationRoot) {
+  let projectHolder = {
+    project: project === null ? null : mergeProjectDirs(null, project),
   };
-  let i = o;
+  let currentIsolationRoot = isolationRoot;
   let signal = createSignal();
-  let observers = e.kind === "fork" ? e.root.observers : new SessionObservers();
-  let autonomousLoopPreamble = e.kind === "fork" ? e.root.autonomousLoopPreamble : new AutonomousLoopSlice();
-  let precompute = e.kind === "fork" ? e.root.precompute : new AgentSidecarSlice();
-  let f = {
+  let observers = source.kind === "fork" ? source.root.observers : new SessionObservers();
+  let autonomousLoopPreamble =
+    source.kind === "fork" ? source.root.autonomousLoopPreamble : new AutonomousLoopSlice();
+  let precompute = source.kind === "fork" ? source.root.precompute : new AgentSidecarSlice();
+  let projectView = {
     get originalCwd() {
-      return getSessionProject(r).originalCwd;
+      return getSessionProject(projectHolder).originalCwd;
     },
     get projectRoot() {
-      return getSessionProject(r).projectRoot;
+      return getSessionProject(projectHolder).projectRoot;
     },
     get cwd() {
-      return getSessionProject(r).cwd;
+      return getSessionProject(projectHolder).cwd;
     },
     get isolationRoot() {
-      return i;
+      return currentIsolationRoot;
     },
   };
-  let S = {
-    host: e.kind === "fork" ? e.root.host : e.host,
+  let session = {
+    host: source.kind === "fork" ? source.root.host : source.host,
     get id() {
-      return e.kind === "fork" ? e.root.id : e.id;
+      return source.kind === "fork" ? source.root.id : source.id;
     },
     get parentId() {
-      return e.kind === "fork" ? e.root.parentId : e.parentId;
+      return source.kind === "fork" ? source.root.parentId : source.parentId;
     },
     get root() {
-      return e.kind === "fork" ? e.root : S;
+      return source.kind === "fork" ? source.root : session;
     },
     get project() {
-      return r.project === null ? null : f;
+      return projectHolder.project === null ? null : projectView;
     },
     observers,
     autonomousLoopPreamble,
-    btwHistory: e.kind === "fork" ? e.root.btwHistory : new SideQuestionSlice(),
-    ccrRecap: e.kind === "fork" ? e.root.ccrRecap : new TurnEndTaskSlice(),
-    conversationLatches: e.kind === "fork" ? e.root.conversationLatches : new ConversationLatches(),
-    costLedger: e.kind === "fork" ? e.root.costLedger : new CostLedger(),
-    engineStore: e.kind === "fork" ? e.root.engineStore : new EngineStoreHolder(),
+    btwHistory: source.kind === "fork" ? source.root.btwHistory : new SideQuestionSlice(),
+    ccrRecap: source.kind === "fork" ? source.root.ccrRecap : new TurnEndTaskSlice(),
+    conversationLatches: source.kind === "fork" ? source.root.conversationLatches : new ConversationLatches(),
+    costLedger: source.kind === "fork" ? source.root.costLedger : new CostLedger(),
+    engineStore: source.kind === "fork" ? source.root.engineStore : new EngineStoreHolder(),
     usageCreditsOnlyModelConsentSlots:
-      e.kind === "fork" ? e.root.usageCreditsOnlyModelConsentSlots : new UsageCreditsConsentSlots(),
-    hookRegistry: e.kind === "fork" ? e.root.hookRegistry : new HookRegistry(),
-    identity: e.kind === "fork" ? e.root.identity : new SessionIdentitySlice(),
-    invokedSkills: e.kind === "fork" ? e.root.invokedSkills : new InvokedSkills(),
-    mcpSessionWiring: e.kind === "fork" ? e.root.mcpSessionWiring : new McpSessionWiring(),
-    modelSelection: e.kind === "fork" ? e.root.modelSelection : new ModelSelectionSlice(),
-    promptAssembly: e.kind === "fork" ? e.root.promptAssembly : new PromptAssemblySlice(),
-    promptSuggestion: e.kind === "fork" ? e.root.promptSuggestion : new TurnOfferSlice(),
-    pendingHint: e.kind === "fork" ? e.root.pendingHint : new PendingOfferSlice(),
-    pluginsSync: e.kind === "fork" ? e.root.pluginsSync : new CloudSyncSlice(),
+      source.kind === "fork" ? source.root.usageCreditsOnlyModelConsentSlots : new UsageCreditsConsentSlots(),
+    hookRegistry: source.kind === "fork" ? source.root.hookRegistry : new HookRegistry(),
+    identity: source.kind === "fork" ? source.root.identity : new SessionIdentitySlice(),
+    invokedSkills: source.kind === "fork" ? source.root.invokedSkills : new InvokedSkills(),
+    mcpSessionWiring: source.kind === "fork" ? source.root.mcpSessionWiring : new McpSessionWiring(),
+    modelSelection: source.kind === "fork" ? source.root.modelSelection : new ModelSelectionSlice(),
+    promptAssembly: source.kind === "fork" ? source.root.promptAssembly : new PromptAssemblySlice(),
+    promptSuggestion: source.kind === "fork" ? source.root.promptSuggestion : new TurnOfferSlice(),
+    pendingHint: source.kind === "fork" ? source.root.pendingHint : new PendingOfferSlice(),
+    pluginsSync: source.kind === "fork" ? source.root.pluginsSync : new CloudSyncSlice(),
     precompute,
-    requestJournal: e.kind === "fork" ? e.root.requestJournal : new RequestJournal(),
-    sessionCron: e.kind === "fork" ? e.root.sessionCron : new SessionCron(),
-    sessionFlags: e.kind === "fork" ? e.root.sessionFlags : new SessionFlags(),
-    sessionRefsGate: e.kind === "fork" ? e.root.sessionRefsGate : new CcrSessionLatchSlice(),
-    sessionScratch: e.kind === "fork" ? e.root.sessionScratch : new SessionScratch(),
-    surfaceCapabilities: e.kind === "fork" ? e.root.surfaceCapabilities : new SurfaceCapabilities(),
-    userPresence: e.kind === "fork" ? e.root.userPresence : new UserPresence(),
-    workflowUsageConsent: e.kind === "fork" ? e.root.workflowUsageConsent : new WorkflowUsageConsentFlag(),
-    outsideReadPrompt: e.kind === "fork" ? e.root.outsideReadPrompt : new OpenToolUseQuestionSlice(),
-    writePermissionStash: e.kind === "fork" ? e.root.writePermissionStash : new FileStateStashSlice(),
-    subscribe(u) {
-      let m = signal.subscribe(u);
-      if (e.kind !== "fork") return m;
-      let root = e.root;
+    requestJournal: source.kind === "fork" ? source.root.requestJournal : new RequestJournal(),
+    sessionCron: source.kind === "fork" ? source.root.sessionCron : new SessionCron(),
+    sessionFlags: source.kind === "fork" ? source.root.sessionFlags : new SessionFlags(),
+    sessionRefsGate: source.kind === "fork" ? source.root.sessionRefsGate : new CcrSessionLatchSlice(),
+    sessionScratch: source.kind === "fork" ? source.root.sessionScratch : new SessionScratch(),
+    surfaceCapabilities: source.kind === "fork" ? source.root.surfaceCapabilities : new SurfaceCapabilities(),
+    userPresence: source.kind === "fork" ? source.root.userPresence : new UserPresence(),
+    workflowUsageConsent:
+      source.kind === "fork" ? source.root.workflowUsageConsent : new WorkflowUsageConsentFlag(),
+    outsideReadPrompt:
+      source.kind === "fork" ? source.root.outsideReadPrompt : new OpenToolUseQuestionSlice(),
+    writePermissionStash:
+      source.kind === "fork" ? source.root.writePermissionStash : new FileStateStashSlice(),
+    subscribe(listener) {
+      let unsubscribe = signal.subscribe(listener);
+      if (source.kind !== "fork") return unsubscribe;
+      let root = source.root;
       let { id, parentId } = root;
-      let x = root.subscribe(() => {
+      let rootUnsubscribe = root.subscribe(() => {
         if (root.id === id && root.parentId === parentId) return;
         id = root.id;
         parentId = root.parentId;
-        u();
+        listener();
       });
       return () => {
-        m();
-        x();
+        unsubscribe();
+        rootUnsubscribe();
       };
     },
     setCwd(cwd) {
-      S.update({
+      session.update({
         project: {
           cwd,
         },
       });
     },
-    setIsolationRoot(u) {
-      if (u !== i) {
-        i = u;
+    setIsolationRoot(isolationRoot) {
+      if (isolationRoot !== currentIsolationRoot) {
+        currentIsolationRoot = isolationRoot;
         signal.emit();
       }
     },
-    withProject(u) {
+    withProject(projectPatch) {
       return forkSessionWithProject(
         {
           kind: "fork",
-          root: S.root,
+          root: session.root,
         },
-        mergeProjectDirs(r.project, u),
-        u.isolationRoot ?? i,
+        mergeProjectDirs(projectHolder.project, projectPatch),
+        projectPatch.isolationRoot ?? currentIsolationRoot,
       );
     },
-    update(u) {
-      let m =
-        u.project === undefined
-          ? r.project
-          : u.project === null
+    update(patch) {
+      let nextProject =
+        patch.project === undefined
+          ? projectHolder.project
+          : patch.project === null
             ? null
-            : mergeProjectDirs(r.project, u.project);
-      let h = false;
-      if (u.id !== undefined || "parentId" in u) {
-        if (e.kind === "fork")
+            : mergeProjectDirs(projectHolder.project, patch.project);
+      let changed = false;
+      if (patch.id !== undefined || "parentId" in patch) {
+        if (source.kind === "fork")
           throw Error(
             "A withProject fork cannot re-identify the session \u2014 update the root session instead",
           );
-        if (u.id !== undefined && u.id !== e.id) {
-          e.id = u.id;
-          h = true;
+        if (patch.id !== undefined && patch.id !== source.id) {
+          source.id = patch.id;
+          changed = true;
         }
-        if ("parentId" in u && u.parentId !== e.parentId) {
-          e.parentId = u.parentId;
-          h = true;
+        if ("parentId" in patch && patch.parentId !== source.parentId) {
+          source.parentId = patch.parentId;
+          changed = true;
         }
       }
       if (
-        m?.originalCwd !== r.project?.originalCwd ||
-        m?.projectRoot !== r.project?.projectRoot ||
-        m?.cwd !== r.project?.cwd
+        nextProject?.originalCwd !== projectHolder.project?.originalCwd ||
+        nextProject?.projectRoot !== projectHolder.project?.projectRoot ||
+        nextProject?.cwd !== projectHolder.project?.cwd
       ) {
-        r.project = m;
-        h = true;
+        projectHolder.project = nextProject;
+        changed = true;
       }
-      let isolationRoot = u.project?.isolationRoot;
-      if (isolationRoot !== undefined && isolationRoot !== i) {
-        i = isolationRoot;
-        h = true;
+      let isolationRoot = patch.project?.isolationRoot;
+      if (isolationRoot !== undefined && isolationRoot !== currentIsolationRoot) {
+        currentIsolationRoot = isolationRoot;
+        changed = true;
       }
-      if (h) signal.emit();
+      if (changed) signal.emit();
     },
   };
-  return S;
+  return session;
 }
 //@ chunk-ndmse9kj.js:50630-50850 placement
 /**
@@ -962,22 +991,22 @@ function forkSessionWithProject(e, n, o) {
 class SessionRootSlot {
   #e;
   #t = new WeakMap();
-  constructor(e) {
-    this.#e = e;
+  constructor(createSlot) {
+    this.#e = createSlot;
   }
-  peek(e) {
-    return this.#t.get(e.root);
+  peek(session) {
+    return this.#t.get(session.root);
   }
-  of(e) {
-    let root = e.root;
-    let o = this.#t.get(root);
-    if (o !== undefined) return o;
-    let r = this.#e();
-    this.#t.set(root, r);
-    return r;
+  of(session) {
+    let root = session.root;
+    let cachedSlot = this.#t.get(root);
+    if (cachedSlot !== undefined) return cachedSlot;
+    let createdSlot = this.#e();
+    this.#t.set(root, createdSlot);
+    return createdSlot;
   }
-  drop(e) {
-    this.#t.delete(e.root);
+  drop(session) {
+    this.#t.delete(session.root);
   }
 }
 //@ chunk-ndmse9kj.js:50850-56668 placement
@@ -1055,39 +1084,39 @@ class RuntimeModeSlice {
   markNoDialogLaunch() {
     this.#n = true;
   }
-  replaceIsInteractive(e) {
-    this.#e = e;
+  replaceIsInteractive(isInteractive) {
+    this.#e = isInteractive;
     this.#t = true;
   }
   printOutputFormat() {
     return this.#o;
   }
-  replacePrintOutputFormat(e) {
-    this.#o = e;
+  replacePrintOutputFormat(outputFormat) {
+    this.#o = outputFormat;
   }
   thinkingDisplayExplicit() {
     return this.#r;
   }
-  replaceThinkingDisplayExplicit(e) {
-    this.#r = e;
+  replaceThinkingDisplayExplicit(isThinkingDisplayExplicit) {
+    this.#r = isThinkingDisplayExplicit;
   }
   permissionPromptToolName() {
     return this.#s;
   }
-  replacePermissionPromptToolName(e) {
-    this.#s = e;
+  replacePermissionPromptToolName(toolName) {
+    this.#s = toolName;
   }
   hasStreamingInput() {
     return this.#i;
   }
-  replaceHasStreamingInput(e) {
-    this.#i = e;
+  replaceHasStreamingInput(hasStreamingInput) {
+    this.#i = hasStreamingInput;
   }
   singleShotPrintSession() {
     return this.#d;
   }
-  replaceSingleShotPrintSession(e) {
-    this.#d = e;
+  replaceSingleShotPrintSession(isSingleShotPrintSession) {
+    this.#d = isSingleShotPrintSession;
   }
   printInputClosed() {
     return this.#u;
@@ -1098,42 +1127,42 @@ class RuntimeModeSlice {
   modelOverrideOptOutForSession() {
     return this.#c;
   }
-  replaceModelOverrideOptOutForSession(e) {
-    this.#c = e;
+  replaceModelOverrideOptOutForSession(isModelOverrideOptOut) {
+    this.#c = isModelOverrideOptOut;
   }
   rendererMode() {
     return this.#l;
   }
-  replaceRendererMode(e) {
-    this.#l = e;
+  replaceRendererMode(rendererMode) {
+    this.#l = rendererMode;
   }
   strictToolResultPairing() {
     return this.#p;
   }
-  replaceStrictToolResultPairing(e) {
-    this.#p = e;
+  replaceStrictToolResultPairing(isStrictToolResultPairing) {
+    this.#p = isStrictToolResultPairing;
   }
   restrictedSession() {
     return this.#h;
   }
-  replaceRestrictedSession(e) {
-    this.#h = e;
+  replaceRestrictedSession(restrictedSession) {
+    this.#h = restrictedSession;
   }
   workspaceRestrictionState() {
     return this.#a;
   }
-  replaceWorkspaceRestrictionState(e) {
-    this.#a = e;
+  replaceWorkspaceRestrictionState(restrictionState) {
+    this.#a = restrictionState;
   }
-  replaceWorkspaceRestrictionUnsubscribe(e) {
+  replaceWorkspaceRestrictionUnsubscribe(unsubscribe) {
     this.#g?.();
-    this.#g = e;
+    this.#g = unsubscribe;
   }
   restrictedWorkspaceRoots() {
     return this.#S;
   }
-  addRestrictedWorkspaceRoot(e, n) {
-    this.#S.set(e, n);
+  addRestrictedWorkspaceRoot(root, value) {
+    this.#S.set(root, value);
   }
   clearRestrictedWorkspaceRoots() {
     this.#S = new Map();
@@ -1141,98 +1170,98 @@ class RuntimeModeSlice {
   clientType() {
     return this.#y;
   }
-  replaceClientType(e) {
-    this.#y = e;
+  replaceClientType(clientType) {
+    this.#y = clientType;
   }
   sessionStartType() {
     return this.#v;
   }
-  replaceSessionStartType(e) {
-    this.#v = e;
+  replaceSessionStartType(sessionStartType) {
+    this.#v = sessionStartType;
   }
   questionPreviewFormat() {
     return this.#f;
   }
-  replaceQuestionPreviewFormat(e) {
-    this.#f = e;
+  replaceQuestionPreviewFormat(previewFormat) {
+    this.#f = previewFormat;
   }
   extendedQuestionsEnabled() {
     return this.#m;
   }
-  replaceExtendedQuestionsEnabled(e) {
-    this.#m = e;
+  replaceExtendedQuestionsEnabled(isExtendedQuestionsEnabled) {
+    this.#m = isExtendedQuestionsEnabled;
   }
   questionOptionDescriptionsOptional() {
     return this.#b;
   }
-  replaceQuestionOptionDescriptionsOptional(e) {
-    this.#b = e;
+  replaceQuestionOptionDescriptionsOptional(optionDescriptionsOptional) {
+    this.#b = optionDescriptionsOptional;
   }
   replConfigArgv() {
     return this.#k;
   }
-  replaceReplConfigArgv(e) {
-    this.#k = e;
+  replaceReplConfigArgv(argv) {
+    this.#k = argv;
   }
   userMsgOptIn() {
     return this.#R;
   }
-  replaceUserMsgOptIn(e) {
-    this.#R = e;
+  replaceUserMsgOptIn(isUserMsgOptIn) {
+    this.#R = isUserMsgOptIn;
   }
   searchToolsOptIn() {
     return this.#x;
   }
-  replaceSearchToolsOptIn(e) {
-    this.#x = e;
+  replaceSearchToolsOptIn(isSearchToolsOptIn) {
+    this.#x = isSearchToolsOptIn;
   }
   todoToolsOptIn() {
     return this.#C;
   }
-  replaceTodoToolsOptIn(e) {
-    this.#C = e;
+  replaceTodoToolsOptIn(isTodoToolsOptIn) {
+    this.#C = isTodoToolsOptIn;
   }
   toolsOmittedByLaunchList() {
     return this.#P;
   }
-  replaceToolsOmittedByLaunchList(e) {
-    this.#P = e;
+  replaceToolsOmittedByLaunchList(omittedTools) {
+    this.#P = omittedTools;
   }
   wizardOperatorToolsEnabled() {
     return this.#T;
   }
-  replaceWizardOperatorToolsEnabled(e) {
-    this.#T = e;
+  replaceWizardOperatorToolsEnabled(isWizardOperatorToolsEnabled) {
+    this.#T = isWizardOperatorToolsEnabled;
   }
   runnerDeclaredNestedRepositoryDiff() {
     return this.#w;
   }
-  replaceRunnerDeclaredNestedRepositoryDiff(e) {
-    this.#w = e;
+  replaceRunnerDeclaredNestedRepositoryDiff(isNestedRepositoryDiff) {
+    this.#w = isNestedRepositoryDiff;
   }
   runnerDeclaredNoRepositoryCheckedOut() {
     return this.#A;
   }
-  replaceRunnerDeclaredNoRepositoryCheckedOut(e) {
-    this.#A = e;
+  replaceRunnerDeclaredNoRepositoryCheckedOut(isNoRepositoryCheckedOut) {
+    this.#A = isNoRepositoryCheckedOut;
   }
   runnerDeclaredFreshMachinePerSession() {
     return this.#L;
   }
-  replaceRunnerDeclaredFreshMachinePerSession(e) {
-    this.#L = e;
+  replaceRunnerDeclaredFreshMachinePerSession(isFreshMachinePerSession) {
+    this.#L = isFreshMachinePerSession;
   }
   pollEventIngress() {
     return this.#M;
   }
-  markPollEventIngress(e) {
-    this.#M = e;
+  markPollEventIngress(ingressMode) {
+    this.#M = ingressMode;
   }
   ownEventDeliveryRequested() {
     return this.#O && !this.#F;
   }
-  replaceOwnEventDeliveryHeld(e) {
-    this.#F = e;
+  replaceOwnEventDeliveryHeld(isHeld) {
+    this.#F = isHeld;
   }
   markOwnEventDeliveryRequested() {
     this.#O = true;
@@ -1240,127 +1269,127 @@ class RuntimeModeSlice {
   sdkAgentProgressSummariesEnabled() {
     return this.#I;
   }
-  replaceSdkAgentProgressSummariesEnabled(e) {
-    this.#I = e;
+  replaceSdkAgentProgressSummariesEnabled(isSdkAgentProgressSummariesEnabled) {
+    this.#I = isSdkAgentProgressSummariesEnabled;
   }
   sessionPersistenceDisabled() {
     return this.#E;
   }
-  replaceSessionPersistenceDisabled(e) {
-    this.#E = e;
+  replaceSessionPersistenceDisabled(isSessionPersistenceDisabled) {
+    this.#E = isSessionPersistenceDisabled;
   }
   diskless() {
     return this.#H;
   }
-  replaceDiskless(e) {
-    this.#H = e;
+  replaceDiskless(isDiskless) {
+    this.#H = isDiskless;
   }
   ccrSessionUrl() {
     return this.#B;
   }
-  replaceCcrSessionUrl(e) {
-    this.#B = e;
+  replaceCcrSessionUrl(sessionUrl) {
+    this.#B = sessionUrl;
   }
   ccrDerivedSurface() {
     return this.#U;
   }
-  replaceCcrDerivedSurface(e) {
-    this.#U = e;
+  replaceCcrDerivedSurface(derivedSurface) {
+    this.#U = derivedSurface;
   }
   autoCompactWindowSurface() {
     return this.#q;
   }
-  replaceAutoCompactWindowSurface(e) {
-    this.#q = e;
+  replaceAutoCompactWindowSurface(compactWindowSurface) {
+    this.#q = compactWindowSurface;
   }
   entrypointOnRequests() {
     return this.#j;
   }
-  replaceEntrypointOnRequests(e) {
-    this.#j = e;
+  replaceEntrypointOnRequests(entrypoint) {
+    this.#j = entrypoint;
   }
   coworkEnrollment() {
     return this.#N;
   }
-  replaceCoworkEnrollment(e) {
-    this.#N = e;
+  replaceCoworkEnrollment(enrollment) {
+    this.#N = enrollment;
   }
   toolsMachine() {
     return this.#_;
   }
-  replaceToolsMachine(e) {
-    this.#_ = e;
+  replaceToolsMachine(toolsMachine) {
+    this.#_ = toolsMachine;
   }
   sessionBypassPermissionsMode() {
     return this.#W;
   }
-  replaceSessionBypassPermissionsMode(e) {
-    this.#W = e;
+  replaceSessionBypassPermissionsMode(isBypassPermissionsMode) {
+    this.#W = isBypassPermissionsMode;
   }
   disableSlashCommands() {
     return this.#G;
   }
-  replaceDisableSlashCommands(e) {
-    this.#G = e;
+  replaceDisableSlashCommands(areSlashCommandsDisabled) {
+    this.#G = areSlashCommandsDisabled;
   }
   disableFileMentions() {
     return this.#V;
   }
-  replaceDisableFileMentions(e) {
-    this.#V = e;
+  replaceDisableFileMentions(areFileMentionsDisabled) {
+    this.#V = areFileMentionsDisabled;
   }
   sessionUploadsDir() {
     return this.#K;
   }
-  replaceSessionUploadsDir(e) {
-    this.#K = e;
+  replaceSessionUploadsDir(uploadsDir) {
+    this.#K = uploadsDir;
   }
   localUploadsRoot() {
     return this.#J;
   }
-  replaceLocalUploadsRoot(e) {
-    this.#J = e;
+  replaceLocalUploadsRoot(uploadsRoot) {
+    this.#J = uploadsRoot;
   }
   mayForwardHomeSettings() {
     return this.#z;
   }
-  replaceMayForwardHomeSettings(e) {
-    this.#z = e;
+  replaceMayForwardHomeSettings(mayForwardHomeSettings) {
+    this.#z = mayForwardHomeSettings;
   }
   homeSettingsHostConsent() {
     return this.#Q;
   }
-  replaceHomeSettingsHostConsent(e) {
-    this.#Q = e;
+  replaceHomeSettingsHostConsent(hostConsent) {
+    this.#Q = hostConsent;
   }
   scheduledTasksEnabled() {
     return this.#D;
   }
-  replaceScheduledTasksEnabled(e) {
-    let n = e && !this.#D;
-    this.#D = e;
-    if (n) this.#oe.emit();
+  replaceScheduledTasksEnabled(isScheduledTasksEnabled) {
+    let becameEnabled = isScheduledTasksEnabled && !this.#D;
+    this.#D = isScheduledTasksEnabled;
+    if (becameEnabled) this.#oe.emit();
   }
-  onScheduledTasksEnabled(e) {
-    return this.#oe.subscribe(e);
+  onScheduledTasksEnabled(listener) {
+    return this.#oe.subscribe(listener);
   }
   initJsonSchema() {
     return this.#$;
   }
-  replaceInitJsonSchema(e) {
-    this.#$ = e;
+  replaceInitJsonSchema(jsonSchema) {
+    this.#$ = jsonSchema;
   }
   cliSessionConfigCarried() {
     return this.#Y;
   }
-  replaceCliSessionConfigCarried(e) {
-    this.#Y = e;
+  replaceCliSessionConfigCarried(isCliSessionConfigCarried) {
+    this.#Y = isCliSessionConfigCarried;
   }
   forkRestrictedLaunchConfig() {
     return this.#X;
   }
-  replaceForkRestrictedLaunchConfig(e) {
-    this.#X = e;
+  replaceForkRestrictedLaunchConfig(restrictedLaunchConfig) {
+    this.#X = restrictedLaunchConfig;
   }
   forkReplayLaunchConfig() {
     return this.#Z;
@@ -1368,23 +1397,23 @@ class RuntimeModeSlice {
   spareClaimState() {
     return this.#te;
   }
-  replaceSpareClaimState(e) {
-    this.#te = e;
+  replaceSpareClaimState(claimState) {
+    this.#te = claimState;
   }
   spareParkedAtMs() {
     return this.#ne;
   }
-  replaceSpareParkedAtMs(e) {
-    this.#ne = e;
+  replaceSpareParkedAtMs(parkedAtMs) {
+    this.#ne = parkedAtMs;
   }
-  replaceForkReplayLaunchConfig(e) {
-    this.#Z = e;
+  replaceForkReplayLaunchConfig(replayLaunchConfig) {
+    this.#Z = replayLaunchConfig;
   }
   projectConfigRoot() {
     return this.#ee;
   }
-  replaceProjectConfigRoot(e) {
-    this.#ee = e;
+  replaceProjectConfigRoot(projectConfigRoot) {
+    this.#ee = projectConfigRoot;
   }
   reset() {
     this.#e = false;
@@ -1466,51 +1495,51 @@ class SettingsSourcesSlice {
   flagSettingsPath() {
     return this.#e;
   }
-  replaceFlagSettingsPath(e) {
-    this.#e = e;
+  replaceFlagSettingsPath(settingsPath) {
+    this.#e = settingsPath;
   }
   flagAgentsFilePaths() {
     return this.#t;
   }
-  replaceFlagAgentsFilePaths(e) {
-    this.#t = e;
+  replaceFlagAgentsFilePaths(agentsFilePaths) {
+    this.#t = agentsFilePaths;
   }
   flagMcpConfigFilePaths() {
     return this.#n;
   }
-  replaceFlagMcpConfigFilePaths(e) {
-    this.#n = e;
+  replaceFlagMcpConfigFilePaths(mcpConfigFilePaths) {
+    this.#n = mcpConfigFilePaths;
   }
   flagSettingsExpectedContent() {
     return this.#o;
   }
-  replaceFlagSettingsExpectedContent(e) {
-    this.#o = e;
+  replaceFlagSettingsExpectedContent(expectedContent) {
+    this.#o = expectedContent;
   }
   flagSettingsFilePinnedContent() {
     return this.#r;
   }
-  replaceFlagSettingsFilePinnedContent(e) {
-    this.#r = e;
+  replaceFlagSettingsFilePinnedContent(pinnedContent) {
+    this.#r = pinnedContent;
   }
   flagSettingsInline() {
     return this.#s;
   }
-  replaceFlagSettingsInline(e) {
-    this.#s = e;
+  replaceFlagSettingsInline(inlineSettings) {
+    this.#s = inlineSettings;
   }
   parentManagedSettings() {
     return this.#i;
   }
-  replaceParentManagedSettings(e, n = null) {
-    this.#i = e;
-    this.#u = n;
+  replaceParentManagedSettings(managedSettings, organizationSettings = null) {
+    this.#i = managedSettings;
+    this.#u = organizationSettings;
   }
   parentManagedSettingsInvalid() {
     return this.#d;
   }
-  replaceParentManagedSettingsInvalid(e) {
-    this.#d = e;
+  replaceParentManagedSettingsInvalid(isInvalid) {
+    this.#d = isInvalid;
   }
   parentOrganizationSettings() {
     return this.#u;
@@ -1518,23 +1547,23 @@ class SettingsSourcesSlice {
   allowedSettingSources() {
     return this.#c;
   }
-  replaceAllowedSettingSources(e) {
-    this.#c = e;
+  replaceAllowedSettingSources(sources) {
+    this.#c = sources;
   }
   allowedSettingSourcesWithoutRepoDirSources() {
-    let e = this.#c;
-    if (this.#l?.of !== e)
+    let sources = this.#c;
+    if (this.#l?.of !== sources)
       this.#l = {
-        of: e,
-        result: e.filter((n) => n !== "projectSettings" && n !== "localSettings"),
+        of: sources,
+        result: sources.filter((source) => source !== "projectSettings" && source !== "localSettings"),
       };
     return this.#l.result;
   }
   useCoworkPlugins() {
     return this.#p;
   }
-  replaceUseCoworkPlugins(e) {
-    this.#p = e;
+  replaceUseCoworkPlugins(useCoworkPlugins) {
+    this.#p = useCoworkPlugins;
   }
   reset() {
     this.#e = undefined;
@@ -1577,20 +1606,20 @@ class PluginsAndChannelsSlice {
   inlinePlugins() {
     return this.#e;
   }
-  replaceInlinePlugins(e) {
-    this.#e = e;
+  replaceInlinePlugins(plugins) {
+    this.#e = plugins;
   }
   inlinePluginsNoMcp() {
     return this.#t;
   }
-  replaceInlinePluginsNoMcp(e) {
-    this.#t = e;
+  replaceInlinePluginsNoMcp(pluginsNoMcp) {
+    this.#t = pluginsNoMcp;
   }
   inlinePluginUrls() {
     return this.#n;
   }
-  replaceInlinePluginUrls(e) {
-    this.#n = e;
+  replaceInlinePluginUrls(pluginUrls) {
+    this.#n = pluginUrls;
   }
   syncedPluginDirs() {
     return this.#o ?? [];
@@ -1598,16 +1627,16 @@ class PluginsAndChannelsSlice {
   syncedPluginDirsRegistered() {
     return this.#o !== undefined;
   }
-  syncedPluginAttestation(e) {
-    return this.#r.get(e);
+  syncedPluginAttestation(pluginId) {
+    return this.#r.get(pluginId);
   }
-  syncedPluginRowId(e) {
-    return this.#s.get(e);
+  syncedPluginRowId(pluginId) {
+    return this.#s.get(pluginId);
   }
-  replaceSyncedPluginDirs(e, n = new Map(), o = new Map()) {
-    this.#o = e;
-    this.#r = n;
-    this.#s = o;
+  replaceSyncedPluginDirs(dirs, attestations = new Map(), rowIds = new Map()) {
+    this.#o = dirs;
+    this.#r = attestations;
+    this.#s = rowIds;
     this.#i = this.#g(this.#i);
   }
   clearSyncedPluginDirs() {
@@ -1616,57 +1645,63 @@ class PluginsAndChannelsSlice {
     this.#s = new Map();
     this.#i = new Map();
   }
-  attestedOfficialPluginMarketplace(e) {
-    return this.#i.get(e);
+  attestedOfficialPluginMarketplace(pluginId) {
+    return this.#i.get(pluginId);
   }
-  replaceAttestedOfficialPluginIds(e) {
-    this.#i = this.#g(e);
+  replaceAttestedOfficialPluginIds(pluginIds) {
+    this.#i = this.#g(pluginIds);
   }
-  #g(e) {
-    let n = new Set([...this.#r.values()].map((o) => `${o.pluginName}@${o.marketplace}`));
-    return new Map([...e].filter(([o, r]) => n.has(`${o.slice(0, o.lastIndexOf("@"))}@${r}`)));
+  #g(pluginIds) {
+    let attestedKeys = new Set(
+      [...this.#r.values()].map((attestation) => `${attestation.pluginName}@${attestation.marketplace}`),
+    );
+    return new Map(
+      [...pluginIds].filter(([pluginId, marketplace]) =>
+        attestedKeys.has(`${pluginId.slice(0, pluginId.lastIndexOf("@"))}@${marketplace}`),
+      ),
+    );
   }
   additionalDirectoriesForClaudeMd() {
     return this.#d;
   }
-  replaceAdditionalDirectoriesForClaudeMd(e) {
-    this.#d = e;
+  replaceAdditionalDirectoriesForClaudeMd(directories) {
+    this.#d = directories;
   }
   claudeMdAdditionalDirectoriesAsked() {
     return this.#u;
   }
-  askClaudeMdAdditionalDirectories(e) {
-    this.#u = e;
+  askClaudeMdAdditionalDirectories(asked) {
+    this.#u = asked;
   }
   allowedChannels() {
     return this.#c;
   }
-  replaceAllowedChannels(e) {
-    this.#c = e;
+  replaceAllowedChannels(channels) {
+    this.#c = channels;
   }
   hasDevChannels() {
     return this.#l;
   }
-  replaceHasDevChannels(e) {
-    this.#l = e;
+  replaceHasDevChannels(hasDevChannels) {
+    this.#l = hasDevChannels;
   }
   sessionSkillAllowlist() {
     return this.#p;
   }
-  replaceSessionSkillAllowlist(e) {
-    this.#p = e;
+  replaceSessionSkillAllowlist(skillAllowlist) {
+    this.#p = skillAllowlist;
   }
   chromeFlagOverride() {
     return this.#h;
   }
-  replaceChromeFlagOverride(e) {
-    this.#h = e;
+  replaceChromeFlagOverride(flagOverride) {
+    this.#h = flagOverride;
   }
   teammateAgentId() {
     return this.#a;
   }
-  replaceTeammateAgentId(e) {
-    this.#a = e;
+  replaceTeammateAgentId(agentId) {
+    this.#a = agentId;
   }
   reset() {
     this.#e = [];
@@ -1693,8 +1728,8 @@ class ModelStringsSlice {
   modelStrings() {
     return this.#e;
   }
-  replaceModelStrings(e) {
-    this.#e = e;
+  replaceModelStrings(modelStrings) {
+    this.#e = modelStrings;
   }
   invalidate() {
     this.#e = null;
@@ -1703,14 +1738,14 @@ class ModelStringsSlice {
   admin3PSteeringSnapshot() {
     return this.#t;
   }
-  recordAdmin3PSteeringSnapshot(e) {
-    this.#t = e;
+  recordAdmin3PSteeringSnapshot(steeringSnapshot) {
+    this.#t = steeringSnapshot;
   }
   probeRefutedDocumentDefaults() {
     return this.#n;
   }
-  recordProbeRefutedDocumentDefault(e) {
-    this.#n.add(e);
+  recordProbeRefutedDocumentDefault(documentKey) {
+    this.#n.add(documentKey);
   }
   reset() {
     this.#e = null;
@@ -1731,32 +1766,32 @@ class DiagnosticsSlice {
   errorLog() {
     return this.#e;
   }
-  recordError(e) {
+  recordError(entry) {
     if (this.#e.length >= 100) this.#e.shift();
-    this.#e.push(e);
+    this.#e.push(entry);
   }
-  recordSlowOperation(e, n) {
+  recordSlowOperation(operation, durationMs) {
     return;
   }
   slowOperations() {
     if (this.#t.length === 0) return EMPTY_DIAGNOSTICS_LIST;
     let now = Date.now();
-    if (this.#t.some((n) => now - n.timestamp >= 1e4)) {
-      this.#t = this.#t.filter((n) => now - n.timestamp < 1e4);
+    if (this.#t.some((operation) => now - operation.timestamp >= 1e4)) {
+      this.#t = this.#t.filter((operation) => now - operation.timestamp < 1e4);
       if (this.#t.length === 0) return EMPTY_DIAGNOSTICS_LIST;
     }
     return this.#t;
   }
-  recordDevBarAlert(e) {
+  recordDevBarAlert(alert) {
     return;
   }
   devBarAlert() {
-    let e = this.#n;
-    if (e && Date.now() - e.timestamp >= 60000) {
+    let alert = this.#n;
+    if (alert && Date.now() - alert.timestamp >= 60000) {
       this.#n = undefined;
       return;
     }
-    return e;
+    return alert;
   }
   reset() {
     this.#e = [];

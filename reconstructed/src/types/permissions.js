@@ -9,6 +9,7 @@
  * attribution: placement 34, fingerprint 1
  */
 import { canCycleToBypassPermissions, canCycleToAuto } from "../utils/permissions/getNextPermissionMode.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ktpw8eqa.js:1247-1351 placement = EXTERNAL_PERMISSION_MODES (0.805)
 /**
@@ -19,121 +20,129 @@ var INTERNAL_PERMISSION_MODES = [...EXTERNAL_PERMISSION_MODES];
 var PERMISSION_MODES = INTERNAL_PERMISSION_MODES;
 var PERMISSION_MODE_MANUAL_ALIAS = "manual";
 //@ chunk-ktpw8eqa.js:1351-1398 placement
-function normalizePermissionModeAlias(e) {
-  return e === "manual" ? "default" : e;
+function normalizePermissionModeAlias(mode) {
+  return mode === "manual" ? "default" : mode;
 }
 //@ chunk-ktpw8eqa.js:1398-1451 placement
-function parsePermissionMode(e) {
-  let o = normalizePermissionModeAlias(e);
-  return INTERNAL_PERMISSION_MODES.find((s) => s === o);
+function parsePermissionMode(mode) {
+  let normalizedMode = normalizePermissionModeAlias(mode);
+  return INTERNAL_PERMISSION_MODES.find((internalMode) => internalMode === normalizedMode);
 }
 //@ chunk-ktpw8eqa.js:1451-2963 placement
 /**
  * 权限类型常量：设置模式失败的错误文字、MCP ask 工具上限与名字正则、熔断器特性表 CIRCUIT_BREAKER_TRAITS（每种 circuitBreaker 的 bypassImmune/waivableInBypass/classifierRouted/autoModeDeny/hostPersonOnly/localProjectionOnly/servedUnplaceable）。
  */
-var UNRECOGNIZED_PERMISSION_MODE_ERROR = `Cannot set permission mode: must be one of ${EXTERNAL_PERMISSION_MODES.join(", ")}`;
-var MCP_ASK_FOR_TOOLS_MAX = 32;
-var MCP_ASK_FOR_TOOLS_NAME = /^[A-Za-z0-9_-]{1,64}$/;
-var CIRCUIT_BREAKER_TRAITS = {
-  dangerousRemoval: {
-    bypassImmune: true,
-    waivableInBypass: true,
-    classifierRouted: true,
-    autoModeDeny: true,
-    hostPersonOnly: false,
-    localProjectionOnly: false,
-    servedUnplaceable: false,
-  },
-  backgroundOperator: {
-    bypassImmune: false,
-    waivableInBypass: false,
-    classifierRouted: true,
-    autoModeDeny: false,
-    hostPersonOnly: false,
-    localProjectionOnly: false,
-    servedUnplaceable: false,
-  },
-  suspiciousWindowsPath: {
-    bypassImmune: false,
-    waivableInBypass: false,
-    classifierRouted: true,
-    autoModeDeny: false,
-    hostPersonOnly: false,
-    localProjectionOnly: false,
-    servedUnplaceable: false,
-  },
-  isolatePeerMachines: {
-    bypassImmune: true,
-    waivableInBypass: false,
-    classifierRouted: false,
-    autoModeDeny: false,
-    hostPersonOnly: false,
-    localProjectionOnly: false,
-    servedUnplaceable: false,
-  },
-  restrictedMode: {
-    bypassImmune: true,
-    waivableInBypass: false,
-    classifierRouted: false,
-    autoModeDeny: false,
-    hostPersonOnly: false,
-    localProjectionOnly: false,
-    servedUnplaceable: false,
-  },
-  outsideReadsBlocked: {
-    bypassImmune: true,
-    waivableInBypass: false,
-    classifierRouted: false,
-    autoModeDeny: false,
-    hostPersonOnly: false,
-    localProjectionOnly: false,
-    servedUnplaceable: false,
-  },
-  claudeSettingsFile: {
-    bypassImmune: false,
-    waivableInBypass: false,
-    classifierRouted: false,
-    autoModeDeny: false,
-    hostPersonOnly: true,
-    localProjectionOnly: false,
-    servedUnplaceable: false,
-  },
-  internalHardDeny: {
-    bypassImmune: false,
-    waivableInBypass: false,
-    classifierRouted: false,
-    autoModeDeny: false,
-    hostPersonOnly: false,
-    localProjectionOnly: false,
-    servedUnplaceable: true,
-  },
-  unfinishedCheck: {
-    bypassImmune: true,
-    waivableInBypass: false,
-    classifierRouted: false,
-    autoModeDeny: false,
-    hostPersonOnly: true,
-    localProjectionOnly: false,
-    servedUnplaceable: false,
-  },
-  ...{},
-  ...{},
-};
+var UNRECOGNIZED_PERMISSION_MODE_ERROR; // deferred: uses EXTERNAL_PERMISSION_MODES of its import cycle while loading; runs once the cycle is complete
+var MCP_ASK_FOR_TOOLS_MAX;
+var MCP_ASK_FOR_TOOLS_NAME;
+var CIRCUIT_BREAKER_TRAITS;
+deferInit("chunk-ktpw8eqa.js:1451", () => {
+  UNRECOGNIZED_PERMISSION_MODE_ERROR = `Cannot set permission mode: must be one of ${EXTERNAL_PERMISSION_MODES.join(", ")}`;
+  MCP_ASK_FOR_TOOLS_MAX = 32;
+  MCP_ASK_FOR_TOOLS_NAME = /^[A-Za-z0-9_-]{1,64}$/;
+  CIRCUIT_BREAKER_TRAITS = {
+    dangerousRemoval: {
+      bypassImmune: true,
+      waivableInBypass: true,
+      classifierRouted: true,
+      autoModeDeny: true,
+      hostPersonOnly: false,
+      localProjectionOnly: false,
+      servedUnplaceable: false,
+    },
+    backgroundOperator: {
+      bypassImmune: false,
+      waivableInBypass: false,
+      classifierRouted: true,
+      autoModeDeny: false,
+      hostPersonOnly: false,
+      localProjectionOnly: false,
+      servedUnplaceable: false,
+    },
+    suspiciousWindowsPath: {
+      bypassImmune: false,
+      waivableInBypass: false,
+      classifierRouted: true,
+      autoModeDeny: false,
+      hostPersonOnly: false,
+      localProjectionOnly: false,
+      servedUnplaceable: false,
+    },
+    isolatePeerMachines: {
+      bypassImmune: true,
+      waivableInBypass: false,
+      classifierRouted: false,
+      autoModeDeny: false,
+      hostPersonOnly: false,
+      localProjectionOnly: false,
+      servedUnplaceable: false,
+    },
+    restrictedMode: {
+      bypassImmune: true,
+      waivableInBypass: false,
+      classifierRouted: false,
+      autoModeDeny: false,
+      hostPersonOnly: false,
+      localProjectionOnly: false,
+      servedUnplaceable: false,
+    },
+    outsideReadsBlocked: {
+      bypassImmune: true,
+      waivableInBypass: false,
+      classifierRouted: false,
+      autoModeDeny: false,
+      hostPersonOnly: false,
+      localProjectionOnly: false,
+      servedUnplaceable: false,
+    },
+    claudeSettingsFile: {
+      bypassImmune: false,
+      waivableInBypass: false,
+      classifierRouted: false,
+      autoModeDeny: false,
+      hostPersonOnly: true,
+      localProjectionOnly: false,
+      servedUnplaceable: false,
+    },
+    internalHardDeny: {
+      bypassImmune: false,
+      waivableInBypass: false,
+      classifierRouted: false,
+      autoModeDeny: false,
+      hostPersonOnly: false,
+      localProjectionOnly: false,
+      servedUnplaceable: true,
+    },
+    unfinishedCheck: {
+      bypassImmune: true,
+      waivableInBypass: false,
+      classifierRouted: false,
+      autoModeDeny: false,
+      hostPersonOnly: true,
+      localProjectionOnly: false,
+      servedUnplaceable: false,
+    },
+    ...{},
+    ...{},
+  };
+});
 //@ chunk-ktpw8eqa.js:2963-3027 placement
 /**
  * 原因（含 also）中是否有 bypass 下也不能放行的熔断器。
  */
 function isBypassImmuneCircuitBreaker(decisionReason) {
-  return circuitBreakersOf(decisionReason).some((o) => CIRCUIT_BREAKER_TRAITS[o]?.bypassImmune === true);
+  return circuitBreakersOf(decisionReason).some(
+    (breaker) => CIRCUIT_BREAKER_TRAITS[breaker]?.bypassImmune === true,
+  );
 }
 //@ chunk-ktpw8eqa.js:3027-3130 placement
 /**
  * 是否有 bypass 下也不能放行、且不可豁免的熔断器。
  */
-function isUnwaivableBypassImmuneCircuitBreaker(e) {
-  return circuitBreakersOf(e).some((o) => {
-    let s = CIRCUIT_BREAKER_TRAITS[o];
-    return s?.bypassImmune === true && !s.waivableInBypass;
+function isUnwaivableBypassImmuneCircuitBreaker(decisionReason) {
+  return circuitBreakersOf(decisionReason).some((breaker) => {
+    let traits = CIRCUIT_BREAKER_TRAITS[breaker];
+    return traits?.bypassImmune === true && !traits.waivableInBypass;
   });
 }
 //@ chunk-ktpw8eqa.js:3130-3200 placement
@@ -141,72 +150,85 @@ function isUnwaivableBypassImmuneCircuitBreaker(e) {
  * 是否有“服务端无法放置”的熔断器。
  */
 function isServedUnplaceableCircuitBreaker(decisionReason) {
-  return circuitBreakersOf(decisionReason).some((o) => CIRCUIT_BREAKER_TRAITS[o]?.servedUnplaceable === true);
+  return circuitBreakersOf(decisionReason).some(
+    (breaker) => CIRCUIT_BREAKER_TRAITS[breaker]?.servedUnplaceable === true,
+  );
 }
 //@ chunk-ktpw8eqa.js:3200-3287 placement
 /**
  * 取出 safetyCheck 涉及的全部熔断器（circuitBreaker 与 also）。
  */
-function circuitBreakersOf(e) {
-  return [...(e.circuitBreaker !== undefined ? [e.circuitBreaker] : []), ...(e.also ?? [])];
+function circuitBreakersOf(decisionReason) {
+  return [
+    ...(decisionReason.circuitBreaker !== undefined ? [decisionReason.circuitBreaker] : []),
+    ...(decisionReason.also ?? []),
+  ];
 }
 //@ chunk-ktpw8eqa.js:3287-3381 placement
 /**
  * 该 safetyCheck 的熔断器是否允许交分类器裁决（classifierRouted）。
  */
-function isClassifierRoutedCircuitBreaker(e) {
+function isClassifierRoutedCircuitBreaker(decisionReason) {
   return (
-    e.circuitBreaker !== undefined && CIRCUIT_BREAKER_TRAITS[e.circuitBreaker]?.classifierRouted === true
+    decisionReason.circuitBreaker !== undefined &&
+    CIRCUIT_BREAKER_TRAITS[decisionReason.circuitBreaker]?.classifierRouted === true
   );
 }
 //@ chunk-ktpw8eqa.js:3381-3491 placement
 /**
  * also 列表中是否带必须由人回答的熔断器（bypassImmune 且不交分类器）。
  */
-function carriesPersonsAsk(e) {
-  return (e.also ?? []).some((o) => {
-    let s = CIRCUIT_BREAKER_TRAITS[o];
-    return s?.bypassImmune === true && !s.classifierRouted;
+function carriesPersonsAsk(decisionReason) {
+  return (decisionReason.also ?? []).some((breaker) => {
+    let traits = CIRCUIT_BREAKER_TRAITS[breaker];
+    return traits?.bypassImmune === true && !traits.classifierRouted;
   });
 }
 //@ chunk-ktpw8eqa.js:3491-3582 placement
 /**
  * 该 safetyCheck 的熔断器在 auto 模式下是否直接拒绝。
  */
-function isAutoModeDenyCircuitBreaker(e) {
-  return e.circuitBreaker !== undefined && CIRCUIT_BREAKER_TRAITS[e.circuitBreaker]?.autoModeDeny === true;
+function isAutoModeDenyCircuitBreaker(decisionReason) {
+  return (
+    decisionReason.circuitBreaker !== undefined &&
+    CIRCUIT_BREAKER_TRAITS[decisionReason.circuitBreaker]?.autoModeDeny === true
+  );
 }
 //@ chunk-ktpw8eqa.js:3582-3648 placement
 /**
  * 是否有只能由宿主侧人工回答的熔断器。
  */
-function isHostPersonOnlyCircuitBreaker(e) {
-  return circuitBreakersOf(e).some((o) => CIRCUIT_BREAKER_TRAITS[o]?.hostPersonOnly === true);
+function isHostPersonOnlyCircuitBreaker(decisionReason) {
+  return circuitBreakersOf(decisionReason).some(
+    (breaker) => CIRCUIT_BREAKER_TRAITS[breaker]?.hostPersonOnly === true,
+  );
 }
 //@ chunk-ktpw8eqa.js:3648-3720 placement
 /**
  * 是否有只在本地投影显示的熔断器。
  */
-function isLocalProjectionOnlyCircuitBreaker(e) {
-  return circuitBreakersOf(e).some((o) => CIRCUIT_BREAKER_TRAITS[o]?.localProjectionOnly === true);
+function isLocalProjectionOnlyCircuitBreaker(decisionReason) {
+  return circuitBreakersOf(decisionReason).some(
+    (breaker) => CIRCUIT_BREAKER_TRAITS[breaker]?.localProjectionOnly === true,
+  );
 }
 //@ chunk-ktpw8eqa.js:3720-3772 placement
-function isPreAskDeny(e) {
-  return e.decideLocation === "pre-ask";
+function isPreAskDeny(decisionReason) {
+  return decisionReason.decideLocation === "pre-ask";
 }
 //@ chunk-ktpw8eqa.js:3772-3834 placement
 /**
  * 是否算作可记录的拒绝：非 allow、不是同一结果对象、不是输入无效的拒绝。
  */
-function isRecordableDenial(decision, o) {
-  return decision.behavior !== "allow" && decision !== o && !isInvalidInputDeny(decision);
+function isRecordableDenial(decision, allowDecision) {
+  return decision.behavior !== "allow" && decision !== allowDecision && !isInvalidInputDeny(decision);
 }
 //@ chunk-ktpw8eqa.js:3834-3898 placement
 /**
  * 是否为“输入无效”导致的拒绝（behavior deny 且 invalidInput）。
  */
-function isInvalidInputDeny(e) {
-  return e.behavior === "deny" && e.invalidInput === true;
+function isInvalidInputDeny(decision) {
+  return decision.behavior === "deny" && decision.invalidInput === true;
 }
 //@ chunk-ktpw8eqa.js:3898-4051 placement = serializeDecisionReason (1)
 /**
@@ -229,46 +251,63 @@ var PERMISSION_DECISION_REASON_TYPES = [
 /**
  * 权限原因文字常量：沙箱/只读自动放行原因、服务端分类器持有、工作目录外读写被阻挡（blockReadsOutsideWorkingDirectories / blockWritesOutsideWorkingDirectories）、--restricted 等；以及 INLINE_CODE_FLAGS（python -c、node -e 等内联代码 flag 表）。
  */
-var PERMISSION_REQUEST_TOOL_KINDS = ["browser"];
-var SANDBOX_AUTO_ALLOW_REASON = "Auto-allowed with sandbox (autoAllowBashIfSandboxed enabled)";
-var READ_ONLY_AUTO_ALLOW_REASON = "Read-only command is allowed";
-var POWERSHELL_READ_ONLY_ALLOW_REASON = "Command is read-only and safe to execute";
-var POWERSHELL_COMPOUND_READ_ONLY_PART_REASON =
-  "All pipeline commands are individually allowed, some only by the read-only allowlist";
-var SERVER_HOLDS_SHELL_ALLOW_REASON = "Auto mode held this command for the server-side classifier to review";
-var TOOL_HOST_ALLOW_IS_CLASSIFIED_REASON =
-  "Auto mode reviews this action before it runs in the cloud environment";
-var OUTSIDE_WORKING_DIRECTORIES_ASK_REASON = "Path is outside allowed working directories";
-var RESTRICTED_MODE_DENY_REASON = "--restricted: path outside the working directory";
-var OUTSIDE_READS_BLOCKED_DENY_REASON =
-  "Reads outside the working directories are blocked (permissions.blockReadsOutsideWorkingDirectories). Add the directory with /add-dir, or remove that setting.";
-var OUTSIDE_WRITES_BLOCKED_DENY_REASON =
-  "Writes outside the working directories are blocked (permissions.blockWritesOutsideWorkingDirectories). Add the directory with /add-dir, or remove that setting.";
-var SETTINGS_WRITES_BLOCKED_DENY_REASON =
-  "Writes to Claude Code settings files are blocked while permissions.blockWritesOutsideWorkingDirectories is on, because a settings file can lift that block. While a managed settings folder cannot be resolved, any .json file counts as one.";
-var NO_PROJECT_DIRECTORY_DENY_REASON = "permission check needs a working directory; the session has none";
-var NO_CONFIG_HOME_DENY_REASON = "permission check needs a config or temp path; the session has none";
-var INLINE_CODE_FLAGS = new Map([
-  ["python", new Set(["-c"])],
-  ["node", new Set(["-e", "--eval", "-p", "--print"])],
-  ["nodejs", new Set(["-e", "--eval", "-p", "--print"])],
-  ["bun", new Set(["-e", "--eval", "-p", "--print"])],
-  ["perl", new Set(["-e", "-E"])],
-  ["ruby", new Set(["-e"])],
-  ["php", new Set(["-r"])],
-  ["bash", new Set(["-c"])],
-  ["sh", new Set(["-c"])],
-  ["zsh", new Set(["-c"])],
-  ["dash", new Set(["-c"])],
-  ["ksh", new Set(["-c"])],
-  ["lua", new Set(["-e"])],
-  ["luajit", new Set(["-e"])],
-  ["tsx", new Set(["-e", "--eval", "-p", "--print"])],
-  ["deno", new Set(["eval"])],
-  ["Rscript", new Set(["-e"])],
-  ["julia", new Set(["-e", "-E"])],
-  ["osascript", new Set(["-e"])],
-]);
+var PERMISSION_REQUEST_TOOL_KINDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SANDBOX_AUTO_ALLOW_REASON;
+var READ_ONLY_AUTO_ALLOW_REASON;
+var POWERSHELL_READ_ONLY_ALLOW_REASON;
+var POWERSHELL_COMPOUND_READ_ONLY_PART_REASON;
+var SERVER_HOLDS_SHELL_ALLOW_REASON;
+var TOOL_HOST_ALLOW_IS_CLASSIFIED_REASON;
+var OUTSIDE_WORKING_DIRECTORIES_ASK_REASON;
+var RESTRICTED_MODE_DENY_REASON;
+var OUTSIDE_READS_BLOCKED_DENY_REASON;
+var OUTSIDE_WRITES_BLOCKED_DENY_REASON;
+var SETTINGS_WRITES_BLOCKED_DENY_REASON;
+var NO_PROJECT_DIRECTORY_DENY_REASON;
+var NO_CONFIG_HOME_DENY_REASON;
+var INLINE_CODE_FLAGS;
+deferInit("chunk-ktpw8eqa.js:4051", () => {
+  PERMISSION_REQUEST_TOOL_KINDS = ["browser"];
+  SANDBOX_AUTO_ALLOW_REASON = "Auto-allowed with sandbox (autoAllowBashIfSandboxed enabled)";
+  READ_ONLY_AUTO_ALLOW_REASON = "Read-only command is allowed";
+  POWERSHELL_READ_ONLY_ALLOW_REASON = "Command is read-only and safe to execute";
+  POWERSHELL_COMPOUND_READ_ONLY_PART_REASON =
+    "All pipeline commands are individually allowed, some only by the read-only allowlist";
+  SERVER_HOLDS_SHELL_ALLOW_REASON = "Auto mode held this command for the server-side classifier to review";
+  TOOL_HOST_ALLOW_IS_CLASSIFIED_REASON =
+    "Auto mode reviews this action before it runs in the cloud environment";
+  OUTSIDE_WORKING_DIRECTORIES_ASK_REASON = "Path is outside allowed working directories";
+  RESTRICTED_MODE_DENY_REASON = "--restricted: path outside the working directory";
+  OUTSIDE_READS_BLOCKED_DENY_REASON =
+    "Reads outside the working directories are blocked (permissions.blockReadsOutsideWorkingDirectories). Add the directory with /add-dir, or remove that setting.";
+  OUTSIDE_WRITES_BLOCKED_DENY_REASON =
+    "Writes outside the working directories are blocked (permissions.blockWritesOutsideWorkingDirectories). Add the directory with /add-dir, or remove that setting.";
+  SETTINGS_WRITES_BLOCKED_DENY_REASON =
+    "Writes to Claude Code settings files are blocked while permissions.blockWritesOutsideWorkingDirectories is on, because a settings file can lift that block. While a managed settings folder cannot be resolved, any .json file counts as one.";
+  NO_PROJECT_DIRECTORY_DENY_REASON = "permission check needs a working directory; the session has none";
+  NO_CONFIG_HOME_DENY_REASON = "permission check needs a config or temp path; the session has none";
+  INLINE_CODE_FLAGS = new Map([
+    ["python", new Set(["-c"])],
+    ["node", new Set(["-e", "--eval", "-p", "--print"])],
+    ["nodejs", new Set(["-e", "--eval", "-p", "--print"])],
+    ["bun", new Set(["-e", "--eval", "-p", "--print"])],
+    ["perl", new Set(["-e", "-E"])],
+    ["ruby", new Set(["-e"])],
+    ["php", new Set(["-r"])],
+    ["bash", new Set(["-c"])],
+    ["sh", new Set(["-c"])],
+    ["zsh", new Set(["-c"])],
+    ["dash", new Set(["-c"])],
+    ["ksh", new Set(["-c"])],
+    ["lua", new Set(["-e"])],
+    ["luajit", new Set(["-e"])],
+    ["tsx", new Set(["-e", "--eval", "-p", "--print"])],
+    ["deno", new Set(["eval"])],
+    ["Rscript", new Set(["-e"])],
+    ["julia", new Set(["-e", "-E"])],
+    ["osascript", new Set(["-e"])],
+  ]);
+});
 //@ chunk-ktpw8eqa.js:5889-5977 placement
 /**
  * 原因是否为 outsideReadsBlocked 熔断的 safetyCheck。
@@ -290,14 +329,14 @@ function isSandboxOverrideUnderReadBlock(decisionReason, toolPermissionContext) 
 /**
  * 读阻挡下“路径在运行时才计算、无法检查”的 ask 结果（safetyCheck、不可交分类器、outsideReadsBlocked）。
  */
-function outsideReadsRuntimePathAsk(e) {
-  let o = `${e} names a path that is computed at run time, which cannot be checked against the read block (permissions.blockReadsOutsideWorkingDirectories)`;
+function outsideReadsRuntimePathAsk(command) {
+  let reasonText = `${command} names a path that is computed at run time, which cannot be checked against the read block (permissions.blockReadsOutsideWorkingDirectories)`;
   return {
     behavior: "ask",
-    message: o,
+    message: reasonText,
     decisionReason: {
       type: "safetyCheck",
-      reason: o,
+      reason: reasonText,
       classifierApprovable: false,
       circuitBreaker: "outsideReadsBlocked",
     },
@@ -308,13 +347,13 @@ function outsideReadsRuntimePathAsk(e) {
  * 读阻挡下“命令太复杂、解析器无法分析”的 ask 结果，不带建议。
  */
 function outsideReadsTooComplexAsk(reason) {
-  let o = `${reason}; under the read block (permissions.blockReadsOutsideWorkingDirectories) a command the shell parser cannot analyze asks the person`;
+  let reasonText = `${reason}; under the read block (permissions.blockReadsOutsideWorkingDirectories) a command the shell parser cannot analyze asks the person`;
   return {
     behavior: "ask",
-    message: o,
+    message: reasonText,
     decisionReason: {
       type: "safetyCheck",
-      reason: o,
+      reason: reasonText,
       classifierApprovable: false,
       circuitBreaker: "outsideReadsBlocked",
     },
@@ -343,30 +382,44 @@ function outsideReadsSedScriptAsk() {
 /**
  * 归类为“分类器不可用”的原因集合，用于给消息加 “Blocked: ” 前缀。
  */
-var BASH_COMMAND_CLAMP_DENY_REASON = "bashCommandClamp: no clamp rule matches this command";
-var BASH_COMMAND_CLAMP_CRASH_REASON = "bashCommandClamp fail-closed: permission check crashed";
-var CLASSIFIER_UNAVAILABLE_REASON = "Classifier unavailable";
-var AUTO_MODE_UNAVAILABLE_STOP_REASON =
-  "Auto mode unavailable \u2014 stopped after repeated responses with no safety verdict";
-var CLASSIFIER_SWITCHED_OFF_KIND = "classifier_switched_off";
-var CLASSIFIER_PARSE_FAILURE_REASON_STEM =
-  "Auto mode could not evaluate this action and is blocking it for safety";
-var CLASSIFIER_TRANSCRIPT_TOO_LONG_REASON =
-  "Auto mode classifier transcript exceeded context window \u2014 falling back to manual approval (try /compact to reduce conversation size)";
-var CLASSIFIER_TRANSCRIPT_TOO_LONG_PROMPT =
-  "The conversation is too long for auto mode's check, so this needs your approval. Run /compact to shorten the conversation.";
-var HOOK_REWROTE_INPUT_REVIEW_REASON =
-  "A hook or plugin changed (or may have changed) a call in this response after auto mode reviewed it, so auto mode could not check what would run";
-var CLASSIFIER_TOO_LONG_COMPACTING_REASON =
-  "Auto mode classifier transcript exceeded context window; will try to compact the conversation before the next request";
-var SERVER_CLASSIFIER_NO_EXPLANATION_REASON =
-  "The server-side auto mode classifier judged this action dangerous (it gave no explanation)";
-var CLASSIFIER_UNAVAILABLE_REASONS = new Set([
-  CLASSIFIER_UNAVAILABLE_REASON,
-  AUTO_MODE_UNAVAILABLE_STOP_REASON,
-  CLASSIFIER_TRANSCRIPT_TOO_LONG_REASON,
-  CLASSIFIER_TOO_LONG_COMPACTING_REASON,
-]);
+var BASH_COMMAND_CLAMP_DENY_REASON; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var BASH_COMMAND_CLAMP_CRASH_REASON;
+var CLASSIFIER_UNAVAILABLE_REASON;
+var AUTO_MODE_UNAVAILABLE_STOP_REASON;
+var CLASSIFIER_SWITCHED_OFF_KIND;
+var CLASSIFIER_PARSE_FAILURE_REASON_STEM;
+var CLASSIFIER_TRANSCRIPT_TOO_LONG_REASON;
+var CLASSIFIER_TRANSCRIPT_TOO_LONG_PROMPT;
+var HOOK_REWROTE_INPUT_REVIEW_REASON;
+var CLASSIFIER_TOO_LONG_COMPACTING_REASON;
+var SERVER_CLASSIFIER_NO_EXPLANATION_REASON;
+var CLASSIFIER_UNAVAILABLE_REASONS;
+deferInit("chunk-ktpw8eqa.js:7185", () => {
+  BASH_COMMAND_CLAMP_DENY_REASON = "bashCommandClamp: no clamp rule matches this command";
+  BASH_COMMAND_CLAMP_CRASH_REASON = "bashCommandClamp fail-closed: permission check crashed";
+  CLASSIFIER_UNAVAILABLE_REASON = "Classifier unavailable";
+  AUTO_MODE_UNAVAILABLE_STOP_REASON =
+    "Auto mode unavailable \u2014 stopped after repeated responses with no safety verdict";
+  CLASSIFIER_SWITCHED_OFF_KIND = "classifier_switched_off";
+  CLASSIFIER_PARSE_FAILURE_REASON_STEM =
+    "Auto mode could not evaluate this action and is blocking it for safety";
+  CLASSIFIER_TRANSCRIPT_TOO_LONG_REASON =
+    "Auto mode classifier transcript exceeded context window \u2014 falling back to manual approval (try /compact to reduce conversation size)";
+  CLASSIFIER_TRANSCRIPT_TOO_LONG_PROMPT =
+    "The conversation is too long for auto mode's check, so this needs your approval. Run /compact to shorten the conversation.";
+  HOOK_REWROTE_INPUT_REVIEW_REASON =
+    "A hook or plugin changed (or may have changed) a call in this response after auto mode reviewed it, so auto mode could not check what would run";
+  CLASSIFIER_TOO_LONG_COMPACTING_REASON =
+    "Auto mode classifier transcript exceeded context window; will try to compact the conversation before the next request";
+  SERVER_CLASSIFIER_NO_EXPLANATION_REASON =
+    "The server-side auto mode classifier judged this action dangerous (it gave no explanation)";
+  CLASSIFIER_UNAVAILABLE_REASONS = new Set([
+    CLASSIFIER_UNAVAILABLE_REASON,
+    AUTO_MODE_UNAVAILABLE_STOP_REASON,
+    CLASSIFIER_TRANSCRIPT_TOO_LONG_REASON,
+    CLASSIFIER_TOO_LONG_COMPACTING_REASON,
+  ]);
+});
 //@ chunk-ktpw8eqa.js:8208-8258 placement
 function classifierWrittenReason(reason) {
   return CLASSIFIER_UNAVAILABLE_REASONS.has(reason) ? `Blocked: ${reason}` : reason;
@@ -425,13 +478,13 @@ function decisionReasonCode(decisionReason) {
           return;
       }
     case "subcommandResults": {
-      let o;
+      let firstCode;
       for (let reason of decisionReason.reasons.values()) {
-        let n = decisionReasonCode(reason.decisionReason);
-        if (n === "outside_reads_blocked") return n;
-        o ??= n;
+        let code = decisionReasonCode(reason.decisionReason);
+        if (code === "outside_reads_blocked") return code;
+        firstCode ??= code;
       }
-      return o;
+      return firstCode;
     }
     default:
       return;
@@ -468,15 +521,15 @@ var NO_KNOWN_PERSON_STARTED_THE_TURN_REASON =
 /**
  * 把 ask 结果压缩成拒绝里附带的 ask 摘要：decisionReason、matchedAskRule、hooksMayRefuse。
  */
-function refusedAskOf(e) {
+function refusedAskOf(decision) {
   return {
-    ...(e.decisionReason !== undefined && {
-      decisionReason: e.decisionReason,
+    ...(decision.decisionReason !== undefined && {
+      decisionReason: decision.decisionReason,
     }),
-    ...(e.matchedAskRule !== undefined && {
-      matchedAskRule: e.matchedAskRule,
+    ...(decision.matchedAskRule !== undefined && {
+      matchedAskRule: decision.matchedAskRule,
     }),
-    ...(e.hooksMayRefuse === true && {
+    ...(decision.hooksMayRefuse === true && {
       hooksMayRefuse: true,
     }),
   };
@@ -485,15 +538,22 @@ function refusedAskOf(e) {
 /**
  * 工具能否自行了结未询问的问题：结果 personOnly、工具实现 settleUnaskedQuestion，且不是钩子要求的 ask 地板。
  */
-function toolMaySettleUnaskedQuestion(e, o, s) {
-  return o.personOnly === true && e.settleUnaskedQuestion !== undefined && s.hookAskFloor !== true;
+function toolMaySettleUnaskedQuestion(tool, permissionState, context) {
+  return (
+    permissionState.personOnly === true &&
+    tool.settleUnaskedQuestion !== undefined &&
+    context.hookAskFloor !== true
+  );
 }
 //@ chunk-ktpw8eqa.js:10072-10172 placement
 /**
  * 是否必须留给人：ask 要求用户交互，或工具 owesPersonOnlyAsk 返回真。
  */
-function mustBeLeftToAPerson(e, o, s, n, r) {
-  return e.askRequiresUserInteraction === true || o.owesPersonOnlyAsk?.(s, n, r) === true;
+function mustBeLeftToAPerson(tool, permissionState, input, context, decisionContext) {
+  return (
+    tool.askRequiresUserInteraction === true ||
+    permissionState.owesPersonOnlyAsk?.(input, context, decisionContext) === true
+  );
 }
 //@ chunk-ktpw8eqa.js:10172-11027 placement
 /**

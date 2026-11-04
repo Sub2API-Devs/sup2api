@@ -8,6 +8,7 @@
  * pieces: chunk-18hwfzwa.js (10), chunk-e6aww6q8.js (13), chunk-hwmsct5x.js (2)
  * attribution: placement 15, fingerprint 3, layout 5, sole-consumer 1, affinity 1
  */
+import { getToastyBreezeConfig, LOW_PRIORITY_COPY } from "../services/lowPriority/headers.js";
 import { bunStringWidth } from "../ink/stringWidth.js";
 import { getLastAssistantMessage } from "../utils/messages.js";
 import { getGitWorktreeName, getRemoteUrl } from "../utils/git.js";
@@ -44,7 +45,7 @@ import { getSessionProject, SessionRootSlot } from "../bootstrap/sessionSlices.j
 import { modelSupportsEffort, getEffortLevelOrHigh } from "../utils/effort.js";
 import { isThinkingEffectivelyEnabled } from "../utils/thinking.js";
 import { logForDebugging } from "../utils/debug.js";
-import { string, u, E, literal } from "../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema, objectSchema, numberSchema, literal } from "../../vendor/zod/v4/classic/schemas.js";
 import { createSignal } from "../utils/signal.js";
 import { env } from "../utils/env.js";
 import { logEvent } from "../services/analytics/index.js";
@@ -60,7 +61,7 @@ import { MAX_TIMER_DELAY_MS } from "../utils/timerDelayClamp.js";
 import { messagesSinceCompactBoundary } from "../services/projects/threadRows.js";
 import { applyCloudCwd } from "../utils/cwd.js";
 import { getPromptCacheSummary, estimateRecacheTokens } from "../services/api/promptCacheBreakDetection.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useIsFullscreen, useRenderMode } from "../ink/renderModeContext.js";
 import { useStoreSelector } from "../hooks/useStoreSelector.js";
 import { useSession } from "../context/session.js";
@@ -83,7 +84,14 @@ import { getEffectiveStatusLine } from "../utils/hooks/hooksConfigSnapshot.js";
 import { useMainLoopModel as useMainLoopModel_3 } from "../hooks/useMainLoopModel.js";
 import { useFastModeOnForModel } from "../hooks/usePromptSuggestion.js";
 import { useQueuedMessageText } from "../context/QueuedMessageContext.js";
-import { y, P, Rh, init_react_production, Se, yt } from "../../vendor/react/cjs/react.production.js";
+import {
+  useState,
+  useEffect,
+  memo,
+  init_react_production,
+  useContext,
+  useSyncExternalStore,
+} from "../../vendor/react/cjs/react.production.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../ink/components/Text.js";
 import { EARLY_RETURN_SENTINEL } from "../../runtime/bun-runtime.js";
@@ -92,43 +100,62 @@ import { CollapseLabel } from "./TokenWarning.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import { noticeDialogSlot } from "./PromptInput/Notifications.js";
 import { rootSessionSlot } from "../context/replRootContext.js";
-import { getToastyBreezeConfig, LOW_PRIORITY_COPY } from "../services/lowPriority/headers.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-hwmsct5x.js:186950-187013 affinity
+function textOrFallback(value, fallback) {
+  return typeof value === "string" && value.trim() !== "" ? value : fallback;
+}
+//@ chunk-hwmsct5x.js:187013-187320 fingerprint = statusLineShouldDisplay (0.301)
+function statusLineShouldDisplay() {
+  let toastyBreezeConfig = getToastyBreezeConfig();
+  return {
+    label: textOrFallback(toastyBreezeConfig.label, LOW_PRIORITY_COPY.label),
+    noticeLine: textOrFallback(toastyBreezeConfig.noticeLine, LOW_PRIORITY_COPY.noticeLine),
+    statusLine: textOrFallback(toastyBreezeConfig.statusLine, LOW_PRIORITY_COPY.statusLine),
+    allowanceNote: textOrFallback(toastyBreezeConfig.allowanceNote, LOW_PRIORITY_COPY.allowanceNote),
+    waitBanner: textOrFallback(toastyBreezeConfig.waitBanner, LOW_PRIORITY_COPY.waitBanner),
+    budgetExhaustedCopy: textOrFallback(
+      toastyBreezeConfig.budgetExhaustedCopy,
+      LOW_PRIORITY_COPY.budgetExhaustedCopy,
+    ),
+  };
+}
 //@ chunk-e6aww6q8.js:3685449-3685470 placement
 var STATUS_LINE_SETTLE_MS = 300;
 var STATUS_LINE_REDRAW_MS = 1000;
 //@ chunk-e6aww6q8.js:3685470-3685535 placement
-function logStatusLineEventOnce(e, n, r, s) {
-  if (!e.current) return;
-  e.current = false;
-  s(n, r());
+function logStatusLineEventOnce(ref, event, getFields, logFn) {
+  if (!ref.current) return;
+  ref.current = false;
+  logFn(event, getFields());
 }
 //@ chunk-e6aww6q8.js:3685535-3685902 placement
 /**
  * 运行一次状态栏命令：未被中止时回调结果，并（去重后）上报输出字符数、显示宽度、行数与命令长度。
  */
-async function runStatusLineCommand(e) {
-  let { signal, executeCommand, getCommandLength, pendingResultLogRef, onResult, logFn } = e;
+async function runStatusLineCommand(options) {
+  let { signal, executeCommand, getCommandLength, pendingResultLogRef, onResult, logFn } = options;
   let commandLength = getCommandLength();
   try {
-    let L = await executeCommand();
+    let result = await executeCommand();
     if (signal.aborted) return;
-    onResult(L);
-    if (L)
+    onResult(result);
+    if (result)
       logStatusLineEventOnce(
         pendingResultLogRef,
         "tengu_status_line_result",
         () => {
-          let lines = L.split(`
+          let lines = result.split(`
 `);
-          let q = 0;
+          let command = 0;
           for (let line of lines) {
-            let Se = bunStringWidth(line);
-            if (Se > q) q = Se;
+            let fields = bunStringWidth(line);
+            if (fields > command) command = fields;
           }
           return {
-            char_length: L.length,
-            visual_width: q,
+            char_length: result.length,
+            visual_width: command,
             line_count: lines.length,
             command_length: commandLength,
           };
@@ -145,14 +172,14 @@ function getLastAssistantMessageId(messages) {
 /**
  * 并行取 git worktree 名与（非特殊环境下的）远程地址，返回 {gitWorktree, repo}。
  */
-async function getStatusLineGitInfo(e) {
-  let [gitWorktreeName, r] = await Promise.all([
-    getGitWorktreeName(e),
+async function getStatusLineGitInfo(cwd) {
+  let [gitWorktreeName, remoteUrl] = await Promise.all([
+    getGitWorktreeName(cwd),
     isRemoteSessionAvailable() ? Promise.resolve(null) : getRemoteUrl(),
   ]);
   return {
     gitWorktree: gitWorktreeName,
-    repo: r ? parseGitRemote(r) : null,
+    repo: remoteUrl ? parseGitRemote(remoteUrl) : null,
   };
 }
 //@ chunk-e6aww6q8.js:3686344-3688795 fingerprint = buildStatusLineCommandInput (0.609)
@@ -186,17 +213,17 @@ function buildStatusLineCommandInput({
   let outputStyleName = settings?.outputStyle || DEFAULT;
   let currentUsage = getLastApiUsage(messages);
   let contextWindowSize = getContextWindow(runtimeModel, getSdkBetas());
-  let pt = remoteSessionName ?? getCurrentSessionDisplayTitle(session.id);
+  let sessionName = remoteSessionName ?? getCurrentSessionDisplayTitle(session.id);
   let sessionId = getRawUtilization();
-  let yt;
+  let rawUtil;
   if (getAPIProvider() === "gateway" && sessionId.overage) {
     maybeRefreshGatewayUsage(lastLimitsObservationAt(), credentials);
-    let rawUtil = cachedGatewayUsage();
-    yt =
-      rawUtil !== undefined &&
-      (rawUtil.resetsAt === null ||
-        Math.floor(Date.parse(rawUtil.resetsAt) / 1000) === sessionId.overage.resets_at)
-        ? rawUtil
+    let rawUtil_2 = cachedGatewayUsage();
+    rawUtil =
+      rawUtil_2 !== undefined &&
+      (rawUtil_2.resetsAt === null ||
+        Math.floor(Date.parse(rawUtil_2.resetsAt) / 1000) === sessionId.overage.resets_at)
+        ? rawUtil_2
         : undefined;
   }
   let rateLimits = {
@@ -217,12 +244,12 @@ function buildStatusLineCommandInput({
         spend_limit: {
           used_percentage: utilizationPercent(sessionId.overage.utilization),
           resets_at: sessionId.overage.resets_at,
-          ...(yt &&
-            yt.currency === "USD" && {
-              used_usd: yt.used / 100,
-              limit_usd: yt.limit / 100,
-              ...(yt.period && {
-                period: yt.period,
+          ...(rawUtil &&
+            rawUtil.currency === "USD" && {
+              used_usd: rawUtil.used / 100,
+              limit_usd: rawUtil.limit / 100,
+              ...(rawUtil.period && {
+                period: rawUtil.period,
               }),
             }),
         },
@@ -230,8 +257,8 @@ function buildStatusLineCommandInput({
   };
   return {
     ...createBaseHookInput(session, cwd),
-    ...(pt && {
-      session_name: pt,
+    ...(sessionName && {
+      session_name: sessionName,
     }),
     model: {
       id: runtimeModel,
@@ -331,40 +358,44 @@ class StatusLineLastTextStore {
 /**
  * 状态栏上次输出的存储，以及会触发状态栏刷新的状态字段名。
  */
-var statusLineLastTextStore = new SessionRootSlot(() => new StatusLineLastTextStore());
-var STATUS_LINE_DEPENDENCY_KEYS = [
-  "tokenUsage",
-  "permissionMode",
-  "vimMode",
-  "mainLoopModel",
-  "fastMode",
-  "effortValue",
-  "thinkingEnabled",
-  "prStatus",
-  "remoteSessionName",
-];
+var statusLineLastTextStore; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+var STATUS_LINE_DEPENDENCY_KEYS;
+deferInit("chunk-e6aww6q8.js:3688821", () => {
+  statusLineLastTextStore = new SessionRootSlot(() => new StatusLineLastTextStore());
+  STATUS_LINE_DEPENDENCY_KEYS = [
+    "tokenUsage",
+    "permissionMode",
+    "vimMode",
+    "mainLoopModel",
+    "fastMode",
+    "effortValue",
+    "thinkingEnabled",
+    "prStatus",
+    "remoteSessionName",
+  ];
+});
 //@ chunk-e6aww6q8.js:3688985-3689068 layout
 function statusLineRefreshMs(statusLine) {
   let refreshInterval = statusLine?.refreshInterval;
   return refreshInterval === undefined ? null : Math.max(1, refreshInterval) * 1000;
 }
 //@ chunk-e6aww6q8.js:3689068-3689291 layout
-function getEarliestRateLimitReset(e) {
+function getEarliestRateLimitReset(utilization) {
   let filtered = [
-    e.rate_limits?.five_hour?.resets_at,
-    e.rate_limits?.seven_day?.resets_at,
-    e.rate_limits?.spend_limit?.resets_at,
-  ].filter((r) => r !== undefined && Number.isFinite(r));
+    utilization.rate_limits?.five_hour?.resets_at,
+    utilization.rate_limits?.seven_day?.resets_at,
+    utilization.rate_limits?.spend_limit?.resets_at,
+  ].filter((resetAt) => resetAt !== undefined && Number.isFinite(resetAt));
   return filtered.length === 0 ? null : Math.min(...filtered) * 1000;
 }
 //@ chunk-e6aww6q8.js:3689291-3689495 layout
-function getNextStatusLineRefreshAt(statusLineCommandInput) {
+function getNextStatusLineRefreshAt(utilization) {
   let filtered = [
-    getEarliestRateLimitReset(statusLineCommandInput),
-    statusLineCommandInput.prompt_cache?.warm && statusLineCommandInput.prompt_cache.expires_at !== null
-      ? statusLineCommandInput.prompt_cache.expires_at * 1000
+    getEarliestRateLimitReset(utilization),
+    utilization.prompt_cache?.warm && utilization.prompt_cache.expires_at !== null
+      ? utilization.prompt_cache.expires_at * 1000
       : null,
-  ].filter((r) => r !== null && Number.isFinite(r));
+  ].filter((resetAt) => resetAt !== null && Number.isFinite(resetAt));
   return filtered.length === 0 ? null : Math.min(...filtered);
 }
 //@ chunk-e6aww6q8.js:3689495-3692443 fingerprint = StatusLineInner (0.455)
@@ -390,37 +421,39 @@ class StatusLineInner {
     current: true,
   };
   #p = false;
-  constructor(e, n) {
-    this.#e = e;
-    this.#t = n;
+  constructor(executor, initialInputs) {
+    this.#e = executor;
+    this.#t = initialInputs;
     this.#n = {
-      text: e.memory.lastText,
+      text: executor.memory.lastText,
     };
   }
   getSnapshot = () => this.#n;
-  subscribe = (e) => {
-    let n = this.#o.subscribe(e);
+  subscribe = (onChanged) => {
+    let unsubscribeStore = this.#o.subscribe(onChanged);
     this.#r++;
     if (!this.#i) this.#h();
-    let r = false;
+    let isReleased = false;
     return () => {
-      if (r) return;
-      r = true;
-      n();
+      if (isReleased) return;
+      isReleased = true;
+      unsubscribeStore();
       this.#r--;
       if (this.#r === 0) this.#v();
     };
   };
-  setInputs(e) {
-    let n = this.#t;
-    this.#t = e;
+  setInputs(nextInputs) {
+    let previousInputs = this.#t;
+    this.#t = nextInputs;
     if (!this.#i) return;
-    let any = STATUS_LINE_DEPENDENCY_KEYS.some((h) => !Object.is(n[h], e[h]));
-    let s =
-      !Object.is(n.lastAssistantMessageId, e.lastAssistantMessageId) && e.lastAssistantMessageId !== this.#u;
-    if (any || s) this.#_();
-    if (statusLineRefreshMs(n.statusLine) !== statusLineRefreshMs(e.statusLine)) this.#f();
-    if (n.statusLine?.command !== e.statusLine?.command) {
+    let any = STATUS_LINE_DEPENDENCY_KEYS.some((key) => !Object.is(previousInputs[key], nextInputs[key]));
+    let messageChanged =
+      !Object.is(previousInputs.lastAssistantMessageId, nextInputs.lastAssistantMessageId) &&
+      nextInputs.lastAssistantMessageId !== this.#u;
+    if (any || messageChanged) this.#_();
+    if (statusLineRefreshMs(previousInputs.statusLine) !== statusLineRefreshMs(nextInputs.statusLine))
+      this.#f();
+    if (previousInputs.statusLine?.command !== nextInputs.statusLine?.command) {
       this.#g = true;
       this.#S.current = true;
       this.#y.current = true;
@@ -480,22 +513,22 @@ class StatusLineInner {
   #f() {
     this.#d?.();
     this.#d = null;
-    let e = statusLineRefreshMs(this.#t.statusLine);
-    if (e === null) return;
-    let min = Math.min(MAX_TIMER_DELAY_MS, e);
-    let r = () => {
+    let refreshMs = statusLineRefreshMs(this.#t.statusLine);
+    if (refreshMs === null) return;
+    let min = Math.min(MAX_TIMER_DELAY_MS, refreshMs);
+    let tick = () => {
       this.#_();
-      this.#d = this.#e.setTimeout(r, min);
+      this.#d = this.#e.setTimeout(tick, min);
     };
-    this.#d = this.#e.setTimeout(r, min);
+    this.#d = this.#e.setTimeout(tick, min);
   }
-  #w(e) {
-    if (e === this.#l) return;
+  #w(nextRefreshAt) {
+    if (nextRefreshAt === this.#l) return;
     this.#c?.();
     this.#c = null;
-    this.#l = e;
-    if (e === null) return;
-    let min = Math.min(MAX_TIMER_DELAY_MS, Math.max(0, e + STATUS_LINE_REDRAW_MS - Date.now()));
+    this.#l = nextRefreshAt;
+    if (nextRefreshAt === null) return;
+    let min = Math.min(MAX_TIMER_DELAY_MS, Math.max(0, nextRefreshAt + STATUS_LINE_REDRAW_MS - Date.now()));
     this.#c = this.#e.setTimeout(() => {
       this.#c = null;
       this.#l = null;
@@ -507,58 +540,58 @@ class StatusLineInner {
     let abortController = new AbortController();
     this.#s = abortController;
     let messages = messagesSinceCompactBoundary(this.#e.getMessages());
-    let r = this.#g;
+    let forceRefresh = this.#g;
     this.#g = false;
     let lastAssistantMessageId = getLastAssistantMessageId(messages);
     if (lastAssistantMessageId !== this.#u) {
       this.#u = lastAssistantMessageId;
       this.#m = doesMostRecentAssistantMessageExceed200k(messages);
     }
-    this.#E(abortController.signal, messages, r, this.#m).catch(logError);
+    this.#E(abortController.signal, messages, forceRefresh, this.#m).catch(logError);
   }
-  async #E(e, messages, r, exceeds200kTokens) {
+  async #E(signal, messages, isCommandRefresh, exceeds200kTokens) {
     let { session } = this.#e;
     let cwd = getSessionProject(session).cwd;
     let { gitWorktree, repo } = await this.#e.getWorkspaceGit(cwd);
     await runStatusLineCommand({
-      signal: e,
+      signal,
       executeCommand: () => {
-        let L = this.#t;
+        let inputs = this.#t;
         let statusLineCommandInput = buildStatusLineCommandInput({
           session,
-          permissionMode: L.permissionMode,
+          permissionMode: inputs.permissionMode,
           exceeds200kTokens,
-          fastMode: L.fastMode,
-          settings: L.settings,
+          fastMode: inputs.fastMode,
+          settings: inputs.settings,
           messages,
-          addedDirs: Array.from(L.additionalWorkingDirectories.keys()),
-          mainLoopModel: L.mainLoopModel,
+          addedDirs: Array.from(inputs.additionalWorkingDirectories.keys()),
+          mainLoopModel: inputs.mainLoopModel,
           gitWorktree,
           repo,
-          prStatus: L.prStatus,
+          prStatus: inputs.prStatus,
           vimModeEnabled: this.#e.isVimModeEnabled(),
-          vimMode: L.vimMode,
+          vimMode: inputs.vimMode,
           cwd: applyCloudCwd(cwd),
-          effortValue: L.effortValue,
-          thinkingEnabled: L.thinkingEnabled,
-          remoteSessionName: L.remoteSessionName,
+          effortValue: inputs.effortValue,
+          thinkingEnabled: inputs.thinkingEnabled,
+          remoteSessionName: inputs.remoteSessionName,
           credentials: this.#e.credentials,
         });
-        if (!e.aborted) this.#w(getNextStatusLineRefreshAt(statusLineCommandInput));
-        return this.#e.execute(statusLineCommandInput, e, r);
+        if (!signal.aborted) this.#w(getNextStatusLineRefreshAt(statusLineCommandInput));
+        return this.#e.execute(statusLineCommandInput, signal, isCommandRefresh);
       },
       getCommandLength: () => this.#t.statusLine?.command.length,
       pendingResultLogRef: this.#y,
-      onResult: (L) => this.#T(L),
+      onResult: (result) => this.#T(result),
       logFn: this.#e.logEvent,
     });
   }
-  #T(e) {
-    if (this.#n.text === e) return;
+  #T(text) {
+    if (this.#n.text === text) return;
     this.#n = {
-      text: e,
+      text,
     };
-    this.#e.memory.lastText = e;
+    this.#e.memory.lastText = text;
     this.#o.emit();
   }
 }
@@ -602,7 +635,7 @@ function buildPromptCacheStatus(now = Date.now()) {
 }
 //@ chunk-18hwfzwa.js:802710-804967 placement
 function StatusLine(props) {
-  let $ = w(43);
+  let $ = useMemoCache(43);
   let { transcript, vimMode } = props;
   let isFullscreen = useIsFullscreen();
   let storeSelector = useStoreSelector(transcript, getLastAssistantMessageId);
@@ -615,13 +648,13 @@ function StatusLine(props) {
   let appState_2 = useAppState(selectToolPermissionContextAdditionalWorkingDirectories);
   let settingsState = useSettingsState();
   const statusLine = settingsState?.statusLine;
-  let It;
+  let effectiveStatusLine;
   if ($[0] !== statusLine) {
-    It = getEffectiveStatusLine(statusLine);
+    effectiveStatusLine = getEffectiveStatusLine(statusLine);
     $[0] = statusLine;
-    $[1] = It;
-  } else It = $[1];
-  let Ot = It;
+    $[1] = effectiveStatusLine;
+  } else effectiveStatusLine = $[1];
+  let statusLineConfig = effectiveStatusLine;
   let mainLoopModel = useMainLoopModel_3();
   let appState_3 = useAppState(selectFastMode_2);
   let fastModeOnForModel = useFastModeOnForModel(appState_3, mainLoopModel);
@@ -629,7 +662,7 @@ function StatusLine(props) {
   let appState_4 = useAppState(selectThinkingEnabled);
   let appState_5 = useAppState(selectPrStatus2);
   let appState_6 = useAppState(selectRemoteSessionName);
-  let po;
+  let createStatusLine;
   if (
     $[2] !== appState_2 ||
     $[3] !== clock ||
@@ -643,19 +676,19 @@ function StatusLine(props) {
     $[11] !== appState_6 ||
     $[12] !== statusLineInput ||
     $[13] !== settingsState ||
-    $[14] !== Ot ||
+    $[14] !== statusLineConfig ||
     $[15] !== appStoreDirect ||
     $[16] !== appState_4 ||
     $[17] !== storeSelector_2 ||
     $[18] !== transcript.getSnapshot ||
     $[19] !== vimMode
   ) {
-    po = () =>
+    createStatusLine = () =>
       new StatusLineInner(
         {
           session: statusLineInput,
           getMessages: transcript.getSnapshot,
-          setTimeout: (ao, co) => clock.setTimeout(ao, co),
+          setTimeout: (fn, delayMs) => clock.setTimeout(fn, delayMs),
           memory: statusLineLastTextStore.of(statusLineInput),
           execute: (signal, timeoutMs, logResult) =>
             executeStatusLineCommand(statusLineInput, signal, timeoutMs, logResult),
@@ -667,7 +700,7 @@ function StatusLine(props) {
           credentials,
         },
         {
-          statusLine: Ot,
+          statusLine: statusLineConfig,
           settings: settingsState,
           lastAssistantMessageId: storeSelector,
           tokenUsage: storeSelector_2,
@@ -694,17 +727,17 @@ function StatusLine(props) {
     $[11] = appState_6;
     $[12] = statusLineInput;
     $[13] = settingsState;
-    $[14] = Ot;
+    $[14] = statusLineConfig;
     $[15] = appStoreDirect;
     $[16] = appState_4;
     $[17] = storeSelector_2;
     $[18] = transcript.getSnapshot;
     $[19] = vimMode;
-    $[20] = po;
-  } else po = $[20];
-  let [Ro] = y(po);
-  let Ho;
-  let Io;
+    $[20] = createStatusLine;
+  } else createStatusLine = $[20];
+  let [statusLineStore] = useState(createStatusLine);
+  let syncInputsEffect;
+  let syncInputsDeps;
   if (
     $[21] !== appState_2 ||
     $[22] !== queuedMessageText ||
@@ -714,16 +747,16 @@ function StatusLine(props) {
     $[26] !== appState ||
     $[27] !== appState_5 ||
     $[28] !== appState_6 ||
-    $[29] !== Ro ||
+    $[29] !== statusLineStore ||
     $[30] !== settingsState ||
-    $[31] !== Ot ||
+    $[31] !== statusLineConfig ||
     $[32] !== appState_4 ||
     $[33] !== storeSelector_2 ||
     $[34] !== vimMode
   ) {
-    Ho = () => {
-      Ro.setInputs({
-        statusLine: Ot,
+    syncInputsEffect = () => {
+      statusLineStore.setInputs({
+        statusLine: statusLineConfig,
         settings: settingsState,
         lastAssistantMessageId: storeSelector,
         tokenUsage: storeSelector_2,
@@ -738,9 +771,9 @@ function StatusLine(props) {
         additionalWorkingDirectories: appState_2,
       });
     };
-    Io = [
-      Ro,
-      Ot,
+    syncInputsDeps = [
+      statusLineStore,
+      statusLineConfig,
       settingsState,
       storeSelector,
       storeSelector_2,
@@ -762,21 +795,21 @@ function StatusLine(props) {
     $[26] = appState;
     $[27] = appState_5;
     $[28] = appState_6;
-    $[29] = Ro;
+    $[29] = statusLineStore;
     $[30] = settingsState;
-    $[31] = Ot;
+    $[31] = statusLineConfig;
     $[32] = appState_4;
     $[33] = storeSelector_2;
     $[34] = vimMode;
-    $[35] = Ho;
-    $[36] = Io;
+    $[35] = syncInputsEffect;
+    $[36] = syncInputsDeps;
   } else {
-    Ho = $[35];
-    Io = $[36];
+    syncInputsEffect = $[35];
+    syncInputsDeps = $[36];
   }
-  P(Ho, Io);
-  let text = useStoreSelector(Ro).text;
-  let paddingX = Ot?.padding ?? 0;
+  useEffect(syncInputsEffect, syncInputsDeps);
+  let text = useStoreSelector(statusLineStore).text;
+  let paddingX = statusLineConfig?.padding ?? 0;
   let children;
   if ($[37] !== isFullscreen || $[38] !== text) {
     children = text
@@ -792,25 +825,25 @@ function StatusLine(props) {
     $[38] = text;
     $[39] = children;
   } else children = $[39];
-  let No;
+  let boxElement;
   if ($[40] !== paddingX || $[41] !== children) {
-    No = jsxProd_default(Box, {
+    boxElement = jsxProd_default(Box, {
       paddingX,
       gap: 2,
       children,
     });
     $[40] = paddingX;
     $[41] = children;
-    $[42] = No;
-  } else No = $[42];
-  return No;
+    $[42] = boxElement;
+  } else boxElement = $[42];
+  return boxElement;
 }
 //@ chunk-18hwfzwa.js:804967-805476 placement
 /**
  * 渲染状态栏命令输出：单行直接截断显示，多行逐行展示（每行带上前几行累积的 ANSI 样式）。
  */
 function StatusLineOutput(props) {
-  let $ = w(11);
+  let $ = useMemoCache(11);
   let { text } = props;
   let Container;
   let direction;
@@ -824,17 +857,17 @@ function StatusLineOutput(props) {
         const children = jsxProd_default(Ansi, {
           children: text,
         });
-        let We;
+        let singleLine;
         if ($[5] !== children) {
-          We = jsxProd_default(Text, {
+          singleLine = jsxProd_default(Text, {
             dimColor: true,
             wrap: "truncate",
             children,
           });
           $[5] = children;
-          $[6] = We;
-        } else We = $[6];
-        earlyResult = We;
+          $[6] = singleLine;
+        } else singleLine = $[6];
+        earlyResult = singleLine;
         break ze;
       }
       Container = Box;
@@ -853,18 +886,18 @@ function StatusLineOutput(props) {
     earlyResult = $[4];
   }
   if (earlyResult !== EARLY_RETURN_SENTINEL) return earlyResult;
-  let He;
+  let containerElement;
   if ($[7] !== Container || $[8] !== direction || $[9] !== rows) {
-    He = jsxProd_default(Container, {
+    containerElement = jsxProd_default(Container, {
       flexDirection: direction,
       children: rows,
     });
     $[7] = Container;
     $[8] = direction;
     $[9] = rows;
-    $[10] = He;
-  } else He = $[10];
-  return He;
+    $[10] = containerElement;
+  } else containerElement = $[10];
+  return containerElement;
 }
 //@ chunk-18hwfzwa.js:805476-805537 placement
 var ANSI_SEQUENCE_RE = /\x1b\[[\d;]*m|\x1b\]8;[^\x07\x1b]*(?:\x07|\x1b\\)/g;
@@ -873,18 +906,24 @@ function carryAnsiAcrossLines(text) {
   let lines = text.split(`
 `);
   if (lines.length === 1) return lines;
-  let D = [lines[0]];
-  let L = "";
+  let outLines = [lines[0]];
+  let carriedAnsi = "";
   for (let idx = 1; idx < lines.length; idx++) {
-    L += (lines[idx - 1].match(ANSI_SEQUENCE_RE) ?? []).join("");
-    D.push(L + lines[idx]);
+    carriedAnsi += (lines[idx - 1].match(ANSI_SEQUENCE_RE) ?? []).join("");
+    outLines.push(carriedAnsi + lines[idx]);
   }
-  return D;
+  return outLines;
 }
 //@ chunk-18hwfzwa.js:805707-805723 placement
-var StatusLineMemo = Rh(StatusLine);
+var StatusLineMemo; // deferred: uses StatusLine of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:805707", () => {
+  StatusLineMemo = memo(StatusLine);
+});
 //@ chunk-18hwfzwa.js:805723-805727 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:805723", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:805727-805840 placement
 /**
  * 读取渲染模式、终端行数与附着端能力等状态（结果未使用），恒返回 false。
@@ -892,10 +931,10 @@ init_react_production();
 function useStatusLineSuppressed() {
   let renderMode = useRenderMode();
   let rows = useTerminalSize().rows;
-  let D = Se(noticeDialogSlot) ?? rows;
-  let L = yt(onAttacherCapsChange, () => false);
-  yt(noopListener, () => false);
-  let ee = Se(rootSessionSlot) !== null;
+  let noticeRows = useContext(noticeDialogSlot) ?? rows;
+  let caps = useSyncExternalStore(onAttacherCapsChange, () => false);
+  useSyncExternalStore(noopListener, () => false);
+  let hasRootSession = useContext(rootSessionSlot) !== null;
   return false;
 }
 //@ chunk-18hwfzwa.js:805840-805868 placement
@@ -903,26 +942,13 @@ function noopListener() {
   return () => {};
 }
 //@ chunk-18hwfzwa.js:805868-805872 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:805868", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:805872-805876 placement
-init_react_production();
-//@ chunk-hwmsct5x.js:186950-187013 affinity
-function textOrFallback(e, n) {
-  return typeof e === "string" && e.trim() !== "" ? e : n;
-}
-//@ chunk-hwmsct5x.js:187013-187320 fingerprint = statusLineShouldDisplay (0.301)
-function statusLineShouldDisplay() {
-  let toastyBreezeConfig = getToastyBreezeConfig();
-  return {
-    label: textOrFallback(toastyBreezeConfig.label, LOW_PRIORITY_COPY.label),
-    noticeLine: textOrFallback(toastyBreezeConfig.noticeLine, LOW_PRIORITY_COPY.noticeLine),
-    statusLine: textOrFallback(toastyBreezeConfig.statusLine, LOW_PRIORITY_COPY.statusLine),
-    allowanceNote: textOrFallback(toastyBreezeConfig.allowanceNote, LOW_PRIORITY_COPY.allowanceNote),
-    waitBanner: textOrFallback(toastyBreezeConfig.waitBanner, LOW_PRIORITY_COPY.waitBanner),
-    budgetExhaustedCopy: textOrFallback(
-      toastyBreezeConfig.budgetExhaustedCopy,
-      LOW_PRIORITY_COPY.budgetExhaustedCopy,
-    ),
-  };
-}
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:805872", () => {
+  init_react_production();
+});
 export { statusLineShouldDisplay, useStatusLineSuppressed, StatusLineMemo };

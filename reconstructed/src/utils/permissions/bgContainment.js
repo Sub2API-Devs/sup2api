@@ -29,28 +29,32 @@ import { isPathWithinCaseAware } from "../pathPrefix.js";
 import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { getPlatform as getPlatform_2 } from "../platform.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:425824-425942 placement
-function toWin32Backslashes(e) {
-  let matches = /^[\\/]{2}/.test(e);
-  return (matches ? "\\\\" : "") + (matches ? e.replace(/^[\\/]{2,}/, "") : e).replace(/[\\/]+/g, "\\");
+function toWin32Backslashes(inputPath) {
+  let matches = /^[\\/]{2}/.test(inputPath);
+  return (
+    (matches ? "\\\\" : "") +
+    (matches ? inputPath.replace(/^[\\/]{2,}/, "") : inputPath).replace(/[\\/]+/g, "\\")
+  );
 }
 //@ chunk-s61vbvea.js:425942-426147 placement
-function refuseContainmentSpelling(e, n, r) {
-  logForDebugging(`bg-containment: refusing ${n} spelling for containment: ${e}`, {
+function refuseContainmentSpelling(path, reason, surfaced) {
+  logForDebugging(`bg-containment: refusing ${reason} spelling for containment: ${path}`, {
     level: "warn",
   });
-  return r === undefined
+  return surfaced === undefined
     ? {
-        lexical: e,
+        lexical: path,
         canonical: null,
         skipped: false,
       }
     : {
-        lexical: e,
+        lexical: path,
         canonical: null,
         skipped: false,
-        surfaced: r,
+        surfaced,
       };
 }
 //@ chunk-s61vbvea.js:426147-426332 placement
@@ -65,112 +69,138 @@ function stripWin32LongPathPrefix(deepestExistingAncestor) {
 //@ chunk-s61vbvea.js:426332-426357 placement
 var TRAILING_DOT_OR_SPACE_BEFORE_SEPARATOR_RE = /[. ](?=[\\/]|$)/;
 //@ chunk-s61vbvea.js:426357-427357 placement
-function classifyContainmentPath(e, n = "linux") {
-  if (hasDotSegment(e)) return refuseContainmentSpelling(identity(e), "dot-segment");
-  let r = identity(e);
-  if (n === "win32") {
-    r = r.replace(/^([\\/])[\\/]{2,}/, (w, R) => R + R);
-    if (isDeviceNamespacePath(r) || hasWin32DevicePrefixSpelling(r))
-      return refuseContainmentSpelling(r, "device-namespace");
-    r = isWslLocalhostPath(r);
-    if (TRAILING_DOT_OR_SPACE_BEFORE_SEPARATOR_RE.test(r))
-      return refuseContainmentSpelling(r, "trailing-dot-or-space");
-    if (isNonWslUncPath(r))
+function classifyContainmentPath(inputPath, platform = "linux") {
+  if (hasDotSegment(inputPath)) return refuseContainmentSpelling(identity(inputPath), "dot-segment");
+  let lexicalPath = identity(inputPath);
+  if (platform === "win32") {
+    lexicalPath = lexicalPath.replace(/^([\\/])[\\/]{2,}/, (match, separator) => separator + separator);
+    if (isDeviceNamespacePath(lexicalPath) || hasWin32DevicePrefixSpelling(lexicalPath))
+      return refuseContainmentSpelling(lexicalPath, "device-namespace");
+    lexicalPath = isWslLocalhostPath(lexicalPath);
+    if (TRAILING_DOT_OR_SPACE_BEFORE_SEPARATOR_RE.test(lexicalPath))
+      return refuseContainmentSpelling(lexicalPath, "trailing-dot-or-space");
+    if (isNonWslUncPath(lexicalPath))
       return {
-        lexical: toWin32Backslashes(r),
+        lexical: toWin32Backslashes(lexicalPath),
         canonical: null,
         skipped: true,
       };
-    r = toWin32Backslashes(r);
+    lexicalPath = toWin32Backslashes(lexicalPath);
   } else {
-    r = r.replace(/\/{2,}/g, "/");
-    if (n === "darwin") r = isSystemVolumePath(r);
-    if (isNetworkMountRoot(r))
+    lexicalPath = lexicalPath.replace(/\/{2,}/g, "/");
+    if (platform === "darwin") lexicalPath = isSystemVolumePath(lexicalPath);
+    if (isNetworkMountRoot(lexicalPath))
       return {
-        lexical: isNetworkMountPath_2(r, n),
+        lexical: isNetworkMountPath_2(lexicalPath, platform),
         canonical: null,
         skipped: true,
       };
   }
-  let deepestExistingAncestor = resolveDeepestExistingAncestorSync(getFsImplementation(), r, {
+  let deepestExistingAncestor = resolveDeepestExistingAncestorSync(getFsImplementation(), lexicalPath, {
     surfaceDotDotTargets: true,
   });
   if (deepestExistingAncestor === undefined)
     return {
-      lexical: r,
-      canonical: r,
+      lexical: lexicalPath,
+      canonical: lexicalPath,
       skipped: false,
     };
-  let h = n === "win32" ? stripWin32LongPathPrefix(deepestExistingAncestor) : deepestExistingAncestor;
-  if (h === null) return refuseContainmentSpelling(r, "resolves-to-device-namespace");
-  let y =
-    n === "win32"
-      ? h
-      : n === "darwin"
-        ? isSystemVolumePath(h.replace(/^\/{2,}/, "/"))
-        : h.replace(/^\/{2,}/, "/");
-  if (isNonWslUncPath(y) || isNetworkMountRoot(y) || isMacSpecialPath(y))
+  let resolvedAncestor =
+    platform === "win32" ? stripWin32LongPathPrefix(deepestExistingAncestor) : deepestExistingAncestor;
+  if (resolvedAncestor === null)
+    return refuseContainmentSpelling(lexicalPath, "resolves-to-device-namespace");
+  let normalizedResolved =
+    platform === "win32"
+      ? resolvedAncestor
+      : platform === "darwin"
+        ? isSystemVolumePath(resolvedAncestor.replace(/^\/{2,}/, "/"))
+        : resolvedAncestor.replace(/^\/{2,}/, "/");
+  if (
+    isNonWslUncPath(normalizedResolved) ||
+    isNetworkMountRoot(normalizedResolved) ||
+    isMacSpecialPath(normalizedResolved)
+  )
     return refuseContainmentSpelling(
-      r,
+      lexicalPath,
       "resolves-to-network",
-      isNetworkMountPath_2(identity(n === "win32" ? toWin32Backslashes(y) : y), n),
+      isNetworkMountPath_2(
+        identity(platform === "win32" ? toWin32Backslashes(normalizedResolved) : normalizedResolved),
+        platform,
+      ),
     );
-  if (hasDotSegment(y)) return refuseContainmentSpelling(r, "resolves-to-dot-segment");
-  if (n === "win32" && TRAILING_DOT_OR_SPACE_BEFORE_SEPARATOR_RE.test(y))
-    return refuseContainmentSpelling(r, "resolves-to-trailing-dot-or-space");
-  let S = n === "win32" ? toWin32Backslashes(y) : y.replace(/\/{2,}/g, "/");
+  if (hasDotSegment(normalizedResolved))
+    return refuseContainmentSpelling(lexicalPath, "resolves-to-dot-segment");
+  if (platform === "win32" && TRAILING_DOT_OR_SPACE_BEFORE_SEPARATOR_RE.test(normalizedResolved))
+    return refuseContainmentSpelling(lexicalPath, "resolves-to-trailing-dot-or-space");
+  let canonicalPath =
+    platform === "win32"
+      ? toWin32Backslashes(normalizedResolved)
+      : normalizedResolved.replace(/\/{2,}/g, "/");
   return {
-    lexical: r,
-    canonical: identity(S),
+    lexical: lexicalPath,
+    canonical: identity(canonicalPath),
     skipped: false,
   };
 }
 //@ chunk-s61vbvea.js:427357-428047 placement
-function resolveContainmentTarget(e, n = "linux") {
-  let s;
-  let h = e;
+function resolveContainmentTarget(inputPath, platform = "linux") {
+  let firstResult;
+  let currentPath = inputPath;
   try {
     for (let j = 0; j < 8; j++) {
-      let S = classifyContainmentPath(h, n);
-      s ??= S;
-      if (S.skipped) return j === 0 ? S : refuseContainmentSpelling(s.lexical, "resolves-to-network");
-      if (S.canonical === null)
+      let result = classifyContainmentPath(currentPath, platform);
+      firstResult ??= result;
+      if (result.skipped)
+        return j === 0 ? result : refuseContainmentSpelling(firstResult.lexical, "resolves-to-network");
+      if (result.canonical === null)
         return j === 0
-          ? S
+          ? result
           : {
-              ...S,
-              lexical: s.lexical,
+              ...result,
+              lexical: firstResult.lexical,
             };
-      if (S.canonical === h) {
+      if (result.canonical === currentPath) {
         try {
-          if (getFsImplementation().lstatSync(h).isSymbolicLink())
-            return refuseContainmentSpelling(s.lexical, "resolution-not-convergent", h !== e ? h : undefined);
+          if (getFsImplementation().lstatSync(currentPath).isSymbolicLink())
+            return refuseContainmentSpelling(
+              firstResult.lexical,
+              "resolution-not-convergent",
+              currentPath !== inputPath ? currentPath : undefined,
+            );
         } catch (error) {
           if (!isENOENT(error)) throw error;
-          if (n === "win32")
+          if (platform === "win32")
             try {
-              getFsImplementation().realpathSync(win32.dirname(h));
+              getFsImplementation().realpathSync(win32.dirname(currentPath));
             } catch (error) {
               if (!isENOENT(error))
                 return refuseContainmentSpelling(
-                  s.lexical,
+                  firstResult.lexical,
                   "resolution-not-convergent",
-                  h !== e ? h : undefined,
+                  currentPath !== inputPath ? currentPath : undefined,
                 );
             }
         }
         return {
-          lexical: s.lexical,
-          canonical: h,
+          lexical: firstResult.lexical,
+          canonical: currentPath,
           skipped: false,
         };
       }
-      h = S.canonical;
+      currentPath = result.canonical;
     }
   } catch {
-    return refuseContainmentSpelling(s?.lexical ?? identity(e), "resolution-error", h !== e ? h : undefined);
+    return refuseContainmentSpelling(
+      firstResult?.lexical ?? identity(inputPath),
+      "resolution-error",
+      currentPath !== inputPath ? currentPath : undefined,
+    );
   }
-  return refuseContainmentSpelling(s.lexical, "resolution-not-convergent", h !== e ? h : undefined);
+  return refuseContainmentSpelling(
+    firstResult.lexical,
+    "resolution-not-convergent",
+    currentPath !== inputPath ? currentPath : undefined,
+  );
 }
 //@ chunk-s61vbvea.js:428047-428595 placement
 /**
@@ -207,81 +237,92 @@ function isOutsideContainment(target, root) {
   );
 }
 //@ chunk-s61vbvea.js:428595-428630 placement
-function isPathWithinRegisteredCaseAware(e, n) {
-  return isPathWithinCaseAware(e, n, true);
+function isPathWithinRegisteredCaseAware(childPath, parentPath) {
+  return isPathWithinCaseAware(childPath, parentPath, true);
 }
 //@ chunk-s61vbvea.js:428630-428640 placement
 var MAX_LONG_NAME_EXPANSION_CACHE = 64;
 //@ chunk-s61vbvea.js:428640-428934 placement
 class LongNameExpansionCache {
   expansionByRootCanonical = new Map();
-  expand(e) {
-    let n = this.expansionByRootCanonical.get(e);
-    if (n === undefined) {
-      n = expandWin32ExistingLongNames(e);
+  expand(rootCanonical) {
+    let expansion = this.expansionByRootCanonical.get(rootCanonical);
+    if (expansion === undefined) {
+      expansion = expandWin32ExistingLongNames(rootCanonical);
       if (this.expansionByRootCanonical.size >= MAX_LONG_NAME_EXPANSION_CACHE)
         this.expansionByRootCanonical.clear();
-      this.expansionByRootCanonical.set(e, n);
+      this.expansionByRootCanonical.set(rootCanonical, expansion);
     }
-    return n;
+    return expansion;
   }
   clear() {
     this.expansionByRootCanonical.clear();
   }
 }
 //@ chunk-s61vbvea.js:428934-428959 placement
-var longNameExpansionCacheSlot = new HostScoped(() => new LongNameExpansionCache());
+var longNameExpansionCacheSlot; // deferred: uses LongNameExpansionCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:428934", () => {
+  longNameExpansionCacheSlot = new HostScoped(() => new LongNameExpansionCache());
+});
 //@ chunk-s61vbvea.js:428959-428996 placement
 function getLongNameExpansionCache() {
   return longNameExpansionCacheSlot.of(getRootSession().host);
 }
 //@ chunk-s61vbvea.js:428996-429127 placement
-function isWithinByLongNames(canonical, canonical_2) {
+function isWithinByLongNames(path, canonical) {
   if (getPlatform_2() !== "windows") return false;
-  let r = expandWin32ExistingLongNames(canonical);
-  let s = getLongNameExpansionCache().expand(canonical_2);
-  if (r === canonical && s === canonical_2) return false;
-  return isSameIndexedPath(identity(toWin32Backslashes(r)), identity(toWin32Backslashes(s)));
+  let expanded = expandWin32ExistingLongNames(path);
+  let otherExpanded = getLongNameExpansionCache().expand(canonical);
+  if (expanded === path && otherExpanded === canonical) return false;
+  return isSameIndexedPath(
+    identity(toWin32Backslashes(expanded)),
+    identity(toWin32Backslashes(otherExpanded)),
+  );
 }
 //@ chunk-s61vbvea.js:429127-429162 placement
-function isSameIndexedPath(e, n) {
-  return isPathWithinCaseAware(e, n, true);
+function isSameIndexedPath(firstPath, secondPath) {
+  return isPathWithinCaseAware(firstPath, secondPath, true);
 }
 //@ chunk-s61vbvea.js:429162-429318 placement
 /**
  * 判断两条路径包含关系记录是否相同：任一无效时为 false，跳过的比较字面形式，否则比较规范形式。
  */
-function isSameContainmentPath(containmentTarget, n) {
-  if (hasUnresolvedCanonicalPath(containmentTarget) || hasUnresolvedCanonicalPath(n)) return false;
-  if (containmentTarget.skipped !== n.skipped) return false;
-  if (containmentTarget.skipped) return isPathWithinLexicalOnly(containmentTarget.lexical, n.lexical);
-  return isPathWithinLexicalOnly(containmentTarget.canonical, n.canonical);
+function isSameContainmentPath(containmentTarget, otherTarget) {
+  if (hasUnresolvedCanonicalPath(containmentTarget) || hasUnresolvedCanonicalPath(otherTarget)) return false;
+  if (containmentTarget.skipped !== otherTarget.skipped) return false;
+  if (containmentTarget.skipped)
+    return isPathWithinLexicalOnly(containmentTarget.lexical, otherTarget.lexical);
+  return isPathWithinLexicalOnly(containmentTarget.canonical, otherTarget.canonical);
 }
 //@ chunk-s61vbvea.js:429318-429353 placement
-function isPathWithinLexicalOnly(e, n) {
-  return isPathWithinCaseAware(e, n, false);
+function isPathWithinLexicalOnly(childPath, parentPath) {
+  return isPathWithinCaseAware(childPath, parentPath, false);
 }
 //@ chunk-s61vbvea.js:429353-429406 placement
 /**
  * hasUnresolvedCanonicalPath：记录既没有规范路径也未被跳过。
  */
-function hasUnresolvedCanonicalPath(e) {
-  return e.canonical === null && !e.skipped;
+function hasUnresolvedCanonicalPath(target) {
+  return target.canonical === null && !target.skipped;
 }
 //@ chunk-s61vbvea.js:429406-429461 placement
 /**
  * isCanonicalUnderRoot：规范路径位于根之下。
  */
-function isCanonicalUnderRoot(e, n) {
-  return e !== null && n !== null && isPathWithinCaseAware(e, n, true);
+function isCanonicalUnderRoot(canonicalPath, canonicalRoot) {
+  return (
+    canonicalPath !== null &&
+    canonicalRoot !== null &&
+    isPathWithinCaseAware(canonicalPath, canonicalRoot, true)
+  );
 }
 //@ chunk-s61vbvea.js:429461-429611 placement
 /**
  * 路径与登记的写法只有大小写不同时，返回提示改写成登记写法的说明，否则空串。
  */
-function describeCaseOnlyMismatch(e, n, r) {
-  return isCanonicalUnderRoot(e, n)
-    ? ` (this path differs from the registered spelling only by letter case \u2014 respell it to match ${r} exactly)`
+function describeCaseOnlyMismatch(canonicalPath, canonicalRoot, registeredSpelling) {
+  return isCanonicalUnderRoot(canonicalPath, canonicalRoot)
+    ? ` (this path differs from the registered spelling only by letter case \u2014 respell it to match ${registeredSpelling} exactly)`
     : "";
 }
 export {

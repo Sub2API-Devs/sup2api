@@ -29,34 +29,49 @@ import { hasSessionIngressAuthToken } from "../../utils/sessionIngressAuth.js";
 import { isRemoteManagedEnvironment, isByocEnvironment } from "../../utils/remoteEnvironment.js";
 import { isProjectsRelay } from "../../utils/messageProvenance.js";
 import { relayRowsOf, isTimelineHumanRow, isNewerRow, lastHumanMessageText } from "./threadTranscript.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s1zey0a9.js:738-1633 placement
 /**
  * 协调会话中继消息的固定说明文字，以及识别整段中继文本（relay/cited/note 标签、缩进）用的正则集合。
  */
-var COORDINATOR_MESSAGE_PATTERNS =
-  'A message from this project\u2019s coordinator session \u2014 a Claude session working for the members of this project. Inside, <cited author="user"> entries are messages from members of this project, copied by the server, and name is that member\u2019s own display name; <cited author="coordinator"> entries and the note are the coordinator session\u2019s words, not a member\u2019s.';
-var attrPattern = (e, ...t) => `(?: (?:${e})="[^"<>\\n]*"${t.map((n) => `| ${n}`).join("")})*`;
-var RELAY_TAG_ATTRS_PATTERN = attrPattern("from|session|current-time|reason|id|sent-for|sent-for-name");
-var CITED_TAG_ATTRS_PATTERN = attrPattern(
-  "id|author|name|author-id|session|at|where|thread|in_reply_to|writer|edited_at|truncated|attachments",
-  'attached_by="server"',
-);
-var RELAY_INDENT_PATTERN = "(?: {2}| {4})";
-var NOTE_OPEN_TAG = "<note>";
-var NOTE_CLOSE_TAGS_PATTERN = "</note>|</note></relay>";
-var regExp = new RegExp(
-  `^(?:<relay${RELAY_TAG_ATTRS_PATTERN}>|</relay>|${RELAY_INDENT_PATTERN}(?:<cited${CITED_TAG_ATTRS_PATTERN}>|</cited>|${NOTE_OPEN_TAG}|${NOTE_CLOSE_TAGS_PATTERN}))$`,
-);
-var regExp_2 = new RegExp(`^${RELAY_INDENT_PATTERN}${NOTE_OPEN_TAG}$`);
-var regExp_3 = new RegExp(`^${RELAY_INDENT_PATTERN}(?:${NOTE_CLOSE_TAGS_PATTERN})$`);
-var ATTRIBUTE_NAME_REGEX = / ([a-z][a-z0-9_-]*)="/g;
+var COORDINATOR_MESSAGE_PATTERNS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var attrPattern;
+var RELAY_TAG_ATTRS_PATTERN;
+var CITED_TAG_ATTRS_PATTERN;
+var RELAY_INDENT_PATTERN;
+var NOTE_OPEN_TAG;
+var NOTE_CLOSE_TAGS_PATTERN;
+var regExp;
+var regExp_2;
+var regExp_3;
+var ATTRIBUTE_NAME_REGEX;
+deferInit("chunk-s1zey0a9.js:738", () => {
+  COORDINATOR_MESSAGE_PATTERNS =
+    'A message from this project\u2019s coordinator session \u2014 a Claude session working for the members of this project. Inside, <cited author="user"> entries are messages from members of this project, copied by the server, and name is that member\u2019s own display name; <cited author="coordinator"> entries and the note are the coordinator session\u2019s words, not a member\u2019s.';
+  attrPattern = (names, ...extraAttrs) =>
+    `(?: (?:${names})="[^"<>\\n]*"${extraAttrs.map((attr) => `| ${attr}`).join("")})*`;
+  RELAY_TAG_ATTRS_PATTERN = attrPattern("from|session|current-time|reason|id|sent-for|sent-for-name");
+  CITED_TAG_ATTRS_PATTERN = attrPattern(
+    "id|author|name|author-id|session|at|where|thread|in_reply_to|writer|edited_at|truncated|attachments",
+    'attached_by="server"',
+  );
+  RELAY_INDENT_PATTERN = "(?: {2}| {4})";
+  NOTE_OPEN_TAG = "<note>";
+  NOTE_CLOSE_TAGS_PATTERN = "</note>|</note></relay>";
+  regExp = new RegExp(
+    `^(?:<relay${RELAY_TAG_ATTRS_PATTERN}>|</relay>|${RELAY_INDENT_PATTERN}(?:<cited${CITED_TAG_ATTRS_PATTERN}>|</cited>|${NOTE_OPEN_TAG}|${NOTE_CLOSE_TAGS_PATTERN}))$`,
+  );
+  regExp_2 = new RegExp(`^${RELAY_INDENT_PATTERN}${NOTE_OPEN_TAG}$`);
+  regExp_3 = new RegExp(`^${RELAY_INDENT_PATTERN}(?:${NOTE_CLOSE_TAGS_PATTERN})$`);
+  ATTRIBUTE_NAME_REGEX = / ([a-z][a-z0-9_-]*)="/g;
+});
 //@ chunk-s1zey0a9.js:1633-1731 placement
 function hasUniqueAttributes(line) {
-  let t = new Set();
-  for (let [, n] of line.matchAll(ATTRIBUTE_NAME_REGEX)) {
-    if (t.has(n)) return false;
-    t.add(n);
+  let seen = new Set();
+  for (let [, attrName] of line.matchAll(ATTRIBUTE_NAME_REGEX)) {
+    if (seen.has(attrName)) return false;
+    seen.add(attrName);
   }
   return true;
 }
@@ -64,22 +79,22 @@ function hasUniqueAttributes(line) {
 var CONTROL_OR_LINEBREAK_REGEX = /[\p{Cc}\u2028\u2029]/u;
 //@ chunk-s1zey0a9.js:1762-1881 placement = escapeXml (0.793)
 function escapeXml(s) {
-  let t = "";
-  for (let n of s) {
-    let r = n === "<" || n === ">" ? n : BRACKET_CONFUSABLES_2.get(n);
-    t += r === "<" ? "&lt;" : r === ">" ? "&gt;" : n;
+  let escaped = "";
+  for (let char of s) {
+    let replaced = char === "<" || char === ">" ? char : BRACKET_CONFUSABLES_2.get(char);
+    escaped += replaced === "<" ? "&lt;" : replaced === ">" ? "&gt;" : char;
   }
-  return t;
+  return escaped;
 }
 //@ chunk-s1zey0a9.js:1881-1988 placement
-function escapeRelayLines(e, t) {
-  return e
+function escapeRelayLines(text, allowEnvelope) {
+  return text
     .split(
       `
 `,
     )
     .map((line) =>
-      t &&
+      allowEnvelope &&
       regExp.test(line) &&
       hasUniqueAttributes(line) &&
       !hasBracketConfusables(line) &&
@@ -91,47 +106,52 @@ function escapeRelayLines(e, t) {
 }
 //@ chunk-s1zey0a9.js:1988-2049 placement
 function hasBracketConfusables(line) {
-  for (let t of line) if (BRACKET_CONFUSABLES_2.has(t)) return true;
+  for (let char of line) if (BRACKET_CONFUSABLES_2.has(char)) return true;
   return false;
 }
 //@ chunk-s1zey0a9.js:2049-2112 placement
 /**
  * 把协调会话中继内容包进带说明的 <relay> 块，逐行转义标签、中和易混字符。
  */
-function wrapCoordinatorRelay(e, t) {
+function wrapCoordinatorRelay(text, serverEnvelope) {
   return `<${COORDINATOR_RELAY}>
-${neutralizeConfusableTags(COORDINATOR_RELAY, escapeRelayLines(e, t))}
+${neutralizeConfusableTags(COORDINATOR_RELAY, escapeRelayLines(text, serverEnvelope))}
 </${COORDINATOR_RELAY}>`;
 }
 //@ chunk-s1zey0a9.js:2112-2486 placement
 /**
  * 协调会话中继消息的说明文字，以及包裹中继内容的前缀列表与结束标记。
  */
-var COORDINATOR_RELAY_NOTE =
-  'A message from this project\u2019s coordinator session \u2014 a Claude session working for your user. Inside, <cited author="user"> entries are your user\u2019s own messages copied by the server; <cited author="coordinator"> entries and the note are the coordinator session\u2019s words, not your user\u2019s.';
-var relayPrefixes = [COORDINATOR_MESSAGE_PATTERNS, COORDINATOR_RELAY_NOTE].map(
-  (e) => `${e}
+var COORDINATOR_RELAY_NOTE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var relayPrefixes;
+var RELAY_SUFFIX;
+deferInit("chunk-s1zey0a9.js:2112", () => {
+  COORDINATOR_RELAY_NOTE =
+    'A message from this project\u2019s coordinator session \u2014 a Claude session working for your user. Inside, <cited author="user"> entries are your user\u2019s own messages copied by the server; <cited author="coordinator"> entries and the note are the coordinator session\u2019s words, not your user\u2019s.';
+  relayPrefixes = [COORDINATOR_MESSAGE_PATTERNS, COORDINATOR_RELAY_NOTE].map(
+    (pattern) => `${pattern}
 
 <${COORDINATOR_RELAY}>
 `,
-);
-var RELAY_SUFFIX = `
+  );
+  RELAY_SUFFIX = `
 </${COORDINATOR_RELAY}>`;
+});
 //@ chunk-s1zey0a9.js:2486-2683 placement
 /**
  * 把协调会话的中继消息重新包装成带说明的格式，去掉原有的中继包裹。
  */
-function formatCoordinatorRelay(e, t) {
+function formatCoordinatorRelay(text, options) {
   let found = relayPrefixes.find(
     (relayPrefix) =>
-      e.startsWith(relayPrefix) &&
-      e.endsWith(RELAY_SUFFIX) &&
-      e.length >= relayPrefix.length + RELAY_SUFFIX.length,
+      text.startsWith(relayPrefix) &&
+      text.endsWith(RELAY_SUFFIX) &&
+      text.length >= relayPrefix.length + RELAY_SUFFIX.length,
   );
-  let r = found === undefined ? e : e.slice(found.length, e.length - RELAY_SUFFIX.length);
+  let envelopeBody = found === undefined ? text : text.slice(found.length, text.length - RELAY_SUFFIX.length);
   return `${COORDINATOR_MESSAGE_PATTERNS}
 
-${wrapCoordinatorRelay(r, t?.serverEnvelope === true)}`;
+${wrapCoordinatorRelay(envelopeBody, options?.serverEnvelope === true)}`;
 }
 //@ chunk-s1zey0a9.js:2683-2753 placement
 /**
@@ -155,10 +175,10 @@ function isCompactBoundaryMessage(message) {
 /**
  * 从后往前找最后一条 compact_boundary 系统消息的下标，找不到返回 -1。
  */
-function findCompactBoundaryIndex(e) {
-  for (let i = e.length - 1; i >= 0; i--) {
-    let n = e[i];
-    if (n && isCompactBoundaryMessage(n)) return i;
+function findCompactBoundaryIndex(messages) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    let message = messages[i];
+    if (message && isCompactBoundaryMessage(message)) return i;
   }
   return -1;
 }
@@ -172,21 +192,21 @@ var COMPACTED_AWAY_NOTICE =
 /**
  * 判断压缩边界之前的消息是否全部是被保留的消息。
  */
-function hasOnlyPreservedBeforeBoundary(e) {
-  let compactBoundaryIndex = findCompactBoundaryIndex(e);
-  let n = e[compactBoundaryIndex];
-  if (!n || !isCompactBoundaryMessage(n)) return false;
-  let uuids = n.compactMetadata?.preservedMessages?.uuids;
-  let s = new Set(Array.isArray(uuids) ? uuids : []);
-  return e.slice(0, compactBoundaryIndex).every((a) => s.has(a.uuid));
+function hasOnlyPreservedBeforeBoundary(messages) {
+  let compactBoundaryIndex = findCompactBoundaryIndex(messages);
+  let boundaryMessage = messages[compactBoundaryIndex];
+  if (!boundaryMessage || !isCompactBoundaryMessage(boundaryMessage)) return false;
+  let uuids = boundaryMessage.compactMetadata?.preservedMessages?.uuids;
+  let preservedUuids = new Set(Array.isArray(uuids) ? uuids : []);
+  return messages.slice(0, compactBoundaryIndex).every((message) => preservedUuids.has(message.uuid));
 }
 //@ chunk-s1zey0a9.js:3198-3255 placement
 /**
  * 丢弃最后一条压缩边界之前的消息（压缩后只保留边界起的部分）。
  */
-function messagesSinceCompactBoundary(e, t) {
-  let compactBoundaryIndex = findCompactBoundaryIndex(e);
-  return compactBoundaryIndex === -1 ? e : e.slice(compactBoundaryIndex);
+function messagesSinceCompactBoundary(messages, unused) {
+  let compactBoundaryIndex = findCompactBoundaryIndex(messages);
+  return compactBoundaryIndex === -1 ? messages : messages.slice(compactBoundaryIndex);
 }
 //@ chunk-s1zey0a9.js:3255-3358 placement
 /**
@@ -247,13 +267,13 @@ function threadRuleMode() {
     : "compact";
 }
 //@ chunk-s1zey0a9.js:4105-4255 placement
-function isFlagOffOrUnresolved(e) {
-  let t = getFeatureValueWithSource_CACHED_MAY_BE_STALE(e, undefined);
-  switch (t.source) {
+function isFlagOffOrUnresolved(flagKey) {
+  let resolved = getFeatureValueWithSource_CACHED_MAY_BE_STALE(flagKey, undefined);
+  switch (resolved.source) {
     case "payload":
     case "disk":
     case "override":
-      return t.value === false;
+      return resolved.value === false;
     case "disabled":
     case "fallback":
       return true;
@@ -267,107 +287,120 @@ function isOtherThreadRowsOff() {
 /**
  * 当前 MCP 客户端里是否有项目中继来源（有则可接受协调会话中继行）。
  */
-function hasRelaySourceForClients(e = getMcpClientsFromAccessor()) {
-  return hasRelaySource(e);
+function hasRelaySourceForClients(clients = getMcpClientsFromAccessor()) {
+  return hasRelaySource(clients);
 }
 //@ chunk-s1zey0a9.js:4359-4404 placement
 /**
  * 只提供更新状态工具、没有建线程工具的 MCP 客户端：需要转发中继行。
  */
-function hasUpdateStatusToolOnly(e) {
-  return serverHasAnyTool(e, HEARTH_UPDATE_STATUS_TOOLS) && !serverHasAnyTool(e, HEARTH_START_THREAD_TOOLS);
+function hasUpdateStatusToolOnly(server) {
+  return (
+    serverHasAnyTool(server, HEARTH_UPDATE_STATUS_TOOLS) &&
+    !serverHasAnyTool(server, HEARTH_START_THREAD_TOOLS)
+  );
 }
 //@ chunk-s1zey0a9.js:4404-4449 placement
 /**
  * 只提供建线程工具、没有更新状态工具的 MCP 客户端。
  */
-function hasStartThreadToolOnly(e) {
-  return serverHasAnyTool(e, HEARTH_START_THREAD_TOOLS) && !serverHasAnyTool(e, HEARTH_UPDATE_STATUS_TOOLS);
+function hasStartThreadToolOnly(server) {
+  return (
+    serverHasAnyTool(server, HEARTH_START_THREAD_TOOLS) &&
+    !serverHasAnyTool(server, HEARTH_UPDATE_STATUS_TOOLS)
+  );
 }
 //@ chunk-s1zey0a9.js:4449-4770 placement
 /**
  * 判断是否需要向分类器转发 Projects 中继行：会话入口令牌存在、处于 Projects 会话、未连接 hearthbot，且有带中继行的用户消息。
  */
-function shouldForwardRelayRows(e, t = getMcpClientsFromAccessor(), projectsMemberRelaySeen = false) {
+function shouldForwardRelayRows(
+  messages,
+  clients = getMcpClientsFromAccessor(),
+  projectsMemberRelaySeen = false,
+) {
   if (
     !hasSessionIngressAuthToken() ||
     !(isRemoteManagedEnvironment() || isByocEnvironment()) ||
-    t === undefined ||
-    t.some((r) => r.name === HEARTHBOT)
+    clients === undefined ||
+    clients.some((client) => client.name === HEARTHBOT)
   )
     return false;
   if (projectsMemberRelaySeen) return true;
-  return e.some((r) => {
-    let s =
-      r.type === "user"
-        ? r
-        : r.type === "attachment" && r.attachment.type === "queued_command"
-          ? r.attachment
+  return messages.some((message) => {
+    let relayHost =
+      message.type === "user"
+        ? message
+        : message.type === "attachment" && message.attachment.type === "queued_command"
+          ? message.attachment
           : undefined;
     return (
-      s !== undefined &&
-      isProjectsRelay(s.origin) &&
-      relayRowsOf(s) !== undefined &&
-      s.hearthRelayThreadTs === undefined
+      relayHost !== undefined &&
+      isProjectsRelay(relayHost.origin) &&
+      relayRowsOf(relayHost) !== undefined &&
+      relayHost.hearthRelayThreadTs === undefined
     );
   });
 }
 //@ chunk-s1zey0a9.js:4770-5442 placement
-function collectThreadRows(e) {
-  let t;
-  let n;
-  let r = resolvedRowsMode() === "full";
-  for (let [s, a] of e.entries()) {
-    let i =
-      a.type === "user"
-        ? a
-        : a.type === "attachment" && a.attachment.type === "queued_command"
-          ? a.attachment
+function collectThreadRows(messages) {
+  let latestRelayRow;
+  let latestSlackRow;
+  let isFullMode = resolvedRowsMode() === "full";
+  for (let [index, message] of messages.entries()) {
+    let relayHost =
+      message.type === "user"
+        ? message
+        : message.type === "attachment" && message.attachment.type === "queued_command"
+          ? message.attachment
           : undefined;
-    if (i === undefined) continue;
-    if (r && isProjectsRelay(i.origin))
-      for (let c of relayRowsOf(i)?.rows ?? []) {
-        if (!isTimelineHumanRow(c) || c.text.trim() === "") continue;
-        let at = Date.parse(c.written_at);
+    if (relayHost === undefined) continue;
+    if (isFullMode && isProjectsRelay(relayHost.origin))
+      for (let row of relayRowsOf(relayHost)?.rows ?? []) {
+        if (!isTimelineHumanRow(row) || row.text.trim() === "") continue;
+        let at = Date.parse(row.written_at);
         if (
           isNewerRow(
             {
               at,
-              index: s,
+              index,
             },
-            t,
+            latestRelayRow,
           )
         )
-          t = {
-            text: c.text,
+          latestRelayRow = {
+            text: row.text,
             at,
-            index: s,
+            index,
           };
       }
-    if (i.verifiedSlackHumanTurn === true) {
-      let c = i.type === "user" ? i.message.content : i.prompt;
-      let l = typeof c === "string" ? lastHumanMessageText(c) : undefined;
-      if (l !== undefined) {
-        let at = Date.parse((i.type === "user" ? undefined : i.timestamp) ?? a.timestamp);
+    if (relayHost.verifiedSlackHumanTurn === true) {
+      let content = relayHost.type === "user" ? relayHost.message.content : relayHost.prompt;
+      let text = typeof content === "string" ? lastHumanMessageText(content) : undefined;
+      if (text !== undefined) {
+        let at = Date.parse(
+          (relayHost.type === "user" ? undefined : relayHost.timestamp) ?? message.timestamp,
+        );
         if (
           isNewerRow(
             {
               at,
-              index: s,
+              index,
             },
-            n,
+            latestSlackRow,
           )
         )
-          n = {
-            text: l,
+          latestSlackRow = {
+            text,
             at,
-            index: s,
+            index,
           };
       }
     }
   }
-  if (t && n) return isNewerRow(n, t) ? n.text : t.text;
-  return (t ?? n)?.text;
+  if (latestRelayRow && latestSlackRow)
+    return isNewerRow(latestSlackRow, latestRelayRow) ? latestSlackRow.text : latestRelayRow.text;
+  return (latestRelayRow ?? latestSlackRow)?.text;
 }
 export {
   COORDINATOR_MESSAGE_PATTERNS,

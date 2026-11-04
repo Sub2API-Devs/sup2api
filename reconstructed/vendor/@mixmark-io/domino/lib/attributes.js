@@ -5,11 +5,11 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_utils } from "./utils.js";
 
 //@ chunk-vwj6ccer.js:26129-28295 cjs-fingerprint
-var require_attributes = x(function (cjsExports) {
+var require_attributes = __commonJS(function (cjsExports) {
   var utils = require_utils();
   cjsExports.property = function (attr) {
     if (Array.isArray(attr.type)) {

@@ -5,34 +5,34 @@
  * pieces: chunk-h6b7mazd.js (4)
  * attribution: cjs-fingerprint 4
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_asynckit } from "../index.js";
 import { require_abort } from "./abort.js";
 
 //@ chunk-h6b7mazd.js:5825-6165 cjs-fingerprint
-var require_state_2 = x(function (cjsExports, cjsModule) {
-  var Pn = require_asynckit();
-  var La = require_abort();
-  cjsModule.exports = Ba;
-  function Ba(e, t, r, n) {
-    var o = r.keyedList ? r.keyedList[r.index] : r.index;
-    r.jobs[o] = Na(t, o, e[o], function (s, i) {
-      if (!(o in r.jobs)) return;
-      delete r.jobs[o];
-      if (s) La(r);
-      else r.results[o] = i;
-      n(s, r.results);
+var asyncModule3 = __commonJS(function (cjsExports, cjsModule) {
+  var asyncModule = require_asynckit();
+  var abortModule = require_abort();
+  cjsModule.exports = iterate;
+  function iterate(list, iterator, state, callback) {
+    var key = state.keyedList ? state.keyedList[state.index] : state.index;
+    state.jobs[key] = runJob(iterator, key, list[key], function (error, output) {
+      if (!(key in state.jobs)) return;
+      delete state.jobs[key];
+      if (error) abortModule(state);
+      else state.results[key] = output;
+      callback(error, state.results);
     });
   }
-  function Na(e, t, r, n) {
-    var o;
-    if (e.length == 2) o = e(r, Pn(n));
-    else o = e(r, t, Pn(n));
-    return o;
+  function runJob(iterator, key, item, callback) {
+    var aborter;
+    if (iterator.length == 2) aborter = iterator(item, asyncModule(callback));
+    else aborter = iterator(item, key, asyncModule(callback));
+    return aborter;
   }
 });
 //@ chunk-h6b7mazd.js:6165-6428 cjs-fingerprint
-var require_state = x(function (cjsExports, cjsModule) {
+var require_state = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = state;
   function state(list, sortMethod) {
     var isNamedList = !Array.isArray(list);
@@ -55,39 +55,39 @@ var require_state = x(function (cjsExports, cjsModule) {
   }
 });
 //@ chunk-h6b7mazd.js:6428-6601 cjs-fingerprint
-var require_state_4 = x(function (cjsExports, cjsModule) {
-  var Ua = require_abort();
-  var qa = require_asynckit();
+var abortModule3 = __commonJS(function (cjsExports, cjsModule) {
+  var abortModule2 = require_abort();
+  var asyncModule2 = require_asynckit();
   cjsModule.exports = state;
   function state(list) {
     if (!Object.keys(this.jobs).length) return;
     this.index = this.size;
-    Ua(this);
-    qa(list)(null, this.results);
+    abortModule2(this);
+    asyncModule2(list)(null, this.results);
   }
 });
 //@ chunk-h6b7mazd.js:6601-6876 cjs-fingerprint
-var require_state_3 = x(function (cjsExports, cjsModule) {
-  var ka = require_state_2();
-  var Ma = require_state();
-  var Ha = require_state_4();
+var require_state_2 = __commonJS(function (cjsExports, cjsModule) {
+  var iterateModule = asyncModule3();
+  var stateModule = require_state();
+  var stateModule4 = abortModule3();
   cjsModule.exports = state;
-  function state(e, t, r) {
-    var n = Ma(e);
-    while (n.index < (n.keyedList || e).length) {
-      ka(e, t, n, function (o, s) {
-        if (o) {
-          r(o, s);
+  function state(list, iterator, callback) {
+    var currentState = stateModule(list);
+    while (currentState.index < (currentState.keyedList || list).length) {
+      iterateModule(list, iterator, currentState, function (error, output) {
+        if (error) {
+          callback(error, output);
           return;
         }
-        if (Object.keys(n.jobs).length === 0) {
-          r(null, n.results);
+        if (Object.keys(currentState.jobs).length === 0) {
+          callback(null, currentState.results);
           return;
         }
       });
-      n.index++;
+      currentState.index++;
     }
-    return Ha.bind(n, r);
+    return stateModule4.bind(currentState, callback);
   }
 });
-export { require_state_3, require_state_2, require_state, require_state_4 };
+export { require_state_2, asyncModule3, require_state, abortModule3 };

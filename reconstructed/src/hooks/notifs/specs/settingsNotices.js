@@ -26,7 +26,7 @@ import { logFeatureOk } from "../../../services/analytics/featureTelemetry.js";
 //@ chunk-18hwfzwa.js:1765355-1765711 placement
 var managedSettingsNoticeNoticeSpec = {
   id: "managed-settings-notice",
-  deps: (h) => [h.hasBgAttacher, h.hasOpenDialog],
+  deps: (ctx) => [ctx.hasBgAttacher, ctx.hasOpenDialog],
   setup() {
     return ({ hasOpenDialog, isRemoteSession, storageV5, transcript }) => {
       if (
@@ -37,36 +37,36 @@ var managedSettingsNoticeNoticeSpec = {
         getTeammateAgentId() !== undefined
       )
         return;
-      let ee = managedSettingsUrl();
-      if (ee === undefined || getGlobalConfig().managedSettingsNoticeSeenOrg === ee) return;
+      let url = managedSettingsUrl();
+      if (url === undefined || getGlobalConfig().managedSettingsNoticeSeenOrg === url) return;
       transcript.apply({
         type: "append",
         messages: [createSystemMessage(MANAGED_SETTINGS_NOTICE, "notice")],
       });
-      markManagedSettingsNoticeSeen(ee, "transcript", storageV5);
+      markManagedSettingsNoticeSeen(url, "transcript", storageV5);
     };
   },
 };
 //@ chunk-18hwfzwa.js:1771932-1772329 placement
 var officialMarketplaceCheckNoticeSpec = {
   id: "official-marketplace-check",
-  deps: (h) => [h.store, h.storageV5],
+  deps: (ctx) => [ctx.store, ctx.storageV5],
   setup() {
-    let h = false;
+    let started = false;
     return ({ store, storageV5 }) => {
-      if (getIsRemoteMode() || h) return;
-      h = true;
+      if (getIsRemoteMode() || started) return;
+      started = true;
       checkAndInstallOfficialMarketplace(storageV5)
-        .then((L) => {
-          let ee = !L.installed && L.skipped && L.reason === "unknown" ? 1 : 0;
-          logSetupIssues("plugins", ee);
-          store.setState((ke) => {
-            if (ke.setupIssues.marketplaceIssueCount === ee) return ke;
+        .then((outcome) => {
+          let issueCount = !outcome.installed && outcome.skipped && outcome.reason === "unknown" ? 1 : 0;
+          logSetupIssues("plugins", issueCount);
+          store.setState((prev) => {
+            if (prev.setupIssues.marketplaceIssueCount === issueCount) return prev;
             return {
-              ...ke,
+              ...prev,
               setupIssues: {
-                ...ke.setupIssues,
-                marketplaceIssueCount: ee,
+                ...prev.setupIssues,
+                marketplaceIssueCount: issueCount,
               },
             };
           });
@@ -79,14 +79,14 @@ var officialMarketplaceCheckNoticeSpec = {
 var OTEL_HEADERS_HELPER_FAILED = "otel-headers-helper-failed";
 var otelHeadersHelperFailedNoticeSpec = {
   id: OTEL_HEADERS_HELPER_FAILED,
-  deps: (h) => [h.addNotification, h.growthBookVersion],
+  deps: (ctx) => [ctx.addNotification, ctx.growthBookVersion],
   setup() {
-    let h = false;
+    let shown = false;
     return ({ addNotification }) => {
       if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_quirky_teacup", true)) return;
-      function D(otelHeadersHelperLastFailure) {
-        if (h) return;
-        h = true;
+      function warn(otelHeadersHelperLastFailure) {
+        if (shown) return;
+        shown = true;
         addNotification({
           key: OTEL_HEADERS_HELPER_FAILED,
           kind: "warning",
@@ -97,8 +97,8 @@ var otelHeadersHelperFailedNoticeSpec = {
         });
       }
       let otelHeadersHelperLastFailure = getOtelHeadersHelperLastFailure();
-      if (otelHeadersHelperLastFailure !== null) D(otelHeadersHelperLastFailure);
-      return onOtelHeadersHelperFailure(D);
+      if (otelHeadersHelperLastFailure !== null) warn(otelHeadersHelperLastFailure);
+      return onOtelHeadersHelperFailure(warn);
     };
   },
 };
@@ -111,14 +111,19 @@ var PLAN_BYPASS_NOTICE_TEXT =
   "Session was started with bypass permissions, so plan mode won't ask before most edits or commands. Start a new session without bypass permissions for prompts in plan mode.";
 var planModeBypassNoticeSpec = {
   id: "plan-mode-bypass-notice",
-  deps: (h) => [h.permissionMode, h.isBypassPermissionsModeAvailable, h.transcript, h.clock],
+  deps: (noticeState) => [
+    noticeState.permissionMode,
+    noticeState.isBypassPermissionsModeAvailable,
+    noticeState.transcript,
+    noticeState.clock,
+  ],
   setup() {
-    let h = false;
+    let hasShown = false;
     return ({ permissionMode, isBypassPermissionsModeAvailable, transcript, clock }) => {
-      if (h || getIsRemoteMode()) return;
+      if (hasShown || getIsRemoteMode()) return;
       if (!isPlanBypass(permissionMode, isBypassPermissionsModeAvailable)) return;
       return clock.setTimeout(() => {
-        h = true;
+        hasShown = true;
         logFeatureOk("mode_plan_bypass_notice");
         transcript.apply({
           type: "append",

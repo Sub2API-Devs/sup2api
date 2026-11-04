@@ -45,8 +45,8 @@ import { subagentWorkflowDir } from "../workflow/snapshots.js";
 var REMOTE_WORKFLOW_SERIALIZED_MAX_CHARS = 1e5;
 var REMOTE_WORKFLOW_TEXT_TRUNCATE_CHARS = 4000;
 //@ chunk-74vrtgsp.js:856-1041 placement
-function sanitizeResultText(e) {
-  let replaced = e
+function sanitizeResultText(text) {
+  let replaced = text
     .replace(/[\r\n\v\f\x1c\x1d\x1e\u0085\u2028\u2029]+/g, " ")
     .replaceAll("remote-workflow:", "remote-workflow;");
   if (replaced.length > REMOTE_WORKFLOW_TEXT_TRUNCATE_CHARS)
@@ -57,18 +57,18 @@ function sanitizeResultText(e) {
 /**
  * 生成一行 remote-workflow 错误结果（层名 + 清洗后的信息）。
  */
-function remoteWorkflowErrorLine(e, t) {
-  return `remote-workflow: error[${e}]: ${sanitizeResultText(t)}`;
+function remoteWorkflowErrorLine(layer, message) {
+  return `remote-workflow: error[${layer}]: ${sanitizeResultText(message)}`;
 }
 //@ chunk-74vrtgsp.js:1105-1248 placement = escapeJsLineTerminators (0.785)
 /**
  * 同上，另外转义 U+0085（NEL），用于 stream-json 输出。
  */
 function escapeJsLineTerminators(json) {
-  let t = jsonStringify(json);
-  return t === undefined
+  let jsonText = jsonStringify(json);
+  return jsonText === undefined
     ? undefined
-    : t.replaceAll("\x85", "\\u0085").replaceAll("\u2028", "\\u2028").replaceAll("\u2029", "\\u2029");
+    : jsonText.replaceAll("\x85", "\\u0085").replaceAll("\u2028", "\\u2028").replaceAll("\u2029", "\\u2029");
 }
 //@ chunk-74vrtgsp.js:1248-1392 placement
 function workflowsDisabledAtStartup() {
@@ -83,9 +83,9 @@ function workflowsDisabledAtStartup() {
 //@ chunk-74vrtgsp.js:1392-1552 placement
 function adminDisabledWorkflows() {
   return getEveryMachineAdminTierSettings().some(
-    (e) =>
-      e.disableWorkflows === true ||
-      Object.entries(e.env ?? {}).some(
+    (settings) =>
+      settings.disableWorkflows === true ||
+      Object.entries(settings.env ?? {}).some(
         ([key, value]) => key.toUpperCase() === "CLAUDE_CODE_DISABLE_WORKFLOWS" && isEnvTruthy(value),
       ),
   );
@@ -137,10 +137,10 @@ async function runRemoteWorkflow({
   eventSessionOrigin,
   context,
 }) {
-  let fail = (s, policyRefusal) => ({
+  let fail = (layer, message) => ({
     ok: false,
-    layer: s,
-    line: remoteWorkflowErrorLine(s, policyRefusal),
+    layer,
+    line: remoteWorkflowErrorLine(layer, message),
   });
   let policyRefusal = workflowPolicyRefusal({
     serverAuthoredCarrier,
@@ -213,12 +213,12 @@ async function runRemoteWorkflow({
         failures: settled.failures,
         result: settled.result,
       };
-      let r = escapeJsLineTerminators(json);
-      if (r === undefined || r.length > REMOTE_WORKFLOW_SERIALIZED_MAX_CHARS) {
-        let E =
-          r === undefined
+      let serialized = escapeJsLineTerminators(json);
+      if (serialized === undefined || serialized.length > REMOTE_WORKFLOW_SERIALIZED_MAX_CHARS) {
+        let omittedReason =
+          serialized === undefined
             ? "not serializable"
-            : `${r.length} chars exceeds ${REMOTE_WORKFLOW_SERIALIZED_MAX_CHARS}`;
+            : `${serialized.length} chars exceeds ${REMOTE_WORKFLOW_SERIALIZED_MAX_CHARS}`;
         let mapped = settled.failures
           .slice(0, 20)
           .map((failure) =>
@@ -226,25 +226,25 @@ async function runRemoteWorkflow({
           );
         if (settled.failures.length > mapped.length)
           mapped.push(`\u2026and ${settled.failures.length - mapped.length} more failures omitted`);
-        r = escapeJsLineTerminators({
+        serialized = escapeJsLineTerminators({
           ...json,
           failures: mapped,
         });
-        if (r === undefined || r.length > REMOTE_WORKFLOW_SERIALIZED_MAX_CHARS)
-          r = escapeJsLineTerminators({
+        if (serialized === undefined || serialized.length > REMOTE_WORKFLOW_SERIALIZED_MAX_CHARS)
+          serialized = escapeJsLineTerminators({
             ...json,
             failures: [
               `<${settled.failures.length} failures omitted: diagnostics never outrank the result payload>`,
             ],
           });
-        if (r === undefined || r.length > REMOTE_WORKFLOW_SERIALIZED_MAX_CHARS)
-          r = escapeJsLineTerminators({
+        if (serialized === undefined || serialized.length > REMOTE_WORKFLOW_SERIALIZED_MAX_CHARS)
+          serialized = escapeJsLineTerminators({
             ...json,
             failures: mapped,
-            result: `<result omitted: ${E}>`,
+            result: `<result omitted: ${omittedReason}>`,
           });
-        if (r === undefined || r.length > REMOTE_WORKFLOW_SERIALIZED_MAX_CHARS)
-          r =
+        if (serialized === undefined || serialized.length > REMOTE_WORKFLOW_SERIALIZED_MAX_CHARS)
+          serialized =
             escapeJsLineTerminators({
               status: "completed",
               workflowName: truncateToLength(String(parsed.meta.name), 200),
@@ -254,12 +254,12 @@ async function runRemoteWorkflow({
               failures: [
                 `<${settled.failures.length} failures omitted: fallback exceeded ${REMOTE_WORKFLOW_SERIALIZED_MAX_CHARS}>`,
               ],
-              result: `<result omitted: ${E}>`,
+              result: `<result omitted: ${omittedReason}>`,
             }) ?? '{"status":"completed"}';
       }
       return {
         ok: true,
-        line: `remote-workflow: ${r}`,
+        line: `remote-workflow: ${serialized}`,
         workflowName: parsed.meta.name,
       };
     }

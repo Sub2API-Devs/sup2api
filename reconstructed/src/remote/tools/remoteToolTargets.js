@@ -57,163 +57,176 @@ import { isKnownProxyEndpointUrl } from "../../tools/WebFetchTool/utils.js";
 /**
  * 同步远程工具可用机器：从会话通道与设备桥列出机器，更新主机表并上报 tengu_remote_tool_targets。
  */
-function syncRemoteToolTargets(e, n, r) {
-  let o = n.sourceHosts("session");
-  n.replaceRemoteHosts("session", e.toolState.get(RemoteBackgroundCommands).hostsForTable());
-  let u = n.sourceHosts("session");
-  if (toolHostsFingerprint(o) === toolHostsFingerprint(u)) return;
+function syncRemoteToolTargets(context, hosts, trigger) {
+  let before = hosts.sourceHosts("session");
+  hosts.replaceRemoteHosts("session", context.toolState.get(RemoteBackgroundCommands).hostsForTable());
+  let after = hosts.sourceHosts("session");
+  if (toolHostsFingerprint(before) === toolHostsFingerprint(after)) return;
   logEvent("tengu_remote_tool_targets", {
     event:
-      e.toolState.get(RemoteBackgroundCommands).entries().length === 0
+      context.toolState.get(RemoteBackgroundCommands).entries().length === 0
         ? lit("withdrawn")
-        : fromEnum(classifyToolHostsChange(o, u)),
+        : fromEnum(classifyToolHostsChange(before, after)),
     source: lit("session"),
-    trigger: fromEnum(r),
-    target_count: u.length,
-    served_tool_count: u.reduce((acc, m) => acc + m.servedTools.size, 0),
-    passthrough_tool_count: u.reduce((acc, m) => acc + (m.passthroughTools?.size ?? 0), 0),
-    target_kind: fromEnumOpt(u[0]?.description?.kind),
-    target_platform: fromEnumOpt(detectTerminal(u[0]?.description?.platform)),
-    incompatible_count: count(u, (s) => s.protocol.kind === "incompatible"),
+    trigger: fromEnum(trigger),
+    target_count: after.length,
+    served_tool_count: after.reduce((acc, host) => acc + host.servedTools.size, 0),
+    passthrough_tool_count: after.reduce((acc, host) => acc + (host.passthroughTools?.size ?? 0), 0),
+    target_kind: fromEnumOpt(after[0]?.description?.kind),
+    target_platform: fromEnumOpt(detectTerminal(after[0]?.description?.platform)),
+    incompatible_count: count(after, (host) => host.protocol.kind === "incompatible"),
   });
 }
 //@ chunk-25sm7c4g.js:25894-26064 placement
-async function refreshDeviceBridgeTargets(e, n, r) {
+async function refreshDeviceBridgeTargets(context, state, trigger) {
   if (!(await isRemoteToolForwardingEnabled())) return;
-  let o = e.toolState.get(RemoteToolTargetsState);
-  o.inFlight ??= listDeviceBridgeTargets(e, o, n, r)
+  let toolState = context.toolState.get(RemoteToolTargetsState);
+  toolState.inFlight ??= listDeviceBridgeTargets(context, toolState, state, trigger)
     .catch((error) => {
       logError(toError(error));
     })
     .finally(() => {
-      o.inFlight = undefined;
+      toolState.inFlight = undefined;
     });
-  return o.inFlight;
+  return toolState.inFlight;
 }
 //@ chunk-25sm7c4g.js:26064-26275 placement
-function remoteToolsListingState(e) {
-  let n = e.toolState.get(RemoteToolTargetsState);
-  let r = remoteToolsConnectionState(e);
-  if (n.synced && !n.lastListingFailed && r !== undefined && r !== "set_aside") return "unlisted";
-  if (n.synced && !n.lastListingFailed) return "listed";
-  return hasConnectedMcpServers(e) ? "unlisted" : "absent";
+function remoteToolsListingState(context) {
+  let state = context.toolState.get(RemoteToolTargetsState);
+  let connectionState = remoteToolsConnectionState(context);
+  if (
+    state.synced &&
+    !state.lastListingFailed &&
+    connectionState !== undefined &&
+    connectionState !== "set_aside"
+  )
+    return "unlisted";
+  if (state.synced && !state.lastListingFailed) return "listed";
+  return hasConnectedMcpServers(context) ? "unlisted" : "absent";
 }
 //@ chunk-25sm7c4g.js:26275-26337 placement
-function hasDeviceBridgeConnection(e) {
-  return e.toolState.get(RemoteToolTargetsState).connection !== undefined;
+function hasDeviceBridgeConnection(context) {
+  return context.toolState.get(RemoteToolTargetsState).connection !== undefined;
 }
 //@ chunk-25sm7c4g.js:26337-26485 placement
-function isListingFailedWithoutHosts(e, n) {
+function isListingFailedWithoutHosts(context, registry) {
   return (
-    e.toolState.get(RemoteToolTargetsState).lastListingFailed &&
-    !n.hosts().some((o) => o.kind === "remote" && (o.source === "bridge" || o.source === "session"))
+    context.toolState.get(RemoteToolTargetsState).lastListingFailed &&
+    !registry
+      .hosts()
+      .some((host) => host.kind === "remote" && (host.source === "bridge" || host.source === "session"))
   );
 }
 //@ chunk-25sm7c4g.js:26485-29763 placement
 /**
  * 调用设备桥 tools/list，按机器分组并采纳/拒绝，失败时保留上次已知机器。
  */
-async function listDeviceBridgeTargets(e, n, r, o) {
-  let clients = e.mcpClients();
-  let chromeClient = findChromeClient(clients);
-  if (chromeClient === undefined) {
-    if (isNonMainSessionSubagent(e.agentContext)) return;
-    reportUnmatchedBridgeEntries(clients, n, o);
-    n.failedAt = undefined;
-    n.lastListingFailed = false;
-    if (hasConnectedMcpServers(e)) n.unconnectedSince ??= Date.now();
+async function listDeviceBridgeTargets(context, state, registry, trigger) {
+  let clients = context.mcpClients();
+  let connection = findChromeClient(clients);
+  if (connection === undefined) {
+    if (isNonMainSessionSubagent(context.agentContext)) return;
+    reportUnmatchedBridgeEntries(clients, state, trigger);
+    state.failedAt = undefined;
+    state.lastListingFailed = false;
+    if (hasConnectedMcpServers(context)) state.unconnectedSince ??= Date.now();
     else {
-      n.provisional = undefined;
-      n.unconnectedSince = undefined;
+      state.provisional = undefined;
+      state.unconnectedSince = undefined;
     }
-    if (n.connection !== undefined) {
-      n.connection = undefined;
-      n.listingMemo = undefined;
-      n.setAside = 0;
-      adoptBridgeMachines(r, [], {
+    if (state.connection !== undefined) {
+      state.connection = undefined;
+      state.listingMemo = undefined;
+      state.setAside = 0;
+      adoptBridgeMachines(registry, [], {
         invalid: undefined,
         unreadable: 0,
         unreadableMarkers: 0,
-        trigger: o,
+        trigger,
       });
     }
     return;
   }
-  let m = mcpClientModule().fetchToolsForClient.cache.get(
-    serverCacheKey(chromeClient.name, chromeClient.config),
+  let cachedListing = mcpClientModule().fetchToolsForClient.cache.get(
+    serverCacheKey(connection.name, connection.config),
   );
-  let any = e.toolState
+  let any = context.toolState
     .get(RemoteBackgroundCommands)
     .entries()
-    .some((M) => M.status === "online");
-  let f = o !== "resolve" && n.provisional?.stub === true && !isSessionChannelDisabled();
+    .some((entry) => entry.status === "online");
+  let stubRefreshable =
+    trigger !== "resolve" && state.provisional?.stub === true && !isSessionChannelDisabled();
   if (
-    n.synced &&
-    chromeClient === n.connection &&
-    m === n.listingMemo &&
-    (any || f || !isProvisionalListingStale(n.provisional))
+    state.synced &&
+    connection === state.connection &&
+    cachedListing === state.listingMemo &&
+    (any || stubRefreshable || !isProvisionalListingStale(state.provisional))
   )
     return;
-  if (n.failedAt?.connection === chromeClient && Date.now() - n.failedAt.time < FAILED_LIST_RETRY_MS) return;
+  if (state.failedAt?.connection === connection && Date.now() - state.failedAt.time < FAILED_LIST_RETRY_MS)
+    return;
   let now = Date.now();
-  let g = await callWithSessionRecovery(
-    chromeClient,
+  let listResult = await callWithSessionRecovery(
+    connection,
     {
       deadlineAt: now + REMOTE_TARGET_TIMINGS,
-      recovery: n.recovery,
+      recovery: state.recovery,
       idempotent: true,
     },
-    (M, y) => listTargetTools(M, Math.min(y, MAX_LIST_PAGE_SIZE)),
+    (client, timeoutMs) => listTargetTools(client, Math.min(timeoutMs, MAX_LIST_PAGE_SIZE)),
   );
-  if (g.kind !== "ok") {
-    n.lastListingFailed = true;
-    n.failedAt =
+  if (listResult.kind !== "ok") {
+    state.lastListingFailed = true;
+    state.failedAt =
       Date.now() - now >= FAILED_LIST_WINDOW_MS
         ? {
-            connection: chromeClient,
+            connection,
             time: Date.now(),
           }
         : undefined;
     logForDebugging(
-      `[remote-tools] device-bridge tools/list failed (${g.kind}); keeping last known machines${"error" in g ? `: ${errorMessage(g.error)}` : ""}`,
+      `[remote-tools] device-bridge tools/list failed (${listResult.kind}); keeping last known machines${"error" in listResult ? `: ${errorMessage(listResult.error)}` : ""}`,
       {
         level: "warn",
       },
     );
     logEvent("tengu_remote_tool_targets", {
       event: lit("list_failed"),
-      trigger: fromEnum(o),
-      reason: "error" in g && isTimeoutError(g.error) ? lit("timeout") : fromEnum(g.kind),
+      trigger: fromEnum(trigger),
+      reason:
+        "error" in listResult && isTimeoutError(listResult.error)
+          ? lit("timeout")
+          : fromEnum(listResult.kind),
     });
     return;
   }
-  if (g.value.truncated)
+  if (listResult.value.truncated)
     logForDebugging(
       "[remote-tools] device-bridge tools/list is paginated; only the first page is read for machine discovery",
       {
         level: "warn",
       },
     );
-  let w = adoptBridgeTargets(chromeClient, g.value.tools, n.recovery);
-  let S = isSessionChannelDisabled()
-    ? w
+  let adopted = adoptBridgeTargets(connection, listResult.value.tools, state.recovery);
+  let channelOnly = isSessionChannelDisabled()
+    ? adopted
     : {
-        ...w,
+        ...adopted,
         hosts: [],
         invalid: undefined,
       };
-  let R = w.hosts.length - S.hosts.length;
-  n.offer = R > 0 ? "offered" : "none";
-  if (R !== n.setAside) {
-    n.setAside = R;
-    if (R > 0) {
+  let setAsideCount = adopted.hosts.length - channelOnly.hosts.length;
+  state.offer = setAsideCount > 0 ? "offered" : "none";
+  if (setAsideCount !== state.setAside) {
+    state.setAside = setAsideCount;
+    if (setAsideCount > 0) {
       logEvent("tengu_remote_tool_targets", {
         event: lit("listing_set_aside"),
-        trigger: fromEnum(o),
-        host_count: R,
-        tool_count: g.value.tools.length,
-        stub: g.value.stub,
-        invalid: fromEnumOpt(w.invalid),
+        trigger: fromEnum(trigger),
+        host_count: setAsideCount,
+        tool_count: listResult.value.tools.length,
+        stub: listResult.value.stub,
+        invalid: fromEnumOpt(adopted.invalid),
       });
       logForDebugging(
         "[remote-tools] device-bridge listing offered a machine; not adopted: machines are taken from the session channel alone",
@@ -223,73 +236,78 @@ async function listDeviceBridgeTargets(e, n, r, o) {
       );
     }
   }
-  let T = S.hosts.length === 0;
-  if (T && (n.provisional === undefined || n.provisional.stub !== g.value.stub)) {
+  let listedEmpty = channelOnly.hosts.length === 0;
+  if (listedEmpty && (state.provisional === undefined || state.provisional.stub !== listResult.value.stub)) {
     logEvent("tengu_remote_tool_targets", {
       event: lit("listed_empty"),
-      trigger: fromEnum(o),
-      tool_count: g.value.tools.length,
-      truncated: g.value.truncated,
-      has_served_name: g.value.tools.some((tool) => DEVICE_PASSTHROUGH_TOOL_NAMES.has(tool.name)),
-      marker_count: count(g.value.tools, (M) => M._meta?.[PASSTHROUGH_MARKER_KEY] !== undefined),
-      stub: g.value.stub,
+      trigger: fromEnum(trigger),
+      tool_count: listResult.value.tools.length,
+      truncated: listResult.value.truncated,
+      has_served_name: listResult.value.tools.some((tool) => DEVICE_PASSTHROUGH_TOOL_NAMES.has(tool.name)),
+      marker_count: count(
+        listResult.value.tools,
+        (tool) => tool._meta?.[PASSTHROUGH_MARKER_KEY] !== undefined,
+      ),
+      stub: listResult.value.stub,
     });
     logForDebugging(
-      `[remote-tools] device-bridge listing adopted no machine (${g.value.tools.length} tools${g.value.stub ? (any ? ", stub listing \u2014 the bound machine serves over the session channel instead" : ", stub listing \u2014 the bound machine has not announced yet") : ""})`,
+      `[remote-tools] device-bridge listing adopted no machine (${listResult.value.tools.length} tools${listResult.value.stub ? (any ? ", stub listing \u2014 the bound machine serves over the session channel instead" : ", stub listing \u2014 the bound machine has not announced yet") : ""})`,
     );
   }
-  if (S.invalid !== undefined)
+  if (channelOnly.invalid !== undefined)
     logForDebugging(
-      `[remote-tools] device-bridge listing rejected (${S.invalid}): one connection must announce exactly one machine \u2014 its first announced name stays attached but unreachable`,
+      `[remote-tools] device-bridge listing rejected (${channelOnly.invalid}): one connection must announce exactly one machine \u2014 its first announced name stays attached but unreachable`,
       {
         level: "warn",
       },
     );
-  adoptBridgeMachines(r, S.hosts, {
-    invalid: S.invalid,
-    unreadable: S.unreadable,
-    unreadableMarkers: S.unreadableMarkers,
-    trigger: o,
+  adoptBridgeMachines(registry, channelOnly.hosts, {
+    invalid: channelOnly.invalid,
+    unreadable: channelOnly.unreadable,
+    unreadableMarkers: channelOnly.unreadableMarkers,
+    trigger,
   });
-  let A = !T && n.provisional !== undefined && m !== undefined && m === n.listingMemo;
-  if (A)
-    mcpClientModule().fetchToolsForClient.cache.delete(
-      serverCacheKey(chromeClient.name, chromeClient.config),
-    );
-  n.connection = chromeClient;
-  n.listingMemo = A ? undefined : m;
-  n.synced = true;
-  n.lastListedAt = Date.now();
-  n.unconnectedSince = undefined;
-  n.provisional = T
+  let dropCache =
+    !listedEmpty &&
+    state.provisional !== undefined &&
+    cachedListing !== undefined &&
+    cachedListing === state.listingMemo;
+  if (dropCache)
+    mcpClientModule().fetchToolsForClient.cache.delete(serverCacheKey(connection.name, connection.config));
+  state.connection = connection;
+  state.listingMemo = dropCache ? undefined : cachedListing;
+  state.synced = true;
+  state.lastListedAt = Date.now();
+  state.unconnectedSince = undefined;
+  state.provisional = listedEmpty
     ? {
         at: Date.now(),
-        since: n.provisional?.since ?? Date.now(),
-        stub: g.value.stub,
+        since: state.provisional?.since ?? Date.now(),
+        stub: listResult.value.stub,
       }
     : undefined;
-  n.reportedUnmatched = false;
-  n.failedAt = undefined;
-  n.lastListingFailed = false;
+  state.reportedUnmatched = false;
+  state.failedAt = undefined;
+  state.lastListingFailed = false;
   logForDebugging(
-    `[remote-tools] device bridge matched: ${chromeClient.name} (${g.value.tools.length} tools over ${g.value.pages} page(s))`,
+    `[remote-tools] device bridge matched: ${connection.name} (${listResult.value.tools.length} tools over ${listResult.value.pages} page(s))`,
   );
 }
 //@ chunk-25sm7c4g.js:29763-29911 placement
-async function listTargetTools(e, timeout) {
-  let r = await listMcpTools(e, {
+async function listTargetTools(client, timeout) {
+  let result = await listMcpTools(client, {
     timeout,
   });
   return {
-    tools: r.tools.filter(isNamedToolEntry),
+    tools: result.tools.filter(isNamedToolEntry),
     pages: 1,
-    truncated: Boolean(r.nextCursor),
-    stub: officeBridgeListingState(r) === "stub",
+    truncated: Boolean(result.nextCursor),
+    stub: officeBridgeListingState(result) === "stub",
   };
 }
 //@ chunk-25sm7c4g.js:29911-29989 placement
-function isNamedToolEntry(e) {
-  return typeof e === "object" && e !== null && typeof e.name === "string";
+function isNamedToolEntry(tool) {
+  return typeof tool === "object" && tool !== null && typeof tool.name === "string";
 }
 //@ chunk-25sm7c4g.js:29989-30083 placement
 function isTimeoutError(error) {
@@ -297,105 +315,115 @@ function isTimeoutError(error) {
   return lower.includes("timed out") || lower.includes("timeout");
 }
 //@ chunk-25sm7c4g.js:30083-30179 placement
-function hasConnectedMcpServers(e) {
-  return e.mcpClients().some((n) => getServerUrl(n) && n.type !== "disabled" && n.type !== "needs-auth");
+function hasConnectedMcpServers(context) {
+  return context
+    .mcpClients()
+    .some((client) => getServerUrl(client) && client.type !== "disabled" && client.type !== "needs-auth");
 }
 //@ chunk-25sm7c4g.js:30179-30463 placement
-function remoteToolsConnectionState(e) {
-  let n = deviceBridgeState(e);
-  let r = n !== "connecting" && e.toolState.get(RemoteToolTargetsState).setAside > 0 ? "set_aside" : n;
-  if (n === undefined || isSessionChannelDisabled()) return r;
-  let o = e.toolState.get(RemoteBackgroundCommands);
-  if (o.hasAnnouncedThisLife()) return o.entries().length === 0 ? "serves_nothing" : r;
-  return (env.CLAUDE_CODE_WORKER_EPOCH ?? 1) > 1 ? "not_reannounced" : r;
+function remoteToolsConnectionState(context) {
+  let bridgeState = deviceBridgeState(context);
+  let state =
+    bridgeState !== "connecting" && context.toolState.get(RemoteToolTargetsState).setAside > 0
+      ? "set_aside"
+      : bridgeState;
+  if (bridgeState === undefined || isSessionChannelDisabled()) return state;
+  let commands = context.toolState.get(RemoteBackgroundCommands);
+  if (commands.hasAnnouncedThisLife()) return commands.entries().length === 0 ? "serves_nothing" : state;
+  return (env.CLAUDE_CODE_WORKER_EPOCH ?? 1) > 1 ? "not_reannounced" : state;
 }
 //@ chunk-25sm7c4g.js:30463-30664 placement
-function sessionChannelOffer(e) {
+function sessionChannelOffer(context) {
   if (isSessionChannelDisabled()) return "none";
-  let { offer } = e.toolState.get(RemoteToolTargetsState);
+  let { offer } = context.toolState.get(RemoteToolTargetsState);
   if (offer !== "unread") return offer;
-  let filtered = e.mcpClients().filter((o) => o.name === REMOTE_DEVICES_SERVER_NAME);
-  return filtered.length > 0 && !filtered.some((o) => getServerUrl(o) || isScopedMcpServerConfig(o))
+  let filtered = context.mcpClients().filter((client) => client.name === REMOTE_DEVICES_SERVER_NAME);
+  return filtered.length > 0 &&
+    !filtered.some((client) => getServerUrl(client) || isScopedMcpServerConfig(client))
     ? "none"
     : "unread";
 }
 //@ chunk-25sm7c4g.js:30664-30677 placement
 var MIN_TRANSPORT_DEADLINE_MS = 15000;
 //@ chunk-25sm7c4g.js:30677-30740 placement
-function targetsDeadlineMs(e) {
-  return e
+function targetsDeadlineMs(longLived) {
+  return longLived
     ? Math.max(MIN_TRANSPORT_DEADLINE_MS, SESSION_TRANSPORT_LIMITS.defaultDeadlineMs)
     : MIN_TRANSPORT_DEADLINE_MS;
 }
 //@ chunk-25sm7c4g.js:30740-30925 placement
-function shouldReannounce(e) {
-  let n = e.toolState.get(RemoteBackgroundCommands);
+function shouldReannounce(context) {
+  let commands = context.toolState.get(RemoteBackgroundCommands);
   return (
     (env.CLAUDE_CODE_WORKER_EPOCH ?? 1) > 1 &&
     !isSessionChannelDisabled() &&
-    !(n.hasAnnouncedThisLife() && n.entries().length === 0) &&
-    e.toolState.get(ReannounceRequester).canAsk() &&
+    !(commands.hasAnnouncedThisLife() && commands.entries().length === 0) &&
+    context.toolState.get(ReannounceRequester).canAsk() &&
     isRemoteToolForwardingEnabledCached() &&
     isBridgePlumbingEnabled()
   );
 }
 //@ chunk-25sm7c4g.js:30925-31012 placement
-function canReannounceMachine(e, n, r) {
-  return n.has(r) && !e.toolState.get(RemoteBackgroundCommands).withdrawnThisLife(r) && shouldReannounce(e);
+function canReannounceMachine(context, machines, machine) {
+  return (
+    machines.has(machine) &&
+    !context.toolState.get(RemoteBackgroundCommands).withdrawnThisLife(machine) &&
+    shouldReannounce(context)
+  );
 }
 //@ chunk-25sm7c4g.js:31012-31979 placement
 async function requestReannounce(
-  e,
-  n,
+  context,
+  signal,
   {
-    deadlineMs: r = SESSION_TRANSPORT_LIMITS.defaultDeadlineMs,
-    sliceMs: o = MIN_RELIST_INTERVAL_MS,
-    routableOtherwise: u,
-    forMachine: s,
+    deadlineMs = SESSION_TRANSPORT_LIMITS.defaultDeadlineMs,
+    sliceMs = MIN_RELIST_INTERVAL_MS,
+    routableOtherwise: isRoutableOtherwise,
+    forMachine: machine,
   } = {},
 ) {
-  let m = e.toolState.get(RemoteBackgroundCommands);
-  if (s === undefined && m.entries().length > 0)
+  let commands = context.toolState.get(RemoteBackgroundCommands);
+  if (machine === undefined && commands.entries().length > 0)
     return {
       kind: "announced",
     };
-  let p = m.announceWaitExpired();
-  if (p !== undefined)
+  let earlierWaitMs = commands.announceWaitExpired();
+  if (earlierWaitMs !== undefined)
     return {
       kind: "gave_up_earlier",
-      waitedMs: p,
+      waitedMs: earlierWaitMs,
     };
   if (
-    s !== undefined &&
-    e.toolState.get(ReannounceRequester).askOnce({
+    machine !== undefined &&
+    context.toolState.get(ReannounceRequester).askOnce({
       workerEpoch: env.CLAUDE_CODE_WORKER_EPOCH ?? 1,
-      deadlineMs: r,
+      deadlineMs,
     })
   )
     logForDebugging("[remote-tools] asked the attached client to announce to this replacement worker");
   let now = Date.now();
   for (;;) {
-    if (n.aborted)
+    if (signal.aborted)
       return {
         kind: "aborted",
       };
-    if (s === undefined ? m.hasAnnouncedThisLife() : m.withdrawnThisLife(s))
+    if (machine === undefined ? commands.hasAnnouncedThisLife() : commands.withdrawnThisLife(machine))
       return {
         kind: "announced",
       };
-    let g = r - (Date.now() - now);
-    if (g <= 0) break;
-    let w = await waitForAnnounce(m, n, Math.min(o, g));
-    if (w === "announced" && (s === undefined || u === undefined))
+    let remainingMs = deadlineMs - (Date.now() - now);
+    if (remainingMs <= 0) break;
+    let waited = await waitForAnnounce(commands, signal, Math.min(sliceMs, remainingMs));
+    if (waited === "announced" && (machine === undefined || isRoutableOtherwise === undefined))
       return {
         kind: "announced",
       };
-    if (w === "aborted")
+    if (waited === "aborted")
       return {
         kind: "aborted",
       };
-    if (u !== undefined && (await u()))
-      return w === "announced"
+    if (isRoutableOtherwise !== undefined && (await isRoutableOtherwise()))
+      return waited === "announced"
         ? {
             kind: "announced",
           }
@@ -403,25 +431,25 @@ async function requestReannounce(
             kind: "routable",
           };
   }
-  let _ = Date.now() - now;
-  m.markAnnounceWaitExpired(_);
+  let waitedMs = Date.now() - now;
+  commands.markAnnounceWaitExpired(waitedMs);
   return {
     kind: "gave_up",
-    waitedMs: _,
+    waitedMs,
   };
 }
 //@ chunk-25sm7c4g.js:31979-32267 placement
-function deviceBridgeState(e) {
-  let n = e.toolState.get(RemoteToolTargetsState);
-  if (n.connection === undefined)
-    return hasConnectedMcpServers(e) &&
-      n.unconnectedSince !== undefined &&
-      Date.now() - n.unconnectedSince < PROVISIONAL_FRESH_MS
+function deviceBridgeState(context) {
+  let state = context.toolState.get(RemoteToolTargetsState);
+  if (state.connection === undefined)
+    return hasConnectedMcpServers(context) &&
+      state.unconnectedSince !== undefined &&
+      Date.now() - state.unconnectedSince < PROVISIONAL_FRESH_MS
       ? "connecting"
       : undefined;
-  if (!n.provisional) return;
-  if (Date.now() - n.provisional.since < PROVISIONAL_FRESH_MS) return "connecting";
-  return n.provisional.stub ? "not_connected" : undefined;
+  if (!state.provisional) return;
+  if (Date.now() - state.provisional.since < PROVISIONAL_FRESH_MS) return "connecting";
+  return state.provisional.stub ? "not_connected" : undefined;
 }
 //@ chunk-25sm7c4g.js:32267-32373 placement
 function isProvisionalListingStale(provisional) {
@@ -431,34 +459,34 @@ function isProvisionalListingStale(provisional) {
   return now - provisional.at >= MIN_RELIST_INTERVAL_MS;
 }
 //@ chunk-25sm7c4g.js:32373-32897 placement
-function reportUnmatchedBridgeEntries(e, n, r) {
-  let filtered = e.filter((s) => s.name === REMOTE_DEVICES_SERVER_NAME);
-  if (filtered.length === 0 || n.reportedUnmatched) return;
+function reportUnmatchedBridgeEntries(clients, state, trigger) {
+  let filtered = clients.filter((client) => client.name === REMOTE_DEVICES_SERVER_NAME);
+  if (filtered.length === 0 || state.reportedUnmatched) return;
   let mapped = filtered.map(classifyBridgeEntry);
-  if (mapped.every((s) => s === "connecting")) return;
-  n.reportedUnmatched = true;
+  if (mapped.every((reason) => reason === "connecting")) return;
+  state.reportedUnmatched = true;
   logForDebugging(
-    `[remote-tools] a '${REMOTE_DEVICES_SERVER_NAME}' MCP entry exists but was not adopted as the device bridge: ${filtered.map((s, m) => `${mapped[m]} (type=${s.type}, scope=${s.config.scope})`).join("; ")}`,
+    `[remote-tools] a '${REMOTE_DEVICES_SERVER_NAME}' MCP entry exists but was not adopted as the device bridge: ${filtered.map((client, index) => `${mapped[index]} (type=${client.type}, scope=${client.config.scope})`).join("; ")}`,
     {
       level: "warn",
     },
   );
   logEvent("tengu_remote_tool_targets", {
     event: lit("no_bridge_connection"),
-    trigger: fromEnum(r),
+    trigger: fromEnum(trigger),
     servers_seen: filtered.length,
     reason: fromEnum(mapped[0] ?? "none"),
     ingress_base_unset: startupCcrEnv.atStartup === undefined,
   });
 }
 //@ chunk-25sm7c4g.js:32897-33293 placement
-function classifyBridgeEntry(e) {
-  if (isScopedMcpServerConfig(e)) return "scoped_entry";
-  if (!("url" in e.config) || typeof e.config.url !== "string") return "no_url";
-  if (!isSameOriginAsCcr(e.config.url)) return "not_ccr_proxy_url";
-  if (!isKnownProxyEndpointUrl(e.config.url)) return "not_devices_upstream";
-  if (!parseCcrMcpUrl(e.config.url)) return "routing_shape";
-  switch (e.type) {
+function classifyBridgeEntry(client) {
+  if (isScopedMcpServerConfig(client)) return "scoped_entry";
+  if (!("url" in client.config) || typeof client.config.url !== "string") return "no_url";
+  if (!isSameOriginAsCcr(client.config.url)) return "not_ccr_proxy_url";
+  if (!isKnownProxyEndpointUrl(client.config.url)) return "not_devices_upstream";
+  if (!parseCcrMcpUrl(client.config.url)) return "routing_shape";
+  switch (client.type) {
     case "connected":
       return "none";
     case "disabled":
@@ -485,8 +513,8 @@ function getServerUrl(config) {
   );
 }
 //@ chunk-25sm7c4g.js:33483-33620 placement
-function isScopedMcpServerConfig(e) {
-  let { scope, pluginSource, agentSource } = e.config;
+function isScopedMcpServerConfig(client) {
+  let { scope, pluginSource, agentSource } = client.config;
   return (
     scope === "project" ||
     scope === "local" ||
@@ -498,28 +526,29 @@ function isScopedMcpServerConfig(e) {
 //@ chunk-25sm7c4g.js:33620-33902 placement
 function parseCcrMcpUrl(url) {
   try {
-    let n = new URL(url);
-    let all = n.searchParams.getAll("toolbox_mcp_server_id");
-    let o = /\/v2\/ccr-sessions\/([^/]+)\/mcp$/.exec(n.pathname)?.[1];
-    let u = all[0];
+    let parsed = new URL(url);
+    let all = parsed.searchParams.getAll("toolbox_mcp_server_id");
+    let sessionId = /\/v2\/ccr-sessions\/([^/]+)\/mcp$/.exec(parsed.pathname)?.[1];
+    let serverId = all[0];
     return (
-      n.searchParams.getAll("mcp_url").length === 1 &&
+      parsed.searchParams.getAll("mcp_url").length === 1 &&
       (all.length === 0 ||
         (all.length === 1 &&
-          (u === REMOTE_DEVICES_SERVER_NAME || (o !== undefined && u === derivedServerIdForTool(o)))))
+          (serverId === REMOTE_DEVICES_SERVER_NAME ||
+            (sessionId !== undefined && serverId === derivedServerIdForTool(sessionId)))))
     );
   } catch {
     return false;
   }
 }
 //@ chunk-25sm7c4g.js:33902-33933 placement
-function derivedServerIdForTool(e) {
-  return derivedServerId(e, REMOTE_DEVICES_SERVER_NAME);
+function derivedServerIdForTool(sessionId) {
+  return derivedServerId(sessionId, REMOTE_DEVICES_SERVER_NAME);
 }
 //@ chunk-25sm7c4g.js:33933-34994 placement
-function adoptBridgeMachines(e, n, { invalid, unreadable, unreadableMarkers, trigger }) {
-  let m = e.sourceHosts("bridge");
-  let { dropped } = e.replaceRemoteHosts("bridge", n);
+function adoptBridgeMachines(registry, hosts, { invalid, unreadable, unreadableMarkers, trigger }) {
+  let before = registry.sourceHosts("bridge");
+  let { dropped } = registry.replaceRemoteHosts("bridge", hosts);
   if (dropped.length > 0)
     logForDebugging(
       `[remote-tools] the bridge announced ${dropped.length} machine(s) under a name this session cannot adopt; not adopted: ${dropped.join(", ")}`,
@@ -527,26 +556,26 @@ function adoptBridgeMachines(e, n, { invalid, unreadable, unreadableMarkers, tri
         level: "warn",
       },
     );
-  let f = e.sourceHosts("bridge");
-  let _ = toolHostsFingerprint(m) !== toolHostsFingerprint(f);
+  let after = registry.sourceHosts("bridge");
+  let changed = toolHostsFingerprint(before) !== toolHostsFingerprint(after);
   if (invalid !== undefined)
     logEvent("tengu_remote_tool_targets", {
       event: lit("listing_invalid"),
       reason: fromEnum(invalid),
       trigger: fromEnum(trigger),
     });
-  let g = _ ? classifyToolHostsChange(m, f) : undefined;
-  if (g !== undefined)
+  let changeKind = changed ? classifyToolHostsChange(before, after) : undefined;
+  if (changeKind !== undefined)
     logEvent("tengu_remote_tool_targets", {
-      event: fromEnum(g),
+      event: fromEnum(changeKind),
       trigger: fromEnum(trigger),
-      target_count: f.length,
-      served_tool_count: f.reduce((acc, S) => acc + S.servedTools.size, 0),
-      passthrough_tool_count: f.reduce((acc, S) => acc + (S.passthroughTools?.size ?? 0), 0),
-      target_kind: fromEnumOpt(f[0]?.description?.kind),
-      target_platform: fromEnumOpt(detectTerminal(f[0]?.description?.platform)),
-      incompatible_count: count(f, (w) => w.protocol.kind === "incompatible"),
-      protocol_version: f[0]?.protocol.kind === "compatible" ? f[0].protocol.version : undefined,
+      target_count: after.length,
+      served_tool_count: after.reduce((acc, host) => acc + host.servedTools.size, 0),
+      passthrough_tool_count: after.reduce((acc, host) => acc + (host.passthroughTools?.size ?? 0), 0),
+      target_kind: fromEnumOpt(after[0]?.description?.kind),
+      target_platform: fromEnumOpt(detectTerminal(after[0]?.description?.platform)),
+      incompatible_count: count(after, (host) => host.protocol.kind === "incompatible"),
+      protocol_version: after[0]?.protocol.kind === "compatible" ? after[0].protocol.version : undefined,
     });
   if (unreadable > 0 || unreadableMarkers > 0)
     logEvent("tengu_remote_tool_targets", {
@@ -557,17 +586,20 @@ function adoptBridgeMachines(e, n, { invalid, unreadable, unreadableMarkers, tri
     });
 }
 //@ chunk-25sm7c4g.js:34994-35130 placement
-function toolHostsFingerprint(e) {
-  return e
-    .map((n) => `${n.name}\x00${n.status}\x00${n.servedTools.size}\x00${n.passthroughTools?.size ?? 0}`)
+function toolHostsFingerprint(hosts) {
+  return hosts
+    .map(
+      (host) =>
+        `${host.name}\x00${host.status}\x00${host.servedTools.size}\x00${host.passthroughTools?.size ?? 0}`,
+    )
     .sort().join(`
 `);
 }
 //@ chunk-25sm7c4g.js:35130-35355 placement
-function classifyToolHostsChange(e, n) {
-  let any = e.some((u) => u.status === "online");
-  let any_2 = n.some((u) => u.status === "online");
-  if (e.length === 0) return n.length === 0 ? "changed" : "discovered";
+function classifyToolHostsChange(before, after) {
+  let any = before.some((host) => host.status === "online");
+  let any_2 = after.some((host) => host.status === "online");
+  if (before.length === 0) return after.length === 0 ? "changed" : "discovered";
   if (any && !any_2) return "went_offline";
   if (!any && any_2) return "came_online";
   return "changed";

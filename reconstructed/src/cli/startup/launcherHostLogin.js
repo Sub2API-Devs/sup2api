@@ -32,30 +32,30 @@ import {
 import { cacheHookSessionTitle } from "../../utils/sessionStorage.js";
 
 //@ chunk-3wek6r2k.js:16735-16911 placement
-function settleLauncherHostLogin(e) {
+function settleLauncherHostLogin(identity) {
   if (usableLauncherHostLoginToken() === null) {
-    if (!takeLauncherHostLoginEnd()) return e;
+    if (!takeLauncherHostLoginEnd()) return identity;
     clearOAuthTokenCache();
     refreshGrowthBookAfterAuthChange();
-    return e.valid && launcherHostLoginRefusal() === "login_method_pin"
-      ? (launcherClaudeAiLoginRefusal() ?? e)
-      : e;
+    return identity.valid && launcherHostLoginRefusal() === "login_method_pin"
+      ? (launcherClaudeAiLoginRefusal() ?? identity)
+      : identity;
   }
-  let o = e.valid ? launcherClaudeAiLoginRefusal() : e;
-  if (o === null) return e;
+  let refusal = identity.valid ? launcherClaudeAiLoginRefusal() : identity;
+  if (refusal === null) return identity;
   forgetLauncherHostLogin();
   clearOAuthTokenCache();
-  return o;
+  return refusal;
 }
 //@ chunk-3wek6r2k.js:16911-17243 placement
-function forgetLauncherHostLoginForCloud(e) {
+function forgetLauncherHostLoginForCloud(options) {
   if (
-    (e.remote !== null ||
-      e.teleport !== null ||
-      e.poolId !== null ||
-      e.environmentQuery !== null ||
-      e.projectFlag !== null ||
-      e.projectBrowse !== null) &&
+    (options.remote !== null ||
+      options.teleport !== null ||
+      options.poolId !== null ||
+      options.environmentQuery !== null ||
+      options.projectFlag !== null ||
+      options.projectBrowse !== null) &&
     forgetLauncherHostLogin() &&
     takeLauncherHostLoginEnd()
   ) {
@@ -71,10 +71,10 @@ function forgetLauncherHostLoginForCloud(e) {
   }
 }
 //@ chunk-3wek6r2k.js:17243-17429 placement
-async function validateLoginIdentity(e) {
-  let o = await validateOauthToken(e);
-  let organizationUuid = o?.organization_uuid;
-  let accountUuid = o?.account_uuid;
+async function validateLoginIdentity(token) {
+  let info = await validateOauthToken(token);
+  let organizationUuid = info?.organization_uuid;
+  let accountUuid = info?.account_uuid;
   return typeof organizationUuid === "string" &&
     organizationUuid !== "" &&
     typeof accountUuid === "string" &&
@@ -89,103 +89,109 @@ async function validateLoginIdentity(e) {
 /**
  * 校验桌面应用替换的登录令牌（launcher-host-login）：组织校验、身份是否与启动身份一致。
  */
-async function verifyLauncherHostLogin(credentials, o) {
-  let n = launcherClaudeAiLoginRefusal();
-  let r = null;
-  if (n !== null)
-    r = {
+async function verifyLauncherHostLogin(credentials, token) {
+  let refusal = launcherClaudeAiLoginRefusal();
+  let verdict = null;
+  if (refusal !== null)
+    verdict = {
       verdict: "refused",
-      why: n.reason,
+      why: refusal.reason,
     };
   else {
-    let [u, p] = await Promise.all([
+    let [startupIdentity, identity] = await Promise.all([
       learnLauncherHostLoginIdentity(validateLoginIdentity),
-      validateLoginIdentity(o),
+      validateLoginIdentity(token),
     ]);
-    let h = await validateForceLoginOrg(credentials, undefined, {
-      accessToken: o,
-      organizationUuid: p?.organizationUuid,
+    let orgCheck = await validateForceLoginOrg(credentials, undefined, {
+      accessToken: token,
+      organizationUuid: identity?.organizationUuid,
     });
-    let S = launcherClaudeAiLoginRefusal();
-    if (S !== null)
-      r = {
+    let refusal = launcherClaudeAiLoginRefusal();
+    if (refusal !== null)
+      verdict = {
         verdict: "refused",
-        why: S.reason,
+        why: refusal.reason,
       };
-    else if (!h.valid)
-      r = {
-        verdict: h.reason === "org_verify_failed" ? "unverified" : "refused",
-        why: h.reason,
+    else if (!orgCheck.valid)
+      verdict = {
+        verdict: orgCheck.reason === "org_verify_failed" ? "unverified" : "refused",
+        why: orgCheck.reason,
       };
-    else if (p === null)
-      r = {
+    else if (identity === null)
+      verdict = {
         verdict: "unverified",
         why: "identity_not_learned",
       };
-    else if (u === null)
-      r = {
+    else if (startupIdentity === null)
+      verdict = {
         verdict: "held_unknown",
         why: "identity_not_learned",
       };
-    else if (u.organizationUuid !== p.organizationUuid || u.accountUuid !== p.accountUuid)
-      r = {
+    else if (
+      startupIdentity.organizationUuid !== identity.organizationUuid ||
+      startupIdentity.accountUuid !== identity.accountUuid
+    )
+      verdict = {
         verdict: "refused",
         why: "not_the_startup_identity",
       };
   }
-  if (r === null) return "allowed";
-  logForDebugging(`[launcher-host-login] the desktop app's replacement sign-in is not taken (${r.why})`, {
-    level: "warn",
-  });
-  return r.verdict;
+  if (verdict === null) return "allowed";
+  logForDebugging(
+    `[launcher-host-login] the desktop app's replacement sign-in is not taken (${verdict.why})`,
+    {
+      level: "warn",
+    },
+  );
+  return verdict.verdict;
 }
 //@ chunk-3wek6r2k.js:18214-18425 placement
 function launcherClaudeAiLoginRefusal() {
-  let e = launcherSignInMethodRefusal();
-  return e === null
+  let refusal = launcherSignInMethodRefusal();
+  return refusal === null
     ? null
     : {
         valid: false,
         reason: "managed_settings_invalid",
         message: `The sign-in the desktop app provided is a claude.ai sign-in, which the settings in force do not allow.
 
-${e}`,
+${refusal}`,
       };
 }
 //@ chunk-3wek6r2k.js:18425-18905 placement
-async function runStartupHooks(trigger, o) {
-  switch (o.kind) {
+async function runStartupHooks(trigger, options) {
+  switch (options.kind) {
     case "session-start": {
-      let n = await processSessionStartHooks(trigger, o.source, {
-        sessionId: o.sessionId,
-        agentType: o.agentType,
-        model: o.model,
-        forceSyncExecution: o.forceSyncExecution,
-        orphaned: o.orphaned,
-        newPluginsOnly: o.newPluginsOnly,
-        storageV5: o.storageV5,
-        credentials: o.credentials,
+      let result = await processSessionStartHooks(trigger, options.source, {
+        sessionId: options.sessionId,
+        agentType: options.agentType,
+        model: options.model,
+        forceSyncExecution: options.forceSyncExecution,
+        orphaned: options.orphaned,
+        newPluginsOnly: options.newPluginsOnly,
+        storageV5: options.storageV5,
+        credentials: options.credentials,
       });
-      if (o.orphaned?.aborted) return n;
-      let r = takePendingHookSessionTitle();
-      if (r) cacheHookSessionTitle(r);
-      return n;
+      if (options.orphaned?.aborted) return result;
+      let title = takePendingHookSessionTitle();
+      if (title) cacheHookSessionTitle(title);
+      return result;
     }
     case "setup":
-      return processSetupHooks(trigger, o.trigger, {
-        forceSyncExecution: o.forceSyncExecution,
-        storageV5: o.storageV5,
-        credentials: o.credentials,
+      return processSetupHooks(trigger, options.trigger, {
+        forceSyncExecution: options.forceSyncExecution,
+        storageV5: options.storageV5,
+        credentials: options.credentials,
       });
   }
 }
 //@ chunk-3wek6r2k.js:18905-18992 placement
-function joinPromptAppend(e, o) {
-  if (!o) return e;
-  if (!e) return o;
-  return `${e.replace(/\r?\n$/, "")}
+function joinPromptAppend(base, append) {
+  if (!append) return base;
+  if (!base) return append;
+  return `${base.replace(/\r?\n$/, "")}
 
-${o}`;
+${append}`;
 }
 //@ chunk-3wek6r2k.js:18992-19020 placement
 var HOSTED_RULES_FLAG = "tengu_harp_voatavo";

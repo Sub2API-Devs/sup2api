@@ -10,12 +10,12 @@ import { init_react_production } from "../../../../react/cjs/react.production.js
 //@ chunk-bzr73sfg.js:145459-145463 esm-layout
 init_react_production();
 //@ chunk-bzr73sfg.js:145463-145488 esm-layout
-var zc = 1;
-var Ia = 8;
-var ul = 32;
-var Fc = 2;
+var concurrentRoot = 1;
+var continuousEventPriority = 8;
+var defaultEventPriority = 32;
+var discreteEventPriority = 2;
 //@ chunk-bzr73sfg.js:145488-145497 esm-layout
-var Uc = 0;
+var noEventPriority = 0;
 //@ chunk-bzr73sfg.js:145497-145505 esm-layout
 /**
  * yoga 边枚举：Left/Top/Right/Bottom/Start/End/Horizontal/Vertical/All（0–8）。
@@ -33,4 +33,10 @@ var Edge;
   Edge[(Edge.Vertical = 7)] = "Vertical";
   Edge[(Edge.All = 8)] = "All";
 })((Edge ||= {}));
-export { Fc, Ia, ul, Uc, zc };
+export {
+  discreteEventPriority,
+  continuousEventPriority,
+  defaultEventPriority,
+  noEventPriority,
+  concurrentRoot,
+};

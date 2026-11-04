@@ -17,6 +17,7 @@ import {
 import { isUncOrDevicePath, hasDotDotSegment } from "./pathClassification.js";
 import { getPlatform } from "./platform.js";
 import { isSystemVolumePath } from "./permissions/protectedDirs.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-qg0af0yq.js:22383-22678 fingerprint = parseAddress (0.812)
 /**
@@ -49,32 +50,32 @@ function parseAddress(to) {
   };
 }
 //@ chunk-qg0af0yq.js:22678-22976 placement
-function parsePeerAddress(e, n) {
-  if (e.trim().length === 0) return "to must not be empty";
-  let address = parseAddress(e);
+function parsePeerAddress(input, listTool) {
+  if (input.trim().length === 0) return "to must not be empty";
+  let address = parseAddress(input);
   if ((address.scheme === "bridge" || address.scheme === "uds") && address.target.trim().length === 0)
     return "address target must not be empty";
-  if (!isValidPipeOrPath(address.target) || !isValidPipeOrPath(e))
-    return `'${e}' is not a local socket address. Use an address from ${n}.`;
+  if (!isValidPipeOrPath(address.target) || !isValidPipeOrPath(input))
+    return `'${input}' is not a local socket address. Use an address from ${listTool}.`;
   return;
 }
 //@ chunk-qg0af0yq.js:22976-23033 placement
-function isValidPipeOrPath(e) {
-  if (!isUncOrDevicePath(e)) return true;
-  return parseNamedPipeName(e) !== undefined;
+function isValidPipeOrPath(address) {
+  if (!isUncOrDevicePath(address)) return true;
+  return parseNamedPipeName(address) !== undefined;
 }
 //@ chunk-qg0af0yq.js:23033-23075 placement
-function isSamePath(sock, sock_2) {
-  return comparePeerDirs(sock, sock_2) === "same";
+function isSamePath(sock, secondPath) {
+  return comparePeerDirs(sock, secondPath) === "same";
 }
 //@ chunk-qg0af0yq.js:23075-23122 placement
-function mayBeSamePath(sock, n) {
-  return comparePeerDirs(sock, n) !== "different";
+function mayBeSamePath(firstPath, otherPath) {
+  return comparePeerDirs(firstPath, otherPath) !== "different";
 }
 //@ chunk-qg0af0yq.js:23122-23547 placement
-function comparePeerDirs(e, n) {
-  let namedPipeName = parseNamedPipeName(e);
-  let namedPipeName_2 = parseNamedPipeName(n);
+function comparePeerDirs(firstPath, secondPath) {
+  let namedPipeName = parseNamedPipeName(firstPath);
+  let namedPipeName_2 = parseNamedPipeName(secondPath);
   if (namedPipeName !== undefined || namedPipeName_2 !== undefined) {
     if (namedPipeName === undefined || namedPipeName_2 === undefined) return "different";
     if (asciiLowerCase(namedPipeName) === asciiLowerCase(namedPipeName_2)) return "same";
@@ -83,17 +84,19 @@ function comparePeerDirs(e, n) {
       ? "maybe"
       : "different";
   }
-  if (e === n) return "same";
-  if (hasDotDotSegment(e) || hasDotDotSegment(n))
-    return foldPathCase(stripMacPrivatePrefix(resolve(e))) === foldPathCase(stripMacPrivatePrefix(resolve(n)))
+  if (firstPath === secondPath) return "same";
+  if (hasDotDotSegment(firstPath) || hasDotDotSegment(secondPath))
+    return foldPathCase(stripMacPrivatePrefix(resolve(firstPath))) ===
+      foldPathCase(stripMacPrivatePrefix(resolve(secondPath)))
       ? "maybe"
       : "different";
-  let i = stripMacPrivatePrefix(resolve(e));
-  let s = stripMacPrivatePrefix(resolve(n));
-  if (i === s) return "same";
+  let normalizedFirst = stripMacPrivatePrefix(resolve(firstPath));
+  let normalizedSecond = stripMacPrivatePrefix(resolve(secondPath));
+  if (normalizedFirst === normalizedSecond) return "same";
   let platform = getPlatform();
-  let a = platform === "macos" || platform === "windows";
-  return foldPathCase(i) === foldPathCase(s) || (a && fullCaseFold(i) === fullCaseFold(s))
+  let caseInsensitive = platform === "macos" || platform === "windows";
+  return foldPathCase(normalizedFirst) === foldPathCase(normalizedSecond) ||
+    (caseInsensitive && fullCaseFold(normalizedFirst) === fullCaseFold(normalizedSecond))
     ? "maybe"
     : "different";
 }
@@ -106,57 +109,59 @@ function foldPathCase(cwd) {
 }
 //@ chunk-qg0af0yq.js:23620-23684 placement
 function asciiLowerCase(namedPipeName) {
-  return namedPipeName.replace(/[A-Z]/g, (n) => n.toLowerCase());
+  return namedPipeName.replace(/[A-Z]/g, (upper) => upper.toLowerCase());
 }
 //@ chunk-qg0af0yq.js:23684-23798 placement
 function simpleCaseFold(namedPipeName) {
-  let n = "";
-  for (let t of namedPipeName) {
-    let upper = t.toUpperCase();
-    let i = isSingleCodePoint(upper) ? upper : t;
-    let lower = i.toLowerCase();
-    n += isSingleCodePoint(lower) ? lower : i;
+  let folded = "";
+  for (let character of namedPipeName) {
+    let text = character.toUpperCase();
+    let upperChar = isSingleCodePoint(text) ? text : character;
+    let text_2 = upperChar.toLowerCase();
+    folded += isSingleCodePoint(text_2) ? text_2 : upperChar;
   }
-  return n;
+  return folded;
 }
 //@ chunk-qg0af0yq.js:23798-23880 placement
-function isSingleCodePoint(e) {
-  let codePoint = e.codePointAt(0);
-  return codePoint !== undefined && e.length === (codePoint > 65535 ? 2 : 1);
+function isSingleCodePoint(text) {
+  let codePoint = text.codePointAt(0);
+  return codePoint !== undefined && text.length === (codePoint > 65535 ? 2 : 1);
 }
 //@ chunk-qg0af0yq.js:23880-23931 placement
-function fullCaseFold(namedPipeName) {
-  return namedPipeName.toUpperCase().toLowerCase();
+function fullCaseFold(text) {
+  return text.toUpperCase().toLowerCase();
 }
 //@ chunk-qg0af0yq.js:23931-23988 placement = setCwdState (0.757)
 function nfcOnMacos(cwd) {
   return getPlatform() === "macos" ? cwd.normalize("NFC") : cwd;
 }
 //@ chunk-qg0af0yq.js:23988-24108 placement = getReservedShortcuts (1)
-function stripMacPrivatePrefix(e) {
-  if (getPlatform() !== "macos") return e;
-  let n = isSystemVolumePath(e);
-  let match = /^\/private(\/(?:var|tmp|etc)(?:\/.*)?)$/.exec(n);
-  return match ? match[1] : n;
+function stripMacPrivatePrefix(inputPath) {
+  if (getPlatform() !== "macos") return inputPath;
+  let systemPath = isSystemVolumePath(inputPath);
+  let match = /^\/private(\/(?:var|tmp|etc)(?:\/.*)?)$/.exec(systemPath);
+  return match ? match[1] : systemPath;
 }
 //@ chunk-qg0af0yq.js:24108-24363 placement
-function parseNamedPipeName(e) {
-  let match = /^[\\/]{2}[.?][\\/]pipe[\\/](?:(LOCAL)[\\/])?([^\\/]+)$/i.exec(e);
+function parseNamedPipeName(inputPath) {
+  let match = /^[\\/]{2}[.?][\\/]pipe[\\/](?:(LOCAL)[\\/])?([^\\/]+)$/i.exec(inputPath);
   if (match === null || match[2] === "." || match[2] === "..") return;
   if (/[. ]$/.test(match[2])) return;
-  if (e.startsWith("\\\\?\\") && e.includes("/")) return;
+  if (inputPath.startsWith("\\\\?\\") && inputPath.includes("/")) return;
   return match[1] === undefined ? match[2] : `${LOCAL}\\${match[2]}`;
 }
 //@ chunk-qg0af0yq.js:24363-24590 placement
-function isTrustedSocketPath(e, n, t) {
-  if (parseNamedPipeName(n) !== undefined) {
-    let namedPipeName = parseNamedPipeName(e);
+function isTrustedSocketPath(socketPath, namespace, peerInfo) {
+  if (parseNamedPipeName(namespace) !== undefined) {
+    let namedPipeName = parseNamedPipeName(socketPath);
     return namedPipeName !== undefined && regExp_4.test(namedPipeName);
   }
-  if (hasDotDotSegment(e)) return false;
-  if (dirname(resolve(e)) === dirname(resolve(n))) return e.endsWith(".sock");
+  if (hasDotDotSegment(socketPath)) return false;
+  if (dirname(resolve(socketPath)) === dirname(resolve(namespace))) return socketPath.endsWith(".sock");
   return (
-    t?.verifiedPeerPid !== undefined && t.ownerUids !== undefined && isSiblingSessionSocket(e, t.ownerUids)
+    peerInfo?.verifiedPeerPid !== undefined &&
+    peerInfo.ownerUids !== undefined &&
+    isSiblingSessionSocket(socketPath, peerInfo.ownerUids)
   );
 }
 //@ chunk-qg0af0yq.js:24590-24831 placement
@@ -168,13 +173,13 @@ var DEFAULT_PEER_SOCKET_PATTERNS = [
   /^\/data\/data\/com\.termux\/files\/usr\/tmp\/cc-socks(?:-(0|[1-9]\d*))?$/,
 ];
 //@ chunk-qg0af0yq.js:24831-25041 placement
-function isSiblingSessionSocket(e, n) {
-  let t = resolve(e);
-  if (!/^(\d+(-[0-9a-f]{8})?|[0-9a-f]{1,16})\.sock$/.test(basename(t))) return false;
-  let r = dirname(t);
-  for (let i of DEFAULT_PEER_SOCKET_PATTERNS) {
-    let match = i.exec(r);
-    if (match) return match[1] === undefined || n.some((o) => String(o) === match[1]);
+function isSiblingSessionSocket(socketPath, ownerUids) {
+  let resolved = resolve(socketPath);
+  if (!/^(\d+(-[0-9a-f]{8})?|[0-9a-f]{1,16})\.sock$/.test(basename(resolved))) return false;
+  let parentDir = dirname(resolved);
+  for (let pattern of DEFAULT_PEER_SOCKET_PATTERNS) {
+    let match = pattern.exec(parentDir);
+    if (match) return match[1] === undefined || ownerUids.some((uid) => String(uid) === match[1]);
   }
   return false;
 }
@@ -182,8 +187,8 @@ function isSiblingSessionSocket(e, n) {
 /**
  * 判断能否回复对等会话的 socket：命名管道作用域不匹配时拒绝，可信路径允许，开启跨默认目录回复时检查同级会话 socket。
  */
-function canReplyToPeerSocket(ownSocket, namespace, features, r = []) {
-  let namedPipeName = parseNamedPipeName(ownSocket);
+function canReplyToPeerSocket(socketPath, namespace, features, ownerUids = []) {
+  let namedPipeName = parseNamedPipeName(socketPath);
   let namedPipeName_2 = parseNamedPipeName(namespace);
   if (
     namedPipeName !== undefined &&
@@ -192,14 +197,22 @@ function canReplyToPeerSocket(ownSocket, namespace, features, r = []) {
     !regExp_5.test(namedPipeName)
   )
     return false;
-  if (isTrustedSocketPath(ownSocket, namespace)) return true;
-  return (features?.includes(REPLY_ACROSS_DEFAULT_DIRS) ?? false) && isSiblingSessionSocket(ownSocket, r);
+  if (isTrustedSocketPath(socketPath, namespace)) return true;
+  return (
+    (features?.includes(REPLY_ACROSS_DEFAULT_DIRS) ?? false) && isSiblingSessionSocket(socketPath, ownerUids)
+  );
 }
 //@ chunk-qg0af0yq.js:25207-25331 placement
-var CC_MSG = "cc-msg-";
-var LOCAL = "LOCAL";
-var regExp_4 = new RegExp(`^(?:${LOCAL}\\\\)?${CC_MSG}[0-9a-f]{32}$`, "i");
-var regExp_5 = new RegExp(`^${CC_MSG}[0-9a-f]{32}$`, "i");
+var CC_MSG; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var LOCAL;
+var regExp_4;
+var regExp_5;
+deferInit("chunk-qg0af0yq.js:25207", () => {
+  CC_MSG = "cc-msg-";
+  LOCAL = "LOCAL";
+  regExp_4 = new RegExp(`^(?:${LOCAL}\\\\)?${CC_MSG}[0-9a-f]{32}$`, "i");
+  regExp_5 = new RegExp(`^${CC_MSG}[0-9a-f]{32}$`, "i");
+});
 export {
   parseAddress,
   isTrustedSocketPath,

@@ -11,6 +11,7 @@
 import { sleep } from "../../utils/sleep.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-82kqcve8.js:21690-21703 placement
 var FIRST_STORE_PULL_WAIT_DEADLINE_MS = 2500;
@@ -40,7 +41,7 @@ class FirstStorePullGate {
     if (this.settled || this.raceSettled) return false;
     return hasMemoryStoresEnv();
   }
-  async wait(e) {
+  async wait(signal) {
     if (this.settled || this.raceSettled) return;
     if (!hasMemoryStoresEnv()) return;
     if (!this.racePromise) {
@@ -52,14 +53,17 @@ class FirstStorePullGate {
         this.raceSettled = true;
       });
     }
-    await Promise.race([this.racePromise, sleep(FIRST_STORE_PULL_WAIT_DEADLINE_MS, e)]);
+    await Promise.race([this.racePromise, sleep(FIRST_STORE_PULL_WAIT_DEADLINE_MS, signal)]);
   }
 }
 //@ chunk-82kqcve8.js:22265-22290 placement
 /**
  * 按宿主保存的首轮拉取闸门。
  */
-var firstStorePullGate = new HostScoped(() => new FirstStorePullGate());
+var firstStorePullGate; // deferred: uses FirstStorePullGate of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-82kqcve8.js:22265", () => {
+  firstStorePullGate = new HostScoped(() => new FirstStorePullGate());
+});
 //@ chunk-82kqcve8.js:22290-22327 placement
 /**
  * 取当前宿主的首轮拉取闸门。
@@ -74,9 +78,9 @@ function settleFirstStorePull() {
 //@ chunk-82kqcve8.js:22356-22468 placement
 function noteStorePulls(stores) {
   let { pulledMounts } = getFirstStorePullGate();
-  for (let r of stores)
-    if (r.pulled) pulledMounts.add(r.mountDir);
-    else pulledMounts.delete(r.mountDir);
+  for (let store of stores)
+    if (store.pulled) pulledMounts.add(store.mountDir);
+    else pulledMounts.delete(store.mountDir);
 }
 //@ chunk-82kqcve8.js:22468-22509 placement
 function isFirstStorePullPending() {

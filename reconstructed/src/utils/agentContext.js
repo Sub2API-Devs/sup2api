@@ -20,25 +20,26 @@ import { getContextKey } from "./cwd.js";
 import { agentTypeForAnalytics_GATE_EVALUATED, lit } from "../services/analytics/safeMetadata.js";
 import { logForDebugging } from "./debug.js";
 import { getDynamicTeamContext } from "./teammate.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:851673-851872 placement
 /**
  * 预先为评审准备规则文本：同一键只准备一次，在时限内等待结果并缓存已完成的答案。
  */
-function primeRulesForCritique(e, id, r, s = TMUX_QUERY_TIMEOUT_MS) {
-  let h = tmuxQueryCacheByRoot.of(e);
-  if (h.has(id)) return;
-  let y = r.then(formatRulesForCritique_2).catch(() => {
+function primeRulesForCritique(sessionRoot, id, rulesPromise, timeoutMs = TMUX_QUERY_TIMEOUT_MS) {
+  let cache = tmuxQueryCacheByRoot.of(sessionRoot);
+  if (cache.has(id)) return;
+  let answerPromise = rulesPromise.then(formatRulesForCritique_2).catch(() => {
     return;
   });
-  let S = {
+  let entry = {
     settled: false,
-    answer: withDeadline(y, s),
+    answer: withDeadline(answerPromise, timeoutMs),
   };
-  h.set(id, S);
-  y.then((answer) => {
-    if (h.get(id) === S)
-      h.set(id, {
+  cache.set(id, entry);
+  answerPromise.then((answer) => {
+    if (cache.get(id) === entry)
+      cache.set(id, {
         settled: true,
         answer,
       });
@@ -48,8 +49,8 @@ function primeRulesForCritique(e, id, r, s = TMUX_QUERY_TIMEOUT_MS) {
 /**
  * 清空某 agent 上下文里的答案缓存。
  */
-function clearAgentAnswers(e) {
-  tmuxQueryCacheByRoot.peek(e)?.clear();
+function clearAgentAnswers(sessionRoot) {
+  tmuxQueryCacheByRoot.peek(sessionRoot)?.clear();
 }
 //@ chunk-aepeg2w5.js:851908-851959 placement
 /**
@@ -62,22 +63,24 @@ function getCachedAgentAnswer(rootSession, sessionId) {
 /**
  * 取上下文里的 hook 调用者。
  */
-function getHookCallerOf(e) {
-  return e.hookCaller;
+function getHookCallerOf(context) {
+  return context.hookCaller;
 }
 //@ chunk-aepeg2w5.js:852044-852133 placement
 /**
  * 主线程非远程执行时的 hook 调用者。
  */
-function getHookCaller(e) {
-  return e.agentId === undefined && e.forRemoteExecution !== true ? e.hookCaller : undefined;
+function getHookCaller(context) {
+  return context.agentId === undefined && context.forRemoteExecution !== true
+    ? context.hookCaller
+    : undefined;
 }
 //@ chunk-aepeg2w5.js:852133-852199 placement
 /**
  * 是否由 hook 或插件驱动。
  */
-function isHookOrPluginSteered(e) {
-  return e.hookCaller !== undefined || e.pluginSteered === true;
+function isHookOrPluginSteered(context) {
+  return context.hookCaller !== undefined || context.pluginSteered === true;
 }
 //@ chunk-aepeg2w5.js:852199-852267 placement
 /**
@@ -90,8 +93,11 @@ function isRemoteOrPluginAgent(requestSource) {
 /**
  * 把指定值的选项排在前面。
  */
-function preferValueFirst(e, n) {
-  return [...e.filter((r) => r.value === n), ...e.filter((r) => r.value !== n)];
+function preferValueFirst(suggestions, preferredValue) {
+  return [
+    ...suggestions.filter((suggestion) => suggestion.value === preferredValue),
+    ...suggestions.filter((suggestion) => suggestion.value !== preferredValue),
+  ];
 }
 //@ chunk-aepeg2w5.js:852353-852518 placement
 /**
@@ -101,7 +107,11 @@ function filterAddDirectoriesUpdates(suggestions) {
   if (!Array.isArray(suggestions)) return null;
   try {
     return suggestions.filter(
-      (n) => typeof n === "object" && n !== null && "type" in n && n.type === "addDirectories",
+      (suggestion) =>
+        typeof suggestion === "object" &&
+        suggestion !== null &&
+        "type" in suggestion &&
+        suggestion.type === "addDirectories",
     );
   } catch {
     return null;
@@ -111,18 +121,27 @@ function filterAddDirectoriesUpdates(suggestions) {
 /**
  * 权限提示对话框定义。
  */
-var PERMISSION_PROMPT_DIALOG = withHideWhile({
-  kind: "permission_prompt",
-  payload: DoctorLazy(() =>
-    deepFreezeToolName(
-      (e) =>
-        typeof e === "object" && e !== null && "requestId" in e && "toolName" in e && "permissionResult" in e,
+var PERMISSION_PROMPT_DIALOG; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:852518", () => {
+  PERMISSION_PROMPT_DIALOG = withHideWhile({
+    kind: "permission_prompt",
+    payload: DoctorLazy(() =>
+      deepFreezeToolName(
+        (payload) =>
+          typeof payload === "object" &&
+          payload !== null &&
+          "requestId" in payload &&
+          "toolName" in payload &&
+          "permissionResult" in payload,
+      ),
     ),
-  ),
-  result: DoctorLazy(() => deepFreezeToolName((e) => typeof e === "object" && e !== null && "behavior" in e)),
-  default: {
-    behavior: "cancelled",
-  },
+    result: DoctorLazy(() =>
+      deepFreezeToolName((result) => typeof result === "object" && result !== null && "behavior" in result),
+    ),
+    default: {
+      behavior: "cancelled",
+    },
+  });
 });
 //@ chunk-aepeg2w5.js:853777-853828 placement
 /**
@@ -145,9 +164,11 @@ function isMainAgent(agentContext) {
 /**
  * 回合归因键。
  */
-function turnAttributionKeyFor(e) {
+function turnAttributionKeyFor(agentContext) {
   return attributionKeyOrUndefined(
-    e && !isMainAgent(e) && "turnAttributionKey" in e ? e.turnAttributionKey : getContextKey(),
+    agentContext && !isMainAgent(agentContext) && "turnAttributionKey" in agentContext
+      ? agentContext.turnAttributionKey
+      : getContextKey(),
   );
 }
 //@ chunk-aepeg2w5.js:853962-854039 placement = isSubagentContext (0.783)
@@ -314,6 +335,13 @@ function consumeInvokingRequestId(agentContext) {
     invocationKind: agentContext.invocationKind,
   };
 }
+//@ chunk-bxv8ns7f.js:191-250 placement
+/**
+ * 对象是否含 main 键（或未定义）。
+ */
+function hasMainKey(observers) {
+  return observers === undefined || Object.hasOwn(observers, "main");
+}
 //@ chunk-ha3km179.js:75409-75465 sole-consumer
 /**
  * 构造 TeammateIdle 钩子的目标对象（agentId、队友名、团队名）。
@@ -327,10 +355,10 @@ var teammateIdleTarget = (agentId, teammateName, teamName) => ({
 /**
  * 找到持有某队友的进程内任务，若其可恢复 agent id 与给定 id 一致，则返回 TeammateIdle 钩子的目标；没有任务持有时记日志。
  */
-function getTeammateIdleTarget(agentContext, n, agentId) {
-  let flattened = Object.values(n.all()).flatMap((S) =>
-    S.type === "in_process_teammate" && S.identity.agentId === agentContext.agentId
-      ? [S.identity.resumableAgentId]
+function getTeammateIdleTarget(agentContext, taskMap, agentId) {
+  let flattened = Object.values(taskMap.all()).flatMap((task) =>
+    task.type === "in_process_teammate" && task.identity.agentId === agentContext.agentId
+      ? [task.identity.resumableAgentId]
       : [],
   );
   if (flattened.length === 0)
@@ -344,14 +372,14 @@ function getTeammateIdleTarget(agentContext, n, agentId) {
 //@ chunk-ha3km179.js:75797-75987 sole-consumer
 function getTeamContextTarget(agentContext) {
   let dynamicTeamContext = getDynamicTeamContext();
-  let r =
+  let hasDynamicTeamContext =
     dynamicTeamContext !== null &&
     Boolean(dynamicTeamContext.agentId) &&
     Boolean(dynamicTeamContext.teamName);
-  let s = agentContext?.agentType === "subagent" && agentContext.isMainSession === true;
-  return r
+  let isSubagentInMainSession = agentContext?.agentType === "subagent" && agentContext.isMainSession === true;
+  return hasDynamicTeamContext
     ? teammateIdleTarget(
-        s ? agentContext.agentId : undefined,
+        isSubagentInMainSession ? agentContext.agentId : undefined,
         dynamicTeamContext.agentName,
         dynamicTeamContext.teamName,
       )
@@ -361,17 +389,10 @@ function getTeamContextTarget(agentContext) {
 /**
  * 按代理语境分派：teammate 走一个实现，其余走另一个。
  */
-function isTeammateAgentContext(agentContext, taskRegistry, agentId) {
+function isTeammateAgentContext(agentContext, taskMap, agentId) {
   return agentContext?.agentType === "teammate"
-    ? getTeammateIdleTarget(agentContext, taskRegistry, agentId)
+    ? getTeammateIdleTarget(agentContext, taskMap, agentId)
     : getTeamContextTarget(agentContext);
-}
-//@ chunk-bxv8ns7f.js:191-250 placement
-/**
- * 对象是否含 main 键（或未定义）。
- */
-function hasMainKey(observers) {
-  return observers === undefined || Object.hasOwn(observers, "main");
 }
 export {
   mainAgentContext,
@@ -391,8 +412,8 @@ export {
   filterAddDirectoriesUpdates,
   preferValueFirst,
   getCachedAgentAnswer,
-  isSubagentContext,
   turnAttributionKeyFor,
+  isSubagentContext,
   isNonMainSessionSubagent,
   reapsShellsOnExit,
   getForegroundSubagentId,

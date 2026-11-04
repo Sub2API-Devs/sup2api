@@ -20,8 +20,8 @@ var SHELL_TOOL_NAMES = new Set([BASH_TOOL_NAME, POWERSHELL_TOOL_NAME]);
 /**
  * 判断工具名是否为 shell 工具。
  */
-function isShellToolName(e) {
-  return SHELL_TOOL_NAMES.has(e);
+function isShellToolName(toolName) {
+  return SHELL_TOOL_NAMES.has(toolName);
 }
 //@ chunk-vf6hkvee.js:285-321 placement
 /**
@@ -43,7 +43,7 @@ function outputFilterHint(name) {
 /**
  * 判断是否为非 MCP 的 shell 工具。
  */
-function isNonMcpShellTool(e) {
-  return e.isMcp !== true && isShellToolName(e.name);
+function isNonMcpShellTool(tool) {
+  return tool.isMcp !== true && isShellToolName(tool.name);
 }
 export { isShellToolName, isNonMcpShellTool, outputFilterHint, shellToolOrDefault };

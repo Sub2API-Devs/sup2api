@@ -9,13 +9,14 @@
  * attribution: fingerprint 5, layout 1
  */
 import { sequential } from "./sequential.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-9h8dr0qb.js:68754-68970 fingerprint = calculatePercentiles (1)
 function calculatePercentiles(dailyActivity) {
   let counts = dailyActivity
-    .map((p) => p.messageCount)
-    .filter((p) => p > 0)
-    .sort((p, h) => p - h);
+    .map((day) => day.messageCount)
+    .filter((count) => count > 0)
+    .sort((left, right) => left - right);
   if (counts.length === 0) return null;
   return {
     p25: counts[Math.floor(counts.length * 0.25)],
@@ -83,8 +84,8 @@ function generateHeatmap(dailyActivity, options = {}) {
   }
   let dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   for (let day = 0; day < 7; day++) {
-    let J = ([1, 3, 5].includes(day) ? dayLabels[day].padEnd(3) : "   ") + " " + grid[day].join("");
-    lines.push(J);
+    let row = ([1, 3, 5].includes(day) ? dayLabels[day].padEnd(3) : "   ") + " " + grid[day].join("");
+    lines.push(row);
   }
   lines.push("");
   lines.push(
@@ -113,7 +114,10 @@ function getIntensity(messageCount, percentiles) {
   return 1;
 }
 //@ chunk-9h8dr0qb.js:70343-70368 fingerprint = claudeOrange (1)
-var claudeOrange = sequential.hex("#da7756");
+var claudeOrange; // deferred: uses sequential (./sequential.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-9h8dr0qb.js:70343", () => {
+  claudeOrange = sequential.hex("#da7756");
+});
 //@ chunk-9h8dr0qb.js:70368-70563 fingerprint = getHeatmapChar (1)
 function getHeatmapChar(intensity) {
   switch (intensity) {

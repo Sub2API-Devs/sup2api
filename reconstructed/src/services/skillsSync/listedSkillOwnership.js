@@ -17,33 +17,33 @@ import { getSkillOwnership } from "../../skills/hostSkillMounts.js";
 /**
  * 记录技能列表中各技能（按清洗后的目录名）的归属、原名与是否从聊天保存，并把列表状态标为已获取。
  */
-function recordListedSkillOwnerships(s) {
-  let e = remoteToolsState();
-  let { listedOwnerships } = e;
+function recordListedSkillOwnerships(listedSkills) {
+  let state = remoteToolsState();
+  let { listedOwnerships } = state;
   listedOwnerships.clear();
-  e.listedSkillsAnswer = "none_yet";
-  for (let t of s) {
-    let l;
+  state.listedSkillsAnswer = "none_yet";
+  for (let skill of listedSkills) {
+    let listedName;
     try {
-      l = stripInvisibleChars(basename(syncedItemPath(t.name, sep)));
+      listedName = stripInvisibleChars(basename(syncedItemPath(skill.name, sep)));
     } catch {
       continue;
     }
-    if (!listedOwnerships.has(l))
-      listedOwnerships.set(l, {
-        listedName: t.name,
-        ownership: getSkillOwnership(t),
-        savedFromAChat: typeof t.backing_plugin_id === "string",
+    if (!listedOwnerships.has(listedName))
+      listedOwnerships.set(listedName, {
+        listedName: skill.name,
+        ownership: getSkillOwnership(skill),
+        savedFromAChat: typeof skill.backing_plugin_id === "string",
       });
   }
-  e.listedSkillsAnswer = "a_list";
-  e.lastRoundCouldNotAsk = false;
+  state.listedSkillsAnswer = "a_list";
+  state.lastRoundCouldNotAsk = false;
 }
 //@ chunk-g6806zjs.js:667-723 placement
 /**
  * 取列表里某技能的归属。
  */
-function listedSkillOwnershipOf(s) {
-  return remoteToolsState().listedOwnerships.get(stripInvisibleChars(s));
+function listedSkillOwnershipOf(listedName) {
+  return remoteToolsState().listedOwnerships.get(stripInvisibleChars(listedName));
 }
 export { listedSkillOwnershipOf, recordListedSkillOwnerships };

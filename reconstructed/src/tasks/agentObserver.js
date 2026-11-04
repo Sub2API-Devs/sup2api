@@ -59,32 +59,36 @@ async function writeObserverMarker(observerTaskId, observerDefinition, storageV5
 var OBSERVER_SPAWNER = {
   async spawnFirstRun({ observerDefinition, pairing, framingPrompt, digest, toolUseContext, canUseTool }) {
     let observerTaskId = pairing.observerTaskId;
-    let d = toolUseContext.session.withProject({
+    let projectSession = toolUseContext.session.withProject({
       cwd: getCwd(),
     });
     await writeObserverMarker(observerTaskId, observerDefinition, toolUseContext.storageV5);
     let { taskRegistry } = toolUseContext;
     let toolPermissionContext = getToolPermissionContext(toolUseContext);
-    let c =
+    let spawnMode =
       narrowerMode(pairing.armingPermissionMode, toolPermissionContext.mode) ?? toolPermissionContext.mode;
-    let g = {
+    let spawnPermissionContext = {
       ...toolPermissionContext,
-      mode: c,
+      mode: spawnMode,
     };
     let filtered = toolUseContext.options.tools.filter(isMcpTool);
     let description = `${observerDefinition.agentType}@${pairing.observedEnvelopeName}`;
-    let i = getAgentDepth(toolUseContext.agentContext) + 1;
+    let agentDepth = getAgentDepth(toolUseContext.agentContext) + 1;
     let availableTools = observerToolset(
       resolveAgentTools(
         observerDefinition,
-        toolUseContext.options.toolCatalog.assembleToolPool(g, excludeCoordinatorCommsMcpTools(filtered), {
-          skipReplFilter: true,
-          machineMcpTools: bridgeToolsOf(toolUseContext),
-        }),
+        toolUseContext.options.toolCatalog.assembleToolPool(
+          spawnPermissionContext,
+          excludeCoordinatorCommsMcpTools(filtered),
+          {
+            skipReplFilter: true,
+            machineMcpTools: bridgeToolsOf(toolUseContext),
+          },
+        ),
         true,
         false,
         false,
-        i,
+        agentDepth,
         memoryModeForSession(toolUseContext).mode,
       ).resolvedTools,
     );
@@ -92,13 +96,13 @@ var OBSERVER_SPAWNER = {
       observerDefinition.model,
       toolUseContext.options.mainLoopModel,
       undefined,
-      g.mode,
+      spawnPermissionContext.mode,
     );
-    let y = registerAsyncAgent({
+    let spawned = registerAsyncAgent({
       outputFileReadable: willToolsLoseSessionState(toolUseContext.options.tools),
       agentId: observerTaskId,
       ownerAgentId: mainAgentId(),
-      spawnDepth: i,
+      spawnDepth: agentDepth,
       description,
       prompt: framingPrompt,
       model: agentModel,
@@ -109,23 +113,23 @@ var OBSERVER_SPAWNER = {
       sessionScratch: toolUseContext.session.sessionScratch,
     });
     markAgentNotified(observerTaskId, taskRegistry);
-    let k = {
+    let metadata = {
       prompt: framingPrompt,
       resolvedAgentModel: agentModel,
       isBuiltInAgent: isBuiltInAgent(observerDefinition),
       startTime: Date.now(),
       agentType: observerDefinition.agentType,
-      agentDepth: i,
+      agentDepth,
       isAsync: true,
       source: observerDefinition.source,
       pluginId: isPluginAgent(observerDefinition)
         ? parsePluginIdentifier_2(observerDefinition.plugin)
         : undefined,
     };
-    let f = {
+    let agentContext = {
       agentId: observerTaskId,
       parentAgentId: toolUseContext.agentId,
-      depth: i,
+      depth: agentDepth,
       parentSessionId: getParentSessionId(),
       agentType: "subagent",
       subagentName: observerDefinition.agentType,
@@ -135,11 +139,11 @@ var OBSERVER_SPAWNER = {
       ...getWorkflowRunFields(toolUseContext.agentContext),
     };
     let { onToolPool, reviewTools } = createDeferredReviewTools(toolUseContext.options.tools);
-    await runWithCwdOverride(f, () =>
-      resolveFromCwd(getSessionProject(d).cwd, () =>
+    await runWithCwdOverride(agentContext, () =>
+      resolveFromCwd(getSessionProject(projectSession).cwd, () =>
         runAsyncAgentLifecycle({
           taskId: observerTaskId,
-          abortController: y.abortController,
+          abortController: spawned.abortController,
           makeStream: (onCacheSafeParams, onQueryProgress, onStreamTokenEstimate) =>
             runAgent({
               agentDefinition: observerDefinition,
@@ -164,11 +168,11 @@ var OBSERVER_SPAWNER = {
               ),
               availableTools,
               useExactTools: true,
-              session: d,
-              spawnMode: c,
+              session: projectSession,
+              spawnMode,
               override: {
                 agentId: identityAgentId2(observerTaskId),
-                abortController: y.abortController,
+                abortController: spawned.abortController,
                 agentToolScope: observerDefinition,
               },
               onModelRestricted: agentModelRestrictionNotifier(
@@ -181,8 +185,8 @@ var OBSERVER_SPAWNER = {
               onToolPool,
             }),
           metadata: {
-            ...k,
-            agentContext: f,
+            ...metadata,
+            agentContext,
           },
           description,
           toolUseContext,
@@ -210,10 +214,11 @@ var OBSERVER_SPAWNER = {
   },
 };
 //@ chunk-3h5pdzw6.js:15350-15443 placement
-function registerObserverSpawner(e) {
+function registerObserverSpawner(rootSession) {
   try {
-    setObserverSpawner(e, OBSERVER_SPAWNER);
+    setObserverSpawner(rootSession, OBSERVER_SPAWNER);
   } catch (error) {
     logForDebugging(`[agentObserver] spawner registration failed: ${error}`);
   }
 }
+export { registerObserverSpawner, OBSERVER_SPAWNER };

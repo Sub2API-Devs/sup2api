@@ -16,15 +16,19 @@ import { withTelemetryMessage, toError } from "../errors.js";
 import { isSessionTaskNotificationOrigin } from "../backgroundSessionResume.js";
 import { isPeerOrObserver } from "../messageProvenance.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3292891-3292953 placement
 /**
  * 按会话根保存的经过时间提醒起点与已报告会话 id。
  */
-var elapsedTimeStateByRoot = new SessionRootSlot(() => ({
-  start: undefined,
-  reportedSessionId: undefined,
-}));
+var elapsedTimeStateByRoot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3292891", () => {
+  elapsedTimeStateByRoot = new SessionRootSlot(() => ({
+    start: undefined,
+    reportedSessionId: undefined,
+  }));
+});
 //@ chunk-e6aww6q8.js:3292953-3293100 placement
 /**
  * 判断当前模型是否启用经过时间提醒（出错视为关闭）。
@@ -38,9 +42,9 @@ function isElapsedTimeReminderEnabled(mainLoopModel) {
   }
 }
 //@ chunk-e6aww6q8.js:3293100-3293257 placement
-function formatElapsedTime(e) {
-  let n = Number.isFinite(e) ? Math.max(0, Math.floor(e / 1000)) : 0;
-  return `Elapsed time so far: ${Math.floor(n / 60)}m ${String(n % 60).padStart(2, "0")}s`;
+function formatElapsedTime(elapsedMs) {
+  let elapsedSeconds = Number.isFinite(elapsedMs) ? Math.max(0, Math.floor(elapsedMs / 1000)) : 0;
+  return `Elapsed time so far: ${Math.floor(elapsedSeconds / 60)}m ${String(elapsedSeconds % 60).padStart(2, "0")}s`;
 }
 //@ chunk-e6aww6q8.js:3293257-3293294 placement
 /**
@@ -53,13 +57,16 @@ function isNonRestartingOrigin(origin) {
 /**
  * 在主会话收到新的用户输入时重置经过时间提醒的起点；子代理、特定来源或空轮询投递不重置，功能关闭时清除起点；失败只记录日志。
  */
-function restartElapsedTimeClock({ session, agentId, options }, s) {
+function restartElapsedTimeClock({ session, agentId, options }, queuedCommand) {
   try {
-    let h = typeof s.value !== "string" && s.value.length === 0 && !s.isPollDelivery;
-    if (agentId || isNonRestartingOrigin(s.origin) || h) return;
+    let isEmptyTurn =
+      typeof queuedCommand.value !== "string" &&
+      queuedCommand.value.length === 0 &&
+      !queuedCommand.isPollDelivery;
+    if (agentId || isNonRestartingOrigin(queuedCommand.origin) || isEmptyTurn) return;
     if (!isElapsedTimeReminderEnabled(options.mainLoopModel)) {
-      let y = elapsedTimeStateByRoot.peek(session);
-      if (y) y.start = undefined;
+      let state = elapsedTimeStateByRoot.peek(session);
+      if (state) state.start = undefined;
       return;
     }
     elapsedTimeStateByRoot.of(session).start = {
@@ -77,25 +84,25 @@ function restartElapsedTimeClock({ session, agentId, options }, s) {
  * 生成经过时间提醒附件（会话首次时设定起点并上报）。
  */
 function getElapsedTimeReminderAttachments({ session }) {
-  let n = elapsedTimeStateByRoot.of(session);
+  let state = elapsedTimeStateByRoot.of(session);
   let id = session.id;
-  let s = session.host.clock.monotonicNow();
-  let start = n.start;
+  let nowMs = session.host.clock.monotonicNow();
+  let start = state.start;
   if (start?.sessionId !== id) {
     start = {
       sessionId: id,
-      startedAt: s,
+      startedAt: nowMs,
     };
-    n.start = start;
+    state.start = start;
   }
-  if (n.reportedSessionId !== id) {
-    n.reportedSessionId = id;
+  if (state.reportedSessionId !== id) {
+    state.reportedSessionId = id;
     logFeatureOk("elapsed_time_reminder");
   }
   return [
     {
       type: "elapsed_time_reminder",
-      text: formatElapsedTime(s - start.startedAt),
+      text: formatElapsedTime(nowMs - start.startedAt),
     },
   ];
 }

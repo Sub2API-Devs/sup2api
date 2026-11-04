@@ -6,10 +6,10 @@
  * attribution: esm-layout 1
  */
 import { __classPrivateFieldSet, __classPrivateFieldGet } from "../internal/tslib.mjs";
-import { mu } from "../internal/parse.mjs";
+import { iterateSseEvents } from "../internal/parse.mjs";
 import { loggerFor } from "../internal/utils/log.mjs";
 import { AnthropicError, APIError } from "./error.mjs";
-import { Uo } from "../internal/utils/values.mjs";
+import { safeJSON } from "../internal/utils/values.mjs";
 import { isAbortError_2 } from "../internal/errors.mjs";
 import { releaseAbortListener } from "../internal/request-signal.mjs";
 import { LineDecoder } from "../internal/decoders/line.mjs";
@@ -27,7 +27,7 @@ var Stream = (() => {
       __classPrivateFieldSet(this, _Stream_client, client, "f");
     }
     static rawEvents(response, controller = new AbortController()) {
-      return mu(response, controller);
+      return iterateSseEvents(response, controller);
     }
     static fromSSEResponse(response, controller, client) {
       let consumed = false;
@@ -40,7 +40,7 @@ var Stream = (() => {
         consumed = true;
         let done = false;
         try {
-          for await (let sse of mu(response, controller)) {
+          for await (let sse of iterateSseEvents(response, controller)) {
             if (sse.event === "completion")
               try {
                 yield JSON.parse(sse.data);
@@ -106,7 +106,7 @@ var Stream = (() => {
               }
             if (sse.event === "ping") continue;
             if (sse.event === "error") {
-              let body = Uo(sse.data) ?? sse.data;
+              let body = safeJSON(sse.data) ?? sse.data;
               let type = body?.error?.type;
               throw new APIError(undefined, body, undefined, response.headers, type);
             }
@@ -184,11 +184,11 @@ var Stream = (() => {
       ];
     }
     toReadableStream() {
-      let n = this;
+      let stream = this;
       let iter;
       return makeReadableStream({
         async start() {
-          iter = n[Symbol.asyncIterator]();
+          iter = stream[Symbol.asyncIterator]();
         },
         async pull(ctrl) {
           try {

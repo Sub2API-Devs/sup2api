@@ -47,41 +47,42 @@ function attachErrorCode(code) {
 /**
  * 从错误文本分类附加失败原因。
  */
-function classifyAttachError(e) {
-  if (e === undefined || e === "") return;
-  if (KICKED_ATTACH_CODE.test(e)) return "ekicked";
-  if (e.includes("ERESPAWNING")) return "erespawning";
-  if (e.includes("ESTARTING")) return "estarting";
-  if (e.includes("ESTALLED")) return "estalled";
-  if (e.includes("EUNVERIFIED")) return "eunverified";
-  if (e.includes("EHOSTDEAD")) return "ehostdead";
-  if (SUPERVISOR_DETACH_CODE.test(e)) return "unknown_code";
+function classifyAttachError(code) {
+  if (code === undefined || code === "") return;
+  if (KICKED_ATTACH_CODE.test(code)) return "ekicked";
+  if (code.includes("ERESPAWNING")) return "erespawning";
+  if (code.includes("ESTARTING")) return "estarting";
+  if (code.includes("ESTALLED")) return "estalled";
+  if (code.includes("EUNVERIFIED")) return "eunverified";
+  if (code.includes("EHOSTDEAD")) return "ehostdead";
+  if (SUPERVISOR_DETACH_CODE.test(code)) return "unknown_code";
   return "worker_detach";
 }
 //@ chunk-vrr64ez0.js:9891-10803 placement
 /**
  * 附加结束时上报遥测（交互是否到达、耗时）。
  */
-function reportAttachTelemetry(e, n, o) {
-  if (!e) return;
-  let reached = e.interactive?.reached;
-  let marksExpected = n === "detached" ? e.interactive?.marksExpected : undefined;
-  let s = n === "detached" && reached === undefined && marksExpected === true;
-  let h = s && e.t0 !== undefined ? Math.round(performance.now() - e.t0) : undefined;
+function reportAttachTelemetry(markers, outcome, failureClass) {
+  if (!markers) return;
+  let reached = markers.interactive?.reached;
+  let marksExpected = outcome === "detached" ? markers.interactive?.marksExpected : undefined;
+  let isCensored = outcome === "detached" && reached === undefined && marksExpected === true;
+  let elapsedMs =
+    isCensored && markers.t0 !== undefined ? Math.round(performance.now() - markers.t0) : undefined;
   logEvent("tengu_bg_attach_outcome", {
-    outcome: fromEnum(n),
+    outcome: fromEnum(outcome),
     got_ack: false,
     got_first_frame: false,
     synthetic: true,
     apc_detach: false,
-    failure_class: fromEnumOpt(n === "error" ? (o ?? "daemon_unavailable") : undefined),
-    gesture_id: sanitizeMarkName(e.gestureId),
-    attempt: ++e.attempt,
-    surface: fromEnumOpt(e.surface),
-    daemon_booted: e.daemonBooted,
-    via: fromEnumOpt(e.interactive?.via),
-    attach_cold: e.interactive?.attachCold,
-    attach_ms: reached !== undefined ? reached.attachMs : h,
+    failure_class: fromEnumOpt(outcome === "error" ? (failureClass ?? "daemon_unavailable") : undefined),
+    gesture_id: sanitizeMarkName(markers.gestureId),
+    attempt: ++markers.attempt,
+    surface: fromEnumOpt(markers.surface),
+    daemon_booted: markers.daemonBooted,
+    via: fromEnumOpt(markers.interactive?.via),
+    attach_cold: markers.interactive?.attachCold,
+    attach_ms: reached !== undefined ? reached.attachMs : elapsedMs,
     content_paint_ms: reached !== undefined ? Math.round(reached.contentPaintMs) : undefined,
     prompt_idle_ms: reached !== undefined ? Math.round(reached.promptIdleMs) : undefined,
     msgs_loaded: reached?.msgsLoaded,
@@ -89,7 +90,7 @@ function reportAttachTelemetry(e, n, o) {
     msgs_rendered_at_first_paint: reached?.msgsRenderedAtFirstPaint,
     first_frame_kind: fromEnumOpt(reached !== undefined ? "real" : undefined),
     marks_expected: reached !== undefined ? true : marksExpected,
-    attach_censored: s ? true : undefined,
+    attach_censored: isCensored ? true : undefined,
   });
 }
 //@ chunk-vrr64ez0.js:10803-10911 placement
@@ -97,12 +98,12 @@ function reportAttachTelemetry(e, n, o) {
  * 向守护进程询问短 id 对应的后台会话是否存在，明确不存在时为真。
  */
 async function isBackgroundSessionGone(short) {
-  let n = await controlRequest({
+  let reply = await controlRequest({
     proto: BG_PROTO,
     op: "has",
     short,
   });
-  return n.ok && n.op === "has" && n.present === false;
+  return reply.ok && reply.op === "has" && reply.present === false;
 }
 export {
   reportAttachTelemetry,

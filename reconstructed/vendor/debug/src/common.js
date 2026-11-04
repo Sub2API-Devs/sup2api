@@ -5,11 +5,11 @@
  * pieces: chunk-h6b7mazd.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_ms } from "../../ms/index.js";
 
 //@ chunk-h6b7mazd.js:28648-30759 cjs-fingerprint
-var require_common = x(function (cjsExports, cjsModule) {
+var require_common = __commonJS(function (cjsExports, cjsModule) {
   function setup(env) {
     createDebug.debug = createDebug;
     createDebug.default = createDebug;
@@ -41,12 +41,12 @@ var require_common = x(function (cjsExports, cjsModule) {
       let enabledCache;
       function debug(...args) {
         if (!debug.enabled) return;
-        let E = debug;
+        let selfRef = debug;
         let curr = Number(new Date());
         let ms = curr - (prevTime || curr);
-        E.diff = ms;
-        E.prev = prevTime;
-        E.curr = curr;
+        selfRef.diff = ms;
+        selfRef.prev = prevTime;
+        selfRef.curr = curr;
         prevTime = curr;
         args[0] = createDebug.coerce(args[0]);
         if (typeof args[0] !== "string") args.unshift("%O");
@@ -57,14 +57,14 @@ var require_common = x(function (cjsExports, cjsModule) {
           let formatter = createDebug.formatters[format];
           if (typeof formatter === "function") {
             let val = args[index];
-            match = formatter.call(E, val);
+            match = formatter.call(selfRef, val);
             args.splice(index, 1);
             index--;
           }
           return match;
         });
-        createDebug.formatArgs.call(E, args);
-        (E.log || createDebug.log).apply(E, args);
+        createDebug.formatArgs.call(selfRef, args);
+        (selfRef.log || createDebug.log).apply(selfRef, args);
       }
       debug.namespace = namespace;
       debug.useColors = createDebug.useColors();

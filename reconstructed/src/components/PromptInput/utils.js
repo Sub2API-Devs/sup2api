@@ -10,15 +10,10 @@
  */
 import { supportsShiftEnter, hasUsedBackslashReturn } from "../../commands/terminalSetup/terminalSetup.js";
 
-//@ chunk-q8cyy466.js:17186-17242 affinity
-var MODE_LABELS = {
-  vim: "Editor mode",
-  "output-style": "Output style",
-};
-//@ chunk-q8cyy466.js:17242-17324 fingerprint = isVimModeEnabled (0.406)
-function isVimModeEnabled(o) {
-  let t = o && MODE_LABELS[o] ? o : "vim";
-  return `/${t} moved \u2192 ${MODE_LABELS[t]} in /config`;
+//@ chunk-tzghj6zv.js:5821-5963 fingerprint = getNewlineInstructions (0.753)
+function getNewlineInstructions() {
+  if (supportsShiftEnter()) return "shift + \u23CE for newline";
+  return hasUsedBackslashReturn() ? "\\\u23CE for newline" : "backslash (\\) + return (\u23CE) for newline";
 }
 //@ chunk-18hwfzwa.js:50897-51162 fingerprint = isNonSpacePrintable (0.892)
 function isNonSpacePrintable(input, key) {
@@ -45,9 +40,14 @@ function isNonSpacePrintable(input, key) {
     !/[\x00-\x1f\x7f]/.test(input)
   );
 }
-//@ chunk-tzghj6zv.js:5821-5963 fingerprint = getNewlineInstructions (0.753)
-function getNewlineInstructions() {
-  if (supportsShiftEnter()) return "shift + \u23CE for newline";
-  return hasUsedBackslashReturn() ? "\\\u23CE for newline" : "backslash (\\) + return (\u23CE) for newline";
+//@ chunk-q8cyy466.js:17186-17242 affinity
+var MODE_LABELS = {
+  vim: "Editor mode",
+  "output-style": "Output style",
+};
+//@ chunk-q8cyy466.js:17242-17324 fingerprint = isVimModeEnabled (0.406)
+function isVimModeEnabled(mode) {
+  let target = mode && MODE_LABELS[mode] ? mode : "vim";
+  return `/${target} moved \u2192 ${MODE_LABELS[target]} in /config`;
 }
 export { isNonSpacePrintable, getNewlineInstructions, isVimModeEnabled };

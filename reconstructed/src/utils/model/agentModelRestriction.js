@@ -12,21 +12,21 @@ import { displayModelName, formatModelRestrictedNotice } from "./validateModel.j
 import { createInformationalSystemMessage } from "../messages.js";
 
 //@ chunk-n0w240z3.js:266-330 placement
-function agentDisplayName(e) {
-  let t = displayModelName(e);
-  return t === displayModelName("") ? "(unnamed agent)" : t;
+function agentDisplayName(agent) {
+  let name = displayModelName(agent);
+  return name === displayModelName("") ? "(unnamed agent)" : name;
 }
 //@ chunk-n0w240z3.js:330-382 placement
-function agentRestrictedNoticeText(e, t, i) {
-  return `${agentDisplayName(e)} agent: ${formatModelRestrictedNotice(t, i)}`;
+function agentRestrictedNoticeText(agent, requestedModel, resolvedModel) {
+  return `${agentDisplayName(agent)} agent: ${formatModelRestrictedNotice(requestedModel, resolvedModel)}`;
 }
 //@ chunk-n0w240z3.js:382-551 placement
-function buildAgentModelRestrictedNotice(e, t, i) {
+function buildAgentModelRestrictedNotice(agent, requestedModel, resolvedModel) {
   return {
     type: "notification",
     notification: {
-      key: `agent-model-restricted-${agentDisplayName(e)}-${displayModelName(t)}`,
-      text: agentRestrictedNoticeText(e, t, i),
+      key: `agent-model-restricted-${agentDisplayName(agent)}-${displayModelName(requestedModel)}`,
+      text: agentRestrictedNoticeText(agent, requestedModel, resolvedModel),
       priority: "medium",
       color: "warning",
       timeoutMs: 1e4,
@@ -37,18 +37,20 @@ function buildAgentModelRestrictedNotice(e, t, i) {
 /**
  * 生成"agent 模型受限"通知的上报回调。
  */
-function agentModelRestrictedReporter(bareCommandName, t) {
-  return (i, n) => {
-    t?.(buildAgentModelRestrictedNotice(bareCommandName, i, n));
+function agentModelRestrictedReporter(agent, notify) {
+  return (requestedModel, reason) => {
+    notify?.(buildAgentModelRestrictedNotice(agent, requestedModel, reason));
   };
 }
 //@ chunk-n0w240z3.js:598-659 placement
 /**
  * 子代理模型受限时发通知。
  */
-function agentModelRestrictionNotifier(e, appendSystemMessage) {
-  return (i, n) => {
-    appendSystemMessage?.(createInformationalSystemMessage(agentRestrictedNoticeText(e, i, n), "warning"));
+function agentModelRestrictionNotifier(agent, appendSystemMessage) {
+  return (requestedModel, reason) => {
+    appendSystemMessage?.(
+      createInformationalSystemMessage(agentRestrictedNoticeText(agent, requestedModel, reason), "warning"),
+    );
   };
 }
 export { agentModelRestrictionNotifier, agentModelRestrictedReporter };

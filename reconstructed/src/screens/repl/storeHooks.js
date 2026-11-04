@@ -10,7 +10,7 @@
  */
 import { promptInputStoreFor } from "../../state/promptInputStore.js";
 import { useSession } from "../../context/session.js";
-import { yt } from "../../../vendor/react/cjs/react.production.js";
+import { useSyncExternalStore } from "../../../vendor/react/cjs/react.production.js";
 import { uiSignals } from "../../state/uiSignals.js";
 import { TMUX_SESSION } from "../../utils/terminalPanel.js";
 import {
@@ -28,8 +28,8 @@ function sessionStore() {
 }
 //@ chunk-18hwfzwa.js:328777-328848 placement
 function useStoreValue() {
-  let h = sessionStore();
-  return yt(h.subscribe, () => h.getState().value);
+  let store = sessionStore();
+  return useSyncExternalStore(store.subscribe, () => store.getState().value);
 }
 //@ chunk-18hwfzwa.js:328848-328873 placement
 /**
@@ -41,32 +41,32 @@ var LONGER_INPUT_PLACEHOLDER = "[longer input]";
  * 订阅草稿值（超过 1 个字符时返回固定占位，减少重渲染）。
  */
 function useShortDraftValue() {
-  let h = sessionStore();
-  return yt(h.subscribe, () => {
-    let { value: x } = h.getState();
-    return x.length <= 1 ? x : LONGER_INPUT_PLACEHOLDER;
+  let store = sessionStore();
+  return useSyncExternalStore(store.subscribe, () => {
+    let { value } = store.getState();
+    return value.length <= 1 ? value : LONGER_INPUT_PLACEHOLDER;
   });
 }
 //@ chunk-18hwfzwa.js:328978-329051 placement
 function useVimMode() {
-  let h = sessionStore();
-  return yt(h.subscribe, () => h.getState().vimMode);
+  let store = sessionStore();
+  return useSyncExternalStore(store.subscribe, () => store.getState().vimMode);
 }
 //@ chunk-18hwfzwa.js:329051-329123 placement
 function useActive() {
-  let h = sessionStore();
-  return yt(h.subscribe, () => h.getState().active);
+  let store = sessionStore();
+  return useSyncExternalStore(store.subscribe, () => store.getState().active);
 }
 //@ chunk-18hwfzwa.js:329123-329203 placement
 function useLaunchWarning() {
-  let h = sessionStore();
-  return yt(h.subscribe, () => h.getState().launchWarning);
+  let store = sessionStore();
+  return useSyncExternalStore(store.subscribe, () => store.getState().launchWarning);
 }
 //@ chunk-18hwfzwa.js:329203-329283 placement
 function setBlockingToolProgress(pauseAnimation) {
-  uiSignals.blockingToolProgress.setState((x) =>
-    x.active === pauseAnimation
-      ? x
+  uiSignals.blockingToolProgress.setState((state) =>
+    state.active === pauseAnimation
+      ? state
       : {
           active: pauseAnimation,
         },
@@ -78,15 +78,15 @@ function getBlockingToolProgress() {
 }
 //@ chunk-18hwfzwa.js:329347-329411 placement
 function useBlockingToolProgress() {
-  return yt(uiSignals.blockingToolProgress.subscribe, getBlockingToolProgress);
+  return useSyncExternalStore(uiSignals.blockingToolProgress.subscribe, getBlockingToolProgress);
 }
 //@ chunk-18hwfzwa.js:329411-329496 placement
-function setDialogHostUnmounted(h) {
-  uiSignals.dialogHostUnmounted.setState((x) =>
-    x.unmounted === h
-      ? x
+function setDialogHostUnmounted(unmounted) {
+  uiSignals.dialogHostUnmounted.setState((state) =>
+    state.unmounted === unmounted
+      ? state
       : {
-          unmounted: h,
+          unmounted,
         },
   );
 }
@@ -96,15 +96,23 @@ function isDialogHostUnmounted() {
 }
 //@ chunk-18hwfzwa.js:329562-329625 placement
 function useDialogHostUnmounted() {
-  return yt(uiSignals.dialogHostUnmounted.subscribe, isDialogHostUnmounted);
+  return useSyncExternalStore(uiSignals.dialogHostUnmounted.subscribe, isDialogHostUnmounted);
 }
 //@ chunk-18hwfzwa.js:329625-329730 placement
 function getActiveBottomSurface() {
   let blockingToolProgress = useBlockingToolProgress();
   let active = useActive();
-  let D = TMUX_SESSION();
+  let tmux = TMUX_SESSION();
   let hasDraftText = useHasDraftText();
-  return blockingToolProgress ? "progress" : D ? "panel" : hasDraftText ? "draft" : active ? "typing" : null;
+  return blockingToolProgress
+    ? "progress"
+    : tmux
+      ? "panel"
+      : hasDraftText
+        ? "draft"
+        : active
+          ? "typing"
+          : null;
 }
 //@ chunk-18hwfzwa.js:329787-329889 placement
 /**
@@ -112,8 +120,11 @@ function getActiveBottomSurface() {
  */
 function useHasDraftText() {
   let topAutoDialogHidden = useTopAutoDialogHidden("draft");
-  let x = sessionStore();
-  return yt(x.subscribe, () => topAutoDialogHidden && x.getState().value.trim() !== "");
+  let store = sessionStore();
+  return useSyncExternalStore(
+    store.subscribe,
+    () => topAutoDialogHidden && store.getState().value.trim() !== "",
+  );
 }
 //@ chunk-18hwfzwa.js:329999-330066 placement
 function useAutoDialogKind() {
@@ -133,28 +144,32 @@ function useAutoDialogKindAlt() {
 /**
  * 订阅对话框与草稿，计算当前可以自动弹出的对话框种类。
  */
-function createAutoDialogSelector(dialogStore, x) {
+function createAutoDialogSelector(dialogStore, store) {
   return {
-    subscribe(D) {
-      let L = [
-        dialogStore.subscribe(D),
-        x.subscribe(D),
-        uiSignals.blockingToolProgress.subscribe(D),
-        uiSignals.dialogHostUnmounted.subscribe(D),
+    subscribe(listener) {
+      let unsubscribers = [
+        dialogStore.subscribe(listener),
+        store.subscribe(listener),
+        uiSignals.blockingToolProgress.subscribe(listener),
+        uiSignals.dialogHostUnmounted.subscribe(listener),
       ];
       return () => {
-        for (let ee of L) ee();
+        for (let unsubscribe of unsubscribers) unsubscribe();
       };
     },
     get() {
       let state = dialogStore.getState();
-      let L = topAutoDialog(state);
-      let ke = topUserDialog(state) !== null && isDialogHiddenWhile(L, "panel");
-      let state_2 = x.getState();
-      let Be = state_2.value.trim() !== "" && isDialogHiddenWhile(L, "draft");
-      return getBlockingToolProgress() || ke || Be || state_2.active || isDialogHostUnmounted()
+      let autoDialog = topAutoDialog(state);
+      let panelHidden = topUserDialog(state) !== null && isDialogHiddenWhile(autoDialog, "panel");
+      let state_2 = store.getState();
+      let draftHidden = state_2.value.trim() !== "" && isDialogHiddenWhile(autoDialog, "draft");
+      return getBlockingToolProgress() ||
+        panelHidden ||
+        draftHidden ||
+        state_2.active ||
+        isDialogHostUnmounted()
         ? undefined
-        : L?.kind;
+        : autoDialog?.kind;
     },
   };
 }

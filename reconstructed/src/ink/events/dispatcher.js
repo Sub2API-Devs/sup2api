@@ -11,7 +11,12 @@
 import { HANDLER_FOR_EVENT } from "./event-handlers.js";
 import { logError } from "../../utils/log.js";
 import { withTelemetryMessage, toError } from "../../utils/errors.js";
-import { Fc, Ia, ul, Uc } from "../../../vendor/yoga-layout/dist/src/generated/YGEnums.js";
+import {
+  discreteEventPriority,
+  continuousEventPriority,
+  defaultEventPriority,
+  noEventPriority,
+} from "../../../vendor/yoga-layout/dist/src/generated/YGEnums.js";
 
 //@ chunk-bzr73sfg.js:188315-188447 fingerprint = getHandler (1)
 /**
@@ -86,14 +91,14 @@ function getEventPriority(eventType) {
     case "blur":
     case "paste":
     case "action":
-      return Fc;
+      return discreteEventPriority;
     case "resize":
     case "scroll":
     case "wheel":
     case "mousemove":
-      return Ia;
+      return continuousEventPriority;
     default:
-      return ul;
+      return defaultEventPriority;
   }
 }
 //@ chunk-bzr73sfg.js:189183-190017 fingerprint = Dispatcher (0.956)
@@ -103,7 +108,7 @@ function getEventPriority(eventType) {
 class Dispatcher {
   discreteUpdates;
   currentEvent = null;
-  currentUpdatePriority = ul;
+  currentUpdatePriority = defaultEventPriority;
   constructor(discreteUpdates = null) {
     this.discreteUpdates = discreteUpdates;
   }
@@ -111,9 +116,9 @@ class Dispatcher {
     this.currentUpdatePriority = currentUpdatePriority;
   }
   resolveEventPriority() {
-    if (this.currentUpdatePriority !== Uc) return this.currentUpdatePriority;
+    if (this.currentUpdatePriority !== noEventPriority) return this.currentUpdatePriority;
     if (this.currentEvent) return getEventPriority(this.currentEvent.type);
-    return ul;
+    return defaultEventPriority;
   }
   dispatch(target, event) {
     let previousEvent = this.currentEvent;
@@ -136,7 +141,7 @@ class Dispatcher {
   dispatchContinuous(target, event) {
     let previousPriority = this.currentUpdatePriority;
     try {
-      this.currentUpdatePriority = Ia;
+      this.currentUpdatePriority = continuousEventPriority;
       return this.dispatch(target, event);
     } finally {
       this.currentUpdatePriority = previousPriority;

@@ -23,13 +23,13 @@ import { isNonWslUncPath, isNetworkMountRoot } from "./networkPaths.js";
 function getClaudeTempDirRealpath() {
   let sessionPathsCache = getSessionPathsCache();
   if (sessionPathsCache.claudeTempDir !== undefined && !isDiskless()) return sessionPathsCache.claudeTempDir;
-  let n = claudeTempDir();
+  let tempDir = claudeTempDir();
   let fsImplementation = getFsImplementation();
-  let r = n;
+  let realTempDir = tempDir;
   try {
-    r = fsImplementation.realpathSync(n);
+    realTempDir = fsImplementation.realpathSync(tempDir);
   } catch {}
-  sessionPathsCache.claudeTempDir = r + sep_2;
+  sessionPathsCache.claudeTempDir = realTempDir + sep_2;
   return sessionPathsCache.claudeTempDir;
 }
 //@ chunk-g54kbxqw.js:46353-46554 placement
@@ -40,13 +40,13 @@ function getChildProcessTmpDirRealpath() {
   let sessionPathsCache = getSessionPathsCache();
   if (sessionPathsCache.childProcessTmpDir !== undefined && !isDiskless())
     return sessionPathsCache.childProcessTmpDir;
-  let n = childProcessTmpDir();
+  let tempDir = childProcessTmpDir();
   let fsImplementation = getFsImplementation();
-  let r = n;
+  let realTempDir = tempDir;
   try {
-    r = fsImplementation.realpathSync(n);
+    realTempDir = fsImplementation.realpathSync(tempDir);
   } catch {}
-  sessionPathsCache.childProcessTmpDir = r + sep_2;
+  sessionPathsCache.childProcessTmpDir = realTempDir + sep_2;
   return sessionPathsCache.childProcessTmpDir;
 }
 //@ chunk-g54kbxqw.js:46554-46585 placement
@@ -60,8 +60,8 @@ function sessionTempDirRealpath() {
 /**
  * 临时目录下按路径分目录的任务输出根。
  */
-function taskRootUnderTemp(e) {
-  return join_2(getClaudeTempDirRealpath(), sanitizePath(e)) + sep_2;
+function taskRootUnderTemp(id) {
+  return join_2(getClaudeTempDirRealpath(), sanitizePath(id)) + sep_2;
 }
 //@ chunk-g54kbxqw.js:46626-46742 placement = normalizeFilePath (1)
 function normalizeFilePath(filePath) {

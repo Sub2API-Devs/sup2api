@@ -11,12 +11,18 @@ import { isIP } from "net";
 import { endRequestAfterResponse } from "./emitted-connection.js";
 import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
 import { sanitizeDenialReason } from "./sandbox-violation-store.js";
-import { ol } from "./resolved-address-guard.js";
+import { isResolvedAddressDeniedError } from "./resolved-address-guard.js";
+import { deferInit } from "../../../../../runtime/deferred-init.js";
 
 //@ chunk-fq0cr76a.js:654888-654989 esm-fingerprint
-var BODYLESS_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-var ECHO_METHODS = new Set(["TRACE", "TRACK"]);
-var DEFAULT_DENY_REASON = "denied by sandbox policy";
+var BODYLESS_METHODS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ECHO_METHODS;
+var DEFAULT_DENY_REASON;
+deferInit("chunk-fq0cr76a.js:654888", () => {
+  BODYLESS_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+  ECHO_METHODS = new Set(["TRACE", "TRACK"]);
+  DEFAULT_DENY_REASON = "denied by sandbox policy";
+});
 //@ chunk-fq0cr76a.js:654989-655161 esm-fingerprint
 function destroyAfterResponse(req, res) {
   if (res.destroyed) {
@@ -380,17 +386,20 @@ function foldHeaderName(name) {
   return name.toLowerCase().replace(/[_.]/g, "-");
 }
 //@ chunk-fq0cr76a.js:661129-661261 esm-fingerprint
-var UNSETTABLE_HEADERS = new Set([
-  "host",
-  "connection",
-  "keep-alive",
-  "proxy-connection",
-  "transfer-encoding",
-  "te",
-  "trailer",
-  "upgrade",
-  "content-length",
-]);
+var UNSETTABLE_HEADERS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fq0cr76a.js:661129", () => {
+  UNSETTABLE_HEADERS = new Set([
+    "host",
+    "connection",
+    "keep-alive",
+    "proxy-connection",
+    "transfer-encoding",
+    "te",
+    "trailer",
+    "upgrade",
+    "content-length",
+  ]);
+});
 //@ chunk-fq0cr76a.js:661261-661397 esm-fingerprint
 function removeHeadersFolded(headers, names) {
   let drop = new Set();
@@ -503,7 +512,7 @@ function denyMarkHeader(mark) {
   return typeof mark === "string" ? ["X-Proxy-Error", mark] : [mark.name, mark.value];
 }
 //@ chunk-fq0cr76a.js:663218-663377 esm-fingerprint
-function Pm(reason, tag = DEFAULT_DENY_TAG, phrase = "Forbidden") {
+function rawDenied(reason, tag = DEFAULT_DENY_TAG, phrase = "Forbidden") {
   let [name, value] = denyMarkHeader(tag);
   return (
     `HTTP/1.1 403 ${sanitizeDenialReason(String(phrase)).replace(/[^ -~]/gu, "?")}\r
@@ -535,7 +544,7 @@ function respondDenied(res, reason, tag = DEFAULT_DENY_TAG, status = 403) {
 }
 //@ chunk-fq0cr76a.js:663572-663779 esm-fingerprint
 function respondUpstreamError(res, err, denyHeader) {
-  if (ol(err))
+  if (isResolvedAddressDeniedError(err))
     respondDenied(
       res,
       err.message,
@@ -577,5 +586,5 @@ export {
   applyHeaderEdits,
   invokeRequestFilterOnResponse,
   removeHeadersFolded,
-  Pm,
+  rawDenied,
 };

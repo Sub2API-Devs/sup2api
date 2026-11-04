@@ -5,10 +5,10 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:13686-14833 cjs-fingerprint
-var require_dijkstra = x(function (cjsExports, cjsModule) {
+var require_dijkstra = __commonJS(function (cjsExports, cjsModule) {
   var dijkstra = {
     single_source_shortest_paths: function (graph, s_2, d) {
       var predecessors = {};

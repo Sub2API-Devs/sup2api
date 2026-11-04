@@ -5,7 +5,7 @@
  * pieces: chunk-bwbq4xvm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_debug } from "../internal/debug.js";
 import { require_constants } from "../internal/constants.js";
 import { require_re } from "../internal/re.js";
@@ -13,7 +13,7 @@ import { require_parse_options } from "../internal/parse-options.js";
 import { require_identifiers } from "../internal/identifiers.js";
 
 //@ chunk-bwbq4xvm.js:5826-10148 cjs-fingerprint
-var require_semver = x(function (cjsExports, cjsModule) {
+var require_semver = __commonJS(function (cjsExports, cjsModule) {
   var debug = require_debug();
   var { MAX_LENGTH, MAX_SAFE_INTEGER } = require_constants();
   var { safeRe: re, t } = require_re();

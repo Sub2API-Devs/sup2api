@@ -29,25 +29,29 @@ import { GITHUB_HOST } from "../../utils/git/githubUrl.js";
  * 合并继承环境、服务器环境与 runner 强制变量；丢弃与强制变量同名变体或非法值并回调 onDropped。
  */
 function mergeSessionEnv({ inheritedEnv, serverEnv, enforcedEnv, onDropped }) {
-  let a = new Set(Object.keys(enforcedEnv).map(foldEnvNameForComparison));
+  let enforcedFoldedNames = new Set(Object.keys(enforcedEnv).map(foldEnvNameForComparison));
   let included = String(enforcedEnv.PATH).includes("\x00");
-  let l = new Map();
-  for (let [u, h] of [
+  let merged = new Map();
+  for (let [source, envMap] of [
     ["inherited", inheritedEnv],
     ["server", serverEnv],
   ])
-    for (let [key, value] of Object.entries(h)) {
+    for (let [key, value] of Object.entries(envMap)) {
       if (value === undefined) continue;
-      let T = foldEnvNameForComparison(key);
+      let foldedKey = foldEnvNameForComparison(key);
       if (key === "" || /[=\0]/.test(key) || String(value).includes("\x00"))
         onDropped(
           jsonStringify(firstLineOf(firstLineOf(key, "="), "\x00")),
           "not a usable environment entry",
-          u,
+          source,
         );
-      else if (!a.has(T) || (u === "inherited" && included && T === "PATH")) l.set(key, value);
+      else if (
+        !enforcedFoldedNames.has(foldedKey) ||
+        (source === "inherited" && included && foldedKey === "PATH")
+      )
+        merged.set(key, value);
       else if (!Object.hasOwn(enforcedEnv, key))
-        onDropped(jsonStringify(key), "a variant of a runner-enforced name", u);
+        onDropped(jsonStringify(key), "a variant of a runner-enforced name", source);
     }
   for (let [key, value] of Object.entries(enforcedEnv)) {
     if (value === undefined) continue;
@@ -57,9 +61,9 @@ function mergeSessionEnv({ inheritedEnv, serverEnv, enforcedEnv, onDropped }) {
         "a runner-enforced value that is not a usable environment value",
         "enforced",
       );
-    else l.set(key, value);
+    else merged.set(key, value);
   }
-  return Object.fromEntries(l);
+  return Object.fromEntries(merged);
 }
 //@ chunk-hm0ce8vc.js:36432-36524 placement
 /**
@@ -92,26 +96,26 @@ function validateAgentFiles(agentFiles) {
       `agent_files has ${agentFiles.length} entries (at most ${MAX_AGENT_FILES})`,
       "agent_files has too many entries",
     );
-  let n = new Set();
+  let seenNames = new Set();
   for (let agentFile of agentFiles) {
-    let s = agentFile?.name;
-    if (typeof s !== "string" || !AGENT_NAME_PATTERN.test(s))
+    let name = agentFile?.name;
+    if (typeof name !== "string" || !AGENT_NAME_PATTERN.test(name))
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `agent_files entry rejected (name must match ${AGENT_NAME_PATTERN}): ${jsonStringify(s)}`,
+        `agent_files entry rejected (name must match ${AGENT_NAME_PATTERN}): ${jsonStringify(name)}`,
         "agent_files entry has an invalid name",
       );
     let content = agentFile.content;
     if (typeof content !== "string" || Buffer.byteLength(content) > MAX_AGENT_FILE_BYTES)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `agent_files entry '${s}' rejected (content must be a string of at most ${MAX_AGENT_FILE_BYTES} bytes)`,
+        `agent_files entry '${name}' rejected (content must be a string of at most ${MAX_AGENT_FILE_BYTES} bytes)`,
         "agent_files entry has invalid content",
       );
-    if (n.has(s))
+    if (seenNames.has(name))
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `agent_files contains duplicate name: ${jsonStringify(s)}`,
+        `agent_files contains duplicate name: ${jsonStringify(name)}`,
         "agent_files contains a duplicate name",
       );
-    n.add(s);
+    seenNames.add(name);
   }
 }
 //@ chunk-hm0ce8vc.js:37395-37843 placement
@@ -120,24 +124,28 @@ function validateAgentFiles(agentFiles) {
  */
 function buildAgentsArgFromFiles(agentFiles, serverAgentsArg) {
   validateAgentFiles(agentFiles);
-  let r =
+  let parsedServerAgents =
     serverAgentsArg === undefined || String(serverAgentsArg) === ""
       ? {}
       : safeParseJSON(String(serverAgentsArg), false);
-  if (typeof r !== "object" || r === null || Array.isArray(r))
+  if (
+    typeof parsedServerAgents !== "object" ||
+    parsedServerAgents === null ||
+    Array.isArray(parsedServerAgents)
+  )
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "claude_code_args agents is not a JSON object",
       "claude_code_args agents is not a JSON object",
     );
-  let s = {
-    ...r,
+  let agents = {
+    ...parsedServerAgents,
   };
-  for (let { name, content } of agentFiles) s[name] = parseAgentFileEntry(name, content);
-  let agentsJson = jsonStringify(s);
-  let o = validateAgentsJson(agentsJson);
-  if (o !== null)
+  for (let { name, content } of agentFiles) agents[name] = parseAgentFileEntry(name, content);
+  let agentsJson = jsonStringify(agents);
+  let validationError = validateAgentsJson(agentsJson);
+  if (validationError !== null)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `agent_files do not form a valid --agents value: ${o}`,
+      `agent_files do not form a valid --agents value: ${validationError}`,
       "agent_files do not form a valid --agents value",
     );
   return agentsJson;
@@ -222,8 +230,8 @@ function parseAgentFileEntry(name, content) {
 /**
  * 把合成的 agents 定义写入会话配置目录（remote-agents.json）。
  */
-async function writeSessionAgentsFile(e) {
-  let { args, agentFiles, serverAgentsArg, configDir, stagedPaths } = e;
+async function writeSessionAgentsFile(options) {
+  let { args, agentFiles, serverAgentsArg, configDir, stagedPaths } = options;
   if (
     Array.isArray(agentFiles) &&
     agentFiles.length === 0 &&
@@ -234,27 +242,27 @@ async function writeSessionAgentsFile(e) {
     "self_hosted_agent_files",
     async () => {
       let agentsArgFromFiles = buildAgentsArgFromFiles(agentFiles, serverAgentsArg);
-      let u = join(configDir, REMOTE_AGENTS_JSON);
-      stagedPaths.push(u);
-      let h = {
+      let agentsPath = join(configDir, REMOTE_AGENTS_JSON);
+      stagedPaths.push(agentsPath);
+      let cancelState = {
         cancelled: false,
       };
       try {
         await withBoundedTimeout(
-          writeSessionFileAtomically(configDir, REMOTE_AGENTS_JSON, agentsArgFromFiles, 384, h),
+          writeSessionFileAtomically(configDir, REMOTE_AGENTS_JSON, agentsArgFromFiles, 384, cancelState),
           AGENTS_FILE_WRITE_TIMEOUT_MS,
-          `[runner:stuck] write ${u} (check NFS/CSI mount health)`,
+          `[runner:stuck] write ${agentsPath} (check NFS/CSI mount health)`,
         );
       } catch (error) {
-        h.cancelled = true;
+        cancelState.cancelled = true;
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
           `could not write the --agents file for the session (${sanitizedErrCodeForTelemetry(error) ?? "unknown error"})`,
           "could not write the --agents file for the session",
         );
       }
-      args.push("--agents", u);
-      e.onDebug(
-        `[runner:session] delivering agents by file: ${u} (${agentFiles.length} server-composed, ${Buffer.byteLength(agentsArgFromFiles)} bytes)`,
+      args.push("--agents", agentsPath);
+      options.onDebug(
+        `[runner:session] delivering agents by file: ${agentsPath} (${agentFiles.length} server-composed, ${Buffer.byteLength(agentsArgFromFiles)} bytes)`,
       );
     },
     () => "deliver_failed",

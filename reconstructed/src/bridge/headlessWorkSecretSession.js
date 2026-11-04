@@ -69,173 +69,179 @@ import { CCRClient } from "../cli/transports/ccrClient.js";
 import { configureApiKeyHeaders } from "../services/api/client.js";
 
 //@ chunk-h3xe040t.js:13316-13399 placement
-function pickSessionIdFromWorkSecret(r, u) {
-  let jwtSessionId = getJwtSessionId(r.session_ingress_token);
-  return jwtSessionId !== undefined && sameSessionId(jwtSessionId, u) ? jwtSessionId : u;
+function pickSessionIdFromWorkSecret(secret, fallbackSessionId) {
+  let jwtSessionId = getJwtSessionId(secret.session_ingress_token);
+  return jwtSessionId !== undefined && sameSessionId(jwtSessionId, fallbackSessionId)
+    ? jwtSessionId
+    : fallbackSessionId;
 }
 //@ chunk-h3xe040t.js:13399-13470 placement
-function resolveBridgeSessionId(r, bridgeSessionId) {
+function resolveBridgeSessionId(secret, fallbackSessionId) {
   try {
-    let _ = pickSessionIdFromWorkSecret(decodeWorkSecret(r), bridgeSessionId);
-    return isSafeBridgeId(_) ? _ : bridgeSessionId;
+    let sessionId = pickSessionIdFromWorkSecret(decodeWorkSecret(secret), fallbackSessionId);
+    return isSafeBridgeId(sessionId) ? sessionId : fallbackSessionId;
   } catch {
-    return bridgeSessionId;
+    return fallbackSessionId;
   }
 }
 //@ chunk-h3xe040t.js:13470-15324 placement
 /**
  * 解析 work secret 里的 claude_code_args/mcp_config，为 sdk_host 通道生成会话配置（模型、权限、拒绝规则、元 MCP）。
  */
-function applySdkHostLaneConfig(r, u) {
-  let _ = isBridgeServerSessionConfigEnabled();
+function applySdkHostLaneConfig(secret, host) {
+  let gateEnabled = isBridgeServerSessionConfigEnabled();
   try {
-    let S = decodeWorkSecret(r);
-    if (!S.claude_code_args && !S.mcp_config) return;
-    if (!_) {
-      logConfigNotApplied(u.sessionId, {
+    let decodedSecret = decodeWorkSecret(secret);
+    if (!decodedSecret.claude_code_args && !decodedSecret.mcp_config) return;
+    if (!gateEnabled) {
+      logConfigNotApplied(host.sessionId, {
         lane: lit("sdk_host"),
-        ...carriedConfigFlags(S),
+        ...carriedConfigFlags(decodedSecret),
       });
       return;
     }
-    let sessionId = pickSessionIdFromWorkSecret(S, u.sessionId);
-    let o = applyBridgeServerArgs(
+    let sessionId = pickSessionIdFromWorkSecret(decodedSecret, host.sessionId);
+    let config = applyBridgeServerArgs(
       {
-        claude_code_args: S.claude_code_args,
-        mcp_config: S.mcp_config,
+        claude_code_args: decodedSecret.claude_code_args,
+        mcp_config: decodedSecret.mcp_config,
       },
       {
         sessionId,
         apiBaseUrl: getBridgeBaseUrl(),
       },
     );
-    let v = false;
-    if (o.appendSystemPrompt) {
-      let y = u.getAppendSystemPrompt();
-      if (!y?.includes(o.appendSystemPrompt))
-        u.setAppendSystemPrompt(
-          y
-            ? `${y}
+    let promptAppended = false;
+    if (config.appendSystemPrompt) {
+      let currentPrompt = host.getAppendSystemPrompt();
+      if (!currentPrompt?.includes(config.appendSystemPrompt))
+        host.setAppendSystemPrompt(
+          currentPrompt
+            ? `${currentPrompt}
 
-${o.appendSystemPrompt}`
-            : o.appendSystemPrompt,
+${config.appendSystemPrompt}`
+            : config.appendSystemPrompt,
         );
-      v = true;
+      promptAppended = true;
     }
-    let E = o.disallowedTools.length > 0 ? u.addDenyRules(o.disallowedTools) : 0;
-    let P =
-      o.metaMountUrl !== null && u.mountMetaMcp !== undefined
-        ? u.mountMetaMcp({
-            url: o.metaMountUrl,
-            autoAllowTools: o.autoAllowTools,
+    let denyRuleCount = config.disallowedTools.length > 0 ? host.addDenyRules(config.disallowedTools) : 0;
+    let metaMounted =
+      config.metaMountUrl !== null && host.mountMetaMcp !== undefined
+        ? host.mountMetaMcp({
+            url: config.metaMountUrl,
+            autoAllowTools: config.autoAllowTools,
             sessionId,
           })
         : false;
-    let M = {
+    let attributes = {
       lane: lit("sdk_host"),
-      ...carriedConfigFlags(S),
-      append_prompt: v,
-      deny_rules: E,
+      ...carriedConfigFlags(decodedSecret),
+      append_prompt: promptAppended,
+      deny_rules: denyRuleCount,
       extra_args_ignored: count(
-        o.extraArgs,
-        (y) =>
-          y.startsWith("--") &&
-          y !== "--model" &&
-          !y.startsWith("--disallowed") &&
-          !y.startsWith("--allowedTools") &&
-          y !== "--effort",
+        config.extraArgs,
+        (arg) =>
+          arg.startsWith("--") &&
+          arg !== "--model" &&
+          !arg.startsWith("--disallowed") &&
+          !arg.startsWith("--allowedTools") &&
+          arg !== "--effort",
       ),
-      meta_mcp_verified: o.metaMountUrl !== null,
-      meta_mcp_mounted: P,
-      auto_allow: P ? o.autoAllowTools.length : 0,
-      ignored_mcp: o.ignoredMcpServers,
-      ...(o.metaDropReason !== null && {
-        meta_drop: fromEnum(o.metaDropReason),
+      meta_mcp_verified: config.metaMountUrl !== null,
+      meta_mcp_mounted: metaMounted,
+      auto_allow: metaMounted ? config.autoAllowTools.length : 0,
+      ignored_mcp: config.ignoredMcpServers,
+      ...(config.metaDropReason !== null && {
+        meta_drop: fromEnum(config.metaDropReason),
       }),
     };
     logForDebugging(
-      `[bridge:server-config] sdk-host lane sessionId=${u.sessionId} appendPrompt=${v ? "applied" : "unset"} denyRules=${E} metaMcp=${o.metaMountUrl === null ? "unset" : P ? "mounted" : "not-mounted"} extraArgsIgnored=${M.extra_args_ignored}`,
+      `[bridge:server-config] sdk-host lane sessionId=${host.sessionId} appendPrompt=${promptAppended ? "applied" : "unset"} denyRules=${denyRuleCount} metaMcp=${config.metaMountUrl === null ? "unset" : metaMounted ? "mounted" : "not-mounted"} extraArgsIgnored=${attributes.extra_args_ignored}`,
     );
-    logEvent("tengu_bridge_server_config_applied", M);
-    if (o.disallowedTools.length > 0 && E === 0)
-      logFeatureSad("bridge_server_session_config", "disallowed_tools_not_applied", M);
-    else if (S.mcp_config && o.metaMountUrl === null)
-      logFeatureSad("bridge_server_session_config", "meta_mcp_not_verified", M);
-    else if (o.metaMountUrl !== null && !P)
-      logFeatureSad("bridge_server_session_config", "meta_mcp_not_mounted", M);
-    else logFeatureOk("bridge_server_session_config", M);
+    logEvent("tengu_bridge_server_config_applied", attributes);
+    if (config.disallowedTools.length > 0 && denyRuleCount === 0)
+      logFeatureSad("bridge_server_session_config", "disallowed_tools_not_applied", attributes);
+    else if (decodedSecret.mcp_config && config.metaMountUrl === null)
+      logFeatureSad("bridge_server_session_config", "meta_mcp_not_verified", attributes);
+    else if (config.metaMountUrl !== null && !metaMounted)
+      logFeatureSad("bridge_server_session_config", "meta_mcp_not_mounted", attributes);
+    else logFeatureOk("bridge_server_session_config", attributes);
   } catch (error) {
     let verdict = error instanceof WorkSecretShapeError ? error.verdict : "derivation_threw";
     logForDebugging(`[bridge:server-config] sdk-host lane not applied: ${verdict}`, {
       level: "warn",
     });
-    if (_) logFeatureBad("bridge_server_session_config", verdict);
+    if (gateEnabled) logFeatureBad("bridge_server_session_config", verdict);
   }
 }
 //@ chunk-h3xe040t.js:15324-15611 placement
-function subtractEnvironmentEntries(r, u) {
-  let _ = new Map();
-  for (let o of u) if (o !== DEFAULTS_PLACEHOLDER) _.set(o, (_.get(o) ?? 0) + 1);
-  let S = u[0] === DEFAULTS_PLACEHOLDER;
-  let C = [];
-  for (let j = r.length - 1; j >= 0; j--) {
-    let v = r[j];
-    if (v === undefined) continue;
-    let E = _.get(v) ?? 0;
-    if (E > 0) {
-      _.set(v, E - 1);
+function subtractEnvironmentEntries(wanted, merged) {
+  let extraCounts = new Map();
+  for (let entry of merged)
+    if (entry !== DEFAULTS_PLACEHOLDER) extraCounts.set(entry, (extraCounts.get(entry) ?? 0) + 1);
+  let mergedHasDefaults = merged[0] === DEFAULTS_PLACEHOLDER;
+  let remaining = [];
+  for (let j = wanted.length - 1; j >= 0; j--) {
+    let entry = wanted[j];
+    if (entry === undefined) continue;
+    let count = extraCounts.get(entry) ?? 0;
+    if (count > 0) {
+      extraCounts.set(entry, count - 1);
       continue;
     }
-    if (S && v === DEFAULTS_PLACEHOLDER && r[j + 1] === u[1]) {
-      S = false;
+    if (mergedHasDefaults && entry === DEFAULTS_PLACEHOLDER && wanted[j + 1] === merged[1]) {
+      mergedHasDefaults = false;
       continue;
     }
-    C.push(v);
+    remaining.push(entry);
   }
-  return C.reverse();
+  return remaining.reverse();
 }
 //@ chunk-h3xe040t.js:15611-16072 placement
 /**
  * 把服务端下发的 auto mode environment 与本地设置合并，返回合并结果与差异标记。
  */
-function mergeAutoModeEnvironment(r, u, _) {
-  let S = getFlagSettingsInline() ?? {};
-  let { autoMode, ...o } = S;
-  let v = isPlainObject(autoMode) ? autoMode : {};
-  let { environment, ...P } = v;
-  let M = stringArray(environment);
-  let y = subtractEnvironmentEntries(M, u);
-  let T = [];
-  if (r.length > 0) {
+function mergeAutoModeEnvironment(hostEntries, mergedEntries, reportFacts) {
+  let flagSettings = getFlagSettingsInline() ?? {};
+  let { autoMode, ...restSettings } = flagSettings;
+  let autoModeObject = isPlainObject(autoMode) ? autoMode : {};
+  let { environment, ...restAutoMode } = autoModeObject;
+  let mergedEnv = stringArray(environment);
+  let keptEnv = subtractEnvironmentEntries(mergedEnv, mergedEntries);
+  let hostEnv = [];
+  if (hostEntries.length > 0) {
     let environment = getAutoModeConfig()?.environment ?? [];
-    let j = new Set(u);
-    let G = new Set(M);
-    let any = environment.some((V) => !j.has(V));
-    let any_2 = environment.some((V) => !G.has(V));
-    let U = u[0] === DEFAULTS_PLACEHOLDER;
-    T = !y.includes(DEFAULTS_PLACEHOLDER) && (U ? !any_2 : !any) ? [DEFAULTS_PLACEHOLDER, ...r] : [...r];
+    let mergedSet = new Set(mergedEntries);
+    let mergedEnvSet = new Set(mergedEnv);
+    let any = environment.some((entry) => !mergedSet.has(entry));
+    let any_2 = environment.some((entry) => !mergedEnvSet.has(entry));
+    let mergedIsDefaultsOnly = mergedEntries[0] === DEFAULTS_PLACEHOLDER;
+    hostEnv =
+      !keptEnv.includes(DEFAULTS_PLACEHOLDER) && (mergedIsDefaultsOnly ? !any_2 : !any)
+        ? [DEFAULTS_PLACEHOLDER, ...hostEntries]
+        : [...hostEntries];
   }
-  let H = [...y, ...T];
-  if (arraysEqual(H, M)) {
-    _(T);
+  let nextEnv = [...keptEnv, ...hostEnv];
+  if (arraysEqual(nextEnv, mergedEnv)) {
+    reportFacts(hostEnv);
     return;
   }
-  let O =
-    H.length > 0
+  let nextAutoMode =
+    nextEnv.length > 0
       ? {
-          ...P,
-          environment: H,
+          ...restAutoMode,
+          environment: nextEnv,
         }
-      : P;
-  let B =
-    Object.keys(O).length > 0
+      : restAutoMode;
+  let nextSettings =
+    Object.keys(nextAutoMode).length > 0
       ? {
-          ...o,
-          autoMode: O,
+          ...restSettings,
+          autoMode: nextAutoMode,
         }
-      : o;
-  setFlagSettingsInline(Object.keys(B).length > 0 ? B : null);
-  _(T);
+      : restSettings;
+  setFlagSettingsInline(Object.keys(nextSettings).length > 0 ? nextSettings : null);
+  reportFacts(hostEnv);
   invalidateCommandNames();
 }
 //@ chunk-h3xe040t.js:16072-16280 placement
@@ -243,10 +249,10 @@ function getEnvOAuthAccountIdentity() {
   switch (getClaudeAIOAuthTokenOrigin()) {
     case "env":
     case "fd": {
-      let r = normalizeUuidOrNull(env.CLAUDE_CODE_ACCOUNT_UUID);
-      return r
+      let accountUuid = normalizeUuidOrNull(env.CLAUDE_CODE_ACCOUNT_UUID);
+      return accountUuid
         ? {
-            accountUuid: r,
+            accountUuid,
             organizationUuid: normalizeUuidOrNull(env.CLAUDE_CODE_ORGANIZATION_UUID) ?? undefined,
           }
         : undefined;
@@ -257,12 +263,12 @@ function getEnvOAuthAccountIdentity() {
   }
 }
 //@ chunk-h3xe040t.js:16280-16513 placement
-function isSameOwnerCaseInsensitive(attachedAs, u) {
-  if (!attachedAs || !u) return false;
+function isSameOwnerCaseInsensitive(attachedAs, candidateOwner) {
+  if (!attachedAs || !candidateOwner) return false;
   return sameOwnerAccount(
     {
-      accountUuid: u.accountUuid.toLowerCase(),
-      organizationUuid: u.organizationUuid?.toLowerCase(),
+      accountUuid: candidateOwner.accountUuid.toLowerCase(),
+      organizationUuid: candidateOwner.organizationUuid?.toLowerCase(),
     },
     {
       accountUuid: attachedAs.accountUuid.toLowerCase(),
@@ -285,91 +291,97 @@ var NOOP_SESSION_CONFIG_APPLY = {
 /**
  * 附加到 headless 会话时拉取会话配置（auto mode 环境等）并在仍需要时应用。
  */
-async function fetchAttachSessionConfig(r) {
-  let u = hasBridgeChildFeatureEnabled("attach");
-  let _ = r.autoModeEnvironment.length > 0;
-  if (!u && !_) return NOOP_SESSION_CONFIG_APPLY;
-  let S = false;
-  S = _;
-  let C =
-    u || S
-      ? await readBridgeSessionTags(r.sessionId, {
+async function fetchAttachSessionConfig(host) {
+  let grantsEnabled = hasBridgeChildFeatureEnabled("attach");
+  let hasFacts = host.autoModeEnvironment.length > 0;
+  if (!grantsEnabled && !hasFacts) return NOOP_SESSION_CONFIG_APPLY;
+  let fromFactsOnly = false;
+  fromFactsOnly = hasFacts;
+  let sessionTags =
+    grantsEnabled || fromFactsOnly
+      ? await readBridgeSessionTags(host.sessionId, {
           baseUrl: getBridgeBaseUrl(),
-          credentials: r.credentials,
+          credentials: host.credentials,
         })
       : null;
-  await r.applyAfter;
-  if (!r.stillWanted()) return NOOP_SESSION_CONFIG_APPLY;
-  let o = classifyBridgeSessionRoles(C);
-  if (o.projectThreadChild && machineLaneVersionRefusal()?.reason === "floor_unreachable") {
+  await host.applyAfter;
+  if (!host.stillWanted()) return NOOP_SESSION_CONFIG_APPLY;
+  let roles = classifyBridgeSessionRoles(sessionTags);
+  if (roles.projectThreadChild && machineLaneVersionRefusal()?.reason === "floor_unreachable") {
     logFeatureSad("bridge_rc_child_grants", "floor_unreachable");
     return NOOP_SESSION_CONFIG_APPLY;
   }
-  let v = null;
-  if (_ && !o.projectThreadChild) v = C === null ? "session_tags_unread" : "session_untagged";
-  let E = getSettingsForSource("policySettings")?.permissions?.defaultMode !== undefined;
+  let factsGap = null;
+  if (hasFacts && !roles.projectThreadChild)
+    factsGap = sessionTags === null ? "session_tags_unread" : "session_untagged";
+  let modePinned = getSettingsForSource("policySettings")?.permissions?.defaultMode !== undefined;
   let bridgeChildFeatures = resolveBridgeChildFeatures({
-    roles: o,
-    modePinned: E,
+    roles,
+    modePinned,
     settings: getInitialSettings_2,
   });
-  if (u && o.rcChild && E) logFeatureSad("bridge_rc_child_grants", "auto_policy_pinned");
-  let M = false;
-  let y = null;
+  if (grantsEnabled && roles.rcChild && modePinned)
+    logFeatureSad("bridge_rc_child_grants", "auto_policy_pinned");
+  let autoModeGranted = false;
+  let previousMode = null;
   if (bridgeChildFeatures.autoOverSettings) {
-    let mode = r.permission.get().mode;
-    let inheritLiftedFrom = r.inheritLiftedFrom ?? null;
-    let U = mode === "default" || mode === "acceptEdits";
-    let W =
-      mode === "plan" && inheritLiftedFrom !== null && r.permission.get().prePlanMode === inheritLiftedFrom;
-    if ((U || W) && r.keepChosenMode()) logFeatureSad("bridge_rc_child_grants", "auto_withheld_mode_chosen");
-    else if ((U || W) && r.permission.get().isAutoModeAvailable === false)
+    let mode = host.permission.get().mode;
+    let inheritLiftedFrom = host.inheritLiftedFrom ?? null;
+    let modeIsNeutral = mode === "default" || mode === "acceptEdits";
+    let inInheritedPlan =
+      mode === "plan" &&
+      inheritLiftedFrom !== null &&
+      host.permission.get().prePlanMode === inheritLiftedFrom;
+    if ((modeIsNeutral || inInheritedPlan) && host.keepChosenMode())
+      logFeatureSad("bridge_rc_child_grants", "auto_withheld_mode_chosen");
+    else if ((modeIsNeutral || inInheritedPlan) && host.permission.get().isAutoModeAvailable === false)
       logFeatureSad("bridge_rc_child_grants", "auto_unavailable");
-    else if (W) {
-      r.permission.set((N) => ({
-        ...N,
+    else if (inInheritedPlan) {
+      host.permission.set((context) => ({
+        ...context,
         prePlanMode: "auto",
       }));
-      M = true;
-      y = inheritLiftedFrom;
+      autoModeGranted = true;
+      previousMode = inheritLiftedFrom;
       logFeatureOk("bridge_rc_child_grants");
-    } else if (!U) logFeatureSad("bridge_rc_child_grants", "auto_host_mode_kept");
+    } else if (!modeIsNeutral) logFeatureSad("bridge_rc_child_grants", "auto_host_mode_kept");
     else if (
-      setPermissionModeWithGuards("auto", r.permission.get(), r.permission.set, "remote_control_attach").ok
+      setPermissionModeWithGuards("auto", host.permission.get(), host.permission.set, "remote_control_attach")
+        .ok
     ) {
-      M = true;
-      y = mode;
+      autoModeGranted = true;
+      previousMode = mode;
       logFeatureOk("bridge_rc_child_grants");
     } else logFeatureSad("bridge_rc_child_grants", "auto_refused");
   }
-  let T = [];
-  let H = null;
-  let O = (autoModeEnvironment) => {
+  let facts = [];
+  let stopWatching = null;
+  let applyFacts = (hostEntries) => {
     try {
-      mergeAutoModeEnvironment(autoModeEnvironment, T, (k) => {
-        T = k;
+      mergeAutoModeEnvironment(hostEntries, facts, (applied) => {
+        facts = applied;
       });
     } catch (error) {
       logError(error);
     }
   };
-  if (v !== null) logFeatureSad("bridge_rc_child_grants", `facts_${v}`);
-  else if (_) {
-    O(r.autoModeEnvironment);
-    let A = () => O(r.autoModeEnvironment);
-    let k = settingsChangeDetector.subscribe(A);
-    let U = onGrowthBookRefresh(A);
-    H = () => {
-      k();
-      U();
+  if (factsGap !== null) logFeatureSad("bridge_rc_child_grants", `facts_${factsGap}`);
+  else if (hasFacts) {
+    applyFacts(host.autoModeEnvironment);
+    let reapply = () => applyFacts(host.autoModeEnvironment);
+    let unsubscribeSettings = settingsChangeDetector.subscribe(reapply);
+    let unsubscribeGrowthBook = onGrowthBookRefresh(reapply);
+    stopWatching = () => {
+      unsubscribeSettings();
+      unsubscribeGrowthBook();
     };
   }
-  let B = false;
+  let artifactGranted = false;
   if (bridgeChildFeatures.artifact && isArtifactSdkDefaultOff()) {
-    B = true;
+    artifactGranted = true;
     env.set("CLAUDE_CODE_BRIDGE_CHILD_ARTIFACT", true);
   }
-  let x = false;
+  let autoCompactGranted = false;
   if (
     bridgeChildFeatures.autoCompact &&
     getSettingsForSource("flagSettings")?.autoCompactEnabled === undefined
@@ -379,50 +391,55 @@ async function fetchAttachSessionConfig(r) {
       autoCompactEnabled: true,
     });
     settingsChangeDetector.notifyChange("flagSettings");
-    x = true;
+    autoCompactGranted = true;
   }
-  let j = false;
+  let projectsEntrypointGranted = false;
   if (bridgeChildFeatures.projectsEntrypoint) {
-    j = useLocalProjectsEntrypoint();
-    if (j) logFeatureOk("bridge_projects_entrypoint_name");
+    projectsEntrypointGranted = useLocalProjectsEntrypoint();
+    if (projectsEntrypointGranted) logFeatureOk("bridge_projects_entrypoint_name");
     else logFeatureSad("bridge_projects_entrypoint_name", "host_name_kept");
   }
-  let G = false;
+  let undone = false;
   return {
     granted: {
-      autoMode: M,
-      facts: T.length,
-      artifact: B,
-      autoCompact: x,
-      projectsEntrypoint: j,
+      autoMode: autoModeGranted,
+      facts: facts.length,
+      artifact: artifactGranted,
+      autoCompact: autoCompactGranted,
+      projectsEntrypoint: projectsEntrypointGranted,
     },
     undo() {
-      if (G) return null;
-      G = true;
-      H?.();
-      O([]);
-      if (B) env.unset("CLAUDE_CODE_BRIDGE_CHILD_ARTIFACT");
-      if (j) clearLocalProjectsEntrypoint();
-      if (x) {
-        let { autoCompactEnabled, ...k } = getFlagSettingsInline() ?? {};
+      if (undone) return null;
+      undone = true;
+      stopWatching?.();
+      applyFacts([]);
+      if (artifactGranted) env.unset("CLAUDE_CODE_BRIDGE_CHILD_ARTIFACT");
+      if (projectsEntrypointGranted) clearLocalProjectsEntrypoint();
+      if (autoCompactGranted) {
+        let { autoCompactEnabled, ...restSettings } = getFlagSettingsInline() ?? {};
         if (autoCompactEnabled === true) {
-          setFlagSettingsInline(Object.keys(k).length > 0 ? k : null);
+          setFlagSettingsInline(Object.keys(restSettings).length > 0 ? restSettings : null);
           settingsChangeDetector.notifyChange("flagSettings");
         }
       }
-      if (y !== null && r.permission.get().mode === "auto")
-        setPermissionModeWithGuards(y, r.permission.get(), r.permission.set, "remote_control_detach");
+      if (previousMode !== null && host.permission.get().mode === "auto")
+        setPermissionModeWithGuards(
+          previousMode,
+          host.permission.get(),
+          host.permission.set,
+          "remote_control_detach",
+        );
       else if (
-        y !== null &&
-        r.permission.get().mode === "plan" &&
-        r.permission.get().prePlanMode === "auto"
+        previousMode !== null &&
+        host.permission.get().mode === "plan" &&
+        host.permission.get().prePlanMode === "auto"
       ) {
-        let A = y;
-        r.permission.set((k) => ({
-          ...k,
-          prePlanMode: A,
+        let restoredMode = previousMode;
+        host.permission.set((context) => ({
+          ...context,
+          prePlanMode: restoredMode,
         }));
-        return A;
+        return restoredMode;
       }
       return null;
     },
@@ -430,54 +447,57 @@ async function fetchAttachSessionConfig(r) {
 }
 //@ chunk-h3xe040t.js:19156-19225 placement
 function mcpClientModule_2() {
-  return require("./chunk-asne9cp8.js").mcpClientModule();
+  return require("../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
 }
 //@ chunk-h3xe040t.js:19225-25833 placement
 /**
  * 创建由 work secret 驱动的 headless 会话：接管权限上下文、动态 MCP 状态与配置应用队列，返回会话控制对象。
  */
-function createHeadlessWorkSecretSession(r) {
-  let { getAppState, setAppState, getDynamicMcpState } = r.stores;
-  let C = setSliceField(setAppState, "toolPermissionContext");
-  let o = null;
-  let v = null;
-  let E = null;
-  let P = null;
-  let M = 0;
+function createHeadlessWorkSecretSession(host) {
+  let { getAppState, setAppState, getDynamicMcpState } = host.stores;
+  let updatePermissionSlice = setSliceField(setAppState, "toolPermissionContext");
+  let current = null;
+  let lastModelPick = null;
+  let lastEffortSeed = null;
+  let pendingGrants = null;
+  let applyGeneration = 0;
   let resolved = Promise.resolve();
-  let T = 0;
-  let H = null;
-  let O = false;
+  let modeChoiceSequence = 0;
+  let chosenMode = null;
+  let applyingPermission = false;
   let permission = {
-    get: r.permission.get,
-    set: (e) => {
-      let n = O;
-      O = true;
+    get: host.permission.get,
+    set: (updater) => {
+      let previous = applyingPermission;
+      applyingPermission = true;
       try {
-        r.permission.set(e);
+        host.permission.set(updater);
       } finally {
-        O = n;
+        applyingPermission = previous;
       }
     },
   };
-  function x(e) {
-    return count(getAppState().toolPermissionContext.alwaysDenyRules.session ?? [], (n) => n === e);
+  function countRule(rule) {
+    return count(
+      getAppState().toolPermissionContext.alwaysDenyRules.session ?? [],
+      (existing) => existing === rule,
+    );
   }
-  function j(e) {
-    let n = new Set(e.map((s) => formatPermissionRule(permissionRuleValueFromString(s))));
-    let filtered = [...n].filter((s) => x(s) === 0);
+  function addDenyRules(rules) {
+    let ruleSet = new Set(rules.map((rule) => formatPermissionRule(permissionRuleValueFromString(rule))));
+    let filtered = [...ruleSet].filter((rule) => countRule(rule) === 0);
     if (filtered.length > 0)
-      C((s) =>
-        applyValidatedPermissionUpdate(s, {
+      updatePermissionSlice((slice) =>
+        applyValidatedPermissionUpdate(slice, {
           type: "addRules",
           destination: "session",
           behavior: "deny",
           rules: filtered.map(permissionRuleValueFromString),
         }),
       );
-    return count([...n], (s) => x(s) > 0);
+    return count([...ruleSet], (rule) => countRule(rule) > 0);
   }
-  function G(e, sessionId, url, autoAllowTools, getWorkerBearerToken) {
+  function mountMeta(state, sessionId, url, autoAllowTools, getWorkerBearerToken) {
     if (!getWorkerBearerToken) {
       logForDebugging("[bridge:server-config] meta mount skipped: the bridge exposes no worker credential", {
         level: "warn",
@@ -505,13 +525,13 @@ function createHeadlessWorkSecretSession(r) {
         getBearerToken: getWorkerBearerToken,
       },
     );
-    let R = {
+    let meta = {
       config,
       allowRules: [],
     };
-    e.meta = R;
-    setAppState((w) =>
-      setMcpClientInAppState(w, CLAUDE_CODE_REMOTE, {
+    state.meta = meta;
+    setAppState((appState) =>
+      setMcpClientInAppState(appState, CLAUDE_CODE_REMOTE, {
         client: {
           name: CLAUDE_CODE_REMOTE,
           type: "pending",
@@ -521,22 +541,22 @@ function createHeadlessWorkSecretSession(r) {
         commands: [],
       }),
     );
-    R.allowRules = buildSessionAllowRuleUpdates(
-      autoAllowTools.map((w) => buildMcpToolName(CLAUDE_CODE_REMOTE, w)),
+    meta.allowRules = buildSessionAllowRuleUpdates(
+      autoAllowTools.map((toolName) => buildMcpToolName(CLAUDE_CODE_REMOTE, toolName)),
     );
-    C((w) => applyMcpMountAllowRules(w, R.allowRules));
-    return R;
+    updatePermissionSlice((slice) => applyMcpMountAllowRules(slice, meta.allowRules));
+    return meta;
   }
-  async function A(config) {
+  async function connectMeta(config) {
     let attemptEpoch = identityEpoch();
-    let p;
+    let result;
     try {
-      p = {
+      result = {
         ...(await mcpClientModule_2().reconnectMcpServerImpl(
           CLAUDE_CODE_REMOTE,
           config,
-          r.storageV5,
-          r.credentials,
+          host.storageV5,
+          host.credentials,
         )),
         attemptEpoch,
       };
@@ -544,7 +564,7 @@ function createHeadlessWorkSecretSession(r) {
       logForDebugging(`[bridge:server-config] meta mount connect threw: ${errorMessage(error)}`, {
         level: "warn",
       });
-      p = {
+      result = {
         client: {
           name: CLAUDE_CODE_REMOTE,
           type: "failed",
@@ -556,52 +576,57 @@ function createHeadlessWorkSecretSession(r) {
         attemptEpoch,
       };
     }
-    if (o?.meta?.config !== config) {
-      if (p.client.type === "connected") await mcpClientModule_2().detachAndCloseConnection(p.client);
+    if (current?.meta?.config !== config) {
+      if (result.client.type === "connected")
+        await mcpClientModule_2().detachAndCloseConnection(result.client);
       return;
     }
-    let s = applyMcpReconnect(r.stores, CLAUDE_CODE_REMOTE, p);
-    switch (s) {
+    let applyOutcome = applyMcpReconnect(host.stores, CLAUDE_CODE_REMOTE, result);
+    switch (applyOutcome) {
       case "applied":
-        if (p.client.type === "connected") logFeatureOk("bridge_meta_mcp_mount");
-        else logFeatureBad("bridge_meta_mcp_mount", `settled_${p.client.type}`);
+        if (result.client.type === "connected") logFeatureOk("bridge_meta_mcp_mount");
+        else logFeatureBad("bridge_meta_mcp_mount", `settled_${result.client.type}`);
         return;
       case "superseded":
       case "dropped":
       case "refused":
-        logFeatureSad("bridge_meta_mcp_mount", s);
+        logFeatureSad("bridge_meta_mcp_mount", applyOutcome);
         return;
     }
   }
-  function k(meta) {
-    C((s) => replaceMcpMountRules(s, meta.allowRules, "one"));
+  function unmountMeta(meta) {
+    updatePermissionSlice((slice) => replaceMcpMountRules(slice, meta.allowRules, "one"));
     let found = getAppState().mcp.clients.find((client) => client.name === CLAUDE_CODE_REMOTE);
     if (found && found.config !== meta.config) {
       if (
         serverCacheKey(CLAUDE_CODE_REMOTE, found.config) === serverCacheKey(CLAUDE_CODE_REMOTE, meta.config)
       )
         return Promise.resolve();
-      return U(meta.config);
+      return clearMetaCache(meta.config);
     }
     let mcpPrefix = getMcpPrefix(CLAUDE_CODE_REMOTE);
-    setAppState((s) => {
-      let { [CLAUDE_CODE_REMOTE]: h, ...I } = s.mcp.resources;
-      let { [CLAUDE_CODE_REMOTE]: R, ...w } = s.mcp.resourceTemplates;
+    setAppState((appState) => {
+      let { [CLAUDE_CODE_REMOTE]: dropResource, ...restResources } = appState.mcp.resources;
+      let { [CLAUDE_CODE_REMOTE]: dropTemplate, ...restTemplates } = appState.mcp.resourceTemplates;
       return {
-        ...s,
+        ...appState,
         mcp: {
-          ...s.mcp,
-          clients: s.mcp.clients.filter((client) => client !== found),
-          tools: s.mcp.tools.filter((tool) => !isToolFromMcpServer(tool, CLAUDE_CODE_REMOTE, mcpPrefix)),
-          commands: s.mcp.commands.filter((command) => !commandBelongsToServer(command, CLAUDE_CODE_REMOTE)),
-          resources: I,
-          resourceTemplates: w,
+          ...appState.mcp,
+          clients: appState.mcp.clients.filter((client) => client !== found),
+          tools: appState.mcp.tools.filter(
+            (tool) => !isToolFromMcpServer(tool, CLAUDE_CODE_REMOTE, mcpPrefix),
+          ),
+          commands: appState.mcp.commands.filter(
+            (command) => !commandBelongsToServer(command, CLAUDE_CODE_REMOTE),
+          ),
+          resources: restResources,
+          resourceTemplates: restTemplates,
         },
       };
     });
-    return U(meta.config);
+    return clearMetaCache(meta.config);
   }
-  function U(config) {
+  function clearMetaCache(config) {
     return mcpClientModule_2()
       .clearServerCache(CLAUDE_CODE_REMOTE, config)
       .catch((error) => {
@@ -610,31 +635,32 @@ function createHeadlessWorkSecretSession(r) {
         });
       });
   }
-  function W() {
-    let e = o;
-    o = null;
-    if (!e) return Promise.resolve();
-    if (e.writtenPrompt !== undefined) {
-      let p = r.getAppendSystemPrompt();
-      if (p === e.writtenPrompt) r.setAppendSystemPrompt(e.hostAppendSystemPrompt);
+  function undoCurrent() {
+    let state = current;
+    current = null;
+    if (!state) return Promise.resolve();
+    if (state.writtenPrompt !== undefined) {
+      let currentPrompt = host.getAppendSystemPrompt();
+      if (currentPrompt === state.writtenPrompt) host.setAppendSystemPrompt(state.hostAppendSystemPrompt);
       else {
-        let hostAppendSystemPrompt = e.hostAppendSystemPrompt;
-        let h = hostAppendSystemPrompt
-          ? e.writtenPrompt.slice(hostAppendSystemPrompt.length)
+        let hostAppendSystemPrompt = state.hostAppendSystemPrompt;
+        let appendedSuffix = hostAppendSystemPrompt
+          ? state.writtenPrompt.slice(hostAppendSystemPrompt.length)
           : `
 
-${e.writtenPrompt}`;
-        if (p !== undefined && p.endsWith(h)) r.setAppendSystemPrompt(p.slice(0, -h.length));
+${state.writtenPrompt}`;
+        if (currentPrompt !== undefined && currentPrompt.endsWith(appendedSuffix))
+          host.setAppendSystemPrompt(currentPrompt.slice(0, -appendedSuffix.length));
       }
     }
-    P = e.grants?.undo() ?? null;
-    let n = Promise.all([
-      e.meta ? k(e.meta) : Promise.resolve(),
-      e.hearth ? e.hearth.drop() : Promise.resolve(),
+    pendingGrants = state.grants?.undo() ?? null;
+    let teardown = Promise.all([
+      state.meta ? unmountMeta(state.meta) : Promise.resolve(),
+      state.hearth ? state.hearth.drop() : Promise.resolve(),
     ]).then(() => {
       return;
     });
-    resolved = Promise.all([resolved, n]).then(
+    resolved = Promise.all([resolved, teardown]).then(
       () => {
         return;
       },
@@ -642,14 +668,14 @@ ${e.writtenPrompt}`;
         return;
       },
     );
-    return n;
+    return teardown;
   }
-  function N(e, sessionId) {
+  function factEntries(secret, sessionId) {
     if (!isBridgeServerSessionConfigEnabled()) return [];
     try {
       return applyBridgeServerArgs(
         {
-          auto_mode_environment: decodeWorkSecret(e).auto_mode_environment,
+          auto_mode_environment: decodeWorkSecret(secret).auto_mode_environment,
         },
         {
           sessionId,
@@ -660,25 +686,26 @@ ${e.writtenPrompt}`;
       return [];
     }
   }
-  function V(e) {
+  function pickedModel(secret) {
     try {
-      return carriedModel(decodeWorkSecret(e).claude_code_args);
+      return carriedModel(decodeWorkSecret(secret).claude_code_args);
     } catch {
       return;
     }
   }
-  function ne(e, n) {
-    if (n === undefined || (v?.sessionId === e && v.model === n)) return Promise.resolve();
-    let p;
+  function applyModelPick(sessionId, model) {
+    if (model === undefined || (lastModelPick?.sessionId === sessionId && lastModelPick.model === model))
+      return Promise.resolve();
+    let pickResult;
     try {
-      p = r.applyModelPick(n);
+      pickResult = host.applyModelPick(model);
     } catch (error) {
       logError(error);
       return Promise.resolve();
     }
-    return Promise.resolve(p)
-      .then((s) => {
-        if (s && !s.ok) {
+    return Promise.resolve(pickResult)
+      .then((outcome) => {
+        if (outcome && !outcome.ok) {
           logFeatureSad("bridge_server_session_config", "model_pick_refused");
           logForDebugging(
             "[bridge:server-config] sdk-host lane model pick refused; the model in force stands",
@@ -688,49 +715,50 @@ ${e.writtenPrompt}`;
           );
           return;
         }
-        v = {
-          sessionId: e,
-          model: n,
+        lastModelPick = {
+          sessionId,
+          model,
         };
         logForDebugging("[bridge:server-config] sdk-host lane model pick applied");
       })
       .catch(logError);
   }
-  function oe(e) {
+  function pickedEffort(secret) {
     if (!isBridgeServerSessionConfigEnabled()) return;
     try {
-      return carriedEffort(decodeWorkSecret(e).claude_code_args);
+      return carriedEffort(decodeWorkSecret(secret).claude_code_args);
     } catch {
       return;
     }
   }
-  function ie(e, n) {
-    if (n === undefined || (E?.sessionId === e && E.effort === n)) return;
-    let p;
+  function seedEffort(sessionId, effort) {
+    if (effort === undefined || (lastEffortSeed?.sessionId === sessionId && lastEffortSeed.effort === effort))
+      return;
+    let seedResult;
     try {
-      p = r.applyEffortSeed(n);
+      seedResult = host.applyEffortSeed(effort);
     } catch (error) {
       logError(error);
       return;
     }
-    if (!p.ok) {
+    if (!seedResult.ok) {
       logFeatureSad("bridge_server_session_config", "effort_pick_refused");
       logForDebugging("[bridge:server-config] sdk-host lane effort refused; the effort in force stands", {
         level: "warn",
       });
       return;
     }
-    E = {
-      sessionId: e,
-      effort: n,
+    lastEffortSeed = {
+      sessionId,
+      effort,
     };
     logForDebugging("[bridge:server-config] sdk-host lane effort seeded");
   }
-  function se(e, getWorkerBearerToken, getWorkerEpoch, s) {
+  function mountHearth(sessionId, getWorkerBearerToken, getWorkerEpoch, applyGate) {
     if (!getWorkerBearerToken) return null;
-    let h;
+    let sessionUrl;
     try {
-      h = new URL(`/v1/code/sessions/${e}`, getBridgeBaseUrl());
+      sessionUrl = new URL(`/v1/code/sessions/${sessionId}`, getBridgeBaseUrl());
     } catch (error) {
       logForDebugging(`[bridge:server-config] reply mount skipped: ${errorMessage(error)}`, {
         level: "warn",
@@ -738,57 +766,60 @@ ${e.writtenPrompt}`;
       return null;
     }
     let headlessHearthMount = createHeadlessHearthMount({
-      stores: r.stores,
-      storageV5: r.storageV5,
-      credentials: r.credentials,
-      sessionId: e,
-      apiBaseUrl: h.origin,
+      stores: host.stores,
+      storageV5: host.storageV5,
+      credentials: host.credentials,
+      sessionId,
+      apiBaseUrl: sessionUrl.origin,
       getBearerToken: getWorkerBearerToken,
       getWorkerEpoch: getWorkerEpoch ?? (() => 0),
       readHearthBinding: () =>
-        CCRClient.readProjectsBindingFor(h, () => {
-          let w = getWorkerBearerToken();
-          return w ? configureApiKeyHeaders(w) : {};
+        CCRClient.readProjectsBindingFor(sessionUrl, () => {
+          let token = getWorkerBearerToken();
+          return token ? configureApiKeyHeaders(token) : {};
         }),
-      sdkHostConfigs: r.sdkHostConfigs,
+      sdkHostConfigs: host.sdkHostConfigs,
     });
-    let R = s.then(() => r.awaitHostApplyQuiescence());
+    let gate = applyGate.then(() => host.awaitHostApplyQuiescence());
     return {
       mount: headlessHearthMount,
-      gate: R,
-      startup: R.then(() => headlessHearthMount.sync("startup")),
+      gate,
+      startup: gate.then(() => headlessHearthMount.sync("startup")),
     };
   }
-  function le(e, n, p) {
-    let grantInputs = e.grantInputs;
+  function startGrants(state, inheritLiftedFrom, modelApply) {
+    let grantInputs = state.grantInputs;
     if (!grantInputs) return Promise.resolve();
-    let h = M;
-    let I = T;
+    let generation = applyGeneration;
+    let modeSeq = modeChoiceSequence;
     return fetchAttachSessionConfig({
       sessionId: grantInputs.sessionId,
-      credentials: r.credentials,
+      credentials: host.credentials,
       autoModeEnvironment: grantInputs.facts,
       permission,
-      stillWanted: () => o === e && M === h,
-      applyAfter: p.then(r.settleAutoModeAvailability).then(() => {
+      stillWanted: () => current === state && applyGeneration === generation,
+      applyAfter: modelApply.then(host.settleAutoModeAvailability).then(() => {
         return;
       }, logError),
-      inheritLiftedFrom: n,
-      keepChosenMode: () => (n !== null ? T !== I : H !== null && H !== "auto"),
+      inheritLiftedFrom,
+      keepChosenMode: () =>
+        inheritLiftedFrom !== null
+          ? modeChoiceSequence !== modeSeq
+          : chosenMode !== null && chosenMode !== "auto",
     })
       .then((attachSessionConfig) => {
-        if (o === e && M === h) e.grants = attachSessionConfig;
+        if (current === state && applyGeneration === generation) state.grants = attachSessionConfig;
         else attachSessionConfig.undo();
       })
       .catch(logError);
   }
   return {
-    apply(e, n) {
-      let sessionId = resolveBridgeSessionId(e, n.bridgeSessionId);
-      W();
-      let s = resolved;
-      let h = {
-        hostAppendSystemPrompt: r.getAppendSystemPrompt(),
+    apply(workSecret, options) {
+      let sessionId = resolveBridgeSessionId(workSecret, options.bridgeSessionId);
+      undoCurrent();
+      let previousResolved = resolved;
+      let state = {
+        hostAppendSystemPrompt: host.getAppendSystemPrompt(),
         writtenPrompt: undefined,
         meta: null,
         hearth: null,
@@ -799,80 +830,87 @@ ${e.writtenPrompt}`;
         attachedAs: getEnvOAuthAccountIdentity(),
         grantsSettled: null,
       };
-      o = h;
-      let I = se(sessionId, n.getWorkerBearerToken, n.getWorkerEpoch, s);
-      if (I) {
-        h.hearth = I.mount;
-        h.hearthGate = I.gate;
-        h.hearthStartup = I.startup;
+      current = state;
+      let hearth = mountHearth(
+        sessionId,
+        options.getWorkerBearerToken,
+        options.getWorkerEpoch,
+        previousResolved,
+      );
+      if (hearth) {
+        state.hearth = hearth.mount;
+        state.hearthGate = hearth.gate;
+        state.hearthStartup = hearth.startup;
       }
       let sessionEffort = getAppState().sessionEffort;
-      let w = ne(sessionId, V(e))
+      let modelTask = applyModelPick(sessionId, pickedModel(workSecret))
         .then(() => {
-          if (o === h && getAppState().sessionEffort === sessionEffort) ie(sessionId, oe(e));
+          if (current === state && getAppState().sessionEffort === sessionEffort)
+            seedEffort(sessionId, pickedEffort(workSecret));
         })
         .catch(logError);
-      h.grantInputs = {
+      state.grantInputs = {
         sessionId,
-        facts: N(e, sessionId),
+        facts: factEntries(workSecret, sessionId),
       };
-      let L = P;
-      P = null;
-      h.grantsSettled = le(h, L, w);
-      applySdkHostLaneConfig(e, {
-        sessionId: n.bridgeSessionId,
-        getAppendSystemPrompt: r.getAppendSystemPrompt,
-        setAppendSystemPrompt: (J) => {
-          r.setAppendSystemPrompt(J);
-          h.writtenPrompt = J;
+      let previousGrants = pendingGrants;
+      pendingGrants = null;
+      state.grantsSettled = startGrants(state, previousGrants, modelTask);
+      applySdkHostLaneConfig(workSecret, {
+        sessionId: options.bridgeSessionId,
+        getAppendSystemPrompt: host.getAppendSystemPrompt,
+        setAppendSystemPrompt: (prompt) => {
+          host.setAppendSystemPrompt(prompt);
+          state.writtenPrompt = prompt;
         },
-        addDenyRules: j,
+        addDenyRules,
         mountMetaMcp: ({ url, autoAllowTools, sessionId }) => {
-          h.meta = G(h, sessionId, url, autoAllowTools, n.getWorkerBearerToken);
-          if (h.meta === null) return false;
-          A(h.meta.config).catch(logError);
+          state.meta = mountMeta(state, sessionId, url, autoAllowTools, options.getWorkerBearerToken);
+          if (state.meta === null) return false;
+          connectMeta(state.meta.config).catch(logError);
           return true;
         },
       });
     },
-    undo: W,
-    loginChanged: (e) => {
-      let n = o;
-      if (n && isSameOwnerCaseInsensitive(n.attachedAs, e)) return;
-      M++;
-      P = null;
-      if (n) {
-        n.grants?.undo();
-        n.grants = null;
-        n.grantsSettled = null;
+    undo: undoCurrent,
+    loginChanged: (identity) => {
+      let state = current;
+      if (state && isSameOwnerCaseInsensitive(state.attachedAs, identity)) return;
+      applyGeneration++;
+      pendingGrants = null;
+      if (state) {
+        state.grants?.undo();
+        state.grants = null;
+        state.grantsSettled = null;
       }
     },
-    noteModeChoice: (e) => {
-      if (O) return;
-      T++;
-      H = e;
-      P = null;
+    noteModeChoice: (mode) => {
+      if (applyingPermission) return;
+      modeChoiceSequence++;
+      chosenMode = mode;
+      pendingGrants = null;
     },
-    projectsReplyMount: () => o?.hearth ?? null,
+    projectsReplyMount: () => current?.hearth ?? null,
     resyncProjectsReplyMount: () => {
-      let e = o;
-      let hearth = e?.hearth;
-      if (!e || !hearth) return;
-      e.hearthGate.then(() => hearth.sync("binding_changed"));
+      let state = current;
+      let hearth = state?.hearth;
+      if (!state || !hearth) return;
+      state.hearthGate.then(() => hearth.sync("binding_changed"));
     },
     takeFirstTurnJoins: () => {
-      if (!o)
+      if (!current)
         return {
           replyMount: null,
           grants: null,
         };
-      let e = {
-        replyMount: o.hearthStartup,
-        grants: o.grantsSettled,
+      let pending = {
+        replyMount: current.hearthStartup,
+        grants: current.grantsSettled,
       };
-      o.hearthStartup = null;
-      o.grantsSettled = null;
-      return e;
+      current.hearthStartup = null;
+      current.grantsSettled = null;
+      return pending;
     },
   };
 }
+export { createHeadlessWorkSecretSession };

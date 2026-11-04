@@ -12,11 +12,11 @@
 /**
  * （切分错误）PowerShell/Windows 命令退出码语义：grep/rg/findstr 的 1 为无匹配、robocopy 的 0–7 为成功，其他非 0 为错误。
  */
-var defaultExitInterpreter = (exitCode, n, r) => ({
+var defaultExitInterpreter = (exitCode, stdout, stderr) => ({
   isError: exitCode !== 0,
   message: exitCode !== 0 ? `Command failed with exit code ${exitCode}` : undefined,
 });
-var exitOneMeans = (message) => (exitCode, r, s) => ({
+var exitOneMeans = (message) => (exitCode, stdout, stderr) => ({
   isError: exitCode !== 0 && exitCode !== 1,
   message: exitCode === 1 ? message : undefined,
 });
@@ -30,13 +30,13 @@ var EXIT_INTERPRETERS = new Map([
   ["findstr", NO_MATCHES_INTERPRETER],
   [
     "robocopy",
-    (e, n, r) => ({
-      isError: e < 0 || e >= 8,
+    (exitCode, stdout, stderr) => ({
+      isError: exitCode < 0 || exitCode >= 8,
       message:
-        e === 0
+        exitCode === 0
           ? "No files copied (already in sync)"
-          : e >= 1 && e < 8
-            ? e & 1
+          : exitCode >= 1 && exitCode < 8
+            ? exitCode & 1
               ? "Files copied successfully"
               : "Robocopy completed (no errors)"
             : undefined,

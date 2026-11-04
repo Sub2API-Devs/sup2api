@@ -8,14 +8,14 @@
  * pieces: chunk-18hwfzwa.js (2), chunk-ah34pb7m.js (4)
  * attribution: placement 2, fingerprint 3, callgraph-witnessed 1
  */
-import { BLACK_CIRCLE, PAUSE_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { BLACK_CIRCLE, PAUSE_GLYPH } from "../../constants/figures.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { FLAG_IDLE_WINDOW } from "../../tasks/LocalAgentTask/keepalive.js";
 import { isAmbientTask, isPanelAgentTask } from "../../tasks/taskKinds.js";
 import { isCoordinatorPanelActive, isCoordinatorPanelEnabled } from "../../utils/transcriptDiagnostics.js";
 import { waitForTaskCompletion } from "../../tools/TaskOutputTool/TaskOutputTool.js";
 import { isBackgroundTask } from "../../tasks/types.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -44,7 +44,8 @@ function getTaskStatusColor(status) {
 //@ chunk-ah34pb7m.js:12331-12424 placement
 function isTerminalStatus(status) {
   return (
-    status.status === "completed" && [...(status.keepaliveReasons ?? [])].some((d) => d !== FLAG_IDLE_WINDOW)
+    status.status === "completed" &&
+    [...(status.keepaliveReasons ?? [])].some((reason) => reason !== FLAG_IDLE_WINDOW)
   );
 }
 //@ chunk-ah34pb7m.js:12424-12578 callgraph-witnessed = shouldHideTasksFooter (0.373)
@@ -62,49 +63,49 @@ function shouldHideTasksFooter(task) {
  * 任务详情对话框的底部快捷键提示：可选"← 返回"、"Esc/Enter/Space 关闭"、可选"x 停止"，再接额外子节点。
  */
 function TaskDetailFooterHints(props) {
-  let $ = w(9);
+  let $ = useMemoCache(9);
   let { showBack, showStop, children } = props;
-  let ke;
+  let backHint;
   if ($[0] !== showBack) {
-    ke =
+    backHint =
       showBack &&
       jsxProd_default(KeyboardShortcutHint, {
         chord: "left",
         action: "go back",
       });
     $[0] = showBack;
-    $[1] = ke;
-  } else ke = $[1];
-  let Re;
+    $[1] = backHint;
+  } else backHint = $[1];
+  let closeHint;
   if ($[2] === MEMO_CACHE_SENTINEL) {
-    Re = jsxProd_default(KeyboardShortcutHint, {
+    closeHint = jsxProd_default(KeyboardShortcutHint, {
       chord: ["escape", "enter", "space"],
       action: "close",
     });
-    $[2] = Re;
-  } else Re = $[2];
-  let Be;
+    $[2] = closeHint;
+  } else closeHint = $[2];
+  let stopHint;
   if ($[3] !== showStop) {
-    Be =
+    stopHint =
       showStop &&
       jsxProd_default(KeyboardShortcutHint, {
         chord: "x",
         action: "stop",
       });
     $[3] = showStop;
-    $[4] = Be;
-  } else Be = $[4];
-  let He;
-  if ($[5] !== children || $[6] !== ke || $[7] !== Be) {
-    He = jsxProd_default_2(Byline, {
-      children: [ke, Re, Be, children],
+    $[4] = stopHint;
+  } else stopHint = $[4];
+  let bylineElement;
+  if ($[5] !== children || $[6] !== backHint || $[7] !== stopHint) {
+    bylineElement = jsxProd_default_2(Byline, {
+      children: [backHint, closeHint, stopHint, children],
     });
     $[5] = children;
-    $[6] = ke;
-    $[7] = Be;
-    $[8] = He;
-  } else He = $[8];
-  return He;
+    $[6] = backHint;
+    $[7] = stopHint;
+    $[8] = bylineElement;
+  } else bylineElement = $[8];
+  return bylineElement;
 }
 //@ chunk-18hwfzwa.js:691937-692158 fingerprint = describeTeammateActivity (0.921)
 function describeTeammateActivity(t) {

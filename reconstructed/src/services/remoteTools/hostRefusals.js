@@ -18,10 +18,10 @@ import { LIST_COMPUTER_FOLDERS, REQUEST_COMPUTER_FOLDER } from "../../remote/too
  * 生成"某字段在目标机器上不可用"的说明（run_in_background 另有补充）。
  */
 function unsupportedFieldMessage({ field, targetName }) {
-  let t = `${field} is not available on ${targetName}.`;
+  let message = `${field} is not available on ${targetName}.`;
   return field === "run_in_background"
-    ? `${t} The calling session has no way to poll a background task there. Run it in the foreground, or in the session's own environment.`
-    : t;
+    ? `${message} The calling session has no way to poll a background task there. Run it in the foreground, or in the session's own environment.`
+    : message;
 }
 //@ chunk-zmxrt63a.js:583-748 placement
 /**
@@ -63,17 +63,17 @@ function staleApprovalMessage({ targetName, why }) {
  * 生成请求的超时超过目标机器上限、已被压到上限的说明。
  */
 function timeoutClampedMessage({ requestedMs, appliedMs, targetName }) {
-  let s = formatDuration(requestedMs, {
+  let requestedText = formatDuration(requestedMs, {
     hideTrailingZeros: true,
   });
-  let o = formatDuration(appliedMs, {
+  let appliedText = formatDuration(appliedMs, {
     hideTrailingZeros: true,
   });
-  if (s === o) {
-    s = `${requestedMs}ms`;
-    o = `${appliedMs}ms`;
+  if (requestedText === appliedText) {
+    requestedText = `${requestedMs}ms`;
+    appliedText = `${appliedMs}ms`;
   }
-  return `The ${s} timeout this call asked for exceeds the ${o} ${targetName} allows a command \u2014 it was held to ${o}.`;
+  return `The ${requestedText} timeout this call asked for exceeds the ${appliedText} ${targetName} allows a command \u2014 it was held to ${appliedText}.`;
 }
 //@ chunk-zmxrt63a.js:1832-2040 placement
 var MAX_DENIED_PATHS_SHOWN = 3;
@@ -123,7 +123,7 @@ function sandboxRunNote({
     : violationRecorded
       ? ` The sandbox_violations lines in its output name what it blocked${failed ? ", and if that is what failed it, running it again unchanged will fail the same way" : ", and that stays blocked on a rerun"}.${tellUser}`
       : filtered.length > 0
-        ? ` Its output says ${filtered.map((c) => SANDBOX_SYMPTOM_TEXT[c]).join(" and ")}, which there usually means the sandbox refused it${launchServicesNote}, and if so running it again unchanged will fail the same way.${tellUser}`
+        ? ` Its output says ${filtered.map((symptom) => SANDBOX_SYMPTOM_TEXT[symptom]).join(" and ")}, which there usually means the sandbox refused it${launchServicesNote}, and if so running it again unchanged will fail the same way.${tellUser}`
         : "";
   if (deniedNote === "" && symptomNote === "" && !firstWord)
     return filesystemConfined
@@ -145,20 +145,20 @@ function backgroundCommandStartedNote({ targetName, shellId, outputPath, limitMs
 /**
  * 远程后台命令停止原因的说明文字。
  */
-function backgroundStopReasonText(e, n) {
-  switch (e) {
+function backgroundStopReasonText(reason, targetName) {
+  switch (reason) {
     case "caller_stopped":
       return "by this session";
     case "stopped_by_person":
-      return `by the person at ${n}`;
+      return `by the person at ${targetName}`;
     case "time_limit":
       return "at its time limit";
     case "serving_ended":
-      return `when ${n} quit serving`;
+      return `when ${targetName} quit serving`;
     case "serving_off":
       return "when serving shut off";
     case "serving_check_failed":
-      return `when ${n} could not check whether it still serves this session`;
+      return `when ${targetName} could not check whether it still serves this session`;
     case "call_stopped":
       return "when its call ended";
   }
@@ -167,8 +167,8 @@ function backgroundStopReasonText(e, n) {
 /**
  * 远程后台命令被拒绝启动（已满、沙箱未运行、不可用）的说明。
  */
-function backgroundRefusalMessage(e, { targetName, max }) {
-  switch (e) {
+function backgroundRefusalMessage(reason, { targetName, max }) {
+  switch (reason) {
     case "full":
       return `${targetName} already has ${max} background ${plural(max, "command")} running or waiting for approval for this session, the most it takes at a time. Nothing was started. Wait for one to finish, or run this one in the foreground.`;
     case "sandbox_down":

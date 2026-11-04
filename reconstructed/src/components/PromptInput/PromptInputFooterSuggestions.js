@@ -8,8 +8,8 @@
  * pieces: chunk-8jypjjdf.js (19)
  * attribution: placement 11, layout 5, fingerprint 3
  */
-import { DIAMOND_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { DIAMOND_GLYPH } from "../../constants/figures.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { EARLY_RETURN_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
   jsxProd_default,
@@ -17,7 +17,7 @@ import {
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { Rh, Q, y } from "../../../vendor/react/cjs/react.production.js";
+import { memo, useMemo, useState } from "../../../vendor/react/cjs/react.production.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
@@ -33,6 +33,7 @@ import { stripLineBreaks, repeatString, collapseWhitespace } from "../../utils/s
 import { HintText } from "../design-system/HintText.js";
 import { TwoColumnRow } from "../CustomSelect/select.js";
 import { getGraphemeSegmenter } from "../../utils/intl.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-8jypjjdf.js:1642-1656 placement
 var WHITESPACE_RE = /\s+/g;
@@ -40,9 +41,10 @@ var WHITESPACE_RE = /\s+/g;
 /**
  * 当前方向键选中的建议 id（与选中项一致时）。
  */
-function getArrowedSuggestionId(o) {
-  let arrowedSuggestionId = o.arrowedSuggestionId;
-  return arrowedSuggestionId != null && o.suggestions[o.selectedSuggestion]?.id === arrowedSuggestionId
+function getArrowedSuggestionId(state) {
+  let arrowedSuggestionId = state.arrowedSuggestionId;
+  return arrowedSuggestionId != null &&
+    state.suggestions[state.selectedSuggestion]?.id === arrowedSuggestionId
     ? arrowedSuggestionId
     : null;
 }
@@ -50,34 +52,37 @@ function getArrowedSuggestionId(o) {
 /**
  * 计算建议列表的可见窗口：各项高度不一，在最大行数内从上次起点出发保证选中项可见，并尽量向上填满。
  */
-function suggestionWindow(o, a, t, l) {
-  let c = (d) => o[d] ?? 1;
-  let m = (d) => {
-    let f = d + 1;
-    let h = c(d);
-    while (f < o.length && h + c(f) <= a) {
-      h += c(f);
-      f++;
+function suggestionWindow(rowHeights, budgetRows, selectedIndex, columnWidth) {
+  let heightOf = (index) => rowHeights[index] ?? 1;
+  let fillFrom = (start) => {
+    let next = start + 1;
+    let rows = heightOf(start);
+    while (next < rowHeights.length && rows + heightOf(next) <= budgetRows) {
+      rows += heightOf(next);
+      next++;
     }
     return {
-      start: d,
-      end: f,
-      usedRows: h,
+      start,
+      end: next,
+      usedRows: rows,
     };
   };
-  let p = m(Math.max(0, Math.min(l, o.length - 1)));
-  if (t >= p.end) p = m(t);
-  else if (t < p.start)
-    p = {
-      start: t,
-      end: t + 1,
-      usedRows: c(t),
+  let rowFillWindow = fillFrom(Math.max(0, Math.min(columnWidth, rowHeights.length - 1)));
+  if (selectedIndex >= rowFillWindow.end) rowFillWindow = fillFrom(selectedIndex);
+  else if (selectedIndex < rowFillWindow.start)
+    rowFillWindow = {
+      start: selectedIndex,
+      end: selectedIndex + 1,
+      usedRows: heightOf(selectedIndex),
     };
-  while (p.start > 0 && p.usedRows + c(p.start - 1) <= a) {
-    p.start--;
-    p.usedRows += c(p.start);
+  while (
+    rowFillWindow.start > 0 &&
+    rowFillWindow.usedRows + heightOf(rowFillWindow.start - 1) <= budgetRows
+  ) {
+    rowFillWindow.start--;
+    rowFillWindow.usedRows += heightOf(rowFillWindow.start);
   }
-  return m(p.start);
+  return fillFrom(rowFillWindow.start);
 }
 //@ chunk-8jypjjdf.js:2112-2121 layout
 var MAX_VISIBLE_SUGGESTIONS = 5;
@@ -96,25 +101,25 @@ function findContiguousMatch(text, query, contiguousOnly = false) {
   let index = lower.indexOf(query);
   if (index !== -1) return snapRangesToGraphemes(text, [[index, index + query.length]]);
   if (contiguousOnly) return [];
-  let m = [];
-  let p = 0;
-  for (let d of query) {
-    let index = lower.indexOf(d, p);
+  let ranges = [];
+  let queryIndex = 0;
+  for (let char of query) {
+    let index = lower.indexOf(char, queryIndex);
     if (index === -1) return [];
-    let h = index + d.length;
-    let last = m.at(-1);
-    if (last && last[1] === index) last[1] = h;
-    else m.push([index, h]);
-    p = h;
+    let nextChar = index + char.length;
+    let last = ranges.at(-1);
+    if (last && last[1] === index) last[1] = nextChar;
+    else ranges.push([index, nextChar]);
+    queryIndex = nextChar;
   }
-  return snapRangesToGraphemes(text, m);
+  return snapRangesToGraphemes(text, ranges);
 }
 //@ chunk-8jypjjdf.js:2608-3288 layout
 function HighlightedSuggestionText(props) {
-  let $ = w(13);
+  let $ = useMemoCache(13);
   let { text, query, color, isSelected, bold, contiguousOnly } = props;
-  let f;
-  let h;
+  let earlyResult;
+  let highlighted;
   if (
     $[0] !== bold ||
     $[1] !== color ||
@@ -123,14 +128,14 @@ function HighlightedSuggestionText(props) {
     $[4] !== query ||
     $[5] !== text
   ) {
-    h = EARLY_RETURN_SENTINEL;
+    highlighted = EARLY_RETURN_SENTINEL;
     g: {
-      let u = query ? findContiguousMatch(text, query, contiguousOnly) : [];
-      if (u.length === 0) {
+      let ranges = query ? findContiguousMatch(text, query, contiguousOnly) : [];
+      if (ranges.length === 0) {
         const dimColor = !isSelected;
-        let C;
+        let plainText;
         if ($[8] !== bold || $[9] !== color || $[10] !== dimColor || $[11] !== text) {
-          C = jsxProd_default(Text, {
+          plainText = jsxProd_default(Text, {
             color,
             dimColor,
             bold,
@@ -140,38 +145,38 @@ function HighlightedSuggestionText(props) {
           $[9] = color;
           $[10] = dimColor;
           $[11] = text;
-          $[12] = C;
-        } else C = $[12];
-        h = C;
+          $[12] = plainText;
+        } else plainText = $[12];
+        highlighted = plainText;
         break g;
       }
-      let W = [];
-      let M = (B, Y, H) => {
-        if (B >= Y) {
+      let parts = [];
+      let pushSlice = (start, end, isMatch) => {
+        if (start >= end) {
           return;
         }
-        W.push(
+        parts.push(
           jsxProd_default(
             Text,
             {
               color,
-              dimColor: !H && !isSelected,
-              bold: bold || H,
-              children: text.slice(B, Y),
+              dimColor: !isMatch && !isSelected,
+              bold: bold || isMatch,
+              children: text.slice(start, end),
             },
-            B,
+            start,
           ),
         );
       };
-      let I = 0;
-      for (const [O, L] of u) {
-        M(I, O, false);
-        M(O, L, true);
-        I = L;
+      let cursor = 0;
+      for (const [rangeStart, rangeEnd] of ranges) {
+        pushSlice(cursor, rangeStart, false);
+        pushSlice(rangeStart, rangeEnd, true);
+        cursor = rangeEnd;
       }
-      M(I, text.length, false);
-      f = jsxProd_default(Fragment, {
-        children: W,
+      pushSlice(cursor, text.length, false);
+      earlyResult = jsxProd_default(Fragment, {
+        children: parts,
       });
     }
     $[0] = bold;
@@ -180,14 +185,14 @@ function HighlightedSuggestionText(props) {
     $[3] = isSelected;
     $[4] = query;
     $[5] = text;
-    $[6] = f;
-    $[7] = h;
+    $[6] = earlyResult;
+    $[7] = highlighted;
   } else {
-    f = $[6];
-    h = $[7];
+    earlyResult = $[6];
+    highlighted = $[7];
   }
-  if (h !== EARLY_RETURN_SENTINEL) return h;
-  return f;
+  if (highlighted !== EARLY_RETURN_SENTINEL) return highlighted;
+  return earlyResult;
 }
 //@ chunk-8jypjjdf.js:3288-3417 layout = getIcon (0.839)
 function getIcon_2(itemId) {
@@ -199,392 +204,411 @@ function getIcon_2(itemId) {
   );
 }
 //@ chunk-8jypjjdf.js:3417-8103 fingerprint = SuggestionItemRow (0.575)
-var SuggestionItemRow = Rh(function (props) {
-  let $ = w(101);
-  let { item, maxColumnWidth, isSelected, allowWrap } = props;
-  let p = allowWrap === undefined ? true : allowWrap;
-  let columns = useTerminalSize().columns;
-  let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let isUnified = getIcon_2(item.id);
-  let b;
-  if ($[0] !== item.id) {
-    b = item.id.startsWith("emoji:");
-    $[0] = item.id;
-    $[1] = b;
-  } else b = $[1];
-  let C = b;
-  let g = isScreenReaderEnabled && !C ? "" : isSelected ? `${figures_default.pointer} ` : "  ";
-  let W = bunStringWidth(g);
-  if (isUnified) {
-    let B;
-    if ($[2] !== item.id) {
-      B = getIcon(item.id);
-      $[2] = item.id;
-      $[3] = B;
-    } else B = $[3];
-    let Y = B;
-    let textColor = isSelected ? "suggestion" : undefined;
-    let dimColor = !isSelected;
-    let isFile = item.id.startsWith("file-");
-    let isMcpResource = item.id.startsWith("mcp-resource-");
-    let L;
-    if ($[4] !== item.id) {
-      L = item.id.startsWith("mcp-template-value::");
-      $[4] = item.id;
-      $[5] = L;
-    } else L = $[5];
-    let q = L;
-    let A = item.id.startsWith("mcp-template::");
-    let K = item.description ? 3 : 0;
-    let displayText;
-    if (isFile || A || q) {
-      let R;
-      if ($[6] !== item.description) {
-        R = item.description ? Math.min(20, bunStringWidth(item.description)) : 0;
-        $[6] = item.description;
-        $[7] = R;
-      } else R = $[7];
-      let descReserve = R;
-      let maxPathLength = columns - W - 2 - 4 - K - descReserve;
-      let J;
-      if ($[8] !== q || $[9] !== item.displayText || $[10] !== maxPathLength) {
-        J = q
-          ? truncateStartToWidth(item.displayText, maxPathLength)
-          : truncatePathMiddle(item.displayText, maxPathLength);
-        $[8] = q;
-        $[9] = item.displayText;
-        $[10] = maxPathLength;
-        $[11] = J;
-      } else J = $[11];
-      displayText = J;
-    } else if (isMcpResource) {
-      let R;
-      if ($[12] !== item.displayText) {
-        R = truncateToWidth(item.displayText, 30);
-        $[12] = item.displayText;
-        $[13] = R;
-      } else R = $[13];
-      displayText = R;
-    } else displayText = item.displayText;
-    let availableWidth = columns - W - 2 - bunStringWidth(displayText) - K - 4;
-    let lineContent;
-    if (item.description) {
-      let maxDescLength = Math.max(0, availableWidth);
-      let R;
-      if ($[14] !== item.description || $[15] !== maxDescLength) {
-        R = truncateToWidth(item.description.replace(WHITESPACE_RE, " "), maxDescLength);
-        $[14] = item.description;
-        $[15] = maxDescLength;
-        $[16] = R;
-      } else R = $[16];
-      let truncatedDesc = R;
-      lineContent = `${g}${Y} ${displayText} \u2013 ${truncatedDesc}`;
-    } else lineContent = `${g}${Y} ${displayText}`;
-    let R;
-    if ($[17] !== dimColor || $[18] !== lineContent || $[19] !== textColor) {
-      R = jsxProd_default(Text, {
-        color: textColor,
-        dimColor,
-        wrap: "truncate",
-        children: lineContent,
-      });
-      $[17] = dimColor;
-      $[18] = lineContent;
-      $[19] = textColor;
-      $[20] = R;
-    } else R = $[20];
-    return R;
-  }
-  let T = item.description || item.tag || item.kind !== undefined || item.sourceTag;
-  let U = maxColumnWidth ?? bunStringWidth(item.displayText) + 5;
-  let B;
-  if ($[21] !== U || $[22] !== columns || $[23] !== T || $[24] !== isScreenReaderEnabled || $[25] !== item) {
-    B = T ? fitSuggestionWidth(item, columns, U, isScreenReaderEnabled) : Math.min(U, columns - 4);
-    $[21] = U;
-    $[22] = columns;
-    $[23] = T;
-    $[24] = isScreenReaderEnabled;
-    $[25] = item;
-    $[26] = B;
-  } else B = $[26];
-  let V = B;
-  let color = item.color || (isSelected ? "suggestion" : undefined);
-  let shouldDim = !isSelected;
-  let bold = C && isSelected;
-  let Tt = V - 2 - (T && !C ? W : 0);
-  let displayText_0 = item.displayText;
-  if (bunStringWidth(displayText_0) > Tt) {
-    let L;
-    if ($[27] !== displayText_0 || $[28] !== Tt) {
-      L =
-        displayText_0.includes("/") || displayText_0.includes("\\")
-          ? truncateStartToWidth(displayText_0, Tt)
-          : truncateToWidth(displayText_0, Tt);
-      $[27] = displayText_0;
-      $[28] = Tt;
-      $[29] = L;
-    } else L = $[29];
-    displayText_0 = L;
-  }
-  let L;
-  if ($[30] !== V || $[31] !== displayText_0 || $[32] !== W) {
-    L = " ".repeat(Math.max(0, V - bunStringWidth(displayText_0) - W));
-    $[30] = V;
-    $[31] = displayText_0;
-    $[32] = W;
-    $[33] = L;
-  } else L = $[33];
-  let children = L;
-  let lt = item.tag ? `[${item.tag}] ` : "";
-  let tagWidth = bunStringWidth(lt);
-  let at;
-  let et;
-  let ot;
-  let R;
-  let J;
-  if ($[34] !== item) {
-    let { kindLaneText, kindLabel, sourceText } = suggestionKindLabels(item);
-    et = kindLaneText;
-    ot = sourceText;
-    at = kindLabel === "skill" ? "skill" : kindLabel === "agent" ? "background" : undefined;
-    R = bunStringWidth(et);
-    J = bunStringWidth(ot);
-    $[34] = item;
-    $[35] = at;
-    $[36] = et;
-    $[37] = ot;
-    $[38] = R;
-    $[39] = J;
-  } else {
-    at = $[35];
-    et = $[36];
-    ot = $[37];
-    R = $[38];
-    J = $[39];
-  }
-  let Ft = R + J;
-  let descriptionWidth = Math.max(0, columns - V - tagWidth - Ft - 4);
-  let color_2;
-  let Wt;
-  let Mt;
-  let Bt;
-  let kt;
-  if (
-    $[40] !== p ||
-    $[41] !== bold ||
-    $[42] !== columns ||
-    $[43] !== descriptionWidth ||
-    $[44] !== V ||
-    $[45] !== displayText_0 ||
-    $[46] !== isSelected ||
-    $[47] !== item.description ||
-    $[48] !== item.query ||
-    $[49] !== at ||
-    $[50] !== et ||
-    $[51] !== Ft ||
-    $[52] !== children ||
-    $[53] !== g ||
-    $[54] !== shouldDim ||
-    $[55] !== ot ||
-    $[56] !== lt ||
-    $[57] !== tagWidth ||
-    $[58] !== color
-  ) {
-    kt = EARLY_RETURN_SENTINEL;
-    Ln: {
-      let co = item.description ? item.description.replace(WHITESPACE_RE, " ").trim() : "";
-      let [nr, po] = p ? splitAtWordWidth(co, descriptionWidth) : [truncateToWidth(co, descriptionWidth), ""];
-      color_2 = isSelected ? "suggestion" : undefined;
-      let ct;
-      if ($[64] !== bold || $[65] !== g || $[66] !== shouldDim || $[67] !== color) {
-        ct = g
-          ? jsxProd_default(Text, {
-              color,
-              dimColor: shouldDim,
-              bold,
-              children: g,
-            })
-          : null;
-        $[64] = bold;
-        $[65] = g;
-        $[66] = shouldDim;
-        $[67] = color;
-        $[68] = ct;
-      } else ct = $[68];
-      let dt;
-      if (
-        $[69] !== bold ||
-        $[70] !== displayText_0 ||
-        $[71] !== isSelected ||
-        $[72] !== item.query ||
-        $[73] !== color
-      ) {
-        dt = jsxProd_default(HighlightedSuggestionText, {
-          text: displayText_0,
-          query: item.query,
-          color,
-          isSelected,
-          bold,
+var SuggestionItemRow; // deferred: uses useTerminalSize (../../hooks/useTerminalSize.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-8jypjjdf.js:3417", () => {
+  SuggestionItemRow = memo(function (props) {
+    let $ = useMemoCache(101);
+    let { item, maxColumnWidth, isSelected, allowWrap } = props;
+    let wrapAllowed = allowWrap === undefined ? true : allowWrap;
+    let columns = useTerminalSize().columns;
+    let isScreenReader = useIsScreenReaderEnabled();
+    let isUnified = getIcon_2(item.id);
+    let isEmojiId;
+    if ($[0] !== item.id) {
+      isEmojiId = item.id.startsWith("emoji:");
+      $[0] = item.id;
+      $[1] = isEmojiId;
+    } else isEmojiId = $[1];
+    let isEmoji = isEmojiId;
+    let prefix = isScreenReader && !isEmoji ? "" : isSelected ? `${figures_default.pointer} ` : "  ";
+    let prefixWidth = bunStringWidth(prefix);
+    if (isUnified) {
+      let icon;
+      if ($[2] !== item.id) {
+        icon = getIcon(item.id);
+        $[2] = item.id;
+        $[3] = icon;
+      } else icon = $[3];
+      let iconText = icon;
+      let textColor = isSelected ? "suggestion" : undefined;
+      let dimColor = !isSelected;
+      let isFile = item.id.startsWith("file-");
+      let isMcpResource = item.id.startsWith("mcp-resource-");
+      let isTemplateValue;
+      if ($[4] !== item.id) {
+        isTemplateValue = item.id.startsWith("mcp-template-value::");
+        $[4] = item.id;
+        $[5] = isTemplateValue;
+      } else isTemplateValue = $[5];
+      let isTemplateValue_2 = isTemplateValue;
+      let isTemplate = item.id.startsWith("mcp-template::");
+      let descReserveFixed = item.description ? 3 : 0;
+      let displayText;
+      if (isFile || isTemplate || isTemplateValue_2) {
+        let descWidth;
+        if ($[6] !== item.description) {
+          descWidth = item.description ? Math.min(20, bunStringWidth(item.description)) : 0;
+          $[6] = item.description;
+          $[7] = descWidth;
+        } else descWidth = $[7];
+        let descReserve = descWidth;
+        let maxPathLength = columns - prefixWidth - 2 - 4 - descReserveFixed - descReserve;
+        let truncatedPath;
+        if ($[8] !== isTemplateValue_2 || $[9] !== item.displayText || $[10] !== maxPathLength) {
+          truncatedPath = isTemplateValue_2
+            ? truncateStartToWidth(item.displayText, maxPathLength)
+            : truncatePathMiddle(item.displayText, maxPathLength);
+          $[8] = isTemplateValue_2;
+          $[9] = item.displayText;
+          $[10] = maxPathLength;
+          $[11] = truncatedPath;
+        } else truncatedPath = $[11];
+        displayText = truncatedPath;
+      } else if (isMcpResource) {
+        let memoCache;
+        if ($[12] !== item.displayText) {
+          memoCache = truncateToWidth(item.displayText, 30);
+          $[12] = item.displayText;
+          $[13] = memoCache;
+        } else memoCache = $[13];
+        displayText = memoCache;
+      } else displayText = item.displayText;
+      let availableWidth = columns - prefixWidth - 2 - bunStringWidth(displayText) - descReserveFixed - 4;
+      let lineContent;
+      if (item.description) {
+        let maxDescLength = Math.max(0, availableWidth);
+        let truncatedDesc;
+        if ($[14] !== item.description || $[15] !== maxDescLength) {
+          truncatedDesc = truncateToWidth(item.description.replace(WHITESPACE_RE, " "), maxDescLength);
+          $[14] = item.description;
+          $[15] = maxDescLength;
+          $[16] = truncatedDesc;
+        } else truncatedDesc = $[16];
+        let truncatedDesc_2 = truncatedDesc;
+        lineContent = `${prefix}${iconText} ${displayText} \u2013 ${truncatedDesc_2}`;
+      } else lineContent = `${prefix}${iconText} ${displayText}`;
+      let textElement;
+      if ($[17] !== dimColor || $[18] !== lineContent || $[19] !== textColor) {
+        textElement = jsxProd_default(Text, {
+          color: textColor,
+          dimColor,
+          wrap: "truncate",
+          children: lineContent,
         });
-        $[69] = bold;
-        $[70] = displayText_0;
-        $[71] = isSelected;
-        $[72] = item.query;
-        $[73] = color;
-        $[74] = dt;
-      } else dt = $[74];
-      let pt;
-      if ($[75] !== bold || $[76] !== children || $[77] !== shouldDim || $[78] !== color) {
-        pt = jsxProd_default(Text, {
-          color,
-          dimColor: shouldDim,
-          bold,
-          children,
-        });
-        $[75] = bold;
-        $[76] = children;
-        $[77] = shouldDim;
-        $[78] = color;
-        $[79] = pt;
-      } else pt = $[79];
-      let Lt;
-      if ($[80] !== at || $[81] !== et) {
-        Lt = et
-          ? jsxProd_default(Text, {
-              color: at,
-              dimColor: at === undefined,
-              children: et,
-            })
-          : null;
-        $[80] = at;
-        $[81] = et;
-        $[82] = Lt;
-      } else Lt = $[82];
-      let uo;
-      if ($[83] !== lt) {
-        uo = lt
-          ? jsxProd_default(Text, {
-              dimColor: true,
-              children: lt,
-            })
-          : null;
-        $[83] = lt;
-        $[84] = uo;
-      } else uo = $[84];
-      let mo;
-      if ($[85] !== ot) {
-        mo = ot
-          ? jsxProd_default(Text, {
-              dimColor: true,
-              children: ot,
-            })
-          : null;
-        $[85] = ot;
-        $[86] = mo;
-      } else mo = $[86];
-      Wt = jsxProd_default_2(Text, {
-        wrap: "truncate",
-        children: [
-          ct,
-          dt,
-          pt,
-          Lt,
-          uo,
-          mo,
-          jsxProd_default(HighlightedSuggestionText, {
-            text: nr,
+        $[17] = dimColor;
+        $[18] = lineContent;
+        $[19] = textColor;
+        $[20] = textElement;
+      } else textElement = $[20];
+      return textElement;
+    }
+    let hasExtra = item.description || item.tag || item.kind !== undefined || item.sourceTag;
+    let baseWidth = maxColumnWidth ?? bunStringWidth(item.displayText) + 5;
+    let rowWidth;
+    if (
+      $[21] !== baseWidth ||
+      $[22] !== columns ||
+      $[23] !== hasExtra ||
+      $[24] !== isScreenReader ||
+      $[25] !== item
+    ) {
+      rowWidth = hasExtra
+        ? fitSuggestionWidth(item, columns, baseWidth, isScreenReader)
+        : Math.min(baseWidth, columns - 4);
+      $[21] = baseWidth;
+      $[22] = columns;
+      $[23] = hasExtra;
+      $[24] = isScreenReader;
+      $[25] = item;
+      $[26] = rowWidth;
+    } else rowWidth = $[26];
+    let rowWidth_2 = rowWidth;
+    let color = item.color || (isSelected ? "suggestion" : undefined);
+    let shouldDim = !isSelected;
+    let bold = isEmoji && isSelected;
+    let textWidth = rowWidth_2 - 2 - (hasExtra && !isEmoji ? prefixWidth : 0);
+    let displayText_0 = item.displayText;
+    if (bunStringWidth(displayText_0) > textWidth) {
+      let truncatedText;
+      if ($[27] !== displayText_0 || $[28] !== textWidth) {
+        truncatedText =
+          displayText_0.includes("/") || displayText_0.includes("\\")
+            ? truncateStartToWidth(displayText_0, textWidth)
+            : truncateToWidth(displayText_0, textWidth);
+        $[27] = displayText_0;
+        $[28] = textWidth;
+        $[29] = truncatedText;
+      } else truncatedText = $[29];
+      displayText_0 = truncatedText;
+    }
+    let padding;
+    if ($[30] !== rowWidth_2 || $[31] !== displayText_0 || $[32] !== prefixWidth) {
+      padding = " ".repeat(Math.max(0, rowWidth_2 - bunStringWidth(displayText_0) - prefixWidth));
+      $[30] = rowWidth_2;
+      $[31] = displayText_0;
+      $[32] = prefixWidth;
+      $[33] = padding;
+    } else padding = $[33];
+    let children = padding;
+    let tagPrefix = item.tag ? `[${item.tag}] ` : "";
+    let tagWidth = bunStringWidth(tagPrefix);
+    let laneColor;
+    let laneText;
+    let sourceText;
+    let laneWidth;
+    let sourceWidth;
+    if ($[34] !== item) {
+      let { kindLaneText, kindLabel, sourceText: sourceText_2 } = suggestionKindLabels(item);
+      laneText = kindLaneText;
+      sourceText = sourceText_2;
+      laneColor = kindLabel === "skill" ? "skill" : kindLabel === "agent" ? "background" : undefined;
+      laneWidth = bunStringWidth(laneText);
+      sourceWidth = bunStringWidth(sourceText);
+      $[34] = item;
+      $[35] = laneColor;
+      $[36] = laneText;
+      $[37] = sourceText;
+      $[38] = laneWidth;
+      $[39] = sourceWidth;
+    } else {
+      laneColor = $[35];
+      laneText = $[36];
+      sourceText = $[37];
+      laneWidth = $[38];
+      sourceWidth = $[39];
+    }
+    let extrasWidth = laneWidth + sourceWidth;
+    let descriptionWidth = Math.max(0, columns - rowWidth_2 - tagWidth - extrasWidth - 4);
+    let color_2;
+    let firstLine;
+    let offset;
+    let restText;
+    let earlyReturn;
+    if (
+      $[40] !== wrapAllowed ||
+      $[41] !== bold ||
+      $[42] !== columns ||
+      $[43] !== descriptionWidth ||
+      $[44] !== rowWidth_2 ||
+      $[45] !== displayText_0 ||
+      $[46] !== isSelected ||
+      $[47] !== item.description ||
+      $[48] !== item.query ||
+      $[49] !== laneColor ||
+      $[50] !== laneText ||
+      $[51] !== extrasWidth ||
+      $[52] !== children ||
+      $[53] !== prefix ||
+      $[54] !== shouldDim ||
+      $[55] !== sourceText ||
+      $[56] !== tagPrefix ||
+      $[57] !== tagWidth ||
+      $[58] !== color
+    ) {
+      earlyReturn = EARLY_RETURN_SENTINEL;
+      Ln: {
+        let descriptionText = item.description ? item.description.replace(WHITESPACE_RE, " ").trim() : "";
+        let [firstPart, restPart] = wrapAllowed
+          ? splitAtWordWidth(descriptionText, descriptionWidth)
+          : [truncateToWidth(descriptionText, descriptionWidth), ""];
+        color_2 = isSelected ? "suggestion" : undefined;
+        let prefixNode;
+        if ($[64] !== bold || $[65] !== prefix || $[66] !== shouldDim || $[67] !== color) {
+          prefixNode = prefix
+            ? jsxProd_default(Text, {
+                color,
+                dimColor: shouldDim,
+                bold,
+                children: prefix,
+              })
+            : null;
+          $[64] = bold;
+          $[65] = prefix;
+          $[66] = shouldDim;
+          $[67] = color;
+          $[68] = prefixNode;
+        } else prefixNode = $[68];
+        let displayNode;
+        if (
+          $[69] !== bold ||
+          $[70] !== displayText_0 ||
+          $[71] !== isSelected ||
+          $[72] !== item.query ||
+          $[73] !== color
+        ) {
+          displayNode = jsxProd_default(HighlightedSuggestionText, {
+            text: displayText_0,
             query: item.query,
-            color: color_2,
+            color,
             isSelected,
             bold,
-            contiguousOnly: true,
-          }),
-        ],
-      });
-      if (!po) {
-        kt = Wt;
-        break Ln;
+          });
+          $[69] = bold;
+          $[70] = displayText_0;
+          $[71] = isSelected;
+          $[72] = item.query;
+          $[73] = color;
+          $[74] = displayNode;
+        } else displayNode = $[74];
+        let paddingNode;
+        if ($[75] !== bold || $[76] !== children || $[77] !== shouldDim || $[78] !== color) {
+          paddingNode = jsxProd_default(Text, {
+            color,
+            dimColor: shouldDim,
+            bold,
+            children,
+          });
+          $[75] = bold;
+          $[76] = children;
+          $[77] = shouldDim;
+          $[78] = color;
+          $[79] = paddingNode;
+        } else paddingNode = $[79];
+        let laneNode;
+        if ($[80] !== laneColor || $[81] !== laneText) {
+          laneNode = laneText
+            ? jsxProd_default(Text, {
+                color: laneColor,
+                dimColor: laneColor === undefined,
+                children: laneText,
+              })
+            : null;
+          $[80] = laneColor;
+          $[81] = laneText;
+          $[82] = laneNode;
+        } else laneNode = $[82];
+        let tagNode;
+        if ($[83] !== tagPrefix) {
+          tagNode = tagPrefix
+            ? jsxProd_default(Text, {
+                dimColor: true,
+                children: tagPrefix,
+              })
+            : null;
+          $[83] = tagPrefix;
+          $[84] = tagNode;
+        } else tagNode = $[84];
+        let sourceNode;
+        if ($[85] !== sourceText) {
+          sourceNode = sourceText
+            ? jsxProd_default(Text, {
+                dimColor: true,
+                children: sourceText,
+              })
+            : null;
+          $[85] = sourceText;
+          $[86] = sourceNode;
+        } else sourceNode = $[86];
+        firstLine = jsxProd_default_2(Text, {
+          wrap: "truncate",
+          children: [
+            prefixNode,
+            displayNode,
+            paddingNode,
+            laneNode,
+            tagNode,
+            sourceNode,
+            jsxProd_default(HighlightedSuggestionText, {
+              text: firstPart,
+              query: item.query,
+              color: color_2,
+              isSelected,
+              bold,
+              contiguousOnly: true,
+            }),
+          ],
+        });
+        if (!restPart) {
+          earlyReturn = firstLine;
+          break Ln;
+        }
+        offset = rowWidth_2 + tagWidth + extrasWidth;
+        restText = truncateToWidth(restPart, Math.max(0, columns - offset - 4));
       }
-      Mt = V + tagWidth + Ft;
-      Bt = truncateToWidth(po, Math.max(0, columns - Mt - 4));
+      $[40] = wrapAllowed;
+      $[41] = bold;
+      $[42] = columns;
+      $[43] = descriptionWidth;
+      $[44] = rowWidth_2;
+      $[45] = displayText_0;
+      $[46] = isSelected;
+      $[47] = item.description;
+      $[48] = item.query;
+      $[49] = laneColor;
+      $[50] = laneText;
+      $[51] = extrasWidth;
+      $[52] = children;
+      $[53] = prefix;
+      $[54] = shouldDim;
+      $[55] = sourceText;
+      $[56] = tagPrefix;
+      $[57] = tagWidth;
+      $[58] = color;
+      $[59] = color_2;
+      $[60] = firstLine;
+      $[61] = offset;
+      $[62] = restText;
+      $[63] = earlyReturn;
+    } else {
+      color_2 = $[59];
+      firstLine = $[60];
+      offset = $[61];
+      restText = $[62];
+      earlyReturn = $[63];
     }
-    $[40] = p;
-    $[41] = bold;
-    $[42] = columns;
-    $[43] = descriptionWidth;
-    $[44] = V;
-    $[45] = displayText_0;
-    $[46] = isSelected;
-    $[47] = item.description;
-    $[48] = item.query;
-    $[49] = at;
-    $[50] = et;
-    $[51] = Ft;
-    $[52] = children;
-    $[53] = g;
-    $[54] = shouldDim;
-    $[55] = ot;
-    $[56] = lt;
-    $[57] = tagWidth;
-    $[58] = color;
-    $[59] = color_2;
-    $[60] = Wt;
-    $[61] = Mt;
-    $[62] = Bt;
-    $[63] = kt;
-  } else {
-    color_2 = $[59];
-    Wt = $[60];
-    Mt = $[61];
-    Bt = $[62];
-    kt = $[63];
-  }
-  if (kt !== EARLY_RETURN_SENTINEL) return kt;
-  let text = Bt;
-  let ct;
-  if ($[87] !== Mt) {
-    ct = " ".repeat(Mt);
-    $[87] = Mt;
-    $[88] = ct;
-  } else ct = $[88];
-  let dt;
-  if ($[89] !== bold || $[90] !== color_2 || $[91] !== text || $[92] !== isSelected || $[93] !== item.query) {
-    dt = jsxProd_default(HighlightedSuggestionText, {
-      text,
-      query: item.query,
-      color: color_2,
-      isSelected,
-      bold,
-      contiguousOnly: true,
-    });
-    $[89] = bold;
-    $[90] = color_2;
-    $[91] = text;
-    $[92] = isSelected;
-    $[93] = item.query;
-    $[94] = dt;
-  } else dt = $[94];
-  let pt;
-  if ($[95] !== dt || $[96] !== ct) {
-    pt = jsxProd_default_2(Text, {
-      wrap: "truncate",
-      children: [ct, dt],
-    });
-    $[95] = dt;
-    $[96] = ct;
-    $[97] = pt;
-  } else pt = $[97];
-  let Lt;
-  if ($[98] !== Wt || $[99] !== pt) {
-    Lt = jsxProd_default_2(Box, {
-      flexDirection: "column",
-      children: [Wt, pt],
-    });
-    $[98] = Wt;
-    $[99] = pt;
-    $[100] = Lt;
-  } else Lt = $[100];
-  return Lt;
+    if (earlyReturn !== EARLY_RETURN_SENTINEL) return earlyReturn;
+    let text = restText;
+    let offsetPadding;
+    if ($[87] !== offset) {
+      offsetPadding = " ".repeat(offset);
+      $[87] = offset;
+      $[88] = offsetPadding;
+    } else offsetPadding = $[88];
+    let restNode;
+    if (
+      $[89] !== bold ||
+      $[90] !== color_2 ||
+      $[91] !== text ||
+      $[92] !== isSelected ||
+      $[93] !== item.query
+    ) {
+      restNode = jsxProd_default(HighlightedSuggestionText, {
+        text,
+        query: item.query,
+        color: color_2,
+        isSelected,
+        bold,
+        contiguousOnly: true,
+      });
+      $[89] = bold;
+      $[90] = color_2;
+      $[91] = text;
+      $[92] = isSelected;
+      $[93] = item.query;
+      $[94] = restNode;
+    } else restNode = $[94];
+    let secondLine;
+    if ($[95] !== restNode || $[96] !== offsetPadding) {
+      secondLine = jsxProd_default_2(Text, {
+        wrap: "truncate",
+        children: [offsetPadding, restNode],
+      });
+      $[95] = restNode;
+      $[96] = offsetPadding;
+      $[97] = secondLine;
+    } else secondLine = $[97];
+    let content;
+    if ($[98] !== firstLine || $[99] !== secondLine) {
+      content = jsxProd_default_2(Box, {
+        flexDirection: "column",
+        children: [firstLine, secondLine],
+      });
+      $[98] = firstLine;
+      $[99] = secondLine;
+      $[100] = content;
+    } else content = $[100];
+    return content;
+  });
 });
 //@ chunk-8jypjjdf.js:8103-9644 fingerprint = PromptInputFooterSuggestions (0.494)
 /**
@@ -606,7 +630,7 @@ function PromptInputFooterSuggestions({
   let { rows, columns } = useTerminalSize();
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let strayClickGuard = useStrayClickGuard();
-  let B = Q(
+  let columnWidth = useMemo(
     () =>
       maxColumnWidth ??
       suggestions.reduce(
@@ -615,13 +639,13 @@ function PromptInputFooterSuggestions({
       ) + 5,
     [suggestions, maxColumnWidth],
   );
-  let [Y, H] = y(null);
-  let M = overlay
+  let [anchorIndex, setAnchorIndex] = useState(null);
+  let maxVisible = overlay
     ? MAX_VISIBLE_SUGGESTIONS
     : Math.max(1, Math.min(Math.max(6, Math.floor(rows / 2)), rows - 3));
   if (suggestions.length === 0) {
     if (!emptyMessage) return null;
-    let T = noPad ? 0 : Math.max(0, M - 1);
+    let padCount = noPad ? 0 : Math.max(0, maxVisible - 1);
     return jsxProd_default_2(Box, {
       flexDirection: "column",
       justifyContent: overlay ? undefined : "flex-end",
@@ -631,55 +655,66 @@ function PromptInputFooterSuggestions({
         }),
         Array.from(
           {
-            length: T,
+            length: padCount,
           },
-          (U, V) =>
+          (unused, index) =>
             jsxProd_default(
               Text,
               {
                 children: " ",
               },
-              `pad-${V}`,
+              `pad-${index}`,
             ),
         ),
       ],
     });
   }
   let max = Math.max(0, Math.min(selectedSuggestion, suggestions.length - 1));
-  let max_2 = Math.max(0, max - M);
-  let mapped = suggestions.slice(max_2, max + M + 1).map(sanitizeSuggestion);
-  let q = M >= 2;
-  let mapped_2 = mapped.map((T) => (q ? suggestionRowHeight(T, columns, B, isScreenReaderEnabled) : 1));
-  let K = max - max_2;
-  let maxColumnWidth_2 = K;
-  let R = K + 1;
-  let v = mapped_2[K] ?? 1;
-  let F = 0;
-  let floored = Math.floor(M / 2);
-  while (maxColumnWidth_2 > 0 && v < M && F + (mapped_2[maxColumnWidth_2 - 1] ?? 1) <= floored) {
+  let max_2 = Math.max(0, max - maxVisible);
+  let mapped = suggestions.slice(max_2, max + maxVisible + 1).map(sanitizeSuggestion);
+  let wrapAllowed = maxVisible >= 2;
+  let rowHeights = mapped.map((item) =>
+    wrapAllowed ? suggestionRowHeight(item, columns, columnWidth, isScreenReaderEnabled) : 1,
+  );
+  let focusIndex = max - max_2;
+  let maxColumnWidth_2 = focusIndex;
+  let end = focusIndex + 1;
+  let usedRows = rowHeights[focusIndex] ?? 1;
+  let grownRows = 0;
+  let floored = Math.floor(maxVisible / 2);
+  while (
+    maxColumnWidth_2 > 0 &&
+    usedRows < maxVisible &&
+    grownRows + (rowHeights[maxColumnWidth_2 - 1] ?? 1) <= floored
+  ) {
     maxColumnWidth_2--;
-    F += mapped_2[maxColumnWidth_2] ?? 1;
+    grownRows += rowHeights[maxColumnWidth_2] ?? 1;
   }
-  v += F;
-  while (R < mapped.length && v + (mapped_2[R] ?? 1) <= M) {
-    v += mapped_2[R] ?? 1;
-    R++;
+  usedRows += grownRows;
+  while (end < mapped.length && usedRows + (rowHeights[end] ?? 1) <= maxVisible) {
+    usedRows += rowHeights[end] ?? 1;
+    end++;
   }
-  while (maxColumnWidth_2 > 0 && v + (mapped_2[maxColumnWidth_2 - 1] ?? 1) <= M) {
+  while (maxColumnWidth_2 > 0 && usedRows + (rowHeights[maxColumnWidth_2 - 1] ?? 1) <= maxVisible) {
     maxColumnWidth_2--;
-    v += mapped_2[maxColumnWidth_2] ?? 1;
+    usedRows += rowHeights[maxColumnWidth_2] ?? 1;
   }
   if (keepWindow) {
-    let T = suggestionWindow(mapped_2, M, K, (Y ?? max_2 + maxColumnWidth_2) - max_2);
-    maxColumnWidth_2 = T.start;
-    R = T.end;
-    v = T.usedRows;
-    if (max_2 + maxColumnWidth_2 !== Y) H(max_2 + maxColumnWidth_2);
+    let suggestWindow = suggestionWindow(
+      rowHeights,
+      maxVisible,
+      focusIndex,
+      (anchorIndex ?? max_2 + maxColumnWidth_2) - max_2,
+    );
+    maxColumnWidth_2 = suggestWindow.start;
+    end = suggestWindow.end;
+    usedRows = suggestWindow.usedRows;
+    if (max_2 + maxColumnWidth_2 !== anchorIndex) setAnchorIndex(max_2 + maxColumnWidth_2);
   }
-  let visibleItems = mapped.slice(maxColumnWidth_2, R);
-  let it = noPad ? 0 : Math.max(0, M - v);
+  let visibleItems = mapped.slice(maxColumnWidth_2, end);
+  let padRows = noPad ? 0 : Math.max(0, maxVisible - usedRows);
   let id = suggestions[selectedSuggestion]?.id;
-  let de =
+  let hoveredItemId =
     hoveredId != null && suggestions.some((suggestion) => suggestion.id === hoveredId)
       ? hoveredId
       : undefined;
@@ -688,15 +723,15 @@ function PromptInputFooterSuggestions({
     justifyContent: overlay ? undefined : "flex-end",
     onMouseLeave: onSelect ? () => onHoverChange?.(null) : undefined,
     children: [
-      visibleItems.map((visible, U) => {
-        let V = max_2 + maxColumnWidth_2 + U;
-        let D = jsxProd_default(
+      visibleItems.map((visible, offset) => {
+        let index = max_2 + maxColumnWidth_2 + offset;
+        let rowNode = jsxProd_default(
           SuggestionItemRow,
           {
             item: visible,
-            maxColumnWidth: B,
-            isSelected: visible.id === (de ?? id),
-            allowWrap: q,
+            maxColumnWidth: columnWidth,
+            isSelected: visible.id === (hoveredItemId ?? id),
+            allowWrap: wrapAllowed,
           },
           visible.id,
         );
@@ -705,35 +740,35 @@ function PromptInputFooterSuggestions({
             TwoColumnRow,
             {
               active: true,
-              children: D,
+              children: rowNode,
             },
             visible.id,
           );
-        if (!onSelect) return D;
+        if (!onSelect) return rowNode;
         return jsxProd_default(
           Box,
           {
             onMouseEnter: () => onHoverChange?.(visible.id),
             onClick: (item_0) => {
               if (strayClickGuard(item_0)) return;
-              onSelect(V, visible.id);
+              onSelect(index, visible.id);
             },
-            children: D,
+            children: rowNode,
           },
           visible.id,
         );
       }),
       Array.from(
         {
-          length: it,
+          length: padRows,
         },
-        (T, U) =>
+        (unused, index) =>
           jsxProd_default(
             Text,
             {
               children: " ",
             },
-            `pad-${U}`,
+            `pad-${index}`,
           ),
       ),
     ],
@@ -743,91 +778,111 @@ function PromptInputFooterSuggestions({
 /**
  * 导出值：FooterSuggestionsMemo（memo 包装的建议列表）；位于「输入建议列表（命令/文件/MCP 资源/agent/emoji 等）：按类型取图标、高亮匹配字符、滚动窗口与对齐」模块。
  */
-var FooterSuggestionsMemo = Rh(PromptInputFooterSuggestions);
+var FooterSuggestionsMemo; // deferred: uses PromptInputFooterSuggestions of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-8jypjjdf.js:9644", () => {
+  FooterSuggestionsMemo = memo(PromptInputFooterSuggestions);
+});
 //@ chunk-8jypjjdf.js:9660-9875 placement
-function suggestionKindLabels(o) {
-  let t = o.kind === undefined || o.kind === "action" ? "" : o.kind === "info" ? "config" : o.kind;
-  let kindLaneText = o.kind === undefined ? "" : t + repeatString(" ", 7 - bunStringWidth(t));
-  let sourceText = o.sourceTag ? `[${o.sourceTag}] ` : "";
+function suggestionKindLabels(suggestion) {
+  let kindLabel =
+    suggestion.kind === undefined || suggestion.kind === "action"
+      ? ""
+      : suggestion.kind === "info"
+        ? "config"
+        : suggestion.kind;
+  let kindLaneText =
+    suggestion.kind === undefined ? "" : kindLabel + repeatString(" ", 7 - bunStringWidth(kindLabel));
+  let sourceText = suggestion.sourceTag ? `[${suggestion.sourceTag}] ` : "";
   return {
     kindLaneText,
-    kindLabel: t,
+    kindLabel,
     sourceText,
   };
 }
 //@ chunk-8jypjjdf.js:9875-9945 placement
-function fitSuggestionWidth(o, a, t, l) {
-  let floored = Math.floor(a * 0.4);
-  return t > floored ? floored + suggestionIndentWidth(o, a, l) : t;
+function fitSuggestionWidth(suggestion, columns, descriptionWidth, isScreenReader) {
+  let floored = Math.floor(columns * 0.4);
+  return descriptionWidth > floored
+    ? floored + suggestionIndentWidth(suggestion, columns, isScreenReader)
+    : descriptionWidth;
 }
 //@ chunk-8jypjjdf.js:9945-10181 placement
-function suggestionIndentWidth(o, a, t) {
-  if (t || o.id.startsWith("emoji:")) return 0;
-  let l = o.tag ? bunStringWidth(`[${o.tag}] `) : 0;
-  let { kindLaneText, sourceText } = suggestionKindLabels(o);
-  let p =
-    a -
-    Math.floor(a * 0.4) -
-    l -
+function suggestionIndentWidth(suggestion, columns, isScreenReader) {
+  if (isScreenReader || suggestion.id.startsWith("emoji:")) return 0;
+  let tagWidth = suggestion.tag ? bunStringWidth(`[${suggestion.tag}] `) : 0;
+  let { kindLaneText, sourceText } = suggestionKindLabels(suggestion);
+  let availableWidth =
+    columns -
+    Math.floor(columns * 0.4) -
+    tagWidth -
     bunStringWidth(kindLaneText) -
     bunStringWidth(sourceText) -
     4 -
-    (o.description ? 1 : 0);
-  let d = bunStringWidth(`${figures_default.pointer} `);
-  return p < 0 ? d : Math.min(d, p);
+    (suggestion.description ? 1 : 0);
+  let pointerWidth = bunStringWidth(`${figures_default.pointer} `);
+  return availableWidth < 0 ? pointerWidth : Math.min(pointerWidth, availableWidth);
 }
 //@ chunk-8jypjjdf.js:10181-10434 placement
-function suggestionRowHeight(o, columns, t, isScreenReaderEnabled) {
-  if (getIcon_2(o.id) || !o.description) return 1;
-  let c = fitSuggestionWidth(o, columns, t, isScreenReaderEnabled);
-  let m = o.tag ? bunStringWidth(`[${o.tag}] `) : 0;
-  let { kindLaneText, sourceText } = suggestionKindLabels(o);
-  let max = Math.max(0, columns - c - m - bunStringWidth(kindLaneText) - bunStringWidth(sourceText) - 4);
+function suggestionRowHeight(suggestion, columns, descriptionWidth, isScreenReader) {
+  if (getIcon_2(suggestion.id) || !suggestion.description) return 1;
+  let descriptionColumns = fitSuggestionWidth(suggestion, columns, descriptionWidth, isScreenReader);
+  let tagWidth = suggestion.tag ? bunStringWidth(`[${suggestion.tag}] `) : 0;
+  let { kindLaneText, sourceText } = suggestionKindLabels(suggestion);
+  let max = Math.max(
+    0,
+    columns - descriptionColumns - tagWidth - bunStringWidth(kindLaneText) - bunStringWidth(sourceText) - 4,
+  );
   if (max <= 0) return 1;
-  let trimmed = o.description.replace(WHITESPACE_RE, " ").trim();
+  let trimmed = suggestion.description.replace(WHITESPACE_RE, " ").trim();
   return bunStringWidth(trimmed) > max ? 2 : 1;
 }
 //@ chunk-8jypjjdf.js:10434-10695 placement
-function sanitizeSuggestion(o) {
-  let a = stripLineBreaks(o.displayText);
-  let t = o.description && collapseWhitespace(o.description);
-  let l = o.tag && collapseWhitespace(o.tag);
-  let c = o.sourceTag && collapseWhitespace(o.sourceTag);
-  if (a === o.displayText && t === o.description && l === o.tag && c === o.sourceTag) return o;
+function sanitizeSuggestion(suggestion) {
+  let displayText = stripLineBreaks(suggestion.displayText);
+  let description = suggestion.description && collapseWhitespace(suggestion.description);
+  let tag = suggestion.tag && collapseWhitespace(suggestion.tag);
+  let sourceTag = suggestion.sourceTag && collapseWhitespace(suggestion.sourceTag);
+  if (
+    displayText === suggestion.displayText &&
+    description === suggestion.description &&
+    tag === suggestion.tag &&
+    sourceTag === suggestion.sourceTag
+  )
+    return suggestion;
   return {
-    ...o,
-    displayText: a,
-    description: t,
-    tag: l,
-    sourceTag: c,
+    ...suggestion,
+    displayText,
+    description,
+    tag,
+    sourceTag,
   };
 }
 //@ chunk-8jypjjdf.js:10695-10900 placement
-function splitAtWordWidth(o, descriptionWidth) {
-  if (descriptionWidth <= 0 || bunStringWidth(o) <= descriptionWidth) return [o, ""];
-  let t = truncateToWidthNoEllipsis(o, descriptionWidth);
-  let sliced = o.slice(t.length);
-  if (sliced.startsWith(" ")) return [t, sliced.trimStart()];
-  let index = t.lastIndexOf(" ");
-  if (index > 0) return [t.slice(0, index), o.slice(index + 1)];
-  return [t, sliced];
+function splitAtWordWidth(text, descriptionWidth) {
+  if (descriptionWidth <= 0 || bunStringWidth(text) <= descriptionWidth) return [text, ""];
+  let head = truncateToWidthNoEllipsis(text, descriptionWidth);
+  let sliced = text.slice(head.length);
+  if (sliced.startsWith(" ")) return [head, sliced.trimStart()];
+  let index = head.lastIndexOf(" ");
+  if (index > 0) return [head.slice(0, index), text.slice(index + 1)];
+  return [head, sliced];
 }
 //@ chunk-8jypjjdf.js:10900-10926 placement
 var NON_LATIN_PATTERN = /[^\u0020-\u02ff]/;
 //@ chunk-8jypjjdf.js:10926-11218 placement = findWordObject (1)
-function snapRangesToGraphemes(o, a) {
-  if (a.length === 0 || !NON_LATIN_PATTERN.test(o)) return a;
-  let t = new Set();
-  for (let { index } of getGraphemeSegmenter().segment(o)) t.add(index);
+function snapRangesToGraphemes(text, ranges) {
+  if (ranges.length === 0 || !NON_LATIN_PATTERN.test(text)) return ranges;
+  let boundaries = new Set();
+  for (let { index } of getGraphemeSegmenter().segment(text)) boundaries.add(index);
   let graphemes = [];
-  for (let [c, m] of a) {
-    let p = c;
-    while (p > 0 && !t.has(p)) p--;
-    let d = m;
-    while (d < o.length && !t.has(d)) d++;
+  for (let [start, end] of ranges) {
+    let nextStart = start;
+    while (nextStart > 0 && !boundaries.has(nextStart)) nextStart--;
+    let rangeEnd = end;
+    while (rangeEnd < text.length && !boundaries.has(rangeEnd)) rangeEnd++;
     let last = graphemes.at(-1);
-    if (last && p <= last[1]) last[1] = Math.max(last[1], d);
-    else graphemes.push([p, d]);
+    if (last && nextStart <= last[1]) last[1] = Math.max(last[1], rangeEnd);
+    else graphemes.push([nextStart, rangeEnd]);
   }
   return graphemes;
 }

@@ -48,18 +48,18 @@ class MarketplacesSyncFailed extends Error {
 /**
  * 把 claude.ai 账号插件市场同步到本地（开关与条件满足时），带遥测。
  */
-async function syncClaudeAiMarketplaces(rootSession, credentials, n) {
+async function syncClaudeAiMarketplaces(rootSession, credentials, accountCredentials) {
   try {
     if (!getAccountPluginsSyncEnabled() || !syncSettingsEnabled() || isPluginsSyncEligible()) return false;
-    let r = syncAccountMarketplaces(credentials, n);
+    let syncPromise = syncAccountMarketplaces(credentials, accountCredentials);
     try {
       return await withFeatureTelemetry(
         "claudeai_marketplaces_sync",
         () => resolveAccountMarketplaceBucket(rootSession, credentials),
-        (u) => (u instanceof MarketplacesSyncFailed ? u.code : "unexpected"),
+        (failure) => (failure instanceof MarketplacesSyncFailed ? failure.code : "unexpected"),
       );
     } finally {
-      await r;
+      await syncPromise;
     }
   } catch (error) {
     if (!(error instanceof MarketplacesSyncFailed)) logError(error);
@@ -67,24 +67,24 @@ async function syncClaudeAiMarketplaces(rootSession, credentials, n) {
   }
 }
 //@ chunk-3wek6r2k.js:75306-75714 placement
-async function syncAccountMarketplaces(credentials, o) {
+async function syncAccountMarketplaces(credentials, accountCredentials) {
   try {
     let entries = Object.entries(await readClaudeAiMarketplaceRegistry());
     if (entries.length === 0) return;
-    let installedPlugins = await getInstalledPluginsAsync(o);
-    let u = new Set(
+    let installedPlugins = await getInstalledPluginsAsync(accountCredentials);
+    let installedSuffixes = new Set(
       Object.entries(installedPlugins.plugins).flatMap(([key, value]) =>
         value.length > 0 ? [marketplaceSuffix(key)] : [],
       ),
     );
-    let filtered = entries.filter(([h]) => u.has(h));
+    let filtered = entries.filter(([suffix]) => installedSuffixes.has(suffix));
     if (filtered.length === 0) return;
     logForDiagnosticsNoPII("info", "claudeai_catalog_background_refresh", {
       count: filtered.length,
     });
     await Promise.all(
-      filtered.map(([h, S]) =>
-        ensureClaudeAiMarketplace(h, S.source, {
+      filtered.map(([name, entry]) =>
+        ensureClaudeAiMarketplace(name, entry.source, {
           mode: "refresh",
           credentials,
           isBackground: true,
@@ -96,25 +96,25 @@ async function syncAccountMarketplaces(credentials, o) {
   }
 }
 //@ chunk-3wek6r2k.js:75714-76896 placement
-async function resolveAccountMarketplaceBucket(e, o) {
-  let syncBucket = await getSyncBucket(o);
+async function resolveAccountMarketplaceBucket(rootSession, credentials) {
+  let syncBucket = await getSyncBucket(credentials);
   if (syncBucket === null) throw new MarketplacesSyncFailed("bucket_unresolved");
-  let r = syncedPluginBucketDir(syncBucket);
-  let u = bucketOrg(syncBucket) ?? "";
+  let root = syncedPluginBucketDir(syncBucket);
+  let organizationUuid = bucketOrg(syncBucket) ?? "";
   try {
-    await ensurePluginsBucketRoot(e, syncBucket);
+    await ensurePluginsBucketRoot(rootSession, syncBucket);
   } catch {
     throw new MarketplacesSyncFailed("root_refused");
   }
   logForDiagnosticsNoPII("info", "marketplaces_sync_starting");
-  let p = accountMarketplacesPromiseCache.of(e.host);
-  let accountMarketplacesCache = await readAccountMarketplacesCache(r);
-  let S =
+  let promiseCache = accountMarketplacesPromiseCache.of(rootSession.host);
+  let accountMarketplacesCache = await readAccountMarketplacesCache(root);
+  let skipEtag =
     (getStrictKnownMarketplaces() !== null || shouldAllowManagedPermissionRulesOnly()) &&
     Object.keys(await readClaudeAiMarketplaceRegistry()).length > 0;
   let claudeAiMarketplaceRows = await fetchClaudeAiMarketplaceRows({
-    etag: S ? undefined : accountMarketplacesCache?.etag,
-    credentials: o,
+    etag: skipEtag ? undefined : accountMarketplacesCache?.etag,
+    credentials,
   });
   switch (claudeAiMarketplaceRows.status) {
     case "ok": {
@@ -122,11 +122,11 @@ async function resolveAccountMarketplaceBucket(e, o) {
         logForDiagnosticsNoPII("warn", "marketplaces_sync_rows_dropped", {
           count: claudeAiMarketplaceRows.dropped,
         });
-      let M = true;
+      let scopesSynced = true;
       try {
-        await syncAccountMarketplaceScopes(claudeAiMarketplaceRows.rows, u);
+        await syncAccountMarketplaceScopes(claudeAiMarketplaceRows.rows, organizationUuid);
       } catch (error) {
-        M = false;
+        scopesSynced = false;
         logForDiagnosticsNoPII("warn", "marketplaces_sync_scope_sync_failed");
         logForDebugging(
           `claude.ai marketplaces: could not re-derive added marketplaces' scopes: ${errorMessage(error)}`,
@@ -135,21 +135,21 @@ async function resolveAccountMarketplaceBucket(e, o) {
           },
         );
       }
-      let etag = M ? claudeAiMarketplaceRows.etag : undefined;
-      let w =
+      let etag = scopesSynced ? claudeAiMarketplaceRows.etag : undefined;
+      let changed =
         accountMarketplacesCache === null || accountMarketplacesCache.etag !== etag || etag === undefined;
-      if (w) {
-        await writeAccountMarketplacesCache(r, {
+      if (changed) {
+        await writeAccountMarketplacesCache(root, {
           etag,
           rows: claudeAiMarketplaceRows.rows,
         });
-        p.invalidate();
+        promiseCache.invalidate();
       }
       logForDiagnosticsNoPII("info", "marketplaces_sync_complete", {
         count: claudeAiMarketplaceRows.rows.length,
-        changed: w,
+        changed,
       });
-      return w;
+      return changed;
     }
     case "not_modified":
       logForDiagnosticsNoPII("info", "marketplaces_sync_not_modified");
@@ -160,7 +160,7 @@ async function resolveAccountMarketplaceBucket(e, o) {
         code: claudeAiMarketplaceRows.code,
       });
       await removeAccountSyncedFile(syncBucket, MARKETPLACES_JSON_FILE);
-      p.invalidate();
+      promiseCache.invalidate();
       throw new MarketplacesSyncFailed(claudeAiMarketplaceRows.code);
     case "skipped":
     case "failed":

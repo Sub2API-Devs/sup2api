@@ -8,6 +8,8 @@
  * pieces: chunk-aepeg2w5.js (1), chunk-d1cgs5na.js (1), chunk-hwmsct5x.js (81)
  * attribution: fingerprint 17, placement 48, layout 13, callgraph-fingerprint 1, callgraph-witnessed 3, affinity 1
  */
+import { getModelStrings, isModelAvailableOnProvider, resolveProviderModelId } from "./modelStrings.js";
+import { catalogFamilyDefaultKey, getModelUnavailabilityReason } from "./classifierModel.js";
 import {
   defaultModelAttributionSuffix,
   resolveDefaultMainLoopModelSetting,
@@ -80,7 +82,6 @@ import {
   buildCatalogRows,
   pickerHintFromOverride,
 } from "./modelErrorOverrides.js";
-import { getModelStrings, isModelAvailableOnProvider, resolveProviderModelId } from "./modelStrings.js";
 import {
   usesPayAsYouGo,
   isUsageCreditsModelBilled,
@@ -115,14 +116,21 @@ import { logFeatureSad, logFeatureOk, logFeatureBad } from "../../services/analy
 import { logForDebugging } from "../debug.js";
 import { normalizeModelId } from "./modelCatalog/catalogEntries.js";
 import { markdownSafeText, sanitizeTitle } from "../resultError.js";
-import { getModelUnavailabilityReason, catalogFamilyDefaultKey } from "./classifierModel.js";
 import { getSettings_DEPRECATED } from "../settings/settings.js";
 import { isModelRemappedOrRetired } from "./deprecation.js";
 import { capitalize } from "../stringUtils.js";
 import { getUserSpecifiedModelSetting } from "./smallFastModel.js";
 import { getInitialMainLoopModel } from "../../bootstrap/state.js";
 import { eligible1mSuffixTarget } from "./defaultModel.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-aepeg2w5.js:438212-438266 fingerprint = getSonnet46Option (0.561)
+/**
+ * 当前提供商 catalog sonnet 档的模型字符串，缺失时 sonnet46。旧版名 getSonnet46Option 为错配（不是选项）。
+ */
+function getDefaultSonnetBuiltin(modelStrings = getModelStrings()) {
+  return catalogFamilyDefaultKey("sonnet", modelStrings) ?? modelStrings.sonnet46;
+}
 //@ chunk-hwmsct5x.js:199615-199672 placement
 /**
  * 默认模型说明里的来源后缀（托管 enforced 等）。
@@ -144,15 +152,15 @@ function getDefaultOptionForUser(fastMode) {
       description: getClaudeAiUserDefaultModelDescription(fastMode),
     };
   let { setting, attribution } = resolveDefaultMainLoopModelSetting();
-  let s = !usesFirstPartyModelIds();
-  let h = isFastModeOnForModel(fastMode, setting) && supportsFastMode(setting);
+  let providerIds = !usesFirstPartyModelIds();
+  let isFast = isFastModeOnForModel(fastMode, setting) && supportsFastMode(setting);
   let is3P =
     attribution === "tier" || (attribution === "served" && isPublishedCatalogInUse())
-      ? getModelPriceSuffix(h ? setting : parseUserSpecifiedModel(setting), h)
+      ? getModelPriceSuffix(isFast ? setting : parseUserSpecifiedModel(setting), isFast)
       : "";
   return {
     value: null,
-    label: s ? "Default" : "Default (recommended)",
+    label: providerIds ? "Default" : "Default (recommended)",
     description: `Use the default model (currently ${renderDefaultModelSetting(setting)})${is3P}${getDefaultAttributionSuffix(attribution)}`,
   };
 }
@@ -178,39 +186,42 @@ function defaultSonnetHasNative1m() {
 /**
  * 读取内置目录中某族最新模型（latest_per_family），返回 {id, displayName, key}；目录不一致时抛错。
  */
-function getLatestFamilyModel(e) {
-  let n = getModelCatalog_2().latest_per_family[e];
-  let found = LEGACY_MODEL_IDS_2.find((y) => y === n);
-  let s = found && getCatalogEntry(found);
-  let h = s && MODEL_KEY_BY_FIRST_PARTY_ID[s.provider_ids.first_party];
-  if (found === undefined || s === undefined || h === undefined)
+function getLatestFamilyModel(family) {
+  let id = getModelCatalog_2().latest_per_family[family];
+  let found = LEGACY_MODEL_IDS_2.find((legacyId) => legacyId === id);
+  let entry = found && getCatalogEntry(found);
+  let key = entry && MODEL_KEY_BY_FIRST_PARTY_ID[entry.provider_ids.first_party];
+  if (found === undefined || entry === undefined || key === undefined)
     throw Error(
       "model-catalog.json: latest_per_family must name a models[] entry that has a CATALOG_ID_TO_KEY line in configs.ts",
     );
   return {
     id: found,
-    displayName: s.display_name,
-    key: h,
+    displayName: entry.display_name,
+    key,
   };
 }
 //@ chunk-hwmsct5x.js:200502-200545 placement
 /**
  * 该档当前主模型就是 catalog 的该档模型。
  */
-function isTierDefaultCatalogModel(e) {
-  return getCanonicalName(getDefaultModelForFamily(e)) === getLatestFamilyModel(e).id;
+function isTierDefaultCatalogModel(family) {
+  return getCanonicalName(getDefaultModelForFamily(family)) === getLatestFamilyModel(family).id;
 }
 //@ chunk-hwmsct5x.js:200545-200753 layout
 /**
  * 自定义档位模型的 label/description（ANTHROPIC_DEFAULT_*_MODEL_NAME/DESCRIPTION 优先）。
  */
-function buildCustomTierLabel(e, n, r, s) {
-  let h = r === undefined ? nameForUnnamedModelId(e) : undefined;
-  let y = (n === "Sonnet" || n === "Opus") && has1mSuffix_2(e);
+function buildCustomTierLabel(model, tierLabel, label, description) {
+  let catalogName = label === undefined ? nameForUnnamedModelId(model) : undefined;
+  let is1m = (tierLabel === "Sonnet" || tierLabel === "Opus") && has1mSuffix_2(model);
   return {
-    label: r ?? h ?? e,
+    label: label ?? catalogName ?? model,
     description:
-      s ?? (h !== undefined ? `Custom ${n} model (${e})` : `Custom ${n} model${y ? " (1M context)" : ""}`),
+      description ??
+      (catalogName !== undefined
+        ? `Custom ${tierLabel} model (${model})`
+        : `Custom ${tierLabel} model${is1m ? " (1M context)" : ""}`),
   };
 }
 //@ chunk-hwmsct5x.js:200753-201081 fingerprint = getCustomSonnetOption (0.796)
@@ -237,8 +248,8 @@ function getCustomSonnetOption() {
 /**
  * 选项描述里的价格后缀（fast mode 时用 fast 价）。
  */
-function getModelPriceSuffix(e, n) {
-  return getModelPricingSuffix(isFastModeOnForModel(n, e), e);
+function getModelPriceSuffix(model, fastMode) {
+  return getModelPricingSuffix(isFastModeOnForModel(fastMode, model), model);
 }
 //@ chunk-hwmsct5x.js:201121-201495 placement
 /**
@@ -249,7 +260,7 @@ var FAMILY_PRESENTATION = {
     label: "Sonnet",
     slogan: SONNET_SLOGAN,
     descriptionForModel: "efficient for routine tasks. Generally recommended for most coding tasks",
-    suffix: (e) => getModelPriceSuffix(e, false),
+    suffix: (fastMode) => getModelPriceSuffix(fastMode, false),
   },
   opus: {
     label: "Opus",
@@ -268,16 +279,16 @@ var FAMILY_PRESENTATION = {
 /**
  * 生成模型选择器中某个模型选项：value、label、显示描述与给模型看的描述。旧版名 generateModelSection 来自 ConfigTool/prompt，实际属于模型选项。
  */
-function generateModelSection(e, n = false) {
-  let { id, displayName, key } = getLatestFamilyModel(e);
-  let y = FAMILY_PRESENTATION[e];
-  let w = usesFirstPartyModelIds() && isTierDefaultCatalogModel(e) ? e : getModelStrings()[key];
-  let S = w === e ? getDefaultModelForFamily(e) : id;
+function generateModelSection(family, fastMode = false) {
+  let { id, displayName, key } = getLatestFamilyModel(family);
+  let presentation = FAMILY_PRESENTATION[family];
+  let value = usesFirstPartyModelIds() && isTierDefaultCatalogModel(family) ? family : getModelStrings()[key];
+  let pricingModel = value === family ? getDefaultModelForFamily(family) : id;
   return {
-    value: w,
-    label: y.label,
-    description: `${displayName} \xB7 ${y.slogan}${y.suffix(S, n)}`,
-    descriptionForModel: `${displayName} - ${y.descriptionForModel}`,
+    value,
+    label: presentation.label,
+    description: `${displayName} \xB7 ${presentation.slogan}${presentation.suffix(pricingModel, fastMode)}`,
+    descriptionForModel: `${displayName} - ${presentation.descriptionForModel}`,
   };
 }
 //@ chunk-hwmsct5x.js:201735-201918 placement
@@ -316,65 +327,63 @@ function getCustomFableOption() {
 //@ chunk-hwmsct5x.js:202390-202428 placement
 var USAGE_CREDITS_SUFFIX = " \xB7 Requires usage credits";
 //@ chunk-hwmsct5x.js:202428-202473 placement
-function usageCreditsSuffix(e) {
-  return !usesPayAsYouGo() && isUsageCreditsModelBilled(parseUserSpecifiedModel(e))
+function usageCreditsSuffix(model) {
+  return !usesPayAsYouGo() && isUsageCreditsModelBilled(parseUserSpecifiedModel(model))
     ? USAGE_CREDITS_SUFFIX
     : "";
 }
 //@ chunk-hwmsct5x.js:202473-202766 placement
-function appendFableCreditSuffix(e) {
-  if (e.disabled === true || typeof e.value !== "string") return e;
-  let modelConfigById = findModelConfigById(stripAnyVersatileSuffix(e.value));
+function appendFableCreditSuffix(option) {
+  if (option.disabled === true || typeof option.value !== "string") return option;
+  let modelConfigById = findModelConfigById(stripAnyVersatileSuffix(option.value));
   if (!(
-    e.value === "fable" ||
-    e.value === "fable[1m]" ||
+    option.value === "fable" ||
+    option.value === "fable[1m]" ||
     modelConfigById === CLAUDE_FABLE_5_CONFIG ||
     modelConfigById === CLAUDE_FABLE_5_1_CONFIG
   ))
-    return e;
-  let s = e.description.endsWith(USAGE_CREDITS_SUFFIX)
-    ? e.description.slice(0, -USAGE_CREDITS_SUFFIX.length)
-    : e.description;
+    return option;
+  let baseDescription = option.description.endsWith(USAGE_CREDITS_SUFFIX)
+    ? option.description.slice(0, -USAGE_CREDITS_SUFFIX.length)
+    : option.description;
   return {
-    ...e,
-    description: `${s}${usageCreditsSuffix(e.value)}`,
+    ...option,
+    description: `${baseDescription}${usageCreditsSuffix(option.value)}`,
   };
 }
 //@ chunk-hwmsct5x.js:202766-203001 placement
-function getFableOption(defaultFableModel, n) {
-  let r = fableDisplayName(defaultFableModel) ?? getLatestFamilyModel("fable").displayName;
-  let s = isClaudeAISubscriber() ? "" : getModelPriceSuffix(defaultFableModel, n);
+function getFableOption(model, fastMode) {
+  let displayName = fableDisplayName(model) ?? getLatestFamilyModel("fable").displayName;
+  let pricing = isClaudeAISubscriber() ? "" : getModelPriceSuffix(model, fastMode);
   return {
     value: "fable",
     label: "Fable",
-    description: `${r} \xB7 ${FABLE_SLOGAN}${s}${usageCreditsSuffix(defaultFableModel)}`,
-    descriptionForModel: `${r} - most capable for your hardest and longest-running tasks`,
+    description: `${displayName} \xB7 ${FABLE_SLOGAN}${pricing}${usageCreditsSuffix(model)}`,
+    descriptionForModel: `${displayName} - most capable for your hardest and longest-running tasks`,
   };
 }
 //@ chunk-hwmsct5x.js:203001-203248 placement
-function getHaiku35Option(customModel) {
-  let n =
-    fableDisplayName(customModel) ??
-    (anyModelDescribed(customModel, strippedCanonicalName(customModel))
-      ? renderModelName(customModel)
-      : undefined);
-  if (n === undefined)
+function getHaiku35Option(model) {
+  let name =
+    fableDisplayName(model) ??
+    (anyModelDescribed(model, strippedCanonicalName(model)) ? renderModelName(model) : undefined);
+  if (name === undefined)
     return {
       ...generateModelSection("fable"),
-      value: customModel,
+      value: model,
     };
   return {
-    value: customModel,
-    label: n,
-    description: `${n} \xB7 ${FABLE_SLOGAN}${usageCreditsSuffix(customModel)}`,
-    descriptionForModel: `${n} - most capable for your hardest and longest-running tasks`,
+    value: model,
+    label: name,
+    description: `${name} \xB7 ${FABLE_SLOGAN}${usageCreditsSuffix(model)}`,
+    descriptionForModel: `${name} - most capable for your hardest and longest-running tasks`,
   };
 }
 //@ chunk-hwmsct5x.js:203248-203346 placement
-function fableDisplayName(e) {
+function fableDisplayName(model) {
   let catalogEntry = getCatalogEntry(
     strip1mSuffix(
-      getCanonicalName(e, {
+      getCanonicalName(model, {
         identity: true,
       }),
     ),
@@ -479,18 +488,18 @@ function getSonnet46_1MOption() {
  */
 function getSonnet1mOption() {
   let { id, displayName } = getLatestFamilyModel("sonnet");
-  let r = {
+  let base = {
     value: "sonnet[1m]",
     label: `${displayName} (1M context)`,
     descriptionForModel: `${displayName} with 1M context window - for long sessions with large codebases`,
   };
   if (isClaudeAISubscriber())
     return {
-      ...r,
+      ...base,
       description: `${displayName} for long sessions`,
     };
   return {
-    ...r,
+    ...base,
     description: `${displayName} for long sessions${getModelPriceSuffix(id, false)}`,
   };
 }
@@ -498,11 +507,11 @@ function getSonnet1mOption() {
 /**
  * "Opus 4.6 (1M context)" 选项。
  */
-function getOpus46_1MOption(fastMode = false, n = true) {
+function getOpus46_1MOption(fastMode = false, withPricing = true) {
   return {
     value: !usesFirstPartyModelIds() ? getModelStrings().opus46 + "[1m]" : "claude-opus-4-6[1m]",
     label: "Opus 4.6 (1M context)",
-    description: `Opus 4.6 for long sessions${n ? getModelPriceSuffix("claude-opus-4-6", fastMode) : ""}`,
+    description: `Opus 4.6 for long sessions${withPricing ? getModelPriceSuffix("claude-opus-4-6", fastMode) : ""}`,
     descriptionForModel: "Opus 4.6 with 1M context window - for long sessions with large codebases",
   };
 }
@@ -544,12 +553,12 @@ function getCustomHaikuOption() {
  */
 function getHaiku45Option() {
   let defaultHaikuModel = getDefaultHaikuModel();
-  let n = getPublicModelDisplayName(defaultHaikuModel) ?? "Haiku";
+  let displayName = getPublicModelDisplayName(defaultHaikuModel) ?? "Haiku";
   return {
     value: "haiku",
     label: "Haiku",
-    description: `${n} \xB7 ${HAIKU_SLOGAN}${getModelPriceSuffix(defaultHaikuModel, false)}`,
-    descriptionForModel: `${n} - fastest for quick answers. Lower cost but less capable than Sonnet.`,
+    description: `${displayName} \xB7 ${HAIKU_SLOGAN}${getModelPriceSuffix(defaultHaikuModel, false)}`,
+    descriptionForModel: `${displayName} - fastest for quick answers. Lower cost but less capable than Sonnet.`,
   };
 }
 //@ chunk-hwmsct5x.js:206132-206235 layout
@@ -567,11 +576,11 @@ function getProUsageMultiplierNote() {
  */
 function getMaxOpusOption(fastMode = false) {
   let { id, displayName } = getLatestFamilyModel("opus");
-  let s = fastMode ? getModelPriceSuffix(id, false) : "";
+  let pricing = fastMode ? getModelPriceSuffix(id, false) : "";
   return {
     value: "opus",
     label: "Opus",
-    description: `${displayName} \xB7 ${OPUS_SLOGAN}${getProUsageMultiplierNote()}${s}`,
+    description: `${displayName} \xB7 ${OPUS_SLOGAN}${getProUsageMultiplierNote()}${pricing}`,
   };
 }
 //@ chunk-hwmsct5x.js:206379-206629 callgraph-fingerprint = getMaxSonnet46_1MOption (0.248)
@@ -579,13 +588,13 @@ function getMaxOpusOption(fastMode = false) {
  * 订阅用户的 "Sonnet 4.6 (1M context)"（可能注明耗用 usage credits）。
  */
 function getMaxSonnet46_1MOption() {
-  let e = !usesFirstPartyModelIds();
-  let n = isClaudeAISubscriber() ? " \xB7 Draws from usage credits" : "";
-  let r = n === "" ? "" : getModelPriceSuffix("claude-sonnet-4-6", false);
+  let providerIds = !usesFirstPartyModelIds();
+  let creditNote = isClaudeAISubscriber() ? " \xB7 Draws from usage credits" : "";
+  let pricing = creditNote === "" ? "" : getModelPriceSuffix("claude-sonnet-4-6", false);
   return {
-    value: e ? getModelStrings().sonnet46 + "[1m]" : "claude-sonnet-4-6[1m]",
+    value: providerIds ? getModelStrings().sonnet46 + "[1m]" : "claude-sonnet-4-6[1m]",
     label: "Sonnet 4.6 (1M context)",
-    description: `Sonnet 4.6 with 1M context${n}${r}`,
+    description: `Sonnet 4.6 with 1M context${creditNote}${pricing}`,
   };
 }
 //@ chunk-hwmsct5x.js:206629-206844 fingerprint = getMaxOpus46_1MOption (0.551)
@@ -593,29 +602,29 @@ function getMaxSonnet46_1MOption() {
  * 订阅用户的 "Opus (1M context)"。
  */
 function getMaxOpus46_1MOption() {
-  let e = isClaudeAISubscriber() ? " \xB7 Draws from usage credits" : "";
+  let creditNote = isClaudeAISubscriber() ? " \xB7 Draws from usage credits" : "";
   let { id, displayName } = getLatestFamilyModel("opus");
-  let s = e === "" ? "" : getModelPriceSuffix(id, false);
+  let pricing = creditNote === "" ? "" : getModelPriceSuffix(id, false);
   return {
     value: "opus[1m]",
     label: "Opus (1M context)",
-    description: `${displayName} with 1M context${getProUsageMultiplierNote()}${e}${s}`,
+    description: `${displayName} with 1M context${getProUsageMultiplierNote()}${creditNote}${pricing}`,
   };
 }
 //@ chunk-hwmsct5x.js:206844-207137 callgraph-witnessed = getOpus46Option (0.392)
 /**
  * 默认 Opus 走 1M 时的 "Opus (1M context)" 选项。旧版名 getOpus46Option 不准确。
  */
-function getOpus1mDefaultOption(e = false, n = false) {
-  let r = !usesFirstPartyModelIds();
+function getOpus1mDefaultOption(withPricing = false, fastMode = false) {
+  let providerIds = !usesFirstPartyModelIds();
   let defaultOpusModel = getDefaultOpusModel();
-  let h = getMarketingNameForModel(stripAnyVersatileSuffix(defaultOpusModel)) ?? "Opus";
-  let y = e ? getModelPriceSuffix(defaultOpusModel, n) : "";
+  let displayName = getMarketingNameForModel(stripAnyVersatileSuffix(defaultOpusModel)) ?? "Opus";
+  let pricing = withPricing ? getModelPriceSuffix(defaultOpusModel, fastMode) : "";
   return {
-    value: r ? getModelStrings()[getLatestFamilyModel("opus").key] + "[1m]" : "opus[1m]",
+    value: providerIds ? getModelStrings()[getLatestFamilyModel("opus").key] + "[1m]" : "opus[1m]",
     label: "Opus (1M context)",
-    description: `${h} with 1M context \xB7 ${OPUS_SLOGAN}${getProUsageMultiplierNote()}${y}`,
-    descriptionForModel: `${h} with 1M context - best for everyday, complex tasks`,
+    description: `${displayName} with 1M context \xB7 ${OPUS_SLOGAN}${getProUsageMultiplierNote()}${pricing}`,
+    descriptionForModel: `${displayName} with 1M context - best for everyday, complex tasks`,
   };
 }
 //@ chunk-hwmsct5x.js:207137-207240 fingerprint = MaxSonnet46Option (1)
@@ -655,62 +664,66 @@ function getOpusPlanOption() {
 /**
  * 空实现（构建裁剪掉的选项钩子）。
  */
-function noopModelOption(e) {
+function noopModelOption(option) {
   return;
 }
 //@ chunk-hwmsct5x.js:207475-207589 layout = aliasMatchesParentTier (0.792)
 /**
  * 在选项列表里补上默认模型所在族与指定族的行。
  */
-function ensureFamilyOptionRows(e, fastMode, r) {
+function ensureFamilyOptionRows(options, fastMode, tier) {
   let canonical = getModelFamilyFromString(getDefaultMainLoopModelSetting());
-  let h = (canonical === "opus" || canonical === "sonnet") && canonical !== r ? [canonical, r] : [r];
-  for (let y of h) ensureTierOptionPresent(e, y, fastMode);
-  return e;
+  let tiers =
+    (canonical === "opus" || canonical === "sonnet") && canonical !== tier ? [canonical, tier] : [tier];
+  for (let tier of tiers) ensureTierOptionPresent(options, tier, fastMode);
+  return options;
 }
 //@ chunk-hwmsct5x.js:207589-207771 layout
 /**
  * /model 选项列表里没有 sonnet/opus（含 opus[1m]）时插入对应默认选项（放在“默认”项之后）。
  */
-function ensureTierOptionPresent(e, n, r) {
-  let s = n === "opus" && opus1mMergeTagsDefaultOpus();
-  if (e.some((y) => y.value === n || (s && y.value === `${n}[1m]`))) return;
-  let h = n === "sonnet" ? getSonnetOption() : getOpusOption(r);
-  e.splice(e.findIndex((y) => y.value === null) + 1, 0, h);
+function ensureTierOptionPresent(options, tier, fastMode) {
+  let mergeTags1m = tier === "opus" && opus1mMergeTagsDefaultOpus();
+  if (options.some((option) => option.value === tier || (mergeTags1m && option.value === `${tier}[1m]`)))
+    return;
+  let option = tier === "sonnet" ? getSonnetOption() : getOpusOption(fastMode);
+  options.splice(options.findIndex((option) => option.value === null) + 1, 0, option);
 }
 //@ chunk-hwmsct5x.js:207771-208021 layout
 /**
  * Sonnet 选项（catalog 默认时可能用精简行）。
  */
-function getSonnetOption(e = false) {
-  let n = isClaudeAISubscriber();
-  if (isTierDefaultCatalogModel("sonnet")) return n ? MaxSonnet46Option() : generateModelSection("sonnet");
+function getSonnetOption(withPricing = false) {
+  let isSubscriber = isClaudeAISubscriber();
+  if (isTierDefaultCatalogModel("sonnet"))
+    return isSubscriber ? MaxSonnet46Option() : generateModelSection("sonnet");
   let defaultSonnetModel = getDefaultSonnetModel();
-  let s = getMarketingNameForModel(stripAnyVersatileSuffix(defaultSonnetModel)) ?? "Sonnet";
-  let h = e ? getModelPriceSuffix(defaultSonnetModel, false) : "";
+  let displayName = getMarketingNameForModel(stripAnyVersatileSuffix(defaultSonnetModel)) ?? "Sonnet";
+  let pricing = withPricing ? getModelPriceSuffix(defaultSonnetModel, false) : "";
   return {
     value: "sonnet",
     label: "Sonnet",
-    description: `${s} \xB7 ${SONNET_SLOGAN}${h}`,
-    descriptionForModel: `${s} - efficient for routine tasks`,
+    description: `${displayName} \xB7 ${SONNET_SLOGAN}${pricing}`,
+    descriptionForModel: `${displayName} - efficient for routine tasks`,
   };
 }
 //@ chunk-hwmsct5x.js:208021-208291 layout
 /**
  * Opus 选项；默认 Opus 1M optIn 时返回 "Opus (1M context)"。auto 名 getHaiku35Option 为错配。
  */
-function getOpusOption(e) {
-  let n = isClaudeAISubscriber();
-  if (opus1mMergeTagsDefaultOpus()) return getOpus1mDefaultOption(!n, e);
-  if (isTierDefaultCatalogModel("opus")) return n ? getMaxOpusOption(false) : generateModelSection("opus", e);
+function getOpusOption(fastMode) {
+  let isSubscriber = isClaudeAISubscriber();
+  if (opus1mMergeTagsDefaultOpus()) return getOpus1mDefaultOption(!isSubscriber, fastMode);
+  if (isTierDefaultCatalogModel("opus"))
+    return isSubscriber ? getMaxOpusOption(false) : generateModelSection("opus", fastMode);
   let defaultOpusModel = getDefaultOpusModel();
-  let s = getMarketingNameForModel(stripAnyVersatileSuffix(defaultOpusModel)) ?? "Opus";
-  let h = n ? "" : getModelPriceSuffix(defaultOpusModel, e);
+  let displayName = getMarketingNameForModel(stripAnyVersatileSuffix(defaultOpusModel)) ?? "Opus";
+  let pricing = isSubscriber ? "" : getModelPriceSuffix(defaultOpusModel, fastMode);
   return {
     value: "opus",
     label: "Opus",
-    description: `${s} \xB7 ${OPUS_SLOGAN}${h}`,
-    descriptionForModel: `${s} - best for everyday, complex tasks`,
+    description: `${displayName} \xB7 ${OPUS_SLOGAN}${pricing}`,
+    descriptionForModel: `${displayName} - best for everyday, complex tasks`,
   };
 }
 //@ chunk-hwmsct5x.js:208291-209773 callgraph-witnessed = getModelOptionsBase (0)
@@ -821,111 +834,114 @@ function getModelOptionsBase(fastMode = false) {
 /**
  * 给任意模型 id 构造 /model 选项：有已知族时用族口号，若有更新版本提示 "Newer version available · select <族>"；未知族为 "Custom model (id)"。旧版名 getAgentModelOptions 不准确。
  */
-function buildModelOptionForId(e) {
-  let marketingNameForModel = getMarketingNameForModel(e);
+function buildModelOptionForId(model) {
+  let marketingNameForModel = getMarketingNameForModel(model);
   if (!marketingNameForModel) return null;
-  let canonicalName = getCanonicalName(e);
-  let s = null;
+  let canonicalName = getCanonicalName(model);
+  let familyInfo = null;
   if (canonicalName.includes("fable"))
-    s = {
+    familyInfo = {
       alias: "Fable",
       aliasModel: getDefaultFableModel(),
       slogan: FABLE_SLOGAN,
     };
   else if (canonicalName.includes("sonnet"))
-    s = {
+    familyInfo = {
       alias: "Sonnet",
       aliasModel: getDefaultSonnetModel(),
       slogan: SONNET_SLOGAN,
     };
   else if (canonicalName.includes("opus"))
-    s = {
+    familyInfo = {
       alias: "Opus",
       aliasModel: getDefaultOpusModel(),
       slogan: OPUS_SLOGAN,
     };
   else if (canonicalName.includes("haiku"))
-    s = {
+    familyInfo = {
       alias: "Haiku",
       aliasModel: getDefaultHaikuModel(),
       slogan: HAIKU_SLOGAN,
     };
-  if (!s)
+  if (!familyInfo)
     return {
-      value: e,
+      value: model,
       label: marketingNameForModel,
-      description: `Custom model (${e})`,
+      description: `Custom model (${model})`,
     };
-  let marketingNameForModel_2 = getMarketingNameForModel(s.aliasModel);
-  let mapped = Object.values(catalogEntriesByFirstPartyId).map((S) => getCanonicalName(S.firstParty));
+  let marketingNameForModel_2 = getMarketingNameForModel(familyInfo.aliasModel);
+  let mapped = Object.values(catalogEntriesByFirstPartyId).map((entry) => getCanonicalName(entry.firstParty));
   let index = mapped.indexOf(canonicalName);
   if (
     marketingNameForModel_2 &&
     index !== -1 &&
-    index < mapped.indexOf(getCanonicalName(s.aliasModel)) &&
-    isModelAllowed(s.aliasModel)
+    index < mapped.indexOf(getCanonicalName(familyInfo.aliasModel)) &&
+    isModelAllowed(familyInfo.aliasModel)
   )
     return {
-      value: e,
+      value: model,
       label: marketingNameForModel,
-      description: `Newer version available \xB7 select ${s.alias} for ${marketingNameForModel_2}`,
+      description: `Newer version available \xB7 select ${familyInfo.alias} for ${marketingNameForModel_2}`,
     };
   return {
-    value: e,
+    value: model,
     label: marketingNameForModel,
-    description: `${s.slogan} (${e})`,
+    description: `${familyInfo.slogan} (${model})`,
   };
 }
 //@ chunk-hwmsct5x.js:210483-210616 placement
 /**
  * 选项标签只是原始 id 时换成目录显示名，原标签放进描述。
  */
-function relabelOptionFromCatalog(e) {
-  if (!isSanitizedModelOption(e)) return e;
-  let n = nameForUnnamedModelId(e.value);
-  return n === undefined
-    ? e
+function relabelOptionFromCatalog(option) {
+  if (!isSanitizedModelOption(option)) return option;
+  let name = nameForUnnamedModelId(option.value);
+  return name === undefined
+    ? option
     : {
-        ...e,
-        label: n,
-        description: `${e.description} (${e.label})`,
+        ...option,
+        label: name,
+        description: `${option.description} (${option.label})`,
       };
 }
 //@ chunk-hwmsct5x.js:210616-210674 placement
 /**
  * 去掉 disabled 行的模型选项。
  */
-function getEnabledModelOptions(e = false) {
-  return buildModelPickerOptions(e).filter((n) => !n.disabled);
+function getEnabledModelOptions(fastMode = false) {
+  return buildModelPickerOptions(fastMode).filter((option) => !option.disabled);
 }
 //@ chunk-hwmsct5x.js:210674-210708 placement
 /**
  * 只在 claude-vscode 入口展示不可用模型行。
  */
-var VSCODE_ENTRYPOINTS = new Set(["claude-vscode"]);
+var VSCODE_ENTRYPOINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hwmsct5x.js:210674", () => {
+  VSCODE_ENTRYPOINTS = new Set(["claude-vscode"]);
+});
 //@ chunk-hwmsct5x.js:210708-211169 placement
 /**
  * VS Code 入口、第一方直连时返回被禁用的模型行（并记 model_unavailable_gate）。
  */
-function getUnavailableModelRows(e) {
+function getUnavailableModelRows(options) {
   if (!VSCODE_ENTRYPOINTS.has(env.CLAUDE_CODE_ENTRYPOINT ?? "")) return [];
-  let n = count(e, (s) => s.disabled === true);
-  let r = {
-    total: e.length,
-    disabled: n,
+  let disabledCount = count(options, (option) => option.disabled === true);
+  let stats = {
+    total: options.length,
+    disabled: disabledCount,
   };
   if (getAPIProvider() !== "firstParty") {
-    if (n > 0) logFeatureSad("model_unavailable_gate", "suppressed_rows_non_first_party", r);
-    else logFeatureOk("model_unavailable_gate", r);
+    if (disabledCount > 0) logFeatureSad("model_unavailable_gate", "suppressed_rows_non_first_party", stats);
+    else logFeatureOk("model_unavailable_gate", stats);
     return [];
   }
   if (!isFirstPartyAnthropicBaseUrl()) {
-    if (n > 0) logFeatureSad("model_unavailable_gate", "suppressed_rows_foreign_base_url", r);
-    else logFeatureOk("model_unavailable_gate", r);
+    if (disabledCount > 0) logFeatureSad("model_unavailable_gate", "suppressed_rows_foreign_base_url", stats);
+    else logFeatureOk("model_unavailable_gate", stats);
     return [];
   }
-  logFeatureOk("model_unavailable_gate", r);
-  return e.filter((s) => s.disabled === true);
+  logFeatureOk("model_unavailable_gate", stats);
+  return options.filter((option) => option.disabled === true);
 }
 //@ chunk-hwmsct5x.js:211169-211202 placement
 /**
@@ -938,13 +954,13 @@ function getUnavailableModelOptions() {
 /**
  * 统计被丢弃的选项及原因（entitlement_denied/managed_denied/allowlist_filtered）。
  */
-function recordDroppedModelOption(e, n, modelEntitlementDenySet) {
-  if (e === null) return;
-  e.dropped++;
-  e.dropReasons.add(
-    isModelDenied(n, modelEntitlementDenySet)
+function recordDroppedModelOption(stats, model, modelEntitlementDenySet) {
+  if (stats === null) return;
+  stats.dropped++;
+  stats.dropReasons.add(
+    isModelDenied(model, modelEntitlementDenySet)
       ? "entitlement_denied"
-      : isModelDeniedSafe(n)
+      : isModelDeniedSafe(model)
         ? "managed_denied"
         : "allowlist_filtered",
   );
@@ -953,9 +969,9 @@ function recordDroppedModelOption(e, n, modelEntitlementDenySet) {
 /**
  * deniedModels 判定，出错视为未拒绝。
  */
-function isModelDeniedSafe(e) {
+function isModelDeniedSafe(model) {
   try {
-    return isModelDeniedByManagedSettings(e);
+    return isModelDeniedByManagedSettings(model);
   } catch {
     return false;
   }
@@ -964,8 +980,8 @@ function isModelDeniedSafe(e) {
 /**
  * 生成模型选项并记 model_picker_options（总数、禁用、丢弃、重复、精选行）。
  */
-function getModelOptionsWithTelemetry(e = false, n) {
-  let r = {
+function getModelOptionsWithTelemetry(fastMode = false, stats) {
+  let localStats = {
     dropped: 0,
     duplicates: 0,
     dropReasons: new Set(),
@@ -974,17 +990,18 @@ function getModelOptionsWithTelemetry(e = false, n) {
     curatedReplaced: false,
   };
   try {
-    let modelPickerOptions = buildModelPickerOptions(e, r);
+    let modelPickerOptions = buildModelPickerOptions(fastMode, localStats);
     logFeatureOk("model_picker_options", {
       total: modelPickerOptions.length,
-      disabled: count(modelPickerOptions, (h) => h.disabled === true),
-      dropped: r.dropped,
-      duplicates: r.duplicates,
-      curated_rows: r.curatedRows,
-      curated_replaced: r.curatedReplaced,
+      disabled: count(modelPickerOptions, (option) => option.disabled === true),
+      dropped: localStats.dropped,
+      duplicates: localStats.duplicates,
+      curated_rows: localStats.curatedRows,
+      curated_replaced: localStats.curatedReplaced,
     });
-    for (let dropReason of r.dropReasons) logFeatureSad("model_picker_options", dropReason);
-    for (let disabledReason of r.disabledReasons) logFeatureSad("model_picker_options", disabledReason);
+    for (let dropReason of localStats.dropReasons) logFeatureSad("model_picker_options", dropReason);
+    for (let disabledReason of localStats.disabledReasons)
+      logFeatureSad("model_picker_options", disabledReason);
     return modelPickerOptions;
   } catch (error) {
     logFeatureBad("model_picker_options", "build_failed");
@@ -995,88 +1012,90 @@ function getModelOptionsWithTelemetry(e = false, n) {
 /**
  * 去重模型选项；服务端目录里不可选的行标为禁用；组织默认行加注；model-error-overrides 命中的行禁用；禁用行排到最后。
  */
-function buildModelPickerOptions(e = false, n = null) {
-  let r = new Set();
-  let filtered = getModelOptions(e, n).filter((z) => {
-    if (z.value === null) return true;
-    if (r.has(z.value)) {
-      if (n !== null) n.duplicates++;
-      logForDebugging(`model options: dropping duplicate row "${z.label}" (value ${z.value})`, {
+function buildModelPickerOptions(fastMode = false, stats = null) {
+  let seen = new Set();
+  let filtered = getModelOptions(fastMode, stats).filter((option) => {
+    if (option.value === null) return true;
+    if (seen.has(option.value)) {
+      if (stats !== null) stats.duplicates++;
+      logForDebugging(`model options: dropping duplicate row "${option.label}" (value ${option.value})`, {
         level: "warn",
       });
       return false;
     }
-    r.add(z.value);
+    seen.add(option.value);
     return true;
   });
-  let h = isPublishedCatalogInUse() ? activeServedCatalog() : null;
-  let y =
-    h === null
+  let catalog = isPublishedCatalogInUse() ? activeServedCatalog() : null;
+  let unselectableEntries =
+    catalog === null
       ? []
       : buildCatalogRows({
-          catalog: h,
+          catalog,
           provenance: "published",
-        }).filter((z) => !z.selectable);
-  let w =
-    y.length === 0
+        }).filter((entry) => !entry.selectable);
+  let withDisabled =
+    unselectableEntries.length === 0
       ? filtered
-      : filtered.map((z) => {
-          if (z.value === null || z.disabled === true) return z;
-          let userSpecifiedModel = parseUserSpecifiedModel(z.value);
-          let servedModel = findServedModel(userSpecifiedModel);
-          let activeServedByIdentity = findActiveServedByIdentity(userSpecifiedModel);
-          let entry = y.find(
-            (ne) =>
-              ne.row === servedModel ||
-              ne.row === activeServedByIdentity ||
-              ne.key === normalizeModelId(userSpecifiedModel),
+      : filtered.map((option) => {
+          if (option.value === null || option.disabled === true) return option;
+          let identity = parseUserSpecifiedModel(option.value);
+          let servedModel = findServedModel(identity);
+          let activeServedByIdentity = findActiveServedByIdentity(identity);
+          let entry = unselectableEntries.find(
+            (entry) =>
+              entry.row === servedModel ||
+              entry.row === activeServedByIdentity ||
+              entry.key === normalizeModelId(identity),
           );
-          let Q = entry === undefined ? null : buildCatalogModelOption(entry);
-          if (entry === undefined || Q === null) return z;
-          n?.disabledReasons.add(isActiveCatalogModel(entry.row) ? "not_offered" : "server_disabled");
+          let catalogOption = entry === undefined ? null : buildCatalogModelOption(entry);
+          if (entry === undefined || catalogOption === null) return option;
+          stats?.disabledReasons.add(isActiveCatalogModel(entry.row) ? "not_offered" : "server_disabled");
           return {
-            ...z,
+            ...option,
             disabled: true,
-            description: Q.description,
+            description: catalogOption.description,
           };
         });
   let { setting, attribution } = resolveDefaultMainLoopModelSetting();
-  let R = attribution === "org" ? setting : null;
-  let L = R
-    ? getCanonicalName(R, {
+  let orgDefault = attribution === "org" ? setting : null;
+  let orgCanonical = orgDefault
+    ? getCanonicalName(orgDefault, {
         identity: true,
       })
     : null;
-  let O = R ? /\[1m\]$/i.test(R) : false;
-  let M = L
-    ? w.map((z) => {
-        if (z.value === null || isModeDependentModelSetting(z.value)) return z;
-        let userSpecifiedModel = parseUserSpecifiedModel(z.value);
+  let orgHas1m = orgDefault ? /\[1m\]$/i.test(orgDefault) : false;
+  let withOrgNote = orgCanonical
+    ? withDisabled.map((option) => {
+        if (option.value === null || isModeDependentModelSetting(option.value)) return option;
+        let userSpecifiedModel = parseUserSpecifiedModel(option.value);
         if (
           getCanonicalName(userSpecifiedModel, {
             identity: true,
-          }) !== L ||
-          /\[1m\]$/i.test(userSpecifiedModel) !== O
+          }) !== orgCanonical ||
+          /\[1m\]$/i.test(userSpecifiedModel) !== orgHas1m
         )
-          return z;
+          return option;
         return {
-          ...z,
-          description: `${z.description}${defaultModelAttributionSuffix("org")}`,
+          ...option,
+          description: `${option.description}${defaultModelAttributionSuffix("org")}`,
         };
       })
-    : w;
-  let mapped = markFableCreditRequired(M, n).map((z) => {
-    if (z.disabled === true) return z;
+    : withDisabled;
+  let mapped = markFableCreditRequired(withOrgNote, stats).map((option) => {
+    if (option.disabled === true) return option;
     try {
-      let G = pickerHintFromOverride(
-        getCanonicalName(z.value === null ? getDefaultMainLoopModel() : parseUserSpecifiedModel(z.value)),
+      let hint = pickerHintFromOverride(
+        getCanonicalName(
+          option.value === null ? getDefaultMainLoopModel() : parseUserSpecifiedModel(option.value),
+        ),
       );
-      if (G !== null) {
-        if (n !== null) n.disabledReasons.add("error_override");
+      if (hint !== null) {
+        if (stats !== null) stats.disabledReasons.add("error_override");
         return {
-          ...z,
+          ...option,
           disabled: true,
-          description: G,
+          description: hint,
         };
       }
     } catch (error) {
@@ -1084,52 +1103,52 @@ function buildModelPickerOptions(e = false, n = null) {
         level: "error",
       });
     }
-    return z;
+    return option;
   });
-  let filtered_2 = mapped.filter((z) => z.disabled === true);
+  let filtered_2 = mapped.filter((option) => option.disabled === true);
   if (filtered_2.length === 0) return mapped;
-  return [...mapped.filter((z) => z.disabled !== true), ...filtered_2];
+  return [...mapped.filter((option) => option.disabled !== true), ...filtered_2];
 }
 //@ chunk-hwmsct5x.js:213303-213848 placement
 /**
  * 有服务端模型目录时按目录行生成选项（第三方走 X_；第一方合并档位自定义行），否则 null。
  */
 function getCatalogDrivenModelOptions(baseContext, stats) {
-  let r = activeServedCatalog();
-  if (r === null || isPublishedCatalogInUse()) return null;
+  let catalog = activeServedCatalog();
+  if (catalog === null || isPublishedCatalogInUse()) return null;
   let entries = buildCatalogRows({
-    catalog: r,
+    catalog,
     provenance: servedCatalogSource() === "published" ? "published" : "served",
   });
-  let h = !isServedCatalogActive();
-  let y = isPublishedCatalogActive();
-  if (y && !usesFirstPartyModelIds()) return mergeCatalogOptions(entries, baseContext, stats);
-  let w = y && allowsCustomTierOptions();
-  let S = [getDefaultOptionForUser(baseContext)];
-  let E = [];
-  let R = (M) => {
-    if (typeof M.value === "string" && isFableFamilyValue(M.value)) E.push(M);
-    else S.push(M);
+  let servedOnly = !isServedCatalogActive();
+  let publishedOnly = isPublishedCatalogActive();
+  if (publishedOnly && !usesFirstPartyModelIds()) return mergeCatalogOptions(entries, baseContext, stats);
+  let allowCustomTier = publishedOnly && allowsCustomTierOptions();
+  let main = [getDefaultOptionForUser(baseContext)];
+  let fableTail = [];
+  let addOption = (option) => {
+    if (typeof option.value === "string" && isFableFamilyValue(option.value)) fableTail.push(option);
+    else main.push(option);
   };
-  let L = w ? getCustomTierOptions() : [];
-  let O = new Set();
-  for (let M of entries) {
-    let found = L.find(([j]) => j === M.family);
+  let customTierOptions = allowCustomTier ? getCustomTierOptions() : [];
+  let usedCustomTiers = new Set();
+  for (let entry of entries) {
+    let found = customTierOptions.find(([family]) => family === entry.family);
     if (found !== undefined) {
-      if (!O.has(found[0])) {
-        O.add(found[0]);
-        R(found[1]);
+      if (!usedCustomTiers.has(found[0])) {
+        usedCustomTiers.add(found[0]);
+        addOption(found[1]);
       }
       continue;
     }
-    let catalogOption = toCatalogOption(M, h, stats);
-    if (catalogOption === null) continue;
-    if (w) R(catalogOption);
-    else S.push(catalogOption);
+    let option = toCatalogOption(entry, servedOnly, stats);
+    if (option === null) continue;
+    if (allowCustomTier) addOption(option);
+    else main.push(option);
   }
-  for (let [M, P] of L) if (!O.has(M)) R(P);
-  for (let M of E) filterModelOptionsByAllowlist(S, M);
-  return S;
+  for (let [family, option] of customTierOptions) if (!usedCustomTiers.has(family)) addOption(option);
+  for (let option of fableTail) filterModelOptionsByAllowlist(main, option);
+  return main;
 }
 //@ chunk-hwmsct5x.js:213848-213970 placement = aliasMatchesParentTier (0.852)
 /**
@@ -1141,27 +1160,27 @@ function getCustomTierOptions() {
     ["opus", getCustomOpusOption()],
     ["haiku", getCustomHaikuOption()],
     ["fable", getCustomFableOption()],
-  ].flatMap(([e, n]) => (n === undefined ? [] : [[e, n]]));
+  ].flatMap(([family, option]) => (option === undefined ? [] : [[family, option]]));
 }
 //@ chunk-hwmsct5x.js:213970-214250 placement
-function toCatalogOption(entry, n, r) {
+function toCatalogOption(entry, applyUnavailabilityFirst, stats) {
   let catalogModelOption = buildCatalogModelOption(entry);
   if (catalogModelOption === null) return null;
-  let h = n ? applyUnavailability(catalogModelOption) : catalogModelOption;
-  if (h === null) {
-    if (r !== null) {
-      r.dropped++;
-      r.dropReasons.add("entitlement_denied");
+  let option = applyUnavailabilityFirst ? applyUnavailability(catalogModelOption) : catalogModelOption;
+  if (option === null) {
+    if (stats !== null) {
+      stats.dropped++;
+      stats.dropReasons.add("entitlement_denied");
     }
     return null;
   }
-  if (h.disabled === true && r !== null)
-    r.disabledReasons.add(
+  if (option.disabled === true && stats !== null)
+    stats.disabledReasons.add(
       catalogModelOption.disabled === true && isActiveCatalogModel(entry.row)
         ? "not_offered"
         : "server_disabled",
     );
-  return h;
+  return option;
 }
 //@ chunk-hwmsct5x.js:214250-215482 placement
 /**
@@ -1171,60 +1190,60 @@ function mergeCatalogOptions(entries, baseContext, stats) {
   let modelStrings = getModelStrings();
   let keyById = new Map();
   for (let key of Object.keys(modelStrings)) {
-    let P = normalizeModelId(strip1mSuffix(String(modelStrings[key])));
-    if (isModelAvailableOnProvider(key) && !keyById.has(P)) keyById.set(P, key);
+    let normalized = normalizeModelId(strip1mSuffix(String(modelStrings[key])));
+    if (isModelAvailableOnProvider(key) && !keyById.has(normalized)) keyById.set(normalized, key);
   }
-  let customTierFamilies = new Set(getCustomTierOptions().map(([M]) => M));
-  let resolveKey = (M) => {
-    let P = strip1mSuffix(M);
-    if (!isBaseModelKey(P)) return keyById.get(normalizeModelId(P));
-    if (customTierFamilies.has(P)) return "pinned";
-    return keyById.get(normalizeModelId(strip1mSuffix(String(parseUserSpecifiedModel(P)))));
+  let customTierFamilies = new Set(getCustomTierOptions().map(([family]) => family));
+  let resolveKey = (value) => {
+    let stripped = strip1mSuffix(value);
+    if (!isBaseModelKey(stripped)) return keyById.get(normalizeModelId(stripped));
+    if (customTierFamilies.has(stripped)) return "pinned";
+    return keyById.get(normalizeModelId(strip1mSuffix(String(parseUserSpecifiedModel(stripped)))));
   };
   let defaultKeys = new Set();
-  for (let M of [getDefaultOpusModel(), getDefaultSonnetModel(), getDefaultHaikuModel()]) {
-    let P = keyById.get(normalizeModelId(strip1mSuffix(String(M))));
-    if (P !== undefined) defaultKeys.add(P);
+  for (let model of [getDefaultOpusModel(), getDefaultSonnetModel(), getDefaultHaikuModel()]) {
+    let key = keyById.get(normalizeModelId(strip1mSuffix(String(model))));
+    if (key !== undefined) defaultKeys.add(key);
   }
   let selectableKeys = new Set();
   let inactiveRows = new Map();
   let hiddenKeys = new Set();
   for (let entry of entries) {
-    let P = entryModelKey(entry.row.id);
-    if (P === undefined) continue;
+    let key = entryModelKey(entry.row.id);
+    if (key === undefined) continue;
     if (isRowNotOnProvider(entry.row)) {
-      hiddenKeys.add(P);
+      hiddenKeys.add(key);
       continue;
     }
-    if (entry.selectable) selectableKeys.add(P);
-    else if (!isActiveCatalogModel(entry.row) && entry.row.section !== "deprecated" && !inactiveRows.has(P))
-      inactiveRows.set(P, entry.row);
+    if (entry.selectable) selectableKeys.add(key);
+    else if (!isActiveCatalogModel(entry.row) && entry.row.section !== "deprecated" && !inactiveRows.has(key))
+      inactiveRows.set(key, entry.row);
   }
   let options = [];
-  for (let M of getModelOptionsBase(baseContext)) {
-    if (M.value === null) {
-      options.push(M);
+  for (let option of getModelOptionsBase(baseContext)) {
+    if (option.value === null) {
+      options.push(option);
       continue;
     }
-    let key = resolveKey(M.value);
+    let key = resolveKey(option.value);
     if (key === "pinned") {
-      options.push(M);
+      options.push(option);
       continue;
     }
     if (key === undefined) continue;
     if (selectableKeys.has(key)) {
-      options.push(M);
+      options.push(option);
       continue;
     }
     if (hiddenKeys.has(key)) continue;
     let inactiveRow = inactiveRows.get(key);
     if (inactiveRow === undefined && defaultKeys.has(key)) {
-      options.push(M);
+      options.push(option);
       continue;
     }
-    if (inactiveRow === undefined || strip1mSuffix(M.value) !== M.value) continue;
+    if (inactiveRow === undefined || strip1mSuffix(option.value) !== option.value) continue;
     options.push({
-      ...M,
+      ...option,
       disabled: true,
       description:
         markdownSafeText(inactiveRow.selection_notice?.text ?? inactiveRow.notice?.text ?? "") ||
@@ -1299,8 +1318,8 @@ function buildCatalogModelOption(entry) {
   };
 }
 //@ chunk-hwmsct5x.js:216239-216265 placement
-function passthroughDescription(e, row) {
-  return e;
+function passthroughDescription(description, row) {
+  return description;
 }
 //@ chunk-hwmsct5x.js:216265-216375 placement = isExcludedModel (0.817)
 function isExcludedModel(entry, aliasFamily) {
@@ -1340,14 +1359,18 @@ function getFamilySlogan(alias) {
 function getModelOptions(fastMode, stats) {
   let catalogDrivenModelOptions = getCatalogDrivenModelOptions(fastMode, stats);
   let options = catalogDrivenModelOptions ?? getModelOptionsBase(fastMode);
-  let h = catalogDrivenModelOptions !== null && isPublishedCatalogActive();
+  let publishedDriven = catalogDrivenModelOptions !== null && isPublishedCatalogActive();
   let ANTHROPIC_CUSTOM_MODEL_OPTION = env.ANTHROPIC_CUSTOM_MODEL_OPTION;
-  let w = ANTHROPIC_CUSTOM_MODEL_OPTION
-    ? options.findIndex((G) => G.value === ANTHROPIC_CUSTOM_MODEL_OPTION)
+  let customIndex = ANTHROPIC_CUSTOM_MODEL_OPTION
+    ? options.findIndex((option) => option.value === ANTHROPIC_CUSTOM_MODEL_OPTION)
     : -1;
-  let S = w !== -1 && h && options[w]?.disabled === true && !isFirstPartyApiBackend();
-  if (ANTHROPIC_CUSTOM_MODEL_OPTION && (w === -1 || S)) {
-    let G = {
+  let replaceCustom =
+    customIndex !== -1 &&
+    publishedDriven &&
+    options[customIndex]?.disabled === true &&
+    !isFirstPartyApiBackend();
+  if (ANTHROPIC_CUSTOM_MODEL_OPTION && (customIndex === -1 || replaceCustom)) {
+    let customOption = {
       value: ANTHROPIC_CUSTOM_MODEL_OPTION,
       label:
         env.ANTHROPIC_CUSTOM_MODEL_OPTION_NAME ??
@@ -1357,51 +1380,51 @@ function getModelOptions(fastMode, stats) {
         env.ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION ?? `Custom model (${ANTHROPIC_CUSTOM_MODEL_OPTION})`,
       sessionTail: true,
     };
-    if (S) options[w] = G;
-    else options.push(G);
+    if (replaceCustom) options[customIndex] = customOption;
+    else options.push(customOption);
   }
-  let E = catalogDrivenModelOptions === null || h ? getGatewayModelOptions() : [];
-  for (let G of E) {
-    let options_2 = relabelOptionFromCatalog(G);
-    let index = options.findIndex((Z) => optionsMatch(Z, options_2));
+  let gatewayOptions = catalogDrivenModelOptions === null || publishedDriven ? getGatewayModelOptions() : [];
+  for (let gatewayOption of gatewayOptions) {
+    let options_2 = relabelOptionFromCatalog(gatewayOption);
+    let index = options.findIndex((option) => optionsMatch(option, options_2));
     if (index === -1) filterModelOptionsByAllowlist(options, options_2);
-    else if (h && options[index]?.disabled === true && options_2.disabled !== true)
+    else if (publishedDriven && options[index]?.disabled === true && options_2.disabled !== true)
       options[index] = options_2;
   }
   let apiProvider = getAPIProvider();
   if (catalogDrivenModelOptions === null && (apiProvider === "firstParty" || apiProvider === "gateway")) {
-    let G = apiProvider === "gateway" || isFirstPartyAnthropicBaseUrl();
-    for (let q of getAdditionalModelOptionsCache()) {
-      let J = appendFableCreditSuffix(q);
-      if (J.disabled && !G) continue;
-      if (!options.some((Z) => optionsMatch(Z, J))) {
-        if (J.disabled === true && stats !== null) stats.disabledReasons.add("server_disabled");
-        filterModelOptionsByAllowlist(options, J);
+    let includeGateway = apiProvider === "gateway" || isFirstPartyAnthropicBaseUrl();
+    for (let extraOption of getAdditionalModelOptionsCache()) {
+      let option = appendFableCreditSuffix(extraOption);
+      if (option.disabled && !includeGateway) continue;
+      if (!options.some((existing) => optionsMatch(existing, option))) {
+        if (option.disabled === true && stats !== null) stats.disabledReasons.add("server_disabled");
+        filterModelOptionsByAllowlist(options, option);
       }
     }
   }
-  let L = isPublishedCatalogInUse() ? activeServedCatalog() : null;
+  let catalog = isPublishedCatalogInUse() ? activeServedCatalog() : null;
   if (
     catalogDrivenModelOptions === null &&
     apiProvider === "firstParty" &&
     (isFableAvailable() ||
-      (L !== null &&
+      (catalog !== null &&
         withCatalogSuppressed(isFableAvailable) &&
         getModelUnavailabilityReason("fable")?.reason === "disabled")) &&
-    !options.some((G) => typeof G.value === "string" && isFableFamilyValue(G.value))
+    !options.some((option) => typeof option.value === "string" && isFableFamilyValue(option.value))
   )
     filterModelOptionsByAllowlist(options, getFableOption(getDefaultFableModel(), fastMode));
   let { availableModels } = getSettings_DEPRECATED() ?? {};
   if (availableModels)
     for (let availableModel of availableModels) {
       let trimmed = availableModel.trim();
-      if (options.some((Q) => Q.value === trimmed)) continue;
+      if (options.some((option) => option.value === trimmed)) continue;
       if (trimmed.startsWith("anthropic.")) {
-        let Q = nameForUnnamedModelId(trimmed);
+        let name = nameForUnnamedModelId(trimmed);
         options.push({
           value: trimmed,
-          label: Q ?? trimmed,
-          description: Q === undefined ? "Custom model" : `Custom model (${trimmed})`,
+          label: name ?? trimmed,
+          description: name === undefined ? "Custom model" : `Custom model (${trimmed})`,
           sessionTail: true,
         });
         continue;
@@ -1409,7 +1432,7 @@ function getModelOptions(fastMode, stats) {
       let lower = strip1mSuffix(trimmed).toLowerCase();
       if (!usesFirstPartyModelIds() || !/^claude-[a-z0-9-]+$/.test(lower)) continue;
       if (
-        !["opus", "sonnet", "haiku"].some((Q) => lower.includes(Q)) &&
+        !["opus", "sonnet", "haiku"].some((name) => lower.includes(name)) &&
         !(apiProvider === "gateway" && isFableModelValue(lower))
       )
         continue;
@@ -1426,47 +1449,49 @@ function getModelOptions(fastMode, stats) {
           continue;
       }
       let modelOptionForId = buildModelOptionForId(trimmed);
-      if (modelOptionForId !== null && !options.some((Q) => optionsMatch(Q, modelOptionForId)))
+      if (modelOptionForId !== null && !options.some((option) => optionsMatch(option, modelOptionForId)))
         filterModelOptionsByAllowlist(options, {
           ...modelOptionForId,
           sessionTail: true,
         });
     }
-  if (L !== null) {
-    let G = new Set(
-      options.map((q) => (q.value === null ? undefined : findServedModel(parseUserSpecifiedModel(q.value)))),
+  if (catalog !== null) {
+    let servedRows = new Set(
+      options.map((option) =>
+        option.value === null ? undefined : findServedModel(parseUserSpecifiedModel(option.value)),
+      ),
     );
-    for (let q of buildCatalogRows({
-      catalog: L,
+    for (let entry of buildCatalogRows({
+      catalog,
       provenance: "published",
     })) {
-      if (q.row.section === "deprecated" || entryModelKey(q.row.id) !== undefined) continue;
+      if (entry.row.section === "deprecated" || entryModelKey(entry.row.id) !== undefined) continue;
       if (
-        (q.family === "fable" && !isFableAvailable()) ||
+        (entry.family === "fable" && !isFableAvailable()) ||
         options.some(
           (existing) =>
             existing.disabled === true &&
             existing.value !== null &&
-            strip1mSuffix(existing.value) === q.family,
+            strip1mSuffix(existing.value) === entry.family,
         )
       )
         continue;
-      let catalogOption = toCatalogOption(q, true, stats);
+      let catalogOption = toCatalogOption(entry, true, stats);
       if (catalogOption === null) continue;
-      if (!G.has(q.row)) {
+      if (!servedRows.has(entry.row)) {
         options.push(catalogOption);
         continue;
       }
-      let Q = catalogOption.value;
-      if (Q === null || !isBaseModelKey(Q)) continue;
+      let value = catalogOption.value;
+      if (value === null || !isBaseModelKey(value)) continue;
       let index = options.findIndex(
-        (existing) => existing.value !== null && strip1mSuffix(existing.value) === Q,
+        (existing) => existing.value !== null && strip1mSuffix(existing.value) === value,
       );
       if (index !== -1)
         options[index] = {
-          value: Q,
-          label: capitalize(Q),
-          description: `${catalogOption.label} \xB7 ${getFamilySlogan(q.family)}`,
+          value,
+          label: capitalize(value),
+          description: `${catalogOption.label} \xB7 ${getFamilySlogan(entry.family)}`,
         };
     }
   }
@@ -1477,30 +1502,30 @@ function getModelOptions(fastMode, stats) {
   if (currentMainLoopModel !== undefined && currentMainLoopModel !== null) customModel = currentMainLoopModel;
   else if (initialMainLoopModel !== undefined && initialMainLoopModel !== null)
     customModel = initialMainLoopModel;
-  let j = customModel === null ? -1 : options.findIndex((opt) => opt.value === customModel);
-  let z = options[j];
+  let customModelIndex = customModel === null ? -1 : options.findIndex((opt) => opt.value === customModel);
+  let customOption = options[customModelIndex];
   if (
     customModel !== null &&
-    z !== undefined &&
-    isDisabledCustomModel(z) &&
+    customOption !== undefined &&
+    isDisabledCustomModel(customOption) &&
     getModelUnavailabilityReason(customModel) === null
   )
-    options[j] = {
+    options[customModelIndex] = {
       value: customModel,
-      label: z.label,
+      label: customOption.label,
       description: "Custom model",
       sessionTail: true,
     };
-  if (customModel === null || j !== -1) return expandGatewayAliasOptions(options, stats);
+  if (customModel === null || customModelIndex !== -1) return expandGatewayAliasOptions(options, stats);
   else if (customModel === "opusplan")
     return expandGatewayAliasOptions([...options, getOpusPlanOption()], stats);
   else if (isFableFamilyValue(customModel)) {
-    let G = {
+    let probe = {
       value: customModel,
       label: "",
       description: "",
     };
-    let index = options.findIndex((J) => optionsMatch(J, G));
+    let index = options.findIndex((option) => optionsMatch(option, probe));
     if (index !== -1)
       options[index] = {
         ...options[index],
@@ -1516,13 +1541,13 @@ function getModelOptions(fastMode, stats) {
     if (!usesFirstPartyModelIds()) {
       let defaultOpusModel = getDefaultOpusModel();
       return expandGatewayAliasOptions(
-        options.map((J) =>
-          J.value === defaultOpusModel
+        options.map((option) =>
+          option.value === defaultOpusModel
             ? {
-                ...J,
+                ...option,
                 value: "opus",
               }
-            : J,
+            : option,
         ),
         stats,
       );
@@ -1530,8 +1555,10 @@ function getModelOptions(fastMode, stats) {
     let knownOption = getMaxOpusOption(false);
     return expandGatewayAliasOptions(
       options.some(
-        (q) =>
-          typeof q.value === "string" && strip1mSuffix(q.value) === q.value && optionsMatch(q, knownOption),
+        (option) =>
+          typeof option.value === "string" &&
+          strip1mSuffix(option.value) === option.value &&
+          optionsMatch(option, knownOption),
       )
         ? options
         : [
@@ -1546,7 +1573,7 @@ function getModelOptions(fastMode, stats) {
   } else if (customModel === "opus[1m]" && usesFirstPartyModelIds()) {
     let opus1mDefaultOption = getOpus1mDefaultOption(false);
     return expandGatewayAliasOptions(
-      options.some((q) => optionsMatch(q, opus1mDefaultOption))
+      options.some((option) => optionsMatch(option, opus1mDefaultOption))
         ? options
         : [
             ...options,
@@ -1558,12 +1585,13 @@ function getModelOptions(fastMode, stats) {
       stats,
     );
   } else {
-    let G = {
+    let probe = {
       value: customModel,
       label: "",
       description: "",
     };
-    if (options.some((q) => optionsMatch(q, G))) return expandGatewayAliasOptions(options, stats);
+    if (options.some((option) => optionsMatch(option, probe)))
+      return expandGatewayAliasOptions(options, stats);
     options.push({
       ...(buildModelOptionForId(customModel) ?? {
         value: customModel,
@@ -1579,15 +1607,15 @@ function getModelOptions(fastMode, stats) {
 /**
  * 未弃用、被允许、未缺席，别名形式需 1M 可用且不是旧模型。
  */
-function isOfferableModel(e) {
+function isOfferableModel(model) {
   if (
-    isModelRemappedOrRetired(e) ||
-    !isModelAllowed(e) ||
-    getModelUnavailabilityReason(e)?.reason === "absent"
+    isModelRemappedOrRetired(model) ||
+    !isModelAllowed(model) ||
+    getModelUnavailabilityReason(model)?.reason === "absent"
   )
     return false;
-  let canonical = strip1mSuffix(e);
-  if (canonical === e) return true;
+  let canonical = strip1mSuffix(model);
+  if (canonical === model) return true;
   let canonicalName = getCanonicalName(canonical.toLowerCase());
   return (
     (canonicalName.includes("opus")
@@ -1639,111 +1667,118 @@ function applyCuratedPicker(options, stats) {
     return [...options.filter((option) => option.value === null), ...curatedOptions];
   let merged = [...options];
   for (let curatedOption of curatedOptions) {
-    let index = merged.findIndex((O) => optionsMatch(O, curatedOption));
-    let L = merged[index];
-    if (L === undefined) merged.push(curatedOption);
-    else if (curatedOption.disabled !== true && isDisabledCustomModel(L)) merged[index] = curatedOption;
+    let index = merged.findIndex((existingOption) => optionsMatch(existingOption, curatedOption));
+    let existingOption = merged[index];
+    if (existingOption === undefined) merged.push(curatedOption);
+    else if (curatedOption.disabled !== true && isDisabledCustomModel(existingOption))
+      merged[index] = curatedOption;
   }
   return merged;
 }
 //@ chunk-hwmsct5x.js:220643-220695 placement
-function isDisabledCustomModel(e) {
-  return e.disabled === true && isPublishedCatalogActive() && !isFirstPartyApiBackend();
+function isDisabledCustomModel(option) {
+  return option.disabled === true && isPublishedCatalogActive() && !isFirstPartyApiBackend();
 }
 //@ chunk-hwmsct5x.js:220695-220890 placement
-function buildCuratedOption(e, n, r, isManaged) {
-  let modelOptionForId = buildModelOptionForId(e);
-  let label = n ?? modelOptionForId?.label ?? e;
-  let w = r ?? (isManaged ? `Managed by your organization (${e})` : `Custom model (${e})`);
+function buildCuratedOption(modelId, label, description, isManaged) {
+  let modelOptionForId = buildModelOptionForId(modelId);
+  let label_2 = label ?? modelOptionForId?.label ?? modelId;
+  let resolvedDescription =
+    description ?? (isManaged ? `Managed by your organization (${modelId})` : `Custom model (${modelId})`);
   return {
-    value: e,
-    label,
-    description: w,
-    descriptionForModel: r ? `${r} (${e})` : w,
+    value: modelId,
+    label: label_2,
+    description: resolvedDescription,
+    descriptionForModel: description ? `${description} (${modelId})` : resolvedDescription,
   };
 }
 //@ chunk-hwmsct5x.js:220890-221057 placement
 /**
  * 在选项中找到与给定模型值相同或等价的选项值。
  */
-function findMatchingOptionValue(e, n) {
-  if (e.some((h) => h.value === n)) return n;
-  let r = {
-    value: n,
+function findMatchingOptionValue(options, value) {
+  if (options.some((option) => option.value === value)) return value;
+  let probe = {
+    value,
     label: "",
     description: "",
   };
-  let found = e.find((h) => optionsMatch(h, r));
+  let found = options.find((matchedOption) => optionsMatch(matchedOption, probe));
   return typeof found?.value === "string" ? found.value : undefined;
 }
 //@ chunk-hwmsct5x.js:221128-221595 placement
 /**
  * 网关环境下把别名型 /model 选项解析成具体模型 id（必要时加 [1m]）；与其他选项重复或不可用时返回 null。
  */
-function resolveGatewayAliasOptionModel(e, n, r) {
-  if (typeof n.value !== "string") {
-    r?.();
+function resolveGatewayAliasOptionModel(options, option, onReject) {
+  if (typeof option.value !== "string") {
+    onReject?.();
     return null;
   }
-  let s = strip1mSuffix(n.value);
-  if (!isBaseModelKey(s) || !usesFirstPartyModelIds()) {
-    r?.();
+  let baseKey = strip1mSuffix(option.value);
+  if (!isBaseModelKey(baseKey) || !usesFirstPartyModelIds()) {
+    onReject?.();
     return null;
   }
-  let h = newestAllowedInFamily(s);
-  if (h === null) {
-    r?.();
+  let newestModel = newestAllowedInFamily(baseKey);
+  if (newestModel === null) {
+    onReject?.();
     return null;
   }
-  let y = n.value !== s;
-  let w =
-    s === "opus"
+  let had1mSuffix = option.value !== baseKey;
+  let shouldProbeTier =
+    baseKey === "opus"
       ? shouldProbeThirdPartyDefaults()
-      : s === "sonnet"
+      : baseKey === "sonnet"
         ? shouldProbeThirdPartyDefaultsAlt()
         : true;
-  let E = (y || (s === "opus" && opus1mMergeAddsTagTo(h))) && w && eligible1mSuffixTarget(h) ? `${h}[1m]` : h;
-  let canonicalName = getCanonicalName(h, {
+  let resolvedId =
+    (had1mSuffix || (baseKey === "opus" && opus1mMergeAddsTagTo(newestModel))) &&
+    shouldProbeTier &&
+    eligible1mSuffixTarget(newestModel)
+      ? `${newestModel}[1m]`
+      : newestModel;
+  let canonicalName = getCanonicalName(newestModel, {
     identity: true,
   });
-  let L = E !== h;
+  let targetHas1m = resolvedId !== newestModel;
   if (
-    e.some(
-      (O) =>
-        O !== n &&
-        O.value !== null &&
-        (strip1mSuffix(O.value) !== O.value) === L &&
-        getCanonicalName(strip1mSuffix(O.value), {
+    options.some(
+      (otherOption) =>
+        otherOption !== option &&
+        otherOption.value !== null &&
+        (strip1mSuffix(otherOption.value) !== otherOption.value) === targetHas1m &&
+        getCanonicalName(strip1mSuffix(otherOption.value), {
           identity: true,
         }) === canonicalName &&
-        isModelAllowed(O.value),
+        isModelAllowed(otherOption.value),
     )
   )
     return null;
-  if (buildModelOptionForId(E) === null) {
-    r?.();
+  if (buildModelOptionForId(resolvedId) === null) {
+    onReject?.();
     return null;
   }
-  return E;
+  return resolvedId;
 }
 //@ chunk-hwmsct5x.js:221595-221838 placement
 /**
  * 遍历 /model 选项：网关下别名选项替换成解析出的具体模型选项并去重；非网关原样返回。
  */
-function expandGatewayAliasOptions(e, n) {
-  if (isModelAllowlistInactive()) return e;
+function expandGatewayAliasOptions(options, stats) {
+  if (isModelAllowlistInactive()) return options;
   let modelEntitlementDenySet = getModelEntitlementDenySet();
-  let s = new Set();
-  return e.flatMap((h) => {
-    if (h.value === null || isModelAllowed(h.value)) return [h];
-    let y = h.value;
-    let gatewayAliasOptionModel = resolveGatewayAliasOptionModel(e, h, () =>
-      recordDroppedModelOption(n, y, modelEntitlementDenySet),
+  let usedIds = new Set();
+  return options.flatMap((option) => {
+    if (option.value === null || isModelAllowed(option.value)) return [option];
+    let droppedValue = option.value;
+    let gatewayAliasOptionModel = resolveGatewayAliasOptionModel(options, option, () =>
+      recordDroppedModelOption(stats, droppedValue, modelEntitlementDenySet),
     );
-    if (gatewayAliasOptionModel === null || s.has(gatewayAliasOptionModel)) return [];
+    if (gatewayAliasOptionModel === null || usedIds.has(gatewayAliasOptionModel)) return [];
     let modelOptionForId = buildModelOptionForId(gatewayAliasOptionModel);
     if (modelOptionForId === null) return [];
-    s.add(gatewayAliasOptionModel);
+    usedIds.add(gatewayAliasOptionModel);
     return [modelOptionForId];
   });
 }
@@ -1751,11 +1786,11 @@ function expandGatewayAliasOptions(e, n) {
 /**
  * 判断两个模型选项是否指向同一模型：值相同、Fable 族键相同，或解析后的模型（含规范名回退）相同且 1M 后缀一致。
  */
-function optionsMatch(e, n) {
-  if (e.value === n.value) return true;
-  if (typeof e.value !== "string" || typeof n.value !== "string") return false;
-  let fableFamilyKey = getFableFamilyKey(e.value);
-  let fableFamilyKey_2 = getFableFamilyKey(n.value);
+function optionsMatch(left, right) {
+  if (left.value === right.value) return true;
+  if (typeof left.value !== "string" || typeof right.value !== "string") return false;
+  let fableFamilyKey = getFableFamilyKey(left.value);
+  let fableFamilyKey_2 = getFableFamilyKey(right.value);
   if (
     fableFamilyKey !== undefined &&
     fableFamilyKey_2 !== undefined &&
@@ -1764,20 +1799,23 @@ function optionsMatch(e, n) {
       fableFamilyKey_2 === FABLE_FAMILY_PREFIX)
   )
     return true;
-  let userSpecifiedModel = parseUserSpecifiedModel(e.value);
-  let userSpecifiedModel_2 = parseUserSpecifiedModel(n.value);
+  let userSpecifiedModel = parseUserSpecifiedModel(left.value);
+  let userSpecifiedModel_2 = parseUserSpecifiedModel(right.value);
   if (stripAnyVersatileSuffix(userSpecifiedModel) !== stripAnyVersatileSuffix(userSpecifiedModel_2)) {
-    let w = usesFirstPartyModelIds() ? undefined : strippedCanonicalName(userSpecifiedModel_2);
-    if (!anyModelDescribed(w) || strippedCanonicalName(userSpecifiedModel) !== w) return false;
+    let rightCanonical = usesFirstPartyModelIds() ? undefined : strippedCanonicalName(userSpecifiedModel_2);
+    if (!anyModelDescribed(rightCanonical) || strippedCanonicalName(userSpecifiedModel) !== rightCanonical)
+      return false;
   }
-  return has1mSuffix_2(e.value) === has1mSuffix_2(n.value) || modelHasNative1MContext(userSpecifiedModel);
+  return (
+    has1mSuffix_2(left.value) === has1mSuffix_2(right.value) || modelHasNative1MContext(userSpecifiedModel)
+  );
 }
 //@ chunk-hwmsct5x.js:223062-223121 placement
 /**
  * 判断值是否属于 Fable 族（fable、fable[1m] 或目录中的 Fable id）。
  */
-function isFableFamilyValue(e) {
-  return e === "fable" || e === "fable[1m]" || isFableModelValue(e);
+function isFableFamilyValue(value) {
+  return value === "fable" || value === "fable[1m]" || isFableModelValue(value);
 }
 //@ chunk-hwmsct5x.js:223121-223138 placement
 var FABLE_FAMILY_PREFIX = "fable:*";
@@ -1785,48 +1823,51 @@ var FABLE_FAMILY_PREFIX = "fable:*";
 /**
  * 取模型值对应的 Fable 族键：fable 别名解析默认 Fable 模型，其他值用目录中 Fable 模型 id 正则匹配。
  */
-function getFableFamilyKey(e) {
-  if (e === "fable" || e === "fable[1m]") {
-    let s = strip1mSuffix(
+function getFableFamilyKey(value) {
+  if (value === "fable" || value === "fable[1m]") {
+    let defaultFableCanonical = strip1mSuffix(
       getCanonicalName(getDefaultFableModel(), {
         identity: true,
       }),
     );
-    return getCatalogEntry(s)?.family === "fable" ||
-      anyModelDescribed(s) ||
-      (isPublishedCatalogInUse() && getCatalogEntry(s) === undefined && findServedModel(s) !== undefined)
-      ? s
+    return getCatalogEntry(defaultFableCanonical)?.family === "fable" ||
+      anyModelDescribed(defaultFableCanonical) ||
+      (isPublishedCatalogInUse() &&
+        getCatalogEntry(defaultFableCanonical) === undefined &&
+        findServedModel(defaultFableCanonical) !== undefined)
+      ? defaultFableCanonical
       : FABLE_FAMILY_PREFIX;
   }
   let sorted = getModelCatalog()
     .models.filter((model) => model.family === "fable")
     .map((model) => model.id)
-    .sort((s, h) => h.length - s.length);
+    .sort((leftId, rightId) => rightId.length - leftId.length);
   return new RegExp(
     `(?:^|[./])(${sorted.join("|")})(?:[-@]\\d{8})?(?:-v\\d+(?::\\d+)?)?(?:\\[[12]m\\])?$`,
     "i",
   )
-    .exec(e)?.[1]
+    .exec(value)?.[1]
     ?.toLowerCase();
 }
 //@ chunk-hwmsct5x.js:223531-223942 placement
 /**
  * 对需要额外用量额度的 Fable 选项标记为禁用并加"requires usage credits"说明（按计费模式判断），记录禁用原因。
  */
-function markFableCreditRequired(e, n) {
-  if (!saffronPickerDimOn() || isConsumerPlan() || !isExtraUsageOrgDisabled()) return e;
-  return e.map((r) => {
-    if (r.disabled === true || typeof r.value !== "string" || !isFableFamilyValue(r.value)) return r;
-    let userSpecifiedModel = parseUserSpecifiedModel(r.value);
-    let h = usageCreditsBillingState(userSpecifiedModel);
-    if (h === "pay_per_request" || h === "included_in_plan") return r;
-    let y = isUsageCreditsModelBilled(userSpecifiedModel) ? "" : " \u2014 requires usage credits";
-    if (n !== null) n.disabledReasons.add("credits_required");
+function markFableCreditRequired(options, stats) {
+  if (!saffronPickerDimOn() || isConsumerPlan() || !isExtraUsageOrgDisabled()) return options;
+  return options.map((option) => {
+    if (option.disabled === true || typeof option.value !== "string" || !isFableFamilyValue(option.value))
+      return option;
+    let userSpecifiedModel = parseUserSpecifiedModel(option.value);
+    let billing = usageCreditsBillingState(userSpecifiedModel);
+    if (billing === "pay_per_request" || billing === "included_in_plan") return option;
+    let creditsNote = isUsageCreditsModelBilled(userSpecifiedModel) ? "" : " \u2014 requires usage credits";
+    if (stats !== null) stats.disabledReasons.add("credits_required");
     return {
-      ...r,
+      ...option,
       disabled: true,
       label: "Fable (disabled)",
-      description: `${r.description}${y}`,
+      description: `${option.description}${creditsNote}`,
     };
   });
 }
@@ -1834,83 +1875,90 @@ function markFableCreditRequired(e, n) {
 /**
  * 插入 Fable 等“置顶族”行：放在 Default 之后、与默认模型同族的行后面。
  */
-function filterModelOptionsByAllowlist(e, n) {
-  if (!(typeof n.value === "string" && isFableFamilyValue(n.value))) {
-    e.push(n);
+function filterModelOptionsByAllowlist(options, option) {
+  if (!(typeof option.value === "string" && isFableFamilyValue(option.value))) {
+    options.push(option);
     return;
   }
-  let index = e.findIndex((H) => H.value === null);
+  let index = options.findIndex((existing) => existing.value === null);
   if (index === -1) {
-    e.splice(0, 0, n);
+    options.splice(0, 0, option);
     return;
   }
   let modelFamilyFromString = getModelFamilyFromString(getDefaultMainLoopModel());
-  let h = e[index + 1]?.value;
-  let y = e[index + 1];
-  let w = typeof h === "string" && y !== undefined ? resolveGatewayAliasOptionModel(e, y) : null;
-  let S = (H) =>
-    w !== null &&
-    getCanonicalName(strip1mSuffix(H), {
+  let nextValue = options[index + 1]?.value;
+  let nextOption = options[index + 1];
+  let aliasModel =
+    typeof nextValue === "string" && nextOption !== undefined
+      ? resolveGatewayAliasOptionModel(options, nextOption)
+      : null;
+  let matchesAlias = (value) =>
+    aliasModel !== null &&
+    getCanonicalName(strip1mSuffix(value), {
       identity: true,
     }) ===
-      getCanonicalName(strip1mSuffix(w), {
+      getCanonicalName(strip1mSuffix(aliasModel), {
         identity: true,
       }) &&
-    (strip1mSuffix(H) !== H) === (strip1mSuffix(w) !== w) &&
-    isModelAllowed(H);
-  let E = getUserSpecifiedModelSetting() ?? getInitialMainLoopModel() ?? null;
-  let R =
-    (typeof E === "string" && S(E)) ||
-    (getSettings_DEPRECATED()?.availableModels ?? []).some((opt) => S(opt.trim())) ||
-    getGatewayModelOptions().some((H) => typeof H.value === "string" && S(H.value)) ||
-    getAdditionalModelOptionsCache().some((H) => typeof H.value === "string" && S(H.value)) ||
-    (getCuratedModelPicker()?.picker.options ?? []).some((H) => S(H.model.trim()));
-  let L = typeof h === "string" && (isModelAllowlistInactive() || isModelAllowed(h) || (w !== null && !R));
-  let O = typeof h === "string" && isBaseModelKey(strip1mSuffix(h)) ? getModelFamilyFromString(h) : null;
-  let M = new Set();
-  if (O !== null) {
-    M.add(O);
-    if (!L && modelFamilyFromString !== null) M.add(modelFamilyFromString);
-  } else if (modelFamilyFromString !== null) M.add(modelFamilyFromString);
-  let P = index + 1;
-  while (P < e.length) {
-    let H = e[P]?.value;
-    if (typeof H !== "string") break;
-    let modelFamilyFromString = getModelFamilyFromString(H);
-    if ((modelFamilyFromString !== null && M.has(modelFamilyFromString)) || isFableFamilyValue(H)) P++;
+    (strip1mSuffix(value) !== value) === (strip1mSuffix(aliasModel) !== aliasModel) &&
+    isModelAllowed(value);
+  let userSetting = getUserSpecifiedModelSetting() ?? getInitialMainLoopModel() ?? null;
+  let aliasMentioned =
+    (typeof userSetting === "string" && matchesAlias(userSetting)) ||
+    (getSettings_DEPRECATED()?.availableModels ?? []).some((opt) => matchesAlias(opt.trim())) ||
+    getGatewayModelOptions().some((opt) => typeof opt.value === "string" && matchesAlias(opt.value)) ||
+    getAdditionalModelOptionsCache().some(
+      (opt) => typeof opt.value === "string" && matchesAlias(opt.value),
+    ) ||
+    (getCuratedModelPicker()?.picker.options ?? []).some((opt) => matchesAlias(opt.model.trim()));
+  let nextAllowed =
+    typeof nextValue === "string" &&
+    (isModelAllowlistInactive() || isModelAllowed(nextValue) || (aliasModel !== null && !aliasMentioned));
+  let nextFamily =
+    typeof nextValue === "string" && isBaseModelKey(strip1mSuffix(nextValue))
+      ? getModelFamilyFromString(nextValue)
+      : null;
+  let families = new Set();
+  if (nextFamily !== null) {
+    families.add(nextFamily);
+    if (!nextAllowed && modelFamilyFromString !== null) families.add(modelFamilyFromString);
+  } else if (modelFamilyFromString !== null) families.add(modelFamilyFromString);
+  let insertAt = index + 1;
+  while (insertAt < options.length) {
+    let value = options[insertAt]?.value;
+    if (typeof value !== "string") break;
+    let modelFamilyFromString = getModelFamilyFromString(value);
+    if ((modelFamilyFromString !== null && families.has(modelFamilyFromString)) || isFableFamilyValue(value))
+      insertAt++;
     else break;
   }
-  e.splice(P, 0, n);
+  options.splice(insertAt, 0, option);
 }
 //@ chunk-hwmsct5x.js:224874-225071 affinity = aliasMatchesParentTier (0.852)
 /**
  * 字符串里的族名（fable/opus/sonnet/haiku），没有为 null。
  */
-function getModelFamilyFromString(e) {
-  let canonical = e.toLowerCase();
+function getModelFamilyFromString(value) {
+  let canonical = value.toLowerCase();
   if (canonical.includes("fable")) return "fable";
   if (canonical.includes("opus")) return "opus";
   if (canonical.includes("sonnet")) return "sonnet";
   if (canonical.includes("haiku")) return "haiku";
   return null;
 }
-//@ chunk-aepeg2w5.js:438212-438266 fingerprint = getSonnet46Option (0.561)
-/**
- * 当前提供商 catalog sonnet 档的模型字符串，缺失时 sonnet46。旧版名 getSonnet46Option 为错配（不是选项）。
- */
-function getDefaultSonnetBuiltin(rawModelStrings = getModelStrings()) {
-  return catalogFamilyDefaultKey("sonnet", rawModelStrings) ?? rawModelStrings.sonnet46;
-}
 //@ chunk-d1cgs5na.js:12554-12651 fingerprint = getModelFamilyInfo (0.437)
 /**
  * sonnet-4-5、sonnet-4-0、3-7、3-5 的规范名集合。旧版名 getModelFamilyInfo 为错配。
  */
-var LEGACY_SONNET_MODELS = new Set([
-  "claude-sonnet-4-5",
-  "claude-sonnet-4-0",
-  "claude-3-7-sonnet",
-  "claude-3-5-sonnet",
-]);
+var LEGACY_SONNET_MODELS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-d1cgs5na.js:12554", () => {
+  LEGACY_SONNET_MODELS = new Set([
+    "claude-sonnet-4-5",
+    "claude-sonnet-4-0",
+    "claude-3-7-sonnet",
+    "claude-3-5-sonnet",
+  ]);
+});
 export {
   getDefaultSonnetBuiltin,
   buildModelPickerOptions,

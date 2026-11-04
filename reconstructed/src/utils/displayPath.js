@@ -28,50 +28,55 @@ var LONG_POSIX_PATH_LENGTH = 4096;
 /**
  * posix 且路径长度 ≥ 4096。
  */
-function isLongPosixPath(n, e) {
-  return e === posix && n.length >= LONG_POSIX_PATH_LENGTH;
+function isLongPosixPath(path, maxLength) {
+  return maxLength === posix && path.length >= LONG_POSIX_PATH_LENGTH;
 }
 //@ chunk-gqez588q.js:5257-5411 placement = BLACK_CIRCLE (0.728)
 /**
  * 路径规范化候选：Windows 去 \\?\ 前缀并解析；macOS 加 /private、/Volumes 变体；Linux 去 /proc/self/root 前缀。旧版名 BLACK_CIRCLE 为错配。
  */
-function getCanonicalPathVariants(remotePath, e, r) {
-  let normalized = r.normalize(remotePath);
-  if (isLongPosixPath(normalized, r)) return [normalized];
-  return r === win32
-    ? [normalizeWin32DevicePath(normalized, e.workingDir)]
-    : e.platform === "darwin"
-      ? uniq([normalized, pathCaseFolder("darwin")(normalized)].flatMap(macPathVariants))
-      : [stripProcRoot(normalized)];
+function getCanonicalPathVariants(inputPath, cwd, variants) {
+  let path = variants.normalize(inputPath);
+  if (isLongPosixPath(path, variants)) return [path];
+  return variants === win32
+    ? [normalizeWin32DevicePath(path, cwd.workingDir)]
+    : cwd.platform === "darwin"
+      ? uniq([path, pathCaseFolder("darwin")(path)].flatMap(macPathVariants))
+      : [stripProcRoot(path)];
 }
 //@ chunk-gqez588q.js:5411-5782 placement
 /**
  * 路径在镜像目录或家目录下时缩写为 "./…" 或 "~/…"（按平台大小写规则比较）。
  */
-function abbreviatePathForDisplay(n, e, unameSR) {
-  let parts = n.split(unameSR.sep);
-  let t = pathCaseFolder(e.platform);
-  let a = unameSR === win32 ? /\\+$/ : /\/+$/;
-  let c = (d) => getCanonicalPathVariants(d, e, unameSR)[0].replace(a, "").split(unameSR.sep);
+function abbreviatePathForDisplay(path, context, unameSR) {
+  let parts = path.split(unameSR.sep);
+  let caseFold = pathCaseFolder(context.platform);
+  let trailingSepRe = unameSR === win32 ? /\\+$/ : /\/+$/;
+  let normalizeVariant = (candidate) =>
+    getCanonicalPathVariants(candidate, context, unameSR)[0].replace(trailingSepRe, "").split(unameSR.sep);
   return [
-    [e.mirroredDir, "./"],
-    [e.homeDir, "~/"],
+    [context.mirroredDir, "./"],
+    [context.homeDir, "~/"],
   ]
-    .flatMap(([d, s]) => (d === undefined ? [] : [[c(d), s]]))
-    .filter(([d]) => parts.length > d.length && d.every((s, o) => t(s) === t(parts[o])))
-    .map(([d, s]) => [s, parts.slice(d.length).join("/")])
-    .filter(([, d]) => d !== "")
-    .map(([d, s]) => `${d}${s}`);
+    .flatMap(([basePath, label]) => (basePath === undefined ? [] : [[normalizeVariant(basePath), label]]))
+    .filter(
+      ([baseParts]) =>
+        parts.length > baseParts.length &&
+        baseParts.every((part, index) => caseFold(part) === caseFold(parts[index])),
+    )
+    .map(([baseLength, variantName]) => [variantName, parts.slice(baseLength.length).join("/")])
+    .filter(([, remainder]) => remainder !== "")
+    .map(([prefix, suffix]) => `${prefix}${suffix}`);
 }
 //@ chunk-gqez588q.js:5782-5881 placement
 /**
  * 绝对路径 → 规范化后的缩写显示路径，非绝对返回 undefined。
  */
-function toDisplayPath(n, e) {
-  let unameSR = getUnameSR(e.platform);
-  let i = normalizeWin32DrivePath(n, unameSR);
-  return unameSR.isAbsolute(i)
-    ? abbreviatePathForDisplay(getCanonicalPathVariants(i, e, unameSR)[0], e, unameSR)[0]
+function toDisplayPath(path, context) {
+  let unameSR = getUnameSR(context.platform);
+  let normalized = normalizeWin32DrivePath(path, unameSR);
+  return unameSR.isAbsolute(normalized)
+    ? abbreviatePathForDisplay(getCanonicalPathVariants(normalized, context, unameSR)[0], context, unameSR)[0]
     : undefined;
 }
 export { toDisplayPath, getCanonicalPathVariants, abbreviatePathForDisplay, isLongPosixPath };

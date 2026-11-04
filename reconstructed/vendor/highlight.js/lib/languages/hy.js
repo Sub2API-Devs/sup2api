@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:194529-197504 cjs-fingerprint
-var require_hy = x(function (cjsExports, cjsModule) {
+var require_hy = __commonJS(function (cjsExports, cjsModule) {
   function hy(hljs) {
     let SYMBOL_RE = "[a-zA-Z_\\-!.?+*=<>&#'][a-zA-Z_\\-!.?+*=<>&#'0-9/;:]*";
     let keywords = {

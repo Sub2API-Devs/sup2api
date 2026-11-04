@@ -16,22 +16,32 @@ import { isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { logError } from "../../utils/log.js";
 import { count } from "../../utils/collections.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3699865-3699901 placement
 /**
  * 是否已记录 mod 加载汇总
  */
-var modLoadSummaryLogged = identity_2(createValueSlot(), (e) => e.set(undefined));
+var modLoadSummaryLogged; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3699865", () => {
+  modLoadSummaryLogged = identity_2(createValueSlot(), (slot) => slot.set(undefined));
+});
 //@ chunk-e6aww6q8.js:3699901-3699937 placement
 /**
  * 分发计数
  */
-var modLoadDispatchCount = identity_2(createValueSlot(), (e) => e.set(undefined));
+var modLoadDispatchCount; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3699901", () => {
+  modLoadDispatchCount = identity_2(createValueSlot(), (slot) => slot.set(undefined));
+});
 //@ chunk-e6aww6q8.js:3699937-3699971 placement
 /**
  * 按来源计数
  */
-var modLoadBySource = identity_2(new Map(), (e) => e.clear());
+var modLoadBySource; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3699937", () => {
+  modLoadBySource = identity_2(new Map(), (bySource) => bySource.clear());
+});
 //@ chunk-e6aww6q8.js:3699971-3700046 placement
 /**
  * 计入一次事件
@@ -41,45 +51,48 @@ function countModLoadEvent(pluginStorageId) {
     modLoadDispatchCount.set((modLoadDispatchCount.get() ?? 0) + 1);
 }
 //@ chunk-e6aww6q8.js:3700046-3700117 placement
-var KAe = Object.freeze(["installed", "plugin_dir", "dev_mods", "managed"]);
+var PROVENANCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3700046", () => {
+  PROVENANCES = Object.freeze(["installed", "plugin_dir", "dev_mods", "managed"]);
+});
 //@ chunk-e6aww6q8.js:3700117-3700514 placement
 /**
  * 每个插件只记一次加载结果（官方市场插件且首次即成功时不记），返回来源、哈希 id、层级等遥测字段。
  */
-function modLoadTelemetryFields(e, n) {
-  let r = modLoadBySource.get(e.pluginStorageId);
-  let s = n === "loaded";
+function modLoadTelemetryFields(pluginInfo, outcome) {
+  let previous = modLoadBySource.get(pluginInfo.pluginStorageId);
+  let isLoaded = outcome === "loaded";
   if (
-    (r === undefined && isOfficialMarketplacePlugin(e.pluginStorageId)) ||
-    r?.isLoaded === true ||
-    (r !== undefined && !s)
+    (previous === undefined && isOfficialMarketplacePlugin(pluginInfo.pluginStorageId)) ||
+    previous?.isLoaded === true ||
+    (previous !== undefined && !isLoaded)
   )
     return;
-  modLoadBySource.set(e.pluginStorageId, {
-    provenance: r?.provenance,
-    isLoaded: s,
+  modLoadBySource.set(pluginInfo.pluginStorageId, {
+    provenance: previous?.provenance,
+    isLoaded,
   });
-  let y = classifyPluginOrigin(e);
-  modLoadBySource.set(e.pluginStorageId, {
-    provenance: KAe.find((S) => S === y.provenance),
-    isLoaded: s,
+  let origin = classifyPluginOrigin(pluginInfo);
+  modLoadBySource.set(pluginInfo.pluginStorageId, {
+    provenance: PROVENANCES.find((provenance) => provenance === origin.provenance),
+    isLoaded,
   });
   return {
-    provenance: y.provenance,
-    plugin_id_hash: y.plugin_id_hash,
-    tier: fromEnumOpt(e.tier),
+    provenance: origin.provenance,
+    plugin_id_hash: origin.plugin_id_hash,
+    tier: fromEnumOpt(pluginInfo.tier),
     is_hosted: isRemoteManagedEnvironment(),
   };
 }
 //@ chunk-e6aww6q8.js:3700514-3700687 placement
-function logModLoad(e, n, r) {
+function logModLoad(pluginInfo, outcome, extraFields) {
   try {
-    let s = modLoadTelemetryFields(e, n);
-    if (s !== undefined)
+    let fields = modLoadTelemetryFields(pluginInfo, outcome);
+    if (fields !== undefined)
       logEvent("tengu_plugin_function_hooks_mod_load", {
-        ...s,
-        outcome: fromEnum(n),
-        ...r,
+        ...fields,
+        outcome: fromEnum(outcome),
+        ...extraFields,
       });
   } catch (error) {
     logError(
@@ -93,17 +106,17 @@ function logModLoad(e, n, r) {
 /**
  * 记录加载失败
  */
-var logModLoadFailed = (e, n) =>
-  logModLoad(e, "failed", {
-    reason: fromEnum(n),
+var logModLoadFailed = (pluginInfo, reason) =>
+  logModLoad(pluginInfo, "failed", {
+    reason: fromEnum(reason),
   });
 //@ chunk-e6aww6q8.js:3700732-3700800 placement
 /**
  * 记录已加载
  */
-var logModLoaded = (e) =>
-  logModLoad(e.args, "loaded", {
-    hook_patterns: e.patterns.length,
+var logModLoaded = (loadedMod) =>
+  logModLoad(loadedMod.args, "loaded", {
+    hook_patterns: loadedMod.patterns.length,
   });
 //@ chunk-e6aww6q8.js:3700800-3701193 placement
 /**
@@ -113,12 +126,17 @@ function logModsFirstTurn() {
   if (modLoadBySource.size === 0 || modLoadSummaryLogged.get() !== undefined) return;
   modLoadSummaryLogged.set(true);
   try {
-    let filtered = [...modLoadBySource.values()].filter((r) => r.isLoaded);
+    let filtered = [...modLoadBySource.values()].filter((entry) => entry.isLoaded);
     logEvent("tengu_plugin_function_hooks_mods_first_turn", {
       loaded_mods: filtered.length,
       failed_mods: modLoadBySource.size - filtered.length,
       mod_dispatches: modLoadDispatchCount.get() ?? 0,
-      ...Object.fromEntries(KAe.map((r) => [`provenance_${r}`, count(filtered, (s) => s.provenance === r)])),
+      ...Object.fromEntries(
+        PROVENANCES.map((provenance) => [
+          `provenance_${provenance}`,
+          count(filtered, (entry) => entry.provenance === provenance),
+        ]),
+      ),
     });
   } catch (error) {
     logError(

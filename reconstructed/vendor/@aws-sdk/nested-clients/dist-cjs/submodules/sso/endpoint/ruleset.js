@@ -6,19 +6,19 @@
  * attribution: esm-fingerprint 1
  */
 //@ chunk-kejz1rpb.js:5071-7442 esm-fingerprint
-var G = {
+var stringParamSchema = {
   ["required"]: false,
   type: "string",
 };
-var q = {
+var booleanParamSchema = {
   ["required"]: true,
   default: false,
   type: "boolean",
 };
-var j = {
+var endpointRef = {
   ["ref"]: "Endpoint",
 };
-var B = {
+var useFipsEqualsTrue = {
   ["fn"]: "booleanEquals",
   ["argv"]: [
     {
@@ -27,7 +27,7 @@ var B = {
     true,
   ],
 };
-var W = {
+var useDualStackEqualsTrue = {
   ["fn"]: "booleanEquals",
   ["argv"]: [
     {
@@ -36,8 +36,8 @@ var W = {
     true,
   ],
 };
-var r = {};
-var M = {
+var n = {};
+var partitionSupportsFips = {
   ["fn"]: "getAttr",
   ["argv"]: [
     {
@@ -46,58 +46,58 @@ var M = {
     "supportsFIPS",
   ],
 };
-var J = {
+var partitionResultRef = {
   ["ref"]: "PartitionResult",
 };
-var z = {
+var booleanEqualsCondition = {
   ["fn"]: "booleanEquals",
   ["argv"]: [
     true,
     {
       ["fn"]: "getAttr",
-      ["argv"]: [J, "supportsDualStack"],
+      ["argv"]: [partitionResultRef, "supportsDualStack"],
     },
   ],
 };
-var K = [B];
-var Q = [W];
-var V = [
+var useFipsEqualsTrueList = [useFipsEqualsTrue];
+var useDualStackEqualsTrueList = [useDualStackEqualsTrue];
+var conditionList = [
   {
     ["ref"]: "Region",
   },
 ];
-var Ne = {
+var ruleSetData = {
   version: "1.0",
   parameters: {
-    Region: G,
-    UseDualStack: q,
-    UseFIPS: q,
-    Endpoint: G,
+    Region: stringParamSchema,
+    UseDualStack: booleanParamSchema,
+    UseFIPS: booleanParamSchema,
+    Endpoint: stringParamSchema,
   },
   rules: [
     {
       conditions: [
         {
           ["fn"]: "isSet",
-          ["argv"]: [j],
+          ["argv"]: [endpointRef],
         },
       ],
       rules: [
         {
-          conditions: K,
+          conditions: useFipsEqualsTrueList,
           error: "Invalid Configuration: FIPS and custom endpoint are not supported",
           type: "error",
         },
         {
-          conditions: Q,
+          conditions: useDualStackEqualsTrueList,
           error: "Invalid Configuration: Dualstack and custom endpoint are not supported",
           type: "error",
         },
         {
           endpoint: {
-            url: j,
-            properties: r,
-            headers: r,
+            url: endpointRef,
+            properties: n,
+            headers: n,
           },
           type: "endpoint",
         },
@@ -108,7 +108,7 @@ var Ne = {
       conditions: [
         {
           ["fn"]: "isSet",
-          ["argv"]: V,
+          ["argv"]: conditionList,
         },
       ],
       rules: [
@@ -116,28 +116,28 @@ var Ne = {
           conditions: [
             {
               ["fn"]: "aws.partition",
-              ["argv"]: V,
+              ["argv"]: conditionList,
               assign: "PartitionResult",
             },
           ],
           rules: [
             {
-              conditions: [B, W],
+              conditions: [useFipsEqualsTrue, useDualStackEqualsTrue],
               rules: [
                 {
                   conditions: [
                     {
                       ["fn"]: "booleanEquals",
-                      ["argv"]: [true, M],
+                      ["argv"]: [true, partitionSupportsFips],
                     },
-                    z,
+                    booleanEqualsCondition,
                   ],
                   rules: [
                     {
                       endpoint: {
                         url: "https://portal.sso-fips.{Region}.{PartitionResult#dualStackDnsSuffix}",
-                        properties: r,
-                        headers: r,
+                        properties: n,
+                        headers: n,
                       },
                       type: "endpoint",
                     },
@@ -152,13 +152,13 @@ var Ne = {
               type: "tree",
             },
             {
-              conditions: K,
+              conditions: useFipsEqualsTrueList,
               rules: [
                 {
                   conditions: [
                     {
                       ["fn"]: "booleanEquals",
-                      ["argv"]: [M, true],
+                      ["argv"]: [partitionSupportsFips, true],
                     },
                   ],
                   rules: [
@@ -169,7 +169,7 @@ var Ne = {
                           ["argv"]: [
                             {
                               ["fn"]: "getAttr",
-                              ["argv"]: [J, "name"],
+                              ["argv"]: [partitionResultRef, "name"],
                             },
                             "aws-us-gov",
                           ],
@@ -177,16 +177,16 @@ var Ne = {
                       ],
                       endpoint: {
                         url: "https://portal.sso.{Region}.amazonaws.com",
-                        properties: r,
-                        headers: r,
+                        properties: n,
+                        headers: n,
                       },
                       type: "endpoint",
                     },
                     {
                       endpoint: {
                         url: "https://portal.sso-fips.{Region}.{PartitionResult#dnsSuffix}",
-                        properties: r,
-                        headers: r,
+                        properties: n,
+                        headers: n,
                       },
                       type: "endpoint",
                     },
@@ -201,16 +201,16 @@ var Ne = {
               type: "tree",
             },
             {
-              conditions: Q,
+              conditions: useDualStackEqualsTrueList,
               rules: [
                 {
-                  conditions: [z],
+                  conditions: [booleanEqualsCondition],
                   rules: [
                     {
                       endpoint: {
                         url: "https://portal.sso.{Region}.{PartitionResult#dualStackDnsSuffix}",
-                        properties: r,
-                        headers: r,
+                        properties: n,
+                        headers: n,
                       },
                       type: "endpoint",
                     },
@@ -227,8 +227,8 @@ var Ne = {
             {
               endpoint: {
                 url: "https://portal.sso.{Region}.{PartitionResult#dnsSuffix}",
-                properties: r,
-                headers: r,
+                properties: n,
+                headers: n,
               },
               type: "endpoint",
             },
@@ -244,5 +244,5 @@ var Ne = {
     },
   ],
 };
-var Y = Ne;
-export { Y };
+var ruleSet = ruleSetData;
+export { ruleSet };

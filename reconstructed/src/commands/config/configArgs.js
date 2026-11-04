@@ -23,25 +23,26 @@ import { isBridgeOrTransport } from "../../cli/transportState.js";
  * /config 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */
 async function runConfigSetCommand(args, context) {
-  let trimmed = args.trim();
-  let lower = trimmed.toLowerCase();
+  let text = args.trim();
+  let lower = text.toLowerCase();
   if (!lower || COMMON_HELP_ARGS.includes(lower) || COMMON_INFO_ARGS_ALIAS.includes(lower))
     return {
       type: "text",
       value: `Usage: /config key=value [key=value ...]
 ${listConfigKeys(context)}`,
     };
-  let configShorthand = parseConfigShorthand(trimmed);
-  if (!configShorthand)
+  let settings = parseConfigShorthand(text);
+  if (!settings)
     return {
       type: "text",
-      value: `Expected key=value, got "${sanitizeTelemetryString(trimmed)}". Run /config to see what's available.`,
+      value: `Expected key=value, got "${sanitizeTelemetryString(text)}". Run /config to see what's available.`,
     };
-  let r = await applyConfigShorthand(configShorthand, context);
-  let s = isBridgeOrTransport(context.session);
+  let results = await applyConfigShorthand(settings, context);
+  let offBox = isBridgeOrTransport(context.session);
   return {
     type: "text",
-    value: r.map((i) => collapseShorthandResultOffBox(i, s)).join(`
+    value: results.map((result) => collapseShorthandResultOffBox(result, offBox)).join(`
 `),
   };
 }
+export { runConfigSetCommand };

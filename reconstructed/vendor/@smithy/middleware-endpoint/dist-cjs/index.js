@@ -5,18 +5,18 @@
  * pieces: chunk-edce4vxq.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_getEndpointFromConfig } from "./adaptors/getEndpointFromConfig.js";
 import { require_url_parser } from "../../url-parser/dist-cjs/index.js";
-import { require_core as require_core_2 } from "../../core/dist-cjs/index.js";
+import { require_core as require_core_3 } from "../../core/dist-cjs/index.js";
 import { require_util_middleware } from "../../util-middleware/dist-cjs/index.js";
 import { require_middleware_serde } from "../../middleware-serde/dist-cjs/index.js";
 
 //@ chunk-edce4vxq.js:116495-120842 cjs-fingerprint
-var require_middleware_endpoint = x(function (cjsExports) {
+var require_middleware_endpoint = __commonJS(function (cjsExports) {
   var getEndpointFromConfig = require_getEndpointFromConfig();
   var urlParser = require_url_parser();
-  var core = require_core_2();
+  var core = require_core_3();
   var utilMiddleware = require_util_middleware();
   var middlewareSerde = require_middleware_serde();
   var resolveParamsForS3 = async (endpointParams) => {

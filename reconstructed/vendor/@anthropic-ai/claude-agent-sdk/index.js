@@ -13,7 +13,7 @@ import { randomUUID as randomUUID_2 } from "crypto";
 import { fileURLToPath } from "url";
 import { createRequire } from "module";
 import { jsonParse, jsonStringify, alwaysTrue } from "../../../src/utils/slowOperations.js";
-import { Re } from "../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_api } from "../../@opentelemetry/api/build/src/index.js";
 import { TOOL_HOOK_EXECUTION_TIMEOUT_MS } from "../../../src/utils/hooks/hookEvents.js";
 import {
@@ -41,170 +41,174 @@ import { withTimeout, sleep } from "../../../src/utils/sleep.js";
 import { STORAGE_SPACES } from "../../../src/utils/storage/storageSpaces.js";
 import { OAUTH_GLOBAL_FILE_SUFFIXES } from "../../../src/constants/oauth.js";
 import { createAbortController } from "../../../src/utils/abortController.js";
-import { $t, Lt, ProcessTransport } from "./transport.js";
+import { assertDialogKindsHandled, resolveNativeCliPath, ProcessTransport } from "./transport.js";
 import { DEFAULT_PRINT_BG_WAIT_CEILING_MS } from "../../../src/tasks/LocalShellTask/backgroundNotices.js";
 import { Query } from "./query.js";
-import { TranscriptMirrorBatcher, Me, we } from "./transcriptMirror.js";
+import {
+  TranscriptMirrorBatcher,
+  DEFAULT_MAX_PENDING_ENTRIES,
+  DEFAULT_MAX_PENDING_BYTES,
+} from "./transcriptMirror.js";
 
 //@ chunk-y805ph4h.js:63137-63633 placement
-function sr(workSecret) {
+function extractSessionIdFromIngressToken(workSecret) {
   try {
-    let s = jsonParse(Buffer.from(workSecret, "base64url").toString("utf8"));
+    let payload = jsonParse(Buffer.from(workSecret, "base64url").toString("utf8"));
     if (
-      typeof s !== "object" ||
-      s === null ||
-      !("session_ingress_token" in s) ||
-      typeof s.session_ingress_token !== "string"
+      typeof payload !== "object" ||
+      payload === null ||
+      !("session_ingress_token" in payload) ||
+      typeof payload.session_ingress_token !== "string"
     )
       return;
-    let sessionIngressToken = s.session_ingress_token;
+    let sessionIngressToken = payload.session_ingress_token;
     let parts = (
       sessionIngressToken.startsWith("sk-ant-si-") ? sessionIngressToken.slice(10) : sessionIngressToken
     ).split(".");
     if (parts.length !== 3 || !parts[1]) return;
-    let m = jsonParse(Buffer.from(parts[1], "base64url").toString("utf8"));
-    return typeof m === "object" &&
-      m !== null &&
-      "session_id" in m &&
-      typeof m.session_id === "string" &&
-      m.session_id
-      ? m.session_id
+    let claims = jsonParse(Buffer.from(parts[1], "base64url").toString("utf8"));
+    return typeof claims === "object" &&
+      claims !== null &&
+      "session_id" in claims &&
+      typeof claims.session_id === "string" &&
+      claims.session_id
+      ? claims.session_id
       : undefined;
   } catch {
     return;
   }
 }
 //@ chunk-y805ph4h.js:63633-63651 placement
-var Ue = Re(require_api(), 1);
+var import_api = __toESM(require_api(), 1);
 //@ chunk-y805ph4h.js:63651-63679 placement
-var qt = 60000;
-var nr = TOOL_HOOK_EXECUTION_TIMEOUT_MS;
-var ha = qt + nr;
+var DEFAULT_SESSION_LOAD_TIMEOUT_MS = 60000;
+var CREDENTIALS_RESUME_TTL_MS = TOOL_HOOK_EXECUTION_TIMEOUT_MS;
+var RESUME_TIMEOUT_MS = DEFAULT_SESSION_LOAD_TIMEOUT_MS + CREDENTIALS_RESUME_TTL_MS;
 //@ chunk-y805ph4h.js:63818-63936 placement
-function Vt(trimmedEnvValue) {
+function configPathsForDir(trimmedEnvValue) {
   return {
     globalConfig: join(trimmedEnvValue || homedir(), ".claude.json"),
     userSettings: join(trimmedEnvValue || join(homedir(), ".claude"), "settings.json"),
   };
 }
 //@ chunk-y805ph4h.js:63936-64007 placement
-function nt(e, s, r, key) {
-  return e !== undefined && s === r
+function pickSessionStoreTarget(backend, expectedKind, actualKind, key) {
+  return backend !== undefined && expectedKind === actualKind
     ? {
-        backend: e,
+        backend,
         key,
       }
     : undefined;
 }
 //@ chunk-y805ph4h.js:64007-64255 placement
-async function de(e, s, r, n) {
-  if (n) return ar(n, e, s, r);
+async function restoreFileFromStore(sourcePath, targetPath, transform, v5Target) {
+  if (v5Target) return restoreFileFromV5Store(v5Target, sourcePath, targetPath, transform);
   try {
-    if (r)
-      await writeFile(s, r(await readFile(e)), {
+    if (transform)
+      await writeFile(targetPath, transform(await readFile(sourcePath)), {
         mode: 384,
       });
-    else await copyFile(e, s);
+    else await copyFile(sourcePath, targetPath);
   } catch (error) {
     if (getErrnoCode(error) === undefined) throw error;
     if (!isENOENT(error)) {
-      await rm(s, {
+      await rm(targetPath, {
         force: true,
       }).catch(() => {});
-      logForDebugging(`sessionStore resume: skipping ${e} (${getErrnoCode(error)})`);
+      logForDebugging(`sessionStore resume: skipping ${sourcePath} (${getErrnoCode(error)})`);
     }
   }
 }
 //@ chunk-y805ph4h.js:64255-64868 placement
-async function ar({ backend, key }, r, n, i) {
-  let m = await backend.read([key]);
-  if (!m.ok) {
-    if (m.error.code === "InvalidArgument")
+async function restoreFileFromV5Store({ backend, key }, targetPath, sourcePath, transform) {
+  let readResult = await backend.read([key]);
+  if (!readResult.ok) {
+    if (readResult.error.code === "InvalidArgument")
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `sessionStore resume: invalid v5 key for ${r}: ${m.error.argument}${m.error.reason ? ` (${m.error.reason})` : ""}`,
+        `sessionStore resume: invalid v5 key for ${targetPath}: ${readResult.error.argument}${readResult.error.reason ? ` (${readResult.error.reason})` : ""}`,
         "sessionStore resume: invalid v5 key (InvalidArgument from backend read)",
       );
-    logForDebugging(`sessionStore resume: skipping ${r} (${m.error.code})`);
+    logForDebugging(`sessionStore resume: skipping ${targetPath} (${readResult.error.code})`);
     return;
   }
-  let l = m.value.items[0];
-  if (!l?.found) return;
-  let buffer = Buffer.from(l.value);
+  let item = readResult.value.items[0];
+  if (!item?.found) return;
+  let buffer = Buffer.from(item.value);
   try {
-    await writeFile(n, i ? i(buffer) : buffer, {
+    await writeFile(sourcePath, transform ? transform(buffer) : buffer, {
       mode: 384,
     });
   } catch (error) {
     if (getErrnoCode(error) === undefined) throw error;
     if (!isENOENT(error)) {
-      await rm(n, {
+      await rm(sourcePath, {
         force: true,
       }).catch(() => {});
-      logForDebugging(`sessionStore resume: skipping ${r} (${getErrnoCode(error)})`);
+      logForDebugging(`sessionStore resume: skipping ${targetPath} (${getErrnoCode(error)})`);
     }
   }
 }
 //@ chunk-y805ph4h.js:64868-65572 placement
-function lr(e, s) {
-  if (e === "bypassPermissions")
+function canUseToolShadowWarning(permissionMode, allowedTools) {
+  if (permissionMode === "bypassPermissions")
     return "canUseTool will not be invoked: permissionMode 'bypassPermissions' auto-approves every tool call (except explicit deny rules) before the callback is consulted. To gate every tool call, use a PreToolUse hook instead.";
-  let filtered = s.filter((n) => n.length > 0 && !n.includes("("));
+  let filtered = allowedTools.filter((toolName) => toolName.length > 0 && !toolName.includes("("));
   if (filtered.length === 0) return;
   return `canUseTool will not be invoked for: ${filtered.join(", ")}. Bare allowedTools entries auto-approve the whole tool before the callback is consulted. To gate every tool call, use a PreToolUse hook; or remove the bare names from allowedTools so they fall through to canUseTool. Allow rules from settings files can also shadow the callback but are not visible here.`;
 }
 //@ chunk-y805ph4h.js:65572-65704 placement
-function Qt(e, s, allowedTools) {
-  if (!e) return;
-  let n = lr(s, allowedTools);
-  if (n === undefined) return;
-  process.emitWarning(n, {
+function warnIfCanUseToolShadowed(canUseTool, permissionMode, allowedTools) {
+  if (!canUseTool) return;
+  let warning = canUseToolShadowWarning(permissionMode, allowedTools);
+  if (warning === undefined) return;
+  process.emitWarning(warning, {
     code: "CLAUDE_SDK_CAN_USE_TOOL_SHADOWED",
   });
 }
 //@ chunk-y805ph4h.js:65813-65882 placement
-function Xt(e) {
-  let s = resolve(e ?? ".");
-  let r;
+function canonicalProjectDir(cwd) {
+  let resolved = resolve(cwd ?? ".");
+  let realPath;
   try {
-    r = realpathSync(s);
+    realPath = realpathSync(resolved);
   } catch {
-    r = s;
+    realPath = resolved;
   }
-  return identity(r);
+  return identity(realPath);
 }
 //@ chunk-y805ph4h.js:65882-66016 placement
-function be(e, s) {
-  let r = Xt(e);
-  if (s === undefined) return getProjectKey(r);
+function projectKeyForCwd(cwd, env) {
+  let dir = canonicalProjectDir(cwd);
+  if (env === undefined) return getProjectKey(dir);
   return (
-    (s.CLAUDE_CONFIG_DIR ? validateProjectDirName(s.CLAUDE_CODE_PROJECT_DIR_NAME) : undefined) ??
-    sanitizePath(r)
+    (env.CLAUDE_CONFIG_DIR ? validateProjectDirName(env.CLAUDE_CODE_PROJECT_DIR_NAME) : undefined) ??
+    sanitizePath(dir)
   );
 }
 //@ chunk-y805ph4h.js:66016-66107 placement
-function ot(e) {
-  return typeof e === "object" && e !== null && "type" in e && e.type === "agent_metadata";
+function isAgentMetadataFrame(frame) {
+  return typeof frame === "object" && frame !== null && "type" in frame && frame.type === "agent_metadata";
 }
 //@ chunk-y805ph4h.js:66107-66473 placement
-function it(e, s) {
-  let r = relative(s, e);
-  let parts = r.split(sep);
-  if (parts[0] === ".." || isAbsolute(r)) return null;
+function parseMirrorPath(filePath, projectsRoot) {
+  let relative_2 = relative(projectsRoot, filePath);
+  let parts = relative_2.split(sep);
+  if (parts[0] === ".." || isAbsolute(relative_2)) return null;
   if (parts.length < 2) return null;
   let projectKey = parts[0];
-  let m = parts[1];
-  if (parts.length === 2 && m.endsWith(".jsonl"))
+  let fileName = parts[1];
+  if (parts.length === 2 && fileName.endsWith(".jsonl"))
     return {
       projectKey,
-      sessionId: m.replace(/\.jsonl$/, ""),
+      sessionId: fileName.replace(/\.jsonl$/, ""),
     };
   if (parts.length >= 4) {
     let sliced = parts.slice(2);
-    let h = sliced.length - 1;
-    sliced[h] = sliced.at(-1).replace(/\.jsonl$/, "");
+    let lastIndex = sliced.length - 1;
+    sliced[lastIndex] = sliced.at(-1).replace(/\.jsonl$/, "");
     return {
       projectKey,
-      sessionId: m,
+      sessionId: fileName,
       subpath: sliced.join("/"),
     };
   }
@@ -213,205 +217,238 @@ function it(e, s) {
 //@ chunk-y805ph4h.js:66473-66524 placement
 process.env.NoDefaultCurrentDirectoryInExePath = "1";
 //@ chunk-y805ph4h.js:66524-66600 placement
-var Tr = ["enabledPlugins", "extraKnownMarketplaces", "additionalMarketplaces"];
+var STRIPPED_SETTINGS_KEYS = ["enabledPlugins", "extraKnownMarketplaces", "additionalMarketplaces"];
 //@ chunk-y805ph4h.js:66600-66859 placement
-function Yt(e) {
-  let s;
+function stripSettingsBeforeMirror(buffer) {
+  let parsed;
   try {
-    s = jsonParse(stripBom(e.toString("utf8")));
+    parsed = jsonParse(stripBom(buffer.toString("utf8")));
   } catch {
-    return e;
+    return buffer;
   }
-  if (!Zt(s)) return e;
-  let r = false;
-  for (let i of Tr)
-    if (Object.hasOwn(s, i)) {
-      delete s[i];
-      r = true;
+  if (!isPlainRecord(parsed)) return buffer;
+  let changed = false;
+  for (let key of STRIPPED_SETTINGS_KEYS)
+    if (Object.hasOwn(parsed, key)) {
+      delete parsed[key];
+      changed = true;
     }
-  let env = s.env;
-  if (Zt(env) && Object.hasOwn(env, "CLAUDE_CONFIG_DIR")) {
+  let env = parsed.env;
+  if (isPlainRecord(env) && Object.hasOwn(env, "CLAUDE_CONFIG_DIR")) {
     delete env.CLAUDE_CONFIG_DIR;
-    r = true;
+    changed = true;
   }
-  return r ? jsonStringify(s) : e;
+  return changed ? jsonStringify(parsed) : buffer;
 }
 //@ chunk-y805ph4h.js:66859-66930 placement
-function Zt(e) {
-  return e !== null && typeof e === "object" && !Array.isArray(e);
+function isPlainRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 //@ chunk-y805ph4h.js:66930-67099 placement
-async function Pr(e, s) {
-  if (!e) return;
-  let r = e;
+async function stripOAuthRefreshToken(content, targetPath) {
+  if (!content) return;
+  let sanitized = content;
   try {
-    let n = jsonParse(e);
-    if (n?.claudeAiOauth?.refreshToken) {
-      delete n.claudeAiOauth.refreshToken;
-      r = jsonStringify(n);
+    let parsed = jsonParse(content);
+    if (parsed?.claudeAiOauth?.refreshToken) {
+      delete parsed.claudeAiOauth.refreshToken;
+      sanitized = jsonStringify(parsed);
     }
   } catch {}
-  await writeFile(s, r, {
+  await writeFile(targetPath, sanitized, {
     mode: 384,
   });
 }
 //@ chunk-y805ph4h.js:67099-67144 placement
-function Mr() {
+function emptyCredentialsProvider() {
   return Promise.resolve(undefined);
 }
 //@ chunk-y805ph4h.js:67144-68342 placement
-async function Ir(sessionStore, resume, r, env, loadTimeoutMs = 60000, m) {
+async function restoreSessionFromStore(store, resume, env, env_2, timeoutMs = 60000, transformCredentials) {
   if (!validateUuid(resume)) return;
-  let l = be(r, env);
-  let h = await withTimeout(
-    sessionStore.load({
-      projectKey: l,
+  let projectKey = projectKeyForCwd(env, env_2);
+  let entries = await withTimeout(
+    store.load({
+      projectKey,
       sessionId: resume,
     }),
-    loadTimeoutMs,
-    `SessionStore.load() timed out after ${loadTimeoutMs}ms for session ${resume}`,
+    timeoutMs,
+    `SessionStore.load() timed out after ${timeoutMs}ms for session ${resume}`,
   );
-  if (!h || h.length === 0) return;
-  let S = join(tmpdir(), `claude-resume-${randomUUID_2()}`);
+  if (!entries || entries.length === 0) return;
+  let tempRoot = join(tmpdir(), `claude-resume-${randomUUID_2()}`);
   try {
-    let y = join(S, "projects", l);
-    await mkdir(y, {
+    let projectsDir = join(tempRoot, "projects", projectKey);
+    await mkdir(projectsDir, {
       recursive: true,
       mode: 448,
     });
-    let w = join(y, `${resume}.jsonl`);
-    await writeEntriesToJsonlFile(w, h);
-    let CLAUDE_CONFIG_DIR = env?.CLAUDE_CONFIG_DIR ?? process.env.CLAUDE_CONFIG_DIR;
-    let R = CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
-    let T;
+    let sessionFile = join(projectsDir, `${resume}.jsonl`);
+    await writeEntriesToJsonlFile(sessionFile, entries);
+    let CLAUDE_CONFIG_DIR = env_2?.CLAUDE_CONFIG_DIR ?? process.env.CLAUDE_CONFIG_DIR;
+    let configDir = CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
+    let credentialsJson;
     try {
-      T = await readFile(join(R, ".credentials.json"), "utf-8");
+      credentialsJson = await readFile(join(configDir, ".credentials.json"), "utf-8");
     } catch (error) {
       if (!isENOENT(error)) throw error;
     }
     if (
       !CLAUDE_CONFIG_DIR &&
-      !(env ?? process.env).ANTHROPIC_API_KEY &&
-      !(env ?? process.env).CLAUDE_CODE_OAUTH_TOKEN
+      !(env_2 ?? process.env).ANTHROPIC_API_KEY &&
+      !(env_2 ?? process.env).CLAUDE_CODE_OAUTH_TOKEN
     )
-      T = (await Mr()) ?? T;
-    await Pr(T, join(S, ".credentials.json"));
-    let E = Vt(getTrimmedEnvValue("CLAUDE_CONFIG_DIR"));
-    let P = CLAUDE_CONFIG_DIR || homedir();
-    let D = join(P, ".claude.json");
-    await de(D, join(S, ".claude.json"), undefined, nt(m, D, E.globalConfig, STORAGE_SPACES.globalConfig()));
-    await de(join(R, ".config.json"), join(S, ".config.json"));
-    for (let K of OAUTH_GLOBAL_FILE_SUFFIXES)
-      if (K) await de(join(P, `.claude${K}.json`), join(S, `.claude${K}.json`));
-    let F = join(R, "settings.json");
-    await de(F, join(S, "settings.json"), Yt, nt(m, F, E.userSettings, STORAGE_SPACES.userSettings()));
-    await de(join(R, "cowork_settings.json"), join(S, "cowork_settings.json"), Yt);
-    if (sessionStore.listSubkeys)
-      await Dr(
-        sessionStore,
+      credentialsJson = (await emptyCredentialsProvider()) ?? credentialsJson;
+    await stripOAuthRefreshToken(credentialsJson, join(tempRoot, ".credentials.json"));
+    let configPaths = configPathsForDir(getTrimmedEnvValue("CLAUDE_CONFIG_DIR"));
+    let homeDir = CLAUDE_CONFIG_DIR || homedir();
+    let globalConfigPath = join(homeDir, ".claude.json");
+    await restoreFileFromStore(
+      globalConfigPath,
+      join(tempRoot, ".claude.json"),
+      undefined,
+      pickSessionStoreTarget(
+        transformCredentials,
+        globalConfigPath,
+        configPaths.globalConfig,
+        STORAGE_SPACES.globalConfig(),
+      ),
+    );
+    await restoreFileFromStore(join(configDir, ".config.json"), join(tempRoot, ".config.json"));
+    for (let suffix of OAUTH_GLOBAL_FILE_SUFFIXES)
+      if (suffix)
+        await restoreFileFromStore(
+          join(homeDir, `.claude${suffix}.json`),
+          join(tempRoot, `.claude${suffix}.json`),
+        );
+    let settingsPath = join(configDir, "settings.json");
+    await restoreFileFromStore(
+      settingsPath,
+      join(tempRoot, "settings.json"),
+      stripSettingsBeforeMirror,
+      pickSessionStoreTarget(
+        transformCredentials,
+        settingsPath,
+        configPaths.userSettings,
+        STORAGE_SPACES.userSettings(),
+      ),
+    );
+    await restoreFileFromStore(
+      join(configDir, "cowork_settings.json"),
+      join(tempRoot, "cowork_settings.json"),
+      stripSettingsBeforeMirror,
+    );
+    if (store.listSubkeys)
+      await restoreSessionSubkeys(
+        store,
         {
-          projectKey: l,
+          projectKey,
           sessionId: resume,
         },
-        join(y, resume),
-        loadTimeoutMs,
+        join(projectsDir, resume),
+        timeoutMs,
       );
-    return S;
+    return tempRoot;
   } catch (error) {
-    await removeRecursiveWithRetry(S);
+    await removeRecursiveWithRetry(tempRoot);
     throw error;
   }
 }
 //@ chunk-y805ph4h.js:68342-69181 placement
-async function Dr(e, s, r, n) {
-  let i = await withTimeout(
-    e.listSubkeys({
-      projectKey: s.projectKey,
-      sessionId: s.sessionId,
+async function restoreSessionSubkeys(store, target, projectsRoot, timeoutMs) {
+  let subkeys = await withTimeout(
+    store.listSubkeys({
+      projectKey: target.projectKey,
+      sessionId: target.sessionId,
     }),
-    n,
-    `SessionStore.listSubkeys() timed out after ${n}ms for session ${s.sessionId}`,
+    timeoutMs,
+    `SessionStore.listSubkeys() timed out after ${timeoutMs}ms for session ${target.sessionId}`,
   );
-  for (let m of i) {
-    let l = resolve(r, m + ".jsonl");
-    if (!m || isAbsolute(m) || m.split(/[\\/]/).includes("..") || !l.startsWith(r + sep)) {
-      logForDebugging(`[SessionStore] skipping unsafe subpath from listSubkeys: ${m}`, {
+  for (let subkey of subkeys) {
+    let subkeyFile = resolve(projectsRoot, subkey + ".jsonl");
+    if (
+      !subkey ||
+      isAbsolute(subkey) ||
+      subkey.split(/[\\/]/).includes("..") ||
+      !subkeyFile.startsWith(projectsRoot + sep)
+    ) {
+      logForDebugging(`[SessionStore] skipping unsafe subpath from listSubkeys: ${subkey}`, {
         level: "warn",
       });
       continue;
     }
-    let h = await withTimeout(
-      e.load({
-        projectKey: s.projectKey,
-        sessionId: s.sessionId,
-        subpath: m,
+    let entries = await withTimeout(
+      store.load({
+        projectKey: target.projectKey,
+        sessionId: target.sessionId,
+        subpath: subkey,
       }),
-      n,
-      `SessionStore.load() timed out after ${n}ms for session ${s.sessionId} subpath ${m}`,
+      timeoutMs,
+      `SessionStore.load() timed out after ${timeoutMs}ms for session ${target.sessionId} subpath ${subkey}`,
     );
-    if (!h || h.length === 0) continue;
-    let S = [];
-    let y = [];
-    for (let w of h)
-      if (ot(w)) S.push(w);
-      else y.push(w);
-    if (y.length > 0) {
-      await mkdir(dirname(l), {
+    if (!entries || entries.length === 0) continue;
+    let metaEntries = [];
+    let sessionEntries = [];
+    for (let entry of entries)
+      if (isAgentMetadataFrame(entry)) metaEntries.push(entry);
+      else sessionEntries.push(entry);
+    if (sessionEntries.length > 0) {
+      await mkdir(dirname(subkeyFile), {
         recursive: true,
       });
-      await writeEntriesToJsonlFile(l, y);
+      await writeEntriesToJsonlFile(subkeyFile, sessionEntries);
     }
-    if (S.length > 0) {
-      let last = S.at(-1);
-      let b = resolve(r, m + ".meta.json");
-      await mkdir(dirname(b), {
+    if (metaEntries.length > 0) {
+      let last = metaEntries.at(-1);
+      let metaPath = resolve(projectsRoot, subkey + ".meta.json");
+      await mkdir(dirname(metaPath), {
         recursive: true,
       });
-      let { type: R, ...T } = last;
-      await writeFile(b, jsonStringify(T), {
+      let { type, ...rest } = last;
+      await writeFile(metaPath, jsonStringify(rest), {
         mode: 384,
       });
     }
   }
 }
 //@ chunk-y805ph4h.js:69181-69476 placement
-function Or(workspaceTrust) {
-  let s =
+function sanitizeWorkspaceTrust(workspaceTrust) {
+  let sanitized =
     workspaceTrust?.accepted === true &&
     (typeof workspaceTrust.directory !== "string" ||
       !(posix.isAbsolute(workspaceTrust.directory) || win32.isAbsolute(workspaceTrust.directory)))
       ? undefined
       : workspaceTrust;
-  if (workspaceTrust !== undefined && s === undefined)
+  if (workspaceTrust !== undefined && sanitized === undefined)
     logForDebugging(
       "workspaceTrust ignored: accepted requires an absolute directory, as it exists where Claude Code runs",
       {
         level: "warn",
       },
     );
-  return s;
+  return sanitized;
 }
 //@ chunk-y805ph4h.js:69476-76596 placement
 /**
  * Agent SDK 的 query() 入口：解析选项、创建 ProcessTransport 与 Query，返回可异步迭代的消息流。
  */
-function query(options, s) {
-  let { isSingleUserTurn, resumeConfigDir, deferSpawn, readsStartupMarks } = s;
-  let { systemPrompt, settings, managedSettings, settingSources, sandbox, ...b } = options ?? {};
-  let R;
+function query(options, options_2) {
+  let { isSingleUserTurn, resumeConfigDir, deferSpawn, readsStartupMarks } = options_2;
+  let { systemPrompt, settings, managedSettings, settingSources, sandbox, ...options_3 } = options ?? {};
+  let systemPrompt_2;
   let appendSystemPrompt;
   let excludeDynamicSections;
-  let P;
-  if (systemPrompt === undefined) R = "";
-  else if (typeof systemPrompt === "string") R = systemPrompt;
-  else if (Array.isArray(systemPrompt)) R = systemPrompt;
+  let appendSystemPrompt_2;
+  if (systemPrompt === undefined) systemPrompt_2 = "";
+  else if (typeof systemPrompt === "string") systemPrompt_2 = systemPrompt;
+  else if (Array.isArray(systemPrompt)) systemPrompt_2 = systemPrompt;
   else if (systemPrompt.type === "custom") {
-    R = systemPrompt.prompt;
-    P = systemPrompt.snapshot;
+    systemPrompt_2 = systemPrompt.prompt;
+    appendSystemPrompt_2 = systemPrompt.snapshot;
   } else if (systemPrompt.type === "preset") {
     appendSystemPrompt = systemPrompt.append;
     excludeDynamicSections = systemPrompt.excludeDynamicSections;
-    P = systemPrompt.snapshot;
+    appendSystemPrompt_2 = systemPrompt.snapshot;
   }
   process.env.CLAUDE_AGENT_SDK_VERSION = process.env.CLAUDE_AGENT_SDK_VERSION ?? "unknown";
   let {
@@ -423,7 +460,7 @@ function query(options, s) {
     allowedTools = [],
     betas,
     canUseTool,
-    continue: re,
+    continue: continueConversation,
     cwd,
     debug,
     debugFile,
@@ -476,118 +513,119 @@ function query(options, s) {
     skills,
     stderr,
     strictMcpConfig,
-  } = b;
-  let St = permissionMode;
+  } = options_3;
+  let sessionStoreKind = permissionMode;
   if (sessionStore && persistSession === false)
     throw Error(
       "sessionStore cannot be used with persistSession: false -- the storage adapter requires local writes to mirror from. To avoid keeping a local copy, pass env: { ...process.env, CLAUDE_CONFIG_DIR: dir }, where dir is a new private directory such as fs.mkdtempSync(path.join(os.tmpdir(), 'claude-')), and delete dir when the query ends.",
     );
-  $t({
+  assertDialogKindsHandled({
     supportedDialogKinds,
     onUserDialog,
   });
-  let workspaceTrust_2 = Or(workspaceTrust);
-  if (sessionStore && re && !resume && !sessionStore.listSessions)
+  let workspaceTrust_2 = sanitizeWorkspaceTrust(workspaceTrust);
+  if (sessionStore && continueConversation && !resume && !sessionStore.listSessions)
     throw Error("Options.continue with sessionStore requires store.listSessions to be implemented");
   if (sessionStore && enableFileCheckpointing)
     throw Error(
       "enableFileCheckpointing is not yet supported with sessionStore (backup blobs are not mirrored, so rewindFiles() fails after a store-backed resume).",
     );
-  if (sessionStore && b.spawnClaudeCodeProcess)
+  if (sessionStore && options_3.spawnClaudeCodeProcess)
     logForDebugging(
       "sessionStore with custom spawnClaudeCodeProcess: ensure the subprocess CLAUDE_CONFIG_DIR matches the parent (same path, same separators) or transcript_mirror frames will be dropped.",
       {
         level: "warn",
       },
     );
-  Qt(!!canUseTool, St ?? "default", allowedTools);
+  warnIfCanUseToolShadowed(!!canUseTool, sessionStoreKind ?? "default", allowedTools);
   if (pluginDelivery !== "argv" && pluginDelivery !== "initialize")
     throw Error("Invalid pluginDelivery. Expected 'argv' or 'initialize'.");
-  let yt = pluginDelivery === "initialize" && plugins !== undefined && plugins.length > 0;
-  let pathToClaudeCodeExecutable = b.pathToClaudeCodeExecutable;
+  let awaitInitializePlugins = pluginDelivery === "initialize" && plugins !== undefined && plugins.length > 0;
+  let pathToClaudeCodeExecutable = options_3.pathToClaudeCodeExecutable;
   if (!pathToClaudeCodeExecutable) {
-    let O = fileURLToPath(import.meta.url);
-    let U = createRequire(O);
-    let q = Lt((ie) => U.resolve(ie));
-    if (!q)
+    let moduleDir = fileURLToPath(import.meta.url);
+    let packageDir = createRequire(moduleDir);
+    let nativePath = resolveNativeCliPath((specifier) => packageDir.resolve(specifier));
+    if (!nativePath)
       throw Error(
         "Native CLI binary for linux-x64 not found. Reinstall @anthropic-ai/claude-agent-sdk without --omit=optional, or set options.pathToClaudeCodeExecutable.",
       );
-    pathToClaudeCodeExecutable = q;
+    pathToClaudeCodeExecutable = nativePath;
   }
   let schema = outputFormat?.type === "json_schema" ? outputFormat.schema : undefined;
-  let I = env
+  let env_2 = env
     ? {
         ...env,
       }
     : {
         ...process.env,
       };
-  if (!I.CLAUDE_CODE_ENTRYPOINT) I.CLAUDE_CODE_ENTRYPOINT = "sdk-ts";
-  if (!I.CLAUDE_AGENT_SDK_VERSION) I.CLAUDE_AGENT_SDK_VERSION = process.env.CLAUDE_AGENT_SDK_VERSION;
-  if (enableFileCheckpointing) I.CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING = "true";
-  if (!Object.keys(I).some((key) => key.toUpperCase() === "CLAUDE_CODE_SDK_READS_SESSION_STATE"))
-    I.CLAUDE_CODE_SDK_READS_SESSION_STATE = "1";
+  if (!env_2.CLAUDE_CODE_ENTRYPOINT) env_2.CLAUDE_CODE_ENTRYPOINT = "sdk-ts";
+  if (!env_2.CLAUDE_AGENT_SDK_VERSION) env_2.CLAUDE_AGENT_SDK_VERSION = process.env.CLAUDE_AGENT_SDK_VERSION;
+  if (enableFileCheckpointing) env_2.CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING = "true";
+  if (!Object.keys(env_2).some((key) => key.toUpperCase() === "CLAUDE_CODE_SDK_READS_SESSION_STATE"))
+    env_2.CLAUDE_CODE_SDK_READS_SESSION_STATE = "1";
   if (
     readsStartupMarks &&
-    !Object.keys(I).some((key) => key.toUpperCase() === "CLAUDE_CODE_SDK_READS_STARTUP_MARKS")
+    !Object.keys(env_2).some((key) => key.toUpperCase() === "CLAUDE_CODE_SDK_READS_STARTUP_MARKS")
   )
-    I.CLAUDE_CODE_SDK_READS_STARTUP_MARKS = "1";
-  let intLoose = parseIntLoose(I.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS);
+    env_2.CLAUDE_CODE_SDK_READS_STARTUP_MARKS = "1";
+  let intLoose = parseIntLoose(env_2.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS);
   let runEndCeilingMs =
     Number.isFinite(intLoose) && intLoose >= 0 ? intLoose : DEFAULT_PRINT_BG_WAIT_CEILING_MS;
-  if (getOAuthToken) I.CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH = "1";
-  if (getHostAuthToken) I.CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH = "1";
+  if (getOAuthToken) env_2.CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH = "1";
+  if (getHostAuthToken) env_2.CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH = "1";
   if (toolConfig?.askUserQuestion?.previewFormat)
-    I.CLAUDE_CODE_QUESTION_PREVIEW_FORMAT = toolConfig.askUserQuestion.previewFormat;
-  for (let [O, U] of [
+    env_2.CLAUDE_CODE_QUESTION_PREVIEW_FORMAT = toolConfig.askUserQuestion.previewFormat;
+  for (let [flag, envName] of [
     [toolConfig?.askUserQuestion?.extendedQuestions, "CLAUDE_CODE_QUESTION_EXTENDED"],
     [toolConfig?.askUserQuestion?.optionalDescriptions, "CLAUDE_CODE_QUESTION_OPTIONAL_DESCRIPTIONS"],
     [false, "CLAUDE_CODE_AGENT_PROGRESS_SUMMARIES"],
   ])
-    if (O) I[U] = "1";
+    if (flag) env_2[envName] = "1";
     else if (!env) {
-      for (let key of Object.keys(I)) if (key.toUpperCase() === U) delete I[key];
+      for (let key of Object.keys(env_2)) if (key.toUpperCase() === envName) delete env_2[key];
     }
-  let Ve = {};
-  Ue.propagation.inject(Ue.context.active(), Ve);
-  if ("traceparent" in Ve) {
-    for (let O of ["TRACEPARENT", "TRACESTATE"]) if (!(O in (env ?? {}))) delete I[O];
+  let traceHeaders = {};
+  import_api.propagation.inject(import_api.context.active(), traceHeaders);
+  if ("traceparent" in traceHeaders) {
+    for (let headerName of ["TRACEPARENT", "TRACESTATE"])
+      if (!(headerName in (env ?? {}))) delete env_2[headerName];
   }
-  for (let [key, value] of Object.entries(Ve)) {
+  for (let [key, value] of Object.entries(traceHeaders)) {
     let upper = key.toUpperCase();
-    if (!(upper in (env ?? {}))) I[upper] = value;
+    if (!(upper in (env ?? {}))) env_2[upper] = value;
   }
-  let bt = {};
-  let _t = new Map();
+  let fileServers = {};
+  let sdkMcpServers = new Map();
   if (mcpServers)
     for (let [key, value] of Object.entries(mcpServers))
-      if (value.type === "sdk" && value.instance) _t.set(key, value);
-      else bt[key] = value;
-  let Se;
+      if (value.type === "sdk" && value.instance) sdkMcpServers.set(key, value);
+      else fileServers[key] = value;
+  let dialogConfig;
   if (thinking)
     switch (thinking.type) {
       case "adaptive":
-        Se = {
+        dialogConfig = {
           type: "adaptive",
           display: thinking.display,
         };
         break;
       case "enabled":
-        Se = {
+        dialogConfig = {
           type: "enabled",
           budgetTokens: thinking.budgetTokens,
           display: thinking.display,
         };
         break;
       case "disabled":
-        Se = {
+        dialogConfig = {
           type: "disabled",
         };
         break;
     }
   else if (maxThinkingTokens !== undefined)
-    Se =
+    dialogConfig =
       maxThinkingTokens === 0
         ? {
             type: "disabled",
@@ -596,7 +634,7 @@ function query(options, s) {
             type: "enabled",
             budgetTokens: maxThinkingTokens,
           };
-  if (resumeConfigDir) I.CLAUDE_CONFIG_DIR = resumeConfigDir;
+  if (resumeConfigDir) env_2.CLAUDE_CONFIG_DIR = resumeConfigDir;
   let transport = new ProcessTransport({
     abortController,
     additionalDirectories,
@@ -615,10 +653,10 @@ function query(options, s) {
         }
       : extraArgs,
     pathToClaudeCodeExecutable,
-    env: I,
+    env: env_2,
     forkSession,
     stderr,
-    thinkingConfig: Se,
+    thinkingConfig: dialogConfig,
     effort,
     maxTurns,
     maxBudgetUsd,
@@ -626,11 +664,11 @@ function query(options, s) {
     model,
     fallbackModel,
     jsonSchema: schema,
-    permissionMode: St,
+    permissionMode: sessionStoreKind,
     allowDangerouslySkipPermissions,
     permissionPromptToolName,
     permissionPrompts,
-    continueConversation: sessionStore ? undefined : re,
+    continueConversation: sessionStore ? undefined : continueConversation,
     resume,
     resumeSessionAt,
     resumeDropsTurn,
@@ -642,7 +680,7 @@ function query(options, s) {
     allowedTools,
     disallowedTools,
     tools,
-    mcpServers: bt,
+    mcpServers: fileServers,
     strictMcpConfig,
     canUseTool: !!canUseTool,
     hooks: !!hooks,
@@ -651,43 +689,43 @@ function query(options, s) {
     persistSession,
     sessionMirror: !!sessionStore,
     plugins,
-    pluginsViaInitialize: yt,
+    pluginsViaInitialize: awaitInitializePlugins,
     sandbox,
-    spawnClaudeCodeProcess: b.spawnClaudeCodeProcess,
+    spawnClaudeCodeProcess: options_3.spawnClaudeCodeProcess,
     onProcessSpawned: options?.onProcessSpawned,
     deferSpawn,
   });
   let initConfig = {
-    systemPrompt: R,
+    systemPrompt: systemPrompt_2,
     appendSystemPrompt,
-    planModeInstructions: b.planModeInstructions,
-    systemPromptSnapshot: P,
-    appendSubagentSystemPrompt: b.appendSubagentSystemPrompt,
-    toolAliases: b.toolAliases,
-    codeRunningMcpTools: b.codeRunningMcpTools,
+    planModeInstructions: options_3.planModeInstructions,
+    systemPromptSnapshot: appendSystemPrompt_2,
+    appendSubagentSystemPrompt: options_3.appendSubagentSystemPrompt,
+    toolAliases: options_3.toolAliases,
+    codeRunningMcpTools: options_3.codeRunningMcpTools,
     excludeDynamicSections,
     agents,
-    title: b.title,
+    title: options_3.title,
     skills,
-    webSearchIsolationExemptMcpServers: b.webSearchIsolationExemptMcpServers,
-    promptSuggestions: b.promptSuggestions,
-    agentProgressSummaries: b.agentProgressSummaries,
+    webSearchIsolationExemptMcpServers: options_3.webSearchIsolationExemptMcpServers,
+    promptSuggestions: options_3.promptSuggestions,
+    agentProgressSummaries: options_3.agentProgressSummaries,
     forwardSubagentText,
     supportedDialogKinds,
     perTaskStopAffordance,
     rapidFollowupPreempt,
     forwardNestedSubagentToolCalls: options?.forwardNestedSubagentToolCalls,
     workspaceTrust: workspaceTrust_2,
-    plugins: yt ? plugins : undefined,
+    plugins: awaitInitializePlugins ? plugins : undefined,
     captureSdkMcpManifests: !isEnvVarTruthy("CLAUDE_AGENT_SDK_DISABLE_MCP_MANIFESTS"),
   };
-  let Qe = new Query(
+  let query = new Query(
     transport,
     isSingleUserTurn,
     canUseTool,
     hooks,
     abortController,
-    _t,
+    sdkMcpServers,
     schema,
     initConfig,
     onElicitation,
@@ -698,42 +736,42 @@ function query(options, s) {
     runEndCeilingMs,
   );
   if (sessionStore) {
-    let O = () => join(I.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude"), "projects");
-    let U = sessionStoreFlush === "eager";
-    let q = new TranscriptMirrorBatcher(
-      async (ie, Xe) => {
-        let ye = it(ie, O());
-        if (ye) await sessionStore.append(ye, Xe);
+    let projectsDirFn = () => join(env_2.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude"), "projects");
+    let eagerMirror = sessionStoreFlush === "eager";
+    let mirrorBatcher = new TranscriptMirrorBatcher(
+      async (filePath, entries) => {
+        let target = parseMirrorPath(filePath, projectsDirFn());
+        if (target) await sessionStore.append(target, entries);
         else
           logForDebugging(
-            `[SessionStore] dropping mirror frame: filePath ${ie} is not under ${O()} -- subprocess CLAUDE_CONFIG_DIR likely differs from parent (custom spawnClaudeCodeProcess / container?)`,
+            `[SessionStore] dropping mirror frame: filePath ${filePath} is not under ${projectsDirFn()} -- subprocess CLAUDE_CONFIG_DIR likely differs from parent (custom spawnClaudeCodeProcess / container?)`,
             {
               level: "warn",
             },
           );
       },
       {
-        onError: (ie, Xe) => {
-          let ye = it(ie, O());
-          if (ye) Qe.reportMirrorError(ye, Xe.message);
+        onError: (filePath, error) => {
+          let target = parseMirrorPath(filePath, projectsDirFn());
+          if (target) query.reportMirrorError(target, error.message);
         },
-        maxPendingEntries: U ? 0 : Me,
-        maxPendingBytes: U ? 0 : we,
+        maxPendingEntries: eagerMirror ? 0 : DEFAULT_MAX_PENDING_ENTRIES,
+        maxPendingBytes: eagerMirror ? 0 : DEFAULT_MAX_PENDING_BYTES,
       },
     );
-    Qe.setTranscriptMirrorBatcher(q);
+    query.setTranscriptMirrorBatcher(mirrorBatcher);
   }
   return {
-    queryInstance: Qe,
+    queryInstance: query,
     transport,
     abortController,
-    processEnv: I,
+    processEnv: env_2,
     verbatimPrompts,
   };
 }
 //@ chunk-y805ph4h.js:76596-76871 placement
-function ss(queryInstance, s, abortController, verbatimPrompts) {
-  if (typeof s === "string")
+function writeInitialPrompt(queryInstance, prompt, abortController, verbatimPrompts) {
+  if (typeof prompt === "string")
     queryInstance
       .writeAfterInitialize(
         jsonStringify({
@@ -744,7 +782,7 @@ function ss(queryInstance, s, abortController, verbatimPrompts) {
             content: [
               {
                 type: "text",
-                text: s,
+                text: prompt,
               },
             ],
           },
@@ -757,44 +795,45 @@ function ss(queryInstance, s, abortController, verbatimPrompts) {
 `,
       )
       .catch((error) => abortController.abort(error));
-  else queryInstance.streamInput(s).catch((error) => abortController.abort(error));
+  else queryInstance.streamInput(prompt).catch((error) => abortController.abort(error));
 }
 //@ chunk-y805ph4h.js:76871-76935 placement
-var Ar = new Set(["EBUSY", "EMFILE", "ENFILE", "ENOTEMPTY", "EPERM"]);
+var RETRYABLE_RM_ERRORS = new Set(["EBUSY", "EMFILE", "ENFILE", "ENOTEMPTY", "EPERM"]);
 //@ chunk-y805ph4h.js:76935-77083 placement = convertDirectoryToZipInPlace (1)
 /**
  * 带重试的递归删除（EBUSY/EPERM 等最多 5 次）。名字配错。
  */
-async function removeRecursiveWithRetry(e) {
+async function removeRecursiveWithRetry(dirPath) {
   for (let i = 0; ; i++)
     try {
-      return await rm(e, {
+      return await rm(dirPath, {
         recursive: true,
         force: true,
       });
     } catch (error) {
-      if (i >= 4 || !Ar.has(getErrnoCode(error) ?? "")) return;
+      if (i >= 4 || !RETRYABLE_RM_ERRORS.has(getErrnoCode(error) ?? "")) return;
       await sleep((i + 1) * 100);
     }
 }
 //@ chunk-y805ph4h.js:77083-77149 placement
-function xr(transport, s) {
+function cleanupTempDirAfterExit(transport, tempDir) {
   transport
     .waitForExit()
     .catch(() => {})
-    .finally(() => removeRecursiveWithRetry(s));
+    .finally(() => removeRecursiveWithRetry(tempDir));
 }
 //@ chunk-y805ph4h.js:77149-77366 placement
-function jr({ prompt, options }) {
-  if ((options?.resume || options?.continue) && options?.sessionStore) return Ur(prompt, options);
+function startQuery({ prompt, options }) {
+  if ((options?.resume || options?.continue) && options?.sessionStore)
+    return startResumedQuery(prompt, options);
   let { queryInstance, abortController, verbatimPrompts } = query(options, {
     isSingleUserTurn: typeof prompt === "string",
   });
-  ss(queryInstance, prompt, abortController, verbatimPrompts);
+  writeInitialPrompt(queryInstance, prompt, abortController, verbatimPrompts);
   return queryInstance;
 }
 //@ chunk-y805ph4h.js:77366-78058 placement
-function Ur(prompt, options) {
+function startResumedQuery(prompt, options) {
   let { queryInstance, transport, abortController, processEnv, verbatimPrompts } = query(
     {
       ...options,
@@ -804,7 +843,7 @@ function Ur(prompt, options) {
       deferSpawn: true,
     },
   );
-  let h = resolve(options.cwd ?? ".");
+  let projectKey = resolve(options.cwd ?? ".");
   let sessionStore = options.sessionStore;
   let loadTimeoutMs = options.loadTimeoutMs ?? 60000;
   let resume = options.resume;
@@ -812,25 +851,25 @@ function Ur(prompt, options) {
     if (!resume)
       resume = (
         await withTimeout(
-          sessionStore.listSessions(be(h, options.env)),
+          sessionStore.listSessions(projectKeyForCwd(projectKey, options.env)),
           loadTimeoutMs,
           `SessionStore.listSessions() timed out after ${loadTimeoutMs}ms`,
         )
       )
         .slice()
-        .sort((T, E) => E.mtime - T.mtime)[0]?.sessionId;
+        .sort((left, right) => right.mtime - left.mtime)[0]?.sessionId;
     if (!resume) return;
-    return Ir(sessionStore, resume, h, options.env, options.loadTimeoutMs);
+    return restoreSessionFromStore(sessionStore, resume, projectKey, options.env, options.loadTimeoutMs);
   })()
-    .then((R) => {
-      if (R) {
+    .then((resumeDir) => {
+      if (resumeDir) {
         transport.updateResume(resume);
-        let T = {
-          CLAUDE_CONFIG_DIR: R,
+        let envPatch = {
+          CLAUDE_CONFIG_DIR: resumeDir,
         };
-        transport.updateEnv(T);
-        processEnv.CLAUDE_CONFIG_DIR = R;
-        queryInstance.addCleanupCallback(() => xr(transport, R));
+        transport.updateEnv(envPatch);
+        processEnv.CLAUDE_CONFIG_DIR = resumeDir;
+        queryInstance.addCleanupCallback(() => cleanupTempDirAfterExit(transport, resumeDir));
       }
       if (!queryInstance.isClosed()) transport.spawn();
     })
@@ -839,7 +878,7 @@ function Ur(prompt, options) {
       transport.spawnAbort(error_2);
       queryInstance.setError(error_2);
     });
-  ss(queryInstance, prompt, abortController, verbatimPrompts);
+  writeInitialPrompt(queryInstance, prompt, abortController, verbatimPrompts);
   return queryInstance;
 }
-export { sr };
+export { extractSessionIdFromIngressToken, startQuery };

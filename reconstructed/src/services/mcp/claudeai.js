@@ -52,8 +52,8 @@ import { stringArray } from "../../utils/collections.js";
 /**
  * 该服务器是否记录过 claude.ai 配置拉取的暂时失败。
  */
-function hasTransientConfigFailure(e) {
-  return getCliOwnedState().claudeAiConfigsFetchTransientFailures.has(e);
+function hasTransientConfigFailure(flag) {
+  return getCliOwnedState().claudeAiConfigsFetchTransientFailures.has(flag);
 }
 //@ chunk-0qx6sn4e.js:3798-3890 placement
 /**
@@ -70,21 +70,22 @@ function takePendingCrossOrgNotice() {
  * 把 claude.ai 连接器的通知（错误或警告）写到标准错误。
  */
 function printClaudeAiConnectorNotice() {
-  let e = takePendingCrossOrgNotice();
-  if (!e) return;
-  let n = e.level === "error" ? sequential.red(e.message) : sequential.yellow(`\u26A0 ${e.message}`);
-  process.stderr.write(`${n}
+  let notice = takePendingCrossOrgNotice();
+  if (!notice) return;
+  let line =
+    notice.level === "error" ? sequential.red(notice.message) : sequential.yellow(`\u26A0 ${notice.message}`);
+  process.stderr.write(`${line}
 `);
 }
 //@ chunk-0qx6sn4e.js:4035-4271 placement
 function connectorMaxPermissions(tools) {
-  let n = Object.create(null);
-  for (let o of tools ?? []) {
-    if (o.effective_max_permission === undefined) continue;
-    let r = ToolPermissionValueSchema().safeParse(o.effective_max_permission);
-    n[o.name] = r.success ? r.data : "blocked";
+  let permissions = Object.create(null);
+  for (let tool of tools ?? []) {
+    if (tool.effective_max_permission === undefined) continue;
+    let parsed = ToolPermissionValueSchema().safeParse(tool.effective_max_permission);
+    permissions[tool.name] = parsed.success ? parsed.data : "blocked";
   }
-  return Object.keys(n).length > 0 ? n : undefined;
+  return Object.keys(permissions).length > 0 ? permissions : undefined;
 }
 //@ chunk-0qx6sn4e.js:4271-4347 placement
 /**
@@ -119,12 +120,14 @@ async function fetchClaudeAIMcpConfigsIfEligible(credentials) {
   let claudeAiConnectorListGeneration = state.claudeAiConnectorListGeneration;
   let fetchSeq = ++state.claudeAiConnectorListFetchSeq;
   try {
-    let l = isEnvDefinedFalsy(process.env.ENABLE_CLAUDEAI_MCP_SERVERS);
-    let E = hasDisableClaudeAiConnectors();
-    if (l || E) {
-      logForDebugging(`[claudeai-mcp] Disabled via ${l ? "env var" : "disableClaudeAiConnectors setting"}`);
+    let envDisabled = isEnvDefinedFalsy(process.env.ENABLE_CLAUDEAI_MCP_SERVERS);
+    let settingDisabled = hasDisableClaudeAiConnectors();
+    if (envDisabled || settingDisabled) {
+      logForDebugging(
+        `[claudeai-mcp] Disabled via ${envDisabled ? "env var" : "disableClaudeAiConnectors setting"}`,
+      );
       logEvent("tengu_claudeai_mcp_eligibility", {
-        state: l ? lit("disabled_env_var") : lit("disabled_setting"),
+        state: envDisabled ? lit("disabled_env_var") : lit("disabled_setting"),
       });
       return {};
     }
@@ -167,10 +170,10 @@ async function fetchClaudeAIMcpConfigsIfEligible(credentials) {
       return {};
     }
     if (!claudeAIOAuthTokens.scopes?.includes("user:mcp_servers")) {
-      let s = env.CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE
+      let reason = env.CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE
         ? "[claudeai-mcp] inference token lacks user:mcp_servers scope \u2014 claude.ai org connectors disabled (locally-configured MCP servers in managed-mcp.json / .claude.json / .mcp.json are NOT affected by this check)"
         : `[claudeai-mcp] Missing user:mcp_servers scope (scopes=${claudeAIOAuthTokens.scopes?.join(",") || "none"})`;
-      logForDebugging(s);
+      logForDebugging(reason);
       logEvent("tengu_claudeai_mcp_eligibility", {
         state: lit("missing_scope"),
       });
@@ -207,7 +210,7 @@ async function fetchClaudeAIMcpConfigsIfEligible(credentials) {
         break;
       } catch (error) {
         let status = axios_default.isAxiosError(error) ? error.response?.status : undefined;
-        let A = () => {
+        let retryWithoutParam = () => {
           if (url === baseUrl || status === undefined || status === 401 || status === 429) return false;
           logForDebugging(
             `[claudeai-mcp] Connector list request got HTTP ${status}, asking once more without include_additional_installs (a connector's additional accounts will not be listed)`,
@@ -216,28 +219,28 @@ async function fetchClaudeAIMcpConfigsIfEligible(credentials) {
           if (!isTransientNetworkError_2(error)) nonTransientRetries++;
           return true;
         };
-        let S = attempts - nonTransientRetries;
-        if (S >= CLAUDEAI_FETCH_MAX_ATTEMPTS || !isTransientNetworkError_2(error)) {
-          if (A()) continue;
+        let transientAttempts = attempts - nonTransientRetries;
+        if (transientAttempts >= CLAUDEAI_FETCH_MAX_ATTEMPTS || !isTransientNetworkError_2(error)) {
+          if (retryWithoutParam()) continue;
           throw error;
         }
-        let h = backoffDelayMs({
-          attempt: S,
+        let delayMs = backoffDelayMs({
+          attempt: transientAttempts,
           baseMs: CLAUDEAI_RETRY_BASE_MS,
           factor: CLAUDEAI_RETRY_FACTOR,
         });
-        if (Date.now() - now + h + CLAUDEAI_FETCH_TIMEOUT_MS >= CLAUDEAI_RETRY_BUDGET_MS) {
+        if (Date.now() - now + delayMs + CLAUDEAI_FETCH_TIMEOUT_MS >= CLAUDEAI_RETRY_BUDGET_MS) {
           logForDebugging(`[claudeai-mcp] Retry budget exhausted after ${attempts} attempt(s)`);
-          if (A()) continue;
+          if (retryWithoutParam()) continue;
           throw error;
         }
-        let z = axios_default.isAxiosError(error)
+        let errorCode = axios_default.isAxiosError(error)
           ? (error.response?.status ?? error.code ?? "unknown")
           : "unknown";
         logForDebugging(
-          `[claudeai-mcp] Transient fetch error (${z}), retrying in ${h}ms (attempt ${S}/${CLAUDEAI_FETCH_MAX_ATTEMPTS})`,
+          `[claudeai-mcp] Transient fetch error (${errorCode}), retrying in ${delayMs}ms (attempt ${transientAttempts}/${CLAUDEAI_FETCH_MAX_ATTEMPTS})`,
         );
-        await sleep(h);
+        await sleep(delayMs);
       }
     }
     let usedNormalizedNames = new Map();
@@ -247,25 +250,25 @@ async function fetchClaudeAIMcpConfigsIfEligible(credentials) {
         additionalInstalls.push(server);
         continue;
       }
-      let u = normalizeUrlNoTrailingSlash(server.url);
-      let A = usedNormalizedNames.get(u);
-      if (A) {
+      let normalizedUrl = normalizeUrlNoTrailingSlash(server.url);
+      let kept = usedNormalizedNames.get(normalizedUrl);
+      if (kept) {
         logForDebugging(
-          `[claudeai-mcp] Dropping duplicate upstream ${u}: keeping ${A.id}, dropping ${server.id}`,
+          `[claudeai-mcp] Dropping duplicate upstream ${normalizedUrl}: keeping ${kept.id}, dropping ${server.id}`,
         );
         continue;
       }
-      usedNormalizedNames.set(u, server);
+      usedNormalizedNames.set(normalizedUrl, server);
     }
     let configs = {};
     let usedNormalized = new Set([CLAUDE_AI]);
     additionalInstalls.sort(
-      (s, u) =>
-        (Date.parse(s.created_at) || 0) - (Date.parse(u.created_at) || 0) ||
-        (s.id < u.id ? -1 : s.id > u.id ? 1 : 0),
+      (left, right) =>
+        (Date.parse(left.created_at) || 0) - (Date.parse(right.created_at) || 0) ||
+        (left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
     );
-    for (let s of [...usedNormalizedNames.values(), ...additionalInstalls]) {
-      let baseName = `claude.ai ${s.display_name}`;
+    for (let server of [...usedNormalizedNames.values(), ...additionalInstalls]) {
+      let baseName = `claude.ai ${server.display_name}`;
       let finalName = baseName;
       let finalNormalized = normalizeNameForMCP(finalName);
       let count = 1;
@@ -275,23 +278,25 @@ async function fetchClaudeAIMcpConfigsIfEligible(credentials) {
         finalNormalized = normalizeNameForMCP(finalName);
       }
       if (count > 1)
-        logForDebugging(`[claudeai-mcp] Display-name collision: "${finalName}" (${s.id}, ${s.url})`);
+        logForDebugging(
+          `[claudeai-mcp] Display-name collision: "${finalName}" (${server.id}, ${server.url})`,
+        );
       usedNormalized.add(finalNormalized);
       configs[finalName] = {
         type: "claudeai-proxy",
-        url: s.url,
-        id: s.id,
-        displayName: s.display_name,
-        iconUrl: s.icon_url,
+        url: server.url,
+        id: server.id,
+        displayName: server.display_name,
+        iconUrl: server.icon_url,
         scope: "claudeai",
-        toolPermissions: connectorMaxPermissions(s.tools),
-        stateless: s.stateless,
-        cachedInitResponse: s.cached_init_response,
-        discoverSupport: s.discover_support,
-        cachedDiscoverResponse: s.cached_discover_response,
-        eligible: s.eligible,
-        ineligibleReason: s.eligibility_reason,
-        enterpriseManaged: s.enterprise_managed,
+        toolPermissions: connectorMaxPermissions(server.tools),
+        stateless: server.stateless,
+        cachedInitResponse: server.cached_init_response,
+        discoverSupport: server.discover_support,
+        cachedDiscoverResponse: server.cached_discover_response,
+        eligible: server.eligible,
+        ineligibleReason: server.eligibility_reason,
+        enterpriseManaged: server.enterprise_managed,
       };
     }
     logForDebugging(`[claudeai-mcp] Fetched ${Object.keys(configs).length} servers`);
@@ -316,32 +321,34 @@ async function fetchClaudeAIMcpConfigsIfEligible(credentials) {
     }
     return configs;
   } catch (error) {
-    let E = axios_default.isAxiosError(error) ? error : undefined;
-    let status = E?.response?.status;
-    let code = E?.code;
-    let p = String(status ?? code ?? "unknown");
-    logForDebugging(`[claudeai-mcp] Fetch failed (${p}) after ${attempts} attempt(s)`);
+    let axiosError = axios_default.isAxiosError(error) ? error : undefined;
+    let status = axiosError?.response?.status;
+    let code = axiosError?.code;
+    let errorCode = String(status ?? code ?? "unknown");
+    logForDebugging(`[claudeai-mcp] Fetch failed (${errorCode}) after ${attempts} attempt(s)`);
     logEvent("tengu_claudeai_mcp_eligibility", {
       state: lit("fetch_failed"),
       status: fromNumberOpt(status) ?? sanitizedConnectionCodeForTelemetry(code) ?? lit("unknown"),
       attempts,
     });
-    if (p === "401" || p === "403") logFeatureSad("mcp_claudeai_fetch_configs", "fetch_needs_auth");
-    else if (p === "429") logFeatureSad("mcp_claudeai_fetch_configs", "fetch_rate_limited");
-    else if (p === "ECONNABORTED" || p === "ETIMEDOUT")
+    if (errorCode === "401" || errorCode === "403")
+      logFeatureSad("mcp_claudeai_fetch_configs", "fetch_needs_auth");
+    else if (errorCode === "429") logFeatureSad("mcp_claudeai_fetch_configs", "fetch_rate_limited");
+    else if (errorCode === "ECONNABORTED" || errorCode === "ETIMEDOUT")
       logFeatureSad("mcp_claudeai_fetch_configs", "fetch_timeout");
-    else if (/^\d+$/.test(p)) logFeatureBad("mcp_claudeai_fetch_configs", `fetch_failed_http_${p}`);
-    else if (p !== "unknown") logFeatureSad("mcp_claudeai_fetch_configs", "fetch_network_error");
+    else if (/^\d+$/.test(errorCode))
+      logFeatureBad("mcp_claudeai_fetch_configs", `fetch_failed_http_${errorCode}`);
+    else if (errorCode !== "unknown") logFeatureSad("mcp_claudeai_fetch_configs", "fetch_network_error");
     else logFeatureBad("mcp_claudeai_fetch_configs", "fetch_failed");
     state.claudeAiConfigsFetch = null;
-    let y =
-      E !== undefined &&
+    let transient =
+      axiosError !== undefined &&
       (status !== undefined
         ? (status >= 500 && status < 600) || status === 429
         : code !== undefined && RETRYABLE_NETWORK_CODES.has(code));
-    let R = {};
-    if (y) state.claudeAiConfigsFetchTransientFailures.add(R);
-    return R;
+    let emptyConfigs = {};
+    if (transient) state.claudeAiConfigsFetchTransientFailures.add(emptyConfigs);
+    return emptyConfigs;
   } finally {
     if (
       !settled &&
@@ -356,29 +363,29 @@ async function fetchClaudeAIMcpConfigsIfEligible(credentials) {
  * buildConnectorIdIndex：建立连接器 id → {name, config, siblingIds} 索引，additional_install 条目按相同上游 URL 挂到主连接器下。
  */
 function buildConnectorIdIndex(configs, listedServers, primaryByUrl) {
-  let r = new Map();
-  let c = new Map();
+  let index = new Map();
+  let byId = new Map();
   for (let [key, value] of Object.entries(configs)) {
     if (value.type !== "claudeai-proxy") continue;
-    let E = {
+    let entry = {
       name: key,
       config: value,
       siblingIds: [value.id],
     };
-    c.set(value.id, E);
-    r.set(normalizeConnectorId(value.id), E);
+    byId.set(value.id, entry);
+    index.set(normalizeConnectorId(value.id), entry);
   }
   for (let listedServer of listedServers) {
-    let l = normalizeConnectorId(listedServer.id);
-    if (r.has(l)) continue;
-    let E = primaryByUrl.get(normalizeUrlNoTrailingSlash(listedServer.url));
-    let d = E === undefined ? undefined : c.get(E.id);
-    if (d !== undefined) {
-      d.siblingIds.push(listedServer.id);
-      r.set(l, d);
+    let normalizedId = normalizeConnectorId(listedServer.id);
+    if (index.has(normalizedId)) continue;
+    let primary = primaryByUrl.get(normalizeUrlNoTrailingSlash(listedServer.url));
+    let sibling = primary === undefined ? undefined : byId.get(primary.id);
+    if (sibling !== undefined) {
+      sibling.siblingIds.push(listedServer.id);
+      index.set(normalizedId, sibling);
     }
   }
-  return r;
+  return index;
 }
 //@ chunk-0qx6sn4e.js:10132-10217 layout
 /**
@@ -404,14 +411,14 @@ function lookupClaudeAiConnectorById(id) {
       : {
           kind: "pending",
         };
-  let r = claudeAiConnectorIdIndex.get(normalizeConnectorId(id));
-  return r === undefined
+  let entry = claudeAiConnectorIdIndex.get(normalizeConnectorId(id));
+  return entry === undefined
     ? {
         kind: "absent",
       }
     : {
         kind: "found",
-        ...r,
+        ...entry,
       };
 }
 //@ chunk-0qx6sn4e.js:10495-10610 layout
@@ -453,8 +460,8 @@ function recordClaudeAiMcpConnected(name, storageV5) {
 /**
  * isClaudeAiMcpConnectedThisSession：本会话是否连上过该 claude.ai 连接器。
  */
-function isClaudeAiMcpConnectedThisSession(e) {
-  return getCliOwnedState().claudeAiConnectedThisSession.has(e);
+function isClaudeAiMcpConnectedThisSession(serverName) {
+  return getCliOwnedState().claudeAiConnectedThisSession.has(serverName);
 }
 //@ chunk-0qx6sn4e.js:11002-11064 layout
 /**
@@ -510,19 +517,19 @@ function claudeAiConnectorAuthUrl(config) {
   let organizationUuid = getOauthAccountInfo()?.organizationUuid;
   if (!organizationUuid || !config.id) return null;
   let CLAUDE_AI_ORIGIN = getOauthConfig().CLAUDE_AI_ORIGIN;
-  let r = normalizeConnectorId(config.id);
+  let connectorId = normalizeConnectorId(config.id);
   let encoded = encodeURIComponent(env.CLAUDE_CODE_ENTRYPOINT || "cli");
-  return `${CLAUDE_AI_ORIGIN}/api/organizations/${organizationUuid}/mcp/start-auth/${r}?product_surface=${encoded}`;
+  return `${CLAUDE_AI_ORIGIN}/api/organizations/${organizationUuid}/mcp/start-auth/${connectorId}?product_surface=${encoded}`;
 }
 //@ chunk-0qx6sn4e.js:11691-11769 placement
 /**
  * 判断该工具是否需要连接器授权。
  */
-function requiresConnectorGrant(e, config) {
+function requiresConnectorGrant(serverName, config) {
   return (
-    normalizeNameForMCP(e).startsWith(CLAUDE_AI_2) &&
+    normalizeNameForMCP(serverName).startsWith(CLAUDE_AI_2) &&
     config.scope !== "claudeai" &&
-    !isMintedDynamicServer(e, config)
+    !isMintedDynamicServer(serverName, config)
   );
 }
 //@ chunk-0qx6sn4e.js:11769-11979 placement
@@ -542,8 +549,8 @@ function requiresConnectorGrant_2(tool) {
 /**
  * 判断是否为已铸币（minted）的动态服务器。
  */
-function isMintedDynamicServer(e, n) {
-  return n.scope === "dynamic" && !isPluginServerConfig(n) && !moduleStore.minted(e);
+function isMintedDynamicServer(serverName, config) {
+  return config.scope === "dynamic" && !isPluginServerConfig(config) && !moduleStore.minted(serverName);
 }
 export {
   requiresConnectorGrant_2,

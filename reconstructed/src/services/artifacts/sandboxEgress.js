@@ -19,18 +19,18 @@ import { ATTESTATION_KIND_TTL_MS } from "./attestation.js";
 /**
  * 记录（或撤销）某环境的沙箱出口网络设置，并写调试日志。
  */
-function setSandboxEgress(env, n) {
+function setSandboxEgress(env, envArg) {
   let liveState = getLiveState();
-  if (n === undefined) {
+  if (envArg === undefined) {
     if (liveState.sandboxEgress.delete(env))
       logForDebugging(`[artifact] sandbox egress setting for ${env} withdrawn`);
     return;
   }
   liveState.sandboxEgress.set(env, {
-    setting: n,
+    setting: envArg,
     at: Date.now(),
   });
-  logForDebugging(`[artifact] sandbox egress setting for ${env}: ${n}`);
+  logForDebugging(`[artifact] sandbox egress setting for ${env}: ${envArg}`);
 }
 //@ chunk-jv307fw4.js:21352-21536 placement
 /**
@@ -39,8 +39,8 @@ function setSandboxEgress(env, n) {
 function isSandboxEgressDisabled(env_2 = claudeAiEnvironment()) {
   if (!isRemoteEnvironmentAny())
     return env.CLAUDE_CODE_REMOTE === true && !isBridgeEnvironment() ? undefined : false;
-  let n = getLiveState().sandboxEgress.get(env_2);
-  if (n === undefined || Date.now() - n.at >= ATTESTATION_KIND_TTL_MS) return;
-  return n.setting === "disabled";
+  let egress = getLiveState().sandboxEgress.get(env_2);
+  if (egress === undefined || Date.now() - egress.at >= ATTESTATION_KIND_TTL_MS) return;
+  return egress.setting === "disabled";
 }
 export { setSandboxEgress, isSandboxEgressDisabled };

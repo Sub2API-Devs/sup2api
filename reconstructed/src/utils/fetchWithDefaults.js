@@ -25,20 +25,20 @@ function headersToObject(headers) {
 /**
  * 包装 fetch，使每次请求合并默认 init（请求头逐项合并）。
  */
-function createFetchWithDefaults(e = fetch, t) {
-  if (!t) return e;
-  return async (r, s) => {
-    let a = {
-      ...t,
-      ...s,
-      headers: s?.headers
+function createFetchWithDefaults(baseFetch = fetch, defaults) {
+  if (!defaults) return baseFetch;
+  return async (url, init) => {
+    let merged = {
+      ...defaults,
+      ...init,
+      headers: init?.headers
         ? {
-            ...headersToObject(t.headers),
-            ...headersToObject(s.headers),
+            ...headersToObject(defaults.headers),
+            ...headersToObject(init.headers),
           }
-        : t.headers,
+        : defaults.headers,
     };
-    return e(r, a);
+    return baseFetch(url, merged);
   };
 }
 export { createFetchWithDefaults, headersToObject };

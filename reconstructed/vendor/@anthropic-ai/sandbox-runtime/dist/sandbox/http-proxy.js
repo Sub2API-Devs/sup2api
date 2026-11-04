@@ -17,7 +17,7 @@ import {
 import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
 import { encodedCommandFromProxyUser } from "./sandbox-utils.js";
 import {
-  Pm,
+  rawDenied,
   respondDenied,
   readRequestTarget,
   requestTargetAsSpelled,
@@ -32,7 +32,7 @@ import {
 } from "./request-filter.js";
 import {
   canonicalizeHost,
-  RTt,
+  formatAuthority,
   shouldBypassParentProxy,
   selectParentProxyUrl,
   openConnectTunnel,
@@ -46,15 +46,20 @@ import {
   onUpstreamError,
 } from "./parent-proxy.js";
 import { peekForClientHello, terminateAndForward } from "./tls-terminate-proxy.js";
-import { ol } from "./resolved-address-guard.js";
+import { isResolvedAddressDeniedError } from "./resolved-address-guard.js";
 import { CRL_PATH } from "./mitm-ca.js";
 import { prepareBodySubstitution } from "./body-substitution.js";
+import { deferInit } from "../../../../../runtime/deferred-init.js";
 
 //@ chunk-fq0cr76a.js:682727-682816 esm-fingerprint
-var ALLOWLIST_DENY = ["Connection blocked by network allowlist", "blocked-by-allowlist"];
-var handedIn = new WeakSet();
+var ALLOWLIST_DENY; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var handedIn;
+deferInit("chunk-fq0cr76a.js:682727", () => {
+  ALLOWLIST_DENY = ["Connection blocked by network allowlist", "blocked-by-allowlist"];
+  handedIn = new WeakSet();
+});
 //@ chunk-fq0cr76a.js:682816-693701 esm-fingerprint
-function hR(options) {
+function createHttpProxyServer(options) {
   if (options.mitmCA) assertTlsTerminationSupported();
   let server = createServer_2(
     options.maxHeaderSize !== undefined
@@ -207,14 +212,14 @@ ${mark}\r
       let { hostname: requestedHost, port } = target;
       let reason;
       if (
-        !(await options.filter(port, requestedHost, socket, auth.encodedCommand, (Me) => {
-          reason = Me;
+        !(await options.filter(port, requestedHost, socket, auth.encodedCommand, (encodedCommand_2) => {
+          reason = encodedCommand_2;
         }))
       ) {
         logForDebugging_2(`Connection blocked to ${requestedHost}:${port}`, {
           level: "error",
         });
-        endWithStatus(Pm(...allowlistDeny, reason));
+        endWithStatus(rawDenied(...allowlistDeny, reason));
         return;
       }
       if (clientGone || socket.destroyed) {
@@ -235,7 +240,7 @@ ${mark}\r
             });
             options.onFilterRequestDenied?.({
               method: "CONNECT",
-              url: RTt(hostname, port, 0),
+              url: formatAuthority(hostname, port, 0),
               reason,
               encodedCommand: auth.encodedCommand,
             });
@@ -330,7 +335,7 @@ too many TLS-terminated tunnels at once`);
           );
           options.onFilterRequestDenied?.({
             method: "CONNECT",
-            url: RTt(hostname, port, 0),
+            url: formatAuthority(hostname, port, 0),
             reason: "tunnel carries no TLS and cannot be inspected",
             encodedCommand: auth.encodedCommand,
           });
@@ -342,11 +347,13 @@ too many TLS-terminated tunnels at once`);
       } else if (options.refuseOpaqueTunnels) {
         options.onFilterRequestDenied?.({
           method: "CONNECT",
-          url: RTt(hostname, port, 0),
+          url: formatAuthority(hostname, port, 0),
           reason: "this proxy does not tunnel CONNECTs it cannot inspect",
           encodedCommand: auth.encodedCommand,
         });
-        endWithStatus(Pm("this proxy does not tunnel CONNECTs it cannot inspect", markFor("opaque_tunnel")));
+        endWithStatus(
+          rawDenied("this proxy does not tunnel CONNECTs it cannot inspect", markFor("opaque_tunnel")),
+        );
         return;
       } else if (options.mitmCA)
         logForDebugging_2(`[tls-terminate] policy exempts ${hostname}:${port}; opaque-tunnelling`);
@@ -377,7 +384,8 @@ too many TLS-terminated tunnels at once`);
           level: "error",
         });
         if (wrote200) socket.destroy();
-        else if (ol(err)) endWithStatus(Pm(err.message, markFor("address_not_allowed"), err.reason));
+        else if (isResolvedAddressDeniedError(err))
+          endWithStatus(rawDenied(err.message, markFor("address_not_allowed"), err.reason));
         else
           endWithStatus(`HTTP/1.1 502 Bad Gateway\r
 \r
@@ -469,7 +477,7 @@ too many TLS-terminated tunnels at once`);
       }
       if (req.socket.destroyed) return;
       let hostname = canonicalizeHost(requestedHost) ?? requestedHost;
-      let authority = RTt(hostname, port, defaultPort);
+      let authority = formatAuthority(hostname, port, defaultPort);
       let fwdHeaders = {
         ...stripHopByHop(req.headers, {
           folded: options.foldHopByHop,
@@ -739,4 +747,4 @@ function isAsciiAuthority(raw, absolute) {
   if (isIP(host) === 4) return true;
   return /^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.?$/.test(host);
 }
-export { hR };
+export { createHttpProxyServer };

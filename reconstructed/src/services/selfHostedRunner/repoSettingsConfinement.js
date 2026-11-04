@@ -42,446 +42,464 @@ import {
 class RepoSettingsRejectedError extends Error {
   entry;
   detail;
-  constructor(e, n) {
+  constructor(entry, detail) {
     super(
-      `[runner:session] repo-committed ${e.kind} entry '${e.raw}' in ${e.sourceFile} ${n} \u2014 refusing to spawn. Host-specific write-scope entries belong in the operator's user-level settings.json (userSettings source, not trust-gated \u2014 see --trust-workspace docs).`,
+      `[runner:session] repo-committed ${entry.kind} entry '${entry.raw}' in ${entry.sourceFile} ${detail} \u2014 refusing to spawn. Host-specific write-scope entries belong in the operator's user-level settings.json (userSettings source, not trust-gated \u2014 see --trust-workspace docs).`,
     );
-    this.entry = e;
-    this.detail = n;
+    this.entry = entry;
+    this.detail = detail;
   }
 }
 //@ chunk-hm0ce8vc.js:195571-203425 placement
 /**
  * 扫描仓库 .claude/settings*.json 等，发现主机特定写入范围条目则拒绝启动（SETUP_FAILURE_KIND_REPO_SETTINGS_REJECTED）。
  */
-async function checkRepoCommittedSettings(e, n, r) {
-  let s = [];
-  let a = (A) => tagFailureStage(A, "SETUP_FAILURE_KIND_REPO_SETTINGS_REJECTED");
-  let o = (path, G, K) => (L) => {
-    let errnoCode = getErrnoCode(L);
+async function checkRepoCommittedSettings(rootDir, extraDirs, findings) {
+  let entries = [];
+  let reject = (error) => tagFailureStage(error, "SETUP_FAILURE_KIND_REPO_SETTINGS_REJECTED");
+  let onStatError = (path, entryInfo, opName) => (error) => {
+    let errnoCode = getErrnoCode(error);
     if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR") return;
     throw new RepoSettingsRejectedError(
       {
-        ...G,
+        ...entryInfo,
         path,
         kind: "scan-fs-error",
       },
-      `could not be probed (${K} failed: ${L instanceof Error ? L.message : String(L)}) \u2014 refusing rather than fold a non-ENOENT error into "does not exist" (fail-closed)`,
+      `could not be probed (${opName} failed: ${error instanceof Error ? error.message : String(error)}) \u2014 refusing rather than fold a non-ENOENT error into "does not exist" (fail-closed)`,
     );
   };
-  let l = (A) => isNetworkRelatedPath(A) || isDevicePrefixPath(A);
-  let u = 4096;
-  let h;
-  let p = () =>
-    (h ??= withFsOpTimeout(
-      realpath(e).catch(() => null),
-      `realpath ${e}`,
+  let isNetworkLikePath = (path) => isNetworkRelatedPath(path) || isDevicePrefixPath(path);
+  let maxPathBytes = 4096;
+  let rootRealpath;
+  let resolveRoot = () =>
+    (rootRealpath ??= withFsOpTimeout(
+      realpath(rootDir).catch(() => null),
+      `realpath ${rootDir}`,
     ));
-  let S = new Map();
-  let T = async (A) => {
-    let G = await p();
-    let K = S.get(A);
-    if (K === undefined) {
+  let screenCache = new Map();
+  let screenPath = async (path) => {
+    let rootReal = await resolveRoot();
+    let cached = screenCache.get(path);
+    if (cached === undefined) {
       let abortController = new AbortController();
-      K = {
-        verdict: examineEntryChain(A, G, {
+      cached = {
+        verdict: examineEntryChain(path, rootReal, {
           signal: abortController.signal,
         }),
         walk: abortController,
       };
-      S.set(A, K);
+      screenCache.set(path, cached);
     }
     try {
-      return await withBoundedTimeout(K.verdict, FS_OP_TIMEOUT_MS, `network-path screen of ${A}`);
+      return await withBoundedTimeout(cached.verdict, FS_OP_TIMEOUT_MS, `network-path screen of ${path}`);
     } catch (error) {
-      K.walk.abort();
+      cached.walk.abort();
       throw error;
     }
   };
-  let y = async (path, G) => {
-    if (isUncOrDevicePath(path) || l(path)) return;
+  let probeEntryPath = async (path, entryInfo) => {
+    if (isUncOrDevicePath(path) || isNetworkLikePath(path)) return;
     if (Buffer.byteLength(path) > 4096)
       throw new RepoSettingsRejectedError(
         {
-          ...G,
+          ...entryInfo,
           path,
           kind: "scan-fs-error",
         },
         `could not be probed (its resolved path is ${Buffer.byteLength(path)} bytes; this scan examines paths up to ${"4096"} bytes) \u2014 refusing rather than examine it (fail-closed)`,
       );
-    let K = await T(path).catch((error) => {
+    let screen = await screenPath(path).catch((error) => {
       throw new RepoSettingsRejectedError(
         {
-          ...G,
+          ...entryInfo,
           path,
           kind: "scan-fs-error",
         },
         `could not be probed (${errorMessage(error)} \u2014 a hung mount on that path, or a symlink chain in the checkout too long to examine in time) \u2014 refusing rather than resolve through an unexamined path (fail-closed)`,
       );
     });
-    if (K.verdict === "unverified")
+    if (screen.verdict === "unverified")
       throw new RepoSettingsRejectedError(
         {
-          ...G,
+          ...entryInfo,
           path,
           kind: "scan-fs-error",
         },
         `could not be probed (its resolved path '${path}' could not be inspected without following links \u2014 a permission, I/O or resource error on a directory or link on it, a link whose target could not be read, or too many symlinks on the path; check that path on the runner host) \u2014 refusing rather than resolve through it (fail-closed)`,
       );
-    if (K.verdict !== "clean")
+    if (screen.verdict !== "clean")
       throw new RepoSettingsRejectedError(
         {
-          ...G,
+          ...entryInfo,
           path,
         },
-        `resolves to '${path}', where a symlink on the path leads to the network path '${K.reaches}' \u2014 resolving it would reach the network before any trust decision; refused without resolving (fail-closed)`,
+        `resolves to '${path}', where a symlink on the path leads to the network path '${screen.reaches}' \u2014 resolving it would reach the network before any trust decision; refused without resolving (fail-closed)`,
       );
-    let L = await withFsOpTimeout(realpath(path).catch(o(path, G, "realpath")), `realpath ${path}`);
-    if (L !== undefined) return L;
-    let D = path;
+    let realPath = await withFsOpTimeout(
+      realpath(path).catch(onStatError(path, entryInfo, "realpath")),
+      `realpath ${path}`,
+    );
+    if (realPath !== undefined) return realPath;
+    let candidate = path;
     for (let j = 0; j < 64; j++) {
-      let ge = await withFsOpTimeout(lstat(D).catch(o(path, G, "lstat")), `lstat ${D}`);
-      if (ge?.isSymbolicLink())
+      let stats = await withFsOpTimeout(
+        lstat(candidate).catch(onStatError(path, entryInfo, "lstat")),
+        `lstat ${candidate}`,
+      );
+      if (stats?.isSymbolicLink())
         throw new RepoSettingsRejectedError(
           {
-            ...G,
+            ...entryInfo,
             path,
           },
-          `traverses a symlink at ${D} whose target path cannot be realpath'd \u2014 a repo-shipped link (dangling, or pointing outside the workspace with a nonexistent leaf) can be retargeted at use time`,
+          `traverses a symlink at ${candidate} whose target path cannot be realpath'd \u2014 a repo-shipped link (dangling, or pointing outside the workspace with a nonexistent leaf) can be retargeted at use time`,
         );
-      if (ge !== undefined) return;
-      let Ne = dirname(D);
-      if (Ne === D) return;
-      D = Ne;
+      if (stats !== undefined) return;
+      let parent = dirname(candidate);
+      if (parent === candidate) return;
+      candidate = parent;
     }
     throw new RepoSettingsRejectedError(
       {
-        ...G,
+        ...entryInfo,
         path,
       },
       "has too many nonexistent path components (ancestor-walk hop bound exhausted) \u2014 refusing rather than skip the symlink probe",
     );
   };
-  let v = async (path, G) => {
+  let checkDotDotSegment = async (path, entryInfo) => {
     if (!isAbsolute(path)) return;
-    let filtered = path.split(sep).filter((D) => D.length > 0);
+    let filtered = path.split(sep).filter((segment) => segment.length > 0);
     if (!filtered.includes("..")) return;
-    if (l(path))
+    if (isNetworkLikePath(path))
       throw new RepoSettingsRejectedError(
         {
-          ...G,
+          ...entryInfo,
           path,
         },
         "names an automount/NT-namespace-transiting spelling with '..' \u2014 the kernel-divergence probe cannot run without performing the automount lookup itself; refusing (fail-closed)",
       );
-    let L = path.startsWith(sep) ? sep : "";
-    for (let D of filtered) {
-      if (D === ".") continue;
-      if (D === "..") {
-        L = dirname(L);
+    let prefix = path.startsWith(sep) ? sep : "";
+    for (let segment of filtered) {
+      if (segment === ".") continue;
+      if (segment === "..") {
+        prefix = dirname(prefix);
         continue;
       }
-      L = L === sep ? sep + D : join(L, D);
-      let oe = await withFsOpTimeout(lstat(L).catch(o(path, G, "lstat")), `lstat ${L}`);
-      if (oe?.isSymbolicLink())
+      prefix = prefix === sep ? sep + segment : join(prefix, segment);
+      let stats = await withFsOpTimeout(
+        lstat(prefix).catch(onStatError(path, entryInfo, "lstat")),
+        `lstat ${prefix}`,
+      );
+      if (stats?.isSymbolicLink())
         throw new RepoSettingsRejectedError(
           {
-            ...G,
+            ...entryInfo,
             path,
           },
-          `contains a '..' after symlink ${L} \u2014 the kernel resolves the symlink before the '..' at bind time, diverging from the lexically-collapsed form the confine check saw`,
+          `contains a '..' after symlink ${prefix} \u2014 the kernel resolves the symlink before the '..' at bind time, diverging from the lexically-collapsed form the confine check saw`,
         );
-      if (oe === undefined) return;
+      if (stats === undefined) return;
     }
   };
-  let w = (A) => {
-    let G = removeTrailingGlobSuffix(A) || sep;
-    return expandPath(G, e);
+  let projectPath = (rawPath) => {
+    let expanded = removeTrailingGlobSuffix(rawPath) || sep;
+    return expandPath(expanded, rootDir);
   };
-  let E = (A) => removeTrailingGlobSuffix(A) || sep;
-  for (let A of new Set([e, ...n])) {
-    let G = join(A, ".claude");
-    let K = await withFsOpTimeout(
-      lstat(G).catch((error) => {
+  let normalizePath = (rawPath) => removeTrailingGlobSuffix(rawPath) || sep;
+  for (let workspacePath of new Set([rootDir, ...extraDirs])) {
+    let claudeDir = join(workspacePath, ".claude");
+    let dirStats = await withFsOpTimeout(
+      lstat(claudeDir).catch((error) => {
         if (isENOENT(error)) return;
         throw error;
       }),
-      `lstat ${G}`,
+      `lstat ${claudeDir}`,
     );
-    if (K === undefined) continue;
-    if (K.isSymbolicLink())
+    if (dirStats === undefined) continue;
+    if (dirStats.isSymbolicLink())
       throw new RepoSettingsRejectedError(
         {
-          path: G,
-          sourceFile: G,
+          path: claudeDir,
+          sourceFile: claudeDir,
           raw: ".claude",
           kind: "permissions.additionalDirectories",
         },
         "is a symlink \u2014 refusing to follow (the settings read below would escape the workspace)",
       );
-    for (let L of ["settings.json", "settings.local.json"]) {
-      let D = join(G, L);
-      let oe = await withFsOpTimeout(
-        lstat(D).catch((error) => {
+    for (let fileName of ["settings.json", "settings.local.json"]) {
+      let settingsPath = join(claudeDir, fileName);
+      let fileStats = await withFsOpTimeout(
+        lstat(settingsPath).catch((error) => {
           if (isENOENT(error)) return;
-          let fe = new RepoSettingsRejectedError(
+          let rejection = new RepoSettingsRejectedError(
             {
-              path: D,
-              sourceFile: D,
-              raw: L,
+              path: settingsPath,
+              sourceFile: settingsPath,
+              raw: fileName,
               kind: "scan-fs-error",
             },
             `could not be lstat'd (${error instanceof Error ? error.message : String(error)}) \u2014 refusing rather than skip the scan`,
           );
-          throw getErrnoCode(error) === "ENOTDIR" ? a(fe) : fe;
+          throw getErrnoCode(error) === "ENOTDIR" ? reject(rejection) : rejection;
         }),
-        `lstat ${D}`,
+        `lstat ${settingsPath}`,
       );
-      if (oe === undefined) continue;
-      if (oe.isSymbolicLink())
+      if (fileStats === undefined) continue;
+      if (fileStats.isSymbolicLink())
         throw new RepoSettingsRejectedError(
           {
-            path: D,
-            sourceFile: D,
-            raw: L,
+            path: settingsPath,
+            sourceFile: settingsPath,
+            raw: fileName,
             kind: "permissions.additionalDirectories",
           },
           "is a symlink \u2014 refusing to follow (the settings read below would escape the workspace; same posture as the .claude-dir lstat guard)",
         );
-      let ge;
+      let content;
       try {
-        ge = await withFsOpTimeout(
-          readFileChecked(D, MAX_SETTINGS_JSON_BYTES).then((fileChecked) => fileChecked.content),
-          `readFile ${D}`,
+        content = await withFsOpTimeout(
+          readFileChecked(settingsPath, MAX_SETTINGS_JSON_BYTES).then((fileChecked) => fileChecked.content),
+          `readFile ${settingsPath}`,
         );
       } catch (error) {
         if (isENOENT(error)) continue;
-        let fe = new RepoSettingsRejectedError(
+        let rejection = new RepoSettingsRejectedError(
           {
-            path: D,
-            sourceFile: D,
-            raw: L,
+            path: settingsPath,
+            sourceFile: settingsPath,
+            raw: fileName,
             kind: "scan-fs-error",
           },
           `could not be read (${error instanceof Error ? error.message : String(error)}) \u2014 refusing rather than skip the scan`,
         );
-        throw isEISDIR(error) || isFileTooLargeError(error) ? a(fe) : fe;
+        throw isEISDIR(error) || isFileTooLargeError(error) ? reject(rejection) : rejection;
       }
-      let me = safeParseJSON(ge, false);
-      if (r && (A === e || e.startsWith(A + sep)) && me?.disableAllHooks === true)
-        r.repoDisablesAllHooks = true;
+      let settings = safeParseJSON(content, false);
       if (
-        me?.env !== undefined &&
-        me?.env !== null &&
-        typeof me.env === "object" &&
-        Object.keys(me.env).length > 0
+        findings &&
+        (workspacePath === rootDir || rootDir.startsWith(workspacePath + sep)) &&
+        settings?.disableAllHooks === true
+      )
+        findings.repoDisablesAllHooks = true;
+      if (
+        settings?.env !== undefined &&
+        settings?.env !== null &&
+        typeof settings.env === "object" &&
+        Object.keys(settings.env).length > 0
       )
         throw new RepoSettingsRejectedError(
           {
-            path: D,
-            sourceFile: D,
-            raw: `env: {${Object.keys(me.env).slice(0, 3).join(", ")}${Object.keys(me.env).length > 3 ? ", \u2026" : ""}}`,
+            path: settingsPath,
+            sourceFile: settingsPath,
+            raw: `env: {${Object.keys(settings.env).slice(0, 3).join(", ")}${Object.keys(settings.env).length > 3 ? ", \u2026" : ""}}`,
             kind: "operator-posture override",
           },
           "sets env vars that reach every child subprocess (BASH_ENV/LD_PRELOAD/NODE_OPTIONS/GIT_* are unsandboxed-exec inlets). Runner-level env belongs in the operator wrapper script or runner env, not repo settings",
         );
-      for (let [ae, fe, $e] of [
-        ["sandbox.enabled", me?.sandbox?.enabled, false],
-        ["disableAllHooks", me?.disableAllHooks, false],
-        ["sandbox.allowUnsandboxedCommands", me?.sandbox?.allowUnsandboxedCommands, true],
-        ["sandbox.failIfUnavailable", me?.sandbox?.failIfUnavailable, false],
+      for (let [postureName, actual, forbidden] of [
+        ["sandbox.enabled", settings?.sandbox?.enabled, false],
+        ["disableAllHooks", settings?.disableAllHooks, false],
+        ["sandbox.allowUnsandboxedCommands", settings?.sandbox?.allowUnsandboxedCommands, true],
+        ["sandbox.failIfUnavailable", settings?.sandbox?.failIfUnavailable, false],
       ])
-        if (fe === $e)
+        if (actual === forbidden)
           throw new RepoSettingsRejectedError(
             {
-              path: D,
-              sourceFile: D,
-              raw: `${ae}: ${String($e)}`,
+              path: settingsPath,
+              sourceFile: settingsPath,
+              raw: `${postureName}: ${String(forbidden)}`,
               kind: "operator-posture override",
             },
-            `negates the operator's ${ae} posture (projectSettings overrides userSettings in the merged read). Remove it from the repo settings; operator posture belongs in the user-level settings.json`,
+            `negates the operator's ${postureName} posture (projectSettings overrides userSettings in the merged read). Remove it from the repo settings; operator posture belongs in the user-level settings.json`,
           );
-      let permissions = me?.permissions;
+      let permissions = settings?.permissions;
       let allow = Array.isArray(permissions?.allow) ? permissions.allow : [];
-      for (let ae of allow) {
-        if (typeof ae !== "string") continue;
-        let fe = permissionRuleValueFromString(ae);
-        if (![FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME].includes(fe.toolName))
+      for (let rule of allow) {
+        if (typeof rule !== "string") continue;
+        let parsedRule = permissionRuleValueFromString(rule);
+        if (
+          ![FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME].includes(parsedRule.toolName)
+        )
           continue;
-        if (fe.ruleContent === undefined) {
-          s.push({
+        if (parsedRule.ruleContent === undefined) {
+          entries.push({
             path: sep,
-            sourceFile: D,
-            raw: ae,
+            sourceFile: settingsPath,
+            raw: rule,
             kind: "permissions.allow (bare write-tool rule)",
           });
           continue;
         }
-        let { root } = patternWithRootFor(fe.ruleContent, A);
+        let { root } = patternWithRootFor(parsedRule.ruleContent, workspacePath);
         {
-          let Fe = {
-            sourceFile: D,
-            raw: ae,
+          let entryInfo = {
+            sourceFile: settingsPath,
+            raw: rule,
             kind: "permissions.allow (sandbox-arm projection)",
           };
-          let ve;
-          let Ae;
+          let projectedPath;
+          let resolvedPath;
           try {
-            ve = resolvePathPatternForSandboxAt(parseRuleForSandbox(ae).ruleContent ?? fe.ruleContent, A);
-            Ae = w(ve);
+            projectedPath = resolvePathPatternForSandboxAt(
+              parseRuleForSandbox(rule).ruleContent ?? parsedRule.ruleContent,
+              workspacePath,
+            );
+            resolvedPath = projectPath(projectedPath);
           } catch (error) {
             throw new RepoSettingsRejectedError(
               {
-                ...Fe,
-                path: fe.ruleContent,
+                ...entryInfo,
+                path: parsedRule.ruleContent,
               },
               `could not be resolved (${error instanceof Error ? error.message : String(error)}) \u2014 refusing rather than trust an entry the confine check cannot project`,
             );
           }
-          s.push({
-            ...Fe,
-            path: Ae,
+          entries.push({
+            ...entryInfo,
+            path: resolvedPath,
           });
-          let Ht = await y(Ae, Fe);
-          if (Ht !== undefined && Ht !== Ae)
-            s.push({
-              ...Fe,
-              path: Ht,
+          let realPath = await probeEntryPath(resolvedPath, entryInfo);
+          if (realPath !== undefined && realPath !== resolvedPath)
+            entries.push({
+              ...entryInfo,
+              path: realPath,
             });
-          await v(E(ve), Fe);
+          await checkDotDotSegment(normalizePath(projectedPath), entryInfo);
         }
         if (root === null) continue;
-        let Ve = {
-          sourceFile: D,
-          raw: ae,
+        let entryInfo = {
+          sourceFile: settingsPath,
+          raw: rule,
           kind: "permissions.allow",
         };
-        s.push({
-          ...Ve,
+        entries.push({
+          ...entryInfo,
           path: root,
         });
-        let Be = await y(root, Ve);
-        if (Be !== undefined && Be !== root)
-          s.push({
-            ...Ve,
-            path: Be,
+        let realPath = await probeEntryPath(root, entryInfo);
+        if (realPath !== undefined && realPath !== root)
+          entries.push({
+            ...entryInfo,
+            path: realPath,
           });
       }
-      for (let [ae, fe] of [
-        ["allowWrite", me?.sandbox?.filesystem?.allowWrite],
-        ["allowRead", me?.sandbox?.filesystem?.allowRead],
+      for (let [listName, list] of [
+        ["allowWrite", settings?.sandbox?.filesystem?.allowWrite],
+        ["allowRead", settings?.sandbox?.filesystem?.allowRead],
       ]) {
-        if (!Array.isArray(fe)) continue;
-        for (let $e of fe) {
-          if (typeof $e !== "string") continue;
-          let Ve = {
-            sourceFile: D,
-            raw: $e,
-            kind: `sandbox.filesystem.${ae}`,
+        if (!Array.isArray(list)) continue;
+        for (let dirEntry of list) {
+          if (typeof dirEntry !== "string") continue;
+          let entryInfo = {
+            sourceFile: settingsPath,
+            raw: dirEntry,
+            kind: `sandbox.filesystem.${listName}`,
           };
-          let Be;
-          let Fe;
+          let resolvedPath;
+          let projectedPath;
           try {
-            Fe = resolveSandboxFilesystemPathAt($e, A);
-            Be = w(Fe);
+            projectedPath = resolveSandboxFilesystemPathAt(dirEntry, workspacePath);
+            resolvedPath = projectPath(projectedPath);
           } catch (error) {
             throw new RepoSettingsRejectedError(
               {
-                ...Ve,
-                path: $e,
+                ...entryInfo,
+                path: dirEntry,
               },
               `could not be resolved (${error instanceof Error ? error.message : String(error)}) \u2014 refusing rather than trust an entry the confine check cannot project`,
             );
           }
-          s.push({
-            ...Ve,
-            path: Be,
+          entries.push({
+            ...entryInfo,
+            path: resolvedPath,
           });
-          let ve = await y(Be, Ve);
-          if (ve !== undefined && ve !== Be)
-            s.push({
-              ...Ve,
-              path: ve,
+          let realPath = await probeEntryPath(resolvedPath, entryInfo);
+          if (realPath !== undefined && realPath !== resolvedPath)
+            entries.push({
+              ...entryInfo,
+              path: realPath,
             });
-          await v(E(Fe), Ve);
+          await checkDotDotSegment(normalizePath(projectedPath), entryInfo);
         }
       }
       let additionalDirectories = permissions?.additionalDirectories;
       if (!Array.isArray(additionalDirectories)) continue;
       for (let additionalDirectory of additionalDirectories) {
         if (typeof additionalDirectory !== "string") continue;
-        let fe = {
-          sourceFile: D,
+        let entryInfo = {
+          sourceFile: settingsPath,
           raw: additionalDirectory,
           kind: "permissions.additionalDirectories",
         };
-        let $e;
+        let resolvedPath;
         try {
-          $e = resolve(expandPath(additionalDirectory, e));
+          resolvedPath = resolve(expandPath(additionalDirectory, rootDir));
         } catch (error) {
           throw new RepoSettingsRejectedError(
             {
-              ...fe,
+              ...entryInfo,
               path: String(additionalDirectory),
             },
             `could not be resolved (${error instanceof Error ? error.message : String(error)}) \u2014 refusing rather than trust an entry the confine check cannot project`,
           );
         }
-        s.push({
-          ...fe,
-          path: $e,
+        entries.push({
+          ...entryInfo,
+          path: resolvedPath,
         });
-        let Ve = await y($e, fe);
-        if (Ve !== undefined && Ve !== $e)
-          s.push({
-            ...fe,
-            path: Ve,
+        let realPath = await probeEntryPath(resolvedPath, entryInfo);
+        if (realPath !== undefined && realPath !== resolvedPath)
+          entries.push({
+            ...entryInfo,
+            path: realPath,
           });
-        await v(E(additionalDirectory), fe);
+        await checkDotDotSegment(normalizePath(additionalDirectory), entryInfo);
       }
     }
   }
-  return s;
+  return entries;
 }
 //@ chunk-hm0ce8vc.js:203425-203810 placement
 /**
  * 会话目录与子进程自动允许写入范围重叠时拒绝启动。
  */
-function checkSessionDirOutsideWriteScope(e, n, r, s) {
-  let lower = e.toLowerCase();
-  let o = (l) => (l.endsWith(sep) ? l : l + sep);
-  for (let l of [r, ...s]) {
-    let lower_2 = l.toLowerCase();
-    if (lower === lower_2 || lower.startsWith(o(lower_2)) || lower_2.startsWith(o(lower)))
+function checkSessionDirOutsideWriteScope(dirPath, label, childCwd, addDirs) {
+  let path = dirPath.toLowerCase();
+  let withSep = (path) => (path.endsWith(sep) ? path : path + sep);
+  for (let allowedPath of [childCwd, ...addDirs]) {
+    let path_2 = allowedPath.toLowerCase();
+    if (path === path_2 || path.startsWith(withSep(path_2)) || path_2.startsWith(withSep(path)))
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `[runner:session] per-session ${n} ${e} overlaps the child's auto-allowed write scope (${l}) \u2014 refusing to spawn`,
+        `[runner:session] per-session ${label} ${dirPath} overlaps the child's auto-allowed write scope (${allowedPath}) \u2014 refusing to spawn`,
         "per-session dir overlaps the child auto-allowed write scope \u2014 refusing to spawn",
       );
   }
 }
 //@ chunk-hm0ce8vc.js:203810-203922 placement
-function resolveInside(e, n) {
-  let r = resolve(e);
-  let s = isAbsolute(n) ? resolve(n) : resolve(r, n);
-  if (s === r) return s;
-  if (s.startsWith(r + sep)) return s;
+function resolveInside(basePath, targetPath) {
+  let baseResolved = resolve(basePath);
+  let targetResolved = isAbsolute(targetPath) ? resolve(targetPath) : resolve(baseResolved, targetPath);
+  if (targetResolved === baseResolved) return targetResolved;
+  if (targetResolved.startsWith(baseResolved + sep)) return targetResolved;
   return null;
 }
 //@ chunk-hm0ce8vc.js:203922-204220 placement
-async function ensureDirsNoSymlinks(e, inside) {
-  let r = resolve(e);
-  let s = resolve(inside);
-  if (s !== r && !s.startsWith(r + sep)) return false;
-  let filtered = s.slice(r.length).split(sep).filter(Boolean);
-  for (let o of filtered) {
-    r = join(r, o);
+async function ensureDirsNoSymlinks(basePath, inside) {
+  let baseResolved = resolve(basePath);
+  let insideResolved = resolve(inside);
+  if (insideResolved !== baseResolved && !insideResolved.startsWith(baseResolved + sep)) return false;
+  let filtered = insideResolved.slice(baseResolved.length).split(sep).filter(Boolean);
+  for (let segment of filtered) {
+    baseResolved = join(baseResolved, segment);
     try {
-      let l = await lstat(r);
-      if (l.isSymbolicLink() || !l.isDirectory()) return false;
+      let stats = await lstat(baseResolved);
+      if (stats.isSymbolicLink() || !stats.isDirectory()) return false;
     } catch (error) {
       if (!isENOENT(error)) return false;
       try {
-        await mkdir(r);
+        await mkdir(baseResolved);
       } catch {
         return false;
       }
@@ -490,11 +508,11 @@ async function ensureDirsNoSymlinks(e, inside) {
   return true;
 }
 //@ chunk-hm0ce8vc.js:204220-204328 placement
-async function isRealpathInside(e, inside) {
+async function isRealpathInside(basePath, inside) {
   try {
-    let r = await realpath(e);
-    let s = await realpath(inside);
-    return s === r || s.startsWith(r + sep);
+    let baseReal = await realpath(basePath);
+    let insideReal = await realpath(inside);
+    return insideReal === baseReal || insideReal.startsWith(baseReal + sep);
   } catch {
     return false;
   }

@@ -5,13 +5,13 @@
  * pieces: chunk-wjd9n4jx.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { require_ByteArrayCollector } from "./ByteArrayCollector.js";
 import { require_createBufferedReadableStream } from "./createBufferedReadableStream.js";
 import { require_stream_type_check } from "./stream-type-check.js";
 
 //@ chunk-wjd9n4jx.js:5121-5983 cjs-fingerprint
-var require_createBufferedReadable = x(function (cjsExports) {
+var require_createBufferedReadable = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

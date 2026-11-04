@@ -8,7 +8,7 @@
  * pieces: chunk-p7xf186d.js (41)
  * attribution: placement 41
  */
-import { PairingClock, PairingError, malformedError, normalizePairingErrorCode_2 } from "./pairingErrors.js";
+import { PairingClock, PairingError, malformedError, normalizePairingErrorCode } from "./pairingErrors.js";
 import {
   MAX_TAG_FAILURES,
   normalizeApiOrigin,
@@ -59,30 +59,30 @@ class PairingAssertionSource {
   clock;
   timeoutSec;
   urls;
-  constructor(e) {
-    this.opts = e;
-    this.clock = new PairingClock(e);
-    this.timeoutSec = e.timeoutSec ?? MAX_TAG_FAILURES;
-    this.urls = normalizeApiOrigin(e.apiOrigin, e.allowLoopbackHttp);
+  constructor(options) {
+    this.opts = options;
+    this.clock = new PairingClock(options);
+    this.timeoutSec = options.timeoutSec ?? MAX_TAG_FAILURES;
+    this.urls = normalizeApiOrigin(options.apiOrigin, options.allowLoopbackHttp);
   }
   get issuer() {
     return this.urls.issuer;
   }
-  serverNow(e) {
-    return e.claims.iat + this.clock.since(e.minted);
+  serverNow(serverTime) {
+    return serverTime.claims.iat + this.clock.since(serverTime.minted);
   }
   async get() {
-    let e = this.current;
-    if (e && e.claims.exp - MAX_TAG_FAILURES_DEFAULT > this.serverNow(e)) return e;
+    let current = this.current;
+    if (current && current.claims.exp - MAX_TAG_FAILURES_DEFAULT > this.serverNow(current)) return current;
     let lastFailure = this.lastFailure;
     if (lastFailure && this.clock.since(lastFailure.at) < lastFailure.floor) throw lastFailure.error;
-    let n = (this.minting ??= this.mint().finally(() => {
-      if (this.minting === n) this.minting = undefined;
+    let minting = (this.minting ??= this.mint().finally(() => {
+      if (this.minting === minting) this.minting = undefined;
     }));
-    return n;
+    return minting;
   }
-  isCurrent(e) {
-    return e.epoch === this.epoch;
+  isCurrent(token) {
+    return token.epoch === this.epoch;
   }
   clear() {
     this.epoch += 1;
@@ -93,7 +93,7 @@ class PairingAssertionSource {
   async mint() {
     let epoch = this.epoch;
     try {
-      let t = await withTimeout_2(
+      let response = await withTimeout_2(
         this.attest(epoch),
         this.timeoutSec,
         () =>
@@ -102,45 +102,45 @@ class PairingAssertionSource {
           }),
       );
       if (epoch !== this.epoch) throw new PairingError("not_signed_in", "identity changed during attest");
-      this.current = t;
+      this.current = response;
       this.lastFailure = undefined;
-      return t;
+      return response;
     } catch (error) {
-      let n =
+      let errorBody =
         error instanceof PairingError
           ? error
           : new PairingError("attest_failed", "unexpected", {
               cause: error,
             });
-      if (epoch === this.epoch && n.code !== "not_signed_in") {
-        let r = n.code === "rate_limited" || n.code === "pairing_disabled";
+      if (epoch === this.epoch && errorBody.code !== "not_signed_in") {
+        let isFatal = errorBody.code === "rate_limited" || errorBody.code === "pairing_disabled";
         this.lastFailure = {
-          error: n,
+          error: errorBody,
           at: this.clock.stamp(),
-          floor: r ? LONG_FAILURE_FLOOR_S : DEFAULT_FAILURE_FLOOR_S,
+          floor: isFatal ? LONG_FAILURE_FLOOR_S : DEFAULT_FAILURE_FLOOR_S,
         };
       }
-      throw n;
+      throw errorBody;
     }
   }
   async attest(epoch) {
-    let t;
+    let verified;
     try {
-      t = await this.opts.getBearer();
+      verified = await this.opts.getBearer();
     } catch (error) {
       throw new PairingError("not_signed_in", "bearer unavailable", {
         cause: error,
       });
     }
-    if (!t) throw new PairingError("not_signed_in");
+    if (!verified) throw new PairingError("not_signed_in");
     let ecdhKeyPair = await generateEcdhKeyPair();
     let minted = this.clock.stamp();
-    let i;
+    let payload;
     try {
-      i = await this.opts.fetchImpl(this.urls.attest, {
+      payload = await this.opts.fetchImpl(this.urls.attest, {
         method: "POST",
         headers: {
-          authorization: `Bearer ${t}`,
+          authorization: `Bearer ${verified}`,
           "content-type": "application/json",
           accept: "application/json",
         },
@@ -154,37 +154,37 @@ class PairingAssertionSource {
         cause: error,
       });
     }
-    if (i.status === 404)
+    if (payload.status === 404)
       throw new PairingError("pairing_disabled", "attest is not enabled", {
         httpStatus: 404,
       });
-    if (i.status === 429)
+    if (payload.status === 429)
       throw new PairingError("rate_limited", undefined, {
         httpStatus: 429,
       });
-    if (i.status !== 200)
-      throw new PairingError("attest_failed", `HTTP ${i.status}`, {
-        httpStatus: i.status,
+    if (payload.status !== 200)
+      throw new PairingError("attest_failed", `HTTP ${payload.status}`, {
+        httpStatus: payload.status,
       });
-    let s;
+    let claims;
     try {
-      s = JSON.parse(await i.text());
+      claims = JSON.parse(await payload.text());
     } catch {
       throw new PairingError("attest_failed", "response is not JSON", {
         httpStatus: 200,
       });
     }
-    let assertion = s?.assertion;
+    let assertion = claims?.assertion;
     if (typeof assertion !== "string")
       throw new PairingError("attest_failed", "response lacks assertion", {
         httpStatus: 200,
       });
-    let c = validatePeerClaims(parseAssertion(assertion).payload);
-    if (c.cnf.jkt !== ecdhKeyPair.jkt)
+    let peerClaims = validatePeerClaims(parseAssertion(assertion).payload);
+    if (peerClaims.cnf.jkt !== ecdhKeyPair.jkt)
       throw new PairingError("key_binding_mismatch", "server bound a different key");
     return {
       assertion,
-      claims: c,
+      claims: peerClaims,
       eph: ecdhKeyPair,
       minted,
       epoch,
@@ -196,22 +196,22 @@ class PairingAssertionSource {
  * 计算 hello 阶段（含 offer 与去掉 mac 的 hello）的 MAC。
  */
 async function computeHelloMac(offer, hello) {
-  let { mac, ...r } = hello;
+  let { mac, ...rest } = hello;
   return sha256(
     concatBytesArgs(
       lengthPrefixed(PAIRING_PROTOCOL),
       lengthPrefixed(utf8Encode(canonicalJson(offer))),
-      lengthPrefixed(utf8Encode(canonicalJson(r))),
+      lengthPrefixed(utf8Encode(canonicalJson(rest))),
     ),
   );
 }
 //@ chunk-p7xf186d.js:18070-18188 placement
-async function deriveEcdhSecret(privateKey, t) {
+async function deriveEcdhSecret(privateKey, peerPublicKey) {
   return new Uint8Array(
     await globalThis.crypto.subtle.deriveBits(
       {
         name: "ECDH",
-        public: t,
+        public: peerPublicKey,
       },
       privateKey,
       256,
@@ -219,46 +219,46 @@ async function deriveEcdhSecret(privateKey, t) {
   );
 }
 //@ chunk-p7xf186d.js:18188-18348 placement
-async function hkdfDerive_2(e, t, n, r) {
+async function hkdfDerive_2(secret, salt, info, length) {
   return new Uint8Array(
     await globalThis.crypto.subtle.deriveBits(
       {
         name: "HKDF",
         hash: "SHA-256",
-        salt: toArrayBuffer(t),
-        info: toArrayBuffer(utf8Encode(`${PAIRING_PROTOCOL} ${n}`)),
+        salt: toArrayBuffer(salt),
+        info: toArrayBuffer(utf8Encode(`${PAIRING_PROTOCOL} ${info}`)),
       },
-      e,
-      r * 8,
+      secret,
+      length * 8,
     ),
   );
 }
 //@ chunk-p7xf186d.js:18348-18635 placement
 async function hkdfDerive(ecdhSecret, helloMac) {
-  let n = await globalThis.crypto.subtle.importKey("raw", toArrayBuffer(ecdhSecret), "HKDF", false, [
+  let baseKey = await globalThis.crypto.subtle.importKey("raw", toArrayBuffer(ecdhSecret), "HKDF", false, [
     "deriveBits",
   ]);
-  let [r, i, s, o, c] = await Promise.all([
-    hkdfDerive_2(n, helloMac, "confirm d", 32),
-    hkdfDerive_2(n, helloMac, "confirm e", 32),
-    hkdfDerive_2(n, helloMac, "aead d2e", 32),
-    hkdfDerive_2(n, helloMac, "aead e2d", 32),
-    hkdfDerive_2(n, helloMac, "sid", 16),
+  let [clientToServerKey, serverToClientKey, clientKeyConfirm, serverKeyConfirm, keyIds] = await Promise.all([
+    hkdfDerive_2(baseKey, helloMac, "confirm d", 32),
+    hkdfDerive_2(baseKey, helloMac, "confirm e", 32),
+    hkdfDerive_2(baseKey, helloMac, "aead d2e", 32),
+    hkdfDerive_2(baseKey, helloMac, "aead e2d", 32),
+    hkdfDerive_2(baseKey, helloMac, "sid", 16),
   ]);
   return {
     th: helloMac,
-    kcD: r,
-    kcE: i,
-    kD2e: s,
-    kE2d: o,
-    sid: c,
+    kcD: clientToServerKey,
+    kcE: serverToClientKey,
+    kD2e: clientKeyConfirm,
+    kE2d: serverKeyConfirm,
+    sid: keyIds,
   };
 }
 //@ chunk-p7xf186d.js:18635-18831 placement
-async function hmacSha256(e, t) {
-  let n = await globalThis.crypto.subtle.importKey(
+async function hmacSha256(key, data) {
+  let cryptoKey = await globalThis.crypto.subtle.importKey(
     "raw",
-    toArrayBuffer(e),
+    toArrayBuffer(key),
     {
       name: "HMAC",
       hash: "SHA-256",
@@ -266,21 +266,21 @@ async function hmacSha256(e, t) {
     false,
     ["sign"],
   );
-  return new Uint8Array(await globalThis.crypto.subtle.sign("HMAC", n, toArrayBuffer(t)));
+  return new Uint8Array(await globalThis.crypto.subtle.sign("HMAC", cryptoKey, toArrayBuffer(data)));
 }
 //@ chunk-p7xf186d.js:18831-18867 placement
 /**
  * 用加密密钥计算密钥确认 MAC。
  */
-function encryptKeyConfirmMac(e) {
-  return hmacSha256(e.kcE, e.th);
+function encryptKeyConfirmMac(mac) {
+  return hmacSha256(mac.kcE, mac.th);
 }
 //@ chunk-p7xf186d.js:18867-18903 placement
 /**
  * 用解密密钥计算密钥确认 MAC。
  */
-function decryptKeyConfirmMac(e) {
-  return hmacSha256(e.kcD, e.th);
+function decryptKeyConfirmMac(mac) {
+  return hmacSha256(mac.kcD, mac.th);
 }
 //@ chunk-p7xf186d.js:18903-18952 placement
 /**
@@ -307,48 +307,48 @@ var SEALED_MESSAGE_TYPE_SET = new Set(SEALED_MESSAGE_TYPES);
 /**
  * 判断字符串是否为合法的封装帧类型。
  */
-function isSealedFrameKind(e) {
-  return typeof e === "string" && SEALED_MESSAGE_TYPE_SET.has(e);
+function isSealedFrameKind(kind) {
+  return typeof kind === "string" && SEALED_MESSAGE_TYPE_SET.has(kind);
 }
 //@ chunk-p7xf186d.js:19236-19311 placement
 /**
  * 判断 toolUseId 合法（未给、或非空且无孤立代理项）。
  */
-function isValidToolUseIdOrUndefined(e) {
-  return e === undefined || (typeof e === "string" && e !== "" && !SURROGATE_RE.test(e));
+function isValidToolUseIdOrUndefined(value) {
+  return value === undefined || (typeof value === "string" && value !== "" && !SURROGATE_RE.test(value));
 }
 //@ chunk-p7xf186d.js:19311-19421 placement
 function isValidChunkInfo(chunk) {
   if (chunk === undefined) return true;
-  let t = chunk;
+  let frame = chunk;
   return (
-    !!t &&
-    typeof t === "object" &&
-    isNonNegativeSafeInt(t.n) &&
-    t.n >= 1 &&
-    isNonNegativeSafeInt(t.i) &&
-    t.i < t.n
+    !!frame &&
+    typeof frame === "object" &&
+    isNonNegativeSafeInt(frame.n) &&
+    frame.n >= 1 &&
+    isNonNegativeSafeInt(frame.i) &&
+    frame.i < frame.n
   );
 }
 //@ chunk-p7xf186d.js:19421-19617 placement
 /**
  * 生成配对通道 AES-GCM 参数：IV 为 4 字节 0 + 64 位序号，附加数据依次绑定协议名、双方标识、序号、消息类型、可选会话、时间戳与分片信息。
  */
-function aesGcmParams(e, t, n, r, i, s, o) {
-  let c = u64be(n);
+function aesGcmParams(key, iv, counter, keyId, direction, frameKind, aad) {
+  let counterBytes = u64be(counter);
   return {
     name: "AES-GCM",
-    iv: toArrayBuffer(concatBytesArgs(new Uint8Array(4), c)),
+    iv: toArrayBuffer(concatBytesArgs(new Uint8Array(4), counterBytes)),
     additionalData: toArrayBuffer(
       concatBytesArgs(
         lengthPrefixed(PAIRING_PROTOCOL),
-        lengthPrefixed(e),
-        lengthPrefixed(t),
-        c,
-        lengthPrefixed(r),
-        lengthPrefixed(i ?? ""),
-        u64be(s),
-        ...(o ? [lengthPrefixed("chunk"), u64be(o.i), u64be(o.n)] : []),
+        lengthPrefixed(key),
+        lengthPrefixed(iv),
+        counterBytes,
+        lengthPrefixed(keyId),
+        lengthPrefixed(direction ?? ""),
+        u64be(frameKind),
+        ...(aad ? [lengthPrefixed("chunk"), u64be(aad.i), u64be(aad.n)] : []),
       ),
     ),
     tagLength: 128,
@@ -367,15 +367,15 @@ function safeFloorNow(wall) {
   }
 }
 //@ chunk-p7xf186d.js:19708-19809 placement
-async function importAesKey(e, t) {
+async function importAesKey(rawKey, usage) {
   return globalThis.crypto.subtle.importKey(
     "raw",
-    toArrayBuffer(e),
+    toArrayBuffer(rawKey),
     {
       name: "AES-GCM",
     },
     false,
-    [t],
+    [usage],
   );
 }
 //@ chunk-p7xf186d.js:19809-19829 placement
@@ -389,11 +389,11 @@ var noopCallback = () => {
 /**
  * 解析封装消息里的 JSON，失败返回 malformed。
  */
-function parseSealedJson(e) {
+function parseSealedJson(text) {
   try {
     return {
       ok: true,
-      inner: JSON.parse(utf8Decode(e)),
+      inner: JSON.parse(utf8Decode(text)),
     };
   } catch {
     return {
@@ -429,23 +429,24 @@ class PairingChannel {
     badTags: 0,
   };
   born;
-  constructor(e, dirOut, kOut, kIn, i) {
-    this.sid = e;
+  constructor(sid, dirOut, kOut, kIn, clock) {
+    this.sid = sid;
     this.dirOut = dirOut;
     this.kOut = kOut;
     this.kIn = kIn;
-    this.clock = i;
-    this.sidB64 = bytesToBinaryString(e);
-    this.born = i.stamp();
+    this.clock = clock;
+    this.sidB64 = bytesToBinaryString(sid);
+    this.born = clock.stamp();
   }
-  static async create(e, t, n = {}) {
-    let [r, i, dirOut] = e === "desktop" ? [t.kD2e, t.kE2d, "d2e"] : [t.kE2d, t.kD2e, "e2d"];
+  static async create(role, secrets, options = {}) {
+    let [keyOut, keyIn, dirOut] =
+      role === "desktop" ? [secrets.kD2e, secrets.kE2d, "d2e"] : [secrets.kE2d, secrets.kD2e, "e2d"];
     return new PairingChannel(
-      t.sid,
+      secrets.sid,
       dirOut,
-      await importAesKey(r, "encrypt"),
-      await importAesKey(i, "decrypt"),
-      n.clock ?? new PairingClock(),
+      await importAesKey(keyOut, "encrypt"),
+      await importAesKey(keyIn, "decrypt"),
+      options.clock ?? new PairingClock(),
     );
   }
   ownSeconds() {
@@ -457,32 +458,32 @@ class PairingChannel {
   get isTornDown() {
     return this.tornDown;
   }
-  enqueue(e, t) {
-    let n = this.q[e].then(t, t);
-    this.q[e] = n.then(noopCallback, noopCallback);
-    return n;
+  enqueue(queue, task) {
+    let result = this.q[queue].then(task, task);
+    this.q[queue] = result.then(noopCallback, noopCallback);
+    return result;
   }
-  seal(e, t, n) {
-    return this.sealFrames(e, t, n, undefined).then(([r]) => {
-      if (r === undefined) throw Error("seal: no envelope produced");
-      return r;
+  seal(kind, toolUseId, payload) {
+    return this.sealFrames(kind, toolUseId, payload, undefined).then(([envelope]) => {
+      if (envelope === undefined) throw Error("seal: no envelope produced");
+      return envelope;
     });
   }
-  sealChunked(e, t, n, r) {
-    if (!Number.isSafeInteger(r) || r < 1)
+  sealChunked(kind, toolUseId, payload, chunkSize) {
+    if (!Number.isSafeInteger(chunkSize) || chunkSize < 1)
       return Promise.reject(RangeError("sealChunked: maxChunkBytes must be a positive integer"));
-    return this.sealFrames(e, t, n, r);
+    return this.sealFrames(kind, toolUseId, payload, chunkSize);
   }
-  sealFrames(e, t, n, r) {
+  sealFrames(kind, toolUseId, payload, chunkSize) {
     if (this.tornDown) return Promise.reject(Error("sealed channel torn down"));
-    if (!isSealedFrameKind(e)) return Promise.reject(TypeError("seal: unknown frame kind"));
-    if (!isValidToolUseIdOrUndefined(t))
+    if (!isSealedFrameKind(kind)) return Promise.reject(TypeError("seal: unknown frame kind"));
+    if (!isValidToolUseIdOrUndefined(toolUseId))
       return Promise.reject(TypeError("seal: toolUseId must be a non-empty well-formed string"));
-    let i;
+    let plaintext;
     try {
-      let json = JSON.stringify(n);
+      let json = JSON.stringify(payload);
       if (typeof json !== "string") throw TypeError("not JSON-serialisable");
-      i = utf8Encode(json);
+      plaintext = utf8Encode(json);
     } catch (error) {
       return Promise.reject(
         TypeError("seal: inner is not JSON-serialisable", {
@@ -490,78 +491,78 @@ class PairingChannel {
         }),
       );
     }
-    let s = r !== undefined;
-    let o = r ?? i.length;
-    let c = Math.ceil(i.length / o);
-    let a = safeFloorNow(this.clock.wall);
-    if (!isNonNegativeSafeInt(a)) return Promise.reject(Error("seal: clock is not a usable time"));
+    let isChunked = chunkSize !== undefined;
+    let chunkLength = chunkSize ?? plaintext.length;
+    let chunkCount = Math.ceil(plaintext.length / chunkLength);
+    let sentAt = safeFloorNow(this.clock.wall);
+    if (!isNonNegativeSafeInt(sentAt)) return Promise.reject(Error("seal: clock is not a usable time"));
     let ctrOut = this.ctrOut;
-    this.ctrOut = ctrOut + c;
+    this.ctrOut = ctrOut + chunkCount;
     if (!Number.isSafeInteger(this.ctrOut)) {
       this.tornDown = true;
       return Promise.reject(Error("sealed channel counter exhausted"));
     }
     return this.enqueue("send", async () => {
-      let l = [];
-      for (let idx = 0; idx < c; idx++) {
-        let y = s
+      let frames = [];
+      for (let idx = 0; idx < chunkCount; idx++) {
+        let chunkInfo = isChunked
           ? {
               i: idx,
-              n: c,
+              n: chunkCount,
             }
           : undefined;
         let uint8Array = new Uint8Array(
           await globalThis.crypto.subtle.encrypt(
-            aesGcmParams(this.dirOut, this.sid, ctrOut + idx, e, t, a, y),
+            aesGcmParams(this.dirOut, this.sid, ctrOut + idx, kind, toolUseId, sentAt, chunkInfo),
             this.kOut,
-            toArrayBuffer(i.subarray(idx * o, (idx + 1) * o)),
+            toArrayBuffer(plaintext.subarray(idx * chunkLength, (idx + 1) * chunkLength)),
           ),
         );
         if (this.tornDown) throw Error("sealed channel torn down");
-        l.push({
+        frames.push({
           sid: this.sidB64,
           ctr: ctrOut + idx,
-          t: a,
+          t: sentAt,
           ct: bytesToBinaryString(uint8Array),
-          ...(y && {
-            chunk: y,
+          ...(chunkInfo && {
+            chunk: chunkInfo,
           }),
         });
       }
-      return l;
+      return frames;
     });
   }
-  open(e, t, n) {
-    return this.enqueue("recv", () => this.openNow(e, t, n));
+  open(kind, toolUseId, envelope) {
+    return this.enqueue("recv", () => this.openNow(kind, toolUseId, envelope));
   }
-  async openNow(e, t, n) {
+  async openNow(kind, toolUseId, envelope) {
     if (this.tornDown)
       return {
         ok: false,
         reason: "torn_down",
       };
-    let r = n;
+    let message = envelope;
     if (
-      !r ||
-      typeof r !== "object" ||
-      typeof r.sid !== "string" ||
-      typeof r.ct !== "string" ||
-      !isNonNegativeSafeInt(r.t) ||
-      !isSealedFrameKind(e) ||
-      !isValidToolUseIdOrUndefined(t) ||
-      !isValidChunkInfo(r.chunk)
+      !message ||
+      typeof message !== "object" ||
+      typeof message.sid !== "string" ||
+      typeof message.ct !== "string" ||
+      !isNonNegativeSafeInt(message.t) ||
+      !isSealedFrameKind(kind) ||
+      !isValidToolUseIdOrUndefined(toolUseId) ||
+      !isValidChunkInfo(message.chunk)
     )
       return {
         ok: false,
         reason: "malformed",
       };
-    let { t: i, chunk } = r;
-    if (r.sid !== this.sidB64)
+    let { t: sentAt, chunk } = message;
+    if (message.sid !== this.sidB64)
       return {
         ok: false,
         reason: "foreign_sid",
       };
-    let ctr = r.ctr;
+    let ctr = message.ctr;
     if (!isNonNegativeSafeInt(ctr))
       return {
         ok: false,
@@ -574,33 +575,33 @@ class PairingChannel {
         reason: "replay",
       };
     }
-    if (!(Math.abs(this.ownSeconds() - i) <= MAX_CLOCK_SKEW_S)) {
+    if (!(Math.abs(this.ownSeconds() - sentAt) <= MAX_CLOCK_SKEW_S)) {
       this.stats.stale += 1;
       return {
         ok: false,
         reason: "stale",
       };
     }
-    let a;
+    let cipherBytes;
     try {
-      a = base64UrlDecode(r.ct);
+      cipherBytes = base64UrlDecode(message.ct);
     } catch {
       return {
         ok: false,
         reason: "malformed",
       };
     }
-    if (a.length < 16)
+    if (cipherBytes.length < 16)
       return {
         ok: false,
         reason: "malformed",
       };
-    let u;
+    let plaintext;
     try {
-      u = await globalThis.crypto.subtle.decrypt(
-        aesGcmParams(this.dirIn, this.sid, ctr, e, t, i, chunk),
+      plaintext = await globalThis.crypto.subtle.decrypt(
+        aesGcmParams(this.dirIn, this.sid, ctr, kind, toolUseId, sentAt, chunk),
         this.kIn,
-        toArrayBuffer(a),
+        toArrayBuffer(cipherBytes),
       );
     } catch {
       this.stats.badTags += 1;
@@ -617,35 +618,35 @@ class PairingChannel {
       };
     if (ctr > this.ctrIn + 1) this.stats.gaps += ctr - this.ctrIn - 1;
     this.ctrIn = ctr;
-    let uint8Array = new Uint8Array(u);
+    let uint8Array = new Uint8Array(plaintext);
     if (!chunk) {
       this.partial = undefined;
       return parseSealedJson(uint8Array);
     }
     return this.reassemble(ctr, chunk, uint8Array);
   }
-  reassemble(e, t, n) {
+  reassemble(counter, chunkInfo, bytes) {
     let partial = this.partial;
     this.partial = undefined;
-    if (t.i === 0)
+    if (chunkInfo.i === 0)
       partial = {
-        firstCtr: e,
-        n: t.n,
+        firstCtr: counter,
+        n: chunkInfo.n,
         parts: [],
         bytes: 0,
       };
-    else if (!partial || e !== partial.firstCtr + partial.parts.length)
+    else if (!partial || counter !== partial.firstCtr + partial.parts.length)
       return {
         ok: false,
         reason: "bad_chunk",
       };
-    if (partial.bytes + n.length > MAX_SEALED_BYTES)
+    if (partial.bytes + bytes.length > MAX_SEALED_BYTES)
       return {
         ok: false,
         reason: "bad_chunk",
       };
-    partial.parts.push(n);
-    partial.bytes += n.length;
+    partial.parts.push(bytes);
+    partial.bytes += bytes.length;
     if (partial.parts.length < partial.n) {
       this.partial = partial;
       return {
@@ -675,8 +676,8 @@ var NONCE_BYTES = 32;
 /**
  * 比较两个组织名（忽略大小写）。
  */
-function sameOrgCaseInsensitive(e, t) {
-  return e.toLowerCase() === t.toLowerCase();
+function sameOrgCaseInsensitive(left, right) {
+  return left.toLowerCase() === right.toLowerCase();
 }
 //@ chunk-p7xf186d.js:23706-24222 placement
 function verifyPeerAccount(claims, claims_2, policy) {
@@ -685,20 +686,20 @@ function verifyPeerAccount(claims, claims_2, policy) {
     if (!sameOrgCaseInsensitive(claims.org, policy.requiredOrg))
       throw new PairingError("org_not_permitted", "own sign-in is not in the configured org");
   }
-  let r = claims_2.hybrid && claims_2.client_kind === "desktop";
-  let i =
+  let desktopHybrid = claims_2.hybrid && claims_2.client_kind === "desktop";
+  let orgMatches =
     !policy.allowedOrgs ||
     policy.allowedOrgs.some((allowedOrg) => sameOrgCaseInsensitive(allowedOrg, claims_2.org));
-  if (r && !i)
+  if (desktopHybrid && !orgMatches)
     throw new PairingError("org_not_permitted", "the managing Desktop's org is outside the configured list");
   if (
-    (policy.requiredOrg !== undefined || r || policy.hybridSignIn) &&
+    (policy.requiredOrg !== undefined || desktopHybrid || policy.hybridSignIn) &&
     !sameOrgCaseInsensitive(claims_2.org, claims.org)
   )
     throw new PairingError(
       "org_mismatch",
       undefined,
-      i
+      orgMatches
         ? {
             peerOrg: claims_2.org,
           }
@@ -706,112 +707,115 @@ function verifyPeerAccount(claims, claims_2, policy) {
     );
 }
 //@ chunk-p7xf186d.js:24222-24412 placement
-function decodeB64Field(e, t, n) {
-  if (typeof e !== "string") throw malformedError(`${t} missing`);
-  let r;
+function decodeB64Field(value, fieldName, expectedLength) {
+  if (typeof value !== "string") throw malformedError(`${fieldName} missing`);
+  let bytes;
   try {
-    r = base64UrlDecode(e);
+    bytes = base64UrlDecode(value);
   } catch {
-    throw malformedError(`${t} not base64url`);
+    throw malformedError(`${fieldName} not base64url`);
   }
-  if (n !== undefined && r.length !== n) throw malformedError(`${t} must be ${n} bytes`);
-  return r;
+  if (expectedLength !== undefined && bytes.length !== expectedLength)
+    throw malformedError(`${fieldName} must be ${expectedLength} bytes`);
+  return bytes;
 }
 //@ chunk-p7xf186d.js:24412-24608 placement
-function checkPairMessage(e, t) {
-  let n = e;
-  if (!n || typeof n !== "object" || n.msg !== t) throw malformedError(`pair_${t} malformed`);
-  if (n.v !== PAIRING_PROTOCOL_VERSION) {
-    let r = typeof n.v === "number" ? String(n.v) : typeof n.v;
-    throw malformedError(`unsupported v ${r}`);
+function checkPairMessage(message, role) {
+  let body = message;
+  if (!body || typeof body !== "object" || body.msg !== role) throw malformedError(`pair_${role} malformed`);
+  if (body.v !== PAIRING_PROTOCOL_VERSION) {
+    let versionType = typeof body.v === "number" ? String(body.v) : typeof body.v;
+    throw malformedError(`unsupported v ${versionType}`);
   }
-  return n;
+  return body;
 }
 //@ chunk-p7xf186d.js:24608-24757 placement
-function smallObjectField(e, t) {
-  if (e === undefined) return;
-  if (!e || typeof e !== "object" || Array.isArray(e) || canonicalJson(e).length > 1024)
-    throw malformedError(`${t} must be a small object`);
-  return e;
+function smallObjectField(value, fieldName) {
+  if (value === undefined) return;
+  if (!value || typeof value !== "object" || Array.isArray(value) || canonicalJson(value).length > 1024)
+    throw malformedError(`${fieldName} must be a small object`);
+  return value;
 }
 //@ chunk-p7xf186d.js:24757-24920 placement
-function parsePairHello(e, t) {
-  let n = ROLE_FIELD_NAMES[t];
-  let r = checkPairMessage(e, t);
+function parsePairHello(message, role) {
+  let instanceField = ROLE_FIELD_NAMES[role];
+  let body = checkPairMessage(message, role);
   try {
-    canonicalJson(r);
+    canonicalJson(body);
   } catch {
-    throw malformedError(`pair_${t} is not canonical JSON`);
+    throw malformedError(`pair_${role} is not canonical JSON`);
   }
-  decodeB64Field(r.nonce, "nonce", NONCE_BYTES);
-  let instance = smallObjectField(r[n], n);
+  decodeB64Field(body.nonce, "nonce", NONCE_BYTES);
+  let instance = smallObjectField(body[instanceField], instanceField);
   return {
-    hello: r,
+    hello: body,
     instance,
   };
 }
 //@ chunk-p7xf186d.js:24920-25047 placement
-function buildPairHello(e, t, instanceHint) {
-  let r = {
-    msg: e,
+function buildPairHello(message, offer, instanceHint) {
+  let hello = {
+    msg: message,
     v: PAIRING_PROTOCOL_VERSION,
-    assertion: t.assertion,
-    public_key: t.eph.publicKey,
+    assertion: offer.assertion,
+    public_key: offer.eph.publicKey,
     nonce: bytesToBinaryString(randomBytes(NONCE_BYTES)),
   };
-  if (instanceHint) r[ROLE_FIELD_NAMES[e]] = instanceHint;
-  return r;
+  if (instanceHint) hello[ROLE_FIELD_NAMES[message]] = instanceHint;
+  return hello;
 }
 //@ chunk-p7xf186d.js:25047-25185 placement
-function parsePairMac(e, t) {
-  let n = checkPairMessage(e, t);
-  if (typeof n.sid !== "string") throw malformedError(`pair_${t} sid missing`);
+function parsePairMac(message, role) {
+  let body = checkPairMessage(message, role);
+  if (typeof body.sid !== "string") throw malformedError(`pair_${role} sid missing`);
   return {
-    sid: n.sid,
-    mac: decodeB64Field(n.mac, `pair_${t} mac`),
+    sid: body.sid,
+    mac: decodeB64Field(body.mac, `pair_${role} mac`),
   };
 }
 //@ chunk-p7xf186d.js:25185-25342 placement
-function cloneSmallObject(instanceHint, t) {
+function cloneSmallObject(instanceHint, fieldName) {
   if (instanceHint === undefined) return;
   try {
-    return smallObjectField(JSON.parse(JSON.stringify(instanceHint)), t);
+    return smallObjectField(JSON.parse(JSON.stringify(instanceHint)), fieldName);
   } catch (error) {
-    throw TypeError(`${t} must be a small JSON object`, {
+    throw TypeError(`${fieldName} must be a small JSON object`, {
       cause: error,
     });
   }
 }
 //@ chunk-p7xf186d.js:25342-25447 placement
-function assertIdentityUnchanged(e, t) {
-  if (!e.isCurrent(t)) throw new PairingError("not_signed_in", "identity changed during the handshake");
+function assertIdentityUnchanged(source, ownIdentity) {
+  if (!source.isCurrent(ownIdentity))
+    throw new PairingError("not_signed_in", "identity changed during the handshake");
 }
 //@ chunk-p7xf186d.js:25447-25516 placement
 /**
  * 用常数时间比较 MAC，不符时抛 bad_key_confirmation。
  */
-function assertMacEqual(e, t, n) {
-  if (!constantTimeEqual(e, t)) throw new PairingError("bad_key_confirmation", n);
+function assertMacEqual(actual, expected, label) {
+  if (!constantTimeEqual(actual, expected)) throw new PairingError("bad_key_confirmation", label);
 }
 //@ chunk-p7xf186d.js:25516-25596 placement
 /**
  * 超过步骤超时则抛出配对过期错误。
  */
-function assertNotExpired(clock, t, n) {
-  if (clock.since(t) > PAIRING_STEP_TIMEOUT_S) throw new PairingError("expired", `${n} took too long`);
+function assertNotExpired(clock, startedAt, label) {
+  if (clock.since(startedAt) > PAIRING_STEP_TIMEOUT_S)
+    throw new PairingError("expired", `${label} took too long`);
 }
 //@ chunk-p7xf186d.js:25596-25794 placement
-async function establishPairingChannel(e, source, clock, r) {
-  let i = await PairingChannel.create(e, r.secrets, {
+async function establishPairingChannel(role, source, clock, state) {
+  let channel = await PairingChannel.create(role, state.secrets, {
     clock,
   });
-  assertIdentityUnchanged(source, r.own);
+  assertIdentityUnchanged(source, state.own);
   return {
-    sidB64: i.sidB64,
-    channel: i,
-    own: r.own.claims,
-    peer: r.peer,
-    peerInstance: r.peerInstance,
+    sidB64: channel.sidB64,
+    channel,
+    own: state.own.claims,
+    peer: state.peer,
+    peerInstance: state.peerInstance,
     establishedAt: clock.wall(),
   };
 }
@@ -826,23 +830,23 @@ class LocalPairingHandshake {
   };
   clock;
   instanceHint;
-  constructor(e) {
-    this.opts = e;
-    this.clock = new PairingClock(e);
-    this.instanceHint = cloneSmallObject(e.instanceHint, "instanceHint");
+  constructor(options) {
+    this.opts = options;
+    this.clock = new PairingClock(options);
+    this.instanceHint = cloneSmallObject(options.instanceHint, "instanceHint");
   }
-  enter(e, t) {
+  enter(expectedPhase, message) {
     let phase = this.phase;
-    if (phase.is !== e) throw malformedError(t);
+    if (phase.is !== expectedPhase) throw malformedError(message);
     this.phase = {
       is: "busy",
     };
     return phase;
   }
-  async step(e) {
+  async step(fn) {
     try {
-      let { next: t, out } = await e();
-      this.phase = t;
+      let { next: nextPhase, out } = await fn();
+      this.phase = nextPhase;
       return out;
     } catch (error) {
       this.phase = {
@@ -854,47 +858,47 @@ class LocalPairingHandshake {
   async createOffer() {
     this.enter("fresh", "createOffer already called; use a new Initiator");
     return this.step(async () => {
-      let e = await this.opts.source.get();
-      let pairHello = buildPairHello("offer", e, this.instanceHint);
+      let own = await this.opts.source.get();
+      let pairHello = buildPairHello("offer", own, this.instanceHint);
       return {
         next: {
           is: "offered",
           offer: pairHello,
-          own: e,
+          own,
           at: this.clock.stamp(),
         },
         out: pairHello,
       };
     });
   }
-  async onAccept(e) {
-    let t = this.enter("offered", "no offer outstanding");
+  async onAccept(message) {
+    let offered = this.enter("offered", "no offer outstanding");
     return this.step(async () => {
-      assertNotExpired(this.clock, t.at, "pair_accept");
-      let { hello, instance } = parsePairHello(e, "accept");
-      let i = decodeB64Field(hello.mac, "pair_accept mac");
+      assertNotExpired(this.clock, offered.at, "pair_accept");
+      let { hello, instance } = parsePairHello(message, "accept");
+      let peerMac = decodeB64Field(hello.mac, "pair_accept mac");
       let { source, jwks, policy } = this.opts;
       let { claims, peerRaw } = await verifyPeerAssertion(hello.assertion, hello.public_key, {
         jwks,
         expectedIssuer: source.issuer,
         expectedKind: "chrome_extension",
       });
-      checkAssertionTimes(claims, source.serverNow(t.own));
-      verifyPeerAccount(t.own.claims, claims, policy);
-      let l = await importEcdhPublicKey(peerRaw);
-      let ecdhSecret = await deriveEcdhSecret(t.own.eph.keyPair.privateKey, l);
-      let helloMac = await computeHelloMac(t.offer, hello);
-      let g = await hkdfDerive(ecdhSecret, helloMac);
-      assertMacEqual(i, await encryptKeyConfirmMac(g));
-      let h = await decryptKeyConfirmMac(g);
-      assertIdentityUnchanged(source, t.own);
-      let U = bytesToBinaryString(g.sid);
+      checkAssertionTimes(claims, source.serverNow(offered.own));
+      verifyPeerAccount(offered.own.claims, claims, policy);
+      let peerKey = await importEcdhPublicKey(peerRaw);
+      let ecdhSecret = await deriveEcdhSecret(offered.own.eph.keyPair.privateKey, peerKey);
+      let helloMac = await computeHelloMac(offered.offer, hello);
+      let secrets = await hkdfDerive(ecdhSecret, helloMac);
+      assertMacEqual(peerMac, await encryptKeyConfirmMac(secrets));
+      let keyConfirm = await decryptKeyConfirmMac(secrets);
+      assertIdentityUnchanged(source, offered.own);
+      let sidB64 = bytesToBinaryString(secrets.sid);
       return {
         next: {
           is: "finishing",
-          own: t.own,
-          secrets: g,
-          sidB64: U,
+          own: offered.own,
+          secrets,
+          sidB64,
           peer: claims,
           peerInstance: instance,
           at: this.clock.stamp(),
@@ -902,20 +906,21 @@ class LocalPairingHandshake {
         out: {
           msg: "finish",
           v: PAIRING_PROTOCOL_VERSION,
-          sid: U,
-          mac: bytesToBinaryString(h),
+          sid: sidB64,
+          mac: bytesToBinaryString(keyConfirm),
         },
       };
     });
   }
-  async onDone(e) {
-    let t = this.enter("finishing", "no finish outstanding");
+  async onDone(message) {
+    let finishing = this.enter("finishing", "no finish outstanding");
     return this.step(async () => {
-      assertNotExpired(this.clock, t.at, "pair_done");
-      let pairMac = parsePairMac(e, "done");
-      if (pairMac.sid !== t.sidB64) throw new PairingError("bad_key_confirmation", "pair_done sid differs");
-      assertMacEqual(pairMac.mac, await computePairDoneMac(t.secrets), "pair_done mac");
-      let out = await establishPairingChannel("desktop", this.opts.source, this.clock, t);
+      assertNotExpired(this.clock, finishing.at, "pair_done");
+      let pairMac = parsePairMac(message, "done");
+      if (pairMac.sid !== finishing.sidB64)
+        throw new PairingError("bad_key_confirmation", "pair_done sid differs");
+      assertMacEqual(pairMac.mac, await computePairDoneMac(finishing.secrets), "pair_done mac");
+      let out = await establishPairingChannel("desktop", this.opts.source, this.clock, finishing);
       return {
         next: {
           is: "spent",
@@ -927,27 +932,27 @@ class LocalPairingHandshake {
 }
 //@ chunk-p7xf186d.js:27468-27561 placement
 function parseRefusal(localPairing) {
-  let t = localPairing;
-  if (!t || typeof t !== "object" || t.msg !== "refuse") return;
-  return normalizePairingErrorCode_2(t.code);
+  let pairing = localPairing;
+  if (!pairing || typeof pairing !== "object" || pairing.msg !== "refuse") return;
+  return normalizePairingErrorCode(pairing.code);
 }
 //@ chunk-p7xf186d.js:27561-27580 placement
 var weakMap = new WeakMap();
 //@ chunk-p7xf186d.js:27580-27612 placement
-function getPairingContext(e) {
-  return weakMap.get(e);
+function getPairingContext(session) {
+  return weakMap.get(session);
 }
 //@ chunk-p7xf186d.js:27612-27704 placement
-function ensurePairingContext(e) {
-  let t = weakMap.get(e);
-  if (!t) {
-    t = {
-      source: new PairingAssertionSource(e),
-      jwks: new JwksCache(e),
+function ensurePairingContext(session) {
+  let context = weakMap.get(session);
+  if (!context) {
+    context = {
+      source: new PairingAssertionSource(session),
+      jwks: new JwksCache(session),
     };
-    weakMap.set(e, t);
+    weakMap.set(session, context);
   }
-  return t;
+  return context;
 }
 //@ chunk-p7xf186d.js:27704-27792 placement
 function normalizeCategory(category) {
@@ -955,8 +960,8 @@ function normalizeCategory(category) {
 }
 //@ chunk-p7xf186d.js:27792-27900 placement
 function stripPrivateOptions(actionData) {
-  let { _perActionOnly, _privateHostReadAlwaysOffer, _privateHostReadAlways, ...i } = actionData;
-  return i;
+  let { _perActionOnly, _privateHostReadAlwaysOffer, _privateHostReadAlways, ...state } = actionData;
+  return state;
 }
 export {
   stripPrivateOptions,

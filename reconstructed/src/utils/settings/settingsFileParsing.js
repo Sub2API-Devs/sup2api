@@ -41,37 +41,38 @@ import { uniq } from "../collections.js";
 import { env } from "../env.js";
 
 //@ chunk-dcmhvw5a.js:470784-471242 placement = parseSettingsFileUncached (0.417)
-function parseSettingsFileIfChanged(e, n, r = false) {
-  let s;
+function parseSettingsFileIfChanged(path, cache, pinned = false) {
+  let text;
   try {
-    if (!isInClaudeConfigHome(e)) vetRepoSettingsPath(getFsImplementation(), e);
-    let { resolvedPath, isSymlink, isCanonical } = safeResolvePath(getFsImplementation(), e);
-    if (!r && isSymlink && (!isCanonical || isSpecialPath(resolvedPath))) {
-      n.delete(e);
-      return settingsFileRedirectedError(e);
+    if (!isInClaudeConfigHome(path)) vetRepoSettingsPath(getFsImplementation(), path);
+    let { resolvedPath, isSymlink, isCanonical } = safeResolvePath(getFsImplementation(), path);
+    if (!pinned && isSymlink && (!isCanonical || isSpecialPath(resolvedPath))) {
+      cache.delete(path);
+      return settingsFileRedirectedError(path);
     }
-    let h;
-    if (r) h = readFileSync(resolvedPath, MAX_SETTINGS_JSON_BYTES);
-    else h = openBoundRead(resolvedPath, isCanonical, MAX_SETTINGS_JSON_BYTES, isSymlink);
-    if (h === null) {
-      n.delete(e);
-      return settingsFileUnverifiedError(e);
+    let fileText;
+    if (pinned) fileText = readFileSync(resolvedPath, MAX_SETTINGS_JSON_BYTES);
+    else fileText = openBoundRead(resolvedPath, isCanonical, MAX_SETTINGS_JSON_BYTES, isSymlink);
+    if (fileText === null) {
+      cache.delete(path);
+      return settingsFileUnverifiedError(path);
     }
-    s = h;
+    text = fileText;
   } catch (error) {
-    if (!isUnavailableErrorCode(getErrnoCode(error))) n.delete(e);
-    return settingsReadErrorResult(error, e);
+    if (!isUnavailableErrorCode(getErrnoCode(error))) cache.delete(path);
+    return settingsReadErrorResult(error, path);
   }
-  let a = n.get(e);
-  let c = a !== undefined && a.content === s ? a.parsed : parseSettingsContent(s, e);
-  n.set(e, {
-    content: s,
-    parsed: c,
+  let cached = cache.get(path);
+  let parsed =
+    cached !== undefined && cached.content === text ? cached.parsed : parseSettingsContent(text, path);
+  cache.set(path, {
+    content: text,
+    parsed,
   });
   return {
-    settings: c.settings ? clone(c.settings) : null,
-    errors: c.errors,
-    textRead: s,
+    settings: parsed.settings ? clone(parsed.settings) : null,
+    errors: parsed.errors,
+    textRead: text,
   };
 }
 //@ chunk-dcmhvw5a.js:471242-471331 placement
@@ -104,75 +105,79 @@ function makeFatalSettingsLoadResult(file, message) {
 /**
  * 把设置文件文本解析成对象并用 zod 校验；托管文档走宽容 schema（无效值按限制性值处理，记录 documentHasPolicyContent），普通文档校验失败返回 settings:null 与格式化错误。
  */
-function parseSettingsContent(e, file, r) {
-  if (e.trim() === "")
+function parseSettingsContent(text, file, policy) {
+  if (text.trim() === "")
     return {
       settings: {},
       errors: [],
       loadState: "loaded",
     };
-  let s = safeParseJSON(e, false);
-  if (r) {
-    if (!isPlainObject_2(s))
+  let parsed = safeParseJSON(text, false);
+  if (policy) {
+    if (!isPlainObject_2(parsed))
       return {
         settings: null,
         errors: [unparseablePolicyDocumentError(file)],
         loadState: "didNotLoad",
       };
-    let m = clone(s);
-    let f = validateSettingsDocument(m, file, {
+    let policyCopy = clone(parsed);
+    let issues = validateSettingsDocument(policyCopy, file, {
       skipMcpServerEntryFilter: true,
       policySource: true,
     });
-    let h = [];
-    let y = buildPolicyTolerantSettingsSchema(collectSettingsIssue(file, h), file, m).safeParse(m);
-    if (!y.success)
+    let policyIssues = [];
+    let policyParsed = buildPolicyTolerantSettingsSchema(
+      collectSettingsIssue(file, policyIssues),
+      file,
+      policyCopy,
+    ).safeParse(policyCopy);
+    if (!policyParsed.success)
       return {
         settings: null,
-        errors: [...f, ...formatZodError(y.error, file)],
+        errors: [...issues, ...formatZodError(policyParsed.error, file)],
         documentHasPolicyContent: false,
         loadState: "didNotLoad",
       };
     return {
-      settings: y.data,
-      errors: [...explainedPolicyChange(f, y.data, h), ...h],
-      documentHasPolicyContent: documentHasPolicyContent(s, y.data),
+      settings: policyParsed.data,
+      errors: [...explainedPolicyChange(issues, policyParsed.data, policyIssues), ...policyIssues],
+      documentHasPolicyContent: documentHasPolicyContent(parsed, policyParsed.data),
       loadState: "loaded",
     };
   }
-  let a = clone(s);
-  let c = [...dropManagedOnlyKeys(a, file), ...validateSettingsDocument(a, file)];
-  let g = getSettingsSchemaForDocument(a).safeParse(a);
-  if (!g.success) {
-    let m = formatZodError(g.error, file);
+  let docCopy = clone(parsed);
+  let issues = [...dropManagedOnlyKeys(docCopy, file), ...validateSettingsDocument(docCopy, file)];
+  let docParsed = getSettingsSchemaForDocument(docCopy).safeParse(docCopy);
+  if (!docParsed.success) {
+    let formatted = formatZodError(docParsed.error, file);
     return {
       settings: null,
-      errors: [...c, ...m],
+      errors: [...issues, ...formatted],
     };
   }
-  if (c.some((m) => m.severity === "fatal"))
+  if (issues.some((issue) => issue.severity === "fatal"))
     return {
       settings: null,
-      errors: c,
+      errors: issues,
     };
   return {
-    settings: g.data,
-    errors: c,
+    settings: docParsed.data,
+    errors: issues,
   };
 }
 //@ chunk-dcmhvw5a.js:472322-472732 placement
-function unparseablePolicyDocumentError(e, { userWritable: n = false } = {}) {
-  return n
+function unparseablePolicyDocumentError(file, { userWritable = false } = {}) {
+  return userWritable
     ? {
-        file: e,
+        file,
         path: "",
-        message: `Managed settings document (${e}) could not be parsed as a JSON object; none of its settings are in effect. Fix or remove it.`,
+        message: `Managed settings document (${file}) could not be parsed as a JSON object; none of its settings are in effect. Fix or remove it.`,
         severity: "warning",
         statusOnly: true,
         userWritable: true,
       }
     : {
-        file: e,
+        file,
         path: "",
         message:
           "Managed settings document could not be parsed as a JSON object; none of its settings are in effect. Fix or remove it.",
@@ -180,30 +185,30 @@ function unparseablePolicyDocumentError(e, { userWritable: n = false } = {}) {
       };
 }
 //@ chunk-dcmhvw5a.js:472732-472835 placement
-function isInClaudeConfigHome(e) {
+function isInClaudeConfigHome(path) {
   let claudeConfigDirOrNull = getClaudeConfigDirOrNull();
   if (claudeConfigDirOrNull === null) return false;
-  let r = identity(dirname(resolve(e)));
-  let s = resolve(claudeConfigDirOrNull);
-  return r === identity(s) || r === getPhysicalPathCached(s);
+  let parentDir = identity(dirname(resolve(path)));
+  let configDir = resolve(claudeConfigDirOrNull);
+  return parentDir === identity(configDir) || parentDir === getPhysicalPathCached(configDir);
 }
 //@ chunk-dcmhvw5a.js:472835-472842 placement
 var settingsParseFailure;
 //@ chunk-dcmhvw5a.js:472842-472955 placement
-function getPhysicalPathCached(e) {
-  if (settingsParseFailure?.lexical !== e) {
-    let n = dirname(e);
+function getPhysicalPathCached(path) {
+  if (settingsParseFailure?.lexical !== path) {
+    let parent = dirname(path);
     settingsParseFailure = {
-      lexical: e,
-      physical: identity(join(nativeRealpathLong(n) ?? n, basename(e))),
+      lexical: path,
+      physical: identity(join(nativeRealpathLong(parent) ?? parent, basename(path))),
     };
   }
   return settingsParseFailure.physical;
 }
 //@ chunk-dcmhvw5a.js:472955-473055 placement = handleFileSystemError (0.788)
-function logMissingSettingsFile(e) {
+function logMissingSettingsFile(path) {
   logForDebugging(
-    cleanForDisplay(`Broken symlink or missing file encountered for settings.json at path: ${e}`),
+    cleanForDisplay(`Broken symlink or missing file encountered for settings.json at path: ${path}`),
   );
 }
 //@ chunk-dcmhvw5a.js:473055-473121 placement
@@ -215,22 +220,22 @@ function missingSettingsFileResult() {
   };
 }
 //@ chunk-dcmhvw5a.js:473121-473249 placement
-function settingsReadErrorResult(error, n) {
+function settingsReadErrorResult(error, path) {
   if (mergeClients(error)) throw error;
-  handleFileSystemError(error, n);
+  handleFileSystemError(error, path);
   if (isENOENT(error)) return missingSettingsFileResult();
   return {
     settings: null,
-    errors: [unreadableSettingsFileError(n, error)],
+    errors: [unreadableSettingsFileError(path, error)],
     loadState: "didNotLoad",
   };
 }
 //@ chunk-dcmhvw5a.js:473249-473514 placement
-function unreadableSettingsFileError(file, error, r = "file") {
+function unreadableSettingsFileError(file, error, kind = "file") {
   return {
     file,
     path: "",
-    message: `${r === "directory" ? "Managed settings drop-in directory" : "Settings file"} could not be read: ${error instanceof Error ? error.message : String(error)}`,
+    message: `${kind === "directory" ? "Managed settings drop-in directory" : "Settings file"} could not be read: ${error instanceof Error ? error.message : String(error)}`,
     severity: "fatal",
     errorClass: "unreadable",
     ...(getErrnoCode(error) !== undefined && {
@@ -239,138 +244,144 @@ function unreadableSettingsFileError(file, error, r = "file") {
   };
 }
 //@ chunk-dcmhvw5a.js:473514-474089 placement
-function unreadableWslFlagWithoutPolicyError(e) {
+function unreadableWslFlagWithoutPolicyError(file) {
   return {
-    file: e,
+    file,
     path: "wslInheritsWindowsSettings",
-    message: `"wslInheritsWindowsSettings" in ${e} holds a value that cannot be read (it takes true or false) and no Windows administrator policy is deployed beside it (HKLM or ${WSL_MANAGED_SETTINGS_DIR}), so whether WSL inherits Windows policy is unknown: no Windows or managed-file policy is in effect (/etc/claude-code is not read beneath it), and unless server-managed settings supply the policy \u2014 they apply regardless \u2014 sign-in and policy enforcement fail closed until the flag is fixed.`,
+    message: `"wslInheritsWindowsSettings" in ${file} holds a value that cannot be read (it takes true or false) and no Windows administrator policy is deployed beside it (HKLM or ${WSL_MANAGED_SETTINGS_DIR}), so whether WSL inherits Windows policy is unknown: no Windows or managed-file policy is in effect (/etc/claude-code is not read beneath it), and unless server-managed settings supply the policy \u2014 they apply regardless \u2014 sign-in and policy enforcement fail closed until the flag is fixed.`,
     severity: "fatal",
     statusOnly: true,
   };
 }
 //@ chunk-dcmhvw5a.js:474089-474171 placement
-function isWslInheritsFatal(e) {
-  return e.path === "wslInheritsWindowsSettings" && e.severity === "fatal";
+function isWslInheritsFatal(issue) {
+  return issue.path === "wslInheritsWindowsSettings" && issue.severity === "fatal";
 }
 //@ chunk-dcmhvw5a.js:474171-474380 placement
-function mdmPolicyErrors(e, n, r) {
-  let s = e.withheldFlagRecord && r().heldOnly === true ? [...e.errors, e.withheldFlagRecord] : e.errors;
-  if (!s.some(isWslInheritsFatal)) return s;
-  if (!authoredPolicyContent(n())) return s;
-  return s.map((a) =>
-    isWslInheritsFatal(a)
+function mdmPolicyErrors(mdm, remote, file) {
+  let errors =
+    mdm.withheldFlagRecord && file().heldOnly === true ? [...mdm.errors, mdm.withheldFlagRecord] : mdm.errors;
+  if (!errors.some(isWslInheritsFatal)) return errors;
+  if (!authoredPolicyContent(remote())) return errors;
+  return errors.map((issue) =>
+    isWslInheritsFatal(issue)
       ? {
-          ...a,
+          ...issue,
           severity: "warning",
         }
-      : a,
+      : issue,
   );
 }
 //@ chunk-dcmhvw5a.js:474380-474729 placement
-function getSettingsRootPathForSource(source, n) {
+function getSettingsRootPathForSource(source, context) {
   switch (source) {
     case "userSettings":
       return resolve(getClaudeConfigDir());
     case "policySettings":
-      return resolve(requireCwd(n));
+      return resolve(requireCwd(context));
     case "projectSettings":
-      return resolve(n.projectConfigDir ?? requireCwd(n));
+      return resolve(context.projectConfigDir ?? requireCwd(context));
     case "localSettings": {
-      if (n.projectConfigDir !== undefined) return resolve(n.projectConfigDir);
-      return resolveLocalSettingsStoreRoot(requireCwd(n), n.canonicalGitRoot);
+      if (context.projectConfigDir !== undefined) return resolve(context.projectConfigDir);
+      return resolveLocalSettingsStoreRoot(requireCwd(context), context.canonicalGitRoot);
     }
     case "flagSettings":
-      return n.flagPath ? dirname(resolve(n.flagPath)) : resolve(requireCwd(n));
+      return context.flagPath ? dirname(resolve(context.flagPath)) : resolve(requireCwd(context));
   }
 }
 //@ chunk-dcmhvw5a.js:474729-474787 placement
-function requireCwd(e) {
-  if (e.cwd === null) throw new NoProjectDirectoryError();
-  return e.cwd;
+function requireCwd(context) {
+  if (context.cwd === null) throw new NoProjectDirectoryError();
+  return context.cwd;
 }
 //@ chunk-dcmhvw5a.js:474787-474909 placement
-function resolveLocalSettingsStoreRoot(e, n) {
-  let r = localSettingsStoreRootBeforeOwnership(e, n);
-  if (r.decided !== undefined) return r.decided;
-  if (!canonicalRootIsOwnedByProcessUser(r.root)) return r.cwdResolved;
-  return r.root;
+function resolveLocalSettingsStoreRoot(cwd, canonicalRoot) {
+  let result = localSettingsStoreRootBeforeOwnership(cwd, canonicalRoot);
+  if (result.decided !== undefined) return result.decided;
+  if (!canonicalRootIsOwnedByProcessUser(result.root)) return result.cwdResolved;
+  return result.root;
 }
 //@ chunk-dcmhvw5a.js:474909-475128 placement
-function localSettingsStoreRootBeforeOwnership(e, n) {
-  let r = n?.(e);
-  if (!r)
+function localSettingsStoreRootBeforeOwnership(cwd, canonicalRoot) {
+  let root = canonicalRoot?.(cwd);
+  if (!root)
     return {
-      decided: resolve(e),
+      decided: resolve(cwd),
     };
-  let s = resolve(r);
-  let a = resolve(e);
-  if (s === a)
+  let resolvedRoot = resolve(root);
+  let resolvedCwd = resolve(cwd);
+  if (resolvedRoot === resolvedCwd)
     return {
-      decided: s,
+      decided: resolvedRoot,
     };
-  let c;
+  let home;
   try {
-    c = normalizedRealHomeDir();
+    home = normalizedRealHomeDir();
   } catch {
     return {
-      decided: a,
+      decided: resolvedCwd,
     };
   }
-  if (s === c)
+  if (resolvedRoot === home)
     return {
-      decided: a,
+      decided: resolvedCwd,
     };
   return {
     decided: undefined,
-    root: s,
-    cwdResolved: a,
+    root: resolvedRoot,
+    cwdResolved: resolvedCwd,
   };
 }
 //@ chunk-dcmhvw5a.js:475128-475202 placement
-function canonicalRootOwnerUids(e) {
-  return commandSyncNameState().localStoreProbes.canonicalRootOwnerUids(e, canonicalRootOwners);
+function canonicalRootOwnerUids(canonicalRoot) {
+  return commandSyncNameState().localStoreProbes.canonicalRootOwnerUids(canonicalRoot, canonicalRootOwners);
 }
 //@ chunk-dcmhvw5a.js:475202-475369 placement
-function canonicalRootOwners(e) {
+function canonicalRootOwners(root) {
   let fsImplementation = getFsImplementation();
   let claudeEntryUid = null;
   try {
-    claudeEntryUid = fsImplementation.lstatSync(join(e, ".claude")).uid;
+    claudeEntryUid = fsImplementation.lstatSync(join(root, ".claude")).uid;
   } catch (error) {
     if (!isENOENT(error)) throw error;
   }
   return {
-    rootUid: fsImplementation.statSync(e).uid,
-    gitEntryUid: gitDirOwnerUid(e),
+    rootUid: fsImplementation.statSync(root).uid,
+    gitEntryUid: gitDirOwnerUid(root),
     claudeEntryUid,
   };
 }
 //@ chunk-dcmhvw5a.js:475369-475454 placement
-function gitDirOwnerUid(e) {
+function gitDirOwnerUid(root) {
   let fsImplementation = getFsImplementation();
   try {
-    return fsImplementation.lstatSync(join(e, ".git")).uid;
+    return fsImplementation.lstatSync(join(root, ".git")).uid;
   } catch (error) {
     throw error;
   }
 }
 //@ chunk-dcmhvw5a.js:475454-476578 placement
-function canonicalRootIsOwnedByProcessUser(root) {
+function canonicalRootIsOwnedByProcessUser(canonicalRoot) {
   if (typeof process.getuid !== "function" && typeof process.geteuid !== "function") {
     logForDebugging(
-      `localSettings: not canonicalizing the consent store to ${root} \u2014 this platform has no uid semantics to verify directory ownership with, so the store stays at the session cwd (canonicalization is POSIX-only)`,
+      `localSettings: not canonicalizing the consent store to ${canonicalRoot} \u2014 this platform has no uid semantics to verify directory ownership with, so the store stays at the session cwd (canonicalization is POSIX-only)`,
       {
         level: "warn",
       },
     );
     return false;
   }
-  let n = typeof process.geteuid === "function" ? process.geteuid() : process.getuid?.();
+  let currentUid = typeof process.geteuid === "function" ? process.geteuid() : process.getuid?.();
   try {
-    let { rootUid, gitEntryUid, claudeEntryUid } = canonicalRootOwnerUids(root);
-    if (rootUid === n && gitEntryUid === n && (claudeEntryUid === null || claudeEntryUid === n)) return true;
+    let { rootUid, gitEntryUid, claudeEntryUid } = canonicalRootOwnerUids(canonicalRoot);
+    if (
+      rootUid === currentUid &&
+      gitEntryUid === currentUid &&
+      (claudeEntryUid === null || claudeEntryUid === currentUid)
+    )
+      return true;
     logForDebugging(
-      `localSettings: not canonicalizing the consent store to ${root} \u2014 it (uid ${rootUid}), its .git entry (uid ${gitEntryUid}), or its .claude entry (uid ${claudeEntryUid ?? "absent"}) is not owned by the current user (uid ${n}); the store stays at the session cwd (the pre-canonicalization behavior). If you own this repo, chown it (including .git and .claude) or run from a directory you own.`,
+      `localSettings: not canonicalizing the consent store to ${canonicalRoot} \u2014 it (uid ${rootUid}), its .git entry (uid ${gitEntryUid}), or its .claude entry (uid ${claudeEntryUid ?? "absent"}) is not owned by the current user (uid ${currentUid}); the store stays at the session cwd (the pre-canonicalization behavior). If you own this repo, chown it (including .git and .claude) or run from a directory you own.`,
       {
         level: "warn",
       },
@@ -378,7 +389,7 @@ function canonicalRootIsOwnedByProcessUser(root) {
     return false;
   } catch (error) {
     logForDebugging(
-      `localSettings: not canonicalizing the consent store to ${root} \u2014 its ownership could not be verified (${error instanceof Error ? error.message : String(error)}); the store stays at the session cwd`,
+      `localSettings: not canonicalizing the consent store to ${canonicalRoot} \u2014 its ownership could not be verified (${error instanceof Error ? error.message : String(error)}); the store stays at the session cwd`,
       {
         level: "warn",
       },
@@ -392,15 +403,15 @@ function normalizedRealHomeDir() {
 }
 //@ chunk-dcmhvw5a.js:476648-476753 placement
 function normalizedRealHome() {
-  let e = nativeRealpathLong(homedir());
-  if (e === null) throw Error("home directory realpath unavailable");
-  return identity(e);
+  let realHome = nativeRealpathLong(homedir());
+  if (realHome === null) throw Error("home directory realpath unavailable");
+  return identity(realHome);
 }
 //@ chunk-dcmhvw5a.js:476753-476841 placement = isApiKeyHelperFromProjectOrLocalSettings (0.831)
-function getRuleAnchorRootForSource(e, settingsContext) {
-  return e === "localSettings" || e === "projectSettings"
+function getRuleAnchorRootForSource(source, settingsContext) {
+  return source === "localSettings" || source === "projectSettings"
     ? resolve(requireCwd(settingsContext))
-    : getSettingsRootPathForSource(e, settingsContext);
+    : getSettingsRootPathForSource(source, settingsContext);
 }
 //@ chunk-dcmhvw5a.js:476841-476892 placement = isInGlobalClaudeFolder (1)
 function userSettingsHomes() {
@@ -412,46 +423,60 @@ var USER_SETTINGS_FILE_NAMES = {
   cowork: "cowork_settings.json",
 };
 //@ chunk-dcmhvw5a.js:476955-477058 placement
-function getUserSettingsFileName(e) {
-  if (e.coworkPlugins || env.CLAUDE_CODE_USE_COWORK_PLUGINS) return USER_SETTINGS_FILE_NAMES.cowork;
+function getUserSettingsFileName(settingsContext) {
+  if (settingsContext.coworkPlugins || env.CLAUDE_CODE_USE_COWORK_PLUGINS)
+    return USER_SETTINGS_FILE_NAMES.cowork;
   return USER_SETTINGS_FILE_NAMES.default;
 }
 //@ chunk-dcmhvw5a.js:477058-477334 placement = getSettingsFilePathForSource (0.792)
 /**
  * 来源 → 设置文件路径：user=<配置目录>/settings.json（cowork 模式 cowork_settings.json）；project=<项目>/.claude/settings.json；local=<项目>/.claude/settings.local.json；policy=<托管目录>/managed-settings.json；flag=--settings 指定的路径。diskless 或无项目时 project/local 返回 undefined。
  */
-function getSettingsFilePathForSource_3(source, n) {
+function getSettingsFilePathForSource_3(source, settingsContext) {
   switch (source) {
     case "userSettings":
-      return join(getSettingsRootPathForSource(source, n), getUserSettingsFileName(n));
+      return join(
+        getSettingsRootPathForSource(source, settingsContext),
+        getUserSettingsFileName(settingsContext),
+      );
     case "projectSettings":
     case "localSettings": {
-      if (n.diskless || (n.cwd === null && n.projectConfigDir === undefined)) return;
-      return join(getSettingsRootPathForSource(source, n), getRelativeSettingsFilePathForSource(source));
+      if (
+        settingsContext.diskless ||
+        (settingsContext.cwd === null && settingsContext.projectConfigDir === undefined)
+      )
+        return;
+      return join(
+        getSettingsRootPathForSource(source, settingsContext),
+        getRelativeSettingsFilePathForSource(source),
+      );
     }
     case "policySettings":
       return getManagedSettingsFilePath();
     case "flagSettings":
-      return n.flagPath;
+      return settingsContext.flagPath;
   }
 }
 export {
   resolveLocalSettingsStoreRoot,
   USER_SETTINGS_FILE_NAMES,
   isInClaudeConfigHome,
+  parseSettingsContent,
+  settingsReadErrorResult,
+  getSettingsFilePathForSource_3,
   getSettingsRootPathForSource,
   localSettingsStoreRootBeforeOwnership,
-  getSettingsFilePathForSource_3,
   getRuleAnchorRootForSource,
   parseSettingsFileIfChanged,
   userSettingsHomes,
-  parseSettingsContent,
   mdmPolicyErrors,
-  settingsReadErrorResult,
   logMissingSettingsFile,
   missingSettingsFileResult,
   unreadableSettingsFileError,
   unparseablePolicyDocumentError,
   unreadableWslFlagWithoutPolicyError,
   normalizedRealHomeDir,
+  canonicalRootIsOwnedByProcessUser,
+  canonicalRootOwnerUids,
+  requireCwd,
 };

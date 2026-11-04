@@ -25,22 +25,22 @@ import { clearReparsePoints } from "../../utils/pathIdentity.js";
 
 //@ chunk-t3sg9e26.js:34198-34300 placement
 function sessionWorktreesRoot(canonicalRepoPath, worktreePath) {
-  let t = dirname(dirname(resolve(worktreePath)));
-  return basename(t) === "_sessions" && resolve(canonicalRepoPath).startsWith(dirname(t) + sep)
-    ? t
+  let root = dirname(dirname(resolve(worktreePath)));
+  return basename(root) === "_sessions" && resolve(canonicalRepoPath).startsWith(dirname(root) + sep)
+    ? root
     : commonPathPrefix(canonicalRepoPath, worktreePath);
 }
 //@ chunk-t3sg9e26.js:34300-34448 placement
-function commonPathPrefix(e, n) {
-  let parts = resolve(e).split(sep);
-  let parts_2 = resolve(n).split(sep);
-  let s = 0;
-  while (s < parts.length && s < parts_2.length && parts[s] === parts_2[s]) s++;
-  return s >= 2 ? parts.slice(0, s).join(sep) : undefined;
+function commonPathPrefix(left, right) {
+  let parts = resolve(left).split(sep);
+  let parts_2 = resolve(right).split(sep);
+  let index = 0;
+  while (index < parts.length && index < parts_2.length && parts[index] === parts_2[index]) index++;
+  return index >= 2 ? parts.slice(0, index).join(sep) : undefined;
 }
 //@ chunk-t3sg9e26.js:34448-35900 placement
-async function addSessionWorktree(e) {
-  let { canonicalRepoPath, worktreePath, ref, onDebug, signal, gitEnvironment } = e;
+async function addSessionWorktree(options) {
+  let { canonicalRepoPath, worktreePath, ref, onDebug, signal, gitEnvironment } = options;
   if (worktreePath === canonicalRepoPath)
     throw Error("addSessionWorktree: worktreePath must not equal canonicalRepoPath");
   let ctx = {
@@ -57,9 +57,9 @@ async function addSessionWorktree(e) {
       ...LOCKED_GIT_ENV,
     })
   ).trim();
-  let u;
+  let result;
   try {
-    u = (
+    result = (
       await runGit(ctx, worktreePath, ["--git-dir", join(worktreePath, ".git"), "rev-parse", "HEAD"], {
         ...LOCKED_GIT_ENV,
       })
@@ -67,7 +67,7 @@ async function addSessionWorktree(e) {
   } catch (error) {
     if (signal?.aborted) throw error;
   }
-  if (u === commit) {
+  if (result === commit) {
     let trimmed = (await runGit(ctx, worktreePath, ["rev-parse", "--absolute-git-dir"])).trim();
     await writeFile(
       join(trimmed, "FETCH_HEAD"),
@@ -78,8 +78,8 @@ async function addSessionWorktree(e) {
     return;
   }
   onDebug(
-    u
-      ? `[byoc:git] Worktree ${worktreePath} at wrong commit ${u.slice(0, 12)}, clearing before re-add`
+    result
+      ? `[byoc:git] Worktree ${worktreePath} at wrong commit ${result.slice(0, 12)}, clearing before re-add`
       : `[byoc:git] Clearing ${worktreePath} before worktree add`,
   );
   await withBoundedTimeout(
@@ -90,13 +90,13 @@ async function addSessionWorktree(e) {
     onDebug(`[byoc:git] rm ${worktreePath} failed (continuing): ${error}`);
   });
   let allowRepair = await withBoundedTimeout(
-    pathSpellings(worktreePath).then((f) => pruneWorktreeRegistration(canonicalRepoPath, f)),
+    pathSpellings(worktreePath).then((spellings) => pruneWorktreeRegistration(canonicalRepoPath, spellings)),
     FILESYSTEM_OP_TIMEOUT_MS,
     `[runner:stuck] worktree deregister ${canonicalRepoPath} (check NFS/CSI mount health)`,
   ).then(
-    (f) => {
-      if (f.outcome === "kept")
-        onDebug(`[byoc:git] left the worktree registration of ${worktreePath} in place: ${f.reason}`);
+    (entry) => {
+      if (entry.outcome === "kept")
+        onDebug(`[byoc:git] left the worktree registration of ${worktreePath} in place: ${entry.reason}`);
       return true;
     },
     (error) => {
@@ -125,12 +125,12 @@ async function addDetachedWorktree(ctx, repoPath, worktreePath, commit, allowRep
   } catch (error) {
     if (!allowRepair || !errorText(error).includes("is a missing but already registered worktree"))
       throw error;
-    let c = await withBoundedTimeout(
-      Promise.all([realpath(repoPath), pathSpellings(worktreePath)]).then(([d, u]) =>
+    let realRepo = await withBoundedTimeout(
+      Promise.all([realpath(repoPath), pathSpellings(worktreePath)]).then(([realPath, spellings]) =>
         deregisterWorktree(
-          join(d, ".git"),
+          join(realPath, ".git"),
           {
-            worktreePath: u,
+            worktreePath: spellings,
             repoSpelled: repoPath,
           },
           {
@@ -144,9 +144,9 @@ async function addDetachedWorktree(ctx, repoPath, worktreePath, commit, allowRep
       outcome: "kept",
       reason: errorText(error),
     }));
-    if (c.outcome !== "dropped") {
+    if (realRepo.outcome !== "dropped") {
       ctx.onDebug(
-        `[byoc:git] git still registers ${worktreePath} with its folder gone, and the registration could not be dropped${c.outcome === "kept" ? `: ${c.reason}` : ""}; not retrying`,
+        `[byoc:git] git still registers ${worktreePath} with its folder gone, and the registration could not be dropped${realRepo.outcome === "kept" ? `: ${realRepo.reason}` : ""}; not retrying`,
       );
       throw error;
     }
@@ -158,15 +158,15 @@ async function addDetachedWorktree(ctx, repoPath, worktreePath, commit, allowRep
 }
 //@ chunk-t3sg9e26.js:36653-36772 placement
 async function pathSpellings(worktreePath) {
-  let n = await realpath(dirname(worktreePath)).catch(() => null);
-  let t = n === null ? null : join(n, basename(worktreePath));
-  return t === null || t === worktreePath ? [worktreePath] : [worktreePath, t];
+  let realParent = await realpath(dirname(worktreePath)).catch(() => null);
+  let resolved = realParent === null ? null : join(realParent, basename(worktreePath));
+  return resolved === null || resolved === worktreePath ? [worktreePath] : [worktreePath, resolved];
 }
 //@ chunk-t3sg9e26.js:36772-37920 placement
-async function removeSessionWorktree(e) {
-  let { worktrees, onDebug, signal } = e;
+async function removeSessionWorktree(options) {
+  let { worktrees, onDebug, signal } = options;
   for (let { canonicalRepoPath, worktreePath } of worktrees) {
-    let a = {
+    let ctx = {
       repoPath: canonicalRepoPath,
       gitURL: "",
       authURL: "",
@@ -190,7 +190,7 @@ async function removeSessionWorktree(e) {
         onDebug(`[byoc:git] kept worktree ${worktreePath} \u2014 unremovable reparse point`);
         continue;
       }
-      let d = await withBoundedTimeout(
+      let result = await withBoundedTimeout(
         removeWorktreeSafely(canonicalRepoPath, worktreePath, {
           trustedRoot: sessionWorktreesRoot(canonicalRepoPath, worktreePath),
           deregisterIfStopped: true,
@@ -199,10 +199,10 @@ async function removeSessionWorktree(e) {
         GIT_WATCHDOG_MS,
         `[runner:stuck] remove ${worktreePath} (check NFS/CSI mount health)`,
       );
-      if (d.outcome === "unanchored")
-        await runGit(a, canonicalRepoPath, ["worktree", "remove", "--force", worktreePath]);
-      else if (d.outcome !== "removed") {
-        onDebug(`[byoc:git] worktree remove ${worktreePath} failed: ${worktreeRemovalText(d)}`);
+      if (result.outcome === "unanchored")
+        await runGit(ctx, canonicalRepoPath, ["worktree", "remove", "--force", worktreePath]);
+      else if (result.outcome !== "removed") {
+        onDebug(`[byoc:git] worktree remove ${worktreePath} failed: ${worktreeRemovalText(result)}`);
         continue;
       }
       onDebug(`[byoc:git] Removed worktree ${worktreePath}`);
@@ -216,9 +216,9 @@ async function removeSessionWorktree(e) {
       FILESYSTEM_OP_TIMEOUT_MS,
       `[runner:stuck] worktree deregister ${canonicalRepoPath} (check NFS/CSI mount health)`,
     ).then(
-      (a) => {
-        if (a.outcome === "kept")
-          onDebug(`[byoc:git] left the worktree registration of ${worktreePath} in place: ${a.reason}`);
+      (entry) => {
+        if (entry.outcome === "kept")
+          onDebug(`[byoc:git] left the worktree registration of ${worktreePath} in place: ${entry.reason}`);
       },
       (error) => {
         onDebug(`[byoc:git] worktree deregister did not finish: ${error}`);
@@ -226,14 +226,15 @@ async function removeSessionWorktree(e) {
     );
 }
 //@ chunk-t3sg9e26.js:37920-38120 placement
-function outcomeBranchesByRepo(e) {
-  let n = new Map();
-  for (let t of e) {
-    let branches = t.branches ?? [];
-    let [s, ...o] = branches;
-    if (o.length > 0) throw Error(`Outcome for ${t.repo} has ${branches.length} branches, expected 0 or 1`);
-    if (s) n.set(t.repo, s);
+function outcomeBranchesByRepo(outcomes) {
+  let byRepo = new Map();
+  for (let outcome of outcomes) {
+    let branches = outcome.branches ?? [];
+    let [first, ...rest] = branches;
+    if (rest.length > 0)
+      throw Error(`Outcome for ${outcome.repo} has ${branches.length} branches, expected 0 or 1`);
+    if (first) byRepo.set(outcome.repo, first);
   }
-  return n;
+  return byRepo;
 }
 export { addSessionWorktree, removeSessionWorktree, outcomeBranchesByRepo };

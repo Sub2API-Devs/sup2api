@@ -8,8 +8,8 @@
  * pieces: chunk-ag5x7vhf.js (1), chunk-yqj79cx2.js (4)
  * attribution: fingerprint 2, placement 3
  */
-import { Rh, R, y, P } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { memo, useRef, useState, useEffect } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTheme } from "./design-system/ThemeProvider.js";
 import { useSettingsState } from "../hooks/useSettings.js";
 import { getColorFile } from "../native-ts/color-diff/index.js";
@@ -41,295 +41,312 @@ import { SPINNER_COLUMN_MIN_WIDTH } from "./Spinner/SpinnerColumn.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import { shrinkTerminalSize } from "./Messages.js";
 import { TerminalSizeContext } from "../ink/terminalModes.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-yqj79cx2.js:3215-5545 fingerprint = HighlightedCode (0.345)
 /**
  * 语法高亮代码：{code, filePath, width, dim, startLine, lineNumbers}；按扩展名选语言，结果缓存，超长截断为 "… from line N"。
  */
-var HIGHLIGHT_MAX_WIDTH = 80;
-var HighlightedCode = Rh(function (props) {
-  let $ = w(40);
-  let { code, filePath, width, dim, startLine, lineNumbers } = props;
-  let h = dim === undefined ? false : dim;
-  let c = startLine === undefined ? 1 : startLine;
-  let p = lineNumbers === undefined ? true : lineNumbers;
-  let ref = R(null);
-  let [measuredWidth, setMeasuredWidth] = y(HIGHLIGHT_MAX_WIDTH);
-  let pt = width || measuredWidth;
-  let [x] = useTheme();
-  let syntaxHighlightingDisabled = useSettingsState().syntaxHighlightingDisabled ?? false;
-  let v;
-  if ($[0] !== code || $[1] !== filePath || $[2] !== syntaxHighlightingDisabled) {
-    _e: {
-      if (syntaxHighlightingDisabled) {
-        v = null;
-        break _e;
-      }
-      let colorFile = getColorFile();
-      if (!colorFile) {
-        v = null;
-        break _e;
-      }
-      v = new colorFile(convertLeadingTabsToSpaces(code), filePath);
-    }
-    $[0] = code;
-    $[1] = filePath;
-    $[2] = syntaxHighlightingDisabled;
-    $[3] = v;
-  } else v = $[3];
-  let I = v;
-  let Qt;
-  let Vt;
-  if ($[4] !== width) {
-    Qt = () => {
-      if (!width && ref.current) {
-        let { width: elementWidth } = measureElement(ref.current);
-        if (elementWidth > 0) setMeasuredWidth(elementWidth - 2);
-      }
-    };
-    Vt = [width];
-    $[4] = width;
-    $[5] = Qt;
-    $[6] = Vt;
-  } else {
-    Qt = $[5];
-    Vt = $[6];
-  }
-  P(Qt, Vt);
-  let Zt;
-  if ($[7] !== code) {
-    Zt = countLines(code);
-    $[7] = code;
-    $[8] = Zt;
-  } else Zt = $[8];
-  let Ae = String(Zt).length + 2;
-  let bt;
-  Ci: {
-    if (!p || c === 1) {
-      bt = null;
-      break Ci;
-    }
-    let te = countLines(code);
-    let et = String(c + te - 1).length;
-    const extraCols = Math.max(0, et - String(te).length);
-    let b;
-    if ($[9] !== et || $[10] !== extraCols) {
-      b = {
-        digits: et,
-        extraCols,
-      };
-      $[9] = et;
-      $[10] = extraCols;
-      $[11] = b;
-    } else b = $[11];
-    bt = b;
-  }
-  let yt = bt;
-  let $e = useIsFullscreen() || c !== 1;
-  let M;
-  Gi: {
-    if (I === null) {
-      M = null;
-      break Gi;
-    }
-    let B = pt - (yt?.extraCols ?? 0) + (p ? 0 : Ae);
-    if (p && !$e) {
-      let lines;
-      if ($[12] !== I || $[13] !== B || $[14] !== h || $[15] !== x) {
-        lines = I.render(x, B, h) ?? [];
-        $[12] = I;
-        $[13] = B;
-        $[14] = h;
-        $[15] = x;
-        $[16] = lines;
-      } else lines = $[16];
-      let N;
-      if ($[17] !== lines) {
-        N = {
-          split: false,
-          lines,
-        };
-        $[17] = lines;
-        $[18] = N;
-      } else N = $[18];
-      M = N;
-      break Gi;
-    }
-    let b;
-    if ($[19] !== I || $[20] !== B || $[21] !== h || $[22] !== x) {
-      b = I.renderSplit(x, B, h);
-      $[19] = I;
-      $[20] = B;
-      $[21] = h;
-      $[22] = x;
-      $[23] = b;
-    } else b = $[23];
-    let { gutters, contents } = b;
-    let N;
-    if ($[24] !== contents || $[25] !== gutters) {
-      N = {
-        split: true,
-        gutters,
-        contents,
-      };
-      $[24] = contents;
-      $[25] = gutters;
-      $[26] = N;
-    } else N = $[26];
-    M = N;
-  }
-  let k = M;
-  let b;
-  Ni: {
-    if (yt === null || k === null || !k.split) {
-      b = null;
-      break Ni;
-    }
-    let { digits } = yt;
-    let N;
-    if ($[27] !== digits || $[28] !== k.gutters || $[29] !== c) {
-      let kt = c;
-      N = k.gutters.map((gutter) => {
-        if (stripAnsi(gutter).trim() === "") {
-          return " ".repeat(digits + 2);
+var HIGHLIGHT_MAX_WIDTH; // deferred: uses useTheme (./design-system/ThemeProvider.js) of its import cycle while loading; runs once the cycle is complete
+var HighlightedCode;
+deferInit("chunk-yqj79cx2.js:3215", () => {
+  HIGHLIGHT_MAX_WIDTH = 80;
+  HighlightedCode = memo(function (props) {
+    let $ = useMemoCache(40);
+    let { code, filePath, width, dim, startLine, lineNumbers } = props;
+    let isDim = dim === undefined ? false : dim;
+    let firstLine = startLine === undefined ? 1 : startLine;
+    let showLineNumbers = lineNumbers === undefined ? true : lineNumbers;
+    let ref = useRef(null);
+    let [measuredWidth, setMeasuredWidth] = useState(HIGHLIGHT_MAX_WIDTH);
+    let effectiveWidth = width || measuredWidth;
+    let [theme] = useTheme();
+    let syntaxHighlightingDisabled = useSettingsState().syntaxHighlightingDisabled ?? false;
+    let colorFile;
+    if ($[0] !== code || $[1] !== filePath || $[2] !== syntaxHighlightingDisabled) {
+      _e: {
+        if (syntaxHighlightingDisabled) {
+          colorFile = null;
+          break _e;
         }
-        let ve = kt;
-        kt = kt + 1;
-        return ` ${String(ve).padStart(digits)} `;
-      });
-      $[27] = digits;
-      $[28] = k.gutters;
-      $[29] = c;
-      $[30] = N;
-    } else N = $[30];
-    b = N;
-  }
-  let Ct = b;
-  let N;
-  if (
-    $[31] !== code ||
-    $[32] !== h ||
-    $[33] !== Ct ||
-    $[34] !== filePath ||
-    $[35] !== p ||
-    $[36] !== k ||
-    $[37] !== c ||
-    $[38] !== syntaxHighlightingDisabled
-  ) {
-    N = jsxProd_default(Box, {
-      ref,
-      children: k
-        ? jsxProd_default(Box, {
-            flexDirection: "column",
-            children: k.split
-              ? k.contents.map((content, rt) =>
-                  !p
-                    ? jsxProd_default(
-                        Text,
-                        {
-                          children: jsxProd_default(Ansi, {
-                            children: content,
-                          }),
-                        },
-                        rt,
-                      )
-                    : jsxProd_default(
-                        CodeLineRow,
-                        {
-                          gutter: k.gutters[rt],
-                          content,
-                          displayGutter: Ct?.[rt],
-                        },
-                        rt,
-                      ),
-                )
-              : k.lines.map(renderFallbackText),
-          })
-        : jsxProd_default_2(Box, {
-            flexDirection: "column",
-            children: [
-              p &&
-                c !== 1 &&
-                jsxProd_default_2(Text, {
-                  dimColor: true,
-                  children: ["\u2026 from line ", c],
+        let colorFile_2 = getColorFile();
+        if (!colorFile_2) {
+          colorFile = null;
+          break _e;
+        }
+        colorFile = new colorFile_2(convertLeadingTabsToSpaces(code), filePath);
+      }
+      $[0] = code;
+      $[1] = filePath;
+      $[2] = syntaxHighlightingDisabled;
+      $[3] = colorFile;
+    } else colorFile = $[3];
+    let highlighter = colorFile;
+    let measureEffect;
+    let measureDeps;
+    if ($[4] !== width) {
+      measureEffect = () => {
+        if (!width && ref.current) {
+          let { width: elementWidth } = measureElement(ref.current);
+          if (elementWidth > 0) setMeasuredWidth(elementWidth - 2);
+        }
+      };
+      measureDeps = [width];
+      $[4] = width;
+      $[5] = measureEffect;
+      $[6] = measureDeps;
+    } else {
+      measureEffect = $[5];
+      measureDeps = $[6];
+    }
+    useEffect(measureEffect, measureDeps);
+    let lineCount;
+    if ($[7] !== code) {
+      lineCount = countLines(code);
+      $[7] = code;
+      $[8] = lineCount;
+    } else lineCount = $[8];
+    let gutterWidth = String(lineCount).length + 2;
+    let numbering;
+    Ci: {
+      if (!showLineNumbers || firstLine === 1) {
+        numbering = null;
+        break Ci;
+      }
+      let count = countLines(code);
+      let digits = String(firstLine + count - 1).length;
+      const extraCols = Math.max(0, digits - String(count).length);
+      let digitsInfo;
+      if ($[9] !== digits || $[10] !== extraCols) {
+        digitsInfo = {
+          digits,
+          extraCols,
+        };
+        $[9] = digits;
+        $[10] = extraCols;
+        $[11] = digitsInfo;
+      } else digitsInfo = $[11];
+      numbering = digitsInfo;
+    }
+    let digitsInfo = numbering;
+    let showFromLine = useIsFullscreen() || firstLine !== 1;
+    let highlighted;
+    Gi: {
+      if (highlighter === null) {
+        highlighted = null;
+        break Gi;
+      }
+      let renderWidth = effectiveWidth - (digitsInfo?.extraCols ?? 0) + (showLineNumbers ? 0 : gutterWidth);
+      if (showLineNumbers && !showFromLine) {
+        let lines;
+        if ($[12] !== highlighter || $[13] !== renderWidth || $[14] !== isDim || $[15] !== theme) {
+          lines = highlighter.render(theme, renderWidth, isDim) ?? [];
+          $[12] = highlighter;
+          $[13] = renderWidth;
+          $[14] = isDim;
+          $[15] = theme;
+          $[16] = lines;
+        } else lines = $[16];
+        let unsplit;
+        if ($[17] !== lines) {
+          unsplit = {
+            split: false,
+            lines,
+          };
+          $[17] = lines;
+          $[18] = unsplit;
+        } else unsplit = $[18];
+        highlighted = unsplit;
+        break Gi;
+      }
+      let splitResult;
+      if ($[19] !== highlighter || $[20] !== renderWidth || $[21] !== isDim || $[22] !== theme) {
+        splitResult = highlighter.renderSplit(theme, renderWidth, isDim);
+        $[19] = highlighter;
+        $[20] = renderWidth;
+        $[21] = isDim;
+        $[22] = theme;
+        $[23] = splitResult;
+      } else splitResult = $[23];
+      let { gutters, contents } = splitResult;
+      let splitHighlight;
+      if ($[24] !== contents || $[25] !== gutters) {
+        splitHighlight = {
+          split: true,
+          gutters,
+          contents,
+        };
+        $[24] = contents;
+        $[25] = gutters;
+        $[26] = splitHighlight;
+      } else splitHighlight = $[26];
+      highlighted = splitHighlight;
+    }
+    let rendered = highlighted;
+    let displayGutters;
+    Ni: {
+      if (digitsInfo === null || rendered === null || !rendered.split) {
+        displayGutters = null;
+        break Ni;
+      }
+      let { digits } = digitsInfo;
+      let gutters;
+      if ($[27] !== digits || $[28] !== rendered.gutters || $[29] !== firstLine) {
+        let lineNumber = firstLine;
+        gutters = rendered.gutters.map((gutter) => {
+          if (stripAnsi(gutter).trim() === "") {
+            return " ".repeat(digits + 2);
+          }
+          let currentLine = lineNumber;
+          lineNumber = lineNumber + 1;
+          return ` ${String(currentLine).padStart(digits)} `;
+        });
+        $[27] = digits;
+        $[28] = rendered.gutters;
+        $[29] = firstLine;
+        $[30] = gutters;
+      } else gutters = $[30];
+      displayGutters = gutters;
+    }
+    let displayGutters_2 = displayGutters;
+    let element;
+    if (
+      $[31] !== code ||
+      $[32] !== isDim ||
+      $[33] !== displayGutters_2 ||
+      $[34] !== filePath ||
+      $[35] !== showLineNumbers ||
+      $[36] !== rendered ||
+      $[37] !== firstLine ||
+      $[38] !== syntaxHighlightingDisabled
+    ) {
+      element = jsxProd_default(Box, {
+        ref,
+        children: rendered
+          ? jsxProd_default(Box, {
+              flexDirection: "column",
+              children: rendered.split
+                ? rendered.contents.map((content, lineIndex) =>
+                    !showLineNumbers
+                      ? jsxProd_default(
+                          Text,
+                          {
+                            children: jsxProd_default(Ansi, {
+                              children: content,
+                            }),
+                          },
+                          lineIndex,
+                        )
+                      : jsxProd_default(
+                          CodeLineRow,
+                          {
+                            gutter: rendered.gutters[lineIndex],
+                            content,
+                            displayGutter: displayGutters_2?.[lineIndex],
+                          },
+                          lineIndex,
+                        ),
+                  )
+                : rendered.lines.map(renderFallbackText),
+            })
+          : jsxProd_default_2(Box, {
+              flexDirection: "column",
+              children: [
+                showLineNumbers &&
+                  firstLine !== 1 &&
+                  jsxProd_default_2(Text, {
+                    dimColor: true,
+                    children: ["\u2026 from line ", firstLine],
+                  }),
+                jsxProd_default(HighlightedCodeFallback, {
+                  code,
+                  filePath,
+                  dim: isDim,
+                  skipColoring: syntaxHighlightingDisabled,
                 }),
-              jsxProd_default(HighlightedCodeFallback, {
-                code,
-                filePath,
-                dim: h,
-                skipColoring: syntaxHighlightingDisabled,
-              }),
-            ],
-          }),
-    });
-    $[31] = code;
-    $[32] = h;
-    $[33] = Ct;
-    $[34] = filePath;
-    $[35] = p;
-    $[36] = k;
-    $[37] = c;
-    $[38] = syntaxHighlightingDisabled;
-    $[39] = N;
-  } else N = $[39];
-  return N;
+              ],
+            }),
+      });
+      $[31] = code;
+      $[32] = isDim;
+      $[33] = displayGutters_2;
+      $[34] = filePath;
+      $[35] = showLineNumbers;
+      $[36] = rendered;
+      $[37] = firstLine;
+      $[38] = syntaxHighlightingDisabled;
+      $[39] = element;
+    } else element = $[39];
+    return element;
+  });
 });
 //@ chunk-yqj79cx2.js:5545-6164 placement
 /**
  * 计算代码每个逻辑行折行后占用的屏幕行数：无高亮器或禁用高亮时按纯文本折行估算，否则用高亮器 renderSplit 的 gutter 位置差得出。
  */
-function useHighlightedLineHeights(o, filePath, i) {
-  let m = w(8);
-  let [g] = useTheme();
+function useHighlightedLineHeights(code, filePath, width) {
+  let $ = useMemoCache(8);
+  let [theme] = useTheme();
   let syntaxHighlightingDisabled = useSettingsState().syntaxHighlightingDisabled ?? false;
-  let d;
-  if (m[0] !== o || m[1] !== filePath || m[2] !== syntaxHighlightingDisabled || m[3] !== g || m[4] !== i) {
+  let heights;
+  if (
+    $[0] !== code ||
+    $[1] !== filePath ||
+    $[2] !== syntaxHighlightingDisabled ||
+    $[3] !== theme ||
+    $[4] !== width
+  ) {
     W: {
-      let h = syntaxHighlightingDisabled ? null : getColorFile();
-      if (h === null) {
-        let { text, markers } = protectLongLines(convertLeadingTabsToSpaces(o));
-        let D = squashTextOf([restoreLongLines(text, markers)]);
-        let lines = D.split(`
+      let colorFile = syntaxHighlightingDisabled ? null : getColorFile();
+      if (colorFile === null) {
+        let { text, markers } = protectLongLines(convertLeadingTabsToSpaces(code));
+        let joined = squashTextOf([restoreLongLines(text, markers)]);
+        let lines = joined.split(`
 `);
         if (lines.length > 1 && lines.at(-1) === "") lines.pop();
-        if (measureTextAlias(D, i).width <= i) {
-          d = lines.map(fallbackLineCount);
+        if (measureTextAlias(joined, width).width <= width) {
+          heights = lines.map(fallbackLineCount);
           break W;
         }
-        let pt;
-        if (m[6] !== i) {
-          pt = (x) =>
+        let countLineHeight;
+        if ($[6] !== width) {
+          countLineHeight = (line) =>
             Math.max(
               1,
               countCharInString(
-                wrapText(x.replace(/\r$/, ""), i, "wrap"),
+                wrapText(line.replace(/\r$/, ""), width, "wrap"),
                 `
 `,
               ) + 1,
             );
-          m[6] = i;
-          m[7] = pt;
-        } else pt = m[7];
-        d = lines.map(pt);
+          $[6] = width;
+          $[7] = countLineHeight;
+        } else countLineHeight = $[7];
+        heights = lines.map(countLineHeight);
         break W;
       }
-      let { gutters } = new h(convertLeadingTabsToSpaces(o), filePath).renderSplit(g, i, false);
+      let { gutters } = new colorFile(convertLeadingTabsToSpaces(code), filePath).renderSplit(
+        theme,
+        width,
+        false,
+      );
       let flattened = gutters.flatMap(visibleLineIndexes);
-      d = flattened.map((v, G) => (flattened[G + 1] ?? gutters.length) - v);
+      heights = flattened.map(
+        (lineIndex, heightIndex) => (flattened[heightIndex + 1] ?? gutters.length) - lineIndex,
+      );
     }
-    m[0] = o;
-    m[1] = filePath;
-    m[2] = syntaxHighlightingDisabled;
-    m[3] = g;
-    m[4] = i;
-    m[5] = d;
-  } else d = m[5];
-  return d;
+    $[0] = code;
+    $[1] = filePath;
+    $[2] = syntaxHighlightingDisabled;
+    $[3] = theme;
+    $[4] = width;
+    $[5] = heights;
+  } else heights = $[5];
+  return heights;
 }
 //@ chunk-yqj79cx2.js:6164-6225 placement
 function countLines(code) {
-  let a =
+  let count =
     countCharInString(
       code,
       `
@@ -337,19 +354,19 @@ function countLines(code) {
     ) + 1;
   return code.endsWith(`
 `)
-    ? a - 1
-    : a;
+    ? count - 1
+    : count;
 }
 //@ chunk-yqj79cx2.js:6225-6653 placement
 /**
  * 渲染代码的一行：不可选中的行号槽位加内容。
  */
 function CodeLineRow(props) {
-  let u = w(8);
+  let $ = useMemoCache(8);
   let { gutter, content, displayGutter } = props;
-  let l;
-  if (u[0] !== displayGutter || u[1] !== gutter) {
-    l = jsxProd_default(NoSelect, {
+  let gutterText;
+  if ($[0] !== displayGutter || $[1] !== gutter) {
+    gutterText = jsxProd_default(NoSelect, {
       fromLeftEdge: true,
       children:
         displayGutter === undefined
@@ -363,35 +380,35 @@ function CodeLineRow(props) {
               children: displayGutter,
             }),
     });
-    u[0] = displayGutter;
-    u[1] = gutter;
-    u[2] = l;
-  } else l = u[2];
-  let d;
-  if (u[3] !== content) {
-    d = jsxProd_default(Text, {
+    $[0] = displayGutter;
+    $[1] = gutter;
+    $[2] = gutterText;
+  } else gutterText = $[2];
+  let contentText;
+  if ($[3] !== content) {
+    contentText = jsxProd_default(Text, {
       children: jsxProd_default(Ansi, {
         children: content,
       }),
     });
-    u[3] = content;
-    u[4] = d;
-  } else d = u[4];
-  let m;
-  if (u[5] !== l || u[6] !== d) {
-    m = jsxProd_default_2(Box, {
+    $[3] = content;
+    $[4] = contentText;
+  } else contentText = $[4];
+  let row;
+  if ($[5] !== gutterText || $[6] !== contentText) {
+    row = jsxProd_default_2(Box, {
       flexDirection: "row",
-      children: [l, d],
+      children: [gutterText, contentText],
     });
-    u[5] = l;
-    u[6] = d;
-    u[7] = m;
-  } else m = u[7];
-  return m;
+    $[5] = gutterText;
+    $[6] = contentText;
+    $[7] = row;
+  } else row = $[7];
+  return row;
 }
 //@ chunk-ag5x7vhf.js:150071-150628 fingerprint = CodeLine (0.514)
 function CodeLine(props) {
-  let $ = w(13);
+  let $ = useMemoCache(13);
   let { verbose, children } = props;
   let gutterWidth = shouldShowNotice(verbose) ? SPINNER_COLUMN_MIN_WIDTH : 0;
   let line = useTerminalSize();
@@ -406,33 +423,33 @@ function CodeLine(props) {
   if (gutterWidth === 0) {
     return children;
   }
-  let A;
+  let gutter;
   if ($[3] !== gutterWidth) {
-    A = jsxProd_default(NoSelect, {
+    gutter = jsxProd_default(NoSelect, {
       fromLeftEdge: true,
       minWidth: gutterWidth,
     });
     $[3] = gutterWidth;
-    $[4] = A;
-  } else A = $[4];
-  let L;
+    $[4] = gutter;
+  } else gutter = $[4];
+  let contentBox;
   if ($[5] !== children) {
-    L = jsxProd_default(Box, {
+    contentBox = jsxProd_default(Box, {
       flexGrow: 1,
       flexDirection: "column",
       children,
     });
     $[5] = children;
-    $[6] = L;
-  } else L = $[6];
+    $[6] = contentBox;
+  } else contentBox = $[6];
   let children_2;
-  if ($[7] !== A || $[8] !== L) {
+  if ($[7] !== gutter || $[8] !== contentBox) {
     children_2 = jsxProd_default_2(Box, {
       flexDirection: "row",
-      children: [A, L],
+      children: [gutter, contentBox],
     });
-    $[7] = A;
-    $[8] = L;
+    $[7] = gutter;
+    $[8] = contentBox;
     $[9] = children_2;
   } else children_2 = $[9];
   let t5;

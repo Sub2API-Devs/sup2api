@@ -10,6 +10,7 @@
  */
 import { join, sep, normalize, isAbsolute } from "path";
 import { homedir } from "os";
+import { isSelfHostedRemoteEnvironment } from "../utils/remoteEnvironment.js";
 import {
   getMemoryToggledOff,
   getAutoMemoryOffThisSession,
@@ -36,14 +37,18 @@ import { getHostedPostTurnMemoryConfig } from "./memoryTool.js";
 import { isUntouchableSpelling } from "../utils/networkPaths.js";
 import { isProjectScopeTrustAccepted } from "../utils/config.js";
 import { isSettingSourceEnabled, getEnabledSettingSources } from "../utils/settings/constants.js";
-import { io } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { memoizeAlias } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { getProjectKey, sanitizePath, getProjectDir } from "../utils/sessionStoragePortable.js";
 import { findCanonicalGitRoot } from "../utils/git.js";
 import { HostScoped } from "../utils/hostScoped.js";
 import { NoProjectDirectoryError } from "../bootstrap/sessionSlices.js";
 import { isProtectedDirPath } from "../utils/permissions/protectedDirNames.js";
-import { isSelfHostedRemoteEnvironment } from "../utils/remoteEnvironment.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-4vzb3taj.js:993-1052 fingerprint = AUTO_MEM_DIRNAME (1)
+function AUTO_MEM_DIRNAME_2(appendSystemPromptHead) {
+  return isSelfHostedRemoteEnvironment() && appendSystemPromptHead === undefined ? ["memory"] : undefined;
+}
 //@ chunk-aepeg2w5.js:59531-59574 placement
 function isAutoMemoryEnabled() {
   if (isAutoMemoryHeldForSession()) return false;
@@ -144,12 +149,11 @@ function isStoreMountedRecall() {
 }
 //@ chunk-aepeg2w5.js:60624-60829 placement
 function isAutoMemoryDisabledForCurrentMainLoopModel() {
-  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_sepia_cormorant", null);
-  if (!Array.isArray(featureValue_CACHED_MAY_BE_STALE) || featureValue_CACHED_MAY_BE_STALE.length === 0)
-    return false;
+  let needles = getFeatureValue_CACHED_MAY_BE_STALE("tengu_sepia_cormorant", null);
+  if (!Array.isArray(needles) || needles.length === 0) return false;
   let mainLoopModelOverride = getMainLoopModelOverride();
-  let r = mainLoopModelOverride !== undefined ? mainLoopModelOverride : getInitialMainLoopModel();
-  if (typeof r !== "string" || !includesAnyIgnoreCase(r, featureValue_CACHED_MAY_BE_STALE)) return false;
+  let model = mainLoopModelOverride !== undefined ? mainLoopModelOverride : getInitialMainLoopModel();
+  if (typeof model !== "string" || !includesAnyIgnoreCase(model, needles)) return false;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_umber_petrel", false);
 }
 //@ chunk-aepeg2w5.js:60829-60952 placement = isExtractModeActive (1)
@@ -208,9 +212,13 @@ function validateMemoryPath(raw, expandTilde) {
   return (normalized + sep).normalize("NFC");
 }
 //@ chunk-aepeg2w5.js:61520-61611 placement
-function isDangerousMemoryRoot(e) {
+function isDangerousMemoryRoot(dir) {
   return (
-    !isAbsolute(e) || e.length < 3 || /^[A-Za-z]:$/.test(e) || isUntouchableSpelling(e) || e.includes("\x00")
+    !isAbsolute(dir) ||
+    dir.length < 3 ||
+    /^[A-Za-z]:$/.test(dir) ||
+    isUntouchableSpelling(dir) ||
+    dir.includes("\x00")
   );
 }
 //@ chunk-aepeg2w5.js:61611-61676 fingerprint = getAutoMemPathOverride (1)
@@ -232,19 +240,19 @@ function getValidatedAutoMemDirSetting() {
  * 按 policy→flag→(信任后)local/project→user 顺序取第一个设置了 autoMemoryDirectory 的来源。
  */
 function getAutoMemPathSetting() {
-  let n = [
+  let sources = [
     "policySettings",
     "flagSettings",
     ...(isProjectScopeTrustAccepted() ? ["localSettings", "projectSettings"] : []),
     "userSettings",
   ];
-  for (let r of n) {
-    if (!isSettingSourceEnabled(r)) continue;
-    let autoMemoryDirectory = getSettingsForSource(r)?.autoMemoryDirectory;
+  for (let source of sources) {
+    if (!isSettingSourceEnabled(source)) continue;
+    let autoMemoryDirectory = getSettingsForSource(source)?.autoMemoryDirectory;
     if (autoMemoryDirectory != null)
       return {
         dir: autoMemoryDirectory,
-        source: r,
+        source,
       };
   }
   return {
@@ -268,15 +276,15 @@ class AutoMemPathResolver {
   canonicalWcRoot;
   canonicalWcRootFor;
   wcWarmPromise;
-  canonicalWcRootForProject(e) {
-    return this.canonicalWcRootFor === e ? this.canonicalWcRoot : undefined;
+  canonicalWcRootForProject(projectRoot) {
+    return this.canonicalWcRootFor === projectRoot ? this.canonicalWcRoot : undefined;
   }
   clearWcWarmLatch() {
     this.canonicalWcRoot = undefined;
     this.canonicalWcRootFor = undefined;
     this.wcWarmPromise = undefined;
   }
-  resolveEntry = io(
+  resolveEntry = memoizeAlias(
     () => {
       let autoMemPathOverride = getAutoMemPathOverride();
       if (autoMemPathOverride)
@@ -285,10 +293,10 @@ class AutoMemPathResolver {
           source: undefined,
         };
       let autoMemPathSetting = getAutoMemPathSetting();
-      let r = validateMemoryPath(autoMemPathSetting.dir, true);
-      if (r)
+      let dir = validateMemoryPath(autoMemPathSetting.dir, true);
+      if (dir)
         return {
-          path: r,
+          path: dir,
           source: autoMemPathSetting.source,
         };
       let projectRootOrNull = getProjectRootOrNull();
@@ -297,18 +305,19 @@ class AutoMemPathResolver {
           path: null,
           source: undefined,
         };
-      let h = this.defaultKey(projectRootOrNull);
+      let key = this.defaultKey(projectRootOrNull);
       let memoryBaseDir = getMemoryBaseDir();
-      let S = memoryBaseDir === getClaudeConfigDir() ? getProjectKey(h.base) : sanitizePath(h.base);
+      let projectKey =
+        memoryBaseDir === getClaudeConfigDir() ? getProjectKey(key.base) : sanitizePath(key.base);
       return {
-        path: (join(memoryBaseDir, "projects", S, AUTO_MEM_DIRNAME) + sep).normalize("NFC"),
+        path: (join(memoryBaseDir, "projects", projectKey, AUTO_MEM_DIRNAME) + sep).normalize("NFC"),
         source: undefined,
-        keyedBy: h,
+        keyedBy: key,
       };
     },
     () => this.memoKey(),
   );
-  resolve = io(
+  resolve = memoizeAlias(
     () => this.resolveEntry().path,
     () => this.memoKey(),
   );
@@ -317,28 +326,28 @@ class AutoMemPathResolver {
   }
   memoKey() {
     let projectRootOrNull = getProjectRootOrNull();
-    let n = projectRootOrNull === null ? null : this.canonicalWcRootForProject(projectRootOrNull);
-    return `${projectRootOrNull ?? ""}|${isProjectScopeTrustAccepted()}|${n ?? ""}|${getEnabledSettingSources().join(",")}`;
+    let canonicalRoot = projectRootOrNull === null ? null : this.canonicalWcRootForProject(projectRootOrNull);
+    return `${projectRootOrNull ?? ""}|${isProjectScopeTrustAccepted()}|${canonicalRoot ?? ""}|${getEnabledSettingSources().join(",")}`;
   }
-  defaultKey(e) {
-    let n = this.canonicalWcRootForProject(e);
-    if (n != null)
+  defaultKey(projectRoot) {
+    let canonicalRoot = this.canonicalWcRootForProject(projectRoot);
+    if (canonicalRoot != null)
       return {
-        base: n,
+        base: canonicalRoot,
         via: "working_copy",
       };
-    let canonicalGitRoot = findCanonicalGitRoot(e);
+    let canonicalGitRoot = findCanonicalGitRoot(projectRoot);
     return canonicalGitRoot !== null
       ? {
           base: canonicalGitRoot,
           via: "git",
         }
       : {
-          base: e,
+          base: projectRoot,
           via: "project_root",
         };
   }
-  resolveOwnProjectDir = io(
+  resolveOwnProjectDir = memoizeAlias(
     () => {
       if (getAutoMemPathOverride() ?? getValidatedAutoMemDirSetting()) return;
       if (getMemoryBaseDir() !== getClaudeConfigDir()) return;
@@ -357,26 +366,35 @@ class AutoMemPathResolver {
   }
 }
 //@ chunk-aepeg2w5.js:63373-63398 placement
-var autoMemPathResolverByHost = new HostScoped(() => new AutoMemPathResolver());
+var autoMemPathResolverByHost; // deferred: uses AutoMemPathResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:63373", () => {
+  autoMemPathResolverByHost = new HostScoped(() => new AutoMemPathResolver());
+});
 //@ chunk-aepeg2w5.js:63398-63600 placement
-class NullAutoMemPathResolver extends AutoMemPathResolver {
-  resolveEntry = io(() => ({
-    path: null,
-    source: undefined,
-  }));
-  resolve = io(() => null);
-  resolveOwnProjectDir = io(() => {
-    return;
-  });
-  canLackAFolder() {
-    return true;
-  }
-  warmCanonicalWcRoot() {
-    return Promise.resolve();
-  }
-}
+let NullAutoMemPathResolver; // deferred: uses AutoMemPathResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:63398", () => {
+  NullAutoMemPathResolver = class NullAutoMemPathResolver extends AutoMemPathResolver {
+    resolveEntry = memoizeAlias(() => ({
+      path: null,
+      source: undefined,
+    }));
+    resolve = memoizeAlias(() => null);
+    resolveOwnProjectDir = memoizeAlias(() => {
+      return;
+    });
+    canLackAFolder() {
+      return true;
+    }
+    warmCanonicalWcRoot() {
+      return Promise.resolve();
+    }
+  };
+});
 //@ chunk-aepeg2w5.js:63600-63614 placement
-var nullAutoMemPathResolver = new NullAutoMemPathResolver();
+var nullAutoMemPathResolver; // deferred: uses NullAutoMemPathResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:63600", () => {
+  nullAutoMemPathResolver = new NullAutoMemPathResolver();
+});
 //@ chunk-aepeg2w5.js:63614-63658 placement
 function getAutoMemPathState() {
   return isDiskless() ? nullAutoMemPathResolver : autoMemPathResolverByHost.of(getRootSession().host);
@@ -403,16 +421,16 @@ function getAutoMemPath() {
 var SHORT_SESSION_ID_CHARS = 8;
 //@ chunk-aepeg2w5.js:63845-64035 placement
 function activeSessionLogExcluder(date) {
-  let n;
+  let sessionIdShort;
   try {
-    n = (date ?? getSessionId()).slice(0, SHORT_SESSION_ID_CHARS);
+    sessionIdShort = (date ?? getSessionId()).slice(0, SHORT_SESSION_ID_CHARS);
   } catch {
     return;
   }
-  return (r) => {
-    if (!r.startsWith("logs/")) return false;
-    let sliced = r.slice(r.lastIndexOf("/") + 1);
-    return sliced === `${n}.md` || sliced.startsWith(`${n}-`);
+  return (relativePath) => {
+    if (!relativePath.startsWith("logs/")) return false;
+    let sliced = relativePath.slice(relativePath.lastIndexOf("/") + 1);
+    return sliced === `${sessionIdShort}.md` || sliced.startsWith(`${sessionIdShort}-`);
   };
 }
 //@ chunk-aepeg2w5.js:64035-64068 placement
@@ -425,27 +443,28 @@ function isAutoMemPath(absolutePath) {
   return normalizedPath !== null && normalize(absolutePath).startsWith(normalizedPath);
 }
 //@ chunk-aepeg2w5.js:64131-64167 placement
-function mayBeAutoMemPath(e) {
-  return hasNoAutoMemPath() || isAutoMemPath(e);
+function mayBeAutoMemPath(filePath) {
+  return hasNoAutoMemPath() || isAutoMemPath(filePath);
 }
 //@ chunk-aepeg2w5.js:64167-64219 placement
 var AUTO_MEM_WRITE_ALLOW_REASON = "auto memory files are allowed for writing";
 //@ chunk-aepeg2w5.js:64219-64366 placement
-function isAutoMemPathSafeForCarveout(e, n = getAutoMemPathOrNull()) {
-  if (n === null || !n.endsWith(sep) || isDangerousMemoryRoot(n.replace(/[/\\]+$/, ""))) return false;
-  let r = normalize(e);
-  if (!r.startsWith(n)) return false;
-  return !isProtectedDirPath(r, n);
+function isAutoMemPathSafeForCarveout(filePath, autoMemPath = getAutoMemPathOrNull()) {
+  if (
+    autoMemPath === null ||
+    !autoMemPath.endsWith(sep) ||
+    isDangerousMemoryRoot(autoMemPath.replace(/[/\\]+$/, ""))
+  )
+    return false;
+  let normalizedPath = normalize(filePath);
+  if (!normalizedPath.startsWith(autoMemPath)) return false;
+  return !isProtectedDirPath(normalizedPath, autoMemPath);
 }
 //@ chunk-aepeg2w5.js:64366-64460 placement
-function isOwnProjectAutoMemPathSafeForCarveout(e) {
+function isOwnProjectAutoMemPathSafeForCarveout(filePath) {
   let ownProjectDir = getAutoMemPathState().resolveOwnProjectDir();
   if (ownProjectDir === undefined) return false;
-  return isAutoMemPathSafeForCarveout(e, ownProjectDir) && isAutoMemoryEnabled();
-}
-//@ chunk-4vzb3taj.js:993-1052 fingerprint = AUTO_MEM_DIRNAME (1)
-function AUTO_MEM_DIRNAME_2(appendSystemPromptHead) {
-  return isSelfHostedRemoteEnvironment() && appendSystemPromptHead === undefined ? ["memory"] : undefined;
+  return isAutoMemPathSafeForCarveout(filePath, ownProjectDir) && isAutoMemoryEnabled();
 }
 export {
   isAutoMemoryEnabled,
@@ -460,9 +479,9 @@ export {
   isAutoMemPathSafeForCarveout,
   isOwnProjectAutoMemPathSafeForCarveout,
   AUTO_MEM_WRITE_ALLOW_REASON,
+  isMemoryRecallEnabled,
   isAutoMemoryEnabledIgnoringPause,
   isAutoMemoryDisabledForCurrentMainLoopModel,
-  isMemoryRecallEnabled,
   isExtractModeActive,
   AUTO_MEM_DIRNAME_2,
   getAutoMemPath,
@@ -474,4 +493,5 @@ export {
   getAutoMemPathSettingSource,
   getAccountMemoryMirrorPath,
   activeSessionLogExcluder,
+  isAutoMemoryEnabledByExplicitSwitches,
 };

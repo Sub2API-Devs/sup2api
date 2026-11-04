@@ -35,7 +35,9 @@ function isValidGitRefNameChars(taskListId) {
     getTaskListLockPath(taskListId) &&
     !CONTROL_OR_FORMAT_CHARS_RE.test(taskListId) &&
     !taskListId.startsWith("-") &&
-    taskListId.split("/").every((r) => Buffer.byteLength(r, "utf8") <= MAX_GIT_REF_COMPONENT_BYTES)
+    taskListId
+      .split("/")
+      .every((component) => Buffer.byteLength(component, "utf8") <= MAX_GIT_REF_COMPONENT_BYTES)
   );
 }
 //@ chunk-6xf89m6d.js:523-685 placement = getTaskListLockPath (1)
@@ -48,7 +50,9 @@ function getTaskListLockPath(taskListId) {
     !taskListId.endsWith(".") &&
     !taskListId.includes("..") &&
     !taskListId.includes("@{") &&
-    taskListId.split("/").every((r) => r !== "" && !r.startsWith(".") && !r.endsWith(".lock"))
+    taskListId
+      .split("/")
+      .every((component) => component !== "" && !component.startsWith(".") && !component.endsWith(".lock"))
   );
 }
 export { isValidGitRefName, MAX_GIT_REF_CHARS };

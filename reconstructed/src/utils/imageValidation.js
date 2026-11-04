@@ -29,22 +29,22 @@ class ImageSizeError extends Error {
   }
 }
 //@ chunk-f25sswmp.js:1847-2019 placement
-function isBase64ImageBlock(e) {
-  if (!isPlainObject_2(e) || !("source" in e)) return false;
-  let source = e.source;
+function isBase64ImageBlock(block) {
+  if (!isPlainObject_2(block) || !("source" in block)) return false;
+  let source = block.source;
   if (!isPlainObject_2(source)) return false;
   if (!("type" in source) || source.type !== "base64") return false;
   return "data" in source && typeof source.data === "string";
 }
 //@ chunk-f25sswmp.js:2288-2441 fingerprint = validateImagesForAPI (1)
-function validateImagesForAPI(e, index, r, s) {
-  let base64Size = e.source.data.length;
-  if (base64Size > r) {
+function validateImagesForAPI(block, index, maxBytes, tooLarge) {
+  let base64Size = block.source.data.length;
+  if (base64Size > maxBytes) {
     logEvent("tengu_image_api_validation_failed", {
       base64_size_bytes: base64Size,
-      max_bytes: r,
+      max_bytes: maxBytes,
     });
-    s.push({
+    tooLarge.push({
       index,
       size: base64Size,
     });

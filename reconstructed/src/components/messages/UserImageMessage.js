@@ -8,7 +8,7 @@
  * pieces: chunk-ah34pb7m.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppStateSlice } from "../../state/AppState.js";
 import { supportsHyperlinks } from "../../ink/supports-hyperlinks.js";
 import { toSafeFileUrl } from "../../services/mcp/xaa.js";
@@ -21,27 +21,29 @@ import { MessageResponse } from "../MessageResponse.js";
 
 //@ chunk-ah34pb7m.js:87716-88531 fingerprint = UserImageMessage (0.769)
 function UserImageMessage(props) {
-  let $ = w(15);
+  let $ = useMemoCache(15);
   let { imageId, addMargin, startsUserTurn } = props;
-  let h =
-    useAppStateSlice((f) => (imageId !== undefined ? (f.storedImagePaths.get(imageId) ?? null) : null)) ??
-    null;
-  let T =
-    useAppStateSlice((M) => (imageId !== undefined ? (M.imageDescriptions.get(imageId) ?? null) : null)) ??
-    null;
+  let storedPath =
+    useAppStateSlice((state) =>
+      imageId !== undefined ? (state.storedImagePaths.get(imageId) ?? null) : null,
+    ) ?? null;
+  let description =
+    useAppStateSlice((state) =>
+      imageId !== undefined ? (state.imageDescriptions.get(imageId) ?? null) : null,
+    ) ?? null;
   let children = imageId ? `[Image #${imageId}]` : "[Image]";
-  let b;
-  if ($[0] !== h) {
-    b = h && supportsHyperlinks() ? toSafeFileUrl(h) : null;
-    $[0] = h;
-    $[1] = b;
-  } else b = $[1];
-  let E = b;
-  let B;
-  if ($[2] !== E || $[3] !== children) {
-    B = E
+  let imageElement;
+  if ($[0] !== storedPath) {
+    imageElement = storedPath && supportsHyperlinks() ? toSafeFileUrl(storedPath) : null;
+    $[0] = storedPath;
+    $[1] = imageElement;
+  } else imageElement = $[1];
+  let imageRowElement = imageElement;
+  let containerElement;
+  if ($[2] !== imageRowElement || $[3] !== children) {
+    containerElement = imageRowElement
       ? jsxProd_default(Link, {
-          url: E,
+          url: imageRowElement,
           children: jsxProd_default(Text, {
             children,
           }),
@@ -49,54 +51,54 @@ function UserImageMessage(props) {
       : jsxProd_default(Text, {
           children,
         });
-    $[2] = E;
+    $[2] = imageRowElement;
     $[3] = children;
-    $[4] = B;
-  } else B = $[4];
-  let L = B;
-  let N;
-  if ($[5] !== T) {
-    N = T
+    $[4] = containerElement;
+  } else containerElement = $[4];
+  let imageContainer = containerElement;
+  let descriptionElement;
+  if ($[5] !== description) {
+    descriptionElement = description
       ? jsxProd_default_2(Text, {
           dimColor: true,
-          children: [" ", T],
+          children: [" ", description],
         })
       : null;
-    $[5] = T;
-    $[6] = N;
-  } else N = $[6];
-  let W;
-  if ($[7] !== L || $[8] !== N) {
-    W = jsxProd_default_2(Text, {
-      children: [L, N],
+    $[5] = description;
+    $[6] = descriptionElement;
+  } else descriptionElement = $[6];
+  let textElement;
+  if ($[7] !== imageContainer || $[8] !== descriptionElement) {
+    textElement = jsxProd_default_2(Text, {
+      children: [imageContainer, descriptionElement],
     });
-    $[7] = L;
-    $[8] = N;
-    $[9] = W;
-  } else W = $[9];
-  let children_2 = W;
+    $[7] = imageContainer;
+    $[8] = descriptionElement;
+    $[9] = textElement;
+  } else textElement = $[9];
+  let children_2 = textElement;
   if (startsUserTurn ?? addMargin) {
     const marginTop = addMargin ? 1 : 0;
-    let V;
+    let boxElement;
     if ($[10] !== children_2 || $[11] !== marginTop) {
-      V = jsxProd_default(Box, {
+      boxElement = jsxProd_default(Box, {
         marginTop,
         children: children_2,
       });
       $[10] = children_2;
       $[11] = marginTop;
-      $[12] = V;
-    } else V = $[12];
-    return V;
+      $[12] = boxElement;
+    } else boxElement = $[12];
+    return boxElement;
   }
-  let K;
+  let messageResponseElement;
   if ($[13] !== children_2) {
-    K = jsxProd_default(MessageResponse, {
+    messageResponseElement = jsxProd_default(MessageResponse, {
       children: children_2,
     });
     $[13] = children_2;
-    $[14] = K;
-  } else K = $[14];
-  return K;
+    $[14] = messageResponseElement;
+  } else messageResponseElement = $[14];
+  return messageResponseElement;
 }
 export { UserImageMessage };

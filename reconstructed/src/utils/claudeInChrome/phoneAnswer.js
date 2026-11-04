@@ -40,13 +40,13 @@ function phoneChromeAnswer() {
 /**
  * 包装"未连接"回答生成函数：每次生成时计数并记录回答文本。
  */
-function countDisconnectedAnswers(e) {
+function countDisconnectedAnswers(answerText) {
   return () => {
-    let n = e();
-    let o = claudeInChromeSession();
-    o.disconnectedAnswerCount++;
-    o.disconnectedAnswerTexts.add(n);
-    return n;
+    let text = answerText();
+    let session = claudeInChromeSession();
+    session.disconnectedAnswerCount++;
+    session.disconnectedAnswerTexts.add(text);
+    return text;
   };
 }
 //@ chunk-wbsgh6dq.js:1185-1236 placement
@@ -68,8 +68,8 @@ function hasDisconnectedAnswerText(text) {
  * 是否出现过断开的回答，或前序 worker 已见过未连接。
  */
 function hasDisconnectedChromeAnswer() {
-  let e = claudeInChromeSession();
-  return e.disconnectedAnswerCount > 0 || e.notConnectedSeenByPriorWorker;
+  let session = claudeInChromeSession();
+  return session.disconnectedAnswerCount > 0 || session.notConnectedSeenByPriorWorker;
 }
 //@ chunk-wbsgh6dq.js:1389-1442 placement
 /**

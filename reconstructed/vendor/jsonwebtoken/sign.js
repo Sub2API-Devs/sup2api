@@ -5,7 +5,7 @@
  * pieces: chunk-mrx6y2r5.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 import { require_timespan } from "./lib/timespan.js";
 import { require_psSupported } from "./lib/psSupported.js";
 import { require_validateAsymmetricKey } from "./lib/validateAsymmetricKey.js";
@@ -19,7 +19,7 @@ import { require_lodash_isstring } from "../lodash.isstring/index.js";
 import { require_lodash_once } from "../lodash.once/index.js";
 
 //@ chunk-mrx6y2r5.js:17076-22157 cjs-fingerprint
-var require_sign = x(function (cjsExports, cjsModule) {
+var require_sign = __commonJS(function (cjsExports, cjsModule) {
   var timespan = require_timespan();
   var PS_SUPPORTED = require_psSupported();
   var validateAsymmetricKey = require_validateAsymmetricKey();

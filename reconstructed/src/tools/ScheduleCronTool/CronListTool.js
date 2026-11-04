@@ -9,7 +9,14 @@
  * attribution: fingerprint 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, u, array, string, M, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  zodStrictObject,
+  objectSchema,
+  array,
+  stringSchema,
+  booleanSchema,
+  numberSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   NEXT_FIRE_AT_DESCRIPTION,
   CRON_LIST_TOOL_NAME,
@@ -32,16 +39,16 @@ import { truncate } from "../../utils/format.js";
  */
 var cronListInputSchema = DoctorLazy(() => zodStrictObject({}));
 var cronListOutputSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     jobs: array(
-      u({
-        id: string(),
-        cron: string(),
-        humanSchedule: string(),
-        prompt: string(),
-        recurring: M().optional(),
-        durable: M().optional(),
-        nextFireAt: E().optional().describe(NEXT_FIRE_AT_DESCRIPTION),
+      objectSchema({
+        id: stringSchema(),
+        cron: stringSchema(),
+        humanSchedule: stringSchema(),
+        prompt: stringSchema(),
+        recurring: booleanSchema().optional(),
+        durable: booleanSchema().optional(),
+        nextFireAt: numberSchema().optional().describe(NEXT_FIRE_AT_DESCRIPTION),
       }),
     ),
   }),
@@ -84,7 +91,7 @@ var CronListTool = buildTool({
         return {
           data: {
             jobs: tasks.map((t) => {
-              let a = t.nextFireAt ?? nextFireTimeForTask(t, jitterConfig);
+              let nextFireAt = t.nextFireAt ?? nextFireTimeForTask(t, jitterConfig);
               return {
                 id: t.id,
                 cron: t.cron,
@@ -96,8 +103,8 @@ var CronListTool = buildTool({
                 ...(t.durable === false && {
                   durable: false,
                 }),
-                ...(a !== null && {
-                  nextFireAt: Math.max(a, now),
+                ...(nextFireAt !== null && {
+                  nextFireAt: Math.max(nextFireAt, now),
                 }),
               };
             }),
@@ -124,3 +131,4 @@ var CronListTool = buildTool({
     return "";
   },
 });
+export { CronListTool };

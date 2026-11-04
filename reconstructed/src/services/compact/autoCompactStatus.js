@@ -17,35 +17,35 @@ import { getAutoCompactThresholdTokens } from "./autoCompact.js";
 /**
  * 自动压缩状态快照（开关、有效窗口、阈值、是否执行、来源）。
  */
-function computeAutocompactState(o, t) {
+function computeAutocompactState(model, autoCompactWindow) {
   let enabled = isAutoCompactEnabled();
-  let modelContextInfo = getModelContextInfo(o);
-  let effectiveWindow = effectiveContextWindow(modelContextInfo, t);
-  let threshold = getAutoCompactThresholdTokens(modelContextInfo, t);
-  let enforced = !(canCompactInRemote() && !hasExplicitWindow(modelContextInfo, t));
+  let modelContextInfo = getModelContextInfo(model);
+  let effectiveWindow = effectiveContextWindow(modelContextInfo, autoCompactWindow);
+  let threshold = getAutoCompactThresholdTokens(modelContextInfo, autoCompactWindow);
+  let enforced = !(canCompactInRemote() && !hasExplicitWindow(modelContextInfo, autoCompactWindow));
   return {
     enabled,
     effectiveWindow,
     threshold,
     enforced,
-    source: windowSource(modelContextInfo, t),
+    source: windowSource(modelContextInfo, autoCompactWindow),
   };
 }
 //@ chunk-4x54g1ez.js:431-545 placement
 /**
  * 状态变化时才通知的自动压缩状态上报器。
  */
-function createAutocompactStateReporter(o) {
-  let t;
+function createAutocompactStateReporter(onChange) {
+  let lastState;
   return {
-    notify(c, e) {
-      let autocompactState = computeAutocompactState(c, e);
-      if (t !== undefined && sameAutocompactState(t, autocompactState)) return;
-      t = autocompactState;
-      o(autocompactState);
+    notify(input, now) {
+      let autocompactState = computeAutocompactState(input, now);
+      if (lastState !== undefined && sameAutocompactState(lastState, autocompactState)) return;
+      lastState = autocompactState;
+      onChange(autocompactState);
     },
     reset() {
-      t = undefined;
+      lastState = undefined;
     },
   };
 }
@@ -53,13 +53,13 @@ function createAutocompactStateReporter(o) {
 /**
  * 两个状态快照是否相同。
  */
-function sameAutocompactState(o, autocompactState) {
+function sameAutocompactState(state, autocompactState) {
   return (
-    o.enabled === autocompactState.enabled &&
-    o.effectiveWindow === autocompactState.effectiveWindow &&
-    o.threshold === autocompactState.threshold &&
-    o.enforced === autocompactState.enforced &&
-    o.source === autocompactState.source
+    state.enabled === autocompactState.enabled &&
+    state.effectiveWindow === autocompactState.effectiveWindow &&
+    state.threshold === autocompactState.threshold &&
+    state.enforced === autocompactState.enforced &&
+    state.source === autocompactState.source
   );
 }
 export { sameAutocompactState, createAutocompactStateReporter };

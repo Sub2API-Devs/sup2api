@@ -9,11 +9,11 @@
  * attribution: fingerprint 1
  */
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
-import { R, ce } from "../../vendor/react/cjs/react.production.js";
+import { useRef, useCallback } from "../../vendor/react/cjs/react.production.js";
 import { useInputRefusalWindow, useRefusalTracker } from "./CustomSelect/selectTypeahead.js";
 import { RECENT_INPUT_GUARD_MS } from "../hooks/useRecentInputGuard.js";
 import { useIsScreenReaderEnabled } from "../ink/components/ErrorBoundary.js";
-import { SS } from "../../vendor/lodash-es/_inlinedHelpers.js";
+import { partitionAlias } from "../../vendor/lodash-es/_inlinedHelpers.js";
 import { logEvent } from "../services/analytics/index.js";
 import { updateSettingsForSourceWithTransform } from "../utils/settings/settings.js";
 import { uniq } from "../utils/collections.js";
@@ -39,58 +39,66 @@ import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
  */
 function MCPServerMultiselectDialog({ serverNames, pluginServerNames, onDone }) {
   let { storageV5 } = useTheme_2();
-  let l = R(false);
+  let submitGuardRef = useRef(false);
   let inputRefusalWindow = useInputRefusalWindow(RECENT_INPUT_GUARD_MS);
   let { refusedWithin, noteRefused } = useRefusalTracker();
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let h = ce(() => {
+  let shouldRefuseInput = useCallback(() => {
     if (inputRefusalWindow() || refusedWithin(RECENT_INPUT_GUARD_MS)) {
       noteRefused();
       return true;
     }
     return false;
   }, [inputRefusalWindow, refusedWithin, noteRefused]);
-  async function E(p) {
-    if (h()) return;
-    if (l.current) return;
-    l.current = true;
-    let [g, y] = SS(serverNames, (P) => p.includes(P));
+  async function handleSubmit(selectedServers) {
+    if (shouldRefuseInput()) return;
+    if (submitGuardRef.current) return;
+    submitGuardRef.current = true;
+    let [approvedServers, rejectedServers] = partitionAlias(serverNames, (server) =>
+      selectedServers.includes(server),
+    );
     logEvent("tengu_mcp_multidialog_choice", {
-      approved: g.length,
-      rejected: y.length,
+      approved: approvedServers.length,
+      rejected: rejectedServers.length,
     });
-    let M = false;
-    if (g.length > 0) {
+    let persistFailed = false;
+    if (approvedServers.length > 0) {
       let { error } = await updateSettingsForSourceWithTransform(
         "localSettings",
-        (A) => ({
-          enabledMcpjsonServers: uniq([...(A?.enabledMcpjsonServers || []), ...g]),
+        (currentSettings) => ({
+          enabledMcpjsonServers: uniq([
+            ...(currentSettings?.enabledMcpjsonServers || []),
+            ...approvedServers,
+          ]),
         }),
         undefined,
         storageV5,
       );
-      M ||= error != null;
+      persistFailed ||= error != null;
     }
-    addSessionApprovedMcpServers(getWorkspacePersistedTrustKey(), g);
-    if (y.length > 0) {
+    addSessionApprovedMcpServers(getWorkspacePersistedTrustKey(), approvedServers);
+    if (rejectedServers.length > 0) {
       let { error } = await updateSettingsForSourceWithTransform(
         "localSettings",
-        (A) => ({
-          disabledMcpjsonServers: uniq([...(A?.disabledMcpjsonServers || []), ...y]),
+        (currentSettings) => ({
+          disabledMcpjsonServers: uniq([
+            ...(currentSettings?.disabledMcpjsonServers || []),
+            ...rejectedServers,
+          ]),
         }),
         undefined,
         storageV5,
       );
-      M ||= error != null;
+      persistFailed ||= error != null;
     }
     onDone({
-      persistFailed: M,
+      persistFailed,
     });
   }
-  let onCancel = ce(async () => {
-    if (h()) return;
-    if (l.current) return;
-    l.current = true;
+  let onCancel = useCallback(async () => {
+    if (shouldRefuseInput()) return;
+    if (submitGuardRef.current) return;
+    submitGuardRef.current = true;
     let { error } = await updateSettingsForSourceWithTransform(
       "localSettings",
       (selectedServers) => ({
@@ -102,7 +110,7 @@ function MCPServerMultiselectDialog({ serverNames, pluginServerNames, onDone }) 
     onDone({
       persistFailed: error != null,
     });
-  }, [h, serverNames, onDone, storageV5]);
+  }, [shouldRefuseInput, serverNames, onDone, storageV5]);
   return jsxProd_default_2(Fragment, {
     children: [
       jsxProd_default_2(Dialog, {
@@ -121,11 +129,11 @@ function MCPServerMultiselectDialog({ serverNames, pluginServerNames, onDone }) 
             })),
             defaultValue: isScreenReaderEnabled ? [] : serverNames,
             submitButtonText: "Enable selected",
-            onSubmit: E,
+            onSubmit: handleSubmit,
             onCancel,
             hideIndexes: true,
-            refuseInput: h,
-            refuseSubmitFocus: h,
+            refuseInput: shouldRefuseInput,
+            refuseSubmitFocus: shouldRefuseInput,
           }),
         ],
       }),

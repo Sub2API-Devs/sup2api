@@ -46,43 +46,45 @@ function heldMessageUuids(message) {
   return isHeldMessageRecognitionOn() ? sourceUuidsOfMessage(message) : [];
 }
 //@ chunk-tyg7f3ek.js:38636-38686 placement
-function heldMessageUuidSet(e) {
-  return new Set([...e].flatMap(sourceUuidsOfMessage));
+function heldMessageUuidSet(messages) {
+  return new Set([...messages].flatMap(sourceUuidsOfMessage));
 }
 //@ chunk-tyg7f3ek.js:38686-38778 placement
-function sourceUuidsOfMessage(e) {
-  let sourceUuid = getSourceUuid(e);
+function sourceUuidsOfMessage(message) {
+  let sourceUuid = getSourceUuid(message);
   if (sourceUuid) return [sourceUuid];
-  return e.type === "user" ? filterUuidList(e.mergedSendUuids) : [];
+  return message.type === "user" ? filterUuidList(message.mergedSendUuids) : [];
 }
 //@ chunk-tyg7f3ek.js:38778-38819 placement
-function heldUuidsIfEnabled(e) {
-  return isHeldMessageRecognitionOn() ? heldMessageUuidSet(e) : new Set();
+function heldUuidsIfEnabled(messages) {
+  return isHeldMessageRecognitionOn() ? heldMessageUuidSet(messages) : new Set();
 }
 //@ chunk-tyg7f3ek.js:38819-39129 placement
-function mergedMessageUuids(e, n) {
-  let index = e.findIndex((h) => h.uuid === n);
-  if (index === -1 || !isHeldMessageRecognitionOn()) return [n];
-  let s = e[index];
+function mergedMessageUuids(messages, uuid) {
+  let index = messages.findIndex((message) => message.uuid === uuid);
+  if (index === -1 || !isHeldMessageRecognitionOn()) return [uuid];
+  let message = messages[index];
   return [
-    ...(s.isMeta === true ? [] : sourceUuidsOfMessage(s)),
-    n,
-    ...e
+    ...(message.isMeta === true ? [] : sourceUuidsOfMessage(message)),
+    uuid,
+    ...messages
       .slice(index + 1)
-      .flatMap((h) =>
-        typeof h.attachment === "object" &&
-        h.attachment !== null &&
-        Reflect.get(h.attachment, "commandMode") === "prompt" &&
-        Reflect.get(h.attachment, "isMeta") !== true
-          ? sourceUuidsOfMessage(h)
+      .flatMap((message) =>
+        typeof message.attachment === "object" &&
+        message.attachment !== null &&
+        Reflect.get(message.attachment, "commandMode") === "prompt" &&
+        Reflect.get(message.attachment, "isMeta") !== true
+          ? sourceUuidsOfMessage(message)
           : [],
       ),
   ];
 }
 //@ chunk-tyg7f3ek.js:39129-39248 placement
-function findMessageIndex(e, n, r = isHeldMessageRecognitionOn()) {
-  let index = e.findIndex((h) => h.uuid === n);
-  return index !== -1 || !r ? index : e.findLastIndex((h) => sourceUuidsOfMessage(h).includes(n));
+function findMessageIndex(messages, uuid, enabled = isHeldMessageRecognitionOn()) {
+  let index = messages.findIndex((message) => message.uuid === uuid);
+  return index !== -1 || !enabled
+    ? index
+    : messages.findLastIndex((message) => sourceUuidsOfMessage(message).includes(uuid));
 }
 //@ chunk-tyg7f3ek.js:39284-39294 placement
 var MAX_HELD_MESSAGES = 64;

@@ -8,7 +8,7 @@
  * pieces: chunk-8ndmcarc.js (2), chunk-hkh7sq9y.js (1), chunk-s06523pk.js (8)
  * attribution: fingerprint 2, shared-adjacent 1, affinity 1, facade-exports 7
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useSetVoiceState } from "../../context/voice.js";
 import { backgroundAll } from "../../tasks/LocalShellTask/LocalShellTask.js";
 import { BackgroundTaskHint, ToolProgressHintNamespace } from "../../components/ToolProgressHint.js";
@@ -44,71 +44,71 @@ var MAX_PREVIEW_CHARS = 160;
  * Bash 运行中的"按 Ctrl+B 转后台"提示（tmux 下显示 ctrl+b ctrl+b）；非交互或后台任务禁用时不显示；按键触发 onBackground。
  */
 function BackgroundHint(props) {
-  let t = w(10);
+  let $ = useMemoCache(10);
   let { toolUseId, keyOnly, onBackground } = props;
-  let d = keyOnly === undefined ? false : keyOnly;
+  let isKeyOnly = keyOnly === undefined ? false : keyOnly;
   let store = useSetVoiceState();
-  let u;
-  if (t[0] !== onBackground || t[1] !== store) {
-    u = () => {
+  let onBackgroundClick;
+  if ($[0] !== onBackground || $[1] !== store) {
+    onBackgroundClick = () => {
       backgroundAll(store);
       onBackground?.();
     };
-    t[0] = onBackground;
-    t[1] = store;
-    t[2] = u;
-  } else u = t[2];
-  let handler = u;
-  let f;
-  if (t[3] !== handler) {
-    f = {
+    $[0] = onBackground;
+    $[1] = store;
+    $[2] = onBackgroundClick;
+  } else onBackgroundClick = $[2];
+  let handler = onBackgroundClick;
+  let hintArgs;
+  if ($[3] !== handler) {
+    hintArgs = {
       handler,
       isActive: true,
     };
-    t[3] = handler;
-    t[4] = f;
-  } else f = t[4];
-  let { cohesionFixes, gateOnShortcut } = BackgroundTaskHint(f);
+    $[3] = handler;
+    $[4] = hintArgs;
+  } else hintArgs = $[4];
+  let { cohesionFixes, gateOnShortcut } = BackgroundTaskHint(hintArgs);
   let baseShortcut = useShortcutDisplay("task:background", "Task", "ctrl+b");
-  let y = cohesionFixes
+  let shortcut = cohesionFixes
     ? gateOnShortcut
     : env.terminal === "tmux" && baseShortcut === "ctrl+b"
       ? "ctrl+b ctrl+b (twice)"
       : baseShortcut;
-  if (d) {
+  if (isKeyOnly) {
     return null;
   }
-  if (isBackgroundTasksOff() || (cohesionFixes && y === "")) {
+  if (isBackgroundTasksOff() || (cohesionFixes && shortcut === "")) {
     return null;
   }
-  let F;
-  if (t[5] !== y) {
-    F = formatShortcutHint({
-      chord: y,
+  let formattedHint;
+  if ($[5] !== shortcut) {
+    formattedHint = formatShortcutHint({
+      chord: shortcut,
       action: "run in background",
       parens: true,
       format: {
         keyCase: "lower",
       },
     });
-    t[5] = y;
-    t[6] = F;
-  } else F = t[6];
-  let R = F;
-  if (R === "") {
+    $[5] = shortcut;
+    $[6] = formattedHint;
+  } else formattedHint = $[6];
+  let hintText = formattedHint;
+  if (hintText === "") {
     return null;
   }
-  let A;
-  if (t[7] !== R || t[8] !== toolUseId) {
-    A = jsxProd_default(ToolProgressHintNamespace.ToolProgressHint, {
+  let element;
+  if ($[7] !== hintText || $[8] !== toolUseId) {
+    element = jsxProd_default(ToolProgressHintNamespace.ToolProgressHint, {
       toolUseId,
-      hint: R,
+      hint: hintText,
     });
-    t[7] = R;
-    t[8] = toolUseId;
-    t[9] = A;
-  } else A = t[9];
-  return A;
+    $[7] = hintText;
+    $[8] = toolUseId;
+    $[9] = element;
+  } else element = $[9];
+  return element;
 }
 //@ chunk-s06523pk.js:2876-3201 facade-exports = renderToolUseMessage (1)
 function renderToolUseMessage(input, { verbose, theme: _theme }) {
@@ -118,14 +118,17 @@ function renderToolUseMessage(input, { verbose, theme: _theme }) {
     let lines = command.split(`
 `);
     if (isFullscreenEnvEnabled()) {
-      let u = bashCommentTitle(command);
-      if (u) return u.length > MAX_PREVIEW_CHARS ? u.slice(0, MAX_PREVIEW_CHARS) + "\u2026" : u;
+      let commentTitle = bashCommentTitle(command);
+      if (commentTitle)
+        return commentTitle.length > MAX_PREVIEW_CHARS
+          ? commentTitle.slice(0, MAX_PREVIEW_CHARS) + "\u2026"
+          : commentTitle;
     }
-    let c = lines.length > MAX_PREVIEW_LINES;
+    let hasTooManyLines = lines.length > MAX_PREVIEW_LINES;
     let needsCharTruncation = command.length > MAX_PREVIEW_CHARS;
-    if (c || needsCharTruncation) {
+    if (hasTooManyLines || needsCharTruncation) {
       let truncated = command;
-      if (c)
+      if (hasTooManyLines)
         truncated = lines.slice(0, MAX_PREVIEW_LINES).join(`
 `);
       if (truncated.length > MAX_PREVIEW_CHARS) truncated = truncated.slice(0, MAX_PREVIEW_CHARS);
@@ -189,17 +192,36 @@ function renderToolUseErrorMessage(
   });
 }
 //@ chunk-s06523pk.js:3906-4058 facade-exports
-function isResultTruncated(a, { columns }) {
-  if (a.isImage) return false;
+function isResultTruncated(result, { columns }) {
+  if (result.isImage) return false;
   return (
-    exceedsLineLimit(a.stdout, columns) ||
+    exceedsLineLimit(result.stdout, columns) ||
     exceedsLineLimit(
-      typeof a.stderr === "string"
-        ? stripSandboxViolations(a.stderr).trim().replace(CWD_RESET_WARNING_RE, "")
-        : a.stderr,
+      typeof result.stderr === "string"
+        ? stripSandboxViolations(result.stderr).trim().replace(CWD_RESET_WARNING_RE, "")
+        : result.stderr,
       columns,
     )
   );
+}
+//@ chunk-hkh7sq9y.js:5285-5608 fingerprint = renderToolUseProgressMessage (0.963)
+function renderToolUseProgressMessage_2(
+  progressMessagesForMessage,
+  { verbose, tools: _tools, terminalSize: _terminalSize, inProgressToolCallCount: _inProgressToolCallCount },
+) {
+  let lastProgress = progressMessagesForMessage.at(-1);
+  if (!lastProgress || !lastProgress.data) return RunningLabel();
+  let data = lastProgress.data;
+  return jsxProd_default(ShellProgressMessage, {
+    fullOutput: data.fullOutput,
+    output: data.output,
+    elapsedTimeSeconds: data.elapsedTimeSeconds,
+    totalLines: data.totalLines,
+    totalBytes: data.totalBytes,
+    timeoutMs: data.timeoutMs,
+    taskId: data.taskId,
+    verbose,
+  });
 }
 //@ chunk-8ndmcarc.js:17835-17957 fingerprint = renderToolUseErrorMessage (1)
 function renderToolUseErrorMessage_2(result, { progressMessagesForMessage, tools, verbose }) {
@@ -228,23 +250,15 @@ function renderToolUseErrorMessage_3(result, { progressMessagesForMessage, tools
     ],
   });
 }
-//@ chunk-hkh7sq9y.js:5285-5608 fingerprint = renderToolUseProgressMessage (0.963)
-function renderToolUseProgressMessage_2(
-  progressMessagesForMessage,
-  { verbose, tools: _tools, terminalSize: _terminalSize, inProgressToolCallCount: _inProgressToolCallCount },
-) {
-  let lastProgress = progressMessagesForMessage.at(-1);
-  if (!lastProgress || !lastProgress.data) return RunningLabel();
-  let data = lastProgress.data;
-  return jsxProd_default(ShellProgressMessage, {
-    fullOutput: data.fullOutput,
-    output: data.output,
-    elapsedTimeSeconds: data.elapsedTimeSeconds,
-    totalLines: data.totalLines,
-    totalBytes: data.totalBytes,
-    timeoutMs: data.timeoutMs,
-    taskId: data.taskId,
-    verbose,
-  });
-}
-export { BackgroundHint };
+export {
+  BackgroundHint,
+  isResultTruncated,
+  renderToolResultMessage,
+  renderToolUseErrorMessage,
+  renderToolUseMessage,
+  renderToolUseProgressMessage,
+  renderToolUseQueuedMessage,
+  renderToolUseProgressMessage_2,
+  renderToolUseErrorMessage_3,
+  renderToolUseErrorMessage_2,
+};

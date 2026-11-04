@@ -10,11 +10,11 @@
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
-  u,
-  string,
-  E,
+  objectSchema,
+  stringSchema,
+  numberSchema,
   literal,
-  M,
+  booleanSchema,
   union,
   array,
   _enum,
@@ -22,6 +22,7 @@ import {
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { env } from "../env.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-v9tcvh08.js:522-20802 placement
 /**
@@ -1152,149 +1153,156 @@ function getCatalogState() {
 /**
  * 模型目录的 zod 模式（first_party/bedrock/vertex/foundry 等 id、effort 级别）。
  */
-var ModelCatalogSchema = DoctorLazy(() =>
-  u({
-    first_party: string(),
-    bedrock: string().nullish(),
-    vertex: string().nullish(),
-    foundry: string().nullish(),
-    anthropic_aws: string().nullish(),
-    anthropic_google_cloud: string().nullish(),
-    mantle: string().nullish(),
-    gateway: string().nullish(),
-  }).loose(),
-);
-var pricingSchema = DoctorLazy(() =>
-  u({
-    input: E(),
-    output: E(),
-    cache_write_5m: E().optional(),
-    cache_write_1h: E().optional(),
-    cache_read: E().optional(),
-    web_search: E().optional(),
-    long_prompt: u({
-      above_prompt_tokens: E().int().positive(),
-      input: E(),
-      output: E(),
-      cache_write_5m: E().optional(),
-      cache_write_1h: E().optional(),
-      cache_read: E().optional(),
-    })
-      .loose()
-      .optional(),
-  }).loose(),
-);
-var catalogModelSchema = DoctorLazy(() =>
-  u({
-    id: string(),
-    family: string(),
-    display_name: string(),
-    slogan: string().optional(),
-    knowledge_cutoff: string().optional(),
-    provider_ids: ModelCatalogSchema(),
-    eager_input_streaming: u({
-      bedrock: literal(true).optional(),
-      vertex: literal(true).optional(),
-    })
-      .loose()
-      .optional(),
-    vertex_region_env_var: string().optional(),
-    fallback_3p: string().optional(),
-    context: u({
-      window: E(),
-      maximum_window: E().optional(),
-      native_1m: M().optional(),
-      supports_1m_beta: M().optional(),
-      clamp_long_context_without_beta: M().optional(),
-      supports_1m_suffix: M().optional(),
-    })
-      .loose()
-      .optional(),
-    max_output_tokens: u({
-      default: E(),
-      upper: E(),
-    })
-      .loose()
-      .optional(),
-    pricing: union([string(), pricingSchema()]).optional(),
-    capabilities: array(string()).default([]),
-    default_effort: _enum(["low", "medium", "high", "xhigh", "max"]).optional(),
-    effort_cost_index: u({
-      low: E().positive().optional(),
-      medium: E().positive().optional(),
-      high: E().positive().optional(),
-      xhigh: E().positive().optional(),
-      max: E().positive().optional(),
-    })
-      .loose()
-      .optional(),
-    image_limits: u({
-      maxWidth: E().optional(),
-      maxHeight: E().optional(),
-      maxImageTokens: E().optional(),
-      maxBase64Size: E().optional(),
-    })
-      .loose()
-      .optional(),
-    advisor_rank: E().optional(),
-    fallback_chain: array(string()).optional(),
-    picker: u({
-      section: _enum(["main", "overflow", "deprecated"]).optional(),
-      badge: string().optional(),
-      disabled_reason: string().optional(),
-      tiers: array(string()).optional(),
-    })
-      .loose()
-      .optional(),
-    deprecation: u({
-      retirement_dates: record(string(), string()).optional(),
-      remapped_to: string().optional(),
-    })
-      .loose()
-      .optional(),
-    min_cli_version: string().optional(),
-  }).loose(),
-);
-var catalogAliasSchema = DoctorLazy(() =>
-  u({
-    default: string(),
-    per_provider: record(string(), string()).optional(),
-  }).loose(),
-);
-var catalogFileSchema = DoctorLazy(() =>
-  u({
-    schema_version: E(),
-    pricing_tiers: record(string(), pricingSchema()).default({}),
-    models: array(catalogModelSchema()),
-    aliases: record(string(), catalogAliasSchema()).default({}),
-    defaults: record(string(), string()).default({}),
-    best: string().optional(),
-    latest_per_family: record(string(), string()).default({}),
-    alias_migration: record(string(), string()).default({}),
-  }).loose(),
-);
+var ModelCatalogSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var pricingSchema;
+var catalogModelSchema;
+var catalogAliasSchema;
+var catalogFileSchema;
+deferInit("chunk-v9tcvh08.js:20995", () => {
+  ModelCatalogSchema = DoctorLazy(() =>
+    objectSchema({
+      first_party: stringSchema(),
+      bedrock: stringSchema().nullish(),
+      vertex: stringSchema().nullish(),
+      foundry: stringSchema().nullish(),
+      anthropic_aws: stringSchema().nullish(),
+      anthropic_google_cloud: stringSchema().nullish(),
+      mantle: stringSchema().nullish(),
+      gateway: stringSchema().nullish(),
+    }).loose(),
+  );
+  pricingSchema = DoctorLazy(() =>
+    objectSchema({
+      input: numberSchema(),
+      output: numberSchema(),
+      cache_write_5m: numberSchema().optional(),
+      cache_write_1h: numberSchema().optional(),
+      cache_read: numberSchema().optional(),
+      web_search: numberSchema().optional(),
+      long_prompt: objectSchema({
+        above_prompt_tokens: numberSchema().int().positive(),
+        input: numberSchema(),
+        output: numberSchema(),
+        cache_write_5m: numberSchema().optional(),
+        cache_write_1h: numberSchema().optional(),
+        cache_read: numberSchema().optional(),
+      })
+        .loose()
+        .optional(),
+    }).loose(),
+  );
+  catalogModelSchema = DoctorLazy(() =>
+    objectSchema({
+      id: stringSchema(),
+      family: stringSchema(),
+      display_name: stringSchema(),
+      slogan: stringSchema().optional(),
+      knowledge_cutoff: stringSchema().optional(),
+      provider_ids: ModelCatalogSchema(),
+      eager_input_streaming: objectSchema({
+        bedrock: literal(true).optional(),
+        vertex: literal(true).optional(),
+      })
+        .loose()
+        .optional(),
+      vertex_region_env_var: stringSchema().optional(),
+      fallback_3p: stringSchema().optional(),
+      context: objectSchema({
+        window: numberSchema(),
+        maximum_window: numberSchema().optional(),
+        native_1m: booleanSchema().optional(),
+        supports_1m_beta: booleanSchema().optional(),
+        clamp_long_context_without_beta: booleanSchema().optional(),
+        supports_1m_suffix: booleanSchema().optional(),
+      })
+        .loose()
+        .optional(),
+      max_output_tokens: objectSchema({
+        default: numberSchema(),
+        upper: numberSchema(),
+      })
+        .loose()
+        .optional(),
+      pricing: union([stringSchema(), pricingSchema()]).optional(),
+      capabilities: array(stringSchema()).default([]),
+      default_effort: _enum(["low", "medium", "high", "xhigh", "max"]).optional(),
+      effort_cost_index: objectSchema({
+        low: numberSchema().positive().optional(),
+        medium: numberSchema().positive().optional(),
+        high: numberSchema().positive().optional(),
+        xhigh: numberSchema().positive().optional(),
+        max: numberSchema().positive().optional(),
+      })
+        .loose()
+        .optional(),
+      image_limits: objectSchema({
+        maxWidth: numberSchema().optional(),
+        maxHeight: numberSchema().optional(),
+        maxImageTokens: numberSchema().optional(),
+        maxBase64Size: numberSchema().optional(),
+      })
+        .loose()
+        .optional(),
+      advisor_rank: numberSchema().optional(),
+      fallback_chain: array(stringSchema()).optional(),
+      picker: objectSchema({
+        section: _enum(["main", "overflow", "deprecated"]).optional(),
+        badge: stringSchema().optional(),
+        disabled_reason: stringSchema().optional(),
+        tiers: array(stringSchema()).optional(),
+      })
+        .loose()
+        .optional(),
+      deprecation: objectSchema({
+        retirement_dates: record(stringSchema(), stringSchema()).optional(),
+        remapped_to: stringSchema().optional(),
+      })
+        .loose()
+        .optional(),
+      min_cli_version: stringSchema().optional(),
+    }).loose(),
+  );
+  catalogAliasSchema = DoctorLazy(() =>
+    objectSchema({
+      default: stringSchema(),
+      per_provider: record(stringSchema(), stringSchema()).optional(),
+    }).loose(),
+  );
+  catalogFileSchema = DoctorLazy(() =>
+    objectSchema({
+      schema_version: numberSchema(),
+      pricing_tiers: record(stringSchema(), pricingSchema()).default({}),
+      models: array(catalogModelSchema()),
+      aliases: record(stringSchema(), catalogAliasSchema()).default({}),
+      defaults: record(stringSchema(), stringSchema()).default({}),
+      best: stringSchema().optional(),
+      latest_per_family: record(stringSchema(), stringSchema()).default({}),
+      alias_migration: record(stringSchema(), stringSchema()).default({}),
+    }).loose(),
+  );
+});
 //@ chunk-v9tcvh08.js:23274-23629 placement
 /**
  * 建立按提供商 id 与目录 id 的索引，检测冲突。
  */
-function indexModelCatalog(e) {
-  let t = new Map();
-  let a = new Map();
-  for (let model of e.models) {
-    t.set(model.id, model);
+function indexModelCatalog(catalog) {
+  let entriesById = new Map();
+  let catalogIdByProviderId = new Map();
+  for (let model of catalog.models) {
+    entriesById.set(model.id, model);
     for (let providerId of Object.values(model.provider_ids)) {
       if (typeof providerId !== "string") continue;
       let lower = providerId.toLowerCase();
-      let l = a.get(lower);
-      if (l !== undefined && l !== model.id)
+      let existingId = catalogIdByProviderId.get(lower);
+      if (existingId !== undefined && existingId !== model.id)
         throw Error("model catalog: provider id collision across distinct entries");
-      a.set(lower, model.id);
+      catalogIdByProviderId.set(lower, model.id);
     }
   }
   return {
-    catalog: e,
-    entriesById: t,
-    catalogIdByProviderId: a,
+    catalog,
+    entriesById,
+    catalogIdByProviderId,
   };
 }
 //@ chunk-v9tcvh08.js:23629-23724 placement
@@ -1314,16 +1322,16 @@ function getModelCatalog_2() {
  */
 var getModelCatalog = getModelCatalog_2;
 //@ chunk-v9tcvh08.js:23769-23838 placement
-function catalogIdForProviderModelId(e) {
-  return getBakedCatalog().catalogIdByProviderId.get(e.toLowerCase());
+function catalogIdForProviderModelId(providerModelId) {
+  return getBakedCatalog().catalogIdByProviderId.get(providerModelId.toLowerCase());
 }
 //@ chunk-v9tcvh08.js:23838-23883 placement
-function getCatalogEntry(e) {
-  return getBakedCatalog().entriesById.get(e);
+function getCatalogEntry(catalogId) {
+  return getBakedCatalog().entriesById.get(catalogId);
 }
 //@ chunk-v9tcvh08.js:23883-24010 placement
-function resolvePricing(e) {
-  let pricing = e.pricing;
+function resolvePricing(entry) {
+  let pricing = entry.pricing;
   if (typeof pricing !== "string") return pricing;
   let pricingTiers = getModelCatalog().pricing_tiers;
   return Object.hasOwn(pricingTiers, pricing) ? pricingTiers[pricing] : undefined;
@@ -1375,76 +1383,82 @@ function setServedCapabilityLookup(servedCapabilityLookup) {
 /**
  * 判断模型是否支持某能力：服务端下发覆盖优先，否则看目录。
  */
-function modelSupportsCapability(canonicalName, t, a) {
-  return modelCapabilitiesEnvEntry(t, canonicalName) ?? lookupCapability(canonicalName, t, a);
+function modelSupportsCapability(canonicalName, capability, model) {
+  return (
+    modelCapabilitiesEnvEntry(capability, canonicalName) ?? lookupCapability(canonicalName, capability, model)
+  );
 }
 //@ chunk-v9tcvh08.js:24847-24898 placement
-function modelDefinitelySupports(e, t, a) {
-  return lookupCapability(e, t, a) === true ? true : undefined;
+function modelDefinitelySupports(canonicalName, capability, model) {
+  return lookupCapability(canonicalName, capability, model) === true ? true : undefined;
 }
 //@ chunk-v9tcvh08.js:24898-24987 placement
-function lookupCapability(e, t, a) {
+function lookupCapability(canonicalName, capability, model) {
   return (
-    getCatalogState().servedCapabilityLookup?.(t, [a, stripContextSuffix(e)]) ??
-    (catalogHasCapability(e, t) ? true : undefined)
+    getCatalogState().servedCapabilityLookup?.(capability, [model, stripContextSuffix(canonicalName)]) ??
+    (catalogHasCapability(canonicalName, capability) ? true : undefined)
   );
 }
 //@ chunk-v9tcvh08.js:24987-25047 placement
-function catalogHasCapability(e, t) {
-  return getCatalogEntry(stripContextSuffix(e))?.capabilities.includes(t);
+function catalogHasCapability(canonicalName, capability) {
+  return getCatalogEntry(stripContextSuffix(canonicalName))?.capabilities.includes(capability);
 }
 //@ chunk-v9tcvh08.js:25047-25086 placement
 /**
  * 取某模型的环境变量式能力配置项。
  */
-function modelCapabilitiesEnvEntry(e, t) {
-  return parseModelCapabilitiesEnv(t).get(e);
+function modelCapabilitiesEnvEntry(model, spec) {
+  return parseModelCapabilitiesEnv(spec).get(model);
 }
 //@ chunk-v9tcvh08.js:25086-25472 placement
 /**
  * 解析 CLAUDE_CODE_MODEL_CAPABILITIES（"模型=能力,-能力;..."，模型可用 * 前缀通配），返回当前模型的能力开关表。
  */
-function parseModelCapabilitiesEnv(e) {
-  let t = new Map();
+function parseModelCapabilitiesEnv(model) {
+  let capabilities = new Map();
   let CLAUDE_CODE_MODEL_CAPABILITIES = env.CLAUDE_CODE_MODEL_CAPABILITIES;
-  if (CLAUDE_CODE_MODEL_CAPABILITIES === undefined) return t;
-  let n = stripContextSuffix(e);
-  for (let r of CLAUDE_CODE_MODEL_CAPABILITIES.split(";")) {
-    let index = r.indexOf("=");
+  if (CLAUDE_CODE_MODEL_CAPABILITIES === undefined) return capabilities;
+  let baseModel = stripContextSuffix(model);
+  for (let segment of CLAUDE_CODE_MODEL_CAPABILITIES.split(";")) {
+    let index = segment.indexOf("=");
     if (index !== -1) {
-      let trimmed = r.slice(0, index).trim();
+      let trimmed = segment.slice(0, index).trim();
       if (trimmed === "") continue;
-      if (!(trimmed.endsWith("*") ? n.startsWith(trimmed.slice(0, -1)) : n === trimmed)) continue;
+      if (!(trimmed.endsWith("*") ? baseModel.startsWith(trimmed.slice(0, -1)) : baseModel === trimmed))
+        continue;
     }
-    for (let l of (index === -1 ? r : r.slice(index + 1)).split(",")) {
-      let trimmed = l.trim();
-      let v = !trimmed.startsWith("-");
-      t.set(v ? trimmed : trimmed.slice(1), v);
+    for (let entry of (index === -1 ? segment : segment.slice(index + 1)).split(",")) {
+      let trimmed = entry.trim();
+      let enabled = !trimmed.startsWith("-");
+      capabilities.set(enabled ? trimmed : trimmed.slice(1), enabled);
     }
   }
-  return t;
+  return capabilities;
 }
 //@ chunk-v9tcvh08.js:25472-25518 placement
-function stripContextSuffix(e) {
-  return e.replace(/\[1m\]/gi, "");
+function stripContextSuffix(modelId) {
+  return modelId.replace(/\[1m\]/gi, "");
 }
 //@ chunk-v9tcvh08.js:25518-25675 placement
 /**
  * 解析目录中的别名目标：按提供商的覆盖优先，否则默认值。
  */
-function resolveCatalogAlias(e, t) {
+function resolveCatalogAlias(aliasKey, provider) {
   let aliases = getModelCatalog().aliases;
-  let n = Object.hasOwn(aliases, e) ? aliases[e] : undefined;
-  if (!n) return;
-  let perProvider = n.per_provider;
-  return (perProvider && Object.hasOwn(perProvider, t) ? perProvider[t] : undefined) ?? n.default;
+  let aliasEntry = Object.hasOwn(aliases, aliasKey) ? aliases[aliasKey] : undefined;
+  if (!aliasEntry) return;
+  let perProvider = aliasEntry.per_provider;
+  return (
+    (perProvider && Object.hasOwn(perProvider, provider) ? perProvider[provider] : undefined) ??
+    aliasEntry.default
+  );
 }
 //@ chunk-v9tcvh08.js:25675-25874 placement
-function validateCatalogAliases(e) {
-  let catalogAlias = resolveCatalogAlias(e, "first_party");
-  let a = catalogAlias === undefined ? undefined : getCatalogEntry(catalogAlias);
-  if (a === undefined) throw Error("model-catalog.json: every aliases entry must name a models[] entry");
-  return a.provider_ids.first_party;
+function validateCatalogAliases(aliasKey) {
+  let catalogAlias = resolveCatalogAlias(aliasKey, "first_party");
+  let entry = catalogAlias === undefined ? undefined : getCatalogEntry(catalogAlias);
+  if (entry === undefined) throw Error("model-catalog.json: every aliases entry must name a models[] entry");
+  return entry.provider_ids.first_party;
 }
 //@ chunk-v9tcvh08.js:25874-26451 placement
 /**
@@ -1478,7 +1492,7 @@ var MODEL_KEY_BY_ID = {
  */
 function toProviderIdMap(catalogEntry) {
   let providerIds = catalogEntry.provider_ids;
-  let a = {
+  let map = {
     firstParty: providerIds.first_party,
     bedrock: providerIds.bedrock ?? null,
     vertex: providerIds.vertex ?? null,
@@ -1488,12 +1502,12 @@ function toProviderIdMap(catalogEntry) {
     mantle: providerIds.mantle ?? null,
     gateway: providerIds.gateway ?? providerIds.first_party,
   };
-  if (catalogEntry.eager_input_streaming) a.eagerInputStreaming = catalogEntry.eager_input_streaming;
-  return a;
+  if (catalogEntry.eager_input_streaming) map.eagerInputStreaming = catalogEntry.eager_input_streaming;
+  return map;
 }
 //@ chunk-v9tcvh08.js:26809-27042 placement
 function requireCatalogEntry() {
-  let e = {};
+  let result = {};
   for (let [key, value] of Object.entries(MODEL_KEY_BY_ID)) {
     let catalogEntry = getCatalogEntry(key);
     if (!catalogEntry)
@@ -1501,24 +1515,27 @@ function requireCatalogEntry() {
         `model catalog missing entry for '${key}' (CATALOG_ID_TO_KEY key '${value}')`,
         "model catalog missing entry for CATALOG_ID_TO_KEY id",
       );
-    e[value] = toProviderIdMap(catalogEntry);
+    result[value] = toProviderIdMap(catalogEntry);
   }
-  return e;
+  return result;
 }
 //@ chunk-v9tcvh08.js:27042-27053 placement
 /**
  * 按 firstParty id 索引的目录条目表。
  */
-var catalogEntriesByFirstPartyId = requireCatalogEntry();
+var catalogEntriesByFirstPartyId; // deferred: uses requireCatalogEntry of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-v9tcvh08.js:27042", () => {
+  catalogEntriesByFirstPartyId = requireCatalogEntry();
+});
 //@ chunk-v9tcvh08.js:27053-27281 placement
-function PROVIDER_KEYS(e) {
-  for (let t of ["bedrock", "vertex", "foundry", "anthropicAws"])
-    if (e[t] === null)
+function PROVIDER_KEYS(providerIds) {
+  for (let provider of ["bedrock", "vertex", "foundry", "anthropicAws"])
+    if (providerIds[provider] === null)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `named CLAUDE_*_CONFIG export for '${e.firstParty}' has null ${t}`,
+        `named CLAUDE_*_CONFIG export for '${providerIds.firstParty}' has null ${provider}`,
         "named model config export has null 3P provider id",
       );
-  return e;
+  return providerIds;
 }
 export {
   getModelCatalog,

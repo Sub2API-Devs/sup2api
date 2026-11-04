@@ -46,14 +46,14 @@ var TODO_TOOL_NAMES = [
 /**
  * 模型是否在 TODO_TOOL_LEGACY_MODELS 中。
  */
-function isTodoToolLegacyModel(e) {
-  return TODO_TOOL_LEGACY_MODELS.has(e);
+function isTodoToolLegacyModel(modelId) {
+  return TODO_TOOL_LEGACY_MODELS.has(modelId);
 }
 //@ chunk-e6aww6q8.js:3232717-3232784 placement
 /**
  * 判断模型 id 是否为推理配置（application-inference-profile）。
  */
-function isInferenceProfileModelId(e) {
-  return e.includes("application-inference-profile");
+function isInferenceProfileModelId(modelId) {
+  return modelId.includes("application-inference-profile");
 }
 export { TODO_TOOL_NAMES, isInferenceProfileModelId, isTodoToolLegacyModel };

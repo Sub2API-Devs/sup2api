@@ -20,10 +20,10 @@ import { hostSkillsEntry } from "../utils/commandPredicates.js";
  * 读取宿主下发的技能目录 CLAUDE_CODE_HOST_SKILL_CATALOG（1–64 个合法文件夹名），格式不对时记录警告与特性状态并返回 null。
  */
 function hostSkillCatalogFolders() {
-  let e = hostSkillCatalog();
-  if (e === undefined) return null;
-  let n = builtinSkillsSchema().safeParse(safeParseJSON(e, false));
-  if (!n.success) {
+  let rawCatalog = hostSkillCatalog();
+  if (rawCatalog === undefined) return null;
+  let parsed = builtinSkillsSchema().safeParse(safeParseJSON(rawCatalog, false));
+  if (!parsed.success) {
     logForDebugging(
       'Ignoring CLAUDE_CODE_HOST_SKILL_CATALOG: expected {"skills": 1 to 64 folder names of ASCII letters, digits, ".", "_" or "-", other than "." and ".."}',
       {
@@ -33,6 +33,6 @@ function hostSkillCatalogFolders() {
     logFeatureBad("skill_host_catalog", "invalid_value");
     return null;
   }
-  return hostSkillsEntry(n.data.skills);
+  return hostSkillsEntry(parsed.data.skills);
 }
 export { hostSkillCatalogFolders };

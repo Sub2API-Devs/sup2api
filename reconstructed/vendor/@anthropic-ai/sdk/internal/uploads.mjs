@@ -10,8 +10,10 @@ import { ReadableStreamFrom } from "./shims.mjs";
 //@ chunk-hwmsct5x.js:39341-39666 esm-fingerprint
 var checkFileSupport = () => {
   if (typeof File === "undefined") {
-    let { process: e } = globalThis;
-    let isOldNode = typeof e?.versions?.node === "string" && parseInt(e.versions.node.split(".")) < 20;
+    let { process: processModule } = globalThis;
+    let isOldNode =
+      typeof processModule?.versions?.node === "string" &&
+      parseInt(processModule.versions.node.split(".")) < 20;
     throw Error(
       "`File` is not defined as a global, which is required for file uploads." +
         (isOldNode
@@ -41,19 +43,19 @@ function getName(value, stripPath) {
 var isAsyncIterable = (value) =>
   value != null && typeof value === "object" && typeof value[Symbol.asyncIterator] === "function";
 //@ chunk-hwmsct5x.js:40077-40151 esm-layout
-var ut = async (opts, n, stripFilenames = true) => ({
+var withUploadBody = async (opts, fetchImpl, stripFilenames = true) => ({
   ...opts,
-  body: await createForm(opts.body, n, stripFilenames),
+  body: await createForm(opts.body, fetchImpl, stripFilenames),
 });
 var supportsFormDataMap = new WeakMap();
 //@ chunk-hwmsct5x.js:40151-40429 esm-fingerprint
 function supportsFormData(fetchObject) {
-  let n = typeof fetchObject === "function" ? fetchObject : fetchObject.fetch;
-  let cached = supportsFormDataMap.get(n);
+  let fetcher = typeof fetchObject === "function" ? fetchObject : fetchObject.fetch;
+  let cached = supportsFormDataMap.get(fetcher);
   if (cached) return cached;
   let promise = (async () => {
     try {
-      let FetchResponse = "Response" in n ? n.Response : (await n("data:,")).constructor;
+      let FetchResponse = "Response" in fetcher ? fetcher.Response : (await fetcher("data:,")).constructor;
       let data = new FormData();
       if (data.toString() === (await new FetchResponse(data).text())) return false;
       return true;
@@ -61,12 +63,12 @@ function supportsFormData(fetchObject) {
       return true;
     }
   })();
-  supportsFormDataMap.set(n, promise);
+  supportsFormDataMap.set(fetcher, promise);
   return promise;
 }
 //@ chunk-hwmsct5x.js:40429-40683 esm-fingerprint
-var createForm = async (body, n, stripFilenames = true) => {
-  if (!(await supportsFormData(n)))
+var createForm = async (body, fetchImpl, stripFilenames = true) => {
+  if (!(await supportsFormData(fetchImpl)))
     throw TypeError(
       "The provided fetch function does not support file uploads with the current global FormData class.",
     );
@@ -122,4 +124,4 @@ var addFormValue = async (form, key, value, stripFilenames) => {
       `Invalid value given to form, expected a string, number, boolean, object, Array, File or Blob but got ${value} instead`,
     );
 };
-export { checkFileSupport, getName, makeFile, isAsyncIterable, ut };
+export { checkFileSupport, getName, makeFile, isAsyncIterable, withUploadBody };

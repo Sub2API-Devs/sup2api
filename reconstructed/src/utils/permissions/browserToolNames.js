@@ -21,31 +21,43 @@ import {
   PERMISSION_MODES,
   EXTERNAL_PERMISSION_MODES,
 } from "../../types/permissions.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-dcmhvw5a.js:206103-206379 placement
 /**
  * 浏览器类 MCP 服务器名集合（Claude Preview、Claude in Chrome）。
  */
-var BROWSER_SERVER_NAMES = new Set(["Claude Preview", "Claude Browser"]);
-var CHROME_IN_SERVER_NAMES = new Set(["claude-in-chrome", "Claude in Chrome"]);
-var ALL_BROWSER_SERVER_NAMES = new Set([...CHROME_IN_SERVER_NAMES, ...BROWSER_SERVER_NAMES]);
-var REMOTE_DEVICES = "remote-devices";
-var CLAUDE_BROWSER_TOOL_PREFIXES = ["Claude_Browser__"];
-var CHROME_TOOL_PREFIXES = ["claude-in-chrome__", "Claude_in_Chrome__"];
-var ALL_BROWSER_TOOL_PREFIXES = [...CLAUDE_BROWSER_TOOL_PREFIXES, ...CHROME_TOOL_PREFIXES];
-var CLAUDE_DEVICE = "claude-device";
-var CHROME = "chrome_";
+var BROWSER_SERVER_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var CHROME_IN_SERVER_NAMES;
+var ALL_BROWSER_SERVER_NAMES;
+var REMOTE_DEVICES;
+var CLAUDE_BROWSER_TOOL_PREFIXES;
+var CHROME_TOOL_PREFIXES;
+var ALL_BROWSER_TOOL_PREFIXES;
+var CLAUDE_DEVICE;
+var CHROME;
+deferInit("chunk-dcmhvw5a.js:206103", () => {
+  BROWSER_SERVER_NAMES = new Set(["Claude Preview", "Claude Browser"]);
+  CHROME_IN_SERVER_NAMES = new Set(["claude-in-chrome", "Claude in Chrome"]);
+  ALL_BROWSER_SERVER_NAMES = new Set([...CHROME_IN_SERVER_NAMES, ...BROWSER_SERVER_NAMES]);
+  REMOTE_DEVICES = "remote-devices";
+  CLAUDE_BROWSER_TOOL_PREFIXES = ["Claude_Browser__"];
+  CHROME_TOOL_PREFIXES = ["claude-in-chrome__", "Claude_in_Chrome__"];
+  ALL_BROWSER_TOOL_PREFIXES = [...CLAUDE_BROWSER_TOOL_PREFIXES, ...CHROME_TOOL_PREFIXES];
+  CLAUDE_DEVICE = "claude-device";
+  CHROME = "chrome_";
+});
 //@ chunk-dcmhvw5a.js:206379-206484 placement
-function isRemoteDeviceToolWithPrefix(e, n) {
-  if (e?.serverName !== REMOTE_DEVICES) return false;
-  let r = normalizeNameForMCP(e.toolName);
-  return n.some((s) => r.startsWith(s));
+function isRemoteDeviceToolWithPrefix(tool, prefixes) {
+  if (tool?.serverName !== REMOTE_DEVICES) return false;
+  let normalizedToolName = normalizeNameForMCP(tool.toolName);
+  return prefixes.some((prefix) => normalizedToolName.startsWith(prefix));
 }
 //@ chunk-dcmhvw5a.js:206484-206550 placement
-function isBrowserComputerUseTool(mcpInfo) {
+function isBrowserComputerUseTool(tool) {
   return (
-    (mcpInfo !== undefined && BROWSER_SERVER_NAMES.has(mcpInfo.serverName)) ||
-    isRemoteDeviceToolWithPrefix(mcpInfo, CLAUDE_BROWSER_TOOL_PREFIXES)
+    (tool !== undefined && BROWSER_SERVER_NAMES.has(tool.serverName)) ||
+    isRemoteDeviceToolWithPrefix(tool, CLAUDE_BROWSER_TOOL_PREFIXES)
   );
 }
 //@ chunk-dcmhvw5a.js:206550-206627 placement
@@ -60,30 +72,30 @@ function isComputerUseTool(mcpInfo) {
   );
 }
 //@ chunk-dcmhvw5a.js:206627-206745 placement
-function isBrowserMcpTool(mcpInfo) {
+function isBrowserMcpTool(tool) {
   return (
-    (mcpInfo !== undefined && CHROME_IN_SERVER_NAMES.has(mcpInfo.serverName)) ||
-    isRemoteDeviceToolWithPrefix(mcpInfo, CHROME_TOOL_PREFIXES) ||
-    (mcpInfo?.serverName === CLAUDE_DEVICE && normalizeNameForMCP(mcpInfo.toolName).startsWith(CHROME))
+    (tool !== undefined && CHROME_IN_SERVER_NAMES.has(tool.serverName)) ||
+    isRemoteDeviceToolWithPrefix(tool, CHROME_TOOL_PREFIXES) ||
+    (tool?.serverName === CLAUDE_DEVICE && normalizeNameForMCP(tool.toolName).startsWith(CHROME))
   );
 }
 //@ chunk-dcmhvw5a.js:206745-207107 placement
 /**
  * 当前权限模式下工具是否自动允许。
  */
-function isAutoAllowedInMode(e, toolPermissionContext) {
-  let mcpPermissionModeOverride = getMcpPermissionModeOverride(e, toolPermissionContext);
-  let s =
+function isAutoAllowedInMode(tool, toolPermissionContext) {
+  let mcpPermissionModeOverride = getMcpPermissionModeOverride(tool, toolPermissionContext);
+  let isBypassLike =
     toolPermissionContext.mode === "bypassPermissions" ||
     toolPermissionContext.mode === "auto" ||
     isPlanBypass(toolPermissionContext.mode, toolPermissionContext.isBypassPermissionsModeAvailable);
-  if (typeof mcpPermissionModeOverride === "string" && s) return mcpPermissionModeOverride;
+  if (typeof mcpPermissionModeOverride === "string" && isBypassLike) return mcpPermissionModeOverride;
   if (
-    s &&
-    (isBrowserComputerUseTool(e?.mcpInfo) ||
-      isComputerUseTool(e?.mcpInfo) ||
-      e?.excludedFromModeBypassAllow?.() === true ||
-      (isBrowserMcpTool(e?.mcpInfo) && toolPermissionContext.chromeClassifierFloorEnabled === true))
+    isBypassLike &&
+    (isBrowserComputerUseTool(tool?.mcpInfo) ||
+      isComputerUseTool(tool?.mcpInfo) ||
+      tool?.excludedFromModeBypassAllow?.() === true ||
+      (isBrowserMcpTool(tool?.mcpInfo) && toolPermissionContext.chromeClassifierFloorEnabled === true))
   )
     return toolPermissionContext.canAutoClassifierRun === true ? "auto" : "default";
   return toolPermissionContext.mode;
@@ -92,8 +104,8 @@ function isAutoAllowedInMode(e, toolPermissionContext) {
 /**
  * 取工具所属 MCP 服务器的权限模式覆盖值。
  */
-function getMcpPermissionModeOverride(e, toolPermissionContext) {
-  let serverName = e?.mcpInfo?.serverName;
+function getMcpPermissionModeOverride(tool, toolPermissionContext) {
+  let serverName = tool?.mcpInfo?.serverName;
   return serverName !== undefined && toolPermissionContext.mcpPermissionModeOverrides !== undefined
     ? getOwn(toolPermissionContext.mcpPermissionModeOverrides, serverName)
     : undefined;
@@ -102,25 +114,25 @@ function getMcpPermissionModeOverride(e, toolPermissionContext) {
 /**
  * 校验 MCP 权限模式覆盖值：null 表示无覆盖，只接受 default 与 auto。
  */
-function parseMcpModeOverride(e) {
-  if (e === null)
+function parseMcpModeOverride(value) {
+  if (value === null)
     return {
       ok: true,
       override: undefined,
     };
-  if (e === "default" || e === "auto")
+  if (value === "default" || value === "auto")
     return {
       ok: true,
-      override: e,
+      override: value,
     };
   return {
     ok: false,
-    rejected: e,
+    rejected: value,
   };
 }
 //@ chunk-dcmhvw5a.js:207390-207428 placement
-function isPlanMode(e) {
-  return e.mode === "plan";
+function isPlanMode(toolPermissionContext) {
+  return toolPermissionContext.mode === "plan";
 }
 //@ chunk-dcmhvw5a.js:207428-207478 placement
 /**
@@ -133,11 +145,11 @@ function isPlanBypass(mode, isBypassPermissionsModeAvailable) {
 /**
  * 当前模式是否以绕过方式自动放行该工具（bypassPermissions 或计划模式下的绕过），工具声明排除时除外。
  */
-function isBypassAllowedInMode(e, n, isBypassPermissionsModeAvailable, forRemoteExecution) {
+function isBypassAllowedInMode(tool, mode, isBypassPermissionsModeAvailable, forRemoteExecution) {
   return (
-    (n === "bypassPermissions" ||
-      (isPlanBypass(n, isBypassPermissionsModeAvailable) && forRemoteExecution !== true)) &&
-    e.excludedFromModeBypassAllow?.() !== true
+    (mode === "bypassPermissions" ||
+      (isPlanBypass(mode, isBypassPermissionsModeAvailable) && forRemoteExecution !== true)) &&
+    tool.excludedFromModeBypassAllow?.() !== true
   );
 }
 //@ chunk-dcmhvw5a.js:207589-207652 placement
@@ -151,36 +163,39 @@ function isSandboxAutoAllowOff(toolPermissionContext) {
 /**
  * 权限模式 schema（含别名规整）与外部模式 schema，及按宽松程度排序的模式等级表。
  */
-var permissionModeSchema = DoctorLazy(() =>
-  preprocess(normalizePermissionModeAlias, _enum(PERMISSION_MODES)),
-);
-var externalPermissionModeSchema = DoctorLazy(() =>
-  preprocess(normalizePermissionModeAlias, _enum(EXTERNAL_PERMISSION_MODES)),
-);
-var PERMISSION_MODE_RANK = {
-  plan: 0,
-  bubble: 1,
-  default: 1,
-  dontAsk: 1,
-  acceptEdits: 2,
-  auto: 3,
-  bypassPermissions: 4,
-};
+var permissionModeSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var externalPermissionModeSchema;
+var PERMISSION_MODE_RANK;
+deferInit("chunk-dcmhvw5a.js:207652", () => {
+  permissionModeSchema = DoctorLazy(() => preprocess(normalizePermissionModeAlias, _enum(PERMISSION_MODES)));
+  externalPermissionModeSchema = DoctorLazy(() =>
+    preprocess(normalizePermissionModeAlias, _enum(EXTERNAL_PERMISSION_MODES)),
+  );
+  PERMISSION_MODE_RANK = {
+    plan: 0,
+    bubble: 1,
+    default: 1,
+    dontAsk: 1,
+    acceptEdits: 2,
+    auto: 3,
+    bypassPermissions: 4,
+  };
+});
 //@ chunk-dcmhvw5a.js:207786-207885 placement
 /**
  * 两个权限模式中取更严格的一个。
  */
-function narrowerMode(e, n) {
-  if (!e) return;
-  if (n === "auto" && e === "acceptEdits") return;
-  return PERMISSION_MODE_RANK[e] <= PERMISSION_MODE_RANK[n] ? e : undefined;
+function narrowerMode(candidateMode, currentMode) {
+  if (!candidateMode) return;
+  if (currentMode === "auto" && candidateMode === "acceptEdits") return;
+  return PERMISSION_MODE_RANK[candidateMode] <= PERMISSION_MODE_RANK[currentMode] ? candidateMode : undefined;
 }
 //@ chunk-dcmhvw5a.js:207885-207975 placement
 /**
  * isBypassCapableMode：可以绕过权限的模式。
  */
-function isBypassCapableMode(e) {
-  return e === "bypassPermissions" || e === "acceptEdits" || e === "auto" || e === "plan";
+function isBypassCapableMode(mode) {
+  return mode === "bypassPermissions" || mode === "acceptEdits" || mode === "auto" || mode === "plan";
 }
 export {
   isAutoAllowedInMode,

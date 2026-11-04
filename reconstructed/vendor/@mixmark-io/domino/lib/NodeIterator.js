@@ -5,13 +5,13 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_NodeFilter } from "./NodeFilter.js";
 import { require_NodeTraversal } from "./NodeTraversal.js";
 import { require_utils } from "./utils.js";
 
 //@ chunk-vwj6ccer.js:71450-73463 cjs-fingerprint
-var require_NodeIterator = x(function (cjsExports, cjsModule) {
+var require_NodeIterator = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = NodeIterator;
   var NodeFilter = require_NodeFilter();
   var NodeTraversal = require_NodeTraversal();

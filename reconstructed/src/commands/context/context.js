@@ -33,38 +33,38 @@ async function call(onDone, context, args) {
       return null;
     }
     try {
-      let p = await requestContextUsage(controlChannel, {
+      let usage = await requestContextUsage(controlChannel, {
         signal: context.abortController.signal,
       });
-      if (!p) {
+      if (!usage) {
         onDone("Couldn't show context usage: the remote sent a reply this version can't display");
         return null;
       }
-      let f = isBridgeOrTransport(context.session);
-      let H = f
+      let isBridge = isBridgeOrTransport(context.session);
+      let trimmedUsage = isBridge
         ? {
-            ...p,
+            ...usage,
             memoryFiles: [],
           }
-        : p;
-      let g = await renderToAnsiString(
+        : usage;
+      let rendered = await renderToAnsiString(
         jsxProd_default(ContextVisualization, {
-          data: H,
+          data: trimmedUsage,
           collapseDetailSections,
         }),
         {
           storageV5: context.storageV5,
         },
       );
-      if (!f && isBridgeOrTransport(context.session)) {
-        f = true;
-        H = {
-          ...p,
+      if (!isBridge && isBridgeOrTransport(context.session)) {
+        isBridge = true;
+        trimmedUsage = {
+          ...usage,
           memoryFiles: [],
         };
-        g = await renderToAnsiString(
+        rendered = await renderToAnsiString(
           jsxProd_default(ContextVisualization, {
-            data: H,
+            data: trimmedUsage,
             collapseDetailSections,
           }),
           {
@@ -72,22 +72,22 @@ async function call(onDone, context, args) {
           },
         );
       }
-      onDone(g, {
+      onDone(rendered, {
         display: "system",
-        metaMessages: [formatContextAsMarkdownTable(H)],
+        metaMessages: [formatContextAsMarkdownTable(trimmedUsage)],
       });
     } catch (error) {
       if (isAbortError(error)) {
         onDone(REMOTE_STOPPED_WAITING_NOTICE);
         return null;
       }
-      let f = isBridgeOrTransport(context.session);
-      if (f)
+      let isBridge = isBridgeOrTransport(context.session);
+      if (isBridge)
         logForDebugging(`/context remote fetch failed: ${errorMessage(error)}`, {
           level: "error",
         });
       onDone(
-        f
+        isBridge
           ? "Couldn't fetch context from remote"
           : `Couldn't fetch context from remote: ${errorMessage(error)}`,
       );
@@ -102,7 +102,7 @@ async function call(onDone, context, args) {
   let messages_2 = messagesSinceCompactBoundary(messages);
   let terminalWidth = process.stdout.columns || 80;
   let appState = getAppState();
-  let T = await analyzeContextUsage(
+  let analysis = await analyzeContextUsage(
     messages_2,
     mainLoopModel,
     async () => appState.toolPermissionContext,
@@ -116,30 +116,30 @@ async function call(onDone, context, args) {
       configuredWindow: appState.autoCompactWindow,
     },
   );
-  let R = isBridgeOrTransport(context.session);
-  let E = R
+  let isBridge = isBridgeOrTransport(context.session);
+  let trimmedAnalysis = isBridge
     ? {
-        ...T,
+        ...analysis,
         memoryFiles: [],
       }
-    : T;
-  let Q = await renderToAnsiString(
+    : analysis;
+  let rendered = await renderToAnsiString(
     jsxProd_default(ContextVisualization, {
-      data: E,
+      data: trimmedAnalysis,
       collapseDetailSections,
     }),
     {
       storageV5: context.storageV5,
     },
   );
-  if (!R && isBridgeOrTransport(context.session)) {
-    E = {
-      ...T,
+  if (!isBridge && isBridgeOrTransport(context.session)) {
+    trimmedAnalysis = {
+      ...analysis,
       memoryFiles: [],
     };
-    Q = await renderToAnsiString(
+    rendered = await renderToAnsiString(
       jsxProd_default(ContextVisualization, {
-        data: E,
+        data: trimmedAnalysis,
         collapseDetailSections,
       }),
       {
@@ -147,9 +147,10 @@ async function call(onDone, context, args) {
       },
     );
   }
-  onDone(Q, {
+  onDone(rendered, {
     display: "system",
-    metaMessages: [formatContextAsMarkdownTable(E)],
+    metaMessages: [formatContextAsMarkdownTable(trimmedAnalysis)],
   });
   return null;
 }
+export { call };

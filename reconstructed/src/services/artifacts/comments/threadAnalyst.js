@@ -26,6 +26,7 @@ import { getParentSessionId } from "../../../utils/teammate.js";
 import { runWithCwdOverride } from "../../../utils/cwd.js";
 import { asSystemPrompt } from "../../../utils/systemPromptType.js";
 import { truncateToLength } from "../../../utils/stringUtils.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-9tgt55am.js:40474-40576 placement
 function getAssistantJsonText(modelWithoutStreaming) {
@@ -35,20 +36,23 @@ function getAssistantJsonText(modelWithoutStreaming) {
   return stripJsonCodeFence(trimmed);
 }
 //@ chunk-9tgt55am.js:40576-40622 placement
-var ALLOWED_ANALYST_ACTIONS = new Set(["comments", "read_page_data"]);
+var ALLOWED_ANALYST_ACTIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-9tgt55am.js:40576", () => {
+  ALLOWED_ANALYST_ACTIONS = new Set(["comments", "read_page_data"]);
+});
 //@ chunk-9tgt55am.js:40622-41455 placement
 /**
  * 构造评论线程分析子代理的 canUseTool：只允许针对同一 artifact、同一线程的只读 Artifact 评论读取类动作（权限检查改写后的输入也要仍在范围内），其他一律拒绝。
  */
 function makeAnalystCanUseTool(slug, threadId) {
-  let isInScope = (r) => {
-    let { action, url } = r;
+  let isInScope = (input) => {
+    let { action, url } = input;
     return (
       typeof action === "string" &&
       ALLOWED_ANALYST_ACTIONS.has(action) &&
       typeof url === "string" &&
       uuidSlugFromUrl(url) === slug &&
-      (action !== "comments" || r.thread_id === threadId)
+      (action !== "comments" || input.thread_id === threadId)
     );
   };
   let deny = () => ({
@@ -60,27 +64,39 @@ function makeAnalystCanUseTool(slug, threadId) {
       reason: "comment analyst read-only scope",
     },
   });
-  return async (r, s, d, h, y, C) => {
-    let R = (N) =>
-      r.mcpInfo !== undefined
+  return async (tool, input, toolUseContext, canUseToolPermissionContext, assistantMessage, toolUseId) => {
+    let toArtifactInput = (rawInput) =>
+      tool.mcpInfo !== undefined
         ? null
-        : r.name === ARTIFACT_TOOL_NAME
-          ? N
-          : r.name === ARTIFACT_COMMENTS_TOOL_NAME
-            ? toParentArtifactInput("comments", N)
+        : tool.name === ARTIFACT_TOOL_NAME
+          ? rawInput
+          : tool.name === ARTIFACT_COMMENTS_TOOL_NAME
+            ? toParentArtifactInput("comments", rawInput)
             : null;
-    let b = R(s);
-    if (b !== null && isInScope(b)) {
-      let N = await hasPermissionsToUseTool(r, s, d, h, y, C);
-      let updatedInput = N.updatedInput;
-      let w =
+    let artifactInput = toArtifactInput(input);
+    if (artifactInput !== null && isInScope(artifactInput)) {
+      let permission = await hasPermissionsToUseTool(
+        tool,
+        input,
+        toolUseContext,
+        canUseToolPermissionContext,
+        assistantMessage,
+        toolUseId,
+      );
+      let updatedInput = permission.updatedInput;
+      let emptyInput =
         updatedInput !== null &&
         typeof updatedInput === "object" &&
         !Array.isArray(updatedInput) &&
         Object.keys(updatedInput).length === 0;
-      if (N.behavior === "allow" && updatedInput !== undefined && !w && !isInScope(R(updatedInput)))
+      if (
+        permission.behavior === "allow" &&
+        updatedInput !== undefined &&
+        !emptyInput &&
+        !isInScope(toArtifactInput(updatedInput))
+      )
         return deny();
-      return N;
+      return permission;
     }
     return deny();
   };
@@ -101,17 +117,17 @@ async function runCommentThreadAnalyst(options) {
   }
   let saltedName = makeSaltedName("comment-thread-analyst");
   let depth = getAgentDepth(context.agentContext) + 1;
-  let [{ runAgent: h }, { COMMENT_ANALYST_AGENT: y }] = await Promise.all([
-    import("./chunk-0qj0hrch.js"),
-    import("./chunk-9ss4055j.js"),
+  let [{ runAgent }, { COMMENT_ANALYST_AGENT }] = await Promise.all([
+    import("../../../tools/AgentTool/runAgent.js"),
+    import("../../../tools/ArtifactTool/COMMENT_ANALYST_AGENT.lazy.js"),
   ]);
-  let C = {
+  let listOptions = {
     agentId: saltedName,
     parentAgentId: context.agentId,
     depth,
     parentSessionId: getParentSessionId(),
     agentType: "subagent",
-    subagentName: y.agentType,
+    subagentName: COMMENT_ANALYST_AGENT.agentType,
     isBuiltIn: true,
     delegatedObservation: true,
     displayName: "comment-thread-analyst",
@@ -121,10 +137,10 @@ async function runCommentThreadAnalyst(options) {
   };
   let content = `Analyze artifact comment thread ${thread.id} on artifact ${url} (triggering comment id ${options.triggerComment.id}). Follow your workflow and output the analysis brief.`;
   try {
-    let brief = await runWithCwdOverride(C, () =>
+    let brief = await runWithCwdOverride(listOptions, () =>
       collectFinalAssistantText(
-        h({
-          agentDefinition: y,
+        runAgent({
+          agentDefinition: COMMENT_ANALYST_AGENT,
           promptMessages: [
             createUserMessage({
               content,
@@ -137,12 +153,12 @@ async function runCommentThreadAnalyst(options) {
           availableTools: context.options.tools,
           override: {
             agentId: identityAgentId2(saltedName),
-            agentContext: C,
+            agentContext: listOptions,
             requireCanUseTool: true,
             userContext: {},
             systemContext: {},
             systemPrompt: asSystemPrompt([
-              y.getSystemPrompt({
+              COMMENT_ANALYST_AGENT.getSystemPrompt({
                 toolUseContext: context,
               }),
             ]),
@@ -174,26 +190,26 @@ async function runCommentThreadAnalyst(options) {
 /**
  * 消费代理消息流，记下最后一条非空助手文本；若最后出现的是 API 错误消息则返回 null。
  */
-async function collectFinalAssistantText(e) {
-  let t = "";
-  let n = false;
-  for await (let a of e) {
-    let r = a;
-    if (r.type !== "assistant" || !Array.isArray(r.message?.content)) continue;
-    if (r.isApiErrorMessage === true) {
-      n = true;
+async function collectFinalAssistantText(events) {
+  let text = "";
+  let isError = false;
+  for await (let event of events) {
+    let message = event;
+    if (message.type !== "assistant" || !Array.isArray(message.message?.content)) continue;
+    if (message.isApiErrorMessage === true) {
+      isError = true;
       continue;
     }
     let trimmed = extractTextContent_2(
-      r.message.content,
+      message.message.content,
       `
 `,
     ).trim();
     if (trimmed !== "") {
-      t = trimmed;
-      n = false;
+      text = trimmed;
+      isError = false;
     }
   }
-  return n ? null : t;
+  return isError ? null : text;
 }
 export { getAssistantJsonText, runCommentThreadAnalyst };

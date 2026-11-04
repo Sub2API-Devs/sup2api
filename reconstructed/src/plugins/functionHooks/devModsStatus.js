@@ -14,21 +14,25 @@ import { createValueSlot } from "../../utils/valueSlot.js";
 import { stripPluginPrefix, ReloadFailedError } from "./hooksModuleLoader.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:4119561-4119615 placement
 /**
  * 带清理的 HostScoped 槽
  */
 var createHostStateSlot = () =>
-  identity_2(createValueSlot(), (e) => {
-    e.get()?.();
-    e.set(undefined);
+  identity_2(createValueSlot(), (slot) => {
+    slot.get()?.();
+    slot.set(undefined);
   });
 //@ chunk-e6aww6q8.js:4119615-4119629 placement
 /**
  * 开发 mod 的宿主状态
  */
-var devModHostState = createHostStateSlot();
+var devModHostState; // deferred: uses createHostStateSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:4119615", () => {
+  devModHostState = createHostStateSlot();
+});
 //@ chunk-e6aww6q8.js:4119629-4119663 placement
 /**
  * "options changed — "
@@ -38,143 +42,159 @@ var OPTIONS_CHANGED_PREFIX = "options changed \u2014 ";
 /**
  * 比较两个文件戳（大小与哈希）：same、other 或 unknown。
  */
-function compareStamp(stamp, n) {
-  if (stamp === undefined || n === undefined) return "unknown";
-  return stamp.size === n.size && stamp.hash === n.hash ? "same" : "other";
+function compareStamp(stamp, other) {
+  if (stamp === undefined || other === undefined) return "unknown";
+  return stamp.size === other.size && stamp.hash === other.hash ? "same" : "other";
 }
 //@ chunk-e6aww6q8.js:4119778-4120026 placement
 /**
  * 判断开发插件文件变化的来源（本进程写入、外部修改或无变化）。
  */
-function classifyChangeSource(e, n, r) {
-  let s = compareStamp(e.stamp, n.read);
-  let y = e.ctimeMs === n.taken?.ctimeMs ? compareStamp(e.stamp, n.taken?.stamp) : "other";
-  let S = s === "other" && y !== "same";
-  let isServed = s === "same" && n.isServed;
-  let L = y !== "other";
-  let G = e.ctimeMs <= r;
-  return S ? undefined : isServed ? "served" : L ? "retold" : G ? "clock" : undefined;
+function classifyChangeSource(current, snapshot, maxClockMs) {
+  let readStamp = compareStamp(current.stamp, snapshot.read);
+  let takenStamp =
+    current.ctimeMs === snapshot.taken?.ctimeMs
+      ? compareStamp(current.stamp, snapshot.taken?.stamp)
+      : "other";
+  let isMismatched = readStamp === "other" && takenStamp !== "same";
+  let isServed = readStamp === "same" && snapshot.isServed;
+  let hasTaken = takenStamp !== "other";
+  let isBeforeMax = current.ctimeMs <= maxClockMs;
+  return isMismatched
+    ? undefined
+    : isServed
+      ? "served"
+      : hasTaken
+        ? "retold"
+        : isBeforeMax
+          ? "clock"
+          : undefined;
 }
 //@ chunk-e6aww6q8.js:4120026-4120145 placement
-function diffPresentPlugins(e, n) {
-  let r = new Set(n);
+function diffPresentPlugins(before, present) {
+  let presentSet = new Set(present);
   return {
-    appeared: n.filter((s) => !e.has(s)),
-    gone: [...e.keys()].filter((key) => !r.has(key)),
+    appeared: present.filter((name) => !before.has(name)),
+    gone: [...before.keys()].filter((key) => !presentSet.has(key)),
   };
 }
 //@ chunk-e6aww6q8.js:4120190-4120523 placement
 /**
  * 描述开发插件目录中插件的出现或消失（已加载/卸载、新出现或已移走）。
  */
-function describePresenceChange(e, n, r) {
-  let s = `${basename(r.root)}${sep}`;
-  let h = e === "new" ? `new in ${s}` : `gone from ${s}`;
-  switch (n) {
+function describePresenceChange(presence, outcome, diff) {
+  let folder = `${basename(diff.root)}${sep}`;
+  let where = presence === "new" ? `new in ${folder}` : `gone from ${folder}`;
+  switch (outcome) {
     case "reloaded":
-      return `${e === "new" ? "loaded" : "unloaded"} (${h})`;
+      return `${presence === "new" ? "loaded" : "unloaded"} (${where})`;
     case "not-loaded":
-      return `${h}, not loaded; /plugin shows why`;
+      return `${where}, not loaded; /plugin shows why`;
     case "held":
-      return `${h}, on hold: /reload-plugins applies it`;
+      return `${where}, on hold: /reload-plugins applies it`;
     case "unbound":
-      return `${h}; restart to apply`;
+      return `${where}; restart to apply`;
   }
 }
 //@ chunk-e6aww6q8.js:4120557-4120604 placement
 /**
  * 相对路径或 none
  */
-var relativeOrNone = (e, n) => (e === undefined ? "none" : relative(n.root, e));
+var relativeOrNone = (path, diff) => (path === undefined ? "none" : relative(diff.root, path));
 //@ chunk-e6aww6q8.js:4120604-4120711 placement
 function describeHookCount(events) {
-  let n = events.length;
-  let r = n === 1 ? "hook" : "hooks";
-  let s = n === 0 ? "" : `: ${events.join(", ")}`;
-  return `${n} ${r}${s}`;
+  let count = events.length;
+  let noun = count === 1 ? "hook" : "hooks";
+  let list = count === 0 ? "" : `: ${events.join(", ")}`;
+  return `${count} ${noun}${list}`;
 }
 //@ chunk-e6aww6q8.js:4120745-4120985 placement
 /**
  * manifest 变化后的状态行："<文件> changed — reloaded (modules: a → b; N hooks)" 或拒绝原因。
  */
-function describeManifestReload(e, n, r) {
-  let s = `${basename(e.manifest)} changed \u2014 `;
-  if (r.refused !== undefined) return s + r.refused;
-  let h = relativeOrNone(n.before, e);
-  let y = relativeOrNone(n.now, e);
-  let S = h === y ? `${y} unchanged` : `${h} \u2192 ${y}`;
-  return `${s}reloaded (modules: ${S}; ${describeHookCount(r.events)})`;
+function describeManifestReload(diff, before, outcome) {
+  let prefix = `${basename(diff.manifest)} changed \u2014 `;
+  if (outcome.refused !== undefined) return prefix + outcome.refused;
+  let wasPath = relativeOrNone(before.before, diff);
+  let nowPath = relativeOrNone(before.now, diff);
+  let modulesText = wasPath === nowPath ? `${nowPath} unchanged` : `${wasPath} \u2192 ${nowPath}`;
+  return `${prefix}reloaded (modules: ${modulesText}; ${describeHookCount(outcome.events)})`;
 }
 //@ chunk-e6aww6q8.js:4121019-4121070 placement
 /**
  * 清单变化需重启
  */
-var manifestChangedRestart = (e) => `${basename(e)} changed; restart to apply`;
+var manifestChangedRestart = (path) => `${basename(path)} changed; restart to apply`;
 //@ chunk-e6aww6q8.js:4121104-4121254 placement
 /**
  * manifest 不再指定 hooks 模块时的状态行。
  */
-function describeModuleUnnamed(e, before) {
-  let r = before === undefined ? "nothing to unload" : `${relativeOrNone(before, e)} unloaded`;
-  return `${basename(e.manifest)} changed \u2014 names no hooks module now; ` + r;
+function describeModuleUnnamed(diff, path) {
+  let tail = path === undefined ? "nothing to unload" : `${relativeOrNone(path, diff)} unloaded`;
+  return `${basename(diff.manifest)} changed \u2014 names no hooks module now; ` + tail;
 }
 //@ chunk-e6aww6q8.js:4121254-4121388 placement
 /**
  * 重载失败的说明：保留旧版本时注明 "the previous version stays loaded"。
  */
-function describeReloadFailure(e, n) {
-  let r = stripPluginPrefix(e, n);
-  return n instanceof ReloadFailedError
-    ? `reload failed, the previous version stays loaded: ${r}`
-    : `reload failed: ${r}`;
+function describeReloadFailure(request, error) {
+  let message = stripPluginPrefix(request, error);
+  return error instanceof ReloadFailedError
+    ? `reload failed, the previous version stays loaded: ${message}`
+    : `reload failed: ${message}`;
 }
 //@ chunk-e6aww6q8.js:4121422-4121521 placement
 /**
  * 重载被 ConfigChange 钩子拦下
  */
-var reloadVetoedText = (e) =>
-  `${basename(e)} changed; a ConfigChange hook blocked the reload, the loaded version stays`;
+var reloadVetoedText = (request) =>
+  `${basename(request)} changed; a ConfigChange hook blocked the reload, the loaded version stays`;
 //@ chunk-e6aww6q8.js:4121521-4121603 placement
 /**
  * 已重载（钩子数）
  */
-function reloadedText(result) {
-  return result.refused === undefined ? `reloaded (${describeHookCount(result.events)})` : result.refused;
+function reloadedText(reloadResult) {
+  return reloadResult.refused === undefined
+    ? `reloaded (${describeHookCount(reloadResult.events)})`
+    : reloadResult.refused;
 }
 //@ chunk-e6aww6q8.js:4121603-4121776 placement
-var describeReloadStorm = (e) =>
-  `reloading unusually often (${e.limit} reloads back to back); pausing, the latest save loads once the directory is quiet, or run /reload-plugins to reload now`;
+var describeReloadStorm = (storm) =>
+  `reloading unusually often (${storm.limit} reloads back to back); pausing, the latest save loads once the directory is quiet, or run /reload-plugins to reload now`;
 //@ chunk-e6aww6q8.js:4121776-4122171 placement
 /**
  * 比较开发目录前后的插件集合，生成新增与消失的说明列表。
  */
-function diffDirPlugins(e, n = describePresenceChange) {
-  let { before, after, present, outcome } = e;
+function diffDirPlugins(diff, describe = describePresenceChange) {
+  let { before, after, present, outcome } = diff;
   let { appeared, gone } = diffPresentPlugins(before, present);
-  let L = (Z, outcome) => ({
-    plugin: after.get(Z) ?? Z,
-    text: n("new", outcome, e),
+  let itemForAppeared = (name, outcome) => ({
+    plugin: after.get(name) ?? name,
+    text: describe("new", outcome, diff),
   });
-  let G = (Z) => ({
-    plugin: before.get(Z) ?? Z,
-    text: n("gone", outcome, e),
+  let itemForGone = (name) => ({
+    plugin: before.get(name) ?? name,
+    text: describe("gone", outcome, diff),
   });
-  if (outcome !== "reloaded") return [...appeared.map((Z) => L(Z, outcome)), ...gone.map(G)];
-  let q = diffPresentPlugins(before, [...after.keys()]);
+  if (outcome !== "reloaded")
+    return [...appeared.map((name) => itemForAppeared(name, outcome)), ...gone.map(itemForGone)];
+  let afterDiff = diffPresentPlugins(before, [...after.keys()]);
   return [
-    ...q.appeared.map((Z) => L(Z, outcome)),
-    ...q.gone.map(G),
-    ...appeared.filter((Z) => !after.has(Z)).map((Z) => L(Z, "not-loaded")),
+    ...afterDiff.appeared.map((name) => itemForAppeared(name, outcome)),
+    ...afterDiff.gone.map(itemForGone),
+    ...appeared.filter((name) => !after.has(name)).map((name) => itemForAppeared(name, "not-loaded")),
   ];
 }
 //@ chunk-e6aww6q8.js:4122171-4122407 placement
-function filterUnservedPlugins(e) {
-  let n = (r) => e.before.has(r) || !e.unserved.has(r);
+function filterUnservedPlugins(diff) {
+  let isToday = (name) => diff.before.has(name) || !diff.unserved.has(name);
   return {
-    ...e,
-    before: new Map([...e.before].filter(([r]) => e.after.has(r) || !e.present.includes(r))),
-    after: new Map([...e.after].filter(([r]) => n(r))),
-    present: e.present.filter(n),
+    ...diff,
+    before: new Map(
+      [...diff.before].filter(([name]) => diff.after.has(name) || !diff.present.includes(name)),
+    ),
+    after: new Map([...diff.after].filter(([name]) => isToday(name))),
+    present: diff.present.filter(isToday),
   };
 }
 //@ chunk-e6aww6q8.js:4122441-4122451 placement
@@ -186,7 +206,7 @@ var DEBOUNCE_FACTOR = 3;
 /**
  * 去抖上限
  */
-var debounceCap = (e, n) => Math.max(e.capMs, n.intervalMs * DEBOUNCE_FACTOR);
+var debounceCap = (burst, clock) => Math.max(burst.capMs, clock.intervalMs * DEBOUNCE_FACTOR);
 //@ chunk-e6aww6q8.js:4122501-4122513 placement
 /**
  * 1.5
@@ -196,24 +216,30 @@ var DEBOUNCE_JITTER = 1.5;
 /**
  * 计算下一次重载的去抖延迟：连续变化时拉长到突发间隔，总等待不超过上限。
  */
-function nextReloadDelay({ debounceMs, burst, storm }, s, h) {
-  let { now, intervalMs } = h;
-  let changedAt = s.changedAt;
-  s.pendingSince ??= now;
-  s.changedAt = now;
+function nextReloadDelay({ debounceMs, burst, storm }, entry, clock) {
+  let { now, intervalMs } = clock;
+  let changedAt = entry.changedAt;
+  entry.pendingSince ??= now;
+  entry.changedAt = now;
   let max = Math.max(burst.gapMs, intervalMs * DEBOUNCE_JITTER);
-  let G = now - changedAt;
-  let Z = G >= debounceMs && G < max && (s.isForced || now - s.settledAt >= storm.gapMs) ? max : debounceMs;
-  let Se = s.pendingSince + debounceCap(burst, h);
-  return Math.max(0, Math.min(Z, Se - now));
+  let sinceChanged = now - changedAt;
+  let delay =
+    sinceChanged >= debounceMs &&
+    sinceChanged < max &&
+    (entry.isForced || now - entry.settledAt >= storm.gapMs)
+      ? max
+      : debounceMs;
+  let capRemaining = entry.pendingSince + debounceCap(burst, clock);
+  return Math.max(0, Math.min(delay, capRemaining - now));
 }
 //@ chunk-e6aww6q8.js:4122788-4122897 placement
 /**
  * 结束一次待重载：等待超过上限则标记强制。
  */
-function settleReloadPending(burst, n, r) {
-  n.isForced = n.pendingSince !== undefined && r.now - n.pendingSince >= debounceCap(burst, r);
-  n.pendingSince = undefined;
+function settleReloadPending(burst, entry, clock) {
+  entry.isForced =
+    entry.pendingSince !== undefined && clock.now - entry.pendingSince >= debounceCap(burst, clock);
+  entry.pendingSince = undefined;
 }
 //@ chunk-e6aww6q8.js:4122897-4122910 placement
 /**
@@ -224,24 +250,24 @@ var RELOAD_MIN_NOTICE_MS = 1000;
 /**
  * 生成开发目录变化说明，包括未被服务的新插件。
  */
-var describeDirChanges = (e, n, r) => [
-  ...diffDirPlugins(filterUnservedPlugins(e), n),
-  ...[...e.after]
-    .filter(([s]) => !e.before.has(s) && e.unserved.has(s) && !r(join(e.root, s)))
-    .map(([, s]) => ({
-      plugin: s,
-      text: n("new", "not-loaded", e),
+var describeDirChanges = (diff, pluginName, rule) => [
+  ...diffDirPlugins(filterUnservedPlugins(diff), pluginName),
+  ...[...diff.after]
+    .filter(([name]) => !diff.before.has(name) && diff.unserved.has(name) && !rule(join(diff.root, name)))
+    .map(([, name]) => ({
+      plugin: name,
+      text: pluginName("new", "not-loaded", diff),
     })),
 ];
 //@ chunk-e6aww6q8.js:4123117-4123324 placement
-function describeDirChangesSafely(plainWording, n, r) {
+function describeDirChangesSafely(plainWording, diff, rule) {
   try {
-    let s = plainWording(n.root);
-    if (s === undefined) return;
-    return describeDirChanges(n, s, r);
+    let lines = plainWording(diff.root);
+    if (lines === undefined) return;
+    return describeDirChanges(diff, lines, rule);
   } catch (error) {
     logForDebugging(
-      `plugin-dir watch: the plain words for ${n.root} threw, so its own lines are told: ${errorMessage(error)}`,
+      `plugin-dir watch: the plain words for ${diff.root} threw, so its own lines are told: ${errorMessage(error)}`,
       {
         level: "error",
       },
@@ -250,12 +276,12 @@ function describeDirChangesSafely(plainWording, n, r) {
   }
 }
 //@ chunk-e6aww6q8.js:4123324-4123488 placement
-function plainLineSafely(plainLine, n, r) {
+function plainLineSafely(plainLine, req, event) {
   try {
-    return plainLine(n, r);
+    return plainLine(req, event);
   } catch (error) {
     logForDebugging(
-      `plugin-dir watch: the plain row for ${n.plugin} threw, so its own line is told: ${errorMessage(error)}`,
+      `plugin-dir watch: the plain row for ${req.plugin} threw, so its own line is told: ${errorMessage(error)}`,
       {
         level: "error",
       },
@@ -267,35 +293,35 @@ function plainLineSafely(plainLine, n, r) {
 /**
  * 输出一条 plugin-dir 监视状态：有面向用户的简明行则显示它（调试日志记原文），否则显示原文。
  */
-function tellWatchLine({ tell, plainLine }, r, s) {
-  let h = plainLineSafely(plainLine, r, s);
-  if (h === undefined) {
-    tell(r.plugin, s.text, s.repeat);
+function tellWatchLine({ tell, plainLine }, req, line) {
+  let text = plainLineSafely(plainLine, req, line);
+  if (text === undefined) {
+    tell(req.plugin, line.text, line.repeat);
     return;
   }
-  logForDebugging(`plugin-dir watch: ${r.plugin}: ${s.text}`);
-  tell(h.plugin, h.text, s.repeat);
+  logForDebugging(`plugin-dir watch: ${req.plugin}: ${line.text}`);
+  tell(text.plugin, text.text, line.repeat);
 }
 //@ chunk-e6aww6q8.js:4123668-4123767 placement
 /**
  * 重载失败提示
  */
-var reloadFailureNotice = (e, error, isServing) => ({
-  text: describeReloadFailure(e, error),
+var reloadFailureNotice = (request, error, isServing) => ({
+  text: describeReloadFailure(request, error),
   repeat: "again",
   event: {
     kind: "failed",
-    reason: stripPluginPrefix(e, error),
+    reason: stripPluginPrefix(request, error),
     isServing,
   },
 });
 //@ chunk-e6aww6q8.js:4123767-4123873 placement
-var folderReloadFailedLine = (e, error, hadLoaded) => ({
-  text: describeReloadFailure(e, error),
+var folderReloadFailedLine = (request, error, hadLoaded) => ({
+  text: describeReloadFailure(request, error),
   repeat: "again",
   event: {
     kind: "folder-failed",
-    reason: stripPluginPrefix(e, error),
+    reason: stripPluginPrefix(request, error),
     hadLoaded,
   },
 });
@@ -314,25 +340,25 @@ var reloadStormNotice = (storm, kind) => ({
 /**
  * once/again
  */
-var repeatWord = (e) => (e.refused === undefined ? "once" : "again");
+var repeatWord = (result) => (result.refused === undefined ? "once" : "again");
 //@ chunk-e6aww6q8.js:4123981-4124054 placement
 /**
  * 重载成功提示
  */
-var reloadedNotice = (text, n) => ({
+var reloadedNotice = (text, result) => ({
   text,
-  repeat: repeatWord(n),
+  repeat: repeatWord(result),
   event: {
     kind: "reloaded",
-    result: n,
+    result,
   },
 });
 //@ chunk-e6aww6q8.js:4124054-4124121 placement
 /**
  * 需重启提示
  */
-var restartNeededNotice = (e) => ({
-  text: manifestChangedRestart(e),
+var restartNeededNotice = (diff) => ({
+  text: manifestChangedRestart(diff),
   repeat: "again",
   event: {
     kind: "restart",
@@ -353,8 +379,8 @@ var unnamedNotice = (text) => ({
 /**
  * 被否决提示
  */
-var vetoedNotice = (e, isServing) => ({
-  text: reloadVetoedText(e),
+var vetoedNotice = (request, isServing) => ({
+  text: reloadVetoedText(request),
   repeat: "again",
   event: {
     kind: "vetoed",
@@ -365,40 +391,40 @@ var vetoedNotice = (e, isServing) => ({
 /**
  * 重载节流器：短间隔内超过次数上限即暂停（并回调），安静一段时间后恢复；catchesUp 进入探测状态。
  */
-function createReloadThrottle({ limit, gapMs, quietMs }, s) {
-  let h = "open";
-  let y = 0;
-  let S = false;
+function createReloadThrottle({ limit, gapMs, quietMs }, onPause) {
+  let state = "open";
+  let count = 0;
+  let canProbe = false;
   let { NEGATIVE_INFINITY, NEGATIVE_INFINITY: NEGATIVE_INFINITY_2 } = Number;
   return {
-    sawChange(G) {
-      let q = G - Math.max(NEGATIVE_INFINITY_2, NEGATIVE_INFINITY);
-      NEGATIVE_INFINITY_2 = G;
-      if (h !== "open" && q >= quietMs) {
-        h = "open";
-        y = 0;
+    sawChange(now) {
+      let gap = now - Math.max(NEGATIVE_INFINITY_2, NEGATIVE_INFINITY);
+      NEGATIVE_INFINITY_2 = now;
+      if (state !== "open" && gap >= quietMs) {
+        state = "open";
+        count = 0;
       }
     },
-    admits(G) {
-      if (h === "paused" || h === "converged") return false;
-      let q = G - NEGATIVE_INFINITY < gapMs;
-      NEGATIVE_INFINITY = G;
-      y = q ? y + 1 : 1;
-      if (h === "probing" && !q && !S) h = "open";
-      S = false;
-      if (y <= limit) return true;
-      if (h === "probing") h = "converged";
+    admits(now) {
+      if (state === "paused" || state === "converged") return false;
+      let isClose = now - NEGATIVE_INFINITY < gapMs;
+      NEGATIVE_INFINITY = now;
+      count = isClose ? count + 1 : 1;
+      if (state === "probing" && !isClose && !canProbe) state = "open";
+      canProbe = false;
+      if (count <= limit) return true;
+      if (state === "probing") state = "converged";
       else {
-        h = "paused";
-        s();
+        state = "paused";
+        onPause();
       }
       return false;
     },
-    isDeferring: () => h === "paused",
+    isDeferring: () => state === "paused",
     catchesUp() {
-      h = "probing";
-      y = 0;
-      S = true;
+      state = "probing";
+      count = 0;
+      canProbe = true;
     },
   };
 }
@@ -420,93 +446,94 @@ function reportPluginDirWatchChanges(
     plainLine,
     plainWording,
   },
-  Z,
-  Se,
+  pluginName,
+  isServingRoot,
 ) {
-  let ke = new Map();
+  let entries = new Map();
   let resolved = Promise.resolve();
-  let Ee = turn.onBegin(Je);
-  let Ae = turn.onEnd(Je);
-  function Ie(pt) {
-    let Et = ke.get(pt);
-    if (Et === undefined) return;
-    let yt = clock.now();
-    Et.breaker.sawChange(yt);
-    let gt = nextReloadDelay(
+  let offBegin = turn.onBegin(runHeld);
+  let offEnd = turn.onEnd(runHeld);
+  function noteChange(root) {
+    let entry = entries.get(root);
+    if (entry === undefined) return;
+    let now = clock.now();
+    entry.breaker.sawChange(now);
+    let delay = nextReloadDelay(
       {
         debounceMs,
         burst,
         storm,
       },
-      Et,
+      entry,
       {
-        now: yt,
+        now,
         intervalMs: 0,
       },
     );
-    if (Et.breaker.isDeferring()) {
-      if (Et.cancelTimer === undefined) Me(Et, storm.quietMs, We);
+    if (entry.breaker.isDeferring()) {
+      if (entry.cancelTimer === undefined) scheduleReload(entry, storm.quietMs, onQuiet);
       return;
     }
     if (turn.isRunning()) {
-      Et.cancelTimer?.();
-      Et.cancelTimer = undefined;
-      Et.isHeld = true;
+      entry.cancelTimer?.();
+      entry.cancelTimer = undefined;
+      entry.isHeld = true;
       return;
     }
-    Me(Et, gt, ze);
+    scheduleReload(entry, delay, queueReload);
   }
-  function Me(pt, quietMs, yt) {
-    pt.cancelTimer?.();
-    pt.cancelTimer = clock.setTimeout(() => yt(pt.root), quietMs);
+  function scheduleReload(entry, quietMs, runReload) {
+    entry.cancelTimer?.();
+    entry.cancelTimer = clock.setTimeout(() => runReload(entry.root), quietMs);
   }
-  function We(pt) {
-    ke.get(pt)?.breaker.catchesUp();
-    ze(pt);
+  function onQuiet(root) {
+    entries.get(root)?.breaker.catchesUp();
+    queueReload(root);
   }
-  function ze(pt) {
-    let Et = ke.get(pt);
-    if (Et === undefined) return;
-    Et.cancelTimer?.();
-    Et.cancelTimer = undefined;
-    Et.isHeld = false;
-    settleReloadPending(burst, Et, {
+  function queueReload(root) {
+    let entry = entries.get(root);
+    if (entry === undefined) return;
+    entry.cancelTimer?.();
+    entry.cancelTimer = undefined;
+    entry.isHeld = false;
+    settleReloadPending(burst, entry, {
       now: clock.now(),
       intervalMs: 0,
     });
-    if (Et.isQueued) return;
-    Et.isQueued = true;
-    resolved = resolved.then(() => lt(Et));
+    if (entry.isQueued) return;
+    entry.isQueued = true;
+    resolved = resolved.then(() => reloadRoot(entry));
   }
-  async function lt(pt) {
-    let { root } = pt;
-    let yt = false;
-    pt.isQueued = false;
+  async function reloadRoot(entry) {
+    let { root } = entry;
+    let wasServing = false;
+    entry.isQueued = false;
     try {
-      yt = Se(root);
-      let gt = await listChildren(root);
-      if (gt === undefined || ke.get(root) !== pt) return;
-      let loaded = pt.loaded;
-      let { appeared, gone } = diffPresentPlugins(loaded, gt);
+      wasServing = isServingRoot(root);
+      let children = await listChildren(root);
+      if (children === undefined || entries.get(root) !== entry) return;
+      let loaded = entry.loaded;
+      let { appeared, gone } = diffPresentPlugins(loaded, children);
       if (appeared.length === 0 && gone.length === 0) return;
-      if (!pt.breaker.admits(clock.now())) {
-        if (pt.breaker.isDeferring()) Me(pt, storm.quietMs, We);
+      if (!entry.breaker.admits(clock.now())) {
+        if (entry.breaker.isDeferring()) scheduleReload(entry, storm.quietMs, onQuiet);
         return;
       }
       let outcome = await reloadPlugins();
-      let { loaded: loaded_2, unserved } = ke.get(root) ?? pt;
-      let pn = {
+      let { loaded: loaded_2, unserved } = entries.get(root) ?? entry;
+      let diff = {
         root,
         before: loaded,
         after: loaded_2,
-        present: gt,
+        present: children,
         unserved,
         outcome,
       };
-      let no = diffDirPlugins(pn);
-      let hn = describeDirChangesSafely(plainWording, pn, Z);
-      if (hn !== undefined) for (let ho of no) logForDebugging(`plugin-dir watch: ${ho.plugin}: ${ho.text}`);
-      for (let ho of hn ?? no) tell(ho.plugin, ho.text);
+      let items = diffDirPlugins(diff);
+      let secondLines = describeDirChangesSafely(plainWording, diff, pluginName);
+      if (secondLines !== undefined)
+        for (let item of items) logForDebugging(`plugin-dir watch: ${item.plugin}: ${item.text}`);
+      for (let item of secondLines ?? items) tell(item.plugin, item.text);
     } catch (error) {
       tellWatchLine(
         {
@@ -517,35 +544,36 @@ function reportPluginDirWatchChanges(
           plugin: basename(root),
           folder: root,
         },
-        folderReloadFailedLine(basename(root), error, yt && Se(root)),
+        folderReloadFailedLine(basename(root), error, wasServing && isServingRoot(root)),
       );
     } finally {
-      pt.settledAt = clock.now();
+      entry.settledAt = clock.now();
     }
   }
-  function Je() {
-    for (let pt of ke.values())
-      if ((pt.isHeld || pt.cancelTimer !== undefined) && !pt.breaker.isDeferring()) ze(pt.root);
+  function runHeld() {
+    for (let entry of entries.values())
+      if ((entry.isHeld || entry.cancelTimer !== undefined) && !entry.breaker.isDeferring())
+        queueReload(entry.root);
   }
-  function nt(pt) {
-    pt.cancelTimer?.();
-    ke.delete(pt.root);
-    return pt.watcher.close();
+  function closeEntry(entry) {
+    entry.cancelTimer?.();
+    entries.delete(entry.root);
+    return entry.watcher.close();
   }
   return {
-    watchCollections(pt) {
-      let Et = new Map(pt.map((yt) => [yt.root, yt]));
-      for (let yt of ke.values()) if (!Et.has(yt.root)) nt(yt);
-      for (let [yt, { loaded: gt, unserved: At }] of Et) {
-        let It = ke.get(yt);
-        if (It !== undefined) {
-          It.loaded = gt;
-          It.unserved = At;
+    watchCollections(collections) {
+      let byRoot = new Map(collections.map((entry) => [entry.root, entry]));
+      for (let entry of entries.values()) if (!byRoot.has(entry.root)) closeEntry(entry);
+      for (let [root, { loaded, unserved }] of byRoot) {
+        let existing = entries.get(root);
+        if (existing !== undefined) {
+          existing.loaded = loaded;
+          existing.unserved = unserved;
           continue;
         }
-        ke.set(yt, {
-          root: yt,
-          watcher: watchRoot(yt, () => Ie(yt)),
+        entries.set(root, {
+          root,
+          watcher: watchRoot(root, () => noteChange(root)),
           breaker: createReloadThrottle(storm, () =>
             tellWatchLine(
               {
@@ -553,14 +581,14 @@ function reportPluginDirWatchChanges(
                 plainLine,
               },
               {
-                plugin: basename(yt),
-                folder: yt,
+                plugin: basename(root),
+                folder: root,
               },
               reloadStormNotice(storm, "folder-paused"),
             ),
           ),
-          loaded: gt,
-          unserved: At,
+          loaded,
+          unserved,
           cancelTimer: undefined,
           isQueued: false,
           isHeld: false,
@@ -571,11 +599,11 @@ function reportPluginDirWatchChanges(
         });
       }
     },
-    watchedCollections: () => [...ke.keys()],
+    watchedCollections: () => [...entries.keys()],
     async dispose() {
-      Ee();
-      Ae();
-      await Promise.all([...ke.values()].map(nt));
+      offBegin();
+      offEnd();
+      await Promise.all([...entries.values()].map(closeEntry));
     },
   };
 }

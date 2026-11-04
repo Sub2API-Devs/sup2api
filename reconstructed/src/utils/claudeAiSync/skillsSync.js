@@ -59,7 +59,7 @@ import { sessionHostKind } from "../telemetry/memorySummary.js";
 import { SESSION_FEATURE_VALUES_SLOT } from "../../bootstrap/sessionFeatureValues.js";
 import { steadyFinchEnabled } from "../permissions/permissionRulePayload.js";
 import { isRemoteOrCowork } from "../../skills/skillSources.js";
-import { Ji } from "../../../vendor/lodash-es/uniqBy.js";
+import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { runPluginsSyncRound } from "./pluginsSync.js";
 import { sessionSkillManifestSlot } from "../../services/plugins/accountSync/sessionSkillManifest.js";
 
@@ -67,8 +67,8 @@ import { sessionSkillManifestSlot } from "../../services/plugins/accountSync/ses
 /**
  * 删除某同步技能目录。
  */
-async function removeSyncedSkillDir(e, n) {
-  await rm_2(bucketDirPath(e, n), {
+async function removeSyncedSkillDir(dirName, root) {
+  await rm_2(bucketDirPath(dirName, root), {
     force: true,
   });
 }
@@ -81,56 +81,56 @@ var MAX_SYNCED_SKILL_BYTES = 4194304;
 /**
  * 只保留数组里的字符串项。
  */
-function stringArray(e) {
-  return Array.isArray(e) ? e.filter((n) => typeof n === "string") : undefined;
+function stringArray(value) {
+  return Array.isArray(value) ? value.filter((item) => typeof item === "string") : undefined;
 }
 //@ chunk-e6aww6q8.js:638516-638694 placement
 /**
  * 合并清单行：先放额外行，再放旧行中未被移除的，最后用新行覆盖（按键去重）。
  */
-function mergeManifestRows(validRows, n, r, s, validRows_2 = []) {
-  let y = new Map();
-  for (let S of validRows_2) y.set(r(S), S);
-  for (let S of n ?? []) if (!s.has(r(S))) y.set(r(S), S);
-  for (let S of validRows) y.set(r(S), S);
-  return Array.from(y.values());
+function mergeManifestRows(validRows, previousRows, keyOf, removedIds, validRows_2 = []) {
+  let byKey = new Map();
+  for (let row of validRows_2) byKey.set(keyOf(row), row);
+  for (let row of previousRows ?? []) if (!removedIds.has(keyOf(row))) byKey.set(keyOf(row), row);
+  for (let row of validRows) byKey.set(keyOf(row), row);
+  return Array.from(byKey.values());
 }
 //@ chunk-e6aww6q8.js:638694-638832 placement
 /**
  * 合并过期目录列表：加上新的、去掉已处理的，结果为空时返回 undefined。
  */
-function mergeStaleDirs(e, n, r) {
-  let s = new Set(e ?? []);
-  for (let h of stringArray(n) ?? []) s.add(h);
-  for (let h of r) s.delete(h);
-  return s.size > 0 ? Array.from(s) : undefined;
+function mergeStaleDirs(previousDirs, manifestDirs, removedDirs) {
+  let merged = new Set(previousDirs ?? []);
+  for (let dirName of stringArray(manifestDirs) ?? []) merged.add(dirName);
+  for (let dirName of removedDirs) merged.delete(dirName);
+  return merged.size > 0 ? Array.from(merged) : undefined;
 }
 //@ chunk-e6aww6q8.js:638832-638962 placement
 /**
  * 用 schema 逐条解析数组，只保留解析成功的项。
  */
-function parseValidRows(e, n) {
-  if (!Array.isArray(n)) return [];
-  let r = [];
-  for (let s of n) {
-    let h = e.safeParse(s);
-    if (h.success) r.push(h.data);
+function parseValidRows(schema, rows) {
+  if (!Array.isArray(rows)) return [];
+  let valid = [];
+  for (let row of rows) {
+    let parseResult = schema.safeParse(row);
+    if (parseResult.success) valid.push(parseResult.data);
   }
-  return r;
+  return valid;
 }
 //@ chunk-e6aww6q8.js:638962-639137 placement
 /**
  * 用新行替换同键旧行，并报告是否有行的归属（等价判断不通过）发生变化。
  */
-function replaceRowsWithAttribution(e, carryover, r, s) {
-  let h = new Map(carryover.map((w) => [r(w), w]));
+function replaceRowsWithAttribution(rows, carryover, keyOf, sameMarketplace) {
+  let carryoverByKey = new Map(carryover.map((row) => [keyOf(row), row]));
   let attributionMoved = false;
   return {
-    rows: e.map((w) => {
-      let L = h.get(r(w));
-      if (L === undefined) return w;
-      if (!s(w, L)) attributionMoved = true;
-      return L;
+    rows: rows.map((row) => {
+      let prevRow = carryoverByKey.get(keyOf(row));
+      if (prevRow === undefined) return row;
+      if (!sameMarketplace(row, prevRow)) attributionMoved = true;
+      return prevRow;
     }),
     attributionMoved,
   };
@@ -139,23 +139,23 @@ function replaceRowsWithAttribution(e, carryover, r, s) {
 /**
  * 返回去掉指定键后的对象副本。
  */
-function omitKeys_2(e, n) {
-  let r = new Set(n);
-  let s = {};
-  for (let [key, value] of Object.entries(e ?? {})) if (!r.has(key)) s[key] = value;
-  return s;
+function omitKeys_2(object, keys) {
+  let keySet = new Set(keys);
+  let result = {};
+  for (let [key, value] of Object.entries(object ?? {})) if (!keySet.has(key)) result[key] = value;
+  return result;
 }
 //@ chunk-e6aww6q8.js:639243-639429 placement
 /**
  * 读取同步清单文件内容（有大小限制）；非 ENOENT 失败时记诊断（超大归为 parse_or_size）并返回 null。
  */
-async function readManifestText(e, n) {
+async function readManifestText(root, path) {
   try {
-    return (await readFileChecked(e, MAX_SYNCED_SKILL_BYTES)).content;
+    return (await readFileChecked(root, MAX_SYNCED_SKILL_BYTES)).content;
   } catch (error) {
-    if (n !== null && !isENOENT(error)) {
+    if (path !== null && !isENOENT(error)) {
       let errnoCode = getErrnoCode(error);
-      logForDiagnosticsNoPII("warn", n, {
+      logForDiagnosticsNoPII("warn", path, {
         code: errnoCode === "ERR_FILE_TOO_LARGE" ? "parse_or_size" : (errnoCode ?? "unknown"),
       });
     }
@@ -166,26 +166,26 @@ async function readManifestText(e, n) {
 /**
  * 解析清单 JSON 并按 schema 校验，失败时记诊断（parse_or_size / not_an_object）并返回 null。
  */
-function parseManifestJson(manifestText, n, r) {
-  let s;
+function parseManifestJson(manifestText, schema, fallback) {
+  let parsed;
   try {
-    s = jsonParse(manifestText);
+    parsed = jsonParse(manifestText);
   } catch {
-    if (r !== null)
-      logForDiagnosticsNoPII("warn", r, {
+    if (fallback !== null)
+      logForDiagnosticsNoPII("warn", fallback, {
         code: "parse_or_size",
       });
     return null;
   }
-  let h = n.safeParse(s);
-  if (!h.success) {
-    if (r !== null)
-      logForDiagnosticsNoPII("warn", r, {
+  let parseResult = schema.safeParse(parsed);
+  if (!parseResult.success) {
+    if (fallback !== null)
+      logForDiagnosticsNoPII("warn", fallback, {
         code: "not_an_object",
       });
     return null;
   }
-  return h.data;
+  return parseResult.data;
 }
 //@ chunk-e6aww6q8.js:640031-640046 placement
 /**
@@ -206,8 +206,8 @@ function syncReuseWithinMs() {
 /**
  * 同步技能“最后一轮完成”标记文件路径。
  */
-function lastCompleteRoundPath(e) {
-  return join(e, LAST_COMPLETE_ROUND_FILE);
+function lastCompleteRoundPath(root) {
+  return join(root, LAST_COMPLETE_ROUND_FILE);
 }
 //@ chunk-e6aww6q8.js:640168-640232 placement
 /**
@@ -220,23 +220,23 @@ var MAX_REUSE_STAMP_BYTES = 1024;
 /**
  * 把复用标记序列化成 “令牌 列表”。
  */
-function serializeReuseStamp(e) {
-  return `${e.token} ${e.listedFor.join(",")}`;
+function serializeReuseStamp(stamp) {
+  return `${stamp.token} ${stamp.listedFor.join(",")}`;
 }
 //@ chunk-e6aww6q8.js:640292-640538 placement
 /**
  * 读取同步复用标记文件：内容为"令牌 列表"，令牌格式不符返回 null。
  */
-async function readReuseStamp(e) {
-  let n = lastCompleteRoundPath(e);
+async function readReuseStamp(root) {
+  let stampPath = lastCompleteRoundPath(root);
   try {
-    await using r = await open(n, readOnlyNoFollowFlags() | READ_LIMITS);
-    let { content } = await readFileHandleChecked(r, n, MAX_REUSE_STAMP_BYTES);
-    let [h = "", y = ""] = content.split(" ", 2);
-    if (!UUID_LIKE_RE.test(h)) return null;
+    await using handle = await open(stampPath, readOnlyNoFollowFlags() | READ_LIMITS);
+    let { content } = await readFileHandleChecked(handle, stampPath, MAX_REUSE_STAMP_BYTES);
+    let [timestamp = "", listedForText = ""] = content.split(" ", 2);
+    if (!UUID_LIKE_RE.test(timestamp)) return null;
     return {
-      token: h,
-      listedFor: y.split(",").filter((S) => SAFE_LISTED_NAME_RE.test(S)),
+      token: timestamp,
+      listedFor: listedForText.split(",").filter((name) => SAFE_LISTED_NAME_RE.test(name)),
     };
   } catch {
     return null;
@@ -246,14 +246,16 @@ async function readReuseStamp(e) {
 /**
  * 写入或续期同步复用标记：已有令牌时把当前项加入列表（文件存在则只更新时间）；否则生成新令牌重建文件。失败时记诊断返回 null。
  */
-async function writeReuseStamp(e, n, r, s) {
-  let stampPath = lastCompleteRoundPath(e);
+async function writeReuseStamp(root, kind, reusable, listedName) {
+  let stampPath = lastCompleteRoundPath(root);
   try {
-    if (r !== null) {
+    if (reusable !== null) {
       let updated = {
-        token: r.token,
+        token: reusable.token,
         listedFor:
-          r.listedFor.includes(s) || !SAFE_LISTED_NAME_RE.test(s) ? r.listedFor : [...r.listedFor, s],
+          reusable.listedFor.includes(listedName) || !SAFE_LISTED_NAME_RE.test(listedName)
+            ? reusable.listedFor
+            : [...reusable.listedFor, listedName],
       };
       if (
         await writeFile(stampPath, serializeReuseStamp(updated), {
@@ -269,11 +271,11 @@ async function writeReuseStamp(e, n, r, s) {
         return updated;
       let date = new Date();
       await lutimes(stampPath, date, date);
-      return await readReuseStamp(e);
+      return await readReuseStamp(root);
     }
     let fresh = {
       token: randomUUID(),
-      listedFor: SAFE_LISTED_NAME_RE.test(s) ? [s] : [],
+      listedFor: SAFE_LISTED_NAME_RE.test(listedName) ? [listedName] : [],
     };
     let content = serializeReuseStamp(fresh);
     await rm_2(stampPath, {
@@ -292,7 +294,7 @@ async function writeReuseStamp(e, n, r, s) {
     });
     return fresh;
   } catch (error) {
-    logForDiagnosticsNoPII("warn", `${n}_sync_reuse_stamp_failed`, {
+    logForDiagnosticsNoPII("warn", `${kind}_sync_reuse_stamp_failed`, {
       code: getErrnoCode(error) ?? "unknown",
     });
     return null;
@@ -302,8 +304,8 @@ async function writeReuseStamp(e, n, r, s) {
 /**
  * 需要写入复用标记时写入，否则删除。
  */
-async function writeOrClearReuseStamp(root, n, r, s, h) {
-  if (r) return writeReuseStamp(root, n, s, h);
+async function writeOrClearReuseStamp(root, kind, reusable, unused, listedName) {
+  if (reusable) return writeReuseStamp(root, kind, unused, listedName);
   await takeReuseStamp(root);
   return null;
 }
@@ -322,33 +324,33 @@ async function takeReuseStamp(root) {
 /**
  * 根据复用标记文件的修改时间判断是否在复用窗口内，返回 {reuse, ageMs, withinMs}。
  */
-async function checkReuseWindow(root, n, r = Date.now()) {
-  if (n === undefined || n <= 0)
+async function checkReuseWindow(root, withinMs, now = Date.now()) {
+  if (withinMs === undefined || withinMs <= 0)
     return {
       reuse: false,
     };
-  let s;
+  let writtenAt;
   try {
-    let y = await lstat(lastCompleteRoundPath(root));
-    if (!y.isFile())
+    let stampStats = await lstat(lastCompleteRoundPath(root));
+    if (!stampStats.isFile())
       return {
         reuse: false,
       };
-    s = Math.floor(y.mtimeMs);
+    writtenAt = Math.floor(stampStats.mtimeMs);
   } catch {
     return {
       reuse: false,
     };
   }
-  let h = r - s;
-  if (h < 0 || h >= n)
+  let ageMs = now - writtenAt;
+  if (ageMs < 0 || ageMs >= withinMs)
     return {
       reuse: false,
     };
   return {
     reuse: true,
-    ageMs: Math.round(h),
-    withinMs: n,
+    ageMs: Math.round(ageMs),
+    withinMs,
   };
 }
 //@ chunk-e6aww6q8.js:641639-641721 placement
@@ -364,22 +366,22 @@ var SKILLS_SYNC_HOOK_LABELS = {
 /**
  * 清理已同步技能的 hook（同步被关闭时）。
  */
-function removeSyncedSkillHooksFor(e) {
-  removeSyncedSkillHooks(SKILLS_SYNC_HOOK_LABELS, syncedSkillRoots(), e);
+function removeSyncedSkillHooksFor(removal) {
+  removeSyncedSkillHooks(SKILLS_SYNC_HOOK_LABELS, syncedSkillRoots(), removal);
 }
 //@ chunk-e6aww6q8.js:641754-641964 placement
 /**
  * 清理不再被列出或技能文件已不存在的已同步技能目录记录。
  */
 async function pruneGoneSkillDirs({ bucketRoot, listedDirs, removalTriedDirs, isSkillFileGone }) {
-  let h = new Set();
-  for (let y of syncedSkillRoots())
+  let goneDirs = new Set();
+  for (let root of syncedSkillRoots())
     if (
-      !y.startsWith(bucketRoot + sep) ||
-      (!listedDirs.has(y) && (removalTriedDirs.has(y) || (await isSkillFileGone(y))))
+      !root.startsWith(bucketRoot + sep) ||
+      (!listedDirs.has(root) && (removalTriedDirs.has(root) || (await isSkillFileGone(root))))
     )
-      h.add(y);
-  removeSyncedSkillHooks(SKILLS_SYNC_HOOK_LABELS, h, "skill_gone");
+      goneDirs.add(root);
+  removeSyncedSkillHooks(SKILLS_SYNC_HOOK_LABELS, goneDirs, "skill_gone");
 }
 //@ chunk-e6aww6q8.js:641964-642004 placement
 /**
@@ -401,18 +403,18 @@ var SKILLS_SYNC_SETTING = {
  */
 function refreshAccountSkillsSyncFlag() {
   refreshSkillsSyncVeto();
-  let e = isAccountSkillsSyncEligible() && !getSkillsSyncVetoed();
-  setAccountSkillsSyncEnabled(e);
-  return e;
+  let enabled = isAccountSkillsSyncEligible() && !getSkillsSyncVetoed();
+  setAccountSkillsSyncEnabled(enabled);
+  return enabled;
 }
 //@ chunk-e6aww6q8.js:642207-642270 placement
 /**
  * 按设置是否可靠更新“技能同步被否决”状态。
  */
 function refreshSkillsSyncVeto() {
-  let e = isSyncSettingsUnreliable(SKILLS_SYNC_SETTING);
-  setSkillsSyncVetoed(e);
-  if (e && isAccountSkillsSyncDenied()) removeSyncedSkillHooksFor("sync_off");
+  let vetoed = isSyncSettingsUnreliable(SKILLS_SYNC_SETTING);
+  setSkillsSyncVetoed(vetoed);
+  if (vetoed && isAccountSkillsSyncDenied()) removeSyncedSkillHooksFor("sync_off");
 }
 //@ chunk-e6aww6q8.js:642270-642307 placement
 /**
@@ -473,91 +475,91 @@ function isAccountSkillsSyncDenied() {
 /**
  * 技能同步是否生效（未被否决且环境或账号开启）。
  */
-function isSkillsSyncActive(e) {
+function isSkillsSyncActive(session) {
   if (getSkillsSyncVetoed()) return false;
-  return isSessionRefsSkillsSyncOn(e) || getAccountSkillsSyncEnabled();
+  return isSessionRefsSkillsSyncOn(session) || getAccountSkillsSyncEnabled();
 }
 //@ chunk-e6aww6q8.js:642638-642695 placement
 /**
  * 环境变量或会话引用同步是否开启。
  */
-function isSessionRefsSkillsSyncOn(e) {
-  return !!env.CLAUDE_CODE_SYNC_SKILLS || isSessionRefsSyncEnabled(e);
+function isSessionRefsSkillsSyncOn(session) {
+  return !!env.CLAUDE_CODE_SYNC_SKILLS || isSessionRefsSyncEnabled(session);
 }
 //@ chunk-e6aww6q8.js:642695-642732 placement
 /**
  * 同步开启且未被否决。
  */
-function isSkillsSyncLive(e) {
-  return isSessionRefsSkillsSyncOn(e) && !getSkillsSyncVetoed();
+function isSkillsSyncLive(session) {
+  return isSessionRefsSkillsSyncOn(session) && !getSkillsSyncVetoed();
 }
 //@ chunk-e6aww6q8.js:642732-642850 placement
 /**
  * 登记一个待完成的下载（Promise 与开始时间），返回其 resolve 函数。
  */
-function registerPendingDownload(e, start) {
-  let r;
-  let promise = new Promise((resolve) => {
-    r = resolve;
+function registerPendingDownload(skillName, start) {
+  let resolve;
+  let promise = new Promise((resolve_2) => {
+    resolve = resolve_2;
   });
-  remoteToolsState().pendingDownloads.set(e, {
+  remoteToolsState().pendingDownloads.set(skillName, {
     promise,
-    resolve: r,
+    resolve,
     start,
   });
-  return r;
+  return resolve;
 }
 //@ chunk-e6aww6q8.js:642850-643065 placement
 /**
  * 触发某技能挂起的下载（只触发一次）并返回其完成 Promise；没有挂起下载时直接成功。
  */
-function startPendingDownload(e) {
-  let n = remoteToolsState().pendingDownloads.get(e);
-  if (!n)
+function startPendingDownload(skillName) {
+  let entry = remoteToolsState().pendingDownloads.get(skillName);
+  if (!entry)
     return Promise.resolve({
       ok: true,
     });
-  let start = n.start;
-  n.start = undefined;
+  let start = entry.start;
+  entry.start = undefined;
   try {
     start?.();
   } catch (error) {
     logError(toError(error));
-    n.resolve({
+    entry.resolve({
       ok: false,
       reason: "download could not start",
     });
   }
-  return n.promise;
+  return entry.promise;
 }
 //@ chunk-e6aww6q8.js:643065-643134 placement
 /**
  * 说明某技能在本会话被关闭。
  */
-function skillSwitchedOffText(e) {
-  return `Skill ${e} is switched off for this session.`;
+function skillSwitchedOffText(skillName) {
+  return `Skill ${skillName} is switched off for this session.`;
 }
 //@ chunk-e6aww6q8.js:643134-643213 placement
 /**
  * 返回已列出的远程技能提示文本。
  */
-function listedSkillText(e) {
-  let n = remoteToolsState().listedSkills.get(e);
-  return n?.command ? n.text : undefined;
+function listedSkillText(skillName) {
+  let entry = remoteToolsState().listedSkills.get(skillName);
+  return entry?.command ? entry.text : undefined;
 }
 //@ chunk-e6aww6q8.js:643213-643281 placement
 /**
  * 该技能是否正在下载。
  */
-function isSkillDownloadPending(e) {
-  return remoteToolsState().pendingDownloads.get(e)?.start !== undefined;
+function isSkillDownloadPending(skillName) {
+  return remoteToolsState().pendingDownloads.get(skillName)?.start !== undefined;
 }
 //@ chunk-e6aww6q8.js:643281-643333 placement
 /**
  * 该技能是否有待完成的下载。
  */
-function hasPendingSkillDownload(e) {
-  return remoteToolsState().pendingDownloads.has(e);
+function hasPendingSkillDownload(skillName) {
+  return remoteToolsState().pendingDownloads.has(skillName);
 }
 //@ chunk-e6aww6q8.js:643333-643385 placement
 /**
@@ -573,36 +575,38 @@ function registerSkillPlaceholder(deferredSyncedSkillCommand) {
 /**
  * 移除技能的占位命令。
  */
-function unregisterSkillPlaceholder(e) {
-  remoteToolsState().placeholders.delete(e);
+function unregisterSkillPlaceholder(skillName) {
+  remoteToolsState().placeholders.delete(skillName);
 }
 //@ chunk-e6aww6q8.js:643429-643597 placement
 /**
  * 命令是否为同步技能的占位命令（与登记的占位同一对象或同一提示生成函数）。
  */
-function isSyncedSkillPlaceholder(e) {
-  let n = remoteToolsState().placeholders.get(stripSyncedSkillPrefix(e.name));
+function isSyncedSkillPlaceholder(placeholder) {
+  let tracked = remoteToolsState().placeholders.get(stripSyncedSkillPrefix(placeholder.name));
   return (
-    n !== undefined &&
-    (n === e ||
-      (n.type === "prompt" && e.type === "prompt" && n.getPromptForCommand === e.getPromptForCommand))
+    tracked !== undefined &&
+    (tracked === placeholder ||
+      (tracked.type === "prompt" &&
+        placeholder.type === "prompt" &&
+        tracked.getPromptForCommand === placeholder.getPromptForCommand))
   );
 }
 //@ chunk-e6aww6q8.js:643597-643802 placement
 /**
  * 从占位、已列出技能与挂起下载中去掉不在给定集合里的项，返回删除数。
  */
-function pruneSyncedSkillState(e) {
-  let n = 0;
+function pruneSyncedSkillState(liveNames) {
+  let removed = 0;
   let { placeholders, listedSkills, pendingDownloads } = remoteToolsState();
-  for (let y of [placeholders, listedSkills])
-    for (let key of y.keys())
-      if (!e.has(key)) {
-        y.delete(key);
-        n++;
+  for (let map of [placeholders, listedSkills])
+    for (let key of map.keys())
+      if (!liveNames.has(key)) {
+        map.delete(key);
+        removed++;
       }
-  for (let key of pendingDownloads.keys()) if (!e.has(key)) pendingDownloads.delete(key);
-  return n;
+  for (let key of pendingDownloads.keys()) if (!liveNames.has(key)) pendingDownloads.delete(key);
+  return removed;
 }
 //@ chunk-e6aww6q8.js:643802-644014 placement
 /**
@@ -612,37 +616,39 @@ function getSyncedSkillCommands() {
   let { placeholders, listedSkills } = remoteToolsState();
   if (placeholders.size === 0 && listedSkills.size === 0) return [];
   return [
-    ...Array.from(placeholders).flatMap(([r, s]) => (isWithheldSkill(r) ? [] : [s])),
-    ...Array.from(listedSkills.values()).flatMap((r) => (r.command ? [r.command] : [])),
+    ...Array.from(placeholders).flatMap(([name, command]) => (isWithheldSkill(name) ? [] : [command])),
+    ...Array.from(listedSkills.values()).flatMap((entry) => (entry.command ? [entry.command] : [])),
   ];
 }
 //@ chunk-e6aww6q8.js:644014-644108 placement
 /**
  * 技能已列出、没有命令且被扣留。
  */
-function isWithheldSkill(e) {
-  let n = remoteToolsState().listedSkills.get(e);
-  return n !== undefined && !n.command && n.withheld === true;
+function isWithheldSkill(skillName) {
+  let entry = remoteToolsState().listedSkills.get(skillName);
+  return entry !== undefined && !entry.command && entry.withheld === true;
 }
 //@ chunk-e6aww6q8.js:644108-644192 placement
 /**
  * 被扣留技能的占位命令列表。
  */
 function withheldSkillPlaceholders() {
-  return Array.from(remoteToolsState().placeholders).flatMap(([e, n]) => (isWithheldSkill(e) ? [n] : []));
+  return Array.from(remoteToolsState().placeholders).flatMap(([name, placeholder]) =>
+    isWithheldSkill(name) ? [placeholder] : [],
+  );
 }
 //@ chunk-e6aww6q8.js:644192-644312 placement
 /**
  * 技能是否以插件形式同步：满足前置条件、未被否决、开启了插件同步且其他条件成立。
  */
-function isSkillsAsPluginsActive(e) {
-  if (!isConvertedSkillsAsPlugins(e)) return false;
+function isSkillsAsPluginsActive(session) {
+  if (!isConvertedSkillsAsPlugins(session)) return false;
   refreshSkillsSyncVeto();
   refreshSyncVeto();
   return (
     !getPluginsSyncVetoed() &&
     (Boolean(env.CLAUDE_CODE_SYNC_PLUGINS) || getAccountPluginsSyncEnabled()) &&
-    isSkillsSyncActive(e) &&
+    isSkillsSyncActive(session) &&
     isSkillsCustomizationAllowed()
   );
 }
@@ -650,104 +656,112 @@ function isSkillsAsPluginsActive(e) {
 /**
  * 托管 worker 或已转换技能列表询问时，在技能以插件形式同步的前提下是否转换技能列表询问。
  */
-function shouldConvertSkillsListAsks(e) {
+function shouldConvertSkillsListAsks(session) {
   return (
     (sessionHostKind() === "hosted_worker" ||
-      SESSION_FEATURE_VALUES_SLOT.peek(e)?.convertedSkillsSkillsListAsks === true) &&
-    isSkillsAsPluginsActive(e)
+      SESSION_FEATURE_VALUES_SLOT.peek(session)?.convertedSkillsSkillsListAsks === true) &&
+    isSkillsAsPluginsActive(session)
   );
 }
 //@ chunk-e6aww6q8.js:644416-644791 placement
 /**
  * 本地非远程会话中异步判定是否把技能列表请求转为插件形式，结果锁定到会话状态（同时只有一个判定在途）。
  */
-function primeSkillsListAskConversion(rootSession, n) {
-  let r = SESSION_FEATURE_VALUES_SLOT.of(rootSession);
+function primeSkillsListAskConversion(session, listAsks) {
+  let featureValues = SESSION_FEATURE_VALUES_SLOT.of(session);
   if (
     !steadyFinchEnabled() ||
     sessionHostKind() !== "none" ||
     isRemoteOrCowork() ||
-    r.convertedSkillsSkillsListAsks !== undefined ||
-    r.convertedSkillsSkillsListPin !== undefined
+    featureValues.convertedSkillsSkillsListAsks !== undefined ||
+    featureValues.convertedSkillsSkillsListPin !== undefined
   )
     return;
-  let s = n()
+  let pinPromise = listAsks()
     .catch((error) => {
       logError(error);
       return false;
     })
-    .then((h) => {
-      r.convertedSkillsSkillsListAsks ??= h && isConvertedSkillsAsPlugins(rootSession);
+    .then((converted) => {
+      featureValues.convertedSkillsSkillsListAsks ??= converted && isConvertedSkillsAsPlugins(session);
     })
     .catch(logError)
     .then(() => {
-      if (r.convertedSkillsSkillsListPin === s) r.convertedSkillsSkillsListPin = undefined;
+      if (featureValues.convertedSkillsSkillsListPin === pinPromise)
+        featureValues.convertedSkillsSkillsListPin = undefined;
     });
-  r.convertedSkillsSkillsListPin = s;
+  featureValues.convertedSkillsSkillsListPin = pinPromise;
 }
 //@ chunk-e6aww6q8.js:644791-644991 placement
-function isConvertedSkillsAsPlugins(e) {
-  let n = SESSION_FEATURE_VALUES_SLOT.of(e);
-  n.convertedSkillsAsPlugins ??=
+function isConvertedSkillsAsPlugins(session) {
+  let featureValues = SESSION_FEATURE_VALUES_SLOT.of(session);
+  featureValues.convertedSkillsAsPlugins ??=
     steadyFinchEnabled() &&
     isHostedWorkerOrLocal() &&
-    (!isSessionRefsSyncEnabled(e) || Boolean(env.CLAUDE_CODE_SYNC_SKILLS)) &&
+    (!isSessionRefsSyncEnabled(session) || Boolean(env.CLAUDE_CODE_SYNC_SKILLS)) &&
     (Boolean(env.CLAUDE_CODE_SYNC_PLUGINS) || getAccountPluginsSyncEnabled());
-  return n.convertedSkillsAsPlugins;
+  return featureValues.convertedSkillsAsPlugins;
 }
 //@ chunk-e6aww6q8.js:644991-645056 placement
 /**
  * 技能转成插件时使用的列表固定标记。
  */
-function convertedSkillsListPin(e) {
-  return SESSION_FEATURE_VALUES_SLOT.peek(e)?.convertedSkillsSkillsListPin;
+function convertedSkillsListPin(session) {
+  return SESSION_FEATURE_VALUES_SLOT.peek(session)?.convertedSkillsSkillsListPin;
 }
 //@ chunk-e6aww6q8.js:645056-645129 placement
 /**
  * 宿主类型是否为 hosted worker，或本地且非远程/协作。
  */
 function isHostedWorkerOrLocal() {
-  let e = sessionHostKind();
-  return e === "hosted_worker" || (e === "none" && !isRemoteOrCowork());
+  let hostKind = sessionHostKind();
+  return hostKind === "hosted_worker" || (hostKind === "none" && !isRemoteOrCowork());
 }
 //@ chunk-e6aww6q8.js:645129-645300 placement
 /**
  * 按键合并两组行：已有行若在新行中有同键项则经合并函数合成，再与新行一起按键去重。
  */
-function mergeRowsByKey(e, n, r, s) {
-  let h = s === undefined ? undefined : new Map(n.map((y) => [r(y), y]));
-  return Ji(
+function mergeRowsByKey(sessionRows, accountRows, keyOf, carryMarketplaceInfo) {
+  let accountByKey =
+    carryMarketplaceInfo === undefined ? undefined : new Map(accountRows.map((row) => [keyOf(row), row]));
+  return uniqByExport(
     [
-      ...e.map((y) => {
-        let S = h?.get(r(y));
-        return S !== undefined && s !== undefined ? s(y, S) : y;
+      ...sessionRows.map((row) => {
+        let accountRow = accountByKey?.get(keyOf(row));
+        return accountRow !== undefined && carryMarketplaceInfo !== undefined
+          ? carryMarketplaceInfo(row, accountRow)
+          : row;
       }),
-      ...n,
+      ...accountRows,
     ],
-    r,
+    keyOf,
   );
 }
 //@ chunk-e6aww6q8.js:645300-646136 placement
 /**
  * 对比远端列表与本地清单，计算要下载的项（新增或名称/版本/更新时间变化）、要删除的项、沿用项与在用目录；名字非法或目录名冲突时记诊断并沿用旧行。
  */
-function planSyncDownloads(e, n, { idOf, dirFor, invalidNameTag, collisionTag, carry, markCollisionLoser }) {
-  let isObject = (Ie) => typeof Ie === "object" && Ie !== null;
-  e = Array.isArray(e) ? e.filter(isObject) : [];
-  n = Array.isArray(n) ? n.filter(isObject) : [];
-  let prevById = new Map(n.map((Ie) => [idOf(Ie), Ie]));
-  let listedIds = new Set(e.map((Ie) => idOf(Ie)));
+function planSyncDownloads(
+  listedRows,
+  previousRows,
+  { idOf, dirFor, invalidNameTag, collisionTag, carry, markCollisionLoser },
+) {
+  let isObject = (value) => typeof value === "object" && value !== null;
+  listedRows = Array.isArray(listedRows) ? listedRows.filter(isObject) : [];
+  previousRows = Array.isArray(previousRows) ? previousRows.filter(isObject) : [];
+  let prevById = new Map(previousRows.map((row) => [idOf(row), row]));
+  let listedIds = new Set(listedRows.map((row) => idOf(row)));
   let liveDirs = new Set();
   let liveDirsFolded = new Set();
   let toDownload = [];
   let carryover = [];
   let carryoverOwningLiveDir = new Set();
-  for (let Ie of e) {
-    let prev = prevById.get(idOf(Ie));
-    if (prev !== undefined && carry !== undefined) prev = carry(prev, Ie);
+  for (let row of listedRows) {
+    let prev = prevById.get(idOf(row));
+    if (prev !== undefined && carry !== undefined) prev = carry(prev, row);
     let dir;
     try {
-      dir = dirFor(Ie.name);
+      dir = dirFor(row.name);
     } catch {
       logForDiagnosticsNoPII("warn", invalidNameTag);
       if (prev) carryover.push(prev);
@@ -762,12 +776,12 @@ function planSyncDownloads(e, n, { idOf, dirFor, invalidNameTag, collisionTag, c
     liveDirsFolded.add(stripInvisibleChars_3(dir));
     if (
       !prev ||
-      prev.updatedAt !== Ie.updatedAt ||
-      prev.name !== Ie.name ||
-      prev.requestedVersion !== Ie.requestedVersion
+      prev.updatedAt !== row.updatedAt ||
+      prev.name !== row.name ||
+      prev.requestedVersion !== row.requestedVersion
     )
       toDownload.push({
-        item: Ie,
+        item: row,
         prev,
       });
     else {
@@ -775,7 +789,7 @@ function planSyncDownloads(e, n, { idOf, dirFor, invalidNameTag, collisionTag, c
       carryoverOwningLiveDir.add(idOf(prev));
     }
   }
-  let toRemove = n.filter((Ie) => !listedIds.has(idOf(Ie)));
+  let toRemove = previousRows.filter((row) => !listedIds.has(idOf(row)));
   return {
     toDownload,
     toRemove,
@@ -793,23 +807,23 @@ var MAX_DEFERRED_RELIST_ROUNDS = 6;
 /**
  * 插件同步是否生效（未被否决且环境或账号开启）。
  */
-function isPluginsSyncActive(e) {
+function isPluginsSyncActive(session) {
   if (getPluginsSyncVetoed()) return false;
-  return isPluginsSyncEnvOn(e) || getAccountPluginsSyncEnabled();
+  return isPluginsSyncEnvOn(session) || getAccountPluginsSyncEnabled();
 }
 //@ chunk-e6aww6q8.js:646200-646257 placement
 /**
  * 环境变量或会话引用同步是否开启。
  */
-function isPluginsSyncEnvOn(e) {
-  return env.CLAUDE_CODE_SYNC_PLUGINS || isSessionRefsSyncEnabled(e);
+function isPluginsSyncEnvOn(session) {
+  return env.CLAUDE_CODE_SYNC_PLUGINS || isSessionRefsSyncEnabled(session);
 }
 //@ chunk-e6aww6q8.js:646257-646294 placement
 /**
  * 插件同步是否活着（开启且未被否决）。
  */
-function isPluginsSyncLive(e) {
-  return isPluginsSyncEnvOn(e) && !getPluginsSyncVetoed();
+function isPluginsSyncLive(session) {
+  return isPluginsSyncEnvOn(session) && !getPluginsSyncVetoed();
 }
 //@ chunk-e6aww6q8.js:646294-646369 placement
 /**
@@ -829,8 +843,8 @@ function pluginMcpTimeoutMs() {
 /**
  * 启动首轮插件同步（只触发一次）并返回其 Promise。
  */
-function startFirstPluginsSync(rootSession, n) {
-  rootSession.pluginsSync.firstSyncPromise ??= runPluginsSyncRound(rootSession, n, {
+function startFirstPluginsSync(session, credentials) {
+  session.pluginsSync.firstSyncPromise ??= runPluginsSyncRound(session, credentials, {
     startup: true,
   });
 }
@@ -848,17 +862,17 @@ function runFirstPluginsSync(session, credentials) {
 /**
  * CCR 非交互会话在开启 CLAUDE_CODE_CCR_EARLY_PLUGINS_SYNC 时提前开始插件同步。
  */
-function startEarlyPluginsSync(rootSession, n, r) {
+function startEarlyPluginsSync(session, credentials, vetoCondition) {
   if (
     !env.CLAUDE_CODE_CCR_EARLY_PLUGINS_SYNC ||
-    rootSession.host.launchOptions.isInteractive() ||
-    !isPluginsSyncEnvOn(rootSession) ||
-    r()
+    session.host.launchOptions.isInteractive() ||
+    !isPluginsSyncEnvOn(session) ||
+    vetoCondition()
   )
     return false;
   refreshSyncVeto();
-  if (!isPluginsSyncLive(rootSession)) return false;
-  startFirstPluginsSync(rootSession, n);
+  if (!isPluginsSyncLive(session)) return false;
+  startFirstPluginsSync(session, credentials);
   return true;
 }
 //@ chunk-e6aww6q8.js:646788-647017 placement
@@ -875,17 +889,17 @@ function rerunPluginsSync(session, credentials) {
   return session.pluginsSync.firstSyncPromise;
 }
 //@ chunk-e6aww6q8.js:647017-647187 placement
-function scheduleDeferredRelist(e, n) {
-  let pluginsSync = e.pluginsSync;
-  cancelDeferredRelist(e);
+function scheduleDeferredRelist(session, credentials) {
+  let pluginsSync = session.pluginsSync;
+  cancelDeferredRelist(session);
   pluginsSync.deferredRelist = setTimeout(
-    (s, h) => {
-      s.pluginsSync.deferredRelist = null;
-      rerunPluginsSync(s, h).catch(logError);
+    (session, credentials) => {
+      session.pluginsSync.deferredRelist = null;
+      rerunPluginsSync(session, credentials).catch(logError);
     },
     MAX_SYNC_REUSE_AGE_MS,
-    e,
-    n,
+    session,
+    credentials,
   );
   pluginsSync.deferredRelist.unref?.();
 }
@@ -905,8 +919,8 @@ function hasRemovalOwed(pluginsSync) {
   return (pluginsSync.lastCompleteList?.removalOwed.size ?? 0) > 0;
 }
 //@ chunk-e6aww6q8.js:647301-647417 placement
-function cancelDeferredRelist(e) {
-  let pluginsSync = e.pluginsSync;
+function cancelDeferredRelist(session) {
+  let pluginsSync = session.pluginsSync;
   if (pluginsSync.deferredRelist !== null) {
     clearTimeout(pluginsSync.deferredRelist);
     pluginsSync.deferredRelist = null;

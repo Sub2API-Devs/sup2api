@@ -15,6 +15,7 @@ import { isPlainDataObject, matcherLog } from "../../../utils/hooks/functionHook
 import { isPlainObject } from "../../../utils/isPlainObject.js";
 import { isCoreOrManaged } from "./chain.js";
 import { HOOK_TIER_ORDER } from "../builtinHooksModule.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-4121qate.js:72399-72412 placement
 /**
@@ -25,19 +26,22 @@ var LINGER_GRACE_MS = 5000;
 /**
  * 暂停计时的 ALS
  */
-var budgetPauseStorage = new AsyncLocalStorage();
+var budgetPauseStorage; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4121qate.js:72461", () => {
+  budgetPauseStorage = new AsyncLocalStorage();
+});
 //@ chunk-4121qate.js:72476-72595 placement
 /**
  * 在当前钩子预算之外执行 e（暂停计时，结束后恢复）。
  */
-async function outsideBudget(e) {
-  let o = budgetPauseStorage.getStore();
-  if (o === undefined) return e();
-  o.pause();
+async function outsideBudget(fn) {
+  let budget = budgetPauseStorage.getStore();
+  if (budget === undefined) return fn();
+  budget.pause();
   try {
-    return await e();
+    return await fn();
   } finally {
-    o.resume();
+    budget.resume();
   }
 }
 //@ chunk-4121qate.js:72595-72607 placement
@@ -64,66 +68,70 @@ var MAX_UINT32 = 4294967295;
 /**
  * 读取插件给的列表长度并校验（非负整数且不超过 2^32-1），否则抛 HooksError。被各站点校验广泛使用。
  */
-function checkedListLength(e) {
-  let o = e.length;
-  let n =
-    typeof o !== "bigint" && typeof o !== "symbol" ? Math.max(Math.trunc(Number(o)) || 0, 0) : undefined;
-  if (n === undefined || n > MAX_UINT32)
-    throw new HooksError(`a plugin's list claims a length no list has (got ${n ?? `a ${typeof o}`})`);
-  return n;
+function checkedListLength(list) {
+  let rawLength = list.length;
+  let length =
+    typeof rawLength !== "bigint" && typeof rawLength !== "symbol"
+      ? Math.max(Math.trunc(Number(rawLength)) || 0, 0)
+      : undefined;
+  if (length === undefined || length > MAX_UINT32)
+    throw new HooksError(
+      `a plugin's list claims a length no list has (got ${length ?? `a ${typeof rawLength}`})`,
+    );
+  return length;
 }
 //@ chunk-4121qate.js:72966-73383 placement
 /**
  * 复制值时进入一层：检查深度上限与循环，记录是否为参数自有对象。
  */
-function openCopyFrame(e, o, r) {
-  let { seen, argument } = o;
-  if (seen.has(e)) return r;
-  let i = (r?.depth ?? 0) + 1;
-  if (i > MAX_NESTING_DEPTH) throw new HooksError(nextNotPlainData(NESTING_TOO_DEEP_MESSAGE));
-  let p = Array.isArray(e);
-  let f = e === argument.own || isPlainDataObject(e);
-  let isWhole = !p && !f && argument.isWhole;
-  if (isWhole && ArrayBuffer.isView(e)) {
-    seen.set(e, structuredClone(e));
-    return r;
+function openCopyFrame(value, copyState, parentFrame) {
+  let { seen, argument } = copyState;
+  if (seen.has(value)) return parentFrame;
+  let depth = (parentFrame?.depth ?? 0) + 1;
+  if (depth > MAX_NESTING_DEPTH) throw new HooksError(nextNotPlainData(NESTING_TOO_DEEP_MESSAGE));
+  let isArray = Array.isArray(value);
+  let isPlain = value === argument.own || isPlainDataObject(value);
+  let isWhole = !isArray && !isPlain && argument.isWhole;
+  if (isWhole && ArrayBuffer.isView(value)) {
+    seen.set(value, structuredClone(value));
+    return parentFrame;
   }
-  if (!(p || f || isWhole) || (!p && !isPlainObject(e))) return r;
-  let c = p ? [] : Object.keys(e);
-  let u = p ? checkedListLength(e) : c.length;
-  let l = p ? [] : {};
-  seen.set(e, l);
+  if (!(isArray || isPlain || isWhole) || (!isArray && !isPlainObject(value))) return parentFrame;
+  let frame = isArray ? [] : Object.keys(value);
+  let into = isArray ? checkedListLength(value) : frame.length;
+  let keys = isArray ? [] : {};
+  seen.set(value, keys);
   return {
-    source: e,
-    into: l,
-    keys: c,
-    length: u,
+    source: value,
+    into: keys,
+    keys: frame,
+    length: into,
     isTaken: isWhole,
     at: 0,
-    depth: i,
-    below: r,
+    depth,
+    below: parentFrame,
   };
 }
 //@ chunk-4121qate.js:73383-73635 placement
-function copyArrayFrame(e, o) {
-  let source = Array.isArray(e.source) ? e.source : [];
-  let into = Array.isArray(e.into) ? e.into : [];
-  for (let at = e.at; at < e.length; at += 1) {
-    let i = source[at];
-    let p = typeof i === "object" && i !== null;
-    let f = p ? openCopyFrame(i, o, e) : e;
-    into[at] = p ? (o.seen.get(i) ?? i) : i;
-    if (f !== e) {
-      e.at = at + 1;
-      return f;
+function copyArrayFrame(frame, copyState) {
+  let source = Array.isArray(frame.source) ? frame.source : [];
+  let into = Array.isArray(frame.into) ? frame.into : [];
+  for (let at = frame.at; at < frame.length; at += 1) {
+    let item = source[at];
+    let isObject = typeof item === "object" && item !== null;
+    let nextFrame = isObject ? openCopyFrame(item, copyState, frame) : frame;
+    into[at] = isObject ? (copyState.seen.get(item) ?? item) : item;
+    if (nextFrame !== frame) {
+      frame.at = at + 1;
+      return nextFrame;
     }
   }
-  return e.below;
+  return frame.below;
 }
 //@ chunk-4121qate.js:73635-73737 placement
-function callToJsonSafely(e, o, applied) {
+function callToJsonSafely(toJSON, owner, applied) {
   try {
-    return [false, applied === undefined ? Reflect.apply(e, o, [""]) : applied(o, e, "")];
+    return [false, applied === undefined ? Reflect.apply(toJSON, owner, [""]) : applied(owner, toJSON, "")];
   } catch (error) {
     return [true, error];
   }
@@ -132,100 +140,102 @@ function callToJsonSafely(e, o, applied) {
 /**
  * 惰性抛/返回值
  */
-function lazyThunk([e, o], answered) {
-  let n = e ? o : answered(o);
+function lazyThunk([isError, value], answered) {
+  let settled = isError ? value : answered(value);
   return () => {
-    if (e) throw n;
-    return n;
+    if (isError) throw settled;
+    return settled;
   };
 }
 //@ chunk-4121qate.js:73807-73875 placement
 /**
  * 安全的 toJSON 结果
  */
-function safeToJsonResult(e, source, r) {
-  return lazyThunk(callToJsonSafely(e, source, r.argument.applied), r.answered);
+function safeToJsonResult(toJSON, owner, copyState) {
+  return lazyThunk(callToJsonSafely(toJSON, owner, copyState.argument.applied), copyState.answered);
 }
 //@ chunk-4121qate.js:73875-74133 placement
-function finishObjectFrame(e, o) {
-  let { into, source } = e;
-  let { argument, seen } = o;
-  let f =
-    e.isTaken && argument.answer === undefined && !Object.hasOwn(into, "toJSON")
+function finishObjectFrame(frame, copyState) {
+  let { into, source } = frame;
+  let { argument, seen } = copyState;
+  let toJSON =
+    frame.isTaken && argument.answer === undefined && !Object.hasOwn(into, "toJSON")
       ? Reflect.get(source, "toJSON")
       : undefined;
-  if (typeof f === "function" && !Array.isArray(into)) into.toJSON = safeToJsonResult(f, source, o);
+  if (typeof toJSON === "function" && !Array.isArray(into))
+    into.toJSON = safeToJsonResult(toJSON, source, copyState);
   if (source === argument.answer) seen.delete(source);
-  return e.below;
+  return frame.below;
 }
 //@ chunk-4121qate.js:74133-74544 placement
-function measureJsonValue(e, o) {
-  let { into, keys } = e;
-  let source = Array.isArray(e.source) ? {} : e.source;
-  let i = source === o.argument.answer;
-  for (let at = e.at; at < keys.length; at += 1) {
-    let f = keys[at] ?? "";
-    let a = source[f];
-    let m = f === "toJSON" && typeof a === "function";
-    let c = !m && typeof a === "object" && a !== null;
-    let u = c ? openCopyFrame(a, o, e) : e;
-    let l = c ? (o.seen.get(a) ?? a) : a;
-    if (!(m && i))
-      Object.defineProperty(into, f, {
-        value: m ? safeToJsonResult(a, source, o) : l,
+function measureJsonValue(frame, copyState) {
+  let { into, keys } = frame;
+  let source = Array.isArray(frame.source) ? {} : frame.source;
+  let isAnswerSource = source === copyState.argument.answer;
+  for (let at = frame.at; at < keys.length; at += 1) {
+    let key = keys[at] ?? "";
+    let value = source[key];
+    let isToJson = key === "toJSON" && typeof value === "function";
+    let isObject = !isToJson && typeof value === "object" && value !== null;
+    let nextFrame = isObject ? openCopyFrame(value, copyState, frame) : frame;
+    let copied = isObject ? (copyState.seen.get(value) ?? value) : value;
+    if (!(isToJson && isAnswerSource))
+      Object.defineProperty(into, key, {
+        value: isToJson ? safeToJsonResult(value, source, copyState) : copied,
         enumerable: true,
         writable: true,
         configurable: true,
       });
-    if (u !== e) {
-      e.at = at + 1;
-      return u;
+    if (nextFrame !== frame) {
+      frame.at = at + 1;
+      return nextFrame;
     }
   }
-  return finishObjectFrame(e, o);
+  return finishObjectFrame(frame, copyState);
 }
 //@ chunk-4121qate.js:74544-74891 placement
 /**
  * 迭代深拷贝插件传来的值（处理循环、toJSON 链、深度上限），得到宿主可安全持有的纯数据副本。
  */
-function copyPluginValue(e, o, r) {
-  if (typeof e !== "object" || e === null) return e;
-  let n = {
-    seen: o,
-    argument: r,
-    answered(f) {
-      if (typeof f === "object" && f !== null && r.answers >= MAX_TOJSON_DEPTH)
+function copyPluginValue(value, seen, copyState) {
+  if (typeof value !== "object" || value === null) return value;
+  let nested = {
+    seen,
+    argument: copyState,
+    answered(answer) {
+      if (typeof answer === "object" && answer !== null && copyState.answers >= MAX_TOJSON_DEPTH)
         throw new HooksError(nextNotPlainData(TOJSON_LOOP_TEXT));
-      let answers = r.answers + 1;
-      return copyPluginValue(f, o, {
-        ...r,
-        answer: f,
+      let answers = copyState.answers + 1;
+      return copyPluginValue(answer, seen, {
+        ...copyState,
+        answer,
         answers,
       });
     },
   };
-  let copyFrame = openCopyFrame(e, n, undefined);
-  let i = copyFrame;
-  while (i !== undefined) i = Array.isArray(i.source) ? copyArrayFrame(i, n) : measureJsonValue(i, n);
-  return (copyFrame === undefined ? o.get(e) : copyFrame.into) ?? e;
+  let copyFrame = openCopyFrame(value, nested, undefined);
+  let frame = copyFrame;
+  while (frame !== undefined)
+    frame = Array.isArray(frame.source) ? copyArrayFrame(frame, nested) : measureJsonValue(frame, nested);
+  return (copyFrame === undefined ? seen.get(value) : copyFrame.into) ?? value;
 }
 //@ chunk-4121qate.js:74891-75019 placement
-function copyAdoptedValues(e, o, r) {
-  let n = new Set(o.values());
-  return e.map((s) =>
-    typeof s === "object" && s !== null && !n.has(s)
-      ? copyPluginValue(s, o, {
-          ...r,
-          own: s,
+function copyAdoptedValues(values, seen, copyState) {
+  let already = new Set(seen.values());
+  return values.map((value) =>
+    typeof value === "object" && value !== null && !already.has(value)
+      ? copyPluginValue(value, seen, {
+          ...copyState,
+          own: value,
         })
-      : s,
+      : value,
   );
 }
 //@ chunk-4121qate.js:75019-75033 placement
 /**
  * 原样返回
  */
-var identityFn = (e) => e;
+var identityFn = (value) => value;
 //@ chunk-4121qate.js:75033-75155 placement
 /**
  * 结束一次下游等待：计入等待耗时，全部结束且未结算时恢复计时。
@@ -250,73 +260,80 @@ var answerState = (own, applied, argumentCopy) => ({
 /**
  * 生成"钩子改写部分未生效"的 hookFailed 上报函数（效果文字固定）。
  */
-var createUnappliedReporter = (effect) => (o, event, n) =>
+var createUnappliedReporter = (effect) => (handler, event, why) =>
   matcherLog().hookFailed({
-    plugin: o.name,
-    environmentId: o.environmentId,
+    plugin: handler.name,
+    environmentId: handler.environmentId,
     event,
-    reason: `${o.name}: ${n}`,
+    reason: `${handler.name}: ${why}`,
     effect,
     hasOverrun: false,
     skip: {
       kind: "unapplied",
-      why: n,
+      why,
     },
   });
 //@ chunk-4121qate.js:75405-75450 placement
 /**
  * 其余改写仍生效
  */
-var unappliedRestStands = createUnappliedReporter("the rest of its rewrite went on");
+var unappliedRestStands; // deferred: uses createUnappliedReporter of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4121qate.js:75405", () => {
+  unappliedRestStands = createUnappliedReporter("the rest of its rewrite went on");
+});
 //@ chunk-4121qate.js:75450-75463 placement
 /**
  * 32000
  */
 var MAX_VALUE_BYTES = 32000;
 //@ chunk-4121qate.js:75463-75618 placement
-function warnOversizedPluginText(e, o, r) {
-  if (r !== undefined && r > MAX_VALUE_BYTES)
+function warnOversizedPluginText(name, event, length) {
+  if (length !== undefined && length > MAX_VALUE_BYTES)
     matcherLog().log(
-      `${e}: wrote a text of ${r} characters (${o}; over ${MAX_VALUE_BYTES}, accepted: a plugin's text is its own to size)`,
+      `${name}: wrote a text of ${length} characters (${event}; over ${MAX_VALUE_BYTES}, accepted: a plugin's text is its own to size)`,
     );
 }
 //@ chunk-4121qate.js:75618-76168 placement
 /**
  * 校验并规范 next() 传入的参数：拷贝、采纳、还原与检查（站点规则），记录未生效部分与超长文本警告。
  */
-function normalizeNextArgument({ handler, site, e: r }, n) {
-  let s = requireEventArgument(n, handler.name);
-  let i =
+function normalizeNextArgument({ handler, site, e }, value) {
+  let argument = requireEventArgument(value, handler.name);
+  let needsCheck =
     !isCoreOrManaged(handler) && (site.checkArgument !== undefined || site.restoreArgument !== undefined);
-  let p = i && !Object.is(s, r);
-  let f = new Map();
-  let a = answerState(s, handler.applied, site.argumentCopy);
-  let m = p ? copyPluginValue(s, f, a) : s;
-  let c = i && handler.isHop !== true;
-  let u = i ? (site.adoptArgument?.(m, r, (x) => copyAdoptedValues(x, f, a)) ?? m) : m;
-  let l = i ? (site.restoreArgument?.(u, r, handler) ?? u) : u;
-  let y = i ? site.checkArgument?.(l, r) : undefined;
-  if (y !== undefined) throw new HooksError(`${handler.name}: next() passed an argument with ${y}`);
-  let g = c ? site.unappliedArgument?.(m, r) : undefined;
-  if (g !== undefined) unappliedRestStands(handler, site.event, g);
-  if (c) warnOversizedPluginText(handler.name, site.event, site.measureArgument?.(l, r));
-  return identityFn(l);
+  let isChanged = needsCheck && !Object.is(argument, e);
+  let seen = new Map();
+  let copyState = answerState(argument, handler.applied, site.argumentCopy);
+  let copied = isChanged ? copyPluginValue(argument, seen, copyState) : argument;
+  let isPluginArg = needsCheck && handler.isHop !== true;
+  let adopted = needsCheck
+    ? (site.adoptArgument?.(copied, e, (values) => copyAdoptedValues(values, seen, copyState)) ?? copied)
+    : copied;
+  let restored = needsCheck ? (site.restoreArgument?.(adopted, e, handler) ?? adopted) : adopted;
+  let problem = needsCheck ? site.checkArgument?.(restored, e) : undefined;
+  if (problem !== undefined)
+    throw new HooksError(`${handler.name}: next() passed an argument with ${problem}`);
+  let unapplied = isPluginArg ? site.unappliedArgument?.(copied, e) : undefined;
+  if (unapplied !== undefined) unappliedRestStands(handler, site.event, unapplied);
+  if (isPluginArg) warnOversizedPluginText(handler.name, site.event, site.measureArgument?.(restored, e));
+  return identityFn(restored);
 }
 //@ chunk-4121qate.js:76168-76196 placement
 /**
  * 层级序号
  */
-var tierIndex = (e) => HOOK_TIER_ORDER.indexOf(e);
+var tierIndex = (tier) => HOOK_TIER_ORDER.indexOf(tier);
 //@ chunk-4121qate.js:76196-76332 placement
 /**
  * 找出越过当前层级的 next.to 目标所属插件（用于拒绝绕过）。
  */
-function findBypassingFloor(e, o, name) {
-  let n = tierIndex(o);
-  return e.find(
-    (s) =>
-      (tierIndex(s.from) < n || (s.isPastPeers === true && s.from === o && s.plugin !== name)) &&
-      n < tierIndex(s.to),
+function findBypassingFloor(floors, to, name) {
+  let toIndex = tierIndex(to);
+  return floors.find(
+    (floor) =>
+      (tierIndex(floor.from) < toIndex ||
+        (floor.isPastPeers === true && floor.from === to && floor.plugin !== name)) &&
+      toIndex < tierIndex(floor.to),
   )?.plugin;
 }
 export {

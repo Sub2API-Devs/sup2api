@@ -17,13 +17,17 @@ import {
   getVerifySkillRolloutGateLatch,
   setVerifySkillRolloutGateLatch,
 } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:596653-596743 placement
-var growthbookFetchMap = identity_2(new WeakMap(), (e) => {
-  let n = getPolyfills().fetch;
-  while (n && e.has(n)) n = e.get(n);
-  setPolyfills({
-    fetch: n,
+var growthbookFetchMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:596653", () => {
+  growthbookFetchMap = identity_2(new WeakMap(), (map) => {
+    let original = getPolyfills().fetch;
+    while (original && map.has(original)) original = map.get(original);
+    setPolyfills({
+      fetch: original,
+    });
   });
 });
 //@ chunk-aepeg2w5.js:596743-596864 placement
@@ -31,18 +35,18 @@ var growthbookFetchMap = identity_2(new WeakMap(), (e) => {
  * 为 GrowthBook 安装走代理的 fetch（只安装一次）。
  */
 function installProxyFetchForGrowthBook() {
-  let e = getPolyfills().fetch;
-  if (!e || growthbookFetchMap.has(e)) return;
-  let n = (r, s) =>
-    e(r, {
-      ...s,
+  let originalFetch = getPolyfills().fetch;
+  if (!originalFetch || growthbookFetchMap.has(originalFetch)) return;
+  let proxiedFetch = (url, options) =>
+    originalFetch(url, {
+      ...options,
       ...getProxyFetchOptions({
-        url: r,
+        url,
       }),
     });
-  growthbookFetchMap.set(n, e);
+  growthbookFetchMap.set(proxiedFetch, originalFetch);
   setPolyfills({
-    fetch: n,
+    fetch: proxiedFetch,
   });
 }
 //@ chunk-aepeg2w5.js:596864-596892 placement
@@ -57,10 +61,13 @@ class GateReaderSlot_2 {
   }
 }
 //@ chunk-aepeg2w5.js:596967-596981 placement
-var commitSkillGateSlot = new GateReaderSlot_2();
+var commitSkillGateSlot; // deferred: uses GateReaderSlot_2 of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:596967", () => {
+  commitSkillGateSlot = new GateReaderSlot_2();
+});
 //@ chunk-aepeg2w5.js:596981-597018 placement
-function registerCommitSkillGateReader(e) {
-  return commitSkillGateSlot.register(e);
+function registerCommitSkillGateReader(reader) {
+  return commitSkillGateSlot.register(reader);
 }
 //@ chunk-aepeg2w5.js:597018-597171 placement
 /**
@@ -71,10 +78,10 @@ function isCommitSkillRolloutOn() {
   if (commitSkillRolloutGateLatch !== null) return commitSkillRolloutGateLatch;
   let reader = commitSkillGateSlot.reader;
   if (!reader) return false;
-  let { value: r, source } = reader(TENGU_CINDER_RELAY, false);
-  if (source === "fallback") return r;
-  setCommitSkillRolloutGateLatch(r);
-  return r;
+  let { value, source } = reader(TENGU_CINDER_RELAY, false);
+  if (source === "fallback") return value;
+  setCommitSkillRolloutGateLatch(value);
+  return value;
 }
 //@ chunk-aepeg2w5.js:597171-597199 placement
 var TENGU_OPAL_CIRCUIT = "tengu_opal_circuit";
@@ -88,10 +95,13 @@ class verifySkillGateSlot {
   }
 }
 //@ chunk-aepeg2w5.js:597274-597288 placement
-var verifySkillGateReaderSlot = new verifySkillGateSlot();
+var verifySkillGateReaderSlot; // deferred: uses verifySkillGateSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:597274", () => {
+  verifySkillGateReaderSlot = new verifySkillGateSlot();
+});
 //@ chunk-aepeg2w5.js:597288-597325 placement
-function registerVerifySkillGateReader(e) {
-  return verifySkillGateReaderSlot.register(e);
+function registerVerifySkillGateReader(reader) {
+  return verifySkillGateReaderSlot.register(reader);
 }
 //@ chunk-aepeg2w5.js:597325-597478 placement
 /**
@@ -102,10 +112,10 @@ function isVerifySkillRolloutOn() {
   if (verifySkillRolloutGateLatch !== null) return verifySkillRolloutGateLatch;
   let reader = verifySkillGateReaderSlot.reader;
   if (!reader) return false;
-  let { value: r, source } = reader(TENGU_OPAL_CIRCUIT, false);
-  if (source === "fallback") return r;
-  setVerifySkillRolloutGateLatch(r);
-  return r;
+  let { value, source } = reader(TENGU_OPAL_CIRCUIT, false);
+  if (source === "fallback") return value;
+  setVerifySkillRolloutGateLatch(value);
+  return value;
 }
 export {
   installProxyFetchForGrowthBook,

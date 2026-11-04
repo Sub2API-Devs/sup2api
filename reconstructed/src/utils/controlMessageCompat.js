@@ -15,10 +15,10 @@
  */
 function normalizeControlMessage(err) {
   if (err === null || typeof err !== "object") return err;
-  let e = err;
-  normalizeControlMessageKeys(e);
-  if ("response" in e && e.response !== null && typeof e.response === "object")
-    normalizeControlMessageKeys(e.response);
+  let message = err;
+  normalizeControlMessageKeys(message);
+  if ("response" in message && message.response !== null && typeof message.response === "object")
+    normalizeControlMessageKeys(message.response);
   return err;
 }
 //@ chunk-xw83kd7e.js:352-469 fingerprint = normalizeControlMessageKeys (0.812)
@@ -30,9 +30,9 @@ function normalizeControlMessageKeys(obj) {
   }
 }
 //@ chunk-xw83kd7e.js:469-644 placement
-function getControlRequestId(n) {
-  if ("request_id" in n) return n.request_id;
-  let requestId = "requestId" in n ? n.requestId : undefined;
+function getControlRequestId(message) {
+  if ("request_id" in message) return message.request_id;
+  let requestId = "requestId" in message ? message.requestId : undefined;
   return typeof requestId === "string" && requestId.toLowerCase().startsWith("late-bind-")
     ? undefined
     : requestId;

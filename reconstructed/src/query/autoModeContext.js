@@ -46,8 +46,8 @@ import {
   PERMISSION_RULE_SOURCES,
 } from "../utils/permissions/permissions.js";
 import {
-  SERVER_CLASSIFIER_DECISION_SCHEMA,
-  MAX_RULE_CANONICAL_LENGTH,
+  DEFAULT_MAX_SAVED_RULES,
+  MAX_SAVED_RULES_SETTING,
   MAX_CLASSIFIER_PAYLOAD_BYTES,
 } from "../utils/permissions/serverClassifier/schemas.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
@@ -69,7 +69,7 @@ import {
   getLoadedModulesForSite,
   hasModuleHookingSite,
 } from "../plugins/hooksModules/loadedModuleFilters.js";
-import { SS } from "../../vendor/lodash-es/_inlinedHelpers.js";
+import { partitionAlias } from "../../vendor/lodash-es/_inlinedHelpers.js";
 import {
   MCP_TOOL_PREFIX,
   getToolNameForPermissionCheck,
@@ -89,7 +89,7 @@ import {
 import { logError } from "../utils/log.js";
 import { withTelemetryMessage, toError } from "../utils/errors.js";
 import { isRemoteBrowserUnderModeFloor } from "../utils/permissions/mcpRuleMatching.js";
-import { Ji } from "../../vendor/lodash-es/uniqBy.js";
+import { uniqByExport } from "../../vendor/lodash-es/uniqBy.js";
 import { getAutoModeConfig } from "../utils/settings/settings.js";
 import { replacesDefaults } from "../utils/permissions/autoModeRulesPrompt.js";
 import { claudeInChromeSession } from "../commands/mobile/mobile.js";
@@ -132,100 +132,109 @@ import { BASH_TOOL_NAME } from "../tools/BashTool/toolName.js";
 import { alwaysFalseStream } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { runInRemoteCallFrameMain } from "../remote/remoteMode.js";
 import { latestPromptSnapshot } from "../utils/contextAttachments/promptSnapshot.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ha3km179.js:120069-125379 placement
 /**
  * 为 auto mode 分类器组装上下文：各来源的权限规则、MCP 挂载、用户设置、环境与 git 状态。
  */
-async function buildAutoModeContext(toolPermissionContext, n, r = false) {
-  let s = r && isNonAutoMode(toolPermissionContext.mode);
-  let h = toPosixPath;
-  let y = isDiskless();
-  let S = (oe) => oe === "mcpMount" || (y && oe === "userSettings");
-  let M = (behavior, ht) =>
-    ht.map((ut) => {
-      let kt = formatPermissionRule(ut.ruleValue);
-      let Gt = {
-        rule: matchLegacyRule(ut.stored ?? kt, behavior),
-        source: ut.source,
-        ...(ut.stored !== undefined &&
-          ut.stored !== kt && {
-            canonical: matchLegacyRule(kt, behavior),
+async function buildAutoModeContext(toolPermissionContext, toolUseContext, judgeOnlyToolsConfigured = false) {
+  let rulesUnread = judgeOnlyToolsConfigured && isNonAutoMode(toolPermissionContext.mode);
+  let toPosix = toPosixPath;
+  let diskless = isDiskless();
+  let isVolatileRuleSource = (source) => source === "mcpMount" || (diskless && source === "userSettings");
+  let mapRules = (behavior, rules) =>
+    rules.map((rule) => {
+      let formattedRule = formatPermissionRule(rule.ruleValue);
+      let mappedRule = {
+        rule: matchLegacyRule(rule.stored ?? formattedRule, behavior),
+        source: rule.source,
+        ...(rule.stored !== undefined &&
+          rule.stored !== formattedRule && {
+            canonical: matchLegacyRule(formattedRule, behavior),
           }),
       };
-      let { toolName, ruleContent } = ut.ruleValue;
+      let { toolName, ruleContent } = rule.ruleValue;
       if (
         ruleContent === undefined ||
-        It === null ||
+        cwdInfo === null ||
         (toolName !== FILE_READ_TOOL_NAME && toolName !== FILE_EDIT_TOOL_NAME)
       )
-        return Gt;
-      if ((y && ruleContent.startsWith("~/")) || (S(ut.source) && /^\/(?!\/)/.test(ruleContent))) return Gt;
-      let At = compiledPathRulePattern(ruleContent, ut.source, behavior);
-      if (At === null) return Gt;
+        return mappedRule;
+      if (
+        (diskless && ruleContent.startsWith("~/")) ||
+        (isVolatileRuleSource(rule.source) && /^\/(?!\/)/.test(ruleContent))
+      )
+        return mappedRule;
+      let compiledPattern = compiledPathRulePattern(ruleContent, rule.source, behavior);
+      if (compiledPattern === null) return mappedRule;
       return {
-        ...Gt,
-        root: At.root === null ? null : h(At.root),
-        pattern: At.pattern,
+        ...mappedRule,
+        root: compiledPattern.root === null ? null : toPosix(compiledPattern.root),
+        pattern: compiledPattern.pattern,
       };
     });
-  let R =
-    n?.options.toolAliases && isHazelPloverOn()
-      ? Object.entries(n.options.toolAliases)
+  let aliasedToolNames =
+    toolUseContext?.options.toolAliases && isHazelPloverOn()
+      ? Object.entries(toolUseContext.options.toolAliases)
           .filter(([key, value]) => value !== key)
           .map(([key]) => key)
       : [];
-  let T = (oe, ruleBehavior) =>
-    Object.entries(oe)
+  let collectRulesBySource = (rulesBySource, ruleBehavior) =>
+    Object.entries(rulesBySource)
       .flatMap(([key, value]) =>
-        (value ?? []).map((Gt) => ({
+        (value ?? []).map((ruleString) => ({
           source: key,
           ruleBehavior,
-          ruleValue: permissionRuleValueFromString(Gt),
-          stored: Gt,
+          ruleValue: permissionRuleValueFromString(ruleString),
+          stored: ruleString,
         })),
       )
       .filter(
-        (ut) =>
-          ut.ruleValue.ruleContent !== undefined ||
-          allowsAliasExpansion(ut) ||
-          !R.some(
-            (kt) =>
-              ut.ruleValue.toolName === kt ||
-              (hasWildcard(ut.ruleValue.toolName) && matchWildcard(ut.ruleValue.toolName, kt)),
+        (mappedRule) =>
+          mappedRule.ruleValue.ruleContent !== undefined ||
+          allowsAliasExpansion(mappedRule) ||
+          !aliasedToolNames.some(
+            (aliasName) =>
+              mappedRule.ruleValue.toolName === aliasName ||
+              (hasWildcard(mappedRule.ruleValue.toolName) &&
+                matchWildcard(mappedRule.ruleValue.toolName, aliasName)),
           ),
       );
-  let { mcpServerPolicy, ...P } = toolPermissionContext.alwaysAskRules;
-  let Q = s ? {} : P;
-  let D = s
-    ? SERVER_CLASSIFIER_DECISION_SCHEMA
-    : getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VELVET_MARBLE_2, SERVER_CLASSIFIER_DECISION_SCHEMA);
-  let L =
-    typeof D === "number" && Number.isInteger(D) && D > SERVER_CLASSIFIER_DECISION_SCHEMA
-      ? Math.min(D, MAX_RULE_CANONICAL_LENGTH)
-      : SERVER_CLASSIFIER_DECISION_SCHEMA;
-  let z = !s && isBuzzingPelicanRouted(toolPermissionContext.mode, toolPermissionContext);
-  let G = s ? [] : getAllowRules(toolPermissionContext);
+  let { mcpServerPolicy, ...askRulesWithoutPolicy } = toolPermissionContext.alwaysAskRules;
+  let baseAskRules = rulesUnread ? {} : askRulesWithoutPolicy;
+  let configuredMaxRules = rulesUnread
+    ? DEFAULT_MAX_SAVED_RULES
+    : getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VELVET_MARBLE_2, DEFAULT_MAX_SAVED_RULES);
+  let maxAllowRules =
+    typeof configuredMaxRules === "number" &&
+    Number.isInteger(configuredMaxRules) &&
+    configuredMaxRules > DEFAULT_MAX_SAVED_RULES
+      ? Math.min(configuredMaxRules, MAX_SAVED_RULES_SETTING)
+      : DEFAULT_MAX_SAVED_RULES;
+  let classifierRouted =
+    !rulesUnread && isBuzzingPelicanRouted(toolPermissionContext.mode, toolPermissionContext);
+  let allowRules = rulesUnread ? [] : getAllowRules(toolPermissionContext);
   let pluginRegistry = getPluginRegistry();
-  let V;
+  let exactMcpToolNames;
   if (
-    n !== undefined &&
-    L > SERVER_CLASSIFIER_DECISION_SCHEMA &&
-    !z &&
+    toolUseContext !== undefined &&
+    maxAllowRules > DEFAULT_MAX_SAVED_RULES &&
+    !classifierRouted &&
     pluginRegistry.hooksRespawns.size === 0 &&
     pluginRegistry.hookRegistrationInFlight === undefined &&
     pluginRegistry.hooksUnknownCause === undefined
   )
     try {
       let loadedModulesForSite = getLoadedModulesForSite("tool.check");
-      let [ht, ut] = SS(
-        G.filter(
+      let [wholeToolRules, patternRules] = partitionAlias(
+        allowRules.filter(
           ({ ruleValue }) =>
             ruleValue.ruleContent === undefined && ruleValue.toolName.startsWith(MCP_TOOL_PREFIX),
         ),
-        (it) => isPatternRuleName(it.ruleValue.toolName),
+        (rule) => isPatternRuleName(rule.ruleValue.toolName),
       );
-      let kt = Map.groupBy(ut, (it) => it.ruleValue.toolName);
+      let rulesByToolName = Map.groupBy(patternRules, (rule) => rule.ruleValue.toolName);
       let askRules = getAskRules(toolPermissionContext);
       let denyRuleIndex = buildDenyRuleIndex(toolPermissionContext, [
         ...askRules,
@@ -236,44 +245,47 @@ async function buildAutoModeContext(toolPermissionContext, n, r = false) {
           },
         })),
       ]);
-      V = new Set(
-        n.options.tools
+      exactMcpToolNames = new Set(
+        toolUseContext.options.tools
           .filter((tool) => {
-            let { name: At, mcpInfo } = tool;
-            let we = kt.get(At);
+            let { name: toolName, mcpInfo } = tool;
+            let toolRules = rulesByToolName.get(toolName);
             if (
-              we === undefined ||
+              toolRules === undefined ||
               mcpInfo === undefined ||
-              At !== getToolNameForPermissionCheck(tool) ||
-              wireName(At) !== At
+              toolName !== getToolNameForPermissionCheck(tool) ||
+              wireName(toolName) !== toolName
             )
               return false;
             return (
               mcpInfo.serverType !== undefined &&
               !isIdeOrSdkType(mcpInfo.serverType) &&
               mcpInfo.serverName !== REMOTE_DEVICES &&
-              !isChromeToolName(At) &&
-              !isClassifiableBrowserCall(At) &&
+              !isChromeToolName(toolName) &&
+              !isClassifiableBrowserCall(toolName) &&
               tool.classifierOnly === undefined &&
               tool.ignoresWholeToolAllowRule === undefined &&
-              !hadRefusedMcpSkip(At) &&
+              !hadRefusedMcpSkip(toolName) &&
               !hasModuleHookingSite(
                 "tool.check",
                 {
                   ...matcherTestTarget(tool),
-                  agentId: n.agentId,
+                  agentId: toolUseContext.agentId,
                 },
                 loadedModulesForSite,
               ) &&
               !isToolDeniedByIndex(toolPermissionContext, denyRuleIndex, tool) &&
-              [...we.toReversed(), ...ht.filter((Le) => toolMatchesWholeToolRule(tool, Le))].every(
-                (Le) =>
+              [
+                ...toolRules.toReversed(),
+                ...wholeToolRules.filter((rule) => toolMatchesWholeToolRule(tool, rule)),
+              ].every(
+                (rule) =>
                   getMcpRuleClassifierRoute(
-                    Le,
+                    rule,
                     tool,
                     {},
                     isAutoAllowedInMode(tool, toolPermissionContext),
-                    n,
+                    toolUseContext,
                     () => getAutoModeClassifierRole(toolPermissionContext.mode),
                   ) === undefined,
               )
@@ -289,17 +301,17 @@ async function buildAutoModeContext(toolPermissionContext, n, r = false) {
         ),
       );
     }
-  let filtered = G.filter(
+  let filtered = allowRules.filter(
     ({ ruleValue }) =>
       toInternalToolName(ruleValue.toolName) === ruleValue.toolName &&
-      !(z && mcpInfoFromString(ruleValue.toolName) !== null) &&
+      !(classifierRouted && mcpInfoFromString(ruleValue.toolName) !== null) &&
       !isDeepDuskDeviceTool(ruleValue.toolName, toolPermissionContext.mode, toolPermissionContext) &&
       !isRemoteBrowserUnderModeFloor(ruleValue.toolName) &&
       !(
-        V !== undefined &&
+        exactMcpToolNames !== undefined &&
         ruleValue.ruleContent === undefined &&
         ruleValue.toolName.startsWith(MCP_TOOL_PREFIX) &&
-        !V.has(ruleValue.toolName)
+        !exactMcpToolNames.has(ruleValue.toolName)
       ) &&
       !(
         ruleValue.ruleContent === undefined &&
@@ -307,91 +319,107 @@ async function buildAutoModeContext(toolPermissionContext, n, r = false) {
         isWebToolClassifierRouted_2(ruleValue.toolName, toolPermissionContext.mode, toolPermissionContext)
       ),
   );
-  let ie = Ji(filtered, (oe) => `${oe.source} ${formatPermissionRule(oe.ruleValue)}`);
-  let Z = L > SERVER_CLASSIFIER_DECISION_SCHEMA ? ie : filtered;
+  let distinctRules = uniqByExport(
+    filtered,
+    (rule) => `${rule.source} ${formatPermissionRule(rule.ruleValue)}`,
+  );
+  let classifierAllowRules = maxAllowRules > DEFAULT_MAX_SAVED_RULES ? distinctRules : filtered;
   let autoModeConfig = getAutoModeConfig();
   let allow = autoModeConfig?.allow ?? [];
-  let se = replacesDefaults(allow) ? scheduledTaskRule() : undefined;
-  let allow_2 = se === undefined || allow.includes(se) ? allow : [...allow, se];
+  let scheduledTaskRule_2 = replacesDefaults(allow) ? scheduledTaskRule() : undefined;
+  let allow_2 =
+    scheduledTaskRule_2 === undefined || allow.includes(scheduledTaskRule_2)
+      ? allow
+      : [...allow, scheduledTaskRule_2];
   let sessionId = getSessionId();
-  let nt = claudeInChromeSession().lastExecutedTabUrlByScope.get(sessionKeyOrHostKey());
-  let bt = nt === undefined ? [] : [[sessionId, nt]];
-  let dt = bt;
-  let rt = bt.length === 0 ? undefined : await listTabsWithTimeout();
-  let le = rt !== undefined && rt.length > MAX_TAB_NAME_CHARS;
-  let Pe =
-    dt.length === 0
+  let lastTabUrl = claudeInChromeSession().lastExecutedTabUrlByScope.get(sessionKeyOrHostKey());
+  let tabBaselineEntries = lastTabUrl === undefined ? [] : [[sessionId, lastTabUrl]];
+  let chromeTabBaselines = tabBaselineEntries;
+  let openTabTitles = tabBaselineEntries.length === 0 ? undefined : await listTabsWithTimeout();
+  let tabsTruncated = openTabTitles !== undefined && openTabTitles.length > MAX_TAB_NAME_CHARS;
+  let chromeNavigation =
+    chromeTabBaselines.length === 0
       ? undefined
       : {
           enabled: toolPermissionContext.chromeNavigationClassifierEnabled === true,
           baselines: Object.fromEntries(
-            dt.map(([oe, ht]) => [oe.slice(0, MAX_TAB_COUNT), formatOriginForClassifier(ht)]),
+            chromeTabBaselines.map(([scopeKey, tabUrl]) => [
+              scopeKey.slice(0, MAX_TAB_COUNT),
+              formatOriginForClassifier(tabUrl),
+            ]),
           ),
-          ...(rt !== undefined && {
+          ...(openTabTitles !== undefined && {
             tabs: {
               [sessionId.slice(0, MAX_TAB_COUNT)]: Object.fromEntries(
-                rt
+                openTabTitles
                   .slice(0, MAX_TAB_NAME_CHARS)
-                  .map((oe) => [String(oe.tabId), formatOriginForClassifier(oe.url)]),
+                  .map((tab) => [String(tab.tabId), formatOriginForClassifier(tab.url)]),
               ),
             },
           }),
         };
-  let Ke = (oe) => ({
-    path: h(oe),
-    resolved: s ? [] : y ? [h(oe)] : getResolvedWorkingDirPaths(oe).map(h),
+  let toTrustedDir = (dirPath) => ({
+    path: toPosix(dirPath),
+    resolved: rulesUnread
+      ? []
+      : diskless
+        ? [toPosix(dirPath)]
+        : getResolvedWorkingDirPaths(dirPath).map(toPosix),
   });
   let cwdOrNull = getCwdOrNull();
   let originalCwdOrNull = getOriginalCwdOrNull();
-  let It =
+  let cwdInfo =
     cwdOrNull === null || originalCwdOrNull === null
       ? null
       : {
           live: cwdOrNull,
           original: originalCwdOrNull,
         };
-  let go = {
+  let classifierContext = {
     permission_mode: toolPermissionContext.mode,
     platform: getPlatform(),
-    ...(It !== null && {
-      live_cwd: h(It.live),
+    ...(cwdInfo !== null && {
+      live_cwd: toPosix(cwdInfo.live),
     }),
-    ...(!y && {
-      home_dir: h(homedir().normalize("NFC")),
+    ...(!diskless && {
+      home_dir: toPosix(homedir().normalize("NFC")),
     }),
     rule_roots:
-      It === null || s
+      cwdInfo === null || rulesUnread
         ? {}
         : Object.fromEntries(
-            PERMISSION_RULE_SOURCES.filter((oe) => !S(oe)).map((oe) => [oe, h(rootPathForSource(oe))]),
+            PERMISSION_RULE_SOURCES.filter((source) => !isVolatileRuleSource(source)).map((source) => [
+              source,
+              toPosix(rootPathForSource(source)),
+            ]),
           ),
     trusted_directories: {
-      ...(It !== null && {
-        primary: Ke(It.original),
+      ...(cwdInfo !== null && {
+        primary: toTrustedDir(cwdInfo.original),
       }),
-      additional: s
+      additional: rulesUnread
         ? []
-        : Array.from(toolPermissionContext.additionalWorkingDirectories.values(), (oe) => ({
-            ...Ke(oe.path),
-            source: oe.source,
+        : Array.from(toolPermissionContext.additionalWorkingDirectories.values(), (directory) => ({
+            ...toTrustedDir(directory.path),
+            source: directory.source,
           })),
-      network: s
+      network: rulesUnread
         ? []
         : uniq(
-            Array.from(toolPermissionContext.trustedNetworkDirectories?.entries() ?? [], ([oe, ht]) => [
-              oe,
-              ...ht,
-            ])
+            Array.from(
+              toolPermissionContext.trustedNetworkDirectories?.entries() ?? [],
+              ([host, networkEntries]) => [host, ...networkEntries],
+            )
               .flat()
-              .map(h),
+              .map(toPosix),
           ),
       block_reads_outside_working_directories:
         toolPermissionContext.blockReadsOutsideWorkingDirectories === true,
     },
     rules: {
-      allow: M("allow", Z),
-      deny: M("deny", T(toolPermissionContext.alwaysDenyRules, "deny")),
-      ask: M("ask", T(Q, "ask")),
+      allow: mapRules("allow", classifierAllowRules),
+      deny: mapRules("deny", collectRulesBySource(toolPermissionContext.alwaysDenyRules, "deny")),
+      ask: mapRules("ask", collectRulesBySource(baseAskRules, "ask")),
     },
     case_insensitive_paths: getPlatform() === "windows",
     auto_mode: {
@@ -401,52 +429,52 @@ async function buildAutoModeContext(toolPermissionContext, n, r = false) {
       environment: autoModeConfig?.environment ?? [],
     },
     artifact_consent_holdback: !recordArtifactConsentFlag(),
-    ...(Pe !== undefined && {
-      chrome_navigation: Pe,
+    ...(chromeNavigation !== undefined && {
+      chrome_navigation: chromeNavigation,
     }),
-    ...(le && {
+    ...(tabsTruncated && {
       truncated: true,
     }),
     restricted: toolPermissionContext.restricted === true,
     is_remote_mode: toolPermissionContext.isRemoteMode === true,
-    ...(V !== undefined && {
+    ...(exactMcpToolNames !== undefined && {
       mcp_allow_rules_exact: true,
     }),
     classify_all_shell: classifyAllShellEnabled(),
     user_identity: await withTimeoutDefault(getClassifierUserTag(), MAX_GIT_FACTS_BYTES, null),
   };
-  return clampClassifierVerdict(go, L, (oe) => {
+  return clampClassifierVerdict(classifierContext, maxAllowRules, (capReport) => {
     let sessionId = getSessionId();
-    let ut = s ? "rulesUnread" : "whole";
-    if (gitEnvCache[ut] === sessionId) return;
-    gitEnvCache[ut] = sessionId;
+    let rulesReadState = rulesUnread ? "rulesUnread" : "whole";
+    if (gitEnvCache[rulesReadState] === sessionId) return;
+    gitEnvCache[rulesReadState] = sessionId;
     logEvent("tengu_auto_mode_context_incomplete", {
-      rules_left_out: s,
-      bytes: oe.bytes,
-      bytes_before_shedding: oe.bytesBeforeShedding,
-      over_cap_before_shedding: oe.overCapBeforeShedding,
-      over_cap: oe.overCap,
-      allow_rules_shed: oe.allowRulesShed,
-      resolved_spellings_shed: oe.resolvedSpellingsShed,
-      path_clamped: oe.pathClamped,
-      identity_clamped: oe.identityClamped,
-      additional_directories: oe.additionalDirectories,
-      network_roots: oe.networkRoots,
-      chrome_tabs_cut: le,
-      truncated: oe.truncated,
-      dropped_allow: oe.dropped.allow ?? 0,
-      dropped_deny: oe.dropped.deny ?? 0,
-      dropped_ask: oe.dropped.ask ?? 0,
+      rules_left_out: rulesUnread,
+      bytes: capReport.bytes,
+      bytes_before_shedding: capReport.bytesBeforeShedding,
+      over_cap_before_shedding: capReport.overCapBeforeShedding,
+      over_cap: capReport.overCap,
+      allow_rules_shed: capReport.allowRulesShed,
+      resolved_spellings_shed: capReport.resolvedSpellingsShed,
+      path_clamped: capReport.pathClamped,
+      identity_clamped: capReport.identityClamped,
+      additional_directories: capReport.additionalDirectories,
+      network_roots: capReport.networkRoots,
+      chrome_tabs_cut: tabsTruncated,
+      truncated: capReport.truncated,
+      dropped_allow: capReport.dropped.allow ?? 0,
+      dropped_deny: capReport.dropped.deny ?? 0,
+      dropped_ask: capReport.dropped.ask ?? 0,
       allow_rules: filtered.length,
-      allow_rules_repeated: filtered.length - ie.length,
-      allow_rules_distinct: uniq(filtered.map((kt) => formatPermissionRule(kt.ruleValue))).length,
-      allow_rules_cap: L,
-      deny_rules: oe.denyRules,
-      ask_rules: oe.askRules,
+      allow_rules_repeated: filtered.length - distinctRules.length,
+      allow_rules_distinct: uniq(filtered.map((rule) => formatPermissionRule(rule.ruleValue))).length,
+      allow_rules_cap: maxAllowRules,
+      deny_rules: capReport.denyRules,
+      ask_rules: capReport.askRules,
       auto_mode_allow: allow.length,
-      auto_mode_soft_deny: oe.autoMode.softDeny,
-      auto_mode_hard_deny: oe.autoMode.hardDeny,
-      auto_mode_environment: oe.autoMode.environment,
+      auto_mode_soft_deny: capReport.autoMode.softDeny,
+      auto_mode_hard_deny: capReport.autoMode.hardDeny,
+      auto_mode_environment: capReport.autoMode.environment,
     });
   });
 }
@@ -454,35 +482,36 @@ async function buildAutoModeContext(toolPermissionContext, n, r = false) {
 /**
  * 判断本回合是否请求 auto mode（beta 被拒、未开启等原因上报）。
  */
-function checkAutoModeRequested(toolUseContext, n) {
+function checkAutoModeRequested(toolUseContext, options) {
   try {
     let toolPermissionContext = getToolPermissionContext(toolUseContext);
     let { role, offReason } = checkServerClassifierEligibility(toolPermissionContext.mode);
-    let y = role !== "off";
-    let S = isBetaRejected(n, BETA_DANGEROUS_TOOL_USE);
-    if ((S || !y) && offReason !== "not_auto_mode") {
-      let w = S ? "beta_rejected" : offReason;
-      if (w !== undefined && w !== "refused_latch")
+    let roleEnabled = role !== "off";
+    let betaRejected = isBetaRejected(options, BETA_DANGEROUS_TOOL_USE);
+    if ((betaRejected || !roleEnabled) && offReason !== "not_auto_mode") {
+      let offReason_2 = betaRejected ? "beta_rejected" : offReason;
+      if (offReason_2 !== undefined && offReason_2 !== "refused_latch")
         logServerCheckDiagnostic({
           state: "not_requested",
-          reason: w,
+          reason: offReason_2,
         });
     }
-    if (S) return;
-    let M = y
+    if (betaRejected) return;
+    let judgeOnlyTools = roleEnabled
       ? undefined
       : new Set(
           toolUseContext.options.tools
             .filter((tool) => isMcpReviewedOutsideAuto(tool, toolPermissionContext))
             .map((tool) => tool.name),
         );
-    if (M !== undefined && (M.size === 0 || M.size > TAB_WAIT_MS)) return;
+    if (judgeOnlyTools !== undefined && (judgeOnlyTools.size === 0 || judgeOnlyTools.size > TAB_WAIT_MS))
+      return;
     let cwdOrNull = getCwdOrNull();
-    let T = {};
+    let probeTrace = {};
     return {
-      probeTrace: T,
-      ...(M !== undefined && {
-        judgeOnlyTools: M,
+      probeTrace,
+      ...(judgeOnlyTools !== undefined && {
+        judgeOnlyTools,
         logged: true,
       }),
       tools: toolUseContext.options.tools,
@@ -493,14 +522,14 @@ function checkAutoModeRequested(toolUseContext, n) {
       context: buildAutoModeContext(
         toolPermissionContext,
         toolUseContext,
-        M !== undefined && !env.CLAUDE_CODE_AUTO_MODE_FULL_CONTEXT,
+        judgeOnlyTools !== undefined && !env.CLAUDE_CODE_AUTO_MODE_FULL_CONTEXT,
       ).catch((error) => {
         logError(error);
         return;
       }),
       git:
-        M === undefined
-          ? collectGitState(cwdOrNull, toolUseContext.abortController.signal, T)
+        judgeOnlyTools === undefined
+          ? collectGitState(cwdOrNull, toolUseContext.abortController.signal, probeTrace)
           : Promise.resolve({
               cwd: cwdOrNull,
               root: null,
@@ -545,10 +574,10 @@ function isClassifierRoleOn(toolUseContext) {
 /**
  * 刷新 auto mode 的 git 状态
  */
-async function refreshGitStateSafe(autoModeContextPromise, n = timerUtils) {
-  if (autoModeContextPromise === undefined) return;
+async function refreshGitStateSafe(autoModeContext, timerUtils = timerUtils_2) {
+  if (autoModeContext === undefined) return;
   try {
-    return await refreshAutoModeGitState(autoModeContextPromise, n);
+    return await refreshAutoModeGitState(autoModeContext, timerUtils);
   } catch (error) {
     logError(error);
     return;
@@ -558,19 +587,19 @@ async function refreshGitStateSafe(autoModeContextPromise, n = timerUtils) {
 /**
  * 刷新 auto mode 上下文的 git 状态（超出上限时上报 tengu_auto_mode_context_over_ceiling）。
  */
-async function refreshAutoModeGitState(e, n) {
-  let context = await e.context;
+async function refreshAutoModeGitState(autoModeContext, timerUtils) {
+  let context = await autoModeContext.context;
   if (context === undefined) return;
-  let s = jsonByteLength(context);
-  if (s > MAX_CLASSIFIER_PAYLOAD_BYTES && e.overCeilingLogged === undefined) {
-    e.overCeilingLogged = true;
+  let payloadBytes = jsonByteLength(context);
+  if (payloadBytes > MAX_CLASSIFIER_PAYLOAD_BYTES && autoModeContext.overCeilingLogged === undefined) {
+    autoModeContext.overCeilingLogged = true;
     logEvent("tengu_auto_mode_context_over_ceiling", {
-      bytes: s,
+      bytes: payloadBytes,
     });
   }
   let now = Date.now();
-  let y = await withTimeoutDefault_2(e.git, n, TENGU_VELVET_MARBLE, {
-    cwd: e.cwd,
+  let gitState = await withTimeoutDefault_2(autoModeContext.git, timerUtils, TENGU_VELVET_MARBLE, {
+    cwd: autoModeContext.cwd,
     root: null,
     branch: null,
     default_branch: null,
@@ -578,51 +607,55 @@ async function refreshAutoModeGitState(e, n) {
     visibility: null,
     error: "pending",
   });
-  let S = clampGitStateForClassifier({
-    ...y,
-    cwd: y.cwd === null ? null : toPosixPath(y.cwd),
-    root: y.root === null ? null : toPosixPath(y.root),
+  let clampedGit = clampGitStateForClassifier({
+    ...gitState,
+    cwd: gitState.cwd === null ? null : toPosixPath(gitState.cwd),
+    root: gitState.root === null ? null : toPosixPath(gitState.root),
   });
-  if (e.logged === undefined) {
-    e.logged = true;
+  if (autoModeContext.logged === undefined) {
+    autoModeContext.logged = true;
     let firstInProcess = !visibilityQueryState.logged;
     visibilityQueryState.logged = true;
     logEvent("tengu_auto_mode_git_state_probe", {
-      duration_ms: now - e.startedAt,
+      duration_ms: now - autoModeContext.startedAt,
       wait_ms: Date.now() - now,
-      outcome: fromEnum(S.error ?? (S.status === null ? "no_status" : S.status.clean ? "clean" : "dirty")),
-      truncated: S.truncated === true || S.status?.truncated === true,
+      outcome: fromEnum(
+        clampedGit.error ??
+          (clampedGit.status === null ? "no_status" : clampedGit.status.clean ? "clean" : "dirty"),
+      ),
+      truncated: clampedGit.truncated === true || clampedGit.status?.truncated === true,
       first_in_process: firstInProcess,
-      repo_visibility_lookup: fromEnum(visibilityLookupKind(e, S)),
-      ...(e.cwd === null && {
+      repo_visibility_lookup: fromEnum(visibilityLookupKind(autoModeContext, clampedGit)),
+      ...(autoModeContext.cwd === null && {
         no_directory: true,
       }),
     });
   }
-  let M;
+  let artifactsContext;
   try {
-    let { artifactsClassifierContext } = await import("./chunk-3jhw7vrg.js");
-    M = artifactsClassifierContext({
-      tools: e.tools,
+    let { artifactsClassifierContext } =
+      await import("../services/artifacts/artifactsClassifierContext.lazy.js");
+    artifactsContext = artifactsClassifierContext({
+      tools: autoModeContext.tools,
     });
   } catch (error) {
     logError(error);
-    M = undefined;
+    artifactsContext = undefined;
   }
   return {
     context,
-    git: S,
-    ...(M !== undefined && {
-      artifacts: M,
+    git: clampedGit,
+    ...(artifactsContext !== undefined && {
+      artifacts: artifactsContext,
     }),
-    ...(e.judgeOnlyTools !== undefined && {
-      judgeOnlyTools: e.judgeOnlyTools,
+    ...(autoModeContext.judgeOnlyTools !== undefined && {
+      judgeOnlyTools: autoModeContext.judgeOnlyTools,
     }),
-    ...((await isComputerAttachedSafe(e)) &&
+    ...((await isComputerAttachedSafe(autoModeContext)) &&
       isValiantSphinxOn() && {
         computerAttached: true,
       }),
-    ...(e.structuredOutputIsHandback === true && {
+    ...(autoModeContext.structuredOutputIsHandback === true && {
       structuredOutputIsHandback: true,
     }),
   };
@@ -631,10 +664,10 @@ async function refreshAutoModeGitState(e, n) {
 /**
  * 调用 computerAttached（失败时视为已连接）。
  */
-async function isComputerAttachedSafe(e) {
-  if (e.computerAttached === undefined) return true;
+async function isComputerAttachedSafe(host) {
+  if (host.computerAttached === undefined) return true;
   try {
-    return (await e.computerAttached()) !== false;
+    return (await host.computerAttached()) !== false;
   } catch (error) {
     logError(toError(error));
     return true;
@@ -647,7 +680,7 @@ async function isComputerAttachedSafe(e) {
 async function checkComputerAttached(toolState) {
   if (toolState === undefined) return true;
   try {
-    let { isComputerAttached } = await import("./chunk-xssqvf8d.js");
+    let { isComputerAttached } = await import("../services/remoteTools/isComputerAttached.lazy.js");
     return isComputerAttached(toolState);
   } catch (error) {
     logError(toError(error));
@@ -658,20 +691,23 @@ async function checkComputerAttached(toolState) {
 /**
  * 可见性查询缓存状态
  */
-var visibilityQueryState = identity(
-  {
-    logged: false,
-  },
-  (e) => {
-    e.logged = false;
-  },
-);
+var visibilityQueryState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ha3km179.js:127893", () => {
+  visibilityQueryState = identity(
+    {
+      logged: false,
+    },
+    (trace) => {
+      trace.logged = false;
+    },
+  );
+});
 //@ chunk-ha3km179.js:127935-128166 placement
 /**
  * 仓库可见性查询的来源（缓存命中、加入进行中、自行查询、未到达）。
  */
-function visibilityLookupKind(e, n) {
-  let visibility = e.probeTrace.visibility;
+function visibilityLookupKind(autoModeContext, gitState) {
+  let visibility = autoModeContext.probeTrace.visibility;
   switch (visibility?.lookup) {
     case "hit":
       return "cache_hit";
@@ -680,16 +716,16 @@ function visibilityLookupKind(e, n) {
     case "fetched":
       return "own_lookup";
     default:
-      return visibility !== undefined && n.error === "pending" ? "not_reached" : "none";
+      return visibility !== undefined && gitState.error === "pending" ? "not_reached" : "none";
   }
 }
 //@ chunk-ha3km179.js:128166-128243 placement
 /**
  * setTimeout 包装
  */
-var timerUtils = {
-  setTimeout: (e, n) => {
-    let timer = setTimeout(e, n);
+var timerUtils_2 = {
+  setTimeout: (callback, delayMs) => {
+    let timer = setTimeout(callback, delayMs);
     return () => clearTimeout(timer);
   },
 };
@@ -697,28 +733,28 @@ var timerUtils = {
 /**
  * 等待 Promise，超时或失败时返回默认值。
  */
-function withTimeoutDefault_2(e, n, r, s) {
+function withTimeoutDefault_2(promise, timers, timeoutMs, defaultValue) {
   return new Promise((resolve) => {
-    let y = false;
-    let S = n.setTimeout(() => {
-      if (!y) {
-        y = true;
-        resolve(s);
+    let settled = false;
+    let timeoutHandle = timers.setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        resolve(defaultValue);
       }
-    }, r);
-    e.then(
-      (M) => {
-        if (!y) {
-          y = true;
-          S();
-          resolve(M);
+    }, timeoutMs);
+    promise.then(
+      (value) => {
+        if (!settled) {
+          settled = true;
+          timeoutHandle();
+          resolve(value);
         }
       },
       () => {
-        if (!y) {
-          y = true;
-          S();
-          resolve(s);
+        if (!settled) {
+          settled = true;
+          timeoutHandle();
+          resolve(defaultValue);
         }
       },
     );
@@ -729,22 +765,25 @@ function withTimeoutDefault_2(e, n, r, s) {
  * 生成 auto mode 回合附件（辅助查询与恢复中不生成）。
  */
 async function autoModeTurnAttachments(
-  messagesForQuery,
+  messages,
   toolUseContext,
   { querySource, resumeActive, model, stamp },
 ) {
   if (resumeActive || classifyQuerySource(querySource) === "auxiliary") return [];
   try {
-    let last = messagesForQuery.findLast(
-      (R) =>
-        R.type === "user" && !R.isCompactSummary && R.taskDelivery === undefined && !isToolResultMessage(R),
+    let last = messages.findLast(
+      (message) =>
+        message.type === "user" &&
+        !message.isCompactSummary &&
+        message.taskDelivery === undefined &&
+        !isToolResultMessage(message),
     );
     if (last?.type === "user" && last.handedOff) {
       let policyAttributionOverrides = getPolicyAttributionOverrides();
       if (!policyAttributionOverrides.commit && !policyAttributionOverrides.pr) return [];
     }
-    let M = await remoteSessionChangeAttachments(messagesForQuery, toolUseContext.options.tools, model);
-    return M ? [createAttachmentMessage_2(M, stamp)] : [];
+    let attachment = await remoteSessionChangeAttachments(messages, toolUseContext.options.tools, model);
+    return attachment ? [createAttachmentMessage_2(attachment, stamp)] : [];
   } catch (error) {
     logError(error);
     return [];
@@ -754,36 +793,36 @@ async function autoModeTurnAttachments(
 /**
  * 远程会话/桥接变更时生成提示附件。
  */
-async function remoteSessionChangeAttachments(e, tools, model) {
-  let s = lastRemoteSessionAttachment(e);
+async function remoteSessionChangeAttachments(messages, unusedArg, model) {
+  let lastChange = lastRemoteSessionAttachment(messages);
   let url = getSessionAttribution()?.url ?? null;
   let sdkHostedBridgeHandle = getSdkHostedBridgeHandle();
-  let S =
+  let sendUserFileHint =
     (getRemoteControlSessionCompatId() !== undefined ||
       (sdkHostedBridgeHandle !== null && !sdkHostedBridgeHandle.outboundOnly)) &&
-    tools.some((Q) => toolMatchesName(Q, SEND_USER_FILE_TOOL_NAME));
-  let M = isAttributionAnnouncementEnabled();
-  let model_2 = M ? model : undefined;
-  if (s === undefined) {
-    let Q = url !== null || S;
+    unusedArg.some((tool) => toolMatchesName(tool, SEND_USER_FILE_TOOL_NAME));
+  let attributionEnabled = isAttributionAnnouncementEnabled();
+  let model_2 = attributionEnabled ? model : undefined;
+  if (lastChange === undefined) {
+    let hasAttribution = url !== null || sendUserFileHint;
     if (
-      !Q &&
+      !hasAttribution &&
       !(
-        M &&
+        attributionEnabled &&
         shouldIncludeGitInstructions() &&
-        (tools.some((G) => toolMatchesName(G, BASH_TOOL_NAME)) || alwaysFalseStream(tools))
+        (unusedArg.some((tool) => toolMatchesName(tool, BASH_TOOL_NAME)) || alwaysFalseStream(unusedArg))
       )
     )
       return;
     let { commit, pr } = await repoCommitAndPr(model_2);
-    if (!Q && !commit && !pr) return;
+    if (!hasAttribution && !commit && !pr) return;
     let policyAttributionOverrides = getPolicyAttributionOverrides();
     return {
       type: "remote_session_change",
       url,
       commit,
       pr,
-      sendUserFileHint: S,
+      sendUserFileHint,
       managedCommit: policyAttributionOverrides.commit,
       managedPr: policyAttributionOverrides.pr,
     };
@@ -791,12 +830,12 @@ async function remoteSessionChangeAttachments(e, tools, model) {
   let { commit, pr } = await repoCommitAndPr(model_2);
   let policyAttributionOverrides = getPolicyAttributionOverrides();
   if (
-    url === s.url &&
-    S === s.sendUserFileHint &&
-    commit === s.commit &&
-    pr === s.pr &&
-    policyAttributionOverrides.commit === (s.managedCommit ?? false) &&
-    policyAttributionOverrides.pr === (s.managedPr ?? false)
+    url === lastChange.url &&
+    sendUserFileHint === lastChange.sendUserFileHint &&
+    commit === lastChange.commit &&
+    pr === lastChange.pr &&
+    policyAttributionOverrides.commit === (lastChange.managedCommit ?? false) &&
+    policyAttributionOverrides.pr === (lastChange.managedPr ?? false)
   )
     return;
   return {
@@ -804,7 +843,7 @@ async function remoteSessionChangeAttachments(e, tools, model) {
     url,
     commit,
     pr,
-    sendUserFileHint: S,
+    sendUserFileHint,
     managedCommit: policyAttributionOverrides.commit,
     managedPr: policyAttributionOverrides.pr,
   };
@@ -833,7 +872,7 @@ function snapshotMessagesAndStart(messages) {
   try {
     return {
       recorded: latestPromptSnapshot(messages),
-      uuids: messages.map((n) => n.uuid),
+      uuids: messages.map((message) => message.uuid),
     };
   } catch (error) {
     logError(error);
@@ -844,12 +883,12 @@ function snapshotMessagesAndStart(messages) {
 /**
  * 更新查询状态的消息与回合起点（失败时保持原状态）。
  */
-function withTurnMessages(toolUseContext, n, isHumanTurn) {
+function withTurnMessages(toolUseContext, messages, isHumanTurn) {
   try {
     return {
       ...toolUseContext,
-      messages: n,
-      turnStartIndex: isHumanTurn(n),
+      messages,
+      turnStartIndex: isHumanTurn(messages),
       contextRoom: undefined,
     };
   } catch (error) {
@@ -861,13 +900,13 @@ function withTurnMessages(toolUseContext, n, isHumanTurn) {
 /**
  * 去掉被放回队列的消息（必要时先结算已取出的）。
  */
-function dropPutBackMessages(messageQueue, n, r) {
+function dropPutBackMessages(messageQueue, uuids, shouldSettleTaken) {
   try {
-    if (r) messageQueue.settleTaken();
-    return n.filter((s) => !messageQueue.wasPutBack(s));
+    if (shouldSettleTaken) messageQueue.settleTaken();
+    return uuids.filter((uuid) => !messageQueue.wasPutBack(uuid));
   } catch (error) {
     logError(error);
-    return n;
+    return uuids;
   }
 }
 export {

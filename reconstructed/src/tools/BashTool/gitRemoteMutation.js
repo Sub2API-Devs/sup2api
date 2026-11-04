@@ -13,179 +13,199 @@ import { parseGitRemote } from "../../utils/detectRepository.js";
 import { GITHUB_HOST } from "../../utils/git/githubUrl.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:528763-528998 placement
 /**
  * 远程变更检测常量：扫描长度上限、参数捕获、gh 变更类子命令正则与 git 目录选项。
  */
-var MAX_REMOTE_SCAN_LENGTH = 5000;
-var ARGS_CAPTURE = String.raw`([^&|;\n]*)`;
-var GH_MUTATION_RE = new RegExp(
-  String.raw`\bgh\s+(pr\s+create|pr\s+merge|pr\s+comment|issue\s+create|issue\s+comment|release\s+create|release\s+upload|repo\s+fork)\b${ARGS_CAPTURE}`,
-  "g",
-);
-var GIT_DIR_OPTIONS = new Set(["-c", "-C", "--git-dir"]);
+var MAX_REMOTE_SCAN_LENGTH; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ARGS_CAPTURE;
+var GH_MUTATION_RE;
+var GIT_DIR_OPTIONS;
+deferInit("chunk-s61vbvea.js:528763", () => {
+  MAX_REMOTE_SCAN_LENGTH = 5000;
+  ARGS_CAPTURE = String.raw`([^&|;\n]*)`;
+  GH_MUTATION_RE = new RegExp(
+    String.raw`\bgh\s+(pr\s+create|pr\s+merge|pr\s+comment|issue\s+create|issue\s+comment|release\s+create|release\s+upload|repo\s+fork)\b${ARGS_CAPTURE}`,
+    "g",
+  );
+  GIT_DIR_OPTIONS = new Set(["-c", "-C", "--git-dir"]);
+});
 //@ chunk-s61vbvea.js:528998-529580 placement
-function isGitRemoteMutation(e) {
-  let n = [];
-  for (let r of e.split(/[&|;\n]/)) {
-    let filtered = r.trim().split(/\s+/).filter(Boolean);
-    let h = 0;
-    while (h < filtered.length) {
-      let y = filtered[h];
-      if (y !== "git" && !y.endsWith("/git")) {
-        h++;
+function isGitRemoteMutation(command) {
+  let mutations = [];
+  for (let segment of command.split(/[&|;\n]/)) {
+    let filtered = segment.trim().split(/\s+/).filter(Boolean);
+    let idx = 0;
+    while (idx < filtered.length) {
+      let word = filtered[idx];
+      if (word !== "git" && !word.endsWith("/git")) {
+        idx++;
         continue;
       }
-      let S = [];
-      let w = h + 1;
-      for (; w < filtered.length; w++) {
-        let x = filtered[w];
-        if (!x.startsWith("-")) break;
-        S.push(x);
-        if (GIT_DIR_OPTIONS.has(x) && w + 1 < filtered.length) S.push(filtered[++w]);
+      let optionSpan = [];
+      let scanIdx = idx + 1;
+      for (; scanIdx < filtered.length; scanIdx++) {
+        let word = filtered[scanIdx];
+        if (!word.startsWith("-")) break;
+        optionSpan.push(word);
+        if (GIT_DIR_OPTIONS.has(word) && scanIdx + 1 < filtered.length) optionSpan.push(filtered[++scanIdx]);
       }
-      let R = filtered[w];
-      if (R === "push") {
-        n.push({
+      let subcommand = filtered[scanIdx];
+      if (subcommand === "push") {
+        mutations.push({
           kind: "push",
-          optsSpan: S.join(" "),
-          rest: filtered.slice(w + 1).join(" "),
+          optsSpan: optionSpan.join(" "),
+          rest: filtered.slice(scanIdx + 1).join(" "),
         });
         break;
       }
-      if (R === "remote" && (filtered[w + 1] === "set-url" || filtered[w + 1] === "add")) {
-        n.push({
+      if (
+        subcommand === "remote" &&
+        (filtered[scanIdx + 1] === "set-url" || filtered[scanIdx + 1] === "add")
+      ) {
+        mutations.push({
           kind: "remote-mutate",
-          optsSpan: S.join(" "),
-          rest: filtered.slice(w + 2).join(" "),
+          optsSpan: optionSpan.join(" "),
+          rest: filtered.slice(scanIdx + 2).join(" "),
         });
         break;
       }
-      h = Math.max(w, h + 1);
+      idx = Math.max(scanIdx, idx + 1);
     }
   }
-  return n;
+  return mutations;
 }
 //@ chunk-s61vbvea.js:529580-529622 placement
 /**
  * 返回某个正则对命令文本的全部匹配。
  */
-function matchAllCaptures(e, command) {
-  return [...command.matchAll(e)];
+function matchAllCaptures(pattern, command) {
+  return [...command.matchAll(pattern)];
 }
 //@ chunk-s61vbvea.js:529622-529673 placement
 /**
  * 去掉值首尾的单引号或双引号（解析 git -C、--git-dir 参数时用）。
  */
-function stripSurroundingQuotes(e) {
-  return e.replace(/^['"]|['"]$/g, "");
+function stripSurroundingQuotes(text) {
+  return text.replace(/^['"]|['"]$/g, "");
 }
 //@ chunk-s61vbvea.js:529673-529814 placement
 /**
  * 从命令中提取 -C 或 --git-dir 指定的目录。
  */
-function getGitDirOption(e) {
-  let match = e.match(/-C\s+(\S+)/);
+function getGitDirOption(optionSpan) {
+  let match = optionSpan.match(/-C\s+(\S+)/);
   if (match?.[1]) return stripSurroundingQuotes(match[1]);
-  let match_2 = e.match(/--git-dir[=\s]+(\S+)/);
+  let match_2 = optionSpan.match(/--git-dir[=\s]+(\S+)/);
   if (match_2?.[1]) return stripSurroundingQuotes(match_2[1]);
   return;
 }
 //@ chunk-s61vbvea.js:529814-530040 placement
-function collectOperands(e, n, r) {
-  let parts = e.trim().split(/\s+/);
-  let h = [];
-  for (let j = 0; j < parts.length && h.length < r; j++) {
-    let S = parts[j];
-    if (S === "") continue;
-    if (S.startsWith("-")) {
-      if (n.has(S)) j++;
+function collectOperands(rest, valueFlags, max) {
+  let parts = rest.trim().split(/\s+/);
+  let operands = [];
+  for (let j = 0; j < parts.length && operands.length < max; j++) {
+    let word = parts[j];
+    if (word === "") continue;
+    if (word.startsWith("-")) {
+      if (valueFlags.has(word)) j++;
       continue;
     }
-    if (/^[\d*]*[<>]/.test(S)) continue;
-    h.push(stripSurroundingQuotes(S));
+    if (/^[\d*]*[<>]/.test(word)) continue;
+    operands.push(stripSurroundingQuotes(word));
   }
-  return h;
+  return operands;
 }
 //@ chunk-s61vbvea.js:530040-530077 placement
 /**
  * 取第一个位置参数（跳过带值选项）。
  */
-function firstOperandOf(e, n) {
-  return collectOperands(e, n, 1)[0];
+function firstOperandOf(rest, valueFlags) {
+  return collectOperands(rest, valueFlags, 1)[0];
 }
 //@ chunk-s61vbvea.js:530077-530151 placement
 /**
  * git push 中带值的选项集合，collectOperands 跳过它们及其值。
  */
-var GIT_PUSH_VALUE_FLAGS = new Set(["-o", "--push-option", "--receive-pack", "--exec", "--repo"]);
+var GIT_PUSH_VALUE_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:530077", () => {
+  GIT_PUSH_VALUE_FLAGS = new Set(["-o", "--push-option", "--receive-pack", "--exec", "--repo"]);
+});
 //@ chunk-s61vbvea.js:530151-530330 placement
 /**
  * 列出 gh 命令涉及的仓库（位置参数与最后一个 --repo）。
  */
-function listGhRepoTargets(e) {
-  let n = [];
-  let r = firstOperandOf(e, GIT_PUSH_VALUE_FLAGS);
-  if (r !== undefined) n.push(r);
-  let s = [...e.matchAll(/(?:^|\s)--repo[=\s]+(\S+)/g)].at(-1)?.[1];
-  if (s) {
-    let h = stripSurroundingQuotes(s);
-    if (!n.includes(h)) n.push(h);
+function listGhRepoTargets(rest) {
+  let targets = [];
+  let firstOperand = firstOperandOf(rest, GIT_PUSH_VALUE_FLAGS);
+  if (firstOperand !== undefined) targets.push(firstOperand);
+  let repoFlagValue = [...rest.matchAll(/(?:^|\s)--repo[=\s]+(\S+)/g)].at(-1)?.[1];
+  if (repoFlagValue) {
+    let repo = stripSurroundingQuotes(repoFlagValue);
+    if (!targets.includes(repo)) targets.push(repo);
   }
-  return n;
+  return targets;
 }
 //@ chunk-s61vbvea.js:530330-530358 placement
 /**
  * gh 中带值的选项集合（-t 标题、-m 正文）。
  */
-var GH_MSG_VALUE_FLAGS = new Set(["-t", "-m"]);
+var GH_MSG_VALUE_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:530330", () => {
+  GH_MSG_VALUE_FLAGS = new Set(["-t", "-m"]);
+});
 //@ chunk-s61vbvea.js:530358-530394 placement
 /**
  * 取第二个位置参数。
  */
-function secondOperandOf(e) {
-  return collectOperands(e, GH_MSG_VALUE_FLAGS, 2)[1];
+function secondOperandOf(rest) {
+  return collectOperands(rest, GH_MSG_VALUE_FLAGS, 2)[1];
 }
 //@ chunk-s61vbvea.js:530394-530502 placement
 /**
  * 取 gh 命令最后一个 --repo/-R 参数。
  */
-function getGhRepoFlag(e) {
-  let r = [...e.matchAll(/(?:^|\s)(?:--repo|-R)[=\s]+(\S+)/g)].at(-1)?.[1];
-  return r ? stripSurroundingQuotes(r) : undefined;
+function getGhRepoFlag(rest) {
+  let repoFlagValue = [...rest.matchAll(/(?:^|\s)(?:--repo|-R)[=\s]+(\S+)/g)].at(-1)?.[1];
+  return repoFlagValue ? stripSurroundingQuotes(repoFlagValue) : undefined;
 }
 //@ chunk-s61vbvea.js:530502-530654 placement
 /**
  * 从 gh pr 的 --head owner:branch 参数中取 owner。
  */
-function getHeadOwner(e) {
-  let r = [...e.matchAll(/(?:^|\s)--head[=\s]+(\S+)/g)].at(-1)?.[1];
-  let s = r ? stripSurroundingQuotes(r) : undefined;
-  if (!s || !s.includes(":")) return;
-  return firstLineOf(s, ":") || undefined;
+function getHeadOwner(rest) {
+  let headFlagValue = [...rest.matchAll(/(?:^|\s)--head[=\s]+(\S+)/g)].at(-1)?.[1];
+  let headSpec = headFlagValue ? stripSurroundingQuotes(headFlagValue) : undefined;
+  if (!headSpec || !headSpec.includes(":")) return;
+  return firstLineOf(headSpec, ":") || undefined;
 }
 //@ chunk-s61vbvea.js:530654-530733 placement
 /**
  * gh 仓库命令里带值的选项（--org、--fork-name、--remote-name）。
  */
-var GH_FORK_VALUE_FLAGS = new Set(["--org", "--fork-name", "--remote-name"]);
-var REPO_PART_RE = /^[A-Za-z0-9._-]+$/;
+var GH_FORK_VALUE_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var REPO_PART_RE;
+deferInit("chunk-s61vbvea.js:530654", () => {
+  GH_FORK_VALUE_FLAGS = new Set(["--org", "--fork-name", "--remote-name"]);
+  REPO_PART_RE = /^[A-Za-z0-9._-]+$/;
+});
 //@ chunk-s61vbvea.js:530733-530805 placement
 /**
  * 判断某段字符是否可作为仓库 owner/name。
  */
-function isRepoPart(e) {
-  return REPO_PART_RE.test(e) && !e.startsWith("-") && e !== "." && e !== "..";
+function isRepoPart(part) {
+  return REPO_PART_RE.test(part) && !part.startsWith("-") && part !== "." && part !== "..";
 }
 //@ chunk-s61vbvea.js:530805-531158 placement
 /**
  * 解析仓库说明为 {host, owner, name}：URL/SSH 形式交给远程解析，owner/name 视为 GitHub，host/owner/name 也接受；本地路径返回 null。
  */
-function parseRepoSpec(e) {
-  if (e.includes("://") || e.startsWith("git@")) return parseGitRemote(e);
-  if (e.startsWith("/") || e.startsWith(".")) return null;
-  let parts = e.replace(/\.git$/, "").split("/");
+function parseRepoSpec(spec) {
+  if (spec.includes("://") || spec.startsWith("git@")) return parseGitRemote(spec);
+  if (spec.startsWith("/") || spec.startsWith(".")) return null;
+  let parts = spec.replace(/\.git$/, "").split("/");
   if (parts.length === 2 && isRepoPart(parts[0]) && isRepoPart(parts[1]))
     return {
       host: GITHUB_HOST,
@@ -213,22 +233,22 @@ function parseRepoSpec(e) {
 class GitRemoteStateCache {
   stateByDir = new Map();
   namedRemoteUrlsByDir = new Map();
-  seedDir(e, n) {
-    this.stateByDir.set(e, n);
+  seedDir(dir, state) {
+    this.stateByDir.set(dir, state);
   }
-  seedNamedRemoteUrl(e, n, r) {
-    let s = this.namedRemoteUrlsByDir.get(e) ?? new Map();
-    s.set(n, r);
-    this.namedRemoteUrlsByDir.set(e, s);
+  seedNamedRemoteUrl(dir, name, url) {
+    let urlsByName = this.namedRemoteUrlsByDir.get(dir) ?? new Map();
+    urlsByName.set(name, url);
+    this.namedRemoteUrlsByDir.set(dir, urlsByName);
   }
-  hasDir(e) {
-    return this.stateByDir.has(e);
+  hasDir(dir) {
+    return this.stateByDir.has(dir);
   }
-  dirState(e) {
-    return this.stateByDir.get(e);
+  dirState(dir) {
+    return this.stateByDir.get(dir);
   }
-  namedRemoteUrl(e, n) {
-    return this.namedRemoteUrlsByDir.get(e)?.get(n);
+  namedRemoteUrl(dir, name) {
+    return this.namedRemoteUrlsByDir.get(dir)?.get(name);
   }
   clear() {
     this.stateByDir.clear();
@@ -239,7 +259,10 @@ class GitRemoteStateCache {
 /**
  * 按宿主隔离的 git 远程状态缓存。
  */
-var gitRemoteStateByHost = new HostScoped(() => new GitRemoteStateCache());
+var gitRemoteStateByHost; // deferred: uses GitRemoteStateCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:531590", () => {
+  gitRemoteStateByHost = new HostScoped(() => new GitRemoteStateCache());
+});
 //@ chunk-s61vbvea.js:531615-531652 placement
 /**
  * 取出当前根会话宿主对应的 git 远程状态缓存。

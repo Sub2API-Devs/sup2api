@@ -54,14 +54,29 @@ import { errorMessage } from "../errors.js";
 /**
  * 执行 agent 钩子：用 $ARGUMENTS 替换后的提示词启动一个最多 50 轮的验证子代理（工具集去掉危险工具并加 StructuredOutput，dontAsk 权限，可读 transcript），超时默认 60s；返回 ok 成功、not ok 阻断、未给结构化输出视为取消；模型被拒时回退主模型。
  */
-async function execAgentHook(hook, hookName, r, jsonInput, h, y, toolUseID, w) {
+async function execAgentHook(
+  hook,
+  hookName,
+  hookEvent,
+  jsonInput,
+  signal,
+  toolUseContext,
+  toolUseID,
+  hookIndex,
+) {
   let effectiveToolUseID = toolUseID || `hook-${randomUUID()}`;
-  let G = y.remoteCall !== undefined;
-  let q = isDiskless() ? undefined : y.agentId ? getAgentTranscriptPath(y.agentId) : getTranscriptPath();
+  let isServedCall = toolUseContext.remoteCall !== undefined;
+  let transcriptPath = isDiskless()
+    ? undefined
+    : toolUseContext.agentId
+      ? getAgentTranscriptPath(toolUseContext.agentId)
+      : getTranscriptPath();
   let resolvedPath =
-    G || q === undefined ? undefined : safeResolvePath(getFsImplementation(), q).resolvedPath;
+    isServedCall || transcriptPath === undefined
+      ? undefined
+      : safeResolvePath(getFsImplementation(), transcriptPath).resolvedPath;
   let hookStartTime = Date.now();
-  let agentName = w ? shortHash(w) : undefined;
+  let agentName = hookIndex ? shortHash(hookIndex) : undefined;
   try {
     let processedPrompt = substituteArguments(hook.prompt, jsonInput);
     logForDebugging(`Hooks: Processing agent hook with prompt: ${processedPrompt}`);
@@ -73,7 +88,7 @@ async function execAgentHook(hook, hookName, r, jsonInput, h, y, toolUseID, w) {
     logForDebugging(`Hooks: Starting agent query with ${agentMessages.length} messages`);
     let hookTimeoutMs_2 = hookTimeoutMs(hook, 60000);
     let hookAbortController = createAbortController();
-    let { signal: parentTimeoutSignal, cleanup: cleanupCombinedSignal } = createCombinedAbortSignal(h, {
+    let { signal: parentTimeoutSignal, cleanup: cleanupCombinedSignal } = createCombinedAbortSignal(signal, {
       timeoutMs: hookTimeoutMs_2,
     });
     let onParentTimeout = () => hookAbortController.abort();
@@ -81,24 +96,24 @@ async function execAgentHook(hook, hookName, r, jsonInput, h, y, toolUseID, w) {
     let combinedSignal = hookAbortController.signal;
     try {
       let structuredOutputTool = createStructuredOutputTool();
-      let memoryCaller = y.memoryCaller ?? "worker";
-      let mode = memoryModeForSession(y).mode;
+      let memoryCaller = toolUseContext.memoryCaller ?? "worker";
+      let mode = memoryModeForSession(toolUseContext).mode;
       let tools = [
-        ...filterNonGuardTools(y.options.tools).filter(
-          (tool) => !isCoordinatorBashToolUse(tool, y) && !isServedAccountMemoryTool(tool, mode),
+        ...filterNonGuardTools(toolUseContext.options.tools).filter(
+          (tool) => !isCoordinatorBashToolUse(tool, toolUseContext) && !isServedAccountMemoryTool(tool, mode),
         ),
         structuredOutputTool,
       ];
-      let At =
-        r === "Stop" || r === "SubagentStop"
+      let introText =
+        hookEvent === "Stop" || hookEvent === "SubagentStop"
           ? "You are verifying a stop condition in Claude Code. Your task is to verify that the agent completed the given plan."
-          : `You are evaluating a ${r} hook in Claude Code. Your task is to evaluate the condition described in the user message.`;
+          : `You are evaluating a ${hookEvent} hook in Claude Code. Your task is to evaluate the condition described in the user message.`;
       let systemPrompt = asSystemPrompt([
-        `${At} ${
+        `${introText} ${
           resolvedPath !== undefined
             ? `The conversation transcript is available at: ${resolvedPath}
 You can read this file to analyze the conversation history if needed.`
-            : G
+            : isServedCall
               ? "This call is being served for another machine's session; there is no local conversation transcript to read."
               : "There is no conversation transcript file to read here."
         }
@@ -110,25 +125,25 @@ When done, return your result using the ${STRUCTUREDOUTPUT} tool, always with a 
 
 ${HOOK_OK_SEMANTICS}`,
       ]);
-      let Yt = unlessManagedDeniedModel(hook.model ?? getSmallFastModel());
-      let qt = hook.model === undefined ? Yt : resolveModelAliasSpelling(Yt);
-      let mainLoopModel = getMainLoopModel_2(y);
-      let rn =
+      let model = unlessManagedDeniedModel(hook.model ?? getSmallFastModel());
+      let modelAlias = hook.model === undefined ? model : resolveModelAliasSpelling(model);
+      let mainLoopModel = getMainLoopModel_2(toolUseContext);
+      let loopModel =
         hook.model === undefined &&
         getAPIProvider() === "gateway" &&
         env.ANTHROPIC_DEFAULT_HAIKU_MODEL === undefined &&
         env.ANTHROPIC_SMALL_FAST_MODEL === undefined
           ? mainLoopModel
-          : qt;
-      let pn = isSameModelSettings(rn, mainLoopModel);
+          : modelAlias;
+      let sameModel = isSameModelSettings(loopModel, mainLoopModel);
       let MAX_AGENT_TURNS = 50;
       let hookAgentId = identityAgentId2(`${HOOK_AGENT_ID_PREFIX}${randomUUID()}`);
       let stickyBetas = createStickyBetaLatches();
       let agentToolUseContext = {
-        ...y,
+        ...toolUseContext,
         agentId: hookAgentId,
         memoryCaller,
-        mcpRequestMeta: stripHostToolMeta(stripMemoryCallMeta(y.mcpRequestMeta)),
+        mcpRequestMeta: stripHostToolMeta(stripMemoryCallMeta(toolUseContext.mcpRequestMeta)),
         stickyBetas,
         abortController: hookAbortController,
         forPromptShellCommand: undefined,
@@ -138,19 +153,19 @@ ${HOOK_OK_SEMANTICS}`,
         gateIgnoresSwitch: undefined,
         clientRequestedToolUseId: undefined,
         namesShownToApi: undefined,
-        permissionLayers: (y.permissionLayers ?? [])
-          .filter((vn) => pn || vn.kind !== "effort")
+        permissionLayers: (toolUseContext.permissionLayers ?? [])
+          .filter((layer) => sameModel || layer.kind !== "effort")
           .concat({
             kind: "model",
-            mainLoopModel: rn,
+            mainLoopModel: loopModel,
           }),
-        readFileState: cloneFileStateCache(y.readFileState, {
+        readFileState: cloneFileStateCache(toolUseContext.readFileState, {
           stripSeededFromContext: true,
         }),
         options: {
-          ...y.options,
+          ...toolUseContext.options,
           tools,
-          mainLoopModel: rn,
+          mainLoopModel: loopModel,
           isNonInteractiveSession: true,
           requiresStructuredOutput: true,
           structuredOutputIsHandback: undefined,
@@ -164,7 +179,9 @@ ${HOOK_OK_SEMANTICS}`,
           refreshMcpClients: undefined,
         },
         getAppState() {
-          let appState = pn ? y.getAppState() : withoutSessionLevel(y.getAppState());
+          let appState = sameModel
+            ? toolUseContext.getAppState()
+            : withoutSessionLevel(toolUseContext.getAppState());
           let existingSessionRules = appState.toolPermissionContext.alwaysAllowRules.session ?? [];
           return {
             ...appState,
@@ -183,9 +200,11 @@ ${HOOK_OK_SEMANTICS}`,
       };
       let structuredOutputResult = null;
       let turnCount = 0;
-      let fo = false;
-      let To = false;
-      let canUseTool = G ? denyDestructiveForHookAgent(hasPermissionsToUseTool) : hasPermissionsToUseTool;
+      let hitMaxTurns = false;
+      let resendable = false;
+      let canUseTool = isServedCall
+        ? denyDestructiveForHookAgent(hasPermissionsToUseTool)
+        : hasPermissionsToUseTool;
       for await (let message of agentToolUseContext.options.runQuery({
         messages: agentMessages,
         systemPrompt,
@@ -204,10 +223,10 @@ ${HOOK_OK_SEMANTICS}`,
         });
         if (message.type === "stream_event" || message.type === "stream_request_start") continue;
         if (message.type === "assistant") {
-          if (turnCount === 0) To = isResendableClientApiError(message);
+          if (turnCount === 0) resendable = isResendableClientApiError(message);
           turnCount++;
           if (turnCount >= 50) {
-            fo = true;
+            hitMaxTurns = true;
             logForDebugging(`Hooks: Agent turn ${turnCount} hit max turns, aborting`);
             hookAbortController.abort();
             break;
@@ -227,13 +246,13 @@ ${HOOK_OK_SEMANTICS}`,
       cleanupCombinedSignal();
       if (!structuredOutputResult) {
         if (
-          To &&
-          rn !== mainLoopModel &&
+          resendable &&
+          loopModel !== mainLoopModel &&
           hook.model !== mainLoopModel &&
-          !h.aborted &&
+          !signal.aborted &&
           !isNoModelFallbackEnabled()
         ) {
-          logForDebugging(`Hooks: ${rn} was refused, running the agent hook on ${mainLoopModel}`);
+          logForDebugging(`Hooks: ${loopModel} was refused, running the agent hook on ${mainLoopModel}`);
           return {
             ...(await execAgentHook(
               {
@@ -241,22 +260,22 @@ ${HOOK_OK_SEMANTICS}`,
                 model: mainLoopModel,
               },
               hookName,
-              r,
+              hookEvent,
               jsonInput,
-              h,
-              y,
+              signal,
+              toolUseContext,
               toolUseID,
-              w,
+              hookIndex,
             )),
             hook,
           };
         }
-        if (fo) {
+        if (hitMaxTurns) {
           logForDebugging("Hooks: Agent hook did not complete within 50 turns");
           logEvent("tengu_agent_stop_hook_max_turns", {
             durationMs: Date.now() - hookStartTime,
             turnCount,
-            hookEvent: fromEnum(r),
+            hookEvent: fromEnum(hookEvent),
             agentName,
           });
           return {
@@ -269,7 +288,7 @@ ${HOOK_OK_SEMANTICS}`,
           durationMs: Date.now() - hookStartTime,
           turnCount,
           errorType: 1,
-          hookEvent: fromEnum(r),
+          hookEvent: fromEnum(hookEvent),
           agentName,
         });
         return {
@@ -282,7 +301,7 @@ ${HOOK_OK_SEMANTICS}`,
         logEvent("tengu_agent_stop_hook_blocking", {
           durationMs: Date.now() - hookStartTime,
           turnCount,
-          hookEvent: fromEnum(r),
+          hookEvent: fromEnum(hookEvent),
           agentName,
         });
         return {
@@ -291,7 +310,7 @@ ${HOOK_OK_SEMANTICS}`,
           blockingError: {
             blockingError: `Agent hook condition was not met: ${structuredOutputResult.reason}`,
             command: hook.prompt,
-            ...promptEndingFields(r, {
+            ...promptEndingFields(hookEvent, {
               reason: structuredOutputResult.reason,
             }),
           },
@@ -301,7 +320,7 @@ ${HOOK_OK_SEMANTICS}`,
       logEvent("tengu_agent_stop_hook_success", {
         durationMs: Date.now() - hookStartTime,
         turnCount,
-        hookEvent: fromEnum(r),
+        hookEvent: fromEnum(hookEvent),
         agentName,
       });
       return {
@@ -311,7 +330,7 @@ ${HOOK_OK_SEMANTICS}`,
           type: "hook_success",
           hookName,
           toolUseID: effectiveToolUseID,
-          hookEvent: r,
+          hookEvent,
           content: "",
         }),
       };
@@ -331,13 +350,13 @@ ${HOOK_OK_SEMANTICS}`,
     logEvent("tengu_agent_stop_hook_error", {
       durationMs: Date.now() - hookStartTime,
       errorType: 2,
-      hookEvent: fromEnum(r),
+      hookEvent: fromEnum(hookEvent),
       agentName,
     });
     return nonBlockingHookErrorResult(hook, {
       hookName,
       toolUseID: effectiveToolUseID,
-      hookEvent: r,
+      hookEvent,
       stderr: `Error executing agent hook: ${errorMsg}`,
       stdout: "",
     });

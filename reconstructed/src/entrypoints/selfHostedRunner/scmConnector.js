@@ -33,38 +33,38 @@ var CONNECT_WAIT_MS = 1e4;
 var ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]);
 var HOP_BY_HOP_HEADERS = new Set(["host", "connection", "content-length", "transfer-encoding"]);
 //@ chunk-2cbdmxy9.js:12360-13037 placement
-function parseScmConnectorHost(e) {
-  if (e.includes("://") || e.includes("/") || e.includes("@"))
+function parseScmConnectorHost(value) {
+  if (value.includes("://") || value.includes("/") || value.includes("@"))
     throw Error("--scm-connector-host expects a bare hostname (e.g. ghe.example.com[:443]), not a URL");
-  let index = e.lastIndexOf(":");
-  let r = e.startsWith("[");
-  let n;
+  let index = value.lastIndexOf(":");
+  let isBracketed = value.startsWith("[");
+  let host;
   let port = 443;
-  if (index > 0 && (!r || (r && e[index - 1] === "]"))) {
-    n = e.slice(0, index);
-    let sliced = e.slice(index + 1);
-    let l = parseInt(sliced, 10);
-    if (Number.isNaN(l) || l < 1 || l > 65535 || String(l) !== sliced)
+  if (index > 0 && (!isBracketed || (isBracketed && value[index - 1] === "]"))) {
+    host = value.slice(0, index);
+    let sliced = value.slice(index + 1);
+    let portValue = parseInt(sliced, 10);
+    if (Number.isNaN(portValue) || portValue < 1 || portValue > 65535 || String(portValue) !== sliced)
       throw Error("--scm-connector-host port must be an integer in [1, 65535]");
-    port = l;
-  } else n = e;
-  if (n.length === 0) throw Error("--scm-connector-host: hostname is empty");
-  if (n.includes(":") && !(n.startsWith("[") && n.endsWith("]")))
+    port = portValue;
+  } else host = value;
+  if (host.length === 0) throw Error("--scm-connector-host: hostname is empty");
+  if (host.includes(":") && !(host.startsWith("[") && host.endsWith("]")))
     throw Error("--scm-connector-host: hostname must be a bare hostname or [v6] literal");
   return {
-    host: n,
+    host,
     port,
   };
 }
 //@ chunk-2cbdmxy9.js:13037-13431 placement
-function parseScmHostRewrite(e) {
-  let index = e.indexOf("=");
-  if (index <= 0 || index === e.length - 1)
+function parseScmHostRewrite(value) {
+  let index = value.indexOf("=");
+  if (index <= 0 || index === value.length - 1)
     throw Error("--scm-connector-host-rewrite requires <from>=<to_host:to_port>");
-  let lower = e.slice(0, index).toLowerCase();
-  let sliced = e.slice(index + 1);
-  for (let l of [lower, sliced])
-    if (l.includes("://") || l.includes("/") || l.includes("@"))
+  let lower = value.slice(0, index).toLowerCase();
+  let sliced = value.slice(index + 1);
+  for (let side of [lower, sliced])
+    if (side.includes("://") || side.includes("/") || side.includes("@"))
       throw Error("--scm-connector-host-rewrite expects bare hostnames, not URLs");
   let { host, port } = parseScmConnectorHost(sliced);
   return {
@@ -83,24 +83,24 @@ function validateScmPath(path) {
   return null;
 }
 //@ chunk-2cbdmxy9.js:13758-14143 placement
-function scmDialUrl(e, t, path) {
-  let n = new URL("https://placeholder.invalid/");
-  n.host = `${e}:${t}`;
-  if (n.hostname === "placeholder.invalid") throw Error("scm-connector dial host is not a valid URL host");
-  let origin = n.origin;
+function scmDialUrl(host, port, path) {
+  let url = new URL("https://placeholder.invalid/");
+  url.host = `${host}:${port}`;
+  if (url.hostname === "placeholder.invalid") throw Error("scm-connector dial host is not a valid URL host");
+  let origin = url.origin;
   let index = path.indexOf("?");
-  n.pathname = index >= 0 ? path.slice(0, index) : path;
-  n.search = index >= 0 ? path.slice(index) : "";
-  if (n.origin !== origin || n.username !== "" || n.password !== "")
+  url.pathname = index >= 0 ? path.slice(0, index) : path;
+  url.search = index >= 0 ? path.slice(index) : "";
+  if (url.origin !== origin || url.username !== "" || url.password !== "")
     throw Error("path escaped the configured origin");
-  return n;
+  return url;
 }
 //@ chunk-2cbdmxy9.js:14143-14312 placement
-function scmConnectorWsUrl(apiUrl, t) {
-  let replaced = SCM_CONNECTOR_CONSTANTS.replace("{provider}", encodeURIComponent(t.provider)).replace(
-    "{id}",
-    String(t.connectorId),
-  );
+function scmConnectorWsUrl(apiUrl, connector) {
+  let replaced = SCM_CONNECTOR_CONSTANTS.replace(
+    "{provider}",
+    encodeURIComponent(connector.provider),
+  ).replace("{id}", String(connector.connectorId));
   return apiUrl.replace(/^http/, "ws").replace(/\/+$/, "") + replaced;
 }
 //@ chunk-2cbdmxy9.js:14312-14417 placement
@@ -117,60 +117,61 @@ function newScmConnectorStatus() {
 /**
  * SCM 连接器隧道：通过 /v1/code/scm-connectors/.../tunnel WebSocket 把服务器请求转发到内网 Git 主机。
  */
-function startScmConnector(scmConnector, scmConnector_2, r, signal) {
-  let h = scmConnectorWsUrl(r.apiUrl, scmConnector);
-  let o =
-    scmConnector.hostRewrite && scmConnector.hostRewrite.from === scmConnector.host.toLowerCase()
-      ? scmConnector.hostRewrite.toHost
-      : scmConnector.host;
-  let l =
-    scmConnector.hostRewrite && scmConnector.hostRewrite.from === scmConnector.host.toLowerCase()
-      ? scmConnector.hostRewrite.toPort
-      : scmConnector.port;
-  let g = false;
-  let c = null;
-  let S = null;
-  let s = null;
-  let u = null;
-  let U = RETRY_BASE_MS;
-  let j = 0;
-  let H;
-  let W = scmConnector.caFile === undefined;
-  let T = new Map();
-  let D = (m) => {
-    scmConnector_2.last_error = redactSecretsInText(m);
+function startScmConnector(connector, scmConnector, context, signal) {
+  let wsUrl = scmConnectorWsUrl(context.apiUrl, connector);
+  let dialHost =
+    connector.hostRewrite && connector.hostRewrite.from === connector.host.toLowerCase()
+      ? connector.hostRewrite.toHost
+      : connector.host;
+  let dialPort =
+    connector.hostRewrite && connector.hostRewrite.from === connector.host.toLowerCase()
+      ? connector.hostRewrite.toPort
+      : connector.port;
+  let isStopped = false;
+  let socket = null;
+  let pingTimer = null;
+  let reconnectTimer = null;
+  let openTimer = null;
+  let retryDelayMs = RETRY_BASE_MS;
+  let lastConnectedAt = 0;
+  let caCert;
+  let hasLoadedCert = connector.caFile === undefined;
+  let inflightRequests = new Map();
+  let setLastError = (message) => {
+    scmConnector.last_error = redactSecretsInText(message);
   };
-  let w = (m) => r.onStatus(`[runner:scm-connector] ${m}`);
-  let x = (m) => r.onDebug(`[runner:scm-connector] ${m}`);
-  function O(m) {
-    let a = c;
-    if (!a || a.readyState !== WebSocket.OPEN) return;
+  let status = (text) => context.onStatus(`[runner:scm-connector] ${text}`);
+  let debug = (text) => context.onDebug(`[runner:scm-connector] ${text}`);
+  function send(payload) {
+    let ws = socket;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
     try {
-      a.send(jsonStringify(m));
+      ws.send(jsonStringify(payload));
     } catch (error) {
-      D(errorMessage(error));
-      w(`send failed: ${errorMessage(error)}`);
+      setLastError(errorMessage(error));
+      status(`send failed: ${errorMessage(error)}`);
     }
   }
-  function I(requestId, errorMessage) {
-    O({
+  function sendHttpError(requestId, errorMessage) {
+    send({
       httpError: {
         requestId,
         errorMessage,
       },
     });
   }
-  function G(signal) {
-    let a = c;
-    if (!a || a.readyState !== WebSocket.OPEN || a.bufferedAmount <= MAX_BODY_BYTES) return Promise.resolve();
+  function waitForDrain(signal) {
+    let ws = socket;
+    if (!ws || ws.readyState !== WebSocket.OPEN || ws.bufferedAmount <= MAX_BODY_BYTES)
+      return Promise.resolve();
     return new Promise((resolve) => {
       let interval = setInterval(() => {
         if (
-          g ||
+          isStopped ||
           signal.aborted ||
-          c !== a ||
-          a.readyState !== WebSocket.OPEN ||
-          a.bufferedAmount <= MAX_BUFFER_BYTES
+          socket !== ws ||
+          ws.readyState !== WebSocket.OPEN ||
+          ws.bufferedAmount <= MAX_BUFFER_BYTES
         ) {
           clearInterval(interval);
           resolve();
@@ -178,306 +179,307 @@ function startScmConnector(scmConnector, scmConnector_2, r, signal) {
       }, MAX_SOCKETS);
     });
   }
-  async function L(httpRequest) {
+  async function forwardHttpRequest(httpRequest) {
     let requestId = httpRequest.requestId;
     if (!requestId) return;
-    if (httpRequest.port !== undefined && httpRequest.port !== 0 && httpRequest.port !== scmConnector.port) {
-      I(
+    if (httpRequest.port !== undefined && httpRequest.port !== 0 && httpRequest.port !== connector.port) {
+      sendHttpError(
         requestId,
-        `port ${httpRequest.port} does not match this connector's configured port ${scmConnector.port}`,
+        `port ${httpRequest.port} does not match this connector's configured port ${connector.port}`,
       );
       return;
     }
-    let f = validateScmPath(httpRequest.path);
-    if (f) {
-      I(requestId, f);
+    let pathError = validateScmPath(httpRequest.path);
+    if (pathError) {
+      sendHttpError(requestId, pathError);
       return;
     }
     let path = httpRequest.path;
     let upper = (httpRequest.method ?? "GET").toUpperCase();
     if (!ALLOWED_METHODS.has(upper)) {
-      I(requestId, "method not allowed");
+      sendHttpError(requestId, "method not allowed");
       return;
     }
-    let R;
+    let upstreamUrl;
     try {
-      R = scmDialUrl(o, l, path);
+      upstreamUrl = scmDialUrl(dialHost, dialPort, path);
     } catch (error) {
-      I(requestId, errorMessage(error));
+      sendHttpError(requestId, errorMessage(error));
       return;
     }
     let abortController = new AbortController();
-    T.set(requestId, abortController);
-    let timer = setTimeout((y) => y.abort(), UPSTREAM_TIMEOUT_MS, abortController);
-    let F;
+    inflightRequests.set(requestId, abortController);
+    let timer = setTimeout((controller) => controller.abort(), UPSTREAM_TIMEOUT_MS, abortController);
+    let response;
     try {
       let headers = new Headers();
-      for (let C of httpRequest.headers ?? []) {
-        if (!C.name || HOP_BY_HOP_HEADERS.has(C.name.toLowerCase())) continue;
-        headers.append(C.name, C.value ?? "");
+      for (let header of httpRequest.headers ?? []) {
+        if (!header.name || HOP_BY_HOP_HEADERS.has(header.name.toLowerCase())) continue;
+        headers.append(header.name, header.value ?? "");
       }
-      headers.set(
-        "Host",
-        scmConnector.port === 443 ? scmConnector.host : `${scmConnector.host}:${scmConnector.port}`,
-      );
+      headers.set("Host", connector.port === 443 ? connector.host : `${connector.host}:${connector.port}`);
       let body =
         httpRequest.body !== undefined && httpRequest.body !== ""
           ? Buffer.from(httpRequest.body, "base64")
           : undefined;
-      F = await fetch(R, {
+      response = await fetch(upstreamUrl, {
         method: upper,
         headers,
         body,
         redirect: "manual",
         signal: abortController.signal,
         tls:
-          H !== undefined || o !== scmConnector.host
+          caCert !== undefined || dialHost !== connector.host
             ? {
-                ca: H,
-                serverName: scmConnector.host,
+                ca: caCert,
+                serverName: connector.host,
               }
             : undefined,
       });
     } catch (error) {
       clearTimeout(timer);
-      T.delete(requestId);
-      D(`forward to ${scmConnector.host}: ${errorMessage(error)}`);
-      I(requestId, errorMessage(error));
+      inflightRequests.delete(requestId);
+      setLastError(`forward to ${connector.host}: ${errorMessage(error)}`);
+      sendHttpError(requestId, errorMessage(error));
       return;
     }
     clearTimeout(timer);
-    let Q = [];
-    F.headers.forEach((value, name) => {
-      Q.push({
+    let headerList = [];
+    response.headers.forEach((value, name) => {
+      headerList.push({
         name,
         value,
       });
     });
-    let P = 0;
-    O({
+    let sequenceNumber = 0;
+    send({
       httpHeaders: {
         requestId,
-        statusCode: F.status,
-        statusText: F.statusText || String(F.status),
-        headers: Q,
-        sequenceNumber: P,
+        statusCode: response.status,
+        statusText: response.statusText || String(response.status),
+        headers: headerList,
+        sequenceNumber,
       },
     });
-    P++;
+    sequenceNumber++;
     try {
-      if (F.body) {
-        let reader = F.body.getReader();
+      if (response.body) {
+        let reader = response.body.getReader();
         for (;;) {
-          await G(abortController.signal);
+          await waitForDrain(abortController.signal);
           if (abortController.signal.aborted) {
             await reader.cancel();
             break;
           }
-          let A = await reader.read();
-          if (A.value && A.value.length > 0)
-            for (let C = 0; C < A.value.length; C += MAX_HEADER_BYTES) {
-              let chunk = A.value.subarray(C, C + MAX_HEADER_BYTES);
-              O({
+          let readResult = await reader.read();
+          if (readResult.value && readResult.value.length > 0)
+            for (let offset = 0; offset < readResult.value.length; offset += MAX_HEADER_BYTES) {
+              let chunk = readResult.value.subarray(offset, offset + MAX_HEADER_BYTES);
+              send({
                 httpChunk: {
                   requestId,
                   data: Buffer.from(chunk).toString("base64"),
                   isFinal: false,
-                  sequenceNumber: P,
+                  sequenceNumber,
                 },
               });
-              P++;
+              sequenceNumber++;
             }
-          if (A.done) break;
+          if (readResult.done) break;
           if (abortController.signal.aborted) {
             await reader.cancel();
             break;
           }
         }
       }
-      O({
+      send({
         httpChunk: {
           requestId,
           data: "",
           isFinal: true,
-          sequenceNumber: P,
+          sequenceNumber,
         },
       });
-      scmConnector_2.requests_forwarded++;
+      scmConnector.requests_forwarded++;
     } catch (error) {
-      I(requestId, `error reading GHES response body: ${errorMessage(error)}`);
+      sendHttpError(requestId, `error reading GHES response body: ${errorMessage(error)}`);
     } finally {
-      T.delete(requestId);
+      inflightRequests.delete(requestId);
     }
   }
-  function B(m) {
-    let a;
+  function handleTunnelMessage(text) {
+    let message;
     try {
-      a = jsonParse(m);
+      message = jsonParse(text);
     } catch (error) {
-      w(`failed to parse tunnel request: ${errorMessage(error)}`);
+      status(`failed to parse tunnel request: ${errorMessage(error)}`);
       return;
     }
-    if (a.httpRequest)
-      L(a.httpRequest).catch((error) => {
-        D(errorMessage(error));
-        w(`handleHttpRequest failed: ${errorMessage(error)}`);
+    if (message.httpRequest)
+      forwardHttpRequest(message.httpRequest).catch((error) => {
+        setLastError(errorMessage(error));
+        status(`handleHttpRequest failed: ${errorMessage(error)}`);
       });
-    else if (a.httpCancel) {
-      let requestId = a.httpCancel.requestId;
+    else if (message.httpCancel) {
+      let requestId = message.httpCancel.requestId;
       if (requestId) {
-        T.get(requestId)?.abort();
-        T.delete(requestId);
+        inflightRequests.get(requestId)?.abort();
+        inflightRequests.delete(requestId);
       }
-    } else if (a.wsOpen)
-      O({
+    } else if (message.wsOpen)
+      send({
         wsError: {
-          tunnelId: a.wsOpen.tunnelId ?? "",
+          tunnelId: message.wsOpen.tunnelId ?? "",
           errorMessage: "WebSocket tunnel is not supported by the SCM connector",
         },
       });
-    else if (a.ptyOpen)
-      O({
+    else if (message.ptyOpen)
+      send({
         ptyError: {
-          tunnelId: a.ptyOpen.tunnelId ?? "",
+          tunnelId: message.ptyOpen.tunnelId ?? "",
           errorMessage: "PTY tunnel is not supported by the SCM connector",
         },
       });
   }
-  function q(code) {
-    if (g) return;
-    scmConnector_2.reconnects++;
-    let a;
+  function scheduleReconnect(code) {
+    if (isStopped) return;
+    scmConnector.reconnects++;
+    let delayMs;
     if (code === PROXY_PORT) {
-      a = CONNECT_TIMEOUT_MS;
-      w(
-        `standby (close code ${code}): another orchestrator holds connector ${scmConnector.connectorId}; retrying in ${a / 1000}s`,
+      delayMs = CONNECT_TIMEOUT_MS;
+      status(
+        `standby (close code ${code}): another orchestrator holds connector ${connector.connectorId}; retrying in ${delayMs / 1000}s`,
       );
     } else {
-      if (j > 0 && Date.now() - j > REQUEST_TIMEOUT_MS) U = RETRY_BASE_MS;
-      a = U + Math.floor(Math.random() * (U / 2));
-      U = Math.min(U * 2, REQUEST_TIMEOUT_MS);
-      x(`reconnecting in ${a}ms`);
+      if (lastConnectedAt > 0 && Date.now() - lastConnectedAt > REQUEST_TIMEOUT_MS)
+        retryDelayMs = RETRY_BASE_MS;
+      delayMs = retryDelayMs + Math.floor(Math.random() * (retryDelayMs / 2));
+      retryDelayMs = Math.min(retryDelayMs * 2, REQUEST_TIMEOUT_MS);
+      debug(`reconnecting in ${delayMs}ms`);
     }
-    j = 0;
-    s = setTimeout(b, a);
+    lastConnectedAt = 0;
+    reconnectTimer = setTimeout(connect, delayMs);
   }
-  function b() {
-    if (g) return;
-    s = null;
-    if (!W)
+  function connect() {
+    if (isStopped) return;
+    reconnectTimer = null;
+    if (!hasLoadedCert)
       withBoundedTimeout(
-        readFile(scmConnector.caFile, "utf8"),
+        readFile(connector.caFile, "utf8"),
         CONNECT_WAIT_MS,
-        `--scm-connector-ca-file read from ${scmConnector.caFile}`,
+        `--scm-connector-ca-file read from ${connector.caFile}`,
       )
-        .then((a) => {
-          H = a;
-          W = true;
+        .then((certData) => {
+          caCert = certData;
+          hasLoadedCert = true;
         })
         .catch((error) => {
-          D(`reading --scm-connector-ca-file: ${errorMessage(error)}`);
-          w(`reading --scm-connector-ca-file: ${errorMessage(error)}`);
+          setLastError(`reading --scm-connector-ca-file: ${errorMessage(error)}`);
+          status(`reading --scm-connector-ca-file: ${errorMessage(error)}`);
         });
-    let m;
+    let ws;
     try {
-      m = new globalThis.WebSocket(h, {
+      ws = new globalThis.WebSocket(wsUrl, {
         headers: {
-          Authorization: `Bearer ${r.poolSecret}`,
+          Authorization: `Bearer ${context.poolSecret}`,
         },
-        proxy: getWebSocketProxyUrl(h),
+        proxy: getWebSocketProxyUrl(wsUrl),
         tls: getWebSocketTLSOptions(undefined) || undefined,
       });
     } catch (error) {
-      D(errorMessage(error));
-      w(`WebSocket construct failed: ${errorMessage(error)}`);
-      q();
+      setLastError(errorMessage(error));
+      status(`WebSocket construct failed: ${errorMessage(error)}`);
+      scheduleReconnect();
       return;
     }
-    c = m;
-    u = setTimeout(
-      (a) => {
-        D("WebSocket open timeout");
-        a.onopen = a.onmessage = a.onerror = a.onclose = null;
+    socket = ws;
+    openTimer = setTimeout(
+      (staleWs) => {
+        setLastError("WebSocket open timeout");
+        staleWs.onopen = staleWs.onmessage = staleWs.onerror = staleWs.onclose = null;
         try {
-          a.close();
+          staleWs.close();
         } catch {}
-        if (c === a) c = null;
-        q();
+        if (socket === staleWs) socket = null;
+        scheduleReconnect();
       },
       HEAD_TIMEOUT_MS,
-      m,
+      ws,
     );
-    m.onopen = () => {
-      if (u) {
-        clearTimeout(u);
-        u = null;
+    ws.onopen = () => {
+      if (openTimer) {
+        clearTimeout(openTimer);
+        openTimer = null;
       }
-      scmConnector_2.connected = true;
-      scmConnector_2.last_connected_at = Date.now();
-      scmConnector_2.last_error = null;
-      j = Date.now();
-      w(
-        `connected provider=${scmConnector.provider} connector_id=${scmConnector.connectorId} forward=${scmConnector.host}:${scmConnector.port}${o !== scmConnector.host ? ` (dial=${o}:${l})` : ""}`,
+      scmConnector.connected = true;
+      scmConnector.last_connected_at = Date.now();
+      scmConnector.last_error = null;
+      lastConnectedAt = Date.now();
+      status(
+        `connected provider=${connector.provider} connector_id=${connector.connectorId} forward=${connector.host}:${connector.port}${dialHost !== connector.host ? ` (dial=${dialHost}:${dialPort})` : ""}`,
       );
-      S = setInterval(() => {
-        if (m.readyState === WebSocket.OPEN) m.ping?.();
+      pingTimer = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) ws.ping?.();
       }, IDLE_TIMEOUT_MS);
     };
-    m.onmessage = (a) => {
-      let f = typeof a.data === "string" ? a.data : Buffer.from(a.data).toString("utf8");
-      B(f);
+    ws.onmessage = (event) => {
+      let text = typeof event.data === "string" ? event.data : Buffer.from(event.data).toString("utf8");
+      handleTunnelMessage(text);
     };
-    m.onerror = (a) => {
-      D("message" in a && typeof a.message === "string" ? a.message : "WebSocket error");
+    ws.onerror = (event) => {
+      setLastError(
+        "message" in event && typeof event.message === "string" ? event.message : "WebSocket error",
+      );
     };
-    m.onclose = (a) => {
-      scmConnector_2.connected = false;
-      if (u) {
-        clearTimeout(u);
-        u = null;
+    ws.onclose = (closeEvent) => {
+      scmConnector.connected = false;
+      if (openTimer) {
+        clearTimeout(openTimer);
+        openTimer = null;
       }
-      if (S) {
-        clearInterval(S);
-        S = null;
+      if (pingTimer) {
+        clearInterval(pingTimer);
+        pingTimer = null;
       }
-      for (let f of T.values()) f.abort();
-      T.clear();
-      if (c === m) c = null;
-      if (a.code !== PROXY_PORT) w(`closed code=${a.code} reason=${a.reason || "(none)"}`);
-      q(a.code);
+      for (let controller of inflightRequests.values()) controller.abort();
+      inflightRequests.clear();
+      if (socket === ws) socket = null;
+      if (closeEvent.code !== PROXY_PORT)
+        status(`closed code=${closeEvent.code} reason=${closeEvent.reason || "(none)"}`);
+      scheduleReconnect(closeEvent.code);
     };
   }
-  function K() {
-    if (g) return;
-    g = true;
-    if (s) {
-      clearTimeout(s);
-      s = null;
+  function stop() {
+    if (isStopped) return;
+    isStopped = true;
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
     }
-    if (u) {
-      clearTimeout(u);
-      u = null;
+    if (openTimer) {
+      clearTimeout(openTimer);
+      openTimer = null;
     }
-    if (S) {
-      clearInterval(S);
-      S = null;
+    if (pingTimer) {
+      clearInterval(pingTimer);
+      pingTimer = null;
     }
-    for (let m of T.values()) m.abort();
-    T.clear();
-    scmConnector_2.connected = false;
+    for (let controller of inflightRequests.values()) controller.abort();
+    inflightRequests.clear();
+    scmConnector.connected = false;
     try {
-      c?.close();
+      socket?.close();
     } catch {}
-    c = null;
-    w("stopped");
+    socket = null;
+    status("stopped");
   }
-  signal?.addEventListener("abort", K, {
+  signal?.addEventListener("abort", stop, {
     once: true,
   });
-  w(`starting provider=${scmConnector.provider} connector_id=${scmConnector.connectorId} url=${h}`);
-  b();
+  status(`starting provider=${connector.provider} connector_id=${connector.connectorId} url=${wsUrl}`);
+  connect();
   return {
-    stop: K,
+    stop,
   };
 }
 //@ chunk-2cbdmxy9.js:19492-19707 placement

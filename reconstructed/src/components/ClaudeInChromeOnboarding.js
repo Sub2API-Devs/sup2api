@@ -8,8 +8,8 @@
  * pieces: chunk-hthm3h8y.js (3)
  * attribution: placement 1, fingerprint 2
  */
-import { init_react_production, y, P } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { init_react_production, useState, useEffect } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { logEvent } from "../services/analytics/index.js";
 import { isChromeExtensionInstalled } from "../utils/claudeInChrome/setup.js";
@@ -38,27 +38,27 @@ function markClaudeInChromeOnboarded(current) {
 }
 //@ chunk-hthm3h8y.js:5561-7326 fingerprint = ClaudeInChromeOnboarding (0.392)
 function ClaudeInChromeOnboarding(props) {
-  let $ = w(22);
+  let $ = useMemoCache(22);
   let { onDone } = props;
-  let [isExtensionInstalled, setIsExtensionInstalled] = y(false);
+  let [isExtensionInstalled, setIsExtensionInstalled] = useState(false);
   let { storageV5 } = useTheme_2();
-  let I;
+  let chromeProps;
   let t2;
   if ($[0] !== storageV5) {
-    I = () => {
+    chromeProps = () => {
       logEvent("tengu_claude_in_chrome_onboarding_shown", {});
       isChromeExtensionInstalled().then(setIsExtensionInstalled).catch(logError);
       saveGlobalConfig(markClaudeInChromeOnboarded, storageV5);
     };
     t2 = [storageV5];
     $[0] = storageV5;
-    $[1] = I;
+    $[1] = chromeProps;
     $[2] = t2;
   } else {
-    I = $[1];
+    chromeProps = $[1];
     t2 = $[2];
   }
-  P(I, t2);
+  useEffect(chromeProps, t2);
   let onKeyDown;
   if ($[3] !== onDone) {
     onKeyDown = (event) => {
@@ -185,3 +185,4 @@ function ClaudeInChromeOnboarding(props) {
   } else t11 = $[21];
   return t11;
 }
+export { ClaudeInChromeOnboarding };

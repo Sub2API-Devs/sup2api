@@ -8,7 +8,7 @@
  * pieces: chunk-ah34pb7m.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { ShutdownRequestDisplay } from "./ShutdownMessage.js";
 import { MarkdownText_2 } from "../pluginUi/render/MarkdownBlock.js";
@@ -16,7 +16,7 @@ import { Box } from "../../ink/components/Text.js";
 
 //@ chunk-ah34pb7m.js:112874-113172 fingerprint = UserPlanMessage (0.444)
 function UserPlanMessage(props) {
-  let $ = w(5);
+  let $ = useMemoCache(5);
   let { addMargin, planContent } = props;
   const marginTop = addMargin ? 1 : 0;
   let children;
@@ -31,16 +31,16 @@ function UserPlanMessage(props) {
     $[0] = planContent;
     $[1] = children;
   } else children = $[1];
-  let M;
+  let planBox;
   if ($[2] !== marginTop || $[3] !== children) {
-    M = jsxProd_default(Box, {
+    planBox = jsxProd_default(Box, {
       marginTop,
       children,
     });
     $[2] = marginTop;
     $[3] = children;
-    $[4] = M;
-  } else M = $[4];
-  return M;
+    $[4] = planBox;
+  } else planBox = $[4];
+  return planBox;
 }
 export { UserPlanMessage };

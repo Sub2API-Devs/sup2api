@@ -11,9 +11,13 @@
 import { refreshLockEnvReader } from "../../utils/auth/cloudAuthRefreshLock.js";
 import { env } from "../../utils/env.js";
 import { REVALIDATE_IN_FULL_AFTER_MS } from "../policyLimits/index.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:340580-340594 placement
-var gateReaderSlot = new refreshLockEnvReader();
+var gateReaderSlot; // deferred: uses refreshLockEnvReader (../../utils/auth/cloudAuthRefreshLock.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:340580", () => {
+  gateReaderSlot = new refreshLockEnvReader();
+});
 //@ chunk-aepeg2w5.js:340594-340631 placement
 function registerMainGateReader(getFeatureValue_CACHED_MAY_BE_STALE) {
   return gateReaderSlot.register(getFeatureValue_CACHED_MAY_BE_STALE);
@@ -26,11 +30,11 @@ function isFoamySpringEnabled() {
   return readGateTrueByDefault("tengu_foamy_spring");
 }
 //@ chunk-aepeg2w5.js:340678-340764 placement
-function readGateFalseByDefault(e) {
+function readGateFalseByDefault(key) {
   let reader = gateReaderSlot.reader;
   if (!reader) return false;
   try {
-    return reader(e, false) === true;
+    return reader(key, false) === true;
   } catch {
     return false;
   }
@@ -39,11 +43,11 @@ function readGateFalseByDefault(e) {
 /**
  * 导出函数 `readGateTrueByDefault`：参数 e，返回 !0; try { return reader(e, !0) !== !1; } catch { return !0; }。
  */
-function readGateTrueByDefault(e) {
+function readGateTrueByDefault(key) {
   let reader = gateReaderSlot.reader;
   if (!reader) return true;
   try {
-    return reader(e, true) !== false;
+    return reader(key, true) !== false;
   } catch {
     return true;
   }
@@ -88,8 +92,10 @@ function setCachedGateValue(usesPerTurnEffort) {
 /**
  * 未过期时返回值。
  */
-function keepIfFresh(e, n) {
-  return e !== undefined && n !== undefined && n < REVALIDATE_IN_FULL_AFTER_MS ? e : undefined;
+function keepIfFresh(value, ageMs) {
+  return value !== undefined && ageMs !== undefined && ageMs < REVALIDATE_IN_FULL_AFTER_MS
+    ? value
+    : undefined;
 }
 //@ chunk-aepeg2w5.js:627116-627142 placement
 var TENGU_WARM_MOCHI = "tengu_warm_mochi";
@@ -103,7 +109,10 @@ class GateReaderSlot {
   }
 }
 //@ chunk-aepeg2w5.js:627217-627231 placement
-var gateReaderA = new GateReaderSlot();
+var gateReaderA; // deferred: uses GateReaderSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:627217", () => {
+  gateReaderA = new GateReaderSlot();
+});
 //@ chunk-aepeg2w5.js:627231-627268 placement
 function registerWarmMochiGateReader(getFeatureValue_CACHED_MAY_BE_STALE) {
   return gateReaderA.register(getFeatureValue_CACHED_MAY_BE_STALE);
@@ -132,10 +141,13 @@ class GateReaderSlotB {
   }
 }
 //@ chunk-aepeg2w5.js:627448-627462 placement
-var gateReaderB = new GateReaderSlotB();
+var gateReaderB; // deferred: uses GateReaderSlotB of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:627448", () => {
+  gateReaderB = new GateReaderSlotB();
+});
 //@ chunk-aepeg2w5.js:627462-627499 placement
-function registerRosyElephantGateReader(e) {
-  return gateReaderB.register(e);
+function registerRosyElephantGateReader(reader) {
+  return gateReaderB.register(reader);
 }
 //@ chunk-aepeg2w5.js:627499-627659 placement
 /**
@@ -145,8 +157,8 @@ function isConnectTimeMcpBlockEnabled() {
   let reader = gateReaderB.reader;
   if (!reader) return false;
   try {
-    let { value: n, source, defaultHost } = reader("tengu_dapper_dusk", false);
-    return n === true && source === "payload" && defaultHost;
+    let { value: flagValue, source, defaultHost } = reader("tengu_dapper_dusk", false);
+    return flagValue === true && source === "payload" && defaultHost;
   } catch {
     return false;
   }
@@ -166,7 +178,10 @@ class VerdictHolder {
   judge = null;
 }
 //@ chunk-aepeg2w5.js:627779-627793 placement
-var verdictHolder = new VerdictHolder();
+var verdictHolder; // deferred: uses VerdictHolder of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:627779", () => {
+  verdictHolder = new VerdictHolder();
+});
 //@ chunk-aepeg2w5.js:627793-627820 placement
 /**
  * 导出函数 `setVerdictJudge`：参数 e。
@@ -178,9 +193,9 @@ function setVerdictJudge(judge) {
 /**
  * 调用已注册的开关判定器（异常视为 false）。
  */
-function judgeGate(e, config) {
+function judgeGate(key, config) {
   try {
-    return verdictHolder.judge?.(e, config) ?? false;
+    return verdictHolder.judge?.(key, config) ?? false;
   } catch {
     return false;
   }

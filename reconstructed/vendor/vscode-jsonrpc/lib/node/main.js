@@ -5,12 +5,12 @@
  * pieces: chunk-t4ksmxzx.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { require_ril } from "./ril.js";
 import { require_api } from "../common/api.js";
 
 //@ chunk-t4ksmxzx.js:54469-59108 cjs-fingerprint
-var require_vscode_jsonrpc = x(function (cjsExports) {
+var require_vscode_jsonrpc = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||
     (Object.create
@@ -32,9 +32,10 @@ var require_vscode_jsonrpc = x(function (cjsExports) {
         });
   var __exportStar =
     (cjsExports && cjsExports.__exportStar) ||
-    function (m, r) {
+    function (m, target) {
       for (var p in m)
-        if (p !== "default" && !Object.prototype.hasOwnProperty.call(r, p)) __createBinding(r, m, p);
+        if (p !== "default" && !Object.prototype.hasOwnProperty.call(target, p))
+          __createBinding(target, m, p);
     };
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
@@ -63,9 +64,9 @@ var require_vscode_jsonrpc = x(function (cjsExports) {
   var api_1 = require_api();
   __exportStar(require_api(), cjsExports);
   class IPCMessageReader extends api_1.AbstractMessageReader {
-    constructor(e) {
+    constructor(childProcess) {
       super();
-      this.process = e;
+      this.process = childProcess;
       let eventEmitter = this.process;
       eventEmitter.on("error", (error) => this.fireError(error));
       eventEmitter.on("close", () => this.fireClose());
@@ -77,9 +78,9 @@ var require_vscode_jsonrpc = x(function (cjsExports) {
   }
   cjsExports.IPCMessageReader = IPCMessageReader;
   class IPCMessageWriter extends api_1.AbstractMessageWriter {
-    constructor(e) {
+    constructor(childProcess) {
       super();
-      this.process = e;
+      this.process = childProcess;
       this.errorCount = 0;
       let eventEmitter = this.process;
       eventEmitter.on("error", (error) => this.fireError(error));

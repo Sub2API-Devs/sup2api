@@ -5,14 +5,14 @@
  * pieces: chunk-2tyrgda4.js (2)
  * attribution: esm-fingerprint 2
  */
-import { K } from "../../../webapi/lib/validate.js";
-import { f, Ue } from "../../../webapi/lib/content_encryption.js";
-import { l, encode } from "../../../browser/runtime/base64url.js";
-import { ue } from "../../../webapi/lib/buffer_utils.js";
+import { isPlainObject } from "../../../webapi/lib/validate.js";
+import { JOSENotSupported, JWKInvalid } from "../../../webapi/lib/content_encryption.js";
+import { encoder, encode } from "../../../browser/runtime/base64url.js";
+import { sha256DigestInit } from "../../../webapi/lib/buffer_utils.js";
 
 //@ chunk-2tyrgda4.js:40828-41683 esm-fingerprint
-async function zr(jwk, digestAlgorithm) {
-  if (!K(jwk)) throw TypeError("JWK must be an object");
+async function thumbprint(jwk, digestAlgorithm) {
+  if (!isPlainObject(jwk)) throw TypeError("JWK must be an object");
   if (!(digestAlgorithm !== null && digestAlgorithm !== undefined)) digestAlgorithm = "sha256";
   if (digestAlgorithm !== "sha256" && digestAlgorithm !== "sha384" && digestAlgorithm !== "sha512")
     throw TypeError('digestAlgorithm must one of "sha256", "sha384", or "sha512"');
@@ -55,12 +55,13 @@ async function zr(jwk, digestAlgorithm) {
       };
       break;
     default:
-      throw new f('"kty" (Key Type) Parameter missing or unsupported');
+      throw new JOSENotSupported('"kty" (Key Type) Parameter missing or unsupported');
   }
-  let data = l.encode(JSON.stringify(components));
-  return encode(await ue(digestAlgorithm, data));
+  let data = encoder.encode(JSON.stringify(components));
+  return encode(await sha256DigestInit(digestAlgorithm, data));
 }
 //@ chunk-2tyrgda4.js:41683-41765 esm-fingerprint
 var check = (value, description) => {
-  if (typeof value !== "string" || !value) throw new Ue(`${description} missing or invalid`);
+  if (typeof value !== "string" || !value) throw new JWKInvalid(`${description} missing or invalid`);
 };
+export { thumbprint };

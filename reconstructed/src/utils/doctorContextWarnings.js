@@ -14,19 +14,23 @@ import { _Lexer } from "../../vendor/marked/lib/marked.esm.js";
 import { consumeFirstBlock, hasOverlongLine } from "../components/Markdown.js";
 import { lexResult, splitHeadingLines } from "./markdownHeadings.js";
 import { figures_default } from "../../vendor/@inquirer/figures/dist/esm/index.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-wj577vf9.js:1034-1142 placement
-var STRIKETHROUGH_TERMINALS = new Set([
-  "iTerm.app",
-  "vscode",
-  "WezTerm",
-  "WarpTerminal",
-  "Hyper",
-  "Tabby",
-  "rio",
-  "contour",
-  "alacritty",
-]);
+var STRIKETHROUGH_TERMINALS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wj577vf9.js:1034", () => {
+  STRIKETHROUGH_TERMINALS = new Set([
+    "iTerm.app",
+    "vscode",
+    "WezTerm",
+    "WarpTerminal",
+    "Hyper",
+    "Tabby",
+    "rio",
+    "contour",
+    "alacritty",
+  ]);
+});
 //@ chunk-wj577vf9.js:1142-1601 placement
 function supportsStrikethrough() {
   if (env.CLAUDE_CODE_FORCE_STRIKETHROUGH) return true;
@@ -53,34 +57,49 @@ function supportsStrikethrough() {
 /**
  * 单块 Markdown 的最大字符数（16000）。
  */
-var MARKDOWN_LIMITS = 1000;
-var MAX_MARKDOWN_BLOCK_CHARS = 16000;
-var MAX_MARKDOWN_BLOCKS = 100;
-var MAX_WINDOW_CHARS = 4000;
-var MAX_WINDOW_BLOCKS = 100;
-var SMALL_MARKDOWN_THRESHOLD = MARKDOWN_LIMITS * MAX_MARKDOWN_BLOCKS;
-var GFM_RULES = _Lexer.rules.block.gfm;
-var CRLF_RE = /\r\n?/g;
-var PROBE_LINE = `x
+var MARKDOWN_LIMITS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_MARKDOWN_BLOCK_CHARS;
+var MAX_MARKDOWN_BLOCKS;
+var MAX_WINDOW_CHARS;
+var MAX_WINDOW_BLOCKS;
+var SMALL_MARKDOWN_THRESHOLD;
+var GFM_RULES;
+var CRLF_RE;
+var PROBE_LINE;
+var LEADING_NEWLINES_RE;
+var TRAILING_NEWLINES_RE;
+var regExp;
+var MARKDOWN_LIMITS_2;
+deferInit("chunk-wj577vf9.js:1601", () => {
+  MARKDOWN_LIMITS = 1000;
+  MAX_MARKDOWN_BLOCK_CHARS = 16000;
+  MAX_MARKDOWN_BLOCKS = 100;
+  MAX_WINDOW_CHARS = 4000;
+  MAX_WINDOW_BLOCKS = 100;
+  SMALL_MARKDOWN_THRESHOLD = MARKDOWN_LIMITS * MAX_MARKDOWN_BLOCKS;
+  GFM_RULES = _Lexer.rules.block.gfm;
+  CRLF_RE = /\r\n?/g;
+  PROBE_LINE = `x
 `;
-var LEADING_NEWLINES_RE = /^\n*/;
-var TRAILING_NEWLINES_RE = /\n*$/;
-var regExp = new RegExp(`^(?:[^\\n]+\\n){1,${MAX_WINDOW_BLOCKS}}? {0,3}(?:=+|-+) *(?:\\n|$)`);
-var MARKDOWN_LIMITS_2 = /^(?:[^\n]+\n)+? {0,3}(?:=+|-+) *(?:\n|$)/;
+  LEADING_NEWLINES_RE = /^\n*/;
+  TRAILING_NEWLINES_RE = /\n*$/;
+  regExp = new RegExp(`^(?:[^\\n]+\\n){1,${MAX_WINDOW_BLOCKS}}? {0,3}(?:=+|-+) *(?:\\n|$)`);
+  MARKDOWN_LIMITS_2 = /^(?:[^\n]+\n)+? {0,3}(?:=+|-+) *(?:\n|$)/;
+});
 //@ chunk-wj577vf9.js:1824-1917 placement
 /**
  * 构造“是否被保持”的计数器守卫。
  */
 function createHeldGuard() {
-  let e = 0;
+  let depth = 0;
   return {
-    isHeld: () => e > 0,
-    during: (t) => {
-      e += 1;
+    isHeld: () => depth > 0,
+    during: (fn) => {
+      depth += 1;
       try {
-        return t();
+        return fn();
       } finally {
-        e -= 1;
+        depth -= 1;
       }
     },
   };
@@ -89,16 +108,19 @@ function createHeldGuard() {
 /**
  * 词法分析是否处于保持状态的守卫。
  */
-var markdownHeldGuard = createHeldGuard();
+var markdownHeldGuard; // deferred: uses createHeldGuard of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-wj577vf9.js:1917", () => {
+  markdownHeldGuard = createHeldGuard();
+});
 //@ chunk-wj577vf9.js:1929-2040 placement
-function lexInlineHtml(marked, t) {
-  let n = new _Lexer(marked.defaults);
-  if (t.includes("<")) n.lex(t);
-  return n.state.inLink || n.state.inRawBlock;
+function lexInlineHtml(marked, text) {
+  let lexer = new _Lexer(marked.defaults);
+  if (text.includes("<")) lexer.lex(text);
+  return lexer.state.inLink || lexer.state.inRawBlock;
 }
 //@ chunk-wj577vf9.js:2040-2162 placement
-function isSmallMarkdown(e) {
-  let replaced = e.replace(
+function isSmallMarkdown(text) {
+  let replaced = text.replace(
     CRLF_RE,
     `
 `,
@@ -109,24 +131,26 @@ function isSmallMarkdown(e) {
   );
 }
 //@ chunk-wj577vf9.js:2162-2258 placement
-function lexMarkdownWindowed(marked, t) {
-  let n = !isSmallMarkdown(t);
+function lexMarkdownWindowed(highlight, text) {
+  let isWindowed = !isSmallMarkdown(text);
   return {
-    tokens: n ? markdownHeldGuard.during(() => splitHeadingLines(marked, t)) : marked.lexer(t),
-    isWindowed: n,
+    tokens: isWindowed
+      ? markdownHeldGuard.during(() => splitHeadingLines(highlight, text))
+      : highlight.lexer(text),
+    isWindowed,
   };
 }
 //@ chunk-5aas12zq.js:15043-15267 fingerprint = checkUnreachableRules (0.377)
 function checkUnreachableRules(getToolPermissionContext) {
   let joined = [getToolPermissionContext.file, getToolPermissionContext.field]
-    .filter((r) => r !== "")
+    .filter((segment) => segment !== "")
     .join(" ");
-  let t =
+  let reason =
     getToolPermissionContext.title === null
       ? getToolPermissionContext.code
       : `${getToolPermissionContext.title} (${getToolPermissionContext.code})`;
   return [
-    `  ${figures_default.pointer} ${joined === "" ? "" : `${joined}: `}${t}. ${getToolPermissionContext.message}`,
+    `  ${figures_default.pointer} ${joined === "" ? "" : `${joined}: `}${reason}. ${getToolPermissionContext.message}`,
     ...(getToolPermissionContext.fix === null ? [] : [`    Fix: ${getToolPermissionContext.fix}`]),
   ];
 }

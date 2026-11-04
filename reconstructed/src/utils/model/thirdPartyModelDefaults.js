@@ -45,11 +45,11 @@ var DEFAULT_MODEL_FAMILY_NAMES = ["Fable", "Haiku", "Mythos", "Opus", "Sonnet"];
 /**
  * 判断值是否为探测写入的默认模型值（可带数字后缀）。
  */
-function isProbeWrittenValue(e) {
-  return DEFAULT_MODEL_FAMILY_NAMES.some((n) => {
-    if (e === n) return true;
-    if (typeof e !== "string" || !e.startsWith(`${n} `)) return false;
-    let sliced = e.slice(n.length + 1);
+function isProbeWrittenValue(value) {
+  return DEFAULT_MODEL_FAMILY_NAMES.some((family) => {
+    if (value === family) return true;
+    if (typeof value !== "string" || !value.startsWith(`${family} `)) return false;
+    let sliced = value.slice(family.length + 1);
     return sliced !== "" && sliced === sliced.trim() && Number.isFinite(Number(sliced));
   });
 }
@@ -57,33 +57,36 @@ function isProbeWrittenValue(e) {
 /**
  * 取第一个词。
  */
-function firstWord(e) {
-  let [n] = e.split(" ");
-  return n;
+function firstWord(value) {
+  let [word] = value.split(" ");
+  return word;
 }
 //@ chunk-aepeg2w5.js:419303-419604 placement
 /**
  * 记录探测写入的默认模型环境变量。
  */
-function recordProbedDefault(envVar, n) {
-  if (envVar === "ANTHROPIC_DEFAULT_SONNET_MODEL") env.set("CLAUDE_CODE_3P_PROBE_WROTE_SONNET_DEFAULT", n);
-  else if (envVar === "ANTHROPIC_DEFAULT_OPUS_MODEL") env.set("CLAUDE_CODE_3P_PROBE_WROTE_OPUS_DEFAULT", n);
-  else if (envVar === "ANTHROPIC_DEFAULT_HAIKU_MODEL") env.set("CLAUDE_CODE_3P_PROBE_WROTE_HAIKU_DEFAULT", n);
+function recordProbedDefault(envVar, value) {
+  if (envVar === "ANTHROPIC_DEFAULT_SONNET_MODEL")
+    env.set("CLAUDE_CODE_3P_PROBE_WROTE_SONNET_DEFAULT", value);
+  else if (envVar === "ANTHROPIC_DEFAULT_OPUS_MODEL")
+    env.set("CLAUDE_CODE_3P_PROBE_WROTE_OPUS_DEFAULT", value);
+  else if (envVar === "ANTHROPIC_DEFAULT_HAIKU_MODEL")
+    env.set("CLAUDE_CODE_3P_PROBE_WROTE_HAIKU_DEFAULT", value);
 }
 //@ chunk-aepeg2w5.js:419604-419799 placement
 /**
  * 记录探测写入的第三方 Sonnet/Opus 默认值到环境变量。
  */
-function recordSeededDefault(e, n) {
-  if (e === "ANTHROPIC_DEFAULT_SONNET_MODEL") env.set("CLAUDE_CODE_3P_SEEDED_SONNET_DEFAULT", n);
-  else if (e === "ANTHROPIC_DEFAULT_OPUS_MODEL") env.set("CLAUDE_CODE_3P_SEEDED_OPUS_DEFAULT", n);
+function recordSeededDefault(envVar, value) {
+  if (envVar === "ANTHROPIC_DEFAULT_SONNET_MODEL") env.set("CLAUDE_CODE_3P_SEEDED_SONNET_DEFAULT", value);
+  else if (envVar === "ANTHROPIC_DEFAULT_OPUS_MODEL") env.set("CLAUDE_CODE_3P_SEEDED_OPUS_DEFAULT", value);
 }
 //@ chunk-aepeg2w5.js:419799-420157 placement
 /**
  * 环境变量是否为探测写入的值。
  */
-function isProbedDefault(e) {
-  switch (e) {
+function isProbedDefault(envVar) {
+  switch (envVar) {
     case "ANTHROPIC_DEFAULT_SONNET_MODEL":
       return (
         env.ANTHROPIC_DEFAULT_SONNET_MODEL !== undefined &&
@@ -103,13 +106,13 @@ function isProbedDefault(e) {
  * 用户自己配置的第三方默认模型。
  */
 function userConfiguredDefault(tierForEnvVar) {
-  let [n, r] =
+  let [currentValue, probeWrittenValue] =
     tierForEnvVar === "sonnet"
       ? [env.ANTHROPIC_DEFAULT_SONNET_MODEL, env.CLAUDE_CODE_3P_PROBE_WROTE_SONNET_DEFAULT]
       : tierForEnvVar === "opus"
         ? [env.ANTHROPIC_DEFAULT_OPUS_MODEL, env.CLAUDE_CODE_3P_PROBE_WROTE_OPUS_DEFAULT]
         : [env.ANTHROPIC_DEFAULT_HAIKU_MODEL, env.CLAUDE_CODE_3P_PROBE_WROTE_HAIKU_DEFAULT];
-  return n !== undefined && n === r;
+  return currentValue !== undefined && currentValue === probeWrittenValue;
 }
 export {
   isProbeWrittenValue,

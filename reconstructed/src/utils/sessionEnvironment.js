@@ -22,6 +22,7 @@ import { getErrnoCode, errorMessage } from "./errors.js";
 import { env } from "./env.js";
 import { getPlatform } from "./platform.js";
 import { cleanupOldFilesInDirectory } from "./cleanup.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:824835-824956 placement
 class SessionEnvScriptSlot {
@@ -37,78 +38,82 @@ class SessionEnvScriptSlot {
   }
 }
 //@ chunk-e6aww6q8.js:824956-824983 placement
-var sessionEnvScriptSlot = new HostScoped(() => new SessionEnvScriptSlot());
+var sessionEnvScriptSlot; // deferred: uses SessionEnvScriptSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:824956", () => {
+  sessionEnvScriptSlot = new HostScoped(() => new SessionEnvScriptSlot());
+});
 //@ chunk-e6aww6q8.js:824983-825022 placement
 function sessionEnvScript() {
   return sessionEnvScriptSlot.of(getRootSession().host);
 }
 //@ chunk-e6aww6q8.js:825022-825109 placement
-async function sessionEnvDir(e = getSessionId()) {
-  let n = join(getClaudeConfigDir(), "session-env", e);
-  await getFsImplementation().mkdir(n);
-  return n;
+async function sessionEnvDir(sessionId = getSessionId()) {
+  let dir = join(getClaudeConfigDir(), "session-env", sessionId);
+  await getFsImplementation().mkdir(dir);
+  return dir;
 }
 //@ chunk-e6aww6q8.js:825109-825172 layout
-function getSessionEnvKey(sessionId, n) {
-  return STORAGE_SPACES.userConfigDir("session-env", [sessionId, n]);
+function getSessionEnvKey(sessionId, name) {
+  return STORAGE_SPACES.userConfigDir("session-env", [sessionId, name]);
 }
 //@ chunk-e6aww6q8.js:825172-825540 layout
-async function listSessionEnvFilesViaStorage(e, sessionId) {
-  let r = [];
-  let s;
+async function listSessionEnvFilesViaStorage(storage, sessionId) {
+  let names = [];
+  let cursor;
   do {
-    let h = await e.listEntries(
+    let page = await storage.listEntries(
       {
         namespace: "userConfigDir",
         dir: "session-env",
         relPath: [sessionId],
       },
-      s === undefined
+      cursor === undefined
         ? undefined
         : {
-            cursor: s,
+            cursor,
           },
     );
-    if (!h.ok)
+    if (!page.ok)
       return {
-        error: h.error,
+        error: page.error,
       };
-    for (let item of h.value.items) {
+    for (let item of page.value.items) {
       if (item.kind !== "key" || item.key.namespace !== "userConfigDir") continue;
       let last = item.key.relPath.at(-1);
-      if (last !== undefined) r.push(last);
+      if (last !== undefined) names.push(last);
     }
-    s = h.value.cursor;
-  } while (s !== undefined);
-  return r;
+    cursor = page.value.cursor;
+  } while (cursor !== undefined);
+  return names;
 }
 //@ chunk-e6aww6q8.js:825540-825633 fingerprint = getHookEnvFilePath (1)
-async function getHookEnvFilePath(hookEvent, hookIndex, envFileSessionId) {
+async function getHookEnvFilePath(hookEvent, hookIndex, sessionId) {
   let prefix = hookEvent.toLowerCase();
-  return join(await sessionEnvDir(envFileSessionId), `${prefix}-hook-${hookIndex}.sh`);
+  return join(await sessionEnvDir(sessionId), `${prefix}-hook-${hookIndex}.sh`);
 }
 //@ chunk-e6aww6q8.js:825633-826304 fingerprint = clearCwdEnvFiles (0.852)
-async function clearCwdEnvFiles(e) {
-  if (isStorageV5Enabled() && e !== undefined) {
+async function clearCwdEnvFiles(storage) {
+  if (isStorageV5Enabled() && storage !== undefined) {
     let sessionId = getSessionId();
-    let r = await listSessionEnvFilesViaStorage(e, sessionId);
-    if (!Array.isArray(r)) {
-      logForDebugging(`Failed to clear cwd env files: ${formatStorageError(r.error)}`);
+    let names = await listSessionEnvFilesViaStorage(storage, sessionId);
+    if (!Array.isArray(names)) {
+      logForDebugging(`Failed to clear cwd env files: ${formatStorageError(names.error)}`);
       return;
     }
-    let filtered = r.filter(
-      (y) =>
-        (y.startsWith("filechanged-hook-") || y.startsWith("cwdchanged-hook-")) && HOOK_ENV_NAME_RE.test(y),
+    let filtered = names.filter(
+      (name) =>
+        (name.startsWith("filechanged-hook-") || name.startsWith("cwdchanged-hook-")) &&
+        HOOK_ENV_NAME_RE.test(name),
     );
     let results = await Promise.all(
-      filtered.map((y) =>
-        e.write(getSessionEnvKey(sessionId, y), "", {
+      filtered.map((name) =>
+        storage.write(getSessionEnvKey(sessionId, name), "", {
           publishDiscipline: "inPlace",
         }),
       ),
     );
-    for (let y of results)
-      if (!y.ok) logForDebugging(`Failed to clear cwd env files: ${formatStorageError(y.error)}`);
+    for (let result of results)
+      if (!result.ok) logForDebugging(`Failed to clear cwd env files: ${formatStorageError(result.error)}`);
     return;
   }
   try {
@@ -136,10 +141,10 @@ function invalidateSessionEnvCache() {
 /**
  * 组装 Bash 工具的会话环境脚本：CLAUDE_ENV_FILE 与 session-env 目录下各 hook 写入的 env 文件（按 setup/sessionstart/cwdchanged/filechanged 顺序）。
  */
-async function getSessionEnvironmentScript(e) {
+async function getSessionEnvironmentScript(storage) {
   let sessionId = getSessionId();
-  let r = sessionEnvScript();
-  if (r.script !== undefined && r.owner === sessionId) return r.script;
+  let cache = sessionEnvScript();
+  if (cache.script !== undefined && cache.owner === sessionId) return cache.script;
   let scripts = [];
   let envFile = env.CLAUDE_ENV_FILE;
   if (envFile)
@@ -154,23 +159,25 @@ async function getSessionEnvironmentScript(e) {
     } catch (e) {
       if (getErrnoCode(e) !== "ENOENT") logForDebugging(`Failed to read CLAUDE_ENV_FILE: ${errorMessage(e)}`);
     }
-  if (isStorageV5Enabled() && e !== undefined) {
-    let S = await listSessionEnvFilesViaStorage(e, sessionId);
-    if (!Array.isArray(S))
-      logForDebugging(`Failed to load session environment from hooks: ${formatStorageError(S.error)}`);
+  if (isStorageV5Enabled() && storage !== undefined) {
+    let names = await listSessionEnvFilesViaStorage(storage, sessionId);
+    if (!Array.isArray(names))
+      logForDebugging(`Failed to load session environment from hooks: ${formatStorageError(names.error)}`);
     else {
-      let sorted = S.filter((G) => HOOK_ENV_NAME_RE.test(G)).sort(sortHookEnvFiles);
+      let sorted = names.filter((name) => HOOK_ENV_NAME_RE.test(name)).sort(sortHookEnvFiles);
       if (sorted.length > 0) {
-        let results = await Promise.all(sorted.map((q) => e.read([getSessionEnvKey(sessionId, q)])));
+        let results = await Promise.all(
+          sorted.map((name) => storage.read([getSessionEnvKey(sessionId, name)])),
+        );
         for (let idx = 0; idx < sorted.length; idx++) {
-          let Z = results[idx];
-          if (!Z.ok) {
-            logForDebugging(`Failed to read hook file ${sorted[idx]}: ${formatStorageError(Z.error)}`);
+          let result = results[idx];
+          if (!result.ok) {
+            logForDebugging(`Failed to read hook file ${sorted[idx]}: ${formatStorageError(result.error)}`);
             continue;
           }
-          let Se = Z.value.items[0];
-          if (!Se?.found) continue;
-          let trimmed = Buffer.from(Se.value).toString("utf-8").trim();
+          let item = result.value.items[0];
+          if (!item?.found) continue;
+          let trimmed = Buffer.from(item.value).toString("utf-8").trim();
           if (trimmed) scripts.push(trimmed);
         }
         logForDebugging(`Session environment loaded from ${sorted.length} hook file(s)`);
@@ -178,19 +185,19 @@ async function getSessionEnvironmentScript(e) {
     }
     if (scripts.length === 0) {
       logForDebugging("No session environment scripts found");
-      r.store(null, sessionId);
+      cache.store(null, sessionId);
       return null;
     }
     let joined = scripts.join(`
 `);
-    r.store(joined, sessionId);
+    cache.store(joined, sessionId);
     logForDebugging(`Session environment script ready (${joined.length} chars total)`);
     return joined;
   }
   try {
     let sessionEnvDir_2 = await sessionEnvDir();
     let hookFiles = (await readdir(sessionEnvDir_2))
-      .filter((G) => HOOK_ENV_NAME_RE.test(G))
+      .filter((name) => HOOK_ENV_NAME_RE.test(name))
       .sort(sortHookEnvFiles);
     for (let file of hookFiles) {
       let filePath = join(sessionEnvDir_2, file);
@@ -210,12 +217,12 @@ async function getSessionEnvironmentScript(e) {
   }
   if (scripts.length === 0) {
     logForDebugging("No session environment scripts found");
-    r.store(null, sessionId);
+    cache.store(null, sessionId);
     return null;
   }
   let joined = scripts.join(`
 `);
-  r.store(joined, sessionId);
+  cache.store(joined, sessionId);
   logForDebugging(`Session environment script ready (${joined.length} chars total)`);
   return joined;
 }
@@ -228,23 +235,26 @@ var PATH_SEPARATOR_RE = /[/\\]/;
 /**
  * 把会话环境脚本解析为变量表：每行必须是纯赋值（可带 export/declare -x 与引号），否则放弃返回空表；Windows 上含路径分隔符的值会被删除。
  */
-async function parseSessionEnvironment(storageV5) {
-  let sessionEnvironmentScript = await getSessionEnvironmentScript(storageV5);
-  let r = new Map();
-  for (let s of sessionEnvironmentScript?.split(`
+async function parseSessionEnvironment(storage) {
+  let sessionEnvironmentScript = await getSessionEnvironmentScript(storage);
+  let env = new Map();
+  for (let line of sessionEnvironmentScript?.split(`
 `) ?? []) {
-    let match = PLAIN_ASSIGNMENT_RE.exec(s.trimEnd());
+    let match = PLAIN_ASSIGNMENT_RE.exec(line.trimEnd());
     if (match === null) {
       logForDebugging("Session environment is not all plain assignments");
       return new Map();
     }
-    let [, y, S] = match;
-    if (y === undefined || S === undefined) continue;
-    let replaced = S.replace(QUOTED_SEGMENT_RE, (L, G, q) => G ?? q?.replace(/\\([$`"\\])/g, "$1") ?? "");
-    if (getPlatform() === "windows" && PATH_SEPARATOR_RE.test(replaced)) r.delete(y);
-    else r.set(y, replaced);
+    let [, name, rawValue] = match;
+    if (name === undefined || rawValue === undefined) continue;
+    let replaced = rawValue.replace(
+      QUOTED_SEGMENT_RE,
+      (match, doubled, quoted) => doubled ?? quoted?.replace(/\\([$`"\\])/g, "$1") ?? "",
+    );
+    if (getPlatform() === "windows" && PATH_SEPARATOR_RE.test(replaced)) env.delete(name);
+    else env.set(name, replaced);
   }
-  return r;
+  return env;
 }
 //@ chunk-e6aww6q8.js:828573-828699 fingerprint = HOOK_ENV_PRIORITY (1)
 var HOOK_ENV_PRIORITY = {

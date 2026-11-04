@@ -22,6 +22,7 @@ import { getSessionFeatureValues } from "../../bootstrap/sessionFeatureValues.js
 import { getCwd } from "../../utils/cwd.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { count } from "../../utils/collections.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hg2zbde4.js:3991-5978 placement
 /**
@@ -62,19 +63,32 @@ var OFFER_CHROME_SETUP_NOT_ATTEMPTED =
 /**
  * 协调者 shell 允许的输入字段（command、description、timeout）。
  */
-var COORDINATOR_SHELL_TIMEOUT_MS = 60000;
-var COORDINATOR_SHELL_ALLOWED_FIELDS = new Set(["command", "description", "timeout"]);
-var COORDINATOR_SHELL_READONLY_ONLY_TEXT = `${BASH_TOOL_NAME} in the coordinator runs only a command it can verify as read-only and that stays in the working directory (no cd, pushd or popd), with no input besides command, description and timeout (no run_in_background, no sandbox bypass, no other machine) \u2014 run anything else from a worker via the ${AGENT} tool.`;
-var COORDINATOR_MULTIPLE_CD_TEXT =
-  "A refused compound command does not mean the shell is unavailable: retry the read as a single plain command.";
-var COORDINATOR_NO_CD_TEXT =
-  "This refusal does not mean the shell is unavailable: a plain read-only command still runs.";
-var MAX_REFUSAL_DETAIL_CHARS = 80;
-var MAX_REFUSAL_REASON_CHARS = 300;
-var COORDINATOR_OUTSIDE_WORKDIR_TEXT = `${BASH_TOOL_NAME} in the coordinator does not read a worker's transcript or a task's output file. A worker's result reaches you in its task notification; ask the worker with ${SENDMESSAGE} for more \u2014 not with the shell.`;
-var COORDINATOR_UNVERIFIABLE_TEXT = `${BASH_TOOL_NAME} in the coordinator does not run a command with an argument built from \`$(\u2026)\`, a variable, a \`~name\` form, or a \`..\` after a directory name: it cannot be checked against this session's worker transcript and task output folders. Name the path literally.`;
-var COORDINATOR_CD_TOO_DEEP_TEXT = `${BASH_TOOL_NAME} in the coordinator does not run a glob wide enough to reach this session's worker transcript and task output folders. Narrow the glob, or name the directory you mean.`;
-var COORDINATOR_QUOTED_COMMANDS = new Set(["cd", "pushd", "popd", "chdir"]);
+var COORDINATOR_SHELL_TIMEOUT_MS; // deferred: uses AGENT (../AgentTool/constants.js) of its import cycle while loading; runs once the cycle is complete
+var COORDINATOR_SHELL_ALLOWED_FIELDS;
+var COORDINATOR_SHELL_READONLY_ONLY_TEXT;
+var COORDINATOR_MULTIPLE_CD_TEXT;
+var COORDINATOR_NO_CD_TEXT;
+var MAX_REFUSAL_DETAIL_CHARS;
+var MAX_REFUSAL_REASON_CHARS;
+var COORDINATOR_OUTSIDE_WORKDIR_TEXT;
+var COORDINATOR_UNVERIFIABLE_TEXT;
+var COORDINATOR_CD_TOO_DEEP_TEXT;
+var COORDINATOR_QUOTED_COMMANDS;
+deferInit("chunk-hg2zbde4.js:8078", () => {
+  COORDINATOR_SHELL_TIMEOUT_MS = 60000;
+  COORDINATOR_SHELL_ALLOWED_FIELDS = new Set(["command", "description", "timeout"]);
+  COORDINATOR_SHELL_READONLY_ONLY_TEXT = `${BASH_TOOL_NAME} in the coordinator runs only a command it can verify as read-only and that stays in the working directory (no cd, pushd or popd), with no input besides command, description and timeout (no run_in_background, no sandbox bypass, no other machine) \u2014 run anything else from a worker via the ${AGENT} tool.`;
+  COORDINATOR_MULTIPLE_CD_TEXT =
+    "A refused compound command does not mean the shell is unavailable: retry the read as a single plain command.";
+  COORDINATOR_NO_CD_TEXT =
+    "This refusal does not mean the shell is unavailable: a plain read-only command still runs.";
+  MAX_REFUSAL_DETAIL_CHARS = 80;
+  MAX_REFUSAL_REASON_CHARS = 300;
+  COORDINATOR_OUTSIDE_WORKDIR_TEXT = `${BASH_TOOL_NAME} in the coordinator does not read a worker's transcript or a task's output file. A worker's result reaches you in its task notification; ask the worker with ${SENDMESSAGE} for more \u2014 not with the shell.`;
+  COORDINATOR_UNVERIFIABLE_TEXT = `${BASH_TOOL_NAME} in the coordinator does not run a command with an argument built from \`$(\u2026)\`, a variable, a \`~name\` form, or a \`..\` after a directory name: it cannot be checked against this session's worker transcript and task output folders. Name the path literally.`;
+  COORDINATOR_CD_TOO_DEEP_TEXT = `${BASH_TOOL_NAME} in the coordinator does not run a glob wide enough to reach this session's worker transcript and task output folders. Narrow the glob, or name the directory you mean.`;
+  COORDINATOR_QUOTED_COMMANDS = new Set(["cd", "pushd", "popd", "chdir"]);
+});
 //@ chunk-hg2zbde4.js:9369-9393 placement
 /**
  * 协调者 shell 命令是否可验证（当前恒为 false）。
@@ -91,11 +105,11 @@ function noopHook() {}
 /**
  * 判断是否为协调者模式下、可检查的 Bash 工具调用。
  */
-function isCoordinatorBashToolUse(tool, o) {
+function isCoordinatorBashToolUse(tool, toolUseContext) {
   return (
     toolMatchesName(tool, BASH_TOOL_NAME) &&
-    o.remoteCall === undefined &&
-    o.agentId === undefined &&
+    toolUseContext.remoteCall === undefined &&
+    toolUseContext.agentId === undefined &&
     isCoordinatorShellVerifiable()
   );
 }
@@ -103,44 +117,46 @@ function isCoordinatorBashToolUse(tool, o) {
 /**
  * 协调者模式下的 shell 只允许可验证为只读的命令，否则给出拒绝说明。
  */
-function checkCoordinatorShellCommand(e, o, r) {
+function checkCoordinatorShellCommand(tool, input, toolUseContext) {
   if (
-    e.isMcp === true ||
-    typeof o.command !== "string" ||
-    Object.entries(o).some(
+    tool.isMcp === true ||
+    typeof input.command !== "string" ||
+    Object.entries(input).some(
       ([key, value]) => !COORDINATOR_SHELL_ALLOWED_FIELDS.has(key) && value !== undefined && value !== false,
     )
   )
     return COORDINATOR_SHELL_READONLY_ONLY_TEXT;
   try {
-    let n = e.isReadOnly(o, r);
-    let { parseForSecurityFromAst } = require("./chunk-n5g0n7p8.js");
-    let { getParserModule } = require("./chunk-zjs53yja.js");
-    let { SPLIT_MAX_LEN } = require("./chunk-zz5tj6bg.js");
-    let O = o.command.length > SPLIT_MAX_LEN ? undefined : getParserModule()?.parse(o.command);
-    let T = O ? parseForSecurityFromAst(o.command, O) : undefined;
-    let commands = T?.kind === "simple" ? T.commands : [];
-    let filtered = commands
+    let isReadOnly = tool.isReadOnly(input, toolUseContext);
+    let { parseForSecurityFromAst } = require("../../utils/bash/ast.js");
+    let { getParserModule } = require("../../utils/bash/bashParser.js");
+    let { SPLIT_MAX_LEN } = require("../../utils/bash/commands.js");
+    let ast = input.command.length > SPLIT_MAX_LEN ? undefined : getParserModule()?.parse(input.command);
+    let parsed = ast ? parseForSecurityFromAst(input.command, ast) : undefined;
+    let commands = parsed?.kind === "simple" ? parsed.commands : [];
+    let cdArgs = commands
       .flatMap((command) => command.argv)
-      .filter((i) => COORDINATOR_QUOTED_COMMANDS.has(i));
-    if (n && commands.length > 0 && filtered.length === 0) return classifyCoordinatorCommand(commands);
-    let u;
-    let h =
+      .filter((arg) => COORDINATOR_QUOTED_COMMANDS.has(arg));
+    if (isReadOnly && commands.length > 0 && cdArgs.length === 0) return classifyCoordinatorCommand(commands);
+    let refusalDetail;
+    let structureNote =
       commands.length > 1
         ? COORDINATOR_MULTIPLE_CD_TEXT
         : commands.length === 0
           ? COORDINATOR_NO_CD_TEXT
           : undefined;
-    if (filtered.length > 0) u = describeUnnecessaryCd(filtered, commands);
-    else if (!n) {
-      let i = e.notReadOnlyReason?.(o, r);
-      if (i?.part !== undefined)
-        u = `The part it could not verify is \`${truncateWithEllipsis(i.part)}\`: the command itself, or a flag, argument, variable prefix or redirect on it, is not on the read-only list.`;
-      else if (i !== undefined)
-        u = `Reason: ${truncateWithEllipsis(i.message.replace(/\.$/, ""), MAX_REFUSAL_REASON_CHARS)}.`;
-      if (i?.everyInput === true) h = undefined;
+    if (cdArgs.length > 0) refusalDetail = describeUnnecessaryCd(cdArgs, commands);
+    else if (!isReadOnly) {
+      let notReadOnlyReason = tool.notReadOnlyReason?.(input, toolUseContext);
+      if (notReadOnlyReason?.part !== undefined)
+        refusalDetail = `The part it could not verify is \`${truncateWithEllipsis(notReadOnlyReason.part)}\`: the command itself, or a flag, argument, variable prefix or redirect on it, is not on the read-only list.`;
+      else if (notReadOnlyReason !== undefined)
+        refusalDetail = `Reason: ${truncateWithEllipsis(notReadOnlyReason.message.replace(/\.$/, ""), MAX_REFUSAL_REASON_CHARS)}.`;
+      if (notReadOnlyReason?.everyInput === true) structureNote = undefined;
     }
-    return [COORDINATOR_SHELL_READONLY_ONLY_TEXT, u, h].filter((i) => i !== undefined).join(" ");
+    return [COORDINATOR_SHELL_READONLY_ONLY_TEXT, refusalDetail, structureNote]
+      .filter((part) => part !== undefined)
+      .join(" ");
   } catch (error) {
     logForDebugging(
       `coordinator Bash read-only check threw ${error instanceof Error ? error.name : typeof error}; refusing`,
@@ -152,20 +168,22 @@ function checkCoordinatorShellCommand(e, o, r) {
   }
 }
 //@ chunk-hg2zbde4.js:10584-10852 placement
-function describeCoordinatorRefusal(e, toolUseContext, r) {
-  if (r.where === "refused" || !isCoordinatorBashToolUse(e, toolUseContext)) return r;
-  if (r.where !== "here")
+function describeCoordinatorRefusal(tool, toolUseContext, refusal) {
+  if (refusal.where === "refused" || !isCoordinatorBashToolUse(tool, toolUseContext)) return refusal;
+  if (refusal.where !== "here")
     return {
       where: "refused",
       message: COORDINATOR_SHELL_READONLY_ONLY_TEXT,
     };
-  let n = e.inputSchema.safeParse(e.coerceInput?.(r.input)?.input ?? r.input);
-  let s = n.success ? checkCoordinatorShellCommand(e, n.data, toolUseContext) : null;
-  return s === null
-    ? r
+  let parsedInput = tool.inputSchema.safeParse(tool.coerceInput?.(refusal.input)?.input ?? refusal.input);
+  let message = parsedInput.success
+    ? checkCoordinatorShellCommand(tool, parsedInput.data, toolUseContext)
+    : null;
+  return message === null
+    ? refusal
     : {
         where: "refused",
-        message: s,
+        message,
       };
 }
 //@ chunk-hg2zbde4.js:10852-10950 placement
@@ -184,89 +202,101 @@ function clampCoordinatorShellTimeout(callInput) {
 }
 //@ chunk-hg2zbde4.js:10950-12209 placement
 function classifyCoordinatorCommand(commands) {
-  let { containsAnyPlaceholder } = require("./chunk-n5g0n7p8.js");
-  let { getPathsForPermissionCheck } = require("./chunk-f80am9t8.js");
-  let { expandPath } = require("./chunk-1164t2wf.js");
-  let { normalizeCaseForComparison, pathInWorkingPath, relativePath } = require("./chunk-nrmn01d7.js");
-  let { getGlobBaseDirectory, hasInteriorDotDot } = require("./chunk-trbwa6wn.js");
-  let { getSessionSubagentsDir } = require("./chunk-44epjky6.js");
-  let { peekTaskOutputDir } = require("./chunk-xr4q1qwc.js");
-  let u = [getSessionSubagentsDir(), peekTaskOutputDir()];
+  let { containsAnyPlaceholder } = require("../../utils/bash/ast.js");
+  let { getPathsForPermissionCheck } = require("../../utils/fsOperations.js");
+  let { expandPath } = require("../../utils/NullBytePathError.lazy.js");
+  let {
+    normalizeCaseForComparison,
+    pathInWorkingPath,
+    relativePath,
+  } = require("../../utils/permissions/filesystem.js");
+  let { getGlobBaseDirectory, hasInteriorDotDot } = require("../../utils/permissions/pathValidation.js");
+  let { getSessionSubagentsDir } = require("../../utils/sessionStorage.js");
+  let { peekTaskOutputDir } = require("../../utils/task/diskOutput.js");
+  let outputRoots = [getSessionSubagentsDir(), peekTaskOutputDir()];
   let sessionFeatureValues = getSessionFeatureValues();
-  if (sessionFeatureValues.coordinatorWorkerOutputTrees?.from !== u.join("\x00"))
+  if (sessionFeatureValues.coordinatorWorkerOutputTrees?.from !== outputRoots.join("\x00"))
     sessionFeatureValues.coordinatorWorkerOutputTrees = {
-      from: u.join("\x00"),
-      spellings: u.flatMap(getPathsForPermissionCheck),
+      from: outputRoots.join("\x00"),
+      spellings: outputRoots.flatMap(getPathsForPermissionCheck),
     };
   let spellings = sessionFeatureValues.coordinatorWorkerOutputTrees.spellings;
-  for (let f of commands) {
-    let argvUnquotedGlob = f.argvUnquotedGlob?.length === f.argv.length ? f.argvUnquotedGlob : [];
-    let mapped = f.redirects.map((redirect) => [redirect.target, true]);
-    for (let [a, m] of f.argv.entries())
-      if (a > 0 && !(m.startsWith("-") && !m.includes("="))) {
-        let p = argvUnquotedGlob[a] ?? true;
-        mapped.push([m, p]);
-        if (m.includes("=")) mapped.push([m.slice(m.indexOf("=") + 1), p]);
+  for (let command of commands) {
+    let argvUnquotedGlob =
+      command.argvUnquotedGlob?.length === command.argv.length ? command.argvUnquotedGlob : [];
+    let mapped = command.redirects.map((redirect) => [redirect.target, true]);
+    for (let [argIndex, arg] of command.argv.entries())
+      if (argIndex > 0 && !(arg.startsWith("-") && !arg.includes("="))) {
+        let isPlainArg = argvUnquotedGlob[argIndex] ?? true;
+        mapped.push([arg, isPlainArg]);
+        if (arg.includes("=")) mapped.push([arg.slice(arg.indexOf("=") + 1), isPlainArg]);
       }
-    for (let [a, m] of mapped) {
-      if (containsAnyPlaceholder(a) || /^~[^/]/.test(a) || hasInteriorDotDot(a))
+    for (let [pathArg, plain] of mapped) {
+      if (containsAnyPlaceholder(pathArg) || /^~[^/]/.test(pathArg) || hasInteriorDotDot(pathArg))
         return COORDINATOR_UNVERIFIABLE_TEXT;
-      let p = m ? getGlobBaseDirectory(a) : a;
-      let P = /\*\*|\{/.test(a) ? 1 / 0 : countPathSegments(a) - countPathSegments(p);
-      let pathsForPermissionCheck = getPathsForPermissionCheck(expandPath(p));
-      let R = false;
-      let C = false;
+      let baseDir = plain ? getGlobBaseDirectory(pathArg) : pathArg;
+      let globDepth = /\*\*|\{/.test(pathArg)
+        ? 1 / 0
+        : countPathSegments(pathArg) - countPathSegments(baseDir);
+      let pathsForPermissionCheck = getPathsForPermissionCheck(expandPath(baseDir));
+      let insideOutputRoot = false;
+      let pathDeeper = false;
       for (let spelling of spellings)
-        for (let L of pathsForPermissionCheck) {
-          if (pathInWorkingPath(L, spelling)) return COORDINATOR_OUTSIDE_WORKDIR_TEXT;
-          if (p !== a && pathInWorkingPath(spelling, L)) {
-            R = true;
-            let w = relativePath(normalizeCaseForComparison(L), normalizeCaseForComparison(spelling));
-            if (!w.startsWith("..")) {
-              C = true;
-              if (P >= countPathSegments(w)) return COORDINATOR_CD_TOO_DEEP_TEXT;
+        for (let spellingValue of pathsForPermissionCheck) {
+          if (pathInWorkingPath(spellingValue, spelling)) return COORDINATOR_OUTSIDE_WORKDIR_TEXT;
+          if (baseDir !== pathArg && pathInWorkingPath(spelling, spellingValue)) {
+            insideOutputRoot = true;
+            let relativeDepth = relativePath(
+              normalizeCaseForComparison(spellingValue),
+              normalizeCaseForComparison(spelling),
+            );
+            if (!relativeDepth.startsWith("..")) {
+              pathDeeper = true;
+              if (globDepth >= countPathSegments(relativeDepth)) return COORDINATOR_CD_TOO_DEEP_TEXT;
             }
           }
         }
-      if (R && !C) return COORDINATOR_CD_TOO_DEEP_TEXT;
+      if (insideOutputRoot && !pathDeeper) return COORDINATOR_CD_TOO_DEEP_TEXT;
     }
   }
   return null;
 }
 //@ chunk-hg2zbde4.js:12209-12822 placement
-function describeUnnecessaryCd(e, commands) {
+function describeUnnecessaryCd(cdArgs, commands) {
   let cwd = getCwd();
-  let n =
-    e.length === 1 ? commands.find((l) => l.argv.length === 2 && l.argv[0] === "cd")?.argv[1] : undefined;
-  if (n !== undefined && resolve(cwd, n) === cwd)
-    return `The \`cd ${truncateWithEllipsis(n)}\` is unnecessary: ${cwd} is already the working directory. Run the rest without it.`;
+  let cdTarget =
+    cdArgs.length === 1
+      ? commands.find((command) => command.argv.length === 2 && command.argv[0] === "cd")?.argv[1]
+      : undefined;
+  if (cdTarget !== undefined && resolve(cwd, cdTarget) === cwd)
+    return `The \`cd ${truncateWithEllipsis(cdTarget)}\` is unnecessary: ${cwd} is already the working directory. Run the rest without it.`;
   let found = commands
-    .map((l) => l.argv[0])
-    .find((l) => l !== undefined && COORDINATOR_QUOTED_COMMANDS.has(l));
+    .map((command) => command.argv[0])
+    .find((arg) => arg !== undefined && COORDINATOR_QUOTED_COMMANDS.has(arg));
   return found !== undefined
     ? `It contains \`${found}\`, and the working directory stays ${cwd} for the whole session: run the command with absolute paths instead of cd.`
-    : `It contains the word \`${e[0]}\`, which is refused wherever it sits in a command, as an argument too: the working directory stays ${cwd} for the whole session.`;
+    : `It contains the word \`${cdArgs[0]}\`, which is refused wherever it sits in a command, as an argument too: the working directory stays ${cwd} for the whole session.`;
 }
 //@ chunk-hg2zbde4.js:12822-12882 placement
 /**
  * 超出长度时截断并加省略号。
  */
-function truncateWithEllipsis(e, o = MAX_REFUSAL_DETAIL_CHARS) {
-  let r = truncateToLength(e, o);
-  return r === e ? e : `${r}\u2026`;
+function truncateWithEllipsis(text, maxChars = MAX_REFUSAL_DETAIL_CHARS) {
+  let truncated = truncateToLength(text, maxChars);
+  return truncated === text ? text : `${truncated}\u2026`;
 }
 //@ chunk-hg2zbde4.js:12882-12944 placement
 /**
  * 统计路径中的有效层级数（忽略空段与 “.”）。
  */
-function countPathSegments(e) {
-  return count(e.split(/[\\/]/), (o) => o !== "" && o !== ".");
+function countPathSegments(path) {
+  return count(path.split(/[\\/]/), (segment) => segment !== "" && segment !== ".");
 }
 export {
   noopHook,
-  isCoordinatorShellVerifiable,
   OFFER_CHROME_SETUP_TOOL_NAME,
   READNOTIFICATIONS,
+  isCoordinatorShellVerifiable,
   describeCoordinatorRefusal,
   isCoordinatorBashToolUse,
   checkCoordinatorShellCommand,

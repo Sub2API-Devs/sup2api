@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (1)
  * attribution: fingerprint 1
  */
-import { Se, Q } from "../../../vendor/react/cjs/react.production.js";
+import { useContext, useMemo } from "../../../vendor/react/cjs/react.production.js";
 import { StdinContextAlias } from "../terminalModes.js";
 import { getSecondRootError } from "../terminal.js";
 
@@ -17,9 +17,9 @@ import { getSecondRootError } from "../terminal.js";
  * 搜索高亮钩子：setQuery（全屏高亮所有匹配）、scanElement（在某元素子树里扫描匹配位置）、setPositions（设置位置式高亮与当前匹配）。
  */
 function useSearchHighlight() {
-  Se(StdinContextAlias);
+  useContext(StdinContextAlias);
   let ink = getSecondRootError().get(process.stdout);
-  return Q(() => {
+  return useMemo(() => {
     if (!ink)
       return {
         setQuery: () => {},

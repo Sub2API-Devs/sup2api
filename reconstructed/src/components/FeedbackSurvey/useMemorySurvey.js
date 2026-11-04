@@ -39,12 +39,12 @@ import { logOTelEvent } from "../../utils/telemetry/events.js";
 import { truncateToLines } from "../../utils/stringUtils.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { extractMemoryCitations } from "../../services/orgMemory/promptIndex.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import { useHost } from "../../context/session.js";
 import { memoryWatchers } from "../../services/memorySync/memoryWatcher.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { R, zt, y, P } from "../../../vendor/react/cjs/react.production.js";
+import { useRef, useLayoutEffect, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { saveGlobalConfig } from "../../utils/config.js";
 import { collectTranscriptShareWithPolicy } from "./submitTranscriptShare.js";
 import { useSurveyState } from "./useSurveyState.js";
@@ -62,9 +62,9 @@ var SURVEYRATING = "surveyRating";
 /**
  * 校验记忆文件 frontmatter 里的 surveyRating（count/mean/total）；total 不合理时按 mean×count 估算并夹在 [count, 3count]。
  */
-function parseSurveyRating(h) {
-  if (typeof h !== "object" || h === null || Array.isArray(h)) return null;
-  let { count, mean, total } = h;
+function parseSurveyRating(value) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  let { count, mean, total } = value;
   if (typeof count !== "number" || !Number.isInteger(count) || count < 1) return null;
   if (typeof mean !== "number" || !Number.isFinite(mean)) return null;
   let total_2 =
@@ -78,20 +78,20 @@ function parseSurveyRating(h) {
   };
 }
 //@ chunk-18hwfzwa.js:1039867-1040025 placement
-function accumulateSurveyRating(h, x) {
-  let surveyRating = parseSurveyRating(h);
+function accumulateSurveyRating(previous, rating) {
+  let surveyRating = parseSurveyRating(previous);
   if (surveyRating === null)
     return {
       count: 1,
-      mean: x,
-      total: x,
+      mean: rating,
+      total: rating,
     };
-  let L = surveyRating.count + 1;
-  let ee = surveyRating.total + x;
+  let count = surveyRating.count + 1;
+  let total = surveyRating.total + rating;
   return {
-    count: L,
-    mean: Math.round((ee / L) * 100) / 100,
-    total: ee,
+    count,
+    mean: Math.round((total / count) * 100) / 100,
+    total,
   };
 }
 //@ chunk-18hwfzwa.js:1040025-1040058 placement
@@ -99,23 +99,23 @@ var MAX_MEMORY_SCAN_FILES = 1e4;
 var MAX_MEMORY_SCAN_LEAVES = 4 * MAX_MEMORY_SCAN_FILES;
 var MAX_MEMORY_FILE_BYTES = 262144;
 //@ chunk-18hwfzwa.js:1040058-1040163 placement
-function isExcludedMemoryPath(h, x) {
-  let D = relative(h, x);
-  if (D === "" || D.startsWith("..")) return true;
-  return isExcludedMemoryKey(D.split(sep).join("/"));
+function isExcludedMemoryPath(root, path) {
+  let relativePath = relative(root, path);
+  if (relativePath === "" || relativePath.startsWith("..")) return true;
+  return isExcludedMemoryKey(relativePath.split(sep).join("/"));
 }
 //@ chunk-18hwfzwa.js:1040163-1040940 placement
-async function listMemoryFilesForSurvey(h) {
-  let x = [];
-  let D = 0;
-  let L = false;
-  let ee = false;
+async function listMemoryFilesForSurvey(options) {
+  let files = [];
+  let fileCount = 0;
+  let wasCapped = false;
+  let hadOmittedEntries = false;
   let allPages = await readAllPages(
     async (cursor) => {
-      let He = await h.storageV5.listRecursive(
+      let page = await options.storageV5.listRecursive(
         {
           namespace: "memory",
-          projectKey: h.projectKey,
+          projectKey: options.projectKey,
         },
         {
           cursor,
@@ -124,162 +124,181 @@ async function listMemoryFilesForSurvey(h) {
           maxLeaves: MAX_MEMORY_SCAN_LEAVES,
         },
       );
-      let skipped = He.ok ? He.value.skipped : undefined;
-      if (skipped !== undefined && (skipped.unrepresentable > 0 || skipped.reserved > 0)) ee = true;
-      return He;
+      let skipped = page.ok ? page.value.skipped : undefined;
+      if (skipped !== undefined && (skipped.unrepresentable > 0 || skipped.reserved > 0))
+        hadOmittedEntries = true;
+      return page;
     },
-    (Be) => {
-      for (let He of Be) {
-        let We = He.kind === "key" && He.key.namespace === "memory" ? He.key.relPath.join("/") : undefined;
-        if (We !== undefined && isExcludedMemoryKey(We)) continue;
-        if (D >= MAX_MEMORY_SCAN_FILES) {
-          L = true;
+    (leaves) => {
+      for (let leaf of leaves) {
+        let relPath =
+          leaf.kind === "key" && leaf.key.namespace === "memory" ? leaf.key.relPath.join("/") : undefined;
+        if (relPath !== undefined && isExcludedMemoryKey(relPath)) continue;
+        if (fileCount >= MAX_MEMORY_SCAN_FILES) {
+          wasCapped = true;
           return;
         }
-        D += 1;
-        if (We === undefined || He.viaSymlink || !We.endsWith(".md")) continue;
-        x.push(We);
+        fileCount += 1;
+        if (relPath === undefined || leaf.viaSymlink || !relPath.endsWith(".md")) continue;
+        files.push(relPath);
       }
     },
     {
-      until: () => L,
+      until: () => wasCapped,
     },
   );
-  let Re = L || ee || allPages.status !== "done";
-  if (Re)
+  let isTruncated = wasCapped || hadOmittedEntries || allPages.status !== "done";
+  if (isTruncated)
     logForDebugging(
-      `memorySurveyRating: v5 scan failed closed: ${L ? "capped" : ee ? "entries omitted by the listing" : allPages.status === "error" ? allPages.error.code : allPages.status}`,
+      `memorySurveyRating: v5 scan failed closed: ${wasCapped ? "capped" : hadOmittedEntries ? "entries omitted by the listing" : allPages.status === "error" ? allPages.error.code : allPages.status}`,
     );
   return {
-    files: x,
-    truncated: Re,
+    files,
+    truncated: isTruncated,
   };
 }
 //@ chunk-18hwfzwa.js:1040940-1041350 placement = replaceFromSnapshot (0.683)
 /**
  * 递归列出目录中的 .md 文件（跳过符号链接与忽略路径，超过上限标记 truncated）。
  */
-async function listMarkdownFilesRecursive(h) {
-  let x = [];
-  let D = [""];
-  while (D.length > 0) {
-    let L = D.pop();
-    let ee;
+async function listMarkdownFilesRecursive(rootDir) {
+  let files = [];
+  let pendingDirs = [""];
+  while (pendingDirs.length > 0) {
+    let relativeDir = pendingDirs.pop();
+    let entries;
     try {
-      ee = await readdir(join(h, L), {
+      entries = await readdir(join(rootDir, relativeDir), {
         withFileTypes: true,
       });
     } catch {
       continue;
     }
-    for (let dirent of ee) {
+    for (let dirent of entries) {
       if (dirent.isSymbolicLink()) continue;
-      let Re = L === "" ? dirent.name : `${L}/${dirent.name}`;
+      let relativePath = relativeDir === "" ? dirent.name : `${relativeDir}/${dirent.name}`;
       if (dirent.isDirectory()) {
-        if (!isExcludedMemoryKey(Re)) D.push(Re);
-      } else if (dirent.isFile() && dirent.name.endsWith(".md") && !isExcludedMemoryKey(Re)) {
-        if (x.length >= MAX_MEMORY_SCAN_FILES)
+        if (!isExcludedMemoryKey(relativePath)) pendingDirs.push(relativePath);
+      } else if (dirent.isFile() && dirent.name.endsWith(".md") && !isExcludedMemoryKey(relativePath)) {
+        if (files.length >= MAX_MEMORY_SCAN_FILES)
           return {
-            files: x,
+            files,
             truncated: true,
           };
-        x.push(Re);
+        files.push(relativePath);
       }
     }
   }
   return {
-    files: x,
+    files,
     truncated: false,
   };
 }
 //@ chunk-18hwfzwa.js:1041350-1041736 sole-consumer = isSessionPlanFile (0.801)
 async function resolveMemoryFileReference(fileRef, baseDir, listFiles) {
   if (!fileRef.endsWith(".md")) return null;
-  let L = (Be) => isAutoMemPath(Be) && !isTeamMemPath(Be) && !isExcludedMemoryPath(baseDir, Be);
+  let isAllowedPath = (candidatePath) =>
+    isAutoMemPath(candidatePath) &&
+    !isTeamMemPath(candidatePath) &&
+    !isExcludedMemoryPath(baseDir, candidatePath);
   if (isAbsolute(fileRef)) {
-    let Be = normalize(fileRef);
-    return L(Be) ? Be : null;
+    let absolutePath = normalize(fileRef);
+    return isAllowedPath(absolutePath) ? absolutePath : null;
   }
   if (fileRef.includes("/") || fileRef.includes(sep)) {
-    let Be = normalize(join(baseDir, fileRef));
-    return L(Be) ? Be : null;
+    let joinedPath = normalize(join(baseDir, fileRef));
+    return isAllowedPath(joinedPath) ? joinedPath : null;
   }
-  let ee = await listFiles();
-  if (ee.truncated) return null;
-  let filtered = ee.files.filter((file) => basename(file) === fileRef);
+  let listing = await listFiles();
+  if (listing.truncated) return null;
+  let filtered = listing.files.filter((file) => basename(file) === fileRef);
   if (filtered.length !== 1) return null;
   let normalizedPath = normalize(join(baseDir, filtered[0]));
-  return L(normalizedPath) ? normalizedPath : null;
+  return isAllowedPath(normalizedPath) ? normalizedPath : null;
 }
 //@ chunk-18hwfzwa.js:1041965-1043331 affinity
 /**
  * 在 frontmatter 文本里写入或替换 surveyRating 块：已有则替换该缩进块，有 metadata: 则插在其下，否则在结尾 --- 前新建 metadata；保留原换行风格，结构异常返回 null。
  */
-function writeSurveyRatingIntoFrontmatter(h, x, D) {
-  let L = x.includes(`\r
+function writeSurveyRatingIntoFrontmatter(content, frontmatterBlock, rating) {
+  let lineEnding = frontmatterBlock.includes(`\r
 `)
     ? `\r
 `
     : `
 `;
-  let ee = x.length;
-  let lines = h.slice(0, ee).split(`
+  let frontmatterLength = frontmatterBlock.length;
+  let lines = content.slice(0, frontmatterLength).split(`
 `);
-  let Be = /^(\s*)surveyRating:/;
-  let He = [];
-  for (let idx = 1; idx < lines.length - 1; idx++) if (Be.test(lines[idx])) He.push(idx);
-  if (He.length > 1) return null;
-  let We = (At) =>
-    `${At}surveyRating:${L}${At}  count: ${D.count}${L}${At}  mean: ${D.mean}${L}${At}  total: ${D.total}`;
-  if (He.length === 1) {
-    let At = He[0];
-    let It = lines[At].match(Be)[1];
-    let Ot = At + 1;
-    while (Ot < lines.length - 1) {
-      let replaced = lines[Ot].replace(/\r$/, "");
+  let surveyRatingLineRegex = /^(\s*)surveyRating:/;
+  let ratingLineIndexes = [];
+  for (let idx = 1; idx < lines.length - 1; idx++)
+    if (surveyRatingLineRegex.test(lines[idx])) ratingLineIndexes.push(idx);
+  if (ratingLineIndexes.length > 1) return null;
+  let renderRatingBlock = (indent) =>
+    `${indent}surveyRating:${lineEnding}${indent}  count: ${rating.count}${lineEnding}${indent}  mean: ${rating.mean}${lineEnding}${indent}  total: ${rating.total}`;
+  if (ratingLineIndexes.length === 1) {
+    let ratingLineIndex = ratingLineIndexes[0];
+    let ratingIndent = lines[ratingLineIndex].match(surveyRatingLineRegex)[1];
+    let blockEnd = ratingLineIndex + 1;
+    while (blockEnd < lines.length - 1) {
+      let replaced = lines[blockEnd].replace(/\r$/, "");
       if (/^\s*(#|$)/.test(replaced)) {
-        let Lt = Ot + 1;
-        while (Lt < lines.length - 1 && /^\s*(#|$)/.test(lines[Lt].replace(/\r$/, ""))) Lt++;
+        let nextContentLine = blockEnd + 1;
+        while (
+          nextContentLine < lines.length - 1 &&
+          /^\s*(#|$)/.test(lines[nextContentLine].replace(/\r$/, ""))
+        )
+          nextContentLine++;
         if (
-          Lt < lines.length - 1 &&
-          /\S/.test(lines[Lt]) &&
-          lines[Lt].match(/^(\s*)/)[1].length > It.length
+          nextContentLine < lines.length - 1 &&
+          /\S/.test(lines[nextContentLine]) &&
+          lines[nextContentLine].match(/^(\s*)/)[1].length > ratingIndent.length
         ) {
-          Ot = Lt;
+          blockEnd = nextContentLine;
           continue;
         }
         break;
       }
-      if (replaced.match(/^(\s*)/)[1].length > It.length) {
-        Ot++;
+      if (replaced.match(/^(\s*)/)[1].length > ratingIndent.length) {
+        blockEnd++;
         continue;
       }
       break;
     }
     return (
-      [...lines.slice(0, At), We(It), ...lines.slice(Ot)].join(`
-`) + h.slice(ee)
+      [...lines.slice(0, ratingLineIndex), renderRatingBlock(ratingIndent), ...lines.slice(blockEnd)].join(`
+`) + content.slice(frontmatterLength)
     );
   }
-  let index = lines.findIndex((line, It) => It > 0 && /^metadata:/.test(line.replace(/\r$/, "")));
-  let index_2 = lines.findIndex((line, It) => It > 0 && /^metadata:\s*$/.test(line.replace(/\r$/, "")));
+  let index = lines.findIndex(
+    (line, lineIndex) => lineIndex > 0 && /^metadata:/.test(line.replace(/\r$/, "")),
+  );
+  let index_2 = lines.findIndex(
+    (line, lineIndex) => lineIndex > 0 && /^metadata:\s*$/.test(line.replace(/\r$/, "")),
+  );
   if (index !== -1 && index_2 === -1) return null;
   if (index_2 !== -1) {
-    let At = index_2 + 1;
-    while (At < lines.length - 1 && /^\s*(#|$)/.test(lines[At].replace(/\r$/, ""))) At++;
-    let match = lines[At]?.match(/^(\s+)\S/);
-    let Ot = match ? match[1] : "  ";
+    let childLineIndex = index_2 + 1;
+    while (childLineIndex < lines.length - 1 && /^\s*(#|$)/.test(lines[childLineIndex].replace(/\r$/, "")))
+      childLineIndex++;
+    let match = lines[childLineIndex]?.match(/^(\s+)\S/);
+    let childIndent = match ? match[1] : "  ";
     return (
-      [...lines.slice(0, index_2 + 1), We(Ot), ...lines.slice(index_2 + 1)].join(`
-`) + h.slice(ee)
+      [...lines.slice(0, index_2 + 1), renderRatingBlock(childIndent), ...lines.slice(index_2 + 1)].join(`
+`) + content.slice(frontmatterLength)
     );
   }
-  let rt = lines.length - 1;
-  while (rt > 0 && lines[rt].trim() !== "---") rt--;
-  if (rt === 0) return null;
+  let closingFenceIndex = lines.length - 1;
+  while (closingFenceIndex > 0 && lines[closingFenceIndex].trim() !== "---") closingFenceIndex--;
+  if (closingFenceIndex === 0) return null;
   return (
-    [...lines.slice(0, rt), `metadata:${L}${We("  ")}`, ...lines.slice(rt)].join(`
-`) + h.slice(ee)
+    [
+      ...lines.slice(0, closingFenceIndex),
+      `metadata:${lineEnding}${renderRatingBlock("  ")}`,
+      ...lines.slice(closingFenceIndex),
+    ].join(`
+`) + content.slice(frontmatterLength)
   );
 }
 //@ chunk-18hwfzwa.js:1043331-1043439 placement = isSessionPlanFile (1)
@@ -299,65 +318,72 @@ function isMemoryDirMarkdownFile(path, memoryDir, excludedDir) {
 /**
  * 把评分写回一个记忆文件：确认是自动记忆目录下的 .md 且不超大，storage v5 时通过后端 updateText 写入，否则读改写本地文件，最后恢复原 atime/mtime。
  */
-async function writeBackMemoryRating(h, path, D, L) {
-  return runWithFileWriteContext(h, async () => {
-    let ee;
+async function writeBackMemoryRating(context, realPath, rating, memoryOptions) {
+  return runWithFileWriteContext(context, async () => {
+    let keySegments;
     try {
-      let [Be, memoryDir, excludedDir] = await Promise.all([
-        realpath(path),
+      let [resolvedPath, memoryDir, excludedDir] = await Promise.all([
+        realpath(realPath),
         resolveRealAutoMemPath(),
         resolveRealAutoMemPath("team"),
       ]);
-      if (Be !== path || !isMemoryDirMarkdownFile(path, memoryDir, excludedDir)) return false;
-      ee = relative(memoryDir, path).split(sep);
+      if (resolvedPath !== realPath || !isMemoryDirMarkdownFile(realPath, memoryDir, excludedDir))
+        return false;
+      keySegments = relative(memoryDir, realPath).split(sep);
     } catch {
       return false;
     }
-    let ke;
-    let Re;
+    let mtime;
+    let atime;
     try {
-      let Be = await stat(path);
-      if (Be.size > MAX_MEMORY_FILE_BYTES) return false;
-      ke = Be.mtime;
-      Re = Be.atime;
+      let stats = await stat(realPath);
+      if (stats.size > MAX_MEMORY_FILE_BYTES) return false;
+      mtime = stats.mtime;
+      atime = stats.atime;
     } catch {
       return false;
     }
-    if (L !== undefined && areValidKeySegments(ee)) {
-      let Be = await L.storageV5.updateText(STORAGE_SPACES.memory(L.projectKey, ee), (He) => {
-        if (He === undefined || Buffer.byteLength(He.value, "utf8") > MAX_MEMORY_FILE_BYTES)
-          return {
-            skip: true,
-          };
-        let We = applySurveyRatingToMemory(He.value, path, D);
-        return We === null
-          ? {
+    if (memoryOptions !== undefined && areValidKeySegments(keySegments)) {
+      let updateResult = await memoryOptions.storageV5.updateText(
+        STORAGE_SPACES.memory(memoryOptions.projectKey, keySegments),
+        (existing) => {
+          if (existing === undefined || Buffer.byteLength(existing.value, "utf8") > MAX_MEMORY_FILE_BYTES)
+            return {
               skip: true,
-            }
-          : {
-              write: detectLineEndingsForString(We, detectLineEndingsForString_2(He.value)),
-              result: He.mtimeMs,
             };
-      });
-      if (!Be.ok) {
-        logForDebugging(`memorySurveyRating: backend update failed: ${Be.error.code}`);
+          let updatedContent = applySurveyRatingToMemory(existing.value, realPath, rating);
+          return updatedContent === null
+            ? {
+                skip: true,
+              }
+            : {
+                write: detectLineEndingsForString(
+                  updatedContent,
+                  detectLineEndingsForString_2(existing.value),
+                ),
+                result: existing.mtimeMs,
+              };
+        },
+      );
+      if (!updateResult.ok) {
+        logForDebugging(`memorySurveyRating: backend update failed: ${updateResult.error.code}`);
         return false;
       }
-      if (!Be.value.written) return false;
-      if (Be.value.result !== undefined) ke = new Date(Be.value.result);
+      if (!updateResult.value.written) return false;
+      if (updateResult.value.result !== undefined) mtime = new Date(updateResult.value.result);
     } else {
-      let Be;
+      let writeResult;
       try {
-        Be = await readFile(path, "utf8");
+        writeResult = await readFile(realPath, "utf8");
       } catch {
         return false;
       }
-      let He = applySurveyRatingToMemory(Be, path, D);
-      if (He === null) return false;
-      await writeTextContentVerified(path, He, "utf8", detectLineEndingsForString_2(Be));
+      let current = applySurveyRatingToMemory(writeResult, realPath, rating);
+      if (current === null) return false;
+      await writeTextContentVerified(realPath, current, "utf8", detectLineEndingsForString_2(writeResult));
     }
     try {
-      await utimes(path, Re, ke);
+      await utimes(realPath, atime, mtime);
     } catch {}
     return true;
   });
@@ -366,27 +392,27 @@ async function writeBackMemoryRating(h, path, D, L) {
 /**
  * 生成带新评分的记忆文件内容：校验 frontmatter 能被宽松与严格两种正则解析且一致，写入后确认正文与其他字段不变，否则返回 null。
  */
-function applySurveyRatingToMemory(h, x, D) {
-  let match = h.match(FRONTMATTER_REGEX);
-  let match_2 = h.match(STRICT_FRONTMATTER_REGEX);
+function applySurveyRatingToMemory(content, filePath, rating) {
+  let match = content.match(FRONTMATTER_REGEX);
+  let match_2 = content.match(STRICT_FRONTMATTER_REGEX);
   if (match === null || match_2 === null || match[1].trim() !== match_2[1].trim()) return null;
-  let frontmatter = parseFrontmatter(h, x);
+  let frontmatter = parseFrontmatter(content, filePath);
   if (frontmatter.parseError || Object.keys(frontmatter.frontmatter).length === 0) return null;
-  let memoryFile = parseMemoryFile(h, x);
+  let memoryFile = parseMemoryFile(content, filePath);
   let { frontmatter: frontmatter_2 } = memoryFile;
-  let He = accumulateSurveyRating(frontmatter_2.metadata[SURVEYRATING], D);
-  let We = writeSurveyRatingIntoFrontmatter(h, match_2[0], He);
-  if (We === null) return null;
-  let memoryFile_2 = parseMemoryFile(We, x);
-  let Xe = isInBundledMode({
+  let nextRating = accumulateSurveyRating(frontmatter_2.metadata[SURVEYRATING], rating);
+  let updatedContent = writeSurveyRatingIntoFrontmatter(content, match_2[0], nextRating);
+  if (updatedContent === null) return null;
+  let memoryFile_2 = parseMemoryFile(updatedContent, filePath);
+  let wasBundled = isInBundledMode({
     name: memoryFile.frontmatter.name,
     description: memoryFile.frontmatter.description,
     metadata: {
       ...memoryFile.frontmatter.metadata,
       [SURVEYRATING]: {
-        count: He.count,
-        mean: He.mean,
-        total: He.total,
+        count: nextRating.count,
+        mean: nextRating.mean,
+        total: nextRating.total,
       },
     },
   });
@@ -395,59 +421,63 @@ function applySurveyRatingToMemory(h, x, D) {
       name: memoryFile_2.frontmatter.name,
       description: memoryFile_2.frontmatter.description,
       metadata: memoryFile_2.frontmatter.metadata,
-    }) !== Xe ||
+    }) !== wasBundled ||
     memoryFile_2.body !== memoryFile.body
   )
     return null;
-  let match_3 = We.match(STRICT_FRONTMATTER_REGEX);
-  if (match_3 === null || We.slice(match_3[0].length) !== h.slice(match_2[0].length)) return null;
-  return We;
+  let match_3 = updatedContent.match(STRICT_FRONTMATTER_REGEX);
+  if (match_3 === null || updatedContent.slice(match_3[0].length) !== content.slice(match_2[0].length))
+    return null;
+  return updatedContent;
 }
 //@ chunk-18hwfzwa.js:1045063-1045844 layout
 /**
  * 记忆调查回答后，把评分（1–3）写回被引用的记忆文件：解析最多 16 个引用、去重真实路径、并行写回，记录 tengu_memory_rating_writeback。
  */
-async function writeBackMemorySurveyRatings(h, filenames, D, storageV5) {
+async function writeBackMemorySurveyRatings(context, filenames, rating, storageV5) {
   try {
-    if (!Number.isInteger(D) || D < 1 || D > 3) return;
-    let baseDir = getAutoMemPath();
-    let ke = storageV5 === undefined ? undefined : projectKeyFromMemoryDir(baseDir);
-    let Re =
+    if (!Number.isInteger(rating) || rating < 1 || rating > 3) return;
+    let autoMemPath = getAutoMemPath();
+    let projectKey = storageV5 === undefined ? undefined : projectKeyFromMemoryDir(autoMemPath);
+    let memoryOptions =
       isStorageV5Enabled() &&
       storageV5 !== undefined &&
-      ke !== undefined &&
-      (await isTeamMemoryDirAbsent(baseDir))
+      projectKey !== undefined &&
+      (await isTeamMemoryDirAbsent(autoMemPath))
         ? {
             storageV5,
-            projectKey: ke,
+            projectKey,
           }
         : undefined;
-    let Be = null;
+    let filesPromise = null;
     let listFiles = () => {
-      Be ??= Re === undefined ? listMarkdownFilesRecursive(baseDir) : listMemoryFilesForSurvey(Re);
-      return Be;
+      filesPromise ??=
+        memoryOptions === undefined
+          ? listMarkdownFilesRecursive(autoMemPath)
+          : listMemoryFilesForSurvey(memoryOptions);
+      return filesPromise;
     };
-    let We = new Map();
-    for (let rt of filenames.slice(0, MAX_MEMORY_FILES_PER_SURVEY)) {
-      let memoryFileReference = await resolveMemoryFileReference(rt.trim(), baseDir, listFiles);
+    let resolvedFiles = new Map();
+    for (let filename of filenames.slice(0, MAX_MEMORY_FILES_PER_SURVEY)) {
+      let memoryFileReference = await resolveMemoryFileReference(filename.trim(), autoMemPath, listFiles);
       if (memoryFileReference === null) continue;
-      let At = await realpath(memoryFileReference).catch(() => null);
-      if (At !== null && !We.has(At)) We.set(At, memoryFileReference);
+      let realPath = await realpath(memoryFileReference).catch(() => null);
+      if (realPath !== null && !resolvedFiles.has(realPath)) resolvedFiles.set(realPath, memoryFileReference);
     }
     let settled = await Promise.allSettled(
-      [...We].map(async ([rt, kt]) => {
-        if (await writeBackMemoryRating(kt, rt, D, Re)) {
-          h.notifyWrite(kt);
+      [...resolvedFiles].map(async ([realPath, displayPath]) => {
+        if (await writeBackMemoryRating(displayPath, realPath, rating, memoryOptions)) {
+          context.notifyWrite(displayPath);
           return true;
         }
         return false;
       }),
     );
-    let Xe = count(settled, (rt) => rt.status === "fulfilled" && rt.value === true);
+    let writtenCount = count(settled, (settled) => settled.status === "fulfilled" && settled.value === true);
     logEvent("tengu_memory_rating_writeback", {
       cited_count: fromNumber(filenames.length),
-      resolved_count: fromNumber(We.size),
-      written_count: fromNumber(Xe),
+      resolved_count: fromNumber(resolvedFiles.size),
+      written_count: fromNumber(writtenCount),
     });
   } catch (error) {
     logForDebugging(`memorySurveyRating: write-back failed: ${String(error)}`);
@@ -458,52 +488,52 @@ function shouldShowTranscriptPrompt() {
   return false;
 }
 //@ chunk-18hwfzwa.js:1045868-1046041 layout
-function logMemorySurveyEvent(Ur, Zr, wr) {
+function logMemorySurveyEvent(eventType, appearanceId, response) {
   logEvent(TENGU_MEMORY_SURVEY_EVENT, {
-    event_type: fromEnum(Ur),
-    appearance_id: sanitizeMarkName(Zr),
-    response: fromEnumOpt(wr),
+    event_type: fromEnum(eventType),
+    appearance_id: sanitizeMarkName(appearanceId),
+    response: fromEnumOpt(response),
   });
   logOTelEvent("feedback_survey", {
-    event_type: Ur,
-    appearance_id: Zr,
-    response: wr,
+    event_type: eventType,
+    appearance_id: appearanceId,
+    response,
     survey_type: "memory",
   });
 }
 //@ chunk-18hwfzwa.js:1046041-1046277 layout
-function logMemoryTranscriptPromptShown(zr, _r) {
+function logMemoryTranscriptPromptShown(appearanceId, response) {
   logEvent(TENGU_MEMORY_SURVEY_EVENT, {
     event_type: lit_2("transcript_prompt_appeared"),
-    appearance_id: sanitizeMarkName(zr),
+    appearance_id: sanitizeMarkName(appearanceId),
     trigger: fromEnum(MEMORY_SURVEY),
-    response: fromEnumOpt(_r),
+    response: fromEnumOpt(response),
   });
   logOTelEvent("feedback_survey", {
     event_type: "transcript_prompt_appeared",
-    appearance_id: zr,
+    appearance_id: appearanceId,
     survey_type: "memory",
-    response: _r,
+    response,
   });
 }
 //@ chunk-18hwfzwa.js:1046277-1046336 layout
-function markTranscriptShareDismissed(fr) {
+function markTranscriptShareDismissed(state) {
   return {
-    ...fr,
+    ...state,
     transcriptShareDismissed: true,
   };
 }
 //@ chunk-18hwfzwa.js:1046336-1046433 layout
-function isMemoryCitationEligible($r) {
+function isMemoryCitationEligible(ref) {
   return (
-    !$r.incomplete &&
-    $r.sentence.length <= MAX_CITATION_LENGTH &&
-    truncateToLines($r.sentence, MEMORY_SURVEY_MAX_LINES) === $r.sentence
+    !ref.incomplete &&
+    ref.sentence.length <= MAX_CITATION_LENGTH &&
+    truncateToLines(ref.sentence, MEMORY_SURVEY_MAX_LINES) === ref.sentence
   );
 }
 //@ chunk-18hwfzwa.js:1046433-1046479 layout
-function isMemoryCitationTooLong(Yr) {
-  return Yr.sentence.length > MAX_CITATION_LENGTH;
+function isMemoryCitationTooLong(ref) {
+  return ref.sentence.length > MAX_CITATION_LENGTH;
 }
 //@ chunk-18hwfzwa.js:1046479-1046634 fingerprint = MEMORY_SURVEY_GATE (0.312)
 var MEMORY_SURVEY_DELAY_MS = 5000;
@@ -527,102 +557,102 @@ function isMemorySurveyForced() {
   return false;
 }
 //@ chunk-18hwfzwa.js:1046806-1046971 sole-consumer
-function extractCitedMemoryRefs(h) {
-  let content = h.message.content;
+function extractCitedMemoryRefs(message) {
+  let content = message.message.content;
   if (!Array.isArray(content)) return [];
   return content
-    .filter((D) => typeof D === "object" && D !== null && D.type === "text")
-    .flatMap((D) => extractMemoryCitations(D.text));
+    .filter((block) => typeof block === "object" && block !== null && block.type === "text")
+    .flatMap((block) => extractMemoryCitations(block.text));
 }
 //@ chunk-18hwfzwa.js:1046971-1050360 fingerprint = useMemorySurvey (0.602)
-function useMemorySurvey(messages, isLoading, hasActivePrompt, L) {
-  let $ = w(43);
-  let ee = hasActivePrompt === undefined ? false : hasActivePrompt;
-  let Re;
-  if ($[0] !== L) {
-    Re = L === undefined ? {} : L;
-    $[0] = L;
-    $[1] = Re;
-  } else Re = $[1];
-  let { enabled, otherSurveyActive } = Re;
-  let We = enabled === undefined ? true : enabled;
-  let ze = otherSurveyActive === undefined ? false : otherSurveyActive;
+function useMemorySurvey(messages, isLoading, hasActivePrompt, options) {
+  let $ = useMemoCache(43);
+  let hasActivePromptFlag = hasActivePrompt === undefined ? false : hasActivePrompt;
+  let resolvedOptions;
+  if ($[0] !== options) {
+    resolvedOptions = options === undefined ? {} : options;
+    $[0] = options;
+    $[1] = resolvedOptions;
+  } else resolvedOptions = $[1];
+  let { enabled, otherSurveyActive } = resolvedOptions;
+  let isEnabled = enabled === undefined ? true : enabled;
+  let otherSurveyActiveFlag = otherSurveyActive === undefined ? false : otherSurveyActive;
   let { storageV5, credentials } = useTheme_2();
   let host = useHost();
-  let At;
+  let watcherCached;
   if ($[2] !== host) {
-    At = memoryWatchers.of(host);
+    watcherCached = memoryWatchers.of(host);
     $[2] = host;
-    $[3] = At;
-  } else At = $[3];
-  let It = At;
-  let Ot;
+    $[3] = watcherCached;
+  } else watcherCached = $[3];
+  let watcher = watcherCached;
+  let emptySeenSet;
   if ($[4] === MEMO_CACHE_SENTINEL) {
-    Ot = new Set();
-    $[4] = Ot;
-  } else Ot = $[4];
-  let memoryReadSeen = R(Ot);
-  let messagesRef = R(null);
-  let messagesRef_2 = R(messages);
-  let oo;
-  let Xt;
+    emptySeenSet = new Set();
+    $[4] = emptySeenSet;
+  } else emptySeenSet = $[4];
+  let memoryReadSeen = useRef(emptySeenSet);
+  let messagesRef = useRef(null);
+  let messagesRef_2 = useRef(messages);
+  let syncMessages;
+  let syncMessagesDeps;
   if ($[5] !== messages) {
-    oo = () => {
+    syncMessages = () => {
       messagesRef_2.current = messages;
     };
-    Xt = [messages];
+    syncMessagesDeps = [messages];
     $[5] = messages;
-    $[6] = oo;
-    $[7] = Xt;
+    $[6] = syncMessages;
+    $[7] = syncMessagesDeps;
   } else {
-    oo = $[6];
-    Xt = $[7];
+    syncMessages = $[6];
+    syncMessagesDeps = $[7];
   }
-  zt(oo, Xt);
-  let [io, so] = y(null);
-  let po = R(null);
-  let ao = logMemorySurveyEvent;
-  let co;
+  useLayoutEffect(syncMessages, syncMessagesDeps);
+  let [citation, setCitation] = useState(null);
+  let citationRef = useRef(null);
+  let logEvent_2 = logMemorySurveyEvent;
+  let onOpen;
   if ($[8] === MEMO_CACHE_SENTINEL) {
-    co = (appearanceId) => ao("appeared", appearanceId);
-    $[8] = co;
-  } else co = $[8];
-  let onOpen = co;
-  let Bo;
+    onOpen = (appearanceId) => logEvent_2("appeared", appearanceId);
+    $[8] = onOpen;
+  } else onOpen = $[8];
+  let onOpen_2 = onOpen;
+  let onAutoDismiss;
   if ($[9] === MEMO_CACHE_SENTINEL) {
-    Bo = (selected_0) => ao("timeout", selected_0);
-    $[9] = Bo;
-  } else Bo = $[9];
-  let onAutoDismiss = Bo;
-  let Io;
+    onAutoDismiss = (selected_0) => logEvent_2("timeout", selected_0);
+    $[9] = onAutoDismiss;
+  } else onAutoDismiss = $[9];
+  let onAutoDismiss_2 = onAutoDismiss;
+  let onAbandon;
   if ($[10] === MEMO_CACHE_SENTINEL) {
-    Io = (appearanceId_1) => ao("abandoned", appearanceId_1);
-    $[10] = Io;
-  } else Io = $[10];
-  let onAbandon = Io;
-  let Cn;
-  if ($[11] !== It || $[12] !== storageV5) {
-    Cn = (appearanceId_2, selected_1) => {
-      ao("responded", appearanceId_2, selected_1);
-      let Yo = po.current;
-      let kn = MEMORY_SURVEY_SCORES[selected_1];
-      if (kn !== undefined && Yo && Yo.filenames.length > 0)
-        writeBackMemorySurveyRatings(It, Yo.filenames, kn, storageV5);
+    onAbandon = (appearanceId_1) => logEvent_2("abandoned", appearanceId_1);
+    $[10] = onAbandon;
+  } else onAbandon = $[10];
+  let onAbandon_2 = onAbandon;
+  let onSelect;
+  if ($[11] !== watcher || $[12] !== storageV5) {
+    onSelect = (appearanceId_2, selected_1) => {
+      logEvent_2("responded", appearanceId_2, selected_1);
+      let currentCitation = citationRef.current;
+      let score = MEMORY_SURVEY_SCORES[selected_1];
+      if (score !== undefined && currentCitation && currentCitation.filenames.length > 0)
+        writeBackMemorySurveyRatings(watcher, currentCitation.filenames, score, storageV5);
     };
-    $[11] = It;
+    $[11] = watcher;
     $[12] = storageV5;
-    $[13] = Cn;
-  } else Cn = $[13];
-  let onSelect = Cn;
+    $[13] = onSelect;
+  } else onSelect = $[13];
+  let onSelect_2 = onSelect;
   let onTranscriptPromptShown = logMemoryTranscriptPromptShown;
-  let Go;
+  let onTranscriptSelect;
   if ($[14] !== credentials || $[15] !== host || $[16] !== storageV5) {
-    Go = async (appearanceId, selected, Xo) => {
+    onTranscriptSelect = async (appearanceId, selected, surveyResponse) => {
       logEvent(TENGU_MEMORY_SURVEY_EVENT, {
         event_type: fromEnum(`transcript_share_${selected}`),
         appearance_id: sanitizeMarkName(appearanceId),
         trigger: fromEnum(MEMORY_SURVEY),
-        response: fromEnumOpt(Xo),
+        response: fromEnumOpt(surveyResponse),
       });
       if (selected === "dont_ask_again") await saveGlobalConfig(markTranscriptShareDismissed, storageV5);
       if (selected === "yes") {
@@ -639,7 +669,7 @@ function useMemorySurvey(messages, isLoading, hasActivePrompt, L) {
           appearance_id: sanitizeMarkName(appearanceId),
           trigger: fromEnum(MEMORY_SURVEY),
           error_code: result.errorCode,
-          response: fromEnumOpt(Xo),
+          response: fromEnumOpt(surveyResponse),
         });
         return result.success;
       }
@@ -648,54 +678,54 @@ function useMemorySurvey(messages, isLoading, hasActivePrompt, L) {
     $[14] = credentials;
     $[15] = host;
     $[16] = storageV5;
-    $[17] = Go;
-  } else Go = $[17];
-  let onTranscriptSelect = Go;
-  let on;
-  if ($[18] !== onSelect || $[19] !== onTranscriptSelect || $[20] !== ze) {
-    on = {
-      otherSurveyActive: ze,
+    $[17] = onTranscriptSelect;
+  } else onTranscriptSelect = $[17];
+  let onTranscriptSelect_2 = onTranscriptSelect;
+  let surveyStateOptions;
+  if ($[18] !== onSelect_2 || $[19] !== onTranscriptSelect_2 || $[20] !== otherSurveyActiveFlag) {
+    surveyStateOptions = {
+      otherSurveyActive: otherSurveyActiveFlag,
       hideThanksAfterMs: MEMORY_SURVEY_DELAY_MS,
       autoDismissAfterMs: MEMORY_SURVEY_TIMEOUT_MS,
-      onOpen,
-      onSelect,
-      onAutoDismiss,
-      onAbandon,
+      onOpen: onOpen_2,
+      onSelect: onSelect_2,
+      onAutoDismiss: onAutoDismiss_2,
+      onAbandon: onAbandon_2,
       shouldShowTranscriptPrompt,
       onTranscriptPromptShown,
-      onTranscriptSelect,
+      onTranscriptSelect: onTranscriptSelect_2,
     };
-    $[18] = onSelect;
-    $[19] = onTranscriptSelect;
-    $[20] = ze;
-    $[21] = on;
-  } else on = $[21];
+    $[18] = onSelect_2;
+    $[19] = onTranscriptSelect_2;
+    $[20] = otherSurveyActiveFlag;
+    $[21] = surveyStateOptions;
+  } else surveyStateOptions = $[21];
   let { state, lastResponse, appearanceId, open, abandon, handleSelect, handleUndo, handleTranscriptSelect } =
-    useSurveyState(on);
-  let Zn;
+    useSurveyState(surveyStateOptions);
+  let lastMessageCached;
   if ($[22] !== messages) {
-    Zn = getLastAssistantMessage(messages);
+    lastMessageCached = getLastAssistantMessage(messages);
     $[22] = messages;
-    $[23] = Zn;
-  } else Zn = $[23];
-  let Un = Zn;
-  let dr;
-  let or;
+    $[23] = lastMessageCached;
+  } else lastMessageCached = $[23];
+  let lastMessage = lastMessageCached;
+  let maybeOpenEffect;
+  let maybeOpenDeps;
   if (
-    $[24] !== We ||
-    $[25] !== ee ||
+    $[24] !== isEnabled ||
+    $[25] !== hasActivePromptFlag ||
     $[26] !== isLoading ||
-    $[27] !== Un ||
+    $[27] !== lastMessage ||
     $[28] !== messages ||
     $[29] !== open ||
-    $[30] !== ze ||
+    $[30] !== otherSurveyActiveFlag ||
     $[31] !== state
   ) {
-    dr = () => {
+    maybeOpenEffect = () => {
       if (messages.length === 0) {
         memoryReadSeen.current.clear();
         messagesRef.current = null;
-        so(null);
+        setCitation(null);
         return;
       }
       if (messagesRef.current !== messages[0].uuid) {
@@ -706,67 +736,76 @@ function useMemorySurvey(messages, isLoading, hasActivePrompt, L) {
         }
         return;
       }
-      if (state !== "closed" || isLoading || ee) {
+      if (state !== "closed" || isLoading || hasActivePromptFlag) {
         return;
       }
-      if (ze) {
+      if (otherSurveyActiveFlag) {
         return;
       }
-      if (!We || !isFeedbackSurveyAllowed()) {
+      if (!isEnabled || !isFeedbackSurveyAllowed()) {
         return;
       }
-      if (!Un || memoryReadSeen.current.has(Un.uuid)) {
+      if (!lastMessage || memoryReadSeen.current.has(lastMessage.uuid)) {
         return;
       }
-      let citedMemoryRefs = extractCitedMemoryRefs(Un);
+      let citedMemoryRefs = extractCitedMemoryRefs(lastMessage);
       if (citedMemoryRefs.length === 0) {
         return;
       }
-      memoryReadSeen.current.add(Un.uuid);
+      memoryReadSeen.current.add(lastMessage.uuid);
       let filtered = citedMemoryRefs.filter(isMemoryCitationEligible);
-      let Ir = citedMemoryRefs.length - filtered.length;
-      if (Ir > 0)
+      let droppedCount = citedMemoryRefs.length - filtered.length;
+      if (droppedCount > 0)
         logEvent(TENGU_MEMORY_SURVEY_EVENT, {
           event_type: lit_2("citation_ineligible"),
-          dropped_citation_count: Ir,
+          dropped_citation_count: droppedCount,
           dropped_too_long_count: count(citedMemoryRefs, isMemoryCitationTooLong),
           eligible_citation_count: filtered.length,
         });
-      let [Pr] = filtered;
-      if (Pr === undefined) {
+      let [firstCitation] = filtered;
+      if (firstCitation === undefined) {
         return;
       }
       if (!isMemorySurveyForced() && Math.random() >= getMemorySurveyProbability()) {
         return;
       }
-      let ts = {
-        sentence: Pr.sentence,
-        filenames: uniq(Pr.filenames),
+      let pendingCitation = {
+        sentence: firstCitation.sentence,
+        filenames: uniq(firstCitation.filenames),
       };
-      po.current = ts;
-      so(ts);
+      citationRef.current = pendingCitation;
+      setCitation(pendingCitation);
       open();
     };
-    or = [We, ze, state, isLoading, ee, Un, messages, open];
-    $[24] = We;
-    $[25] = ee;
+    maybeOpenDeps = [
+      isEnabled,
+      otherSurveyActiveFlag,
+      state,
+      isLoading,
+      hasActivePromptFlag,
+      lastMessage,
+      messages,
+      open,
+    ];
+    $[24] = isEnabled;
+    $[25] = hasActivePromptFlag;
     $[26] = isLoading;
-    $[27] = Un;
+    $[27] = lastMessage;
     $[28] = messages;
     $[29] = open;
-    $[30] = ze;
+    $[30] = otherSurveyActiveFlag;
     $[31] = state;
-    $[32] = dr;
-    $[33] = or;
+    $[32] = maybeOpenEffect;
+    $[33] = maybeOpenDeps;
   } else {
-    dr = $[32];
-    or = $[33];
+    maybeOpenEffect = $[32];
+    maybeOpenDeps = $[33];
   }
-  P(dr, or);
-  let Gn;
+  useEffect(maybeOpenEffect, maybeOpenDeps);
+  let surveyState;
   if (
     $[34] !== abandon ||
-    $[35] !== io ||
+    $[35] !== citation ||
     $[36] !== appearanceId ||
     $[37] !== handleSelect ||
     $[38] !== handleTranscriptSelect ||
@@ -774,27 +813,27 @@ function useMemorySurvey(messages, isLoading, hasActivePrompt, L) {
     $[40] !== lastResponse ||
     $[41] !== state
   ) {
-    Gn = {
+    surveyState = {
       state,
       lastResponse,
       appearanceId,
-      citation: io,
+      citation,
       abandon,
       handleSelect,
       handleUndo,
       handleTranscriptSelect,
     };
     $[34] = abandon;
-    $[35] = io;
+    $[35] = citation;
     $[36] = appearanceId;
     $[37] = handleSelect;
     $[38] = handleTranscriptSelect;
     $[39] = handleUndo;
     $[40] = lastResponse;
     $[41] = state;
-    $[42] = Gn;
-  } else Gn = $[42];
-  return Gn;
+    $[42] = surveyState;
+  } else surveyState = $[42];
+  return surveyState;
 }
 export {
   useMemorySurvey,

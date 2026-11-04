@@ -34,12 +34,12 @@ async function planTrustedRepositoriesHeader(attaches) {
       kind: "not_sent",
       why: "folder_not_trusted",
     };
-  let n = await trustedDeviceHeaders().catch(() => ({}));
-  return Object.keys(n).length > 0
+  let headers = await trustedDeviceHeaders().catch(() => ({}));
+  return Object.keys(headers).length > 0
     ? {
         kind: "send",
         covers: attaches.launchCheckout.covers,
-        proofHeaders: n,
+        proofHeaders: headers,
       }
     : {
         kind: "not_sent",
@@ -49,10 +49,10 @@ async function planTrustedRepositoriesHeader(attaches) {
 //@ chunk-e6aww6q8.js:1881515-1881546 placement
 var REPOSITORIES_TRUSTED = "repositories_trusted";
 //@ chunk-e6aww6q8.js:1881546-1882084 placement
-function requestRepositoriesTrusted(e) {
-  let n = securityTierErrorSchema().safeParse(e);
-  if (!n.success) return "unnamed";
-  let { reason, resource, sub_reason: subReason } = n.data.error;
+function requestRepositoriesTrusted(body) {
+  let parsed = securityTierErrorSchema().safeParse(body);
+  if (!parsed.success) return "unnamed";
+  let { reason, resource, sub_reason: subReason } = parsed.data.error;
   if (reason === "repositories_trusted_not_covered") return "not_covered";
   if (resource === "repositories_trusted_request_forbidden") return "forbidden_caller";
   if (subReason === "repositories_trusted_request")
@@ -66,32 +66,34 @@ function requestRepositoriesTrusted(e) {
       default:
         return "other";
     }
-  return [reason, resource, subReason].some((y) => y?.startsWith(REPOSITORIES_TRUSTED)) ? "other" : "unnamed";
+  return [reason, resource, subReason].some((value) => value?.startsWith(REPOSITORIES_TRUSTED))
+    ? "other"
+    : "unnamed";
 }
 //@ chunk-e6aww6q8.js:1882084-1882419 placement
 /**
  * 上报可信仓库头的发送结果（已发送、被拒后重试等）。
  */
-function logTrustedRepositoriesOutcome(e) {
-  switch (e.kind) {
+function logTrustedRepositoriesOutcome(outcome) {
+  switch (outcome.kind) {
     case "sent":
       logFeatureOk("cloud_repositories_trusted_create", {
-        covers: fromEnum(e.covers),
+        covers: fromEnum(outcome.covers),
       });
       return;
     case "refused_then_retried":
-      logFeatureSad("cloud_repositories_trusted_create", e.kind, {
-        reason: fromEnum(e.refusal),
-        covers: fromEnum(e.covers),
+      logFeatureSad("cloud_repositories_trusted_create", outcome.kind, {
+        reason: fromEnum(outcome.refusal),
+        covers: fromEnum(outcome.covers),
       });
       return;
     case "not_sent":
-      logFeatureSad("cloud_repositories_trusted_create", e.kind, {
-        reason: fromEnum(e.why),
+      logFeatureSad("cloud_repositories_trusted_create", outcome.kind, {
+        reason: fromEnum(outcome.why),
       });
       return;
     default: {
-      let n = e;
+      let unreachable = outcome;
     }
   }
 }

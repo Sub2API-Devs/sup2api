@@ -10,15 +10,15 @@
  */
 import {
   CONVERSATION_TOO_LONG_HINT,
-  COMPACT_FAILED_CONTEXT_LIMIT,
+  COMPACT_FAILED_CONTEXT_LIMIT_MESSAGE,
   MEDIA_TOO_LARGE_HINT,
-  COMPACT_FAILED_MEDIA_LIMIT,
+  COMPACT_FAILED_MEDIA_LIMIT_MESSAGE,
   NO_MESSAGES_TO_COMPACT,
   COMPACT_ERROR_PREFIX,
   COULD_NOT_COMPACT,
 } from "../../services/compact/compactErrors.js";
 import { COMPACTION_BLOCKED_BY_HOOK } from "../../services/compact/compact.js";
-import { DIAMOND_GLYPH, FILLED_DIAMOND_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { DIAMOND_GLYPH, FILLED_DIAMOND_GLYPH } from "../../constants/figures.js";
 import { FOREIGN_ORG_THINKING_NOTICE, FOREIGN_ORG_THINKING_HINT } from "../../constants/messages.js";
 import { renderTruncatedContent } from "../../utils/terminal.js";
 import { splitNoticeDetail, buildSystemNoticeLine } from "./CompactBoundaryMessage.js";
@@ -31,6 +31,7 @@ import { permissionRetryText, autoModeRetrySuffix } from "../../utils/messages.j
 import { teamMemSavedPart, getMemorySavedVerb } from "./teamMemSaved.js";
 import { ISOLATION_CHECK_INTERVAL } from "../../services/tools/webToolIsolation.js";
 import { formatSecondsShort } from "../../utils/format.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ah34pb7m.js:48594-48611 placement
 var ERROR_PREFIX = "Error: ";
@@ -38,12 +39,12 @@ var ERROR_PREFIX = "Error: ";
 /**
  * 识别系统通知文本的类别与语气。
  */
-function classifySystemNoticeText(m) {
-  let d = m.startsWith(ERROR_PREFIX) ? m.slice(ERROR_PREFIX.length) : m;
-  switch (d) {
-    case COMPACT_FAILED_CONTEXT_LIMIT:
+function classifySystemNoticeText(rawText) {
+  let text = rawText.startsWith(ERROR_PREFIX) ? rawText.slice(ERROR_PREFIX.length) : rawText;
+  switch (text) {
+    case COMPACT_FAILED_CONTEXT_LIMIT_MESSAGE:
       return couldNotCompactRow(CONVERSATION_TOO_LONG_HINT);
-    case COMPACT_FAILED_MEDIA_LIMIT:
+    case COMPACT_FAILED_MEDIA_LIMIT_MESSAGE:
       return couldNotCompactRow(MEDIA_TOO_LARGE_HINT);
     case NO_MESSAGES_TO_COMPACT:
       return {
@@ -53,10 +54,10 @@ function classifySystemNoticeText(m) {
     default:
       break;
   }
-  let c = COMPACT_ERROR_PREFIX.trimEnd();
-  if (d.startsWith(c)) return couldNotCompactRow(d.slice(c.length).trim());
-  if (d.startsWith(COMPACTION_BLOCKED_BY_HOOK)) {
-    let replaced = d.slice(COMPACTION_BLOCKED_BY_HOOK.length).replace(/^:\s*/, "");
+  let errorPrefix = COMPACT_ERROR_PREFIX.trimEnd();
+  if (text.startsWith(errorPrefix)) return couldNotCompactRow(text.slice(errorPrefix.length).trim());
+  if (text.startsWith(COMPACTION_BLOCKED_BY_HOOK)) {
+    let replaced = text.slice(COMPACTION_BLOCKED_BY_HOOK.length).replace(/^:\s*/, "");
     return {
       tone: "dim",
       text: COMPACTION_BLOCKED_BY_HOOK,
@@ -66,19 +67,26 @@ function classifySystemNoticeText(m) {
   return null;
 }
 //@ chunk-ah34pb7m.js:48976-49036 placement
-function couldNotCompactRow(m) {
+function couldNotCompactRow(detail) {
   return {
     tone: "red",
     text: COULD_NOT_COMPACT,
-    detail: m || undefined,
+    detail: detail || undefined,
   };
 }
 //@ chunk-ah34pb7m.js:49036-49091 placement
-var memorySavedVerbApi = null;
-var HOOK_FEEDBACK_MAX_WIDTH = 200;
-var HOOK_FEEDBACK_MAX_LINES = 5;
-var SCHEDULED_TEXT_MAX_LENGTH = 1000;
-var SYSTEM_NOTICE_PREFIXES = [`${DIAMOND_GLYPH} `, `${FILLED_DIAMOND_GLYPH} `];
+var memorySavedVerbApi; // deferred: uses DIAMOND_GLYPH (../../constants/figures.js) of its import cycle while loading; runs once the cycle is complete
+var HOOK_FEEDBACK_MAX_WIDTH;
+var HOOK_FEEDBACK_MAX_LINES;
+var SCHEDULED_TEXT_MAX_LENGTH;
+var SYSTEM_NOTICE_PREFIXES;
+deferInit("chunk-ah34pb7m.js:49036", () => {
+  memorySavedVerbApi = null;
+  HOOK_FEEDBACK_MAX_WIDTH = 200;
+  HOOK_FEEDBACK_MAX_LINES = 5;
+  SCHEDULED_TEXT_MAX_LENGTH = 1000;
+  SYSTEM_NOTICE_PREFIXES = [`${DIAMOND_GLYPH} `, `${FILLED_DIAMOND_GLYPH} `];
+});
 //@ chunk-ah34pb7m.js:49091-51889 placement
 /**
  * 解析系统消息（informational、模型回退、定时任务触发等）为显示结构。
@@ -117,20 +125,20 @@ function parseSystemMessage(message) {
         return {
           kind: "legacy",
         };
-      let d;
+      let tone;
       switch (message.level) {
         case "warning":
-          d = "gold";
+          tone = "gold";
           break;
         case "notice":
-          d = "dim";
+          tone = "dim";
           break;
         case "info":
         case "suggestion":
-          d = null;
+          tone = null;
           break;
       }
-      if (d === null)
+      if (tone === null)
         return {
           kind: "legacy",
         };
@@ -141,32 +149,32 @@ function parseSystemMessage(message) {
         return {
           kind: "line",
           row: {
-            tone: d,
+            tone,
             text: FOREIGN_ORG_THINKING_NOTICE,
             detail: FOREIGN_ORG_THINKING_HINT,
             linkify: false,
           },
         };
-      let [c, ...g] = renderTruncatedContent(message.content, {
+      let [firstText, ...subTexts] = renderTruncatedContent(message.content, {
         maxChars: SCHEDULED_TEXT_MAX_LENGTH,
       });
-      if (c === undefined)
+      if (firstText === undefined)
         return {
           kind: "legacy",
         };
       return {
         kind: "line",
         row: {
-          ...(message.level === "warning" && c.startsWith(COULD_NOT_COMPACT)
-            ? splitNoticeDetail("red", c, {
+          ...(message.level === "warning" && firstText.startsWith(COULD_NOT_COMPACT)
+            ? splitNoticeDetail("red", firstText, {
                 linkify: false,
               })
             : {
-                tone: d,
-                text: c,
+                tone,
+                text: firstText,
                 linkify: false,
               }),
-          subLines: g.length > 0 ? g : undefined,
+          subLines: subTexts.length > 0 ? subTexts : undefined,
         },
       };
     }
@@ -216,15 +224,15 @@ function parseSystemMessage(message) {
         linkify: false,
       });
     case "memory_saved": {
-      let d = teamMemSavedPart(message);
+      let savedPart = teamMemSavedPart(message);
       let validStringArray = getValidStringArray(message.writtenPaths);
       let memorySavedVerb = getMemorySavedVerb(message);
-      let f = validStringArray.length - (d?.count ?? 0);
-      let h = memorySavedVerbApi?.localMemoryQualifier() ?? "";
+      let localCount = validStringArray.length - (savedPart?.count ?? 0);
+      let localQualifier = memorySavedVerbApi?.localMemoryQualifier() ?? "";
       let filtered = [
-        f > 0 ? `${f} ${h}${f === 1 ? "memory" : "memories"}` : null,
-        d?.segment ?? null,
-      ].filter((T) => T !== null);
+        localCount > 0 ? `${localCount} ${localQualifier}${localCount === 1 ? "memory" : "memories"}` : null,
+        savedPart?.segment ?? null,
+      ].filter((part) => part !== null);
       return {
         kind: "line",
         row: {
@@ -248,22 +256,22 @@ function parseSystemMessage(message) {
         stopReason,
         totalDurationMs,
       } = normalizeHookSummary(message);
-      let ms = totalDurationMs ?? hookInfos.reduce((acc, B) => acc + (B.durationMs ?? 0), 0);
-      let k = false;
+      let ms = totalDurationMs ?? hookInfos.reduce((acc, hookInfo) => acc + (hookInfo.durationMs ?? 0), 0);
+      let isIsolated = false;
       if (
         hookErrors.length === 0 &&
         hookAdditionalContext.length === 0 &&
         !preventedContinuation &&
-        (!k || ms < ISOLATION_CHECK_INTERVAL)
+        (!isIsolated || ms < ISOLATION_CHECK_INTERVAL)
       )
         return {
           kind: "hidden",
         };
-      let b = renderTruncatedContent(
+      let contentRows = renderTruncatedContent(
         [
           ...(preventedContinuation && stopReason ? [stopReason] : []),
           ...hookErrors.map((hookError) => `Stop hook error: ${hookError}`),
-          ...hookAdditionalContext.map((E) => `Stop hook feedback: ${E}`),
+          ...hookAdditionalContext.map((feedbackLine) => `Stop hook feedback: ${feedbackLine}`),
         ].join(`
 `),
         {
@@ -280,15 +288,15 @@ function parseSystemMessage(message) {
                 ? "gold"
                 : "dim",
           text: `Ran ${hookCount} stop ${hookCount === 1 ? "hook" : "hooks"}`,
-          detail: k && ms > 0 ? formatSecondsShort(ms) : undefined,
-          subLines: b.length > 0 ? b : undefined,
+          detail: isIsolated && ms > 0 ? formatSecondsShort(ms) : undefined,
+          subLines: contentRows.length > 0 ? contentRows : undefined,
           linkify: false,
         },
       };
     }
     default: {
-      let d = memorySavedVerbApi?.accountMemorySavedParts(message);
-      if (d === undefined)
+      let savedParts = memorySavedVerbApi?.accountMemorySavedParts(message);
+      if (savedParts === undefined)
         return {
           kind: "legacy",
         };
@@ -296,17 +304,17 @@ function parseSystemMessage(message) {
         kind: "line",
         row: {
           tone: "dim",
-          text: d.header,
-          detail: d.hint,
+          text: savedParts.header,
+          detail: savedParts.hint,
           subLines: [
-            ...d.pathRows,
-            ...(d.bodyRows === undefined
+            ...savedParts.pathRows,
+            ...(savedParts.bodyRows === undefined
               ? []
               : renderTruncatedContent(
-                  d.bodyRows.join(`
+                  savedParts.bodyRows.join(`
 `),
                   {
-                    maxLines: d.bodyRows.length,
+                    maxLines: savedParts.bodyRows.length,
                     preserveLayout: true,
                   },
                 )),

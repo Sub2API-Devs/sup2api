@@ -9,6 +9,7 @@
  * attribution: placement 10
  */
 import { parseJsonObject } from "./progress.js";
+import { runDeferredInits } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-ae5g0zb5.js:35406-35813 placement
 /**
@@ -42,8 +43,8 @@ var claudeTestState = {
 /**
  * 普通对象
  */
-function isPlainObjectNonArray(e) {
-  return e !== null && typeof e === "object" && !Array.isArray(e);
+function isPlainObjectNonArray(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 //@ chunk-ae5g0zb5.js:35883-35989 placement
 /**
@@ -57,25 +58,29 @@ var MAX_SPEC_PATH_LENGTH = 200;
 /**
  * 规格路径是否合法（长度、段数、每段字符）。
  */
-function isValidSpecPath(e) {
-  if (typeof e !== "string" || e === "" || e.length > MAX_SPEC_PATH_LENGTH) return false;
-  let parts = e.split("/");
-  return parts.length <= MAX_SPEC_SEGMENTS && parts.every((r) => SPEC_SEGMENT_RE.test(r));
+function isValidSpecPath(specPath) {
+  if (typeof specPath !== "string" || specPath === "" || specPath.length > MAX_SPEC_PATH_LENGTH) return false;
+  let parts = specPath.split("/");
+  return parts.length <= MAX_SPEC_SEGMENTS && parts.every((segment) => SPEC_SEGMENT_RE.test(segment));
 }
 //@ chunk-ae5g0zb5.js:36122-36371 placement
 /**
  * 把参数（可能是绝对路径）转为相对规格目录的合法路径，否则 null。
  */
-function toSpecPath(e, n) {
-  if (typeof e !== "string") return null;
-  let r = e.trim().split(/\s+/, 1)[0] ?? "";
-  let replaced = n.replace(/\/+$/, "");
-  let replaced_2 = (
-    r.startsWith("/") ? (r.startsWith(`${replaced}/`) ? r.slice(replaced.length + 1) : null) : r
+function toSpecPath(text, rootDir) {
+  if (typeof text !== "string") return null;
+  let firstWord = text.trim().split(/\s+/, 1)[0] ?? "";
+  let replaced = rootDir.replace(/\/+$/, "");
+  let specPath = (
+    firstWord.startsWith("/")
+      ? firstWord.startsWith(`${replaced}/`)
+        ? firstWord.slice(replaced.length + 1)
+        : null
+      : firstWord
   )
     ?.replace(/^(?:\.\/+)+/, "")
     .replace(/\/+$/, "");
-  return isValidSpecPath(replaced_2) ? replaced_2 : null;
+  return isValidSpecPath(specPath) ? specPath : null;
 }
 //@ chunk-ae5g0zb5.js:36371-36671 placement
 /**
@@ -100,8 +105,8 @@ function parseConsentAnswer(runFile) {
 /**
  * 去掉被隔离的条目
  */
-function filterWalled(e, n) {
-  return n ? e.filter((r) => r.walled !== true) : [...e];
+function filterWalled(items, dropWalled) {
+  return dropWalled ? items.filter((item) => item.walled !== true) : [...items];
 }
 //@ chunk-ae5g0zb5.js:36818-37944 placement
 /**
@@ -201,6 +206,11 @@ function describePortInUse(failure) {
       : `Dependencies aren't installed: run ${failure.install} install`;
   return APP_UNAVAILABLE_CAUSES[failure.cause];
 }
+
+// The import cycle this module closes (3 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("src/plugins/bundled/claudeTest/appFacts.js");
+runDeferredInits("worker:src/plugins/bundled/claudeTest/appFacts.js");
 export {
   claudeTestState,
   isPlainObjectNonArray,

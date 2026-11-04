@@ -8,9 +8,10 @@
  * pieces: chunk-zhrgwca4.js (13)
  * attribution: placement 13
  */
-import { Ar } from "../../../../runtime/bun-runtime.js";
+import { __export } from "../../../../runtime/bun-runtime.js";
 import { DEV_MODS_DIR_PLACEHOLDER } from "./devModsWatcher.js";
 import { getIsNonInteractiveSession } from "../../../bootstrap/state.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-zhrgwca4.js:1093-1102 placement
 /**
@@ -18,9 +19,12 @@ import { getIsNonInteractiveSession } from "../../../bootstrap/state.js";
  */
 var devModsDialogNamespace = {};
 //@ chunk-zhrgwca4.js:1102-1152 placement
-Ar(devModsDialogNamespace, {
-  DEV_MODS_PLACEHOLDER: () => DEV_MODS_DIR_PLACEHOLDER,
-  default: () => devModsDialogNamespace,
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-zhrgwca4.js:1102", () => {
+  __export(devModsDialogNamespace, {
+    DEV_MODS_PLACEHOLDER: () => DEV_MODS_DIR_PLACEHOLDER,
+    default: () => devModsDialogNamespace,
+  });
 });
 //@ chunk-zhrgwca4.js:1152-1212 placement
 /**
@@ -42,16 +46,16 @@ var OUTCOME_BY_REASON = {
   error: "retry",
 };
 //@ chunk-zhrgwca4.js:1310-1472 placement
-function consentOutcomeToChoice(o) {
-  switch (o.kind) {
+function consentOutcomeToChoice(outcome) {
+  switch (outcome.kind) {
     case "chose":
-      return CHOICE_BY_VALUE[o.value];
+      return CHOICE_BY_VALUE[outcome.value];
     case "declined":
       return "decline";
     case "aborted":
       return "withdrawn";
     case "unanswered":
-      return OUTCOME_BY_REASON[o.reason];
+      return OUTCOME_BY_REASON[outcome.reason];
   }
 }
 //@ chunk-zhrgwca4.js:1472-1484 placement
@@ -60,10 +64,10 @@ var CONSENT_DIALOG_DELAY_MS = 2000;
 /**
  * 描述 mod 加载时机（立即或本轮结束后）。
  */
-var loadTimingLabel = (o) => (o === "now" ? "now" : "when this turn ends");
+var loadTimingLabel = (loadTiming) => (loadTiming === "now" ? "now" : "when this turn ends");
 //@ chunk-zhrgwca4.js:1534-1675 placement
-var devModsConsentBody = (o) =>
-  `They'll load ${loadTimingLabel(o)}, and they'll reload whenever they change. A mod is code, and it runs with the same access you have here.`;
+var devModsConsentBody = (loadTiming) =>
+  `They'll load ${loadTimingLabel(loadTiming)}, and they'll reload whenever they change. A mod is code, and it runs with the same access you have here.`;
 //@ chunk-zhrgwca4.js:1675-1801 placement
 var DEV_MODS_CONSENT_OPTIONS = [
   {
@@ -80,18 +84,18 @@ var DEV_MODS_CONSENT_OPTIONS = [
   },
 ];
 //@ chunk-zhrgwca4.js:1801-2369 placement
-function devModsExplainerLines(o) {
-  let e = o === "now";
-  let r = !getIsNonInteractiveSession();
+function devModsExplainerLines(loadTiming) {
+  let loadsNow = loadTiming === "now";
+  let isInteractive = !getIsNonInteractiveSession();
   return [
     "A mod is a small program that changes how Claude looks or behaves here.",
     "Claude wrote these mods, and they run with the same access you have.",
-    e
+    loadsNow
       ? "If you turn them on, they'll load now and reload whenever they change."
       : "Once they're on, they load when this turn ends and reload when they change.",
     "That lasts for the rest of this session, even if it restarts.",
     "If you choose Not now, nothing new will load until this session next starts.",
-    ...(r ? ["You can see what's loaded, and turn it off, with /plugin."] : []),
+    ...(isInteractive ? ["You can see what's loaded, and turn it off, with /plugin."] : []),
   ].join(`
 `);
 }
@@ -100,9 +104,9 @@ var MODS_DIALOG_TITLE = "Mods";
 //@ chunk-zhrgwca4.js:2383-2439 placement
 var DEV_MODS_CONSENT_QUESTION = "Turn on the mods Claude writes in this session?";
 //@ chunk-zhrgwca4.js:2439-2468 placement
-var devModsConsentQuestionFor = (o) => `${DEV_MODS_CONSENT_QUESTION}
+var devModsConsentQuestionFor = (loadTiming) => `${DEV_MODS_CONSENT_QUESTION}
 
-${devModsConsentBody(o)}`;
+${devModsConsentBody(loadTiming)}`;
 export {
   DEV_MODS_CONSENT_QUESTION,
   devModsExplainerLines,

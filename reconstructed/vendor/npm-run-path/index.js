@@ -11,33 +11,33 @@ import path from "path";
 import { pathKey } from "../path-key/index.js";
 
 //@ chunk-m4p5zn6n.js:7660-8136 esm-fingerprint
-var br = ({
-  cwd: e = Mr.cwd(),
-  path: n = Mr.env[pathKey()],
+var npmRunPathEnv = ({
+  cwd = Mr.cwd(),
+  path: pathVar = Mr.env[pathKey()],
   preferLocal = true,
-  execPath: o = Mr.execPath,
+  execPath = Mr.execPath,
   addExecPath = true,
 } = {}) => {
-  let u = e instanceof URL ? fileURLToPath(e) : e;
-  let resolved = path.resolve(u);
+  let cwdPath = cwd instanceof URL ? fileURLToPath(cwd) : cwd;
+  let resolved = path.resolve(cwdPath);
   let result = [];
-  if (preferLocal) Cr(result, resolved);
-  if (addExecPath) Er(result, o, resolved);
-  return [...result, n].join(path.delimiter);
+  if (preferLocal) appendBinDirs(result, resolved);
+  if (addExecPath) appendExecPathDirs(result, execPath, resolved);
+  return [...result, pathVar].join(path.delimiter);
 };
-var Cr = (result, n) => {
-  let r;
-  while (r !== n) {
-    result.push(path.join(n, "node_modules/.bin"));
-    r = n;
-    n = path.resolve(n, "..");
+var appendBinDirs = (result, dir) => {
+  let parent;
+  while (parent !== dir) {
+    result.push(path.join(dir, "node_modules/.bin"));
+    parent = dir;
+    dir = path.resolve(dir, "..");
   }
 };
-var Er = (result, n, r) => {
-  let o = n instanceof URL ? fileURLToPath(n) : n;
-  result.push(path.resolve(r, o, ".."));
+var appendExecPathDirs = (result, execPathValue, cwdPath) => {
+  let resolvedExecPath = execPathValue instanceof URL ? fileURLToPath(execPathValue) : execPathValue;
+  result.push(path.resolve(cwdPath, resolvedExecPath, ".."));
 };
-var Kt = ({ env = Mr.env, ...options } = {}) => {
+var npmRunPath = ({ env = Mr.env, ...options } = {}) => {
   env = {
     ...env,
   };
@@ -45,7 +45,7 @@ var Kt = ({ env = Mr.env, ...options } = {}) => {
     env,
   });
   options.path = env[pathName];
-  env[pathName] = br(options);
+  env[pathName] = npmRunPathEnv(options);
   return env;
 };
-export { Kt };
+export { npmRunPath };

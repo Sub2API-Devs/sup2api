@@ -24,3 +24,4 @@ var workflowsCommandDefinition = {
   thinClientDispatch: "control-request",
 };
 var workflowsCommand = workflowsCommandDefinition;
+export { workflowsCommand };

@@ -15,17 +15,12 @@ import { isRemoteEnvironmentAny } from "../../utils/remoteEnvironment.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 
-//@ chunk-6qdkmygq.js:3644-3673 placement
-/**
- * /design-revoke 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
- */
-var designRevokeCall = (args, context) => designCommandCall("revoke", context);
 //@ chunk-ww36hy8b.js:411-1753 placement
-var designCommandCall = async (n, context) => {
-  let o = context.toolState.get(DesignGateState);
-  if (n === "consent")
+var designCommandCall = async (args, context) => {
+  let gate = context.toolState.get(DesignGateState);
+  if (args === "consent")
     try {
-      await recordDesignConsent(o, "agent_design_projects", context.credentials);
+      await recordDesignConsent(gate, "agent_design_projects", context.credentials);
       return {
         type: "text",
         value: `Design agent access granted for your Claude Design projects. Use /design revoke to undo.
@@ -48,7 +43,7 @@ ${STANDALONE_DESIGN_CLOSING_NOTICE}`,
       };
     }
   try {
-    await revokeDesignConsent(o, "agent_design_projects", context.credentials);
+    await revokeDesignConsent(gate, "agent_design_projects", context.credentials);
     return {
       type: "text",
       value: "Design agent access revoked for your Claude Design projects.",
@@ -70,4 +65,9 @@ ${STANDALONE_DESIGN_CLOSING_NOTICE}`,
     };
   }
 };
-export { designCommandCall };
+//@ chunk-6qdkmygq.js:3644-3673 placement
+/**
+ * /design-revoke 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
+ */
+var designRevokeCall = (args, context) => designCommandCall("revoke", context);
+export { designCommandCall, designRevokeCall };

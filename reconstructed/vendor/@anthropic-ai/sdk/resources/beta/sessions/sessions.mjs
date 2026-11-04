@@ -10,7 +10,7 @@ import { Events } from "./events.mjs";
 import { Resources } from "./resources.mjs";
 import { Threads } from "./threads/threads.mjs";
 import { buildHeaders } from "../../../internal/headers.mjs";
-import { I } from "../../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../../internal/utils/path.mjs";
 import { BidirectionalPageCursor } from "../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:133758-135536 esm-fingerprint
@@ -42,7 +42,7 @@ var Sessions = (() => {
     }
     retrieve(sessionID, params = {}, options) {
       let { betas, workspace_id } = params ?? {};
-      return this._client.get(I`/v1/sessions/${sessionID}?beta=true`, {
+      return this._client.get(parseUrl_2`/v1/sessions/${sessionID}?beta=true`, {
         ...options,
         headers: buildHeaders([
           {
@@ -59,7 +59,7 @@ var Sessions = (() => {
     }
     update(sessionID, params, options) {
       let { betas, workspace_id, ...body } = params;
-      return this._client.post(I`/v1/sessions/${sessionID}?beta=true`, {
+      return this._client.post(parseUrl_2`/v1/sessions/${sessionID}?beta=true`, {
         body,
         ...options,
         headers: buildHeaders([
@@ -95,7 +95,7 @@ var Sessions = (() => {
     }
     delete(sessionID, params = {}, options) {
       let { betas, workspace_id } = params ?? {};
-      return this._client.delete(I`/v1/sessions/${sessionID}?beta=true`, {
+      return this._client.delete(parseUrl_2`/v1/sessions/${sessionID}?beta=true`, {
         ...options,
         headers: buildHeaders([
           {
@@ -112,7 +112,7 @@ var Sessions = (() => {
     }
     archive(sessionID, params = {}, options) {
       let { betas, workspace_id } = params ?? {};
-      return this._client.post(I`/v1/sessions/${sessionID}/archive?beta=true`, {
+      return this._client.post(parseUrl_2`/v1/sessions/${sessionID}/archive?beta=true`, {
         ...options,
         headers: buildHeaders([
           {

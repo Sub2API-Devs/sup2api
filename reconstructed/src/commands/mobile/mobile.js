@@ -11,6 +11,7 @@
 import { createSignal } from "../../utils/signal.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-3q7pey4p.js:297-2093 placement
 /**
@@ -90,7 +91,10 @@ function isMobilePlatform(prev) {
 /**
  * 按宿主缓存的 ClaudeInChromeSessionState。
  */
-var CLAUDE_IN_CHROME_SESSION_SLOT = new HostScoped(() => new ClaudeInChromeSessionState());
+var CLAUDE_IN_CHROME_SESSION_SLOT; // deferred: uses ClaudeInChromeSessionState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3q7pey4p.js:2141", () => {
+  CLAUDE_IN_CHROME_SESSION_SLOT = new HostScoped(() => new ClaudeInChromeSessionState());
+});
 //@ chunk-3q7pey4p.js:2166-2204 placement
 /**
  * 取当前会话的 ClaudeInChrome 会话状态（按 tool_use_id 记录已解析 host 等），50 多处调用。
@@ -103,7 +107,7 @@ function claudeInChromeSession() {
  * 把某 tool_use_id 已解析的 host 标记为 keepHostPin（保持宿主固定）。
  */
 function keepResolvedHostPin(toolUseID) {
-  let n = claudeInChromeSession().resolvedHostByToolUseId.get(toolUseID);
-  if (n !== undefined) n.keepHostPin = true;
+  let pin = claudeInChromeSession().resolvedHostByToolUseId.get(toolUseID);
+  if (pin !== undefined) pin.keepHostPin = true;
 }
 export { claudeInChromeSession, keepResolvedHostPin, CLAUDE_IN_CHROME_SESSION_SLOT, isMobilePlatform };

@@ -12,6 +12,14 @@ import { isLocalAgent } from "../../state/teammateViewHelpers.js";
 import { keepaliveReasons } from "../../tasks/taskKinds.js";
 import { FLAG_IDLE_WINDOW } from "../../tasks/LocalAgentTask/keepalive.js";
 
+//@ chunk-e6aww6q8.js:4718644-4718761 fingerprint = useTeammateLifecycleNotification (0.759)
+function useTeammateLifecycleNotification(task) {
+  if (!isLocalAgent(task)) return false;
+  return (
+    task.status === "running" ||
+    (task.status === "completed" && [...keepaliveReasons(task)].some((reason) => reason !== FLAG_IDLE_WINDOW))
+  );
+}
 //@ chunk-18hwfzwa.js:1787959-1788064 file-local
 function parseCount(notif) {
   if (!("text" in notif)) return 1;
@@ -19,7 +27,7 @@ function parseCount(notif) {
   return match?.[1] ? parseInt(match[1], 10) : 1;
 }
 //@ chunk-18hwfzwa.js:1788064-1788103 layout
-function foldTeammatesStarted(notif, x) {
+function foldTeammatesStarted(notif, notification) {
   return makeSpawnNotif(parseCount(notif) + 1);
 }
 //@ chunk-18hwfzwa.js:1788103-1788257 fingerprint = makeSpawnNotif (0.664)
@@ -47,13 +55,5 @@ function makeShutdownNotif(count) {
     timeoutMs: 5000,
     fold: foldTeammatesShutdown,
   };
-}
-//@ chunk-e6aww6q8.js:4718644-4718761 fingerprint = useTeammateLifecycleNotification (0.759)
-function useTeammateLifecycleNotification(e) {
-  if (!isLocalAgent(e)) return false;
-  return (
-    e.status === "running" ||
-    (e.status === "completed" && [...keepaliveReasons(e)].some((n) => n !== FLAG_IDLE_WINDOW))
-  );
 }
 export { useTeammateLifecycleNotification, makeSpawnNotif, makeShutdownNotif };

@@ -43,11 +43,11 @@ class FlushGate {
     this._pending.push(...items);
     return true;
   }
-  evictOldest(n, h) {
-    let w = count(this._pending, n) - h;
-    if (w <= 0) return;
-    this._evictedCount += w;
-    this._pending = this._pending.filter((C) => !n(C) || w-- <= 0);
+  evictOldest(shouldEvict, keepCount) {
+    let evictCount = count(this._pending, shouldEvict) - keepCount;
+    if (evictCount <= 0) return;
+    this._evictedCount += evictCount;
+    this._pending = this._pending.filter((item) => !shouldEvict(item) || evictCount-- <= 0);
   }
   drop() {
     this._active = false;

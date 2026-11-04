@@ -11,7 +11,13 @@
 import { join, dirname } from "path";
 import { getClaudeConfigDir } from "../../utils/envUtils.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, E, string, record, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  numberSchema,
+  stringSchema,
+  record,
+  unknown,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { MCP_PROTOCOL_NEXT } from "./mcpCallConstants.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
@@ -24,6 +30,7 @@ import { NOFOLLOW_NONBLOCK_FLAGS } from "../../utils/fsFlags.js";
 import { isENOENT, getErrnoCode, errorMessage } from "../../utils/errors.js";
 import { isDisklessWithoutState } from "../orgMemory/memoryStores.js";
 import { getCliOwnedState } from "./cliOwnedClients.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-8t8n4kdh.js:27904-27992 placement
 /**
@@ -46,13 +53,17 @@ function getDiscoverVerdictsPath() {
 /**
  * 判定记录表的 schema。
  */
-var DiscoverVerdictSchema = DoctorLazy(() =>
-  u({
-    observedAt: E(),
-    modernProtocolVersion: string(),
-  }),
-);
-var verdictMapSchema = DoctorLazy(() => record(string(), unknown()));
+var DiscoverVerdictSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var verdictMapSchema;
+deferInit("chunk-8t8n4kdh.js:28043", () => {
+  DiscoverVerdictSchema = DoctorLazy(() =>
+    objectSchema({
+      observedAt: numberSchema(),
+      modernProtocolVersion: stringSchema(),
+    }),
+  );
+  verdictMapSchema = DoctorLazy(() => record(stringSchema(), unknown()));
+});
 //@ chunk-8t8n4kdh.js:28126-28180 placement
 function isDiscoverVerdictMemoryEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_dreamy_sundae", true) !== false;
@@ -72,59 +83,59 @@ function shouldRememberVerdict(discoverVerdictKey) {
 /**
  * 判定的有效期（stdio 用较短 TTL）。
  */
-function verdictTtlMs(e) {
-  return e.startsWith(STDIO_VERDICT_PREFIX) ? STDIO_VERDICT_TTL_MS : VERDICT_TTL_MS;
+function verdictTtlMs(verdictKey) {
+  return verdictKey.startsWith(STDIO_VERDICT_PREFIX) ? STDIO_VERDICT_TTL_MS : VERDICT_TTL_MS;
 }
 //@ chunk-8t8n4kdh.js:28316-28408 placement
 /**
  * 判定是否仍有效且协议为现代版本。
  */
-function isModernVerdictValid(discoverVerdictKey, discoverVerdict, r) {
-  let s = r - discoverVerdict.observedAt;
+function isModernVerdictValid(verdictKey, discoverVerdict, now) {
+  let ageMs = now - discoverVerdict.observedAt;
   return (
     discoverVerdict.modernProtocolVersion === MCP_PROTOCOL_NEXT &&
-    s >= 0 &&
-    s < verdictTtlMs(discoverVerdictKey)
+    ageMs >= 0 &&
+    ageMs < verdictTtlMs(verdictKey)
   );
 }
 //@ chunk-8t8n4kdh.js:28408-28469 placement
 /**
  * 判定是否仍有效（不区分协议）。
  */
-function isVerdictValid(e, n, r) {
-  let s = r - n.observedAt;
-  return s >= 0 && s < verdictTtlMs(e);
+function isVerdictValid(verdictKey, verdict, now) {
+  let ageMs = now - verdict.observedAt;
+  return ageMs >= 0 && ageMs < verdictTtlMs(verdictKey);
 }
 //@ chunk-8t8n4kdh.js:28469-28896 placement
 /**
  * readDiscoverVerdicts：读取记住的 discover 判定（v5 存储或文件），读失败当作没有记录（服务器照常被 server/discover 探测）。
  */
-async function readDiscoverVerdicts(e) {
-  let n;
-  if (isStorageV5Enabled() && e !== undefined) {
-    let text = await e.readText([STORAGE_SPACES.state(DISCOVER_VERDICTS_STATE_NAME)]);
+async function readDiscoverVerdicts(storage) {
+  let raw;
+  if (isStorageV5Enabled() && storage !== undefined) {
+    let text = await storage.readText([STORAGE_SPACES.state(DISCOVER_VERDICTS_STATE_NAME)]);
     if (!text.ok)
       logForDebugging(
         `[mcp] could not read the remembered discover verdicts (${formatStorageError(text.error)}); servers are probed with server/discover as if nothing was remembered`,
       );
-    else if (text.value.items[0]?.found) n = text.value.items[0].value;
-  } else n = await readDiscoverVerdictsFile(getDiscoverVerdictsPath());
-  if (n === undefined) return {};
-  let r;
+    else if (text.value.items[0]?.found) raw = text.value.items[0].value;
+  } else raw = await readDiscoverVerdictsFile(getDiscoverVerdictsPath());
+  if (raw === undefined) return {};
+  let parsed;
   try {
-    r = jsonParse(n);
+    parsed = jsonParse(raw);
   } catch {
     return {};
   }
-  let s = verdictMapSchema().safeParse(r);
-  return s.success ? s.data : {};
+  let parseResult = verdictMapSchema().safeParse(parsed);
+  return parseResult.success ? parseResult.data : {};
 }
 //@ chunk-8t8n4kdh.js:28896-29664 placement
 /**
  * readDiscoverVerdictsFile：只读普通文件且不跟随符号链接、≤256 KiB。
  */
 async function readDiscoverVerdictsFile(discoverVerdictsPath) {
-  let r;
+  let buffer;
   try {
     let fileReader = getFileReader();
     if (NOFOLLOW_NONBLOCK_FLAGS === 0) {
@@ -136,7 +147,7 @@ async function readDiscoverVerdictsFile(discoverVerdictsPath) {
         return;
       }
     }
-    r = await fileReader.readTail(discoverVerdictsPath, MAX_VERDICTS_FILE_BYTES + 1, {
+    buffer = await fileReader.readTail(discoverVerdictsPath, MAX_VERDICTS_FILE_BYTES + 1, {
       noFollow: true,
     });
   } catch (error) {
@@ -149,22 +160,22 @@ async function readDiscoverVerdictsFile(discoverVerdictsPath) {
     );
     return;
   }
-  if (r.length > MAX_VERDICTS_FILE_BYTES) {
+  if (buffer.length > MAX_VERDICTS_FILE_BYTES) {
     logForDebugging(
       `[mcp] ${discoverVerdictsPath} is larger than ${MAX_VERDICTS_FILE_BYTES} bytes; ignoring it, so servers are probed with server/discover as if nothing was remembered`,
     );
     return;
   }
-  return r.toString("utf8");
+  return buffer.toString("utf8");
 }
 //@ chunk-8t8n4kdh.js:29664-29804 placement
 /**
  * getDiscoverVerdicts：进程内记忆化的判定表读取。
  */
-function getDiscoverVerdicts(e) {
-  if (isDisklessWithoutState(e)) return Promise.resolve({});
+function getDiscoverVerdicts(storage) {
+  if (isDisklessWithoutState(storage)) return Promise.resolve({});
   let cliOwnedState = getCliOwnedState();
-  cliOwnedState.discoverVerdictsRead ??= readDiscoverVerdicts(e).catch(() => ({}));
+  cliOwnedState.discoverVerdictsRead ??= readDiscoverVerdicts(storage).catch(() => ({}));
   return cliOwnedState.discoverVerdictsRead;
 }
 //@ chunk-8t8n4kdh.js:29804-30040 placement = ensureScratchpadDir (0.624)
@@ -172,54 +183,54 @@ function getDiscoverVerdicts(e) {
  * 把 MCP discover 判定结果写入状态：有托管存储时写存储（0600），否则在本地路径原子写入（目录 0700、文件 0600），失败返回错误。旧版名 ensureScratchpadDir 误配，应归 MCP 模块。
  */
 async function writeDiscoverVerdicts(verdicts, storage) {
-  let r = jsonStringify(verdicts);
+  let serialized = jsonStringify(verdicts);
   if (isStorageV5Enabled() && storage !== undefined) {
-    let h = await storage.write(STORAGE_SPACES.state(DISCOVER_VERDICTS_STATE_NAME), r, {
+    let writeResult = await storage.write(STORAGE_SPACES.state(DISCOVER_VERDICTS_STATE_NAME), serialized, {
       mode: 384,
     });
-    return h.ok ? undefined : formatStorageError(h.error);
+    return writeResult.ok ? undefined : formatStorageError(writeResult.error);
   }
   let fs = getDiscoverVerdictsPath();
   try {
     await getFileReader().mkdir(dirname(fs), 448);
-    await getFileReader().atomicWrite(fs, r, 384);
+    await getFileReader().atomicWrite(fs, serialized, 384);
     return;
   } catch (error) {
     return errorMessage(error);
   }
 }
 //@ chunk-8t8n4kdh.js:30040-30145 placement
-function readDiscoverVerdict(e, discoverVerdictKey) {
-  if (!Object.hasOwn(e, discoverVerdictKey)) return;
-  let r = DiscoverVerdictSchema().safeParse(e[discoverVerdictKey]);
-  return r.success ? r.data : undefined;
+function readDiscoverVerdict(verdicts, discoverVerdictKey) {
+  if (!Object.hasOwn(verdicts, discoverVerdictKey)) return;
+  let parseResult = DiscoverVerdictSchema().safeParse(verdicts[discoverVerdictKey]);
+  return parseResult.success ? parseResult.data : undefined;
 }
 //@ chunk-8t8n4kdh.js:30145-30279 placement
-function retainValidDiscoverVerdicts(e, n) {
-  let r = {};
-  for (let [key, value] of Object.entries(e)) {
-    let y = DiscoverVerdictSchema().safeParse(value);
-    if (y.success && isVerdictValid(key, y.data, n)) r[key] = y.data;
+function retainValidDiscoverVerdicts(verdicts, now) {
+  let kept = {};
+  for (let [key, value] of Object.entries(verdicts)) {
+    let parseResult = DiscoverVerdictSchema().safeParse(value);
+    if (parseResult.success && isVerdictValid(key, parseResult.data, now)) kept[key] = parseResult.data;
   }
-  return r;
+  return kept;
 }
 //@ chunk-8t8n4kdh.js:30279-30726 placement
 /**
  * updateDiscoverVerdicts：串行化的读-改-写；写失败丢弃改动并在下次重新读取。
  */
-function updateDiscoverVerdicts(storage, n) {
+function updateDiscoverVerdicts(storage, update) {
   let cliOwnedState = getCliOwnedState();
   cliOwnedState.discoverVerdictsWriteChain = cliOwnedState.discoverVerdictsWriteChain
     .then(async () => {
       if (isDisklessWithoutState(storage)) return;
-      let verdicts = n(await getDiscoverVerdicts(storage));
+      let verdicts = update(await getDiscoverVerdicts(storage));
       if (verdicts === undefined) return;
       cliOwnedState.discoverVerdictsRead = Promise.resolve(verdicts);
-      let h = await writeDiscoverVerdicts(verdicts, storage);
-      if (h !== undefined) {
+      let writeError = await writeDiscoverVerdicts(verdicts, storage);
+      if (writeError !== undefined) {
         cliOwnedState.discoverVerdictsRead = null;
         logForDebugging(
-          `[mcp] could not save the remembered discover verdicts (${h}); the change is dropped and storage is read again at the next use`,
+          `[mcp] could not save the remembered discover verdicts (${writeError}); the change is dropped and storage is read again at the next use`,
         );
       }
     })

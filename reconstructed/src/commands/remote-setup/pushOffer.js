@@ -26,31 +26,42 @@ import {
   saveCurrentProjectConfig,
 } from "../../utils/config.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-p8zkbd8d.js:567-821 placement
 /**
  * Web setup 推送优惠相关常量：模式 off/survey、最多展示 3 次、间隔 1 天，以及按宿主的 offer 状态槽与推送槽。
  */
-var TENGU_REFLECTIVE_BEE = "tengu_reflective_bee";
-var WEB_SETUP_OFFER_MODES = ["off", "survey"];
-var MAX_WEB_SETUP_OFFER_SHOWS = 3;
-var _ = 86400000;
-var TENGU_WEB_SETUP_PUSH_OFFER = "tengu_web_setup_push_offer";
-var WEB_SETUP_PUSH_OFFER_QUESTION =
-  "Pushed to GitHub. Connect GitHub to claude.ai so you can work on this repo even when this machine is offline?";
-var WEB_SETUP_PUSH_OFFER_DELAY_MS = 1000;
-var WEB_SETUP_PUSH_OFFER_SLOT = new HostScoped(() =>
-  createStore({
-    status: "none",
-  }),
-);
+var TENGU_REFLECTIVE_BEE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var WEB_SETUP_OFFER_MODES;
+var MAX_WEB_SETUP_OFFER_SHOWS;
+var _;
+var TENGU_WEB_SETUP_PUSH_OFFER;
+var WEB_SETUP_PUSH_OFFER_QUESTION;
+var WEB_SETUP_PUSH_OFFER_DELAY_MS;
+var WEB_SETUP_PUSH_OFFER_SLOT;
+deferInit("chunk-p8zkbd8d.js:567", () => {
+  TENGU_REFLECTIVE_BEE = "tengu_reflective_bee";
+  WEB_SETUP_OFFER_MODES = ["off", "survey"];
+  MAX_WEB_SETUP_OFFER_SHOWS = 3;
+  _ = 86400000;
+  TENGU_WEB_SETUP_PUSH_OFFER = "tengu_web_setup_push_offer";
+  WEB_SETUP_PUSH_OFFER_QUESTION =
+    "Pushed to GitHub. Connect GitHub to claude.ai so you can work on this repo even when this machine is offline?";
+  WEB_SETUP_PUSH_OFFER_DELAY_MS = 1000;
+  WEB_SETUP_PUSH_OFFER_SLOT = new HostScoped(() =>
+    createStore({
+      status: "none",
+    }),
+  );
+});
 //@ chunk-p8zkbd8d.js:821-1237 placement
 /**
  * 满足条件（第一方订阅、web-setup 开启、未屏蔽、GitHub 未连接）时根据 tengu_reflective_bee 变体把推送提议置为 pending。
  */
 function maybeArmWebSetupPushOffer({ trigger, host, storageV5 }) {
-  let r = WEB_SETUP_PUSH_OFFER_SLOT.of(host);
-  if (r.getState().status !== "none") return;
+  let slot = WEB_SETUP_PUSH_OFFER_SLOT.of(host);
+  if (slot.getState().status !== "none") return;
   if (isUnattendedInteractiveSession()) return;
   if (getAPIProvider() !== "firstParty" || !isClaudeAISubscriber() || !isWebSetupEnabled()) return;
   if (isRemoteSessionAvailable()) return;
@@ -61,8 +72,8 @@ function maybeArmWebSetupPushOffer({ trigger, host, storageV5 }) {
     trigger: fromEnum(trigger),
   });
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_REFLECTIVE_BEE, "off");
-  let found = WEB_SETUP_OFFER_MODES.find((i) => i === featureValue_CACHED_MAY_BE_STALE);
-  r.setState(() =>
+  let found = WEB_SETUP_OFFER_MODES.find((mode) => mode === featureValue_CACHED_MAY_BE_STALE);
+  slot.setState(() =>
     found === undefined || found === "off"
       ? {
           status: "resolved",
@@ -88,14 +99,14 @@ function isPushOfferSuppressed() {
  * 把会话中待处理的远程推送提议标记为已解决；未处于 pending 或仍未连接时返回 false。
  */
 function resolvePendingPushOffer(host, storageV5) {
-  let s = WEB_SETUP_PUSH_OFFER_SLOT.of(host);
-  if (s.getState().status !== "pending") return false;
+  let slot = WEB_SETUP_PUSH_OFFER_SLOT.of(host);
+  if (slot.getState().status !== "pending") return false;
   if (
     !isPushOfferSuppressed() &&
     GITHUB_CONNECTION_STATUS_CACHE.of(host).peek(undefined, storageV5) === "not_connected"
   )
     return false;
-  s.setState(() => ({
+  slot.setState(() => ({
     status: "resolved",
   }));
   return true;
@@ -105,10 +116,10 @@ function resolvePendingPushOffer(host, storageV5) {
  * 把 pending 提议标为 shown，上报事件，并记录全局 lastShownAt/shownCount 与项目已展示标记。
  */
 function markPushOfferShown(host, storageV5) {
-  let s = WEB_SETUP_PUSH_OFFER_SLOT.of(host);
-  let state = s.getState();
+  let slot = WEB_SETUP_PUSH_OFFER_SLOT.of(host);
+  let state = slot.getState();
   if (state.status !== "pending") return;
-  s.setState(() => ({
+  slot.setState(() => ({
     ...state,
     status: "shown",
   }));
@@ -120,25 +131,25 @@ function markPushOfferShown(host, storageV5) {
   logFeatureOk("remote_setup_push_offer");
   let now = Date.now();
   saveGlobalConfig(
-    (e) =>
-      e.webSetupPushOffer?.lastShownAt === now
-        ? e
+    (config) =>
+      config.webSetupPushOffer?.lastShownAt === now
+        ? config
         : {
-            ...e,
+            ...config,
             webSetupPushOffer: {
-              ...e.webSetupPushOffer,
+              ...config.webSetupPushOffer,
               lastShownAt: now,
-              shownCount: (e.webSetupPushOffer?.shownCount ?? 0) + 1,
+              shownCount: (config.webSetupPushOffer?.shownCount ?? 0) + 1,
             },
           },
     storageV5,
   );
   saveCurrentProjectConfig(
-    (e) =>
-      e.webSetupPushOfferShown
-        ? e
+    (config) =>
+      config.webSetupPushOfferShown
+        ? config
         : {
-            ...e,
+            ...config,
             webSetupPushOfferShown: true,
           },
     storageV5,
@@ -148,27 +159,27 @@ function markPushOfferShown(host, storageV5) {
 /**
  * 用户对已展示的提议作答后置为 resolved 并上报；选 dont_ask_again 时永久关闭。
  */
-function resolveShownPushOffer(host, o, storageV5) {
-  let r = WEB_SETUP_PUSH_OFFER_SLOT.of(host);
-  let state = r.getState();
+function resolveShownPushOffer(host, event, storageV5) {
+  let slot = WEB_SETUP_PUSH_OFFER_SLOT.of(host);
+  let state = slot.getState();
   if (state.status !== "shown") return;
-  r.setState(() => ({
+  slot.setState(() => ({
     status: "resolved",
   }));
   logEvent(TENGU_WEB_SETUP_PUSH_OFFER, {
-    event: fromEnum(o),
+    event: fromEnum(event),
     variant: fromEnum(state.variant),
     trigger: fromEnum(state.trigger),
   });
-  if (o === "dont_ask_again")
+  if (event === "dont_ask_again")
     saveGlobalConfig(
-      (e) =>
-        e.webSetupPushOffer?.dismissedForever
-          ? e
+      (config) =>
+        config.webSetupPushOffer?.dismissedForever
+          ? config
           : {
-              ...e,
+              ...config,
               webSetupPushOffer: {
-                ...e.webSetupPushOffer,
+                ...config.webSetupPushOffer,
                 dismissedForever: true,
               },
             },

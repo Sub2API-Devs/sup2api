@@ -89,103 +89,114 @@ var CD_COMMAND_NAME = "Cd";
 /**
  * 找匹配的 cd 规则
  */
-function findCdRule(e, r) {
-  let s = uniq([...getPathsForPermissionCheck(e.requestedPath), e.canonicalPath]);
-  let n = uniq([e.canonicalPath, normalizeTrustedSymlink(e.canonicalPath)]);
-  let d = (ruleContent, source, f) => f.some((g) => cdRuleMatches(ruleContent, source, g));
-  for (let o of getDenyRules(r)) {
-    if (o.ruleValue.toolName !== CD_COMMAND_NAME) continue;
-    let ruleContent = o.ruleValue.ruleContent;
-    if (ruleContent === undefined || d(ruleContent, o.source, s))
+function findCdRule(targetInfo, context) {
+  let requestedSpellings = uniq([
+    ...getPathsForPermissionCheck(targetInfo.requestedPath),
+    targetInfo.canonicalPath,
+  ]);
+  let canonicalSpellings = uniq([
+    targetInfo.canonicalPath,
+    normalizeTrustedSymlink(targetInfo.canonicalPath),
+  ]);
+  let matchesAny = (ruleContent, source, spellings) =>
+    spellings.some((spelling) => cdRuleMatches(ruleContent, source, spelling));
+  for (let rule of getDenyRules(context)) {
+    if (rule.ruleValue.toolName !== CD_COMMAND_NAME) continue;
+    let ruleContent = rule.ruleValue.ruleContent;
+    if (ruleContent === undefined || matchesAny(ruleContent, rule.source, requestedSpellings))
       return {
         result: "blockedByRule",
-        rule: o,
+        rule,
       };
   }
-  let filtered = getAllowRules(r).filter((o) => o.ruleValue.toolName === CD_COMMAND_NAME);
+  let filtered = getAllowRules(context).filter(
+    (allowRule) => allowRule.ruleValue.toolName === CD_COMMAND_NAME,
+  );
   if (filtered.length === 0)
     return {
       result: "allowed",
     };
-  for (let o of filtered) {
-    let ruleContent = o.ruleValue.ruleContent;
-    if (ruleContent === undefined || d(ruleContent, o.source, n))
+  for (let allowRule of filtered) {
+    let ruleContent = allowRule.ruleValue.ruleContent;
+    if (ruleContent === undefined || matchesAny(ruleContent, allowRule.source, canonicalSpellings))
       return {
         result: "allowed",
       };
   }
   return {
     result: "outsideAllowedPatterns",
-    allowedPatterns: filtered.map((o) => o.ruleValue.ruleContent).filter((o) => o !== undefined),
+    allowedPatterns: filtered
+      .map((allowRule) => allowRule.ruleValue.ruleContent)
+      .filter((ruleContent) => ruleContent !== undefined),
   };
 }
 //@ chunk-1wvrnct9.js:2131-2334 placement
 /**
  * 规则是否匹配路径
  */
-function cdRuleMatches(e, r, s) {
-  let { relativePattern, root } = patternWithRoot(e, r);
-  let u = relativePath(root ?? getCwd(), s);
-  if (u === ".." || u.startsWith("../")) return false;
-  let replaced = relativePattern
+function cdRuleMatches(ruleContent, source, targetPath) {
+  let { relativePattern, root } = patternWithRoot(ruleContent, source);
+  let relative = relativePath(root ?? getCwd(), targetPath);
+  if (relative === ".." || relative.startsWith("../")) return false;
+  let pattern = relativePattern
     .replace(/\/{2,}/g, "/")
     .replace(/^\//, "")
     .replace(/\/$/, "");
-  return cdPatternToRegExp(replaced).test(u);
+  return cdPatternToRegExp(pattern).test(relative);
 }
 //@ chunk-1wvrnct9.js:2334-2669 placement
 /**
  * cd 规则模式转正则
  */
-function cdPatternToRegExp(e) {
-  let r = "^";
-  for (let j = 0; j < e.length; j++) {
-    let n = e[j];
-    if (j === 0 && n === "*" && e[1] === "*" && e[2] === "/") {
-      r += "(?:.*/)?";
+function cdPatternToRegExp(pattern) {
+  let regex = "^";
+  for (let j = 0; j < pattern.length; j++) {
+    let char = pattern[j];
+    if (j === 0 && char === "*" && pattern[1] === "*" && pattern[2] === "/") {
+      regex += "(?:.*/)?";
       j += 2;
-    } else if (n === "/" && e[j + 1] === "*" && e[j + 2] === "*") {
-      r += "(/.*)?";
+    } else if (char === "/" && pattern[j + 1] === "*" && pattern[j + 2] === "*") {
+      regex += "(/.*)?";
       j += 2;
-    } else if (n === "*") {
-      if (e[j + 1] === "*") {
-        r += ".*";
+    } else if (char === "*") {
+      if (pattern[j + 1] === "*") {
+        regex += ".*";
         j++;
-      } else r += "[^/]+";
-    } else if ("\\^$.|?+()[]{}".includes(n)) r += `\\${n}`;
-    else r += n;
+      } else regex += "[^/]+";
+    } else if ("\\^$.|?+()[]{}".includes(char)) regex += `\\${char}`;
+    else regex += char;
   }
-  return new RegExp(`${r}$`, "i");
+  return new RegExp(`${regex}$`, "i");
 }
 //@ chunk-1wvrnct9.js:2669-2748 placement
-async function recordDirectoryTrust(e, storageV5) {
-  if (await isHomeDirectory(e)) {
+async function recordDirectoryTrust(path, storageV5) {
+  if (await isHomeDirectory(path)) {
     setSessionTrustAccepted(true);
     setHomeTrustDialogAccepted(true);
     return false;
   }
-  return setPathTrustedDurably(e, storageV5);
+  return setPathTrustedDurably(path, storageV5);
 }
 //@ chunk-1wvrnct9.js:2748-2868 placement
-async function isHomeDirectory(e) {
-  let r = async (s) => {
-    let n = s;
+async function isHomeDirectory(path) {
+  let normalize = async (path) => {
+    let resolved = path;
     try {
-      n = await realpath(s);
+      resolved = await realpath(path);
     } catch {}
-    return normalizePathForCompare(identity(n));
+    return normalizePathForCompare(identity(resolved));
   };
-  return (await r(e)) === (await r(homedir()));
+  return (await normalize(path)) === (await normalize(homedir()));
 }
 //@ chunk-1wvrnct9.js:2868-3366 placement
-async function validateCdTarget(e, toolPermissionContext) {
-  let s = expandPath(e);
+async function validateCdTarget(inputPath, context) {
+  let expanded = expandPath(inputPath);
   try {
-    if (!(await stat(s)).isDirectory())
+    if (!(await stat(expanded)).isDirectory())
       return {
         result: "not_a_directory",
-        path: s,
-        parent: dirname(s),
+        path: expanded,
+        parent: dirname(expanded),
       };
   } catch (error) {
     if (!isFsInaccessible(error))
@@ -196,119 +207,120 @@ async function validateCdTarget(e, toolPermissionContext) {
       );
     return {
       result: "not_found",
-      path: s,
+      path: expanded,
     };
   }
-  let n = s;
+  let canonical = expanded;
   try {
-    n = await realpath(s);
+    canonical = await realpath(expanded);
   } catch {
-    n = s;
+    canonical = expanded;
   }
-  let d = identity(n);
-  if (d === getCwd() && d === getOriginalCwd())
+  let canonicalKey = identity(canonical);
+  if (canonicalKey === getCwd() && canonicalKey === getOriginalCwd())
     return {
       result: "same",
-      directory: n,
+      directory: canonical,
     };
   let cdRule = findCdRule(
     {
-      requestedPath: s,
-      canonicalPath: n,
+      requestedPath: expanded,
+      canonicalPath: canonical,
     },
-    toolPermissionContext,
+    context,
   );
   if (cdRule.result !== "allowed")
     return {
       result: "blocked_by_rule",
-      directory: n,
+      directory: canonical,
       check: cdRule,
     };
   return {
     result: "ok",
-    directory: n,
+    directory: canonical,
   };
 }
 //@ chunk-1wvrnct9.js:3366-4443 placement
-function cdRuleRefusalMessage(directory, check, s = (d) => d, n) {
-  let d = n?.terminalAffordances !== false;
-  let u = n?.display ?? ((o) => o);
-  directory = u(directory);
+function cdRuleRefusalMessage(directory, check, display = (text) => text, options) {
+  let terminalAffordances = options?.terminalAffordances !== false;
+  let format = options?.display ?? ((text) => text);
+  directory = format(directory);
   if (check.result === "blockedByRule") {
-    let o = u(formatPermissionRule(check.rule.ruleValue));
-    let m = permissionRuleSourceDisplayString(check.rule.source);
+    let ruleText = format(formatPermissionRule(check.rule.ruleValue));
+    let sourceText = permissionRuleSourceDisplayString(check.rule.source);
     if (check.rule.ruleValue.ruleContent === undefined)
-      return d
-        ? `Can't move to ${s(directory)} \u2014 /cd is turned off by the ${s(o)} rule in ${m}. Update the rule in /permissions to move between directories again.`
-        : `Can't move to ${s(directory)} \u2014 directory changes are turned off by the ${s(o)} permission rule in ${m}.`;
-    return d
-      ? `Can't move to ${s(directory)} \u2014 it's excluded by the ${s(o)} rule in ${m}. Pick a directory outside that rule, or update it in /permissions.`
-      : `Can't move to ${s(directory)} \u2014 it's excluded by the ${s(o)} permission rule in ${m}. Pick a directory outside that rule.`;
+      return terminalAffordances
+        ? `Can't move to ${display(directory)} \u2014 /cd is turned off by the ${display(ruleText)} rule in ${sourceText}. Update the rule in /permissions to move between directories again.`
+        : `Can't move to ${display(directory)} \u2014 directory changes are turned off by the ${display(ruleText)} permission rule in ${sourceText}.`;
+    return terminalAffordances
+      ? `Can't move to ${display(directory)} \u2014 it's excluded by the ${display(ruleText)} rule in ${sourceText}. Pick a directory outside that rule, or update it in /permissions.`
+      : `Can't move to ${display(directory)} \u2014 it's excluded by the ${display(ruleText)} permission rule in ${sourceText}. Pick a directory outside that rule.`;
   }
-  return d
-    ? `Can't move to ${s(directory)} \u2014 /cd is limited to directories matching ${check.allowedPatterns.map((allowedPattern) => s(u(allowedPattern))).join(", ")}. Pick a matching directory, or add a Cd rule in /permissions.`
-    : `Can't move to ${s(directory)} \u2014 directory changes are limited to ${check.allowedPatterns.map((allowedPattern) => s(u(allowedPattern))).join(", ")}. Pick a matching directory.`;
+  return terminalAffordances
+    ? `Can't move to ${display(directory)} \u2014 /cd is limited to directories matching ${check.allowedPatterns.map((allowedPattern) => display(format(allowedPattern))).join(", ")}. Pick a matching directory, or add a Cd rule in /permissions.`
+    : `Can't move to ${display(directory)} \u2014 directory changes are limited to ${check.allowedPatterns.map((allowedPattern) => display(format(allowedPattern))).join(", ")}. Pick a matching directory.`;
 }
 //@ chunk-1wvrnct9.js:4443-4792 placement
 /**
  * 收集目标目录的 CLAUDE.md
  */
-async function collectClaudeMdForTarget(e, targetPath, s) {
+async function collectClaudeMdForTarget(session, targetPath, storageV5) {
   if (env.CLAUDE_CODE_DISABLE_CLAUDE_MDS) return "";
   let processedPaths = new Set();
-  for (let y of await getMemoryFilesCached(e, false, s)) processedPaths.add(normalizePathForCompare(y.path));
-  let d = [];
-  let u = targetPath;
-  while (u !== parse(u).root) {
-    d.push(u);
-    u = dirname(u);
+  for (let memoryFile of await getMemoryFilesCached(session, false, storageV5))
+    processedPaths.add(normalizePathForCompare(memoryFile.path));
+  let dirs = [];
+  let current = targetPath;
+  while (current !== parse(current).root) {
+    dirs.push(current);
+    current = dirname(current);
   }
   let worktreeRoots = getWorktreeRoots(targetPath);
-  let { held, keep } = beginCwdRelocationHold(e);
-  let g = [];
-  for (let y of d.reverse())
-    g.push(
-      ...(await getMemoryFilesForNestedDirectory(y, targetPath, processedPaths, {
-        skipProject: isInMainRepoOutsideWorktree(y, worktreeRoots),
-        held: y === targetPath ? held?.within : held?.above(y),
+  let { held, keep } = beginCwdRelocationHold(session);
+  let files = [];
+  for (let dir of dirs.reverse())
+    files.push(
+      ...(await getMemoryFilesForNestedDirectory(dir, targetPath, processedPaths, {
+        skipProject: isInMainRepoOutsideWorktree(dir, worktreeRoots),
+        held: dir === targetPath ? held?.within : held?.above(dir),
       })),
     );
   keep();
-  return oversizedMemoryWarning(g);
+  return oversizedMemoryWarning(files);
 }
 //@ chunk-1wvrnct9.js:4792-8255 placement
 async function relocateSession(
   session,
-  directory,
-  s,
-  { storageV5: n, credentials: d, freshSession: u = false, confirmFresh: o, requestBuilt: m } = {},
+  path,
+  source,
+  { storageV5, credentials, freshSession = false, confirmFresh, requestBuilt } = {},
 ) {
   let cwd = getCwd();
   let originalCwd = getOriginalCwd();
-  let y = uniq([originalCwd, cwd]);
+  let baseDirs = uniq([originalCwd, cwd]);
   let departedAdditionalDirectories = uniq(
     [
       ...(getSettingsForSourceTightenOnly("projectSettings")?.permissions?.additionalDirectories ?? []),
       ...(getSettingsForSourceTightenOnly("localSettings")?.permissions?.additionalDirectories ?? []),
-    ].flatMap((p) => {
+    ].flatMap((dir) => {
       try {
-        return y.map((P) => expandPath(p, P));
+        return baseDirs.map((base) => expandPath(dir, base));
       } catch {
         return [];
       }
     }),
   );
-  chdirAndSetCwd(directory);
+  chdirAndSetCwd(path);
   setOriginalCwd(getCwd());
-  let w = true;
+  let transcriptRelocated = true;
   try {
-    await relocateSessionTranscript(n);
+    await relocateSessionTranscript(storageV5);
   } catch (error) {
-    w = false;
-    let P = false;
+    transcriptRelocated = false;
+    let rolledBack = false;
     try {
       processChdir(cwd);
-      P = true;
+      rolledBack = true;
     } catch {
       logForDebugging(
         `directory move: transcript move failed and rollback chdir failed; completing the move with the transcript left in its previous home: ${error}`,
@@ -317,15 +329,15 @@ async function relocateSession(
         },
       );
     }
-    if (P) {
+    if (rolledBack) {
       setCwd(cwd);
       setOriginalCwd(originalCwd);
       throw error;
     }
   }
-  if (w)
+  if (transcriptRelocated)
     try {
-      await relocateBgSessionCwd(getCwd(), n);
+      await relocateBgSessionCwd(getCwd(), storageV5);
     } catch (error) {
       logForDebugging(`directory move: bg session state rehome failed (continuing): ${error}`, {
         level: "error",
@@ -365,8 +377,8 @@ async function relocateSession(
       },
     );
   }
-  let h = u && (o === undefined || o());
-  if (h) setProjectRoot(getCwd());
+  let fresh = freshSession && (confirmFresh === undefined || confirmFresh());
+  if (fresh) setProjectRoot(getCwd());
   else
     try {
       await addSkillDirectories(await getProjectDirsUpToHome("skills", getCwd()));
@@ -384,10 +396,10 @@ async function relocateSession(
   SandboxManager.refreshConfig();
   invalidateAll();
   logEvent("tengu_cd_command", {
-    source: fromEnum(s),
-    fresh_session: h,
+    source: fromEnum(source),
+    fresh_session: fresh,
   });
-  if (h) {
+  if (fresh) {
     try {
       resetEnvironmentCaches();
       resetGetMemoryFilesCache(session, "session_start");
@@ -399,10 +411,10 @@ async function relocateSession(
       clearRepositoryCaches();
       clearResolveGitDirCache();
       getPlansDirectory.cache.clear?.();
-      primePlanSlugCollisions(n);
+      primePlanSlugCollisions(storageV5);
       getAutoMemPathState().reset();
       prefetchGitStatus(session);
-      getOrBuildUserContext(session, n, d);
+      getOrBuildUserContext(session, storageV5, credentials);
     } catch (error) {
       logForDebugging(
         `directory move: re-deriving start-of-session state for the new directory failed (continuing): ${error}`,
@@ -413,16 +425,16 @@ async function relocateSession(
     }
     return {
       modelMessage: "",
-      transcriptRelocated: w,
+      transcriptRelocated,
       projectGrantsGated: false,
       gatedNotice: "",
       departedAdditionalDirectories,
       freshSession: true,
     };
   }
-  let C = "";
+  let memoryContext = "";
   try {
-    C = await collectClaudeMdForTarget(session, directory, n);
+    memoryContext = await collectClaudeMdForTarget(session, path, storageV5);
   } catch (error) {
     logForDebugging(
       `directory move: loading the new directory's memory context failed (continuing without it): ${error}`,
@@ -431,23 +443,23 @@ async function relocateSession(
       },
     );
   }
-  let S = escapeForTag(directory);
-  let j = s === "cd_command" ? "via /cd" : "by the user";
-  let A =
-    m === undefined || m()
+  let escapedDir = escapeForTag(path);
+  let sourceText = source === "cd_command" ? "via /cd" : "by the user";
+  let staleNote =
+    requestBuilt === undefined || requestBuilt()
       ? "The environment block at the start of this conversation still names the " +
         "previous directory \u2014 that information is stale. "
       : "";
-  let M = wrapInSystemReminder(
-    `The session's working directory has changed to ${S} (${j}). ` +
-      A +
-      `All tool calls and relative paths now resolve from ${S}. Project settings (permission rules, hooks), project MCP servers, and project skills now come from ${S}; its CLAUDE.md, if any, follows below. Environment variables set by the previous directory's ` +
+  let moveMessage = wrapInSystemReminder(
+    `The session's working directory has changed to ${escapedDir} (${sourceText}). ` +
+      staleNote +
+      `All tool calls and relative paths now resolve from ${escapedDir}. Project settings (permission rules, hooks), project MCP servers, and project skills now come from ${escapedDir}; its CLAUDE.md, if any, follows below. Environment variables set by the previous directory's ` +
       "settings stay in effect for this process \u2014 they cannot be unset \u2014 and " +
       "the new directory's settings env is applied on top of them.",
   );
-  let _ = false;
+  let gated = false;
   try {
-    _ =
+    gated =
       !env.CLAUDE_CODE_SANDBOXED &&
       !isHomeDirectorySession() &&
       !isWorkspacePersistedTrusted() &&
@@ -457,18 +469,18 @@ async function relocateSession(
       level: "error",
     });
   }
-  let R = _
+  let gatedNotice = gated
     ? wrapInSystemReminder(
-        `Note: ${S} declares project permission rules and/or additional directories in its settings, but they are NOT applied \u2014 the workspace is trusted only through a parent directory's grant, and project-scoped grants require trusting this directory explicitly. Tool calls those rules would have pre-approved will ask for permission.`,
+        `Note: ${escapedDir} declares project permission rules and/or additional directories in its settings, but they are NOT applied \u2014 the workspace is trusted only through a parent directory's grant, and project-scoped grants require trusting this directory explicitly. Tool calls those rules would have pre-approved will ask for permission.`,
       )
     : "";
   return {
-    modelMessage: [M, R, C].filter(Boolean).join(`
+    modelMessage: [moveMessage, gatedNotice, memoryContext].filter(Boolean).join(`
 
 `),
-    transcriptRelocated: w,
-    projectGrantsGated: _,
-    gatedNotice: R,
+    transcriptRelocated,
+    projectGrantsGated: gated,
+    gatedNotice,
     departedAdditionalDirectories,
     freshSession: false,
   };
@@ -492,15 +504,15 @@ function withGatedGrantsApplied(outcome) {
   );
 }
 //@ chunk-1wvrnct9.js:8559-8600 placement
-function safeWireMessage(e, r) {
-  return UNSAFE_PATH_GLYPH_RE.test(e) ? r : e;
+function safeWireMessage(message, fallback) {
+  return UNSAFE_PATH_GLYPH_RE.test(message) ? fallback : message;
 }
 //@ chunk-1wvrnct9.js:8600-12643 placement
 /**
  * 处理 set_cwd 控制请求（/cd 与桥接）：校验目标目录、按 Cd 权限规则拦截、记录目录信任、迁移会话并重新加载项目设置与 CLAUDE.md。
  */
-async function handleSetCwdControlRequest(e, r) {
-  if (r.isBusy())
+async function handleSetCwdControlRequest(request, context) {
+  if (context.isBusy())
     return {
       kind: "response",
       response: {
@@ -510,32 +522,32 @@ async function handleSetCwdControlRequest(e, r) {
           "A turn is in progress \u2014 the working directory can only change while the session is idle. Wait for the turn to finish (or interrupt it), then retry.",
       },
     };
-  if (typeof e.path !== "string" || e.path.trim() === "")
+  if (typeof request.path !== "string" || request.path.trim() === "")
     return {
       kind: "invalid",
       message: "set_cwd: invalid request \u2014 path must be a non-empty string",
     };
-  let s = e.trust_accepted === true;
-  if (s && typeof e.trusted_directory !== "string")
+  let trustAccepted = request.trust_accepted === true;
+  if (trustAccepted && typeof request.trusted_directory !== "string")
     return {
       kind: "invalid",
       message:
         "set_cwd: invalid request \u2014 trust_accepted requires trusted_directory (echo the directory from the needs_trust response)",
     };
-  let n = false;
+  let vetted = false;
   try {
-    n = vetPathSpellingsOrChain(
-      e.path,
-      expandPath(e.path),
-      r.toolPermissionContext.trustedNetworkDirectories,
+    vetted = vetPathSpellingsOrChain(
+      request.path,
+      expandPath(request.path),
+      context.toolPermissionContext.trustedNetworkDirectories,
       {
         allowLinkTextClimbs: true,
       },
     ).ok;
   } catch {
-    n = false;
+    vetted = false;
   }
-  if (!n)
+  if (!vetted)
     return {
       kind: "response",
       response: {
@@ -545,9 +557,9 @@ async function handleSetCwdControlRequest(e, r) {
           "The target is a network path or an obfuscated spelling, which cannot be set as the working directory from a remote host. The path is deliberately not echoed back.",
       },
     };
-  let d = await validateCdTarget(e.path.trim(), r.toolPermissionContext);
-  let u = "directory" in d ? d.directory : d.path;
-  if (UNSAFE_PATH_GLYPH_RE.test(u))
+  let check = await validateCdTarget(request.path.trim(), context.toolPermissionContext);
+  let targetPath = "directory" in check ? check.directory : check.path;
+  if (UNSAFE_PATH_GLYPH_RE.test(targetPath))
     return {
       kind: "response",
       response: {
@@ -558,8 +570,8 @@ async function handleSetCwdControlRequest(e, r) {
       },
     };
   if (
-    "directory" in d &&
-    pathVettingReason(d.directory, r.toolPermissionContext.trustedNetworkDirectories) !== undefined
+    "directory" in check &&
+    pathVettingReason(check.directory, context.toolPermissionContext.trustedNetworkDirectories) !== undefined
   )
     return {
       kind: "response",
@@ -570,85 +582,88 @@ async function handleSetCwdControlRequest(e, r) {
           "The target resolved to a network path or an obfuscated spelling, which cannot be set as the working directory from a remote host. The path is deliberately not echoed back.",
       },
     };
-  if (d.result === "not_found")
+  if (check.result === "not_found")
     return {
       kind: "response",
       response: {
         status: "rejected",
         reason: "not_found",
-        message: `Couldn't find a directory at ${d.path}.`,
+        message: `Couldn't find a directory at ${check.path}.`,
       },
     };
-  if (d.result === "not_a_directory")
+  if (check.result === "not_a_directory")
     return {
       kind: "response",
       response: {
         status: "rejected",
         reason: "not_a_directory",
-        message: `${d.path} is not a directory.`,
+        message: `${check.path} is not a directory.`,
       },
     };
-  if (d.result === "blocked_by_rule")
+  if (check.result === "blocked_by_rule")
     return {
       kind: "response",
       response: {
         status: "rejected",
         reason: "blocked_by_rule",
         message: safeWireMessage(
-          cdRuleRefusalMessage(d.directory, d.check, undefined, {
+          cdRuleRefusalMessage(check.directory, check.check, undefined, {
             terminalAffordances: false,
           }),
           "A Cd permission rule blocks this directory. The rule text contains control or invisible characters, so it is not echoed here \u2014 check the Cd(...) entries in your settings.",
         ),
       },
     };
-  if (d.result === "same")
+  if (check.result === "same")
     return {
       kind: "response",
       response: {
         status: "ok",
-        cwd: d.directory,
+        cwd: check.directory,
         changed: false,
         transcript_relocated: true,
       },
     };
-  let directory = d.directory;
+  let directory = check.directory;
   if (!isPathTrusted(directory)) {
-    let h = uncachedStorageRootFor(directory);
-    let C = h != null && h !== directory && !UNSAFE_PATH_GLYPH_RE.test(h) ? h : undefined;
-    if (!s)
+    let trustRoot = uncachedStorageRootFor(directory);
+    let suggestedRoot =
+      trustRoot != null && trustRoot !== directory && !UNSAFE_PATH_GLYPH_RE.test(trustRoot)
+        ? trustRoot
+        : undefined;
+    if (!trustAccepted)
       return {
         kind: "response",
         response:
-          C != null
+          suggestedRoot != null
             ? {
                 status: "needs_trust",
                 directory,
-                trust_root: C,
+                trust_root: suggestedRoot,
               }
             : {
                 status: "needs_trust",
                 directory,
               },
       };
-    if (e.trusted_directory !== directory)
+    if (request.trusted_directory !== directory)
       return {
         kind: "response",
         response:
-          C != null
+          suggestedRoot != null
             ? {
                 status: "needs_trust",
                 directory,
-                trust_root: C,
+                trust_root: suggestedRoot,
               }
             : {
                 status: "needs_trust",
                 directory,
               },
       };
-    await recordDirectoryTrust(directory, r.storageV5);
+    await recordDirectoryTrust(directory, context.storageV5);
   }
-  if (r.isBusy())
+  if (context.isBusy())
     return {
       kind: "response",
       response: {
@@ -657,21 +672,21 @@ async function handleSetCwdControlRequest(e, r) {
         message: "A turn started while the request was being validated. Retry when the session is idle.",
       },
     };
-  let freshSession = r.isFreshSession();
+  let freshSession = context.isFreshSession();
   let {
     modelMessage,
     transcriptRelocated,
     departedAdditionalDirectories,
     freshSession: freshSession_2,
-  } = await relocateSession(r.session, directory, "set_cwd", {
-    storageV5: r.storageV5,
-    credentials: r.credentials,
+  } = await relocateSession(context.session, directory, "set_cwd", {
+    storageV5: context.storageV5,
+    credentials: context.credentials,
     freshSession,
-    confirmFresh: () => !r.isBusy() && r.isFreshSession(),
-    requestBuilt: r.requestBuilt,
+    confirmFresh: () => !context.isBusy() && context.isFreshSession(),
+    requestBuilt: context.requestBuilt,
   });
   try {
-    if (freshSession_2) r.settlePlanAutoMode();
+    if (freshSession_2) context.settlePlanAutoMode();
   } catch (error) {
     logForDebugging(
       `set_cwd: settling the plan setting for the new directory failed (continuing): ${error}`,
@@ -681,7 +696,7 @@ async function handleSetCwdControlRequest(e, r) {
     );
   }
   try {
-    r.retireDepartedAdditionalDirectories?.(departedAdditionalDirectories);
+    context.retireDepartedAdditionalDirectories?.(departedAdditionalDirectories);
   } catch (error) {
     logForDebugging(
       `set_cwd: retiring the previous project's additional directories failed (continuing): ${error}`,
@@ -691,7 +706,7 @@ async function handleSetCwdControlRequest(e, r) {
     );
   }
   try {
-    if (modelMessage) r.enqueueMoveNotice(modelMessage);
+    if (modelMessage) context.enqueueMoveNotice(modelMessage);
   } catch (error) {
     logForDebugging(`set_cwd: enqueueing the move notice failed (continuing): ${error}`, {
       level: "error",
@@ -716,4 +731,6 @@ export {
   recordDirectoryTrust,
   reapplyProjectSettingsAfterTrustChange,
   withGatedGrantsApplied,
+  handleSetCwdControlRequest,
+  safeWireMessage,
 };

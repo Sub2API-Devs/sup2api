@@ -20,7 +20,13 @@ import {
 import { POWERSHELL_TOOL_NAME } from "../../../tools/PowerShellTool/toolName.js";
 import { figSpecRegistryByHost } from "../../../utils/Shell.js";
 import { useHost } from "../../../context/session.js";
-import { Q, y, R, P, ce } from "../../../../vendor/react/cjs/react.production.js";
+import {
+  useMemo,
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+} from "../../../../vendor/react/cjs/react.production.js";
 import { sanitizeToolNameForAnalytics } from "../../../services/analytics/metadata.js";
 import { useShellPermissionFeedback } from "../useShellPermissionFeedback.js";
 import { ShowInIDEPrompt } from "../../ShowInIDEPrompt.js";
@@ -66,27 +72,27 @@ import { Byline } from "../../design-system/Byline.js";
 import { KeyboardShortcutHint } from "../../design-system/KeyboardShortcutHint.js";
 
 //@ chunk-18hwfzwa.js:1398571-1398594 sole-consumer
-var powershellRuleLabelPredicate = (h) => ruleMatchesTool(h, POWERSHELL_TOOL_NAME);
+var powershellRuleLabelPredicate = (rule) => ruleMatchesTool(rule, POWERSHELL_TOOL_NAME);
 //@ chunk-18hwfzwa.js:1398594-1398690 sole-consumer
-function parsePowerShellConsentSuggestions(h) {
-  return parseConsentSuggestions(h, {
+function parsePowerShellConsentSuggestions(suggestions) {
+  return parseConsentSuggestions(suggestions, {
     displayedTypes: CONSENT_UPDATE_TYPES,
     labelPredicate: powershellRuleLabelPredicate,
-    renderLabel: (x) => parseSuggestionRows(x, POWERSHELL_TOOL_NAME),
+    renderLabel: (suggestion) => parseSuggestionRows(suggestion, POWERSHELL_TOOL_NAME),
   });
 }
 //@ chunk-18hwfzwa.js:1398690-1399269 sole-consumer
 /**
  * 把 PowerShell 权限选项转换为结果：yes、应用建议、编辑过的前缀规则、no（带反馈）。
  */
-function powerShellChoiceToResult(h, payload, unaryEvent, L = {}) {
-  switch (h) {
+function powerShellChoiceToResult(choice, payload, unaryEvent, extra = {}) {
+  switch (choice) {
     case "yes":
       return {
         behavior: "allow",
         updatedInput: payload.input,
-        ...(L.feedback && {
-          feedback: L.feedback,
+        ...(extra.feedback && {
+          feedback: extra.feedback,
         }),
       };
     case "yes-apply-suggestions": {
@@ -102,8 +108,8 @@ function powerShellChoiceToResult(h, payload, unaryEvent, L = {}) {
       };
     }
     case "yes-prefix-edited": {
-      let ee = directoryRow(L.editablePrefixSeed, L.editablePrefix, POWERSHELL_TOOL_NAME);
-      if (ee === null)
+      let dirRow = directoryRow(extra.editablePrefixSeed, extra.editablePrefix, POWERSHELL_TOOL_NAME);
+      if (dirRow === null)
         return {
           behavior: "allow",
           updatedInput: payload.input,
@@ -111,14 +117,14 @@ function powerShellChoiceToResult(h, payload, unaryEvent, L = {}) {
       return {
         behavior: "allow",
         updatedInput: payload.input,
-        permissionUpdates: ee.applies,
+        permissionUpdates: dirRow.applies,
       };
     }
     case "no":
       return {
         behavior: "deny",
-        ...(L.feedback && {
-          feedback: L.feedback,
+        ...(extra.feedback && {
+          feedback: extra.feedback,
         }),
       };
   }
@@ -128,10 +134,10 @@ function powerShellChoiceToResult(h, payload, unaryEvent, L = {}) {
  * PowerShell 权限对话框（同 Bash 结构，选项来自 powershellToolUseOptions）。
  */
 function PowerShellPermissionRequest({ payload, answer, wouldTakeAnswer }) {
-  let L = figSpecRegistryByHost.of(useHost());
+  let shellSpec = figSpecRegistryByHost.of(useHost());
   let command = payload.command;
-  let ke = payload.permissionResult.inPlaceOfClassifier === true;
-  let toolName = Q(() => sanitizeToolNameForAnalytics(payload.toolName), [payload.toolName]);
+  let hideIndexes = payload.permissionResult.inPlaceOfClassifier === true;
+  let toolName = useMemo(() => sanitizeToolNameForAnalytics(payload.toolName), [payload.toolName]);
   let {
     acceptFeedback,
     rejectFeedback,
@@ -148,31 +154,34 @@ function PowerShellPermissionRequest({ payload, answer, wouldTakeAnswer }) {
     feedbackTypeOf: ShowInIDEPrompt,
     toolName,
     isMcp: payload.isMcp,
-    initialFocusedType: ke ? "reject" : "accept",
+    initialFocusedType: hideIndexes ? "reject" : "accept",
   });
-  let Dt = KillAgentsConfirm(payload.requestSource);
-  let Lt = typeof payload.input.command !== "string" || payload.input.command.length > MAX_PAYLOAD_UNITS;
-  let [oo, Xt] = y(() => (Lt ? undefined : safeDisplayText(command)));
-  let [io, so] = y();
-  let po = R(undefined);
-  let ao = R(false);
-  if (!ao.current) {
-    ao.current = true;
-    po.current = safeDisplayText(oo);
+  let killAgentsNotice = KillAgentsConfirm(payload.requestSource);
+  let isCommandWithheld =
+    typeof payload.input.command !== "string" || payload.input.command.length > MAX_PAYLOAD_UNITS;
+  let [editablePrefix, setEditablePrefix] = useState(() =>
+    isCommandWithheld ? undefined : safeDisplayText(command),
+  );
+  let [refinedPrefix, setRefinedPrefix] = useState();
+  let seedPrefix = useRef(undefined);
+  let seededRef = useRef(false);
+  if (!seededRef.current) {
+    seededRef.current = true;
+    seedPrefix.current = safeDisplayText(editablePrefix);
   }
-  let hasUserEditedPrefix = R(false);
-  P(() => {
-    if (Lt) return;
+  let hasUserEditedPrefix = useRef(false);
+  useEffect(() => {
+    if (isCommandWithheld) return;
     let cancelled = false;
-    getCommandPrefixStatic(L, command, (element) => isAllowlistedCommand(element, element.text))
+    getCommandPrefixStatic(shellSpec, command, (element) => isAllowlistedCommand(element, element.text))
       .then((prefixes) => {
         if (cancelled || hasUserEditedPrefix.current) return;
         if (prefixes.length > 0) {
-          let $n = safeDisplayText(`${prefixes[0]} *`);
-          if ($n !== undefined) {
-            po.current = $n;
-            Xt($n);
-            so($n);
+          let nextPrefix = safeDisplayText(`${prefixes[0]} *`);
+          if (nextPrefix !== undefined) {
+            seedPrefix.current = nextPrefix;
+            setEditablePrefix(nextPrefix);
+            setRefinedPrefix(nextPrefix);
           }
         }
       })
@@ -180,15 +189,15 @@ function PowerShellPermissionRequest({ payload, answer, wouldTakeAnswer }) {
     return () => {
       cancelled = true;
     };
-  }, [L, command, Lt]);
-  let bo = ce((prefixes) => {
+  }, [shellSpec, command, isCommandWithheld]);
+  let onEditablePrefixChange = useCallback((prefixes) => {
     hasUserEditedPrefix.current = true;
-    Xt(prefixes);
+    setEditablePrefix(prefixes);
   }, []);
-  let { sandboxingEnabled, isSandboxed } = Q(() => {
-    let Xo = SandboxManager.isSandboxingEnabled();
+  let { sandboxingEnabled, isSandboxed } = useMemo(() => {
+    let sandboxOn = SandboxManager.isSandboxingEnabled();
     let isSandboxed =
-      Xo &&
+      sandboxOn &&
       payload.requestSource?.type !== "remote-agent" &&
       shouldUseSandbox({
         command: typeof payload.input.command === "string" ? payload.input.command : command,
@@ -196,70 +205,85 @@ function PowerShellPermissionRequest({ payload, answer, wouldTakeAnswer }) {
         shellType: "powershell",
       });
     return {
-      sandboxingEnabled: Xo,
+      sandboxingEnabled: sandboxOn,
       isSandboxed,
     };
   }, [command, payload.input, payload.requestSource]);
-  let onEditablePrefixChange = Q(
+  let onEditablePrefixChange_2 = useMemo(
     () =>
       serializeApprovalPayload(payload.input.command, {
         maxUnits: MAX_PAYLOAD_UNITS,
       }),
     [payload.input.command],
   );
-  let Ho = onEditablePrefixChange.kind === "withheld" || typeof payload.input.command !== "string";
-  let Io = CommandDisplay({
-    commandDisplay: onEditablePrefixChange,
+  let isCommandWithheld_2 =
+    onEditablePrefixChange_2.kind === "withheld" || typeof payload.input.command !== "string";
+  let display = CommandDisplay({
+    commandDisplay: onEditablePrefixChange_2,
     description: payload.description,
-    refinedPrefix: io,
+    refinedPrefix,
   });
-  let Wo = Ho || !Io.body.offersStanding;
-  let isStandingHeld = Io.body.isStandingHeld;
-  let Cn = Q(() => {
-    if (Ho || !getFeatureValue_CACHED_MAY_BE_STALE("tengu_destructive_command_warning", false)) return null;
+  let standingUnavailable = isCommandWithheld_2 || !display.body.offersStanding;
+  let isStandingHeld = display.body.isStandingHeld;
+  let destructiveWarning = useMemo(() => {
+    if (
+      isCommandWithheld_2 ||
+      !getFeatureValue_CACHED_MAY_BE_STALE("tengu_destructive_command_warning", false)
+    )
+      return null;
     let command_2 = typeof payload.input.command === "string" ? payload.input.command : command;
     return getDestructiveCommandWarning(command_2);
-  }, [command, payload.input, Ho]);
-  let No =
+  }, [command, payload.input, isCommandWithheld_2]);
+  let hasSafetyCheck =
     findSafetyCheckReason(payload.permissionResult.decisionReason, (value) => !value.classifierApprovable) !==
     undefined;
-  let vo =
+  let noStanding =
     payload.isAskCappedByOrg ||
-    ke ||
+    hideIndexes ||
     payload.permissionResult.oneTimeAnswersOnly === true ||
     isRemoteOrPluginAgent(payload.requestSource);
-  let Yo = No || vo;
-  let unaryEvent = Q(
+  let noStanding_2 = hasSafetyCheck || noStanding;
+  let unaryEvent = useMemo(
     () =>
-      Wo || vo
+      standingUnavailable || noStanding
         ? null
         : parsePowerShellConsentSuggestions(
-            No
+            hasSafetyCheck
               ? filterAddDirectoriesUpdates(payload.permissionResult.suggestions)
               : payload.permissionResult.suggestions,
           ),
-    [Wo, vo, No, payload.permissionResult.suggestions],
+    [standingUnavailable, noStanding, hasSafetyCheck, payload.permissionResult.suggestions],
   );
-  let options = Q(
+  let options = useMemo(
     () =>
       powershellToolUseOptions({
         suggestionsRow: unaryEvent,
-        hasBackendSuggestions: !Wo && !Yo && (payload.permissionResult.suggestions?.length ?? 0) > 0,
+        hasBackendSuggestions:
+          !standingUnavailable && !noStanding_2 && (payload.permissionResult.suggestions?.length ?? 0) > 0,
         onRejectFeedbackChange: setRejectFeedback,
         onAcceptFeedbackChange: setAcceptFeedback,
         yesInputMode: acceptInputMode,
         noInputMode: rejectInputMode,
-        editablePrefix: Wo || Yo ? undefined : oo,
-        onEditablePrefixChange: bo,
+        editablePrefix: standingUnavailable || noStanding_2 ? undefined : editablePrefix,
+        onEditablePrefixChange,
       }),
-    [unaryEvent, Wo, Yo, payload.permissionResult.suggestions, acceptInputMode, rejectInputMode, oo, bo],
+    [
+      unaryEvent,
+      standingUnavailable,
+      noStanding_2,
+      payload.permissionResult.suggestions,
+      acceptInputMode,
+      rejectInputMode,
+      editablePrefix,
+      onEditablePrefixChange,
+    ],
   );
-  let fieldLeftOpen = Io.fieldLeftOpen;
-  let handleToggleDebug = Q(() => {
-    let Xo = freezeOptionsAfterAnswer(options, fieldLeftOpen);
-    return ke ? preferValueFirst(Xo, "no") : Xo;
-  }, [options, fieldLeftOpen, ke]);
-  let onChange = ce(
+  let fieldLeftOpen = display.fieldLeftOpen;
+  let handleToggleDebug = useMemo(() => {
+    let frozenOptions = freezeOptionsAfterAnswer(options, fieldLeftOpen);
+    return hideIndexes ? preferValueFirst(frozenOptions, "no") : frozenOptions;
+  }, [options, fieldLeftOpen, hideIndexes]);
+  let onChange = useCallback(
     (prev) => {
       if (!wouldTakeAnswer() || (isStandingHeld && isNotYesNo(prev))) return false;
       logEvent("tengu_permission_request_option_selected", {
@@ -293,8 +317,8 @@ function PowerShellPermissionRequest({ payload, answer, wouldTakeAnswer }) {
       if (prev === "yes-prefix-edited") {
         answer(
           powerShellChoiceToResult("yes-prefix-edited", payload, unaryEvent, {
-            editablePrefix: oo,
-            editablePrefixSeed: po.current,
+            editablePrefix,
+            editablePrefixSeed: seedPrefix.current,
           }),
         );
         return;
@@ -309,11 +333,11 @@ function PowerShellPermissionRequest({ payload, answer, wouldTakeAnswer }) {
       unaryEvent,
       acceptFeedback,
       rejectFeedback,
-      oo,
+      editablePrefix,
       logSubmitted,
     ],
   );
-  let onCancel = ce(() => {
+  let onCancel = useCallback(() => {
     if (!wouldTakeAnswer()) return;
     logEscape();
     answer({
@@ -321,7 +345,7 @@ function PowerShellPermissionRequest({ payload, answer, wouldTakeAnswer }) {
     });
   }, [answer, wouldTakeAnswer, logEscape]);
   return jsxProd_default(FittedBodyKeybindings, {
-    fitted: Io,
+    fitted: display,
     children: jsxProd_default_2(PermissionDialog_2, {
       title: sandboxingEnabled && !isSandboxed ? "PowerShell command (unsandboxed)" : "PowerShell command",
       innerPaddingX: 0,
@@ -331,16 +355,16 @@ function PowerShellPermissionRequest({ payload, answer, wouldTakeAnswer }) {
           flexDirection: "column",
           paddingX: 1,
           children: jsxProd_default(Blockquote, {
-            multiline: needsGutter(Io.description),
+            multiline: needsGutter(display.description),
             children: jsxProd_default(Text, {
               dimColor: true,
-              children: Io.description,
+              children: display.description,
             }),
           }),
         }),
         jsxProd_default(CommandPreviewFrame, {
-          commandDisplay: onEditablePrefixChange,
-          fitted: Io,
+          commandDisplay: onEditablePrefixChange_2,
+          fitted: display,
         }),
         jsxProd_default_2(Box, {
           flexDirection: "column",
@@ -357,30 +381,30 @@ function PowerShellPermissionRequest({ payload, answer, wouldTakeAnswer }) {
             jsxProd_default(PermissionRuleExplanation, {
               permissionResult: payload.permissionResult,
               toolType: "command",
-              rowBudget: Io.isCut || ke ? MAX_EXPLANATION_LINES : undefined,
-              rowColumns: Io.isCut ? Io.reasonColumns : undefined,
+              rowBudget: display.isCut || hideIndexes ? MAX_EXPLANATION_LINES : undefined,
+              rowColumns: display.isCut ? display.reasonColumns : undefined,
             }),
-            Cn &&
+            destructiveWarning &&
               jsxProd_default(Box, {
                 marginBottom: 1,
                 children: jsxProd_default(Text, {
                   color: "warning",
-                  children: Cn,
+                  children: destructiveWarning,
                 }),
               }),
             jsxProd_default(Text, {
               children: "Do you want to proceed?",
             }),
             jsxProd_default(ModelSelector, {
-              hideIndexes: ke,
+              hideIndexes,
               selectedValue: NO_COMMITTED_ROW,
               options: handleToggleDebug,
               inlineDescriptions: true,
               onChange,
               onCancel,
-              onFocus: (Xo) => {
-                Io.noteFocus(Xo);
-                handleFocus(Xo);
+              onFocus: (choice) => {
+                display.noteFocus(choice);
+                handleFocus(choice);
               },
               onInputModeToggle: handleInputModeToggle,
             }),
@@ -392,7 +416,7 @@ function PowerShellPermissionRequest({ payload, answer, wouldTakeAnswer }) {
           paddingX: 1,
           children: jsxProd_default(Text, {
             dimColor: true,
-            wrap: Dt ? "truncate" : undefined,
+            wrap: killAgentsNotice ? "truncate" : undefined,
             children: jsxProd_default_2(Byline, {
               children: [
                 jsxProd_default(KeyboardShortcutHint, {
@@ -400,7 +424,7 @@ function PowerShellPermissionRequest({ payload, answer, wouldTakeAnswer }) {
                   action: "cancel",
                 }),
                 hintNode,
-                Dt,
+                killAgentsNotice,
               ],
             }),
           }),

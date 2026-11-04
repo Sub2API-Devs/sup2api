@@ -12,6 +12,7 @@ import { ifNotInteger } from "../warn.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { buildAccessibility } from "../dom.js";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-24t3dkzb.js:6874-8555 fingerprint = Box (0.8)
 /**
@@ -52,31 +53,31 @@ function Box({
   "aria-role": role,
   "aria-state": state,
   "aria-preserve-whitespace": preserveWhitespace,
-  ...l
+  ...style
 }) {
-  ifNotInteger(l.margin, "margin");
-  ifNotInteger(l.marginX, "marginX");
-  ifNotInteger(l.marginY, "marginY");
-  ifNotInteger(l.marginTop, "marginTop");
-  ifNotInteger(l.marginBottom, "marginBottom");
-  if (l.marginLeft !== "auto") ifNotInteger(l.marginLeft, "marginLeft");
-  if (l.marginRight !== "auto") ifNotInteger(l.marginRight, "marginRight");
-  ifNotInteger(l.padding, "padding");
-  ifNotInteger(l.paddingX, "paddingX");
-  ifNotInteger(l.paddingY, "paddingY");
-  ifNotInteger(l.paddingTop, "paddingTop");
-  ifNotInteger(l.paddingBottom, "paddingBottom");
-  ifNotInteger(l.paddingLeft, "paddingLeft");
-  ifNotInteger(l.paddingRight, "paddingRight");
-  ifNotInteger(l.gap, "gap");
-  ifNotInteger(l.columnGap, "columnGap");
-  ifNotInteger(l.rowGap, "rowGap");
-  l.flexWrap ??= "nowrap";
-  l.flexDirection ??= "row";
-  l.flexGrow ??= 0;
-  l.flexShrink ??= 1;
-  l.overflowX = l.overflowX ?? l.overflow ?? "visible";
-  l.overflowY = l.overflowY ?? l.overflow ?? "visible";
+  ifNotInteger(style.margin, "margin");
+  ifNotInteger(style.marginX, "marginX");
+  ifNotInteger(style.marginY, "marginY");
+  ifNotInteger(style.marginTop, "marginTop");
+  ifNotInteger(style.marginBottom, "marginBottom");
+  if (style.marginLeft !== "auto") ifNotInteger(style.marginLeft, "marginLeft");
+  if (style.marginRight !== "auto") ifNotInteger(style.marginRight, "marginRight");
+  ifNotInteger(style.padding, "padding");
+  ifNotInteger(style.paddingX, "paddingX");
+  ifNotInteger(style.paddingY, "paddingY");
+  ifNotInteger(style.paddingTop, "paddingTop");
+  ifNotInteger(style.paddingBottom, "paddingBottom");
+  ifNotInteger(style.paddingLeft, "paddingLeft");
+  ifNotInteger(style.paddingRight, "paddingRight");
+  ifNotInteger(style.gap, "gap");
+  ifNotInteger(style.columnGap, "columnGap");
+  ifNotInteger(style.rowGap, "rowGap");
+  style.flexWrap ??= "nowrap";
+  style.flexDirection ??= "row";
+  style.flexGrow ??= 0;
+  style.flexShrink ??= 1;
+  style.overflowX = style.overflowX ?? style.overflow ?? "visible";
+  style.overflowY = style.overflowY ?? style.overflow ?? "visible";
   return jsxProd_default("ink-box", {
     ref,
     tabIndex,
@@ -107,12 +108,15 @@ function Box({
     onAction,
     onActionCapture,
     accessibility: buildAccessibility(hidden, label, role, state, preserveWhitespace),
-    style: l,
+    style,
     children,
   });
 }
 //@ chunk-24t3dkzb.js:8555-8565 placement
 var BaseBox = Box;
 //@ chunk-24t3dkzb.js:8565-8569 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-24t3dkzb.js:8565", () => {
+  init_react_production();
+});
 export { BaseBox };

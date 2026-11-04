@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:229395-229632 cjs-fingerprint
-var require_ldif = x(function (cjsExports, cjsModule) {
+var require_ldif = __commonJS(function (cjsExports, cjsModule) {
   function ldif(hljs) {
     return {
       name: "LDIF",

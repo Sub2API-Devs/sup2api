@@ -45,6 +45,7 @@ import { normalizeNameForMCP } from "../../services/mcp/normalization.js";
 import { REMOTE_TOOL_PROTOCOL_VERSION } from "./protocolConstants.js";
 import { buildMcpToolName } from "../../services/mcp/mcpStringUtils.js";
 import { isValidMachineSlug } from "../../bridge/deviceRegistration.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-25sm7c4g.js:1282-1351 placement
 function isBridgePlumbingEnabled() {
@@ -56,49 +57,49 @@ function isBridgePlumbingEnabled() {
 }
 //@ chunk-25sm7c4g.js:1351-1420 placement
 function mcpClientModule() {
-  return require("./chunk-asne9cp8.js").mcpClientModule();
+  return require("../../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
 }
 //@ chunk-25sm7c4g.js:1420-1579 placement
 class BridgeSessionRecovery {
   #e = new WeakMap();
-  reinitialize(e) {
-    let n = this.#e.get(e);
-    if (n) return n;
-    let r = mcpClientModule()
-      .clearServerCache(e.name, e.config)
+  reinitialize(connection) {
+    let existing = this.#e.get(connection);
+    if (existing) return existing;
+    let resetPromise = mcpClientModule()
+      .clearServerCache(connection.name, connection.config)
       .catch(() => {});
-    this.#e.set(e, r);
-    return r;
+    this.#e.set(connection, resetPromise);
+    return resetPromise;
   }
 }
 //@ chunk-25sm7c4g.js:1579-1593 placement
 var CONNECTION_CLOSED_ERROR_CODE = -32000;
 //@ chunk-25sm7c4g.js:1593-1815 placement
-async function callWithSessionRecovery(e, n, r) {
-  let o = await callBridgeTool(e, n, r);
-  if (o.kind !== "session_expired") return evictFailedConnectMemo(e, o);
-  await n.recovery.reinitialize(o.connection);
-  let u = await callBridgeTool(e, n, r);
-  return u.kind === "session_expired"
+async function callWithSessionRecovery(connection, options, run) {
+  let result = await callBridgeTool(connection, options, run);
+  if (result.kind !== "session_expired") return evictFailedConnectMemo(connection, result);
+  await options.recovery.reinitialize(result.connection);
+  let retryResult = await callBridgeTool(connection, options, run);
+  return retryResult.kind === "session_expired"
     ? {
         kind: "expired_twice",
       }
-    : evictFailedConnectMemo(e, u);
+    : evictFailedConnectMemo(connection, retryResult);
 }
 //@ chunk-25sm7c4g.js:1815-1953 placement
-async function evictFailedConnectMemo(e, n) {
-  if (n.kind === "connect_failed")
+async function evictFailedConnectMemo(connection, result) {
+  if (result.kind === "connect_failed")
     await mcpClientModule()
-      .evictStaleFailedConnectMemoForServe(e.name, e.config)
+      .evictStaleFailedConnectMemoForServe(connection.name, connection.config)
       .catch(() => {});
-  return n;
+  return result;
 }
 //@ chunk-25sm7c4g.js:1953-2498 placement
-async function callBridgeTool(e, { deadlineAt, signal, idempotent = false }, u) {
-  let s = mcpClientModule();
-  let m;
+async function callBridgeTool(connection, { deadlineAt, signal, idempotent = false }, run) {
+  let mcpModule = mcpClientModule();
+  let client;
   try {
-    m = await s.ensureConnectedClient(e, {
+    client = await mcpModule.ensureConnectedClient(connection, {
       signal,
       timeoutMs: Math.max(1, deadlineAt - Date.now()),
       context: "remote tool execution",
@@ -109,8 +110,8 @@ async function callBridgeTool(e, { deadlineAt, signal, idempotent = false }, u) 
       error,
     };
   }
-  let p = deadlineAt - Date.now();
-  if (p <= 0)
+  let remainingMs = deadlineAt - Date.now();
+  if (remainingMs <= 0)
     return {
       kind: "connect_failed",
       error: Error("deadline reached before the request could be sent"),
@@ -118,14 +119,15 @@ async function callBridgeTool(e, { deadlineAt, signal, idempotent = false }, u) 
   try {
     return {
       kind: "ok",
-      value: await u(m, p),
+      value: await run(client, remainingMs),
     };
   } catch (error) {
     return error instanceof Error &&
-      (s.isMcpSessionExpiredError(error) || (idempotent && isHttpConnectionClosedError(error, m)))
+      (mcpModule.isMcpSessionExpiredError(error) ||
+        (idempotent && isHttpConnectionClosedError(error, client)))
       ? {
           kind: "session_expired",
-          connection: m,
+          connection: client,
         }
       : {
           kind: "failed",
@@ -134,97 +136,112 @@ async function callBridgeTool(e, { deadlineAt, signal, idempotent = false }, u) 
   }
 }
 //@ chunk-25sm7c4g.js:2498-2678 placement
-function isHttpConnectionClosedError(error, n) {
+function isHttpConnectionClosedError(error, client) {
   return (
     (("code" in error &&
       error.code === CONNECTION_CLOSED_ERROR_CODE &&
       error.message.includes("Connection closed")) ||
       getErrnoCode(error) === "CONNECTION_CLOSED") &&
-    (n.config.type === "http" || n.config.type === "claudeai-proxy")
+    (client.config.type === "http" || client.config.type === "claudeai-proxy")
   );
 }
 //@ chunk-25sm7c4g.js:2678-3084 placement
 /**
  * 远程调用/Office bridge 的错误归类表：请求超时与连接关闭错误码、bridge 状态码到 unreachable/dropped/timed_out 的分组、三类错误消息正则、可分类消息长度上限 200。
  */
-var BRIDGE_CALL_LIMITS = {
-  maxRequestBytes: 4128768,
-  defaultDeadlineMs: 58000,
-};
-var REQUEST_TIMEOUT_ERROR_CODE = -32001;
-var OFFICE_BRIDGE_KIND = "office_bridge.kind";
-var OFFICE_BRIDGE_BOUND_MISS = "office_bridge.bound_miss";
-var UNREACHABLE_BRIDGE_KINDS = new Set(["not_connected", "send_failed", "contested", "unsupported_on_bound"]);
-var DROPPED_BRIDGE_KINDS = new Set(["disconnected", "cancelled"]);
-var TIMED_OUT_BRIDGE_KINDS = new Set(["timeout"]);
-var NOT_CONNECTED_MESSAGE_RE = /not connected|not reachable|offline/i;
-var DISCONNECTED_MESSAGE_RE = /disconnected before responding|connection may be closing/i;
-var TIMEOUT_MESSAGE_RE = /did not respond within/i;
-var MAX_CLASSIFIABLE_MESSAGE_LENGTH = 200;
+var BRIDGE_CALL_LIMITS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var REQUEST_TIMEOUT_ERROR_CODE;
+var OFFICE_BRIDGE_KIND;
+var OFFICE_BRIDGE_BOUND_MISS;
+var UNREACHABLE_BRIDGE_KINDS;
+var DROPPED_BRIDGE_KINDS;
+var TIMED_OUT_BRIDGE_KINDS;
+var NOT_CONNECTED_MESSAGE_RE;
+var DISCONNECTED_MESSAGE_RE;
+var TIMEOUT_MESSAGE_RE;
+var MAX_CLASSIFIABLE_MESSAGE_LENGTH;
+deferInit("chunk-25sm7c4g.js:2678", () => {
+  BRIDGE_CALL_LIMITS = {
+    maxRequestBytes: 4128768,
+    defaultDeadlineMs: 58000,
+  };
+  REQUEST_TIMEOUT_ERROR_CODE = -32001;
+  OFFICE_BRIDGE_KIND = "office_bridge.kind";
+  OFFICE_BRIDGE_BOUND_MISS = "office_bridge.bound_miss";
+  UNREACHABLE_BRIDGE_KINDS = new Set(["not_connected", "send_failed", "contested", "unsupported_on_bound"]);
+  DROPPED_BRIDGE_KINDS = new Set(["disconnected", "cancelled"]);
+  TIMED_OUT_BRIDGE_KINDS = new Set(["timeout"]);
+  NOT_CONNECTED_MESSAGE_RE = /not connected|not reachable|offline/i;
+  DISCONNECTED_MESSAGE_RE = /disconnected before responding|connection may be closing/i;
+  TIMEOUT_MESSAGE_RE = /did not respond within/i;
+  MAX_CLASSIFIABLE_MESSAGE_LENGTH = 200;
+});
 //@ chunk-25sm7c4g.js:3084-3201 placement
-function createBridgeTransport(e, recovery) {
+function createBridgeTransport(chromeClient, recovery) {
   return {
     kind: "bridge",
     limits: BRIDGE_CALL_LIMITS,
-    call: (name, o, u, s) => callRemoteToolOverBridge(e, recovery, name, o, u, s),
-    callPlumbing: (r, o, u) => callBridgePlumbingTool(e, recovery, r, o, u),
+    call: (name, toolName, args, options) =>
+      callRemoteToolOverBridge(chromeClient, recovery, name, toolName, args, options),
+    callPlumbing: (name, args, options) =>
+      callBridgePlumbingTool(chromeClient, recovery, name, args, options),
   };
 }
 //@ chunk-25sm7c4g.js:3201-4041 placement
 /**
  * 通过设备桥（office/device bridge）MCP 调用远程管道工具：超时、会话过期重初始化、结果信封解析。
  */
-async function callBridgePlumbingTool(e, recovery, r, o, u) {
-  if (!DEVICE_SYNC_FILES_TOOLS.has(r)) throw Error("callPlumbing: not a bridge plumbing tool");
+async function callBridgePlumbingTool(chromeClient, recovery, name, args, options) {
+  if (!DEVICE_SYNC_FILES_TOOLS.has(name)) throw Error("callPlumbing: not a bridge plumbing tool");
   let now = Date.now();
-  let capMs = clampToMaxPageSize(u.deadlineMs);
-  let p = await callWithSessionRecovery(
-    e,
+  let capMs = clampToMaxPageSize(options.deadlineMs);
+  let callOutcome = await callWithSessionRecovery(
+    chromeClient,
     {
       deadlineAt: now + capMs,
       recovery,
-      signal: u.signal,
-      idempotent: u.idempotent,
+      signal: options.signal,
+      idempotent: options.idempotent,
     },
-    (f, timeout) =>
+    (client, timeout) =>
       callMcpTool(
-        f,
+        client,
         {
-          name: r,
+          name,
           arguments: {
-            ...o,
+            ...args,
           },
         },
         {
-          signal: u.signal,
+          signal: options.signal,
           timeout,
         },
       ),
   );
-  if (p.kind === "ok") {
-    let callResult = readCallResult(p.value);
-    let _ = flattenContentText(callResult.content);
-    let g =
+  if (callOutcome.kind === "ok") {
+    let callResult = readCallResult(callOutcome.value);
+    let text = flattenContentText(callResult.content);
+    let classified =
       callResult.isError && callResult.envelope.status === "absent"
-        ? classifyBridgeError(p.value, _, capMs)
+        ? classifyBridgeError(callOutcome.value, text, capMs)
         : undefined;
-    if (g !== undefined) return normalizeTransportFailure(g);
+    if (classified !== undefined) return normalizeTransportFailure(classified);
     return {
       kind: "result",
-      structuredContent: p.value.structuredContent,
-      text: _,
+      structuredContent: callOutcome.value.structuredContent,
+      text,
       isError: callResult.isError,
     };
   }
-  if (u.signal.aborted)
+  if (options.signal.aborted)
     return {
       kind: "cancelled",
     };
-  switch (p.kind) {
+  switch (callOutcome.kind) {
     case "connect_failed":
       return {
         kind: "unreachable",
-        detail: normalizeMcpServerName(errorMessage(p.error)),
+        detail: normalizeMcpServerName(errorMessage(callOutcome.error)),
       };
     case "expired_twice":
       return {
@@ -232,77 +249,77 @@ async function callBridgePlumbingTool(e, recovery, r, o, u) {
         detail: "the device bridge rejected the session again right after re-initializing it; nothing ran",
       };
     case "failed":
-      return normalizeTransportFailure(classifyBridgeTransportError(p.error, capMs, undefined));
+      return normalizeTransportFailure(classifyBridgeTransportError(callOutcome.error, capMs, undefined));
   }
 }
 //@ chunk-25sm7c4g.js:4041-4237 placement
-function normalizeTransportFailure(e) {
-  switch (e.kind) {
+function normalizeTransportFailure(failure) {
+  switch (failure.kind) {
     case "timed_out":
     case "unreachable":
     case "dropped":
     case "transport_error":
     case "cancelled":
-      return e;
+      return failure;
     default:
       return {
         kind: "transport_error",
-        detail: `unexpected: ${e.kind}`,
+        detail: `unexpected: ${failure.kind}`,
       };
   }
 }
 //@ chunk-25sm7c4g.js:4237-4944 placement
-async function callRemoteToolOverBridge(e, recovery, name, o, u, s) {
+async function callRemoteToolOverBridge(chromeClient, recovery, name, args, callMeta, options) {
   let now = Date.now();
-  let capMs = clampToMaxPageSize(s.deadlineMs);
-  let f = encodeCallArgs(u);
-  let _ = await callWithSessionRecovery(
-    e,
+  let capMs = clampToMaxPageSize(options.deadlineMs);
+  let encodedMeta = encodeCallArgs(callMeta);
+  let callOutcome = await callWithSessionRecovery(
+    chromeClient,
     {
       deadlineAt: now + capMs,
       recovery,
-      signal: s.signal,
+      signal: options.signal,
     },
-    (g, timeout) =>
+    (client, timeout) =>
       callMcpTool(
-        g,
+        client,
         {
           name,
           arguments: {
-            ...o,
-            [REMOTE_TOOL_CALL_META]: u,
+            ...args,
+            [REMOTE_TOOL_CALL_META]: callMeta,
           },
           _meta: {
-            [CLAUDECODE_TOOLUSEID]: s.toolUseId,
-            ...(f !== undefined && {
-              [CLAUDECODE_REMOTETOOLCALL]: f,
+            [CLAUDECODE_TOOLUSEID]: options.toolUseId,
+            ...(encodedMeta !== undefined && {
+              [CLAUDECODE_REMOTETOOLCALL]: encodedMeta,
             }),
           },
         },
         {
-          signal: s.signal,
+          signal: options.signal,
           timeout,
         },
       ),
   );
-  if (_.kind === "ok") {
-    let bridgeResultEnvelope = readBridgeResultEnvelope(_.value, Date.now() - now, capMs);
+  if (callOutcome.kind === "ok") {
+    let bridgeResultEnvelope = readBridgeResultEnvelope(callOutcome.value, Date.now() - now, capMs);
     return bridgeResultEnvelope.kind === "result"
       ? {
           ...bridgeResultEnvelope,
-          metaCopy: f === undefined ? "omitted" : "attached",
+          metaCopy: encodedMeta === undefined ? "omitted" : "attached",
         }
       : bridgeResultEnvelope;
   }
-  if (s.signal.aborted)
+  if (options.signal.aborted)
     return {
       kind: "cancelled",
     };
-  switch (_.kind) {
+  switch (callOutcome.kind) {
     case "connect_failed":
       return {
         kind: "unreachable",
-        detail: normalizeMcpServerName(errorMessage(_.error)),
+        detail: normalizeMcpServerName(errorMessage(callOutcome.error)),
       };
     case "expired_twice":
       return {
@@ -310,12 +327,12 @@ async function callRemoteToolOverBridge(e, recovery, name, o, u, s) {
         detail: "the device bridge rejected the session again right after re-initializing it; nothing ran",
       };
     case "failed":
-      return classifyBridgeTransportError(_.error, capMs, s.toolUseId);
+      return classifyBridgeTransportError(callOutcome.error, capMs, options.toolUseId);
   }
 }
 //@ chunk-25sm7c4g.js:4944-5423 placement
-function readBridgeResultEnvelope(e, elapsedMs, capMs) {
-  let callResult = readCallResult(e);
+function readBridgeResultEnvelope(value, elapsedMs, capMs) {
+  let callResult = readCallResult(value);
   switch (callResult.envelope.status) {
     case "malformed":
       return {
@@ -330,28 +347,28 @@ function readBridgeResultEnvelope(e, elapsedMs, capMs) {
         isError: callResult.isError,
         envelope: callResult.envelope.envelope,
         elapsedMs,
-        responseBytes: byteLengthOf(e),
+        responseBytes: byteLengthOf(value),
         ...{},
       };
     case "absent": {
-      let u = callResult.isError
-        ? classifyBridgeError(e, flattenContentText(callResult.content), capMs)
+      let classified = callResult.isError
+        ? classifyBridgeError(value, flattenContentText(callResult.content), capMs)
         : undefined;
-      if (u) return u;
+      if (classified) return classified;
       return {
         kind: "result",
         content: callResult.content,
         isError: callResult.isError,
         envelope: undefined,
         elapsedMs,
-        responseBytes: byteLengthOf(e),
+        responseBytes: byteLengthOf(value),
       };
     }
   }
 }
 //@ chunk-25sm7c4g.js:5423-6054 placement
-function classifyBridgeError(e, n, capMs) {
-  let officeBridgeKind = readOfficeBridgeKind(e);
+function classifyBridgeError(value, messageText, capMs) {
+  let officeBridgeKind = readOfficeBridgeKind(value);
   if (officeBridgeKind !== undefined && TIMED_OUT_BRIDGE_KINDS.has(officeBridgeKind))
     return {
       kind: "timed_out",
@@ -376,18 +393,18 @@ function classifyBridgeError(e, n, capMs) {
       detail: "bridge: malformed result",
       unreadableResult: true,
     };
-  if (n.length > MAX_CLASSIFIABLE_MESSAGE_LENGTH) return;
-  if (TIMEOUT_MESSAGE_RE.test(n))
+  if (messageText.length > MAX_CLASSIFIABLE_MESSAGE_LENGTH) return;
+  if (TIMEOUT_MESSAGE_RE.test(messageText))
     return {
       kind: "timed_out",
       capMs,
     };
-  if (DISCONNECTED_MESSAGE_RE.test(n))
+  if (DISCONNECTED_MESSAGE_RE.test(messageText))
     return {
       kind: "dropped",
       detail: "bridge: disconnected",
     };
-  if (NOT_CONNECTED_MESSAGE_RE.test(n))
+  if (NOT_CONNECTED_MESSAGE_RE.test(messageText))
     return {
       kind: "unreachable",
       detail: "bridge: not connected",
@@ -396,32 +413,32 @@ function classifyBridgeError(e, n, capMs) {
   return;
 }
 //@ chunk-25sm7c4g.js:6054-6266 placement
-function readOfficeBridgeKind(e) {
-  let _meta = e !== null && typeof e === "object" && "_meta" in e ? e._meta : undefined;
+function readOfficeBridgeKind(value) {
+  let _meta = value !== null && typeof value === "object" && "_meta" in value ? value._meta : undefined;
   if (_meta === null || typeof _meta !== "object") return;
-  let r = _meta;
-  let o = r[OFFICE_BRIDGE_KIND];
-  if (typeof o === "string") return o;
-  return r[OFFICE_BRIDGE_BOUND_MISS] !== undefined ? "not_connected" : undefined;
+  let meta = _meta;
+  let kind = meta[OFFICE_BRIDGE_KIND];
+  if (typeof kind === "string") return kind;
+  return meta[OFFICE_BRIDGE_BOUND_MISS] !== undefined ? "not_connected" : undefined;
 }
 //@ chunk-25sm7c4g.js:6266-6587 placement
-function classifyBridgeTransportError(err, capMs, r) {
-  if (getNumericErrorCode(err) === REQUEST_TIMEOUT_ERROR_CODE || getErrnoCode(err) === "REQUEST_TIMEOUT")
+function classifyBridgeTransportError(error, capMs, toolUseId) {
+  if (getNumericErrorCode(error) === REQUEST_TIMEOUT_ERROR_CODE || getErrnoCode(error) === "REQUEST_TIMEOUT")
     return {
       kind: "timed_out",
       capMs,
     };
-  let detail = normalizeMcpServerName(errorMessage(err));
-  if (getNumericErrorCode(err) === CCR_NEEDS_APPROVAL_CODE && isArgsTooLargeError(err, r))
+  let detail = normalizeMcpServerName(errorMessage(error));
+  if (getNumericErrorCode(error) === CCR_NEEDS_APPROVAL_CODE && isArgsTooLargeError(error, toolUseId))
     return {
       kind: "approval_unverified",
     };
-  if (classifyMcpErrorSourceCategory(err) !== "downstream_unreachable")
+  if (classifyMcpErrorSourceCategory(error) !== "downstream_unreachable")
     return {
       kind: "transport_error",
       detail,
     };
-  return UNREACHABLE_ERROR_CODES.has(getErrnoCode(err) ?? "")
+  return UNREACHABLE_ERROR_CODES.has(getErrnoCode(error) ?? "")
     ? {
         kind: "unreachable",
         detail,
@@ -432,25 +449,28 @@ function classifyBridgeTransportError(err, capMs, r) {
       };
 }
 //@ chunk-25sm7c4g.js:6587-6699 placement
-var UNREACHABLE_ERROR_CODES = new Set([
-  "ECONNREFUSED",
-  "ConnectionRefused",
-  "ENOTFOUND",
-  "ENETUNREACH",
-  "EAI_AGAIN",
-  "FailedToOpenSocket",
-]);
+var UNREACHABLE_ERROR_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-25sm7c4g.js:6587", () => {
+  UNREACHABLE_ERROR_CODES = new Set([
+    "ECONNREFUSED",
+    "ConnectionRefused",
+    "ENOTFOUND",
+    "ENETUNREACH",
+    "EAI_AGAIN",
+    "FailedToOpenSocket",
+  ]);
+});
 //@ chunk-25sm7c4g.js:6699-6962 placement
-function isArgsTooLargeError(e, n) {
-  let r = e !== null && typeof e === "object" && "data" in e ? e.data : undefined;
-  if (typeof r !== "object" || r === null) return false;
-  let o = r;
+function isArgsTooLargeError(error, toolUseId) {
+  let data = error !== null && typeof error === "object" && "data" in error ? error.data : undefined;
+  if (typeof data !== "object" || data === null) return false;
+  let record = data;
   return (
-    typeof o.args_sha256 === "string" &&
-    typeof o.tool_name === "string" &&
-    typeof o.tool_use_id === "string" &&
-    n !== undefined &&
-    o.tool_use_id === n
+    typeof record.args_sha256 === "string" &&
+    typeof record.tool_name === "string" &&
+    typeof record.tool_use_id === "string" &&
+    toolUseId !== undefined &&
+    record.tool_use_id === toolUseId
   );
 }
 //@ chunk-25sm7c4g.js:6962-7066 placement = isConnectionError (1)
@@ -463,47 +483,51 @@ function getNumericErrorCode(err) {
 function flattenContentText(content) {
   return typeof content === "string"
     ? content
-    : content.flatMap((n) => (n.type === "text" ? [n.text] : [])).join(`
+    : content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join(`
 `);
 }
 //@ chunk-25sm7c4g.js:7164-7190 placement
 var ATTACHED_MACHINE = "attached-machine";
 //@ chunk-25sm7c4g.js:7190-8728 placement
 function adoptBridgeTargets(chromeClient, tools, recovery) {
-  let mapped = tools.map((h) => ({
-    ...h,
-    name: recursivelySanitizeUnicode(h.name),
+  let mapped = tools.map((tool) => ({
+    ...tool,
+    name: recursivelySanitizeUnicode(tool.name),
   }));
   let mapped_2 = mapped
-    .filter((h) => DEVICE_PASSTHROUGH_TOOL_NAMES.has(h.name))
-    .map((h) => ({
-      toolName: h.name,
-      meta: readRemoteToolRegistration(h),
-      raw: h._meta?.[ANTHROPIC_REMOTETOOLEXECUTION],
+    .filter((tool) => DEVICE_PASSTHROUGH_TOOL_NAMES.has(tool.name))
+    .map((tool) => ({
+      toolName: tool.name,
+      meta: readRemoteToolRegistration(tool),
+      raw: tool._meta?.[ANTHROPIC_REMOTETOOLEXECUTION],
     }));
   let filtered = mapped.filter(
-    (h) =>
-      !DEVICE_PASSTHROUGH_TOOL_NAMES.has(h.name) &&
-      mayBePassthroughTool(h.name) &&
-      h._meta?.[PASSTHROUGH_MARKER_KEY] !== undefined,
+    (tool) =>
+      !DEVICE_PASSTHROUGH_TOOL_NAMES.has(tool.name) &&
+      mayBePassthroughTool(tool.name) &&
+      tool._meta?.[PASSTHROUGH_MARKER_KEY] !== undefined,
   );
-  let flattened = filtered.flatMap((h) => {
-    let passthroughMarker = readPassthroughMarker(h);
+  let flattened = filtered.flatMap((tool) => {
+    let passthroughMarker = readPassthroughMarker(tool);
     return passthroughMarker === undefined
       ? []
       : [
           {
-            bridgeName: h.name,
+            bridgeName: tool.name,
             marker: passthroughMarker,
           },
         ];
   });
-  let p = new Set(flattened.map((h) => h.bridgeName));
-  let f = new Set(filtered.filter((h) => !p.has(h.name)).map((h) => h.name));
-  let size = f.size;
-  let unreadable = count(mapped_2, (h) => h.meta === undefined);
-  let w = new Set(mapped_2.map((h) => h.toolName));
-  let plumbingTools = new Set(mapped.filter((h) => DEVICE_SYNC_FILES_TOOLS.has(h.name)).map((h) => h.name));
+  let markedNames = new Set(flattened.map((entry) => entry.bridgeName));
+  let rejectedNames = new Set(
+    filtered.filter((tool) => !markedNames.has(tool.name)).map((tool) => tool.name),
+  );
+  let size = rejectedNames.size;
+  let unreadable = count(mapped_2, (entry) => entry.meta === undefined);
+  let servedNames = new Set(mapped_2.map((entry) => entry.toolName));
+  let plumbingTools = new Set(
+    mapped.filter((tool) => DEVICE_SYNC_FILES_TOOLS.has(tool.name)).map((tool) => tool.name),
+  );
   let passthroughTools = new Map(
     flattened.map(({ bridgeName, marker }) => [
       bridgeName,
@@ -512,41 +536,46 @@ function adoptBridgeTargets(chromeClient, tools, recovery) {
       },
     ]),
   );
-  let T = new Set([
-    ...mapped_2.flatMap((h) => (h.meta ? [h.meta.target.name] : [])),
+  let targetNames = new Set([
+    ...mapped_2.flatMap((entry) => (entry.meta ? [entry.meta.target.name] : [])),
     ...flattened.map(({ marker }) => marker.target.name),
   ]);
-  let reduced = mapped.reduce((acc, O) => {
-    let C = normalizeNameForMCP(O.name);
-    acc.set(C, (acc.get(C) ?? 0) + 1);
+  let reduced = mapped.reduce((acc, tool) => {
+    let normalizedName = normalizeNameForMCP(tool.name);
+    acc.set(normalizedName, (acc.get(normalizedName) ?? 0) + 1);
     return acc;
   }, new Map());
-  let any = filtered.some((h) => (reduced.get(normalizeNameForMCP(h.name)) ?? 0) > 1);
-  let y = T.size > 1 ? "two_names" : w.size < mapped_2.length || any ? "duplicate_tool" : undefined;
+  let any = filtered.some((tool) => (reduced.get(normalizeNameForMCP(tool.name)) ?? 0) > 1);
+  let invalidReason =
+    targetNames.size > 1
+      ? "two_names"
+      : servedNames.size < mapped_2.length || any
+        ? "duplicate_tool"
+        : undefined;
   if (mapped_2.length === 0 && flattened.length === 0 && size === 0)
     return {
       hosts: [],
-      invalid: y,
+      invalid: invalidReason,
       unreadable: 0,
       unreadableMarkers: size,
     };
-  let meta = mapped_2.find((h) => h.meta)?.meta;
+  let meta = mapped_2.find((entry) => entry.meta)?.meta;
   let target = meta?.target ?? flattened[0]?.marker.target;
-  let P = meta === undefined ? mapped_2.map((h) => h.raw) : [];
-  let found = P.map(peerProtocolVersions).find((h) => h !== undefined);
-  let found_2 = P.map(advertisedProtocolVersions).find((h) => h !== undefined);
+  let rawMetas = meta === undefined ? mapped_2.map((entry) => entry.raw) : [];
+  let found = rawMetas.map(peerProtocolVersions).find((versions) => versions !== undefined);
+  let found_2 = rawMetas.map(advertisedProtocolVersions).find((versions) => versions !== undefined);
   return {
     hosts: [
       {
         kind: "remote",
         source: "bridge",
         name: target?.name ?? ATTACHED_MACHINE,
-        status: y === undefined ? "online" : "offline",
+        status: invalidReason === undefined ? "online" : "offline",
         enforcement: "self",
         description: target,
-        servedTools: w,
+        servedTools: servedNames,
         passthroughTools,
-        rejectedPassthroughTools: f,
+        rejectedPassthroughTools: rejectedNames,
         plumbingTools,
         protocol:
           found !== undefined
@@ -562,18 +591,18 @@ function adoptBridgeTargets(chromeClient, tools, recovery) {
         transport: createBridgeTransport(chromeClient, recovery),
       },
     ],
-    invalid: y,
+    invalid: invalidReason,
     unreadable,
     unreadableMarkers: size,
   };
 }
 //@ chunk-25sm7c4g.js:8728-8847 placement
-function readPassthroughMarker(e) {
+function readPassthroughMarker(tool) {
   let passthroughMarker = parsePassthroughMarker(
-    recursivelySanitizeUnicode(e._meta?.[PASSTHROUGH_MARKER_KEY]),
+    recursivelySanitizeUnicode(tool._meta?.[PASSTHROUGH_MARKER_KEY]),
   );
   return passthroughMarker !== undefined &&
-    passthroughMarker.tool === buildMcpToolName(...splitBridgeToolName(e.name)) &&
+    passthroughMarker.tool === buildMcpToolName(...splitBridgeToolName(tool.name)) &&
     isValidMachineSlug(passthroughMarker.target.name)
     ? passthroughMarker
     : undefined;
@@ -584,39 +613,41 @@ function splitBridgeToolName(name) {
   return index < 0 ? ["", name] : [name.slice(0, index), name.slice(index + 2)];
 }
 //@ chunk-25sm7c4g.js:8930-9037 placement
-function readRemoteToolRegistration(e) {
-  let registration = parseRegistration(recursivelySanitizeUnicode(e._meta?.[ANTHROPIC_REMOTETOOLEXECUTION]));
+function readRemoteToolRegistration(tool) {
+  let registration = parseRegistration(
+    recursivelySanitizeUnicode(tool._meta?.[ANTHROPIC_REMOTETOOLEXECUTION]),
+  );
   return registration !== undefined &&
-    registration.tool === e.name &&
+    registration.tool === tool.name &&
     isValidMachineSlug(registration.target.name)
     ? registration
     : undefined;
 }
 //@ chunk-25sm7c4g.js:9037-9997 placement
-async function callPlumbingOverSession(sender, n, r, args, u) {
-  if (!DEVICE_SYNC_FILES_TOOLS.has(r)) throw Error("callPlumbing: not a plumbing tool");
-  if (u.signal.aborted)
+async function callPlumbingOverSession(sender, target, name, args, options) {
+  if (!DEVICE_SYNC_FILES_TOOLS.has(name)) throw Error("callPlumbing: not a plumbing tool");
+  if (options.signal.aborted)
     return {
       kind: "cancelled",
     };
-  let s = clampToMaxPageSize(u.deadlineMs);
+  let deadlineMs = clampToMaxPageSize(options.deadlineMs);
   let request = {
     subtype: "remote_plumbing_call",
     ...buildPlumbingRequest({
-      instanceId: n.instanceId,
-      host: n.host,
-      name: r,
+      instanceId: target.instanceId,
+      host: target.host,
+      name,
       args,
       issuedAt: Date.now(),
-      deadlineMs: s,
+      deadlineMs,
     }),
   };
-  let p;
+  let call;
   try {
-    p = sender.sendServedCallRequest({
+    call = sender.sendServedCallRequest({
       request,
       accepts: acceptsServedCallResult,
-      signal: u.signal,
+      signal: options.signal,
     });
   } catch (error) {
     return {
@@ -624,20 +655,20 @@ async function callPlumbingOverSession(sender, n, r, args, u) {
       detail: `send failed: ${errorMessage(error)}`,
     };
   }
-  if (!p.sent) {
-    p.reply.catch(() => {});
+  if (!call.sent) {
+    call.reply.catch(() => {});
     return {
       kind: "unreachable",
       detail: "the session stream is closed; nothing was sent",
     };
   }
-  let f = false;
+  let timedOut = false;
   let timer = setTimeout(() => {
-    f = true;
-    p.cancel();
-  }, s);
+    timedOut = true;
+    call.cancel();
+  }, deadlineMs);
   try {
-    let reply = await p.reply;
+    let reply = await call.reply;
     return (
       toPlumbingCallResult(reply) ?? {
         kind: "transport_error",
@@ -645,12 +676,12 @@ async function callPlumbingOverSession(sender, n, r, args, u) {
       }
     );
   } catch (error) {
-    if (f)
+    if (timedOut)
       return {
         kind: "timed_out",
-        capMs: s,
+        capMs: deadlineMs,
       };
-    if (u.signal.aborted)
+    if (options.signal.aborted)
       return {
         kind: "cancelled",
       };
@@ -672,15 +703,15 @@ async function callPlumbingOverSession(sender, n, r, args, u) {
  * 从对象里取出 result 字段，只有它是带 content 数组的对象时才返回。
  */
 function getMcpResultWithContent(r) {
-  let n = typeof r === "object" && r !== null && "result" in r ? r.result : undefined;
-  if (typeof n !== "object" || n === null) return;
-  return Array.isArray(n.content) ? n : undefined;
+  let result = typeof r === "object" && r !== null && "result" in r ? r.result : undefined;
+  if (typeof result !== "object" || result === null) return;
+  return Array.isArray(result.content) ? result : undefined;
 }
 //@ chunk-25sm7c4g.js:10159-10235 affinity
-function acceptsServedCallResult(e) {
+function acceptsServedCallResult(reply) {
   try {
-    if (isRemoteToolCallMeta(e)) return false;
-    return getMcpResultWithContent(e) !== undefined;
+    if (isRemoteToolCallMeta(reply)) return false;
+    return getMcpResultWithContent(reply) !== undefined;
   } catch {
     return false;
   }
@@ -693,8 +724,10 @@ function toPlumbingCallResult(reply) {
   return {
     kind: "result",
     structuredContent,
-    text: content.flatMap((s) =>
-      typeof s === "object" && s !== null && s.type === "text" && typeof s.text === "string" ? [s.text] : [],
+    text: content.flatMap((block) =>
+      typeof block === "object" && block !== null && block.type === "text" && typeof block.text === "string"
+        ? [block.text]
+        : [],
     ).join(`
 `),
     isError: isError === true,

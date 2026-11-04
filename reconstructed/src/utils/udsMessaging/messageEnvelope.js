@@ -19,8 +19,8 @@ function newMessageId() {
 //@ chunk-0xhrb5qv.js:262-334 placement
 var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 //@ chunk-0xhrb5qv.js:334-388 placement
-function isUuid(t) {
-  return typeof t === "string" && UUID_RE.test(t);
+function isUuid(value) {
+  return typeof value === "string" && UUID_RE.test(value);
 }
 //@ chunk-0xhrb5qv.js:388-428 placement
 function createMessageEnvelope() {

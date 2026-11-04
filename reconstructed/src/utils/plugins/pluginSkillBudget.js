@@ -16,53 +16,53 @@ import {
 } from "../../tools/SkillTool/prompt.js";
 
 //@ chunk-vqq8wr5t.js:240-327 placement
-function skillDescriptionBudget(e, o) {
-  let commandDescription = getCommandDescription(e);
+function skillDescriptionBudget(commandName, label) {
+  let commandDescription = getCommandDescription(commandName);
   let min = Math.min(commandDescription.length, getSkillDescMaxChars());
-  return 2 + getSkillListingLabel(e, o).length + 2 + min + 1;
+  return 2 + getSkillListingLabel(commandName, label).length + 2 + min + 1;
 }
 //@ chunk-vqq8wr5t.js:327-965 placement
 /**
  * 统计各插件可被模型调用的技能占用的描述预算。
  */
-function pluginSkillBudgetUsage(e, o, p) {
-  let s = new Map();
-  for (let n of e) {
-    if (n.type !== "prompt" || n.disableModelInvocation) continue;
-    let t = n.pluginInfo?.pluginManifest.name;
-    if (!t) continue;
-    let a = skillDescriptionBudget(n, e);
-    let r = s.get(t) ?? [];
-    r.push({
-      name: n.name,
-      chars: a,
-      approxTokens: Math.round(a / o),
+function pluginSkillBudgetUsage(commands, charsPerToken, limit) {
+  let byPlugin = new Map();
+  for (let command of commands) {
+    if (command.type !== "prompt" || command.disableModelInvocation) continue;
+    let pluginName = command.pluginInfo?.pluginManifest.name;
+    if (!pluginName) continue;
+    let chars = skillDescriptionBudget(command, commands);
+    let entries = byPlugin.get(pluginName) ?? [];
+    entries.push({
+      name: command.name,
+      chars,
+      approxTokens: Math.round(chars / charsPerToken),
     });
-    s.set(t, r);
+    byPlugin.set(pluginName, entries);
   }
-  let sorted = [...s.entries()]
-    .map(([n, t]) => {
-      t.sort((r, u) => u.chars - r.chars);
-      let reduced = t.reduce((acc, u) => acc + u.chars, 0);
+  let sorted = [...byPlugin.entries()]
+    .map(([pluginName, entries]) => {
+      entries.sort((left, right) => right.chars - left.chars);
+      let reduced = entries.reduce((acc, sum) => acc + sum.chars, 0);
       return {
-        pluginName: n,
-        skillCount: t.length,
+        pluginName,
+        skillCount: entries.length,
         chars: reduced,
-        approxTokens: Math.round(reduced / o),
-        skills: t,
+        approxTokens: Math.round(reduced / charsPerToken),
+        skills: entries,
       };
     })
-    .sort((n, t) => t.chars - n.chars);
-  let reduced = sorted.reduce((acc, t) => acc + t.chars, 0);
-  let charBudget = getCharBudget(p, o);
-  let l = reduced > charBudget;
-  let g = l ? charBudget : reduced;
+    .sort((left, right) => right.chars - left.chars);
+  let reduced = sorted.reduce((acc, entry) => acc + entry.chars, 0);
+  let charBudget = getCharBudget(limit, charsPerToken);
+  let overBudget = reduced > charBudget;
+  let totalChars = overBudget ? charBudget : reduced;
   return {
     byPlugin: sorted,
-    totalChars: g,
-    totalTokens: Math.round(g / o),
-    overBudget: l,
-    budgetTokens: Math.round(charBudget / o),
+    totalChars,
+    totalTokens: Math.round(totalChars / charsPerToken),
+    overBudget,
+    budgetTokens: Math.round(charBudget / charsPerToken),
   };
 }
 export { pluginSkillBudgetUsage };

@@ -35,6 +35,7 @@ import { WORD_BOUNDARY_PATTERN, CJK_PUNCTUATION } from "./attachments/atMentions
 import { logEvent } from "../services/analytics/index.js";
 import { logAtMention } from "./telemetry/thirdPartyEventRecords.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../services/analytics/featureTelemetry.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3194653-3194703 placement
 /**
@@ -49,7 +50,10 @@ async function listLocalPeerSessions() {
  */
 async function listPeerSessionsSafe() {
   if (isCrossSessionMessagingEnabled()) {
-    let { listLivePeerSessions, SessionRecordsUnreadableError } = require("./chunk-ewxn4535.js");
+    let {
+      listLivePeerSessions,
+      SessionRecordsUnreadableError,
+    } = require("./udsMessaging/SessionRecordsUnreadableError.lazy.js");
     try {
       return {
         sessions: await listLivePeerSessions(),
@@ -80,77 +84,89 @@ async function listPeerSessionsSafe() {
 /**
  * cachedBridgeListingRows：跨会话消息开启时返回缓存的桥接会话行。
  */
-function cachedBridgeListingRows(e) {
-  if (isCrossSessionMessagingEnabled()) return bridgeListingRows(e);
+function cachedBridgeListingRows(options) {
+  if (isCrossSessionMessagingEnabled()) return bridgeListingRows(options);
   return;
 }
 //@ chunk-e6aww6q8.js:3195159-3195219 placement
-async function primeAndGetBridgeRows(e) {
+async function primeAndGetBridgeRows(options) {
   await primePeerIdentity({
     refresh: false,
   });
-  return cachedBridgeListingRows(e);
+  return cachedBridgeListingRows(options);
 }
 //@ chunk-e6aww6q8.js:3195219-3195264 placement
 /**
  * warmBridgeListingIfEnabled：开启时预热桥接会话列表。
  */
-function warmBridgeListingIfEnabled(e) {
-  if (isCrossSessionMessagingEnabled()) return warmBridgeListing(e);
+function warmBridgeListingIfEnabled(options) {
+  if (isCrossSessionMessagingEnabled()) return warmBridgeListing(options);
   return;
 }
 //@ chunk-e6aww6q8.js:3195298-3195365 placement
-var MAX_PEER_SUGGESTIONS = 20;
-var MAX_SAME_NAME_CANDIDATES = 3;
-var regExp_14 = new RegExp(`\\[${ADDRESS_REF_PATTERN}\\]`, "i");
-var MAX_QUOTED_MENTION_LENGTH = 128;
-var MAX_MENTION_NAME_LENGTH = MAX_SEED_NAME_CHARS;
+var MAX_PEER_SUGGESTIONS; // deferred: uses MIN_ADDRESS_REF_LENGTH (./sessionAddresses.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_SAME_NAME_CANDIDATES;
+var regExp_14;
+var MAX_QUOTED_MENTION_LENGTH;
+var MAX_MENTION_NAME_LENGTH;
+deferInit("chunk-e6aww6q8.js:3195298", () => {
+  MAX_PEER_SUGGESTIONS = 20;
+  MAX_SAME_NAME_CANDIDATES = 3;
+  regExp_14 = new RegExp(`\\[${ADDRESS_REF_PATTERN}\\]`, "i");
+  MAX_QUOTED_MENTION_LENGTH = 128;
+  MAX_MENTION_NAME_LENGTH = MAX_SEED_NAME_CHARS;
+});
 //@ chunk-e6aww6q8.js:3195365-3196434 placement
 /**
  * 解析对等会话的地址（主会话、队友、子代理、本机、云会话）。
  */
-function resolvePeerAddress(e, n, r = Date.now()) {
-  let s = describeAgentAddress(e, n);
-  let h = new Set([slugifySessionName(MAIN)]);
-  if (e.teamContext) h.add(slugifySessionName(TEAM_LEAD));
-  let y = [];
-  for (let candidate of s.candidates)
+function resolvePeerAddress(session, address, now = Date.now()) {
+  let described = describeAgentAddress(session, address);
+  let inProcess = new Set([slugifySessionName(MAIN)]);
+  if (session.teamContext) inProcess.add(slugifySessionName(TEAM_LEAD));
+  let external = [];
+  for (let candidate of described.candidates)
     if (candidate.kind === "main" || candidate.kind === "teammate" || candidate.kind === "subagent")
-      h.add(slugifySessionName(candidate.name));
-    else y.push(candidate);
-  let S = (Se) => Math.min(Se.lastActive ?? 0, r);
-  y.sort((Se, ke) => {
-    let we = Number(ke.where === "this-machine") - Number(Se.where === "this-machine");
-    return we !== 0 ? we : S(ke) - S(Se);
+      inProcess.add(slugifySessionName(candidate.name));
+    else external.push(candidate);
+  let lastActiveAt = (candidate) => Math.min(candidate.lastActive ?? 0, now);
+  external.sort((left, right) => {
+    let localFirst = Number(right.where === "this-machine") - Number(left.where === "this-machine");
+    return localFirst !== 0 ? localFirst : lastActiveAt(right) - lastActiveAt(left);
   });
-  let w = new Set();
-  let filtered = y.filter((Se) => {
-    let ke = `${Se.kind}\x00${Se.id}\x00${slugifySessionName(Se.name)}`;
-    if (w.has(ke)) return false;
-    w.add(ke);
+  let seenKeys = new Set();
+  let filtered = external.filter((candidate) => {
+    let dedupeKey = `${candidate.kind}\x00${candidate.id}\x00${slugifySessionName(candidate.name)}`;
+    if (seenKeys.has(dedupeKey)) return false;
+    seenKeys.add(dedupeKey);
     return true;
   });
-  let G = new Set();
-  for (let session of n.sessions) {
-    let ke = session.name ? normalizeSessionTitle(session.name) : null;
-    if (ke) G.add(`session\x00${session.sock}\x00${slugifySessionName(ke)}`);
+  let namedSessionKeys = new Set();
+  for (let session of address.sessions) {
+    let normalizedTitle = session.name ? normalizeSessionTitle(session.name) : null;
+    if (normalizedTitle)
+      namedSessionKeys.add(`session\x00${session.sock}\x00${slugifySessionName(normalizedTitle)}`);
   }
-  let q = new Set();
-  let Z = new Set();
-  for (let Se of [...(n.cloud ?? []), ...(n.bridge ?? [])]) if (isUntitledName(Se.title)) Z.add(Se.id);
-  for (let Se of filtered)
-    if ((Se.kind === "cloud-session" || Se.kind === "bridge-session") && Z.has(Se.id))
-      q.add(`${Se.kind}\x00${Se.id}\x00${slugifySessionName(Se.name)}`);
-  for (let session of n.sessions)
+  let defaultNamed = new Set();
+  let untitledIds = new Set();
+  for (let remoteSession of [...(address.cloud ?? []), ...(address.bridge ?? [])])
+    if (isUntitledName(remoteSession.title)) untitledIds.add(remoteSession.id);
+  for (let candidate of filtered)
+    if (
+      (candidate.kind === "cloud-session" || candidate.kind === "bridge-session") &&
+      untitledIds.has(candidate.id)
+    )
+      defaultNamed.add(`${candidate.kind}\x00${candidate.id}\x00${slugifySessionName(candidate.name)}`);
+  for (let session of address.sessions)
     if (!session.name && session.cwd) {
-      let ke = normalizeSessionTitle(basename(session.cwd));
-      let we = ke && `session\x00${session.sock}\x00${slugifySessionName(ke)}`;
-      if (we && !G.has(we)) q.add(we);
+      let cwdTitle = normalizeSessionTitle(basename(session.cwd));
+      let candidateKey = cwdTitle && `session\x00${session.sock}\x00${slugifySessionName(cwdTitle)}`;
+      if (candidateKey && !namedSessionKeys.has(candidateKey)) defaultNamed.add(candidateKey);
     }
   return {
     candidates: filtered,
-    inProcess: h,
-    defaultNamed: q,
+    inProcess,
+    defaultNamed,
   };
 }
 //@ chunk-e6aww6q8.js:3196434-3196709 placement
@@ -158,24 +174,24 @@ function resolvePeerAddress(e, n, r = Date.now()) {
  * 判断会话名能否作为 @ 提及目标：不含引号、尖括号、换行和非法字符，不像 agent 名，且长度在上限内（纯 ASCII 与其他字符上限不同）。
  */
 function isAddressablePeerName(name) {
-  let n = slugifySessionName(name);
+  let slug = slugifySessionName(name);
   if (
     name.includes('"') ||
-    n.includes('"') ||
+    slug.includes('"') ||
     /[<>]/.test(name) ||
-    /[<>]/.test(n) ||
+    /[<>]/.test(slug) ||
     /[\n\r\u2028\u2029]/.test(name) ||
     regExp_14.test(name) ||
-    regExp_14.test(n) ||
-    n.startsWith("agent-") ||
-    n.endsWith("(agent)") ||
-    n.length === 0
+    regExp_14.test(slug) ||
+    slug.startsWith("agent-") ||
+    slug.endsWith("(agent)") ||
+    slug.length === 0
   )
     return false;
-  let r = [...name].length;
+  let nameLength = [...name].length;
   return UNQUOTED_MENTION_NAME_PATTERN.test(name)
-    ? r <= MAX_QUOTED_MENTION_LENGTH
-    : r <= MAX_MENTION_NAME_LENGTH;
+    ? nameLength <= MAX_QUOTED_MENTION_LENGTH
+    : nameLength <= MAX_MENTION_NAME_LENGTH;
 }
 //@ chunk-e6aww6q8.js:3196709-3196728 placement
 var UNQUOTED_MENTION_NAME_PATTERN = /^[\w-]+$/;
@@ -183,18 +199,18 @@ var UNQUOTED_MENTION_NAME_PATTERN = /^[\w-]+$/;
 /**
  * 汇总可寻址对象（会话列表、团队文件、云端、bridge）供 @ 补全与附件使用（切分误归 AgentTool）。
  */
-async function resolveTeamName(session, n, r) {
-  let teamName = n.teamContext?.teamName;
-  let [h, y, S] = await Promise.all([
+async function resolveTeamName(options, address, sourceSession) {
+  let teamName = address.teamContext?.teamName;
+  let [localSessions, teamFile, bridgeRows] = await Promise.all([
     listLocalPeerSessions(),
-    teamName ? readTeamFileAsync(teamName, r.storageV5) : Promise.resolve(null),
-    primeAndGetBridgeRows(session),
+    teamName ? readTeamFileAsync(teamName, sourceSession.storageV5) : Promise.resolve(null),
+    primeAndGetBridgeRows(options),
   ]);
-  return resolvePeerAddress(n, {
-    teamFile: y,
-    sessions: h,
-    cloud: warmCloudSessions(session),
-    bridge: S,
+  return resolvePeerAddress(address, {
+    teamFile,
+    sessions: localSessions,
+    cloud: warmCloudSessions(options),
+    bridge: bridgeRows,
   });
 }
 //@ chunk-e6aww6q8.js:3196928-3196963 placement
@@ -202,25 +218,25 @@ function candidateDisplayText(candidate) {
   return formatMentionName(candidate.name);
 }
 //@ chunk-e6aww6q8.js:3196963-3197016 placement
-function formatMentionName(e) {
-  return UNQUOTED_MENTION_NAME_PATTERN.test(e) ? `@${e}` : `@"${e}"`;
+function formatMentionName(name) {
+  return UNQUOTED_MENTION_NAME_PATTERN.test(name) ? `@${name}` : `@"${name}"`;
 }
 //@ chunk-e6aww6q8.js:3197016-3197192 placement
-function describePeerCandidate(candidate, n) {
-  let r =
+function describePeerCandidate(candidate, now) {
+  let activeSuffix =
     candidate.lastActive === undefined
       ? ""
-      : ` \xB7 active ${formatDuration(Math.max(0, n - candidate.lastActive), {
+      : ` \xB7 active ${formatDuration(Math.max(0, now - candidate.lastActive), {
           mostSignificantOnly: true,
         })} ago`;
-  return `message session \xB7 ${describeLocationWithRemoteControl(candidate.where)}${r}`;
+  return `message session \xB7 ${describeLocationWithRemoteControl(candidate.where)}${activeSuffix}`;
 }
 //@ chunk-e6aww6q8.js:3197192-3197487 placement
 /**
  * 按输入前缀生成 @ 会话提及建议：跳过进程内同名、已排除和不可寻址的候选，最多若干条，附显示文本与"最近活跃"说明。
  */
-function suggestPeerMentions(roster, n, r = Date.now()) {
-  if (n === "") return [];
+function suggestPeerMentions(roster, query, now = Date.now()) {
+  if (query === "") return [];
   let suggestions = [];
   for (let candidate of roster.candidates) {
     if (suggestions.length >= MAX_PEER_SUGGESTIONS) break;
@@ -228,31 +244,34 @@ function suggestPeerMentions(roster, n, r = Date.now()) {
     if (
       roster.inProcess.has(normalizedName) ||
       wasDefaultNamed(roster, candidate) ||
-      !normalizedName.startsWith(n) ||
+      !normalizedName.startsWith(query) ||
       !isAddressablePeerName(candidate.name)
     )
       continue;
     suggestions.push({
       id: `dm-peer-${candidate.kind}-${candidate.ref}-${normalizedName}`,
       displayText: candidateDisplayText(candidate),
-      description: describePeerCandidate(candidate, r),
+      description: describePeerCandidate(candidate, now),
     });
   }
   return suggestions;
 }
 //@ chunk-e6aww6q8.js:3197487-3197665 placement
-var regExp_15 = new RegExp(
-  String.raw`(?:^|${WORD_BOUNDARY_PATTERN})@(?:"([^"\n]{1,${MAX_MENTION_NAME_LENGTH}})"|([\w-]{1,${MAX_QUOTED_MENTION_LENGTH}})(?=$|[\s,;!?)\]}>'"\u201D\u2019${CJK_PUNCTUATION}]|[.:](?:$|\s)|\[${ADDRESS_REF_PATTERN}\]))(?:[ \t]*\[(${ADDRESS_REF_PATTERN})\])?`,
-  "gu",
-);
+var regExp_15; // deferred: uses MAX_PEER_SUGGESTIONS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3197487", () => {
+  regExp_15 = new RegExp(
+    String.raw`(?:^|${WORD_BOUNDARY_PATTERN})@(?:"([^"\n]{1,${MAX_MENTION_NAME_LENGTH}})"|([\w-]{1,${MAX_QUOTED_MENTION_LENGTH}})(?=$|[\s,;!?)\]}>'"\u201D\u2019${CJK_PUNCTUATION}]|[.:](?:$|\s)|\[${ADDRESS_REF_PATTERN}\]))(?:[ \t]*\[(${ADDRESS_REF_PATTERN})\])?`,
+    "gu",
+  );
+});
 //@ chunk-e6aww6q8.js:3197665-3197979 placement
 /**
  * 从文本中提取 @会话 提及（名称与可选引用），去重；同名既有带引用又有不带引用时只保留带引用的。
  */
-function parsePeerMentions(e) {
+function parsePeerMentions(text) {
   let mentions = [];
   let seen = new Set();
-  for (let match of e.matchAll(regExp_15)) {
+  for (let match of text.matchAll(regExp_15)) {
     let name = match[1] ?? match[2];
     if (!isAddressablePeerName(name)) continue;
     let ref = match[3];
@@ -285,11 +304,11 @@ function resolvePeerMentions(mentions, peers) {
     let sameName = peers.candidates.filter(
       (candidate) => slugifySessionName(candidate.name) === normalizedName,
     );
-    let eligible = sameName.filter((q) => !wasDefaultNamed(peers, q));
+    let eligible = sameName.filter((candidate) => !wasDefaultNamed(peers, candidate));
     let displayName = formatMentionName(mentionName);
     let mentionLabel = ref === undefined ? displayName : `${displayName} [${ref}]`;
     if (ref !== undefined) {
-      let refMatch = sameName.find((Z) => Z.ref === ref);
+      let refMatch = sameName.find((candidate) => candidate.ref === ref);
       if (refMatch)
         results.push({
           kind: "resolved",
@@ -320,8 +339,10 @@ function resolvePeerMentions(mentions, peers) {
   return results;
 }
 //@ chunk-e6aww6q8.js:3198574-3198659 placement
-function wasDefaultNamed(e, n) {
-  return e.defaultNamed.has(`${n.kind}\x00${n.id}\x00${slugifySessionName(n.name)}`);
+function wasDefaultNamed(roster, candidate) {
+  return roster.defaultNamed.has(
+    `${candidate.kind}\x00${candidate.id}\x00${slugifySessionName(candidate.name)}`,
+  );
 }
 //@ chunk-e6aww6q8.js:3198659-3198715 placement
 function toMentionCandidate(refMatch) {
@@ -331,14 +352,14 @@ function toMentionCandidate(refMatch) {
   };
 }
 //@ chunk-e6aww6q8.js:3198715-3198953 placement
-function logPeerMentionOutcome(e) {
-  logEvent(`tengu_at_mention_peer_${e}`, {});
+function logPeerMentionOutcome(outcome) {
+  logEvent(`tengu_at_mention_peer_${outcome}`, {});
   logAtMention({
     mentionType: "peer",
-    success: e === "success",
+    success: outcome === "success",
   });
-  if (e === "success") logFeatureOk("input_peer_at_mention");
-  else if (e === "ask") logFeatureSad("input_peer_at_mention", "ask");
+  if (outcome === "success") logFeatureOk("input_peer_at_mention");
+  else if (outcome === "ask") logFeatureSad("input_peer_at_mention", "ask");
   else logFeatureBad("input_peer_at_mention", "not_found");
 }
 export {

@@ -13,6 +13,7 @@ import { env } from "../../utils/env.js";
 import { getSessionFeatureValues } from "../../bootstrap/sessionFeatureValues.js";
 import { BOUNDED_READ_MAX } from "../../utils/fsSafety/atomicWriteStaging.js";
 import { getFeatureValue_SESSION_PINNED } from "../../services/analytics/growthbook.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-q7gky7a4.js:375-813 placement
 /**
@@ -24,20 +25,23 @@ var ALLOW_LARGE_NO_ROOM_HINT = ` Even with ${ALLOW_LARGE_PARAM}, this is more th
 var ALLOW_LARGE_UNAVAILABLE_HINT = ` ${ALLOW_LARGE_PARAM} is not available where this read runs; read it in parts with offset and limit.`;
 var MAX_CHARS_PER_TOKEN = 128;
 //@ chunk-q7gky7a4.js:1174-1192 placement
-var weakMap = new WeakMap();
+var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-q7gky7a4.js:1174", () => {
+  weakMap = new WeakMap();
+});
 //@ chunk-q7gky7a4.js:1192-1221 placement
 /**
  * 把某文件句柄对应的读取限制记入 WeakMap 缓存。
  */
-function setCachedReadingLimit(e, t) {
-  weakMap.set(e, t);
+function setCachedReadingLimit(output, limitText) {
+  weakMap.set(output, limitText);
 }
 //@ chunk-q7gky7a4.js:1221-1253 placement
 /**
  * 取出此前按文件句柄缓存的读取限制。
  */
-function getCachedReadingLimit(e) {
-  return weakMap.get(e);
+function getCachedReadingLimit(output) {
+  return weakMap.get(output);
 }
 //@ chunk-q7gky7a4.js:1253-1349 fingerprint = getEnvMaxTokens (1)
 /**

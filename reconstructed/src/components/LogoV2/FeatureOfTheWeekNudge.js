@@ -19,17 +19,18 @@ import {
   jsxProd_default_2,
   Fragment,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { findSlashMentionRanges } from "../../utils/attachments/skillMentions.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { announcementState } from "../../services/announcements/announcementState.js";
 import { useNoticeImpressionEnabled, useNoticeImpression } from "./CondensedLogo.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { y, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { useState, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { sanitizedMachineReasonForTelemetry } from "../../utils/errors.js";
 import { lit } from "../../services/analytics/safeMetadata.js";
 import { formatCurrency } from "../../services/api/referral.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ag5x7vhf.js:80712-80762 placement
 function fotwState() {
@@ -39,14 +40,14 @@ function fotwState() {
   };
 }
 //@ chunk-ag5x7vhf.js:80762-80827 placement
-function renderAnnouncementLine(We, fe) {
+function renderAnnouncementLine(line, key) {
   return jsxProd_default(
     HighlightedCommandText,
     {
-      text: We.text,
-      style: We.style,
+      text: line.text,
+      style: line.style,
     },
-    fe,
+    key,
   );
 }
 //@ chunk-ag5x7vhf.js:80827-80884 placement
@@ -56,16 +57,16 @@ var PROMOTION_TERMS_URL = "https://www.anthropic.com/legal/promotion-terms";
  * 渲染一段提示文字，把其中识别出的 /命令（去掉尾部标点）加粗并用 permission 色；整体可选 bold 或 dim 样式。
  */
 function HighlightedCommandText(props) {
-  let T = w(9);
+  let $ = useMemoCache(9);
   let { text, style } = props;
-  let k;
-  if (T[0] !== text) {
-    k = [];
-    let _ = 0;
+  let parts;
+  if ($[0] !== text) {
+    parts = [];
+    let lastEnd = 0;
     for (const { start, end } of findSlashMentionRanges(text)) {
-      if (start > _) k.push(text.slice(_, start));
+      if (start > lastEnd) parts.push(text.slice(lastEnd, start));
       let replaced = text.slice(start, end).replace(/[:\-_]+$/, "");
-      k.push(
+      parts.push(
         jsxProd_default(
           Text,
           {
@@ -76,36 +77,36 @@ function HighlightedCommandText(props) {
           start,
         ),
       );
-      _ = start + replaced.length;
+      lastEnd = start + replaced.length;
     }
-    if (_ < text.length) {
-      let L;
-      if (T[2] !== _ || T[3] !== text) {
-        L = text.slice(_);
-        T[2] = _;
-        T[3] = text;
-        T[4] = L;
-      } else L = T[4];
-      k.push(L);
+    if (lastEnd < text.length) {
+      let tail;
+      if ($[2] !== lastEnd || $[3] !== text) {
+        tail = text.slice(lastEnd);
+        $[2] = lastEnd;
+        $[3] = text;
+        $[4] = tail;
+      } else tail = $[4];
+      parts.push(tail);
     }
-    T[0] = text;
-    T[1] = k;
-  } else k = T[1];
+    $[0] = text;
+    $[1] = parts;
+  } else parts = $[1];
   const bold = style === "bold";
   const dimColor = style === "dim";
-  let W;
-  if (T[5] !== k || T[6] !== bold || T[7] !== dimColor) {
-    W = jsxProd_default(Text, {
+  let textNode;
+  if ($[5] !== parts || $[6] !== bold || $[7] !== dimColor) {
+    textNode = jsxProd_default(Text, {
       bold,
       dimColor,
-      children: k,
+      children: parts,
     });
-    T[5] = k;
-    T[6] = bold;
-    T[7] = dimColor;
-    T[8] = W;
-  } else W = T[8];
-  return W;
+    $[5] = parts;
+    $[6] = bold;
+    $[7] = dimColor;
+    $[8] = textNode;
+  } else textNode = $[8];
+  return textNode;
 }
 //@ chunk-ag5x7vhf.js:81411-81495 placement
 function shouldShowFotw() {
@@ -115,60 +116,60 @@ function shouldShowFotw() {
 }
 //@ chunk-ag5x7vhf.js:81495-81711 placement
 function getFeatureOfTheWeekContent(noticeImpressionEnabled) {
-  let h = announcementState();
-  if (h.fotwContent !== null) return h.fotwContent;
+  let state = announcementState();
+  if (state.fotwContent !== null) return state.fotwContent;
   if (!shouldShowFotw()) return null;
   let promoCampaign = parsePromoCampaign();
   if (!promoCampaign) return null;
-  let T = {
+  let content = {
     variant: canClaimPromoCredit() ? "credit" : "upsell",
     campaign: promoCampaign,
     cached: promoCreditAmount(),
   };
-  if (noticeImpressionEnabled) h.fotwContent = T;
-  return T;
+  if (noticeImpressionEnabled) state.fotwContent = content;
+  return content;
 }
 //@ chunk-ag5x7vhf.js:81711-81921 placement
 function FeatureOfTheWeekNotice() {
-  let h = w(4);
+  let $ = useMemoCache(4);
   let noticeImpressionEnabled = useNoticeImpressionEnabled();
-  let x;
-  if (h[0] !== noticeImpressionEnabled) {
-    x = getFeatureOfTheWeekContent(noticeImpressionEnabled);
-    h[0] = noticeImpressionEnabled;
-    h[1] = x;
-  } else x = h[1];
-  let T = x;
-  if (T === null) {
+  let content;
+  if ($[0] !== noticeImpressionEnabled) {
+    content = getFeatureOfTheWeekContent(noticeImpressionEnabled);
+    $[0] = noticeImpressionEnabled;
+    $[1] = content;
+  } else content = $[1];
+  let content_2 = content;
+  if (content_2 === null) {
     return null;
   }
-  let k;
-  if (h[2] !== T.variant) {
-    k = jsxProd_default(FeatureOfTheWeekNudge, {
-      variant: T.variant,
+  let nudge;
+  if ($[2] !== content_2.variant) {
+    nudge = jsxProd_default(FeatureOfTheWeekNudge, {
+      variant: content_2.variant,
     });
-    h[2] = T.variant;
-    h[3] = k;
-  } else k = h[3];
-  return k;
+    $[2] = content_2.variant;
+    $[3] = nudge;
+  } else nudge = $[3];
+  return nudge;
 }
 //@ chunk-ag5x7vhf.js:81921-83765 placement
 function FeatureOfTheWeekNudge(props) {
-  let x = w(24);
+  let $ = useMemoCache(24);
   let { variant } = props;
-  let T;
-  if (x[0] === MEMO_CACHE_SENTINEL) {
-    T = announcementState();
-    x[0] = T;
-  } else T = x[0];
-  let fotwContent = T.fotwContent;
-  let [_] = y(fotwState);
-  let campaign = fotwContent !== null ? fotwContent.campaign : _.campaign;
-  let cached = fotwContent !== null ? fotwContent.cached : _.cached;
+  let state;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    state = announcementState();
+    $[0] = state;
+  } else state = $[0];
+  let fotwContent = state.fotwContent;
+  let [fallback] = useState(fotwState);
+  let campaign = fotwContent !== null ? fotwContent.campaign : fallback.campaign;
+  let cached = fotwContent !== null ? fotwContent.cached : fallback.cached;
   let enabled = Boolean(campaign?.command) && (variant === "upsell" || cached !== null);
-  let L;
-  if (x[1] !== campaign || x[2] !== variant) {
-    L = () => {
+  let onShown;
+  if ($[1] !== campaign || $[2] !== variant) {
+    onShown = () => {
       if (!campaign) {
         return;
       }
@@ -178,32 +179,32 @@ function FeatureOfTheWeekNudge(props) {
         audience: lit(variant === "credit" ? "claimant" : "viewer"),
       });
     };
-    x[1] = campaign;
-    x[2] = variant;
-    x[3] = L;
-  } else L = x[3];
-  let V;
-  if (x[4] !== enabled) {
-    V = {
+    $[1] = campaign;
+    $[2] = variant;
+    $[3] = onShown;
+  } else onShown = $[3];
+  let impressionOptions;
+  if ($[4] !== enabled) {
+    impressionOptions = {
       enabled,
     };
-    x[4] = enabled;
-    x[5] = V;
-  } else V = x[5];
-  useNoticeImpression("fotw-nudge", L, V);
+    $[4] = enabled;
+    $[5] = impressionOptions;
+  } else impressionOptions = $[5];
+  useNoticeImpression("fotw-nudge", onShown, impressionOptions);
   if (!campaign?.command) {
     return null;
   }
-  let W = campaign.hideCommandChip !== true;
-  let z;
+  let showCommandChip = campaign.hideCommandChip !== true;
+  let headline;
   if (
-    x[6] !== campaign.announcementLines ||
-    x[7] !== campaign.command ||
-    x[8] !== campaign.commandBlurb ||
-    x[9] !== campaign.titleLabel ||
-    x[10] !== W
+    $[6] !== campaign.announcementLines ||
+    $[7] !== campaign.command ||
+    $[8] !== campaign.commandBlurb ||
+    $[9] !== campaign.titleLabel ||
+    $[10] !== showCommandChip
   ) {
-    z = campaign.announcementLines?.length
+    headline = campaign.announcementLines?.length
       ? jsxProd_default(Box, {
           flexDirection: "column",
           children: campaign.announcementLines.map(renderAnnouncementLine),
@@ -214,7 +215,7 @@ function FeatureOfTheWeekNudge(props) {
               bold: true,
               children: campaign.titleLabel ?? "Feature of the week:",
             }),
-            W
+            showCommandChip
               ? jsxProd_default_2(Fragment, {
                   children: [
                     " ",
@@ -226,70 +227,73 @@ function FeatureOfTheWeekNudge(props) {
                   ],
                 })
               : null,
-            campaign.commandBlurb ? `${W ? " \u2014 " : " "}${campaign.commandBlurb}` : "",
+            campaign.commandBlurb ? `${showCommandChip ? " \u2014 " : " "}${campaign.commandBlurb}` : "",
           ],
         });
-    x[6] = campaign.announcementLines;
-    x[7] = campaign.command;
-    x[8] = campaign.commandBlurb;
-    x[9] = campaign.titleLabel;
-    x[10] = W;
-    x[11] = z;
-  } else z = x[11];
-  let K = z;
+    $[6] = campaign.announcementLines;
+    $[7] = campaign.command;
+    $[8] = campaign.commandBlurb;
+    $[9] = campaign.titleLabel;
+    $[10] = showCommandChip;
+    $[11] = headline;
+  } else headline = $[11];
+  let headline_2 = headline;
   if (variant === "upsell") {
-    let q;
-    if (x[12] !== K) {
-      q = jsxProd_default(Box, {
+    let upsellBox;
+    if ($[12] !== headline_2) {
+      upsellBox = jsxProd_default(Box, {
         flexDirection: "column",
-        children: K,
+        children: headline_2,
       });
-      x[12] = K;
-      x[13] = q;
-    } else q = x[13];
-    return q;
+      $[12] = headline_2;
+      $[13] = upsellBox;
+    } else upsellBox = $[13];
+    return upsellBox;
   }
   if (cached === null) {
     return null;
   }
-  let q;
-  if (x[14] !== cached.amountMinorUnits || x[15] !== cached.currency) {
-    q = formatCurrency(cached.amountMinorUnits, cached.currency, "fit");
-    x[14] = cached.amountMinorUnits;
-    x[15] = cached.currency;
-    x[16] = q;
-  } else q = x[16];
-  let Y = q;
-  const pe = campaign.redeemBy ? ` \xB7 Redeem by ${campaign.redeemBy}` : "";
-  let xe;
-  if (x[17] !== Y || x[18] !== pe) {
-    xe = jsxProd_default_2(Text, {
-      children: ["Get ", Y, " in usage credits when you run it", pe],
+  let amountText;
+  if ($[14] !== cached.amountMinorUnits || $[15] !== cached.currency) {
+    amountText = formatCurrency(cached.amountMinorUnits, cached.currency, "fit");
+    $[14] = cached.amountMinorUnits;
+    $[15] = cached.currency;
+    $[16] = amountText;
+  } else amountText = $[16];
+  let amountText_2 = amountText;
+  const redeemSuffix = campaign.redeemBy ? ` \xB7 Redeem by ${campaign.redeemBy}` : "";
+  let creditLine;
+  if ($[17] !== amountText_2 || $[18] !== redeemSuffix) {
+    creditLine = jsxProd_default_2(Text, {
+      children: ["Get ", amountText_2, " in usage credits when you run it", redeemSuffix],
     });
-    x[17] = Y;
-    x[18] = pe;
-    x[19] = xe;
-  } else xe = x[19];
-  let ge;
-  if (x[20] === MEMO_CACHE_SENTINEL) {
-    ge = jsxProd_default_2(Text, {
+    $[17] = amountText_2;
+    $[18] = redeemSuffix;
+    $[19] = creditLine;
+  } else creditLine = $[19];
+  let termsLine;
+  if ($[20] === MEMO_CACHE_SENTINEL) {
+    termsLine = jsxProd_default_2(Text, {
       dimColor: true,
       children: ["Terms apply: ", PROMOTION_TERMS_URL],
     });
-    x[20] = ge;
-  } else ge = x[20];
-  let Re;
-  if (x[21] !== K || x[22] !== xe) {
-    Re = jsxProd_default_2(Box, {
+    $[20] = termsLine;
+  } else termsLine = $[20];
+  let creditBox;
+  if ($[21] !== headline_2 || $[22] !== creditLine) {
+    creditBox = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [K, xe, ge],
+      children: [headline_2, creditLine, termsLine],
     });
-    x[21] = K;
-    x[22] = xe;
-    x[23] = Re;
-  } else Re = x[23];
-  return Re;
+    $[21] = headline_2;
+    $[22] = creditLine;
+    $[23] = creditBox;
+  } else creditBox = $[23];
+  return creditBox;
 }
 //@ chunk-ag5x7vhf.js:83765-83769 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:83765", () => {
+  init_react_production();
+});
 export { shouldShowFotw, FeatureOfTheWeekNotice };

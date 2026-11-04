@@ -117,7 +117,7 @@ import { getEntrypointKind, isHostEntrypoint } from "../../utils/entrypointKinds
 import { logForDebugging } from "../../utils/debug.js";
 import { errBody, refusalReasonOf, outcomeUnknownMessage } from "./publishErrors.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, _enum, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, _enum, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { parseRetryAfterMs } from "../../bridge/debugUtils.js";
 import { isStalledUpload } from "../../utils/teleport/api.js";
 import { McpDoubtfulAnswerError } from "./artifactMcpWire.js";
@@ -125,19 +125,20 @@ import { isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
 import { isAccountIngressToken } from "../ccrAgentProxy/agentProxy.js";
 import { publishReadDeadlineS } from "./framePublish.js";
 import { isTransportError } from "../http/externalHttp.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-06y4szbn.js:75207-91694 placement
 /**
  * 发布 artifact 页面的主流程：准备页面、能力与契约、预留、上传（直连或中继）、处理冲突/限流/日上限/缩略图并记录本方发布。
  */
-async function publishArtifactPage(e, n, r) {
+async function publishArtifactPage(body, input, relayOnly) {
   let startTime = performance.now();
-  let h = r !== undefined ? relayOnlyRefusalReason(n) : undefined;
-  if (h !== undefined) {
+  let relayOnlyProblem = relayOnly !== undefined ? relayOnlyRefusalReason(input) : undefined;
+  if (relayOnlyProblem !== undefined) {
     logFeatureBad("artifact_publish", "relay_only_not_fresh_page");
     return {
       ...publishError(
-        `Nothing was published: a publish made without asking may only create a new artifact, naming no url and setting no capabilities, contract, force, file removals or live files, but this one ${h}. Every publish in this session now goes through the usual permission check, which may need a person's approval.`,
+        `Nothing was published: a publish made without asking may only create a new artifact, naming no url and setting no capabilities, contract, force, file removals or live files, but this one ${relayOnlyProblem}. Every publish in this session now goes through the usual permission check, which may need a person's approval.`,
       ),
       refusedShape: true,
     };
@@ -156,31 +157,36 @@ async function publishArtifactPage(e, n, r) {
     readBack,
     publishContext,
     originMetadata,
-  } = n;
-  let copiedFiles = n.copiedFiles ?? [];
+  } = input;
+  let copiedFiles = input.copiedFiles ?? [];
   if (
-    n.createPath !== undefined &&
+    input.createPath !== undefined &&
     (slug !== undefined ||
-      n.force === true ||
-      n.baseVersion !== undefined ||
+      input.force === true ||
+      input.baseVersion !== undefined ||
       copiedFiles.length > 0 ||
-      (n.removeFiles !== undefined && n.removeFiles.length > 0) ||
-      n.liveFiles !== undefined)
+      (input.removeFiles !== undefined && input.removeFiles.length > 0) ||
+      input.liveFiles !== undefined)
   ) {
     logFeatureBad("artifact_publish", "create_bad_combo");
     return publishError("invalid publish options");
   }
   let isRedeploy = !!slug;
   let hasCaps = capabilities !== undefined;
-  let ie = isFrameBaseVersionEnabled();
-  let Z = n.force === true;
-  let Oe =
-    (n.files?.length ?? 0) > 0 ||
+  let baseVersionSupported = isFrameBaseVersionEnabled();
+  let forced = input.force === true;
+  let touchesFiles =
+    (input.files?.length ?? 0) > 0 ||
     copiedFiles.length > 0 ||
-    (n.removeFiles?.length ?? 0) > 0 ||
-    n.liveFiles !== undefined;
-  let ye = n.autoEditAttribution !== undefined || Oe ? n.baseVersion : ie ? n.baseVersion : undefined;
-  let Ee = {
+    (input.removeFiles?.length ?? 0) > 0 ||
+    input.liveFiles !== undefined;
+  let baseVersion =
+    input.autoEditAttribution !== undefined || touchesFiles
+      ? input.baseVersion
+      : baseVersionSupported
+        ? input.baseVersion
+        : undefined;
+  let meta = {
     slug,
     title,
     favicon,
@@ -190,298 +196,309 @@ async function publishArtifactPage(e, n, r) {
     label,
     note,
     ...(slug !== undefined &&
-      n.deadline !== undefined && {
-        deadline: n.deadline,
+      input.deadline !== undefined && {
+        deadline: input.deadline,
       }),
-    ...(n.requestId !== undefined && {
-      requestId: n.requestId,
+    ...(input.requestId !== undefined && {
+      requestId: input.requestId,
     }),
-    createConfirmed: n.createConfirmed,
+    createConfirmed: input.createConfirmed,
     description,
     publishContext,
     originMetadata,
-    ...(n.autoEditAttribution && {
-      autoEditAttribution: n.autoEditAttribution,
+    ...(input.autoEditAttribution && {
+      autoEditAttribution: input.autoEditAttribution,
     }),
-    ...(n.createPath === undefined &&
-      n.thumbnail && {
-        thumbnail: n.thumbnail,
+    ...(input.createPath === undefined &&
+      input.thumbnail && {
+        thumbnail: input.thumbnail,
       }),
-    ...(n.createPath === undefined &&
-      n.thumbnailDark && {
-        thumbnailDark: n.thumbnailDark,
+    ...(input.createPath === undefined &&
+      input.thumbnailDark && {
+        thumbnailDark: input.thumbnailDark,
       }),
   };
-  let bt = validateSupportingFiles(n.files ?? []);
-  if (bt !== null) return bt;
-  let artifactBody = await prepareArtifactBody(e, {
-    injectDiagramRuntime: n.injectDiagramRuntime,
-    injectHighlightRuntime: n.injectHighlightRuntime,
-    expectRoundTrippedPage: n.expectRoundTrippedPage,
+  let filesProblem = validateSupportingFiles(input.files ?? []);
+  if (filesProblem !== null) return filesProblem;
+  let artifactBody = await prepareArtifactBody(body, {
+    injectDiagramRuntime: input.injectDiagramRuntime,
+    injectHighlightRuntime: input.injectHighlightRuntime,
+    expectRoundTrippedPage: input.expectRoundTrippedPage,
   });
-  let He = composeArtifactPage(artifactBody.body, artifactBody.roundTripLang, artifactBody.roundTripCover);
-  let Y = Buffer.byteLength(He, "utf8");
-  let { body, mermaidInjected, hljsInjected, unnested, hoistedCommentsDropped } = artifactBody;
-  let Be = hasSuspiciousBaseHref(body)
+  let html = composeArtifactPage(artifactBody.body, artifactBody.roundTripLang, artifactBody.roundTripCover);
+  let pageBytes = Buffer.byteLength(html, "utf8");
+  let { body: body_2, mermaidInjected, hljsInjected, unnested, hoistedCommentsDropped } = artifactBody;
+  let baseProblems = hasSuspiciousBaseHref(body_2)
     ? [isFrameMultiFileEnabled() ? BASE_HREF_TEXT : BASE_HREF_OUTSIDE_TEXT_SINGLE]
     : [];
-  if (Y > MAX_ARTIFACT_BYTES) {
+  if (pageBytes > MAX_ARTIFACT_BYTES) {
     logFeatureBad("artifact_publish", "too_large", {
-      page_bytes: Y,
+      page_bytes: pageBytes,
       mermaid_injected: mermaidInjected,
       hljs_injected: hljsInjected,
     });
     return publishError(
-      `too large: rendered page is ${Math.ceil(Y / 1024 / 1024)}MB (max ${MAX_ARTIFACT_BYTES / 1024 / 1024}MB)` +
+      `too large: rendered page is ${Math.ceil(pageBytes / 1024 / 1024)}MB (max ${MAX_ARTIFACT_BYTES / 1024 / 1024}MB)` +
         (hljsInjected
           ? " \u2014 includes the inline syntax-highlight runtime (~0.6MB), added because the page contains fenced code"
           : ""),
     );
   }
-  Ee.template = "plain";
-  let Te = capabilities;
-  let Ve = [];
-  let $e = [];
+  meta.template = "plain";
+  let sentCaps = capabilities;
+  let warnings = [];
+  let declaredServers = [];
   if (capabilities !== undefined && session !== undefined) {
     let { connectorNames, serverNames } = session;
-    let K = normalizeMcpCapability(capabilities, connectorNames, serverNames, {
+    let mcpResult = normalizeMcpCapability(capabilities, connectorNames, serverNames, {
       hostServers,
     });
     if (
-      K.ok &&
+      mcpResult.ok &&
       hostServers === undefined &&
-      K.servers.some((server) => getLocalServerName(server) !== undefined)
+      mcpResult.servers.some((server) => getLocalServerName(server) !== undefined)
     ) {
       let liveState = getLiveState();
       let epoch = liveState.accountEpoch;
-      let contract = await resolveContract({
+      let caps = await resolveContract({
         timeoutMs: CONTRACT_FETCH_TIMEOUT_MS,
-        ...(n.signal && {
-          signal: n.signal,
+        ...(input.signal && {
+          signal: input.signal,
         }),
-        credentials: n.credentials,
+        credentials: input.credentials,
       });
-      if (!("err" in contract)) {
+      if (!("err" in caps)) {
         saveRosterToConfig({
           session: liveState,
           epoch,
-          roster: contract,
+          roster: caps,
           storageV5: undefined,
         });
-        let Fe = hasFeatureFlag(contract, "mcp", HOST);
-        n.noteHostServers?.(Fe);
-        if (!Fe)
-          K = normalizeMcpCapability(capabilities, connectorNames, serverNames, {
+        let hostOk = hasFeatureFlag(caps, "mcp", HOST);
+        input.noteHostServers?.(hostOk);
+        if (!hostOk)
+          mcpResult = normalizeMcpCapability(capabilities, connectorNames, serverNames, {
             hostServers: false,
           });
       } else
         logFeatureSad("artifact_publish", "host_roster_fetch_failed", {
-          cause: fromEnum(contract.cause),
+          cause: fromEnum(caps.cause),
         });
     }
-    if (!K.ok) {
-      let ce = count(K.malformed, (be) => be.kind === "host_unavailable");
-      let Ae = count(K.malformed, (be) => be.kind === "unknown_tools");
-      let Ie = count(
-        K.malformed,
-        (be) =>
-          be.kind === "opaque_id" ||
-          be.kind === "known_id" ||
-          be.kind === "tool_name" ||
-          be.kind === "connector_as_host" ||
-          be.kind === "undeclarable_name",
+    if (!mcpResult.ok) {
+      let hostUnavailableCount = count(mcpResult.malformed, (item) => item.kind === "host_unavailable");
+      let unknownToolsCount = count(mcpResult.malformed, (item) => item.kind === "unknown_tools");
+      let opaqueIdCount = count(
+        mcpResult.malformed,
+        (item) =>
+          item.kind === "opaque_id" ||
+          item.kind === "known_id" ||
+          item.kind === "tool_name" ||
+          item.kind === "connector_as_host" ||
+          item.kind === "undeclarable_name",
       );
-      let Fe = count(K.malformed, (be) => be.kind === "local_server_as_first_party");
+      let firstPartyCollisionCount = count(
+        mcpResult.malformed,
+        (item) => item.kind === "local_server_as_first_party",
+      );
       logFeatureBad(
         "artifact_publish",
-        ce > 0
+        hostUnavailableCount > 0
           ? "host_server_unavailable"
-          : K.internal.length > 0
+          : mcpResult.internal.length > 0
             ? "internal_host_server_name"
-            : Fe > 0
+            : firstPartyCollisionCount > 0
               ? "first_party_server_collision"
-              : K.unresolved.length > 0
+              : mcpResult.unresolved.length > 0
                 ? "unresolved_mcp_server"
-                : Ie > 0
+                : opaqueIdCount > 0
                   ? "opaque_mcp_server_id"
-                  : Ae > 0
+                  : unknownToolsCount > 0
                     ? "unknown_mcp_tool"
-                    : K.malformed.length > 0
+                    : mcpResult.malformed.length > 0
                       ? "malformed_mcp_manifest"
                       : "mcp_manifest_over_caps",
         {
-          page_bytes: Y,
-          unresolved_count: K.unresolved.length,
-          internal_count: K.internal.length,
-          malformed_count: K.malformed.length - Ie - ce - Ae,
-          opaque_id_count: Ie,
-          host_unavailable_count: ce,
-          unknown_tools_count: Ae,
-          oversized_count: K.oversized.length,
-          ...(K.serverCount !== null && {
-            server_count: K.serverCount,
+          page_bytes: pageBytes,
+          unresolved_count: mcpResult.unresolved.length,
+          internal_count: mcpResult.internal.length,
+          malformed_count:
+            mcpResult.malformed.length - opaqueIdCount - hostUnavailableCount - unknownToolsCount,
+          opaque_id_count: opaqueIdCount,
+          host_unavailable_count: hostUnavailableCount,
+          unknown_tools_count: unknownToolsCount,
+          oversized_count: mcpResult.oversized.length,
+          ...(mcpResult.serverCount !== null && {
+            server_count: mcpResult.serverCount,
           }),
         },
       );
-      let Ge = describeCapabilityProblems(K.malformed);
-      if (K.unresolved.length > 0) {
-        let be = capListForDisplay(K.unresolved, 8, (Le) => `"${sanitizeConnectorName(Le)}"`);
+      let problems = describeCapabilityProblems(mcpResult.malformed);
+      if (mcpResult.unresolved.length > 0) {
+        let listed = capListForDisplay(mcpResult.unresolved, 8, (name) => `"${sanitizeConnectorName(name)}"`);
         let filtered = connectorNames.filter(isDeclarableServer);
-        let qe = capListForDisplay(
-          uniq(filtered.map((Le) => Le.server)),
+        let knownList = capListForDisplay(
+          uniq(filtered.map((conn) => conn.server)),
           8,
-          (Le) => `"${sanitizeConnectorName(Le)}"`,
+          (name) => `"${sanitizeConnectorName(name)}"`,
         );
-        let bn = qe.length === 0 ? "" : ` (connectors this session: ${qe.join(", ")})`;
-        let any = filtered.some((Le) => normalizeUuidOrNull(Le.toolPrefix) !== null);
-        Ge.push(
-          `unknown ${plural(K.unresolved.length, "connector")}: ${be.join(", ")} \u2014 ` +
+        let knownSuffix = knownList.length === 0 ? "" : ` (connectors this session: ${knownList.join(", ")})`;
+        let any = filtered.some((conn) => normalizeUuidOrNull(conn.toolPrefix) !== null);
+        problems.push(
+          `unknown ${plural(mcpResult.unresolved.length, "connector")}: ${listed.join(", ")} \u2014 ` +
             (any
               ? "set `server` to the connector's exact display name"
               : `set \`server\` to the segment between \`mcp__\` and the next \`__\` of a tool name from this session (for \`mcp__${slackConnectorName()}__search\`, use \`${slackConnectorName()}\`, copied exactly), or to the connector's exact display name`) +
-            `${bn}. The control plane would accept this manifest, but the page would break at view time`,
+            `${knownSuffix}. The control plane would accept this manifest, but the page would break at view time`,
         );
       }
-      if (K.internal.length > 0) {
-        let be = capListForDisplay(uniq(K.internal), 8, (at) => `"${sanitizeConnectorName(at)}"`);
-        Ge.push(
-          `built-in ${plural(K.internal.length, "server")} ${be.join(", ")} ` +
+      if (mcpResult.internal.length > 0) {
+        let names = capListForDisplay(
+          uniq(mcpResult.internal),
+          8,
+          (name) => `"${sanitizeConnectorName(name)}"`,
+        );
+        problems.push(
+          `built-in ${plural(mcpResult.internal.length, "server")} ${names.join(", ")} ` +
             "\u2014 the Claude app's own servers, which it never exposes to " +
             "pages as host servers; declare only servers from the MCP configuration (host:<name> for the `mcp__<name>__<tool>` tools of a server you configured). The control plane would accept this manifest, but the page would break at view time",
         );
       }
-      for (let be of K.oversized)
-        Ge.push(
-          `${describeServerKind(be.server)} "${sanitizeConnectorName(be.server)}" declares ${be.toolCount} tools, counted after any same-name entries merge (max ${MAX_SANITIZED_TEXT}) \u2014 trim the tools ` +
+      for (let oversized of mcpResult.oversized)
+        problems.push(
+          `${describeServerKind(oversized.server)} "${sanitizeConnectorName(oversized.server)}" declares ${oversized.toolCount} tools, counted after any same-name entries merge (max ${MAX_SANITIZED_TEXT}) \u2014 trim the tools ` +
             "list; the control plane would reject it anyway",
         );
-      if (K.serverCount !== null)
-        Ge.push(
-          `manifest declares ${K.serverCount} servers (max ${MAX_LISTED_MCP_SERVERS}) \u2014 declare only the servers ` +
+      if (mcpResult.serverCount !== null)
+        problems.push(
+          `manifest declares ${mcpResult.serverCount} servers (max ${MAX_LISTED_MCP_SERVERS}) \u2014 declare only the servers ` +
             "the page actually calls; the control plane would reject it anyway",
         );
-      return publishError(`mcp manifest rejected: ${Ge.join("; ")}.`);
+      return publishError(`mcp manifest rejected: ${problems.join("; ")}.`);
     }
-    Te = K.caps;
-    Ve = K.warnings;
-    $e = K.servers;
-    let S = [
-      e,
-      ...(n.files ?? []).flatMap((ce) =>
-        MANIFEST_TEXT_TYPES.has(ce.contentType) ? [bufferToText(ce.content)] : [],
+    sentCaps = mcpResult.caps;
+    warnings = mcpResult.warnings;
+    declaredServers = mcpResult.servers;
+    let texts = [
+      body,
+      ...(input.files ?? []).flatMap((file) =>
+        MANIFEST_TEXT_TYPES.has(file.contentType) ? [bufferToText(file.content)] : [],
       ),
     ];
-    let Q = K.servers.length > 0 ? findUndeclaredMcpToolCalls(S, K.servers, 64) : [];
-    let filtered = findMentionedTools(S, K.renamed).filter(([ce]) => !Q.includes(ce));
+    let undeclared =
+      mcpResult.servers.length > 0 ? findUndeclaredMcpToolCalls(texts, mcpResult.servers, 64) : [];
+    let filtered = findMentionedTools(texts, mcpResult.renamed).filter(
+      ([name]) => !undeclared.includes(name),
+    );
     if (filtered.length > 0)
-      Ve = [
-        ...Ve,
-        `the page source still holds ${plural(filtered.length, "a server name", "server names")} this publish rewrote in the manifest, as ${plural(filtered.length, "a quoted string", "quoted strings")} \u2014 ${capListForDisplay(filtered, 8, ([ce, Ae]) => `"${sanitizeConnectorName(ce)}" (viewers resolve only "${sanitizeConnectorName(Ae)}")`).join(", ")} \u2014 so if the page passes ${filtered.length === 1 ? "it" : "them"} to callTool(\u2026) / watchTool(\u2026), those calls fail for every viewer; use the display ${plural(filtered.length, "name")} there.`,
+      warnings = [
+        ...warnings,
+        `the page source still holds ${plural(filtered.length, "a server name", "server names")} this publish rewrote in the manifest, as ${plural(filtered.length, "a quoted string", "quoted strings")} \u2014 ${capListForDisplay(filtered, 8, ([oldName, newName]) => `"${sanitizeConnectorName(oldName)}" (viewers resolve only "${sanitizeConnectorName(newName)}")`).join(", ")} \u2014 so if the page passes ${filtered.length === 1 ? "it" : "them"} to callTool(\u2026) / watchTool(\u2026), those calls fail for every viewer; use the display ${plural(filtered.length, "name")} there.`,
       ];
   } else if (capabilities !== undefined) {
-    let D = listLocalServerDeclarations(capabilities).length;
-    if (D > 0)
+    let localCount = listLocalServerDeclarations(capabilities).length;
+    if (localCount > 0)
       logFeatureSad("artifact_publish", "slug_without_pairs", {
-        page_bytes: Y,
-        slug_count: D,
+        page_bytes: pageBytes,
+        slug_count: localCount,
       });
   }
-  let keys = Object.keys(Te ?? {});
-  let Me;
-  let hostGrant = readHostGrant(env.CLAUDE_ARTIFACT_HOST_GRANT);
-  if (Te !== undefined) {
-    let D = applyHostGrant(Te, hostGrant);
-    if (!D.ok) {
+  let keys = Object.keys(sentCaps ?? {});
+  let cappedCaps;
+  let grant = readHostGrant(env.CLAUDE_ARTIFACT_HOST_GRANT);
+  if (sentCaps !== undefined) {
+    let grant_2 = applyHostGrant(sentCaps, grant);
+    if (!grant_2.ok) {
       logFeatureBad("artifact_publish", "host_grant_unreadable", {
-        page_bytes: Y,
-        host_server_count: D.refused.length,
+        page_bytes: pageBytes,
+        host_server_count: grant_2.refused.length,
       });
-      let fe = capListForDisplay(D.refused, 8, (K) => `"${sanitizeConnectorName(K)}"`);
+      let refusedList = capListForDisplay(grant_2.refused, 8, (name) => `"${sanitizeConnectorName(name)}"`);
       return publishError(
         `mcp manifest rejected: this computer's local-server grant (${CLAUDE_ARTIFACT_HOST_GRANT_ENV}, set by the app that launched this session; not something to fix from here) could not be read, so ` +
-          `no host: server can be declared from this session \u2014 ${fe.join(", ")}; declare only claude.ai connectors (set "server" to the connector's display name), or to publish without connector access leave "mcp" out of capabilities (pass capabilities: {} to clear a stored declaration).`,
+          `no host: server can be declared from this session \u2014 ${refusedList.join(", ")}; declare only claude.ai connectors (set "server" to the connector's display name), or to publish without connector access leave "mcp" out of capabilities (pass capabilities: {} to clear a stored declaration).`,
       );
     }
-    if (D.dropped.length > 0) {
+    if (grant_2.dropped.length > 0) {
       logFeatureSad("artifact_publish", "host_grant_narrowed", {
-        page_bytes: Y,
-        dropped_count: D.dropped.length,
+        page_bytes: pageBytes,
+        dropped_count: grant_2.dropped.length,
       });
-      Te = D.caps;
-      $e = $e.filter((K) => D.servers.includes(K));
-      let fe = D.dropped.length === 1 ? "it" : "them";
-      Me = D.caps;
-      Ve = [
-        ...Ve,
-        `this computer did not grant the page these local tools, so they were left out of the manifest: ${describeCapabilityTools(D.dropped)} \u2014 the page's ` +
-          `calls to ${fe} fail for every viewer; tell the user which local tools were left out` +
-          (D.servers.length === 0
+      sentCaps = grant_2.caps;
+      declaredServers = declaredServers.filter((server) => grant_2.servers.includes(server));
+      let them = grant_2.dropped.length === 1 ? "it" : "them";
+      cappedCaps = grant_2.caps;
+      warnings = [
+        ...warnings,
+        `this computer did not grant the page these local tools, so they were left out of the manifest: ${describeCapabilityTools(grant_2.dropped)} \u2014 the page's ` +
+          `calls to ${them} fail for every viewer; tell the user which local tools were left out` +
+          (grant_2.servers.length === 0
             ? ', and that the page now has no connector access at all (no declared server remained, so this publish carries no "mcp" and any stored "mcp" declaration is replaced)'
             : "") +
           ".",
       ];
     }
   }
-  if (session !== undefined && $e.length > 0) {
-    let D = [
-      e,
-      ...(n.files ?? []).flatMap((K) =>
-        MANIFEST_TEXT_TYPES.has(K.contentType) ? [bufferToText(K.content)] : [],
+  if (session !== undefined && declaredServers.length > 0) {
+    let texts = [
+      body,
+      ...(input.files ?? []).flatMap((file) =>
+        MANIFEST_TEXT_TYPES.has(file.contentType) ? [bufferToText(file.content)] : [],
       ),
     ];
-    let undeclaredMcpToolCalls = findUndeclaredMcpToolCalls(D, $e, 64);
+    let undeclaredMcpToolCalls = findUndeclaredMcpToolCalls(texts, declaredServers, 64);
     if (undeclaredMcpToolCalls.length > 0)
-      Ve = [
-        ...Ve,
-        `the page calls callTool/watchTool with ${plural(undeclaredMcpToolCalls.length, "a server name", "server names")} not in this manifest \u2014 ${capListForDisplay(undeclaredMcpToolCalls, 8, (K) => `"${sanitizeConnectorName(K)}"`).join(", ")} \u2014 and ${isDynamicMcp((Me ?? Te)?.mcp) ? "under this dynamic declaration each viewer is asked to approve them at first use (a name the viewer has no connector for is refused)" : "those calls fail for every viewer"}; the manifest declares ${capListForDisplay($e, 8, (K) => `"${sanitizeConnectorName(K)}"`).join(", ")}.`,
+      warnings = [
+        ...warnings,
+        `the page calls callTool/watchTool with ${plural(undeclaredMcpToolCalls.length, "a server name", "server names")} not in this manifest \u2014 ${capListForDisplay(undeclaredMcpToolCalls, 8, (name) => `"${sanitizeConnectorName(name)}"`).join(", ")} \u2014 and ${isDynamicMcp((cappedCaps ?? sentCaps)?.mcp) ? "under this dynamic declaration each viewer is asked to approve them at first use (a name the viewer has no connector for is refused)" : "those calls fail for every viewer"}; the manifest declares ${capListForDisplay(declaredServers, 8, (name) => `"${sanitizeConnectorName(name)}"`).join(", ")}.`,
       ];
   }
   if (
-    n.contract !== undefined &&
-    n.contract !== "latest" &&
-    (!CONTRACT_VERSION_REGEX.test(n.contract) || n.contract === UNVERSIONED_CONTRACT)
+    input.contract !== undefined &&
+    input.contract !== "latest" &&
+    (!CONTRACT_VERSION_REGEX.test(input.contract) || input.contract === UNVERSIONED_CONTRACT)
   ) {
     logFeatureBad("artifact_publish", "invalid_contract", {
-      page_bytes: Y,
+      page_bytes: pageBytes,
     });
     return publishError(
-      `invalid contract ${jsonStringify(n.contract)} \u2014 pass 'latest' ` +
+      `invalid contract ${jsonStringify(input.contract)} \u2014 pass 'latest' ` +
         "or a published version like 0.1.0.",
     );
   }
-  let upgrade = n.contract === "latest";
-  let contract = n.contract !== undefined && n.contract !== "latest" ? n.contract : null;
-  let et = n.contract !== undefined;
-  let storedPin = slug && !et ? n.storedPin : null;
-  let ke;
-  if (slug && !et && storedPin === undefined) {
-    let frameDecl = await readFrameDecl(slug, undefined, n.credentials);
+  let upgrade = input.contract === "latest";
+  let contract = input.contract !== undefined && input.contract !== "latest" ? input.contract : null;
+  let contractSpecified = input.contract !== undefined;
+  let storedPin = slug && !contractSpecified ? input.storedPin : null;
+  let storedCaps;
+  if (slug && !contractSpecified && storedPin === undefined) {
+    let frameDecl = await readFrameDecl(slug, undefined, input.credentials);
     if (
       frameDecl !== null &&
       "err" in frameDecl &&
-      n.onPinReadError !== "assume_none" &&
+      input.onPinReadError !== "assume_none" &&
       isRetryableReadBack(frameDecl)
     ) {
       let backTelemetry = readBackTelemetry(frameDecl);
-      await sleep(READBACK_RETRY_MS, n.signal);
-      if (!n.signal?.aborted) {
-        frameDecl = await readFrameDecl(slug, n.signal, n.credentials);
+      await sleep(READBACK_RETRY_MS, input.signal);
+      if (!input.signal?.aborted) {
+        frameDecl = await readFrameDecl(slug, input.signal, input.credentials);
         logFeatureSad("artifact_publish", "pin_readback_retried", {
-          page_bytes: Y,
+          page_bytes: pageBytes,
           ...backTelemetry,
           recovered: !(frameDecl !== null && "err" in frameDecl),
         });
       }
     }
     if (frameDecl !== null && "err" in frameDecl) {
-      if (n.onPinReadError === "assume_none") {
+      if (input.onPinReadError === "assume_none") {
         logFeatureSad("artifact_publish", "pin_readback_assumed_none", {
-          page_bytes: Y,
+          page_bytes: pageBytes,
         });
         storedPin = null;
       } else {
         logFeatureBad("artifact_publish", "pin_readback_failed", {
-          page_bytes: Y,
+          page_bytes: pageBytes,
           ...readBackTelemetry(frameDecl),
         });
         return publishError(
@@ -491,25 +508,25 @@ async function publishArtifactPage(e, n, r) {
       }
     } else {
       storedPin = frameDecl === null ? null : parseContractVersion(frameDecl.contract);
-      ke = frameDecl?.capabilities ?? {};
+      storedCaps = frameDecl?.capabilities ?? {};
     }
   }
   let contractVersion = parseContractVersion(storedPin);
-  if (slug && ke === undefined && Object.keys(capabilities ?? {}).length > 0) {
-    let frameDecl = await readFrameDecl(slug, undefined, n.credentials);
+  if (slug && storedCaps === undefined && Object.keys(capabilities ?? {}).length > 0) {
+    let frameDecl = await readFrameDecl(slug, undefined, input.credentials);
     if (
       frameDecl !== null &&
       "err" in frameDecl &&
-      n.contract === undefined &&
+      input.contract === undefined &&
       isRetryableReadBack(frameDecl)
     ) {
-      await sleep(READBACK_RETRY_MS, n.signal);
-      if (!n.signal?.aborted) frameDecl = await readFrameDecl(slug, undefined, n.credentials);
+      await sleep(READBACK_RETRY_MS, input.signal);
+      if (!input.signal?.aborted) frameDecl = await readFrameDecl(slug, undefined, input.credentials);
     }
     if (frameDecl !== null && "err" in frameDecl) {
-      if (n.contract === undefined) {
+      if (input.contract === undefined) {
         logFeatureBad("artifact_publish", "capability_readback_failed", {
-          page_bytes: Y,
+          page_bytes: pageBytes,
           ...readBackTelemetry(frameDecl),
         });
         return publishError(
@@ -518,121 +535,127 @@ async function publishArtifactPage(e, n, r) {
         );
       }
       logFeatureSad("artifact_publish", "retrofit_guard_skipped");
-    } else ke = frameDecl?.capabilities ?? {};
+    } else storedCaps = frameDecl?.capabilities ?? {};
   }
   if (capabilities === undefined && slug) {
-    let D = await checkHostGrantCarry({
+    let carryCheck = await checkHostGrantCarry({
       slug,
-      hostGrant,
-      storedCaps: ke,
-      signal: n.signal,
-      credentials: n.credentials,
-      pageBytes: Y,
+      hostGrant: grant,
+      storedCaps,
+      signal: input.signal,
+      credentials: input.credentials,
+      pageBytes,
       lane: "page",
     });
-    if (!D.ok) return publishError(D.err);
-    ke = D.storedCaps;
+    if (!carryCheck.ok) return publishError(carryCheck.err);
+    storedCaps = carryCheck.storedCaps;
   }
-  let ve = (D) => (D === SELF ? ARTIFACT_CAPABILITY_KEY : D);
-  let mapped = Object.keys(ke ?? {}).map(ve);
-  let mapped_2 = keys.map(ve);
-  let filtered = Object.entries(ke ?? {}).filter(([key]) => !mapped_2.includes(ve(key)));
-  let tt = getUserClaudeRulesDir_2(ke?.db) ?? [];
-  let db = Te?.db;
-  let Rt = tt.length > 0 && (db === true || (isPlainObjectConnector(db) && !Object.hasOwn(db, "rules")));
-  let gn = isValidDbRules(tt);
-  let nt = getUserScopes(ke?.user) ?? [];
-  let user = Te?.user;
-  let ft =
-    nt.length > 0 && (user === true || (isPlainObjectConnector(user) && !Object.hasOwn(user, "scopes")));
-  let Ke = isValidScopeList(nt);
-  let Je = () => {
-    let D = jsonStringify(nt);
-    let fe = sanitizeDisplayText(D, {
+  let capKey = (key) => (key === SELF ? ARTIFACT_CAPABILITY_KEY : key);
+  let mapped = Object.keys(storedCaps ?? {}).map(capKey);
+  let mapped_2 = keys.map(capKey);
+  let filtered = Object.entries(storedCaps ?? {}).filter(([key]) => !mapped_2.includes(capKey(key)));
+  let storedDbRules = getUserClaudeRulesDir_2(storedCaps?.db) ?? [];
+  let db = sentCaps?.db;
+  let dbRulesReset =
+    storedDbRules.length > 0 && (db === true || (isPlainObjectConnector(db) && !Object.hasOwn(db, "rules")));
+  let dbRulesValid = isValidDbRules(storedDbRules);
+  let storedScopes = getUserScopes(storedCaps?.user) ?? [];
+  let user = sentCaps?.user;
+  let scopesDropped =
+    storedScopes.length > 0 &&
+    (user === true || (isPlainObjectConnector(user) && !Object.hasOwn(user, "scopes")));
+  let scopesValid = isValidScopeList(storedScopes);
+  let scopesText = () => {
+    let json = jsonStringify(storedScopes);
+    let clean = sanitizeDisplayText(json, {
       max: 200,
     });
-    return Ke && fe === D ? fe : "";
+    return scopesValid && clean === json ? clean : "";
   };
-  if (n.createPath === undefined && filtered.length > 0 && mapped_2.some((D) => !mapped.includes(D))) {
+  if (
+    input.createPath === undefined &&
+    filtered.length > 0 &&
+    mapped_2.some((key) => !mapped.includes(key))
+  ) {
     logFeatureBad("artifact_publish", "capability_retrofit_refused");
-    let D = capListForDisplay(filtered, 8, ([ce]) => sanitizeDisplayText(ce));
-    let fe = jsonStringify({
+    let missingList = capListForDisplay(filtered, 8, ([name]) => sanitizeDisplayText(name));
+    let mergedDecl = jsonStringify({
       ...Object.fromEntries(filtered),
-      ...Te,
-      ...(Rt && {
-        db: ke?.db,
+      ...sentCaps,
+      ...(dbRulesReset && {
+        db: storedCaps?.db,
       }),
-      ...(ft && {
-        user: ke?.user,
+      ...(scopesDropped && {
+        user: storedCaps?.user,
       }),
     });
-    let K = sanitizeDisplayText(fe, {
+    let cleanDecl = sanitizeDisplayText(mergedDecl, {
       max: 600,
     });
-    let S = Rt || filtered.some(([ce]) => ce === "db");
-    let Q = ft || filtered.some(([ce]) => ce === "user");
-    let I =
-      K === fe &&
-      !/[<>]/.test(foldLookalikeChars(fe)) &&
-      scrubArtifactEnvelopeTags(fe) === fe &&
-      (!S || isValidDbCapability(ke?.db)) &&
-      (!Q || isValidUserCapability(ke?.user))
-        ? K
+    let mentionsDb = dbRulesReset || filtered.some(([name]) => name === "db");
+    let mentionsUser = scopesDropped || filtered.some(([name]) => name === "user");
+    let suggestion =
+      cleanDecl === mergedDecl &&
+      !/[<>]/.test(foldLookalikeChars(mergedDecl)) &&
+      scrubArtifactEnvelopeTags(mergedDecl) === mergedDecl &&
+      (!mentionsDb || isValidDbCapability(storedCaps?.db)) &&
+      (!mentionsUser || isValidUserCapability(storedCaps?.user))
+        ? cleanDecl
         : "";
     return publishError(
-      `your capabilities declaration omits the stored ${plural(filtered.length, "capability", "capabilities")} ${D.join(", ")} while adding new ones \u2014 a sent declaration replaces the stored one, so this publish would have silently revoked ${filtered.length === 1 ? "it" : "them"}. To keep ${filtered.length === 1 ? "it" : "them"}, republish declaring the union${I !== "" ? `: ${I}` : " (republish with capabilities omitted to read the stored declaration back, then resend it plus your additions)"}. To revoke on purpose, publish that union first, then republish without the revoked names (a declaration that adds no new name goes out as sent); capabilities: {} clears everything.`,
+      `your capabilities declaration omits the stored ${plural(filtered.length, "capability", "capabilities")} ${missingList.join(", ")} while adding new ones \u2014 a sent declaration replaces the stored one, so this publish would have silently revoked ${filtered.length === 1 ? "it" : "them"}. To keep ${filtered.length === 1 ? "it" : "them"}, republish declaring the union${suggestion !== "" ? `: ${suggestion}` : " (republish with capabilities omitted to read the stored declaration back, then resend it plus your additions)"}. To revoke on purpose, publish that union first, then republish without the revoked names (a declaration that adds no new name goes out as sent); capabilities: {} clears everything.`,
     );
   }
-  if (n.createPath === undefined && Rt) {
+  if (input.createPath === undefined && dbRulesReset) {
     logFeatureBad("artifact_publish", "db_rules_reset_refused");
-    let D = jsonStringify(tt);
-    let fe = sanitizeDisplayText(D, {
+    let json = jsonStringify(storedDbRules);
+    let clean = sanitizeDisplayText(json, {
       max: 600,
     });
-    let K = gn && fe === D ? fe : "";
-    let S = ft
-      ? ` The sent user block likewise omits its stored scopes${Je() !== "" ? ` (${Je()})` : ""}: resend user with them as well, or user: {"scopes": []} to drop them.`
+    let listing = dbRulesValid && clean === json ? clean : "";
+    let userNote = scopesDropped
+      ? ` The sent user block likewise omits its stored scopes${scopesText() !== "" ? ` (${scopesText()})` : ""}: resend user with them as well, or user: {"scopes": []} to drop them.`
       : "";
     return publishError(
-      `your capabilities declaration re-sends db without its rules while the artifact stores ${tt.length} ${plural(tt.length, "access rule")}${K !== "" ? `: ${K}` : ' (not listed here; read the artifact with action "read" to see them)'} \u2014 ` +
-        `a sent db block replaces the stored one, rules included, so this publish would have reset them to the defaults (anyone who can open the artifact can read its shared data, and anyone with more than view-only access can write it). To keep them, ${K !== "" ? "resend db with those rules" : "publish with capabilities omitted (the stored declaration stays as it is), or read it back and resend db with its rules"}; to reset them on purpose, send db: {"rules": []}.` +
-        S,
+      `your capabilities declaration re-sends db without its rules while the artifact stores ${storedDbRules.length} ${plural(storedDbRules.length, "access rule")}${listing !== "" ? `: ${listing}` : ' (not listed here; read the artifact with action "read" to see them)'} \u2014 ` +
+        `a sent db block replaces the stored one, rules included, so this publish would have reset them to the defaults (anyone who can open the artifact can read its shared data, and anyone with more than view-only access can write it). To keep them, ${listing !== "" ? "resend db with those rules" : "publish with capabilities omitted (the stored declaration stays as it is), or read it back and resend db with its rules"}; to reset them on purpose, send db: {"rules": []}.` +
+        userNote,
     );
   }
-  if (n.createPath === undefined && ft) {
+  if (input.createPath === undefined && scopesDropped) {
     logFeatureBad("artifact_publish", "user_scopes_reset_refused");
-    let D = Je();
+    let scopes = scopesText();
     return publishError(
-      `your capabilities declaration re-sends user without its scopes while the artifact stores ${nt.length} ${plural(nt.length, "scope")}${D !== "" ? `: ${D}` : ""} \u2014 ` +
-        `a sent user block replaces the stored one, scopes included, so this publish would have dropped ${nt.length === 1 ? "it" : "them"} (for profile, the page would no longer receive the viewer's name and avatar). To keep ${nt.length === 1 ? "it" : "them"}, ${D !== "" ? `resend user with scopes: ${D}` : "publish with capabilities omitted (the stored declaration stays as it is), or read it back and resend user with its scopes"}; to drop ${nt.length === 1 ? "it" : "them"} on purpose, send user: {"scopes": []}.`,
+      `your capabilities declaration re-sends user without its scopes while the artifact stores ${storedScopes.length} ${plural(storedScopes.length, "scope")}${scopes !== "" ? `: ${scopes}` : ""} \u2014 ` +
+        `a sent user block replaces the stored one, scopes included, so this publish would have dropped ${storedScopes.length === 1 ? "it" : "them"} (for profile, the page would no longer receive the viewer's name and avatar). To keep ${storedScopes.length === 1 ? "it" : "them"}, ${scopes !== "" ? `resend user with scopes: ${scopes}` : "publish with capabilities omitted (the stored declaration stays as it is), or read it back and resend user with its scopes"}; to drop ${storedScopes.length === 1 ? "it" : "them"} on purpose, send user: {"scopes": []}.`,
     );
   }
   let publishCapabilities = await resolvePublishCapabilities({
-    capabilities: Te,
+    capabilities: sentCaps,
     echoPin: contractVersion,
     explicitPin: contract,
     upgrade,
-    pageBytes: Y,
-    ...(n.createPath !== undefined && {
+    pageBytes,
+    ...(input.createPath !== undefined && {
       latestFetchRemedy: {
         retry: "nothing was created; retry.",
         refused: `Nothing was created; tell the user the page has to be created from ${CONTRACT_FETCH_SUBJECT}.`,
       },
     }),
-    credentials: n.credentials,
+    credentials: input.credentials,
   });
   if ("errMsg" in publishCapabilities) return publishError(publishCapabilities.errMsg);
   let fields = publishCapabilities.fields;
   let sent = {
-    capNames: Object.keys(Te ?? {}).map(ve),
-    hostDecl: usesLocalMcpServers(Te),
+    capNames: Object.keys(sentCaps ?? {}).map(capKey),
+    hostDecl: usesLocalMcpServers(sentCaps),
     latestContract: "contract" in fields && contract === null && contractVersion === null,
   };
-  let pt;
-  let It = (D) =>
+  let reservedSlug;
+  let diagnoseAndReturn = (published) =>
     buildInstallationHealthDiagnostics(
-      readBackAfterPublish(D, readBack ? slug : undefined, n.credentials, n.signal),
-      [...Ve, ...Be],
+      readBackAfterPublish(published, readBack ? slug : undefined, input.credentials, input.signal),
+      [...warnings, ...baseProblems],
     ).then((installationHealthDiagnostics) => {
       if (installationHealthDiagnostics.err === null && unnested !== undefined)
         logFeatureSad(
@@ -642,25 +665,25 @@ async function publishArtifactPage(e, n, r) {
       if (installationHealthDiagnostics.err === null && hoistedCommentsDropped)
         logFeatureSad("artifact_publish", "hoisted_comment_dropped");
       if (installationHealthDiagnostics.err !== null)
-        return pt !== undefined &&
+        return reservedSlug !== undefined &&
           installationHealthDiagnostics.strandedSlug === undefined &&
           !installationHealthDiagnostics.conflict &&
           !installationHealthDiagnostics.gone
           ? {
               ...installationHealthDiagnostics,
-              reservedSlug: pt,
+              reservedSlug,
             }
           : installationHealthDiagnostics;
       return {
-        ...notLivePathsResult(installationHealthDiagnostics, n.files ?? []),
-        ...(Me !== undefined && {
-          sentCapabilities: Me,
+        ...notLivePathsResult(installationHealthDiagnostics, input.files ?? []),
+        ...(cappedCaps !== undefined && {
+          sentCapabilities: cappedCaps,
         }),
       };
     });
-  let files = n.files ?? [];
-  let removeFiles = n.removeFiles ?? [];
-  if (files.length > 0 || copiedFiles.length > 0 || removeFiles.length > 0 || n.liveFiles !== undefined) {
+  let files = input.files ?? [];
+  let removeFiles = input.removeFiles ?? [];
+  if (files.length > 0 || copiedFiles.length > 0 || removeFiles.length > 0 || input.liveFiles !== undefined) {
     if (!isFrameMultiFileEnabled()) {
       logFeatureBad("artifact_publish", "multifile_flag_off", {
         n_files: files.length + copiedFiles.length,
@@ -678,18 +701,18 @@ async function publishArtifactPage(e, n, r) {
       });
       return publishError(COPY_FROM_DISABLED_TEXT);
     }
-    if (n.createPath !== undefined)
-      return It(
-        retryWithoutThumbnail(Ee, (D) =>
+    if (input.createPath !== undefined)
+      return diagnoseAndReturn(
+        retryWithoutThumbnail(meta, (payload) =>
           publishFilesVersion(
-            He,
-            D,
+            html,
+            payload,
             fields,
             undefined,
             false,
             {
               t0: startTime,
-              pageBytes: Y,
+              pageBytes,
               lane: "inline",
               isRedeploy,
               hasCaps,
@@ -697,172 +720,183 @@ async function publishArtifactPage(e, n, r) {
               ...(contractVersion !== null && {
                 echoedPin: contractVersion,
               }),
-              ...(n.liveFilesGate === true && {
+              ...(input.liveFilesGate === true && {
                 liveFilesOn: true,
               }),
               sent,
             },
-            n.ownPublishes,
-            n.credentials,
-            n.createPath,
-            n.onRetry,
-            n.signal,
+            input.ownPublishes,
+            input.credentials,
+            input.createPath,
+            input.onRetry,
+            input.signal,
             files,
           ),
         ),
       );
-    return It(
-      retryWithoutThumbnail(Ee, (D, fe) =>
-        sendFilesPublish(He, files, copiedFiles, removeFiles, D, fields, {
-          baseVersion: fe ?? ye,
-          force: Z,
-          ...(n.liveFiles !== undefined && {
-            liveFiles: n.liveFiles,
+    return diagnoseAndReturn(
+      retryWithoutThumbnail(meta, (meta2, echoedPin) =>
+        sendFilesPublish(html, files, copiedFiles, removeFiles, meta2, fields, {
+          baseVersion: echoedPin ?? baseVersion,
+          force: forced,
+          ...(input.liveFiles !== undefined && {
+            liveFiles: input.liveFiles,
           }),
-          ...(n.copiedCrossOrgOk === true && {
+          ...(input.copiedCrossOrgOk === true && {
             copiedCrossOrgOk: true,
           }),
-          ...(pt !== undefined && {
-            reservedSlug: pt,
+          ...(reservedSlug !== undefined && {
+            reservedSlug,
           }),
-          ownPublishes: n.ownPublishes,
+          ownPublishes: input.ownPublishes,
           tele: {
             t0: startTime,
-            pageBytes: Y,
+            pageBytes,
             lane: "inline",
             isRedeploy,
             hasCaps,
-            forced: Z,
+            forced,
             ...(contractVersion !== null && {
               echoedPin: contractVersion,
             }),
-            ...(n.liveFilesGate === true && {
+            ...(input.liveFilesGate === true && {
               liveFilesOn: true,
             }),
             sent,
           },
-          onRetry: n.onRetry,
-          onReserved: (K) => {
-            pt = K;
+          onRetry: input.onRetry,
+          onReserved: (slug) => {
+            reservedSlug = slug;
           },
-          signal: n.signal,
-          credentials: n.credentials,
-          relayOnly: r,
+          signal: input.signal,
+          credentials: input.credentials,
+          relayOnly,
         }),
       ),
     );
   }
-  let Lt =
-    slug === undefined && n.createPath === undefined && isFrameMultiFileEnabled()
-      ? await reservePublishSlot(n.credentials, n.signal, startTime, r)
+  let reserved =
+    slug === undefined && input.createPath === undefined && isFrameMultiFileEnabled()
+      ? await reservePublishSlot(input.credentials, input.signal, startTime, relayOnly)
       : undefined;
-  pt = Lt;
-  if (n.signal?.aborted) return publishError("publish cancelled \u2014 nothing was published.");
-  return It(
-    retryWithoutThumbnail(Ee, (D) =>
+  reservedSlug = reserved;
+  if (input.signal?.aborted) return publishError("publish cancelled \u2014 nothing was published.");
+  return diagnoseAndReturn(
+    retryWithoutThumbnail(meta, (payload) =>
       publishFilesVersion(
-        He,
-        D,
+        html,
+        payload,
         fields,
-        ye,
-        Z,
+        baseVersion,
+        forced,
         {
           t0: startTime,
-          pageBytes: Y,
+          pageBytes,
           lane: "inline",
           isRedeploy,
           hasCaps,
-          forced: Z,
+          forced,
           ...(contractVersion !== null && {
             echoedPin: contractVersion,
           }),
-          ...(n.liveFilesGate === true && {
+          ...(input.liveFilesGate === true && {
             liveFilesOn: true,
           }),
           sent,
         },
-        n.ownPublishes,
-        n.credentials,
-        n.createPath,
-        n.onRetry,
-        n.signal,
+        input.ownPublishes,
+        input.credentials,
+        input.createPath,
+        input.onRetry,
+        input.signal,
         undefined,
-        Lt,
-        r,
+        reserved,
+        relayOnly,
       ),
     ),
   );
 }
 //@ chunk-06y4szbn.js:91694-92307 placement
-async function reservePublishSlot(credentials, signal, r, s) {
+async function reservePublishSlot(credentials, signal, busyWaitMs, busyWaitBudget) {
   if (signal?.aborted) return;
   try {
-    let h = {
+    let requestOptions = {
       refreshOAuth: true,
       headers: buildFrameHeaders(),
       timeout: 30000,
       credentials,
       relayOnCredentialRefusal: true,
     };
-    let b;
+    let res;
     try {
-      b =
-        s !== undefined
-          ? await postRelayOnlyWithBusyWait("/api/frame/deploy/prepare", entrypointHint(), h, s, signal)
-          : await frameApi.post("/api/frame/deploy/prepare", entrypointHint(), h);
+      res =
+        busyWaitBudget !== undefined
+          ? await postRelayOnlyWithBusyWait(
+              "/api/frame/deploy/prepare",
+              entrypointHint(),
+              requestOptions,
+              busyWaitBudget,
+              signal,
+            )
+          : await frameApi.post("/api/frame/deploy/prepare", entrypointHint(), requestOptions);
     } catch (error) {
       if (error instanceof RelayOnlyUnsentError) return;
       throw error;
     }
-    if (b.ok && b.status === 200 && typeof b.data?.slug === "string" && ARTIFACT_SLUG_RE.test(b.data.slug))
-      return b.data.slug;
-    if (!b.ok || (b.status !== 403 && b.status !== 404))
+    if (
+      res.ok &&
+      res.status === 200 &&
+      typeof res.data?.slug === "string" &&
+      ARTIFACT_SLUG_RE.test(res.data.slug)
+    )
+      return res.data.slug;
+    if (!res.ok || (res.status !== 403 && res.status !== 404))
       logFeatureSad("artifact_publish", "reserve_unavailable", {
-        reserve_status: b.ok ? b.status : 0,
+        reserve_status: res.ok ? res.status : 0,
       });
   } catch (error) {
     logFeatureSad("artifact_publish", "reserve_unavailable", {
       reserve_status: 0,
-      ...getTransportErrorProps(error, r),
+      ...getTransportErrorProps(error, busyWaitMs),
     });
   }
   return;
 }
 //@ chunk-06y4szbn.js:92307-92909 placement
-async function retryWithoutThumbnail(e, n) {
-  let r = await n(e);
+async function retryWithoutThumbnail(input, publishOnce) {
+  let result = await publishOnce(input);
   if (
-    r.err === null ||
-    r.thumbnailRejected === undefined ||
-    r.strandedSlug !== undefined ||
-    r.liveVersion !== undefined
+    result.err === null ||
+    result.thumbnailRejected === undefined ||
+    result.strandedSlug !== undefined ||
+    result.liveVersion !== undefined
   )
-    return r;
-  if (e.thumbnail === undefined && e.thumbnailDark === undefined) {
+    return result;
+  if (input.thumbnail === undefined && input.thumbnailDark === undefined) {
     logFeatureBad("artifact_publish", "thumbnail_rejected");
-    return r;
+    return result;
   }
   logFeatureSad("artifact_publish", "thumbnail_rejected");
-  let { thumbnail, thumbnailDark, ...b } = e;
-  let y =
-    r.created === undefined
-      ? await n(b)
-      : await n(
+  let { thumbnail, thumbnailDark, ...withoutThumbnail } = input;
+  let retryResult =
+    result.created === undefined
+      ? await publishOnce(withoutThumbnail)
+      : await publishOnce(
           {
-            ...b,
-            slug: r.created.slug,
+            ...withoutThumbnail,
+            slug: result.created.slug,
           },
-          r.created.version,
+          result.created.version,
         );
-  return y.err === null
+  return retryResult.err === null
     ? {
-        ...y,
+        ...retryResult,
         warnings: [
-          ...(y.warnings ?? []),
-          `The custom thumbnail was not accepted by the server (${r.thumbnailRejected}); published with the automatic screenshot instead.`,
+          ...(retryResult.warnings ?? []),
+          `The custom thumbnail was not accepted by the server (${result.thumbnailRejected}); published with the automatic screenshot instead.`,
         ],
       }
-    : y;
+    : retryResult;
 }
 //@ chunk-06y4szbn.js:92909-93022 placement
 function surfacedViaForEntrypoint() {
@@ -871,31 +905,31 @@ function surfacedViaForEntrypoint() {
   return "terminal_link";
 }
 //@ chunk-06y4szbn.js:93022-93456 placement
-async function trackFrameEvent(eventName, n) {
+async function trackFrameEvent(eventName, properties) {
   try {
-    let r = await frameApi.post(
+    let res = await frameApi.post(
       "/api/frame/track",
       {
         event_name: eventName,
-        ...(n.slug && {
-          slug: n.slug,
+        ...(properties.slug && {
+          slug: properties.slug,
         }),
-        ...(n.via && {
-          via: n.via,
+        ...(properties.via && {
+          via: properties.via,
         }),
-        ...(n.mode && {
-          mode: n.mode,
+        ...(properties.mode && {
+          mode: properties.mode,
         }),
       },
       {
         refreshOAuth: true,
         headers: buildFrameHeaders(),
         timeout: 5000,
-        credentials: n.credentials,
+        credentials: properties.credentials,
       },
     );
-    if (!r.ok) logForDebugging(`[artifact] /track skipped: ${r.reason}`);
-    else if (r.status !== 204) logForDebugging(`[artifact] /track ${r.status}: ${errBody(r.data)}`);
+    if (!res.ok) logForDebugging(`[artifact] /track skipped: ${res.reason}`);
+    else if (res.status !== 204) logForDebugging(`[artifact] /track ${res.status}: ${errBody(res.data)}`);
   } catch (error) {
     logForDebugging(`[artifact] /track failed: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -904,48 +938,56 @@ async function trackFrameEvent(eventName, n) {
 /**
  * 每日发布上限错误的两个代码（frame_daily_publish_cap_reached / frame_daily_push_cap_reached）、schema 与两种计划文案，以及 publish 429 前缀与剩余次数响应头。
  */
-var DAILY_CAP_CODES = ["frame_daily_publish_cap_reached", "frame_daily_push_cap_reached"];
-var DAILY_CAP_KINDS = {
-  frame_daily_publish_cap_reached: "daily_new",
-  frame_daily_push_cap_reached: "daily_pushes",
-};
-var dailyCapErrorSchema = DoctorLazy(() =>
-  u({
-    error: _enum(DAILY_CAP_CODES),
-    message: string().catch(""),
-  }),
-);
-var DAILY_CAP_TEXTS = {
-  daily_new: "daily new-artifact limit for your plan reached \u2014 resets at UTC midnight",
-  daily_pushes: "daily publish limit for your plan reached \u2014 resets at UTC midnight",
-};
-var PUBLISH_CAP_FRAME = "publish 429: ";
-var X_FRAME_PUSH_REMAINING = "x-frame-push-remaining";
+var DAILY_CAP_CODES; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var DAILY_CAP_KINDS;
+var dailyCapErrorSchema;
+var DAILY_CAP_TEXTS;
+var PUBLISH_CAP_FRAME;
+var X_FRAME_PUSH_REMAINING;
+deferInit("chunk-06y4szbn.js:93456", () => {
+  DAILY_CAP_CODES = ["frame_daily_publish_cap_reached", "frame_daily_push_cap_reached"];
+  DAILY_CAP_KINDS = {
+    frame_daily_publish_cap_reached: "daily_new",
+    frame_daily_push_cap_reached: "daily_pushes",
+  };
+  dailyCapErrorSchema = DoctorLazy(() =>
+    objectSchema({
+      error: _enum(DAILY_CAP_CODES),
+      message: stringSchema().catch(""),
+    }),
+  );
+  DAILY_CAP_TEXTS = {
+    daily_new: "daily new-artifact limit for your plan reached \u2014 resets at UTC midnight",
+    daily_pushes: "daily publish limit for your plan reached \u2014 resets at UTC midnight",
+  };
+  PUBLISH_CAP_FRAME = "publish 429: ";
+  X_FRAME_PUSH_REMAINING = "x-frame-push-remaining";
+});
 //@ chunk-06y4szbn.js:93901-93997 placement
-function parseIntHeader(e) {
-  let n = typeof e === "string" ? e.trim() : "";
-  return /^\d{1,9}$/.test(n) ? Number(n) : undefined;
+function parseIntHeader(value) {
+  let text = typeof value === "string" ? value.trim() : "";
+  return /^\d{1,9}$/.test(text) ? Number(text) : undefined;
 }
 //@ chunk-06y4szbn.js:93997-94116 placement
-function dailyPublishResetEpochSeconds(e = Date.now()) {
-  let date = new Date(e);
+function dailyPublishResetEpochSeconds(now = Date.now()) {
+  let date = new Date(now);
   return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + 1) / 1000;
 }
 //@ chunk-06y4szbn.js:94116-94226 placement
 function dailyResetFromHeader(date) {
-  let n = typeof date === "string" ? Date.parse(date) : Number.NaN;
-  return dailyPublishResetEpochSeconds(Number.isFinite(n) ? n : Date.now());
+  let ms = typeof date === "string" ? Date.parse(date) : Number.NaN;
+  return dailyPublishResetEpochSeconds(Number.isFinite(ms) ? ms : Date.now());
 }
 //@ chunk-06y4szbn.js:94226-94390 placement
-function dailyCapNotice(e) {
-  let n = dailyCapErrorSchema().safeParse(e);
-  if (!n.success) return;
-  let r = DAILY_CAP_KINDS[n.data.error];
-  let s = scrubServerLine(n.data.message, 200);
-  let h = s !== "" ? s : DAILY_CAP_TEXTS[r];
+function dailyCapNotice(body) {
+  let parsed = dailyCapErrorSchema().safeParse(body);
+  if (!parsed.success) return;
+  let kind = DAILY_CAP_KINDS[parsed.data.error];
+  let serverLine = scrubServerLine(parsed.data.message, 200);
+  let text = serverLine !== "" ? serverLine : DAILY_CAP_TEXTS[kind];
   return {
-    capType: r,
-    message: `${PUBLISH_CAP_FRAME}${h}`,
+    capType: kind,
+    message: `${PUBLISH_CAP_FRAME}${text}`,
   };
 }
 //@ chunk-06y4szbn.js:94390-94425 placement
@@ -957,19 +999,19 @@ var RETRY_BASE_MS = 5000;
 var MAX_RETRY_AFTER_MS = 20000;
 var MAX_RETRY_AFTER_ACCEPT_MS = 30000;
 //@ chunk-06y4szbn.js:94425-94480 placement
-function retryDelayMs(e) {
-  let n = parseRetryAfterMs(e) ?? 2000;
-  return n <= MAX_RETRY_AFTER_ACCEPT_MS ? n : undefined;
+function retryDelayMs(headerValue) {
+  let delayMs = parseRetryAfterMs(headerValue) ?? 2000;
+  return delayMs <= MAX_RETRY_AFTER_ACCEPT_MS ? delayMs : undefined;
 }
 //@ chunk-06y4szbn.js:94480-94525 placement
-function retryAfterDelay(e) {
-  return Math.min(parseRetryAfterMs(e) ?? DEFAULT_RETRY_AFTER_MS, MAX_RETRY_AFTER_MS);
+function retryAfterDelay(headerValue) {
+  return Math.min(parseRetryAfterMs(headerValue) ?? DEFAULT_RETRY_AFTER_MS, MAX_RETRY_AFTER_MS);
 }
 //@ chunk-06y4szbn.js:94525-94673 placement
-function backoffMs(e, n) {
+function backoffMs(attempt, retryAfterHeader) {
   let rounded = Math.round(
     backoffDelayMs({
-      attempt: e - 1,
+      attempt: attempt - 1,
       baseMs: RETRY_BASE_MS,
       jitter: {
         kind: "proportional",
@@ -977,74 +1019,81 @@ function backoffMs(e, n) {
       },
     }),
   );
-  let s = parseRetryAfterMs(n) ?? 0;
-  return Math.min(Math.max(s, rounded), MAX_RETRY_AFTER_MS);
+  let retryAfterMs = parseRetryAfterMs(retryAfterHeader) ?? 0;
+  return Math.min(Math.max(retryAfterMs, rounded), MAX_RETRY_AFTER_MS);
 }
 //@ chunk-06y4szbn.js:94673-94758 placement
 class PublishError extends Error {
   startedAtMs;
-  constructor(message, startedAtMs, r) {
-    super(message, r);
+  constructor(message, startedAtMs, options) {
+    super(message, options);
     this.startedAtMs = startedAtMs;
   }
 }
 //@ chunk-06y4szbn.js:94758-94779 placement
-class PublishTransportError extends PublishError {}
+let PublishTransportError; // deferred: uses PublishError of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-06y4szbn.js:94758", () => {
+  PublishTransportError = class PublishTransportError extends PublishError {};
+});
 //@ chunk-06y4szbn.js:94779-94874 placement
-class PublishRefusedError extends PublishError {
-  seen;
-  resent;
-  constructor(e, n, r, seen, resent) {
-    super(e, n, r);
-    this.seen = seen;
-    this.resent = resent;
-  }
-}
+let PublishRefusedError; // deferred: uses PublishError of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-06y4szbn.js:94779", () => {
+  PublishRefusedError = class PublishRefusedError extends PublishError {
+    seen;
+    resent;
+    constructor(message, startedAtMs, options, seen, resent) {
+      super(message, startedAtMs, options);
+      this.seen = seen;
+      this.resent = resent;
+    }
+  };
+});
 //@ chunk-06y4szbn.js:94874-94925 placement
 function hasSeenTransportError(error) {
   return error.seen !== undefined && isStalledUpload(error.seen);
 }
 //@ chunk-06y4szbn.js:94925-95203 placement
-function trackUploadBytes(e) {
+function trackUploadBytes(input) {
   let jsonBytes = 0;
   let wireBytes = 0;
-  return (s) => {
-    jsonBytes += s.json_bytes;
-    wireBytes += s.wire_bytes;
-    e.json_bytes = jsonBytes;
-    e.wire_bytes = wireBytes;
-    e.body_gzip = e.body_gzip === true || s.body_gzip;
-    if (s.gzip_skip !== undefined) e.gzip_skip = fromEnum(s.gzip_skip);
-    if (s.gzip_fallback_status !== undefined) e.gzip_fallback_status ??= s.gzip_fallback_status;
+  return (publishInput) => {
+    jsonBytes += publishInput.json_bytes;
+    wireBytes += publishInput.wire_bytes;
+    input.json_bytes = jsonBytes;
+    input.wire_bytes = wireBytes;
+    input.body_gzip = input.body_gzip === true || publishInput.body_gzip;
+    if (publishInput.gzip_skip !== undefined) input.gzip_skip = fromEnum(publishInput.gzip_skip);
+    if (publishInput.gzip_fallback_status !== undefined)
+      input.gzip_fallback_status ??= publishInput.gzip_fallback_status;
   };
 }
 //@ chunk-06y4szbn.js:95203-95459 placement
-function deployQuery(e, n) {
-  let r = [
-    ...(e.attemptId === undefined ? [] : [`attempt_id=${e.attemptId}`]),
-    ...(e.attemptId !== undefined && e.resend ? ["resend=1"] : []),
-    ...(n.createConfirmed === true ? [CREATE_CONFIRMED_QUERY] : []),
+function deployQuery(path, params) {
+  let parts = [
+    ...(path.attemptId === undefined ? [] : [`attempt_id=${path.attemptId}`]),
+    ...(path.attemptId !== undefined && path.resend ? ["resend=1"] : []),
+    ...(params.createConfirmed === true ? [CREATE_CONFIRMED_QUERY] : []),
   ];
-  return r.length === 0 ? "/api/frame/deploy/direct" : `/api/frame/deploy/direct?${r.join("&")}`;
+  return parts.length === 0 ? "/api/frame/deploy/direct" : `/api/frame/deploy/direct?${parts.join("&")}`;
 }
 //@ chunk-06y4szbn.js:95459-95847 placement
-async function resendAfterTornBody(e, error, r) {
-  let s = {
+async function resendAfterTornBody(post, error, publishError) {
+  let seen = {
     ...getTransportErrorProps(error.cause, error.startedAtMs),
     ...error.seen,
   };
   logForDebugging(
-    `[artifact] publish request died before its whole body left this machine (socket took ${s.bytes_flushed} of ${s.body_bytes} bytes) \u2014 re-sending once on a fresh connection`,
+    `[artifact] publish request died before its whole body left this machine (socket took ${seen.bytes_flushed} of ${seen.body_bytes} bytes) \u2014 re-sending once on a fresh connection`,
   );
   let deployFinalStatus = 0;
   try {
-    let b = await e();
-    deployFinalStatus = b.ok ? b.status : 0;
-    return b;
+    let res = await post();
+    deployFinalStatus = res.ok ? res.status : 0;
+    return res;
   } finally {
     logFeatureSad("artifact_publish", "deploy_resent", {
-      ...r,
-      ...s,
+      ...publishError,
+      ...seen,
       deploy_final_status: deployFinalStatus,
     });
   }
@@ -1053,16 +1102,16 @@ async function resendAfterTornBody(e, error, r) {
 var MAX_SETTLING_RETRIES = 2;
 var DEFAULT_RETRY_AFTER_MS = 2000;
 //@ chunk-06y4szbn.js:95864-95953 placement
-function isPublishSettling(e) {
-  return e.ok && e.fromFrame && e.status === 409 && refusalReasonOf(e.data) === "publish_settling";
+function isPublishSettling(res) {
+  return res.ok && res.fromFrame && res.status === 409 && refusalReasonOf(res.data) === "publish_settling";
 }
 //@ chunk-06y4szbn.js:95953-96038 placement
-function isReplayedResponse(e) {
-  return typeof e === "object" && e !== null && "replayed" in e && e.replayed === true;
+function isReplayedResponse(res) {
+  return typeof res === "object" && res !== null && "replayed" in res && res.replayed === true;
 }
 //@ chunk-06y4szbn.js:96038-97033 placement
-async function classifyPublishFailure(e, error, r, s) {
-  let h = {
+async function classifyPublishFailure(post, error, failureError, signal) {
+  let seen = {
     ...getTransportErrorProps(error.cause, error.startedAtMs),
     ...(error instanceof PublishRefusedError && error.seen),
     ...(error.cause instanceof McpDoubtfulAnswerError && {
@@ -1074,67 +1123,75 @@ async function classifyPublishFailure(e, error, r, s) {
     "[artifact] publish request ended without a clear answer \u2014 re-sending it once, marked as a re-send, so a publish that already landed is answered rather than repeated",
   );
   let deployFinalStatus = 0;
-  let y;
-  let x = 0;
+  let res;
+  let attempt = 0;
   let replayed = false;
-  let R = false;
+  let resent = false;
   try {
-    let C = await e();
-    y = fromEnum(C.route);
-    while (isPublishSettling(C) && x < MAX_SETTLING_RETRIES) {
-      let k = retryAfterDelay(C.response?.headers?.["retry-after"]);
+    let response = await post();
+    res = fromEnum(response.route);
+    while (isPublishSettling(response) && attempt < MAX_SETTLING_RETRIES) {
+      let delayMs = retryAfterDelay(response.response?.headers?.["retry-after"]);
       logForDebugging(
-        `[artifact] the first attempt landed and its content is still being stored \u2014 re-sending in ${k}ms`,
+        `[artifact] the first attempt landed and its content is still being stored \u2014 re-sending in ${delayMs}ms`,
       );
-      await sleep(k, s);
-      if (s?.aborted) break;
-      x += 1;
-      C = await e();
-      y = fromEnum(C.route);
+      await sleep(delayMs, signal);
+      if (signal?.aborted) break;
+      attempt += 1;
+      response = await post();
+      res = fromEnum(response.route);
     }
-    deployFinalStatus = C.ok ? C.status : 0;
-    if (C.route === "direct" && isCredentialRefusal(C) && error instanceof PublishTransportError) {
-      R = true;
+    deployFinalStatus = response.ok ? response.status : 0;
+    if (
+      response.route === "direct" &&
+      isCredentialRefusal(response) &&
+      error instanceof PublishTransportError
+    ) {
+      resent = true;
       throw error;
     }
-    replayed = C.ok && C.status >= 200 && C.status < 300 && isReplayedResponse(C.data);
-    return C;
+    replayed =
+      response.ok && response.status >= 200 && response.status < 300 && isReplayedResponse(response.data);
+    return response;
   } finally {
     logFeatureSad("artifact_publish", "deploy_resent", {
-      ...r,
-      ...h,
+      ...failureError,
+      ...seen,
       deploy_final_status: deployFinalStatus,
-      ...(y !== undefined && {
-        resend_route: y,
+      ...(res !== undefined && {
+        resend_route: res,
       }),
-      settle_resends: x,
+      settle_resends: attempt,
       replayed,
-      ...(R && {
+      ...(resent && {
         resend_refused: true,
       }),
-      ...(s?.aborted && {
+      ...(signal?.aborted && {
         cancelled: true,
       }),
     });
   }
 }
 //@ chunk-06y4szbn.js:97033-97220 placement
-function isRetryablePublishResponse(e) {
-  if (!e.ok || e.status === 408 || e.status === 499) return true;
-  if (e.status === 429) return dailyCapNotice(e.data) === undefined;
+function isRetryablePublishResponse(res) {
+  if (!res.ok || res.status === 408 || res.status === 499) return true;
+  if (res.status === 429) return dailyCapNotice(res.data) === undefined;
   return (
-    e.status >= 500 &&
-    strandedSlugFrom(e.status, e.data) === null &&
-    refusalReasonOf(e.data) !== "render_busy"
+    res.status >= 500 &&
+    strandedSlugFrom(res.status, res.data) === null &&
+    refusalReasonOf(res.data) !== "render_busy"
   );
 }
 //@ chunk-06y4szbn.js:97220-97241 placement
-class PublishFailedError extends PublishError {}
+let PublishFailedError; // deferred: uses PublishError of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-06y4szbn.js:97220", () => {
+  PublishFailedError = class PublishFailedError extends PublishError {};
+});
 //@ chunk-06y4szbn.js:97241-97409 placement
-async function withPublishTiming(e) {
+async function withPublishTiming(post) {
   let startTime = performance.now();
   try {
-    return await e();
+    return await post();
   } catch (error) {
     if (error instanceof RelayOnlyUnsentError) throw error;
     throw new PublishFailedError(error instanceof Error ? error.message : String(error), startTime, {
@@ -1143,7 +1200,7 @@ async function withPublishTiming(e) {
   }
 }
 //@ chunk-06y4szbn.js:97409-97588 placement
-function publishErrorTelemetry(error, n) {
+function publishErrorTelemetry(error, telemetry) {
   return error instanceof PublishError
     ? {
         ...getTransportErrorProps(error.cause, error.startedAtMs),
@@ -1155,25 +1212,34 @@ function publishErrorTelemetry(error, n) {
           deploy_status: error.cause.status,
         }),
       }
-    : getTransportErrorProps(error, n);
+    : getTransportErrorProps(error, telemetry);
 }
 //@ chunk-06y4szbn.js:97588-98050 placement
-async function postDeploy(e, n, credentials, s, onEncoding, b = {}, relayOnly = undefined, signal) {
-  let w = {
+async function postDeploy(
+  path,
+  body,
+  credentials,
+  onSeen,
+  onEncoding,
+  state = {},
+  busyWait = undefined,
+  signal,
+) {
+  let requestOptions = {
     refreshOAuth: true,
     headers: buildFrameHeaders(),
     streamUpload: {
       tailFloorMs,
-      onSettled: (k) => {
-        b.seen = k;
-        s(k);
+      onSettled: (seen) => {
+        state.seen = seen;
+        onSeen(seen);
       },
     },
     gzipBody: {
       tailFloorMs: tailFloorMs(undefined),
       onEncoding,
     },
-    ...(b.freshConnection && {
+    ...(state.freshConnection && {
       freshConnection: true,
     }),
     relayOnCredentialRefusal: true,
@@ -1182,42 +1248,45 @@ async function postDeploy(e, n, credentials, s, onEncoding, b = {}, relayOnly = 
     relayProbe: LATEST_CONTRACT_PATH_FRAME,
     credentials,
   };
-  let C = await (
-    relayOnly !== undefined ? postRelayOnlyWithBusyWait(e, n, w, relayOnly, signal) : frameApi.post(e, n, w)
+  let res = await (
+    busyWait !== undefined
+      ? postRelayOnlyWithBusyWait(path, body, requestOptions, busyWait, signal)
+      : frameApi.post(path, body, requestOptions)
   ).catch((error) => {
     if (error instanceof McpDoubtfulAnswerError) {
-      b.seen = undefined;
-      s(undefined);
+      state.seen = undefined;
+      onSeen(undefined);
     }
     throw error;
   });
-  s(undefined);
-  return C;
+  onSeen(undefined);
+  return res;
 }
 //@ chunk-06y4szbn.js:98050-98484 placement
-function relayOnlyRefusalReason(e) {
-  if (e.slug !== undefined || e.baseVersion !== undefined) return "names an existing artifact";
-  if (e.force === true) return "sets force";
-  if (e.capabilities !== undefined) return "declares capabilities";
-  if (e.contract !== undefined) return "sets a contract";
-  if ((e.removeFiles?.length ?? 0) > 0) return "removes files";
+function relayOnlyRefusalReason(body) {
+  if (body.slug !== undefined || body.baseVersion !== undefined) return "names an existing artifact";
+  if (body.force === true) return "sets force";
+  if (body.capabilities !== undefined) return "declares capabilities";
+  if (body.contract !== undefined) return "sets a contract";
+  if ((body.removeFiles?.length ?? 0) > 0) return "removes files";
   if (
-    e.createPath !== undefined ||
-    e.liveFiles !== undefined ||
-    (e.files ?? []).some((n) => n.live !== undefined || n.reseed === true)
+    body.createPath !== undefined ||
+    body.liveFiles !== undefined ||
+    (body.files ?? []).some((file) => file.live !== undefined || file.reseed === true)
   )
     return "makes or changes a live file";
   return;
 }
 //@ chunk-06y4szbn.js:98484-98553 placement
-function isRelayOnlyUnsendable(e) {
+function isRelayOnlyUnsendable(path) {
   return (
-    isRemoteManagedEnvironment() && (plannedRoute("POST", e, "only") !== "relay" || !isAccountIngressToken())
+    isRemoteManagedEnvironment() &&
+    (plannedRoute("POST", path, "only") !== "relay" || !isAccountIngressToken())
   );
 }
 //@ chunk-06y4szbn.js:98553-98868 placement
-function relayOnlyUnsentResult(e) {
-  logFeatureBad("artifact_publish", "relay_only_unsent", e);
+function relayOnlyUnsentResult(path) {
+  logFeatureBad("artifact_publish", "relay_only_unsent", path);
   return {
     ...publishError(
       "Nothing was published: a publish made without asking must go through the cloud session's gateway, which could not carry it. Publishing it again now goes through the usual permission check, which may need a person's approval.",
@@ -1235,68 +1304,81 @@ function isRelayOnlyCancelled(error) {
 }
 //@ chunk-06y4szbn.js:99006-99174 placement
 class RelayOnlyUnsentError extends Error {
-  constructor(e = "this request never reached the artifact server: the session gateway did not carry it") {
-    super(e);
+  constructor(
+    message = "this request never reached the artifact server: the session gateway did not carry it",
+  ) {
+    super(message);
     this.name = "RelayOnlyUnsentError";
   }
 }
 //@ chunk-06y4szbn.js:99174-99348 placement
-class RelayOnlyCancelledError extends RelayOnlyUnsentError {
-  constructor() {
-    super("this request was not sent again: the publish was cancelled while the session gateway was busy");
-    this.name = "RelayOnlyCancelledError";
-  }
-}
+let RelayOnlyCancelledError; // deferred: uses RelayOnlyUnsentError of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-06y4szbn.js:99174", () => {
+  RelayOnlyCancelledError = class RelayOnlyCancelledError extends RelayOnlyUnsentError {
+    constructor() {
+      super("this request was not sent again: the publish was cancelled while the session gateway was busy");
+      this.name = "RelayOnlyCancelledError";
+    }
+  };
+});
 //@ chunk-06y4szbn.js:99348-99361 placement
 var RELAY_ONLY_BUSY_WAIT_MAX_MS = 5000;
 //@ chunk-06y4szbn.js:99361-99723 placement
-async function postRelayOnlyWithBusyWait(e, n, r, s, h) {
-  for (let b = false; ; b = true) {
-    if (isRelayOnlyUnsendable(e)) throw new RelayOnlyUnsentError();
-    s.count += 1;
-    let y = await frameApi.postRelayOnly(e, n, r);
-    if (isRelayUnsent(y)) throw new RelayOnlyUnsentError();
-    if (!y.ok || y.gatewayRetryAfterMs === undefined) return y;
-    s.count -= 1;
-    if (h?.aborted) throw new RelayOnlyCancelledError();
-    if (b) {
+async function postRelayOnlyWithBusyWait(path, body, options, busyWait, signal) {
+  for (let retried = false; ; retried = true) {
+    if (isRelayOnlyUnsendable(path)) throw new RelayOnlyUnsentError();
+    busyWait.count += 1;
+    let res = await frameApi.postRelayOnly(path, body, options);
+    if (isRelayUnsent(res)) throw new RelayOnlyUnsentError();
+    if (!res.ok || res.gatewayRetryAfterMs === undefined) return res;
+    busyWait.count -= 1;
+    if (signal?.aborted) throw new RelayOnlyCancelledError();
+    if (retried) {
       logFeatureSad("artifact_publish", "relay_only_busy");
       throw new RelayOnlyUnsentError();
     }
-    await sleep(Math.min(y.gatewayRetryAfterMs, RELAY_ONLY_BUSY_WAIT_MAX_MS), h);
-    if (h?.aborted) throw new RelayOnlyCancelledError();
+    await sleep(Math.min(res.gatewayRetryAfterMs, RELAY_ONLY_BUSY_WAIT_MAX_MS), signal);
+    if (signal?.aborted) throw new RelayOnlyCancelledError();
   }
 }
 //@ chunk-06y4szbn.js:99723-99761 placement
-function tailFloorMs(e) {
-  return (publishReadDeadlineS(e) + 30) * 1000;
+function tailFloorMs(options) {
+  return (publishReadDeadlineS(options) + 30) * 1000;
 }
 //@ chunk-06y4szbn.js:99761-102357 placement
 /**
  * 发送部署请求并在断流/5xx/中继忙时有限重试（同一 attempt_id，必要时新连接重发）。
  */
-async function deployWithRetry(e, n, r, s, h = false, b = false, y = false) {
+async function deployWithRetry(
+  postOnce,
+  onRetryStatus,
+  signal,
+  telemetry,
+  allowStranded = false,
+  retryFresh = false,
+  throwUnsent = false,
+) {
   let attemptId = randomUUID();
-  let w = false;
-  let R = async (resent = false) => {
-    let ge = {
+  let resentOnce = false;
+  let attemptSend = async (resent = false) => {
+    let requestState = {
       attemptId,
       ...(resent && {
         freshConnection: resent,
       }),
-      ...(w && {
+      ...(resentOnce && {
         resend: true,
       }),
     };
     let startTime = performance.now();
     try {
-      let Z = await e(ge);
-      s.wire = wireOf(Z);
-      if (Z.mcpDoubt !== undefined) s.deploy_status = Z.mcpDoubt;
-      return Z;
+      let res = await postOnce(requestState);
+      telemetry.wire = wireOf(res);
+      if (res.mcpDoubt !== undefined) telemetry.deploy_status = res.mcpDoubt;
+      return res;
     } catch (error) {
       if (error instanceof RelayOnlyUnsentError) {
-        if (C === 1 && y) throw error;
+        if (attemptCount === 1 && throwUnsent) throw error;
         throw new PublishRefusedError(
           outcomeUnknownMessage(
             error instanceof RelayOnlyCancelledError
@@ -1307,191 +1389,196 @@ async function deployWithRetry(e, n, r, s, h = false, b = false, y = false) {
           {
             cause: error,
           },
-          ge.seen,
+          requestState.seen,
           resent,
         );
       }
-      s.wire = wireOfThrow(error);
-      let Oe = errBody(error instanceof Error ? error.message : String(error));
+      telemetry.wire = wireOfThrow(error);
+      let errText = errBody(error instanceof Error ? error.message : String(error));
       throw threwOnRelayLeg(error)
-        ? new PublishTransportError(outcomeUnknownMessage(`relay request failed: ${Oe}`), startTime, {
+        ? new PublishTransportError(outcomeUnknownMessage(`relay request failed: ${errText}`), startTime, {
             cause: error,
           })
         : new PublishRefusedError(
             error instanceof McpDoubtfulAnswerError
               ? malformedDeployResponse()
-              : outcomeUnknownMessage(`deploy request failed: ${Oe}`),
+              : outcomeUnknownMessage(`deploy request failed: ${errText}`),
             startTime,
             {
               cause: error,
             },
-            ge.seen,
+            requestState.seen,
             resent,
           );
     }
   };
-  let C = 1;
-  let k;
-  let V;
+  let attemptCount = 1;
+  let res;
+  let doubtfulError;
   try {
-    k = await R();
+    res = await attemptSend();
   } catch (error) {
-    if (r?.aborted) throw error;
-    if (error instanceof PublishRefusedError && error.cause instanceof McpDoubtfulAnswerError) V = error;
+    if (signal?.aborted) throw error;
+    if (error instanceof PublishRefusedError && error.cause instanceof McpDoubtfulAnswerError)
+      doubtfulError = error;
     if (
-      b &&
+      retryFresh &&
       (error instanceof PublishTransportError ||
-        (error instanceof PublishRefusedError && (isTransportError(error.cause) || error === V)))
+        (error instanceof PublishRefusedError && (isTransportError(error.cause) || error === doubtfulError)))
     ) {
-      C += 1;
-      w = true;
-      k = await classifyPublishFailure(() => R(true), error, s, r);
+      attemptCount += 1;
+      resentOnce = true;
+      res = await classifyPublishFailure(() => attemptSend(true), error, telemetry, signal);
     } else if (
       error instanceof PublishRefusedError &&
       isTransportError(error.cause) &&
       hasSeenTransportError(error)
     ) {
-      C += 1;
-      k = await resendAfterTornBody(() => R(true), error, s);
+      attemptCount += 1;
+      res = await resendAfterTornBody(() => attemptSend(true), error, telemetry);
     } else throw error;
   }
-  let L = false;
-  let q;
-  let W = (X) => {
-    q ??= X.status === 429 ? 429 : 503;
+  let slept = false;
+  let retriedStatus;
+  let reportRetry = (info) => {
+    retriedStatus ??= info.status === 429 ? 429 : 503;
     logForDebugging(
-      `[artifact] /deploy/direct ${X.status} \u2014 retrying in ${X.delayMs}ms (attempt ${X.attempt} of ${X.maxAttempts})`,
+      `[artifact] /deploy/direct ${info.status} \u2014 retrying in ${info.delayMs}ms (attempt ${info.attempt} of ${info.maxAttempts})`,
     );
-    n?.(X);
+    onRetryStatus?.(info);
   };
-  let G = async (X) => {
-    await sleep(X, r);
-    if (r?.aborted) {
+  let sleepAndResend = async (delayMs) => {
+    await sleep(delayMs, signal);
+    if (signal?.aborted) {
       logForDebugging("[artifact] /deploy/direct retry cancelled by user");
       return false;
     }
-    C += 1;
-    L = true;
-    k = await R();
-    L = false;
+    attemptCount += 1;
+    slept = true;
+    res = await attemptSend();
+    slept = false;
     return true;
   };
-  let P = () => {
-    if (V !== undefined && isRetryablePublishResponse(k)) throw V;
-    return k;
+  let finish = () => {
+    if (doubtfulError !== undefined && isRetryablePublishResponse(res)) throw doubtfulError;
+    return res;
   };
-  let j = k.ok && k.fromFrame && k.status === 503 && refusalReasonOf(k.data) === "render_busy";
+  let isRenderBusy =
+    res.ok && res.fromFrame && res.status === 503 && refusalReasonOf(res.data) === "render_busy";
   try {
-    if (k.ok && k.fromFrame && k.status === 429) {
-      if (dailyCapNotice(k.data) !== undefined) {
+    if (res.ok && res.fromFrame && res.status === 429) {
+      if (dailyCapNotice(res.data) !== undefined) {
         logForDebugging("[artifact] /deploy/direct 429 is a plan cap \u2014 not retrying");
-        return P();
+        return finish();
       }
-      let Z = retryDelayMs(k.response?.headers?.["retry-after"]);
-      if (Z === undefined) return P();
-      W({
+      let delayMs = retryDelayMs(res.response?.headers?.["retry-after"]);
+      if (delayMs === undefined) return finish();
+      reportRetry({
         status: 429,
         attempt: 2,
         maxAttempts: 2,
-        delayMs: Z,
+        delayMs,
       });
-      await G(Z);
-      return P();
+      await sleepAndResend(delayMs);
+      return finish();
     }
-    if (j && k.ok) {
-      let min = Math.min(parseRetryAfterMs(k.response?.headers?.["retry-after"]) ?? 1000, MAX_RETRY_AFTER_MS);
-      W({
+    if (isRenderBusy && res.ok) {
+      let min = Math.min(
+        parseRetryAfterMs(res.response?.headers?.["retry-after"]) ?? 1000,
+        MAX_RETRY_AFTER_MS,
+      );
+      reportRetry({
         status: 503,
         attempt: 2,
         maxAttempts: 2,
         delayMs: min,
       });
-      await G(min);
-      return P();
+      await sleepAndResend(min);
+      return finish();
     }
-    let X = 2;
-    let ge = false;
+    let attempt = 2;
+    let settlingRetryPending = false;
     while (
-      k.ok &&
-      k.fromFrame &&
-      k.status === 503 &&
-      !(h && strandedSlugFrom(k.status, k.data)) &&
-      X <= MAX_503_RETRIES
+      res.ok &&
+      res.fromFrame &&
+      res.status === 503 &&
+      !(allowStranded && strandedSlugFrom(res.status, res.data)) &&
+      attempt <= MAX_503_RETRIES
     ) {
-      let Z = backoffMs(X, k.response?.headers?.["retry-after"]);
-      W({
+      let delayMs = backoffMs(attempt, res.response?.headers?.["retry-after"]);
+      reportRetry({
         status: 503,
-        attempt: X,
+        attempt,
         maxAttempts: MAX_503_RETRIES,
-        delayMs: Z,
+        delayMs,
       });
-      if (b && !w && !strandedSlugFrom(k.status, k.data)) {
-        w = true;
-        ge = true;
+      if (retryFresh && !resentOnce && !strandedSlugFrom(res.status, res.data)) {
+        resentOnce = true;
+        settlingRetryPending = true;
       }
-      if (!(await G(Z))) break;
-      X += 1;
+      if (!(await sleepAndResend(delayMs))) break;
+      attempt += 1;
     }
-    let ie = 0;
-    while (ge && isPublishSettling(k) && ie < MAX_SETTLING_RETRIES) {
-      let Z = retryAfterDelay(k.response?.headers?.["retry-after"]);
+    let settlingAttempts = 0;
+    while (settlingRetryPending && isPublishSettling(res) && settlingAttempts < MAX_SETTLING_RETRIES) {
+      let delayMs = retryAfterDelay(res.response?.headers?.["retry-after"]);
       logForDebugging(
-        `[artifact] an earlier attempt landed and its content is still being stored \u2014 re-sending in ${Z}ms`,
+        `[artifact] an earlier attempt landed and its content is still being stored \u2014 re-sending in ${delayMs}ms`,
       );
-      if (!(await G(Z))) break;
-      ie += 1;
+      if (!(await sleepAndResend(delayMs))) break;
+      settlingAttempts += 1;
     }
-    return P();
+    return finish();
   } finally {
-    if (q !== undefined) {
-      logFeatureSad("artifact_publish", q === 503 ? "deploy_503_retried" : "deploy_429_retried", {
-        ...s,
-        deploy_attempts: C,
-        deploy_final_status: L || !k.ok ? 0 : k.status,
-        ...(r?.aborted && {
+    if (retriedStatus !== undefined) {
+      logFeatureSad("artifact_publish", retriedStatus === 503 ? "deploy_503_retried" : "deploy_429_retried", {
+        ...telemetry,
+        deploy_attempts: attemptCount,
+        deploy_final_status: slept || !res.ok ? 0 : res.status,
+        ...(signal?.aborted && {
           cancelled: true,
         }),
-        ...(j && {
+        ...(isRenderBusy && {
           render_busy: true,
         }),
       });
-      n?.({
+      onRetryStatus?.({
         settled: true,
       });
     }
   }
 }
 //@ chunk-06y4szbn.js:102357-102721 placement
-function droppedFieldOn400(e, n) {
-  if (!(n.ok && n.fromFrame && n.status === 400)) return;
-  let r = formatFrameErrorBody(n.data);
-  let matches = UNKNOWN_FIELD_ERROR_RE.test(r);
-  if (carriesDeadline(e) && matches && /["']deadline["']/.test(r)) return "deadline";
-  if (requestIdMeta(e.requestId).request_id !== undefined && matches && /["']request_id["']/.test(r))
+function droppedFieldOn400(input, error) {
+  if (!(error.ok && error.fromFrame && error.status === 400)) return;
+  let text = formatFrameErrorBody(error.data);
+  let matches = UNKNOWN_FIELD_ERROR_RE.test(text);
+  if (carriesDeadline(input) && matches && /["']deadline["']/.test(text)) return "deadline";
+  if (requestIdMeta(input.requestId).request_id !== undefined && matches && /["']request_id["']/.test(text))
     return "request_id";
   if (
-    e.icon &&
-    ((matches && /["']icon["']/.test(r)) || /^icon (?:must be|and tint can only)\b/.test(r.trimStart()))
+    input.icon &&
+    ((matches && /["']icon["']/.test(text)) || /^icon (?:must be|and tint can only)\b/.test(text.trimStart()))
   )
     return "icon";
   return;
 }
 //@ chunk-06y4szbn.js:102721-102876 placement
-function withoutField(e, n) {
-  switch (n) {
+function withoutField(input, field) {
+  switch (field) {
     case "deadline":
       return {
-        ...e,
+        ...input,
         deadline: undefined,
       };
     case "icon":
       return {
-        ...e,
+        ...input,
         icon: undefined,
       };
     case "request_id":
       return {
-        ...e,
+        ...input,
         requestId: undefined,
       };
   }

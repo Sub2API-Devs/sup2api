@@ -72,37 +72,44 @@ import { cloneStickyBetaLatches, forkStickyBetaLatches } from "../bootstrap/stat
 import { withKeepaliveReset } from "../services/api/cacheKeepalive.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { isStreamEvent, isTransientMessage_2 } from "./messageKinds.js";
-import { mRe, addUsage_2 } from "../../vendor/@anthropic-ai/sdk/lib/internal/tracing/response.mjs";
+import {
+  mergeUsageFromDelta,
+  addUsage_2,
+} from "../../vendor/@anthropic-ai/sdk/lib/internal/tracing/response.mjs";
 import { applyPreservedMessages } from "../services/compact/compact.js";
 import { killShellTasksForAgent } from "../tasks/LocalShellTask/killShellTasks.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { agentTypeForTelemetry } from "../services/analytics/metadata.js";
 import { sanitizeMarkName } from "./startupMarks.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:2209627-2209863 placement
 function createForkCacheSlot() {
-  let e;
-  let n;
-  let r;
-  let s = false;
+  let cachedValue;
+  let cachedKey;
+  let cachedRequestId;
+  let consumed = false;
   return {
-    set: (h, y) => {
-      e = h;
-      n = y;
-      r = undefined;
+    set: (key, value) => {
+      cachedValue = key;
+      cachedKey = value;
+      cachedRequestId = undefined;
     },
-    setRequest: (h, y, S) => {
-      e = h;
-      n = y;
-      r = S;
+    setRequest: (key, value, requestId) => {
+      cachedValue = key;
+      cachedKey = value;
+      cachedRequestId = requestId;
     },
-    current: (h, y) => (n === h && (r === undefined || r === y) ? e : undefined),
-    holdsResponse: (h) => n === h && e !== undefined && r === undefined,
+    current: (key, requestId) =>
+      cachedKey === key && (cachedRequestId === undefined || cachedRequestId === requestId)
+        ? cachedValue
+        : undefined,
+    holdsResponse: (key) => cachedKey === key && cachedValue !== undefined && cachedRequestId === undefined,
     once: () => {
-      let h = !s;
-      s = true;
-      return h;
+      let isFirst = !consumed;
+      consumed = true;
+      return isFirst;
     },
   };
 }
@@ -110,7 +117,10 @@ function createForkCacheSlot() {
 /**
  * 保存 fork 缓存安全参数的槽位。
  */
-var forkCacheSafeParamsSlot = createForkCacheSlot();
+var forkCacheSafeParamsSlot; // deferred: uses createForkCacheSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2209863", () => {
+  forkCacheSafeParamsSlot = createForkCacheSlot();
+});
 //@ chunk-e6aww6q8.js:2209876-2209903 placement
 /**
  * 清空 fork 缓存安全参数。
@@ -133,8 +143,8 @@ function buildAdvisorForkHint({ forkLabel, forkContextMessages, advisorModel }) 
     : undefined;
 }
 //@ chunk-e6aww6q8.js:2210127-2210191 placement
-function isAdvisorHintMessage(e) {
-  return e.type === "user" && e.message.content === NEVER_CONSULT_ADVISOR_TEXT;
+function isAdvisorHintMessage(message) {
+  return message.type === "user" && message.message.content === NEVER_CONSULT_ADVISOR_TEXT;
 }
 //@ chunk-e6aww6q8.js:2210191-2210307 placement
 class LastForkParams {
@@ -155,7 +165,10 @@ function hasModeDependentUserModel() {
   );
 }
 //@ chunk-e6aww6q8.js:2210372-2210400 layout
-var lastForkParamsSlot = new SessionRootSlot(() => new LastForkParams());
+var lastForkParamsSlot; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2210372", () => {
+  lastForkParamsSlot = new SessionRootSlot(() => new LastForkParams());
+});
 //@ chunk-e6aww6q8.js:2210400-2210466 layout
 function getLastForkParams() {
   let rootSession = getRootSession();
@@ -228,13 +241,13 @@ function getLastCacheSafeParams() {
   };
 }
 //@ chunk-e6aww6q8.js:2211399-2211567 facade-exports
-function isMainThreadCacheWarm(e = Date.now()) {
+function isMainThreadCacheWarm(nowMs = Date.now()) {
   let { last } = getLastForkParams();
   if (last.savedAt === null || !canReuseLastForkParams()) return false;
   let lastMainThreadCacheTtlMs = getLastMainThreadCacheTtlMs();
   if (lastMainThreadCacheTtlMs === null) return false;
   let max = Math.max(last.savedAt, getLastMainThreadCacheRenewedAt() ?? -1 / 0);
-  return e - max < lastMainThreadCacheTtlMs * 0.9;
+  return nowMs - max < lastMainThreadCacheTtlMs * 0.9;
 }
 //@ chunk-e6aww6q8.js:2211567-2211768 layout
 /**
@@ -254,8 +267,9 @@ function canReuseLastForkParams() {
  * 两个工具对象除 call 外所有属性都相同（工具调用路由只允许替换 call）。
  */
 function differsOnlyInCall(toolA, toolB) {
-  let r = new Set([...Object.keys(toolA), ...Object.keys(toolB)]);
-  for (let s of r) if (s !== "call" && Reflect.get(toolA, s) !== Reflect.get(toolB, s)) return false;
+  let keys = new Set([...Object.keys(toolA), ...Object.keys(toolB)]);
+  for (let key of keys)
+    if (key !== "call" && Reflect.get(toolA, key) !== Reflect.get(toolB, key)) return false;
   return true;
 }
 //@ chunk-e6aww6q8.js:2211923-2212169 facade-exports = createCacheSafeParams (0.755)
@@ -319,9 +333,9 @@ async function prepareForkedCommandContext(command, args, toolUseContext, agentC
     command,
   );
   let allowedTools = splitRuleList(await armedAllowedToolsOf(command));
-  let ke = await checkCommandSyncedAccess(command);
-  if (isDefined(ke)) {
-    logSyncedCommandRefused(command, ke);
+  let syncStateAfterBody = await checkCommandSyncedAccess(command);
+  if (isDefined(syncStateAfterBody)) {
+    logSyncedCommandRefused(command, syncStateAfterBody);
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `Unknown skill: ${command.name}`,
       "forked skill refused after its body was fetched: synced plugin",
@@ -397,9 +411,9 @@ async function prepareForkedCommandContext(command, args, toolUseContext, agentC
       `Forked command ${command.name}: agent '${agentType}' is not available as a fork base, running on '${baseAgent.agentType}'`,
     );
   let forkReadFileState = createRemoteFileState(READ_FILE_STATE_CACHE_SIZE);
-  let pt = isSkillShownToModel(command);
+  let skillShownToModel = isSkillShownToModel(command);
   let attachmentMessages =
-    options?.extractAttachments && !pt
+    options?.extractAttachments && !skillShownToModel
       ? await toArray_2(
           options.extractAttachments(
             joined,
@@ -426,7 +440,8 @@ async function prepareForkedCommandContext(command, args, toolUseContext, agentC
           ),
         )
       : [];
-  for (let [At, It] of forkReadFileState.entries()) if (It.isPartialView) forkReadFileState.delete(At);
+  for (let [filePath, fileState] of forkReadFileState.entries())
+    if (fileState.isPartialView) forkReadFileState.delete(filePath);
   let promptMessages = [
     createUserMessage({
       content: joined,
@@ -551,17 +566,17 @@ function createSubagentContext(parentContext, overrides) {
   let options = overrides?.options ?? parentContext.options;
   let agentContext = overrides?.agentContext ?? parentContext.agentContext;
   if (overrides?.options && overrides.options.tools !== parentContext.options.tools) {
-    let L =
+    let sharesRefreshTools =
       overrides.options.refreshTools !== undefined &&
       overrides.options.refreshTools === parentContext.options.refreshTools;
-    let G =
+    let sharesRefreshMcpClients =
       overrides.options.refreshMcpClients !== undefined &&
       overrides.options.refreshMcpClients === parentContext.options.refreshMcpClients;
-    if (L || G)
+    if (sharesRefreshTools || sharesRefreshMcpClients)
       options = {
         ...overrides.options,
-        refreshTools: L ? undefined : overrides.options.refreshTools,
-        refreshMcpClients: G ? undefined : overrides.options.refreshMcpClients,
+        refreshTools: sharesRefreshTools ? undefined : overrides.options.refreshTools,
+        refreshMcpClients: sharesRefreshMcpClients ? undefined : overrides.options.refreshMcpClients,
       };
   }
   return {
@@ -599,22 +614,22 @@ function createSubagentContext(parentContext, overrides) {
     markUltrareviewOverageConfirmed: parentContext.markUltrareviewOverageConfirmed,
     setAppState: overrides?.shareSetAppState
       ? parentContext.setAppState
-      : (L) =>
-          parentContext.setAppState((G) => {
-            let q = L(G);
-            if (q === G) return G;
-            let Z = false;
-            let Se = {
-              ...G,
+      : (updater) =>
+          parentContext.setAppState((prevState) => {
+            let nextState = updater(prevState);
+            if (nextState === prevState) return prevState;
+            let hasChanged = false;
+            let mergedState = {
+              ...prevState,
             };
-            for (let ke of SUBAGENT_WRITABLE_APP_STATE_KEYS)
-              if (q[ke] !== G[ke]) {
-                Object.assign(Se, {
-                  [ke]: q[ke],
+            for (let stateKey of SUBAGENT_WRITABLE_APP_STATE_KEYS)
+              if (nextState[stateKey] !== prevState[stateKey]) {
+                Object.assign(mergedState, {
+                  [stateKey]: nextState[stateKey],
                 });
-                Z = true;
+                hasChanged = true;
               }
-            return Z ? Se : G;
+            return hasChanged ? mergedState : prevState;
           }),
     setToolPermissionContext: overrides?.shareSetAppState ? parentContext.setToolPermissionContext : () => {},
     setSessionToolPermissionContext: parentContext.setSessionToolPermissionContext,
@@ -652,8 +667,8 @@ function createSubagentContext(parentContext, overrides) {
         },
     applyFileHistoryOp: overrides?.shareFileHistory
       ? parentContext.applyFileHistoryOp
-      : (L) => {
-          if (L.kind === "touch") parentContext.applyFileHistoryOp(L);
+      : (historyOp) => {
+          if (historyOp.kind === "touch") parentContext.applyFileHistoryOp(historyOp);
         },
     applyAttributionOp: parentContext.applyAttributionOp,
     requestDialog: parentContext.requestDialog,
@@ -700,17 +715,17 @@ function createSubagentContext(parentContext, overrides) {
  * 父消息里 fork 点的 uuid：末尾若是同一响应拆成的多条 assistant，取第一条。
  */
 function forkPointUuidOf(messages) {
-  let n = messages.length - 1;
-  let r = messages[n];
-  if (r?.type === "assistant") {
-    let id = r.message.id;
-    while (n > 0) {
-      let h = messages[n - 1];
-      if (h?.type !== "assistant" || h.message.id !== id) break;
-      n--;
+  let index = messages.length - 1;
+  let lastMessage = messages[index];
+  if (lastMessage?.type === "assistant") {
+    let id = lastMessage.message.id;
+    while (index > 0) {
+      let prevMessage = messages[index - 1];
+      if (prevMessage?.type !== "assistant" || prevMessage.message.id !== id) break;
+      index--;
     }
   }
-  return messages[n]?.uuid;
+  return messages[index]?.uuid;
 }
 //@ chunk-e6aww6q8.js:2220442-2220452 layout
 /**
@@ -902,7 +917,7 @@ async function runForkedAgentImpl({
           message.event?.type === "message_delta" &&
           message.event.usage
         ) {
-          let turnUsage = mRe(
+          let turnUsage = mergeUsageFromDelta(
             {
               ...EMPTY_USAGE,
             },

@@ -10,8 +10,8 @@
  */
 import { join } from "path";
 import { homedir } from "os";
-import { init_react_production, y } from "../../../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../../../vendor/react/compiler-runtime.js";
+import { init_react_production, useState } from "../../../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../../../vendor/react/compiler-runtime.js";
 import { useWizard } from "../../../wizard/useWizard.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../../runtime/bun-runtime.js";
 import { useKeybinding } from "../../../../keybindings/useKeybinding.js";
@@ -27,16 +27,20 @@ import { Text, Box } from "../../../../ink/components/Text.js";
 import { TextInput } from "../../../TextInput.js";
 import { ErrorText } from "../../../ErrorText.js";
 import { WizardDialogLayout } from "../../../wizard/WizardDialogLayout.js";
+import { deferInit } from "../../../../../runtime/deferred-init.js";
 
 //@ chunk-y6fv30yg.js:15626-15630 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-y6fv30yg.js:15626", () => {
+  init_react_production();
+});
 //@ chunk-y6fv30yg.js:15689-17115 callgraph-fingerprint = PromptStep (0.516)
 function PromptStep() {
-  let $ = w(17);
+  let $ = useMemoCache(17);
   let { goBack, goToStep, updateWizardData, wizardData } = useWizard();
-  let [systemPrompt, setSystemPrompt] = y(wizardData.keyFile ?? "");
-  let [cursorOffset, setCursorOffset] = y(systemPrompt.length);
-  let [error, setError] = y(null);
+  let [systemPrompt, setSystemPrompt] = useState(wizardData.keyFile ?? "");
+  let [cursorOffset, setCursorOffset] = useState(systemPrompt.length);
+  let [error, setError] = useState(null);
   let t0;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     t0 = {
@@ -45,9 +49,9 @@ function PromptStep() {
     $[0] = t0;
   } else t0 = $[0];
   useKeybinding("confirm:no", goBack, t0);
-  let A;
+  let entry;
   if ($[1] !== goToStep || $[2] !== updateWizardData || $[3] !== systemPrompt) {
-    A = () => {
+    entry = () => {
       let trimmedPrompt = systemPrompt.trim();
       if (!trimmedPrompt) {
         setError("Path is required");
@@ -66,9 +70,9 @@ function PromptStep() {
     $[1] = goToStep;
     $[2] = updateWizardData;
     $[3] = systemPrompt;
-    $[4] = A;
-  } else A = $[4];
-  let handleSubmit = A;
+    $[4] = entry;
+  } else entry = $[4];
+  let handleSubmit = entry;
   let footerText;
   if ($[5] === MEMO_CACHE_SENTINEL) {
     footerText = jsxProd_default_2(Byline, {

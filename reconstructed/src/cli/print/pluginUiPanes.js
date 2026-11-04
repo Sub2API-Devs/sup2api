@@ -23,6 +23,7 @@ import { isModuleAdmittedByName } from "../../services/mcp/mcpClientCapabilities
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { subscribe_2 } from "../../components/permissions/AskUserQuestionPermissionRequest/uiRenderHook.js";
 import { collectSurfaceHandles } from "../../plugins/functionHooks/sessionEvents.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-tyg7f3ek.js:490840-490853 placement
 var PANE_STATUS_TTL_MS = 60000;
@@ -30,10 +31,10 @@ var PANE_STATUS_TTL_MS = 60000;
 var PANE_STATUS_MAX = 20;
 //@ chunk-tyg7f3ek.js:490863-491397 placement
 function createUiStatusBuffer(now) {
-  let n = new Map();
-  let r = [];
+  let byPlugin = new Map();
+  let recent = [];
   let order = 0;
-  function h(push) {
+  function createPushedItem(push) {
     order += 1;
     return {
       push,
@@ -41,111 +42,117 @@ function createUiStatusBuffer(now) {
       order,
     };
   }
-  function y(P) {
-    if (P.subtype !== "ui_status") return;
-    n.delete(P.plugin);
-    n.set(P.plugin, h(P));
+  function note(event) {
+    if (event.subtype !== "ui_status") return;
+    byPlugin.delete(event.plugin);
+    byPlugin.set(event.plugin, createPushedItem(event));
   }
-  function S(P) {
-    if (P.subtype === "ui_status") {
-      y(P);
+  function hold(event) {
+    if (event.subtype === "ui_status") {
+      note(event);
       return;
     }
-    r.push(h(P));
-    r.splice(0, r.length - PANE_STATUS_MAX);
+    recent.push(createPushedItem(event));
+    recent.splice(0, recent.length - PANE_STATUS_MAX);
   }
-  function R() {
-    let P = now() - PANE_STATUS_TTL_MS;
-    let filtered = r.splice(0).filter((q) => q.madeAtMs >= P);
-    return [...n.values(), ...filtered].sort((q, x) => q.order - x.order).map((q) => q.push);
+  function forFirstClient() {
+    let cutoff = now() - PANE_STATUS_TTL_MS;
+    let filtered = recent.splice(0).filter((entry) => entry.madeAtMs >= cutoff);
+    return [...byPlugin.values(), ...filtered].sort((a, b) => a.order - b.order).map((entry) => entry.push);
   }
-  function w() {
-    r.splice(0);
-    return [...n.values()].map((P) => P.push);
+  function forLaterClient() {
+    recent.splice(0);
+    return [...byPlugin.values()].map((entry) => entry.push);
   }
   return {
-    note: y,
-    hold: S,
-    forFirstClient: R,
-    forLaterClient: w,
+    note,
+    hold,
+    forFirstClient,
+    forLaterClient,
   };
 }
 //@ chunk-tyg7f3ek.js:491397-491473 placement
-var paneSignals = identity(
-  {
-    scroll: createSignal(),
-    focus: createSignal(),
-  },
-  (e) => {
-    e.scroll.clear();
-    e.focus.clear();
-  },
-);
+var paneSignals; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-tyg7f3ek.js:491397", () => {
+  paneSignals = identity(
+    {
+      scroll: createSignal(),
+      focus: createSignal(),
+    },
+    (signals) => {
+      signals.scroll.clear();
+      signals.focus.clear();
+    },
+  );
+});
 //@ chunk-tyg7f3ek.js:491473-491507 placement
-var paneSites = identity(new Map(), (e) => e.clear());
+var paneSites; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-tyg7f3ek.js:491473", () => {
+  paneSites = identity(new Map(), (sites) => sites.clear());
+});
 //@ chunk-tyg7f3ek.js:491507-491969 placement
-function setPaneFocus(e, n) {
-  let r = paneSites.get(e);
-  if (r === undefined) return "no such site";
-  let { plugin, element } = n;
+function setPaneFocus(key, request) {
+  let site = paneSites.get(key);
+  if (site === undefined) return "no such site";
+  let { plugin, element } = request;
   if (element === undefined || plugin === undefined) {
-    paneSites.set(e, {
-      ...r,
+    paneSites.set(key, {
+      ...site,
       holder: undefined,
     });
     return;
   }
-  if (!r.focusables.some((focusable) => focusable.plugin === plugin && focusable.element === element))
+  if (!site.focusables.some((focusable) => focusable.plugin === plugin && focusable.element === element))
     return `no element of ${plugin} is drawn under that key`;
-  paneSites.set(e, {
-    ...r,
+  paneSites.set(key, {
+    ...site,
     holder: {
       plugin,
       element,
     },
   });
-  if (n.origin.kind === "plugin" && !r.isReporting)
+  if (request.origin.kind === "plugin" && !site.isReporting)
     paneSignals.focus.emit({
-      clientId: r.clientId,
-      component: r.component,
-      requestId: r.requestId,
+      clientId: site.clientId,
+      component: site.component,
+      requestId: site.requestId,
       plugin,
       element,
     });
   return;
 }
 //@ chunk-tyg7f3ek.js:491969-492418 placement
-function scrollPaneByPerson(e, n, r) {
-  let s = paneSites.get(e);
-  if (s === undefined) return "no such site";
-  if (r.kind === "person") {
-    if (s.isSuperseded) return "the window moved meanwhile";
-    let max = Math.max(0, s.contentRows - s.bodyRows);
-    paneSites.set(e, {
-      ...s,
-      offset: n,
-      isFollowingEnd: s.isFollowingEnd && n >= max,
+function scrollPaneByPerson(key, offset, origin) {
+  let site = paneSites.get(key);
+  if (site === undefined) return "no such site";
+  if (origin.kind === "person") {
+    if (site.isSuperseded) return "the window moved meanwhile";
+    let max = Math.max(0, site.contentRows - site.bodyRows);
+    paneSites.set(key, {
+      ...site,
+      offset,
+      isFollowingEnd: site.isFollowingEnd && offset >= max,
     });
     return;
   }
-  paneSites.set(e, {
-    ...s,
-    offset: n,
-    isSuperseded: s.isPersonMoving,
+  paneSites.set(key, {
+    ...site,
+    offset,
+    isSuperseded: site.isPersonMoving,
     isFollowingEnd: false,
   });
   paneSignals.scroll.emit({
-    clientId: s.clientId,
-    component: s.component,
-    requestId: s.requestId,
-    offset: n,
+    clientId: site.clientId,
+    component: site.component,
+    requestId: site.requestId,
+    offset,
     isFollowingEnd: false,
   });
   return;
 }
 //@ chunk-tyg7f3ek.js:492418-492524 placement
-function scrollActor(e, element) {
-  return e.by === "auto" && element !== null && element !== undefined
+function scrollActor(request, element) {
+  return request.by === "auto" && element !== null && element !== undefined
     ? {
         kind: "plugin",
         name: element.plugin,
@@ -155,8 +162,8 @@ function scrollActor(e, element) {
       };
 }
 //@ chunk-tyg7f3ek.js:492524-492627 placement
-function paneHolder(e) {
-  let holder = paneSites.get(e)?.holder;
+function paneHolder(key) {
+  let holder = paneSites.get(key)?.holder;
   if (holder === undefined) return null;
   return {
     plugin: holder.plugin,
@@ -164,46 +171,46 @@ function paneHolder(e) {
   };
 }
 //@ chunk-tyg7f3ek.js:492627-492668 placement
-var paneResultWithElement = (e, result) => ({
+var paneResultWithElement = (key, result) => ({
   result,
-  element: paneHolder(e),
+  element: paneHolder(key),
 });
 //@ chunk-tyg7f3ek.js:492668-492784 placement
 function isPaneSiteOpen(component, requestId) {
-  let r = component === "AbovePrompt" && requestId === ABOVE_PROMPT;
-  let s =
+  let isAbovePrompt = component === "AbovePrompt" && requestId === ABOVE_PROMPT;
+  let isOpenPane =
     component === "Pane" &&
     paneRegistry()
       .getState()
-      .open.some((h) => h.id === requestId);
-  return r || s;
+      .open.some((pane) => pane.id === requestId);
+  return isAbovePrompt || isOpenPane;
 }
 //@ chunk-tyg7f3ek.js:492784-492892 placement
-function paneScrollOffset(e) {
-  if (e === undefined) return 0;
-  return e.isFollowingEnd ? Math.max(0, e.contentRows - e.bodyRows) : e.offset;
+function paneScrollOffset(site) {
+  if (site === undefined) return 0;
+  return site.isFollowingEnd ? Math.max(0, site.contentRows - site.bodyRows) : site.offset;
 }
 //@ chunk-tyg7f3ek.js:492892-493724 placement
-function publishPaneState(e) {
-  let n = paneSites.get(e);
-  if (n === undefined) {
-    scrollSites().delete(e);
-    focusSites().delete(e);
+function publishPaneState(key) {
+  let site = paneSites.get(key);
+  if (site === undefined) {
+    scrollSites().delete(key);
+    focusSites().delete(key);
     return;
   }
-  let { component, requestId, owner, bodyRows, contentRows } = n;
+  let { component, requestId, owner, bodyRows, contentRows } = site;
   let max = Math.max(0, contentRows - bodyRows);
-  let w = () => paneSites.get(e);
-  scrollSites().set(e, {
+  let current = () => paneSites.get(key);
+  scrollSites().set(key, {
     component,
     requestId,
     owner,
     bodyRows,
     contentRows,
     maxOffset: max,
-    offset: () => paneScrollOffset(w()),
-    keyRows: (P, L) => {
-      let found = w()?.keyed.find((x) => x.plugin === P && x.key === L);
+    offset: () => paneScrollOffset(current()),
+    keyRows: (plugin, key) => {
+      let found = current()?.keyed.find((entry) => entry.plugin === plugin && entry.key === key);
       return (
         found && {
           top: found.top,
@@ -211,91 +218,94 @@ function publishPaneState(e) {
         }
       );
     },
-    commit: (P, L) => scrollPaneByPerson(e, Math.min(max, P), L) === undefined,
+    commit: (offset, origin) => scrollPaneByPerson(key, Math.min(max, offset), origin) === undefined,
     followEnd: () => {
-      let P = w();
-      if (P !== undefined) {
-        paneSites.set(e, {
-          ...P,
+      let site = current();
+      if (site !== undefined) {
+        paneSites.set(key, {
+          ...site,
           isFollowingEnd: true,
         });
         paneSignals.scroll.emit({
-          clientId: P.clientId,
+          clientId: site.clientId,
           component,
           requestId,
-          offset: P.offset,
+          offset: site.offset,
           isFollowingEnd: true,
         });
       }
     },
   });
-  focusSites().set(e, {
+  focusSites().set(key, {
     component,
     requestId,
     owner,
-    isHeldNow: () => w()?.isHeld === true,
-    holderNow: () => w()?.holder?.plugin,
-    hasElement: (P, L) =>
-      w()?.focusables.some((focusable) => focusable.plugin === P && focusable.element === L) === true,
-    commit: (P) => setPaneFocus(e, P),
+    isHeldNow: () => current()?.isHeld === true,
+    holderNow: () => current()?.holder?.plugin,
+    hasElement: (plugin, element) =>
+      current()?.focusables.some(
+        (focusable) => focusable.plugin === plugin && focusable.element === element,
+      ) === true,
+    commit: (request) => setPaneFocus(key, request),
   });
   focusSiteDraws().emit();
 }
 //@ chunk-tyg7f3ek.js:493724-493832 placement
-function keepHeldElement(e, n) {
-  return n.element === undefined && n.isHeld && e.element !== undefined
+function keepHeldElement(previous, next) {
+  return next.element === undefined && next.isHeld && previous.element !== undefined
     ? {
-        ...n,
-        element: e.element,
-        by: e.by,
+        ...next,
+        element: previous.element,
+        by: previous.by,
       }
-    : n;
+    : next;
 }
 //@ chunk-tyg7f3ek.js:493832-493868 placement
-var mergeScrollReporter = (e, n) => ({
-  ...n,
-  by: e.by + n.by,
+var mergeScrollReporter = (a, b) => ({
+  ...b,
+  by: a.by + b.by,
 });
 //@ chunk-tyg7f3ek.js:493868-493956 placement
 function pluginOfPane(component, requestId) {
-  return (component === "Pane" ? allPanes(paneRegistry().getState()) : []).find((h) => h.id === requestId)
-    ?.plugin;
+  return (component === "Pane" ? allPanes(paneRegistry().getState()) : []).find(
+    (pane) => pane.id === requestId,
+  )?.plugin;
 }
 //@ chunk-tyg7f3ek.js:493956-494441 placement
-function createSerialReporter(e) {
-  let n;
-  let r;
-  async function s(h, y) {
+function createSerialReporter(merge) {
+  let running;
+  let pending;
+  async function run(report, runReport) {
     try {
       return await new Promise((resolve, reject) => {
-        y(h).then(resolve, reject);
+        runReport(report).then(resolve, reject);
       });
     } finally {
-      let S = r;
-      r = undefined;
-      n = S && s(S.report, y);
-      if (S !== undefined) n?.then(S.resolve, S.reject);
+      let pending2 = pending;
+      pending = undefined;
+      running = pending2 && run(pending2.report, runReport);
+      if (pending2 !== undefined) running?.then(pending2.resolve, pending2.reject);
     }
   }
   return {
-    drop: (h) => {
-      let y = r;
-      let S = () => y?.resolve(h);
-      r = undefined;
-      (n ?? Promise.resolve()).then(S, S);
+    drop: (value) => {
+      let waiting = pending;
+      let resolve = () => waiting?.resolve(value);
+      pending = undefined;
+      (running ?? Promise.resolve()).then(resolve, resolve);
     },
-    take: (h, y) => {
-      if (n === undefined) {
-        n = s(h, y);
-        return n;
+    take: (report, runReport) => {
+      if (running === undefined) {
+        running = run(report, runReport);
+        return running;
       }
-      if (r !== undefined) {
-        r.report = e(r.report, h);
-        return r.promise;
+      if (pending !== undefined) {
+        pending.report = merge(pending.report, report);
+        return pending.promise;
       }
       let { promise, resolve, reject } = Promise.withResolvers();
-      r = {
-        report: h,
+      pending = {
+        report,
         resolve,
         reject,
         promise,
@@ -305,8 +315,8 @@ function createSerialReporter(e) {
   };
 }
 //@ chunk-tyg7f3ek.js:494441-494744 placement
-var newPaneSite = (e, n, r) => ({
-  owner: n?.owner ?? pluginOfPane(e.component, e.requestId),
+var newPaneSite = (key, site, extra) => ({
+  owner: site?.owner ?? pluginOfPane(key.component, key.requestId),
   offset: 0,
   unlandedOffset: undefined,
   bodyRows: 0,
@@ -319,11 +329,11 @@ var newPaneSite = (e, n, r) => ({
   isSuperseded: false,
   isReporting: false,
   isFollowingEnd: false,
-  scrolls: n?.scrolls ?? createSerialReporter(mergeScrollReporter),
-  focuses: n?.focuses ?? createSerialReporter(keepHeldElement),
-  ...e,
-  ...n,
-  ...r,
+  scrolls: site?.scrolls ?? createSerialReporter(mergeScrollReporter),
+  focuses: site?.focuses ?? createSerialReporter(keepHeldElement),
+  ...key,
+  ...site,
+  ...extra,
 });
 //@ chunk-tyg7f3ek.js:494744-494801 placement
 var noSuchSiteResult = () => ({
@@ -333,391 +343,396 @@ var noSuchSiteResult = () => ({
   element: null,
 });
 //@ chunk-tyg7f3ek.js:494801-495295 placement
-async function focusPaneElement(e) {
-  let { clientId, component, requestId, element } = e;
-  let y = siteKey(component, requestId);
-  let S = paneSites.get(y);
-  if (S === undefined || !isPaneSiteOpen(component, requestId)) return noSuchSiteResult();
+async function focusPaneElement(request) {
+  let { clientId, component, requestId, element } = request;
+  let key = siteKey(component, requestId);
+  let site = paneSites.get(key);
+  if (site === undefined || !isPaneSiteOpen(component, requestId)) return noSuchSiteResult();
   paneSites.set(
-    y,
+    key,
     newPaneSite(
       {
         component,
         requestId,
         clientId,
       },
-      S,
+      site,
       {
-        isHeld: e.isHeld,
-        holder: e.isHeld ? S.holder : undefined,
+        isHeld: request.isHeld,
+        holder: request.isHeld ? site.holder : undefined,
         isReporting: true,
       },
     ),
   );
-  publishPaneState(y);
-  let isHeld = element !== undefined && e.isHeld;
-  let w = element ?? undefined;
+  publishPaneState(key);
+  let isHeld = element !== undefined && request.isHeld;
+  let focusTarget = element ?? undefined;
   try {
     return paneResultWithElement(
-      y,
+      key,
       isHeld
         ? await dispatchUiFocus({
             input: {
               component,
               requestId,
-              ...(w !== undefined && {
-                plugin: w.plugin,
-                element: w.key,
+              ...(focusTarget !== undefined && {
+                plugin: focusTarget.plugin,
+                element: focusTarget.key,
               }),
-              origin: scrollActor(e, element),
+              origin: scrollActor(request, element),
             },
           })
         : {},
     );
   } finally {
-    let P = paneSites.get(y);
-    if (P !== undefined)
-      paneSites.set(y, {
-        ...P,
+    let site = paneSites.get(key);
+    if (site !== undefined)
+      paneSites.set(key, {
+        ...site,
         isReporting: false,
       });
   }
 }
 //@ chunk-tyg7f3ek.js:495295-495344 placement
 var FOCUS_REQUEST_KIND = {
-  turnsOf: (e) => e.focuses,
+  turnsOf: (site) => site.focuses,
   run: focusPaneElement,
   denied: noSuchSiteResult,
 };
 //@ chunk-tyg7f3ek.js:495344-495392 placement
-var isClientAttached = (clientId) => clientRegistry.list().some((n) => n.clientId === clientId);
+var isClientAttached = (clientId) => clientRegistry.list().some((client) => client.clientId === clientId);
 //@ chunk-tyg7f3ek.js:495392-495639 placement
-function runPaneRequest(e, n) {
-  let { clientId, component, requestId } = e;
-  let y = siteKey(component, requestId);
-  let S = paneSites.get(y);
-  if (!isPaneSiteOpen(component, requestId) || (S === undefined && !isClientAttached(clientId)))
-    return Promise.resolve(n.denied(e));
+function runPaneRequest(request, kind) {
+  let { clientId, component, requestId } = request;
+  let key = siteKey(component, requestId);
+  let site = paneSites.get(key);
+  if (!isPaneSiteOpen(component, requestId) || (site === undefined && !isClientAttached(clientId)))
+    return Promise.resolve(kind.denied(request));
   let paneSite = newPaneSite(
     {
       component,
       requestId,
       clientId,
     },
-    S,
+    site,
     {},
   );
-  paneSites.set(y, paneSite);
-  return n.turnsOf(paneSite).take(e, n.run);
+  paneSites.set(key, paneSite);
+  return kind.turnsOf(paneSite).take(request, kind.run);
 }
 //@ chunk-tyg7f3ek.js:495639-495660 placement
-var handlePaneFocusRequest = (e) => runPaneRequest(e, FOCUS_REQUEST_KIND);
+var handlePaneFocusRequest = (request) => runPaneRequest(request, FOCUS_REQUEST_KIND);
 //@ chunk-tyg7f3ek.js:495660-495923 placement
-function trackOpenPane(e) {
-  let n = siteKey("Pane", e.requestId);
-  let r = paneSites.get(n);
+function trackOpenPane(request) {
+  let key = siteKey("Pane", request.requestId);
+  let site = paneSites.get(key);
   if (!(
-    isPaneSiteOpen("Pane", e.requestId) &&
-    (r !== undefined || (e.isHeld && isClientAttached(e.clientId)))
+    isPaneSiteOpen("Pane", request.requestId) &&
+    (site !== undefined || (request.isHeld && isClientAttached(request.clientId)))
   ))
     return;
   paneSites.set(
-    n,
+    key,
     newPaneSite(
       {
         component: "Pane",
-        requestId: e.requestId,
-        clientId: e.clientId,
+        requestId: request.requestId,
+        clientId: request.clientId,
       },
-      r,
+      site,
       {
-        isHeld: e.isHeld,
-        ...(!e.isHeld && {
+        isHeld: request.isHeld,
+        ...(!request.isHeld && {
           holder: undefined,
         }),
       },
     ),
   );
-  publishPaneState(n);
+  publishPaneState(key);
 }
 //@ chunk-tyg7f3ek.js:495923-496085 placement
 function syncOpenPanes(clientId) {
   let { open, focusedId } = paneRegistry().getState();
-  for (let s of open) {
-    let h = paneSites.has(siteKey("Pane", s.id));
-    let y = s.id === focusedId;
-    if (h || y)
+  for (let pane of open) {
+    let tracked = paneSites.has(siteKey("Pane", pane.id));
+    let focused = pane.id === focusedId;
+    if (tracked || focused)
       trackOpenPane({
         clientId,
-        requestId: s.id,
-        isHeld: y,
+        requestId: pane.id,
+        isHeld: focused,
       });
   }
 }
 //@ chunk-tyg7f3ek.js:496085-496195 placement
-function dropPaneSites(e) {
-  let filtered = [...paneSites.entries()].filter(([, r]) => e(r));
-  for (let [r] of filtered) {
-    paneSites.delete(r);
-    publishPaneState(r);
+function dropPaneSites(predicate) {
+  let filtered = [...paneSites.entries()].filter(([, site]) => predicate(site));
+  for (let [key] of filtered) {
+    paneSites.delete(key);
+    publishPaneState(key);
   }
   return filtered.length;
 }
 //@ chunk-tyg7f3ek.js:496195-496277 placement
-var dropClosedPanes = (e) =>
-  dropPaneSites((n) => n.component === "Pane" && !e.panes.some((pane) => pane.id === n.requestId));
+var dropClosedPanes = (state) =>
+  dropPaneSites(
+    (site) => site.component === "Pane" && !state.panes.some((pane) => pane.id === site.requestId),
+  );
 //@ chunk-tyg7f3ek.js:496277-496326 placement
-var maxScrollOffset = (e) => Math.max(0, e.contentRows - e.bodyRows);
+var maxScrollOffset = (site) => Math.max(0, site.contentRows - site.bodyRows);
 //@ chunk-tyg7f3ek.js:496326-496432 placement
-function isLandedScroll(e, n) {
-  let { unlandedOffset } = n;
+function isLandedScroll(request, site) {
+  let { unlandedOffset } = site;
   return (
     unlandedOffset !== undefined &&
-    e.offset === Math.min(Math.max(0, unlandedOffset + e.by), maxScrollOffset(e))
+    request.offset === Math.min(Math.max(0, unlandedOffset + request.by), maxScrollOffset(request))
   );
 }
 //@ chunk-tyg7f3ek.js:496432-497004 placement
 function describeOpenPanes(state) {
-  let filtered = state.open.filter((y) => isModuleAdmittedByName(y.plugin));
-  let r = new Set(state.open.filter((y) => !filtered.includes(y)).map((y) => y.id));
-  let s = (y) => (r.has(y ?? "") ? null : y);
-  let h = r.has(state.shownId ?? "");
+  let filtered = state.open.filter((pane) => isModuleAdmittedByName(pane.plugin));
+  let hiddenIds = new Set(state.open.filter((pane) => !filtered.includes(pane)).map((pane) => pane.id));
+  let visible = (id) => (hiddenIds.has(id ?? "") ? null : id);
+  let shownHidden = hiddenIds.has(state.shownId ?? "");
   return {
-    panes: filtered.map((y) => ({
-      id: y.id,
-      title: y.title,
-      plugin: y.plugin,
-      ...(y.closeOnEscape && {
-        closeOnEscape: y.closeOnEscape,
+    panes: filtered.map((pane) => ({
+      id: pane.id,
+      title: pane.title,
+      plugin: pane.plugin,
+      ...(pane.closeOnEscape && {
+        closeOnEscape: pane.closeOnEscape,
       }),
-      ...(y.holdToasts && {
-        holdToasts: y.holdToasts,
+      ...(pane.holdToasts && {
+        holdToasts: pane.holdToasts,
       }),
-      ...(y.backgroundColor !== undefined && {
-        backgroundColor: y.backgroundColor,
+      ...(pane.backgroundColor !== undefined && {
+        backgroundColor: pane.backgroundColor,
       }),
-      ...(y.rows !== undefined && {
-        rows: y.rows,
+      ...(pane.rows !== undefined && {
+        rows: pane.rows,
       }),
-      ...(y.columns !== undefined && {
-        columns: y.columns,
+      ...(pane.columns !== undefined && {
+        columns: pane.columns,
       }),
     })),
-    shownId: h ? (filtered.at(-1)?.id ?? null) : state.shownId,
-    focusedId: s(state.focusedId),
-    focusRequestedId: s(state.focusRequest),
+    shownId: shownHidden ? (filtered.at(-1)?.id ?? null) : state.shownId,
+    focusedId: visible(state.focusedId),
+    focusRequestedId: visible(state.focusRequest),
   };
 }
 //@ chunk-tyg7f3ek.js:497004-497172 placement
-function subscribeOpenPanes(e) {
-  let n = jsonStringify(describeOpenPanes(paneRegistry().getState()));
-  function r() {
-    let y = describeOpenPanes(paneRegistry().getState());
-    let S = jsonStringify(y);
-    if (S === n) return;
-    n = S;
-    e(y);
+function subscribeOpenPanes(onPanes) {
+  let lastJson = jsonStringify(describeOpenPanes(paneRegistry().getState()));
+  function check() {
+    let panes = describeOpenPanes(paneRegistry().getState());
+    let json = jsonStringify(panes);
+    if (json === lastJson) return;
+    lastJson = json;
+    onPanes(panes);
   }
-  let s = paneRegistry().subscribe(r);
-  let h = subscribe_2(r);
+  let unsubscribe = paneRegistry().subscribe(check);
+  let unsubscribeSignal = subscribe_2(check);
   return () => {
-    s();
-    h();
+    unsubscribe();
+    unsubscribeSignal();
   };
 }
 //@ chunk-tyg7f3ek.js:497172-497276 placement
-var windowMovedResult = (e) => ({
+var windowMovedResult = (site) => ({
   result: {
     deny: "the window moved meanwhile",
   },
-  offset: paneScrollOffset(e),
-  isFollowingEnd: e.isFollowingEnd,
+  offset: paneScrollOffset(site),
+  isFollowingEnd: site.isFollowingEnd,
 });
 //@ chunk-tyg7f3ek.js:497276-497679 placement
-function settleScrollRequest(e, n) {
-  let { key, before } = e;
-  let h = paneSites.get(key);
-  if (h === undefined || h.scrolls !== e.scrolls)
+function settleScrollRequest(request, result) {
+  let { key, before } = request;
+  let site = paneSites.get(key);
+  if (site === undefined || site.scrolls !== request.scrolls)
     return {
-      result: n,
+      result,
       offset: before,
       isFollowingEnd: false,
     };
-  if (h.isSuperseded) {
-    let w = windowMovedResult(h);
-    h.scrolls.drop(w);
-    return w;
+  if (site.isSuperseded) {
+    let moved = windowMovedResult(site);
+    site.scrolls.drop(moved);
+    return moved;
   }
-  let y = n.deny !== undefined;
-  let { end } = e;
+  let denied = result.deny !== undefined;
+  let { end } = request;
   let isFollowingEnd =
-    h.isFollowingEnd || (!y && end.wasFollowed && end.isDownward && h.offset >= end.offset);
+    site.isFollowingEnd || (!denied && end.wasFollowed && end.isDownward && site.offset >= end.offset);
   paneSites.set(key, {
-    ...h,
-    offset: y ? before : h.offset,
+    ...site,
+    offset: denied ? before : site.offset,
     isFollowingEnd,
   });
   return {
-    result: n,
-    offset: y ? before : h.offset,
+    result,
+    offset: denied ? before : site.offset,
     isFollowingEnd,
   };
 }
 //@ chunk-tyg7f3ek.js:497679-497757 placement
-var scrollFollowState = (e, n) => ({
-  offset: maxScrollOffset(e),
-  wasFollowed: n.isFollowingEnd,
-  isDownward: e.by > 0,
+var scrollFollowState = (request, site) => ({
+  offset: maxScrollOffset(request),
+  wasFollowed: site.isFollowingEnd,
+  isDownward: request.by > 0,
 });
 //@ chunk-tyg7f3ek.js:497757-497833 placement
-function clampScrollOffset(e, n) {
-  let r = maxScrollOffset(e);
-  return n.isFollowingEnd ? r : Math.min(n.offset, r);
+function clampScrollOffset(request, site) {
+  let max = maxScrollOffset(request);
+  return site.isFollowingEnd ? max : Math.min(site.offset, max);
 }
 //@ chunk-tyg7f3ek.js:497833-497928 placement
-var describePaneScroll = (e, n) => ({
-  key: siteKey(e.component, e.requestId),
-  scrolls: n.scrolls,
-  before: clampScrollOffset(e, n),
-  end: scrollFollowState(e, n),
+var describePaneScroll = (request, site) => ({
+  key: siteKey(request.component, request.requestId),
+  scrolls: site.scrolls,
+  before: clampScrollOffset(request, site),
+  end: scrollFollowState(request, site),
 });
 //@ chunk-tyg7f3ek.js:497928-498007 placement
-var noSuchPaneSiteResult = (e) => ({
+var noSuchPaneSiteResult = (request) => ({
   result: {
     deny: "no such site",
   },
-  offset: e.offset,
+  offset: request.offset,
   isFollowingEnd: false,
 });
 //@ chunk-tyg7f3ek.js:498007-498808 placement
-async function scrollPaneElement(e) {
-  let { clientId, component, requestId } = e;
-  let h = siteKey(component, requestId);
-  let y = paneSites.get(h);
-  if (y === undefined || !isPaneSiteOpen(component, requestId)) return noSuchPaneSiteResult(e);
-  let S = describePaneScroll(e, y);
-  let w = (S.end.wasFollowed && S.end.isDownward) || isLandedScroll(e, y) ? S.before + e.by : e.offset;
-  let offset = Math.min(Math.max(0, w), S.end.offset);
+async function scrollPaneElement(request) {
+  let { clientId, component, requestId } = request;
+  let key = siteKey(component, requestId);
+  let site = paneSites.get(key);
+  if (site === undefined || !isPaneSiteOpen(component, requestId)) return noSuchPaneSiteResult(request);
+  let described = describePaneScroll(request, site);
+  let nextOffset =
+    (described.end.wasFollowed && described.end.isDownward) || isLandedScroll(request, site)
+      ? described.before + request.by
+      : request.offset;
+  let offset = Math.min(Math.max(0, nextOffset), described.end.offset);
   paneSites.set(
-    h,
+    key,
     newPaneSite(
       {
         component,
         requestId,
         clientId,
       },
-      y,
+      site,
       {
-        offset: S.before,
-        bodyRows: e.bodyRows,
-        contentRows: e.contentRows,
-        ...(e.keyed !== undefined && {
-          keyed: e.keyed,
+        offset: described.before,
+        bodyRows: request.bodyRows,
+        contentRows: request.contentRows,
+        ...(request.keyed !== undefined && {
+          keyed: request.keyed,
         }),
         isPersonMoving: true,
         isSuperseded: false,
       },
     ),
   );
-  publishPaneState(h);
+  publishPaneState(key);
   try {
     return settleScrollRequest(
-      S,
+      described,
       await dispatchUiScroll({
         input: {
           component,
           requestId,
           offset,
-          by: e.by,
-          bodyRows: e.bodyRows,
-          contentRows: e.contentRows,
+          by: request.by,
+          bodyRows: request.bodyRows,
+          contentRows: request.contentRows,
           origin: {
             kind: "person",
           },
-          ...(e.pointer !== undefined && {
-            pointer: e.pointer,
+          ...(request.pointer !== undefined && {
+            pointer: request.pointer,
           }),
         },
       }),
     );
   } finally {
-    let L = paneSites.get(h);
-    if (L !== undefined && L.scrolls === S.scrolls) {
-      let q = paneScrollOffset(L) === e.offset;
-      paneSites.set(h, {
-        ...L,
+    let site = paneSites.get(key);
+    if (site !== undefined && site.scrolls === described.scrolls) {
+      let unchanged = paneScrollOffset(site) === request.offset;
+      paneSites.set(key, {
+        ...site,
         isPersonMoving: false,
         isSuperseded: false,
-        unlandedOffset: q ? undefined : e.offset,
+        unlandedOffset: unchanged ? undefined : request.offset,
       });
     }
   }
 }
 //@ chunk-tyg7f3ek.js:498808-498857 placement
 var SCROLL_REQUEST_KIND = {
-  turnsOf: (e) => e.scrolls,
+  turnsOf: (site) => site.scrolls,
   run: scrollPaneElement,
   denied: noSuchPaneSiteResult,
 };
 //@ chunk-tyg7f3ek.js:498857-498951 placement
-function pickContentRows(scroll, n) {
-  return n === undefined || (n.bodyRows === 0 && n.contentRows === 0)
+function pickContentRows(scroll, site) {
+  return site === undefined || (site.bodyRows === 0 && site.contentRows === 0)
     ? scroll
     : {
         bodyRows: scroll.bodyRows,
       };
 }
 //@ chunk-tyg7f3ek.js:498951-499316 placement
-function attachPaneClient(e) {
-  let { clientId, component, requestId } = e;
+function attachPaneClient(request) {
+  let { clientId, component, requestId } = request;
   if (!(isPaneSiteOpen(component, requestId) && isClientAttached(clientId))) return;
-  let y = siteKey(component, requestId);
-  let S = paneSites.get(y);
+  let key = siteKey(component, requestId);
+  let site = paneSites.get(key);
   paneSites.set(
-    y,
+    key,
     newPaneSite(
       {
         component,
         requestId,
         clientId,
       },
-      S,
+      site,
       {
         clientId,
-        ...(e.scroll !== undefined && pickContentRows(e.scroll, S)),
-        ...(e.contentRows !== undefined && {
-          contentRows: e.contentRows,
+        ...(request.scroll !== undefined && pickContentRows(request.scroll, site)),
+        ...(request.contentRows !== undefined && {
+          contentRows: request.contentRows,
         }),
-        ...(e.keyed !== undefined && {
-          keyed: e.keyed,
+        ...(request.keyed !== undefined && {
+          keyed: request.keyed,
         }),
-        ...(e.keyboard !== undefined && {
-          isHeld: e.keyboard === "held",
+        ...(request.keyboard !== undefined && {
+          isHeld: request.keyboard === "held",
         }),
       },
     ),
   );
-  publishPaneState(y);
+  publishPaneState(key);
 }
 //@ chunk-tyg7f3ek.js:499316-499590 placement
-function updatePaneSurface(e) {
-  let { clientId, component, requestId } = e;
-  let h = siteKey(component, requestId);
-  let y = paneSites.get(h);
-  if (!(y !== undefined && isClientAttached(clientId) && isPaneSiteOpen(component, requestId))) return;
-  let surfaceHandles = collectSurfaceHandles(e.tree);
-  let { holder } = y;
-  let P =
+function updatePaneSurface(request) {
+  let { clientId, component, requestId } = request;
+  let key = siteKey(component, requestId);
+  let site = paneSites.get(key);
+  if (!(site !== undefined && isClientAttached(clientId) && isPaneSiteOpen(component, requestId))) return;
+  let surfaceHandles = collectSurfaceHandles(request.tree);
+  let { holder } = site;
+  let holderStillDrawn =
     holder !== undefined &&
     surfaceHandles.some(
       (surfaceHandle) => surfaceHandle.plugin === holder.plugin && surfaceHandle.element === holder.element,
     );
-  paneSites.set(h, {
-    ...y,
+  paneSites.set(key, {
+    ...site,
     focusables: surfaceHandles,
-    holder: P ? holder : undefined,
+    holder: holderStillDrawn ? holder : undefined,
   });
-  publishPaneState(h);
+  publishPaneState(key);
 }
 export {
   createUiStatusBuffer,

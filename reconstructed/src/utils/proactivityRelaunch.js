@@ -27,8 +27,8 @@ var CLAUDE_CODE_RELAUNCH_PROACTIVITY_EVER_ON = "CLAUDE_CODE_RELAUNCH_PROACTIVITY
 /**
  * withProactivityBaseline：带主动性基线时原样返回。
  */
-function withProactivityBaseline(e) {
-  return e.toolPermissionContext.proactivityBaseline === undefined ? undefined : e;
+function withProactivityBaseline(context) {
+  return context.toolPermissionContext.proactivityBaseline === undefined ? undefined : context;
 }
 //@ chunk-erzjxbhh.js:691-795 placement
 /**
@@ -47,13 +47,13 @@ function proactivityBaselineEnv({ toolPermissionContext }) {
  * 生成重启时传递主动性等级、是否已决定与是否开启过的环境变量。
  */
 function proactivityLevelEnv({ proactivityLevel, toolPermissionContext }) {
-  let n = {
+  let relaunchEnv = {
     [CLAUDE_CODE_RELAUNCH_PROACTIVITY_LEVEL]: proactivityLevel,
   };
   if (toolPermissionContext.startupModeDecidedByProactivityLevel !== undefined)
-    n[CLAUDE_CODE_RELAUNCH_PROACTIVITY_DECIDED] = "1";
-  if (wasProactivityEverOn()) n[CLAUDE_CODE_RELAUNCH_PROACTIVITY_EVER_ON] = "1";
-  return n;
+    relaunchEnv[CLAUDE_CODE_RELAUNCH_PROACTIVITY_DECIDED] = "1";
+  if (wasProactivityEverOn()) relaunchEnv[CLAUDE_CODE_RELAUNCH_PROACTIVITY_EVER_ON] = "1";
+  return relaunchEnv;
 }
 //@ chunk-erzjxbhh.js:960-1070 placement
 /**
@@ -70,21 +70,23 @@ function undecidedProactivityEnv({ toolPermissionContext }) {
 /**
  * 判断重启参数是否为恢复会话或显式指定了 --permission-mode。
  */
-function hasExplicitPermissionMode(e) {
+function hasExplicitPermissionMode(argv) {
   return (
-    hasResumeFlag(e) !== "fresh" ||
-    argsBeforeDoubleDash(e).some((t) => t === "--permission-mode" || t.startsWith("--permission-mode="))
+    hasResumeFlag(argv) !== "fresh" ||
+    argsBeforeDoubleDash(argv).some(
+      (arg) => arg === "--permission-mode" || arg.startsWith("--permission-mode="),
+    )
   );
 }
 //@ chunk-erzjxbhh.js:1189-1367 placement
 /**
  * 读取并清除重启传来的基线权限模式（未允许时忽略 bypassPermissions）。
  */
-function takeRelaunchBaselineMode(e) {
-  let t = env.CLAUDE_CODE_RELAUNCH_PROACTIVITY_BASELINE;
+function takeRelaunchBaselineMode(allowBypass) {
+  let baselineValue = env.CLAUDE_CODE_RELAUNCH_PROACTIVITY_BASELINE;
   env.unset("CLAUDE_CODE_RELAUNCH_PROACTIVITY_BASELINE");
-  let permissionMode = parsePermissionMode(t);
-  if (permissionMode === "bypassPermissions" && !e) return;
+  let permissionMode = parsePermissionMode(baselineValue);
+  if (permissionMode === "bypassPermissions" && !allowBypass) return;
   return permissionMode;
 }
 //@ chunk-erzjxbhh.js:1367-1609 placement

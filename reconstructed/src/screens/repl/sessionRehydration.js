@@ -22,20 +22,20 @@ import { logGoalCleared } from "../../commands/goal/goal.js";
 /**
  * 消息的首段文本（助手文本或工具结果）。
  */
-function messageSnippet(h) {
-  if (h.type === "assistant") {
-    let x = h.message.content[0];
-    return x.type === "text" ? capTextChars(x.text) : "";
+function messageSnippet(message) {
+  if (message.type === "assistant") {
+    let block = message.message.content[0];
+    return block.type === "text" ? capTextChars(block.text) : "";
   }
-  if (h.type === "user") {
-    if (h.isMeta) return "";
-    let x = h.message.content[0];
-    if (x.type !== "tool_result") return "";
-    if (typeof x.content === "string") return capTextChars(x.content);
-    if (Array.isArray(x.content))
+  if (message.type === "user") {
+    if (message.isMeta) return "";
+    let block = message.message.content[0];
+    if (block.type !== "tool_result") return "";
+    if (typeof block.content === "string") return capTextChars(block.content);
+    if (Array.isArray(block.content))
       return capTextChars(
         extractTextContent_2(
-          x.content,
+          block.content,
           `
 `,
         ),
@@ -45,42 +45,42 @@ function messageSnippet(h) {
   return "";
 }
 //@ chunk-18hwfzwa.js:342090-342142 placement
-function capTextChars(h) {
-  return h.length > MAX_SESSION_TEXT_CHARS ? h.slice(-MAX_SESSION_TEXT_CHARS) : h;
+function capTextChars(text) {
+  return text.length > MAX_SESSION_TEXT_CHARS ? text.slice(-MAX_SESSION_TEXT_CHARS) : text;
 }
 //@ chunk-18hwfzwa.js:342142-342461 placement
-function rehydrateSession(assistantMessages, x, { restoreAgentNames }) {
-  if (isBareMode()) return x;
-  let L = x;
-  let ee = tryRehydrate(() => rehydrateFooterLinks(assistantMessages, L.footerLinks));
-  if (ee !== null)
-    L = {
-      ...L,
-      footerLinks: ee,
+function rehydrateSession(messages, state, { restoreAgentNames }) {
+  if (isBareMode()) return state;
+  let next = state;
+  let footerLinks = tryRehydrate(() => rehydrateFooterLinks(messages, next.footerLinks));
+  if (footerLinks !== null)
+    next = {
+      ...next,
+      footerLinks,
     };
-  let ke = tryRehydrate(() => sendPinsIfNotSettled(assistantMessages, L.sendMessagePins));
-  if (ke !== null)
-    L = {
-      ...L,
-      sendMessagePins: ke,
+  let sendPins = tryRehydrate(() => sendPinsIfNotSettled(messages, next.sendMessagePins));
+  if (sendPins !== null)
+    next = {
+      ...next,
+      sendMessagePins: sendPins,
     };
-  let Re = tryRehydrate(() =>
-    restoreAgentNames ? collectNamedAgentIds(assistantMessages, L.agentNameRegistry) : null,
+  let agentNames = tryRehydrate(() =>
+    restoreAgentNames ? collectNamedAgentIds(messages, next.agentNameRegistry) : null,
   );
-  if (Re !== null)
-    L = {
-      ...L,
-      agentNameRegistry: Re,
+  if (agentNames !== null)
+    next = {
+      ...next,
+      agentNameRegistry: agentNames,
     };
-  return L;
+  return next;
 }
 //@ chunk-18hwfzwa.js:342461-342595 placement
 /**
  * 执行恢复步骤，出错时记日志并返回 null。
  */
-function tryRehydrate(h) {
+function tryRehydrate(fn) {
   try {
-    return h();
+    return fn();
   } catch (error) {
     let error_2 = toError(error);
     logForDebugging(`session rehydration threw: ${error_2.stack ?? error_2.message}`, {
@@ -95,23 +95,23 @@ var responsePairRetirer = null;
 /**
  * 恢复时清掉面板文件视图、展开状态与无键的页脚链接。
  */
-function resetTransientUiState(h) {
+function resetTransientUiState(state) {
   return {
-    ...h,
+    ...state,
     panelFileView: null,
     idleTeammatesExpanded: false,
-    footerLinks: h.footerLinks.some((footerLink) => footerLink.key === undefined)
-      ? h.footerLinks.filter((footerLink) => footerLink.key !== undefined)
-      : h.footerLinks,
+    footerLinks: state.footerLinks.some((footerLink) => footerLink.key === undefined)
+      ? state.footerLinks.filter((footerLink) => footerLink.key !== undefined)
+      : state.footerLinks,
   };
 }
 //@ chunk-18hwfzwa.js:342789-342935 placement
-function retireResumeSwapPair(h, x, dialogStore, session) {
-  closeWebViews(h);
+function retireResumeSwapPair(getState, setState, dialogStore, session) {
+  closeWebViews(getState);
   responsePairRetirer?.retireResponsePair(session);
   dialogStore.dismissKind(GOAL_PROPOSAL_DIALOG.kind);
-  let activeGoal = h().activeGoal;
+  let activeGoal = getState().activeGoal;
   if (activeGoal !== undefined) logGoalCleared(activeGoal, "resume_swap");
-  x(resetArtifactReadState);
+  setState(resetArtifactReadState);
 }
 export { resetTransientUiState, messageSnippet, retireResumeSwapPair, rehydrateSession };

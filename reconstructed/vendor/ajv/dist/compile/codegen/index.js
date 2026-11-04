@@ -5,12 +5,12 @@
  * pieces: chunk-s82q9s4x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_code } from "./code.js";
 import { require_scope } from "./scope.js";
 
 //@ chunk-s82q9s4x.js:5426-17192 cjs-fingerprint
-var require_codegen_2 = x(function (cjsExports) {
+var require_codegen_2 = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -257,9 +257,9 @@ var require_codegen_2 = x(function (cjsExports) {
       let { nodes } = this;
       let i = nodes.length;
       while (i--) {
-        let n = nodes[i];
-        if (n.optimizeNames(names, constants)) continue;
-        subtractNames(names, n.names);
+        let node = nodes[i];
+        if (node.optimizeNames(names, constants)) continue;
+        subtractNames(names, node.names);
         nodes.splice(i, 1);
       }
       return nodes.length > 0 ? this : undefined;
@@ -558,8 +558,8 @@ var require_codegen_2 = x(function (cjsExports) {
       let name = this._scope.toName(nameOrPrefix);
       if (this.opts.es5) {
         let arr = iterable instanceof code_1.Name ? iterable : this.var("_arr", iterable);
-        return this.forRange("_i", 0, code_1._`${arr}.length`, (i) => {
-          this.var(name, code_1._`${arr}[${i}]`);
+        return this.forRange("_i", 0, code_1._`${arr}.length`, (indexVar) => {
+          this.var(name, code_1._`${arr}[${indexVar}]`);
           forBody(name);
         });
       }

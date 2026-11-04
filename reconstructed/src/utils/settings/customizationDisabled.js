@@ -77,10 +77,10 @@ var CUSTOMIZATION_KINDS_COPY = {
 /**
  * 判断某类定制（CLAUDE.md、skills、hooks、插件等）是否被 --bare 或环境变量禁用。
  */
-function isCustomizationDisabled(e, s) {
-  if (CUSTOMIZATION_KINDS_COPY[e] && isDiskless()) return true;
-  if (isSafeMode() && !CUSTOMIZATION_KINDS[e]) return true;
-  if (isBareMode() && !s?.explicitlyRequested) return CUSTOMIZATION_KINDS_2[e];
+function isCustomizationDisabled(kind, options) {
+  if (CUSTOMIZATION_KINDS_COPY[kind] && isDiskless()) return true;
+  if (isSafeMode() && !CUSTOMIZATION_KINDS[kind]) return true;
+  if (isBareMode() && !options?.explicitlyRequested) return CUSTOMIZATION_KINDS_2[kind];
   return false;
 }
 //@ chunk-2xdyp70v.js:1174-1289 placement

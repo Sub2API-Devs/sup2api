@@ -17,80 +17,92 @@ import { loadConfigRowHandles } from "./apiDispatch.js";
 import { UI_ENV_SITE_RULES, checkConfigValueType } from "./sites/siteRules.js";
 import { errorMessage } from "../../utils/errors.js";
 import { HooksError } from "./hooksErrors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3718367-3718466 placement = getShellConfigImpl (0.668)
 /**
  * 把配置项转成 config.describe 用的描述对象（与 Shell 无关，切分误归）。
  */
-var toConfigDescribeItem = (e) => ({
-  key: e.key,
-  label: e.label,
-  description: e.description,
+var toConfigDescribeItem = (row) => ({
+  key: row.key,
+  label: row.label,
+  description: row.description,
   isHidden: false,
-  provider: e.provider,
+  provider: row.provider,
 });
 //@ chunk-e6aww6q8.js:3718466-3718483 placement
 /**
  * 配置行描述缓存
  */
-var configDescribeCache = createDescribeCache(pickRowFields);
+var configDescribeCache; // deferred: uses createDescribeCache (./commandApi.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3718466", () => {
+  configDescribeCache = createDescribeCache(pickRowFields);
+});
 //@ chunk-e6aww6q8.js:3718483-3718547 placement
 /**
  * 合并 label/description
  */
-var withRowLabels = (e, n) => ({
-  ...e,
-  label: n.label,
-  description: n.description,
+var withRowLabels = (row, described) => ({
+  ...row,
+  label: described.label,
+  description: described.description,
 });
 //@ chunk-e6aww6q8.js:3718547-3718775 placement
-async function describeConfigRow(e, n) {
-  let configDescribeItem = toConfigDescribeItem(e);
-  let s = () =>
+async function describeConfigRow(row, plugin) {
+  let configDescribeItem = toConfigDescribeItem(row);
+  let bottom = () =>
     NO_CORE_AT_CHAIN_BOTTOM("config.describe", {
       core: {
         "config.describe": CONFIG_DESCRIBE_EVENT.core,
       },
-      origin: n,
+      origin: plugin,
     })(configDescribeItem);
-  let h = await (n ? s() : configDescribeCache.of(configDescribeItem, s));
-  let S = h.label === e.label && h.description === e.description ? e : withRowLabels(e, h);
-  return h.isHidden ? undefined : S;
+  let described = await (plugin ? bottom() : configDescribeCache.of(configDescribeItem, bottom));
+  let merged =
+    described.label === row.label && described.description === row.description
+      ? row
+      : withRowLabels(row, described);
+  return described.isHidden ? undefined : merged;
 }
 //@ chunk-e6aww6q8.js:3718775-3718862 placement
 /**
  * 有钩子时改写配置行
  */
-function describeConfigRowIfHooked(e, n) {
+function describeConfigRowIfHooked(row, plugin) {
   return hasModuleHookingSite("config.describe", {
-    key: e.key,
+    key: row.key,
   })
-    ? describeConfigRow(e, n)
-    : Promise.resolve(e);
+    ? describeConfigRow(row, plugin)
+    : Promise.resolve(row);
 }
 //@ chunk-e6aww6q8.js:3718862-3719015 placement
-async function describeConfigRows(e, n) {
-  let filtered = (await Promise.all(e.map((h) => describeConfigRowIfHooked(h, n)))).filter(
-    (h) => h !== undefined,
+async function describeConfigRows(rows, plugin) {
+  let filtered = (await Promise.all(rows.map((row) => describeConfigRowIfHooked(row, plugin)))).filter(
+    (row) => row !== undefined,
   );
-  return filtered.length === e.length && filtered.every((h, y) => h === e[y]) ? e : filtered;
+  return filtered.length === rows.length && filtered.every((row, index) => row === rows[index])
+    ? rows
+    : filtered;
 }
 //@ chunk-e6aww6q8.js:3719015-3719121 placement
 /**
  * /config 行变化计数器：bump 递增并通知订阅者。
  */
-var CONFIG_ROWS_VERSION = (() => {
-  let e = 0;
-  let signal = createSignal();
-  return {
-    get: () => e,
-    subscribe: (r) => signal.subscribe(r),
-    bump: () => {
-      e += 1;
-      signal.emit();
-    },
-  };
-})();
+var CONFIG_ROWS_VERSION; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3719015", () => {
+  CONFIG_ROWS_VERSION = (() => {
+    let rows = 0;
+    let signal = createSignal();
+    return {
+      get: () => rows,
+      subscribe: (plugin) => signal.subscribe(plugin),
+      bump: () => {
+        rows += 1;
+        signal.emit();
+      },
+    };
+  })();
+});
 //@ chunk-e6aww6q8.js:3719121-3719186 placement
 /**
  * 配置钩子释放时递增版本
@@ -103,58 +115,62 @@ function onConfigHookReleased(turnHeld) {
 /**
  * 描述配置行列表
  */
-var describeConfigRowsList = async (plugin, origin = [plugin]) => [
+var describeConfigRowsList = async (pluginName, plugin = [pluginName]) => [
   ...(await describeConfigRows(
-    Array.from(await loadConfigRowHandles(plugin, "$.config.list"), (r) => r.row),
-    origin,
+    Array.from(await loadConfigRowHandles(pluginName, "$.config.list"), (handle) => handle.row),
+    plugin,
   )),
 ];
 //@ chunk-e6aww6q8.js:3719280-3719305 placement
 /**
  * config.set 站点规则
  */
-var CONFIG_SET_SITE_RULES = UI_ENV_SITE_RULES["config.set"];
+var CONFIG_SET_SITE_RULES; // deferred: uses UI_ENV_SITE_RULES (./sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3719280", () => {
+  CONFIG_SET_SITE_RULES = UI_ENV_SITE_RULES["config.set"];
+});
 //@ chunk-e6aww6q8.js:3719305-3719651 placement
 /**
  * 按配置项类型（布尔、选项、字符串、数字、列表）校验要写入的值，返回问题说明。
  */
-function checkConfigValue(row, n) {
+function checkConfigValue(row, value) {
   let options = row.options ?? [];
-  let s = typeof n === "string" && options.includes(n);
+  let isValidOption = typeof value === "string" && options.includes(value);
   switch (row.kind) {
     case "boolean":
-      return typeof n === "boolean" ? undefined : "takes true or false";
+      return typeof value === "boolean" ? undefined : "takes true or false";
     case "choice":
-      return s ? undefined : `takes one of: ${options.join(", ")}`;
+      return isValidOption ? undefined : `takes one of: ${options.join(", ")}`;
     case "text":
-      return typeof n === "string" ? undefined : "takes a text";
+      return typeof value === "string" ? undefined : "takes a text";
     case "number":
-      return Number.isFinite(n) ? undefined : "takes a number";
+      return Number.isFinite(value) ? undefined : "takes a number";
   }
 }
 //@ chunk-e6aww6q8.js:3719651-3719823 placement
-var createConfigSetCore = (e) => ({
+var createConfigSetCore = (config) => ({
   name: "core",
   isCore: true,
   budgetMs: 0,
-  run: async (n) => {
-    let r = e.lockReason ?? checkConfigValue(e.row, n.value) ?? (await e.write(n.value));
-    return r === undefined
+  run: async (req) => {
+    let event =
+      config.lockReason ?? checkConfigValue(config.row, req.value) ?? (await config.write(req.value));
+    return event === undefined
       ? {
-          value: n.value,
+          value: req.value,
         }
       : {
-          deny: r,
+          deny: event,
         };
   },
 });
 //@ chunk-e6aww6q8.js:3719823-3719929 placement
-var toConfigSetEvent = (e) => ({
-  key: e.row.key,
-  value: e.value,
-  previous: e.row.value,
-  provider: e.row.provider,
-  origin: e.origin,
+var toConfigSetEvent = (request) => ({
+  key: request.row.key,
+  value: request.value,
+  previous: request.row.value,
+  provider: request.row.provider,
+  origin: request.origin,
 });
 //@ chunk-e6aww6q8.js:3719929-3719958 placement
 /**
@@ -162,22 +178,25 @@ var toConfigSetEvent = (e) => ({
  */
 var isConfigSetHooked = () => hasModuleHookingSite("config.set");
 //@ chunk-e6aww6q8.js:3719958-3719999 placement
-var P8n = Object.freeze({
-  kind: "composer",
+var COMPOSER_CONFIG_ORIGIN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3719958", () => {
+  COMPOSER_CONFIG_ORIGIN = Object.freeze({
+    kind: "composer",
+  });
 });
 //@ chunk-e6aww6q8.js:3719999-3720180 placement
 /**
  * 经 config.set 钩子链设置一个 /config 行的值（核心处理器负责锁定检查、类型检查与写入），失败时返回 deny。
  */
-async function dispatchConfigSet(e) {
+async function dispatchConfigSet(request) {
   try {
     return await NO_CORE_AT_CHAIN_BOTTOM("config.set", {
       core: {
-        "config.set": createConfigSetCore(e),
+        "config.set": createConfigSetCore(request),
       },
-      origin: e.hookOrigin,
-      signal: e.signal,
-    })(toConfigSetEvent(e));
+      origin: request.hookOrigin,
+      signal: request.signal,
+    })(toConfigSetEvent(request));
   } catch (error) {
     return {
       deny: `config.set failed: ${errorMessage(error)}`,
@@ -185,18 +204,20 @@ async function dispatchConfigSet(e) {
   }
 }
 //@ chunk-e6aww6q8.js:3720180-3720453 placement
-async function configSetForPlugin(e, plugin, hookOrigin = [plugin]) {
-  let found = (await loadConfigRowHandles(plugin, "$.config.set")).find((h) => h.row.key === e.key);
+async function configSetForPlugin(request, pluginName, hookOrigin = [pluginName]) {
+  let found = (await loadConfigRowHandles(pluginName, "$.config.set")).find(
+    (handle) => handle.row.key === request.key,
+  );
   if (!found)
     throw new HooksError(
-      `${plugin}: $.config.set: no /config row with key ${e.key} ($.config.list names them)`,
+      `${pluginName}: $.config.set: no /config row with key ${request.key} ($.config.list names them)`,
     );
   return dispatchConfigSet({
     ...found,
-    value: e.value,
+    value: request.value,
     origin: {
       kind: "plugin",
-      name: plugin,
+      name: pluginName,
     },
     hookOrigin,
   });
@@ -206,19 +227,19 @@ async function configSetForPlugin(e, plugin, hookOrigin = [plugin]) {
  * $.config.set 表项：参数 {key, value}，按 key 找到 /config 行后经 config.set 设置。
  */
 var CONFIG_SET_API = {
-  check: (e) =>
-    typeof e?.key === "string" && e.key !== ""
-      ? checkConfigValueType(e.value)
+  check: (args) =>
+    typeof args?.key === "string" && args.key !== ""
+      ? checkConfigValueType(args.value)
       : "takes { key, value } (the key as $.config.list names it)",
-  run: (e, n) => configSetForPlugin(e, n.plugin, n.origin),
+  run: (a, b) => configSetForPlugin(a, b.plugin, b.origin),
 };
 //@ chunk-e6aww6q8.js:3720619-3720668 placement
 /**
  * 先等待再 yield*
  */
-async function* afterThenYield(e, n) {
-  await e;
-  return yield* n();
+async function* afterThenYield(first, rest) {
+  await first;
+  return yield* rest();
 }
 export {
   isConfigSetHooked,
@@ -228,7 +249,7 @@ export {
   describeConfigRowsList,
   CONFIG_SET_API,
   onConfigHookReleased,
-  P8n,
+  COMPOSER_CONFIG_ORIGIN,
   dispatchConfigSet,
   describeConfigRowIfHooked,
 };

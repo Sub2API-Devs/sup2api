@@ -5,10 +5,10 @@
  * pieces: chunk-bwbq4xvm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-bwbq4xvm.js:1748-1947 cjs-fingerprint
-var require_debug = x(function (cjsExports, cjsModule) {
+var require_debug = __commonJS(function (cjsExports, cjsModule) {
   var debug =
     typeof process === "object" &&
     process.env &&

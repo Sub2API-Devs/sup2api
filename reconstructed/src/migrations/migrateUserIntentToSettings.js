@@ -20,25 +20,25 @@ import { logError } from "../utils/log.js";
 /**
  * 迁移：把全局配置里的用户意图类设置搬到 userSettings。
  */
-async function migrateUserIntentToSettings(e) {
+async function migrateUserIntentToSettings(context) {
   let globalConfig = getGlobalConfig();
   let settingsForSourceForUpkeep = getSettingsForSourceForUpkeep("userSettings");
-  let s = {};
-  for (let S of USER_INTENT_SETTING_KEYS) {
-    let y = globalConfig[S];
-    if (y === undefined) continue;
-    if (y === DEFAULT_GLOBAL_CONFIG[S]) continue;
-    if (settingsForSourceForUpkeep?.[S] !== undefined) continue;
-    let P = validateConfigValue(S, y);
-    if (P === undefined) continue;
-    s[S] = P;
+  let pendingSettings = {};
+  for (let key of USER_INTENT_SETTING_KEYS) {
+    let value = globalConfig[key];
+    if (value === undefined) continue;
+    if (value === DEFAULT_GLOBAL_CONFIG[key]) continue;
+    if (settingsForSourceForUpkeep?.[key] !== undefined) continue;
+    let validated = validateConfigValue(key, value);
+    if (validated === undefined) continue;
+    pendingSettings[key] = validated;
   }
-  if (Object.keys(s).length === 0) return true;
+  if (Object.keys(pendingSettings).length === 0) return true;
   try {
-    let { error } = await updateSettingsForSource("userSettings", s, undefined, e);
+    let { error } = await updateSettingsForSource("userSettings", pendingSettings, undefined, context);
     if (error) throw error;
     logEvent("tengu_migrate_user_intent_to_settings", {
-      migrated_count: Object.keys(s).length,
+      migrated_count: Object.keys(pendingSettings).length,
     });
     logFeatureOk("migration_user_intent_to_settings");
     return true;

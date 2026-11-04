@@ -5,7 +5,7 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_utils } from "./utils.js";
 import { require_error_correction_level } from "./error-correction-level.js";
 import { require_bit_buffer } from "./bit-buffer.js";
@@ -21,7 +21,7 @@ import { require_mode } from "./mode.js";
 import { require_segments } from "./segments.js";
 
 //@ chunk-spjgqa4y.js:17575-20975 cjs-fingerprint
-var require_qrcode = x(function (cjsExports) {
+var require_qrcode = __commonJS(function (cjsExports) {
   var Utils = require_utils();
   var ECLevel = require_error_correction_level();
   var BitBuffer = require_bit_buffer();
@@ -38,9 +38,9 @@ var require_qrcode = x(function (cjsExports) {
   function setupFinderPattern(matrix, version) {
     let size = matrix.size;
     let pos = FinderPattern.getPositions(version);
-    for (let i = 0; i < pos.length; i++) {
-      let row = pos[i][0];
-      let col = pos[i][1];
+    for (let posIndex = 0; posIndex < pos.length; posIndex++) {
+      let row = pos[posIndex][0];
+      let col = pos[posIndex][1];
       for (let r = -1; r <= 7; r++) {
         if (row + r <= -1 || size <= row + r) continue;
         for (let c = -1; c <= 7; c++) {

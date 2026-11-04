@@ -54,6 +54,7 @@ import { classifyArtifactSocketError } from "./frameApi.js";
 import { checkAndRefreshOAuthTokenIfNeeded } from "../../utils/auth.js";
 import { findProxyError } from "../../utils/proxy.js";
 import { parseRetryAfterMs } from "../../bridge/debugUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-sh3bk7pt.js:3791-4306 placement
 /**
@@ -89,54 +90,66 @@ async function sendWithOptionalGzip({ url: options, body, storageV5, signal, sen
   });
 }
 //@ chunk-sh3bk7pt.js:4306-4399 placement
-function isRelayUnsent(frameWithRetry) {
+function isRelayUnsent(relayResult) {
   return (
-    !frameWithRetry.ok &&
-    (frameWithRetry.reason === "relay-unavailable" || frameWithRetry.reason === "relay-not-served")
+    !relayResult.ok &&
+    (relayResult.reason === "relay-unavailable" || relayResult.reason === "relay-not-served")
   );
 }
 //@ chunk-sh3bk7pt.js:4399-4508 placement
 /**
  * 中继请求的两个头 x-ccr-relay-upstream、x-ccr-sandbox-egress 与沙箱出网档位取值。
  */
-var X_CCR_RELAY_UPSTREAM = "x-ccr-relay-upstream";
-var X_CCR_SANDBOX_EGRESS = "x-ccr-sandbox-egress";
-var SANDBOX_EGRESS_MODES = new Set(["disabled", "restricted", "unrestricted"]);
+var X_CCR_RELAY_UPSTREAM; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var X_CCR_SANDBOX_EGRESS;
+var SANDBOX_EGRESS_MODES;
+deferInit("chunk-sh3bk7pt.js:4399", () => {
+  X_CCR_RELAY_UPSTREAM = "x-ccr-relay-upstream";
+  X_CCR_SANDBOX_EGRESS = "x-ccr-sandbox-egress";
+  SANDBOX_EGRESS_MODES = new Set(["disabled", "restricted", "unrestricted"]);
+});
 //@ chunk-sh3bk7pt.js:4508-4645 placement
-function sandboxEgressOf(e) {
-  if (!e.ok || e.route !== "relay" || !fromUpstream(e)) return;
-  let n = e.response.headers?.[X_CCR_SANDBOX_EGRESS];
-  return typeof n === "string" && SANDBOX_EGRESS_MODES.has(n) ? n : undefined;
+function sandboxEgressOf(result) {
+  if (!result.ok || result.route !== "relay" || !fromUpstream(result)) return;
+  let egress = result.response.headers?.[X_CCR_SANDBOX_EGRESS];
+  return typeof egress === "string" && SANDBOX_EGRESS_MODES.has(egress) ? egress : undefined;
 }
 //@ chunk-sh3bk7pt.js:4645-4682 placement
 var CCR_CREDENTIAL_REFUSED_PREFIX = "forbidden: CCR agent tokens";
 //@ chunk-sh3bk7pt.js:4682-4810 placement
-function isFrameNotFoundBody(e) {
-  if (typeof e === "string") return e.trim() === "not found";
-  return typeof e === "object" && e !== null && e.error === "not_found";
+function isFrameNotFoundBody(body) {
+  if (typeof body === "string") return body.trim() === "not found";
+  return typeof body === "object" && body !== null && body.error === "not_found";
 }
 //@ chunk-sh3bk7pt.js:4810-4878 placement
-function isFrameNoVersionBody(e) {
-  return typeof e === "string" && e.trim() === "no version";
+function isFrameNoVersionBody(body) {
+  return typeof body === "string" && body.trim() === "no version";
 }
 //@ chunk-sh3bk7pt.js:4878-5105 placement
 /**
  * 组织网络策略拒绝 artifact 存储读取/写入的服务端消息集合。
  */
-var RELAY_FALLBACK_STATUSES = new Set([401, 403, 404, 413]);
-var STORE_READ_POLICY_DENIALS = new Set([
-  "organization network policy denies artifact storage reads for this session",
-  "organization network policy could not be determined for this session; artifact storage reads denied",
-]);
+var RELAY_FALLBACK_STATUSES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var STORE_READ_POLICY_DENIALS;
+deferInit("chunk-sh3bk7pt.js:4878", () => {
+  RELAY_FALLBACK_STATUSES = new Set([401, 403, 404, 413]);
+  STORE_READ_POLICY_DENIALS = new Set([
+    "organization network policy denies artifact storage reads for this session",
+    "organization network policy could not be determined for this session; artifact storage reads denied",
+  ]);
+});
 //@ chunk-sh3bk7pt.js:5105-5304 placement
-var STORE_WRITE_POLICY_DENIALS = new Set([
-  "organization network policy denies artifact storage writes for this session",
-  "organization network policy could not be determined for this session; artifact storage writes denied",
-]);
+var STORE_WRITE_POLICY_DENIALS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-sh3bk7pt.js:5105", () => {
+  STORE_WRITE_POLICY_DENIALS = new Set([
+    "organization network policy denies artifact storage writes for this session",
+    "organization network policy could not be determined for this session; artifact storage writes denied",
+  ]);
+});
 //@ chunk-sh3bk7pt.js:5304-5440 placement
-function isStorePolicyDenial(e) {
-  if (!e.ok || fromUpstream(e) || e.status !== 403 || typeof e.data !== "string") return false;
-  let trimmed = e.data.trim();
+function isStorePolicyDenial(body) {
+  if (!body.ok || fromUpstream(body) || body.status !== 403 || typeof body.data !== "string") return false;
+  let trimmed = body.data.trim();
   return (
     STORE_READ_POLICY_DENIALS.has(trimmed) || (relayIsOnlyRoute() && STORE_WRITE_POLICY_DENIALS.has(trimmed))
   );
@@ -145,146 +158,176 @@ function isStorePolicyDenial(e) {
 var RELAY_APPROVAL_REQUIRED_TEXT =
   "relay approval required: this change was not approved by the person for this session";
 //@ chunk-sh3bk7pt.js:5534-5631 placement
-function isRelayApprovalRequired(e) {
+function isRelayApprovalRequired(body) {
   return (
-    e.ok &&
-    !fromUpstream(e) &&
-    e.status === 403 &&
-    typeof e.data === "string" &&
-    e.data.trim() === RELAY_APPROVAL_REQUIRED_TEXT
+    body.ok &&
+    !fromUpstream(body) &&
+    body.status === 403 &&
+    typeof body.data === "string" &&
+    body.data.trim() === RELAY_APPROVAL_REQUIRED_TEXT
   );
 }
 //@ chunk-sh3bk7pt.js:5631-5962 placement
 /**
  * 组织网络策略拒绝或无法确定 artifact 读取时的服务端消息集合，以及云会话网络关闭时挂载读取的说明。
  */
-var READ_POLICY_DENIALS = new Set([
-  "organization network policy denies artifact reads for this session",
-  "organization network policy could not be determined for this session",
-]);
-var MOUNT_NETWORK_OFF_WORDS =
-  "this cloud session's network access is turned off for the organization, or could not be confirmed, so the session gateway does not serve artifact pages or files to it";
+var READ_POLICY_DENIALS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MOUNT_NETWORK_OFF_WORDS;
+deferInit("chunk-sh3bk7pt.js:5631", () => {
+  READ_POLICY_DENIALS = new Set([
+    "organization network policy denies artifact reads for this session",
+    "organization network policy could not be determined for this session",
+  ]);
+  MOUNT_NETWORK_OFF_WORDS =
+    "this cloud session's network access is turned off for the organization, or could not be confirmed, so the session gateway does not serve artifact pages or files to it";
+});
 //@ chunk-sh3bk7pt.js:5962-6074 placement
-function isMountNetworkOffRefusal(status, n) {
+function isMountNetworkOffRefusal(status, body) {
   return (
     status === 403 &&
-    n !== undefined &&
-    n.byteLength <= 256 &&
-    READ_POLICY_DENIALS.has(Buffer.from(n).toString("utf8").trim())
+    body !== undefined &&
+    body.byteLength <= 256 &&
+    READ_POLICY_DENIALS.has(Buffer.from(body).toString("utf8").trim())
   );
 }
 //@ chunk-sh3bk7pt.js:6074-6205 placement
 /**
  * 中继相关常量：直连被拒/隧道拒绝的冷却时长、探测超时与大小、记录集合，以及允许透传的请求头正则（x-frame-*、x-ccr-relay-*、accept、if-match）。
  */
-var DIRECT_REFUSAL_TTL_MS = 300000;
-var RELAY_PROBE_TIMEOUT_MS = 15000;
-var RELAY_PROBE_MAX_BYTES = 65536;
-var weakSet = new WeakSet();
-var weakMap = new WeakMap();
-var RELAYABLE_HEADER_RE = /^(?:x-frame-[a-z0-9-]+|x-ccr-relay-[a-z0-9-]+|accept|if-match)$/i;
+var DIRECT_REFUSAL_TTL_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var RELAY_PROBE_TIMEOUT_MS;
+var RELAY_PROBE_MAX_BYTES;
+var weakSet;
+var weakMap;
+var RELAYABLE_HEADER_RE;
+deferInit("chunk-sh3bk7pt.js:6074", () => {
+  DIRECT_REFUSAL_TTL_MS = 300000;
+  RELAY_PROBE_TIMEOUT_MS = 15000;
+  RELAY_PROBE_MAX_BYTES = 65536;
+  weakSet = new WeakSet();
+  weakMap = new WeakMap();
+  RELAYABLE_HEADER_RE = /^(?:x-frame-[a-z0-9-]+|x-ccr-relay-[a-z0-9-]+|accept|if-match)$/i;
+});
 //@ chunk-sh3bk7pt.js:6205-6266 placement
 function filterRelayableHeaders(headers) {
   if (!headers) return headers;
-  return pickByHelper(headers, (n, r) => RELAYABLE_HEADER_RE.test(r));
+  return pickByHelper(headers, (value, name) => RELAYABLE_HEADER_RE.test(name));
 }
 //@ chunk-sh3bk7pt.js:6266-7634 placement
 /**
  * 通过会话中继转发 artifact 请求的路由族与具体路由表：boot/blobs/comments/subscriptions/types/type_create/db/sharing/publish/frames_external 各自的 method+path。
  */
-var BOOT_RELAY_FAMILY = lit("boot");
-var BLOBS_RELAY_FAMILY = lit("blobs");
-var COMMENTS_RELAY_FAMILY = lit("comments");
-var SUBSCRIPTIONS_RELAY_FAMILY = lit("subscriptions");
-var TYPES_RELAY_FAMILY = lit("types");
-var TYPE_FILES_RELAY_FAMILY = lit("type_files");
-var TYPE_CREATE_RELAY_FAMILY = lit("type_create");
-var DB_RELAY_FAMILY = lit("db");
-var SHARING_RELAY_FAMILY = lit("sharing");
-var PUBLISH_RELAY_FAMILY = lit("publish");
-var FRAMES_EXTERNAL_RELAY_FAMILY = lit("frames_external");
-var RELAY_FAMILY_SET = new Set([
-  COMMENTS_RELAY_FAMILY,
-  SUBSCRIPTIONS_RELAY_FAMILY,
-  BOOT_RELAY_FAMILY,
-  FRAMES_EXTERNAL_RELAY_FAMILY,
-  TYPES_RELAY_FAMILY,
-  TYPE_FILES_RELAY_FAMILY,
-  TYPE_CREATE_RELAY_FAMILY,
-  DB_RELAY_FAMILY,
-  PUBLISH_RELAY_FAMILY,
-  BLOBS_RELAY_FAMILY,
-  ...[],
-]);
-var TENGU_COBALT_PLINTH_BURNET = "tengu_cobalt_plinth_burnet";
-var SORTED_RELAY_ROUTES = [
-  ...parseRelayRoutes(BOOT_RELAY_FAMILY, [
-    "GET /{slug}",
-    "GET /versions/{slug}",
-    "GET /frames",
-    "POST /track",
-  ]),
-  ...parseRelayRoutes(FRAMES_EXTERNAL_RELAY_FAMILY, ["GET /frames/external"]),
-  ...parseRelayRoutes(PUBLISH_RELAY_FAMILY, [
-    "POST /deploy/direct",
-    "POST /deploy/prepare",
-    "POST /upload",
-    "GET /contract/latest",
-    "GET /contract/{v}",
-    "GET /contract/{v}/{file}",
-    "GET /contract/{v}/prompt",
-    "GET /read/{slug}",
-  ]),
-  ...parseRelayRoutes(COMMENTS_RELAY_FAMILY, [
-    "GET /comments/{slug}",
-    "POST /comments/{slug}/{thread}",
-    "POST /comments/{slug}/{thread}/resolve",
-    "POST /comments/{slug}/{thread}/summon-status",
-  ]),
-  ...parseRelayRoutes(DB_RELAY_FAMILY, ["POST /db/agent"]),
-  ...parseRelayRoutes(TYPES_RELAY_FAMILY, ["GET /types", "GET /types/{slug}"]),
-  ...parseRelayRoutes(TYPE_CREATE_RELAY_FAMILY, ["POST /types/{slug}/create"]),
-  ...parseRelayRoutes(lit("type_instances"), ["GET /types/{slug}/instances"]),
-  ...parseRelayRoutes(TYPE_FILES_RELAY_FAMILY, [
-    "GET /types/{slug}/files/{a}",
-    "GET /types/{slug}/files/{a}/{b}",
-    "GET /types/{slug}/files/{a}/{b}/{c}",
-    "GET /types/{slug}/files/{a}/{b}/{c}/{d}",
-    "GET /types/{slug}/files/{a}/{b}/{c}/{d}/{e}",
-  ]),
-  ...parseRelayRoutes(SUBSCRIPTIONS_RELAY_FAMILY, ["POST /subscribe/{slug}", "POST /unsubscribe/{slug}"]),
-  ...parseRelayRoutes(lit("delete"), ["DELETE /{slug}"]),
-  ...parseRelayRoutes(SHARING_RELAY_FAMILY, ["GET /perm/{slug}", "PATCH /perm/{slug}"]),
-  ...parseRelayRoutes(lit("favorites"), ["POST /favorite/{slug}", "DELETE /favorite/{slug}"]),
-  ...[],
-].sort((e, n) => countPlaceholders(e) - countPlaceholders(n));
+var BOOT_RELAY_FAMILY; // deferred: uses parseRelayRoutes of its import cycle while loading; runs once the cycle is complete
+var BLOBS_RELAY_FAMILY;
+var COMMENTS_RELAY_FAMILY;
+var SUBSCRIPTIONS_RELAY_FAMILY;
+var TYPES_RELAY_FAMILY;
+var TYPE_FILES_RELAY_FAMILY;
+var TYPE_CREATE_RELAY_FAMILY;
+var DB_RELAY_FAMILY;
+var SHARING_RELAY_FAMILY;
+var PUBLISH_RELAY_FAMILY;
+var FRAMES_EXTERNAL_RELAY_FAMILY;
+var RELAY_FAMILY_SET;
+var TENGU_COBALT_PLINTH_BURNET;
+var SORTED_RELAY_ROUTES;
+deferInit("chunk-sh3bk7pt.js:6266", () => {
+  BOOT_RELAY_FAMILY = lit("boot");
+  BLOBS_RELAY_FAMILY = lit("blobs");
+  COMMENTS_RELAY_FAMILY = lit("comments");
+  SUBSCRIPTIONS_RELAY_FAMILY = lit("subscriptions");
+  TYPES_RELAY_FAMILY = lit("types");
+  TYPE_FILES_RELAY_FAMILY = lit("type_files");
+  TYPE_CREATE_RELAY_FAMILY = lit("type_create");
+  DB_RELAY_FAMILY = lit("db");
+  SHARING_RELAY_FAMILY = lit("sharing");
+  PUBLISH_RELAY_FAMILY = lit("publish");
+  FRAMES_EXTERNAL_RELAY_FAMILY = lit("frames_external");
+  RELAY_FAMILY_SET = new Set([
+    COMMENTS_RELAY_FAMILY,
+    SUBSCRIPTIONS_RELAY_FAMILY,
+    BOOT_RELAY_FAMILY,
+    FRAMES_EXTERNAL_RELAY_FAMILY,
+    TYPES_RELAY_FAMILY,
+    TYPE_FILES_RELAY_FAMILY,
+    TYPE_CREATE_RELAY_FAMILY,
+    DB_RELAY_FAMILY,
+    PUBLISH_RELAY_FAMILY,
+    BLOBS_RELAY_FAMILY,
+    ...[],
+  ]);
+  TENGU_COBALT_PLINTH_BURNET = "tengu_cobalt_plinth_burnet";
+  SORTED_RELAY_ROUTES = [
+    ...parseRelayRoutes(BOOT_RELAY_FAMILY, [
+      "GET /{slug}",
+      "GET /versions/{slug}",
+      "GET /frames",
+      "POST /track",
+    ]),
+    ...parseRelayRoutes(FRAMES_EXTERNAL_RELAY_FAMILY, ["GET /frames/external"]),
+    ...parseRelayRoutes(PUBLISH_RELAY_FAMILY, [
+      "POST /deploy/direct",
+      "POST /deploy/prepare",
+      "POST /upload",
+      "GET /contract/latest",
+      "GET /contract/{v}",
+      "GET /contract/{v}/{file}",
+      "GET /contract/{v}/prompt",
+      "GET /read/{slug}",
+    ]),
+    ...parseRelayRoutes(COMMENTS_RELAY_FAMILY, [
+      "GET /comments/{slug}",
+      "POST /comments/{slug}/{thread}",
+      "POST /comments/{slug}/{thread}/resolve",
+      "POST /comments/{slug}/{thread}/summon-status",
+    ]),
+    ...parseRelayRoutes(DB_RELAY_FAMILY, ["POST /db/agent"]),
+    ...parseRelayRoutes(TYPES_RELAY_FAMILY, ["GET /types", "GET /types/{slug}"]),
+    ...parseRelayRoutes(TYPE_CREATE_RELAY_FAMILY, ["POST /types/{slug}/create"]),
+    ...parseRelayRoutes(lit("type_instances"), ["GET /types/{slug}/instances"]),
+    ...parseRelayRoutes(TYPE_FILES_RELAY_FAMILY, [
+      "GET /types/{slug}/files/{a}",
+      "GET /types/{slug}/files/{a}/{b}",
+      "GET /types/{slug}/files/{a}/{b}/{c}",
+      "GET /types/{slug}/files/{a}/{b}/{c}/{d}",
+      "GET /types/{slug}/files/{a}/{b}/{c}/{d}/{e}",
+    ]),
+    ...parseRelayRoutes(SUBSCRIPTIONS_RELAY_FAMILY, ["POST /subscribe/{slug}", "POST /unsubscribe/{slug}"]),
+    ...parseRelayRoutes(lit("delete"), ["DELETE /{slug}"]),
+    ...parseRelayRoutes(SHARING_RELAY_FAMILY, ["GET /perm/{slug}", "PATCH /perm/{slug}"]),
+    ...parseRelayRoutes(lit("favorites"), ["POST /favorite/{slug}", "DELETE /favorite/{slug}"]),
+    ...[],
+  ].sort((a, b) => countPlaceholders(a) - countPlaceholders(b));
+});
 //@ chunk-sh3bk7pt.js:7634-7740 placement
-function parseRelayRoutes(family, n) {
-  return n.map((r) => {
-    let [a, l] = r.split(" ");
+function parseRelayRoutes(family, familyName) {
+  return familyName.map((route) => {
+    let [method, path] = route.split(" ");
     return {
-      method: a,
-      pattern: l.split("/"),
+      method,
+      pattern: path.split("/"),
       family,
     };
   });
 }
 //@ chunk-sh3bk7pt.js:7740-7798 placement
-function countPlaceholders(e) {
-  return count(e.pattern, (n) => n.startsWith("{"));
+function countPlaceholders(route) {
+  return count(route.pattern, (segment) => segment.startsWith("{"));
 }
 //@ chunk-sh3bk7pt.js:7798-8007 placement
-function relayFamily(e, n) {
-  let parts = n
+function relayFamily(family, route) {
+  let parts = route
     .slice(10)
     .replace(/[?#].*$/s, "")
     .split("/");
   return (
     SORTED_RELAY_ROUTES.find(
-      (l) =>
-        l.method === e &&
-        l.pattern.length === parts.length &&
-        l.pattern.every((y, d) => (y.startsWith("{") ? parts[d] !== "" : y === parts[d])),
+      (route) =>
+        route.method === family &&
+        route.pattern.length === parts.length &&
+        route.pattern.every((segment, index) =>
+          segment.startsWith("{") ? parts[index] !== "" : segment === parts[index],
+        ),
     )?.family ?? null
   );
 }
@@ -304,13 +347,13 @@ function relayIsOnlyRoute() {
   return isDiskless();
 }
 //@ chunk-sh3bk7pt.js:8220-8261 placement
-function frameVerbRelayActive(e = null) {
-  return frameRelayActive() && !isBotContextUnserved(e);
+function frameVerbRelayActive(family = null) {
+  return frameRelayActive() && !isBotContextUnserved(family);
 }
 //@ chunk-sh3bk7pt.js:8261-8470 placement
-function isBotContextUnserved(e) {
+function isBotContextUnserved(family) {
   if (!isActingAsBot() && !isAgentSessionWorkerRelay()) return false;
-  if (e !== null && accountBotMayRelay(e)) return false;
+  if (family !== null && accountBotMayRelay(family)) return false;
   let frameRelay = getLiveState().frameRelay;
   if (!frameRelay.botContextNoted) {
     frameRelay.botContextNoted = true;
@@ -358,66 +401,66 @@ function runnerAgentMayReadFilesDirect() {
   );
 }
 //@ chunk-sh3bk7pt.js:8789-8845 placement
-function accountBotMayRelay(e) {
+function accountBotMayRelay(family) {
   return (
-    RELAY_FAMILY_SET.has(e) &&
+    RELAY_FAMILY_SET.has(family) &&
     isRemoteManagedEnvironment() &&
     getFeatureValue_CACHED_MAY_BE_STALE(TENGU_COBALT_PLINTH_BURNET, false) &&
     isUserIngressToken()
   );
 }
 //@ chunk-sh3bk7pt.js:8845-8919 placement
-function relayDeclined(e) {
-  return (getLiveState().frameRelay.declinedUntil.get(e) ?? 0) > Date.now();
+function relayDeclined(family) {
+  return (getLiveState().frameRelay.declinedUntil.get(family) ?? 0) > Date.now();
 }
 //@ chunk-sh3bk7pt.js:8919-9065 placement
-function declineRelay(e, n = false) {
+function declineRelay(family, silent = false) {
   let frameRelay = getLiveState().frameRelay;
-  let a = Date.now() + DIRECT_REFUSAL_TTL_MS;
-  frameRelay.declinedUntil.set(e, a);
-  if (n) frameRelay.hopFailedUntil.set(e, a);
-  else frameRelay.hopFailedUntil.delete(e);
+  let until = Date.now() + DIRECT_REFUSAL_TTL_MS;
+  frameRelay.declinedUntil.set(family, until);
+  if (silent) frameRelay.hopFailedUntil.set(family, until);
+  else frameRelay.hopFailedUntil.delete(family);
 }
 //@ chunk-sh3bk7pt.js:9065-9141 placement
-function relayHopFailed(e) {
-  return (getLiveState().frameRelay.hopFailedUntil.get(e) ?? 0) > Date.now();
+function relayHopFailed(family) {
+  return (getLiveState().frameRelay.hopFailedUntil.get(family) ?? 0) > Date.now();
 }
 //@ chunk-sh3bk7pt.js:9141-9214 placement
-function relayServed(e) {
-  return (getLiveState().frameRelay.servedUntil.get(e) ?? 0) > Date.now();
+function relayServed(family) {
+  return (getLiveState().frameRelay.servedUntil.get(family) ?? 0) > Date.now();
 }
 //@ chunk-sh3bk7pt.js:9214-9329 placement
-function markRelayServed(e) {
+function markRelayServed(state) {
   let frameRelay = getLiveState().frameRelay;
-  frameRelay.declinedUntil.delete(e);
-  frameRelay.servedUntil.set(e, Date.now() + DIRECT_REFUSAL_TTL_MS);
-  frameRelay.vouched.add(e);
+  frameRelay.declinedUntil.delete(state);
+  frameRelay.servedUntil.set(state, Date.now() + DIRECT_REFUSAL_TTL_MS);
+  frameRelay.vouched.add(state);
 }
 //@ chunk-sh3bk7pt.js:9329-9383 placement
-function relayVouched(e) {
-  return getLiveState().frameRelay.vouched.has(e);
+function relayVouched(state) {
+  return getLiveState().frameRelay.vouched.has(state);
 }
 //@ chunk-sh3bk7pt.js:9383-9433 placement
-function clearRelayVouch(e) {
-  getLiveState().frameRelay.vouched.delete(e);
+function clearRelayVouch(state) {
+  getLiveState().frameRelay.vouched.delete(state);
 }
 //@ chunk-sh3bk7pt.js:9433-9512 placement
-function isDirectRefused(e) {
-  return (getLiveState().frameRelay.directRefusedUntil.get(e) ?? 0) > Date.now();
+function isDirectRefused(state) {
+  return (getLiveState().frameRelay.directRefusedUntil.get(state) ?? 0) > Date.now();
 }
 //@ chunk-sh3bk7pt.js:9512-9569 placement
-function isCredentialRefusal(e) {
-  return e.ok && e.status === 403 && isCredentialRefusalBody(e.data);
+function isCredentialRefusal(error) {
+  return error.ok && error.status === 403 && isCredentialRefusalBody(error.data);
 }
 //@ chunk-sh3bk7pt.js:9569-9642 placement
-function isCredentialRefusalBody(e) {
-  return typeof e === "string" && e.trimStart().startsWith(CCR_CREDENTIAL_REFUSED_PREFIX);
+function isCredentialRefusalBody(body) {
+  return typeof body === "string" && body.trimStart().startsWith(CCR_CREDENTIAL_REFUSED_PREFIX);
 }
 //@ chunk-sh3bk7pt.js:9642-9766 placement
-function noteDirectRefusal(family, n) {
-  if (!n.ok) return;
+function noteDirectRefusal(family, familyKey) {
+  if (!familyKey.ok) return;
   let { directRefusedUntil } = getLiveState().frameRelay;
-  if (isCredentialRefusal(n)) directRefusedUntil.set(family, Date.now() + DIRECT_REFUSAL_TTL_MS);
+  if (isCredentialRefusal(familyKey)) directRefusedUntil.set(family, Date.now() + DIRECT_REFUSAL_TTL_MS);
   else directRefusedUntil.delete(family);
 }
 //@ chunk-sh3bk7pt.js:9766-9888 placement
@@ -438,62 +481,65 @@ function mountHopFailedForRunner(status) {
 //@ chunk-sh3bk7pt.js:9963-9977 placement
 var alwaysTrue = () => true;
 //@ chunk-sh3bk7pt.js:9977-10126 placement
-function noteTunnelDeclined(e, n, status) {
-  getLiveState().frameRelay.tunnelDeclinedUntil.set(e, Date.now() + DIRECT_REFUSAL_TTL_MS);
+function noteTunnelDeclined(family, status, status_2) {
+  getLiveState().frameRelay.tunnelDeclinedUntil.set(family, Date.now() + DIRECT_REFUSAL_TTL_MS);
   logFeatureSad("artifact_frame_relay", "tunnel_declined", {
-    family: e,
-    cause: fromEnum(n),
-    status,
+    family,
+    cause: fromEnum(status),
+    status: status_2,
   });
 }
 //@ chunk-sh3bk7pt.js:10126-10145 placement
-var weakSet_2 = new WeakSet();
+var weakSet_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-sh3bk7pt.js:10126", () => {
+  weakSet_2 = new WeakSet();
+});
 //@ chunk-sh3bk7pt.js:10145-10208 placement
 function isFirstPartyFetchRequest(error) {
   return typeof error === "object" && error !== null && weakSet_2.has(error);
 }
 //@ chunk-sh3bk7pt.js:10208-10798 placement
-async function sendRelayed(e, n, r, a, l) {
-  let d =
-    (getLiveState().frameRelay.tunnelDeclinedUntil.get(l) ?? 0) > Date.now()
+async function sendRelayed(method, path, body, options, family) {
+  let tunnelRoute =
+    (getLiveState().frameRelay.tunnelDeclinedUntil.get(family) ?? 0) > Date.now()
       ? undefined
       : getFrameTunnelRoute();
-  if (d !== undefined) {
+  if (tunnelRoute !== undefined) {
     let status = 0;
     try {
-      let s = await sendByMethod(e, n, r, {
-        ...a,
+      let res = await sendByMethod(method, path, body, {
+        ...options,
         host: "frame",
         auth: "session-jwt",
-        frameTunnel: d,
+        frameTunnel: tunnelRoute,
         maxRedirects: 0,
       });
-      if (!s.ok || fromUpstream(s))
+      if (!res.ok || fromUpstream(res))
         return {
-          res: s,
+          res,
           tunnelled: true,
         };
-      status = s.status;
+      status = res.status;
       if (status >= 500 || status === 499) {
-        noteTunnelDeclined(l, "hop_failed", status);
+        noteTunnelDeclined(family, "hop_failed", status);
         return {
-          res: s,
+          res,
           tunnelled: true,
         };
       }
     } catch (error) {
       if (isCancel(error)) throw error;
       if (!isProxyOrConnectRefusal(error)) {
-        noteTunnelDeclined(l, "threw", 0);
+        noteTunnelDeclined(family, "threw", 0);
         if (typeof error === "object" && error !== null) weakSet_2.add(error);
         throw error;
       }
     }
-    noteTunnelDeclined(l, status === 0 ? "never_opened" : "refused", status);
+    noteTunnelDeclined(family, status === 0 ? "never_opened" : "refused", status);
   }
   return {
-    res: await sendByMethod(e, getAgentProxyFramePath(n), r, {
-      ...a,
+    res: await sendByMethod(method, getAgentProxyFramePath(path), body, {
+      ...options,
       host: "ccr-gateway",
       auth: "session-jwt",
       maxRedirects: 0,
@@ -502,35 +548,35 @@ async function sendRelayed(e, n, r, a, l) {
   };
 }
 //@ chunk-sh3bk7pt.js:10798-10963 placement
-function sendByMethod(method, path, r, a) {
+function sendByMethod(method, path, pathArg, init) {
   switch (method) {
     case "GET":
-      return apiClient.get(path, a);
+      return apiClient.get(path, init);
     case "POST":
-      return apiClient.post(path, r, a);
+      return apiClient.post(path, pathArg, init);
     case "PATCH":
-      return apiClient.patch(path, r, a);
+      return apiClient.patch(path, pathArg, init);
     case "DELETE":
-      return apiClient.delete(path, r, a);
+      return apiClient.delete(path, pathArg, init);
   }
 }
 //@ chunk-sh3bk7pt.js:10963-11169 placement
-async function withMcpFallback(e, n) {
-  let r = "answered";
+async function withMcpFallback(direct, options) {
+  let outcome = "answered";
   try {
-    let a = await e();
-    if (a !== null)
+    let answered = await direct();
+    if (answered !== null)
       return {
-        ...a,
-        mcpWire: r,
+        ...answered,
+        mcpWire: outcome,
       };
-    r = "stood_aside";
+    outcome = "stood_aside";
     return {
-      ...(await n()),
-      mcpWire: r,
+      ...(await options()),
+      mcpWire: outcome,
     };
   } catch (error) {
-    if (typeof error === "object" && error !== null) weakMap.set(error, r);
+    if (typeof error === "object" && error !== null) weakMap.set(error, outcome);
     throw error;
   }
 }
@@ -553,10 +599,10 @@ function sendDirect(method, path, body, options, allowMcp = true) {
         recoverOAuth401,
       }),
   };
-  let R = allowMcp && !httpOnly ? mcpRowFor(method, path) : null;
-  if (R)
+  let mcpRow = allowMcp && !httpOnly ? mcpRowFor(method, path) : null;
+  if (mcpRow)
     return withMcpFallback(
-      () => sendOverMcp(R, path, body, requestOptions, gzipBody?.onEncoding),
+      () => sendOverMcp(mcpRow, path, body, requestOptions, gzipBody?.onEncoding),
       () => sendDirect(method, path, body, options, false),
     );
   let { streamUpload } = rest;
@@ -565,31 +611,31 @@ function sendDirect(method, path, body, options, allowMcp = true) {
     wire: "http",
     signal: rest.signal,
     timeoutMs: requestOptions.timeout ?? UPLOAD_TIMEOUT_MS,
-    send: (L, P) => {
-      let O = {
+    send: (url, init) => {
+      let request = {
         ...requestOptions,
-        ...(L && {
-          freshConnection: L,
+        ...(url && {
+          freshConnection: url,
         }),
-        ...(P !== undefined && {
-          timeout: P,
+        ...(init !== undefined && {
+          timeout: init,
         }),
       };
       if (method !== "POST" || gzipBody === undefined || streamUpload === undefined)
-        return sendByMethod(method, path, body, O);
+        return sendByMethod(method, path, body, request);
       return sendWithOptionalGzip({
         url: `${frameBaseUrl()}${path}`,
         body,
         storageV5: rest.storageV5,
         signal: rest.signal,
         onEncoding: gzipBody.onEncoding,
-        send: (p) =>
-          p === null
-            ? sendByMethod(method, path, body, O)
-            : sendByMethod(method, path, p, {
-                ...O,
+        send: (options) =>
+          options === null
+            ? sendByMethod(method, path, body, request)
+            : sendByMethod(method, path, options, {
+                ...request,
                 headers: {
-                  ...O.headers,
+                  ...request.headers,
                   ...GZIP_JSON_HEADERS,
                 },
                 streamUpload: {
@@ -607,8 +653,8 @@ function artifactsApiTokenOverride() {
 }
 //@ chunk-sh3bk7pt.js:12116-12186 placement
 function directAuthFingerprint() {
-  let e = artifactsApiTokenOverride();
-  if (e) return hashCredential(`Bearer ${e}`);
+  let tokenOverride = artifactsApiTokenOverride();
+  if (tokenOverride) return hashCredential(`Bearer ${tokenOverride}`);
   return claudeAiBearerDigest();
 }
 //@ chunk-sh3bk7pt.js:12186-12263 placement
@@ -621,18 +667,18 @@ async function settleDirectAuth(credentials) {
   } catch {}
 }
 //@ chunk-sh3bk7pt.js:12263-12325 placement
-function fromUpstream(e) {
-  return e.ok && e.response.headers?.[X_CCR_RELAY_UPSTREAM] !== undefined;
+function fromUpstream(upstream) {
+  return upstream.ok && upstream.response.headers?.[X_CCR_RELAY_UPSTREAM] !== undefined;
 }
 //@ chunk-sh3bk7pt.js:12325-12377 placement
-function isRelayFallbackStatus(e) {
-  return e.ok && !fromUpstream(e) && RELAY_FALLBACK_STATUSES.has(e.status);
+function isRelayFallbackStatus(status) {
+  return status.ok && !fromUpstream(status) && RELAY_FALLBACK_STATUSES.has(status.status);
 }
 //@ chunk-sh3bk7pt.js:12377-12448 placement
-function classifyGatewayAnswer(e) {
+function classifyGatewayAnswer(answer) {
   return {
-    refused: isRelayFallbackStatus(e),
-    vouched: fromUpstream(e) || (e.ok && e.status < 300),
+    refused: isRelayFallbackStatus(answer),
+    vouched: fromUpstream(answer) || (answer.ok && answer.status < 300),
   };
 }
 //@ chunk-sh3bk7pt.js:12448-12483 placement
@@ -643,14 +689,14 @@ function frameRelayOffered() {
 /**
  * 决定一次 frame 请求走哪条路：relay（经会话网关）、direct（直连）、unsent（不应发出）或 not-served（机器人上下文不服务）；考虑中继模式、路由家族、是否只能中继、中继是否已被拒。
  */
-function chooseRelayLeg(e, n, r, relayOnCredentialRefusal = false) {
-  let l = r !== "fallback";
-  let y = r === "strict" && isRemoteEnvironmentAny();
-  let d = relayIsOnlyRoute();
-  let S = frameRelayActive();
-  let u = S ? relayFamily(e, n) : null;
-  if (S && isBotContextUnserved(u))
-    return d || y || (r === "only" && isRemoteManagedEnvironment())
+function chooseRelayLeg(method, path, mode, relayOnCredentialRefusal = false) {
+  let allowsFallback = mode !== "fallback";
+  let strictRemote = mode === "strict" && isRemoteEnvironmentAny();
+  let relayOnly = relayIsOnlyRoute();
+  let relayActive = frameRelayActive();
+  let family = relayActive ? relayFamily(method, path) : null;
+  if (relayActive && isBotContextUnserved(family))
+    return relayOnly || strictRemote || (mode === "only" && isRemoteManagedEnvironment())
       ? {
           leg: "not-served",
           relaying: false,
@@ -661,162 +707,172 @@ function chooseRelayLeg(e, n, r, relayOnCredentialRefusal = false) {
           relaying: false,
           family: null,
         };
-  let s = S;
-  if (u === null)
+  let active = relayActive;
+  if (family === null)
     return {
-      leg: d || y || (l && isRemoteManagedEnvironment() && s) ? "unsent" : "direct",
-      relaying: s,
-      family: u,
+      leg:
+        relayOnly || strictRemote || (allowsFallback && isRemoteManagedEnvironment() && active)
+          ? "unsent"
+          : "direct",
+      relaying: active,
+      family,
     };
-  let R =
-    (r === "fallback" || (r === "bound" && !relayIsOnlyRouteFor(u))) &&
-    !(relayOnCredentialRefusal && isRemoteManagedEnvironment() && isDirectRefused(u));
-  if (!d && relayDeclined(u) && (R || (!isRemoteManagedEnvironment() && !y && relayHopFailed(u))))
+  let mayDirect =
+    (mode === "fallback" || (mode === "bound" && !relayIsOnlyRouteFor(family))) &&
+    !(relayOnCredentialRefusal && isRemoteManagedEnvironment() && isDirectRefused(family));
+  if (
+    !relayOnly &&
+    relayDeclined(family) &&
+    (mayDirect || (!isRemoteManagedEnvironment() && !strictRemote && relayHopFailed(family)))
+  )
     return {
       leg: "direct",
-      relaying: s,
-      family: u,
+      relaying: active,
+      family,
     };
   return {
     leg: "relay",
     relaying: true,
-    family: u,
+    family,
   };
 }
 //@ chunk-sh3bk7pt.js:12975-13029 placement
-function relayIsOnlyRouteFor(e) {
-  return relayIsOnlyRoute() || (isRemoteManagedEnvironment() && (e === null || !accountBotMayRelay(e)));
+function relayIsOnlyRouteFor(route) {
+  return (
+    relayIsOnlyRoute() || (isRemoteManagedEnvironment() && (route === null || !accountBotMayRelay(route)))
+  );
 }
 //@ chunk-sh3bk7pt.js:13029-13154 placement
-function isRelayRequired(mode, n) {
+function isRelayRequired(mode, relayMode) {
   switch (mode) {
     case "strict":
       return isRemoteEnvironmentAny();
     case "only":
       return isRemoteManagedEnvironment();
     case "bound":
-      return relayIsOnlyRouteFor(n);
+      return relayIsOnlyRouteFor(relayMode);
     case "fallback":
       return false;
   }
 }
 //@ chunk-sh3bk7pt.js:13154-13239 placement
-function plannedRoute(e, n, r = "fallback") {
-  return relayIsOnlyRoute() || chooseRelayLeg(e, n, r).leg === "relay" ? "relay" : "direct";
+function plannedRoute(route, mode, fallbackMode = "fallback") {
+  return relayIsOnlyRoute() || chooseRelayLeg(route, mode, fallbackMode).leg === "relay" ? "relay" : "direct";
 }
 //@ chunk-sh3bk7pt.js:13239-16556 placement
 /**
  * 发送 frame 接口请求的总入口：按路由选择直连或经中继；中继前可探测、中继不可用时按模式回退直连或返回 relay-unavailable；直连遭凭据拒绝且允许时改走中继；全程打点。
  */
 async function sendFrameRequest(method, path, body, options, mode = "fallback") {
-  let y = relayIsOnlyRoute() || isRelayRequired(mode, relayFamily(method, path));
+  let mustRelay = relayIsOnlyRoute() || isRelayRequired(mode, relayFamily(method, path));
   let { relayProbe, relayOnCredentialRefusal, ...options_2 } = options;
-  let s = async () => ({
+  let sendDirectOnce = async () => ({
     ...(await sendDirect(method, path, body, options_2)),
     route: "direct",
     fromFrame: true,
   });
   let leg = chooseRelayLeg(method, path, mode, relayOnCredentialRefusal);
-  let w = leg.relaying && !isRemoteManagedEnvironment();
-  let L = (o, h) =>
+  let isRunner = leg.relaying && !isRemoteManagedEnvironment();
+  let relayFailure = (reason, status) =>
     mode === "fallback"
       ? {
           ok: false,
           reason: "no-auth",
-          detail: `its artifact connection did not carry the request${h ? ` (HTTP ${h})` : ""}, so nothing was sent${o === "relay-unavailable" ? "; one retry is safe" : ""}`,
+          detail: `its artifact connection did not carry the request${status ? ` (HTTP ${status})` : ""}, so nothing was sent${reason === "relay-unavailable" ? "; one retry is safe" : ""}`,
           route: "relay",
           fromFrame: false,
         }
       : {
           ok: false,
-          reason: o,
-          status: h,
+          reason,
+          status,
           route: "relay",
           fromFrame: false,
         };
-  let P = (o, probed) => {
+  let relayUnavailable = (status, probed) => {
     logFeatureSad("artifact_frame_relay", "relay_only_unavailable", {
       ...(leg.family !== null && {
         family: leg.family,
       }),
-      status: o,
+      status,
       probed,
-      ...(w && {
+      ...(isRunner && {
         runner: true,
       }),
     });
-    return L("relay-unavailable", o);
+    return relayFailure("relay-unavailable", status);
   };
-  if (leg.leg === "not-served") return L("relay-not-served", 0);
-  if (leg.leg === "unsent") return P(0, false);
-  let O;
+  if (leg.leg === "not-served") return relayFailure("relay-not-served", 0);
+  if (leg.leg === "unsent") return relayUnavailable(0, false);
+  let directResult;
   let family;
   if (leg.leg === "relay") family = leg.family;
   else {
-    let o = await s();
-    if (leg.family === null || !isRemoteManagedEnvironment()) return o;
-    noteDirectRefusal(leg.family, o);
-    if (!o.ok || !isCredentialRefusal(o)) return o;
+    let res = await sendDirectOnce();
+    if (leg.family === null || !isRemoteManagedEnvironment()) return res;
+    noteDirectRefusal(leg.family, res);
+    if (!res.ok || !isCredentialRefusal(res)) return res;
     logFeatureSad("artifact_frame_relay", "direct_refused", {
       family: leg.family,
-      status: o.status,
+      status: res.status,
       reoffered: relayOnCredentialRefusal === true,
     });
-    if (!relayOnCredentialRefusal) return o;
+    if (!relayOnCredentialRefusal) return res;
     family = leg.family;
-    O = o;
+    directResult = res;
   }
-  let G = false;
-  let x = () => ({
-    ...(w && {
+  let tunnelled = false;
+  let telemetryFields = () => ({
+    ...(isRunner && {
       runner: true,
     }),
-    ...(G && {
+    ...(tunnelled && {
       tunnel: true,
     }),
-    ...(O !== undefined && {
+    ...(directResult !== undefined && {
       reoffered: true,
     }),
   });
-  let U = async () => {
-    if (O !== undefined) return O;
-    let o = await s();
-    if (!w) {
-      noteDirectRefusal(family, o);
-      if (o.ok && isCredentialRefusal(o))
+  let sendDirectOrCached = async () => {
+    if (directResult !== undefined) return directResult;
+    let res = await sendDirectOnce();
+    if (!isRunner) {
+      noteDirectRefusal(family, res);
+      if (res.ok && isCredentialRefusal(res))
         logFeatureSad("artifact_frame_relay", "direct_refused", {
           family,
-          status: o.status,
+          status: res.status,
           reoffered: false,
         });
     }
-    return o;
+    return res;
   };
-  let { refreshOAuth, isBackground, credentials, recoverOAuth401, gzipBody, httpOnly, ...H } = options_2;
-  let V = async (o, h, D, M) => {
-    let Z = await sendRelayed(
-      o,
-      h,
-      D,
+  let { refreshOAuth, isBackground, credentials, recoverOAuth401, gzipBody, httpOnly, ...restOptions } =
+    options_2;
+  let sendViaRelay = async (method, path, body, options) => {
+    let relayed = await sendRelayed(
+      method,
+      path,
+      body,
       {
-        ...M,
-        headers: filterRelayableHeaders(M.headers),
+        ...options,
+        headers: filterRelayableHeaders(options.headers),
         validateStatus: alwaysTrue,
       },
       family,
     );
-    G = Z.tunnelled;
-    return Z.res;
+    tunnelled = relayed.tunnelled;
+    return relayed.res;
   };
-  let N = async (status, probed) => {
+  let fallBackDirect = async (status, probed) => {
     declineRelay(family, status === 0 || status >= 500);
-    if (y) return P(status, probed);
-    let D;
+    if (mustRelay) return relayUnavailable(status, probed);
+    let directStatus;
     try {
-      let M = await U();
-      D = M.ok ? M.status : undefined;
+      let directRes = await sendDirectOrCached();
+      directStatus = directRes.ok ? directRes.status : undefined;
       return {
-        ...M,
+        ...directRes,
         gatewayDeclined: status,
       };
     } finally {
@@ -824,94 +880,99 @@ async function sendFrameRequest(method, path, body, options, mode = "fallback") 
         family,
         status,
         probed,
-        ...(D !== undefined && {
-          direct_status: D,
+        ...(directStatus !== undefined && {
+          direct_status: directStatus,
         }),
-        ...x(),
+        ...telemetryFields(),
       });
     }
   };
   if (relayProbe !== undefined && !relayServed(family)) {
-    let o;
+    let probeResult;
     try {
-      o = await V("GET", relayProbe, undefined, {
-        signal: H.signal,
+      probeResult = await sendViaRelay("GET", relayProbe, undefined, {
+        signal: restOptions.signal,
         timeout: RELAY_PROBE_TIMEOUT_MS,
         maxContentLength: RELAY_PROBE_MAX_BYTES,
       });
     } catch (error) {
       if (isCancel(error)) throw error;
-      G = isFirstPartyFetchRequest(error);
-      return N(0, true);
+      tunnelled = isFirstPartyFetchRequest(error);
+      return fallBackDirect(0, true);
     }
-    if (!o.ok) return y ? P(0, true) : U();
-    if (isStorePolicyDenial(o))
+    if (!probeResult.ok) return mustRelay ? relayUnavailable(0, true) : sendDirectOrCached();
+    if (isStorePolicyDenial(probeResult))
       logFeatureSad("artifact_frame_relay", "relay_policy_refused", {
         family,
-        status: o.status,
+        status: probeResult.status,
         probed: true,
-        ...x(),
+        ...telemetryFields(),
       });
-    else if (isRelayFallbackStatus(o) || (!fromUpstream(o) && (o.status >= 500 || o.status === 499)))
-      return N(o.status, true);
-    else if (!fromUpstream(o) && o.status >= 300) return y ? P(o.status, true) : U();
+    else if (
+      isRelayFallbackStatus(probeResult) ||
+      (!fromUpstream(probeResult) && (probeResult.status >= 500 || probeResult.status === 499))
+    )
+      return fallBackDirect(probeResult.status, true);
+    else if (!fromUpstream(probeResult) && probeResult.status >= 300)
+      return mustRelay ? relayUnavailable(probeResult.status, true) : sendDirectOrCached();
     markRelayServed(family);
   }
-  let T;
+  let response;
   try {
-    T = await V(method, path, body, H);
+    response = await sendViaRelay(method, path, body, restOptions);
   } catch (error) {
     if (!isCancel(error)) {
-      G = isFirstPartyFetchRequest(error);
-      if (findProxyError(error) !== undefined) return N(0, false);
+      tunnelled = isFirstPartyFetchRequest(error);
+      if (findProxyError(error) !== undefined) return fallBackDirect(0, false);
       declineRelay(family, true);
       logFeatureBad("artifact_frame_relay", "request_error", {
         family,
-        ...x(),
+        ...telemetryFields(),
       });
       if (typeof error === "object" && error !== null) weakSet.add(error);
     }
     throw error;
   }
-  if (!T.ok) return y ? P(0, false) : U();
-  if (isStorePolicyDenial(T) || isRelayApprovalRequired(T)) {
-    let o = isRelayApprovalRequired(T);
+  if (!response.ok) return mustRelay ? relayUnavailable(0, false) : sendDirectOrCached();
+  if (isStorePolicyDenial(response) || isRelayApprovalRequired(response)) {
+    let needsApproval = isRelayApprovalRequired(response);
     markRelayServed(family);
-    logFeatureSad("artifact_frame_relay", o ? "relay_approval_refused" : "relay_policy_refused", {
+    logFeatureSad("artifact_frame_relay", needsApproval ? "relay_approval_refused" : "relay_policy_refused", {
       family,
-      status: T.status,
-      ...x(),
+      status: response.status,
+      ...telemetryFields(),
     });
     return {
-      ...T,
+      ...response,
       route: "relay",
       fromFrame: false,
-      gatewayPolicy: o ? "unapproved" : "network-off",
+      gatewayPolicy: needsApproval ? "unapproved" : "network-off",
     };
   }
-  if (isRelayFallbackStatus(T)) return N(T.status, false);
-  let q = fromUpstream(T);
-  let K = q || T.status < 300;
-  if (K) {
+  if (isRelayFallbackStatus(response)) return fallBackDirect(response.status, false);
+  let fromUpstreamResponse = fromUpstream(response);
+  let relaySucceeded = fromUpstreamResponse || response.status < 300;
+  if (relaySucceeded) {
     markRelayServed(family);
     logFeatureOk("artifact_frame_relay", {
       family,
-      status: T.status,
-      upstream: q,
-      ...x(),
+      status: response.status,
+      upstream: fromUpstreamResponse,
+      ...telemetryFields(),
     });
-  } else if (T.status >= 500 || T.status === 499) {
-    let o = mode !== "fallback" && T.status === 503 ? T.response.headers?.["retry-after"] : undefined;
-    let retryAfterMs = parseRetryAfterMs(typeof o === "string" ? o : undefined);
+  } else if (response.status >= 500 || response.status === 499) {
+    let retryAfterHeader =
+      mode !== "fallback" && response.status === 503 ? response.response.headers?.["retry-after"] : undefined;
+    let retryAfterMs = parseRetryAfterMs(typeof retryAfterHeader === "string" ? retryAfterHeader : undefined);
     if (retryAfterMs !== undefined) {
       logFeatureSad("artifact_frame_relay", "relay_busy", {
         family,
-        status: T.status,
+        status: response.status,
         retry_after_ms: retryAfterMs,
-        ...x(),
+        ...telemetryFields(),
       });
       return {
-        ...T,
+        ...response,
         route: "relay",
         fromFrame: false,
         gatewayRetryAfterMs: retryAfterMs,
@@ -920,19 +981,19 @@ async function sendFrameRequest(method, path, body, options, mode = "fallback") 
     declineRelay(family, true);
     logFeatureBad("artifact_frame_relay", "relay_error", {
       family,
-      status: T.status,
-      ...x(),
+      status: response.status,
+      ...telemetryFields(),
     });
   } else
     logFeatureSad("artifact_frame_relay", "relay_refused", {
       family,
-      status: T.status,
-      ...x(),
+      status: response.status,
+      ...telemetryFields(),
     });
   return {
-    ...T,
+    ...response,
     route: "relay",
-    fromFrame: K,
+    fromFrame: relaySucceeded,
   };
 }
 //@ chunk-sh3bk7pt.js:16556-16619 placement
@@ -951,8 +1012,8 @@ function toWireTelemetry(mcpWire) {
   }
 }
 //@ chunk-sh3bk7pt.js:16749-16815 placement
-function wireOf(e) {
-  return e.route === "relay" ? lit("relay") : toWireTelemetry(e.mcpWire);
+function wireOf(value) {
+  return value.route === "relay" ? lit("relay") : toWireTelemetry(value.mcpWire);
 }
 //@ chunk-sh3bk7pt.js:16815-16916 placement
 function wireOfThrow(error) {
@@ -961,32 +1022,32 @@ function wireOfThrow(error) {
 }
 //@ chunk-sh3bk7pt.js:16916-17381 placement
 var frameApi = {
-  get(e, n) {
-    return sendFrameRequest("GET", e, undefined, n);
+  get(path, options) {
+    return sendFrameRequest("GET", path, undefined, options);
   },
-  post(e, n, r) {
-    return sendFrameRequest("POST", e, n, r);
+  post(path, body, options) {
+    return sendFrameRequest("POST", path, body, options);
   },
-  postRelayOnly(e, n, r) {
-    return sendFrameRequest("POST", e, n, r, "only");
+  postRelayOnly(path, body, options) {
+    return sendFrameRequest("POST", path, body, options, "only");
   },
-  postRelayStrict(e, n, r) {
-    return sendFrameRequest("POST", e, n, r, "strict");
+  postRelayStrict(path, body, options) {
+    return sendFrameRequest("POST", path, body, options, "strict");
   },
-  getRelayOnly(e, n) {
-    return sendFrameRequest("GET", e, undefined, n, "only");
+  getRelayOnly(path, options) {
+    return sendFrameRequest("GET", path, undefined, options, "only");
   },
-  postRelayBound(e, n, r) {
-    return sendFrameRequest("POST", e, n, r, "bound");
+  postRelayBound(path, body, options) {
+    return sendFrameRequest("POST", path, body, options, "bound");
   },
-  getRelayBound(e, n) {
-    return sendFrameRequest("GET", e, undefined, n, "bound");
+  getRelayBound(path, options) {
+    return sendFrameRequest("GET", path, undefined, options, "bound");
   },
-  patchRelayOnly(e, n, r) {
-    return sendFrameRequest("PATCH", e, n, r, "only");
+  patchRelayOnly(path, body, options) {
+    return sendFrameRequest("PATCH", path, body, options, "only");
   },
-  deleteRelayOnly(e, n) {
-    return sendFrameRequest("DELETE", e, undefined, n, "only");
+  deleteRelayOnly(path, options) {
+    return sendFrameRequest("DELETE", path, undefined, options, "only");
   },
 };
 export {

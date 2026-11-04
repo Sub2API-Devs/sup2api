@@ -16,56 +16,56 @@ import { toastStoppedOnce } from "../../../plugins/functionHooks/apiCatalog.js";
 /**
  * 定时任务属于插件且插件定时器当前被挡住（xZ）时：登记在插件就绪后执行，非循环任务还登记重试回调；返回是否被挡住。
  */
-function deferIfPluginTimersHeld(i, r, d) {
-  let { plugin } = i;
-  let e = plugin !== undefined && isHeldByPlugin();
-  if (e) runIgnoringAbort(() => toastStoppedOnce(plugin));
-  if (e && !i.recurring) holdQueuedInput(r, undefined, i.agentId ? "stays" : d);
-  return e;
+function deferIfPluginTimersHeld(entry, run, fallbackRun) {
+  let { plugin } = entry;
+  let held = plugin !== undefined && isHeldByPlugin();
+  if (held) runIgnoringAbort(() => toastStoppedOnce(plugin));
+  if (held && !entry.recurring) holdQueuedInput(run, undefined, entry.agentId ? "stays" : fallbackRun);
+  return held;
 }
 //@ chunk-1z9pe0vy.js:404-849 placement
 /**
  * 定时任务执行器的包装工厂：tTr 包装单个任务，被挡住时延后到插件就绪；nTr 按插件分组批量执行，返回已延后的任务 id。
  */
-var wrapScheduledTaskRunner = (i) => (r, d) => {
-  let n = () => {
-    if (d !== undefined) runIgnoringAbort(d);
+var wrapScheduledTaskRunner = (runOne) => (entry, done) => {
+  let doneOnce = () => {
+    if (done !== undefined) runIgnoringAbort(done);
   };
-  let e = () => {
-    if (deferIfPluginTimersHeld(r, e, n)) return;
-    i(r, n);
+  let runIfFree = () => {
+    if (deferIfPluginTimersHeld(entry, runIfFree, doneOnce)) return;
+    runOne(entry, doneOnce);
   };
-  let o = deferIfPluginTimersHeld(r, e, n);
-  if (!o) i(r, () => {});
-  return o && !r.recurring;
+  let held = deferIfPluginTimersHeld(entry, runIfFree, doneOnce);
+  if (!held) runOne(entry, () => {});
+  return held && !entry.recurring;
 };
-var wrapScheduledTaskBatchRunner = (i) => (r, d) => {
-  let n = new Map();
-  r.forEach((e) => {
-    n.set(e.plugin, [...(n.get(e.plugin) ?? []), e]);
+var wrapScheduledTaskBatchRunner = (runBatch) => (entries, done) => {
+  let byPlugin = new Map();
+  entries.forEach((entry) => {
+    byPlugin.set(entry.plugin, [...(byPlugin.get(entry.plugin) ?? []), entry]);
   });
-  return [...n].flatMap(([e, o]) => {
-    let l =
-      e === undefined
+  return [...byPlugin].flatMap(([plugin, group]) => {
+    let holder =
+      plugin === undefined
         ? {}
         : {
-            plugin: e,
+            plugin,
           };
-    let t = () => runIgnoringAbort(() => d(o));
-    let u = () => {
-      if (deferIfPluginTimersHeld(l, u, t)) return;
-      i(o, e, t);
+    let finish = () => runIgnoringAbort(() => done(group));
+    let runIfFree = () => {
+      if (deferIfPluginTimersHeld(holder, runIfFree, finish)) return;
+      runBatch(group, plugin, finish);
     };
-    let a = deferIfPluginTimersHeld(l, u, t);
-    let f = false;
-    let g = false;
-    if (!a)
-      i(o, e, () => {
-        f = true;
-        if (g) t();
+    let held = deferIfPluginTimersHeld(holder, runIfFree, finish);
+    let started = false;
+    let groupDone = false;
+    if (!held)
+      runBatch(group, plugin, () => {
+        started = true;
+        if (groupDone) finish();
       });
-    g = true;
-    return a || !f ? o.map((c) => c.id) : [];
+    groupDone = true;
+    return held || !started ? group.map((item) => item.id) : [];
   });
 };
 export { wrapScheduledTaskBatchRunner, wrapScheduledTaskRunner };

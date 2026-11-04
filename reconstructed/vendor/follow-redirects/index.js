@@ -5,13 +5,13 @@
  * pieces: chunk-h6b7mazd.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 import { require_debug } from "./debug.js";
 
 //@ chunk-h6b7mazd.js:37518-45969 cjs-fingerprint
-var require_follow_redirects = x(function (cjsExports, cjsModule) {
+var require_follow_redirects = __commonJS(function (cjsExports, cjsModule) {
   var url = importMetaRequire("url");
-  var ut = url.URL;
+  var URLCtor = url.URL;
   var http = importMetaRequire("http");
   var https = importMetaRequire("https");
   var Writable = importMetaRequire("stream").Writable;
@@ -26,7 +26,7 @@ var require_follow_redirects = x(function (cjsExports, cjsModule) {
   })();
   var useNativeURL = false;
   try {
-    assert(new ut(""));
+    assert(new URLCtor(""));
   } catch (error) {
     useNativeURL = error.code === "ERR_INVALID_URL";
   }
@@ -75,12 +75,12 @@ var require_follow_redirects = x(function (cjsExports, cjsModule) {
     this._requestBodyLength = 0;
     this._requestBodyBuffers = [];
     if (responseCallback) this.on("response", responseCallback);
-    var r = this;
+    var selfRef = this;
     this._onNativeResponse = function (response) {
       try {
-        r._processResponse(response);
+        selfRef._processResponse(response);
       } catch (cause) {
-        r.emit(
+        selfRef.emit(
           "error",
           cause instanceof RedirectionError
             ? cause
@@ -142,10 +142,10 @@ var require_follow_redirects = x(function (cjsExports, cjsModule) {
       this._ended = this._ending = true;
       this._currentRequest.end(null, null, callback);
     } else {
-      var n = this;
+      var selfRef = this;
       var currentRequest = this._currentRequest;
       this.write(data, encoding, function () {
-        n._ended = true;
+        selfRef._ended = true;
         currentRequest.end(null, null, callback);
       });
       this._ending = true;
@@ -160,31 +160,31 @@ var require_follow_redirects = x(function (cjsExports, cjsModule) {
     this._currentRequest.removeHeader(name);
   };
   RedirectableRequest.prototype.setTimeout = function (msecs, callback) {
-    var r = this;
+    var selfRef = this;
     function destroyOnTimeout(socket) {
       socket.setTimeout(msecs);
       socket.removeListener("timeout", socket.destroy);
       socket.addListener("timeout", socket.destroy);
     }
     function startTimer(socket) {
-      if (r._timeout) clearTimeout(r._timeout);
-      r._timeout = setTimeout(function () {
-        r.emit("timeout");
+      if (selfRef._timeout) clearTimeout(selfRef._timeout);
+      selfRef._timeout = setTimeout(function () {
+        selfRef.emit("timeout");
         clearTimer();
       }, msecs);
       destroyOnTimeout(socket);
     }
     function clearTimer() {
-      if (r._timeout) {
-        clearTimeout(r._timeout);
-        r._timeout = null;
+      if (selfRef._timeout) {
+        clearTimeout(selfRef._timeout);
+        selfRef._timeout = null;
       }
-      r.removeListener("abort", clearTimer);
-      r.removeListener("error", clearTimer);
-      r.removeListener("response", clearTimer);
-      r.removeListener("close", clearTimer);
-      if (callback) r.removeListener("timeout", callback);
-      if (!r.socket) r._currentRequest.removeListener("socket", startTimer);
+      selfRef.removeListener("abort", clearTimer);
+      selfRef.removeListener("error", clearTimer);
+      selfRef.removeListener("response", clearTimer);
+      selfRef.removeListener("close", clearTimer);
+      if (callback) selfRef.removeListener("timeout", callback);
+      if (!selfRef.socket) selfRef._currentRequest.removeListener("socket", startTimer);
     }
     if (callback) this.on("timeout", callback);
     if (this.socket) startTimer(this.socket);
@@ -238,15 +238,15 @@ var require_follow_redirects = x(function (cjsExports, cjsModule) {
     this._currentUrl = /^\//.test(this._options.path) ? url.format(this._options) : this._options.path;
     if (this._isRedirect) {
       var i_2 = 0;
-      var i = this;
+      var selfRef = this;
       var buffers = this._requestBodyBuffers;
       (function writeNext(error) {
-        if (request === i._currentRequest) {
-          if (error) i.emit("error", error);
+        if (request === selfRef._currentRequest) {
+          if (error) selfRef.emit("error", error);
           else if (i_2 < buffers.length) {
             var buffer = buffers[i_2++];
             if (!request.finished) request.write(buffer.data, buffer.encoding, writeNext);
-          } else if (i._ended) request.end();
+          } else if (selfRef._ended) request.end();
         }
       })();
     }
@@ -323,7 +323,7 @@ var require_follow_redirects = x(function (cjsExports, cjsModule) {
     this._performRequest();
   };
   function wrap(protocols) {
-    var t = {
+    var defaults = {
       maxRedirects: 21,
       maxBodyLength: 10485760,
     };
@@ -331,7 +331,7 @@ var require_follow_redirects = x(function (cjsExports, cjsModule) {
     Object.keys(protocols).forEach(function (scheme) {
       var protocol = scheme + ":";
       var nativeProtocol = (nativeProtocols[protocol] = protocols[scheme]);
-      var wrappedProtocol = (t[scheme] = Object.create(nativeProtocol));
+      var wrappedProtocol = (defaults[scheme] = Object.create(nativeProtocol));
       function request(input, options, callback) {
         if (isURL(input)) input = spreadUrlObject(input);
         else if (isString(input)) input = spreadUrlObject(parseUrl(input));
@@ -348,8 +348,8 @@ var require_follow_redirects = x(function (cjsExports, cjsModule) {
         }
         options = Object.assign(
           {
-            maxRedirects: t.maxRedirects,
-            maxBodyLength: t.maxBodyLength,
+            maxRedirects: defaults.maxRedirects,
+            maxBodyLength: defaults.maxBodyLength,
           },
           input,
           options,
@@ -380,12 +380,12 @@ var require_follow_redirects = x(function (cjsExports, cjsModule) {
         },
       });
     });
-    return t;
+    return defaults;
   }
   function noop() {}
   function parseUrl(input) {
     var parsed;
-    if (useNativeURL) parsed = new ut(input);
+    if (useNativeURL) parsed = new URLCtor(input);
     else {
       parsed = validateUrl(url.parse(input));
       if (!isString(parsed.protocol))
@@ -396,7 +396,7 @@ var require_follow_redirects = x(function (cjsExports, cjsModule) {
     return parsed;
   }
   function resolveUrl(relative, base) {
-    return useNativeURL ? new ut(relative, base) : parseUrl(url.resolve(base, relative));
+    return useNativeURL ? new URLCtor(relative, base) : parseUrl(url.resolve(base, relative));
   }
   function validateUrl(input) {
     if (/^\[/.test(input.hostname) && !/^\[[:0-9a-f]+\]$/i.test(input.hostname))
@@ -469,7 +469,7 @@ var require_follow_redirects = x(function (cjsExports, cjsModule) {
     return typeof value === "object" && "length" in value;
   }
   function isURL(value) {
-    return ut && value instanceof ut;
+    return URLCtor && value instanceof URLCtor;
   }
   function escapeRegex(regex) {
     return regex.replace(/[\]\\/()*+?.$]/g, "\\$&");

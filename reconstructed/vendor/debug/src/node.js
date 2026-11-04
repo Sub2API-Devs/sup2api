@@ -5,12 +5,12 @@
  * pieces: chunk-h6b7mazd.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_supports_color_2 } from "../../supports-color/index.js";
 import { require_common } from "./common.js";
 
 //@ chunk-h6b7mazd.js:35154-37209 cjs-fingerprint
-var require_node = x(function (cjsExports, cjsModule) {
+var require_node = __commonJS(function (cjsExports, cjsModule) {
   var tty = importMetaRequire("tty");
   var util = importMetaRequire("util");
   cjsExports.init = init;

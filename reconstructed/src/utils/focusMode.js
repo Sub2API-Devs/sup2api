@@ -21,9 +21,13 @@ import {
 import { getInitialSettings_2, getSettingsForSource } from "./settings/settings.js";
 import { getGlobalConfig } from "./config.js";
 import { settingsChangeDetector } from "./settings/changeDetector.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-82kqcve8.js:36843-36866 placement
-var focusModeSignalSlot = new HostScoped(() => createSignal());
+var focusModeSignalSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-82kqcve8.js:36843", () => {
+  focusModeSignalSlot = new HostScoped(() => createSignal());
+});
 //@ chunk-82kqcve8.js:36866-36903 placement
 function focusModeSignal() {
   return focusModeSignalSlot.of(getRootSession().host);
@@ -45,16 +49,16 @@ function isFocusModeFlag() {
 /**
  * 设置 flag 设置中的视图模式（专注模式），变化时通知设置变更。
  */
-function setViewMode(e) {
-  let { viewMode = null, ...r } = getFlagSettingsInline() ?? {};
-  if (viewMode === e) return;
+function setViewMode(nextViewMode) {
+  let { viewMode = null, ...remainingSettings } = getFlagSettingsInline() ?? {};
+  if (viewMode === nextViewMode) return;
   setFlagSettingsInline(
-    e
+    nextViewMode
       ? {
-          ...r,
-          viewMode: e,
+          ...remainingSettings,
+          viewMode: nextViewMode,
         }
-      : r,
+      : remainingSettings,
   );
   settingsChangeDetector.notifyChange("flagSettings");
   invalidateFocusModeSection();
@@ -63,8 +67,8 @@ function setViewMode(e) {
 /**
  * 订阅聚焦模式变化。
  */
-function subscribeFocusMode(e) {
-  return focusModeSignal().subscribe(e);
+function subscribeFocusMode(listener) {
+  return focusModeSignal().subscribe(listener);
 }
 //@ chunk-82kqcve8.js:37284-37308 placement
 var FOCUS_MODE_SUFFIXES = ["", ":L", ":L:R"];
@@ -73,7 +77,7 @@ var FOCUS_MODE_SUFFIXES = ["", ":L", ":L:R"];
  * 清空聚焦模式各分节的缓存并通知订阅者。
  */
 function invalidateFocusModeSection() {
-  for (let e of FOCUS_MODE_SUFFIXES) getSystemPromptSectionCache().delete(`focus_mode${e}`);
+  for (let suffix of FOCUS_MODE_SUFFIXES) getSystemPromptSectionCache().delete(`focus_mode${suffix}`);
   noteSystemPromptSectionInvalidation("focus_mode");
   focusModeSignal().emit();
 }
@@ -81,9 +85,9 @@ function invalidateFocusModeSection() {
 /**
  * 清空记忆分节缓存并触发一次刷新。
  */
-function invalidateMemorySections(e = "focus_mode") {
-  for (let n of FOCUS_MODE_SUFFIXES) getSystemPromptSectionCache().delete(`memory${n}`);
-  noteSystemPromptSectionInvalidation(e);
+function invalidateMemorySections(reason = "focus_mode") {
+  for (let suffix of FOCUS_MODE_SUFFIXES) getSystemPromptSectionCache().delete(`memory${suffix}`);
+  noteSystemPromptSectionInvalidation(reason);
 }
 export {
   isFocusModeEnabled,

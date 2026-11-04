@@ -47,6 +47,6 @@ var ultrareviewNonInteractiveCommand = {
   get isHidden() {
     return !getIsNonInteractiveSession();
   },
-  load: () => import("./chunk-yxg7c7n7.js"),
+  load: () => import("./review/call.lazy.js"),
 };
 export { ultrareviewCommand, ultrareviewNonInteractiveCommand };

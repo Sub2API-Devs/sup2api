@@ -94,175 +94,194 @@ import { isSilentAbortReason, shutdownInterruptStamp } from "../utils/abortContr
 import { getShortcutDisplay } from "../keybindings/shortcutFormat.js";
 import { logHookPushbackEvent } from "../services/tools/toolDecisionTelemetry.js";
 import { getTaskListId, listTasks } from "../utils/tasks.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ha3km179.js:79310-79416 placement
-var extractMemoriesModule = require("./chunk-aghtagt4.js");
-var agentJobStateModule = require("./chunk-wd9kxbpn.js");
-var postTurnSummaryModule = require("./chunk-e321p3vc.js");
+var extractMemoriesModule; // deferred: loads other modules while loading; runs once its import cycle is complete
+var agentJobStateModule;
+var postTurnSummaryModule;
+deferInit("chunk-ha3km179.js:79310", () => {
+  extractMemoriesModule = require("../services/extractMemories/extractMemories.js");
+  agentJobStateModule = require("../services/agentStatus/LINK_SCAN_MAX_BYTES.lazy.js");
+  postTurnSummaryModule = require("../services/classifierSummary.js");
+});
 //@ chunk-ha3km179.js:82467-85391 placement
 /**
  * 主线程回合结束后生成并发布回合摘要（按检测到的界面发往不同接收端）。
  */
-async function* generatePostTurnSummary(e, content, r, s, h) {
+async function* generatePostTurnSummary(
+  classifierJobState,
+  messages,
+  assistantMessages,
+  toolUseContext,
+  querySource,
+) {
   if (
-    !e ||
-    classifyQuerySource(h) !== "main" ||
-    s.agentId ||
-    (isTerminalShutdown() && !s.abortController.signal.aborted)
+    !classifierJobState ||
+    classifyQuerySource(querySource) !== "main" ||
+    toolUseContext.agentId ||
+    (isTerminalShutdown() && !toolUseContext.abortController.signal.aborted)
   )
     return;
-  let y = postTurnSummaryModule;
-  let S = y.detectSurfaces(
-    isStorageV5Enabled() && s.storageV5 ? await y.watchedForSurfaces(s.storageV5) : undefined,
+  let postTurnSummary = postTurnSummaryModule;
+  let surfaces = postTurnSummary.detectSurfaces(
+    isStorageV5Enabled() && toolUseContext.storageV5
+      ? await postTurnSummary.watchedForSurfaces(toolUseContext.storageV5)
+      : undefined,
   );
-  let M = y.sinksFor(S);
-  let R = y.engineFor(M);
-  if (!R) return;
-  e.lastEmittedDetail = "";
-  let postTurnSummary = s.getAppState().postTurnSummary;
-  if (M.has("summary"))
+  let sinks = postTurnSummary.sinksFor(surfaces);
+  let engine = postTurnSummary.engineFor(sinks);
+  if (!engine) return;
+  classifierJobState.lastEmittedDetail = "";
+  let postTurnSummary_2 = toolUseContext.getAppState().postTurnSummary;
+  if (sinks.has("summary"))
     yield {
       type: "post_turn_summary",
       value: null,
     };
-  let w = y.projectsRecapEnabled(s.options.tools);
-  let P;
-  let Q = lit("none");
-  let D = M.has("summary") ? shownErroredToolRowId(content) : undefined;
-  e.onClassified = (V, fe) => {
-    if (fe || !M.has("summary")) return;
-    if (P?.superseded) {
+  let projectsRecap = postTurnSummary.projectsRecapEnabled(toolUseContext.options.tools);
+  let hold;
+  let outcomeLabel = lit("none");
+  let erroredRowId = sinks.has("summary") ? shownErroredToolRowId(messages) : undefined;
+  classifierJobState.onClassified = (classified, isFresh) => {
+    if (isFresh || !sinks.has("summary")) return;
+    if (hold?.superseded) {
       logForDebugging(
         "[classifier] dropped a late end-of-turn summary: a newer session status was written or cleared while it was being generated",
       );
-      Q = lit("dropped_superseded");
+      outcomeLabel = lit("dropped_superseded");
       return;
     }
-    if (V.source === "no-text-turn" && V.detail === "") {
-      if (postTurnSummary) {
-        s.setAppState((re) =>
-          re.postTurnSummary === postTurnSummary
-            ? re
+    if (classified.source === "no-text-turn" && classified.detail === "") {
+      if (postTurnSummary_2) {
+        toolUseContext.setAppState((appState) =>
+          appState.postTurnSummary === postTurnSummary_2
+            ? appState
             : {
-                ...re,
-                postTurnSummary,
+                ...appState,
+                postTurnSummary: postTurnSummary_2,
               },
         );
         publishPostTurnSummary(
-          s.sessionState,
-          postTurnSummary,
-          P === undefined
+          toolUseContext.sessionState,
+          postTurnSummary_2,
+          hold === undefined
             ? undefined
             : {
                 turnEndVerdict: true,
               },
         );
-        Q = lit("republished_prior");
+        outcomeLabel = lit("republished_prior");
       }
       return;
     }
-    let ie = y.classifiedToPostTurnSummary(V, {
-      projectsRecap: w,
+    let nextSummary = postTurnSummary.classifiedToPostTurnSummary(classified, {
+      projectsRecap,
     });
-    let Z = V.source === "no-text-turn" ? postTurnSummary?.standing : D;
-    if (ie.status_category === "blocked" && Z !== undefined) ie.standing = Z;
-    if (V.source === "no-text-turn") {
-      ie.recent_action = postTurnSummary?.recent_action ?? "";
-      if (postTurnSummary?.description !== undefined) ie.description = postTurnSummary.description;
-      if (postTurnSummary?.reply !== undefined) ie.reply = postTurnSummary.reply;
+    let standing = classified.source === "no-text-turn" ? postTurnSummary_2?.standing : erroredRowId;
+    if (nextSummary.status_category === "blocked" && standing !== undefined) nextSummary.standing = standing;
+    if (classified.source === "no-text-turn") {
+      nextSummary.recent_action = postTurnSummary_2?.recent_action ?? "";
+      if (postTurnSummary_2?.description !== undefined)
+        nextSummary.description = postTurnSummary_2.description;
+      if (postTurnSummary_2?.reply !== undefined) nextSummary.reply = postTurnSummary_2.reply;
     }
-    s.setAppState((re) =>
-      re.postTurnSummary?.status_category === ie.status_category &&
-      re.postTurnSummary.status_detail === ie.status_detail &&
-      re.postTurnSummary.needs_action === ie.needs_action &&
-      re.postTurnSummary.recent_action === ie.recent_action &&
-      re.postTurnSummary.description === ie.description &&
-      re.postTurnSummary.reply === ie.reply &&
-      re.postTurnSummary.standing === ie.standing
-        ? re
+    toolUseContext.setAppState((appStateBeforeSummary) =>
+      appStateBeforeSummary.postTurnSummary?.status_category === nextSummary.status_category &&
+      appStateBeforeSummary.postTurnSummary.status_detail === nextSummary.status_detail &&
+      appStateBeforeSummary.postTurnSummary.needs_action === nextSummary.needs_action &&
+      appStateBeforeSummary.postTurnSummary.recent_action === nextSummary.recent_action &&
+      appStateBeforeSummary.postTurnSummary.description === nextSummary.description &&
+      appStateBeforeSummary.postTurnSummary.reply === nextSummary.reply &&
+      appStateBeforeSummary.postTurnSummary.standing === nextSummary.standing
+        ? appStateBeforeSummary
         : {
-            ...re,
-            postTurnSummary: ie,
+            ...appStateBeforeSummary,
+            postTurnSummary: nextSummary,
           },
     );
     publishPostTurnSummary(
-      s.sessionState,
-      ie,
-      P === undefined
+      toolUseContext.sessionState,
+      nextSummary,
+      hold === undefined
         ? undefined
         : {
             turnEndVerdict: true,
           },
     );
-    Q = lit("published");
+    outcomeLabel = lit("published");
     enqueueTaskNotification({
       type: "system",
       subtype: "post_turn_summary",
-      summarizes_uuid: r.at(-1)?.uuid ?? "",
-      status_category: ie.status_category,
-      status_detail: ie.status_detail,
-      needs_action: ie.needs_action,
+      summarizes_uuid: assistantMessages.at(-1)?.uuid ?? "",
+      status_category: nextSummary.status_category,
+      status_detail: nextSummary.status_detail,
+      needs_action: nextSummary.needs_action,
     });
   };
   let mainThreadAgentType = getMainThreadAgentType();
-  let z = mainThreadAgentType
-    ? s.options.agentDefinitions.activeAgents.find(
+  let mainThreadAgent = mainThreadAgentType
+    ? toolUseContext.options.agentDefinitions.activeAgents.find(
         (activeAgent) => activeAgent.agentType === mainThreadAgentType,
       )
     : undefined;
-  let filtered = content.filter((V) => V.type === "assistant");
-  if (w) {
-    let threadRows = collectThreadRows(content);
-    e.latestAsk = "";
-    if (threadRows) agentJobStateModule.captureLatestAsk(e, threadRows);
+  let filtered = messages.filter((message) => message.type === "assistant");
+  if (projectsRecap) {
+    let threadRows = collectThreadRows(messages);
+    classifierJobState.latestAsk = "";
+    if (threadRows) agentJobStateModule.captureLatestAsk(classifierJobState, threadRows);
   } else {
-    let latestRealUserAsk = agentJobStateModule.findLatestRealUserAsk(content);
-    if (latestRealUserAsk) agentJobStateModule.captureLatestAsk(e, latestRealUserAsk);
+    let latestRealUserAsk = agentJobStateModule.findLatestRealUserAsk(messages);
+    if (latestRealUserAsk) agentJobStateModule.captureLatestAsk(classifierJobState, latestRealUserAsk);
   }
-  e.scriptPosts = s.toolState.get(ReplCallNoteBuffer).take();
-  e.quietTurnKeepsAsk =
-    M.has("summary") &&
-    postTurnSummary?.standing !== undefined &&
-    logOperation(postTurnSummary.standing, content);
-  if (e.quietTurnKeepsAsk) logFeatureOk("chat_relay_standing_ask");
-  let ee = agentJobStateModule
+  classifierJobState.scriptPosts = toolUseContext.toolState.get(ReplCallNoteBuffer).take();
+  classifierJobState.quietTurnKeepsAsk =
+    sinks.has("summary") &&
+    postTurnSummary_2?.standing !== undefined &&
+    logOperation(postTurnSummary_2.standing, messages);
+  if (classifierJobState.quietTurnKeepsAsk) logFeatureOk("chat_relay_standing_ask");
+  let classifyPromise = agentJobStateModule
     .classifyAndPush(
-      e,
+      classifierJobState,
       getOwnJobShortId(),
-      z,
+      mainThreadAgent,
       "",
       filtered,
-      hasActiveAgentTasks(s.taskRegistry.all()),
-      R,
-      S,
+      hasActiveAgentTasks(toolUseContext.taskRegistry.all()),
+      engine,
+      surfaces,
       false,
-      w,
+      projectsRecap,
     )
     .catch((error) => {
       logForDebugging(`[classifier] error: ${errorMessage(error)}`, {
         level: "error",
       });
     });
-  if (isBgSession() || h === "sdk") {
-    let sessionState = s.sessionState;
-    let fe = S.has("ccr") && isRemoteCowork();
-    let ie = isClaudeAiChatOrigin();
-    let Z = fe && sessionState !== undefined && !ie;
-    let holdCapMs = Z ? 0 : SESSION_STATE_IDLE_TTL_MS;
+  if (isBgSession() || querySource === "sdk") {
+    let sessionState = toolUseContext.sessionState;
+    let coworkCcr = surfaces.has("ccr") && isRemoteCowork();
+    let chatOrigin = isClaudeAiChatOrigin();
+    let shouldHold = coworkCcr && sessionState !== undefined && !chatOrigin;
+    let holdCapMs = shouldHold ? 0 : SESSION_STATE_IDLE_TTL_MS;
     let now = Date.now();
-    if (Z) P = sessionState.holdTurnEndSummary(ee, performance.now() + SESSION_STATE_IDLE_TTL_MS);
-    else await withTimeout(ee, SESSION_STATE_IDLE_TTL_MS, "classifier write timed out").catch(() => {});
+    if (shouldHold)
+      hold = sessionState.holdTurnEndSummary(classifyPromise, performance.now() + SESSION_STATE_IDLE_TTL_MS);
+    else
+      await withTimeout(classifyPromise, SESSION_STATE_IDLE_TTL_MS, "classifier write timed out").catch(
+        () => {},
+      );
     let now_2 = Date.now();
-    if (h === "sdk")
-      ee.then(() => {
+    if (querySource === "sdk")
+      classifyPromise.then(() => {
         logEvent("tengu_turn_end_classifier_hold", {
           hold_cap_ms: holdCapMs,
           held_ms: now_2 - now,
           summary_after_turn_ms: Math.max(0, Date.now() - now_2),
-          cowork_ccr: fe,
-          engine: fromEnum(R),
-          summary_outcome: Q,
-          session_origin_chat: ie,
+          cowork_ccr: coworkCcr,
+          engine: fromEnum(engine),
+          summary_outcome: outcomeLabel,
+          session_origin_chat: chatOrigin,
         });
       });
   }
@@ -271,9 +290,9 @@ async function* generatePostTurnSummary(e, content, r, s, h) {
 /**
  * 若有未完成的回合结束摘要且条件满足，等待其完成（错误交给处理函数）。
  */
-function waitForTurnEndSummary(sessionState, n) {
+function waitForTurnEndSummary(sessionState, shouldWait) {
   try {
-    if (!sessionState?.turnEndSummaryOutstanding() || !n()) return;
+    if (!sessionState?.turnEndSummaryOutstanding() || !shouldWait()) return;
     return sessionState.waitForTurnEndSummary()?.catch(logSummaryFailure);
   } catch (error) {
     logSummaryFailure(error);
@@ -292,180 +311,189 @@ function logSummaryFailure(error) {
  * 回合结束时运行 Stop hooks 与记忆提取，返回阻断错误与是否阻止继续。
  */
 async function* runStopHooks(
-  cmd,
+  messagesForQuery,
   assistantMessages,
   systemPrompt,
   userContext,
   systemContext,
-  toolUseContext,
+  context,
   querySource,
   stopHookActive,
   stickyBetas,
   classifierJobState,
   toolResults = [],
 ) {
-  if (isTerminalShutdown() && !toolUseContext.abortController.signal.aborted)
+  if (isTerminalShutdown() && !context.abortController.signal.aborted)
     return {
       blockingErrors: [],
       preventContinuation: false,
     };
-  if (toolUseContext.options.settingsHooksOff || querySource === "agent_summary")
+  if (context.options.settingsHooksOff || querySource === "agent_summary")
     return {
       blockingErrors: [],
       preventContinuation: false,
     };
   let now = Date.now();
-  let context = {
-    messages: [...cmd, ...assistantMessages, ...toolResults],
+  let context_2 = {
+    messages: [...messagesForQuery, ...assistantMessages, ...toolResults],
     systemPrompt,
     userContext,
     systemContext,
-    toolUseContext,
+    toolUseContext: context,
     querySource,
     stickyBetas,
   };
   if (
-    isMainAgent(toolUseContext.agentContext) &&
+    isMainAgent(context.agentContext) &&
     (querySource.startsWith("repl_main_thread") || querySource === "sdk")
   )
-    saveCacheSafeParams(createCacheSafeParams(context));
+    saveCacheSafeParams(createCacheSafeParams(context_2));
   yield* generatePostTurnSummary(
     classifierJobState,
-    context.messages,
+    context_2.messages,
     assistantMessages,
-    toolUseContext,
+    context,
     querySource,
   );
   if (!isBareMode()) {
     if (!isEnvDefinedFalsy(process.env.CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION))
-      if (isSuggestionOwnedByPlugin() && isMainAgent(toolUseContext.agentContext))
-        toolUseContext.session.promptSuggestion.arm();
-      else executePromptSuggestion(context, classifierJobState?.lastResult);
+      if (isSuggestionOwnedByPlugin() && isMainAgent(context.agentContext))
+        context.session.promptSuggestion.arm();
+      else executePromptSuggestion(context_2, classifierJobState?.lastResult);
     if (
-      !toolUseContext.agentId &&
-      (isExtractModeActive() || extractMemoriesModule.isLaptopExtractActive(toolUseContext.session.host))
+      !context.agentId &&
+      (isExtractModeActive() || extractMemoriesModule.isLaptopExtractActive(context.session.host))
     ) {
-      let le = extractMemoriesModule.executeExtractMemories(context, toolUseContext.appendSystemMessage);
+      let extractPromise = extractMemoriesModule.executeExtractMemories(
+        context_2,
+        context.appendSystemMessage,
+      );
       if (
         getHostedPostTurnMemoryConfig()?.sync ||
-        extractMemoriesModule.isLaptopExtractSync(toolUseContext.session.host)
+        extractMemoriesModule.isLaptopExtractSync(context.session.host)
       )
         try {
-          await le;
+          await extractPromise;
         } catch (error) {
           logForDebugging(`extractMemories (sync) failed: ${error}`);
         }
     }
-    if (!toolUseContext.agentId) runAutoDreamForHost(context, toolUseContext.appendSystemMessage);
+    if (!context.agentId) runAutoDreamForHost(context_2, context.appendSystemMessage);
   }
-  if (!toolUseContext.agentId)
+  if (!context.agentId)
     try {
-      yield* cleanupComputerUseAfterTurn(toolUseContext);
+      yield* cleanupComputerUseAfterTurn(context);
     } catch {}
-  let D = null;
+  let briefNudge = null;
   if (
     (querySource.startsWith("repl_main_thread") || querySource === "sdk") &&
     lazyChunkCv3.isBriefEnabled() &&
     !env.DISABLE_BRIEF_MODE_STOP_HOOK &&
-    !toolUseContext.agentId &&
-    toolUseContext.options.tools.some((tool) => toolMatchesName(tool, lazyChunkVsw.BRIEF_TOOL_NAME))
+    !context.agentId &&
+    context.options.tools.some((tool) => toolMatchesName(tool, lazyChunkVsw.BRIEF_TOOL_NAME))
   )
     try {
-      let lastRealUserMessageIndex = findLastRealUserMessageIndex(cmd);
-      let sliced = cmd.slice(lastRealUserMessageIndex + 1);
+      let lastRealUserMessageIndex = findLastRealUserMessageIndex(messagesForQuery);
+      let sliced = messagesForQuery.slice(lastRealUserMessageIndex + 1);
       let any = [...sliced, ...assistantMessages].some(
-        (je) =>
-          je.type === "assistant" &&
-          je.message.content.some(
-            (It) =>
-              It.type === "tool_use" &&
-              (It.name === lazyChunkVsw.BRIEF_TOOL_NAME || It.name === lazyChunkVsw.LEGACY_BRIEF_TOOL_NAME),
+        (message) =>
+          message.type === "assistant" &&
+          message.message.content.some(
+            (block) =>
+              block.type === "tool_use" &&
+              (block.name === lazyChunkVsw.BRIEF_TOOL_NAME ||
+                block.name === lazyChunkVsw.LEGACY_BRIEF_TOOL_NAME),
           ),
       );
-      let J =
+      let briefAlreadyEnforced =
         !any &&
         sliced.some(
-          (je) =>
-            je.type === "user" &&
-            je.isMeta &&
-            typeof je.message.content === "string" &&
-            je.message.content.includes(lazyChunkVsw.BRIEF_ENFORCE_SENTINEL),
+          (message) =>
+            message.type === "user" &&
+            message.isMeta &&
+            typeof message.message.content === "string" &&
+            message.message.content.includes(lazyChunkVsw.BRIEF_ENFORCE_SENTINEL),
         );
-      if (!any && !J) {
-        D = createUserMessage({
+      if (!any && !briefAlreadyEnforced) {
+        briefNudge = createUserMessage({
           content: `${lazyChunkVsw.BRIEF_ENFORCE_SENTINEL} ${lazyChunkCv3.getBriefEnforceText()}`,
           isMeta: true,
         });
-        yield D;
+        yield briefNudge;
       }
     } catch (error) {
       logForDebugging(`Brief mode enforcement failed: ${errorMessage(error)}`, {
         level: "error",
       });
     }
-  let L = null;
-  let z = null;
-  let G = replyGatePolicy();
+  let replyGateNudge = null;
+  let replyGateBounce = null;
+  let replyGatePolicyValue = replyGatePolicy();
   if (
     getQueuedPeerMessageCount &&
     querySource === "sdk" &&
-    !toolUseContext.agentId &&
-    (G !== undefined ||
+    !context.agentId &&
+    (replyGatePolicyValue !== undefined ||
       (getQueuedPeerMessageCount.isProjectsReplyGateEnabled() &&
-        getQueuedPeerMessageCount.isProjectsReplyMountConnected(toolUseContext.getAppState())))
+        getQueuedPeerMessageCount.isProjectsReplyMountConnected(context.getAppState())))
   )
     try {
-      let hearthToolNames = resolveHearthToolNames(toolUseContext.options.tools);
-      let Pe = getQueuedPeerMessageCount.evaluateProjectsReplyGate(
-        cmd,
+      let hearthToolNames = resolveHearthToolNames(context.options.tools);
+      let gateDecision = getQueuedPeerMessageCount.evaluateProjectsReplyGate(
+        messagesForQuery,
         [...assistantMessages, ...toolResults],
-        G !== undefined
+        replyGatePolicyValue !== undefined
           ? {
               kind: "policy",
-              policy: G,
+              policy: replyGatePolicyValue,
             }
           : {
               kind: "remote_control",
               toolNames: hearthToolNames,
             },
       );
-      switch (Pe.kind) {
+      switch (gateDecision.kind) {
         case "answered":
-          if (G !== undefined)
+          if (replyGatePolicyValue !== undefined)
             logFeatureOk("projects_reply_gate_policy", {
-              person_opened_turn: Pe.personOpened,
-              no_reply_only: Pe.noReplyOnly,
+              person_opened_turn: gateDecision.personOpened,
+              no_reply_only: gateDecision.noReplyOnly,
             });
           else logFeatureOk("bridge_projects_reply_gate");
           break;
         case "still_silent":
-          if (G !== undefined)
+          if (replyGatePolicyValue !== undefined)
             logReplyGatePolicy("still_silent", {
-              person_opened_turn: Pe.personOpened,
+              person_opened_turn: gateDecision.personOpened,
             });
           else logFeatureBad("bridge_projects_reply_gate", "still_silent");
           break;
         case "skip":
           break;
         case "bounce":
-          if (!serverHasAnyTool(toolUseContext.options.tools, G?.terminalTools ?? [hearthToolNames.reply])) {
-            if (G !== undefined)
+          if (
+            !serverHasAnyTool(
+              context.options.tools,
+              replyGatePolicyValue?.terminalTools ?? [hearthToolNames.reply],
+            )
+          ) {
+            if (replyGatePolicyValue !== undefined)
               logReplyGatePolicy("reply_tool_not_in_pool", {
-                person_opened_turn: Pe.personOpened,
+                person_opened_turn: gateDecision.personOpened,
               });
             else logFeatureBad("bridge_projects_reply_gate", "reply_tool_not_in_pool");
             break;
           }
-          if (G !== undefined)
-            logFeatureSad("projects_reply_gate_policy", Pe.reason, {
-              person_opened_turn: Pe.personOpened,
+          if (replyGatePolicyValue !== undefined)
+            logFeatureSad("projects_reply_gate_policy", gateDecision.reason, {
+              person_opened_turn: gateDecision.personOpened,
             });
-          else logFeatureSad("bridge_projects_reply_gate", Pe.reason);
-          z = createUserMessage({
-            content: Pe.text,
+          else logFeatureSad("bridge_projects_reply_gate", gateDecision.reason);
+          replyGateBounce = createUserMessage({
+            content: gateDecision.text,
             isMeta: true,
           });
-          yield z;
+          yield replyGateBounce;
           break;
       }
     } catch (error) {
@@ -473,95 +501,95 @@ async function* runStopHooks(
         level: "error",
       });
     }
-  let ee = null;
-  if (toolUseContext.options.requiresStructuredOutput && classifyQuerySource(querySource) !== "auxiliary")
+  let structuredOutputNudge = null;
+  if (context.options.requiresStructuredOutput && classifyQuerySource(querySource) !== "auxiliary")
     try {
-      let lastRealUserMessageIndex = findLastRealUserMessageIndex(cmd);
-      let sliced = cmd.slice(lastRealUserMessageIndex + 1);
-      let Ke = hasSuccessfulToolCall([...sliced, ...assistantMessages], STRUCTUREDOUTPUT);
-      let J =
-        !Ke &&
+      let lastRealUserMessageIndex = findLastRealUserMessageIndex(messagesForQuery);
+      let sliced = messagesForQuery.slice(lastRealUserMessageIndex + 1);
+      let hasStructuredOutput = hasSuccessfulToolCall([...sliced, ...assistantMessages], STRUCTUREDOUTPUT);
+      let structuredOutputEnforced =
+        !hasStructuredOutput &&
         sliced.some(
-          (je) =>
-            je.type === "user" &&
-            je.isMeta &&
-            typeof je.message.content === "string" &&
-            je.message.content.includes(STRUCTURED_OUTPUT_ENFORCE_PREFIX),
+          (message) =>
+            message.type === "user" &&
+            message.isMeta &&
+            typeof message.message.content === "string" &&
+            message.message.content.includes(STRUCTURED_OUTPUT_ENFORCE_PREFIX),
         );
-      if (!Ke && !J) {
-        ee = createUserMessage({
+      if (!hasStructuredOutput && !structuredOutputEnforced) {
+        structuredOutputNudge = createUserMessage({
           content: `${STRUCTURED_OUTPUT_ENFORCE_PREFIX} You MUST call the ${STRUCTUREDOUTPUT} tool to complete this request. Call this tool now.`,
           isMeta: true,
         });
-        yield ee;
+        yield structuredOutputNudge;
       }
     } catch (error) {
       logForDebugging(`StructuredOutput enforcement failed: ${errorMessage(error)}`, {
         level: "error",
       });
     }
-  let V = null;
+  let handbackNudge = null;
   if (
-    toolUseContext.options.requiresHandback &&
+    context.options.requiresHandback &&
     classifyQuerySource(querySource) !== "auxiliary" &&
-    toolUseContext.agentId !== undefined
+    context.agentId !== undefined
   )
     try {
-      let agentId = toolUseContext.agentId;
-      let Pe = toolUseContext.taskRegistry.get(agentId);
-      let pendingHandbackReport = getPendingHandbackReport(Pe, agentId);
-      let handbackBounces = getSelectableBackgroundTasks(Pe)?.handbackBounces ?? 0;
-      pruneSettledChildWork(agentId, toolUseContext.taskRegistry);
-      let je = hasPendingChildWork(agentId, toolUseContext.taskRegistry);
+      let agentId = context.agentId;
+      let agentTask = context.taskRegistry.get(agentId);
+      let pendingHandbackReport = getPendingHandbackReport(agentTask, agentId);
+      let handbackBounces = getSelectableBackgroundTasks(agentTask)?.handbackBounces ?? 0;
+      pruneSettledChildWork(agentId, context.taskRegistry);
+      let childWorkPending = hasPendingChildWork(agentId, context.taskRegistry);
       if (
         pendingHandbackReport !== undefined &&
         pendingHandbackReport.length === 0 &&
-        !je &&
+        !childWorkPending &&
         handbackBounces < MAX_HANDBACK_ENFORCE_RETRIES
       ) {
-        toolUseContext.taskRegistry.update(agentId, (It) => ({
-          ...It,
+        context.taskRegistry.update(agentId, (task) => ({
+          ...task,
           handbackBounces: handbackBounces + 1,
         }));
-        V = createUserMessage({
+        handbackNudge = createUserMessage({
           content: `${HANDBACK_ENFORCE_PREFIX} Your report has not been delivered. Call ${SUBAGENTHANDBACK}({message: <your full report>}) now; the call ends your run.`,
           isMeta: true,
         });
-        yield V;
+        yield handbackNudge;
       }
     } catch (error) {
       logForDebugging(`Subagent hand-back enforcement failed: ${errorMessage(error)}`, {
         level: "error",
       });
     }
-  let fe = null;
+  let unsentFileNudge = null;
   if (
     querySource === "sdk" &&
-    !toolUseContext.agentId &&
+    !context.agentId &&
     isResilientGalaxyOn() &&
-    toolUseContext.options.tools.some((tool) => toolMatchesName(tool, SEND_USER_FILE_TOOL_NAME))
+    context.options.tools.some((tool) => toolMatchesName(tool, SEND_USER_FILE_TOOL_NAME))
   )
     try {
-      let le = lastTurnReminderState(context.messages);
-      switch (le.kind) {
+      let reminderState = lastTurnReminderState(context_2.messages);
+      switch (reminderState.kind) {
         case "skip":
           break;
         case "remind":
           logFeatureSad("query_unsent_file_reminder", "reminded");
-          fe = createUserMessage({
-            content: le.text,
+          unsentFileNudge = createUserMessage({
+            content: reminderState.text,
             isMeta: true,
           });
-          yield fe;
+          yield unsentFileNudge;
           break;
         case "reminded":
-          if (le.sent)
+          if (reminderState.sent)
             logFeatureOk("query_unsent_file_reminder", {
-              message_length: le.textLength,
+              message_length: reminderState.textLength,
             });
           else
             logFeatureSad("query_unsent_file_reminder", "not_sent", {
-              message_length: le.textLength,
+              message_length: reminderState.textLength,
             });
           break;
       }
@@ -572,99 +600,106 @@ async function* runStopHooks(
     }
   if (classifyQuerySource(querySource) !== "auxiliary" && glowingOrbitOn())
     try {
-      let le = pendingShellHandOffs(
-        cmd.slice(findLastPromptIndex(cmd)),
+      let pendingHandoffs = pendingShellHandOffs(
+        messagesForQuery.slice(findLastPromptIndex(messagesForQuery)),
         assistantMessages,
-        toolUseContext.agentId ?? null,
+        context.agentId ?? null,
       );
-      if (le === undefined) logFeatureSad("skill_inline_command_handoff", "too_much_to_check");
-      else if (le.length > 0) logFeatureBad("skill_inline_command_handoff", "not_run");
+      if (pendingHandoffs === undefined) logFeatureSad("skill_inline_command_handoff", "too_much_to_check");
+      else if (pendingHandoffs.length > 0) logFeatureBad("skill_inline_command_handoff", "not_run");
     } catch (error) {
       logForDebugging(`Skill inline command turn-end check failed: ${errorMessage(error)}`, {
         level: "error",
       });
     }
-  let filtered = [D, L, z, ee, V, fe].filter((le) => le !== null);
-  let Z = false;
-  let re;
-  let Re = undefined;
-  let se = [...filtered];
+  let filtered = [
+    briefNudge,
+    replyGateNudge,
+    replyGateBounce,
+    structuredOutputNudge,
+    handbackNudge,
+    unsentFileNudge,
+  ].filter((nudge) => nudge !== null);
+  let hookHandlerFailed = false;
+  let pausedGoalHook;
+  let rearmedGoal = undefined;
+  let blockingErrors = [...filtered];
   let preventedContinuation = false;
-  let U = [];
-  let nt = false;
-  let activeGoal = toolUseContext.agentId ? undefined : toolUseContext.getAppState().activeGoal;
-  let dt;
-  let rt;
+  let taskHookBlockingErrors = [];
+  let taskHookPrevented = false;
+  let activeGoal = context.agentId ? undefined : context.getAppState().activeGoal;
+  let goalOutcome;
+  let goalTaskCounts;
   try {
-    let appState = toolUseContext.getAppState();
-    let mode = getToolPermissionContext(toolUseContext).mode;
+    let appState = context.getAppState();
+    let mode = getToolPermissionContext(context).mode;
     let activeGoal_2 = appState.activeGoal;
-    let J = !toolUseContext.agentId;
-    if (J) clearPendingGoalIdleCheckin(toolUseContext.session.sessionScratch);
-    if (activeGoal_2 && J) {
-      let visibleBackgroundTasks = getVisibleBackgroundTasks(toolUseContext.taskRegistry.all());
+    let isMainThreadAgent = !context.agentId;
+    if (isMainThreadAgent) clearPendingGoalIdleCheckin(context.session.sessionScratch);
+    if (activeGoal_2 && isMainThreadAgent) {
+      let visibleBackgroundTasks = getVisibleBackgroundTasks(context.taskRegistry.all());
       if (visibleBackgroundTasks.length > 0) {
-        re = getSessionStopPromptHooks(toolUseContext.sessionHooksRegistry, getSessionId()).find(
-          (we) => we.prompt === activeGoal_2.condition,
+        pausedGoalHook = getSessionStopPromptHooks(context.sessionHooksRegistry, getSessionId()).find(
+          (sessionHook) => sessionHook.prompt === activeGoal_2.condition,
         );
-        if (re) {
-          toolUseContext.sessionHooksRegistry.remove(getSessionId(), "Stop", re);
+        if (pausedGoalHook) {
+          context.sessionHooksRegistry.remove(getSessionId(), "Stop", pausedGoalHook);
           logForDebugging("[goal] evaluation deferred \u2014 background work still running");
-          dt = "deferred";
-          rt = {
+          goalOutcome = "deferred";
+          goalTaskCounts = {
             activeAgents: count(visibleBackgroundTasks, isActiveAgentTask),
             activeShells: count(visibleBackgroundTasks, isRunningShellTask),
           };
-          let we;
+          let checkinText;
           try {
-            let Le = planGoalCheckin(activeGoal_2, visibleBackgroundTasks, Date.now());
-            Re = Le.nextGoal;
-            we = Le.checkinText;
+            let checkinPlan = planGoalCheckin(activeGoal_2, visibleBackgroundTasks, Date.now());
+            rearmedGoal = checkinPlan.nextGoal;
+            checkinText = checkinPlan.checkinText;
           } catch (error) {
             logError(error);
-            Re = activeGoal_2;
+            rearmedGoal = activeGoal_2;
             logFeatureBad("goal_checkin", "plan_failed");
           }
-          if (Re !== undefined && Re !== activeGoal_2)
+          if (rearmedGoal !== undefined && rearmedGoal !== activeGoal_2)
             yield {
               type: "active_goal",
-              value: Re,
+              value: rearmedGoal,
             };
-          if (we !== undefined) {
+          if (checkinText !== undefined) {
             let userMessage = createUserMessage({
-              content: we,
+              content: checkinText,
               isMeta: true,
             });
-            se.push(userMessage);
+            blockingErrors.push(userMessage);
             filtered.push(userMessage);
             yield userMessage;
           }
         }
       } else if (activeGoal_2.deferredSince !== undefined) {
-        let { deferredSince, checkinCount, lastDeferralPassAt, ...Ct } = activeGoal_2;
+        let { deferredSince, checkinCount, lastDeferralPassAt, ...goalWithoutDeferral } = activeGoal_2;
         yield {
           type: "active_goal",
-          value: Ct,
+          value: goalWithoutDeferral,
         };
       }
     }
-    let je = (hook) => {
+    let findPausedGoalHook = (hook) => {
       if (!hook) return;
-      return (toolUseContext.sessionHooksRegistry.get(getSessionId(), "Stop").get("Stop") ?? [])
-        .flatMap((Le) => Le.hooks)
-        .some((Le) => isHookEqual(Le, hook))
+      return (context.sessionHooksRegistry.get(getSessionId(), "Stop").get("Stop") ?? [])
+        .flatMap((matcher) => matcher.hooks)
+        .some((candidateHook) => isHookEqual(candidateHook, hook))
         ? hook
         : undefined;
     };
-    let It = executeStopHooks(
+    let stopHookResults = executeStopHooks(
       mode,
-      toolUseContext.abortController.signal,
+      context.abortController.signal,
       undefined,
       stopHookActive,
-      toolUseContext.agentId,
-      toolUseContext,
-      context.messages,
-      toolUseContext.agentType,
+      context.agentId,
+      context,
+      context_2.messages,
+      context.agentType,
       "blockable_turn_end",
     );
     let toolUseID = "";
@@ -674,34 +709,35 @@ async function* runStopHooks(
     let hookErrors = [];
     let hookAdditionalContext = [];
     let hookInfos = [];
-    let it = false;
-    for await (let Me of It) {
-      if (Me.message) {
-        yield Me.message;
-        if (isHookBlockingErrorAttachment(Me.message) && isJoyfulGlobeOn()) se.push(Me.message);
-        if (Me.message.type === "progress" && Me.message.toolUseID) {
-          toolUseID = Me.message.toolUseID;
+    let hookPushedBack = false;
+    for await (let hookResult of stopHookResults) {
+      if (hookResult.message) {
+        yield hookResult.message;
+        if (isHookBlockingErrorAttachment(hookResult.message) && isJoyfulGlobeOn())
+          blockingErrors.push(hookResult.message);
+        if (hookResult.message.type === "progress" && hookResult.message.toolUseID) {
+          toolUseID = hookResult.message.toolUseID;
           hookCount++;
-          let we = Me.message.data;
-          if (we.command)
+          let progressData = hookResult.message.data;
+          if (progressData.command)
             hookInfos.push({
-              command: we.command,
-              promptText: we.promptText,
+              command: progressData.command,
+              promptText: progressData.promptText,
             });
         }
-        if (Me.message.type === "attachment") {
-          let attachment = Me.message.attachment;
+        if (hookResult.message.type === "attachment") {
+          let attachment = hookResult.message.attachment;
           if (
             "hookEvent" in attachment &&
             (attachment.hookEvent === "Stop" || attachment.hookEvent === "SubagentStop")
           ) {
             if (
               activeGoal &&
-              Me.hook?.prompt === activeGoal.condition &&
+              hookResult.hook?.prompt === activeGoal.condition &&
               (attachment.type === "hook_non_blocking_error" ||
                 attachment.type === "hook_error_during_execution")
             ) {
-              dt = "error";
+              goalOutcome = "error";
               logFeatureSad("goal_met", "evaluator_error");
             }
             if (attachment.type === "hook_non_blocking_error") {
@@ -716,11 +752,11 @@ async function* runStopHooks(
                 (attachment.stderr && attachment.stderr.trim())
               )
                 hasOutput = true;
-              let Le = je(Me.hook);
-              if (attachment.hookEvent === "Stop" && Le) {
-                toolUseContext.sessionHooksRegistry.remove(getSessionId(), "Stop", Le);
-                let activeGoal = toolUseContext.getAppState().activeGoal;
-                if (activeGoal?.condition === Le.prompt) {
+              let sessionHookEntry = findPausedGoalHook(hookResult.hook);
+              if (attachment.hookEvent === "Stop" && sessionHookEntry) {
+                context.sessionHooksRegistry.remove(getSessionId(), "Stop", sessionHookEntry);
+                let activeGoal = context.getAppState().activeGoal;
+                if (activeGoal?.condition === sessionHookEntry.prompt) {
                   let iterations = activeGoal.iterations + 1;
                   let durationMs = Date.now() - activeGoal.setAt;
                   let tokens = getTotalOutputTokens() - activeGoal.tokensAtStart;
@@ -728,21 +764,21 @@ async function* runStopHooks(
                     type: "active_goal",
                     value: undefined,
                   };
-                  dt = Me.impossible ? "impossible" : "met";
-                  if (Me.impossible) {
+                  goalOutcome = hookResult.impossible ? "impossible" : "met";
+                  if (hookResult.impossible) {
                     yield createAttachmentMessage_2({
                       type: "goal_status",
                       met: false,
                       failed: true,
-                      condition: Le.prompt,
-                      reason: Me.stopReason,
+                      condition: sessionHookEntry.prompt,
+                      reason: hookResult.stopReason,
                       iterations,
                       durationMs,
                       tokens,
                     });
                     logEvent("tengu_goal_failed", {
-                      promptLength: Le.prompt.length,
-                      reasonLength: Me.stopReason?.length ?? 0,
+                      promptLength: sessionHookEntry.prompt.length,
+                      reasonLength: hookResult.stopReason?.length ?? 0,
                       iterations,
                       durationMs,
                       tokens,
@@ -753,23 +789,23 @@ async function* runStopHooks(
                     yield createAttachmentMessage_2({
                       type: "goal_status",
                       met: true,
-                      condition: Le.prompt,
-                      reason: Me.stopReason,
+                      condition: sessionHookEntry.prompt,
+                      reason: hookResult.stopReason,
                       iterations,
                       durationMs,
                       tokens,
                     });
                     logEvent("tengu_goal_achieved", {
-                      promptLength: Le.prompt.length,
+                      promptLength: sessionHookEntry.prompt.length,
                       iterations,
                       durationMs,
                       tokens,
                       origin: fromEnumOpt(activeGoal.origin),
                     });
                     logFeatureOk("goal_met");
-                    toolUseContext.sessionState?.notifyMetadataChanged({
+                    context.sessionState?.notifyMetadataChanged({
                       goal: {
-                        condition: Le.prompt,
+                        condition: sessionHookEntry.prompt,
                         set_at: activeGoal.setAt,
                         iterations,
                         last_reason: null,
@@ -782,68 +818,68 @@ async function* runStopHooks(
             }
             if ("durationMs" in attachment && "command" in attachment) {
               let found = hookInfos.find(
-                (st) => st.command === attachment.command && st.durationMs === undefined,
+                (info) => info.command === attachment.command && info.durationMs === undefined,
               );
               if (found) found.durationMs = attachment.durationMs;
             }
           }
         }
       }
-      if (Me.timedOut) {
-        if (activeGoal && Me.hook?.prompt === activeGoal.condition) {
-          dt = "cancelled";
+      if (hookResult.timedOut) {
+        if (activeGoal && hookResult.hook?.prompt === activeGoal.condition) {
+          goalOutcome = "cancelled";
           logFeatureSad("goal_met", "evaluator_timeout");
         }
         continue;
       }
-      if (Me.blockingError) {
+      if (hookResult.blockingError) {
         let userMessage = createUserMessage({
-          content: getStopHookMessage(Me.blockingError),
+          content: getStopHookMessage(hookResult.blockingError),
           isMeta: true,
         });
-        se.push(userMessage);
+        blockingErrors.push(userMessage);
         yield userMessage;
         hasOutput = true;
-        let Le = je(Me.hook);
-        let activeGoal = toolUseContext.getAppState().activeGoal;
-        if (Le && activeGoal?.condition === Le.prompt) {
-          dt = "not_met";
+        let pausedHook = findPausedGoalHook(hookResult.hook);
+        let activeGoal = context.getAppState().activeGoal;
+        if (pausedHook && activeGoal?.condition === pausedHook.prompt) {
+          goalOutcome = "not_met";
           yield {
             type: "active_goal",
             value: {
               ...activeGoal,
               iterations: activeGoal.iterations + 1,
-              lastReason: Me.stopReason,
+              lastReason: hookResult.stopReason,
             },
           };
           yield createAttachmentMessage_2({
             type: "goal_status",
             met: false,
-            condition: Le.prompt,
-            reason: Me.stopReason,
+            condition: pausedHook.prompt,
+            reason: hookResult.stopReason,
           });
         } else {
-          hookErrors.push(Me.blockingError.blockingError);
-          it = true;
+          hookErrors.push(hookResult.blockingError.blockingError);
+          hookPushedBack = true;
         }
       }
-      if (Me.additionalContexts && Me.additionalContexts.length > 0) {
-        let we = toolUseContext.agentId ? "SubagentStop" : "Stop";
+      if (hookResult.additionalContexts && hookResult.additionalContexts.length > 0) {
+        let hookEventName = context.agentId ? "SubagentStop" : "Stop";
         let attachmentMessage = createAttachmentMessage_2({
           type: "hook_additional_context",
-          content: Me.additionalContexts,
-          hookName: we,
+          content: hookResult.additionalContexts,
+          hookName: hookEventName,
           toolUseID,
-          hookEvent: we,
+          hookEvent: hookEventName,
         });
-        if (!isBareModeAttachmentDropped(attachmentMessage)) se.push(attachmentMessage);
+        if (!isBareModeAttachmentDropped(attachmentMessage)) blockingErrors.push(attachmentMessage);
         yield attachmentMessage;
         hasOutput = true;
-        hookAdditionalContext.push(...Me.additionalContexts);
+        hookAdditionalContext.push(...hookResult.additionalContexts);
       }
-      if (Me.preventContinuation) {
+      if (hookResult.preventContinuation) {
         preventedContinuation = true;
-        stopReason = Me.stopReason || "Stop hook prevented continuation";
+        stopReason = hookResult.stopReason || "Stop hook prevented continuation";
         yield createAttachmentMessage_2({
           type: "hook_stopped_continuation",
           message: stopReason,
@@ -852,15 +888,15 @@ async function* runStopHooks(
           hookEvent: "Stop",
         });
       }
-      if (toolUseContext.abortController.signal.aborted) {
+      if (context.abortController.signal.aborted) {
         logEvent("tengu_pre_stop_hooks_cancelled", {
-          queryChainId: sanitizeMarkName(toolUseContext.queryTracking?.chainId),
-          queryDepth: toolUseContext.queryTracking?.depth,
+          queryChainId: sanitizeMarkName(context.queryTracking?.chainId),
+          queryDepth: context.queryTracking?.depth,
         });
-        if (!isSilentAbortReason(toolUseContext.abortController.signal.reason))
+        if (!isSilentAbortReason(context.abortController.signal.reason))
           yield createUserInterruptionMessage({
             toolUse: false,
-            interruptedByShutdown: shutdownInterruptStamp(toolUseContext.abortController.signal),
+            interruptedByShutdown: shutdownInterruptStamp(context.abortController.signal),
           });
         return {
           blockingErrors: [],
@@ -896,7 +932,7 @@ async function* runStopHooks(
       }
     }
     if (preventedContinuation) {
-      yield* runTurnEndReactions(toolUseContext, context.messages, {
+      yield* runTurnEndReactions(context, context_2.messages, {
         stopHookActive,
       });
       return {
@@ -904,119 +940,119 @@ async function* runStopHooks(
         preventContinuation: true,
       };
     }
-    if (se.length > 0) {
-      if (it)
+    if (blockingErrors.length > 0) {
+      if (hookPushedBack)
         logHookPushbackEvent({
           pushback: {
-            hookEvent: toolUseContext.agentId ? "subagent_stop" : "stop",
+            hookEvent: context.agentId ? "subagent_stop" : "stop",
           },
           permissionMode: mode,
-          agentContext: toolUseContext.agentContext,
+          agentContext: context.agentContext,
         });
       return {
-        blockingErrors: se,
+        blockingErrors,
         preventContinuation: false,
-        goalPass: dt,
+        goalPass: goalOutcome,
       };
     }
-    let At = isTeammateAgentContext(
-      toolUseContext.agentContext,
-      toolUseContext.taskRegistry,
-      toolUseContext.agentId,
-    );
-    if (At !== undefined && toolUseContext.agentId === At.agentId) {
-      let { teammateName, teamName } = At;
-      let Le;
-      let st = "";
+    let teammateContext = isTeammateAgentContext(context.agentContext, context.taskRegistry, context.agentId);
+    if (teammateContext !== undefined && context.agentId === teammateContext.agentId) {
+      let { teammateName, teamName } = teammateContext;
+      let taskStopReason;
+      let taskHookToolUseID = "";
       let taskListId = getTaskListId();
-      let filtered = (await listTasks(taskListId, toolUseContext.storageV5)).filter(
-        (Mt) => Mt.status === "in_progress" && Mt.owner === teammateName,
+      let filtered = (await listTasks(taskListId, context.storageV5)).filter(
+        (task) => task.status === "in_progress" && task.owner === teammateName,
       );
-      for (let Mt of filtered) {
-        let bo = executeTaskCompletedHooks(
-          Mt.id,
-          Mt.subject,
-          Mt.description,
+      for (let task of filtered) {
+        let completedHookResults = executeTaskCompletedHooks(
+          task.id,
+          task.subject,
+          task.description,
           teammateName,
           teamName,
           mode,
-          toolUseContext.abortController.signal,
+          context.abortController.signal,
           undefined,
-          toolUseContext,
+          context,
         );
-        for await (let Jt of bo) {
-          if (Jt.message) {
-            if (Jt.message.type === "progress" && Jt.message.toolUseID) st = Jt.message.toolUseID;
-            yield Jt.message;
-            if (isHookBlockingErrorAttachment(Jt.message) && isJoyfulGlobeOn()) U.push(Jt.message);
+        for await (let hookResult of completedHookResults) {
+          if (hookResult.message) {
+            if (hookResult.message.type === "progress" && hookResult.message.toolUseID)
+              taskHookToolUseID = hookResult.message.toolUseID;
+            yield hookResult.message;
+            if (isHookBlockingErrorAttachment(hookResult.message) && isJoyfulGlobeOn())
+              taskHookBlockingErrors.push(hookResult.message);
           }
-          if (Jt.blockingError) {
+          if (hookResult.blockingError) {
             let userMessage = createUserMessage({
-              content: getTaskCompletedHookMessage(Jt.blockingError),
+              content: getTaskCompletedHookMessage(hookResult.blockingError),
               isMeta: true,
             });
-            U.push(userMessage);
+            taskHookBlockingErrors.push(userMessage);
             yield userMessage;
           }
-          if (Jt.preventContinuation) {
-            nt = true;
-            Le = Jt.stopReason || "TaskCompleted hook prevented continuation";
+          if (hookResult.preventContinuation) {
+            taskHookPrevented = true;
+            taskStopReason = hookResult.stopReason || "TaskCompleted hook prevented continuation";
             yield createAttachmentMessage_2({
               type: "hook_stopped_continuation",
-              message: Le,
+              message: taskStopReason,
               hookName: "TaskCompleted",
-              toolUseID: st,
+              toolUseID: taskHookToolUseID,
               hookEvent: "TaskCompleted",
             });
           }
-          if (toolUseContext.abortController.signal.aborted)
+          if (context.abortController.signal.aborted)
             return {
               blockingErrors: [],
               preventContinuation: true,
             };
         }
       }
-      let yo = executeTeammateIdleHooks(
+      let idleHookResults = executeTeammateIdleHooks(
         teammateName,
         teamName,
         mode,
-        toolUseContext.abortController.signal,
+        context.abortController.signal,
         undefined,
-        toolUseContext,
+        context,
       );
-      for await (let Mt of yo) {
-        if (Mt.message) {
-          if (Mt.message.type === "progress" && Mt.message.toolUseID) st = Mt.message.toolUseID;
-          yield Mt.message;
-          if (isHookBlockingErrorAttachment(Mt.message) && isJoyfulGlobeOn()) U.push(Mt.message);
+      for await (let hookResult of idleHookResults) {
+        if (hookResult.message) {
+          if (hookResult.message.type === "progress" && hookResult.message.toolUseID)
+            taskHookToolUseID = hookResult.message.toolUseID;
+          yield hookResult.message;
+          if (isHookBlockingErrorAttachment(hookResult.message) && isJoyfulGlobeOn())
+            taskHookBlockingErrors.push(hookResult.message);
         }
-        if (Mt.blockingError) {
+        if (hookResult.blockingError) {
           let userMessage = createUserMessage({
-            content: getTeammateIdleHookMessage(Mt.blockingError),
+            content: getTeammateIdleHookMessage(hookResult.blockingError),
             isMeta: true,
           });
-          U.push(userMessage);
+          taskHookBlockingErrors.push(userMessage);
           yield userMessage;
         }
-        if (Mt.preventContinuation) {
-          nt = true;
-          Le = Mt.stopReason || "TeammateIdle hook prevented continuation";
+        if (hookResult.preventContinuation) {
+          taskHookPrevented = true;
+          taskStopReason = hookResult.stopReason || "TeammateIdle hook prevented continuation";
           yield createAttachmentMessage_2({
             type: "hook_stopped_continuation",
-            message: Le,
+            message: taskStopReason,
             hookName: "TeammateIdle",
-            toolUseID: st,
+            toolUseID: taskHookToolUseID,
             hookEvent: "TeammateIdle",
           });
         }
-        if (toolUseContext.abortController.signal.aborted)
+        if (context.abortController.signal.aborted)
           return {
             blockingErrors: [],
             preventContinuation: true,
           };
       }
-      if (nt) {
-        yield* runTurnEndReactions(toolUseContext, context.messages, {
+      if (taskHookPrevented) {
+        yield* runTurnEndReactions(context, context_2.messages, {
           stopHookActive,
         });
         return {
@@ -1024,37 +1060,37 @@ async function* runStopHooks(
           preventContinuation: true,
         };
       }
-      if (U.length > 0)
+      if (taskHookBlockingErrors.length > 0)
         return {
-          blockingErrors: U,
+          blockingErrors: taskHookBlockingErrors,
           preventContinuation: false,
-          goalPass: dt,
+          goalPass: goalOutcome,
         };
     }
-    yield* runTurnEndReactions(toolUseContext, context.messages, {
+    yield* runTurnEndReactions(context, context_2.messages, {
       stopHookActive,
     });
     return {
       blockingErrors: [],
       preventContinuation: false,
-      goalPass: dt,
+      goalPass: goalOutcome,
     };
   } catch (error) {
     if (
       isAbortError(error) &&
-      (toolUseContext.abortController.signal.aborted || error instanceof StreamClosedAbortError)
+      (context.abortController.signal.aborted || error instanceof StreamClosedAbortError)
     ) {
       logForDebugging("Stop hook cancelled (abort or stream teardown)");
-      if (!toolUseContext.abortController.signal.aborted) {
-        let Ke = [...se, ...U];
-        let J = preventedContinuation || nt;
-        if (J || Ke.length === 0)
-          yield* runTurnEndReactions(toolUseContext, context.messages, {
+      if (!context.abortController.signal.aborted) {
+        let allBlockingErrors = [...blockingErrors, ...taskHookBlockingErrors];
+        let prevented = preventedContinuation || taskHookPrevented;
+        if (prevented || allBlockingErrors.length === 0)
+          yield* runTurnEndReactions(context, context_2.messages, {
             stopHookActive,
           });
         return {
-          blockingErrors: Ke,
-          preventContinuation: J,
+          blockingErrors: allBlockingErrors,
+          preventContinuation: prevented,
         };
       }
       return {
@@ -1062,30 +1098,31 @@ async function* runStopHooks(
         preventContinuation: false,
       };
     }
-    Z = true;
+    hookHandlerFailed = true;
     let duration = Date.now() - now;
     logEvent("tengu_stop_hook_error", {
       duration,
-      queryChainId: sanitizeMarkName(toolUseContext.queryTracking?.chainId),
-      queryDepth: toolUseContext.queryTracking?.depth,
+      queryChainId: sanitizeMarkName(context.queryTracking?.chainId),
+      queryDepth: context.queryTracking?.depth,
     });
     yield createSystemMessage(`Stop hook failed: ${errorMessage(error)}`, "warning");
     if (filtered.length === 0)
-      yield* runTurnEndReactions(toolUseContext, context.messages, {
+      yield* runTurnEndReactions(context, context_2.messages, {
         stopHookActive,
       });
     return {
       blockingErrors: filtered,
       preventContinuation: false,
-      goalPass: activeGoal && (dt === undefined || dt === "not_met") ? "error" : dt,
+      goalPass:
+        activeGoal && (goalOutcome === undefined || goalOutcome === "not_met") ? "error" : goalOutcome,
     };
   } finally {
-    if (re) toolUseContext.sessionHooksRegistry.add(getSessionId(), "Stop", "", re);
-    if (Re !== undefined && !toolUseContext.options.isNonInteractiveSession) {
-      let { getAppState, setAppState, taskRegistry, session, messageQueue } = toolUseContext;
+    if (pausedGoalHook) context.sessionHooksRegistry.add(getSessionId(), "Stop", "", pausedGoalHook);
+    if (rearmedGoal !== undefined && !context.options.isNonInteractiveSession) {
+      let { getAppState, setAppState, taskRegistry, session, messageQueue } = context;
       try {
         scheduleGoalIdleCheckin({
-          goal: Re,
+          goal: rearmedGoal,
           now: Date.now(),
           sessionScratch: session.sessionScratch,
           getAppState,
@@ -1102,18 +1139,18 @@ async function* runStopHooks(
         }
       }
     }
-    if (Z) logFeatureBad("hook_stop_handler", "hook_stop_handler_failed");
+    if (hookHandlerFailed) logFeatureBad("hook_stop_handler", "hook_stop_handler_failed");
     else logFeatureOk("hook_stop_handler");
     if (activeGoal) {
-      let aborted = toolUseContext.abortController.signal.aborted;
-      let Pe = dt === "met" || dt === "not_met" || dt === "impossible";
+      let aborted = context.abortController.signal.aborted;
+      let goalEvaluated = goalOutcome === "met" || goalOutcome === "not_met" || goalOutcome === "impossible";
       logEvent("tengu_goal_evaluated", {
-        outcome: fromEnum(dt ?? (Z ? "error" : aborted ? "cancelled" : "absent")),
+        outcome: fromEnum(goalOutcome ?? (hookHandlerFailed ? "error" : aborted ? "cancelled" : "absent")),
         durationMs: Date.now() - now,
-        iterations: activeGoal.iterations + (Pe ? 1 : 0),
+        iterations: activeGoal.iterations + (goalEvaluated ? 1 : 0),
         parentAborted: aborted,
         origin: fromEnumOpt(activeGoal.origin),
-        ...rt,
+        ...goalTaskCounts,
       });
     }
   }
@@ -1122,30 +1159,30 @@ async function* runStopHooks(
 /**
  * 运行 turn_end_reactions hooks。
  */
-async function* runTurnEndReactions(e, n, { stopHookActive }) {
+async function* runTurnEndReactions(context, messages, { stopHookActive }) {
   try {
-    let s = executeStopHooks(
-      getToolPermissionContext(e).mode,
-      e.abortController.signal,
+    let reactionResults = executeStopHooks(
+      getToolPermissionContext(context).mode,
+      context.abortController.signal,
       undefined,
       stopHookActive,
-      e.agentId,
-      e,
-      n,
-      e.agentType,
+      context.agentId,
+      context,
+      messages,
+      context.agentType,
       "turn_end_reactions",
     );
-    for await (let h of s) {
-      if (h.message) yield h.message;
-      if (h.blockingError || h.preventContinuation)
+    for await (let hookResult of reactionResults) {
+      if (hookResult.message) yield hookResult.message;
+      if (hookResult.blockingError || hookResult.preventContinuation)
         logForDebugging(
-          `[stop-hooks] Turn-end reaction hook block discarded: ${h.blockingError?.blockingError ?? h.stopReason ?? "preventContinuation"}`,
+          `[stop-hooks] Turn-end reaction hook block discarded: ${hookResult.blockingError?.blockingError ?? hookResult.stopReason ?? "preventContinuation"}`,
         );
     }
   } catch (error) {
     if (
       isAbortError(error) &&
-      (e.abortController.signal.aborted || error instanceof StreamClosedAbortError)
+      (context.abortController.signal.aborted || error instanceof StreamClosedAbortError)
     ) {
       logForDebugging("[stop-hooks] Turn-end reactions pass cancelled (abort or stream teardown)");
       return;

@@ -5,11 +5,12 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/claudeInChrome/toolRendering.tsx
- * pieces: chunk-3k33hyyp.js (2), chunk-ah34pb7m.js (6)
- * attribution: fingerprint 5, placement 3
+ * pieces: chunk-3k33hyyp.js (2), chunk-ah34pb7m.js (5)
+ * attribution: fingerprint 5, placement 2
  */
 import { count } from "../collections.js";
 import { shouldHideTasksFooter } from "../../components/tasks/taskStatusUtils.js";
+import { countNonAmbientTasks } from "../tasks.js";
 import { supportsHyperlinks } from "../../ink/supports-hyperlinks.js";
 import {
   jsxProd_default_2,
@@ -26,15 +27,8 @@ import { getClaudeInChromePermissionOverrides } from "./permissionOverrides.js";
 /**
  * 统计可见任务数（排除进程内队友）。
  */
-function countVisibleTasks(m, d) {
-  return count(Object.values(m), shouldHideTasksFooter) + countNonAmbientTasks(d);
-}
-//@ chunk-ah34pb7m.js:12634-12714 placement
-/**
- * 统计既不是 ambient 也不是进程内队友的任务数。
- */
-function countNonAmbientTasks(remoteBackgroundTasks) {
-  return count(remoteBackgroundTasks, (d) => !d.ambient && d.taskType !== "in_process_teammate");
+function countVisibleTasks(tasks, options) {
+  return count(Object.values(tasks), shouldHideTasksFooter) + countNonAmbientTasks(options);
 }
 //@ chunk-ah34pb7m.js:12714-12751 fingerprint = CHROME_EXTENSION_FOCUS_TAB_URL_BASE (1)
 /**
@@ -147,7 +141,7 @@ function renderChromeToolResultMessage(output, toolName, verbose) {
  * 返回一个渲染函数：结果是对象时按给定格式渲染（verbose 透传），否则返回 null。
  */
 function createObjectResultRenderer(toolName) {
-  return (output, c, { verbose }) => {
+  return (output, result, { verbose }) => {
     if (typeof output !== "object" || output === null) return null;
     return renderChromeToolResultMessage(output, toolName, verbose);
   };
@@ -246,4 +240,9 @@ function getClaudeInChromeMCPToolOverrides(toolName) {
     ...getClaudeInChromePermissionOverrides(toolName),
   };
 }
-export { countNonAmbientTasks, countVisibleTasks, createObjectResultRenderer, renderChromeViewTabLink };
+export {
+  countVisibleTasks,
+  createObjectResultRenderer,
+  renderChromeViewTabLink,
+  getClaudeInChromeMCPToolOverrides,
+};

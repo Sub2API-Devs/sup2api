@@ -15,32 +15,38 @@ import { errorMessage } from "../errors.js";
 import { isSameAnswerInput, isUnchangedAnswerInput } from "../permissions/permissionAnswer.js";
 import { shouldAllowManagedHooksOnly } from "./hooksConfigSnapshot.js";
 import { isHookPolicyUnanswered } from "../../commands/goal/goal.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:871497-871624 placement
-var PLUGIN_HOOK_REWRITE_REFUSAL = hookRewriteRefusalText("A plugin hook", "one of their plugins");
-var SETTINGS_HOOK_REWRITE_REFUSAL = hookRewriteRefusalText(
-  "A settings hook",
-  "their organization's or their repo's settings",
-);
+var PLUGIN_HOOK_REWRITE_REFUSAL; // deferred: uses hookRewriteRefusalText of its import cycle while loading; runs once the cycle is complete
+var SETTINGS_HOOK_REWRITE_REFUSAL;
+deferInit("chunk-e6aww6q8.js:871497", () => {
+  PLUGIN_HOOK_REWRITE_REFUSAL = hookRewriteRefusalText("A plugin hook", "one of their plugins");
+  SETTINGS_HOOK_REWRITE_REFUSAL = hookRewriteRefusalText(
+    "A settings hook",
+    "their organization's or their repo's settings",
+  );
+});
 //@ chunk-e6aww6q8.js:871624-871996 placement
 /**
  * 生成 hook 改写了跨环境工具调用输入而被拒绝时的说明。
  */
-function hookRewriteRefusalText(e, n) {
-  return `${e} changed this tool call's input. That is allowed only for calls that run in the same environment as the hook, and this one does not, so the call was not made. Retrying will not help while the hook keeps changing the input. Go on without this call, and tell the user that a hook in ${n} changes this tool's input, which is not supported here.`;
+function hookRewriteRefusalText(hookName, source) {
+  return `${hookName} changed this tool call's input. That is allowed only for calls that run in the same environment as the hook, and this one does not, so the call was not made. Retrying will not help while the hook keeps changing the input. Go on without this call, and tell the user that a hook in ${source} changes this tool's input, which is not supported here.`;
 }
 //@ chunk-e6aww6q8.js:871996-872416 placement
 /**
  * 判断工具调用是否与 hook 在同一环境运行（插件 hook 运行器是否接管该工具）。
  */
-function describeToolCallPlacement(e, n) {
-  let toolInput = "tool_input" in e && isPlainObject_5(e.tool_input) ? e.tool_input : undefined;
+function describeToolCallPlacement(hookInput, origin) {
+  let toolInput =
+    "tool_input" in hookInput && isPlainObject_5(hookInput.tool_input) ? hookInput.tool_input : undefined;
   let runsThere = false;
-  let h = false;
+  let runnerThrew = false;
   try {
-    runsThere = getPluginHookRunner()?.runsTool(e.tool_name, toolInput) === true;
+    runsThere = getPluginHookRunner()?.runsTool(hookInput.tool_name, toolInput) === true;
   } catch (error) {
-    h = true;
+    runnerThrew = true;
     logForDebugging(
       `Hooks: the plugin hook runner could not say where a tool call runs (${errorMessage(error)}), so the call counts as this process's and a rewritten input for it is refused`,
       {
@@ -51,17 +57,17 @@ function describeToolCallPlacement(e, n) {
   return {
     runsThere,
     toolInput,
-    ...(h && {
-      runnerThrew: h,
+    ...(runnerThrew && {
+      runnerThrew,
     }),
-    ...(n?.settingsSource !== undefined && {
+    ...(origin?.settingsSource !== undefined && {
       ofSettings: true,
     }),
   };
 }
 //@ chunk-e6aww6q8.js:872416-872706 placement
-function hookDecisionKind(e) {
-  let hookSpecificOutput = e.hookSpecificOutput;
+function hookDecisionKind(answer) {
+  let hookSpecificOutput = answer.hookSpecificOutput;
   if (hookSpecificOutput?.hookEventName === "PermissionRequest") return "allow";
   if (
     hookSpecificOutput?.hookEventName === "PreToolUse" &&
@@ -69,45 +75,45 @@ function hookDecisionKind(e) {
     hookSpecificOutput.permissionDecision !== "deny"
   )
     return hookSpecificOutput.permissionDecision;
-  if (e.decision === "approve") return "allow";
-  return e.decision ?? "none";
+  if (answer.decision === "approve") return "allow";
+  return answer.decision ?? "none";
 }
 //@ chunk-e6aww6q8.js:872706-873436 placement
 /**
  * 检查 hook 输出是否改写了不在同一环境运行的调用的输入，是则返回拒绝结果。
  */
 function refuseCrossEnvironmentInputRewrite(output, { toolInput, ofSettings }) {
-  let s = ofSettings ? SETTINGS_HOOK_REWRITE_REFUSAL : PLUGIN_HOOK_REWRITE_REFUSAL;
+  let refusalText = ofSettings ? SETTINGS_HOOK_REWRITE_REFUSAL : PLUGIN_HOOK_REWRITE_REFUSAL;
   switch (output.hookEventName) {
     case "PreToolUse": {
-      let { updatedInput, ...y } = output;
-      if (y.permissionDecision === "deny" || updatedInput === undefined) return;
+      let { updatedInput, ...rest } = output;
+      if (rest.permissionDecision === "deny" || updatedInput === undefined) return;
       if (toolInput !== undefined && isSameAnswerInput(updatedInput, toolInput))
         return {
-          output: y,
+          output: rest,
           refused: false,
         };
       return {
         output: {
           hookEventName: "PreToolUse",
-          ...(y.additionalContext !== undefined && {
-            additionalContext: y.additionalContext,
+          ...(rest.additionalContext !== undefined && {
+            additionalContext: rest.additionalContext,
           }),
           permissionDecision: "deny",
-          permissionDecisionReason: s,
+          permissionDecisionReason: refusalText,
         },
         refused: true,
       };
     }
     case "PermissionRequest": {
       if (output.decision.behavior !== "allow") return;
-      let { updatedInput, ...y } = output.decision;
+      let { updatedInput, ...rest } = output.decision;
       if (updatedInput === undefined) return;
       return isUnchangedAnswerInput(updatedInput, toolInput ?? {})
         ? {
             output: {
               hookEventName: "PermissionRequest",
-              decision: y,
+              decision: rest,
             },
             refused: false,
           }
@@ -116,7 +122,7 @@ function refuseCrossEnvironmentInputRewrite(output, { toolInput, ofSettings }) {
               hookEventName: "PermissionRequest",
               decision: {
                 behavior: "deny",
-                message: s,
+                message: refusalText,
               },
             },
             refused: true,
@@ -130,36 +136,36 @@ function refuseCrossEnvironmentInputRewrite(output, { toolInput, ofSettings }) {
 /**
  * 钩子返回改写后的工具输入（PreToolUse updatedInput 或 PermissionRequest 的 allow+updatedInput）时，若工具调用不在钩子所在环境运行且输入确有变化，则把决定改为 deny 并附说明；返回新的答复与是否被拒。
  */
-function applyInputRewritePolicy(answer, eventName, r, toolInput) {
-  let h = {
+function applyInputRewritePolicy(answer, eventName, placement, toolInput) {
+  let unchanged = {
     answer,
     refused: false,
   };
-  if ("async" in answer || answer.hookSpecificOutput === undefined) return h;
+  if ("async" in answer || answer.hookSpecificOutput === undefined) return unchanged;
   let hookSpecificOutput = answer.hookSpecificOutput;
-  if (hookSpecificOutput.hookEventName !== eventName) return h;
-  let S = refuseCrossEnvironmentInputRewrite(
+  if (hookSpecificOutput.hookEventName !== eventName) return unchanged;
+  let rewrite = refuseCrossEnvironmentInputRewrite(
     hookSpecificOutput,
-    r.runsThere
+    placement.runsThere
       ? {
-          ...r,
+          ...placement,
           toolInput,
         }
-      : r,
+      : placement,
   );
-  if (S === undefined || (r.runsThere && S.refused)) return h;
-  if (!S.refused)
+  if (rewrite === undefined || (placement.runsThere && rewrite.refused)) return unchanged;
+  if (!rewrite.refused)
     return {
       answer: {
         ...answer,
-        hookSpecificOutput: S.output,
+        hookSpecificOutput: rewrite.output,
       },
       refused: false,
     };
-  let { decision, reason, ...G } = answer;
+  let { decision, reason, ...rest } = answer;
   return {
     answer: {
-      ...G,
+      ...rest,
       ...(decision !== "approve" &&
         decision !== undefined && {
           decision,
@@ -168,20 +174,20 @@ function applyInputRewritePolicy(answer, eventName, r, toolInput) {
         reason !== undefined && {
           reason,
         }),
-      hookSpecificOutput: S.output,
+      hookSpecificOutput: rewrite.output,
     },
     refused: true,
   };
 }
 //@ chunk-e6aww6q8.js:873945-874563 placement
-function applyRemoteHookInputRewrite(answer, hookInput, hookOriginLabel, s) {
+function applyRemoteHookInputRewrite(answer, hookInput, origin, state) {
   if (!("tool_name" in hookInput)) return answer;
-  let h = describeToolCallPlacement(hookInput, hookOriginLabel);
+  let placement = describeToolCallPlacement(hookInput, origin);
   let { answer: answer_2, refused } = applyInputRewritePolicy(
     answer,
     hookInput.hook_event_name,
-    h,
-    s?.repairedInput,
+    placement,
+    state?.repairedInput,
   );
   if (!refused || "async" in answer) return answer_2;
   logForDebugging(
@@ -194,7 +200,7 @@ function applyRemoteHookInputRewrite(answer, hookInput, hookOriginLabel, s) {
     getPluginHookRunner()?.rewriteRefused?.({
       hook_event_kind: hookInput.hook_event_name,
       decision_kind: hookDecisionKind(answer),
-      runner_threw: h.runnerThrew === true,
+      runner_threw: placement.runnerThrew === true,
     });
   } catch (error) {
     logForDebugging(
@@ -207,7 +213,10 @@ function applyRemoteHookInputRewrite(answer, hookInput, hookOriginLabel, s) {
   return answer_2;
 }
 //@ chunk-e6aww6q8.js:874563-874583 placement
-var weakSet_3 = new WeakSet();
+var weakSet_3; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:874563", () => {
+  weakSet_3 = new WeakSet();
+});
 //@ chunk-e6aww6q8.js:874583-874618 placement
 /**
  * 标记某输入已被改写，并返回该对象。
@@ -227,15 +236,15 @@ function unmarkRewrittenInput(hook) {
 /**
  * 判断输入是否带改写标记。
  */
-function isRewrittenInput(e) {
-  return weakSet_3.has(e);
+function isRewrittenInput(input) {
+  return weakSet_3.has(input);
 }
 //@ chunk-e6aww6q8.js:874682-874726 placement
 /**
  * 若来源带标记则返回新值（保持标记）。
  */
-function rewriteInputIfMarked(e, n) {
-  return weakSet_3.has(e) ? markRewrittenInput(n) : n;
+function rewriteInputIfMarked(input, rewritten) {
+  return weakSet_3.has(input) ? markRewrittenInput(rewritten) : rewritten;
 }
 //@ chunk-e6aww6q8.js:874726-874759 placement
 /**

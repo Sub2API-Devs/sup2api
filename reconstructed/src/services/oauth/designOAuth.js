@@ -25,9 +25,9 @@ import { OAuthService } from "./index.js";
 import { AuthCodeRefusedError } from "./auth-code-listener.js";
 
 //@ chunk-8genbs31.js:609-773 placement
-async function readDesignOAuth(r) {
+async function readDesignOAuth(key) {
   try {
-    return (await getSecureStorage().readAsync(r))?.designOauth ?? null;
+    return (await getSecureStorage().readAsync(key))?.designOauth ?? null;
   } catch (error) {
     logForDebugging(`Failed to read design OAuth tokens: ${errorMessage(error)}`, {
       level: "error",
@@ -36,25 +36,25 @@ async function readDesignOAuth(r) {
   }
 }
 //@ chunk-8genbs31.js:773-1085 placement
-async function writeDesignOAuth(designOauth, n) {
+async function writeDesignOAuth(designOauth, options) {
   try {
-    let o = false;
-    let s = await getSecureStorage().mutate((e) => {
-      if (n?.onlyIf && !n.onlyIf(e.designOauth)) {
-        o = true;
-        return e;
+    let raced = false;
+    let result = await getSecureStorage().mutate((store) => {
+      if (options?.onlyIf && !options.onlyIf(store.designOauth)) {
+        raced = true;
+        return store;
       }
       return {
-        ...e,
+        ...store,
         designOauth,
       };
     });
-    return o
+    return raced
       ? {
-          ...s,
+          ...result,
           raced: true,
         }
-      : s;
+      : result;
   } catch (error) {
     logForDebugging(`Failed to save design OAuth tokens: ${errorMessage(error)}`, {
       level: "error",
@@ -66,16 +66,16 @@ async function writeDesignOAuth(designOauth, n) {
   }
 }
 //@ chunk-8genbs31.js:1085-1311 placement
-async function clearDesignOAuthIf(r) {
+async function clearDesignOAuthIf(shouldClear) {
   try {
-    await getSecureStorage().mutate((n) => {
-      if (!n.designOauth) return n;
-      if (!r(n.designOauth)) return n;
-      let o = {
-        ...n,
+    await getSecureStorage().mutate((store) => {
+      if (!store.designOauth) return store;
+      if (!shouldClear(store.designOauth)) return store;
+      let next = {
+        ...store,
       };
-      delete o.designOauth;
-      return o;
+      delete next.designOauth;
+      return next;
     });
   } catch (error) {
     logForDebugging(`Failed to clear design OAuth tokens: ${errorMessage(error)}`, {
@@ -98,8 +98,8 @@ async function readStoredDesignOAuth() {
 /**
  * 获取 Design 服务的 OAuth 访问令牌，必要时刷新；未登录时返回需要登录。
  */
-async function getDesignAccessToken(r) {
-  let designOAuth = await readDesignOAuth(r);
+async function getDesignAccessToken(credentials) {
+  let designOAuth = await readDesignOAuth(credentials);
   if (!designOAuth?.accessToken)
     return {
       ok: false,
@@ -118,7 +118,7 @@ async function getDesignAccessToken(r) {
     };
   }
   try {
-    return await withOauthSlotRefreshLock(DESIGN_OAUTH_REFRESH_LOCK, async (o) => {
+    return await withOauthSlotRefreshLock(DESIGN_OAUTH_REFRESH_LOCK, async (lock) => {
       let storedDesignOAuth = await readStoredDesignOAuth();
       if (!storedDesignOAuth?.accessToken)
         return {
@@ -132,7 +132,7 @@ async function getDesignAccessToken(r) {
         };
       if (!storedDesignOAuth.refreshToken) {
         let refreshToken = storedDesignOAuth.refreshToken;
-        await clearDesignOAuthIf((c) => c.refreshToken === refreshToken);
+        await clearDesignOAuthIf((stored) => stored.refreshToken === refreshToken);
         return {
           ok: false,
           reason: "needs_design_login",
@@ -140,13 +140,13 @@ async function getDesignAccessToken(r) {
       }
       if (!Array.isArray(storedDesignOAuth.scopes) || storedDesignOAuth.scopes.length === 0) {
         let refreshToken = storedDesignOAuth.refreshToken;
-        await clearDesignOAuthIf((c) => c.refreshToken === refreshToken);
+        await clearDesignOAuthIf((stored) => stored.refreshToken === refreshToken);
         return {
           ok: false,
           reason: "needs_design_login",
         };
       }
-      if (o.isCompromised()) {
+      if (lock.isCompromised()) {
         logFeatureSad("oauth_token_refresh", "design_oauth_refresh_lock_compromised");
         return {
           ok: false,
@@ -155,24 +155,25 @@ async function getDesignAccessToken(r) {
         };
       }
       try {
-        let e = await refreshOAuthToken(storedDesignOAuth.refreshToken, {
+        let refreshed = await refreshOAuthToken(storedDesignOAuth.refreshToken, {
           clientId: storedDesignOAuth.clientId,
           scopes: storedDesignOAuth.scopes,
           skipProfileFetch: true,
         });
-        if (!e.refreshToken || !e.expiresAt) {
-          if (e.refreshToken && e.refreshToken !== storedDesignOAuth.refreshToken)
-            await revokeOAuthToken(e.refreshToken, storedDesignOAuth.clientId);
+        if (!refreshed.refreshToken || !refreshed.expiresAt) {
+          if (refreshed.refreshToken && refreshed.refreshToken !== storedDesignOAuth.refreshToken)
+            await revokeOAuthToken(refreshed.refreshToken, storedDesignOAuth.clientId);
           return {
             ok: false,
             reason: "design_refresh_failed",
             detail: "refresh response missing refresh_token or expiry",
           };
         }
-        if (!DESIGN_OAUTH_SCOPES.every((a) => e.scopes.includes(a))) {
-          if (e.refreshToken) await revokeOAuthToken(e.refreshToken, storedDesignOAuth.clientId);
+        if (!DESIGN_OAUTH_SCOPES.every((scope) => refreshed.scopes.includes(scope))) {
+          if (refreshed.refreshToken)
+            await revokeOAuthToken(refreshed.refreshToken, storedDesignOAuth.clientId);
           let refreshToken = storedDesignOAuth.refreshToken;
-          await clearDesignOAuthIf((k) => k.refreshToken === refreshToken);
+          await clearDesignOAuthIf((stored) => stored.refreshToken === refreshToken);
           return {
             ok: false,
             reason: "needs_design_login",
@@ -180,20 +181,22 @@ async function getDesignAccessToken(r) {
           };
         }
         let refreshToken = storedDesignOAuth.refreshToken;
-        let u = await writeDesignOAuth(
+        let writeResult = await writeDesignOAuth(
           {
-            accessToken: e.accessToken,
-            refreshToken: e.refreshToken,
-            expiresAt: e.expiresAt,
-            scopes: e.scopes.filter((scope) => DESIGN_OAUTH_SCOPES.some((k) => k === scope)),
+            accessToken: refreshed.accessToken,
+            refreshToken: refreshed.refreshToken,
+            expiresAt: refreshed.expiresAt,
+            scopes: refreshed.scopes.filter((scope) =>
+              DESIGN_OAUTH_SCOPES.some((knownScope) => knownScope === scope),
+            ),
             clientId: storedDesignOAuth.clientId,
           },
           {
-            onlyIf: (a) => a?.refreshToken === refreshToken,
+            onlyIf: (current) => current?.refreshToken === refreshToken,
           },
         );
-        if (u.raced) {
-          await revokeOAuthToken(e.refreshToken, storedDesignOAuth.clientId);
+        if (writeResult.raced) {
+          await revokeOAuthToken(refreshed.refreshToken, storedDesignOAuth.clientId);
           let storedDesignOAuth_2 = await readStoredDesignOAuth();
           return storedDesignOAuth_2?.accessToken && !isOAuthTokenExpired(storedDesignOAuth_2.expiresAt)
             ? {
@@ -205,7 +208,7 @@ async function getDesignAccessToken(r) {
                 reason: "needs_design_login",
               };
         }
-        if (!u.success)
+        if (!writeResult.success)
           logForDebugging(
             "Design OAuth refresh succeeded but persist failed; continuing with in-memory token.",
             {
@@ -214,10 +217,10 @@ async function getDesignAccessToken(r) {
           );
         return {
           ok: true,
-          accessToken: e.accessToken,
+          accessToken: refreshed.accessToken,
         };
       } catch (error) {
-        if (o.isCompromised()) {
+        if (lock.isCompromised()) {
           let storedDesignOAuth = await readStoredDesignOAuth();
           if (storedDesignOAuth?.accessToken && !isOAuthTokenExpired(storedDesignOAuth.expiresAt))
             return {
@@ -234,7 +237,7 @@ async function getDesignAccessToken(r) {
         }
         if (isInvalidGrantError(error)) {
           let refreshToken = storedDesignOAuth.refreshToken;
-          await clearDesignOAuthIf((u) => u.refreshToken === refreshToken);
+          await clearDesignOAuthIf((stored) => stored.refreshToken === refreshToken);
           return {
             ok: false,
             reason: "needs_design_login",
@@ -271,17 +274,17 @@ function isDesignOAuthConfigured() {
   return !designOAuthClientId().startsWith("00000000-");
 }
 //@ chunk-8genbs31.js:4304-4983 placement
-async function refreshDesignToken(r, n) {
-  let filtered = DESIGN_OAUTH_SCOPES.filter((s) => !r.scopes.includes(s));
+async function refreshDesignToken(tokenResponse, clientId) {
+  let filtered = DESIGN_OAUTH_SCOPES.filter((scope) => !tokenResponse.scopes.includes(scope));
   if (filtered.length > 0) {
-    if (r.refreshToken) await revokeOAuthToken(r.refreshToken, n);
+    if (tokenResponse.refreshToken) await revokeOAuthToken(tokenResponse.refreshToken, clientId);
     return {
       ok: false,
       message: `The authorization server did not grant the design scopes (missing: ${filtered.join(", ")}) \u2014 the Claude Design app registration may be incomplete or out of date.`,
     };
   }
-  if (!r.refreshToken || !r.expiresAt) {
-    if (r.refreshToken) await revokeOAuthToken(r.refreshToken, n);
+  if (!tokenResponse.refreshToken || !tokenResponse.expiresAt) {
+    if (tokenResponse.refreshToken) await revokeOAuthToken(tokenResponse.refreshToken, clientId);
     return {
       ok: false,
       message:
@@ -291,11 +294,13 @@ async function refreshDesignToken(r, n) {
   return {
     ok: true,
     slot: {
-      accessToken: r.accessToken,
-      refreshToken: r.refreshToken,
-      expiresAt: r.expiresAt,
-      scopes: r.scopes.filter((scope) => DESIGN_OAUTH_SCOPES.some((e) => e === scope)),
-      clientId: n,
+      accessToken: tokenResponse.accessToken,
+      refreshToken: tokenResponse.refreshToken,
+      expiresAt: tokenResponse.expiresAt,
+      scopes: tokenResponse.scopes.filter((scope) =>
+        DESIGN_OAUTH_SCOPES.some((knownScope) => knownScope === scope),
+      ),
+      clientId,
     },
   };
 }
@@ -312,7 +317,7 @@ var DESIGN_LOGIN_TIMEOUT_MS = 300000;
 /**
  * 执行 Design OAuth 登录流程（本地回调或手动粘贴授权码），保存令牌。
  */
-async function runDesignLogin(signal, n) {
+async function runDesignLogin(signal, options) {
   if (signal?.aborted)
     return {
       ok: false,
@@ -326,36 +331,36 @@ async function runDesignLogin(signal, n) {
       message:
         "The Claude Design OAuth client is not configured in this build. Set CLAUDE_CODE_DESIGN_OAUTH_CLIENT_ID to the registered client id, or update to a build with the registered client.",
     };
-  if (isRemoteEnvironment() && !n?.onManualCode)
+  if (isRemoteEnvironment() && !options?.onManualCode)
     return {
       ok: false,
       reason: "remote",
       message:
         "This session is remote, so the browser can't reach the local sign-in listener. Run /design-login instead \u2014 it supports pasting the authorization code manually.",
     };
-  let o = designOAuthClientId();
-  let s = new OAuthService();
-  let e = false;
-  let c = false;
-  let u;
+  let clientId = designOAuthClientId();
+  let oauthService = new OAuthService();
+  let timedOut = false;
+  let abandoned = false;
+  let timeoutTimer;
   try {
-    let onAuthUrl = n?.onAuthUrl;
-    n?.onManualCode?.((authorizationCode, state) =>
-      s.handleManualAuthCodeInput({
+    let onAuthUrl = options?.onAuthUrl;
+    options?.onManualCode?.((authorizationCode, state) =>
+      oauthService.handleManualAuthCodeInput({
         authorizationCode,
         state,
       }),
     );
-    let k = s.startOAuthFlow(
+    let loginFlow = oauthService.startOAuthFlow(
       onAuthUrl
-        ? async (g, T) => {
-            onAuthUrl(T ?? g, g);
+        ? async (authUrl, state) => {
+            onAuthUrl(state ?? authUrl, authUrl);
           }
         : async () => {},
       {
         loginWithClaudeAi: true,
         oauthClient: {
-          clientId: o,
+          clientId,
           scopes: DESIGN_OAUTH_SCOPES,
         },
         skipProfileFetch: true,
@@ -365,21 +370,23 @@ async function runDesignLogin(signal, n) {
         }),
       },
     );
-    k.then((g) => {
-      if (c && g.refreshToken) revokeOAuthToken(g.refreshToken, o);
-    }).catch(() => {});
+    loginFlow
+      .then((tokens) => {
+        if (abandoned && tokens.refreshToken) revokeOAuthToken(tokens.refreshToken, clientId);
+      })
+      .catch(() => {});
     let winner = await Promise.race([
-      k,
+      loginFlow,
       new Promise((resolve, reject) => {
-        u = setTimeout(() => {
-          e = true;
-          c = true;
+        timeoutTimer = setTimeout(() => {
+          timedOut = true;
+          abandoned = true;
           reject(Error("design login timed out"));
         }, DESIGN_LOGIN_TIMEOUT_MS);
         signal?.addEventListener(
           "abort",
           () => {
-            c = true;
+            abandoned = true;
             reject(Error("design login interrupted"));
           },
           {
@@ -388,23 +395,23 @@ async function runDesignLogin(signal, n) {
         );
       }),
     ]);
-    let h = await refreshDesignToken(winner, o);
-    if (!h.ok)
+    let refreshed = await refreshDesignToken(winner, clientId);
+    if (!refreshed.ok)
       return {
         ok: false,
         reason: "invalid",
-        message: h.message,
+        message: refreshed.message,
       };
     if (signal?.aborted) {
-      await revokeOAuthToken(h.slot.refreshToken, h.slot.clientId);
+      await revokeOAuthToken(refreshed.slot.refreshToken, refreshed.slot.clientId);
       return {
         ok: false,
         reason: "interrupted",
         message: "Design login was interrupted.",
       };
     }
-    if (!(await writeDesignOAuth(h.slot)).success) {
-      await revokeOAuthToken(h.slot.refreshToken, h.slot.clientId);
+    if (!(await writeDesignOAuth(refreshed.slot)).success) {
+      await revokeOAuthToken(refreshed.slot.refreshToken, refreshed.slot.clientId);
       return {
         ok: false,
         reason: "save_failed",
@@ -413,17 +420,17 @@ async function runDesignLogin(signal, n) {
     }
     return {
       ok: true,
-      accessToken: h.slot.accessToken,
+      accessToken: refreshed.slot.accessToken,
     };
   } catch (error) {
-    c = true;
+    abandoned = true;
     if (signal?.aborted)
       return {
         ok: false,
         reason: "interrupted",
         message: "Design login was interrupted.",
       };
-    if (e)
+    if (timedOut)
       return {
         ok: false,
         reason: "timed_out",
@@ -443,8 +450,8 @@ async function runDesignLogin(signal, n) {
       message: `The browser authorization failed (${errorMessage(error)}). Run /design-login to retry with the manual flow.`,
     };
   } finally {
-    if (u !== undefined) clearTimeout(u);
-    s.cleanup();
+    if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
+    oauthService.cleanup();
   }
 }
 export {

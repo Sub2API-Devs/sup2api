@@ -10,6 +10,7 @@
  */
 import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-551t875q.js:261-309 placement
 /**
@@ -25,7 +26,10 @@ class AgentProxyEndpointState {
 /**
  * 按宿主隔离的 agent 代理端点状态。
  */
-var agentProxyStateByHost = new HostScoped(() => new AgentProxyEndpointState());
+var agentProxyStateByHost; // deferred: uses AgentProxyEndpointState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-551t875q.js:309", () => {
+  agentProxyStateByHost = new HostScoped(() => new AgentProxyEndpointState());
+});
 //@ chunk-551t875q.js:332-367 placement
 /**
  * 取出当前宿主的 agent 代理端点状态。
@@ -37,8 +41,8 @@ function getAgentProxyEndpointState() {
 /**
  * 设置当前 agent 代理端点。
  */
-function setAgentProxyEndpoint(e) {
-  getAgentProxyEndpointState().set(e);
+function setAgentProxyEndpoint(endpoint) {
+  getAgentProxyEndpointState().set(endpoint);
 }
 //@ chunk-551t875q.js:394-429 placement
 /**

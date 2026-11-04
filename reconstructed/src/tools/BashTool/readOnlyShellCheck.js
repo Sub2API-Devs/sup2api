@@ -58,6 +58,7 @@ import { expandTildeWithHome } from "../../utils/networkPaths.js";
 import { getPlatform } from "../../utils/platform.js";
 import { getPathsForPermissionCheck } from "../../utils/fsOperations.js";
 import { uniq } from "../../utils/collections.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-whwptcwy.js:1083-1111 placement
 var TENGU_VIOLIN_LINING = "tengu_violin_lining";
@@ -74,11 +75,11 @@ function useSecurityParser() {
 /**
  * 解析命令（解析器放弃时标为 too-complex）。
  */
-async function parseShellCommand(e) {
+async function parseShellCommand(command) {
   return runWithRuleOff(async () => {
-    if (!useSecurityParser()) return parseForSecurity(e);
-    let commandRaw = await parseCommandRaw(e);
-    if (commandRaw === PARSE_ABORTED && e.trim() !== "")
+    if (!useSecurityParser()) return parseForSecurity(command);
+    let commandRaw = await parseCommandRaw(command);
+    if (commandRaw === PARSE_ABORTED && command.trim() !== "")
       return {
         kind: "too-complex",
         reason: "the parser gave up on the command",
@@ -89,7 +90,7 @@ async function parseShellCommand(e) {
           commands: [],
           bareAssignmentNames: [],
         }
-      : parseForSecurityFromAst(e, commandRaw);
+      : parseForSecurityFromAst(command, commandRaw);
   });
 }
 //@ chunk-whwptcwy.js:1505-1542 placement
@@ -103,8 +104,8 @@ var TENGU_NIFTY_PINE = "tengu_nifty_pine";
 /**
  * 判断变量是否影响命令执行（被判定工具当作输入）。
  */
-function isExecInfluencingVar(e) {
-  return isExecInfluencingVar_2(e) || e === "PWD" || e === "OLDPWD";
+function isExecInfluencingVar(name) {
+  return isExecInfluencingVar_2(name) || name === "PWD" || name === "OLDPWD";
 }
 //@ chunk-whwptcwy.js:1595-1663 placement
 /**
@@ -117,58 +118,64 @@ function isNonLocaleExecInfluencingVar(name) {
 /**
  * 声明命令集合、可执行代码的命令集合（eval 类、zsh 危险内建、shell 程序、包装命令、xargs、parallel），Claude 配置目录下的敏感文件名（.config.json、.credentials.json、.device-keys.json），以及开关名 tengu_toasty_hammock。属只读命令判定的辅助模块。
  */
-var DECLARATION_COMMANDS = new Set(["export", "declare", "typeset", "readonly", "local", "unset"]);
-var EXEC_CAPABLE_COMMANDS = new Set([
-  ...EVAL_LIKE_BUILTINS,
-  ...ZSH_DANGEROUS_BUILTINS,
-  ...SHELL_PROGRAM_NAMES,
-  ...TRANSPARENT_LAUNCHER_NAMES,
-  ...UNHANDLED_EXEC_WRAPPERS,
-  "xargs",
-  "parallel",
-]);
-var CLAUDE_HOME_SECRET_FILE_NAMES = [LEGACY_CONFIG_JSON, CREDENTIALS_FILE_NAME, DEVICE_KEYS_FILE_NAME];
-var TENGU_TOASTY_HAMMOCK = "tengu_toasty_hammock";
+var DECLARATION_COMMANDS; // deferred: uses EVAL_LIKE_BUILTINS (../../utils/bash/ast.js) of its import cycle while loading; runs once the cycle is complete
+var EXEC_CAPABLE_COMMANDS;
+var CLAUDE_HOME_SECRET_FILE_NAMES;
+var TENGU_TOASTY_HAMMOCK;
+deferInit("chunk-whwptcwy.js:1663", () => {
+  DECLARATION_COMMANDS = new Set(["export", "declare", "typeset", "readonly", "local", "unset"]);
+  EXEC_CAPABLE_COMMANDS = new Set([
+    ...EVAL_LIKE_BUILTINS,
+    ...ZSH_DANGEROUS_BUILTINS,
+    ...SHELL_PROGRAM_NAMES,
+    ...TRANSPARENT_LAUNCHER_NAMES,
+    ...UNHANDLED_EXEC_WRAPPERS,
+    "xargs",
+    "parallel",
+  ]);
+  CLAUDE_HOME_SECRET_FILE_NAMES = [LEGACY_CONFIG_JSON, CREDENTIALS_FILE_NAME, DEVICE_KEYS_FILE_NAME];
+  TENGU_TOASTY_HAMMOCK = "tengu_toasty_hammock";
+});
 //@ chunk-whwptcwy.js:1845-1917 placement
 /**
  * 判断词是否为 [、[[ 或只含安全字符，可作为命令名/参数。
  */
-function isPlainCommandWord(e) {
-  return e === "[" || e === "[[" || /^[A-Za-z0-9_.+:~/-]+$/.test(e);
+function isPlainCommandWord(word) {
+  return word === "[" || word === "[[" || /^[A-Za-z0-9_.+:~/-]+$/.test(word);
 }
 //@ chunk-whwptcwy.js:1917-2286 placement
-async function shouldBypassAskForReadOnly(e, n, t, cwd) {
-  let s =
-    t.behavior === "ask" &&
-    findSafetyCheckReason(t.decisionReason, isHostPersonOnlyCircuitBreaker) !== undefined;
-  if (e.name === BASH_TOOL_NAME) {
-    if (typeof n.command !== "string") return "uncertain";
-    let i = await classifyServedShellLine(n.command, cwd, s);
-    return i === "none" &&
-      t.behavior === "ask" &&
-      findSafetyCheckReason(t.decisionReason, isServedUnplaceableCircuitBreaker) !== undefined
+async function shouldBypassAskForReadOnly(tool, input, result, cwd) {
+  let isPersonOnly =
+    result.behavior === "ask" &&
+    findSafetyCheckReason(result.decisionReason, isHostPersonOnlyCircuitBreaker) !== undefined;
+  if (tool.name === BASH_TOOL_NAME) {
+    if (typeof input.command !== "string") return "uncertain";
+    let verdict = await classifyServedShellLine(input.command, cwd, isPersonOnly);
+    return verdict === "none" &&
+      result.behavior === "ask" &&
+      findSafetyCheckReason(result.decisionReason, isServedUnplaceableCircuitBreaker) !== undefined
       ? "uncertain"
-      : i;
+      : verdict;
   }
-  if (e.name !== POWERSHELL_TOOL_NAME) return "none";
-  if (s) return "settings";
-  return t.behavior === "ask" && SAFETY_CHECK_FIELDS(t) ? "uncertain" : "none";
+  if (tool.name !== POWERSHELL_TOOL_NAME) return "none";
+  if (isPersonOnly) return "settings";
+  return result.behavior === "ask" && SAFETY_CHECK_FIELDS(result) ? "uncertain" : "none";
 }
 //@ chunk-whwptcwy.js:2286-2464 placement
 /**
  * 判断托管服务的命令行是否会写入受保护路径（Bash/PowerShell 且非只读）。
  */
-async function servedLineTouchesProtectedPath(e, n, t, r = false) {
+async function servedLineTouchesProtectedPath(tool, input, result, allowReadOnly = false) {
   if (
-    (e.name !== BASH_TOOL_NAME && e.name !== POWERSHELL_TOOL_NAME) ||
-    !touchesProtectedPath(n, "file") ||
-    !(await isServedLineWriting(e, n, t))
+    (tool.name !== BASH_TOOL_NAME && tool.name !== POWERSHELL_TOOL_NAME) ||
+    !touchesProtectedPath(input, "file") ||
+    !(await isServedLineWriting(tool, input, result))
   )
     return false;
-  let command = n.command;
+  let command = input.command;
   return !(
-    r &&
-    e.name === BASH_TOOL_NAME &&
+    allowReadOnly &&
+    tool.name === BASH_TOOL_NAME &&
     typeof command === "string" &&
     (await isReadOnlyCommand(command))
   );
@@ -177,12 +184,12 @@ async function servedLineTouchesProtectedPath(e, n, t, r = false) {
 /**
  * 判断托管服务的命令是否会写入（PowerShell 按解析结果，其他用工具的 isReadOnly）。
  */
-async function isServedLineWriting(e, n, t) {
+async function isServedLineWriting(tool, input, result) {
   try {
-    let command = n.command;
-    return e.name === POWERSHELL_TOOL_NAME && typeof command === "string"
+    let command = input.command;
+    return tool.name === POWERSHELL_TOOL_NAME && typeof command === "string"
       ? !isReadOnlyCommand_2(command, await parsePowerShellCommand(command))
-      : !e.isReadOnly(n, t);
+      : !tool.isReadOnly(input, result);
   } catch (error) {
     logError(
       Error("a served shell line's read-only check threw; the line counts as not read-only", {
@@ -200,23 +207,31 @@ function getProtectedSettingsPaths() {
   return {
     paths: [
       ...claudeStateFilePaths(),
-      ...getClaudeConfigDirs().flatMap((e) => CLAUDE_HOME_SECRET_FILE_NAMES.map((n) => join(e, n))),
+      ...getClaudeConfigDirs().flatMap((configDir) =>
+        CLAUDE_HOME_SECRET_FILE_NAMES.map((fileName) => join(configDir, fileName)),
+      ),
     ],
-    globalConfigNames: OAUTH_GLOBAL_FILE_SUFFIXES.map((e) => `.claude${e}.json`),
+    globalConfigNames: OAUTH_GLOBAL_FILE_SUFFIXES.map((suffix) => `.claude${suffix}.json`),
   };
 }
 //@ chunk-whwptcwy.js:2842-3109 placement
 /**
  * 一组常量：simctl/open/defaults 的子命令、形如 a.b.claude 的 bundle id 正则、以及判断命令含危险 shell 语法的正则。
  */
-var SIMCTL_APP_VERBS = {
-  simctl: ["launch", "terminate", "uninstall", "get_app_container", "appinfo", "privacy"],
-  open: ["-b"],
-  defaults: ["read", "read-type", "write", "delete"],
-};
-var CLAUDE_APP_BUNDLE_ID_RE = String.raw`(?:[a-z][a-z0-9_-]*\.){2,}claude`;
-var regExp = new RegExp(`^${CLAUDE_APP_BUNDLE_ID_RE}$`, "i");
-var DANGEROUS_SHELL_SYNTAX_RE = /[|`\\(]|\$[{_]|\$BASH|<<|\bfunction\b/;
+var SIMCTL_APP_VERBS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var CLAUDE_APP_BUNDLE_ID_RE;
+var regExp;
+var DANGEROUS_SHELL_SYNTAX_RE;
+deferInit("chunk-whwptcwy.js:2842", () => {
+  SIMCTL_APP_VERBS = {
+    simctl: ["launch", "terminate", "uninstall", "get_app_container", "appinfo", "privacy"],
+    open: ["-b"],
+    defaults: ["read", "read-type", "write", "delete"],
+  };
+  CLAUDE_APP_BUNDLE_ID_RE = String.raw`(?:[a-z][a-z0-9_-]*\.){2,}claude`;
+  regExp = new RegExp(`^${CLAUDE_APP_BUNDLE_ID_RE}$`, "i");
+  DANGEROUS_SHELL_SYNTAX_RE = /[|`\\(]|\$[{_]|\$BASH|<<|\bfunction\b/;
+});
 //@ chunk-whwptcwy.js:3109-4253 placement
 /**
  * 判断命令是否只读（简单命令、无赋值、目标不是设置文件）。
@@ -227,16 +242,16 @@ async function isReadOnlyCommand(command) {
     let shellCommand = await parseShellCommand(command);
     if (shellCommand.kind !== "simple" || shellCommand.bareAssignmentNames.some(isExecInfluencingVar))
       return false;
-    let t = [];
+    let appIds = [];
     let command_2 = command.replace(
       new RegExp(String.raw`(^|\s)(${CLAUDE_APP_BUNDLE_ID_RE})(?=$|[\s;&])`, "gi"),
-      (o, a, f) => {
-        t.push(f);
-        return `${a}APPID`;
+      (prefix, matched, appId) => {
+        appIds.push(appId);
+        return `${matched}APPID`;
       },
     );
-    let s = [];
-    let i = 0;
+    let argvAppIds = [];
+    let settingAppIds = 0;
     for (let { argv, envVars, redirects } of shellCommand.commands) {
       if (
         envVars.some((envVar) => isExecInfluencingVar(envVar.name)) ||
@@ -245,37 +260,41 @@ async function isReadOnlyCommand(command) {
         )
       )
         return false;
-      let u = argv[0];
-      let p =
-        u === "simctl"
+      let program = argv[0];
+      let simctlIdx =
+        program === "simctl"
           ? 0
-          : (u === "xcrun" || u === "/usr/bin/xcrun") && argv[1] === "simctl"
+          : (program === "xcrun" || program === "/usr/bin/xcrun") && argv[1] === "simctl"
             ? 1
             : undefined;
-      let g = p === undefined ? undefined : argv[p + 1];
-      let S = p !== undefined && g !== undefined && SIMCTL_APP_VERBS.simctl.includes(g) ? p + 1 : undefined;
-      let h =
-        (u === "defaults" || u === "/usr/bin/defaults") &&
+      let simctlVerb = simctlIdx === undefined ? undefined : argv[simctlIdx + 1];
+      let simctlVerbIdx =
+        simctlIdx !== undefined && simctlVerb !== undefined && SIMCTL_APP_VERBS.simctl.includes(simctlVerb)
+          ? simctlIdx + 1
+          : undefined;
+      let isDefaults =
+        (program === "defaults" || program === "/usr/bin/defaults") &&
         argv[1] !== undefined &&
         SIMCTL_APP_VERBS.defaults.includes(argv[1]);
-      let d = u === "open" || u === "/usr/bin/open";
-      if (p === undefined && !h && !d && u !== undefined && u !== "sleep") return false;
-      for (let [m, y] of argv.entries()) {
-        if (!regExp.test(y)) continue;
-        s.push(y);
-        let E = argv[m - 1];
+      let isOpen = program === "open" || program === "/usr/bin/open";
+      if (simctlIdx === undefined && !isDefaults && !isOpen && program !== undefined && program !== "sleep")
+        return false;
+      for (let [argIdx, arg] of argv.entries()) {
+        if (!regExp.test(arg)) continue;
+        argvAppIds.push(arg);
+        let previousArg = argv[argIdx - 1];
         if (
-          (S !== undefined && m > S) ||
-          (h && m === 2) ||
-          (d && E !== undefined && SIMCTL_APP_VERBS.open.includes(E))
+          (simctlVerbIdx !== undefined && argIdx > simctlVerbIdx) ||
+          (isDefaults && argIdx === 2) ||
+          (isOpen && previousArg !== undefined && SIMCTL_APP_VERBS.open.includes(previousArg))
         )
-          i += 1;
+          settingAppIds += 1;
       }
     }
     return (
-      t.length > 0 &&
-      i === s.length &&
-      t.toSorted().join(" ") === s.toSorted().join(" ") &&
+      appIds.length > 0 &&
+      settingAppIds === argvAppIds.length &&
+      appIds.toSorted().join(" ") === argvAppIds.toSorted().join(" ") &&
       !touchesProtectedPath(
         {
           command: command_2,
@@ -293,40 +312,49 @@ async function isReadOnlyCommand(command) {
   }
 }
 //@ chunk-whwptcwy.js:4253-5072 placement
-function touchesProtectedPath(e, n) {
-  let command = e.command;
+function touchesProtectedPath(input, mode) {
+  let command = input.command;
   if (typeof command !== "string") return true;
   let { files, dirs } = settingsLocationPaths();
-  let i = n !== "file_or_folder";
-  let o = n === "own_file";
+  let includesSecrets = mode !== "file_or_folder";
+  let isOwnFile = mode === "own_file";
   let flattened = dirs.flatMap((dir) => [dir, tildify(dir)]);
   let protectedSettingsPaths = getProtectedSettingsPaths();
-  let paths = i ? protectedSettingsPaths.paths : [];
-  let p = [
-    ...(o ? [] : [...settingsTextNeedles(), "managed-settings"]),
-    ...(i ? protectedSettingsPaths.globalConfigNames : [...SETTINGS_FILE_BASENAMES, ...flattened]),
-    ...[...(o ? [] : files), ...paths].flatMap((d) => [d, tildify(d)]),
+  let paths = includesSecrets ? protectedSettingsPaths.paths : [];
+  let needlePaths = [
+    ...(isOwnFile ? [] : [...settingsTextNeedles(), "managed-settings"]),
+    ...(includesSecrets
+      ? protectedSettingsPaths.globalConfigNames
+      : [...SETTINGS_FILE_BASENAMES, ...flattened]),
+    ...[...(isOwnFile ? [] : files), ...paths].flatMap((path) => [path, tildify(path)]),
   ];
-  let g = settingsDirectoryWords();
-  let S = i
-    ? [...(o ? [] : SETTINGS_FILE_BASENAMES), ...CLAUDE_HOME_SECRET_FILE_NAMES]
-    : files.map((file) => basename(file)).filter((d) => d.includes("."));
-  return ["", "/"].some((d) => {
-    let m = normalizeForPathMatch(command, d);
-    if (p.some((_) => m.includes(normalizeForPathMatch(_, d)))) return true;
-    let any = g.some((_) =>
-      new RegExp(`${urlPatternToRegex(normalizeForPathMatch(_, d))}(?![a-z0-9_])`).test(m),
+  let directoryWords = settingsDirectoryWords();
+  let fileNames = includesSecrets
+    ? [...(isOwnFile ? [] : SETTINGS_FILE_BASENAMES), ...CLAUDE_HOME_SECRET_FILE_NAMES]
+    : files.map((file) => basename(file)).filter((fileName) => fileName.includes("."));
+  return ["", "/"].some((separator) => {
+    let normalizedCommand = normalizeForPathMatch(command, separator);
+    if (needlePaths.some((needle) => normalizedCommand.includes(normalizeForPathMatch(needle, separator))))
+      return true;
+    let any = directoryWords.some((word) =>
+      new RegExp(`${urlPatternToRegex(normalizeForPathMatch(word, separator))}(?![a-z0-9_])`).test(
+        normalizedCommand,
+      ),
     );
-    let any_2 = S.some((_) =>
-      new RegExp(`(?<![a-z0-9_])${urlPatternToRegex(normalizeForPathMatch(_, d))}(?![a-z0-9_])`).test(m),
+    let any_2 = fileNames.some((fileName) =>
+      new RegExp(
+        `(?<![a-z0-9_])${urlPatternToRegex(normalizeForPathMatch(fileName, separator))}(?![a-z0-9_])`,
+      ).test(normalizedCommand),
     );
-    if (!i) return any || any_2;
+    if (!includesSecrets) return any || any_2;
     return (
-      (any_2 && (any || flattened.some((_) => m.includes(normalizeForPathMatch(_, d))))) ||
-      (o ? [] : [...g, ...flattened]).some((_) =>
+      (any_2 &&
+        (any ||
+          flattened.some((dir) => normalizedCommand.includes(normalizeForPathMatch(dir, separator))))) ||
+      (isOwnFile ? [] : [...directoryWords, ...flattened]).some((needle) =>
         new RegExp(
-          `${urlPatternToRegex(normalizeForPathMatch(_, d))}(?![a-z0-9_-])(?=((?:/+(?:\\.(?![a-z0-9_.-]))?)*))\\1(?!\\.?[a-z0-9_-])`,
-        ).test(m),
+          `${urlPatternToRegex(normalizeForPathMatch(needle, separator))}(?![a-z0-9_-])(?=((?:/+(?:\\.(?![a-z0-9_.-]))?)*))\\1(?!\\.?[a-z0-9_-])`,
+        ).test(normalizedCommand),
       )
     );
   });
@@ -335,124 +363,137 @@ function touchesProtectedPath(e, n) {
 /**
  * 规整命令文本以便按路径匹配：NFKC、去掉引号、按平台替换反斜杠。
  */
-function normalizeForPathMatch(e, n) {
-  return normalizeCaseForComparison(e.normalize("NFKC")).replace(/['"`]/g, "").replaceAll("\\", n);
+function normalizeForPathMatch(text, separator) {
+  return normalizeCaseForComparison(text.normalize("NFKC")).replace(/['"`]/g, "").replaceAll("\\", separator);
 }
 //@ chunk-whwptcwy.js:5159-5520 placement
-function SAFETY_CHECK_FIELDS(e) {
-  let decisionReason = e.decisionReason;
+function SAFETY_CHECK_FIELDS(result) {
+  let decisionReason = result.decisionReason;
   if (decisionReason?.type === "subcommandResults") {
     for (let reason of decisionReason.reasons.values())
       if (reason.behavior === "ask" && SAFETY_CHECK_FIELDS(reason)) return true;
     return false;
   }
-  if (decisionReason === undefined) return e.blockedPath === undefined;
+  if (decisionReason === undefined) return result.blockedPath === undefined;
   if (decisionReason.type === "sandboxOverride")
     return decisionReason.replaces !== undefined && SAFETY_CHECK_FIELDS(decisionReason.replaces);
   if (decisionReason.type === "safetyCheck" && !isHostPersonOnlyCircuitBreaker(decisionReason))
-    return isServedUnplaceableCircuitBreaker(decisionReason) || e.blockedPath === undefined;
+    return isServedUnplaceableCircuitBreaker(decisionReason) || result.blockedPath === undefined;
   return decisionReason.type === "other";
 }
 //@ chunk-whwptcwy.js:5520-6876 placement
 /**
  * 对 served shell 行做只读检查（检查抛错时视为不确定）。
  */
-async function classifyServedShellLine(e, n, t = false) {
-  let r = isGuardOff();
-  let { result: s, fired } = await runGuarded(r, () => parseShellCommand(e));
-  if (s.kind !== "simple")
-    return fired && !r && (await runWithGuardOff(() => classifyServedShellLine(e, n, t))) === "settings"
+async function classifyServedShellLine(command, cwd, includeCopySources = false) {
+  let guardOff = isGuardOff();
+  let { result: parsed, fired } = await runGuarded(guardOff, () => parseShellCommand(command));
+  if (parsed.kind !== "simple")
+    return fired &&
+      !guardOff &&
+      (await runWithGuardOff(() => classifyServedShellLine(command, cwd, includeCopySources))) === "settings"
       ? "settings"
       : "uncertain";
-  let o = s.bareAssignmentNames.some(isExecInfluencingVar) || s.laterLoopPassesDiffer === true;
-  let a = [n];
-  let f = true;
-  let u = false;
-  let p = false;
-  let g = true;
-  let S = 0;
-  let h =
-    s.hasLoop !== false &&
+  let isUncertain =
+    parsed.bareAssignmentNames.some(isExecInfluencingVar) || parsed.laterLoopPassesDiffer === true;
+  let currentDirs = [cwd];
+  let dirsResolved = true;
+  let hasUnknownCd = false;
+  let copiesSettings = false;
+  let allCommandsKnown = true;
+  let scanSteps = 0;
+  let trackLoops =
+    parsed.hasLoop !== false &&
     readFlagWithOverride(TENGU_TOASTY_HAMMOCK, {
       safe: true,
     });
-  for (let command of s.commands) {
+  for (let command of parsed.commands) {
     let { simple, wrapperWords, pathSpelled, doubt } = describeSubcommandResults(command);
-    if (doubt || hasPlaceholderInArgs(simple) || u) o = true;
-    let directoryChange = resolveDirectoryChange(simple, a);
-    if (directoryChange !== undefined && h) o = true;
-    if (directoryChange === "unknown") f = false;
+    if (doubt || hasPlaceholderInArgs(simple) || hasUnknownCd) isUncertain = true;
+    let directoryChange = resolveDirectoryChange(simple, currentDirs);
+    if (directoryChange !== undefined && trackLoops) isUncertain = true;
+    if (directoryChange === "unknown") dirsResolved = false;
     else if (directoryChange !== undefined) {
-      a = directoryChange;
-      if (simple.argv.slice(1).some(hasDotDotAfterSegment)) f = false;
+      currentDirs = directoryChange;
+      if (simple.argv.slice(1).some(hasDotDotAfterSegment)) dirsResolved = false;
     }
     if (directoryChange !== undefined && !isDirectoryChangeCommand(simple)) {
-      f = false;
-      u = true;
+      dirsResolved = false;
+      hasUnknownCd = true;
     }
     let writeTargetsForAstCommand = getWriteTargetsForAstCommand(simple);
-    if (writeTargetsForAstCommand.writesUnseen) o = true;
+    if (writeTargetsForAstCommand.writesUnseen) isUncertain = true;
     if (!writeTargetsForAstCommand.known && directoryChange === undefined && simple.argv.length > 0)
-      g = false;
-    let N = (c) => (isAbsolute(c) || c.startsWith("~") ? [n] : a);
+      allCommandsKnown = false;
+    let dirsFor = (path) => (isAbsolute(path) || path.startsWith("~") ? [cwd] : currentDirs);
     let flattened = [
       ...wrapperWords,
       ...(writeTargetsForAstCommand.known && !pathSpelled ? [] : simple.argv.slice(1)),
       ...simple.envVars.map((envVar) => envVar.value),
-    ].flatMap((c) => getArgPathVariants(c));
+    ].flatMap((value) => getArgPathVariants(value));
     if (
       !writeTargetsForAstCommand.known &&
       directoryChange === undefined &&
       simple.argv.length > 0 &&
-      a.some((c) => isHostPersonOnlyPath(".", c))
+      currentDirs.some((dir) => isHostPersonOnlyPath(".", dir))
     )
-      o = true;
+      isUncertain = true;
     if (
-      !f &&
+      !dirsResolved &&
       flattened.some(
-        (c) =>
-          c !== "" && !isAbsolute(c) && !c.startsWith("~") && isHostPersonOnlyPath(c, resolve(n, ".claude")),
+        (path) =>
+          path !== "" &&
+          !isAbsolute(path) &&
+          !path.startsWith("~") &&
+          isHostPersonOnlyPath(path, resolve(cwd, ".claude")),
       )
     )
-      o = true;
-    for (let c of [...flattened, ...writeTargetsForAstCommand.landings])
-      if (c !== "" && N(c).some((R) => isHostPersonOnlyPath(c, R))) o = true;
-    for (let c of writeTargetsForAstCommand.written) {
-      S++;
-      if (S > MAX_ENV_SCAN_STEPS) return "uncertain";
-      if (containsAnyPlaceholder(c) || (N(c) === a && !f)) o = true;
-      for (let R of N(c)) {
-        let k = classifyWriteTarget(c, R);
-        if (k === "settings") return "settings";
-        if (k === "uncertain") o = true;
+      isUncertain = true;
+    for (let path of [...flattened, ...writeTargetsForAstCommand.landings])
+      if (path !== "" && dirsFor(path).some((dir) => isHostPersonOnlyPath(path, dir))) isUncertain = true;
+    for (let target of writeTargetsForAstCommand.written) {
+      scanSteps++;
+      if (scanSteps > MAX_ENV_SCAN_STEPS) return "uncertain";
+      if (containsAnyPlaceholder(target) || (dirsFor(target) === currentDirs && !dirsResolved))
+        isUncertain = true;
+      for (let dir of dirsFor(target)) {
+        let verdict = classifyWriteTarget(target, dir);
+        if (verdict === "settings") return "settings";
+        if (verdict === "uncertain") isUncertain = true;
       }
     }
     for (let copySource of writeTargetsForAstCommand.copySources) {
-      S++;
-      if (S > MAX_ENV_SCAN_STEPS) return "uncertain";
-      if (N(copySource).some((R) => classifyWriteTarget(copySource, R) === "settings")) p = true;
-      else if (N(copySource).some((R) => isServedUnplaceablePath(copySource, R))) o = true;
+      scanSteps++;
+      if (scanSteps > MAX_ENV_SCAN_STEPS) return "uncertain";
+      if (dirsFor(copySource).some((dir) => classifyWriteTarget(copySource, dir) === "settings"))
+        copiesSettings = true;
+      else if (dirsFor(copySource).some((dir) => isServedUnplaceablePath(copySource, dir)))
+        isUncertain = true;
     }
   }
-  if (o || (t && !(p && g))) return "uncertain";
+  if (isUncertain || (includeCopySources && !(copiesSettings && allCommandsKnown))) return "uncertain";
   return "none";
 }
 //@ chunk-whwptcwy.js:6876-6948 placement
 /**
  * 影响工作目录的变量集合与 cd 类选项正则；有它们时不能沿用原 cwd 判断。
  */
-var CWD_INFLUENCING_VARS = new Set(["HOME", "CDPATH", "PWD", "OLDPWD"]);
-var CD_FLAG_RE = /^-[^-]*[CD]|^--chd/;
+var CWD_INFLUENCING_VARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var CD_FLAG_RE;
+deferInit("chunk-whwptcwy.js:6876", () => {
+  CWD_INFLUENCING_VARS = new Set(["HOME", "CDPATH", "PWD", "OLDPWD"]);
+  CD_FLAG_RE = /^-[^-]*[CD]|^--chd/;
+});
 //@ chunk-whwptcwy.js:6948-7778 placement
-async function classifyCommandForSandbox(command, n) {
+async function classifyCommandForSandbox(command, cwd) {
   let shellCommand = await parseShellCommand(command);
   if (shellCommand.kind !== "simple" || shellCommand.hasLoop !== false) return "unparsed";
   let any = shellCommand.bareAssignmentNames.some((bareAssignmentName) =>
     CWD_INFLUENCING_VARS.has(bareAssignmentName),
   );
-  let s = [n];
-  let i = false;
-  let o = [];
+  let currentDirs = [cwd];
+  let isCwdUnknown = false;
+  let entries = [];
   for (let command of shellCommand.commands) {
     if (
       command.envVars.some((envVar) => CWD_INFLUENCING_VARS.has(envVar.name)) ||
@@ -460,21 +501,21 @@ async function classifyCommandForSandbox(command, n) {
     )
       any = true;
     let { simple, wrapperWords } = describeSubcommandResults(command);
-    let p = i;
-    let directoryChange = resolveDirectoryChange(simple, s);
+    let wasUnknown = isCwdUnknown;
+    let directoryChange = resolveDirectoryChange(simple, currentDirs);
     if (
       directoryChange === "unknown" ||
       (directoryChange !== undefined && (any || simple.argv.slice(1).some(hasDotDotAfterSegment)))
     )
-      i = true;
-    if (directoryChange !== undefined && !isDirectoryChangeCommand(simple)) i = true;
-    if (directoryChange !== undefined && directoryChange !== "unknown") s = directoryChange;
+      isCwdUnknown = true;
+    if (directoryChange !== undefined && !isDirectoryChangeCommand(simple)) isCwdUnknown = true;
+    if (directoryChange !== undefined && directoryChange !== "unknown") currentDirs = directoryChange;
     let any_2 = wrapperWords.some((wrapperWord) => CD_FLAG_RE.test(wrapperWord));
-    for (let h of [
+    for (let group of [
       {
         list: command.argv,
-        directories: any_2 ? [] : s,
-        mayBeElsewhere: p || any_2,
+        directories: any_2 ? [] : currentDirs,
+        mayBeElsewhere: wasUnknown || any_2,
       },
       {
         list: [
@@ -483,195 +524,204 @@ async function classifyCommandForSandbox(command, n) {
             .filter((redirect) => redirect.op !== "<<" && redirect.op !== "<<<")
             .map((redirect) => redirect.target),
         ],
-        directories: s,
-        mayBeElsewhere: p,
+        directories: currentDirs,
+        mayBeElsewhere: wasUnknown,
       },
     ])
-      for (let d of h.list)
-        for (let word of getArgPathVariants(d))
-          o.push({
+      for (let value of group.list)
+        for (let word of getArgPathVariants(value))
+          entries.push({
             word,
-            directories: h.directories,
-            mayBeElsewhere: h.mayBeElsewhere,
+            directories: group.directories,
+            mayBeElsewhere: group.mayBeElsewhere,
           });
   }
-  return o;
+  return entries;
 }
 //@ chunk-whwptcwy.js:7778-7928 placement
-function getArgPathVariants(e) {
+function getArgPathVariants(arg) {
   return [
-    e,
-    ...(e.includes("=") ? [e.slice(e.indexOf("=") + 1)] : []),
-    ...(/^-[^-]./.test(e)
+    arg,
+    ...(arg.includes("=") ? [arg.slice(arg.indexOf("=") + 1)] : []),
+    ...(/^-[^-]./.test(arg)
       ? Array.from(
           {
-            length: e.length - 2,
+            length: arg.length - 2,
           },
-          (n, t) => e.slice(t + 2),
+          (unused, offset) => arg.slice(offset + 2),
         )
       : []),
   ];
 }
 //@ chunk-whwptcwy.js:7928-8543 placement
 function describeSubcommandResults(command) {
-  let [n, ...t] = command.argv;
-  if (n === undefined)
+  let [program, ...args] = command.argv;
+  if (program === undefined)
     return {
       simple: command,
       wrapperWords: [],
       pathSpelled: false,
       doubt: false,
     };
-  let r = [stripPathAndExe(n), ...t];
-  let s = stripWrappersFromArgvForPaths(unwrapCommandArgv(r));
-  let i = r.length - s.length;
-  let o = i >= 0 && s.every((p, g) => p === r[i + g]);
-  let a = o ? r.slice(0, i) : r;
-  let f = o && i === 0 ? n : s[0];
-  let u = f === undefined ? undefined : stripPathAndExe(f);
+  let normalizedArgv = [stripPathAndExe(program), ...args];
+  let unwrappedArgv = stripWrappersFromArgvForPaths(unwrapCommandArgv(normalizedArgv));
+  let droppedCount = normalizedArgv.length - unwrappedArgv.length;
+  let isPrefixOfUnwrapped =
+    droppedCount >= 0 && unwrappedArgv.every((word, idx) => word === normalizedArgv[droppedCount + idx]);
+  let wrapperWords = isPrefixOfUnwrapped ? normalizedArgv.slice(0, droppedCount) : normalizedArgv;
+  let commandWord = isPrefixOfUnwrapped && droppedCount === 0 ? program : unwrappedArgv[0];
+  let baseName = commandWord === undefined ? undefined : stripPathAndExe(commandWord);
   return {
     simple:
-      o && i === 0 && n === r[0]
+      isPrefixOfUnwrapped && droppedCount === 0 && program === normalizedArgv[0]
         ? command
         : {
             ...command,
-            argv: s,
-            text: shellQuoteArgs(s),
+            argv: unwrappedArgv,
+            text: shellQuoteArgs(unwrappedArgv),
           },
-    wrapperWords: a,
-    pathSpelled: n !== r[0] || (f !== undefined && f !== u) || a.some((p) => p !== stripPathAndExe(p)),
+    wrapperWords,
+    pathSpelled:
+      program !== normalizedArgv[0] ||
+      (commandWord !== undefined && commandWord !== baseName) ||
+      wrapperWords.some((word) => word !== stripPathAndExe(word)),
     doubt:
-      !o ||
-      !isPlainCommandWord(n) ||
-      [...a, ...(f === undefined ? [] : [f])].some(containsAnyPlaceholder) ||
-      a.some(
-        (p) =>
-          (p.startsWith("-") && p !== "-" && p !== "--") ||
-          isNonLocaleExecInfluencingVar(/^([A-Za-z_][A-Za-z0-9_]*)\+?=/.exec(p)?.[1] ?? ""),
+      !isPrefixOfUnwrapped ||
+      !isPlainCommandWord(program) ||
+      [...wrapperWords, ...(commandWord === undefined ? [] : [commandWord])].some(containsAnyPlaceholder) ||
+      wrapperWords.some(
+        (word) =>
+          (word.startsWith("-") && word !== "-" && word !== "--") ||
+          isNonLocaleExecInfluencingVar(/^([A-Za-z_][A-Za-z0-9_]*)\+?=/.exec(word)?.[1] ?? ""),
       ) ||
-      (f !== undefined &&
-        u !== undefined &&
-        (!isPlainCommandWord(f) || u.startsWith("-") || EXEC_CAPABLE_COMMANDS.has(u))),
+      (commandWord !== undefined &&
+        baseName !== undefined &&
+        (!isPlainCommandWord(commandWord) ||
+          baseName.startsWith("-") ||
+          EXEC_CAPABLE_COMMANDS.has(baseName))),
   };
 }
 //@ chunk-whwptcwy.js:8543-8704 placement = spawnScriptArgs (0.635)
 function hasPlaceholderInArgs(simple) {
-  let [n, ...t] = simple.argv;
+  let [program, ...args] = simple.argv;
   return (
     simple.envVars.some((envVar) => isNonLocaleExecInfluencingVar(envVar.name)) ||
-    (n !== undefined &&
-      DECLARATION_COMMANDS.has(n) &&
-      t.some((r) => {
-        let s = r.split(/\+?=/, 1)[0] ?? "";
-        return containsAnyPlaceholder(s) || isExecInfluencingVar(s);
+    (program !== undefined &&
+      DECLARATION_COMMANDS.has(program) &&
+      args.some((arg) => {
+        let varName = arg.split(/\+?=/, 1)[0] ?? "";
+        return containsAnyPlaceholder(varName) || isExecInfluencingVar(varName);
       }))
   );
 }
 //@ chunk-whwptcwy.js:8704-8993 placement
-function classifyWriteTarget(e, n) {
-  let t = validatePath(e, n, getEmptyToolPermissionContext(), "write");
-  if (t.allowed) return "none";
-  if (t.decisionReason?.type === "safetyCheck") {
-    if (isHostPersonOnlyCircuitBreaker(t.decisionReason)) return "settings";
-    return isServedUnplaceableCircuitBreaker(t.decisionReason) ? "uncertain" : "none";
+function classifyWriteTarget(path, cwd) {
+  let validation = validatePath(path, cwd, getEmptyToolPermissionContext(), "write");
+  if (validation.allowed) return "none";
+  if (validation.decisionReason?.type === "safetyCheck") {
+    if (isHostPersonOnlyCircuitBreaker(validation.decisionReason)) return "settings";
+    return isServedUnplaceableCircuitBreaker(validation.decisionReason) ? "uncertain" : "none";
   }
-  if (t.decisionReason?.type !== "other") return "none";
-  return isHostPersonOnlyPath(e, n) ? "settings" : "uncertain";
+  if (validation.decisionReason?.type !== "other") return "none";
+  return isHostPersonOnlyPath(path, cwd) ? "settings" : "uncertain";
 }
 //@ chunk-whwptcwy.js:8993-9117 placement
-function isServedUnplaceablePath(copySource, n) {
-  let t = validatePath(copySource, n, getEmptyToolPermissionContext(), "write");
+function isServedUnplaceablePath(copySource, cwd) {
+  let validation = validatePath(copySource, cwd, getEmptyToolPermissionContext(), "write");
   return (
-    !t.allowed &&
-    t.decisionReason?.type === "safetyCheck" &&
-    isServedUnplaceableCircuitBreaker(t.decisionReason)
+    !validation.allowed &&
+    validation.decisionReason?.type === "safetyCheck" &&
+    isServedUnplaceableCircuitBreaker(validation.decisionReason)
   );
 }
 //@ chunk-whwptcwy.js:9117-9224 placement
 /**
  * 判断路径是否只允许宿主用户本人编辑（命中仅限本人的安全熔断）。
  */
-function isHostPersonOnlyPath(e, n) {
-  let t = resolve(n, expandTildeWithHome(getPlatform() === "windows" ? e.replaceAll("\\", "/") : e));
-  let r = checkPathSafetyForAutoEdit(t, [t]);
-  return !r.safe && isHostPersonOnlyCircuitBreaker(r);
+function isHostPersonOnlyPath(path, cwd) {
+  let resolved = resolve(
+    cwd,
+    expandTildeWithHome(getPlatform() === "windows" ? path.replaceAll("\\", "/") : path),
+  );
+  let safety = checkPathSafetyForAutoEdit(resolved, [resolved]);
+  return !safety.safe && isHostPersonOnlyCircuitBreaker(safety);
 }
 //@ chunk-whwptcwy.js:9224-9705 placement
-function resolveDirectoryChange(simple, n) {
-  let [t, ...r] = simple.argv;
-  if (t === "popd") return "unknown";
-  if (t !== "cd" && t !== "chdir" && t !== "pushd") return;
-  let s = [];
-  let i = false;
-  for (let u of r) {
-    if (!i) {
-      if (u === "--") {
-        i = true;
+function resolveDirectoryChange(simple, dirs) {
+  let [commandName, ...args] = simple.argv;
+  if (commandName === "popd") return "unknown";
+  if (commandName !== "cd" && commandName !== "chdir" && commandName !== "pushd") return;
+  let operands = [];
+  let sawOperand = false;
+  for (let arg of args) {
+    if (!sawOperand) {
+      if (arg === "--") {
+        sawOperand = true;
         continue;
       }
-      if (u.startsWith("-") && u !== "-") continue;
-      i = true;
+      if (arg.startsWith("-") && arg !== "-") continue;
+      sawOperand = true;
     }
-    s.push(u);
+    operands.push(arg);
   }
-  let o = s[0];
-  if (o === undefined) return t === "pushd" ? "unknown" : cappedPathList(n, [homedir()]);
+  let target = operands[0];
+  if (target === undefined) return commandName === "pushd" ? "unknown" : cappedPathList(dirs, [homedir()]);
   if (
-    s.length > 1 ||
-    o === "-" ||
-    (t === "pushd" && /^[+-]\d+$/.test(o)) ||
-    containsAnyPlaceholder(o) ||
-    classifyWriteTarget(o, n[0] ?? homedir()) === "uncertain"
+    operands.length > 1 ||
+    target === "-" ||
+    (commandName === "pushd" && /^[+-]\d+$/.test(target)) ||
+    containsAnyPlaceholder(target) ||
+    classifyWriteTarget(target, dirs[0] ?? homedir()) === "uncertain"
   )
     return "unknown";
-  let a = expandTildeWithHome(o);
-  let f = isAbsolute(a) ? [a] : n.map((u) => resolve(u, a));
-  return cappedPathList(n, [...f, ...f.flatMap(additionalPermissionPaths)]);
+  let expanded = expandTildeWithHome(target);
+  let resolvedDirs = isAbsolute(expanded) ? [expanded] : dirs.map((dir) => resolve(dir, expanded));
+  return cappedPathList(dirs, [...resolvedDirs, ...resolvedDirs.flatMap(additionalPermissionPaths)]);
 }
 //@ chunk-whwptcwy.js:9705-10028 placement
 function isDirectoryChangeCommand(simple) {
-  let [n, ...t] = simple.argv;
-  if (n !== "cd" && n !== "chdir" && n !== "pushd") return true;
+  let [commandName, ...args] = simple.argv;
+  if (commandName !== "cd" && commandName !== "chdir" && commandName !== "pushd") return true;
   if (
     !readFlagWithOverride(TENGU_NIFTY_PINE, {
       safe: true,
     })
   )
     return true;
-  let r = [];
-  let s = false;
-  for (let i of t) {
-    if (!s) {
-      if (i === "--") {
-        s = true;
+  let operands = [];
+  let sawOperand = false;
+  for (let arg of args) {
+    if (!sawOperand) {
+      if (arg === "--") {
+        sawOperand = true;
         continue;
       }
-      if (i.startsWith("-") && i !== "-") {
-        if (!/^-[qsLP]+$/.test(i)) return false;
+      if (arg.startsWith("-") && arg !== "-") {
+        if (!/^-[qsLP]+$/.test(arg)) return false;
         continue;
       }
-      s = true;
+      sawOperand = true;
     }
-    r.push(i);
+    operands.push(arg);
   }
-  return r.length < 2 && (r[0] === undefined || !/^[+-]\d+$/.test(r[0]));
+  return operands.length < 2 && (operands[0] === undefined || !/^[+-]\d+$/.test(operands[0]));
 }
 //@ chunk-whwptcwy.js:10028-10146 placement
-function hasDotDotAfterSegment(e) {
-  let n = false;
-  for (let t of e.split(/[\\/]/))
-    if (t === "..") {
-      if (n) return true;
-    } else if (t !== "" && t !== ".") n = true;
+function hasDotDotAfterSegment(path) {
+  let sawSegment = false;
+  for (let segment of path.split(/[\\/]/))
+    if (segment === "..") {
+      if (sawSegment) return true;
+    } else if (segment !== "" && segment !== ".") sawSegment = true;
   return false;
 }
 //@ chunk-whwptcwy.js:10146-10213 placement
 /**
  * 取命令涉及的其他权限路径（排除路径本身），用于把路径规则也应用到这些路径上。
  */
-function additionalPermissionPaths(e) {
+function additionalPermissionPaths(path) {
   try {
-    return getPathsForPermissionCheck(e).filter((n) => n !== e);
+    return getPathsForPermissionCheck(path).filter((permissionPath) => permissionPath !== path);
   } catch {
     return [];
   }
@@ -680,9 +730,9 @@ function additionalPermissionPaths(e) {
 /**
  * 合并路径列表去重，数量超过上限时返回 “unknown”，避免路径检查泄漏。
  */
-function cappedPathList(e, n) {
-  let t = uniq([...e, ...n]);
-  return t.length > MAX_REPORTED_COMMAND_CHARS ? "unknown" : t;
+function cappedPathList(dirs, extra) {
+  let paths = uniq([...dirs, ...extra]);
+  return paths.length > MAX_REPORTED_COMMAND_CHARS ? "unknown" : paths;
 }
 export {
   useSecurityParser,

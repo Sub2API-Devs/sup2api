@@ -45,8 +45,8 @@ function uploadsRootCandidates() {
 /**
  * 生成带哈希前缀的上传文件名。
  */
-function hashPrefixedFileName(t, e) {
-  return `${t}-${savedNameWithUnderscore(e)}`;
+function hashPrefixedFileName(prefix, name) {
+  return `${prefix}-${savedNameWithUnderscore(name)}`;
 }
 //@ chunk-f87fzzk4.js:579-663 placement
 /**
@@ -58,39 +58,39 @@ function shortContentHash(fileUuid) {
 //@ chunk-f87fzzk4.js:663-690 placement
 var HASH_PREFIX_RE = /^[A-Za-z0-9_-]{8}-/;
 //@ chunk-f87fzzk4.js:690-736 placement
-function needsTrailingUnderscore(t) {
-  return hasTrailingOrReservedName(t.replace(/_+$/, ""));
+function needsTrailingUnderscore(name) {
+  return hasTrailingOrReservedName(name.replace(/_+$/, ""));
 }
 //@ chunk-f87fzzk4.js:736-770 placement
-function savedNameWithUnderscore(t) {
-  return needsTrailingUnderscore(t) ? t + "_" : t;
+function savedNameWithUnderscore(name) {
+  return needsTrailingUnderscore(name) ? name + "_" : name;
 }
 //@ chunk-f87fzzk4.js:770-866 placement
 /**
  * 去哈希前缀的显示文件名。
  */
-function uploadDisplayName(t) {
-  let replaced = t.replace(HASH_PREFIX_RE, "");
-  if (replaced.endsWith("_") && needsTrailingUnderscore(replaced)) return replaced.slice(0, -1);
-  return replaced || t;
+function uploadDisplayName(name) {
+  let name_2 = name.replace(HASH_PREFIX_RE, "");
+  if (name_2.endsWith("_") && needsTrailingUnderscore(name_2)) return name_2.slice(0, -1);
+  return name_2 || name;
 }
 //@ chunk-f87fzzk4.js:866-877 placement
 var MAX_ATTACHMENT_DIGESTS = 1024;
 //@ chunk-f87fzzk4.js:877-997 placement
-function rememberAttachmentDigest(t, e) {
-  let n = humanAttachmentDigestRegistry();
-  if (!n.has(t) && n.size >= MAX_ATTACHMENT_DIGESTS) {
-    let r = n.keys().next().value;
-    if (r !== undefined) n.delete(r);
+function rememberAttachmentDigest(key, digest) {
+  let registry = humanAttachmentDigestRegistry();
+  if (!registry.has(key) && registry.size >= MAX_ATTACHMENT_DIGESTS) {
+    let oldestKey = registry.keys().next().value;
+    if (oldestKey !== undefined) registry.delete(oldestKey);
   }
-  n.set(t, e);
+  registry.set(key, digest);
 }
 //@ chunk-f87fzzk4.js:997-1033 placement
 /**
  * 取附件摘要登记表里的项。
  */
-function attachmentDigestOf(real) {
-  return humanAttachmentDigestRegistry().get(real);
+function attachmentDigestOf(realPath) {
+  return humanAttachmentDigestRegistry().get(realPath);
 }
 export {
   sessionUploadsDir,

@@ -32,6 +32,7 @@ import {
 } from "../../utils/auth.js";
 import { env } from "../../utils/env.js";
 import { isOauthTokenFromBgSnapshot } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-171dhyhe.js:44646-44783 placement
 class DesignNeedsConsentError extends Error {
@@ -43,9 +44,9 @@ class DesignNeedsConsentError extends Error {
   }
 }
 //@ chunk-171dhyhe.js:44783-44906 placement
-function parseConsentError(e) {
-  if (e == null || typeof e !== "object" || e.error !== "needs_consent") return null;
-  let consent = e.consent;
+function parseConsentError(body) {
+  if (body == null || typeof body !== "object" || body.error !== "needs_consent") return null;
+  let consent = body.consent;
   return isDesignConsentName(consent) ? consent : null;
 }
 //@ chunk-171dhyhe.js:44906-45066 placement
@@ -58,9 +59,9 @@ class DesignNeedsProjectGrantError extends Error {
   }
 }
 //@ chunk-171dhyhe.js:45066-45281 placement
-function parseProjectGrantError(e) {
-  if (e == null || typeof e !== "object" || e.error !== "needs_project_grant") return null;
-  let projectId = e.project_id;
+function parseProjectGrantError(body) {
+  if (body == null || typeof body !== "object" || body.error !== "needs_project_grant") return null;
+  let projectId = body.project_id;
   if (
     typeof projectId !== "string" ||
     projectId.length === 0 ||
@@ -71,153 +72,159 @@ function parseProjectGrantError(e) {
   return projectId;
 }
 //@ chunk-171dhyhe.js:45281-46137 placement
-class DesignNeedsScopesError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  constructor(e) {
-    super(
-      e?.isNonInteractiveSession === true
-        ? "Claude Design rejected this session's claude.ai credential (HTTP 403): it does not carry Claude Design access, and /design login cannot run in this non-interactive session. Ask the user to run /design login once from an interactive Claude Code session on this machine \u2014 non-interactive runs here then reuse that authorization. (CI runners and hosted sessions have no interactive session; Claude Design is not reachable from those without a stored /design login credential.)"
-        : "Claude Design rejected this session's claude.ai credential (HTTP 403): it does not carry Claude Design access. Run /design login to authorize Claude Design, then retry.",
-      "design_tool_needs_design_scopes",
-    );
-    this.name = "DesignNeedsScopesError";
-    tagObject(this, {
-      kind: "auth_missing_scope",
-      provider: "claude_design",
-    });
-  }
-}
+let DesignNeedsScopesError; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-171dhyhe.js:45281", () => {
+  DesignNeedsScopesError = class DesignNeedsScopesError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    constructor(options) {
+      super(
+        options?.isNonInteractiveSession === true
+          ? "Claude Design rejected this session's claude.ai credential (HTTP 403): it does not carry Claude Design access, and /design login cannot run in this non-interactive session. Ask the user to run /design login once from an interactive Claude Code session on this machine \u2014 non-interactive runs here then reuse that authorization. (CI runners and hosted sessions have no interactive session; Claude Design is not reachable from those without a stored /design login credential.)"
+          : "Claude Design rejected this session's claude.ai credential (HTTP 403): it does not carry Claude Design access. Run /design login to authorize Claude Design, then retry.",
+        "design_tool_needs_design_scopes",
+      );
+      this.name = "DesignNeedsScopesError";
+      tagObject(this, {
+        kind: "auth_missing_scope",
+        provider: "claude_design",
+      });
+    }
+  };
+});
 //@ chunk-171dhyhe.js:46137-46147 placement
 /**
  * 记住已下发目录哈希的条数上限（64），超出逐出最旧的。
  */
 var MAX_SERVED_CATALOG_HASHES = 64;
 //@ chunk-171dhyhe.js:46147-46358 placement
-function rememberCatalogHash(e, t, c) {
-  e.servedCatalogHashes.delete(t);
-  e.servedCatalogHashes.set(t, c);
-  if (e.servedCatalogHashes.size > MAX_SERVED_CATALOG_HASHES) {
-    let n = e.servedCatalogHashes.keys().next().value;
-    if (n !== undefined) e.servedCatalogHashes.delete(n);
+function rememberCatalogHash(state, agentId, hash) {
+  state.servedCatalogHashes.delete(agentId);
+  state.servedCatalogHashes.set(agentId, hash);
+  if (state.servedCatalogHashes.size > MAX_SERVED_CATALOG_HASHES) {
+    let oldestAgentId = state.servedCatalogHashes.keys().next().value;
+    if (oldestAgentId !== undefined) state.servedCatalogHashes.delete(oldestAgentId);
   }
 }
 //@ chunk-171dhyhe.js:46358-46500 placement
 function firstSentence(description) {
   let trimmed = description.replace(/\s+/g, " ").trim();
   let index = trimmed.indexOf(". ");
-  let n = index > 0 ? trimmed.slice(0, index + 1) : trimmed;
-  return n.length > 140 ? truncateToLength(n, 140).trimEnd() + "\u2026" : n;
+  let firstClause = index > 0 ? trimmed.slice(0, index + 1) : trimmed;
+  return firstClause.length > 140 ? truncateToLength(firstClause, 140).trimEnd() + "\u2026" : firstClause;
 }
 //@ chunk-171dhyhe.js:46500-48615 placement
 /**
  * 执行一次 Claude Design 操作：必要时先发现目录（tools/list）、初始化 MCP 会话，再 tools/call；处理同意、项目授权、作用域不足等错误。
  */
-async function callDesignOperation(e, t, c, accessToken, r, l, a) {
+async function callDesignOperation(state, operation, args, accessToken, signal, agentId, credentials) {
   try {
-    let y = null;
-    if (t === LIST || isUnknownDesignOperation(t)) y = await discoverDesignToolsOnce(e, accessToken, r, a);
-    if (t === LIST) {
-      let mapped = (y ?? []).map((s) => ({
-        name: s.name,
-        description: s.description,
-        inputSchema: s.inputSchema,
+    let discoveredTools = null;
+    if (operation === LIST || isUnknownDesignOperation(operation))
+      discoveredTools = await discoverDesignToolsOnce(state, accessToken, signal, credentials);
+    if (operation === LIST) {
+      let mapped = (discoveredTools ?? []).map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
       }));
-      let b =
+      let catalogJson =
         jsonStringify({
           tools: mapped,
         }) ?? "";
-      let D = shortHash(b);
-      let full = c?.full;
+      let catalogHash = shortHash(catalogJson);
+      let full = args?.full;
       if (
         !(full !== undefined && full !== false && full !== "false" && full !== 0 && full !== "") &&
-        l !== null &&
-        e.servedCatalogHashes.get(l) === D
+        agentId !== null &&
+        state.servedCatalogHashes.get(agentId) === catalogHash
       ) {
-        rememberCatalogHash(e, l, D);
-        let s = {
+        rememberCatalogHash(state, agentId, catalogHash);
+        let unchangedResult = {
           catalog_unchanged: true,
-          catalog_hash: D,
+          catalog_hash: catalogHash,
           note:
-            `The operation catalog is unchanged since the earlier "${LIST}" result in this conversation (hash ${D}) \u2014 full descriptions and argument schemas are in that result. ` +
+            `The operation catalog is unchanged since the earlier "${LIST}" result in this conversation (hash ${catalogHash}) \u2014 full descriptions and argument schemas are in that result. ` +
             `If it is no longer in context, call ${CLAUDE_DESIGN_TOOL_NAME}({operation: "${LIST}", arguments: {full: true}}) for the full catalog.`,
-          operations: mapped.map((g) => ({
-            name: g.name,
-            summary: firstSentence(g.description),
+          operations: mapped.map((tool) => ({
+            name: tool.name,
+            summary: firstSentence(tool.description),
           })),
         };
         return {
-          operation: t,
+          operation,
           content: [
             {
               type: "text",
-              text: jsonStringify(s),
+              text: jsonStringify(unchangedResult),
             },
           ],
         };
       }
-      if (l !== null) rememberCatalogHash(e, l, D);
+      if (agentId !== null) rememberCatalogHash(state, agentId, catalogHash);
       return {
-        operation: t,
+        operation,
         content: [
           {
             type: "text",
-            text: b,
+            text: catalogJson,
           },
         ],
       };
     }
-    if (y && designHintsFor(t) === undefined)
+    if (discoveredTools && designHintsFor(operation) === undefined)
       return {
-        operation: t,
+        operation,
         content: [
           {
             type: "text",
-            text: `Unknown Claude Design operation "${t}". Call ${CLAUDE_DESIGN_TOOL_NAME}({operation: "${LIST}"}) to see the available operations.`,
+            text: `Unknown Claude Design operation "${operation}". Call ${CLAUDE_DESIGN_TOOL_NAME}({operation: "${LIST}"}) to see the available operations.`,
           },
         ],
         isError: true,
       };
-    let v = (designSession) =>
+    let callTool = (designSession) =>
       postDesignMcp(
         {
           jsonrpc: "2.0",
           id: 1,
           method: "tools/call",
           params: {
-            name: t,
-            arguments: c,
+            name: operation,
+            arguments: args,
           },
         },
         accessToken,
         designSession,
-        r,
-        a,
+        signal,
+        credentials,
       );
-    let designSession = await initializeDesignSession(e, accessToken, r, a);
-    let m = await v(designSession);
-    if (m.status === 404 && designSession) {
-      resetDesignSession(e);
-      m = await v(await initializeDesignSession(e, accessToken, r, a));
+    let designSession = await initializeDesignSession(state, accessToken, signal, credentials);
+    let response = await callTool(designSession);
+    if (response.status === 404 && designSession) {
+      resetDesignSession(state);
+      response = await callTool(await initializeDesignSession(state, accessToken, signal, credentials));
     }
-    if (m.status === 403) {
-      let consent = parseConsentError(m.data);
+    if (response.status === 403) {
+      let consent = parseConsentError(response.data);
       if (consent !== null) throw new DesignNeedsConsentError(consent);
-      let projectId = parseProjectGrantError(m.data);
+      let projectId = parseProjectGrantError(response.data);
       if (projectId !== null) throw new DesignNeedsProjectGrantError(projectId);
     }
-    if (m.status < 200 || m.status >= 300)
+    if (response.status < 200 || response.status >= 300)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Claude Design ${t} failed: HTTP ${m.status} ${redactToken(jsonStringify(m.data) ?? "", accessToken)}`,
+        `Claude Design ${operation} failed: HTTP ${response.status} ${redactToken(jsonStringify(response.data) ?? "", accessToken)}`,
         "design_tool_http_error",
       );
-    let f = m.data;
-    if (f.error)
+    let responseData = response.data;
+    if (responseData.error)
       return {
-        operation: t,
+        operation,
         content: [
           {
             type: "text",
             text: redactToken(
-              `${f.error.message}${f.error.data ? ` \u2014 ${jsonStringify(f.error.data)}` : ""}`,
+              `${responseData.error.message}${responseData.error.data ? ` \u2014 ${jsonStringify(responseData.error.data)}` : ""}`,
               accessToken,
             ),
           },
@@ -225,12 +232,12 @@ async function callDesignOperation(e, t, c, accessToken, r, l, a) {
         isError: true,
       };
     return {
-      operation: t,
-      content: f.result?.content ?? [],
-      isError: f.result?.isError,
+      operation,
+      content: responseData.result?.content ?? [],
+      isError: responseData.result?.isError,
     };
   } catch (error) {
-    if (r.aborted) throw new AbortError();
+    if (signal.aborted) throw new AbortError();
     if (
       error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS ||
       error instanceof DesignNeedsConsentError ||
@@ -239,7 +246,7 @@ async function callDesignOperation(e, t, c, accessToken, r, l, a) {
       throw error;
     if (isCancelError(error))
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Claude Design ${t} was cancelled because a concurrent Claude Design call was interrupted mid-handshake (the first calls of a session share one initialize/discovery round-trip). Retry the operation.`,
+        `Claude Design ${operation} was cancelled because a concurrent Claude Design call was interrupted mid-handshake (the first calls of a session share one initialize/discovery round-trip). Retry the operation.`,
         "design_tool_shared_handshake_cancelled",
       );
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -251,21 +258,25 @@ async function callDesignOperation(e, t, c, accessToken, r, l, a) {
 //@ chunk-171dhyhe.js:48615-48760 placement
 function isCancelError(error) {
   if (typeof error !== "object" || error === null) return false;
-  let t = error;
-  return t.name === "CanceledError" || t.name === "AbortError" || t.code === "ERR_CANCELED";
+  let errorObject = error;
+  return (
+    errorObject.name === "CanceledError" ||
+    errorObject.name === "AbortError" ||
+    errorObject.code === "ERR_CANCELED"
+  );
 }
 //@ chunk-171dhyhe.js:48760-48942 placement
-function discoverDesignToolsOnce(e, t, c, n) {
-  if (e.discoverInFlight) return e.discoverInFlight;
-  let designTools = discoverDesignTools(e, t, c, n);
-  e.discoverInFlight = designTools;
+function discoverDesignToolsOnce(state, accessToken, signal, credentials) {
+  if (state.discoverInFlight) return state.discoverInFlight;
+  let designTools = discoverDesignTools(state, accessToken, signal, credentials);
+  state.discoverInFlight = designTools;
   return designTools.finally(() => {
-    if (e.discoverInFlight === designTools) e.discoverInFlight = null;
+    if (state.discoverInFlight === designTools) state.discoverInFlight = null;
   });
 }
 //@ chunk-171dhyhe.js:48942-49325 placement
-async function discoverDesignTools(e, t, c, n) {
-  let r = (designSession) =>
+async function discoverDesignTools(state, accessToken, signal, credentials) {
+  let listTools = (designSession) =>
     postDesignMcp(
       {
         jsonrpc: "2.0",
@@ -273,37 +284,37 @@ async function discoverDesignTools(e, t, c, n) {
         method: "tools/list",
         params: {},
       },
-      t,
+      accessToken,
       designSession,
-      c,
-      n,
+      signal,
+      credentials,
     );
-  let designSession = await initializeDesignSession(e, t, c, n);
-  let a = await r(designSession);
-  if (a.status === 404 && designSession) {
-    resetDesignSession(e);
-    a = await r(await initializeDesignSession(e, t, c, n));
+  let designSession = await initializeDesignSession(state, accessToken, signal, credentials);
+  let response = await listTools(designSession);
+  if (response.status === 404 && designSession) {
+    resetDesignSession(state);
+    response = await listTools(await initializeDesignSession(state, accessToken, signal, credentials));
   }
-  if (a.status < 200 || a.status >= 300 || !Array.isArray(a.data.result?.tools))
+  if (response.status < 200 || response.status >= 300 || !Array.isArray(response.data.result?.tools))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Claude Design discovery failed: HTTP ${a.status}`,
+      `Claude Design discovery failed: HTTP ${response.status}`,
       "design_tool_discovery_failed",
     );
-  return recordDesignTools(a.data.result.tools);
+  return recordDesignTools(response.data.result.tools);
 }
 //@ chunk-171dhyhe.js:49325-49430 placement
-function resetDesignSession(e) {
-  e.cachedSessionId = null;
-  e.initialized = false;
-  e.initializeInFlight = null;
-  e.discoverInFlight = null;
+function resetDesignSession(state) {
+  state.cachedSessionId = null;
+  state.initialized = false;
+  state.initializeInFlight = null;
+  state.discoverInFlight = null;
 }
 //@ chunk-171dhyhe.js:49430-50121 placement
-async function initializeDesignSession(e, t, c, n) {
-  if (e.initialized) return e.cachedSessionId;
-  if (e.initializeInFlight) return e.initializeInFlight;
-  let r = (async () => {
-    let l = await postDesignMcp(
+async function initializeDesignSession(state, accessToken, signal, credentials) {
+  if (state.initialized) return state.cachedSessionId;
+  if (state.initializeInFlight) return state.initializeInFlight;
+  let initializePromise = (async () => {
+    let response = await postDesignMcp(
       {
         jsonrpc: "2.0",
         id: 0,
@@ -317,75 +328,84 @@ async function initializeDesignSession(e, t, c, n) {
           },
         },
       },
-      t,
+      accessToken,
       null,
-      c,
-      n,
+      signal,
+      credentials,
       "text",
     );
-    if (l.status < 200 || l.status >= 300)
+    if (response.status < 200 || response.status >= 300)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Claude Design initialize failed: HTTP ${l.status}`,
+        `Claude Design initialize failed: HTTP ${response.status}`,
         "design_tool_initialize_failed",
       );
-    let a = l.response.headers["mcp-session-id"];
-    e.cachedSessionId = typeof a === "string" && a ? a : null;
-    e.initialized = true;
-    return e.cachedSessionId;
+    let sessionIdHeader = response.response.headers["mcp-session-id"];
+    state.cachedSessionId = typeof sessionIdHeader === "string" && sessionIdHeader ? sessionIdHeader : null;
+    state.initialized = true;
+    return state.cachedSessionId;
   })();
-  e.initializeInFlight = r;
+  state.initializeInFlight = initializePromise;
   try {
-    return await r;
+    return await initializePromise;
   } finally {
-    if (e.initializeInFlight === r) e.initializeInFlight = null;
+    if (state.initializeInFlight === initializePromise) state.initializeInFlight = null;
   }
 }
 //@ chunk-171dhyhe.js:50121-50416 placement
-class DesignAuth401Error extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  wasRetried;
-  constructor(wasRetried = false) {
-    super(
-      "Claude Design authentication failed (HTTP 401). The claude.ai credential is missing or expired \u2014 run /login, or /design login for a separate design credential.",
-      "design_tool_auth_401",
-    );
-    this.name = "DesignAuth401Error";
-    this.wasRetried = wasRetried;
-  }
-}
+let DesignAuth401Error; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-171dhyhe.js:50121", () => {
+  DesignAuth401Error = class DesignAuth401Error extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    wasRetried;
+    constructor(wasRetried = false) {
+      super(
+        "Claude Design authentication failed (HTTP 401). The claude.ai credential is missing or expired \u2014 run /login, or /design login for a separate design credential.",
+        "design_tool_auth_401",
+      );
+      this.name = "DesignAuth401Error";
+      this.wasRetried = wasRetried;
+    }
+  };
+});
 //@ chunk-171dhyhe.js:50760-53132 placement
-async function handleDesignAuth401(credentials, t) {
-  let c = t?.isNonInteractiveSession === true;
-  let n =
-    t?.wasRetried === true
+async function handleDesignAuth401(credentials, options) {
+  let isNonInteractive = options?.isNonInteractiveSession === true;
+  let failureText =
+    options?.wasRetried === true
       ? "Claude Design authentication failed (HTTP 401): a freshly refreshed credential was also rejected \u2014 likely a server-side access problem with this account or credential rather than simple expiry."
       : "Claude Design authentication failed (HTTP 401): the credential was rejected and an automatic refresh did not produce a new one.";
-  let r;
-  if (isStorageV5Enabled() && credentials !== undefined) r = await getClaudeAIOAuthTokensAsync(credentials);
-  else r = getClaudeAIOAuthTokens();
-  let l = !!r?.accessToken && !!r.refreshToken && r.scopes?.includes("user:design:read") === true;
-  if (!l && (await hasDesignOAuthToken(credentials)))
+  let oauthTokens;
+  if (isStorageV5Enabled() && credentials !== undefined)
+    oauthTokens = await getClaudeAIOAuthTokensAsync(credentials);
+  else oauthTokens = getClaudeAIOAuthTokens();
+  let hasDesignScope =
+    !!oauthTokens?.accessToken &&
+    !!oauthTokens.refreshToken &&
+    oauthTokens.scopes?.includes("user:design:read") === true;
+  if (!hasDesignScope && (await hasDesignOAuthToken(credentials)))
     return {
-      message: `${n} The design credential (from /design login) is expired or revoked${c ? ", and /design login requires an interactive terminal \u2014 re-authenticate outside this session" : " \u2014 run /design login to re-authenticate"}.`,
+      message: `${failureText} The design credential (from /design login) is expired or revoked${isNonInteractive ? ", and /design login requires an interactive terminal \u2014 re-authenticate outside this session" : " \u2014 run /design login to re-authenticate"}.`,
       remedy: {
         kind: "auth_expired",
         provider: "claude_design",
       },
     };
-  if (!l && r?.accessToken && !r.refreshToken) {
+  if (!hasDesignScope && oauthTokens?.accessToken && !oauthTokens.refreshToken) {
     let { source } =
       isStorageV5Enabled() && credentials !== undefined
         ? await getAuthTokenSourceAsync(credentials)
         : getAuthTokenSource();
     if (env.CLAUDE_CODE_REMOTE_SESSION_ID)
       return {
-        message: `${n} This remote session's credential is injected and rotated by the session host \u2014 it usually self-heals within minutes. Retry shortly; if this persists, the host session needs attention.`,
+        message: `${failureText} This remote session's credential is injected and rotated by the session host \u2014 it usually self-heals within minutes. Retry shortly; if this persists, the host session needs attention.`,
       };
     if (
       (source === "CCR_OAUTH_TOKEN_FILE" || source === "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR") &&
       (!isOauthTokenFromBgSnapshot() || isHostManagedProviderAuth())
     )
       return {
-        message: `${n} This session authenticates with an OAuth token injected by the CCR host, which has no refresh token \u2014 it cannot self-heal and has likely expired or been revoked. The credential comes from the host session; check or restart it there.`,
+        message: `${failureText} This session authenticates with an OAuth token injected by the CCR host, which has no refresh token \u2014 it cannot self-heal and has likely expired or been revoked. The credential comes from the host session; check or restart it there.`,
         remedy: {
           kind: "auth_overridden",
           provider: "claude_ai",
@@ -397,7 +417,7 @@ async function handleDesignAuth401(credentials, t) {
       (source === "ANTHROPIC_AUTH_TOKEN" && Boolean(env.CLAUDE_CODE_OAUTH_TOKEN))
     )
       return {
-        message: `${n} This session authenticates with the CLAUDE_CODE_OAUTH_TOKEN environment variable, which has no refresh token \u2014 it cannot self-heal and has likely expired or been revoked. Mint a fresh token with \`claude setup-token\` and restart the session with it${c ? "" : ", or unset it and run /login"}.`,
+        message: `${failureText} This session authenticates with the CLAUDE_CODE_OAUTH_TOKEN environment variable, which has no refresh token \u2014 it cannot self-heal and has likely expired or been revoked. Mint a fresh token with \`claude setup-token\` and restart the session with it${isNonInteractive ? "" : ", or unset it and run /login"}.`,
         remedy: {
           kind: "auth_overridden",
           provider: "claude_ai",
@@ -406,13 +426,13 @@ async function handleDesignAuth401(credentials, t) {
       };
   }
   let remedy = authExpiredBlock();
-  if (c)
+  if (isNonInteractive)
     return {
-      message: `${n} The claude.ai credential is expired or revoked, and /login requires an interactive terminal \u2014 re-authenticate outside this session.`,
+      message: `${failureText} The claude.ai credential is expired or revoked, and /login requires an interactive terminal \u2014 re-authenticate outside this session.`,
       remedy,
     };
   return {
-    message: `${n} Run /login, or /design login for a separate design credential.`,
+    message: `${failureText} Run /login, or /design login for a separate design credential.`,
     remedy,
   };
 }

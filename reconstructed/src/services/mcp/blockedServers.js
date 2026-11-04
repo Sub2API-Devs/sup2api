@@ -8,7 +8,7 @@
  * pieces: chunk-1s0bgm1n.js (2)
  * attribution: placement 2
  */
-import { wi } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_reject } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 
 //@ chunk-1s0bgm1n.js:227-315 placement
 /**
@@ -27,7 +27,7 @@ var BLOCKED_TOOL_POLICY = {
 function applyBlockedToolPolicy(toolPermissions) {
   return {
     ...toolPermissions,
-    ...wi(BLOCKED_TOOL_POLICY, (s, r) => toolPermissions?.[r] === "blocked"),
+    ...import_reject(BLOCKED_TOOL_POLICY, (value, key) => toolPermissions?.[key] === "blocked"),
   };
 }
 export { applyBlockedToolPolicy, BLOCKED_TOOL_POLICY };

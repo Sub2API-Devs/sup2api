@@ -18,7 +18,7 @@ import {
   useHasAutoDialog,
 } from "../../state/dialogQueue.js";
 import { uiSignals } from "../../state/uiSignals.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { DIALOG_REGISTRY, useHasBlockingDialog } from "./registry.js";
 import { DIALOG_KIND_META, dialogLayout, dialogNotification, dialogCueBehindDraft } from "./dialogKinds.js";
 import { useRenderMode } from "../../ink/renderModeContext.js";
@@ -36,11 +36,18 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { permissionTitleRef, useOnFirstReveal } from "../permissions/PermissionRequestTitle.js";
 import { Text } from "../../ink/components/Text.js";
-import { zt, y, R, Se, P, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import {
+  useLayoutEffect,
+  useState,
+  useRef,
+  useContext,
+  useEffect,
+  init_react_production,
+} from "../../../vendor/react/cjs/react.production.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { endAnnouncementHold } from "../../utils/accessibility/screenReader.js";
 import { useInputClock, nodeRowRange, nodeScreenBox } from "../../ink/components/Input.js";
-import { kp } from "../../../vendor/convert-to-spaces/dist/index.js";
+import { APP_CONTEXT } from "../../../vendor/convert-to-spaces/dist/index.js";
 import { isDecstbmRendererEnabled } from "../../ink/nativeCursor.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { usePreDispatchKeyHandler } from "../../keybindings/useActionHandlers.js";
@@ -54,18 +61,19 @@ import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { CHROME_ROWS } from "../../ink/outputReplay.js";
 import { WORKFLOW_PROGRESS_LIMITS } from "../workflow/WorkflowProgress.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1445523-1445557 placement
-function isNull(hn) {
-  return hn === null;
+function isNull(value) {
+  return value === null;
 }
 //@ chunk-18hwfzwa.js:1445557-1445596 placement
-function topBlockingOrAutoDialog(ee) {
-  return topBlockingDialog(ee) ?? topAutoDialog(ee);
+function topBlockingOrAutoDialog(state) {
+  return topBlockingDialog(state) ?? topAutoDialog(state);
 }
 //@ chunk-18hwfzwa.js:1445596-1445628 placement
-function selectOpen2(We) {
-  return We.open;
+function selectOpen2(state) {
+  return state.open;
 }
 //@ chunk-18hwfzwa.js:1445628-1445714 placement
 function notifyAutoDenyPresence(input, key) {
@@ -77,68 +85,76 @@ function notifyAutoDenyPresence(input, key) {
  * 对话框宿主：按 dialogStore 中打开的对话框与 DIALOG_REGISTRY 渲染，处理 inline/fullscreen 变体、草稿遮挡时延迟显示、首次显示时响铃通知。
  */
 function DialogHost(props) {
-  let $ = w(38);
+  let $ = useMemoCache(38);
   let { transport, variant, components, meta, scrollRegion } = props;
-  let Re = variant === undefined ? "inline" : variant;
+  let variantValue = variant === undefined ? "inline" : variant;
   let components_2 = components === undefined ? DIALOG_REGISTRY : components;
-  let He = meta === undefined ? DIALOG_KIND_META : meta;
+  let componentMap = meta === undefined ? DIALOG_KIND_META : meta;
   useExternalDialogBridge(transport);
   let dialogStore = useDialogStore();
   let renderMode = useRenderMode();
   let topUserDialog = useTopUserDialog();
   let autoDialogKind = useAutoDialogKind();
   let { hidden, reason } = useHiddenDialogReason();
-  let It = topUserDialog !== null && dialogLayout(He, topUserDialog, renderMode) === Re;
-  let Ot = autoDialogKind !== null && dialogLayout(He, autoDialogKind, renderMode) === Re;
-  let Dt;
-  if ($[0] !== hidden || $[1] !== He || $[2] !== renderMode || $[3] !== Re) {
-    Dt =
-      hidden !== null && dialogLayout(He, hidden, renderMode) === Re
-        ? dialogNotification(He, hidden)
+  let showUserDialog =
+    topUserDialog !== null && dialogLayout(componentMap, topUserDialog, renderMode) === variantValue;
+  let showAutoDialog =
+    autoDialogKind !== null && dialogLayout(componentMap, autoDialogKind, renderMode) === variantValue;
+  let hiddenNotificationCached;
+  if ($[0] !== hidden || $[1] !== componentMap || $[2] !== renderMode || $[3] !== variantValue) {
+    hiddenNotificationCached =
+      hidden !== null && dialogLayout(componentMap, hidden, renderMode) === variantValue
+        ? dialogNotification(componentMap, hidden)
         : undefined;
     $[0] = hidden;
-    $[1] = He;
+    $[1] = componentMap;
     $[2] = renderMode;
-    $[3] = Re;
-    $[4] = Dt;
-  } else Dt = $[4];
-  let Lt = Dt;
+    $[3] = variantValue;
+    $[4] = hiddenNotificationCached;
+  } else hiddenNotificationCached = $[4];
+  let hiddenNotification = hiddenNotificationCached;
   let suppressedAutoDialogs = useSuppressedAutoDialogs(autoDialogKind, hidden);
-  let Xt = Ot ? autoDialogKind : It ? topUserDialog : null;
-  let inputReleaseTiming = useInputReleaseTiming(Xt?.id ?? "");
+  let activeRequest = showAutoDialog ? autoDialogKind : showUserDialog ? topUserDialog : null;
+  let inputReleaseTiming = useInputReleaseTiming(activeRequest?.id ?? "");
   let { displacedAt } = inputReleaseTiming;
   let timeout = useTimeout(RECENT_INPUT_GUARD_MS_2, displacedAt);
-  let ao = displacedAt === 0 || timeout;
-  let co = Xt !== null && Xt.userInvoked === true && !ao;
-  let bo;
-  if ($[5] !== hidden || $[6] !== Lt) {
-    bo =
-      hidden !== null && Lt !== undefined
+  let isInputSettled = displacedAt === 0 || timeout;
+  let canShowFrame = activeRequest !== null && activeRequest.userInvoked === true && !isInputSettled;
+  let bellElement;
+  if ($[5] !== hidden || $[6] !== hiddenNotification) {
+    bellElement =
+      hidden !== null && hiddenNotification !== undefined
         ? jsxProd_default(
             permissionTitleRef,
             {
               value: hidden.id,
               children: jsxProd_default(DialogBell, {
-                notification: Lt,
+                notification: hiddenNotification,
               }),
             },
             hidden.id,
           )
         : null;
     $[5] = hidden;
-    $[6] = Lt;
-    $[7] = bo;
-  } else bo = $[7];
-  let Ao = bo;
-  let Bo;
-  if ($[8] !== hidden || $[9] !== reason || $[10] !== He || $[11] !== renderMode || $[12] !== Re) {
-    Bo =
-      hidden !== null && reason === "draft" && dialogLayout(He, hidden, renderMode) === Re
+    $[6] = hiddenNotification;
+    $[7] = bellElement;
+  } else bellElement = $[7];
+  let bell = bellElement;
+  let draftCueCached;
+  if (
+    $[8] !== hidden ||
+    $[9] !== reason ||
+    $[10] !== componentMap ||
+    $[11] !== renderMode ||
+    $[12] !== variantValue
+  ) {
+    draftCueCached =
+      hidden !== null && reason === "draft" && dialogLayout(componentMap, hidden, renderMode) === variantValue
         ? jsxProd_default(Text, {
             dimColor: true,
             children:
-              dialogCueBehindDraft(He, hidden) ??
-              He[hidden.kind]?.draftHiddenCue ??
+              dialogCueBehindDraft(componentMap, hidden) ??
+              componentMap[hidden.kind]?.draftHiddenCue ??
               (NON_BLOCKING_DIALOG_KINDS.has(hidden.kind)
                 ? SUGGESTION_WAITING_NOTICE
                 : QUESTION_WAITING_NOTICE),
@@ -146,138 +162,138 @@ function DialogHost(props) {
         : null;
     $[8] = hidden;
     $[9] = reason;
-    $[10] = He;
+    $[10] = componentMap;
     $[11] = renderMode;
-    $[12] = Re;
-    $[13] = Bo;
-  } else Bo = $[13];
-  let Ro = Bo;
-  let Ho;
-  if ($[14] !== He || $[15] !== renderMode || $[16] !== Re) {
-    Ho = (Io) => dialogLayout(He, Io, renderMode) === Re;
-    $[14] = He;
+    $[12] = variantValue;
+    $[13] = draftCueCached;
+  } else draftCueCached = $[13];
+  let bellElement_2 = draftCueCached;
+  let matchesVariant;
+  if ($[14] !== componentMap || $[15] !== renderMode || $[16] !== variantValue) {
+    matchesVariant = (request) => dialogLayout(componentMap, request, renderMode) === variantValue;
+    $[14] = componentMap;
     $[15] = renderMode;
-    $[16] = Re;
-    $[17] = Ho;
-  } else Ho = $[17];
-  const filtered = suppressedAutoDialogs.filter(Ho);
-  let mn;
-  if ($[18] !== dialogStore || $[19] !== He) {
-    mn = (Cn) => {
-      let No = dialogNotification(He, Cn);
-      return No === undefined || dialogStore.hasRevealed(Cn.id, BURIED_IDLE_CUE)
+    $[16] = variantValue;
+    $[17] = matchesVariant;
+  } else matchesVariant = $[17];
+  const filtered = suppressedAutoDialogs.filter(matchesVariant);
+  let renderBuriedCue;
+  if ($[18] !== dialogStore || $[19] !== componentMap) {
+    renderBuriedCue = (request) => {
+      let notification = dialogNotification(componentMap, request);
+      return notification === undefined || dialogStore.hasRevealed(request.id, BURIED_IDLE_CUE)
         ? null
         : jsxProd_default(
             BuriedPermissionCue,
             {
-              requestId: Cn.id,
-              notification: No,
+              requestId: request.id,
+              notification,
             },
-            Cn.id,
+            request.id,
           );
     };
     $[18] = dialogStore;
-    $[19] = He;
-    $[20] = mn;
-  } else mn = $[20];
-  let mapped = filtered.map(mn);
-  let Yo = Xt !== null && !co;
-  let kn;
-  let Fn;
-  if ($[21] !== scrollRegion || $[22] !== Yo) {
-    kn = () => (Yo ? () => scrollRegion?.onDialogLeft() : undefined);
-    Fn = [scrollRegion, Yo];
+    $[19] = componentMap;
+    $[20] = renderBuriedCue;
+  } else renderBuriedCue = $[20];
+  let mapped = filtered.map(renderBuriedCue);
+  let showFrame = activeRequest !== null && !canShowFrame;
+  let dialogLeaveEffect;
+  let dialogLeaveDeps;
+  if ($[21] !== scrollRegion || $[22] !== showFrame) {
+    dialogLeaveEffect = () => (showFrame ? () => scrollRegion?.onDialogLeft() : undefined);
+    dialogLeaveDeps = [scrollRegion, showFrame];
     $[21] = scrollRegion;
-    $[22] = Yo;
-    $[23] = kn;
-    $[24] = Fn;
+    $[22] = showFrame;
+    $[23] = dialogLeaveEffect;
+    $[24] = dialogLeaveDeps;
   } else {
-    kn = $[23];
-    Fn = $[24];
+    dialogLeaveEffect = $[23];
+    dialogLeaveDeps = $[24];
   }
-  zt(kn, Fn);
-  if (Ao === null && Ro === null && !Yo && mapped.every(isNull)) {
+  useLayoutEffect(dialogLeaveEffect, dialogLeaveDeps);
+  if (bell === null && bellElement_2 === null && !showFrame && mapped.every(isNull)) {
     return null;
   }
-  let bn;
+  let frameElement;
   if (
     $[25] !== components_2 ||
     $[26] !== inputReleaseTiming ||
-    $[27] !== He ||
+    $[27] !== componentMap ||
     $[28] !== scrollRegion ||
-    $[29] !== Yo ||
-    $[30] !== Re ||
-    $[31] !== Xt
+    $[29] !== showFrame ||
+    $[30] !== variantValue ||
+    $[31] !== activeRequest
   ) {
-    bn =
-      Yo &&
+    frameElement =
+      showFrame &&
       jsxProd_default(
         DialogFrame,
         {
-          variant: Re,
-          request: Xt,
+          variant: variantValue,
+          request: activeRequest,
           components: components_2,
-          notification: dialogNotification(He, Xt),
+          notification: dialogNotification(componentMap, activeRequest),
           hostShown: inputReleaseTiming,
           scrollRegion,
         },
-        Xt.id,
+        activeRequest.id,
       );
     $[25] = components_2;
     $[26] = inputReleaseTiming;
-    $[27] = He;
+    $[27] = componentMap;
     $[28] = scrollRegion;
-    $[29] = Yo;
-    $[30] = Re;
-    $[31] = Xt;
-    $[32] = bn;
-  } else bn = $[32];
-  let Go;
-  if ($[33] !== mapped || $[34] !== Ro || $[35] !== Ao || $[36] !== bn) {
-    Go = jsxProd_default_2(Fragment, {
-      children: [Ao, mapped, Ro, bn],
+    $[29] = showFrame;
+    $[30] = variantValue;
+    $[31] = activeRequest;
+    $[32] = frameElement;
+  } else frameElement = $[32];
+  let hostElement;
+  if ($[33] !== mapped || $[34] !== bellElement_2 || $[35] !== bell || $[36] !== frameElement) {
+    hostElement = jsxProd_default_2(Fragment, {
+      children: [bell, mapped, bellElement_2, frameElement],
     });
     $[33] = mapped;
-    $[34] = Ro;
-    $[35] = Ao;
-    $[36] = bn;
-    $[37] = Go;
-  } else Go = $[37];
-  return Go;
+    $[34] = bellElement_2;
+    $[35] = bell;
+    $[36] = frameElement;
+    $[37] = hostElement;
+  } else hostElement = $[37];
+  return hostElement;
 }
 //@ chunk-18hwfzwa.js:1447866-1448155 placement
 function useHiddenDialogReason() {
-  let $ = w(5);
+  let $ = useMemoCache(5);
   let hidden = useDialogSelector(topBlockingOrAutoDialog);
   let activeBottomSurface = getActiveBottomSurface();
   switch (activeBottomSurface) {
     case "panel":
     case "progress":
     case "draft": {
-      let L;
+      let hiddenState;
       if ($[0] !== hidden || $[1] !== activeBottomSurface) {
-        L = {
+        hiddenState = {
           hidden,
           reason: activeBottomSurface,
         };
         $[0] = hidden;
         $[1] = activeBottomSurface;
-        $[2] = L;
-      } else L = $[2];
-      return L;
+        $[2] = hiddenState;
+      } else hiddenState = $[2];
+      return hiddenState;
     }
     case "typing":
     case null: {
-      let L;
+      let visibleState;
       if ($[3] !== activeBottomSurface) {
-        L = {
+        visibleState = {
           hidden: null,
           reason: activeBottomSurface,
         };
         $[3] = activeBottomSurface;
-        $[4] = L;
-      } else L = $[4];
-      return L;
+        $[4] = visibleState;
+      } else visibleState = $[4];
+      return visibleState;
     }
   }
 }
@@ -286,47 +302,48 @@ function useHiddenDialogReason() {
  * 有用户对话框时返回空列表；否则列出被抑制的自动对话框（非用户触发、非当前顶层与指定排除项）。
  */
 function useSuppressedAutoDialogs(autoDialogKind, hidden) {
-  let $ = w(12);
+  let $ = useMemoCache(12);
   let dialogSelector = useDialogSelector(selectOpen2);
-  let ee;
+  let topAutoCached;
   if ($[0] !== dialogSelector) {
-    ee = topAutoDialog({
+    topAutoCached = topAutoDialog({
       open: dialogSelector,
     });
     $[0] = dialogSelector;
-    $[1] = ee;
-  } else ee = $[1];
-  let ke = ee;
+    $[1] = topAutoCached;
+  } else topAutoCached = $[1];
+  let topAuto = topAutoCached;
   if (
     topUserDialog({
       open: dialogSelector,
     }) !== null
   ) {
-    let Re;
+    let noneSuppressed;
     if ($[2] === MEMO_CACHE_SENTINEL) {
-      Re = [];
-      $[2] = Re;
-    } else Re = $[2];
-    return Re;
+      noneSuppressed = [];
+      $[2] = noneSuppressed;
+    } else noneSuppressed = $[2];
+    return noneSuppressed;
   }
-  let Re;
-  if ($[3] !== hidden || $[4] !== dialogSelector || $[5] !== ke || $[6] !== autoDialogKind) {
-    let Be;
-    if ($[8] !== hidden || $[9] !== ke || $[10] !== autoDialogKind) {
-      Be = (He) => !He.userInvoked && He !== ke && He !== autoDialogKind && He !== hidden;
+  let suppressed;
+  if ($[3] !== hidden || $[4] !== dialogSelector || $[5] !== topAuto || $[6] !== autoDialogKind) {
+    let keepSuppressed;
+    if ($[8] !== hidden || $[9] !== topAuto || $[10] !== autoDialogKind) {
+      keepSuppressed = (request) =>
+        !request.userInvoked && request !== topAuto && request !== autoDialogKind && request !== hidden;
       $[8] = hidden;
-      $[9] = ke;
+      $[9] = topAuto;
       $[10] = autoDialogKind;
-      $[11] = Be;
-    } else Be = $[11];
-    Re = dialogSelector.filter(Be);
+      $[11] = keepSuppressed;
+    } else keepSuppressed = $[11];
+    suppressed = dialogSelector.filter(keepSuppressed);
     $[3] = hidden;
     $[4] = dialogSelector;
-    $[5] = ke;
+    $[5] = topAuto;
     $[6] = autoDialogKind;
-    $[7] = Re;
-  } else Re = $[7];
-  return Re;
+    $[7] = suppressed;
+  } else suppressed = $[7];
+  return suppressed;
 }
 //@ chunk-18hwfzwa.js:1448609-1448805 placement
 var QUESTION_WAITING_NOTICE =
@@ -337,11 +354,11 @@ var SUGGESTION_WAITING_NOTICE =
 /**
  * 跟踪底部输入区占用状态：输入结束时记录释放时间与宽限期（有未发送草稿用更长宽限），输入内容被替换时记录时间，返回给对话框判断何时可以弹出。
  */
-function useInputReleaseTiming(h) {
-  let $ = w(5);
+function useInputReleaseTiming(requestId) {
+  let $ = useMemoCache(5);
   let activeSurface = getActiveBottomSurface();
   let draftStore = sessionStore();
-  let [lastSurface, setLastSurface] = y(activeSurface);
+  let [lastSurface, setLastSurface] = useState(activeSurface);
   let initialRelease;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     initialRelease = {
@@ -350,7 +367,7 @@ function useInputReleaseTiming(h) {
     };
     $[0] = initialRelease;
   } else initialRelease = $[0];
-  let [release, setRelease] = y(initialRelease);
+  let [release, setRelease] = useState(initialRelease);
   if (lastSurface !== activeSurface) {
     setLastSurface(activeSurface);
     if (activeSurface === null) {
@@ -363,11 +380,11 @@ function useInputReleaseTiming(h) {
       endAnnouncementHold();
     }
   }
-  let [lastValue, setLastValue] = y(h);
-  let [displacedAt, setDisplacedAt] = y(0);
-  if (lastValue !== h) {
-    setLastValue(h);
-    if (lastValue !== "" && h !== "") setDisplacedAt(Date.now());
+  let [lastValue, setLastValue] = useState(requestId);
+  let [displacedAt, setDisplacedAt] = useState(0);
+  if (lastValue !== requestId) {
+    setLastValue(requestId);
+    if (lastValue !== "" && requestId !== "") setDisplacedAt(Date.now());
   }
   let result;
   if ($[1] !== displacedAt || $[2] !== release.at || $[3] !== release.graceMs) {
@@ -387,76 +404,84 @@ function useInputReleaseTiming(h) {
 /**
  * 按对话框外层无边框无内边距的纵向容器偏移，修正可见行范围。
  */
-function offsetVisibleRows(h, x) {
-  let D = 0;
-  let L = x;
+function offsetVisibleRows(range, node) {
+  let offsetRows = 0;
+  let current = node;
   while (
-    L?.yogaNode &&
-    L.style.flexDirection === "column" &&
-    L.yogaNode.getComputedBorder(1) === 0 &&
-    L.yogaNode.getComputedPadding(1) === 0
+    current?.yogaNode &&
+    current.style.flexDirection === "column" &&
+    current.yogaNode.getComputedBorder(1) === 0 &&
+    current.yogaNode.getComputedPadding(1) === 0
   ) {
-    let found = L.childNodes.find((childNode) => childNode.yogaNode !== undefined);
+    let found = current.childNodes.find((childNode) => childNode.yogaNode !== undefined);
     if (!found?.yogaNode) break;
-    D += found.yogaNode.getComputedTop();
-    L = found;
+    offsetRows += found.yogaNode.getComputedTop();
+    current = found;
   }
-  if (!h || D <= 0) return h;
-  return h.last < D
+  if (!range || offsetRows <= 0) return range;
+  return range.last < offsetRows
     ? null
     : {
-        first: Math.max(0, h.first - D),
-        last: h.last - D,
-        of: h.of - D,
+        first: Math.max(0, range.first - offsetRows),
+        last: range.last - offsetRows,
+        of: range.of - offsetRows,
       };
 }
 //@ chunk-18hwfzwa.js:1449713-1449800 placement
-function isScrollAtEnd(h, x) {
-  return h !== null && h.last === h.of - 1 && h.last - h.first + 1 >= Math.min(h.of, x);
+function isScrollAtEnd(range, viewportRows) {
+  return (
+    range !== null &&
+    range.last === range.of - 1 &&
+    range.last - range.first + 1 >= Math.min(range.of, viewportRows)
+  );
 }
 //@ chunk-18hwfzwa.js:1449800-1452498 placement
 function DialogFrame(props) {
-  let $ = w(33);
+  let $ = useMemoCache(33);
   let { variant, request, components, notification, hostShown, scrollRegion } = props;
   let dialogStore = useDialogStore();
   let inputClock = useInputClock();
-  let We = R(null);
-  let ze = R(null);
-  let Xe = R(false);
-  let rt = R(undefined);
-  let kt = R(0);
-  let { subscribeFrames } = Se(kp);
-  let Ot;
-  let Et;
+  let boxRef = useRef(null);
+  let revealedAtRef = useRef(null);
+  let followedRef = useRef(false);
+  let rowRangeRef = useRef(undefined);
+  let viewportRowsRef = useRef(0);
+  let { subscribeFrames } = useContext(APP_CONTEXT);
+  let followEffect;
+  let followDeps;
   if ($[0] !== scrollRegion || $[1] !== subscribeFrames) {
-    Ot = () => {
+    followEffect = () => {
       if (scrollRegion === undefined) {
         return;
       }
-      let Lt = function Lt() {
-        rt.current = offsetVisibleRows(nodeRowRange(We.current), We.current);
-        let Dt = nodeScreenBox(We.current);
-        kt.current = Dt?.viewportRows ?? 0;
-        if (Xe.current && rt.current !== undefined && isScrollAtEnd(rt.current, kt.current)) {
-          Xe.current = false;
-          ze.current = Date.now();
+      let syncFollow = function updateFollow() {
+        rowRangeRef.current = offsetVisibleRows(nodeRowRange(boxRef.current), boxRef.current);
+        let screenBox = nodeScreenBox(boxRef.current);
+        viewportRowsRef.current = screenBox?.viewportRows ?? 0;
+        if (
+          followedRef.current &&
+          rowRangeRef.current !== undefined &&
+          isScrollAtEnd(rowRangeRef.current, viewportRowsRef.current)
+        ) {
+          followedRef.current = false;
+          revealedAtRef.current = Date.now();
         }
-        scrollRegion?.followDialog(Dt);
+        scrollRegion?.followDialog(screenBox);
       };
-      Lt();
-      return subscribeFrames(Lt);
+      syncFollow();
+      return subscribeFrames(syncFollow);
     };
-    Et = [scrollRegion, subscribeFrames];
+    followDeps = [scrollRegion, subscribeFrames];
     $[0] = scrollRegion;
     $[1] = subscribeFrames;
-    $[2] = Ot;
-    $[3] = Et;
+    $[2] = followEffect;
+    $[3] = followDeps;
   } else {
-    Ot = $[2];
-    Et = $[3];
+    followEffect = $[2];
+    followDeps = $[3];
   }
-  zt(Ot, Et);
-  let oo = components[request.kind];
+  useLayoutEffect(followEffect, followDeps);
+  let DialogComponent = components[request.kind];
   let reserve = dialogReservedRows({
     variant,
     fullscreen: useRenderMode() === "fullscreen",
@@ -465,7 +490,7 @@ function DialogFrame(props) {
     rows: useTerminalSize().rows,
   });
   usePreDispatchKeyHandler(notifyAutoDenyPresence);
-  let io;
+  let wouldTakeAnswerCached;
   if (
     $[4] !== dialogStore ||
     $[5] !== hostShown ||
@@ -474,8 +499,8 @@ function DialogFrame(props) {
     $[8] !== request.payload ||
     $[9] !== scrollRegion
   ) {
-    io = function Ho() {
-      let found = dialogStore.getState().open.find((so) => so.id === request.id);
+    wouldTakeAnswerCached = function wouldTakeAnswer() {
+      let found = dialogStore.getState().open.find((entry) => entry.id === request.id);
       if (!found) {
         return false;
       }
@@ -489,35 +514,44 @@ function DialogFrame(props) {
         return true;
       }
       let currentEvent = dispatcher.currentEvent;
-      let co = currentEvent instanceof KeybindingActionEvent ? currentEvent.sourceEvent : currentEvent;
-      let bo = co instanceof KeyboardEvent && co.name === "escape";
-      let Ao = rt.current;
-      let Bo = Ao === undefined && (nodeScreenBox(We.current)?.rows ?? 0) > 0;
+      let sourceEvent =
+        currentEvent instanceof KeybindingActionEvent ? currentEvent.sourceEvent : currentEvent;
+      let isEscapeKey = sourceEvent instanceof KeyboardEvent && sourceEvent.name === "escape";
+      let knownRange = rowRangeRef.current;
+      let isFirstShow = knownRange === undefined && (nodeScreenBox(boxRef.current)?.rows ?? 0) > 0;
       if (
         scrollRegion !== undefined &&
-        co instanceof KeyboardEvent &&
-        !bo &&
-        (Bo || (Ao !== undefined && !isScrollAtEnd(Ao, kt.current)))
+        sourceEvent instanceof KeyboardEvent &&
+        !isEscapeKey &&
+        (isFirstShow || (knownRange !== undefined && !isScrollAtEnd(knownRange, viewportRowsRef.current)))
       ) {
-        if (scrollRegion.showDialog(nodeScreenBox(We.current), Ao === null || Bo)) {
-          ze.current = Date.now();
-          Xe.current = true;
-        } else if (ze.current !== null && isWithinRecentInput(inputClock, ze.current, INPUT_SETTLE_MS))
-          ze.current = Date.now();
+        if (scrollRegion.showDialog(nodeScreenBox(boxRef.current), knownRange === null || isFirstShow)) {
+          revealedAtRef.current = Date.now();
+          followedRef.current = true;
+        } else if (
+          revealedAtRef.current !== null &&
+          isWithinRecentInput(inputClock, revealedAtRef.current, INPUT_SETTLE_MS)
+        )
+          revealedAtRef.current = Date.now();
         return false;
       }
-      let Ro =
-        ze.current !== null &&
-        isWithinRecentInput(inputClock, ze.current, bo ? RECENT_INPUT_GUARD_MS_2 : INPUT_SETTLE_MS);
-      if (Ro && co instanceof KeyboardEvent && !bo) ze.current = Date.now();
+      let isRecentlyRevealed =
+        revealedAtRef.current !== null &&
+        isWithinRecentInput(
+          inputClock,
+          revealedAtRef.current,
+          isEscapeKey ? RECENT_INPUT_GUARD_MS_2 : INPUT_SETTLE_MS,
+        );
+      if (isRecentlyRevealed && sourceEvent instanceof KeyboardEvent && !isEscapeKey)
+        revealedAtRef.current = Date.now();
       return !(
         isWithinRecentInput(inputClock, hostShown.displacedAt) ||
         isWithinRecentInput(
           inputClock,
           hostShown.releasedAt,
-          bo ? RECENT_INPUT_GUARD_MS_2 : hostShown.releaseGraceMs,
+          isEscapeKey ? RECENT_INPUT_GUARD_MS_2 : hostShown.releaseGraceMs,
         ) ||
-        Ro
+        isRecentlyRevealed
       );
     };
     $[4] = dialogStore;
@@ -526,225 +560,235 @@ function DialogFrame(props) {
     $[7] = request.id;
     $[8] = request.payload;
     $[9] = scrollRegion;
-    $[10] = io;
-  } else io = $[10];
-  let Ho = io;
-  if (!oo) {
+    $[10] = wouldTakeAnswerCached;
+  } else wouldTakeAnswerCached = $[10];
+  let wouldTakeAnswer = wouldTakeAnswerCached;
+  if (!DialogComponent) {
     dialogStore.dismiss(request.id);
     return null;
   }
-  let Io;
+  let firstRevealHook;
   if ($[11] !== request.onFirstReveal) {
-    Io =
+    firstRevealHook =
       request.onFirstReveal !== undefined &&
       jsxProd_default(OnFirstRevealHook, {
         onFirstReveal: request.onFirstReveal,
       });
     $[11] = request.onFirstReveal;
-    $[12] = Io;
-  } else Io = $[12];
-  let Wo;
+    $[12] = firstRevealHook;
+  } else firstRevealHook = $[12];
+  let bellNotificationElement;
   if ($[13] !== notification) {
-    Wo =
+    bellNotificationElement =
       notification !== undefined &&
       jsxProd_default(DialogBell, {
         notification,
       });
     $[13] = notification;
-    $[14] = Wo;
-  } else Wo = $[14];
+    $[14] = bellNotificationElement;
+  } else bellNotificationElement = $[14];
   let answer;
-  if ($[15] !== dialogStore || $[16] !== request.id || $[17] !== Ho) {
-    answer = (Cn) => {
-      if (!Ho()) {
+  if ($[15] !== dialogStore || $[16] !== request.id || $[17] !== wouldTakeAnswer) {
+    answer = (value) => {
+      if (!wouldTakeAnswer()) {
         return false;
       }
-      dialogStore.answer(request.id, Cn);
+      dialogStore.answer(request.id, value);
       return true;
     };
     $[15] = dialogStore;
     $[16] = request.id;
-    $[17] = Ho;
+    $[17] = wouldTakeAnswer;
     $[18] = answer;
   } else answer = $[18];
-  let No;
-  if ($[19] !== oo || $[20] !== request.payload || $[21] !== answer || $[22] !== Ho) {
-    No = jsxProd_default(oo, {
+  let dialogElement;
+  if (
+    $[19] !== DialogComponent ||
+    $[20] !== request.payload ||
+    $[21] !== answer ||
+    $[22] !== wouldTakeAnswer
+  ) {
+    dialogElement = jsxProd_default(DialogComponent, {
       payload: request.payload,
-      wouldTakeAnswer: Ho,
+      wouldTakeAnswer,
       answer,
     });
-    $[19] = oo;
+    $[19] = DialogComponent;
     $[20] = request.payload;
     $[21] = answer;
-    $[22] = Ho;
-    $[23] = No;
-  } else No = $[23];
-  let vo;
-  if ($[24] !== request.id || $[25] !== reserve || $[26] !== Wo || $[27] !== No) {
-    vo = jsxProd_default_2(
+    $[22] = wouldTakeAnswer;
+    $[23] = dialogElement;
+  } else dialogElement = $[23];
+  let scrollColumnElement;
+  if (
+    $[24] !== request.id ||
+    $[25] !== reserve ||
+    $[26] !== bellNotificationElement ||
+    $[27] !== dialogElement
+  ) {
+    scrollColumnElement = jsxProd_default_2(
       ScrollColumn,
       {
-        box: We,
+        box: boxRef,
         reserve,
-        children: [Wo, No],
+        children: [bellNotificationElement, dialogElement],
       },
       request.id,
     );
     $[24] = request.id;
     $[25] = reserve;
-    $[26] = Wo;
-    $[27] = No;
-    $[28] = vo;
-  } else vo = $[28];
-  let Yo;
-  if ($[29] !== request.id || $[30] !== Io || $[31] !== vo) {
-    Yo = jsxProd_default_2(permissionTitleRef, {
+    $[26] = bellNotificationElement;
+    $[27] = dialogElement;
+    $[28] = scrollColumnElement;
+  } else scrollColumnElement = $[28];
+  let titledElement;
+  if ($[29] !== request.id || $[30] !== firstRevealHook || $[31] !== scrollColumnElement) {
+    titledElement = jsxProd_default_2(permissionTitleRef, {
       value: request.id,
-      children: [Io, vo],
+      children: [firstRevealHook, scrollColumnElement],
     });
     $[29] = request.id;
-    $[30] = Io;
-    $[31] = vo;
-    $[32] = Yo;
-  } else Yo = $[32];
-  return Yo;
+    $[30] = firstRevealHook;
+    $[31] = scrollColumnElement;
+    $[32] = titledElement;
+  } else titledElement = $[32];
+  return titledElement;
 }
 //@ chunk-18hwfzwa.js:1452498-1452573 placement
-function OnFirstRevealHook(h) {
-  let { onFirstReveal } = h;
+function OnFirstRevealHook(props) {
+  let { onFirstReveal } = props;
   useOnFirstReveal("on-first-reveal", onFirstReveal);
   return null;
 }
 //@ chunk-18hwfzwa.js:1452573-1452718 placement
 function DialogBell(props) {
-  let $ = w(1);
+  let $ = useMemoCache(1);
   let { notification } = props;
   usePermissionPromptNotification(notification);
   let screenReaderBell = useScreenReaderBell();
-  let ee;
+  let addBellOptions;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    ee = {
+    addBellOptions = {
       perReveal: true,
     };
-    $[0] = ee;
-  } else ee = $[0];
-  useOnFirstReveal("bell", screenReaderBell, ee);
+    $[0] = addBellOptions;
+  } else addBellOptions = $[0];
+  useOnFirstReveal("bell", screenReaderBell, addBellOptions);
   return null;
 }
 //@ chunk-18hwfzwa.js:1452718-1452744 affinity
 var BURIED_IDLE_CUE = "buried-idle-cue";
 //@ chunk-18hwfzwa.js:1452744-1452925 sole-consumer
 function BuriedPermissionCue(props) {
-  let $ = w(3);
+  let $ = useMemoCache(3);
   let { requestId, notification } = props;
   let dialogStore = useDialogStore();
-  let ke;
+  let revealCue;
   if ($[0] !== dialogStore || $[1] !== requestId) {
-    ke = () => dialogStore.firstReveal(requestId, BURIED_IDLE_CUE);
+    revealCue = () => dialogStore.firstReveal(requestId, BURIED_IDLE_CUE);
     $[0] = dialogStore;
     $[1] = requestId;
-    $[2] = ke;
-  } else ke = $[2];
-  usePermissionPromptNotification(notification, ke);
+    $[2] = revealCue;
+  } else revealCue = $[2];
+  usePermissionPromptNotification(notification, revealCue);
   return null;
 }
 //@ chunk-18hwfzwa.js:1452984-1453225 placement
-function useLogDialogSuppressed(h) {
-  let $ = w(5);
+function useLogDialogSuppressed(enabled) {
+  let $ = useMemoCache(5);
   let hasAutoDialog = useHasAutoDialog();
   let activeBottomSurface = getActiveBottomSurface();
-  let ee;
-  let ke;
-  if ($[0] !== hasAutoDialog || $[1] !== h || $[2] !== activeBottomSurface) {
-    ee = () => {
-      if (!h || !hasAutoDialog || activeBottomSurface === null) {
+  let logSuppressed;
+  let logDeps;
+  if ($[0] !== hasAutoDialog || $[1] !== enabled || $[2] !== activeBottomSurface) {
+    logSuppressed = () => {
+      if (!enabled || !hasAutoDialog || activeBottomSurface === null) {
         return;
       }
       logEvent("tengu_dialoghost_suppressed", {
         reason: fromEnum(activeBottomSurface),
       });
     };
-    ke = [h, hasAutoDialog, activeBottomSurface];
+    logDeps = [enabled, hasAutoDialog, activeBottomSurface];
     $[0] = hasAutoDialog;
-    $[1] = h;
+    $[1] = enabled;
     $[2] = activeBottomSurface;
-    $[3] = ee;
-    $[4] = ke;
+    $[3] = logSuppressed;
+    $[4] = logDeps;
   } else {
-    ee = $[3];
-    ke = $[4];
+    logSuppressed = $[3];
+    logDeps = $[4];
   }
-  P(ee, ke);
+  useEffect(logSuppressed, logDeps);
 }
 //@ chunk-18hwfzwa.js:1453225-1453828 placement
 /**
  * 把外部对话框来源（SDK/桥接）接到对话框存储：订阅打开/取消/更新，关闭时回复结果或取消；卸载时把未答复的全部取消。
  */
 function useExternalDialogBridge(source) {
-  let $ = w(4);
+  let $ = useMemoCache(4);
   useLogDialogSuppressed(source !== undefined);
   let dialogStore = useDialogStore();
-  let L;
-  let ee;
+  let bridgeEffect;
+  let bridgeDeps;
   if ($[0] !== dialogStore || $[1] !== source) {
-    L = () => {
+    bridgeEffect = () => {
       if (!source) {
         return;
       }
-      let ke = new Set();
-      let Be = source.subscribe((Re) => {
-        ke.add(Re.id);
-        dialogStore.open(Re);
+      let bridgedIds = new Set();
+      let unsubscribeOpen = source.subscribe((request) => {
+        bridgedIds.add(request.id);
+        dialogStore.open(request);
       });
-      let We = source.onCancel((He) => {
-        dialogStore.dismiss(He);
+      let unsubscribeCancel = source.onCancel((id) => {
+        dialogStore.dismiss(id);
       });
-      let kt = source.onUpdate((ze) => {
-        let { id, payload } = ze;
-        if (ke.has(id)) dialogStore.update(id, payload);
+      let unsubscribeUpdate = source.onUpdate((update) => {
+        let { id, payload } = update;
+        if (bridgedIds.has(id)) dialogStore.update(id, payload);
       });
-      let It = dialogStore.onClosed((At) => {
-        if (!ke.delete(At.id)) {
+      let unsubscribeClosed = dialogStore.onClosed((closed) => {
+        if (!bridgedIds.delete(closed.id)) {
           return;
         }
         source.reply(
-          At.type === "answered"
+          closed.type === "answered"
             ? {
-                id: At.id,
-                result: At.result,
+                id: closed.id,
+                result: closed.result,
               }
             : {
-                id: At.id,
+                id: closed.id,
                 cancelled: true,
               },
         );
       });
       return () => {
-        Be();
-        We();
-        kt();
-        It();
-        for (const Ot of ke) {
-          dialogStore.dismiss(Ot);
+        unsubscribeOpen();
+        unsubscribeCancel();
+        unsubscribeUpdate();
+        unsubscribeClosed();
+        for (const id of bridgedIds) {
+          dialogStore.dismiss(id);
           source.reply({
-            id: Ot,
+            id,
             cancelled: true,
           });
         }
-        ke.clear();
+        bridgedIds.clear();
       };
     };
-    ee = [source, dialogStore];
+    bridgeDeps = [source, dialogStore];
     $[0] = dialogStore;
     $[1] = source;
-    $[2] = L;
-    $[3] = ee;
+    $[2] = bridgeEffect;
+    $[3] = bridgeDeps;
   } else {
-    L = $[2];
-    ee = $[3];
+    bridgeEffect = $[2];
+    bridgeDeps = $[3];
   }
-  P(L, ee);
+  useEffect(bridgeEffect, bridgeDeps);
 }
 //@ chunk-18hwfzwa.js:1453828-1453970 placement
 function dialogReservedRows({ variant, fullscreen, decstbm, promptShown, rows }) {
@@ -752,7 +796,13 @@ function dialogReservedRows({ variant, fullscreen, decstbm, promptShown, rows })
   return (decstbm ? CHROME_ROWS : SCROLL_COLUMN_MIN_ROWS) + (promptShown ? WORKFLOW_PROGRESS_LIMITS : 0);
 }
 //@ chunk-18hwfzwa.js:1453970-1453974 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1453970", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1453974-1453978 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1453974", () => {
+  init_react_production();
+});
 export { useExternalDialogBridge, DialogHost };

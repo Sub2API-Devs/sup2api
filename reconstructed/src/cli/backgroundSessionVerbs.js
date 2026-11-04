@@ -14,11 +14,11 @@ import { Help, Command } from "../../vendor/commander/esm.mjs";
 function addBackgroundVerbsToHelp(program) {
   program.configureHelp({
     ...program.configureHelp(),
-    visibleCommands(e) {
-      let S = Help.prototype.visibleCommands.call(this, e);
-      if (e !== program) return S;
-      let A = [...S, ...getBackgroundSessionVerbCommands()];
-      return this.sortSubcommands ? A.sort((r, s) => r.name().localeCompare(s.name())) : A;
+    visibleCommands(cmd) {
+      let commands = Help.prototype.visibleCommands.call(this, cmd);
+      if (cmd !== program) return commands;
+      let merged = [...commands, ...getBackgroundSessionVerbCommands()];
+      return this.sortSubcommands ? merged.sort((a, b) => a.name().localeCompare(b.name())) : merged;
     },
   });
 }

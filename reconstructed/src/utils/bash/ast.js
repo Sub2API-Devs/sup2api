@@ -38,24 +38,28 @@ import {
   unattendedServingConsentView,
   unattendedServingConsentMayHoldYes,
 } from "../../services/remoteTools/unattendedConsentStore.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-r01896cg.js:3046-3060 placement
 /**
  * 记录是否发生拒绝的 AsyncLocalStorage。
  */
-var refusalTrackingStorage = new AsyncLocalStorage();
+var refusalTrackingStorage; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-r01896cg.js:3046", () => {
+  refusalTrackingStorage = new AsyncLocalStorage();
+});
 //@ chunk-r01896cg.js:3060-3165 placement
 /**
  * 在拒绝跟踪上下文中运行函数，返回结果与是否发生拒绝。
  */
-async function runWithRefusalTracking(accepted, t) {
-  let r = {
+async function runWithRefusalTracking(accepted, fn) {
+  let tracker = {
     accepted,
     refused: false,
   };
   return {
-    result: await refusalTrackingStorage.run(r, t),
-    refused: r.refused,
+    result: await refusalTrackingStorage.run(tracker, fn),
+    refused: tracker.refused,
   };
 }
 //@ chunk-r01896cg.js:3165-3255 placement
@@ -63,36 +67,46 @@ async function runWithRefusalTracking(accepted, t) {
  * 标记本次分析发生拒绝，并返回是否为首次。
  */
 function noteRefusal() {
-  let e = refusalTrackingStorage.getStore();
-  if (e === undefined) return true;
-  e.refused = true;
-  return !e.accepted;
+  let tracker = refusalTrackingStorage.getStore();
+  if (tracker === undefined) return true;
+  tracker.refused = true;
+  return !tracker.accepted;
 }
 //@ chunk-r01896cg.js:3255-3655 facade-majority = VAR_PLACEHOLDER (0.159)
-var STRUCTURAL_TYPES = new Set(["program", "list", "pipeline", "redirected_statement"]);
-var SEPARATOR_TYPES = new Set([
-  "&&",
-  "||",
-  "|",
-  ";",
-  "&",
-  "|&",
-  `
+var STRUCTURAL_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SEPARATOR_TYPES;
+var REDIRECTABLE_COMMAND_TYPES;
+var TRAILING_OK_TYPES;
+var CMDSUB_PLACEHOLDER;
+var VAR_PLACEHOLDER;
+var REDIRECT_NODE_TYPES;
+var UNCERTAIN_VAR_PLACEHOLDER;
+deferInit("chunk-r01896cg.js:3255", () => {
+  STRUCTURAL_TYPES = new Set(["program", "list", "pipeline", "redirected_statement"]);
+  SEPARATOR_TYPES = new Set([
+    "&&",
+    "||",
+    "|",
+    ";",
+    "&",
+    "|&",
+    `
 `,
-]);
-var REDIRECTABLE_COMMAND_TYPES = new Set([
-  "command",
-  "pipeline",
-  "list",
-  "negated_command",
-  "declaration_command",
-  "unset_command",
-]);
-var TRAILING_OK_TYPES = new Set(["test_command", "redirected_statement"]);
-var CMDSUB_PLACEHOLDER = "__CMDSUB_OUTPUT__";
-var VAR_PLACEHOLDER = "__TRACKED_VAR__";
-var REDIRECT_NODE_TYPES = new Set(["file_redirect", "herestring_redirect", "heredoc_redirect"]);
-var UNCERTAIN_VAR_PLACEHOLDER = "__UNCERTAIN_VAR__";
+  ]);
+  REDIRECTABLE_COMMAND_TYPES = new Set([
+    "command",
+    "pipeline",
+    "list",
+    "negated_command",
+    "declaration_command",
+    "unset_command",
+  ]);
+  TRAILING_OK_TYPES = new Set(["test_command", "redirected_statement"]);
+  CMDSUB_PLACEHOLDER = "__CMDSUB_OUTPUT__";
+  VAR_PLACEHOLDER = "__TRACKED_VAR__";
+  REDIRECT_NODE_TYPES = new Set(["file_redirect", "herestring_redirect", "heredoc_redirect"]);
+  UNCERTAIN_VAR_PLACEHOLDER = "__UNCERTAIN_VAR__";
+});
 //@ chunk-r01896cg.js:3655-3722 facade-majority
 /**
  * 值中是否含任一占位符（CMDSUB / TRACKED_VAR / UNCERTAIN_VAR）。
@@ -108,12 +122,12 @@ function containsAnyPlaceholder(value) {
 /**
  * 把占位符换成 $(…) / ${…}，用于给用户看的理由文本。
  */
-function redactPlaceholdersForDisplay(e) {
-  return e.replaceAll(CMDSUB_PLACEHOLDER, "$(\u2026)").replaceAll(VAR_PLACEHOLDER, "${\u2026}");
+function redactPlaceholdersForDisplay(text) {
+  return text.replaceAll(CMDSUB_PLACEHOLDER, "$(\u2026)").replaceAll(VAR_PLACEHOLDER, "${\u2026}");
 }
 //@ chunk-r01896cg.js:3799-3859 facade-majority
-function deletePlaceholders(e) {
-  return e.replaceAll(CMDSUB_PLACEHOLDER, "").replaceAll(VAR_PLACEHOLDER, "");
+function deletePlaceholders(text) {
+  return text.replaceAll(CMDSUB_PLACEHOLDER, "").replaceAll(VAR_PLACEHOLDER, "");
 }
 //@ chunk-r01896cg.js:3859-3888 layout
 var substitutionCount = 0;
@@ -121,10 +135,10 @@ var catHeredocInlineCount = 0;
 var quoteScanCarveOutCount = 0;
 var QUOTE_OR_BACKSLASH_RE = /["`\\]/;
 //@ chunk-r01896cg.js:3888-3930 layout
-function isPrecededByNewline(e, t) {
+function isPrecededByNewline(text, index) {
   return (
-    t > 0 &&
-    e[t - 1] ===
+    index > 0 &&
+    text[index - 1] ===
       `
 `
   );
@@ -133,12 +147,12 @@ function isPrecededByNewline(e, t) {
 /**
  * 文本中是否含运行时才确定的占位符：变量或不确定变量占位，或不在行首的命令替换输出占位。
  */
-function containsRuntimePlaceholder(e) {
-  if (e.includes(VAR_PLACEHOLDER) || e.includes(UNCERTAIN_VAR_PLACEHOLDER)) return true;
-  let index = e.indexOf(CMDSUB_PLACEHOLDER);
+function containsRuntimePlaceholder(text) {
+  if (text.includes(VAR_PLACEHOLDER) || text.includes(UNCERTAIN_VAR_PLACEHOLDER)) return true;
+  let index = text.indexOf(CMDSUB_PLACEHOLDER);
   while (index !== -1) {
-    if (!isPrecededByNewline(e, index)) return true;
-    index = e.indexOf(CMDSUB_PLACEHOLDER, index + CMDSUB_PLACEHOLDER.length);
+    if (!isPrecededByNewline(text, index)) return true;
+    index = text.indexOf(CMDSUB_PLACEHOLDER, index + CMDSUB_PLACEHOLDER.length);
   }
   return false;
 }
@@ -154,69 +168,80 @@ function startsWithAnyPlaceholder(argValue) {
   );
 }
 //@ chunk-r01896cg.js:4153-4961 fingerprint = SAFE_ENV_VARS (0.606)
-var BARE_VAR_UNSAFE_RE = /[ \t\n*?[]/;
-var STDBUF_SHORT_SEP_RE = /^-[ioe]$/;
-var STDBUF_SHORT_FUSED_RE = /^-[ioe]./;
-var STDBUF_LONG_RE = /^--(input|output|error)=/;
-var BASH_READONLY_SPECIAL_VARS = new Set([
-  "BASHOPTS",
-  "BASH_VERSINFO",
-  "EUID",
-  "PPID",
-  "SHELLOPTS",
-  "UID",
-  "FUNCNAME",
-  "GROUPS",
-  "BASH_ARGC",
-  "BASH_ARGV",
-  "BASH_LINENO",
-  "BASH_SOURCE",
-  "BASHPID",
-]);
-var SAFE_ENV_VARS = new Set([
-  "HOME",
-  "PWD",
-  "OLDPWD",
-  "USER",
-  "LOGNAME",
-  "SHELL",
-  "PATH",
-  "HOSTNAME",
-  "UID",
-  "EUID",
-  "PPID",
-  "RANDOM",
-  "SECONDS",
-  "LINENO",
-  "TMPDIR",
-  "BASH_VERSION",
-  "BASHPID",
-  "SHLVL",
-  "HISTFILE",
-  "IFS",
-]);
-var SPECIAL_VAR_NAMES = new Set(["?", "$", "!", "#", "0", "-"]);
-var DANGEROUS_NODE_TYPES = new Set([
-  "command_substitution",
-  "process_substitution",
-  "expansion",
-  "simple_expansion",
-  "brace_expression",
-  "subshell",
-  "compound_statement",
-  "for_statement",
-  "while_statement",
-  "until_statement",
-  "if_statement",
-  "case_statement",
-  "function_definition",
-  "test_command",
-  "ansi_c_string",
-  "translated_string",
-  "herestring_redirect",
-  "heredoc_redirect",
-]);
-var DANGEROUS_TYPE_IDS = [...DANGEROUS_NODE_TYPES];
+var BARE_VAR_UNSAFE_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var STDBUF_SHORT_SEP_RE;
+var STDBUF_SHORT_FUSED_RE;
+var STDBUF_LONG_RE;
+var BASH_READONLY_SPECIAL_VARS;
+var SAFE_ENV_VARS;
+var SPECIAL_VAR_NAMES;
+var DANGEROUS_NODE_TYPES;
+var DANGEROUS_TYPE_IDS;
+deferInit("chunk-r01896cg.js:4153", () => {
+  BARE_VAR_UNSAFE_RE = /[ \t\n*?[]/;
+  STDBUF_SHORT_SEP_RE = /^-[ioe]$/;
+  STDBUF_SHORT_FUSED_RE = /^-[ioe]./;
+  STDBUF_LONG_RE = /^--(input|output|error)=/;
+  BASH_READONLY_SPECIAL_VARS = new Set([
+    "BASHOPTS",
+    "BASH_VERSINFO",
+    "EUID",
+    "PPID",
+    "SHELLOPTS",
+    "UID",
+    "FUNCNAME",
+    "GROUPS",
+    "BASH_ARGC",
+    "BASH_ARGV",
+    "BASH_LINENO",
+    "BASH_SOURCE",
+    "BASHPID",
+  ]);
+  SAFE_ENV_VARS = new Set([
+    "HOME",
+    "PWD",
+    "OLDPWD",
+    "USER",
+    "LOGNAME",
+    "SHELL",
+    "PATH",
+    "HOSTNAME",
+    "UID",
+    "EUID",
+    "PPID",
+    "RANDOM",
+    "SECONDS",
+    "LINENO",
+    "TMPDIR",
+    "BASH_VERSION",
+    "BASHPID",
+    "SHLVL",
+    "HISTFILE",
+    "IFS",
+  ]);
+  SPECIAL_VAR_NAMES = new Set(["?", "$", "!", "#", "0", "-"]);
+  DANGEROUS_NODE_TYPES = new Set([
+    "command_substitution",
+    "process_substitution",
+    "expansion",
+    "simple_expansion",
+    "brace_expression",
+    "subshell",
+    "compound_statement",
+    "for_statement",
+    "while_statement",
+    "until_statement",
+    "if_statement",
+    "case_statement",
+    "function_definition",
+    "test_command",
+    "ansi_c_string",
+    "translated_string",
+    "herestring_redirect",
+    "heredoc_redirect",
+  ]);
+  DANGEROUS_TYPE_IDS = [...DANGEROUS_NODE_TYPES];
+});
 //@ chunk-r01896cg.js:4961-5054 facade-majority = nodeTypeId (1)
 /**
  * 把节点类型映射为数字 id（未定义 -2、ERROR -1、DANGEROUS_TYPE_IDS 下标+1、其他 0），用于 tengu_bash_ast_too_complex 遥测。
@@ -228,103 +253,123 @@ function nodeTypeId(nodeType) {
   return i >= 0 ? i + 1 : 0;
 }
 //@ chunk-r01896cg.js:5054-5653 facade-majority = REDIRECT_OPS (1)
-var REDIRECT_OPS = {
-  ">": ">",
-  ">>": ">>",
-  "<": "<",
-  ">&": ">&",
-  "<&": "<&",
-  ">|": ">|",
-  "&>": "&>",
-  "&>>": "&>>",
-  "<<<": "<<<",
-};
-var BRACE_EXPANSION_RE = /\{[^\s]*(,|\.\.)[^\s]*\}/;
-var BRACE_ESCAPED_CLOSE_RE = /\{[^{]*\\}/;
-var BRACE_ESCAPED_OPEN_RE = /\{[^}]*\\\{/;
-var CONTROL_CHAR_RE = /[\x00-\x08\x0B-\x1F\x7F]/;
-var LONE_SURROGATE_RE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
-var UNICODE_WHITESPACE_RE = /[\u00A0\u1680\u2000-\u200B\u2028\u2029\u202F\u205F\u3000\uFEFF]/;
-var BACKSLASH_ESCAPED_SPACE_RE = /\\[ \t]/;
-var BACKSLASH_LINE_CONTINUATION_RE = /(?:^|[^ \t\\])(?:\\\\)*\\\n|[ \t](?:\\\\)+\\\n/;
-var BACKSLASH_WHITESPACE_RE = new RegExp(
-  `${BACKSLASH_ESCAPED_SPACE_RE.source}|${BACKSLASH_LINE_CONTINUATION_RE.source}`,
-);
-var WORD_LEAF_EXPANSION_RE = /(?:^|[^\\])(?:\\\\)*(?:[`$]|[<>=]\()/;
-var WORD_LEAF_QUOTE_RE = /(?:^|[^\\])(?:\\\\)*['"]/;
-var ZSH_TILDE_BRACKET_RE = /~\[/;
-var ZSH_EQUALS_EXPANSION_RE = /(?:^|[\s;&|])=[a-zA-Z_]/;
-var ZSH_NUMERIC_GLOB_RE = /<\d*-\d*>/;
-var BRACE_WITH_QUOTE_RE = /\{[^}]*['"]/;
+var REDIRECT_OPS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var BRACE_EXPANSION_RE;
+var BRACE_ESCAPED_CLOSE_RE;
+var BRACE_ESCAPED_OPEN_RE;
+var CONTROL_CHAR_RE;
+var LONE_SURROGATE_RE;
+var UNICODE_WHITESPACE_RE;
+var BACKSLASH_ESCAPED_SPACE_RE;
+var BACKSLASH_LINE_CONTINUATION_RE;
+var BACKSLASH_WHITESPACE_RE;
+var WORD_LEAF_EXPANSION_RE;
+var WORD_LEAF_QUOTE_RE;
+var ZSH_TILDE_BRACKET_RE;
+var ZSH_EQUALS_EXPANSION_RE;
+var ZSH_NUMERIC_GLOB_RE;
+var BRACE_WITH_QUOTE_RE;
+deferInit("chunk-r01896cg.js:5054", () => {
+  REDIRECT_OPS = {
+    ">": ">",
+    ">>": ">>",
+    "<": "<",
+    ">&": ">&",
+    "<&": "<&",
+    ">|": ">|",
+    "&>": "&>",
+    "&>>": "&>>",
+    "<<<": "<<<",
+  };
+  BRACE_EXPANSION_RE = /\{[^\s]*(,|\.\.)[^\s]*\}/;
+  BRACE_ESCAPED_CLOSE_RE = /\{[^{]*\\}/;
+  BRACE_ESCAPED_OPEN_RE = /\{[^}]*\\\{/;
+  CONTROL_CHAR_RE = /[\x00-\x08\x0B-\x1F\x7F]/;
+  LONE_SURROGATE_RE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+  UNICODE_WHITESPACE_RE = /[\u00A0\u1680\u2000-\u200B\u2028\u2029\u202F\u205F\u3000\uFEFF]/;
+  BACKSLASH_ESCAPED_SPACE_RE = /\\[ \t]/;
+  BACKSLASH_LINE_CONTINUATION_RE = /(?:^|[^ \t\\])(?:\\\\)*\\\n|[ \t](?:\\\\)+\\\n/;
+  BACKSLASH_WHITESPACE_RE = new RegExp(
+    `${BACKSLASH_ESCAPED_SPACE_RE.source}|${BACKSLASH_LINE_CONTINUATION_RE.source}`,
+  );
+  WORD_LEAF_EXPANSION_RE = /(?:^|[^\\])(?:\\\\)*(?:[`$]|[<>=]\()/;
+  WORD_LEAF_QUOTE_RE = /(?:^|[^\\])(?:\\\\)*['"]/;
+  ZSH_TILDE_BRACKET_RE = /~\[/;
+  ZSH_EQUALS_EXPANSION_RE = /(?:^|[\s;&|])=[a-zA-Z_]/;
+  ZSH_NUMERIC_GLOB_RE = /<\d*-\d*>/;
+  BRACE_WITH_QUOTE_RE = /\{[^}]*['"]/;
+});
 //@ chunk-r01896cg.js:5653-6301 layout
 /**
  * 简易扫描：命令文本在未加引号处（跳过单/双引号、反引号、注释）出现 * ? [ 即为真。写入 SimpleCommand.hasUnquotedGlob。
  */
 function hasUnquotedGlob(text) {
-  let t = false;
-  let r = false;
-  let s = false;
-  let o = true;
-  let n = 0;
-  while (n < text.length) {
-    let i = text[n];
-    if (s) {
-      if (i === "\\" && (text[n + 1] === "`" || text[n + 1] === "\\" || text[n + 1] === "$")) n += 2;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inBacktick = false;
+  let atWordStart = true;
+  let index = 0;
+  while (index < text.length) {
+    let char = text[index];
+    if (inBacktick) {
+      if (char === "\\" && (text[index + 1] === "`" || text[index + 1] === "\\" || text[index + 1] === "$"))
+        index += 2;
       else {
-        if (i === "`") s = false;
-        n++;
+        if (char === "`") inBacktick = false;
+        index++;
       }
-    } else if (t) {
-      if (i === "'") t = false;
-      n++;
-    } else if (r) {
-      if (i === "\\" && (text[n + 1] === '"' || text[n + 1] === "\\" || text[n + 1] === "`")) n += 2;
-      else if (i === "`") {
-        s = true;
-        n++;
+    } else if (inSingleQuote) {
+      if (char === "'") inSingleQuote = false;
+      index++;
+    } else if (inDoubleQuote) {
+      if (char === "\\" && (text[index + 1] === '"' || text[index + 1] === "\\" || text[index + 1] === "`"))
+        index += 2;
+      else if (char === "`") {
+        inBacktick = true;
+        index++;
       } else {
-        if (i === '"') r = false;
-        n++;
+        if (char === '"') inDoubleQuote = false;
+        index++;
       }
-    } else if (i === "\\" && n + 1 < text.length) {
+    } else if (char === "\\" && index + 1 < text.length) {
       if (
-        text[n + 1] !==
+        text[index + 1] !==
         `
 `
       )
-        o = false;
-      n += 2;
-    } else if (i === "#" && o) {
+        atWordStart = false;
+      index += 2;
+    } else if (char === "#" && atWordStart) {
       while (
-        n < text.length &&
-        text[n] !==
+        index < text.length &&
+        text[index] !==
           `
 `
       )
-        n++;
-      o = true;
-    } else if (i === "`") {
-      s = true;
-      o = false;
-      n++;
+        index++;
+      atWordStart = true;
+    } else if (char === "`") {
+      inBacktick = true;
+      atWordStart = false;
+      index++;
     } else {
-      if (i === "*" || i === "?" || i === "[") return true;
-      if (i === "'") t = true;
-      else if (i === '"') r = true;
-      o =
-        i === " " ||
-        i === "\t" ||
-        i ===
+      if (char === "*" || char === "?" || char === "[") return true;
+      if (char === "'") inSingleQuote = true;
+      else if (char === '"') inDoubleQuote = true;
+      atWordStart =
+        char === " " ||
+        char === "\t" ||
+        char ===
           `
 ` ||
-        i === ";" ||
-        i === "|" ||
-        i === "&" ||
-        i === "(" ||
-        i === ")" ||
-        i === "<" ||
-        i === ">";
-      n++;
+        char === ";" ||
+        char === "|" ||
+        char === "&" ||
+        char === "(" ||
+        char === ")" ||
+        char === "<" ||
+        char === ">";
+      index++;
     }
   }
   return false;
@@ -332,8 +377,8 @@ function hasUnquotedGlob(text) {
 //@ chunk-r01896cg.js:6301-6326 layout
 var GLOB_PATTERN_RE = /[*?]|\[[^\]]*\]/;
 //@ chunk-r01896cg.js:6326-6359 layout
-function looksLikeGlob(e) {
-  return GLOB_PATTERN_RE.test(e);
+function looksLikeGlob(text) {
+  return GLOB_PATTERN_RE.test(text);
 }
 //@ chunk-r01896cg.js:6359-6680 facade-majority
 /**
@@ -354,7 +399,7 @@ function hasSourceUnquotedGlob(command) {
   if (argvUnquotedGlob === undefined) return false;
   if (argvUnquotedGlob.length !== command.argv.length) return command.argv.some(looksLikeGlob);
   return command.argv.some(
-    (arg, o) => looksLikeGlob(arg) && (argvUnquotedGlob[o] === true || containsAnyPlaceholder(arg)),
+    (arg, index) => looksLikeGlob(arg) && (argvUnquotedGlob[index] === true || containsAnyPlaceholder(arg)),
   );
 }
 //@ chunk-r01896cg.js:6680-7494 file-local
@@ -364,92 +409,95 @@ function hasSourceUnquotedGlob(command) {
 function maskBracesInQuotedContexts(cmd) {
   if (!cmd.includes("{")) return cmd;
   let out = [];
-  let r = false;
-  let s = false;
-  let o = false;
-  let n = true;
-  let i = 0;
-  while (i < cmd.length) {
-    let c = cmd[i];
-    if (o) {
-      if (c === "\\" && (cmd[i + 1] === "`" || cmd[i + 1] === "\\" || cmd[i + 1] === "$")) {
-        out.push(c, cmd[i + 1]);
-        i += 2;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inBacktick = false;
+  let atWordStart = true;
+  let index = 0;
+  while (index < cmd.length) {
+    let char = cmd[index];
+    if (inBacktick) {
+      if (char === "\\" && (cmd[index + 1] === "`" || cmd[index + 1] === "\\" || cmd[index + 1] === "$")) {
+        out.push(char, cmd[index + 1]);
+        index += 2;
       } else {
-        if (c === "`") o = false;
-        out.push(c === "{" ? " " : c);
-        i++;
+        if (char === "`") inBacktick = false;
+        out.push(char === "{" ? " " : char);
+        index++;
       }
-    } else if (r) {
-      if (c === "'") r = false;
-      out.push(c === "{" ? " " : c);
-      i++;
-    } else if (s) {
-      if (c === "\\" && (cmd[i + 1] === '"' || cmd[i + 1] === "\\" || cmd[i + 1] === "`")) {
-        out.push(c, cmd[i + 1]);
-        i += 2;
-      } else if (c === "`") {
-        o = true;
-        out.push(c);
-        i++;
+    } else if (inSingleQuote) {
+      if (char === "'") inSingleQuote = false;
+      out.push(char === "{" ? " " : char);
+      index++;
+    } else if (inDoubleQuote) {
+      if (char === "\\" && (cmd[index + 1] === '"' || cmd[index + 1] === "\\" || cmd[index + 1] === "`")) {
+        out.push(char, cmd[index + 1]);
+        index += 2;
+      } else if (char === "`") {
+        inBacktick = true;
+        out.push(char);
+        index++;
       } else {
-        if (c === '"') s = false;
-        out.push(c === "{" ? " " : c);
-        i++;
+        if (char === '"') inDoubleQuote = false;
+        out.push(char === "{" ? " " : char);
+        index++;
       }
-    } else if (c === "\\" && i + 1 < cmd.length) {
-      out.push(c, cmd[i + 1]);
+    } else if (char === "\\" && index + 1 < cmd.length) {
+      out.push(char, cmd[index + 1]);
       if (
-        cmd[i + 1] !==
+        cmd[index + 1] !==
         `
 `
       )
-        n = false;
-      i += 2;
-    } else if (c === "#" && n) {
+        atWordStart = false;
+      index += 2;
+    } else if (char === "#" && atWordStart) {
       while (
-        i < cmd.length &&
-        cmd[i] !==
+        index < cmd.length &&
+        cmd[index] !==
           `
 `
       ) {
-        out.push(cmd[i]);
-        i++;
+        out.push(cmd[index]);
+        index++;
       }
-      n = true;
-    } else if (c === "`") {
-      o = true;
-      n = false;
-      out.push(c);
-      i++;
+      atWordStart = true;
+    } else if (char === "`") {
+      inBacktick = true;
+      atWordStart = false;
+      out.push(char);
+      index++;
     } else {
-      if (c === "'") r = true;
-      else if (c === '"') s = true;
-      n =
-        c === " " ||
-        c === "\t" ||
-        c ===
+      if (char === "'") inSingleQuote = true;
+      else if (char === '"') inDoubleQuote = true;
+      atWordStart =
+        char === " " ||
+        char === "\t" ||
+        char ===
           `
 ` ||
-        c === ";" ||
-        c === "|" ||
-        c === "&" ||
-        c === "(" ||
-        c === ")" ||
-        c === "<" ||
-        c === ">";
-      out.push(c);
-      i++;
+        char === ";" ||
+        char === "|" ||
+        char === "&" ||
+        char === "(" ||
+        char === ")" ||
+        char === "<" ||
+        char === ">";
+      out.push(char);
+      index++;
     }
   }
   return out.join("");
 }
 //@ chunk-r01896cg.js:7494-7525 callgraph-fingerprint = DOLLAR (1)
-var DOLLAR = String.fromCharCode(36);
+var DOLLAR; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-r01896cg.js:7494", () => {
+  DOLLAR = String.fromCharCode(36);
+});
 //@ chunk-r01896cg.js:7525-7621 file-local
-function collectCommandSubstitution(e, t) {
-  if (e.type === t) return true;
-  for (let child of e.children) if (child && collectCommandSubstitution(child, t)) return true;
+function collectCommandSubstitution(node, type) {
+  if (node.type === type) return true;
+  for (let child of node.children) if (child && collectCommandSubstitution(child, type)) return true;
   return false;
 }
 //@ chunk-r01896cg.js:7621-7947 facade-majority
@@ -485,12 +533,12 @@ async function parseForSecurity(command, { readsDivergentShapes = false } = {}) 
  * 为 n 个声明前缀生成“bash 是否保留赋值”的若干种布尔组合：n≤3 全枚举（exhaustive），否则取全假/全真/单个为真，并补上当前组合。供 shell -c 递归检查逐种读法判定。
  */
 function declarationPrefixReadings(count, currentReading) {
-  let r = (o) =>
+  let readingOf = (pick) =>
     Array.from(
       {
         length: count,
       },
-      (n, i) => o(i),
+      (value, index) => pick(index),
     );
   if (count <= 3)
     return {
@@ -498,16 +546,19 @@ function declarationPrefixReadings(count, currentReading) {
         {
           length: 2 ** count,
         },
-        (o, n) => r((i) => Math.floor(n / 2 ** i) % 2 === 1),
+        (value, bitmask) => readingOf((bit) => Math.floor(bitmask / 2 ** bit) % 2 === 1),
       ),
       exhaustive: true,
     };
-  let s = [r(() => false), r(() => true)];
-  for (let i = 0; count <= 8 && i < count; i++) s.push(r((n) => n === i));
-  if (currentReading?.length === count && !s.some((o) => o.every((n, i) => n === currentReading[i])))
-    s.push([...currentReading]);
+  let readings = [readingOf(() => false), readingOf(() => true)];
+  for (let i = 0; count <= 8 && i < count; i++) readings.push(readingOf((index) => index === i));
+  if (
+    currentReading?.length === count &&
+    !readings.some((reading) => reading.every((value, index) => value === currentReading[index]))
+  )
+    readings.push([...currentReading]);
   return {
-    readings: s,
+    readings,
     exhaustive: false,
   };
 }
@@ -597,15 +648,15 @@ function parseForSecurityFromAst_2(
       reason: "Parser aborted (timeout, resource limit, or over-length)",
       nodeType: "PARSE_ABORT",
     };
-  for (let E of ["backtick_body_empty", "backtick_body_overrun", "backtick_escape_unsupported"])
-    if (collectCommandSubstitution(root, E))
+  for (let marker of ["backtick_body_empty", "backtick_body_overrun", "backtick_escape_unsupported"])
+    if (collectCommandSubstitution(root, marker))
       return {
         kind: "too-complex",
         reason:
-          E === "backtick_body_empty"
+          marker === "backtick_body_empty"
             ? "empty backtick substitution \u2014 bash joins the surrounding words, so the parsed command boundaries cannot be trusted"
             : "backtick substitution scan could not be trusted (" +
-              E +
+              marker +
               ") \u2014 the parsed bytes may differ from what bash executes",
         differential: true,
       };
@@ -615,35 +666,39 @@ function parseForSecurityFromAst_2(
     if (zshDifferentialSyntax) return zshDifferentialSyntax;
   }
   {
-    let E = checkDeclarationOperands(root);
-    if (E) return E;
+    let refusal = checkDeclarationOperands(root);
+    if (refusal) return refusal;
   }
-  let l = (E) => E === 32 || E === 9 || E === 10 || E === 13 || E === 59 || E === 38;
-  let f = (coveredEnd, K) => {
-    let B = coveredEnd;
-    while (B < K) {
-      let et = buffer[B];
-      if (l(et)) B++;
-      else if (et === 92 && (buffer[B + 1] === 10 || (buffer[B + 1] === 13 && buffer[B + 2] === 10)))
-        B += buffer[B + 1] === 13 ? 3 : 2;
+  let isSeparatorByte = (byte) =>
+    byte === 32 || byte === 9 || byte === 10 || byte === 13 || byte === 59 || byte === 38;
+  let skipBlanks = (coveredEnd, limit) => {
+    let position = coveredEnd;
+    while (position < limit) {
+      let byte = buffer[position];
+      if (isSeparatorByte(byte)) position++;
+      else if (
+        byte === 92 &&
+        (buffer[position + 1] === 10 || (buffer[position + 1] === 13 && buffer[position + 2] === 10))
+      )
+        position += buffer[position + 1] === 13 ? 3 : 2;
       else break;
     }
-    return B;
+    return position;
   };
   let sorted = root.children
     .filter((child) => child !== null)
     .map((child) => [child.startIndex, child.endIndex])
-    .sort((E, K) => E[0] - K[0]);
+    .sort((leftRange, rightRange) => leftRange[0] - rightRange[0]);
   let coveredEnd = 0;
-  for (let [E, K] of sorted) {
-    if (f(coveredEnd, E) < E)
+  for (let [start, end] of sorted) {
+    if (skipBlanks(coveredEnd, start) < start)
       return {
         kind: "too-complex",
         reason: "Parser skipped input between top-level statements",
       };
-    if (K > coveredEnd) coveredEnd = K;
+    if (end > coveredEnd) coveredEnd = end;
   }
-  if (f(coveredEnd, buffer.length) < buffer.length)
+  if (skipBlanks(coveredEnd, buffer.length) < buffer.length)
     return {
       kind: "too-complex",
       reason: "Parser did not consume trailing input",
@@ -669,21 +724,21 @@ function parseForSecurityFromAst_2(
       differential: true,
       divergentShape: true,
     };
-  let h = allowPlainUnquotedHeredocs;
-  let d = readingDivergentShapes;
-  let m = sawUncertainWrite;
-  let p = reExpansionBudget;
-  let g = currentDeclarationPrefix;
+  let savedPlainHeredocs = allowPlainUnquotedHeredocs;
+  let savedDivergentShapes = readingDivergentShapes;
+  let savedUncertainWrite = sawUncertainWrite;
+  let savedBudget = reExpansionBudget;
+  let savedPrefix = currentDeclarationPrefix;
   let _ = declarationPrefixCount;
-  let b = declarationPrefixValues;
-  let k = prefixAssignInBranch;
-  let A = unsetNames;
-  let R = declarationPrefixBashKeeps;
-  let T = usedAssignedValue;
+  let savedPrefixValues = declarationPrefixValues;
+  let savedPrefixInBranch = prefixAssignInBranch;
+  let savedUnsetNames = unsetNames;
+  let savedBashKeeps = declarationPrefixBashKeeps;
+  let savedUsedAssignedValue = usedAssignedValue;
   usedAssignedValue = false;
-  let v = isLaterLoopPass;
-  let de = currentLoopNode;
-  let tn = loopDepth;
+  let savedIsLaterLoopPass = isLaterLoopPass;
+  let savedLoopNode = currentLoopNode;
+  let savedLoopDepth = loopDepth;
   isLaterLoopPass = pass === "later";
   currentLoopNode = null;
   loopDepth = 0;
@@ -733,20 +788,20 @@ function parseForSecurityFromAst_2(
         uncertainWrite: true,
       };
   } finally {
-    allowPlainUnquotedHeredocs = h;
-    readingDivergentShapes = d;
-    sawUncertainWrite = m;
-    reExpansionBudget = p;
-    currentDeclarationPrefix = g;
+    allowPlainUnquotedHeredocs = savedPlainHeredocs;
+    readingDivergentShapes = savedDivergentShapes;
+    sawUncertainWrite = savedUncertainWrite;
+    reExpansionBudget = savedBudget;
+    currentDeclarationPrefix = savedPrefix;
     declarationPrefixCount = _;
-    declarationPrefixValues = b;
-    prefixAssignInBranch = k;
-    unsetNames = A;
-    declarationPrefixBashKeeps = R;
-    usedAssignedValue = T;
-    isLaterLoopPass = v;
-    currentLoopNode = de;
-    loopDepth = tn;
+    declarationPrefixValues = savedPrefixValues;
+    prefixAssignInBranch = savedPrefixInBranch;
+    unsetNames = savedUnsetNames;
+    declarationPrefixBashKeeps = savedBashKeeps;
+    usedAssignedValue = savedUsedAssignedValue;
+    isLaterLoopPass = savedIsLaterLoopPass;
+    currentLoopNode = savedLoopNode;
+    loopDepth = savedLoopDepth;
   }
   if (
     result.kind === "too-complex" &&
@@ -767,8 +822,8 @@ function findStructuralParseError(node) {
   if (node.children.length === 0)
     return node.startIndex === node.endIndex && !node.type.startsWith("heredoc_") ? "Parse error" : null;
   for (let child of node.children) {
-    let r = child === null ? null : findStructuralParseError(child);
-    if (r !== null) return r;
+    let childError = child === null ? null : findStructuralParseError(child);
+    if (childError !== null) return childError;
   }
   return node.type === "test_command" && node.children[0]?.type === "[" && !/^\[[ \t]/.test(node.text)
     ? "[ glued to the next word names another command"
@@ -782,25 +837,25 @@ function hasDollarNonAsciiError(nodeType) {
   return false;
 }
 //@ chunk-r01896cg.js:12261-12680 layout
-function hasZshLengthOfNonAsciiSubscript(e) {
-  let children = e.children;
+function hasZshLengthOfNonAsciiSubscript(node) {
+  let children = node.children;
   for (let k = 0; k < children.length; k++) {
-    let s = children[k];
-    if (!s) continue;
+    let child = children[k];
+    if (!child) continue;
     if (
-      s.type === "simple_expansion" &&
-      s.children.some((child) => child?.type === "special_variable_name" && child.text === "#")
+      child.type === "simple_expansion" &&
+      child.children.some((child) => child?.type === "special_variable_name" && child.text === "#")
     ) {
-      let o = "";
+      let textAfterSubscript = "";
       for (let k_2 = k + 1; k_2 < children.length; k_2++) {
         let text = children[k_2]?.text ?? "";
-        o += text;
+        textAfterSubscript += text;
         if (!/^[\w\u0080-\uffff]*$/.test(text)) break;
       }
-      let match = /^[\w\u0080-\uffff]*(?=\[|:[a-zA-Z&])/.exec(o);
+      let match = /^[\w\u0080-\uffff]*(?=\[|:[a-zA-Z&])/.exec(textAfterSubscript);
       if (match && /[\u0080-\uffff]/.test(match[0])) return true;
     }
-    if (hasZshLengthOfNonAsciiSubscript(s)) return true;
+    if (hasZshLengthOfNonAsciiSubscript(child)) return true;
   }
   return false;
 }
@@ -815,8 +870,12 @@ function isDollarNonAsciiName(text) {
 function findZshDifferentialSyntax(node, bytes, baseOffset) {
   for (let child of node.children) {
     if (!child) continue;
-    let o = child.startIndex - 1 - baseOffset;
-    if (child.type === "comment" && o >= 0 && (bytes[o] === 41 || bytes[o] === 40))
+    let charBeforeChild = child.startIndex - 1 - baseOffset;
+    if (
+      child.type === "comment" &&
+      charBeforeChild >= 0 &&
+      (bytes[charBeforeChild] === 41 || bytes[charBeforeChild] === 40)
+    )
       return {
         kind: "too-complex",
         reason:
@@ -843,16 +902,17 @@ function findZshDifferentialSyntax(node, bytes, baseOffset) {
       child.type === "function" &&
       !node.children.some((child) => child !== undefined && child.type === "(")
     ) {
-      let o = node.children[1];
-      let n = node.children.find((child) => child !== undefined && child.type === "redirected_statement")
-        ?.children[0];
-      let i =
+      let functionWord = node.children[1];
+      let redirectedBody = node.children.find(
+        (child) => child !== undefined && child.type === "redirected_statement",
+      )?.children[0];
+      let bodySubshell =
         node.children.find((child) => child !== undefined && child.type === "subshell") ??
-        (n?.type === "subshell" ? n : undefined);
+        (redirectedBody?.type === "subshell" ? redirectedBody : undefined);
       if (
-        o !== undefined &&
-        i !== undefined &&
-        isOnlyBlankBetween(bytes, o.endIndex - baseOffset, i.startIndex - baseOffset)
+        functionWord !== undefined &&
+        bodySubshell !== undefined &&
+        isOnlyBlankBetween(bytes, functionWord.endIndex - baseOffset, bodySubshell.startIndex - baseOffset)
       )
         return {
           kind: "too-complex",
@@ -874,205 +934,240 @@ function findZshDifferentialSyntax(node, bytes, baseOffset) {
 /**
  * 复合语句节点类型（if/elif/else/while/until/case）。
  */
-var COMPOUND_STATEMENT_TYPES = new Set(["if", "elif", "else", "while", "until", "case"]);
+var COMPOUND_STATEMENT_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-r01896cg.js:14269", () => {
+  COMPOUND_STATEMENT_TYPES = new Set(["if", "elif", "else", "while", "until", "case"]);
+});
 //@ chunk-r01896cg.js:14329-19184 layout
 /**
  * 递归检查 declare/unset 语句的写法：标志会改变赋值语义且有会被求值的操作数、相邻引号片段拼成一个操作数、$'…' 标志、拼写成别的命令但实为声明等，返回 too-complex。（实为 ast.ts 安全检查，被切到 bashParser.ts）
  */
-function checkDeclarationOperands(e) {
-  if (e.type === "declaration_command" || e.type === "unset_command") {
+function checkDeclarationOperands(node) {
+  if (node.type === "declaration_command" || node.type === "unset_command") {
     if (
-      e.type === "declaration_command" &&
-      e.children.some(
+      node.type === "declaration_command" &&
+      node.children.some(
         (child) =>
           child !== undefined &&
-          (/^(?:export|readonly)$/.test(e.children[0]?.text ?? "")
+          (/^(?:export|readonly)$/.test(node.children[0]?.text ?? "")
             ? EXPORT_SEMANTIC_FLAG_RE
             : DECLARE_SEMANTIC_FLAG_RE
           ).test(unquoteFlagWord(child.text)),
       ) &&
-      !areDeclareArgsSimple(e)
+      !areDeclareArgsSimple(node)
     )
       return {
         kind: "too-complex",
-        reason: `${e.children[0]?.text ?? "declare"} with a flag that changes assignment semantics and an operand it would evaluate`,
+        reason: `${node.children[0]?.text ?? "declare"} with a flag that changes assignment semantics and an operand it would evaluate`,
         differential: true,
       };
-    let t =
-      e.type === "unset_command" || /^(?:declare|typeset|local|export)$/.test(e.children[0]?.text ?? "");
-    let matches = /^(?:declare|typeset|local)$/.test(e.children[0]?.text ?? "");
-    let any = e.children.some(
+    let isDeclarationBuiltin =
+      node.type === "unset_command" ||
+      /^(?:declare|typeset|local|export)$/.test(node.children[0]?.text ?? "");
+    let matches = /^(?:declare|typeset|local)$/.test(node.children[0]?.text ?? "");
+    let allowFunctionName = node.children.some(
       (child) => child !== undefined && /^[-+][A-Za-z]*[fF]/.test(unquoteFlagWord(child.text)),
     );
-    let o;
-    for (let [n, i] of e.children.entries()) {
-      if (!i) continue;
-      if (n > 1 && o !== undefined && i.type !== "variable_assignment" && i.startIndex === o.endIndex)
+    let prevOperand;
+    for (let [childIndex, operand] of node.children.entries()) {
+      if (!operand) continue;
+      if (
+        childIndex > 1 &&
+        prevOperand !== undefined &&
+        operand.type !== "variable_assignment" &&
+        operand.startIndex === prevOperand.endIndex
+      )
         return {
           kind: "too-complex",
-          reason: `${e.children[0]?.text ?? e.type} operand '${o.text}${i.text}' is split across adjacent quoted segments \u2014 the shell joins them into one word the analyzer cannot verify`,
+          reason: `${node.children[0]?.text ?? node.type} operand '${prevOperand.text}${operand.text}' is split across adjacent quoted segments \u2014 the shell joins them into one word the analyzer cannot verify`,
           differential: true,
         };
-      if (n > 0 && i.type === "ansi_c_string" && /^\$'[-+]/.test(i.text))
+      if (childIndex > 0 && operand.type === "ansi_c_string" && /^\$'[-+]/.test(operand.text))
         return {
           kind: "too-complex",
-          reason: `${e.children[0]?.text ?? e.type} flag ${i.text} \u2014 a $'\u2026' flag word the shell decodes`,
+          reason: `${node.children[0]?.text ?? node.type} flag ${operand.text} \u2014 a $'\u2026' flag word the shell decodes`,
           differential: true,
         };
-      if (n > 0 && !/^[-+]/.test(unquoteFlagWord(i.text))) {
-        let c =
-          i.type === "word" ||
-          i.type === "raw_string" ||
-          i.type === "concatenation" ||
-          i.type === "variable_name" ||
-          i.type === "number";
-        if (i.type === "ansi_c_string" && (t || e.children[0]?.text === "readonly"))
+      if (childIndex > 0 && !/^[-+]/.test(unquoteFlagWord(operand.text))) {
+        let isPlainWordType =
+          operand.type === "word" ||
+          operand.type === "raw_string" ||
+          operand.type === "concatenation" ||
+          operand.type === "variable_name" ||
+          operand.type === "number";
+        if (
+          operand.type === "ansi_c_string" &&
+          (isDeclarationBuiltin || node.children[0]?.text === "readonly")
+        )
           return {
             kind: "too-complex",
-            reason: `${e.children[0]?.text ?? e.type} operand ${i.text} \u2014 a $'\u2026' word the shell decodes, which may carry a subscript the parser cannot read`,
+            reason: `${node.children[0]?.text ?? node.type} operand ${operand.text} \u2014 a $'\u2026' word the shell decodes, which may carry a subscript the parser cannot read`,
             differential: true,
           };
         if (matches) {
-          if (!isSafeDeclarationArg(i, any))
+          if (!isSafeDeclarationArg(operand, allowFunctionName))
             return {
               kind: "too-complex",
-              reason: `${e.children[0]?.text ?? "declare"} operand '${i.text}' is not a plain NAME with an inert value \u2014 the shell may re-parse it as a subscript, an expanded name or a compound assignment`,
+              reason: `${node.children[0]?.text ?? "declare"} operand '${operand.text}' is not a plain NAME with an inert value \u2014 the shell may re-parse it as a subscript, an expanded name or a compound assignment`,
               differential: true,
             };
-          o = i;
+          prevOperand = operand;
           continue;
         }
-        let assignmentName = getAssignmentName(i.text);
-        let matches_2 = /^['"]?[A-Za-z_]\w*=/.test(i.text);
-        let y = c
-          ? (t && assignmentName.includes("[")) ||
-            (matches_2 ? assignmentName.slice(1).includes("\\") : i.text.slice(1).includes("\\"))
-          : i.type === "string" && (matches_2 ? assignmentName.includes("\\") : i.text.includes("\\"));
-        let x = i.type === "variable_assignment" && /['\\]/.test(getAssignmentName(i.text));
-        let u = c && t && /^['"]?\$/.test(assignmentName) && /[[`'"]/.test(i.text);
-        if (y || x || u)
+        let assignmentName = getAssignmentName(operand.text);
+        let matches_2 = /^['"]?[A-Za-z_]\w*=/.test(operand.text);
+        let hasEvaluatedSubscript = isPlainWordType
+          ? (isDeclarationBuiltin && assignmentName.includes("[")) ||
+            (matches_2 ? assignmentName.slice(1).includes("\\") : operand.text.slice(1).includes("\\"))
+          : operand.type === "string" &&
+            (matches_2 ? assignmentName.includes("\\") : operand.text.includes("\\"));
+        let assignmentHasEscape =
+          operand.type === "variable_assignment" && /['\\]/.test(getAssignmentName(operand.text));
+        let hasDollarAssignment =
+          isPlainWordType &&
+          isDeclarationBuiltin &&
+          /^['"]?\$/.test(assignmentName) &&
+          /[[`'"]/.test(operand.text);
+        if (hasEvaluatedSubscript || assignmentHasEscape || hasDollarAssignment)
           return {
             kind: "too-complex",
-            reason: `${e.children[0]?.text ?? e.type} operand '${i.text}' carries a subscript or escape the shell evaluates \u2014 the parser read it as literal text`,
+            reason: `${node.children[0]?.text ?? node.type} operand '${operand.text}' carries a subscript or escape the shell evaluates \u2014 the parser read it as literal text`,
             differential: true,
           };
         if (
-          i.type === "variable_name"
-            ? !(PLAIN_VAR_NAME_RE.test(i.text) || (any && FUNCTION_NAME_RE.test(i.text)))
-            : (i.type === "word" ||
-                i.type === "concatenation" ||
-                i.type === "raw_string" ||
-                (i.type === "string" && getAssignmentName(i.text) !== i.text)) &&
-              !isPlainDeclarationOperand(i.text, any, e.children[0]?.text === "readonly")
+          operand.type === "variable_name"
+            ? !(
+                PLAIN_VAR_NAME_RE.test(operand.text) ||
+                (allowFunctionName && FUNCTION_NAME_RE.test(operand.text))
+              )
+            : (operand.type === "word" ||
+                operand.type === "concatenation" ||
+                operand.type === "raw_string" ||
+                (operand.type === "string" && getAssignmentName(operand.text) !== operand.text)) &&
+              !isPlainDeclarationOperand(
+                operand.text,
+                allowFunctionName,
+                node.children[0]?.text === "readonly",
+              )
         )
           return {
             kind: "too-complex",
-            reason: `${e.children[0]?.text ?? e.type} operand '${i.text}' is not a plain variable name \u2014 the shell expands or matches it before assigning`,
+            reason: `${node.children[0]?.text ?? node.type} operand '${operand.text}' is not a plain variable name \u2014 the shell expands or matches it before assigning`,
             differential: true,
           };
       }
-      o = i;
+      prevOperand = operand;
     }
   }
-  if (e.type === "command") {
-    let found = e.children.find((child) => child !== undefined && child.type === "command_name");
-    let r = found === undefined ? -1 : e.children.indexOf(found);
-    let filtered = e.children.filter(
-      (child, n) => child !== undefined && n > r && child.type !== "command_name",
+  if (node.type === "command") {
+    let node_2 = node.children.find((child) => child !== undefined && child.type === "command_name");
+    let commandNameIndex = node_2 === undefined ? -1 : node.children.indexOf(node_2);
+    let filtered = node.children.filter(
+      (child, childIndex) =>
+        child !== undefined && childIndex > commandNameIndex && child.type !== "command_name",
     );
-    if (found !== undefined) {
-      if (containsAnsiCString(found) && filtered.some((f) => !/^[-+]/.test(unquoteFlagWord(f.text))))
+    if (node_2 !== undefined) {
+      if (
+        containsAnsiCString(node_2) &&
+        filtered.some((argWord) => !/^[-+]/.test(unquoteFlagWord(argWord.text)))
+      )
         return {
           kind: "too-complex",
-          reason: `command head ${found.text} \u2014 a $'\u2026' word the shell decodes before looking the command up`,
+          reason: `command head ${node_2.text} \u2014 a $'\u2026' word the shell decodes before looking the command up`,
           differential: true,
         };
-      let o = stripQuoteChars(found.text);
-      let n = filtered;
-      let i = false;
-      let c = false;
-      while (PREFIX_WRAPPER_RE.test(o) && n.length > 0) {
-        i = true;
-        while (n.length > 0 && /^-/.test(unquoteFlagWord(n[0].text))) {
-          let f = unquoteFlagWord(n[0].text);
-          if (o === "command" && /^-[pP]*[vV]/.test(f)) c = true;
-          n = n.slice(o === "exec" && /^-[cl]*a$/.test(f) ? 2 : 1);
+      let headWord = stripQuoteChars(node_2.text);
+      let remainingWords = filtered;
+      let sawWrapper = false;
+      let sawPrintVersionFlag = false;
+      while (PREFIX_WRAPPER_RE.test(headWord) && remainingWords.length > 0) {
+        sawWrapper = true;
+        while (remainingWords.length > 0 && /^-/.test(unquoteFlagWord(remainingWords[0].text))) {
+          let flagWord = unquoteFlagWord(remainingWords[0].text);
+          if (headWord === "command" && /^-[pP]*[vV]/.test(flagWord)) sawPrintVersionFlag = true;
+          remainingWords = remainingWords.slice(headWord === "exec" && /^-[cl]*a$/.test(flagWord) ? 2 : 1);
         }
         if (
-          !c &&
-          n.length > 0 &&
-          containsAnsiCString(n[0]) &&
-          n.slice(1).some((f) => !/^[-+]/.test(unquoteFlagWord(f.text)))
+          !sawPrintVersionFlag &&
+          remainingWords.length > 0 &&
+          containsAnsiCString(remainingWords[0]) &&
+          remainingWords.slice(1).some((argWord) => !/^[-+]/.test(unquoteFlagWord(argWord.text)))
         )
           return {
             kind: "too-complex",
-            reason: `command head ${n[0].text} after ${o} \u2014 a $'\u2026' word the shell decodes before looking the command up`,
+            reason: `command head ${remainingWords[0].text} after ${headWord} \u2014 a $'\u2026' word the shell decodes before looking the command up`,
             differential: true,
           };
-        o = n.length > 0 ? stripQuoteChars(n[0].text) : "";
-        n = n.slice(1);
+        headWord = remainingWords.length > 0 ? stripQuoteChars(remainingWords[0].text) : "";
+        remainingWords = remainingWords.slice(1);
       }
-      let l = i || stripQuoteChars(found.text) !== found.text || DECLARATION_NAME_RE.test(found.text);
-      if (!c && l && DECLARATION_NAME_RE.test(o)) {
-        let f = o === "integer" || o === "float";
-        let y = {
-          ...e,
+      let isDeclarationHead =
+        sawWrapper || stripQuoteChars(node_2.text) !== node_2.text || DECLARATION_NAME_RE.test(node_2.text);
+      if (!sawPrintVersionFlag && isDeclarationHead && DECLARATION_NAME_RE.test(headWord)) {
+        let isIntegerHead = headWord === "integer" || headWord === "float";
+        let syntheticNode = {
+          ...node,
           children: [
-            found,
-            ...(f
+            node_2,
+            ...(isIntegerHead
               ? [
                   {
-                    ...found,
+                    ...node_2,
                     text: "-i",
                   },
                 ]
               : []),
-            ...n,
+            ...remainingWords,
           ],
         };
-        let joined = n
-          .map((p) => unquoteFlagWord(p.text))
-          .filter((p) => /^[-+]/.test(p))
+        let joined = remainingWords
+          .map((argWord) => unquoteFlagWord(argWord.text))
+          .filter((flagWord) => /^[-+]/.test(flagWord))
           .join("");
-        let u =
-          f ||
-          (/^(?:declare|typeset|local|private)$/.test(o) && DECLARE_SEMANTIC_FLAG_CHARS.test(joined)) ||
-          (/^(?:export|readonly)$/.test(o) && EXPORT_SEMANTIC_FLAG_CHARS.test(joined));
-        let filtered = n.filter((p) => !/^[-+]/.test(unquoteFlagWord(p.text)));
-        let matches = /[fF]/.test(joined);
-        let m =
-          (u && !areDeclareArgsSimple(y)) ||
-          n.some((p) => p.type === "ansi_c_string" && /^\$'[-+]/.test(p.text));
-        if (/^(?:declare|typeset|local|integer|float|private)$/.test(o))
-          m ||= filtered.some((p) => !isSafeDeclarationArg(p, matches));
+        let hasSemanticFlag =
+          isIntegerHead ||
+          (/^(?:declare|typeset|local|private)$/.test(headWord) && DECLARE_FLAG_CHARS_RE.test(joined)) ||
+          (/^(?:export|readonly)$/.test(headWord) && EXPORT_FLAG_CHARS_RE.test(joined));
+        let filtered = remainingWords.filter(
+          (operandWord) => !/^[-+]/.test(unquoteFlagWord(operandWord.text)),
+        );
+        let allowFunctionName = /[fF]/.test(joined);
+        let isComplex =
+          (hasSemanticFlag && !areDeclareArgsSimple(syntheticNode)) ||
+          remainingWords.some(
+            (operandWord) => operandWord.type === "ansi_c_string" && /^\$'[-+]/.test(operandWord.text),
+          );
+        if (/^(?:declare|typeset|local|integer|float|private)$/.test(headWord))
+          isComplex ||= filtered.some((operandWord) => !isSafeDeclarationArg(operandWord, allowFunctionName));
         else
-          m ||= filtered.some((p) => {
-            if (p.type === "ansi_c_string") return true;
-            let assignmentName = getAssignmentName(p.text);
+          isComplex ||= filtered.some((operandWord) => {
+            if (operandWord.type === "ansi_c_string") return true;
+            let assignmentName = getAssignmentName(operandWord.text);
             return (
               /[\\'"]/.test(assignmentName.replace(/^['"]/, "").replace(/['"]$/, "")) ||
-              (o !== "readonly" && assignmentName.includes("[")) ||
+              (headWord !== "readonly" && assignmentName.includes("[")) ||
               /^['"]?\$/.test(assignmentName) ||
-              ((p.type === "word" ||
-                p.type === "concatenation" ||
-                p.type === "raw_string" ||
-                (p.type === "string" && getAssignmentName(p.text) !== p.text)) &&
-                !isPlainDeclarationOperand(p.text, matches, o === "readonly"))
+              ((operandWord.type === "word" ||
+                operandWord.type === "concatenation" ||
+                operandWord.type === "raw_string" ||
+                (operandWord.type === "string" &&
+                  getAssignmentName(operandWord.text) !== operandWord.text)) &&
+                !isPlainDeclarationOperand(operandWord.text, allowFunctionName, headWord === "readonly"))
             );
           });
-        if (m)
+        if (isComplex)
           return {
             kind: "too-complex",
-            reason: `${o} spelled '${i ? `${found.text} \u2026` : found.text}' with an operand the shell would evaluate \u2014 the parser did not read this as a declaration`,
+            reason: `${headWord} spelled '${sawWrapper ? `${node_2.text} \u2026` : node_2.text}' with an operand the shell would evaluate \u2014 the parser did not read this as a declaration`,
             differential: true,
           };
       }
     }
   }
-  for (let child of e.children) {
+  for (let child of node.children) {
     if (!child) continue;
-    let r = checkDeclarationOperands(child);
-    if (r) return r;
+    let childError = checkDeclarationOperands(child);
+    if (childError) return childError;
   }
   return null;
 }
@@ -1080,103 +1175,119 @@ function checkDeclarationOperands(e) {
 /**
  * 声明类命令的正则与选项规则：前缀包装（builtin/command/exec/time/coproc/noglob/nocorrect/-）、声明命令名、declare/export 会改变语义的标志字母，以及 declare/typeset/local/export/readonly 的赋值型与列出型选项。
  */
-var PREFIX_WRAPPER_RE = /^(?:builtin|command|exec|time|coproc|noglob|nocorrect|-)$/;
-var DECLARATION_NAME_RE = /^(?:declare|typeset|local|export|readonly|unset|integer|float|private)$/;
-var DECLARE_SEMANTIC_FLAG_RE = /^[-+].*[nialuAEFLRZ]/;
-var DECLARE_SEMANTIC_FLAG_CHARS = /[nialuAEFLRZ]/;
-var EXPORT_SEMANTIC_FLAG_RE = /^[-+].*[aAiluEFLRZ]/;
-var EXPORT_SEMANTIC_FLAG_CHARS = /[aAiluEFLRZ]/;
-var DECLARE_OPTION_CLASSES = {
-  assigning: /^[-+][rtx]+$/,
-  listing: /^(?:-[fgprtxU]+|\+[grtx]+)$/,
-};
-var DECLARATION_OPTION_RULES = new Map([
-  ["declare", DECLARE_OPTION_CLASSES],
-  ["typeset", DECLARE_OPTION_CLASSES],
-  [
-    "local",
-    {
-      assigning: DECLARE_OPTION_CLASSES.assigning,
-      listing: /^-[fprtx]+$/,
-    },
-  ],
-  [
-    "export",
-    {
-      listing: /^-[aAfnp]+$/,
-    },
-  ],
-  [
-    "readonly",
-    {
-      listing: /^-[aAfpx]+$/,
-    },
-  ],
-]);
+var PREFIX_WRAPPER_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DECLARATION_NAME_RE;
+var DECLARE_SEMANTIC_FLAG_RE;
+var DECLARE_FLAG_CHARS_RE;
+var EXPORT_SEMANTIC_FLAG_RE;
+var EXPORT_FLAG_CHARS_RE;
+var DECLARE_OPTION_CLASSES;
+var DECLARATION_OPTION_RULES;
+deferInit("chunk-r01896cg.js:19184", () => {
+  PREFIX_WRAPPER_RE = /^(?:builtin|command|exec|time|coproc|noglob|nocorrect|-)$/;
+  DECLARATION_NAME_RE = /^(?:declare|typeset|local|export|readonly|unset|integer|float|private)$/;
+  DECLARE_SEMANTIC_FLAG_RE = /^[-+].*[nialuAEFLRZ]/;
+  DECLARE_FLAG_CHARS_RE = /[nialuAEFLRZ]/;
+  EXPORT_SEMANTIC_FLAG_RE = /^[-+].*[aAiluEFLRZ]/;
+  EXPORT_FLAG_CHARS_RE = /[aAiluEFLRZ]/;
+  DECLARE_OPTION_CLASSES = {
+    assigning: /^[-+][rtx]+$/,
+    listing: /^(?:-[fgprtxU]+|\+[grtx]+)$/,
+  };
+  DECLARATION_OPTION_RULES = new Map([
+    ["declare", DECLARE_OPTION_CLASSES],
+    ["typeset", DECLARE_OPTION_CLASSES],
+    [
+      "local",
+      {
+        assigning: DECLARE_OPTION_CLASSES.assigning,
+        listing: /^-[fprtx]+$/,
+      },
+    ],
+    [
+      "export",
+      {
+        listing: /^-[aAfnp]+$/,
+      },
+    ],
+    [
+      "readonly",
+      {
+        listing: /^-[aAfpx]+$/,
+      },
+    ],
+  ]);
+});
 //@ chunk-r01896cg.js:19657-20601 placement
 /**
  * 检查声明命令的选项组合：列举型选项与赋值同用、readonly 重复命名、选项出现在名字之后、bash/zsh 不共同支持的选项，返回理由或 null。
  */
-function checkDeclarationOptions(e, t) {
-  let r = DECLARATION_OPTION_RULES.get(e);
-  let s = new Set();
-  let o = e === "readonly";
-  let n = false;
-  let i;
-  for (let c of t)
-    if (!/^[-+]/.test(c)) {
-      if (i !== undefined && c.includes("="))
-        return `${e} ${i} with an assignment \u2014 not every supported bash and zsh assigns under that option, so the value cannot be statically verified`;
-      let replaced = c.replace(/\+?=.*/s, "");
-      if (o && c.includes("=") && s.has(replaced))
-        return `${e} names '${redactPlaceholdersForDisplay(replaced)}' twice \u2014 the first makes it read-only, so bash does not carry out the second`;
-      s.add(replaced);
-      n = true;
-    } else if (n)
-      return `${e} word '${redactPlaceholdersForDisplay(c)}' comes after the options \u2014 the shell reads it as a name, which it cannot be, and bash and zsh go on from that error differently`;
-    else if (c === "--") n = true;
-    else if (r?.assigning?.test(c)) o ||= /^-.*r/.test(c);
-    else if (r?.listing.test(c)) i ??= c;
+function checkDeclarationOptions(commandName, words) {
+  let optionRules = DECLARATION_OPTION_RULES.get(commandName);
+  let seenNames = new Set();
+  let isReadonly = commandName === "readonly";
+  let sawNonOption = false;
+  let listingOption;
+  for (let word of words)
+    if (!/^[-+]/.test(word)) {
+      if (listingOption !== undefined && word.includes("="))
+        return `${commandName} ${listingOption} with an assignment \u2014 not every supported bash and zsh assigns under that option, so the value cannot be statically verified`;
+      let replaced = word.replace(/\+?=.*/s, "");
+      if (isReadonly && word.includes("=") && seenNames.has(replaced))
+        return `${commandName} names '${redactPlaceholdersForDisplay(replaced)}' twice \u2014 the first makes it read-only, so bash does not carry out the second`;
+      seenNames.add(replaced);
+      sawNonOption = true;
+    } else if (sawNonOption)
+      return `${commandName} word '${redactPlaceholdersForDisplay(word)}' comes after the options \u2014 the shell reads it as a name, which it cannot be, and bash and zsh go on from that error differently`;
+    else if (word === "--") sawNonOption = true;
+    else if (optionRules?.assigning?.test(word)) isReadonly ||= /^-.*r/.test(word);
+    else if (optionRules?.listing.test(word)) listingOption ??= word;
     else
-      return `${e} option '${redactPlaceholdersForDisplay(c)}' is not one bash and zsh are both known to accept \u2014 a shell that rejects it assigns nothing, so the names it declares cannot be statically verified`;
+      return `${commandName} option '${redactPlaceholdersForDisplay(word)}' is not one bash and zsh are both known to accept \u2014 a shell that rejects it assigns nothing, so the names it declares cannot be statically verified`;
   return null;
 }
 //@ chunk-r01896cg.js:20601-21033 placement
 /**
  * 检查声明上下文分歧：local 在函数外赋值、export/readonly 给名字加数组属性，返回理由或 null。
  */
-function checkDeclarationContext(e, t) {
-  let filtered = t.filter((s) => !/^[-+]/.test(s));
-  if (e === "local" && filtered.some((s) => s.includes("=")))
+function checkDeclarationContext(commandName, words) {
+  let filtered = words.filter((operandWord) => !/^[-+]/.test(operandWord));
+  if (commandName === "local" && filtered.some((operandWord) => operandWord.includes("=")))
     return "'local' outside a function \u2014 bash refuses that and assigns nothing, so the value cannot be statically verified";
-  if ((e === "export" || e === "readonly") && filtered.length > 0 && t.some(isSetFlagWithA))
-    return `'${e}' gives a name the array attribute \u2014 zsh empties a value it held and bash keeps it, so it cannot be statically verified`;
+  if (
+    (commandName === "export" || commandName === "readonly") &&
+    filtered.length > 0 &&
+    words.some(isSetFlagWithA)
+  )
+    return `'${commandName}' gives a name the array attribute \u2014 zsh empties a value it held and bash keeps it, so it cannot be statically verified`;
   return null;
 }
 //@ chunk-r01896cg.js:21033-21092 placement
 var PLAIN_VAR_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 var FUNCTION_NAME_RE = /^[A-Za-z_][\w.:-]*$/;
 //@ chunk-r01896cg.js:21092-21403 placement
-function isPlainDeclarationOperand(text, t, r = false) {
+function isPlainDeclarationOperand(text, allowFunctionName, isReadonly = false) {
   let assignmentName = getAssignmentName(text);
-  let o = text[0];
-  if (o === "'" || o === '"') {
+  let quoteChar = text[0];
+  if (quoteChar === "'" || quoteChar === '"') {
     assignmentName = assignmentName.slice(1);
-    if (assignmentName.endsWith(o)) assignmentName = assignmentName.slice(0, -1);
+    if (assignmentName.endsWith(quoteChar)) assignmentName = assignmentName.slice(0, -1);
   } else if (/^\\[A-Za-z_]/.test(assignmentName)) assignmentName = assignmentName.slice(1);
-  if (r && (o === "'" || o === '"')) {
+  if (isReadonly && (quoteChar === "'" || quoteChar === '"')) {
     let index = text.indexOf("[");
-    let index_2 = text.indexOf(o, 1);
+    let index_2 = text.indexOf(quoteChar, 1);
     if (index > 0 && index_2 > index) assignmentName = assignmentName.replace(/\[[\s\S]*$/, "");
   }
   assignmentName = assignmentName.replace(/\+$/, "");
-  return PLAIN_VAR_NAME_RE.test(assignmentName) || (t && FUNCTION_NAME_RE.test(assignmentName));
+  return (
+    PLAIN_VAR_NAME_RE.test(assignmentName) || (allowFunctionName && FUNCTION_NAME_RE.test(assignmentName))
+  );
 }
 //@ chunk-r01896cg.js:21403-21491 placement
-function containsAnsiCString(e) {
+function containsAnsiCString(node) {
   return (
-    e.type === "ansi_c_string" ||
-    e.children.some((child) => child !== undefined && containsAnsiCString(child))
+    node.type === "ansi_c_string" ||
+    node.children.some((child) => child !== undefined && containsAnsiCString(child))
   );
 }
 //@ chunk-r01896cg.js:21491-21563 placement
@@ -1184,42 +1295,46 @@ function stripQuoteChars(text) {
   return text.replace(/\$(['"])/g, "$1").replace(/["'\\]/g, "");
 }
 //@ chunk-r01896cg.js:21563-21689 placement
-var EXPANSION_NODE_TYPES = new Set([
-  "command_substitution",
-  "process_substitution",
-  "arithmetic_expansion",
-  "expansion",
-  "simple_expansion",
-]);
-var EXPANSION_MASK = "$_";
+var EXPANSION_NODE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var EXPANSION_MASK;
+deferInit("chunk-r01896cg.js:21563", () => {
+  EXPANSION_NODE_TYPES = new Set([
+    "command_substitution",
+    "process_substitution",
+    "arithmetic_expansion",
+    "expansion",
+    "simple_expansion",
+  ]);
+  EXPANSION_MASK = "$_";
+});
 //@ chunk-r01896cg.js:21689-22087 placement = mk (0.834)
 function maskExpansions(node) {
-  let t = [];
-  let r = (i) => {
-    for (let child of i.children) {
+  let ranges = [];
+  let walk = (current) => {
+    for (let child of current.children) {
       if (!child) continue;
       if (EXPANSION_NODE_TYPES.has(child.type))
-        t.push([child.startIndex - node.startIndex, child.endIndex - node.startIndex]);
-      else r(child);
+        ranges.push([child.startIndex - node.startIndex, child.endIndex - node.startIndex]);
+      else walk(child);
     }
   };
-  r(node);
-  if (t.length === 0) return node.text;
-  t.sort((i, c) => i[0] - c[0]);
+  walk(node);
+  if (ranges.length === 0) return node.text;
+  ranges.sort((leftRange, rightRange) => leftRange[0] - rightRange[0]);
   let buffer = Buffer.from(node.text, "utf8");
-  let o = "";
-  let n = 0;
-  for (let [i, c] of t) {
-    if (i < n || c > buffer.length) return node.text;
-    o += buffer.subarray(n, i).toString("utf8") + EXPANSION_MASK;
-    n = c;
+  let out = "";
+  let cursor = 0;
+  for (let [start, end] of ranges) {
+    if (start < cursor || end > buffer.length) return node.text;
+    out += buffer.subarray(cursor, start).toString("utf8") + EXPANSION_MASK;
+    cursor = end;
   }
-  return o + buffer.subarray(n).toString("utf8");
+  return out + buffer.subarray(cursor).toString("utf8");
 }
 //@ chunk-r01896cg.js:22087-22234 sole-consumer
-function hasParenInExpansion(e) {
-  if (e.type === "expansion" && e.text.replace(/\$\(\(?|[<>]\(/g, "").includes("(")) return true;
-  return e.children.some((child) => child !== undefined && hasParenInExpansion(child));
+function hasParenInExpansion(node) {
+  if (node.type === "expansion" && node.text.replace(/\$\(\(?|[<>]\(/g, "").includes("(")) return true;
+  return node.children.some((child) => child !== undefined && hasParenInExpansion(child));
 }
 //@ chunk-r01896cg.js:22234-22898 sole-consumer
 /**
@@ -1241,7 +1356,7 @@ function isSafeDeclarationArg(node, allowExtendedNames) {
   if (eqIndex < 0) return true;
   if (
     node.children.find(
-      (child, y) => child !== undefined && y >= 2 && child.type !== "=" && child.type !== "+=",
+      (child, index) => child !== undefined && index >= 2 && child.type !== "=" && child.type !== "+=",
     )?.type === "array"
   )
     return true;
@@ -1257,27 +1372,27 @@ function isSafeDeclarationArg(node, allowExtendedNames) {
 }
 //@ chunk-r01896cg.js:22898-23179 sole-consumer
 function getAssignmentName(text) {
-  let t = 0;
-  let r = null;
-  let s = text[0] === "'" || text[0] === '"' ? text[0] : null;
-  for (let o = s === null ? 0 : 1; o < text.length; o += 1) {
-    let n = text[o];
-    if (r !== null) {
-      if (n === r) r = null;
-    } else if ((n === "'" || n === '"') && n !== s) r = n;
-    else if (n === "[") t += 1;
-    else if (n === "]" && t > 0) t -= 1;
-    else if (n === "=" && t === 0) return text.slice(0, o);
+  let bracketDepth = 0;
+  let otherQuote = null;
+  let outerQuote = text[0] === "'" || text[0] === '"' ? text[0] : null;
+  for (let index = outerQuote === null ? 0 : 1; index < text.length; index += 1) {
+    let char = text[index];
+    if (otherQuote !== null) {
+      if (char === otherQuote) otherQuote = null;
+    } else if ((char === "'" || char === '"') && char !== outerQuote) otherQuote = char;
+    else if (char === "[") bracketDepth += 1;
+    else if (char === "]" && bracketDepth > 0) bracketDepth -= 1;
+    else if (char === "=" && bracketDepth === 0) return text.slice(0, index);
   }
   return text;
 }
 //@ chunk-r01896cg.js:23263-23390 sole-consumer
-function isOnlyBlankBetween(bytes, t, r) {
-  let s = t;
-  while (s < r) {
-    let o = bytes[s];
-    if (o === 32 || o === 9) s += 1;
-    else if (o === 92 && bytes[s + 1] === 10) s += 2;
+function isOnlyBlankBetween(bytes, start, end) {
+  let index = start;
+  while (index < end) {
+    let byte = bytes[index];
+    if (byte === 32 || byte === 9) index += 1;
+    else if (byte === 92 && bytes[index + 1] === 10) index += 2;
     else return false;
   }
   return true;
@@ -1289,14 +1404,14 @@ function isOnlyBlankBetween(bytes, t, r) {
 function areDeclareArgsSimple(node) {
   let joined = node.children
     .map((child) => (child === undefined ? "" : unquoteFlagWord(child.text)))
-    .filter((o) => /^[-+]/.test(o))
+    .filter((flagWord) => /^[-+]/.test(flagWord))
     .join("");
-  let s = /[iEF]/.test(joined)
+  let argPattern = /[iEF]/.test(joined)
     ? /^[A-Za-z_][\w.-]*=(?:(['"]?)[0-9+\-*\/% ().]*\1|\([0-9+\-*\/% ().\s]*\))$/
     : /^[A-Za-z_][\w.-]*(?:\+?=(?:(['"]?)[\w.\/ -]*\1|\([\w\s.\/-]*\)))?$/;
-  return node.children.every((child, n) => {
-    if (!child || n === 0 || /^[-+]/.test(unquoteFlagWord(child.text))) return true;
-    return s.test(child.text);
+  return node.children.every((child, index) => {
+    if (!child || index === 0 || /^[-+]/.test(unquoteFlagWord(child.text))) return true;
+    return argPattern.test(child.text);
   });
 }
 //@ chunk-r01896cg.js:23760-23870 sole-consumer
@@ -1306,8 +1421,12 @@ function unquoteFlagWord(text) {
   return /^\\[-+]/.test(text) ? text.slice(1) : text;
 }
 //@ chunk-r01896cg.js:23870-23927 sole-consumer
-var LOOP_STATEMENT_TYPES = new Set(["for_statement", "while_statement"]);
-var MAX_LOOP_NESTING = 5;
+var LOOP_STATEMENT_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_LOOP_NESTING;
+deferInit("chunk-r01896cg.js:23870", () => {
+  LOOP_STATEMENT_TYPES = new Set(["for_statement", "while_statement"]);
+  MAX_LOOP_NESTING = 5;
+});
 //@ chunk-r01896cg.js:23927-23970 sole-consumer
 function isLoopBlockedByEnvScrub(node) {
   return LOOP_STATEMENT_TYPES.has(node.type) && isScrubEnabled();
@@ -1324,17 +1443,19 @@ function walkProgram(root) {
   let bareAssignmentNames = [];
   let error = collectCommands(root, commands, varScope, bareAssignmentNames);
   if (error) return error;
-  let hasLoop = [...LOOP_STATEMENT_TYPES].some((l) => collectCommandSubstitution(root, l));
+  let hasLoop = [...LOOP_STATEMENT_TYPES].some((loopType) => collectCommandSubstitution(root, loopType));
   let lastCommand = hasLoop ? undefined : commands.at(-1);
-  for (let l of readingDivergentShapes ? [] : commands) {
-    let [f = "", ...y] = l.argv;
-    let x = zshStatWritesVarReason(f, y) ?? (l === lastCommand ? null : checkDeclarationContext(f, y));
-    if (x !== null)
+  for (let command of readingDivergentShapes ? [] : commands) {
+    let [name = "", ...args] = command.argv;
+    let reason =
+      zshStatWritesVarReason(name, args) ??
+      (command === lastCommand ? null : checkDeclarationContext(name, args));
+    if (reason !== null)
       return {
         kind: "too-complex",
-        reason: x,
+        reason,
         divergentShape: true,
-        ...(l.argvUnquotedGlob === undefined && {
+        ...(command.argvUnquotedGlob === undefined && {
           nodeType: "declaration_command",
         }),
       };
@@ -1347,71 +1468,75 @@ function walkProgram(root) {
   };
 }
 //@ chunk-r01896cg.js:24387-24554 layout = mk (0.834)
-function isSameLine(e, t, r) {
-  return !Buffer.from(e.text, "utf8")
-    .subarray(t.endIndex - e.startIndex, r.startIndex - e.startIndex)
+function isSameLine(parent, left, right) {
+  return !Buffer.from(parent.text, "utf8")
+    .subarray(left.endIndex - parent.startIndex, right.startIndex - parent.startIndex)
     .toString("utf8")
     .replace(/\\\r?\n/g, "").includes(`
 `);
 }
 //@ chunk-r01896cg.js:24554-24959 layout = extractCompoundStructure (0.753)
-var STATEMENT_NODE_TYPES = new Set([
-  "command",
-  "variable_assignment",
-  "variable_assignments",
-  "list",
-  "pipeline",
-  "redirected_statement",
-  "negated_command",
-  "declaration_command",
-  "unset_command",
-  "test_command",
-  "subshell",
-  "compound_statement",
-  "if_statement",
-  "while_statement",
-  "for_statement",
-  "case_statement",
-  "function_definition",
-  "ERROR",
-]);
-var SCOPED_STATEMENT_TYPES = new Set([
-  "negated_command",
-  "if_statement",
-  "while_statement",
-  "for_statement",
-  "subshell",
-]);
+var STATEMENT_NODE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SCOPED_STATEMENT_TYPES;
+deferInit("chunk-r01896cg.js:24554", () => {
+  STATEMENT_NODE_TYPES = new Set([
+    "command",
+    "variable_assignment",
+    "variable_assignments",
+    "list",
+    "pipeline",
+    "redirected_statement",
+    "negated_command",
+    "declaration_command",
+    "unset_command",
+    "test_command",
+    "subshell",
+    "compound_statement",
+    "if_statement",
+    "while_statement",
+    "for_statement",
+    "case_statement",
+    "function_definition",
+    "ERROR",
+  ]);
+  SCOPED_STATEMENT_TYPES = new Set([
+    "negated_command",
+    "if_statement",
+    "while_statement",
+    "for_statement",
+    "subshell",
+  ]);
+});
 //@ chunk-r01896cg.js:24959-25668 facade-majority
 /**
  * 递归扫描同一行上紧贴前一语句的语句或 (…) 组：bash 会把它们读成一条命令或报错，zsh 会当成 glob 组，存在解析分歧，返回 too-complex（differential）。
  */
-function scanSameLineStatementSplits(e) {
-  let t = null;
-  for (let child of e.children) {
+function scanSameLineStatementSplits(node) {
+  let previousStatement = null;
+  for (let child of node.children) {
     if (!child) continue;
     if (STATEMENT_NODE_TYPES.has(child.type)) {
-      if (t !== null) {
-        let o = child;
-        while (STRUCTURAL_TYPES.has(o.type)) {
-          let found = o.children.find((child) => child != null);
+      if (previousStatement !== null) {
+        let inner = child;
+        while (STRUCTURAL_TYPES.has(inner.type)) {
+          let found = inner.children.find((child) => child != null);
           if (!found) break;
-          o = found;
+          inner = found;
         }
-        if (SCOPED_STATEMENT_TYPES.has(o.type) && isSameLine(e, t, o))
+        if (SCOPED_STATEMENT_TYPES.has(inner.type) && isSameLine(node, previousStatement, inner))
           return {
             kind: "too-complex",
             reason:
-              o.type === "subshell"
+              inner.type === "subshell"
                 ? "`(\u2026)` group directly follows a statement or word on the same line \u2014 bash rejects the line, but zsh reads the glued `(\u2026)` as a glob-group word and expands what follows it"
                 : "statement directly follows another statement on the same line \u2014 bash reads the text as one command (`!` and shell keywords are plain words after an assignment), not two statements",
             differential: true,
           };
       }
-      t = child;
-    } else t = null;
-    let s = scanSameLineStatementSplits(child);
-    if (s) return s;
+      previousStatement = child;
+    } else previousStatement = null;
+    let failure = scanSameLineStatementSplits(child);
+    if (failure) return failure;
   }
   return null;
 }
@@ -1431,7 +1556,7 @@ function collectCommands(node, commands, varScope, bareAssignmentNames, isProgra
   if (node.type === "comment") return null;
   if (STRUCTURAL_TYPES.has(node.type)) {
     let isPipeline = node.type === "pipeline";
-    let i = commands.length;
+    let commandsBefore = commands.length;
     let needsSnapshot = false;
     if (!isPipeline) {
       for (let child of node.children)
@@ -1440,117 +1565,123 @@ function collectCommands(node, commands, varScope, bareAssignmentNames, isProgra
           break;
         }
     }
-    let l = needsSnapshot ? new Map(varScope) : null;
-    let f = isPipeline ? new Map(varScope) : varScope;
-    let y = null;
+    let snapshotScope = needsSnapshot ? new Map(varScope) : null;
+    let branchScope = isPipeline ? new Map(varScope) : varScope;
+    let unsettledNames = null;
     for (let child of node.children) {
       if (!child) continue;
       if (SEPARATOR_TYPES.has(child.type)) {
         if (child.type === "||" || child.type === "|" || child.type === "|&" || child.type === "&") {
           if (child.type === "||") {
-            y ??= new Set();
-            if (loopDepth === 0) for (let key of varScope.keys()) y.add(key);
-            let h = l ?? varScope;
-            f = new Map(h);
-            for (let [d, m] of varScope) if (h.get(d) !== m) markVarUnknown(f, d);
-            for (let key of h.keys()) if (!varScope.has(key)) markVarUnknown(f, key);
-          } else f = new Map(l ?? varScope);
-        } else if (y !== null) {
-          for (let h of y) markVarUnknown(varScope, h);
-          y = null;
-          f = varScope;
+            unsettledNames ??= new Set();
+            if (loopDepth === 0) for (let key of varScope.keys()) unsettledNames.add(key);
+            let sourceScope = snapshotScope ?? varScope;
+            branchScope = new Map(sourceScope);
+            for (let [key, value] of varScope)
+              if (sourceScope.get(key) !== value) markVarUnknown(branchScope, key);
+            for (let key of sourceScope.keys()) if (!varScope.has(key)) markVarUnknown(branchScope, key);
+          } else branchScope = new Map(snapshotScope ?? varScope);
+        } else if (unsettledNames !== null) {
+          for (let key of unsettledNames) markVarUnknown(varScope, key);
+          unsettledNames = null;
+          branchScope = varScope;
         }
         continue;
       }
-      let err = collectCommands(child, commands, f, bareAssignmentNames, node.type === "program");
+      let err = collectCommands(child, commands, branchScope, bareAssignmentNames, node.type === "program");
       if (err) return err;
-      if (y !== null && loopDepth > 0) mergeScopeInto(varScope, f);
+      if (unsettledNames !== null && loopDepth > 0) mergeScopeInto(varScope, branchScope);
     }
-    if (y !== null) for (let x of y) markVarUnknown(varScope, x);
+    if (unsettledNames !== null) for (let key of unsettledNames) markVarUnknown(varScope, key);
     if (isPipeline) {
-      mergeScopeInto(varScope, f);
-      if (commands.length === i) pushTrueCommand(commands, node);
+      mergeScopeInto(varScope, branchScope);
+      if (commands.length === commandsBefore) pushTrueCommand(commands, node);
     }
     return null;
   }
   if (node.type === "negated_command") {
-    let n = commands.length;
+    let commandsBefore = commands.length;
     for (let child of node.children) {
       if (!child) continue;
       if (child.type === "!") continue;
       let commands_2 = collectCommands(child, commands, varScope, bareAssignmentNames);
       if (commands_2) return commands_2;
     }
-    if (commands.length === n) pushTrueCommand(commands, node);
+    if (commands.length === commandsBefore) pushTrueCommand(commands, node);
     return null;
   }
   if (node.type === "declaration_command") {
-    let n = commands.length;
+    let commandsBefore = commands.length;
     let any = node.children.some((child) => child !== null && containsArithmeticExpansion(child));
-    let c = (m, p) => {
+    let checkArithmetic = (name, value) => {
       if (!any) return null;
-      let g = varScope.get(m);
-      let _ = n === 0 && !containsAnyPlaceholder(p);
-      let b = g !== undefined && !containsAnyPlaceholder(g);
-      return _ || b
+      let trackedValue = varScope.get(name);
+      let _ = commandsBefore === 0 && !containsAnyPlaceholder(value);
+      let valueTracked = trackedValue !== undefined && !containsAnyPlaceholder(trackedValue);
+      return _ || valueTracked
         ? divergentShapeResult(
-            `'${m}' is assigned by a declaration carrying an expansion that can fail at runtime, which assigns nothing when it fails \u2014 its value cannot be statically verified`,
+            `'${name}' is assigned by a declaration carrying an expansion that can fail at runtime, which assigns nothing when it fails \u2014 its value cannot be statically verified`,
           )
         : null;
     };
-    let l = quoteScanCarveOutCount;
+    let carveOutsBefore = quoteScanCarveOutCount;
     let varScope_2 = new Map(varScope);
-    let y = false;
-    let x = false;
-    let u = [];
-    let h = -1;
+    let sawFunctionFlag = false;
+    let sawUpperFlag = false;
+    let argv = [];
+    let previousEnd = -1;
     for (let child of node.children) {
       if (!child) continue;
-      let p = child.startIndex === h;
-      switch (((h = child.endIndex), child.type)) {
+      let gluedToPrevious = child.startIndex === previousEnd;
+      switch (((previousEnd = child.endIndex), child.type)) {
         case "export":
         case "local":
         case "readonly":
         case "declare":
         case "typeset":
-          u.push(child.text);
+          argv.push(child.text);
           break;
         case "word":
         case "number":
         case "raw_string":
         case "string":
         case "concatenation": {
-          if (p)
+          if (gluedToPrevious)
             return {
               kind: "too-complex",
-              reason: `${u[0] ?? "declaration"} operand is split across adjacent quoted segments \u2014 the shell joins them into one word the analyzer cannot verify`,
+              reason: `${argv[0] ?? "declaration"} operand is split across adjacent quoted segments \u2014 the shell joins them into one word the analyzer cannot verify`,
               differential: true,
             };
-          let g = walkArgument(child, commands, varScope_2, bareAssignmentNames);
-          if (typeof g !== "string") return g;
-          if (/^[+-].*m/.test(g))
+          let word = walkArgument(child, commands, varScope_2, bareAssignmentNames);
+          if (typeof word !== "string") return word;
+          if (/^[+-].*m/.test(word))
             return {
               kind: "too-complex",
-              reason: `${u[0]} flag ${g} \u2014 zsh -m/+m pattern-assigns every matching variable; cannot statically model target set`,
+              reason: `${argv[0]} flag ${word} \u2014 zsh -m/+m pattern-assigns every matching variable; cannot statically model target set`,
               nodeType: "declaration_command",
             };
-          if (u[0] === "declare" || u[0] === "typeset" || u[0] === "local" || u[0] === "readonly") {
-            if (/^[+-].*f/.test(g)) y = true;
-            if (/^[+-].*[uU]/.test(g)) x = true;
-            if (y && x)
+          if (
+            argv[0] === "declare" ||
+            argv[0] === "typeset" ||
+            argv[0] === "local" ||
+            argv[0] === "readonly"
+          ) {
+            if (/^[+-].*f/.test(word)) sawFunctionFlag = true;
+            if (/^[+-].*[uU]/.test(word)) sawUpperFlag = true;
+            if (sawFunctionFlag && sawUpperFlag)
               return {
                 kind: "too-complex",
-                reason: `${u[0]} with both -f and -u/-U flags \u2014 zsh marks a function for autoload (synonym of 'autoload'), creating a function from file contents at call time`,
+                reason: `${argv[0]} with both -f and -u/-U flags \u2014 zsh marks a function for autoload (synonym of 'autoload'), creating a function from file contents at call time`,
                 nodeType: "declaration_command",
               };
           }
           if (
-            (u[0] === "declare" || u[0] === "typeset" || u[0] === "local") &&
-            DECLARE_SEMANTIC_FLAG_RE.test(g)
+            (argv[0] === "declare" || argv[0] === "typeset" || argv[0] === "local") &&
+            DECLARE_SEMANTIC_FLAG_RE.test(word)
           )
             return {
               kind: "too-complex",
-              reason: `declare flag ${g} changes assignment semantics (nameref/integer/float/array/width-truncation/case-conversion)`,
+              reason: `declare flag ${word} changes assignment semantics (nameref/integer/float/array/width-truncation/case-conversion)`,
               ...(areDeclareArgsSimple(node)
                 ? {
                     nodeType: "declaration_command",
@@ -1559,16 +1690,20 @@ function collectCommands(node, commands, varScope, bareAssignmentNames, isProgra
                     differential: true,
                   }),
             };
-          if ((u[0] === "export" || u[0] === "readonly") && isSetFlagWithA(g) && !areDeclareArgsSimple(node))
+          if (
+            (argv[0] === "export" || argv[0] === "readonly") &&
+            isSetFlagWithA(word) &&
+            !areDeclareArgsSimple(node)
+          )
             return {
               kind: "too-complex",
-              reason: `${u[0]} flag ${g} with an operand bash would evaluate as a compound array assignment`,
+              reason: `${argv[0]} flag ${word} with an operand bash would evaluate as a compound array assignment`,
               differential: true,
             };
-          if ((u[0] === "export" || u[0] === "readonly") && /^[+-].*[iluEFLRZ]/.test(g))
+          if ((argv[0] === "export" || argv[0] === "readonly") && /^[+-].*[iluEFLRZ]/.test(word))
             return {
               kind: "too-complex",
-              reason: `${u[0]} flag ${g} \u2014 zsh bin_typeset mathevals (-i/-E/-F), width-truncates (-L/-R/-Z), or case-converts (-l/-u) the assigned value`,
+              reason: `${argv[0]} flag ${word} \u2014 zsh bin_typeset mathevals (-i/-E/-F), width-truncates (-L/-R/-Z), or case-converts (-l/-u) the assigned value`,
               ...(areDeclareArgsSimple(node)
                 ? {
                     nodeType: "declaration_command",
@@ -1577,136 +1712,136 @@ function collectCommands(node, commands, varScope, bareAssignmentNames, isProgra
                     differential: true,
                   }),
             };
-          if (/^[+-].*T/.test(g))
+          if (/^[+-].*T/.test(word))
             return {
               kind: "too-complex",
-              reason: `${u[0]} -T creates a user-defined zsh tied pair \u2014 tracked literals for its operands are unreliable`,
+              reason: `${argv[0]} -T creates a user-defined zsh tied pair \u2014 tracked literals for its operands are unreliable`,
               nodeType: "declaration_command",
             };
           if (
-            (u[0] === "declare" || u[0] === "typeset" || u[0] === "local" || u[0] === "export") &&
-            g[0] !== "-" &&
-            /^[^=]*\[/.test(g)
+            (argv[0] === "declare" || argv[0] === "typeset" || argv[0] === "local" || argv[0] === "export") &&
+            word[0] !== "-" &&
+            /^[^=]*\[/.test(word)
           )
             return {
               kind: "too-complex",
-              reason: `${u[0]} positional '${g}' contains array subscript \u2014 zsh/bash evaluate $(cmd) in subscripts`,
+              reason: `${argv[0]} positional '${word}' contains array subscript \u2014 zsh/bash evaluate $(cmd) in subscripts`,
               differential: true,
             };
           if (
-            (u[0] === "declare" || u[0] === "typeset" || u[0] === "local") &&
-            !/^[-+]/.test(g) &&
+            (argv[0] === "declare" || argv[0] === "typeset" || argv[0] === "local") &&
+            !/^[-+]/.test(word) &&
             !isSafeDeclarationArg(
               child,
-              u.some((_) => /^[-+][A-Za-z]*[fF]/.test(_)),
+              argv.some((existingFlag) => /^[-+][A-Za-z]*[fF]/.test(existingFlag)),
             )
           )
             return {
               kind: "too-complex",
-              reason: `${u[0]} operand '${child.text}' is not a plain NAME with an inert value \u2014 the shell may re-parse it as a subscript, an expanded name or a compound assignment`,
+              reason: `${argv[0]} operand '${child.text}' is not a plain NAME with an inert value \u2014 the shell may re-parse it as a subscript, an expanded name or a compound assignment`,
               differential: true,
             };
-          if (g[0] !== "-") {
-            let index = g.indexOf("=");
+          if (word[0] !== "-") {
+            let index = word.indexOf("=");
             if (index > 0) {
-              let sliced = g.slice(0, index);
+              let sliced = word.slice(0, index);
               if (/^[A-Za-z_][A-Za-z0-9_]*\+?$/.test(sliced)) {
-                let k = sliced.endsWith("+");
-                let A = k ? sliced.slice(0, -1) : sliced;
-                let R = c(A, g.slice(index + 1));
-                if (R) return R;
+                let isAppend = sliced.endsWith("+");
+                let varName = isAppend ? sliced.slice(0, -1) : sliced;
+                let refusal = checkArithmetic(varName, word.slice(index + 1));
+                if (refusal) return refusal;
                 applyVarToScope(
                   varScope,
                   {
-                    name: A,
-                    value: g.slice(index + 1),
-                    isAppend: k,
+                    name: varName,
+                    value: word.slice(index + 1),
+                    isAppend,
                   },
-                  n > 0,
+                  commandsBefore > 0,
                 );
-                bareAssignmentNames.push(A);
+                bareAssignmentNames.push(varName);
               }
             }
           }
-          u.push(g);
+          argv.push(word);
           break;
         }
         case "variable_assignment": {
           if (
-            (u[0] === "declare" || u[0] === "typeset" || u[0] === "local") &&
+            (argv[0] === "declare" || argv[0] === "typeset" || argv[0] === "local") &&
             !isSafeDeclarationArg(
               child,
-              u.some((b) => /^[-+][A-Za-z]*[fF]/.test(b)),
+              argv.some((existingFlag) => /^[-+][A-Za-z]*[fF]/.test(existingFlag)),
             )
           )
             return {
               kind: "too-complex",
-              reason: `${u[0]} operand '${child.text}' is not a plain NAME with an inert value \u2014 the shell may re-parse it as a subscript, an expanded name or a compound assignment`,
+              reason: `${argv[0]} operand '${child.text}' is not a plain NAME with an inert value \u2014 the shell may re-parse it as a subscript, an expanded name or a compound assignment`,
               differential: true,
             };
           let assignment = walkVariableAssignment(child, commands, varScope_2, bareAssignmentNames);
           if ("kind" in assignment) return assignment;
-          let _ = c(assignment.name, assignment.value);
-          if (_) return _;
-          applyVarToScope(varScope, assignment, n > 0);
+          let refusal = checkArithmetic(assignment.name, assignment.value);
+          if (refusal) return refusal;
+          applyVarToScope(varScope, assignment, commandsBefore > 0);
           bareAssignmentNames.push(assignment.name);
-          u.push(`${assignment.name}=${assignment.value}`);
+          argv.push(`${assignment.name}=${assignment.value}`);
           break;
         }
         case "variable_name": {
           let text = child.text;
           if (
-            (u[0] === "declare" || u[0] === "typeset" || u[0] === "local" || u[0] === "export") &&
+            (argv[0] === "declare" || argv[0] === "typeset" || argv[0] === "local" || argv[0] === "export") &&
             text[0] !== "-" &&
             /^[^=]*\[/.test(text)
           )
             return {
               kind: "too-complex",
-              reason: `${u[0]} positional '${text}' contains array subscript \u2014 backslash-escaped form de-escapes to [$(cmd)] at runtime`,
+              reason: `${argv[0]} positional '${text}' contains array subscript \u2014 backslash-escaped form de-escapes to [$(cmd)] at runtime`,
               differential: true,
             };
-          let any = u.some((b) => /^-[A-Za-z]*[fF]/.test(b));
+          let any = argv.some((existingFlag) => /^-[A-Za-z]*[fF]/.test(existingFlag));
           if (!PLAIN_VAR_NAME_RE.test(text) && !(any && FUNCTION_NAME_RE.test(text)))
             return {
               kind: "too-complex",
-              reason: `${u[0]} operand '${text}' is not a plain variable name \u2014 the shell may turn it into an assignment the parser did not see`,
+              reason: `${argv[0]} operand '${text}' is not a plain variable name \u2014 the shell may turn it into an assignment the parser did not see`,
               differential: true,
             };
-          u.push(text);
+          argv.push(text);
           break;
         }
         case "ansi_c_string":
           return {
             kind: "too-complex",
-            reason: `${u[0] ?? "declaration"} operand ${child.text} \u2014 a $'\u2026' word the shell decodes, which may carry a subscript the parser cannot read`,
+            reason: `${argv[0] ?? "declaration"} operand ${child.text} \u2014 a $'\u2026' word the shell decodes, which may carry a subscript the parser cannot read`,
             differential: true,
           };
         default:
           return tooComplex(child);
       }
     }
-    let d = checkDeclarationOptions(u[0] ?? "", u.slice(1));
-    if (d !== null && !readingDivergentShapes)
+    let refusal = checkDeclarationOptions(argv[0] ?? "", argv.slice(1));
+    if (refusal !== null && !readingDivergentShapes)
       return {
         kind: "too-complex",
-        reason: d,
+        reason: refusal,
         divergentShape: true,
         ...(areDeclareArgsSimple(node) && {
           nodeType: "declaration_command",
         }),
       };
     commands.push({
-      argv: u,
+      argv,
       envVars: [],
       redirects: [],
       text: node.text,
       hasUnquotedGlob: hasUnquotedGlob(node.text),
-      carveOutMayDesyncQuoteScan: quoteScanCarveOutCount !== l,
+      carveOutMayDesyncQuoteScan: quoteScanCarveOutCount !== carveOutsBefore,
     });
     return null;
   }
   if (node.type === "variable_assignment") {
-    let n = commands.length;
+    let commandsBefore = commands.length;
     let assignment = walkVariableAssignment(node, commands, varScope, bareAssignmentNames);
     if ("kind" in assignment) return assignment;
     if (isExecInfluencingVar(assignment.name))
@@ -1721,10 +1856,10 @@ function collectCommands(node, commands, varScope, bareAssignmentNames, isProgra
         reason: `${assignment.name} has integer attribute \u2014 assignment arith-evals RHS, which can execute subscript command substitution or abort/diverge at runtime`,
         nodeType: "variable_assignment",
       };
-    applyVarToScope(varScope, assignment, n > 0);
+    applyVarToScope(varScope, assignment, commandsBefore > 0);
     bareAssignmentNames.push(assignment.name);
     if (
-      commands.length === n &&
+      commands.length === commandsBefore &&
       (containsArithmeticExpansion(node) || BASH_READONLY_SPECIAL_VARS.has(assignment.name))
     )
       pushTrueCommand(commands, node);
@@ -1736,8 +1871,8 @@ function collectCommands(node, commands, varScope, bareAssignmentNames, isProgra
     if ("kind" in loopWrites) return loopWrites;
     let loopVar = null;
     let doGroup = null;
-    let l = commands.length;
-    let f = false;
+    let commandsBefore = commands.length;
+    let needsTrueCommand = false;
     for (let child of node.children) {
       if (!child) continue;
       if (child.type === "variable_name") loopVar = child.text;
@@ -1755,9 +1890,9 @@ function collectCommands(node, commands, varScope, bareAssignmentNames, isProgra
       } else {
         let arg = walkArgument(child, commands, varScope, bareAssignmentNames);
         if (typeof arg !== "string") return arg;
-        if (containsArithmeticExpansion(child)) f = true;
+        if (containsArithmeticExpansion(child)) needsTrueCommand = true;
         else if ((hasUnquotedGlob(child.text) || nodeHasUnquotedGlob(child)) && isVastPuddleEnabled())
-          f = true;
+          needsTrueCommand = true;
       }
     }
     if (loopVar === null || doGroup === null) return tooComplex(node);
@@ -1776,11 +1911,11 @@ function collectCommands(node, commands, varScope, bareAssignmentNames, isProgra
         reason: `${loopVar} as loop variable bypasses assignment validation`,
         nodeType: "for_statement",
       };
-    let y = varScope.get(loopVar);
-    if (y !== undefined && !containsAnyPlaceholder(y))
+    let trackedValue = varScope.get(loopVar);
+    if (trackedValue !== undefined && !containsAnyPlaceholder(trackedValue))
       return {
         kind: "too-complex",
-        reason: `for-loop variable '${loopVar}' would overwrite tracked literal ${JSON.stringify(y.slice(0, 40))}; post-loop value cannot be statically determined`,
+        reason: `for-loop variable '${loopVar}' would overwrite tracked literal ${JSON.stringify(trackedValue.slice(0, 40))}; post-loop value cannot be statically determined`,
         nodeType: "for_statement",
       };
     varScope.delete(loopVar);
@@ -1796,22 +1931,22 @@ function collectCommands(node, commands, varScope, bareAssignmentNames, isProgra
       if (err) return err;
     }
     mergeScopeInto(varScope, bodyScope);
-    if (f && commands.length === l) pushTrueCommand(commands, node);
+    if (needsTrueCommand && commands.length === commandsBefore) pushTrueCommand(commands, node);
     return null;
   }
   if (node.type === "if_statement" || node.type === "while_statement") {
     if (isLoopBlockedByEnvScrub(node)) return tooComplex(node);
-    let n = null;
-    let i = null;
+    let keysBeforeLoop = null;
+    let scopeBeforeCondition = null;
     if (node.type === "while_statement") {
       let loopWrites = collectLoopWrites(node, commands, varScope, bareAssignmentNames);
       if ("kind" in loopWrites) return loopWrites;
-      n = new Set(varScope.keys());
-      i = new Map(varScope);
+      keysBeforeLoop = new Set(varScope.keys());
+      scopeBeforeCondition = new Map(varScope);
       markLoopWritesUnknown(varScope, node);
       for (let loopWrite of loopWrites) {
         markVarUnknown(varScope, loopWrite);
-        markVarUnknown(i, loopWrite);
+        markVarUnknown(scopeBeforeCondition, loopWrite);
       }
     }
     let seenThen = false;
@@ -1860,40 +1995,40 @@ function collectCommands(node, commands, varScope, bareAssignmentNames, isProgra
         mergeScopeInto(varScope, branchScope);
         continue;
       }
-      let f = new Map(varScope);
+      let branchScope = new Map(varScope);
       let before = commands.length;
-      let err = collectCommands(child, commands, f, bareAssignmentNames);
+      let err = collectCommands(child, commands, branchScope, bareAssignmentNames);
       if (err) return err;
       if (!seenThen) {
-        for (let [u, h] of f) {
-          let d = (i ?? varScope).get(u);
-          if (d !== undefined && !containsAnyPlaceholder(d) && h !== d)
+        for (let [key, value] of branchScope) {
+          let trackedValue = (scopeBeforeCondition ?? varScope).get(key);
+          if (trackedValue !== undefined && !containsAnyPlaceholder(trackedValue) && value !== trackedValue)
             return {
               kind: "too-complex",
-              reason: `'${u}' was tracked as literal '${d}' but condition may modify it (||/pipeline/unset/&&-short-circuit) \u2014 cannot prove downstream value`,
+              reason: `'${key}' was tracked as literal '${trackedValue}' but condition may modify it (||/pipeline/unset/&&-short-circuit) \u2014 cannot prove downstream value`,
               nodeType: node.type,
             };
-          if (d?.includes(UNCERTAIN_VAR_PLACEHOLDER) === true && h !== d) {
-            varScope.set(u, d);
+          if (trackedValue?.includes(UNCERTAIN_VAR_PLACEHOLDER) === true && value !== trackedValue) {
+            varScope.set(key, trackedValue);
             continue;
           }
-          varScope.set(u, h);
+          varScope.set(key, value);
         }
         for (let key of varScope.keys())
-          if (!f.has(key)) {
-            let h = (i ?? varScope).get(key);
-            if (h !== undefined && !containsAnyPlaceholder(h))
+          if (!branchScope.has(key)) {
+            let trackedValue = (scopeBeforeCondition ?? varScope).get(key);
+            if (trackedValue !== undefined && !containsAnyPlaceholder(trackedValue))
               return {
                 kind: "too-complex",
-                reason: `'${key}' was tracked as literal '${h}' but condition may unset it (&&-short-circuit) \u2014 cannot prove downstream value`,
+                reason: `'${key}' was tracked as literal '${trackedValue}' but condition may unset it (&&-short-circuit) \u2014 cannot prove downstream value`,
                 nodeType: node.type,
               };
             markVarUnknown(varScope, key);
           }
         for (let i = before; i < commands.length; i++) {
-          let h = commands[i];
-          if (h?.argv[0] === "read" && !isBashReadingMode()) {
-            for (let arg of h.argv.slice(1))
+          let command = commands[i];
+          if (command?.argv[0] === "read" && !isBashReadingMode()) {
+            for (let arg of command.argv.slice(1))
               if (!arg.startsWith("-") && /^[A-Za-z_][A-Za-z0-9_]*$/.test(arg)) {
                 let existing = varScope.get(arg);
                 if (existing !== undefined && !containsAnyPlaceholder(existing))
@@ -1904,47 +2039,47 @@ function collectCommands(node, commands, varScope, bareAssignmentNames, isProgra
                   };
                 markVarUnknown(varScope, arg);
               }
-            let d = varScope.get("REPLY");
-            if (d !== undefined && !containsAnyPlaceholder(d))
+            let trackedReply = varScope.get("REPLY");
+            if (trackedReply !== undefined && !containsAnyPlaceholder(trackedReply))
               return {
                 kind: "too-complex",
-                reason: `'read' in condition may write stdin to REPLY; cannot prove it overwrites tracked literal '${d}'`,
+                reason: `'read' in condition may write stdin to REPLY; cannot prove it overwrites tracked literal '${trackedReply}'`,
                 nodeType: node.type,
               };
             markVarUnknown(varScope, "REPLY");
           }
         }
-      } else mergeScopeInto(varScope, f);
+      } else mergeScopeInto(varScope, branchScope);
     }
-    if (n !== null) {
-      for (let key of [...varScope.keys()]) if (!n.has(key)) varScope.delete(key);
+    if (keysBeforeLoop !== null) {
+      for (let key of [...varScope.keys()]) if (!keysBeforeLoop.has(key)) varScope.delete(key);
     }
     return null;
   }
   if (node.type === "subshell") {
     let innerScope = new Map(varScope);
-    let i = commands.length;
-    let c = false;
+    let commandsBefore = commands.length;
+    let sawContent = false;
     for (let child of node.children) {
       if (!child) continue;
       if (child.type === "(" || child.type === ")") continue;
-      if (child.type !== "comment") c = true;
+      if (child.type !== "comment") sawContent = true;
       let err = collectCommands(child, commands, innerScope, bareAssignmentNames);
       if (err) return err;
     }
-    if (c && commands.length === i) pushTrueCommand(commands, node);
+    if (sawContent && commands.length === commandsBefore) pushTrueCommand(commands, node);
     return null;
   }
   if (node.type === "test_command") {
-    let isDoubleBracket = node.children.some((child) => child?.type === "[[");
-    let testCommandGap = findTestCommandGap(node, isDoubleBracket);
+    let any = node.children.some((child) => child?.type === "[[");
+    let testCommandGap = findTestCommandGap(node, any);
     if (testCommandGap) return testCommandGap;
     let argv = ["[["];
-    let l = quoteScanCarveOutCount;
+    let carveOutsBefore = quoteScanCarveOutCount;
     for (let child of node.children) {
       if (!child) continue;
       if (child.type === "[[" || child.type === "]]" || child.type === "[" || child.type === "]") continue;
-      let err = walkTestExpr(child, argv, commands, varScope, bareAssignmentNames, isDoubleBracket);
+      let err = walkTestExpr(child, argv, commands, varScope, bareAssignmentNames, any);
       if (err) return err;
     }
     commands.push({
@@ -1953,40 +2088,40 @@ function collectCommands(node, commands, varScope, bareAssignmentNames, isProgra
       redirects: [],
       text: node.text,
       hasUnquotedGlob: hasUnquotedGlob(node.text),
-      carveOutMayDesyncQuoteScan: quoteScanCarveOutCount !== l,
+      carveOutMayDesyncQuoteScan: quoteScanCarveOutCount !== carveOutsBefore,
     });
     return null;
   }
   if (node.type === "unset_command") {
-    let n = [];
-    let i = quoteScanCarveOutCount;
+    let argv = [];
+    let carveOutsBefore = quoteScanCarveOutCount;
     let hasPriorCommands = commands.length > 0;
-    let l = false;
-    let f = false;
-    let y = false;
+    let sawFunctionFlag = false;
+    let sawOperand = false;
+    let isUnsetenv = false;
     for (let child of node.children) {
       if (!child) continue;
       switch (child.type) {
         case "unset":
-          n.push(child.text);
-          y = child.text === "unsetenv";
+          argv.push(child.text);
+          isUnsetenv = child.text === "unsetenv";
           break;
         case "variable_name":
-          if (!PLAIN_VAR_NAME_RE.test(child.text) && !(l && FUNCTION_NAME_RE.test(child.text)))
+          if (!PLAIN_VAR_NAME_RE.test(child.text) && !(sawFunctionFlag && FUNCTION_NAME_RE.test(child.text)))
             return {
               kind: "too-complex",
-              reason: `${n[0] ?? "unset"} operand '${child.text}' is not a plain variable name \u2014 the shell may expand or evaluate it`,
+              reason: `${argv[0] ?? "unset"} operand '${child.text}' is not a plain variable name \u2014 the shell may expand or evaluate it`,
               differential: true,
             };
-          n.push(child.text);
-          f = true;
-          if (l || y) {
-            let u = uncertainValueResult(
+          argv.push(child.text);
+          sawOperand = true;
+          if (sawFunctionFlag || isUnsetenv) {
+            let refusal = uncertainValueResult(
               varScope.get(child.text),
               `'${child.text}' no longer has a statically known value at this unset \u2014 cannot verify what the command leaves behind`,
               "unset_command",
             );
-            if (u !== null) return u;
+            if (refusal !== null) return refusal;
             break;
           }
           if (isAssignmentNameUnsafeForSandbox(child.text))
@@ -2001,22 +2136,22 @@ function collectCommands(node, commands, varScope, bareAssignmentNames, isProgra
           let name = walkArgument(child, commands, varScope, bareAssignmentNames);
           if (typeof name !== "string") return name;
           if (name.startsWith("-")) {
-            if (f) return tooComplex(child);
+            if (sawOperand) return tooComplex(child);
             if (name !== "-f" && name !== "-v") return tooComplex(child);
-            if (name === "-f") l = true;
-            n.push(name);
+            if (name === "-f") sawFunctionFlag = true;
+            argv.push(name);
             break;
           }
           if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) return tooComplex(child);
-          n.push(name);
-          f = true;
-          if (l || y) {
-            let h = uncertainValueResult(
+          argv.push(name);
+          sawOperand = true;
+          if (sawFunctionFlag || isUnsetenv) {
+            let refusal = uncertainValueResult(
               varScope.get(name),
               `'${name}' no longer has a statically known value at this unset \u2014 cannot verify what the command leaves behind`,
               "unset_command",
             );
-            if (h !== null) return h;
+            if (refusal !== null) return refusal;
             break;
           }
           if (isAssignmentNameUnsafeForSandbox(name))
@@ -2035,7 +2170,7 @@ function collectCommands(node, commands, varScope, bareAssignmentNames, isProgra
           if (/\[/.test(child.text) || child.type === "ansi_c_string")
             return {
               kind: "too-complex",
-              reason: `${n[0] ?? "unset"} operand ${child.text} carries a subscript \u2014 bash and zsh evaluate $(cmd) inside it`,
+              reason: `${argv[0] ?? "unset"} operand ${child.text} carries a subscript \u2014 bash and zsh evaluate $(cmd) inside it`,
               differential: true,
             };
           return tooComplex(child);
@@ -2044,60 +2179,63 @@ function collectCommands(node, commands, varScope, bareAssignmentNames, isProgra
       }
     }
     commands.push({
-      argv: n,
+      argv,
       envVars: [],
       redirects: [],
       text: node.text,
       hasUnquotedGlob: hasUnquotedGlob(node.text),
-      carveOutMayDesyncQuoteScan: quoteScanCarveOutCount !== i,
+      carveOutMayDesyncQuoteScan: quoteScanCarveOutCount !== carveOutsBefore,
     });
     return null;
   }
   return tooComplex(node);
 }
 //@ chunk-r01896cg.js:38155-38260 fingerprint = walkTestExpr (0.752)
-var TEST_EXPRESSION_TYPES = new Set([
-  "unary_expression",
-  "binary_expression",
-  "negated_expression",
-  "parenthesized_expression",
-]);
+var TEST_EXPRESSION_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-r01896cg.js:38155", () => {
+  TEST_EXPRESSION_TYPES = new Set([
+    "unary_expression",
+    "binary_expression",
+    "negated_expression",
+    "parenthesized_expression",
+  ]);
+});
 //@ chunk-r01896cg.js:38260-38497 layout
-function isBlankTestGap(e, t) {
-  let r = 0;
-  while (r < e.length) {
-    let s = e[r];
-    if (s === " " || s === "\t") {
-      r++;
+function isBlankTestGap(text, allowComments) {
+  let index = 0;
+  while (index < text.length) {
+    let char = text[index];
+    if (char === " " || char === "\t") {
+      index++;
       continue;
     }
     if (
-      s === "\\" &&
-      e[r + 1] ===
+      char === "\\" &&
+      text[index + 1] ===
         `
 `
     ) {
-      r += 2;
+      index += 2;
       continue;
     }
     if (
-      t &&
-      s ===
+      allowComments &&
+      char ===
         `
 `
     ) {
-      r++;
+      index++;
       continue;
     }
-    if (t && s === "#") {
-      r++;
+    if (allowComments && char === "#") {
+      index++;
       while (
-        r < e.length &&
-        e[r] !==
+        index < text.length &&
+        text[index] !==
           `
 `
       )
-        r++;
+        index++;
       continue;
     }
     return false;
@@ -2105,14 +2243,16 @@ function isBlankTestGap(e, t) {
   return true;
 }
 //@ chunk-r01896cg.js:38497-39147 layout
-function findTestCommandGap(e, t) {
-  let buffer = Buffer.from(e.text, "utf8");
-  let startIndex = e.startIndex;
-  for (let child of e.children) {
+function findTestCommandGap(node, allowComments) {
+  let buffer = Buffer.from(node.text, "utf8");
+  let startIndex = node.startIndex;
+  for (let child of node.children) {
     if (!child) continue;
     if (child.startIndex > startIndex) {
-      let str = buffer.subarray(startIndex - e.startIndex, child.startIndex - e.startIndex).toString("utf8");
-      if (!isBlankTestGap(str, t))
+      let text = buffer
+        .subarray(startIndex - node.startIndex, child.startIndex - node.startIndex)
+        .toString("utf8");
+      if (!isBlankTestGap(text, allowComments))
         return {
           kind: "too-complex",
           reason:
@@ -2121,13 +2261,13 @@ function findTestCommandGap(e, t) {
     }
     startIndex = Math.max(startIndex, child.endIndex);
     if (TEST_EXPRESSION_TYPES.has(child.type)) {
-      let testCommandGap = findTestCommandGap(child, t);
+      let testCommandGap = findTestCommandGap(child, allowComments);
       if (testCommandGap) return testCommandGap;
     }
   }
-  if (startIndex < e.endIndex) {
-    let str = buffer.subarray(startIndex - e.startIndex).toString("utf8");
-    if (!isBlankTestGap(str, t))
+  if (startIndex < node.endIndex) {
+    let text = buffer.subarray(startIndex - node.startIndex).toString("utf8");
+    if (!isBlankTestGap(text, allowComments))
       return {
         kind: "too-complex",
         reason:
@@ -2138,31 +2278,32 @@ function findTestCommandGap(e, t) {
 }
 //@ chunk-r01896cg.js:39147-39491 layout
 function hasZshEqualsProcSubst(text) {
-  let t = false;
-  let r = false;
-  let s = false;
-  let o = 0;
-  let n;
-  for (let i = 0; i < text.length; i++) {
-    let c = text[i];
-    if (!t && c === "\\") {
-      i++;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let sawSeparator = false;
+  let parenDepth = 0;
+  let prevChar;
+  for (let index = 0; index < text.length; index++) {
+    let char = text[index];
+    if (!inSingleQuote && char === "\\") {
+      index++;
       continue;
     }
-    if (!r && c === "'") {
-      t = !t;
+    if (!inDoubleQuote && char === "'") {
+      inSingleQuote = !inSingleQuote;
       continue;
     }
-    if (!t && c === '"') {
-      r = !r;
+    if (!inSingleQuote && char === '"') {
+      inDoubleQuote = !inDoubleQuote;
       continue;
     }
-    if (!t && !r) {
-      if (c === "=" && text[i + 1] === "(" && (s || i === 0 || n === "|")) return true;
-      if (c === "(") o++;
-      else if (c === ")") o = Math.max(0, o - 1);
-      else if (o === 0 && (c === "|" || c === "&") && n === c) s = true;
-      n = c;
+    if (!inSingleQuote && !inDoubleQuote) {
+      if (char === "=" && text[index + 1] === "(" && (sawSeparator || index === 0 || prevChar === "|"))
+        return true;
+      if (char === "(") parenDepth++;
+      else if (char === ")") parenDepth = Math.max(0, parenDepth - 1);
+      else if (parenDepth === 0 && (char === "|" || char === "&") && prevChar === char) sawSeparator = true;
+      prevChar = char;
     }
   }
   return false;
@@ -2173,12 +2314,12 @@ function hasZshEqualsProcSubst(text) {
  */
 function containsStandaloneCondCloser(text) {
   let replaced = text.replace(/\[(?::[a-zA-Z]+:|=[A-Za-z0-9-]*=|\.[A-Za-z0-9-]*\.|[!^]?)\]\](?!\])/g, "\x00");
-  let r = /[A-Za-z0-9_]/;
+  let isWordChar = /[A-Za-z0-9_]/;
   let index = replaced.indexOf("]]");
   while (index !== -1) {
-    let o = index > 0 ? replaced[index - 1] : "";
-    let n = index + 2 < replaced.length ? replaced[index + 2] : "";
-    if (!(r.test(o) && r.test(n))) return true;
+    let prevChar = index > 0 ? replaced[index - 1] : "";
+    let nextChar = index + 2 < replaced.length ? replaced[index + 2] : "";
+    if (!(isWordChar.test(prevChar) && isWordChar.test(nextChar))) return true;
     index = replaced.indexOf("]]", index + 1);
   }
   return false;
@@ -2192,29 +2333,40 @@ var ZSH_SPECIAL_SUBSCRIPT_TESTEXPR_RE = /^([\w\u0080-\uffff]*|[-?*@!#$])(\[|:[a-
  */
 function walkTestExpr(node, argv, innerCommands, varScope, bareAssignmentNames, isDoubleBracket) {
   if (TEST_EXPRESSION_TYPES.has(node.type)) {
-    for (let i = 0; i < node.children.length; i++) {
-      let node_2 = node.children[i];
+    for (let childIndex = 0; childIndex < node.children.length; childIndex++) {
+      let node_2 = node.children[childIndex];
       if (!node_2) continue;
       if (
         (node_2.type === "simple_expansion" || node_2.type === "expansion") &&
-        (node.children[i + 1]?.text.startsWith("[") ||
-          /^:[a-zA-Z&]/.test(node.children[i + 1]?.text ?? "") ||
+        (node.children[childIndex + 1]?.text.startsWith("[") ||
+          /^:[a-zA-Z&]/.test(node.children[childIndex + 1]?.text ?? "") ||
           (node_2.children.some((child) => child?.type === "special_variable_name") &&
-            ZSH_SPECIAL_SUBSCRIPT_TESTEXPR_RE.test(node.children[i + 1]?.text ?? "")))
+            ZSH_SPECIAL_SUBSCRIPT_TESTEXPR_RE.test(node.children[childIndex + 1]?.text ?? "")))
       )
         return {
           kind: "too-complex",
           reason: "zsh $name[expr] / $name:mod in [[ ]] operand \u2014 recursive eval",
           differential: true,
         };
-      if (isDoubleBracket && node_2.type === "!" && node.children[i + 1]?.startIndex === node_2.endIndex)
+      if (
+        isDoubleBracket &&
+        node_2.type === "!" &&
+        node.children[childIndex + 1]?.startIndex === node_2.endIndex
+      )
         return {
           kind: "too-complex",
           reason: "zsh reads !( in [[ ]] as part of a word",
           differential: true,
         };
-      let l = walkTestExpr(node_2, argv, innerCommands, varScope, bareAssignmentNames, isDoubleBracket);
-      if (l) return l;
+      let childError = walkTestExpr(
+        node_2,
+        argv,
+        innerCommands,
+        varScope,
+        bareAssignmentNames,
+        isDoubleBracket,
+      );
+      if (childError) return childError;
     }
     return null;
   }
@@ -2255,66 +2407,66 @@ function walkTestExpr(node, argv, innerCommands, varScope, bareAssignmentNames, 
         };
       if (node.type === "extglob_pattern") {
         let text = node.text;
-        let c = 0;
-        while (c < text.length) {
-          if (text[c] === "\\" && c + 1 < text.length) {
-            c += 2;
+        let patternIndex = 0;
+        while (patternIndex < text.length) {
+          if (text[patternIndex] === "\\" && patternIndex + 1 < text.length) {
+            patternIndex += 2;
             continue;
           }
-          if (text[c] === "&")
+          if (text[patternIndex] === "&")
             return {
               kind: "too-complex",
               reason: "[[ ]] pattern contains unquoted & (zsh splits the word at & at any depth)",
               differential: true,
             };
-          c++;
+          patternIndex++;
         }
       }
       if (node.type === "regex") {
         let text = node.text;
-        let c = 0;
-        let l = 0;
-        while (l < text.length) {
-          let f = text[l];
-          if (f === "\\" && l + 1 < text.length) {
-            l += 2;
+        let parenDepth = 0;
+        let charIndex = 0;
+        while (charIndex < text.length) {
+          let char = text[charIndex];
+          if (char === "\\" && charIndex + 1 < text.length) {
+            charIndex += 2;
             continue;
           }
-          if (c === 0 && f === "|" && text[l + 1] === f)
+          if (parenDepth === 0 && char === "|" && text[charIndex + 1] === char)
             return {
               kind: "too-complex",
               reason: "[[ ]] regex contains glued || (zsh splits it as a cond operator)",
               differential: true,
             };
-          if (f === "&")
+          if (char === "&")
             return {
               kind: "too-complex",
               reason: "[[ ]] regex contains unquoted & (zsh splits the word at & at any depth)",
               differential: true,
             };
-          if (f === '"' || f === "'") {
-            let y = f;
-            l++;
-            while (l < text.length && text[l] !== y) {
-              if (y === '"' && text[l] === "\\" && l + 1 < text.length) l++;
-              l++;
+          if (char === '"' || char === "'") {
+            let quoteChar = char;
+            charIndex++;
+            while (charIndex < text.length && text[charIndex] !== quoteChar) {
+              if (quoteChar === '"' && text[charIndex] === "\\" && charIndex + 1 < text.length) charIndex++;
+              charIndex++;
             }
-            if (l < text.length) l++;
+            if (charIndex < text.length) charIndex++;
             continue;
           }
-          if (f === "(") c++;
-          else if (f === ")") {
-            c--;
-            if (c < 0)
+          if (char === "(") parenDepth++;
+          else if (char === ")") {
+            parenDepth--;
+            if (parenDepth < 0)
               return {
                 kind: "too-complex",
                 reason: "[[ ]] regex has unbalanced parentheses (parser desync)",
                 differential: true,
               };
           }
-          l++;
+          charIndex++;
         }
-        if (c !== 0)
+        if (parenDepth !== 0)
           return {
             kind: "too-complex",
             reason: "[[ ]] regex has unbalanced parentheses (parser desync)",
@@ -2343,20 +2495,21 @@ function walkTestExpr(node, argv, innerCommands, varScope, bareAssignmentNames, 
         reason: "Test command comparison is missing its right-hand side \u2014 parser dropped consumed bytes",
       };
     default: {
-      let i = walkArgument(node, innerCommands, varScope, bareAssignmentNames);
-      if (typeof i !== "string") {
-        if (isDoubleBracket && i.kind === "too-complex") {
-          let { nodeType, ...l } = i;
+      let argumentValue = walkArgument(node, innerCommands, varScope, bareAssignmentNames);
+      if (typeof argumentValue !== "string") {
+        if (isDoubleBracket && argumentValue.kind === "too-complex") {
+          let { nodeType, ...restResult } = argumentValue;
           return {
-            ...l,
+            ...restResult,
             differential: true,
           };
         }
-        return i;
+        return argumentValue;
       }
       if (
-        (isDoubleBracket && (containsStandaloneCondCloser(i) || containsStandaloneCondCloser(node.text))) ||
-        /]].*[;\n&|<>]/s.test(i)
+        (isDoubleBracket &&
+          (containsStandaloneCondCloser(argumentValue) || containsStandaloneCondCloser(node.text))) ||
+        /]].*[;\n&|<>]/s.test(argumentValue)
       )
         return {
           kind: "too-complex",
@@ -2365,21 +2518,23 @@ function walkTestExpr(node, argv, innerCommands, varScope, bareAssignmentNames, 
             : "test command quoted operand contains `]]`+separator bytes \u2014 possible parser quote-state desync",
           differential: true,
         };
-      argv.push(i);
+      argv.push(argumentValue);
       return null;
     }
   }
 }
 //@ chunk-r01896cg.js:43362-43617 layout
-function findUnsupportedListTail(e) {
-  let t = null;
-  for (let child of e.children) {
+function findUnsupportedListTail(node) {
+  let lastChild = null;
+  for (let child of node.children) {
     if (!child || child.type === "!" || child.type === "comment" || SEPARATOR_TYPES.has(child.type)) continue;
-    t = child;
+    lastChild = child;
   }
-  if (!t) return null;
-  if (t.type === "list" || t.type === "negated_command") return findUnsupportedListTail(t);
-  if (!REDIRECTABLE_COMMAND_TYPES.has(t.type) && !TRAILING_OK_TYPES.has(t.type)) return t;
+  if (!lastChild) return null;
+  if (lastChild.type === "list" || lastChild.type === "negated_command")
+    return findUnsupportedListTail(lastChild);
+  if (!REDIRECTABLE_COMMAND_TYPES.has(lastChild.type) && !TRAILING_OK_TYPES.has(lastChild.type))
+    return lastChild;
   return null;
 }
 //@ chunk-r01896cg.js:43617-43676 layout
@@ -2391,16 +2546,21 @@ function markVarUnknown(varScope, name) {
   varScope.set(name, VAR_PLACEHOLDER);
 }
 //@ chunk-r01896cg.js:43676-43694 layout
-var UNCERTAIN_PREFIX = `${UNCERTAIN_VAR_PLACEHOLDER}\x00`;
+var UNCERTAIN_PREFIX; // deferred: uses STRUCTURAL_TYPES of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-r01896cg.js:43676", () => {
+  UNCERTAIN_PREFIX = `${UNCERTAIN_VAR_PLACEHOLDER}\x00`;
+});
 //@ chunk-r01896cg.js:43694-43757 layout
-function stripUncertainPrefix(e) {
-  return readingDivergentShapes && e.startsWith(UNCERTAIN_PREFIX) ? e.slice(UNCERTAIN_PREFIX.length) : e;
+function stripUncertainPrefix(text) {
+  return readingDivergentShapes && text.startsWith(UNCERTAIN_PREFIX)
+    ? text.slice(UNCERTAIN_PREFIX.length)
+    : text;
 }
 //@ chunk-r01896cg.js:43757-43952 layout
-function uncertainValueResult(e, reason, nodeType) {
-  if (e === undefined) return null;
-  if (!containsAnyPlaceholder(stripUncertainPrefix(e))) return null;
-  return !readingDivergentShapes && e.includes(UNCERTAIN_VAR_PLACEHOLDER)
+function uncertainValueResult(value, reason, nodeType) {
+  if (value === undefined) return null;
+  if (!containsAnyPlaceholder(stripUncertainPrefix(value))) return null;
+  return !readingDivergentShapes && value.includes(UNCERTAIN_VAR_PLACEHOLDER)
     ? {
         kind: "too-complex",
         reason,
@@ -2424,17 +2584,18 @@ function recordUnset(varScope, name, hasPriorCommands) {
 }
 //@ chunk-r01896cg.js:44016-44179 layout
 function mergeScopeAfterConditional(varScope, snapshot) {
-  for (let [r, s] of varScope)
-    if (snapshot.get(r) !== s) {
-      if (!readingDivergentShapes && declarationPrefixValues.get(r) === s) prefixAssignInBranch = true;
+  for (let [varName, value] of varScope)
+    if (snapshot.get(varName) !== value) {
+      if (!readingDivergentShapes && declarationPrefixValues.get(varName) === value)
+        prefixAssignInBranch = true;
       sawUncertainWrite ||= readingDivergentShapes;
       varScope.set(
-        r,
+        varName,
         !readingDivergentShapes
           ? UNCERTAIN_VAR_PLACEHOLDER
-          : s.includes(UNCERTAIN_VAR_PLACEHOLDER)
-            ? s
-            : UNCERTAIN_PREFIX + s,
+          : value.includes(UNCERTAIN_VAR_PLACEHOLDER)
+            ? value
+            : UNCERTAIN_PREFIX + value,
       );
     }
   for (let key of snapshot.keys()) if (!varScope.has(key)) varScope.set(key, UNCERTAIN_VAR_PLACEHOLDER);
@@ -2462,13 +2623,13 @@ function walkRedirectedStatement(node, commands, varScope, bareAssignmentNames, 
   }
   if (!innerCommand) {
     for (let fileRedirect of fileRedirects) {
-      let p = walkFileRedirect(fileRedirect, commands, varScope, bareAssignmentNames);
-      if ("kind" in p) return p;
-      redirects.push(p);
+      let redirect = walkFileRedirect(fileRedirect, commands, varScope, bareAssignmentNames);
+      if ("kind" in redirect) return redirect;
+      redirects.push(redirect);
     }
     for (let heredocRedirect of heredocRedirects) {
-      let p = walkHeredocRedirect(heredocRedirect, varScope);
-      if (p) return p;
+      let failure = walkHeredocRedirect(heredocRedirect, varScope);
+      if (failure) return failure;
     }
     commands.push({
       argv: [],
@@ -2488,29 +2649,29 @@ function walkRedirectedStatement(node, commands, varScope, bareAssignmentNames, 
     heredocRedirects.length === 1
       ? heredocRedirects[0]?.children.find((child) => child?.type === "pipeline")
       : undefined;
-  let x;
-  let u = false;
+  let scopeBeforeInner;
+  let needsMerge = false;
   if (innerCommand.type === "list") {
     let children = innerCommand.children;
     if (children.length === 3 && children[0] && children[1]?.type === "&&" && children[2]) {
       let commands_2 = collectCommands(children[0], commands, varScope, bareAssignmentNames);
       if (commands_2) return commands_2;
-      x = new Map(varScope);
-      u = true;
+      scopeBeforeInner = new Map(varScope);
+      needsMerge = true;
       let commands_3 = collectCommands(children[2], commands, varScope, bareAssignmentNames);
       if (commands_3) return commands_3;
     } else {
       let commands_2 = collectCommands(innerCommand, commands, varScope, bareAssignmentNames);
       if (commands_2) return commands_2;
-      x = varScope;
+      scopeBeforeInner = varScope;
     }
   } else if (STRUCTURAL_TYPES.has(innerCommand.type)) {
     let commands_2 = collectCommands(innerCommand, commands, varScope, bareAssignmentNames);
     if (commands_2) return commands_2;
-    x = varScope;
+    scopeBeforeInner = varScope;
   } else {
-    x = new Map(varScope);
-    u = true;
+    scopeBeforeInner = new Map(varScope);
+    needsMerge = true;
     let commands_2 = collectCommands(
       innerCommand,
       commands,
@@ -2519,24 +2680,34 @@ function walkRedirectedStatement(node, commands, varScope, bareAssignmentNames, 
     );
     if (commands_2) return commands_2;
   }
-  if (u) mergeScopeAfterConditional(varScope, x);
+  if (needsMerge) mergeScopeAfterConditional(varScope, scopeBeforeInner);
   let command = commands.length > before ? commands.at(-1) : undefined;
-  let d = command?.envVars[0]?.name;
-  if (d !== undefined && fileRedirects.some((fileRedirect) => containsArithmeticExpansion(fileRedirect))) {
-    let m = prefixAssignmentMayFailResult(d);
-    if (m) return m;
+  let prefixVarName = command?.envVars[0]?.name;
+  if (
+    prefixVarName !== undefined &&
+    fileRedirects.some((fileRedirect) => containsArithmeticExpansion(fileRedirect))
+  ) {
+    let failure = prefixAssignmentMayFailResult(prefixVarName);
+    if (failure) return failure;
   }
   for (let fileRedirect of fileRedirects) {
-    let p = walkFileRedirect(fileRedirect, commands, x, bareAssignmentNames);
-    if ("kind" in p) return p;
-    redirects.push(p);
+    let redirect = walkFileRedirect(fileRedirect, commands, scopeBeforeInner, bareAssignmentNames);
+    if ("kind" in redirect) return redirect;
+    redirects.push(redirect);
   }
   if (command) {
-    let m = checkRedirectReadsPrefixVar(fileRedirects, command, redirects, commands, x, bareAssignmentNames);
-    if (m) return m;
+    let failure = checkRedirectReadsPrefixVar(
+      fileRedirects,
+      command,
+      redirects,
+      commands,
+      scopeBeforeInner,
+      bareAssignmentNames,
+    );
+    if (failure) return failure;
   }
   for (let heredocRedirect of heredocRedirects) {
-    let err = walkHeredocRedirect(heredocRedirect, x, trailingPipeline);
+    let err = walkHeredocRedirect(heredocRedirect, scopeBeforeInner, trailingPipeline);
     if (err) return err;
   }
   if (trailingPipeline) {
@@ -2544,8 +2715,8 @@ function walkRedirectedStatement(node, commands, varScope, bareAssignmentNames, 
     if (commands_2) return commands_2;
   }
   if (heredocRedirects.length > 0)
-    for (let m = before; m < commands.length; m++) {
-      let last = commands[m];
+    for (let index = before; index < commands.length; index++) {
+      let last = commands[index];
       if (last) last.argvSourceLiteral = false;
     }
   if (redirects.length > 0)
@@ -2595,8 +2766,8 @@ function checkFileRedirectShape(node) {
         };
     }
   }
-  let t = null;
-  let r = 0;
+  let lastOp = null;
+  let targetCount = 0;
   for (let child of node.children) {
     if (!child) continue;
     if (child.type === "variable_name")
@@ -2606,29 +2777,29 @@ function checkFileRedirectShape(node) {
       };
     if (child.type === "file_descriptor") continue;
     if (child.type === ">&-" || child.type === "<&-") {
-      t = child.type;
+      lastOp = child.type;
       continue;
     }
     if (child.type in REDIRECT_OPS) {
-      t = child.type;
+      lastOp = child.type;
       continue;
     }
-    if ((t === ">&" || t === "<&") && child.text.startsWith("-"))
+    if ((lastOp === ">&" || lastOp === "<&") && child.text.startsWith("-"))
       return {
         kind: "too-complex",
         reason:
           "Redirect target after >& or <& starts with - \u2014 bash treats the dash as close-fd and passes the rest to the command as a hidden argument",
       };
-    if (t === ">&-" || t === "<&-")
+    if (lastOp === ">&-" || lastOp === "<&-")
       return {
         kind: "too-complex",
         reason:
           "Close-fd redirect is followed by a word \u2014 bash passes it to the command as a hidden argument",
       };
-    r++;
-    t = null;
+    targetCount++;
+    lastOp = null;
   }
-  if (r > 1)
+  if (targetCount > 1)
     return {
       kind: "too-complex",
       reason: "Redirect has multiple targets \u2014 post-redirect args swallowed",
@@ -2636,48 +2807,56 @@ function checkFileRedirectShape(node) {
   return null;
 }
 //@ chunk-r01896cg.js:47196-47372 layout
-var HEREDOC_PART_TYPES = new Set([
-  "heredoc_start",
-  "heredoc_body",
-  "<<",
-  "<<-",
-  "heredoc_end",
-  "file_descriptor",
-]);
-var HEREDOC_TRAILER_TYPES = new Set(["file_redirect", "pipeline"]);
-var FD_VARIABLE_RE = /^\{(?:\w|[^\x00-\x7F])+(\[.*\])?\}$/su;
+var HEREDOC_PART_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var HEREDOC_TRAILER_TYPES;
+var FD_VARIABLE_RE;
+deferInit("chunk-r01896cg.js:47196", () => {
+  HEREDOC_PART_TYPES = new Set([
+    "heredoc_start",
+    "heredoc_body",
+    "<<",
+    "<<-",
+    "heredoc_end",
+    "file_descriptor",
+  ]);
+  HEREDOC_TRAILER_TYPES = new Set(["file_redirect", "pipeline"]);
+  FD_VARIABLE_RE = /^\{(?:\w|[^\x00-\x7F])+(\[.*\])?\}$/su;
+});
 //@ chunk-r01896cg.js:47372-47557 layout
 function describeFdVariable(text) {
-  let t = /^\{((?:\w|[^\x00-\x7F])+)/u.exec(text)?.[1];
-  if (t === undefined) return "{\u2026}";
-  let r = /^\w{1,64}$/.test(t) ? t : "\u2026";
-  return text[t.length + 1] === "[" ? `{${r}[\u2026]}` : `{${r}}`;
+  let name = /^\{((?:\w|[^\x00-\x7F])+)/u.exec(text)?.[1];
+  if (name === undefined) return "{\u2026}";
+  let safeName = /^\w{1,64}$/.test(name) ? name : "\u2026";
+  return text[name.length + 1] === "[" ? `{${safeName}[\u2026]}` : `{${safeName}}`;
 }
 //@ chunk-r01896cg.js:47557-47918 layout = mk (1)
 /**
  * 在子树中找 {name}> / {name}< 形式的 fd 变量重定向，返回其文本（会给 shell 变量赋值，属副作用）。
  */
-function findFdVariableRedirect(e, t) {
-  let r = t[e.startIndex] === 123 ? FD_VARIABLE_RE.exec(e.text) : null;
-  if (r) {
-    let endIndex = e.endIndex;
-    let o = false;
+function findFdVariableRedirect(node, bytes) {
+  let match = bytes[node.startIndex] === 123 ? FD_VARIABLE_RE.exec(node.text) : null;
+  if (match) {
+    let endIndex = node.endIndex;
+    let hadSpace = false;
     for (;;) {
-      let l = t[endIndex];
-      if (l === 32 || l === 9) {
-        o = true;
+      let byte = bytes[endIndex];
+      if (byte === 32 || byte === 9) {
+        hadSpace = true;
         endIndex++;
-      } else if (l === 92 && t[endIndex + 1] === 10) endIndex += 2;
+      } else if (byte === 92 && bytes[endIndex + 1] === 10) endIndex += 2;
       else break;
     }
-    let n = t[endIndex];
-    let i = t[endIndex + 1];
-    if ((((n === 62 || n === 60) && i !== 40) || (n === 38 && i === 62)) && !(o && r[1] !== undefined))
-      return e.text;
+    let nextByte = bytes[endIndex];
+    let byteAfter = bytes[endIndex + 1];
+    if (
+      (((nextByte === 62 || nextByte === 60) && byteAfter !== 40) || (nextByte === 38 && byteAfter === 62)) &&
+      !(hadSpace && match[1] !== undefined)
+    )
+      return node.text;
   }
-  for (let child of e.children)
+  for (let child of node.children)
     if (child) {
-      let fdVariableRedirect = findFdVariableRedirect(child, t);
+      let fdVariableRedirect = findFdVariableRedirect(child, bytes);
       if (fdVariableRedirect !== null) return fdVariableRedirect;
     }
   return null;
@@ -2688,8 +2867,8 @@ function findFdVariableRedirect(e, t) {
  */
 function findRedirectShapeError(node) {
   if (node.type === "file_redirect") {
-    let t = checkFileRedirectShape(node);
-    if (t) return t;
+    let failure = checkFileRedirectShape(node);
+    if (failure) return failure;
   }
   if (node.type === "herestring_redirect" || node.type === "heredoc_redirect") {
     for (let child of node.children)
@@ -2719,14 +2898,14 @@ function findRedirectShapeError(node) {
  * 解析单个 file_redirect 为 {op, target, fd, targetSourceLiteral}：拒绝 fd 变量、关闭 fd 后跟词、多目标、>& 后以 - 开头、含花括号/替换的目标、含命令替换输出/换行/以 ! 或 = 开头的目标，以及 >& 后非简单路径。
  */
 function walkFileRedirect(node, innerCommands, varScope, bareAssignmentNames) {
-  let o = substitutionCount;
-  let n = catHeredocInlineCount;
+  let substitutionsBefore = substitutionCount;
+  let inlineHeredocsBefore = catHeredocInlineCount;
   let op = null;
   let target = null;
   let fd;
   {
-    let f = checkFileRedirectShape(node);
-    if (f) return f;
+    let shapeError = checkFileRedirectShape(node);
+    if (shapeError) return shapeError;
   }
   for (let child of node.children) {
     if (!child) continue;
@@ -2762,28 +2941,28 @@ function walkFileRedirect(node, innerCommands, varScope, bareAssignmentNames) {
       if (BRACE_ESCAPED_CLOSE_RE.test(child.text)) return tooComplex(child);
       if (BRACE_ESCAPED_OPEN_RE.test(child.text)) return tooComplex(child);
       if (/(?:^|[^\\])(?:\\\\)*[`$]/.test(child.text)) return tooComplex(child);
-      target = child.text.replace(/\\([\s\S])/g, (y, x) =>
-        x ===
+      target = child.text.replace(/\\([\s\S])/g, (matchText, escaped) =>
+        escaped ===
         `
 `
           ? ""
-          : x,
+          : escaped,
       );
     } else if (child.type === "raw_string") target = stripRawString(child.text);
     else if (child.type === "string") {
-      let y = walkString(child, innerCommands, varScope, bareAssignmentNames);
-      if (typeof y !== "string") return y;
-      target = y;
+      let word = walkString(child, innerCommands, varScope, bareAssignmentNames);
+      if (typeof word !== "string") return word;
+      target = word;
     } else if (child.type === "concatenation") {
-      let y = walkArgument(child, innerCommands, varScope, bareAssignmentNames);
-      if (typeof y !== "string") return y;
+      let word = walkArgument(child, innerCommands, varScope, bareAssignmentNames);
+      if (typeof word !== "string") return word;
       if (/(?:^|[^\\])(?:\\\\)*[`$]/.test(child.text))
         return {
           kind: "too-complex",
           reason: "Redirect target concatenation contains $/` \u2014 unanalyzable gap or substitution",
           nodeType: "concatenation",
         };
-      target = y;
+      target = word;
     } else return tooComplex(child);
   }
   if (!op || target === null)
@@ -2835,25 +3014,41 @@ function walkFileRedirect(node, innerCommands, varScope, bareAssignmentNames) {
     op,
     target,
     fd,
-    targetSourceLiteral: substitutionCount === o && catHeredocInlineCount === n,
+    targetSourceLiteral:
+      substitutionCount === substitutionsBefore && catHeredocInlineCount === inlineHeredocsBefore,
   };
 }
 //@ chunk-r01896cg.js:51279-51375 layout
-var allowPlainUnquotedHeredocs = false;
-var readingDivergentShapes = false;
-var sawUncertainWrite = false;
-var reExpansionBudget = 0;
-var argvWordNodes = new WeakMap();
+var allowPlainUnquotedHeredocs; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var readingDivergentShapes;
+var sawUncertainWrite;
+var reExpansionBudget;
+var argvWordNodes;
 var currentDeclarationPrefix;
-var declarationPrefixCount = 0;
+var declarationPrefixCount;
 var declarationPrefixBashKeeps;
-var declarationPrefixValues = new Map();
-var prefixAssignInBranch = false;
-var usedAssignedValue = false;
-var isLaterLoopPass = false;
-var currentLoopNode = null;
-var loopDepth = 0;
-var unsetNames = new Set();
+var declarationPrefixValues;
+var prefixAssignInBranch;
+var usedAssignedValue;
+var isLaterLoopPass;
+var currentLoopNode;
+var loopDepth;
+var unsetNames;
+deferInit("chunk-r01896cg.js:51279", () => {
+  allowPlainUnquotedHeredocs = false;
+  readingDivergentShapes = false;
+  sawUncertainWrite = false;
+  reExpansionBudget = 0;
+  argvWordNodes = new WeakMap();
+  declarationPrefixCount = 0;
+  declarationPrefixValues = new Map();
+  prefixAssignInBranch = false;
+  usedAssignedValue = false;
+  isLaterLoopPass = false;
+  currentLoopNode = null;
+  loopDepth = 0;
+  unsetNames = new Set();
+});
 //@ chunk-r01896cg.js:51375-51452 layout
 function divergentShapeResult(reason) {
   return readingDivergentShapes
@@ -2865,9 +3060,9 @@ function divergentShapeResult(reason) {
       };
 }
 //@ chunk-r01896cg.js:51452-51648 layout
-function prefixAssignmentMayFailResult(e) {
+function prefixAssignmentMayFailResult(varName) {
   return divergentShapeResult(
-    `'${e}' is set for one command that carries an expansion which can fail at runtime \u2014 whether the assignment stands for later commands cannot be statically verified`,
+    `'${varName}' is set for one command that carries an expansion which can fail at runtime \u2014 whether the assignment stands for later commands cannot be statically verified`,
   );
 }
 //@ chunk-r01896cg.js:51648-51671 layout
@@ -2879,12 +3074,17 @@ function getDeclarationPrefixCount() {
   return declarationPrefixCount;
 }
 //@ chunk-r01896cg.js:51694-51836 layout
-var HEREDOC_BODY_ESCAPE_RE = /`|\\[$`\\\n]/;
-var VAR_NAME_SOURCE = PLAIN_VAR_NAME_RE.source.slice(1, -1);
-var PLAIN_VAR_REF_RE = new RegExp(
-  `\\$(?:${VAR_NAME_SOURCE}(?![A-Za-z0-9_\\u0080-\\uffff])|\\{${VAR_NAME_SOURCE}\\})(?!\\[|:[A-Za-z&])`,
-  "g",
-);
+var HEREDOC_BODY_ESCAPE_RE; // deferred: uses PLAIN_VAR_NAME_RE of its import cycle while loading; runs once the cycle is complete
+var VAR_NAME_SOURCE;
+var PLAIN_VAR_REF_RE;
+deferInit("chunk-r01896cg.js:51694", () => {
+  HEREDOC_BODY_ESCAPE_RE = /`|\\[$`\\\n]/;
+  VAR_NAME_SOURCE = PLAIN_VAR_NAME_RE.source.slice(1, -1);
+  PLAIN_VAR_REF_RE = new RegExp(
+    `\\$(?:${VAR_NAME_SOURCE}(?![A-Za-z0-9_\\u0080-\\uffff])|\\{${VAR_NAME_SOURCE}\\})(?!\\[|:[A-Za-z&])`,
+    "g",
+  );
+});
 //@ chunk-r01896cg.js:51836-54371 layout
 /**
  * 校验 heredoc：必须有被扫描的正文；分界符未加引号时只在 plainUnquotedHeredocs 模式且正文只含可静态解析的 $name 时放行，否则 too-complex（differential）；引号分界符含反斜杠、<<- 配制表符分界符、正文行以分界符开头后跟 ) ` } 等也拒绝。可选允许分界行后紧跟一个简单管道。
@@ -2911,13 +3111,13 @@ function walkHeredocRedirect(node, varScope, trailingPipeline) {
       )
     );
     else if (HEREDOC_TRAILER_TYPES.has(child.type)) {
-      let f = tooComplex(child);
-      return f.kind === "too-complex"
+      let failure = tooComplex(child);
+      return failure.kind === "too-complex"
         ? {
-            ...f,
+            ...failure,
             afterHeredocDelimiter: true,
           }
-        : f;
+        : failure;
     } else
       return {
         kind: "too-complex",
@@ -2966,11 +3166,11 @@ function walkHeredocRedirect(node, varScope, trailingPipeline) {
       !HEREDOC_BODY_ESCAPE_RE.test(body.text) &&
       (body.text.match(/\$/g)?.length ?? 0) === filtered.length &&
       (body.text.match(PLAIN_VAR_REF_RE)?.length ?? 0) === filtered.length &&
-      filtered.every((y) => {
+      filtered.every((expansion) => {
         substitutionCount++;
         return (
-          (y?.type === "simple_expansion" || y?.type === "expansion") &&
-          typeof resolveSimpleExpansion(y, varScope, true) === "string"
+          (expansion?.type === "simple_expansion" || expansion?.type === "expansion") &&
+          typeof resolveSimpleExpansion(expansion, varScope, true) === "string"
         );
       })
     ))
@@ -2997,13 +3197,13 @@ function walkHeredocRedirect(node, varScope, trailingPipeline) {
       if (child.type !== "heredoc_content") return tooComplex(child);
     }
   if (delimiter !== null && body !== null) {
-    let l = !isQuotedDelimiter
+    let delimiterText = !isQuotedDelimiter
       ? delimiter
       : delimiter.startsWith("\\")
         ? delimiter.slice(1)
         : delimiter.slice(1, -1);
-    if (l.length > 0) {
-      if (isDashHeredoc && l.startsWith("\t"))
+    if (delimiterText.length > 0) {
+      if (isDashHeredoc && delimiterText.startsWith("\t"))
         return {
           kind: "too-complex",
           reason: "Heredoc uses <<- with a tab-prefixed delimiter",
@@ -3011,9 +3211,9 @@ function walkHeredocRedirect(node, varScope, trailingPipeline) {
         };
       for (let line of body.text.split(`
 `)) {
-        let y = isDashHeredoc ? line.replace(/^\t+/, "") : line;
-        if (!y.startsWith(l)) continue;
-        let sliced = y.slice(l.length);
+        let lineText = isDashHeredoc ? line.replace(/^\t+/, "") : line;
+        if (!lineText.startsWith(delimiterText)) continue;
+        let sliced = lineText.slice(delimiterText.length);
         if (/[)`}]/.test(sliced))
           return {
             kind: "too-complex",
@@ -3046,58 +3246,66 @@ function walkHerestringRedirect(node, innerCommands, varScope, bareAssignmentNam
   return null;
 }
 //@ chunk-r01896cg.js:54707-55086 facade-majority
-var COMMAND_WRAPPER_BUILTINS = new Set(["command", "builtin", "noglob", "nocorrect", "time"]);
-var SAFE_PREFIX_ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*\+?=[A-Za-z0-9_.,:/@%+=-]*$/;
-var ASSIGNING_WRAPPERS = new Set(["builtin", "command", "noglob"]);
-var DECLARATION_BUILTINS = new Set(["declare", "typeset", "local", "export", "readonly"]);
-var DECLARATION_BUILTINS_ZSH = new Set([...DECLARATION_BUILTINS, "integer", "float", "private"]);
-var POSIX_SPECIAL_BUILTINS_NONEVAL = new Set([
-  ":",
-  "break",
-  "continue",
-  "return",
-  "exit",
-  "shift",
-  "times",
-  "set",
-  "export",
-  "readonly",
-  "unset",
-]);
+var COMMAND_WRAPPER_BUILTINS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SAFE_PREFIX_ASSIGN_RE;
+var ASSIGNING_WRAPPERS;
+var DECLARATION_BUILTINS;
+var DECLARATION_BUILTINS_ZSH;
+var POSIX_SPECIAL_BUILTINS_NONEVAL;
+deferInit("chunk-r01896cg.js:54707", () => {
+  COMMAND_WRAPPER_BUILTINS = new Set(["command", "builtin", "noglob", "nocorrect", "time"]);
+  SAFE_PREFIX_ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*\+?=[A-Za-z0-9_.,:/@%+=-]*$/;
+  ASSIGNING_WRAPPERS = new Set(["builtin", "command", "noglob"]);
+  DECLARATION_BUILTINS = new Set(["declare", "typeset", "local", "export", "readonly"]);
+  DECLARATION_BUILTINS_ZSH = new Set([...DECLARATION_BUILTINS, "integer", "float", "private"]);
+  POSIX_SPECIAL_BUILTINS_NONEVAL = new Set([
+    ":",
+    "break",
+    "continue",
+    "return",
+    "exit",
+    "shift",
+    "times",
+    "set",
+    "export",
+    "readonly",
+    "unset",
+  ]);
+});
 //@ chunk-r01896cg.js:55086-55887 layout
-function checkZshReadDivergence(e, t, r, varScope, bareAssignmentNames) {
-  if (e === undefined) return null;
-  let [, n = "", i = ""] = /^([A-Za-z_][A-Za-z0-9_]*)([\s\S]*)$/.exec(e) ?? [];
-  if (n === "" || (r ? i === "" : i !== "" && !/^[[?]/.test(i))) return null;
-  let c = varScope.get(n);
+function checkZshReadDivergence(operand, flag, bareNameOnly, varScope, bareAssignmentNames) {
+  if (operand === undefined) return null;
+  let [, name = "", rest = ""] = /^([A-Za-z_][A-Za-z0-9_]*)([\s\S]*)$/.exec(operand) ?? [];
+  if (name === "" || (bareNameOnly ? rest === "" : rest !== "" && !/^[[?]/.test(rest))) return null;
+  let trackedValue = varScope.get(name);
   if (
-    !bareAssignmentNames.includes(n) &&
-    !unsetNames.has(n) &&
-    !declarationPrefixValues.has(n) &&
-    (c === undefined || containsAnyPlaceholder(c))
+    !bareAssignmentNames.includes(name) &&
+    !unsetNames.has(name) &&
+    !declarationPrefixValues.has(name) &&
+    (trackedValue === undefined || containsAnyPlaceholder(trackedValue))
   )
     return null;
   if (!isNestedRippleEnabled() || isRuleOffOrBashReading()) return null;
-  let l = i;
-  let f = n;
-  if (l.startsWith("[")) {
-    let u = 0;
-    let h = l.length;
-    for (let k = 0; k < l.length; k++)
-      if (l[k] === "[") u++;
-      else if (l[k] === "]" && --u === 0) {
-        h = k + 1;
+  let rest_2 = rest;
+  let display = name;
+  if (rest_2.startsWith("[")) {
+    let bracketDepth = 0;
+    let restEnd = rest_2.length;
+    for (let k = 0; k < rest_2.length; k++)
+      if (rest_2[k] === "[") bracketDepth++;
+      else if (rest_2[k] === "]" && --bracketDepth === 0) {
+        restEnd = k + 1;
         break;
       }
-    f += "[\u2026]";
-    l = l.slice(h);
+    display += "[\u2026]";
+    rest_2 = rest_2.slice(restEnd);
   }
-  if (l !== "") f += l.startsWith("?") ? "?\u2026" : "\u2026";
-  let x = `In zsh, 'read ${redactPlaceholdersForDisplay(t === null ? f : `${t} ${f}`)}' can set ${n} differently from bash or leave it unchanged, and this command set or unset ${n} earlier, so ${n}'s value after the read can't be checked before the command runs`;
-  if (!isLaterLoopPass) recordReadingRefusal(x);
+  if (rest_2 !== "") display += rest_2.startsWith("?") ? "?\u2026" : "\u2026";
+  let reason = `In zsh, 'read ${redactPlaceholdersForDisplay(flag === null ? display : `${flag} ${display}`)}' can set ${name} differently from bash or leave it unchanged, and this command set or unset ${name} earlier, so ${name}'s value after the read can't be checked before the command runs`;
+  if (!isLaterLoopPass) recordReadingRefusal(reason);
   return {
     kind: "too-complex",
-    reason: x,
+    reason,
     differential: true,
   };
 }
@@ -3115,186 +3323,204 @@ function applyCommandVariableWrites(
 ) {
   let writtenNames = [];
   let assignedNames = [];
-  let l = (p, g = true) => {
-    let match = p.match(/^[A-Za-z_][A-Za-z0-9_]*/);
+  let recordName = (word, alsoAssigned = true) => {
+    let match = word.match(/^[A-Za-z_][A-Za-z0-9_]*/);
     if (match) {
       writtenNames.push(match[0]);
-      if (g) assignedNames.push(match[0]);
+      if (alsoAssigned) assignedNames.push(match[0]);
     }
   };
   let restArgv = argv;
-  let y = false;
-  let x;
-  let u = [];
+  let wrappedComplex = false;
+  let wrapper;
+  let prefixWords = [];
   for (;;) {
-    let p = restArgv[0];
-    if (p === undefined) break;
-    if (COMMAND_WRAPPER_BUILTINS.has(p)) {
-      if ((x === "builtin" || x === "command") && p !== "builtin" && p !== "command") {
-        if (p === "noglob" && !y)
+    let word = restArgv[0];
+    if (word === undefined) break;
+    if (COMMAND_WRAPPER_BUILTINS.has(word)) {
+      if ((wrapper === "builtin" || wrapper === "command") && word !== "builtin" && word !== "command") {
+        if (word === "noglob" && !wrappedComplex)
           return {
             kind: "too-complex",
-            reason: `'${x} noglob' runs the wrapped command on zsh (for 'command', under POSIX_BUILTINS) but not bash \u2014 cannot statically model whether it executes`,
+            reason: `'${wrapper} noglob' runs the wrapped command on zsh (for 'command', under POSIX_BUILTINS) but not bash \u2014 cannot statically model whether it executes`,
             nodeType: "command",
           };
-        y = true;
+        wrappedComplex = true;
       }
-      let g = 1;
-      while (g < restArgv.length && /^-[-pvV]*$/.test(restArgv[g])) {
+      let flagIndex = 1;
+      while (flagIndex < restArgv.length && /^-[-pvV]*$/.test(restArgv[flagIndex])) {
         if (
-          /[vV]/.test(restArgv[g]) ||
-          (p === "builtin" && /p/.test(restArgv[g]) && isStagedPumpkinEnabled())
+          /[vV]/.test(restArgv[flagIndex]) ||
+          (word === "builtin" && /p/.test(restArgv[flagIndex]) && isStagedPumpkinEnabled())
         )
-          y = true;
-        g++;
+          wrappedComplex = true;
+        flagIndex++;
       }
-      restArgv = restArgv.slice(g);
-      x = p;
-    } else if (p === "!") {
-      if (x === "builtin" || x === "command") y = true;
+      restArgv = restArgv.slice(flagIndex);
+      wrapper = word;
+    } else if (word === "!") {
+      if (wrapper === "builtin" || wrapper === "command") wrappedComplex = true;
       restArgv = restArgv.slice(1);
-      x = undefined;
-    } else if (/^[A-Za-z_]\w*(\[[^\]]*\])?\+?=/.test(p)) {
-      if (x !== undefined && ASSIGNING_WRAPPERS.has(x) && isStagedPumpkinEnabled()) {
-        if (!(SAFE_PREFIX_ASSIGN_RE.test(p) && !containsAnyPlaceholder(p)) && !y) {
-          let b = wrappedGlobResult(x, p);
-          if (b) return b;
+      wrapper = undefined;
+    } else if (/^[A-Za-z_]\w*(\[[^\]]*\])?\+?=/.test(word)) {
+      if (wrapper !== undefined && ASSIGNING_WRAPPERS.has(wrapper) && isStagedPumpkinEnabled()) {
+        if (!(SAFE_PREFIX_ASSIGN_RE.test(word) && !containsAnyPlaceholder(word)) && !wrappedComplex) {
+          let result = wrappedGlobResult(wrapper, word);
+          if (result) return result;
         }
-        y = true;
+        wrappedComplex = true;
       }
-      let g = writtenNames.length;
-      l(p);
-      u.push({
-        word: p,
-        target: writtenNames.length > g ? g : undefined,
+      let writtenBefore = writtenNames.length;
+      recordName(word);
+      prefixWords.push({
+        word,
+        target: writtenNames.length > writtenBefore ? writtenBefore : undefined,
       });
       restArgv = restArgv.slice(1);
-      x = undefined;
+      wrapper = undefined;
     } else {
       if (
-        x !== undefined &&
-        ASSIGNING_WRAPPERS.has(x) &&
-        !y &&
-        p !== "[" &&
-        /[*?[]/.test(p) &&
+        wrapper !== undefined &&
+        ASSIGNING_WRAPPERS.has(wrapper) &&
+        !wrappedComplex &&
+        word !== "[" &&
+        /[*?[]/.test(word) &&
         isStagedPumpkinEnabled()
       ) {
-        let g = wrappedGlobResult(x, p);
-        if (g) return g;
+        let result = wrappedGlobResult(wrapper, word);
+        if (result) return result;
       }
       break;
     }
   }
   let commandName = restArgv[0];
-  if (commandName === undefined) for (let envVar of envVars) l(envVar.name);
+  if (commandName === undefined) for (let envVar of envVars) recordName(envVar.name);
   else if (DECLARATION_BUILTINS.has(commandName)) {
-    let p = false;
+    let afterDoubleDash = false;
     for (let k = 1; k < restArgv.length; k++) {
-      let _ = restArgv[k];
-      if (!p && _ === "--") {
-        p = true;
+      let word = restArgv[k];
+      if (!afterDoubleDash && word === "--") {
+        afterDoubleDash = true;
         continue;
       }
-      if (!p && /^[+-].*m/.test(_))
+      if (!afterDoubleDash && /^[+-].*m/.test(word))
         return {
           kind: "too-complex",
-          reason: `'${commandName} ${_}' (wrapped form) \u2014 zsh -m/+m pattern-assigns every matching variable; cannot statically model target set`,
+          reason: `'${commandName} ${word}' (wrapped form) \u2014 zsh -m/+m pattern-assigns every matching variable; cannot statically model target set`,
           nodeType: "command",
         };
-      if (!p && _.startsWith("-")) continue;
-      if (_.includes("=")) l(_);
+      if (!afterDoubleDash && word.startsWith("-")) continue;
+      if (word.includes("=")) recordName(word);
     }
   } else if (commandName === "read" && isBashReadingMode());
   else if (commandName === "read") {
-    let p = 1;
-    let g = false;
-    let _ = false;
-    while (p < restArgv.length) {
-      let b = restArgv[p];
-      if (!g && b === "--") {
-        g = true;
-        p++;
+    let index = 1;
+    let afterDoubleDash = false;
+    let sawOperand = false;
+    while (index < restArgv.length) {
+      let word = restArgv[index];
+      if (!afterDoubleDash && word === "--") {
+        afterDoubleDash = true;
+        index++;
         continue;
       }
-      if (!g && b.startsWith("-")) {
-        if (READ_DATA_FLAGS.has(b)) {
-          if (READ_FLAGS_WITH_CHECKED_OPERAND.has(b)) {
-            let R = checkZshReadDivergence(restArgv[p + 1], b, false, varScope, bareAssignmentNames);
-            if (R) return R;
+      if (!afterDoubleDash && word.startsWith("-")) {
+        if (READ_DATA_FLAGS.has(word)) {
+          if (READ_FLAGS_WITH_CHECKED_OPERAND.has(word)) {
+            let refusal = checkZshReadDivergence(
+              restArgv[index + 1],
+              word,
+              false,
+              varScope,
+              bareAssignmentNames,
+            );
+            if (refusal) return refusal;
           }
-          p += 2;
+          index += 2;
           continue;
         }
-        let A = false;
-        for (let idx = 1; idx < b.length; idx++) {
-          let T = b[idx];
-          if (T === "a" || T === "A") {
-            let v = idx < b.length - 1 ? b.slice(idx + 1) : restArgv[p + 1];
-            if (v) {
-              let de = checkZshReadDivergence(v, b.slice(0, idx + 1), true, varScope, bareAssignmentNames);
-              if (de) return de;
-              l(v);
-              _ = true;
+        let flagEndsCluster = false;
+        for (let idx = 1; idx < word.length; idx++) {
+          let flagChar = word[idx];
+          if (flagChar === "a" || flagChar === "A") {
+            let operand = idx < word.length - 1 ? word.slice(idx + 1) : restArgv[index + 1];
+            if (operand) {
+              let refusal = checkZshReadDivergence(
+                operand,
+                word.slice(0, idx + 1),
+                true,
+                varScope,
+                bareAssignmentNames,
+              );
+              if (refusal) return refusal;
+              recordName(operand);
+              sawOperand = true;
             }
-            A = idx === b.length - 1;
+            flagEndsCluster = idx === word.length - 1;
             break;
           }
-          if (READ_DATA_FLAGS.has("-" + T)) {
-            A = idx === b.length - 1;
-            if (A && READ_FLAGS_WITH_CHECKED_OPERAND.has("-" + T)) {
-              let v = checkZshReadDivergence(restArgv[p + 1], b, false, varScope, bareAssignmentNames);
-              if (v) return v;
+          if (READ_DATA_FLAGS.has("-" + flagChar)) {
+            flagEndsCluster = idx === word.length - 1;
+            if (flagEndsCluster && READ_FLAGS_WITH_CHECKED_OPERAND.has("-" + flagChar)) {
+              let refusal = checkZshReadDivergence(
+                restArgv[index + 1],
+                word,
+                false,
+                varScope,
+                bareAssignmentNames,
+              );
+              if (refusal) return refusal;
             }
             break;
           }
         }
-        p += A ? 2 : 1;
+        index += flagEndsCluster ? 2 : 1;
         continue;
       }
-      let k = checkZshReadDivergence(b, null, true, varScope, bareAssignmentNames);
-      if (k) return k;
-      l(b);
-      _ = true;
-      p++;
+      let refusal = checkZshReadDivergence(word, null, true, varScope, bareAssignmentNames);
+      if (refusal) return refusal;
+      recordName(word);
+      sawOperand = true;
+      index++;
     }
-    if (!_) writtenNames.push("REPLY");
+    if (!sawOperand) writtenNames.push("REPLY");
   } else if (commandName === "printf")
     for (let k = 1; k < restArgv.length; k++) {
-      let g = restArgv[k];
-      if (g === "--" || !g.startsWith("-")) break;
-      if (g === "-v") {
-        if (restArgv[k + 1]) l(restArgv[k + 1]);
+      let word = restArgv[k];
+      if (word === "--" || !word.startsWith("-")) break;
+      if (word === "-v") {
+        if (restArgv[k + 1]) recordName(restArgv[k + 1]);
         k++;
         continue;
       }
-      if (g.startsWith("-v")) l(g.slice(2));
+      if (word.startsWith("-v")) recordName(word.slice(2));
     }
   else if (commandName === "getopts") {
-    let p = restArgv[1] === "--" ? 1 : 0;
-    if (restArgv[2 + p]) l(restArgv[2 + p]);
+    let skipCount = restArgv[1] === "--" ? 1 : 0;
+    if (restArgv[2 + skipCount]) recordName(restArgv[2 + skipCount]);
     writtenNames.push("OPTARG");
     markVarUnknown(varScope, "OPTIND");
   } else if (commandName === "wait")
     for (let k = 1; k < restArgv.length; k++) {
-      let g = restArgv[k];
-      if (g === "--" || !g.startsWith("-")) break;
-      for (let k_2 = 1; k_2 < g.length; k_2++)
-        if (g[k_2] === "p") {
-          if (k_2 < g.length - 1) l(g.slice(k_2 + 1));
+      let word = restArgv[k];
+      if (word === "--" || !word.startsWith("-")) break;
+      for (let k_2 = 1; k_2 < word.length; k_2++)
+        if (word[k_2] === "p") {
+          if (k_2 < word.length - 1) recordName(word.slice(k_2 + 1));
           else if (restArgv[k + 1]) {
-            l(restArgv[k + 1]);
+            recordName(restArgv[k + 1]);
             k++;
           }
           break;
         }
     }
-  else if (!y && (commandName === "unset" || commandName === "unsetenv")) {
-    let p = false;
-    let g = false;
+  else if (!wrappedComplex && (commandName === "unset" || commandName === "unsetenv")) {
+    let functionMode = false;
+    let sawOperand = false;
     for (let idx = 1; idx < restArgv.length; idx++) {
       let name = restArgv[idx];
       if (name.startsWith("-")) {
-        if (g)
+        if (sawOperand)
           return {
             kind: "too-complex",
             reason: `'unset \u2026 ${name}' (wrapped form) \u2014 flag after name; getopt stops at first non-option`,
@@ -3306,23 +3532,23 @@ function applyCommandVariableWrites(
             reason: `'unset ${name}' (wrapped form) \u2014 flag other than -f/-v (zsh -m pattern-unset, bash -n nameref) cannot be statically modelled`,
             nodeType: "command",
           };
-        if (name === "-f") p = true;
+        if (name === "-f") functionMode = true;
         continue;
       }
-      g = true;
+      sawOperand = true;
       if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name))
         return {
           kind: "too-complex",
           reason: `'unset ${name}' (wrapped form) \u2014 non-identifier operand may pathname-expand; cannot statically know which var is unset`,
           nodeType: "command",
         };
-      if (p || commandName === "unsetenv") {
-        let k = uncertainValueResult(
+      if (functionMode || commandName === "unsetenv") {
+        let refusal = uncertainValueResult(
           varScope.get(name),
           `'${name}' no longer has a statically known value at this unset (wrapped form) \u2014 cannot verify what the command leaves behind`,
           "command",
         );
-        if (k !== null) return k;
+        if (refusal !== null) return refusal;
         continue;
       }
       if (isAssignmentNameUnsafeForSandbox(name))
@@ -3332,77 +3558,77 @@ function applyCommandVariableWrites(
           nodeType: "command",
         };
       if (hasArithmetic) {
-        let k = divergentShapeResult(
+        let refusal = divergentShapeResult(
           `'unset ${name}' is in a command carrying an expansion that can fail at runtime \u2014 whether the name is cleared cannot be statically verified`,
         );
-        if (k) return k;
+        if (refusal) return refusal;
       }
       recordUnset(varScope, name, hasPriorCommands);
     }
   } else if (commandName === "print")
     for (let idx = 1; idx < restArgv.length; idx++) {
-      let g = restArgv[idx];
-      if (g === "--" || g === "-" || !g.startsWith("-")) break;
-      let _ = false;
-      for (let idx_2 = 1; idx_2 < g.length; idx_2++) {
-        let k = g[idx_2];
-        if (k === "v") {
-          let A = idx_2 < g.length - 1 ? g.slice(idx_2 + 1) : restArgv[idx + 1];
-          if (A) l(A);
-          _ = idx_2 === g.length - 1;
+      let word = restArgv[idx];
+      if (word === "--" || word === "-" || !word.startsWith("-")) break;
+      let flagEndsCluster = false;
+      for (let idx_2 = 1; idx_2 < word.length; idx_2++) {
+        let flagChar = word[idx_2];
+        if (flagChar === "v") {
+          let operand = idx_2 < word.length - 1 ? word.slice(idx_2 + 1) : restArgv[idx + 1];
+          if (operand) recordName(operand);
+          flagEndsCluster = idx_2 === word.length - 1;
           break;
         }
-        if (OPTION_LETTERS_TAKING_ARGUMENT.has("-" + k)) {
-          _ = idx_2 === g.length - 1;
+        if (OPTION_LETTERS_TAKING_ARGUMENT.has("-" + flagChar)) {
+          flagEndsCluster = idx_2 === word.length - 1;
           break;
         }
       }
-      if (_) idx++;
+      if (flagEndsCluster) idx++;
     }
   else if (commandName === "set")
     for (let k = 1; k < restArgv.length; k++) {
-      let g = restArgv[k];
-      if (g === "--" || !/^[-+]/.test(g)) break;
-      let index = g.indexOf("A", 1);
+      let word = restArgv[k];
+      if (word === "--" || !/^[-+]/.test(word)) break;
+      let index = word.indexOf("A", 1);
       if (index === -1) {
-        if (g.endsWith("o")) k++;
+        if (word.endsWith("o")) k++;
         continue;
       }
-      if (index < g.length - 1) l(g.slice(index + 1));
-      else if (restArgv[k + 1]) l(restArgv[k + 1]);
+      if (index < word.length - 1) recordName(word.slice(index + 1));
+      else if (restArgv[k + 1]) recordName(restArgv[k + 1]);
       break;
     }
   else if (commandName === "mapfile" || commandName === "readarray") {
-    let p = false;
+    let sawOperand = false;
     for (let k = 1; k < restArgv.length; k++) {
-      let _ = restArgv[k];
-      if (_.startsWith("-")) {
-        if (/^-[dnOsuCc]$/.test(_)) k++;
+      let word = restArgv[k];
+      if (word.startsWith("-")) {
+        if (/^-[dnOsuCc]$/.test(word)) k++;
         continue;
       }
-      l(_);
-      p = true;
+      recordName(word);
+      sawOperand = true;
     }
-    if (!p) writtenNames.push("MAPFILE");
+    if (!sawOperand) writtenNames.push("MAPFILE");
   } else if (
-    !y &&
+    !wrappedComplex &&
     (commandName === "cd" || commandName === "chdir" || commandName === "pushd" || commandName === "popd")
   ) {
-    let p = false;
+    let skipsPwdUpdate = false;
     if (commandName === "pushd" || commandName === "popd")
       for (let k = 1; k < restArgv.length; k++) {
-        let _ = restArgv[k];
-        if (_ === "--") break;
-        if (hasAnyShortFlagChar(_, "n")) {
-          p = true;
+        let word = restArgv[k];
+        if (word === "--") break;
+        if (hasAnyShortFlagChar(word, "n")) {
+          skipsPwdUpdate = true;
           break;
         }
-        if (commandName === "popd" && (/^\+0*[1-9]/.test(_) || /^-0+$/.test(_))) {
-          p = true;
+        if (commandName === "popd" && (/^\+0*[1-9]/.test(word) || /^-0+$/.test(word))) {
+          skipsPwdUpdate = true;
           break;
         }
       }
-    if (!p) {
+    if (!skipsPwdUpdate) {
       markVarUnknown(varScope, "PWD");
       markVarUnknown(varScope, "OLDPWD");
     }
@@ -3411,86 +3637,95 @@ function applyCommandVariableWrites(
       markVarUnknown(varScope, "dirstack");
     }
   }
-  let d =
-    commandName !== undefined && DECLARATION_BUILTINS_ZSH.has(commandName) ? envVars.length + u.length : 0;
-  let m = declarationPrefixCount;
-  declarationPrefixCount += d;
-  if (d > 0 && currentDeclarationPrefix === undefined) {
-    let p =
+  let declarationPrefixLength =
+    commandName !== undefined && DECLARATION_BUILTINS_ZSH.has(commandName)
+      ? envVars.length + prefixWords.length
+      : 0;
+  let prefixCountBefore = declarationPrefixCount;
+  declarationPrefixCount += declarationPrefixLength;
+  if (declarationPrefixLength > 0 && currentDeclarationPrefix === undefined) {
+    let keepsValue =
       commandName === "export" ||
       commandName === "readonly" ||
       restArgv.some((restArg) => /^-[A-Za-z]*[xr]/.test(restArg));
-    let g = new Set();
-    for (let _ of p ? restArgv.slice(1) : []) {
-      let match = /^[A-Za-z_]\w*/.exec(_);
-      if (match !== null) g.add(match[0]);
+    let keptNames = new Set();
+    for (let arg of keepsValue ? restArgv.slice(1) : []) {
+      let match = /^[A-Za-z_]\w*/.exec(arg);
+      if (match !== null) keptNames.add(match[0]);
     }
     declarationPrefixBashKeeps = [
       ...(declarationPrefixBashKeeps ?? []),
-      ...envVars.map((envVar) => g.has(envVar.name)),
-      ...u.map(({ word }) => g.has(/^[A-Za-z_]\w*/.exec(word)?.[0] ?? "")),
+      ...envVars.map((envVar) => keptNames.has(envVar.name)),
+      ...prefixWords.map(({ word }) => keptNames.has(/^[A-Za-z_]\w*/.exec(word)?.[0] ?? "")),
     ];
   }
-  if (d > 0 && currentDeclarationPrefix !== undefined) {
-    let p = {
+  if (declarationPrefixLength > 0 && currentDeclarationPrefix !== undefined) {
+    let refusal = {
       kind: "too-complex",
       reason: `A variable set in front of ${commandName} in this command can't be checked before it runs`,
     };
-    let g = [...envVars];
-    for (let { word } of u) {
+    let prefixAssignments = [...envVars];
+    for (let { word } of prefixWords) {
       let match = /^([A-Za-z_]\w*)(\+?)=([^]*)$/.exec(word);
-      if (match === null) return p;
-      let [, k = "", A, R = ""] = match;
-      g.push(
-        A === "+"
+      if (match === null) return refusal;
+      let [, name = "", appendMark, value = ""] = match;
+      prefixAssignments.push(
+        appendMark === "+"
           ? {
-              name: k,
-              value: R,
+              name,
+              value,
               isAppend: true,
             }
           : {
-              name: k,
-              value: R,
+              name,
+              value,
             },
       );
     }
-    if (currentDeclarationPrefix.length < m + g.length || (u.length > 0 && g.length > 1)) return p;
-    for (let k = u.length - 1; k >= 0; k--) {
-      let target = u[k]?.target;
+    if (
+      currentDeclarationPrefix.length < prefixCountBefore + prefixAssignments.length ||
+      (prefixWords.length > 0 && prefixAssignments.length > 1)
+    )
+      return refusal;
+    for (let k = prefixWords.length - 1; k >= 0; k--) {
+      let target = prefixWords[k]?.target;
       if (target !== undefined) writtenNames.splice(target, 1);
     }
-    for (let [_, b] of g.entries()) {
-      if (currentDeclarationPrefix[m + _] !== true) continue;
-      let k = b.isAppend ? varScope.get(b.name) : "";
-      let A = k === undefined ? undefined : stripUncertainPrefix(k);
-      if (containsAnyPlaceholder(b.value) || isAssignmentNameUnsafeForSandbox(b.name)) return p;
-      if (A === undefined || containsAnyPlaceholder(A))
-        return p.kind === "too-complex" &&
+    for (let [index, assignment] of prefixAssignments.entries()) {
+      if (currentDeclarationPrefix[prefixCountBefore + index] !== true) continue;
+      let existingPrefixValue = assignment.isAppend ? varScope.get(assignment.name) : "";
+      let existingValue =
+        existingPrefixValue === undefined ? undefined : stripUncertainPrefix(existingPrefixValue);
+      if (containsAnyPlaceholder(assignment.value) || isAssignmentNameUnsafeForSandbox(assignment.name))
+        return refusal;
+      if (existingValue === undefined || containsAnyPlaceholder(existingValue))
+        return refusal.kind === "too-complex" &&
           !readingDivergentShapes &&
-          k?.includes(UNCERTAIN_VAR_PLACEHOLDER) === true
+          existingPrefixValue?.includes(UNCERTAIN_VAR_PLACEHOLDER) === true
           ? {
-              ...p,
+              ...refusal,
               divergentShape: true,
             }
-          : p;
+          : refusal;
       if (hasArithmetic) {
-        let T = divergentShapeResult(
-          `'${b.name}' is appended to by a command carrying an expansion that can fail at runtime \u2014 whether the append happens cannot be statically verified`,
+        let refusal = divergentShapeResult(
+          `'${assignment.name}' is appended to by a command carrying an expansion that can fail at runtime \u2014 whether the append happens cannot be statically verified`,
         );
-        if (T) return T;
+        if (refusal) return refusal;
       }
-      let R = (A === k ? "" : UNCERTAIN_PREFIX) + A + b.value;
-      varScope.set(b.name, R);
-      declarationPrefixValues.set(b.name, A + b.value);
+      let newValue =
+        (existingValue === existingPrefixValue ? "" : UNCERTAIN_PREFIX) + existingValue + assignment.value;
+      varScope.set(assignment.name, newValue);
+      declarationPrefixValues.set(assignment.name, existingValue + assignment.value);
     }
   }
   if (
     commandName !== undefined &&
     envVars.length > 0 &&
-    !(d > 0 && currentDeclarationPrefix !== undefined) &&
+    !(declarationPrefixLength > 0 && currentDeclarationPrefix !== undefined) &&
     POSIX_SPECIAL_BUILTINS_NONEVAL.has(commandName)
   )
-    for (let envVar of envVars) l(envVar.name);
+    for (let envVar of envVars) recordName(envVar.name);
   for (let writtenName of writtenNames) {
     if (isAssignmentNameUnsafeForSandbox(writtenName))
       return {
@@ -3504,12 +3739,12 @@ function applyCommandVariableWrites(
   return null;
 }
 //@ chunk-r01896cg.js:62370-62591 layout
-function wrappedGlobResult(e, t) {
+function wrappedGlobResult(commandName, word) {
   return readingDivergentShapes
     ? null
     : {
         kind: "too-complex",
-        reason: `'${e} ${redactPlaceholdersForDisplay(t)}' has a pattern the shell may expand, so this command can't be checked before it runs`,
+        reason: `'${commandName} ${redactPlaceholdersForDisplay(word)}' has a pattern the shell may expand, so this command can't be checked before it runs`,
         nodeType: "command",
         divergentShape: true,
         keepsRemovalVerdict: true,
@@ -3520,83 +3755,88 @@ var ASSIGNMENT_WORD_RE = /^([A-Za-z_]\w*)(?:\[[\s\S]*?\])?(\+?)=([\s\S]*)$/;
 var RE_EXPANSION_FACTOR = 16;
 //@ chunk-r01896cg.js:62655-64008 layout
 function checkRedirectReadsPrefixVar(children, command, redirects, commands, varScope, bareAssignmentNames) {
-  let i = [...command.envVars];
-  let c = argvWordNodes.get(command.argv);
-  let l = false;
-  for (let [d, m] of command.argv.entries()) {
-    let [, p, g, _] = ASSIGNMENT_WORD_RE.exec(m) ?? [];
-    let [, b] = /^([A-Za-z_]\w*)\[/.exec(m) ?? [];
-    if (p !== undefined && _ !== undefined)
-      i.push({
-        name: p,
-        value: _,
-        isAppend: g === "+",
-        word: c?.[d],
-        isOtherElement: /^\w+\[[1-9]\d*\]/.test(m),
+  let assignments = [...command.envVars];
+  let wordNodes = argvWordNodes.get(command.argv);
+  let sawNonAssignment = false;
+  for (let [index, word] of command.argv.entries()) {
+    let [, name, appendMark, value] = ASSIGNMENT_WORD_RE.exec(word) ?? [];
+    let [, subscriptName] = /^([A-Za-z_]\w*)\[/.exec(word) ?? [];
+    if (name !== undefined && value !== undefined)
+      assignments.push({
+        name,
+        value,
+        isAppend: appendMark === "+",
+        word: wordNodes?.[index],
+        isOtherElement: /^\w+\[[1-9]\d*\]/.test(word),
       });
-    else if (b !== undefined) {
-      i.push({
-        name: b,
+    else if (subscriptName !== undefined) {
+      assignments.push({
+        name: subscriptName,
         value: VAR_PLACEHOLDER,
       });
-      l = true;
-    } else if (!l && (i.length > command.envVars.length || !/^(?:time|coproc|!|-p|--)$/.test(m))) return null;
+      sawNonAssignment = true;
+    } else if (
+      !sawNonAssignment &&
+      (assignments.length > command.envVars.length || !/^(?:time|coproc|!|-p|--)$/.test(word))
+    )
+      return null;
   }
-  let f = new Set(i.map((d) => d.name));
+  let assignedNames = new Set(assignments.map((assignment) => assignment.name));
   let filtered = children.filter(
     (child) =>
       (child?.type === "file_redirect" || child?.type === "herestring_redirect") &&
-      findReferencedVar(child, f) !== null,
+      findReferencedVar(child, assignedNames) !== null,
   );
   if (filtered.length === 0) return null;
-  let x = divergentShapeResult(
+  let refusal = divergentShapeResult(
     "A redirect in this command may read a variable the same command sets, and shells can differ on which value it gets",
   );
-  if (x)
-    return x.kind === "too-complex"
+  if (refusal)
+    return refusal.kind === "too-complex"
       ? {
-          ...x,
+          ...refusal,
           keepsRemovalVerdict: true,
         }
-      : x;
+      : refusal;
   let varScope_2 = new Map(varScope);
-  let h = new Set();
-  for (let { name: d, value: m, isAppend, word, isOtherElement } of i) {
-    let b = m;
-    if (word !== undefined && findReferencedVar(word, h) !== null) {
-      let A = [];
-      let R = consumeReExpansionBudget(word)
-        ? walkArgument(word, A, varScope_2, bareAssignmentNames)
+  let seenNames = new Set();
+  for (let { name, value, isAppend, word, isOtherElement } of assignments) {
+    let resolvedValue = value;
+    if (word !== undefined && findReferencedVar(word, seenNames) !== null) {
+      let extraCommands = [];
+      let walked = consumeReExpansionBudget(word)
+        ? walkArgument(word, extraCommands, varScope_2, bareAssignmentNames)
         : undefined;
-      b = typeof R === "string" ? ASSIGNMENT_WORD_RE.exec(R)?.[3] : undefined;
-      if (b !== undefined) {
+      resolvedValue = typeof walked === "string" ? ASSIGNMENT_WORD_RE.exec(walked)?.[3] : undefined;
+      if (resolvedValue !== undefined) {
         let index = commands.findIndex((command_2) => command_2.argv === command.argv);
-        commands.splice(index === -1 ? commands.length : index, 0, ...A);
+        commands.splice(index === -1 ? commands.length : index, 0, ...extraCommands);
       }
     }
     if (isOtherElement) continue;
-    let k = isAppend ? varScope_2.get(d) : "";
-    if (k === undefined || b === undefined) markVarUnknown(varScope_2, d);
-    else varScope_2.set(d, k + b);
-    h.add(d);
+    let existing = isAppend ? varScope_2.get(name) : "";
+    if (existing === undefined || resolvedValue === undefined) markVarUnknown(varScope_2, name);
+    else varScope_2.set(name, existing + resolvedValue);
+    seenNames.add(name);
   }
-  for (let d of filtered) {
-    if (!consumeReExpansionBudget(d)) continue;
-    let m = commands.length;
-    if (d.type === "file_redirect") {
-      let g = walkFileRedirect(d, commands, varScope_2, bareAssignmentNames);
-      commands.length = m;
-      if (!("kind" in g)) redirects.push(g);
+  for (let redirect of filtered) {
+    if (!consumeReExpansionBudget(redirect)) continue;
+    let commandsBefore = commands.length;
+    if (redirect.type === "file_redirect") {
+      let result = walkFileRedirect(redirect, commands, varScope_2, bareAssignmentNames);
+      commands.length = commandsBefore;
+      if (!("kind" in result)) redirects.push(result);
       continue;
     }
-    if (walkHerestringRedirect(d, commands, varScope_2, bareAssignmentNames)) commands.length = m;
+    if (walkHerestringRedirect(redirect, commands, varScope_2, bareAssignmentNames))
+      commands.length = commandsBefore;
   }
   return null;
 }
 //@ chunk-r01896cg.js:64008-64080 layout
-function consumeReExpansionBudget(e) {
-  if (e.text.length > reExpansionBudget) return false;
-  reExpansionBudget -= e.text.length;
+function consumeReExpansionBudget(node) {
+  if (node.text.length > reExpansionBudget) return false;
+  reExpansionBudget -= node.text.length;
   return true;
 }
 //@ chunk-r01896cg.js:64080-66702 fingerprint = walkCommand (0.699)
@@ -3606,7 +3846,7 @@ function consumeReExpansionBudget(e) {
 function walkCommand(node, extraRedirects, innerCommands, varScope, bareAssignmentNames) {
   let substitutionCountBefore = substitutionCount;
   let carveOutCountBefore = quoteScanCarveOutCount;
-  let c = innerCommands.length;
+  let innerCommandCount = innerCommands.length;
   let argv = [];
   let argvNodes = [];
   if (readingDivergentShapes) argvWordNodes.set(argv, argvNodes);
@@ -3616,12 +3856,12 @@ function walkCommand(node, extraRedirects, innerCommands, varScope, bareAssignme
   let scopeBeforeRedirects = node.children.some((child) => child && REDIRECT_NODE_TYPES.has(child.type))
     ? new Map(varScope)
     : null;
-  let d = 0;
+  let arithmeticPrefixIndex = 0;
   let hasArithmetic = false;
   for (let child of node.children) {
     if (!child) continue;
-    let A = containsArithmeticExpansion(child);
-    switch (((hasArithmetic ||= A), child.type)) {
+    let hasArithmeticChild = containsArithmeticExpansion(child);
+    switch (((hasArithmetic ||= hasArithmeticChild), child.type)) {
       case "variable_assignment": {
         if (envVars.length > 0) {
           let referencedVar = findReferencedVar(child, new Set(envVars.map((envVar) => envVar.name)));
@@ -3632,41 +3872,45 @@ function walkCommand(node, extraRedirects, innerCommands, varScope, bareAssignme
               nodeType: "variable_assignment",
             };
         }
-        let R = walkVariableAssignment(child, innerCommands, varScope, bareAssignmentNames);
-        if ("kind" in R) return R;
-        if (isIntegerVarAssignUnsafe(R.name, R.value))
+        let assignment = walkVariableAssignment(child, innerCommands, varScope, bareAssignmentNames);
+        if ("kind" in assignment) return assignment;
+        if (isIntegerVarAssignUnsafe(assignment.name, assignment.value))
           return {
             kind: "too-complex",
-            reason: `${R.name} has integer attribute \u2014 env-prefix arith-evals value, which can execute subscript command substitution or abort/diverge at runtime`,
+            reason: `${assignment.name} has integer attribute \u2014 env-prefix arith-evals value, which can execute subscript command substitution or abort/diverge at runtime`,
             nodeType: "variable_assignment",
           };
         envVars.push(
-          R.isAppend
+          assignment.isAppend
             ? {
-                name: R.name,
-                value: R.value,
+                name: assignment.name,
+                value: assignment.value,
                 isAppend: true,
               }
             : {
-                name: R.name,
-                value: R.value,
+                name: assignment.name,
+                value: assignment.value,
               },
         );
-        if (A) d = envVars.length - 1;
+        if (hasArithmeticChild) arithmeticPrefixIndex = envVars.length - 1;
         break;
       }
       case "command_name": {
-        let R = child.children[0] ?? child;
+        let commandNode = child.children[0] ?? child;
         if (isScrubEnabled()) {
-          if (R.type === "simple_expansion" || R.type === "expansion") return tooComplex(R);
-          if ((R.type === "string" || R.type === "concatenation") && containsExpansionNode(R))
-            return tooComplex(R);
+          if (commandNode.type === "simple_expansion" || commandNode.type === "expansion")
+            return tooComplex(commandNode);
+          if (
+            (commandNode.type === "string" || commandNode.type === "concatenation") &&
+            containsExpansionNode(commandNode)
+          )
+            return tooComplex(commandNode);
         }
-        let T = walkArgument(R, innerCommands, varScope, bareAssignmentNames);
-        if (typeof T !== "string") return T;
-        argv.push(T);
-        argvNodes.push(R);
-        argvUnquotedGlob.push(hasUnquotedGlob(R.text) || nodeHasUnquotedGlob(R));
+        let commandName = walkArgument(commandNode, innerCommands, varScope, bareAssignmentNames);
+        if (typeof commandName !== "string") return commandName;
+        argv.push(commandName);
+        argvNodes.push(commandNode);
+        argvUnquotedGlob.push(hasUnquotedGlob(commandNode.text) || nodeHasUnquotedGlob(commandNode));
         break;
       }
       case "word":
@@ -3698,25 +3942,25 @@ function walkCommand(node, extraRedirects, innerCommands, varScope, bareAssignme
         break;
       }
       case "file_redirect": {
-        let R = envVars[0]?.name;
-        if (R !== undefined && A) {
-          let v = prefixAssignmentMayFailResult(R);
-          if (v) return v;
+        let firstEnvName = envVars[0]?.name;
+        if (firstEnvName !== undefined && hasArithmeticChild) {
+          let refusal = prefixAssignmentMayFailResult(firstEnvName);
+          if (refusal) return refusal;
         }
-        let T = walkFileRedirect(child, innerCommands, varScope, bareAssignmentNames);
-        if ("kind" in T) return T;
-        redirects.push(T);
+        let result = walkFileRedirect(child, innerCommands, varScope, bareAssignmentNames);
+        if ("kind" in result) return result;
+        redirects.push(result);
         break;
       }
       case "herestring_redirect": {
         substitutionCount++;
-        let R = envVars[0]?.name;
-        if (R !== undefined && A) {
-          let v = prefixAssignmentMayFailResult(R);
-          if (v) return v;
+        let firstEnvName = envVars[0]?.name;
+        if (firstEnvName !== undefined && hasArithmeticChild) {
+          let refusal = prefixAssignmentMayFailResult(firstEnvName);
+          if (refusal) return refusal;
         }
-        let T = walkHerestringRedirect(child, innerCommands, varScope, bareAssignmentNames);
-        if (T) return T;
+        let failure = walkHerestringRedirect(child, innerCommands, varScope, bareAssignmentNames);
+        if (failure) return failure;
         break;
       }
       default:
@@ -3724,7 +3968,7 @@ function walkCommand(node, extraRedirects, innerCommands, varScope, bareAssignme
     }
   }
   if (scopeBeforeRedirects) {
-    let k = checkRedirectReadsPrefixVar(
+    let refusal = checkRedirectReadsPrefixVar(
       node.children,
       {
         argv,
@@ -3735,29 +3979,36 @@ function walkCommand(node, extraRedirects, innerCommands, varScope, bareAssignme
       varScope,
       bareAssignmentNames,
     );
-    if (k) return k;
+    if (refusal) return refusal;
   }
-  let p = envVars[0]?.name;
-  if (d > 0 && p !== undefined) {
-    let k = prefixAssignmentMayFailResult(p);
-    if (k) return k;
+  let firstEnvName = envVars[0]?.name;
+  if (arithmeticPrefixIndex > 0 && firstEnvName !== undefined) {
+    let refusal = prefixAssignmentMayFailResult(firstEnvName);
+    if (refusal) return refusal;
   }
   {
-    let k = applyCommandVariableWrites(argv, envVars, varScope, bareAssignmentNames, c > 0, hasArithmetic);
-    if (k) return k;
+    let refusal = applyCommandVariableWrites(
+      argv,
+      envVars,
+      varScope,
+      bareAssignmentNames,
+      innerCommandCount > 0,
+      hasArithmetic,
+    );
+    if (refusal) return refusal;
   }
   if (scopeBeforeRedirects) mergeScopeAfterConditional(varScope, scopeBeforeRedirects);
-  let g = (k, A) =>
-    k === "" || /["'\\ \t\n$`;|&<>(){}#]/.test(k) || (A === 0 && k.includes("="))
-      ? `'${k.replaceAll("'", "'\\''")}'`
-      : k;
+  let quoteWord = (word, index) =>
+    word === "" || /["'\\ \t\n$`;|&<>(){}#]/.test(word) || (index === 0 && word.includes("="))
+      ? `'${word.replaceAll("'", "'\\''")}'`
+      : word;
   let text =
     /\$[A-Za-z_]/.test(node.text) ||
     node.text.includes(`
 `)
       ? [
-          ...envVars.map((envVar) => `${envVar.name}=${g(envVar.value)}`),
-          ...argv.map((arg, A) => g(arg, A)),
+          ...envVars.map((envVar) => `${envVar.name}=${quoteWord(envVar.value)}`),
+          ...argv.map((arg, index) => quoteWord(arg, index)),
         ].join(" ")
       : node.text;
   let hasUnquotedGlob_2 = hasUnquotedGlob(node.text);
@@ -3808,34 +4059,38 @@ function walkCommandSubstitution(node, innerCommands, varScope, bareAssignmentNa
   if (allowPlainUnquotedHeredocs && collectCommandSubstitution(node, "heredoc_redirect"))
     return tooComplex(node);
   let innerScope = new Map(varScope);
-  let n = innerCommands.length;
-  let i = false;
+  let innerCommandCount = innerCommands.length;
+  let sawContent = false;
   {
     let buffer = Buffer.from(node.text, "utf8");
-    let l = (x) => x === 32 || x === 9 || x === 10 || x === 13 || x === 59 || x === 38;
-    let f = (x, u) => {
-      let h = x;
-      while (h < u) {
-        let d = buffer[h];
-        if (l(d)) h++;
-        else if (d === 92 && (buffer[h + 1] === 10 || (buffer[h + 1] === 13 && buffer[h + 2] === 10)))
-          h += buffer[h + 1] === 13 ? 3 : 2;
+    let isGapByte = (byte) =>
+      byte === 32 || byte === 9 || byte === 10 || byte === 13 || byte === 59 || byte === 38;
+    let isOnlyGap = (start, end) => {
+      let index = start;
+      while (index < end) {
+        let byte = buffer[index];
+        if (isGapByte(byte)) index++;
+        else if (
+          byte === 92 &&
+          (buffer[index + 1] === 10 || (buffer[index + 1] === 13 && buffer[index + 2] === 10))
+        )
+          index += buffer[index + 1] === 13 ? 3 : 2;
         else return false;
       }
       return true;
     };
-    let y = 0;
+    let cursor = 0;
     for (let child of node.children) {
       if (!child) continue;
-      let u = child.startIndex - node.startIndex;
-      if (!f(y, u))
+      let childStart = child.startIndex - node.startIndex;
+      if (!isOnlyGap(cursor, childStart))
         return {
           kind: "too-complex",
           reason: "command substitution contains bytes no parsed node accounts for",
         };
-      y = child.endIndex - node.startIndex;
+      cursor = child.endIndex - node.startIndex;
     }
-    if (!f(y, buffer.length))
+    if (!isOnlyGap(cursor, buffer.length))
       return {
         kind: "too-complex",
         reason: "command substitution contains bytes no parsed node accounts for",
@@ -3844,11 +4099,11 @@ function walkCommandSubstitution(node, innerCommands, varScope, bareAssignmentNa
   for (let child of node.children) {
     if (!child) continue;
     if (child.type === "$(" || child.type === "`" || child.type === ")") continue;
-    if (child.type !== "comment") i = true;
+    if (child.type !== "comment") sawContent = true;
     let commands = collectCommands(child, innerCommands, innerScope, bareAssignmentNames);
     if (commands) return commands;
   }
-  if (i && innerCommands.length === n) pushTrueCommand(innerCommands, node);
+  if (sawContent && innerCommands.length === innerCommandCount) pushTrueCommand(innerCommands, node);
   return null;
 }
 //@ chunk-r01896cg.js:67903-70413 fingerprint = walkArgument (0.634)
@@ -3920,22 +4175,22 @@ function walkArgument(node, innerCommands, varScope, bareAssignmentNames) {
           differential: true,
         };
       let result = "";
-      let n = false;
+      let sawBraceWord = false;
       let startIndex = node.startIndex;
       for (let k = 0; k < node.children.length; k++) {
-        let l = node.children[k];
-        if (!l) continue;
-        if (l.startIndex > startIndex)
+        let childNode = node.children[k];
+        if (!childNode) continue;
+        if (childNode.startIndex > startIndex)
           return {
             kind: "too-complex",
             reason:
               "Concatenation has unparsed bytes between children \u2014 parser dropped content that shell will see",
             nodeType: "concatenation",
           };
-        startIndex = l.endIndex;
-        if (l.type === "word" && l.text.includes("{")) n = true;
+        startIndex = childNode.endIndex;
+        if (childNode.type === "word" && childNode.text.includes("{")) sawBraceWord = true;
         if (
-          (l.type === "simple_expansion" || l.type === "expansion") &&
+          (childNode.type === "simple_expansion" || childNode.type === "expansion") &&
           (node.children[k + 1]?.text.startsWith("[") || /^:[a-zA-Z&]/.test(node.children[k + 1]?.text ?? ""))
         )
           return {
@@ -3944,11 +4199,11 @@ function walkArgument(node, innerCommands, varScope, bareAssignmentNames) {
             nodeType: "concatenation",
             differential: true,
           };
-        let part = walkArgument(l, innerCommands, varScope, bareAssignmentNames);
+        let part = walkArgument(childNode, innerCommands, varScope, bareAssignmentNames);
         if (typeof part !== "string") return part;
         result += part;
       }
-      if (n && (result.includes(",") || result.includes("..")))
+      if (sawBraceWord && (result.includes(",") || result.includes("..")))
         return {
           kind: "too-complex",
           reason: "Brace expansion (unquoted `{` in concatenation with `,`/`..`)",
@@ -3990,9 +4245,9 @@ function walkArgument(node, innerCommands, varScope, bareAssignmentNames) {
 function walkString(node, innerCommands, varScope, bareAssignmentNames) {
   let result = "";
   let cursor = -1;
-  let i = false;
-  let c = false;
-  let l = false;
+  let sawPlaceholder = false;
+  let sawContent = false;
+  let sawEmptyExpansion = false;
   for (let child of node.children) {
     if (!child) continue;
     if (cursor !== -1 && child.startIndex > cursor) {
@@ -4009,7 +4264,7 @@ function walkString(node, innerCommands, varScope, bareAssignmentNames) {
         };
       if (str.length > 0) {
         result += str;
-        c = true;
+        sawContent = true;
       }
     }
     switch (((cursor = child.endIndex), child.type)) {
@@ -4018,32 +4273,32 @@ function walkString(node, innerCommands, varScope, bareAssignmentNames) {
         break;
       case "string_content":
         result += child.text.replace(/\\\n/g, "").replace(/\\([$`"\\])/g, "$1");
-        c = true;
+        sawContent = true;
         break;
       case DOLLAR: {
         let index = node.children.indexOf(child);
-        let x = node.children[index + 1];
-        if (x?.type === "string_content") {
-          if (x.text.startsWith("["))
+        let nextNode = node.children[index + 1];
+        if (nextNode?.type === "string_content") {
+          if (nextNode.text.startsWith("["))
             return {
               kind: "too-complex",
               reason: "Legacy $[...] arithmetic inside double-quotes \u2014 recursive subscript eval",
               nodeType: "string",
               differential: true,
             };
-          if (/^[+^=~]/.test(x.text))
+          if (/^[+^=~]/.test(nextNode.text))
             return {
               kind: "too-complex",
               reason: "zsh $+/$^/$=/$~ prefix-flag expansion \u2014 value defeats downstream content checks",
               nodeType: "string",
               differential: true,
             };
-          let u = node.children[index - 1];
+          let previousNode = node.children[index - 1];
           if (
-            /^:[a-zA-Z&]/.test(x.text) &&
-            u?.type === "simple_expansion" &&
-            u.endIndex === child.startIndex &&
-            u.children.some((child) => child?.type === "special_variable_name")
+            /^:[a-zA-Z&]/.test(nextNode.text) &&
+            previousNode?.type === "simple_expansion" &&
+            previousNode.endIndex === child.startIndex &&
+            previousNode.children.some((child) => child?.type === "special_variable_name")
           )
             return {
               kind: "too-complex",
@@ -4053,7 +4308,7 @@ function walkString(node, innerCommands, varScope, bareAssignmentNames) {
             };
         }
         result += DOLLAR;
-        c = true;
+        sawContent = true;
         break;
       }
       case "command_substitution": {
@@ -4076,19 +4331,19 @@ function walkString(node, innerCommands, varScope, bareAssignmentNames) {
             result +=
               `
 ` + CMDSUB_PLACEHOLDER;
-            c = true;
+            sawContent = true;
             break;
           }
           catHeredocInlineCount++;
           result += trimmed;
-          c = true;
+          sawContent = true;
           break;
         }
         let err = walkCommandSubstitution(child, innerCommands, varScope, bareAssignmentNames);
         if (err) return err;
         substitutionCount++;
         result += CMDSUB_PLACEHOLDER;
-        i = true;
+        sawPlaceholder = true;
         break;
       }
       case "simple_expansion": {
@@ -4096,13 +4351,13 @@ function walkString(node, innerCommands, varScope, bareAssignmentNames) {
         let err = resolveSimpleExpansion(child, varScope, true);
         if (typeof err !== "string") return err;
         {
-          let x = node.children[node.children.indexOf(child) + 1];
+          let nextNode = node.children[node.children.indexOf(child) + 1];
           let any = child.children.some((child) => child?.type === "special_variable_name");
           if (
-            x?.type === "string_content" &&
-            (x.text.startsWith("[") ||
-              /^:[a-zA-Z&]/.test(x.text) ||
-              (any && ZSH_SUBSCRIPT_OR_MODIFIER_RE.test(x.text)))
+            nextNode?.type === "string_content" &&
+            (nextNode.text.startsWith("[") ||
+              /^:[a-zA-Z&]/.test(nextNode.text) ||
+              (any && ZSH_SUBSCRIPT_OR_MODIFIER_RE.test(nextNode.text)))
           )
             return {
               kind: "too-complex",
@@ -4111,9 +4366,9 @@ function walkString(node, innerCommands, varScope, bareAssignmentNames) {
               differential: true,
             };
         }
-        if (containsAnyPlaceholder(err)) i = true;
-        else if (err !== "") c = true;
-        else l = true;
+        if (containsAnyPlaceholder(err)) sawPlaceholder = true;
+        else if (err !== "") sawContent = true;
+        else sawEmptyExpansion = true;
         result += err;
         break;
       }
@@ -4122,18 +4377,18 @@ function walkString(node, innerCommands, varScope, bareAssignmentNames) {
         if (err) return err;
         substitutionCount++;
         result += VAR_PLACEHOLDER;
-        i = true;
+        sawPlaceholder = true;
         break;
       }
       default:
         return tooComplex(child);
     }
   }
-  if (i) {
+  if (sawPlaceholder) {
     if ([...result.replaceAll(CMDSUB_PLACEHOLDER, "").replaceAll(VAR_PLACEHOLDER, "")].length <= 1)
       return tooComplex(node);
   }
-  if (!c && !i && !l && node.text.length > 2) {
+  if (!sawContent && !sawPlaceholder && !sawEmptyExpansion && node.text.length > 2) {
     let sliced = node.text.slice(1, -1);
     if (sliced.includes("`") || sliced.includes("$("))
       return {
@@ -4314,65 +4569,68 @@ function walkVariableAssignment(node, innerCommands, varScope, bareAssignmentNam
 /**
  * bash/zsh 会隐式改写的特殊变量集合（_、RANDOM、SECONDS、REPLY、PIPESTATUS、BASH_REMATCH、MATCH、OPTARG、PS1 等），这些变量的值不能当作已跟踪的常量。
  */
-var BASH_IMPLICITLY_REBOUND_VARS = new Set([
-  "_",
-  "RANDOM",
-  "SECONDS",
-  "LINENO",
-  "BASH_COMMAND",
-  "FUNCNAME",
-  "EPOCHSECONDS",
-  "EPOCHREALTIME",
-  "SRANDOM",
-  "BASHPID",
-  "BASH_MONOSECONDS",
-  "BASH_TRAPSIG",
-  "HISTCMD",
-  "ERRNO",
-  "REPLY",
-  "reply",
-  "PIPESTATUS",
-  "pipestatus",
-  "BASH_SOURCE",
-  "DIRSTACK",
-  "GROUPS",
-  "BASH_ARGV",
-  "BASH_ARGC",
-  "BASH_SUBSHELL",
-  "BASH_LINENO",
-  "BASH_ARGV0",
-  "BASH_REMATCH",
-  "MATCH",
-  "match",
-  "MBEGIN",
-  "MEND",
-  "mbegin",
-  "mend",
-  "OPTARG",
-  "OPTIND",
-  "argv",
-  "FIGNORE",
-  "fignore",
-  "PSVAR",
-  "psvar",
-  "WATCH",
-  "watch",
-  "HISTCHARS",
-  "histchars",
-  "PS1",
-  "PROMPT",
-  "prompt",
-  "PS2",
-  "PROMPT2",
-  "PS3",
-  "PROMPT3",
-  "PS4",
-  "PROMPT4",
-  "RPS1",
-  "RPROMPT",
-  "RPS2",
-  "RPROMPT2",
-]);
+var BASH_IMPLICITLY_REBOUND_VARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-r01896cg.js:76097", () => {
+  BASH_IMPLICITLY_REBOUND_VARS = new Set([
+    "_",
+    "RANDOM",
+    "SECONDS",
+    "LINENO",
+    "BASH_COMMAND",
+    "FUNCNAME",
+    "EPOCHSECONDS",
+    "EPOCHREALTIME",
+    "SRANDOM",
+    "BASHPID",
+    "BASH_MONOSECONDS",
+    "BASH_TRAPSIG",
+    "HISTCMD",
+    "ERRNO",
+    "REPLY",
+    "reply",
+    "PIPESTATUS",
+    "pipestatus",
+    "BASH_SOURCE",
+    "DIRSTACK",
+    "GROUPS",
+    "BASH_ARGV",
+    "BASH_ARGC",
+    "BASH_SUBSHELL",
+    "BASH_LINENO",
+    "BASH_ARGV0",
+    "BASH_REMATCH",
+    "MATCH",
+    "match",
+    "MBEGIN",
+    "MEND",
+    "mbegin",
+    "mend",
+    "OPTARG",
+    "OPTIND",
+    "argv",
+    "FIGNORE",
+    "fignore",
+    "PSVAR",
+    "psvar",
+    "WATCH",
+    "watch",
+    "HISTCHARS",
+    "histchars",
+    "PS1",
+    "PROMPT",
+    "prompt",
+    "PS2",
+    "PROMPT2",
+    "PS3",
+    "PROMPT3",
+    "PS4",
+    "PROMPT4",
+    "RPS1",
+    "RPROMPT",
+    "RPS2",
+    "RPROMPT2",
+  ]);
+});
 //@ chunk-r01896cg.js:76691-77367 fingerprint = resolveSimpleExpansion (0.525)
 /**
  * 解析 $var：作用域里有值时返回值（不确定值→too-complex+divergentShape；动态变量只在引号内且是安全环境变量时返回占位符；裸用时空值或含空白/通配的值拒绝）；HOME 取本机 homedir；引号内的安全环境变量与特殊变量返回 VAR_PLACEHOLDER；其余 too-complex。
@@ -4393,37 +4651,37 @@ function resolveSimpleExpansion(node, varScope, insideString) {
   }
   if (varName === null) return tooComplex(node);
   let trackedValue = varScope.get(varName);
-  let i = trackedValue === undefined ? undefined : stripUncertainPrefix(trackedValue);
-  if (i !== undefined) {
-    if (i.includes(UNCERTAIN_VAR_PLACEHOLDER)) {
-      let c = tooComplex(node);
-      return c.kind === "too-complex" && !readingDivergentShapes
+  let value = trackedValue === undefined ? undefined : stripUncertainPrefix(trackedValue);
+  if (value !== undefined) {
+    if (value.includes(UNCERTAIN_VAR_PLACEHOLDER)) {
+      let failure = tooComplex(node);
+      return failure.kind === "too-complex" && !readingDivergentShapes
         ? {
-            ...c,
+            ...failure,
             divergentShape: true,
           }
-        : c;
+        : failure;
     }
     if (BASH_IMPLICITLY_REBOUND_VARS.has(varName))
       return insideString && SAFE_ENV_VARS.has(varName) && varName !== "BASHPID"
         ? VAR_PLACEHOLDER
         : tooComplex(node);
-    if (containsAnyPlaceholder(i)) {
+    if (containsAnyPlaceholder(value)) {
       if (!insideString) return tooComplex(node);
-      usedAssignedValue ||= i !== VAR_PLACEHOLDER && i !== CMDSUB_PLACEHOLDER;
-      return i;
+      usedAssignedValue ||= value !== VAR_PLACEHOLDER && value !== CMDSUB_PLACEHOLDER;
+      return value;
     }
     if (!insideString) {
-      if (i === "") return tooComplex(node);
-      if (BARE_VAR_UNSAFE_RE.test(i)) return tooComplex(node);
+      if (value === "") return tooComplex(node);
+      if (BARE_VAR_UNSAFE_RE.test(value)) return tooComplex(node);
     }
     usedAssignedValue = true;
-    return i;
+    return value;
   }
   if (varName === "HOME") {
-    let c = homedir();
-    if (!insideString && (c === "" || BARE_VAR_UNSAFE_RE.test(c))) return tooComplex(node);
-    return c;
+    let home = homedir();
+    if (!insideString && (home === "" || BARE_VAR_UNSAFE_RE.test(home))) return tooComplex(node);
+    return home;
   }
   if (insideString) {
     if (SAFE_ENV_VARS.has(varName)) return VAR_PLACEHOLDER;
@@ -4447,59 +4705,59 @@ function collectLoopWrites(loopNode, commands, varScope, bareAssignmentNames) {
       reason: "Loops nested too deeply to follow the variables they change",
       nodeType: loopNode.type,
     };
-  let o = new Map(varScope);
-  let n = currentLoopNode;
-  let i = usedAssignedValue;
-  let c = sawUncertainWrite;
-  let l = declarationPrefixCount;
-  let f = declarationPrefixBashKeeps;
-  let y = declarationPrefixValues;
-  let x = prefixAssignInBranch;
-  declarationPrefixValues = new Map(y);
+  let probeScope = new Map(varScope);
+  let savedLoopNode = currentLoopNode;
+  let savedUsedAssignedValue = usedAssignedValue;
+  let savedUncertainWrite = sawUncertainWrite;
+  let savedPrefixCount = declarationPrefixCount;
+  let savedBashKeeps = declarationPrefixBashKeeps;
+  let savedPrefixValues = declarationPrefixValues;
+  let savedPrefixInBranch = prefixAssignInBranch;
+  declarationPrefixValues = new Map(savedPrefixValues);
   currentLoopNode = loopNode;
   loopDepth++;
-  let commands_2 = collectCommands(loopNode, [...commands], o, [...bareAssignmentNames]);
+  let commands_2 = collectCommands(loopNode, [...commands], probeScope, [...bareAssignmentNames]);
   loopDepth--;
-  currentLoopNode = n;
-  usedAssignedValue = i;
-  sawUncertainWrite = c;
-  declarationPrefixCount = l;
-  declarationPrefixBashKeeps = f;
-  declarationPrefixValues = y;
-  prefixAssignInBranch = x;
-  return commands_2 ?? [...varScope.keys()].filter((key) => o.get(key) !== varScope.get(key));
+  currentLoopNode = savedLoopNode;
+  usedAssignedValue = savedUsedAssignedValue;
+  sawUncertainWrite = savedUncertainWrite;
+  declarationPrefixCount = savedPrefixCount;
+  declarationPrefixBashKeeps = savedBashKeeps;
+  declarationPrefixValues = savedPrefixValues;
+  prefixAssignInBranch = savedPrefixInBranch;
+  return commands_2 ?? [...varScope.keys()].filter((key) => probeScope.get(key) !== varScope.get(key));
 }
 //@ chunk-r01896cg.js:77739-78254 layout
-function markUnsetOperandsUnknown(e, varScope) {
-  let r = () => {
+function markUnsetOperandsUnknown(operands, varScope) {
+  let markAllUnknown = () => {
     for (let key of varScope.keys()) markVarUnknown(varScope, key);
   };
-  for (let s of e) {
-    if (s?.type === "unset" && s.text === "unsetenv") return;
+  for (let operand of operands) {
+    if (operand?.type === "unset" && operand.text === "unsetenv") return;
     if (
-      !s ||
-      s.type === "unset" ||
-      s.type === "file_redirect" ||
-      s.type === "heredoc_redirect" ||
-      s.type === "herestring_redirect"
+      !operand ||
+      operand.type === "unset" ||
+      operand.type === "file_redirect" ||
+      operand.type === "heredoc_redirect" ||
+      operand.type === "herestring_redirect"
     )
       continue;
-    if (s.type === "variable_name") {
-      markVarUnknown(varScope, s.text.replace(/\\/g, ""));
+    if (operand.type === "variable_name") {
+      markVarUnknown(varScope, operand.text.replace(/\\/g, ""));
       continue;
     }
-    if (s.type === "word") {
-      if (s.text.startsWith("-")) {
-        if (s.text === "--" || /^-[fvn]+$/.test(s.text)) continue;
-        r();
+    if (operand.type === "word") {
+      if (operand.text.startsWith("-")) {
+        if (operand.text === "--" || /^-[fvn]+$/.test(operand.text)) continue;
+        markAllUnknown();
         continue;
       }
-      if (/^\\?[A-Za-z_][A-Za-z0-9_]*$/.test(s.text)) {
-        markVarUnknown(varScope, s.text.replace(/^\\/, ""));
+      if (/^\\?[A-Za-z_][A-Za-z0-9_]*$/.test(operand.text)) {
+        markVarUnknown(varScope, operand.text.replace(/^\\/, ""));
         continue;
       }
     }
-    r();
+    markAllUnknown();
   }
 }
 //@ chunk-r01896cg.js:78254-78693 layout
@@ -4518,13 +4776,13 @@ function staticWordValue(child) {
       return null;
     }
     case "concatenation": {
-      let t = "";
+      let joined = "";
       for (let child_2 of child.children) {
-        let s = staticWordValue(child_2);
-        if (s === null) return null;
-        t += s;
+        let part = staticWordValue(child_2);
+        if (part === null) return null;
+        joined += part;
       }
-      return t;
+      return joined;
     }
     default:
       return null;
@@ -4543,20 +4801,20 @@ function markWrittenVarsUnknown(node, varScope) {
   )
     return;
   if (node.type === "pipeline") {
-    let r = null;
-    for (let child of node.children) if (child && !SEPARATOR_TYPES.has(child.type)) r = child;
-    if (r) markWrittenVarsUnknown(r, varScope);
+    let lastCommand = null;
+    for (let child of node.children) if (child && !SEPARATOR_TYPES.has(child.type)) lastCommand = child;
+    if (lastCommand) markWrittenVarsUnknown(lastCommand, varScope);
     return;
   }
   if (node.type === "list" || node.type === "program") {
     let children = node.children;
     for (let i = 0; i < children.length; i++) {
-      let o = children[i];
-      if (!o || SEPARATOR_TYPES.has(o.type)) continue;
-      let n = i + 1;
-      while (n < children.length && !children[n]) n++;
-      if (children[n]?.type === "&") continue;
-      markWrittenVarsUnknown(o, varScope);
+      let child = children[i];
+      if (!child || SEPARATOR_TYPES.has(child.type)) continue;
+      let nextIndex = i + 1;
+      while (nextIndex < children.length && !children[nextIndex]) nextIndex++;
+      if (children[nextIndex]?.type === "&") continue;
+      markWrittenVarsUnknown(child, varScope);
     }
     return;
   }
@@ -4576,118 +4834,130 @@ function markWrittenVarsUnknown(node, varScope) {
   }
   if (node.type === "unset_command") markUnsetOperandsUnknown(node.children, varScope);
   if (node.type === "command") {
-    let r;
-    let s;
-    let o = [];
-    let n = [];
-    let i = false;
+    let commandName;
+    let commandNode;
+    let words = [];
+    let wordNodes = [];
+    let sawName = false;
     for (let child of node.children) {
       if (!child) continue;
       if (child.type === "command_name") {
-        s = child;
-        r = staticWordValue(child.children[0] ?? child) ?? undefined;
-        i = true;
+        commandNode = child;
+        commandName = staticWordValue(child.children[0] ?? child) ?? undefined;
+        sawName = true;
       } else if (
-        !i ||
+        !sawName ||
         child.type === "file_redirect" ||
         child.type === "herestring_redirect" ||
         child.type === "heredoc_redirect"
       );
       else {
-        o.push(staticWordValue(child) ?? "");
-        n.push(child);
+        words.push(staticWordValue(child) ?? "");
+        wordNodes.push(child);
       }
     }
-    let c = false;
-    let l;
-    while (r !== undefined && (COMMAND_WRAPPER_BUILTINS.has(r) || r === "!")) {
-      if ((l === "builtin" || l === "command") && r !== "builtin" && r !== "command" && r !== "noglob")
-        c = true;
-      let d = r === "!" ? undefined : r;
-      while (o.length > 0) {
-        let m = o[0];
-        if (/^-[-pvV]*$/.test(m)) {
-          if (/[vV]/.test(m) || (d === "builtin" && /p/.test(m) && isStagedPumpkinEnabled())) c = true;
-          o.shift();
-          n.shift();
-        } else if (/^[A-Za-z_]\w*(\[[^\]]*\])?\+?=/.test(m)) {
+    let wrappedComplex = false;
+    let previousWrapper;
+    while (commandName !== undefined && (COMMAND_WRAPPER_BUILTINS.has(commandName) || commandName === "!")) {
+      if (
+        (previousWrapper === "builtin" || previousWrapper === "command") &&
+        commandName !== "builtin" &&
+        commandName !== "command" &&
+        commandName !== "noglob"
+      )
+        wrappedComplex = true;
+      let currentWrapper = commandName === "!" ? undefined : commandName;
+      while (words.length > 0) {
+        let word = words[0];
+        if (/^-[-pvV]*$/.test(word)) {
           if (
-            d !== undefined &&
-            ASSIGNING_WRAPPERS.has(d) &&
-            ((SAFE_PREFIX_ASSIGN_RE.test(m) && !containsAnyPlaceholder(m)) || readingDivergentShapes) &&
+            /[vV]/.test(word) ||
+            (currentWrapper === "builtin" && /p/.test(word) && isStagedPumpkinEnabled())
+          )
+            wrappedComplex = true;
+          words.shift();
+          wordNodes.shift();
+        } else if (/^[A-Za-z_]\w*(\[[^\]]*\])?\+?=/.test(word)) {
+          if (
+            currentWrapper !== undefined &&
+            ASSIGNING_WRAPPERS.has(currentWrapper) &&
+            ((SAFE_PREFIX_ASSIGN_RE.test(word) && !containsAnyPlaceholder(word)) || readingDivergentShapes) &&
             isStagedPumpkinEnabled()
           )
-            c = true;
-          let p = m.match(/^[A-Za-z_][A-Za-z0-9_]*/)[0];
-          markVarUnknown(varScope, p);
-          o.shift();
-          n.shift();
-          d = undefined;
+            wrappedComplex = true;
+          let name = word.match(/^[A-Za-z_][A-Za-z0-9_]*/)[0];
+          markVarUnknown(varScope, name);
+          words.shift();
+          wordNodes.shift();
+          currentWrapper = undefined;
         } else break;
       }
-      l = d;
-      r = o.shift();
-      n.shift();
+      previousWrapper = currentWrapper;
+      commandName = words.shift();
+      wordNodes.shift();
     }
-    let f = o;
-    let y = (d) => {
-      if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(d)) markVarUnknown(varScope, d);
+    let args = words;
+    let markName = (arg) => {
+      if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(arg)) markVarUnknown(varScope, arg);
     };
-    if (r === "read" && !isBashReadingMode()) {
+    if (commandName === "read" && !isBashReadingMode()) {
       markVarUnknown(varScope, "REPLY");
-      let d = 0;
-      let m = false;
-      while (d < f.length) {
-        let p = f[d];
-        if (!m && p === "--") {
-          m = true;
-          d++;
+      let index = 0;
+      let afterDoubleDash = false;
+      while (index < args.length) {
+        let arg = args[index];
+        if (!afterDoubleDash && arg === "--") {
+          afterDoubleDash = true;
+          index++;
           continue;
         }
-        if (!m && p.startsWith("-")) {
-          if (READ_DATA_FLAGS.has(p)) {
-            d += 2;
+        if (!afterDoubleDash && arg.startsWith("-")) {
+          if (READ_DATA_FLAGS.has(arg)) {
+            index += 2;
             continue;
           }
-          let g = false;
-          for (let k = 1; k < p.length; k++) {
-            let b = p[k];
-            if (b === "a" || b === "A") {
-              y(k < p.length - 1 ? p.slice(k + 1) : (f[d + 1] ?? ""));
-              g = k === p.length - 1;
+          let flagEndsCluster = false;
+          for (let k = 1; k < arg.length; k++) {
+            let flagChar = arg[k];
+            if (flagChar === "a" || flagChar === "A") {
+              markName(k < arg.length - 1 ? arg.slice(k + 1) : (args[index + 1] ?? ""));
+              flagEndsCluster = k === arg.length - 1;
               break;
             }
-            if (READ_DATA_FLAGS.has("-" + b)) {
-              g = k === p.length - 1;
+            if (READ_DATA_FLAGS.has("-" + flagChar)) {
+              flagEndsCluster = k === arg.length - 1;
               break;
             }
           }
-          d += g ? 2 : 1;
+          index += flagEndsCluster ? 2 : 1;
           continue;
         }
-        y(p);
-        d++;
+        markName(arg);
+        index++;
       }
-    } else if (r === "mapfile" || r === "readarray") {
+    } else if (commandName === "mapfile" || commandName === "readarray") {
       markVarUnknown(varScope, "MAPFILE");
-      for (let k = 0; k < f.length; k++) {
-        let m = f[k];
-        if (m.startsWith("-")) {
-          if (/^-[dnOsuCc]$/.test(m)) k++;
+      for (let k = 0; k < args.length; k++) {
+        let arg = args[k];
+        if (arg.startsWith("-")) {
+          if (/^-[dnOsuCc]$/.test(arg)) k++;
           continue;
         }
-        y(m);
+        markName(arg);
       }
-    } else if (r === "unset" && !c) markUnsetOperandsUnknown(n, varScope);
-    let x = s?.children[0];
-    let u = x?.type === "word" ? x.text.replace(/\\(.)/g, "$1") : undefined;
-    let h =
-      u !== undefined &&
-      !POSIX_SPECIAL_BUILTINS_NONEVAL.has(u) &&
-      !COMMAND_WRAPPER_BUILTINS.has(u) &&
-      !(currentDeclarationPrefix === undefined ? DECLARATION_BUILTINS : DECLARATION_BUILTINS_ZSH).has(u);
+    } else if (commandName === "unset" && !wrappedComplex) markUnsetOperandsUnknown(wordNodes, varScope);
+    let nameNode = commandNode?.children[0];
+    let commandText = nameNode?.type === "word" ? nameNode.text.replace(/\\(.)/g, "$1") : undefined;
+    let walkAssignments =
+      commandText !== undefined &&
+      !POSIX_SPECIAL_BUILTINS_NONEVAL.has(commandText) &&
+      !COMMAND_WRAPPER_BUILTINS.has(commandText) &&
+      !(currentDeclarationPrefix === undefined ? DECLARATION_BUILTINS : DECLARATION_BUILTINS_ZSH).has(
+        commandText,
+      );
     for (let child of node.children)
-      if (child && (child.type !== "variable_assignment" || !h)) markWrittenVarsUnknown(child, varScope);
+      if (child && (child.type !== "variable_assignment" || !walkAssignments))
+        markWrittenVarsUnknown(child, varScope);
     return;
   }
   if (node.type === "declaration_command") {
@@ -4714,12 +4984,13 @@ function markWrittenVarsUnknown(node, varScope) {
 }
 //@ chunk-r01896cg.js:81485-81650 layout
 function mergeScopeInto(target, branchScope) {
-  for (let [r, s] of branchScope) {
-    let o = target.get(r);
-    if (o !== undefined && o !== s) {
-      let n = stripUncertainPrefix(s);
-      if (declarationPrefixValues.get(r) === n && stripUncertainPrefix(o) !== n) prefixAssignInBranch = true;
-      markVarUnknown(target, r);
+  for (let [name, value] of branchScope) {
+    let existing = target.get(name);
+    if (existing !== undefined && existing !== value) {
+      let stripped = stripUncertainPrefix(value);
+      if (declarationPrefixValues.get(name) === stripped && stripUncertainPrefix(existing) !== stripped)
+        prefixAssignInBranch = true;
+      markVarUnknown(target, name);
     }
   }
   for (let key of target.keys()) if (!branchScope.has(key)) markVarUnknown(target, key);
@@ -4734,17 +5005,17 @@ function applyVarToScope(varScope, assignment, markUnknown = false) {
     return;
   }
   if (assignment.isAppend && !varScope.has(assignment.name)) return;
-  let s = varScope.get(assignment.name);
+  let existing = varScope.get(assignment.name);
   if (
-    s !== undefined &&
-    s !== assignment.value &&
+    existing !== undefined &&
+    existing !== assignment.value &&
     !assignment.isAppend &&
     !containsAnyPlaceholder(assignment.value)
   ) {
     markVarUnknown(varScope, assignment.name);
     return;
   }
-  let combined = assignment.isAppend ? (s ?? "") + assignment.value : assignment.value;
+  let combined = assignment.isAppend ? (existing ?? "") + assignment.value : assignment.value;
   varScope.set(assignment.name, combined);
 }
 //@ chunk-r01896cg.js:81885-81921 file-local
@@ -4752,8 +5023,8 @@ function stripRawString(text) {
   return text.slice(1, -1);
 }
 //@ chunk-r01896cg.js:81921-82065 layout
-function containsExpansionNode(e) {
-  for (let child of e.children) {
+function containsExpansionNode(node) {
+  for (let child of node.children) {
     if (!child) continue;
     if (child.type === "simple_expansion" || child.type === "expansion") return true;
     if (containsExpansionNode(child)) return true;
@@ -4768,19 +5039,19 @@ function tildeVarName(text) {
   return null;
 }
 //@ chunk-r01896cg.js:82229-82512 layout
-function findReferencedVar(child, t) {
-  let r = child.type === "variable_assignment";
+function findReferencedVar(child, names) {
+  let isDefinition = child.type === "variable_assignment";
   for (let child_2 of child.children) {
     if (!child_2) continue;
     if (child_2.type === "variable_name") {
-      if (r) continue;
-      if (t.has(child_2.text)) return child_2.text;
+      if (isDefinition) continue;
+      if (names.has(child_2.text)) return child_2.text;
     }
     if (child_2.type === "word") {
-      let n = tildeVarName(child_2.text);
-      if (n !== null && t.has(n)) return n;
+      let tildeName = tildeVarName(child_2.text);
+      if (tildeName !== null && names.has(tildeName)) return tildeName;
     }
-    let referencedVar = findReferencedVar(child_2, t);
+    let referencedVar = findReferencedVar(child_2, names);
     if (referencedVar !== null) return referencedVar;
   }
   return null;
@@ -4799,10 +5070,10 @@ function tooComplex(node) {
           : "Parse error",
       nodeType: node.type,
     };
-  let t = DANGEROUS_TYPES.get(node.type);
+  let label = DANGEROUS_TYPES.get(node.type);
   return {
     kind: "too-complex",
-    reason: `${t === undefined ? "This command" : `${t} in this command`} can't be checked before it runs`,
+    reason: `${label === undefined ? "This command" : `${label} in this command`} can't be checked before it runs`,
     nodeType: node.type,
   };
 }
@@ -4810,183 +5081,190 @@ function tooComplex(node) {
 /**
  * 节点类型 → 用户可读描述（A variable、A nested command、A here-document…），tooComplex 生成理由时使用。
  */
-var DANGEROUS_TYPES = new Map([
-  ["simple_expansion", "A variable"],
-  ["expansion", "A variable in braces"],
-  ["command_substitution", "A nested command"],
-  ["process_substitution", "A command used as a file"],
-  ["brace_expression", "A brace pattern"],
-  ["ansi_c_string", "Text with escape codes"],
-  ["translated_string", "Translatable text"],
-  ["test_command", "A test in brackets"],
-  ["herestring_redirect", "A here-string"],
-  ["heredoc_redirect", "A here-document"],
-  ["subshell", "A group in parentheses"],
-  ["compound_statement", "A group in braces or double parentheses"],
-  ["for_statement", "A for or select loop"],
-  ["c_style_for_statement", "A counting for loop"],
-  ["while_statement", "A while or until loop"],
-  ["until_statement", "An until loop"],
-  ["if_statement", "An if statement"],
-  ["case_statement", "A case statement"],
-  ["function_definition", "A function definition"],
-  ["array", "A list of values"],
-  ["string", "Quoted text"],
-  ["file_redirect", "A file redirect"],
-  ["pipeline", "A pipeline"],
-  ["concatenation", "Joined pieces of text"],
-  ["variable_assignment", "A variable assignment"],
-  ["variable_assignments", "Variable assignments"],
-]);
+var DANGEROUS_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-r01896cg.js:82897", () => {
+  DANGEROUS_TYPES = new Map([
+    ["simple_expansion", "A variable"],
+    ["expansion", "A variable in braces"],
+    ["command_substitution", "A nested command"],
+    ["process_substitution", "A command used as a file"],
+    ["brace_expression", "A brace pattern"],
+    ["ansi_c_string", "Text with escape codes"],
+    ["translated_string", "Translatable text"],
+    ["test_command", "A test in brackets"],
+    ["herestring_redirect", "A here-string"],
+    ["heredoc_redirect", "A here-document"],
+    ["subshell", "A group in parentheses"],
+    ["compound_statement", "A group in braces or double parentheses"],
+    ["for_statement", "A for or select loop"],
+    ["c_style_for_statement", "A counting for loop"],
+    ["while_statement", "A while or until loop"],
+    ["until_statement", "An until loop"],
+    ["if_statement", "An if statement"],
+    ["case_statement", "A case statement"],
+    ["function_definition", "A function definition"],
+    ["array", "A list of values"],
+    ["string", "Quoted text"],
+    ["file_redirect", "A file redirect"],
+    ["pipeline", "A pipeline"],
+    ["concatenation", "Joined pieces of text"],
+    ["variable_assignment", "A variable assignment"],
+    ["variable_assignments", "Variable assignments"],
+  ]);
+});
 //@ chunk-r01896cg.js:83970-84415 facade-majority
 /**
  * 提取文本中所有 ${…} 的内部内容（尊重引号与嵌套）。
  */
-function liveBracedExpansionBodies(e) {
-  let t = [];
-  let r = 0;
-  let s = false;
-  let o = false;
-  while (r < e.length) {
-    let n = e[r];
-    if (n === "\\" && !s) {
-      r += 2;
+function liveBracedExpansionBodies(text) {
+  let bodies = [];
+  let index = 0;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  while (index < text.length) {
+    let char = text[index];
+    if (char === "\\" && !inSingleQuote) {
+      index += 2;
       continue;
     }
-    if (n === "'" && !o) {
-      s = !s;
-      r++;
+    if (char === "'" && !inDoubleQuote) {
+      inSingleQuote = !inSingleQuote;
+      index++;
       continue;
     }
-    if (n === '"' && !s) {
-      o = !o;
-      r++;
+    if (char === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote;
+      index++;
       continue;
     }
-    if (!s && n === "$" && e[r + 1] === "{") {
-      let i = 1;
-      let c = r + 2;
-      let l = false;
-      let f = false;
-      while (c < e.length && i > 0) {
-        let y = e[c];
-        if (y === "\\" && !l) {
-          c += 2;
+    if (!inSingleQuote && char === "$" && text[index + 1] === "{") {
+      let depth = 1;
+      let bodyStart = index + 2;
+      let innerSingle = false;
+      let innerDouble = false;
+      while (bodyStart < text.length && depth > 0) {
+        let innerChar = text[bodyStart];
+        if (innerChar === "\\" && !innerSingle) {
+          bodyStart += 2;
           continue;
         }
-        if (y === "'" && !f) l = !l;
-        else if (y === '"' && !l) f = !f;
-        else if (!l && !f) {
-          if (y === "{") i++;
-          else if (y === "}") i--;
+        if (innerChar === "'" && !innerDouble) innerSingle = !innerSingle;
+        else if (innerChar === '"' && !innerSingle) innerDouble = !innerDouble;
+        else if (!innerSingle && !innerDouble) {
+          if (innerChar === "{") depth++;
+          else if (innerChar === "}") depth--;
         }
-        c++;
+        bodyStart++;
       }
-      t.push(e.slice(r + 2, i === 0 ? c - 1 : c));
-      r = c;
+      bodies.push(text.slice(index + 2, depth === 0 ? bodyStart - 1 : bodyStart));
+      index = bodyStart;
       continue;
     }
-    r++;
+    index++;
   }
-  return t;
+  return bodies;
 }
 //@ chunk-r01896cg.js:84415-84691 facade-majority
 /**
  * 去掉反斜杠转义（保留会影响引号或展开的转义），单引号区原样保留，用于比较命令文本的字面形态。
  */
-function stripLiteralQuotedRegions(e) {
-  let t = "";
-  let r = false;
-  let s = false;
-  for (let k = 0; k < e.length; k++) {
-    let n = e[k];
-    if (r) {
-      if (n === "'") {
-        r = false;
-        t += n;
+function stripLiteralQuotedRegions(text) {
+  let out = "";
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  for (let k = 0; k < text.length; k++) {
+    let char = text[k];
+    if (inSingleQuote) {
+      if (char === "'") {
+        inSingleQuote = false;
+        out += char;
       }
       continue;
     }
-    if (n === "\\" && !r) {
-      let i = e[k + 1];
+    if (char === "\\" && !inSingleQuote) {
+      let escaped = text[k + 1];
       k++;
-      if (i !== undefined && !"$'\"`\\".includes(i)) t += i;
+      if (escaped !== undefined && !"$'\"`\\".includes(escaped)) out += escaped;
       continue;
     }
-    if (n === '"') {
-      s = !s;
-      t += n;
+    if (char === '"') {
+      inDoubleQuote = !inDoubleQuote;
+      out += char;
       continue;
     }
-    if (n === "'" && !s) {
-      r = true;
-      t += n;
+    if (char === "'" && !inDoubleQuote) {
+      inSingleQuote = true;
+      out += char;
       continue;
     }
-    t += n;
+    out += char;
   }
-  return t;
+  return out;
 }
 //@ chunk-r01896cg.js:84691-84934 facade-majority
 /**
  * 去掉引号内的内容和转义字符，只保留未加引号的部分。
  */
-function stripQuotedRegions(e) {
-  let t = "";
-  let r;
-  for (let i = 0; i < e.length; i++) {
-    let o = e[i];
-    if (r === "'") {
-      if (o === "'") r = undefined;
+function stripQuotedRegions(text) {
+  let out = "";
+  let quote;
+  for (let i = 0; i < text.length; i++) {
+    let char = text[i];
+    if (quote === "'") {
+      if (char === "'") quote = undefined;
       continue;
     }
-    if (r === '"') {
-      if (o === "\\") i++;
-      else if (o === '"') r = undefined;
+    if (quote === '"') {
+      if (char === "\\") i++;
+      else if (char === '"') quote = undefined;
       continue;
     }
-    if (o === "\\") {
+    if (char === "\\") {
       i++;
       continue;
     }
-    if (o === "'" || o === '"') {
-      r = o;
+    if (char === "'" || char === '"') {
+      quote = char;
       continue;
     }
-    t += o;
+    out += char;
   }
-  return t;
+  return out;
 }
 //@ chunk-r01896cg.js:84934-85146 facade-majority
 /**
  * 会写变量的 zsh 模块函数名（strftime、zstat、zselect、zftp 等），以及会写变量的 zsh 内建集合（zformat、zparseopts、zstyle、vared……）。
  */
-var ZSH_MODULE_NAME_WRITERS = [
-  "strftime",
-  "pcre_match",
-  "zstat",
-  "zselect",
-  "zgetattr",
-  "zlistattr",
-  "ztie",
-  "zuntie",
-  "syserror",
-  "zsystem",
-  "zftp",
-  "zcurses",
-];
-var ZSH_VAR_WRITING_BUILTINS = new Set([
-  "zformat",
-  "zparseopts",
-  "zstyle",
-  "zregexparse",
-  "getln",
-  "vared",
-  ...ZSH_MODULE_NAME_WRITERS,
-]);
+var ZSH_MODULE_NAME_WRITERS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ZSH_VAR_WRITING_BUILTINS;
+deferInit("chunk-r01896cg.js:84934", () => {
+  ZSH_MODULE_NAME_WRITERS = [
+    "strftime",
+    "pcre_match",
+    "zstat",
+    "zselect",
+    "zgetattr",
+    "zlistattr",
+    "ztie",
+    "zuntie",
+    "syserror",
+    "zsystem",
+    "zftp",
+    "zcurses",
+  ];
+  ZSH_VAR_WRITING_BUILTINS = new Set([
+    "zformat",
+    "zparseopts",
+    "zstyle",
+    "zregexparse",
+    "getln",
+    "vared",
+    ...ZSH_MODULE_NAME_WRITERS,
+  ]);
+});
 //@ chunk-r01896cg.js:85146-85388 layout
-function zshStatWritesVarReason(e, t) {
-  return e === "stat" && t.some((r) => /^-[gnNolLtTrs]*[AH]/.test(r)) && noteRefusal()
+function zshStatWritesVarReason(commandName, args) {
+  return commandName === "stat" && args.some((arg) => /^-[gnNolLtTrs]*[AH]/.test(arg)) && noteRefusal()
     ? "'stat' with -A or -H \u2014 zsh's stat builtin stores its result in the variable that option names, so a tracked value cannot be statically verified"
     : null;
 }
@@ -4994,158 +5272,173 @@ function zshStatWritesVarReason(e, t) {
 /**
  * zsh 危险内建集合（zmodload、emulate、sysopen、zpty、ztcp、zf_rm……、setopt、autoload，以及会写变量的内建），checkSemantics 遇到即拒绝；同一语句定义 find 的执行/写类动作集合 FIND_EXEC_ACTIONS（-exec、-delete、-fprint 等）。
  */
-var ZSH_DANGEROUS_BUILTINS = new Set([
-  "zmodload",
-  "emulate",
-  "sysopen",
-  "sysread",
-  "syswrite",
-  "sysseek",
-  "zpty",
-  "ztcp",
-  "zsocket",
-  "zf_rm",
-  "zf_mv",
-  "zf_ln",
-  "zf_chmod",
-  "zf_chown",
-  "zf_mkdir",
-  "zf_rmdir",
-  "zf_chgrp",
-  "repeat",
-  "foreach",
-  "zcompile",
-  "setopt",
-  "unsetopt",
-  "disable",
-  "shopt",
-  "autoload",
-  "functions",
-  ...ZSH_VAR_WRITING_BUILTINS,
-]);
-var FIND_EXEC_ACTIONS = new Set([
-  "-exec",
-  "-execdir",
-  "-ok",
-  "-okdir",
-  "-delete",
-  "-rm",
-  "-fprint",
-  "-fprint0",
-  "-fprintf",
-  "-fls",
-  "-files0-from",
-]);
+var ZSH_DANGEROUS_BUILTINS; // deferred: uses ZSH_MODULE_NAME_WRITERS of its import cycle while loading; runs once the cycle is complete
+var FIND_EXEC_ACTIONS;
+deferInit("chunk-r01896cg.js:85388", () => {
+  ZSH_DANGEROUS_BUILTINS = new Set([
+    "zmodload",
+    "emulate",
+    "sysopen",
+    "sysread",
+    "syswrite",
+    "sysseek",
+    "zpty",
+    "ztcp",
+    "zsocket",
+    "zf_rm",
+    "zf_mv",
+    "zf_ln",
+    "zf_chmod",
+    "zf_chown",
+    "zf_mkdir",
+    "zf_rmdir",
+    "zf_chgrp",
+    "repeat",
+    "foreach",
+    "zcompile",
+    "setopt",
+    "unsetopt",
+    "disable",
+    "shopt",
+    "autoload",
+    "functions",
+    ...ZSH_VAR_WRITING_BUILTINS,
+  ]);
+  FIND_EXEC_ACTIONS = new Set([
+    "-exec",
+    "-execdir",
+    "-ok",
+    "-okdir",
+    "-delete",
+    "-rm",
+    "-fprint",
+    "-fprint0",
+    "-fprintf",
+    "-fls",
+    "-files0-from",
+  ]);
+});
 //@ chunk-r01896cg.js:85787-85828 facade-majority
-function isFindDangerousAction(e) {
-  return FIND_EXEC_ACTIONS.has(e) && isRmModifierAllowed(e);
+function isFindDangerousAction(action) {
+  return FIND_EXEC_ACTIONS.has(action) && isRmModifierAllowed(action);
 }
 //@ chunk-r01896cg.js:85828-86374 layout
 /**
  * 匹配 find 的 -newerXY 谓词。
  */
-var FIND_ARG_TAKING_PREDICATES = new Set([
-  "-name",
-  "-iname",
-  "-path",
-  "-ipath",
-  "-lname",
-  "-ilname",
-  "-regex",
-  "-iregex",
-  "-wholename",
-  "-iwholename",
-  "-samefile",
-  "-newer",
-  "-anewer",
-  "-cnewer",
-  "-mnewer",
-  "-perm",
-  "-user",
-  "-group",
-  "-uid",
-  "-gid",
-  "-size",
-  "-type",
-  "-xtype",
-  "-fstype",
-  "-inum",
-  "-links",
-  "-used",
-  "-context",
-  "-amin",
-  "-cmin",
-  "-mmin",
-  "-atime",
-  "-ctime",
-  "-mtime",
-  "-mindepth",
-  "-maxdepth",
-  "-printf",
-  "-regextype",
-  "-D",
-  "-f",
-  "-flags",
-  "-Bnewer",
-  "-Btime",
-  "-Bmin",
-  "-files0-from",
-  "-xattrname",
-]);
-var FIND_NEWER_XY_RE_2 = /^-newer[aBcm][aBcmt]$/;
-var FIND_NEWER_XY_RE = /^-(?:[EHLPXdsx]*D|f|[dsx]*[EHLPX][EHLPXdsx]*f)$/;
-var FIND_ACTION_FLAG_RE = /^-[dsx]+f$/;
+var FIND_ARG_TAKING_PREDICATES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var FIND_NEWER_XY_RE_2;
+var FIND_NEWER_XY_RE;
+var FIND_ACTION_FLAG_RE;
+deferInit("chunk-r01896cg.js:85828", () => {
+  FIND_ARG_TAKING_PREDICATES = new Set([
+    "-name",
+    "-iname",
+    "-path",
+    "-ipath",
+    "-lname",
+    "-ilname",
+    "-regex",
+    "-iregex",
+    "-wholename",
+    "-iwholename",
+    "-samefile",
+    "-newer",
+    "-anewer",
+    "-cnewer",
+    "-mnewer",
+    "-perm",
+    "-user",
+    "-group",
+    "-uid",
+    "-gid",
+    "-size",
+    "-type",
+    "-xtype",
+    "-fstype",
+    "-inum",
+    "-links",
+    "-used",
+    "-context",
+    "-amin",
+    "-cmin",
+    "-mmin",
+    "-atime",
+    "-ctime",
+    "-mtime",
+    "-mindepth",
+    "-maxdepth",
+    "-printf",
+    "-regextype",
+    "-D",
+    "-f",
+    "-flags",
+    "-Bnewer",
+    "-Btime",
+    "-Bmin",
+    "-files0-from",
+    "-xattrname",
+  ]);
+  FIND_NEWER_XY_RE_2 = /^-newer[aBcm][aBcmt]$/;
+  FIND_NEWER_XY_RE = /^-(?:[EHLPXdsx]*D|f|[dsx]*[EHLPX][EHLPXdsx]*f)$/;
+  FIND_ACTION_FLAG_RE = /^-[dsx]+f$/;
+});
 //@ chunk-r01896cg.js:86374-86431 facade-majority
-function findWordTakesOperand(e) {
-  return FIND_ARG_TAKING_PREDICATES.has(e) || FIND_NEWER_XY_RE_2.test(e) || FIND_NEWER_XY_RE.test(e);
+function findWordTakesOperand(word) {
+  return FIND_ARG_TAKING_PREDICATES.has(word) || FIND_NEWER_XY_RE_2.test(word) || FIND_NEWER_XY_RE.test(word);
 }
 //@ chunk-r01896cg.js:86431-86465 facade-majority
-function findWordTakesFlagValue(e) {
-  return FIND_NEWER_XY_RE.test(e);
+function findWordTakesFlagValue(word) {
+  return FIND_NEWER_XY_RE.test(word);
 }
 //@ chunk-r01896cg.js:86465-86499 facade-majority
-function isAmbiguousFindWord(e) {
-  return FIND_ACTION_FLAG_RE.test(e);
+function isAmbiguousFindWord(word) {
+  return FIND_ACTION_FLAG_RE.test(word);
 }
 //@ chunk-r01896cg.js:86499-86734 facade-majority = EVAL_LIKE_BUILTINS (0.812)
 /**
  * eval 类内建集合（eval、source、.、exec、trap、alias、let、mapfile、bind、complete……），这类命令的参数会被当成代码执行；同时定义 awk 程序名集合，以及 awk 读取程序文件的选项正则。
  */
-var EVAL_LIKE_BUILTINS = new Set([
-  "eval",
-  "source",
-  ".",
-  "exec",
-  "nocorrect",
-  "fc",
-  "coproc",
-  "trap",
-  "enable",
-  "mapfile",
-  "readarray",
-  "hash",
-  "bind",
-  "complete",
-  "compgen",
-  "alias",
-  "let",
-]);
-var AWK_NAMES = new Set(["awk", "gawk", "mawk", "nawk"]);
-var AWK_PROGRAM_FILE_OPT_RE = /^(?:-[FvW]$|--(?:fie|a$|as))/;
+var EVAL_LIKE_BUILTINS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var AWK_NAMES;
+var AWK_PROGRAM_FILE_OPT_RE;
+deferInit("chunk-r01896cg.js:86499", () => {
+  EVAL_LIKE_BUILTINS = new Set([
+    "eval",
+    "source",
+    ".",
+    "exec",
+    "nocorrect",
+    "fc",
+    "coproc",
+    "trap",
+    "enable",
+    "mapfile",
+    "readarray",
+    "hash",
+    "bind",
+    "complete",
+    "compgen",
+    "alias",
+    "let",
+  ]);
+  AWK_NAMES = new Set(["awk", "gawk", "mawk", "nawk"]);
+  AWK_PROGRAM_FILE_OPT_RE = /^(?:-[FvW]$|--(?:fie|a$|as))/;
+});
 //@ chunk-r01896cg.js:86734-87486 facade-majority
 /**
  * 检查 awk 程序文本：system()、命令管道/getline、@load/@include/间接调用、extension()、/inet/ 网络套接字，命中返回理由，否则 false。
  */
-function awkProgramHasExecBridge(e) {
-  if (/(?<![A-Za-z_])system[\s\\]*\(/.test(e))
+function awkProgramHasExecBridge(program) {
+  if (/(?<![A-Za-z_])system[\s\\]*\(/.test(program))
     return "awk program contains system() which executes arbitrary commands";
-  if (/(?:^|[^|])\|&?[^/|%";#{}]*"/.test(e) || /(?:^|[^|])\|&?[\s\\]*getline\b/.test(e))
+  if (/(?:^|[^|])\|&?[^/|%";#{}]*"/.test(program) || /(?:^|[^|])\|&?[\s\\]*getline\b/.test(program))
     return 'awk program contains a command pipe (| "cmd" or | getline) which executes arbitrary commands';
-  if (/@[\s\\]*(?:load|include)\b|@[\s\\]*\w+(?:::\w+)?(?:\[[^\]]*\])*[\s\\]*\(/.test(e))
+  if (/@[\s\\]*(?:load|include)\b|@[\s\\]*\w+(?:::\w+)?(?:\[[^\]]*\])*[\s\\]*\(/.test(program))
     return "awk program contains @load/@include or an @indirect call which can execute arbitrary code";
-  if (/(?<![A-Za-z_])extension[\s\\]*\(/.test(e))
+  if (/(?<![A-Za-z_])extension[\s\\]*\(/.test(program))
     return "awk program contains extension() which loads arbitrary native code (legacy gawk)";
-  if (/"\/inet[46]?\//.test(e))
+  if (/"\/inet[46]?\//.test(program))
     return "awk program opens a gawk /inet/ network socket which can exfiltrate data";
   return false;
 }
@@ -5153,235 +5446,256 @@ function awkProgramHasExecBridge(e) {
 /**
  * shell 程序名集合（POSIX shell、busybox/toybox/wsl/su 等 applet、fish/csh、cmd/powershell）、可透明剥离的启动包装（time、command、env、nice、nohup、sudo、doas、timeout……）和不处理的执行包装（watch、setsid、strace、flock、unshare……）。
  */
-var POSIX_SHELL_NAMES = new Set(["bash", "sh", "zsh", "dash", "ksh", "mksh", "ash", "hush", "rbash"]);
-var APPLET_SHELL_NAMES = new Set(["busybox", "toybox", "wsl", "su", "runuser"]);
-var SHELL_PROGRAM_NAMES = new Set([
-  ...POSIX_SHELL_NAMES,
-  "fish",
-  "csh",
-  "tcsh",
-  "rsh",
-  ...APPLET_SHELL_NAMES,
-  "cmd",
-  "powershell",
-  "pwsh",
-]);
-var TRANSPARENT_LAUNCHER_NAMES = new Set([
-  "time",
-  "command",
-  "builtin",
-  "noglob",
-  "env",
-  "nice",
-  "nohup",
-  "sudo",
-  "doas",
-  "stdbuf",
-  "timeout",
-]);
-var UNHANDLED_EXEC_WRAPPERS = new Set([
-  "watch",
-  "ionice",
-  "chrt",
-  "setsid",
-  "taskset",
-  "strace",
-  "ltrace",
-  "script",
-  "flock",
-  "unshare",
-  "nsenter",
-]);
+var POSIX_SHELL_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var APPLET_SHELL_NAMES;
+var SHELL_PROGRAM_NAMES;
+var TRANSPARENT_LAUNCHER_NAMES;
+var UNHANDLED_EXEC_WRAPPERS;
+deferInit("chunk-r01896cg.js:87486", () => {
+  POSIX_SHELL_NAMES = new Set(["bash", "sh", "zsh", "dash", "ksh", "mksh", "ash", "hush", "rbash"]);
+  APPLET_SHELL_NAMES = new Set(["busybox", "toybox", "wsl", "su", "runuser"]);
+  SHELL_PROGRAM_NAMES = new Set([
+    ...POSIX_SHELL_NAMES,
+    "fish",
+    "csh",
+    "tcsh",
+    "rsh",
+    ...APPLET_SHELL_NAMES,
+    "cmd",
+    "powershell",
+    "pwsh",
+  ]);
+  TRANSPARENT_LAUNCHER_NAMES = new Set([
+    "time",
+    "command",
+    "builtin",
+    "noglob",
+    "env",
+    "nice",
+    "nohup",
+    "sudo",
+    "doas",
+    "stdbuf",
+    "timeout",
+  ]);
+  UNHANDLED_EXEC_WRAPPERS = new Set([
+    "watch",
+    "ionice",
+    "chrt",
+    "setsid",
+    "taskset",
+    "strace",
+    "ltrace",
+    "script",
+    "flock",
+    "unshare",
+    "nsenter",
+  ]);
+});
 //@ chunk-r01896cg.js:87916-87970 layout
-function isZshDangerousBuiltin(e) {
-  return ZSH_DANGEROUS_BUILTINS.has(e) && (!ZSH_VAR_WRITING_BUILTINS.has(e) || noteRefusal());
+function isZshDangerousBuiltin(name) {
+  return ZSH_DANGEROUS_BUILTINS.has(name) && (!ZSH_VAR_WRITING_BUILTINS.has(name) || noteRefusal());
 }
 //@ chunk-r01896cg.js:87970-88068 facade-majority
 /**
  * 命令名是否为 eval 类内建、zsh 危险内建、exec 包装或 rm/rmdir。
  */
-function isSandboxAutoAllowUnsafeBase(e) {
-  let t = stripPathAndExe(e);
+function isSandboxAutoAllowUnsafeBase(name) {
+  let baseName = stripPathAndExe(name);
   return (
-    EVAL_LIKE_BUILTINS.has(e) ||
-    isZshDangerousBuiltin(e) ||
-    UNHANDLED_EXEC_WRAPPERS.has(e) ||
-    UNHANDLED_EXEC_WRAPPERS.has(t) ||
-    t === "rm" ||
-    t === "rmdir"
+    EVAL_LIKE_BUILTINS.has(name) ||
+    isZshDangerousBuiltin(name) ||
+    UNHANDLED_EXEC_WRAPPERS.has(name) ||
+    UNHANDLED_EXEC_WRAPPERS.has(baseName) ||
+    baseName === "rm" ||
+    baseName === "rmdir"
   );
 }
 //@ chunk-r01896cg.js:88068-89928 facade-majority
 /**
  * Bash 语义检查用的常量表：会对下标求值的选项（test -v、printf -v、read -a…）、算术比较运算符、声明类关键字与内建、set -o 安全选项与字母，以及影响命令查找/执行的变量名（PATH、BASH_ENV、LANG、LC_* 等）。
  */
-var SUBSCRIPT_EVAL_FLAGS = {
-  test: new Set(["-v", "-R", "-t"]),
-  "[": new Set(["-v", "-R", "-t"]),
-  "[[": new Set(["-v", "-R", "-t"]),
-  printf: new Set(["-v"]),
-  read: new Set(["-a"]),
-  unset: new Set(["-v"]),
-  wait: new Set(["-p"]),
-};
-var TEST_ARITH_CMP_OPS = new Set(["-eq", "-ne", "-lt", "-le", "-gt", "-ge"]);
-var TEST_ARITH_NUMERIC_RE = /^-?(0[xX][0-9a-fA-F]+|[0-9]+#[0-9a-zA-Z]+|[0-9]+)$/;
-var BARE_SUBSCRIPT_NAME_BUILTINS = new Set(["read", "unset"]);
-var DECLARATION_KEYWORDS = new Set([
-  "declare",
-  "typeset",
-  "local",
-  "export",
-  "readonly",
-  "private",
-  "float",
-  "integer",
-]);
-var PRINT_PROMPT_FLAG = /^[+-][-+\w]*P/;
-var DECLARATION_LIKE_BUILTINS = new Set([
-  "declare",
-  "typeset",
-  "local",
-  "export",
-  "readonly",
-  "print",
-  "getopts",
-  "set",
-  "zparseopts",
-  "zformat",
-  "zstyle",
-  ...ZSH_MODULE_NAME_WRITERS,
-  "autoload",
-  "shift",
-  "exit",
-  "return",
-  "break",
-  "continue",
-  "bye",
-  "logout",
-  "vared",
-  "private",
-  "getln",
-  "zregexparse",
-  "float",
-  "integer",
-]);
-var SET_O_SAFE_OPTS = new Set([
-  "pipefail",
-  "errexit",
-  "nounset",
-  "xtrace",
-  "noglob",
-  "noclobber",
-  "verbose",
-  "monitor",
-  "notify",
-  "vi",
-  "emacs",
-  "errtrace",
-  "functrace",
-  "hashall",
-  "physical",
-  "ignoreeof",
-]);
-var SET_O_SAFE_LETTERS = new Set(["e", "u", "x", "f", "C", "v", "m", "b", "E", "T", "h", "P", "n"]);
-var EXEC_INFLUENCING_VARS = new Set([
-  "path",
-  "home",
-  "dirstack",
-  "tmpprefix",
-  "bash_env",
-  "env",
-  "cdpath",
-  "globignore",
-  "shell",
-  "fpath",
-  "bash_loadables_path",
-  "module_path",
-  "manpath",
-  "mailpath",
-  "readnullcmd",
-  "nullcmd",
-  "histfile",
-  "zdotdir",
-  "functions",
-  "commands",
-  "aliases",
-  "galiases",
-  "saliases",
-  "bash_cmds",
-  "bash_aliases",
-  "execignore",
-  "bash_source_path",
-  "lang",
-  "language",
-  "lc_all",
-  "lc_ctype",
-  "lc_collate",
-  "lc_messages",
-  "lc_numeric",
-  "lc_time",
-  "histchars",
-  "textdomain",
-  "textdomaindir",
-]);
-var INTEGER_ATTR_DEFAULT_VARS = new Set([
-  "RANDOM",
-  "SECONDS",
-  "LINENO",
-  "OPTIND",
-  "MAILCHECK",
-  "HISTCMD",
-  "SRANDOM",
-  "EPOCHSECONDS",
-  "EPOCHREALTIME",
-  "BASHPID",
-  "BASH_MONOSECONDS",
-  "BASH_TRAPSIG",
-  "COLUMNS",
-  "LINES",
-  "SHLVL",
-  "ERRNO",
-  "TMOUT",
-  "HISTSIZE",
-  "SAVEHIST",
-  "TRY_BLOCK_ERROR",
-  "TRY_BLOCK_INTERRUPT",
-  "KEYTIMEOUT",
-  "LISTMAX",
-  "LOGCHECK",
-  "PERIOD",
-  "FUNCNEST",
-  "UID",
-  "EUID",
-  "GID",
-  "EGID",
-  "REPORTTIME",
-  "REPORTMEMORY",
-  "DIRSTACKSIZE",
-  "BAUD",
-  "ZLE_RPROMPT_INDENT",
-  "MBEGIN",
-  "MEND",
-  "PPID",
-  "ARGC",
-  "ZSH_SUBSHELL",
-  "TTYIDLE",
-  "status",
-]);
+var SUBSCRIPT_EVAL_FLAGS; // deferred: uses ZSH_MODULE_NAME_WRITERS of its import cycle while loading; runs once the cycle is complete
+var TEST_ARITH_CMP_OPS;
+var TEST_ARITH_NUMERIC_RE;
+var BARE_SUBSCRIPT_NAME_BUILTINS;
+var DECLARATION_KEYWORDS;
+var PRINT_PROMPT_FLAG;
+var DECLARATION_LIKE_BUILTINS;
+var SET_O_SAFE_OPTS;
+var SET_O_SAFE_LETTERS;
+var EXEC_INFLUENCING_VARS;
+var INTEGER_ATTR_DEFAULT_VARS;
+deferInit("chunk-r01896cg.js:88068", () => {
+  SUBSCRIPT_EVAL_FLAGS = {
+    test: new Set(["-v", "-R", "-t"]),
+    "[": new Set(["-v", "-R", "-t"]),
+    "[[": new Set(["-v", "-R", "-t"]),
+    printf: new Set(["-v"]),
+    read: new Set(["-a"]),
+    unset: new Set(["-v"]),
+    wait: new Set(["-p"]),
+  };
+  TEST_ARITH_CMP_OPS = new Set(["-eq", "-ne", "-lt", "-le", "-gt", "-ge"]);
+  TEST_ARITH_NUMERIC_RE = /^-?(0[xX][0-9a-fA-F]+|[0-9]+#[0-9a-zA-Z]+|[0-9]+)$/;
+  BARE_SUBSCRIPT_NAME_BUILTINS = new Set(["read", "unset"]);
+  DECLARATION_KEYWORDS = new Set([
+    "declare",
+    "typeset",
+    "local",
+    "export",
+    "readonly",
+    "private",
+    "float",
+    "integer",
+  ]);
+  PRINT_PROMPT_FLAG = /^[+-][-+\w]*P/;
+  DECLARATION_LIKE_BUILTINS = new Set([
+    "declare",
+    "typeset",
+    "local",
+    "export",
+    "readonly",
+    "print",
+    "getopts",
+    "set",
+    "zparseopts",
+    "zformat",
+    "zstyle",
+    ...ZSH_MODULE_NAME_WRITERS,
+    "autoload",
+    "shift",
+    "exit",
+    "return",
+    "break",
+    "continue",
+    "bye",
+    "logout",
+    "vared",
+    "private",
+    "getln",
+    "zregexparse",
+    "float",
+    "integer",
+  ]);
+  SET_O_SAFE_OPTS = new Set([
+    "pipefail",
+    "errexit",
+    "nounset",
+    "xtrace",
+    "noglob",
+    "noclobber",
+    "verbose",
+    "monitor",
+    "notify",
+    "vi",
+    "emacs",
+    "errtrace",
+    "functrace",
+    "hashall",
+    "physical",
+    "ignoreeof",
+  ]);
+  SET_O_SAFE_LETTERS = new Set(["e", "u", "x", "f", "C", "v", "m", "b", "E", "T", "h", "P", "n"]);
+  EXEC_INFLUENCING_VARS = new Set([
+    "path",
+    "home",
+    "dirstack",
+    "tmpprefix",
+    "bash_env",
+    "env",
+    "cdpath",
+    "globignore",
+    "shell",
+    "fpath",
+    "bash_loadables_path",
+    "module_path",
+    "manpath",
+    "mailpath",
+    "readnullcmd",
+    "nullcmd",
+    "histfile",
+    "zdotdir",
+    "functions",
+    "commands",
+    "aliases",
+    "galiases",
+    "saliases",
+    "bash_cmds",
+    "bash_aliases",
+    "execignore",
+    "bash_source_path",
+    "lang",
+    "language",
+    "lc_all",
+    "lc_ctype",
+    "lc_collate",
+    "lc_messages",
+    "lc_numeric",
+    "lc_time",
+    "histchars",
+    "textdomain",
+    "textdomaindir",
+  ]);
+  INTEGER_ATTR_DEFAULT_VARS = new Set([
+    "RANDOM",
+    "SECONDS",
+    "LINENO",
+    "OPTIND",
+    "MAILCHECK",
+    "HISTCMD",
+    "SRANDOM",
+    "EPOCHSECONDS",
+    "EPOCHREALTIME",
+    "BASHPID",
+    "BASH_MONOSECONDS",
+    "BASH_TRAPSIG",
+    "COLUMNS",
+    "LINES",
+    "SHLVL",
+    "ERRNO",
+    "TMOUT",
+    "HISTSIZE",
+    "SAVEHIST",
+    "TRY_BLOCK_ERROR",
+    "TRY_BLOCK_INTERRUPT",
+    "KEYTIMEOUT",
+    "LISTMAX",
+    "LOGCHECK",
+    "PERIOD",
+    "FUNCNEST",
+    "UID",
+    "EUID",
+    "GID",
+    "EGID",
+    "REPORTTIME",
+    "REPORTMEMORY",
+    "DIRSTACKSIZE",
+    "BAUD",
+    "ZLE_RPROMPT_INDENT",
+    "MBEGIN",
+    "MEND",
+    "PPID",
+    "ARGC",
+    "ZSH_SUBSHELL",
+    "TTYIDLE",
+    "status",
+  ]);
+});
 //@ chunk-r01896cg.js:89928-90092 layout
-function isIntegerVarAssignUnsafe(name, t) {
+function isIntegerVarAssignUnsafe(name, value) {
   if (!INTEGER_ATTR_DEFAULT_VARS.has(name)) return false;
-  if (t.includes("[") || t.includes("`") || /\$\(/.test(t) || containsAnyPlaceholder(t)) return true;
-  if (!/^(0|[1-9][0-9]{0,17})$/.test(t)) return true;
+  if (value.includes("[") || value.includes("`") || /\$\(/.test(value) || containsAnyPlaceholder(value))
+    return true;
+  if (!/^(0|[1-9][0-9]{0,17})$/.test(value)) return true;
   return false;
 }
 //@ chunk-r01896cg.js:90092-90219 facade-majority
 /**
  * 是否为影响命令查找/执行的变量（PATH、HOME、IFS 之外的 fpath/cdpath/LANG/LC_* 等，及 LD_*\/DYLD_*\/BASH_FUNC_* 前缀），大小写不敏感。
  */
-function isExecInfluencingVar(e) {
-  let lower = e.toLowerCase();
+function isExecInfluencingVar(name) {
+  let lower = name.toLowerCase();
   return (
     EXEC_INFLUENCING_VARS.has(lower) ||
     lower.startsWith("ld_") ||
@@ -5393,58 +5707,68 @@ function isExecInfluencingVar(e) {
 /**
  * 受保护 shell 变量：执行影响变量、IFS、PS4、PROMPT4 或整数属性变量。ShellSnapshot 解析导出变量时也用它过滤。
  */
-function isAssignmentNameUnsafeForSandbox(e) {
+function isAssignmentNameUnsafeForSandbox(name) {
   return (
-    isExecInfluencingVar(e) ||
-    e === "IFS" ||
-    e === "PS4" ||
-    e === "PROMPT4" ||
-    INTEGER_ATTR_DEFAULT_VARS.has(e)
+    isExecInfluencingVar(name) ||
+    name === "IFS" ||
+    name === "PS4" ||
+    name === "PROMPT4" ||
+    INTEGER_ATTR_DEFAULT_VARS.has(name)
   );
 }
 //@ chunk-r01896cg.js:90297-90558 facade-majority
 /**
  * read 内建的选项表：带数据参数的选项、需再检查参数的选项、数值参数选项与数值正则；另有带下标变量名正则、组合短选项里吃参数的字母、/proc/*\/environ 正则和“换行后 #”正则。
  */
-var READ_DATA_FLAGS = new Set(["-p", "-d", "-n", "-N", "-t", "-u", "-i"]);
-var READ_FLAGS_WITH_CHECKED_OPERAND = new Set(["-p", "-t", "-n"]);
-var READ_NUMERIC_ARG_FLAGS = new Set(["-t", "-n", "-N"]);
-var READ_NUMERIC_OPERAND_RE = /^(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)$/;
-var SUBSCRIPTED_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*\[/;
-var OPTION_LETTERS_TAKING_ARGUMENT = new Set(["-f", "-C", "-x", "-X", "-u"]);
-var PROC_ENVIRON_RE = /\/proc\/.*\/environ/;
-var NEWLINE_HASH_RE = /\n\s*#/;
+var READ_DATA_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var READ_FLAGS_WITH_CHECKED_OPERAND;
+var READ_NUMERIC_ARG_FLAGS;
+var READ_NUMERIC_OPERAND_RE;
+var SUBSCRIPTED_NAME_RE;
+var OPTION_LETTERS_TAKING_ARGUMENT;
+var PROC_ENVIRON_RE;
+var NEWLINE_HASH_RE;
+deferInit("chunk-r01896cg.js:90297", () => {
+  READ_DATA_FLAGS = new Set(["-p", "-d", "-n", "-N", "-t", "-u", "-i"]);
+  READ_FLAGS_WITH_CHECKED_OPERAND = new Set(["-p", "-t", "-n"]);
+  READ_NUMERIC_ARG_FLAGS = new Set(["-t", "-n", "-N"]);
+  READ_NUMERIC_OPERAND_RE = /^(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)$/;
+  SUBSCRIPTED_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*\[/;
+  OPTION_LETTERS_TAKING_ARGUMENT = new Set(["-f", "-C", "-x", "-X", "-u"]);
+  PROC_ENVIRON_RE = /\/proc\/.*\/environ/;
+  NEWLINE_HASH_RE = /\n\s*#/;
+});
 //@ chunk-r01896cg.js:90558-103152 facade-majority = checkSemantics (0.488)
 /**
  * 对 simple 结果做语义检查（2.1.88 checkSemantics 的扩展）：先剥去 time/nohup/timeout/nice/env/stdbuf/command/builtin/noglob/xargs 包装（参数不规范即拒绝），再检查命令名为空/占位符/片段、test -v 等下标求值、eval 类内建、zsh 危险内建、awk 危险程序、find -exec 类、shell 关键字作命令名、/proc/*\/environ、换行后 #（kind:'newline-hash'）等。返回 {ok:true} 或 {ok:false, reason, kind?}。
  */
 function checkSemantics(commands, options) {
-  let r = options?.sourceGlobRecord !== false;
-  let s = null;
+  let useSourceGlob = options?.sourceGlobRecord !== false;
+  let firstFailure = null;
   for (let cmd of commands) {
     let argv = cmd.argv;
-    let i = false;
+    let sawXargs = false;
     for (;;) {
-      let u = argv[0] === undefined ? undefined : stripPathAndExe(argv[0]);
-      let h =
-        u === "time" ||
-        u === "nohup" ||
-        u === "timeout" ||
-        u === "nice" ||
-        u === "stdbuf" ||
-        u === "env" ||
-        u === "command" ||
-        u === "xargs"
-          ? u
+      let baseName = argv[0] === undefined ? undefined : stripPathAndExe(argv[0]);
+      let wrapperName =
+        baseName === "time" ||
+        baseName === "nohup" ||
+        baseName === "timeout" ||
+        baseName === "nice" ||
+        baseName === "stdbuf" ||
+        baseName === "env" ||
+        baseName === "command" ||
+        baseName === "xargs"
+          ? baseName
           : argv[0];
-      if (h === "time" || h === "nohup") {
+      if (wrapperName === "time" || wrapperName === "nohup") {
         argv = argv.slice(1);
         if (argv[0] !== undefined && !/^[\w./~+-]+$/.test(argv[0]))
           return {
             ok: false,
-            reason: `'${h} ${argv[0]}' can't be checked before it runs`,
+            reason: `'${wrapperName} ${argv[0]}' can't be checked before it runs`,
           };
-      } else if (h === "timeout") {
+      } else if (wrapperName === "timeout") {
         let i = 1;
         while (i < argv.length) {
           let arg = argv[i];
@@ -5479,7 +5803,7 @@ function checkSemantics(commands, options) {
             reason: `timeout duration '${argv[i]}' can't be checked before it runs`,
           };
         else break;
-      } else if (h === "nice") {
+      } else if (wrapperName === "nice") {
         if (argv[1] === "-n" && argv[2] && /^-?\d+$/.test(argv[2])) argv = argv.slice(3);
         else if (argv[1] && /^-\d+$/.test(argv[1])) argv = argv.slice(2);
         else if (argv[1] && (/[$(`]/.test(argv[1]) || containsAnyPlaceholder(argv[1])))
@@ -5488,7 +5812,7 @@ function checkSemantics(commands, options) {
             reason: `nice argument '${argv[1]}' contains expansion \u2014 cannot statically determine wrapped command`,
           };
         else argv = argv.slice(1);
-      } else if (h === "env") {
+      } else if (wrapperName === "env") {
         let i = 1;
         while (i < argv.length) {
           let arg = argv[i];
@@ -5504,7 +5828,7 @@ function checkSemantics(commands, options) {
         }
         if (i < argv.length) argv = argv.slice(i);
         else break;
-      } else if (h === "stdbuf") {
+      } else if (wrapperName === "stdbuf") {
         let i = 1;
         while (i < argv.length) {
           let arg = argv[i];
@@ -5520,82 +5844,86 @@ function checkSemantics(commands, options) {
         }
         if (i > 1 && i < argv.length) argv = argv.slice(i);
         else break;
-      } else if (h === "command") {
-        let d = 1;
-        let m = false;
-        while (d < argv.length && argv[d].startsWith("-") && argv[d] !== "--") {
-          let p = argv[d];
-          if (!/^-[pvV]+$/.test(p))
+      } else if (wrapperName === "command") {
+        let index = 1;
+        let isPrintMode = false;
+        while (index < argv.length && argv[index].startsWith("-") && argv[index] !== "--") {
+          let flag = argv[index];
+          if (!/^-[pvV]+$/.test(flag))
             return {
               ok: false,
-              reason: `'command ${p}' can't be checked before it runs`,
+              reason: `'command ${flag}' can't be checked before it runs`,
             };
-          if (p.includes("v") || p.includes("V")) m = true;
-          d++;
+          if (flag.includes("v") || flag.includes("V")) isPrintMode = true;
+          index++;
         }
-        if (argv[d] === "--") d++;
-        if (m || d >= argv.length) break;
-        argv = argv.slice(d);
+        if (argv[index] === "--") index++;
+        if (isPrintMode || index >= argv.length) break;
+        argv = argv.slice(index);
       } else if (argv[0] === "builtin" || argv[0] === "noglob") {
-        let d = argv[0] === "builtin" && argv[1] === "--" ? 2 : 1;
-        if (d < argv.length) argv = argv.slice(d);
+        let skipCount = argv[0] === "builtin" && argv[1] === "--" ? 2 : 1;
+        if (skipCount < argv.length) argv = argv.slice(skipCount);
         else break;
-      } else if (h === "xargs") {
+      } else if (wrapperName === "xargs") {
         if (argv.length >= 2 && !argv[1].startsWith("-")) {
           argv = argv.slice(1);
-          i = true;
+          sawXargs = true;
         } else break;
       } else break;
     }
-    let c = argv[0];
-    if (c === undefined) continue;
-    let l = stripPathAndExe(c);
-    if (c === "")
+    let commandName = argv[0];
+    if (commandName === undefined) continue;
+    let baseName = stripPathAndExe(commandName);
+    if (commandName === "")
       return {
         ok: false,
         reason: "Empty command name \u2014 argv[0] may not reflect what bash runs",
       };
-    if (containsAnyPlaceholder(c))
+    if (containsAnyPlaceholder(commandName))
       return {
         ok: false,
         reason: "Command name is runtime-determined (placeholder argv[0])",
       };
-    if (c.startsWith("-") || c.startsWith("|") || c.startsWith("&"))
+    if (commandName.startsWith("-") || commandName.startsWith("|") || commandName.startsWith("&"))
       return {
         ok: false,
         reason: "Command appears to be an incomplete fragment",
       };
-    let dangerFlags = getOwn(SUBSCRIPT_EVAL_FLAGS, l);
-    let y = l === "test" || l === "[" || l === "[[";
+    let dangerFlags = getOwn(SUBSCRIPT_EVAL_FLAGS, baseName);
+    let isTestCommand = baseName === "test" || baseName === "[" || baseName === "[[";
     if (dangerFlags !== undefined)
       for (let i = 1; i < argv.length; i++) {
         let arg = argv[i];
-        let d = argv[i + 1];
-        if (dangerFlags.has(arg) && d !== undefined && (d.includes("[") || containsAnyPlaceholder(d)))
+        let operand = argv[i + 1];
+        if (
+          dangerFlags.has(arg) &&
+          operand !== undefined &&
+          (operand.includes("[") || containsAnyPlaceholder(operand))
+        )
           return {
             ok: false,
-            reason: `'${l} ${arg}' operand contains array subscript or runtime-determined value \u2014 bash evaluates $(cmd) in subscripts`,
+            reason: `'${baseName} ${arg}' operand contains array subscript or runtime-determined value \u2014 bash evaluates $(cmd) in subscripts`,
           };
-        if (y) {
-          if (arg === "-t" && d !== undefined && !TEST_ARITH_NUMERIC_RE.test(d))
+        if (isTestCommand) {
+          if (arg === "-t" && operand !== undefined && !TEST_ARITH_NUMERIC_RE.test(operand))
             return {
               ok: false,
-              reason: `'${l} -t' operand is non-numeric \u2014 zsh arith-evals identifiers (may run $(cmd))`,
+              reason: `'${baseName} -t' operand is non-numeric \u2014 zsh arith-evals identifiers (may run $(cmd))`,
             };
           continue;
         }
         if (arg.length > 2 && arg[0] === "-" && arg[1] !== "-" && !arg.includes("[")) {
           for (let flag of dangerFlags)
             if (flag.length === 2 && arg.includes(flag[1])) {
-              let p = argv[i + 1];
-              if (p !== undefined && (p.includes("[") || containsAnyPlaceholder(p)))
+              let operand = argv[i + 1];
+              if (operand !== undefined && (operand.includes("[") || containsAnyPlaceholder(operand)))
                 return {
                   ok: false,
-                  reason: `'${l} ${flag}' (combined in '${arg}') operand contains array subscript \u2014 bash evaluates $(cmd) in subscripts`,
+                  reason: `'${baseName} ${flag}' (combined in '${arg}') operand contains array subscript \u2014 bash evaluates $(cmd) in subscripts`,
                 };
             }
         }
-        if (arg.length > 2 && arg[0] === "-" && l !== "read")
+        if (arg.length > 2 && arg[0] === "-" && baseName !== "read")
           for (let flag of dangerFlags) {
             if (flag.length !== 2) continue;
             let index = arg.indexOf(flag[1], 1);
@@ -5604,64 +5932,65 @@ function checkSemantics(commands, options) {
             if (/[A-Za-z_][A-Za-z0-9_]*\[/.test(sliced) || containsAnyPlaceholder(sliced))
               return {
                 ok: false,
-                reason: `'${l} ${flag}' (fused in '${arg}') operand contains array subscript \u2014 bash evaluates $(cmd) in subscripts`,
+                reason: `'${baseName} ${flag}' (fused in '${arg}') operand contains array subscript \u2014 bash evaluates $(cmd) in subscripts`,
               };
           }
       }
-    if (y)
+    if (isTestCommand)
       for (let i = 2; i < argv.length; i++) {
         if (!TEST_ARITH_CMP_OPS.has(argv[i])) continue;
-        for (let h of [argv[i - 1], argv[i + 1]]) {
-          if (h === undefined) continue;
-          if (h.includes("[") || !TEST_ARITH_NUMERIC_RE.test(h))
+        for (let operand of [argv[i - 1], argv[i + 1]]) {
+          if (operand === undefined) continue;
+          if (operand.includes("[") || !TEST_ARITH_NUMERIC_RE.test(operand))
             return {
               ok: false,
-              reason: `'${l} ... ${argv[i]} ...' operand is non-numeric \u2014 \`[[\` arithmetically evaluates identifiers/subscripts (may run $(cmd))`,
+              reason: `'${baseName} ... ${argv[i]} ...' operand is non-numeric \u2014 \`[[\` arithmetically evaluates identifiers/subscripts (may run $(cmd))`,
             };
         }
       }
-    if (BARE_SUBSCRIPT_NAME_BUILTINS.has(l)) {
-      let u = false;
+    if (BARE_SUBSCRIPT_NAME_BUILTINS.has(baseName)) {
+      let awaitingOperand = false;
       for (let k = 1; k < argv.length; k++) {
-        let d = argv[k];
-        if (u !== false) {
-          let m = u;
-          u = false;
-          if (m === "numeric" && !READ_NUMERIC_OPERAND_RE.test(d))
+        let arg = argv[k];
+        if (awaitingOperand !== false) {
+          let pendingKind = awaitingOperand;
+          awaitingOperand = false;
+          if (pendingKind === "numeric" && !READ_NUMERIC_OPERAND_RE.test(arg))
             return {
               ok: false,
-              reason: `'read ${argv[k - 1]}' operand '${d}' is non-numeric \u2014 zsh arith-evals subscripts/expressions (may run $(cmd))`,
+              reason: `'read ${argv[k - 1]}' operand '${arg}' is non-numeric \u2014 zsh arith-evals subscripts/expressions (may run $(cmd))`,
             };
           if (
-            m === "prompt" &&
-            (SUBSCRIPTED_NAME_RE.test(d) ||
-              (d[0] === "-" && /[A-Za-z_][A-Za-z0-9_]*\[/.test(d)) ||
-              d.includes(CMDSUB_PLACEHOLDER))
+            pendingKind === "prompt" &&
+            (SUBSCRIPTED_NAME_RE.test(arg) ||
+              (arg[0] === "-" && /[A-Za-z_][A-Za-z0-9_]*\[/.test(arg)) ||
+              arg.includes(CMDSUB_PLACEHOLDER))
           )
             return {
               ok: false,
-              reason: `'read ${argv[k - 1]}' operand '${d}' is a subscripted NAME, dash-prefixed with a subscript, or runtime-determined \u2014 zsh -p takes no operand; may arith-eval the subscript and run $(cmd)`,
+              reason: `'read ${argv[k - 1]}' operand '${arg}' is a subscripted NAME, dash-prefixed with a subscript, or runtime-determined \u2014 zsh -p takes no operand; may arith-eval the subscript and run $(cmd)`,
             };
           continue;
         }
-        if (d[0] === "-") {
-          if (l === "read") {
-            if (READ_NUMERIC_ARG_FLAGS.has(d)) u = "numeric";
-            else if (d === "-p") u = "prompt";
-            else if (READ_DATA_FLAGS.has(d)) u = "string";
-            else if (d.length > 2)
-              for (let k = 1; k < d.length; k++) {
-                let p = "-" + d[k];
-                let g = READ_NUMERIC_ARG_FLAGS.has(p);
-                if (g || READ_DATA_FLAGS.has(p)) {
-                  if (k === d.length - 1) u = g ? "numeric" : p === "-p" ? "prompt" : "string";
-                  else if (g && !READ_NUMERIC_OPERAND_RE.test(d.slice(k + 1)))
+        if (arg[0] === "-") {
+          if (baseName === "read") {
+            if (READ_NUMERIC_ARG_FLAGS.has(arg)) awaitingOperand = "numeric";
+            else if (arg === "-p") awaitingOperand = "prompt";
+            else if (READ_DATA_FLAGS.has(arg)) awaitingOperand = "string";
+            else if (arg.length > 2)
+              for (let k = 1; k < arg.length; k++) {
+                let fusedFlag = "-" + arg[k];
+                let isNumericFlag = READ_NUMERIC_ARG_FLAGS.has(fusedFlag);
+                if (isNumericFlag || READ_DATA_FLAGS.has(fusedFlag)) {
+                  if (k === arg.length - 1)
+                    awaitingOperand = isNumericFlag ? "numeric" : fusedFlag === "-p" ? "prompt" : "string";
+                  else if (isNumericFlag && !READ_NUMERIC_OPERAND_RE.test(arg.slice(k + 1)))
                     return {
                       ok: false,
-                      reason: `'read ${p}' (fused in '${d}') operand is non-numeric \u2014 zsh arith-evals subscripts/expressions (may run $(cmd))`,
+                      reason: `'read ${fusedFlag}' (fused in '${arg}') operand is non-numeric \u2014 zsh arith-evals subscripts/expressions (may run $(cmd))`,
                     };
-                  else if (p === "-p") {
-                    let sliced = d.slice(k + 1);
+                  else if (fusedFlag === "-p") {
+                    let sliced = arg.slice(k + 1);
                     if (/[A-Za-z_][A-Za-z0-9_]*\[/.test(sliced) || sliced.includes(CMDSUB_PLACEHOLDER))
                       return {
                         ok: false,
@@ -5674,73 +6003,74 @@ function checkSemantics(commands, options) {
           }
           continue;
         }
-        if (d.includes("[") || containsAnyPlaceholder(d))
+        if (arg.includes("[") || containsAnyPlaceholder(arg))
           return {
             ok: false,
-            reason: `'${l}' positional NAME '${d}' contains array subscript or runtime-determined value \u2014 bash evaluates $(cmd) in subscripts`,
+            reason: `'${baseName}' positional NAME '${arg}' contains array subscript or runtime-determined value \u2014 bash evaluates $(cmd) in subscripts`,
           };
       }
     }
-    if (DECLARATION_LIKE_BUILTINS.has(l)) {
-      let u = l === "declare" || l === "typeset" || l === "local";
-      let h = u || l === "export" || l === "readonly";
-      let d = u || l === "readonly";
-      let m = false;
-      let p = false;
+    if (DECLARATION_LIKE_BUILTINS.has(baseName)) {
+      let isDeclareLike = baseName === "declare" || baseName === "typeset" || baseName === "local";
+      let keepsValue = isDeclareLike || baseName === "export" || baseName === "readonly";
+      let hasFunctionFlagScope = isDeclareLike || baseName === "readonly";
+      let sawFunctionFlag = false;
+      let sawUpperFlag = false;
       for (let idx = 1; idx < argv.length; idx++) {
-        let k = argv[idx];
-        if (d) {
-          if (/^[+-].*f/.test(k)) m = true;
-          if (/^[+-].*[uU]/.test(k)) p = true;
-          if (m && p)
+        let arg = argv[idx];
+        if (hasFunctionFlagScope) {
+          if (/^[+-].*f/.test(arg)) sawFunctionFlag = true;
+          if (/^[+-].*[uU]/.test(arg)) sawUpperFlag = true;
+          if (sawFunctionFlag && sawUpperFlag)
             return {
               ok: false,
-              reason: `'${l}' with both -f and -u/-U flags (reached as plain command via wrapper/quote) \u2014 zsh marks a function for autoload (synonym of 'autoload')`,
+              reason: `'${baseName}' with both -f and -u/-U flags (reached as plain command via wrapper/quote) \u2014 zsh marks a function for autoload (synonym of 'autoload')`,
             };
         }
-        if (u && DECLARE_SEMANTIC_FLAG_RE.test(k))
+        if (isDeclareLike && DECLARE_SEMANTIC_FLAG_RE.test(arg))
           return {
             ok: false,
-            reason: `'${l}' with -n/-i/-a/-A/-E/-F/-L/-R/-Z/-l/-u flag (reached as plain command via wrapper/quote) changes assignment eval semantics`,
+            reason: `'${baseName}' with -n/-i/-a/-A/-E/-F/-L/-R/-Z/-l/-u flag (reached as plain command via wrapper/quote) changes assignment eval semantics`,
           };
-        if (DECLARATION_KEYWORDS.has(l) && /^[+-].*[iluEFLRZ]/.test(k))
+        if (DECLARATION_KEYWORDS.has(baseName) && /^[+-].*[iluEFLRZ]/.test(arg))
           return {
             ok: false,
-            reason: `'${l}' with -i/-E/-F/-L/-R/-Z/-l/-u flag (reached as plain command via wrapper/quote) \u2014 zsh bin_typeset mathevals, width-truncates, or case-converts the value`,
+            reason: `'${baseName}' with -i/-E/-F/-L/-R/-Z/-l/-u flag (reached as plain command via wrapper/quote) \u2014 zsh bin_typeset mathevals, width-truncates, or case-converts the value`,
           };
-        if ((h || l === "private") && /^[+-].*m/.test(k))
+        if ((keepsValue || baseName === "private") && /^[+-].*m/.test(arg))
           return {
             ok: false,
-            reason: `'${l}' with -m/+m flag (reached as plain command via wrapper/quote) \u2014 zsh pattern-assigns every matching variable`,
+            reason: `'${baseName}' with -m/+m flag (reached as plain command via wrapper/quote) \u2014 zsh pattern-assigns every matching variable`,
           };
-        if (DECLARATION_KEYWORDS.has(l) && /^[+-].*T/.test(k))
+        if (DECLARATION_KEYWORDS.has(baseName) && /^[+-].*T/.test(arg))
           return {
             ok: false,
-            reason: `'${l} -T' creates a user-defined zsh tied pair \u2014 tracked literals for its operands are unreliable`,
+            reason: `'${baseName} -T' creates a user-defined zsh tied pair \u2014 tracked literals for its operands are unreliable`,
           };
-        let A = k.includes("[") && /[$`]/.test(k);
-        if (A || containsAnyPlaceholder(k))
+        let hasSubscriptExpansion = arg.includes("[") && /[$`]/.test(arg);
+        if (hasSubscriptExpansion || containsAnyPlaceholder(arg))
           return {
             ok: false,
-            reason: A
-              ? `'${l}' operand '${redactPlaceholdersForDisplay(k)}' contains array subscript with expansion \u2014 shell arith-evals $(cmd) in subscripts`
-              : `'${l}' operand '${redactPlaceholdersForDisplay(k)}' is runtime-determined and may carry an array subscript \u2014 shell arith-evals $(cmd) in subscripts`,
+            reason: hasSubscriptExpansion
+              ? `'${baseName}' operand '${redactPlaceholdersForDisplay(arg)}' contains array subscript with expansion \u2014 shell arith-evals $(cmd) in subscripts`
+              : `'${baseName}' operand '${redactPlaceholdersForDisplay(arg)}' is runtime-determined and may carry an array subscript \u2014 shell arith-evals $(cmd) in subscripts`,
           };
-        if ((l === "float" || l === "integer") && !/^[+-]/.test(k))
+        if ((baseName === "float" || baseName === "integer") && !/^[+-]/.test(arg))
           return {
             ok: false,
-            reason: `zsh '${l}' operand \u2014 implicit typeset -E/-i arithmetically evaluates the (existing or assigned) value`,
+            reason: `zsh '${baseName}' operand \u2014 implicit typeset -E/-i arithmetically evaluates the (existing or assigned) value`,
           };
       }
-      let g = h && c === l ? checkDeclarationOptions(l, argv.slice(1)) : null;
-      if (g !== null)
+      let refusal =
+        keepsValue && commandName === baseName ? checkDeclarationOptions(baseName, argv.slice(1)) : null;
+      if (refusal !== null)
         return {
           ok: false,
-          reason: g,
+          reason: refusal,
         };
       let _ =
-        c === l && (options?.hasLoop !== false || cmd !== commands.at(-1))
-          ? checkDeclarationContext(l, argv.slice(1))
+        commandName === baseName && (options?.hasLoop !== false || cmd !== commands.at(-1))
+          ? checkDeclarationContext(baseName, argv.slice(1))
           : null;
       if (_ !== null)
         return {
@@ -5748,90 +6078,94 @@ function checkSemantics(commands, options) {
           reason: _,
         };
     }
-    if (l === "printf")
+    if (baseName === "printf")
       for (let k = 1; k < argv.length; k++) {
-        let h = argv[k];
-        let d = h.includes("[") && /[$`]/.test(h);
-        if (d || containsAnyPlaceholder(h))
+        let arg = argv[k];
+        let hasSubscriptExpansion = arg.includes("[") && /[$`]/.test(arg);
+        if (hasSubscriptExpansion || containsAnyPlaceholder(arg))
           return {
             ok: false,
-            reason: d
-              ? `printf operand '${redactPlaceholdersForDisplay(h)}' contains array subscript with expansion \u2014 zsh arith-evals %d/%i operands (may run $(cmd))`
-              : `printf operand '${redactPlaceholdersForDisplay(h)}' is runtime-determined and may carry an array subscript \u2014 zsh arith-evals %d/%i operands (may run $(cmd))`,
+            reason: hasSubscriptExpansion
+              ? `printf operand '${redactPlaceholdersForDisplay(arg)}' contains array subscript with expansion \u2014 zsh arith-evals %d/%i operands (may run $(cmd))`
+              : `printf operand '${redactPlaceholdersForDisplay(arg)}' is runtime-determined and may carry an array subscript \u2014 zsh arith-evals %d/%i operands (may run $(cmd))`,
           };
       }
-    if (l === "set")
+    if (baseName === "set")
       for (let k = 1; k < argv.length; k++) {
-        let h = argv[k];
-        if (h === "--") break;
-        if (!/^[-+]/.test(h)) continue;
-        for (let k_2 = 1; k_2 < h.length; k_2++) {
-          let m = h[k_2];
-          if (m === "o") {
-            let p = k_2 < h.length - 1 ? h.slice(k_2 + 1) : argv[k + 1];
-            if (p !== undefined && p !== "" && !SET_O_SAFE_OPTS.has(p.toLowerCase().replace(/[_-]/g, "")))
+        let arg = argv[k];
+        if (arg === "--") break;
+        if (!/^[-+]/.test(arg)) continue;
+        for (let k_2 = 1; k_2 < arg.length; k_2++) {
+          let letter = arg[k_2];
+          if (letter === "o") {
+            let option = k_2 < arg.length - 1 ? arg.slice(k_2 + 1) : argv[k + 1];
+            if (
+              option !== undefined &&
+              option !== "" &&
+              !SET_O_SAFE_OPTS.has(option.toLowerCase().replace(/[_-]/g, ""))
+            )
               return {
                 ok: false,
-                reason: `'set -o/+o ${p}' changes shell parsing/globbing state \u2014 can enable globsubst/extendedglob and defeat static analysis`,
+                reason: `'set -o/+o ${option}' changes shell parsing/globbing state \u2014 can enable globsubst/extendedglob and defeat static analysis`,
               };
-            if (k_2 === h.length - 1) k++;
+            if (k_2 === arg.length - 1) k++;
             break;
           }
-          if (m === "A") break;
-          if (!SET_O_SAFE_LETTERS.has(m))
+          if (letter === "A") break;
+          if (!SET_O_SAFE_LETTERS.has(letter))
             return {
               ok: false,
-              reason: `'set ${h[0]}${m}' changes shell option state (allexport/keyword/\u2026) \u2014 defeats static env-var analysis; see SET_O_SAFE_LETTERS`,
+              reason: `'set ${arg[0]}${letter}' changes shell option state (allexport/keyword/\u2026) \u2014 defeats static env-var analysis; see SET_O_SAFE_LETTERS`,
             };
         }
       }
-    if (l === "print" && argv.some((arg) => PRINT_PROMPT_FLAG.test(arg)))
+    if (baseName === "print" && argv.some((arg) => PRINT_PROMPT_FLAG.test(arg)))
       return {
         ok: false,
         reason: "What 'print -P' expands can't be checked before it runs",
       };
-    if (l === "jobs")
+    if (baseName === "jobs")
       for (let k = 1; k < argv.length; k++) {
-        let h = argv[k];
-        if (/^[+-].*x/.test(h))
+        let arg = argv[k];
+        if (/^[+-].*x/.test(arg))
           return {
             ok: false,
             reason: "What 'jobs -x' starts can't be checked before it runs",
           };
       }
-    if (SHELL_KEYWORDS.has(c))
+    if (SHELL_KEYWORDS.has(commandName))
       return {
         ok: false,
-        reason: `Shell keyword '${l}' as command name \u2014 tree-sitter mis-parse`,
+        reason: `Shell keyword '${baseName}' as command name \u2014 tree-sitter mis-parse`,
       };
-    if (i) {
-      if (l === "find" || l === "jq")
+    if (sawXargs) {
+      if (baseName === "find" || baseName === "jq")
         return {
           ok: false,
-          reason: `What xargs adds to ${l} can't be checked before it runs`,
+          reason: `What xargs adds to ${baseName} can't be checked before it runs`,
         };
-      if (AWK_NAMES.has(l)) {
-        let u = false;
+      if (AWK_NAMES.has(baseName)) {
+        let hasProgram = false;
         for (let k = 1; k < argv.length; k++) {
-          let d = argv[k];
-          if (d === "--") {
-            u = k + 1 < argv.length;
+          let arg = argv[k];
+          if (arg === "--") {
+            hasProgram = k + 1 < argv.length;
             break;
           }
-          if (d === "-" || !d.startsWith("-")) {
-            u = true;
+          if (arg === "-" || !arg.startsWith("-")) {
+            hasProgram = true;
             break;
           }
-          if (!d.includes("=") && AWK_PROGRAM_FILE_OPT_RE.test(d)) k++;
+          if (!arg.includes("=") && AWK_PROGRAM_FILE_OPT_RE.test(arg)) k++;
         }
-        if (!u)
+        if (!hasProgram)
           return {
             ok: false,
-            reason: `The program xargs gives ${l} can't be checked before it runs`,
+            reason: `The program xargs gives ${baseName} can't be checked before it runs`,
           };
       }
     }
-    if (l === "jq") {
+    if (baseName === "jq") {
       for (let arg of argv) {
         if (/\bsystem\s*\(/.test(arg))
           return {
@@ -5855,19 +6189,19 @@ function checkSemantics(commands, options) {
           reason: "jq command contains dangerous flags that could execute code or read arbitrary files",
         };
     }
-    if (AWK_NAMES.has(l)) {
-      if (cmd.hasUnquotedGlob || (r && hasSourceUnquotedGlob(cmd)))
+    if (AWK_NAMES.has(baseName)) {
+      if (cmd.hasUnquotedGlob || (useSourceGlob && hasSourceUnquotedGlob(cmd)))
         return {
           ok: false,
           reason:
             "awk command contains unquoted glob characters \u2014 could glob-expand to a planted program or flag before awk runs",
         };
       for (let arg of argv) {
-        let h = awkProgramHasExecBridge(arg);
-        if (h !== false)
+        let reason = awkProgramHasExecBridge(arg);
+        if (reason !== false)
           return {
             ok: false,
-            reason: h,
+            reason,
           };
         if (containsAnyPlaceholder(arg))
           return {
@@ -5883,71 +6217,71 @@ function checkSemantics(commands, options) {
           reason: "awk has an option that can't be checked before it runs",
         };
     }
-    if (l === "find") {
-      if (cmd.hasUnquotedGlob || (r && hasSourceUnquotedGlob(cmd)))
+    if (baseName === "find") {
+      if (cmd.hasUnquotedGlob || (useSourceGlob && hasSourceUnquotedGlob(cmd)))
         return {
           ok: false,
           reason:
             "find contains unquoted glob characters \u2014 could glob-expand to a dangerous action before find runs",
         };
-      let u = false;
+      let afterFlagValue = false;
       for (let k = 1; k < argv.length; k++) {
-        let d = argv[k];
-        let m = u;
-        u = false;
-        if (isFindDangerousAction(d))
+        let arg = argv[k];
+        let previousWasFlagValue = afterFlagValue;
+        afterFlagValue = false;
+        if (isFindDangerousAction(arg))
           return {
             ok: false,
-            reason: `find with '${d}' executes commands or modifies files \u2014 cannot be auto-allowed by a Bash(find:*) prefix rule`,
+            reason: `find with '${arg}' executes commands or modifies files \u2014 cannot be auto-allowed by a Bash(find:*) prefix rule`,
           };
-        if (isAmbiguousFindWord(d))
+        if (isAmbiguousFindWord(arg))
           return {
             ok: false,
-            reason: `find option '${d}' is read differently by different versions of find \u2014 could hide a following action`,
+            reason: `find option '${arg}' is read differently by different versions of find \u2014 could hide a following action`,
           };
-        if (!m && findWordTakesFlagValue(d)) {
-          u = true;
+        if (!previousWasFlagValue && findWordTakesFlagValue(arg)) {
+          afterFlagValue = true;
           continue;
         }
-        if (!m && findWordTakesOperand(d)) {
+        if (!previousWasFlagValue && findWordTakesOperand(arg)) {
           k++;
           continue;
         }
-        if (containsAnyPlaceholder(d))
+        if (containsAnyPlaceholder(arg))
           return {
             ok: false,
             reason: "find argument is runtime-determined \u2014 could resolve to a dangerous action",
           };
-        if (/[[\]*?]/.test(d))
+        if (/[[\]*?]/.test(arg))
           return {
             ok: false,
-            reason: `find argument '${d}' contains glob characters \u2014 could glob-expand to a dangerous action`,
+            reason: `find argument '${arg}' contains glob characters \u2014 could glob-expand to a dangerous action`,
           };
       }
     }
-    if (isZshDangerousBuiltin(c))
+    if (isZshDangerousBuiltin(commandName))
       return {
         ok: false,
-        reason: `Zsh builtin '${l}' can bypass security checks`,
+        reason: `Zsh builtin '${baseName}' can bypass security checks`,
       };
-    let x = zshStatWritesVarReason(c, argv.slice(1));
-    if (x !== null)
+    let refusal = zshStatWritesVarReason(commandName, argv.slice(1));
+    if (refusal !== null)
       return {
         ok: false,
-        reason: x,
+        reason: refusal,
       };
-    if (EVAL_LIKE_BUILTINS.has(c))
-      if (l === "fc" && !argv.slice(1).some((arg) => /^[+-].*[es]/.test(arg)));
-      else if (l === "compgen" && !argv.slice(1).some((arg) => /^[+-].*[CFW]/.test(arg)));
+    if (EVAL_LIKE_BUILTINS.has(commandName))
+      if (baseName === "fc" && !argv.slice(1).some((arg) => /^[+-].*[es]/.test(arg)));
+      else if (baseName === "compgen" && !argv.slice(1).some((arg) => /^[+-].*[CFW]/.test(arg)));
       else
         return {
           ok: false,
-          reason: `'${l}' evaluates arguments as shell code`,
+          reason: `'${baseName}' evaluates arguments as shell code`,
         };
-    if (UNHANDLED_EXEC_WRAPPERS.has(l) && argv.length > 1)
+    if (UNHANDLED_EXEC_WRAPPERS.has(baseName) && argv.length > 1)
       return {
         ok: false,
-        reason: `What '${l}' starts can't be checked before it runs`,
+        reason: `What '${baseName}' starts can't be checked before it runs`,
       };
     for (let arg of cmd.argv)
       if (arg.includes("/proc/") && PROC_ENVIRON_RE.test(arg))
@@ -5967,7 +6301,7 @@ function checkSemantics(commands, options) {
 `) &&
         NEWLINE_HASH_RE.test(arg)
       )
-        s ??= {
+        firstFailure ??= {
           ok: false,
           kind: "newline-hash",
           reason: "Newline followed by # inside a quoted argument can hide arguments from path validation",
@@ -5978,7 +6312,7 @@ function checkSemantics(commands, options) {
 `) &&
         NEWLINE_HASH_RE.test(envVar.value)
       )
-        s ??= {
+        firstFailure ??= {
           ok: false,
           kind: "newline-hash",
           reason: "Newline followed by # inside an env var value can hide arguments from path validation",
@@ -5989,30 +6323,62 @@ function checkSemantics(commands, options) {
 `) &&
         NEWLINE_HASH_RE.test(redirect.target)
       )
-        s ??= {
+        firstFailure ??= {
           ok: false,
           kind: "newline-hash",
           reason: "Newline followed by # inside a redirect target can hide arguments from path validation",
         };
   }
-  if (s) return s;
+  if (firstFailure) return firstFailure;
   return {
     ok: true,
   };
 }
+//@ chunk-38axkkfw.js:4923-5089 fingerprint = walkHeredocRedirect (0.627)
+/**
+ * 重定向相关的操作符与节点类型集合（< > >> << <<- <<< <& >& &> &>> >| 以及 file_descriptor、heredoc_*），判断重定向子节点是否只含这些记号。
+ */
+var REDIRECT_OPERATOR_TOKENS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-38axkkfw.js:4923", () => {
+  REDIRECT_OPERATOR_TOKENS = new Set([
+    "<",
+    ">",
+    ">>",
+    "<<",
+    "<<-",
+    "<<<",
+    "<&",
+    ">&",
+    "&>",
+    "&>>",
+    ">|",
+    ">&-",
+    "<&-",
+    "file_descriptor",
+    "heredoc_start",
+    "heredoc_body",
+    "heredoc_content",
+    "heredoc_end",
+  ]);
+});
 //@ chunk-e6aww6q8.js:1144304-1144468 fingerprint = parseForSecurity (0.861)
 /**
  * 快速判断命令是否含 zsh 危险命令：能安全解析时用 AST argv，否则用 splitCommand + tryParseShellCommand 回退，逐条交给 validateZshDangerousCommands。
  */
 function hasZshDangerousCommand(cmd) {
-  let n = cmd.length > SPLIT_MAX_LEN ? null : getParserModule()?.parse(cmd);
-  let r = n ? parseForSecurityFromAst(cmd, n) : undefined;
+  let root = cmd.length > SPLIT_MAX_LEN ? null : getParserModule()?.parse(cmd);
+  let parsed = root ? parseForSecurityFromAst(cmd, root) : undefined;
   return (
-    r?.kind === "simple" ? r.commands.map((command) => command.argv) : splitCommand(cmd).map(getCommandArgv)
-  ).some((h) => isXargsToSafeFilter(stripCommandBuiltinPrefixes(h)));
+    parsed?.kind === "simple"
+      ? parsed.commands.map((command) => command.argv)
+      : splitCommand(cmd).map(getCommandArgv)
+  ).some((argv) => isXargsToSafeFilter(stripCommandBuiltinPrefixes(argv)));
 }
 //@ chunk-e6aww6q8.js:1151910-1151949 fingerprint = walkHerestringRedirect (1)
-var INPUT_REDIRECT_OPS_2 = new Set(["<", "<<", "<<<", "<&"]);
+var INPUT_REDIRECT_OPS_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:1151910", () => {
+  INPUT_REDIRECT_OPS_2 = new Set(["<", "<<", "<<<", "<&"]);
+});
 //@ chunk-e6aww6q8.js:1155366-1155446 placement
 /**
  * 匹配命令开头的 command/builtin/noglob 包装前缀；stripCommandPrefixes 循环剥除。
@@ -6023,51 +6389,30 @@ var COMMAND_PREFIX_STRIP_RE = /^(?:(?:command(?:[ \t]+-p+)*|builtin)(?:[ \t]+--)
  * 循环剥掉 command/builtin/noglob 前缀，得到实际执行的命令文本。
  */
 function stripCommandPrefixes(text) {
-  let n = text;
-  while (COMMAND_PREFIX_STRIP_RE.test(n)) n = n.replace(COMMAND_PREFIX_STRIP_RE, "");
-  return n;
+  let stripped = text;
+  while (COMMAND_PREFIX_STRIP_RE.test(stripped)) stripped = stripped.replace(COMMAND_PREFIX_STRIP_RE, "");
+  return stripped;
 }
 //@ chunk-e6aww6q8.js:1155517-1155651 placement
 /**
  * 判断语法树中是否含子 shell 或复合语句节点。
  */
-function hasSubshellNode(e) {
-  if (e.type === "subshell" || e.type === "compound_statement") return true;
-  for (let child of e.children) if (child && hasSubshellNode(child)) return true;
+function hasSubshellNode(node) {
+  if (node.type === "subshell" || node.type === "compound_statement") return true;
+  for (let child of node.children) if (child && hasSubshellNode(child)) return true;
   return false;
 }
 //@ chunk-e6aww6q8.js:1155651-1155721 fingerprint = STRUCTURAL_TYPES (1)
 /**
  * 结构性节点类型集合：program、list、pipeline、redirected_statement，遍历时只下钻不当作命令。
  */
-var STRUCTURAL_TYPES_2 = new Set(["program", "list", "pipeline", "redirected_statement"]);
-//@ chunk-38axkkfw.js:4923-5089 fingerprint = walkHeredocRedirect (0.627)
-/**
- * 重定向相关的操作符与节点类型集合（< > >> << <<- <<< <& >& &> &>> >| 以及 file_descriptor、heredoc_*），判断重定向子节点是否只含这些记号。
- */
-var REDIRECT_OPERATOR_TOKENS = new Set([
-  "<",
-  ">",
-  ">>",
-  "<<",
-  "<<-",
-  "<<<",
-  "<&",
-  ">&",
-  "&>",
-  "&>>",
-  ">|",
-  ">&-",
-  "<&-",
-  "file_descriptor",
-  "heredoc_start",
-  "heredoc_body",
-  "heredoc_content",
-  "heredoc_end",
-]);
+var STRUCTURAL_TYPES_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:1155651", () => {
+  STRUCTURAL_TYPES_2 = new Set(["program", "list", "pipeline", "redirected_statement"]);
+});
 //@ chunk-jxcqr1hv.js:657-705 fingerprint = BARE_SUBSCRIPT_NAME_BUILTINS (0.702)
-function BARE_SUBSCRIPT_NAME_BUILTINS_2(e) {
-  return unattendedServingConsentView() !== "unset" || unattendedServingConsentMayHoldYes() || e;
+function BARE_SUBSCRIPT_NAME_BUILTINS_2(fallback) {
+  return unattendedServingConsentView() !== "unset" || unattendedServingConsentMayHoldYes() || fallback;
 }
 export {
   containsAnyPlaceholder,

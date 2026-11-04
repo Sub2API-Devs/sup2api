@@ -24,7 +24,7 @@ var toggleDiffPanel = async (onDone, context) => {
 };
 //@ chunk-19av2vh6.js:4091-4208 fingerprint = call (0.615)
 var openDiffDialog = async (onDone, context) => {
-  let { DiffDialog } = await import("./chunk-mtx4csef.js");
+  let { DiffDialog } = await import("../../components/diff/DiffDialog.js");
   return jsxProd_default(DiffDialog, {
     messages: context.messages,
     onDone,
@@ -38,3 +38,4 @@ var callDiff = (onDone, context, args, invokedName) =>
   resolveRenderMode(context.presentation, context.dispatchedAsImmediate) === "fullscreen"
     ? toggleDiffPanel(onDone, context, args, invokedName)
     : openDiffDialog(onDone, context, args, invokedName);
+export { callDiff };

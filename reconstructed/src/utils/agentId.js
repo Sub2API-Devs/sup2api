@@ -14,15 +14,15 @@ import { createHash, randomBytes } from "crypto";
 /**
  * 原样返回输入（某类 agent id 的占位校验）。
  */
-function identityAgentId(t) {
-  return t;
+function identityAgentId(agentId) {
+  return agentId;
 }
 //@ chunk-kcjh5jnz.js:215-239 placement
 /**
  * 原样返回输入（另一类 agent id 的占位校验）。
  */
-function identityAgentId2(t) {
-  return t;
+function identityAgentId2(agentId) {
+  return agentId;
 }
 //@ chunk-kcjh5jnz.js:239-261 placement
 var HOOK_AGENT_ID_PREFIX = "hook-agent-";
@@ -30,12 +30,12 @@ var HOOK_AGENT_ID_PREFIX = "hook-agent-";
 /**
  * 判断字符串是否可安全用作 id/文件名片段：≤200 字符、只含字母数字下划线连字符且不以连字符开头、不是 Windows 保留设备名。
  */
-function isSafeIdSegment_2(t) {
+function isSafeIdSegment_2(segment) {
   return (
-    typeof t === "string" &&
-    t.length <= 200 &&
-    /^[A-Za-z0-9_][A-Za-z0-9_-]*$/.test(t) &&
-    !/^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])$/i.test(t)
+    typeof segment === "string" &&
+    segment.length <= 200 &&
+    /^[A-Za-z0-9_][A-Za-z0-9_-]*$/.test(segment) &&
+    !/^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])$/i.test(segment)
   );
 }
 //@ chunk-kcjh5jnz.js:411-474 placement
@@ -49,8 +49,8 @@ var SAFE_ID_SEGMENT_RE = /^[\w-]{1,128}$/;
 /**
  * 判断字符串是否可作为安全 id 片段。
  */
-function isSafeIdSegment(t) {
-  return SAFE_ID_SEGMENT_RE.test(t);
+function isSafeIdSegment(segment) {
+  return SAFE_ID_SEGMENT_RE.test(segment);
 }
 //@ chunk-kcjh5jnz.js:506-552 placement
 var regExp_2 = new RegExp(`^a(?:${ID_SEGMENT_PATTERN}-)?[0-9a-f]{16}$`);
@@ -58,8 +58,8 @@ var regExp_2 = new RegExp(`^a(?:${ID_SEGMENT_PATTERN}-)?[0-9a-f]{16}$`);
 /**
  * 合法 agent id 原样返回，否则返回 null。
  */
-function normalizeAgentIdOrNull(t) {
-  return regExp_2.test(t) ? t : null;
+function normalizeAgentIdOrNull(agentId) {
+  return regExp_2.test(agentId) ? agentId : null;
 }
 //@ chunk-kcjh5jnz.js:662-734 placement
 /**
@@ -67,27 +67,27 @@ function normalizeAgentIdOrNull(t) {
  */
 var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 //@ chunk-kcjh5jnz.js:734-1023 placement
-function hashAgentId(t, o) {
-  let buffer = Buffer.from(o.replace(/-/g, ""), "hex");
-  let n = createHash("sha1").update(buffer).update(Buffer.from(t, "utf8")).digest();
-  n[6] = (n[6] & 15) | 80;
-  n[8] = (n[8] & 63) | 128;
-  let str = n.subarray(0, 16).toString("hex");
+function hashAgentId(name, saltHex) {
+  let buffer = Buffer.from(saltHex.replace(/-/g, ""), "hex");
+  let digest = createHash("sha1").update(buffer).update(Buffer.from(name, "utf8")).digest();
+  digest[6] = (digest[6] & 15) | 80;
+  digest[8] = (digest[8] & 63) | 128;
+  let str = digest.subarray(0, 16).toString("hex");
   return `${str.slice(0, 8)}-${str.slice(8, 12)}-${str.slice(12, 16)}-${str.slice(16, 20)}-${str.slice(20, 32)}`;
 }
 //@ chunk-kcjh5jnz.js:1023-1097 placement
 /**
  * 合法 UUID 原样返回，否则返回 null。
  */
-function normalizeUuidOrNull(t) {
-  if (typeof t !== "string") return null;
-  return UUID_RE.test(t) ? t : null;
+function normalizeUuidOrNull(value) {
+  if (typeof value !== "string") return null;
+  return UUID_RE.test(value) ? value : null;
 }
 //@ chunk-kcjh5jnz.js:1097-1224 placement = generatePlaceholders (1)
-function makeSaltedName(t) {
-  if (t && !regExp.test(t)) t = t.replace(/[^\w-]/g, "").slice(0, 63);
+function makeSaltedName(name) {
+  if (name && !regExp.test(name)) name = name.replace(/[^\w-]/g, "").slice(0, 63);
   let salt = randomBytes(8).toString("hex");
-  return t ? `a${t}-${salt}` : `a${salt}`;
+  return name ? `a${name}-${salt}` : `a${salt}`;
 }
 export {
   normalizeUuidOrNull,

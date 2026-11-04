@@ -14,12 +14,13 @@ import { toError, errorStackOrMessage } from "./errors.js";
 import { isEnvTruthy } from "./envUtils.js";
 import { isEssentialTrafficOnly } from "./privacyLevel.js";
 import { setLastAPIRequest, setLastAPIRequestMessages } from "../bootstrap/state.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-bbtre4r8.js:14747-15020 facade-exports = getLogDisplayTitle (0.847)
 function getLogDisplayTitle(log, defaultTitle) {
-  let r = log.firstPromptShown ?? log.firstPrompt;
-  let isAutonomousPrompt = r?.startsWith(`<${TICK}>`);
-  let strippedFirstPrompt = r ? unwrapReminderText(r) : "";
+  let firstPromptText = log.firstPromptShown ?? log.firstPrompt;
+  let isAutonomousPrompt = firstPromptText?.startsWith(`<${TICK}>`);
+  let strippedFirstPrompt = firstPromptText ? unwrapReminderText(firstPromptText) : "";
   let useFirstPrompt = strippedFirstPrompt && !isAutonomousPrompt;
   let title =
     log.agentName ||
@@ -48,36 +49,36 @@ class attachErrorLogSink_2 {
   sink = null;
   hardFailMode = undefined;
   maxRememberedChars = undefined;
-  remember(t) {
+  remember(event) {
     if (this.recentErrors.length >= MAX_REMEMBERED_ERRORS) this.recentErrors.shift();
     let maxRememberedChars = this.maxRememberedChars;
     this.recentErrors.push(
-      maxRememberedChars === undefined || t.error.length <= maxRememberedChars
-        ? t
+      maxRememberedChars === undefined || event.error.length <= maxRememberedChars
+        ? event
         : {
-            ...t,
-            error: `error text not remembered: it has ${t.error.length} characters, over this process's fixed limit of ${maxRememberedChars} per error`,
+            ...event,
+            error: `error text not remembered: it has ${event.error.length} characters, over this process's fixed limit of ${maxRememberedChars} per error`,
           },
     );
   }
-  dispatch(t) {
+  dispatch(event) {
     if (this.sink === null) {
       if (this.queue.length >= MAX_REMEMBERED_ERROR_CHARS) {
         this.droppedBeforeSink++;
         return;
       }
-      this.queue.push(t);
+      this.queue.push(event);
       return;
     }
-    switch (t.type) {
+    switch (event.type) {
       case "error":
-        this.sink.logError(t.error);
+        this.sink.logError(event.error);
         break;
       case "mcpError":
-        this.sink.logMCPError(t.serverName, t.error);
+        this.sink.logMCPError(event.serverName, event.error);
         break;
       case "mcpDebug":
-        this.sink.logMCPDebug(t.serverName, t.message);
+        this.sink.logMCPDebug(event.serverName, event.message);
         break;
     }
   }
@@ -86,7 +87,7 @@ class attachErrorLogSink_2 {
     this.sink = sink;
     let queue = this.queue;
     this.queue = [];
-    for (let r of queue) this.dispatch(r);
+    for (let pendingEvent of queue) this.dispatch(pendingEvent);
   }
   isHardFailMode() {
     this.hardFailMode ??= process.argv.includes("--hard-fail");
@@ -102,7 +103,10 @@ class attachErrorLogSink_2 {
   }
 }
 //@ chunk-bbtre4r8.js:16155-16169 facade-exports
-var errorLogBuffer = new attachErrorLogSink_2();
+var errorLogBuffer; // deferred: uses attachErrorLogSink_2 of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-bbtre4r8.js:16155", () => {
+  errorLogBuffer = new attachErrorLogSink_2();
+});
 //@ chunk-bbtre4r8.js:16169-16203 facade-exports
 function attachErrorLogSink(errorLogSink) {
   errorLogBuffer.attachSink(errorLogSink);
@@ -169,11 +173,11 @@ function keepsMCPDebug() {
   }
 }
 //@ chunk-bbtre4r8.js:16949-17070 facade-exports = isMainThreadSource (1)
-function captureAPIRequest(t, querySource, r) {
+function captureAPIRequest(request, querySource, isEligible) {
   if (!querySource || !querySource.startsWith("repl_main_thread")) return;
-  if (!r) return;
-  let { messages, ...o } = t;
-  setLastAPIRequest(o);
+  if (!isEligible) return;
+  let { messages, ...requestWithoutMessages } = request;
+  setLastAPIRequest(requestWithoutMessages);
   setLastAPIRequestMessages(null);
 }
 //@ chunk-s67w32sp.js:5050-5139 fingerprint = dateToFilename (0.673)

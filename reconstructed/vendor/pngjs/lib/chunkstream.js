@@ -5,10 +5,10 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:20975-23141 cjs-fingerprint
-var require_chunkstream = x(function (cjsExports, cjsModule) {
+var require_chunkstream = __commonJS(function (cjsExports, cjsModule) {
   var util = importMetaRequire("util");
   var Stream = importMetaRequire("stream");
   var ChunkStream = (cjsModule.exports = function () {

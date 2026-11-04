@@ -17,33 +17,33 @@ import { pathToSessionSideKey } from "../utils/storage/storageKeys.js";
 import { isDiskless } from "../bootstrap/state.js";
 
 //@ chunk-63641kq7.js:5307-5362 placement
-function getCustomTitlePath(e, n) {
-  return join(dirname(e), n, "custom-title.json");
+function getCustomTitlePath(title, sessionId) {
+  return join(dirname(title), sessionId, "custom-title.json");
 }
 //@ chunk-63641kq7.js:5362-5556 placement
-async function readCustomTitle(fullPath, sessionId, r) {
-  let sideFileText = await readSideFileText(getCustomTitlePath(fullPath, sessionId), r);
+async function readCustomTitle(fullPath, sessionId, options) {
+  let sideFileText = await readSideFileText(getCustomTitlePath(fullPath, sessionId), options);
   if (sideFileText === undefined) return;
-  let i;
+  let raw;
   try {
-    i = JSON.parse(sideFileText);
+    raw = JSON.parse(sideFileText);
   } catch {
     return;
   }
-  let s = LogSelectorOptionsSchema().safeParse(i);
-  if (!s.success) return;
-  return sanitizeSessionTitle(s.data.customTitle) || undefined;
+  let parsed = LogSelectorOptionsSchema().safeParse(raw);
+  if (!parsed.success) return;
+  return sanitizeSessionTitle(parsed.data.customTitle) || undefined;
 }
 //@ chunk-63641kq7.js:5556-5796 placement
-async function readSideFileText(customTitlePath, n) {
-  if (isStorageV5Enabled() && n !== undefined)
+async function readSideFileText(customTitlePath, options) {
+  if (isStorageV5Enabled() && options !== undefined)
     try {
-      let r = pathToSessionSideKey(customTitlePath);
-      if (r !== undefined) {
-        let text = await n.readText([r]);
+      let sideKey = pathToSessionSideKey(customTitlePath);
+      if (sideKey !== undefined) {
+        let text = await options.readText([sideKey]);
         if (!text.ok) return;
-        let i = text.value.items[0];
-        return i.found ? i.value : undefined;
+        let item = text.value.items[0];
+        return item.found ? item.value : undefined;
       }
     } catch {
       return;

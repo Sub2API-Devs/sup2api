@@ -50,7 +50,7 @@ function isUnattendedServingAccepted() {
  */
 async function saveUnattendedServingConsent(choice) {
   if (choice === "accepted" && managedSettingsForbidUnattendedServing()) return "forbidden";
-  let n =
+  let action =
     choice === "accepted"
       ? "accepted"
       : unattendedServingConsentView() === "accepted"
@@ -58,7 +58,7 @@ async function saveUnattendedServingConsent(choice) {
         : "declined";
   if (!(await writeUnattendedServingConsent(choice))) return "not_saved";
   logEvent("tengu_served_unattended_consent", {
-    action: fromEnum(n),
+    action: fromEnum(action),
     surface: lit("cli"),
   });
   return "saved";

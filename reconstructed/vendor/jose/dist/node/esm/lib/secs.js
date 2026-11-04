@@ -5,14 +5,14 @@
  * pieces: chunk-2tyrgda4.js (3)
  * attribution: esm-layout 2, esm-fingerprint 1
  */
-import { Xa } from "../../../../../../runtime/bun-runtime.js";
+import { __esm } from "../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-2tyrgda4.js:38867-38881 esm-layout
-var er = () => {};
+var noopJwtClaims = () => {};
 //@ chunk-2tyrgda4.js:38881-39404 esm-layout
-var Vr;
-var ct = (str) => {
-  let matched = Vr.exec(str);
+var timePeriodRegex;
+var parseSecs = (str) => {
+  let matched = timePeriodRegex.exec(str);
   if (!matched) throw TypeError("Invalid time period format");
   let value = parseFloat(matched[1]);
   switch (matched[2].toLowerCase()) {
@@ -47,7 +47,8 @@ var ct = (str) => {
   }
 };
 //@ chunk-2tyrgda4.js:39404-39526 esm-fingerprint
-var init_secs = Xa(() => {
-  Vr = /^(\d+|\d+\.\d+) ?(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)$/i;
+var init_secs = __esm(() => {
+  timePeriodRegex =
+    /^(\d+|\d+\.\d+) ?(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)$/i;
 });
-export { ct, er, init_secs };
+export { parseSecs, noopJwtClaims, init_secs };

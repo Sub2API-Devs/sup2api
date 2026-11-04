@@ -20,17 +20,17 @@ var MAX_CODE_CHARS = 2000;
 /**
  * 截断过长代码并返回截掉字符数。
  */
-function truncateCode(e, n = 0) {
-  if (e.length - n <= MAX_CODE_CHARS)
+function truncateCode(code, offset = 0) {
+  if (code.length - offset <= MAX_CODE_CHARS)
     return {
-      code: e.slice(n),
+      code: code.slice(offset),
       truncatedChars: 0,
     };
-  let sliced = e.slice(n, n + MAX_CODE_CHARS + 1);
-  let c = truncateToLength(sliced, MAX_CODE_CHARS);
+  let sliced = code.slice(offset, offset + MAX_CODE_CHARS + 1);
+  let truncated = truncateToLength(sliced, MAX_CODE_CHARS);
   return {
-    code: c,
-    truncatedChars: e.length - n - c.length,
+    code: truncated,
+    truncatedChars: code.length - offset - truncated.length,
   };
 }
 //@ chunk-cwwxybjc.js:872-918 placement

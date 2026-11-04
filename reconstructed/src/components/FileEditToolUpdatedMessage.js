@@ -8,8 +8,9 @@
  * pieces: chunk-dcmhvw5a.js (1), chunk-vnfdjr3f.js (5)
  * attribution: fingerprint 2, file-local 2, callgraph-fingerprint 1, layout 1
  */
+import { countCharInString } from "../utils/stringUtils.js";
 import { count } from "../utils/collections.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import {
   jsxProd_default_2,
@@ -21,8 +22,23 @@ import { MessageResponse } from "./MessageResponse.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { CtrlOToExpand } from "./CtrlOToExpand.js";
 import { StructuredDiffList } from "./StructuredDiffList.js";
-import { countCharInString } from "../utils/stringUtils.js";
 
+//@ chunk-dcmhvw5a.js:383995-384090 fingerprint = _temp4 (0.685)
+function editSizeOf(script) {
+  return {
+    bytes: Buffer.byteLength(script, "utf8"),
+    lines:
+      countCharInString(
+        script,
+        `
+`,
+      ) +
+      (script.endsWith(`
+`)
+        ? 0
+        : 1),
+  };
+}
 //@ chunk-vnfdjr3f.js:2341-2381 file-local
 function isAddedLine(__0) {
   return __0.startsWith("+");
@@ -32,8 +48,8 @@ function addAddedLines(acc, hunk) {
   return acc + count(hunk.lines, isAddedLine);
 }
 //@ chunk-vnfdjr3f.js:2421-2463 file-local
-function isRemovedLine(vt) {
-  return vt.startsWith("-");
+function isRemovedLine(line) {
+  return line.startsWith("-");
 }
 //@ chunk-vnfdjr3f.js:2463-2507 layout
 function addRemovedLines(acc, hunk) {
@@ -44,7 +60,7 @@ function addRemovedLines(acc, hunk) {
  * 编辑成功消息："Added N lines, removed M lines"，非 condensed 时下方显示 StructuredDiffList。
  */
 function FileEditToolUpdatedMessage(props) {
-  let $ = w(25);
+  let $ = useMemoCache(25);
   let { filePath, structuredPatch, firstLine, fileContent, style, verbose, previewHint, collapsed } = props;
   let { columns } = useTerminalSize();
   let numAdditions = structuredPatch.reduce(addAddedLines, 0);
@@ -119,31 +135,31 @@ function FileEditToolUpdatedMessage(props) {
   } else if (style === "condensed" && !verbose) {
     return text;
   } else if (collapsed && !verbose && numAdditions + numRemovals > 0) {
-    let u;
+    let expandHint;
     if ($[11] === MEMO_CACHE_SENTINEL) {
-      u = jsxProd_default(CtrlOToExpand, {});
-      $[11] = u;
-    } else u = $[11];
-    let x;
+      expandHint = jsxProd_default(CtrlOToExpand, {});
+      $[11] = expandHint;
+    } else expandHint = $[11];
+    let collapsedElement;
     if ($[12] !== text) {
-      x = jsxProd_default(MessageResponse, {
+      collapsedElement = jsxProd_default(MessageResponse, {
         children: jsxProd_default_2(Text, {
-          children: [text, " ", u],
+          children: [text, " ", expandHint],
         }),
       });
       $[12] = text;
-      $[13] = x;
-    } else x = $[13];
-    return x;
+      $[13] = collapsedElement;
+    } else collapsedElement = $[13];
+    return collapsedElement;
   }
-  let u;
+  let summaryElement;
   if ($[14] !== text) {
-    u = jsxProd_default(Text, {
+    summaryElement = jsxProd_default(Text, {
       children: text,
     });
     $[14] = text;
-    $[15] = u;
-  } else u = $[15];
+    $[15] = summaryElement;
+  } else summaryElement = $[15];
   const width = columns - 12;
   let t7;
   if (
@@ -169,33 +185,17 @@ function FileEditToolUpdatedMessage(props) {
     $[21] = t7;
   } else t7 = $[21];
   let t8;
-  if ($[22] !== u || $[23] !== t7) {
+  if ($[22] !== summaryElement || $[23] !== t7) {
     t8 = jsxProd_default(MessageResponse, {
       children: jsxProd_default_2(Box, {
         flexDirection: "column",
-        children: [u, t7],
+        children: [summaryElement, t7],
       }),
     });
-    $[22] = u;
+    $[22] = summaryElement;
     $[23] = t7;
     $[24] = t8;
   } else t8 = $[24];
   return t8;
-}
-//@ chunk-dcmhvw5a.js:383995-384090 fingerprint = _temp4 (0.685)
-function editSizeOf(script) {
-  return {
-    bytes: Buffer.byteLength(script, "utf8"),
-    lines:
-      countCharInString(
-        script,
-        `
-`,
-      ) +
-      (script.endsWith(`
-`)
-        ? 0
-        : 1),
-  };
 }
 export { editSizeOf, FileEditToolUpdatedMessage };

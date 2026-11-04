@@ -29,16 +29,16 @@ import { isPlainObject } from "../../../utils/isPlainObject.js";
 /**
  * 判断路径是否在网络位置或其他设备上（不同于权限锚点所在卷、或 WSL/家目录挂载规则），用于拒绝访问。
  */
-function isNetworkOrDevicePath(e) {
+function isNetworkOrDevicePath(path) {
   let permissionScreenAnchor = getPermissionScreenAnchor();
-  let r = permissionScreenAnchor === null ? [] : networkMountRoots(permissionScreenAnchor);
-  if (networkMountRoots(e).some((f) => !r.includes(f))) return true;
-  if (!(isUncOrNetworkSpelling(e) || classifyHomeMount(e))) return false;
-  if (isNonWslUncPath(e))
-    return permissionScreenAnchor === null || isForeignNetworkPath(e, permissionScreenAnchor);
-  let i = isNetworkMountRoot(e) ? networkMountHost(e) : null;
-  let p = permissionScreenAnchor === null ? null : networkMountHost(permissionScreenAnchor);
-  return i === null || i !== p;
+  let anchorRoots = permissionScreenAnchor === null ? [] : networkMountRoots(permissionScreenAnchor);
+  if (networkMountRoots(path).some((root) => !anchorRoots.includes(root))) return true;
+  if (!(isUncOrNetworkSpelling(path) || classifyHomeMount(path))) return false;
+  if (isNonWslUncPath(path))
+    return permissionScreenAnchor === null || isForeignNetworkPath(path, permissionScreenAnchor);
+  let pathHost = isNetworkMountRoot(path) ? networkMountHost(path) : null;
+  let anchorHost = permissionScreenAnchor === null ? null : networkMountHost(permissionScreenAnchor);
+  return pathHost === null || pathHost !== anchorHost;
 }
 //@ chunk-4121qate.js:153041-153167 placement
 function checkGeneration(generation) {
@@ -57,22 +57,22 @@ var MAX_IMAGE_COLUMNS = 3072;
  */
 var MAX_IMAGE_ROWS = 4096;
 //@ chunk-4121qate.js:153191-153324 placement
-function checkImageSize(width, height, r) {
+function checkImageSize(width, height, limit) {
   return isNonNegativeInt(width) &&
     isNonNegativeInt(height) &&
     width >= 1 &&
     height >= 1 &&
-    width <= r &&
-    height <= r
+    width <= limit &&
+    height <= limit
     ? undefined
-    : `source width and height must be whole numbers from 1 to ${r}`;
+    : `source width and height must be whole numbers from 1 to ${limit}`;
 }
 //@ chunk-4121qate.js:153324-154039 placement
 /**
  * 校验图片 source.file：绝对路径、无控制字符、非网络/设备路径
  */
-function checkImageFileSource(file, o) {
-  let { format, width, height, generation } = o;
+function checkImageFileSource(file, source) {
+  let { format, width, height, generation } = source;
   if (typeof file !== "string" || file === "" || !isAbsolute(file))
     return "source.file must be an absolute path";
   if (hasControlCharacter(file) || /[\t\n\r]/.test(file)) return "source.file holds a control character";
@@ -82,10 +82,10 @@ function checkImageFileSource(file, o) {
     return `source.file is longer than ${MAX_IMAGE_COLUMNS} bytes`;
   if (format !== "png" && format !== "rgba" && format !== "rgb")
     return 'source.format must be "png", "rgba" or "rgb" beside file';
-  let p = format === "png";
-  if (p && (width !== undefined || height !== undefined))
+  let isPng = format === "png";
+  if (isPng && (width !== undefined || height !== undefined))
     return 'source width and height go with format "rgba" or "rgb"; a png sizes itself';
-  return (p ? undefined : checkImageSize(width, height, MAX_IMAGE_ROWS)) ?? checkGeneration(generation);
+  return (isPng ? undefined : checkImageSize(width, height, MAX_IMAGE_ROWS)) ?? checkGeneration(generation);
 }
 //@ chunk-4121qate.js:154039-154050 placement
 /**
@@ -110,15 +110,13 @@ var checkImageCellSize = (columns, rows) =>
 /**
  * file/shm 来源
  */
-var isNamedImageSource = (e) => Object.hasOwn(e, "file") || Object.hasOwn(e, "shm");
+var isNamedImageSource = (source) => Object.hasOwn(source, "file") || Object.hasOwn(source, "shm");
 //@ chunk-4121qate.js:154201-154249 placement
 /**
  * 图像负载字节数
  */
-var imagePayloadBytes = (source) =>
-  isNamedImageSource(source)
-    ? 0
-    : (base64DecodedLength(getImagePath(source) ? source.png : source.rgba) ?? 0);
+var imagePayloadBytes = (entry) =>
+  isNamedImageSource(entry) ? 0 : (base64DecodedLength(getImagePath(entry) ? entry.png : entry.rgba) ?? 0);
 //@ chunk-4121qate.js:154249-154264 placement
 /**
  * 2097152
@@ -146,12 +144,16 @@ var PNG_HEADER_LAYOUT = {
  */
 var PNG_SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
 //@ chunk-4121qate.js:154373-154852 placement
-function checkPngSource(e) {
+function checkPngSource(base64) {
   let buffer = Buffer.from(
-    e.slice(0, Math.ceil(PNG_HEADER_LAYOUT.bytes / base64BytesPerFour.bytes) * base64BytesPerFour.characters),
+    base64.slice(
+      0,
+      Math.ceil(PNG_HEADER_LAYOUT.bytes / base64BytesPerFour.bytes) * base64BytesPerFour.characters,
+    ),
     "base64",
   );
-  if (!PNG_SIGNATURE.every((f, a) => buffer[a] === f)) return "source.png does not start as a PNG file does";
+  if (!PNG_SIGNATURE.every((signatureByte, index) => buffer[index] === signatureByte))
+    return "source.png does not start as a PNG file does";
   if (!(
     buffer.length >= PNG_HEADER_LAYOUT.bytes &&
     buffer.toString("latin1", PNG_HEADER_LAYOUT.typeAt, PNG_HEADER_LAYOUT.widthAt) === PNG_HEADER_LAYOUT.type
@@ -167,16 +169,19 @@ function checkPngSource(e) {
     : `source.png declares ${uInt32BE}x${uInt32BE_2} pixels; a side is 1 to ${MAX_IMAGE_DIMENSION}`;
 }
 //@ chunk-4121qate.js:154852-155028 placement
-function checkPngBase64(e) {
-  let o = base64DecodedLength(e);
-  if (o === undefined || typeof e !== "string") return "source.png must be standard padded base64";
-  return o > MAX_IMAGE_BYTES ? `source.png decodes to more than ${MAX_IMAGE_BYTES} bytes` : checkPngSource(e);
+function checkPngBase64(base64) {
+  let decodedLength = base64DecodedLength(base64);
+  if (decodedLength === undefined || typeof base64 !== "string")
+    return "source.png must be standard padded base64";
+  return decodedLength > MAX_IMAGE_BYTES
+    ? `source.png decodes to more than ${MAX_IMAGE_BYTES} bytes`
+    : checkPngSource(base64);
 }
 //@ chunk-4121qate.js:155028-155040 placement
 /**
  * 2048
  */
-var MAX_SHM_NAME = 2048;
+var MAX_RGBA_DIMENSION = 2048;
 //@ chunk-4121qate.js:155040-155049 placement
 /**
  * 4
@@ -186,14 +191,16 @@ var RGBA_BYTES_PER_PIXEL = 4;
 /**
  * 校验 rgba 图片来源：base64 合法、尺寸与大小在上限内。
  */
-function checkRgbaSource(rgba, width, height) {
-  let n = base64DecodedLength(rgba);
-  if (n === undefined) return "source.rgba must be standard padded base64";
-  let s = checkImageSize(width, height, MAX_SHM_NAME);
-  if (s !== undefined) return s;
-  if (n > MAX_IMAGE_BYTES) return `source.rgba decodes to more than ${MAX_IMAGE_BYTES} bytes`;
-  let i = Number(width) * Number(height) * RGBA_BYTES_PER_PIXEL;
-  return n === i ? undefined : `source.rgba decodes to ${n} bytes, not width * height * 4 (${i})`;
+function checkRgbaSource(text, width, height) {
+  let decodedLength = base64DecodedLength(text);
+  if (decodedLength === undefined) return "source.rgba must be standard padded base64";
+  let sizeProblem = checkImageSize(width, height, MAX_RGBA_DIMENSION);
+  if (sizeProblem !== undefined) return sizeProblem;
+  if (decodedLength > MAX_IMAGE_BYTES) return `source.rgba decodes to more than ${MAX_IMAGE_BYTES} bytes`;
+  let expectedBytes = Number(width) * Number(height) * RGBA_BYTES_PER_PIXEL;
+  return decodedLength === expectedBytes
+    ? undefined
+    : `source.rgba decodes to ${decodedLength} bytes, not width * height * 4 (${expectedBytes})`;
 }
 //@ chunk-4121qate.js:155362-155409 placement
 /**
@@ -204,9 +211,9 @@ var SHM_NAME_RE = /^\/(?!\.{1,2}$)[A-Za-z0-9._-]{1,254}$/;
 /**
  * 校验 shm 图片来源：名字格式、像素格式、尺寸与代号。
  */
-function checkShmSource(e, o) {
-  let { format, width, height, generation } = o;
-  if (typeof e !== "string" || !SHM_NAME_RE.test(e))
+function checkShmSource(name, source) {
+  let { format, width, height, generation } = source;
+  if (typeof name !== "string" || !SHM_NAME_RE.test(name))
     return 'source.shm must be "/" then 1 to 254 of A-Z a-z 0-9 . _ - (not "." or ".." alone), a POSIX shared-memory name';
   return format === "rgba" || format === "rgb"
     ? (checkImageSize(width, height, MAX_IMAGE_ROWS) ?? checkGeneration(generation))
@@ -221,16 +228,17 @@ var IMAGE_SOURCE_KINDS = [
 ];
 //@ chunk-4121qate.js:155896-156487 placement
 function checkImageSource(source) {
-  let o = "{ png }, { rgba, width, height }, { file, format } or { shm, format, width, height }";
-  if (!isPlainObject(source)) return `source must be ${o}`;
-  let [r, n] = IMAGE_SOURCE_KINDS.filter(([a]) => Object.hasOwn(source, a));
-  if (r === undefined) return `source must be ${o}`;
-  let [s, i] = r;
-  if (n !== undefined) return `source holds both "${s}" and "${n[0]}"; it is one of ${o}`;
-  let p = i;
-  let found = Object.keys(source).find((key) => !p.includes(key));
-  if (found !== undefined) return `source field "${found}" is not allowed beside "${s}"`;
-  switch (s) {
+  let shapeText = "{ png }, { rgba, width, height }, { file, format } or { shm, format, width, height }";
+  if (!isPlainObject(source)) return `source must be ${shapeText}`;
+  let [firstKind, secondKind] = IMAGE_SOURCE_KINDS.filter(([kind]) => Object.hasOwn(source, kind));
+  if (firstKind === undefined) return `source must be ${shapeText}`;
+  let [kindName, allowedFields] = firstKind;
+  if (secondKind !== undefined)
+    return `source holds both "${kindName}" and "${secondKind[0]}"; it is one of ${shapeText}`;
+  let fields = allowedFields;
+  let found = Object.keys(source).find((key) => !fields.includes(key));
+  if (found !== undefined) return `source field "${found}" is not allowed beside "${kindName}"`;
+  switch (kindName) {
     case "png":
       return checkPngBase64(source.png);
     case "rgba":
@@ -245,19 +253,19 @@ function checkImageSource(source) {
 /**
  * 是否 shm 来源
  */
-var isShmSource = (e) => Object.hasOwn(e, "shm");
+var isShmSource = (source) => Object.hasOwn(source, "shm");
 //@ chunk-4121qate.js:156523-156899 placement
 /**
  * 把校验过的图片来源转换为渲染请求：png/rgba 带 base64，file/shm 带介质名与格式尺寸。
  */
-function toImageRequest(source) {
-  if (getImagePath(source))
+function toImageRequest(entry) {
+  if (getImagePath(entry))
     return {
       format: "png",
-      base64: source.png,
+      base64: entry.png,
     };
-  if (!isNamedImageSource(source)) {
-    let { rgba, width, height } = source;
+  if (!isNamedImageSource(entry)) {
+    let { rgba, width, height } = entry;
     return {
       format: "rgba",
       base64: rgba,
@@ -265,23 +273,23 @@ function toImageRequest(source) {
       height,
     };
   }
-  let o = Object.hasOwn(source, "shm") ? "shm" : "file";
-  let r = o === "shm";
-  let n = "shm" in source;
-  let s = "file" in source;
-  let name = r ? (n ? source.shm : "") : s ? source.file : "";
-  return source.format === "png"
+  let medium = Object.hasOwn(entry, "shm") ? "shm" : "file";
+  let isShm = medium === "shm";
+  let hasShm = "shm" in entry;
+  let hasFile = "file" in entry;
+  let name = isShm ? (hasShm ? entry.shm : "") : hasFile ? entry.file : "";
+  return entry.format === "png"
     ? {
-        medium: o,
+        medium,
         name,
         format: "png",
       }
     : {
-        medium: o,
+        medium,
         name,
-        format: source.format,
-        width: source.width,
-        height: source.height,
+        format: entry.format,
+        width: entry.width,
+        height: entry.height,
       };
 }
 export {

@@ -5,10 +5,10 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-1ny7cxrt.js:7302-7617 cjs-fingerprint
-var require_base64url = x(function (cjsExports, cjsModule) {
+var require_base64url = __commonJS(function (cjsExports, cjsModule) {
   var encode;
   if (Buffer.isEncoding("base64url"))
     encode = (input, encoding = "utf8") => Buffer.from(input, encoding).toString("base64url");

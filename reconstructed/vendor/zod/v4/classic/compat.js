@@ -6,8 +6,12 @@
  * attribution: esm-fingerprint 1, esm-layout 5
  */
 import { _coercedString, _coercedNumber, _coercedBoolean } from "../core/api.js";
-import { lMn, ZodNumber, ZodBoolean } from "./schemas.js";
+import { ZodString, ZodNumber, ZodBoolean } from "./schemas.js";
+import { deferInit, beginDeferredInits } from "../../../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 3677 modules closed by ../../../../src/utils/hooks/functionHookMatchers.js (in the hooks worker thread);
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("worker:src/utils/hooks/functionHookMatchers.js");
 //@ chunk-7gfe9gyh.js:248-565 esm-fingerprint
 var ZodIssueCode = {
   invalid_type: "invalid_type",
@@ -23,19 +27,22 @@ var ZodIssueCode = {
   custom: "custom",
 };
 //@ chunk-7gfe9gyh.js:565-571 esm-layout
-var e;
+var ZodFirstPartyTypeKind;
 //@ chunk-7gfe9gyh.js:571-598 esm-layout
-(function (o) {})(e || (e = {}));
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-7gfe9gyh.js:571", () => {
+  (function (typeKindNamespace) {})(ZodFirstPartyTypeKind || (ZodFirstPartyTypeKind = {}));
+});
 //@ chunk-7gfe9gyh.js:598-632 esm-layout
-function Fgs(map) {
-  return _coercedString(lMn, map);
+function coerceString(map) {
+  return _coercedString(ZodString, map);
 }
 //@ chunk-7gfe9gyh.js:632-666 esm-layout
-function F1e(params) {
+function coerceNumber(params) {
   return _coercedNumber(ZodNumber, params);
 }
 //@ chunk-7gfe9gyh.js:666-700 esm-layout
-function v1i(params) {
+function coerceBoolean(params) {
   return _coercedBoolean(ZodBoolean, params);
 }
-export { F1e, v1i, ZodIssueCode, Fgs };
+export { coerceNumber, coerceBoolean, ZodIssueCode, coerceString };

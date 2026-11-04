@@ -17,9 +17,12 @@ import { CONSENT_ASK_TAG } from "./consentStamps.js";
 /**
  * 旧版权限检查中查找匹配的 url 内容 ask 规则（可先改写输入）。
  */
-function legacyAskRule(e, i, t) {
-  let s = t !== undefined && typeof i === "object" && i !== null ? t(i, e) : i;
-  return findUrlContentRule(getToolPermissionContext(e), s, "ask");
+function legacyAskRule(context, input, ruleTargetInput) {
+  let ruleInput =
+    ruleTargetInput !== undefined && typeof input === "object" && input !== null
+      ? ruleTargetInput(input, context)
+      : input;
+  return findUrlContentRule(getToolPermissionContext(context), ruleInput, "ask");
 }
 //@ chunk-p98twse2.js:20539-21212 placement
 /**
@@ -81,8 +84,8 @@ function legacyCheckPermissions(
 /**
  * 取输入里的 action 字段（非字符串返回 undefined）。
  */
-function actionNameOf(e) {
-  let action = e?.action;
+function actionNameOf(input) {
+  let action = input?.action;
   return typeof action === "string" ? action : undefined;
 }
 //@ chunk-p98twse2.js:21278-21411 placement = getUpdatedInputOrFallback (1)

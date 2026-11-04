@@ -8,7 +8,7 @@
  * pieces: chunk-bajxb7bf.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { count } from "../../utils/collections.js";
 import { plural } from "../../utils/stringUtils.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
@@ -19,39 +19,39 @@ import { Dialog } from "../design-system/Dialog.js";
 
 //@ chunk-bajxb7bf.js:40776-41839 fingerprint = SelectEventMode (0.324)
 function SelectEventMode(props) {
-  let $ = w(22);
+  let $ = useMemoCache(22);
   let { hookEventMetadata, hooksByEvent, onSelectEvent, onCancel } = props;
-  let t;
-  let f;
+  let entries;
+  let withHooks;
   if ($[0] !== hookEventMetadata || $[1] !== hooksByEvent) {
-    t = Object.entries(hookEventMetadata);
-    let k;
+    entries = Object.entries(hookEventMetadata);
+    let hasHooks;
     if ($[4] !== hooksByEvent) {
-      k = (C) => {
-        let [D] = C;
-        return (hooksByEvent[D] ?? 0) > 0;
+      hasHooks = (entry) => {
+        let [event] = entry;
+        return (hooksByEvent[event] ?? 0) > 0;
       };
       $[4] = hooksByEvent;
-      $[5] = k;
-    } else k = $[5];
-    f = count(t, k);
+      $[5] = hasHooks;
+    } else hasHooks = $[5];
+    withHooks = count(entries, hasHooks);
     $[0] = hookEventMetadata;
     $[1] = hooksByEvent;
-    $[2] = t;
-    $[3] = f;
+    $[2] = entries;
+    $[3] = withHooks;
   } else {
-    t = $[2];
-    f = $[3];
+    entries = $[2];
+    withHooks = $[3];
   }
-  let M = f;
-  const k = t.length;
-  let C;
-  if ($[6] !== t.length) {
-    C = plural(t.length, "event");
-    $[6] = t.length;
-    $[7] = C;
-  } else C = $[7];
-  const subtitle = `${k} ${C} \xB7 ${M} with hooks`;
+  let withHooks_2 = withHooks;
+  const eventCount = entries.length;
+  let eventPlural;
+  if ($[6] !== entries.length) {
+    eventPlural = plural(entries.length, "event");
+    $[6] = entries.length;
+    $[7] = eventPlural;
+  } else eventPlural = $[7];
+  const subtitle = `${eventCount} ${eventPlural} \xB7 ${withHooks_2} with hooks`;
   let inputGuide;
   if ($[8] === MEMO_CACHE_SENTINEL) {
     inputGuide = jsxProd_default(useEnterEscape, {
@@ -61,31 +61,31 @@ function SelectEventMode(props) {
     $[8] = inputGuide;
   } else inputGuide = $[8];
   let onSelect;
-  if ($[9] !== t || $[10] !== onSelectEvent) {
+  if ($[9] !== entries || $[10] !== onSelectEvent) {
     onSelect = (value) => {
-      let b = t[value];
-      if (b) onSelectEvent(b[0]);
+      let entry = entries[value];
+      if (entry) onSelectEvent(entry[0]);
     };
-    $[9] = t;
+    $[9] = entries;
     $[10] = onSelectEvent;
     $[11] = onSelect;
   } else onSelect = $[11];
   let children;
-  if ($[12] !== t || $[13] !== hooksByEvent) {
-    children = t.map((t7) => {
-      let [N, metadata] = t7;
-      let count = hooksByEvent[N] || 0;
+  if ($[12] !== entries || $[13] !== hooksByEvent) {
+    children = entries.map((t7) => {
+      let [event, metadata] = t7;
+      let count = hooksByEvent[event] || 0;
       return jsxProd_default(
         OrderedListWithItem.Item,
         {
-          label: N,
+          label: event,
           meta: count > 0 ? [`${count} ${plural(count, "hook")}`] : [],
           description: metadata.summary,
         },
-        N,
+        event,
       );
     });
-    $[12] = t;
+    $[12] = entries;
     $[13] = hooksByEvent;
     $[14] = children;
   } else children = $[14];
@@ -99,9 +99,9 @@ function SelectEventMode(props) {
     $[16] = children;
     $[17] = children_2;
   } else children_2 = $[17];
-  let Y;
+  let dialog;
   if ($[18] !== onCancel || $[19] !== subtitle || $[20] !== children_2) {
-    Y = jsxProd_default(Dialog, {
+    dialog = jsxProd_default(Dialog, {
       title: "Hook events",
       subtitle,
       onCancel,
@@ -111,8 +111,8 @@ function SelectEventMode(props) {
     $[18] = onCancel;
     $[19] = subtitle;
     $[20] = children_2;
-    $[21] = Y;
-  } else Y = $[21];
-  return Y;
+    $[21] = dialog;
+  } else dialog = $[21];
+  return dialog;
 }
 export { SelectEventMode };

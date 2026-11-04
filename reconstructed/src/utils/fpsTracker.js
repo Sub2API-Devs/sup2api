@@ -28,13 +28,13 @@ class FpsTracker {
       return;
     let totalTimeMs = this.lastRenderTime - this.firstRenderTime;
     if (totalTimeMs <= 0) return;
-    let p = this.totalFrames / (totalTimeMs / 1000);
-    let sorted = this.frameDurations.slice().sort((C, b) => b - C);
+    let averageFps = this.totalFrames / (totalTimeMs / 1000);
+    let sorted = this.frameDurations.slice().sort((durationA, durationB) => durationB - durationA);
     let p99Index = Math.max(0, Math.ceil(sorted.length * 0.01) - 1);
     let p99FrameTimeMs = sorted[p99Index];
     let low1PctFps = p99FrameTimeMs > 0 ? 1000 / p99FrameTimeMs : 0;
     return {
-      averageFps: Math.round(p * 100) / 100,
+      averageFps: Math.round(averageFps * 100) / 100,
       low1PctFps: Math.round(low1PctFps * 100) / 100,
     };
   }

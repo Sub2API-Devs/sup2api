@@ -19,7 +19,7 @@ import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 /**
  * 迁移：Pro 用户未显式选模型时记录切到 Opus 默认（只做一次，opusProMigrationComplete）。
  */
-function resetProToOpusDefault(e) {
+function resetProToOpusDefault(context) {
   if (getGlobalConfig().opusProMigrationComplete) return;
   if (getAPIProvider() !== "firstParty" || !isProSubscriber()) {
     saveGlobalConfig(
@@ -27,7 +27,7 @@ function resetProToOpusDefault(e) {
         ...current,
         opusProMigrationComplete: true,
       }),
-      e,
+      context,
     );
     logEvent("tengu_reset_pro_to_opus_default", {
       skipped: true,
@@ -42,7 +42,7 @@ function resetProToOpusDefault(e) {
         opusProMigrationComplete: true,
         opusProMigrationTimestamp,
       }),
-      e,
+      context,
     );
     logEvent("tengu_reset_pro_to_opus_default", {
       skipped: false,
@@ -54,7 +54,7 @@ function resetProToOpusDefault(e) {
         ...current,
         opusProMigrationComplete: true,
       }),
-      e,
+      context,
     );
     logEvent("tengu_reset_pro_to_opus_default", {
       skipped: false,

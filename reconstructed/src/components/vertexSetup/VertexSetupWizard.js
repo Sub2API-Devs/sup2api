@@ -8,13 +8,13 @@
  * pieces: chunk-y6fv30yg.js (11)
  * attribution: placement 11
  */
-import { init_react_production, y, R } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState, useRef } from "../../../vendor/react/cjs/react.production.js";
 import {
   jsxProd_default_2,
   jsxProd_default,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import { useWizard } from "../wizard/useWizard.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
@@ -39,6 +39,7 @@ import { VertexProjectStep, VertexModelPinsStep } from "./vertexCredentials.js";
 import { TypeStep } from "../agents/new-agent-creation/wizard-steps/TypeStep.js";
 import { LocationStep } from "../agents/new-agent-creation/wizard-steps/LocationStep.js";
 import { WizardProvider } from "../wizard/WizardProvider.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-y6fv30yg.js:1434-1525 placement
 var VERTEX_WIZARD_STEPS_2 = {
@@ -51,14 +52,17 @@ var VERTEX_WIZARD_STEPS_2 = {
   CONFIRM: 6,
 };
 //@ chunk-y6fv30yg.js:2554-2558 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-y6fv30yg.js:2554", () => {
+  init_react_production();
+});
 //@ chunk-y6fv30yg.js:2558-2594 placement
-function hasProjectSelection(J) {
-  return J[1] !== undefined;
+function hasProjectSelection(entry) {
+  return entry[1] !== undefined;
 }
 //@ chunk-y6fv30yg.js:2594-2697 placement
-function renderEnvAssignment(o) {
-  let [N, G] = o;
+function renderEnvAssignment(entry) {
+  let [name, value] = entry;
   return jsxProd_default_2(
     Text,
     {
@@ -66,13 +70,13 @@ function renderEnvAssignment(o) {
         "  ",
         jsxProd_default(Text, {
           color: "suggestion",
-          children: N,
+          children: name,
         }),
         " = ",
-        G,
+        value,
       ],
     },
-    N,
+    name,
   );
 }
 //@ chunk-y6fv30yg.js:2697-3522 placement
@@ -106,35 +110,35 @@ function buildVertexEnvSettings(wizardData) {
 }
 //@ chunk-y6fv30yg.js:3522-5539 placement = ConfirmStep (0.161)
 function ConfirmStep(props) {
-  let $ = w(30);
+  let $ = useMemoCache(30);
   let { onComplete } = props;
   let { storageV5 } = useTheme_2();
   let { goBack, wizardData } = useWizard();
-  let [h, p] = y(null);
-  let u;
+  let [saveError, setSaveError] = useState(null);
+  let settingsPath;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    u = tildify(getSettingsFilePathForSource("userSettings") ?? "~/.claude/settings.json");
-    $[0] = u;
-  } else u = $[0];
-  let k = u;
-  let g;
+    settingsPath = tildify(getSettingsFilePathForSource("userSettings") ?? "~/.claude/settings.json");
+    $[0] = settingsPath;
+  } else settingsPath = $[0];
+  let settingsPath_ = settingsPath;
+  let envSettings;
   if ($[1] !== wizardData) {
-    g = buildVertexEnvSettings(wizardData);
+    envSettings = buildVertexEnvSettings(wizardData);
     $[1] = wizardData;
-    $[2] = g;
-  } else g = $[2];
-  let _ = g;
-  let A;
-  if ($[3] !== _) {
-    A = Object.entries(_).filter(hasProjectSelection);
-    $[3] = _;
-    $[4] = A;
-  } else A = $[4];
-  let d = A;
-  let D = R(false);
-  let x;
+    $[2] = envSettings;
+  } else envSettings = $[2];
+  let envSettings_ = envSettings;
+  let envEntries;
+  if ($[3] !== envSettings_) {
+    envEntries = Object.entries(envSettings_).filter(hasProjectSelection);
+    $[3] = envSettings_;
+    $[4] = envEntries;
+  } else envEntries = $[4];
+  let pinEntries = envEntries;
+  let hasSubmittedRef = useRef(false);
+  let onConfirm;
   if (
-    $[5] !== _ ||
+    $[5] !== envSettings_ ||
     $[6] !== onComplete ||
     $[7] !== storageV5 ||
     $[8] !== wizardData.authMethod ||
@@ -144,22 +148,22 @@ function ConfirmStep(props) {
     $[12] !== wizardData.pinSonnet ||
     $[13] !== wizardData.verifiedIdentity
   ) {
-    x = async () => {
-      if (D.current) {
+    onConfirm = async () => {
+      if (hasSubmittedRef.current) {
         return;
       }
-      D.current = true;
+      hasSubmittedRef.current = true;
       let { error } = await updateSettingsForSource(
         "userSettings",
         {
-          env: _,
+          env: envSettings_,
         },
         undefined,
         storageV5,
       );
       if (error) {
-        D.current = false;
-        p(error.message);
+        hasSubmittedRef.current = false;
+        setSaveError(error.message);
         return;
       }
       logEvent("tengu_vertex_setup_complete", {
@@ -170,10 +174,10 @@ function ConfirmStep(props) {
         verified: Boolean(wizardData.verifiedIdentity),
       });
       onComplete(
-        `Vertex AI configuration saved to ${k}.${wizardData.authMethod === "adc" ? " When your ADC token expires, run `gcloud auth application-default login` \u2014 Claude Code picks up refreshed credentials automatically." : ""}`,
+        `Vertex AI configuration saved to ${settingsPath_}.${wizardData.authMethod === "adc" ? " When your ADC token expires, run `gcloud auth application-default login` \u2014 Claude Code picks up refreshed credentials automatically." : ""}`,
       );
     };
-    $[5] = _;
+    $[5] = envSettings_;
     $[6] = onComplete;
     $[7] = storageV5;
     $[8] = wizardData.authMethod;
@@ -182,28 +186,28 @@ function ConfirmStep(props) {
     $[11] = wizardData.pinOpus;
     $[12] = wizardData.pinSonnet;
     $[13] = wizardData.verifiedIdentity;
-    $[14] = x;
-  } else x = $[14];
-  let onConfirm = x;
-  let E;
+    $[14] = onConfirm;
+  } else onConfirm = $[14];
+  let onConfirm_2 = onConfirm;
+  let explainElement;
   if ($[15] === MEMO_CACHE_SENTINEL) {
-    E = jsxProd_default_2(Text, {
-      children: ["These will be written to ", k, " under env:"],
+    explainElement = jsxProd_default_2(Text, {
+      children: ["These will be written to ", settingsPath_, " under env:"],
     });
-    $[15] = E;
-  } else E = $[15];
-  let v;
-  if ($[16] !== d) {
-    v = jsxProd_default(Box, {
+    $[15] = explainElement;
+  } else explainElement = $[15];
+  let envListElement;
+  if ($[16] !== pinEntries) {
+    envListElement = jsxProd_default(Box, {
       flexDirection: "column",
-      children: d.map(renderEnvAssignment),
+      children: pinEntries.map(renderEnvAssignment),
     });
-    $[16] = d;
-    $[17] = v;
-  } else v = $[17];
-  let b;
+    $[16] = pinEntries;
+    $[17] = envListElement;
+  } else envListElement = $[17];
+  let verifiedElement;
   if ($[18] !== wizardData.verifiedIdentity) {
-    b =
+    verifiedElement =
       wizardData.verifiedIdentity &&
       jsxProd_default_2(Text, {
         dimColor: true,
@@ -217,45 +221,50 @@ function ConfirmStep(props) {
         ],
       });
     $[18] = wizardData.verifiedIdentity;
-    $[19] = b;
-  } else b = $[19];
-  let W;
-  if ($[20] !== h) {
-    W = jsxProd_default(ErrorText, {
-      error: h,
+    $[19] = verifiedElement;
+  } else verifiedElement = $[19];
+  let errorElement;
+  if ($[20] !== saveError) {
+    errorElement = jsxProd_default(ErrorText, {
+      error: saveError,
     });
-    $[20] = h;
-    $[21] = W;
-  } else W = $[21];
-  let Y;
-  if ($[22] !== goBack || $[23] !== onConfirm) {
-    Y = jsxProd_default(ConfirmSelect, {
+    $[20] = saveError;
+    $[21] = errorElement;
+  } else errorElement = $[21];
+  let confirmElement;
+  if ($[22] !== goBack || $[23] !== onConfirm_2) {
+    confirmElement = jsxProd_default(ConfirmSelect, {
       confirmLabel: "Save",
       cancelLabel: "Cancel",
-      onConfirm,
+      onConfirm: onConfirm_2,
       onCancel: goBack,
     });
     $[22] = goBack;
-    $[23] = onConfirm;
-    $[24] = Y;
-  } else Y = $[24];
-  let F;
-  if ($[25] !== v || $[26] !== b || $[27] !== W || $[28] !== Y) {
-    F = jsxProd_default(WizardDialogLayout, {
+    $[23] = onConfirm_2;
+    $[24] = confirmElement;
+  } else confirmElement = $[24];
+  let layoutElement;
+  if (
+    $[25] !== envListElement ||
+    $[26] !== verifiedElement ||
+    $[27] !== errorElement ||
+    $[28] !== confirmElement
+  ) {
+    layoutElement = jsxProd_default(WizardDialogLayout, {
       subtitle: "Confirm and save",
       children: jsxProd_default_2(Box, {
         flexDirection: "column",
         gap: 1,
-        children: [E, v, b, W, Y],
+        children: [explainElement, envListElement, verifiedElement, errorElement, confirmElement],
       }),
     });
-    $[25] = v;
-    $[26] = b;
-    $[27] = W;
-    $[28] = Y;
-    $[29] = F;
-  } else F = $[29];
-  return F;
+    $[25] = envListElement;
+    $[26] = verifiedElement;
+    $[27] = errorElement;
+    $[28] = confirmElement;
+    $[29] = layoutElement;
+  } else layoutElement = $[29];
+  return layoutElement;
 }
 //@ chunk-y6fv30yg.js:5539-5644 placement
 function defaultVertexModels() {
@@ -267,11 +276,11 @@ function defaultVertexModels() {
   };
 }
 //@ chunk-y6fv30yg.js:5644-5805 placement
-function knownVertexModelIds(o) {
-  let l = new Set();
-  for (let c of Object.values(catalogEntriesByFirstPartyId))
-    if (c.vertex !== null && c.vertex.toLowerCase().includes(o)) l.add(c.vertex);
-  return [...l].sort().reverse();
+function knownVertexModelIds(query) {
+  let ids = new Set();
+  for (let entry of Object.values(catalogEntriesByFirstPartyId))
+    if (entry.vertex !== null && entry.vertex.toLowerCase().includes(query)) ids.add(entry.vertex);
+  return [...ids].sort().reverse();
 }
 //@ chunk-y6fv30yg.js:19411-19426 placement
 function noopWizardEffect() {}
@@ -287,24 +296,24 @@ var VERTEX_WIZARD_STEPS = [
 ];
 //@ chunk-y6fv30yg.js:19456-19849 placement
 function VertexSetupWizard(props) {
-  let t = w(7);
+  let $ = useMemoCache(7);
   let { onComplete, onCancel, exitOnCtrlCD } = props;
   let stepProps;
-  if (t[0] !== onComplete) {
+  if ($[0] !== onComplete) {
     stepProps = {
       onComplete,
     };
-    t[0] = onComplete;
-    t[1] = stepProps;
-  } else stepProps = t[1];
+    $[0] = onComplete;
+    $[1] = stepProps;
+  } else stepProps = $[1];
   let initialData;
-  if (t[2] === MEMO_CACHE_SENTINEL) {
+  if ($[2] === MEMO_CACHE_SENTINEL) {
     initialData = {};
-    t[2] = initialData;
-  } else initialData = t[2];
-  let f;
-  if (t[3] !== exitOnCtrlCD || t[4] !== onCancel || t[5] !== stepProps) {
-    f = jsxProd_default(WizardProvider, {
+    $[2] = initialData;
+  } else initialData = $[2];
+  let wizardElement;
+  if ($[3] !== exitOnCtrlCD || $[4] !== onCancel || $[5] !== stepProps) {
+    wizardElement = jsxProd_default(WizardProvider, {
       steps: VERTEX_WIZARD_STEPS,
       stepProps,
       initialData,
@@ -314,11 +323,11 @@ function VertexSetupWizard(props) {
       title: "Set up Google Vertex AI",
       showStepCounter: false,
     });
-    t[3] = exitOnCtrlCD;
-    t[4] = onCancel;
-    t[5] = stepProps;
-    t[6] = f;
-  } else f = t[6];
-  return f;
+    $[3] = exitOnCtrlCD;
+    $[4] = onCancel;
+    $[5] = stepProps;
+    $[6] = wizardElement;
+  } else wizardElement = $[6];
+  return wizardElement;
 }
 export { VertexSetupWizard, VERTEX_WIZARD_STEPS_2, defaultVertexModels, knownVertexModelIds };

@@ -21,7 +21,13 @@ import {
   reduceFileHistoryState,
 } from "../utils/fileHistory.js";
 import { useAppState, useAppStoreDirect, useSetAppState } from "../state/AppState.js";
-import { y, Q, P, ce, R } from "../../vendor/react/cjs/react.production.js";
+import {
+  useState,
+  useMemo,
+  useEffect,
+  useCallback,
+  useRef,
+} from "../../vendor/react/cjs/react.production.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import { useIsFullscreen } from "../ink/renderModeContext.js";
 import {
@@ -60,7 +66,7 @@ import { PromptDialog } from "./hooks/PromptDialog.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 import { figures_default } from "../../vendor/@inquirer/figures/dist/esm/index.js";
 import { merged, isMenuOpen } from "./CustomSelect/select.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL, EARLY_RETURN_SENTINEL } from "../../runtime/bun-runtime.js";
 import { DiffStatCounts } from "./PrBadge.js";
 import { textOrReminderWrapped } from "../utils/systemReminder.js";
@@ -79,6 +85,34 @@ import { mainAgentId, getParentSessionId } from "../bootstrap/state.js";
 import { isEnvTruthy } from "../utils/envUtils.js";
 import { getLastSessionLog } from "../utils/conversationRecovery.js";
 
+//@ chunk-wyqg6m3h.js:36692-36855 fingerprint = DiffStatsText (0.64)
+function diffStat(theme, added, removed) {
+  let { Text } = theme.ui;
+  let hasBoth = added > 0 && removed > 0;
+  return h(
+    Text,
+    null,
+    added > 0
+      ? h(
+          Text,
+          {
+            color: "diffAddedWord",
+          },
+          `+${added}`,
+        )
+      : "",
+    hasBoth ? " " : "",
+    removed > 0
+      ? h(
+          Text,
+          {
+            color: "diffRemovedWord",
+          },
+          `-${removed}`,
+        )
+      : "",
+  );
+}
 //@ chunk-18hwfzwa.js:415610-415635 affinity
 class ConversationRestoreError extends Error {}
 //@ chunk-18hwfzwa.js:415635-415696 fingerprint = isSummarizeOption (1)
@@ -103,21 +137,21 @@ function MessageSelector({
   restoreWait,
   rowCountingMs = TURN_DIFF_COUNTING_MS,
 }) {
-  let fileHistory = useAppState((ur) => ur.fileHistory);
-  let [error, setError] = y(undefined);
-  let [It, Ot] = y(false);
+  let fileHistory = useAppState((persistedState) => persistedState.fileHistory);
+  let [error, setError] = useState(undefined);
+  let [dismissError, setDismissError] = useState(false);
   let isFileHistoryEnabled = fileHistoryEnabled();
   let { rows } = useTerminalSize();
-  let Lt = useIsFullscreen() ? Math.floor(rows / 2) : rows;
-  let oo = isFileHistoryEnabled ? 3 : 2;
-  let Xt = 12;
-  let max = Math.max(2, Math.floor((Lt - 12) / oo));
-  let currentUUID = Q(randomUUID, []);
-  let messageOptions = Q(randomUUID, []);
-  let ao = !!onResumePreviousSession;
-  let co = Q(
+  let visibleRows = useIsFullscreen() ? Math.floor(rows / 2) : rows;
+  let rowsPerItem = isFileHistoryEnabled ? 3 : 2;
+  let chromeRows = 12;
+  let max = Math.max(2, Math.floor((visibleRows - 12) / rowsPerItem));
+  let currentUUID = useMemo(randomUUID, []);
+  let messageOptions = useMemo(randomUUID, []);
+  let canResumePrevious = !!onResumePreviousSession;
+  let allMessages = useMemo(
     () => [
-      ...(ao
+      ...(canResumePrevious
         ? [
             {
               ...createUserMessage({
@@ -135,14 +169,14 @@ function MessageSelector({
         uuid: currentUUID,
       },
     ],
-    [messages, currentUUID, messageOptions, ao],
+    [messages, currentUUID, messageOptions, canResumePrevious],
   );
-  let bo = co.length > 1;
-  let [Ao, Bo] = y(undefined);
-  let [Ro, Ho] = y(preselectedMessage);
-  let [Io, Wo] = y(() => new Date());
-  let [diffStatsForRestore, setDiffStatsForRestore] = y(undefined);
-  P(() => {
+  let hasMultiple = allMessages.length > 1;
+  let [focusedIndex, setFocusedIndex] = useState(undefined);
+  let [selectedMessage, setSelectedMessage] = useState(preselectedMessage);
+  let [now, setNow] = useState(() => new Date());
+  let [diffStatsForRestore, setDiffStatsForRestore] = useState(undefined);
+  useEffect(() => {
     if (!preselectedMessage || !isFileHistoryEnabled) return;
     let cancelled = false;
     fileHistoryGetDiffStats(fileHistory, preselectedMessage.uuid).then((stats) => {
@@ -152,11 +186,11 @@ function MessageSelector({
       cancelled = true;
     };
   }, [preselectedMessage, isFileHistoryEnabled, fileHistory]);
-  let [isRestoring, setIsRestoring] = y(null);
-  let Yo = isRestoring !== null;
-  let [selectedRestoreOption, setSelectedRestoreOption] = y("both");
-  let [summarizeFromFeedback, setSummarizeFromFeedback] = y("");
-  let [summarizeUpToFeedback, setSummarizeUpToFeedback] = y("");
+  let [isRestoring, setIsRestoring] = useState(null);
+  let isRestoring_2 = isRestoring !== null;
+  let [selectedRestoreOption, setSelectedRestoreOption] = useState("both");
+  let [summarizeFromFeedback, setSummarizeFromFeedback] = useState("");
+  let [summarizeUpToFeedback, setSummarizeUpToFeedback] = useState("");
   function getRestoreOptions(canRestoreCode) {
     let baseOptions = canRestoreCode
       ? [
@@ -208,7 +242,7 @@ function MessageSelector({
     });
     return baseOptions;
   }
-  P(() => {
+  useEffect(() => {
     logEvent("tengu_message_selector_opened", {});
   }, []);
   async function restoreConversationDirectly(message) {
@@ -248,45 +282,45 @@ ${errorMessage(error)}`);
         await restoreConversationDirectly(message);
         return;
       }
-      Wo(new Date());
-      Ho(message);
+      setNow(new Date());
+      setSelectedMessage(message);
       return;
     }
     let diffStats = await fileHistoryGetDiffStats(fileHistory, message.uuid);
-    Wo(new Date());
-    Ho(message);
+    setNow(new Date());
+    setSelectedMessage(message);
     setDiffStatsForRestore(diffStats);
   }
   async function onSelectRestoreOption(option) {
     logEvent("tengu_message_selector_restore_option_selected", {
       option: fromEnum(option),
     });
-    if (!Ro) {
+    if (!selectedMessage) {
       setError("Message not found.");
       return;
     }
     if (option === "nevermind") {
       if (preselectedMessage) onClose();
-      else Ho(undefined);
+      else setSelectedMessage(undefined);
       return;
     }
     if (isSummarizeOption(option) && onSummarize) {
       onPreRestore();
       setIsRestoring(option);
       setError(undefined);
-      Ot(false);
+      setDismissError(false);
       try {
         let direction = option === "summarize_up_to" ? "up_to" : "from";
         let feedback =
           (direction === "up_to" ? summarizeUpToFeedback : summarizeFromFeedback).trim() || undefined;
-        await onSummarize(Ro, feedback, direction);
+        await onSummarize(selectedMessage, feedback, direction);
         setIsRestoring(null);
-        Ho(undefined);
+        setSelectedMessage(undefined);
         onClose();
       } catch (error) {
         if (!(error instanceof CompactionError)) logError(error);
         setIsRestoring(null);
-        Ho(undefined);
+        setSelectedMessage(undefined);
         setError(`Failed to summarize:
 ${errorMessage(error)}`);
       }
@@ -295,13 +329,13 @@ ${errorMessage(error)}`);
     onPreRestore();
     setIsRestoring(option);
     setError(undefined);
-    Ot(false);
+    setDismissError(false);
     let codeError = null;
     let conversationError = null;
-    let ts = 0;
+    let skippedLinks = 0;
     if (option === "code" || option === "both")
       try {
-        ts = (await onRestoreCode(Ro))?.skippedLinks ?? 0;
+        skippedLinks = (await onRestoreCode(selectedMessage))?.skippedLinks ?? 0;
       } catch (error) {
         codeError = error;
         if (codeError instanceof RewindNoFilesRestoredError)
@@ -312,16 +346,16 @@ ${errorMessage(error)}`);
       }
     if (option === "conversation" || option === "both")
       try {
-        await onRestoreMessage(Ro);
+        await onRestoreMessage(selectedMessage);
       } catch (error) {
         conversationError = error;
         logConversationRestoreError(conversationError);
       }
     setIsRestoring(null);
-    Ho(undefined);
-    let Gn =
-      ts > 0
-        ? `Restored the code, but skipped ${ts} ${ts === 1 ? "file" : "files"}: ${REWIND_UNSAFE_PATH_REASON}. Skipped files were left untouched \u2014 run with --debug for the paths.`
+    setSelectedMessage(undefined);
+    let skippedNote =
+      skippedLinks > 0
+        ? `Restored the code, but skipped ${skippedLinks} ${skippedLinks === 1 ? "file" : "files"}: ${REWIND_UNSAFE_PATH_REASON}. Skipped files were left untouched \u2014 run with --debug for the paths.`
         : undefined;
     if (conversationError && codeError)
       setError(`Failed to restore the conversation and code:
@@ -330,86 +364,101 @@ ${errorMessage(codeError)}`);
     else if (codeError)
       setError(`Failed to restore the code:
 ${errorMessage(codeError)}`);
-    else if (conversationError || Gn) {
-      Ot(!conversationError);
+    else if (conversationError || skippedNote) {
+      setDismissError(!conversationError);
       setError(
         [
           conversationError
             ? `Failed to restore the conversation:
 ${errorMessage(conversationError)}`
             : undefined,
-          Gn,
+          skippedNote,
         ].filter(Boolean).join(`
 
 `),
       );
     } else onClose();
   }
-  let handleEscape = ce(() => {
-    if (Ro && !preselectedMessage) {
-      Ho(undefined);
+  let handleEscape = useCallback(() => {
+    if (selectedMessage && !preselectedMessage) {
+      setSelectedMessage(undefined);
       return;
     }
     logEvent("tengu_message_selector_cancelled", {});
     onClose();
-  }, [onClose, Ro, preselectedMessage]);
-  let cn = useGlobalExitKeybindings(
+  }, [onClose, selectedMessage, preselectedMessage]);
+  let globalExit = useGlobalExitKeybindings(
     undefined,
     () => {
-      if (!Yo || restoreWait === undefined) return false;
+      if (!isRestoring_2 || restoreWait === undefined) return false;
       restoreWait.onStopWaiting();
       return true;
     },
-    !!Ro,
+    !!selectedMessage,
   );
-  useRegisterKeybindingContext("MessageSelector", !Yo && !error && !Ro && bo);
-  let [fileHistoryMetadata, setFileHistoryMetadata] = y({});
-  let mr = R(new Map());
-  P(() => {
+  useRegisterKeybindingContext(
+    "MessageSelector",
+    !isRestoring_2 && !error && !selectedMessage && hasMultiple,
+  );
+  let [fileHistoryMetadata, setFileHistoryMetadata] = useState({});
+  let pairCounts = useRef(new Map());
+  useEffect(() => {
     if (!isFileHistoryEnabled || preselectedMessage) return;
     let abortController = new AbortController();
-    async function Ir() {
-      let Pr = {};
-      let ts = {
-        pairCounts: mr.current,
+    async function loadMetadata() {
+      let nextMetadata = {};
+      let options = {
+        pairCounts: pairCounts.current,
         countUntil: performance.now() + rowCountingMs,
         signal: abortController.signal,
       };
-      for (let idx = co.length - 1; idx >= 0; idx--) {
-        let Ur = co[idx];
-        if (Ur.uuid === currentUUID || Ur.uuid === messageOptions) continue;
-        if (!fileHistoryCanRestore(fileHistory, Ur.uuid)) {
-          Pr[idx] = undefined;
+      for (let idx = allMessages.length - 1; idx >= 0; idx--) {
+        let message = allMessages[idx];
+        if (message.uuid === currentUUID || message.uuid === messageOptions) continue;
+        if (!fileHistoryCanRestore(fileHistory, message.uuid)) {
+          nextMetadata[idx] = undefined;
           continue;
         }
-        let Zr = idx + 1;
-        while (Zr < co.length - 1 && !fileHistoryCanRestore(fileHistory, co[Zr].uuid)) Zr++;
-        let nextUserMessage = co.at(Zr);
-        Pr[idx] = await fileHistoryGetTurnDiffStats(
+        let nextIdx = idx + 1;
+        while (
+          nextIdx < allMessages.length - 1 &&
+          !fileHistoryCanRestore(fileHistory, allMessages[nextIdx].uuid)
+        )
+          nextIdx++;
+        let nextUserMessage = allMessages.at(nextIdx);
+        nextMetadata[idx] = await fileHistoryGetTurnDiffStats(
           fileHistory,
-          Ur.uuid,
+          message.uuid,
           nextUserMessage?.uuid !== currentUUID ? nextUserMessage?.uuid : undefined,
-          ts,
+          options,
         );
         if (abortController.signal.aborted) return;
       }
-      setFileHistoryMetadata(Pr);
+      setFileHistoryMetadata(nextMetadata);
     }
-    Ir().catch(logError);
+    loadMetadata().catch(logError);
     return () => {
       abortController.abort();
     };
-  }, [co, currentUUID, messageOptions, fileHistory, isFileHistoryEnabled, preselectedMessage, rowCountingMs]);
+  }, [
+    allMessages,
+    currentUUID,
+    messageOptions,
+    fileHistory,
+    isFileHistoryEnabled,
+    preselectedMessage,
+    rowCountingMs,
+  ]);
   let canRestoreCode =
     isFileHistoryEnabled && diffStatsForRestore?.filesChanged && diffStatsForRestore.filesChanged.length > 0;
-  let showPickList = !error && !Ro && !preselectedMessage && bo;
-  let Fr = !error && !!Ro && bo;
-  let Zn = isFileHistoryEnabled
+  let showPickList = !error && !selectedMessage && !preselectedMessage && hasMultiple;
+  let showConfirm = !error && !!selectedMessage && hasMultiple;
+  let pickPrompt = isFileHistoryEnabled
     ? "Restore the code and/or conversation to the point before\u2026"
     : "Restore the conversation to the point before\u2026";
-  let Un = false;
-  let dr = stableEmptyObject(Un);
-  let or =
+  let isOneParagraph = false;
+  let hintFormat = stableEmptyObject(isOneParagraph);
+  let description =
     confirmDescription !== undefined && !isSummarizeOption(selectedRestoreOption)
       ? jsxProd_default(Text, {
           dimColor: true,
@@ -422,64 +471,64 @@ ${errorMessage(conversationError)}`
           selectedRestoreOption,
           canRestoreCode: !!canRestoreCode,
           diffStatsForRestore,
-          isOneParagraph: Un,
+          isOneParagraph,
         });
-  let pr = !!Ro && bo;
-  let Qn = jsxProd_default_2(Byline, {
+  let showInputGuide = !!selectedMessage && hasMultiple;
+  let hints = jsxProd_default_2(Byline, {
     children: [
       !error &&
-        bo &&
+        hasMultiple &&
         jsxProd_default(KeyboardShortcutHint, {
           chord: "enter",
-          action: Un && Fr ? "confirm" : "continue",
-          ...dr,
+          action: isOneParagraph && showConfirm ? "confirm" : "continue",
+          ...hintFormat,
         }),
       jsxProd_default(KeyboardShortcutHint, {
         chord: "escape",
         action: "cancel",
-        ...dr,
+        ...hintFormat,
       }),
     ],
   });
   return jsxProd_default_2(Dialog, {
-    title: Un && Fr ? REWIND : "Rewind",
-    subtitle: Un && showPickList ? Zn : undefined,
-    color: Un && error && !It ? "error" : "suggestion",
+    title: isOneParagraph && showConfirm ? REWIND : "Rewind",
+    subtitle: isOneParagraph && showPickList ? pickPrompt : undefined,
+    color: isOneParagraph && error && !dismissError ? "error" : "suggestion",
     onCancel: handleEscape,
-    isCancelActive: !Ro || !bo,
-    hideInputGuide: pr && !Un,
-    inputGuide: Un
+    isCancelActive: !selectedMessage || !hasMultiple,
+    hideInputGuide: showInputGuide && !isOneParagraph,
+    inputGuide: isOneParagraph
       ? (prev_1) => {
-          if (!pr) return prev_1.pending ? `Press ${prev_1.keyName} again to cancel` : Qn;
-          if (Yo) return " ";
-          return cn.pending ? `Press ${cn.keyName} again to exit` : Qn;
+          if (!showInputGuide) return prev_1.pending ? `Press ${prev_1.keyName} again to cancel` : hints;
+          if (isRestoring_2) return " ";
+          return globalExit.pending ? `Press ${globalExit.keyName} again to exit` : hints;
         }
-      : Qn,
+      : hints,
     children: [
-      Un && error
+      isOneParagraph && error
         ? jsxProd_default(Text, {
             children: error,
           })
         : jsxProd_default(ErrorText, {
             error,
           }),
-      !bo &&
+      !hasMultiple &&
         jsxProd_default(HintText, {
           children: "Nothing to rewind to yet.",
         }),
-      Fr &&
+      showConfirm &&
         jsxProd_default_2(Fragment, {
           children: [
-            Un
+            isOneParagraph
               ? jsxProd_default(Box, {
                   paddingLeft: 2,
                   children: jsxProd_default(UserMessageOption, {
-                    userMessage: Ro,
+                    userMessage: selectedMessage,
                     color: "text",
                     isCurrent: false,
                     isRedesign: true,
-                    age: formatRelativeTimeAgo(new Date(Ro.timestamp), {
-                      now: Io,
+                    age: formatRelativeTimeAgo(new Date(selectedMessage.timestamp), {
+                      now,
                     }),
                   }),
                 })
@@ -504,7 +553,7 @@ ${errorMessage(conversationError)}`
                       borderLeftDimColor: true,
                       children: [
                         jsxProd_default(UserMessageOption, {
-                          userMessage: Ro,
+                          userMessage: selectedMessage,
                           color: "text",
                           isCurrent: false,
                           isRedesign: false,
@@ -513,8 +562,8 @@ ${errorMessage(conversationError)}`
                           dimColor: true,
                           children: [
                             "(",
-                            formatRelativeTimeAgo(new Date(Ro.timestamp), {
-                              now: Io,
+                            formatRelativeTimeAgo(new Date(selectedMessage.timestamp), {
+                              now,
                             }),
                             ")",
                           ],
@@ -523,18 +572,18 @@ ${errorMessage(conversationError)}`
                     }),
                   ],
                 }),
-            Un && canRestoreCode
+            isOneParagraph && canRestoreCode
               ? jsxProd_default_2(Box, {
                   flexDirection: "column",
                   children: [
-                    or,
+                    description,
                     jsxProd_default(Text, {
                       dimColor: true,
                       children: RESTORE_FILES_CAVEAT,
                     }),
                   ],
                 })
-              : or,
+              : description,
             isSummarizeOption(isRestoring)
               ? jsxProd_default_2(Box, {
                   flexDirection: "row",
@@ -546,22 +595,22 @@ ${errorMessage(conversationError)}`
                     }),
                   ],
                 })
-              : Yo && restoreWait !== undefined
+              : isRestoring_2 && restoreWait !== undefined
                 ? jsxProd_default(PromptDialog, {
                     message: restoreWait.message,
                     onCancel: restoreWait.onStopWaiting,
                     escAction: "stop waiting",
                   })
                 : jsxProd_default(ModelSelector, {
-                    isDisabled: Yo,
+                    isDisabled: isRestoring_2,
                     options: getRestoreOptions(!!canRestoreCode),
                     defaultFocusValue: canRestoreCode ? "both" : "conversation",
                     onFocus: (value) => setSelectedRestoreOption(value),
                     onChange: (value) => onSelectRestoreOption(value),
-                    onCancel: () => (preselectedMessage ? onClose() : Ho(undefined)),
+                    onCancel: () => (preselectedMessage ? onClose() : setSelectedMessage(undefined)),
                   }),
             canRestoreCode &&
-              !Un &&
+              !isOneParagraph &&
               jsxProd_default(Box, {
                 marginBottom: 1,
                 children: jsxProd_default_2(Text, {
@@ -574,25 +623,25 @@ ${errorMessage(conversationError)}`
       showPickList &&
         jsxProd_default_2(Fragment, {
           children: [
-            !Un &&
+            !isOneParagraph &&
               jsxProd_default(Text, {
-                children: Zn,
+                children: pickPrompt,
               }),
             jsxProd_default(merged, {
-              visibleCount: max * oo + 2,
-              defaultFocusIndex: Ao ?? co.length - 1,
-              onFocus: Bo,
-              isDisabled: Yo,
+              visibleCount: max * rowsPerItem + 2,
+              defaultFocusIndex: focusedIndex ?? allMessages.length - 1,
+              onFocus: setFocusedIndex,
+              isDisabled: isRestoring_2,
               scrollBar: false,
               onSelect: (value_0) => {
-                let Ir = co[value_0];
-                if (Ir) handleSelect(Ir);
+                let message = allMessages[value_0];
+                if (message) handleSelect(message);
               },
-              children: co.map((msg, visibleOptionIndex) =>
+              children: allMessages.map((msg, visibleOptionIndex) =>
                 jsxProd_default(
                   merged.Item,
                   {
-                    lines: oo,
+                    lines: rowsPerItem,
                     children: jsxProd_default(computeDiffStatsBetweenMessages, {
                       message: msg,
                       isCurrent: msg.uuid === currentUUID,
@@ -600,7 +649,7 @@ ${errorMessage(conversationError)}`
                       parentSessionId,
                       metadataLoaded: isFileHistoryEnabled && visibleOptionIndex in fileHistoryMetadata,
                       metadata: fileHistoryMetadata[visibleOptionIndex],
-                      isRedesign: Un,
+                      isRedesign: isOneParagraph,
                     }),
                   },
                   msg.uuid,
@@ -613,14 +662,14 @@ ${errorMessage(conversationError)}`
   });
 }
 //@ chunk-18hwfzwa.js:422268-422399 layout
-function logConversationRestoreError(h) {
-  if (h instanceof ConversationRestoreError) {
-    logForDebugging(`MessageSelector: conversation restore not done: ${h.message}`, {
+function logConversationRestoreError(error) {
+  if (error instanceof ConversationRestoreError) {
+    logForDebugging(`MessageSelector: conversation restore not done: ${error.message}`, {
       level: "error",
     });
     return;
   }
-  logError(h);
+  logError(error);
 }
 //@ chunk-18hwfzwa.js:422399-422832 fingerprint = getRestoreOptionConversationText (0.939)
 function getRestoreOptionConversationText(option) {
@@ -639,7 +688,7 @@ function getRestoreOptionConversationText(option) {
 }
 //@ chunk-18hwfzwa.js:422832-423703 fingerprint = RestoreOptionDescription (0.785)
 function RestoreOptionDescription(props) {
-  let $ = w(17);
+  let $ = useMemoCache(17);
   let { selectedRestoreOption, canRestoreCode, diffStatsForRestore, isOneParagraph } = props;
   let showCodeRestore =
     canRestoreCode && (selectedRestoreOption === "both" || selectedRestoreOption === "code");
@@ -649,19 +698,19 @@ function RestoreOptionDescription(props) {
     $[0] = selectedRestoreOption;
     $[1] = children;
   } else children = $[1];
-  let He;
+  let conversationTextElement;
   if ($[2] !== children) {
-    He = jsxProd_default(Text, {
+    conversationTextElement = jsxProd_default(Text, {
       dimColor: true,
       children,
     });
     $[2] = children;
-    $[3] = He;
-  } else He = $[3];
-  let We = He;
-  let ze;
+    $[3] = conversationTextElement;
+  } else conversationTextElement = $[3];
+  let conversationTextText = conversationTextElement;
+  let codeRestoreElement;
   if ($[4] !== diffStatsForRestore || $[5] !== selectedRestoreOption || $[6] !== showCodeRestore) {
-    ze =
+    codeRestoreElement =
       !isSummarizeOption(selectedRestoreOption) &&
       (showCodeRestore
         ? jsxProd_default(RestoreCodeConfirmation, {
@@ -674,47 +723,47 @@ function RestoreOptionDescription(props) {
     $[4] = diffStatsForRestore;
     $[5] = selectedRestoreOption;
     $[6] = showCodeRestore;
-    $[7] = ze;
-  } else ze = $[7];
-  let Xe = ze;
+    $[7] = codeRestoreElement;
+  } else codeRestoreElement = $[7];
+  let codeRestoreSection = codeRestoreElement;
   if (isOneParagraph) {
-    let rt;
-    if ($[8] !== Xe) {
-      rt =
-        Xe &&
+    let spacerElement;
+    if ($[8] !== codeRestoreSection) {
+      spacerElement =
+        codeRestoreSection &&
         jsxProd_default(Text, {
           children: " ",
         });
-      $[8] = Xe;
-      $[9] = rt;
-    } else rt = $[9];
-    let kt;
-    if ($[10] !== Xe || $[11] !== We || $[12] !== rt) {
-      kt = jsxProd_default_2(Text, {
-        children: [We, rt, Xe],
+      $[8] = codeRestoreSection;
+      $[9] = spacerElement;
+    } else spacerElement = $[9];
+    let oneLineSummary;
+    if ($[10] !== codeRestoreSection || $[11] !== conversationTextText || $[12] !== spacerElement) {
+      oneLineSummary = jsxProd_default_2(Text, {
+        children: [conversationTextText, spacerElement, codeRestoreSection],
       });
-      $[10] = Xe;
-      $[11] = We;
-      $[12] = rt;
-      $[13] = kt;
-    } else kt = $[13];
-    return kt;
+      $[10] = codeRestoreSection;
+      $[11] = conversationTextText;
+      $[12] = spacerElement;
+      $[13] = oneLineSummary;
+    } else oneLineSummary = $[13];
+    return oneLineSummary;
   }
-  let rt;
-  if ($[14] !== Xe || $[15] !== We) {
-    rt = jsxProd_default_2(Box, {
+  let stackedSummary;
+  if ($[14] !== codeRestoreSection || $[15] !== conversationTextText) {
+    stackedSummary = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [We, Xe],
+      children: [conversationTextText, codeRestoreSection],
     });
-    $[14] = Xe;
-    $[15] = We;
-    $[16] = rt;
-  } else rt = $[16];
-  return rt;
+    $[14] = codeRestoreSection;
+    $[15] = conversationTextText;
+    $[16] = stackedSummary;
+  } else stackedSummary = $[16];
+  return stackedSummary;
 }
 //@ chunk-18hwfzwa.js:423703-424837 fingerprint = RestoreCodeConfirmation (0.498)
 function RestoreCodeConfirmation(props) {
-  let $ = w(15);
+  let $ = useMemoCache(15);
   let { diffStatsForRestore } = props;
   if (diffStatsForRestore === undefined) {
     return;
@@ -733,82 +782,82 @@ function RestoreCodeConfirmation(props) {
   let numFilesChanged = diffStatsForRestore.filesChanged.length;
   let fileLabel;
   if (numFilesChanged === 1) {
-    const L = diffStatsForRestore.filesChanged[0] || "";
-    let Re;
-    if ($[1] !== L) {
-      Re = pathModule.basename(L);
-      $[1] = L;
-      $[2] = Re;
-    } else Re = $[2];
-    fileLabel = Re;
+    const firstPath = diffStatsForRestore.filesChanged[0] || "";
+    let firstLabel;
+    if ($[1] !== firstPath) {
+      firstLabel = pathModule.basename(firstPath);
+      $[1] = firstPath;
+      $[2] = firstLabel;
+    } else firstLabel = $[2];
+    fileLabel = firstLabel;
   } else if (numFilesChanged === 2) {
-    const L = diffStatsForRestore.filesChanged[0] || "";
-    let Re;
-    if ($[3] !== L) {
-      Re = pathModule.basename(L);
-      $[3] = L;
-      $[4] = Re;
-    } else Re = $[4];
-    let Be = Re;
-    const He = diffStatsForRestore.filesChanged[1] || "";
+    const firstPath = diffStatsForRestore.filesChanged[0] || "";
+    let firstLabel;
+    if ($[3] !== firstPath) {
+      firstLabel = pathModule.basename(firstPath);
+      $[3] = firstPath;
+      $[4] = firstLabel;
+    } else firstLabel = $[4];
+    let firstFileLabel = firstLabel;
+    const secondPath = diffStatsForRestore.filesChanged[1] || "";
     let t2;
-    if ($[5] !== He) {
-      t2 = pathModule.basename(He);
-      $[5] = He;
+    if ($[5] !== secondPath) {
+      t2 = pathModule.basename(secondPath);
+      $[5] = secondPath;
       $[6] = t2;
     } else t2 = $[6];
     let file2 = t2;
-    fileLabel = `${Be} and ${file2}`;
+    fileLabel = `${firstFileLabel} and ${file2}`;
   } else {
-    const L = diffStatsForRestore.filesChanged[0] || "";
-    let Re;
-    if ($[7] !== L) {
-      Re = pathModule.basename(L);
-      $[7] = L;
-      $[8] = Re;
-    } else Re = $[8];
-    fileLabel = `${Re} and ${diffStatsForRestore.filesChanged.length - 1} other files`;
+    const firstPath = diffStatsForRestore.filesChanged[0] || "";
+    let firstLabel;
+    if ($[7] !== firstPath) {
+      firstLabel = pathModule.basename(firstPath);
+      $[7] = firstPath;
+      $[8] = firstLabel;
+    } else firstLabel = $[8];
+    fileLabel = `${firstLabel} and ${diffStatsForRestore.filesChanged.length - 1} other files`;
   }
-  let L;
+  let diffCountsElement;
   if ($[9] !== diffStatsForRestore.deletions || $[10] !== diffStatsForRestore.insertions) {
-    L = jsxProd_default(DiffStatCounts, {
+    diffCountsElement = jsxProd_default(DiffStatCounts, {
       added: diffStatsForRestore.insertions,
       removed: diffStatsForRestore.deletions,
     });
     $[9] = diffStatsForRestore.deletions;
     $[10] = diffStatsForRestore.insertions;
-    $[11] = L;
-  } else L = $[11];
+    $[11] = diffCountsElement;
+  } else diffCountsElement = $[11];
   let t2;
-  if ($[12] !== fileLabel || $[13] !== L) {
+  if ($[12] !== fileLabel || $[13] !== diffCountsElement) {
     t2 = jsxProd_default(Fragment, {
       children: jsxProd_default_2(Text, {
         dimColor: true,
-        children: ["The code will be restored", " ", L, " ", "in ", fileLabel, "."],
+        children: ["The code will be restored", " ", diffCountsElement, " ", "in ", fileLabel, "."],
       }),
     });
     $[12] = fileLabel;
-    $[13] = L;
+    $[13] = diffCountsElement;
     $[14] = t2;
   } else t2 = $[14];
   return t2;
 }
 //@ chunk-18hwfzwa.js:424837-426117 file-local
 function computeDiffStatsBetweenMessages(props) {
-  let $ = w(16);
+  let $ = useMemoCache(16);
   let { message, isCurrent, isPreClear, parentSessionId, metadataLoaded, metadata, isRedesign } = props;
-  let He = isMenuOpen();
-  let We = metadata?.filesChanged && metadata.filesChanged.length;
-  let Xe;
+  let menuOpen = isMenuOpen();
+  let filesChangedCount = metadata?.filesChanged && metadata.filesChanged.length;
+  let messageLabelElement;
   if (
     $[0] !== isCurrent ||
     $[1] !== isPreClear ||
     $[2] !== isRedesign ||
-    $[3] !== He ||
+    $[3] !== menuOpen ||
     $[4] !== message ||
     $[5] !== parentSessionId
   ) {
-    Xe = jsxProd_default(Box, {
+    messageLabelElement = jsxProd_default(Box, {
       flexShrink: 1,
       height: 1,
       overflow: "hidden",
@@ -816,13 +865,13 @@ function computeDiffStatsBetweenMessages(props) {
         ? jsxProd_default(Box, {
             width: "100%",
             children: jsxProd_default_2(Text, {
-              color: He ? "suggestion" : undefined,
+              color: menuOpen ? "suggestion" : undefined,
               children: ["/resume ", parentSessionId, " (previous session)"],
             }),
           })
         : jsxProd_default(UserMessageOption, {
             userMessage: message,
-            color: He ? "suggestion" : undefined,
+            color: menuOpen ? "suggestion" : undefined,
             isCurrent,
             isRedesign,
             paddingRight: 10,
@@ -831,28 +880,34 @@ function computeDiffStatsBetweenMessages(props) {
     $[0] = isCurrent;
     $[1] = isPreClear;
     $[2] = isRedesign;
-    $[3] = He;
+    $[3] = menuOpen;
     $[4] = message;
     $[5] = parentSessionId;
-    $[6] = Xe;
-  } else Xe = $[6];
-  let rt;
-  if ($[7] !== isRedesign || $[8] !== He || $[9] !== metadata || $[10] !== metadataLoaded || $[11] !== We) {
-    rt =
+    $[6] = messageLabelElement;
+  } else messageLabelElement = $[6];
+  let diffSummaryElement;
+  if (
+    $[7] !== isRedesign ||
+    $[8] !== menuOpen ||
+    $[9] !== metadata ||
+    $[10] !== metadataLoaded ||
+    $[11] !== filesChangedCount
+  ) {
+    diffSummaryElement =
       metadataLoaded &&
       jsxProd_default(Box, {
         height: 1,
         flexDirection: "row",
         children: metadata
           ? jsxProd_default(Text, {
-              dimColor: !He,
+              dimColor: !menuOpen,
               color: "inactive",
-              children: We
+              children: filesChangedCount
                 ? jsxProd_default_2(Fragment, {
                     children: [
-                      We === 1 && metadata.filesChanged[0]
+                      filesChangedCount === 1 && metadata.filesChanged[0]
                         ? `${pathModule.basename(metadata.filesChanged[0])} `
-                        : `${We} files changed `,
+                        : `${filesChangedCount} files changed `,
                       jsxProd_default(DiffStatCounts, {
                         added: metadata.insertions,
                         removed: metadata.deletions,
@@ -870,41 +925,41 @@ function computeDiffStatsBetweenMessages(props) {
             }),
       });
     $[7] = isRedesign;
-    $[8] = He;
+    $[8] = menuOpen;
     $[9] = metadata;
     $[10] = metadataLoaded;
-    $[11] = We;
-    $[12] = rt;
-  } else rt = $[12];
-  let kt;
-  if ($[13] !== Xe || $[14] !== rt) {
-    kt = jsxProd_default_2(Box, {
+    $[11] = filesChangedCount;
+    $[12] = diffSummaryElement;
+  } else diffSummaryElement = $[12];
+  let rowElement;
+  if ($[13] !== messageLabelElement || $[14] !== diffSummaryElement) {
+    rowElement = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [Xe, rt],
+      children: [messageLabelElement, diffSummaryElement],
     });
-    $[13] = Xe;
-    $[14] = rt;
-    $[15] = kt;
-  } else kt = $[15];
-  return kt;
+    $[13] = messageLabelElement;
+    $[14] = diffSummaryElement;
+    $[15] = rowElement;
+  } else rowElement = $[15];
+  return rowElement;
 }
 //@ chunk-18hwfzwa.js:426117-429323 fingerprint = UserMessageOption (0.462)
 function UserMessageOption(props) {
-  let $ = w(62);
+  let $ = useMemoCache(62);
   let { userMessage, color, dimColor, isCurrent, isRedesign, paddingRight, age } = props;
   let { columns } = useTerminalSize();
-  let ze;
+  let text;
   if ($[0] !== userMessage) {
-    ze = textOrReminderWrapped(getUserMessageText(userMessage)?.trim() || "(no prompt)");
+    text = textOrReminderWrapped(getUserMessageText(userMessage)?.trim() || "(no prompt)");
     $[0] = userMessage;
-    $[1] = ze;
-  } else ze = $[1];
-  let text = ze;
+    $[1] = text;
+  } else text = $[1];
+  let text_2 = text;
   if (isCurrent) {
     const children = isRedesign ? CURRENT_ITEM_LABEL : "(current)";
-    let kt;
+    let currentBox;
     if ($[2] !== color || $[3] !== dimColor || $[4] !== children) {
-      kt = jsxProd_default(Box, {
+      currentBox = jsxProd_default(Box, {
         width: "100%",
         children: jsxProd_default(Text, {
           italic: true,
@@ -916,14 +971,14 @@ function UserMessageOption(props) {
       $[2] = color;
       $[3] = dimColor;
       $[4] = children;
-      $[5] = kt;
-    } else kt = $[5];
-    return kt;
+      $[5] = currentBox;
+    } else currentBox = $[5];
+    return currentBox;
   }
-  if (isEmptyMessageText(text)) {
-    let rt;
+  if (isEmptyMessageText(text_2)) {
+    let emptyText;
     if ($[6] !== color || $[7] !== dimColor) {
-      rt = jsxProd_default(Text, {
+      emptyText = jsxProd_default(Text, {
         italic: true,
         color,
         dimColor,
@@ -931,164 +986,164 @@ function UserMessageOption(props) {
       });
       $[6] = color;
       $[7] = dimColor;
-      $[8] = rt;
-    } else rt = $[8];
-    let kt;
+      $[8] = emptyText;
+    } else emptyText = $[8];
+    let ageSuffix;
     if ($[9] !== age) {
-      kt = jsxProd_default(MessageAgeSuffix, {
+      ageSuffix = jsxProd_default(MessageAgeSuffix, {
         age,
       });
       $[9] = age;
-      $[10] = kt;
-    } else kt = $[10];
-    let At;
-    if ($[11] !== rt || $[12] !== kt) {
-      At = jsxProd_default_2(Box, {
+      $[10] = ageSuffix;
+    } else ageSuffix = $[10];
+    let emptyBox;
+    if ($[11] !== emptyText || $[12] !== ageSuffix) {
+      emptyBox = jsxProd_default_2(Box, {
         flexDirection: "row",
         width: "100%",
-        children: [rt, kt],
+        children: [emptyText, ageSuffix],
       });
-      $[11] = rt;
-      $[12] = kt;
-      $[13] = At;
-    } else At = $[13];
-    return At;
+      $[11] = emptyText;
+      $[12] = ageSuffix;
+      $[13] = emptyBox;
+    } else emptyBox = $[13];
+    return emptyBox;
   }
-  let It;
-  let rt;
+  let commandMessage;
+  let isUsableCommand;
   if ($[14] !== userMessage.message.content) {
-    It = findLastCommandMessage(userMessage.message.content);
-    rt = It && isUsableCommandMessage(It);
+    commandMessage = findLastCommandMessage(userMessage.message.content);
+    isUsableCommand = commandMessage && isUsableCommandMessage(commandMessage);
     $[14] = userMessage.message.content;
-    $[15] = It;
-    $[16] = rt;
+    $[15] = commandMessage;
+    $[16] = isUsableCommand;
   } else {
-    It = $[15];
-    rt = $[16];
+    commandMessage = $[15];
+    isUsableCommand = $[16];
   }
-  if (rt) {
-    let { message, args, isSkillFormat } = It;
+  if (isUsableCommand) {
+    let { message, args, isSkillFormat } = commandMessage;
     if (message) {
       if (isSkillFormat) {
-        let kt;
+        let ageSuffix;
         if ($[17] !== age) {
-          kt = jsxProd_default(MessageAgeSuffix, {
+          ageSuffix = jsxProd_default(MessageAgeSuffix, {
             age,
           });
           $[17] = age;
-          $[18] = kt;
-        } else kt = $[18];
-        let At;
-        if ($[19] !== color || $[20] !== message || $[21] !== dimColor || $[22] !== kt) {
-          At = jsxProd_default(Box, {
+          $[18] = ageSuffix;
+        } else ageSuffix = $[18];
+        let skillBox;
+        if ($[19] !== color || $[20] !== message || $[21] !== dimColor || $[22] !== ageSuffix) {
+          skillBox = jsxProd_default(Box, {
             flexDirection: "row",
             width: "100%",
             children: jsxProd_default_2(Text, {
               color,
               dimColor,
-              children: ["Skill(", message, ")", kt],
+              children: ["Skill(", message, ")", ageSuffix],
             }),
           });
           $[19] = color;
           $[20] = message;
           $[21] = dimColor;
-          $[22] = kt;
-          $[23] = At;
-        } else At = $[23];
-        return At;
+          $[22] = ageSuffix;
+          $[23] = skillBox;
+        } else skillBox = $[23];
+        return skillBox;
       } else {
-        const kt = userMessage.stackedOriginalInput ?? `/${message}${args ? ` ${args}` : ""}`;
-        let At;
+        const commandLine = userMessage.stackedOriginalInput ?? `/${message}${args ? ` ${args}` : ""}`;
+        let ageSuffix;
         if ($[24] !== age) {
-          At = jsxProd_default(MessageAgeSuffix, {
+          ageSuffix = jsxProd_default(MessageAgeSuffix, {
             age,
           });
           $[24] = age;
-          $[25] = At;
-        } else At = $[25];
-        let Lt;
-        if ($[26] !== color || $[27] !== dimColor || $[28] !== kt || $[29] !== At) {
-          Lt = jsxProd_default(Box, {
+          $[25] = ageSuffix;
+        } else ageSuffix = $[25];
+        let commandBox;
+        if ($[26] !== color || $[27] !== dimColor || $[28] !== commandLine || $[29] !== ageSuffix) {
+          commandBox = jsxProd_default(Box, {
             flexDirection: "row",
             width: "100%",
             children: jsxProd_default_2(Text, {
               color,
               dimColor,
-              children: [kt, At],
+              children: [commandLine, ageSuffix],
             }),
           });
           $[26] = color;
           $[27] = dimColor;
-          $[28] = kt;
-          $[29] = At;
-          $[30] = Lt;
-        } else Lt = $[30];
-        return Lt;
+          $[28] = commandLine;
+          $[29] = ageSuffix;
+          $[30] = commandBox;
+        } else commandBox = $[30];
+        return commandBox;
       }
     }
   }
-  let kt;
-  if ($[31] !== It || $[32] !== userMessage.message.content) {
-    kt = It ? null : extractBashInput(userMessage.message.content);
-    $[31] = It;
+  let bashInput;
+  if ($[31] !== commandMessage || $[32] !== userMessage.message.content) {
+    bashInput = commandMessage ? null : extractBashInput(userMessage.message.content);
+    $[31] = commandMessage;
     $[32] = userMessage.message.content;
-    $[33] = kt;
-  } else kt = $[33];
-  let oo = kt;
-  if (oo) {
-    let At;
+    $[33] = bashInput;
+  } else bashInput = $[33];
+  let bashInput_2 = bashInput;
+  if (bashInput_2) {
+    let bashBang;
     if ($[34] === MEMO_CACHE_SENTINEL) {
-      At = jsxProd_default(Text, {
+      bashBang = jsxProd_default(Text, {
         color: "bashBorder",
         children: "!",
       });
-      $[34] = At;
-    } else At = $[34];
-    let Lt;
+      $[34] = bashBang;
+    } else bashBang = $[34];
+    let ageSuffix;
     if ($[35] !== age) {
-      Lt = jsxProd_default(MessageAgeSuffix, {
+      ageSuffix = jsxProd_default(MessageAgeSuffix, {
         age,
       });
       $[35] = age;
-      $[36] = Lt;
-    } else Lt = $[36];
-    let Xt;
-    if ($[37] !== oo || $[38] !== color || $[39] !== dimColor || $[40] !== Lt) {
-      Xt = jsxProd_default_2(Box, {
+      $[36] = ageSuffix;
+    } else ageSuffix = $[36];
+    let bashBox;
+    if ($[37] !== bashInput_2 || $[38] !== color || $[39] !== dimColor || $[40] !== ageSuffix) {
+      bashBox = jsxProd_default_2(Box, {
         flexDirection: "row",
         width: "100%",
         children: [
-          At,
+          bashBang,
           jsxProd_default_2(Text, {
             color,
             dimColor,
-            children: [" ", oo, Lt],
+            children: [" ", bashInput_2, ageSuffix],
           }),
         ],
       });
-      $[37] = oo;
+      $[37] = bashInput_2;
       $[38] = color;
       $[39] = dimColor;
-      $[40] = Lt;
-      $[41] = Xt;
-    } else Xt = $[41];
-    return Xt;
+      $[40] = ageSuffix;
+      $[41] = bashBox;
+    } else bashBox = $[41];
+    return bashBox;
   }
-  let io;
-  let At;
+  let truncated;
+  let earlyReturn;
   if (
     $[42] !== age ||
     $[43] !== color ||
     $[44] !== columns ||
     $[45] !== dimColor ||
-    $[46] !== text ||
+    $[46] !== text_2 ||
     $[47] !== paddingRight
   ) {
-    At = EARLY_RETURN_SENTINEL;
+    earlyReturn = EARLY_RETURN_SENTINEL;
     po: {
-      io = paddingRight
-        ? truncate(text, columns - paddingRight, true)
-        : truncateToLength(text, 500)
+      truncated = paddingRight
+        ? truncate(text_2, columns - paddingRight, true)
+        : truncateToLength(text_2, 500)
             .split(
               `
 `,
@@ -1097,35 +1152,35 @@ function UserMessageOption(props) {
 `);
       if (
         age !== undefined &&
-        io.includes(`
+        truncated.includes(`
 `)
       ) {
         const commandMessage = jsxProd_default(Text, {
           color,
           dimColor,
-          children: io.trimEnd(),
+          children: truncated.trimEnd(),
         });
-        let Xt;
+        let ageText;
         if ($[50] !== age) {
-          Xt = jsxProd_default(Text, {
+          ageText = jsxProd_default(Text, {
             dimColor: true,
             children: age,
           });
           $[50] = age;
-          $[51] = Xt;
-        } else Xt = $[51];
-        let so;
-        if ($[52] !== commandMessage || $[53] !== Xt) {
-          so = jsxProd_default_2(Box, {
+          $[51] = ageText;
+        } else ageText = $[51];
+        let stackedBox;
+        if ($[52] !== commandMessage || $[53] !== ageText) {
+          stackedBox = jsxProd_default_2(Box, {
             flexDirection: "column",
             width: "100%",
-            children: [commandMessage, Xt],
+            children: [commandMessage, ageText],
           });
           $[52] = commandMessage;
-          $[53] = Xt;
-          $[54] = so;
-        } else so = $[54];
-        At = so;
+          $[53] = ageText;
+          $[54] = stackedBox;
+        } else stackedBox = $[54];
+        earlyReturn = stackedBox;
         break po;
       }
     }
@@ -1133,49 +1188,49 @@ function UserMessageOption(props) {
     $[43] = color;
     $[44] = columns;
     $[45] = dimColor;
-    $[46] = text;
+    $[46] = text_2;
     $[47] = paddingRight;
-    $[48] = io;
-    $[49] = At;
+    $[48] = truncated;
+    $[49] = earlyReturn;
   } else {
-    io = $[48];
-    At = $[49];
+    truncated = $[48];
+    earlyReturn = $[49];
   }
-  if (At !== EARLY_RETURN_SENTINEL) return At;
-  let Lt;
+  if (earlyReturn !== EARLY_RETURN_SENTINEL) return earlyReturn;
+  let ageSuffix;
   if ($[55] !== age) {
-    Lt = jsxProd_default(MessageAgeSuffix, {
+    ageSuffix = jsxProd_default(MessageAgeSuffix, {
       age,
     });
     $[55] = age;
-    $[56] = Lt;
-  } else Lt = $[56];
-  let Xt;
-  if ($[57] !== color || $[58] !== dimColor || $[59] !== io || $[60] !== Lt) {
-    Xt = jsxProd_default(Box, {
+    $[56] = ageSuffix;
+  } else ageSuffix = $[56];
+  let plainBox;
+  if ($[57] !== color || $[58] !== dimColor || $[59] !== truncated || $[60] !== ageSuffix) {
+    plainBox = jsxProd_default(Box, {
       flexDirection: "row",
       width: "100%",
       children: jsxProd_default_2(Text, {
         color,
         dimColor,
-        children: [io, Lt],
+        children: [truncated, ageSuffix],
       }),
     });
     $[57] = color;
     $[58] = dimColor;
-    $[59] = io;
-    $[60] = Lt;
-    $[61] = Xt;
-  } else Xt = $[61];
-  return Xt;
+    $[59] = truncated;
+    $[60] = ageSuffix;
+    $[61] = plainBox;
+  } else plainBox = $[61];
+  return plainBox;
 }
 //@ chunk-18hwfzwa.js:429323-429467 layout
 function MessageAgeSuffix(props) {
-  let $ = w(2);
+  let $ = useMemoCache(2);
   let { age } = props;
-  let L;
+  let ageSuffix;
   if ($[0] !== age) {
-    L =
+    ageSuffix =
       age === undefined
         ? null
         : jsxProd_default_2(Text, {
@@ -1183,9 +1238,9 @@ function MessageAgeSuffix(props) {
             children: [" \xB7 ", age],
           });
     $[0] = age;
-    $[1] = L;
-  } else L = $[1];
-  return L;
+    $[1] = ageSuffix;
+  } else ageSuffix = $[1];
+  return ageSuffix;
 }
 //@ chunk-18hwfzwa.js:429467-429960 fingerprint = messagesAfterAreOnlySynthetic (0.891)
 function messagesAfterAreOnlySynthetic(messages, fromIndex) {
@@ -1218,10 +1273,10 @@ function messagesAfterAreOnlySynthetic(messages, fromIndex) {
  * 把消息列表中以 queued_command 附件形式存在的人类 prompt 还原为普通用户消息（跳过 meta、已存在 uuid、cron 触发和非对象内容），让 Rewind 选择器能选中它们；无变化时返回原数组。
  */
 function expandQueuedPromptAttachments(messages) {
-  let x = new Set();
-  for (let message of messages) if (message.type === "user") x.add(message.uuid);
-  let D = false;
-  let mapped = messages.map((message, ke) => {
+  let existingUserUuids = new Set();
+  for (let message of messages) if (message.type === "user") existingUserUuids.add(message.uuid);
+  let didExpand = false;
+  let mapped = messages.map((message, index) => {
     if (
       message.type !== "attachment" ||
       message.attachment.type !== "queued_command" ||
@@ -1233,14 +1288,14 @@ function expandQueuedPromptAttachments(messages) {
     if (
       queuedCommandAttachment === undefined ||
       queuedCommandAttachment.isMeta ||
-      x.has(queuedCommandAttachment.uuid) ||
-      hasCronToolUse(messages, ke) ||
+      existingUserUuids.has(queuedCommandAttachment.uuid) ||
+      hasCronToolUse(messages, index) ||
       (Array.isArray(queuedCommandAttachment.content) &&
-        queuedCommandAttachment.content.some((Be) => typeof Be !== "object" || Be === null))
+        queuedCommandAttachment.content.some((part) => typeof part !== "object" || part === null))
     )
       return message;
-    x.add(queuedCommandAttachment.uuid);
-    D = true;
+    existingUserUuids.add(queuedCommandAttachment.uuid);
+    didExpand = true;
     return createUserMessage({
       content: queuedCommandAttachment.content,
       uuid: queuedCommandAttachment.uuid,
@@ -1249,26 +1304,26 @@ function expandQueuedPromptAttachments(messages) {
       origin: queuedCommandAttachment.origin,
     });
   });
-  return D ? mapped : messages;
+  return didExpand ? mapped : messages;
 }
 //@ chunk-18hwfzwa.js:430532-430773 placement
 function openRewindSelector({ localJsx, turn, sessionController }) {
   if (localJsx.size > 0) return null;
-  let L = {
+  let localJsxOptions = {
     commandName: "rewind",
     immediate: false,
     hidesPrompt: true,
     retireAtTurnBoundary: false,
   };
-  let ee = localJsx.show(
+  let rewindDialog = localJsx.show(
     jsxProd_default(RewindMessageSelector, {
       turn,
       sessionController,
-      onClose: () => ee.close(),
+      onClose: () => rewindDialog.close(),
     }),
-    L,
+    localJsxOptions,
   );
-  return ee;
+  return rewindDialog;
 }
 //@ chunk-18hwfzwa.js:430773-431571 placement
 function RewindMessageSelector({ turn, sessionController, onClose }) {
@@ -1277,26 +1332,26 @@ function RewindMessageSelector({ turn, sessionController, onClose }) {
   let setAppState = useSetAppState();
   let session = useSession();
   let { messages } = transcriptMessagesStore(mainAgentId());
-  let messages_2 = Q(() => expandQueuedPromptAttachments(messages), [messages]);
+  let messages_2 = useMemo(() => expandQueuedPromptAttachments(messages), [messages]);
   return jsxProd_default(MessageSelector, {
     messages: messages_2,
     onPreRestore: turn.cancel,
-    onRestoreCode: async (We) => {
+    onRestoreCode: async (message) => {
       try {
-        return await fileHistoryRewind(() => appStoreDirect.getState().fileHistory, We.uuid);
+        return await fileHistoryRewind(() => appStoreDirect.getState().fileHistory, message.uuid);
       } finally {
-        setAppState((ze) => {
-          let Xe = reduceFileHistoryState(
-            ze.fileHistory,
+        setAppState((appState) => {
+          let nextFileHistory = reduceFileHistoryState(
+            appState.fileHistory,
             {
               kind: "touch",
             },
             storageV5,
           );
-          if (Xe === ze.fileHistory) return ze;
+          if (nextFileHistory === appState.fileHistory) return appState;
           return {
-            ...ze,
-            fileHistory: Xe,
+            ...appState,
+            fileHistory: nextFileHistory,
           };
         });
       }
@@ -1305,7 +1360,7 @@ function RewindMessageSelector({ turn, sessionController, onClose }) {
       sessionController.runsNoModelTurn || isEnvTruthy(process.env.DISABLE_COMPACT)
         ? undefined
         : sessionController.handleSummarize,
-    onRestoreMessage: (We) => sessionController.handleRestoreMessage(We, "message_selector"),
+    onRestoreMessage: (message) => sessionController.handleRestoreMessage(message, "message_selector"),
     onClose,
     parentSessionId: getParentSessionId(),
     onResumePreviousSession:
@@ -1323,33 +1378,5 @@ function RewindMessageSelector({ turn, sessionController, onClose }) {
           }
         : undefined,
   });
-}
-//@ chunk-wyqg6m3h.js:36692-36855 fingerprint = DiffStatsText (0.64)
-function diffStat(e, o, r) {
-  let { Text } = e.ui;
-  let n = o > 0 && r > 0;
-  return h(
-    Text,
-    null,
-    o > 0
-      ? h(
-          Text,
-          {
-            color: "diffAddedWord",
-          },
-          `+${o}`,
-        )
-      : "",
-    n ? " " : "",
-    r > 0
-      ? h(
-          Text,
-          {
-            color: "diffRemovedWord",
-          },
-          `-${r}`,
-        )
-      : "",
-  );
 }
 export { openRewindSelector, messagesAfterAreOnlySynthetic, diffStat };

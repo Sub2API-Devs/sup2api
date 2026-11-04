@@ -22,6 +22,13 @@ import { readRequestIdSource } from "../services/api/requestIdSource.js";
 import { buildSessionEndpoint } from "../assistant/sessionHistory.js";
 import { postSessionAction } from "./remoteBridgeCore.js";
 
+//@ chunk-jt8zq468.js:191-263 placement
+/**
+ * 判断字符串是否为安全的 reason code（小写字母数字下划线、1–64 字符）；不合法时不回填到错误对象。
+ */
+function isSnakeCaseReasonCode(value) {
+  return typeof value === "string" && /^[a-z0-9_]{1,64}$/.test(value);
+}
 //@ chunk-kgtpkbhq.js:605-624 fingerprint = ANTHROPIC_VERSION (1)
 var ANTHROPIC_VERSION = "2023-06-01";
 //@ chunk-kgtpkbhq.js:624-783 facade-majority = oauthHeaders (0.762)
@@ -41,8 +48,10 @@ function oauthHeaders(accessToken) {
 /**
  * 错误结果是否为终止性（terminal===true）。
  */
-function isCreateSessionFailure(e) {
-  return e !== null && typeof e === "object" && "terminal" in e && e.terminal === true;
+function isCreateSessionFailure(failure) {
+  return (
+    failure !== null && typeof failure === "object" && "terminal" in failure && failure.terminal === true
+  );
 }
 //@ chunk-kgtpkbhq.js:869-1213 layout
 /**
@@ -58,11 +67,11 @@ function isGroupingRejection(body) {
   )
     return false;
   let error = body.error;
-  let r = "type" in error ? error.type : undefined;
+  let errorType = "type" in error ? error.type : undefined;
   let resourceType = "resource_type" in error ? error.resource_type : undefined;
   let reason = "reason" in error ? error.reason : undefined;
   return (
-    (r === "not_found_error" && resourceType === "session_grouping") ||
+    (errorType === "not_found_error" && resourceType === "session_grouping") ||
     reason === "public_grouping_hosted_only" ||
     reason === "feature_disabled"
   );
@@ -101,16 +110,16 @@ async function createCodeSession(
     }),
   };
   if (gitContext && "gitRepoUrl" in gitContext) {
-    let { buildGitSessionContext } = await import("./chunk-wx4f8343.js");
+    let { buildGitSessionContext } = await import("./gitSessionContext.js");
     let { sources, outcomes, report } = await buildGitSessionContext(
       gitContext.gitRepoUrl,
       gitContext.branch,
       gitContext.defaultBranch,
     );
     if (report.branchDropped && report.warnMessage) {
-      let j = `${report.branchDropped}:${gitContext.gitRepoUrl}:${gitContext.branch}`;
-      if (!warnState || warnState.lastKey !== j) {
-        if (warnState) warnState.lastKey = j;
+      let warnKey = `${report.branchDropped}:${gitContext.gitRepoUrl}:${gitContext.branch}`;
+      if (!warnState || warnState.lastKey !== warnKey) {
+        if (warnState) warnState.lastKey = warnKey;
         logForDebugging(`[code-session] ${report.warnMessage}`);
       }
     } else if (warnState) warnState.lastKey = null;
@@ -138,7 +147,7 @@ async function createCodeSession(
       {
         headers: oauthHeaders(accessToken),
         timeout: timeoutMs,
-        validateStatus: (h) => h < 500,
+        validateStatus: (status) => status < 500,
       },
     );
   } catch (err) {
@@ -205,15 +214,17 @@ async function createCodeSession(
 /**
  * 结果是否为终止性。
  */
-function isCredentialsFailure(e) {
-  return e !== null && "terminal" in e && e.terminal === true;
+function isCredentialsFailure(failure) {
+  return failure !== null && "terminal" in failure && failure.terminal === true;
 }
 //@ chunk-kgtpkbhq.js:3071-3156 facade-majority
 /**
  * 结果是否为非终止的 OAuth 拒绝（terminal===false）。
  */
-function isCredentialsRejection(e) {
-  return typeof e === "object" && e !== null && "terminal" in e && e.terminal === false;
+function isCredentialsRejection(failure) {
+  return (
+    typeof failure === "object" && failure !== null && "terminal" in failure && failure.terminal === false
+  );
 }
 //@ chunk-kgtpkbhq.js:3156-3302 facade-majority
 /**
@@ -228,8 +239,8 @@ function classifyElevatedAuthError(body) {
   return;
 }
 //@ chunk-kgtpkbhq.js:3302-3475 facade-majority
-function classifyElevatedAuthSubReason(e) {
-  let errorObject = getErrorObject(e);
+function classifyElevatedAuthSubReason(error) {
+  let errorObject = getErrorObject(error);
   return errorObject !== undefined &&
     "resource" in errorObject &&
     errorObject.resource === "untrusted_device" &&
@@ -287,15 +298,15 @@ function readUntrustedDeviceRefusal(body) {
 /**
  * 拒绝类型是否为 token_refused。
  */
-function shouldCloudSessionEnroll(e) {
-  return e.kind === "token_refused";
+function shouldCloudSessionEnroll(refusal) {
+  return refusal.kind === "token_refused";
 }
 //@ chunk-kgtpkbhq.js:4227-4278 facade-majority
 /**
  * 拒绝类型是否不是 signature_wanted（可以走注册设备流程）。
  */
-function shouldRemoteControlEnroll(e) {
-  return e.kind !== "signature_wanted";
+function shouldRemoteControlEnroll(refusal) {
+  return refusal.kind !== "signature_wanted";
 }
 //@ chunk-kgtpkbhq.js:4278-4345 facade-majority
 /**
@@ -309,22 +320,22 @@ var REFUSAL_BEHIND_NO_ENROLL = {
 /**
  * 从错误响应中取 reason / resource / sub_reason。
  */
-function refusalCodes(e) {
-  let errorObject = getErrorObject(e);
+function refusalCodes(error) {
+  let errorObject = getErrorObject(error);
   if (errorObject === undefined) return;
-  let r = {
+  let copy = {
     ...errorObject,
   };
   return {
-    reason: sanitizeSnakeField(r.reason),
-    resource: sanitizeSnakeField(r.resource),
-    subReason: sanitizeSnakeField(r.sub_reason),
+    reason: sanitizeSnakeField(copy.reason),
+    resource: sanitizeSnakeField(copy.resource),
+    subReason: sanitizeSnakeField(copy.sub_reason),
   };
 }
 //@ chunk-kgtpkbhq.js:4482-4581 layout
-function sanitizeSnakeField(e) {
-  if (e === undefined || e === null || e === "") return "";
-  return typeof e === "string" && isSnakeCaseReasonCode(e) ? e : undefined;
+function sanitizeSnakeField(value) {
+  if (value === undefined || value === null || value === "") return "";
+  return typeof value === "string" && isSnakeCaseReasonCode(value) ? value : undefined;
 }
 //@ chunk-kgtpkbhq.js:4581-4703 layout
 function getErrorObject(body) {
@@ -357,9 +368,9 @@ async function attachBridgeWorker(
   let url = `${baseUrl}/v1/code/sessions/${sessionId}/bridge`;
   let headers = oauthHeaders(accessToken);
   if (deviceToken) headers["X-Trusted-Device-Token"] = deviceToken;
-  let s;
+  let response;
   try {
-    s = await axios_default.post(
+    response = await axios_default.post(
       url,
       epochGuard === undefined
         ? {}
@@ -369,24 +380,24 @@ async function attachBridgeWorker(
       {
         headers,
         timeout: timeoutMs,
-        validateStatus: (i) => i < 500,
+        validateStatus: (status) => status < 500,
       },
     );
   } catch (err) {
     logForDebugging(`[code-session] /bridge request failed: ${errorMessage(err)}`);
     return null;
   }
-  if (s.status !== 200) {
-    let detail = extractErrorDetail(s.data);
-    logForDebugging(`[code-session] /bridge failed ${s.status}${detail ? `: ${detail}` : ""}`);
-    if (s.status === 401) {
-      if (lacksAuthorizationHeader(s.config)) return null;
+  if (response.status !== 200) {
+    let detail = extractErrorDetail(response.data);
+    logForDebugging(`[code-session] /bridge failed ${response.status}${detail ? `: ${detail}` : ""}`);
+    if (response.status === 401) {
+      if (lacksAuthorizationHeader(response.config)) return null;
       onAuth401?.();
     }
-    if (epochGuard !== undefined && s.status === 409) {
-      let errorObject = getErrorObject(s.data);
+    if (epochGuard !== undefined && response.status === 409) {
+      let errorObject = getErrorObject(response.data);
       let expectedEpoch = epochGuard.expectedEpoch;
-      let y = [
+      let epochs = [
         toSafeInteger(
           errorObject !== undefined && "expected_epoch" in errorObject
             ? errorObject.expected_epoch
@@ -397,31 +408,33 @@ async function attachBridgeWorker(
         ),
       ];
       epochGuard.onRefused(
-        y.includes(expectedEpoch) ? y.find((v) => v !== undefined && v > expectedEpoch) : undefined,
+        epochs.includes(expectedEpoch)
+          ? epochs.find((epoch) => epoch !== undefined && epoch > expectedEpoch)
+          : undefined,
       );
     }
-    let a;
-    if (s.status === 403) {
-      let l = classifyElevatedAuthError(s.data);
-      if (l === "untrusted_device") {
-        let untrustedDeviceRefusal = readUntrustedDeviceRefusal(s.data);
+    let requestIdSource;
+    if (response.status === 403) {
+      let elevatedKind = classifyElevatedAuthError(response.data);
+      if (elevatedKind === "untrusted_device") {
+        let untrustedDeviceRefusal = readUntrustedDeviceRefusal(response.data);
         return {
           terminal: true,
-          reason: l,
+          reason: elevatedKind,
           ...(untrustedDeviceRefusal && {
             refusal: untrustedDeviceRefusal,
           }),
         };
       }
-      if (l)
+      if (elevatedKind)
         return {
           terminal: true,
-          reason: l,
+          reason: elevatedKind,
         };
-      a = readRequestIdSource((h) => s.headers?.[h]);
-      logForDebugging(`[code-session] /bridge 403 source=${a}`);
+      requestIdSource = readRequestIdSource((headerName) => response.headers?.[headerName]);
+      logForDebugging(`[code-session] /bridge 403 source=${requestIdSource}`);
     }
-    switch (classifyHttpStatus(s.status)) {
+    switch (classifyHttpStatus(response.status)) {
       case "oauth_rejected":
         return {
           terminal: false,
@@ -433,14 +446,14 @@ async function attachBridgeWorker(
         return {
           terminal: true,
           reason: "request_rejected",
-          status: s.status,
-          ...(a && {
-            source: a,
+          status: response.status,
+          ...(requestIdSource && {
+            source: requestIdSource,
           }),
         };
     }
   }
-  let data = s.data;
+  let data = response.data;
   if (
     data === null ||
     typeof data !== "object" ||
@@ -480,12 +493,12 @@ async function attachBridgeWorker(
   };
 }
 //@ chunk-kgtpkbhq.js:6643-6745 placement
-function isValidSessionId(sessionId, n) {
+function isValidSessionId(sessionId, label) {
   try {
     validateBridgeId(sessionId, "sessionId");
     return true;
   } catch (error) {
-    logForDebugging(`[code-session] ${n}: ${errorMessage(error)}`);
+    logForDebugging(`[code-session] ${label}: ${errorMessage(error)}`);
     return false;
   }
 }
@@ -496,58 +509,65 @@ async function getCodeSession(baseUrl, accessToken, sessionId, timeout, options)
   if (!sessionEndpoint) return "invalid";
   let { url, headers, id } = sessionEndpoint;
   try {
-    let s = await axios_default.get(url, {
+    let response = await axios_default.get(url, {
       headers,
       timeout,
-      validateStatus: (i) => i < 500,
+      validateStatus: (status) => status < 500,
     });
-    if (s.status !== 200) {
-      let errorDetail = extractErrorDetail(s.data);
-      logForDebugging(`[code-session] Get ${id} failed ${s.status}${errorDetail ? `: ${errorDetail}` : ""}`);
-      return s.status;
+    if (response.status !== 200) {
+      let errorDetail = extractErrorDetail(response.data);
+      logForDebugging(
+        `[code-session] Get ${id} failed ${response.status}${errorDetail ? `: ${errorDetail}` : ""}`,
+      );
+      return response.status;
     }
     if (!options.useV2) {
-      let i = s.data;
+      let body = response.data;
       return {
-        ...i,
-        status: i?.status ?? i?.session_status,
-        id: typeof i?.id === "string" ? i.id : id,
+        ...body,
+        status: body?.status ?? body?.session_status,
+        id: typeof body?.id === "string" ? body.id : id,
       };
     }
-    let u = s.data;
-    let c = u?.response_shape ?? u?.session;
-    if (c && typeof c.id === "string")
+    let body = response.data;
+    let session = body?.response_shape ?? body?.session;
+    if (session && typeof session.id === "string")
       return {
-        ...c,
-        updated_at: "last_event_at" in c && typeof c.last_event_at === "string" ? c.last_event_at : undefined,
+        ...session,
+        updated_at:
+          "last_event_at" in session && typeof session.last_event_at === "string"
+            ? session.last_event_at
+            : undefined,
       };
     logForDebugging(`[code-session] Get ${id}: no session.id in 200 response`);
-    return s.status;
+    return response.status;
   } catch (error) {
     logForDebugging(`[code-session] Get ${id} failed: ${errorMessage(error)}`);
     return axios_default.isAxiosError(error) && error.code === "ECONNABORTED" ? "timeout" : "error";
   }
 }
 //@ chunk-kgtpkbhq.js:8005-8499 facade-majority
-async function updateCodeSession(baseUrl, accessToken, sessionId, f, timeout, options) {
+async function updateCodeSession(baseUrl, accessToken, sessionId, fields, timeout, options) {
   if (!isValidSessionId(sessionId, "Update")) return "invalid";
   let sessionEndpoint = buildSessionEndpoint("Update", baseUrl, accessToken, sessionId, options);
   if (!sessionEndpoint) return "invalid";
   let { url, headers, id } = sessionEndpoint;
-  let u = {
+  let requestConfig = {
     headers,
     timeout,
     validateStatus: () => true,
   };
   try {
-    let c = options.useV2 ? await axios_default.put(url, f, u) : await axios_default.patch(url, f, u);
-    if (c.status !== 200) {
-      let errorDetail = extractErrorDetail(c.data);
+    let response = options.useV2
+      ? await axios_default.put(url, fields, requestConfig)
+      : await axios_default.patch(url, fields, requestConfig);
+    if (response.status !== 200) {
+      let errorDetail = extractErrorDetail(response.data);
       logForDebugging(
-        `[code-session] Update ${id} failed ${c.status}${errorDetail ? `: ${errorDetail}` : ""}`,
+        `[code-session] Update ${id} failed ${response.status}${errorDetail ? `: ${errorDetail}` : ""}`,
       );
     }
-    return c.status;
+    return response.status;
   } catch (error) {
     logForDebugging(`[code-session] Update ${id} failed: ${errorMessage(error)}`);
     return axios_default.isAxiosError(error) && error.code === "ECONNABORTED" ? "timeout" : "error";
@@ -586,9 +606,9 @@ async function unarchiveCodeSession(baseUrl, accessToken, sessionId, timeoutMs, 
 /**
  * 从桥接 worker 的启动参数里取 mcp_config.content（必须是非空字符串），否则返回 undefined。
  */
-function extractMcpConfigContent(e) {
-  if (!("mcp_config" in e)) return;
-  let mcpConfig = e.mcp_config;
+function extractMcpConfigContent(body) {
+  if (!("mcp_config" in body)) return;
+  let mcpConfig = body.mcp_config;
   if (
     mcpConfig !== null &&
     typeof mcpConfig === "object" &&
@@ -606,15 +626,8 @@ function extractMcpConfigContent(e) {
  * 字符串或数字转成安全整数，否则 undefined。
  */
 function toSafeInteger(workerEpoch) {
-  let n = typeof workerEpoch === "string" ? Number(workerEpoch) : workerEpoch;
-  return typeof n === "number" && Number.isSafeInteger(n) ? n : undefined;
-}
-//@ chunk-jt8zq468.js:191-263 placement
-/**
- * 判断字符串是否为安全的 reason code（小写字母数字下划线、1–64 字符）；不合法时不回填到错误对象。
- */
-function isSnakeCaseReasonCode(n) {
-  return typeof n === "string" && /^[a-z0-9_]{1,64}$/.test(n);
+  let value = typeof workerEpoch === "string" ? Number(workerEpoch) : workerEpoch;
+  return typeof value === "number" && Number.isSafeInteger(value) ? value : undefined;
 }
 export {
   shouldCloudSessionEnroll,
@@ -625,12 +638,15 @@ export {
   createCodeSession,
   isCreateSessionFailure,
   isCredentialsRejection,
+  isValidSessionId,
+  shouldRemoteControlEnroll,
   isCredentialsFailure,
   attachBridgeWorker,
-  shouldRemoteControlEnroll,
-  isValidSessionId,
   archiveCodeSession,
   unarchiveCodeSession,
   REFUSAL_BEHIND_NO_ENROLL,
   refusalCodes,
+  classifyElevatedAuthSubReason,
+  getCodeSession,
+  updateCodeSession,
 };

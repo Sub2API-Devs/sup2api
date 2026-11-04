@@ -21,61 +21,62 @@ import { logFeatureOk, logFeatureBad, logFeatureSad } from "../analytics/feature
 import { logEvent } from "../analytics/index.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
 import { INTERRUPT_SEND_NOW_V1 } from "../../utils/messages/systemInit.js";
 import { parseThinClientReply } from "../../cli/thinClient.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 import { REMOTE_TOOLS_LOG_EVENTS } from "../remoteTools/remoteToolsDebug.js";
 import { TICK } from "../../constants/xml.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-08945j39.js:4170-4321 placement
 /**
  * 瘦客户端帧处理：更新等待完成与前台状态，返回后台任务结束与任务生命周期帧判断结果。
  */
-function trackThinClientFrame(e, n) {
-  trackBackgroundTask(e.awaitingFinish, n);
-  isSystemInitMessage(e.foreground, n);
+function trackThinClientFrame(frame, server) {
+  trackBackgroundTask(frame.awaitingFinish, server);
+  isSystemInitMessage(frame.foreground, server);
   return {
-    backgroundTaskEnded: emitTaskTerminatedSdk(e.awaitingFinish, n),
-    isTaskLifecycleFrame: toBackgroundTaskEvent(e.running, n),
+    backgroundTaskEnded: emitTaskTerminatedSdk(frame.awaitingFinish, server),
+    isTaskLifecycleFrame: toBackgroundTaskEvent(frame.running, server),
   };
 }
 //@ chunk-08945j39.js:4321-4395 placement
 /**
  * 把任务/子代理类型等标签清洗成可展示文本（限长）。
  */
-function sanitizeLabel(e) {
-  return typeof e === "string"
-    ? sanitizeDisplayText(e, {
+function sanitizeLabel(value) {
+  return typeof value === "string"
+    ? sanitizeDisplayText(value, {
         maxCodeUnits: MAX_TITLE_LENGTH,
       })
     : undefined;
 }
 //@ chunk-08945j39.js:4395-4531 placement
-function toBackgroundTaskInfo(id, n, subagentType) {
+function toBackgroundTaskInfo(id, task, subagentType) {
   return {
     id,
-    taskType: sanitizeLabel(n.task_type),
+    taskType: sanitizeLabel(task.task_type),
     subagentType: sanitizeLabel(subagentType),
-    description: sanitizeLabel(n.description) ?? "",
-    ambient: n.ambient === true,
+    description: sanitizeLabel(task.description) ?? "",
+    ambient: task.ambient === true,
   };
 }
 //@ chunk-08945j39.js:4531-4737 placement
 /**
  * 比较两个后台任务列表（id、类型、子代理类型、描述、ambient）是否相同。
  */
-function sameBackgroundTaskList(remoteBackgroundTasks, n) {
+function sameBackgroundTaskList(remoteBackgroundTasks, remote) {
   return (
-    remoteBackgroundTasks.length === n.length &&
+    remoteBackgroundTasks.length === remote.length &&
     remoteBackgroundTasks.every(
-      (s, i) =>
-        s.id === n[i]?.id &&
-        s.taskType === n[i]?.taskType &&
-        s.subagentType === n[i]?.subagentType &&
-        s.description === n[i]?.description &&
-        s.ambient === n[i]?.ambient,
+      (left, right) =>
+        left.id === remote[right]?.id &&
+        left.taskType === remote[right]?.taskType &&
+        left.subagentType === remote[right]?.subagentType &&
+        left.description === remote[right]?.description &&
+        left.ambient === remote[right]?.ambient,
     )
   );
 }
@@ -88,7 +89,8 @@ var PROGRESS_UPDATE_MS = 1e4;
 var TYPED_AHEAD_GRACE_MS = 2000;
 var DEFAULT_TYPED_AHEAD_GRACE_MS = TYPED_AHEAD_GRACE_MS;
 var SENDING_SETTINGS_TEXT = "Sending this machine's settings \u2014 Esc cancels the message\u2026";
-var stillSendingText = (e) => `Still sending this machine's settings (${Math.round(e / 1000)} s)\u2026`;
+var stillSendingText = (value) =>
+  `Still sending this machine's settings (${Math.round(value / 1000)} s)\u2026`;
 var MESSAGE_NOT_SENT_TEXT =
   "That message was not sent; this machine's settings are still on their way to the cloud session, and your next message waits for them too.";
 var STOPPED_WAITING_TEXT =
@@ -102,7 +104,7 @@ var SEND_MAYBE_FAILED_TEXT =
  * 首条消息发送前等待本机设置上传完成，超时/失败后放行
  */
 function holdFirstSendForSettings(
-  e,
+  state,
   {
     retire,
     noticeAfterMs = HOME_SEED_SEND_TEXTS,
@@ -111,89 +113,90 @@ function holdFirstSendForSettings(
     now = Date.now,
   },
 ) {
-  let h = (E) => e.failureAnsweredAtMs !== undefined && E - e.failureAnsweredAtMs >= typedAheadGraceMs;
-  let v = e.outcome();
-  if (v !== undefined && (getFirstSendHold(v) === undefined || h(now()))) {
-    if (getFirstSendHold(v) !== undefined)
+  let pastGrace = (nowMs) =>
+    state.failureAnsweredAtMs !== undefined && nowMs - state.failureAnsweredAtMs >= typedAheadGraceMs;
+  let outcome = state.outcome();
+  if (outcome !== undefined && (getFirstSendHold(outcome) === undefined || pastGrace(now()))) {
+    if (getFirstSendHold(outcome) !== undefined)
       logFirstSendOutcome(
-        getFirstSendGate(v) === "hold_unsure" ? "ungated_after_timeout" : "ungated_after_failure",
+        getFirstSendGate(outcome) === "hold_unsure" ? "ungated_after_timeout" : "ungated_after_failure",
       );
     return null;
   }
-  let w = false;
-  let R = 0;
-  let y;
-  let b = false;
-  e.completion.then(
-    (E) => {
-      if (getFirstSendHold(E) !== undefined) e.failureAnsweredAtMs ??= now();
+  let seeingFailure = false;
+  let progressUsers = 0;
+  let progressController;
+  let stopNoticeShown = false;
+  state.completion.then(
+    (completed) => {
+      if (getFirstSendHold(completed) !== undefined) state.failureAnsweredAtMs ??= now();
     },
     () => {},
   );
-  let k = (E, L, A, j, ne) => {
-    let G = E === undefined ? undefined : getFirstSendHold(E);
-    if (G !== undefined && (L || !h(A))) {
-      e.failureAnsweredAtMs ??= now();
-      w = true;
+  let decide = (outcome, cameBack, waitStartedAt, atExit, alreadyResent) => {
+    let hold = outcome === undefined ? undefined : getFirstSendHold(outcome);
+    if (hold !== undefined && (cameBack || !pastGrace(waitStartedAt))) {
+      state.failureAnsweredAtMs ??= now();
+      seeingFailure = true;
       logFirstSendOutcome(
-        j
+        atExit
           ? "came_back_at_exit"
-          : L
+          : cameBack
             ? "came_back_waited"
-            : now() - (e.settledAtMs() ?? now()) < typedAheadGraceMs
+            : now() - (state.settledAtMs() ?? now()) < typedAheadGraceMs
               ? "came_back_early"
               : "came_back_late",
       );
-      return G;
+      return hold;
     }
-    logFirstSendOutcome(describeFirstSendOutcome(E, w ? "resent" : "unasked"));
+    logFirstSendOutcome(describeFirstSendOutcome(outcome, seeingFailure ? "resent" : "unasked"));
     retire();
     return;
   };
-  let P = async (signal) => {
-    let L = now();
+  let runProgress = async (signal) => {
+    let startedAt = now();
     await sleep(noticeAfterMs, signal);
-    for (let A = false; !signal.aborted; A = true) {
-      e.status.publish(A ? stillSendingText(now() - L) : SENDING_SETTINGS_TEXT, "progress");
+    for (let later = false; !signal.aborted; later = true) {
+      state.status.publish(later ? stillSendingText(now() - startedAt) : SENDING_SETTINGS_TEXT, "progress");
       await sleep(progressEveryMs, signal);
     }
   };
-  let q = () => {
-    R += 1;
-    if (y === undefined) {
+  let acquireProgress = () => {
+    progressUsers += 1;
+    if (progressController === undefined) {
       let abortController = new AbortController();
-      y = abortController;
-      e.completion.then(
+      progressController = abortController;
+      state.completion.then(
         () => abortController.abort(),
         () => abortController.abort(),
       );
-      P(abortController.signal);
+      runProgress(abortController.signal);
     }
     return () => {
-      R -= 1;
-      if (R === 0 && e.outcome() === undefined) {
-        y?.abort();
-        y = undefined;
+      progressUsers -= 1;
+      if (progressUsers === 0 && state.outcome() === undefined) {
+        progressController?.abort();
+        progressController = undefined;
       }
     };
   };
-  let fe = (passed) => {
-    let L = passed.then((A) => (A ? q() : undefined));
-    return () => void L.then((A) => A?.());
+  let fromPromise = (passed) => {
+    let release = passed.then((proceed) => (proceed ? acquireProgress() : undefined));
+    return () => void release.then((releaseFn) => releaseFn?.());
   };
-  return async (E) => {
-    let { released, withdrawn, exiting, final, decided } = E;
-    let Y = now();
-    let X = e.outcome();
-    if (X !== undefined) {
-      let K = k(X, false, Y, false, false);
-      if (K !== undefined) logFirstSendWait(0, "upload_failed", false);
-      return K;
+  return async (signals) => {
+    let { released, withdrawn, exiting, final, decided } = signals;
+    let startedAt = now();
+    let outcome = state.outcome();
+    if (outcome !== undefined) {
+      let decision = decide(outcome, false, startedAt, false, false);
+      if (decision !== undefined) logFirstSendWait(0, "upload_failed", false);
+      return decision;
     }
-    let z = undefined;
-    let B = z !== undefined;
-    let V = () => now() - Y;
-    let se = e.completion.then(
+    let precomputed = undefined;
+    let usedPrecompute = precomputed !== undefined;
+    let waitedMs = () => now() - startedAt;
+    let settledPromise = state.completion.then(
       (settled) => ({
         settled,
       }),
@@ -201,61 +204,65 @@ function holdFirstSendForSettings(
         settled: undefined,
       }),
     );
-    let Q = z === undefined ? q() : fe(z.passed);
+    let releaseProgress = precomputed === undefined ? acquireProgress() : fromPromise(precomputed.passed);
     let winner = await Promise.race([
-      se,
+      settledPromise,
       released.then(() => "released"),
       withdrawn.then(() => "withdrawn"),
       decided.then(() => "decided"),
     ]);
-    Q();
-    let M = winner === "released" && exiting();
-    if (M) {
-      winner = await Promise.race([se, withdrawn.then(() => "withdrawn"), decided.then(() => "decided")]);
+    releaseProgress();
+    let releasedAtExit = winner === "released" && exiting();
+    if (releasedAtExit) {
+      winner = await Promise.race([
+        settledPromise,
+        withdrawn.then(() => "withdrawn"),
+        decided.then(() => "decided"),
+      ]);
       if (typeof winner === "object" && !final()) {
-        logFirstSendWait(V(), "upload_settled", B);
+        logFirstSendWait(waitedMs(), "upload_settled", usedPrecompute);
         logFirstSendOutcome(describeFirstSendOutcome(winner.settled, "handover"));
         retire();
         return;
       }
     }
     if (winner === "decided") {
-      logFirstSendWait(V(), "decided", B);
+      logFirstSendWait(waitedMs(), "decided", usedPrecompute);
       return;
     }
     if (winner === "released") {
-      if (!b && !B) {
-        b = true;
+      if (!stopNoticeShown && !usedPrecompute) {
+        stopNoticeShown = true;
         setTimeout(() => {
-          b = false;
+          stopNoticeShown = false;
         }, 0);
-        e.status.publish(MESSAGE_NOT_SENT_TEXT, "info");
+        state.status.publish(MESSAGE_NOT_SENT_TEXT, "info");
       }
-      logFirstSendWait(V(), "released", B);
+      logFirstSendWait(waitedMs(), "released", usedPrecompute);
       return {
         go: false,
         reason: STOPPED_WAITING_TEXT,
       };
     }
     if (winner === "withdrawn") {
-      logFirstSendWait(V(), "withdrawn", B);
+      logFirstSendWait(waitedMs(), "withdrawn", usedPrecompute);
       return {
         go: false,
         reason: WITHDRAWN_TEXT,
       };
     }
-    let O = k(winner.settled, true, Y, M, B);
-    logFirstSendWait(V(), O === undefined ? "upload_settled" : "upload_failed", B);
-    return O;
+    let decision = decide(winner.settled, true, startedAt, releasedAtExit, usedPrecompute);
+    logFirstSendWait(waitedMs(), decision === undefined ? "upload_settled" : "upload_failed", usedPrecompute);
+    return decision;
   };
 }
 //@ chunk-08945j39.js:7489-7796 placement
 /**
  * 根据设置上传结果决定首条消息能否发送：上传失败/满/不可用/未授权为 hold_failed，超时为 hold_unsure，其余放行。
  */
-function getFirstSendGate(e) {
-  if (e.kind !== "uploaded") return "go";
-  switch (e.outcome) {
+function getFirstSendGate(state) {
+  if (state.kind !== "uploaded") return "go";
+  switch (state.outcome) {
     case "failed":
     case "lane_full":
     case "unavailable":
@@ -273,8 +280,8 @@ function getFirstSendGate(e) {
   }
 }
 //@ chunk-08945j39.js:7796-7926 placement
-function getFirstSendHold(e) {
-  switch (getFirstSendGate(e)) {
+function getFirstSendHold(state) {
+  switch (getFirstSendGate(state)) {
     case "go":
       return;
     case "hold_failed":
@@ -290,31 +297,31 @@ function getFirstSendHold(e) {
   }
 }
 //@ chunk-08945j39.js:7926-8112 placement
-function describeFirstSendOutcome(e, n) {
-  if (e === undefined) return "upload_rejected";
-  switch (getFirstSendGate(e)) {
+function describeFirstSendOutcome(state, held) {
+  if (state === undefined) return "upload_rejected";
+  switch (getFirstSendGate(state)) {
     case "go":
       return "went";
     case "hold_failed":
-      return `ran_without_settings_${n}`;
+      return `ran_without_settings_${held}`;
     case "hold_unsure":
-      return `ran_unsure_${n}`;
+      return `ran_unsure_${held}`;
   }
 }
 //@ chunk-08945j39.js:8112-8279 placement
-function logFirstSendOutcome(e) {
-  if (e === "went") logFeatureOk("ccr_home_seed_first_message");
-  else if (e === "upload_rejected") logFeatureBad("ccr_home_seed_first_message", e);
-  else logFeatureSad("ccr_home_seed_first_message", e);
+function logFirstSendOutcome(outcome) {
+  if (outcome === "went") logFeatureOk("ccr_home_seed_first_message");
+  else if (outcome === "upload_rejected") logFeatureBad("ccr_home_seed_first_message", outcome);
+  else logFeatureSad("ccr_home_seed_first_message", outcome);
 }
 //@ chunk-08945j39.js:8279-8365 placement
 /**
  * 记录“首条发送等待设置上传”的埋点。
  */
-function logFirstSendWait(heldMs, n, s) {
+function logFirstSendWait(heldMs, release, waitedMs) {
   logEvent("tengu_home_seed_first_send_wait", {
     held_ms: heldMs,
-    release: fromEnum(n),
+    release: fromEnum(release),
     ...{},
   });
 }
@@ -335,40 +342,44 @@ function defaultHoldBudgetMs(subtype, timeoutMs) {
 /**
  * 空实现（保留调用点）。
  */
-function noopGuard(e, n, s) {
+function noopGuard(unused1, unused2, unused3) {
   return;
 }
 //@ chunk-08945j39.js:8606-8705 placement
 /**
  * 瘦客户端 interrupt 回复的 schema。
  */
-var thinClientInterruptReplySchema = DoctorLazy(() =>
-  u({
-    send_now: _enum(["stopped", "delivering", "nothing_waiting"]).optional().catch(undefined),
-  }),
-);
+var thinClientInterruptReplySchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-08945j39.js:8606", () => {
+  thinClientInterruptReplySchema = DoctorLazy(() =>
+    objectSchema({
+      send_now: _enum(["stopped", "delivering", "nothing_waiting"]).optional().catch(undefined),
+    }),
+  );
+});
 //@ chunk-08945j39.js:8705-8788 placement
 /**
  * 云会话是否声明支持 interrupt + send_now。
  */
-function supportsSendNow(e) {
-  return Array.isArray(e.capabilities) && e.capabilities.includes(INTERRUPT_SEND_NOW_V1);
+function supportsSendNow(server) {
+  return Array.isArray(server.capabilities) && server.capabilities.includes(INTERRUPT_SEND_NOW_V1);
 }
 //@ chunk-08945j39.js:8788-9046 placement
 /**
  * 向云会话发 interrupt 并 send_now 请求，返回 send_now 结果；请求失败记日志返回 failed。
  */
-async function requestSendNow(e, n) {
+async function requestSendNow(send, options) {
   try {
-    let s = await e({
+    let response = await send({
       subtype: "interrupt",
       send_now: true,
-      ...(n !== undefined && {
-        message_uuid: n,
+      ...(options !== undefined && {
+        message_uuid: options,
       }),
     });
     return (
-      parseThinClientReply("interrupt", thinClientInterruptReplySchema(), s ?? {})?.send_now ?? "stopped"
+      parseThinClientReply("interrupt", thinClientInterruptReplySchema(), response ?? {})?.send_now ??
+      "stopped"
     );
   } catch (error) {
     logForDebugging(`[thin-client] send-now request failed: ${errorMessage(error)}`, {
@@ -378,54 +389,66 @@ async function requestSendNow(e, n) {
   }
 }
 //@ chunk-08945j39.js:9046-9225 placement
-var FORWARDED_CONTROL_REQUESTS = [
-  "can_use_tool",
-  "request_user_dialog",
-  "hook_callback",
-  ...REMOTE_TOOLS_LOG_EVENTS,
-];
-var HOST_HANDLED_CONTROL_REQUESTS = [
-  "elicitation",
-  "mcp_message",
-  "oauth_token_refresh",
-  "host_auth_token_refresh",
-  "remote_control_work_secret",
-];
+var FORWARDED_CONTROL_REQUESTS; // deferred: uses REMOTE_TOOLS_LOG_EVENTS (../remoteTools/remoteToolsDebug.js) of its import cycle while loading; runs once the cycle is complete
+var HOST_HANDLED_CONTROL_REQUESTS;
+deferInit("chunk-08945j39.js:9046", () => {
+  FORWARDED_CONTROL_REQUESTS = [
+    "can_use_tool",
+    "request_user_dialog",
+    "hook_callback",
+    ...REMOTE_TOOLS_LOG_EVENTS,
+  ];
+  HOST_HANDLED_CONTROL_REQUESTS = [
+    "elicitation",
+    "mcp_message",
+    "oauth_token_refresh",
+    "host_auth_token_refresh",
+    "remote_control_work_secret",
+  ];
+});
 //@ chunk-08945j39.js:9262-9330 placement
-var regExp = new RegExp(`<${TICK}[\\s>]`, "i");
-var regExp_2 = new RegExp(`</${TICK}>`, "i");
+var regExp; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var regExp_2;
+deferInit("chunk-08945j39.js:9262", () => {
+  regExp = new RegExp(`<${TICK}[\\s>]`, "i");
+  regExp_2 = new RegExp(`</${TICK}>`, "i");
+});
 //@ chunk-08945j39.js:9330-9375 placement
 /**
  * 判断一帧是否属于可透传的消息类型。
  */
-function isForwardedFrame(e) {
-  return regExp.test(e) && regExp_2.test(e);
+function isForwardedFrame(frame) {
+  return regExp.test(frame) && regExp_2.test(frame);
 }
 //@ chunk-08945j39.js:9375-9672 placement
 /**
  * 瘦客户端转发的消息类型，以及各 system 子类型允许透传的字段。
  */
-var FORWARDED_MESSAGE_TYPES = new Set(["user", "env_manager_log"]);
-var SYSTEM_SUBTYPE_FIELDS = new Map([
-  ["thinking_tokens", ["estimated_tokens", "estimated_tokens_delta", "user_message_uuid"]],
-  ["post_turn_summary", ["summarizes_uuid", "status_category", "status_detail", "needs_action"]],
-  ["task_summary", ["detail"]],
-  ["commands_changed", ["commands"]],
-]);
+var FORWARDED_MESSAGE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SYSTEM_SUBTYPE_FIELDS;
+deferInit("chunk-08945j39.js:9375", () => {
+  FORWARDED_MESSAGE_TYPES = new Set(["user", "env_manager_log"]);
+  SYSTEM_SUBTYPE_FIELDS = new Map([
+    ["thinking_tokens", ["estimated_tokens", "estimated_tokens_delta", "user_message_uuid"]],
+    ["post_turn_summary", ["summarizes_uuid", "status_category", "status_detail", "needs_action"]],
+    ["task_summary", ["detail"]],
+    ["commands_changed", ["commands"]],
+  ]);
+});
 //@ chunk-08945j39.js:9672-9903 placement
 function pickSystemMessageFields(payload) {
   let subtype = payload.subtype;
   if (payload.type !== "system" || typeof subtype !== "string") return null;
-  let s = SYSTEM_SUBTYPE_FIELDS.get(subtype);
-  if (!s) return null;
-  let i = {
+  let msgPayload = SYSTEM_SUBTYPE_FIELDS.get(subtype);
+  if (!msgPayload) return null;
+  let value = {
     type: "system",
     subtype,
     uuid: payload.uuid,
     session_id: payload.session_id,
   };
-  for (let r of s) if (r in payload) i[r] = payload[r];
-  return i;
+  for (let fieldValue of msgPayload) if (fieldValue in payload) value[fieldValue] = payload[fieldValue];
+  return value;
 }
 //@ chunk-08945j39.js:9903-9914 placement
 /**

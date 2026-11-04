@@ -14,7 +14,7 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { createSignal } from "../../utils/signal.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { env } from "../../utils/env.js";
@@ -51,61 +51,62 @@ class TerminalTitleController {
   #r;
   #c = false;
   #i = false;
-  constructor(h) {
-    this.#t = h;
-    this.#s = terminalTitleFromRename(h.store);
-    this.#r = h.store.getState().remoteSessionName;
+  constructor(options) {
+    this.#t = options;
+    this.#s = terminalTitleFromRename(options.store);
+    this.#r = options.store.getState().remoteSessionName;
     this.#n = this.#l();
   }
   connect() {
     if (this.#c || this.#i) return;
     this.#c = true;
-    let h = this.#t;
+    let sources = this.#t;
     this.#o.push(
       subscribeSessionTitleChanged(this.#a),
-      h.session.subscribe(this.#a),
-      h.sessionController.subscribe(this.#a),
-      h.scope.subscribe(this.#a),
-      h.store.subscribe(() => {
-        let x = terminalTitleFromRename(h.store);
-        let remoteSessionName = h.store.getState().remoteSessionName;
-        if (x === this.#s && remoteSessionName === this.#r) return;
-        this.#s = x;
+      sources.session.subscribe(this.#a),
+      sources.sessionController.subscribe(this.#a),
+      sources.scope.subscribe(this.#a),
+      sources.store.subscribe(() => {
+        let renamedTitle = terminalTitleFromRename(sources.store);
+        let remoteSessionName = sources.store.getState().remoteSessionName;
+        if (renamedTitle === this.#s && remoteSessionName === this.#r) return;
+        this.#s = renamedTitle;
         this.#r = remoteSessionName;
         this.#a();
       }),
     );
     this.#a();
   }
-  subscribe = (h) => this.#e.subscribe(h);
+  subscribe = (listener) => this.#e.subscribe(listener);
   getSnapshot = () => this.#n;
   dispose = () => {
     this.#i = true;
     this.#c = false;
-    for (let h of this.#o.splice(0)) h();
+    for (let unsubscribe of this.#o.splice(0)) unsubscribe();
   };
   #a = () => {
-    let h = this.#l();
-    let x = this.#n;
-    if (TERMINAL_TITLE_SOURCES.every((D) => Object.is(h[D], x[D]))) return;
-    this.#n = h;
+    let nextTitle = this.#l();
+    let currentTitle = this.#n;
+    if (TERMINAL_TITLE_SOURCES.every((source) => Object.is(nextTitle[source], currentTitle[source]))) return;
+    this.#n = nextTitle;
     this.#e.emit();
   };
   #l() {
     let { session, sessionController, scope, disabled } = this.#t;
-    let ee = this.#s ? getCurrentSessionTitle(session.id) : undefined;
+    let sessionTitle = this.#s ? getCurrentSessionTitle(session.id) : undefined;
     let currentSessionAiTitle = getCurrentSessionAiTitle(session.id);
     let { haikuTitle } = sessionController.getSnapshot();
     let agentType = scope.getSnapshot().mainThreadAgentDefinition?.agentType;
-    let He = this.#s ? this.#r : undefined;
+    let serviceName = this.#s ? this.#r : undefined;
     return {
       disabled,
-      serviceName: He,
-      sessionTitle: ee,
+      serviceName,
+      sessionTitle,
       aiSessionTitle: currentSessionAiTitle,
       agentTitle: agentType,
       haikuTitle,
-      terminalTitle: He ?? ee ?? currentSessionAiTitle ?? agentType ?? haikuTitle ?? DEFAULT_TITLE,
+      terminalTitle:
+        serviceName ?? sessionTitle ?? currentSessionAiTitle ?? agentType ?? haikuTitle ?? DEFAULT_TITLE,
     };
   }
 }

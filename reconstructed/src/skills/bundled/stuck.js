@@ -14,7 +14,7 @@ import { parseFrontmatter } from "../../utils/frontmatterParser.js";
 
 //@ chunk-hantmvxa.js:100182-100233 sole-consumer
 function loadDatavizSkillFiles() {
-  return import("./chunk-a4mpfcn7.js");
+  return import("./SKILL_FILES_3.lazy.js");
 }
 //@ chunk-hantmvxa.js:100233-101745 affinity
 /**
@@ -33,17 +33,17 @@ function registerDatavizSkill() {
     description: DATAVIZ_DESCRIPTION,
     userInvocable: true,
     files: () => loadDatavizSkillFiles().then((datavizSkillFiles) => datavizSkillFiles.SKILL_FILES),
-    async getPromptForCommand(n) {
+    async getPromptForCommand(args) {
       let { SKILL_MD } = await loadDatavizSkillFiles();
-      let r = [parseFrontmatter(SKILL_MD).content.trimStart()];
-      if (n)
-        r.push(`## User Request
+      let parts = [parseFrontmatter(SKILL_MD).content.trimStart()];
+      if (args)
+        parts.push(`## User Request
 
-${n}`);
+${args}`);
       return [
         {
           type: "text",
-          text: r.join(`
+          text: parts.join(`
 
 `),
         },

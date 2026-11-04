@@ -24,24 +24,24 @@ var LIVENESS_GRACE_MS = 500;
 /**
  * 导出函数 `watchLiveness`：参数 e。
  */
-function watchLiveness(e) {
-  setInterval(checkAndShutdown, LIVENESS_INTERVAL_MS, e).unref();
+function watchLiveness(config) {
+  setInterval(checkAndShutdown, LIVENESS_INTERVAL_MS, config).unref();
 }
 //@ chunk-66nm9g6r.js:11879-12015 placement
-async function isRunnerProcessAlive(e) {
-  let o = await provenSameProcessAsync(e.pid, e.procStart);
-  if (o === undefined) {
+async function isRunnerProcessAlive(proc) {
+  let alive = await provenSameProcessAsync(proc.pid, proc.procStart);
+  if (alive === undefined) {
     await sleep(LIVENESS_GRACE_MS);
-    o = await provenSameProcessAsync(e.pid, e.procStart);
+    alive = await provenSameProcessAsync(proc.pid, proc.procStart);
   }
-  return o === true && !(await hasExitedUnreapedOrGone(e));
+  return alive === true && !(await hasExitedUnreapedOrGone(proc));
 }
 //@ chunk-66nm9g6r.js:12015-12104 placement
-async function hasExitedUnreapedOrGone(e) {
+async function hasExitedUnreapedOrGone(proc) {
   return (
-    isProcessProvablyGone(e.pid) ||
-    (await hasExitedUnreaped(e.pid)) ||
-    (await provenSameProcessAsync(e.pid, e.procStart)) === false
+    isProcessProvablyGone(proc.pid) ||
+    (await hasExitedUnreaped(proc.pid)) ||
+    (await provenSameProcessAsync(proc.pid, proc.procStart)) === false
   );
 }
 //@ chunk-66nm9g6r.js:12104-12159 placement
@@ -53,6 +53,7 @@ function writeInitSystemLine() {
 `);
 }
 //@ chunk-66nm9g6r.js:12159-12199 placement
-async function checkAndShutdown(e) {
-  if (await hasExitedUnreapedOrGone(e)) gracefulShutdown(0);
+async function checkAndShutdown(config) {
+  if (await hasExitedUnreapedOrGone(config)) gracefulShutdown(0);
 }
+export { watchLiveness, isRunnerProcessAlive, writeInitSystemLine };

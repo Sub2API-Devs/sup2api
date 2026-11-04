@@ -24,12 +24,10 @@ import { UNLIMITED_RATE_LIMITER } from "../../../tasks/taskLoopRegistry.js";
 import { NOOP_NOTIFICATION_DRAIN } from "../../../services/queuedNotifications/queuedNotifications.js";
 import { NOOP_FUNCTION_HOOK_REGISTRY } from "../../../utils/hooks/functionHookNoop.js";
 import { artifactReadObservationIn } from "../../../services/artifacts/readObservation.js";
-import {
-  createEmptyArtifactSessionStores,
-  NO_OP_COLOR_ASSIGNER,
-  Jce,
-} from "../../../services/artifacts/artifactReadConsent.js";
+import { createEmptyArtifactSessionStores } from "../../../services/artifacts/artifactReadConsent.js";
 import { NOOP_AGENT_NAME_REGISTRY } from "../../../utils/agentNameRegistry.js";
+import { NO_OP_COLOR_ASSIGNER } from "../../../tools/AgentTool/agentColorManager.js";
+import { NO_BRIDGE_CONSENT } from "../../../screens/repl/bridgeChannelSlot.js";
 import { isUnattendedOwnRecord } from "./servedPermissionDecision.js";
 import { unattendedStanceKind } from "./servedSafetyChecks.js";
 import { unattendedServingConsented } from "../../../services/remoteTools/unattendedConsentStore.js";
@@ -41,14 +39,18 @@ import { clipFullOutput } from "./servedShellSettings.js";
 import { unreadableSpillNote } from "./outputSpill.js";
 import { logError } from "../../../utils/log.js";
 import { violinFholeEnabled } from "../../../utils/sandbox/sandboxDefaultPolicy.js";
+import { beginDeferredInits } from "../../../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 3 modules closed by ./serveCall.js;
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("src/remote/tools/serve/serveCall.js");
 //@ chunk-ad2e1aj6.js:29729-29810 placement
 function stoppedBeforeStartReason(clock) {
   return clock.timedOut ? "deadline" : clock.shuttingDown() ? "shutdown" : "cancel";
 }
 //@ chunk-ad2e1aj6.js:29810-30000 placement
-function timedOutOrCancelled(e) {
-  let { target, facts, targetName, clock, notes } = e;
+function timedOutOrCancelled(context) {
+  let { target, facts, targetName, clock, notes } = context;
   return {
     ...failedEnvelope(
       target,
@@ -66,16 +68,16 @@ function timedOutOrCancelled(e) {
   };
 }
 //@ chunk-ad2e1aj6.js:30000-30172 placement
-function stoppedBeforeStart(e) {
-  let { target, facts, targetName, clock } = e;
-  let i = stoppedBeforeStartReason(clock);
+function stoppedBeforeStart(request) {
+  let { target, facts, targetName, clock } = request;
+  let stopReason = stoppedBeforeStartReason(clock);
   return {
     ...failedEnvelope(
       target,
       facts,
-      i === "deadline" ? "timed_out" : "cancelled",
+      stopReason === "deadline" ? "timed_out" : "cancelled",
       stoppedBeforeStartMessage({
-        stoppedBy: i,
+        stoppedBy: stopReason,
         targetName,
       }),
     ),
@@ -83,19 +85,19 @@ function stoppedBeforeStart(e) {
   };
 }
 //@ chunk-ad2e1aj6.js:30172-31203 placement
-function callNotRunEnvelope(e) {
-  let { target, facts, targetName, clock } = e;
-  let i = {
-    notes: e.notes.lines(),
+function callNotRunEnvelope(request) {
+  let { target, facts, targetName, clock } = request;
+  let envelopeOptions = {
+    notes: request.notes.lines(),
   };
-  if (!isPermissionGranted(e)) {
-    let y = clock.timedOut
+  if (!isPermissionGranted(request)) {
+    let envelope = clock.timedOut
       ? failedEnvelope(
           target,
           facts,
           "timed_out",
           `The call was stopped on ${targetName} at its deadline before the command started (a hook or an approval was still pending) \u2014 nothing ran.`,
-          i,
+          envelopeOptions,
         )
       : failedEnvelope(
           target,
@@ -104,14 +106,14 @@ function callNotRunEnvelope(e) {
           clock.shuttingDown()
             ? `The call was stopped because Claude Code on ${targetName} is shutting down, before the command started \u2014 nothing ran.`
             : `The call was cancelled on ${targetName} before the command started (a hook or an approval was still pending) \u2014 nothing ran.`,
-          i,
+          envelopeOptions,
         );
-    return e.controller.signal.aborted
+    return request.controller.signal.aborted
       ? {
-          ...y,
+          ...envelope,
           ranNothing: true,
         }
-      : y;
+      : envelope;
   }
   return clock.timedOut
     ? failedEnvelope(
@@ -119,7 +121,7 @@ function callNotRunEnvelope(e) {
         facts,
         "timed_out",
         `The call did not finish within its deadline on ${targetName} and was stopped \u2014 it may have partially run. Do not retry non-idempotent commands blindly.`,
-        i,
+        envelopeOptions,
       )
     : failedEnvelope(
         target,
@@ -128,102 +130,106 @@ function callNotRunEnvelope(e) {
         clock.shuttingDown()
           ? `The call was stopped while it ran because Claude Code on ${targetName} is shutting down \u2014 it may have partially run.`
           : `The call was cancelled while it ran on ${targetName} \u2014 it may have partially run.`,
-        i,
+        envelopeOptions,
       );
 }
 //@ chunk-ad2e1aj6.js:31203-31314 placement
-function isPermissionGranted(e) {
-  return e.permissionOutcome?.kind === "allowed" || e.permissionOutcome?.kind === "approved_by_session";
+function isPermissionGranted(outcome) {
+  return (
+    outcome.permissionOutcome?.kind === "allowed" || outcome.permissionOutcome?.kind === "approved_by_session"
+  );
 }
 //@ chunk-ad2e1aj6.js:31314-32769 placement
-function callResultEnvelope(e, n) {
-  let { target, facts, targetName, callId, controller, clock, toolVerdict, notes } = e;
-  if (n === undefined) return callNotRunEnvelope(e);
-  if (n.result === undefined)
+function callResultEnvelope(request, outcome) {
+  let { target, facts, targetName, callId, controller, clock, toolVerdict, notes } = request;
+  if (outcome === undefined) return callNotRunEnvelope(request);
+  if (outcome.result === undefined)
     return controller.signal.aborted
-      ? callNotRunEnvelope(e)
+      ? callNotRunEnvelope(request)
       : failedEnvelope(
           target,
           facts,
           "tool_error",
           `The call produced no result on ${targetName} (one of your hooks there deferred it or returned no result) \u2014 it did not run.`,
           {
-            notes: [...notes.lines(), ...resultNotes(n, targetName)],
+            notes: [...notes.lines(), ...resultNotes(outcome, targetName)],
           },
         );
-  let ranToEnd = !n.settledBeforeStop && n.ranToEnd;
-  if (!n.settledBeforeStop && !ranToEnd) return callNotRunEnvelope(e);
+  let ranToEnd = !outcome.settledBeforeStop && outcome.ranToEnd;
+  if (!outcome.settledBeforeStop && !ranToEnd) return callNotRunEnvelope(request);
   if (toolVerdict !== undefined) {
-    let F = {
-      notes: [...notes.lines(), ...resultNotes(n, targetName)],
+    let envelopeOptions = {
+      notes: [...notes.lines(), ...resultNotes(outcome, targetName)],
     };
     return toolVerdict.verdict.kind === "refused"
-      ? refusedEnvelope(target, facts, toolVerdict.verdict.code, toolVerdict.message, F)
-      : failedEnvelope(target, facts, toolVerdict.verdict.code, toolVerdict.message, F);
+      ? refusedEnvelope(target, facts, toolVerdict.verdict.code, toolVerdict.message, envelopeOptions)
+      : failedEnvelope(target, facts, toolVerdict.verdict.code, toolVerdict.message, envelopeOptions);
   }
-  let P = clock.timedOut
+  let stopCause = clock.timedOut
     ? "at the call's deadline"
     : clock.shuttingDown()
       ? "because Claude Code here is shutting down"
       : "when the call was cancelled";
-  let x = `(output withheld: the command COMPLETED on ${targetName} and was not interrupted. What ran after it here \u2014 a PostToolUse hook, most likely \u2014 was stopped ${P} before it finished, and it may have been meant to check this output, so only the output is withheld. Do not re-run the command just to see the output unless it is safe to repeat.)`;
-  let Y = shapeServedResult({
+  let withheldText = `(output withheld: the command COMPLETED on ${targetName} and was not interrupted. What ran after it here \u2014 a PostToolUse hook, most likely \u2014 was stopped ${stopCause} before it finished, and it may have been meant to check this output, so only the output is withheld. Do not re-run the command just to see the output unless it is safe to repeat.)`;
+  let shaped = shapeServedResult({
     run: ranToEnd
       ? {
-          ...n,
+          ...outcome,
           result: {
-            ...n.result,
-            content: x,
+            ...outcome.result,
+            content: withheldText,
           },
-          output: isShellToolName(facts.toolName) ? toBashStyleOutput(n.output, x) : undefined,
+          output: isShellToolName(facts.toolName)
+            ? toBashStyleOutput(outcome.output, withheldText)
+            : undefined,
           extra: [],
           hookExtra: [],
           notes: [...notes.lines()],
         }
       : {
-          ...n,
-          result: n.result,
-          notes: [...notes.lines(), ...n.notes],
+          ...outcome,
+          result: outcome.result,
+          notes: [...notes.lines(), ...outcome.notes],
         },
     toolName: facts.toolName,
     target,
     callId,
     targetName,
-    permissionOutcome: e.permissionOutcome,
+    permissionOutcome: request.permissionOutcome,
     budget: resultSizeLimitsFor(facts.arrivedOver),
   });
-  facts.truncated = Y.truncated;
+  facts.truncated = shaped.truncated;
   return {
-    envelope: Y.envelope,
-    content: Y.content,
+    envelope: shaped.envelope,
+    content: shaped.content,
   };
 }
 //@ chunk-ad2e1aj6.js:32769-32971 placement
-function toBashStyleOutput(output, n) {
-  if (typeof output !== "object" || output === null) return n;
-  let s = Reflect.get(output, "returnCodeInterpretation");
+function toBashStyleOutput(output, text) {
+  if (typeof output !== "object" || output === null) return text;
+  let interp = Reflect.get(output, "returnCodeInterpretation");
   return {
-    stdout: n,
+    stdout: text,
     stderr: "",
     interrupted: false,
-    ...(typeof s === "string" && {
-      returnCodeInterpretation: s,
+    ...(typeof interp === "string" && {
+      returnCodeInterpretation: interp,
     }),
   };
 }
 //@ chunk-ad2e1aj6.js:32971-34520 placement
-function servedToolUseContext(e) {
-  let n = {
+function servedToolUseContext(served) {
+  let appState = {
     ...getDefaultAppState_2(),
-    toolPermissionContext: e.permissionContext,
+    toolPermissionContext: served.permissionContext,
   };
   let mainLoopModel = getMainLoopModel();
   return {
     requestDialog: undefined,
-    abortController: e.abortController,
+    abortController: served.abortController,
     messageQueue: commandQueueManager(),
     session: getRootSession().withProject({
-      cwd: e.cwd,
+      cwd: served.cwd,
     }),
     agentContext: {
       agentType: "main",
@@ -231,7 +237,7 @@ function servedToolUseContext(e) {
     },
     options: {
       commands: [],
-      tools: e.servedTools,
+      tools: served.servedTools,
       toolCatalog: TOOL_CATALOG,
       mainLoopModel,
       thinkingConfig: {
@@ -249,15 +255,15 @@ function servedToolUseContext(e) {
         allAgents: [],
       },
     },
-    getAppState: () => n,
+    getAppState: () => appState,
     setAppState: () => {},
     markPrResolvedThisSession: () => {},
     isUltrareviewOverageConfirmed: () => false,
     markUltrareviewOverageConfirmed: () => {},
-    getAdvisorSetting: () => n.advisorModel,
-    getMcp: () => n.mcp,
-    getProactivityLevel: () => n.proactivityLevel,
-    getWebBrowser: () => n.webBrowser,
+    getAdvisorSetting: () => appState.advisorModel,
+    getMcp: () => appState.mcp,
+    getProactivityLevel: () => appState.proactivityLevel,
+    getWebBrowser: () => appState.webBrowser,
     setToolPermissionContext: () => {},
     setSessionToolPermissionContext: () => {},
     taskRegistry: UNLIMITED_RATE_LIMITER,
@@ -265,7 +271,7 @@ function servedToolUseContext(e) {
     sessionHooksRegistry: NOOP_FUNCTION_HOOK_REGISTRY,
     setWebBrowserSlice: () => {},
     setArtifactReadVersion: () => {},
-    getArtifactReadObservation: artifactReadObservationIn(() => n),
+    getArtifactReadObservation: artifactReadObservationIn(() => appState),
     artifactRegistries: createEmptyArtifactSessionStores(),
     setArtifactContractTarget: () => {},
     getArtifactContractTarget: () => ({
@@ -276,42 +282,45 @@ function servedToolUseContext(e) {
     agentLifecycle: NOOP_AGENT_NAME_REGISTRY,
     teammateColors: NO_OP_COLOR_ASSIGNER,
     rootToolSurface: {
-      tools: e.servedTools,
+      tools: served.servedTools,
       mainLoopModel,
     },
     messages: [],
     turnStartIndex: 0,
-    readFileState: e.session.readFileState,
-    toolState: e.session.toolState,
+    readFileState: served.session.readFileState,
+    toolState: served.session.toolState,
     toolDecisions: new Map(),
-    permissionRelays: Jce,
+    permissionRelays: NO_BRIDGE_CONSENT,
     getFileHistoryState: () => {
       return;
     },
     applyFileHistoryOp: () => {},
     applyAttributionOp: () => {},
-    remoteCall: e.remoteCall,
+    remoteCall: served.remoteCall,
     requireCanUseTool: true,
-    storageV5: e.storageV5,
+    storageV5: served.storageV5,
   };
 }
 //@ chunk-ad2e1aj6.js:34520-34590 placement
-function servingConsentRequirement(unattended) {
-  if (!isUnattendedOwnRecord(unattended)) return unattendedStanceKind(unattended);
+function servingConsentRequirement(stanceValue) {
+  if (!isUnattendedOwnRecord(stanceValue)) return unattendedStanceKind(stanceValue);
   return unattendedServingConsented() ? undefined : "consent";
 }
 //@ chunk-ad2e1aj6.js:34590-34705 placement
 function isServedPostToolHookEnabled() {
   try {
-    let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_violin_endpin", false);
-    return e === true && source !== "override";
+    let { value: flagValue, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
+      "tengu_violin_endpin",
+      false,
+    );
+    return flagValue === true && source !== "override";
   } catch {
     return false;
   }
 }
 //@ chunk-ad2e1aj6.js:34705-35252 placement
 function runServedPostToolHook({ toolName, toolInput, toolAliases, targetName, keep }) {
-  let i = {
+  let hookInput = {
     session_id: "",
     transcript_path: "",
     cwd: "",
@@ -321,15 +330,16 @@ function runServedPostToolHook({ toolName, toolInput, toolAliases, targetName, k
     tool_response: undefined,
     tool_use_id: "",
   };
-  let y;
-  let O = false;
-  let R = () => {
-    if (O || y === undefined) return;
-    let [w, C] = y;
+  let latestOutput;
+  let hookFailed = false;
+  let keepForHook = () => {
+    if (hookFailed || latestOutput === undefined) return;
+    let [content, meta] = latestOutput;
     try {
       return getHooksForEvent("PostToolUse").some(
         ({ matcher, hooks }) =>
-          hooks.some((hook) => hook.type !== "callback") && hookMatcherMatches(i, matcher, toolAliases),
+          hooks.some((hook) => hook.type !== "callback") &&
+          hookMatcherMatches(hookInput, matcher, toolAliases),
       ) ||
         dispatchClassicEvent("PostToolUse") ||
         hasModuleHookingSite("tool.call", {
@@ -337,26 +347,26 @@ function runServedPostToolHook({ toolName, toolInput, toolAliases, targetName, k
         })
         ? undefined
         : clipFullOutput(
-            w,
+            content,
             unreadableSpillNote({
               targetName,
               shellToolName: toolName,
-              ...C,
+              ...meta,
             }),
           );
     } catch (error) {
-      O = true;
+      hookFailed = true;
       logError(error);
       return;
     }
   };
-  return (w, C) => {
-    if (O || !violinFholeEnabled()) {
-      y = undefined;
+  return (content, meta) => {
+    if (hookFailed || !violinFholeEnabled()) {
+      latestOutput = undefined;
       return;
     }
-    y = [w, C];
-    keep(R);
+    latestOutput = [content, meta];
+    keep(keepForHook);
   };
 }
 export {

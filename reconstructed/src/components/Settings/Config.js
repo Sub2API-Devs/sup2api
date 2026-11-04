@@ -8,8 +8,19 @@
  * pieces: chunk-6f92z7de.js (1), chunk-9h8dr0qb.js (20)
  * attribution: placement 15, layout 3, fingerprint 2, sole-consumer 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
-import { yt, R, y, Q, P, zt, Qr, ce } from "../../../vendor/react/cjs/react.production.js";
+import { OUTPUT_STYLE_CONFIG, DEFAULT as DEFAULT_2 } from "../../constants/outputStyles.js";
+import { fromSanitizer_SANITIZER_OUTPUT_ONLY, lit, fromEnum } from "../../services/analytics/safeMetadata.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import {
+  useSyncExternalStore,
+  useRef,
+  useState,
+  useMemo,
+  useEffect,
+  useLayoutEffect,
+  use,
+  useCallback,
+} from "../../../vendor/react/cjs/react.production.js";
 import {
   onReachabilityChange,
   getReachability,
@@ -23,7 +34,7 @@ import {
   Fragment,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Link, Box } from "../../ink/components/Text.js";
-import { WARNING_GLYPH, LEFT_ARROW } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { WARNING_GLYPH, LEFT_ARROW } from "../../constants/figures.js";
 import {
   DEFAULT_GLOBAL_CONFIG,
   getCurrentProjectConfig,
@@ -34,7 +45,6 @@ import {
   getGlobalConfig,
   NOTIFICATION_CHANNELS,
 } from "../../utils/config.js";
-import { fromSanitizer_SANITIZER_OUTPUT_ONLY, lit, fromEnum } from "../../services/analytics/safeMetadata.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { useIsFullscreen } from "../../ink/renderModeContext.js";
 import { stableEmptyObject } from "../../utils/stableEmptyObject.js";
@@ -59,7 +69,6 @@ import {
   isAutoContinueEnabled,
   isAutoContinueUserSetting,
 } from "../../services/quotaAutoResume/quotaAutoResume.js";
-import { DEFAULT as DEFAULT_2, OUTPUT_STYLE_CONFIG } from "../../constants/outputStyles.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { useFocusOnMount } from "../../hooks/useFocusOnMount.js";
 import { useTerminalFocus } from "../../ink/hooks/use-terminal-focus.js";
@@ -143,16 +152,26 @@ import { SearchBox } from "../SearchBox.js";
 import { cellText } from "../CustomSelect/selectTable.js";
 import { permissionModeTitle } from "../../utils/permissions/PermissionMode.js";
 import { workflowSizeDisplay } from "../../utils/workflows/workflowGates.js";
+import { deferInit, runDeferredInits } from "../../../runtime/deferred-init.js";
 
+//@ chunk-6f92z7de.js:265-326 placement
+/**
+ * 函数 markCustomSetting（未知键标 custom）；位于「/config 设置页（Config 标签）：可切换的全部设置项（主题、编辑器模式、通知、自动压缩、verbose、模型、输出样式、语言等），远程会话下说明作用范围」模块。
+ */
+function markCustomSetting(value) {
+  return Object.hasOwn(OUTPUT_STYLE_CONFIG, value)
+    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(value)
+    : lit("custom");
+}
 //@ chunk-9h8dr0qb.js:12815-13132 placement
 function renderMobileNotice() {
-  let u = w(1);
-  if (yt(onReachabilityChange, getReachability, noop_4)?.has_active_channel !== false) {
+  let $ = useMemoCache(1);
+  if (useSyncExternalStore(onReachabilityChange, getReachability, noop_4)?.has_active_channel !== false) {
     return null;
   }
-  let p;
-  if (u[0] === MEMO_CACHE_SENTINEL) {
-    p = jsxProd_default_2(Text, {
+  let textElement;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    textElement = jsxProd_default_2(Text, {
       color: "warning",
       wrap: "truncate-end",
       children: [
@@ -167,9 +186,9 @@ function renderMobileNotice() {
         " and turn on notif",
       ],
     });
-    u[0] = p;
-  } else p = u[0];
-  return p;
+    $[0] = textElement;
+  } else textElement = $[0];
+  return textElement;
 }
 //@ chunk-9h8dr0qb.js:13132-13703 placement
 /**
@@ -208,167 +227,190 @@ var MOVED_TO_SETTINGS_FIELDS = [
     isSet: ({ settingsData }) => settingsData?.awaySummaryEnabled !== undefined,
   },
 ];
-var MOVED_TO_SETTINGS_IDS = new Set(MOVED_TO_SETTINGS_FIELDS.map((o) => o.id));
+var MOVED_TO_SETTINGS_IDS = new Set(MOVED_TO_SETTINGS_FIELDS.map((fieldDefs) => fieldDefs.id));
 //@ chunk-9h8dr0qb.js:13703-13735 placement
-function isMovedToSettings(o) {
-  return MOVED_TO_SETTINGS_IDS.has(o);
+function isMovedToSettings(settingId) {
+  return MOVED_TO_SETTINGS_IDS.has(settingId);
 }
 //@ chunk-9h8dr0qb.js:13735-13830 placement
-function sectionTitleWithNote(o, id) {
-  return o === "Advanced" && isMovedToSettings(id)
+function sectionTitleWithNote(title, settingId) {
+  return title === "Advanced" && isMovedToSettings(settingId)
     ? {
-        name: o,
+        name: title,
         note: "moving to settings.json",
       }
     : {
-        name: o,
+        name: title,
       };
 }
 //@ chunk-9h8dr0qb.js:13830-15061 placement
 /**
  * 各分组包含的设置键。
  */
-var CONFIG_SECTION_KEYS = {
-  Appearance: ["theme", "language", "reduceMotion"],
-  "Model & output": [
-    "model",
-    "fast",
-    "switchModelsOnFlag",
-    "autoContinueAtUsageLimit",
-    "outputStyle",
-    "defaultView",
-    "verbose",
-    "autoCompact",
-    "idleCompaction",
-    "thinking",
-    "permissionMode",
-    "useAutoModeDuringPlan",
-  ],
-  Display: [
-    "autoScroll",
-    "progressBar",
-    "tips",
-    "turnDuration",
-    "timeFormat",
-    "prStatus",
-    "externalEditorContext",
-  ],
-  "Input & controls": [
-    "editor",
-    "askUserQuestionTimeout",
-    "modelProposedGoals",
-    "copyOnSelect",
-    "promptSuggestionEnabled",
-    "agentsView",
-    "defaultToAgentsView",
-    "checkpoints",
-    "workflows",
-    "workflowKeywordTriggerEnabled",
-    "artifacts",
-  ],
-  Connections: [
-    "notifChannel",
-    "inputNeededNotifEnabled",
-    "agentPushNotifEnabled",
-    "autoConnectIde",
-    "autoInstallIdeExtension",
-    "diffTool",
-    "chrome",
-    "remoteControl",
-    "remoteHomeSettings",
-    ...[],
-    "dialogExpiry",
-    "crossSessionInbound",
-    "showExternalIncludesDialog",
-    "apiKey",
-  ],
-  Plugins: [],
-  Advanced: MOVED_TO_SETTINGS_FIELDS.map((o) => o.id),
-  Experimental: ["precomputeCompactionEnabled", "timestamps", "showStatusInTerminalTab", "teammateMode"],
-  Internal: [
-    ...[],
-    "snipEnabled",
-    "snipDebug",
-    "doneMeansMerged",
-    "autoUploadSessions",
-    "autoAddRemoteControlDaemonWorker",
-    "autofixPrMode",
-  ],
-};
-var settingToSectionMap = new Map(
-  CONFIG_SECTION_TITLES.flatMap((o) => CONFIG_SECTION_KEYS[o].map((u) => [u, o])),
-);
-var settingOrderMap = new Map(
-  CONFIG_SECTION_TITLES.flatMap((o, u) => CONFIG_SECTION_KEYS[o].map((p, h) => [p, u * 1000 + h])),
-);
+var CONFIG_SECTION_KEYS; // deferred: uses CONFIG_SECTION_TITLES of its import cycle while loading; runs once the cycle is complete
+var settingToSectionMap;
+var settingOrderMap;
+deferInit("chunk-9h8dr0qb.js:13830", () => {
+  CONFIG_SECTION_KEYS = {
+    Appearance: ["theme", "language", "reduceMotion"],
+    "Model & output": [
+      "model",
+      "fast",
+      "switchModelsOnFlag",
+      "autoContinueAtUsageLimit",
+      "outputStyle",
+      "defaultView",
+      "verbose",
+      "autoCompact",
+      "idleCompaction",
+      "thinking",
+      "permissionMode",
+      "useAutoModeDuringPlan",
+    ],
+    Display: [
+      "autoScroll",
+      "progressBar",
+      "tips",
+      "turnDuration",
+      "timeFormat",
+      "prStatus",
+      "externalEditorContext",
+    ],
+    "Input & controls": [
+      "editor",
+      "askUserQuestionTimeout",
+      "modelProposedGoals",
+      "copyOnSelect",
+      "promptSuggestionEnabled",
+      "agentsView",
+      "defaultToAgentsView",
+      "checkpoints",
+      "workflows",
+      "workflowKeywordTriggerEnabled",
+      "artifacts",
+    ],
+    Connections: [
+      "notifChannel",
+      "inputNeededNotifEnabled",
+      "agentPushNotifEnabled",
+      "autoConnectIde",
+      "autoInstallIdeExtension",
+      "diffTool",
+      "chrome",
+      "remoteControl",
+      "remoteHomeSettings",
+      ...[],
+      "dialogExpiry",
+      "crossSessionInbound",
+      "showExternalIncludesDialog",
+      "apiKey",
+    ],
+    Plugins: [],
+    Advanced: MOVED_TO_SETTINGS_FIELDS.map((state) => state.id),
+    Experimental: ["precomputeCompactionEnabled", "timestamps", "showStatusInTerminalTab", "teammateMode"],
+    Internal: [
+      ...[],
+      "snipEnabled",
+      "snipDebug",
+      "doneMeansMerged",
+      "autoUploadSessions",
+      "autoAddRemoteControlDaemonWorker",
+      "autofixPrMode",
+    ],
+  };
+  settingToSectionMap = new Map(
+    CONFIG_SECTION_TITLES.flatMap((title) => CONFIG_SECTION_KEYS[title].map((key) => [key, title])),
+  );
+  settingOrderMap = new Map(
+    CONFIG_SECTION_TITLES.flatMap((title, index) =>
+      CONFIG_SECTION_KEYS[title].map((key, columnIndex) => [key, index * 1000 + columnIndex]),
+    ),
+  );
+});
 //@ chunk-9h8dr0qb.js:15061-15099 placement
-function isNestedSettingKey(o) {
-  return o.includes(".");
+function isNestedSettingKey(key) {
+  return key.includes(".");
 }
 //@ chunk-9h8dr0qb.js:15099-15161 placement
-function sectionForSetting(id) {
-  return settingToSectionMap.get(id) ?? (isNestedSettingKey(id) ? "Plugins" : "Advanced");
+function sectionForSetting(key) {
+  return settingToSectionMap.get(key) ?? (isNestedSettingKey(key) ? "Plugins" : "Advanced");
 }
 //@ chunk-9h8dr0qb.js:15161-15230 placement
-var PLUGINS_SECTION_ORDER = CONFIG_SECTION_TITLES.indexOf("Plugins") * 1000;
-var ADVANCED_SECTION_ORDER = CONFIG_SECTION_TITLES.indexOf("Advanced") * 1000 + 999;
+var PLUGINS_SECTION_ORDER; // deferred: uses CONFIG_SECTION_TITLES of its import cycle while loading; runs once the cycle is complete
+var ADVANCED_SECTION_ORDER;
+deferInit("chunk-9h8dr0qb.js:15161", () => {
+  PLUGINS_SECTION_ORDER = CONFIG_SECTION_TITLES.indexOf("Plugins") * 1000;
+  ADVANCED_SECTION_ORDER = CONFIG_SECTION_TITLES.indexOf("Advanced") * 1000 + 999;
+});
 //@ chunk-9h8dr0qb.js:15230-15277 placement
-function settingSortKey(id) {
-  return settingOrderMap.get(id) ?? (isNestedSettingKey(id) ? PLUGINS_SECTION_ORDER : ADVANCED_SECTION_ORDER);
+function settingSortKey(key) {
+  return (
+    settingOrderMap.get(key) ?? (isNestedSettingKey(key) ? PLUGINS_SECTION_ORDER : ADVANCED_SECTION_ORDER)
+  );
 }
 //@ chunk-9h8dr0qb.js:15277-15419 placement
-function sortSettingsByOrder(o) {
-  return o
-    .map((item, p) => ({
+function sortSettingsByOrder(items) {
+  return items
+    .map((item, index) => ({
       item,
-      i: p,
+      i: index,
     }))
-    .sort((u, p) => {
-      let h = settingSortKey(u.item.id) - settingSortKey(p.item.id);
-      return h !== 0 ? h : u.i - p.i;
+    .sort((a, b) => {
+      let byOrder = settingSortKey(a.item.id) - settingSortKey(b.item.id);
+      return byOrder !== 0 ? byOrder : a.i - b.i;
     })
     .map(({ item }) => item);
 }
 //@ chunk-9h8dr0qb.js:15419-15563 placement
-var SETTING_ID_RE = /^[a-z][A-Za-z0-9]{0,63}$/;
-var SETTING_VALUE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
-var FIXED_VALUE_LABELS = new Set(["Allowed", "Not allowed", "Switch automatically", "Ask each time", ...[]]);
+var SETTING_ID_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SETTING_VALUE_ID_RE;
+var FIXED_VALUE_LABELS;
+deferInit("chunk-9h8dr0qb.js:15419", () => {
+  SETTING_ID_RE = /^[a-z][A-Za-z0-9]{0,63}$/;
+  SETTING_VALUE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+  FIXED_VALUE_LABELS = new Set(["Allowed", "Not allowed", "Switch automatically", "Ask each time", ...[]]);
+});
 //@ chunk-9h8dr0qb.js:15563-15621 placement
 function markSettingIdSafe(id) {
   return SETTING_ID_RE.test(id) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(id) : lit("nonconforming");
 }
 //@ chunk-9h8dr0qb.js:15621-15690 placement
-function markSettingValueSafe(o) {
-  return SETTING_VALUE_ID_RE.test(o) || FIXED_VALUE_LABELS.has(o)
-    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(o)
+function markSettingValueSafe(value) {
+  return SETTING_VALUE_ID_RE.test(value) || FIXED_VALUE_LABELS.has(value)
+    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(value)
     : lit("nonconforming");
 }
 //@ chunk-9h8dr0qb.js:15690-15898 placement
-function truncateToWidth(searchQuery, u) {
-  if (bunStringWidth(searchQuery) <= u) return searchQuery;
-  let max = Math.max(1, u - 1);
-  let h = 0;
-  let D = 0;
-  while (D < searchQuery.length) {
-    let code = searchQuery.charCodeAt(D);
-    let T = code >= 55296 && code <= 56319 ? 2 : 1;
-    let A = bunStringWidth(searchQuery.slice(D, D + T));
-    if (h + A > max) break;
-    h += A;
-    D += T;
+function truncateToWidth(searchQuery, maxWidth) {
+  if (bunStringWidth(searchQuery) <= maxWidth) return searchQuery;
+  let max = Math.max(1, maxWidth - 1);
+  let width = 0;
+  let index = 0;
+  while (index < searchQuery.length) {
+    let code = searchQuery.charCodeAt(index);
+    let codePointLength = code >= 55296 && code <= 56319 ? 2 : 1;
+    let charWidth = bunStringWidth(searchQuery.slice(index, index + codePointLength));
+    if (width + charWidth > max) break;
+    width += charWidth;
+    index += codePointLength;
   }
-  return searchQuery.slice(0, D) + "\u2026";
+  return searchQuery.slice(0, index) + "\u2026";
 }
 //@ chunk-9h8dr0qb.js:15898-15950 layout
-function settingIdsKey(o) {
-  return o.map((u) => u.id).join("\x00");
+function settingIdsKey(items) {
+  return items.map((item) => item.id).join("\x00");
 }
 //@ chunk-9h8dr0qb.js:15950-16100 layout
-function sameSettingLabels(o, prev) {
-  if (o.size !== prev.size) return false;
-  for (let [p, h] of o) {
-    let D = prev.get(p);
-    if (D === undefined || D.label !== h.label || D.hidden !== h.hidden) return false;
+function sameSettingLabels(current, prev) {
+  if (current.size !== prev.size) return false;
+  for (let [id, labelInfo] of current) {
+    let previousLabel = prev.get(id);
+    if (
+      previousLabel === undefined ||
+      previousLabel.label !== labelInfo.label ||
+      previousLabel.hidden !== labelInfo.hidden
+    )
+      return false;
   }
   return true;
 }
@@ -390,108 +432,111 @@ function Config({
   contentHeight,
 }) {
   let inAppSelection = useIsFullscreen();
-  let v = false;
-  let F = stableEmptyObject(false);
+  let initialValue = false;
+  let hintFormat = stableEmptyObject(false);
   let tabsStandIn = useStatusLineSuppressed();
   let { storageV5, credentials } = useTheme_2();
   let session = useSession();
   let appStoreDirect = useAppStoreDirect();
   let session_2 = useAppStateSession();
   let { addNotification } = useNotifications();
-  let latestPick = R(0);
-  let latestFastPick = R(0);
+  let latestPick = useRef(0);
+  let latestFastPick = useRef(0);
   let { headerFocused, focusHeader, blurHeader } = useTabHeaderFocus();
   let insideModal = useHasScrollViewport();
-  let [, fe] = useTheme();
+  let [, setTheme] = useTheme();
   let themeSetting = useThemeSetting();
-  let [de, ve] = y(getEffectiveConfigValues);
-  let pe = R(de);
-  let [Ce, He] = y(() => ({
+  let [globalConfig, setGlobalConfig] = useState(getEffectiveConfigValues);
+  let globalConfigRef = useRef(globalConfig);
+  let [settingsData, setSettingsData] = useState(() => ({
     ...getInitialSettings_2(),
     ...remoteForwardedSettings(),
     feedbackDrafts: getFeedbackDraftsSetting(),
     autoContinueAtUsageLimit: isAutoContinueEnabled(),
   }));
-  let initialSettingsRef = R(getInitialSettings_2());
-  let [outputStyle, setOutputStyle] = y(Ce?.outputStyle || DEFAULT_2);
-  let outputStyleRef = R(outputStyle);
-  let [Ue, Ie] = y(() => getCurrentProjectConfig().hasClaudeMdExternalIncludesApproved === true);
-  let [language, setLanguage] = y(Ce?.language);
-  let languageRef = R(language);
-  let [Ne, at] = y(undefined);
-  let [ot, st] = y(undefined);
-  let [et, Ge] = y(0);
-  let [, Qe] = y(0);
-  let idRef = R(null);
-  let parsedModeRef = R("");
-  let kt = R(null);
+  let initialSettingsRef = useRef(getInitialSettings_2());
+  let [outputStyle, setOutputStyle] = useState(settingsData?.outputStyle || DEFAULT_2);
+  let outputStyleRef = useRef(outputStyle);
+  let [externalIncludesApproved, setExternalIncludesApproved] = useState(
+    () => getCurrentProjectConfig().hasClaudeMdExternalIncludesApproved === true,
+  );
+  let [language, setLanguage] = useState(settingsData?.language);
+  let languageRef = useRef(language);
+  let [focusedSettingId, setFocusedSettingId] = useState(undefined);
+  let [resetKeyValue, setResetKeyValue] = useState(undefined);
+  let [resetNonce, bumpResetNonce] = useState(0);
+  let [, bumpLockRetry] = useState(0);
+  let idRef = useRef(null);
+  let parsedModeRef = useRef("");
+  let containerRef = useRef(null);
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  useFocusOnMount(kt, isScreenReaderEnabled ? false : !headerFocused);
-  let [Xe, tt] = y(!isScreenReaderEnabled);
+  useFocusOnMount(containerRef, isScreenReaderEnabled ? false : !headerFocused);
+  let [isSearchMode, setSearchMode] = useState(!isScreenReaderEnabled);
   let isTerminalFocused = useTerminalFocus();
   let { rows, columns } = useTerminalSize();
-  let _n = R(null);
-  let [Qt, ps] = y(1);
-  let In = contentHeight ?? Math.min(Math.floor(rows * 0.8), 30);
-  let hn = !isRemoteSessionAvailable()
+  let footerRef = useRef(null);
+  let [headerHeight, setHeaderHeight] = useState(1);
+  let panelHeight = contentHeight ?? Math.min(Math.floor(rows * 0.8), 30);
+  let remoteNotice = !isRemoteSessionAvailable()
     ? null
     : getRemoteCaps()?.sessionId !== undefined
       ? "Changes here update this machine's settings and future cloud sessions, not the running one."
       : "Changes here update this machine's settings, not the running remote session.";
-  let zi = hn === null ? 0 : Math.ceil((hn.length + 2) / Math.max(1, columns - 4));
-  let maxVisible = Math.max(5, In - 8 - Qt - zi);
-  let mainLoopModel = useAppState((k) => k.mainLoopModel);
+  let noticeRows =
+    remoteNotice === null ? 0 : Math.ceil((remoteNotice.length + 2) / Math.max(1, columns - 4));
+  let maxVisible = Math.max(5, panelHeight - 8 - headerHeight - noticeRows);
+  let mainLoopModel = useAppState((appState) => appState.mainLoopModel);
   let mainLoopModelForSession = useAppState((s_0) => s_0.mainLoopModelForSession);
-  let gs = useMainLoopModelSetting() ?? mainLoopModel;
+  let modelSetting = useMainLoopModelSetting() ?? mainLoopModel;
   let verbose = useAppState((s_1) => s_1.verbose);
   let thinkingEnabled = useAppState((s_2) => s_2.thinkingEnabled);
   let promptSuggestionEnabled = useAppState((s_3) => (isFastModeEnabled() ? s_3.fastMode : false));
-  let fastModeOnForModel = useFastModeOnForModel(promptSuggestionEnabled, gs);
-  let promptSuggestionEnabled_2 = useAppState((k) => k.promptSuggestionEnabled);
-  let awaySummaryEnabled = useAppState((k) => k.awaySummaryEnabled);
-  let showDefaultViewPicker = require("./chunk-cv3kgbt2.js").isBriefEntitled();
+  let fastModeOnForModel = useFastModeOnForModel(promptSuggestionEnabled, modelSetting);
+  let promptSuggestionEnabled_2 = useAppState((appState) => appState.promptSuggestionEnabled);
+  let awaySummaryEnabled = useAppState((appState) => appState.awaySummaryEnabled);
+  let showDefaultViewPicker = require("../../tools/BriefTool/BriefTool.js").isBriefEntitled();
   let setAppState = useSetAppState();
-  let [Yi, hs] = y(() => new Map());
-  let changeLog = Q(
+  let [changes, setChanges] = useState(() => new Map());
+  let changeLog = useMemo(
     () => ({
-      record: (k, oe, se) =>
-        hs((ge) => {
-          let be = new Map(ge);
-          if (se?.moveToEnd) be.delete(k);
-          return be.set(k, oe);
+      record: (key, value, options) =>
+        setChanges((prev) => {
+          let next = new Map(prev);
+          if (options?.moveToEnd) next.delete(key);
+          return next.set(key, value);
         }),
-      clear: (k) =>
-        hs((oe) => {
-          let se = new Map(oe);
-          se.delete(k);
-          return se;
+      clear: (key) =>
+        setChanges((prev) => {
+          let next = new Map(prev);
+          next.delete(key);
+          return next;
         }),
-      toggle: (k, oe) =>
-        hs((se) => {
-          let ge = new Map(se);
-          return ge.delete(k) ? ge : ge.set(k, oe);
+      toggle: (key, value) =>
+        setChanges((prev) => {
+          let next = new Map(prev);
+          return next.delete(key) ? next : next.set(key, value);
         }),
     }),
     [],
   );
-  let thinkingEnabledRef = R(thinkingEnabled);
-  P(() => onHydrated(() => ve(getEffectiveConfigValues())), []);
-  let [zl, ho] = y(false);
-  let [qi, On] = y(null);
-  let [Be, Fe] = y(null);
-  let Ln = R(0);
-  let [Qi, Xi] = y(null);
-  let [Ji, Zi] = y(null);
-  let [Ss, ta] = y("");
-  let enabled = useAppState((k) => k.plugins.enabled);
-  let [Gl, Yl] = y(() => new Map());
-  let [ql, Ql] = y(() => new Map());
-  let Xl = yt(CONFIG_ROWS_VERSION.subscribe, CONFIG_ROWS_VERSION.get);
-  zt(() => {
-    if (!_n.current) return;
-    let height = measureElement(_n.current).height;
-    if (height !== Qt) ps(height);
-  }, [headerFocused, Xe, columns, rows, Qt, Be]);
+  let thinkingEnabledRef = useRef(thinkingEnabled);
+  useEffect(() => onHydrated(() => setGlobalConfig(getEffectiveConfigValues())), []);
+  let [showThinkingWarning, setShowThinkingWarning] = useState(false);
+  let [remoteHomeError, setRemoteHomeError] = useState(null);
+  let [activeDialog, setActiveDialog] = useState(null);
+  let savedCountRef = useRef(0);
+  let [enumPickerId, setEnumPickerId] = useState(null);
+  let [textEditId, setTextEditId] = useState(null);
+  let [textEditValue, setTextEditValue] = useState("");
+  let enabled = useAppState((appState) => appState.plugins.enabled);
+  let [shownPluginSettings, setShownPluginSettings] = useState(() => new Map());
+  let [settingLabels, setSettingLabels] = useState(() => new Map());
+  let configRowsVersion = useSyncExternalStore(CONFIG_ROWS_VERSION.subscribe, CONFIG_ROWS_VERSION.get);
+  useLayoutEffect(() => {
+    if (!footerRef.current) return;
+    let height = measureElement(footerRef.current).height;
+    if (height !== headerHeight) setHeaderHeight(height);
+  }, [headerFocused, isSearchMode, columns, rows, headerHeight, activeDialog]);
   let {
     query: searchQuery,
     setQuery: setSearchQuery,
@@ -499,15 +544,15 @@ function Config({
     handleKeyDown,
     handlePaste,
   } = useSearchInput({
-    isActive: Xe && Be === null && !headerFocused,
-    onExit: () => tt(false),
+    isActive: isSearchMode && activeDialog === null && !headerFocused,
+    onExit: () => setSearchMode(false),
     onExitUp: focusHeader,
     passthroughCtrlKeys: ["c", "d"],
   });
-  let oa = !headerFocused;
-  P(() => {
-    onIsSearchModeChange(oa);
-  }, [oa, onIsSearchModeChange]);
+  let isSearchModeActive = !headerFocused;
+  useEffect(() => {
+    onIsSearchModeChange(isSearchModeActive);
+  }, [isSearchModeActive, onIsSearchModeChange]);
   let isConnectedToIde = hasAccessToIDEExtensionDiffFeature(mcpClients);
   let isFileCheckpointingAvailable = !env.CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING;
   let setting = resolveSetting("disableWorkflows", false);
@@ -519,33 +564,33 @@ function Config({
   let workflowSizeGuidelineToggleable = !hasWorkflowSizeSetting();
   let autoContinueAtUsageLimitToggleable = isAutoContinueUserSetting();
   let artifactToggleable = isArtifactConfigToggleable();
-  let [ac] = y(isRemoteToolServingOnForSettings);
-  let rc = alwaysFalse();
-  let launchDirectoryKeys = Q(() => null, [rc]);
-  let isConnectedToIde_2 = Qr(getMemoryFilesCached(session, true, storageV5, credentials));
+  let [remoteToolServing] = useState(isRemoteToolServingOnForSettings);
+  let neverNull = alwaysFalse();
+  let launchDirectoryKeys = useMemo(() => null, [neverNull]);
+  let isConnectedToIde_2 = use(getMemoryFilesCached(session, true, storageV5, credentials));
   let shouldShowExternalIncludesToggle = hasExternalClaudeMdIncludes(isConnectedToIde_2);
   let autoUpdaterDisabledReason = getAutoUpdaterDisabledReason();
-  let bs = shouldShowConfigGate();
+  let pushTogglesVisible = shouldShowConfigGate();
   let {
     settings,
     dialogFieldRows,
     helpers: { onChangeMainModelConfig, changeNotifChannel, changeInputNeededNotif, changeAgentPushNotif },
   } = buildConfigRows({
-    globalConfig: de,
-    settingsData: Ce,
+    globalConfig,
+    settingsData,
     themeSetting,
     currentOutputStyle: outputStyle,
     currentLanguage: language,
-    externalIncludesApproved: Ue,
+    externalIncludesApproved,
     thinkingEnabled,
     verbose,
     mainLoopModel,
-    currentModel: gs,
+    currentModel: modelSetting,
     isFastMode: promptSuggestionEnabled,
     promptSuggestionEnabled: promptSuggestionEnabled_2,
     awaySummaryEnabled,
     showDefaultViewPicker,
-    pushTogglesVisible: bs,
+    pushTogglesVisible,
     crossSessionInboxRowVisible: isCrossSessionMessagingEnabled(),
     isConnectedToIde,
     inAppSelection,
@@ -555,7 +600,7 @@ function Config({
     workflowSizeGuidelineToggleable,
     autoContinueAtUsageLimitToggleable,
     artifactToggleable,
-    remoteToolServingOn: ac,
+    remoteToolServingOn: remoteToolServing,
     launchDirectoryKeys,
     shouldShowExternalIncludesToggle,
     autoUpdaterDisabledReason,
@@ -569,58 +614,58 @@ function Config({
       latestFastPick,
     },
     setAppState,
-    setTheme: fe,
-    setGlobalConfig: ve,
-    setSettingsData: He,
+    setTheme,
+    setGlobalConfig,
+    setSettingsData,
     setPlanAutoModeOffAtLaunch,
     changeLog,
   });
-  let Nn = [
+  let allSettings = [
     ...settings,
     ...pluginConfigSettings(enabled, {
       storageV5,
-      shown: Gl,
-      onShown: (k, oe) => Yl((value) => new Map(value).set(k, oe)),
+      shown: shownPluginSettings,
+      onShown: (key, value) => setShownPluginSettings((value_2) => new Map(value_2).set(key, value)),
     }),
   ];
-  let hc = settingIdsKey(Nn);
-  P(() => {
-    let k = true;
-    describedSettings(Nn)
+  let settingsKey = settingIdsKey(allSettings);
+  useEffect(() => {
+    let isMounted = true;
+    describedSettings(allSettings)
       .then((prev) => {
-        if (k) Ql((prev_0) => (sameSettingLabels(prev_0, prev) ? prev_0 : prev));
+        if (isMounted) setSettingLabels((prev_0) => (sameSettingLabels(prev_0, prev) ? prev_0 : prev));
       })
       .catch((value_0) => {
         logError(toError(value_0));
       });
     return () => {
-      k = false;
+      isMounted = false;
     };
-  }, [hc, Xl]);
-  let flattened = Nn.flatMap((current) => {
-    let oe = ql.get(current.id);
-    if (oe?.hidden) return [];
-    let se =
-      oe === undefined || oe.label === current.label
+  }, [settingsKey, configRowsVersion]);
+  let flattened = allSettings.flatMap((current) => {
+    let labelOverride = settingLabels.get(current.id);
+    if (labelOverride?.hidden) return [];
+    let mergedSetting =
+      labelOverride === undefined || labelOverride.label === current.label
         ? current
         : "labelBoldSuffix" in current
           ? {
               ...current,
-              label: oe.label,
+              label: labelOverride.label,
               labelBoldSuffix: "",
             }
           : {
               ...current,
-              label: oe.label,
+              label: labelOverride.label,
             };
-    return [throughConfigSet(se)];
+    return [throughConfigSet(mergedSetting)];
   });
-  let Sn = ce(
-    (k, oe) => {
-      Promise.resolve(k)
+  let commitAndReport = useCallback(
+    (promise, onDone) => {
+      Promise.resolve(promise)
         .then((prev_1) => {
           if (prev_1 && "error" in prev_1 && prev_1.error) {
-            oe?.();
+            onDone?.();
             addNotification({
               key: "config-change-refused",
               kind: "warning",
@@ -636,34 +681,35 @@ function Config({
     },
     [addNotification],
   );
-  let So = (current_0) => {
-    let found = Nn.find((prev_3) => prev_3.id === current_0);
-    return found === undefined ? undefined : throughConfigSet(found);
+  let findSetting = (current_0) => {
+    let context = allSettings.find((prev_3) => prev_3.id === current_0);
+    return context === undefined ? undefined : throughConfigSet(context);
   };
-  let Cs = (k, oe, se, ge) => {
-    let be = dialogFieldRows.find((prev_4) => prev_4.id === k) ?? Nn.find((prev_5) => prev_5.id === k);
-    Sn(commitThroughConfigSet(be, oe, se), ge);
+  let commitSetting = (id, value, updater, onDone) => {
+    let setting =
+      dialogFieldRows.find((prev_4) => prev_4.id === id) ?? allSettings.find((prev_5) => prev_5.id === id);
+    commitAndReport(commitThroughConfigSet(setting, value, updater), onDone);
   };
-  let bo = (k, oe, se) => {
-    let ge = Ln.current;
-    Cs(k, oe, se, () => {
-      if (Ln.current === ge) {
-        Ln.current += 1;
-        Fe(null);
+  let commitViaRow = (id, value, updater) => {
+    let savedCount = savedCountRef.current;
+    commitSetting(id, value, updater, () => {
+      if (savedCountRef.current === savedCount) {
+        savedCountRef.current += 1;
+        setActiveDialog(null);
         setTabsHidden(false);
       }
     });
   };
-  let Co = ce(
-    (k, oe) => {
-      if (k !== "latest" && k !== "stable")
+  let commitAutoUpdateChannel = useCallback(
+    (channel, options) => {
+      if (channel !== "latest" && channel !== "stable")
         return {
           error: new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `Auto-update channel doesn't accept "${sanitizeHookText(String(k))}".`,
+            `Auto-update channel doesn't accept "${sanitizeHookText(String(channel))}".`,
             "auto-update channel rewritten to a value the row does not know",
           ),
         };
-      if (oe.kind === "enable") {
+      if (options.kind === "enable") {
         saveGlobalConfig(
           (prev_6) => ({
             ...prev_6,
@@ -671,60 +717,60 @@ function Config({
           }),
           storageV5,
         );
-        ve((prev_7) => ({
+        setGlobalConfig((prev_7) => ({
           ...prev_7,
           autoUpdates: true,
         }));
         updateSettingsForSource(
           "userSettings",
           {
-            autoUpdatesChannel: k,
+            autoUpdatesChannel: channel,
             minimumVersion: undefined,
           },
           undefined,
           storageV5,
         );
-        He((prev_8) => ({
+        setSettingsData((prev_8) => ({
           ...prev_8,
-          autoUpdatesChannel: k,
+          autoUpdatesChannel: channel,
           minimumVersion: undefined,
         }));
         logEvent("tengu_autoupdate_enabled", {
-          channel: fromEnum(k),
+          channel: fromEnum(channel),
         });
         return;
       }
-      let se =
-        k === "latest"
+      let settingsPatch =
+        channel === "latest"
           ? {
               autoUpdatesChannel: undefined,
               minimumVersion: undefined,
             }
-          : oe.minimumVersion === undefined
+          : options.minimumVersion === undefined
             ? {
-                autoUpdatesChannel: k,
+                autoUpdatesChannel: channel,
               }
             : {
-                autoUpdatesChannel: k,
-                minimumVersion: oe.minimumVersion,
+                autoUpdatesChannel: channel,
+                minimumVersion: options.minimumVersion,
               };
-      updateSettingsForSource("userSettings", se, undefined, storageV5);
-      He((prev_9) => ({
+      updateSettingsForSource("userSettings", settingsPatch, undefined, storageV5);
+      setSettingsData((prev_9) => ({
         ...prev_9,
-        ...se,
+        ...settingsPatch,
       }));
       logEvent("tengu_autoupdate_channel_changed", {
-        channel: fromEnum(k),
-        ...(k === "stable" && {
-          minimum_version_set: oe.minimumVersion !== undefined,
+        channel: fromEnum(channel),
+        ...(channel === "stable" && {
+          minimum_version_set: options.minimumVersion !== undefined,
         }),
       });
     },
     [storageV5],
   );
-  let en = isSettingsMovedToConfig();
-  let bt = Q(() => {
-    let settingsItems = en ? sortSettingsByOrder(flattened) : flattened;
+  let isSettingsMoved = isSettingsMovedToConfig();
+  let visibleSettings = useMemo(() => {
+    let settingsItems = isSettingsMoved ? sortSettingsByOrder(flattened) : flattened;
     if (!searchQuery) return settingsItems;
     let lowerQuery = searchQuery.toLowerCase();
     return settingsItems.filter((setting) => {
@@ -739,35 +785,36 @@ function Config({
         return setting.options.some((prev_11) => prev_11.toLowerCase().includes(lowerQuery));
       return false;
     });
-  }, [flattened, searchQuery, en]);
-  P(() => {
+  }, [flattened, searchQuery, isSettingsMoved]);
+  useEffect(() => {
     if (isScreenReaderEnabled || idRef.current === null) return;
-    if (Xe || Ne !== idRef.current) idRef.current = null;
-  }, [isScreenReaderEnabled, Ne, Xe]);
-  let yc = yt(onReachabilityChange, getReachability, () => {
+    if (isSearchMode || focusedSettingId !== idRef.current) idRef.current = null;
+  }, [isScreenReaderEnabled, focusedSettingId, isSearchMode]);
+  let reachability = useSyncExternalStore(onReachabilityChange, getReachability, () => {
     return;
   });
   let max = Math.max(1, columns - 2 * (insideModal ? PANE_WIDTH_RESERVE + PANE_PADDING_X : PANE_PADDING));
   let max_2 = Math.max(1, max - 7);
-  let ws = truncateToWidth(searchQuery, max_2);
-  let cursorOffset = Math.min(searchCursorOffset, ws.length);
-  let wc = ce(() => {
-    if (Be !== null) return;
-    let formattedChanges = [...Yi].map(([key, value]) => {
-      let Wn = fromEnum(key);
+  let truncatedQuery = truncateToWidth(searchQuery, max_2);
+  let cursorOffset = Math.min(searchCursorOffset, truncatedQuery.length);
+  let closeHandler = useCallback(() => {
+    if (activeDialog !== null) return;
+    let formattedChanges = [...changes].map(([key, value]) => {
+      let keyName = fromEnum(key);
       logEvent("tengu_config_changed", {
-        key: Wn,
-        setting: Wn,
+        key: keyName,
+        setting: keyName,
         value: shortHash(String(value)),
       });
       return `Set ${key} to ${sequential.bold(value)}`;
     });
     let effectiveApiKey = isAntBuild() ? undefined : env.ANTHROPIC_API_KEY;
     let initialUsingCustomKey = Boolean(
-      effectiveApiKey && customApiKeyResponsesOf(pe.current).approved.includes(tailOfId(effectiveApiKey)),
+      effectiveApiKey &&
+      customApiKeyResponsesOf(globalConfigRef.current).approved.includes(tailOfId(effectiveApiKey)),
     );
     let currentUsingCustomKey = Boolean(
-      effectiveApiKey && customApiKeyResponsesOf(de).approved.includes(tailOfId(effectiveApiKey)),
+      effectiveApiKey && customApiKeyResponsesOf(globalConfig).approved.includes(tailOfId(effectiveApiKey)),
     );
     if (initialUsingCustomKey !== currentUsingCustomKey) {
       formattedChanges.push(`${currentUsingCustomKey ? "Enabled" : "Disabled"} custom API key`);
@@ -777,61 +824,70 @@ function Config({
         value: currentUsingCustomKey,
       });
     }
-    if (de.theme !== pe.current.theme) formattedChanges.push(`Set theme to ${sequential.bold(de.theme)}`);
-    if (de.preferredNotifChannel !== pe.current.preferredNotifChannel)
-      formattedChanges.push(`Set notifications to ${sequential.bold(de.preferredNotifChannel)}`);
+    if (globalConfig.theme !== globalConfigRef.current.theme)
+      formattedChanges.push(`Set theme to ${sequential.bold(globalConfig.theme)}`);
+    if (globalConfig.preferredNotifChannel !== globalConfigRef.current.preferredNotifChannel)
+      formattedChanges.push(`Set notifications to ${sequential.bold(globalConfig.preferredNotifChannel)}`);
     if (outputStyle !== outputStyleRef.current)
       formattedChanges.push(`Set output style to ${sequential.bold(outputStyle)}`);
     if (language !== languageRef.current)
       formattedChanges.push(`Set response language to ${sequential.bold(language ?? "Default (English)")}`);
-    if (de.editorMode !== pe.current.editorMode)
-      formattedChanges.push(`Set editor mode to ${sequential.bold(de.editorMode || "emacs")}`);
-    if (de.diffTool !== pe.current.diffTool)
-      formattedChanges.push(`Set diff tool to ${sequential.bold(de.diffTool)}`);
-    if (de.autoConnectIde !== pe.current.autoConnectIde)
-      formattedChanges.push(`${de.autoConnectIde ? "Enabled" : "Disabled"} auto-connect to IDE`);
-    if (de.autoInstallIdeExtension !== pe.current.autoInstallIdeExtension)
+    if (globalConfig.editorMode !== globalConfigRef.current.editorMode)
+      formattedChanges.push(`Set editor mode to ${sequential.bold(globalConfig.editorMode || "emacs")}`);
+    if (globalConfig.diffTool !== globalConfigRef.current.diffTool)
+      formattedChanges.push(`Set diff tool to ${sequential.bold(globalConfig.diffTool)}`);
+    if (globalConfig.autoConnectIde !== globalConfigRef.current.autoConnectIde)
+      formattedChanges.push(`${globalConfig.autoConnectIde ? "Enabled" : "Disabled"} auto-connect to IDE`);
+    if (globalConfig.autoInstallIdeExtension !== globalConfigRef.current.autoInstallIdeExtension)
       formattedChanges.push(
-        `${de.autoInstallIdeExtension ? "Enabled" : "Disabled"} auto-install IDE extension`,
+        `${globalConfig.autoInstallIdeExtension ? "Enabled" : "Disabled"} auto-install IDE extension`,
       );
-    if (de.autoCompactEnabled !== pe.current.autoCompactEnabled)
-      formattedChanges.push(`${de.autoCompactEnabled ? "Enabled" : "Disabled"} auto-compact`);
-    if (de.autoScrollEnabled !== pe.current.autoScrollEnabled)
-      formattedChanges.push(`${de.autoScrollEnabled ? "Enabled" : "Disabled"} auto-scroll`);
-    if (de.respectGitignore !== pe.current.respectGitignore)
+    if (globalConfig.autoCompactEnabled !== globalConfigRef.current.autoCompactEnabled)
+      formattedChanges.push(`${globalConfig.autoCompactEnabled ? "Enabled" : "Disabled"} auto-compact`);
+    if (globalConfig.autoScrollEnabled !== globalConfigRef.current.autoScrollEnabled)
+      formattedChanges.push(`${globalConfig.autoScrollEnabled ? "Enabled" : "Disabled"} auto-scroll`);
+    if (globalConfig.respectGitignore !== globalConfigRef.current.respectGitignore)
       formattedChanges.push(
-        `${de.respectGitignore ? "Enabled" : "Disabled"} respect .gitignore in file picker`,
+        `${globalConfig.respectGitignore ? "Enabled" : "Disabled"} respect .gitignore in file picker`,
       );
-    if (de.copyFullResponse !== pe.current.copyFullResponse)
-      formattedChanges.push(`${de.copyFullResponse ? "Enabled" : "Disabled"} always copy full response`);
-    if (de.copyOnSelect !== pe.current.copyOnSelect)
-      formattedChanges.push(`${de.copyOnSelect ? "Enabled" : "Disabled"} copy on select`);
-    if (de.leftArrowOpensAgents !== pe.current.leftArrowOpensAgents)
+    if (globalConfig.copyFullResponse !== globalConfigRef.current.copyFullResponse)
       formattedChanges.push(
-        `${(de.leftArrowOpensAgents ?? true) ? "Enabled" : "Disabled"} ${LEFT_ARROW} opens agents`,
+        `${globalConfig.copyFullResponse ? "Enabled" : "Disabled"} always copy full response`,
       );
-    if (de.defaultToAgentsView !== pe.current.defaultToAgentsView)
-      formattedChanges.push(`${de.defaultToAgentsView ? "Enabled" : "Disabled"} open agents view by default`);
-    if (de.terminalProgressBarEnabled !== pe.current.terminalProgressBarEnabled)
+    if (globalConfig.copyOnSelect !== globalConfigRef.current.copyOnSelect)
+      formattedChanges.push(`${globalConfig.copyOnSelect ? "Enabled" : "Disabled"} copy on select`);
+    if (globalConfig.leftArrowOpensAgents !== globalConfigRef.current.leftArrowOpensAgents)
       formattedChanges.push(
-        `${de.terminalProgressBarEnabled ? "Enabled" : "Disabled"} terminal progress bar`,
+        `${(globalConfig.leftArrowOpensAgents ?? true) ? "Enabled" : "Disabled"} ${LEFT_ARROW} opens agents`,
       );
-    if (de.showStatusInTerminalTab !== pe.current.showStatusInTerminalTab)
-      formattedChanges.push(`${de.showStatusInTerminalTab ? "Enabled" : "Disabled"} terminal tab status`);
-    if (de.showTurnDuration !== pe.current.showTurnDuration)
-      formattedChanges.push(`${de.showTurnDuration ? "Enabled" : "Disabled"} turn duration`);
-    if (de.showMessageTimestamps !== pe.current.showMessageTimestamps)
-      formattedChanges.push(`${de.showMessageTimestamps ? "Enabled" : "Disabled"} message timestamps`);
-    if (de.remoteControlAtStartup !== pe.current.remoteControlAtStartup) {
+    if (globalConfig.defaultToAgentsView !== globalConfigRef.current.defaultToAgentsView)
+      formattedChanges.push(
+        `${globalConfig.defaultToAgentsView ? "Enabled" : "Disabled"} open agents view by default`,
+      );
+    if (globalConfig.terminalProgressBarEnabled !== globalConfigRef.current.terminalProgressBarEnabled)
+      formattedChanges.push(
+        `${globalConfig.terminalProgressBarEnabled ? "Enabled" : "Disabled"} terminal progress bar`,
+      );
+    if (globalConfig.showStatusInTerminalTab !== globalConfigRef.current.showStatusInTerminalTab)
+      formattedChanges.push(
+        `${globalConfig.showStatusInTerminalTab ? "Enabled" : "Disabled"} terminal tab status`,
+      );
+    if (globalConfig.showTurnDuration !== globalConfigRef.current.showTurnDuration)
+      formattedChanges.push(`${globalConfig.showTurnDuration ? "Enabled" : "Disabled"} turn duration`);
+    if (globalConfig.showMessageTimestamps !== globalConfigRef.current.showMessageTimestamps)
+      formattedChanges.push(
+        `${globalConfig.showMessageTimestamps ? "Enabled" : "Disabled"} message timestamps`,
+      );
+    if (globalConfig.remoteControlAtStartup !== globalConfigRef.current.remoteControlAtStartup) {
       let remoteLabel =
-        de.remoteControlAtStartup === undefined
+        globalConfig.remoteControlAtStartup === undefined
           ? "Reset Remote Control to default"
-          : `${de.remoteControlAtStartup ? "Enabled" : "Disabled"} Remote Control for all sessions`;
+          : `${globalConfig.remoteControlAtStartup ? "Enabled" : "Disabled"} Remote Control for all sessions`;
       formattedChanges.push(remoteLabel);
     }
-    if (Ce?.autoUpdatesChannel !== initialSettingsRef.current?.autoUpdatesChannel)
+    if (settingsData?.autoUpdatesChannel !== initialSettingsRef.current?.autoUpdatesChannel)
       formattedChanges.push(
-        `Set auto-update channel to ${sequential.bold(Ce?.autoUpdatesChannel === "rc" ? "slow" : (Ce?.autoUpdatesChannel ?? "latest"))}`,
+        `Set auto-update channel to ${sequential.bold(settingsData?.autoUpdatesChannel === "rc" ? "slow" : (settingsData?.autoUpdatesChannel ?? "latest"))}`,
       );
     if (formattedChanges.length > 0)
       onClose(
@@ -843,37 +899,40 @@ function Config({
         display: "system",
       });
   }, [
-    Be,
-    Yi,
-    de,
+    activeDialog,
+    changes,
+    globalConfig,
     mainLoopModel,
     outputStyle,
     language,
-    Ce?.autoUpdatesChannel,
-    isFastModeEnabled() ? Ce?.fastMode : undefined,
+    settingsData?.autoUpdatesChannel,
+    isFastModeEnabled() ? settingsData?.fastMode : undefined,
     onClose,
   ]);
-  useKeybinding("confirm:no", wc, {
+  useKeybinding("confirm:no", closeHandler, {
     context: "Settings",
-    isActive: Be === null && !Xe && !headerFocused,
+    isActive: activeDialog === null && !isSearchMode && !headerFocused,
   });
-  let ks = ce(
+  let isExternalIncludesToggle = useCallback(
     (current_1) =>
-      en && current_1.type === "managedEnum" && current_1.id === "showExternalIncludesDialog" && Ue,
-    [en, Ue],
+      isSettingsMoved &&
+      current_1.type === "managedEnum" &&
+      current_1.id === "showExternalIncludesDialog" &&
+      externalIncludesApproved,
+    [isSettingsMoved, externalIncludesApproved],
   );
-  let kc = ce(
+  let movedToSettings = useCallback(
     (current_2) =>
       MOVED_TO_SETTINGS_FIELDS.find((current_3) => current_3.id === current_2)?.isSet({
-        settingsData: Ce,
-        globalConfig: de,
+        settingsData,
+        globalConfig,
       }) ?? false,
-    [Ce, de],
+    [settingsData, globalConfig],
   );
-  let wo = ce(
-    (k, oe) => {
-      let se = k.onChange(oe);
-      let ge = (current_4) => {
+  let changeSetting = useCallback(
+    (setting, value) => {
+      let result = setting.onChange(value);
+      let handleResult = (current_4) => {
         if (current_4 && "error" in current_4 && current_4.error) {
           addNotification({
             key: "config-change-refused",
@@ -892,52 +951,52 @@ function Config({
             priority: "immediate",
           });
         logEvent("tengu_config_changed", {
-          setting: markSettingIdSafe(k.id),
-          value: k.provided === undefined ? markSettingValueSafe(oe) : lit("plugin_field"),
+          setting: markSettingIdSafe(setting.id),
+          value: setting.provided === undefined ? markSettingValueSafe(value) : lit("plugin_field"),
         });
       };
-      if (se instanceof Promise) {
-        se.then(ge);
+      if (result instanceof Promise) {
+        result.then(handleResult);
         return;
       }
-      ge(se);
+      handleResult(result);
     },
     [addNotification],
   );
-  let Tt = Q(() => {
-    let found = flattened.find((current_5) => current_5.id === Qi);
+  let enumPickerSetting = useMemo(() => {
+    let found = flattened.find((current_5) => current_5.id === enumPickerId);
     return found && found.type === "enum" ? found : undefined;
-  }, [flattened, Qi]);
-  let tn = ce(() => {
-    Xi(null);
-    Fe(null);
+  }, [flattened, enumPickerId]);
+  let closeEnumPicker = useCallback(() => {
+    setEnumPickerId(null);
+    setActiveDialog(null);
     setTabsHidden(false);
   }, [setTabsHidden]);
-  let Dt = Q(() => {
-    let found = flattened.find((oe) => oe.id === Ji);
+  let textEditSetting = useMemo(() => {
+    let found = flattened.find((state) => state.id === textEditId);
     return found && found.type === "managedEnum" ? found : undefined;
-  }, [flattened, Ji]);
-  let bn = ce(() => {
-    Zi(null);
-    Fe(null);
+  }, [flattened, textEditId]);
+  let closeTextEdit = useCallback(() => {
+    setTextEditId(null);
+    setActiveDialog(null);
     setTabsHidden(false);
   }, [setTabsHidden]);
-  zt(() => {
-    if (Be === "TextEdit" && Dt === undefined) bn();
-    else if (Be === "EnumPicker" && Tt === undefined) tn();
-  }, [Be, Dt, Tt, bn, tn]);
-  P(
+  useLayoutEffect(() => {
+    if (activeDialog === "TextEdit" && textEditSetting === undefined) closeTextEdit();
+    else if (activeDialog === "EnumPicker" && enumPickerSetting === undefined) closeEnumPicker();
+  }, [activeDialog, textEditSetting, enumPickerSetting, closeTextEdit, closeEnumPicker]);
+  useEffect(
     () =>
       unclaimedPaneClick.subscribe(() => {
-        if (Be === "EnumPicker") tn();
-        else if (Be === "TextEdit") bn();
+        if (activeDialog === "EnumPicker") closeEnumPicker();
+        else if (activeDialog === "TextEdit") closeTextEdit();
       }),
-    [unclaimedPaneClick, Be, tn, bn],
+    [unclaimedPaneClick, activeDialog, closeEnumPicker, closeTextEdit],
   );
-  let Fn = ce(
-    (k, oe) => {
-      if (idRef.current !== null && idRef.current !== k.id) {
-        let parsedMode = settingIdsKey(bt);
+  let onRowActivate = useCallback(
+    (setting, nextValue) => {
+      if (idRef.current !== null && idRef.current !== setting.id) {
+        let parsedMode = settingIdsKey(visibleSettings);
         if (isScreenReaderEnabled && parsedMode !== parsedModeRef.current) {
           idRef.current = null;
           parsedModeRef.current = parsedMode;
@@ -945,43 +1004,43 @@ function Config({
         }
         idRef.current = null;
       }
-      if (k.lock !== undefined) {
-        if (k.lock.source === "managed") return;
-        idRef.current = k.id;
-        parsedModeRef.current = settingIdsKey(bt);
+      if (setting.lock !== undefined) {
+        if (setting.lock.source === "managed") return;
+        idRef.current = setting.id;
+        parsedModeRef.current = settingIdsKey(visibleSettings);
         ensurePolicyLimitsLoadedForDiagnostic()
           .catch(() => {})
-          .finally(() => Qe((se) => se + 1));
+          .finally(() => bumpLockRetry((retryCount) => retryCount + 1));
         return;
       }
-      if (idRef.current === k.id) {
+      if (idRef.current === setting.id) {
         idRef.current = null;
-        Qe((se) => se + 1);
+        bumpLockRetry((retryCount) => retryCount + 1);
         return;
       }
-      if (k.id === "remoteHomeSettings" && k.value === false) {
-        if (k.grantBlocker !== undefined) {
-          logFeatureBad("remote_home_settings_mode", k.grantBlocker);
-          On(FORWARD_SETTINGS_ERRORS[k.grantBlocker]);
+      if (setting.id === "remoteHomeSettings" && setting.value === false) {
+        if (setting.grantBlocker !== undefined) {
+          logFeatureBad("remote_home_settings_mode", setting.grantBlocker);
+          setRemoteHomeError(FORWARD_SETTINGS_ERRORS[setting.grantBlocker]);
         } else {
-          Fe("RemoteHomeSettings");
+          setActiveDialog("RemoteHomeSettings");
           setTabsHidden(true);
         }
         return;
       }
-      if (k.type === "boolean") {
-        let se = typeof oe === "boolean" ? oe : !k.value;
-        let ge = k.onChange(se);
-        if (k.id === "remoteHomeSettings") {
-          On(null);
-          Promise.resolve(ge).then((prev_12) => {
-            if (prev_12?.error) On(prev_12.error.message);
-            else if (prev_12?.messageSuffix) On(`Saved${prev_12.messageSuffix}`);
+      if (setting.type === "boolean") {
+        let nextBool = typeof nextValue === "boolean" ? nextValue : !setting.value;
+        let result = setting.onChange(nextBool);
+        if (setting.id === "remoteHomeSettings") {
+          setRemoteHomeError(null);
+          Promise.resolve(result).then((prev_12) => {
+            if (prev_12?.error) setRemoteHomeError(prev_12.error.message);
+            else if (prev_12?.messageSuffix) setRemoteHomeError(`Saved${prev_12.messageSuffix}`);
           });
         }
-        Promise.resolve(ge)
+        Promise.resolve(result)
           .then((prev_13) => {
-            if (k.id === "remoteHomeSettings") return;
+            if (setting.id === "remoteHomeSettings") return;
             if (prev_13 && "error" in prev_13 && prev_13.error) {
               addNotification({
                 key: "config-change-refused",
@@ -1011,131 +1070,136 @@ function Config({
             });
           });
         logEvent("tengu_config_changed", {
-          setting: markSettingIdSafe(k.id),
-          value: se,
+          setting: markSettingIdSafe(setting.id),
+          value: nextBool,
         });
-        if (k.id === "thinking") {
-          if (se === thinkingEnabledRef.current) ho(false);
-          else if (messages.some((prev_15) => prev_15.type === "assistant")) ho(true);
+        if (setting.id === "thinking") {
+          if (nextBool === thinkingEnabledRef.current) setShowThinkingWarning(false);
+          else if (messages.some((prev_15) => prev_15.type === "assistant")) setShowThinkingWarning(true);
         }
         return;
       }
-      if (ks(k)) {
+      if (isExternalIncludesToggle(setting)) {
         recordExternalIncludesDecision(false, "config_toggle", storageV5);
-        Ie(false);
+        setExternalIncludesApproved(false);
         return;
       }
-      if (k.id === "agentsView") {
-        Fe("AgentsView");
+      if (setting.id === "agentsView") {
+        setActiveDialog("AgentsView");
         setTabsHidden(true);
         return;
       }
-      if (k.id === "notifChannel" && k.type === "managedEnum") {
-        Fe("Notifications");
+      if (setting.id === "notifChannel" && setting.type === "managedEnum") {
+        setActiveDialog("Notifications");
         setTabsHidden(true);
         return;
       }
-      if (k.provided !== undefined && k.type === "managedEnum") {
-        Zi(k.id);
-        ta(shownSettingValue(k));
-        Fe("TextEdit");
+      if (setting.provided !== undefined && setting.type === "managedEnum") {
+        setTextEditId(setting.id);
+        setTextEditValue(shownSettingValue(setting));
+        setActiveDialog("TextEdit");
         setTabsHidden(true);
         return;
       }
       if (
-        k.id === "theme" ||
-        k.id === "model" ||
-        k.id === "showExternalIncludesDialog" ||
-        k.id === "outputStyle" ||
-        k.id === "language"
+        setting.id === "theme" ||
+        setting.id === "model" ||
+        setting.id === "showExternalIncludesDialog" ||
+        setting.id === "outputStyle" ||
+        setting.id === "language"
       )
-        switch (k.id) {
+        switch (setting.id) {
           case "theme":
-            Fe("Theme");
+            setActiveDialog("Theme");
             setTabsHidden(true);
             return;
           case "model":
-            Fe("Model");
+            setActiveDialog("Model");
             setTabsHidden(true);
             return;
           case "showExternalIncludesDialog":
-            Fe("ExternalIncludes");
+            setActiveDialog("ExternalIncludes");
             setTabsHidden(true);
             return;
           case "outputStyle":
-            Fe("OutputStyle");
+            setActiveDialog("OutputStyle");
             setTabsHidden(true);
             return;
           case "language":
-            Fe("Language");
+            setActiveDialog("Language");
             setTabsHidden(true);
             return;
         }
-      if (k.id === "autoUpdatesChannel") {
+      if (setting.id === "autoUpdatesChannel") {
         if (autoUpdaterDisabledReason) {
-          Fe("EnableAutoUpdates");
+          setActiveDialog("EnableAutoUpdates");
           setTabsHidden(true);
           return;
         }
-        if ((Ce?.autoUpdatesChannel ?? "latest") === "latest") {
-          Fe("ChannelDowngrade");
+        if ((settingsData?.autoUpdatesChannel ?? "latest") === "latest") {
+          setActiveDialog("ChannelDowngrade");
           setTabsHidden(true);
         } else
-          Sn(
-            commitThroughConfigSet(k, "latest", (prev_16) =>
-              Co(prev_16, {
+          commitAndReport(
+            commitThroughConfigSet(setting, "latest", (prev_16) =>
+              commitAutoUpdateChannel(prev_16, {
                 kind: "switch",
               }),
             ),
           );
         return;
       }
-      if (k.type === "enum" && k.pickToCommit) {
-        Xi(k.id);
-        Fe("EnumPicker");
+      if (setting.type === "enum" && setting.pickToCommit) {
+        setEnumPickerId(setting.id);
+        setActiveDialog("EnumPicker");
         setTabsHidden(true);
         return;
       }
-      if (k.type === "enum") {
-        let ge = (k.options.indexOf(k.value) + 1) % k.options.length;
-        wo(k, typeof oe === "string" && k.options.includes(oe) ? oe : k.options[ge]);
+      if (setting.type === "enum") {
+        let nextIndex = (setting.options.indexOf(setting.value) + 1) % setting.options.length;
+        changeSetting(
+          setting,
+          typeof nextValue === "string" && setting.options.includes(nextValue)
+            ? nextValue
+            : setting.options[nextIndex],
+        );
         return;
       }
     },
     [
       addNotification,
       autoUpdaterDisabledReason,
-      wo,
-      ks,
-      bt,
+      changeSetting,
+      isExternalIncludesToggle,
+      visibleSettings,
       isScreenReaderEnabled,
-      Sn,
-      Ce?.autoUpdatesChannel,
+      commitAndReport,
+      settingsData?.autoUpdatesChannel,
       setTabsHidden,
       storageV5,
-      Co,
+      commitAutoUpdateChannel,
     ],
   );
   MessageActionsKeybindings(
     {
       "settings:search": () => {
-        tt(true);
+        setSearchMode(true);
         setSearchQuery("");
       },
     },
     {
       context: "Settings",
-      isActive: Be === null && !Xe && !headerFocused && !isScreenReaderEnabled,
+      isActive: activeDialog === null && !isSearchMode && !headerFocused && !isScreenReaderEnabled,
     },
   );
-  let ra = Q(
+  let agentViewRows = useMemo(
     () => [
       ...(isFleetBackgroundAllowed()
         ? [
             {
               id: "leftArrowOpensAgents",
               label: `${LEFT_ARROW} opens agents`,
-              value: de.leftArrowOpensAgents ?? true,
+              value: globalConfig.leftArrowOpensAgents ?? true,
             },
           ]
         : []),
@@ -1144,53 +1208,53 @@ function Config({
             {
               id: "defaultToAgentsView",
               label: "Start in agent view",
-              value: de.defaultToAgentsView ?? false,
+              value: globalConfig.defaultToAgentsView ?? false,
             },
           ]
         : []),
     ],
-    [de.leftArrowOpensAgents, de.defaultToAgentsView],
+    [globalConfig.leftArrowOpensAgents, globalConfig.defaultToAgentsView],
   );
-  let Tc = ce(
-    (k, oe) => {
-      if (k === "leftArrowOpensAgents") {
+  let setAgentViewRow = useCallback(
+    (id, value) => {
+      if (id === "leftArrowOpensAgents") {
         saveGlobalConfig(
           (current_6) => ({
             ...current_6,
-            leftArrowOpensAgents: oe,
+            leftArrowOpensAgents: value,
           }),
           storageV5,
         );
-        ve((current_7) => ({
+        setGlobalConfig((current_7) => ({
           ...current_7,
-          leftArrowOpensAgents: oe,
+          leftArrowOpensAgents: value,
         }));
       } else {
         saveGlobalConfig(
           (current_8) => ({
             ...current_8,
-            defaultToAgentsView: oe,
+            defaultToAgentsView: value,
           }),
           storageV5,
         );
-        ve((current_9) => ({
+        setGlobalConfig((current_9) => ({
           ...current_9,
-          defaultToAgentsView: oe,
+          defaultToAgentsView: value,
         }));
       }
       logEvent("tengu_config_changed", {
-        setting: fromEnum(k),
-        value: oe,
+        setting: fromEnum(id),
+        value,
       });
     },
     [storageV5],
   );
-  let onKeyDown = ce(
+  let onKeyDown = useCallback(
     (e) => {
-      if (Be !== null) return;
+      if (activeDialog !== null) return;
       if (headerFocused) return;
-      if (Xe) {
-        if ((e.key === "return" || e.key === "down") && bt.length === 0) {
+      if (isSearchMode) {
+        if ((e.key === "return" || e.key === "down") && visibleSettings.length === 0) {
           e.preventDefault();
           return;
         }
@@ -1198,13 +1262,13 @@ function Config({
         if (e.key === "escape") {
           e.preventDefault();
           if (searchQuery.length > 0) setSearchQuery("");
-          else tt(false);
+          else setSearchMode(false);
           return;
         }
         if (e.key === "return" || e.key === "down") {
           e.preventDefault();
-          tt(false);
-          Ge((current_11) => current_11 + 1);
+          setSearchMode(false);
+          bumpResetNonce((current_11) => current_11 + 1);
         }
         return;
       }
@@ -1216,40 +1280,54 @@ function Config({
       if (e.ctrl || e.meta) return;
       if (e.key.length === 1 && e.key !== " ") {
         e.preventDefault();
-        tt(true);
+        setSearchMode(true);
         setSearchQuery(e.key === "/" ? "" : e.key);
       }
     },
-    [Be, headerFocused, Xe, searchQuery, setSearchQuery, handleKeyDown, bt.length],
+    [
+      activeDialog,
+      headerFocused,
+      isSearchMode,
+      searchQuery,
+      setSearchQuery,
+      handleKeyDown,
+      visibleSettings.length,
+    ],
   );
-  let Ts = !headerFocused && !Xe;
-  let la = () => {
+  let canInteract = !headerFocused && !isSearchMode;
+  let dismissSearch = () => {
     if (headerFocused) blurHeader();
-    tt(false);
+    setSearchMode(false);
   };
-  let Ds = `${et} ${searchQuery}`;
-  let lock = (ot === Ds ? bt.find((current_12) => current_12.id === Ne) : bt[0])?.lock;
-  let ca = 0;
-  let Un = maxVisible - ca - 1 >= 5 ? ca : 0;
-  let vc = Un > 0;
-  let children = bt.flatMap((k, oe) => {
-    let se = en ? sectionForSetting(k.id) : undefined;
-    let ge = se !== undefined && (oe === 0 || sectionForSetting(bt[oe - 1]?.id ?? "") !== se);
+  let resetKey = `${resetNonce} ${searchQuery}`;
+  let lock = (
+    resetKeyValue === resetKey
+      ? visibleSettings.find((current_12) => current_12.id === focusedSettingId)
+      : visibleSettings[0]
+  )?.lock;
+  let reservedRow = 0;
+  let reservedRows = maxVisible - reservedRow - 1 >= 5 ? reservedRow : 0;
+  let hasReservedRow = reservedRows > 0;
+  let children = visibleSettings.flatMap((setting, index) => {
+    let section = isSettingsMoved ? sectionForSetting(setting.id) : undefined;
+    let isSectionStart =
+      section !== undefined &&
+      (index === 0 || sectionForSetting(visibleSettings[index - 1]?.id ?? "") !== section);
     let children =
-      k.id === "autoUpdatesChannel" && autoUpdaterDisabledReason
+      setting.id === "autoUpdatesChannel" && autoUpdaterDisabledReason
         ? `disabled (${formatAutoUpdaterDisabledReason(autoUpdaterDisabledReason)})`
-        : formatSettingValue(k, shownSettingValue(k), en, false);
-    let mt = ge ? sectionTitleWithNote(se, k.id) : undefined;
-    let Wn = k.lock !== undefined;
-    let Mc =
-      ks(k) ||
-      (k.type === "enum" && !k.pickToCommit) ||
-      (k.id === "autoUpdatesChannel" &&
+        : formatSettingValue(setting, shownSettingValue(setting), isSettingsMoved, false);
+    let sectionHeading = isSectionStart ? sectionTitleWithNote(section, setting.id) : undefined;
+    let isLocked = setting.lock !== undefined;
+    let isButtonStyle =
+      isExternalIncludesToggle(setting) ||
+      (setting.type === "enum" && !setting.pickToCommit) ||
+      (setting.id === "autoUpdatesChannel" &&
         autoUpdaterDisabledReason === null &&
-        (Ce?.autoUpdatesChannel ?? "latest") !== "latest");
+        (settingsData?.autoUpdatesChannel ?? "latest") !== "latest");
     return [
-      ...(ge && oe > 0 ? [jsxProd_default(merged.Heading, {}, `${se} gap`)] : []),
-      ...(mt
+      ...(isSectionStart && index > 0 ? [jsxProd_default(merged.Heading, {}, `${section} gap`)] : []),
+      ...(sectionHeading
         ? [
             jsxProd_default(
               merged.Heading,
@@ -1259,17 +1337,17 @@ function Config({
                   children: [
                     jsxProd_default(Text, {
                       bold: true,
-                      children: mt.name,
+                      children: sectionHeading.name,
                     }),
-                    mt.note !== undefined &&
+                    sectionHeading.note !== undefined &&
                       jsxProd_default_2(Text, {
                         dimColor: true,
-                        children: ["  ", mt.note],
+                        children: ["  ", sectionHeading.note],
                       }),
                   ],
                 }),
               },
-              se,
+              section,
             ),
           ]
         : []),
@@ -1277,75 +1355,81 @@ function Config({
         merged_2.Field,
         {
           label: [
-            "labelBoldSuffix" in k ? k.label + k.labelBoldSuffix : k.label,
-            ...(k.provided === undefined ? [] : [k.provided.plugin]),
+            "labelBoldSuffix" in setting ? setting.label + setting.labelBoldSuffix : setting.label,
+            ...(setting.provided === undefined ? [] : [setting.provided.plugin]),
           ].join(" \xB7 "),
           description:
             [
-              zl && k.id === "thinking" ? `${WARNING_GLYPH} ${THINKING_CHANGE_WARNING}` : undefined,
-              k.id === "remoteHomeSettings" && qi !== null ? `${WARNING_GLYPH} ${qi}` : undefined,
-              k.notice === undefined ? undefined : `${WARNING_GLYPH} ${k.notice}`,
-              vc ? undefined : k.lock?.reason,
-              se === "Advanced" && kc(k.id) ? "\u2192 settings.json" : undefined,
+              showThinkingWarning && setting.id === "thinking"
+                ? `${WARNING_GLYPH} ${THINKING_CHANGE_WARNING}`
+                : undefined,
+              setting.id === "remoteHomeSettings" && remoteHomeError !== null
+                ? `${WARNING_GLYPH} ${remoteHomeError}`
+                : undefined,
+              setting.notice === undefined ? undefined : `${WARNING_GLYPH} ${setting.notice}`,
+              hasReservedRow ? undefined : setting.lock?.reason,
+              section === "Advanced" && movedToSettings(setting.id) ? "\u2192 settings.json" : undefined,
             ]
               .filter((prev_18) => prev_18 !== undefined)
               .join(" ") || undefined,
           ink: undefined,
           children:
-            k.lock?.source === "policy"
+            setting.lock?.source === "policy"
               ? jsxProd_default(merged_2.Button, {
-                  onPress: () => Fn(k),
+                  onPress: () => onRowActivate(setting),
                   children,
                 })
-              : k.type === "boolean"
+              : setting.type === "boolean"
                 ? jsxProd_default(merged_2.Toggle, {
-                    value: k.value,
-                    onChange: (prev_19) => Fn(k, prev_19),
-                    disabled: Wn,
+                    value: setting.value,
+                    onChange: (prev_19) => onRowActivate(setting, prev_19),
+                    disabled: isLocked,
                   })
-                : Wn
+                : isLocked
                   ? jsxProd_default(merged_2.Button, {
                       onPress: () => {},
                       disabled: true,
                       children,
                     })
-                  : k.type === "enum" && !k.pickToCommit && k.options.includes(k.value)
+                  : setting.type === "enum" &&
+                      !setting.pickToCommit &&
+                      setting.options.includes(setting.value)
                     ? jsxProd_default(merged_2.Select, {
-                        value: k.value,
-                        options: k.options.map((current_13) => ({
+                        value: setting.value,
+                        options: setting.options.map((current_13) => ({
                           value: current_13,
                           label: formatSettingValue(
-                            k,
+                            setting,
                             shownSettingValue({
-                              ...k,
+                              ...setting,
                               value: current_13,
                             }),
-                            en,
+                            isSettingsMoved,
                             false,
                           ),
                         })),
-                        onChange: (current_14) => Fn(k, current_14),
+                        onChange: (current_14) => onRowActivate(setting, current_14),
                       })
-                    : Mc
+                    : isButtonStyle
                       ? jsxProd_default(merged_2.Button, {
-                          onPress: () => Fn(k),
+                          onPress: () => onRowActivate(setting),
                           children,
                         })
                       : jsxProd_default(merged_2.Link, {
-                          onOpen: () => Fn(k),
+                          onOpen: () => onRowActivate(setting),
                           children,
                         }),
         },
-        k.id,
+        setting.id,
       ),
-      ...((k.id === "inputNeededNotifEnabled" || k.id === "agentPushNotifEnabled") &&
-      yc?.has_active_channel === false
-        ? [jsxProd_default(renderMobileNotice, {}, `${k.id} warning`)]
+      ...((setting.id === "inputNeededNotifEnabled" || setting.id === "agentPushNotifEnabled") &&
+      reachability?.has_active_channel === false
+        ? [jsxProd_default(renderMobileNotice, {}, `${setting.id} warning`)]
         : []),
     ];
   });
   return jsxProd_default(Box, {
-    ref: kt,
+    ref: containerRef,
     flexDirection: "column",
     width: "100%",
     ...(isScreenReaderEnabled
@@ -1355,22 +1439,27 @@ function Config({
           autoFocus: !headerFocused,
           onKeyDown,
           onPaste: handlePaste,
-          onWheel: Be === null && !Ts && bt.length > 0 ? la : undefined,
+          onWheel:
+            activeDialog === null && !canInteract && visibleSettings.length > 0 ? dismissSearch : undefined,
         }),
     children:
-      Be === "Theme"
+      activeDialog === "Theme"
         ? jsxProd_default_2(Fragment, {
             children: [
               jsxProd_default(ThemePicker, {
                 onThemeSelect: (current_15) => {
-                  let oe = commitThroughConfigSet(So("theme"), current_15, themeWriter(fe));
-                  Sn(oe);
-                  Fe(null);
+                  let committed = commitThroughConfigSet(
+                    findSetting("theme"),
+                    current_15,
+                    themeWriter(setTheme),
+                  );
+                  commitAndReport(committed);
+                  setActiveDialog(null);
                   setTabsHidden(false);
-                  return oe;
+                  return committed;
                 },
                 onCancel: () => {
-                  Fe(null);
+                  setActiveDialog(null);
                   setTabsHidden(false);
                 },
                 helpText: isCustomizationDisabled("themes")
@@ -1401,16 +1490,19 @@ function Config({
               }),
             ],
           })
-        : Be === "Model"
+        : activeDialog === "Model"
           ? jsxProd_default_2(Fragment, {
               children: [
                 jsxProd_default(ModelPicker, {
                   initial: mainLoopModel,
                   sessionModel: mainLoopModelForSession,
-                  onSelect: (k, oe) => {
+                  onSelect: (model, saveAsDefault) => {
                     Promise.resolve(
-                      commitThroughConfigSet(So("model"), k ?? "default", (current_16) =>
-                        onChangeMainModelConfig(current_16 === "default" ? null : String(current_16), oe),
+                      commitThroughConfigSet(findSetting("model"), model ?? "default", (current_16) =>
+                        onChangeMainModelConfig(
+                          current_16 === "default" ? null : String(current_16),
+                          saveAsDefault,
+                        ),
                       ),
                     )
                       .then((current_17) => {
@@ -1433,15 +1525,15 @@ function Config({
                           priority: "immediate",
                         });
                       });
-                    Fe(null);
+                    setActiveDialog(null);
                     setTabsHidden(false);
                   },
                   onCancel: () => {
-                    Fe(null);
+                    setActiveDialog(null);
                     setTabsHidden(false);
                   },
                   showFastModeNotice: isFastModeEnabled()
-                    ? fastModeOnForModel && supportsFastMode(gs) && isFastModeAvailable()
+                    ? fastModeOnForModel && supportsFastMode(modelSetting) && isFastModeAvailable()
                     : false,
                 }),
                 jsxProd_default(Text, {
@@ -1452,27 +1544,27 @@ function Config({
                       jsxProd_default(KeyboardShortcutHint, {
                         chord: "enter",
                         action: "confirm",
-                        ...F,
+                        ...hintFormat,
                       }),
                       jsxProd_default(ConfigurableShortcutHint, {
                         action: "confirm:no",
                         context: "Confirmation",
                         fallback: "Esc",
                         description: "cancel",
-                        ...F,
+                        ...hintFormat,
                       }),
                     ],
                   }),
                 }),
               ],
             })
-          : Be === "RemoteHomeSettings"
+          : activeDialog === "RemoteHomeSettings"
             ? jsxProd_default(RemoteHomeSettingsDialog, {
                 configHome: getClaudeConfigDir(),
                 storageV5,
                 origin: "config_panel",
                 onDone: (current_19) => {
-                  On(
+                  setRemoteHomeError(
                     current_19 === "not_saved"
                       ? FORWARD_SETTINGS_ERRORS.flag_off
                       : current_19 === "not_stored"
@@ -1485,21 +1577,23 @@ function Config({
                       value: true,
                     });
                   if (current_19 === "forward" || current_19 === "keep_local")
-                    ve((current_20) => ({
+                    setGlobalConfig((current_20) => ({
                       ...current_20,
                       remoteHomeSettingsMode: getGlobalConfig().remoteHomeSettingsMode,
                     }));
-                  Fe(null);
+                  setActiveDialog(null);
                   setTabsHidden(false);
                 },
               })
-            : Be === "ExternalIncludes"
+            : activeDialog === "ExternalIncludes"
               ? jsxProd_default_2(Fragment, {
                   children: [
                     jsxProd_default(ClaudeMdExternalIncludesDialog, {
                       onDone: () => {
-                        Ie(getCurrentProjectConfig().hasClaudeMdExternalIncludesApproved === true);
-                        Fe(null);
+                        setExternalIncludesApproved(
+                          getCurrentProjectConfig().hasClaudeMdExternalIncludesApproved === true,
+                        );
+                        setActiveDialog(null);
                         setTabsHidden(false);
                       },
                       externalIncludes: getExternalClaudeMdIncludes(isConnectedToIde_2),
@@ -1523,16 +1617,16 @@ function Config({
                     }),
                   ],
                 })
-              : Be === "OutputStyle"
+              : activeDialog === "OutputStyle"
                 ? jsxProd_default_2(Fragment, {
                     children: [
                       jsxProd_default(OutputStylePicker, {
                         initialStyle: outputStyle,
-                        visibleCount: Math.max(3, In - 7),
+                        visibleCount: Math.max(3, panelHeight - 7),
                         onComplete: (current_21) => {
-                          Fe(null);
+                          setActiveDialog(null);
                           setTabsHidden(false);
-                          let oe = (style) => {
+                          let applyStyle = (style) => {
                             let truncatedKey = String(style);
                             setOutputStyle(truncatedKey || DEFAULT_2);
                             noteSystemPromptSectionInvalidation("output_style");
@@ -1550,10 +1644,12 @@ function Config({
                               settings_source: lit("localSettings"),
                             });
                           };
-                          Sn(commitThroughConfigSet(So("outputStyle"), current_21 ?? "", oe));
+                          commitAndReport(
+                            commitThroughConfigSet(findSetting("outputStyle"), current_21 ?? "", applyStyle),
+                          );
                         },
                         onCancel: () => {
-                          Fe(null);
+                          setActiveDialog(null);
                           setTabsHidden(false);
                         },
                       }),
@@ -1565,53 +1661,55 @@ function Config({
                             jsxProd_default(KeyboardShortcutHint, {
                               chord: "enter",
                               action: "confirm",
-                              ...F,
+                              ...hintFormat,
                             }),
                             jsxProd_default(ConfigurableShortcutHint, {
                               action: "confirm:no",
                               context: "Confirmation",
                               fallback: "Esc",
                               description: "cancel",
-                              ...F,
+                              ...hintFormat,
                             }),
                           ],
                         }),
                       }),
                     ],
                   })
-                : Be === "Language"
+                : activeDialog === "Language"
                   ? jsxProd_default_2(Fragment, {
                       children: [
                         jsxProd_default(LanguagePicker, {
                           initialLanguage: language,
-                          onComplete: (k) => {
-                            Fe(null);
+                          onComplete: (language) => {
+                            setActiveDialog(null);
                             setTabsHidden(false);
-                            let oe = (k_0) => {
-                              let ge = String(k_0) || undefined;
-                              setLanguage(ge);
+                            let commitLanguage = (k_0) => {
+                              let languageValue = String(k_0) || undefined;
+                              setLanguage(languageValue);
                               updateSettingsForSource(
                                 "userSettings",
                                 {
-                                  language: ge,
+                                  language: languageValue,
                                 },
                                 undefined,
                                 storageV5,
                               );
-                              let be = normalizeLanguageForSTT(ge);
+                              let normalizedLanguage = normalizeLanguageForSTT(languageValue);
                               logEvent("tengu_language_changed", {
-                                language: !ge
+                                language: !languageValue
                                   ? lit("default")
-                                  : be.fellBackFrom === undefined
-                                    ? localeOrNonconforming(be.code)
+                                  : normalizedLanguage.fellBackFrom === undefined
+                                    ? localeOrNonconforming(normalizedLanguage.code)
                                     : lit("custom"),
                                 source: lit("config_panel"),
                               });
                             };
-                            Sn(commitThroughConfigSet(So("language"), k ?? "", oe));
+                            commitAndReport(
+                              commitThroughConfigSet(findSetting("language"), language ?? "", commitLanguage),
+                            );
                           },
                           onCancel: () => {
-                            Fe(null);
+                            setActiveDialog(null);
                             setTabsHidden(false);
                           },
                         }),
@@ -1634,20 +1732,20 @@ function Config({
                         }),
                       ],
                     })
-                  : Be === "AgentsView"
+                  : activeDialog === "AgentsView"
                     ? jsxProd_default_2(Dialog, {
                         title: "Agents view",
                         onCancel: () => {
-                          Ln.current += 1;
-                          Fe(null);
+                          savedCountRef.current += 1;
+                          setActiveDialog(null);
                           setTabsHidden(false);
                         },
                         hideBorder: true,
                         hideInputGuide: true,
                         children: [
                           jsxProd_default(merged_2, {
-                            visibleCount: ra.length * 2,
-                            children: ra.map((k_1) =>
+                            visibleCount: agentViewRows.length * 2,
+                            children: agentViewRows.map((k_1) =>
                               jsxProd_default(
                                 merged_2.Field,
                                 {
@@ -1655,7 +1753,9 @@ function Config({
                                   children: jsxProd_default(merged_2.Toggle, {
                                     value: k_1.value,
                                     onChange: (k_2) =>
-                                      bo(k_1.id, k_2, (setting) => Tc(k_1.id, setting === true)),
+                                      commitViaRow(k_1.id, k_2, (setting) =>
+                                        setAgentViewRow(k_1.id, setting === true),
+                                      ),
                                   }),
                                 },
                                 k_1.id,
@@ -1682,32 +1782,32 @@ function Config({
                           }),
                         ],
                       })
-                    : Be === "EnumPicker" && Tt
+                    : activeDialog === "EnumPicker" && enumPickerSetting
                       ? jsxProd_default_2(Box, {
                           flexDirection: "column",
                           onClick: stopClickPropagation,
                           children: [
                             jsxProd_default(Dialog, {
-                              title: Tt.label,
+                              title: enumPickerSetting.label,
                               subtitle:
-                                Tt.provided === undefined
+                                enumPickerSetting.provided === undefined
                                   ? undefined
-                                  : `${Tt.provided.description} \xB7 ${Tt.provided.plugin}`,
-                              onCancel: tn,
+                                  : `${enumPickerSetting.provided.description} \xB7 ${enumPickerSetting.provided.plugin}`,
+                              onCancel: closeEnumPicker,
                               hideBorder: true,
                               hideInputGuide: true,
                               children: jsxProd_default(ModelSelector, {
-                                options: Tt.options.map((prev_21) => ({
+                                options: enumPickerSetting.options.map((prev_21) => ({
                                   label: prev_21,
                                   value: prev_21,
                                 })),
-                                defaultValue: String(Tt.value),
-                                defaultFocusValue: String(Tt.value),
+                                defaultValue: String(enumPickerSetting.value),
+                                defaultFocusValue: String(enumPickerSetting.value),
                                 onChange: (newIndex_0) => {
-                                  tn();
-                                  wo(Tt, newIndex_0);
+                                  closeEnumPicker();
+                                  changeSetting(enumPickerSetting, newIndex_0);
                                 },
-                                onCancel: tn,
+                                onCancel: closeEnumPicker,
                               }),
                             }),
                             jsxProd_default(Text, {
@@ -1729,45 +1829,46 @@ function Config({
                             }),
                           ],
                         })
-                      : Be === "TextEdit" && Dt
+                      : activeDialog === "TextEdit" && textEditSetting
                         ? jsxProd_default(Box, {
                             flexDirection: "column",
                             onClick: stopClickPropagation,
                             children: jsxProd_default(AgentsList, {
-                              title: Dt.label,
+                              title: textEditSetting.label,
                               subtitle:
-                                Dt.provided === undefined
+                                textEditSetting.provided === undefined
                                   ? undefined
-                                  : `${Dt.provided.description} \xB7 ${Dt.provided.plugin}`,
+                                  : `${textEditSetting.provided.description} \xB7 ${textEditSetting.provided.plugin}`,
                               fields: [
                                 {
                                   type: "text",
                                   key: "value",
-                                  label: Dt.label,
+                                  label: textEditSetting.label,
                                   validate: (prev_22) =>
-                                    Dt.coerce?.(prev_22) === undefined
-                                      ? (Dt.optionsHint ?? "Not a value it takes")
+                                    textEditSetting.coerce?.(prev_22) === undefined
+                                      ? (textEditSetting.optionsHint ?? "Not a value it takes")
                                       : null,
                                 },
                               ],
                               values: {
-                                value: Ss,
+                                value: textEditValue,
                               },
-                              onChange: (k, oe) => ta(oe),
+                              onChange: (field, value) => setTextEditValue(value),
                               onSubmit: () => {
-                                let k = Dt;
-                                let oe = k.coerce?.(Ss) ?? Ss;
-                                bn();
-                                if (oe !== shownSettingValue(k)) wo(k, oe);
+                                let setting = textEditSetting;
+                                let coercedValue = setting.coerce?.(textEditValue) ?? textEditValue;
+                                closeTextEdit();
+                                if (coercedValue !== shownSettingValue(setting))
+                                  changeSetting(setting, coercedValue);
                               },
-                              onCancel: bn,
+                              onCancel: closeTextEdit,
                             }),
                           })
-                        : Be === "EnableAutoUpdates"
+                        : activeDialog === "EnableAutoUpdates"
                           ? jsxProd_default(Dialog, {
                               title: "Enable Auto-Updates",
                               onCancel: () => {
-                                Fe(null);
+                                setActiveDialog(null);
                                 setTabsHidden(false);
                               },
                               hideBorder: true,
@@ -1805,17 +1906,17 @@ function Config({
                                         },
                                       ],
                                       onChange: (prev_24) => {
-                                        Fe(null);
+                                        setActiveDialog(null);
                                         setTabsHidden(false);
-                                        Cs("autoUpdatesChannel", prev_24, (delta) =>
-                                          Co(delta, {
+                                        commitSetting("autoUpdatesChannel", prev_24, (delta) =>
+                                          commitAutoUpdateChannel(delta, {
                                             kind: "enable",
                                           }),
                                         );
                                       },
                                     }),
                             })
-                          : Be === "ChannelDowngrade"
+                          : activeDialog === "ChannelDowngrade"
                             ? jsxProd_default(ChannelDowngradeDialog, {
                                 currentVersion: {
                                   ISSUES_EXPLAINER:
@@ -1831,14 +1932,14 @@ function Config({
                                     "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                                   DD_SOURCEMAP_GROUP: "default",
                                 }.VERSION,
-                                onChoice: (k) => {
-                                  Fe(null);
+                                onChoice: (choice) => {
+                                  setActiveDialog(null);
                                   setTabsHidden(false);
-                                  if (k === "cancel") return;
-                                  Cs("autoUpdatesChannel", "stable", (setting_1) =>
-                                    Co(
+                                  if (choice === "cancel") return;
+                                  commitSetting("autoUpdatesChannel", "stable", (setting_1) =>
+                                    commitAutoUpdateChannel(
                                       setting_1,
-                                      k === "stay"
+                                      choice === "stay"
                                         ? {
                                             kind: "switch",
                                             minimumVersion: {
@@ -1864,15 +1965,15 @@ function Config({
                                   );
                                 },
                               })
-                            : Be === "Notifications"
+                            : activeDialog === "Notifications"
                               ? jsxProd_default(ColorStep, {
-                                  channel: de.preferredNotifChannel,
-                                  showInputNeededRow: bs && isKairosInputNeededPushEnabled(),
-                                  showDoneRow: bs,
-                                  inputNeededEnabled: de.inputNeededNotifEnabled ?? false,
-                                  doneEnabled: de.agentPushNotifEnabled ?? false,
+                                  channel: globalConfig.preferredNotifChannel,
+                                  showInputNeededRow: pushTogglesVisible && isKairosInputNeededPushEnabled(),
+                                  showDoneRow: pushTogglesVisible,
+                                  inputNeededEnabled: globalConfig.inputNeededNotifEnabled ?? false,
+                                  doneEnabled: globalConfig.agentPushNotifEnabled ?? false,
                                   onChangeChannel: (current_23) => {
-                                    bo("notifChannel", current_23, (prev_25) => {
+                                    commitViaRow("notifChannel", current_23, (prev_25) => {
                                       let found = NOTIFICATION_CHANNELS.find((style) => style === prev_25);
                                       if (found === undefined)
                                         return {
@@ -1890,28 +1991,28 @@ function Config({
                                     });
                                   },
                                   onChangeInputNeeded: (language) => {
-                                    bo("inputNeededNotifEnabled", language, (channel) => {
-                                      let se = channel === true;
-                                      changeInputNeededNotif(se);
+                                    commitViaRow("inputNeededNotifEnabled", language, (channel) => {
+                                      let enabled = channel === true;
+                                      changeInputNeededNotif(enabled);
                                       logEvent("tengu_config_changed", {
                                         setting: lit("inputNeededNotifEnabled"),
-                                        value: se,
+                                        value: enabled,
                                       });
                                     });
                                   },
                                   onChangeDone: (current_24) => {
-                                    bo("agentPushNotifEnabled", current_24, (prev_26) => {
-                                      let se = prev_26 === true;
-                                      changeAgentPushNotif(se);
+                                    commitViaRow("agentPushNotifEnabled", current_24, (prev_26) => {
+                                      let enabled = prev_26 === true;
+                                      changeAgentPushNotif(enabled);
                                       logEvent("tengu_config_changed", {
                                         setting: lit("agentPushNotifEnabled"),
-                                        value: se,
+                                        value: enabled,
                                       });
                                     });
                                   },
                                   onClose: () => {
-                                    Ln.current += 1;
-                                    Fe(null);
+                                    savedCountRef.current += 1;
+                                    setActiveDialog(null);
                                     setTabsHidden(false);
                                   },
                                 })
@@ -1925,60 +2026,61 @@ function Config({
                                         flexDirection: "column",
                                         children: [
                                           jsxProd_default(SearchBox, {
-                                            query: ws,
-                                            isFocused: Xe && !headerFocused,
+                                            query: truncatedQuery,
+                                            isFocused: isSearchMode && !headerFocused,
                                             isTerminalFocused,
                                             cursorOffset,
                                             placeholder: "Search settings\u2026",
                                             isSearchLineUnpadded: false,
                                             onFocus: () => {
                                               if (headerFocused) blurHeader();
-                                              tt(true);
+                                              setSearchMode(true);
                                             },
                                           }),
-                                          hn !== null &&
+                                          remoteNotice !== null &&
                                             jsxProd_default(Text, {
                                               dimColor: true,
                                               wrap: "wrap-trim",
-                                              children: hn,
+                                              children: remoteNotice,
                                             }),
                                         ],
                                       }),
                                     jsxProd_default(merged_2, {
-                                      visibleCount: Un > 0 ? maxVisible - Un - 1 : maxVisible,
+                                      visibleCount:
+                                        reservedRows > 0 ? maxVisible - reservedRows - 1 : maxVisible,
                                       defaultFocusIndex: Math.max(
                                         0,
-                                        bt.findIndex((choice) => choice.id === Ne),
+                                        visibleSettings.findIndex((choice) => choice.id === focusedSettingId),
                                       ),
-                                      isDisabled: !Ts,
+                                      isDisabled: !canInteract,
                                       keybindingContext: "Settings",
                                       onUpFromFirstItem: () => {
-                                        ho(false);
-                                        tt(true);
+                                        setShowThinkingWarning(false);
+                                        setSearchMode(true);
                                       },
-                                      onDisabledRowClick: la,
+                                      onDisabledRowClick: dismissSearch,
                                       onFocus: (prev_27) => {
-                                        let id = bt[prev_27]?.id;
-                                        if (id !== "thinking") ho(false);
-                                        at(id);
-                                        st(Ds);
+                                        let id = visibleSettings[prev_27]?.id;
+                                        if (id !== "thinking") setShowThinkingWarning(false);
+                                        setFocusedSettingId(id);
+                                        setResetKeyValue(resetKey);
                                       },
-                                      resetKey: Ds,
-                                      emptyMessage: `No settings match "${ws}"`,
+                                      resetKey,
+                                      emptyMessage: `No settings match "${truncatedQuery}"`,
                                       children,
                                     }),
-                                    Un > 0 &&
+                                    reservedRows > 0 &&
                                       jsxProd_default(Box, {
-                                        height: Un,
+                                        height: reservedRows,
                                         flexShrink: 0,
                                         children: jsxProd_default(Text, {
                                           dimColor: true,
                                           wrap: "wrap-trim",
-                                          children: Ts && cellText(lock?.reason),
+                                          children: canInteract && cellText(lock?.reason),
                                         }),
                                       }),
                                     jsxProd_default(Box, {
-                                      ref: _n,
+                                      ref: footerRef,
                                       flexDirection: "column",
                                       flexShrink: 0,
                                       children: isScreenReaderEnabled
@@ -2002,24 +2104,24 @@ function Config({
                                                     format: {
                                                       keyCase: "lower",
                                                     },
-                                                    terse: F.terse,
+                                                    terse: hintFormat.terse,
                                                   }),
                                                   jsxProd_default(KeyboardShortcutHint, {
                                                     chord: "down",
                                                     action: "return",
-                                                    ...F,
+                                                    ...hintFormat,
                                                   }),
                                                   jsxProd_default(ConfigurableShortcutHint, {
                                                     action: "confirm:no",
                                                     context: "Settings",
                                                     fallback: "Esc",
                                                     description: "close",
-                                                    ...F,
+                                                    ...hintFormat,
                                                   }),
                                                 ],
                                               }),
                                             })
-                                          : Xe
+                                          : isSearchMode
                                             ? jsxProd_default(Text, {
                                                 dimColor: true,
                                                 italic: false,
@@ -2031,19 +2133,19 @@ function Config({
                                                     jsxProd_default(KeyboardShortcutHint, {
                                                       chord: ["enter", "down"],
                                                       action: "select",
-                                                      ...F,
+                                                      ...hintFormat,
                                                     }),
                                                     jsxProd_default(KeyboardShortcutHint, {
                                                       chord: "up",
                                                       action: "tabs",
-                                                      ...F,
+                                                      ...hintFormat,
                                                     }),
                                                     jsxProd_default(ConfigurableShortcutHint, {
                                                       action: "confirm:no",
                                                       context: "Settings",
                                                       fallback: "Esc",
                                                       description: "clear",
-                                                      ...F,
+                                                      ...hintFormat,
                                                     }),
                                                   ],
                                                 }),
@@ -2057,27 +2159,27 @@ function Config({
                                                       ? jsxProd_default(KeyboardShortcutHint, {
                                                           chord: ["enter", "space"],
                                                           action: "change",
-                                                          ...F,
+                                                          ...hintFormat,
                                                         })
                                                       : lock?.source === "policy" &&
                                                         jsxProd_default(KeyboardShortcutHint, {
                                                           chord: ["enter", "space"],
                                                           action: "retry",
-                                                          ...F,
+                                                          ...hintFormat,
                                                         }),
                                                     jsxProd_default(ConfigurableShortcutHint, {
                                                       action: "settings:search",
                                                       context: "Settings",
                                                       fallback: "/",
                                                       description: "search",
-                                                      ...F,
+                                                      ...hintFormat,
                                                     }),
                                                     jsxProd_default(ConfigurableShortcutHint, {
                                                       action: "confirm:no",
                                                       context: "Settings",
                                                       fallback: "Esc",
                                                       description: "close",
-                                                      ...F,
+                                                      ...hintFormat,
                                                     }),
                                                   ],
                                                 }),
@@ -2113,20 +2215,17 @@ var NOTIF_CHANNEL_LABELS = {
   notifications_disabled: "Disabled",
 };
 //@ chunk-9h8dr0qb.js:42307-42590 sole-consumer
-function formatSettingValue(o, u, p, h) {
-  if (h && o.id === "switchModelsOnFlag") return SWITCH_MODEL_LABELS[u] ?? u;
-  if (o.id === "theme") return THEME_LABELS[u] ?? u;
-  if (o.id === "permissionMode") return permissionModeTitle(u);
-  if (o.id === "workflowSizeGuideline")
-    return workflowSizeDisplay(u, (o.isDefaultValue ?? false) && u === o.value);
-  if (o.id === "notifChannel" && !p) return NOTIF_CHANNEL_LABELS[u] ?? u;
-  return u;
+function formatSettingValue(setting, value, fieldDef, isColumnView) {
+  if (isColumnView && setting.id === "switchModelsOnFlag") return SWITCH_MODEL_LABELS[value] ?? value;
+  if (setting.id === "theme") return THEME_LABELS[value] ?? value;
+  if (setting.id === "permissionMode") return permissionModeTitle(value);
+  if (setting.id === "workflowSizeGuideline")
+    return workflowSizeDisplay(value, (setting.isDefaultValue ?? false) && value === setting.value);
+  if (setting.id === "notifChannel" && !fieldDef) return NOTIF_CHANNEL_LABELS[value] ?? value;
+  return value;
 }
-//@ chunk-6f92z7de.js:265-326 placement
-/**
- * 函数 markCustomSetting（未知键标 custom）；位于「/config 设置页（Config 标签）：可切换的全部设置项（主题、编辑器模式、通知、自动压缩、verbose、模型、输出样式、语言等），远程会话下说明作用范围」模块。
- */
-function markCustomSetting(t) {
-  return Object.hasOwn(OUTPUT_STYLE_CONFIG, t) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(t) : lit("custom");
-}
+
+// The import cycle this module closes (2 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("src/components/Settings/Config.js");
 export { markCustomSetting, renderMobileNotice, Config };

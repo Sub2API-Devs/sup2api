@@ -10,7 +10,7 @@
  */
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logForDebugging } from "../utils/debug.js";
-import { string } from "../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { createSignal } from "../utils/signal.js";
 import { Text } from "./components/Text.js";
 import { HIDE_CURSOR, SHOW_CURSOR, BSU, ESU } from "./termio/dec.js";
@@ -25,8 +25,9 @@ import {
   ERASE_LINE,
 } from "./termio/csi.js";
 import { isSynchronizedOutputSupported } from "./terminal.js";
-import { init_react_production, qt } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, createContext } from "../../vendor/react/cjs/react.production.js";
 import { serializeScreenRow } from "./output.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ag5x7vhf.js:11164-11179 placement
 /**
@@ -44,18 +45,18 @@ class ReplayHandleSlot {
   get handle() {
     return this.#e;
   }
-  attach = (m) => {
-    this.#n(m);
+  attach = (node) => {
+    this.#n(node);
     return () => {
-      if (this.#e === m) this.#n(null);
+      if (this.#e === node) this.#n(null);
     };
   };
-  subscribe = (m) => this.#o.subscribe(m);
-  #n(m) {
-    if (m === this.#e) return;
+  subscribe = (listener) => this.#o.subscribe(listener);
+  #n(node) {
+    if (node === this.#e) return;
     this.#t();
-    this.#e = m;
-    this.#t = m ? m.subscribe(this.#o.emit) : noop_3;
+    this.#e = node;
+    this.#t = node ? node.subscribe(this.#o.emit) : noop_3;
   }
 }
 //@ chunk-ag5x7vhf.js:11423-11472 placement
@@ -121,16 +122,16 @@ class ScreenReplayWriter {
     this.buf += RESET_SCROLL_REGION;
     this.commitImmediate();
   }
-  resume(m, h) {
+  resume(cols, rows) {
     this.suspended = false;
-    let x = m !== this._suspendedCols || h !== this._suspendedRows;
-    this.cols = m;
-    this.rows = h;
-    this.contentHeight = Math.max(2, h - CHROME_ROWS);
+    let sizeChanged = cols !== this._suspendedCols || rows !== this._suspendedRows;
+    this.cols = cols;
+    this.rows = rows;
+    this.contentHeight = Math.max(2, rows - CHROME_ROWS);
     this.buf += HIDE_CURSOR;
     this.buf += setScrollRegion(1, this.contentHeight);
     this.buf += CURSOR_HOME;
-    if (x) {
+    if (sizeChanged) {
       this.buf += ERASE_SCREEN + ERASE_SCROLLBACK + CURSOR_HOME;
       this.resetTransientState();
       this.replayPending = true;
@@ -150,7 +151,7 @@ class ScreenReplayWriter {
     this.buf += SHOW_CURSOR;
     this.commitImmediate();
   }
-  syncViewport(m, h) {
+  syncViewport(viewport, contentHeight) {
     if (this.suspended) return;
     if (this.pumpCursor >= 0) return;
     if (!this.syncOpen && isSynchronizedOutputSupported()) {
@@ -160,9 +161,9 @@ class ScreenReplayWriter {
     this.restoreUnderContentOverlay();
     if (this.replayPending) {
       this.replayPending = false;
-      this.committedTop = Math.min(m.scrollTop, m.transcriptEnd);
+      this.committedTop = Math.min(viewport.scrollTop, viewport.transcriptEnd);
     }
-    let min = Math.min(m.scrollTop, m.transcriptEnd);
+    let min = Math.min(viewport.scrollTop, viewport.transcriptEnd);
     let max = Math.max(0, min - this.committedTop);
     if (max > 0) {
       let min_2 = Math.min(max, this.onScreen.length);
@@ -174,64 +175,64 @@ class ScreenReplayWriter {
         if (this.nativeHistory.length > MAX_NATIVE_HISTORY_ROWS)
           this.nativeHistory.splice(0, this.nativeHistory.length - MAX_NATIVE_HISTORY_ROWS);
       }
-      let V = this.committedTop + min_2;
+      let previousCommittedTop = this.committedTop + min_2;
       this.committedTop = min;
-      if (V < min)
+      if (previousCommittedTop < min)
         this._gapRange = {
-          from: V,
+          from: previousCommittedTop,
           to: min,
         };
       if (this.nativeHistory.length === 0 && min > 0) this._backfillNeeded = true;
     }
-    if (h !== this.contentHeight) {
-      this.contentHeight = h;
-      this.buf += setScrollRegion(1, Math.max(2, h));
+    if (contentHeight !== this.contentHeight) {
+      this.contentHeight = contentHeight;
+      this.buf += setScrollRegion(1, Math.max(2, contentHeight));
     }
-    let max_2 = Math.max(0, this.committedTop - m.scrollTop);
-    let contentHeight = this.contentHeight;
-    let min_2 = Math.min(m.lines.length, contentHeight);
+    let max_2 = Math.max(0, this.committedTop - viewport.scrollTop);
+    let contentHeight_2 = this.contentHeight;
+    let min_2 = Math.min(viewport.lines.length, contentHeight_2);
     let max_3 = Math.max(0, min_2 - max_2);
-    let max_4 = Math.max(0, contentHeight - this.onScreen.length);
-    if (this.onScreen.length > contentHeight) this.onScreen.length = contentHeight;
-    while (this.onScreen.length < contentHeight) this.onScreen.push("");
-    for (let idx = 0; idx < contentHeight; idx++) {
-      let V = idx < max_3 ? m.lines[max_2 + idx] : "";
-      if (idx < contentHeight - max_4 && this.onScreen[idx] === V) continue;
-      this.buf += cursorPosition(idx + 1, 1) + V + ANSI_RESET + CLEAR_TO_EOL;
-      this.onScreen[idx] = V;
+    let max_4 = Math.max(0, contentHeight_2 - this.onScreen.length);
+    if (this.onScreen.length > contentHeight_2) this.onScreen.length = contentHeight_2;
+    while (this.onScreen.length < contentHeight_2) this.onScreen.push("");
+    for (let idx = 0; idx < contentHeight_2; idx++) {
+      let line = idx < max_3 ? viewport.lines[max_2 + idx] : "";
+      if (idx < contentHeight_2 - max_4 && this.onScreen[idx] === line) continue;
+      this.buf += cursorPosition(idx + 1, 1) + line + ANSI_RESET + CLEAR_TO_EOL;
+      this.onScreen[idx] = line;
     }
-    this.tailSlack = Math.max(0, contentHeight - max_3);
+    this.tailSlack = Math.max(0, contentHeight_2 - max_3);
   }
-  draw(m) {
+  draw(layout) {
     if (this.suspended) return;
     let syncOpen = this.syncOpen;
     if (!this.syncOpen && isSynchronizedOutputSupported()) this.buf += BSU;
-    let x = this.buf.length;
+    let frameStart = this.buf.length;
     this.buf += HIDE_CURSOR;
     this.restoreUnderContentOverlay();
-    if (m.contentHeight !== this.contentHeight) {
-      this.contentHeight = m.contentHeight;
-      this.buf += setScrollRegion(1, Math.max(2, m.contentHeight));
+    if (layout.contentHeight !== this.contentHeight) {
+      this.contentHeight = layout.contentHeight;
+      this.buf += setScrollRegion(1, Math.max(2, layout.contentHeight));
     }
     for (let contentHeight = this.contentHeight; contentHeight < this.rows; contentHeight++)
       this.clearLine(contentHeight);
     if (this.tailSlack > 0) {
-      let _ = this.contentHeight - this.tailSlack;
-      for (let I = _; I < this.contentHeight; I++) this.clearLine(I);
+      let contentBottom = this.contentHeight - this.tailSlack;
+      for (let row = contentBottom; row < this.contentHeight; row++) this.clearLine(row);
     }
-    this.writeOverlayLines(m.bottomTop, m.bottomLines);
-    let T = m.overlayLines.length;
-    if (T > 0) {
-      this.overlayRatchet = Math.max(this.overlayRatchet, T);
+    this.writeOverlayLines(layout.bottomTop, layout.bottomLines);
+    let overlayCount = layout.overlayLines.length;
+    if (overlayCount > 0) {
+      this.overlayRatchet = Math.max(this.overlayRatchet, overlayCount);
       let max = Math.max(0, this.rows - this.overlayRatchet);
-      this.writeOverlayLines(max, m.overlayLines);
-      for (let idx = max + T; idx < this.rows; idx++) this.clearLine(idx);
+      this.writeOverlayLines(max, layout.overlayLines);
+      for (let idx = max + overlayCount; idx < this.rows; idx++) this.clearLine(idx);
       this.contentOverlayRows = Math.max(0, this.contentHeight - Math.max(0, max - 1));
     } else {
       this.overlayRatchet = 0;
       this.contentOverlayRows = 0;
     }
-    let sliced = this.buf.slice(x);
+    let sliced = this.buf.slice(frameStart);
     if (!syncOpen && sliced === this.lastFrame) {
       this.buf = "";
       this.syncOpen = false;
@@ -242,29 +243,29 @@ class ScreenReplayWriter {
     this.syncOpen = false;
     this.commitImmediate();
   }
-  computeLayout(m, overlayLines) {
-    let max = Math.max(CHROME_ROWS, m.length);
+  computeLayout(bottomLines, overlayLines) {
+    let max = Math.max(CHROME_ROWS, bottomLines.length);
     return {
       contentHeight: Math.max(2, this.rows - max),
       bottomTop: this.rows - max,
-      bottomLines: m,
+      bottomLines,
       overlayLines,
     };
   }
-  handleResize(m, h) {
-    if (m === this.cols && h === this.rows) return "noop";
+  handleResize(cols, rows) {
+    if (cols === this.cols && rows === this.rows) return "noop";
     if (this.suspended) {
-      this.cols = m;
-      this.rows = h;
+      this.cols = cols;
+      this.rows = rows;
       return "noop";
     }
-    let x = m !== this.cols;
-    let rows = this.rows;
-    this.cols = m;
-    this.rows = h;
-    let max = Math.max(2, h - CHROME_ROWS);
+    let widthChanged = cols !== this.cols;
+    let rows_2 = this.rows;
+    this.cols = cols;
+    this.rows = rows;
+    let max = Math.max(2, rows - CHROME_ROWS);
     this.contentHeight = max;
-    if (x || h < rows) {
+    if (widthChanged || rows < rows_2) {
       this.buf += RESET_SCROLL_REGION + ERASE_SCREEN + ERASE_SCROLLBACK + CURSOR_HOME;
       this.buf += setScrollRegion(1, Math.max(2, max));
       this.resetTransientState();
@@ -307,17 +308,17 @@ class ScreenReplayWriter {
     this._gapRange = null;
     return _gapRange;
   }
-  primeBackfill(m) {
-    if (m.length === 0) return;
-    let h = this.nativeHistory.length;
-    for (let x of m) this.nativeHistory.push(x);
+  primeBackfill(history) {
+    if (history.length === 0) return;
+    let previousLength = this.nativeHistory.length;
+    for (let line of history) this.nativeHistory.push(line);
     if (this.nativeHistory.length > MAX_NATIVE_HISTORY_ROWS) {
-      let x = this.nativeHistory.length - MAX_NATIVE_HISTORY_ROWS;
-      this.nativeHistory.splice(0, x);
-      this.pumpCursor = Math.max(0, h - x);
-    } else this.pumpCursor = h;
+      let overflowCount = this.nativeHistory.length - MAX_NATIVE_HISTORY_ROWS;
+      this.nativeHistory.splice(0, overflowCount);
+      this.pumpCursor = Math.max(0, previousLength - overflowCount);
+    } else this.pumpCursor = previousLength;
     this.replayPending = true;
-    if (h > 0) this.onScreen.length = 0;
+    if (previousLength > 0) this.onScreen.length = 0;
   }
   switchTranscript() {
     this.buf += RESET_SCROLL_REGION + ERASE_SCREEN + ERASE_SCROLLBACK;
@@ -335,13 +336,13 @@ class ScreenReplayWriter {
     if (contentOverlayRows === 0) return;
     this.contentOverlayRows = 0;
     let contentHeight = this.contentHeight;
-    let x = this.onScreen.length;
+    let screenRows = this.onScreen.length;
     for (let idx = 0; idx < contentOverlayRows; idx++) {
-      let k = contentHeight - 1 - idx;
-      if (k < 0) break;
-      this.buf += cursorPosition(k + 1, 1) + ERASE_LINE;
-      let _ = x - 1 - idx;
-      if (_ >= 0) this.buf += this.onScreen[_] + ANSI_RESET;
+      let targetRow = contentHeight - 1 - idx;
+      if (targetRow < 0) break;
+      this.buf += cursorPosition(targetRow + 1, 1) + ERASE_LINE;
+      let sourceRow = screenRows - 1 - idx;
+      if (sourceRow >= 0) this.buf += this.onScreen[sourceRow] + ANSI_RESET;
     }
   }
   resetTransientState() {
@@ -351,12 +352,12 @@ class ScreenReplayWriter {
     this.onScreen.length = 0;
     this.committedTop = 0;
   }
-  clearLine(m) {
-    this.buf += cursorPosition(m + 1, 1) + ERASE_LINE;
+  clearLine(row) {
+    this.buf += cursorPosition(row + 1, 1) + ERASE_LINE;
   }
-  writeOverlayLines(m, h) {
-    for (let k = 0; k < h.length; k++)
-      this.buf += cursorPosition(m + k + 1, 1) + h[k] + ANSI_RESET + CLEAR_TO_EOL;
+  writeOverlayLines(top, lines) {
+    for (let k = 0; k < lines.length; k++)
+      this.buf += cursorPosition(top + k + 1, 1) + lines[k] + ANSI_RESET + CLEAR_TO_EOL;
   }
   commitImmediate() {
     if (this.buf.length === 0) return;
@@ -390,25 +391,34 @@ class ScreenReplayWriter {
 //@ chunk-ag5x7vhf.js:17834-17851 placement = RESET (1)
 var RESET = "\x1B[0m";
 //@ chunk-ag5x7vhf.js:18348-18352 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:18348", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:18352-18368 placement
-var ScrollAnchorContext = qt(null);
+var ScrollAnchorContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:18352", () => {
+  ScrollAnchorContext = createContext(null);
+});
 //@ chunk-ag5x7vhf.js:21878-22079 placement
 /**
  * 把某个节点缓存布局覆盖的屏幕行逐行序列化（裁到屏幕高度内）；节点没有布局时返回空数组。
  */
-function serializeNodeScreenRows(m, stylePool, x) {
-  if (!x) return [];
-  let cachedLayout = x.cachedLayout;
+function serializeNodeScreenRows(screen, stylePool, node) {
+  if (!node) return [];
+  let cachedLayout = node.cachedLayout;
   if (!cachedLayout || cachedLayout.height <= 0) return [];
-  let k = [];
-  let min = Math.min(cachedLayout.y + cachedLayout.height, m.screen.height);
+  let rows = [];
+  let min = Math.min(cachedLayout.y + cachedLayout.height, screen.screen.height);
   for (let max = Math.max(0, cachedLayout.y); max < min; max++)
-    k.push(serializeScreenRow(m.screen, stylePool, max));
-  return k;
+    rows.push(serializeScreenRow(screen.screen, stylePool, max));
+  return rows;
 }
 //@ chunk-ag5x7vhf.js:22079-22083 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:22079", () => {
+  init_react_production();
+});
 export {
   ReplayHandleSlot,
   CHROME_ROWS,

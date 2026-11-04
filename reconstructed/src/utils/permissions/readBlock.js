@@ -21,20 +21,24 @@ import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTel
 import { logForDebugging } from "../debug.js";
 import { getAutoMemPathSettingSource, hasNoAutoMemPath } from "../../memdir/paths.js";
 import { invalidateMemorySections } from "../focusMode.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-82kqcve8.js:124030-124094 placement
 function hasBlockReadsOutsideWorkingDirectories() {
   return isSettingEnabledInSources("blockReadsOutsideWorkingDirectories");
 }
 //@ chunk-82kqcve8.js:124094-124134 placement
-var writeBlockCachedState = identity_2(
-  {
-    value: false,
-  },
-  (e) => {
-    e.value = false;
-  },
-);
+var writeBlockCachedState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-82kqcve8.js:124094", () => {
+  writeBlockCachedState = identity_2(
+    {
+      value: false,
+    },
+    (state) => {
+      state.value = false;
+    },
+  );
+});
 //@ chunk-82kqcve8.js:124134-124236 placement
 function isWriteBlockOn() {
   if (isCcsTenant()) return false;
@@ -42,14 +46,17 @@ function isWriteBlockOn() {
   return writeBlockCachedState.value;
 }
 //@ chunk-82kqcve8.js:124236-124276 placement
-var readBlockExemptCache = identity_2(
-  {
-    value: [],
-  },
-  (e) => {
-    e.value = [];
-  },
-);
+var readBlockExemptCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-82kqcve8.js:124236", () => {
+  readBlockExemptCache = identity_2(
+    {
+      value: [],
+    },
+    (state) => {
+      state.value = [];
+    },
+  );
+});
 //@ chunk-82kqcve8.js:124276-124951 placement
 function readBlockExemptPathsInSettings() {
   if (isCcsTenant() || settingsGrantsConfined()) return [];
@@ -62,8 +69,12 @@ function readBlockExemptPathsInSettings() {
       blockReadsExemptPath.trim() !== blockReadsExemptPath
     )
       return [];
-    let s = expandPathOrNull(blockReadsExemptPath);
-    return s === null || expandPathOrNull(s) !== s || dirname(s) === s ? [] : [s];
+    let expandedPath = expandPathOrNull(blockReadsExemptPath);
+    return expandedPath === null ||
+      expandPathOrNull(expandedPath) !== expandedPath ||
+      dirname(expandedPath) === expandedPath
+      ? []
+      : [expandedPath];
   });
   if (!arraysEqual(blockReadsExemptPaths, readBlockExemptCache.value)) {
     readBlockExemptCache.value = blockReadsExemptPaths;
@@ -88,14 +99,17 @@ function isAutoMemPathFromRepoSettings() {
   );
 }
 //@ chunk-82kqcve8.js:125015-125055 placement
-var readBlockAppliedState = identity_2(
-  {
-    value: false,
-  },
-  (e) => {
-    e.value = false;
-  },
-);
+var readBlockAppliedState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-82kqcve8.js:125015", () => {
+  readBlockAppliedState = identity_2(
+    {
+      value: false,
+    },
+    (state) => {
+      state.value = false;
+    },
+  );
+});
 //@ chunk-82kqcve8.js:125055-125088 placement
 function markReadBlockApplied() {
   readBlockAppliedState.value = true;

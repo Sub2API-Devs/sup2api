@@ -10,7 +10,7 @@ import { createAbortablePromise } from "./createAbortablePromise.js";
 //@ chunk-mrx6y2r5.js:56444-56476 esm-fingerprint
 var StandardAbortMessage_2 = "The delay was aborted.";
 //@ chunk-mrx6y2r5.js:56476-56688 esm-fingerprint
-function delay_2(timeInMs, options) {
+function delay_3(timeInMs, options) {
   let token;
   let { abortSignal, abortErrorMsg } = options !== null && options !== undefined ? options : {};
   return createAbortablePromise(
@@ -25,4 +25,4 @@ function delay_2(timeInMs, options) {
     },
   );
 }
-export { delay_2 };
+export { delay_3 };

@@ -64,22 +64,65 @@ import { createUserMessage, createSystemMessage } from "../utils/messages.js";
 import { getIsNonInteractiveSession, getSessionId } from "../bootstrap/state.js";
 import { logError } from "../utils/log.js";
 
+//@ chunk-dcmhvw5a.js:49677-50242 placement
+/**
+ * 用量上限消息的开头文本集合。
+ */
+var LIMIT_MESSAGE_PREFIXES = [
+  "You've hit your",
+  "You've reached your",
+  "You're out of usage credits",
+  "Your org is out of usage \xB7 add funds to continue",
+  "Your org is out of usage \xB7 contact your admin",
+  "Your seat type doesn't include usage credits",
+  "Your seat type doesn't include usage",
+  "Your usage allocation has been disabled by your admin",
+  "Your group's usage limit is set to $0",
+  "Fable 5 requires usage credits",
+  "You're out of extra usage",
+  "Your seat type doesn't include extra usage",
+];
+var LIMIT_MESSAGE_PREFIX_PATTERNS = [
+  /^(?:Fable|Haiku|Mythos|Opus|Sonnet)(?: [^\u00B7\n]{1,40})? requires usage credits\./,
+];
+//@ chunk-dcmhvw5a.js:50242-50322 placement
+function isRateLimitErrorMessage(text) {
+  return (
+    LIMIT_MESSAGE_PREFIXES.some((prefix) => text.startsWith(prefix)) ||
+    LIMIT_MESSAGE_PREFIX_PATTERNS.some((pattern) => pattern.test(text))
+  );
+}
+//@ chunk-dcmhvw5a.js:50322-50625 fingerprint = RATE_LIMIT_ERROR_PREFIXES (0.403)
+/**
+ * 限额文案前缀表：错误类、预警类（"You've used"/"You're close to"）、overage 类（"Now using usage credits" 等），用于识别限额消息。
+ */
+var RATE_LIMIT_ERROR_PREFIXES = ["This service is disabled for your org"];
+var RATE_LIMIT_WARNING_PREFIXES = ["You've used", "You're close to"];
+var OVERAGE_NOTICE_PREFIXES = [
+  "You're now using usage credits",
+  "You're now using your usage allocation",
+  "Now using your usage allocation",
+  "Now using usage credits",
+  "Now using credits",
+  "You're now using extra usage",
+  "Now using extra usage",
+];
 //@ chunk-w5ndchqs.js:20352-20707 placement
-function rateLimitWindowLabel(e) {
-  let n = e.resetsAt ? formatResetTimeWithLocale(e.resetsAt, true) : undefined;
-  if (!n) return null;
-  switch (e.rateLimitType) {
+function rateLimitWindowLabel(limits) {
+  let resetTime = limits.resetsAt ? formatResetTimeWithLocale(limits.resetsAt, true) : undefined;
+  if (!resetTime) return null;
+  switch (limits.rateLimitType) {
     case "five_hour":
     case "seven_day":
     case "seven_day_opus":
       return {
-        limitName: RATE_LIMIT_DISPLAY_NAMES[e.rateLimitType],
-        resetTime: n,
+        limitName: RATE_LIMIT_DISPLAY_NAMES[limits.rateLimitType],
+        resetTime,
       };
     case "seven_day_sonnet":
       return {
         limitName: getWeeklyModelLimitName(),
-        resetTime: n,
+        resetTime,
       };
     case "seven_day_overage_included":
     case "overage":
@@ -93,15 +136,15 @@ function rateLimitWindowLabel(e) {
 /**
  * 由额度状态得到 {message, severity}：overage 预警、被拒（错误）、allowed_warning（团队/企业已开 extra usage 时不提示）。
  */
-function getRateLimitMessage(limits, model, r) {
+function getRateLimitMessage(limits, model, threshold) {
   if (limits.isUsingOverage) {
     if (limits.overageStatus === "allowed_warning") {
-      let s = isUsageBasedBilling() ? "usage limit" : "usage credit limit";
-      let utilizationPercent = toUtilizationPercent(r);
+      let limitName = isUsageBasedBilling() ? "usage limit" : "usage credit limit";
+      let utilizationPercent = toUtilizationPercent(threshold);
       return {
         message: utilizationPercent
-          ? `Over ${utilizationPercent}% of your ${s} used`
-          : `You're close to your ${s}`,
+          ? `Over ${utilizationPercent}% of your ${limitName} used`
+          : `You're close to your ${limitName}`,
         severity: "warning",
       };
     }
@@ -140,8 +183,8 @@ function getRateLimitErrorMessage(limits, model) {
 /**
  * 只取警告级文案。
  */
-function getRateLimitWarning(limits, model, r) {
-  let message = getRateLimitMessage(limits, model, r);
+function getRateLimitWarning(limits, model, threshold) {
+  let message = getRateLimitMessage(limits, model, threshold);
   if (message && message.severity === "warning") return message.message;
   return null;
 }
@@ -149,20 +192,20 @@ function getRateLimitWarning(limits, model, r) {
 /**
  * 被拒时的"You've hit your <限额>"文案（按限额类型）。
  */
-function getLimitReachedText(e, n, r) {
-  switch (e.rateLimitType) {
+function getLimitReachedText(limits, model, options) {
+  switch (limits.rateLimitType) {
     case "seven_day_sonnet":
-      return formatLimitReachedText(getWeeklyModelLimitName(), n, r, {
+      return formatLimitReachedText(getWeeklyModelLimitName(), model, options, {
         progressSavedSuffix: isVellumAnchorEnabled(),
       });
     case "five_hour":
     case "seven_day":
     case "seven_day_opus":
-      return formatLimitReachedText(RATE_LIMIT_DISPLAY_NAMES[e.rateLimitType], n, r, {
+      return formatLimitReachedText(RATE_LIMIT_DISPLAY_NAMES[limits.rateLimitType], model, options, {
         progressSavedSuffix: isVellumAnchorEnabled(),
       });
     case "seven_day_overage_included":
-      return formatLimitReachedText(RATE_LIMIT_DISPLAY_NAMES[e.rateLimitType], n, r);
+      return formatLimitReachedText(RATE_LIMIT_DISPLAY_NAMES[limits.rateLimitType], model, options);
     default:
       return null;
   }
@@ -171,16 +214,16 @@ function getLimitReachedText(e, n, r) {
 /**
  * 利用率转 1–99 的整数百分比。
  */
-function toUtilizationPercent(e) {
-  if (e === undefined || !Number.isFinite(e) || e <= 0 || e >= 1) return;
-  return Math.min(99, Math.floor(Math.round(e * 1e4) / 100));
+function toUtilizationPercent(fraction) {
+  if (fraction === undefined || !Number.isFinite(fraction) || fraction <= 0 || fraction >= 1) return;
+  return Math.min(99, Math.floor(Math.round(fraction * 1e4) / 100));
 }
 //@ chunk-w5ndchqs.js:24857-25556 fingerprint = getEarlyWarningText (0.526)
 /**
  * 预警文案："You've used N% of your <限额>" 等。
  */
 function getEarlyWarningText(limits) {
-  let n = limits.utilization
+  let percent = limits.utilization
     ? Math.floor(
         limits.rateLimitType === "overage"
           ? utilizationPercent(limits.utilization)
@@ -197,23 +240,24 @@ function getEarlyWarningText(limits) {
       limitName = RATE_LIMIT_DISPLAY_NAMES[limits.rateLimitType];
       break;
     case "overage":
-      if (isUsageBasedBilling()) limitName = n ? "usage" : "usage limit";
-      else limitName = n ? "usage credits" : "usage credit limit";
+      if (isUsageBasedBilling()) limitName = percent ? "usage" : "usage limit";
+      else limitName = percent ? "usage credits" : "usage credit limit";
       break;
     case undefined:
       return null;
   }
-  let s = limits.rateLimitType === "overage" && isUsageBasedBilling();
-  let d = limits.resetsAt && !s ? formatResetTimeWithLocale(limits.resetsAt, true) : undefined;
+  let isUsageAllocation = limits.rateLimitType === "overage" && isUsageBasedBilling();
+  let resetTime =
+    limits.resetsAt && !isUsageAllocation ? formatResetTimeWithLocale(limits.resetsAt, true) : undefined;
   let warningUpsellText = getWarningUpsellText(limits.rateLimitType);
-  let h = n ? undefined : toUtilizationPercent(limits.surpassedThreshold);
+  let surpassedPercent = percent ? undefined : toUtilizationPercent(limits.surpassedThreshold);
   return [
-    n
-      ? `You've used ${n}% of your ${limitName}`
-      : h
-        ? `Over ${h}% of your ${limitName} used`
+    percent
+      ? `You've used ${percent}% of your ${limitName}`
+      : surpassedPercent
+        ? `Over ${surpassedPercent}% of your ${limitName} used`
         : `Approaching ${limitName}`,
-    d && `resets ${d}`,
+    resetTime && `resets ${resetTime}`,
     warningUpsellText,
   ]
     .filter(Boolean)
@@ -226,16 +270,20 @@ function getEarlyWarningText(limits) {
 function getWarningUpsellText(rateLimitType) {
   let subscriptionType = getSubscriptionType();
   let hasExtraUsageEnabled = getOauthAccountInfo()?.hasExtraUsageEnabled === true;
-  let s = isConsumerPlan();
+  let isConsumer = isConsumerPlan();
   if (subscriptionType === "team" || subscriptionType === "enterprise") {
     if (!hasExtraUsageEnabled && isExtraUsageAllowed())
-      return s
+      return isConsumer
         ? "Run /usage-credits to turn on extra usage for your org"
         : "Run /usage-credits to ask your admin for more";
     if (hasExtraUsageEnabled && rateLimitType === "overage") {
       if (isExtraUsageAllowed())
-        return s ? "Run /usage-credits to raise the cap" : "Run /usage-credits to ask your admin for more";
-      return s ? `Raise the cap at ${HTTPS_CLAUDE_AI_ADMIN_SETTINGS_USAGE}` : "Ask your admin for more";
+        return isConsumer
+          ? "Run /usage-credits to raise the cap"
+          : "Run /usage-credits to ask your admin for more";
+      return isConsumer
+        ? `Raise the cap at ${HTTPS_CLAUDE_AI_ADMIN_SETTINGS_USAGE}`
+        : "Ask your admin for more";
     }
     return null;
   }
@@ -254,24 +302,20 @@ function getWarningUpsellText(rateLimitType) {
 /**
  * 需要用量信用的模型受限时提示购买或换模型。
  */
-function getModelSwitchUpsell(mainLoopModel) {
-  if (mainLoopModel === null || !isCreditsOnlyModelLimit(mainLoopModel)) return null;
+function getModelSwitchUpsell(model) {
+  if (model === null || !isCreditsOnlyModelLimit(model)) return null;
   if (!isExtraUsageAllowed()) return "Switch models to keep working.";
   if (!isConsumerPlan()) return "Switch models to keep working.";
-  return `Buy more to keep using ${renderUsageCreditsOnlyModelName(parseUserSpecifiedModel(mainLoopModel))}, or switch models to keep working.`;
+  return `Buy more to keep using ${renderUsageCreditsOnlyModelName(parseUserSpecifiedModel(model))}, or switch models to keep working.`;
 }
 //@ chunk-w5ndchqs.js:26420-26497 layout
 /**
  * 模型受"仅用量信用"限制（可用、需信用、未豁免）。
  */
-function isCreditsOnlyModelLimit(e) {
-  if (e === null) return false;
-  let userSpecifiedModel = parseUserSpecifiedModel(e);
-  return (
-    isUsageCreditsOnlyModel(userSpecifiedModel) &&
-    isModelBilledOrRequired(userSpecifiedModel) &&
-    !usesPayAsYouGo()
-  );
+function isCreditsOnlyModelLimit(model) {
+  if (model === null) return false;
+  let modelId = parseUserSpecifiedModel(model);
+  return isUsageCreditsOnlyModel(modelId) && isModelBilledOrRequired(modelId) && !usesPayAsYouGo();
 }
 //@ chunk-w5ndchqs.js:26497-26898 layout
 /**
@@ -304,7 +348,7 @@ function getProRunwayTip(claudeAiLimits, mainLoopModel, effortValue) {
  * 正在使用 overage 时的提示文案。
  */
 function getUsingOverageText(limits, mainLoopModel) {
-  let r = limits.resetsAt ? formatResetTimeWithLocale(limits.resetsAt, true) : "";
+  let resetTime = limits.resetsAt ? formatResetTimeWithLocale(limits.resetsAt, true) : "";
   let limitName = "";
   switch (limits.rateLimitType) {
     case "five_hour":
@@ -325,16 +369,18 @@ function getUsingOverageText(limits, mainLoopModel) {
     let publicModelDisplayName = getPublicModelDisplayName(parseUserSpecifiedModel(mainLoopModel));
     if (
       publicModelDisplayName &&
-      overageIncludedModels().some((w) => w.toLowerCase() === publicModelDisplayName.toLowerCase())
+      overageIncludedModels().some(
+        (includedModel) => includedModel.toLowerCase() === publicModelDisplayName.toLowerCase(),
+      )
     ) {
-      let w = r ? ` \xB7 Your ${publicModelDisplayName} limit resets ${r}` : "";
-      return `Now using usage credits for ${publicModelDisplayName}${w}`;
+      let resetSuffix = resetTime ? ` \xB7 Your ${publicModelDisplayName} limit resets ${resetTime}` : "";
+      return `Now using usage credits for ${publicModelDisplayName}${resetSuffix}`;
     }
   }
-  let m = subscriptionType ? "your usage allocation" : "usage credits";
-  if (!limitName) return subscriptionType ? `Now using ${m}` : "Now using credits";
-  let resetMessage = r && !subscriptionType ? ` \xB7 Your ${limitName} resets ${r}` : "";
-  return `You're now using ${m}${resetMessage}`;
+  let allocationText = subscriptionType ? "your usage allocation" : "usage credits";
+  if (!limitName) return subscriptionType ? `Now using ${allocationText}` : "Now using credits";
+  let resetMessage = resetTime && !subscriptionType ? ` \xB7 Your ${limitName} resets ${resetTime}` : "";
+  return `You're now using ${allocationText}${resetMessage}`;
 }
 //@ chunk-w5ndchqs.js:27538-27634 layout
 /**
@@ -360,9 +406,9 @@ function getAskAdminSuffix() {
 /**
  * "You've hit your <限额><重置时间>[ · progress saved]"。
  */
-function formatLimitReachedText(e, n, r, s) {
-  let d = s?.progressSavedSuffix ? " \xB7 progress saved" : "";
-  return `You've hit your ${e}${n}${d}`;
+function formatLimitReachedText(limitName, suffix, resetText, options) {
+  let savedSuffix = options?.progressSavedSuffix ? " \xB7 progress saved" : "";
+  return `You've hit your ${limitName}${suffix}${savedSuffix}`;
 }
 //@ chunk-89vj35pq.js:520-732 placement
 var TENGU_LANTERN_WICK_RELEASE = "tengu_lantern_wick_release";
@@ -372,93 +418,96 @@ var TENGU_LANTERN_WICK_BRAID_RELEASE = "tengu_lantern_wick_braid_release";
 var TENGU_LANTERN_WICK_TEXT_BY_MODEL = "tengu_lantern_wick_text_by_model";
 var TENGU_LANTERN_WICK_RELEASE_BY_MODEL = "tengu_lantern_wick_release_by_model";
 //@ chunk-89vj35pq.js:732-775 placement
-function servedTextOrFlag(t, n, model) {
-  return servedTextForModel(t, model) ?? getFeatureValue_CACHED_MAY_BE_STALE(n, "");
+function servedTextOrFlag(byModelFlag, fallbackFlag, model) {
+  return servedTextForModel(byModelFlag, model) ?? getFeatureValue_CACHED_MAY_BE_STALE(fallbackFlag, "");
 }
 //@ chunk-89vj35pq.js:775-927 placement
 /**
  * 从开关配置中按模型名、规范名或 default 取服务端下发的文字。
  */
-function servedTextForModel(t, n) {
-  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(t, {});
+function servedTextForModel(byModelFlag, model) {
+  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(byModelFlag, {});
   if (typeof featureValue_CACHED_MAY_BE_STALE !== "object" || featureValue_CACHED_MAY_BE_STALE === null)
     return;
-  let u = featureValue_CACHED_MAY_BE_STALE;
-  return [n, getCanonicalName(n), "default"].map((s) => u[s]).find((s) => typeof s === "string");
+  let byModel = featureValue_CACHED_MAY_BE_STALE;
+  return [model, getCanonicalName(model), "default"]
+    .map((key) => byModel[key])
+    .find((text) => typeof text === "string");
 }
 //@ chunk-89vj35pq.js:927-1240 placement
 /**
  * 把服务端下发的文字清洗后加方括号，清洗失败或被改动时记遥测。
  */
-function bracketServedText(t) {
+function bracketServedText(text) {
   if (isBotProtectedWrapUpTextOn()) {
-    let e = sanitizeAttributeValue(t);
-    if (e === null) {
-      if (typeof t === "string" && t.trim() !== "")
+    let sanitized = sanitizeAttributeValue(text);
+    if (sanitized === null) {
+      if (typeof text === "string" && text.trim() !== "")
         logFeatureSad("usage_limit_served_text_rejected", "release_text");
       return "";
     }
-    if (typeof t === "string" && e !== t.trim())
+    if (typeof text === "string" && sanitized !== text.trim())
       logFeatureSad("usage_limit_served_text_altered", "release_text");
-    return `[${e}]`;
+    return `[${sanitized}]`;
   }
-  let n = typeof t === "string" ? t.trim() : "";
-  return n ? `[${n}]` : "";
+  let trimmed = typeof text === "string" ? text.trim() : "";
+  return trimmed ? `[${trimmed}]` : "";
 }
 //@ chunk-89vj35pq.js:1240-1374 placement
-function lastUsageLimitNote(t) {
-  for (let i = t.length - 1; i >= 0; i--) {
-    let e = t[i];
-    if (e?.type === "user" && e.usageLimitNote !== undefined) return e.usageLimitNote;
+function lastUsageLimitNote(messages) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    let message = messages[i];
+    if (message?.type === "user" && message.usageLimitNote !== undefined) return message.usageLimitNote;
   }
   return;
 }
 //@ chunk-89vj35pq.js:1374-3036 placement
 function* usageLimitNotices(
-  messagesForQuery,
+  messages,
   { resumeActive, isMainLoop, querySource, depth, model, toolUseContext, now, uuid },
 ) {
   let { agentContext } = toolUseContext;
-  let C =
+  let isAgentCall =
     !isMainLoop &&
     querySource.startsWith("agent:") &&
     agentContext.agentType !== "teammate" &&
     !(agentContext.agentType === "subagent" && agentContext.workflowRunId);
-  if (resumeActive || !(isMainLoop || C)) return messagesForQuery;
-  let i = [];
+  if (resumeActive || !(isMainLoop || isAgentCall)) return messages;
+  let notices = [];
   try {
-    let a = isMainLoop && depth === 0 && isSessionTaskTurn(messagesForQuery);
-    let E = a && isSubagentWrapUpNoteDue();
-    if (isMainLoop && depth === 0 && !E) wrapUpOnMainTurnStart();
-    let R = false;
-    let U = false;
-    if (isMainLoop && (depth > 0 || E)) {
-      U = takeWrapUpTurnNote();
-      if (E && !U) {
-        let r = lastUsageLimitNote(messagesForQuery);
-        if (r !== "wrap_up" && r !== "near_limit") wrapUpOnMainTurnStart();
+    let isFirstTaskTurn = isMainLoop && depth === 0 && isSessionTaskTurn(messages);
+    let wrapUpDue = isFirstTaskTurn && isSubagentWrapUpNoteDue();
+    if (isMainLoop && depth === 0 && !wrapUpDue) wrapUpOnMainTurnStart();
+    let wrapUpPushed = false;
+    let wrapUpTurnNote = false;
+    if (isMainLoop && (depth > 0 || wrapUpDue)) {
+      wrapUpTurnNote = takeWrapUpTurnNote();
+      if (wrapUpDue && !wrapUpTurnNote) {
+        let lastNote = lastUsageLimitNote(messages);
+        if (lastNote !== "wrap_up" && lastNote !== "near_limit") wrapUpOnMainTurnStart();
       }
     }
     if (
       isMainLoop
-        ? U
+        ? wrapUpTurnNote
         : isSubagentWrapUpNoteDue() &&
           getFeatureValue_CACHED_MAY_BE_STALE(TENGU_LANTERN_WICK_BRAID, false) === true &&
-          lastUsageLimitNote(messagesForQuery) !== "wrap_up"
+          lastUsageLimitNote(messages) !== "wrap_up"
     ) {
-      let r =
+      let wrapUpText =
         (isMainLoop
           ? null
           : formatWrapUpText(getFeatureValue_CACHED_MAY_BE_STALE(TENGU_LANTERN_WICK_BRAID_TEXT, ""))) ??
         formatWrapUpText(servedTextOrFlag(TENGU_LANTERN_WICK_TEXT_BY_MODEL, WRAP_UP_TEXT_FLAG, model));
-      let o =
-        r !== null
+      let wrapUpMode =
+        wrapUpText !== null
           ? "custom"
           : parseWrapUpMode(getFeatureValue_CACHED_MAY_BE_STALE(TENGU_LANTERN_WICK_MODE, "off"));
-      if (o !== "off") {
-        i.push(
+      if (wrapUpMode !== "off") {
+        notices.push(
           createUserMessage({
-            content: r ?? (o === "next-steps" ? GRACE_CHECKPOINT_NOTE : USAGE_LIMIT_WRAP_UP_NOTE),
+            content:
+              wrapUpText ?? (wrapUpMode === "next-steps" ? GRACE_CHECKPOINT_NOTE : USAGE_LIMIT_WRAP_UP_NOTE),
             isMeta: true,
             turnCompanion: true,
             usageLimitNote: "wrap_up",
@@ -467,36 +516,36 @@ function* usageLimitNotices(
           }),
         );
         logFeatureOk(isMainLoop ? "usage_limit_grace_wrapup" : "usage_limit_grace_wrapup_subagent", {
-          next_steps: o === "next-steps",
-          custom: o === "custom",
+          next_steps: wrapUpMode === "next-steps",
+          custom: wrapUpMode === "custom",
         });
-        R = true;
+        wrapUpPushed = true;
         if (isMainLoop) markWrapUpStartNotePlaced();
       }
     }
-    let T = !isMainLoop || a ? getWrapUpZone() : null;
-    let G = T !== null && T.extraUsageStatus === undefined;
-    let N;
+    let wrapUpZone = !isMainLoop || isFirstTaskTurn ? getWrapUpZone() : null;
+    let hasExtraUsage = wrapUpZone !== null && wrapUpZone.extraUsageStatus === undefined;
+    let shouldRelease;
     if (isMainLoop) {
-      let r = depth === 0 ? lastUsageLimitNote(messagesForQuery) : undefined;
-      N = !G && (r === "wrap_up" || r === "near_limit");
+      let lastNote = depth === 0 ? lastUsageLimitNote(messages) : undefined;
+      shouldRelease = !hasExtraUsage && (lastNote === "wrap_up" || lastNote === "near_limit");
     } else
-      N =
-        !G &&
-        lastUsageLimitNote(messagesForQuery) === "wrap_up" &&
+      shouldRelease =
+        !hasExtraUsage &&
+        lastUsageLimitNote(messages) === "wrap_up" &&
         getFeatureValue_CACHED_MAY_BE_STALE(TENGU_LANTERN_WICK_BRAID, false) === true;
-    if (N) {
-      let r =
+    if (shouldRelease) {
+      let releaseText =
         (isMainLoop
           ? ""
           : bracketServedText(getFeatureValue_CACHED_MAY_BE_STALE(TENGU_LANTERN_WICK_BRAID_RELEASE, ""))) ||
         bracketServedText(
           servedTextOrFlag(TENGU_LANTERN_WICK_RELEASE_BY_MODEL, TENGU_LANTERN_WICK_RELEASE, model),
         );
-      if (r) {
-        i.push(
+      if (releaseText) {
+        notices.push(
           createUserMessage({
-            content: r,
+            content: releaseText,
             isMeta: true,
             turnCompanion: true,
             usageLimitNote: "release",
@@ -513,9 +562,9 @@ function* usageLimitNotices(
       consumeNearLimitWrapUpHint() &&
       getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VELLUM_ANCHOR, false)
     ) {
-      i.push(createSystemMessage(WRAP_UP_APPROACHING_NOTICE, NOTICE));
-      if (!R)
-        i.push(
+      notices.push(createSystemMessage(WRAP_UP_APPROACHING_NOTICE, NOTICE));
+      if (!wrapUpPushed)
+        notices.push(
           createUserMessage({
             content: WRAP_UP_APPROACHING_CHECKPOINT_NOTE,
             isMeta: true,
@@ -527,7 +576,7 @@ function* usageLimitNotices(
         );
       logFeatureOk("usage_limit_near_wrapup");
       if (!getIsNonInteractiveSession())
-        import("./chunk-89f54s6c.js")
+        import("./rateLimitCheckpoint/performRateLimitCheckpoint.lazy.js")
           .then(({ performRateLimitCheckpoint }) =>
             performRateLimitCheckpoint({
               todos: toolUseContext.getAppState().todos[toolUseContext.agentId ?? getSessionId()] ?? [],
@@ -539,56 +588,13 @@ function* usageLimitNotices(
   } catch (error) {
     logError(error);
   }
-  let d = [];
-  for (let a of i) {
-    yield a;
-    if (a.type === "user") d.push(a);
+  let pushed = [];
+  for (let notice of notices) {
+    yield notice;
+    if (notice.type === "user") pushed.push(notice);
   }
-  return d.length === 0 ? messagesForQuery : [...messagesForQuery, ...d];
+  return pushed.length === 0 ? messages : [...messages, ...pushed];
 }
-//@ chunk-dcmhvw5a.js:49677-50242 placement
-/**
- * 用量上限消息的开头文本集合。
- */
-var LIMIT_MESSAGE_PREFIXES = [
-  "You've hit your",
-  "You've reached your",
-  "You're out of usage credits",
-  "Your org is out of usage \xB7 add funds to continue",
-  "Your org is out of usage \xB7 contact your admin",
-  "Your seat type doesn't include usage credits",
-  "Your seat type doesn't include usage",
-  "Your usage allocation has been disabled by your admin",
-  "Your group's usage limit is set to $0",
-  "Fable 5 requires usage credits",
-  "You're out of extra usage",
-  "Your seat type doesn't include extra usage",
-];
-var LIMIT_MESSAGE_PREFIX_PATTERNS = [
-  /^(?:Fable|Haiku|Mythos|Opus|Sonnet)(?: [^\u00B7\n]{1,40})? requires usage credits\./,
-];
-//@ chunk-dcmhvw5a.js:50242-50322 placement
-function isRateLimitErrorMessage(text) {
-  return (
-    LIMIT_MESSAGE_PREFIXES.some((prefix) => text.startsWith(prefix)) ||
-    LIMIT_MESSAGE_PREFIX_PATTERNS.some((n) => n.test(text))
-  );
-}
-//@ chunk-dcmhvw5a.js:50322-50625 fingerprint = RATE_LIMIT_ERROR_PREFIXES (0.403)
-/**
- * 限额文案前缀表：错误类、预警类（"You've used"/"You're close to"）、overage 类（"Now using usage credits" 等），用于识别限额消息。
- */
-var RATE_LIMIT_ERROR_PREFIXES = ["This service is disabled for your org"];
-var RATE_LIMIT_WARNING_PREFIXES = ["You've used", "You're close to"];
-var OVERAGE_NOTICE_PREFIXES = [
-  "You're now using usage credits",
-  "You're now using your usage allocation",
-  "Now using your usage allocation",
-  "Now using usage credits",
-  "Now using credits",
-  "You're now using extra usage",
-  "Now using extra usage",
-];
 export {
   getLimitReachedText,
   rateLimitWindowLabel,

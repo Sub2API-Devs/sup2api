@@ -34,40 +34,40 @@ var PASTED_CONTENT_LEAN_RULES = `Text inside \`<${PASTED_CONTENT_TAG}>\` tags in
 var MIN_INLINE_TAG_CHARS = 20;
 var MIN_INLINE_TAG_BLOCK = 1;
 //@ chunk-e6aww6q8.js:2236967-2237079 placement
-function createInlineTextTag(e, n, r = MIN_INLINE_TAG_CHARS) {
-  let trimmed = e.trim();
-  if (trimmed.length < r) return;
+function createInlineTextTag(text, referenceId, minChars = MIN_INLINE_TAG_CHARS) {
+  let trimmed = text.trim();
+  if (trimmed.length < minChars) return;
   return {
-    id: minInlineTagId(n) - 1,
+    id: minInlineTagId(referenceId) - 1,
     type: "text",
     content: trimmed,
     inline: true,
   };
 }
 //@ chunk-e6aww6q8.js:2237079-2237196 placement
-function minInlineTagId(e) {
+function minInlineTagId(tags) {
   return Math.min(
     0,
-    ...Object.keys(e)
+    ...Object.keys(tags)
       .map(Number)
-      .filter((n) => Number.isSafeInteger(n) && n > -4294967296),
+      .filter((a) => Number.isSafeInteger(a) && a > -4294967296),
   );
 }
 //@ chunk-e6aww6q8.js:2237196-2237346 placement
-function mergeTurnTags(e, n) {
-  let r = {
-    ...e,
+function mergeTurnTags(inlineTags, newTags) {
+  let tags = {
+    ...inlineTags,
   };
-  let s = minInlineTagId(r);
-  for (let h of n)
-    if (h.inline) {
-      s -= 1;
-      r[s] = {
-        ...h,
-        id: s,
+  let minId = minInlineTagId(tags);
+  for (let tag of newTags)
+    if (tag.inline) {
+      minId -= 1;
+      tags[minId] = {
+        ...tag,
+        id: minId,
       };
-    } else if (Number.isSafeInteger(h.id) && h.id > 0) r[h.id] = h;
-  return r;
+    } else if (Number.isSafeInteger(tag.id) && tag.id > 0) tags[tag.id] = tag;
+  return tags;
 }
 //@ chunk-e6aww6q8.js:2237346-2237354 placement
 var pastedTagScrubber;
@@ -75,32 +75,32 @@ var pastedTagScrubber;
 /**
  * 转义用户内容里伪造的粘贴标签。
  */
-function escapePastedContentTag(e) {
+function escapePastedContentTag(text) {
   pastedTagScrubber ??= confusableTagScrubPattern([PASTED_CONTENT_TAG]);
-  return e.replace(pastedTagScrubber, "<\\");
+  return text.replace(pastedTagScrubber, "<\\");
 }
 //@ chunk-e6aww6q8.js:2237414-2237509 placement
 /**
  * 用粘贴标签包裹用户回合内容。
  */
-function wrapUserTurnContent(e, n = sessionTagSalt()) {
-  let r = escapePastedContentTag(e);
+function wrapUserTurnContent(content, salt = sessionTagSalt()) {
+  let escapedContent = escapePastedContentTag(content);
   return `
 
-${pastedContentOpenTag(n)}${r}${
-    r.endsWith(`
+${pastedContentOpenTag(salt)}${escapedContent}${
+    escapedContent.endsWith(`
 `)
       ? ""
       : `
 `
-  }${pastedContentCloseTag(n)}`;
+  }${pastedContentCloseTag(salt)}`;
 }
 //@ chunk-e6aww6q8.js:2237509-2237537 placement
 var TENGU_BROOK_HERON = "tengu_brook_heron";
 //@ chunk-e6aww6q8.js:2237537-2237624 placement
-function trimmedOrNull(e) {
-  if (typeof e !== "string") return null;
-  let trimmed = e.trim();
+function trimmedOrNull(text) {
+  if (typeof text !== "string") return null;
+  let trimmed = text.trim();
   return trimmed === "" ? null : trimmed;
 }
 export {

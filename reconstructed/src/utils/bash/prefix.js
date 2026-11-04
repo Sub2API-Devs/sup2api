@@ -12,6 +12,7 @@ import { parseCommand, extractCommandArguments } from "./parser.js";
 import { buildPrefix, noAdditionalDepthRule } from "../shell/specPrefix.js";
 import { countCharInString, firstLineOf } from "../stringUtils.js";
 import { splitCommand } from "./commands.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1047628-1047821 fingerprint = isKnownSubcommand (1)
 /**
@@ -22,7 +23,7 @@ function isKnownSubcommand(arg, spec) {
   let lower = arg.toLowerCase();
   return spec.subcommands.some((sub) =>
     Array.isArray(sub.name)
-      ? sub.name.some((h) => h.toLowerCase() === lower)
+      ? sub.name.some((name) => name.toLowerCase() === lower)
       : sub.name.toLowerCase() === lower,
   );
 }
@@ -30,10 +31,16 @@ function isKnownSubcommand(arg, spec) {
 /**
  * 前缀提取用的常量：纯数字参数正则、环境变量赋值正则、总视为包装命令的集合（nice），以及转数组的辅助函数。
  */
-var NUMERIC_ARG_RE = /^\d+$/;
-var ENV_ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
-var ALWAYS_WRAPPER_COMMANDS = new Set(["nice"]);
-var toArray = (val) => (Array.isArray(val) ? val : [val]);
+var NUMERIC_ARG_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ENV_ASSIGN_RE;
+var ALWAYS_WRAPPER_COMMANDS;
+var toArray;
+deferInit("chunk-e6aww6q8.js:3034349", () => {
+  NUMERIC_ARG_RE = /^\d+$/;
+  ENV_ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
+  ALWAYS_WRAPPER_COMMANDS = new Set(["nice"]);
+  toArray = (val) => (Array.isArray(val) ? val : [val]);
+});
 //@ chunk-e6aww6q8.js:3034450-3034588 layout = isKnownSubcommand (1)
 function isExactSubcommand(arg, spec) {
   if (!spec?.subcommands?.length) return false;
@@ -68,8 +75,8 @@ async function getCommandPrefixStatic(specRegistry, command, recursionDepth = 0,
     ? await handleWrapper(specRegistry, cmd, args, recursionDepth, wrapperDepth)
     : await buildPrefix(cmd, args, spec);
   if (prefix === null && recursionDepth === 0 && isWrapper) return null;
-  let ke = noAdditionalDepthRule(cmd, args[0] ?? "");
-  if (ke !== undefined && countCharInString(prefix ?? "", " ") + 1 < ke)
+  let minDepth = noAdditionalDepthRule(cmd, args[0] ?? "");
+  if (minDepth !== undefined && countCharInString(prefix ?? "", " ") + 1 < minDepth)
     return {
       commandPrefix: null,
     };
@@ -120,7 +127,7 @@ async function handleWrapper(specRegistry, wrapperName, args, recursionDepth, wr
 /**
  * 复合命令的前缀：用 splitCommand 拆子命令，逐个求前缀（可用回调排除），按首词分组后取最长公共前缀。
  */
-async function getCompoundCommandPrefixesStatic(command, command_2, r) {
+async function getCompoundCommandPrefixesStatic(command, command_2, isExcluded) {
   let subcommands = splitCommand(command_2);
   if (subcommands.length <= 1) {
     let result = await getCommandPrefixStatic(command, command_2);
@@ -129,7 +136,7 @@ async function getCompoundCommandPrefixesStatic(command, command_2, r) {
   let prefixes = [];
   for (let subcmd of subcommands) {
     let trimmed = subcmd.trim();
-    if (r?.(trimmed)) continue;
+    if (isExcluded?.(trimmed)) continue;
     let result = await getCommandPrefixStatic(command, trimmed);
     if (result?.commandPrefix) prefixes.push(result.commandPrefix);
   }
@@ -168,53 +175,55 @@ function longestCommonPrefix(strings) {
  * 复合命令逐子命令求前缀，去掉命令自带的 VAR=val，再按 spec 逐层扩展子命令，返回去重后的前缀列表。
  */
 async function getCompoundCommandPrefixesStatic_2(command, excludeSubcommand) {
-  let r = new Set();
-  for (let s of splitCommand(excludeSubcommand)) {
-    let trimmed = s.trim();
+  let prefixes = new Set();
+  for (let subcmd of splitCommand(excludeSubcommand)) {
+    let trimmed = subcmd.trim();
     let commandPrefixStatic = await getCommandPrefixStatic(command, trimmed);
     if (!commandPrefixStatic?.commandPrefix) continue;
-    let S = await stripEnvVarPrefix(trimmed, commandPrefixStatic.commandPrefix);
-    let w = await extendPrefixBySpec(command, S);
-    if (w) r.add(w);
+    let stripped = await stripEnvVarPrefix(trimmed, commandPrefixStatic.commandPrefix);
+    let extended = await extendPrefixBySpec(command, stripped);
+    if (extended) prefixes.add(extended);
   }
-  return [...r];
+  return [...prefixes];
 }
 //@ chunk-e6aww6q8.js:3036577-3036727 placement
-async function stripEnvVarPrefix(command, n) {
+async function stripEnvVarPrefix(command, prefix) {
   let command_2 = await parseCommand(command);
   if (command_2?.envVars.length) {
-    let s = `${command_2.envVars.join(" ")} `;
-    if (n.startsWith(s)) return n.slice(s.length);
+    let envPrefix = `${command_2.envVars.join(" ")} `;
+    if (prefix.startsWith(envPrefix)) return prefix.slice(envPrefix.length);
   }
-  return n;
+  return prefix;
 }
 //@ chunk-e6aww6q8.js:3036727-3037078 placement
-async function extendPrefixBySpec(command, n) {
-  let filtered = n.split(" ").filter(Boolean);
-  if (filtered.length <= 1) return n;
-  let s = [filtered[0]];
-  let h = await command.get(filtered[0]);
+async function extendPrefixBySpec(command, prefix) {
+  let filtered = prefix.split(" ").filter(Boolean);
+  if (filtered.length <= 1) return prefix;
+  let parts = [filtered[0]];
+  let currentSpec = await command.get(filtered[0]);
   for (let idx = 1; idx < filtered.length; idx++) {
     let spec = filtered[idx];
     if (spec.startsWith("-")) break;
-    if (h?.args && toArray(h.args).some((L) => L?.isCommand)) {
+    if (currentSpec?.args && toArray(currentSpec.args).some((argSpec) => argSpec?.isCommand)) {
       if (NUMERIC_ARG_RE.test(spec)) continue;
-      s.push(spec);
-      h = await command.get(spec);
+      parts.push(spec);
+      currentSpec = await command.get(spec);
       continue;
     }
-    let subcommandSpec = findSubcommandSpec(h, spec);
+    let subcommandSpec = findSubcommandSpec(currentSpec, spec);
     if (!subcommandSpec) break;
-    s.push(spec);
-    h = subcommandSpec;
+    parts.push(spec);
+    currentSpec = subcommandSpec;
   }
-  return s.join(" ");
+  return parts.join(" ");
 }
 //@ chunk-e6aww6q8.js:3037078-3037238 placement = isKnownSubcommand (1)
 function findSubcommandSpec(arg, spec) {
   if (!arg?.subcommands?.length) return null;
   let lower = spec.toLowerCase();
-  return arg.subcommands.find((sub) => toArray(sub.name).some((h) => h.toLowerCase() === lower)) ?? null;
+  return (
+    arg.subcommands.find((sub) => toArray(sub.name).some((name) => name.toLowerCase() === lower)) ?? null
+  );
 }
 export {
   getCompoundCommandPrefixesStatic,

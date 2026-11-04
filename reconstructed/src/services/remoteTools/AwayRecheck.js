@@ -27,48 +27,51 @@ class AwayRecheck {
   #t = new Map();
   #n = new AbortController();
   #o = [];
-  start(e) {
+  start(deps) {
     if (this.#e !== undefined) return;
-    this.#e = e;
+    this.#e = deps;
     this.#n = new AbortController();
     this.#o = [
-      e.registry.onModelToldAway((n) => {
-        this.#s(e, n);
+      deps.registry.onModelToldAway((machineName) => {
+        this.#s(deps, machineName);
       }),
-      e.registry.onHostStatusChange((n) => {
-        switch (n.change) {
+      deps.registry.onHostStatusChange((change) => {
+        switch (change.change) {
           case "back":
-            this.#r(n.name);
+            this.#r(change.name);
             return;
           case "away":
-            if (n.toldModel) this.#s(e, n.name);
+            if (change.toldModel) this.#s(deps, change.name);
         }
       }),
-      e.registry.onAwayEpisodeDropped((n) => {
-        this.#r(n);
+      deps.registry.onAwayEpisodeDropped((machineName) => {
+        this.#r(machineName);
       }),
     ];
   }
-  checking(e) {
-    return this.#t.has(e) || (this.#e?.registry.awayEpisode(e)?.toldModel === false && this.#e.isEnabled());
+  checking(machineName) {
+    return (
+      this.#t.has(machineName) ||
+      (this.#e?.registry.awayEpisode(machineName)?.toldModel === false && this.#e.isEnabled())
+    );
   }
   dispose() {
-    for (let e of this.#o) e();
+    for (let unsubscribe of this.#o) unsubscribe();
     for (let key of [...this.#t.keys()]) this.#r(key);
     this.#n.abort();
     this.#o = [];
     this.#e = undefined;
   }
-  #r(e) {
-    this.#t.get(e)?.cancelTimer();
-    this.#t.delete(e);
+  #r(machineName) {
+    this.#t.get(machineName)?.cancelTimer();
+    this.#t.delete(machineName);
   }
-  #s(e, n) {
-    let o = e.registry.awayEpisode(n);
-    if (o === undefined || !e.isEnabled() || this.#t.has(n)) return;
+  #s(deps, machineName) {
+    let episode = deps.registry.awayEpisode(machineName);
+    if (episode === undefined || !deps.isEnabled() || this.#t.has(machineName)) return;
     let mapped = AWAY_RECHECK_DELAYS_MS.map(
       (baseMs) =>
-        o.awaySince +
+        episode.awaySince +
         backoffDelayMs({
           attempt: 1,
           baseMs,
@@ -76,52 +79,52 @@ class AwayRecheck {
             kind: "symmetric",
             ratio: AWAY_RECHECK_JITTER_RATIO,
           },
-          random: e.random,
+          random: deps.random,
         }),
     );
-    let s = e.registry.now();
-    let i = count(mapped, (u) => u <= s);
-    this.#i(e, n, mapped, Math.max(0, i - 1));
+    let nowMs = deps.registry.now();
+    let passedCount = count(mapped, (dueAt) => dueAt <= nowMs);
+    this.#i(deps, machineName, mapped, Math.max(0, passedCount - 1));
   }
-  #i(e, n, o, r) {
-    let s = {
-      dueAts: o,
-      cancelTimer: e.schedule(
+  #i(deps, machineName, dueAts, startIndex) {
+    let entry = {
+      dueAts,
+      cancelTimer: deps.schedule(
         () => {
-          this.#a(e, n, s, r);
+          this.#a(deps, machineName, entry, startIndex);
         },
-        Math.max(0, (o[r] ?? 0) - e.registry.now()),
+        Math.max(0, (dueAts[startIndex] ?? 0) - deps.registry.now()),
       ),
     };
-    this.#t.set(n, s);
+    this.#t.set(machineName, entry);
   }
-  async #a(e, n, o, r) {
+  async #a(deps, machineName, entry, startIndex) {
     try {
-      if (this.#t.get(n) !== o) return;
-      if (!e.isEnabled()) {
-        this.#t.delete(n);
+      if (this.#t.get(machineName) !== entry) return;
+      if (!deps.isEnabled()) {
+        this.#t.delete(machineName);
         return;
       }
-      let s = await e.registry
+      let alive = await deps.registry
         .entries()
-        .find((h) => h.name === n)
+        .find((host) => host.name === machineName)
         ?.transport.probeLive?.({
           signal: this.#n.signal,
         });
-      if (s === true) logFeatureOk("rtc_away_recheck");
-      if (this.#t.get(n) !== o) return;
-      let i = e.registry.now();
-      let index = o.dueAts.findIndex((dueAt, p) => p > r && dueAt > i);
-      if (s === true || index === -1) {
-        this.#t.delete(n);
-        if (s !== true) logFeatureSad("rtc_away_recheck", s === false ? "exhausted" : "inconclusive");
+      if (alive === true) logFeatureOk("rtc_away_recheck");
+      if (this.#t.get(machineName) !== entry) return;
+      let nowMs = deps.registry.now();
+      let index = entry.dueAts.findIndex((dueAt, index) => index > startIndex && dueAt > nowMs);
+      if (alive === true || index === -1) {
+        this.#t.delete(machineName);
+        if (alive !== true) logFeatureSad("rtc_away_recheck", alive === false ? "exhausted" : "inconclusive");
         return;
       }
-      this.#i(e, n, o.dueAts, index);
+      this.#i(deps, machineName, entry.dueAts, index);
     } catch (error) {
       logError(error);
       logFeatureBad("rtc_away_recheck", "probe_threw");
-      if (this.#t.get(n) === o) this.#t.delete(n);
+      if (this.#t.get(machineName) === entry) this.#t.delete(machineName);
     }
   }
 }

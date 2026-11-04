@@ -17,32 +17,32 @@ var CLOUD_TRASH_MARKER_FILE = ".claude-cloud-trash";
 var GITIGNORE_FILE_NAME = ".gitignore";
 //@ chunk-s61vbvea.js:596741-596893 placement
 function findHandleInOtherDrawings({ byDrawing, plugin, except, handle }) {
-  for (let [h, y] of byDrawing)
-    if (h !== except && h.startsWith(`${plugin}\x00`)) {
-      let S = y.get(handle);
-      if (S !== undefined) return S;
+  for (let [drawingKey, drawing] of byDrawing)
+    if (drawingKey !== except && drawingKey.startsWith(`${plugin}\x00`)) {
+      let entry = drawing.get(handle);
+      if (entry !== undefined) return entry;
     }
   return;
 }
 //@ chunk-s61vbvea.js:596893-597128 placement
-function carryForwardHandles({ previous, handles, ...r }) {
-  let s = new Set(handles);
+function carryForwardHandles({ previous, handles, ...rest }) {
+  let currentHandles = new Set(handles);
   return new Map([
     ...previous,
-    ...[...previous].flatMap(([h, y], S) => {
-      let w = handles[S];
-      return w !== undefined &&
-        !previous.has(w) &&
-        !s.has(h) &&
+    ...[...previous].flatMap(([previousHandle, entry], index) => {
+      let newHandle = handles[index];
+      return newHandle !== undefined &&
+        !previous.has(newHandle) &&
+        !currentHandles.has(previousHandle) &&
         findHandleInOtherDrawings({
-          ...r,
-          handle: h,
+          ...rest,
+          handle: previousHandle,
         }) === undefined &&
         findHandleInOtherDrawings({
-          ...r,
-          handle: w,
+          ...rest,
+          handle: newHandle,
         }) === undefined
-        ? [[w, y]]
+        ? [[newHandle, entry]]
         : [];
     }),
   ]);
@@ -51,7 +51,8 @@ function carryForwardHandles({ previous, handles, ...r }) {
 /**
  * 云回收站条目的键（文件、组件、请求 id 与面板）。
  */
-var cloudTrashEntryKey = (e, n) => `${e}\x00${n.component}\x00${n.requestId}\x00${n.surface}`;
+var cloudTrashEntryKey = (plugin, target) =>
+  `${plugin}\x00${target.component}\x00${target.requestId}\x00${target.surface}`;
 //@ chunk-s61vbvea.js:597201-597219 placement
 /**
  * 回收站随机后缀的上限（2^30）。
@@ -64,43 +65,46 @@ var TRASH_SUFFIX_RANGE_EXCLUSIVE = 1073741824;
 var randomTrashSuffix = () => Math.floor(Math.random() * TRASH_SUFFIX_RANGE_EXCLUSIVE);
 //@ chunk-s61vbvea.js:597259-598766 placement
 function moveToCloudTrash_2() {
-  let e = new Map();
-  let n = new Map();
-  let r = new Map();
-  let s = randomTrashSuffix();
+  let pressesByHandle = new Map();
+  let byDrawing = new Map();
+  let drawnByDrawing = new Map();
+  let suffix = randomTrashSuffix();
   return {
-    heldPress: (h, y, S) => {
-      let w = e.get(y);
-      return w?.plugin === h && (S === undefined || S === "" || w.element === S) ? w : undefined;
+    heldPress: (plugin, handle, element) => {
+      let press = pressesByHandle.get(handle);
+      return press?.plugin === plugin &&
+        (element === undefined || element === "" || press.element === element)
+        ? press
+        : undefined;
     },
-    holdDrawing(h, { drawn, ...S }, w) {
-      let R = cloudTrashEntryKey(h, S);
-      let x = n.get(R) ?? new Map();
-      let P = new Map();
-      let G =
-        drawn !== undefined && drawn === r.get(R) && w.length === x.size
+    holdDrawing(plugin, { drawn, ...target }, handles) {
+      let drawingKey = cloudTrashEntryKey(plugin, target);
+      let previous = byDrawing.get(drawingKey) ?? new Map();
+      let entries = new Map();
+      let carried =
+        drawn !== undefined && drawn === drawnByDrawing.get(drawingKey) && handles.length === previous.size
           ? carryForwardHandles({
-              byDrawing: n,
-              plugin: h,
-              except: R,
-              previous: x,
-              handles: w.map((Q) => Q.handle),
+              byDrawing,
+              plugin,
+              except: drawingKey,
+              previous,
+              handles: handles.map((handleEntry) => handleEntry.handle),
             })
-          : x;
-      for (let { tag, handle, element, pressableLinks, options } of w) {
-        let re =
-          G.get(handle) ??
+          : previous;
+      for (let { tag, handle, element, pressableLinks, options } of handles) {
+        let entry =
+          carried.get(handle) ??
           findHandleInOtherDrawings({
-            byDrawing: n,
-            plugin: h,
-            except: R,
+            byDrawing,
+            plugin,
+            except: drawingKey,
             handle,
           }) ??
-          ++s;
-        P.set(handle, re);
-        e.set(re, {
+          ++suffix;
+        entries.set(handle, entry);
+        pressesByHandle.set(entry, {
           tag,
-          plugin: h,
+          plugin,
           handle,
           element,
           ...(pressableLinks !== undefined && {
@@ -109,65 +113,66 @@ function moveToCloudTrash_2() {
           ...(options !== undefined && {
             options,
           }),
-          ...S,
+          ...target,
         });
       }
-      let L = [];
-      let q = new Set(P.values());
-      for (let [Q, Z] of x)
+      let released = [];
+      let heldSet = new Set(entries.values());
+      for (let [handle, entry] of previous)
         if (
-          !P.has(Q) &&
+          !entries.has(handle) &&
           findHandleInOtherDrawings({
-            byDrawing: n,
-            plugin: h,
-            except: R,
-            handle: Q,
+            byDrawing,
+            plugin,
+            except: drawingKey,
+            handle,
           }) === undefined
         ) {
-          if (!q.has(Z)) e.delete(Z);
-          L.push(Q);
+          if (!heldSet.has(entry)) pressesByHandle.delete(entry);
+          released.push(handle);
         }
-      if (P.size === 0) n.delete(R);
-      else n.set(R, P);
-      if (P.size === 0) r.delete(R);
-      else r.set(R, drawn);
+      if (entries.size === 0) byDrawing.delete(drawingKey);
+      else byDrawing.set(drawingKey, entries);
+      if (entries.size === 0) drawnByDrawing.delete(drawingKey);
+      else drawnByDrawing.set(drawingKey, drawn);
       return {
-        hosted: P,
-        released: L,
+        hosted: entries,
+        released,
       };
     },
-    holdersOf: (h) =>
-      Array.from(n.keys())
-        .filter((key) => key.endsWith(cloudTrashEntryKey("", h)))
+    holdersOf: (handle) =>
+      Array.from(byDrawing.keys())
+        .filter((key) => key.endsWith(cloudTrashEntryKey("", handle)))
         .map((key) => key.slice(0, key.indexOf("\x00"))),
-    forgetPresses(h) {
-      for (let [y, S] of e) if (S.plugin === h) e.delete(y);
-      for (let key of n.keys())
-        if (key.startsWith(`${h}\x00`)) {
-          n.delete(key);
-          r.delete(key);
+    forgetPresses(plugin) {
+      for (let [handle, press] of pressesByHandle)
+        if (press.plugin === plugin) pressesByHandle.delete(handle);
+      for (let key of byDrawing.keys())
+        if (key.startsWith(`${plugin}\x00`)) {
+          byDrawing.delete(key);
+          drawnByDrawing.delete(key);
         }
     },
     heldByKeyOf({ tag, plugin, element, surface, component, requestId }) {
-      let filtered = [...e.values()].filter(
-        (G) =>
-          G.tag === tag &&
-          G.plugin === plugin &&
-          G.element === element &&
-          G.surface === surface &&
-          G.component === component &&
-          (requestId === undefined || G.requestId === requestId),
+      let filtered = [...pressesByHandle.values()].filter(
+        (entry) =>
+          entry.tag === tag &&
+          entry.plugin === plugin &&
+          entry.element === element &&
+          entry.surface === surface &&
+          entry.component === component &&
+          (requestId === undefined || entry.requestId === requestId),
       );
       return filtered.length === 1 ? filtered[0] : undefined;
     },
-    hostedButtonsOf: (h, y) =>
-      [...e]
-        .filter(([, S]) => S.plugin === h && S.element === y)
-        .map(([S, w]) => ({
-          hosted: S,
-          button: w,
+    hostedButtonsOf: (plugin, element) =>
+      [...pressesByHandle]
+        .filter(([, button]) => button.plugin === plugin && button.element === element)
+        .map(([hosted, button]) => ({
+          hosted,
+          button,
         })),
-    heldPressCount: () => e.size,
+    heldPressCount: () => pressesByHandle.size,
   };
 }
 //@ chunk-s61vbvea.js:598766-598779 placement

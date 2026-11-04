@@ -15,46 +15,46 @@ import { validateToolSchema } from "./toolSchemaValidation.js";
 /**
  * 判断 MCP 工具 schema 能否发给 API（不支持则丢弃或规范化）。
  */
-function judgeToolSchemaSendability(inputSchema, n) {
-  let e = flattenInputSchema(inputSchema);
-  if (e.outcome === "drop")
+function judgeToolSchemaSendability(schema, options) {
+  let flattened = flattenInputSchema(schema);
+  if (flattened.outcome === "drop")
     return {
       verdict: "drop",
       cause: "schema_unsupported",
-      reason: e.reason,
+      reason: flattened.reason,
     };
-  if (e.outcome === "normalized" && !n.normalizeEnabled)
+  if (flattened.outcome === "normalized" && !options.normalizeEnabled)
     return {
       verdict: "drop",
       cause: "normalize_gated",
-      reason: `its input schema uses top-level ${e.combinators.join("/")}, which the Anthropic API does not accept`,
+      reason: `its input schema uses top-level ${flattened.combinators.join("/")}, which the Anthropic API does not accept`,
     };
-  let o =
-    e.outcome === "normalized"
+  let normalized =
+    flattened.outcome === "normalized"
       ? {
-          schema: e.schema,
-          note: e.note,
-          combinators: e.combinators,
+          schema: flattened.schema,
+          note: flattened.note,
+          combinators: flattened.combinators,
         }
       : undefined;
-  let i = validateToolSchema(o?.schema ?? inputSchema);
-  if (i.valid)
+  let validation = validateToolSchema(normalized?.schema ?? schema);
+  if (validation.valid)
     return {
       verdict: "send",
-      normalized: o,
+      normalized,
       apiWouldReject: undefined,
     };
-  if (!n.apiValidateEnabled)
+  if (!options.apiValidateEnabled)
     return {
       verdict: "send",
-      normalized: o,
-      apiWouldReject: i,
+      normalized,
+      apiWouldReject: validation,
     };
   return {
     verdict: "drop",
     cause: "api_invalid",
-    normalized: o,
-    rejection: i,
+    normalized,
+    rejection: validation,
   };
 }
 export { judgeToolSchemaSendability };

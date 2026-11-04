@@ -42,7 +42,7 @@ import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { deviceMcpConsentSpec, buildMcpServeConsentPayload } from "../../cli/headlessCloud/consent.js";
 import { normalizeHostname } from "../../services/remoteTools/unattendedConsentStore.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
-import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { isAbortError, errorMessage } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";
@@ -52,7 +52,7 @@ import { logError } from "../../utils/log.js";
  * 询问是否把本机 MCP 服务器共享给云会话（首次/重新同意），记录 tengu_device_mcp_host_consent。
  */
 async function askHostDeviceMcpConsent({ dialogs, storageV5, signal, seams = {} }) {
-  let e = {
+  let result = {
     kind: "not_asked",
   };
   try {
@@ -62,68 +62,74 @@ async function askHostDeviceMcpConsent({ dialogs, storageV5, signal, seams = {} 
       !(seams.servingOn ?? isRemoteToolServingSwitchOn)() ||
       (seams.egressDenied ?? (() => getDeviceBindingRefusal() !== undefined))()
     )
-      return e;
-    let v = seams.readSnapshot ?? (() => readDeviceMcpSnapshot(createSnapshotStore(storageV5)));
-    let _ = seams.readConsent ?? (() => readDeviceMcpConsent(deviceMcpConsentStore(storageV5)));
-    let j =
+      return result;
+    let readSnapshot = seams.readSnapshot ?? (() => readDeviceMcpSnapshot(createSnapshotStore(storageV5)));
+    let readConsent = seams.readConsent ?? (() => readDeviceMcpConsent(deviceMcpConsentStore(storageV5)));
+    let writeNotNow =
       seams.writeNotNow ?? ((servers) => writeDeviceMcpNotNow(servers, deviceMcpNotNowStore(storageV5)));
-    let S = seams.clearNotNow ?? (() => clearDeviceMcpNotNow(deviceMcpNotNowStore(storageV5)));
-    let C = await _();
-    if (C === "declined" || C === "unreadable") return e;
-    let M = await v();
-    let n =
-      C === "unset" ? undefined : M === "unreadable" ? {} : pickByHelper(M.withheld, hasSnapshotChanges);
-    if (n !== undefined && Object.keys(n).length === 0) return e;
-    let E = await (
+    let clearNotNow = seams.clearNotNow ?? (() => clearDeviceMcpNotNow(deviceMcpNotNowStore(storageV5)));
+    let consent = await readConsent();
+    if (consent === "declined" || consent === "unreadable") return result;
+    let snapshot = await readSnapshot();
+    let withheld =
+      consent === "unset"
+        ? undefined
+        : snapshot === "unreadable"
+          ? {}
+          : pickByHelper(snapshot.withheld, hasSnapshotChanges);
+    if (withheld !== undefined && Object.keys(withheld).length === 0) return result;
+    let servers = await (
       seams.resolveConfigs ??
       (() =>
         getDeviceBridgeMcpServers({
           storageV5,
         }))
     )();
-    let filtered = Object.entries(E).filter(
+    let filtered = Object.entries(servers).filter(
       ([key, value]) => isDeviceBridgeTransport(value) && isForwardableDeviceMcp(key, value),
     );
-    let filtered_2 = filtered.map(([o]) => o).filter((o) => n === undefined || Object.hasOwn(n, o));
-    if (filtered_2.length === 0) return e;
-    let D = n === undefined ? "first" : "reconsent";
-    let i = (o) => {
+    let required = filtered
+      .map(([serverName]) => serverName)
+      .filter((serverName) => withheld === undefined || Object.hasOwn(withheld, serverName));
+    if (required.length === 0) return result;
+    let mode = withheld === undefined ? "first" : "reconsent";
+    let logAction = (action) => {
       logEvent("tengu_device_mcp_host_consent", {
-        action: fromEnum(o),
-        mode: fromEnum(D),
-        server_count: filtered_2.length,
+        action: fromEnum(action),
+        mode: fromEnum(mode),
+        server_count: required.length,
       });
     };
     if (!dialogs.kinds.has(deviceMcpConsentSpec.kind)) {
-      i("unsupported_surface");
-      return e;
+      logAction("unsupported_surface");
+      return result;
     }
     if (
-      D === "first" &&
+      mode === "first" &&
       containsAll(
         await (seams.readNotNow ?? (() => readDeviceMcpNotNow(deviceMcpNotNowStore(storageV5))))(),
-        filtered_2,
+        required,
       )
     ) {
-      i("suppressed_by_not_now");
-      return e;
+      logAction("suppressed_by_not_now");
+      return result;
     }
     let mcpServeConsentPayload = buildMcpServeConsentPayload({
       machineName: (seams.machineName ?? (() => shortServerLabel(normalizeHostname(hostname()))))(),
       offered: filtered,
-      snapshot: M,
-      ...(n !== undefined && {
-        withheld: n,
+      snapshot,
+      ...(withheld !== undefined && {
+        withheld,
       }),
       diffNamesCap: MAX_SNAPSHOT_SERVERS,
     });
     if (mcpServeConsentPayload === null) {
-      i("not_presentable");
+      logAction("not_presentable");
       logFeatureSad("device_mcp_host_consent", "not_presentable");
-      return e;
+      return result;
     }
-    i("shown");
-    e = {
+    logAction("shown");
+    result = {
       kind: "asked",
       answer: "as_stored",
     };
@@ -131,80 +137,81 @@ async function askHostDeviceMcpConsent({ dialogs, storageV5, signal, seams = {} 
       signal,
     });
     if (!answered) {
-      i("unanswered");
+      logAction("unanswered");
       logFeatureSad("device_mcp_host_consent", "unanswered");
-      return e;
+      return result;
     }
     if (answer === "not_now") {
-      i("not_now");
-      if (D === "first" && (await _()) === "unset") await j(filtered_2);
+      logAction("not_now");
+      if (mode === "first" && (await readConsent()) === "unset") await writeNotNow(required);
       logFeatureOk("device_mcp_host_consent");
-      return e;
+      return result;
     }
-    let p = answer === "allow" ? "accepted" : "declined";
-    e = {
+    let answerKind = answer === "allow" ? "accepted" : "declined";
+    result = {
       kind: "asked",
-      answer: p === "declined" ? "declined" : "as_stored",
+      answer: answerKind === "declined" ? "declined" : "as_stored",
     };
-    let y = {
+    let askedResult = {
       kind: "asked",
-      answer: n === undefined ? p : "as_stored",
+      answer: withheld === undefined ? answerKind : "as_stored",
     };
-    let r = await (n === undefined ? _() : v());
-    if (r === "unreadable" || (p === "accepted" && r === "declined")) {
-      i(r === "unreadable" ? "not_saved" : "superseded");
-      logFeatureSad("device_mcp_host_consent", r === "unreadable" ? "not_saved" : "superseded");
-      return r === "declined"
+    let currentState = await (withheld === undefined ? readConsent() : readSnapshot());
+    if (currentState === "unreadable" || (answerKind === "accepted" && currentState === "declined")) {
+      logAction(currentState === "unreadable" ? "not_saved" : "superseded");
+      logFeatureSad("device_mcp_host_consent", currentState === "unreadable" ? "not_saved" : "superseded");
+      return currentState === "declined"
         ? {
             kind: "asked",
             answer: "declined",
           }
-        : e;
+        : result;
     }
-    let O =
-      p === "declined" || typeof r !== "object"
-        ? filtered_2
-        : filtered_2.filter(
-            (o) =>
-              n !== undefined &&
-              Object.hasOwn(r.withheld, o) &&
-              En(r.withheld[o], n[o]) &&
-              r.servers[o] !== "declined",
+    let toApply =
+      answerKind === "declined" || typeof currentState !== "object"
+        ? required
+        : required.filter(
+            (serverName) =>
+              withheld !== undefined &&
+              Object.hasOwn(currentState.withheld, serverName) &&
+              import_sortedIndex_2(currentState.withheld[serverName], withheld[serverName]) &&
+              currentState.servers[serverName] !== "declined",
           );
-    if (r === p || O.length === 0) {
-      e = y;
-      if (n === undefined) await S();
-      i("superseded");
+    if (currentState === answerKind || toApply.length === 0) {
+      result = askedResult;
+      if (withheld === undefined) await clearNotNow();
+      logAction("superseded");
       logFeatureOk("device_mcp_host_consent");
-      return e;
+      return result;
     }
-    let P = () =>
-      typeof r === "object"
-        ? (seams.writeSnapshot ?? ((o) => writeDeviceMcpSnapshot(o, createSnapshotStore(storageV5))))(
-            applyConsentChoice(r, O, p),
-          )
+    let save = () =>
+      typeof currentState === "object"
+        ? (
+            seams.writeSnapshot ??
+            ((nextSnapshot) => writeDeviceMcpSnapshot(nextSnapshot, createSnapshotStore(storageV5)))
+          )(applyConsentChoice(currentState, toApply, answerKind))
         : (
             seams.writeConsent ??
             ((choice) => writeDeviceMcpConsent(choice, deviceMcpConsentStore(storageV5)))
-          )(p);
-    if (!((await P()) || (p === "declined" && (await P())))) {
-      i("not_saved");
+          )(answerKind);
+    if (!((await save()) || (answerKind === "declined" && (await save())))) {
+      logAction("not_saved");
       logFeatureSad("device_mcp_host_consent", "not_saved");
       logForDebugging(
-        p === "declined"
+        answerKind === "declined"
           ? "[headlessCloud] device-MCP refusal not saved; this computer offers none of its MCP servers for this attach"
           : "[headlessCloud] device-MCP answer not saved; asked again at the next attach",
         {
           level: "warn",
         },
       );
-      return e;
+      return result;
     }
-    e = y;
-    if (n === undefined) await S();
-    i(answer === "allow" ? "allowed" : "denied");
+    result = askedResult;
+    if (withheld === undefined) await clearNotNow();
+    logAction(answer === "allow" ? "allowed" : "denied");
     logFeatureOk("device_mcp_host_consent");
-    return e;
+    return result;
   } catch (error) {
     if (isAbortError(error))
       logForDebugging(`[headlessCloud] device-MCP question abandoned: ${errorMessage(error)}`);
@@ -212,6 +219,7 @@ async function askHostDeviceMcpConsent({ dialogs, storageV5, signal, seams = {} 
       logFeatureBad("device_mcp_host_consent", "failed");
       logError(error);
     }
-    return e;
+    return result;
   }
 }
+export { askHostDeviceMcpConsent };

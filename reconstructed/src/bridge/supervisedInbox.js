@@ -36,7 +36,7 @@ function stableBridgeBaseUrl() {
   let latchedPreSettingsEnvSnapshot = getLatchedPreSettingsEnvSnapshot();
   if (
     latchedPreSettingsEnvSnapshot !== undefined &&
-    BRIDGE_URL_ENV_VARS.some((r) => process.env[r] !== latchedPreSettingsEnvSnapshot[r])
+    BRIDGE_URL_ENV_VARS.some((name) => process.env[name] !== latchedPreSettingsEnvSnapshot[name])
   )
     return;
   try {
@@ -46,8 +46,8 @@ function stableBridgeBaseUrl() {
   }
 }
 //@ chunk-x4rjx7qa.js:913-981 placement
-function inboxFetchFailure(stop, r = "bridge_inbox_fetch") {
-  logFeatureBad(r, stop);
+function inboxFetchFailure(stop, eventName = "bridge_inbox_fetch") {
+  logFeatureBad(eventName, stop);
   return {
     ok: false,
     reason: stop,
@@ -57,7 +57,7 @@ function inboxFetchFailure(stop, r = "bridge_inbox_fetch") {
 /**
  * 检查受监管桥接会话、流量、令牌与 base URL
  */
-async function resolveSupervisedInboxContext(e) {
+async function resolveSupervisedInboxContext(options) {
   let supervisedBridgeSession = bridgeHostState().supervisedBridgeSession;
   if (supervisedBridgeSession === null)
     return {
@@ -71,21 +71,21 @@ async function resolveSupervisedInboxContext(e) {
     return {
       stop: "no_token",
     };
-  let a = stableBridgeBaseUrl();
-  if (a === undefined)
+  let baseUrl = stableBridgeBaseUrl();
+  if (baseUrl === undefined)
     return {
       stop: "base_url_override",
     };
-  let { credentials, storageV5 } = e;
+  let { credentials, storageV5 } = options;
   let bridgeAccessToken = await getBridgeAccessTokenAsync(credentials);
   if (bridgeAccessToken === undefined)
     return {
       stop: "no_token",
     };
-  let s = await verifyInboxOwner(supervisedBridgeSession, e, bridgeAccessToken);
-  if (s)
+  let refusal = await verifyInboxOwner(supervisedBridgeSession, options, bridgeAccessToken);
+  if (refusal)
     return {
-      stop: s,
+      stop: refusal,
     };
   try {
     await checkAndRefreshOAuthTokenIfNeeded({
@@ -103,17 +103,17 @@ async function resolveSupervisedInboxContext(e) {
       stop: "no_token",
     };
   let deviceToken = await getTrustedDeviceToken();
-  let f = await verifyInboxOwner(supervisedBridgeSession, e, bridgeAccessToken_2, {
+  let freshRefusal = await verifyInboxOwner(supervisedBridgeSession, options, bridgeAccessToken_2, {
     fresh: true,
   });
-  if (f)
+  if (freshRefusal)
     return {
-      stop: f,
+      stop: freshRefusal,
     };
   return {
     send: {
       sessionId: supervisedBridgeSession.bridgeSessionId,
-      baseUrl: a,
+      baseUrl,
       accessToken: bridgeAccessToken_2,
       deviceToken,
     },
@@ -127,12 +127,12 @@ function isSupervisedBridgeChild() {
 /**
  * 受监管桥接子进程绑定 PR 订阅并拉取收件箱消息。
  */
-async function bindSupervisedPR(e, repo, prNumber, o) {
-  let supervisedInboxContext = await resolveSupervisedInboxContext(o);
+async function bindSupervisedPR(subscription, repo, prNumber, options) {
+  let supervisedInboxContext = await resolveSupervisedInboxContext(options);
   if ("stop" in supervisedInboxContext)
-    return inboxFetchFailure(supervisedInboxContext.stop, prSubscriptionEventName(e));
+    return inboxFetchFailure(supervisedInboxContext.stop, prSubscriptionEventName(subscription));
   let { sessionId, baseUrl, accessToken, deviceToken } = supervisedInboxContext.send;
-  return subscribeGithubPullRequest(e, {
+  return subscribeGithubPullRequest(subscription, {
     sessionId,
     repo,
     prNumber,
@@ -145,47 +145,47 @@ async function bindSupervisedPR(e, repo, prNumber, o) {
 /**
  * 为受监管会话缓存收件箱所有者 pin 的铸造
  */
-function getInboxOwnerPin(e, { credentials, storageV5 }, o) {
-  if (e.inboxOwner !== undefined) return e.inboxOwner;
-  let n = {
+function getInboxOwnerPin(session, { credentials, storageV5 }, accessToken) {
+  if (session.inboxOwner !== undefined) return session.inboxOwner;
+  let pin = {
     mint: resolveBridgeOwnerPin({
-      getAccessToken: () => o,
+      getAccessToken: () => accessToken,
       storageV5,
       credentials,
-      presetOwner: e.owner,
+      presetOwner: session.owner,
     }),
     changed: false,
   };
-  e.inboxOwner = n;
-  let i = (s) => {
-    if (!s && e.inboxOwner === n) e.inboxOwner = undefined;
+  session.inboxOwner = pin;
+  let forgetOnFailure = (isSettled) => {
+    if (!isSettled && session.inboxOwner === pin) session.inboxOwner = undefined;
   };
-  n.mint.then(
-    (s) => i(s.pin !== undefined || s.reason === "not_owner"),
-    () => i(false),
+  pin.mint.then(
+    (mintResult) => forgetOnFailure(mintResult.pin !== undefined || mintResult.reason === "not_owner"),
+    () => forgetOnFailure(false),
   );
-  return n;
+  return pin;
 }
 //@ chunk-x4rjx7qa.js:2322-3141 placement
 /**
  * 核对收件箱所有者 pin 是否一致
  */
-async function verifyInboxOwner(supervisedBridgeSession, r, bridgeAccessToken, o) {
+async function verifyInboxOwner(session, options, accessToken, confirmOptions) {
   if (!isBridgeOwnerPinnedEndEnabled()) return;
-  if (supervisedBridgeSession.owner === undefined) return "owner_unverified";
-  let inboxOwnerPin = getInboxOwnerPin(supervisedBridgeSession, r, bridgeAccessToken);
+  if (session.owner === undefined) return "owner_unverified";
+  let inboxOwnerPin = getInboxOwnerPin(session, options, accessToken);
   if (inboxOwnerPin.changed) return "owner_changed";
-  let i;
+  let mintResult;
   try {
-    i = await inboxOwnerPin.mint;
+    mintResult = await inboxOwnerPin.mint;
   } catch (error) {
     logForDebugging(`[bridge] inbox fetch: owner pin could not be minted: ${errorMessage(error)}`, {
       level: "error",
     });
     return "owner_unverified";
   }
-  if (i.pin === undefined)
-    switch (i.reason) {
+  if (mintResult.pin === undefined)
+    switch (mintResult.reason) {
       case "no_token":
         return "no_token";
       case "no_identity":
@@ -199,20 +199,20 @@ async function verifyInboxOwner(supervisedBridgeSession, r, bridgeAccessToken, o
       case "disabled":
         return;
     }
-  if (o?.fresh || i.pin.identityLooksChanged()) {
-    let s = await i.pin.confirmChanged(o);
-    if (s === "changed" || inboxOwnerPin.changed) {
+  if (confirmOptions?.fresh || mintResult.pin.identityLooksChanged()) {
+    let confirmOutcome = await mintResult.pin.confirmChanged(confirmOptions);
+    if (confirmOutcome === "changed" || inboxOwnerPin.changed) {
       inboxOwnerPin.changed = true;
       return "owner_changed";
     }
-    if (s === "inconclusive") return "owner_unverified";
+    if (confirmOutcome === "inconclusive") return "owner_unverified";
   }
-  if (o?.fresh && !i.pin.ownerVerified()) return "owner_unverified";
+  if (confirmOptions?.fresh && !mintResult.pin.ownerVerified()) return "owner_unverified";
   return inboxOwnerPin.changed ? "owner_changed" : undefined;
 }
 //@ chunk-x4rjx7qa.js:3141-3386 placement
-async function fetchSupervisedInboxMessage(fileId, r) {
-  let supervisedInboxContext = await resolveSupervisedInboxContext(r);
+async function fetchSupervisedInboxMessage(fileId, options) {
+  let supervisedInboxContext = await resolveSupervisedInboxContext(options);
   if ("stop" in supervisedInboxContext) return inboxFetchFailure(supervisedInboxContext.stop);
   let { sessionId, baseUrl, accessToken, deviceToken } = supervisedInboxContext.send;
   return fetchSessionInboxMessage({
@@ -223,4 +223,4 @@ async function fetchSupervisedInboxMessage(fileId, r) {
     getTrustedDeviceToken: () => Promise.resolve(deviceToken),
   });
 }
-export { fetchSupervisedInboxMessage };
+export { fetchSupervisedInboxMessage, bindSupervisedPR, isSupervisedBridgeChild };

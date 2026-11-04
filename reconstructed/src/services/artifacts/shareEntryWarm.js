@@ -31,67 +31,67 @@ var MAX_PROBE_REUSE_MS = 1000;
 /**
  * 预热 artifact 分享条目（分享状态探测）。
  */
-async function warmShareEntry(e, r, debugLabel, n) {
-  if (!!r.toolUseId && probeAnswered(getShareEntry(e.slug), r.toolUseId)) return;
-  let { signal } = r.abortController;
+async function warmShareEntry(target, context, debugLabel, options) {
+  if (!!context.toolUseId && probeAnswered(getShareEntry(target.slug), context.toolUseId)) return;
+  let { signal } = context.abortController;
   if (signal.aborted) throw new AbortError("artifact permission check aborted");
-  let l = othersArtifactReadConsentSurface();
-  let f = n?.readBack !== true;
-  let w = f && (!l || artifactHostAnswerAtHand(e));
-  let b = l ? probeArtifactHostEgress(e, signal) : undefined;
-  if (w && getReusableProbedEntry(e.slug) !== undefined) {
-    await b;
+  let otherConsent = othersArtifactReadConsentSurface();
+  let shouldProbe = options?.readBack !== true;
+  let shouldReuse = shouldProbe && (!otherConsent || artifactHostAnswerAtHand(target));
+  let egressProbe = otherConsent ? probeArtifactHostEgress(target, signal) : undefined;
+  if (shouldReuse && getReusableProbedEntry(target.slug) !== undefined) {
+    await egressProbe;
     if (signal.aborted) throw new AbortError("artifact permission check aborted");
-    if (reuseProbedEntry(e.slug, r.toolUseId)) return;
+    if (reuseProbedEntry(target.slug, context.toolUseId)) return;
   }
-  let d = n?.readBack === true ? `${e.slug}?readback` : e.slug;
-  let reusableProbeInFlight = getReusableProbeInFlight(d);
-  let a = reusableProbeInFlight ?? startShareProbe(d, e, r, n);
-  let [s] = await Promise.all([
-    reusableProbeInFlight !== undefined ? awaitProbeRead(reusableProbeInFlight, signal) : a.read,
-    b,
+  let probeKey = options?.readBack === true ? `${target.slug}?readback` : target.slug;
+  let reusableProbeInFlight = getReusableProbeInFlight(probeKey);
+  let probe = reusableProbeInFlight ?? startShareProbe(probeKey, target, context, options);
+  let [read] = await Promise.all([
+    reusableProbeInFlight !== undefined ? awaitProbeRead(reusableProbeInFlight, signal) : probe.read,
+    egressProbe,
   ]);
-  if (s === undefined) {
+  if (read === undefined) {
     if (signal.aborted) throw new AbortError("artifact permission check aborted");
-    let reusableProbeInFlight_2 = getReusableProbeInFlight(d);
+    let reusableProbeInFlight_2 = getReusableProbeInFlight(probeKey);
     if (reusableProbeInFlight_2 !== undefined && reusableProbeInFlight_2 !== reusableProbeInFlight) {
-      a = reusableProbeInFlight_2;
-      s = await awaitProbeRead(reusableProbeInFlight_2, signal);
+      probe = reusableProbeInFlight_2;
+      read = await awaitProbeRead(reusableProbeInFlight_2, signal);
     }
   }
-  if (s === undefined) {
-    if (f && reuseProbedEntry(e.slug, r.toolUseId)) return;
-    a = startShareProbe(d, e, r, n);
-    s = await a.read;
+  if (read === undefined) {
+    if (shouldProbe && reuseProbedEntry(target.slug, context.toolUseId)) return;
+    probe = startShareProbe(probeKey, target, context, options);
+    read = await probe.read;
   }
-  foldShareProbe(e.slug, s, {
+  foldShareProbe(target.slug, read, {
     consumedByCheck: true,
-    toolUseId: r.toolUseId,
-    issuedAt: a.issuedAt,
-    probeId: a.id,
+    toolUseId: context.toolUseId,
+    issuedAt: probe.issuedAt,
+    probeId: probe.id,
     debugLabel,
   });
 }
 //@ chunk-hfg56cbz.js:1294-1472 placement
-async function reprobeShareEntry(e, r, debugLabel) {
+async function reprobeShareEntry(slug, context, debugLabel) {
   let issuedAt = Date.now();
-  let o = await probeArtifactAccess(e, r.abortController.signal, r.credentials);
-  foldShareProbe(e.slug, o, {
+  let result = await probeArtifactAccess(slug, context.abortController.signal, context.credentials);
+  foldShareProbe(slug.slug, result, {
     consumedByCheck: false,
-    toolUseId: r.toolUseId,
+    toolUseId: context.toolUseId,
     issuedAt,
     debugLabel,
   });
 }
 //@ chunk-hfg56cbz.js:1472-1591 placement
-function isProbeReusable(e) {
+function isProbeReusable(entry) {
   let now = Date.now();
   let min = Math.min(env.CLAUDE_CODE_ARTIFACT_SHARE_PROBE_REUSE_MS ?? MAX_PROBE_REUSE_MS, MAX_PROBE_REUSE_MS);
-  return now >= e && now - e < min && !issuedUnderDepartedAccount(e);
+  return now >= entry && now - entry < min && !issuedUnderDepartedAccount(entry);
 }
 //@ chunk-hfg56cbz.js:1591-1711 placement
-function getReusableProbedEntry(e) {
-  let shareEntry = getShareEntry(e);
+function getReusableProbedEntry(slug) {
+  let shareEntry = getShareEntry(slug);
   return shareEntry?.lastProbeAt !== undefined &&
     shareEntry.lastProbeIssuedAt !== undefined &&
     isProbeReusable(shareEntry.lastProbeIssuedAt)
@@ -99,43 +99,43 @@ function getReusableProbedEntry(e) {
     : undefined;
 }
 //@ chunk-hfg56cbz.js:1711-1799 placement
-function clearProbeInFlight(e, r) {
+function clearProbeInFlight(slug, probe) {
   let { checkProbesInFlight } = getLiveState().shareStatus;
-  if (checkProbesInFlight.get(e) === r) checkProbesInFlight.delete(e);
+  if (checkProbesInFlight.get(slug) === probe) checkProbesInFlight.delete(slug);
 }
 //@ chunk-hfg56cbz.js:1799-2015 placement
 /**
  * 发起分享状态探测
  */
-function startShareProbe(e, r, t, n) {
-  let o = {
+function startShareProbe(slug, context, toolUseId, options) {
+  let probe = {
     id: Symbol("share probe"),
     issuedAt: Date.now(),
-    read: probeArtifactAccess(r, t.abortController.signal, t.credentials, n),
+    read: probeArtifactAccess(context, toolUseId.abortController.signal, toolUseId.credentials, options),
   };
-  o.read.then(
-    () => clearProbeInFlight(e, o),
-    () => clearProbeInFlight(e, o),
+  probe.read.then(
+    () => clearProbeInFlight(slug, probe),
+    () => clearProbeInFlight(slug, probe),
   );
-  getLiveState().shareStatus.checkProbesInFlight.set(e, o);
-  return o;
+  getLiveState().shareStatus.checkProbesInFlight.set(slug, probe);
+  return probe;
 }
 //@ chunk-hfg56cbz.js:2015-2130 placement
 function reuseProbedEntry(slug, toolUseId) {
-  let reusableProbedEntry = getReusableProbedEntry(slug);
-  if (reusableProbedEntry === undefined) return false;
+  let entry = getReusableProbedEntry(slug);
+  if (entry === undefined) return false;
   if (toolUseId !== undefined)
     setShareEntry(slug, {
-      ...reusableProbedEntry,
-      ...stampProbeUse(reusableProbedEntry, toolUseId, true),
+      ...entry,
+      ...stampProbeUse(entry, toolUseId, true),
     });
-  bookShareStatusUse(reusableProbedEntry, false, true);
+  bookShareStatusUse(entry, false, true);
   return true;
 }
 //@ chunk-hfg56cbz.js:2130-2236 placement
-function getReusableProbeInFlight(e) {
-  let r = getLiveState().shareStatus.checkProbesInFlight.get(e);
-  return r !== undefined && isProbeReusable(r.issuedAt) ? r : undefined;
+function getReusableProbeInFlight(slug) {
+  let probe = getLiveState().shareStatus.checkProbesInFlight.get(slug);
+  return probe !== undefined && isProbeReusable(probe.issuedAt) ? probe : undefined;
 }
 //@ chunk-hfg56cbz.js:2236-2374 placement
 async function awaitProbeRead(reusableProbeInFlight, signal) {

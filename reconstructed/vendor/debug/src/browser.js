@@ -5,11 +5,11 @@
  * pieces: chunk-h6b7mazd.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_common } from "./common.js";
 
 //@ chunk-h6b7mazd.js:30759-33381 cjs-fingerprint
-var require_browser = x(function (cjsExports, cjsModule) {
+var require_browser = __commonJS(function (cjsExports, cjsModule) {
   cjsExports.formatArgs = formatArgs;
   cjsExports.save = save;
   cjsExports.load = load;

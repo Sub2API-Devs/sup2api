@@ -17,22 +17,22 @@ import { emitTaskNotification } from "../../utils/task/taskNotifications.js";
 var LocalMemoryImportTask = {
   name: "LocalMemoryImportTask",
   type: "local_memory_import",
-  async kill(e, r) {
-    let n = false;
-    r.update(e, (s) => {
-      if (s.status !== "running") return s;
-      s.abortController?.abort();
-      n = true;
+  async kill(taskId, taskRegistry) {
+    let didKill = false;
+    taskRegistry.update(taskId, (task) => {
+      if (task.status !== "running") return task;
+      task.abortController?.abort();
+      didKill = true;
       return {
-        ...s,
+        ...task,
         status: "killed",
         endTime: Date.now(),
         notified: true,
         abortController: undefined,
       };
     });
-    if (n)
-      emitTaskNotification(e, "stopped", {
+    if (didKill)
+      emitTaskNotification(taskId, "stopped", {
         skipTranscript: true,
         ambient: true,
       });

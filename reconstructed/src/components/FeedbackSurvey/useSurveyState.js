@@ -10,12 +10,19 @@
  */
 import { randomUUID } from "crypto";
 import { useClock } from "../../ink/components/ClockContext.js";
-import { y, R, P, ce, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  init_react_production,
+} from "../../../vendor/react/cjs/react.production.js";
 import { useTimeout } from "../../ink/hooks/useTerminalHooks.js";
 import { isPolicyAllowed as isPolicyAllowed_2 } from "../../services/policyLimits/policyEvidence.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { buildEffortLevelTelemetry } from "./FeedbackDraftNotice.js";
 import { resolveEffortLevel } from "../../utils/effort.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1021671-1021684 affinity
 var PENDING_OPEN_DELAY_MS = 3000;
@@ -40,83 +47,83 @@ function useSurveyState({
   onFollowupResolve,
 }) {
   let clock = useClock();
-  let [It, Ot] = y("closed");
-  let [Et, Dt] = y(null);
-  let [Lt, oo] = y(null);
-  let [Xt, io] = y(true);
-  let appearanceId = R(randomUUID());
-  let lastResponseRef = R(null);
-  let ao = R(null);
-  let co = R(null);
-  P(
+  let [state, setState] = useState("closed");
+  let [lastResponse, setLastResponse] = useState(null);
+  let [bundlePath, setBundlePath] = useState(null);
+  let [submittingShare, setSubmittingShare] = useState(true);
+  let appearanceId = useRef(randomUUID());
+  let lastResponseRef = useRef(null);
+  let pendingTimerRef = useRef(null);
+  let sharePromiseRef = useRef(null);
+  useEffect(
     () => () => {
-      ao.current?.();
+      pendingTimerRef.current?.();
     },
     [],
   );
-  let [bo, Ao] = y(false);
-  let showThanksThenClose = ce(
-    (bn = "digit") => {
-      Ao(bn === "followup");
-      Ot("thanks");
+  let [thanksFromFollowup, setThanksFromFollowup] = useState(false);
+  let showThanksThenClose = useCallback(
+    (mode = "digit") => {
+      setThanksFromFollowup(mode === "followup");
+      setState("thanks");
       clock.setTimeout(() => {
-        Ot("closed");
-        Dt(null);
+        setState("closed");
+        setLastResponse(null);
       }, hideThanksAfterMs);
     },
     [clock, hideThanksAfterMs],
   );
-  let Ro = ce(() => {
-    Ot("submitted");
-    clock.setTimeout(() => Ot("closed"), hideThanksAfterMs);
+  let showSubmittedThenClose = useCallback(() => {
+    setState("submitted");
+    clock.setTimeout(() => setState("closed"), hideThanksAfterMs);
   }, [clock, hideThanksAfterMs]);
-  let Ho = ce(() => {
-    Ot("share_failed");
-    clock.setTimeout(() => Ot("closed"), hideThanksAfterMs);
+  let showShareFailedThenClose = useCallback(() => {
+    setState("share_failed");
+    clock.setTimeout(() => setState("closed"), hideThanksAfterMs);
   }, [clock, hideThanksAfterMs]);
-  let open = ce(() => {
-    if (It !== "closed") return;
-    Wo.current = false;
-    Ot("open");
+  let open = useCallback(() => {
+    if (state !== "closed") return;
+    answeredRef.current = false;
+    setState("open");
     appearanceId.current = randomUUID();
     onOpen(appearanceId.current);
-  }, [It, onOpen]);
-  let Wo = R(false);
-  let showSubmittedThenClose = ce(() => {
-    if (It !== "open") return;
-    Ot("closed");
-    Dt(null);
+  }, [state, onOpen]);
+  let answeredRef = useRef(false);
+  let showSubmittedThenClose_2 = useCallback(() => {
+    if (state !== "open") return;
+    setState("closed");
+    setLastResponse(null);
     onAbandon?.(appearanceId.current);
-  }, [It, onAbandon]);
-  P(() => {
-    if (otherSurveyActive && It === "open" && !Wo.current) Ot("closed");
-  }, [otherSurveyActive, It]);
+  }, [state, onAbandon]);
+  useEffect(() => {
+    if (otherSurveyActive && state === "open" && !answeredRef.current) setState("closed");
+  }, [otherSurveyActive, state]);
   useTimeout(
     () => {
-      Ot("closed");
-      Dt(null);
+      setState("closed");
+      setLastResponse(null);
       onAutoDismiss?.(appearanceId.current);
     },
-    It === "open" && autoDismissAfterMs ? autoDismissAfterMs : null,
-    [It, autoDismissAfterMs],
+    state === "open" && autoDismissAfterMs ? autoDismissAfterMs : null,
+    [state, autoDismissAfterMs],
   );
-  let open_2 = ce(
+  let open_2 = useCallback(
     (selected) => {
-      ao.current = null;
+      pendingTimerRef.current = null;
       if (selected !== "dismissed" && !isPolicyAllowed_2("allow_product_feedback")) {
-        Ot("closed");
-        Dt(null);
+        setState("closed");
+        setLastResponse(null);
         return;
       }
       onSelect(appearanceId.current, selected);
       if (selected === "dismissed") {
-        Ot("closed");
-        Dt(null);
+        setState("closed");
+        setLastResponse(null);
       } else if (shouldShowTranscriptPrompt?.(selected)) {
-        Ot("transcript_prompt");
+        setState("transcript_prompt");
         onTranscriptPromptShown?.(appearanceId.current, selected);
       } else if (shouldShowFollowupPrompt?.(selected)) {
-        Ot("followup_prompt");
+        setState("followup_prompt");
         onFollowupPromptShown?.(appearanceId.current, selected);
       } else showThanksThenClose();
     },
@@ -129,50 +136,51 @@ function useSurveyState({
       onFollowupPromptShown,
     ],
   );
-  let handleSelect = ce(
+  let handleSelect = useCallback(
     (selected) => {
-      ao.current?.();
-      ao.current = null;
-      Wo.current = true;
-      Dt(selected);
+      pendingTimerRef.current?.();
+      pendingTimerRef.current = null;
+      answeredRef.current = true;
+      setLastResponse(selected);
       lastResponseRef.current = selected;
       if (selected === "dismissed") {
         open_2(selected);
         return;
       }
-      Ot("pending");
-      ao.current = clock.setTimeout(() => open_2(selected), PENDING_OPEN_DELAY_MS);
+      setState("pending");
+      pendingTimerRef.current = clock.setTimeout(() => open_2(selected), PENDING_OPEN_DELAY_MS);
     },
     [clock, open_2],
   );
-  let handleTranscriptSelect = ce(() => {
-    if (ao.current === null) return false;
-    ao.current();
-    ao.current = null;
-    Dt(null);
+  let handleTranscriptSelect = useCallback(() => {
+    if (pendingTimerRef.current === null) return false;
+    pendingTimerRef.current();
+    pendingTimerRef.current = null;
+    setLastResponse(null);
     lastResponseRef.current = null;
-    Ot("open");
+    setState("open");
     return true;
   }, []);
-  let Yo = ce(
+  let handleShareResult = useCallback(
     ({ success, bundlePath }) => {
       if (success) {
-        oo(bundlePath ?? null);
-        Ro();
-      } else Ho();
+        setBundlePath(bundlePath ?? null);
+        showSubmittedThenClose();
+      } else showShareFailedThenClose();
     },
-    [Ro, Ho],
+    [showSubmittedThenClose, showShareFailedThenClose],
   );
-  let handleTranscriptSelect_2 = ce(
+  let handleTranscriptSelect_2 = useCallback(
     (selected_0) => {
-      let Go = lastResponseRef.current;
-      let hn = Go !== null && (shouldShowFollowupPrompt?.(Go) ?? false);
+      let previousResponse = lastResponseRef.current;
+      let followupFirst =
+        previousResponse !== null && (shouldShowFollowupPrompt?.(previousResponse) ?? false);
       switch (selected_0) {
         case "yes": {
-          let Mn = () =>
+          let sharePromise = () =>
             (async () => {
               try {
-                let success = await onTranscriptSelect?.(appearanceId.current, selected_0, Go);
+                let success = await onTranscriptSelect?.(appearanceId.current, selected_0, previousResponse);
                 return typeof success === "object"
                   ? success
                   : {
@@ -186,105 +194,110 @@ function useSurveyState({
                 };
               }
             })();
-          if (hn && Go !== null) {
-            onShareConsent?.(appearanceId.current, Go);
-            co.current = Mn;
-            Ot("followup_prompt");
-            onFollowupPromptShown?.(appearanceId.current, Go);
+          if (followupFirst && previousResponse !== null) {
+            onShareConsent?.(appearanceId.current, previousResponse);
+            sharePromiseRef.current = sharePromise;
+            setState("followup_prompt");
+            onFollowupPromptShown?.(appearanceId.current, previousResponse);
           } else {
-            io(true);
-            Ot("submitting");
-            Mn().then(Yo);
+            setSubmittingShare(true);
+            setState("submitting");
+            sharePromise().then(handleShareResult);
           }
           break;
         }
         case "no":
         case "dont_ask_again":
-          onTranscriptSelect?.(appearanceId.current, selected_0, Go);
-          if (hn && Go !== null) {
-            Ot("followup_prompt");
-            onFollowupPromptShown?.(appearanceId.current, Go);
+          onTranscriptSelect?.(appearanceId.current, selected_0, previousResponse);
+          if (followupFirst && previousResponse !== null) {
+            setState("followup_prompt");
+            onFollowupPromptShown?.(appearanceId.current, previousResponse);
           } else showThanksThenClose();
           break;
       }
     },
     [
       showThanksThenClose,
-      Yo,
+      handleShareResult,
       onTranscriptSelect,
       onShareConsent,
       shouldShowFollowupPrompt,
       onFollowupPromptShown,
     ],
   );
-  let handleFollowupResolve = ce(
-    (bn) => {
-      let Go = onFollowupResolve?.(appearanceId.current, bn, lastResponseRef.current);
-      let hn = Go ? Promise.resolve(Go).catch(() => {}) : null;
-      let Mn = co.current;
-      co.current = null;
-      if (Mn) {
-        io(true);
-        Ot("submitting");
-        Promise.all([Mn(), hn]).then(([Xo]) => Yo(Xo));
-      } else if (hn) {
-        io(false);
-        Ot("submitting");
-        hn.then(() => showThanksThenClose("followup"));
+  let handleFollowupResolve = useCallback(
+    (resolution) => {
+      let submitPromise = onFollowupResolve?.(appearanceId.current, resolution, lastResponseRef.current);
+      let followupPromise = submitPromise ? Promise.resolve(submitPromise).catch(() => {}) : null;
+      let sharePromise = sharePromiseRef.current;
+      sharePromiseRef.current = null;
+      if (sharePromise) {
+        setSubmittingShare(true);
+        setState("submitting");
+        Promise.all([sharePromise(), followupPromise]).then(([shareResult]) =>
+          handleShareResult(shareResult),
+        );
+      } else if (followupPromise) {
+        setSubmittingShare(false);
+        setState("submitting");
+        followupPromise.then(() => showThanksThenClose("followup"));
       } else showThanksThenClose("followup");
     },
-    [onFollowupResolve, Yo, showThanksThenClose],
+    [onFollowupResolve, handleShareResult, showThanksThenClose],
   );
   return {
-    state: It,
-    lastResponse: Et,
+    state,
+    lastResponse,
     appearanceId: appearanceId.current,
-    transcriptBundlePath: Lt,
+    transcriptBundlePath: bundlePath,
     open,
-    abandon: showSubmittedThenClose,
+    abandon: showSubmittedThenClose_2,
     handleSelect,
     handleUndo: handleTranscriptSelect,
     handleTranscriptSelect: handleTranscriptSelect_2,
     handleFollowupResolve,
-    thanksFromFollowup: bo,
-    submittingShare: Xt,
+    thanksFromFollowup,
+    submittingShare,
   };
 }
 //@ chunk-18hwfzwa.js:1034274-1034549 placement
-function surveyProbability(h) {
-  if (!h) return {};
+function surveyProbability(probability) {
+  if (!probability) return {};
   return {
-    stays_while_typing: h.stays,
-    survey_config_probability: h.configProbability,
-    survey_override_probability: h.settingsRate,
-    ...(h.answer && {
-      answered_after_typing: answeredAfterTyping(h),
-      response_method: fromEnum(h.answer.method),
-      ms_since_appeared: h.answer.msSinceAppeared,
+    stays_while_typing: probability.stays,
+    survey_config_probability: probability.configProbability,
+    survey_override_probability: probability.settingsRate,
+    ...(probability.answer && {
+      answered_after_typing: answeredAfterTyping(probability),
+      response_method: fromEnum(probability.answer.method),
+      ms_since_appeared: probability.answer.msSinceAppeared,
     }),
   };
 }
 //@ chunk-18hwfzwa.js:1034549-1034615 placement
-function answeredAfterTyping(h) {
-  return h !== null && h.submitCountWhenTypedOver !== null;
+function answeredAfterTyping(answer) {
+  return answer !== null && answer.submitCountWhenTypedOver !== null;
 }
 //@ chunk-18hwfzwa.js:1034615-1034670 placement
-function msSinceAppeared(h, x) {
-  return Math.round(x - h.openedAtClock);
+function msSinceAppeared(state, now) {
+  return Math.round(now - state.openedAtClock);
 }
 //@ chunk-18hwfzwa.js:1034670-1034714 placement
 function effortLevelForAppState(appStoreDirect) {
   return buildEffortLevelTelemetry(resolveEffortLevel(appStoreDirect.getState()));
 }
 //@ chunk-18hwfzwa.js:1034714-1034718 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1034714", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1034718-1034755 placement
-function selectIsLoading3(Kn) {
-  return Kn.isLoading;
+function selectIsLoading3(state) {
+  return state.isLoading;
 }
 //@ chunk-18hwfzwa.js:1034755-1034794 placement
-function selectSubmitCount2(Wn) {
-  return Wn.submitCount;
+function selectSubmitCount2(state) {
+  return state.submitCount;
 }
 export {
   effortLevelForAppState,

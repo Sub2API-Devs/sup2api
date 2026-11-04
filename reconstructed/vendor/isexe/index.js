@@ -5,12 +5,12 @@
  * pieces: chunk-m4p5zn6n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 import { require_windows } from "./windows.js";
 import { require_mode } from "./mode.js";
 
 //@ chunk-m4p5zn6n.js:1714-2251 cjs-fingerprint
-var require_isexe = x(function (cjsExports, cjsModule) {
+var require_isexe = __commonJS(function (cjsExports, cjsModule) {
   var fs = importMetaRequire("fs");
   var core;
   if (global.TESTING_WINDOWS) core = require_windows();

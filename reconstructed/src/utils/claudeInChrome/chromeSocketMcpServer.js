@@ -23,12 +23,12 @@ import { createLinkedTransportPair } from "../../services/mcp/InProcessTransport
  */
 var ECHOED_PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26"];
 //@ chunk-t8hkp4g3.js:959-1033 placement
-function createChromeSocketClient(e) {
-  return e.bridgeConfig
-    ? createChromeBridgeClient(e)
-    : e.getSocketPaths
-      ? createLocalChromeBridgePool(e)
-      : createChromeSocketClient_2(e);
+function createChromeSocketClient(options) {
+  return options.bridgeConfig
+    ? createChromeBridgeClient(options)
+    : options.getSocketPaths
+      ? createLocalChromeBridgePool(options)
+      : createChromeSocketClient_2(options);
 }
 //@ chunk-t8hkp4g3.js:1033-1067 placement
 function createClaudeForChromeMcpServer(context, socketClient) {
@@ -49,10 +49,10 @@ class ChromeSocketMcpBridge {
     this.context = context;
     this.socketClient = socketClient;
   }
-  async connect(e) {
-    this.client = e;
-    e.onmessage = (o) => this.receive(o);
-    e.onclose = () => void this.closePackageServer();
+  async connect(client) {
+    this.client = client;
+    client.onmessage = (event) => this.receive(event);
+    client.onclose = () => void this.closePackageServer();
     let { logger, serverName } = this.context;
     this.socketClient.setNotificationHandler(({ method, params }) => {
       logger.info(`[${serverName}] Forwarding MCP notification: ${quoteTruncated(method)}`);
@@ -80,30 +80,30 @@ class ChromeSocketMcpBridge {
       })
     )?.server.close();
   }
-  sendToClient(e) {
-    if (!this.isClosed) this.client?.send(e).catch(logError);
+  sendToClient(message) {
+    if (!this.isClosed) this.client?.send(message).catch(logError);
   }
-  receive(e) {
-    let r = this.packageServer === undefined ? this.ownResultFor(e) : undefined;
-    if (r === undefined) this.handToPackageServer(({ transport }) => transport.send(e));
-    else if ("id" in e && e.id !== undefined)
+  receive(message) {
+    let ownResult = this.packageServer === undefined ? this.ownResultFor(message) : undefined;
+    if (ownResult === undefined) this.handToPackageServer(({ transport }) => transport.send(message));
+    else if ("id" in message && message.id !== undefined)
       this.sendToClient({
-        result: r,
+        result: ownResult,
         jsonrpc: "2.0",
-        id: e.id,
+        id: message.id,
       });
   }
-  ownResultFor(e) {
+  ownResultFor(message) {
     if (
-      !("method" in e) ||
-      ("id" in e && typeof e.id !== "string" && !Number.isInteger(e.id)) ||
-      (e.params !== undefined && !isPlainObject(e.params)) ||
-      (e.params?._meta !== undefined && !isPlainObject(e.params._meta))
+      !("method" in message) ||
+      ("id" in message && typeof message.id !== "string" && !Number.isInteger(message.id)) ||
+      (message.params !== undefined && !isPlainObject(message.params)) ||
+      (message.params?._meta !== undefined && !isPlainObject(message.params._meta))
     )
       return;
-    switch (e.method) {
+    switch (message.method) {
       case "initialize": {
-        let { protocolVersion, capabilities, clientInfo } = e.params ?? {};
+        let { protocolVersion, capabilities, clientInfo } = message.params ?? {};
         if (
           this.handshake.length > 0 ||
           typeof protocolVersion !== "string" ||
@@ -114,7 +114,7 @@ class ChromeSocketMcpBridge {
           typeof clientInfo.version !== "string"
         )
           return;
-        this.handshake.push(e);
+        this.handshake.push(message);
         return {
           protocolVersion,
           capabilities: {
@@ -130,7 +130,7 @@ class ChromeSocketMcpBridge {
         };
       }
       case "notifications/initialized":
-        this.handshake.push(e);
+        this.handshake.push(message);
         return {};
       case "ping":
         return {};
@@ -140,7 +140,7 @@ class ChromeSocketMcpBridge {
         return {};
       case "tools/list":
         if (
-          e.params?.cursor !== undefined ||
+          message.params?.cursor !== undefined ||
           this.context.bridgeConfig === undefined ||
           this.context.excludedTools !== undefined ||
           this.context.isDisabled !== undefined ||
@@ -148,23 +148,23 @@ class ChromeSocketMcpBridge {
         )
           return;
         return {
-          tools: BROWSER_TOOLS.map((r) =>
-            r.name === "list_connected_browsers"
+          tools: BROWSER_TOOLS.map((tool) =>
+            tool.name === "list_connected_browsers"
               ? {
-                  ...r,
-                  description: `${r.description} ${browserSelectionNote(this.context.askUserToolName)}`,
+                  ...tool,
+                  description: `${tool.description} ${browserSelectionNote(this.context.askUserToolName)}`,
                 }
-              : r,
+              : tool,
           ),
         };
       default:
         return;
     }
   }
-  handToPackageServer(e) {
+  handToPackageServer(handler) {
     if (this.isClosed) return;
     this.packageServer ??= this.startPackageServer();
-    this.packageServer.then(e).catch((error) => {
+    this.packageServer.then(handler).catch((error) => {
       logError(error);
       return this.close();
     });
@@ -173,18 +173,19 @@ class ChromeSocketMcpBridge {
     return withFeatureTelemetry("chrome_late_mcp_server", () => this.packageServerGivenTheHandshake());
   }
   async packageServerGivenTheHandshake() {
-    let { createClaudeForChromeMcpServer } = await import("./chunk-3ewc7v9f.js");
+    let { createClaudeForChromeMcpServer } = await import("./BROWSER_TOOLS.lazy.js");
     let claudeForChromeMcpServer = createClaudeForChromeMcpServer(this.context, this.socketClient);
-    let [i, o] = createLinkedTransportPair();
-    let n = new Set(this.handshake.flatMap((t) => ("id" in t ? [t.id] : [])));
-    i.onmessage = (t) => {
-      if ("method" in t || !("id" in t) || !n.delete(t.id)) this.sendToClient(t);
+    let [bridgeTransport, packageTransport] = createLinkedTransportPair();
+    let answeredIds = new Set(this.handshake.flatMap((message) => ("id" in message ? [message.id] : [])));
+    bridgeTransport.onmessage = (event) => {
+      if ("method" in event || !("id" in event) || !answeredIds.delete(event.id)) this.sendToClient(event);
     };
-    await claudeForChromeMcpServer.connect(o);
-    for (let t of this.handshake) await i.send(t);
+    await claudeForChromeMcpServer.connect(packageTransport);
+    for (let message of this.handshake) await bridgeTransport.send(message);
     return {
       server: claudeForChromeMcpServer,
-      transport: i,
+      transport: bridgeTransport,
     };
   }
 }
+export { ECHOED_PROTOCOL_VERSIONS, createChromeSocketClient, createClaudeForChromeMcpServer };

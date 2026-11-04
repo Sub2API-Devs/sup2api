@@ -39,16 +39,16 @@ import { CLOUD_LINE_MAX_CHARS } from "../cloudSession/headlessCloudClient.js";
 /**
  * 跟踪云会话经本机执行的远程工具调用：记录 call_id、工具名、结束状态、重复调用与审批等待，供报告与去重。
  */
-function createServedToolsTracker(e) {
-  let n = new Map();
+function createServedToolsTracker(options) {
+  let live = new Map();
   let weakSet = new WeakSet();
-  let r = [];
-  let h = false;
+  let recent = [];
+  let dirty = false;
   let signal = createSignal();
-  let S = (toolUseId, tool, ended, code) => {
-    n.delete(toolUseId);
-    r = [
-      ...r,
+  let changed = (toolUseId, tool, ended, code) => {
+    live.delete(toolUseId);
+    recent = [
+      ...recent,
       {
         call_id: toolUseId,
         tool,
@@ -56,103 +56,103 @@ function createServedToolsTracker(e) {
         ...(code !== undefined && {
           code,
         }),
-        at: e.now(),
+        at: options.now(),
       },
     ].slice(-SERVED_TOOLS_MAX_CALLS);
   };
-  let w = (R, k) => {
-    if (k === undefined)
+  let finish = (callId, tool) => {
+    if (tool === undefined)
       return {
-        ...R,
+        ...callId,
         state: "asked",
       };
-    let classifierEligible = k.classifier_eligible === true;
-    if (R.ask_id === k.ask_id)
+    let classifierEligible = tool.classifier_eligible === true;
+    if (callId.ask_id === tool.ask_id)
       return {
-        ...R,
+        ...callId,
         state: "asked",
         classifier_eligible: classifierEligible,
       };
-    let O = e.now();
+    let withAsk = options.now();
     return {
-      ...R,
+      ...callId,
       state: "asked",
-      since: O,
-      ask_id: k.ask_id,
-      lapses_at: O + (e.maxAskMs() ?? DEFAULT_SERVING_LIMITS.max_ask_ms),
+      since: withAsk,
+      ask_id: tool.ask_id,
+      lapses_at: withAsk + (options.maxAskMs() ?? DEFAULT_SERVING_LIMITS.max_ask_ms),
       classifier_eligible: classifierEligible,
     };
   };
   return {
-    legStarted: (R) => {
-      if (!R.request.ok || R.request.kind !== "call") return;
-      let toolUseId = R.tool_use_id;
-      let I = n.get(toolUseId);
-      let approval = R.request.value.approval;
-      if (approval === undefined ? I !== undefined : approval.decision === "deny") return;
-      if (I === undefined) {
-        if (n.size >= MAX_SERVED_TOOL_CALLS_LISTED) return;
-        weakSet.add(R);
+    legStarted: (ask) => {
+      if (!ask.request.ok || ask.request.kind !== "call") return;
+      let toolUseId = ask.tool_use_id;
+      let entry = live.get(toolUseId);
+      let approval = ask.request.value.approval;
+      if (approval === undefined ? entry !== undefined : approval.decision === "deny") return;
+      if (entry === undefined) {
+        if (live.size >= MAX_SERVED_TOOL_CALLS_LISTED) return;
+        weakSet.add(ask);
       }
-      n.set(toolUseId, {
-        ...(I ?? {
+      live.set(toolUseId, {
+        ...(entry ?? {
           call_id: toolUseId,
-          tool: R.name,
+          tool: ask.name,
           ...(approval !== undefined && {
             ask_id: approval.ask_id,
           }),
         }),
         state: "running",
-        since: e.now(),
+        since: options.now(),
       });
       signal.emit();
     },
-    legAnswered: (R, k) => {
-      if (!R.request.ok) return;
-      let toolUseId = R.tool_use_id;
-      let O = n.get(toolUseId);
-      let P = weakSet.delete(R);
-      let envelope = k === undefined ? undefined : readCallResult(k).envelope;
+    legAnswered: (event, reply) => {
+      if (!event.request.ok) return;
+      let toolUseId = event.tool_use_id;
+      let entry = live.get(toolUseId);
+      let removed = weakSet.delete(event);
+      let envelope = reply === undefined ? undefined : readCallResult(reply).envelope;
       let envelope_2 = envelope?.status === "present" ? envelope.envelope : undefined;
-      let approval = R.request.kind === "call" ? R.request.value.approval : undefined;
-      let j = R.request.kind === "outcome_query" || (approval === undefined && !P);
+      let approval = event.request.kind === "call" ? event.request.value.approval : undefined;
+      let answered = event.request.kind === "outcome_query" || (approval === undefined && !removed);
       if (
         envelope_2 === undefined ||
         (isReplayedOutcome(envelope_2) &&
-          (P || (envelope_2.outcome === "refused" && envelope_2.code === "duplicate_call"))) ||
-        (j && (O === undefined || isFailedServedCall(envelope_2)))
+          (removed || (envelope_2.outcome === "refused" && envelope_2.code === "duplicate_call"))) ||
+        (answered && (entry === undefined || isFailedServedCall(envelope_2)))
       ) {
-        if (P && O !== undefined) {
-          n.delete(toolUseId);
+        if (removed && entry !== undefined) {
+          live.delete(toolUseId);
           signal.emit();
         }
         return;
       }
-      let Y = O?.tool ?? R.name;
+      let isOutcomeQuery = entry?.tool ?? event.name;
       switch (envelope_2.outcome) {
         case "needs_approval":
-          if (O === undefined) return;
-          n.set(toolUseId, w(O, envelope_2));
+          if (entry === undefined) return;
+          live.set(toolUseId, finish(entry, envelope_2));
           break;
         case "in_progress":
-          if (O === undefined) return;
-          n.set(
+          if (entry === undefined) return;
+          live.set(
             toolUseId,
             envelope_2.state === "awaiting_approval"
-              ? w(O, undefined)
+              ? finish(entry, undefined)
               : {
-                  ...O,
+                  ...entry,
                   state: "running",
                 },
           );
           break;
         case "acknowledged":
-          S(toolUseId, Y, approval?.feedback === WITHDRAWN ? "withdrawn" : "denied");
+          changed(toolUseId, isOutcomeQuery, approval?.feedback === WITHDRAWN ? "withdrawn" : "denied");
           break;
         case "completed":
-          S(
+          changed(
             toolUseId,
-            Y,
+            isOutcomeQuery,
             "completed",
             envelope_2.disposition === undefined || envelope_2.disposition === "ran"
               ? undefined
@@ -166,64 +166,64 @@ function createServedToolsTracker(e) {
             envelope_2.code !== "withdrawn" &&
             envelope_2.code !== "unknown_call"
           ) {
-            if (O === undefined) return;
-            if (P) {
-              n.delete(toolUseId);
+            if (entry === undefined) return;
+            if (removed) {
+              live.delete(toolUseId);
               signal.emit();
               return;
             }
-            if (O.ask_id === undefined) return;
-            let { classifier_eligible: classifierEligible, ...W } = w(O, undefined);
-            n.set(
+            if (entry.ask_id === undefined) return;
+            let { classifier_eligible: classifierEligible, ...rest } = finish(entry, undefined);
+            live.set(
               toolUseId,
               classifierEligible === false
                 ? {
-                    ...W,
+                    ...rest,
                     classifier_eligible: classifierEligible,
                   }
-                : W,
+                : rest,
             );
             break;
           }
-          S(toolUseId, Y, "refused", envelope_2.code);
+          changed(toolUseId, isOutcomeQuery, "refused", envelope_2.code);
           break;
         case "failed":
-          S(toolUseId, Y, "failed", envelope_2.code);
+          changed(toolUseId, isOutcomeQuery, "failed", envelope_2.code);
           break;
       }
-      h = true;
+      dirty = true;
       signal.emit();
     },
     workerGone: () => {
-      let filtered = [...n.values()].filter((k) => k.state === "asked");
+      let filtered = [...live.values()].filter((callId) => callId.state === "asked");
       if (filtered.length === 0) return;
-      filtered.forEach((k) => n.delete(k.call_id));
+      filtered.forEach((asked) => live.delete(asked.call_id));
       signal.emit();
     },
     clear: () => {
-      if (n.size === 0) return;
-      n.clear();
+      if (live.size === 0) return;
+      live.clear();
       signal.emit();
     },
     report: () =>
-      h || n.size > 0
+      dirty || live.size > 0
         ? {
-            live: [...n.values()],
-            recent: r,
+            live: [...live.values()],
+            recent,
           }
         : undefined,
-    onChanged: (R) => signal.subscribe(R),
+    onChanged: (listener) => signal.subscribe(listener),
   };
 }
 //@ chunk-fe6rs39h.js:8904-8957 placement
-function isReplayedOutcome(e) {
-  return "replayed" in e && e.replayed === true;
+function isReplayedOutcome(entry) {
+  return "replayed" in entry && entry.replayed === true;
 }
 //@ chunk-fe6rs39h.js:8957-9057 placement
-function isFailedServedCall(envelope) {
+function isFailedServedCall(entry) {
   return (
-    (envelope.outcome === "failed" || (envelope.outcome === "refused" && envelope.code !== "unknown_call")) &&
-    !isReplayedOutcome(envelope)
+    (entry.outcome === "failed" || (entry.outcome === "refused" && entry.code !== "unknown_call")) &&
+    !isReplayedOutcome(entry)
   );
 }
 //@ chunk-fe6rs39h.js:9057-9795 placement
@@ -240,12 +240,12 @@ class IdleWatcher {
   stopped = false;
   lookDueAt = 0;
   cancel;
-  constructor(e, idleReleaseMs, isBusy, onIdle) {
-    this.clock = e;
+  constructor(clock, idleReleaseMs, isBusy, onIdle) {
+    this.clock = clock;
     this.idleMs = idleReleaseMs;
     this.isBusy = isBusy;
     this.onIdle = onIdle;
-    this.lastActivityAt = e.now();
+    this.lastActivityAt = clock.now();
     this.arm(idleReleaseMs);
   }
   noteActivity() {
@@ -256,26 +256,26 @@ class IdleWatcher {
     this.cancel?.();
     this.cancel = undefined;
   }
-  arm(e) {
-    let min = Math.min(e, 60000);
+  arm(ms) {
+    let min = Math.min(ms, 60000);
     this.lookDueAt = this.clock.now() + min;
     this.cancel = this.clock.setTimeout(() => this.look(), min);
   }
   look() {
     this.cancel = undefined;
     if (this.stopped) return;
-    let e = this.clock.now();
-    let n = this.isBusy();
-    let s = e - this.lookDueAt > 60000;
-    if (n || this.busyAtLastLook || s) this.lastActivityAt = e;
-    this.busyAtLastLook = n;
-    let r = e - this.lastActivityAt;
-    if (r >= this.idleMs) {
+    let now = this.clock.now();
+    let busy = this.isBusy();
+    let late = now - this.lookDueAt > 60000;
+    if (busy || this.busyAtLastLook || late) this.lastActivityAt = now;
+    this.busyAtLastLook = busy;
+    let idleFor = now - this.lastActivityAt;
+    if (idleFor >= this.idleMs) {
       this.stopped = true;
       this.onIdle();
       return;
     }
-    this.arm(this.idleMs - r);
+    this.arm(this.idleMs - idleFor);
   }
 }
 //@ chunk-fe6rs39h.js:9795-9840 placement
@@ -286,211 +286,220 @@ var SERVED_TOOLS_IDLE_GRACE_MS = 120000;
 /**
  * 无头云会话的"本机工具服务"特性：未绑定或不可用时报告 off，否则通过会话通道宣布本机工具并处理撤回/拒绝/验证状态。
  */
-function createServedToolsFeature(e) {
-  return (n) => {
-    if (!n.bound) return servedToolsOff("not_bound");
-    if (n.servedTools === undefined) return servedToolsOff(n.servedToolsUnavailable);
-    let s = null;
-    let r = false;
-    let h = false;
-    let y = false;
-    let S = false;
-    let w = false;
-    let R = {
+function createServedToolsFeature(session) {
+  return (email) => {
+    if (!email.bound) return servedToolsOff("not_bound");
+    if (email.servedTools === undefined) return servedToolsOff(email.servedToolsUnavailable);
+    let featureSession = null;
+    let announced = false;
+    let returnedFlag = false;
+    let asleep = false;
+    let reconnectPending = false;
+    let hostSleep = false;
+    let state = {
       at: "pending",
     };
-    let k;
+    let activity;
     let signal = createSignal();
     let signal_2 = createSignal();
     let servedToolsTracker = createServedToolsTracker({
       now: Date.now,
-      maxAskMs: () => Q.servedHost()?.limits.max_ask_ms,
+      maxAskMs: () => inFlight.servedHost()?.limits.max_ask_ms,
     });
     servedToolsTracker.onChanged(() => signal_2.emit());
-    let N;
-    let L = (q) => {
-      R = q;
-      if (q.at !== "on") servedToolsTracker.clear();
+    let lastNotice;
+    let setState = (next) => {
+      state = next;
+      if (next.at !== "on") servedToolsTracker.clear();
       signal.emit();
     };
     let policy = remoteToolServingPolicyName();
     let noticeBacklog = createNoticeBacklog();
-    let { onAnnounceOutcome, onRevoked, onNotice, buildAnnounce, ...X } = n.servedTools;
-    let ee = false;
-    let se = false;
-    let x = false;
-    let ie;
-    let G = 0;
-    let Q = e.openChannel({
-      ...X,
-      onAnnounceOutcome: (q, V) => {
-        if (!S && q.kind !== "failed") y = false;
-        if (q.kind === "announced") {
-          se = ee;
-          L({
-            at: q.status === "announced" ? "on" : "withdrawn",
+    let { onAnnounceOutcome, onRevoked, onNotice, buildAnnounce, ...toolsNoticeBacklog } = email.servedTools;
+    let channelOptions = false;
+    let announceSettled = false;
+    let isSleeping = false;
+    let sawAnnounce;
+    let retryNext = 0;
+    let inFlight = session.openChannel({
+      ...toolsNoticeBacklog,
+      onAnnounceOutcome: (outcome, detail) => {
+        if (!reconnectPending && outcome.kind !== "failed") asleep = false;
+        if (outcome.kind === "announced") {
+          announceSettled = channelOptions;
+          setState({
+            at: outcome.status === "announced" ? "on" : "withdrawn",
           });
-        } else if (q.kind === "refused")
-          L({
-            at: q.reason === UNVERIFIED_SENDER_2 ? "unverified" : "refused",
+        } else if (outcome.kind === "refused")
+          setState({
+            at: outcome.reason === UNVERIFIED_SENDER_2 ? "unverified" : "refused",
           });
-        else if (q.kind === "unsupported")
-          L({
+        else if (outcome.kind === "unsupported")
+          setState({
             at: "refused",
           });
-        onAnnounceOutcome?.(q, V);
+        onAnnounceOutcome?.(outcome, detail);
       },
-      onRevoked: (q) =>
-        onRevoked((V) => {
-          L({
+      onRevoked: (revoke) =>
+        onRevoked((reason) => {
+          setState({
             at: "revoked",
-            reason: V,
+            reason,
           });
-          q(V);
+          revoke(reason);
         }),
-      onNotice: (q, V) => {
-        k = V;
-        noticeBacklog.publish(V, "warning");
-        onNotice?.(q, V);
+      onNotice: (line, level) => {
+        activity = level;
+        noticeBacklog.publish(level, "warning");
+        onNotice?.(line, level);
         signal_2.emit();
       },
-      buildAnnounce: (q, V, le) => {
-        ee = isServedToolsHeadlessEnabled();
-        let ue = [...(ee ? [ANNOUNCES_RETURN] : []), ...(isStillHereOnCached() ? [SAYS_STILL_HERE] : [])];
+      buildAnnounce: (caps, base, allow) => {
+        channelOptions = isServedToolsHeadlessEnabled();
+        let capabilities = [
+          ...(channelOptions ? [ANNOUNCES_RETURN] : []),
+          ...(isStillHereOnCached() ? [SAYS_STILL_HERE] : []),
+        ];
         return buildAnnounce(
-          ue.length > 0
+          capabilities.length > 0
             ? {
-                ...q,
+                ...caps,
                 host: {
-                  ...q.host,
-                  capabilities: [...(q.host.capabilities ?? []), ...ue],
+                  ...caps.host,
+                  capabilities: [...(caps.host.capabilities ?? []), ...capabilities],
                 },
               }
-            : q,
-          V,
-          le,
+            : caps,
+          base,
+          allow,
         );
       },
       onServedCall: {
         requestStarted: () => {
-          G++;
-          ie?.noteActivity();
+          retryNext++;
+          sawAnnounce?.noteActivity();
         },
         requestEnded: () => {
-          G = Math.max(0, G - 1);
-          ie?.noteActivity();
+          retryNext = Math.max(0, retryNext - 1);
+          sawAnnounce?.noteActivity();
         },
-        legStarted: (q, V) => {
-          if (V !== undefined) N = Math.max(N ?? -1 / 0, Date.now() - V);
-          servedToolsTracker.legStarted(q);
+        legStarted: (leg, startedAt) => {
+          if (startedAt !== undefined) lastNotice = Math.max(lastNotice ?? -1 / 0, Date.now() - startedAt);
+          servedToolsTracker.legStarted(leg);
         },
-        legAnswered: (q, V) => servedToolsTracker.legAnswered(q, V),
+        legAnswered: (call, answer) => servedToolsTracker.legAnswered(call, answer),
       },
-      sessionId: n.sessionId,
-      manager: () => s,
+      sessionId: email.sessionId,
+      manager: () => featureSession,
     });
     return {
       feature: "tools",
       status: noticeBacklog,
-      onSettled: (q) => {
-        signal.subscribe(q);
-        if (R.at !== "pending") q();
+      onSettled: (listener) => {
+        signal.subscribe(listener);
+        if (state.at !== "pending") listener();
       },
-      onReportChanged: (q) => {
-        signal_2.subscribe(q);
+      onReportChanged: (listener) => {
+        signal_2.subscribe(listener);
       },
       sessionCallbacks: {
-        ...Q.callbacks,
+        ...inFlight.callbacks,
         onWorkerLive: () => {
-          if (e.controlOnly === true && h) Q.requestAnnounce("reconnected");
-          else if (x && (y || (se && isServedToolsHeadlessEnabled()))) Q.requestAnnounce("returned");
-          x = false;
-          h = false;
-          Q.callbacks.onWorkerLive?.();
+          if (session.controlOnly === true && returnedFlag) inFlight.requestAnnounce("reconnected");
+          else if (isSleeping && (asleep || (announceSettled && isServedToolsHeadlessEnabled())))
+            inFlight.requestAnnounce("returned");
+          isSleeping = false;
+          returnedFlag = false;
+          inFlight.callbacks.onWorkerLive?.();
         },
-        onStreamSilent: (q) => {
+        onStreamSilent: (event) => {
           if (
-            q.suspended ||
-            S ||
+            event.suspended ||
+            reconnectPending ||
             !isStillHereOnCached() ||
-            N === undefined ||
-            Date.now() - N > SERVED_TOOLS_IDLE_GRACE_MS ||
-            servedToolsTracker.report()?.live.some((V) => V.state === "running") !== true
+            lastNotice === undefined ||
+            Date.now() - lastNotice > SERVED_TOOLS_IDLE_GRACE_MS ||
+            servedToolsTracker.report()?.live.some((event) => event.state === "running") !== true
           )
             return;
-          Q.sayStillHere();
+          inFlight.sayStillHere();
         },
         onWorkerGone: () => {
-          h = true;
-          x = false;
-          Q.callbacks.onWorkerGone?.();
+          returnedFlag = true;
+          isSleeping = false;
+          inFlight.callbacks.onWorkerGone?.();
           servedToolsTracker.workerGone();
         },
       },
-      onSession: (q) => {
-        s = q.manager;
-        if (n.trigger === "create") s.beginWorkerStart();
-        let { endServing } = q;
-        let { idleReleaseMs } = e;
-        if (e.controlOnly === true && idleReleaseMs !== undefined && endServing !== undefined) {
-          ie = new IdleWatcher(
-            q.clock ?? systemClock,
+      onSession: (servingSession) => {
+        featureSession = servingSession.manager;
+        if (email.trigger === "create") featureSession.beginWorkerStart();
+        let { endServing } = servingSession;
+        let { idleReleaseMs } = session;
+        if (session.controlOnly === true && idleReleaseMs !== undefined && endServing !== undefined) {
+          sawAnnounce = new IdleWatcher(
+            servingSession.clock ?? systemClock,
             idleReleaseMs,
-            () => G > 0 || (servedToolsTracker.report()?.live.length ?? 0) > 0 || Q.hasBackgroundWork(),
+            () =>
+              retryNext > 0 ||
+              (servedToolsTracker.report()?.live.length ?? 0) > 0 ||
+              inFlight.hasBackgroundWork(),
             () => {
               logForDebugging(
                 `[servedTools] this session ran nothing here for ${Math.round(idleReleaseMs / 60000)} min: letting it go`,
               );
-              if (s?.workerLive() === true) logFeatureOk("rtc_idle_release");
+              if (featureSession?.workerLive() === true) logFeatureOk("rtc_idle_release");
               else logFeatureSad("rtc_idle_release", "no_worker");
-              L({
+              setState({
                 at: "left",
                 leftFor: "idle",
               });
               endServing("idle");
             },
           );
-          servedToolsTracker.onChanged(() => ie?.noteActivity());
+          servedToolsTracker.onChanged(() => sawAnnounce?.noteActivity());
         }
       },
       onWorkerLive: () => {
-        s?.endWorkerStart();
-        Q.requestAnnounce("attached");
+        featureSession?.endWorkerStart();
+        inFlight.requestAnnounce("attached");
       },
-      onStreamConnected: (q) => {
-        if (r) {
-          let V = y || (q !== undefined && (q.driftRedial || q.gapMs >= SERVED_TOOLS_IDLE_LOOK_MS));
-          if (S) w ||= V;
-          else x ||= V;
-          Q.requestAnnounce("reconnected");
+      onStreamConnected: (event) => {
+        if (announced) {
+          let isGap =
+            asleep ||
+            (event !== undefined && (event.driftRedial || event.gapMs >= SERVED_TOOLS_IDLE_LOOK_MS));
+          if (reconnectPending) hostSleep ||= isGap;
+          else isSleeping ||= isGap;
+          inFlight.requestAnnounce("reconnected");
         }
-        r = true;
+        announced = true;
       },
       onHostWake: () => {
-        S = false;
-        let q = y || w;
-        w = false;
-        Q.hostWoke(q);
-        return q;
+        reconnectPending = false;
+        let needsAnnounce = asleep || hostSleep;
+        hostSleep = false;
+        inFlight.hostWoke(needsAnnounce);
+        return needsAnnounce;
       },
       onHostSleep: async () => {
-        S = true;
-        x = false;
-        w = false;
-        let q = Q.sayAsleep();
-        if (q === null) return;
-        y = true;
-        if (!(await q)) y = false;
+        reconnectPending = true;
+        isSleeping = false;
+        hostSleep = false;
+        let say = inFlight.sayAsleep();
+        if (say === null) return;
+        asleep = true;
+        if (!(await say)) asleep = false;
       },
-      onWorkerInit: (q) =>
-        Q.requestAnnounce("worker_init", {
-          workerEpoch: q.workerEpoch,
+      onWorkerInit: (init) =>
+        inFlight.requestAnnounce("worker_init", {
+          workerEpoch: init.workerEpoch,
         }),
       report: () => {
-        let q = Q.servedHost();
-        let V = servedToolsTracker.report();
+        let host = inFlight.servedHost();
+        let calls = servedToolsTracker.report();
         return {
-          ...(R.at === "on"
+          ...(state.at === "on"
             ? {
                 state: "forwarded",
                 source: "default",
@@ -498,53 +507,53 @@ function createServedToolsFeature(e) {
             : {
                 state: "off",
                 reason:
-                  R.at === "withdrawn"
+                  state.at === "withdrawn"
                     ? "serving_off"
-                    : R.at === "left"
-                      ? leftStateFor(R.leftFor)
+                    : state.at === "left"
+                      ? leftStateFor(state.leftFor)
                       : "not_announced",
               }),
-          ...(k !== undefined && {
-            message: truncateStatusMessage(k),
+          ...(activity !== undefined && {
+            message: truncateStatusMessage(activity),
           }),
           facts: {
-            ...(q !== undefined && {
+            ...(host !== undefined && {
               host: {
-                handle: q.name,
-                working_dir: q.working_dir,
-                platform: q.platform,
-                ...(q.claude_code_version !== undefined && {
-                  cli_version: q.claude_code_version,
+                handle: host.name,
+                working_dir: host.working_dir,
+                platform: host.platform,
+                ...(host.claude_code_version !== undefined && {
+                  cli_version: host.claude_code_version,
                 }),
               },
             }),
             serving: {
-              ...servedToolsStatusReport(R),
+              ...servedToolsStatusReport(state),
               policy,
               channel: "session",
             },
-            ...(V !== undefined && {
-              calls: V,
+            ...(calls !== undefined && {
+              calls,
             }),
           },
         };
       },
-      dispose: (q) => {
-        ie?.stop();
-        let leftFor = q?.leftFor;
-        if (leftFor !== undefined && R.at !== "left")
-          L({
+      dispose: (options) => {
+        sawAnnounce?.stop();
+        let leftFor = options?.leftFor;
+        if (leftFor !== undefined && state.at !== "left")
+          setState({
             at: "left",
             leftFor,
           });
-        return Q.close(leftFor);
+        return inFlight.close(leftFor);
       },
     };
   };
 }
 //@ chunk-fe6rs39h.js:13270-13672 placement
-function servedToolsStatusReport(e) {
-  switch (e.at) {
+function servedToolsStatusReport(state) {
+  switch (state.at) {
     case "pending":
       return {
         state: "pending",
@@ -554,11 +563,11 @@ function servedToolsStatusReport(e) {
         state: "on",
       };
     case "withdrawn": {
-      let n = remoteToolServingOffReason();
+      let withdrawn = remoteToolServingOffReason();
       return {
         state: "off",
-        ...(n !== undefined && {
-          reason: n,
+        ...(withdrawn !== undefined && {
+          reason: withdrawn,
         }),
       };
     }
@@ -575,29 +584,29 @@ function servedToolsStatusReport(e) {
     case "revoked":
       return {
         state: "revoked",
-        reason: e.reason,
+        reason: state.reason,
       };
     case "left":
       return {
         state: "off",
-        reason: leftStateFor(e.leftFor),
+        reason: leftStateFor(state.leftFor),
       };
   }
 }
 //@ chunk-fe6rs39h.js:13672-13871 placement
-function truncateStatusMessage(e) {
-  if (truncateToLength(e, CLOUD_LINE_MAX_CHARS) === e) return e;
-  let n = truncateToLength(e, CLOUD_LINE_MAX_CHARS);
-  let max = Math.max(n.lastIndexOf(" \u2014 "), n.lastIndexOf("; "), n.lastIndexOf(". "));
-  let r = max > 0 ? max : n.lastIndexOf(" ");
-  return (r > 0 ? n.slice(0, r) : n).trimEnd();
+function truncateStatusMessage(state) {
+  if (truncateToLength(state, CLOUD_LINE_MAX_CHARS) === state) return state;
+  let trimmed = truncateToLength(state, CLOUD_LINE_MAX_CHARS);
+  let max = Math.max(trimmed.lastIndexOf(" \u2014 "), trimmed.lastIndexOf("; "), trimmed.lastIndexOf(". "));
+  let cut = max > 0 ? max : trimmed.lastIndexOf(" ");
+  return (cut > 0 ? trimmed.slice(0, cut) : trimmed).trimEnd();
 }
 //@ chunk-fe6rs39h.js:13871-14172 placement
 function servedToolsOff(servedToolsUnavailable) {
   logForDebugging(
     `[servedTools] not served over the session channel: ${servedToolsUnavailable ?? "not_served"}`,
   );
-  let n = {
+  let reason = {
     state: "off",
     reason: servedToolsUnavailable === "not_bound" ? "not_bound" : "not_served",
     facts: {
@@ -613,7 +622,7 @@ function servedToolsOff(servedToolsUnavailable) {
   };
   return {
     feature: "tools",
-    report: () => n,
+    report: () => reason,
   };
 }
 export { truncateStatusMessage, createServedToolsFeature };

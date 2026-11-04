@@ -41,7 +41,7 @@ var DIR_TYPES = new Set([EntryTypes.DIR_TYPE, EntryTypes.EVERYTHING_TYPE, EntryT
 var FILE_TYPES = new Set([EntryTypes.EVERYTHING_TYPE, EntryTypes.FILE_DIR_TYPE, EntryTypes.FILE_TYPE]);
 var isNormalFlowError = (error) => NORMAL_FLOW_ERRORS.has(error.code);
 var wantBigintFsStats = false;
-var emptyFn = (t) => true;
+var emptyFn = (entry) => true;
 var normalizeFilter = (filter) => {
   if (filter === undefined) return emptyFn;
   if (typeof filter === "function") return filter;
@@ -56,7 +56,7 @@ var normalizeFilter = (filter) => {
   return emptyFn;
 };
 //@ chunk-3gvas51j.js:1291-3702 esm-fingerprint
-class Q extends Readable {
+class ReaddirpStream extends Readable {
   constructor(options = {}) {
     super({
       objectMode: true,
@@ -203,7 +203,7 @@ class Q extends Readable {
   }
 }
 //@ chunk-3gvas51j.js:3702-4126 esm-fingerprint
-function X(root, options = {}) {
+function readdirp(root, options = {}) {
   let type = options.entryType || options.type;
   if (type === "both") type = EntryTypes.FILE_DIR_TYPE;
   if (type) options.type = type;
@@ -213,6 +213,6 @@ function X(root, options = {}) {
   else if (type && !ALL_TYPES.includes(type))
     throw Error(`readdirp: Invalid type passed. Use one of ${ALL_TYPES.join(", ")}`);
   options.root = root;
-  return new Q(options);
+  return new ReaddirpStream(options);
 }
-export { X };
+export { readdirp };

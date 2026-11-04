@@ -52,22 +52,23 @@ import { getErrnoCode } from "../../utils/errors.js";
 import { getBundledSkillsRoot } from "../../utils/permissions/filesystem.js";
 import { SYNCED_DIR } from "../../utils/plugins/syncedItems.js";
 import { invalidateCommandNames } from "../../utils/settings/commandSyncNames.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-axmbhcjg.js:28530-28874 placement
 /**
  * 构造不发送的条目结果：记录主文件及其非样式 import 的原因（各真实路径只记一次）。
  */
-function buildWithheldEntry(e, reason, r, path = e.destination) {
-  let i = [
+function buildWithheldEntry(candidate, reason, seenReal, path = candidate.destination) {
+  let rows = [
     {
-      realPath: e.location.realPath,
+      realPath: candidate.location.realPath,
       row: {
         path,
         reason,
       },
     },
-    ...e.imports
-      .filter((u) => !u.asStyle)
+    ...candidate.imports
+      .filter((importEntry) => !importEntry.asStyle)
       .map(({ location }) => ({
         realPath: location.realPath,
         row: {
@@ -76,24 +77,24 @@ function buildWithheldEntry(e, reason, r, path = e.destination) {
         },
       })),
   ];
-  let s = [];
-  for (let { realPath, row } of i)
-    if (!r.has(realPath)) {
-      r.add(realPath);
-      s.push(row);
+  let leftBehind = [];
+  for (let { realPath, row } of rows)
+    if (!seenReal.has(realPath)) {
+      seenReal.add(realPath);
+      leftBehind.push(row);
     }
   return {
     entry: null,
     foldedIncludes: [],
-    leftBehind: s,
+    leftBehind,
   };
 }
 //@ chunk-axmbhcjg.js:28874-28948 placement
 /**
  * 以本地路径读取一个工作文件。
  */
-function readNativeWorkingFile(e, location) {
-  return readWorkingFile(e.realConfigHome, e.realConfigHome, location.nativeRel);
+function readNativeWorkingFile(walkState, location) {
+  return readWorkingFile(walkState.realConfigHome, walkState.realConfigHome, location.nativeRel);
 }
 //@ chunk-axmbhcjg.js:28948-29454 placement
 /**
@@ -137,24 +138,24 @@ var ALWAYS_COVERS = {
   covers: "all",
 };
 //@ chunk-axmbhcjg.js:29585-29868 placement
-function getPreToolUseMatchers(e) {
-  if (!hasPreToolUseHooks(e))
+function getPreToolUseMatchers(settings) {
+  if (!hasPreToolUseHooks(settings))
     return {
       covers: "matchers",
       matchers: [],
     };
-  let n = PreToolUseHooksOf(e);
-  if (!Array.isArray(n)) return ALWAYS_COVERS;
-  let r = [];
-  for (let o of n) {
-    let matcher = isPlainObject(o) ? o.matcher : undefined;
+  let hooks = PreToolUseHooksOf(settings);
+  if (!Array.isArray(hooks)) return ALWAYS_COVERS;
+  let matchers = [];
+  for (let entry of hooks) {
+    let matcher = isPlainObject(entry) ? entry.matcher : undefined;
     if (typeof matcher !== "string") return ALWAYS_COVERS;
     if (matcher.trim() === "" || matcher === "*" || matcher === ".*") return ALWAYS_COVERS;
-    r.push(matcher);
+    matchers.push(matcher);
   }
   return {
     covers: "matchers",
-    matchers: r,
+    matchers,
   };
 }
 //@ chunk-axmbhcjg.js:29868-30062 placement
@@ -162,22 +163,24 @@ function makeHookCoveragePredicate(hookCoverage) {
   if (hookCoverage.covers === "all") return true;
   let matchers = hookCoverage.matchers;
   if (matchers.length === 0) return false;
-  return (r) =>
-    hasWildcard(r)
+  return (covers) =>
+    hasWildcard(covers)
       ? matchers.some((matcher) => {
-          let i = preToolUseMatcherListedTools(matcher);
-          return i === undefined || i.some((s) => matchRulePattern(r, s));
+          let oneMatcher = preToolUseMatcherListedTools(matcher);
+          return (
+            oneMatcher === undefined || oneMatcher.some((matchers) => matchRulePattern(covers, matchers))
+          );
         })
-      : matchers.some((matcher) => preToolUseMatcherCoversTool(matcher, r));
+      : matchers.some((matcher) => preToolUseMatcherCoversTool(matcher, covers));
 }
 //@ chunk-axmbhcjg.js:30062-30231 placement
-function mergePreToolUseHooks(e) {
-  let filtered = e.filter(hasPreToolUseHooks);
+function mergePreToolUseHooks(settingsList) {
+  let filtered = settingsList.filter(hasPreToolUseHooks);
   if (filtered.length === 0) return;
   let mapped = filtered.map(PreToolUseHooksOf);
   return (
-    filtered.find((i, s) => !Array.isArray(mapped[s])) ?? {
-      PreToolUse: mapped.flatMap((i) => (Array.isArray(i) ? i : [])),
+    filtered.find((settings, index) => !Array.isArray(mapped[index])) ?? {
+      PreToolUse: mapped.flatMap((hooks) => (Array.isArray(hooks) ? hooks : [])),
     }
   );
 }
@@ -185,8 +188,8 @@ function mergePreToolUseHooks(e) {
 /**
  * 取设置里 PreToolUse 钩子配置。
  */
-function PreToolUseHooksOf(e) {
-  return isPlainObject(e) && Object.hasOwn(e, "PreToolUse") ? e.PreToolUse : undefined;
+function PreToolUseHooksOf(settings) {
+  return isPlainObject(settings) && Object.hasOwn(settings, "PreToolUse") ? settings.PreToolUse : undefined;
 }
 //@ chunk-axmbhcjg.js:30309-30432 placement
 function mergeHookCoverage(preToolUseMatchers, preToolUseMatchers_2) {
@@ -223,18 +226,22 @@ function computePreToolUseCoverage({
   )
     return ALWAYS_COVERS;
   let filtered = plugins.enabled.filter(
-    (d) =>
-      d.scope === "project" ||
-      marketplaceSuffix(d.source) === SYNCED ||
-      (d.scope !== "user" &&
-        (repoEnabledPluginKeys === undefined || repoEnabledPluginKeys.has(nfcLower(d.source)))),
+    (sources) =>
+      sources.scope === "project" ||
+      marketplaceSuffix(sources.source) === SYNCED ||
+      (sources.scope !== "user" &&
+        (repoEnabledPluginKeys === undefined || repoEnabledPluginKeys.has(nfcLower(sources.source)))),
   );
-  if (filtered.some((d) => d.hooksConfig === undefined && d.manifest.hooks !== undefined))
+  if (
+    filtered.some(
+      (processGuard) => processGuard.hooksConfig === undefined && processGuard.manifest.hooks !== undefined,
+    )
+  )
     return ALWAYS_COVERS;
   return [
     processGuard,
     ...sources.map((source) => (source.read ? getPreToolUseMatchers(source.hooks) : ALWAYS_COVERS)),
-    ...filtered.map((d) => getPreToolUseMatchers(d.hooksConfig)),
+    ...filtered.map((plugins) => getPreToolUseMatchers(plugins.hooksConfig)),
   ].reduce(mergeHookCoverage, {
     covers: "matchers",
     matchers: [],
@@ -242,7 +249,9 @@ function computePreToolUseCoverage({
 }
 //@ chunk-axmbhcjg.js:31072-31177 placement
 function hasHookAffectingErrors(errors) {
-  return errors.some((n) => n.severity !== "warning" || n.path === "hooks" || n.path.startsWith("hooks."));
+  return errors.some(
+    (error) => error.severity !== "warning" || error.path === "hooks" || error.path.startsWith("hooks."),
+  );
 }
 //@ chunk-axmbhcjg.js:31177-32640 placement
 /**
@@ -251,23 +260,25 @@ function hasHookAffectingErrors(errors) {
 function createHookCoverageSources(pluginOptions, getSkillHooks, settingsToCloud = isSettingsToCloudEnabled) {
   return {
     sources: SETTING_SOURCES,
-    hooksOf: (o) => {
-      if (o === "userSettings" || o === "flagSettings") return;
-      if (o === "policySettings") return getSettingsForSource(o)?.hooks;
-      let mapped = settingsPathsForSource(o).map(readSettingsFileStrict);
+    hooksOf: (source) => {
+      if (source === "userSettings" || source === "flagSettings") return;
+      if (source === "policySettings") return getSettingsForSource(source)?.hooks;
+      let mapped = settingsPathsForSource(source).map(readSettingsFileStrict);
       return mergePreToolUseHooks([
-        ...mapped.map((s) => s?.hooks),
-        getSettingsForSourceTightenOnly(o)?.hooks,
+        ...mapped.map((settings) => settings?.hooks),
+        getSettingsForSourceTightenOnly(source)?.hooks,
       ]);
     },
     sourcesIncomplete: () =>
       hasHookAffectingErrors(getSettingsWithErrors_2().errors) ||
-      getAdditionalDirSettingsPaths().some((o) => hasHookAffectingErrors(readSettingsStrict(o).errors)) ||
-      (filtered_2.some((o) => !isSettingSourceEnabled(o)) && hasAgentSetting()),
+      getAdditionalDirSettingsPaths().some((path) =>
+        hasHookAffectingErrors(readSettingsStrict(path).errors),
+      ) ||
+      (filtered_2.some((source) => !isSettingSourceEnabled(source)) && hasAgentSetting()),
     processGuard: () => {
-      let o = skillDirs();
+      let skillRoots = skillDirs();
       let PreToolUse = (getSkillHooks() ?? []).filter(
-        (s) => s.hooks.length > 0 && !isOwnSkillRoot(s.skillRoot, o),
+        (skillHook) => skillHook.hooks.length > 0 && !isOwnSkillRoot(skillHook.skillRoot, skillRoots),
       );
       return mergeHookCoverage(
         getPreToolUseMatchers(getMainThreadAgentHooks()),
@@ -283,12 +294,12 @@ function createHookCoverageSources(pluginOptions, getSkillHooks, settingsToCloud
         )
       )
         throw Error("an --add-dir settings file names another host");
-      let [allPluginsForPreview, i] = await Promise.all([
+      let [allPluginsForPreview, suppressedSkills] = await Promise.all([
         loadAllPluginsForPreview(pluginOptions),
         isSettingSourceEnabled("projectSettings") ? 0 : countUnloadedProjectSkills(),
       ]);
-      let s =
-        i === 0
+      let plugins =
+        suppressedSkills === 0
           ? allPluginsForPreview
           : {
               ...allPluginsForPreview,
@@ -297,13 +308,13 @@ function createHookCoverageSources(pluginOptions, getSkillHooks, settingsToCloud
                 {
                   type: "project-scope-suppressed-untrusted",
                   source: `(unlisted)@${SKILLS_DIR}`,
-                  count: i,
+                  count: suppressedSkills,
                   warning:
                     "project skill directories on disk were not loaded: the project settings source is off for this process",
                 },
               ],
             };
-      let u = new Set(
+      let loadedIds = new Set(
         enabledPluginIds({
           enabledPlugins: {
             ...getAddDirEnabledPlugins(),
@@ -311,24 +322,24 @@ function createHookCoverageSources(pluginOptions, getSkillHooks, settingsToCloud
           },
         }),
       );
-      let filtered = allEnabledPluginIds().filter((m) => !u.has(m));
-      let f = filtered_2.some((m) => !isSettingSourceEnabled(m))
-        ? s.enabled.filter((m) => m.settings?.agent !== undefined)
+      let filtered = allEnabledPluginIds().filter((pluginId) => !loadedIds.has(pluginId));
+      let unresolvedAgents = filtered_2.some((source) => !isSettingSourceEnabled(source))
+        ? plugins.enabled.filter((plugin) => plugin.settings?.agent !== undefined)
         : [];
-      return filtered.length === 0 && f.length === 0
-        ? s
+      return filtered.length === 0 && unresolvedAgents.length === 0
+        ? plugins
         : {
-            ...s,
+            ...plugins,
             errors: [
-              ...s.errors,
+              ...plugins.errors,
               ...filtered.map((source) => ({
                 type: "generic-error",
                 source,
                 error: "enabled in a settings file this process did not load",
               })),
-              ...f.map((m) => ({
+              ...unresolvedAgents.map((plugin) => ({
                 type: "generic-error",
-                source: m.source,
+                source: plugin.source,
                 error: "names a main-thread agent this process did not resolve",
               })),
             ],
@@ -343,13 +354,13 @@ function createHookCoverageSources(pluginOptions, getSkillHooks, settingsToCloud
 }
 //@ chunk-axmbhcjg.js:32640-32897 placement
 async function countUnloadedProjectSkills() {
-  let e = join(getProjectConfigRoot() ?? getOriginalCwd(), ".claude", "skills");
-  if (e === join(getClaudeConfigDir(), "skills")) return 0;
-  if (await hasUntouchableRecordSpellingAsync(e)) return 1;
-  return readdir(e, {
+  let dir = join(getProjectConfigRoot() ?? getOriginalCwd(), ".claude", "skills");
+  if (dir === join(getClaudeConfigDir(), "skills")) return 0;
+  if (await hasUntouchableRecordSpellingAsync(dir)) return 1;
+  return readdir(dir, {
     withFileTypes: true,
   }).then(
-    (n) => count(n, (r) => r.isDirectory() || r.isSymbolicLink()),
+    (entries) => count(entries, (count) => count.isDirectory() || count.isSymbolicLink()),
     (error) => (["ENOENT", "ENOTDIR"].includes(getErrnoCode(error) ?? "") ? 0 : 1),
   );
 }
@@ -361,41 +372,46 @@ function hasAgentSetting() {
   return (
     getSettingsWithErrors_2().settings?.agent !== undefined ||
     filtered_2
-      .flatMap((e) => settingsPathsForSource(e).map(readSettingsFileStrict))
-      .some((e) => e?.agent !== undefined)
+      .flatMap((source) => settingsPathsForSource(source).map(readSettingsFileStrict))
+      .some((source) => source?.agent !== undefined)
   );
 }
 //@ chunk-axmbhcjg.js:33009-33064 placement
-var filtered_2 = SETTING_SOURCES.filter((e) => e !== "policySettings" && REPO_DIR_SETTING_SOURCES.has(e));
+var filtered_2; // deferred: uses SETTING_SOURCES (../../utils/settings/constants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-axmbhcjg.js:33009", () => {
+  filtered_2 = SETTING_SOURCES.filter(
+    (source) => source !== "policySettings" && REPO_DIR_SETTING_SOURCES.has(source),
+  );
+});
 //@ chunk-axmbhcjg.js:33064-33160 placement
 /**
  * 技能目录：自有的 skills/commands/bundled 与同步目录。
  */
 function skillDirs() {
-  let e = join(getClaudeConfigDir(), "skills");
+  let opposite = join(getClaudeConfigDir(), "skills");
   return {
-    own: [e, join(getClaudeConfigDir(), "commands"), getBundledSkillsRoot()],
-    synced: join(e, SYNCED_DIR),
+    own: [opposite, join(getClaudeConfigDir(), "commands"), getBundledSkillsRoot()],
+    synced: join(opposite, SYNCED_DIR),
   };
 }
 //@ chunk-axmbhcjg.js:33160-33238 placement
 /**
  * 技能根目录是否属于自有目录（不在同步目录里）。
  */
-function isOwnSkillRoot(skillRoot, n) {
+function isOwnSkillRoot(parent, info) {
   return (
-    skillRoot !== undefined &&
-    !isPathUnder(n.synced, skillRoot) &&
-    n.own.some((r) => isPathUnder(r, skillRoot))
+    parent !== undefined &&
+    !isPathUnder(info.synced, parent) &&
+    info.own.some((own) => isPathUnder(own, parent))
   );
 }
 //@ chunk-axmbhcjg.js:33238-33314 placement
 /**
  * 判断路径是否位于给定目录之下。
  */
-function isPathUnder(e, n) {
-  let r = relative(e, n);
-  return r !== "" && r.split(sep)[0] !== ".." && !isAbsolute(r);
+function isPathUnder(child, parent) {
+  let rel = relative(child, parent);
+  return rel !== "" && rel.split(sep)[0] !== ".." && !isAbsolute(rel);
 }
 //@ chunk-axmbhcjg.js:33314-33399 placement = _temp8 (1)
 /**
@@ -405,20 +421,20 @@ function settingsPathsForSource(a_3) {
   return [
     getSettingsFilePathForSource(a_3),
     a_3 === "localSettings" ? getLegacyLocalSettingsFilePath() : undefined,
-  ].filter((n) => n !== undefined);
+  ].filter((source) => source !== undefined);
 }
 //@ chunk-axmbhcjg.js:33399-33507 placement = isClaudeSettingsPath (1)
 /**
  * 列出每个附加目录下的 .claude/settings.json 与 settings.local.json 路径。旧版名 isClaudeSettingsPath 误配。
  */
 function getAdditionalDirSettingsPaths() {
-  return getAdditionalDirectoriesForClaudeMd().flatMap((e) =>
-    ["settings.json", "settings.local.json"].map((settingsPath) => join(e, ".claude", settingsPath)),
+  return getAdditionalDirectoriesForClaudeMd().flatMap((dir) =>
+    ["settings.json", "settings.local.json"].map((settingsPath) => join(dir, ".claude", settingsPath)),
   );
 }
 //@ chunk-axmbhcjg.js:33507-33620 placement
-function readSettingsFileStrict(e) {
-  let { settings, errors } = readSettingsStrict(e);
+function readSettingsFileStrict(path) {
+  let { settings, errors } = readSettingsStrict(path);
   if (hasHookAffectingErrors(errors)) throw Error("a settings file could not be read");
   return settings;
 }
@@ -426,9 +442,9 @@ function readSettingsFileStrict(e) {
 /**
  * 严格读取设置文件（含其他主机的记录时抛错）。
  */
-function readSettingsStrict(e) {
-  if (hasUntouchableRecordSpelling(e)) throw Error("a settings file names another host");
-  return parseSettingsFileUncached(e);
+function readSettingsStrict(path) {
+  if (hasUntouchableRecordSpelling(path)) throw Error("a settings file names another host");
+  return parseSettingsFileUncached(path);
 }
 //@ chunk-axmbhcjg.js:33707-33791 placement
 /**
@@ -436,7 +452,7 @@ function readSettingsStrict(e) {
  */
 function allEnabledPluginIds() {
   return [
-    ...filtered_2.flatMap((n) => settingsPathsForSource(n).map(readSettingsFileStrict)),
+    ...filtered_2.flatMap((source) => settingsPathsForSource(source).map(readSettingsFileStrict)),
     ...getAdditionalDirSettingsPaths().map(readSettingsFileStrict),
   ].flatMap(enabledPluginIds);
 }
@@ -472,36 +488,36 @@ async function resolvePreToolUseCoverage(hookCoverageSources) {
       };
     }
   });
-  let r;
+  let incomplete;
   try {
-    r = hookCoverageSources.sourcesIncomplete();
+    incomplete = hookCoverageSources.sourcesIncomplete();
   } catch {
-    r = true;
+    incomplete = true;
   }
-  let o;
+  let guard;
   try {
-    o = hookCoverageSources.processGuard();
+    guard = hookCoverageSources.processGuard();
   } catch {
-    o = ALWAYS_COVERS;
+    guard = ALWAYS_COVERS;
   }
-  let i;
+  let plugins;
   try {
-    i = await hookCoverageSources.loadPlugins();
+    plugins = await hookCoverageSources.loadPlugins();
   } catch {
-    i = null;
+    plugins = null;
   }
-  let s;
+  let repoKeys;
   try {
-    s = hookCoverageSources.repoEnabledPluginKeys?.();
+    repoKeys = hookCoverageSources.repoEnabledPluginKeys?.();
   } catch {
-    s = undefined;
+    repoKeys = undefined;
   }
   return computePreToolUseCoverage({
     sources,
-    sourcesIncomplete: r,
-    processGuard: o,
-    plugins: i,
-    repoEnabledPluginKeys: s,
+    sourcesIncomplete: incomplete,
+    processGuard: guard,
+    plugins,
+    repoEnabledPluginKeys: repoKeys,
   });
 }
 //@ chunk-axmbhcjg.js:34348-34557 placement
@@ -521,11 +537,11 @@ async function readUserSettingsForSeed() {
       };
 }
 //@ chunk-axmbhcjg.js:34557-34669 placement
-function isBlockingSettingsError(e) {
+function isBlockingSettingsError(error) {
   return (
-    e.severity !== "warning" ||
-    e.path === "permissions" ||
-    (e.path.startsWith("permissions.") && !isPermissionsAllowPath(e))
+    error.severity !== "warning" ||
+    error.path === "permissions" ||
+    (error.path.startsWith("permissions.") && !isPermissionsAllowPath(error))
   );
 }
 //@ chunk-axmbhcjg.js:34669-34732 placement

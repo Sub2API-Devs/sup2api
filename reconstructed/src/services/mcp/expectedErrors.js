@@ -25,16 +25,18 @@ var EXPECTED_MCP_ERROR_NAMES = new Set([
   "TelemetrySafeError",
 ]);
 //@ chunk-f1mqry73.js:582-953 placement
-function isExpectedMcpError(r) {
-  if (r instanceof DOMException) return r.name === "TimeoutError";
-  if (!(r instanceof Error)) return false;
-  if (r instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS) return true;
-  if (r instanceof StreamableHTTPError) return true;
+function isExpectedMcpError(error) {
+  if (error instanceof DOMException) return error.name === "TimeoutError";
+  if (!(error instanceof Error)) return false;
+  if (error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS) return true;
+  if (error instanceof StreamableHTTPError) return true;
   if (
-    (("errorCode" in r && typeof r.errorCode === "string") || ("code" in r && typeof r.code === "string")) &&
-    /^HTTP 40[13]\b/.test(r.message)
+    (("errorCode" in error && typeof error.errorCode === "string") ||
+      ("code" in error && typeof error.code === "string")) &&
+    /^HTTP 40[13]\b/.test(error.message)
   )
     return true;
-  let e = r.name !== "Error" ? r.name : (r.constructor?.name ?? "");
-  return EXPECTED_MCP_ERROR_NAMES.has(e);
+  let constructorName = error.name !== "Error" ? error.name : (error.constructor?.name ?? "");
+  return EXPECTED_MCP_ERROR_NAMES.has(constructorName);
 }
+export { isExpectedMcpError };

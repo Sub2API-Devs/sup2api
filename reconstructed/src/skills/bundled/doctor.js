@@ -38,14 +38,14 @@ var PROMPT_AUDIT_UNAVAILABLE_PROMPT =
  * 生成 /doctor（checkup）的完整提示词（约 47 KB）：安装健康、未用扩展、本地记忆去重、CLAUDE.md 瘦身、慢 hooks、权限等检查步骤；参数决定检查编号是否含第 10 项。
  */
 function buildDoctorPrompt(doctorUsageFlaggedSection) {
-  let n = doctorUsageFlaggedSection ? "0-4, 7 and 10" : "0-4 and 7";
+  let sectionsText = doctorUsageFlaggedSection ? "0-4, 7 and 10" : "0-4 and 7";
   return `# Claude Code Doctor
 
 Health-check my Claude Code setup and fix what's wrong: diagnose installation health (what the \`claude doctor\` terminal diagnostics cover), find extensions that cost context but never get used, deduplicate my LOCAL memory files against checked-in ones, trim checked-in CLAUDE.md files down to what a session can't derive on its own, migrate the always-loaded guidance that survives to lazy loading, flag slow hooks, verify my installed version is current, make auto mode my default permission mode, and pre-approve the read-only commands I keep getting denied on.
 
 ## Ground rules
 
-- **Propose, then confirm, then apply \u2014 and recommend, don't just offer.** Run every check read-only first and present the full report. Then confirm in at most TWO questions \u2014 never a question per check and never a long multi-select over every group. (1) ONE consolidated cleanup AskUserQuestion covering checks ${n}: options are "Clean up everything (recommended)" first, "Let me pick" second, "No, keep everything" last; only if the user picks "Let me pick", ask one follow-up multiSelect question with an option per action group (split it only if there are more than 4 groups \u2014 AskUserQuestion caps options at 4). (2) A SEPARATE permission question for checks 8 and 9, never folded into the cleanup bundle: those change what runs without asking, and a user consenting to decluttering must not silently widen permission posture \u2014 this question names every change it grants (the default-mode switch and each allow rule string), and is skipped when neither check proposed anything. You are the expert here: put the recommended action FIRST with "(recommended)" in its label and the decline option last \u2014 AskUserQuestion has no pre-selected/default option, so ordering plus the label is what makes the sensible default read as the default. Never edit any file before its group is confirmed (by "Clean up everything", by follow-up selection, or by the permission question); recommending changes the framing, not the gating.
+- **Propose, then confirm, then apply \u2014 and recommend, don't just offer.** Run every check read-only first and present the full report. Then confirm in at most TWO questions \u2014 never a question per check and never a long multi-select over every group. (1) ONE consolidated cleanup AskUserQuestion covering checks ${sectionsText}: options are "Clean up everything (recommended)" first, "Let me pick" second, "No, keep everything" last; only if the user picks "Let me pick", ask one follow-up multiSelect question with an option per action group (split it only if there are more than 4 groups \u2014 AskUserQuestion caps options at 4). (2) A SEPARATE permission question for checks 8 and 9, never folded into the cleanup bundle: those change what runs without asking, and a user consenting to decluttering must not silently widen permission posture \u2014 this question names every change it grants (the default-mode switch and each allow rule string), and is skipped when neither check proposed anything. You are the expert here: put the recommended action FIRST with "(recommended)" in its label and the decline option last \u2014 AskUserQuestion has no pre-selected/default option, so ordering plus the label is what makes the sensible default read as the default. Never edit any file before its group is confirmed (by "Clean up everything", by follow-up selection, or by the permission question); recommending changes the framing, not the gating.
 - **Disabling, dedup, and settings proposals (checks 8 and 9) touch only user/local-scope files**: \`~/.claude/settings.json\`, \`.claude/settings.local.json\`, \`~/.claude.json\`, \`~/.claude/CLAUDE.md\`, \`CLAUDE.local.md\`. Never edit checked-in files (\`CLAUDE.md\`, \`.claude/settings.json\`, \`.mcp.json\`) for those checks. Only the CLAUDE.md checks (3 and 4${doctorUsageFlaggedSection ? ", and 10" : ""}) may propose edits to checked-in files, applied as ordinary working-tree edits the user reviews in \`git diff\` \u2014 never commit them yourself. Check 0's fixes touch only the user's own machine \u2014 shell config files, \`~/.claude/local\`, npm's global dir, \`~/.claude/agents\` \u2014 with one exception: repairs to agent definition files under the project's \`.claude/agents/\` are checked-in edits and follow check 4's rule (ordinary working-tree edits the user reviews in \`git diff\`, never committed by you).
 - Token figures are estimates: tokens \u2248 characters / 4. Label them "est." everywhere.
 - **Key-scoped reads only.** Settings and MCP config files routinely carry secrets: \`env\` blocks, MCP server \`env\` and \`headers\` (API keys, tokens), hook command strings. Read ONLY the keys each check needs (e.g. \`jq '.permissions.defaultMode'\`, \`jq '.mcpServers | keys'\`) \u2014 never read a whole settings file into the conversation, and never quote or inline \`env\`/\`headers\` values in proposals, reports, or shell commands.
@@ -181,7 +181,7 @@ ${doctorUsageFlaggedSection}
 1. **Plain-language summary first, and keep it SHORT** \u2014 2-3 sentences: what you found, what it costs, that cleanup is reversible (see the beginner-friendly ground rule). Anything that doesn't change the user's decision belongs in the detail table, not the lead. Then the detail table: | Component | Type | Scope | Uses (total since install) | Used in window? | Est. resident tokens | Verdict |. One row per skill/MCP server/plugin/CLAUDE.md file; MCP servers have no counter \u2014 put "n/a (no counter)" in the total column and answer the window column from transcript hits; use "deferred" in the tokens column for deferred MCP servers, and "no signal (passive)" across both usage columns for components with no usage counter. State the scan window under the table.
 2. **Proposed actions grouped by check** (0, 1, 2, 3, 4, 7, 8, 9${doctorUsageFlaggedSection ? ", 10" : ""}), each item with exact file + exact edit (or exact command, for checks 0 and 7).
 3. **Warnings** (checks 5 and 6) \u2014 no actions, just findings.
-4. **Confirmation gates**: at most TWO AskUserQuestions (mechanics in the propose-then-confirm ground rule) \u2014 the consolidated cleanup question for checks ${n}, then the separate permission question for checks 8 and 9. Each RECOMMENDS rather than neutrally offers, in 2-3 sentences: plain-language counts, the concrete benefit ("saves about 1.5k tokens of context every session"), and honest reversibility \u2014 "You can ask me to undo it later" wherever that's true (the disable mechanics above all are; for deletions, the report quotes what was removed so it can be restored). Don't restate the report's per-item detail \u2014 except in the permission question, which must name every change it grants. Models to follow:
+4. **Confirmation gates**: at most TWO AskUserQuestions (mechanics in the propose-then-confirm ground rule) \u2014 the consolidated cleanup question for checks ${sectionsText}, then the separate permission question for checks 8 and 9. Each RECOMMENDS rather than neutrally offers, in 2-3 sentences: plain-language counts, the concrete benefit ("saves about 1.5k tokens of context every session"), and honest reversibility \u2014 "You can ask me to undo it later" wherever that's true (the disable mechanics above all are; for deletions, the report quotes what was removed so it can be restored). Don't restate the report's per-item detail \u2014 except in the permission question, which must name every change it grants. Models to follow:
 
 > Everything above is unused and safe to remove: 4 skills, 2 plugins, and 1 MCP server (a connection to an external tool). Cleaning up saves about 1.5k tokens of context every session, and you can ask me to undo it later. Clean up everything?
 >
@@ -224,13 +224,13 @@ async function buildDoctorUsageFlaggedSection({ session, storageV5, live }) {
     sessionCannotTakeOver(session)
   )
     return "";
-  let r = await collectUsageRecommendations(storageV5).catch((error) => {
+  let recommendations = await collectUsageRecommendations(storageV5).catch((error) => {
     logError(error);
     return;
   });
-  if (!r || sessionCannotTakeOver(session)) return "";
-  let h = costliestBehavior(r.week, r.evidence.week, live);
-  if (h.length === 0) return "";
+  if (!recommendations || sessionCannotTakeOver(session)) return "";
+  let flagged = costliestBehavior(recommendations.week, recommendations.evidence.week, live);
+  if (flagged.length === 0) return "";
   return `
 ## Check 10 \u2014 what /usage flagged
 
@@ -241,13 +241,13 @@ Claude Code measured these from the last 7 days of local sessions, and /usage sh
 - A row without \`fix\` is advice: a command it names is for the user to run, not you.
 
 \`\`\`json
-${h.map((y) =>
+${flagged.map((item) =>
   jsonStringify({
-    share: `${y.pct}%`,
-    title: y.title,
-    detail: y.detail,
-    ...(y.action?.kind === "prompt" && {
-      fix: y.action.prompt,
+    share: `${item.pct}%`,
+    title: item.title,
+    detail: item.detail,
+    ...(item.action?.kind === "prompt" && {
+      fix: item.action.prompt,
     }),
   }),
 ).join(`
@@ -277,9 +277,9 @@ function registerDoctorSkill() {
     disableModelInvocation: true,
     argumentHint: "[prompt-audit [<path>]]",
     progressMessage: "running checkup",
-    async getPromptForCommand(e, toolUseContext) {
-      if (matchSubcommand(e) === "prompt-audit") {
-        let found = getBundledSkills().find((w) => w.name === "claude-api");
+    async getPromptForCommand(args, toolUseContext) {
+      if (matchSubcommand(args) === "prompt-audit") {
+        let found = getBundledSkills().find((skill) => skill.name === "claude-api");
         if (found?.type !== "prompt" || !isCommandEnabled(found) || isSkillOff(found))
           return [
             {
@@ -287,7 +287,7 @@ function registerDoctorSkill() {
               text: PROMPT_AUDIT_UNAVAILABLE_PROMPT,
             },
           ];
-        let trimmed = e.trim();
+        let trimmed = args.trim();
         let matches = /\s/.test(trimmed);
         return found.getPromptForCommand(matches ? trimmed : PROMPT_AUDIT_ARGS, toolUseContext);
       }
@@ -302,12 +302,12 @@ function registerDoctorSkill() {
           ),
         }),
       );
-      if (e)
+      if (args)
         text += `
 
 ## Additional instructions from the user
 
-${e}`;
+${args}`;
       return [
         {
           type: "text",

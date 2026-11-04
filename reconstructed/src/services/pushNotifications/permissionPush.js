@@ -123,14 +123,15 @@ import { formatPermissionRequestFailure } from "../../utils/permissions/permissi
 import { ZodError } from "../../../vendor/zod/v4/classic/errors.js";
 import { setPermissionPromptHostProbe } from "../../utils/permissions/permissionPromptHost.js";
 import { dropStaleHostDisplay } from "../../utils/hooks/hookMessages.js";
-import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-6j594vm1.js:5574-5676 placement
-function getGrantScopeField(hostPolicy, applied) {
-  let d = permissionGrantScope(applied);
-  return d === "once" || (d === "session" && hostPolicy.kind === "launcher")
+function getGrantScopeField(hostPolicy, updates) {
+  let scope = permissionGrantScope(updates);
+  return scope === "once" || (scope === "session" && hostPolicy.kind === "launcher")
     ? {
-        grantScope: d,
+        grantScope: scope,
       }
     : {};
 }
@@ -138,28 +139,31 @@ function getGrantScopeField(hostPolicy, applied) {
 /**
  * 构建"没有可批准界面"时的拒绝结果，消息附带决定原因。
  */
-function buildNoApprovalSurfaceDenial(n) {
-  let e = serializeDecisionReason(n.decisionReason);
-  let d = e !== undefined && !n.message.includes(e) ? `${n.message} ${e}` : n.message;
+function buildNoApprovalSurfaceDenial(request) {
+  let reasonText = serializeDecisionReason(request.decisionReason);
+  let message =
+    reasonText !== undefined && !request.message.includes(reasonText)
+      ? `${request.message} ${reasonText}`
+      : request.message;
   return {
     behavior: "deny",
-    message: buildNoApprovalSurfaceDenial_2(d),
+    message: buildNoApprovalSurfaceDenial_2(message),
     decisionReason: {
       ...NO_APPROVAL_SURFACE_DENY_REASON,
-      ask: refusedAskOf(n),
+      ask: refusedAskOf(request),
     },
     decideLocation: "ask-path",
   };
 }
 //@ chunk-6j594vm1.js:5887-6016 placement
-function buildNoPromptSurfaceDenial(n, reason) {
+function buildNoPromptSurfaceDenial(request, reason) {
   return {
     behavior: "deny",
-    message: n.message,
+    message: request.message,
     decisionReason: {
       ...NO_PROMPT_SURFACE_DENY_REASON,
       reason,
-      ask: refusedAskOf(n),
+      ask: refusedAskOf(request),
     },
     decideLocation: "ask-path",
   };
@@ -168,16 +172,18 @@ function buildNoPromptSurfaceDenial(n, reason) {
 /**
  * 没有可弹提示的界面且状态未定时给出拒绝。
  */
-function noPromptSurfaceDenialIfUnsettled(n, e, d, reason) {
-  return toolMaySettleUnaskedQuestion(n, e, d) ? buildNoPromptSurfaceDenial(e, reason) : undefined;
+function noPromptSurfaceDenialIfUnsettled(tool, request, reason, reason_2) {
+  return toolMaySettleUnaskedQuestion(tool, request, reason)
+    ? buildNoPromptSurfaceDenial(request, reason_2)
+    : undefined;
 }
 //@ chunk-6j594vm1.js:6071-6134 placement
 /**
  * 没有弹窗界面且只允许本人时给出拒绝。
  */
-function noPromptSurfaceDenialIfPersonOnly(tool, e, d, toolUseContext, toolUseId) {
-  return mustBeLeftToAPerson(e, tool, d, toolUseContext, toolUseId)
-    ? buildNoPromptSurfaceDenial(e, NO_PROMPT_SURFACE_REASON)
+function noPromptSurfaceDenialIfPersonOnly(tool, request, signal, toolUseContext, toolUseId) {
+  return mustBeLeftToAPerson(request, tool, signal, toolUseContext, toolUseId)
+    ? buildNoPromptSurfaceDenial(request, NO_PROMPT_SURFACE_REASON)
     : undefined;
 }
 //@ chunk-6j594vm1.js:6134-6162 placement
@@ -190,9 +196,9 @@ function isInterruptModeOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_CINDER_SWIFT, "off") === "interrupt";
 }
 //@ chunk-6j594vm1.js:6210-6375 placement
-function describeToolUseForPush(n, e) {
+function describeToolUseForPush(tool, toolUse) {
   try {
-    return n.getToolUseSummary?.(e) ?? n.getActivityDescription?.(e) ?? "";
+    return tool.getToolUseSummary?.(toolUse) ?? tool.getActivityDescription?.(toolUse) ?? "";
   } catch (error) {
     logForDebugging(`describeToolUseForPush failed: ${error}`, {
       level: "error",
@@ -201,24 +207,24 @@ function describeToolUseForPush(n, e) {
   }
 }
 //@ chunk-6j594vm1.js:6375-6413 placement
-function pushCardForToolUse(n, updatedInput) {
-  return describeToolUseForPush_2(n, updatedInput)?.card;
+function pushCardForToolUse(tool, updatedInput) {
+  return describeToolUseForPush_2(tool, updatedInput)?.card;
 }
 //@ chunk-6j594vm1.js:6413-7303 placement
 /**
  * 为推送通知描述工具调用（问题、计划等）。
  */
-function describeToolUseForPush_2(n, e) {
-  if (!n.requiresUserInteraction?.()) return;
-  switch (n.name) {
+function describeToolUseForPush_2(tool, input) {
+  if (!tool.requiresUserInteraction?.()) return;
+  switch (tool.name) {
     case ASKUSERQUESTION: {
-      let questions = Array.isArray(e?.questions) ? e.questions : [];
-      let r = questions[0];
-      let m = r?.header || r?.question;
-      let s = questions.length > 1 ? ` (+${questions.length - 1} more)` : "";
+      let questions = Array.isArray(input?.questions) ? input.questions : [];
+      let firstQuestion = questions[0];
+      let questionText = firstQuestion?.header || firstQuestion?.question;
+      let moreSuffix = questions.length > 1 ? ` (+${questions.length - 1} more)` : "";
       return {
         label: "Question",
-        body: m ? m + s : "Tap to answer",
+        body: questionText ? questionText + moreSuffix : "Tap to answer",
       };
     }
     case EXITPLANMODE:
@@ -228,18 +234,18 @@ function describeToolUseForPush_2(n, e) {
       };
     case CONNECTGITHUB:
       return {
-        label: humanizeToolName(n.name),
+        label: humanizeToolName(tool.name),
         body: "",
       };
     case OFFER_CHROME_SETUP_TOOL_NAME: {
-      let d =
-        typeof e?.reason === "string"
-          ? truncate(redactSecretsInText(stripIgnorables(e.reason)), 200).replace(/[\s.!?]+$/u, "")
+      let reasonText =
+        typeof input?.reason === "string"
+          ? truncate(redactSecretsInText(stripIgnorables(input.reason)), 200).replace(/[\s.!?]+$/u, "")
           : "";
       return {
         label: "Claude in Chrome",
-        body: d
-          ? `Let Claude use your browser for ${d}? Open this task on your computer.`
+        body: reasonText
+          ? `Let Claude use your browser for ${reasonText}? Open this task on your computer.`
           : "Let Claude use your browser? Open this task on your computer.",
         card: {
           title: "Set up Claude in Chrome on your computer",
@@ -250,7 +256,7 @@ function describeToolUseForPush_2(n, e) {
     }
     default:
       return {
-        label: humanizeToolName(n.name),
+        label: humanizeToolName(tool.name),
         body: "",
       };
   }
@@ -259,68 +265,69 @@ function describeToolUseForPush_2(n, e) {
 /**
  * 生成权限请求推送内容与遥测字段。
  */
-function permissionPushPayload(n, updatedInput, toolUseId, r, m) {
-  let s = decisionReasonCode(m?.decisionReason);
-  let y = {
-    ...(m?.decisionReason && {
-      decision_reason_type: decisionReasonTypeOnWire(m.decisionReason),
+function permissionPushPayload(tool, toolUse, toolUseId, requestId, context) {
+  let reasonCode = decisionReasonCode(context?.decisionReason);
+  let reasonFields = {
+    ...(context?.decisionReason && {
+      decision_reason_type: decisionReasonTypeOnWire(context.decisionReason),
     }),
-    ...(s && {
-      decision_reason_code: s,
+    ...(reasonCode && {
+      decision_reason_code: reasonCode,
     }),
   };
-  let f = m?.askerAgentId !== undefined && {
-    agent_id: m.askerAgentId,
+  let agentFields = context?.askerAgentId !== undefined && {
+    agent_id: context.askerAgentId,
   };
-  let k = m?.hostDisplay
+  let display = context?.hostDisplay
     ? {
-        label: m.hostDisplay.displayName,
+        label: context.hostDisplay.displayName,
         body: "",
       }
-    : describeToolUseForPush_2(n, updatedInput);
-  if (k)
+    : describeToolUseForPush_2(tool, toolUse);
+  if (display)
     return {
-      tool_name: n.name,
-      display_tool_name: k.label,
-      action_description: k.body,
+      tool_name: tool.name,
+      display_tool_name: display.label,
+      action_description: display.body,
       raw_command: undefined,
       tool_use_id: toolUseId,
       request_id: "",
-      ...(r && {
-        suppressed_request_id: r,
+      ...(requestId && {
+        suppressed_request_id: requestId,
       }),
-      input: updatedInput,
-      ...y,
-      ...f,
+      input: toolUse,
+      ...reasonFields,
+      ...agentFields,
     };
-  let R =
-    (n.name === BASH_TOOL_NAME || n.name === POWERSHELL_TOOL_NAME) && typeof updatedInput.command === "string"
-      ? redactSecretsInText(updatedInput.command)
+  let rawCommand =
+    (tool.name === BASH_TOOL_NAME || tool.name === POWERSHELL_TOOL_NAME) &&
+    typeof toolUse.command === "string"
+      ? redactSecretsInText(toolUse.command)
       : undefined;
   let actionDescription =
-    R !== undefined
-      ? typeof updatedInput.description === "string" &&
-        updatedInput.description &&
-        !isHostOnlyNativeTool(n) &&
-        !hasHostField(updatedInput)
-        ? redactSecretsInText(updatedInput.description)
-        : truncate(R, MAX_DESCRIPTION_CHARS)
-      : redactSecretsInText(describeToolUseForPush(n, updatedInput));
-  let h = m?.tapToOpenOnly === true;
+    rawCommand !== undefined
+      ? typeof toolUse.description === "string" &&
+        toolUse.description &&
+        !isHostOnlyNativeTool(tool) &&
+        !hasHostField(toolUse)
+        ? redactSecretsInText(toolUse.description)
+        : truncate(rawCommand, MAX_DESCRIPTION_CHARS)
+      : redactSecretsInText(describeToolUseForPush(tool, toolUse));
+  let tapToOpenOnly = context?.tapToOpenOnly === true;
   return {
-    tool_name: n.name,
-    display_tool_name: humanizeToolName(n.name),
+    tool_name: tool.name,
+    display_tool_name: humanizeToolName(tool.name),
     action_description: actionDescription,
-    raw_command: R,
+    raw_command: rawCommand,
     tool_use_id: toolUseId,
-    request_id: h ? "" : r,
-    ...(h &&
-      r && {
-        suppressed_request_id: r,
+    request_id: tapToOpenOnly ? "" : requestId,
+    ...(tapToOpenOnly &&
+      requestId && {
+        suppressed_request_id: requestId,
       }),
-    input: updatedInput,
-    ...y,
-    ...f,
+    input: toolUse,
+    ...reasonFields,
+    ...agentFields,
   };
 }
 //@ chunk-6j594vm1.js:8240-8249 placement
@@ -329,13 +336,13 @@ var MAX_PUSH_ASK_ATTEMPTS = 3;
 /**
  * 需要权限时向手机推送请求（tengu_drifting_dream）。
  */
-function pushPermissionRequest(n) {
+function pushPermissionRequest(request) {
   let { promise, resolve } = Promise.withResolvers();
-  let { ask, tool, input, toolUseContext, toolUseID, isWaiting } = n;
+  let { ask, tool, input, toolUseContext, toolUseID, isWaiting } = request;
   if (
     !getFeatureValue_CACHED_MAY_BE_STALE("tengu_drifting_dream", false) ||
-    n.answers.kind !== "launcher" ||
-    n.forced ||
+    request.answers.kind !== "launcher" ||
+    request.forced ||
     toolUseContext.hookAskFloor === true ||
     ask.personOnly === true ||
     toolUseContext.forRemoteExecution === true ||
@@ -347,8 +354,8 @@ function pushPermissionRequest(n) {
       allowed: promise,
       stop: () => {},
     };
-  let R = 0;
-  let c = (A) => {
+  let generation = 0;
+  let recheck = (attempt) => {
     if (!isWaiting()) return;
     let toolPermissionContext = getToolPermissionContext(toolUseContext);
     if (
@@ -358,8 +365,8 @@ function pushPermissionRequest(n) {
       )
     )
       return;
-    let C = ++R;
-    let w = storedToolPermissionContext(toolUseContext);
+    let round = ++generation;
+    let before = storedToolPermissionContext(toolUseContext);
     hasPermissionsToUseTool(
       tool,
       input,
@@ -367,18 +374,18 @@ function pushPermissionRequest(n) {
         ...toolUseContext,
         permissionRound: undefined,
       },
-      n.assistantMessage,
+      request.assistantMessage,
       toolUseID,
     )
-      .then((D) => {
-        if (!isWaiting() || C !== R) return;
-        if (!isDeepStrictEqual(storedToolPermissionContext(toolUseContext), w)) {
-          if (A < MAX_PUSH_ASK_ATTEMPTS) c(A + 1);
+      .then((decision) => {
+        if (!isWaiting() || round !== generation) return;
+        if (!isDeepStrictEqual(storedToolPermissionContext(toolUseContext), before)) {
+          if (attempt < MAX_PUSH_ASK_ATTEMPTS) recheck(attempt + 1);
           return;
         }
-        if (D.behavior === "allow" && isPushableDecisionReason(D.decisionReason)) {
-          h();
-          resolve(D);
+        if (decision.behavior === "allow" && isPushableDecisionReason(decision.decisionReason)) {
+          unsubscribe();
+          resolve(decision);
         }
       })
       .catch((error) => {
@@ -391,11 +398,11 @@ function pushPermissionRequest(n) {
           );
       });
   };
-  let h = permissionModeSignal.subscribe(() => c(0));
-  if (!isDeepStrictEqual(storedToolPermissionContext(toolUseContext), n.askedUnder)) c(0);
+  let unsubscribe = permissionModeSignal.subscribe(() => recheck(0));
+  if (!isDeepStrictEqual(storedToolPermissionContext(toolUseContext), request.askedUnder)) recheck(0);
   return {
     allowed: promise,
-    stop: h,
+    stop: unsubscribe,
   };
 }
 //@ chunk-6j594vm1.js:9077-9465 placement
@@ -421,7 +428,9 @@ function isPushableDecisionReason(decisionReason) {
       );
       return (
         filtered.length > 0 &&
-        filtered.every((d) => d.behavior === "allow" && isPushableDecisionReason(d.decisionReason))
+        filtered.every(
+          (reason) => reason.behavior === "allow" && isPushableDecisionReason(reason.decisionReason),
+        )
       );
     }
     default:
@@ -429,37 +438,38 @@ function isPushableDecisionReason(decisionReason) {
   }
 }
 //@ chunk-6j594vm1.js:9465-9636 placement
-function checkServerPolicyAskPushable(n) {
-  let decisionReason = n.ask.decisionReason;
-  if (decisionReason === undefined ? n.tool.mcpInfo === undefined : decisionReason.type !== "rule") return;
+function checkServerPolicyAskPushable(askContext) {
+  let decisionReason = askContext.ask.decisionReason;
+  if (decisionReason === undefined ? askContext.tool.mcpInfo === undefined : decisionReason.type !== "rule")
+    return;
   try {
-    if (mustAskWithoutPush(n)) return false;
+    if (mustAskWithoutPush(askContext)) return false;
   } catch (error) {
     if (!isAbortError(error)) logError(error);
     return false;
   }
-  return recheckPushable(n);
+  return recheckPushable(askContext);
 }
 //@ chunk-6j594vm1.js:9636-9725 placement
 /**
  * 去掉服务端策略里的「只询问」部分。
  */
-function stripServerPolicyAskOnly(n) {
-  return n.subtype === "can_use_tool"
+function stripServerPolicyAskOnly(request) {
+  return request.subtype === "can_use_tool"
     ? {
-        ...n,
+        ...request,
         server_policy_ask_only: undefined,
       }
-    : n;
+    : request;
 }
 //@ chunk-6j594vm1.js:9725-9858 placement
-function mustAskWithoutPush(n) {
-  let decisionReason = n.ask.decisionReason;
+function mustAskWithoutPush(askContext) {
+  let decisionReason = askContext.ask.decisionReason;
   return (
-    n.tool.mcpInfo === undefined ||
+    askContext.tool.mcpInfo === undefined ||
     !(decisionReason === undefined || isServerPolicyAskReason(decisionReason)) ||
-    !isAllowedUpdate(n.ask, ["decisionReason"]) ||
-    mustAskLocally(n)
+    !isAllowedUpdate(askContext.ask, ["decisionReason"]) ||
+    mustAskLocally(askContext)
   );
 }
 //@ chunk-6j594vm1.js:9858-10319 placement
@@ -488,13 +498,13 @@ function mustAskLocally({ tool, effectiveInput, ask, toolUseContext, forceDecisi
   );
 }
 //@ chunk-6j594vm1.js:10319-10462 placement
-async function recheckPushable(n) {
+async function recheckPushable(askContext) {
   try {
-    let e = storedToolPermissionContext(n.toolUseContext);
+    let permissionContext = storedToolPermissionContext(askContext.toolUseContext);
     return (
-      (await isPushableWithoutServerAsk(n)) &&
-      isDeepStrictEqual(storedToolPermissionContext(n.toolUseContext), e) &&
-      !mustAskWithoutPush(n)
+      (await isPushableWithoutServerAsk(askContext)) &&
+      isDeepStrictEqual(storedToolPermissionContext(askContext.toolUseContext), permissionContext) &&
+      !mustAskWithoutPush(askContext)
     );
   } catch (error) {
     if (!isAbortError(error)) logError(error);
@@ -503,32 +513,33 @@ async function recheckPushable(n) {
 }
 //@ chunk-6j594vm1.js:10462-10737 placement
 async function isPushableWithoutServerAsk({ tool, effectiveInput, toolUseContext }) {
-  let r = false;
-  let m = await checkDeclarativePermissionLessServerPolicyAsks(
+  let sawAsk = false;
+  let decision = await checkDeclarativePermissionLessServerPolicyAsks(
     {
       ...tool,
-      checkPermissions: async (s, y) => {
-        let f = await tool.checkPermissions(s, y);
-        r ||= f.behavior === "ask";
-        return f;
+      checkPermissions: async (input, toolUseContext) => {
+        let result = await tool.checkPermissions(input, toolUseContext);
+        sawAsk ||= result.behavior === "ask";
+        return result;
       },
     },
     effectiveInput,
     toolUseContext,
   );
   return (
-    !r &&
-    (m.behavior === "allow"
-      ? isPushableDecisionReason(m.decisionReason)
-      : m.behavior === "ask" && isAllowedUpdate(m, []))
+    !sawAsk &&
+    (decision.behavior === "allow"
+      ? isPushableDecisionReason(decision.decisionReason)
+      : decision.behavior === "ask" && isAllowedUpdate(decision, []))
   );
 }
 //@ chunk-6j594vm1.js:10737-10781 placement
 var ALLOWED_UPDATE_KEYS = ["behavior", "message", "suggestions"];
 //@ chunk-6j594vm1.js:10781-10880 placement
-function isAllowedUpdate(n, e) {
-  return Object.entries(n).every(
-    ([key, value]) => value === undefined || ALLOWED_UPDATE_KEYS.includes(key) || e.includes(key),
+function isAllowedUpdate(update, extraAllowedKeys) {
+  return Object.entries(update).every(
+    ([key, value]) =>
+      value === undefined || ALLOWED_UPDATE_KEYS.includes(key) || extraAllowedKeys.includes(key),
   );
 }
 //@ chunk-6j594vm1.js:10880-11141 placement
@@ -564,54 +575,72 @@ function isAutoClassifierActiveForCall(tool, toolUseContext) {
 /**
  * 创建权限询问函数（launcher/strict 模式、推送、远程）。
  */
-function createPermissionAsker(n, e) {
-  let d = async (r, m, s, y, toolUseId, k) => {
-    let R = storedToolPermissionContext(s);
-    let c;
-    switch (n.kind) {
+function createPermissionAsker(answers, host) {
+  let askPermission = async (tool, input, toolUseContext, assistantMessage, toolUseId, forcedDecision) => {
+    let askedUnderContext = storedToolPermissionContext(toolUseContext);
+    let decision;
+    switch (answers.kind) {
       case "launcher":
-        c = k ?? (await hasPermissionsToUseTool(r, m, s, y, toolUseId));
+        decision =
+          forcedDecision ??
+          (await hasPermissionsToUseTool(tool, input, toolUseContext, assistantMessage, toolUseId));
         break;
       case "strict":
-        c = k ?? (await hasPermissionsToUseToolWithSink(r, m, s, y, toolUseId, n, undefined));
+        decision =
+          forcedDecision ??
+          (await hasPermissionsToUseToolWithSink(
+            tool,
+            input,
+            toolUseContext,
+            assistantMessage,
+            toolUseId,
+            answers,
+            undefined,
+          ));
         break;
     }
-    let h =
-      c.behavior === "ask" &&
-      k === undefined &&
+    let personOnlyDenial =
+      decision.behavior === "ask" &&
+      forcedDecision === undefined &&
       env.CLAUDE_CODE_REMOTE &&
-      mustBeLeftToAPerson(c, r, m, s, toolUseId)
-        ? noPromptSurfaceDenialIfUnsettled(r, c, s, NO_KNOWN_PERSON_STARTED_THE_TURN_REASON)
+      mustBeLeftToAPerson(decision, tool, input, toolUseContext, toolUseId)
+        ? noPromptSurfaceDenialIfUnsettled(
+            tool,
+            decision,
+            toolUseContext,
+            NO_KNOWN_PERSON_STARTED_THE_TURN_REASON,
+          )
         : undefined;
-    let messageInboundOrigin = s.options.messageInboundOrigin;
+    let messageInboundOrigin = toolUseContext.options.messageInboundOrigin;
     if (
-      h !== undefined &&
-      !isUserDrivenHere(s.messages) &&
+      personOnlyDenial !== undefined &&
+      !isUserDrivenHere(toolUseContext.messages) &&
       (isAgentSdkEntrypoint() ||
         (messageInboundOrigin
           ? !isHumanOriginLoosely(messageInboundOrigin) &&
-            (isTriggerFireOrigin(messageInboundOrigin) || !isUserDrivenTurn(s.messages))
-          : s.agentId === undefined && classifyMessageSource_2(s.messages)))
+            (isTriggerFireOrigin(messageInboundOrigin) || !isUserDrivenTurn(toolUseContext.messages))
+          : toolUseContext.agentId === undefined && classifyMessageSource_2(toolUseContext.messages)))
     )
-      c = h;
-    if (c.behavior === "allow") return c;
-    if (c.behavior === "deny") {
-      if (isTerminalShutdown() && !s.abortController.signal.aborted) return heldUntilExit();
-      if (!isInvalidInputDeny(c)) e.emitPermissionDenied(r.name, toolUseId, s.agentId, c);
-      return c;
+      decision = personOnlyDenial;
+    if (decision.behavior === "allow") return decision;
+    if (decision.behavior === "deny") {
+      if (isTerminalShutdown() && !toolUseContext.abortController.signal.aborted) return heldUntilExit();
+      if (!isInvalidInputDeny(decision))
+        host.emitPermissionDenied(tool.name, toolUseId, toolUseContext.agentId, decision);
+      return decision;
     }
-    let b = {
-      tool: r,
-      effectiveInput: c.updatedInput ?? m,
-      ask: c,
-      toolUseContext: s,
-      forceDecision: k,
+    let askContext = {
+      tool,
+      effectiveInput: decision.updatedInput ?? input,
+      ask: decision,
+      toolUseContext,
+      forceDecision: forcedDecision,
     };
-    let C = e.keptAskFor?.(toolUseId);
-    if (C !== undefined) {
-      let O = await C.answerFor({
+    let keptAsk = host.keptAskFor?.(toolUseId);
+    if (keptAsk !== undefined) {
+      let keptAnswer = await keptAsk.answerFor({
         usable: () =>
-          isAllowedUpdate(c, [
+          isAllowedUpdate(decision, [
             "decisionReason",
             "updatedInput",
             "blockedPath",
@@ -619,28 +648,28 @@ function createPermissionAsker(n, e) {
             "bashAllowRuleOverridable",
             "suppressAlwaysAllowRule",
           ]) &&
-          !requiresConnectorGrant_2(r) &&
-          isDeepStrictEqual(storedToolPermissionContext(s), R) &&
-          !mustAskLocally(b),
-        toolName: r.name,
-        input: c.updatedInput ?? m,
-        planMode: () => getToolPermissionContext(s).mode === "plan",
+          !requiresConnectorGrant_2(tool) &&
+          isDeepStrictEqual(storedToolPermissionContext(toolUseContext), askedUnderContext) &&
+          !mustAskLocally(askContext),
+        toolName: tool.name,
+        input: decision.updatedInput ?? input,
+        planMode: () => getToolPermissionContext(toolUseContext).mode === "plan",
       });
-      if (O !== undefined && !s.abortController.signal.aborted && !isTerminalShutdown())
+      if (keptAnswer !== undefined && !toolUseContext.abortController.signal.aborted && !isTerminalShutdown())
         return permissionPromptToolResultToPermissionDecision(
-          n,
-          O,
-          r,
-          c.updatedInput ?? m,
-          s,
-          r,
-          c.suppressAlwaysAllowRule === true,
+          answers,
+          keptAnswer,
+          tool,
+          decision.updatedInput ?? input,
+          toolUseContext,
+          tool,
+          decision.suppressAlwaysAllowRule === true,
           false,
         );
     }
-    let w = checkServerPolicyAskPushable(b);
-    let D = typeof w === "object" ? await w : w;
-    if (s.abortController.signal.aborted)
+    let pushableCheck = checkServerPolicyAskPushable(askContext);
+    let serverPolicyPushable = typeof pushableCheck === "object" ? await pushableCheck : pushableCheck;
+    if (toolUseContext.abortController.signal.aborted)
       return {
         behavior: "deny",
         message: "Tool permission request aborted",
@@ -649,219 +678,259 @@ function createPermissionAsker(n, e) {
         decideLocation: "ask-path",
       };
     if (isTerminalShutdown()) return heldUntilExit();
-    if (r.askInputPreparer !== undefined && !weakSet.has(c) && s.forRemoteExecution !== true) {
-      let O = await r.askInputPreparer(c.updatedInput ?? m, s, toolUseId);
-      if (O !== undefined) return askPermissionWithPush(d, n, O, c, r, m, s, y, toolUseId);
-    }
-    let updatedInput = c.updatedInput ?? m;
-    let suggestions = c.suggestions;
     if (
-      r.name === BASH_TOOL_NAME &&
+      tool.askInputPreparer !== undefined &&
+      !weakSet.has(decision) &&
+      toolUseContext.forRemoteExecution !== true
+    ) {
+      let preparedInput = await tool.askInputPreparer(
+        decision.updatedInput ?? input,
+        toolUseContext,
+        toolUseId,
+      );
+      if (preparedInput !== undefined)
+        return askPermissionWithPush(
+          askPermission,
+          answers,
+          preparedInput,
+          decision,
+          tool,
+          input,
+          toolUseContext,
+          assistantMessage,
+          toolUseId,
+        );
+    }
+    let updatedInput = decision.updatedInput ?? input;
+    let suggestions = decision.suggestions;
+    if (
+      tool.name === BASH_TOOL_NAME &&
       typeof updatedInput.command === "string" &&
       suggestions?.length &&
       !suggestions.some((suggestion) => suggestion.destination !== "session")
     )
       suggestions = [...suggestionForExactCommand(updatedInput.command), ...suggestions];
     let abortController = new AbortController();
-    let signal = s.abortController.signal;
-    let Q = false;
-    let de = () => {
-      if (!isTerminalShutdown()) Q = true;
+    let signal = toolUseContext.abortController.signal;
+    let abortedByTurn = false;
+    let onTurnAbort = () => {
+      if (!isTerminalShutdown()) abortedByTurn = true;
       abortController.abort(signal.reason);
     };
-    signal.addEventListener("abort", de, {
+    signal.addEventListener("abort", onTurnAbort, {
       once: true,
     });
-    let I = randomUUID();
-    let foregroundSubagentId = getForegroundSubagentId(s.agentContext);
-    let ce;
-    let E;
-    let X = false;
-    let ue;
+    let requestId = randomUUID();
+    let foregroundSubagentId = getForegroundSubagentId(toolUseContext.agentContext);
+    let shownSubagentId;
+    let permissionLog;
+    let hookSettled = false;
+    let stopWaiting;
     try {
-      let W = (
-        c.personOnly === true || weakSet.has(c)
+      let hookOutcome = (
+        decision.personOnly === true || weakSet.has(decision)
           ? Promise.resolve(undefined)
           : executePermissionRequestHooksForSDK(
-              n,
-              r,
+              answers,
+              tool,
               toolUseId,
               updatedInput,
-              s,
+              toolUseContext,
               suggestions,
-              c,
-              () => X || signal.aborted,
+              decision,
+              () => hookSettled || signal.aborted,
             )
       ).then((outcome) => ({
         source: "hook",
         outcome,
       }));
-      W.catch(() => {});
-      let decisionReason = c.decisionReason;
-      let Z = c.localDisplayOnly === true || (c.personOnly === true && decisionReason?.type === "classifier");
-      let le = requiresConnectorGrant_2(r);
-      let fe = mustBeLeftToAPerson(c, r, m, s, toolUseId);
-      if (e.promptShown) {
-        let S = permissionPushPayload(r, updatedInput, toolUseId, I, {
-          tapToOpenOnly: Z || le || fe || c.metadata?.mcpSkill !== undefined,
-          hostDisplay: c.hostDisplay,
+      hookOutcome.catch(() => {});
+      let decisionReason = decision.decisionReason;
+      let localDisplayOnly =
+        decision.localDisplayOnly === true ||
+        (decision.personOnly === true && decisionReason?.type === "classifier");
+      let needsConnectorGrant = requiresConnectorGrant_2(tool);
+      let personOnly = mustBeLeftToAPerson(decision, tool, input, toolUseContext, toolUseId);
+      if (host.promptShown) {
+        let pushPayload = permissionPushPayload(tool, updatedInput, toolUseId, requestId, {
+          tapToOpenOnly:
+            localDisplayOnly ||
+            needsConnectorGrant ||
+            personOnly ||
+            decision.metadata?.mcpSkill !== undefined,
+          hostDisplay: decision.hostDisplay,
           decisionReason,
-          askerAgentId: s.agentId,
+          askerAgentId: toolUseContext.agentId,
         });
-        ce = foregroundSubagentId;
-        e.promptShown(I, S, foregroundSubagentId, getBackgroundAgentId(s.agentContext));
+        shownSubagentId = foregroundSubagentId;
+        host.promptShown(
+          requestId,
+          pushPayload,
+          foregroundSubagentId,
+          getBackgroundAgentId(toolUseContext.agentContext),
+        );
       }
       let safetyCheckReason = findSafetyCheckReason(decisionReason);
-      let Me = r.name === BASH_TOOL_NAME || r.name === POWERSHELL_TOOL_NAME;
-      let Le =
-        weakMap.get(c) ||
-        (c.metadata && "command" in c.metadata
-          ? c.metadata.mcpSkill
+      let isShellTool = tool.name === BASH_TOOL_NAME || tool.name === POWERSHELL_TOOL_NAME;
+      let activityDescription =
+        weakMap.get(decision) ||
+        (decision.metadata && "command" in decision.metadata
+          ? decision.metadata.mcpSkill
             ? safetyCheckReason?.reason
-            : c.metadata.command.description
+            : decision.metadata.command.description
           : undefined) ||
-        (Me && typeof updatedInput.command === "string"
+        (isShellTool && typeof updatedInput.command === "string"
           ? typeof updatedInput.description === "string" && updatedInput.description
             ? redactSecretsInText(updatedInput.description)
             : truncate(redactSecretsInText(updatedInput.command), MAX_DESCRIPTION_CHARS)
-          : describeToolUseForPush(r, updatedInput)) ||
+          : describeToolUseForPush(tool, updatedInput)) ||
         undefined;
-      let ee = pushCardForToolUse(r, updatedInput);
-      let ne =
-        isHostOnlyNativeTool(r) || (r.name === POWERSHELL_TOOL_NAME && hasHostField(updatedInput))
+      let card = pushCardForToolUse(tool, updatedInput);
+      let visibleDescription =
+        isHostOnlyNativeTool(tool) || (tool.name === POWERSHELL_TOOL_NAME && hasHostField(updatedInput))
           ? undefined
-          : (Le ?? ee?.description);
-      let ye =
+          : (activityDescription ?? card?.description);
+      let reasonText =
         serializeDecisionReason(decisionReason) ??
         (decisionReason?.type === "subcommandResults" && safetyCheckReason
           ? (findSafetyCheckReason(
               decisionReason,
-              (S) => !S.classifierApprovable && !isCircuitBreakerSafetyCheck(S),
+              (check) => !check.classifierApprovable && !isCircuitBreakerSafetyCheck(check),
             )?.reason ??
             (isCircuitBreakerSafetyCheck(safetyCheckReason) ? undefined : safetyCheckReason.reason))
           : undefined);
-      let hostDisplay = c.hostDisplay;
-      let ie = Z ? stripNonPrintable(stripAnsi(ye ?? "")) : "";
-      let ge = hostDisplay
+      let hostDisplay = decision.hostDisplay;
+      let localReasonText = localDisplayOnly ? stripNonPrintable(stripAnsi(reasonText ?? "")) : "";
+      let description = hostDisplay
         ? hostDisplay.description
-        : ie && ne && c.localDisplayOnly !== true
-          ? `${ne}
-${ie}`
-          : ie || ne;
-      let He = isChromeToolName(getToolNameForPermissionCheck(r));
-      let metadata = c.metadata;
-      let he = schedulePermissionNotify(humanizeToolName(r.name), s.storageV5, s.credentials);
+        : localReasonText && visibleDescription && decision.localDisplayOnly !== true
+          ? `${visibleDescription}
+${localReasonText}`
+          : localReasonText || visibleDescription;
+      let isChromeTool = isChromeToolName(getToolNameForPermissionCheck(tool));
+      let metadata = decision.metadata;
+      let notifyTask = schedulePermissionNotify(
+        humanizeToolName(tool.name),
+        toolUseContext.storageV5,
+        toolUseContext.credentials,
+      );
       if (hostDisplay) logFeatureOk("permission_host_worded_ask");
-      let B = e
+      let sdkRequest = host
         .request(
           {
             subtype: "can_use_tool",
-            tool_name: r.name,
-            ...(r.mcpInfo && {
-              mcp_server: mcpServerIdentityForHooks(r.mcpInfo),
+            tool_name: tool.name,
+            ...(tool.mcpInfo && {
+              mcp_server: mcpServerIdentityForHooks(tool.mcpInfo),
             }),
-            ...(ee && {
-              title: ee.title,
+            ...(card && {
+              title: card.title,
             }),
-            display_name: hostDisplay?.displayName ?? humanizeToolName(r.name),
+            display_name: hostDisplay?.displayName ?? humanizeToolName(tool.name),
             input: updatedInput,
             ...(hostDisplay && {
               title: hostDisplay.title,
             }),
-            ...(ge && {
-              description: ge,
+            ...(description && {
+              description,
             }),
-            ...(He && {
+            ...(isChromeTool && {
               tool_kind: "browser",
             }),
             ...undefined,
             permission_suggestions: suggestions,
-            blocked_path: c.blockedPath,
-            decision_reason: ye,
+            blocked_path: decision.blockedPath,
+            decision_reason: reasonText,
             decision_reason_type: decisionReasonTypeOnWire(decisionReason),
             decision_reason_code: decisionReasonCode(decisionReason),
             decision_reason_rule_source:
               decisionReason?.type === "rule" ? decisionReason.rule.source : undefined,
             ...(decisionReason?.type === "hook" && {
-              decision_reason_hook_event: classicPreToolUseHookId_2(decisionReason.hookName, r.name),
+              decision_reason_hook_event: classicPreToolUseHookId_2(decisionReason.hookName, tool.name),
               decision_reason_hook_source: classicPreToolUseHookId(decisionReason.hookSource),
               decision_reason_hook_plugin_id: classicHookId(decisionReason.hookPluginId),
             }),
-            server_policy_ask_only: D,
-            ...(c.matchedAskRule && {
+            server_policy_ask_only: serverPolicyPushable,
+            ...(decision.matchedAskRule && {
               matched_ask_rule: {
-                source: c.matchedAskRule.source,
-                tool_name: c.matchedAskRule.ruleValue.toolName,
-                ...(c.matchedAskRule.ruleValue.ruleContent !== undefined && {
-                  rule_content: c.matchedAskRule.ruleValue.ruleContent,
+                source: decision.matchedAskRule.source,
+                tool_name: decision.matchedAskRule.ruleValue.toolName,
+                ...(decision.matchedAskRule.ruleValue.ruleContent !== undefined && {
+                  rule_content: decision.matchedAskRule.ruleValue.ruleContent,
                 }),
               },
             }),
             classifier_approvable: safetyCheckReason
-              ? !findSafetyCheckReason(decisionReason, (S) => !S.classifierApprovable)
+              ? !findSafetyCheckReason(decisionReason, (check) => !check.classifierApprovable)
               : undefined,
             ...((decisionReason?.type === "rule" ||
-              (decisionReason?.type === "other" && decisionReason.reason === askCeilingReason(r))) &&
-              r.mcpInfo?.effectiveMaxPermission === "ask" && {
+              (decisionReason?.type === "other" && decisionReason.reason === askCeilingReason(tool))) &&
+              tool.mcpInfo?.effectiveMaxPermission === "ask" && {
                 decision_reason_code: "org_ask_ceiling",
               }),
             tool_use_id: toolUseId,
-            agent_id: s.agentId,
-            plugin: getHookCallerOf(s) ?? (isHookOrPluginSteered(s) ? "" : undefined),
+            agent_id: toolUseContext.agentId,
+            plugin:
+              getHookCallerOf(toolUseContext) ?? (isHookOrPluginSteered(toolUseContext) ? "" : undefined),
             suppress_always_allow_rule:
-              c.suppressAlwaysAllowRule ||
-              (r.suppressesAlwaysAllowRule?.(
+              decision.suppressAlwaysAllowRule ||
+              (tool.suppressesAlwaysAllowRule?.(
                 updatedInput,
                 !getFeatureValue_CACHED_MAY_BE_STALE("tengu_valiant_crayon", false),
               ) === true &&
                 !(suggestions ?? []).some(
-                  (S) =>
-                    (S.type === "addRules" || S.type === "replaceRules") &&
-                    S.behavior === "allow" &&
-                    S.rules.some((rule) => rule.ruleContent !== undefined),
+                  (suggestion) =>
+                    (suggestion.type === "addRules" || suggestion.type === "replaceRules") &&
+                    suggestion.behavior === "allow" &&
+                    suggestion.rules.some((rule) => rule.ruleContent !== undefined),
                 )) ||
               undefined,
-            default_to_no: c.defaultToNo || undefined,
-            provenance_prompt_line: c.provenancePromptLine,
+            default_to_no: decision.defaultToNo || undefined,
+            provenance_prompt_line: decision.provenancePromptLine,
             requires_user_interaction:
-              r.requiresUserInteraction?.() || Z || le || fe || hostDisplay !== undefined || undefined,
+              tool.requiresUserInteraction?.() ||
+              localDisplayOnly ||
+              needsConnectorGrant ||
+              personOnly ||
+              hostDisplay !== undefined ||
+              undefined,
           },
           abortController.signal,
-          I,
+          requestId,
         )
         .then((result) => ({
           source: "sdk",
           result,
         }));
-      B.catch(() => {});
-      B.then(
+      sdkRequest.catch(() => {});
+      sdkRequest.then(
         () => {
-          X = true;
+          hookSettled = true;
         },
         () => {
-          X = true;
+          hookSettled = true;
         },
       );
-      if (e.isPending(I)) {
-        E = {
+      if (host.isPending(requestId)) {
+        permissionLog = {
           logContext: {
-            tool: r,
+            tool,
             input: updatedInput,
-            messageId: y.message.id,
+            messageId: assistantMessage.message.id,
             toolUseID: toolUseId,
-            permissionMode: getToolPermissionContext(s).mode,
-            agentContext: s.agentContext,
-            mcpClients: s.options.mcpClients,
-            appliedAllowUpdates: (S) => {
-              switch (n.kind) {
+            permissionMode: getToolPermissionContext(toolUseContext).mode,
+            agentContext: toolUseContext.agentContext,
+            mcpClients: toolUseContext.options.mcpClients,
+            appliedAllowUpdates: (context) => {
+              switch (answers.kind) {
                 case "launcher":
                   return alwaysAllowRulesFor(
-                    S,
-                    r,
+                    context,
+                    tool,
                     updatedInput,
-                    s,
-                    c.suppressAlwaysAllowRule === true,
-                    c.metadata?.mcpSkill === undefined
+                    toolUseContext,
+                    decision.suppressAlwaysAllowRule === true,
+                    decision.metadata?.mcpSkill === undefined
                       ? undefined
                       : {
                           rule: undefined,
@@ -874,104 +943,107 @@ ${ie}`
           },
           shownAtMs: Date.now(),
         };
-        logPermissionRequestShown(E.logContext, decisionReason?.type);
+        logPermissionRequestShown(permissionLog.logContext, decisionReason?.type);
       }
-      B.then(he, he);
-      let winner = await Promise.race([W, B]);
+      sdkRequest.then(notifyTask, notifyTask);
+      let winner = await Promise.race([hookOutcome, sdkRequest]);
       if (winner.source === "hook") {
         if (winner.outcome) {
-          if (isTerminalShutdown() && !Q) await heldUntilExit();
+          if (isTerminalShutdown() && !abortedByTurn) await heldUntilExit();
           abortController.abort();
-          if (E)
+          if (permissionLog)
             logPermissionDecision(
-              E.logContext,
+              permissionLog.logContext,
               {
                 kind: "hook",
                 behavior: winner.outcome.decision.behavior === "allow" ? "allow" : "deny",
                 permanent: winner.outcome.permanent,
               },
-              E.shownAtMs,
+              permissionLog.shownAtMs,
             );
           if (winner.outcome.interrupt) {
-            logForDebugging(`Hook interrupt: tool=${r.name} hookMessage=${winner.outcome.decision.message}`);
-            turnAbortControllerOf(s.abortController).abort();
+            logForDebugging(
+              `Hook interrupt: tool=${tool.name} hookMessage=${winner.outcome.decision.message}`,
+            );
+            turnAbortControllerOf(toolUseContext.abortController).abort();
           }
           return winner.outcome.decision;
         }
-        let S = pushPermissionRequest({
-          answers: n,
-          ask: c,
-          forced: k !== undefined,
-          askedUnder: R,
-          tool: r,
-          input: m,
-          toolUseContext: s,
-          assistantMessage: y,
+        let pushRace = pushPermissionRequest({
+          answers,
+          ask: decision,
+          forced: forcedDecision !== undefined,
+          askedUnder: askedUnderContext,
+          tool,
+          input,
+          toolUseContext,
+          assistantMessage,
           toolUseID: toolUseId,
-          isWaiting: () => e.isPending(I) && !signal.aborted,
+          isWaiting: () => host.isPending(requestId) && !signal.aborted,
         });
-        ue = S.stop;
+        stopWaiting = pushRace.stop;
         let winner_2 = await Promise.race([
-          B.then(() => {
+          sdkRequest.then(() => {
             return;
           }),
-          S.allowed,
+          pushRace.allowed,
         ]);
-        if (winner_2 !== undefined && e.isPending(I)) {
-          if (isTerminalShutdown() && !Q) await heldUntilExit();
+        if (winner_2 !== undefined && host.isPending(requestId)) {
+          if (isTerminalShutdown() && !abortedByTurn) await heldUntilExit();
           abortController.abort();
-          dropPermissionRecord(s, toolUseId);
-          if (E)
+          dropPermissionRecord(toolUseContext, toolUseId);
+          if (permissionLog)
             logPermissionDecision(
-              E.logContext,
+              permissionLog.logContext,
               {
                 kind: "recheck",
               },
-              E.shownAtMs,
+              permissionLog.shownAtMs,
             );
           return winner_2;
         }
       }
-      let ke = winner.source === "hook" ? (await B).result : winner.result;
-      if (E)
+      let answer = winner.source === "hook" ? (await sdkRequest).result : winner.result;
+      if (permissionLog)
         logPermissionDecision(
-          E.logContext,
+          permissionLog.logContext,
           {
             kind: "host_answer",
-            answer: ke,
+            answer,
           },
-          E.shownAtMs,
+          permissionLog.shownAtMs,
         );
-      let x = permissionPromptToolResultToPermissionDecision(
-        n,
-        ke,
-        r,
+      let finalDecision = permissionPromptToolResultToPermissionDecision(
+        answers,
+        answer,
+        tool,
         updatedInput,
-        s,
-        r,
-        c.suppressAlwaysAllowRule === true,
-        D !== true,
-        c.metadata?.mcpSkill === undefined
+        toolUseContext,
+        tool,
+        decision.suppressAlwaysAllowRule === true,
+        serverPolicyPushable !== true,
+        decision.metadata?.mcpSkill === undefined
           ? undefined
           : {
               rule: undefined,
             },
       );
       if (
-        x.behavior === "allow" &&
-        e.answeredAtHostDialog(I) &&
-        s.forRemoteExecution !== true &&
+        finalDecision.behavior === "allow" &&
+        host.answeredAtHostDialog(requestId) &&
+        toolUseContext.forRemoteExecution !== true &&
         returnFalsePermissionHook()
       )
-        recordHostAttestedCall(s.session, toolUseId, {
-          toolName: r.name,
-          input: x.updatedInput ?? updatedInput,
+        recordHostAttestedCall(toolUseContext.session, toolUseId, {
+          toolName: tool.name,
+          input: finalDecision.updatedInput ?? updatedInput,
         });
-      if (x.behavior === "allow") recordMcpApprovalTicket_2(e.takeApprovalTicket(I), r, toolUseId, s);
-      return x;
+      if (finalDecision.behavior === "allow")
+        recordMcpApprovalTicket_2(host.takeApprovalTicket(requestId), tool, toolUseId, toolUseContext);
+      return finalDecision;
     } catch (error) {
-      if (isTerminalShutdown() && e.isPending(I)) await heldUntilExit();
-      if (e.interruptedAtStreamClose(I) && isInterruptModeOn()) {
+      if (isTerminalShutdown() && host.isPending(requestId)) await heldUntilExit();
+      if (host.interruptedAtStreamClose(requestId) && isInterruptModeOn()) {
         try {
           logEvent("tengu_auq_park_interrupted_at_stream_close", {
             stream_closed: error instanceof StreamClosedAbortError,
@@ -982,131 +1054,148 @@ ${ie}`
         } catch {}
         throw error;
       }
-      let W = formatPermissionRequestFailure(n, error, r.name);
-      let _ = CAN_USE_TOOL_REQUEST_FAILED_DENY_REASON;
+      let failureMessage = formatPermissionRequestFailure(answers, error, tool.name);
+      let denyReason = CAN_USE_TOOL_REQUEST_FAILED_DENY_REASON;
       if (error instanceof ZodError) {
         logForDebugging(
-          `canUseTool returned a schema-invalid permission result for ${r.name}: ${error.message.slice(0, 2000)}`,
+          `canUseTool returned a schema-invalid permission result for ${tool.name}: ${error.message.slice(0, 2000)}`,
           {
             level: "error",
           },
         );
-        W = `The canUseTool callback returned an invalid permission result. ${PERMISSION_PROMPT_RESULT_FORMAT_HINT}`;
-        _ = CAN_USE_TOOL_INVALID_RESULT_DENY_REASON;
-      } else if (error instanceof StreamClosedAbortError) _ = CAN_USE_TOOL_STREAM_CLOSED_DENY_REASON;
+        failureMessage = `The canUseTool callback returned an invalid permission result. ${PERMISSION_PROMPT_RESULT_FORMAT_HINT}`;
+        denyReason = CAN_USE_TOOL_INVALID_RESULT_DENY_REASON;
+      } else if (error instanceof StreamClosedAbortError) denyReason = CAN_USE_TOOL_STREAM_CLOSED_DENY_REASON;
       else if (isAbortError(error) && signal.aborted) {
-        W = "Tool permission request aborted";
-        _ = CAN_USE_TOOL_ABORTED_DENY_REASON;
-        if (E && !isAskWithdrawnByAsker(signal))
+        failureMessage = "Tool permission request aborted";
+        denyReason = CAN_USE_TOOL_ABORTED_DENY_REASON;
+        if (permissionLog && !isAskWithdrawnByAsker(signal))
           logPermissionDecision(
-            E.logContext,
+            permissionLog.logContext,
             {
               kind: "turn_aborted",
             },
-            E.shownAtMs,
+            permissionLog.shownAtMs,
           );
       }
       return {
         behavior: "deny",
-        message: W,
+        message: failureMessage,
         toolUseID: toolUseId,
-        decisionReason: _,
+        decisionReason: denyReason,
         decideLocation: "ask-path",
       };
     } finally {
-      ue?.();
-      e.promptSettled(I, ce);
-      signal.removeEventListener("abort", de);
+      stopWaiting?.();
+      host.promptSettled(requestId, shownSubagentId);
+      signal.removeEventListener("abort", onTurnAbort);
     }
   };
-  return setPermissionPromptHostProbe("callback", d, () => true);
+  return setPermissionPromptHostProbe("callback", askPermission, () => true);
 }
 //@ chunk-6j594vm1.js:18451-18485 placement
-var weakSet = new WeakSet();
-var weakMap = new WeakMap();
+var weakSet; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var weakMap;
+deferInit("chunk-6j594vm1.js:18451", () => {
+  weakSet = new WeakSet();
+  weakMap = new WeakMap();
+});
 //@ chunk-6j594vm1.js:18485-19866 placement
 /**
  * 询问权限并同时推送，取先到的答复。
  */
-async function askPermissionWithPush(n, e, d, r, m, s, y, f, k) {
-  let signal = y.abortController.signal;
-  let c = () => ({
+async function askPermissionWithPush(
+  askPermission,
+  answers,
+  preparedAsk,
+  decision,
+  tool,
+  input,
+  toolUseContext,
+  assistantMessage,
+  toolUseId,
+) {
+  let signal = toolUseContext.abortController.signal;
+  let abortedDecision = () => ({
     behavior: "deny",
     message: "Tool permission request aborted",
-    toolUseID: k,
+    toolUseID: toolUseId,
     decisionReason: CAN_USE_TOOL_ABORTED_DENY_REASON,
     decideLocation: "ask-path",
   });
-  if (r.personOnly !== true) {
-    let w;
+  if (decision.personOnly !== true) {
+    let hookOutcome;
     try {
-      w = await executePermissionRequestHooksForSDK(
-        e,
-        m,
-        k,
-        r.updatedInput ?? s,
-        y,
-        r.suggestions,
-        r,
+      hookOutcome = await executePermissionRequestHooksForSDK(
+        answers,
+        tool,
+        toolUseId,
+        decision.updatedInput ?? input,
+        toolUseContext,
+        decision.suggestions,
+        decision,
         () => signal.aborted,
       );
     } catch (error) {
       return signal.aborted
-        ? c()
+        ? abortedDecision()
         : {
             behavior: "deny",
-            message: formatPermissionRequestFailure(e, error, m.name),
-            toolUseID: k,
+            message: formatPermissionRequestFailure(answers, error, tool.name),
+            toolUseID: toolUseId,
             decisionReason: CAN_USE_TOOL_REQUEST_FAILED_DENY_REASON,
             decideLocation: "ask-path",
           };
     }
-    if (w !== undefined) {
+    if (hookOutcome !== undefined) {
       if (isTerminalShutdown() && !signal.aborted) return heldUntilExit();
-      if (w.interrupt) turnAbortControllerOf(y.abortController).abort();
-      return w.decision;
+      if (hookOutcome.interrupt) turnAbortControllerOf(toolUseContext.abortController).abort();
+      return hookOutcome.decision;
     }
   }
-  let h = await d.prepare();
+  let prepared = await preparedAsk.prepare();
   if (signal.aborted) {
-    if (!("error" in h)) h.release();
-    return c();
+    if (!("error" in prepared)) prepared.release();
+    return abortedDecision();
   }
-  if ("error" in h)
+  if ("error" in prepared)
     return {
       behavior: "deny",
-      message: h.error,
-      toolUseID: k,
+      message: prepared.error,
+      toolUseID: toolUseId,
       decisionReason: {
         type: "other",
         reason: "files not attached",
       },
       decideLocation: "ask-path",
     };
-  let A = {
-    ...dropStaleHostDisplay(r, h.input),
-    updatedInput: h.input,
+  let patchedDecision = {
+    ...dropStaleHostDisplay(decision, prepared.input),
+    updatedInput: prepared.input,
   };
-  weakSet.add(A);
-  weakMap.set(A, h.description);
-  let b;
+  weakSet.add(patchedDecision);
+  weakMap.set(patchedDecision, prepared.description);
+  let result;
   try {
-    b = await n(m, s, y, f, k, A);
+    result = await askPermission(tool, input, toolUseContext, assistantMessage, toolUseId, patchedDecision);
   } catch (error) {
-    h.release();
+    prepared.release();
     throw error;
   }
-  if (b.behavior !== "allow") {
-    h.release();
-    return b;
+  if (result.behavior !== "allow") {
+    prepared.release();
+    return result;
   }
-  let C = b.updatedInput !== undefined && Object.keys(b.updatedInput).length > 0 ? b.updatedInput : h.input;
-  if (!En(C.files, h.input.files)) {
-    h.release();
+  let approvedInput =
+    result.updatedInput !== undefined && Object.keys(result.updatedInput).length > 0
+      ? result.updatedInput
+      : prepared.input;
+  if (!import_sortedIndex_2(approvedInput.files, prepared.input.files)) {
+    prepared.release();
     return {
       behavior: "deny",
-      message: `The approval for ${m.name} changed the files to attach, which cannot be applied. Call it again with the files you want attached.`,
-      toolUseID: k,
+      message: `The approval for ${tool.name} changed the files to attach, which cannot be applied. Call it again with the files you want attached.`,
+      toolUseID: toolUseId,
       decisionReason: {
         type: "other",
         reason: "approval changed the files",
@@ -1115,8 +1204,8 @@ async function askPermissionWithPush(n, e, d, r, m, s, y, f, k) {
     };
   }
   return {
-    ...b,
-    updatedInput: C,
+    ...result,
+    updatedInput: approvedInput,
   };
 }
 export {

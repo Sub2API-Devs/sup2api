@@ -12,7 +12,7 @@ import { stripInvisibleChars_2 } from "../../utils/invisibleChars.js";
 import { stripAnsi } from "../../utils/stripAnsi.js";
 
 //@ chunk-yr5hx1r4.js:264-326 placement
-function diffLineToPlainText(t) {
-  return stripInvisibleChars_2(stripAnsi(t)).text.replace(/[\t\n]+/g, " ");
+function diffLineToPlainText(line) {
+  return stripInvisibleChars_2(stripAnsi(line)).text.replace(/[\t\n]+/g, " ");
 }
 export { diffLineToPlainText };

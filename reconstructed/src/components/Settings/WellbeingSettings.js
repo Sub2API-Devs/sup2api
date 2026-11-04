@@ -13,67 +13,70 @@ import { init_react_production } from "../../../vendor/react/cjs/react.productio
 //@ chunk-a7sxm3q7.js:5714-5718 placement
 init_react_production();
 //@ chunk-a7sxm3q7.js:5718-5749 placement
-function diffDesc(gn, bn) {
-  return gn - bn;
+function diffDesc(a, b) {
+  return a - b;
 }
 //@ chunk-a7sxm3q7.js:5749-5921 placement
-function toIntervalOption(fn) {
+function toIntervalOption(minutes) {
   return {
-    value: String(fn),
-    label: !INTERVAL_PRESETS.includes(fn)
-      ? `Custom \xB7 every ${spanOf(fn)}`
-      : fn === C
-        ? `Every ${spanOf(fn)} (default)`
-        : `Every ${spanOf(fn)}`,
+    value: String(minutes),
+    label: !INTERVAL_PRESETS.includes(minutes)
+      ? `Custom \xB7 every ${spanOf(minutes)}`
+      : minutes === C
+        ? `Every ${spanOf(minutes)} (default)`
+        : `Every ${spanOf(minutes)}`,
   };
 }
 //@ chunk-a7sxm3q7.js:5921-5952 placement
-function diffAsc(hn, vn) {
-  return hn - vn;
+function diffAsc(a, b) {
+  return a - b;
 }
 //@ chunk-a7sxm3q7.js:5952-6107 placement
-function toThresholdOption(pn) {
+function toThresholdOption(minutes) {
   return {
-    value: String(pn),
-    label: !THRESHOLD_PRESETS.includes(pn)
-      ? `Custom \xB7 ${pn} minutes`
-      : pn === M
-        ? `${pn} minutes (default)`
-        : `${pn} minutes`,
+    value: String(minutes),
+    label: !THRESHOLD_PRESETS.includes(minutes)
+      ? `Custom \xB7 ${minutes} minutes`
+      : minutes === M
+        ? `${minutes} minutes (default)`
+        : `${minutes} minutes`,
   };
 }
 //@ chunk-a7sxm3q7.js:6107-6865 placement
 function WellbeingSettings() {
-  let qn = i("breakReminder", {
+  let breakReminder = i("breakReminder", {
     enabled: false,
   }).value;
-  let wn = i("quietHours", {
+  let quietHours = i("quietHours", {
     enabled: false,
   }).value;
-  let Mn = {
-    enabled: qn.enabled ?? false,
-    intervalMinutes: qn.intervalMinutes ?? C,
-    breakThresholdMinutes: qn.breakThresholdMinutes ?? M,
+  let nextSettings = {
+    enabled: breakReminder.enabled ?? false,
+    intervalMinutes: breakReminder.intervalMinutes ?? C,
+    breakThresholdMinutes: breakReminder.breakThresholdMinutes ?? M,
     quiet: {
-      enabled: wn.enabled ?? false,
-      start: wn.start,
-      end: wn.end,
+      enabled: quietHours.enabled ?? false,
+      start: quietHours.start,
+      end: quietHours.end,
     },
   };
-  let kn =
-    wn.start && wn.end
+  let quietRange =
+    quietHours.start && quietHours.end
       ? {
-          start: wn.start,
-          end: wn.end,
+          start: quietHours.start,
+          end: quietHours.end,
         }
       : undefined;
-  let xn = kn && !QUIET_PRESETS.some((Cn) => keyOf(Cn) === keyOf(kn)) ? kn : undefined;
+  let customRange =
+    quietRange && !QUIET_PRESETS.some((preset) => keyOf(preset) === keyOf(quietRange))
+      ? quietRange
+      : undefined;
   return {
-    draft: Mn,
-    intervals: t([...INTERVAL_PRESETS, Mn.intervalMinutes])
+    draft: nextSettings,
+    intervals: t([...INTERVAL_PRESETS, nextSettings.intervalMinutes])
       .sort(diffDesc)
       .map(toIntervalOption),
-    thresholds: t([...THRESHOLD_PRESETS, Mn.breakThresholdMinutes])
+    thresholds: t([...THRESHOLD_PRESETS, nextSettings.breakThresholdMinutes])
       .sort(diffAsc)
       .map(toThresholdOption),
     quiets: [
@@ -82,10 +85,10 @@ function WellbeingSettings() {
         label: "Off",
         range: undefined,
       },
-      ...[...QUIET_PRESETS, ...(xn ? [xn] : [])].map((Dn) => ({
-        value: keyOf(Dn),
-        label: `${Dn === xn ? "Custom \xB7 " : ""}${Dn.start} \u2013 ${Dn.end}`,
-        range: Dn,
+      ...[...QUIET_PRESETS, ...(customRange ? [customRange] : [])].map((option) => ({
+        value: keyOf(option),
+        label: `${option === customRange ? "Custom \xB7 " : ""}${option.start} \u2013 ${option.end}`,
+        range: option,
       })),
     ],
   };
@@ -103,3 +106,4 @@ var runWellbeingCommand = async (onDone) => {
   onDone("Wellbeing settings are not available in this build");
   return null;
 };
+export { WELLBEING_ROW_HEIGHT, runWellbeingCommand };

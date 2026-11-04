@@ -10,97 +10,101 @@
  */
 import { getCommandArgv } from "../../utils/bash/commands.js";
 import { SED_PRINT_RANGE_RE, SED_PRINT_LINE_RE, DEFAULT_HEAD_LINES, DEFAULT_TAIL_LINES } from "./BashTool.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:4763170-4763857 placement
 /**
  * 解析 sed 的读取类参数（-n、-e 等）。
  */
-function parseSedReadArgs(e) {
-  let n;
+function parseSedReadArgs(command) {
+  let argv;
   try {
-    n = getCommandArgv(e);
+    argv = getCommandArgv(command);
   } catch {
     return null;
   }
-  if (n[0] !== "sed") return null;
-  let r = false;
-  let s = null;
-  let h = null;
-  for (let idx = 1; idx < n.length; idx++) {
-    let L = n[idx];
-    if (L.startsWith("-")) {
-      if (L.startsWith("--")) {
-        if (L === "--in-place" || L.startsWith("--in-place=")) return null;
-        if (L === "--expression") return null;
-        if (L === "--quiet" || L === "--silent") r = true;
+  if (argv[0] !== "sed") return null;
+  let isQuiet = false;
+  let script = null;
+  let filePath = null;
+  for (let idx = 1; idx < argv.length; idx++) {
+    let arg = argv[idx];
+    if (arg.startsWith("-")) {
+      if (arg.startsWith("--")) {
+        if (arg === "--in-place" || arg.startsWith("--in-place=")) return null;
+        if (arg === "--expression") return null;
+        if (arg === "--quiet" || arg === "--silent") isQuiet = true;
       } else {
-        if (L.includes("i")) return null;
-        if (L === "-e") return null;
-        if (L.includes("n")) r = true;
+        if (arg.includes("i")) return null;
+        if (arg === "-e") return null;
+        if (arg.includes("n")) isQuiet = true;
       }
       continue;
     }
-    if (s === null) s = L;
-    else if (h === null) h = L;
+    if (script === null) script = arg;
+    else if (filePath === null) filePath = arg;
     else return null;
   }
-  if (!r || s === null || h === null) return null;
-  let match = SED_PRINT_RANGE_RE.exec(s);
+  if (!isQuiet || script === null || filePath === null) return null;
+  let match = SED_PRINT_RANGE_RE.exec(script);
   if (match)
     return {
-      filePath: h,
+      filePath,
       startLine: Number(match[1]),
       endLine: Number(match[2]),
     };
-  let match_2 = SED_PRINT_LINE_RE.exec(s);
+  let match_2 = SED_PRINT_LINE_RE.exec(script);
   if (match_2) {
-    let w = Number(match_2[1]);
+    let line = Number(match_2[1]);
     return {
-      filePath: h,
-      startLine: w,
-      endLine: w,
+      filePath,
+      startLine: line,
+      endLine: line,
     };
   }
   return null;
 }
 //@ chunk-e6aww6q8.js:4763857-4764029 placement
-var CAT_LIKE_COMMANDS = new Map([
-  ["cat", new Set(["-n", "--number"])],
-  ["nl", new Set()],
-  ["bat", new Set(["-n", "--number", "-p", "--plain"])],
-  ["batcat", new Set(["-n", "--number", "-p", "--plain"])],
-]);
+var CAT_LIKE_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4763857", () => {
+  CAT_LIKE_COMMANDS = new Map([
+    ["cat", new Set(["-n", "--number"])],
+    ["nl", new Set()],
+    ["bat", new Set(["-n", "--number", "-p", "--plain"])],
+    ["batcat", new Set(["-n", "--number", "-p", "--plain"])],
+  ]);
+});
 //@ chunk-e6aww6q8.js:4764029-4764437 placement
 /**
  * 把 cat/nl 类命令解析为文件读取：只允许已知选项与单个文件参数，返回文件路径以及是否带行号；不符合返回 null。
  */
-function parseCatRead(e) {
-  let n;
+function parseCatRead(command) {
+  let argv;
   try {
-    n = getCommandArgv(e);
+    argv = getCommandArgv(command);
   } catch {
     return null;
   }
-  let r = CAT_LIKE_COMMANDS.get(n[0] ?? "");
-  if (r === undefined) return null;
-  let s = null;
-  for (let idx = 1; idx < n.length; idx++) {
-    let S = n[idx];
-    if (S.startsWith("-") && S !== "-") {
-      if (!r.has(S)) return null;
+  let allowedFlags = CAT_LIKE_COMMANDS.get(argv[0] ?? "");
+  if (allowedFlags === undefined) return null;
+  let filePath = null;
+  for (let idx = 1; idx < argv.length; idx++) {
+    let arg = argv[idx];
+    if (arg.startsWith("-") && arg !== "-") {
+      if (!allowedFlags.has(arg)) return null;
       continue;
     }
-    if (s !== null) return null;
-    s = S;
+    if (filePath !== null) return null;
+    filePath = arg;
   }
-  if (s === null || s === "-") return null;
-  let h = n[0] === "nl" || n.includes("-n") || n.includes("--number");
+  if (filePath === null || filePath === "-") return null;
+  let isNumbered = argv[0] === "nl" || argv.includes("-n") || argv.includes("--number");
   return {
-    filePath: s,
+    filePath,
     startLine: undefined,
     endLine: undefined,
-    ...(h && {
-      numbered: h,
+    ...(isNumbered && {
+      numbered: isNumbered,
     }),
   };
 }
@@ -108,56 +112,56 @@ function parseCatRead(e) {
 /**
  * 解析 head/tail 的行数参数（-n N、--lines=N、-nN、-N）与单个文件参数，返回行数与文件；格式不符返回 null。
  */
-function parseLineCountArgs(e, n) {
-  let r = null;
-  let s = null;
-  for (let idx = 1; idx < e.length; idx++) {
-    let y = e[idx];
-    if (y === "-n" || y === "--lines") {
-      let S = e[++idx];
-      if (S === undefined) return null;
-      if (!/^\d+$/.test(S)) return null;
-      r = Number(S);
+function parseLineCountArgs(argv, defaultCount) {
+  let count = null;
+  let filePath = null;
+  for (let idx = 1; idx < argv.length; idx++) {
+    let arg = argv[idx];
+    if (arg === "-n" || arg === "--lines") {
+      let value = argv[++idx];
+      if (value === undefined) return null;
+      if (!/^\d+$/.test(value)) return null;
+      count = Number(value);
       continue;
     }
-    if (y.startsWith("--lines=")) {
-      let sliced = y.slice(8);
+    if (arg.startsWith("--lines=")) {
+      let sliced = arg.slice(8);
       if (!/^\d+$/.test(sliced)) return null;
-      r = Number(sliced);
+      count = Number(sliced);
       continue;
     }
-    if (/^-n\d+$/.test(y)) {
-      r = Number(y.slice(2));
+    if (/^-n\d+$/.test(arg)) {
+      count = Number(arg.slice(2));
       continue;
     }
-    if (/^-\d+$/.test(y)) {
-      r = Number(y.slice(1));
+    if (/^-\d+$/.test(arg)) {
+      count = Number(arg.slice(1));
       continue;
     }
-    if (y.startsWith("-")) return null;
-    if (s !== null) return null;
-    s = y;
+    if (arg.startsWith("-")) return null;
+    if (filePath !== null) return null;
+    filePath = arg;
   }
-  if (s === null || s === "-") return null;
-  if (r === 0) return null;
+  if (filePath === null || filePath === "-") return null;
+  if (count === 0) return null;
   return {
-    count: r ?? n,
-    filePath: s,
+    count: count ?? defaultCount,
+    filePath,
   };
 }
 //@ chunk-e6aww6q8.js:4764979-4765157 placement
 /**
  * 把 head 命令解析为文件读取（起始行与行数）。
  */
-function parseHeadRead(e) {
-  let n;
+function parseHeadRead(command) {
+  let argv;
   try {
-    n = getCommandArgv(e);
+    argv = getCommandArgv(command);
   } catch {
     return null;
   }
-  if (n[0] !== "head") return null;
-  let lineCountArgs = parseLineCountArgs(n, DEFAULT_HEAD_LINES);
+  if (argv[0] !== "head") return null;
+  let lineCountArgs = parseLineCountArgs(argv, DEFAULT_HEAD_LINES);
   if (lineCountArgs === null) return null;
   return {
     filePath: lineCountArgs.filePath,
@@ -169,15 +173,15 @@ function parseHeadRead(e) {
 /**
  * 把 tail 命令解析为文件读取（从末尾计算的行数）。
  */
-function parseTailRead(e) {
-  let n;
+function parseTailRead(command) {
+  let argv;
   try {
-    n = getCommandArgv(e);
+    argv = getCommandArgv(command);
   } catch {
     return null;
   }
-  if (n[0] !== "tail") return null;
-  let lineCountArgs = parseLineCountArgs(n, DEFAULT_TAIL_LINES);
+  if (argv[0] !== "tail") return null;
+  let lineCountArgs = parseLineCountArgs(argv, DEFAULT_TAIL_LINES);
   if (lineCountArgs === null) return null;
   return {
     filePath: lineCountArgs.filePath,
@@ -190,79 +194,93 @@ function parseTailRead(e) {
 /**
  * grep/rg 读命令解析允许的选项：上下文选项、短选项组合、长选项集合。
  */
-var GREP_CONTEXT_SHORT_RE = /^-[ABC]\d+$/;
-var GREP_CONTEXT_LONG_RE = /^--(?:after-context|before-context|context)=\d+$/;
-var GREP_SHORT_FLAGS_RE = /^-[niwxEFGPHh]+$/;
-var GREP_LONG_FLAGS = new Set([
-  "--line-number",
-  "--ignore-case",
-  "--word-regexp",
-  "--line-regexp",
-  "--extended-regexp",
-  "--fixed-strings",
-  "--basic-regexp",
-  "--perl-regexp",
-  "--with-filename",
-  "--no-filename",
-  "--color=never",
-  "--color=auto",
-]);
-var RG_SHORT_FLAGS_RE = /^-[iSswxFnNHUP]+$/;
-var RG_LONG_FLAGS = new Set([
-  "--ignore-case",
-  "--smart-case",
-  "--case-sensitive",
-  "--word-regexp",
-  "--line-regexp",
-  "--fixed-strings",
-  "--line-number",
-  "--no-line-number",
-  "--with-filename",
-  "--no-filename",
-  "--multiline",
-  "--pcre2",
-]);
+var GREP_CONTEXT_SHORT_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var GREP_CONTEXT_LONG_RE;
+var GREP_SHORT_FLAGS_RE;
+var GREP_LONG_FLAGS;
+var RG_SHORT_FLAGS_RE;
+var RG_LONG_FLAGS;
+deferInit("chunk-e6aww6q8.js:4765357", () => {
+  GREP_CONTEXT_SHORT_RE = /^-[ABC]\d+$/;
+  GREP_CONTEXT_LONG_RE = /^--(?:after-context|before-context|context)=\d+$/;
+  GREP_SHORT_FLAGS_RE = /^-[niwxEFGPHh]+$/;
+  GREP_LONG_FLAGS = new Set([
+    "--line-number",
+    "--ignore-case",
+    "--word-regexp",
+    "--line-regexp",
+    "--extended-regexp",
+    "--fixed-strings",
+    "--basic-regexp",
+    "--perl-regexp",
+    "--with-filename",
+    "--no-filename",
+    "--color=never",
+    "--color=auto",
+  ]);
+  RG_SHORT_FLAGS_RE = /^-[iSswxFnNHUP]+$/;
+  RG_LONG_FLAGS = new Set([
+    "--ignore-case",
+    "--smart-case",
+    "--case-sensitive",
+    "--word-regexp",
+    "--line-regexp",
+    "--fixed-strings",
+    "--line-number",
+    "--no-line-number",
+    "--with-filename",
+    "--no-filename",
+    "--multiline",
+    "--pcre2",
+  ]);
+});
 //@ chunk-e6aww6q8.js:4765904-4766686 placement
 /**
  * 解析 grep 的读取类参数（上下文行数等）。
  */
-function parseGrepReadArgs(e) {
-  let n;
+function parseGrepReadArgs(command) {
+  let argv;
   try {
-    n = getCommandArgv(e);
+    argv = getCommandArgv(command);
   } catch {
     return null;
   }
-  let r = n[0] === "rg";
-  if (!r && n[0] !== "grep" && n[0] !== "egrep" && n[0] !== "fgrep") return null;
-  let s = r ? RG_SHORT_FLAGS_RE : GREP_SHORT_FLAGS_RE;
-  let h = r ? RG_LONG_FLAGS : GREP_LONG_FLAGS;
-  let y = null;
-  let S = null;
-  for (let idx = 1; idx < n.length; idx++) {
-    let L = n[idx];
-    if (L.startsWith("-") && L !== "-") {
-      if (L === "-A" || L === "-B" || L === "-C") {
-        let G = n[++idx];
-        if (G === undefined || !/^\d+$/.test(G)) return null;
+  let isRipgrep = argv[0] === "rg";
+  if (!isRipgrep && argv[0] !== "grep" && argv[0] !== "egrep" && argv[0] !== "fgrep") return null;
+  let shortFlagsRe = isRipgrep ? RG_SHORT_FLAGS_RE : GREP_SHORT_FLAGS_RE;
+  let longFlags = isRipgrep ? RG_LONG_FLAGS : GREP_LONG_FLAGS;
+  let pattern = null;
+  let filePath = null;
+  for (let idx = 1; idx < argv.length; idx++) {
+    let arg = argv[idx];
+    if (arg.startsWith("-") && arg !== "-") {
+      if (arg === "-A" || arg === "-B" || arg === "-C") {
+        let value = argv[++idx];
+        if (value === undefined || !/^\d+$/.test(value)) return null;
         continue;
       }
-      if (r && (L === "--after-context" || L === "--before-context" || L === "--context")) {
-        let G = n[++idx];
-        if (G === undefined || !/^\d+$/.test(G)) return null;
+      if (isRipgrep && (arg === "--after-context" || arg === "--before-context" || arg === "--context")) {
+        let value = argv[++idx];
+        if (value === undefined || !/^\d+$/.test(value)) return null;
         continue;
       }
-      if (GREP_CONTEXT_SHORT_RE.test(L) || GREP_CONTEXT_LONG_RE.test(L) || s.test(L) || h.has(L)) continue;
+      if (
+        GREP_CONTEXT_SHORT_RE.test(arg) ||
+        GREP_CONTEXT_LONG_RE.test(arg) ||
+        shortFlagsRe.test(arg) ||
+        longFlags.has(arg)
+      )
+        continue;
       return null;
     }
-    if (y === null) y = L;
-    else if (S === null) S = L;
+    if (pattern === null) pattern = arg;
+    else if (filePath === null) filePath = arg;
     else return null;
   }
-  if (y === null || S === null || S === "-") return null;
-  if (/[*?[{]/.test(S)) return null;
+  if (pattern === null || filePath === null || filePath === "-") return null;
+  if (/[*?[{]/.test(filePath)) return null;
   return {
-    filePath: S,
+    filePath,
     startLine: undefined,
     endLine: undefined,
     requiresExitZero: true,

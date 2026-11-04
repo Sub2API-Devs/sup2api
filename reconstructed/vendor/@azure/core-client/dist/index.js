@@ -9,7 +9,7 @@ import { getOperationRequestInfo, getOperationArgumentValueFromParameter } from 
 
 //@ chunk-mrx6y2r5.js:67078-67096 esm-layout
 var XML_ATTRKEY = "$";
-var ei = "_";
+var SEP_SPECIAL = "_";
 //@ chunk-mrx6y2r5.js:67096-67355 esm-fingerprint
 function isPrimitiveBody(value, mapperTypeName) {
   return (
@@ -102,7 +102,7 @@ var MapperTypeNames = {
   UnixTime: "UnixTime",
 };
 //@ chunk-mrx6y2r5.js:73790-73944 esm-fingerprint
-function kd(operationSpec) {
+function getStreamingResponseStatusCodes(operationSpec) {
   let result = new Set();
   for (let statusCode in operationSpec.responses) {
     let operationResponse = operationSpec.responses[statusCode];
@@ -212,7 +212,7 @@ function serializeRequestBody(
             ? undefined
             : serializerOptions.xml.xmlCharKey) !== null && _d !== undefined
           ? _d
-          : ei,
+          : SEP_SPECIAL,
     },
   };
   let xmlCharKey = updatedOptions.xml.xmlCharKey;
@@ -247,7 +247,7 @@ function serializeRequestBody(
           );
           if (typeName === MapperTypeNames.Sequence)
             request.body = stringifyXML(
-              ng(value, xmlElementName || xmlName || serializedName, xmlnsKey, xmlNamespace),
+              prepareXMLRootList(value, xmlElementName || xmlName || serializedName, xmlnsKey, xmlNamespace),
               {
                 rootName: xmlName || serializedName,
                 xmlCharKey,
@@ -306,18 +306,25 @@ function getXmlValueWithNamespace(xmlNamespace, xmlnsKey, typeName, serializedVa
   return serializedValue;
 }
 //@ chunk-mrx6y2r5.js:76509-76618 esm-layout
-function ng(e, t, xmlnsKey, xmlNamespace) {
-  if (!Array.isArray(e)) e = [e];
+function prepareXMLRootList(obj, elementName, xmlnsKey, xmlNamespace) {
+  if (!Array.isArray(obj)) obj = [obj];
   if (!xmlnsKey || !xmlNamespace)
     return {
-      [t]: e,
+      [elementName]: obj,
     };
-  let o = {
-    [t]: e,
+  let result = {
+    [elementName]: obj,
   };
-  o[XML_ATTRKEY] = {
+  result[XML_ATTRKEY] = {
     [xmlnsKey]: xmlNamespace,
   };
-  return o;
+  return result;
 }
-export { ei, MapperTypeNames, serializationPolicy, getPathStringFromParameter, kd, flattenResponse };
+export {
+  SEP_SPECIAL,
+  MapperTypeNames,
+  serializationPolicy,
+  getPathStringFromParameter,
+  getStreamingResponseStatusCodes,
+  flattenResponse,
+};

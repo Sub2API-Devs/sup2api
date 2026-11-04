@@ -11,13 +11,13 @@
 import { env } from "../../utils/env.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import {
-  string,
+  stringSchema,
   discriminatedUnion,
-  u,
+  objectSchema,
   literal,
   array,
-  M,
-  E,
+  booleanSchema,
+  numberSchema,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
@@ -33,7 +33,13 @@ import { isPlainNonInteractive } from "../../utils/sessionShape.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { logError } from "../../utils/log.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-207srz4f.js:191-206 placement
+/**
+ * print 模式等待后台任务的默认上限（600000 ms），可被 CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS 覆盖
+ */
+var DEFAULT_PRINT_BG_WAIT_CEILING_MS = 600000;
 //@ chunk-fym4r1th.js:1089-1155 placement
 /**
  * 取 print 模式等待后台任务的默认上限（环境变量优先）。
@@ -63,55 +69,62 @@ var BACKGROUND_STOP_EXPLANATIONS = {
 /**
  * GetTask 结果的输出上限与按状态（working、completed、failed、cancelled）区分的 schema。
  */
-var MAX_TASK_OUTPUT_CHARS = 12000;
-var MAX_TASK_OUTPUT_BYTES = 4 * MAX_TASK_OUTPUT_CHARS;
-var GET_TASK_ID_PREFIX = "gettask_";
-var taskStatusBaseFields = {
-  taskId: string(),
-  statusMessage: string(),
-  createdAt: string(),
-  lastUpdatedAt: string(),
-};
-var getTaskResultSchema = DoctorLazy(() =>
-  discriminatedUnion("status", [
-    u({
-      ...taskStatusBaseFields,
-      status: literal("working"),
-    }),
-    u({
-      ...taskStatusBaseFields,
-      status: literal("completed"),
-      result: u({
-        content: array(
-          u({
-            type: literal("text"),
-            text: string(),
-          }),
-        ),
-        isError: M(),
+var MAX_TASK_OUTPUT_CHARS; // deferred: uses stringSchema (../../../vendor/zod/v4/classic/schemas.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_TASK_OUTPUT_BYTES;
+var GET_TASK_ID_PREFIX;
+var taskStatusBaseFields;
+var getTaskResultSchema;
+deferInit("chunk-fym4r1th.js:2165", () => {
+  MAX_TASK_OUTPUT_CHARS = 12000;
+  MAX_TASK_OUTPUT_BYTES = 4 * MAX_TASK_OUTPUT_CHARS;
+  GET_TASK_ID_PREFIX = "gettask_";
+  taskStatusBaseFields = {
+    taskId: stringSchema(),
+    statusMessage: stringSchema(),
+    createdAt: stringSchema(),
+    lastUpdatedAt: stringSchema(),
+  };
+  getTaskResultSchema = DoctorLazy(() =>
+    discriminatedUnion("status", [
+      objectSchema({
+        ...taskStatusBaseFields,
+        status: literal("working"),
       }),
-    }),
-    u({
-      ...taskStatusBaseFields,
-      status: literal("failed"),
-      error: u({
-        code: E(),
-        message: string(),
+      objectSchema({
+        ...taskStatusBaseFields,
+        status: literal("completed"),
+        result: objectSchema({
+          content: array(
+            objectSchema({
+              type: literal("text"),
+              text: stringSchema(),
+            }),
+          ),
+          isError: booleanSchema(),
+        }),
       }),
-    }),
-    u({
-      ...taskStatusBaseFields,
-      status: literal("cancelled"),
-    }),
-  ]),
-);
+      objectSchema({
+        ...taskStatusBaseFields,
+        status: literal("failed"),
+        error: objectSchema({
+          code: numberSchema(),
+          message: stringSchema(),
+        }),
+      }),
+      objectSchema({
+        ...taskStatusBaseFields,
+        status: literal("cancelled"),
+      }),
+    ]),
+  );
+});
 //@ chunk-fym4r1th.js:2511-2581 placement
 /**
  * 解析任务结果为协议对象，解析失败返回 null。
  */
-function parseTaskResultOrNull(e) {
-  let s = getTaskResultSchema().safeParse(e);
-  return s.success ? s.data : null;
+function parseTaskResultOrNull(value) {
+  let parsed = getTaskResultSchema().safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
 //@ chunk-fym4r1th.js:2581-2613 placement
 /**
@@ -143,8 +156,8 @@ function toGetTaskResult(task) {
         createdAt,
         lastUpdatedAt,
         result: {
-          content: task.result.content.map(({ type: d, text }) => ({
-            type: d,
+          content: task.result.content.map(({ type, text }) => ({
+            type,
             text,
           })),
           isError: task.result.isError,
@@ -179,8 +192,8 @@ function describeInterimOutput(outputFile) {
     : ` Output is being written to ${outputFile}; use ${FILE_READ_TOOL_NAME} on that path for interim output.`;
 }
 //@ chunk-fym4r1th.js:3342-3390 placement
-function fieldNote(e, outputFile) {
-  return outputFile === "" ? "" : ` ${e}: ${outputFile}`;
+function fieldNote(label, outputFile) {
+  return outputFile === "" ? "" : ` ${label}: ${outputFile}`;
 }
 //@ chunk-fym4r1th.js:3390-4292 placement
 /**
@@ -217,22 +230,22 @@ function buildFinishBeforeResponseNotice() {
   return `Its result reaches you only if it finishes while you are still working: it is terminated when you give your final response, and nothing can follow that. ${buildBackgroundWaitAdvice()}`;
 }
 //@ chunk-fym4r1th.js:5049-5844 placement
-function backgroundTaskNotice(taskId, s, { backgroundedByUser: n = false, ending: a } = {}) {
-  let r =
-    a === "final_response"
+function backgroundTaskNotice(taskId, leadText, { backgroundedByUser = false, ending } = {}) {
+  let deliveryAdvice =
+    ending === "final_response"
       ? buildBackgroundWaitAdvice()
       : hasBackgroundBashStopAfterReply()
         ? "If it finishes while you are still working, its result is delivered to you automatically between your tool calls, so there is no need to check whether it is done or to sleep; if you need its result before you reply, wait with one foreground shell command that blocks until the output file shows what you need."
-        : n
+        : backgroundedByUser
           ? "Its result is delivered to you automatically when it finishes; carry on without waiting for it."
           : `When it finishes, its result is delivered to you automatically \u2014 ${BACKGROUND_TASK_DELIVERY_TEXT} \u2014 so there is no need to check whether it is done or to sleep; if that result is all you are waiting for, end your turn.`;
-  let d = {
+  let notice = {
     resultType: "task",
     taskId,
     status: "working",
-    statusMessage: `${s} ${r}`,
+    statusMessage: `${leadText} ${deliveryAdvice}`,
   };
-  return jsonStringify(d);
+  return jsonStringify(notice);
 }
 //@ chunk-fym4r1th.js:5844-5891 placement
 /**
@@ -245,14 +258,14 @@ function isoTime(startTime) {
 /**
  * 取任务输出末尾一段，被截断时加上"更早输出已省略"及完整输出路径。
  */
-function formatTaskOutputTail({ content, omittedBytes }, n) {
-  let a = takeLastChars(content, MAX_TASK_OUTPUT_CHARS);
-  let r = omittedBytes > 0 || a.length < content.length;
-  let d = a.replace(/^\n+/, "").trimEnd();
-  return r
-    ? `[\u2026 earlier output omitted; full output: ${n}]
-${d}`
-    : d;
+function formatTaskOutputTail({ content, omittedBytes }, outputFile) {
+  let tail = takeLastChars(content, MAX_TASK_OUTPUT_CHARS);
+  let wasOmitted = omittedBytes > 0 || tail.length < content.length;
+  let trimmed = tail.replace(/^\n+/, "").trimEnd();
+  return wasOmitted
+    ? `[\u2026 earlier output omitted; full output: ${outputFile}]
+${trimmed}`
+    : trimmed;
 }
 //@ chunk-fym4r1th.js:6076-6681 placement
 /**
@@ -349,15 +362,15 @@ function getShellTaskStatus(task, output, waitContext) {
 /**
  * 由 uuid 生成任务 id（去掉连字符并加前缀）。
  */
-function taskIdFromUuid(e) {
-  return `${GET_TASK_ID_PREFIX}${e.replaceAll("-", "")}`;
+function taskIdFromUuid(uuid) {
+  return `${GET_TASK_ID_PREFIX}${uuid.replaceAll("-", "")}`;
 }
 //@ chunk-fym4r1th.js:7522-7583 placement
 /**
  * 判断字符串是否是任务 id。
  */
-function isTaskId(e) {
-  return typeof e === "string" && e.startsWith(GET_TASK_ID_PREFIX);
+function isTaskId(value) {
+  return typeof value === "string" && value.startsWith(GET_TASK_ID_PREFIX);
 }
 //@ chunk-fym4r1th.js:7583-7617 placement
 /**
@@ -379,8 +392,8 @@ function stripPreambleSuffix(toolUseId) {
  */
 function parentTaskId(toolUseId) {
   if (toolUseId === undefined) return;
-  let s = stripPreambleSuffix(toolUseId);
-  return s.endsWith(INNER_TASK_SUFFIX) ? undefined : sanitizeMarkName(s);
+  let stripped = stripPreambleSuffix(toolUseId);
+  return stripped.endsWith(INNER_TASK_SUFFIX) ? undefined : sanitizeMarkName(stripped);
 }
 //@ chunk-s61vbvea.js:453549-453611 placement
 /**
@@ -418,45 +431,49 @@ class BackgroundOutputGate {
   get gateOpen() {
     return this.#n;
   }
-  markCopyCleared(e) {
-    this.#i = e;
+  markCopyCleared(value) {
+    this.#i = value;
   }
   get copyCleared() {
     return this.#i;
   }
-  markSyncedFolder(e) {
-    this.#l = e;
+  markSyncedFolder(folder) {
+    this.#l = folder;
   }
   get syncedFolder() {
     return this.#l;
   }
-  stage(e, isNeverDropped = false) {
-    let r = {
-      text: e,
+  stage(text, isNeverDropped = false) {
+    let entry = {
+      text,
       isNeverDropped,
     };
-    let s = [...this.#e.filter((S) => S.text !== e), r];
-    let h = new Set(s.filter((S) => !S.isNeverDropped).slice(0, -MAX_NON_NEVER_DROPPED_TASKS));
-    this.#e = s.filter((S) => !h.has(S));
-    let y = () => {
-      if (this.#e.includes(r)) return "waiting";
-      return this.#t.has(r) ? "taken" : "gone";
+    let next = [...this.#e.filter((candidate) => candidate.text !== text), entry];
+    let dropped = new Set(
+      next.filter((candidate) => !candidate.isNeverDropped).slice(0, -MAX_NON_NEVER_DROPPED_TASKS),
+    );
+    this.#e = next.filter((candidate) => !dropped.has(candidate));
+    let stateOf = () => {
+      if (this.#e.includes(entry)) return "waiting";
+      return this.#t.has(entry) ? "taken" : "gone";
     };
     return {
       get state() {
-        return y();
+        return stateOf();
       },
-      revise: (S) => {
-        if (y() !== "waiting") return;
-        let w =
-          S === null
+      revise: (replacement) => {
+        if (stateOf() !== "waiting") return;
+        let nextEntry =
+          replacement === null
             ? null
             : {
-                text: S,
+                text: replacement,
                 isNeverDropped,
               };
-        this.#e = this.#e.flatMap((R) => (R !== r ? [R] : w === null ? [] : [w]));
-        r = w ?? r;
+        this.#e = this.#e.flatMap((existing) =>
+          existing !== entry ? [existing] : nextEntry === null ? [] : [nextEntry],
+        );
+        entry = nextEntry ?? entry;
       },
     };
   }
@@ -464,17 +481,20 @@ class BackgroundOutputGate {
     return this.#e.length;
   }
   take() {
-    let e = this.#e;
+    let taken = this.#e;
     this.#e = [];
-    e.forEach((n) => this.#t.add(n));
-    return e.map((n) => n.text);
+    taken.forEach((entry) => this.#t.add(entry));
+    return taken.map((entry) => entry.text);
   }
 }
 //@ chunk-s61vbvea.js:454724-454751 placement
 /**
  * 按会话保存的后台输出门。
  */
-var backgroundOutputGateSlots = new SessionRootSlot(() => new BackgroundOutputGate());
+var backgroundOutputGateSlots; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:454724", () => {
+  backgroundOutputGateSlots = new SessionRootSlot(() => new BackgroundOutputGate());
+});
 //@ chunk-s61vbvea.js:454751-454801 placement
 /**
  * 该会话是否还有未取的后台输出。
@@ -486,8 +506,8 @@ function hasPendingBackgroundOutput(session) {
 /**
  * 该会话的后台输出门是否已打开。
  */
-function isBackgroundOutputGateOpen(e) {
-  return backgroundOutputGateSlots.peek(e)?.gateOpen ?? false;
+function isBackgroundOutputGateOpen(session) {
+  return backgroundOutputGateSlots.peek(session)?.gateOpen ?? false;
 }
 //@ chunk-s61vbvea.js:454849-454878 placement
 /**
@@ -500,7 +520,7 @@ function backgroundOutputGateOpen(session) {
 /**
  * 任务级 cwd 覆盖（当前恒为 null 的预留）。
  */
-function taskCwdOverride(e) {
+function taskCwdOverride(session) {
   return null;
 }
 //@ chunk-s61vbvea.js:454906-454942 placement
@@ -517,11 +537,6 @@ function taskCwd(session) {
 function taskCopyClearedAt(session) {
   return backgroundOutputGateSlots.peek(session)?.copyCleared ?? null;
 }
-//@ chunk-207srz4f.js:191-206 placement
-/**
- * print 模式等待后台任务的默认上限（600000 ms），可被 CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS 覆盖
- */
-var DEFAULT_PRINT_BG_WAIT_CEILING_MS = 600000;
 export {
   isTaskId,
   parseTaskResultOrNull,

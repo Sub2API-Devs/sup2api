@@ -5,10 +5,10 @@
  * pieces: chunk-dxsqk077.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-dxsqk077.js:226-953 cjs-fingerprint
-var require_fast_deep_equal = x(function (cjsExports, cjsModule) {
+var require_fast_deep_equal = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = function equal(a, b) {
     if (a === b) return true;
     if (a && b && typeof a == "object" && typeof b == "object") {

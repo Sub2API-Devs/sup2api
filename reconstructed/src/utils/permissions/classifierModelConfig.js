@@ -12,8 +12,8 @@
 //@ chunk-gz7b768t.js:680-686 placement
 var classifierToolSetCache;
 //@ chunk-gz7b768t.js:686-729 placement
-function initClassifierToolSet(e) {
-  if (classifierToolSetCache === undefined) classifierToolSetCache = new Set(e);
+function initClassifierToolSet(toolNames) {
+  if (classifierToolSetCache === undefined) classifierToolSetCache = new Set(toolNames);
 }
 //@ chunk-gz7b768t.js:729-775 placement
 function classifierToolSet() {
@@ -51,5 +51,5 @@ var CLASSIFIER_FEATURE_DEFAULTS = Object.freeze({
     }),
   }),
 });
-var f = Object.freeze({});
-export { initClassifierToolSet, CLASSIFIER_FEATURE_DEFAULTS, f, classifierToolSet };
+var defaultConfig = Object.freeze({});
+export { initClassifierToolSet, CLASSIFIER_FEATURE_DEFAULTS, defaultConfig, classifierToolSet };

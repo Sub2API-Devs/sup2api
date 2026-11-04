@@ -16,7 +16,7 @@ import {
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { env } from "../../utils/env.js";
@@ -24,20 +24,21 @@ import { logEvent } from "../../services/analytics/index.js";
 import { logError } from "../../utils/log.js";
 import { errorMessage } from "../../utils/errors.js";
 import { NOTIF_ACTIVE_THRESHOLD_MS } from "../../bootstrap/state.js";
-import { init_react_production, R } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useRef } from "../../../vendor/react/cjs/react.production.js";
 import { usePreDispatchKeyHandler } from "../../keybindings/useActionHandlers.js";
 import { needsArrowHint } from "../../components/ResumeStaleConversationDialog.js";
 import { isNonSpacePrintable } from "../../components/PromptInput/utils.js";
 import { topAutoDialog } from "../../state/dialogQueue.js";
 import { COLD_RESUME_QUOTA } from "../../components/nudges/nudgeIds.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:48551-48653 placement
-function isColdCacheWatchEnabled(h) {
+function isColdCacheWatchEnabled(config) {
   return (
-    !h.disabled &&
-    !h.disableQuery &&
-    !h.embedded &&
-    !h.isThinClient &&
+    !config.disabled &&
+    !config.disableQuery &&
+    !config.embedded &&
+    !config.isThinClient &&
     !isUnattendedInteractiveSession() &&
     !isScreenReaderMode() &&
     isDriftingNovaEnabled()
@@ -54,10 +55,10 @@ class ColdCacheWatcher {
   #n = null;
   #s;
   #r = false;
-  constructor(h) {
-    this.#e = h;
-    this.#t = h.turn.getSnapshot();
-    this.#s = h.turn.subscribe(this.#c);
+  constructor(host) {
+    this.#e = host;
+    this.#t = host.turn.getSnapshot();
+    this.#s = host.turn.subscribe(this.#c);
   }
   dispose() {
     if (this.#r) return;
@@ -67,9 +68,12 @@ class ColdCacheWatcher {
   }
   #c = () => {
     let snapshot = this.#e.turn.getSnapshot();
-    let x = this.#t;
+    let previousSnapshot = this.#t;
     this.#t = snapshot;
-    if (snapshot.isLoading !== x.isLoading || snapshot.lastQueryCompletionTime !== x.lastQueryCompletionTime)
+    if (
+      snapshot.isLoading !== previousSnapshot.isLoading ||
+      snapshot.lastQueryCompletionTime !== previousSnapshot.lastQueryCompletionTime
+    )
       this.#a();
   };
   #i() {
@@ -79,68 +83,72 @@ class ColdCacheWatcher {
   #a() {
     this.#i();
     if (this.#r || this.#t.isLoading || !this.#e.isEnabled()) return;
-    let h = this.#e.expectedMissAt();
-    if (h !== null && h !== this.#n) this.#l(h);
+    let expectedMissAt = this.#e.expectedMissAt();
+    if (expectedMissAt !== null && expectedMissAt !== this.#n) this.#l(expectedMissAt);
   }
-  #l(h) {
+  #l(targetAt) {
     this.#i();
     this.#o = this.#e.clock.setTimeout(
       () => {
         this.#o = null;
         this.#d();
       },
-      Math.min(MAX_INT32, Math.max(0, h - this.#e.now())),
+      Math.min(MAX_INT32, Math.max(0, targetAt - this.#e.now())),
     );
   }
   #d() {
-    let h = this.#e;
-    if (this.#r || this.#t.isLoading || !h.isEnabled()) return;
-    let x = h.expectedMissAt();
-    let D = h.now();
-    if (x === null || x === this.#n) return;
-    if (D < x) {
-      this.#l(x);
+    let host = this.#e;
+    if (this.#r || this.#t.isLoading || !host.isEnabled()) return;
+    let expectedMissAt = host.expectedMissAt();
+    let nowMs = host.now();
+    if (expectedMissAt === null || expectedMissAt === this.#n) return;
+    if (nowMs < expectedMissAt) {
+      this.#l(expectedMissAt);
       return;
     }
-    let L = h.getLastInteractionTime() + NOTIF_ACTIVE_THRESHOLD_MS;
-    if (D < L) {
-      this.#l(L);
+    let activeUntil = host.getLastInteractionTime() + NOTIF_ACTIVE_THRESHOLD_MS;
+    if (nowMs < activeUntil) {
+      this.#l(activeUntil);
       return;
     }
     if (
-      h.isTurnActive() ||
-      h.isDialogOnScreen() ||
-      h.hasPendingLoopWakeup() ||
-      h.hasArmedQuotaAutoResume() ||
-      h.hasBackgroundAgents()
+      host.isTurnActive() ||
+      host.isDialogOnScreen() ||
+      host.hasPendingLoopWakeup() ||
+      host.hasArmedQuotaAutoResume() ||
+      host.hasBackgroundAgents()
     ) {
-      this.#l(D + NOTIF_ACTIVE_THRESHOLD_MS);
+      this.#l(nowMs + NOTIF_ACTIVE_THRESHOLD_MS);
       return;
     }
-    let ee = h.pastUsageLimitUntil();
-    if (ee !== null) {
-      this.#l(Number.isFinite(ee) ? ee : D + NOTIF_ACTIVE_THRESHOLD_MS);
+    let partBusyUntil = host.pastUsageLimitUntil();
+    if (partBusyUntil !== null) {
+      this.#l(Number.isFinite(partBusyUntil) ? partBusyUntil : nowMs + NOTIF_ACTIVE_THRESHOLD_MS);
       return;
     }
-    this.#n = x;
-    let ke = h.evaluate();
-    if (ke === null) return;
-    h.setIdleHintSuppressed(true);
-    h.ask(ke)
+    this.#n = expectedMissAt;
+    let hint = host.evaluate();
+    if (hint === null) return;
+    host.setIdleHintSuppressed(true);
+    host
+      .ask(hint)
       .catch(logError)
-      .finally(() => h.setIdleHintSuppressed(false));
+      .finally(() => host.setIdleHintSuppressed(false));
   }
 }
 //@ chunk-18hwfzwa.js:49890-49894 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:49890", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:49894-50624 placement
 function useIdleReturnTypeThrough({ onScreen, dialogStore, draft }) {
-  let L = R(null);
+  let bufferRef = useRef(null);
   usePreDispatchKeyHandler(
-    (input, key, Re) => {
+    (input, key, fallbackInput) => {
       let idleQuotaResumePayload = selectIdleQuotaResumePayload(dialogStore);
       if (idleQuotaResumePayload === undefined) return;
-      let He = askBuffer(L, idleQuotaResumePayload);
+      let buffer = askBuffer(bufferRef, idleQuotaResumePayload);
       if (
         key.return ||
         input ===
@@ -151,26 +159,26 @@ function useIdleReturnTypeThrough({ onScreen, dialogStore, draft }) {
       if (key.home || key.end || key.pageUp || key.pageDown || (key.ctrl && (input === "n" || input === "p")))
         return true;
       if (key.backspace) {
-        let last = He.chars.at(-1);
+        let last = buffer.chars.at(-1);
         if (last !== undefined && draft.value.endsWith(last)) {
-          He.chars.pop();
+          buffer.chars.pop();
           draft.setValueRaw(draft.value.slice(0, -last.length));
-        } else if (He.chars.length === 0 && He.setBash) {
-          He.setBash = false;
+        } else if (buffer.chars.length === 0 && buffer.setBash) {
+          buffer.setBash = false;
           draft.setMode("prompt");
         } else return;
         return true;
       }
-      let We = input !== "" ? input : Re;
-      if (!isNonSpacePrintable(We, key)) return;
-      let ze = We;
-      if (draft.value === "" && draft.mode === "prompt" && We.startsWith("!")) {
+      let typedInput = input !== "" ? input : fallbackInput;
+      if (!isNonSpacePrintable(typedInput, key)) return;
+      let textToInsert = typedInput;
+      if (draft.value === "" && draft.mode === "prompt" && typedInput.startsWith("!")) {
         draft.setMode("bash");
-        He.setBash = true;
-        ze = We.slice(1);
+        buffer.setBash = true;
+        textToInsert = typedInput.slice(1);
       }
-      draft.setValueRaw(draft.value + ze);
-      He.chars.push(...ze);
+      draft.setValueRaw(draft.value + textToInsert);
+      buffer.chars.push(...textToInsert);
       return true;
     },
     {
@@ -180,20 +188,20 @@ function useIdleReturnTypeThrough({ onScreen, dialogStore, draft }) {
   return null;
 }
 //@ chunk-18hwfzwa.js:50624-50719 placement
-function askBuffer(h, idleQuotaResumePayload) {
-  if (h.current?.ask !== idleQuotaResumePayload)
-    h.current = {
-      ask: idleQuotaResumePayload,
+function askBuffer(bufferRef, askId) {
+  if (bufferRef.current?.ask !== askId)
+    bufferRef.current = {
+      ask: askId,
       chars: [],
       setBash: false,
     };
-  return h.current;
+  return bufferRef.current;
 }
 //@ chunk-18hwfzwa.js:50719-50809 placement
 function selectIdleQuotaResumePayload(dialogStore) {
-  let x = topAutoDialog(dialogStore.getState());
-  let payload = x?.payload;
-  return x?.kind === COLD_RESUME_QUOTA && isIdleTriggeredPayload(payload) ? payload : undefined;
+  let dialog = topAutoDialog(dialogStore.getState());
+  let payload = dialog?.payload;
+  return dialog?.kind === COLD_RESUME_QUOTA && isIdleTriggeredPayload(payload) ? payload : undefined;
 }
 //@ chunk-18hwfzwa.js:50809-50897 placement
 function isIdleTriggeredPayload(payload) {

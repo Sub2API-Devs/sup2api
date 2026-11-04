@@ -8,33 +8,33 @@
  * pieces: chunk-w1b4bxwt.js (1)
  * attribution: placement 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useIsScreenReaderEnabled } from "../ink/components/ErrorBoundary.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box } from "../ink/components/Text.js";
 
 //@ chunk-w1b4bxwt.js:299-659 placement
 function Blockquote(props) {
-  let l = w(4);
+  let $ = useMemoCache(4);
   let { multiline, children } = props;
   if (useIsScreenReaderEnabled()) {
-    let o;
-    if (l[0] !== children) {
-      o = jsxProd_default(Box, {
+    let childText;
+    if ($[0] !== children) {
+      childText = jsxProd_default(Box, {
         "aria-role": "blockquote",
         children,
       });
-      l[0] = children;
-      l[1] = o;
-    } else o = l[1];
-    return o;
+      $[0] = children;
+      $[1] = childText;
+    } else childText = $[1];
+    return childText;
   }
   if (!multiline) {
     return children;
   }
-  let o;
-  if (l[2] !== children) {
-    o = jsxProd_default(Box, {
+  let text;
+  if ($[2] !== children) {
+    text = jsxProd_default(Box, {
       borderStyle: "single",
       borderLeft: true,
       borderRight: false,
@@ -44,9 +44,9 @@ function Blockquote(props) {
       paddingLeft: 1,
       children,
     });
-    l[2] = children;
-    l[3] = o;
-  } else o = l[3];
-  return o;
+    $[2] = children;
+    $[3] = text;
+  } else text = $[3];
+  return text;
 }
 export { Blockquote };

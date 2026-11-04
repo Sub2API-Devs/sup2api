@@ -8,7 +8,7 @@
  * pieces: chunk-bzr73sfg.js (13)
  * attribution: placement 13
  */
-import { init_react_production, qt } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, createContext } from "../../vendor/react/cjs/react.production.js";
 import { env } from "../utils/env.js";
 import { getTerminalProbeState, setXtversionName, keys } from "./terminalCapabilities.js";
 import {
@@ -29,11 +29,18 @@ import {
   DECSTBM_ENABLED,
 } from "./terminal.js";
 import { DEC } from "./termio/dec.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-bzr73sfg.js:229377-229381 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bzr73sfg.js:229377", () => {
+  init_react_production();
+});
 //@ chunk-bzr73sfg.js:229381-229398 placement
-var InputNowContext = qt(null);
+var InputNowContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bzr73sfg.js:229381", () => {
+  InputNowContext = createContext(null);
+});
 //@ chunk-bzr73sfg.js:229398-229412 placement
 var noopCursorDeclaration = () => {};
 //@ chunk-bzr73sfg.js:229412-229482 placement
@@ -73,9 +80,9 @@ function describeCellPixels() {
  * 重新查询单元格像素尺寸（终端重新获得焦点后，字体/缩放可能变了）。
  */
 async function reprobeCellSize(querier) {
-  let [u] = await Promise.all([querier.send(cellSizeQuery()), querier.flush()]);
-  if (u) {
-    recordCellPixels(u);
+  let [cellPixels] = await Promise.all([querier.send(cellSizeQuery()), querier.flush()]);
+  if (cellPixels) {
+    recordCellPixels(cellPixels);
     logForDebugging(`Cell size asked again: ${describeCellPixels()}`);
   }
 }
@@ -103,7 +110,7 @@ function releaseOwedReplyHold(app, stdin) {
  * 启动时探测终端能力（扩展键、kitty 键盘、XTVERSION、OSC 回复、tmux）。
  */
 async function probeTerminalCapabilities(querier, capabilities, timeoutMs = CAPABILITY_PROBE_TIMEOUT_MS) {
-  let m = armCapabilitiesDeadline(capabilities, timeoutMs);
+  let cancelDeadline = armCapabilitiesDeadline(capabilities, timeoutMs);
   let tmuxFactsPromise = env.TMUX
     ? queryTmuxPaneInfo().then((facts) => ({
         facts,
@@ -119,43 +126,49 @@ async function probeTerminalCapabilities(querier, capabilities, timeoutMs = CAPA
     canAskXtversion ? querier.send(xtversion()) : Promise.resolve(undefined),
     askKeys ? querier.send(kittyKeyboard()) : Promise.resolve(undefined),
     askProgramStatus
-      ? querier.send(programStatusQuery()).then((ee) => {
-          if (ee) capabilities.answer("programStatus", true, "probe: OSC 7501 reply");
-          return ee;
+      ? querier.send(programStatusQuery()).then((programStatusReply) => {
+          if (programStatusReply) capabilities.answer("programStatus", true, "probe: OSC 7501 reply");
+          return programStatusReply;
         })
       : Promise.resolve(undefined),
     querier.flush(),
   ]);
-  clearTimeout(m);
+  clearTimeout(cancelDeadline);
   if (xtversion_2) {
-    let ee = xtversion_2.name;
-    if (env.TMUX && ee.startsWith("tmux ")) {
+    let terminalName = xtversion_2.name;
+    if (env.TMUX && terminalName.startsWith("tmux ")) {
       let termtype = (await tmuxFactsPromise)?.facts?.termtype;
-      if (termtype) ee = termtype;
+      if (termtype) terminalName = termtype;
     }
-    setXtversionName(ee);
-    logForDebugging(`XTVERSION: terminal identified as "${ee}"`);
-    if (!env.TMUX) capabilities.answer("itermImages", supportsItermImages(ee), `probe: XTVERSION ${ee}`);
+    setXtversionName(terminalName);
+    logForDebugging(`XTVERSION: terminal identified as "${terminalName}"`);
+    if (!env.TMUX)
+      capabilities.answer(
+        "itermImages",
+        supportsItermImages(terminalName),
+        `probe: XTVERSION ${terminalName}`,
+      );
   } else
     logForDebugging(
       canAskXtversion
         ? "XTVERSION: no reply (terminal ignored query)"
         : "XTVERSION: not asked (VTE before 0.53 would show the query as text)",
     );
-  let U = kittyFlags
+  let kittyStatus = kittyFlags
     ? `CSI ? u flags=${kittyFlags.flags}`
     : askKeys
       ? "no reply to CSI ? u"
       : "CSI ? u not asked";
-  let L = kittyFlags !== undefined && capabilities.answer("extendedKeys", true, `probe: ${U}`);
+  let keysAnswered =
+    kittyFlags !== undefined && capabilities.answer("extendedKeys", true, `probe: ${kittyStatus}`);
   if (askKeys && (kittyFlags !== undefined || firstFlushed))
-    capabilities.answer("kittyKeyboard", kittyFlags !== undefined, `probe: ${U}`);
+    capabilities.answer("kittyKeyboard", kittyFlags !== undefined, `probe: ${kittyStatus}`);
   if (askProgramStatus && programStatusReply === undefined && firstFlushed)
     capabilities.answer("programStatus", false, "probe: no reply to OSC 7501 ; ?");
   let skipDecrqm = !xtversion_2 || env.TERM_PROGRAM === "Apple_Terminal";
   let askGraphics = !skipDecrqm && !env.TMUX && capabilities.get("kittyGraphics").state === "pending";
   let askMousePixels = !skipDecrqm && capabilities.get("mousePixels").state === "pending";
-  let X = armCapabilitiesDeadline(capabilities, timeoutMs);
+  let cancelDeadline_2 = armCapabilitiesDeadline(capabilities, timeoutMs);
   let [syncReply, da1Reply, cellSizeReply, pixelsReply, secondFlushed] = await Promise.all([
     skipDecrqm ? Promise.resolve(undefined) : querier.send(decrqm(DEC.SYNCHRONIZED_UPDATE)),
     askGraphics ? querier.send(kittyGraphicsQuery()) : Promise.resolve(undefined),
@@ -187,43 +200,52 @@ async function probeTerminalCapabilities(querier, capabilities, timeoutMs = CAPA
       `probe: DECRPM 1016 status=${pixelsReply.status}, cell ${describeCellPixels()}`,
     );
   if (env.TMUX) {
-    let ee = {
+    let tmuxQuery = {
       versionName: xtversion_2?.name,
       hasPane: Boolean(env.TMUX_PANE),
     };
-    let ne = xtversion_2?.name.startsWith("tmux ") === true ? await tmuxFactsPromise : undefined;
-    let facts = ne?.facts;
+    let tmuxPaneResult = xtversion_2?.name.startsWith("tmux ") === true ? await tmuxFactsPromise : undefined;
+    let facts = tmuxPaneResult?.facts;
     let terminalProbeState = getTerminalProbeState();
     let tmuxPane = terminalProbeState.tmuxPane;
     terminalProbeState.tmuxPane =
-      facts === undefined || !ee.hasPane
+      facts === undefined || !tmuxQuery.hasPane
         ? tmuxPane
         : {
             ...facts.pane,
             passthrough: tmuxPane?.passthrough ?? facts.pane.passthrough,
           };
-    terminalProbeState.tmuxPaneAnsweredAt = facts !== undefined && ee.hasPane ? ne?.at : undefined;
-    let ue = probeTmuxPassthrough(facts, ee);
-    capabilities.answer("kittyGraphics", ue.kittyGraphics.value, `probe: ${ue.kittyGraphics.source}`);
-    capabilities.answer("itermImages", ue.itermImages.value, `probe: ${ue.itermImages.source}`);
+    terminalProbeState.tmuxPaneAnsweredAt =
+      facts !== undefined && tmuxQuery.hasPane ? tmuxPaneResult?.at : undefined;
+    let passthroughProbe = probeTmuxPassthrough(facts, tmuxQuery);
+    capabilities.answer(
+      "kittyGraphics",
+      passthroughProbe.kittyGraphics.value,
+      `probe: ${passthroughProbe.kittyGraphics.source}`,
+    );
+    capabilities.answer(
+      "itermImages",
+      passthroughProbe.itermImages.value,
+      `probe: ${passthroughProbe.itermImages.source}`,
+    );
     logForDebugging(
-      facts === undefined || !ee.hasPane
-        ? `tmux images: kitty no, iTerm2 no (${ue.itermImages.source})`
-        : `tmux images: passthrough ${facts.pane.passthrough}, focus events ${facts.pane.hasFocusEvents ? "on" : "off"}, kitty ${ue.kittyGraphics.value ? "yes" : "no"}, iTerm2 ${ue.itermImages.value ? "yes" : "no"}, pane's top-left at row ${facts.pane.top}, column ${facts.pane.left} (from 0)`,
+      facts === undefined || !tmuxQuery.hasPane
+        ? `tmux images: kitty no, iTerm2 no (${passthroughProbe.itermImages.source})`
+        : `tmux images: passthrough ${facts.pane.passthrough}, focus events ${facts.pane.hasFocusEvents ? "on" : "off"}, kitty ${passthroughProbe.kittyGraphics.value ? "yes" : "no"}, iTerm2 ${passthroughProbe.itermImages.value ? "yes" : "no"}, pane's top-left at row ${facts.pane.top}, column ${facts.pane.left} (from 0)`,
     );
   }
-  clearTimeout(X);
+  clearTimeout(cancelDeadline_2);
   capabilities.deadline();
   logForDebugging(
     "Terminal capabilities: " +
       keys
-        .map((ee) => {
-          let ae = capabilities.get(ee);
-          let ne = ae.state === "settled" ? ae.value : ae.likely;
-          return `${ee}=${ne ? "yes" : "no"} (${ae.source})`;
+        .map((capability) => {
+          let reading = capabilities.get(capability);
+          let value = reading.state === "settled" ? reading.value : reading.likely;
+          return `${capability}=${value ? "yes" : "no"} (${reading.source})`;
         })
         .join("; ") +
-      (L ? "" : `; terminal said: ${U}`) +
+      (keysAnswered ? "" : `; terminal said: ${kittyStatus}`) +
       (syncReply
         ? ""
         : skipDecrqm

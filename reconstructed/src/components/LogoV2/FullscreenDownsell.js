@@ -10,7 +10,7 @@
  */
 import { getFullscreenDecision } from "../../utils/fullscreen.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import { useNoticeImpression } from "./CondensedLogo.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
@@ -33,39 +33,39 @@ function isFullscreenDownsellActive() {
 }
 //@ chunk-ag5x7vhf.js:84857-85038 placement
 function FullscreenDownsellNotice() {
-  let h = w(3);
+  let $ = useMemoCache(3);
   let { storageV5 } = useTheme_2();
-  let x;
-  if (h[0] !== storageV5) {
-    x = () => recordFullscreenDownsellSeen(storageV5);
-    h[0] = storageV5;
-    h[1] = x;
-  } else x = h[1];
-  useNoticeImpression("fullscreen-downsell", x);
-  let k;
-  if (h[2] === MEMO_CACHE_SENTINEL) {
-    k = jsxProd_default(FlickerFreeRenderingNotice, {});
-    h[2] = k;
-  } else k = h[2];
-  return k;
+  let onShown;
+  if ($[0] !== storageV5) {
+    onShown = () => recordFullscreenDownsellSeen(storageV5);
+    $[0] = storageV5;
+    $[1] = onShown;
+  } else onShown = $[1];
+  useNoticeImpression("fullscreen-downsell", onShown);
+  let notice;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    notice = jsxProd_default(FlickerFreeRenderingNotice, {});
+    $[2] = notice;
+  } else notice = $[2];
+  return notice;
 }
 //@ chunk-ag5x7vhf.js:85038-85454 placement
 /**
  * 记录全屏下推（downsell）提示被看过一次；达到次数后把 settings.tui=fullscreen 持久化（tengu_fullscreen_downsell_persisted）。
  */
 async function recordFullscreenDownsellSeen(storageV5) {
-  let h = 0;
-  saveGlobalConfig((x) => {
-    h = (x.fullscreenDownsellSeenCount ?? 0) + 1;
+  let seenCount = 0;
+  saveGlobalConfig((config) => {
+    seenCount = (config.fullscreenDownsellSeenCount ?? 0) + 1;
     return {
-      ...x,
-      fullscreenDownsellSeenCount: h,
+      ...config,
+      fullscreenDownsellSeenCount: seenCount,
     };
   }, storageV5);
   logEvent("tengu_fullscreen_downsell_shown", {
-    seen_count: h,
+    seen_count: seenCount,
   });
-  if (h >= DOWNSELL_MAX_VIEWS && getInitialSettings_2().tui === undefined) {
+  if (seenCount >= DOWNSELL_MAX_VIEWS && getInitialSettings_2().tui === undefined) {
     let { error } = await updateSettingsForSource(
       "userSettings",
       {
@@ -81,7 +81,7 @@ async function recordFullscreenDownsellSeen(storageV5) {
       return;
     }
     logEvent("tengu_fullscreen_downsell_persisted", {
-      seen_count: h,
+      seen_count: seenCount,
     });
   }
 }
@@ -90,10 +90,10 @@ async function recordFullscreenDownsellSeen(storageV5) {
  * 全屏（无闪烁渲染）说明：滚动、选中即复制、点击移动光标/展开、/tui default 退回。
  */
 function FlickerFreeRenderingNotice() {
-  let m = w(1);
-  let h;
-  if (m[0] === MEMO_CACHE_SENTINEL) {
-    h = jsxProd_default_2(Box, {
+  let $ = useMemoCache(1);
+  let notice;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    notice = jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
         jsxProd_default_2(Box, {
@@ -124,8 +124,8 @@ function FlickerFreeRenderingNotice() {
         }),
       ],
     });
-    m[0] = h;
-  } else h = m[0];
-  return h;
+    $[0] = notice;
+  } else notice = $[0];
+  return notice;
 }
 export { isFullscreenDownsellActive, FullscreenDownsellNotice };

@@ -86,15 +86,15 @@ class TranscriptStream {
     this._getTranscriptLength = getTranscriptLength;
     this._coalescer = createFlushBatcher({
       scheduleTimeout,
-      onFlush: (He) => {
-        let We = He !== null && !this._isStreamingTextVisible() ? null : He;
-        this.previewStore.setRaw(We);
+      onFlush: (text) => {
+        let visibleText = text !== null && !this._isStreamingTextVisible() ? null : text;
+        this.previewStore.setRaw(visibleText);
         if (
           !this._streamingTextShown &&
-          We !== null &&
+          visibleText !== null &&
           this.previewStore.getState().transformed === null &&
-          this._previewOnScreen(We, getStreamingPreviewHold(), turnHasToolUse) &&
-          isLineNearlyFull(We, getColumns())
+          this._previewOnScreen(visibleText, getStreamingPreviewHold(), turnHasToolUse) &&
+          isLineNearlyFull(visibleText, getColumns())
         ) {
           this._streamingTextShown = true;
           onStreamingTextShown?.();
@@ -102,100 +102,108 @@ class TranscriptStream {
       },
     });
   }
-  _previewOnScreen(h, x, D) {
-    switch (x) {
+  _previewOnScreen(text, hold, turnHasToolUse) {
+    switch (hold) {
       case "none":
         return true;
       case "hidden":
         return false;
       case "focus":
-        return !D() && this._snapshot.streamingToolUses.length === 0 && endsBeforeLastLine(h);
+        return !turnHasToolUse() && this._snapshot.streamingToolUses.length === 0 && endsBeforeLastLine(text);
     }
   }
   subscribe = this._changed.subscribe;
   getSnapshot = () => this._snapshot;
-  setStreamingToolUses = (h) => {
+  setStreamingToolUses = (next) => {
     let streamingToolUses = this._snapshot.streamingToolUses;
-    let D = typeof h === "function" ? h(streamingToolUses) : h;
-    if (D === streamingToolUses) return;
+    let nextToolUses = typeof next === "function" ? next(streamingToolUses) : next;
+    if (nextToolUses === streamingToolUses) return;
     this._publish({
-      streamingToolUses: D,
+      streamingToolUses: nextToolUses,
     });
   };
-  setSettledReply = (h) => {
-    if (h.length === 0 && this._snapshot.settledReply.length === 0) return;
+  setSettledReply = (reply) => {
+    if (reply.length === 0 && this._snapshot.settledReply.length === 0) return;
     this._publish({
-      settledReply: h.length === 0 ? completedShellLines : h,
+      settledReply: reply.length === 0 ? completedShellLines : reply,
     });
   };
-  setStreamingThinking = (h) => {
+  setStreamingThinking = (next) => {
     let streamingThinking = this._snapshot.streamingThinking;
-    let D = typeof h === "function" ? h(streamingThinking) : h;
-    if (D === streamingThinking) return;
+    let nextThinking = typeof next === "function" ? next(streamingThinking) : next;
+    if (nextThinking === streamingThinking) return;
     this._cancelThinkingHide?.();
     this._cancelThinkingHide = null;
     this._publish({
-      streamingThinking: D,
+      streamingThinking: nextThinking,
     });
     if (this._disposed) return;
-    if (D && !D.isStreaming && D.streamingEndedAt) {
-      let L = TURN_RESULT_TIMEOUT_MS - (Date.now() - D.streamingEndedAt);
-      if (L > 0)
+    if (nextThinking && !nextThinking.isStreaming && nextThinking.streamingEndedAt) {
+      let hideDelayMs = TURN_RESULT_TIMEOUT_MS - (Date.now() - nextThinking.streamingEndedAt);
+      if (hideDelayMs > 0)
         this._cancelThinkingHide = this._scheduleTimeout(() => {
           this._cancelThinkingHide = null;
           this.setStreamingThinking(null);
-        }, L);
+        }, hideDelayMs);
       else this.setStreamingThinking(null);
     }
   };
-  setUserInputOnProcessing = (h, x, D = false) => {
+  setUserInputOnProcessing = (text, origin, waitedInQueue = false) => {
     this._showPromptsOnProcessing(
-      h,
-      x,
-      h !== undefined && h === this._snapshot.userInputOnProcessing
+      text,
+      origin,
+      text !== undefined && text === this._snapshot.userInputOnProcessing
         ? this._snapshot.followingPromptsOnProcessing
         : pendingShellLines,
-      D,
+      waitedInQueue,
     );
   };
-  showDrainedPrompts(h, x) {
-    this._showPromptsOnProcessing(h.text, h.origin, x.length === 0 ? pendingShellLines : x, true);
+  showDrainedPrompts(prompt, followingPrompts) {
+    this._showPromptsOnProcessing(
+      prompt.text,
+      prompt.origin,
+      followingPrompts.length === 0 ? pendingShellLines : followingPrompts,
+      true,
+    );
   }
-  _showPromptsOnProcessing(h, x, D, L) {
-    if (h !== undefined) this.placeholderTracker.start(this._getTranscriptLength(), h);
+  _showPromptsOnProcessing(text, origin, followingPrompts, waitedInQueue) {
+    if (text !== undefined) this.placeholderTracker.start(this._getTranscriptLength(), text);
     else this.placeholderTracker.stop();
-    let ee = h === undefined ? undefined : x;
-    let ke = h !== undefined && L;
+    let placeholderOrigin = text === undefined ? undefined : origin;
+    let placeholderWaitedInQueue = text !== undefined && waitedInQueue;
     if (
-      h === this._snapshot.userInputOnProcessing &&
-      ke === this._snapshot.placeholderWaitedInQueue &&
-      stableStringifySafe(ee) === stableStringifySafe(this._snapshot.placeholderOrigin) &&
-      D.length === this._snapshot.followingPromptsOnProcessing.length &&
-      D.every((Re, Be) => {
-        let He = this._snapshot.followingPromptsOnProcessing[Be];
-        return Re.text === He?.text && stableStringifySafe(Re.origin) === stableStringifySafe(He.origin);
+      text === this._snapshot.userInputOnProcessing &&
+      placeholderWaitedInQueue === this._snapshot.placeholderWaitedInQueue &&
+      stableStringifySafe(placeholderOrigin) === stableStringifySafe(this._snapshot.placeholderOrigin) &&
+      followingPrompts.length === this._snapshot.followingPromptsOnProcessing.length &&
+      followingPrompts.every((prompt, index) => {
+        let previous = this._snapshot.followingPromptsOnProcessing[index];
+        return (
+          prompt.text === previous?.text &&
+          stableStringifySafe(prompt.origin) === stableStringifySafe(previous.origin)
+        );
       })
     )
       return;
     this._publish({
-      userInputOnProcessing: h,
-      placeholderOrigin: ee,
-      followingPromptsOnProcessing: D,
-      placeholderWaitedInQueue: ke,
+      userInputOnProcessing: text,
+      placeholderOrigin,
+      followingPromptsOnProcessing: followingPrompts,
+      placeholderWaitedInQueue,
     });
   }
-  trackTranscriptWrite(h, x) {
-    if (this.placeholderTracker.track(h, x) && this._snapshot.userInputOnProcessing !== undefined)
+  trackTranscriptWrite(shellId, prompt) {
+    if (this.placeholderTracker.track(shellId, prompt) && this._snapshot.userInputOnProcessing !== undefined)
       this._publish({
         userInputOnProcessing: undefined,
         placeholderOrigin: undefined,
         followingPromptsOnProcessing: pendingShellLines,
         placeholderWaitedInQueue: false,
       });
-    if (x !== h) this._sweepResolvedToolProgress(x);
+    if (prompt !== shellId) this._sweepResolvedToolProgress(prompt);
   }
-  awaitModelFor(h) {
-    let flattened = h.filter(isHumanTurnOrQueuedCommand).flatMap((D) => shortUuid(D) ?? []);
+  awaitModelFor(prompts) {
+    let flattened = prompts.filter(isHumanTurnOrQueuedCommand).flatMap((prompt) => shortUuid(prompt) ?? []);
     if (flattened.length === 0) return;
     this._publish({
       promptsAwaitingModel: new Set([...this._snapshot.promptsAwaitingModel, ...flattened]),
@@ -208,33 +216,33 @@ class TranscriptStream {
       promptsAwaitingModel: drainedShells,
     });
   };
-  emitToolProgress = (h) => {
+  emitToolProgress = (progress) => {
     let toolProgress = this._snapshot.toolProgress;
-    let D = applyToolHint(
-      h.kind === "bash_mode_progress"
+    let nextProgress = applyToolHint(
+      progress.kind === "bash_mode_progress"
         ? applyToolHint(toolProgress, {
             kind: "clear",
             toolUseId: DRAINED_SHELL_LINE,
           })
         : toolProgress,
-      h,
+      progress,
     );
-    if (D === toolProgress) return;
+    if (nextProgress === toolProgress) return;
     this._publish({
-      toolProgress: D,
+      toolProgress: nextProgress,
     });
   };
   showDrainedShellLine(input, verbose) {
-    let D = {
+    let hint = {
       kind: "bash_mode_progress",
       toolUseId: DRAINED_SHELL_LINE,
       input,
       progress: null,
       verbose,
     };
-    this.emitToolProgress(D);
+    this.emitToolProgress(hint);
     return () => {
-      if (this._snapshot.toolProgress.get(DRAINED_SHELL_LINE) === D)
+      if (this._snapshot.toolProgress.get(DRAINED_SHELL_LINE) === hint)
         this.emitToolProgress({
           kind: "clear",
           toolUseId: DRAINED_SHELL_LINE,
@@ -247,19 +255,20 @@ class TranscriptStream {
       toolProgress: inFlightByShell,
     });
   }
-  _sweepResolvedToolProgress(h) {
+  _sweepResolvedToolProgress(shells) {
     let toolProgress = this._snapshot.toolProgress;
     if (toolProgress.size === 0) return;
-    let D = new Set();
-    for (let ee of h) {
-      if (ee.type !== "user" || !Array.isArray(ee.message.content)) continue;
-      for (let ke of ee.message.content)
-        if (ke.type === "tool_result" && toolProgress.has(ke.tool_use_id)) D.add(ke.tool_use_id);
+    let resolvedIds = new Set();
+    for (let shell of shells) {
+      if (shell.type !== "user" || !Array.isArray(shell.message.content)) continue;
+      for (let block of shell.message.content)
+        if (block.type === "tool_result" && toolProgress.has(block.tool_use_id))
+          resolvedIds.add(block.tool_use_id);
     }
-    let L = dropToolHints(toolProgress, D);
-    if (L === toolProgress) return;
+    let nextProgress = dropToolHints(toolProgress, resolvedIds);
+    if (nextProgress === toolProgress) return;
     this._publish({
-      toolProgress: L,
+      toolProgress: nextProgress,
     });
   }
   get responseLength() {
@@ -269,7 +278,7 @@ class TranscriptStream {
     return this._inFlightMessageId;
   }
   get isMainResponseStreaming() {
-    let last = this._apiMetrics.findLast((x) => x.id == null);
+    let last = this._apiMetrics.findLast((entry) => entry.id == null);
     return last !== undefined && last.outputTokens == null;
   }
   get isMainRequestAwaitingResponse() {
@@ -278,8 +287,8 @@ class TranscriptStream {
   noteMainRequestAnnounced = () => {
     this._isMainRequestAwaitingResponse = true;
   };
-  addResponseLength = (h) => {
-    this._responseLength += h;
+  addResponseLength = (length) => {
+    this._responseLength += length;
     let now = Date.now();
     if (now - this._lastTokenFlushTime >= DRAIN_POLL_MS) {
       this._lastTokenFlushTime = now;
@@ -287,7 +296,7 @@ class TranscriptStream {
         tokenCount: Math.round(this._responseLength / 4),
       });
     }
-    if (h > 0 && this._apiMetrics.length > 0) {
+    if (length > 0 && this._apiMetrics.length > 0) {
       let last = this._apiMetrics.at(-1);
       if (last.outputTokens == null) {
         last.lastTokenTime = Date.now();
@@ -295,9 +304,9 @@ class TranscriptStream {
       }
     }
   };
-  onResponseLength = (h) => {
-    if (h.op === "reset") this._zeroResponseLength();
-    else this.addResponseLength(h.delta);
+  onResponseLength = (nowMs) => {
+    if (nowMs.op === "reset") this._zeroResponseLength();
+    else this.addResponseLength(nowMs.delta);
   };
   _zeroResponseLength() {
     if (this._responseLength === 0) return;
@@ -306,34 +315,36 @@ class TranscriptStream {
       tokenCount: 0,
     });
   }
-  recordApiMetricsEvent = (h) => {
-    if (h.type === "start" && h.messageId != null) this._inFlightMessageId = h.messageId;
-    let x =
-      h.type === "thinking_signature" && isReplBridgeActive()
-        ? (this._apiMetrics.findLast((D) => D.id == null)?.thinkingTokenEstimate ?? 0)
+  recordApiMetricsEvent = (event) => {
+    if (event.type === "start" && event.messageId != null) this._inFlightMessageId = event.messageId;
+    let baseline =
+      event.type === "thinking_signature" && isReplBridgeActive()
+        ? (this._apiMetrics.findLast((entry) => entry.id == null)?.thinkingTokenEstimate ?? 0)
         : undefined;
     this._responseLength = applyStreamTokenEvent({
       entries: this._apiMetrics,
       responseLength: this._responseLength,
-      event: h,
+      event,
     });
-    if (h.type === "thinking_progress" && isReplBridgeActive()) {
-      let last = this._apiMetrics.findLast((L) => L.id == null);
+    if (event.type === "thinking_progress" && isReplBridgeActive()) {
+      let last = this._apiMetrics.findLast((entry) => entry.id == null);
       if (last?.thinkingTokenEstimate != null)
         enqueueTaskNotification({
           type: "system",
           subtype: "thinking_tokens",
           estimated_tokens: last.thinkingTokenEstimate,
-          estimated_tokens_delta: h.estimatedTokensDelta,
+          estimated_tokens_delta: event.estimatedTokensDelta,
         });
-    } else if (x !== undefined) {
-      let thinkingTokenEstimate = this._apiMetrics.findLast((L) => L.id == null)?.thinkingTokenEstimate;
-      if (thinkingTokenEstimate != null && thinkingTokenEstimate > x)
+    } else if (baseline !== undefined) {
+      let thinkingTokenEstimate = this._apiMetrics.findLast(
+        (entry) => entry.id == null,
+      )?.thinkingTokenEstimate;
+      if (thinkingTokenEstimate != null && thinkingTokenEstimate > baseline)
         enqueueTaskNotification({
           type: "system",
           subtype: "thinking_tokens",
           estimated_tokens: thinkingTokenEstimate,
-          estimated_tokens_delta: thinkingTokenEstimate - x,
+          estimated_tokens_delta: thinkingTokenEstimate - baseline,
         });
     }
   };
@@ -345,21 +356,21 @@ class TranscriptStream {
   clearApiMetrics() {
     this._apiMetrics = [];
   }
-  applyStreamingText = (h) => {
+  applyStreamingText = (text) => {
     if (this._disposed) {
-      if (h(this._coalescer.peek()) === null) this._coalescer.clear();
+      if (text(this._coalescer.peek()) === null) this._coalescer.clear();
       return;
     }
-    this._coalescer.apply(h);
+    this._coalescer.apply(text);
   };
-  applyTransformedStreamingText = (h) => {
-    if (h !== null && h !== "" && !this._isStreamingTextVisible()) return;
-    this.previewStore.setTransformed(h);
+  applyTransformedStreamingText = (text) => {
+    if (text !== null && text !== "" && !this._isStreamingTextVisible()) return;
+    this.previewStore.setTransformed(text);
   };
-  applyStreamingRewrite = (h) => {
-    if (h !== null && !this._isStreamingTextVisible()) return;
-    if (h !== null) this._coalescer.flushNow();
-    this.previewStore.setRewrite(h);
+  applyStreamingRewrite = (rewrite) => {
+    if (rewrite !== null && !this._isStreamingTextVisible()) return;
+    if (rewrite !== null) this._coalescer.flushNow();
+    this.previewStore.setRewrite(rewrite);
   };
   peekStreamingText() {
     return this._coalescer.peek();
@@ -390,10 +401,10 @@ class TranscriptStream {
     this._cancelThinkingHide = null;
     this._coalescer.dispose();
   }
-  _publish(h) {
+  _publish(patch) {
     this._snapshot = {
       ...this._snapshot,
-      ...h,
+      ...patch,
     };
     try {
       this._changed.emit();
@@ -401,17 +412,17 @@ class TranscriptStream {
       logError(error);
     }
   }
-  _mirrorTiming(h) {
+  _mirrorTiming(timing) {
     try {
-      this._onTimingChange(h);
+      this._onTimingChange(timing);
     } catch (error) {
       logError(error);
     }
   }
 }
 //@ chunk-18hwfzwa.js:1510531-1510570 placement
-function clearIfAny(h) {
-  return h.length > 0 ? [] : h;
+function clearIfAny(list) {
+  return list.length > 0 ? [] : list;
 }
 //@ chunk-18hwfzwa.js:1510570-1510660 placement = buildTranscriptEntries (0.777)
 function isHumanTurnOrQueuedCommand(message) {

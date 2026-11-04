@@ -21,7 +21,7 @@ import { getAPIProvider, isFirstPartyAnthropicBaseUrl } from "../../utils/model/
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession, getGatewayAuth } from "../../bootstrap/state.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, booleanSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   errorMessage,
@@ -49,27 +49,26 @@ import { DESKTOP_3P_ENTRYPOINT } from "../../utils/entrypointKinds.js";
 import { withTimeout } from "../../utils/sleep.js";
 import { claudeCodeUserAgent } from "../../utils/http.js";
 import { LOCALHOST_NAMES } from "../../bridge/workSecret.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:231706-231792 placement
 /**
  * 把模型名解析成上游 wire id（Bedrock 时按 profile 与区域前缀处理）。
  */
-function resolveWireModelId(e) {
-  let bedrockRegionPrefix = getBedrockRegionPrefix(getAwsRegionSync());
-  let bedrockInferenceProfilesGuard = getBedrockInferenceProfilesGuard();
+function resolveWireModelId(model) {
+  let regionPrefix = getBedrockRegionPrefix(getAwsRegionSync());
+  let profiles = getBedrockInferenceProfilesGuard();
   return (
-    (bedrockInferenceProfilesGuard === undefined
-      ? undefined
-      : pickProfileForFoundationModel(e, bedrockInferenceProfilesGuard, bedrockRegionPrefix)) ??
-    withBedrockRegionPrefix(e, bedrockRegionPrefix)
+    (profiles === undefined ? undefined : pickProfileForFoundationModel(model, profiles, regionPrefix)) ??
+    withBedrockRegionPrefix(model, regionPrefix)
   );
 }
 //@ chunk-aepeg2w5.js:231792-231834 placement
 /**
  * 判断模型是否可解析成 provider 模型 id。
  */
-function hasProviderModelId(e, n) {
-  return resolveProviderModelId(e, n) !== undefined;
+function hasProviderModelId(provider, model) {
+  return resolveProviderModelId(provider, model) !== undefined;
 }
 //@ chunk-aepeg2w5.js:231834-231887 placement
 /**
@@ -82,8 +81,8 @@ function gatewayGeneration() {
 /**
  * 按 wire id 查网关模型的目录行 id。
  */
-function gatewayCatalogRowId(e) {
-  return findCatalogRowIdByWireId(e, {
+function gatewayCatalogRowId(wireId) {
+  return findCatalogRowIdByWireId(wireId, {
     provider: getAPIProvider(),
     generation: gatewayGeneration(),
     wireIdOf: gatewayModelIdFor,
@@ -101,7 +100,10 @@ class GatewaySeenState {
 /**
  * 网关 URL 状态的宿主作用域单例。
  */
-var gatewaySeenState = new HostScoped(() => new GatewaySeenState());
+var gatewaySeenState; // deferred: uses GatewaySeenState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:232372", () => {
+  gatewaySeenState = new HostScoped(() => new GatewaySeenState());
+});
 //@ chunk-aepeg2w5.js:232397-232434 placement
 /**
  * 取当前宿主的网关 URL 状态。
@@ -136,42 +138,57 @@ function noteGatewaySettled() {
   return gatewaySeenState.seenAt === url;
 }
 //@ chunk-aepeg2w5.js:232639-232785 placement
-var GATEWAY_HOST_CHECK_PATH = "/gateway-api/gateway-hosts/check";
-var MAX_HOST_CHECK_BYTES = 8192;
-var GatewayHostCheckSchema = DoctorLazy(() =>
-  u({
-    host: string(),
-    listed: M(),
-    served: M().nullable(),
-    canonical: string().optional().catch(undefined),
-  }),
-);
+var GATEWAY_HOST_CHECK_PATH; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_HOST_CHECK_BYTES;
+var GatewayHostCheckSchema;
+deferInit("chunk-aepeg2w5.js:232639", () => {
+  GATEWAY_HOST_CHECK_PATH = "/gateway-api/gateway-hosts/check";
+  MAX_HOST_CHECK_BYTES = 8192;
+  GatewayHostCheckSchema = DoctorLazy(() =>
+    objectSchema({
+      host: stringSchema(),
+      listed: booleanSchema(),
+      served: booleanSchema().nullable(),
+      canonical: stringSchema().optional().catch(undefined),
+    }),
+  );
+});
 //@ chunk-aepeg2w5.js:232785-232852 placement
 /**
  * 网关主机检查中可重试的错误（429/5xx）。
  */
-class GatewayHostCheckRetryableError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  kind;
-  constructor(e, n, kind) {
-    super(e, n);
-    this.kind = kind;
-  }
-}
+let GatewayHostCheckRetryableError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:232785", () => {
+  GatewayHostCheckRetryableError = class GatewayHostCheckRetryableError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    kind;
+    constructor(message, telemetry, kind) {
+      super(message, telemetry);
+      this.kind = kind;
+    }
+  };
+});
 //@ chunk-aepeg2w5.js:232852-232872 placement
 /**
  * 网关主机检查的一般失败（非 200、非 JSON）。
  */
-class GatewayHostCheckError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {}
+let GatewayHostCheckError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:232852", () => {
+  GatewayHostCheckError = class GatewayHostCheckError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {};
+});
 //@ chunk-aepeg2w5.js:232872-232948 placement
 /**
  * 临时暂停代理时钟后取 helper 的代理认证。
  */
 async function withProxyAuthHelper(helperClock) {
-  let n = helperClock?.pause();
+  let clock = helperClock?.pause();
   try {
     return await getProxyAuthFromHelper();
   } finally {
-    n?.();
+    clock?.();
   }
 }
 //@ chunk-aepeg2w5.js:232948-234232 placement
@@ -179,72 +196,75 @@ async function withProxyAuthHelper(helperClock) {
  * 调用 /gateway-api/gateway-hosts/check 确认网关主机。
  */
 async function queryGatewayHostCheck(
-  e,
-  n,
+  host,
+  claimedHost,
   { timeoutMs, presentClientCertificate, authorization, helperClock },
 ) {
-  let S = new URL(GATEWAY_HOST_CHECK_PATH, `https://${e}`);
-  S.searchParams.set("host", n);
+  let url = new URL(GATEWAY_HOST_CHECK_PATH, `https://${host}`);
+  url.searchParams.set("host", claimedHost);
   if (authorization !== undefined && !/^[\x20-\x7e]+$/.test(authorization)) authorization = undefined;
-  let href = S.href;
+  let href = url.href;
   let usableProxyUrl = getUsableProxyUrl();
-  let x = usableProxyUrl !== undefined && !shouldBypassProxy(href);
-  if (x) await withProxyAuthHelper(helperClock);
-  let P = {
+  let viaProxy = usableProxyUrl !== undefined && !shouldBypassProxy(href);
+  if (viaProxy) await withProxyAuthHelper(helperClock);
+  let attempt = {
     timedOut: false,
   };
-  let F = await (async () => {
-    let j = await requestWithProxyAuthRetry(S, {
-      proxyUrl: x ? usableProxyUrl : undefined,
+  let body = await (async () => {
+    let answer = await requestWithProxyAuthRetry(url, {
+      proxyUrl: viaProxy ? usableProxyUrl : undefined,
       presentClientCertificate,
       authorization,
       caCerts: getCACertificates(),
       timeoutMs,
       helperClock,
-      attempt: P,
+      attempt,
     });
-    if (j.status === 429 || (j.status >= 500 && j.status <= 599))
+    if (answer.status === 429 || (answer.status >= 500 && answer.status <= 599))
       throw new GatewayHostCheckRetryableError(
-        `HTTP ${j.status}`,
+        `HTTP ${answer.status}`,
         "gateway host check answered a 429 or 5xx status",
         "http-status",
       );
-    if (j.status !== 200)
-      throw new GatewayHostCheckError(`HTTP ${j.status}`, "gateway host check answered a non-200 status");
-    return j.body;
+    if (answer.status !== 200)
+      throw new GatewayHostCheckError(
+        `HTTP ${answer.status}`,
+        "gateway host check answered a non-200 status",
+      );
+    return answer.body;
   })().catch((error) => {
     if (
-      !P.timedOut &&
+      !attempt.timedOut &&
       (error instanceof GatewayHostCheckError || error instanceof GatewayHostCheckRetryableError)
     )
       throw error;
     throw new GatewayHostCheckRetryableError(
-      P.timedOut ? HOST_CHECK_TIMEOUT_MESSAGE : classifyTlsError(error),
+      attempt.timedOut ? HOST_CHECK_TIMEOUT_MESSAGE : classifyTlsError(error),
       "gateway host check got no answer",
       "no-answer",
     );
   });
-  let L;
+  let parsed;
   try {
-    L = jsonParse(F);
+    parsed = jsonParse(body);
   } catch {
     throw new GatewayHostCheckError(
       "not a host-check answer (not JSON)",
       "gateway host check answer was not JSON",
     );
   }
-  let G = GatewayHostCheckSchema().safeParse(L);
-  if (!G.success)
+  let validated = GatewayHostCheckSchema().safeParse(parsed);
+  if (!validated.success)
     throw new GatewayHostCheckError(
       "not a host-check answer (unrecognized JSON)",
       "gateway host check answer was not a host-check object",
     );
-  if (G.data.host !== n.toLowerCase().replace(/\.$/, ""))
+  if (validated.data.host !== claimedHost.toLowerCase().replace(/\.$/, ""))
     throw new GatewayHostCheckError(
       "it answered about another hostname",
       "gateway host check answered about another hostname",
     );
-  return G.data;
+  return validated.data;
 }
 //@ chunk-aepeg2w5.js:234232-234436 placement
 var HOST_CHECK_TIMEOUT_MESSAGE = "timed out";
@@ -259,7 +279,7 @@ var TLS_REFUSED_MESSAGE = "TLS connection not accepted";
  * 把 TLS/网络错误归类并截短消息。
  */
 function classifyTlsError(error) {
-  let n = truncateToLength(
+  let text = truncateToLength(
     errorMessage(error)
       .replace(/\s*For more information, pass `verbose: true`.*$/s, "")
       .replace(/[^\x20-\x7e]/gu, "?")
@@ -267,37 +287,38 @@ function classifyTlsError(error) {
     MAX_ERROR_DETAIL,
   );
   let errnoCode = getErrnoCode(error);
-  if (errnoCode === "ERR_TLS_CERT_ALTNAME_INVALID" || /does not match certificate's altnames/i.test(n)) {
-    logForDebugging(`[gateway] certificate for another name: ${n}`);
+  if (errnoCode === "ERR_TLS_CERT_ALTNAME_INVALID" || /does not match certificate's altnames/i.test(text)) {
+    logForDebugging(`[gateway] certificate for another name: ${text}`);
     return `${TLS_REFUSED_MESSAGE}: the certificate is for another name`;
   }
   if (errnoCode === "ConnectionRefused" || errnoCode === "ECONNREFUSED") return "connection refused";
-  if (errnoCode?.startsWith("HPE_") || /^Parse Error/i.test(n)) return "not an HTTP response";
-  if (errnoCode === "ENOTFOUND" || /ENOTFOUND|getaddrinfo/i.test(n)) return "the name does not resolve";
-  if (/timed? ?out|TimedOut/i.test(n)) return HOST_CHECK_TIMEOUT_MESSAGE;
-  if (/certificate|altnames|self[- ]signed|CERT_|SSL|TLS/i.test(n)) return `${TLS_REFUSED_MESSAGE}: ${n}`;
-  return n;
+  if (errnoCode?.startsWith("HPE_") || /^Parse Error/i.test(text)) return "not an HTTP response";
+  if (errnoCode === "ENOTFOUND" || /ENOTFOUND|getaddrinfo/i.test(text)) return "the name does not resolve";
+  if (/timed? ?out|TimedOut/i.test(text)) return HOST_CHECK_TIMEOUT_MESSAGE;
+  if (/certificate|altnames|self[- ]signed|CERT_|SSL|TLS/i.test(text))
+    return `${TLS_REFUSED_MESSAGE}: ${text}`;
+  return text;
 }
 //@ chunk-aepeg2w5.js:235145-236281 placement
 /**
  * 探测网关的 /managed/settings 端点。
  */
-async function probeGatewayManagedSettings(url, n, timeoutMs) {
+async function probeGatewayManagedSettings(url, authorization, timeoutMs) {
   try {
-    let s = new URL(`${url.replace(/\/$/, "")}/managed/settings`);
-    if (s.protocol !== "https:") return;
-    let proxyUrl = shouldBypassProxy(s.href) ? undefined : getUsableProxyUrl();
-    let y = {
+    let settingsUrl = new URL(`${url.replace(/\/$/, "")}/managed/settings`);
+    if (settingsUrl.protocol !== "https:") return;
+    let proxyUrl = shouldBypassProxy(settingsUrl.href) ? undefined : getUsableProxyUrl();
+    let attempt = {
       timedOut: false,
     };
-    let S = await requestWithProxyAuthRetry(s, {
+    let answer = await requestWithProxyAuthRetry(settingsUrl, {
       proxyUrl,
       presentClientCertificate: true,
-      authorization: /^[\x20-\x7e]+$/.test(n) ? n : undefined,
-      caCerts: caListBehindProxy(anthropicHostOf(s)),
+      authorization: /^[\x20-\x7e]+$/.test(authorization) ? authorization : undefined,
+      caCerts: caListBehindProxy(anthropicHostOf(settingsUrl)),
       timeoutMs,
       helperClock: undefined,
-      attempt: y,
+      attempt,
       statusOnlyAs: `claude-cli/${
         {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
@@ -312,30 +333,36 @@ async function probeGatewayManagedSettings(url, n, timeoutMs) {
         }.VERSION
       } (external, ${DESKTOP_3P_ENTRYPOINT})`,
     }).catch((error) => ({
-      unanswered: y.timedOut ? HOST_CHECK_TIMEOUT_MESSAGE : classifyTlsError(error),
+      unanswered: attempt.timedOut ? HOST_CHECK_TIMEOUT_MESSAGE : classifyTlsError(error),
     }));
-    if ("unanswered" in S) return S;
-    noteGatewaySeen(S.gatewayVersion);
-    if (S.status === 429 || (S.status >= 500 && S.status <= 599))
+    if ("unanswered" in answer) return answer;
+    noteGatewaySeen(answer.gatewayVersion);
+    if (answer.status === 429 || (answer.status >= 500 && answer.status <= 599))
       return {
-        unanswered: `HTTP ${S.status}`,
+        unanswered: `HTTP ${answer.status}`,
       };
-    return !S.isGatewaysOwnNow ? undefined : S.status === 304 ? true : S.status === 404 ? false : undefined;
+    return !answer.isGatewaysOwnNow
+      ? undefined
+      : answer.status === 304
+        ? true
+        : answer.status === 404
+          ? false
+          : undefined;
   } catch {
     return;
   }
 }
 //@ chunk-aepeg2w5.js:236281-236560 placement
-async function requestWithProxyAuthRetry(e, n) {
+async function requestWithProxyAuthRetry(url, options) {
   try {
-    return await requestWithTimeout(e, n);
+    return await requestWithTimeout(url, options);
   } catch (error) {
     let proxyError = findProxyError(error);
     if (proxyError?.connectStatus === 407 && getConfiguredProxyAuthHelper() !== undefined) {
-      let h = proxyError.headers["proxy-authenticate"];
-      clearProxyAuthHelperCache(Array.isArray(h) ? h[0] : h);
-      if ((await withProxyAuthHelper(n.helperClock)) !== null)
-        return await requestWithTimeout(e, n).catch((error) => {
+      let proxyErr = proxyError.headers["proxy-authenticate"];
+      clearProxyAuthHelperCache(Array.isArray(proxyErr) ? proxyErr[0] : proxyErr);
+      if ((await withProxyAuthHelper(options.helperClock)) !== null)
+        return await requestWithTimeout(url, options).catch((error) => {
           throw proxyErrorToHostCheckError(error) ?? error;
         });
     }
@@ -343,13 +370,17 @@ async function requestWithProxyAuthRetry(e, n) {
   }
 }
 //@ chunk-aepeg2w5.js:236560-236757 placement
-async function requestWithTimeout(e, n) {
-  let signal = AbortSignal.timeout(n.timeoutMs);
+async function requestWithTimeout(url, options) {
+  let signal = AbortSignal.timeout(options.timeoutMs);
   try {
-    return await withTimeout(createGatewayRequest(e, n, signal), n.timeoutMs, HOST_CHECK_TIMEOUT_MESSAGE);
+    return await withTimeout(
+      createGatewayRequest(url, options, signal),
+      options.timeoutMs,
+      HOST_CHECK_TIMEOUT_MESSAGE,
+    );
   } catch (error) {
     if (signal.aborted || (error instanceof Error && error.message === HOST_CHECK_TIMEOUT_MESSAGE))
-      n.attempt.timedOut = true;
+      options.attempt.timedOut = true;
     throw error;
   }
 }
@@ -374,30 +405,30 @@ function proxyErrorToHostCheckError(error) {
  * 创建到网关的 HTTPS 请求（代理、客户端证书、CA）。
  */
 function createGatewayRequest(
-  e,
+  url,
   { proxyUrl, presentClientCertificate, authorization, caCerts, statusOnlyAs },
   signal,
 ) {
-  let w = {
+  let tlsOptions = {
     ...(presentClientCertificate && getMTLSConfig()),
     ...(caCerts && {
       ca: caCerts,
     }),
   };
-  let R =
+  let agent =
     proxyUrl === undefined
       ? new Agent({
-          ...w,
+          ...tlsOptions,
           keepAlive: false,
         })
-      : createConnectProxyAgent(proxyUrl, w);
-  let replaced = e.hostname.replace(/^\[|\]$/g, "");
+      : createConnectProxyAgent(proxyUrl, tlsOptions);
+  let replaced = url.hostname.replace(/^\[|\]$/g, "");
   return new Promise((resolve, reject) => {
-    let L = request_2(
+    let request = request_2(
       {
         host: replaced,
-        port: e.port ? Number(e.port) : 443,
-        path: `${e.pathname}${e.search}`,
+        port: url.port ? Number(url.port) : 443,
+        path: `${url.pathname}${url.search}`,
         method: "GET",
         headers: {
           Accept: "application/json",
@@ -411,64 +442,65 @@ function createGatewayRequest(
             Authorization: authorization,
           }),
         },
-        agent: R,
-        ...w,
+        agent,
+        ...tlsOptions,
         ...proxyTlsOptions(replaced),
         signal,
       },
-      (G) => {
-        let statusCode = G.statusCode ?? 0;
+      (response) => {
+        let statusCode = response.statusCode ?? 0;
         if (statusOnlyAs !== undefined) {
-          let re = G.headers["x-cc-gateway-version"];
-          let isGatewaysOwnNow = Boolean(re) && /\bno-store\b/i.test(G.headers["cache-control"] ?? "");
-          G.destroy();
+          let gatewayVersion = response.headers["x-cc-gateway-version"];
+          let isGatewaysOwnNow =
+            Boolean(gatewayVersion) && /\bno-store\b/i.test(response.headers["cache-control"] ?? "");
+          response.destroy();
           resolve({
             status: statusCode,
             body: "",
             isGatewaysOwnNow,
-            gatewayVersion: re,
+            gatewayVersion,
           });
           return;
         }
         if (statusCode !== 200) {
-          G.resume();
+          response.resume();
           resolve({
             status: statusCode,
             body: "",
           });
           return;
         }
-        if (Number(G.headers["content-length"] ?? "0") > MAX_HOST_CHECK_BYTES) {
-          G.destroy();
+        if (Number(response.headers["content-length"] ?? "0") > MAX_HOST_CHECK_BYTES) {
+          response.destroy();
           reject(answerTooLargeError());
           return;
         }
-        let q = [];
-        let Q = 0;
-        G.on("data", (re) => {
-          Q += re.length;
-          if (Q > MAX_HOST_CHECK_BYTES) {
-            G.destroy();
+        let chunks = [];
+        let receivedBytes = 0;
+        response.on("data", (chunk) => {
+          receivedBytes += chunk.length;
+          if (receivedBytes > MAX_HOST_CHECK_BYTES) {
+            response.destroy();
             reject(answerTooLargeError());
             return;
           }
-          q.push(re);
+          chunks.push(chunk);
         });
-        G.once("end", () => {
-          if (G.complete)
+        response.once("end", () => {
+          if (response.complete)
             resolve({
               status: statusCode,
-              body: Buffer.concat(q).toString("utf8"),
+              body: Buffer.concat(chunks).toString("utf8"),
             });
           else reject(Error("response ended early"));
         });
-        G.once("error", (re) => reject(toError(re)));
-        G.once("close", () => reject(Error("response ended early")));
+        response.once("error", (error) => reject(toError(error)));
+        response.once("close", () => reject(Error("response ended early")));
       },
     );
-    L.once("error", (G) => reject(toError(G)));
-    L.end();
-  }).finally(() => R.destroy());
+    request.once("error", (error) => reject(toError(error)));
+    request.end();
+  }).finally(() => agent.destroy());
 }
 //@ chunk-aepeg2w5.js:238366-238658 placement
 /**
@@ -477,12 +509,12 @@ function createGatewayRequest(
 function normalizeGatewayUrl(url) {
   let trimmed = url.trim();
   if (!/^https?:\/\//i.test(trimmed)) trimmed = `https://${trimmed}`;
-  let r = new URL(trimmed);
-  if (r.protocol === "http:" && !LOCALHOST_NAMES.has(r.hostname))
+  let parsed = new URL(trimmed);
+  if (parsed.protocol === "http:" && !LOCALHOST_NAMES.has(parsed.hostname))
     throw Error(
       "Gateway URL must use https:// (got http://). Plain HTTP is only allowed for localhost during development.",
     );
-  return r.href.replace(/\/+$/, "");
+  return parsed.href.replace(/\/+$/, "");
 }
 export {
   gatewayCatalogRowId,

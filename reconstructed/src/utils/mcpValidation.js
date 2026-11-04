@@ -38,22 +38,22 @@ function getMaxMcpOutputTokens() {
 /**
  * 去掉 MCP 结果中文本块的 `_meta` 字段（没有则原样返回同一数组）。
  */
-function stripTextBlockMeta(e) {
-  if (!e || typeof e === "string" || !Array.isArray(e)) return e;
-  let n = e;
-  let r = false;
-  for (let o of n)
-    if (o?.type === "text" && "_meta" in o && o._meta) {
-      r = true;
+function stripTextBlockMeta(content) {
+  if (!content || typeof content === "string" || !Array.isArray(content)) return content;
+  let blocks = content;
+  let hasMeta = false;
+  for (let block of blocks)
+    if (block?.type === "text" && "_meta" in block && block._meta) {
+      hasMeta = true;
       break;
     }
-  if (!r) return e;
-  return n.map((o) => {
-    if (o?.type === "text" && "_meta" in o && o._meta) {
-      let { _meta, ...c } = o;
-      return c;
+  if (!hasMeta) return content;
+  return blocks.map((block) => {
+    if (block?.type === "text" && "_meta" in block && block._meta) {
+      let { _meta, ...blockWithoutMeta } = block;
+      return blockWithoutMeta;
     }
-    return o;
+    return block;
   });
 }
 //@ chunk-f8r3h98t.js:999-1011 layout
@@ -62,24 +62,24 @@ var MAX_META_JSON_CHARS = 65536;
 /**
  * 若 MCP 结果文本块的 `_meta` 序列化后总长超过上限（或无法序列化），保留结果时去掉这些 `_meta` 并记日志；否则原样返回。
  */
-function capTextBlockMeta(e) {
-  if (!Array.isArray(e)) return e;
-  let n = 0;
-  for (let r of e) {
-    if (r?.type !== "text" || !("_meta" in r) || !r._meta) continue;
+function capTextBlockMeta(content) {
+  if (!Array.isArray(content)) return content;
+  let metaChars = 0;
+  for (let block of content) {
+    if (block?.type !== "text" || !("_meta" in block) || !block._meta) continue;
     try {
-      n += jsonStringify(r._meta).length;
+      metaChars += jsonStringify(block._meta).length;
     } catch {
-      n = 1 / 0;
+      metaChars = 1 / 0;
     }
-    if (n > MAX_META_JSON_CHARS) {
+    if (metaChars > MAX_META_JSON_CHARS) {
       logForDebugging(
         `MCP result: text blocks' _meta (over ${MAX_META_JSON_CHARS} characters of JSON in all, or not serializable) left off the retained result`,
       );
-      return stripTextBlockMeta(e);
+      return stripTextBlockMeta(content);
     }
   }
-  return e;
+  return content;
 }
 //@ chunk-f8r3h98t.js:1327-1364 file-local
 function isTextBlock(block) {
@@ -113,10 +113,10 @@ function getMaxMcpOutputChars() {
 //@ chunk-f8r3h98t.js:1616-1654 layout
 var TRUNCATION_MARKER_PREFIX = "[OUTPUT TRUNCATED - exceeded ";
 //@ chunk-f8r3h98t.js:1654-1809 layout
-function imagesLeftOutText(e) {
-  return e === 1
+function imagesLeftOutText(imageCount) {
+  return imageCount === 1
     ? "[Image left out: it did not fit in the tool output limit]"
-    : `[${e} images left out: they did not fit in the tool output limit]`;
+    : `[${imageCount} images left out: they did not fit in the tool output limit]`;
 }
 //@ chunk-f8r3h98t.js:1809-2121 fingerprint = getTruncationMessage (1)
 /**
@@ -139,40 +139,40 @@ async function truncateContentBlocks(blocks, maxChars) {
   let leftOutInsertAt;
   let leftOutImageIndices = [];
   let stopIndex;
-  for (let [f, a] of blocks.entries())
-    if (isTextBlock(a)) {
+  for (let [index, block] of blocks.entries())
+    if (isTextBlock(block)) {
       let remainingChars = maxChars - currentChars;
       if (remainingChars <= 0) {
-        stopIndex = f;
+        stopIndex = index;
         break;
       }
-      if (a.text.length <= remainingChars) {
-        result.push(a);
-        currentChars += a.text.length;
+      if (block.text.length <= remainingChars) {
+        result.push(block);
+        currentChars += block.text.length;
       } else {
-        let u = truncateToLength(a.text, remainingChars);
-        if (u) {
-          let m = {
+        let truncatedText = truncateToLength(block.text, remainingChars);
+        if (truncatedText) {
+          let truncatedBlock = {
             type: "text",
-            text: u,
+            text: truncatedText,
           };
-          if (a._meta) m._meta = a._meta;
-          result.push(m);
+          if (block._meta) truncatedBlock._meta = block._meta;
+          result.push(truncatedBlock);
         }
-        stopIndex = f + 1;
+        stopIndex = index + 1;
         break;
       }
-    } else if (isImageBlock(a)) {
+    } else if (isImageBlock(block)) {
       let imageChars = IMAGE_TOKEN_ESTIMATE * 4;
       if (currentChars + imageChars <= maxChars) {
-        result.push(a);
+        result.push(block);
         currentChars += imageChars;
       } else {
         let remainingChars = maxChars - currentChars;
         let compressedBlock;
         if (remainingChars > 0) {
           let remainingBytes = Math.floor(remainingChars * 0.75);
-          compressedBlock = await compressImageBlock(a, remainingBytes).catch(() => {
+          compressedBlock = await compressImageBlock(block, remainingBytes).catch(() => {
             return;
           });
         }
@@ -185,20 +185,21 @@ async function truncateContentBlocks(blocks, maxChars) {
             leftOutInsertAt = result.length;
             currentChars += imagesLeftOutText(1).length;
           }
-          leftOutImageIndices.push(f);
+          leftOutImageIndices.push(index);
         }
       }
-    } else result.push(a);
+    } else result.push(block);
   if (stopIndex !== undefined) {
-    for (let f = stopIndex; f < blocks.length; f++) if (isImageBlock(blocks[f])) leftOutImageIndices.push(f);
+    for (let tailIndex = stopIndex; tailIndex < blocks.length; tailIndex++)
+      if (isImageBlock(blocks[tailIndex])) leftOutImageIndices.push(tailIndex);
   }
   if (leftOutImageIndices.length > 0) {
-    let f = toolResultStoreOrNull();
+    let store = toolResultStoreOrNull();
     let results = await Promise.all(
       leftOutImageIndices.map(async (leftOutImageIndex) => {
-        let u = blocks[leftOutImageIndex];
-        return isImageBlock(u) && u.source.type === "base64"
-          ? ((await f?.saveLeftOut?.(u.source.data).catch(() => null)) ?? null)
+        let block = blocks[leftOutImageIndex];
+        return isImageBlock(block) && block.source.type === "base64"
+          ? ((await store?.saveLeftOut?.(block.source.data).catch(() => null)) ?? null)
           : null;
       }),
     );
@@ -209,14 +210,14 @@ async function truncateContentBlocks(blocks, maxChars) {
         type: "text",
         text: imagesLeftOutText(leftOutImageIndices.length),
       },
-      ...results.flatMap((s) => {
-        let u = s === null ? null : createImageMetadataText({}, s.path);
-        return u === null
+      ...results.flatMap((saved) => {
+        let metadataText = saved === null ? null : createImageMetadataText({}, saved.path);
+        return metadataText === null
           ? []
           : [
               {
                 type: "text",
-                text: u,
+                text: metadataText,
               },
             ];
       }),

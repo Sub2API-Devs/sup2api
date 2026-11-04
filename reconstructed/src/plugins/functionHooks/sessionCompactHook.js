@@ -18,25 +18,26 @@ import { createStepRecorder } from "./dispatch/chain.js";
 import { NO_CORE_AT_CHAIN_BOTTOM } from "./eventCatalog.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { UI_ENV_SITE_RULES } from "./sites/siteRules.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1538522-1538936 placement
 /**
  * 把插件可见的会话行还原为内部消息：助手行生成文本与 tool_use，用户行生成 tool_result 与文本。
  */
-function pluginRowToMessage(e) {
-  let n =
-    e.text === ""
+function pluginRowToMessage(row) {
+  let textBlocks =
+    row.text === ""
       ? []
       : [
           {
             type: "text",
-            text: e.text,
+            text: row.text,
           },
         ];
-  if (e.role === "assistant") {
-    let h = [
-      ...n,
-      ...e.toolUses.map((toolUse) => ({
+  if (row.role === "assistant") {
+    let content = [
+      ...textBlocks,
+      ...row.toolUses.map((toolUse) => ({
         type: "tool_use",
         id: toolUse.tool_use_id,
         name: toolUse.tool,
@@ -44,40 +45,40 @@ function pluginRowToMessage(e) {
       })),
     ];
     return createAssistantMessage({
-      content: h.length === 0 ? "" : h,
+      content: content.length === 0 ? "" : content,
     });
   }
-  let mapped = (e.toolResults ?? []).map((h) => ({
+  let mapped = (row.toolResults ?? []).map((toolResult) => ({
     type: "tool_result",
-    tool_use_id: h.tool_use_id,
-    content: h.text,
-    ...(h.isError && {
+    tool_use_id: toolResult.tool_use_id,
+    content: toolResult.text,
+    ...(toolResult.isError && {
       is_error: true,
     }),
   }));
-  let s = mapped.length === 0;
+  let hasNoResults = mapped.length === 0;
   return createUserMessage({
-    content: s ? e.text : [...mapped, ...n],
+    content: hasNoResults ? row.text : [...mapped, ...textBlocks],
   });
 }
 //@ chunk-e6aww6q8.js:1538936-1539024 placement
 /**
  * 构造插件行
  */
-var pluginRow = (e) =>
+var pluginRow = (row) =>
   stableStringifySafe({
-    role: e.role,
-    text: e.text,
-    toolUses: e.toolUses,
-    toolResults: e.toolResults,
+    role: row.role,
+    text: row.text,
+    toolUses: row.toolUses,
+    toolResults: row.toolResults,
   });
 //@ chunk-e6aww6q8.js:1539024-1539091 placement
 /**
  * 附上工具结果与句柄
  */
-var withToolResults = (pluginMessage, n, handle) => ({
+var withToolResults = (pluginMessage, resultsById, handle) => ({
   ...pluginMessage,
-  toolUses: pluginMessage.toolUses.map(attachToolResults(n)),
+  toolUses: pluginMessage.toolUses.map(attachToolResults(resultsById)),
   handle,
 });
 //@ chunk-e6aww6q8.js:1539091-1539676 placement
@@ -85,63 +86,67 @@ var withToolResults = (pluginMessage, n, handle) => ({
  * session.compact 的行映射器：rowsOf 把消息转为插件行并记住每行对应的原消息组，messagesOf 把插件返回的行还原（未改动的行用原消息）。
  */
 function createCompactRowMapper() {
-  let e = new Map();
+  let rowsByHandle = new Map();
   return {
-    rowsOf(n) {
-      let r = new Map();
-      for (let w of n) {
-        let toolResults = toPluginMessage(w)?.toolResults;
-        for (let G of toolResults ?? []) r.set(G.tool_use_id, G);
+    rowsOf(messages) {
+      let resultsById = new Map();
+      for (let message of messages) {
+        let toolResults = toPluginMessage(message)?.toolResults;
+        for (let toolResult of toolResults ?? []) resultsById.set(toolResult.tool_use_id, toolResult);
       }
-      let s = [];
-      let h = [];
-      let y = [];
-      let S = false;
-      for (let w of n) {
-        let pluginMessage = toPluginMessage(w);
-        if (pluginMessage === undefined && S) {
-          y.push(w);
+      let rows = [];
+      let pending = [];
+      let group = [];
+      let started = false;
+      for (let message of messages) {
+        let pluginMessage = toPluginMessage(message);
+        if (pluginMessage === undefined && started) {
+          group.push(message);
           continue;
         }
         if (pluginMessage === undefined) {
-          h.push(w);
+          pending.push(message);
           continue;
         }
-        let G = withToolResults(pluginMessage, r, w.uuid);
-        y = [...h, w];
-        h = [];
-        S = true;
-        e.set(w.uuid, {
-          row: G,
-          messages: y,
+        let row = withToolResults(pluginMessage, resultsById, message.uuid);
+        group = [...pending, message];
+        pending = [];
+        started = true;
+        rowsByHandle.set(message.uuid, {
+          row,
+          messages: group,
         });
-        s.push(G);
+        rows.push(row);
       }
-      return s;
+      return rows;
     },
-    messagesOf(n) {
-      let r = new Set();
-      return n.flatMap((s) => {
-        let h = s.handle === undefined ? undefined : e.get(s.handle);
-        if (!(h !== undefined && !r.has(h.row.handle ?? "") && pluginRow(h.row) === pluginRow(s)))
-          return [pluginRowToMessage(s)];
-        r.add(h.row.handle ?? "");
-        return h.messages;
+    messagesOf(rows) {
+      let takenHandles = new Set();
+      return rows.flatMap((row) => {
+        let origin = row.handle === undefined ? undefined : rowsByHandle.get(row.handle);
+        if (!(
+          origin !== undefined &&
+          !takenHandles.has(origin.row.handle ?? "") &&
+          pluginRow(origin.row) === pluginRow(row)
+        ))
+          return [pluginRowToMessage(row)];
+        takenHandles.add(origin.row.handle ?? "");
+        return origin.messages;
       });
     },
   };
 }
 //@ chunk-e6aww6q8.js:1539676-1539856 placement
-var compactResult = (e, messages) => ({
+var compactResult = (made, messages) => ({
   messages,
-  ...(e.tokensBefore !== undefined && {
-    tokensBefore: e.tokensBefore,
+  ...(made.tokensBefore !== undefined && {
+    tokensBefore: made.tokensBefore,
   }),
-  ...(e.tokensAfter !== undefined && {
-    tokensAfter: e.tokensAfter,
+  ...(made.tokensAfter !== undefined && {
+    tokensAfter: made.tokensAfter,
   }),
-  ...(e.usage !== undefined && {
-    usage: e.usage,
+  ...(made.usage !== undefined && {
+    usage: made.usage,
   }),
 });
 //@ chunk-e6aww6q8.js:1539856-1540150 placement
@@ -152,37 +157,42 @@ var createCompactCore = (compact, compactRowMapper, stepRecorder) => ({
   name: "core",
   isCore: true,
   budgetMs: 0,
-  async run(s) {
+  async run(request) {
     let instructions =
-      s.instructions === undefined || s.instructions.trim() === "" ? undefined : s.instructions;
-    let S = await compact(compactRowMapper.messagesOf(s.messages), instructions);
-    if (S.skip !== undefined)
+      request.instructions === undefined || request.instructions.trim() === ""
+        ? undefined
+        : request.instructions;
+    let made = await compact(compactRowMapper.messagesOf(request.messages), instructions);
+    if (made.skip !== undefined)
       return {
-        skip: S.skip,
+        skip: made.skip,
       };
-    let messages = compactRowMapper.rowsOf(S.messages);
-    stepRecorder.keep(s, {
-      made: S,
+    let messages = compactRowMapper.rowsOf(made.messages);
+    stepRecorder.keep(request, {
+      made,
       rows: messages,
     });
-    return compactResult(S, messages);
+    return compactResult(made, messages);
   },
 });
 //@ chunk-e6aww6q8.js:1540150-1540238 placement
 /**
  * session.compact 核心步骤
  */
-var compactCoreStep = (e, result = compactResult(e, createCompactRowMapper().rowsOf(e.messages))) => ({
+var compactCoreStep = (
+  made,
+  result = compactResult(made, createCompactRowMapper().rowsOf(made.messages)),
+) => ({
   kind: "core",
-  record: e.record,
+  record: made.record,
   result,
 });
 //@ chunk-e6aww6q8.js:1540238-1540357 placement
 var sameRows = (messages, rows) =>
   messages.length === rows.length &&
-  messages.every((r, s) => {
-    let h = rows[s];
-    return h !== undefined && r.handle === h.handle && pluginRow(r) === pluginRow(h);
+  messages.every((message, index) => {
+    let row = rows[index];
+    return row !== undefined && message.handle === row.handle && pluginRow(message) === pluginRow(row);
   });
 //@ chunk-e6aww6q8.js:1540395-1540565 placement = getTokenCountFromUsage (0.899)
 var getTokenCountFromUsage_2 = (usage) => ({
@@ -204,38 +214,38 @@ var getTokenCountFromUsage_2 = (usage) => ({
  * 助手行换新 uuid
  */
 var reuuidAssistantRows = (messages) =>
-  messages.map((n) =>
-    n.type === "assistant"
-      ? getTokenCountFromUsage_2(n)
+  messages.map((message) =>
+    message.type === "assistant"
+      ? getTokenCountFromUsage_2(message)
       : {
-          ...n,
+          ...message,
           uuid: randomUUID(),
         },
   );
 //@ chunk-e6aww6q8.js:1540674-1540788 placement
-var replacedCompactResult = (e, compactRowMapper, record) => ({
+var replacedCompactResult = (result, compactRowMapper, record) => ({
   kind: "replaced",
   messages: reuuidAssistantRows(
-    compactRowMapper.messagesOf(e.messages).filter((s) => !isCompactBoundaryMessage_3(s)),
+    compactRowMapper.messagesOf(result.messages).filter((message) => !isCompactBoundaryMessage_3(message)),
   ),
   record,
-  result: e,
+  result,
 });
 //@ chunk-e6aww6q8.js:1540788-1540825 placement
 /**
  * 跳过压缩
  */
-var skippedCompact = (e) => ({
+var skippedCompact = (fields) => ({
   kind: "skipped",
-  ...e,
+  ...fields,
 });
 //@ chunk-e6aww6q8.js:1540825-1541723 placement
 /**
  * 运行 session.compact 钩子链并记录核心是否执行。
  */
-async function dispatchSessionCompactHooks(e) {
-  let { trigger, instructions, messages, agentId, isIsolated, origin, signal, compact } = e;
-  let G = pluginsMatchingEvent(
+async function dispatchSessionCompactHooks(request) {
+  let { trigger, instructions, messages, agentId, isIsolated, origin, signal, compact } = request;
+  let matchers = pluginsMatchingEvent(
     "session.compact",
     {
       trigger,
@@ -243,14 +253,14 @@ async function dispatchSessionCompactHooks(e) {
     },
     origin,
   );
-  if (isIsolated || G.length === 0) {
-    let Ie = await compact([...messages], instructions);
-    return Ie.skip !== undefined
+  if (isIsolated || matchers.length === 0) {
+    let made = await compact([...messages], instructions);
+    return made.skip !== undefined
       ? skippedCompact({
-          reason: Ie.skip,
+          reason: made.skip,
           ranCore: true,
         })
-      : compactCoreStep(Ie);
+      : compactCoreStep(made);
   }
   let compactRowMapper = createCompactRowMapper();
   let stepRecorder = createStepRecorder();
@@ -270,33 +280,37 @@ async function dispatchSessionCompactHooks(e) {
     }),
     messages: compactRowMapper.rowsOf(messages),
   });
-  let ke = `hooked by ${G.join("+")}`;
-  let we = stepRecorder.ran() ? "core ran beneath" : "core never ran";
+  let hookedBy = `hooked by ${matchers.join("+")}`;
+  let coreNote = stepRecorder.ran() ? "core ran beneath" : "core never ran";
   if (result.skip !== undefined) {
-    logForDebugging(`session.compact (${trigger}): skipped (${result.skip}; ${ke}); ${we}`);
+    logForDebugging(`session.compact (${trigger}): skipped (${result.skip}; ${hookedBy}); ${coreNote}`);
     return skippedCompact({
       reason: result.skip,
       ranCore: stepRecorder.ran(),
     });
   }
-  let Ee = stepRecorder.last();
-  if (Ee !== undefined && sameRows(result.messages, Ee.made.rows))
-    return compactCoreStep(Ee.made.made, result);
+  let lastStep = stepRecorder.last();
+  if (lastStep !== undefined && sameRows(result.messages, lastStep.made.rows))
+    return compactCoreStep(lastStep.made.made, result);
   logForDebugging(
-    `session.compact (${trigger}): a hook's ${result.messages.length} messages stand (${ke}); ${we}`,
+    `session.compact (${trigger}): a hook's ${result.messages.length} messages stand (${hookedBy}); ${coreNote}`,
   );
-  return replacedCompactResult(result, compactRowMapper, Ee?.made.made.record);
+  return replacedCompactResult(result, compactRowMapper, lastStep?.made.made.record);
 }
 //@ chunk-e6aww6q8.js:1541723-1541784 placement
 /**
  * 保留下层的行 uuid
  */
-var keptRowUuids = (e) => e.filter((n) => toPluginMessage(n) !== undefined).map((n) => n.uuid);
+var keptRowUuids = (messages) =>
+  messages.filter((message) => toPluginMessage(message) !== undefined).map((message) => message.uuid);
 //@ chunk-e6aww6q8.js:1541784-1541814 placement
 /**
  * session.compact 站点规则
  */
-var SESSION_COMPACT_RULES = UI_ENV_SITE_RULES["session.compact"];
+var SESSION_COMPACT_RULES; // deferred: uses UI_ENV_SITE_RULES (./sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1541784", () => {
+  SESSION_COMPACT_RULES = UI_ENV_SITE_RULES["session.compact"];
+});
 //@ chunk-e6aww6q8.js:1541814-1542130 placement = getTokenCountFromUsage (1)
 function getTokenCountFromUsage_3(usage) {
   return usage === undefined ||

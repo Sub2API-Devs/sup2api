@@ -9,7 +9,13 @@
  * attribution: placement 7, layout 1, callgraph-fingerprint 1, fingerprint 1
  */
 import { watch } from "fs";
-import { init_react_production, qt, Se, P } from "../../vendor/react/cjs/react.production.js";
+import { currentPolicyNoticeHolder, getPolicyNotice } from "../services/policyLimits/cacheStamp.js";
+import {
+  init_react_production,
+  createContext,
+  useContext,
+  useEffect,
+} from "../../vendor/react/cjs/react.production.js";
 import { errorMessage, getErrnoCode, isSadFsErrno, isEnvFsErrno } from "../utils/errors.js";
 import { logError } from "../utils/log.js";
 import { logForDebugging } from "../utils/debug.js";
@@ -32,10 +38,18 @@ import { useAppState } from "../state/AppState.js";
 import { getIsRemoteMode } from "../bootstrap/state.js";
 import { isTeamLead } from "../utils/teammate.js";
 import { useStoreSelector } from "./useStoreSelector.js";
-import { currentPolicyNoticeHolder, getPolicyNotice } from "../services/policyLimits/cacheStamp.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-55ht3bcx.js:5347-5413 fingerprint = useTasksV2 (0.488)
+var useTasksV2 = {
+  subscribe: (listener) => currentPolicyNoticeHolder().changed.subscribe(listener),
+  getSnapshot: getPolicyNotice,
+};
 //@ chunk-0n43rj0b.js:691-695 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0n43rj0b.js:691", () => {
+  init_react_production();
+});
 //@ chunk-0n43rj0b.js:722-745 layout
 var TASK_LIST_POLL_MS = 5000;
 var MAX_RENDERED_TASKS = 50;
@@ -64,15 +78,15 @@ class TasksV2Store {
   #S = 0;
   #m = 0;
   #E;
-  constructor(storageV5, i = globalThis, e = () => {}) {
+  constructor(storageV5, globals = globalThis, onHiddenChange = () => {}) {
     this.#r = isStorageV5Enabled() && storageV5 !== undefined ? storageV5 : undefined;
-    this.#s = i;
-    this.#E = e;
+    this.#s = globals;
+    this.#E = onHiddenChange;
   }
-  #w(s) {
-    let i = this.#d;
-    this.#d = s;
-    if (s && !i) this.#E();
+  #w(hidden) {
+    let wasHidden = this.#d;
+    this.#d = hidden;
+    if (hidden && !wasHidden) this.#E();
   }
   getSnapshot = () => (this.#d ? undefined : this.#c);
   subscribe = (fn) => {
@@ -95,23 +109,23 @@ class TasksV2Store {
   #V() {
     this.#y.emit();
   }
-  #F(s) {
+  #F(taskListId) {
     if (this.#r) {
-      this.#T(this.#r, s, false);
+      this.#T(this.#r, taskListId, false);
       return;
     }
-    let taskOutputDir = getTaskOutputDir(s);
+    let taskOutputDir = getTaskOutputDir(taskListId);
     if (taskOutputDir === this.#f && this.#n !== null) return;
     this.#n?.close();
     this.#n = null;
     this.#f = taskOutputDir;
     try {
-      let e = watch(taskOutputDir, this.#h);
-      e.on("error", (r) => {
-        logForDebugging(`Task list watcher error: ${errorMessage(r)}`, {
+      let watcher = watch(taskOutputDir, this.#h);
+      watcher.on("error", (error) => {
+        logForDebugging(`Task list watcher error: ${errorMessage(error)}`, {
           level: "warn",
         });
-        if (this.#n === e) {
+        if (this.#n === watcher) {
           this.#f = null;
           this.#i = true;
           if (this.#t === null) {
@@ -120,53 +134,53 @@ class TasksV2Store {
           }
         }
       });
-      e.unref();
-      this.#n = e;
+      watcher.unref();
+      this.#n = watcher;
       this.#i = false;
     } catch {}
   }
-  #T(s, i, e) {
-    let r = this.#e;
-    if (r.phase !== "idle" && r.listId === i && !e) return;
-    if (r.phase === "live") r.subscription.unsubscribe();
-    let n = ++this.#m;
+  #T(storageV5, listId, isRetry) {
+    let current = this.#e;
+    if (current.phase !== "idle" && current.listId === listId && !isRetry) return;
+    if (current.phase === "live") current.subscription.unsubscribe();
+    let generation = ++this.#m;
     this.#e = {
       phase: "subscribing",
-      listId: i,
-      generation: n,
+      listId,
+      generation,
       endedEarly: false,
     };
     this.#i = true;
     this.#u();
-    let h = (o, p) => {
-      if (n !== this.#m) {
-        o?.unsubscribe();
+    let settle = (subscription, error) => {
+      if (generation !== this.#m) {
+        subscription?.unsubscribe();
         return;
       }
-      let c = this.#e;
-      if (o && c.phase === "subscribing" && c.endedEarly) {
-        o.unsubscribe();
-        if (e) this.#v(i);
-        else this.#T(s, i, true);
+      let current = this.#e;
+      if (subscription && current.phase === "subscribing" && current.endedEarly) {
+        subscription.unsubscribe();
+        if (isRetry) this.#v(listId);
+        else this.#T(storageV5, listId, true);
         return;
       }
-      if (o) {
+      if (subscription) {
         this.#e = {
           phase: "live",
-          listId: i,
-          generation: n,
-          subscription: o,
-          onRetry: e,
+          listId,
+          generation,
+          subscription,
+          onRetry: isRetry,
         };
         this.#i = false;
         this.#h();
         return;
       }
-      logForDebugging(`Task list subscription unavailable: ${p}`, {
+      logForDebugging(`Task list subscription unavailable: ${error}`, {
         level: "warn",
       });
-      if (e) {
-        this.#v(i);
+      if (isRetry) {
+        this.#v(listId);
         return;
       }
       this.#e = {
@@ -175,48 +189,48 @@ class TasksV2Store {
       this.#i = true;
       this.#u();
     };
-    let a;
+    let pending;
     try {
-      a = s.subscribe(
+      pending = storageV5.subscribe(
         {
           target: "scope",
           scope: {
             namespace: "task",
-            listId: sanitizePathComponent(i),
+            listId: sanitizePathComponent(listId),
           },
         },
-        (o) => this.#x(o, n),
+        (change) => this.#x(change, generation),
       );
     } catch (error) {
-      h(null, errorMessage(error));
+      settle(null, errorMessage(error));
       return;
     }
-    a.then(
-      (o) => (o.ok ? h(o.value) : h(null, formatStorageError(o.error))),
-      (error) => h(null, errorMessage(error)),
+    pending.then(
+      (result) => (result.ok ? settle(result.value) : settle(null, formatStorageError(result.error))),
+      (error) => settle(null, errorMessage(error)),
     );
   }
-  #x(s, i) {
-    let e = this.#e;
-    if (e.phase === "subscribing" && e.generation === i && !s.ok) {
-      e.endedEarly = true;
+  #x(change, generation) {
+    let current = this.#e;
+    if (current.phase === "subscribing" && current.generation === generation && !change.ok) {
+      current.endedEarly = true;
       return;
     }
-    if (!this.#a || e.phase !== "live" || e.generation !== i) return;
-    if (s.ok) {
-      e.onRetry = false;
+    if (!this.#a || current.phase !== "live" || current.generation !== generation) return;
+    if (change.ok) {
+      current.onRetry = false;
       this.#h();
       return;
     }
-    logForDebugging(`Task list subscription ended: ${formatStorageError(s.error)}`, {
+    logForDebugging(`Task list subscription ended: ${formatStorageError(change.error)}`, {
       level: "warn",
     });
-    if (e.onRetry || !this.#r) {
-      e.subscription.unsubscribe();
-      this.#v(e.listId);
+    if (current.onRetry || !this.#r) {
+      current.subscription.unsubscribe();
+      this.#v(current.listId);
       return;
     }
-    this.#T(this.#r, e.listId, true);
+    this.#T(this.#r, current.listId, true);
   }
   #v(listId) {
     this.#m++;
@@ -240,21 +254,21 @@ class TasksV2Store {
   };
   refetch = () => this.#k();
   #k = async () => {
-    let s = ++this.#R;
+    let generation = ++this.#R;
     let taskListId = getTaskListId();
     this.#F(taskListId);
-    let e;
+    let tasks;
     try {
-      e = await listTasksForStore(taskListId, this.#r);
+      tasks = await listTasksForStore(taskListId, this.#r);
     } catch (error) {
       logForDebugging(`Task list read failed: ${errorMessage(error)}`, {
         level: "warn",
       });
-      e = null;
+      tasks = null;
     }
-    if (this.#r && s < this.#S) return;
-    this.#S = s;
-    if (e === null) {
+    if (this.#r && generation < this.#S) return;
+    this.#S = generation;
+    if (tasks === null) {
       if (this.#a) {
         this.#i = true;
         this.#u();
@@ -262,11 +276,11 @@ class TasksV2Store {
       return;
     }
     if (this.#e.phase === "live") this.#i = false;
-    let filtered = e.filter((a) => !a.metadata?._internal);
+    let filtered = tasks.filter((task) => !task.metadata?._internal);
     if (!this.#a) return;
-    let any = filtered.some((a) => a.status !== "completed");
-    let h = !areTaskListsEqual(this.#c, filtered);
-    if (h) this.#c = filtered;
+    let any = filtered.some((task) => task.status !== "completed");
+    let changed = !areTaskListsEqual(this.#c, filtered);
+    if (changed) this.#c = filtered;
     if (any || filtered.length === 0) {
       this.#w(filtered.length === 0);
       this.#C();
@@ -279,7 +293,7 @@ class TasksV2Store {
         this.#o = this.#s.setTimeout(this.#B.bind(this, taskListId), TASK_LIST_POLL_MS);
         this.#o.unref();
       }
-    if (h) this.#V();
+    if (changed) this.#V();
     if (this.#t) {
       this.#s.clearTimeout(this.#t);
       this.#t = null;
@@ -289,10 +303,10 @@ class TasksV2Store {
       this.#u();
     }
   };
-  #B(s) {
+  #B(expectedListId) {
     this.#o = null;
     let taskListId = getTaskListId();
-    if (taskListId !== s) return;
+    if (taskListId !== expectedListId) return;
     this.#p = true;
     listTasks(taskListId, this.#r)
       .then(async (tasksToCheck) => {
@@ -359,18 +373,23 @@ class TasksV2Store {
 /**
  * 导出值：同一声明里的多个绑定：taskListSignal（任务列表信号）；noopTaskListener（空实现）；位于「TasksV2Store：订阅任务列表文件变化，提供 useTasksV2 与折叠联动」模块。
  */
-var taskListSignal = qt(null);
-var noopTaskListener = () => {};
+var taskListSignal; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var noopTaskListener;
+deferInit("chunk-0n43rj0b.js:4964", () => {
+  taskListSignal = createContext(null);
+  noopTaskListener = () => {};
+});
 //@ chunk-0n43rj0b.js:4990-5228 placement
 function useTasksV2StoreIfEnabled() {
-  let s = Se(taskListSignal);
-  let i = useAppState((r) => r.teamContext);
-  if (!(areTaskToolsEnabled() && !getIsRemoteMode() && (!i || isTeamLead(i)))) return null;
-  if (!s)
+  let store = useContext(taskListSignal);
+  let teamContext = useAppState((appState) => appState.teamContext);
+  if (!(areTaskToolsEnabled() && !getIsRemoteMode() && (!teamContext || isTeamLead(teamContext))))
+    return null;
+  if (!store)
     throw ReferenceError(
       "useTasksV2 cannot be called outside of a TasksV2StoreContext provider (mounted by <AppStateProvider />)",
     );
-  return s;
+  return store;
 }
 //@ chunk-0n43rj0b.js:5228-5258 placement
 /**
@@ -385,7 +404,7 @@ function useTaskListSnapshot() {
  */
 function useTaskListSubscription() {
   let tasksV2StoreIfEnabled = useTasksV2StoreIfEnabled();
-  P(() => {
+  useEffect(() => {
     if (!tasksV2StoreIfEnabled) return;
     return tasksV2StoreIfEnabled.subscribe(noopTaskListener);
   }, [tasksV2StoreIfEnabled]);
@@ -401,30 +420,25 @@ function useHasTaskSelection() {
 /**
  * 两个任务数组逐字段相等（useTasksV2 避免无谓重渲染）。
  */
-function areTaskListsEqual(s, i) {
-  if (s === undefined || s.length !== i.length) return false;
-  for (let idx = 0; idx < i.length; idx++) {
-    let r = s[idx];
-    let n = i[idx];
+function areTaskListsEqual(previous, next) {
+  if (previous === undefined || previous.length !== next.length) return false;
+  for (let idx = 0; idx < next.length; idx++) {
+    let a = previous[idx];
+    let b = next[idx];
     if (
-      r.id !== n.id ||
-      r.status !== n.status ||
-      r.subject !== n.subject ||
-      r.activeForm !== n.activeForm ||
-      r.owner !== n.owner ||
-      r.description !== n.description ||
-      !arraysShallowEqual(r.blockedBy, n.blockedBy) ||
-      !arraysShallowEqual(r.blocks, n.blocks)
+      a.id !== b.id ||
+      a.status !== b.status ||
+      a.subject !== b.subject ||
+      a.activeForm !== b.activeForm ||
+      a.owner !== b.owner ||
+      a.description !== b.description ||
+      !arraysShallowEqual(a.blockedBy, b.blockedBy) ||
+      !arraysShallowEqual(a.blocks, b.blocks)
     )
       return false;
   }
   return true;
 }
-//@ chunk-55ht3bcx.js:5347-5413 fingerprint = useTasksV2 (0.488)
-var useTasksV2 = {
-  subscribe: (e) => currentPolicyNoticeHolder().changed.subscribe(e),
-  getSnapshot: getPolicyNotice,
-};
 export {
   useTaskListSubscription,
   useHasTaskSelection,

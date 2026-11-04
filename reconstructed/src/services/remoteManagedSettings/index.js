@@ -185,6 +185,7 @@ import {
   hasDeclaredNoConsentSurface,
 } from "./securityCheck.js";
 import { settingsChangeDetector } from "../../utils/settings/changeDetector.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-4pc1m5n9.js:2393-2436 placement
 var TENGU_MANAGED_CONFIG_PREFETCH_OFF = "tengu_managed_config_prefetch_off";
@@ -229,9 +230,9 @@ function fetchRemoteManagedSettingsSigned({ jws, settings, bodySent, authType, f
       logFeatureSad("remote_managed_settings_trusted_source", "error");
       return false;
     }
-    let R;
+    let pinnedOrgs;
     try {
-      R = describeMdmSettingsState();
+      pinnedOrgs = describeMdmSettingsState();
     } catch (error) {
       logForDebugging(`Remote settings: the organization pin could not be read: ${errorMessage(error)}`, {
         level: "error",
@@ -239,11 +240,11 @@ function fetchRemoteManagedSettingsSigned({ jws, settings, bodySent, authType, f
       logFeatureSad("remote_managed_settings_trusted_source", "org_pin_unknown");
       return false;
     }
-    if (R !== undefined && !R.includes(organizationUuid)) {
+    if (pinnedOrgs !== undefined && !pinnedOrgs.includes(organizationUuid)) {
       logFeatureSad("remote_managed_settings_trusted_source", "org_pin_mismatch");
       return false;
     }
-    if (R !== undefined)
+    if (pinnedOrgs !== undefined)
       try {
         if (
           verifyCacheSignature({
@@ -268,7 +269,7 @@ function fetchRemoteManagedSettingsSigned({ jws, settings, bodySent, authType, f
       jws,
       settings,
       cachePath,
-      pinnedOrgs: R,
+      pinnedOrgs,
     });
     return true;
   };
@@ -279,22 +280,22 @@ function fetchRemoteManagedSettingsSigned({ jws, settings, bodySent, authType, f
  */
 function logTrustedSource({ jws, settings, cachePath, pinnedOrgs }) {
   try {
-    let y = servedBodyOf(settings);
-    let S = verifySignedCache({
+    let body = servedBodyOf(settings);
+    let verdict = verifySignedCache({
       kind: "managed-settings",
       cachePath,
       live: {
         jws,
       },
-      body: y,
-      bodySha: computeChecksum(y),
+      body,
+      bodySha: computeChecksum(body),
       account: getStoredOauthAccountInfo(),
       pinnedOrgs,
       nowMs: Date.now(),
       roots: isSecDefaultPluginEnabled(),
     });
-    if (S.trusted) logFeatureOk("remote_managed_settings_trusted_source");
-    else logFeatureSad("remote_managed_settings_trusted_source", S.reason);
+    if (verdict.trusted) logFeatureOk("remote_managed_settings_trusted_source");
+    else logFeatureSad("remote_managed_settings_trusted_source", verdict.reason);
   } catch (error) {
     logError(error);
     logFeatureSad("remote_managed_settings_trusted_source", "error");
@@ -305,7 +306,7 @@ function remoteSettingsCredentialKey() {
   if (getGatewayAuth()) return "gateway";
   let claudeAIOAuthTokens = getClaudeAIOAuthTokens();
   let storedOauthAccountInfo = getStoredOauthAccountInfo();
-  let s = hostOrgSignInBearer();
+  let hostBearer = hostOrgSignInBearer();
   return computeContentHash(
     jsonStringify([
       isClaudeAISubscriber() && isBigQueryMetricsEnabled_2(),
@@ -320,7 +321,7 @@ function remoteSettingsCredentialKey() {
           : computeContentHash(claudeAIOAuthTokens.accessToken),
       getAnthropicApiKeyFingerprint().fingerprint,
       isProfileRemoteSettingsCredential() ? (getWIFAccountInfo()?.organizationUuid ?? "") : null,
-      s === undefined ? null : computeContentHash(s),
+      hostBearer === undefined ? null : computeContentHash(hostBearer),
     ]),
   );
 }
@@ -330,37 +331,39 @@ function getClientSurface() {
     ownEntrypoint: true,
   });
   if (!isHostManagedProviderSession()) return userAgent;
-  let n = `, ${env.CLAUDE_CODE_ENTRYPOINT ?? "cli"}`;
-  let index = userAgent.indexOf(n);
+  let entrypointSuffix = `, ${env.CLAUDE_CODE_ENTRYPOINT ?? "cli"}`;
+  let index = userAgent.indexOf(entrypointSuffix);
   return index === -1
     ? userAgent
-    : userAgent.slice(0, index + n.length) + `, ${DESKTOP_3P_ENTRYPOINT}` + userAgent.slice(index + n.length);
+    : userAgent.slice(0, index + entrypointSuffix.length) +
+        `, ${DESKTOP_3P_ENTRYPOINT}` +
+        userAgent.slice(index + entrypointSuffix.length);
 }
 //@ chunk-4pc1m5n9.js:6684-6812 fingerprint = getRemoteManagedSettingsEndpoint (0.739)
 /**
  * 远程托管设置端点：网关模式为 <gateway>/managed/settings，否则 <BASE_API_URL>/api/claude_code/settings。
  */
 function getRemoteManagedSettingsEndpoint() {
-  let e = hasManagedSettings() ? null : getGatewayAuth();
-  if (e) return `${e.url}/managed/settings`;
+  let gatewayAuth = hasManagedSettings() ? null : getGatewayAuth();
+  if (gatewayAuth) return `${gatewayAuth.url}/managed/settings`;
   return `${getOauthConfig().BASE_API_URL}/api/claude_code/settings`;
 }
 //@ chunk-4pc1m5n9.js:6812-6895 layout
-function sanitizeRemoteSettings(e) {
-  if (!e) return e;
-  return parsePolicyObjectTolerant(e, "remote managed settings").settings ?? {};
+function sanitizeRemoteSettings(settings) {
+  if (!settings) return settings;
+  return parsePolicyObjectTolerant(settings, "remote managed settings").settings ?? {};
 }
 //@ chunk-4pc1m5n9.js:6895-7486 layout
-function ruleRemoteSettingsPayload(e, n) {
-  let s = stripReservedKeys(e);
-  let policyObjectTolerant = parsePolicyObjectTolerant(s, n);
-  let y = s;
-  let keys = Object.keys(y);
+function ruleRemoteSettingsPayload(payload, source) {
+  let stripped = stripReservedKeys(payload);
+  let policyObjectTolerant = parsePolicyObjectTolerant(stripped, source);
+  let restored = stripped;
+  let keys = Object.keys(restored);
   if (
     !policyObjectTolerant.settings &&
     keys.length > 0 &&
-    !keys.every((k) => policyObjectTolerant.removed.includes(k)) &&
-    !sortKeysDeep(y)
+    !keys.every((key) => policyObjectTolerant.removed.includes(key)) &&
+    !sortKeysDeep(restored)
   ) {
     logForDebugging(
       `Remote settings: ruled_empty - no key in the payload could be applied as written (${policyObjectTolerant.errors.length} rulings); nothing of it applies`,
@@ -380,41 +383,43 @@ function ruleRemoteSettingsPayload(e, n) {
       `Remote settings: Payload contains ${policyObjectTolerant.errors.length} invalid entries; applying the salvaged subset`,
     );
   return {
-    settings: s,
-    salvagedSettings: restoreSalvagedRemoteSettings(y, policyObjectTolerant),
+    settings: stripped,
+    salvagedSettings: restoreSalvagedRemoteSettings(restored, policyObjectTolerant),
   };
 }
 //@ chunk-4pc1m5n9.js:7486-7576 file-local
 function sortKeysDeep(obj) {
   let keys = Object.keys(obj);
-  return keys.length > 0 && keys.every((s) => RETENTION_POLICY_KEYS.some((r) => r === s));
+  return (
+    keys.length > 0 && keys.every((key) => RETENTION_POLICY_KEYS.some((allowedKey) => allowedKey === key))
+  );
 }
 //@ chunk-4pc1m5n9.js:7576-7828 sole-consumer
-function restoreSubstitutedRemoteKeys(e, n, s) {
+function restoreSubstitutedRemoteKeys(settings, original, ruling) {
   let filtered = [
-    ...RETENTION_POLICY_KEYS.filter((y) => y in n && !(y in e)),
-    ...(s.onlySubstitutes
-      ? s.errors.filter((error) => error.onlySubstitutes).map((error) => error.path)
+    ...RETENTION_POLICY_KEYS.filter((key) => key in original && !(key in settings)),
+    ...(ruling.onlySubstitutes
+      ? ruling.errors.filter((error) => error.onlySubstitutes).map((error) => error.path)
       : []),
-  ].filter((y) => y in n);
-  if (filtered.length === 0) return e;
+  ].filter((key) => key in original);
+  if (filtered.length === 0) return settings;
   return {
-    ...e,
-    ...Object.fromEntries(filtered.map((y) => [y, n[y]])),
+    ...settings,
+    ...Object.fromEntries(filtered.map((key) => [key, original[key]])),
   };
 }
 //@ chunk-4pc1m5n9.js:7828-7912 sole-consumer
-function sanitizeRemoteSettingsKeepingSubstitutes(e) {
-  let policyObjectTolerant = parsePolicyObjectTolerant(e, "remote managed settings");
-  return restoreSubstitutedRemoteKeys(policyObjectTolerant.settings ?? {}, e, policyObjectTolerant);
+function sanitizeRemoteSettingsKeepingSubstitutes(payload) {
+  let ruling = parsePolicyObjectTolerant(payload, "remote managed settings");
+  return restoreSubstitutedRemoteKeys(ruling.settings ?? {}, payload, ruling);
 }
 //@ chunk-4pc1m5n9.js:7912-8010 sole-consumer
-function restoreSalvagedRemoteSettings(e, policyObjectTolerant) {
-  let s = policyObjectTolerant.errors.length > 0 ? (policyObjectTolerant.settings ?? {}) : undefined;
-  return s === undefined ? undefined : restoreSubstitutedRemoteKeys(s, e, policyObjectTolerant);
+function restoreSalvagedRemoteSettings(original, ruling) {
+  let salvaged = ruling.errors.length > 0 ? (ruling.settings ?? {}) : undefined;
+  return salvaged === undefined ? undefined : restoreSubstitutedRemoteKeys(salvaged, original, ruling);
 }
 //@ chunk-4pc1m5n9.js:8010-8688 sole-consumer
-async function fetchRemoteSettingsMockOrNull(credentials) {
+async function fetchRemoteSettingsMockOrNull(options) {
   let mockRemoteSettingsValue = getMockRemoteSettingsValue();
   if (mockRemoteSettingsValue === undefined) return null;
   if (mockRemoteSettingsValue === "fail")
@@ -429,29 +434,29 @@ async function fetchRemoteSettingsMockOrNull(credentials) {
       success: true,
       settings: {},
       checksum: undefined,
-      consentIdentity: await hasAnthropicApiKeyAuth_2(credentials),
+      consentIdentity: await hasAnthropicApiKeyAuth_2(options),
     };
   try {
     let mockRemoteSettingsFixturePath = getMockRemoteSettingsFixturePath();
-    let r =
+    let raw =
       mockRemoteSettingsFixturePath !== undefined
         ? await readFile(mockRemoteSettingsFixturePath, "utf-8")
         : mockRemoteSettingsValue;
-    let y = jsonParse(r);
-    if (!y || typeof y !== "object" || Array.isArray(y))
+    let parsed = jsonParse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
       return {
         success: false,
         error: "mock JSON parse failed",
         errorKind: "parse_error",
         skipRetry: true,
       };
-    let S = ruleRemoteSettingsPayload(y, "mock remote settings");
-    if ("ruledEmpty" in S) return S.ruledEmpty;
+    let ruled = ruleRemoteSettingsPayload(parsed, "mock remote settings");
+    if ("ruledEmpty" in ruled) return ruled.ruledEmpty;
     return {
       success: true,
-      ...S,
+      ...ruled,
       checksum: "mock",
-      consentIdentity: await hasAnthropicApiKeyAuth_2(credentials),
+      consentIdentity: await hasAnthropicApiKeyAuth_2(options),
     };
   } catch {
     return {
@@ -463,23 +468,23 @@ async function fetchRemoteSettingsMockOrNull(credentials) {
   }
 }
 //@ chunk-4pc1m5n9.js:9352-12031 callgraph-fingerprint = getRemoteSettingsAuthHeaders (0.275)
-async function getRemoteSettingsAuthHeaders(e, n) {
+async function getRemoteSettingsAuthHeaders(credentials, options) {
   if (hasManagedSettings()) {
-    let S = claimedCredential();
-    if (S === null || envDriftDetected())
+    let credential = claimedCredential();
+    if (credential === null || envDriftDetected())
       return {
         headers: {},
         error:
-          S === null
+          credential === null
             ? "No credential from the host that launched this session"
             : "The settings endpoint was moved after this session was launched",
         authType: "none",
       };
     let url = getRemoteManagedSettingsEndpoint();
-    return S.kind === "bearer"
+    return credential.kind === "bearer"
       ? {
           headers: {
-            Authorization: `Bearer ${S.token}`,
+            Authorization: `Bearer ${credential.token}`,
             "anthropic-beta": OAUTH_BETA_HEADER,
           },
           authType: "oauth",
@@ -488,7 +493,7 @@ async function getRemoteSettingsAuthHeaders(e, n) {
         }
       : {
           headers: {
-            "x-api-key": S.key,
+            "x-api-key": credential.key,
           },
           authType: "api_key",
           url,
@@ -496,18 +501,20 @@ async function getRemoteSettingsAuthHeaders(e, n) {
   }
   let gatewayAuth = getGatewayAuth();
   if (gatewayAuth) {
-    let S = isGatewayAuthPinned(gatewayAuth) ? await gatewayTrustFor(gatewayAuth, e) : undefined;
+    let pinnedFingerprint = isGatewayAuthPinned(gatewayAuth)
+      ? await gatewayTrustFor(gatewayAuth, credentials)
+      : undefined;
     return {
       headers: {
         Authorization: `Bearer ${gatewayAuth.jwt}`,
       },
       authType: "gateway_jwt",
-      consentIdentity: computeChecksumFromSettings(gatewayAuth, S),
-      pinnedFingerprint: S,
+      consentIdentity: computeChecksumFromSettings(gatewayAuth, pinnedFingerprint),
+      pinnedFingerprint,
     };
   }
-  let r = classifyRemoteSettingsCredential();
-  if (r.kind === "org_login") {
+  let credentialKind = classifyRemoteSettingsCredential();
+  if (credentialKind.kind === "org_login") {
     let claudeAIOAuthTokens = getClaudeAIOAuthTokens();
     if (claudeAIOAuthTokens?.accessToken)
       return {
@@ -517,11 +524,11 @@ async function getRemoteSettingsAuthHeaders(e, n) {
         },
         authType: "oauth",
         accessToken: claudeAIOAuthTokens.accessToken,
-        ...(await consentIdentityOf(e)),
+        ...(await consentIdentityOf(credentials)),
       };
   }
-  if (r.kind === "api_key") {
-    if (apiKeyForHost(r.key) === null) {
+  if (credentialKind.kind === "api_key") {
+    if (apiKeyForHost(credentialKind.key) === null) {
       logForDebugging("Remote settings: API key not sent: ANTHROPIC_BASE_URL is not an Anthropic host");
       return {
         headers: {},
@@ -531,20 +538,20 @@ async function getRemoteSettingsAuthHeaders(e, n) {
     }
     return {
       headers: {
-        "x-api-key": r.key,
+        "x-api-key": credentialKind.key,
       },
       authType: "api_key",
     };
   }
-  if (r.kind === "host_bearer")
+  if (credentialKind.kind === "host_bearer")
     return {
       headers: {
-        Authorization: `Bearer ${r.bearer}`,
+        Authorization: `Bearer ${credentialKind.bearer}`,
       },
       authType: "oauth",
       credentialOrigin: "injected_token",
     };
-  if (r.kind === "profile") {
+  if (credentialKind.kind === "profile") {
     if (isWIFSettingsBearerRejected()) {
       logForDebugging(
         "Remote settings: the settings endpoint rejected the profile credential after a forced refresh; not fetching with it again until the next sign-in or restart",
@@ -558,15 +565,16 @@ async function getRemoteSettingsAuthHeaders(e, n) {
       };
     }
     try {
-      let { getWIFCredentials, getWIFTokenCache } = await import("./chunk-7k61ne1e.js");
+      let { getWIFCredentials, getWIFTokenCache } =
+        await import("../../../vendor/@anthropic-ai/sdk/lib/credentials/TokenCache.lazy.js");
       let [wifTokenCache, wifCredentials] = await Promise.all([getWIFTokenCache(), getWIFCredentials()]);
       if (wifTokenCache !== null) {
         if (!getBridgeBaseUrl(wifCredentials?.baseURL)) {
-          let O = `Remote settings: profile base URL ${wifCredentials?.baseURL ?? "(unknown)"} is not the settings endpoint's host; not fetching with the profile credential`;
-          logForDebugging(O);
+          let message = `Remote settings: profile base URL ${wifCredentials?.baseURL ?? "(unknown)"} is not the settings endpoint's host; not fetching with the profile credential`;
+          logForDebugging(message);
           return {
             headers: {},
-            error: O,
+            error: message,
             authType: "profile",
             profileError: true,
           };
@@ -584,14 +592,15 @@ async function getRemoteSettingsAuthHeaders(e, n) {
         };
       }
     } catch (error) {
-      let k = `Remote settings: profile credential unavailable: ${errorMessage(error)}`;
-      logForDebugging(k, {
+      let message = `Remote settings: profile credential unavailable: ${errorMessage(error)}`;
+      logForDebugging(message, {
         level: "error",
       });
-      let { isWIFTransientExchangeError } = await import("./chunk-7k61ne1e.js");
+      let { isWIFTransientExchangeError } =
+        await import("../../../vendor/@anthropic-ai/sdk/lib/credentials/TokenCache.lazy.js");
       return {
         headers: {},
-        error: k,
+        error: message,
         authType: "profile",
         profileError: true,
         retryable: isWIFTransientExchangeError(error),
@@ -607,7 +616,7 @@ async function getRemoteSettingsAuthHeaders(e, n) {
       },
       authType: "oauth",
       accessToken: oauthTokens.accessToken,
-      ...(await consentIdentityOf(e)),
+      ...(await consentIdentityOf(credentials)),
     };
   return {
     headers: {},
@@ -619,13 +628,13 @@ async function getRemoteSettingsAuthHeaders(e, n) {
 /**
  * 把 consentIdentityOf 的结果简化为同意身份对象。
  */
-async function consentIdentityAsync(e) {
-  return (await consentIdentityOf(e)).consentIdentity;
+async function consentIdentityAsync(credentials) {
+  return (await consentIdentityOf(credentials)).consentIdentity;
 }
 //@ chunk-4pc1m5n9.js:12088-12383 placement
-async function consentIdentityOf(e) {
+async function consentIdentityOf(credentials) {
   let storedOauthAccountInfo = getStoredOauthAccountInfo();
-  let claudeAIOAuthTokenOrigin = await getClaudeAIOAuthTokenOriginAsync(e);
+  let claudeAIOAuthTokenOrigin = await getClaudeAIOAuthTokenOriginAsync(credentials);
   let credentialOrigin =
     claudeAIOAuthTokenOrigin === "store"
       ? "stored_login"
@@ -650,57 +659,59 @@ async function consentIdentityOf(e) {
 var GATEWAY = "gateway:";
 var HYBRID = "hybrid:";
 //@ chunk-4pc1m5n9.js:12650-12678 placement
-async function hybridConsentIdentity(e) {
+async function hybridConsentIdentity(credentials) {
   return;
 }
 //@ chunk-4pc1m5n9.js:12678-12689 placement
 var MAX_GATEWAY_ACCOUNT_ID_CHARS = 256;
 //@ chunk-4pc1m5n9.js:12689-12991 placement
-function computeChecksumFromSettings(gatewayAuth, n) {
-  if (!isGatewayAuthPinned(gatewayAuth) || !n || n === HTTP_LOOPBACK) return;
-  let s;
+function computeChecksumFromSettings(auth, fingerprint) {
+  if (!isGatewayAuthPinned(auth) || !fingerprint || fingerprint === HTTP_LOOPBACK) return;
+  let parsedUrl;
   try {
-    s = new URL(gatewayAuth.url);
+    parsedUrl = new URL(auth.url);
   } catch {
     return;
   }
-  if (s.protocol !== "https:") return;
-  let r = `${s.origin}${s.pathname === "/" ? "" : s.pathname}`;
-  let y = gatewayJwtSubject(gatewayAuth) ?? "";
+  if (parsedUrl.protocol !== "https:") return;
+  let baseUrl = `${parsedUrl.origin}${parsedUrl.pathname === "/" ? "" : parsedUrl.pathname}`;
+  let subject = gatewayJwtSubject(auth) ?? "";
   return {
-    organizationUuid: `${GATEWAY}${r}#${n}`,
+    organizationUuid: `${GATEWAY}${baseUrl}#${fingerprint}`,
     accountUuid:
-      y.length > MAX_GATEWAY_ACCOUNT_ID_CHARS ? `sha256:${createHash("sha256").update(y).digest("hex")}` : y,
+      subject.length > MAX_GATEWAY_ACCOUNT_ID_CHARS
+        ? `sha256:${createHash("sha256").update(subject).digest("hex")}`
+        : subject,
   };
 }
 //@ chunk-4pc1m5n9.js:12991-13047 placement
 /**
  * 读取某网关地址对应主机的信任状态。
  */
-async function gatewayTrustFor(gatewayAuth, n) {
-  return readGatewayTrust(hostOf(new URL(gatewayAuth.url)), n);
+async function gatewayTrustFor(gatewayAuth, credentials) {
+  return readGatewayTrust(hostOf(new URL(gatewayAuth.url)), credentials);
 }
 //@ chunk-4pc1m5n9.js:13220-13566 sole-consumer
 /**
  * 同意身份与拉取身份一致时写同意记录。
  */
-async function recordConsentIfSameIdentity(consentIdentity, n, storageV5, credentials) {
+async function recordConsentIfSameIdentity(consentIdentity, settings, storageV5, credentials) {
   if (!consentIdentity) return;
-  let y = consentIdentity.organizationUuid.startsWith(GATEWAY)
+  let currentIdentity = consentIdentity.organizationUuid.startsWith(GATEWAY)
     ? await hasAnthropicApiKeyAuth_2(credentials)
     : consentIdentity.organizationUuid.startsWith(HYBRID)
       ? await hybridConsentIdentity(credentials)
       : getStoredOauthAccountInfo();
   if (
-    y?.organizationUuid !== consentIdentity.organizationUuid ||
-    y.accountUuid !== consentIdentity.accountUuid
+    currentIdentity?.organizationUuid !== consentIdentity.organizationUuid ||
+    currentIdentity.accountUuid !== consentIdentity.accountUuid
   ) {
     logForDebugging(
       "Remote settings: consent identity no longer matches the fetch identity; not recording org consent",
     );
     return;
   }
-  await writeConsentRecords(consentIdentity, n, storageV5);
+  await writeConsentRecords(consentIdentity, settings, storageV5);
 }
 //@ chunk-4pc1m5n9.js:13566-13760 sole-consumer
 function wasResetDuringFetch(syncCacheResetEpoch) {
@@ -710,47 +721,55 @@ function wasResetDuringFetch(syncCacheResetEpoch) {
   return true;
 }
 //@ chunk-4pc1m5n9.js:13760-13849 affinity
-function formatRemoteSettingsErrorKind(e) {
-  return e.httpStatus !== undefined ? `${e.errorKind}/${e.httpStatus}` : e.errorKind;
+function formatRemoteSettingsErrorKind(failure) {
+  return failure.httpStatus !== undefined ? `${failure.errorKind}/${failure.httpStatus}` : failure.errorKind;
 }
 //@ chunk-4pc1m5n9.js:13849-14681 fingerprint = fetchWithRetry (0.314)
-async function fetchWithRetry(e, n) {
-  let remoteSettingsMockOrNull = await fetchRemoteSettingsMockOrNull(n.credentials);
+async function fetchWithRetry(etag, options) {
+  let remoteSettingsMockOrNull = await fetchRemoteSettingsMockOrNull(options.credentials);
   if (remoteSettingsMockOrNull) return remoteSettingsMockOrNull;
   let lastResult = null;
-  let y =
-    (getGatewayAuth() && !n.background) || n.singleAttempt
+  let maxRetries =
+    (getGatewayAuth() && !options.background) || options.singleAttempt
       ? 0
-      : (n.maxRetries ?? MAX_BACKGROUND_FETCH_RETRIES);
-  let S = isManagedConfigPrefetchEnabled();
-  let k = S && n.startupAwaited === true && !n.background && !getGatewayAuth();
-  let oauthRefreshLatch = S ? n.oauthRefreshLatch : undefined;
-  let C = (E) =>
-    fetchRemoteManagedSettings(e, false, n.credentials, E, oauthRefreshLatch, n.hybridOrganizationUuid);
-  let prefetched = n.prefetched;
-  let O = false;
-  for (let attempt = 1; attempt <= y + 1; attempt++) {
-    let A = prefetched ?? abortableAttempt(C);
+      : (options.maxRetries ?? MAX_BACKGROUND_FETCH_RETRIES);
+  let isPrefetch = isManagedConfigPrefetchEnabled();
+  let useHedge = isPrefetch && options.startupAwaited === true && !options.background && !getGatewayAuth();
+  let oauthRefreshLatch = isPrefetch ? options.oauthRefreshLatch : undefined;
+  let attemptFetch = (signal) =>
+    fetchRemoteManagedSettings(
+      etag,
+      false,
+      options.credentials,
+      signal,
+      oauthRefreshLatch,
+      options.hybridOrganizationUuid,
+    );
+  let prefetched = options.prefetched;
+  let hedged = false;
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+    let current = prefetched ?? abortableAttempt(attemptFetch);
     prefetched = undefined;
-    if (k && attempt === 1) {
-      let M = await hedgedRequest({
-        first: A,
-        send: C,
-        isAnswer: (w, G) => w.success || (w.skipRetry === true && !(G && w.errorKind === "http_401")),
+    if (useHedge && attempt === 1) {
+      let hedgedResult = await hedgedRequest({
+        first: current,
+        send: attemptFetch,
+        isAnswer: (result, morePending) =>
+          result.success || (result.skipRetry === true && !(morePending && result.errorKind === "http_401")),
         stillWanted: isManagedConfigPrefetchEnabled,
-        retryFollows: y > 0,
+        retryFollows: maxRetries > 0,
       });
-      lastResult = M.result;
-      O ||= M.hedged;
-    } else lastResult = await A.attempt;
+      lastResult = hedgedResult.result;
+      hedged ||= hedgedResult.hedged;
+    } else lastResult = await current.attempt;
     lastResult.attempts = attempt;
-    if (O) lastResult.hedged = true;
+    if (hedged) lastResult.hedged = true;
     if (lastResult.success) return lastResult;
     if (lastResult.skipRetry) return lastResult;
-    if (attempt > y) return lastResult;
+    if (attempt > maxRetries) return lastResult;
     let delayMs = getRetryDelay(attempt);
     logForDebugging(
-      `Remote settings: Retry ${attempt}/${y} after ${delayMs}ms (${formatRemoteSettingsErrorKind({
+      `Remote settings: Retry ${attempt}/${maxRetries} after ${delayMs}ms (${formatRemoteSettingsErrorKind({
         errorKind: lastResult.errorKind ?? "unknown_error",
         ...(lastResult.httpStatus !== undefined && {
           httpStatus: lastResult.httpStatus,
@@ -762,11 +781,14 @@ async function fetchWithRetry(e, n) {
   return lastResult;
 }
 //@ chunk-4pc1m5n9.js:14681-14699 layout
-var now = Date.now();
+var now; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4pc1m5n9.js:14681", () => {
+  now = Date.now();
+});
 //@ chunk-4pc1m5n9.js:14699-15794 layout
-function classifyRemoteSettingsFailure(e) {
+function classifyRemoteSettingsFailure(failure) {
   let errorCode = (() => {
-    switch (e.errorKind) {
+    switch (failure.errorKind) {
       case "http_401":
       case "http_403":
         return "auth_failed";
@@ -792,85 +814,80 @@ function classifyRemoteSettingsFailure(e) {
         return;
     }
   })();
-  let httpStatus = e.errorKind === "http_401" ? 401 : e.errorKind === "http_403" ? 403 : e.httpStatus;
+  let httpStatus =
+    failure.errorKind === "http_401" ? 401 : failure.errorKind === "http_403" ? 403 : failure.httpStatus;
   let authType =
-    e.authType === "oauth"
+    failure.authType === "oauth"
       ? "oauth"
-      : e.authType === "api_key"
+      : failure.authType === "api_key"
         ? "api_key"
-        : e.authType === "profile"
+        : failure.authType === "profile"
           ? "wif"
           : undefined;
   return classifyAuthOutcome({
     errorCode,
     httpStatus,
-    serverErrorType: e.serverErrorType,
-    serverErrorCode: e.serverErrorCode,
-    serverAuthDenial: e.serverAuthDenial,
-    tokenRefreshOutcome: e.tokenRefreshOutcome,
-    forcedRefreshOutcome: e.forcedRefreshOutcome,
+    serverErrorType: failure.serverErrorType,
+    serverErrorCode: failure.serverErrorCode,
+    serverAuthDenial: failure.serverAuthDenial,
+    tokenRefreshOutcome: failure.tokenRefreshOutcome,
+    forcedRefreshOutcome: failure.forcedRefreshOutcome,
     authType,
-    credentialOrigin: e.authType === "api_key" ? "static_key" : e.credentialOrigin,
-    injectedTokenRecovery: e.credentialOrigin === "injected_token" ? injectedOAuthTokenRecovery() : undefined,
-    noResponse: e.noResponse,
+    credentialOrigin: failure.authType === "api_key" ? "static_key" : failure.credentialOrigin,
+    injectedTokenRecovery:
+      failure.credentialOrigin === "injected_token" ? injectedOAuthTokenRecovery() : undefined,
+    noResponse: failure.noResponse,
   });
 }
 //@ chunk-4pc1m5n9.js:15794-21412 fingerprint = fetchRemoteManagedSettings (0.355)
 /**
  * 单次请求远程设置端点（OAuth Bearer 或 API key），区分 200/204/304/404 与失败类型，带重试。
  */
-async function fetchRemoteManagedSettings(
-  e,
-  n = false,
-  s,
-  r,
-  oauthRefreshLatch,
-  hybridOrganizationUuid = null,
-) {
-  let k = oauthRefreshLatch && oauthRefreshLatchStamp(oauthRefreshLatch.recoveries);
-  let R;
-  let C = false;
-  let T = false;
-  let O;
+async function fetchRemoteManagedSettings(etag, isRetry = false, credentials, signal, latch, options = null) {
+  let latchStamp = latch && oauthRefreshLatchStamp(latch.recoveries);
+  let accessToken;
+  let isProfileBearer = false;
+  let isStoredLogin = false;
+  let refreshOutcome;
   let consentIdentity;
-  let A = false;
-  let P = {};
-  let M = (w) => {
+  let usedAuthUrl = false;
+  let authFacts = {};
+  let fail = (failure) => {
     logForDebugging(
       `Remote settings: Fetch attempt failed (${formatRemoteSettingsErrorKind({
-        errorKind: w.errorKind ?? "unknown_error",
-        ...(w.httpStatus !== undefined && {
-          httpStatus: w.httpStatus,
+        errorKind: failure.errorKind ?? "unknown_error",
+        ...(failure.httpStatus !== undefined && {
+          httpStatus: failure.httpStatus,
         }),
       })})`,
     );
     return {
-      ...P,
-      ...w,
+      ...authFacts,
+      ...failure,
     };
   };
   try {
-    O =
-      hybridOrganizationUuid !== null
+    refreshOutcome =
+      options !== null
         ? "not_needed"
         : await checkAndRefreshOAuthTokenIfNeededWithOutcome({
-            credentials: s,
+            credentials,
           });
-    if (hybridOrganizationUuid === null) await refreshGatewayToken(s);
-    let remoteSettingsAuthHeaders = await getRemoteSettingsAuthHeaders(s, hybridOrganizationUuid);
-    R = remoteSettingsAuthHeaders.accessToken;
-    C = remoteSettingsAuthHeaders.profileBearer === true;
-    T =
+    if (options === null) await refreshGatewayToken(credentials);
+    let remoteSettingsAuthHeaders = await getRemoteSettingsAuthHeaders(credentials, options);
+    accessToken = remoteSettingsAuthHeaders.accessToken;
+    isProfileBearer = remoteSettingsAuthHeaders.profileBearer === true;
+    isStoredLogin =
       remoteSettingsAuthHeaders.accessToken !== undefined &&
       remoteSettingsAuthHeaders.credentialOrigin === "stored_login";
     consentIdentity = remoteSettingsAuthHeaders.consentIdentity;
-    P = {
+    authFacts = {
       authType: remoteSettingsAuthHeaders.authType,
       credentialOrigin: remoteSettingsAuthHeaders.credentialOrigin,
-      tokenRefreshOutcome: remoteSettingsAuthHeaders.authType === "oauth" ? O : undefined,
+      tokenRefreshOutcome: remoteSettingsAuthHeaders.authType === "oauth" ? refreshOutcome : undefined,
     };
     if (remoteSettingsAuthHeaders.error)
-      return M({
+      return fail({
         success: false,
         error: remoteSettingsAuthHeaders.profileError
           ? remoteSettingsAuthHeaders.error
@@ -884,44 +901,44 @@ async function fetchRemoteManagedSettings(
               : "no_auth_available",
         skipRetry: !remoteSettingsAuthHeaders.retryable,
       });
-    let G = remoteSettingsAuthHeaders.url ?? getRemoteManagedSettingsEndpoint();
-    A = remoteSettingsAuthHeaders.url !== undefined;
-    let h = {
+    let url = remoteSettingsAuthHeaders.url ?? getRemoteManagedSettingsEndpoint();
+    usedAuthUrl = remoteSettingsAuthHeaders.url !== undefined;
+    let headers = {
       ...remoteSettingsAuthHeaders.headers,
       "User-Agent": isProviderManagedByHost() ? getClientSurface() : claudeCodeUserAgent(),
       "Cache-Control": "no-cache",
       Pragma: "no-cache",
     };
-    let F = hasManagedOrCoworkSurface() || hybridOrganizationUuid !== null ? undefined : e;
-    if (F) h["If-None-Match"] = `"${F}"`;
+    let etagToSend = hasManagedOrCoworkSurface() || options !== null ? undefined : etag;
+    if (etagToSend) headers["If-None-Match"] = `"${etagToSend}"`;
     let hostVerdict = getGatewayAuth()?.hostVerdict;
-    let Q =
-      pinnedAgentFor(remoteSettingsAuthHeaders.pinnedFingerprint, G) ??
+    let agent =
+      pinnedAgentFor(remoteSettingsAuthHeaders.pinnedFingerprint, url) ??
       (hostVerdict && "verified" in hostVerdict && hostVerdict.verified && !("vouched" in hostVerdict)
-        ? createPinnedAgent(G, hostVerdict.network)
+        ? createPinnedAgent(url, hostVerdict.network)
         : undefined);
-    let H = {
-      headers: h,
+    let requestConfig = {
+      headers,
       timeout: PROBE_TIMEOUT_MS,
       ...(hasManagedSettings() && {
         proxy: false,
       }),
-      ...(A && {
+      ...(usedAuthUrl && {
         maxRedirects: 0,
         adapter: "http",
       }),
-      validateStatus: (N) => N === 200 || N === 204 || N === 304 || N === 404,
-      signal: r,
+      validateStatus: (status) => status === 200 || status === 204 || status === 304 || status === 404,
+      signal,
     };
-    let response = await axios_default.get(G, {
-      ...H,
-      ...(Q && {
-        httpsAgent: Q,
+    let response = await axios_default.get(url, {
+      ...requestConfig,
+      ...(agent && {
+        httpsAgent: agent,
       }),
     });
     noteGatewaySeen(response.headers?.["x-cc-gateway-version"]);
     if (response.status === 304) {
-      if (!F) {
+      if (!etagToSend) {
         logForDebugging("Remote settings: 304 to an unconditional request");
         return {
           success: false,
@@ -929,7 +946,7 @@ async function fetchRemoteManagedSettings(
           errorKind: "unknown_error",
           httpStatus: 304,
           skipRetry: true,
-          ...P,
+          ...authFacts,
           ...responseHeaderFacts(response.headers),
         };
       }
@@ -937,10 +954,10 @@ async function fetchRemoteManagedSettings(
       return {
         success: true,
         settings: null,
-        checksum: e,
+        checksum: etag,
         signature: signatureHeaderValue(response.headers),
         consentIdentity,
-        ...P,
+        ...authFacts,
         responseKind: "not_modified",
         ...responseHeaderFacts(response.headers),
       };
@@ -948,7 +965,7 @@ async function fetchRemoteManagedSettings(
     if (response.status === 204 || response.status === 404) {
       if (
         isPolicyGraceEnabled() &&
-        P.authType !== "gateway_jwt" &&
+        authFacts.authType !== "gateway_jwt" &&
         !hasSessionsTokenRequestId(response.headers)
       ) {
         logForDebugging(
@@ -960,7 +977,7 @@ async function fetchRemoteManagedSettings(
           errorKind: "http_4xx",
           httpStatus: response.status,
           skipRetry: true,
-          ...P,
+          ...authFacts,
           ...responseHeaderFacts(response.headers),
         };
       }
@@ -971,7 +988,7 @@ async function fetchRemoteManagedSettings(
         checksum: undefined,
         signature: signatureHeaderValue(response.headers),
         consentIdentity,
-        ...P,
+        ...authFacts,
         responseKind: "none_configured",
         ...responseHeaderFacts(response.headers),
       };
@@ -985,75 +1002,75 @@ async function fetchRemoteManagedSettings(
         error: "Invalid remote settings format",
         errorKind: "parse_error",
         skipRetry: true,
-        ...P,
+        ...authFacts,
         ...responseHeaderFacts(response.headers),
       };
     }
-    let Z = ruleRemoteSettingsPayload(
+    let ruled = ruleRemoteSettingsPayload(
       hasManagedOrCoworkSurface() ? extractRestrictionSettings(parsed.data.settings) : parsed.data.settings,
       "remote managed settings",
     );
-    if ("ruledEmpty" in Z)
+    if ("ruledEmpty" in ruled)
       return {
-        ...Z.ruledEmpty,
-        ...P,
+        ...ruled.ruledEmpty,
+        ...authFacts,
       };
-    if (oauthRefreshLatch && parsed.data.checksum) restoreOAuthRefreshLatch(oauthRefreshLatch, k);
+    if (latch && parsed.data.checksum) restoreOAuthRefreshLatch(latch, latchStamp);
     logForDebugging("Remote settings: Fetched successfully");
     return {
       success: true,
-      ...Z,
+      ...ruled,
       checksum: parsed.data.checksum,
       isAnsweredEmpty: Object.keys(parsed.data.settings).length === 0,
       signature: hasManagedOrCoworkSurface() ? undefined : signatureHeaderValue(response.headers),
       consentIdentity,
-      ...P,
+      ...authFacts,
     };
   } catch (error) {
-    let G = errorMessage(error?.cause);
+    let causeMessage = errorMessage(error?.cause);
     if (errorMessage(error).includes(PIN_STORE_SYMLINK_MESSAGE))
-      return M({
+      return fail({
         success: false,
         error: "Cloud gateway TLS pin is in a symlinked credentials file",
         errorKind: "gateway_pin_refused",
         skipRetry: true,
       });
     if (errorMessage(error).includes(PIN_STORE_UNREADABLE_MESSAGE))
-      return M({
+      return fail({
         success: false,
         error: "Cloud gateway TLS pin could not be read from the credentials file",
         errorKind: "gateway_pin_unreadable",
       });
-    if (errorMessage(error).includes(PIN_MISMATCH_MESSAGE) || G.includes(PIN_MISMATCH_MESSAGE)) {
-      let H = pinMismatchFromError(error);
-      return M({
+    if (errorMessage(error).includes(PIN_MISMATCH_MESSAGE) || causeMessage.includes(PIN_MISMATCH_MESSAGE)) {
+      let mismatch = pinMismatchFromError(error);
+      return fail({
         success: false,
         error: "Cloud gateway TLS certificate does not match stored pin",
         errorKind: "gateway_cert_mismatch",
-        ...(H && {
-          gatewayPinMismatch: H,
+        ...(mismatch && {
+          gatewayPinMismatch: mismatch,
         }),
         skipRetry: true,
       });
     }
     if (
       errorMessage(error).includes(PUBLIC_ADDRESS_MODEL_MESSAGE) ||
-      G.includes(PUBLIC_ADDRESS_MODEL_MESSAGE)
+      causeMessage.includes(PUBLIC_ADDRESS_MODEL_MESSAGE)
     )
-      return M({
+      return fail({
         success: false,
         error: "Cloud gateway connection outside the network it was checked on",
         errorKind: "gateway_public_address",
         skipRetry: true,
       });
     let { kind, status, message } = classifyAxiosError(error);
-    if (status === 404 && hybridOrganizationUuid === null) {
+    if (status === 404 && options === null) {
       if (
         isPolicyGraceEnabled() &&
-        P.authType !== "gateway_jwt" &&
+        authFacts.authType !== "gateway_jwt" &&
         !hasSessionsTokenRequestId(axios_default.isAxiosError(error) ? error.response?.headers : undefined)
       )
-        return M({
+        return fail({
           success: false,
           error: "404 from an intermediary (no Anthropic request id)",
           errorKind: "http_4xx",
@@ -1066,89 +1083,98 @@ async function fetchRemoteManagedSettings(
         settings: {},
         checksum: "",
         consentIdentity,
-        ...P,
+        ...authFacts,
         responseKind: "none_configured",
         ...responseHeaderFactsOf(error),
       };
     }
-    let Q = {
+    let serverFacts = {
       ...extractServerErrorFields(error),
       ...responseHeaderFactsOf(error),
     };
     switch (kind) {
       case "auth": {
-        let H = {
+        let authFailure = {
           success: false,
           error: "Not authorized for remote settings",
           errorKind: status === 401 ? "http_401" : "http_403",
           skipRetry: true,
-          ...Q,
+          ...serverFacts,
         };
-        if (r?.aborted) return M(H);
-        let I;
-        if (status === 401 && R && !n && !oauthRefreshLatch?.attempted) {
-          let U = R;
-          let N = await countOAuth401Recovery(oauthRefreshLatch, async () => {
-            if (C) {
-              if (oauthRefreshLatch) oauthRefreshLatch.attempted = true;
-              let { getWIFTokenCache, invalidateWIFToken } = await import("./chunk-7k61ne1e.js");
-              await invalidateWIFToken(U);
+        if (signal?.aborted) return fail(authFailure);
+        let refreshOutcome_2;
+        if (status === 401 && accessToken && !isRetry && !latch?.attempted) {
+          let tokenToRefresh = accessToken;
+          let recoveredToken = await countOAuth401Recovery(latch, async () => {
+            if (isProfileBearer) {
+              if (latch) latch.attempted = true;
+              let { getWIFTokenCache, invalidateWIFToken } =
+                await import("../../../vendor/@anthropic-ai/sdk/lib/credentials/TokenCache.lazy.js");
+              await invalidateWIFToken(tokenToRefresh);
               return getWIFTokenCache()
                 .then((wifTokenCache) => wifTokenCache?.getToken())
                 .catch(() => {
                   return;
                 });
             }
-            I = {
+            refreshOutcome_2 = {
               outcome: undefined,
             };
-            await handleOAuth401Error(U, s, undefined, {
-              onForcedRefreshOutcome: (K) => {
-                I = {
-                  outcome: K,
+            await handleOAuth401Error(tokenToRefresh, credentials, undefined, {
+              onForcedRefreshOutcome: (forcedOutcome) => {
+                refreshOutcome_2 = {
+                  outcome: forcedOutcome,
                 };
-                H.forcedRefreshOutcome = K;
-                if (oauthRefreshLatch) {
-                  oauthRefreshLatch.attempted = true;
-                  oauthRefreshLatch.lastOutcome = K;
+                authFailure.forcedRefreshOutcome = forcedOutcome;
+                if (latch) {
+                  latch.attempted = true;
+                  latch.lastOutcome = forcedOutcome;
                 }
               },
             });
             return getClaudeAIOAuthTokens()?.accessToken;
           });
-          if (N && N !== R) {
-            M(H);
+          if (recoveredToken && recoveredToken !== accessToken) {
+            fail(authFailure);
             logEvent("tengu_remote_settings_401_force_refresh_retry", {});
-            let remoteManagedSettings = await fetchRemoteManagedSettings(e, true, s, r, oauthRefreshLatch);
+            let remoteManagedSettings = await fetchRemoteManagedSettings(
+              etag,
+              true,
+              credentials,
+              signal,
+              latch,
+            );
             return {
               ...remoteManagedSettings,
               retriedAfter401: true,
-              forcedRefreshOutcome: remoteManagedSettings.forcedRefreshOutcome ?? H.forcedRefreshOutcome,
+              forcedRefreshOutcome:
+                remoteManagedSettings.forcedRefreshOutcome ?? authFailure.forcedRefreshOutcome,
             };
           }
         }
-        if (status === 401 && T && isAuthFailureWorthRetrying(O, I)) H.skipRetry = false;
-        if (status === 401 && C && n) setWIFSettingsBearerRejected(true);
-        if (status === 401 && H.forcedRefreshOutcome === undefined && oauthRefreshLatch?.attempted)
-          H.forcedRefreshOutcome = oauthRefreshLatch.lastOutcome;
-        return M(H);
+        if (status === 401 && isStoredLogin && isAuthFailureWorthRetrying(refreshOutcome, refreshOutcome_2))
+          authFailure.skipRetry = false;
+        if (status === 401 && isProfileBearer && isRetry) setWIFSettingsBearerRejected(true);
+        if (status === 401 && authFailure.forcedRefreshOutcome === undefined && latch?.attempted)
+          authFailure.forcedRefreshOutcome = latch.lastOutcome;
+        return fail(authFailure);
       }
       case "timeout":
-        return M({
+        return fail({
           success: false,
           error: "Remote settings request timeout",
           errorKind: "timeout",
           errno: fetchErrorCode(error),
         });
       case "network":
-        return M({
+        return fail({
           success: false,
           error: "Cannot connect to server",
           errorKind: "network_error",
           errno: fetchErrorCode(error),
         });
       default:
-        return M({
+        return fail({
           success: false,
           error: message,
           errorKind:
@@ -1166,9 +1192,9 @@ async function fetchRemoteManagedSettings(
               noResponse: true,
               errno: fetchErrorCode(error),
             }),
-          ...Q,
+          ...serverFacts,
           ...((isNonRetryableClientError(status) ||
-            (A && status !== undefined && status >= 300 && status < 400)) && {
+            (usedAuthUrl && status !== undefined && status >= 300 && status < 400)) && {
             skipRetry: true,
           }),
         });
@@ -1179,41 +1205,49 @@ async function fetchRemoteManagedSettings(
 /**
  * 哨兵值：保存远程设置时保留已存的签名/语句，不被这次结果覆盖。
  */
-var KEEP_STORED_STATEMENT = Symbol("keep the stored statement");
-var BODY_JUST_RECEIVED = Symbol("the server sent the body now");
+var KEEP_STORED_STATEMENT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var BODY_JUST_RECEIVED;
+deferInit("chunk-4pc1m5n9.js:21412", () => {
+  KEEP_STORED_STATEMENT = Symbol("keep the stored statement");
+  BODY_JUST_RECEIVED = Symbol("the server sent the body now");
+});
 //@ chunk-4pc1m5n9.js:21497-22630 fingerprint = saveSettings (0.338)
 /**
  * 把远程设置写入缓存（storage 后端或 <配置目录>/remote-settings.json）。
  */
-async function saveSettings(e, storageV5, s, r, y) {
+async function saveSettings(settings, storageV5, signature, hybridOrgUuid, bodyReceivedAt) {
   if (hostSessionSkipsSharedCache()) return;
-  let S = jsonStringify(isManagedSettingsCopyKeptVerifiable() ? servedBodyOf(e) : e, null, 2);
-  let k = helperConsentDigest(e);
+  let text = jsonStringify(
+    isManagedSettingsCopyKeptVerifiable() ? servedBodyOf(settings) : settings,
+    null,
+    2,
+  );
+  let helperDigest = helperConsentDigest(settings);
   if (isDiskless() && isStorageV5Enabled() && storageV5 !== undefined && !getRemoteSettingsPathOverride()) {
-    let R = await storageV5.write(STORAGE_SPACES.state("remote-settings"), S, {
+    let writeResult = await storageV5.write(STORAGE_SPACES.state("remote-settings"), text, {
       publishDiscipline: "inPlace",
       mode: 384,
       flush: true,
     });
-    if (!R.ok) {
-      logForDebugging(`Remote settings: Failed to save - ${formatStorageError(R.error)}`);
+    if (!writeResult.ok) {
+      logForDebugging(`Remote settings: Failed to save - ${formatStorageError(writeResult.error)}`);
       return;
     }
     logForDebugging("Remote settings: Saved via storage backend");
-    remoteSettingsFileWritten("cache", S);
-    if (s !== KEEP_STORED_STATEMENT) await saveSignedCacheJws(getSettingsPath(), s);
-    await stampRemoteSettingsSync(y === BODY_JUST_RECEIVED ? undefined : y);
-    if (k !== undefined) {
-      let C = await storageV5.write(STORAGE_SPACES.state(HELPER_CONSENT_STATE_ID), k, {
+    remoteSettingsFileWritten("cache", text);
+    if (signature !== KEEP_STORED_STATEMENT) await saveSignedCacheJws(getSettingsPath(), signature);
+    await stampRemoteSettingsSync(bodyReceivedAt === BODY_JUST_RECEIVED ? undefined : bodyReceivedAt);
+    if (helperDigest !== undefined) {
+      let helperWrite = await storageV5.write(STORAGE_SPACES.state(HELPER_CONSENT_STATE_ID), helperDigest, {
         publishDiscipline: "inPlace",
         mode: 384,
       });
       logForDebugging(
-        C.ok
+        helperWrite.ok
           ? "Remote settings: Saved helper consent via storage backend"
-          : `Remote settings: Failed to save helper consent - ${formatStorageError(C.error)}`,
+          : `Remote settings: Failed to save helper consent - ${formatStorageError(helperWrite.error)}`,
       );
-      if (C.ok) remoteSettingsFileWritten("helperConsent", k);
+      if (helperWrite.ok) remoteSettingsFileWritten("helperConsent", helperDigest);
     }
     return;
   }
@@ -1223,7 +1257,7 @@ async function saveSettings(e, storageV5, s, r, y) {
   }
   try {
     let path = getSettingsPath();
-    await readStoredCertificate(path, S);
+    await readStoredCertificate(path, text);
     logForDebugging(`Remote settings: Saved to ${path}`);
   } catch (error) {
     logForDebugging(
@@ -1231,14 +1265,14 @@ async function saveSettings(e, storageV5, s, r, y) {
     );
     return;
   }
-  if (isStorageV5Enabled() && !getRemoteSettingsPathOverride()) remoteSettingsFileWritten("cache", S);
-  if (s !== KEEP_STORED_STATEMENT) await saveSignedCacheJws(getSettingsPath(), s);
-  await stampRemoteSettingsSync(y === BODY_JUST_RECEIVED ? undefined : y);
-  if (k === undefined) return;
+  if (isStorageV5Enabled() && !getRemoteSettingsPathOverride()) remoteSettingsFileWritten("cache", text);
+  if (signature !== KEEP_STORED_STATEMENT) await saveSignedCacheJws(getSettingsPath(), signature);
+  await stampRemoteSettingsSync(bodyReceivedAt === BODY_JUST_RECEIVED ? undefined : bodyReceivedAt);
+  if (helperDigest === undefined) return;
   try {
-    await readStoredCertificate(getHelperConsentPath(), k);
+    await readStoredCertificate(getHelperConsentPath(), helperDigest);
     if (isStorageV5Enabled() && !getRemoteSettingsPathOverride())
-      remoteSettingsFileWritten("helperConsent", k);
+      remoteSettingsFileWritten("helperConsent", helperDigest);
   } catch (error) {
     logForDebugging(`Remote settings: Failed to save helper consent - ${errorMessage(error)}`);
   }
@@ -1247,7 +1281,7 @@ async function saveSettings(e, storageV5, s, r, y) {
 /**
  * 获取远程托管设置：不符合条件返回 ineligible；CLAUDE_CODE_REMOTE_SETTINGS_PATH 覆盖文件或受限子进程直接用本地快照；否则带缓存 checksum 请求端点（304 沿用缓存），校验签名/组织后写入 remote-settings.json 缓存并作为 policy 的 remote 层。
  */
-async function fetchAndLoadRemoteManagedSettings(e) {
+async function fetchAndLoadRemoteManagedSettings(options) {
   if (!computeRemoteSettingsEligibility()) {
     currentRemoteSettingsState().prefetch.clear();
     return {
@@ -1256,7 +1290,7 @@ async function fetchAndLoadRemoteManagedSettings(e) {
       resolution: "ineligible",
     };
   }
-  let n = null;
+  let hybridOrgUuid = null;
   let cachedSettings = getRemoteSettingsPathOverride();
   if (cachedSettings || isEvalPolicySnapshotOnly()) {
     currentRemoteSettingsState().prefetch.clear();
@@ -1271,206 +1305,215 @@ async function fetchAndLoadRemoteManagedSettings(e) {
       resolution: "local",
     };
   }
-  if (n === null) persistOrgPinFromEligibility();
-  let remoteManagedSettingsRawCache = getRemoteManagedSettingsRawCache();
-  let y = isRemoteManagedSettingsVerified();
-  let S = settingsPresenceSignal.get();
+  if (hybridOrgUuid === null) persistOrgPinFromEligibility();
+  let settings = getRemoteManagedSettingsRawCache();
+  let alreadyVerified = isRemoteManagedSettingsVerified();
+  let presenceAtStart = settingsPresenceSignal.get();
   let gateAnswer = getStoredCopyTrust();
   let storedCopyTrustedPrincipal = getStoredCopyTrustedPrincipal();
-  let C = remoteManagedSettingsRawCache ? computeChecksum(remoteManagedSettingsRawCache) : undefined;
+  let cacheChecksum = settings ? computeChecksum(settings) : undefined;
   let syncCacheResetEpoch = getSyncCacheResetEpoch();
-  let O = currentRemoteSettingsState();
-  if (!O.signedCacheShadowChecked) {
-    O.signedCacheShadowChecked = true;
-    O.storedCopyAtStart =
-      hostSessionSkipsSharedCache() || hasManagedSettings() || n !== null
+  let state = currentRemoteSettingsState();
+  if (!state.signedCacheShadowChecked) {
+    state.signedCacheShadowChecked = true;
+    state.storedCopyAtStart =
+      hostSessionSkipsSharedCache() || hasManagedSettings() || hybridOrgUuid !== null
         ? "not_read"
         : {
             enforced: isManagedSettingsCopyTrustEnforced(),
             gateAnswer,
-            hadCopy: remoteManagedSettingsRawCache !== null,
+            hadCopy: settings !== null,
           };
-    if (remoteManagedSettingsRawCache && !hasManagedSettings() && n === null)
+    if (settings && !hasManagedSettings() && hybridOrgUuid === null)
       verifyStoredCacheAsync({
         kind: "managed-settings",
         cachePath: getSettingsPath(),
         bodySha: isManagedSettingsCopyKeptVerifiable()
-          ? computeChecksum(servedBodyOf(remoteManagedSettingsRawCache))
-          : computeChecksum(remoteManagedSettingsRawCache),
+          ? computeChecksum(servedBodyOf(settings))
+          : computeChecksum(settings),
         readStoredAccount: getStoredOauthAccountInfo,
         readOrgPin: describeMdmSettingsState,
         onJudged: (storedCopyShadow) => {
-          O.storedCopyShadow = storedCopyShadow;
+          state.storedCopyShadow = storedCopyShadow;
         },
       });
   }
-  if (!e.background && O.prefetch.pending) {
-    let result = await getClaudeAIOAuthTokenOriginAsync(e.credentials);
+  if (!options.background && state.prefetch.pending) {
+    let result = await getClaudeAIOAuthTokenOriginAsync(options.credentials);
     if (result !== "store" || env.CLAUDE_CODE_OAUTH_TOKEN) clearOAuthTokenMemos();
     if (storeRecheckNeeded(result))
-      await checkOAuthCredentialsChangedOnDisk(getRootSession().host, e.credentials);
+      await checkOAuthCredentialsChangedOnDisk(getRootSession().host, options.credentials);
   }
-  let E = e.background
+  let prefetchedFetch = options.background
     ? undefined
-    : O.prefetch.take(
-        (A) =>
-          A.checksum === C &&
-          A.epoch === syncCacheResetEpoch &&
-          A.endpoint === getRemoteManagedSettingsEndpoint() &&
-          A.principal === remoteSettingsCredentialKey(),
+    : state.prefetch.take(
+        (prefetchEntry) =>
+          prefetchEntry.checksum === cacheChecksum &&
+          prefetchEntry.epoch === syncCacheResetEpoch &&
+          prefetchEntry.endpoint === getRemoteManagedSettingsEndpoint() &&
+          prefetchEntry.principal === remoteSettingsCredentialKey(),
       );
   try {
     let now_2 = Date.now();
-    let P = n === null ? await readSyncAge(now_2) : undefined;
-    let M =
-      isPolicyGraceEnabled() && n === null
-        ? await settingsAgeMs(remoteManagedSettingsRawCache !== null, P, now_2)
+    let syncAgeMs = hybridOrgUuid === null ? await readSyncAge(now_2) : undefined;
+    let cacheAgeMs =
+      isPolicyGraceEnabled() && hybridOrgUuid === null
+        ? await settingsAgeMs(settings !== null, syncAgeMs, now_2)
         : undefined;
-    let w = isPolicyGraceEnabled() ? keepIfFresh(C, M) : C;
+    let etagToSend = isPolicyGraceEnabled() ? keepIfFresh(cacheChecksum, cacheAgeMs) : cacheChecksum;
     let now_3 = Date.now();
-    let h = await fetchWithRetry(w, {
-      ...e,
-      prefetched: E,
-      oauthRefreshLatch: e.background ? undefined : O.oauthRefreshLatch,
-      hybridOrganizationUuid: n,
+    let fetched = await fetchWithRetry(etagToSend, {
+      ...options,
+      prefetched: prefetchedFetch,
+      oauthRefreshLatch: options.background ? undefined : state.oauthRefreshLatch,
+      hybridOrganizationUuid: hybridOrgUuid,
     });
-    let F = Date.now() - now_3;
-    if (e.cycleFacts) {
-      e.cycleFacts.hadCache = remoteManagedSettingsRawCache !== null;
-      e.cycleFacts.fetchMs = F;
+    let fetchMs = Date.now() - now_3;
+    if (options.cycleFacts) {
+      options.cycleFacts.hadCache = settings !== null;
+      options.cycleFacts.fetchMs = fetchMs;
     }
-    let bodyReceivedAtMs = now_3 + F;
-    if (h.success && h.responseKind !== "not_modified") noteBodyReceivedAt(bodyReceivedAtMs);
-    let Q = h.authType === "oauth";
-    let H = h.success ? undefined : classifyRemoteSettingsFailure(h);
-    let I = settingsFetchOutcome(
-      h.success
+    let bodyReceivedAtMs = now_3 + fetchMs;
+    if (fetched.success && fetched.responseKind !== "not_modified") noteBodyReceivedAt(bodyReceivedAtMs);
+    let usedOauth = fetched.authType === "oauth";
+    let credentialState = fetched.success ? undefined : classifyRemoteSettingsFailure(fetched);
+    let outcomeReason = settingsFetchOutcome(
+      fetched.success
         ? {
             succeeded: true,
-            responseKind: h.responseKind ?? "body",
+            responseKind: fetched.responseKind ?? "body",
           }
         : {
             succeeded: false,
             failure:
-              h.errorKind === "no_auth_available" || h.errorKind === "api_key_not_sent"
+              fetched.errorKind === "no_auth_available" || fetched.errorKind === "api_key_not_sent"
                 ? "no_credentials"
-                : h.errorKind === "profile_credential_error"
+                : fetched.errorKind === "profile_credential_error"
                   ? "credential_exchange"
-                  : h.errorKind === "timeout"
+                  : fetched.errorKind === "timeout"
                     ? "timeout"
-                    : h.errorKind === "network_error" ||
-                        h.errorKind === "gateway_public_address" ||
-                        h.noResponse
+                    : fetched.errorKind === "network_error" ||
+                        fetched.errorKind === "gateway_public_address" ||
+                        fetched.noResponse
                       ? "network"
-                      : h.errorKind === "gateway_cert_mismatch" ||
-                          h.errorKind === "gateway_pin_refused" ||
-                          h.errorKind === "gateway_pin_unreadable"
+                      : fetched.errorKind === "gateway_cert_mismatch" ||
+                          fetched.errorKind === "gateway_pin_refused" ||
+                          fetched.errorKind === "gateway_pin_unreadable"
                         ? "tls"
-                        : h.errorKind === "parse_error" || h.errorKind === "ruled_empty"
+                        : fetched.errorKind === "parse_error" || fetched.errorKind === "ruled_empty"
                           ? "parse"
-                          : h.httpStatus !== undefined ||
-                              h.errorKind === "http_401" ||
-                              h.errorKind === "http_403"
+                          : fetched.httpStatus !== undefined ||
+                              fetched.errorKind === "http_401" ||
+                              fetched.errorKind === "http_403"
                             ? "http"
                             : "other",
             httpStatus:
-              h.httpStatus ??
-              (h.errorKind === "http_401" ? 401 : h.errorKind === "http_403" ? 403 : undefined),
-            serverErrorType: h.serverErrorType,
-            serverErrorCode: h.serverErrorCode,
-            serverAuthDenial: h.serverAuthDenial,
-            credentialState: H,
-            tokenRefreshOutcome: h.tokenRefreshOutcome,
-            forcedRefreshOutcome: h.forcedRefreshOutcome,
-            errno: h.errno,
-            responseContentType: h.responseContentType,
-            requestIdPresent: h.requestIdPresent,
-            exchangeFinal: h.errorKind === "profile_credential_error" ? h.skipRetry === true : undefined,
+              fetched.httpStatus ??
+              (fetched.errorKind === "http_401" ? 401 : fetched.errorKind === "http_403" ? 403 : undefined),
+            serverErrorType: fetched.serverErrorType,
+            serverErrorCode: fetched.serverErrorCode,
+            serverAuthDenial: fetched.serverAuthDenial,
+            credentialState,
+            tokenRefreshOutcome: fetched.tokenRefreshOutcome,
+            forcedRefreshOutcome: fetched.forcedRefreshOutcome,
+            errno: fetched.errno,
+            responseContentType: fetched.responseContentType,
+            requestIdPresent: fetched.requestIdPresent,
+            exchangeFinal:
+              fetched.errorKind === "profile_credential_error" ? fetched.skipRetry === true : undefined,
           },
     );
-    if (e.cycleFacts) e.cycleFacts.outcomeReason = I;
+    if (options.cycleFacts) options.cycleFacts.outcomeReason = outcomeReason;
     let path = isManagedSettingsCopyTrustEnforced();
-    let Z = hostSessionSkipsSharedCache()
+    let storedCopyLabel = hostSessionSkipsSharedCache()
       ? "not_read"
       : cacheTrustAnswer(
           {
             enforced: path,
             gateAnswer,
-            hadCopy: remoteManagedSettingsRawCache !== null,
+            hadCopy: settings !== null,
           },
-          O.storedCopyShadow,
+          state.storedCopyShadow,
         );
-    let settings = h.success ? h.settings : undefined;
-    O.liveAnswer = h.success
+    let settings_2 = fetched.success ? fetched.settings : undefined;
+    state.liveAnswer = fetched.success
       ? {
-          jws: h.signature,
+          jws: fetched.signature,
           bodySha: () => {
-            if (settings !== null && settings !== undefined) return computeChecksum(servedBodyOf(settings));
-            return remoteManagedSettingsRawCache !== null && isManagedSettingsCopyKeptVerifiable()
-              ? computeChecksum(servedBodyOf(remoteManagedSettingsRawCache))
-              : (h.checksum ?? "");
+            if (settings_2 !== null && settings_2 !== undefined)
+              return computeChecksum(servedBodyOf(settings_2));
+            return settings !== null && isManagedSettingsCopyKeptVerifiable()
+              ? computeChecksum(servedBodyOf(settings))
+              : (fetched.checksum ?? "");
           },
         }
       : undefined;
-    let K = !O.storedCopyReported && n === null;
-    O.storedCopyReported = true;
-    let ee = path ? storedCopyTrustedPrincipal : trustedPrincipal(O.storedCopyShadow);
-    if (h.success && h.signature !== undefined && ee !== undefined && !O.livePrincipalChecked) {
-      O.livePrincipalChecked = true;
+    let reportStoredCopy = !state.storedCopyReported && hybridOrgUuid === null;
+    state.storedCopyReported = true;
+    let storedPrincipal = path ? storedCopyTrustedPrincipal : trustedPrincipal(state.storedCopyShadow);
+    if (
+      fetched.success &&
+      fetched.signature !== undefined &&
+      storedPrincipal !== undefined &&
+      !state.livePrincipalChecked
+    ) {
+      state.livePrincipalChecked = true;
       logPrincipalChange({
         kind: "managed-settings",
-        jws: h.signature,
-        trustedPrincipal: ee,
+        jws: fetched.signature,
+        trustedPrincipal: storedPrincipal,
         gate: path ? "enforced" : "shadow",
       });
     }
     logEvent("tengu_remote_settings_fetch", {
-      duration_ms: F,
+      duration_ms: fetchMs,
       ms_since_startup: bodyReceivedAtMs - now,
-      success: h.success,
-      error_kind: fromEnumOpt(h.errorKind),
-      http_status: h.httpStatus,
-      attempts: h.attempts,
-      had_cache: remoteManagedSettingsRawCache !== null,
-      cache_age_ms: remoteManagedSettingsRawCache !== null ? P : undefined,
-      stored_copy: K ? fromEnum(Z) : undefined,
-      stored_copy_gate: K ? fromEnum(path ? "enforced" : "shadow") : undefined,
-      is_load: !e.background,
-      awaited: e.startupAwaited === true,
-      auth_type: fromEnumOpt(h.authType),
+      success: fetched.success,
+      error_kind: fromEnumOpt(fetched.errorKind),
+      http_status: fetched.httpStatus,
+      attempts: fetched.attempts,
+      had_cache: settings !== null,
+      cache_age_ms: settings !== null ? syncAgeMs : undefined,
+      stored_copy: reportStoredCopy ? fromEnum(storedCopyLabel) : undefined,
+      stored_copy_gate: reportStoredCopy ? fromEnum(path ? "enforced" : "shadow") : undefined,
+      is_load: !options.background,
+      awaited: options.startupAwaited === true,
+      auth_type: fromEnumOpt(fetched.authType),
       token_source: fromEnum(getAuthTokenSource().source),
       credential_road: fromEnum(settingsAuthSource()),
-      credential_origin: fromEnumOpt(h.credentialOrigin),
-      api_key_prefix: h.authType === "api_key" ? fromEnum(getApiKeyPrefixBucket()) : undefined,
+      credential_origin: fromEnumOpt(fetched.credentialOrigin),
+      api_key_prefix: fetched.authType === "api_key" ? fromEnum(getApiKeyPrefixBucket()) : undefined,
       has_custom_base_url: hasCustomBaseUrlForAnalytics(),
-      token_refresh_outcome: Q ? fromEnumOpt(h.tokenRefreshOutcome) : undefined,
-      forced_refresh_outcome: Q ? fromEnumOpt(h.forcedRefreshOutcome) : undefined,
-      retried_after_401: h.retriedAfter401 ?? false,
-      server_error_type: fromEnumOpt(h.serverErrorType),
-      server_error_code: fromEnumOpt(h.serverErrorCode),
-      server_auth_denial: fromEnumOpt(h.serverAuthDenial),
+      token_refresh_outcome: usedOauth ? fromEnumOpt(fetched.tokenRefreshOutcome) : undefined,
+      forced_refresh_outcome: usedOauth ? fromEnumOpt(fetched.forcedRefreshOutcome) : undefined,
+      retried_after_401: fetched.retriedAfter401 ?? false,
+      server_error_type: fromEnumOpt(fetched.serverErrorType),
+      server_error_code: fromEnumOpt(fetched.serverErrorCode),
+      server_auth_denial: fromEnumOpt(fetched.serverAuthDenial),
       injected_token_recovery: fromEnumOpt(
-        !h.success && h.credentialOrigin === "injected_token" ? injectedOAuthTokenRecovery() : undefined,
+        !fetched.success && fetched.credentialOrigin === "injected_token"
+          ? injectedOAuthTokenRecovery()
+          : undefined,
       ),
-      credential_state: fromEnumOpt(H),
-      error_errno: fromEnumOpt(h.errno),
-      outcome_reason: fromEnum(I),
-      response_kind: fromEnumOpt(h.success ? (h.responseKind ?? "body") : undefined),
-      request_id_present: h.requestIdPresent,
-      response_content_type: fromEnumOpt(h.responseContentType),
-      prefetched: E !== undefined,
-      hedged: h.hedged === true,
+      credential_state: fromEnumOpt(credentialState),
+      error_errno: fromEnumOpt(fetched.errno),
+      outcome_reason: fromEnum(outcomeReason),
+      response_kind: fromEnumOpt(fetched.success ? (fetched.responseKind ?? "body") : undefined),
+      request_id_present: fetched.requestIdPresent,
+      response_content_type: fromEnumOpt(fetched.responseContentType),
+      prefetched: prefetchedFetch !== undefined,
+      hedged: fetched.hedged === true,
     });
-    if (h.success && h.responseKind === "none_configured") clearEmptySettingsPresence();
+    if (fetched.success && fetched.responseKind === "none_configured") clearEmptySettingsPresence();
     if (wasResetDuringFetch(syncCacheResetEpoch))
       return {
         settings: null,
         fetchSucceeded: false,
         resolution: "reset",
       };
-    if (!h.success && h.errorKind === "ruled_empty") {
-      if (remoteManagedSettingsRawCache) setSessionCache(remoteManagedSettingsRawCache);
-      if (remoteManagedSettingsRawCache !== null && Object.keys(remoteManagedSettingsRawCache).length > 0) {
+    if (!fetched.success && fetched.errorKind === "ruled_empty") {
+      if (settings) setSessionCache(settings);
+      if (settings !== null && Object.keys(settings).length > 0) {
         logFeatureSad("remote_managed_settings_pull", "ruled_empty_kept_previous");
         logForDebugging(
           "Remote settings: ruled_empty_kept_previous - the previously accepted settings stay in force",
@@ -1482,98 +1525,97 @@ async function fetchAndLoadRemoteManagedSettings(e) {
         );
       }
       return {
-        settings: remoteManagedSettingsRawCache,
+        settings,
         fetchSucceeded: false,
         failure: {
           errorKind: "ruled_empty",
-          message: h.error ?? "ruled empty",
-          rulings: h.rulings ?? [],
+          message: fetched.error ?? "ruled empty",
+          rulings: fetched.rulings ?? [],
         },
         resolution: "ruled_empty",
       };
     }
-    if (!h.success) {
-      logFeatureBad("remote_managed_settings_pull", h.errorKind ?? "remote_managed_settings_fetch_failed");
-      let q = {
-        errorKind: h.errorKind ?? "unknown_error",
-        message: h.error ?? "Unknown error",
-        ...(h.httpStatus !== undefined && {
-          httpStatus: h.httpStatus,
+    if (!fetched.success) {
+      logFeatureBad(
+        "remote_managed_settings_pull",
+        fetched.errorKind ?? "remote_managed_settings_fetch_failed",
+      );
+      let failure = {
+        errorKind: fetched.errorKind ?? "unknown_error",
+        message: fetched.error ?? "Unknown error",
+        ...(fetched.httpStatus !== undefined && {
+          httpStatus: fetched.httpStatus,
         }),
-        ...(h.noResponse === true && {
+        ...(fetched.noResponse === true && {
           noResponse: true,
         }),
-        ...(stampedServerErrorType(h) !== undefined && {
-          serverErrorType: stampedServerErrorType(h),
-          ...(h.serverErrorCode !== undefined && {
-            serverErrorCode: h.serverErrorCode,
+        ...(stampedServerErrorType(fetched) !== undefined && {
+          serverErrorType: stampedServerErrorType(fetched),
+          ...(fetched.serverErrorCode !== undefined && {
+            serverErrorCode: fetched.serverErrorCode,
           }),
-          ...(h.serverAuthDenial !== undefined && {
-            serverAuthDenial: h.serverAuthDenial,
+          ...(fetched.serverAuthDenial !== undefined && {
+            serverAuthDenial: fetched.serverAuthDenial,
           }),
         }),
-        ...((h.errorKind === "http_401" || h.errorKind === "http_403") && {
+        ...((fetched.errorKind === "http_401" || fetched.errorKind === "http_403") && {
           credentialState: classifyRemoteSettingsFailure(
-            h.serverErrorStamped === true || !isPolicyGraceEnabled()
-              ? h
+            fetched.serverErrorStamped === true || !isPolicyGraceEnabled()
+              ? fetched
               : {
-                  ...h,
+                  ...fetched,
                   serverErrorType: undefined,
                   serverErrorCode: undefined,
-                  serverAuthDenial: h.errorKind === "http_401" ? h.serverAuthDenial : undefined,
+                  serverAuthDenial: fetched.errorKind === "http_401" ? fetched.serverAuthDenial : undefined,
                 },
           ),
         }),
-        ...(h.gatewayPinMismatch && {
-          gatewayPinMismatch: h.gatewayPinMismatch,
+        ...(fetched.gatewayPinMismatch && {
+          gatewayPinMismatch: fetched.gatewayPinMismatch,
         }),
       };
-      if (remoteManagedSettingsRawCache) {
+      if (settings) {
         logForDebugging(
-          `Remote settings: Using stale cache after fetch failure (${formatRemoteSettingsErrorKind(q)})`,
+          `Remote settings: Using stale cache after fetch failure (${formatRemoteSettingsErrorKind(failure)})`,
         );
-        setSessionCache(remoteManagedSettingsRawCache);
+        setSessionCache(settings);
         return {
-          settings: remoteManagedSettingsRawCache,
+          settings,
           fetchSucceeded: false,
-          failure: q,
+          failure,
           resolution: "failed",
         };
       }
       logForDebugging(
-        `Remote settings: Fetch failed (${formatRemoteSettingsErrorKind(q)}) and no cached settings`,
+        `Remote settings: Fetch failed (${formatRemoteSettingsErrorKind(failure)}) and no cached settings`,
       );
       return {
         settings: null,
         fetchSucceeded: false,
-        failure: q,
+        failure,
         resolution: "failed",
       };
     }
-    if (
-      h.settings === null &&
-      remoteManagedSettingsRawCache &&
-      remoteManagedSettingsRawCache === getRemoteManagedSettingsConsentedBaseline()
-    ) {
+    if (fetched.settings === null && settings && settings === getRemoteManagedSettingsConsentedBaseline()) {
       logForDebugging("Remote settings: Cache still valid (304 Not Modified)");
-      setSessionCache(remoteManagedSettingsRawCache, {
+      setSessionCache(settings, {
         verified: true,
       });
       if (!hostSessionSkipsSharedCache()) {
-        await maybePersistSignature(getSettingsPath(), h.signature, {
+        await maybePersistSignature(getSettingsPath(), fetched.signature, {
           keptVerifiable: isManagedSettingsCopyKeptVerifiable(),
         });
-        let q = wasResetDuringFetch(syncCacheResetEpoch);
-        if (await clearSignatureIfStale(getSettingsPath(), q)) await removeSyncStamp();
+        let wasReset = wasResetDuringFetch(syncCacheResetEpoch);
+        if (await clearSignatureIfStale(getSettingsPath(), wasReset)) await removeSyncStamp();
         else if (!isPolicyGraceEnabled()) await stampRemoteSettingsSync();
-        if (q)
+        if (wasReset)
           return {
             settings: null,
             fetchSucceeded: false,
             resolution: "reset",
           };
       }
-      if (!y) {
+      if (!alreadyVerified) {
         await reapplyEnvAfterSettings();
         if (wasResetDuringFetch(syncCacheResetEpoch))
           return {
@@ -1581,12 +1623,12 @@ async function fetchAndLoadRemoteManagedSettings(e) {
             fetchSucceeded: false,
             resolution: "reset",
           };
-        if (remoteManagedSettingsRawCache === getRemoteManagedSettingsConsentedBaseline()) {
+        if (settings === getRemoteManagedSettingsConsentedBaseline()) {
           await recordConsentIfSameIdentity(
-            h.consentIdentity,
-            sanitizeRemoteSettings(remoteManagedSettingsRawCache),
-            e.storageV5,
-            e.credentials,
+            fetched.consentIdentity,
+            sanitizeRemoteSettings(settings),
+            options.storageV5,
+            options.credentials,
           );
           if (wasResetDuringFetch(syncCacheResetEpoch))
             return {
@@ -1600,37 +1642,39 @@ async function fetchAndLoadRemoteManagedSettings(e) {
         status: lit("not_modified"),
       });
       return {
-        settings: remoteManagedSettingsRawCache,
+        settings,
         fetchSucceeded: true,
         resolution: "applied",
       };
     }
-    let L = h.settings ?? remoteManagedSettingsRawCache ?? {};
-    if (Object.keys(L).length > 0) {
-      let q = h.consentIdentity ? await readDangerousSettingsHash(h.consentIdentity, e.storageV5) : null;
-      let Oe = sanitizeRemoteSettings(getRemoteManagedSettingsConsentedBaseline());
-      let Ze =
-        q !== null
+    let nextSettings = fetched.settings ?? settings ?? {};
+    if (Object.keys(nextSettings).length > 0) {
+      let recordedHash = fetched.consentIdentity
+        ? await readDangerousSettingsHash(fetched.consentIdentity, options.storageV5)
+        : null;
+      let consentedBaseline = sanitizeRemoteSettings(getRemoteManagedSettingsConsentedBaseline());
+      let consentBaseline =
+        recordedHash !== null
           ? {
               source: "org_record",
-              dangerousSettingsHash: q,
-              consentedPayload: Oe,
+              dangerousSettingsHash: recordedHash,
+              consentedPayload: consentedBaseline,
             }
           : {
               source: "consented_payload",
-              settings: Oe,
+              settings: consentedBaseline,
             };
-      let code = sanitizeRemoteSettings(L);
+      let code = sanitizeRemoteSettings(nextSettings);
       let result = await checkManagedSettingsSecurity(
-        Ze,
+        consentBaseline,
         code,
-        e.showSecurityDialog,
+        options.showSecurityDialog,
         fetchRemoteManagedSettingsSigned({
-          jws: h.signature,
-          settings: L,
-          bodySent: h.settings !== null,
-          authType: h.authType,
-          fetchedAs: h.consentIdentity,
+          jws: fetched.signature,
+          settings: nextSettings,
+          bodySent: fetched.settings !== null,
+          authType: fetched.authType,
+          fetchedAs: fetched.consentIdentity,
           cachePath: getSettingsPath(),
         }),
       );
@@ -1646,14 +1690,14 @@ async function fetchAndLoadRemoteManagedSettings(e) {
             "Remote settings: A newer fetch took over the pending consent review; leaving the decision to it",
           );
           return {
-            settings: remoteManagedSettingsRawCache,
+            settings,
             fetchSucceeded: true,
             resolution: "consent_superseded",
           };
         }
         if (result === "deferred_no_consent_surface") {
-          let re = hasDeclaredNoConsentSurface();
-          if (re) {
+          let isDeferred = hasDeclaredNoConsentSurface();
+          if (isDeferred) {
             logForDebugging(
               "Remote settings: Consent prompt deferred to the next interactive session (this command cannot host it); keeping the consented baseline",
             );
@@ -1665,23 +1709,23 @@ async function fetchAndLoadRemoteManagedSettings(e) {
             logFeatureBad("remote_managed_settings_pull", "remote_managed_settings_no_consent_surface");
           }
           return {
-            settings: remoteManagedSettingsRawCache,
+            settings,
             fetchSucceeded: false,
-            resolution: re ? "deferred" : "no_consent_surface",
+            resolution: isDeferred ? "deferred" : "no_consent_surface",
           };
         }
         logForDebugging("Remote settings: User rejected new settings, using cached settings");
         return {
-          settings: remoteManagedSettingsRawCache,
+          settings,
           fetchSucceeded: true,
           resolution: "rejected",
         };
       }
-      setSessionCache(L, {
+      setSessionCache(nextSettings, {
         verified: true,
         consentDeferred: result === "deferred_non_interactive",
       });
-      if (!y) {
+      if (!alreadyVerified) {
         await reapplyEnvAfterSettings();
         if (wasResetDuringFetch(syncCacheResetEpoch))
           return {
@@ -1694,33 +1738,43 @@ async function fetchAndLoadRemoteManagedSettings(e) {
         case "approved":
         case "first_party_silent":
         case "no_check_needed":
-          markRemoteManagedSettingsConsented(L);
-          await recordConsentIfSameIdentity(h.consentIdentity, code, e.storageV5, e.credentials);
+          markRemoteManagedSettingsConsented(nextSettings);
+          await recordConsentIfSameIdentity(
+            fetched.consentIdentity,
+            code,
+            options.storageV5,
+            options.credentials,
+          );
           if (wasResetDuringFetch(syncCacheResetEpoch))
             return {
               settings: null,
               fetchSucceeded: false,
               resolution: "reset",
             };
-          let re = isManagedSettingsCopyKeptVerifiable() && h.settings !== null && h.signature !== undefined;
-          let Ee = isManagedSettingsCopyKeptVerifiable() && h.settings === null;
+          let keepSigned =
+            isManagedSettingsCopyKeptVerifiable() &&
+            fetched.settings !== null &&
+            fetched.signature !== undefined;
+          let keptSignatureOnly = isManagedSettingsCopyKeptVerifiable() && fetched.settings === null;
           await saveSettings(
-            re || Ee
-              ? L
-              : (h.salvagedSettings ??
-                  (h.settings === null ? sanitizeRemoteSettingsKeepingSubstitutes(L) : L)),
-            e.storageV5,
-            re || (h.salvagedSettings === undefined && h.settings !== null)
-              ? h.signature
-              : Ee
-                ? (h.signature ?? KEEP_STORED_STATEMENT)
+            keepSigned || keptSignatureOnly
+              ? nextSettings
+              : (fetched.salvagedSettings ??
+                  (fetched.settings === null
+                    ? sanitizeRemoteSettingsKeepingSubstitutes(nextSettings)
+                    : nextSettings)),
+            options.storageV5,
+            keepSigned || (fetched.salvagedSettings === undefined && fetched.settings !== null)
+              ? fetched.signature
+              : keptSignatureOnly
+                ? (fetched.signature ?? KEEP_STORED_STATEMENT)
                 : undefined,
-            n,
-            h.settings !== null || !isPolicyGraceEnabled()
+            hybridOrgUuid,
+            fetched.settings !== null || !isPolicyGraceEnabled()
               ? BODY_JUST_RECEIVED
-              : M === undefined
+              : cacheAgeMs === undefined
                 ? 0
-                : now_2 - M,
+                : now_2 - cacheAgeMs,
           );
           logForDebugging("Remote settings: Applied new settings successfully");
           logFeatureOk("remote_managed_settings_pull", {
@@ -1741,21 +1795,22 @@ async function fetchAndLoadRemoteManagedSettings(e) {
           break;
       }
       return {
-        settings: L,
+        settings: nextSettings,
         fetchSucceeded: true,
         resolution: "applied",
       };
     }
-    if (h.isAnsweredEmpty === true && !wasResetDuringFetch(syncCacheResetEpoch)) markSettingsPresenceEmpty();
-    let ve =
-      h.responseKind === "none_configured" &&
+    if (fetched.isAnsweredEmpty === true && !wasResetDuringFetch(syncCacheResetEpoch))
+      markSettingsPresenceEmpty();
+    let nothingChanged =
+      fetched.responseKind === "none_configured" &&
       hasManagedSettings() &&
       getRemoteManagedSettingsRawCache() === null &&
-      settingsPresenceSignal.get() === S;
-    setSessionCache(L, {
+      settingsPresenceSignal.get() === presenceAtStart;
+    setSessionCache(nextSettings, {
       verified: true,
     });
-    if (!y && !ve) {
+    if (!alreadyVerified && !nothingChanged) {
       await reapplyEnvAfterSettings();
       if (wasResetDuringFetch(syncCacheResetEpoch))
         return {
@@ -1764,24 +1819,35 @@ async function fetchAndLoadRemoteManagedSettings(e) {
           resolution: "reset",
         };
     }
-    markRemoteManagedSettingsConsented(L);
-    await recordConsentIfSameIdentity(h.consentIdentity, L, e.storageV5, e.credentials);
+    markRemoteManagedSettingsConsented(nextSettings);
+    await recordConsentIfSameIdentity(
+      fetched.consentIdentity,
+      nextSettings,
+      options.storageV5,
+      options.credentials,
+    );
     if (wasResetDuringFetch(syncCacheResetEpoch))
       return {
         settings: null,
         fetchSucceeded: false,
         resolution: "reset",
       };
-    await saveSettings(h.settings ?? {}, e.storageV5, h.signature, n, BODY_JUST_RECEIVED);
+    await saveSettings(
+      fetched.settings ?? {},
+      options.storageV5,
+      fetched.signature,
+      hybridOrgUuid,
+      BODY_JUST_RECEIVED,
+    );
     logForDebugging("Remote settings: Saved empty sentinel (404 response)");
     logFeatureOk("remote_managed_settings_pull", {
       status: lit("no_content"),
     });
     return {
-      settings: L,
+      settings: nextSettings,
       fetchSucceeded: true,
       resolution: "none",
-      changesNothing: ve,
+      changesNothing: nothingChanged,
     };
   } catch {
     if (wasResetDuringFetch(syncCacheResetEpoch))
@@ -1795,11 +1861,11 @@ async function fetchAndLoadRemoteManagedSettings(e) {
       errorKind: "unknown_error",
       message: "Unexpected error while applying remote settings",
     };
-    if (remoteManagedSettingsRawCache) {
+    if (settings) {
       logForDebugging("Remote settings: Using stale cache after error");
-      setSessionCache(remoteManagedSettingsRawCache);
+      setSessionCache(settings);
       return {
-        settings: remoteManagedSettingsRawCache,
+        settings,
         fetchSucceeded: false,
         failure,
         resolution: "failed",
@@ -1830,37 +1896,40 @@ async function reapplyEnvAfterSettings() {
   if (isDiskless()) return;
   try {
     let [
-      { applyConfigEnvironmentVariables: e, applySafeConfigEnvironmentVariables: n },
-      { checkHasTrustDialogAccepted: s },
-      { captureAdmin3PSteeringSnapshot: r },
-      { providerBoundRoute: y, resetProviderBoundCachesIfMoved: S },
+      {
+        applyConfigEnvironmentVariables: applyConfigEnv,
+        applySafeConfigEnvironmentVariables: applySafeConfigEnv,
+      },
+      { checkHasTrustDialogAccepted: hasTrustDialog },
+      { captureAdmin3PSteeringSnapshot: capture3PSteering },
+      { providerBoundRoute: boundRoute, resetProviderBoundCachesIfMoved: resetBoundCachesIfMoved },
     ] = await Promise.all([
-      import("./chunk-q6kb333n.js"),
-      import("./chunk-eesswvbz.js"),
-      import("./chunk-kva132ev.js"),
-      import("./chunk-zxkkfxjk.js"),
+      import("../../utils/managedEnvApply.js"),
+      import("../../utils/config.js"),
+      import("../../utils/model/thirdPartyDefaultFallbacks.js"),
+      import("../../utils/model/resetProviderCaches.js"),
     ]);
-    let k = false;
-    let R = null;
-    if (s()) e();
+    let unusedFlag = false;
+    let unusedValue = null;
+    if (hasTrustDialog()) applyConfigEnv();
     else {
-      n();
+      applySafeConfigEnv();
       let [
-        { clearProxyCache: C, configureGlobalAgents: T },
-        { clearCACertsCache: O, loadExtraCACerts: E },
-        { clearMTLSCache: A, loadMTLSClientMaterial: P },
+        { clearProxyCache, configureGlobalAgents },
+        { clearCACertsCache, loadExtraCACerts },
+        { clearMTLSCache, loadMTLSClientMaterial: loadMTLSMaterial },
       ] = await Promise.all([
-        import("./chunk-amdegp7s.js"),
-        import("./chunk-1aa5zmz2.js"),
-        import("./chunk-afejk3jk.js"),
+        import("../../utils/proxy.js"),
+        import("../../utils/caCerts.js"),
+        import("../../utils/mtls.js"),
       ]);
-      C();
-      O();
-      A();
-      await Promise.all([E(), P()]);
-      T();
+      clearProxyCache();
+      clearCACertsCache();
+      clearMTLSCache();
+      await Promise.all([loadExtraCACerts(), loadMTLSMaterial()]);
+      configureGlobalAgents();
     }
-    r();
+    capture3PSteering();
   } catch (error) {
     logError(error);
   }

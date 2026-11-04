@@ -250,3 +250,4 @@ async function readHead(file, n_2) {
     await handle.close();
   }
 }
+export { setupSkills };

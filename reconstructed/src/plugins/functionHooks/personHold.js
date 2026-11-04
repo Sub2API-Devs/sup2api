@@ -13,20 +13,20 @@ import { createSignal } from "../../utils/signal.js";
 
 //@ chunk-e6aww6q8.js:779592-779772 placement
 function createTurnBindings() {
-  let e = new Map();
+  let bindingsById = new Map();
   return {
-    bind: (n, turnId, started) => {
-      e.set(n, {
+    bind: (id, turnId, started) => {
+      bindingsById.set(id, {
         turnId,
         started,
       });
     },
-    release: (n, r) => {
-      if (e.get(n)?.turnId === r) e.delete(n);
+    release: (id, turnId) => {
+      if (bindingsById.get(id)?.turnId === turnId) bindingsById.delete(id);
     },
-    current: (n) => e.get(n),
+    current: (id) => bindingsById.get(id),
     clear: () => {
-      e.clear();
+      bindingsById.clear();
     },
   };
 }
@@ -34,8 +34,8 @@ function createTurnBindings() {
 /**
  * 回合绑定表
  */
-var turnBindings = identity_2(createTurnBindings(), (e) => {
-  e.clear();
+var turnBindings = identity_2(createTurnBindings(), (bindings) => {
+  bindings.clear();
 });
 //@ chunk-e6aww6q8.js:779806-779822 placement
 /**
@@ -47,42 +47,42 @@ var bindTurn = turnBindings.bind;
  * 当前回合槽：bind 记录回合 id、开始 Promise、是否由人发起与取消函数，release 只释放同一回合。
  */
 function createCurrentTurnSlot() {
-  let e;
+  let current;
   return {
-    bind: (n) => {
-      let r = false;
-      e = {
-        turnId: n.turnId,
-        started: n.started ?? Promise.resolve(),
-        isPersonStarted: n.startedBy === "person",
-        cancelled: () => r,
+    bind: (turn) => {
+      let isCancelled = false;
+      current = {
+        turnId: turn.turnId,
+        started: turn.started ?? Promise.resolve(),
+        isPersonStarted: turn.startedBy === "person",
+        cancelled: () => isCancelled,
         cancel: () => {
-          if (r) return;
-          r = true;
-          n.abort();
+          if (isCancelled) return;
+          isCancelled = true;
+          turn.abort();
         },
       };
     },
-    release: (n) => {
-      if (e?.turnId === n) e = undefined;
+    release: (turnId) => {
+      if (current?.turnId === turnId) current = undefined;
     },
-    current: () => e,
+    current: () => current,
   };
 }
 //@ chunk-e6aww6q8.js:780079-780155 placement
 /**
  * 当前回合槽
  */
-var currentTurnSlot = identity_2(createCurrentTurnSlot(), (e) => {
-  let n = e.current();
-  if (n !== undefined) e.release(n.turnId);
+var currentTurnSlot = identity_2(createCurrentTurnSlot(), (slot) => {
+  let turn = slot.current();
+  if (turn !== undefined) slot.release(turn.turnId);
 });
 //@ chunk-e6aww6q8.js:780155-780189 placement
 /**
  * 回合释放信号
  */
-var turnFinishedSignal = identity_2(createSignal(), (e) => {
-  e.clear();
+var turnFinishedSignal = identity_2(createSignal(), (signal) => {
+  signal.clear();
 });
 //@ chunk-e6aww6q8.js:780227-780246 placement
 var release_2 = turnBindings.release;
@@ -95,17 +95,17 @@ var TURN_ABORTED_FLAG = true;
 /**
  * 回合释放信号
  */
-var turnEndedSignal = identity_2(createSignal(), (e) => {
-  e.clear();
+var turnEndedSignal = identity_2(createSignal(), (signal) => {
+  signal.clear();
 });
 //@ chunk-e6aww6q8.js:780291-780371 placement
 /**
  * 若是当前回合则释放并通知
  */
-function releaseTurnIfCurrent(e, n) {
-  let r = currentTurnSlot.current()?.turnId === e;
-  currentTurnSlot.release(e);
-  if (r) turnEndedSignal.emit(n);
+function releaseTurnIfCurrent(turnId, payload) {
+  let isCurrent = currentTurnSlot.current()?.turnId === turnId;
+  currentTurnSlot.release(turnId);
+  if (isCurrent) turnEndedSignal.emit(payload);
 }
 //@ chunk-e6aww6q8.js:780371-780390 placement
 /**

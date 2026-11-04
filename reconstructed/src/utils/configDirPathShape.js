@@ -18,45 +18,50 @@ import { getPreSettingsEnvSnapshot } from "./managedEnvApply.js";
 import { getClaudeConfigHomeDir } from "./envUtils.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { createEnvAccessor } from "./env/envRegistry.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-3wek6r2k.js:68365-68416 placement
-function isUncachedPromptBoundary(e) {
+function isUncachedPromptBoundary(promptPart) {
   return (
-    e === SYSTEM_PROMPT_DYNAMIC_BOUNDARY ||
-    isCliSyspromptPrefix(e) ||
+    promptPart === SYSTEM_PROMPT_DYNAMIC_BOUNDARY ||
+    isCliSyspromptPrefix(promptPart) ||
     isUncachedSystemBlock({
-      text: e,
+      text: promptPart,
     })
   );
 }
 //@ chunk-3wek6r2k.js:68416-68474 placement
-function joinCacheablePrompt(e) {
-  return e.filter((o) => o && !isUncachedPromptBoundary(o)).join(`
+function joinCacheablePrompt(promptParts) {
+  return promptParts.filter((promptPart) => promptPart && !isUncachedPromptBoundary(promptPart)).join(`
 
 `);
 }
 //@ chunk-3wek6r2k.js:68498-68886 placement
-function configDirPathShape(e, o = pathModule) {
-  if (e === undefined) return "unset";
-  let trimmed = e.trim();
+function configDirPathShape(configDirPath, pathApi = pathModule) {
+  if (configDirPath === undefined) return "unset";
+  let trimmed = configDirPath.trim();
   if (trimmed === "") return "blank";
-  let r = o.sep === "\\";
-  if (o.isAbsolute(e))
-    return !r || /^[a-z]:/i.test(e) ? "absolute" : /^[\\/]{2}/.test(e) ? "unc" : "rooted_no_drive";
+  let isWindowsPath = pathApi.sep === "\\";
+  if (pathApi.isAbsolute(configDirPath))
+    return !isWindowsPath || /^[a-z]:/i.test(configDirPath)
+      ? "absolute"
+      : /^[\\/]{2}/.test(configDirPath)
+        ? "unc"
+        : "rooted_no_drive";
   let replaced = trimmed.replace(/^(["'])(.*)\1$/s, "$2");
-  if (o.isAbsolute(replaced)) return "quoted_or_padded";
-  let [p = ""] = replaced.split(r ? /[\\/]/ : "/");
-  return p === "~" ? "tilde" : /^[$%~]/.test(p) ? "variable" : "relative";
+  if (pathApi.isAbsolute(replaced)) return "quoted_or_padded";
+  let [firstSegment = ""] = replaced.split(isWindowsPath ? /[\\/]/ : "/");
+  return firstSegment === "~" ? "tilde" : /^[$%~]/.test(firstSegment) ? "variable" : "relative";
 }
 //@ chunk-3wek6r2k.js:68886-69038 placement
 function configDirTelemetry() {
   if (isDiskless()) return {};
-  let envCaseInsensitive = getEnvCaseInsensitive(getPreSettingsEnvSnapshot(), "CLAUDE_CONFIG_DIR");
-  let claudeConfigHomeDir = getClaudeConfigHomeDir();
+  let configDirPath = getEnvCaseInsensitive(getPreSettingsEnvSnapshot(), "CLAUDE_CONFIG_DIR");
+  let configDirPath_2 = getClaudeConfigHomeDir();
   return {
-    config_dir_kind: fromEnum(configDirPathShape(envCaseInsensitive)),
-    ...(claudeConfigHomeDir !== envCaseInsensitive && {
-      config_dir_settings_kind: fromEnum(configDirPathShape(claudeConfigHomeDir)),
+    config_dir_kind: fromEnum(configDirPathShape(configDirPath)),
+    ...(configDirPath_2 !== configDirPath && {
+      config_dir_settings_kind: fromEnum(configDirPathShape(configDirPath_2)),
     }),
   };
 }
@@ -64,6 +69,10 @@ function configDirTelemetry() {
 /**
  * 配置目录路径覆盖的空表。
  */
-var emptyConfigDirOverrides = {};
-var configDirOverridesAccessor = createEnvAccessor(emptyConfigDirOverrides, null);
+var emptyConfigDirOverrides; // deferred: uses createEnvAccessor (./env/envRegistry.js) of its import cycle while loading; runs once the cycle is complete
+var configDirOverridesAccessor;
+deferInit("chunk-3wek6r2k.js:69038", () => {
+  emptyConfigDirOverrides = {};
+  configDirOverridesAccessor = createEnvAccessor(emptyConfigDirOverrides, null);
+});
 export { configDirTelemetry, joinCacheablePrompt, isUncachedPromptBoundary };

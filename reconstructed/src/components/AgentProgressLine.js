@@ -9,7 +9,7 @@
  * attribution: placement 1, fingerprint 1
  */
 import { init_react_production } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default_2,
   Fragment,
@@ -19,12 +19,16 @@ import { Text, Box } from "../ink/components/Text.js";
 import { TagTabs } from "./TagTabs.js";
 import { formatNumber } from "../utils/format.js";
 import { TreeConnectorsRow } from "./design-system/TreeConnectors.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ah34pb7m.js:36053-36057 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ah34pb7m.js:36053", () => {
+  init_react_production();
+});
 //@ chunk-ah34pb7m.js:36057-37715 fingerprint = AgentProgressLine (0.716)
 function AgentProgressLine(props) {
-  let $ = w(32);
+  let $ = useMemoCache(32);
   let {
     agentType,
     description,
@@ -153,19 +157,19 @@ function AgentProgressLine(props) {
     $[20] = t7;
     $[21] = children;
   } else children = $[21];
-  let pe;
+  let headerRow;
   if ($[22] !== connectors || $[23] !== children) {
-    pe = jsxProd_default(TreeConnectorsRow, {
+    headerRow = jsxProd_default(TreeConnectorsRow, {
       connectors,
       children,
     });
     $[22] = connectors;
     $[23] = children;
-    $[24] = pe;
-  } else pe = $[24];
-  let te;
+    $[24] = headerRow;
+  } else headerRow = $[24];
+  let statusRow;
   if ($[25] !== getStatusText || $[26] !== isBackgrounded || $[27] !== isLast) {
-    te =
+    statusRow =
       !isBackgrounded &&
       jsxProd_default(TreeConnectorsRow, {
         connectors: [isLast ? "space" : "pipe"],
@@ -177,17 +181,17 @@ function AgentProgressLine(props) {
     $[25] = getStatusText;
     $[26] = isBackgrounded;
     $[27] = isLast;
-    $[28] = te;
-  } else te = $[28];
+    $[28] = statusRow;
+  } else statusRow = $[28];
   let t11;
-  if ($[29] !== pe || $[30] !== te) {
+  if ($[29] !== headerRow || $[30] !== statusRow) {
     t11 = jsxProd_default_2(Box, {
       flexDirection: "column",
       paddingLeft: 3,
-      children: [pe, te],
+      children: [headerRow, statusRow],
     });
-    $[29] = pe;
-    $[30] = te;
+    $[29] = headerRow;
+    $[30] = statusRow;
     $[31] = t11;
   } else t11 = $[31];
   return t11;

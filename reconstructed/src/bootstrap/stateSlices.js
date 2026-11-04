@@ -21,67 +21,69 @@ import {
 } from "./state.js";
 import { mergeProjectDirs } from "./sessionSlices.js";
 import { SESSION_URL_HASH_SALT } from "../utils/sessionUrl.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ndmse9kj.js:1260-1313 placement
 /**
  * typeof 为 object 且非 null，用于结构比较前的快速判断。
  */
-function isObjectLike(e) {
-  return typeof e === "object" && e !== null;
+function isObjectLike(value) {
+  return typeof value === "object" && value !== null;
 }
 //@ chunk-ndmse9kj.js:1313-1351 placement
 /**
  * 结构相等判断（忽略值为 undefined 的键，不允许多次配对同一节点）：设置/文档比较用。
  */
-function deepEqualIgnoringUndefined(e, n) {
-  return structurallyEqualGraphs(e, n, definedEntries, false);
+function deepEqualIgnoringUndefined(left, right) {
+  return structurallyEqualGraphs(left, right, definedEntries, false);
 }
 //@ chunk-ndmse9kj.js:1351-1400 placement
-function deepEqualWithCycles(e, n) {
-  return structurallyEqualGraphs(e, n, Object.entries, true);
+function deepEqualWithCycles(left, right) {
+  return structurallyEqualGraphs(left, right, Object.entries, true);
 }
 //@ chunk-ndmse9kj.js:1400-1768 placement
 /**
  * 用显式栈比较两棵（可能有环的）对象图：o 枚举子项，r 为真时允许同一对节点重复配对（容忍环）。叶子按 === 比较，容器先比外形（ft）再逐键下钻。
  */
 function structurallyEqualGraphs(left, right, childEntries, allowCycles) {
-  let i = new Map();
-  let s = [[left, right]];
-  while (s.length > 0) {
-    let [a, l] = s.pop();
-    if (!isObjectLike(a) || !isObjectLike(l)) {
-      if (a !== l) return false;
+  let seenPairs = new Map();
+  let pendingPairs = [[left, right]];
+  while (pendingPairs.length > 0) {
+    let [leftValue, rightValue] = pendingPairs.pop();
+    if (!isObjectLike(leftValue) || !isObjectLike(rightValue)) {
+      if (leftValue !== rightValue) return false;
       continue;
     }
-    let p = i.get(a);
-    if (p !== undefined) {
-      if (p.has(l)) continue;
+    let rightSet = seenPairs.get(leftValue);
+    if (rightSet !== undefined) {
+      if (rightSet.has(rightValue)) continue;
       if (!allowCycles) return false;
-      p.add(l);
-    } else i.set(a, new Set([l]));
-    let f = new Map(childEntries(l));
-    let S = childEntries(a);
-    if (!haveSameContainerKind(a, l) || S.length !== f.size) return false;
-    for (let [u, m] of S) {
-      if (!f.has(u)) return false;
-      s.push([m, f.get(u)]);
+      rightSet.add(rightValue);
+    } else seenPairs.set(leftValue, new Set([rightValue]));
+    let rightEntries = new Map(childEntries(rightValue));
+    let leftEntries = childEntries(leftValue);
+    if (!haveSameContainerKind(leftValue, rightValue) || leftEntries.length !== rightEntries.size)
+      return false;
+    for (let [key, childValue] of leftEntries) {
+      if (!rightEntries.has(key)) return false;
+      pendingPairs.push([childValue, rightEntries.get(key)]);
     }
   }
   return true;
 }
 //@ chunk-ndmse9kj.js:1768-1835 placement
-function definedEntries(e) {
-  return Object.entries(e).filter(([, value]) => value !== undefined);
+function definedEntries(value) {
+  return Object.entries(value).filter(([, value]) => value !== undefined);
 }
 //@ chunk-ndmse9kj.js:1835-1973 placement
-function haveSameContainerKind(e, n) {
-  if (Array.isArray(e) || Array.isArray(n))
-    return Array.isArray(e) && Array.isArray(n) && e.length === n.length;
-  return isPlainObject(e) && isPlainObject(n);
+function haveSameContainerKind(left, right) {
+  if (Array.isArray(left) || Array.isArray(right))
+    return Array.isArray(left) && Array.isArray(right) && left.length === right.length;
+  return isPlainObject(left) && isPlainObject(right);
 }
 //@ chunk-ndmse9kj.js:1973-2057 placement
-function isPlainObject(e) {
-  let prototypeOf = Object.getPrototypeOf(e);
+function isPlainObject(value) {
+  let prototypeOf = Object.getPrototypeOf(value);
   return prototypeOf === Object.prototype || prototypeOf === null;
 }
 //@ chunk-ndmse9kj.js:2057-2397 placement
@@ -96,17 +98,17 @@ class ManagedDocumentLinks {
     this.walked.clear();
     this.folderIsLink.clear();
   }
-  noteWalked(e, n) {
-    if (!this.walked.has(e)) this.walked.set(e, n());
+  noteWalked(path, resolveLink) {
+    if (!this.walked.has(path)) this.walked.set(path, resolveLink());
   }
-  linkOf(e) {
-    return this.walked.get(e) ?? null;
+  linkOf(path) {
+    return this.walked.get(path) ?? null;
   }
-  isLinked(e) {
-    return this.linkOf(e) !== null;
+  isLinked(path) {
+    return this.linkOf(path) !== null;
   }
   all() {
-    return [...this.walked.values(), this.managedMcp].filter((e) => e !== null);
+    return [...this.walked.values(), this.managedMcp].filter((link) => link !== null);
   }
 }
 //@ chunk-ndmse9kj.js:2397-2509 placement
@@ -127,9 +129,9 @@ function classifyConfigDirOwnership({ file, folder, linked, posix }) {
   if (!posix) return "not_evaluated";
   if (file === undefined || folder === undefined) return linked ? "symlinked" : "unknown";
   if (file.uid !== 0 || folder.uid !== 0) return "not_admin_owned";
-  let i = file.mode | folder.mode;
-  if ((i & 2) !== 0) return "other_writable";
-  if ((i & 16) !== 0) return "group_writable";
+  let modeBits = file.mode | folder.mode;
+  if ((modeBits & 2) !== 0) return "other_writable";
+  if ((modeBits & 16) !== 0) return "group_writable";
   return linked ? "symlinked" : "protected";
 }
 //@ chunk-ndmse9kj.js:2817-3158 placement
@@ -139,11 +141,11 @@ function classifyConfigDirOwnership({ file, folder, linked, posix }) {
 function isWritableByCurrentUser({ file, folder, euid, groups, posix }) {
   if (!posix || euid === undefined) return;
   if (euid === 0) return true;
-  let filtered = [file, folder].filter((l) => l !== undefined);
-  let mapped = filtered.map((l) => {
-    if (l.uid === euid || (l.mode & 2) !== 0) return true;
-    if ((l.mode & 16) === 0) return false;
-    return l.gid === undefined ? undefined : groups().includes(l.gid);
+  let filtered = [file, folder].filter((stat) => stat !== undefined);
+  let mapped = filtered.map((stat) => {
+    if (stat.uid === euid || (stat.mode & 2) !== 0) return true;
+    if ((stat.mode & 16) === 0) return false;
+    return stat.gid === undefined ? undefined : groups().includes(stat.gid);
   });
   if (mapped.includes(true)) return true;
   return filtered.length < 2 || mapped.includes(undefined) ? undefined : false;
@@ -163,8 +165,8 @@ class ManagedFileProtections {
     this.siblingRecords.clear();
     this.setsOrgPin = false;
   }
-  note(e, n) {
-    this.documents.set(e, n);
+  note(path, record) {
+    this.documents.set(path, record);
   }
   all() {
     return [...this.documents];
@@ -193,38 +195,38 @@ class RepoTierFreeze {
   tiers;
   baseline;
   lingering;
-  tier(e) {
+  tier(key) {
     if (this.holders === 0 && this.lingering !== undefined) {
-      let n = this.lingering();
-      if (n === undefined) this.lingering = undefined;
-      this.tiers = n;
+      let lingeredTiers = this.lingering();
+      if (lingeredTiers === undefined) this.lingering = undefined;
+      this.tiers = lingeredTiers;
     }
-    return this.tiers?.get(e);
+    return this.tiers?.get(key);
   }
-  engage(e, n) {
-    let o;
+  engage(loadTiers, loadBaseline) {
+    let saved;
     if (this.holders === 0) {
-      let i = e();
-      let baseline = n?.() ?? i;
+      let tiers = loadTiers();
+      let baseline = loadBaseline?.() ?? tiers;
       if (this.lingering !== undefined) {
-        o = {
+        saved = {
           tiers: this.tiers,
           lingering: this.lingering,
         };
         this.lingering = undefined;
       }
-      this.tiers = i;
+      this.tiers = tiers;
       this.baseline = baseline;
     }
     this.holders++;
-    let r = false;
+    let released = false;
     return {
       release: () => {
-        if (r)
+        if (released)
           return {
             last: false,
           };
-        r = true;
+        released = true;
         this.holders--;
         if (this.holders > 0)
           return {
@@ -238,44 +240,44 @@ class RepoTierFreeze {
         };
       },
       abandon: () => {
-        if (r) return;
-        r = true;
+        if (released) return;
+        released = true;
         this.holders--;
         if (this.holders === 0) {
-          this.tiers = o?.tiers;
-          this.lingering = o?.lingering;
+          this.tiers = saved?.tiers;
+          this.lingering = saved?.lingering;
           this.baseline = undefined;
         }
       },
     };
   }
-  whileLive(e) {
+  whileLive(run) {
     let tiers = this.tiers;
     let lingering = this.lingering;
     this.tiers = undefined;
     this.lingering = undefined;
     try {
-      return e();
+      return run();
     } finally {
       this.tiers = tiers;
       this.lingering = lingering;
     }
   }
-  baselineTier(e) {
-    return this.baseline?.get(e);
+  baselineTier(key) {
+    return this.baseline?.get(key);
   }
-  differingTiers(e) {
-    return this.baseline === undefined ? [] : diffTierKeys(this.baseline, e);
+  differingTiers(current) {
+    return this.baseline === undefined ? [] : diffTierKeys(this.baseline, current);
   }
-  rebaseline(e, n) {
+  rebaseline(current, keys) {
     if (this.baseline === undefined) return;
-    let o = new Map(this.baseline);
-    for (let r of n) {
-      let i = e.get(r);
-      if (i === undefined) o.delete(r);
-      else o.set(r, i);
+    let nextBaseline = new Map(this.baseline);
+    for (let key of keys) {
+      let tier = current.get(key);
+      if (tier === undefined) nextBaseline.delete(key);
+      else nextBaseline.set(key, tier);
     }
-    this.baseline = o;
+    this.baseline = nextBaseline;
   }
   linger(tiers, lingering) {
     if (this.holders === 0) {
@@ -292,26 +294,29 @@ class RepoTierFreeze {
 /**
  * 空对象归一为 null：设置读取时把 {} 视为"没有值"。
  */
-function nullIfEmptyObject(e) {
-  return e !== null && Object.keys(e).length === 0 ? null : e;
+function nullIfEmptyObject(value) {
+  return value !== null && Object.keys(value).length === 0 ? null : value;
 }
 //@ chunk-ndmse9kj.js:4892-5019 placement
-function normalizeTierForCompare(e) {
+function normalizeTierForCompare(tier) {
   return {
-    ...e,
-    settings: nullIfEmptyObject(e.settings),
-    unfiltered: nullIfEmptyObject(e.unfiltered),
-    ...(e.legacy !== undefined && {
-      legacy: nullIfEmptyObject(e.legacy),
+    ...tier,
+    settings: nullIfEmptyObject(tier.settings),
+    unfiltered: nullIfEmptyObject(tier.unfiltered),
+    ...(tier.legacy !== undefined && {
+      legacy: nullIfEmptyObject(tier.legacy),
     }),
   };
 }
 //@ chunk-ndmse9kj.js:5019-5165 placement
-function diffTierKeys(baseline, n) {
-  return [...baseline.keys(), ...[...n.keys()].filter((key) => !baseline.has(key))].filter((o) => {
-    let r = baseline.get(o);
-    let i = n.get(o);
-    return !deepEqualWithCycles(r && normalizeTierForCompare(r), i && normalizeTierForCompare(i));
+function diffTierKeys(baseline, other) {
+  return [...baseline.keys(), ...[...other.keys()].filter((key) => !baseline.has(key))].filter((key) => {
+    let baselineTier = baseline.get(key);
+    let otherTier = other.get(key);
+    return !deepEqualWithCycles(
+      baselineTier && normalizeTierForCompare(baselineTier),
+      otherTier && normalizeTierForCompare(otherTier),
+    );
   });
 }
 //@ chunk-ndmse9kj.js:5165-5237 placement
@@ -361,7 +366,7 @@ class SettingsCacheStore {
   clearPluginBase() {
     this.pluginBase = undefined;
   }
-  invalidateAll(e) {
+  invalidateAll(options) {
     this.epoch++;
     this.mergedSettings = null;
     this.perSource.clear();
@@ -373,12 +378,12 @@ class SettingsCacheStore {
     this.walkedFolders.clear();
     this.folderListings.clear();
     this.policy = {};
-    if (e?.userLayer === "retain" && isStorageV5Enabled() && this.primer !== undefined) {
-      for (let [n, o] of this.retained) {
-        this.parsedFiles.set(n, o.parsed);
-        this.primedFiles.add(n);
+    if (options?.userLayer === "retain" && isStorageV5Enabled() && this.primer !== undefined) {
+      for (let [path, entry] of this.retained) {
+        this.parsedFiles.set(path, entry.parsed);
+        this.primedFiles.add(path);
       }
-      for (let [n, o] of this.retainedListings) this.folderListings.set(n, o.names);
+      for (let [path, entry] of this.retainedListings) this.folderListings.set(path, entry.names);
     } else {
       this.retained.clear();
       this.retainedListings.clear();
@@ -390,135 +395,138 @@ class SettingsCacheStore {
     this.perSource.delete("policySettings");
     this.policy = {};
   }
-  onInvalidate(e) {
-    return this.invalidated.subscribe(e);
+  onInvalidate(listener) {
+    return this.invalidated.subscribe(listener);
   }
-  seedParsedFile(e, n, o, r) {
-    if (r !== this.epoch) return false;
-    let i = this.parsedFiles.get(e);
-    let s = i !== undefined && settingsEqualIgnoringOwner(i, o);
-    let a = !s;
-    let l = s ? i : o;
-    this.parsedFiles.set(e, l);
-    if (n === "userSettings")
+  seedParsedFile(path, sourceName, parsed, epoch) {
+    if (epoch !== this.epoch) return false;
+    let previous = this.parsedFiles.get(path);
+    let unchanged = previous !== undefined && settingsEqualIgnoringOwner(previous, parsed);
+    let changed = !unchanged;
+    let next = unchanged ? previous : parsed;
+    this.parsedFiles.set(path, next);
+    if (sourceName === "userSettings")
       this.lastSeededUserLayer = {
-        path: e,
-        parsed: l,
+        path,
+        parsed: next,
       };
-    if (a || this.primedFiles.has(e)) this.primedFiles.add(e);
-    let p = this.retained.get(e);
-    if (p !== undefined) p.parsed = l;
-    if (a) this.dropDerivedCaches(n);
+    if (changed || this.primedFiles.has(path)) this.primedFiles.add(path);
+    let retainedEntry = this.retained.get(path);
+    if (retainedEntry !== undefined) retainedEntry.parsed = next;
+    if (changed) this.dropDerivedCaches(sourceName);
     return true;
   }
-  walkReadDiffers(e, n) {
-    let o = this.parsedFiles.get(e);
-    return o !== undefined && !this.primedFiles.has(e) && !deepEqualWithCycles(o, n);
+  walkReadDiffers(path, parsed) {
+    let previous = this.parsedFiles.get(path);
+    return previous !== undefined && !this.primedFiles.has(path) && !deepEqualWithCycles(previous, parsed);
   }
-  unseedParsedFile(e, n, o) {
-    if (o !== this.epoch) return;
-    this.retained.delete(e);
-    if (!this.primedFiles.has(e) || (n === "policySettings" && this.policyWalks > 0)) return;
-    this.primedFiles.delete(e);
-    this.parsedFiles.delete(e);
-    this.dropDerivedCaches(n);
+  unseedParsedFile(path, sourceName, epoch) {
+    if (epoch !== this.epoch) return;
+    this.retained.delete(path);
+    if (!this.primedFiles.has(path) || (sourceName === "policySettings" && this.policyWalks > 0)) return;
+    this.primedFiles.delete(path);
+    this.parsedFiles.delete(path);
+    this.dropDerivedCaches(sourceName);
   }
-  dropDerivedCaches(e) {
-    this.perSource.delete(e);
+  dropDerivedCaches(sourceName) {
+    this.perSource.delete(sourceName);
     this.mergedSettings = null;
-    if (e === "policySettings") this.policy = {};
+    if (sourceName === "policySettings") this.policy = {};
   }
-  primedFolderListing(e) {
-    return isStorageV5Enabled() ? this.folderListings.get(e) : undefined;
+  primedFolderListing(folder) {
+    return isStorageV5Enabled() ? this.folderListings.get(folder) : undefined;
   }
-  folderListingForPolicyWalk(e) {
+  folderListingForPolicyWalk(folder) {
     if (!isStorageV5Enabled()) return;
     this.policyWalks++;
-    let n = this.folderListings.get(e);
-    if (!this.walkedFolders.has(e) || n !== undefined) this.walkedFolders.set(e, n ?? null);
-    return n;
+    let names = this.folderListings.get(folder);
+    if (!this.walkedFolders.has(folder) || names !== undefined) this.walkedFolders.set(folder, names ?? null);
+    return names;
   }
-  noteWalkListing(e, n) {
+  noteWalkListing(folder, names) {
     if (!isStorageV5Enabled()) return;
-    this.walkedFolders.set(e, n);
+    this.walkedFolders.set(folder, names);
   }
   get policyWalkCount() {
     return this.policyWalks;
   }
-  policyInstallVerdict(e, n, o) {
-    let r = this.parsedFiles.get(e);
-    if (r === undefined || settingsEqualIgnoringOwner(r, n)) return "install";
-    if (!this.primedFiles.has(e)) return "raced";
+  policyInstallVerdict(path, parsed, policyWalks) {
+    let previous = this.parsedFiles.get(path);
+    if (previous === undefined || settingsEqualIgnoringOwner(previous, parsed)) return "install";
+    if (!this.primedFiles.has(path)) return "raced";
     if (this.policyWalks === 0) return "install";
-    return this.policyWalks > o ? "raced" : "deferred";
+    return this.policyWalks > policyWalks ? "raced" : "deferred";
   }
-  folderInstallVerdict(e, n, o) {
-    if (!this.walkedFolders.has(e)) return this.hasParsedDropInOutside(e, n) ? "raced" : "install";
-    let r = this.walkedFolders.get(e);
-    if (r !== null && r !== undefined && deepEqualWithCycles(r, n)) return "install";
-    return this.policyWalks > o ? "raced" : "deferred";
+  folderInstallVerdict(folder, names, policyWalks) {
+    if (!this.walkedFolders.has(folder))
+      return this.hasParsedDropInOutside(folder, names) ? "raced" : "install";
+    let walkedNames = this.walkedFolders.get(folder);
+    if (walkedNames !== null && walkedNames !== undefined && deepEqualWithCycles(walkedNames, names))
+      return "install";
+    return this.policyWalks > policyWalks ? "raced" : "deferred";
   }
-  seedFolderListing(e, n, o) {
-    if (o !== this.epoch) return false;
-    let r = this.folderListings.get(e);
-    this.folderListings.set(e, n);
-    let i = this.retainedListings.get(e);
-    if (i !== undefined) i.names = n;
-    if (r !== undefined && !deepEqualWithCycles(r, n)) this.dropDerivedCaches("policySettings");
+  seedFolderListing(folder, names, epoch) {
+    if (epoch !== this.epoch) return false;
+    let previous = this.folderListings.get(folder);
+    this.folderListings.set(folder, names);
+    let retainedEntry = this.retainedListings.get(folder);
+    if (retainedEntry !== undefined) retainedEntry.names = names;
+    if (previous !== undefined && !deepEqualWithCycles(previous, names))
+      this.dropDerivedCaches("policySettings");
     return true;
   }
-  walkReadManagedFileIn(e, n) {
-    for (let [o, r] of this.parsedFiles)
+  walkReadManagedFileIn(filePath, folderPath) {
+    for (let [path, entry] of this.parsedFiles)
       if (
-        !o.includes("\x00") &&
-        !this.primedFiles.has(o) &&
-        (r.settings !== null || r.errors.length > 0) &&
-        (o === e || dirname(o) === n)
+        !path.includes("\x00") &&
+        !this.primedFiles.has(path) &&
+        (entry.settings !== null || entry.errors.length > 0) &&
+        (path === filePath || dirname(path) === folderPath)
       )
         return true;
     return false;
   }
-  walkRead(e) {
-    return this.parsedFiles.has(e) && !this.primedFiles.has(e);
+  walkRead(path) {
+    return this.parsedFiles.has(path) && !this.primedFiles.has(path);
   }
-  hasParsedDropInOutside(e, n) {
+  hasParsedDropInOutside(folder, names) {
     for (let key of this.parsedFiles.keys())
       if (
         !key.includes("\x00") &&
         !this.primedFiles.has(key) &&
-        dirname(key) === e &&
-        !n.includes(basename(key))
+        dirname(key) === folder &&
+        !names.includes(basename(key))
       )
         return true;
     return false;
   }
-  clearFolderListing(e, n) {
-    if (n !== this.epoch) return;
-    this.retainedListings.delete(e);
-    if (!this.folderListings.has(e) || this.walkedFolders.has(e)) return;
-    this.folderListings.delete(e);
+  clearFolderListing(folder, epoch) {
+    if (epoch !== this.epoch) return;
+    this.retainedListings.delete(folder);
+    if (!this.folderListings.has(folder) || this.walkedFolders.has(folder)) return;
+    this.folderListings.delete(folder);
     this.dropDerivedCaches("policySettings");
   }
-  retainLayer(e, n) {
-    let o = this.parsedFiles.get(e);
-    let r = {
-      parsed: o !== undefined && settingsEqualIgnoringOwner(o, n) ? o : n,
+  retainLayer(path, parsed) {
+    let previous = this.parsedFiles.get(path);
+    let entry = {
+      parsed: previous !== undefined && settingsEqualIgnoringOwner(previous, parsed) ? previous : parsed,
     };
-    this.retained.set(e, r);
+    this.retained.set(path, entry);
     return () => {
-      if (this.retained.get(e) === r) this.retained.delete(e);
+      if (this.retained.get(path) === entry) this.retained.delete(path);
     };
   }
-  dropRetainedLayer(e) {
-    this.retained.delete(e);
+  dropRetainedLayer(path) {
+    this.retained.delete(path);
   }
-  retainFolderListing(e, names) {
-    let o = {
+  retainFolderListing(folder, names) {
+    let entry = {
       names,
     };
-    this.retainedListings.set(e, o);
+    this.retainedListings.set(folder, entry);
     return () => {
-      if (this.retainedListings.get(e) === o) this.retainedListings.delete(e);
+      if (this.retainedListings.get(folder) === entry) this.retainedListings.delete(folder);
     };
   }
 }
@@ -529,26 +537,26 @@ class SettingsCacheStore {
 class LocalStoreProbes {
   ownerUidsByRoot = new Map();
   realHomeDir = undefined;
-  canonicalRootOwnerUids(e, n) {
-    let o = this.ownerUidsByRoot.get(e);
-    if (o !== undefined) return o;
-    let r = n(e);
-    this.ownerUidsByRoot.set(e, r);
-    return r;
+  canonicalRootOwnerUids(root, computeOwnerUids) {
+    let uids = this.ownerUidsByRoot.get(root);
+    if (uids !== undefined) return uids;
+    let computed = computeOwnerUids(root);
+    this.ownerUidsByRoot.set(root, computed);
+    return computed;
   }
-  hasCanonicalRootOwnerUids(e) {
-    return this.ownerUidsByRoot.has(e);
+  hasCanonicalRootOwnerUids(root) {
+    return this.ownerUidsByRoot.has(root);
   }
-  primeCanonicalRootOwnerUids(e, n) {
-    if (this.ownerUidsByRoot.has(e)) return false;
-    this.ownerUidsByRoot.set(e, n);
+  primeCanonicalRootOwnerUids(root, uids) {
+    if (this.ownerUidsByRoot.has(root)) return false;
+    this.ownerUidsByRoot.set(root, uids);
     return true;
   }
   clearCanonicalRootOwnerUids() {
     this.ownerUidsByRoot.clear();
   }
-  normalizedRealHomeDir(e) {
-    this.realHomeDir ??= e();
+  normalizedRealHomeDir(computeHomeDir) {
+    this.realHomeDir ??= computeHomeDir();
     return this.realHomeDir;
   }
   clearNormalizedRealHomeDir() {
@@ -559,16 +567,19 @@ class LocalStoreProbes {
 /**
  * 按会话宿主缓存的 SettingsCacheStore（设置缓存与派生缓存的容器）。
  */
-var SETTINGS_CACHE_STORE_SLOT = new HostScoped(() => new SettingsCacheStore());
+var SETTINGS_CACHE_STORE_SLOT; // deferred: uses SettingsCacheStore of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ndmse9kj.js:10211", () => {
+  SETTINGS_CACHE_STORE_SLOT = new HostScoped(() => new SettingsCacheStore());
+});
 //@ chunk-ndmse9kj.js:10238-10312 placement
-function settingsEqualIgnoringOwner(e, n) {
+function settingsEqualIgnoringOwner(left, right) {
   return deepEqualWithCycles(
     {
-      ...e,
+      ...left,
       fileOwner: undefined,
     },
     {
-      ...n,
+      ...right,
       fileOwner: undefined,
     },
   );
@@ -690,22 +701,22 @@ function resetDeclaredTools(conversation) {
 /**
  * 清空 systemMessagesAcceptedBy，并把 wireShapeSeed 带来的 sent/rejected beta 从集合里撤回，然后丢弃种子。
  */
-function dropWireShapeSeed(e) {
-  e.systemMessagesAcceptedBy.clear();
-  let wireShapeSeed = e.wireShapeSeed;
+function dropWireShapeSeed(stickyBetas) {
+  stickyBetas.systemMessagesAcceptedBy.clear();
+  let wireShapeSeed = stickyBetas.wireShapeSeed;
   if (wireShapeSeed === undefined) return;
-  for (let o of wireShapeSeed.sent) e.sent.delete(o);
-  for (let o of wireShapeSeed.rejected) e.rejected.delete(o);
-  e.wireShapeSeed = undefined;
+  for (let beta of wireShapeSeed.sent) stickyBetas.sent.delete(beta);
+  for (let beta of wireShapeSeed.rejected) stickyBetas.rejected.delete(beta);
+  stickyBetas.wireShapeSeed = undefined;
 }
 //@ chunk-ndmse9kj.js:12792-12888 placement
 /**
  * 把上一份粘性 beta 状态的 sent/rejected 集合并回新状态，并挂上 wireShapeSeed，供后续撤销。
  */
-function applyWireShapeSeed(e, n) {
-  for (let o of n.sent) markBetaSent(e, o);
-  for (let o of n.rejected) markBetaRejected(e, o);
-  e.wireShapeSeed = n;
+function applyWireShapeSeed(stickyBetas, seed) {
+  for (let beta of seed.sent) markBetaSent(stickyBetas, beta);
+  for (let beta of seed.rejected) markBetaRejected(stickyBetas, beta);
+  stickyBetas.wireShapeSeed = seed;
 }
 //@ chunk-ndmse9kj.js:12888-12925 placement
 /**
@@ -724,115 +735,117 @@ function clearInlineToolsRefusal(stickyBetas) {
     stickyBetas.rejected.delete(rejectedHeader);
     stickyBetas.inlineToolsRefusal.rejectedHeader = undefined;
   }
-  for (let r of announcementsByName) stickyBetas.nameOnlyAnnouncements.delete(r);
+  for (let name of announcementsByName) stickyBetas.nameOnlyAnnouncements.delete(name);
   announcementsByName.clear();
 }
 //@ chunk-ndmse9kj.js:13143-13189 placement
 /**
  * 清掉 advisorHeld 后返回同一对象，便于链式构造解锁状态。
  */
-function clearAdvisorHeldAndReturn(e) {
-  e.advisorHeld = undefined;
-  return e;
+function clearAdvisorHeldAndReturn(stickyBetas) {
+  stickyBetas.advisorHeld = undefined;
+  return stickyBetas;
 }
 //@ chunk-ndmse9kj.js:13189-13231 placement
 /**
  * 把 declaredToolsDecided 置 true：声明的工具集已经确定，不再追加。
  */
-function markDeclaredToolsDecided(e) {
-  e.declaredToolsDecided = true;
+function markDeclaredToolsDecided(stickyBetas) {
+  stickyBetas.declaredToolsDecided = true;
 }
 //@ chunk-ndmse9kj.js:13231-13846 placement
 /**
  * 生成一份解锁后的粘性 beta 状态：新建空状态，只保留声明工具集、advisor、wire 种子、内联拒绝、web search 历史拒绝、媒体上限、被拒 schema 与 nameOnlyEntries 的拒绝/上报标记。
  */
 function unlatchStickyBetaLatches(previous) {
-  let stickyBetaLatches = createStickyBetaLatches();
-  stickyBetaLatches.declaredTools = previous.declaredTools;
-  stickyBetaLatches.noChannelTools = previous.noChannelTools;
-  stickyBetaLatches.turnDeniedTools = previous.turnDeniedTools;
-  stickyBetaLatches.declaredToolsDecided = previous.declaredToolsDecided;
-  stickyBetaLatches.advisorHeld = previous.advisorHeld;
-  if (previous.wireShapeSeed !== undefined) applyWireShapeSeed(stickyBetaLatches, previous.wireShapeSeed);
+  let stickyBetas = createStickyBetaLatches();
+  stickyBetas.declaredTools = previous.declaredTools;
+  stickyBetas.noChannelTools = previous.noChannelTools;
+  stickyBetas.turnDeniedTools = previous.turnDeniedTools;
+  stickyBetas.declaredToolsDecided = previous.declaredToolsDecided;
+  stickyBetas.advisorHeld = previous.advisorHeld;
+  if (previous.wireShapeSeed !== undefined) applyWireShapeSeed(stickyBetas, previous.wireShapeSeed);
   let { rejectedHeader, announcementsByName } = previous.inlineToolsRefusal;
-  if (rejectedHeader !== undefined) rejectInlineToolsHeader(stickyBetaLatches, rejectedHeader);
-  addNameOnlyAnnouncements(stickyBetaLatches, announcementsByName);
-  stickyBetaLatches.webSearchHistoryRejected = previous.webSearchHistoryRejected;
-  stickyBetaLatches.mediaItemCap = previous.mediaItemCap;
-  for (let [i, s] of previous.refusedToolSchemas) stickyBetaLatches.refusedToolSchemas.set(i, s);
-  stickyBetaLatches.nameOnlyEntries.refused = previous.nameOnlyEntries.refused;
-  stickyBetaLatches.nameOnlyEntries.reported = previous.nameOnlyEntries.reported;
-  return stickyBetaLatches;
+  if (rejectedHeader !== undefined) rejectInlineToolsHeader(stickyBetas, rejectedHeader);
+  addNameOnlyAnnouncements(stickyBetas, announcementsByName);
+  stickyBetas.webSearchHistoryRejected = previous.webSearchHistoryRejected;
+  stickyBetas.mediaItemCap = previous.mediaItemCap;
+  for (let [name, reason] of previous.refusedToolSchemas) stickyBetas.refusedToolSchemas.set(name, reason);
+  stickyBetas.nameOnlyEntries.refused = previous.nameOnlyEntries.refused;
+  stickyBetas.nameOnlyEntries.reported = previous.nameOnlyEntries.reported;
+  return stickyBetas;
 }
 //@ chunk-ndmse9kj.js:13846-13910 placement
 /**
  * 把某个头记入拒绝集合并写入 inlineToolsRefusal.rejectedHeader（内联工具被拒）。
  */
-function rejectInlineToolsHeader(e, n) {
-  markBetaRejected(e, n);
-  e.inlineToolsRefusal.rejectedHeader = n;
+function rejectInlineToolsHeader(stickyBetas, headerName) {
+  markBetaRejected(stickyBetas, headerName);
+  stickyBetas.inlineToolsRefusal.rejectedHeader = headerName;
 }
 //@ chunk-ndmse9kj.js:13910-14022 placement
 /**
  * 把一组工具名同时记入内联拒绝的按名公告集合和 nameOnlyAnnouncements。
  */
-function addNameOnlyAnnouncements(e, n) {
-  for (let o of n) {
-    e.inlineToolsRefusal.announcementsByName.add(o);
-    e.nameOnlyAnnouncements.add(o);
+function addNameOnlyAnnouncements(stickyBetas, names) {
+  for (let name of names) {
+    stickyBetas.inlineToolsRefusal.announcementsByName.add(name);
+    stickyBetas.nameOnlyAnnouncements.add(name);
   }
 }
 //@ chunk-ndmse9kj.js:14022-14093 placement
 /**
  * 首次设置 declaredTools 并标记为已决定。
  */
-function setDeclaredTools(e, declaredTools) {
-  if (e.declaredTools === undefined) e.declaredTools = declaredTools;
-  markDeclaredToolsDecided(e);
+function setDeclaredTools(stickyBetas, declaredTools) {
+  if (stickyBetas.declaredTools === undefined) stickyBetas.declaredTools = declaredTools;
+  markDeclaredToolsDecided(stickyBetas);
 }
 //@ chunk-ndmse9kj.js:14093-14210 placement
 /**
  * 返回已在 wire 上露出的工具名集合；有按值定义的工具时与 definedByValue 合并。
  */
-function getSurfacedToolNames(e) {
-  return e.definedByValue.size === 0 ? e.surfacedOnWire : new Set([...e.surfacedOnWire, ...e.definedByValue]);
+function getSurfacedToolNames(stickyBetas) {
+  return stickyBetas.definedByValue.size === 0
+    ? stickyBetas.surfacedOnWire
+    : new Set([...stickyBetas.surfacedOnWire, ...stickyBetas.definedByValue]);
 }
 //@ chunk-ndmse9kj.js:14210-14263 placement
 /**
  * 标记某个 beta 头已发送（未被拒绝时才记入 sent）。
  */
-function markBetaSent(conversation, n) {
-  if (!conversation.rejected.has(n)) conversation.sent.add(n);
+function markBetaSent(betaState, beta) {
+  if (!betaState.rejected.has(beta)) betaState.sent.add(beta);
 }
 //@ chunk-ndmse9kj.js:14263-14321 placement
 /**
  * 判断某个 beta 头已发送且未被拒绝。
  */
-function isBetaSent(e, n) {
-  return e.sent.has(n) && !e.rejected.has(n);
+function isBetaSent(stickyBetas, beta) {
+  return stickyBetas.sent.has(beta) && !stickyBetas.rejected.has(beta);
 }
 //@ chunk-ndmse9kj.js:14321-14373 placement
 /**
  * 标记某个 beta 头被拒：从 sent 删除并加入 rejected。另附同名 inlineToolsRefusal 记录。
  */
-function markBetaRejected(conversation, n) {
-  conversation.sent.delete(n);
-  conversation.rejected.add(n);
+function markBetaRejected(conversation, beta) {
+  conversation.sent.delete(beta);
+  conversation.rejected.add(beta);
 }
 //@ chunk-ndmse9kj.js:14373-14415 placement
 /**
  * 判断某个 beta 头是否被拒绝。
  */
-function isBetaRejected(conversation, n) {
-  return conversation.rejected.has(n);
+function isBetaRejected(betaState, beta) {
+  return betaState.rejected.has(beta);
 }
 //@ chunk-ndmse9kj.js:14415-14471 placement
 /**
  * 忘记某个 beta 头：sent 与 rejected 两边都删除。
  */
-function forgetBeta(e, n) {
-  e.sent.delete(n);
-  e.rejected.delete(n);
+function forgetBeta(stickyBetas, beta) {
+  stickyBetas.sent.delete(beta);
+  stickyBetas.rejected.delete(beta);
 }
 //@ chunk-ndmse9kj.js:14471-14517 placement
 /**
@@ -866,8 +879,8 @@ function setMediaItemCap(conversation, mediaItemCap) {
 /**
  * 清除媒体条目上限缓存。
  */
-function clearMediaItemCap(e) {
-  e.mediaItemCap = undefined;
+function clearMediaItemCap(stickyBetas) {
+  stickyBetas.mediaItemCap = undefined;
 }
 //@ chunk-ndmse9kj.js:14709-14754 placement
 /**
@@ -893,8 +906,8 @@ var UNREADABLE_TOOLS_USED_BEFORE_SUMMARY = "unreadable-tools-used-before-summary
 /**
  * 把工具名规范成可出现在 <tools-used-before-summary> 的文本：不合规时返回固定占位 UNREADABLE_TOOLS_USED_BEFORE_SUMMARY。
  */
-function readableToolName(e) {
-  return TOOL_NAME_PATTERN.test(e) ? e : "unreadable-tools-used-before-summary";
+function readableToolName(toolName) {
+  return TOOL_NAME_PATTERN.test(toolName) ? toolName : "unreadable-tools-used-before-summary";
 }
 //@ chunk-ndmse9kj.js:14989-15024 placement
 var TOOLS_USED_BEFORE_SUMMARY_TAG = "tools-used-before-summary";
@@ -902,15 +915,15 @@ var TOOLS_USED_BEFORE_SUMMARY_TAG = "tools-used-before-summary";
 /**
  * 生成 <tools-used-before-summary>…</tools-used-before-summary> 标签文本，逐个名字先按 xre 规范化。
  */
-function formatToolsUsedBeforeSummary(e) {
-  return `<${TOOLS_USED_BEFORE_SUMMARY_TAG}>${e.map(readableToolName).join(", ")}</${TOOLS_USED_BEFORE_SUMMARY_TAG}>`;
+function formatToolsUsedBeforeSummary(toolNames) {
+  return `<${TOOLS_USED_BEFORE_SUMMARY_TAG}>${toolNames.map(readableToolName).join(", ")}</${TOOLS_USED_BEFORE_SUMMARY_TAG}>`;
 }
 //@ chunk-ndmse9kj.js:15088-15157 placement
 /**
  * 判断工具名是否为 Gmail 附件下载工具（以 download_gmail_attachment 结尾）。
  */
-function isGmailAttachmentTool(e) {
-  return /(?:^|__|:)download_gmail_attachment$/.test(e);
+function isGmailAttachmentTool(toolName) {
+  return /(?:^|__|:)download_gmail_attachment$/.test(toolName);
 }
 //@ chunk-ndmse9kj.js:15157-15715 placement
 /**
@@ -921,21 +934,21 @@ class ToolsUsedSet {
   #t = 0;
   #n = false;
   #o;
-  record(e) {
-    let n = false;
-    for (let o of e) {
-      if (typeof o !== "string" || o === "") continue;
-      let r = readableToolName(o);
-      if (!this.#e.has(r)) {
-        this.#e.add(r);
-        n = true;
+  record(toolNames) {
+    let added = false;
+    for (let toolName of toolNames) {
+      if (typeof toolName !== "string" || toolName === "") continue;
+      let readableName = readableToolName(toolName);
+      if (!this.#e.has(readableName)) {
+        this.#e.add(readableName);
+        added = true;
       }
     }
-    if (n) this.#t++;
-    return n;
+    if (added) this.#t++;
+    return added;
   }
-  has(e) {
-    return this.#e.has(e);
+  has(name) {
+    return this.#e.has(name);
   }
   names() {
     return [...this.#e];
@@ -946,11 +959,11 @@ class ToolsUsedSet {
   generation() {
     return this.#t;
   }
-  built(e) {
+  built(build) {
     if (this.#o?.generation !== this.#t)
       this.#o = {
         generation: this.#t,
-        value: e(this.names()),
+        value: build(this.names()),
       };
     return this.#o.value;
   }
@@ -959,9 +972,9 @@ class ToolsUsedSet {
     this.#n = true;
     return true;
   }
-  replace(e) {
+  replace(toolNames) {
     this.clear();
-    this.record(e);
+    this.record(toolNames);
   }
   clear() {
     this.#e.clear();
@@ -987,12 +1000,12 @@ class ConversationLatches {
   atisLatch() {
     return this.#t;
   }
-  replaceAtisLatch(e) {
-    this.#t = e;
-    this.#n?.(e);
+  replaceAtisLatch(latch) {
+    this.#t = latch;
+    this.#n?.(latch);
   }
-  watchAtisLatch(e) {
-    this.#n = e;
+  watchAtisLatch(watch) {
+    this.#n = watch;
   }
   reset() {
     this.#e = createStickyBetaLatches();
@@ -1012,17 +1025,17 @@ var ZERO_TOKEN_USAGE = {
 };
 //@ chunk-ndmse9kj.js:16078-16144 placement
 function nullProtoCopy(modelUsage) {
-  let n = Object.create(null);
-  return Object.assign(n, modelUsage);
+  let copy = Object.create(null);
+  return Object.assign(copy, modelUsage);
 }
 //@ chunk-ndmse9kj.js:16144-16223 placement
 function cloneModelUsage(modelUsage) {
-  let n = nullProtoCopy();
+  let copy = nullProtoCopy();
   for (let [key, value] of Object.entries(modelUsage))
-    n[key] = {
+    copy[key] = {
       ...value,
     };
-  return n;
+  return copy;
 }
 //@ chunk-ndmse9kj.js:16223-20132 placement
 /**
@@ -1091,8 +1104,8 @@ class CostLedger {
   modelUsage() {
     return this.#g;
   }
-  usageForModel(e) {
-    return this.#g[e];
+  usageForModel(model) {
+    return this.#g[model];
   }
   trackUsageSinceLastResult() {
     this.#S ??= nullProtoCopy();
@@ -1101,9 +1114,9 @@ class CostLedger {
     return this.#S;
   }
   takeUsageSinceLastResult() {
-    let e = this.#S;
-    if (e !== undefined) this.#S = nullProtoCopy();
-    return e;
+    let usage = this.#S;
+    if (usage !== undefined) this.#S = nullProtoCopy();
+    return usage;
   }
   totalInputTokens() {
     return this.#m("inputTokens");
@@ -1120,45 +1133,45 @@ class CostLedger {
   totalWebSearchRequests() {
     return this.#m("webSearchRequests");
   }
-  #m(e) {
-    let n = 0;
-    for (let o of Object.values(this.#g)) n += o[e];
-    return n;
+  #m(field) {
+    let total = 0;
+    for (let usage of Object.values(this.#g)) total += usage[field];
+    return total;
   }
-  recordApiDuration(e, n) {
-    this.#t += e;
-    this.#n += n;
+  recordApiDuration(durationMs, durationWithoutRetriesMs) {
+    this.#t += durationMs;
+    this.#n += durationWithoutRetriesMs;
   }
   spentTokens() {
     return this.#p;
   }
-  recordSpentTokens(e) {
-    let n = this.#p;
+  recordSpentTokens(tokens) {
+    let previous = this.#p;
     this.#p = {
-      inputTokens: n.inputTokens + e.inputTokens,
-      outputTokens: n.outputTokens + e.outputTokens,
-      cacheReadInputTokens: n.cacheReadInputTokens + e.cacheReadInputTokens,
-      cacheCreationInputTokens: n.cacheCreationInputTokens + e.cacheCreationInputTokens,
+      inputTokens: previous.inputTokens + tokens.inputTokens,
+      outputTokens: previous.outputTokens + tokens.outputTokens,
+      cacheReadInputTokens: previous.cacheReadInputTokens + tokens.cacheReadInputTokens,
+      cacheCreationInputTokens: previous.cacheCreationInputTokens + tokens.cacheCreationInputTokens,
     };
     this.spendRecorded.emit();
   }
-  recordCost(e, n, o) {
-    this.#g[o] = n;
-    this.#e += e;
+  recordCost(costUsd, usage, model) {
+    this.#g[model] = usage;
+    this.#e += costUsd;
     this.spendRecorded.emit();
   }
-  recordSideQueryCost(e) {
-    if (Number.isFinite(e) && e >= 0) {
-      this.#l += e;
+  recordSideQueryCost(costUsd) {
+    if (Number.isFinite(costUsd) && costUsd >= 0) {
+      this.#l += costUsd;
       this.spendRecorded.emit();
     }
   }
-  recordToolDuration(e) {
-    this.#o += e;
+  recordToolDuration(durationMs) {
+    this.#o += durationMs;
   }
-  recordLinesChanged(e, n) {
-    this.#i += e;
-    this.#d += n;
+  recordLinesChanged(added, removed) {
+    this.#i += added;
+    this.#d += removed;
   }
   markUnknownModelCost() {
     this.#h = true;
@@ -1176,8 +1189,8 @@ class CostLedger {
     this.#r = Date.now();
     this.anchorLogicalStart(undefined);
   }
-  anchorLogicalStart(e) {
-    this.#s = e === undefined ? undefined : Math.min(e, this.#r);
+  anchorLogicalStart(startTime) {
+    this.#s = startTime === undefined ? undefined : Math.min(startTime, this.#r);
   }
   restore(
     {
@@ -1192,9 +1205,9 @@ class CostLedger {
       modelUsage,
       hasUnknownModelCost,
     },
-    S,
+    ownerSessionId,
   ) {
-    this.#f = S;
+    this.#f = ownerSessionId;
     this.#e = totalCostUSD;
     this.#u = totalCostUSD;
     this.#t = totalAPIDuration;
@@ -1213,17 +1226,17 @@ class CostLedger {
     if (lastDuration !== undefined) this.#r = Date.now() - lastDuration;
     this.anchorLogicalStart(startTime);
   }
-  registerSaver(e) {
-    this.#y = e;
+  registerSaver(saver) {
+    this.#y = saver;
   }
-  runSaver(e, n) {
-    (this.#y ?? (n ? n.#y : null))?.(e);
+  runSaver(payload, fallback) {
+    (this.#y ?? (fallback ? fallback.#y : null))?.(payload);
   }
-  registerTranscriptRecorder(e) {
-    this.#v = e;
+  registerTranscriptRecorder(recorder) {
+    this.#v = recorder;
   }
-  runTranscriptRecorder(e, n, o) {
-    (this.#v ?? (o ? o.#v : null))?.(e, n);
+  runTranscriptRecorder(recorder, options, fallback) {
+    (this.#v ?? (fallback ? fallback.#v : null))?.(recorder, options);
   }
   snapshot() {
     return {
@@ -1243,36 +1256,36 @@ class CostLedger {
       modelUsage: cloneModelUsage(this.#g),
     };
   }
-  restoreSnapshot(e) {
-    this.#f = e.ownerSessionId;
-    this.#e = e.totalCostUSD;
-    this.#t = e.totalAPIDuration;
-    this.#n = e.totalAPIDurationWithoutRetries;
-    this.#o = e.totalToolDuration;
-    this.#r = e.startTime;
-    this.#s = e.sessionLogicalStartTime;
-    this.#i = e.totalLinesAdded;
-    this.#d = e.totalLinesRemoved;
-    this.#u = e.restoredCostUSD;
-    this.#c = e.restoredTokens;
-    this.#h = e.hasUnknownModelCost;
-    this.#a = e.safetyStops;
-    this.#g = cloneModelUsage(e.modelUsage);
+  restoreSnapshot(snapshot) {
+    this.#f = snapshot.ownerSessionId;
+    this.#e = snapshot.totalCostUSD;
+    this.#t = snapshot.totalAPIDuration;
+    this.#n = snapshot.totalAPIDurationWithoutRetries;
+    this.#o = snapshot.totalToolDuration;
+    this.#r = snapshot.startTime;
+    this.#s = snapshot.sessionLogicalStartTime;
+    this.#i = snapshot.totalLinesAdded;
+    this.#d = snapshot.totalLinesRemoved;
+    this.#u = snapshot.restoredCostUSD;
+    this.#c = snapshot.restoredTokens;
+    this.#h = snapshot.hasUnknownModelCost;
+    this.#a = snapshot.safetyStops;
+    this.#g = cloneModelUsage(snapshot.modelUsage);
   }
-  claim(e) {
-    this.#f ??= e;
+  claim(sessionId) {
+    this.#f ??= sessionId;
   }
-  scopeTo(e) {
-    this.#f = e;
+  scopeTo(sessionId) {
+    this.#f = sessionId;
   }
   ownerSessionId() {
     return this.#f;
   }
-  belongsTo(e) {
-    return this.#f === e;
+  belongsTo(sessionId) {
+    return this.#f === sessionId;
   }
-  reset(e) {
-    this.#f = e;
+  reset(sessionId) {
+    this.#f = sessionId;
     this.#e = 0;
     this.#u = 0;
     this.#c = ZERO_TOKEN_USAGE;
@@ -1295,19 +1308,19 @@ class CostLedger {
 class UsageCreditsConsentSlots {
   #e = new Set();
   #t = new Map();
-  consentSessionFallback(e) {
-    return this.#e.has(e);
+  consentSessionFallback(modelFamily) {
+    return this.#e.has(modelFamily);
   }
-  replaceConsentSessionFallback(e, n) {
-    if (n) this.#e.add(e);
-    else this.#e.delete(e);
+  replaceConsentSessionFallback(modelFamily, consented) {
+    if (consented) this.#e.add(modelFamily);
+    else this.#e.delete(modelFamily);
   }
-  sessionConsentKey(e) {
-    return this.#t.get(e) ?? null;
+  sessionConsentKey(modelFamily) {
+    return this.#t.get(modelFamily) ?? null;
   }
-  replaceSessionConsentKey(e, n) {
-    if (n === null) this.#t.delete(e);
-    else this.#t.set(e, n);
+  replaceSessionConsentKey(modelFamily, ownerKey) {
+    if (ownerKey === null) this.#t.delete(modelFamily);
+    else this.#t.set(modelFamily, ownerKey);
   }
   reset() {
     this.#e.clear();
@@ -1330,14 +1343,14 @@ class HookRegistry {
   mainThreadAgentType() {
     return this.#t;
   }
-  replaceMainThreadAgentType(e) {
-    this.#t = e;
+  replaceMainThreadAgentType(agentType) {
+    this.#t = agentType;
   }
   mainThreadAgentHooks() {
     return this.#n;
   }
-  replaceMainThreadAgentHooks(e) {
-    this.#n = e;
+  replaceMainThreadAgentHooks(hooks) {
+    this.#n = hooks;
   }
   reset() {
     this.#e = {
@@ -1356,14 +1369,14 @@ class InvokedSkills {
   skills() {
     return this.#e;
   }
-  lookup(e) {
-    return this.#e.get(e);
+  lookup(key) {
+    return this.#e.get(key);
   }
-  record(e, n) {
-    this.#e.set(e, n);
+  record(key, skill) {
+    this.#e.set(key, skill);
   }
-  forget(e) {
-    this.#e.delete(e);
+  forget(key) {
+    this.#e.delete(key);
   }
   forgetAll() {
     this.#e.clear();
@@ -1385,55 +1398,55 @@ class McpSessionWiring {
   approvedServers() {
     return this.#e;
   }
-  approveServers(e, n) {
-    for (let o of n)
-      if (!this.#e.some((r) => r.name === o && r.workspaceKey === e))
+  approveServers(workspaceKey, serverNames) {
+    for (let serverName of serverNames)
+      if (!this.#e.some((approved) => approved.name === serverName && approved.workspaceKey === workspaceKey))
         this.#e.push({
-          name: o,
-          workspaceKey: e,
+          name: serverName,
+          workspaceKey,
         });
   }
-  registerClientsAccessor(e) {
-    this.#t = e;
+  registerClientsAccessor(accessor) {
+    this.#t = accessor;
   }
-  acquireClientsAccessor(e) {
+  acquireClientsAccessor(accessor) {
     if (this.#t) return () => {};
-    this.#t = e;
+    this.#t = accessor;
     return () => {
-      if (this.#t === e) this.#t = undefined;
+      if (this.#t === accessor) this.#t = undefined;
     };
   }
   clientsFromAccessor() {
     return this.#t?.();
   }
-  registerConnectedClientWiring(e) {
-    this.#n = e;
+  registerConnectedClientWiring(wiring) {
+    this.#n = wiring;
   }
   connectedClientWiring() {
     return this.#n;
   }
-  registerToolsSwapper(e) {
-    this.#o = e;
+  registerToolsSwapper(swapper) {
+    this.#o = swapper;
   }
-  acquireToolsSwapper(e) {
+  acquireToolsSwapper(swapper) {
     if (this.#o) return () => {};
-    this.#o = e;
+    this.#o = swapper;
     return () => {
-      if (this.#o === e) this.#o = undefined;
+      if (this.#o === swapper) this.#o = undefined;
     };
   }
-  swapServerTools(e, n, o) {
+  swapServerTools(serverName, config, options) {
     if (!this.#o) return false;
-    return this.#o(e, n, o);
+    return this.#o(serverName, config, options);
   }
-  registerConnections(e) {
-    this.#r = e;
+  registerConnections(connections) {
+    this.#r = connections;
   }
-  acquireConnections(e) {
+  acquireConnections(connections) {
     if (this.#r) return () => {};
-    this.#r = e;
+    this.#r = connections;
     return () => {
-      if (this.#r === e) this.#r = undefined;
+      if (this.#r === connections) this.#r = undefined;
     };
   }
   connections() {
@@ -1465,52 +1478,52 @@ class ModelSelectionSlice {
   mainLoopModelOverride() {
     return this.#e;
   }
-  overrideMainLoopModel(e) {
-    this.#e = e;
+  overrideMainLoopModel(model) {
+    this.#e = model;
   }
   mainLoopEffortState() {
     return this.#t;
   }
-  replaceMainLoopEffortState(e) {
-    this.#t = e;
+  replaceMainLoopEffortState(effortState) {
+    this.#t = effortState;
   }
   initialMainLoopModel() {
     return this.#n;
   }
-  replaceInitialMainLoopModel(e) {
-    this.#n = e;
+  replaceInitialMainLoopModel(model) {
+    this.#n = model;
   }
   initialModelSettingLayer() {
     return this.#o;
   }
-  replaceInitialModelSettingLayer(e) {
-    this.#o = e;
+  replaceInitialModelSettingLayer(layer) {
+    this.#o = layer;
   }
   resolvedOrgDefault() {
     return this.#r;
   }
-  replaceResolvedOrgDefault(e) {
-    this.#r = e;
+  replaceResolvedOrgDefault(orgDefault) {
+    this.#r = orgDefault;
   }
   initialEnvDefaultModel() {
     return this.#s;
   }
-  replaceInitialEnvDefaultModel(e) {
-    this.#s = e;
+  replaceInitialEnvDefaultModel(model) {
+    this.#s = model;
   }
   refusalFallbackOccurred() {
     return this.#i;
   }
-  markRefusalFallbackOccurred(e) {
+  markRefusalFallbackOccurred(requestId) {
     this.#i = true;
-    this.#u ??= e;
+    this.#u ??= requestId;
   }
   refusalFallbackHeaderArmed() {
     return this.#d;
   }
-  armRefusalFallbackHeader(e) {
+  armRefusalFallbackHeader(requestId) {
     this.#d = true;
-    this.#u ??= e;
+    this.#u ??= requestId;
   }
   refusalFallbackLatchOriginRequestId() {
     return this.#u;
@@ -1530,23 +1543,23 @@ class ModelSelectionSlice {
   refusalFallbackModelLatch() {
     return this.#l;
   }
-  replaceRefusalFallbackModelLatch(e, n = "superseded") {
-    if (this.#l?.carriedEffort !== undefined && e?.carriedEffort === undefined) this.#p = n;
-    this.#l = e;
+  replaceRefusalFallbackModelLatch(latch, reason = "superseded") {
+    if (this.#l?.carriedEffort !== undefined && latch?.carriedEffort === undefined) this.#p = reason;
+    this.#l = latch;
   }
-  unlatchRefusalFallbackModel(e) {
-    this.replaceRefusalFallbackModelLatch(undefined, e);
+  unlatchRefusalFallbackModel(reason) {
+    this.replaceRefusalFallbackModelLatch(undefined, reason);
   }
   takeCarriedEffortEnd() {
-    let e = this.#p;
+    let carriedEffortEnd = this.#p;
     this.#p = undefined;
-    return e;
+    return carriedEffortEnd;
   }
   availabilityFallbackChain() {
     return this.#h;
   }
-  replaceAvailabilityFallbackChain(e) {
-    this.#h = e;
+  replaceAvailabilityFallbackChain(chain) {
+    this.#h = chain;
   }
   reset() {
     this.#e = undefined;
@@ -1575,15 +1588,15 @@ class PromptAssemblySlice {
   sections() {
     return this.#e;
   }
-  recordSection(e, n) {
-    this.#e.set(e, n);
+  recordSection(key, section) {
+    this.#e.set(key, section);
   }
   forgetAllSections() {
     this.#e.clear();
   }
-  noteInvalidation(e = "other") {
+  noteInvalidation(reason = "other") {
     this.#t += 1;
-    this.#n = e;
+    this.#n = reason;
   }
   epoch() {
     return this.#t;
@@ -1622,38 +1635,38 @@ class RequestJournal {
   lastAPIRequest() {
     return this.#e;
   }
-  replaceLastAPIRequest(e) {
-    this.#e = e;
+  replaceLastAPIRequest(request) {
+    this.#e = request;
   }
   lastCancelledAPIMessageId() {
     return this.#t;
   }
-  replaceLastCancelledAPIMessageId(e) {
-    this.#t = e;
+  replaceLastCancelledAPIMessageId(messageId) {
+    this.#t = messageId;
   }
   lastAPIRequestMessages() {
     return this.#n;
   }
-  replaceLastAPIRequestMessages(e) {
-    this.#n = e;
+  replaceLastAPIRequestMessages(messages) {
+    this.#n = messages;
   }
   lastClassifierRequests() {
     return this.#o;
   }
-  replaceLastClassifierRequests(e) {
-    this.#o = e;
+  replaceLastClassifierRequests(requests) {
+    this.#o = requests;
   }
   promptId() {
     return this.#r;
   }
-  replacePromptId(e) {
-    this.#r = e;
+  replacePromptId(promptId) {
+    this.#r = promptId;
   }
   promptIndex() {
     return this.#s;
   }
-  replacePromptIndex(e) {
-    this.#s = e;
+  replacePromptIndex(index) {
+    this.#s = index;
   }
   incrementPromptIndex() {
     this.#s++;
@@ -1662,16 +1675,16 @@ class RequestJournal {
   lastPersonPrompt() {
     return this.#i;
   }
-  replaceLastPersonPrompt(e) {
-    this.#i = e;
+  replaceLastPersonPrompt(prompt) {
+    this.#i = prompt;
   }
   lastMainRequestId() {
     return this.#d;
   }
-  replaceLastMainRequestId(e, n) {
-    this.#d = e;
-    this.#c = n;
-    if (e === undefined) this.#u += 1;
+  replaceLastMainRequestId(requestId, response) {
+    this.#d = requestId;
+    this.#c = response;
+    if (requestId === undefined) this.#u += 1;
   }
   lastMainResponse() {
     return this.#c;
@@ -1682,37 +1695,41 @@ class RequestJournal {
   lastMainThreadCacheTtlMs() {
     return this.#l;
   }
-  replaceLastMainThreadCacheTtlMs(e, model, o = false) {
-    this.#l = e;
+  replaceLastMainThreadCacheTtlMs(ttlMs, model, isRenewal = false) {
+    this.#l = ttlMs;
     this.#a = Date.now();
     this.#h = {
-      ttlMs: e,
+      ttlMs,
       model,
       requestAt: this.#a,
-      askedAt: o ? (this.#h?.askedAt ?? this.#a) : this.#a,
+      askedAt: isRenewal ? (this.#h?.askedAt ?? this.#a) : this.#a,
     };
     this.#g = this.#a;
     this.#S = true;
   }
-  isLastMainThreadAskLive(e, n) {
-    let o = this.#h;
+  isLastMainThreadAskLive(ttlMs, model) {
+    let clientPlatform = this.#h;
     return (
-      o !== null && o.requestAt === this.#a && o.ttlMs === e && o.model === n && Date.now() - o.askedAt < e
+      clientPlatform !== null &&
+      clientPlatform.requestAt === this.#a &&
+      clientPlatform.ttlMs === ttlMs &&
+      clientPlatform.model === model &&
+      Date.now() - clientPlatform.askedAt < ttlMs
     );
   }
-  adjustLastMainThreadCacheTtlMs(e) {
-    this.#l = e;
+  adjustLastMainThreadCacheTtlMs(ttlMs) {
+    this.#l = ttlMs;
   }
-  recordLastMainThreadCacheRenewal(e) {
+  recordLastMainThreadCacheRenewal(at) {
     if (this.#a !== null)
       this.#p = {
         requestAt: this.#a,
-        at: Math.max(e, this.lastMainThreadCacheRenewedAt() ?? -1 / 0),
+        at: Math.max(at, this.lastMainThreadCacheRenewedAt() ?? -1 / 0),
       };
   }
   lastMainThreadCacheRenewedAt() {
-    let e = this.#p;
-    return e !== null && e.requestAt === this.#a ? e.at : null;
+    let renewal = this.#p;
+    return renewal !== null && renewal.requestAt === this.#a ? renewal.at : null;
   }
   lastLiveMainThreadRequestAt() {
     return this.#g;
@@ -1726,46 +1743,46 @@ class RequestJournal {
   recordMainThreadTurnStart() {
     this.#S = true;
   }
-  replaceLastMainThreadRequest(e, n) {
-    this.#a = e;
-    this.#l = n;
+  replaceLastMainThreadRequest(requestAt, ttlMs) {
+    this.#a = requestAt;
+    this.#l = ttlMs;
   }
   lastMainThreadContextTokens() {
     return this.#y;
   }
-  replaceLastMainThreadContextTokens(e) {
-    this.#y = e;
+  replaceLastMainThreadContextTokens(tokens) {
+    this.#y = tokens;
   }
-  stageResumeSeed(e) {
-    this.#m = e;
+  stageResumeSeed(seed) {
+    this.#m = seed;
   }
-  applyResumeSeed(e) {
+  applyResumeSeed(seed) {
     this.#m = null;
-    this.#l = e.ttlMs;
-    this.#a = e.requestAt;
-    this.#y = e.contextTokens;
+    this.#l = seed.ttlMs;
+    this.#a = seed.requestAt;
+    this.#y = seed.contextTokens;
   }
   #m = null;
-  clearLastMainThreadRequest(e) {
-    let n = e !== undefined && this.#m?.sessionId === e ? this.#m : null;
+  clearLastMainThreadRequest(sessionId) {
+    let seed = sessionId !== undefined && this.#m?.sessionId === sessionId ? this.#m : null;
     this.#m = null;
-    this.#l = n?.ttlMs ?? null;
-    this.#a = n?.requestAt ?? null;
-    this.#y = n?.contextTokens ?? null;
+    this.#l = seed?.ttlMs ?? null;
+    this.#a = seed?.requestAt ?? null;
+    this.#y = seed?.contextTokens ?? null;
     this.#g = null;
     this.#S = false;
   }
   lastApiCompletionTimestamp() {
     return this.#v;
   }
-  replaceLastApiCompletionTimestamp(e) {
-    this.#v = e;
+  replaceLastApiCompletionTimestamp(timestamp) {
+    this.#v = timestamp;
   }
   pendingPostCompaction() {
     return this.#f;
   }
-  replacePendingPostCompaction(e) {
-    this.#f = e;
+  replacePendingPostCompaction(pending) {
+    this.#f = pending;
   }
   reset() {
     this.#e = null;
@@ -1805,20 +1822,20 @@ class SessionCron {
   tasks() {
     return this.#e;
   }
-  schedule(e) {
-    this.#e.push(e);
+  schedule(task) {
+    this.#e.push(task);
   }
-  replaceTasks(e) {
-    this.#e = e;
+  replaceTasks(tasks) {
+    this.#e = tasks;
   }
-  chainStartedAt(e) {
-    return this.#t[e];
+  chainStartedAt(chainId) {
+    return this.#t[chainId];
   }
-  recordChainStart(e, n) {
-    this.#t[e] = n;
+  recordChainStart(chainId, startedAt) {
+    this.#t[chainId] = startedAt;
   }
-  forgetChainStart(e) {
-    delete this.#t[e];
+  forgetChainStart(chainId) {
+    delete this.#t[chainId];
   }
   tickInFlightPrompt() {
     return this.#n;
@@ -1826,21 +1843,21 @@ class SessionCron {
   tickInFlightPlugin() {
     return this.#o;
   }
-  replaceTickInFlightPrompt(e, n) {
-    this.#n = e;
-    this.#o = e === null ? undefined : n;
+  replaceTickInFlightPrompt(prompt, plugin) {
+    this.#n = prompt;
+    this.#o = prompt === null ? undefined : plugin;
   }
   consecutiveKeepalives() {
     return this.#r;
   }
-  replaceConsecutiveKeepalives(e) {
-    this.#r = e;
+  replaceConsecutiveKeepalives(count) {
+    this.#r = count;
   }
   ended() {
     return this.#s;
   }
-  replaceEnded(e) {
-    this.#s = e;
+  replaceEnded(ended) {
+    this.#s = ended;
   }
   wakeFires() {
     return this.#i;
@@ -1901,69 +1918,69 @@ class SessionFlags {
   onboardingShownThisSession() {
     return this.#e;
   }
-  replaceOnboardingShownThisSession(e) {
-    this.#e = e;
+  replaceOnboardingShownThisSession(shown) {
+    this.#e = shown;
   }
   lspRecommendationShownThisSession() {
     return this.#t;
   }
-  replaceLspRecommendationShownThisSession(e) {
-    this.#t = e;
+  replaceLspRecommendationShownThisSession(shown) {
+    this.#t = shown;
   }
   sessionTrustAccepted() {
     return this.#n;
   }
-  replaceSessionTrustAccepted(e) {
-    this.#n = e;
+  replaceSessionTrustAccepted(accepted) {
+    this.#n = accepted;
   }
   homeTrustDialogAccepted() {
     return this.#o;
   }
-  replaceHomeTrustDialogAccepted(e) {
-    this.#o = e;
+  replaceHomeTrustDialogAccepted(accepted) {
+    this.#o = accepted;
   }
   hasExitedPlanMode() {
     return this.#r;
   }
-  replaceHasExitedPlanMode(e) {
-    this.#r = e;
+  replaceHasExitedPlanMode(hasExited) {
+    this.#r = hasExited;
   }
   needsPlanModeExitAttachment() {
     return this.#s;
   }
-  replaceNeedsPlanModeExitAttachment(e) {
-    this.#s = e;
+  replaceNeedsPlanModeExitAttachment(needsAttachment) {
+    this.#s = needsAttachment;
   }
   needsAutoModeExitAttachment() {
     return this.#i;
   }
-  replaceNeedsAutoModeExitAttachment(e) {
-    this.#i = e;
+  replaceNeedsAutoModeExitAttachment(needsAttachment) {
+    this.#i = needsAttachment;
   }
   memoryToggledOff() {
     return this.#d;
   }
-  replaceMemoryToggledOff(e) {
-    this.#d = e;
+  replaceMemoryToggledOff(isToggledOff) {
+    this.#d = isToggledOff;
   }
   autoMemoryOffThisSession() {
     return this.#u;
   }
-  replaceAutoMemoryOffThisSession(e) {
-    this.#u = e;
+  replaceAutoMemoryOffThisSession(isOff) {
+    this.#u = isOff;
   }
   memoryPausedByCommand() {
     return this.#l;
   }
-  replaceMemoryPausedByCommand(e) {
-    this.#l = e;
+  replaceMemoryPausedByCommand(isPaused) {
+    this.#l = isPaused;
   }
   accountMemorySessionMode() {
     return this.#p;
   }
-  replaceAccountMemorySessionMode(e, n = false) {
-    this.#p = e;
-    this.#h = n && e !== undefined;
+  replaceAccountMemorySessionMode(mode, isRestored = false) {
+    this.#p = mode;
+    this.#h = isRestored && mode !== undefined;
   }
   accountMemorySessionModeRestored() {
     return this.#h;
@@ -1971,56 +1988,56 @@ class SessionFlags {
   accountMemoryLaunchMode() {
     return this.#a;
   }
-  replaceAccountMemoryLaunchMode(e) {
-    this.#a = e;
+  replaceAccountMemoryLaunchMode(mode) {
+    this.#a = mode;
   }
   restoredMemoryPause() {
     return this.#g;
   }
-  replaceRestoredMemoryPause(e) {
-    this.#g = e;
+  replaceRestoredMemoryPause(isPaused) {
+    this.#g = isPaused;
   }
   restoredAutoMemoryOff() {
     return this.#c;
   }
-  replaceRestoredAutoMemoryOff(e) {
-    this.#c = e;
+  replaceRestoredAutoMemoryOff(isOff) {
+    this.#c = isOff;
   }
   teardownUnwindRequested() {
     return this.#m;
   }
-  replaceTeardownUnwindRequested(e) {
-    this.#m = e;
+  replaceTeardownUnwindRequested(requested) {
+    this.#m = requested;
   }
   backgroundAutoModeSetupInFlight() {
     return this.#S;
   }
-  replaceBackgroundAutoModeSetupInFlight(e) {
-    this.#S = e;
+  replaceBackgroundAutoModeSetupInFlight(inFlight) {
+    this.#S = inFlight;
   }
   deferredToolStubGateLatch() {
     return this.#y;
   }
-  replaceDeferredToolStubGateLatch(e) {
-    this.#y = e;
+  replaceDeferredToolStubGateLatch(latch) {
+    this.#y = latch;
   }
   verifySkillRolloutGateLatch() {
     return this.#v;
   }
-  replaceVerifySkillRolloutGateLatch(e) {
-    this.#v = e;
+  replaceVerifySkillRolloutGateLatch(latch) {
+    this.#v = latch;
   }
   commitSkillRolloutGateLatch() {
     return this.#f;
   }
-  replaceCommitSkillRolloutGateLatch(e) {
-    this.#f = e;
+  replaceCommitSkillRolloutGateLatch(latch) {
+    this.#f = latch;
   }
   memoryToolsShapeLatch() {
     return this.#b;
   }
-  replaceMemoryToolsShapeLatch(e) {
-    this.#b = e;
+  replaceMemoryToolsShapeLatch(latch) {
+    this.#b = latch;
   }
   proposeGoalAvailabilityLogged() {
     return this.#k;
@@ -2031,20 +2048,20 @@ class SessionFlags {
   activeRoutine() {
     return this.#A;
   }
-  replaceActiveRoutine(e) {
-    this.#A = e;
+  replaceActiveRoutine(routine) {
+    this.#A = routine;
   }
   inheritedTeamName() {
     return this.#L;
   }
-  replaceInheritedTeamName(e) {
-    this.#L = e;
+  replaceInheritedTeamName(teamName) {
+    this.#L = teamName;
   }
   teleportedSessionInfo() {
     return this.#M;
   }
-  replaceTeleportedSessionInfo(e) {
-    this.#M = e;
+  replaceTeleportedSessionInfo(info) {
+    this.#M = info;
   }
   markFirstTeleportMessageLogged() {
     if (this.#M) this.#M.hasLoggedFirstMessage = true;
@@ -2052,41 +2069,41 @@ class SessionFlags {
   cachedClaudeMdContent() {
     return this.#O;
   }
-  replaceCachedClaudeMdContent(e) {
-    this.#O = e;
+  replaceCachedClaudeMdContent(content) {
+    this.#O = content;
   }
   accountSkillsSyncEnabled() {
     return this.#R;
   }
-  replaceAccountSkillsSyncEnabled(e) {
-    this.#R = e;
+  replaceAccountSkillsSyncEnabled(enabled) {
+    this.#R = enabled;
   }
   skillsSyncVetoed() {
     return this.#x;
   }
-  replaceSkillsSyncVetoed(e) {
-    this.#x = e;
+  replaceSkillsSyncVetoed(vetoed) {
+    this.#x = vetoed;
   }
   accountPluginsSyncEnabled() {
     return this.#C;
   }
-  replaceAccountPluginsSyncEnabled(e) {
-    this.#C = e;
+  replaceAccountPluginsSyncEnabled(enabled) {
+    this.#C = enabled;
   }
   pluginsSyncVetoed() {
     return this.#P;
   }
-  replacePluginsSyncVetoed(e) {
-    this.#P = e;
+  replacePluginsSyncVetoed(vetoed) {
+    this.#P = vetoed;
   }
-  armPendingContextCompacted(e, n) {
-    this.#T = e;
-    this.#w = n;
+  armPendingContextCompacted(info, response) {
+    this.#T = info;
+    this.#w = response;
   }
   consumePendingContextCompacted() {
-    let e = this.#T;
+    let info = this.#T;
     this.#T = undefined;
-    return e;
+    return info;
   }
   forgetPendingContextCompacted() {
     this.#T = undefined;
@@ -2184,8 +2201,8 @@ class SessionScratch {
   planSlugCache() {
     return this.#e;
   }
-  forgetPlanSlug(e) {
-    this.#e.delete(e);
+  forgetPlanSlug(slug) {
+    this.#e.delete(slug);
   }
   pendingBranchLinks() {
     return this.#t;
@@ -2196,8 +2213,8 @@ class SessionScratch {
   vimSharedState() {
     return this.#n;
   }
-  replaceVimSharedState(e) {
-    this.#n = e;
+  replaceVimSharedState(state) {
+    this.#n = state;
   }
   agentColorMap() {
     return this.#o;
@@ -2244,8 +2261,8 @@ class SessionScratch {
   filesPlacedByNameRead() {
     return this.#v;
   }
-  setFilesPlacedByNameRead(e) {
-    this.#v = e;
+  setFilesPlacedByNameRead(reader) {
+    this.#v = reader;
   }
   inboundAttachmentDownloads() {
     return this.#f;
@@ -2256,9 +2273,9 @@ class SessionScratch {
   chromeAvailabilityStagesLogged() {
     return this.#b;
   }
-  replaceChromeAvailabilityStagesLogged(e) {
+  replaceChromeAvailabilityStagesLogged(stages) {
     this.#b = new Set();
-    if (e) this.#k = Date.now();
+    if (stages) this.#k = Date.now();
   }
   chromeAvailabilityAnchorMs() {
     return this.#k;
@@ -2266,26 +2283,26 @@ class SessionScratch {
   pendingGoalIdleCheckin() {
     return this.#R;
   }
-  replacePendingGoalIdleCheckin(e) {
-    this.#R = e;
+  replacePendingGoalIdleCheckin(timer) {
+    this.#R = timer;
   }
   pendingGoalReprompt() {
     return this.#x;
   }
-  replacePendingGoalReprompt(e) {
-    this.#x = e;
+  replacePendingGoalReprompt(timer) {
+    this.#x = timer;
   }
   goalInterruptionStreak() {
     return this.#C;
   }
-  replaceGoalInterruptionStreak(e) {
-    this.#C = e;
+  replaceGoalInterruptionStreak(streak) {
+    this.#C = streak;
   }
   workerCheckin() {
     return this.#P;
   }
-  replaceWorkerCheckin(e) {
-    this.#P = e;
+  replaceWorkerCheckin(checkin) {
+    this.#P = checkin;
   }
   reset() {
     this.#e = new Map();
@@ -2306,9 +2323,9 @@ class SessionScratch {
     this.#S = new Map();
     this.#y = new Map();
     this.#v = undefined;
-    for (let e of this.#f.byFileUuid.values()) {
-      clearTimeout(e.expiry);
-      e.abort.abort();
+    for (let entry of this.#f.byFileUuid.values()) {
+      clearTimeout(entry.expiry);
+      entry.abort.abort();
     }
     this.#f = {
       byFileUuid: new Map(),
@@ -2359,8 +2376,8 @@ class SurfaceCapabilities {
   sdkDialogHostActive() {
     return this.#e;
   }
-  markSdkDialogHostActive(e) {
-    this.#e = e;
+  markSdkDialogHostActive(isActive) {
+    this.#e = isActive;
   }
   sdkSupportedDialogKinds() {
     return this.#t;
@@ -2368,80 +2385,80 @@ class SurfaceCapabilities {
   sdkSupportedDialogKindsSource() {
     return this.#n;
   }
-  declareDialogKinds(e, n) {
-    this.#t = e;
-    this.#n = e === undefined ? undefined : n;
+  declareDialogKinds(kinds, source) {
+    this.#t = kinds;
+    this.#n = kinds === undefined ? undefined : source;
   }
   sdkPerTaskStopAffordance() {
     return this.#o;
   }
-  declarePerTaskStopAffordance(e) {
-    this.#o = e;
+  declarePerTaskStopAffordance(affordance) {
+    this.#o = affordance;
   }
   sdkRapidFollowupPreempt() {
     return this.#r;
   }
-  declareRapidFollowupPreempt(e) {
-    this.#r = e;
+  declareRapidFollowupPreempt(preempt) {
+    this.#r = preempt;
   }
   sdkForwardNestedSubagentToolCalls() {
     return this.#s;
   }
-  declareForwardNestedSubagentToolCalls(e) {
-    this.#s = e;
+  declareForwardNestedSubagentToolCalls(forward) {
+    this.#s = forward;
   }
   hostRendersChromeSetupOffer() {
     return this.#i;
   }
-  declareHostRendersChromeSetupOffer(e) {
-    this.#i = e;
+  declareHostRendersChromeSetupOffer(renders) {
+    this.#i = renders;
   }
   attacherCaps() {
     return this.#d;
   }
-  replaceAttacherCaps(e) {
-    this.#d = e;
+  replaceAttacherCaps(caps) {
+    this.#d = caps;
     this.attacherCapsChanged.emit();
   }
   rvSupervisorLinkLive() {
     return this.#u;
   }
-  replaceRvSupervisorLinkLive(e) {
-    if (this.#u === e) return;
-    this.#u = e;
+  replaceRvSupervisorLinkLive(isLive) {
+    if (this.#u === isLive) return;
+    this.#u = isLive;
     this.rvSupervisorLinkChanged.emit();
   }
   sdkBetas() {
     return this.#c;
   }
-  replaceSdkBetas(e) {
-    this.#c = e;
+  replaceSdkBetas(betas) {
+    this.#c = betas;
   }
   caps() {
     return this.#l;
   }
-  replaceCaps(e) {
-    this.#l = e;
+  replaceCaps(caps) {
+    this.#l = caps;
   }
-  markRemote(e) {
+  markRemote(isRemote) {
     this.#l = {
       ...this.#l,
-      workspace: e ? "remote" : "local",
+      workspace: isRemote ? "remote" : "local",
     };
   }
-  cloudCwdOfSession(e) {
-    return this.#l.workspace === "remote" && this.#a?.sessionId === e ? this.#a.cwd : null;
+  cloudCwdOfSession(sessionId) {
+    return this.#l.workspace === "remote" && this.#a?.sessionId === sessionId ? this.#a.cwd : null;
   }
-  replaceCloudCwd(e) {
-    this.#a = e;
+  replaceCloudCwd(cwd) {
+    this.#a = cwd;
     this.cloudCwdChanged.emit();
   }
   replBridgeActive() {
     return this.#p;
   }
-  replaceReplBridgeActive(e) {
-    if (this.#p === e) return;
-    this.#p = e;
+  replaceReplBridgeActive(isActive) {
+    if (this.#p === isActive) return;
+    this.#p = isActive;
   }
   mainLoopBusy() {
     return this.#h !== "idle";
@@ -2449,8 +2466,8 @@ class SurfaceCapabilities {
   mainQueryRunning() {
     return this.#h === "running";
   }
-  replaceMainLoopStatus(e) {
-    this.#h = e;
+  replaceMainLoopStatus(status) {
+    this.#h = status;
   }
   reset() {
     this.#e = false;
@@ -2503,8 +2520,8 @@ class UserPresence {
   notePersonWrote() {
     this.#o = performance.now();
   }
-  recordInteraction(e) {
-    if (e) this.#d();
+  recordInteraction(isImmediate) {
+    if (isImmediate) this.#d();
     else this.#t = true;
   }
   flushIfDirty() {
@@ -2522,8 +2539,8 @@ class UserPresence {
   terminalFocus() {
     return this.#r;
   }
-  updateTerminalFocus(e) {
-    this.#r = e;
+  updateTerminalFocus(focus) {
+    this.#r = focus;
     this.terminalFocusFired.emit();
   }
   scrollDraining() {

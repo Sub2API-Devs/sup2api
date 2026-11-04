@@ -36,10 +36,10 @@ import { logError } from "../../log.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
 import {
   discriminatedUnion,
-  u,
+  objectSchema,
   literal,
   _enum,
-  string,
+  stringSchema,
   record,
   unknown,
   array,
@@ -49,6 +49,7 @@ import { MCP_TOOL_PREFIX } from "../../../services/mcp/mcpStringUtils.js";
 import { countToolCallsSince_6 } from "./arbiter.js";
 import { settleClassifierRequest, forgetClassifierRequest } from "./context.js";
 import { getAPIProvider } from "../../model/providers.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1026138-1026800 placement
 /**
@@ -85,7 +86,7 @@ async function handleServerVerdictUnavailable(toolUseId, options) {
     inARow = getAutoModeUnavailableResponsesInARow(options.runKey);
   }
   let position = inARow + 1;
-  let S = options.turn !== undefined && {
+  let turnFields = options.turn !== undefined && {
     turn: options.turn,
   };
   if (position >= TIMER_MARGIN_MS) {
@@ -93,7 +94,7 @@ async function handleServerVerdictUnavailable(toolUseId, options) {
       runKey: options.runKey,
       position,
       waited: Promise.resolve(true),
-      ...S,
+      ...turnFields,
     });
     return {
       kind: "stop",
@@ -107,7 +108,7 @@ async function handleServerVerdictUnavailable(toolUseId, options) {
     runKey: options.runKey,
     position,
     waited,
-    ...S,
+    ...turnFields,
   });
   return {
     kind: "deny",
@@ -119,8 +120,8 @@ async function handleServerVerdictUnavailable(toolUseId, options) {
 /**
  * clearUnavailableStreak：有连续不可用后清零。
  */
-function clearUnavailableStreak(e) {
-  if (getAutoModeUnavailableResponsesInARow(e) > 0) clearAutoModeUnavailableResponses(e);
+function clearUnavailableStreak(runKey) {
+  if (getAutoModeUnavailableResponsesInARow(runKey) > 0) clearAutoModeUnavailableResponses(runKey);
 }
 //@ chunk-e6aww6q8.js:1026835-1026864 placement
 function retryDelayFor(position) {
@@ -135,9 +136,9 @@ function waitForUnavailableRetry(
   position,
   { signal, scheduleTimeout = setTimeoutWithCancel, onWait },
 ) {
-  let y = (S) => {
+  let reportWait = (status) => {
     try {
-      onWait?.(S);
+      onWait?.(status);
     } catch (error) {
       logForDebugging(`[server-classifier] retry banner update failed: ${errorMessage(error)}`, {
         level: "warn",
@@ -145,37 +146,40 @@ function waitForUnavailableRetry(
     }
   };
   return new Promise((resolve) => {
-    let w = () => {};
-    let L = (q) => {
-      w();
-      signal.removeEventListener("abort", G);
-      y(null);
-      resolve(q);
+    let cancelTimer = () => {};
+    let finish = (retryNow) => {
+      cancelTimer();
+      signal.removeEventListener("abort", onAbort);
+      reportWait(null);
+      resolve(retryNow);
     };
-    let G = () => L(false);
-    signal.addEventListener("abort", G, {
+    let onAbort = () => finish(false);
+    signal.addEventListener("abort", onAbort, {
       once: true,
     });
-    y({
+    reportWait({
       position,
       limit: TIMER_MARGIN_MS,
       delayMs,
     });
-    w = scheduleTimeout(() => L(true), delayMs);
+    cancelTimer = scheduleTimeout(() => finish(true), delayMs);
   });
 }
 //@ chunk-e6aww6q8.js:1027237-1027562 placement
 /**
  * 判断原因码是否属于服务端不可用（含流结束、无法识别结果；严格模式下还包括无结果、不支持）。
  */
-function isServerUnavailableReason(e, n) {
-  if (e === undefined) return false;
-  if (e.startsWith("server_call_unavailable_")) return e !== "server_call_unavailable_truncated";
+function isServerUnavailableReason(reason, isTruncated) {
+  if (reason === undefined) return false;
+  if (reason.startsWith("server_call_unavailable_")) return reason !== "server_call_unavailable_truncated";
   return (
-    e.startsWith("server_unavailable_") ||
-    e === "server_stream_ended" ||
-    e === "server_unrecognized_result" ||
-    (!n && (e === "server_no_result" || e === "server_unsupported" || e === "server_thread_unsupported"))
+    reason.startsWith("server_unavailable_") ||
+    reason === "server_stream_ended" ||
+    reason === "server_unrecognized_result" ||
+    (!isTruncated &&
+      (reason === "server_no_result" ||
+        reason === "server_unsupported" ||
+        reason === "server_thread_unsupported"))
   );
 }
 //@ chunk-e6aww6q8.js:1027562-1027865 placement
@@ -193,41 +197,41 @@ function buildTurnEndedUnavailableMessage(name) {
 /**
  * 给用户的"auto 模式不可用"提示，必要时说明请求经过的代理可能改写了响应。
  */
-function buildUserUnavailableNotice(e) {
-  let n = `Auto mode is unavailable \u2014 the server returned no safety verdict for the last ${TIMER_MARGIN_MS} responses, so Claude stopped. Send a message to try again, or switch out of auto mode.`;
-  return e === undefined
-    ? n
-    : `${n} Requests in this session go through ${e}; a proxy that alters responses could cause this.`;
+function buildUserUnavailableNotice(gatewayHost) {
+  let baseMessage = `Auto mode is unavailable \u2014 the server returned no safety verdict for the last ${TIMER_MARGIN_MS} responses, so Claude stopped. Send a message to try again, or switch out of auto mode.`;
+  return gatewayHost === undefined
+    ? baseMessage
+    : `${baseMessage} Requests in this session go through ${gatewayHost}; a proxy that alters responses could cause this.`;
 }
 //@ chunk-e6aww6q8.js:1028409-1028470 placement
 /**
  * minimalUnavailableNotice：只保留最简不可用说明。
  */
-function minimalUnavailableNotice(autoModeUnavailableStopNotice) {
+function minimalUnavailableNotice(notice) {
   let userUnavailableNotice = buildUserUnavailableNotice(undefined);
-  return autoModeUnavailableStopNotice.startsWith(userUnavailableNotice)
-    ? userUnavailableNotice
-    : autoModeUnavailableStopNotice;
+  return notice.startsWith(userUnavailableNotice) ? userUnavailableNotice : notice;
 }
 //@ chunk-e6aww6q8.js:1028470-1028736 placement
-function buildClassifierParseFailureReason(e, n, stopReason) {
-  return `${`${CLASSIFIER_PARSE_FAILURE_REASON_STEM}${n === "policy_refusal" && stopReason === "refusal" ? " \u2014 a safety check separate from auto mode blocked this request because of earlier conversation content \u2014 it isn't about the action itself" : ""}`} \u2014 run with --debug for details`;
+function buildClassifierParseFailureReason(stem, failureReason, stopReason) {
+  return `${`${CLASSIFIER_PARSE_FAILURE_REASON_STEM}${failureReason === "policy_refusal" && stopReason === "refusal" ? " \u2014 a safety check separate from auto mode blocked this request because of earlier conversation content \u2014 it isn't about the action itself" : ""}`} \u2014 run with --debug for details`;
 }
 //@ chunk-e6aww6q8.js:1028736-1028996 placement
 /**
  * 宿主入口下按状态与原因去重，记录 auto 模式服务端检查的诊断事件。
  */
-function logServerCheckDiagnostic(e) {
+function logServerCheckDiagnostic(state) {
   try {
     if (
       !isHostEntrypoint() ||
-      !streamFallbackWarning().once(`auto_mode_server_check:${e.state}:${"reason" in e ? e.reason : ""}`)
+      !streamFallbackWarning().once(
+        `auto_mode_server_check:${state.state}:${"reason" in state ? state.reason : ""}`,
+      )
     )
       return;
-    let n = userServerClassifierSwitch();
-    logForDiagnosticsNoPII(e.state === "no_verdict" ? "warn" : "info", "cli_api_auto_mode_server_check", {
-      ...e,
-      switch: n === null ? "unset" : n ? "on" : "off",
+    let userSwitch = userServerClassifierSwitch();
+    logForDiagnosticsNoPII(state.state === "no_verdict" ? "warn" : "info", "cli_api_auto_mode_server_check", {
+      ...state,
+      switch: userSwitch === null ? "unset" : userSwitch ? "on" : "off",
     });
   } catch (error) {
     logError(toError(error));
@@ -237,72 +241,81 @@ function logServerCheckDiagnostic(e) {
 /**
  * DANGEROUS_TOOL_USE：危险工具使用判定类型；dangerousToolUseVerdictSchema：危险工具使用判定 schema；dangerousToolUseToolListSchema：危险工具列表 schema（同一声明共 5 个绑定）。
  */
-var DANGEROUS_TOOL_USE_2 = "dangerous_tool_use";
-var DANGEROUS_TOOL_USE = DoctorLazy(() =>
-  discriminatedUnion("type", [
-    u({
-      type: literal("evaluated"),
-      outcome: _enum(["flagged", "not_flagged"]),
-      explanation: string()
-        .nullish()
-        .transform((e) => e ?? undefined)
-        .optional(),
-    }),
-    u({
-      type: literal("skipped"),
-    }),
-    u({
-      type: literal("unavailable"),
-      reason: string(),
-    }),
-  ]),
-);
-var dangerousToolUseVerdictSchema = DoctorLazy(() =>
-  discriminatedUnion("type", [
-    u({
-      type: literal("available"),
-      tool_uses: record(string(), unknown()),
-    }),
-    u({
-      type: literal("unsupported"),
-    }),
-    u({
-      type: literal("unavailable"),
-      reason: string(),
-    }),
-  ]),
-);
-var dangerousToolUseToolListSchema = DoctorLazy(() =>
-  array(
-    u({
-      type: string(),
-    }).loose(),
-  ),
-);
-var dangerousToolUseUnsupportedSchema = ["disabled", "error"];
-var dangerousToolUseCombinedSchema = ["timeout", "error", "refused", "input_too_long", "truncated"];
+var DANGEROUS_TOOL_USE_2; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var DANGEROUS_TOOL_USE;
+var dangerousToolUseVerdictSchema;
+var dangerousToolUseToolListSchema;
+var DANGEROUS_TOOL_USE_UNSUPPORTED_REASONS;
+var DANGEROUS_TOOL_USE_COMBINED_REASONS;
+deferInit("chunk-e6aww6q8.js:1028996", () => {
+  DANGEROUS_TOOL_USE_2 = "dangerous_tool_use";
+  DANGEROUS_TOOL_USE = DoctorLazy(() =>
+    discriminatedUnion("type", [
+      objectSchema({
+        type: literal("evaluated"),
+        outcome: _enum(["flagged", "not_flagged"]),
+        explanation: stringSchema()
+          .nullish()
+          .transform((explanation) => explanation ?? undefined)
+          .optional(),
+      }),
+      objectSchema({
+        type: literal("skipped"),
+      }),
+      objectSchema({
+        type: literal("unavailable"),
+        reason: stringSchema(),
+      }),
+    ]),
+  );
+  dangerousToolUseVerdictSchema = DoctorLazy(() =>
+    discriminatedUnion("type", [
+      objectSchema({
+        type: literal("available"),
+        tool_uses: record(stringSchema(), unknown()),
+      }),
+      objectSchema({
+        type: literal("unsupported"),
+      }),
+      objectSchema({
+        type: literal("unavailable"),
+        reason: stringSchema(),
+      }),
+    ]),
+  );
+  dangerousToolUseToolListSchema = DoctorLazy(() =>
+    array(
+      objectSchema({
+        type: stringSchema(),
+      }).loose(),
+    ),
+  );
+  DANGEROUS_TOOL_USE_UNSUPPORTED_REASONS = ["disabled", "error"];
+  DANGEROUS_TOOL_USE_COMBINED_REASONS = ["timeout", "error", "refused", "input_too_long", "truncated"];
+});
 //@ chunk-e6aww6q8.js:1029496-1029545 placement
 /**
  * knownValueOrOther：值在已知集合中则原样，否则 other。
  */
-function knownValueOrOther(e, reason) {
-  return e.includes(reason) ? reason : "other";
+function knownValueOrOther(allowedReasons, reason) {
+  return allowedReasons.includes(reason) ? reason : "other";
 }
 //@ chunk-e6aww6q8.js:1029545-1030412 placement
-function parseServerClassifierResult(e) {
-  let safeguardResults = typeof e === "object" && e !== null ? e.safeguard_results : undefined;
+function parseServerClassifierResult(response) {
+  let safeguardResults =
+    typeof response === "object" && response !== null ? response.safeguard_results : undefined;
   if (safeguardResults === undefined || safeguardResults === null)
     return {
       kind: "none",
       why: "server_no_result",
     };
-  let r = dangerousToolUseToolListSchema().safeParse(safeguardResults);
-  if (!r.success)
+  let listResult = dangerousToolUseToolListSchema().safeParse(safeguardResults);
+  if (!listResult.success)
     return {
       kind: "none",
       why: "server_unrecognized_result",
     };
-  let filtered = r.data.filter((y) => y.type === DANGEROUS_TOOL_USE_2);
+  let filtered = listResult.data.filter((entry) => entry.type === DANGEROUS_TOOL_USE_2);
   if (filtered.length === 0)
     return {
       kind: "none",
@@ -313,13 +326,13 @@ function parseServerClassifierResult(e) {
       kind: "none",
       why: "server_unrecognized_result",
     };
-  let h = dangerousToolUseVerdictSchema().safeParse(filtered[0].status);
-  if (!h.success)
+  let verdictResult = dangerousToolUseVerdictSchema().safeParse(filtered[0].status);
+  if (!verdictResult.success)
     return {
       kind: "none",
       why: "server_unrecognized_result",
     };
-  switch (h.data.type) {
+  switch (verdictResult.data.type) {
     case "unsupported":
       return {
         kind: "none",
@@ -328,16 +341,16 @@ function parseServerClassifierResult(e) {
     case "unavailable":
       return {
         kind: "none",
-        why: `server_unavailable_${knownValueOrOther(dangerousToolUseUnsupportedSchema, h.data.reason)}`,
+        why: `server_unavailable_${knownValueOrOther(DANGEROUS_TOOL_USE_UNSUPPORTED_REASONS, verdictResult.data.reason)}`,
       };
     case "available": {
-      let y = new Map();
-      for (let [key, value] of Object.entries(h.data.tool_uses)) {
-        let L = DANGEROUS_TOOL_USE().safeParse(value);
-        y.set(
+      let statuses = new Map();
+      for (let [key, value] of Object.entries(verdictResult.data.tool_uses)) {
+        let parsedStatus = DANGEROUS_TOOL_USE().safeParse(value);
+        statuses.set(
           key,
-          L.success
-            ? L.data
+          parsedStatus.success
+            ? parsedStatus.data
             : {
                 type: "unrecognized",
               },
@@ -345,7 +358,7 @@ function parseServerClassifierResult(e) {
       }
       return {
         kind: "per_call",
-        statuses: y,
+        statuses,
       };
     }
   }
@@ -379,19 +392,19 @@ class ClassifierResult {
       this.#i = resolve;
     });
   }
-  settle(e) {
+  settle(result) {
     if (this.#n !== undefined) return false;
-    this.#n = e;
+    this.#n = result;
     this.#o = Date.now();
-    this.#i(e);
+    this.#i(result);
     return true;
   }
   results() {
     return this.#n !== undefined ? Promise.resolve(this.#n) : this.#s;
   }
-  noteRewriteCause(e) {
-    if (e === "hook" || e === "tool_call_chain") this.#e = true;
-    else if (e === "siblings_unknown" || e === "sibling_not_reviewed") this.#t ??= e;
+  noteRewriteCause(cause) {
+    if (cause === "hook" || cause === "tool_call_chain") this.#e = true;
+    else if (cause === "siblings_unknown" || cause === "sibling_not_reviewed") this.#t ??= cause;
   }
   siblingNoteCause() {
     return this.#e ? "sibling_changed" : (this.#t ?? "sibling_not_reviewed");
@@ -399,16 +412,22 @@ class ClassifierResult {
   settledAt() {
     return this.#o;
   }
-  noteRewrittenCall(e, n) {
-    if (!this.#r.has(e)) {
-      this.#r.set(e, n);
+  noteRewrittenCall(toolUseId, callIds) {
+    if (!this.#r.has(toolUseId)) {
+      this.#r.set(toolUseId, callIds);
       return;
     }
-    let r = this.#r.get(e);
-    this.#r.set(e, r === undefined || n === undefined ? undefined : new Set([...r].filter((s) => n.has(s))));
+    let previous = this.#r.get(toolUseId);
+    this.#r.set(
+      toolUseId,
+      previous === undefined || callIds === undefined
+        ? undefined
+        : new Set([...previous].filter((id) => callIds.has(id))),
+    );
   }
-  isVoidedByAnotherCall(e) {
-    for (let [n, r] of this.#r) if (r === undefined || (n !== e && !r.has(e))) return true;
+  isVoidedByAnotherCall(toolUseID) {
+    for (let [rewrittenId, keptIds] of this.#r)
+      if (keptIds === undefined || (rewrittenId !== toolUseID && !keptIds.has(toolUseID))) return true;
     return false;
   }
   toJSON() {
@@ -418,27 +437,32 @@ class ClassifierResult {
 //@ chunk-e6aww6q8.js:1031435-1031466 placement
 var SERVER_CONTEXT_STALE = "server_context_stale";
 //@ chunk-e6aww6q8.js:1031466-1031642 placement
-function createServerClassifierResult(key, n = {}) {
-  if (n.judgeOnlyTools === undefined)
+function createServerClassifierResult(key, options = {}) {
+  if (options.judgeOnlyTools === undefined)
     logServerCheckDiagnostic({
       state: "requested",
     });
   return new ClassifierResult(
     key,
-    n.artifacts,
-    n.thread === true,
-    n.exactMcpAllowRules ?? EMPTY_VERDICT_SET,
-    n.judgeOnlyTools,
-    agentIdOrMain(n.agentId),
+    options.artifacts,
+    options.thread === true,
+    options.exactMcpAllowRules ?? EMPTY_VERDICT_SET,
+    options.judgeOnlyTools,
+    agentIdOrMain(options.agentId),
   );
 }
 //@ chunk-e6aww6q8.js:1031642-1031658 placement
-var EMPTY_VERDICT_SET = new Set();
+var EMPTY_VERDICT_SET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:1031642", () => {
+  EMPTY_VERDICT_SET = new Set();
+});
 //@ chunk-e6aww6q8.js:1031658-1031812 placement
-function getExactMcpAllowRules(e) {
-  if (e.mcp_allow_rules_exact !== true) return EMPTY_VERDICT_SET;
+function getExactMcpAllowRules(context) {
+  if (context.mcp_allow_rules_exact !== true) return EMPTY_VERDICT_SET;
   return new Set(
-    e.rules.allow.map((n) => n.rule).filter((n) => n.startsWith(MCP_TOOL_PREFIX) && !n.includes("(")),
+    context.rules.allow
+      .map((entry) => entry.rule)
+      .filter((rule) => rule.startsWith(MCP_TOOL_PREFIX) && !rule.includes("(")),
   );
 }
 //@ chunk-e6aww6q8.js:1031812-1031860 placement
@@ -456,75 +480,84 @@ function sentExactMcpAllowRule(serverClassifierResults, name) {
   return asClassifierResult(serverClassifierResults)?.sentExactMcpAllowRules.has(name) === true;
 }
 //@ chunk-e6aww6q8.js:1031927-1032116 placement
-function wasSentForJudging(e, n, r) {
-  if (e.sentJudgeOnlyTools === undefined) return true;
-  let found = n.message.content.find((h) => h.type === "tool_use" && h.id === r);
-  return found?.type === "tool_use" && e.sentJudgeOnlyTools.has(found.name);
+function wasSentForJudging(result, assistantMessage, toolUseID) {
+  if (result.sentJudgeOnlyTools === undefined) return true;
+  let found = assistantMessage.message.content.find(
+    (block) => block.type === "tool_use" && block.id === toolUseID,
+  );
+  return found?.type === "tool_use" && result.sentJudgeOnlyTools.has(found.name);
 }
 //@ chunk-e6aww6q8.js:1032116-1032245 placement
 function hasHeldServerVerdict(assistantMessage, toolUseID) {
-  let r = asClassifierResult(
+  let classifierResult = asClassifierResult(
     assistantMessage.serverClassifierResults ?? assistantMessage.serverClassifierReviewLeftBehind,
   );
   return (
-    r !== undefined &&
+    classifierResult !== undefined &&
     countToolCallsSince_6(assistantMessage, toolUseID) &&
-    wasSentForJudging(r, assistantMessage, toolUseID)
+    wasSentForJudging(classifierResult, assistantMessage, toolUseID)
   );
 }
 //@ chunk-e6aww6q8.js:1032245-1032325 placement
 /**
  * classifierResultPayload：构造分类结果载荷。
  */
-function classifierResultPayload(e) {
+function classifierResultPayload(result) {
   return {
-    serverClassifierRequest: e.key,
-    serverClassifierResults: e,
+    serverClassifierRequest: result.key,
+    serverClassifierResults: result,
   };
 }
 //@ chunk-e6aww6q8.js:1032325-1032484 placement
-function settleServerClassifierResult(e, n, r) {
-  let s = noteThreadUnsupported(e, parseServerClassifierResult(n));
+function settleServerClassifierResult(message, response, callIds) {
+  let result = noteThreadUnsupported(message, parseServerClassifierResult(response));
   settleClassifierRequest(
-    e.key,
-    s.kind === "per_call" ? [...s.statuses].filter(([, h]) => h.type === "evaluated").map(([h]) => h) : [],
+    message.key,
+    result.kind === "per_call"
+      ? [...result.statuses].filter(([, status]) => status.type === "evaluated").map(([callId]) => callId)
+      : [],
   );
-  return recordServerVerdict(e, s, r);
+  return recordServerVerdict(message, result, callIds);
 }
 //@ chunk-e6aww6q8.js:1032484-1032921 placement
 /**
  * 结算服务端分类结果：有已评估调用时清零连续无裁决计数；按结果记录诊断（无裁决、已裁决、只裁决了其他调用）。
  */
-function recordServerVerdict(e, n, r) {
-  let s = asClassifierResult(e);
-  if (s === undefined || !s.settle(n)) return;
-  let h = r === undefined ? undefined : [...r];
-  let y = n.kind === "per_call" && hasEvaluatedStatus(n.statuses, h);
-  if (y) clearUnavailableStreak(s.runKey);
-  if (e.sentJudgeOnlyTools !== undefined) return n;
-  if (n.kind === "none")
+function recordServerVerdict(message, result, callIds) {
+  let classified = asClassifierResult(message);
+  if (classified === undefined || !classified.settle(result)) return;
+  let judgedIds = callIds === undefined ? undefined : [...callIds];
+  let hasVerdict = result.kind === "per_call" && hasEvaluatedStatus(result.statuses, judgedIds);
+  if (hasVerdict) clearUnavailableStreak(classified.runKey);
+  if (message.sentJudgeOnlyTools !== undefined) return result;
+  if (result.kind === "none")
     logServerCheckDiagnostic({
       state: "no_verdict",
-      reason: n.why,
+      reason: result.why,
     });
-  else if (y)
+  else if (hasVerdict)
     logServerCheckDiagnostic({
       state: "verdict",
     });
-  else if (n.statuses.size > 0 && h !== undefined && h.length > 0 && !h.some((S) => n.statuses.has(S)))
+  else if (
+    result.statuses.size > 0 &&
+    judgedIds !== undefined &&
+    judgedIds.length > 0 &&
+    !judgedIds.some((callId) => result.statuses.has(callId))
+  )
     logServerCheckDiagnostic({
       state: "no_verdict",
       reason: "other_tool_use_ids",
     });
-  return n;
+  return result;
 }
 //@ chunk-e6aww6q8.js:1032921-1033275 placement
 /**
  * 带消息线程的请求被回答"不支持"时，标记会话之后不再带线程发送，并把原因改为 server_thread_unsupported。
  */
-function noteThreadUnsupported(e, serverClassifierResult) {
+function noteThreadUnsupported(state, serverClassifierResult) {
   if (
-    e.sentThread &&
+    state.sentThread &&
     serverClassifierResult.kind === "none" &&
     serverClassifierResult.why === "server_unsupported"
   ) {
@@ -545,26 +578,26 @@ function noteThreadUnsupported(e, serverClassifierResult) {
   return serverClassifierResult;
 }
 //@ chunk-e6aww6q8.js:1033275-1033426 placement
-function hasEvaluatedStatus(statuses, n) {
-  if (n === undefined) return [...statuses.values()].some((r) => r.type === "evaluated");
-  for (let r of n) if (statuses.get(r)?.type === "evaluated") return true;
+function hasEvaluatedStatus(statuses, toolUseIds) {
+  if (toolUseIds === undefined) return [...statuses.values()].some((status) => status.type === "evaluated");
+  for (let toolUseId of toolUseIds) if (statuses.get(toolUseId)?.type === "evaluated") return true;
   return false;
 }
 //@ chunk-e6aww6q8.js:1033426-1033563 placement
-function isServerClassifierUnsupported(e) {
+function isServerClassifierUnsupported(result) {
   return (
-    e.kind === "none" &&
-    (e.why === "server_unsupported" ||
-      e.why === "server_unavailable_disabled" ||
-      e.why === "server_no_result")
+    result.kind === "none" &&
+    (result.why === "server_unsupported" ||
+      result.why === "server_unavailable_disabled" ||
+      result.why === "server_no_result")
   );
 }
 //@ chunk-e6aww6q8.js:1033563-1033630 placement
 /**
  * settleServerNoResult：服务端无结果时结算。
  */
-function settleServerNoResult(e) {
-  return recordServerVerdict(e, {
+function settleServerNoResult(request) {
+  return recordServerVerdict(request, {
     kind: "none",
     why: "server_no_result",
   });
@@ -573,9 +606,9 @@ function settleServerNoResult(e) {
 /**
  * settleServerStreamEnded：服务端流结束时结算。
  */
-function settleServerStreamEnded(e) {
-  forgetClassifierRequest(e.key);
-  asClassifierResult(e)?.settle({
+function settleServerStreamEnded(request) {
+  forgetClassifierRequest(request.key);
+  asClassifierResult(request)?.settle({
     kind: "none",
     why: "server_stream_ended",
   });
@@ -619,7 +652,7 @@ export {
   settleServerNoResult,
   buildClassifierParseFailureReason,
   knownValueOrOther,
-  dangerousToolUseCombinedSchema,
+  DANGEROUS_TOOL_USE_COMBINED_REASONS,
   asClassifierResult,
   wasSentForJudging,
   logServerCheckDiagnostic,

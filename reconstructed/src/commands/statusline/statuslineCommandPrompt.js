@@ -28,14 +28,15 @@ async function callStatuslineCommand() {
       value: lowPriorityOffMessage(),
     };
   }
-  let t = enableLowPriorityMode("command");
-  if (t === "unavailable")
+  let runResult = enableLowPriorityMode("command");
+  if (runResult === "unavailable")
     return {
       type: "text",
       value: lowPriorityUnavailableMessage(),
     };
   return {
     type: "text",
-    value: lowPriorityOnMessage(t),
+    value: lowPriorityOnMessage(runResult),
   };
 }
+export { callStatuslineCommand };

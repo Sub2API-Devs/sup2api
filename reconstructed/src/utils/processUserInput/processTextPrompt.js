@@ -35,47 +35,53 @@ import { wrapNonUserMessage } from "../messages/nonUserMessages.js";
  * processTextPrompt：普通文本提示转为用户消息并上报 tengu_input_prompt。
  */
 function processTextPrompt(
-  e,
+  inputContent,
   imageContentBlocks,
   imagePasteIds,
   attachmentMessages,
-  r,
-  w,
+  promptId,
+  uuid,
   permissionMode,
-  C,
+  isMeta,
   effortLevelIfSupported,
-  M,
-  R,
+  promptSource,
+  origin,
   wakeupSource,
   hostInitiator,
   artifactCommentTurn,
-  U,
+  userPromptHold,
   inboundOrigin,
-  re,
-  z,
+  toolsUsed,
+  knownTools,
 ) {
-  let userPromptText = typeof e === "string" ? e : e.find((block) => block.type === "text")?.text || "";
-  let ee = w || randomUUID();
-  let Y = typeof e === "string" ? e : e.findLast((block) => block.type === "text")?.text || "";
-  let ue = hasToolResultBlock(e) ? undefined : r;
-  if (Y)
+  let userPromptText =
+    typeof inputContent === "string"
+      ? inputContent
+      : inputContent.find((block) => block.type === "text")?.text || "";
+  let messageUuid = uuid || randomUUID();
+  let promptText =
+    typeof inputContent === "string"
+      ? inputContent
+      : inputContent.findLast((block) => block.type === "text")?.text || "";
+  let existingPromptId = hasToolResultBlock(inputContent) ? undefined : promptId;
+  if (promptText)
     logSlashPromptEvent(
       {
-        text: Y,
+        text: promptText,
         attributes: {
-          ...(ue && {
-            "prompt.id": ue,
+          ...(existingPromptId && {
+            "prompt.id": existingPromptId,
           }),
-          "message.uuid": ee,
+          "message.uuid": messageUuid,
         },
       },
-      U,
+      userPromptHold,
     );
   let isNegative = hasFrustrationLanguage(userPromptText);
   let isKeepGoing = matchesKeepGoingKeyword(userPromptText);
   let isWakeup = isPresencePing(userPromptText);
-  let nt = C ? null : getLastCancelledAPIMessageId();
-  let promptIndex = C ? undefined : incrementPromptIndex();
+  let cancelledMessageId = isMeta ? null : getLastCancelledAPIMessageId();
+  let promptIndex = isMeta ? undefined : incrementPromptIndex();
   let userMessage = promptTelemetryFields({
     wakeupSource,
     hostInitiator,
@@ -88,60 +94,64 @@ function processTextPrompt(
     is_wakeup: isWakeup,
     ...false,
     prompt_index: promptIndex,
-    prompt_length: Y.length,
-    ...(M && {
-      prompt_source: fromEnum(M),
+    prompt_length: promptText.length,
+    ...(promptSource && {
+      prompt_source: fromEnum(promptSource),
     }),
     ...(effortLevelIfSupported && {
       effort_level: fromEnum(effortLevelIfSupported),
     }),
-    turn_origin: fromEnum(getOriginKindLabel(R)),
+    turn_origin: fromEnum(getOriginKindLabel(origin)),
     ...userMessage,
     ...emptyObjectFactory(),
     ...(userMessage.artifact_comment_turn &&
-      ue && {
-        turn_prompt_id: sanitizeMarkName(ue),
+      existingPromptId && {
+        turn_prompt_id: sanitizeMarkName(existingPromptId),
       }),
-    ...(nt && {
-      interrupted_message_id: sanitizeMarkName(nt),
+    ...(cancelledMessageId && {
+      interrupted_message_id: sanitizeMarkName(cancelledMessageId),
     }),
   });
-  let at = isGlimmeringFinchGateOn();
-  let St = re === undefined || !at ? undefined : unreadableToolsUsed(re, z ?? []);
-  let jt = St === undefined ? [] : [markToolSummaryMessage(createUserMessage(summaryCompanionMessage(St)))];
-  let de =
-    typeof e === "string" && re !== undefined && !at
-      ? joinWithNewlineIfAny(e, unreadableToolsLine(re, z ?? []))
-      : e;
-  let gt = de;
+  let summaryEnabled = isGlimmeringFinchGateOn();
+  let unreadable =
+    toolsUsed === undefined || !summaryEnabled ? undefined : unreadableToolsUsed(toolsUsed, knownTools ?? []);
+  let summaryMessages =
+    unreadable === undefined
+      ? []
+      : [markToolSummaryMessage(createUserMessage(summaryCompanionMessage(unreadable)))];
+  let content =
+    typeof inputContent === "string" && toolsUsed !== undefined && !summaryEnabled
+      ? joinWithNewlineIfAny(inputContent, unreadableToolsLine(toolsUsed, knownTools ?? []))
+      : inputContent;
+  let finalContent = content;
   if (imageContentBlocks.length > 0)
-    gt = [
-      ...(typeof de === "string"
-        ? de.trim()
+    finalContent = [
+      ...(typeof content === "string"
+        ? content.trim()
           ? [
               {
                 type: "text",
-                text: de,
+                text: content,
               },
             ]
           : []
-        : de),
+        : content),
       ...imageContentBlocks,
     ];
   let userMessage_2 = createUserMessage({
-    content: gt,
-    uuid: ee,
+    content: finalContent,
+    uuid: messageUuid,
     imagePasteIds: imagePasteIds.length > 0 ? imagePasteIds : undefined,
     permissionMode,
-    isMeta: C || undefined,
-    promptSource: M,
-    promptId: ue,
-    origin: R,
+    isMeta: isMeta || undefined,
+    promptSource,
+    promptId: existingPromptId,
+    origin,
   });
-  let unframed = cloneContent(gt);
-  if (R) wrapNonUserMessage(userMessage_2, R);
+  let unframed = cloneContent(finalContent);
+  if (origin) wrapNonUserMessage(userMessage_2, origin);
   return {
-    messages: [...jt, userMessage_2, ...attachmentMessages],
+    messages: [...summaryMessages, userMessage_2, ...attachmentMessages],
     shouldQuery: true,
     promptRow: {
       message: userMessage_2,

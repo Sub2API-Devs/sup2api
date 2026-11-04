@@ -15,35 +15,35 @@ class SelfPostCounter {
   #t = new Map();
   #n = 0;
   onCleared = null;
-  notePost(t) {
-    this.#t.set(t, (this.#t.get(t) ?? 0) + 1);
+  notePost(agentId) {
+    this.#t.set(agentId, (this.#t.get(agentId) ?? 0) + 1);
     this.#n++;
   }
-  forgetPost(t) {
-    let n = this.#t.get(t) ?? 0;
-    if (n <= 1) this.#t.delete(t);
-    else this.#t.set(t, n - 1);
+  forgetPost(agentId) {
+    let count = this.#t.get(agentId) ?? 0;
+    if (count <= 1) this.#t.delete(agentId);
+    else this.#t.set(agentId, count - 1);
     this.#n = Math.max(0, this.#n - 1);
   }
-  atBound(t, n) {
-    return this.postsSinceHumanTurn(t) >= n.maxSelfHops || this.#n >= n.maxChainLength;
+  atBound(agentId, bounds) {
+    return this.postsSinceHumanTurn(agentId) >= bounds.maxSelfHops || this.#n >= bounds.maxChainLength;
   }
-  seed(t, n) {
+  seed(counts, total) {
     this.#t.clear();
-    for (let [e, o] of t) this.#t.set(e, o);
-    this.#n = n;
+    for (let [agentId, count] of counts) this.#t.set(agentId, count);
+    this.#n = total;
   }
   noteHumanTurn() {
-    let t = this.#n > 0;
+    let hadPosts = this.#n > 0;
     this.#t.clear();
     this.#n = 0;
-    if (t) this.onCleared?.();
+    if (hadPosts) this.onCleared?.();
   }
   peersPostedTo() {
     return [...this.#t.keys()];
   }
-  postsSinceHumanTurn(t) {
-    return this.#t.get(t) ?? 0;
+  postsSinceHumanTurn(agentId) {
+    return this.#t.get(agentId) ?? 0;
   }
   totalPostsSinceHumanTurn() {
     return this.#n;

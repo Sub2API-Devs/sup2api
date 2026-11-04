@@ -45,50 +45,50 @@ function isAdoptEnabled() {
 var MAX_TASK_DETAIL_CHARS = 50;
 //@ chunk-sq8979s2.js:764-912 placement
 function sessionCronLabels(cronFilter) {
-  let o = [];
-  for (let n of getSessionCronTasks()) {
-    if (cronFilter && !cronFilter(n)) continue;
-    o.push({
+  let labels = [];
+  for (let cronTask of getSessionCronTasks()) {
+    if (cronFilter && !cronFilter(cronTask)) continue;
+    labels.push({
       label: "scheduled task",
-      detail: `${cronScheduleText(n)} \xB7 ${truncate(n.prompt, MAX_TASK_DETAIL_CHARS, true)}`,
+      detail: `${cronScheduleText(cronTask)} \xB7 ${truncate(cronTask.prompt, MAX_TASK_DETAIL_CHARS, true)}`,
     });
   }
-  return o;
+  return labels;
 }
 //@ chunk-sq8979s2.js:912-1143 placement
-function cronScheduleText(e) {
-  if (e.recurring) return cronToHuman(e.cron);
-  let fields = parseCronExpression(e.cron);
-  let n =
+function cronScheduleText(cronTask) {
+  if (cronTask.recurring) return cronToHuman(cronTask.cron);
+  let fields = parseCronExpression(cronTask.cron);
+  let nextRun =
     fields &&
-    computeNextCronRun(fields, new Date(e.createdAt), {
+    computeNextCronRun(fields, new Date(cronTask.createdAt), {
       oneShot: true,
     });
-  if (!n) return cronToHuman(e.cron);
-  let max = Math.max(0, n.getTime() - Date.now());
+  if (!nextRun) return cronToHuman(cronTask.cron);
+  let max = Math.max(0, nextRun.getTime() - Date.now());
   return `Runs once in ${formatDuration(max, {
     mostSignificantOnly: true,
   })}`;
 }
 //@ chunk-sq8979s2.js:1143-1569 placement
-function backgroundTaskKindLabel(tasks, { includeDream: o = false, mcpClients: n } = {}) {
-  let r = [];
-  for (let t of Object.values(tasks)) {
-    if (!waitForTaskCompletion(t) || t.type === "remote_agent") continue;
-    if (!o && t.type === "dream") continue;
-    if (t.type === "post_turn_memory") continue;
-    if (t.type === "monitor_ws" && t.ambient) continue;
-    if (isIdleTeammateTask(t)) continue;
-    if (taskAbortController(t)) continue;
-    if (isRemoteMcpTask(t, n)) continue;
-    if (isLocalShellTask(t) && t.stopsOnExit) continue;
-    r.push({
-      label: taskKindLabel(t.type),
-      detail: truncate(t.description, MAX_TASK_DETAIL_CHARS, true),
+function backgroundTaskKindLabel(tasks, { includeDream = false, mcpClients } = {}) {
+  let labels = [];
+  for (let task of Object.values(tasks)) {
+    if (!waitForTaskCompletion(task) || task.type === "remote_agent") continue;
+    if (!includeDream && task.type === "dream") continue;
+    if (task.type === "post_turn_memory") continue;
+    if (task.type === "monitor_ws" && task.ambient) continue;
+    if (isIdleTeammateTask(task)) continue;
+    if (taskAbortController(task)) continue;
+    if (isRemoteMcpTask(task, mcpClients)) continue;
+    if (isLocalShellTask(task) && task.stopsOnExit) continue;
+    labels.push({
+      label: taskKindLabel(task.type),
+      detail: truncate(task.description, MAX_TASK_DETAIL_CHARS, true),
     });
   }
-  r.push(...sessionCronLabels());
-  return r;
+  labels.push(...sessionCronLabels());
+  return labels;
 }
 //@ chunk-sq8979s2.js:1569-1661 placement
 var TASK_KIND_LABELS_2 = {
@@ -99,73 +99,75 @@ var TASK_KIND_LABELS_2 = {
   mcp: "MCP task",
 };
 //@ chunk-sq8979s2.js:1661-2174 placement
-function backgroundTaskDescription(e, mcpClients) {
+function backgroundTaskDescription(taskStates, mcpClients) {
   let inFlightWithSessionCrons = getInFlightWithSessionCrons();
   let { items, kinds } = inFlightWithSessionCrons;
-  let a = [];
+  let labels = [];
   for (let item of items) {
     if (item.kind === "todo" || item.doneAt !== undefined || item.stopsOnExit) continue;
-    if (isRemoteMcpTask(e?.[item.id], mcpClients)) continue;
-    a.push({
+    if (isRemoteMcpTask(taskStates?.[item.id], mcpClients)) continue;
+    labels.push({
       label: TASK_KIND_LABELS_2[item.kind],
       detail: truncate(item.label, MAX_TASK_DETAIL_CHARS, true),
     });
   }
   if (kinds.includes("auto_mode_scan"))
-    a.push({
+    labels.push({
       label: TASK_KIND_LABELS.auto_mode_scan,
       detail: "environment scan for /auto-mode-setup",
     });
   if (kinds.includes("local_memory_import"))
-    a.push({
+    labels.push({
       label: TASK_KIND_LABELS.local_memory_import,
       detail: "still reading local memory notes; running the command again later continues it",
     });
-  a.push(...sessionCronLabels());
-  return a;
+  labels.push(...sessionCronLabels());
+  return labels;
 }
 //@ chunk-sq8979s2.js:2174-2242 placement
 /**
  * 是环境监视任务且当前未被自动反应武装（可被等待）。
  */
-function isAmbientMonitorNotArmed(e) {
-  return e.type === "monitor_ws" && e.ambient === true && !isAutoReactArmedMonitorTask(e);
+function isAmbientMonitorNotArmed(task) {
+  return task.type === "monitor_ws" && task.ambient === true && !isAutoReactArmedMonitorTask(task);
 }
 //@ chunk-sq8979s2.js:2242-2394 placement
-function waitableTasks(e) {
-  return Object.values(e)
+function waitableTasks(tasks) {
+  return Object.values(tasks)
     .filter(waitForTaskCompletion)
-    .filter((o) => o.type !== "remote_agent" && o.type !== "dream" && o.type !== "post_turn_memory")
-    .filter((o) => !isAmbientMonitorNotArmed(o));
+    .filter(
+      (task) => task.type !== "remote_agent" && task.type !== "dream" && task.type !== "post_turn_memory",
+    )
+    .filter((task) => !isAmbientMonitorNotArmed(task));
 }
 //@ chunk-sq8979s2.js:2394-2906 placement
-function backgroundTaskStatusLabel(e) {
-  if (e.status !== "running" && e.status !== "pending") return false;
-  if (isAmbientTask(e)) return false;
+function backgroundTaskStatusLabel(task) {
+  if (task.status !== "running" && task.status !== "pending") return false;
+  if (isAmbientTask(task)) return false;
   if (
-    e.type === "in_process_teammate" &&
-    e.evictAfter === 0 &&
-    e.currentWorkAbortController === undefined &&
-    isIdleTeammateTask(e)
+    task.type === "in_process_teammate" &&
+    task.evictAfter === 0 &&
+    task.currentWorkAbortController === undefined &&
+    isIdleTeammateTask(task)
   )
     return false;
-  if (e.type === "remote_agent" || e.type === "dream" || e.type === "post_turn_memory") return false;
-  if (e.type === "mcp_task" && e.abortController === undefined) {
-    if (e.protocol === "sep2663") {
-      if (e.parked === true) return false;
-      return e.sidecarSessionId !== getSessionId() || e.sidecarProjectDir !== getMcpTaskProjectDir();
+  if (task.type === "remote_agent" || task.type === "dream" || task.type === "post_turn_memory") return false;
+  if (task.type === "mcp_task" && task.abortController === undefined) {
+    if (task.protocol === "sep2663") {
+      if (task.parked === true) return false;
+      return task.sidecarSessionId !== getSessionId() || task.sidecarProjectDir !== getMcpTaskProjectDir();
     }
     return false;
   }
-  if (e.type === "monitor_ws" && e.ambient === true) return false;
+  if (task.type === "monitor_ws" && task.ambient === true) return false;
   return true;
 }
 //@ chunk-sq8979s2.js:2906-2956 placement
 /**
  * 已武装且带有活动帧的监视任务。
  */
-function isLiveFrameTask(e) {
-  return isAutoReactArmedMonitorTask(e) && e.frameLive !== undefined;
+function isLiveFrameTask(task) {
+  return isAutoReactArmedMonitorTask(task) && task.frameLive !== undefined;
 }
 //@ chunk-sq8979s2.js:2956-3024 placement
 /**
@@ -178,69 +180,74 @@ function isBackgroundExitHandoffEnabled() {
 /**
  * 已武装且监视器在线运行的任务。
  */
-function isLiveAutoReactTask(e) {
-  return isAutoReactArmedMonitorTask(e) && isMonitorWsTaskLive(e);
+function isLiveAutoReactTask(task) {
+  return isAutoReactArmedMonitorTask(task) && isMonitorWsTaskLive(task);
 }
 //@ chunk-sq8979s2.js:3060-3129 placement
 /**
  * 是否有活动或启动中的自动反应任务（或定时任务在启动）。
  */
-function hasLiveOrBootingAutoReact(e) {
+function hasLiveOrBootingAutoReact(tasks) {
   return (
-    Object.values(e).some(isLiveAutoReactTask) || isAutoReactWatching() || getBootingAutoReactSlugs().size > 0
+    Object.values(tasks).some(isLiveAutoReactTask) ||
+    isAutoReactWatching() ||
+    getBootingAutoReactSlugs().size > 0
   );
 }
 //@ chunk-sq8979s2.js:3129-3177 placement
 /**
  * 任务集合里是否有需要显示「后台运行中」标签的任务。
  */
-function hasRunningBackgroundTask(e) {
-  return Object.values(e).some(backgroundTaskStatusLabel);
+function hasRunningBackgroundTask(tasks) {
+  return Object.values(tasks).some(backgroundTaskStatusLabel);
 }
 //@ chunk-sq8979s2.js:3177-3609 placement
 /**
  * 汇总后台工作：任务数（含会话定时任务与 Artifact 监视）、可重启数、种类、可排空的监视器等。
  */
-function summarizeBackgroundWork(tasks, { sessionCrons: o = true } = {}) {
-  let n = waitableTasks(tasks);
-  let r = o ? getSessionCronTasks().length : 0;
-  let t = uniq(n.map(taskKindKey));
-  let a = new Set(n.flatMap((c) => (isLiveFrameTask(c) ? [c.frameLive.slug] : [])));
-  let s = !isAdoptEnabled()
+function summarizeBackgroundWork(tasks, { sessionCrons = true } = {}) {
+  let waitable = waitableTasks(tasks);
+  let cronCount = sessionCrons ? getSessionCronTasks().length : 0;
+  let kinds = uniq(waitable.map(taskKindKey));
+  let frameSlugs = new Set(waitable.flatMap((task) => (isLiveFrameTask(task) ? [task.frameLive.slug] : [])));
+  let bootingCount = !isAdoptEnabled()
     ? 0
-    : count(uniq([...getAutoReactSlugs(), ...getBootingAutoReactSlugs()]), (c) => !a.has(c));
-  if (s > 0 && !t.includes("artifact_watch")) t.push("artifact_watch");
-  let drainableMonitors = isBackgroundExitHandoffEnabled() ? a.size + s : 0;
-  if (r > 0) t.push("session_cron");
+    : count(uniq([...getAutoReactSlugs(), ...getBootingAutoReactSlugs()]), (slug) => !frameSlugs.has(slug));
+  if (bootingCount > 0 && !kinds.includes("artifact_watch")) kinds.push("artifact_watch");
+  let drainableMonitors = isBackgroundExitHandoffEnabled() ? frameSlugs.size + bootingCount : 0;
+  if (cronCount > 0) kinds.push("session_cron");
   let restartableCount = count(Object.values(tasks), isMainThreadForegroundAgent);
   return {
-    count: n.length + r + s,
+    count: waitable.length + cronCount + bootingCount,
     restartableCount,
-    kinds: t,
+    kinds,
     drainableMonitors,
-    carriedMonitors: a.size + s,
+    carriedMonitors: frameSlugs.size + bootingCount,
   };
 }
 //@ chunk-sq8979s2.js:3609-3732 placement
-function taskKindKey(e) {
-  if (e.type === "monitor_ws" && e.ambient) return "artifact_watch";
-  return isLocalShellTask(e) && e.kind === "monitor" ? "monitor" : e.type;
+function taskKindKey(task) {
+  if (task.type === "monitor_ws" && task.ambient) return "artifact_watch";
+  return isLocalShellTask(task) && task.kind === "monitor" ? "monitor" : task.type;
 }
 //@ chunk-sq8979s2.js:3732-3975 placement
 /**
  * 生成后台工作摘要：数量、种类与显示文字（任务标签和循环数）。
  */
-function backgroundWorkSummary(e, o) {
-  let tasks = waitableTasks(e);
-  let r = sessionCronLabels(o?.cronFilter);
-  let count = tasks.length + r.length;
-  let a = uniq(tasks.map(taskKindKey));
-  if (r.length > 0) a.push("session_cron");
-  let s = [getPillLabel(tasks), r.length ? `${r.length} ${plural(r.length, "loop")}` : ""];
+function backgroundWorkSummary(taskStates, options) {
+  let tasks = waitableTasks(taskStates);
+  let cronLabels = sessionCronLabels(options?.cronFilter);
+  let count = tasks.length + cronLabels.length;
+  let kinds = uniq(tasks.map(taskKindKey));
+  if (cronLabels.length > 0) kinds.push("session_cron");
+  let parts = [
+    getPillLabel(tasks),
+    cronLabels.length ? `${cronLabels.length} ${plural(cronLabels.length, "loop")}` : "",
+  ];
   return {
     count,
-    kinds: a,
-    summary: s.filter(Boolean).join(", "),
+    kinds,
+    summary: parts.filter(Boolean).join(", "),
   };
 }
 //@ chunk-sq8979s2.js:3975-4139 placement
@@ -250,10 +257,10 @@ function formatDetachedTaskNotice() {
   return `Detached \u2014 ${tasks} ${plural(tasks, "task")} still running. Run \`claude agents\` to see your background sessions.`;
 }
 //@ chunk-sq8979s2.js:4139-4291 placement
-function isRemoteMcpTask(e, o) {
-  if (e?.type !== "mcp_task" || backgroundTaskStatusLabel(e)) return false;
-  let n = o?.find((r) => r.name === e.serverName)?.config.type;
-  return n !== undefined && n !== "stdio" && n !== "sdk";
+function isRemoteMcpTask(task, mcpClients) {
+  if (task?.type !== "mcp_task" || backgroundTaskStatusLabel(task)) return false;
+  let serverType = mcpClients?.find((client) => client.name === task.serverName)?.config.type;
+  return serverType !== undefined && serverType !== "stdio" && serverType !== "sdk";
 }
 export {
   summarizeBackgroundWork,

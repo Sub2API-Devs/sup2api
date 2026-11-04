@@ -5,29 +5,29 @@
  * pieces: chunk-82d8c88w.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 
 //@ chunk-82d8c88w.js:4019-4461 cjs-fingerprint
-var require_buffer_equal_constant_time = x(function (cjsExports, cjsModule) {
-  var w = importMetaRequire("buffer").Buffer;
+var require_buffer_equal_constant_time = __commonJS(function (cjsExports, cjsModule) {
+  var BufferCtor = importMetaRequire("buffer").Buffer;
   var SlowBuffer = importMetaRequire("buffer").SlowBuffer;
   cjsModule.exports = bufferEq;
   function bufferEq(a, b) {
-    if (!w.isBuffer(a) || !w.isBuffer(b)) return false;
+    if (!BufferCtor.isBuffer(a) || !BufferCtor.isBuffer(b)) return false;
     if (a.length !== b.length) return false;
     var c = 0;
     for (var i = 0; i < a.length; i++) c |= a[i] ^ b[i];
     return c === 0;
   }
   bufferEq.install = function () {
-    w.prototype.equal = SlowBuffer.prototype.equal = function (that) {
+    BufferCtor.prototype.equal = SlowBuffer.prototype.equal = function (that) {
       return bufferEq(this, that);
     };
   };
-  var origBufEqual = w.prototype.equal;
+  var origBufEqual = BufferCtor.prototype.equal;
   var origSlowBufEqual = SlowBuffer.prototype.equal;
   bufferEq.restore = function () {
-    w.prototype.equal = origBufEqual;
+    BufferCtor.prototype.equal = origBufEqual;
     SlowBuffer.prototype.equal = origSlowBufEqual;
   };
 });

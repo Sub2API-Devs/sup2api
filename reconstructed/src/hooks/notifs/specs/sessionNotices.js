@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (14)
  * attribution: placement 14
  */
-import { P } from "../../../../vendor/react/cjs/react.production.js";
+import { useEffect } from "../../../../vendor/react/cjs/react.production.js";
 import { getIsRemoteMode } from "../../../bootstrap/state.js";
 import {
   isAdvisorToolEnabled,
@@ -24,17 +24,15 @@ import {
   AUTOCOMPACT_OFFER_DIALOG,
   MIN_OFFER_WINDOW_TOKENS,
   autocompactOfferEligibility,
+  readAutoCompactOffer,
   TENGU_BINARY_MUSIC,
   autocompactOfferConfig,
   describeOfferSkip,
+  markAutoCompactOfferEligibleLogged,
   MIN_OFFER_DIALOG_ROWS,
   resolveOfferOrder,
   showAutocompactOffer,
 } from "../../../services/compact/autocompactOffer.js";
-import {
-  readAutoCompactOffer,
-  markAutoCompactOfferEligibleLogged,
-} from "../../../utils/permissions/permissionSetup.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../../utils/config.js";
 import {
   hasFreshGrowthBookFeatures,
@@ -72,29 +70,29 @@ import { getCurrentWorktreeSession } from "../../../utils/worktree.js";
 
 //@ chunk-18hwfzwa.js:1751839-1751883 placement
 function noopEffect_2(session, addNotification, removeNotification) {
-  P(() => {
+  useEffect(() => {
     return;
   }, [session, addNotification, removeNotification]);
 }
 //@ chunk-18hwfzwa.js:1751883-1752682 placement
 var advisorToolNoticeSpec = {
   id: "advisor-tool",
-  deps: (h) => [h.advisorModel, h.mainLoopModel, h.addNotification, h.growthBookVersion],
+  deps: (ctx) => [ctx.advisorModel, ctx.mainLoopModel, ctx.addNotification, ctx.growthBookVersion],
   setup() {
-    let h;
+    let cancelled;
     return ({ addNotification, advisorModel, mainLoopModel }) => {
       if (getIsRemoteMode() || !isAdvisorToolEnabled()) {
-        h = undefined;
+        cancelled = undefined;
         return;
       }
       if (!advisorModel || !baseModelSupportsAdvisor(mainLoopModel)) {
-        h = undefined;
+        cancelled = undefined;
         return;
       }
       if (!canUseAsAdvisor(advisorModel)) {
         if (isAdvisorPendingConsent(advisorModel)) {
-          if (h !== "consent") {
-            h = "consent";
+          if (cancelled !== "consent") {
+            cancelled = "consent";
             addNotification({
               key: "fable-advisor-consent",
               kind: "event",
@@ -104,21 +102,21 @@ var advisorToolNoticeSpec = {
           }
           return;
         }
-        h = undefined;
+        cancelled = undefined;
         return;
       }
-      let ee = canAdviseModel(mainLoopModel, advisorModel) ? "on" : "pairing";
-      if (h === ee) return;
-      h = ee;
+      let pairing = canAdviseModel(mainLoopModel, advisorModel) ? "on" : "pairing";
+      if (cancelled === pairing) return;
+      cancelled = pairing;
       addNotification({
         key: "advisor-experimental",
         kind: "event",
         text:
-          ee === "on"
+          pairing === "on"
             ? "Advisor Tool (experimental) is on and may use more tokens \xB7 /advisor"
             : "Advisor will not activate on the main model (advisor is less capable); subagents may still use it and may use more tokens \xB7 /advisor",
         priority: "medium",
-        fold: (ke, Re) => Re,
+        fold: (acc, value) => value,
       });
     };
   },
@@ -136,32 +134,32 @@ function noopSessionNotice() {}
  */
 var autocompactOfferNoticeSpec = {
   id: "autocompact-offer",
-  deps: (h) => [
-    h.transcript.getSnapshot(),
-    h.turnAtRender.isLoading,
-    h.turnAtRender.lastTurnEnd,
-    h.initialMessage,
-    h.queuedCommandCount,
-    h.isRemoteSession,
-    h.disabled,
-    h.replBridgeActive,
-    h.mainLoopModel,
-    h.settings,
-    h.growthBookVersion,
-    h.storageV5,
-    h.requestDialog,
-    h.dialogStore,
+  deps: (ctx) => [
+    ctx.transcript.getSnapshot(),
+    ctx.turnAtRender.isLoading,
+    ctx.turnAtRender.lastTurnEnd,
+    ctx.initialMessage,
+    ctx.queuedCommandCount,
+    ctx.isRemoteSession,
+    ctx.disabled,
+    ctx.replBridgeActive,
+    ctx.mainLoopModel,
+    ctx.settings,
+    ctx.growthBookVersion,
+    ctx.storageV5,
+    ctx.requestDialog,
+    ctx.dialogStore,
   ],
   setup() {
-    let h;
-    let x;
-    let D = new Set();
-    let L;
-    let ee = new Set();
-    let ke = new Set();
-    let Re = null;
-    let Be = new Set();
-    let He = new Set();
+    let seenOfferKey;
+    let lastOffer;
+    let loggedKeys = new Set();
+    let lastTokens;
+    let shownKeys = new Set();
+    let pendingKeys = new Set();
+    let pendingTimer = null;
+    let acceptedKeys = new Set();
+    let declinedKeys = new Set();
     return (
       {
         turnAtRender: { isLoading, lastTurnEnd },
@@ -179,14 +177,17 @@ var autocompactOfferNoticeSpec = {
         terminalSize,
         isTranscriptAtBottom,
       },
-      po,
+      snapshot,
     ) => {
-      let ao = {
-        getLiveModel: () => po().mainLoopModel,
+      let offerState = {
+        getLiveModel: () => snapshot().mainLoopModel,
         getLiveWindow: () => store.getState().autoCompactWindow,
-        getLiveContextTokens: () => getLiveContextTokens(po()),
+        getLiveContextTokens: () => getLiveContextTokens(snapshot()),
       };
-      if (Re !== null && (replBridgeActive || !makeAutocompactOfferPayload(Re, ao)))
+      if (
+        pendingTimer !== null &&
+        (replBridgeActive || !makeAutocompactOfferPayload(pendingTimer, offerState))
+      )
         dialogStore.dismissKind(AUTOCOMPACT_OFFER_DIALOG.kind);
       if (
         isRemoteSession ||
@@ -203,21 +204,21 @@ var autocompactOfferNoticeSpec = {
         mainLoopModel,
       });
       if (liveContextTokens < MIN_OFFER_WINDOW_TOKENS) return;
-      let snapshot = transcript.getSnapshot();
-      let lastIndex = snapshot.findLastIndex((Mn) => Mn.type === "assistant");
-      let uuid = snapshot[lastIndex]?.uuid;
-      if (L === undefined || L.reply !== uuid)
-        L = {
+      let snapshot_2 = transcript.getSnapshot();
+      let lastIndex = snapshot_2.findLastIndex((message) => message.type === "assistant");
+      let uuid = snapshot_2[lastIndex]?.uuid;
+      if (lastTokens === undefined || lastTokens.reply !== uuid)
+        lastTokens = {
           reply: uuid,
           model: mainLoopModel,
         };
-      else if (L.model !== mainLoopModel) return;
-      let Ro = autocompactOfferEligibility({
+      else if (lastTokens.model !== mainLoopModel) return;
+      let eligibility = autocompactOfferEligibility({
         model: mainLoopModel,
         configuredWindow: store.getState().autoCompactWindow,
       });
-      if (Ro === undefined) return;
-      let { accountUuid, modelKey, windowTokens } = Ro;
+      if (eligibility === undefined) return;
+      let { accountUuid, modelKey, windowTokens } = eligibility;
       let autoCompactOffer = readAutoCompactOffer(getGlobalConfig(), accountUuid, modelKey);
       if (
         autoCompactOffer?.isAnswered ||
@@ -226,103 +227,103 @@ var autocompactOfferNoticeSpec = {
       )
         return;
       let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_BINARY_MUSIC, {});
-      if (featureValue_CACHED_MAY_BE_STALE !== h) {
-        h = featureValue_CACHED_MAY_BE_STALE;
-        x = autocompactOfferConfig(featureValue_CACHED_MAY_BE_STALE);
+      if (featureValue_CACHED_MAY_BE_STALE !== seenOfferKey) {
+        seenOfferKey = featureValue_CACHED_MAY_BE_STALE;
+        lastOffer = autocompactOfferConfig(featureValue_CACHED_MAY_BE_STALE);
       }
-      let No = x;
-      if (No === undefined || liveContextTokens < No.triggerTokens) return;
+      let lastTokens_ = lastOffer;
+      if (lastTokens_ === undefined || liveContextTokens < lastTokens_.triggerTokens) return;
       let now = Date.now();
-      let Yo = `${accountUuid}:${modelKey}`;
-      let kn = describeOfferSkip(Ro, No.defaultTokens);
-      if (autoCompactOffer === undefined && !D.has(Yo)) {
-        D.add(Yo);
+      let offerKey = `${accountUuid}:${modelKey}`;
+      let skipReason = describeOfferSkip(eligibility, lastTokens_.defaultTokens);
+      if (autoCompactOffer === undefined && !loggedKeys.has(offerKey)) {
+        loggedKeys.add(offerKey);
         logEvent("tengu_autocompact_offer_eligible", {
-          arm: fromEnum(No.arm),
+          arm: fromEnum(lastTokens_.arm),
           window_model: telemetrySafeModelName(modelKey),
           surface: lit_2("cli"),
           context_tokens: liveContextTokens,
-          trigger_tokens: No.triggerTokens,
-          default_tokens: No.defaultTokens,
+          trigger_tokens: lastTokens_.triggerTokens,
+          default_tokens: lastTokens_.defaultTokens,
           window_tokens: windowTokens,
-          current_setting: fromEnum(Ro.currentSetting),
-          offerable: kn === undefined,
-          not_offered_reason: fromEnumOpt(kn),
+          current_setting: fromEnum(eligibility.currentSetting),
+          offerable: skipReason === undefined,
+          not_offered_reason: fromEnumOpt(skipReason),
           async_on: isPrecomputedCompactEnabled(),
         });
       }
       if (autoCompactOffer === undefined)
         saveGlobalConfig(
-          (Mn) => markAutoCompactOfferEligibleLogged(Mn, accountUuid, modelKey, now),
+          (key) => markAutoCompactOfferEligibleLogged(key, accountUuid, modelKey, now),
           storageV5,
         );
-      let { currentSetting } = Ro;
+      let { currentSetting } = eligibility;
       if (
-        No.arm === "control" ||
-        kn !== undefined ||
+        lastTokens_.arm === "control" ||
+        skipReason !== undefined ||
         (currentSetting !== "auto" &&
           currentSetting !== "own_per_model" &&
           currentSetting !== "own_top_level") ||
-        ee.has(Yo) ||
-        (autoCompactOffer?.escCount ?? 0) >= No.maxAsks ||
-        Re !== null
+        shownKeys.has(offerKey) ||
+        (autoCompactOffer?.escCount ?? 0) >= lastTokens_.maxAsks ||
+        pendingTimer !== null
       )
         return;
-      if (Be.has(uuid)) return;
-      Be.add(uuid);
-      if (ke.has(Yo) && !isUserDrivenHere(snapshot.slice(0, lastIndex + 1))) return;
-      let bn =
+      if (acceptedKeys.has(uuid)) return;
+      acceptedKeys.add(uuid);
+      if (pendingKeys.has(offerKey) && !isUserDrivenHere(snapshot_2.slice(0, lastIndex + 1))) return;
+      let notification =
         terminalSize.rows < MIN_OFFER_DIALOG_ROWS && !isScreenReaderMode()
           ? "terminal_too_short"
           : !isTranscriptAtBottom()
             ? "scrolled_away"
             : undefined;
-      if (bn !== undefined) {
-        if (!He.has(bn)) {
-          He.add(bn);
-          logFeatureSad("autocompact_offer", bn);
+      if (notification !== undefined) {
+        if (!declinedKeys.has(notification)) {
+          declinedKeys.add(notification);
+          logFeatureSad("autocompact_offer", notification);
         }
         return;
       }
       let modelContextInfo = getModelContextInfo(mainLoopModel);
-      let hn = {
-        order: resolveOfferOrder(No.order, accountUuid),
+      let spec = {
+        order: resolveOfferOrder(lastTokens_.order, accountUuid),
         accountUuid,
         modelKey,
-        sizes: No.sizes
+        sizes: lastTokens_.sizes
           .filter((siz) => siz < windowTokens)
           .map((siz) => ({
             tokens: siz,
             firesAt: getAutoCompactThresholdTokens(modelContextInfo, siz),
           })),
-        defaultTokens: No.defaultTokens,
-        triggerTokens: No.triggerTokens,
+        defaultTokens: lastTokens_.defaultTokens,
+        triggerTokens: lastTokens_.triggerTokens,
         contextTokens: liveContextTokens,
         windowTokens,
         currentSetting,
         askNumber: (autoCompactOffer?.escCount ?? 0) + 1,
       };
-      Re = hn;
-      showAutocompactOffer(requestDialog, hn, {
-        ...ao,
-        applyFlagSettings: (Mn) => applySessionSettingsPatch(Mn, store.setState),
-        appendSystemLine: (Mn, Xo) =>
+      pendingTimer = spec;
+      showAutocompactOffer(requestDialog, spec, {
+        ...offerState,
+        applyFlagSettings: (patch) => applySessionSettingsPatch(patch, store.setState),
+        appendSystemLine: (line, kind) =>
           transcript.apply({
             type: "append",
-            messages: [createSystemMessage(Mn, Xo)],
+            messages: [createSystemMessage(line, kind)],
           }),
         storageV5,
       })
-        .then((Mn) => {
-          if (Mn === "withdrawn") ke.add(Yo);
-          else if (Mn !== "cancelled") ee.add(Yo);
+        .then((result) => {
+          if (result === "withdrawn") pendingKeys.add(offerKey);
+          else if (result !== "cancelled") shownKeys.add(offerKey);
         })
         .catch((error) => {
-          ee.add(Yo);
+          shownKeys.add(offerKey);
           logError(error);
         })
         .finally(() => {
-          Re = null;
+          pendingTimer = null;
         });
     };
   },
@@ -341,30 +342,32 @@ function getLiveContextTokens({ transcript, mainLoopModel }) {
 var AUTO_MODE_WARNING_DELAY_MS = 800;
 var autoModeEntryWarningSpec = {
   id: "auto-mode-entry-warning",
-  deps: (h) => [h.permissionMode, h.transcript, h.clock, h.storageV5, h.store],
+  deps: (ctx) => [ctx.permissionMode, ctx.transcript, ctx.clock, ctx.storageV5, ctx.store],
   setup() {
-    let h = false;
+    let cancelled = false;
     return ({ permissionMode, transcript, clock, storageV5, store }) => {
       if (permissionMode !== "auto") return;
-      if (h) return;
+      if (cancelled) return;
       return clock.setTimeout(() => {
         (async () => {
-          let { isAutoModeFromFallback } = await import("./chunk-dbas1xsr.js");
+          let { isAutoModeFromFallback } = await import("../../../utils/permissions/autoModeState.js");
           if (isAutoModeFromFallback()) {
-            h = true;
+            cancelled = true;
             return;
           }
-          h = true;
+          cancelled = true;
           if (isBgSession()) return;
-          let { shouldShowAutoModeEntryWarning } = await import("./chunk-vrb83jkc.js");
+          let { shouldShowAutoModeEntryWarning } =
+            await import("../../../components/LogoV2/AutoModeDefaultNotice.js");
           if (shouldShowAutoModeEntryWarning()) {
-            let { getAutoModeDescription } = await import("./chunk-w1graenk.js");
+            let { getAutoModeDescription } =
+              await import("../../../utils/permissions/getAutoModeDescription.lazy.js");
             await saveGlobalConfig(
-              (We) =>
-                We.hasSeenAutoModeEntryWarning
-                  ? We
+              (mode) =>
+                mode.hasSeenAutoModeEntryWarning
+                  ? mode
                   : {
-                      ...We,
+                      ...mode,
                       hasSeenAutoModeEntryWarning: true,
                     },
               storageV5,
@@ -383,9 +386,9 @@ var autoModeEntryWarningSpec = {
 //@ chunk-18hwfzwa.js:1785137-1785355 placement
 var repoMemoryImportNoticeSpec = {
   id: "repo-memory-import",
-  deps: (h) => [h.addNotification, h.transcript, h.session, h.isRemoteSession],
+  deps: (ctx) => [ctx.addNotification, ctx.transcript, ctx.session, ctx.isRemoteSession],
   setup() {
-    let h = false;
+    let cancelled = false;
     return ({ addNotification, transcript, session, isRemoteSession, credentials }) => {
       return;
     };
@@ -394,7 +397,7 @@ var repoMemoryImportNoticeSpec = {
 //@ chunk-18hwfzwa.js:1785355-1785931 placement
 var replMountLogNoticeSpec = {
   id: "repl-mount-log",
-  deps: (h) => [h.disabled],
+  deps: (ctx) => [ctx.disabled],
   setup() {
     return ({ disabled }) => {
       logForDebugging(`[REPL:mount] REPL mounted, disabled=${disabled}`);
@@ -404,7 +407,7 @@ var replMountLogNoticeSpec = {
 };
 var dialogWaitingInTranscriptNoticeSpec = {
   id: "dialog-waiting-in-transcript",
-  deps: (h) => [h.screen, h.hasOpenDialog],
+  deps: (ctx) => [ctx.screen, ctx.hasOpenDialog],
   setup() {
     return ({ screen, hasOpenDialog }) => {
       if (screen === "transcript" && hasOpenDialog) {
@@ -420,11 +423,11 @@ var dialogWaitingTranscriptNoticeSpec = {
     return ({ session, transcript }) => {
       if (!isSessionRestored(session.host)) return;
       reportContentPaint(transcript.getSnapshot().length);
-      let D = setImmediate(() => {
+      let handle = setImmediate(() => {
         reportPromptIdle();
       });
       return () => {
-        clearImmediate(D);
+        clearImmediate(handle);
       };
     };
   },
@@ -441,22 +444,22 @@ function noopSlackFooterOffer() {
 //@ chunk-18hwfzwa.js:1787616-1787959 placement
 var subscriptionSwitchCheckNoticeSpec = {
   id: "subscription-switch-check",
-  deps: (h) => [h.store],
+  deps: (ctx) => [ctx.store],
   setup() {
-    let h = false;
+    let cancelled = false;
     return ({ store }) => {
-      if (getIsRemoteMode() || h) return;
-      h = true;
+      if (getIsRemoteMode() || cancelled) return;
+      cancelled = true;
       if (!useCanSwitchToExistingSubscription() || isPromoOffersBlocked()) return;
       getExistingClaudeSubscription()
         .then((existingClaudeSubscription) => {
           if (existingClaudeSubscription === null) return;
-          store.setState((L) => {
-            if (L.setupIssues.existingClaudeSubscription === existingClaudeSubscription) return L;
+          store.setState((prev) => {
+            if (prev.setupIssues.existingClaudeSubscription === existingClaudeSubscription) return prev;
             return {
-              ...L,
+              ...prev,
               setupIssues: {
-                ...L.setupIssues,
+                ...prev.setupIssues,
                 existingClaudeSubscription,
               },
             };
@@ -469,24 +472,24 @@ var subscriptionSwitchCheckNoticeSpec = {
 //@ chunk-18hwfzwa.js:1788831-1789070 placement
 var wellbeingNoticeSpec = {
   id: "wellbeing",
-  deps: (h) => [h.settings, h.addNotification, h.clock],
+  deps: (ctx) => [ctx.settings, ctx.addNotification, ctx.clock],
   setup() {
-    let h = null;
-    let x = false;
-    let D = null;
-    let L = null;
-    let ee = () => {};
-    let ke = null;
-    let Re = null;
-    function Be(We, ze) {
+    let lastShownAt = null;
+    let shown = false;
+    let startedAt = null;
+    let lastActiveAt = null;
+    let cleanup = () => {};
+    let pendingTimer = null;
+    let reminder = null;
+    function shouldShow(settings, now) {
       return false;
     }
-    function He() {}
+    function reset() {}
     return {
-      effect: (We) => {},
+      effect: (ctx) => {},
       dispose: () => {
-        Re?.stop();
-        Re = null;
+        reminder?.stop();
+        reminder = null;
       },
     };
   },

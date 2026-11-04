@@ -5,13 +5,13 @@
  * pieces: chunk-na3pph4p.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_bignumber } from "../../bignumber.js/bignumber.js";
 
 //@ chunk-na3pph4p.js:37695-39504 cjs-fingerprint
-var require_stringify = x(function (cjsExports, cjsModule) {
+var require_stringify = __commonJS(function (cjsExports, cjsModule) {
   var BigNumber = require_bignumber();
-  var rn = cjsExports;
+  var stringifyExports = cjsExports;
   (function () {
     function f(n) {
       return n < 10 ? "0" + n : n;
@@ -123,8 +123,8 @@ var require_stringify = x(function (cjsExports, cjsModule) {
           return v;
       }
     }
-    if (typeof rn.stringify !== "function")
-      rn.stringify = function (value, replacer, space) {
+    if (typeof stringifyExports.stringify !== "function")
+      stringifyExports.stringify = function (value, replacer, space) {
         var i;
         gap = "";
         indent = "";

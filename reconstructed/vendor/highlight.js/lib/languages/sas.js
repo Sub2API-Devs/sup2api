@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:409669-414424 cjs-fingerprint
-var require_sas = x(function (cjsExports, cjsModule) {
+var require_sas = __commonJS(function (cjsExports, cjsModule) {
   function sas(hljs) {
     let regex = hljs.regex;
     let SAS_KEYWORDS = [

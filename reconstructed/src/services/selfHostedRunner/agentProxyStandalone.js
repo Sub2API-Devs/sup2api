@@ -108,51 +108,52 @@ async function startAgentProxyStandaloneRelay() {
     };
   }
   await reloadCertsIfChanged();
-  let u = caEnvSnapshot();
+  let caSnapshot = caEnvSnapshot();
   let caCertificates = getCACertificates();
-  let f = envSnapshot(CLIENT_CERT_ENV_VARS);
+  let clientCertSnapshot = envSnapshot(CLIENT_CERT_ENV_VARS);
   let mtlsConfig = getMTLSConfig();
-  let P;
-  let h;
+  let pendingCertRefresh;
+  let forwarder;
   try {
-    h = await startEgressProxy({
+    forwarder = await startEgressProxy({
       upstreamProxyUrl: agentProxyUrl.url.href,
       minter: {
         async mint() {
-          let l = sessionTunnelAuth.token();
-          if (!l) throw new ProxyAuthorizationMintError("the session token is not available");
-          return `Basic ${Buffer.from(`${sessionId}:${l}`).toString("base64")}`;
+          let token = sessionTunnelAuth.token();
+          if (!token) throw new ProxyAuthorizationMintError("the session token is not available");
+          return `Basic ${Buffer.from(`${sessionId}:${token}`).toString("base64")}`;
         },
       },
       upstreamTls: () => {
-        let l = caEnvSnapshot() === u ? getCACertificates() : caCertificates;
-        let R = envSnapshot(CLIENT_CERT_ENV_VARS) === f ? getMTLSConfig() : mtlsConfig;
+        let caCertificatesCopy = caEnvSnapshot() === caSnapshot ? getCACertificates() : caCertificates;
+        let mtlsConfigCopy =
+          envSnapshot(CLIENT_CERT_ENV_VARS) === clientCertSnapshot ? getMTLSConfig() : mtlsConfig;
         return {
-          ...(R && {
-            cert: R.cert,
-            key: R.key,
-            passphrase: R.passphrase,
+          ...(mtlsConfigCopy && {
+            cert: mtlsConfigCopy.cert,
+            key: mtlsConfigCopy.key,
+            passphrase: mtlsConfigCopy.passphrase,
           }),
-          ...(l && {
-            ca: l,
+          ...(caCertificatesCopy && {
+            ca: caCertificatesCopy,
           }),
           rejectUnauthorized: true,
         };
       },
       onUpstreamFailure: () => {
-        P ??= refreshProxyIfCertsChanged().finally(() => {
-          P = undefined;
+        pendingCertRefresh ??= refreshProxyIfCertsChanged().finally(() => {
+          pendingCertRefresh = undefined;
         });
-        return P;
+        return pendingCertRefresh;
       },
       logLabel: "agent-proxy-standalone",
       unrefListener: true,
       connectOnly: true,
-      onStatus: (l) =>
-        logForDebugging(l, {
+      onStatus: (statusMessage) =>
+        logForDebugging(statusMessage, {
           level: "warn",
         }),
-      onDebug: (l) => logForDebugging(l),
+      onDebug: (debugMessage) => logForDebugging(debugMessage),
     });
   } catch (error) {
     let errnoCode = getErrnoCode(error);
@@ -166,31 +167,31 @@ async function startAgentProxyStandaloneRelay() {
       message: `Claude Code could not start its local forwarder to the proxy named by SELF_HOSTED_RUNNER_AGENT_PROXY_URL${errnoCode ? ` (${errnoCode})` : ""}, and does not start without it. Start a new session; if this keeps happening, check that the runner container allows listening on 127.0.0.1.`,
     };
   }
-  currentRelayForwarder().forwarder = h;
-  for (let l of PROXY_ENV_NAMES) env.set(l, h.url);
+  currentRelayForwarder().forwarder = forwarder;
+  for (let proxyEnvName of PROXY_ENV_NAMES) env.set(proxyEnvName, forwarder.url);
   env.set("NO_PROXY", joined);
   env.set("no_proxy", joined);
   for (let [key, value] of Object.entries(proxyEnvForSubprocess(process.env)))
     if (key !== "CLOUDSDK_PROXY_PASSWORD") process.env[key] = value;
   env.set("CLAUDE_CODE_ENABLE_PROXY_AUTH_HELPER", false);
   logForDebugging(
-    `[agent-proxy-standalone] routing through ${agentProxyUrl.url.protocol}//${agentProxyUrl.url.host} via 127.0.0.1:${h.port}`,
+    `[agent-proxy-standalone] routing through ${agentProxyUrl.url.protocol}//${agentProxyUrl.url.host} via 127.0.0.1:${forwarder.port}`,
   );
   logFeatureOk("agent_proxy_standalone");
   return {
     kind: "on",
-    port: h.port,
+    port: forwarder.port,
   };
 }
 //@ chunk-88g43zt5.js:22847-22885 placement
-function isStandaloneRelayMode(e) {
-  return e?.trim() === AGENT_PROXY_STANDALONE_RELAY_MODE;
+function isStandaloneRelayMode(relayMode) {
+  return relayMode?.trim() === AGENT_PROXY_STANDALONE_RELAY_MODE;
 }
 //@ chunk-88g43zt5.js:22885-22950 placement
 var RUNNER_AGENT_PROXY_URL_SETTING = "--agent-proxy-url / SELF_HOSTED_RUNNER_AGENT_PROXY_URL";
 //@ chunk-88g43zt5.js:22950-22993 placement
-function runnerUsesAgentProxyStandalone(e, n) {
-  return isStandaloneRelayMode(e) || n !== undefined;
+function runnerUsesAgentProxyStandalone(relayMode, runnerProxyUrl) {
+  return isStandaloneRelayMode(relayMode) || runnerProxyUrl !== undefined;
 }
 //@ chunk-88g43zt5.js:22993-23086 placement
 var AGENT_PROXY_TOGGLE_ENV_VARS = [
@@ -206,8 +207,8 @@ function hostedRelayReason(serverEnv) {
   if (trimmed && trimmed !== "off" && trimmed !== AGENT_PROXY_STANDALONE_RELAY_MODE)
     return "unknown_relay_mode";
   if (
-    AGENT_PROXY_TOGGLE_ENV_VARS.some((o) => {
-      let trimmed = serverEnv[o]?.trim();
+    AGENT_PROXY_TOGGLE_ENV_VARS.some((envName) => {
+      let trimmed = serverEnv[envName]?.trim();
       return !!trimmed && !isEnvDefinedFalsy(trimmed);
     })
   )
@@ -215,75 +216,76 @@ function hostedRelayReason(serverEnv) {
   return;
 }
 //@ chunk-88g43zt5.js:23370-27067 placement
-function agentProxyStandaloneRefusal(e) {
-  let n = e.runnerProxyUrl !== undefined;
-  if (!runnerUsesAgentProxyStandalone(e.serverEnv?.CCR_AGENT_PROXY_RELAY_MODE, e.runnerProxyUrl)) return;
-  let s = n ? hostedRelayReason(e.serverEnv) : undefined;
-  if (s !== undefined) {
-    logFeatureBad("agent_proxy_standalone", s);
-    let o =
-      s === "hosted_relay"
+function agentProxyStandaloneRefusal(request) {
+  let hasRunnerProxyUrl = request.runnerProxyUrl !== undefined;
+  if (!runnerUsesAgentProxyStandalone(request.serverEnv?.CCR_AGENT_PROXY_RELAY_MODE, request.runnerProxyUrl))
+    return;
+  let hostedReason = hasRunnerProxyUrl ? hostedRelayReason(request.serverEnv) : undefined;
+  if (hostedReason !== undefined) {
+    logFeatureBad("agent_proxy_standalone", hostedReason);
+    let relayDescription =
+      hostedReason === "hosted_relay"
         ? "This environment sends sessions through Anthropic's relay"
-        : s === "unknown_relay_mode"
+        : hostedReason === "unknown_relay_mode"
           ? "This environment names a relay mode this runner does not recognize"
           : "The server sent no session config to check the relay mode against";
     return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Session ${e.sessionId}: ${o}, so a runner started with ${e.runnerProxySetting} can't run it. Remove ${e.runnerProxySetting} from this runner, or change the environment's relay mode`,
+      `Session ${request.sessionId}: ${relayDescription}, so a runner started with ${request.runnerProxySetting} can't run it. Remove ${request.runnerProxySetting} from this runner, or change the environment's relay mode`,
       "runner started with an agent proxy URL refuses a session on the hosted relay, with an unknown relay mode, or without a config",
     );
   }
-  switch (e.governedGit) {
+  switch (request.governedGit) {
     case "off":
       break;
     case "legacy":
       logFeatureBad("agent_proxy_standalone", "governed_git");
       return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        n
-          ? `Session ${e.sessionId} uses Anthropic-managed git (governed git), which this runner refuses: it routes every session through the proxy that ${e.runnerProxySetting} names, and only the self-hosted runner can send governed git through that proxy. Run this pool's Anthropic-managed git sessions on a self-hosted runner, or on a runner started without a proxy URL`
-          : `Session ${e.sessionId} asks for Anthropic-managed git (governed git) and for routing through your self-hosted agent proxy, which this runner cannot combine: only the self-hosted runner can send governed git through that proxy. Run this pool's sessions on a self-hosted runner, or turn off one of the two for the pool`,
+        hasRunnerProxyUrl
+          ? `Session ${request.sessionId} uses Anthropic-managed git (governed git), which this runner refuses: it routes every session through the proxy that ${request.runnerProxySetting} names, and only the self-hosted runner can send governed git through that proxy. Run this pool's Anthropic-managed git sessions on a self-hosted runner, or on a runner started without a proxy URL`
+          : `Session ${request.sessionId} asks for Anthropic-managed git (governed git) and for routing through your self-hosted agent proxy, which this runner cannot combine: only the self-hosted runner can send governed git through that proxy. Run this pool's sessions on a self-hosted runner, or turn off one of the two for the pool`,
         "session pairs governed git with the agent_proxy_standalone relay mode on a runner that cannot route it",
       );
     case "on": {
-      if (e.gitConfigArmed !== true) {
+      if (request.gitConfigArmed !== true) {
         logFeatureBad("agent_proxy_standalone", "governed_git_no_git_config");
         return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `Session ${e.sessionId} uses Anthropic-managed git (governed git) through your self-hosted agent proxy without its git setup, which this runner refuses: without it, git would not trust the proxy's route to GitHub`,
+          `Session ${request.sessionId} uses Anthropic-managed git (governed git) through your self-hosted agent proxy without its git setup, which this runner refuses: without it, git would not trust the proxy's route to GitHub`,
           "runner refuses a governed-git block without its git config arm in the agent_proxy_standalone relay mode",
         );
       }
       if (getPlatform() === "windows") {
         logFeatureBad("agent_proxy_standalone", "governed_git_windows");
         return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `Session ${e.sessionId} uses Anthropic-managed git (governed git) through your self-hosted agent proxy, which this runner refuses on Windows: the session's git config would hold the credential for the proxy's local forwarder, and Windows does not keep that file private to the runner's user. Run this pool's Anthropic-managed git sessions on a Linux or macOS runner`,
+          `Session ${request.sessionId} uses Anthropic-managed git (governed git) through your self-hosted agent proxy, which this runner refuses on Windows: the session's git config would hold the credential for the proxy's local forwarder, and Windows does not keep that file private to the runner's user. Run this pool's Anthropic-managed git sessions on a Linux or macOS runner`,
           "runner refuses governed git in the agent_proxy_standalone relay mode on Windows",
         );
       }
       break;
     }
     default:
-      e.governedGit;
+      request.governedGit;
   }
-  if (e.egressListener) {
+  if (request.egressListener) {
     logFeatureBad("agent_proxy_standalone", "runner_egress_listener");
     return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      n
-        ? `Session ${e.sessionId} routes through the proxy that ${e.runnerProxySetting} names, which this runner cannot combine with its --proxy-authorization-command / --proxy-authorization-file egress listener: the session would reach that proxy without the listener. Start this runner with only one of ${e.runnerProxySetting} and --proxy-authorization-command / --proxy-authorization-file`
-        : `Session ${e.sessionId} routes through your self-hosted agent proxy, as the pool's relay mode asks, which this runner cannot combine with its --proxy-authorization-command / --proxy-authorization-file egress listener: the session would reach that proxy without the listener. Run this pool's sessions on a runner started with ${e.runnerProxySetting} and without --proxy-authorization-command / --proxy-authorization-file, or change the pool's relay mode`,
+      hasRunnerProxyUrl
+        ? `Session ${request.sessionId} routes through the proxy that ${request.runnerProxySetting} names, which this runner cannot combine with its --proxy-authorization-command / --proxy-authorization-file egress listener: the session would reach that proxy without the listener. Start this runner with only one of ${request.runnerProxySetting} and --proxy-authorization-command / --proxy-authorization-file`
+        : `Session ${request.sessionId} routes through your self-hosted agent proxy, as the pool's relay mode asks, which this runner cannot combine with its --proxy-authorization-command / --proxy-authorization-file egress listener: the session would reach that proxy without the listener. Run this pool's sessions on a runner started with ${request.runnerProxySetting} and without --proxy-authorization-command / --proxy-authorization-file, or change the pool's relay mode`,
       "session uses the agent_proxy_standalone relay mode on a runner with a --proxy-authorization-* egress listener",
     );
   }
   return;
 }
 //@ chunk-88g43zt5.js:27067-27117 placement
-function childRelayEnvValue(e, n) {
-  return n !== undefined ? AGENT_PROXY_STANDALONE_RELAY_MODE : e?.trim();
+function childRelayEnvValue(relayMode, runnerProxyUrl) {
+  return runnerProxyUrl !== undefined ? AGENT_PROXY_STANDALONE_RELAY_MODE : relayMode?.trim();
 }
 //@ chunk-88g43zt5.js:27117-27379 placement
-function checkRunnerAgentProxyStandaloneUrl(e, n) {
-  if (e === undefined) return;
-  let agentProxyUrl = parseAgentProxyUrl(e, {
-    name: n,
-    failureSuffix: `Set ${n} to your proxy's https:// URL (for example https://proxy.internal:3128) and restart the runner.`,
+function checkRunnerAgentProxyStandaloneUrl(rawUrl, envName) {
+  if (rawUrl === undefined) return;
+  let agentProxyUrl = parseAgentProxyUrl(rawUrl, {
+    name: envName,
+    failureSuffix: `Set ${envName} to your proxy's https:// URL (for example https://proxy.internal:3128) and restart the runner.`,
   });
   if (!agentProxyUrl.ok)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -299,7 +301,7 @@ function agentProxyStandaloneRunnerEnv(env) {
     AGENT_PROXY_AUTH_TOKEN: undefined,
     CCR_AGENT_PROXY_CA_CERT_B64: undefined,
     CCR_AGENT_PROXY_ENABLED: undefined,
-    ...Object.fromEntries(TLS_ENV_VARS.map((n) => [n, env[n]])),
+    ...Object.fromEntries(TLS_ENV_VARS.map((envName) => [envName, env[envName]])),
   };
 }
 //@ chunk-88g43zt5.js:27567-27851 placement
@@ -323,15 +325,15 @@ var TLS_ENV_VARS = [...CA_ENV_VARS, ...CLIENT_CERT_ENV_VARS];
  */
 async function readSessionTunnelAuth() {
   if (isHttpMcpServeInvocation()) {
-    let [{ peekSessionTunnelInput: e }, { parseSessionTunnelEnvelope: n }] = await Promise.all([
-      import("./chunk-3tf2y68m.js"),
-      import("./chunk-e6a6pbbv.js"),
+    let [{ peekSessionTunnelInput }, { parseSessionTunnelEnvelope }] = await Promise.all([
+      import("../../entrypoints/sessionTunnelInput.js"),
+      import("../../cli/handlers/EX_CONFIG.lazy.js"),
     ]);
-    let s = n(e());
-    if (s === undefined) return;
-    let sessionToken = s.session_token;
+    let envelope = parseSessionTunnelEnvelope(peekSessionTunnelInput());
+    if (envelope === undefined) return;
+    let sessionToken = envelope.session_token;
     return {
-      sessionId: s.session_id,
+      sessionId: envelope.session_id,
       token: () => sessionToken,
     };
   }
@@ -341,8 +343,8 @@ async function readSessionTunnelAuth() {
   };
 }
 //@ chunk-88g43zt5.js:28178-28220 placement
-function envSnapshot(e) {
-  return jsonStringify(e.map((n) => env[n]));
+function envSnapshot(envNames) {
+  return jsonStringify(envNames.map((envName) => env[envName]));
 }
 //@ chunk-88g43zt5.js:28220-28289 placement
 function caEnvSnapshot() {
@@ -380,45 +382,45 @@ function parseAgentProxyUrl(
     failureSuffix: PROXY_URL_REMEDY,
   },
 ) {
-  let { name: s, failureSuffix } = options;
+  let { name: envName, failureSuffix } = options;
   let trimmed = value?.trim();
   if (!trimmed)
     return {
       ok: false,
       code: "missing",
-      message: `This session's runner pool sends its traffic through your own proxy, but ${s} is not set. ${failureSuffix}`,
+      message: `This session's runner pool sends its traffic through your own proxy, but ${envName} is not set. ${failureSuffix}`,
     };
-  let c;
+  let parsedUrl;
   try {
-    c = new URL(trimmed);
+    parsedUrl = new URL(trimmed);
   } catch {
     return {
       ok: false,
       code: "unparsable",
-      message: `${s} cannot be parsed as a URL. ${failureSuffix}`,
+      message: `${envName} cannot be parsed as a URL. ${failureSuffix}`,
     };
   }
-  if ((c.protocol !== "http:" && c.protocol !== "https:") || !c.host)
+  if ((parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") || !parsedUrl.host)
     return {
       ok: false,
       code: "scheme",
-      message: `${s} must be an https:// URL with a host. ${failureSuffix}`,
+      message: `${envName} must be an https:// URL with a host. ${failureSuffix}`,
     };
-  if (c.protocol === "http:")
+  if (parsedUrl.protocol === "http:")
     return {
       ok: false,
       code: "plaintext",
-      message: `${s} must use https://, also for a proxy on this machine: Claude Code sends this session's credentials to it and checks the proxy's certificate against the CAs the runner container trusts. ${failureSuffix}`,
+      message: `${envName} must use https://, also for a proxy on this machine: Claude Code sends this session's credentials to it and checks the proxy's certificate against the CAs the runner container trusts. ${failureSuffix}`,
     };
-  if (c.username || c.password)
+  if (parsedUrl.username || parsedUrl.password)
     return {
       ok: false,
       code: "credentials",
-      message: `${s} must not include a user name or password, because Claude Code signs in to the proxy with this session's own credentials. ${failureSuffix}`,
+      message: `${envName} must not include a user name or password, because Claude Code signs in to the proxy with this session's own credentials. ${failureSuffix}`,
     };
   return {
     ok: true,
-    url: c,
+    url: parsedUrl,
   };
 }
 export {
@@ -431,4 +433,5 @@ export {
   runnerUsesAgentProxyStandalone,
   childRelayEnvValue,
   agentProxyStandaloneRunnerEnv,
+  startAgentProxyStandaloneRelay,
 };

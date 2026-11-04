@@ -19,23 +19,23 @@ import { logForDebugging } from "../debug.js";
 import { errorMessage } from "../errors.js";
 
 //@ chunk-ee3471fv.js:516-684 placement
-function connectAccountHint(e) {
-  return `To fix: ${e.webSetupHint ? `${e.webSetupHint}, or connect` : "connect"} an account at ${connectGithubUrl()} \u2014 ${e.rerun} (allow a minute after connecting).`;
+function connectAccountHint(hint) {
+  return `To fix: ${hint.webSetupHint ? `${hint.webSetupHint}, or connect` : "connect"} an account at ${connectGithubUrl()} \u2014 ${hint.rerun} (allow a minute after connecting).`;
 }
 //@ chunk-ee3471fv.js:684-840 placement
-function noAccessText(e) {
-  return `${e.subject} with the GitHub account connected to your Claude account, and none is connected (or the connection expired). ${connectAccountHint(e)}`;
+function noAccessText(hint) {
+  return `${hint.subject} with the GitHub account connected to your Claude account, and none is connected (or the connection expired). ${connectAccountHint(hint)}`;
 }
 //@ chunk-ee3471fv.js:840-1294 placement
-function installAppHint(e) {
-  let apostrophe = e.apostrophe ?? "'";
-  let o = `install the app at ${GITHUB_APP_INSTALL_URL}`;
-  let webSetupHint = e.webSetupHint;
-  let i =
-    webSetupHint && e.leadWithWebSetup
-      ? `${webSetupHint}, or ${o}`
-      : `${o}${webSetupHint ? `, or ${webSetupHint}` : ""}`;
-  return `Your connected GitHub account can${apostrophe}t see ${e.owner}/${e.name} \u2014 usually the Claude GitHub app isn${apostrophe}t installed on ${e.owner} or wasn${apostrophe}t granted this repo (web-connected accounts need it for private repos), or a different GitHub account is connected. To fix: ${i} \u2014 ${e.rerun}.`;
+function installAppHint(hint) {
+  let apostrophe = hint.apostrophe ?? "'";
+  let installHint = `install the app at ${GITHUB_APP_INSTALL_URL}`;
+  let webSetupHint = hint.webSetupHint;
+  let actionHint =
+    webSetupHint && hint.leadWithWebSetup
+      ? `${webSetupHint}, or ${installHint}`
+      : `${installHint}${webSetupHint ? `, or ${webSetupHint}` : ""}`;
+  return `Your connected GitHub account can${apostrophe}t see ${hint.owner}/${hint.name} \u2014 usually the Claude GitHub app isn${apostrophe}t installed on ${hint.owner} or wasn${apostrophe}t granted this repo (web-connected accounts need it for private repos), or a different GitHub account is connected. To fix: ${actionHint} \u2014 ${hint.rerun}.`;
 }
 //@ chunk-ee3471fv.js:1294-1318 placement
 var PROBE_TIMEOUT_MS = 5000;
@@ -45,21 +45,21 @@ var MAX_TIMEOUT_MS = 2147483647;
  * 探测连接的 GitHub 账号能否访问仓库，返回结论与 HTTP 状态（非第一方或仅必要流量时直接不确定）。
  */
 async function probeGithubRepoAccess(owner, name, accessProbeBudgetMs = PROBE_TIMEOUT_MS) {
-  let n = {
+  let inconclusive = {
     verdict: "inconclusive",
     httpStatus: null,
   };
-  if (isEssentialTrafficOnly() || !isFirstPartyProvider()) return n;
-  let i =
+  if (isEssentialTrafficOnly() || !isFirstPartyProvider()) return inconclusive;
+  let budgetMs =
     Number.isSafeInteger(accessProbeBudgetMs) && accessProbeBudgetMs > 0
       ? Math.min(accessProbeBudgetMs, MAX_TIMEOUT_MS)
       : 0;
-  if (i === 0) return n;
-  let c = AbortSignal.timeout(i);
-  let a = (async () => {
+  if (budgetMs === 0) return inconclusive;
+  let signal = AbortSignal.timeout(budgetMs);
+  let probePromise = (async () => {
     await checkAndRefreshOAuthTokenIfNeeded();
-    if (c.aborted) return n;
-    let { linkedAccountAccess, httpStatus } = await checkGithubAppInstalled(owner, name, c, {
+    if (signal.aborted) return inconclusive;
+    let { linkedAccountAccess, httpStatus } = await checkGithubAppInstalled(owner, name, signal, {
       resyncUndetermined: false,
     });
     return {
@@ -67,15 +67,17 @@ async function probeGithubRepoAccess(owner, name, accessProbeBudgetMs = PROBE_TI
       httpStatus,
     };
   })();
-  let u = await raceWithAbortSignal(a, c, () => Error("budget expired")).catch((error) => {
-    logForDebugging(
-      `linked GitHub account access probe gave up, treating as inconclusive: ${errorMessage(error)}`,
-    );
-    return n;
-  });
-  logForDebugging(
-    `linked GitHub account access to ${owner}/${name}: ${u.verdict} (HTTP ${u.httpStatus ?? "none"})`,
+  let probe = await raceWithAbortSignal(probePromise, signal, () => Error("budget expired")).catch(
+    (error) => {
+      logForDebugging(
+        `linked GitHub account access probe gave up, treating as inconclusive: ${errorMessage(error)}`,
+      );
+      return inconclusive;
+    },
   );
-  return u;
+  logForDebugging(
+    `linked GitHub account access to ${owner}/${name}: ${probe.verdict} (HTTP ${probe.httpStatus ?? "none"})`,
+  );
+  return probe;
 }
 export { probeGithubRepoAccess, noAccessText, installAppHint, connectAccountHint };

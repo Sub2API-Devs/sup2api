@@ -5,10 +5,10 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:34044-34825 cjs-fingerprint
-var require_format_normaliser = x(function (cjsExports, cjsModule) {
+var require_format_normaliser = __commonJS(function (cjsExports, cjsModule) {
   function dePalette(indata, outdata, width, height, palette) {
     let pxPos = 0;
     for (let y = 0; y < height; y++)
@@ -47,8 +47,8 @@ var require_format_normaliser = x(function (cjsExports, cjsModule) {
         pxPos += 4;
       }
   }
-  cjsModule.exports = function (indata, e) {
-    let { depth, width, height, colorType, transColor, palette } = e;
+  cjsModule.exports = function (indata, frame) {
+    let { depth, width, height, colorType, transColor, palette } = frame;
     let outdata = indata;
     if (colorType === 3) dePalette(indata, outdata, width, height, palette);
     else {

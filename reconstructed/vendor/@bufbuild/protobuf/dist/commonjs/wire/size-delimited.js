@@ -5,13 +5,13 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_to_binary } from "../../cjs/to-binary.js";
 import { require_binary_encoding } from "./binary-encoding.js";
 import { require_from_binary } from "../from-binary.js";
 
 //@ chunk-fq0cr76a.js:446147-448705 cjs-fingerprint
-var require_size_delimited = x(function (cjsExports) {
+var require_size_delimited = __commonJS(function (cjsExports) {
   var __asyncValues =
     (cjsExports && cjsExports.__asyncValues) ||
     function (o) {

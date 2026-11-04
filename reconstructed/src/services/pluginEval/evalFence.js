@@ -8,7 +8,7 @@
  * pieces: chunk-qchp9vrd.js (29)
  * attribution: placement 29
  */
-import path from "path";
+import { default as path_3 } from "path";
 import { realpath, lstat, readdir, readFile } from "fs/promises";
 import os_2 from "os";
 import {
@@ -39,9 +39,9 @@ import { STRIPPED_GIT_ENV_SET } from "./childEnvironment.js";
 import { regExp } from "../../utils/git/gitSafeEnv.js";
 
 //@ chunk-qchp9vrd.js:150731-150924 placement
-function describeFenceProbeFailure(e, error) {
+function describeFenceProbeFailure(label, error) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-    `${e}: a plugin, case or version-control path could not be examined (${getErrnoCode(error) ?? "unexpected error"}) \u2014 make it readable or remove it`,
+    `${label}: a plugin, case or version-control path could not be examined (${getErrnoCode(error) ?? "unexpected error"}) \u2014 make it readable or remove it`,
     "eval fence probe failed",
   );
 }
@@ -49,630 +49,703 @@ function describeFenceProbeFailure(e, error) {
 /**
  * 解析插件、用例与 add_dirs 的真实路径，生成本次运行允许/拒绝访问的路径集合（约 14 KB）。
  */
-async function buildEvalFence(e, n) {
-  let r = `case "${formatGuardValueJson(e.name)}"`;
-  let a = e.evalDirSegments ?? [EVALS_DIR_NAME];
-  let s = (V, q) => toEvalPathError(V, q);
-  let h = (V, q) => V === q || s(V, q);
-  let w = async (V) => {
-    await checkRepoAuthoredPath(path.dirname(V), path.basename(V), r);
-    return realpath(V).catch((error) => {
+async function buildEvalFence(evalCase, addDirs) {
+  let caseLabel = `case "${formatGuardValueJson(evalCase.name)}"`;
+  let evalDirSegments = evalCase.evalDirSegments ?? [EVALS_DIR_NAME];
+  let pathWithin = (parent, child) => toEvalPathError(parent, child);
+  let isSameOrWithin = (child, parent) => child === parent || pathWithin(child, parent);
+  let resolveRealPath = async (targetPath) => {
+    await checkRepoAuthoredPath(path_3.dirname(targetPath), path_3.basename(targetPath), caseLabel);
+    return realpath(targetPath).catch((error) => {
       let errnoCode = getErrnoCode(error);
-      if (errnoCode === "ENOENT") return V;
+      if (errnoCode === "ENOENT") return targetPath;
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${r}: a plugin, case or add_dirs path could not be resolved (${errnoCode ?? "unexpected error"}) \u2014 make it readable or remove it`,
+        `${caseLabel}: a plugin, case or add_dirs path could not be resolved (${errnoCode ?? "unexpected error"}) \u2014 make it readable or remove it`,
         "eval path unresolvable",
       );
     });
   };
-  let b = async (V) =>
-    lstat(V).then(
-      (q) => q.nlink,
+  let hardLinkCount = async (targetPath) =>
+    lstat(targetPath).then(
+      (stats) => stats.nlink,
       (error) => {
-        throw describeFenceProbeFailure(r, error);
+        throw describeFenceProbeFailure(caseLabel, error);
       },
     );
-  let y = nfcKeyIfEnabled;
-  let R = (V, q) => {
-    let parts = V.split(path.sep);
-    return parts.length >= q.length && q.every((ue, ae) => y(parts[parts.length - q.length + ae]) === y(ue));
+  let foldKey = nfcKeyIfEnabled;
+  let pathEndsWithSegments = (parts, suffix) => {
+    let parts_2 = parts.split(path_3.sep);
+    return (
+      parts_2.length >= suffix.length &&
+      suffix.every(
+        (suffixSegment, suffixIndex) =>
+          foldKey(parts_2[parts_2.length - suffix.length + suffixIndex]) === foldKey(suffixSegment),
+      )
+    );
   };
-  let S = [a, [EVALS_DIR_NAME]];
-  for (let V of e.pluginDirsUnderTest) {
+  let evalDirSuites = [evalDirSegments, [EVALS_DIR_NAME]];
+  for (let pluginDir of evalCase.pluginDirsUnderTest) {
     let pluginManifestAdvisory = await readPluginManifestAdvisory({
       flag: undefined,
-      pluginRoot: V,
+      pluginRoot: pluginDir,
     });
-    if (pluginManifestAdvisory.ok) S.push(pluginManifestAdvisory.value.segments);
-    S.push(...(await readManifestToFenceSuites(V)));
+    if (pluginManifestAdvisory.ok) evalDirSuites.push(pluginManifestAdvisory.value.segments);
+    evalDirSuites.push(...(await readManifestToFenceSuites(pluginDir)));
   }
-  let T = (V) => S.some((q) => R(V, q));
-  let N = (V, q) => y(V) === y(q);
-  let x = (V) => VCS_DIR_NAMES.some((q) => N(V, q));
-  let j = async (V, q) => {
-    let re;
+  let isInsideEvalDir = (path) => evalDirSuites.some((segments) => pathEndsWithSegments(path, segments));
+  let sameFolded = (left, right) => foldKey(left) === foldKey(right);
+  let isVcsDirName = (name) => VCS_DIR_NAMES.some((vcsName) => sameFolded(name, vcsName));
+  let listDirOrNull = async (dir, missingIsEmpty) => {
+    let entries;
     try {
-      re = await readdir(V, {
+      entries = await readdir(dir, {
         withFileTypes: true,
       });
     } catch (error) {
-      if (q && getErrnoCode(error) === "ENOENT") return [];
+      if (missingIsEmpty && getErrnoCode(error) === "ENOENT") return [];
       return null;
     }
-    for (let ue of re)
-      if (ue.name.includes("\uFFFD"))
+    for (let entry of entries)
+      if (entry.name.includes("\uFFFD"))
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `${r}: "${formatGuardValueJson(ue.name)}" under a plugin or eval directory is not a valid UTF-8 name (or imitates one that is not) \u2014 rename or remove it`,
+          `${caseLabel}: "${formatGuardValueJson(entry.name)}" under a plugin or eval directory is not a valid UTF-8 name (or imitates one that is not) \u2014 rename or remove it`,
           "eval tree has undecodable name",
         );
-    return re;
+    return entries;
   };
-  let K = (V, q) => {
+  let throwUnlistable = (dir, root) => {
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${r}: cannot list "${formatGuardValueJson(path.relative(q, V) || ".")}" under a plugin or eval directory \u2014 make it readable or remove it`,
+      `${caseLabel}: cannot list "${formatGuardValueJson(path_3.relative(root, dir) || ".")}" under a plugin or eval directory \u2014 make it readable or remove it`,
       "eval directory unlistable",
     );
   };
-  let X = async (V) => {
-    let q = [];
-    let re = 0;
-    let ue = [
+  let listFenceFiles = async (root) => {
+    let files = [];
+    let entryCount = 0;
+    let pending = [
       {
-        dir: V,
+        dir: root,
         depth: 0,
       },
     ];
-    for (let ae = ue.pop(); ae !== undefined; ae = ue.pop()) {
-      let Ot = (await j(ae.dir, ae.dir === V)) ?? K(ae.dir, V);
-      for (let qe of Ot) {
-        let joined = path.join(ae.dir, qe.name);
-        let fileKind = await getFileKind(qe, joined, "unknown");
+    for (let current = pending.pop(); current !== undefined; current = pending.pop()) {
+      let entries =
+        (await listDirOrNull(current.dir, current.dir === root)) ?? throwUnlistable(current.dir, root);
+      for (let entry of entries) {
+        let joined = path_3.join(current.dir, entry.name);
+        let fileKind = await getFileKind(entry, joined, "unknown");
         if (fileKind !== "dir" && fileKind !== "symlink" && fileKind !== "unknown") continue;
-        if (++re > MAX_FENCE_ENTRIES || ae.depth >= 12) return [V];
-        if (T(joined) || fileKind !== "dir") q.push(joined);
+        if (++entryCount > MAX_FENCE_ENTRIES || current.depth >= 12) return [root];
+        if (isInsideEvalDir(joined) || fileKind !== "dir") files.push(joined);
         else
-          ue.push({
+          pending.push({
             dir: joined,
-            depth: ae.depth + 1,
+            depth: current.depth + 1,
           });
       }
     }
-    return q;
+    return files;
   };
-  let W = await w(e.caseDir);
-  let results = await Promise.all(e.pluginDirsUnderTest.map(w));
-  let pluginDirsUnderTest = e.pluginDirsUnderTest;
-  let Z = (V, q) => {
-    let re;
-    for (let dir = path.dirname(V); q.some((ae) => h(ae, dir)); dir = path.dirname(dir)) {
-      if (T(dir)) re = dir;
-      if (dir === path.dirname(dir)) break;
+  let caseRealPath = await resolveRealPath(evalCase.caseDir);
+  let results = await Promise.all(evalCase.pluginDirsUnderTest.map(resolveRealPath));
+  let pluginDirsUnderTest = evalCase.pluginDirsUnderTest;
+  let outermostSuite = (startPath, roots) => {
+    let found;
+    for (
+      let dir = path_3.dirname(startPath);
+      roots.some((root) => isSameOrWithin(root, dir));
+      dir = path_3.dirname(dir)
+    ) {
+      if (isInsideEvalDir(dir)) found = dir;
+      if (dir === path_3.dirname(dir)) break;
     }
-    return re;
+    return found;
   };
-  let se = Z(W, results);
-  let Q = Z(e.caseDir, pluginDirsUnderTest);
-  let Se = Q === undefined ? undefined : await w(Q);
-  let filtered = uniq([se, Se].filter((V) => V !== undefined)).filter((V) => h(V, W));
-  let dir = path.dirname(W);
-  let Je = () => {
-    for (let dir = path.dirname(W); dir !== path.dirname(dir); dir = path.dirname(dir))
-      if (T(dir)) return dir;
+  let caseSuite = outermostSuite(caseRealPath, results);
+  let pluginSuite = outermostSuite(evalCase.caseDir, pluginDirsUnderTest);
+  let pluginSuiteReal = pluginSuite === undefined ? undefined : await resolveRealPath(pluginSuite);
+  let filtered = uniq([caseSuite, pluginSuiteReal].filter((path) => path !== undefined)).filter((path) =>
+    isSameOrWithin(path, caseRealPath),
+  );
+  let dir = path_3.dirname(caseRealPath);
+  let nearestEvalDir = () => {
+    for (let dir = path_3.dirname(caseRealPath); dir !== path_3.dirname(dir); dir = path_3.dirname(dir))
+      if (isInsideEvalDir(dir)) return dir;
     return;
   };
-  let Ee =
-    filtered.find((V) => filtered.every((q) => h(V, q))) ??
+  let sandboxParent =
+    filtered.find((path) => filtered.every((other) => isSameOrWithin(path, other))) ??
     filtered[0] ??
-    Je() ??
-    (results.some((V) => h(V, dir)) ? dir : W);
-  let results_2 = await Promise.all(n.map(w));
-  for (let V of results_2) {
-    let q = await lstat(V).catch((error) => {
+    nearestEvalDir() ??
+    (results.some((pluginReal) => isSameOrWithin(pluginReal, dir)) ? dir : caseRealPath);
+  let results_2 = await Promise.all(addDirs.map(resolveRealPath));
+  for (let addDir of results_2) {
+    let stats = await lstat(addDir).catch((error) => {
       if (getErrnoCode(error) === "ENOENT") return null;
-      throw describeFenceProbeFailure(r, error);
+      throw describeFenceProbeFailure(caseLabel, error);
     });
-    if (q !== null && !q.isDirectory())
+    if (stats !== null && !stats.isDirectory())
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${r}: an add_dir must name a directory, not a file`,
+        `${caseLabel}: an add_dir must name a directory, not a file`,
         "eval add_dir is not a directory",
       );
   }
-  let ye = await readdir(W).catch((error) => {
+  let caseEntries = await readdir(caseRealPath).catch((error) => {
     if (getErrnoCode(error) === "ENOENT") return [];
-    throw describeFenceProbeFailure(r, error);
+    throw describeFenceProbeFailure(caseLabel, error);
   });
-  let je = async (V) => {
-    let filtered = ye.filter((ae) => N(ae, V));
+  let resolveCaseSubdir = async (name) => {
+    let filtered = caseEntries.filter((entryName) => sameFolded(entryName, name));
     if (filtered.length > 1)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${r}: the case directory has more than one entry named "${V}" up to letter case \u2014 keep exactly one`,
+        `${caseLabel}: the case directory has more than one entry named "${name}" up to letter case \u2014 keep exactly one`,
         "eval case has case-variant duplicates of a reserved directory",
       );
-    let joined = path.join(W, filtered[0] ?? V);
-    let ue = await lstat(joined).catch((error) => {
+    let joined = path_3.join(caseRealPath, filtered[0] ?? name);
+    let stats = await lstat(joined).catch((error) => {
       if (getErrnoCode(error) === "ENOENT") return null;
-      throw describeFenceProbeFailure(r, error);
+      throw describeFenceProbeFailure(caseLabel, error);
     });
-    if (ue?.isSymbolicLink())
+    if (stats?.isSymbolicLink())
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${r}: "${V}" must be a real directory inside the case, not a symbolic link`,
+        `${caseLabel}: "${name}" must be a real directory inside the case, not a symbolic link`,
         "eval case reserved directory is a symlink",
       );
-    return ue === null ? joined : w(joined);
+    return stats === null ? joined : resolveRealPath(joined);
   };
-  let pt = await je("graders");
-  let Pt = await je("mocks");
-  let ce = (V, q) => q === V || q.startsWith(V.endsWith(path.sep) ? V : V + path.sep);
-  let At = () => {
-    let resolved = path.resolve(e.caseDir);
+  let gradersDir = await resolveCaseSubdir("graders");
+  let mocksDir = await resolveCaseSubdir("mocks");
+  let isWithinOrSame = (root, path) =>
+    path === root || path.startsWith(root.endsWith(path_3.sep) ? root : root + path_3.sep);
+  let findEvalDirAboveCase = () => {
+    let resolved = path_3.resolve(evalCase.caseDir);
     for (let idx = 0; idx < 64; idx++) {
-      if (pathEndsWith(resolved.split(path.sep), a, SUPPORTED_PLATFORMS() ? "folded" : "exact"))
+      if (
+        pathEndsWith(resolved.split(path_3.sep), evalDirSegments, SUPPORTED_PLATFORMS() ? "folded" : "exact")
+      )
         return resolved;
-      let dir = path.dirname(resolved);
+      let dir = path_3.dirname(resolved);
       if (dir === resolved) break;
       resolved = dir;
     }
     return null;
   };
   let results_3 = await Promise.all(
-    (e.graders ?? []).flatMap((V) => {
-      if (V.type !== "baseline") return [];
-      let resolved = path.resolve(W, V.baseline_file);
+    (evalCase.graders ?? []).flatMap((grader) => {
+      if (grader.type !== "baseline") return [];
+      let path = path_3.resolve(caseRealPath, grader.baseline_file);
       if (
-        path.isAbsolute(V.baseline_file) ||
-        isUncOrDevicePath(V.baseline_file) ||
-        isNetworkMountPath(V.baseline_file) ||
-        isUncOrDevicePath(resolved) ||
-        isNetworkMountPath(resolved) ||
-        ![e.caseDir, W, Ee, At(), ...e.pluginDirsUnderTest]
-          .filter((re) => re !== null)
-          .some((re) => ce(path.resolve(re), resolved))
+        path_3.isAbsolute(grader.baseline_file) ||
+        isUncOrDevicePath(grader.baseline_file) ||
+        isNetworkMountPath(grader.baseline_file) ||
+        isUncOrDevicePath(path) ||
+        isNetworkMountPath(path) ||
+        ![
+          evalCase.caseDir,
+          caseRealPath,
+          sandboxParent,
+          findEvalDirAboveCase(),
+          ...evalCase.pluginDirsUnderTest,
+        ]
+          .filter((root) => root !== null)
+          .some((root) => isWithinOrSame(path_3.resolve(root), path))
       )
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `${r}: a baseline grader's baseline_file must be a relative path inside the suite or the plugin under test`,
+          `${caseLabel}: a baseline grader's baseline_file must be a relative path inside the suite or the plugin under test`,
           "eval: baseline_file not relative",
         );
-      return [w(resolved)];
+      return [resolveRealPath(path)];
     }),
   );
-  for (let V of results_2)
+  for (let addDirReal of results_2)
     if (
-      h(V, W) ||
-      h(V, Ee) ||
-      results.some((re) => V === re) ||
-      (s(Ee, V) && !s(W, V)) ||
-      h(V, pt) ||
-      h(pt, V) ||
-      h(V, Pt) ||
-      h(Pt, V) ||
-      results_3.some((re) => s(V, re))
+      isSameOrWithin(addDirReal, caseRealPath) ||
+      isSameOrWithin(addDirReal, sandboxParent) ||
+      results.some((pluginReal) => addDirReal === pluginReal) ||
+      (pathWithin(sandboxParent, addDirReal) && !pathWithin(caseRealPath, addDirReal)) ||
+      isSameOrWithin(addDirReal, gradersDir) ||
+      isSameOrWithin(gradersDir, addDirReal) ||
+      isSameOrWithin(addDirReal, mocksDir) ||
+      isSameOrWithin(mocksDir, addDirReal) ||
+      results_3.some((baselineReal) => pathWithin(addDirReal, baselineReal))
     )
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${r}: an add_dir may only name fixture directories inside this case \u2014 not the case directory itself, its graders, a sibling case, an eval directory, or the plugin root`,
+        `${caseLabel}: an add_dir may only name fixture directories inside this case \u2014 not the case directory itself, its graders, a sibling case, an eval directory, or the plugin root`,
         "eval add_dir covers case definitions",
       );
-  let ie = [...results, Ee, W];
-  let _e = new Set();
-  let filtered_2 = results.filter((V) => s(Ee, V));
-  for (let V of filtered_2)
-    if (!s(W, V) || [pt, Pt].some((q) => h(V, q) || h(q, V)) || results_3.some((q) => h(V, q)))
+  let pluginRoots = [...results, sandboxParent, caseRealPath];
+  let vcsFilesFound = new Set();
+  let filtered_2 = results.filter((pluginReal) => pathWithin(sandboxParent, pluginReal));
+  for (let path of filtered_2)
+    if (
+      !pathWithin(caseRealPath, path) ||
+      [gradersDir, mocksDir].some((dir) => isSameOrWithin(path, dir) || isSameOrWithin(dir, path)) ||
+      results_3.some((baseline) => isSameOrWithin(path, baseline))
+    )
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${r}: a plugins entry names the case directory, its graders or mocks, or a directory covering them \u2014 a plugin shipped with a case must sit in its own subdirectory`,
+        `${caseLabel}: a plugins entry names the case directory, its graders or mocks, or a directory covering them \u2014 a plugin shipped with a case must sit in its own subdirectory`,
         "eval case plugin covers case material",
       );
-  let De = [...results_2, ...filtered_2];
-  let he = (V) => De.some((q) => h(q, V));
-  let xe = (V) => De.some((q) => s(V, q));
-  let Me = [];
-  let Ne = [];
-  let ot = [];
-  let nt = [];
-  let mt = (V) => {
-    checkPathSegmentWhitespace(V, "plugin entry");
-    return toSandboxRulePath(V);
+  let restrictedRoots = [...results_2, ...filtered_2];
+  let isUnderReadable = (path) => restrictedRoots.some((root) => isSameOrWithin(root, path));
+  let isUnderRestricted = (path) => restrictedRoots.some((root) => pathWithin(path, root));
+  let missingPaths = [];
+  let allowedPaths = [];
+  let allowRules = [];
+  let allowPaths = [];
+  let toRulePath = (path) => {
+    checkPathSegmentWhitespace(path, "plugin entry");
+    return toSandboxRulePath(path);
   };
-  let Ye = [];
-  for (let V of [...e.pluginDirs, ...e.pluginDirsUnderTest]) {
-    let resolved = path.resolve(V);
-    let re = await w(V);
-    if (resolved !== path.resolve(re) && !Ye.some((ue) => ue.lexical === resolved))
-      Ye.push({
-        canonical: re,
+  let lexicalAliases = [];
+  for (let pluginDir of [...evalCase.pluginDirs, ...evalCase.pluginDirsUnderTest]) {
+    let resolved = path_3.resolve(pluginDir);
+    let canonical = await resolveRealPath(pluginDir);
+    if (resolved !== path_3.resolve(canonical) && !lexicalAliases.some((alias) => alias.lexical === resolved))
+      lexicalAliases.push({
+        canonical,
         lexical: resolved,
       });
   }
-  let lt = (V) => {
-    let q = [V];
-    for (let { canonical, lexical } of Ye)
-      if (V === canonical || toEvalPathError(canonical, V)) q.push(lexical + V.slice(canonical.length));
-    return q;
+  let withAliases = (path) => {
+    let variants = [path];
+    for (let { canonical, lexical } of lexicalAliases)
+      if (path === canonical || toEvalPathError(canonical, path))
+        variants.push(lexical + path.slice(canonical.length));
+    return variants;
   };
-  let Ge = new Set();
-  let Lt = (V) => {
-    let q = V;
+  let seenRules = new Set();
+  let usableAncestor = (path) => {
+    let current = path;
     for (;;) {
-      if (isUsablePathSegment(q)) {
-        if (q !== V && [...results, Ee, W].some((ue) => h(q, ue)))
-          checkPathSegmentWhitespace(V, "plugin entry");
-        return q;
+      if (isUsablePathSegment(current)) {
+        if (
+          current !== path &&
+          [...results, sandboxParent, caseRealPath].some((root) => isSameOrWithin(current, root))
+        )
+          checkPathSegmentWhitespace(path, "plugin entry");
+        return current;
       }
-      let dir = path.dirname(q);
-      if (dir === q) {
-        checkPathSegmentWhitespace(V, "plugin entry");
-        return q;
+      let dir = path_3.dirname(current);
+      if (dir === current) {
+        checkPathSegmentWhitespace(path, "plugin entry");
+        return current;
       }
-      q = dir;
+      current = dir;
     }
   };
-  let _t = (V) => {
-    let q = Lt(V);
-    for (let re of lt(q)) {
-      let ue = `tree:${path.normalize(re)}`;
-      if (Ge.has(ue)) continue;
-      Ge.add(ue);
-      ot.push(`${FILE_READ_TOOL_NAME}(${mt(re)})`, `${FILE_READ_TOOL_NAME}(${mt(re)}/**)`);
-      nt.push(re);
+  let allowTree = (path) => {
+    let ancestor = usableAncestor(path);
+    for (let variant of withAliases(ancestor)) {
+      let ruleKey = `tree:${path_3.normalize(variant)}`;
+      if (seenRules.has(ruleKey)) continue;
+      seenRules.add(ruleKey);
+      allowRules.push(
+        `${FILE_READ_TOOL_NAME}(${toRulePath(variant)})`,
+        `${FILE_READ_TOOL_NAME}(${toRulePath(variant)}/**)`,
+      );
+      allowPaths.push(variant);
     }
   };
-  let zt = (V) => {
-    if (!isUsablePathSegment(V)) {
-      _t(Lt(V));
+  let allowFile = (path) => {
+    if (!isUsablePathSegment(path)) {
+      allowTree(usableAncestor(path));
       return;
     }
-    let q = V;
-    for (let re of lt(q)) {
-      let ue = `file:${path.normalize(re)}`;
-      if (Ge.has(ue)) continue;
-      Ge.add(ue);
-      ot.push(`${FILE_READ_TOOL_NAME}(${mt(re)})`);
-      nt.push(re);
+    let ancestor = path;
+    for (let variant of withAliases(ancestor)) {
+      let ruleKey = `file:${path_3.normalize(variant)}`;
+      if (seenRules.has(ruleKey)) continue;
+      seenRules.add(ruleKey);
+      allowRules.push(`${FILE_READ_TOOL_NAME}(${toRulePath(variant)})`);
+      allowPaths.push(variant);
     }
   };
-  let fn = async (V) => {
-    let q = 0;
-    let any = filtered_2.some((ae) => h(ae, V));
-    let ue = [V];
-    for (let ae = ue.pop(); ae !== undefined; ae = ue.pop()) {
-      let Ot = (await j(ae, ae === V)) ?? K(ae, V);
-      for (let qe of Ot) {
-        if (++q > MAX_FENCE_ENTRIES)
+  let screenEvalTree = async (root) => {
+    let entryCount = 0;
+    let any = filtered_2.some((pluginReal) => isSameOrWithin(pluginReal, root));
+    let pending = [root];
+    for (let current = pending.pop(); current !== undefined; current = pending.pop()) {
+      let entries = (await listDirOrNull(current, current === root)) ?? throwUnlistable(current, root);
+      for (let entry of entries) {
+        if (++entryCount > MAX_FENCE_ENTRIES)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `${r}: the eval directory holds more than ${MAX_FENCE_ENTRIES} entries \u2014 move large fixtures out of it`,
+            `${caseLabel}: the eval directory holds more than ${MAX_FENCE_ENTRIES} entries \u2014 move large fixtures out of it`,
             "eval suite too large to screen",
           );
-        let joined = path.join(ae, qe.name);
-        if (!any && filtered_2.some((He) => h(He, joined))) continue;
-        let fileKind = await getFileKind(qe, joined, "unknown");
+        let path = path_3.join(current, entry.name);
+        if (!any && filtered_2.some((pluginReal) => isSameOrWithin(pluginReal, path))) continue;
+        let fileKind = await getFileKind(entry, path, "unknown");
         if (fileKind === "unknown")
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `${r}: cannot tell what "${formatGuardValueJson(qe.name)}" under the eval directory is \u2014 make it readable or remove it`,
+            `${caseLabel}: cannot tell what "${formatGuardValueJson(entry.name)}" under the eval directory is \u2014 make it readable or remove it`,
             "eval case tree entry unclassifiable",
           );
-        let Xe = any ? results_2.some((He) => h(He, joined)) : he(joined);
-        if (fileKind === "symlink" && Xe) continue;
+        let insideAddDir = any
+          ? results_2.some((pluginReal) => isSameOrWithin(pluginReal, path))
+          : isUnderReadable(path);
+        if (fileKind === "symlink" && insideAddDir) continue;
         if (fileKind === "symlink") {
-          let He = await w(joined);
-          if (He === joined)
+          let linkTarget = await resolveRealPath(path);
+          if (linkTarget === path)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `${r}: "${formatGuardValueJson(qe.name)}" under the eval directory is a symbolic link whose target cannot be resolved \u2014 remove it or point it at an existing file`,
+              `${caseLabel}: "${formatGuardValueJson(entry.name)}" under the eval directory is a symbolic link whose target cannot be resolved \u2014 remove it or point it at an existing file`,
               "eval suite link unresolvable",
             );
-          if (results_2.includes(He)) continue;
-          let ln = await lstat(He).catch((error) => {
-            throw describeFenceProbeFailure(r, error);
+          if (results_2.includes(linkTarget)) continue;
+          let targetStats = await lstat(linkTarget).catch((error) => {
+            throw describeFenceProbeFailure(caseLabel, error);
           });
-          if (!ln.isDirectory()) {
-            zt(joined);
-            if (ln.nlink > 1)
+          if (!targetStats.isDirectory()) {
+            allowFile(path);
+            if (targetStats.nlink > 1)
               throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-                `${r}: "${formatGuardValueJson(path.relative(V, joined))}" under the eval directory links to a file with ${ln.nlink} names \u2014 case definitions must not be reachable by another name`,
+                `${caseLabel}: "${formatGuardValueJson(path_3.relative(root, path))}" under the eval directory links to a file with ${targetStats.nlink} names \u2014 case definitions must not be reachable by another name`,
                 "eval suite links to hard-linked file",
               );
-            zt(He);
+            allowFile(linkTarget);
             continue;
           }
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `${r}: "${formatGuardValueJson(qe.name)}" under the eval directory is a symbolic link to a directory \u2014 case definitions must be plain files and directories`,
+            `${caseLabel}: "${formatGuardValueJson(entry.name)}" under the eval directory is a symbolic link to a directory \u2014 case definitions must be plain files and directories`,
             "eval case tree contains a symlink",
           );
         }
-        if (fileKind === "dir") ue.push(joined);
-        else if (fileKind === "file" && (await b(joined)) > 1)
+        if (fileKind === "dir") pending.push(path);
+        else if (fileKind === "file" && (await hardLinkCount(path)) > 1)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            Xe
-              ? `${r}: "${formatGuardValueJson(path.relative(V, joined))}" inside an add_dir has more than one hard link \u2014 fixtures must be plain copies`
-              : `${r}: "${formatGuardValueJson(qe.name)}" under the eval directory has more than one hard link \u2014 case definitions must not be reachable by another name`,
-            Xe ? "eval add_dir file hard-linked" : "eval case file hard-linked",
+            insideAddDir
+              ? `${caseLabel}: "${formatGuardValueJson(path_3.relative(root, path))}" inside an add_dir has more than one hard link \u2014 fixtures must be plain copies`
+              : `${caseLabel}: "${formatGuardValueJson(entry.name)}" under the eval directory has more than one hard link \u2014 case definitions must not be reachable by another name`,
+            insideAddDir ? "eval add_dir file hard-linked" : "eval case file hard-linked",
           );
       }
     }
   };
-  let mapped = S.map((V) => V.join("/"));
-  for (let V of results_3) {
-    zt(V);
-    let q = await lstat(V).catch((error) => {
+  let mapped = evalDirSuites.map((segments) => segments.join("/"));
+  for (let baselinePath of results_3) {
+    allowFile(baselinePath);
+    let stats = await lstat(baselinePath).catch((error) => {
       if (getErrnoCode(error) === "ENOENT") return null;
-      throw describeFenceProbeFailure(r, error);
+      throw describeFenceProbeFailure(caseLabel, error);
     });
-    if (q !== null && !q.isFile())
+    if (stats !== null && !stats.isFile())
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${r}: a baseline grader's baseline_file must name a regular file`,
+        `${caseLabel}: a baseline grader's baseline_file must name a regular file`,
         "eval baseline reference is not a regular file",
       );
-    if (q !== null && q.nlink > 1)
+    if (stats !== null && stats.nlink > 1)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${r}: a baseline grader's reference file is hard-linked (has another name) \u2014 keep a single copy`,
+        `${caseLabel}: a baseline grader's reference file is hard-linked (has another name) \u2014 keep a single copy`,
         "eval baseline reference is hard-linked",
       );
   }
-  let et = new Set();
-  let Et = (V) => {
-    _t(V);
-    for (let q of lt(V)) et.add(q);
+  let nestedSuitePaths = new Set();
+  let allowNestedSuite = (path) => {
+    allowTree(path);
+    for (let variant of withAliases(path)) nestedSuitePaths.add(variant);
   };
-  let Ht = async (V, q = "plugin") => {
-    let re = 0;
-    let ue = [V];
-    for (let ae = ue.pop(); ae !== undefined; ae = ue.pop()) {
-      if (h(Ee, ae) && !filtered_2.some((qe) => h(qe, ae))) continue;
-      let Ot = (await j(ae, ae === V)) ?? K(ae, V);
-      if (ae !== V || !results.includes(V))
-        for (let qe of await readManifestToFenceSuites(ae)) {
-          let joined = path.join(ae, ...qe);
-          let Pe = await w(joined);
-          if (Pe !== joined && !results.some((He) => h(He, Pe)) && q === "plugin")
+  let screenPluginDir = async (root, kind = "plugin") => {
+    let entryCount = 0;
+    let pending = [root];
+    for (let current = pending.pop(); current !== undefined; current = pending.pop()) {
+      if (
+        isSameOrWithin(sandboxParent, current) &&
+        !filtered_2.some((pluginReal) => isSameOrWithin(pluginReal, current))
+      )
+        continue;
+      let entries = (await listDirOrNull(current, current === root)) ?? throwUnlistable(current, root);
+      if (current !== root || !results.includes(root))
+        for (let segments of await readManifestToFenceSuites(current)) {
+          let joined = path_3.join(current, ...segments);
+          let realPath = await resolveRealPath(joined);
+          if (
+            realPath !== joined &&
+            !results.some((pluginReal) => isSameOrWithin(pluginReal, realPath)) &&
+            kind === "plugin"
+          )
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `${r}: ${formatGuardValueJson(path.relative(V, joined))} is an eval-directory link that points outside the plugin \u2014 remove it`,
+              `${caseLabel}: ${formatGuardValueJson(path_3.relative(root, joined))} is an eval-directory link that points outside the plugin \u2014 remove it`,
               "eval nested suite link escapes plugin",
             );
-          let Xe = (He) => !h(Ee, He) || filtered_2.some((ln) => h(ln, He));
-          for (let He of uniq([joined, Pe])) if (Xe(He)) _t(He);
-          if (Pe !== joined && !results.some((He) => h(He, Pe)));
-          else if (Xe(Pe))
-            await fn(Pe).catch((error) => {
+          let shouldScreen = (path) =>
+            !isSameOrWithin(sandboxParent, path) ||
+            filtered_2.some((pluginReal) => isSameOrWithin(pluginReal, path));
+          for (let path of uniq([joined, realPath])) if (shouldScreen(path)) allowTree(path);
+          if (realPath !== joined && !results.some((pluginReal) => isSameOrWithin(pluginReal, realPath)));
+          else if (shouldScreen(realPath))
+            await screenEvalTree(realPath).catch((error) => {
               if (getErrnoCode(error) === "ENOENT" || getErrnoCode(error) === "ENOTDIR") return;
               throw error;
             });
         }
-      for (let qe of Ot) {
-        if (++re > MAX_FENCE_ENTRIES)
+      for (let entry of entries) {
+        if (++entryCount > MAX_FENCE_ENTRIES)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            q === "plugin"
-              ? `${r}: a plugin directory holds more than ${MAX_FENCE_ENTRIES} entries to check for eval directories \u2014 point the case at a smaller plugin directory`
-              : `${r}: a checkout sharing the plugin's repository holds more than ${MAX_FENCE_ENTRIES} entries to check for eval directories \u2014 run from a standalone clone`,
+            kind === "plugin"
+              ? `${caseLabel}: a plugin directory holds more than ${MAX_FENCE_ENTRIES} entries to check for eval directories \u2014 point the case at a smaller plugin directory`
+              : `${caseLabel}: a checkout sharing the plugin's repository holds more than ${MAX_FENCE_ENTRIES} entries to check for eval directories \u2014 run from a standalone clone`,
             "eval plugin too large to screen",
           );
-        let joined = path.join(ae, qe.name);
-        if (x(qe.name)) {
-          Et(joined);
-          for (let Xe of await probeVcsMetadata(ae, r, ie, (He) => _e.add(He))) Et(Xe);
+        let joined = path_3.join(current, entry.name);
+        if (isVcsDirName(entry.name)) {
+          allowNestedSuite(joined);
+          for (let vcsPath of await probeVcsMetadata(current, caseLabel, pluginRoots, (filePath) =>
+            vcsFilesFound.add(filePath),
+          ))
+            allowNestedSuite(vcsPath);
           continue;
         }
-        let fileKind = await getFileKind(qe, joined, "unknown");
+        let fileKind = await getFileKind(entry, joined, "unknown");
         if (fileKind === "unknown") {
-          _t(joined);
+          allowTree(joined);
           continue;
         }
-        if (N(qe.name, "node_modules")) {
+        if (sameFolded(entry.name, "node_modules")) {
           if (fileKind !== "dir") {
-            _t(joined);
+            allowTree(joined);
             continue;
           }
-          for (let Xe of mapped)
-            ot.push(
-              `${FILE_READ_TOOL_NAME}(${mt(joined)}/**/${Xe})`,
-              `${FILE_READ_TOOL_NAME}(${mt(joined)}/**/${Xe}/**)`,
+          for (let fileName of mapped)
+            allowRules.push(
+              `${FILE_READ_TOOL_NAME}(${toRulePath(joined)}/**/${fileName})`,
+              `${FILE_READ_TOOL_NAME}(${toRulePath(joined)}/**/${fileName}/**)`,
             );
-          for (let Xe of await X(joined)) _t(Xe);
+          for (let nestedPath of await listFenceFiles(joined)) allowTree(nestedPath);
           continue;
         }
-        if (fileKind === "file" && isRunArtifactFile(qe.name)) {
-          if (q === "plugin" && (await b(joined)) > 1)
+        if (fileKind === "file" && isRunArtifactFile(entry.name)) {
+          if (kind === "plugin" && (await hardLinkCount(joined)) > 1)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `${r}: a file in the plugin has more than one name (a hard link) \u2014 case definitions must not be reachable by another name; replace it with a copy`,
+              `${caseLabel}: a file in the plugin has more than one name (a hard link) \u2014 case definitions must not be reachable by another name; replace it with a copy`,
               "eval plugin contains hard-linked file",
             );
-          zt(joined);
+          allowFile(joined);
           continue;
         }
-        if (fileKind === "symlink" && T(joined)) {
-          _t(joined);
-          let Xe = await w(joined);
-          if (q === "plugin" && !results.some((He) => h(He, Xe)))
+        if (fileKind === "symlink" && isInsideEvalDir(joined)) {
+          allowTree(joined);
+          let linkTarget = await resolveRealPath(joined);
+          if (kind === "plugin" && !results.some((pluginReal) => isSameOrWithin(pluginReal, linkTarget)))
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `${r}: ${formatGuardValueJson(path.relative(V, joined))} is an eval-directory link that points outside the plugin \u2014 remove it`,
+              `${caseLabel}: ${formatGuardValueJson(path_3.relative(root, joined))} is an eval-directory link that points outside the plugin \u2014 remove it`,
               "eval suite link leaves the plugin",
             );
-          if (!results.some((He) => h(He, Xe))) _t(Xe);
-          else if (!h(Ee, Xe) || filtered_2.some((He) => h(He, Xe))) {
-            _t(Xe);
-            await fn(Xe);
+          if (!results.some((pluginReal) => isSameOrWithin(pluginReal, linkTarget))) allowTree(linkTarget);
+          else if (
+            !isSameOrWithin(sandboxParent, linkTarget) ||
+            filtered_2.some((pluginReal) => isSameOrWithin(pluginReal, linkTarget))
+          ) {
+            allowTree(linkTarget);
+            await screenEvalTree(linkTarget);
           }
           continue;
         }
         if (fileKind !== "dir") {
-          if (fileKind === "file" && (await b(joined)) > 1) {
-            if (q === "spared") {
-              zt(joined);
+          if (fileKind === "file" && (await hardLinkCount(joined)) > 1) {
+            if (kind === "spared") {
+              allowFile(joined);
               continue;
             }
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `${r}: a file in the plugin has more than one name (a hard link) \u2014 case definitions must not be reachable by another name; replace it with a copy`,
+              `${caseLabel}: a file in the plugin has more than one name (a hard link) \u2014 case definitions must not be reachable by another name; replace it with a copy`,
               "eval plugin contains hard-linked file",
             );
           }
           continue;
         }
-        if (h(Ee, joined) && !filtered_2.some((Xe) => h(Xe, joined))) continue;
-        if (T(joined)) {
-          _t(joined);
-          await fn(joined);
-        } else if (await looksLikeVcsTree(joined)) _t(joined);
-        else ue.push(joined);
+        if (
+          isSameOrWithin(sandboxParent, joined) &&
+          !filtered_2.some((pluginReal) => isSameOrWithin(pluginReal, joined))
+        )
+          continue;
+        if (isInsideEvalDir(joined)) {
+          allowTree(joined);
+          await screenEvalTree(joined);
+        } else if (await looksLikeVcsTree(joined)) allowTree(joined);
+        else pending.push(joined);
       }
     }
   };
-  let lr = async (V) => {
-    for (let dir of V) {
-      let re = 0;
-      let ue = [
+  let scanManifestDirs = async (dirs) => {
+    for (let dir of dirs) {
+      let dirCount = 0;
+      let pending = [
         {
           dir,
           depth: 0,
         },
       ];
-      for (let ae = ue.pop(); ae !== undefined; ae = ue.pop()) {
-        S.push(...(await readManifestToFenceSuites(ae.dir)));
-        if (ae.depth >= MAX_FENCE_MANIFEST_DEPTH) continue;
-        if (++re > MAX_FENCE_ENTRIES)
+      for (let current = pending.pop(); current !== undefined; current = pending.pop()) {
+        evalDirSuites.push(...(await readManifestToFenceSuites(current.dir)));
+        if (current.depth >= MAX_FENCE_MANIFEST_DEPTH) continue;
+        if (++dirCount > MAX_FENCE_ENTRIES)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `${r}: too many directories to examine for eval manifests \u2014 refusing to run`,
+            `${caseLabel}: too many directories to examine for eval manifests \u2014 refusing to run`,
             "eval fence: manifest scan budget exceeded",
           );
-        for (let Ot of await listSubdirectories(ae.dir, r)) {
-          let base = path.basename(Ot);
-          if (!x(base) && !N(base, "node_modules"))
-            ue.push({
-              dir: Ot,
-              depth: ae.depth + 1,
+        for (let subdir of await listSubdirectories(current.dir, caseLabel)) {
+          let base = path_3.basename(subdir);
+          if (!isVcsDirName(base) && !sameFolded(base, "node_modules"))
+            pending.push({
+              dir: subdir,
+              depth: current.depth + 1,
             });
         }
       }
     }
   };
-  for (let V of uniq([...results, Ee, W]))
-    for (let q of await probeVcsMetadata(V, r, ie, (re) => _e.add(re))) Et(q);
-  let _n = new Set();
-  let Xr = new Set();
+  for (let root of uniq([...results, sandboxParent, caseRealPath]))
+    for (let vcsPath of await probeVcsMetadata(root, caseLabel, pluginRoots, (filePath) =>
+      vcsFilesFound.add(filePath),
+    ))
+      allowNestedSuite(vcsPath);
+  let scannedDirs = new Set();
+  let screenedRoots = new Set();
   for (let idx = 0; idx < 8; idx++) {
-    let filtered = [..._e].filter((ae) => !_n.has(ae));
-    let re = S.length;
-    await lr(filtered);
-    for (let ae of filtered) _n.add(ae);
-    let ue = S.length > re;
-    for (let ae of [...results, ..._e])
-      if (ue || !Xr.has(ae)) {
-        await Ht(ae, results.includes(ae) ? "plugin" : "spared");
-        Xr.add(ae);
+    let dirs = [...vcsFilesFound].filter((dir) => !scannedDirs.has(dir));
+    let manifestCount = evalDirSuites.length;
+    await scanManifestDirs(dirs);
+    for (let dir of dirs) scannedDirs.add(dir);
+    let foundNew = evalDirSuites.length > manifestCount;
+    for (let root of [...results, ...vcsFilesFound])
+      if (foundNew || !screenedRoots.has(root)) {
+        await screenPluginDir(root, results.includes(root) ? "plugin" : "spared");
+        screenedRoots.add(root);
       }
-    if ([..._e].every((ae) => _n.has(ae))) break;
+    if ([...vcsFilesFound].every((dir) => scannedDirs.has(dir))) break;
   }
-  if (![..._e].every((V) => _n.has(V)))
+  if (![...vcsFilesFound].every((dir) => scannedDirs.has(dir)))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${r}: the repository layout keeps revealing further working trees \u2014 refusing to run`,
+      `${caseLabel}: the repository layout keeps revealing further working trees \u2014 refusing to run`,
       "eval fence: spared-tree fixed point not reached",
     );
-  for (let pluginDir of e.pluginDirs) {
-    let q = await w(pluginDir);
-    if (!filtered_2.includes(q) && nt.some((re) => h(re, q)))
+  for (let pluginDir of evalCase.pluginDirs) {
+    let pluginReal = await resolveRealPath(pluginDir);
+    if (
+      !filtered_2.includes(pluginReal) &&
+      allowPaths.some((denyPath) => isSameOrWithin(denyPath, pluginReal))
+    )
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${r}: a plugin listed by the case lies inside an eval suite or another fenced directory \u2014 move it out of the suite`,
+        `${caseLabel}: a plugin listed by the case lies inside an eval suite or another fenced directory \u2014 move it out of the suite`,
         "eval: case plugin inside a fenced suite",
       );
   }
-  for (let pluginDir of e.pluginDirs) {
-    let q = await w(pluginDir);
-    let resolved = path.resolve(pluginDir);
-    let ue = (ae) => (resolved === path.resolve(q) ? [ae] : [ae, resolved + ae.slice(q.length)]);
-    if (!h(q, Ee)) {
-      Me.push(...ue(q));
+  for (let pluginDir of evalCase.pluginDirs) {
+    let pluginReal = await resolveRealPath(pluginDir);
+    let resolved = path_3.resolve(pluginDir);
+    let aliasVariants = (path) =>
+      resolved === path_3.resolve(pluginReal) ? [path] : [path, resolved + path.slice(pluginReal.length)];
+    if (!isSameOrWithin(pluginReal, sandboxParent)) {
+      missingPaths.push(...aliasVariants(pluginReal));
       continue;
     }
-    for (let ae = q; ae !== Ee;) {
-      let Ot = await j(ae, ae === q);
-      if (Ot === null) break;
-      let qe;
-      for (let Re of Ot) {
-        let joined = path.join(ae, Re.name);
-        if (h(joined, Ee)) {
-          qe = joined;
+    for (let current = pluginReal; current !== sandboxParent;) {
+      let entries = await listDirOrNull(current, current === pluginReal);
+      if (entries === null) break;
+      let nextUp;
+      for (let entry of entries) {
+        let repoRoot = path_3.join(current, entry.name);
+        if (isSameOrWithin(repoRoot, sandboxParent)) {
+          nextUp = repoRoot;
           continue;
         }
-        let fileKind = await getFileKind(Re, joined, "other");
-        checkPathSegmentWhitespace(joined, "plugin entry");
-        if (x(Re.name) || T(joined) || et.has(joined)) continue;
+        let fileKind = await getFileKind(entry, repoRoot, "other");
+        checkPathSegmentWhitespace(repoRoot, "plugin entry");
+        if (isVcsDirName(entry.name) || isInsideEvalDir(repoRoot) || nestedSuitePaths.has(repoRoot)) continue;
         if (fileKind === "dir") {
-          if (await looksLikeVcsTree(joined)) continue;
-          Me.push(...ue(joined));
-        } else if (fileKind === "symlink") Me.push(...ue(joined));
-        else if (fileKind === "file" && !isRunArtifactFile(Re.name) && (await b(joined)) === 1)
-          Ne.push(...ue(joined));
+          if (await looksLikeVcsTree(repoRoot)) continue;
+          missingPaths.push(...aliasVariants(repoRoot));
+        } else if (fileKind === "symlink") missingPaths.push(...aliasVariants(repoRoot));
+        else if (
+          fileKind === "file" &&
+          !isRunArtifactFile(entry.name) &&
+          (await hardLinkCount(repoRoot)) === 1
+        )
+          allowedPaths.push(...aliasVariants(repoRoot));
       }
-      if (qe === undefined) break;
-      ae = qe;
+      if (nextUp === undefined) break;
+      current = nextUp;
     }
   }
-  e.pluginDirsUnderTest.forEach((V, q) => {
-    let re = results[q] ?? V;
-    if (h(re, Ee)) {
-      let joined = path.join(V, path.relative(re, Ee));
-      if (joined !== Ee) _t(joined);
+  evalCase.pluginDirsUnderTest.forEach((pluginDir, index) => {
+    let realDir = results[index] ?? pluginDir;
+    if (isSameOrWithin(realDir, sandboxParent)) {
+      let joined = path_3.join(pluginDir, path_3.relative(realDir, sandboxParent));
+      if (joined !== sandboxParent) allowTree(joined);
     }
   });
-  let parts = path.relative(Ee, W).split(path.sep);
-  let parts_2 = path.resolve(e.caseDir).split(path.sep);
+  let parts = path_3.relative(sandboxParent, caseRealPath).split(path_3.sep);
+  let parts_2 = path_3.resolve(evalCase.caseDir).split(path_3.sep);
   if (
     parts.length < parts_2.length &&
-    parts.every((V, q) => y(V) === y(parts_2[parts_2.length - parts.length + q] ?? ""))
+    parts.every(
+      (part, partIndex) =>
+        foldKey(part) === foldKey(parts_2[parts_2.length - parts.length + partIndex] ?? ""),
+    )
   ) {
-    let joined = parts_2.slice(0, parts_2.length - parts.length).join(path.sep);
-    if (joined !== Ee && joined !== "") _t(joined);
+    let joined = parts_2.slice(0, parts_2.length - parts.length).join(path_3.sep);
+    if (joined !== sandboxParent && joined !== "") allowTree(joined);
   }
   if (SUPPORTED_PLATFORMS()) {
-    let V = a;
-    let joined = Ee.split(path.sep).slice(0, -V.length).join(path.sep);
-    let joined_2 = path.join(joined || path.sep, ...V);
-    if (joined_2 !== Ee && R(Ee, V)) _t(joined_2);
+    let suffix = evalDirSegments;
+    let joined = sandboxParent.split(path_3.sep).slice(0, -suffix.length).join(path_3.sep);
+    let joined_2 = path_3.join(joined || path_3.sep, ...suffix);
+    if (joined_2 !== sandboxParent && pathEndsWithSegments(sandboxParent, suffix)) allowTree(joined_2);
   }
-  await fn(Ee);
-  let En = De.some((V) => s(Ee, V)) ? [Ee] : [];
-  if (En.length === 0) _t(Ee);
-  for (let V = En.pop(); V !== undefined; V = En.pop()) {
-    let q = (await j(V, V === Ee)) ?? K(V, Ee);
-    for (let re of q) {
-      let joined = path.join(V, re.name);
-      if (he(joined)) continue;
-      let fileKind = await getFileKind(re, joined, "unknown");
-      if (fileKind === "dir" && xe(joined)) En.push(joined);
-      else if (fileKind === "dir" || fileKind === "unknown") _t(joined);
-      else zt(joined);
+  await screenEvalTree(sandboxParent);
+  let suiteQueue = restrictedRoots.some((pluginReal) => pathWithin(sandboxParent, pluginReal))
+    ? [sandboxParent]
+    : [];
+  if (suiteQueue.length === 0) allowTree(sandboxParent);
+  for (let suiteDir = suiteQueue.pop(); suiteDir !== undefined; suiteDir = suiteQueue.pop()) {
+    let entries =
+      (await listDirOrNull(suiteDir, suiteDir === sandboxParent)) ?? throwUnlistable(suiteDir, sandboxParent);
+    for (let entry of entries) {
+      let path = path_3.join(suiteDir, entry.name);
+      if (isUnderReadable(path)) continue;
+      let fileKind = await getFileKind(entry, path, "unknown");
+      if (fileKind === "dir" && isUnderRestricted(path)) suiteQueue.push(path);
+      else if (fileKind === "dir" || fileKind === "unknown") allowTree(path);
+      else allowFile(path);
     }
   }
-  for (let V of results_2) {
-    if (V.split(path.sep).some((q) => x(q)))
+  for (let addDir of results_2) {
+    if (addDir.split(path_3.sep).some((part) => isVcsDirName(part)))
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${r}: an add_dirs entry points into version-control metadata \u2014 point it at the fixtures themselves`,
+        `${caseLabel}: an add_dirs entry points into version-control metadata \u2014 point it at the fixtures themselves`,
         "eval add_dir inside vcs dir",
       );
-    for (let q of et)
-      if (V === q || toEvalPathError(q, V))
+    for (let vcsPath of nestedSuitePaths)
+      if (addDir === vcsPath || toEvalPathError(vcsPath, addDir))
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `${r}: an add_dirs entry points into version-control metadata \u2014 point it at the fixtures themselves`,
+          `${caseLabel}: an add_dirs entry points into version-control metadata \u2014 point it at the fixtures themselves`,
           "eval add_dir inside vcs dir",
         );
-    for (let q of nt) {
-      let re = (ae, Ot) =>
-        nfcKeyIfEnabled(ae) === nfcKeyIfEnabled(Ot) || toEvalPathError(ae, Ot, nfcKeyIfEnabled);
+    for (let denyPath of allowPaths) {
+      let overlaps = (left, right) =>
+        nfcKeyIfEnabled(left) === nfcKeyIfEnabled(right) || toEvalPathError(left, right, nfcKeyIfEnabled);
       if (
         !(
-          re(Ee, q) &&
-          !filtered_2.some((ae) => re(ae, q)) &&
-          !et.has(q) &&
-          !q.split(path.sep).some((ae) => x(ae))
+          overlaps(sandboxParent, denyPath) &&
+          !filtered_2.some((pluginReal) => overlaps(pluginReal, denyPath)) &&
+          !nestedSuitePaths.has(denyPath) &&
+          !denyPath.split(path_3.sep).some((part) => isVcsDirName(part))
         ) &&
-        (nfcKeyIfEnabled(V) === nfcKeyIfEnabled(q) || toEvalPathError(q, V, nfcKeyIfEnabled))
+        (nfcKeyIfEnabled(addDir) === nfcKeyIfEnabled(denyPath) ||
+          toEvalPathError(denyPath, addDir, nfcKeyIfEnabled))
       )
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `${r}: an add_dirs entry points inside a directory that holds case definitions or version-control data of a plugin under test \u2014 point it at the fixtures themselves`,
+          `${caseLabel}: an add_dirs entry points inside a directory that holds case definitions or version-control data of a plugin under test \u2014 point it at the fixtures themselves`,
           "eval add_dir inside fenced directory",
         );
     }
   }
   return {
-    readRoots: uniq(Me.map((V) => path.normalize(V))),
-    readFiles: uniq(Ne.map((V) => path.normalize(V))),
-    denies: ot,
-    denyPaths: uniq(nt.map((V) => path.normalize(V))),
+    readRoots: uniq(missingPaths.map((root) => path_3.normalize(root))),
+    readFiles: uniq(allowedPaths.map((file) => path_3.normalize(file))),
+    denies: allowRules,
+    denyPaths: uniq(allowPaths.map((denyPath) => path_3.normalize(denyPath))),
   };
 }
 //@ chunk-qchp9vrd.js:164936-164962 placement
@@ -683,224 +756,230 @@ var MAX_FENCE_ENTRIES = 20000;
 var MAX_FENCE_MANIFEST_DEPTH = 3;
 var MAX_FENCE_RECORDS = 4096;
 //@ chunk-qchp9vrd.js:164962-168518 placement
-async function probeVcsMetadata(e, n = "plugin eval", r = [], a) {
-  let s = (K) => {
-    let errnoCode = getErrnoCode(K);
+async function probeVcsMetadata(root, label = "plugin eval", knownRoots = [], onSpared) {
+  let rethrowOrNull = (error) => {
+    let errnoCode = getErrnoCode(error);
     if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR") return null;
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${n}: a version-control directory or one of its pointers could not be resolved (${errnoCode ?? "unexpected error"}) \u2014 make it readable or remove it`,
+      `${label}: a version-control directory or one of its pointers could not be resolved (${errnoCode ?? "unexpected error"}) \u2014 make it readable or remove it`,
       "eval vcs metadata unresolvable",
     );
   };
-  let h = async (K) => {
-    await checkRepoAuthoredPath(path.dirname(K), path.basename(K), n);
-    return realpath(K).catch(s);
+  let realPathOf = async (path) => {
+    await checkRepoAuthoredPath(path_3.dirname(path), path_3.basename(path), label);
+    return realpath(path).catch(rethrowOrNull);
   };
-  let w = (await h(e)) ?? e;
-  let b = [path.join(w, ".git")];
-  let y = async (K, X) => {
-    await checkRepoAuthoredPath(K, X, n);
-    return realpath(path.resolve(K, X)).catch(s);
+  let baseReal = (await realPathOf(root)) ?? root;
+  let found = [path_3.join(baseReal, ".git")];
+  let realPathRelative = async (base, relativePath) => {
+    await checkRepoAuthoredPath(base, relativePath, label);
+    return realpath(path_3.resolve(base, relativePath)).catch(rethrowOrNull);
   };
-  let R = (K) => {
-    if ([w, ...r].every((X) => K !== X && !toEvalPathError(X, K) && !toEvalPathError(K, X))) b.push(K);
-    else if (K !== w && !toEvalPathError(K, w)) a?.(K);
+  let addIfOutside = (path) => {
+    if (
+      [baseReal, ...knownRoots].every(
+        (knownRoot) =>
+          path !== knownRoot && !toEvalPathError(knownRoot, path) && !toEvalPathError(path, knownRoot),
+      )
+    )
+      found.push(path);
+    else if (path !== baseReal && !toEvalPathError(path, baseReal)) onSpared?.(path);
   };
-  let S = async (K, X = 0) => {
-    await N(K, ".git");
-    let joined = path.join(K, "objects");
-    let G = (await checkGitMetadataFile(path.join(joined, "info", "alternates"), 4096)) ?? "";
-    for (let line of G.split(`
+  let probeGitDir = async (dir, depth = 0) => {
+    await probeStore(dir, ".git");
+    let joined = path_3.join(dir, "objects");
+    let alternatesText = (await checkGitMetadataFile(path_3.join(joined, "info", "alternates"), 4096)) ?? "";
+    for (let line of alternatesText.split(`
 `)) {
       let trimmed = line.trim();
       if (!trimmed || trimmed.startsWith("#")) continue;
-      let Q = await y(joined, trimmed);
-      if (Q === null) continue;
-      b.push(Q);
-      if (path.basename(Q) === "objects") {
-        let dir = path.dirname(Q);
-        b.push(dir);
-        if (path.basename(dir) === ".git") R(path.dirname(dir));
-        if (X < 5) await S(dir, X + 1);
+      let target = await realPathRelative(joined, trimmed);
+      if (target === null) continue;
+      found.push(target);
+      if (path_3.basename(target) === "objects") {
+        let dir = path_3.dirname(target);
+        found.push(dir);
+        if (path_3.basename(dir) === ".git") addIfOutside(path_3.dirname(dir));
+        if (depth < 5) await probeGitDir(dir, depth + 1);
       }
     }
-    let J = [];
+    let worktrees = [];
     try {
-      J = await readdir(path.join(K, "worktrees"), {
+      worktrees = await readdir(path_3.join(dir, "worktrees"), {
         withFileTypes: true,
       });
     } catch (error) {
       if (getErrnoCode(error) !== "ENOENT" && getErrnoCode(error) !== "ENOTDIR")
-        throw describeFenceProbeFailure(n, error);
+        throw describeFenceProbeFailure(label, error);
     }
-    if (J.length > 200)
+    if (worktrees.length > 200)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${n}: a git directory of the plugin registers more linked worktrees than can be screened`,
+        `${label}: a git directory of the plugin registers more linked worktrees than can be screened`,
         "eval plugin git dir has too many worktrees",
       );
-    for (let Z of J) {
-      let joined = path.join(K, "worktrees", Z.name);
-      let trimmed = ((await checkGitMetadataFile(path.join(joined, "gitdir"), 4096)) ?? "").trim();
+    for (let worktree of worktrees) {
+      let joined = path_3.join(dir, "worktrees", worktree.name);
+      let trimmed = ((await checkGitMetadataFile(path_3.join(joined, "gitdir"), 4096)) ?? "").trim();
       if (trimmed) {
-        let Se = await y(joined, trimmed);
-        if (Se !== null) R(path.dirname(Se));
+        let gitDir = await realPathRelative(joined, trimmed);
+        if (gitDir !== null) addIfOutside(path_3.dirname(gitDir));
       }
     }
   };
-  let T = {
-    ".git": ["objects", path.join("objects", "pack"), "lfs"],
+  let storesByVcs = {
+    ".git": ["objects", path_3.join("objects", "pack"), "lfs"],
     ".hg": ["store"],
     ".sl": ["store"],
     ".svn": ["pristine"],
-    ".jj": ["repo", path.join("repo", "store")],
+    ".jj": ["repo", path_3.join("repo", "store")],
     ".bzr": ["repository"],
     _darcs: ["patches", "pristine.hashed", "inventories"],
   };
-  let N = async (K, X, W) => {
-    for (let G of W ?? T[X] ?? []) {
-      let J = await h(path.join(K, G));
-      if (J === null) continue;
-      if (J !== K && !toEvalPathError(K, J)) {
-        b.push(J);
+  let probeStore = async (dir, vcsName, subpaths) => {
+    for (let subpath of subpaths ?? storesByVcs[vcsName] ?? []) {
+      let real = await realPathOf(path_3.join(dir, subpath));
+      if (real === null) continue;
+      if (real !== dir && !toEvalPathError(dir, real)) {
+        found.push(real);
         continue;
       }
-      let Z = await readdir(J, {
+      let entries = await readdir(real, {
         withFileTypes: true,
       }).catch((error) => {
         if (getErrnoCode(error) === "ENOENT" || getErrnoCode(error) === "ENOTDIR") return [];
-        throw describeFenceProbeFailure(n, error);
+        throw describeFenceProbeFailure(label, error);
       });
-      let se = 0;
-      for (let Q of Z) {
-        if (++se > MAX_FENCE_RECORDS)
+      let entryCount = 0;
+      for (let entry of entries) {
+        if (++entryCount > MAX_FENCE_RECORDS)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `${n}: a version-control store holds too many top-level entries to examine \u2014 refusing to run`,
+            `${label}: a version-control store holds too many top-level entries to examine \u2014 refusing to run`,
             "eval fence: vcs store too large to screen",
           );
-        let fileKind = await getFileKind(Q, path.join(J, Q.name), "unknown");
+        let fileKind = await getFileKind(entry, path_3.join(real, entry.name), "unknown");
         if (fileKind === "unknown")
-          throw describeFenceProbeFailure(n, Error("unclassifiable version-control store entry"));
+          throw describeFenceProbeFailure(label, Error("unclassifiable version-control store entry"));
         if (fileKind !== "symlink") continue;
-        let we = await h(path.join(J, Q.name));
-        if (we !== null && !toEvalPathError(K, we)) b.push(we);
+        let linkTarget = await realPathOf(path_3.join(real, entry.name));
+        if (linkTarget !== null && !toEvalPathError(dir, linkTarget)) found.push(linkTarget);
       }
     }
   };
-  let x = async (K, X) => {
-    let W;
-    let G;
-    if (X === ".hg" || X === ".sl") {
-      W = path.join(K, "sharedpath");
-      G = (Q) => path.dirname(Q);
-    } else if (X === ".jj") {
-      W = path.join(K, "repo");
-      G = (Q) => path.dirname(path.dirname(Q));
+  let probeSharedStore = async (dir, vcsName) => {
+    let pointerPath;
+    let sharedRoot;
+    if (vcsName === ".hg" || vcsName === ".sl") {
+      pointerPath = path_3.join(dir, "sharedpath");
+      sharedRoot = (pointer) => path_3.dirname(pointer);
+    } else if (vcsName === ".jj") {
+      pointerPath = path_3.join(dir, "repo");
+      sharedRoot = (repoPath) => path_3.dirname(path_3.dirname(repoPath));
     } else return;
     if (
-      !(await lstat(W).then(
-        (Q) => Q.isFile(),
+      !(await lstat(pointerPath).then(
+        (stats) => stats.isFile(),
         (error) => {
           if (getErrnoCode(error) === "ENOENT" || getErrnoCode(error) === "ENOTDIR") return false;
-          throw describeFenceProbeFailure(n, error);
+          throw describeFenceProbeFailure(label, error);
         },
       ))
     )
       return;
-    let trimmed = ((await checkGitMetadataFile(W, 4096)) ?? "").trim();
+    let trimmed = ((await checkGitMetadataFile(pointerPath, 4096)) ?? "").trim();
     if (trimmed === "") return;
-    let se = await y(K, trimmed);
-    if (se === null) return;
-    b.push(se);
-    R(G(se));
-    await N(se, X, X === ".jj" ? ["store"] : undefined);
+    let sharedReal = await realPathRelative(dir, trimmed);
+    if (sharedReal === null) return;
+    found.push(sharedReal);
+    addIfOutside(sharedRoot(sharedReal));
+    await probeStore(sharedReal, vcsName, vcsName === ".jj" ? ["store"] : undefined);
   };
-  let j = async (K) => {
-    let X = (await checkGitMetadataFile(K, 4096)) ?? "";
-    let match = /^gitdir:\s*(.+)$/m.exec(X);
+  let probeGitFile = async (gitFilePath) => {
+    let text = (await checkGitMetadataFile(gitFilePath, 4096)) ?? "";
+    let match = /^gitdir:\s*(.+)$/m.exec(text);
     if (!match?.[1]) return false;
-    let G = await y(path.dirname(K), match[1].trim());
-    if (G === null) return false;
-    b.push(G);
-    await S(G);
-    let trimmed = ((await checkGitMetadataFile(path.join(G, "commondir"), 4096)) ?? "").trim();
+    let gitDirReal = await realPathRelative(path_3.dirname(gitFilePath), match[1].trim());
+    if (gitDirReal === null) return false;
+    found.push(gitDirReal);
+    await probeGitDir(gitDirReal);
+    let trimmed = ((await checkGitMetadataFile(path_3.join(gitDirReal, "commondir"), 4096)) ?? "").trim();
     if (trimmed) {
-      let Z = await y(G, trimmed);
-      if (Z !== null) {
-        b.push(Z);
-        await S(Z);
-        R(path.dirname(Z));
+      let commonDir = await realPathRelative(gitDirReal, trimmed);
+      if (commonDir !== null) {
+        found.push(commonDir);
+        await probeGitDir(commonDir);
+        addIfOutside(path_3.dirname(commonDir));
       }
     }
-    return lstat(path.join(G, "HEAD")).then(
+    return lstat(path_3.join(gitDirReal, "HEAD")).then(
       () => true,
       (error) => {
         if (getErrnoCode(error) === "ENOENT") return false;
-        throw describeFenceProbeFailure(n, error);
+        throw describeFenceProbeFailure(label, error);
       },
     );
   };
-  for (let K = w; ;) {
-    let X = false;
-    for (let G of VCS_DIR_NAMES) {
-      let J = await h(path.join(K, G));
-      if (J === null) continue;
-      b.push(J);
-      await N(J, G);
-      if (G !== ".git") {
-        await x(J, G);
+  for (let dir = baseReal; ;) {
+    let foundRepo = false;
+    for (let vcsName of VCS_DIR_NAMES) {
+      let vcsPath = await realPathOf(path_3.join(dir, vcsName));
+      if (vcsPath === null) continue;
+      found.push(vcsPath);
+      await probeStore(vcsPath, vcsName);
+      if (vcsName !== ".git") {
+        await probeSharedStore(vcsPath, vcsName);
         continue;
       }
-      let Z = await lstat(J).catch((error) => {
+      let stats = await lstat(vcsPath).catch((error) => {
         if (getErrnoCode(error) === "ENOENT") return null;
-        throw describeFenceProbeFailure(n, error);
+        throw describeFenceProbeFailure(label, error);
       });
-      if (Z === null) continue;
-      if (Z.isFile()) X = (await j(J)) || X;
+      if (stats === null) continue;
+      if (stats.isFile()) foundRepo = (await probeGitFile(vcsPath)) || foundRepo;
       else {
-        await S(J);
-        X =
-          (await lstat(path.join(J, "HEAD")).then(
+        await probeGitDir(vcsPath);
+        foundRepo =
+          (await lstat(path_3.join(vcsPath, "HEAD")).then(
             () => true,
             (error) => {
               if (getErrnoCode(error) === "ENOENT") return false;
-              throw describeFenceProbeFailure(n, error);
+              throw describeFenceProbeFailure(label, error);
             },
-          )) || X;
+          )) || foundRepo;
       }
     }
-    if (X && K !== w) break;
-    let dir = path.dirname(K);
-    if (dir === K) break;
-    K = dir;
+    if (foundRepo && dir !== baseReal) break;
+    let dir_2 = path_3.dirname(dir);
+    if (dir_2 === dir) break;
+    dir = dir_2;
   }
-  return uniq(b);
+  return uniq(found);
 }
 //@ chunk-qchp9vrd.js:168518-169095 placement
-async function checkGitMetadataFile(e, n) {
-  let noFollow = await openNoFollow_2(e);
+async function checkGitMetadataFile(filePath, maxBytes) {
+  let noFollow = await openNoFollow_2(filePath);
   if (!noFollow.ok) {
     if (noFollow.error.kind === "absent") return null;
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `git metadata file "${path.basename(e)}" is not a plain readable file`,
+      `git metadata file "${path_3.basename(filePath)}" is not a plain readable file`,
       "eval metadata file unreadable or not plain",
     );
   }
-  let a = noFollow.value;
+  let handle = noFollow.value;
   try {
-    let stats = await a.stat();
+    let stats = await handle.stat();
     if (!stats.isFile())
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `git metadata file "${path.basename(e)}" is not a regular file`,
+        `git metadata file "${path_3.basename(filePath)}" is not a regular file`,
         "eval metadata file is not a regular file",
       );
-    if (stats.size > n)
+    if (stats.size > maxBytes)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `git metadata file "${path.basename(e)}" is larger than ${n} bytes`,
+        `git metadata file "${path_3.basename(filePath)}" is larger than ${maxBytes} bytes`,
         "eval metadata file too large",
       );
-    return (await a.readFile()).toString("utf8");
+    return (await handle.readFile()).toString("utf8");
   } finally {
-    await a.close();
+    await handle.close();
   }
 }
 //@ chunk-qchp9vrd.js:169095-169201 placement
@@ -917,23 +996,23 @@ function isRunArtifactFile(name) {
   return RUN_ARTIFACT_FILENAMES.includes(name.toLowerCase());
 }
 //@ chunk-qchp9vrd.js:169252-169534 placement
-async function looksLikeVcsTree(e) {
-  let n;
+async function looksLikeVcsTree(repoRoot) {
+  let entries;
   try {
-    n = await readdir(e, {
+    entries = await readdir(repoRoot, {
       withFileTypes: true,
     });
   } catch {
     return false;
   }
-  if (n.some((a) => isRunArtifactFile(a.name))) return true;
-  let r = 0;
-  for (let a of n) {
-    let joined = path.join(e, a.name);
-    if ((await getFileKind(a, joined, "other")) !== "dir" || ++r > 200) continue;
-    for (let h of RUN_ARTIFACT_FILENAMES)
+  if (entries.some((entry) => isRunArtifactFile(entry.name))) return true;
+  let dirCount = 0;
+  for (let entry of entries) {
+    let joined = path_3.join(repoRoot, entry.name);
+    if ((await getFileKind(entry, joined, "other")) !== "dir" || ++dirCount > 200) continue;
+    for (let fileName of RUN_ARTIFACT_FILENAMES)
       try {
-        await lstat(path.join(joined, h));
+        await lstat(path_3.join(joined, fileName));
         return true;
       } catch {}
   }
@@ -943,32 +1022,33 @@ async function looksLikeVcsTree(e) {
 /**
  * 判断路径段是否可用（校验通过）。
  */
-function isUsablePathSegment(e) {
+function isUsablePathSegment(segment) {
   try {
-    checkPathSegmentWhitespace(e, "probe");
+    checkPathSegmentWhitespace(segment, "probe");
     return true;
   } catch {
     return false;
   }
 }
 //@ chunk-qchp9vrd.js:169593-170327 placement
-function checkPathSegmentWhitespace(e, n) {
-  for (let a of e.split(/[\\/]/))
-    if (a !== a.trim())
+function checkPathSegmentWhitespace(path, label) {
+  for (let segment of path.split(/[\\/]/))
+    if (segment !== segment.trim())
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${n} directory name "${formatGuardValueJson(a)}" starts or ends with whitespace, which cannot be scoped safely in a permission rule \u2014 rename it`,
+        `${label} directory name "${formatGuardValueJson(segment)}" starts or ends with whitespace, which cannot be scoped safely in a permission rule \u2014 rename it`,
         "eval path segment has edge whitespace",
       );
-  let r = getPlatform() === "windows" ? e.replaceAll("\\", "/") : e;
-  if (r.startsWith("//"))
+  let normalizedPath = getPlatform() === "windows" ? path.replaceAll("\\", "/") : path;
+  if (normalizedPath.startsWith("//"))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${n} is on a network (UNC) path, which cannot be scoped \u2014 run the evaluation from a local checkout`,
+      `${label} is on a network (UNC) path, which cannot be scoped \u2014 run the evaluation from a local checkout`,
       "eval path is UNC",
     );
-  if (RULE_META_CHARS_RE.test(r)) {
-    let a = r.split("/").find((s) => RULE_META_CHARS_RE.test(s)) ?? "";
+  if (RULE_META_CHARS_RE.test(normalizedPath)) {
+    let offendingSegment =
+      normalizedPath.split("/").find((segment) => RULE_META_CHARS_RE.test(segment)) ?? "";
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${n} directory name "${formatGuardValueJson(a)}" contains a character that cannot be scoped safely in a permission rule (one of ( ) [ ] { } * ? ! # or a backslash) \u2014 rename it`,
+      `${label} directory name "${formatGuardValueJson(offendingSegment)}" contains a character that cannot be scoped safely in a permission rule (one of ( ) [ ] { } * ? ! # or a backslash) \u2014 rename it`,
       "eval path unsafe for permission rule",
     );
   }
@@ -1068,7 +1148,7 @@ var PROXY_ENV_VARS_EXTRA = uniq([
   "NPM_CONFIG_HTTPS_PROXY",
   "NPM_CONFIG_HTTP_PROXY",
   "YARN_PROXY",
-  ...PROXY_ENV_VARS_2.filter((e) => e !== "JAVA_TOOL_OPTIONS"),
+  ...PROXY_ENV_VARS_2.filter((name) => name !== "JAVA_TOOL_OPTIONS"),
 ]);
 var NETWORK_FS_NAMES = new Set([
   "drvfs",
@@ -1089,41 +1169,45 @@ var NETWORK_FS_NAMES = new Set([
 /**
  * 解析 /proc/mounts 文本，列出网络/远程文件系统、FUSE、WSL drvfs 与 UNC 来源的挂载点（解码八进制转义）。
  */
-function parseNetworkMounts(e) {
-  let n = [];
-  for (let line of e.split(`
+function parseNetworkMounts(mountTable) {
+  let mounts = [];
+  for (let line of mountTable.split(`
 `)) {
-    let [a, s, h, w] = line.split(" ");
-    if (s === undefined || h === undefined || !path.posix.isAbsolute(s)) continue;
-    let b = firstLineOf(h, ".");
+    let [device, mountPoint, fsType, mountOptions] = line.split(" ");
+    if (mountPoint === undefined || fsType === undefined || !path_3.posix.isAbsolute(mountPoint)) continue;
+    let baseFsType = firstLineOf(fsType, ".");
     if (
-      NETWORK_FS_NAMES.has(h) ||
-      NETWORK_FS_NAMES.has(b) ||
-      b === "fuse" ||
-      /^[A-Za-z]:/.test(a ?? "") ||
-      /^(\\\\|\/\/)/.test(a ?? "") ||
-      /^[^/\s]+:\//.test(a ?? "") ||
-      /(^|,)aname=drvfs/.test(w ?? "")
+      NETWORK_FS_NAMES.has(fsType) ||
+      NETWORK_FS_NAMES.has(baseFsType) ||
+      baseFsType === "fuse" ||
+      /^[A-Za-z]:/.test(device ?? "") ||
+      /^(\\\\|\/\/)/.test(device ?? "") ||
+      /^[^/\s]+:\//.test(device ?? "") ||
+      /(^|,)aname=drvfs/.test(mountOptions ?? "")
     )
-      n.push(s.replace(/\\([0-7]{3})/g, (y, R) => String.fromCharCode(parseInt(R, 8))));
+      mounts.push(
+        mountPoint.replace(/\\([0-7]{3})/g, (octalMatch, octalDigits) =>
+          String.fromCharCode(parseInt(octalDigits, 8)),
+        ),
+      );
   }
-  return uniq(n);
+  return uniq(mounts);
 }
 //@ chunk-qchp9vrd.js:172633-173070 placement
-async function detectWslWindowsMounts(e) {
-  let n = (s) => {
+async function detectWslWindowsMounts(mountsText) {
+  let refuse = (reason) => {
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `A shell tool was granted, but ${s}, so the Windows side could not be put out of the sandboxed shell's reach \u2014 the run was refused.`,
+      `A shell tool was granted, but ${reason}, so the Windows side could not be put out of the sandboxed shell's reach \u2014 the run was refused.`,
       "eval: WSL Windows-side mounts undetermined",
     );
   };
-  let r =
-    e ??
+  let text =
+    mountsText ??
     (await readFile("/proc/mounts", "utf8").catch(() =>
-      n("the WSL mount table (/proc/mounts) cannot be read"),
+      refuse("the WSL mount table (/proc/mounts) cannot be read"),
     ));
-  let networkMounts = parseNetworkMounts(r);
-  if (networkMounts.length === 0) n("no Windows filesystem mount was recognized in the WSL mount table");
+  let networkMounts = parseNetworkMounts(text);
+  if (networkMounts.length === 0) refuse("no Windows filesystem mount was recognized in the WSL mount table");
   return networkMounts;
 }
 //@ chunk-qchp9vrd.js:173070-173185 placement
@@ -1132,7 +1216,7 @@ async function detectWslWindowsMounts(e) {
  */
 function getXdgConfigHome() {
   let trimmed = process.env.XDG_CONFIG_HOME?.trim();
-  return trimmed && path.isAbsolute(trimmed) ? trimmed : path.join(os_2.homedir(), ".config");
+  return trimmed && path_3.isAbsolute(trimmed) ? trimmed : path_3.join(os_2.homedir(), ".config");
 }
 //@ chunk-qchp9vrd.js:173185-173597 placement
 /**
@@ -1165,95 +1249,100 @@ var CONFIG_DIR_ENV_VARS = new Set([
 /**
  * 判断字符串是否含通配符。
  */
-function hasGlobChars(e) {
-  return /[*?[\]]/.test(e);
+function hasGlobChars(path) {
+  return /[*?[\]]/.test(path);
 }
 //@ chunk-qchp9vrd.js:173636-173675 placement
 /**
  * 判断是否为文件系统根目录。
  */
-function isRootDir(e) {
-  return path.dirname(e) === e;
+function isRootDir(path) {
+  return path_3.dirname(path) === path;
 }
 //@ chunk-qchp9vrd.js:173675-173726 placement
 /**
  * 取父目录（已是根时原样）。
  */
-function withDirname(e) {
-  let dir = path.dirname(e);
-  return isRootDir(dir) ? e : dir;
+function withDirname(path) {
+  let path_2 = path_3.dirname(path);
+  return isRootDir(path_2) ? path : path_2;
 }
 //@ chunk-qchp9vrd.js:173726-173843 placement
 /**
  * 在路径列表中补上其真实路径对应的目录（去重）。
  */
-async function withPathDirectories(e) {
-  let n = await probePathDirectories(Promise.all(e.map((r) => realpath(r).catch(() => r))), "a directory");
-  return uniq([...e, ...n]);
+async function withPathDirectories(paths) {
+  let realPaths = await probePathDirectories(
+    Promise.all(paths.map((path) => realpath(path).catch(() => path))),
+    "a directory",
+  );
+  return uniq([...paths, ...realPaths]);
 }
 //@ chunk-qchp9vrd.js:173843-173889 placement
 /**
  * 按平台转换沙箱规则路径。
  */
-function toSandboxPathForPlatform(e) {
-  return getPlatform() === "windows" ? e : toSandboxRulePath(e);
+function toSandboxPathForPlatform(path) {
+  return getPlatform() === "windows" ? path : toSandboxRulePath(path);
 }
 //@ chunk-qchp9vrd.js:173889-174088 placement
 /**
  * 把文件路径转换为沙箱规则路径格式（Windows 盘符转 //c/...，其他前缀 /）。
  */
-function toSandboxRulePath(e) {
-  let n = getPlatform() === "windows" ? e.replaceAll("\\", "/") : e;
-  let match = /^([A-Za-z]):\//.exec(n);
+function toSandboxRulePath(path) {
+  let slashed = getPlatform() === "windows" ? path.replaceAll("\\", "/") : path;
+  let match = /^([A-Za-z]):\//.exec(slashed);
   if (match) {
-    let [a, s = ""] = match;
-    return `//${s.toLowerCase()}/${n.slice(a.length)}`;
+    let [wholeMatch, driveLetter = ""] = match;
+    return `//${driveLetter.toLowerCase()}/${slashed.slice(wholeMatch.length)}`;
   }
-  return `/${n.startsWith("/") ? n : `/${n}`}`;
+  return `/${slashed.startsWith("/") ? slashed : `/${slashed}`}`;
 }
 //@ chunk-qchp9vrd.js:179573-179930 placement
 /**
  * 解析用例引用的文件路径，要求经链接解析后仍位于用例目录或被测插件内，且是单链接普通文件，否则抛出。
  */
-async function resolveCaseFileInsideSuite(case_, n, r) {
-  let a = await checkCaseInsideRoot(case_, n);
-  let suiteRealRoots = await getSuiteRealRoots(case_);
-  let h = await lstat(a).catch(() => null);
+async function resolveCaseFileInsideSuite(evalCase, relativePath, fieldName) {
+  let resolved = await checkCaseInsideRoot(evalCase, relativePath);
+  let suiteRealRoots = await getSuiteRealRoots(evalCase);
+  let stats = await lstat(resolved).catch(() => null);
   if (
-    !suiteRealRoots.some((suiteRealRoot) => toEvalPathError(suiteRealRoot, a)) ||
-    h === null ||
-    !h.isFile() ||
-    h.nlink > 1
+    !suiteRealRoots.some((suiteRealRoot) => toEvalPathError(suiteRealRoot, resolved)) ||
+    stats === null ||
+    !stats.isFile() ||
+    stats.nlink > 1
   )
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `case "${case_.name}": ${r} "${n}" resolves (through a link) outside the case directory and the plugin under test, or is not a plain single-link file`,
+      `case "${evalCase.name}": ${fieldName} "${relativePath}" resolves (through a link) outside the case directory and the plugin under test, or is not a plain single-link file`,
       "eval case file escapes suite via link",
     );
-  return a;
+  return resolved;
 }
 //@ chunk-qchp9vrd.js:179930-180037 placement
 /**
  * 获取评测用例目录与被测插件目录的真实路径。
  */
-async function getSuiteRealRoots(e) {
-  return Promise.all([e.caseDir, ...e.pluginDirsUnderTest].map((n) => realpath(n).catch(() => n)));
+async function getSuiteRealRoots(evalCase) {
+  return Promise.all(
+    [evalCase.caseDir, ...evalCase.pluginDirsUnderTest].map((dir) => realpath(dir).catch(() => dir)),
+  );
 }
 //@ chunk-qchp9vrd.js:180037-180119 placement
 /**
  * 检查用例路径是否在根内。
  */
-async function checkCaseInsideRoot(e, n) {
-  return checkCasePathInsideRoot(e.caseDir, n, `case "${e.name}"`, "case directory");
+async function checkCaseInsideRoot(evalCase, relativePath) {
+  return checkCasePathInsideRoot(evalCase.caseDir, relativePath, `case "${evalCase.name}"`, "case directory");
 }
 //@ chunk-qchp9vrd.js:180119-180724 placement
-async function checkCasePathInsideRoot(e, n, r, a) {
-  await checkRepoAuthoredPath(e, n, r);
-  let resolved = path.resolve(e, n);
-  let h = await realpath(e).catch(() => path.resolve(e));
-  let resolved_2 = path.resolve(h, n);
-  if (resolved_2 !== h && !toEvalPathError(h, resolved_2))
+async function checkCasePathInsideRoot(root, relativePath, label, rootName) {
+  await checkRepoAuthoredPath(root, relativePath, label);
+  let resolved = path_3.resolve(root, relativePath);
+  let realRoot = await realpath(root).catch(() => path_3.resolve(root));
+  let resolved_2 = path_3.resolve(realRoot, relativePath);
+  if (resolved_2 !== realRoot && !toEvalPathError(realRoot, resolved_2))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${r}: path "${n}" escapes the ${a} (\`..\` or an absolute path) \u2014 it must name something inside it`,
+      `${label}: path "${relativePath}" escapes the ${rootName} (\`..\` or an absolute path) \u2014 it must name something inside it`,
       "case-authored path escapes its root",
     );
   try {
@@ -1263,7 +1352,7 @@ async function checkCasePathInsideRoot(e, n, r, a) {
     if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR")
       throw Object.assign(
         new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `${r}: path "${n}" does not exist`,
+          `${label}: path "${relativePath}" does not exist`,
           "case-authored path does not exist",
         ),
         {
@@ -1272,7 +1361,7 @@ async function checkCasePathInsideRoot(e, n, r, a) {
       );
     throw Object.assign(
       new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${r}: path "${n}" is unreadable (${errnoCode ?? "unknown error"})`,
+        `${label}: path "${relativePath}" is unreadable (${errnoCode ?? "unknown error"})`,
         "case-authored path unreadable",
       ),
       {
@@ -1290,10 +1379,10 @@ var EVAL_ENV_KEY_RE = /^EVAL_[A-Z0-9_]*$/;
 /**
  * 从环境变量对象中删除被禁止的变量（名单或正则匹配）。
  */
-function stripBlockedEnvVars(e) {
-  for (let key of Object.keys(e)) {
+function stripBlockedEnvVars(env) {
+  for (let key of Object.keys(env)) {
     let upper = key.toUpperCase();
-    if (STRIPPED_GIT_ENV_SET.has(upper) || regExp.test(key)) delete e[key];
+    if (STRIPPED_GIT_ENV_SET.has(upper) || regExp.test(key)) delete env[key];
   }
 }
 export {

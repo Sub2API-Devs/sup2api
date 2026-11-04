@@ -5,11 +5,11 @@
  * pieces: chunk-bwbq4xvm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_parse } from "./parse.js";
 
 //@ chunk-bwbq4xvm.js:11456-11583 cjs-fingerprint
-var require_prerelease = x(function (cjsExports, cjsModule) {
+var require_prerelease = __commonJS(function (cjsExports, cjsModule) {
   var parse = require_parse();
   var prerelease = (version, options) => {
     let parsed = parse(version, options);

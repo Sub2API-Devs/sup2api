@@ -18,36 +18,44 @@ var FAST_PATH_SUBCOMMANDS = new Set(["update", "upgrade", "doctor", "forward-hom
 /**
  * 插件相关快速路径的占位判定，当前恒返回 false。
  */
-function isPluginsFastPathArg(o) {
+function isPluginsFastPathArg(arg) {
   return false;
 }
 //@ chunk-y7y3wdde.js:283-352 placement
 /**
  * 参数里是否有 mcp serve
  */
-function isMcpServe(o) {
-  let index = o.indexOf("mcp");
-  return index !== -1 && o[index + 1] === "serve";
+function isMcpServe(args) {
+  let index = args.indexOf("mcp");
+  return index !== -1 && args[index + 1] === "serve";
 }
 //@ chunk-y7y3wdde.js:352-432 placement
 /**
  * agents 后跟 --json
  */
-function isAgentsJson(o) {
-  let index = o.indexOf("agents");
-  return index !== -1 && o.includes("--json", index + 1);
+function isAgentsJson(args) {
+  let index = args.indexOf("agents");
+  return index !== -1 && args.includes("--json", index + 1);
 }
 //@ chunk-y7y3wdde.js:432-515 placement
 /**
  * plugin/plugins 后跟 eval
  */
-function isPluginEval(o) {
-  return o.some((n, e) => (n === "plugin" || n === "plugins") && o[e + 1] === "eval");
+function isPluginEval(args) {
+  return args.some((arg, index) => (arg === "plugin" || arg === "plugins") && args[index + 1] === "eval");
 }
 //@ chunk-y7y3wdde.js:515-580 placement
 /**
  * remote-control 或 rc
  */
-function isRemoteControlCommand(o) {
-  return o.some((n) => n === "remote-control" || n === "rc");
+function isRemoteControlCommand(args) {
+  return args.some((arg) => arg === "remote-control" || arg === "rc");
 }
+export {
+  FAST_PATH_SUBCOMMANDS,
+  isAgentsJson,
+  isMcpServe,
+  isPluginEval,
+  isPluginsFastPathArg,
+  isRemoteControlCommand,
+};

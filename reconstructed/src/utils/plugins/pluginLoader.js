@@ -13,7 +13,7 @@ import { join, sep, relative, isAbsolute, parse, resolve as resolve_2, dirname, 
 import {
   realpath,
   lstat,
-  stat,
+  stat as stat_2,
   readdir,
   rm as rm_2,
   mkdir,
@@ -26,7 +26,7 @@ import { constants, createWriteStream } from "fs";
 import { createHash, randomBytes } from "crypto";
 import { Readable } from "stream";
 import { pipeline } from "stream/promises";
-import { xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import {
   escapeControlCharsForDisplay,
   truncateToLength,
@@ -336,7 +336,7 @@ import {
 } from "../telemetry/pluginTelemetry.js";
 import { logError } from "../log.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { getSettingsFieldSchema } from "../settings/types.js";
 import {
   tryUnwrapTextPayload,
@@ -397,7 +397,7 @@ import { getResolvedMarketplacesCacheDir, NOT_RECORDED } from "./marketplaceName
 import { formatSourceForDisplay } from "./marketplaceHelpers.js";
 import { parseRepoWithRef, samePluginSource, pinnedSha } from "./pluginSourceUrl.js";
 import { SETTING_SOURCES } from "../settings/constants.js";
-import { pluginLinkSchema, thinkbackStorageKey } from "./pluginLinks.js";
+import { PLUGIN_LINK_HEADER, thinkbackStorageKey } from "./pluginLinks.js";
 import { hasDotSegmentAlias } from "../pathClassification.js";
 import { isServerPluginId, getPluginAttribution } from "./pluginAttribution.js";
 import { getPluginRegistry } from "./pluginLoadState.js";
@@ -451,15 +451,17 @@ import {
   clearPluginCommandBase,
   setPluginCommandBase,
 } from "../settings/commandSyncNames.js";
-import { manifestRelativePath } from "./validate/validatePluginDirectory.js";
 import { _ } from "../../services/modelCatalog/publishedCatalog.js";
+import { manifestRelativePath } from "./validate/validatePluginDirectory.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:606211-606381 placement
-function mapStringsDeep(e, expandData) {
-  if (typeof e === "string") return expandData(e);
-  if (Array.isArray(e)) return e.map((r) => mapStringsDeep(r, expandData));
-  if (typeof e === "object" && e !== null) return xr(e, (r) => mapStringsDeep(r, expandData));
-  return e;
+function mapStringsDeep(value, expandData) {
+  if (typeof value === "string") return expandData(value);
+  if (Array.isArray(value)) return value.map((item) => mapStringsDeep(item, expandData));
+  if (typeof value === "object" && value !== null)
+    return import_mapValues(value, (value) => mapStringsDeep(value, expandData));
+  return value;
 }
 //@ chunk-e6aww6q8.js:606867-606884 placement
 var MAX_LISTED_ITEMS = 5;
@@ -468,31 +470,33 @@ var MAX_QUOTED_ITEM_LENGTH = 40;
 /**
  * truncateListItem：截断列表项并补省略号。
  */
-function truncateListItem(e) {
-  let n = escapeControlCharsForDisplay(e);
-  return n.length <= MAX_QUOTED_ITEM_LENGTH ? n : `${truncateToLength(n, MAX_QUOTED_ITEM_LENGTH)}...`;
+function truncateListItem(item) {
+  let escaped = escapeControlCharsForDisplay(item);
+  return escaped.length <= MAX_QUOTED_ITEM_LENGTH
+    ? escaped
+    : `${truncateToLength(escaped, MAX_QUOTED_ITEM_LENGTH)}...`;
 }
 //@ chunk-e6aww6q8.js:606953-606988 placement
 /**
  * quotedListItem：列表项加引号。
  */
-function quotedListItem(e) {
-  return `"${truncateListItem(e)}"`;
+function quotedListItem(item) {
+  return `"${truncateListItem(item)}"`;
 }
 //@ chunk-e6aww6q8.js:606988-607082 placement = formatFailureDetails (0.777)
 /**
  * 列表前 N 项用逗号连接，多余的写“and N more”。
  */
-function formatFailureDetails_2(e) {
-  let remaining = e.length - MAX_LISTED_ITEMS;
-  return e.slice(0, MAX_LISTED_ITEMS).join(", ") + (remaining > 0 ? ` and ${remaining} more` : "");
+function formatFailureDetails_2(items) {
+  let remaining = items.length - MAX_LISTED_ITEMS;
+  return items.slice(0, MAX_LISTED_ITEMS).join(", ") + (remaining > 0 ? ` and ${remaining} more` : "");
 }
 //@ chunk-e6aww6q8.js:724353-724409 fingerprint = getVersionedZipCachePath (1)
 /**
  * 路径是否以 .zip 结尾（忽略大小写）。
  */
-function isZipPathCaseInsensitive(e) {
-  return e.toLowerCase().endsWith(".zip");
+function isZipPathCaseInsensitive(path) {
+  return path.toLowerCase().endsWith(".zip");
 }
 //@ chunk-e6aww6q8.js:4324611-4324691 fingerprint = resolveGitSubdirUrl (0.712)
 /**
@@ -505,26 +509,26 @@ function githubRepoToCloneUrl(url) {
 /**
  * 构造 npm 命令的 --registry 参数；作用域包另加 --@scope:registry。
  */
-function buildNpmRegistryArgs(e, n) {
-  if (!e.registry) return [];
+function buildNpmRegistryArgs(options, packageName) {
+  if (!options.registry) return [];
   let packageSpec =
-    n !== undefined && n.startsWith("@") && isValidNpmPackageNameLoose(n)
-      ? n.slice(0, n.indexOf("/"))
+    packageName !== undefined && packageName.startsWith("@") && isValidNpmPackageNameLoose(packageName)
+      ? packageName.slice(0, packageName.indexOf("/"))
       : undefined;
   return packageSpec === undefined
-    ? ["--registry", e.registry]
-    : ["--registry", e.registry, `--${packageSpec}:registry=${e.registry}`];
+    ? ["--registry", options.registry]
+    : ["--registry", options.registry, `--${packageSpec}:registry=${options.registry}`];
 }
 //@ chunk-e6aww6q8.js:4496936-4497084 placement = discoverSkillDirsForPaths (0.562)
 /**
  * skill 显示路径：project 作用域且在 .claude/skills 下显示为 ./ 相对路径，否则缩写主目录。
  */
-function displaySkillsDirPath(e) {
-  if (e.scope === "project") {
+function displaySkillsDirPath(plugin) {
+  if (plugin.scope === "project") {
     let skillDir = join(getOriginalCwd(), ".claude", "skills");
-    if (e.path.startsWith(skillDir + sep)) return "." + sep + relative(getOriginalCwd(), e.path);
+    if (plugin.path.startsWith(skillDir + sep)) return "." + sep + relative(getOriginalCwd(), plugin.path);
   }
-  return tildify(e.path);
+  return tildify(plugin.path);
 }
 //@ chunk-e6aww6q8.js:4497084-4497119 placement
 function pluginCacheDirPath() {
@@ -532,20 +536,22 @@ function pluginCacheDirPath() {
 }
 //@ chunk-e6aww6q8.js:4497119-4497210 placement
 function anchoredPluginCachePath() {
-  let e = pluginCacheDirPath();
-  return isAbsolute(e) && (sep === "/" || parse(e).root.length > 1)
-    ? resolve_2(e)
-    : resolve_2(getOriginalCwd(), e);
+  let cacheDir = pluginCacheDirPath();
+  return isAbsolute(cacheDir) && (sep === "/" || parse(cacheDir).root.length > 1)
+    ? resolve_2(cacheDir)
+    : resolve_2(getOriginalCwd(), cacheDir);
 }
 //@ chunk-e6aww6q8.js:4497210-4497267 placement
-function orphanMarkerCoordsV5(e, n) {
-  return isStorageV5Enabled() && n !== undefined ? parseVersionCachePath(e, anchoredPluginCachePath()) : null;
+function orphanMarkerCoordsV5(versionPath, storageV5) {
+  return isStorageV5Enabled() && storageV5 !== undefined
+    ? parseVersionCachePath(versionPath, anchoredPluginCachePath())
+    : null;
 }
 //@ chunk-e6aww6q8.js:4497267-4497344 placement
-function strictCacheAddressable(e) {
+function strictCacheAddressable(storageV5) {
   return (
     isStorageV5Enabled() &&
-    e !== undefined &&
+    storageV5 !== undefined &&
     parseVersionCachePath(join(anchoredPluginCachePath(), "_", "_", "_"), anchoredPluginCachePath()) !== null
   );
 }
@@ -554,32 +560,41 @@ async function versionParentContained(cachePath) {
   return (await versionParentState(cachePath)) === "real";
 }
 //@ chunk-e6aww6q8.js:4497395-4497558 placement
-function versionParentUnexaminableError(e, error) {
+function versionParentUnexaminableError(pluginId, error) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-    `Could not examine the plugin directory of ${e} (${errorMessage(error)}); retry the install.`,
+    `Could not examine the plugin directory of ${pluginId} (${errorMessage(error)}); retry the install.`,
     "plugin cache version parent could not be examined",
   );
 }
 //@ chunk-e6aww6q8.js:4497558-4497804 placement
-async function isPlainPluginParentDir(e) {
-  let n = anchoredPluginCachePath();
-  let r = relative(n, e);
-  let parts = r.split(sep);
-  if (!r || isAbsolute(r) || parts.length !== 2 || parts.some((w) => w === "" || w === "." || w === ".."))
+async function isPlainPluginParentDir(parentDir) {
+  let cacheRoot = anchoredPluginCachePath();
+  let relPath = relative(cacheRoot, parentDir);
+  let parts = relPath.split(sep);
+  if (
+    !relPath ||
+    isAbsolute(relPath) ||
+    parts.length !== 2 ||
+    parts.some((part) => part === "" || part === "." || part === "..")
+  )
     return false;
-  let [h, y] = parts;
-  if (h === undefined || y === undefined) return false;
-  let S = await realpath(n);
-  return (await isPlainDirectory(join(S, h))) && (await isPlainDirectory(join(S, h, y)));
+  let [marketplace, plugin] = parts;
+  if (marketplace === undefined || plugin === undefined) return false;
+  let realRoot = await realpath(cacheRoot);
+  return (
+    (await isPlainDirectory(join(realRoot, marketplace))) &&
+    (await isPlainDirectory(join(realRoot, marketplace, plugin)))
+  );
 }
 //@ chunk-e6aww6q8.js:4497804-4497999 placement
-async function isPlainDirectory(e) {
-  if ((await lstat(e)).isDirectory() && (await isSameFilesystem(dirname(e), basename(e)))) return true;
-  let r = await stat(e).catch((error) => {
+async function isPlainDirectory(dirPath) {
+  if ((await lstat(dirPath)).isDirectory() && (await isSameFilesystem(dirname(dirPath), basename(dirPath))))
+    return true;
+  let stat = await stat_2(dirPath).catch((error) => {
     if (isPathAbsent(error) || getErrnoCode(error) === "ELOOP") return null;
     throw error;
   });
-  return r !== null && r.isDirectory();
+  return stat !== null && stat.isDirectory();
 }
 //@ chunk-e6aww6q8.js:4497999-4498693 placement
 /**
@@ -597,96 +612,96 @@ var CONTAINMENT_FAILURE_MESSAGES = {
   "after a failed archive": "plugin cache version parent not contained after a failed archive",
 };
 //@ chunk-e6aww6q8.js:4498693-4499051 placement
-async function requireVersionParentContained(e, pluginId, version, s, h, y) {
-  if (y === undefined && (await versionParentState(e)) === "real") return;
-  let S = `Could not ${s} ${pluginId} ${version}: its plugin directory is not a directory (a dangling link, or a file wearing the marketplace or plugin folder name); make it a directory, or retry the install if it was being moved.`;
+async function requireVersionParentContained(cachePath, pluginId, version, verb, stage, state) {
+  if (state === undefined && (await versionParentState(cachePath)) === "real") return;
+  let message = `Could not ${verb} ${pluginId} ${version}: its plugin directory is not a directory (a dangling link, or a file wearing the marketplace or plugin folder name); make it a directory, or retry the install if it was being moved.`;
   throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-    S,
-    CONTAINMENT_FAILURE_MESSAGES[h] ?? "plugin cache version parent not contained",
+    message,
+    CONTAINMENT_FAILURE_MESSAGES[stage] ?? "plugin cache version parent not contained",
   );
 }
 //@ chunk-e6aww6q8.js:4499051-4499167 placement
-async function versionParentState(e) {
+async function versionParentState(cachePath) {
   try {
-    return (await isPlainPluginParentDir(dirname(e))) ? "real" : "refused";
+    return (await isPlainPluginParentDir(dirname(cachePath))) ? "real" : "refused";
   } catch (error) {
     if (isPathAbsent(error)) return "absent";
-    throw versionParentUnexaminableError(e, error);
+    throw versionParentUnexaminableError(cachePath, error);
   }
 }
 //@ chunk-e6aww6q8.js:4499167-4499324 placement
-function getPluginCachePath(cachePath, pluginId, version, s = "cache") {
+function getPluginCachePath(cachePath, pluginId, version, verb = "cache") {
   return versionPathOccupantError(
-    `Could not ${s} ${pluginId} ${version}: what occupies its cache path ${cachePath} could not be examined; retry the load or the install.`,
+    `Could not ${verb} ${pluginId} ${version}: what occupies its cache path ${cachePath} could not be examined; retry the load or the install.`,
   );
 }
 //@ chunk-e6aww6q8.js:4499324-4499869 placement
 /**
  * 缓存/归档路径上的残留链接删不掉时抛错。
  */
-async function removeStrayLinkOrThrow(e, n, r, s, h) {
-  if ((await removePathEntry(e).catch(() => "directory")) !== "directory") return;
-  if (h === "archive")
+async function removeStrayLinkOrThrow(linkPath, pluginId, version, verb, where) {
+  if ((await removePathEntry(linkPath).catch(() => "directory")) !== "directory") return;
+  if (where === "archive")
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Could not ${s} ${n} ${r}: a link sits at its archive path and could not be removed; remove that link from the plugin cache, then retry the install.`,
+      `Could not ${verb} ${pluginId} ${version}: a link sits at its archive path and could not be removed; remove that link from the plugin cache, then retry the install.`,
       "plugin cache stray link at the archive path not removable",
     );
   throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-    `Could not ${s} ${n} ${r}: a link sits at its cache path and could not be removed; remove that link from the plugin cache, then retry the install.`,
+    `Could not ${verb} ${pluginId} ${version}: a link sits at its cache path and could not be removed; remove that link from the plugin cache, then retry the install.`,
     "plugin cache stray link not removable before replace",
   );
 }
 //@ chunk-e6aww6q8.js:4499869-4500162 placement
-async function clearOccupantForReplace(cachePath, pluginId, version, s = "cache") {
-  switch (await classifyCacheEntry(cachePath)) {
+async function clearOccupantForReplace(linkPath, pluginId, version, verb = "cache") {
+  switch (await classifyCacheEntry(linkPath)) {
     case "absent":
       return "done";
     case "other":
       return "recurse";
     case "symlink":
-      await removeStrayLinkOrThrow(cachePath, pluginId, version, s, "cache");
+      await removeStrayLinkOrThrow(linkPath, pluginId, version, verb, "cache");
       logForDebugging(
-        `Plugin ${pluginId} version ${version}: removed a link at its cache path ${cachePath} as an entry before replacing it`,
+        `Plugin ${pluginId} version ${version}: removed a link at its cache path ${linkPath} as an entry before replacing it`,
       );
       return "done";
     default:
-      throw getPluginCachePath(cachePath, pluginId, version, s);
+      throw getPluginCachePath(linkPath, pluginId, version, verb);
   }
 }
 //@ chunk-e6aww6q8.js:4500162-4500507 placement
-async function strictArchivePresent(e, n, r, s) {
-  switch (await classifyCacheEntry(e)) {
+async function strictArchivePresent(archivePath, pluginId, version, assertParent) {
+  switch (await classifyCacheEntry(archivePath)) {
     case "absent":
       return false;
     case "other":
       return true;
     case "symlink":
-      await s();
-      await removeStrayLinkOrThrow(e, n, r, "cache", "archive");
+      await assertParent();
+      await removeStrayLinkOrThrow(archivePath, pluginId, version, "cache", "archive");
       logForDebugging(
-        `Plugin ${n} version ${r}: removed a link wearing its archive's name at ${e}; it is never served \u2014 the archive is rebuilt or the cached directory used`,
+        `Plugin ${pluginId} version ${version}: removed a link wearing its archive's name at ${archivePath}; it is never served \u2014 the archive is rebuilt or the cached directory used`,
       );
       return false;
     default:
-      throw getPluginCachePath(e, n, r);
+      throw getPluginCachePath(archivePath, pluginId, version);
   }
 }
 //@ chunk-e6aww6q8.js:4500507-4500596 placement
-async function isCacheDirReusable(e) {
+async function isCacheDirReusable(cachePath) {
   return (
-    (await isCachePathClean(e)) &&
-    (await dirHasPluginRoot(e)) &&
-    (await hasRealEntries(e, {
+    (await isCachePathClean(cachePath)) &&
+    (await dirHasPluginRoot(cachePath)) &&
+    (await hasRealEntries(cachePath, {
       whenUnreadable: false,
     }))
   );
 }
 //@ chunk-e6aww6q8.js:4500596-4500858 placement
 async function decideCachedVersionReuse(cachePath, pluginId, version, linkFarm, sourcePath) {
-  let y = await classifyCacheEntry(cachePath);
-  if (y === "absent") return "absent";
-  if (y === "unexaminable") throw getPluginCachePath(cachePath, pluginId, version);
-  if (y === "symlink") return (await isCacheDirReusable(cachePath)) ? "serve" : "republish";
+  let kind = await classifyCacheEntry(cachePath);
+  if (kind === "absent") return "absent";
+  if (kind === "unexaminable") throw getPluginCachePath(cachePath, pluginId, version);
+  if (kind === "symlink") return (await isCacheDirReusable(cachePath)) ? "serve" : "republish";
   return (
     linkFarm
       ? (await classifyLinkFarmReuse(cachePath, sourcePath)).reusable
@@ -698,12 +713,12 @@ async function decideCachedVersionReuse(cachePath, pluginId, version, linkFarm, 
     : "republish";
 }
 //@ chunk-e6aww6q8.js:4500858-4501029 placement
-async function isStagedTreeIntact(e) {
+async function isStagedTreeIntact(stagedPath) {
   try {
-    if (!(await lstat(e)).isDirectory()) return false;
-    let r = dirname(e);
-    let [s, h] = await Promise.all([realpath(e), realpath(r)]);
-    return s === join(h, basename(e)) && (await isPlainPluginParentDir(r));
+    if (!(await lstat(stagedPath)).isDirectory()) return false;
+    let parent = dirname(stagedPath);
+    let [realStaged, realParent] = await Promise.all([realpath(stagedPath), realpath(parent)]);
+    return realStaged === join(realParent, basename(stagedPath)) && (await isPlainPluginParentDir(parent));
   } catch {
     return false;
   }
@@ -712,14 +727,14 @@ async function isStagedTreeIntact(e) {
 /**
  * 暂存树被替换时按阶段（install/publish/archive）抛错。
  */
-async function assertStagedTreeIntact(e, pluginId, version, s) {
-  if (await isStagedTreeIntact(e)) return;
-  if (s === "install")
+async function assertStagedTreeIntact(stagedPath, pluginId, version, phase) {
+  if (await isStagedTreeIntact(stagedPath)) return;
+  if (phase === "install")
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `Could not install dependencies for ${pluginId} ${version}: its staged tree was replaced after the copy; retry the load or the install.`,
       "plugin cache staged tree swapped before dependency install",
     );
-  if (s === "publish")
+  if (phase === "publish")
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `Could not publish ${pluginId} ${version}: its staged tree was replaced before publishing; retry the load or the install.`,
       "plugin cache staged tree swapped before publishing",
@@ -732,11 +747,19 @@ async function assertStagedTreeIntact(e, pluginId, version, s) {
 //@ chunk-e6aww6q8.js:4501662-4501821 placement
 async function isCachePathClean(cachePath) {
   try {
-    let [n, r] = await Promise.all([realpath(anchoredPluginCachePath()), realpath(dirname(cachePath))]);
+    let [rootReal, parentReal] = await Promise.all([
+      realpath(anchoredPluginCachePath()),
+      realpath(dirname(cachePath)),
+    ]);
     return (
-      (await resolveLinkChainFromParent(join(r, basename(cachePath)), createLinkTargetScreen(n), undefined, {
-        trustedRoot: n,
-      })) === "clean"
+      (await resolveLinkChainFromParent(
+        join(parentReal, basename(cachePath)),
+        createLinkTargetScreen(rootReal),
+        undefined,
+        {
+          trustedRoot: rootReal,
+        },
+      )) === "clean"
     );
   } catch {
     return false;
@@ -746,21 +769,30 @@ async function isCachePathClean(cachePath) {
 /**
  * 版本目录是缓存下的普通目录时返回其真实路径。
  */
-async function resolvePlainVersionDir(e) {
-  let n = relative(anchoredPluginCachePath(), e);
-  let parts = n.split(sep);
-  if (!n || isAbsolute(n) || parts.length !== 3 || parts.some((s) => s === "" || s === "." || s === ".."))
+async function resolvePlainVersionDir(versionDir) {
+  let relPath = relative(anchoredPluginCachePath(), versionDir);
+  let parts = relPath.split(sep);
+  if (
+    !relPath ||
+    isAbsolute(relPath) ||
+    parts.length !== 3 ||
+    parts.some((part) => part === "" || part === "." || part === "..")
+  )
     return null;
   try {
-    if (!(await isPlainPluginParentDir(dirname(e)))) return null;
-    if (!(await lstat(e)).isDirectory() || !(await isSameFilesystem(dirname(e), basename(e)))) return null;
-    let [h, y, S] = await Promise.all([
-      realpath(e),
-      realpath(dirname(e)),
+    if (!(await isPlainPluginParentDir(dirname(versionDir)))) return null;
+    if (
+      !(await lstat(versionDir)).isDirectory() ||
+      !(await isSameFilesystem(dirname(versionDir), basename(versionDir)))
+    )
+      return null;
+    let [realVersion, realParent, rootReal] = await Promise.all([
+      realpath(versionDir),
+      realpath(dirname(versionDir)),
       realpath(anchoredPluginCachePath()),
     ]);
-    if (h === S || isPathUnder(S, h)) return null;
-    return h === join(y, basename(e)) ? h : null;
+    if (realVersion === rootReal || isPathUnder(rootReal, realVersion)) return null;
+    return realVersion === join(realParent, basename(versionDir)) ? realVersion : null;
   } catch (error) {
     if (isPathAbsent(error)) return null;
     throw error;
@@ -770,77 +802,77 @@ async function resolvePlainVersionDir(e) {
 /**
  * 严格安装步骤前确认版本目录仍是普通目录。
  */
-async function requirePlainVersionDir(e, n) {
-  let r;
+async function requirePlainVersionDir(versionDir, phase) {
+  let resolved;
   try {
-    r = await resolvePlainVersionDir(e);
+    resolved = await resolvePlainVersionDir(versionDir);
   } catch (error) {
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Could not prepare ${e} for its ${n} (it could not be examined: ${errorMessage(error)}); retry the install.`,
+      `Could not prepare ${versionDir} for its ${phase} (it could not be examined: ${errorMessage(error)}); retry the install.`,
       "plugin cache version directory could not be examined before a strict install step",
     );
   }
-  if (r === null && parseVersionCachePath(e, anchoredPluginCachePath()) !== null)
+  if (resolved === null && parseVersionCachePath(versionDir, anchoredPluginCachePath()) !== null)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Could not prepare ${e} for its ${n}: it is no longer a plain version directory under its marketplace and plugin directories inside the plugin cache (it was removed or replaced after the copy); retry the install.`,
+      `Could not prepare ${versionDir} for its ${phase}: it is no longer a plain version directory under its marketplace and plugin directories inside the plugin cache (it was removed or replaced after the copy); retry the install.`,
       "plugin cache version directory replaced before a strict install step",
     );
-  return r;
+  return resolved;
 }
 //@ chunk-e6aww6q8.js:4502802-4503547 placement
-async function unvouchBeforeDependencyStep(e, n, { staged: r = false } = {}) {
-  if (!strictCacheAddressable(n)) return;
-  if ((await requirePlainVersionDir(e, "dependency install")) === null) {
+async function unvouchBeforeDependencyStep(versionDir, storageV5, { staged = false } = {}) {
+  if (!strictCacheAddressable(storageV5)) return;
+  if ((await requirePlainVersionDir(versionDir, "dependency install")) === null) {
     logForDebugging(
-      `Plugin cache: ${e} is not a version directory inside the plugin cache; its dependency step runs without a liveness record or vouch withdrawal`,
+      `Plugin cache: ${versionDir} is not a version directory inside the plugin cache; its dependency step runs without a liveness record or vouch withdrawal`,
       {
         level: "warn",
       },
     );
     return;
   }
-  if (!r && !(await writeInUseMarker(e, n)))
+  if (!staged && !(await writeInUseMarker(versionDir, storageV5)))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Could not prepare ${e} for its dependency install (this session could not be recorded as its user); retry the install.`,
+      `Could not prepare ${versionDir} for its dependency install (this session could not be recorded as its user); retry the install.`,
       "plugin cache liveness record could not be written before dependency install",
     );
-  if (await withdrawScreenMarker(e)) return;
+  if (await withdrawScreenMarker(versionDir)) return;
   throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-    `Could not prepare ${e} for its dependency install (the conversion marker could not be withdrawn); retry the install.`,
+    `Could not prepare ${versionDir} for its dependency install (the conversion marker could not be withdrawn); retry the install.`,
     "plugin cache conversion marker could not be withdrawn before dependency install",
   );
 }
 //@ chunk-e6aww6q8.js:4503547-4504323 placement
-async function unmarkBeforeArchiving(e, n, { staged: r = false } = {}) {
-  if (!strictCacheAddressable(n) || r) return true;
-  let s = await resolvePlainVersionDir(e).catch(() => null);
-  if (s === null) {
+async function unmarkBeforeArchiving(versionDir, storageV5, { staged = false } = {}) {
+  if (!strictCacheAddressable(storageV5) || staged) return true;
+  let resolved = await resolvePlainVersionDir(versionDir).catch(() => null);
+  if (resolved === null) {
     logForDebugging(
-      `Plugin cache: ${e} is left as a directory this time (fully usable): it is not a version directory inside the plugin cache`,
+      `Plugin cache: ${versionDir} is left as a directory this time (fully usable): it is not a version directory inside the plugin cache`,
       {
         level: "warn",
       },
     );
     return false;
   }
-  if (await isPluginVersionInUseSafe(e, n)) {
+  if (await isPluginVersionInUseSafe(versionDir, storageV5)) {
     logForDebugging(
-      `Plugin cache: ${e} is left as a directory this time (fully usable): another session is using it`,
+      `Plugin cache: ${versionDir} is left as a directory this time (fully usable): another session is using it`,
     );
     return false;
   }
-  if ((await realpath(e).catch(() => null)) !== s) {
+  if ((await realpath(versionDir).catch(() => null)) !== resolved) {
     logForDebugging(
-      `Plugin cache: ${e} is left as a directory this time: it moved while its users were probed`,
+      `Plugin cache: ${versionDir} is left as a directory this time: it moved while its users were probed`,
       {
         level: "warn",
       },
     );
     return false;
   }
-  if (!(await removeInUseMarker(e, n))) {
+  if (!(await removeInUseMarker(versionDir, storageV5))) {
     logForDebugging(
-      `Plugin cache: ${e} is left as a directory this time (fully usable): this session's liveness record in it could not be withdrawn \u2014 it is never archived with one inside`,
+      `Plugin cache: ${versionDir} is left as a directory this time (fully usable): this session's liveness record in it could not be withdrawn \u2014 it is never archived with one inside`,
       {
         level: "warn",
       },
@@ -850,77 +882,84 @@ async function unmarkBeforeArchiving(e, n, { staged: r = false } = {}) {
   return true;
 }
 //@ chunk-e6aww6q8.js:4504323-4504804 placement
-async function removeFreshCopyUnlessInUse(e, n) {
-  if (!strictCacheAddressable(n)) return;
-  let r = await resolvePlainVersionDir(e).catch(() => null);
-  if (r === null) return;
-  let s = await realpath(anchoredPluginCachePath()).catch(() => null);
-  if (s === null || r === s || !isPathUnder(r, s)) {
-    logForDebugging(`Cache at ${e} left in place after the failed install: it lies outside the plugin cache`);
-    return;
-  }
-  if ((await isPluginVersionInUseSafe(e, n)) || (await realpath(e).catch(() => null)) !== r) {
+async function removeFreshCopyUnlessInUse(versionDir, storageV5) {
+  if (!strictCacheAddressable(storageV5)) return;
+  let resolved = await resolvePlainVersionDir(versionDir).catch(() => null);
+  if (resolved === null) return;
+  let rootReal = await realpath(anchoredPluginCachePath()).catch(() => null);
+  if (rootReal === null || resolved === rootReal || !isPathUnder(resolved, rootReal)) {
     logForDebugging(
-      `Cache at ${e} left in place after the failed install: another session is using it, liveness could not be determined, or it moved`,
+      `Cache at ${versionDir} left in place after the failed install: it lies outside the plugin cache`,
     );
     return;
   }
-  await removeDirectoryTreeNoFollow_2(r).catch(() => {});
+  if (
+    (await isPluginVersionInUseSafe(versionDir, storageV5)) ||
+    (await realpath(versionDir).catch(() => null)) !== resolved
+  ) {
+    logForDebugging(
+      `Cache at ${versionDir} left in place after the failed install: another session is using it, liveness could not be determined, or it moved`,
+    );
+    return;
+  }
+  await removeDirectoryTreeNoFollow_2(resolved).catch(() => {});
 }
 //@ chunk-e6aww6q8.js:4504804-4505997 placement
-async function rescreenCachedPluginTree(e, n) {
-  if (!strictCacheAddressable(n)) return;
-  let r = await requirePlainVersionDir(e, "post-install screen");
-  if (r === null) {
+async function rescreenCachedPluginTree(versionDir, storageV5) {
+  if (!strictCacheAddressable(storageV5)) return;
+  let resolved = await requirePlainVersionDir(versionDir, "post-install screen");
+  if (resolved === null) {
     logForDebugging(
-      `Plugin cache: post-install screen of ${e} not run: it is not a version directory inside the plugin cache`,
+      `Plugin cache: post-install screen of ${versionDir} not run: it is not a version directory inside the plugin cache`,
       {
         level: "warn",
       },
     );
     return;
   }
-  if (!(await withdrawScreenMarker(e)))
+  if (!(await withdrawScreenMarker(versionDir)))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Could not re-screen ${e} after its dependency install (the conversion marker could not be withdrawn); retry the install.`,
+      `Could not re-screen ${versionDir} after its dependency install (the conversion marker could not be withdrawn); retry the install.`,
       "plugin cache conversion marker could not be withdrawn before the post-install screen",
     );
-  if (await isPluginVersionInUseSafe(e, n)) {
+  if (await isPluginVersionInUseSafe(versionDir, storageV5)) {
     logForDebugging(
-      `Plugin cache: post-install screen of ${e} left to a later load: another session is using it (or liveness could not be determined)`,
+      `Plugin cache: post-install screen of ${versionDir} left to a later load: another session is using it (or liveness could not be determined)`,
     );
     return;
   }
-  if ((await realpath(e).catch(() => null)) !== r) {
+  if ((await realpath(versionDir).catch(() => null)) !== resolved) {
     logForDebugging(
-      `Plugin cache: post-install screen of ${e} left to a later load: the directory moved while its liveness was probed`,
+      `Plugin cache: post-install screen of ${versionDir} left to a later load: the directory moved while its liveness was probed`,
     );
     return;
   }
-  let h = await materializePluginLinks(e, copyDir, {
+  let screenResult = await materializePluginLinks(versionDir, copyDir, {
     mode: "migrate",
   }).catch((error) => {
-    logForDebugging(`Plugin cache: post-install screen of ${e} failed: ${errorMessage(error)}`, {
+    logForDebugging(`Plugin cache: post-install screen of ${versionDir} failed: ${errorMessage(error)}`, {
       level: "warn",
     });
     return null;
   });
-  if ((h === null || !h.vouched) && !(await withdrawScreenMarker(e)))
+  if ((screenResult === null || !screenResult.vouched) && !(await withdrawScreenMarker(versionDir)))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Could not vouch for ${e} after its dependency install, and the conversion marker could not be withdrawn; retry the install.`,
+      `Could not vouch for ${versionDir} after its dependency install, and the conversion marker could not be withdrawn; retry the install.`,
       "plugin cache conversion marker could not be withdrawn after the post-install screen",
     );
 }
 //@ chunk-e6aww6q8.js:4505997-4506216 placement
-async function materializeCachedLinks(e, storageV5, linkFarm = false) {
+async function materializeCachedLinks(versionDir, storageV5, linkFarm = false) {
   if (!strictCacheAddressable(storageV5)) return;
   if (linkFarm) {
-    logForDebugging(`materializeLinks: ${e}: link-mode command source (used in place), not converted`);
+    logForDebugging(
+      `materializeLinks: ${versionDir}: link-mode command source (used in place), not converted`,
+    );
     return;
   }
-  await materializeVersionLinksOnce(e, anchoredPluginCachePath(), copyDir, storageV5, () =>
+  await materializeVersionLinksOnce(versionDir, anchoredPluginCachePath(), copyDir, storageV5, () =>
     isPluginVersionInUse(
-      e,
+      versionDir,
       {
         refusedCountsAsLive: false,
       },
@@ -929,23 +968,28 @@ async function materializeCachedLinks(e, storageV5, linkFarm = false) {
   );
 }
 //@ chunk-e6aww6q8.js:4506216-4506326 placement
-function getLegacyCachePath(e, n, r) {
-  let replaced = r.replace(/[^a-zA-Z0-9\-_.]/g, "-");
+function getLegacyCachePath(baseDir, pluginId, version) {
+  let replaced = version.replace(/[^a-zA-Z0-9\-_.]/g, "-");
   if (replaced === "." || replaced === "..") replaced = "-";
-  return join(getPluginCacheDirIn(e, n), replaced);
+  return join(getPluginCacheDirIn(baseDir, pluginId), replaced);
 }
 //@ chunk-e6aww6q8.js:4506326-4506435 placement
-function getPluginCacheDirIn(e, n) {
-  let { name: r, marketplace } = parsePluginIdentifier(n);
+function getPluginCacheDirIn(baseDir, pluginId) {
+  let { name, marketplace } = parsePluginIdentifier(pluginId);
   return join(
-    e,
+    baseDir,
     PLUGIN_CACHE_DIRNAME,
     sanitizePluginId(marketplace || "unknown"),
-    marketplace === pluginManifestPathSchemas ? escapeNpmPackageForDir(r) : sanitizePluginId(r || n),
+    marketplace === pluginManifestPathSchemas
+      ? escapeNpmPackageForDir(name)
+      : sanitizePluginId(name || pluginId),
   );
 }
 //@ chunk-e6aww6q8.js:4506435-4506455 placement
-var weakSet_7 = new WeakSet();
+var weakSet_7; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4506435", () => {
+  weakSet_7 = new WeakSet();
+});
 //@ chunk-e6aww6q8.js:4506455-4506493 placement = getVersionedCachePath (0)
 /**
  * 版本化缓存目录 <plugins>/cache/<marketplace>/<plugin>/<version>。
@@ -957,12 +1001,12 @@ function getVersionedCachePath(pluginId, version) {
 /**
  * 通过 storageV5 存储后端读取插件缓存内的文件，返回 {outcome:"found",content}/"absent"/"error"；路径不在插件缓存内返回 null。
  */
-async function readFileViaStorageBackend(e, n) {
-  let r = cacheStorageKeyOrFallback(n, anchoredPluginCachePath());
-  if (r === null) return null;
-  let s = await e.read([r]);
-  if (!s.ok) {
-    let error = s.error;
+async function readFileViaStorageBackend(storageV5, fullPath) {
+  let storageKey = cacheStorageKeyOrFallback(fullPath, anchoredPluginCachePath());
+  if (storageKey === null) return null;
+  let readResult = await storageV5.read([storageKey]);
+  if (!readResult.ok) {
+    let error = readResult.error;
     return {
       outcome: "error",
       detail: formatStorageError(error),
@@ -970,55 +1014,60 @@ async function readFileViaStorageBackend(e, n) {
         "telemetryCode" in error && typeof error.telemetryCode === "string" ? error.telemetryCode : undefined,
     };
   }
-  let h = s.value.items[0];
-  if (!h?.found)
+  let item = readResult.value.items[0];
+  if (!item?.found)
     return {
       outcome: "absent",
     };
   return {
     outcome: "found",
-    content: Buffer.from(h.value).toString("utf-8"),
+    content: Buffer.from(item.value).toString("utf-8"),
   };
 }
 //@ chunk-e6aww6q8.js:4506868-4507100 placement
-async function isCachePathPresentInStorage(e, n) {
-  let r = cacheStorageKeyOrFallback(n, anchoredPluginCachePath());
-  if (r === null) return null;
-  let s = await e.statMeta(r);
-  if (s.ok) return true;
+async function isCachePathPresentInStorage(storageV5, fullPath) {
+  let storageKey = cacheStorageKeyOrFallback(fullPath, anchoredPluginCachePath());
+  if (storageKey === null) return null;
+  let statResult = await storageV5.statMeta(storageKey);
+  if (statResult.ok) return true;
   let telemetryCode =
-    "telemetryCode" in s.error && typeof s.error.telemetryCode === "string"
-      ? s.error.telemetryCode
+    "telemetryCode" in statResult.error && typeof statResult.error.telemetryCode === "string"
+      ? statResult.error.telemetryCode
       : undefined;
   return isNonRegularError(telemetryCode) ? null : false;
 }
 //@ chunk-e6aww6q8.js:4507100-4507190 placement
-async function isCachePresent(e, fullPath) {
-  let r = isStorageV5Enabled() && e !== undefined ? await isCachePathPresentInStorage(e, fullPath) : null;
-  return r !== null ? r : pathExists(fullPath);
+async function isCachePresent(storageV5, fullPath) {
+  let result =
+    isStorageV5Enabled() && storageV5 !== undefined
+      ? await isCachePathPresentInStorage(storageV5, fullPath)
+      : null;
+  return result !== null ? result : pathExists(fullPath);
 }
 //@ chunk-e6aww6q8.js:4507190-4507585 placement
 /**
  * 检查插件组件路径：present/absent/{unknown, errno}。
  */
-async function probeComponentPath(e, n) {
-  let r =
-    isStorageV5Enabled() && e !== undefined ? cacheStorageKeyOrFallback(n, anchoredPluginCachePath()) : null;
-  if (e !== undefined && r !== null) {
-    let s = await e.statMeta(r);
-    if (s.ok) return "present";
-    let h = storageErrorCode(s.error);
-    if (s.error.code === "NotFound" || h === "ENOENT" || h === "ENOTDIR") return "absent";
-    if (!isNonRegularError(h))
+async function probeComponentPath(storageV5, fullPath) {
+  let storageKey =
+    isStorageV5Enabled() && storageV5 !== undefined
+      ? cacheStorageKeyOrFallback(fullPath, anchoredPluginCachePath())
+      : null;
+  if (storageV5 !== undefined && storageKey !== null) {
+    let statResult = await storageV5.statMeta(storageKey);
+    if (statResult.ok) return "present";
+    let code = storageErrorCode(statResult.error);
+    if (statResult.error.code === "NotFound" || code === "ENOENT" || code === "ENOTDIR") return "absent";
+    if (!isNonRegularError(code))
       return {
-        unknown: formatStorageError(s.error),
+        unknown: formatStorageError(statResult.error),
         errno: sanitizeErrnoForTelemetry({
-          code: h,
+          code,
         }),
       };
   }
   try {
-    await stat(n);
+    await stat_2(fullPath);
     return "present";
   } catch (error) {
     return isENOENT(error) || getErrnoCode(error) === "ENOTDIR"
@@ -1030,31 +1079,34 @@ async function probeComponentPath(e, n) {
   }
 }
 //@ chunk-e6aww6q8.js:4507585-4507791 placement
-function reportUncheckablePath(e, source, name, component, h, y) {
-  logForDebugging(`Plugin ${name}: could not check ${h} (${y.unknown}); not loading it`, {
+function reportUncheckablePath(errors, source, name, component, relPath, unknown) {
+  logForDebugging(`Plugin ${name}: could not check ${relPath} (${unknown.unknown}); not loading it`, {
     level: "error",
   });
-  e.push({
+  errors.push({
     type: "path-not-found",
     source,
     plugin: name,
-    path: h,
+    path: relPath,
     component,
-    errno: y.errno ?? "UNKNOWN",
+    errno: unknown.errno ?? "UNKNOWN",
   });
 }
 //@ chunk-e6aww6q8.js:4507791-4508003 placement = _temp2 (1)
-async function statPluginPath(e, fullPath) {
-  let r = isStorageV5Enabled() && e !== undefined ? await isCachePathPresentInStorage(e, fullPath) : null;
-  if (r !== null)
+async function statPluginPath(storageV5, fullPath) {
+  let result =
+    isStorageV5Enabled() && storageV5 !== undefined
+      ? await isCachePathPresentInStorage(storageV5, fullPath)
+      : null;
+  if (result !== null)
     return {
-      exists: r,
+      exists: result,
       isDirectory: false,
     };
   try {
     return {
       exists: true,
-      isDirectory: (await stat(fullPath)).isDirectory(),
+      isDirectory: (await stat_2(fullPath)).isDirectory(),
     };
   } catch {
     return {
@@ -1067,33 +1119,33 @@ async function statPluginPath(e, fullPath) {
 /**
  * 缓存目录（或存储作用域）中是否有非忽略项。
  */
-async function dirHasRealEntries(e, n, isCacheEntryName = isCacheSkipEntry) {
-  let s = orphanMarkerCoordsV5(e, n);
-  if (n !== undefined && s !== null) {
-    let y = await listStorageScopeNames(n, {
+async function dirHasRealEntries(dirPath, storageV5, isCacheEntryName = isCacheSkipEntry) {
+  let coords = orphanMarkerCoordsV5(dirPath, storageV5);
+  if (storageV5 !== undefined && coords !== null) {
+    let listing = await listStorageScopeNames(storageV5, {
       namespace: "pluginCache",
-      marketplace: s.marketplace,
-      plugin: s.plugin,
-      version: s.version,
+      marketplace: coords.marketplace,
+      plugin: coords.plugin,
+      version: coords.version,
     });
-    if (y.error !== undefined) {
-      let error = y.error;
+    if (listing.error !== undefined) {
+      let error = listing.error;
       if ("telemetryCode" in error && isFsInaccessibleCode(error.telemetryCode)) return false;
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `Failed to list plugin cache dir: ${formatStorageError(error)}`,
         "failed to list plugin cache dir (v5 backend error)",
       );
     }
-    return y.names.some(({ name: S }) => !isCacheEntryName(S));
+    return listing.names.some(({ name }) => !isCacheEntryName(name));
   }
-  let h;
+  let names;
   try {
-    h = await readdir(e);
+    names = await readdir(dirPath);
   } catch (error) {
     if (isFsInaccessible(error)) return false;
     throw error;
   }
-  return h.some((y) => !isCacheEntryName(y));
+  return names.some((name) => !isCacheEntryName(name));
 }
 //@ chunk-e6aww6q8.js:4508498-4508528 placement
 var LINKS_MATERIALIZED_MARKER = ".links_materialized";
@@ -1101,25 +1153,25 @@ var LINKS_MATERIALIZED_MARKER = ".links_materialized";
 /**
  * 判断版本化缓存目录是否完整可用；storageV5 下若有 .links_materialized 标记则按链接已物化方式检查。
  */
-async function cacheDirHasPluginContentStrict(e, n) {
+async function cacheDirHasPluginContentStrict(cachePath, storageV5) {
   if (
     !isStorageV5Enabled() ||
-    n === undefined ||
-    parseVersionCachePath(e, anchoredPluginCachePath()) === null
+    storageV5 === undefined ||
+    parseVersionCachePath(cachePath, anchoredPluginCachePath()) === null
   )
-    return dirHasRealEntries(e);
-  let r = await lstat(join(e, LINKS_MATERIALIZED_MARKER)).catch(() => null);
-  return r !== null && r.isFile()
-    ? dirHasRealEntries(e, n, isCacheEntryName)
-    : dirHasRealEntries(e, undefined, isCacheEntryName);
+    return dirHasRealEntries(cachePath);
+  let markerStat = await lstat(join(cachePath, LINKS_MATERIALIZED_MARKER)).catch(() => null);
+  return markerStat !== null && markerStat.isFile()
+    ? dirHasRealEntries(cachePath, storageV5, isCacheEntryName)
+    : dirHasRealEntries(cachePath, undefined, isCacheEntryName);
 }
 //@ chunk-e6aww6q8.js:4508701-4508908 placement
 async function removeCacheInUseMarker(cachePath, storageV5) {
   if (await isSymlinkOrFalse(cachePath)) return;
-  let r = orphanMarkerCoordsV5(cachePath, storageV5);
-  if (storageV5 !== undefined && r !== null) {
+  let coords = orphanMarkerCoordsV5(cachePath, storageV5);
+  if (storageV5 !== undefined && coords !== null) {
     await storageV5.delete(
-      STORAGE_SPACES.pluginCache(r.marketplace, r.plugin, r.version, [ORPHAN_MARKER_FILE]),
+      STORAGE_SPACES.pluginCache(coords.marketplace, coords.plugin, coords.version, [ORPHAN_MARKER_FILE]),
     );
     return;
   }
@@ -1131,26 +1183,26 @@ async function removeCacheInUseMarker(cachePath, storageV5) {
 /**
  * 在一个插件的多个安装记录中挑第一个 installPath 可信且缓存存在的；都不存在时返回第一个可信的或第一条。
  */
-async function pickUsableInstallation(installations, { storageV5: n, trustedRoots: r = [] } = {}) {
-  let s = installations && filterInstallationsForCurrentProject(installations);
-  if (!s || s.length === 0) return;
-  if (s.length === 1) return s[0];
-  let h;
-  for (let y of s) {
-    if (!y.installPath) continue;
-    let { absolute, suspect } = classifyMarketplacePath(y.installPath, {
-      trustedRoots: r,
+async function pickUsableInstallation(installations, { storageV5, trustedRoots = [] } = {}) {
+  let relevant = installations && filterInstallationsForCurrentProject(installations);
+  if (!relevant || relevant.length === 0) return;
+  if (relevant.length === 1) return relevant[0];
+  let fallback;
+  for (let installation of relevant) {
+    if (!installation.installPath) continue;
+    let { absolute, suspect } = classifyMarketplacePath(installation.installPath, {
+      trustedRoots,
     });
     if (suspect) continue;
-    h ??= y;
+    fallback ??= installation;
     if (
       absolute.endsWith(".zip")
         ? await pathExists(absolute)
-        : await cacheDirHasPluginContentStrict(absolute, n)
+        : await cacheDirHasPluginContentStrict(absolute, storageV5)
     )
-      return y;
+      return installation;
   }
-  return h ?? s[0];
+  return fallback ?? relevant[0];
 }
 //@ chunk-e6aww6q8.js:4509239-4509280 placement = getVersionedZipCachePath (1)
 /**
@@ -1160,9 +1212,9 @@ function getVersionedZipCachePath(pluginId, version) {
   return `${getVersionedCachePath(pluginId, version)}.zip`;
 }
 //@ chunk-e6aww6q8.js:4509280-4509388 placement
-async function findSeedCachePath(e, n) {
-  for (let r of getPluginSeedDirs()) {
-    let legacyCachePath = getLegacyCachePath(r, e, n);
+async function findSeedCachePath(pluginId, version) {
+  for (let seedDir of getPluginSeedDirs()) {
+    let legacyCachePath = getLegacyCachePath(seedDir, pluginId, version);
     try {
       if (await dirHasRealEntries(legacyCachePath)) return legacyCachePath;
     } catch {}
@@ -1170,10 +1222,10 @@ async function findSeedCachePath(e, n) {
   return null;
 }
 //@ chunk-e6aww6q8.js:4509388-4509485 placement = formatRelativeTimeAgo (0.75)
-async function probeSeedForPlugin(pluginId, n, r) {
+async function probeSeedForPlugin(pluginId, version, mode) {
   return (
-    (await findSeedCachePath(pluginId, n)) ??
-    (r === "always" || n === "unknown" ? await probeSeedCacheAnyVersion(pluginId) : null)
+    (await findSeedCachePath(pluginId, version)) ??
+    (mode === "always" || version === "unknown" ? await probeSeedCacheAnyVersion(pluginId) : null)
   );
 }
 //@ chunk-e6aww6q8.js:4509485-4509693 placement
@@ -1181,30 +1233,30 @@ async function probeSeedCacheAnyVersion(pluginId) {
   for (let seedDir of getPluginSeedDirs()) {
     let pluginDir = dirname(getLegacyCachePath(seedDir, pluginId, "_"));
     try {
-      let s = [];
-      for (let h of await readdir(pluginDir)) {
-        if (isTempSiblingName(h)) continue;
-        let versionDir = join(pluginDir, h);
-        if (await dirHasRealEntries(versionDir)) s.push(versionDir);
+      let found = [];
+      for (let name of await readdir(pluginDir)) {
+        if (isTempSiblingName(name)) continue;
+        let versionDir = join(pluginDir, name);
+        if (await dirHasRealEntries(versionDir)) found.push(versionDir);
       }
-      if (s.length === 1) return s[0];
+      if (found.length === 1) return found[0];
     } catch {}
   }
   return null;
 }
 //@ chunk-e6aww6q8.js:4509693-4509732 placement
-function isCommandSourceError(e) {
-  return e instanceof CommandSourceError;
+function isCommandSourceError(error) {
+  return error instanceof CommandSourceError;
 }
 //@ chunk-e6aww6q8.js:4509732-4509805 placement
-function commandSourceErrorMessage(error, n = redactUrlsInMessage) {
+function commandSourceErrorMessage(error, redact = redactUrlsInMessage) {
   return isCommandSourceError(error)
-    ? n(
+    ? redact(
         printableMessage(error, {
           isComposed: isCommandSourceError,
         }),
       )
-    : printableMessage(n(errorMessage(error)));
+    : printableMessage(redact(errorMessage(error)));
 }
 //@ chunk-e6aww6q8.js:4509805-4509824 placement
 var MAX_MANIFEST_PROBLEMS = 20;
@@ -1213,7 +1265,7 @@ var MAX_PROBLEM_TEXT_LENGTH = 500;
 /**
  * manifest 解析/校验错误转插件错误（脱敏、截断）。
  */
-function manifestErrorToPluginError(error, source, r) {
+function manifestErrorToPluginError(error, source, pluginName) {
   if (!(error instanceof ManifestLoadError)) return;
   let manifestPath = redactUrlsInMessage(error.manifestPath);
   let mapped = error.problems
@@ -1225,8 +1277,8 @@ function manifestErrorToPluginError(error, source, r) {
     ? {
         type: "manifest-parse-error",
         source,
-        ...(r !== undefined && {
-          plugin: r,
+        ...(pluginName !== undefined && {
+          plugin: pluginName,
         }),
         manifestPath,
         parseError: mapped.join(", "),
@@ -1234,8 +1286,8 @@ function manifestErrorToPluginError(error, source, r) {
     : {
         type: "manifest-validation-error",
         source,
-        ...(r !== undefined && {
-          plugin: r,
+        ...(pluginName !== undefined && {
+          plugin: pluginName,
         }),
         manifestPath,
         validationErrors: mapped,
@@ -1245,53 +1297,65 @@ function manifestErrorToPluginError(error, source, r) {
       };
 }
 //@ chunk-e6aww6q8.js:4510322-4510589 placement
-async function classifyLinkFarmReuse(cachePath, sourcePath) {
-  let r = await classifyLinkFarm(cachePath);
-  if (r === "not-live")
+async function classifyLinkFarmReuse(farmDir, farmDir_2) {
+  let classification = await classifyLinkFarm(farmDir);
+  if (classification === "not-live")
     return {
       live: false,
       reusable: false,
       unclassifiable: false,
     };
-  if (r === "unclassifiable")
+  if (classification === "unclassifiable")
     return {
       live: true,
       reusable: false,
       unclassifiable: true,
     };
-  let linkFarmTarget = await readLinkFarmTarget(sourcePath);
+  let linkFarmTarget = await readLinkFarmTarget(farmDir_2);
   return {
     live: true,
-    reusable: linkFarmTarget !== undefined && !(await hasEntriesOutsideTarget(cachePath, linkFarmTarget)),
+    reusable: linkFarmTarget !== undefined && !(await hasEntriesOutsideTarget(farmDir, linkFarmTarget)),
     unclassifiable: false,
   };
 }
 //@ chunk-e6aww6q8.js:4510589-4510671 placement
-async function isPluginVersionInUseSafe(e, n) {
+async function isPluginVersionInUseSafe(cachePath, storageV5) {
   try {
     return await isPluginVersionInUse(
-      e,
+      cachePath,
       {
         excludeSelf: true,
       },
-      n,
+      storageV5,
     );
   } catch {
     return true;
   }
 }
 //@ chunk-e6aww6q8.js:4510671-4510744 placement
-async function copyPluginDir(e, n, r, useStorageBackend) {
-  await copyDir(e, n, e, n, r, useStorageBackend, new Set(), freshSymlinkCopyBudget(), false, false, true);
+async function copyPluginDir(sourceDir, targetDir, containmentRoot, useStorageBackend) {
+  await copyDir(
+    sourceDir,
+    targetDir,
+    sourceDir,
+    targetDir,
+    containmentRoot,
+    useStorageBackend,
+    new Set(),
+    freshSymlinkCopyBudget(),
+    false,
+    false,
+    true,
+  );
 }
 //@ chunk-e6aww6q8.js:4510744-4510950 placement = isRealPathWithinTeamDir (1)
 async function lstatChildBigintOrUndefined(realCandidate) {
-  for (let n of getPluginSeedDirs()) {
-    let r = dirname(getLegacyCachePath(n, realCandidate, "_"));
+  for (let seedDir of getPluginSeedDirs()) {
+    let pluginDir = dirname(getLegacyCachePath(seedDir, realCandidate, "_"));
     try {
-      for (let s of await readdir(r)) {
-        if (isTempSiblingName(s)) continue;
-        if (await dirHasRealEntries(join(r, s))) return true;
+      for (let name of await readdir(pluginDir)) {
+        if (isTempSiblingName(name)) continue;
+        if (await dirHasRealEntries(join(pluginDir, name))) return true;
       }
     } catch (error) {
       if (isENOENT(error) || getErrnoCode(error) === "ENOTDIR") continue;
@@ -1302,198 +1366,239 @@ async function lstatChildBigintOrUndefined(realCandidate) {
 }
 //@ chunk-e6aww6q8.js:4510950-4514602 placement
 async function copyDir(
-  e,
-  n,
-  r = e,
-  s = n,
-  h = r,
-  y = false,
-  S = new Set(),
-  w = freshSymlinkCopyBudget(),
-  L = false,
-  G = false,
-  q = false,
+  sourceDir,
+  targetDir,
+  containmentRoot = sourceDir,
+  viewRoot = targetDir,
+  containmentBase = containmentRoot,
+  strict = false,
+  cycleSet = new Set(),
+  budget = freshSymlinkCopyBudget(),
+  budgeted = false,
+  noFollow = false,
+  skipFarms = false,
 ) {
-  if (y) await mkdir(n);
-  else await getFsImplementation().mkdir(n);
-  let Z = resolve_2(e);
-  let Se = resolve_2(n);
-  let ke = Se.startsWith(Z + sep) ? relative(Z, Se).split(sep)[0] : undefined;
-  let we = await readdir(e, {
+  if (strict) await mkdir(targetDir);
+  else await getFsImplementation().mkdir(targetDir);
+  let sourceResolved = resolve_2(sourceDir);
+  let targetResolved = resolve_2(targetDir);
+  let nestedDirName = targetResolved.startsWith(sourceResolved + sep)
+    ? relative(sourceResolved, targetResolved).split(sep)[0]
+    : undefined;
+  let entries = await readdir(sourceDir, {
     withFileTypes: true,
   });
-  let Ee;
-  let Ae;
-  let Ie;
-  let Me = !L && resolve_2(e) === resolve_2(r);
-  for (let We of we) {
-    if (ke !== undefined && We.name === ke) continue;
-    if (q && isPristineLinkFarm(We.name)) continue;
-    let ze = await classifyDirEntry(e, We);
-    if ((G || y) && We.isDirectory() && ze.isSymbolicLink)
+  let realSourceOnce;
+  let realRootOnce;
+  let screenOnce;
+  let isTop = !budgeted && resolve_2(sourceDir) === resolve_2(containmentRoot);
+  for (let entry of entries) {
+    if (nestedDirName !== undefined && entry.name === nestedDirName) continue;
+    if (skipFarms && isPristineLinkFarm(entry.name)) continue;
+    let info = await classifyDirEntry(sourceDir, entry);
+    if ((noFollow || strict) && entry.isDirectory() && info.isSymbolicLink)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Refusing to copy ${join(e, We.name)}: it is no longer a directory as listed \u2014 a link or Windows junction stands there (planted, or swapped during the copy). Plugin trees must hold plain directories.`,
+        `Refusing to copy ${join(sourceDir, entry.name)}: it is no longer a directory as listed \u2014 a link or Windows junction stands there (planted, or swapped during the copy). Plugin trees must hold plain directories.`,
         "plugin copy source directory entry is a link at descent",
       );
-    let lt = join(e, We.name);
-    let Je = join(n, We.name);
-    if (y && Me && !isNodeModulesSegment(We.name) && isCacheEntryName(We.name)) {
-      logForDebugging(`copyDir: not copying shipped cache bookkeeping ${lt}`);
+    let sourcePath = join(sourceDir, entry.name);
+    let targetPath = join(targetDir, entry.name);
+    if (strict && isTop && !isNodeModulesSegment(entry.name) && isCacheEntryName(entry.name)) {
+      logForDebugging(`copyDir: not copying shipped cache bookkeeping ${sourcePath}`);
       continue;
     }
-    if (ze.isDirectory) {
-      if (L) consumeSymlinkCopyBudget(w, 1, 0);
-      if ((G || y) && !(await lstat(lt)).isDirectory())
+    if (info.isDirectory) {
+      if (budgeted) consumeSymlinkCopyBudget(budget, 1, 0);
+      if ((noFollow || strict) && !(await lstat(sourcePath)).isDirectory())
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `Refusing to copy ${lt}: it is no longer a directory (swapped during the copy).`,
+          `Refusing to copy ${sourcePath}: it is no longer a directory (swapped during the copy).`,
           "plugin copy source directory swapped mid-copy",
         );
-      if (y && getPlatform() === "windows") {
-        Ee ??= await realpath(e);
-        if (!(await isSameFilesystem(Ee, We.name)))
+      if (strict && getPlatform() === "windows") {
+        realSourceOnce ??= await realpath(sourceDir);
+        if (!(await isSameFilesystem(realSourceOnce, entry.name)))
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `Refusing to copy ${lt}: it resolves somewhere other than its own name (a junction or mount point).`,
+            `Refusing to copy ${sourcePath}: it resolves somewhere other than its own name (a junction or mount point).`,
             "plugin copy source directory is a reparse point",
           );
       }
-      await copyDir(lt, Je, r, s, h, y, S, w, L, G, false);
-    } else if (ze.isFile) {
-      if (y) {
-        let nt = await lstat(lt);
-        if (!nt.isFile()) throw fileSwappedError(lt);
-        if (L) consumeSymlinkCopyBudget(w, 1, nt.size);
+      await copyDir(
+        sourcePath,
+        targetPath,
+        containmentRoot,
+        viewRoot,
+        containmentBase,
+        strict,
+        cycleSet,
+        budget,
+        budgeted,
+        noFollow,
+        false,
+      );
+    } else if (info.isFile) {
+      if (strict) {
+        let stat = await lstat(sourcePath);
+        if (!stat.isFile()) throw fileSwappedError(sourcePath);
+        if (budgeted) consumeSymlinkCopyBudget(budget, 1, stat.size);
       }
-      if (G)
-        await copyFileNoFollow(lt, Je, {
-          exclusive: y,
-          nonBlocking: y,
+      if (noFollow)
+        await copyFileNoFollow(sourcePath, targetPath, {
+          exclusive: strict,
+          nonBlocking: strict,
         });
-      else if (y) await copyFile(lt, Je, constants.COPYFILE_EXCL);
-      else await copyFile(lt, Je);
-    } else if (ze.isSymbolicLink) {
-      let nt;
+      else if (strict) await copyFile(sourcePath, targetPath, constants.COPYFILE_EXCL);
+      else await copyFile(sourcePath, targetPath);
+    } else if (info.isSymbolicLink) {
+      let linkTarget;
       try {
-        nt = ze.linkTarget ?? (await readlink(lt));
+        linkTarget = info.linkTarget ?? (await readlink(sourcePath));
       } catch (error) {
         if (getErrnoCode(error) !== "EINVAL")
-          logForDebugging(`copyDir: readlink failed for ${lt}: ${errorMessage(error)}`, {
+          logForDebugging(`copyDir: readlink failed for ${sourcePath}: ${errorMessage(error)}`, {
             level: "warn",
           });
         continue;
       }
-      if (y) {
-        Ae ??= await realpath(r).catch(() => resolve_2(r));
-        Ie ??= createLinkTargetScreen(Ae);
-        let It;
+      if (strict) {
+        realRootOnce ??= await realpath(containmentRoot).catch(() => resolve_2(containmentRoot));
+        screenOnce ??= createLinkTargetScreen(realRootOnce);
+        let verdict;
         try {
-          It = await resolveLinkChainFromParent(join(Ae, relative(resolve_2(r), resolve_2(lt))), Ie, nt, {
-            trustedRoot: Ae,
-          });
+          verdict = await resolveLinkChainFromParent(
+            join(realRootOnce, relative(resolve_2(containmentRoot), resolve_2(sourcePath))),
+            screenOnce,
+            linkTarget,
+            {
+              trustedRoot: realRootOnce,
+            },
+          );
         } catch (error) {
-          It = "unexaminable";
-          logForDebugging(`copyDir: cannot examine symlink ${lt}: ${errorMessage(error)}`, {
+          verdict = "unexaminable";
+          logForDebugging(`copyDir: cannot examine symlink ${sourcePath}: ${errorMessage(error)}`, {
             level: "warn",
           });
         }
-        if (It !== "clean") {
+        if (verdict !== "clean") {
           logForDebugging(
-            `copyDir: dropping symlink ${lt} -> ${nt} (${It === "network" ? "names a network host" : It === "loop" ? "symlink loop" : It === "unexaminable" ? "could not be examined" : It === "unsupported" ? "unsupported target spelling" : "dangling"})`,
+            `copyDir: dropping symlink ${sourcePath} -> ${linkTarget} (${verdict === "network" ? "names a network host" : verdict === "loop" ? "symlink loop" : verdict === "unexaminable" ? "could not be examined" : verdict === "unsupported" ? "unsupported target spelling" : "dangling"})`,
             {
-              level: It === "unexaminable" ? "warn" : "debug",
+              level: verdict === "unexaminable" ? "warn" : "debug",
             },
           );
           continue;
         }
-      } else if (resolvePathChain(lt, h)) {
-        logForDebugging(`copyDir: dropping a symlink whose target chain cannot be trusted: ${lt}`, {
+      } else if (resolvePathChain(sourcePath, containmentBase)) {
+        logForDebugging(`copyDir: dropping a symlink whose target chain cannot be trusted: ${sourcePath}`, {
           level: "warn",
         });
         continue;
       }
-      let pt;
+      let realTarget;
       try {
-        pt = await realpath(lt);
+        realTarget = await realpath(sourcePath);
       } catch {
-        if (!y && !isAbsolute(nt)) {
-          let It = resolve_2(dirname(lt), nt);
-          if (isPathUnder(It, resolve_2(r))) {
-            await symlink(nt, Je);
+        if (!strict && !isAbsolute(linkTarget)) {
+          let resolvedTarget = resolve_2(dirname(sourcePath), linkTarget);
+          if (isPathUnder(resolvedTarget, resolve_2(containmentRoot))) {
+            await symlink(linkTarget, targetPath);
             continue;
           }
         }
-        logForDebugging(`copyDir: skipping broken symlink ${lt} -> ${nt}`);
+        logForDebugging(`copyDir: skipping broken symlink ${sourcePath} -> ${linkTarget}`);
         continue;
       }
-      let Et;
+      let realRoot;
       try {
-        Et = await realpath(r);
+        realRoot = await realpath(containmentRoot);
       } catch {
-        Et = r;
+        realRoot = containmentRoot;
       }
-      let yt;
+      let realBase;
       try {
-        yt = await realpath(h);
+        realBase = await realpath(containmentBase);
       } catch {
-        yt = h;
+        realBase = containmentBase;
       }
-      let gt = isPathUnder(pt, Et);
-      let At = pathHasNodeModulesSegment(relative(r, lt));
-      if (gt && (!y || At)) {
-        let It = relative(Et, pt);
-        let Yt = join(s, It);
-        let qt = relative(dirname(Je), Yt);
-        await symlink(qt, Je);
-      } else if (gt || (isPathUnder(pt, yt) && !isPathUnder(Et, pt))) {
-        if (y) {
-          let qt = join(Et, relative(resolve_2(r), Z));
-          if (isPathUnder(qt, pt)) {
-            logForDebugging(`copyDir: skipping symlink to an ancestor directory ${lt} -> ${pt}`);
+      let targetInsideRoot = isPathUnder(realTarget, realRoot);
+      let targetInNodeModules = pathHasNodeModulesSegment(relative(containmentRoot, sourcePath));
+      if (targetInsideRoot && (!strict || targetInNodeModules)) {
+        let relInRoot = relative(realRoot, realTarget);
+        let viewTarget = join(viewRoot, relInRoot);
+        let relativeTarget = relative(dirname(targetPath), viewTarget);
+        await symlink(relativeTarget, targetPath);
+      } else if (
+        targetInsideRoot ||
+        (isPathUnder(realTarget, realBase) && !isPathUnder(realRoot, realTarget))
+      ) {
+        if (strict) {
+          let ancestorTarget = join(realRoot, relative(resolve_2(containmentRoot), sourceResolved));
+          if (isPathUnder(ancestorTarget, realTarget)) {
+            logForDebugging(
+              `copyDir: skipping symlink to an ancestor directory ${sourcePath} -> ${realTarget}`,
+            );
             continue;
           }
         }
-        if (S.has(pt)) {
-          logForDebugging(`copyDir: skipping cyclic symlink target ${lt} -> ${pt}`);
+        if (cycleSet.has(realTarget)) {
+          logForDebugging(`copyDir: skipping cyclic symlink target ${sourcePath} -> ${realTarget}`);
           continue;
         }
-        let Yt = await (y || G ? lstat : stat)(pt).catch((error) => {
-          logForDebugging(`copyDir: stat failed while materializing ${lt} -> ${pt}: ${errorMessage(error)}`, {
-            level: "warn",
-          });
+        let targetStat = await (strict || noFollow ? lstat : stat_2)(realTarget).catch((error) => {
+          logForDebugging(
+            `copyDir: stat failed while materializing ${sourcePath} -> ${realTarget}: ${errorMessage(error)}`,
+            {
+              level: "warn",
+            },
+          );
           return;
         });
-        if (!Yt) continue;
-        if (Yt.isSymbolicLink())
+        if (!targetStat) continue;
+        if (targetStat.isSymbolicLink())
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `Refusing to copy ${lt}: its target is no longer what it resolved to (swapped during the copy).`,
+            `Refusing to copy ${sourcePath}: its target is no longer what it resolved to (swapped during the copy).`,
             "plugin copy symlink target swapped mid-copy",
           );
-        if (Yt.isFile()) {
-          if (y) consumeSymlinkCopyBudget(w, 1, Yt.size);
-          if (y || G)
-            await copyFileNoFollow(pt, Je, {
+        if (targetStat.isFile()) {
+          if (strict) consumeSymlinkCopyBudget(budget, 1, targetStat.size);
+          if (strict || noFollow)
+            await copyFileNoFollow(realTarget, targetPath, {
               exactMode: true,
               exclusive: true,
-              nonBlocking: y,
+              nonBlocking: strict,
             });
-          else await copyFile(pt, Je);
-        } else if (Yt.isDirectory()) {
-          if (y) consumeSymlinkCopyBudget(w, 1, 0);
-          S.add(pt);
+          else await copyFile(realTarget, targetPath);
+        } else if (targetStat.isDirectory()) {
+          if (strict) consumeSymlinkCopyBudget(budget, 1, 0);
+          cycleSet.add(realTarget);
           try {
-            await copyDir(pt, Je, pt, Je, h, y, S, w, y, G);
+            await copyDir(
+              realTarget,
+              targetPath,
+              realTarget,
+              targetPath,
+              containmentBase,
+              strict,
+              cycleSet,
+              budget,
+              strict,
+              noFollow,
+            );
           } finally {
-            S.delete(pt);
+            cycleSet.delete(realTarget);
           }
-        } else logForDebugging(`copyDir: skipping non-regular symlink target ${lt} -> ${pt}`);
-      } else logForDebugging(`copyDir: skipping symlink escaping containment root: ${lt} -> ${pt}`);
+        } else logForDebugging(`copyDir: skipping non-regular symlink target ${sourcePath} -> ${realTarget}`);
+      } else
+        logForDebugging(
+          `copyDir: skipping symlink escaping containment root: ${sourcePath} -> ${realTarget}`,
+        );
     }
   }
 }
 //@ chunk-e6aww6q8.js:4514602-4514831 placement
-function assertSymlinkFree(e, n) {
-  if (e.failed > 0 || e.readOnly)
+function assertSymlinkFree(result, pluginPath) {
+  if (result.failed > 0 || result.readOnly)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Plugin tree at ${n} could not be made symlink-free (${e.readOnly ? "not writable" : `${e.failed} failed`}); refusing to cache it`,
+      `Plugin tree at ${pluginPath} could not be made symlink-free (${result.readOnly ? "not writable" : `${result.failed} failed`}); refusing to cache it`,
       "plugin tree could not be made symlink-free",
     );
 }
@@ -1501,28 +1606,31 @@ function assertSymlinkFree(e, n) {
 /**
  * 存储中暂存副本是否为空（分页列举）。
  */
-async function isStorageScopeEmpty(storageV5, n) {
-  let r;
+async function isStorageScopeEmpty(storageV5, scope) {
+  let cursor;
   do {
-    let s = await storageV5.listEntries(n, {
+    let page = await storageV5.listEntries(scope, {
       skipKeyStats: true,
       skipScopeStats: true,
-      ...(r === undefined
+      ...(cursor === undefined
         ? {}
         : {
-            cursor: r,
+            cursor,
           }),
     });
-    if (!s.ok)
+    if (!page.ok)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Failed to list the staged plugin copy (${formatStorageError(s.error)}); retry the load or the install.`,
+        `Failed to list the staged plugin copy (${formatStorageError(page.error)}); retry the load or the install.`,
         "plugin cache staged copy could not be listed",
       );
-    let skipped = s.value.skipped;
-    if (s.value.items.length > 0 || (skipped !== undefined && Object.values(skipped).some((y) => y > 0)))
+    let skipped = page.value.skipped;
+    if (
+      page.value.items.length > 0 ||
+      (skipped !== undefined && Object.values(skipped).some((skippedCount) => skippedCount > 0))
+    )
       return false;
-    r = s.value.cursor;
-  } while (r !== undefined);
+    cursor = page.value.cursor;
+  } while (cursor !== undefined);
   return true;
 }
 //@ chunk-e6aww6q8.js:4515261-4521669 placement = copyPluginToVersionedCache (0.356)
@@ -1544,20 +1652,21 @@ async function copyPluginToVersionedCache(
   let useStorageBackend = strictCacheAddressable(storageV5);
   let cachePath = getVersionedCachePath(pluginId, version);
   let zipPath = getVersionedZipCachePath(pluginId, version);
-  let ke = (yt, gt, At) => requireVersionParentContained(cachePath, pluginId, version, yt, gt, At);
-  let we = useStorageBackend ? await versionParentState(cachePath) : "real";
-  if (we === "refused") await ke("cache", "before reuse", we);
-  let Ee;
-  let Ae = () =>
-    (Ee ??=
-      we === "absent"
+  let assertParent = (verb, stage, state) =>
+    requireVersionParentContained(cachePath, pluginId, version, verb, stage, state);
+  let parentState = useStorageBackend ? await versionParentState(cachePath) : "real";
+  if (parentState === "refused") await assertParent("cache", "before reuse", parentState);
+  let reuseDecision;
+  let reuseOnce = () =>
+    (reuseDecision ??=
+      parentState === "absent"
         ? Promise.resolve("absent")
         : decideCachedVersionReuse(cachePath, pluginId, version, linkFarm, sourcePath));
   if (zipCacheMode) {
     if (
-      we !== "absent" &&
+      parentState !== "absent" &&
       (useStorageBackend
-        ? await strictArchivePresent(zipPath, pluginId, version, () => ke("cache", "before reuse"))
+        ? await strictArchivePresent(zipPath, pluginId, version, () => assertParent("cache", "before reuse"))
         : await pathExists(zipPath))
     ) {
       if (!forceOverwrite) {
@@ -1566,12 +1675,12 @@ async function copyPluginToVersionedCache(
           await Promise.all([sweepStaleTempSiblings(cachePath), sweepStaleTempSiblings(zipPath)]);
         return zipPath;
       }
-      if (useStorageBackend) await ke("cache", "before overwrite");
+      if (useStorageBackend) await assertParent("cache", "before overwrite");
       await rm_2(zipPath, {
         force: true,
       });
     } else if (useStorageBackend && !forceOverwrite) {
-      if ((await Ae()) === "serve") {
+      if ((await reuseOnce()) === "serve") {
         await materializeCachedLinks(cachePath, storageV5, linkFarm);
         await removeCacheInUseMarker(cachePath, storageV5);
         logForDebugging(
@@ -1580,35 +1689,35 @@ async function copyPluginToVersionedCache(
         return cachePath;
       }
     }
-  } else if (useStorageBackend ? (await Ae()) !== "absent" : await pathExists(cachePath)) {
-    if (!useStorageBackend || (await Ae()) === "serve")
+  } else if (useStorageBackend ? (await reuseOnce()) !== "absent" : await pathExists(cachePath)) {
+    if (!useStorageBackend || (await reuseOnce()) === "serve")
       await materializeCachedLinks(cachePath, storageV5, linkFarm);
-    let yt = false;
-    let gt;
-    if (useStorageBackend) gt = (await Ae()) === "serve";
+    let wasLive = false;
+    let reusable;
+    if (useStorageBackend) reusable = (await reuseOnce()) === "serve";
     else {
-      let At = await classifyLinkFarmReuse(cachePath, sourcePath);
-      yt = At.live;
-      gt = isLinkModeCommandSource(marketplaceEntry?.source)
-        ? At.reusable
-        : At.unclassifiable || (!yt && (await dirHasRealEntries(cachePath)));
+      let farmReuse = await classifyLinkFarmReuse(cachePath, sourcePath);
+      wasLive = farmReuse.live;
+      reusable = isLinkModeCommandSource(marketplaceEntry?.source)
+        ? farmReuse.reusable
+        : farmReuse.unclassifiable || (!wasLive && (await dirHasRealEntries(cachePath)));
     }
-    if (!forceOverwrite && gt) {
+    if (!forceOverwrite && reusable) {
       await removeCacheInUseMarker(cachePath, storageV5);
       logForDebugging(`Plugin ${pluginId} version ${version} already cached at ${cachePath}`);
       return cachePath;
     }
-    if ((gt || yt) && (await isPluginVersionInUseSafe(cachePath, storageV5))) {
+    if ((reusable || wasLive) && (await isPluginVersionInUseSafe(cachePath, storageV5))) {
       logForDebugging(
         `Cache for ${pluginId} at ${cachePath} is in use by another session; deferring overwrite until it exits`,
       );
       return cachePath;
     }
-    if (!useStorageBackend || gt) {
-      if (useStorageBackend) await ke("cache", "before overwrite");
+    if (!useStorageBackend || reusable) {
+      if (useStorageBackend) await assertParent("cache", "before overwrite");
       if (!useStorageBackend || (await clearOccupantForReplace(cachePath, pluginId, version)) === "recurse") {
         logForDebugging(
-          `Removing ${gt || yt ? "superseded" : "incomplete"} cache directory for ${pluginId} at ${cachePath}`,
+          `Removing ${reusable || wasLive ? "superseded" : "incomplete"} cache directory for ${pluginId} at ${cachePath}`,
         );
         await evictCachedVersionDir(cachePath, storageV5);
       }
@@ -1621,37 +1730,37 @@ async function copyPluginToVersionedCache(
   }
   await ensurePluginCacheFolder(cachePath, storageV5);
   if (isLinkModeCommandSource(marketplaceEntry?.source)) {
-    let yt = true;
+    let notSymlink = true;
     if (useStorageBackend) {
-      await ke("link", "before relink");
+      await assertParent("link", "before relink");
       let entries = await classifyCacheEntry(cachePath);
       if (entries === "unexaminable") throw getPluginCachePath(cachePath, pluginId, version, "link");
-      yt = entries !== "symlink";
+      notSymlink = entries !== "symlink";
     }
-    let gt = yt
+    let farmReuse = notSymlink
       ? await classifyLinkFarmReuse(cachePath, sourcePath)
       : {
           live: false,
           reusable: false,
         };
-    if (gt.reusable) {
+    if (farmReuse.reusable) {
       logForDebugging(`Plugin ${pluginId} version ${version} already linked at ${cachePath}`);
       return cachePath;
     }
-    if (!useStorageBackend && gt.live && (await isPluginVersionInUseSafe(cachePath, storageV5))) {
+    if (!useStorageBackend && farmReuse.live && (await isPluginVersionInUseSafe(cachePath, storageV5))) {
       logForDebugging(
         `Link farm for ${pluginId} at ${cachePath} is in use by another session; deferring the relink until it exits`,
       );
       return cachePath;
     }
     if (useStorageBackend) {
-      let At = await lstat(cachePath).catch((error) => {
+      let stat = await lstat(cachePath).catch((error) => {
         if (isPathAbsent(error)) return null;
         throw getPluginCachePath(cachePath, pluginId, version, "link");
       });
       if (
-        At !== null &&
-        (At.isDirectory() || At.isSymbolicLink()) &&
+        stat !== null &&
+        (stat.isDirectory() || stat.isSymbolicLink()) &&
         (await isPluginVersionInUse(
           cachePath,
           {
@@ -1665,36 +1774,36 @@ async function copyPluginToVersionedCache(
           "plugin cache relink target has live users",
         );
     }
-    if (useStorageBackend) await ke("link", "during relink");
+    if (useStorageBackend) await assertParent("link", "during relink");
     if (
       !useStorageBackend ||
       (await clearOccupantForReplace(cachePath, pluginId, version, "link")) === "recurse"
     )
       await evictCachedVersionDir(cachePath, storageV5);
-    if (useStorageBackend) await ke("link", "during relink");
+    if (useStorageBackend) await assertParent("link", "during relink");
     await checkRelinkTarget(sourcePath, cachePath);
     logForDebugging(`Linked plugin ${pluginId} into versioned cache at ${cachePath}`);
     return cachePath;
   }
   if (useStorageBackend) {
-    await ke("cache", "before staging");
+    await assertParent("cache", "before staging");
     await Promise.all([sweepStaleTempSiblings(cachePath), sweepStaleTempSiblings(zipPath)]);
   }
-  let Me = useStorageBackend ? makeTempSiblingName(cachePath) : cachePath;
-  let We = async (yt) => {
-    await ke("publish", yt);
-    await assertStagedTreeIntact(Me, pluginId, version, "publish");
+  let stagingPath = useStorageBackend ? makeTempSiblingName(cachePath) : cachePath;
+  let assertPublishable = async (stage) => {
+    await assertParent("publish", stage);
+    await assertStagedTreeIntact(stagingPath, pluginId, version, "publish");
   };
-  let ze = useStorageBackend && zipCacheMode;
-  let lt = false;
-  let Je = false;
-  let nt = false;
+  let zipStaged = useStorageBackend && zipCacheMode;
+  let published = false;
+  let zipDeferred = false;
+  let deferZip = false;
   try {
     if (marketplaceEntry && typeof marketplaceEntry.source === "string" && marketplaceDir) {
       let sourceDir = validatePathWithinBase(marketplaceDir, marketplaceEntry.source);
       logForDebugging(`Copying source directory ${marketplaceEntry.source} for plugin ${pluginId}`);
       try {
-        await copyPluginDir(sourceDir, Me, marketplaceDir, useStorageBackend);
+        await copyPluginDir(sourceDir, stagingPath, marketplaceDir, useStorageBackend);
       } catch (error) {
         if (isENOENT(error) && getErrnoPath_2(error) === sourceDir)
           throw Error(
@@ -1704,44 +1813,44 @@ async function copyPluginToVersionedCache(
       }
     } else {
       logForDebugging(`Copying plugin ${pluginId} to versioned cache (fallback to full copy)`);
-      await copyPluginDir(sourcePath, Me, sourcePath, useStorageBackend);
+      await copyPluginDir(sourcePath, stagingPath, sourcePath, useStorageBackend);
     }
-    let gitPath = join(Me, ".git");
+    let gitPath = join(stagingPath, ".git");
     await removeDirectoryTreeNoFollow_2(gitPath);
-    let gt =
+    let storageScope =
       useStorageBackend && storageV5 !== undefined
-        ? versionCacheStorageSpace(Me, anchoredPluginCachePath())
+        ? versionCacheStorageSpace(stagingPath, anchoredPluginCachePath())
         : null;
     if (
-      gt !== null &&
+      storageScope !== null &&
       storageV5 !== undefined &&
       !(await hasLinkedAncestorBelow(cachePath, anchoredPluginCachePath()))
-        ? await isStorageScopeEmpty(storageV5, gt)
-        : (await readdir(Me)).length === 0
+        ? await isStorageScopeEmpty(storageV5, storageScope)
+        : (await readdir(stagingPath)).length === 0
     )
       throw Error(`Failed to copy plugin ${pluginId} to versioned cache: destination is empty after copy`);
-    if (useStorageBackend) assertSymlinkFree(await materializePluginLinks(Me, copyDir), Me);
-    if (ze) nt = true;
+    if (useStorageBackend) assertSymlinkFree(await materializePluginLinks(stagingPath, copyDir), stagingPath);
+    if (zipStaged) deferZip = true;
     else if (useStorageBackend) {
-      await We("during publish");
+      await assertPublishable("during publish");
       try {
-        await moveIntoVersionPath(Me, cachePath);
-        lt = true;
+        await moveIntoVersionPath(stagingPath, cachePath);
+        published = true;
       } catch (error) {
-        let Yt = async () => {
+        let isUsableOccupant = async () => {
           let cacheEntries = await classifyCacheEntry(cachePath);
           return (
             cacheEntries === "other" || (cacheEntries === "symlink" && (await isCachePathClean(cachePath)))
           );
         };
-        let qt = async () =>
+        let recheckOccupied = async () =>
           (await versionParentContained(cachePath)) &&
-          (await Yt()) &&
+          (await isUsableOccupant()) &&
           (await hasRealEntries(cachePath, {
             whenUnreadable: false,
           }).catch(() => false));
-        let Zt = async (error) => {
-          if (await qt()) {
+        let deferArchive = async (error) => {
+          if (await recheckOccupied()) {
             logForDebugging(
               `Plugin ${pluginId} version ${version} was cached concurrently at ${cachePath}; using it (${errorMessage(error)})`,
             );
@@ -1752,31 +1861,33 @@ async function copyPluginToVersionedCache(
             "plugin cache staged publish could not complete",
           );
         };
-        let rn = async () => {
-          await We("during publish");
+        let publishNow = async () => {
+          await assertPublishable("during publish");
           try {
-            await moveIntoVersionPath(Me, cachePath);
-            lt = true;
+            await moveIntoVersionPath(stagingPath, cachePath);
+            published = true;
           } catch (error) {
-            Je = await Zt(error);
+            zipDeferred = await deferArchive(error);
           }
         };
-        let pn = await classifyCacheEntry(cachePath);
-        if (pn === "unexaminable") throw getPluginCachePath(cachePath, pluginId, version);
-        let no = pn === "symlink" && !(await isCachePathClean(cachePath));
-        if (pn === "absent") await rn();
+        let entryKind = await classifyCacheEntry(cachePath);
+        if (entryKind === "unexaminable") throw getPluginCachePath(cachePath, pluginId, version);
+        let uncleanLink = entryKind === "symlink" && !(await isCachePathClean(cachePath));
+        if (entryKind === "absent") await publishNow();
         else if (
-          pn === "symlink" ? no || !(await dirHasPluginRoot(cachePath)) : !(await hasRealEntries(cachePath))
+          entryKind === "symlink"
+            ? uncleanLink || !(await dirHasPluginRoot(cachePath))
+            : !(await hasRealEntries(cachePath))
         ) {
-          await ke("publish", "during publish");
-          let hn =
-            pn === "other" &&
+          await assertParent("publish", "during publish");
+          let isRealDirectory =
+            entryKind === "other" &&
             (await lstat(cachePath).then(
-              (yn) => yn.isDirectory(),
+              (entryStats) => entryStats.isDirectory(),
               () => false,
             ));
           if (
-            (hn || pn === "symlink") &&
+            (isRealDirectory || entryKind === "symlink") &&
             (await isPluginVersionInUse(
               cachePath,
               {
@@ -1789,43 +1900,43 @@ async function copyPluginToVersionedCache(
               `Could not publish ${pluginId} ${version}: another session is recorded as using the entry at its cache path; retry the load or the install.`,
               "plugin cache payload-free debris has live users",
             );
-          if (hn) await removeInUseMarker(cachePath, storageV5);
+          if (isRealDirectory) await removeInUseMarker(cachePath, storageV5);
           logForDebugging(
-            `Plugin ${pluginId} version ${version}: clearing ${pn === "symlink" ? "a stray symlink" : hn ? "payload-free debris" : "a stray non-directory entry"} at ${cachePath} (${errorMessage(error)})`,
+            `Plugin ${pluginId} version ${version}: clearing ${entryKind === "symlink" ? "a stray symlink" : isRealDirectory ? "payload-free debris" : "a stray non-directory entry"} at ${cachePath} (${errorMessage(error)})`,
           );
           if (
-            pn === "symlink"
+            entryKind === "symlink"
               ? await removePathEntry(cachePath).then(
-                  (yn) => yn !== "directory",
+                  (removeResult) => removeResult !== "directory",
                   () => false,
                 )
               : (await removeVersionDirIfIdle(cachePath)) === "removed"
           )
-            await rn();
-          else if (no)
+            await publishNow();
+          else if (uncleanLink)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
               `Could not publish ${pluginId} ${version}: a link sits at its cache path and could not be removed; remove that link from the plugin cache, then retry the install.`,
               "plugin cache stray link not removable",
             );
-          else Je = await Zt(error);
-        } else Je = await Zt(error);
+          else zipDeferred = await deferArchive(error);
+        } else zipDeferred = await deferArchive(error);
       }
     }
   } finally {
-    if (useStorageBackend && !lt && !nt) await removeDirectoryTreeNoFollow(Me);
+    if (useStorageBackend && !published && !deferZip) await removeDirectoryTreeNoFollow(stagingPath);
   }
-  if (Je) {
+  if (zipDeferred) {
     await materializeCachedLinks(cachePath, storageV5, linkFarm);
     await removeCacheInUseMarker(cachePath, storageV5);
     await writeInUseMarker(cachePath, storageV5);
     return cachePath;
   }
-  let pt = nt ? Me : cachePath;
-  let Et = async () => {
+  let treePath = deferZip ? stagingPath : cachePath;
+  let republishStaged = async () => {
     try {
-      await We("after a failed archive");
+      await assertPublishable("after a failed archive");
       try {
-        await moveIntoVersionPath(Me, cachePath);
+        await moveIntoVersionPath(stagingPath, cachePath);
       } catch (error) {
         if (
           (await classifyCacheEntry(cachePath)) !== "other" ||
@@ -1841,8 +1952,8 @@ async function copyPluginToVersionedCache(
           throw error;
         await removeInUseMarker(cachePath, storageV5);
         if ((await removeVersionDirIfIdle(cachePath)) !== "removed") throw error;
-        await We("after a failed archive");
-        await moveIntoVersionPath(Me, cachePath);
+        await assertPublishable("after a failed archive");
+        await moveIntoVersionPath(stagingPath, cachePath);
       }
       logForDebugging(
         `Plugin ${pluginId} version ${version}: its archive could not be written; the completed directory is kept at ${cachePath} instead`,
@@ -1861,39 +1972,39 @@ async function copyPluginToVersionedCache(
   };
   try {
     try {
-      if (nt) await assertStagedTreeIntact(pt, pluginId, version, "install");
-      await unvouchBeforeDependencyStep(pt, storageV5, {
-        staged: nt,
+      if (deferZip) await assertStagedTreeIntact(treePath, pluginId, version, "install");
+      await unvouchBeforeDependencyStep(treePath, storageV5, {
+        staged: deferZip,
       });
-      let yt = await installPluginDependencies(pt);
-      if (yt.error)
-        logForDebugging(`Plugin dependency install warning for ${pluginId}: ${yt.error}`, {
+      let dependencyResult = await installPluginDependencies(treePath);
+      if (dependencyResult.error)
+        logForDebugging(`Plugin dependency install warning for ${pluginId}: ${dependencyResult.error}`, {
           level: "warn",
         });
-      await provisionBinaryAssets(pt, pluginId, {
+      await provisionBinaryAssets(treePath, pluginId, {
         storageV5,
         credentials: options?.credentials,
       });
-      await rescreenCachedPluginTree(pt, storageV5);
+      await rescreenCachedPluginTree(treePath, storageV5);
     } catch (error) {
-      if (!nt) await removeFreshCopyUnlessInUse(cachePath, storageV5);
+      if (!deferZip) await removeFreshCopyUnlessInUse(cachePath, storageV5);
       throw error;
     }
-    if (nt) await assertStagedTreeIntact(pt, pluginId, version, "archive");
+    if (deferZip) await assertStagedTreeIntact(treePath, pluginId, version, "archive");
     if (
       zipCacheMode &&
-      (await unmarkBeforeArchiving(pt, storageV5, {
-        staged: nt,
+      (await unmarkBeforeArchiving(treePath, storageV5, {
+        staged: deferZip,
       }))
     ) {
       try {
-        await publishDirectoryAsZip(pt, zipPath);
+        await publishDirectoryAsZip(treePath, zipPath);
       } catch (error) {
-        if (nt && (await classifyCacheEntry(zipPath)) === "absent") await Et();
+        if (deferZip && (await classifyCacheEntry(zipPath)) === "absent") await republishStaged();
         throw error;
       }
       if (
-        nt &&
+        deferZip &&
         (await versionParentContained(cachePath).catch(() => false)) &&
         (await classifyCacheEntry(cachePath)) === "other" &&
         !(await hasRealEntries(cachePath))
@@ -1903,7 +2014,7 @@ async function copyPluginToVersionedCache(
       return zipPath;
     }
   } finally {
-    if (nt) await removeDirectoryTreeNoFollow(Me);
+    if (deferZip) await removeDirectoryTreeNoFollow(stagingPath);
   }
   logForDebugging(`Successfully cached plugin ${pluginId} at ${cachePath}`);
   return cachePath;
@@ -1913,30 +2024,32 @@ async function copyPluginToVersionedCache(
  * 删除版本化缓存目录：存储后端模式下先让存储层清理作用域，剩余部分再直接删除。
  */
 async function evictCachedVersionDir(cachePath, storageV5) {
-  let r = orphanMarkerCoordsV5(cachePath, storageV5);
+  let storageCoords = orphanMarkerCoordsV5(cachePath, storageV5);
   if (
     storageV5 !== undefined &&
-    r !== null &&
+    storageCoords !== null &&
     !(await hasLinkedAncestorBelow(cachePath, anchoredPluginCachePath()))
   ) {
-    let s = await storageV5.deleteScope({
+    let deleteResult = await storageV5.deleteScope({
       namespace: "pluginCache",
-      ...r,
+      ...storageCoords,
     });
-    if (s.ok && !(await pathExists(cachePath))) return;
+    if (deleteResult.ok && !(await pathExists(cachePath))) return;
     if (
-      !s.ok &&
-      (s.error.code === "InvalidArgument" ||
-        (s.error.code === "Failed" && "telemetryCode" in s.error && s.error.telemetryCode === "ELOOP"))
+      !deleteResult.ok &&
+      (deleteResult.error.code === "InvalidArgument" ||
+        (deleteResult.error.code === "Failed" &&
+          "telemetryCode" in deleteResult.error &&
+          deleteResult.error.telemetryCode === "ELOOP"))
     )
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Could not empty ${cachePath}: the storage layer refused the version folder (${formatStorageError(s.error)}); check that plugin cache folder \u2014 nothing was removed \u2014 and then retry the install or the update.`,
+        `Could not empty ${cachePath}: the storage layer refused the version folder (${formatStorageError(deleteResult.error)}); check that plugin cache folder \u2014 nothing was removed \u2014 and then retry the install or the update.`,
         "plugin cache version folder refused by the storage layer during removal",
       );
     logForDebugging(
-      s.ok
+      deleteResult.ok
         ? `Storage sweep of ${cachePath} left entries it does not own; removing the directory directly`
-        : `Storage sweep of ${cachePath} failed (${formatStorageError(s.error)}); removing the directory directly`,
+        : `Storage sweep of ${cachePath} failed (${formatStorageError(deleteResult.error)}); removing the directory directly`,
       {
         level: "warn",
       },
@@ -1946,26 +2059,30 @@ async function evictCachedVersionDir(cachePath, storageV5) {
 }
 //@ chunk-e6aww6q8.js:4522454-4523178 placement
 async function ensurePluginCacheFolder(cachePath, storageV5) {
-  let r =
+  let storageScope =
     isStorageV5Enabled() && storageV5 !== undefined
       ? pluginCacheStorageScope(dirname(cachePath), anchoredPluginCachePath())
       : null;
   if (
     isStorageV5Enabled() &&
     storageV5 !== undefined &&
-    r !== null &&
-    r.plugin !== undefined &&
+    storageScope !== null &&
+    storageScope.plugin !== undefined &&
     !(await hasLinkedAncestorBelow(cachePath, anchoredPluginCachePath()))
   ) {
-    let s = await storageV5.ensureScope(r);
-    if (s.ok) return;
-    if (s.error.code === "Failed" && "telemetryCode" in s.error && s.error.telemetryCode === "ELOOP")
+    let ensureResult = await storageV5.ensureScope(storageScope);
+    if (ensureResult.ok) return;
+    if (
+      ensureResult.error.code === "Failed" &&
+      "telemetryCode" in ensureResult.error &&
+      ensureResult.error.telemetryCode === "ELOOP"
+    )
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Could not prepare the plugin cache folder of ${cachePath}: the storage layer refused it (${formatStorageError(s.error)}); check that plugin cache folder \u2014 the plugin version was not cached \u2014 and then retry the install or the update.`,
+        `Could not prepare the plugin cache folder of ${cachePath}: the storage layer refused it (${formatStorageError(ensureResult.error)}); check that plugin cache folder \u2014 the plugin version was not cached \u2014 and then retry the install or the update.`,
         "plugin cache plugin folder refused by the storage layer during creation",
       );
     logForDebugging(
-      `The storage layer could not create the plugin cache folder of ${cachePath} (${formatStorageError(s.error)}); creating it directly`,
+      `The storage layer could not create the plugin cache folder of ${cachePath} (${formatStorageError(ensureResult.error)}); creating it directly`,
       {
         level: "warn",
       },
@@ -1977,57 +2094,54 @@ async function ensurePluginCacheFolder(cachePath, storageV5) {
 /**
  * 不运行 install 脚本地下载 npm 包到目标目录（可指定 registry、期望 integrity）。
  */
-async function fetchNpmPackageNoScripts(e, targetPath, r) {
-  logForDebugging(`Fetching npm package ${e}@${r.version ?? "latest"} (no install scripts)`);
+async function fetchNpmPackageNoScripts(packageName, targetPath, options) {
+  logForDebugging(`Fetching npm package ${packageName}@${options.version ?? "latest"} (no install scripts)`);
   return fetchNpmPackage(
     {
-      packageName: e,
-      versionSpec: r.version,
+      packageName,
+      versionSpec: options.version,
       targetPath,
     },
     {
-      registry: r.registry,
-      workDir: r.scratchDir,
-      isNpmMarketplaceLane: r.isNpmMarketplaceLane ?? false,
-      ...(r.expectedIntegrity !== undefined && {
-        expectedIntegrity: r.expectedIntegrity,
+      registry: options.registry,
+      workDir: options.scratchDir,
+      isNpmMarketplaceLane: options.isNpmMarketplaceLane ?? false,
+      ...(options.expectedIntegrity !== undefined && {
+        expectedIntegrity: options.expectedIntegrity,
       }),
     },
   );
 }
 //@ chunk-e6aww6q8.js:4524665-4524705 affinity
-var CLONE_STEP_FAILED = Symbol("pluginCloneStepFailed");
+var CLONE_STEP_FAILED; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4524665", () => {
+  CLONE_STEP_FAILED = Symbol("pluginCloneStepFailed");
+});
 //@ chunk-e6aww6q8.js:4524705-4526454 fingerprint = gitClone (0.736)
 /**
  * git 克隆插件仓库：校验 sha/ref、--depth 1（有 sha 时 fetch 该提交）、可禁用子模块、校验钉住的提交。
  */
-async function gitClone_2(
-  gitUrl,
-  targetPath,
-  ref,
-  sha,
-  { isDirectoryPlugin: h, noSubmodules: y = false } = {},
-) {
+async function gitClone_2(gitUrl, targetPath, ref, sha, { isDirectoryPlugin, noSubmodules = false } = {}) {
   assertFullCommitSha(sha);
   if (ref?.startsWith("-")) throw Error(`Invalid ref "${ref}": cannot start with "-"`);
-  let S = runGitWithCeilingDirs(targetPath, await resolveGitSshConfig(gitUrl));
-  let { pinArgs, env } = S;
-  let G = y ? ["-c", "submodule.recurse=false"] : [];
-  let q = [...S.inCheckoutArgs, ...G];
-  let Z = [
+  let gitEnv = runGitWithCeilingDirs(targetPath, await resolveGitSshConfig(gitUrl));
+  let { pinArgs, env } = gitEnv;
+  let recurseArgs = noSubmodules ? ["-c", "submodule.recurse=false"] : [];
+  let checkoutArgs = [...gitEnv.inCheckoutArgs, ...recurseArgs];
+  let cloneArgs = [
     ...SSH_BATCH_CONFIG_ARGS,
     ...pinArgs,
-    ...G,
+    ...recurseArgs,
     "clone",
     "--depth",
     "1",
-    ...(y ? ["--no-recurse-submodules"] : ["--recurse-submodules", "--shallow-submodules"]),
+    ...(noSubmodules ? ["--no-recurse-submodules"] : ["--recurse-submodules", "--shallow-submodules"]),
   ];
-  if (ref && !sha) Z.push("--branch", ref);
-  if (sha) Z.push("--no-checkout");
-  Z.push("--", gitUrl, targetPath);
+  if (ref && !sha) cloneArgs.push("--branch", ref);
+  if (sha) cloneArgs.push("--no-checkout");
+  cloneArgs.push("--", gitUrl, targetPath);
   let cloneStarted = performance.now();
-  let cloneResult = await execFileNoThrow(gitExe(), Z, {
+  let cloneResult = await execFileNoThrow(gitExe(), cloneArgs, {
     ...(await prepareGitWorkDir(targetPath, gitEnvWithCMessages(env))),
     stdin: "ignore",
   });
@@ -2038,7 +2152,7 @@ async function gitClone_2(
       "failure",
       performance.now() - cloneStarted,
       classifyFetchError(cloneResult.stderr),
-      h,
+      isDirectoryPlugin,
     );
     throw withTelemetryMessage(
       Object.assign(
@@ -2053,13 +2167,13 @@ async function gitClone_2(
       "plugin git clone failed (stderr redacted)",
     );
   }
-  let we;
+  let pinned;
   if (sha) {
     if (
       (
         await execFileNoThrowWithCwd(
           gitExe(),
-          [...q, "fetch", SAFE_UPLOAD_PACK_ARG_2, "--depth", "1", "origin", sha],
+          [...checkoutArgs, "fetch", SAFE_UPLOAD_PACK_ARG_2, "--depth", "1", "origin", sha],
           {
             cwd: targetPath,
             env,
@@ -2071,7 +2185,7 @@ async function gitClone_2(
       logForDebugging(`Shallow fetch of SHA ${sha} failed, falling back to unshallow fetch`);
       let unshallowResult = await execFileNoThrowWithCwd(
         gitExe(),
-        [...q, "fetch", SAFE_UPLOAD_PACK_ARG_2, "--unshallow", ...(ref ? ["origin", ref] : [])],
+        [...checkoutArgs, "fetch", SAFE_UPLOAD_PACK_ARG_2, "--unshallow", ...(ref ? ["origin", ref] : [])],
         {
           cwd: targetPath,
           env,
@@ -2085,7 +2199,7 @@ async function gitClone_2(
           "failure",
           performance.now() - cloneStarted,
           classifyFetchError(unshallowResult.stderr),
-          h,
+          isDirectoryPlugin,
         );
         throw withTelemetryMessage(
           Error(`Failed to fetch commit ${sha}: ${redactKnownUrls(unshallowResult.stderr, gitUrl)}`),
@@ -2095,7 +2209,7 @@ async function gitClone_2(
     }
     let checkoutResult = await runGitInOwnWorkTree(
       targetPath,
-      [...q, "checkout", sha],
+      [...checkoutArgs, "checkout", sha],
       pickGitNoPromptEnv(env),
     );
     if (checkoutResult.code !== 0) {
@@ -2105,7 +2219,7 @@ async function gitClone_2(
         "failure",
         performance.now() - cloneStarted,
         classifyFetchError(checkoutResult.stderr),
-        h,
+        isDirectoryPlugin,
       );
       throw withTelemetryMessage(
         Error(`Failed to checkout commit ${sha}: ${redactKnownUrls(checkoutResult.stderr, gitUrl)}`),
@@ -2113,8 +2227,8 @@ async function gitClone_2(
       );
     }
     try {
-      we = await verifyPinnedSha(targetPath, "HEAD", sha, {
-        inCheckoutArgs: q,
+      pinned = await verifyPinnedSha(targetPath, "HEAD", sha, {
+        inCheckoutArgs: checkoutArgs,
         env,
       });
     } catch (error) {
@@ -2124,73 +2238,80 @@ async function gitClone_2(
         "failure",
         performance.now() - cloneStarted,
         "sha_pin_mismatch",
-        h,
+        isDirectoryPlugin,
       );
       throw error;
     }
   }
-  logPluginFetch("plugin_clone", gitUrl, "success", performance.now() - cloneStarted, undefined, h);
-  return we;
+  logPluginFetch(
+    "plugin_clone",
+    gitUrl,
+    "success",
+    performance.now() - cloneStarted,
+    undefined,
+    isDirectoryPlugin,
+  );
+  return pinned;
 }
 //@ chunk-e6aww6q8.js:4526454-4526599 fingerprint = installFromGit (1)
-async function installFromGit(gitUrl, targetPath, ref, sha, h) {
+async function installFromGit(gitUrl, targetPath, ref, sha, options) {
   let safeUrl = parsePluginGitUrl(gitUrl);
-  let S = await gitClone_2(safeUrl, targetPath, ref, sha, h);
+  let pinnedSha = await gitClone_2(safeUrl, targetPath, ref, sha, options);
   let refMessage = ref ? ` (ref: ${ref})` : "";
   logForDebugging(`Cloned repository from ${redactUrlQuery(safeUrl)}${refMessage} to ${targetPath}`);
-  return S;
+  return pinnedSha;
 }
 //@ chunk-e6aww6q8.js:4526599-4527713 fingerprint = installFromGitHub (0.49)
 /**
  * github 来源安装：校验 owner/repo，按 SSH 配置情况先 SSH 后 HTTPS（或直接 HTTPS）克隆，失败时回退另一种传输。
  */
-async function installFromGitHub(repo, n, ref, s, noSubmodules, gitHubHttpsFallback) {
+async function installFromGitHub(repo, targetPath, ref, sha, noSubmodules, fallback) {
   if (!/^[a-zA-Z0-9-_.]+\/[a-zA-Z0-9-_.]+$/.test(repo))
     throw Error(`Invalid GitHub repository format: ${repo}. Expected format: owner/repo`);
-  let S = `git@${GITHUB_HOST}:${repo}.git`;
-  let w = `https://github.com/${repo}.git`;
+  let sshUrl = `git@${GITHUB_HOST}:${repo}.git`;
+  let httpsUrl = `https://github.com/${repo}.git`;
   if (preferHttpsGitTransport())
-    return installFromGit(w, n, ref, s, {
+    return installFromGit(httpsUrl, targetPath, ref, sha, {
       noSubmodules,
     });
-  if (gitHubHttpsFallback === undefined)
-    return installFromGit(S, n, ref, s, {
+  if (fallback === undefined)
+    return installFromGit(sshUrl, targetPath, ref, sha, {
       noSubmodules,
     });
-  if (!(await readGitSshCommand(gitHubHttpsFallback, S, n, false)))
+  if (!(await readGitSshCommand(fallback, sshUrl, targetPath, false)))
     try {
-      return await installFromGit(S, n, ref, s, {
+      return await installFromGit(sshUrl, targetPath, ref, sha, {
         noSubmodules,
       });
     } catch (error) {
       if (
         !isCloneStepFailure(error) ||
         !isSshAuthFailureOutput(errorMessage(error)) ||
-        !(await readGitSshCommand(gitHubHttpsFallback, S, n, true))
+        !(await readGitSshCommand(fallback, sshUrl, targetPath, true))
       )
         throw error;
-      await removeDirectoryTreeNoFollow_2(n).catch(() => {
+      await removeDirectoryTreeNoFollow_2(targetPath).catch(() => {
         throw error;
       });
     }
-  gitHubHttpsFallback.notify(sshNotConfiguredMessage(w));
+  fallback.notify(sshNotConfiguredMessage(httpsUrl));
   try {
-    return await installFromGit(w, n, ref, s, {
+    return await installFromGit(httpsUrl, targetPath, ref, sha, {
       noSubmodules,
     });
   } catch (error) {
     if (!isCloneStepFailure(error)) throw error;
     try {
-      await removeDirectoryTreeNoFollow_2(n);
+      await removeDirectoryTreeNoFollow_2(targetPath);
     } catch (error_2) {
-      logForDebugging(`Could not clear ${n} for the SSH retry: ${errorMessage(error_2)}`, {
+      logForDebugging(`Could not clear ${targetPath} for the SSH retry: ${errorMessage(error_2)}`, {
         level: "warn",
       });
       throw error;
     }
-    gitHubHttpsFallback.notify(httpsFailedRetrySshMessage(S));
+    fallback.notify(httpsFailedRetrySshMessage(sshUrl));
     try {
-      return await installFromGit(S, n, ref, s, {
+      return await installFromGit(sshUrl, targetPath, ref, sha, {
         noSubmodules,
       });
     } catch (error_2) {
@@ -2228,19 +2349,21 @@ class GitHostFetchFailedError extends Error {}
 var GIT_NETWORK_ERROR_RE =
   /^(?:fatal: unable to access '[^']*': |error: RPC failed; (?:curl (?:6|7|18|28|35|52|55|56|60|92)\b|HTTP [45]\d\d)|ssh: Could not resolve hostname |ssh: connect to host \S+ port \d+: |fatal: unable to connect to )/;
 //@ chunk-e6aww6q8.js:4528180-4528411 layout
-function classifyGitError(stderr, n) {
+function classifyGitError(stderr, message) {
   let lines = stderr.split(`
 `);
-  if (lines.some((line) => line.startsWith("fatal: remote error:"))) return Error(n);
+  if (lines.some((line) => line.startsWith("fatal: remote error:"))) return Error(message);
   if (lines.some((line) => line.startsWith("xcrun: error:") || line === GIT_MISSING_MAC_MESSAGE))
-    return new GitNotAvailableError(n);
-  return lines.some((line) => GIT_NETWORK_ERROR_RE.test(line)) ? new GitHostFetchFailedError(n) : Error(n);
+    return new GitNotAvailableError(message);
+  return lines.some((line) => GIT_NETWORK_ERROR_RE.test(line))
+    ? new GitHostFetchFailedError(message)
+    : Error(message);
 }
 //@ chunk-e6aww6q8.js:4528411-4528527 layout
 function gitEnvWithCMessages(env) {
-  let { LC_ALL, ...r } = env;
+  let { LC_ALL, ...rest } = env;
   return {
-    ...r,
+    ...rest,
     LC_ALL: undefined,
     ...(LC_ALL !== undefined &&
       LC_ALL !== "" && {
@@ -2255,12 +2378,12 @@ function gitEnvWithCMessages(env) {
  */
 async function installFromGitSubdir(
   url,
-  n,
+  targetPath,
   subdirPath,
   ref,
   sha,
-  tempPath = n,
-  { noSubmodules: S = false } = {},
+  tempPath = targetPath,
+  { noSubmodules = false } = {},
 ) {
   if (!(await isGitUsable()))
     throw new GitNotAvailableError(
@@ -2270,14 +2393,14 @@ async function installFromGitSubdir(
   if (ref?.startsWith("-")) throw Error(`Invalid ref "${ref}": cannot start with "-"`);
   let gitUrl = githubShorthandToCloneUrl(url);
   let cloneDir = `${tempPath}${TEMP_CACHE_CLONE_SUFFIX}`;
-  let G = runGitWithCeilingDirs(cloneDir, await resolveGitSshConfig(gitUrl));
-  let { pinArgs, env } = G;
-  let Se = S ? ["-c", "submodule.recurse=false"] : [];
-  let ke = [...G.inCheckoutArgs, ...Se];
+  let gitEnv = runGitWithCeilingDirs(cloneDir, await resolveGitSshConfig(gitUrl));
+  let { pinArgs, env } = gitEnv;
+  let recurseArgs = noSubmodules ? ["-c", "submodule.recurse=false"] : [];
+  let checkoutArgs = [...gitEnv.inCheckoutArgs, ...recurseArgs];
   let cloneArgs = [
     ...SSH_BATCH_CONFIG_ARGS,
     ...pinArgs,
-    ...Se,
+    ...recurseArgs,
     "clone",
     "--depth",
     "1",
@@ -2299,12 +2422,12 @@ async function installFromGitSubdir(
       "plugin git-subdir clone failed (stderr redacted)",
     );
   try {
-    let Ae = pickGitNoPromptEnv(env);
-    let Ie = [...ke, "read-tree", "-u", "--reset"];
+    let noPromptEnv = pickGitNoPromptEnv(env);
+    let readTreeArgs = [...checkoutArgs, "read-tree", "-u", "--reset"];
     let sparseResult = await runGitInOwnWorkTree(
       cloneDir,
-      [...ke, "sparse-checkout", "set", "--cone", "--", subdirPath],
-      Ae,
+      [...checkoutArgs, "sparse-checkout", "set", "--cone", "--", subdirPath],
+      noPromptEnv,
     );
     if (sparseResult.code !== 0)
       throw withTelemetryMessage(
@@ -2319,7 +2442,7 @@ async function installFromGitSubdir(
         (
           await execFileNoThrowWithCwd(
             gitExe(),
-            [...ke, "fetch", SAFE_UPLOAD_PACK_ARG_2, "--depth", "1", "origin", sha],
+            [...checkoutArgs, "fetch", SAFE_UPLOAD_PACK_ARG_2, "--depth", "1", "origin", sha],
             {
               cwd: cloneDir,
               env,
@@ -2331,7 +2454,7 @@ async function installFromGitSubdir(
         logForDebugging(`Shallow fetch of SHA ${sha} failed for git-subdir, falling back to unshallow fetch`);
         let unshallow = await execFileNoThrowWithCwd(
           gitExe(),
-          [...ke, "fetch", SAFE_UPLOAD_PACK_ARG_2, "--unshallow", ...(ref ? ["origin", ref] : [])],
+          [...checkoutArgs, "fetch", SAFE_UPLOAD_PACK_ARG_2, "--unshallow", ...(ref ? ["origin", ref] : [])],
           {
             cwd: cloneDir,
             env,
@@ -2344,20 +2467,20 @@ async function installFromGitSubdir(
             "plugin git-subdir fetch (unshallow) failed (stderr redacted)",
           );
       }
-      let checkout = await runGitInOwnWorkTree(cloneDir, [...Ie, sha], Ae);
+      let checkout = await runGitInOwnWorkTree(cloneDir, [...readTreeArgs, sha], noPromptEnv);
       if (checkout.code !== 0)
         throw withTelemetryMessage(
           Error(`Failed to checkout commit ${sha}: ${redactKnownUrls(checkout.stderr, gitUrl)}`),
           "plugin git-subdir checkout failed (stderr redacted)",
         );
       resolvedSha = await verifyPinnedSha(cloneDir, `${sha}^{commit}`, sha, {
-        inCheckoutArgs: ke,
+        inCheckoutArgs: checkoutArgs,
         env,
       });
     } else {
       let [checkout, revParse] = await Promise.all([
-        runGitInOwnWorkTree(cloneDir, [...Ie, "HEAD"], Ae),
-        execFileNoThrowWithCwd(gitExe(), [...ke, "rev-parse", "HEAD"], {
+        runGitInOwnWorkTree(cloneDir, [...readTreeArgs, "HEAD"], noPromptEnv),
+        execFileNoThrowWithCwd(gitExe(), [...checkoutArgs, "rev-parse", "HEAD"], {
           cwd: cloneDir,
           env,
           stdin: "ignore",
@@ -2373,8 +2496,9 @@ async function installFromGitSubdir(
     let resolvedSubdir = validatePathWithinBase(cloneDir, subdirPath);
     await hasSymlinkBetween(cloneDir, resolvedSubdir, subdirPath);
     try {
-      if (dirname(n) !== anchoredPluginCachePath()) await getFsImplementation().mkdir(dirname(n));
-      await retryFsOp(resolvedSubdir, n);
+      if (dirname(targetPath) !== anchoredPluginCachePath())
+        await getFsImplementation().mkdir(dirname(targetPath));
+      await retryFsOp(resolvedSubdir, targetPath);
     } catch (e) {
       if (isENOENT(e))
         throw Error(
@@ -2385,7 +2509,7 @@ async function installFromGitSubdir(
     let refMsg = ref ? ` ref=${ref}` : "";
     let shaMsg = resolvedSha ? ` sha=${resolvedSha}` : "";
     logForDebugging(
-      `Extracted subdir ${subdirPath} from ${redactUrlQuery(gitUrl)}${refMsg}${shaMsg} to ${n}`,
+      `Extracted subdir ${subdirPath} from ${redactUrlQuery(gitUrl)}${refMsg}${shaMsg} to ${targetPath}`,
     );
     return resolvedSha;
   } finally {
@@ -2396,19 +2520,25 @@ async function installFromGitSubdir(
   }
 }
 //@ chunk-e6aww6q8.js:4531133-4531330 fingerprint = installFromLocal (0.745)
-async function installFromLocal(sourcePath, targetPath, r, s = false, { noFollowFiles: h = false } = {}) {
+async function installFromLocal(
+  sourcePath,
+  targetPath,
+  containmentRoot,
+  strict = false,
+  { noFollowFiles = false } = {},
+) {
   if (!(await pathExists(sourcePath))) throw Error(`Source path does not exist: ${sourcePath}`);
   await copyDir(
     sourcePath,
     targetPath,
     sourcePath,
     targetPath,
-    r || sourcePath,
-    s,
+    containmentRoot || sourcePath,
+    strict,
     new Set(),
     freshSymlinkCopyBudget(),
     false,
-    h,
+    noFollowFiles,
     true,
   );
   let gitPath = join(targetPath, ".git");
@@ -2465,50 +2595,50 @@ async function cachePlugin(source, options) {
   let cachePath = anchoredPluginCachePath();
   await getFsImplementation().mkdir(cachePath);
   let tempName = getTemporaryCachePath(source);
-  let h = strictCacheAddressable(options?.storageV5);
-  let y =
-    isStorageV5Enabled() && options?.storageV5 !== undefined && h && options.pluginId
+  let strict = strictCacheAddressable(options?.storageV5);
+  let staging =
+    isStorageV5Enabled() && options?.storageV5 !== undefined && strict && options.pluginId
       ? allocateStagingInCache(options.storageV5, options.pluginId)
       : undefined;
-  if (y !== undefined)
+  if (staging !== undefined)
     try {
-      await getFsImplementation().mkdir(dirname(y.path));
-      if (!(await stat(dirname(y.path))).isDirectory())
+      await getFsImplementation().mkdir(dirname(staging.path));
+      if (!(await stat_2(dirname(staging.path))).isDirectory())
         throw Error("the plugin cache folder is not a directory");
     } catch (error) {
       logForDebugging(
-        `Could not prepare ${dirname(y.path)} for staging (${errorMessage(error)}); staging at the cache root instead`,
+        `Could not prepare ${dirname(staging.path)} for staging (${errorMessage(error)}); staging at the cache root instead`,
         {
           level: "debug",
         },
       );
-      y = undefined;
+      staging = undefined;
     }
-  let targetPath = y?.path ?? join(cachePath, tempName);
+  let stagingPath = staging?.path ?? join(cachePath, tempName);
   let tempPath = join(cachePath, tempName);
-  let L = async () => {
-    if (y !== undefined) await getFsImplementation().mkdir(dirname(targetPath));
+  let prepareTargetParent = async () => {
+    if (staging !== undefined) await getFsImplementation().mkdir(dirname(stagingPath));
   };
-  let G = false;
-  let q;
-  let Z;
-  let Se;
-  let ke;
-  let we;
+  let started = false;
+  let gitSha;
+  let contentSha;
+  let producerDir;
+  let npmResolution;
+  let manifestResult;
   try {
     logForDebugging(
-      `Caching plugin from source: ${jsonStringify(redactPluginSourceForLog(source))} to temporary path ${targetPath}`,
+      `Caching plugin from source: ${jsonStringify(redactPluginSourceForLog(source))} to temporary path ${stagingPath}`,
     );
-    G = true;
+    started = true;
     if (typeof source === "string") {
-      await L();
-      await installFromLocal(source, targetPath, options?.containmentRoot, h);
+      await prepareTargetParent();
+      await installFromLocal(source, stagingPath, options?.containmentRoot, strict);
     } else
       switch (source.source) {
         case "npm":
-          await L();
+          await prepareTargetParent();
           try {
-            ke = await fetchNpmPackageNoScripts(source.package, targetPath, {
+            npmResolution = await fetchNpmPackageNoScripts(source.package, stagingPath, {
               registry: source.registry,
               version: source.version,
               scratchDir: `${tempPath}${TEMP_CACHE_LINK_SUFFIX}`,
@@ -2520,10 +2650,10 @@ async function cachePlugin(source, options) {
           }
           break;
         case "github":
-          await L();
-          q = await installFromGitHub(
+          await prepareTargetParent();
+          gitSha = await installFromGitHub(
             source.repo,
-            targetPath,
+            stagingPath,
             source.ref,
             source.sha,
             options.directoryPin !== null,
@@ -2531,16 +2661,16 @@ async function cachePlugin(source, options) {
           );
           break;
         case "url":
-          await L();
-          q = await installFromGit(source.url, targetPath, source.ref, source.sha, {
+          await prepareTargetParent();
+          gitSha = await installFromGit(source.url, stagingPath, source.ref, source.sha, {
             isDirectoryPlugin: options?.isDirectoryPlugin,
             noSubmodules: options.directoryPin !== null,
           });
           break;
         case "git-subdir":
-          q = await installFromGitSubdir(
+          gitSha = await installFromGitSubdir(
             source.url,
-            targetPath,
+            stagingPath,
             source.path,
             source.ref,
             source.sha,
@@ -2551,9 +2681,9 @@ async function cachePlugin(source, options) {
           );
           break;
         case "archive":
-          Z = await installFromArchive(
+          contentSha = await installFromArchive(
             source,
-            targetPath,
+            stagingPath,
             tempPath,
             options?.archiveAuth,
             options?.entryDeclaresComponents ?? false,
@@ -2561,22 +2691,22 @@ async function cachePlugin(source, options) {
           );
           break;
         case "claudeai":
-          Z = await installClaudeAiPlugin(source, targetPath, tempPath, options?.credentials);
+          contentSha = await installClaudeAiPlugin(source, stagingPath, tempPath, options?.credentials);
           break;
         case "command": {
-          let lt = await holdCommandSourceForOrg(
+          let commandResult = await holdCommandSourceForOrg(
             source,
-            targetPath,
+            stagingPath,
             async (sourcePath, targetPath) => {
-              await L();
-              await installFromLocal(sourcePath, targetPath, undefined, h, {
+              await prepareTargetParent();
+              await installFromLocal(sourcePath, targetPath, undefined, strict, {
                 noFollowFiles: true,
               });
             },
             options?.commandSourceConsent,
           );
-          Z = lt.contentSha256;
-          Se = lt.producerDirectory;
+          contentSha = commandResult.contentSha256;
+          producerDir = commandResult.producerDirectory;
           break;
         }
         case "unsupported":
@@ -2595,19 +2725,21 @@ async function cachePlugin(source, options) {
             "plugin source type unsupported",
           );
       }
-    if (h && !isLinkModeCommandSource(source))
-      assertSymlinkFree(await materializePluginLinks(targetPath, copyDir), targetPath);
-    let ze = typeof source === "string" ? source : source.source;
-    we = await loadPluginManifest(targetPath, tempName, ze, [join(targetPath, PLUGIN_JSON)]);
+    if (strict && !isLinkModeCommandSource(source))
+      assertSymlinkFree(await materializePluginLinks(stagingPath, copyDir), stagingPath);
+    let sourceKind = typeof source === "string" ? source : source.source;
+    manifestResult = await loadPluginManifest(stagingPath, tempName, sourceKind, [
+      join(stagingPath, PLUGIN_JSON),
+    ]);
     if (!isLinkModeCommandSource(source))
-      await removeIgnoredEntries(targetPath, {
+      await removeIgnoredEntries(stagingPath, {
         keepGit: true,
       });
   } catch (error) {
-    if (G && (h || (await pathExists(targetPath)))) {
-      logForDebugging(`Cleaning up failed installation at ${targetPath}`);
+    if (started && (strict || (await pathExists(stagingPath)))) {
+      logForDebugging(`Cleaning up failed installation at ${stagingPath}`);
       try {
-        await removeDirectoryTreeNoFollow_2(targetPath);
+        await removeDirectoryTreeNoFollow_2(stagingPath);
       } catch (error) {
         logForDebugging(`Failed to clean up installation: ${error}`, {
           level: "error",
@@ -2616,52 +2748,52 @@ async function cachePlugin(source, options) {
     }
     throw error;
   }
-  let Ee = typeof source === "string" ? source : source.source;
-  let { manifest, manifestPath, depConstraints } = we;
-  let We =
+  let sourceKind = typeof source === "string" ? source : source.source;
+  let { manifest, manifestPath, depConstraints } = manifestResult;
+  let pluginManifest =
     manifestPath !== null
       ? manifest
       : options?.manifest || {
           name: tempName,
-          description: `Plugin cached from ${Ee}`,
+          description: `Plugin cached from ${sourceKind}`,
         };
-  logForDebugging(`Successfully cached plugin ${We.name} to ${targetPath}`);
+  logForDebugging(`Successfully cached plugin ${pluginManifest.name} to ${stagingPath}`);
   return {
-    path: targetPath,
-    manifest: We,
-    ...(q && {
-      gitCommitSha: q,
+    path: stagingPath,
+    manifest: pluginManifest,
+    ...(gitSha && {
+      gitCommitSha: gitSha,
     }),
-    ...(Z && {
-      contentSha256: Z,
+    ...(contentSha && {
+      contentSha256: contentSha,
     }),
-    ...(Se && {
-      producerPath: Se,
+    ...(producerDir && {
+      producerPath: producerDir,
     }),
-    ...(ke && {
-      npmResolution: ke,
+    ...(npmResolution && {
+      npmResolution,
     }),
     ...(depConstraints && {
       depConstraints,
     }),
-    ...(y && {
-      stagingScope: y.scope,
+    ...(staging && {
+      stagingScope: staging.scope,
     }),
   };
 }
 //@ chunk-e6aww6q8.js:4534542-4534733 placement
 function allocateStagingInCache(storageV5, pluginId) {
-  let r = anchoredPluginCachePath();
-  let s = pluginCacheStorageScope(getPluginCacheDirIn(getPluginsDirectory(), pluginId), r);
-  if (s === null || s.plugin === undefined) return;
-  let h = storageV5.stagingScopeWithin(s);
-  if (!isVersionRootStorageKey(h)) return;
-  let y = storageKeyToCachePath(h, r);
-  return y === null
+  let cacheRoot = anchoredPluginCachePath();
+  let pluginScope = pluginCacheStorageScope(getPluginCacheDirIn(getPluginsDirectory(), pluginId), cacheRoot);
+  if (pluginScope === null || pluginScope.plugin === undefined) return;
+  let stagingKey = storageV5.stagingScopeWithin(pluginScope);
+  if (!isVersionRootStorageKey(stagingKey)) return;
+  let stagingPath = storageKeyToCachePath(stagingKey, cacheRoot);
+  return stagingPath === null
     ? undefined
     : {
-        scope: h,
-        path: y,
+        scope: stagingKey,
+        path: stagingPath,
       };
 }
 //@ chunk-e6aww6q8.js:4534733-4534867 placement
@@ -2672,9 +2804,16 @@ var UNSUPPORTED_SOURCE_MESSAGE =
 /**
  * 安装插件压缩包：拒绝只声明不安全组件路径的条目，过滤 __MACOSX 等文件。
  */
-async function installFromArchive(source, n, tempPath, archiveAuth, h = false, y = []) {
+async function installFromArchive(
+  source,
+  targetPath,
+  tempPath,
+  archiveAuth,
+  entryDeclaresComponents = false,
+  declaredComponentPaths = [],
+) {
   return withFeatureTelemetry("plugin_archive_install", async () => {
-    if (y === null)
+    if (declaredComponentPaths === null)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `Plugin archive from ${redactUrlsInText(source.url)} was not installed: its marketplace entry declares only unsafe or malformed component paths. Fix the entry.`,
         "plugin marketplace entry declares only unsafe component paths",
@@ -2683,47 +2822,48 @@ async function installFromArchive(source, n, tempPath, archiveAuth, h = false, y
     if (archiveAuth && Object.keys(archiveAuth.headers).length > 0)
       if (sameOrigin_2(archiveAuth.url, source.url)) headers = archiveAuth.headers;
       else logForDebugging("Not forwarding marketplace headers to plugin archive on a different origin");
-    let { data: w, contentSha256 } = await downloadAndVerifyBinary(source.url, {
+    let { data: archiveData, contentSha256 } = await downloadAndVerifyBinary(source.url, {
       sha256: source.sha256,
       headers,
     });
-    let G = `${tempPath}${TEMP_CACHE_LINK_SUFFIX}`;
+    let stagingDirPath = `${tempPath}${TEMP_CACHE_LINK_SUFFIX}`;
     try {
       if (
-        !(await extractZipToDirectory(w, G)).some(
-          (ke) => !ke.startsWith("__MACOSX/") && basename(ke) !== ".DS_Store",
+        !(await extractZipToDirectory(archiveData, stagingDirPath)).some(
+          (extractedPath) =>
+            !extractedPath.startsWith("__MACOSX/") && basename(extractedPath) !== ".DS_Store",
         )
       )
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
           `Plugin archive from ${redactUrlsInText(source.url)} contained no plugin files. The archive was not installed. Verify the URL serves a zip of the plugin contents.`,
           "plugin archive was empty",
         );
-      let pluginRootInExtracted = await findPluginRootInExtracted(G);
-      if (pluginRootInExtracted !== G)
+      let pluginRootInExtracted = await findPluginRootInExtracted(stagingDirPath);
+      if (pluginRootInExtracted !== stagingDirPath)
         logForDebugging(
           `Plugin archive had a wrapper directory; using ${printableName(basename(pluginRootInExtracted))} as the plugin root`,
         );
-      if (h && y !== null && y.length > 0) {
-        if (!(await anyPathExistsUnder(pluginRootInExtracted, y))) {
-          let singleTopDir = await findSingleTopDir(pluginRootInExtracted);
-          if (singleTopDir && (await anyPathExistsUnder(singleTopDir, y))) {
+      if (entryDeclaresComponents && declaredComponentPaths !== null && declaredComponentPaths.length > 0) {
+        if (!(await anyPathExistsUnder(pluginRootInExtracted, declaredComponentPaths))) {
+          let root = await findSingleTopDir(pluginRootInExtracted);
+          if (root && (await anyPathExistsUnder(root, declaredComponentPaths))) {
             logForDebugging(
-              `Plugin archive entry paths resolve under wrapper ${printableName(basename(singleTopDir))}; using it as the plugin root`,
+              `Plugin archive entry paths resolve under wrapper ${printableName(basename(root))}; using it as the plugin root`,
             );
-            pluginRootInExtracted = singleTopDir;
+            pluginRootInExtracted = root;
           } else if (
-            pluginRootInExtracted !== G &&
+            pluginRootInExtracted !== stagingDirPath &&
             !(await hasManifestIdentityFile(pluginRootInExtracted)) &&
-            (await anyPathExistsUnder(G, y))
+            (await anyPathExistsUnder(stagingDirPath, declaredComponentPaths))
           ) {
             logForDebugging(
               "Plugin archive entry paths resolve at the archive root; using it instead of the promoted subdirectory",
             );
-            pluginRootInExtracted = G;
+            pluginRootInExtracted = stagingDirPath;
           } else {
-            let we = examplePathSuffix(y[0]);
+            let pathSuffix = examplePathSuffix(declaredComponentPaths[0]);
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `Plugin archive from ${redactUrlsInText(source.url)} does not contain the component paths its marketplace entry declares${we}. The archive was not installed. Repackage the zip so the declared paths sit at the plugin root (optionally inside a single wrapper directory), or fix the entry.`,
+              `Plugin archive from ${redactUrlsInText(source.url)} does not contain the component paths its marketplace entry declares${pathSuffix}. The archive was not installed. Repackage the zip so the declared paths sit at the plugin root (optionally inside a single wrapper directory), or fix the entry.`,
               "plugin archive missing entry-declared component paths",
             );
           }
@@ -2738,16 +2878,17 @@ async function installFromArchive(source, n, tempPath, archiveAuth, h = false, y
           isProbe: true,
         },
       );
-      if (!h && !(await pluginRootHasMarker(pluginRootInExtracted)))
+      if (!entryDeclaresComponents && !(await pluginRootHasMarker(pluginRootInExtracted)))
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
           `Plugin archive from ${redactUrlsInText(source.url)} has no plugin content at its root (expected .claude-plugin/ or a commands/, skills/, agents/, hooks/, themes/, output-styles/, monitors/, workflows/, SKILL.md, .mcp.json, or .lsp.json at the top level, optionally inside a single wrapper directory). The archive was not installed.`,
           "plugin archive has no plugin-shaped root",
         );
-      if (dirname(n) !== anchoredPluginCachePath()) await getFsImplementation().mkdir(dirname(n));
-      await retryFsOp(pluginRootInExtracted, n);
+      if (dirname(targetPath) !== anchoredPluginCachePath())
+        await getFsImplementation().mkdir(dirname(targetPath));
+      await retryFsOp(pluginRootInExtracted, targetPath);
       return contentSha256;
     } finally {
-      await rm_2(G, {
+      await rm_2(stagingDirPath, {
         recursive: true,
         force: true,
       }).catch(() => {});
@@ -2758,116 +2899,133 @@ async function installFromArchive(source, n, tempPath, archiveAuth, h = false, y
 /**
  * 读取并解析 .claude-plugin/plugin.json（找不到再试候选路径），先确认清单路径不经符号链接逃出插件目录；JSON 损坏或 schema 失败抛 TelemetrySafeError；返回 {manifest, manifestPath, depConstraints}。没有 manifest 时用目录名合成。
  */
-async function loadPluginManifest(pluginPath, pluginName, source, s = [], h, y) {
-  let S = () => {
-    if (!h?.isProbe && !h?.noTelemetry) logFeatureOk("plugin_load_manifest");
+async function loadPluginManifest(
+  pluginPath,
+  pluginName,
+  source,
+  extraManifestPaths = [],
+  options,
+  storageV5,
+) {
+  let onSuccess = () => {
+    if (!options?.isProbe && !options?.noTelemetry) logFeatureOk("plugin_load_manifest");
   };
-  let w = (G) => {
-    if (h?.noTelemetry) return;
-    logFeatureBad("plugin_load_manifest", G);
+  let onFailure = (reason) => {
+    if (options?.noTelemetry) return;
+    logFeatureBad("plugin_load_manifest", reason);
   };
-  let L = [join(pluginPath, PLUGIN_MANIFEST_PATH_2), ...s];
+  let candidatePaths = [join(pluginPath, PLUGIN_MANIFEST_PATH_2), ...extraManifestPaths];
   await assertManifestContained(
-    h?.containedIn,
+    options?.containedIn,
     pluginPath,
     pluginName,
     PLUGIN_MANIFEST_PATH_2,
-    h?.noTelemetry,
+    options?.noTelemetry,
   );
-  for (let G of L) {
-    let q;
-    let Z = isStorageV5Enabled() && y !== undefined ? await readFileViaStorageBackend(y, G) : null;
-    if (Z !== null) {
-      if (Z.outcome === "absent" || (Z.outcome === "error" && Z.telemetryCode === "ENOTDIR")) continue;
-      if (Z.outcome === "error") {
-        w("plugin_load_manifest_read_failed");
+  for (let manifestPath of candidatePaths) {
+    let manifestContent;
+    let backendRead =
+      isStorageV5Enabled() && storageV5 !== undefined
+        ? await readFileViaStorageBackend(storageV5, manifestPath)
+        : null;
+    if (backendRead !== null) {
+      if (
+        backendRead.outcome === "absent" ||
+        (backendRead.outcome === "error" && backendRead.telemetryCode === "ENOTDIR")
+      )
+        continue;
+      if (backendRead.outcome === "error") {
+        onFailure("plugin_load_manifest_read_failed");
         logForDebugging(
-          `Plugin ${pluginName}: failed to read manifest file at ${G}. Read error: ${Z.detail}`,
+          `Plugin ${pluginName}: failed to read manifest file at ${manifestPath}. Read error: ${backendRead.detail}`,
           {
             level: "error",
           },
         );
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `Plugin ${pluginName}: failed to read manifest file at ${G}.
+          `Plugin ${pluginName}: failed to read manifest file at ${manifestPath}.
 
-Read error: ${Z.detail}`,
+Read error: ${backendRead.detail}`,
           "plugin manifest read failed (v5 backend error)",
           MANIFEST_ERROR_CLASSES.readFailed,
         );
       }
-      q = Z.content;
+      manifestContent = backendRead.content;
     } else
       try {
-        q = await readFile(G, {
+        manifestContent = await readFile(manifestPath, {
           encoding: "utf-8",
         });
       } catch (error) {
         if (isENOENT(error) || getErrnoCode(error) === "ENOTDIR") continue;
         let parsedJson = errorMessage(error);
-        w("plugin_load_manifest_read_failed");
+        onFailure("plugin_load_manifest_read_failed");
         logForDebugging(
-          `Plugin ${pluginName}: failed to read manifest file at ${G}. Read error: ${parsedJson}`,
+          `Plugin ${pluginName}: failed to read manifest file at ${manifestPath}. Read error: ${parsedJson}`,
           {
             level: "error",
           },
         );
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `Plugin ${pluginName}: failed to read manifest file at ${G}.
+          `Plugin ${pluginName}: failed to read manifest file at ${manifestPath}.
 
 Read error: ${parsedJson}`,
           "plugin manifest read failed",
           MANIFEST_ERROR_CLASSES.readFailed,
         );
       }
-    let Se;
+    let manifestJson;
     try {
-      Se = jsonParse(stripBom(q));
+      manifestJson = jsonParse(stripBom(manifestContent));
     } catch (error) {
       let errorMsg = errorMessage(error);
-      w("plugin_load_manifest_json_invalid");
-      logForDebugging(`Plugin ${pluginName} has a corrupt manifest file at ${G}. Parse error: ${errorMsg}`, {
-        level: "error",
-      });
+      onFailure("plugin_load_manifest_json_invalid");
+      logForDebugging(
+        `Plugin ${pluginName} has a corrupt manifest file at ${manifestPath}. Parse error: ${errorMsg}`,
+        {
+          level: "error",
+        },
+      );
       throw new ManifestLoadError(
-        `Plugin ${pluginName} has a corrupt manifest file at ${G}.
+        `Plugin ${pluginName} has a corrupt manifest file at ${manifestPath}.
 
 JSON parse error: ${errorMsg}`,
         "plugin manifest is not valid JSON",
         MANIFEST_ERROR_CLASSES.jsonInvalid,
-        G,
+        manifestPath,
         [errorMsg],
       );
     }
-    let ke = validatePluginManifest(Se, "plugin-json", {
+    let validation = validatePluginManifest(manifestJson, "plugin-json", {
       pluginName,
-      manifestPath: G,
+      manifestPath,
     });
-    if (!ke.ok) {
-      w("plugin_load_manifest_schema_invalid");
-      logForDebugging(ke.error, {
+    if (!validation.ok) {
+      onFailure("plugin_load_manifest_schema_invalid");
+      logForDebugging(validation.error, {
         level: "error",
       });
       throw new ManifestLoadError(
-        ke.error,
+        validation.error,
         "plugin manifest failed schema validation",
         MANIFEST_ERROR_CLASSES.schemaInvalid,
-        G,
-        ke.errors.map((error) => (error.path ? `${error.path}: ${error.message}` : error.message)),
+        manifestPath,
+        validation.errors.map((error) => (error.path ? `${error.path}: ${error.message}` : error.message)),
       );
     }
-    for (let hookNote of ke.hookNotes)
+    for (let hookNote of validation.hookNotes)
       logForDebugging(`Plugin ${pluginName}: ${hookNote}`, {
         level: "warn",
       });
-    let { manifest, rawCandidate } = ke;
-    S();
+    let { manifest, rawCandidate } = validation;
+    onSuccess();
     return {
       manifest,
-      manifestPath: G,
+      manifestPath,
       depConstraints: readManifestDependencyPins(rawCandidate),
     };
   }
-  S();
+  onSuccess();
   return {
     manifest: {
       name: pluginName,
@@ -2881,42 +3039,45 @@ JSON parse error: ${errorMsg}`,
 /**
  * 读取 hooks/hooks.json：校验 PluginHooksSchema，返回 hooks 配置与 hooks 模块（modules）列表。
  */
-async function loadPluginHooks_3(hooksFilePath, pluginName, r) {
-  let s;
-  let h = isStorageV5Enabled() && r !== undefined ? await readFileViaStorageBackend(r, hooksFilePath) : null;
-  if (h !== null) {
-    if (h.outcome === "error")
+async function loadPluginHooks_3(hooksFilePath, pluginName, storageV5) {
+  let content;
+  let backendRead =
+    isStorageV5Enabled() && storageV5 !== undefined
+      ? await readFileViaStorageBackend(storageV5, hooksFilePath)
+      : null;
+  if (backendRead !== null) {
+    if (backendRead.outcome === "error")
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Hooks file read failed at ${hooksFilePath} for plugin ${pluginName}: ${h.detail}`,
+        `Hooks file read failed at ${hooksFilePath} for plugin ${pluginName}: ${backendRead.detail}`,
         "plugin hooks file read failed (v5 backend)",
       );
-    s = h.outcome === "found" ? h.content : undefined;
+    content = backendRead.outcome === "found" ? backendRead.content : undefined;
   } else if (await pathExists(hooksFilePath))
-    s = await readFile(hooksFilePath, {
+    content = await readFile(hooksFilePath, {
       encoding: "utf-8",
     });
-  if (s === undefined)
+  if (content === undefined)
     throw Error(
       `Hooks file not found at ${hooksFilePath} for plugin ${pluginName}. If the manifest declares hooks, the file must exist.`,
     );
-  let y = jsonParse(s);
-  if (hasNestedHooks(y, SETTINGS_SKIPPED_KEYS) || looksLikeHookMatcher(y))
+  let parsed = jsonParse(content);
+  if (hasNestedHooks(parsed, SETTINGS_SKIPPED_KEYS) || looksLikeHookMatcher(parsed))
     throw new HookValidationError(
       `hooks.json declares ${[...GUARD_HOOK_EVENTS].join("/")} at its top level, outside the "hooks" object \u2014 ${UNLOADABLE_GUARD_NOTE}`,
     );
   if (
-    y &&
-    typeof y === "object" &&
-    "hooks" in y &&
-    y.hooks !== null &&
-    y.hooks !== undefined &&
-    !isPlainObject_5(y.hooks)
+    parsed &&
+    typeof parsed === "object" &&
+    "hooks" in parsed &&
+    parsed.hooks !== null &&
+    parsed.hooks !== undefined &&
+    !isPlainObject_5(parsed.hooks)
   )
     throw new HookValidationError(
       `hooks: must be an object mapping event names to matcher arrays \u2014 ${UNLOADABLE_GUARD_NOTE}`,
     );
-  if (y && typeof y === "object" && "hooks" in y) {
-    let rawHooksConfig = validateHooksSetting(y.hooks);
+  if (parsed && typeof parsed === "object" && "hooks" in parsed) {
+    let rawHooksConfig = validateHooksSetting(parsed.hooks);
     for (let note of rawHooksConfig.notes)
       logForDebugging(`Plugin ${pluginName}: ${note}`, {
         level: "warn",
@@ -2926,49 +3087,49 @@ async function loadPluginHooks_3(hooksFilePath, pluginName, r) {
         `${rawHooksConfig.unloadableGuards.join("; ")} \u2014 ${UNLOADABLE_GUARD_NOTE}`,
       );
   }
-  let S;
+  let parsedHooks;
   try {
-    S = PluginHooksSchema().parse(y);
+    parsedHooks = PluginHooksSchema().parse(parsed);
   } catch (error) {
-    let hooks = y && typeof y === "object" && "hooks" in y ? y.hooks : undefined;
-    if (hasGuardHooks_2(hooks) || hasGuardHooks_2(y))
+    let hooks = parsed && typeof parsed === "object" && "hooks" in parsed ? parsed.hooks : undefined;
+    if (hasGuardHooks_2(hooks) || hasGuardHooks_2(parsed))
       throw new HookValidationError(`${errorMessage(error)} \u2014 ${UNLOADABLE_GUARD_NOTE}`);
     throw error;
   }
-  warnUnknownHooksJsonKeys(pluginName, hooksFilePath, y);
+  warnUnknownHooksJsonKeys(pluginName, hooksFilePath, parsed);
   return {
-    hooks: S.hooks ?? {},
-    modules: S.modules ?? [],
+    hooks: parsedHooks.hooks ?? {},
+    modules: parsedHooks.modules ?? [],
   };
 }
 //@ chunk-e6aww6q8.js:4540263-4540956 layout
 /**
  * 处理 hooks.json 的 modules（JS hooks 模块）：每插件只允许一个，多于一个时报 hook-load-failed 都不加载。
  */
-async function loadPluginHooksModule(e) {
-  let { plugin, namedModules, source, storageV5, anchor } = e;
-  let [S, w] = namedModules;
-  if (S === undefined) return;
-  if (w !== undefined)
+async function loadPluginHooksModule(options) {
+  let { plugin, namedModules, source, storageV5, anchor } = options;
+  let [spec, moduleSpec] = namedModules;
+  if (spec === undefined) return;
+  if (moduleSpec !== undefined)
     return {
       type: "hook-load-failed",
       source,
       plugin: plugin.name,
-      hookPath: w.hooksFilePath,
+      hookPath: moduleSpec.hooksFilePath,
       reason: `Plugin ${plugin.name} names one hooks module per plugin, but ${namedModules.map((namedModule) => namedModule.hooksFilePath).join(" and ")} each name one in \`modules\`; neither is loaded`,
     };
   let { fullPath, reason } = await resolveComponentPath(
     resolveWithinDir,
     anchor,
     plugin.path,
-    join(relative(plugin.path, dirname(S.hooksFilePath)), S.spec),
+    join(relative(plugin.path, dirname(spec.hooksFilePath)), spec.spec),
   );
   if (fullPath === null)
     return {
       type: "path-traversal",
       source,
       plugin: plugin.name,
-      path: S.spec,
+      path: spec.spec,
       component: "hooks",
       ...(reason !== undefined && {
         reason,
@@ -2989,28 +3150,37 @@ async function loadPluginHooksModule(e) {
 /**
  * 读 manifest 的 monitors（或 experimental.monitors），缺省时读 monitors/monitors.json，校验后挂到插件对象上（后台常驻监视命令）。
  */
-async function loadPluginMonitors(pluginPath, manifest, source, s, h, y, S) {
+async function loadPluginMonitors(
+  pluginPath,
+  manifest,
+  source,
+  errors,
+  anchor,
+  storageV5,
+  containmentAnchorDir,
+) {
   let monitors = manifest.experimental?.monitors ?? manifest.monitors;
-  let L;
+  let monitorsPath;
   if (monitors === undefined) {
-    let G = join(pluginPath, "monitors", "monitors.json");
-    let q = await probeComponentPath(y, G);
-    if (q === "present") {
+    let standardPath = join(pluginPath, "monitors", "monitors.json");
+    let presence = await probeComponentPath(storageV5, standardPath);
+    if (presence === "present") {
       if (
-        await reportIfPathEscapes(S, pluginPath, join("monitors", "monitors.json"), {
-          errors: s,
+        await reportIfPathEscapes(containmentAnchorDir, pluginPath, join("monitors", "monitors.json"), {
+          errors,
           source,
           plugin: manifest.name,
           component: "monitors",
         })
       )
         return;
-      L = G;
-    } else if (q !== "absent") reportUncheckablePath(s, source, manifest.name, "monitors", G, q);
+      monitorsPath = standardPath;
+    } else if (presence !== "absent")
+      reportUncheckablePath(errors, source, manifest.name, "monitors", standardPath, presence);
   } else if (typeof monitors === "string") {
-    let { fullPath, reason } = await resolveComponentPath(resolveWithinDir, h, pluginPath, monitors);
+    let { fullPath, reason } = await resolveComponentPath(resolveWithinDir, anchor, pluginPath, monitors);
     if (fullPath === null) {
-      s.push({
+      errors.push({
         type: "path-traversal",
         source,
         plugin: manifest.name,
@@ -3022,36 +3192,39 @@ async function loadPluginMonitors(pluginPath, manifest, source, s, h, y, S) {
       });
       return;
     }
-    L = fullPath;
+    monitorsPath = fullPath;
   } else return monitors;
-  if (L === undefined) return;
+  if (monitorsPath === undefined) return;
   try {
-    let G = isStorageV5Enabled() && y !== undefined ? await readFileViaStorageBackend(y, L) : null;
-    let q;
-    if (G !== null) {
-      if (G.outcome !== "found")
+    let backendRead =
+      isStorageV5Enabled() && storageV5 !== undefined
+        ? await readFileViaStorageBackend(storageV5, monitorsPath)
+        : null;
+    let monitorsContent;
+    if (backendRead !== null) {
+      if (backendRead.outcome !== "found")
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          G.outcome === "error" ? G.detail : `monitors file not found at ${L}`,
+          backendRead.outcome === "error" ? backendRead.detail : `monitors file not found at ${monitorsPath}`,
           "plugin monitors read failed (v5 backend)",
         );
-      q = G.content;
+      monitorsContent = backendRead.content;
     } else
-      q = await readFile(L, {
+      monitorsContent = await readFile(monitorsPath, {
         encoding: "utf-8",
       });
-    return PluginMonitorsArraySchema().parse(jsonParse(q));
+    return PluginMonitorsArraySchema().parse(jsonParse(monitorsContent));
   } catch (error) {
-    let q = errorMessage(error);
-    logForDebugging(`Failed to load monitors for ${manifest.name} from ${L}: ${q}`, {
+    let reason = errorMessage(error);
+    logForDebugging(`Failed to load monitors for ${manifest.name} from ${monitorsPath}: ${reason}`, {
       level: "error",
     });
-    s.push({
+    errors.push({
       type: "component-load-failed",
       source,
       plugin: manifest.name,
       component: "monitors",
-      path: L,
-      reason: q,
+      path: monitorsPath,
+      reason,
     });
     return;
   }
@@ -3060,21 +3233,38 @@ async function loadPluginMonitors(pluginPath, manifest, source, s, h, y, S) {
 /**
  * 把相对路径解析到目录内，越界返回 null。
  */
-function resolveWithinDir(e, n) {
-  let r = resolve_2(e);
-  let s = resolve_2(r, n);
-  let h = relative(r, s);
-  if (h === ".." || h.startsWith(`..${sep}`) || resolve_2(h) === h) return null;
-  return s;
+function resolveWithinDir(baseDir, targetPath) {
+  let resolvedBase = resolve_2(baseDir);
+  let resolvedTarget = resolve_2(resolvedBase, targetPath);
+  let relativePath = relative(resolvedBase, resolvedTarget);
+  if (
+    relativePath === ".." ||
+    relativePath.startsWith(`..${sep}`) ||
+    resolve_2(relativePath) === relativePath
+  )
+    return null;
+  return resolvedTarget;
 }
 //@ chunk-e6aww6q8.js:4542132-4543378 fingerprint = validatePluginPaths (0.466)
 /**
  * 校验 manifest 中声明的组件路径：都要在插件目录内且存在，逃逸或不存在的记 path-traversal/path-not-found 错误，返回有效路径。
  */
-async function validatePluginPaths(relPaths, pluginPath, name, source, h, y, S, w, L, G = false, q) {
+async function validatePluginPaths(
+  relPaths,
+  pluginPath,
+  name,
+  source,
+  component,
+  label,
+  verb,
+  errors,
+  anchor,
+  mustBeDirectory = false,
+  storageV5,
+) {
   let checks = await Promise.all(
     relPaths.map(async (relPath) => {
-      let { fullPath, reason } = await resolveComponentPath(resolveWithinDir, L, pluginPath, relPath);
+      let { fullPath, reason } = await resolveComponentPath(resolveWithinDir, anchor, pluginPath, relPath);
       if (fullPath === null)
         return {
           relPath,
@@ -3087,7 +3277,7 @@ async function validatePluginPaths(relPaths, pluginPath, name, source, h, y, S, 
         relPath,
         fullPath,
         reason,
-        ...(await statPluginPath(q, fullPath)),
+        ...(await statPluginPath(storageV5, fullPath)),
       };
     }),
   );
@@ -3095,17 +3285,17 @@ async function validatePluginPaths(relPaths, pluginPath, name, source, h, y, S, 
   for (let { relPath, fullPath, exists, isDirectory, reason } of checks) {
     if (fullPath === null) {
       logForDebugging(
-        `${y} path ${relPath} ${S} escapes plugin directory for ${name}${reason === undefined ? "" : `: ${reason}`}`,
+        `${label} path ${relPath} ${verb} escapes plugin directory for ${name}${reason === undefined ? "" : `: ${reason}`}`,
         {
           level: "error",
         },
       );
-      w.push({
+      errors.push({
         type: "path-traversal",
         source,
         plugin: name,
         path: relPath,
-        component: h,
+        component,
         ...(reason !== undefined && {
           reason,
         }),
@@ -3113,37 +3303,37 @@ async function validatePluginPaths(relPaths, pluginPath, name, source, h, y, S, 
       continue;
     }
     if (!exists) {
-      logForDebugging(`${y} path ${relPath} ${S} not found at ${fullPath} for ${name}`, {
+      logForDebugging(`${label} path ${relPath} ${verb} not found at ${fullPath} for ${name}`, {
         level: "error",
       });
-      w.push({
+      errors.push({
         type: "path-not-found",
         source,
         plugin: name,
         path: fullPath,
-        component: h,
+        component,
       });
-    } else if (G && !isDirectory) {
-      let Me = dirname(relPath);
-      let We =
-        h === "skills" && basename(relPath).toLowerCase() === "skill.md"
-          ? Me === "."
+    } else if (mustBeDirectory && !isDirectory) {
+      let parent = dirname(relPath);
+      let parentHint =
+        component === "skills" && basename(relPath).toLowerCase() === "skill.md"
+          ? parent === "."
             ? " \u2014 point to the plugin root '.' instead"
-            : ` \u2014 point to the parent directory '${Me}' instead`
+            : ` \u2014 point to the parent directory '${parent}' instead`
           : "";
       let reason =
-        h === "skills"
-          ? `path is a file; skills entries must be directories containing SKILL.md${We}`
+        component === "skills"
+          ? `path is a file; skills entries must be directories containing SKILL.md${parentHint}`
           : "path is a file; expected a directory";
-      logForDebugging(`${y} path ${relPath} ${S} is a file, not a directory, for ${name}`, {
+      logForDebugging(`${label} path ${relPath} ${verb} is a file, not a directory, for ${name}`, {
         level: "error",
       });
-      w.push({
+      errors.push({
         type: "component-load-failed",
         source,
         plugin: name,
         path: relPath,
-        component: h,
+        component,
         reason,
       });
     } else validPaths.push(fullPath);
@@ -3154,7 +3344,7 @@ async function validatePluginPaths(relPaths, pluginPath, name, source, h, y, S, 
 /**
  * 处理 manifest 或 marketplace 条目中 commands 的对象形式（name → {source|content,…}）与路径数组：解析路径、校验逃逸、内联内容注册，结果写入插件对象。
  */
-async function finishLoadingPluginFromPath(e, commands, r, s) {
+async function finishLoadingPluginFromPath(plugin, commands, options, storageV5) {
   let {
     pluginPath,
     pluginName,
@@ -3165,25 +3355,25 @@ async function finishLoadingPluginFromPath(e, commands, r, s) {
     anchor,
     registerInlineContent,
     errors,
-  } = r;
-  let ke = origin === "manifest" ? "specified in manifest but" : "from marketplace entry";
-  let we = origin === "manifest" ? "manifest" : "marketplace entry";
-  let Ee = Object.values(commands)[0];
+  } = options;
+  let originNote = origin === "manifest" ? "specified in manifest but" : "from marketplace entry";
+  let originLabel = origin === "manifest" ? "manifest" : "marketplace entry";
+  let firstEntry = Object.values(commands)[0];
   if (
     typeof commands === "object" &&
     !Array.isArray(commands) &&
-    Ee &&
-    typeof Ee === "object" &&
-    ("source" in Ee || "content" in Ee)
+    firstEntry &&
+    typeof firstEntry === "object" &&
+    ("source" in firstEntry || "content" in firstEntry)
   ) {
-    let We =
+    let commandsMetadata =
       mode === "append"
         ? {
-            ...(e.commandsMetadata || {}),
+            ...(plugin.commandsMetadata || {}),
           }
         : {};
-    let ze = 0;
-    let lt = [];
+    let acceptedCount = 0;
+    let acceptedPaths = [];
     let checks = await Promise.all(
       Object.entries(commands).map(async ([commandName, metadata]) => {
         if (!metadata || typeof metadata !== "object")
@@ -3205,7 +3395,7 @@ async function finishLoadingPluginFromPath(e, commands, r, s) {
             kind: "source",
             fullPath,
             reason,
-            exists: fullPath !== null && (await isCachePresent(s, fullPath)),
+            exists: fullPath !== null && (await isCachePresent(storageV5, fullPath)),
           };
         }
         if (metadata.content && registerInlineContent)
@@ -3224,13 +3414,13 @@ async function finishLoadingPluginFromPath(e, commands, r, s) {
     for (let check of checks) {
       if (check.kind === "skip") continue;
       if (check.kind === "content") {
-        We[check.commandName] = check.metadata;
-        ze++;
+        commandsMetadata[check.commandName] = check.metadata;
+        acceptedCount++;
         continue;
       }
       if (check.fullPath === null) {
         logForDebugging(
-          `Command ${check.commandName} source ${check.metadata.source} ${ke} escapes plugin directory for ${pluginName}${check.reason === undefined ? "" : `: ${check.reason}`}`,
+          `Command ${check.commandName} source ${check.metadata.source} ${originNote} escapes plugin directory for ${pluginName}${check.reason === undefined ? "" : `: ${check.reason}`}`,
           {
             level: "error",
           },
@@ -3246,12 +3436,12 @@ async function finishLoadingPluginFromPath(e, commands, r, s) {
           }),
         });
       } else if (check.exists) {
-        lt.push(check.fullPath);
-        We[check.commandName] = check.metadata;
-        ze++;
+        acceptedPaths.push(check.fullPath);
+        commandsMetadata[check.commandName] = check.metadata;
+        acceptedCount++;
       } else {
         logForDebugging(
-          `Command ${check.commandName} path ${check.metadata.source} ${ke} not found at ${check.fullPath} for ${pluginName}`,
+          `Command ${check.commandName} path ${check.metadata.source} ${originNote} not found at ${check.fullPath} for ${pluginName}`,
           {
             level: "error",
           },
@@ -3265,13 +3455,15 @@ async function finishLoadingPluginFromPath(e, commands, r, s) {
         });
       }
     }
-    if (lt.length > 0) e.commandsPaths = mode === "append" ? [...(e.commandsPaths || []), ...lt] : lt;
-    if (ze > 0) e.commandsMetadata = We;
+    if (acceptedPaths.length > 0)
+      plugin.commandsPaths =
+        mode === "append" ? [...(plugin.commandsPaths || []), ...acceptedPaths] : acceptedPaths;
+    if (acceptedCount > 0) plugin.commandsMetadata = commandsMetadata;
     return;
   }
-  let Ae = Array.isArray(commands) ? commands : [commands];
+  let cmdPaths = Array.isArray(commands) ? commands : [commands];
   let checks = await Promise.all(
-    Ae.map(async (cmdPath) => {
+    cmdPaths.map(async (cmdPath) => {
       if (typeof cmdPath !== "string")
         return {
           cmdPath,
@@ -3283,21 +3475,21 @@ async function finishLoadingPluginFromPath(e, commands, r, s) {
         kind: "path",
         fullPath,
         reason,
-        exists: fullPath !== null && (await isCachePresent(s, fullPath)),
+        exists: fullPath !== null && (await isCachePresent(storageV5, fullPath)),
       };
     }),
   );
-  let Me = [];
+  let validPaths = [];
   for (let check of checks) {
     if (check.kind === "invalid") {
-      logForDebugging(`Unexpected command format in ${we} for ${pluginName}`, {
+      logForDebugging(`Unexpected command format in ${originLabel} for ${pluginName}`, {
         level: "error",
       });
       continue;
     }
     if (check.fullPath === null) {
       logForDebugging(
-        `Command path ${check.cmdPath} ${ke} escapes plugin directory for ${pluginName}${check.reason === undefined ? "" : `: ${check.reason}`}`,
+        `Command path ${check.cmdPath} ${originNote} escapes plugin directory for ${pluginName}${check.reason === undefined ? "" : `: ${check.reason}`}`,
         {
           level: "error",
         },
@@ -3314,10 +3506,10 @@ async function finishLoadingPluginFromPath(e, commands, r, s) {
       });
       continue;
     }
-    if (check.exists) Me.push(check.fullPath);
+    if (check.exists) validPaths.push(check.fullPath);
     else {
       logForDebugging(
-        `Command path ${check.cmdPath} ${ke} not found at ${check.fullPath} for ${pluginName}`,
+        `Command path ${check.cmdPath} ${originNote} not found at ${check.fullPath} for ${pluginName}`,
         {
           level: "error",
         },
@@ -3331,28 +3523,39 @@ async function finishLoadingPluginFromPath(e, commands, r, s) {
       });
     }
   }
-  if (Me.length > 0) e.commandsPaths = mode === "append" ? [...(e.commandsPaths || []), ...Me] : Me;
+  if (validPaths.length > 0)
+    plugin.commandsPaths = mode === "append" ? [...(plugin.commandsPaths || []), ...validPaths] : validPaths;
 }
 //@ chunk-e6aww6q8.js:4547805-4555972 placement = createPluginFromPath (0.485)
 /**
  * 由插件目录构造 LoadedPlugin：读 manifest；默认目录 commands/、agents/、skills/、output-styles/、themes/、workflows/ 存在即挂 *Path，manifest 指定的路径挂 *Paths（并做目录逃逸检查）；根目录 SKILL.md 视为单技能插件；读 hooks/hooks.json 与 manifest.hooks、monitors、mcpServers、lspServers、settings、userConfig 等；错误收集到 errors 数组。
  */
-async function createPluginFromPath(pluginPath, pluginSource, enabled, fallbackName, h = true, y, S, w, L) {
-  let G = [];
-  let q = [];
-  let Z = S ?? (await resolveContainmentRoots([pluginPath], "plugin directory"));
+async function createPluginFromPath(
+  pluginPath,
+  pluginSource,
+  enabled,
+  fallbackName,
+  pluginEnabled = true,
+  storageV5,
+  containmentRoots,
+  options,
+  containedIn,
+) {
+  let errors = [];
+  let warnings = [];
+  let resolvedRoots = containmentRoots ?? (await resolveContainmentRoots([pluginPath], "plugin directory"));
   let { manifest, manifestPath, depConstraints } = await loadPluginManifest(
     pluginPath,
     fallbackName,
     pluginSource,
     [],
     {
-      ...w,
-      containedIn: L,
+      ...options,
+      containedIn,
     },
-    y,
+    storageV5,
   );
-  let Ee = {
+  let plugin = {
     name: manifest.name,
     manifest,
     path: pluginPath,
@@ -3361,120 +3564,124 @@ async function createPluginFromPath(pluginPath, pluginSource, enabled, fallbackN
     enabled,
     depConstraints,
   };
-  let Ae = new Map();
-  let Ie = async (ao) => {
+  let statErrors = new Map();
+  let probeDir = async (dirName) => {
     try {
-      await stat(join(pluginPath, ao));
+      await stat_2(join(pluginPath, dirName));
       return true;
     } catch (error) {
-      if (!isPathAbsent(error)) Ae.set(ao, getErrnoCode(error) ?? "UNKNOWN");
+      if (!isPathAbsent(error)) statErrors.set(dirName, getErrnoCode(error) ?? "UNKNOWN");
       return false;
     }
   };
-  let [Me, We, ze, lt, Je, nt] = await (async () => {
-    let ao = ["commands", "agents", "skills", "output-styles", "themes"];
-    let $o =
-      isStorageV5Enabled() && y !== undefined
+  let [hasCommands, hasAgents, hasSkills, hasOutputStyles, hasThemes, hasWorkflows] = await (async () => {
+    let folderNames = ["commands", "agents", "skills", "output-styles", "themes"];
+    let coords =
+      isStorageV5Enabled() && storageV5 !== undefined
         ? parseVersionCachePath(pluginPath, anchoredPluginCachePath())
         : null;
-    if (isStorageV5Enabled() && y !== undefined && $o !== null) {
-      let yo = new Set();
-      let Ho;
-      let rr = false;
+    if (isStorageV5Enabled() && storageV5 !== undefined && coords !== null) {
+      let scopesPaged = new Set();
+      let cursor;
+      let failed = false;
       do {
-        let br = await y.listEntries(
+        let page = await storageV5.listEntries(
           {
             namespace: "pluginCache",
-            marketplace: $o.marketplace,
-            plugin: $o.plugin,
-            version: $o.version,
+            marketplace: coords.marketplace,
+            plugin: coords.plugin,
+            version: coords.version,
           },
           {
             skipKeyStats: true,
-            ...(Ho === undefined
+            ...(cursor === undefined
               ? {}
               : {
-                  cursor: Ho,
+                  cursor,
                 }),
           },
         );
-        if (!br.ok) {
-          rr = true;
+        if (!page.ok) {
+          failed = true;
           break;
         }
-        for (let item of br.value.items) {
-          let Fr =
+        for (let item of page.value.items) {
+          let name =
             item.kind === "scope" && item.scope.namespace === "pluginCache"
               ? item.scope.relPath?.at(-1)
               : undefined;
-          if (Fr !== undefined) yo.add(Fr);
+          if (name !== undefined) scopesPaged.add(name);
         }
-        Ho = br.value.cursor;
-      } while (Ho !== undefined);
-      if (!rr) {
-        let br = (Hr, Fr) => (Fr ? Promise.resolve(true) : Ie(Hr));
-        return Promise.all([...ao.map((Hr) => br(Hr, yo.has(Hr))), br("workflows", yo.has("workflows"))]);
+        cursor = page.value.cursor;
+      } while (cursor !== undefined);
+      if (!failed) {
+        let probeOne = (dirName, alreadyKnown) => (alreadyKnown ? Promise.resolve(true) : probeDir(dirName));
+        return Promise.all([
+          ...folderNames.map((folderName) => probeOne(folderName, scopesPaged.has(folderName))),
+          probeOne("workflows", scopesPaged.has("workflows")),
+        ]);
       }
     }
-    return Promise.all([...ao.map((cmdPath) => Ie(cmdPath)), Ie("workflows")]);
+    return Promise.all([...folderNames.map((cmdPath) => probeDir(cmdPath)), probeDir("workflows")]);
   })();
-  for (let [ao, $o] of [...Ae].sort(([yo], [Ho]) => yo.localeCompare(Ho))) {
-    let fullPath = join(pluginPath, ao);
+  for (let [folderName, code] of [...statErrors].sort(([left], [right]) => left.localeCompare(right))) {
+    let fullPath = join(pluginPath, folderName);
     logForDebugging(
-      `Plugin ${manifest.name}: could not check the default ${ao}/ folder at ${fullPath} (${$o}); not loading it`,
+      `Plugin ${manifest.name}: could not check the default ${folderName}/ folder at ${fullPath} (${code}); not loading it`,
       {
         level: "error",
       },
     );
-    G.push({
+    errors.push({
       type: "path-not-found",
       source: pluginSource,
       plugin: manifest.name,
       path: fullPath,
-      component: ao,
-      errno: $o,
+      component: folderName,
+      errno: code,
     });
   }
   let { marketplace } = parsePluginIdentifier_2(pluginSource);
-  for (let [ao, $o, yo, Ho] of [
-    ["commands", Me, "commands", "commands"],
-    ["agents", We, "agents", "agents"],
-    ["outputStyles", lt, "output-styles", "output-styles"],
-    ["themes", Je, "themes", "themes"],
+  for (let [manifestField, hasDefaultFolder, component, folderName] of [
+    ["commands", hasCommands, "commands", "commands"],
+    ["agents", hasAgents, "agents", "agents"],
+    ["outputStyles", hasOutputStyles, "output-styles", "output-styles"],
+    ["themes", hasThemes, "themes", "themes"],
   ]) {
-    let rr = manifest.experimental?.[ao];
-    let br = manifest[ao];
-    if (ao === "themes") br = manifest.experimental?.themes ?? manifest.themes;
-    else if (ao === "outputStyles") br = manifest.outputStyles;
-    let Hr = [];
-    if (rr !== undefined) Hr.push(`experimental.${ao}`);
-    if (manifest[ao] !== undefined && (rr === undefined || true)) Hr.push(ao);
-    if (!br || !$o) continue;
-    logPluginFolderShadowed(manifest.name, marketplace, yo);
-    let Fr = join(pluginPath, Ho);
-    if (specCoversDefaultDir(br, pluginPath, Fr)) continue;
+    let experimentalValue = manifest.experimental?.[manifestField];
+    let spec = manifest[manifestField];
+    if (manifestField === "themes") spec = manifest.experimental?.themes ?? manifest.themes;
+    else if (manifestField === "outputStyles") spec = manifest.outputStyles;
+    let fields = [];
+    if (experimentalValue !== undefined) fields.push(`experimental.${manifestField}`);
+    if (manifest[manifestField] !== undefined && (experimentalValue === undefined || true))
+      fields.push(manifestField);
+    if (!spec || !hasDefaultFolder) continue;
+    logPluginFolderShadowed(manifest.name, marketplace, component);
+    let folderPath = join(pluginPath, folderName);
+    if (specCoversDefaultDir(spec, pluginPath, folderPath)) continue;
     logForDebugging(
-      `Plugin ${manifest.name}: ${Ho}/ folder exists but is not auto-loaded because the manifest sets ${Hr.map((cs) => `"${cs}"`).join(" and ")}`,
+      `Plugin ${manifest.name}: ${folderName}/ folder exists but is not auto-loaded because the manifest sets ${fields.map((field) => `"${field}"`).join(" and ")}`,
     );
-    q.push({
+    warnings.push({
       type: "folder-shadowed-by-manifest",
       source: pluginSource,
       plugin: manifest.name,
-      component: yo,
-      folderPath: Fr,
-      manifestFields: Hr,
+      component,
+      folderPath,
+      manifestFields: fields,
     });
   }
-  if (manifest.workflows && nt) {
+  if (manifest.workflows && hasWorkflows) {
     logPluginFolderShadowed(manifest.name, marketplace, "workflows");
-    let ao = join(pluginPath, "workflows");
-    if (!specCoversDefaultDir(manifest.workflows, pluginPath, ao))
-      q.push({
+    let workflowsFolder = join(pluginPath, "workflows");
+    if (!specCoversDefaultDir(manifest.workflows, pluginPath, workflowsFolder))
+      warnings.push({
         type: "folder-shadowed-by-manifest",
         source: pluginSource,
         plugin: manifest.name,
         component: "workflows",
-        folderPath: ao,
+        folderPath: workflowsFolder,
         manifestFields: [
           manifest.experimental?.workflows !== undefined ? "experimental.workflows" : "workflows",
         ],
@@ -3482,21 +3689,21 @@ async function createPluginFromPath(pluginPath, pluginSource, enabled, fallbackN
   }
   if (
     (manifest.experimental?.monitors ?? manifest.monitors) !== undefined &&
-    (await isCachePresent(y, join(pluginPath, "monitors", "monitors.json")))
+    (await isCachePresent(storageV5, join(pluginPath, "monitors", "monitors.json")))
   )
     logPluginFolderShadowed(manifest.name, marketplace, "monitors");
-  let Et = !manifest.commands && Me;
-  let yt = !manifest.agents && We;
-  let gt = ze;
+  let useDefaultCommands = !manifest.commands && hasCommands;
+  let useDefaultAgents = !manifest.agents && hasAgents;
+  let useDefaultSkills = hasSkills;
   let outputStyles = manifest.outputStyles;
-  let It = !outputStyles && lt;
-  let Yt = !(manifest.experimental?.themes ?? manifest.themes) && Je;
-  let qt = !manifest.workflows && nt;
+  let useDefaultOutputStyles = !outputStyles && hasOutputStyles;
+  let useDefaultThemes = !(manifest.experimental?.themes ?? manifest.themes) && hasThemes;
+  let useDefaultWorkflows = !manifest.workflows && hasWorkflows;
   let commandsPath = join(pluginPath, "commands");
-  if (Et) Ee.commandsPath = commandsPath;
+  if (useDefaultCommands) plugin.commandsPath = commandsPath;
   if (manifest.commands)
     await finishLoadingPluginFromPath(
-      Ee,
+      plugin,
       manifest.commands,
       {
         pluginPath,
@@ -3505,160 +3712,161 @@ async function createPluginFromPath(pluginPath, pluginSource, enabled, fallbackN
         mode: "assign",
         origin: "manifest",
         resolvePath: resolveWithinDir,
-        anchor: Z,
+        anchor: resolvedRoots,
         registerInlineContent: true,
-        errors: G,
+        errors,
       },
-      y,
+      storageV5,
     );
   let agentsPath = join(pluginPath, "agents");
-  if (yt) Ee.agentsPath = agentsPath;
+  if (useDefaultAgents) plugin.agentsPath = agentsPath;
   if (manifest.agents) {
-    let ao = Array.isArray(manifest.agents) ? manifest.agents : [manifest.agents];
-    let $o = await validatePluginPaths(
-      ao,
+    let agentSpecs = Array.isArray(manifest.agents) ? manifest.agents : [manifest.agents];
+    let validAgents = await validatePluginPaths(
+      agentSpecs,
       pluginPath,
       manifest.name,
       pluginSource,
       "agents",
       "Agent",
       "specified in manifest but",
-      G,
-      Z,
+      errors,
+      resolvedRoots,
       false,
-      y,
+      storageV5,
     );
-    if ($o.length > 0) Ee.agentsPaths = $o;
+    if (validAgents.length > 0) plugin.agentsPaths = validAgents;
   }
   let skillsPath = join(pluginPath, "skills");
-  if (gt) Ee.skillsPath = skillsPath;
+  if (useDefaultSkills) plugin.skillsPath = skillsPath;
   if (manifest.skills) {
-    let ao = Array.isArray(manifest.skills) ? manifest.skills : [manifest.skills];
-    let $o = resolve_2(skillsPath);
-    let yo = resolve_2(pluginPath);
+    let skillSpecs = Array.isArray(manifest.skills) ? manifest.skills : [manifest.skills];
+    let skillsDirResolved = resolve_2(skillsPath);
+    let rootResolved = resolve_2(pluginPath);
     let filtered = (
       await validatePluginPaths(
-        ao,
+        skillSpecs,
         pluginPath,
         manifest.name,
         pluginSource,
         "skills",
         "Skill",
         "specified in manifest but",
-        G,
-        Z,
+        errors,
+        resolvedRoots,
         true,
-        y,
+        storageV5,
       )
-    ).filter((rr) => {
-      let br = resolve_2(rr);
-      if (br === $o) return false;
-      if (marketplace === SKILLS_DIR && br === yo) return false;
+    ).filter((path) => {
+      let resolved = resolve_2(path);
+      if (resolved === skillsDirResolved) return false;
+      if (marketplace === SKILLS_DIR && resolved === rootResolved) return false;
       return true;
     });
-    if (filtered.length > 0) Ee.skillsPaths = filtered;
-  } else if (!gt && marketplace !== SKILLS_DIR) {
-    let ao = join(pluginPath, "SKILL.md");
-    let $o = await probeComponentPath(y, ao);
+    if (filtered.length > 0) plugin.skillsPaths = filtered;
+  } else if (!useDefaultSkills && marketplace !== SKILLS_DIR) {
+    let skillFilePath = join(pluginPath, "SKILL.md");
+    let probe = await probeComponentPath(storageV5, skillFilePath);
     if (
-      $o === "present" &&
-      !(await reportIfPathEscapes(L, pluginPath, "SKILL.md", {
-        errors: G,
+      probe === "present" &&
+      !(await reportIfPathEscapes(containedIn, pluginPath, "SKILL.md", {
+        errors,
         source: pluginSource,
         plugin: manifest.name,
         component: "skills",
       }))
     )
-      Ee.skillsPaths = [pluginPath];
-    else if (typeof $o === "object") reportUncheckablePath(G, pluginSource, manifest.name, "skills", ao, $o);
+      plugin.skillsPaths = [pluginPath];
+    else if (typeof probe === "object")
+      reportUncheckablePath(errors, pluginSource, manifest.name, "skills", skillFilePath, probe);
   }
   let outputStylesPath = join(pluginPath, "output-styles");
-  if (It) Ee.outputStylesPath = outputStylesPath;
+  if (useDefaultOutputStyles) plugin.outputStylesPath = outputStylesPath;
   if (outputStyles) {
-    let ao = Array.isArray(outputStyles) ? outputStyles : [outputStyles];
-    let $o = await validatePluginPaths(
-      ao,
+    let styleSpecs = Array.isArray(outputStyles) ? outputStyles : [outputStyles];
+    let validStyles = await validatePluginPaths(
+      styleSpecs,
       pluginPath,
       manifest.name,
       pluginSource,
       "output-styles",
       "Output style",
       "specified in manifest but",
-      G,
-      Z,
+      errors,
+      resolvedRoots,
       false,
-      y,
+      storageV5,
     );
-    if ($o.length > 0) Ee.outputStylesPaths = $o;
+    if (validStyles.length > 0) plugin.outputStylesPaths = validStyles;
   }
   let themesPath = join(pluginPath, "themes");
-  if (Yt) Ee.themesPath = themesPath;
+  if (useDefaultThemes) plugin.themesPath = themesPath;
   let themes = manifest.experimental?.themes ?? manifest.themes;
   if (themes) {
-    let ao = Array.isArray(themes) ? themes : [themes];
-    let $o = await validatePluginPaths(
-      ao,
+    let themeSpecs = Array.isArray(themes) ? themes : [themes];
+    let validThemes = await validatePluginPaths(
+      themeSpecs,
       pluginPath,
       manifest.name,
       pluginSource,
       "themes",
       "Theme",
       "specified in manifest but",
-      G,
-      Z,
+      errors,
+      resolvedRoots,
       false,
-      y,
+      storageV5,
     );
-    if ($o.length > 0) Ee.themesPaths = $o;
+    if (validThemes.length > 0) plugin.themesPaths = validThemes;
   }
-  if (qt) Ee.workflowsPath = join(pluginPath, "workflows");
+  if (useDefaultWorkflows) plugin.workflowsPath = join(pluginPath, "workflows");
   if (manifest.workflows) {
-    let ao = Array.isArray(manifest.workflows) ? manifest.workflows : [manifest.workflows];
-    let $o = await validatePluginPaths(
-      ao,
+    let workflowSpecs = Array.isArray(manifest.workflows) ? manifest.workflows : [manifest.workflows];
+    let validWorkflows = await validatePluginPaths(
+      workflowSpecs,
       pluginPath,
       manifest.name,
       pluginSource,
       "workflows",
       "Workflow",
       "specified in manifest but",
-      G,
-      Z,
+      errors,
+      resolvedRoots,
       false,
-      y,
+      storageV5,
     );
-    if ($o.length > 0) Ee.workflowsPaths = $o;
+    if (validWorkflows.length > 0) plugin.workflowsPaths = validWorkflows;
   }
   let base;
   let loadedHookPaths = new Set();
-  let Xn = new Set();
-  let fo = [];
+  let hooksPathsSeen = new Set();
+  let hookModules = [];
   let standardHooksPath = join(pluginPath, "hooks", "hooks.json");
-  let bo = await probeComponentPath(y, standardHooksPath);
-  let vn =
-    bo === "present" &&
-    (await reportIfPathEscapes(L, pluginPath, join("hooks", "hooks.json"), {
-      errors: G,
+  let hooksProbe = await probeComponentPath(storageV5, standardHooksPath);
+  let hooksEscapes =
+    hooksProbe === "present" &&
+    (await reportIfPathEscapes(containedIn, pluginPath, join("hooks", "hooks.json"), {
+      errors,
       source: pluginSource,
       plugin: manifest.name,
       component: "hooks",
     }));
-  if (bo === "present" && !vn)
+  if (hooksProbe === "present" && !hooksEscapes)
     try {
-      let { hooks, modules } = await loadPluginHooks_3(standardHooksPath, manifest.name, y);
+      let { hooks, modules } = await loadPluginHooks_3(standardHooksPath, manifest.name, storageV5);
       base = Object.keys(hooks).length > 0 ? hooks : undefined;
       for (let spec of modules)
-        fo.push({
+        hookModules.push({
           hooksFilePath: standardHooksPath,
           spec,
         });
-      let yo = standardHooksPath;
+      let realHooksPath = standardHooksPath;
       try {
-        yo = await getFsImplementation().realpath(standardHooksPath);
+        realHooksPath = await getFsImplementation().realpath(standardHooksPath);
       } catch {}
-      loadedHookPaths.add(yo);
-      Xn.add(yo);
-      Xn.add(standardHooksPath);
+      loadedHookPaths.add(realHooksPath);
+      hooksPathsSeen.add(realHooksPath);
+      hooksPathsSeen.add(standardHooksPath);
       logForDebugging(
         `Read hooks.json for plugin ${manifest.name} (enabled=${enabled}${enabled ? "" : "; will NOT register, plugin is disabled"}): ${standardHooksPath}`,
       );
@@ -3668,7 +3876,7 @@ async function createPluginFromPath(pluginPath, pluginSource, enabled, fallbackN
       logForDebugging(`Failed to load hooks for ${manifest.name}: ${errorMsg}`, {
         level: "error",
       });
-      G.push({
+      errors.push({
         type: "hook-load-failed",
         source: pluginSource,
         plugin: manifest.name,
@@ -3676,29 +3884,32 @@ async function createPluginFromPath(pluginPath, pluginSource, enabled, fallbackN
         reason: errorMsg,
       });
     }
-  else if (typeof bo === "object") {
-    logForDebugging(`Could not determine whether ${manifest.name} ships hooks/hooks.json: ${bo.unknown}`, {
-      level: "error",
-    });
-    G.push({
+  else if (typeof hooksProbe === "object") {
+    logForDebugging(
+      `Could not determine whether ${manifest.name} ships hooks/hooks.json: ${hooksProbe.unknown}`,
+      {
+        level: "error",
+      },
+    );
+    errors.push({
       type: "hook-load-failed",
       source: pluginSource,
       plugin: manifest.name,
       hookPath: standardHooksPath,
-      reason: `Could not determine whether ${standardHooksPath} exists: ${bo.unknown}`,
-      ...(bo.errno !== undefined && {
-        errno: bo.errno,
+      reason: `Could not determine whether ${standardHooksPath} exists: ${hooksProbe.unknown}`,
+      ...(hooksProbe.errno !== undefined && {
+        errno: hooksProbe.errno,
       }),
     });
   }
   if (manifest.hooks) {
-    let ao = Array.isArray(manifest.hooks) ? manifest.hooks : [manifest.hooks];
-    for (let hookSpec of ao)
+    let hookSpecs = Array.isArray(manifest.hooks) ? manifest.hooks : [manifest.hooks];
+    for (let hookSpec of hookSpecs)
       if (typeof hookSpec === "string") {
-        if (vn && resolveWithinDir(pluginPath, hookSpec) === resolve_2(standardHooksPath)) continue;
+        if (hooksEscapes && resolveWithinDir(pluginPath, hookSpec) === resolve_2(standardHooksPath)) continue;
         let { fullPath, reason, real } = await resolveComponentPath(
           resolveWithinDir,
-          Z,
+          resolvedRoots,
           pluginPath,
           hookSpec,
         );
@@ -3709,7 +3920,7 @@ async function createPluginFromPath(pluginPath, pluginSource, enabled, fallbackN
               level: "error",
             },
           );
-          G.push({
+          errors.push({
             type: "path-traversal",
             source: pluginSource,
             plugin: manifest.name,
@@ -3721,14 +3932,14 @@ async function createPluginFromPath(pluginPath, pluginSource, enabled, fallbackN
           });
           continue;
         }
-        if (!(await isCachePresent(y, fullPath))) {
+        if (!(await isCachePresent(storageV5, fullPath))) {
           logForDebugging(
             `Hooks file ${hookSpec} specified in manifest but not found at ${fullPath} for ${manifest.name}`,
             {
               level: "error",
             },
           );
-          G.push({
+          errors.push({
             type: "path-not-found",
             source: pluginSource,
             plugin: manifest.name,
@@ -3737,23 +3948,23 @@ async function createPluginFromPath(pluginPath, pluginSource, enabled, fallbackN
           });
           continue;
         }
-        let br = real ?? fullPath;
-        if (Xn.has(br)) {
+        let loadedPath = real ?? fullPath;
+        if (hooksPathsSeen.has(loadedPath)) {
           logForDebugging(
             `Hooks file ${hookSpec} in the manifest of plugin ${manifest.name} names the standard hooks/hooks.json, which loads on its own; loaded once`,
           );
           continue;
         }
-        if (loadedHookPaths.has(br)) {
+        if (loadedHookPaths.has(loadedPath)) {
           logForDebugging(
-            `Skipping duplicate hooks file for plugin ${manifest.name}: ${hookSpec} (resolves to already-loaded file: ${br})`,
+            `Skipping duplicate hooks file for plugin ${manifest.name}: ${hookSpec} (resolves to already-loaded file: ${loadedPath})`,
           );
-          if (h) {
-            let errorMsg = `Duplicate hooks file detected: ${hookSpec} resolves to already-loaded file ${br}; manifest.hooks lists it more than once.`;
+          if (pluginEnabled) {
+            let errorMsg = `Duplicate hooks file detected: ${hookSpec} resolves to already-loaded file ${loadedPath}; manifest.hooks lists it more than once.`;
             logForDebugging(errorMsg, {
               level: "error",
             });
-            G.push({
+            errors.push({
               type: "hook-load-failed",
               source: pluginSource,
               plugin: manifest.name,
@@ -3764,12 +3975,12 @@ async function createPluginFromPath(pluginPath, pluginSource, enabled, fallbackN
           continue;
         }
         try {
-          let pluginHooks = await loadPluginHooks_3(fullPath, manifest.name, y);
+          let pluginHooks = await loadPluginHooks_3(fullPath, manifest.name, storageV5);
           try {
             if (Object.keys(pluginHooks.hooks).length > 0) base = mergeHooksSettings(base, pluginHooks.hooks);
-            loadedHookPaths.add(br);
+            loadedHookPaths.add(loadedPath);
             for (let spec of pluginHooks.modules)
-              fo.push({
+              hookModules.push({
                 hooksFilePath: fullPath,
                 spec,
               });
@@ -3782,7 +3993,7 @@ async function createPluginFromPath(pluginPath, pluginSource, enabled, fallbackN
               level: "error",
             });
             logError(toError(mergeError));
-            G.push({
+            errors.push({
               type: "hook-load-failed",
               source: pluginSource,
               plugin: manifest.name,
@@ -3796,7 +4007,7 @@ async function createPluginFromPath(pluginPath, pluginSource, enabled, fallbackN
           logForDebugging(`Failed to load hooks from ${hookSpec} for ${manifest.name}: ${errorMsg}`, {
             level: "error",
           });
-          G.push({
+          errors.push({
             type: "hook-load-failed",
             source: pluginSource,
             plugin: manifest.name,
@@ -3809,45 +4020,60 @@ async function createPluginFromPath(pluginPath, pluginSource, enabled, fallbackN
         if (unloadableGuards.length > 0)
           throw new HookValidationError(
             invalid
-              .filter((br) => unloadableGuards.includes(br.path))
-              .map((br) => `${br.path}: ${br.reason}`)
+              .filter((invalid) => unloadableGuards.includes(invalid.path))
+              .map((invalidEntry) => `${invalidEntry.path}: ${invalidEntry.reason}`)
               .join("; "),
           );
-        G.push(...toHookLoadErrors(invalid, pluginSource, manifest.name, manifestPath ?? pluginPath));
+        errors.push(...toHookLoadErrors(invalid, pluginSource, manifest.name, manifestPath ?? pluginPath));
         if (hooks) base = mergeHooksSettings(base, hooks);
       }
   }
   let pluginHooksModule = await loadPluginHooksModule({
-    plugin: Ee,
-    namedModules: fo,
+    plugin,
+    namedModules: hookModules,
     source: pluginSource,
-    storageV5: y,
-    anchor: Z,
+    storageV5,
+    anchor: resolvedRoots,
   });
-  if (pluginHooksModule !== undefined) G.push(pluginHooksModule);
-  if (base) Ee.hooksConfig = base;
-  let pluginMonitors = await loadPluginMonitors(pluginPath, manifest, pluginSource, G, Z, y, L);
-  if (pluginMonitors) Ee.monitors = pluginMonitors;
-  let ko = await reportIfPathEscapes(L, pluginPath, "settings.json", {
-    errors: G,
+  if (pluginHooksModule !== undefined) errors.push(pluginHooksModule);
+  if (base) plugin.hooksConfig = base;
+  let pluginMonitors = await loadPluginMonitors(
+    pluginPath,
+    manifest,
+    pluginSource,
+    errors,
+    resolvedRoots,
+    storageV5,
+    containedIn,
+  );
+  if (pluginMonitors) plugin.monitors = pluginMonitors;
+  let containmentRefused = await reportIfPathEscapes(containedIn, pluginPath, "settings.json", {
+    errors,
     source: pluginSource,
     plugin: manifest.name,
     component: "settings",
   });
-  let pluginSettings = await loadPluginSettings(pluginPath, manifest, y, ko);
-  if (pluginSettings) Ee.settings = pluginSettings;
+  let pluginSettings = await loadPluginSettings(pluginPath, manifest, storageV5, containmentRefused);
+  if (pluginSettings) plugin.settings = pluginSettings;
   return {
-    plugin: Ee,
-    errors: G,
-    warnings: q,
+    plugin,
+    errors,
+    warnings,
     hasManifest: manifestPath !== null,
     manifestPath,
   };
 }
 //@ chunk-e6aww6q8.js:4555972-4556034 layout
-var PluginAllowedSettingsSchema = DoctorLazy(() =>
-  u(Object.fromEntries(SETTINGS_KEYS_WITH_PLUGIN_ENUM.map((e) => [e, getSettingsFieldSchema(e)]))),
-);
+var PluginAllowedSettingsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:4555972", () => {
+  PluginAllowedSettingsSchema = DoctorLazy(() =>
+    objectSchema(
+      Object.fromEntries(
+        SETTINGS_KEYS_WITH_PLUGIN_ENUM.map((settingKey) => [settingKey, getSettingsFieldSchema(settingKey)]),
+      ),
+    ),
+  );
+});
 //@ chunk-e6aww6q8.js:4556034-4556154 file-local
 function parsePluginSettings(raw) {
   let result = PluginAllowedSettingsSchema().safeParse(raw);
@@ -3860,40 +4086,42 @@ function parsePluginSettings(raw) {
 /**
  * 读取插件根目录 settings.json（或 manifest.settings），只保留白名单键，作为插件启用期间合并进用户设置的值。
  */
-async function loadPluginSettings(pluginPath, manifest, r, s = false) {
+async function loadPluginSettings(pluginPath, manifest, storageV5, containmentRefused = false) {
   let settingsJsonPath = join(pluginPath, "settings.json");
-  let y = false;
+  let parseFailed = false;
   try {
-    if (s)
+    if (containmentRefused)
       throw Object.assign(Error("settings.json not read"), {
         code: "ENOENT",
       });
-    let S =
-      isStorageV5Enabled() && r !== undefined ? await readFileViaStorageBackend(r, settingsJsonPath) : null;
-    let w;
-    if (S !== null) {
-      if (S.outcome === "absent")
+    let backendRead =
+      isStorageV5Enabled() && storageV5 !== undefined
+        ? await readFileViaStorageBackend(storageV5, settingsJsonPath)
+        : null;
+    let settingsContent;
+    if (backendRead !== null) {
+      if (backendRead.outcome === "absent")
         throw Object.assign(Error("settings.json absent"), {
           code: "ENOENT",
         });
-      if (S.outcome === "error")
+      if (backendRead.outcome === "error")
         throw Object.assign(
           new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            S.detail,
+            backendRead.detail,
             "plugin settings read failed (v5 backend)",
           ),
-          S.telemetryCode !== undefined
+          backendRead.telemetryCode !== undefined
             ? {
-                code: S.telemetryCode,
+                code: backendRead.telemetryCode,
               }
             : {},
         );
-      w = S.content;
+      settingsContent = backendRead.content;
     } else
-      w = await readFile(settingsJsonPath, {
+      settingsContent = await readFile(settingsJsonPath, {
         encoding: "utf-8",
       });
-    let parsed = jsonParse(w);
+    let parsed = jsonParse(settingsContent);
     if (isPlainObject_5(parsed)) {
       let filtered = parsePluginSettings(parsed);
       if (filtered) {
@@ -3904,7 +4132,7 @@ async function loadPluginSettings(pluginPath, manifest, r, s = false) {
     }
   } catch (e) {
     if (!isFsInaccessible(e)) {
-      y = true;
+      parseFailed = true;
       logForDebugging(`Failed to parse settings.json for plugin ${manifest.name}: ${e}`, {
         level: "warn",
       });
@@ -3914,14 +4142,15 @@ async function loadPluginSettings(pluginPath, manifest, r, s = false) {
     let filtered = parsePluginSettings(manifest.settings);
     if (filtered) {
       logForDebugging(`Loaded settings from manifest for plugin ${manifest.name}`);
-      if (s) logFeatureSad("plugin_load_settings", "plugin_load_settings_containment_refused");
-      else if (y) logFeatureSad("plugin_load_settings", "plugin_load_settings_parse_failed");
+      if (containmentRefused)
+        logFeatureSad("plugin_load_settings", "plugin_load_settings_containment_refused");
+      else if (parseFailed) logFeatureSad("plugin_load_settings", "plugin_load_settings_parse_failed");
       else logFeatureOk("plugin_load_settings");
       return filtered;
     }
   }
-  if (s) logFeatureSad("plugin_load_settings", "plugin_load_settings_containment_refused");
-  else if (y) logFeatureSad("plugin_load_settings", "plugin_load_settings_parse_failed");
+  if (containmentRefused) logFeatureSad("plugin_load_settings", "plugin_load_settings_containment_refused");
+  else if (parseFailed) logFeatureSad("plugin_load_settings", "plugin_load_settings_parse_failed");
   else logFeatureOk("plugin_load_settings");
   return;
 }
@@ -3930,11 +4159,11 @@ async function loadPluginSettings(pluginPath, manifest, r, s = false) {
  * 解析 marketplace 条目里内联的 hooks：只支持对象形式（事件名 → matcher 数组），文件路径与数组形式报 hook-load-failed。
  */
 function parseMarketplaceEntryHooks(hooks, source, plugin, hookPath) {
-  let h =
+  let formHint =
     "Define hooks in the plugin's own hooks/hooks.json (or its plugin.json), or inline them here as an object mapping hook event names to matcher arrays.";
   if (Array.isArray(hooks) && hasGuardHooks_2(hooks))
     throw new HookValidationError(
-      `hooks: the array form is not yet supported in a marketplace entry (${UNLOADABLE_GUARD_NOTE}). ${h}`,
+      `hooks: the array form is not yet supported in a marketplace entry (${UNLOADABLE_GUARD_NOTE}). ${formHint}`,
     );
   if (typeof hooks === "string" || Array.isArray(hooks))
     return {
@@ -3945,7 +4174,7 @@ function parseMarketplaceEntryHooks(hooks, source, plugin, hookPath) {
           source,
           plugin,
           hookPath,
-          reason: `hooks: the file-path and array forms are not yet supported in a marketplace entry. ${h}`,
+          reason: `hooks: the file-path and array forms are not yet supported in a marketplace entry. ${formHint}`,
         },
       ],
     };
@@ -3953,8 +4182,8 @@ function parseMarketplaceEntryHooks(hooks, source, plugin, hookPath) {
   if (unloadableGuards.length > 0)
     throw new HookValidationError(
       invalid
-        .filter((L) => unloadableGuards.includes(L.path))
-        .map((L) => `${L.path}: ${L.reason}`)
+        .filter((entry) => unloadableGuards.includes(entry.path))
+        .map((entry) => `${entry.path}: ${entry.reason}`)
         .join("; "),
     );
   return {
@@ -4001,9 +4230,9 @@ async function loadNpmMarketplacePlugin({
   errors,
   warnings,
 }) {
-  let Se = isDependencyAutoInstallState(enabledValue);
+  let entryEnabled = isDependencyAutoInstallState(enabledValue);
   if (!npmMarketplaceEnabled()) {
-    if (Se)
+    if (entryEnabled)
       errors.push({
         type: "generic-error",
         source: pluginId,
@@ -4013,19 +4242,19 @@ async function loadNpmMarketplacePlugin({
     return null;
   }
   let trustedRoots = getMarketplaceCandidatePaths(pluginId, knownMarketplaces, tryUnwrapTextPayload());
-  let we = await pickUsableInstallation(installations, {
+  let usableInstallation = await pickUsableInstallation(installations, {
     storageV5,
     trustedRoots,
   });
-  let Ee =
-    we === undefined
+  let resolvedInstallation =
+    usableInstallation === undefined
       ? undefined
       : {
-          ...we,
-          installPath: resolve_2(getOriginalCwd(), we.installPath),
+          ...usableInstallation,
+          installPath: resolve_2(getOriginalCwd(), usableInstallation.installPath),
         };
-  if (Ee === undefined) {
-    if (Se)
+  if (resolvedInstallation === undefined) {
+    if (entryEnabled)
       errors.push({
         type: "plugin-not-installed",
         source: pluginId,
@@ -4037,12 +4266,12 @@ async function loadNpmMarketplacePlugin({
     return null;
   }
   if (
-    we !== undefined &&
-    classifyMarketplacePath(we.installPath, {
+    usableInstallation !== undefined &&
+    classifyMarketplacePath(usableInstallation.installPath, {
       trustedRoots,
     }).suspect
   ) {
-    if (Se)
+    if (entryEnabled)
       errors.push({
         type: "generic-error",
         refused: true,
@@ -4059,11 +4288,11 @@ async function loadNpmMarketplacePlugin({
       });
     return null;
   }
-  let Ae =
-    Ee.npmResolved !== undefined
+  let policyRefusal =
+    resolvedInstallation.npmResolved !== undefined
       ? npmResolutionPolicyRefusal({
           packageName,
-          tarballUrl: Ee.npmResolved,
+          tarballUrl: resolvedInstallation.npmResolved,
         })
       : isMarketplaceRestrictionPolicyActive()
         ? `${printableName(pluginId, 200)} was not loaded: its install record does not say where it was fetched from, and your organization restricts plugin sources; ${runCommandHint(
@@ -4075,19 +4304,19 @@ async function loadNpmMarketplacePlugin({
             },
           )}`
         : null;
-  if (Ae !== null) {
-    if (Se)
+  if (policyRefusal !== null) {
+    if (entryEnabled)
       errors.push({
         type: "generic-error",
         refused: true,
         source: pluginId,
         plugin: packageName,
-        error: Ae,
+        error: policyRefusal,
       });
     return null;
   }
-  let entry = toNpmMarketplaceSource(packageName, Ee);
-  let Me = await (cacheOnly
+  let entry = toNpmMarketplaceSource(packageName, resolvedInstallation);
+  let plugin = await (cacheOnly
     ? loadCachedMarketplacePlugin(
         entry,
         NPM_REGISTRY,
@@ -4096,12 +4325,12 @@ async function loadNpmMarketplacePlugin({
         enabledValue === true,
         errors,
         warnings,
-        Ee.installPath,
+        resolvedInstallation.installPath,
         installations?.find((installation) => installation.installPath)?.installPath,
         {
           storageV5,
           preview,
-          entryEnabled: Se,
+          entryEnabled,
           registryReadFailed,
         },
       )
@@ -4113,37 +4342,37 @@ async function loadNpmMarketplacePlugin({
         enabledValue === true,
         errors,
         warnings,
-        Ee.version,
+        resolvedInstallation.version,
         undefined,
         {
           storageV5,
-          entryEnabled: Se,
+          entryEnabled,
           credentials,
           installRecord: registryReadFailed ? "unknown" : "present",
           recordedArchiveSha256: undefined,
           recordedClaudeAiPluginId: undefined,
-          recordedNpmIntegrity: Ee.npmIntegrity,
+          recordedNpmIntegrity: resolvedInstallation.npmIntegrity,
         },
       ));
-  if (Me && Ee.npmResolved !== undefined) {
-    let We = redactNpmTarball({
+  if (plugin && resolvedInstallation.npmResolved !== undefined) {
+    let npmResolution = redactNpmTarball({
       packageName,
-      tarballUrl: Ee.npmResolved,
+      tarballUrl: resolvedInstallation.npmResolved,
     });
-    if (We !== null) Me.npmResolution = We;
+    if (npmResolution !== null) plugin.npmResolution = npmResolution;
   }
-  return Me;
+  return plugin;
 }
 //@ chunk-e6aww6q8.js:4560222-4560423 placement
 /**
  * 合并 --add-dir 目录与设置的 enabledPlugins，过滤出 ID 合法、非 builtin、非保留市场的条目。
  */
 function getEnabledPluginEntries() {
-  let e = {
+  let allEnabledPlugins = {
     ...getAddDirEnabledPlugins(),
     ...(getSettings_DEPRECATED().enabledPlugins || {}),
   };
-  return Object.entries(e).filter(([key, value]) => {
+  return Object.entries(allEnabledPlugins).filter(([key, value]) => {
     if (!PluginIdSchema().safeParse(key).success || value === undefined) return false;
     let { marketplace } = parsePluginIdentifier(key);
     return marketplace !== BUILTIN && !isOfficialMarketplace_2(marketplace);
@@ -4162,158 +4391,173 @@ function hasMarketplaceBackedPlugins() {
  */
 async function loadPluginsFromMarketplaces({ cacheOnly, preview = false, storageV5, credentials }) {
   let now = Date.now();
-  let y = [];
-  let S = [];
-  let w = [];
+  let plugins = [];
+  let errors = [];
+  let warnings = [];
   let enabledPluginEntries = getEnabledPluginEntries();
-  let knownMarketplaces = await loadKnownMarketplacesSafe(storageV5);
-  let q = isKnownMarketplacesReadFailure(knownMarketplaces);
-  let Z = admissionKindsFor(knownMarketplaces);
-  let Se = (marketplaceName) => admissionCauseFor(knownMarketplaces, marketplaceName);
+  let config = await loadKnownMarketplacesSafe(storageV5);
+  let registryReadFailed = isKnownMarketplacesReadFailure(config);
+  let admissionKinds = admissionKindsFor(config);
+  let admissionCause = (name) => admissionCauseFor(config, name);
   let strictAllowlist = getStrictKnownMarketplaces();
   let blocklist = isMarketplaceRestrictionPolicyActive();
-  let Ee = new Set(
+  let marketplaceNames = new Set(
     enabledPluginEntries
-      .map(([yn]) => parsePluginIdentifier(yn).marketplace)
-      .filter((yn) => !!yn && yn.toLowerCase() !== pluginManifestPathSchemas),
+      .map(([pluginId]) => parsePluginIdentifier(pluginId).marketplace)
+      .filter(
+        (marketplaceName) => !!marketplaceName && marketplaceName.toLowerCase() !== pluginManifestPathSchemas,
+      ),
   );
-  let Ae = q ? undefined : validateDeclaredMarketplaceSource(Ee, knownMarketplaces);
-  let Ie = new Set(Object.keys(Ae?.additions ?? {}));
-  let Me = new Map(Ae?.skipped);
-  let We =
-    Ie.size === 0
-      ? knownMarketplaces
+  let declaredSource = registryReadFailed
+    ? undefined
+    : validateDeclaredMarketplaceSource(marketplaceNames, config);
+  let addedMarketplaces = new Set(Object.keys(declaredSource?.additions ?? {}));
+  let skippedMarketplaces = new Map(declaredSource?.skipped);
+  let mergedMarketplaces =
+    addedMarketplaces.size === 0
+      ? config
       : {
-          ...knownMarketplaces,
-          ...Ae?.additions,
+          ...config,
+          ...declaredSource?.additions,
         };
-  let ze = new Map();
-  let lt = new Set();
+  let marketplaceCatalogs = new Map();
+  let unreadableCatalogs = new Set();
   await Promise.all(
-    [...Ee].map(async (yn) => {
-      let Kn = Object.hasOwn(We, yn) ? We[yn] : undefined;
-      let Xn = Ie.has(yn);
-      let fo = {
-        registryEntry: Kn,
-        registryEntryIsSaved: !Xn,
-        unreadableCatalogs: lt,
+    [...marketplaceNames].map(async (marketplaceName) => {
+      let registryEntry = Object.hasOwn(mergedMarketplaces, marketplaceName)
+        ? mergedMarketplaces[marketplaceName]
+        : undefined;
+      let isAdded = addedMarketplaces.has(marketplaceName);
+      let readOptions = {
+        registryEntry,
+        registryEntryIsSaved: !isAdded,
+        unreadableCatalogs,
       };
-      let marketplaceCacheOnly = await getMarketplaceCacheOnly(yn, storageV5, fo);
-      if (Xn && (marketplaceCacheOnly === null || marketplaceCacheOnly.name !== yn)) {
-        let vn = We[yn];
-        let co = printableOrEmpty(vn?.installLocation ?? "");
+      let marketplaceCacheOnly = await getMarketplaceCacheOnly(marketplaceName, storageV5, readOptions);
+      if (isAdded && (marketplaceCacheOnly === null || marketplaceCacheOnly.name !== marketplaceName)) {
+        let entry = mergedMarketplaces[marketplaceName];
+        let location = printableOrEmpty(entry?.installLocation ?? "");
         if (marketplaceCacheOnly === null) {
-          Me.set(yn, `no marketplace manifest could be read at its declared location ${co}`);
+          skippedMarketplaces.set(
+            marketplaceName,
+            `no marketplace manifest could be read at its declared location ${location}`,
+          );
           logMarketplaceNoticeOnce(
-            `declared-unreadable:${yn}:${co}`,
-            `Marketplace ${jsonStringify(yn)} is declared in settings, but no marketplace manifest could be read at ${co} (.claude-plugin/marketplace.json missing or invalid): left to the reconciler, its plugins do not load from the declaration`,
+            `declared-unreadable:${marketplaceName}:${location}`,
+            `Marketplace ${jsonStringify(marketplaceName)} is declared in settings, but no marketplace manifest could be read at ${location} (.claude-plugin/marketplace.json missing or invalid): left to the reconciler, its plugins do not load from the declaration`,
           );
         } else {
-          Me.set(
-            yn,
+          skippedMarketplaces.set(
+            marketplaceName,
             `the marketplace at its declared location names itself ${jsonStringify(marketplaceCacheOnly.name)}`,
           );
           logMarketplaceNoticeOnce(
-            `catalog-name:${yn}:${marketplaceCacheOnly.name}`,
-            `Marketplace ${jsonStringify(yn)} is declared in settings, but the marketplace at the declared path names itself ${jsonStringify(marketplaceCacheOnly.name)}: declare it under that name (its plugins are enabled as <plugin>@${marketplaceCacheOnly.name})`,
+            `catalog-name:${marketplaceName}:${marketplaceCacheOnly.name}`,
+            `Marketplace ${jsonStringify(marketplaceName)} is declared in settings, but the marketplace at the declared path names itself ${jsonStringify(marketplaceCacheOnly.name)}: declare it under that name (its plugins are enabled as <plugin>@${marketplaceCacheOnly.name})`,
           );
         }
-        delete We[yn];
-        Ie.delete(yn);
-        lt.delete(yn);
-        ze.set(yn, null);
+        delete mergedMarketplaces[marketplaceName];
+        addedMarketplaces.delete(marketplaceName);
+        unreadableCatalogs.delete(marketplaceName);
+        marketplaceCatalogs.set(marketplaceName, null);
         return;
       }
-      let bo =
-        Kn !== undefined &&
-        !Xn &&
-        !isClaudeAiMarketplaceSource(Kn.source) &&
-        !isPluginDirectorySource(Kn.source) &&
-        validateReservedMarketplaceEntry(yn, Kn) === null &&
-        !isImpersonatingOfficialMarketplace(yn, Kn);
-      for (let vn of ARCHIVE_RETRY_DELAYS_MS) {
-        if (marketplaceCacheOnly !== null || !bo) break;
-        await sleep(vn);
-        marketplaceCacheOnly = await getMarketplaceCacheOnly(yn, storageV5, fo);
+      let canRetry =
+        registryEntry !== undefined &&
+        !isAdded &&
+        !isClaudeAiMarketplaceSource(registryEntry.source) &&
+        !isPluginDirectorySource(registryEntry.source) &&
+        validateReservedMarketplaceEntry(marketplaceName, registryEntry) === null &&
+        !isImpersonatingOfficialMarketplace(marketplaceName, registryEntry);
+      for (let delayMs of ARCHIVE_RETRY_DELAYS_MS) {
+        if (marketplaceCacheOnly !== null || !canRetry) break;
+        await sleep(delayMs);
+        marketplaceCacheOnly = await getMarketplaceCacheOnly(marketplaceName, storageV5, readOptions);
         if (marketplaceCacheOnly !== null)
           logForDebugging(
-            `Marketplace ${yn}: catalog readable again after a re-read (another process was refreshing it)`,
+            `Marketplace ${marketplaceName}: catalog readable again after a re-read (another process was refreshing it)`,
           );
       }
-      ze.set(yn, marketplaceCacheOnly);
+      marketplaceCatalogs.set(marketplaceName, marketplaceCacheOnly);
     }),
   );
-  let Je = [];
-  let uniqueMarketplaces = new Set(enabledPluginEntries.map(([yn]) => yn));
-  let pt = new Map();
-  let flattened = enabledPluginEntries.flatMap(([yn, Kn]) => {
-    let { name: Xn, marketplace } = parsePluginIdentifier(yn);
-    let To = marketplace ? ze.get(marketplace) : null;
-    let bo = marketplace ? We[marketplace] : undefined;
-    if (!Xn || !marketplace || !To?.renames || Kn === false || isSourceDisallowedOrUnverifiable(bo?.source))
-      return [[yn, Kn]];
-    let vn = pt.get(marketplace);
-    if (!vn) {
-      vn = new Set(To.plugins.map((plugin) => plugin.name));
-      pt.set(marketplace, vn);
+  let renames = [];
+  let uniqueMarketplaces = new Set(enabledPluginEntries.map(([pluginId]) => pluginId));
+  let marketplacePluginNames = new Map();
+  let flattened = enabledPluginEntries.flatMap(([pluginId, enabledValue]) => {
+    let { name: pluginName, marketplace } = parsePluginIdentifier(pluginId);
+    let catalog = marketplace ? marketplaceCatalogs.get(marketplace) : null;
+    let registryEntry = marketplace ? mergedMarketplaces[marketplace] : undefined;
+    if (
+      !pluginName ||
+      !marketplace ||
+      !catalog?.renames ||
+      enabledValue === false ||
+      isSourceDisallowedOrUnverifiable(registryEntry?.source)
+    )
+      return [[pluginId, enabledValue]];
+    let names = marketplacePluginNames.get(marketplace);
+    if (!names) {
+      names = new Set(catalog.plugins.map((plugin) => plugin.name));
+      marketplacePluginNames.set(marketplace, names);
     }
-    if (vn.has(Xn)) return [[yn, Kn]];
-    let pluginRename = resolvePluginRename(Xn, To.renames, vn);
-    if (pluginRename === null) return [[yn, Kn]];
+    if (names.has(pluginName)) return [[pluginId, enabledValue]];
+    let pluginRename = resolvePluginRename(pluginName, catalog.renames, names);
+    if (pluginRename === null) return [[pluginId, enabledValue]];
     if (pluginRename.kind === "unresolved") {
-      if (!preview) logPluginRenamed(Xn, marketplace, pluginRename);
+      if (!preview) logPluginRenamed(pluginName, marketplace, pluginRename);
       logForDebugging(
-        `Plugin "${yn}" has a renames entry but it does not resolve (${pluginRename.reason}); falling through to plugin-not-found`,
+        `Plugin "${pluginId}" has a renames entry but it does not resolve (${pluginRename.reason}); falling through to plugin-not-found`,
         {
           level: "warn",
         },
       );
-      return [[yn, Kn]];
+      return [[pluginId, enabledValue]];
     }
-    let So = pluginRename.kind === "renamed" ? `${pluginRename.to}@${marketplace}` : null;
-    if (So !== null && !PluginIdSchema().safeParse(So).success) {
+    let renamedId = pluginRename.kind === "renamed" ? `${pluginRename.to}@${marketplace}` : null;
+    if (renamedId !== null && !PluginIdSchema().safeParse(renamedId).success) {
       if (!preview)
-        logPluginRenamed(Xn, marketplace, {
+        logPluginRenamed(pluginName, marketplace, {
           kind: "unresolved",
           reason: "target-missing",
         });
       logForDebugging(
-        `Plugin "${yn}" rename target "${So}" is not a valid PluginIdSchema id; falling through to plugin-not-found`,
+        `Plugin "${pluginId}" rename target "${renamedId}" is not a valid PluginIdSchema id; falling through to plugin-not-found`,
         {
           level: "warn",
         },
       );
-      return [[yn, Kn]];
+      return [[pluginId, enabledValue]];
     }
-    if (!preview) logPluginRenamed(Xn, marketplace, pluginRename);
-    Je.push({
+    if (!preview) logPluginRenamed(pluginName, marketplace, pluginRename);
+    renames.push({
       marketplace,
-      oldName: Xn,
-      oldId: yn,
-      newId: So,
+      oldName: pluginName,
+      oldId: pluginId,
+      newId: renamedId,
       resolution: pluginRename,
     });
-    w.push({
+    warnings.push({
       type: "plugin-renamed",
-      source: yn,
-      plugin: Xn,
+      source: pluginId,
+      plugin: pluginName,
       marketplace,
       renamedTo: pluginRename.kind === "renamed" ? pluginRename.to : null,
     });
-    if (So === null || uniqueMarketplaces.has(So)) return [];
-    uniqueMarketplaces.add(So);
-    return [[So, Kn]];
+    if (renamedId === null || uniqueMarketplaces.has(renamedId)) return [];
+    uniqueMarketplaces.add(renamedId);
+    return [[renamedId, enabledValue]];
   });
-  if (!preview && Je.length > 0)
+  if (!preview && renames.length > 0)
     try {
       await removeInstallationsAndRefreshSnapshot(
-        Je.flatMap((yn) =>
-          yn.newId === null
+        renames.flatMap((rename) =>
+          rename.newId === null
             ? []
             : [
                 {
-                  oldId: yn.oldId,
-                  newId: yn.newId,
+                  oldId: rename.oldId,
+                  newId: rename.newId,
                 },
               ],
         ),
@@ -4326,126 +4570,133 @@ async function loadPluginsFromMarketplaces({ cacheOnly, preview = false, storage
     }
   if (!preview && isStorageV5Enabled() && storageV5 !== undefined)
     await primeInstalledPluginsCache(storageV5);
-  let yt = preview
+  let installedPlugins = preview
     ? isStorageV5Enabled() && storageV5 !== undefined
       ? await loadInstalledPlugins(storageV5)
       : loadInstalledPluginsSync()
     : getInstalledPluginsSnapshot();
-  let gt = hasFailedInstalledPluginsRead(yt);
-  let At = gt ? await readInstalledPluginsLenient(storageV5) : {};
-  let It = isOfficialMarketplaceSourced(knownMarketplaces);
-  let Yt = pluginDirectoryPolicyBlock();
-  let qt = flattened.some(([yn]) => yn.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`))
+  let installedListFailed = hasFailedInstalledPluginsRead(installedPlugins);
+  let lenientInstalled = installedListFailed ? await readInstalledPluginsLenient(storageV5) : {};
+  let officialSourced = isOfficialMarketplaceSourced(config);
+  let directoryPolicyBlock = pluginDirectoryPolicyBlock();
+  let bindings = flattened.some(([pluginId]) => pluginId.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`))
     ? await bindingsWithReadFailure()
     : new Map();
-  let Zt = (yn) => {
-    let Kn;
+  let makeContainsCheck = (rootPathFn) => {
+    let rootPath;
     let marketplaceCatalogs = new Map();
     return (name) => {
-      let To = marketplaceCatalogs.get(name);
-      if (To === undefined) {
-        Kn ??= toComparablePath(yn());
+      let contained = marketplaceCatalogs.get(name);
+      if (contained === undefined) {
+        rootPath ??= toComparablePath(rootPathFn());
         let comparablePath = toComparablePath(name);
-        To =
-          comparablePath !== Kn &&
-          isPathWithin_2(Kn, comparablePath, {
+        contained =
+          comparablePath !== rootPath &&
+          isPathWithin_2(rootPath, comparablePath, {
             alreadyComparable: true,
           });
-        marketplaceCatalogs.set(name, To);
+        marketplaceCatalogs.set(name, contained);
       }
-      return To;
+      return contained;
     };
   };
-  let rn = Zt(getResolvedMarketplacesCacheDir);
-  let pn = Zt(anchoredPluginCachePath);
-  let no = (yn) => pn(yn.extractedFrom ?? yn.path);
+  let isInMarketplaceCache = makeContainsCheck(getResolvedMarketplacesCacheDir);
+  let isInPluginCache = makeContainsCheck(anchoredPluginCachePath);
+  let isPluginCachePath = (install) => isInPluginCache(install.extractedFrom ?? install.path);
   let results = await Promise.allSettled(
-    flattened.map(async ([realCandidate, Kn]) => {
-      let { name: pluginName, marketplace: marketplaceName } = parsePluginIdentifier(realCandidate);
+    flattened.map(async ([pluginId, enabledValue]) => {
+      let { name: pluginName, marketplace: marketplaceName } = parsePluginIdentifier(pluginId);
       if (marketplaceName === pluginManifestPathSchemas)
         return loadNpmMarketplacePlugin({
-          pluginId: realCandidate,
+          pluginId,
           packageName: pluginName,
-          enabledValue: Kn,
-          installations: yt.plugins[realCandidate],
-          registryReadFailed: gt,
-          knownMarketplaces: We,
+          enabledValue,
+          installations: installedPlugins.plugins[pluginId],
+          registryReadFailed: installedListFailed,
+          knownMarketplaces: mergedMarketplaces,
           cacheOnly,
           preview,
           storageV5,
           credentials,
-          errors: S,
-          warnings: w,
+          errors,
+          warnings,
         });
-      let To = We[marketplaceName];
-      let bo = marketplaceName === OFFICIAL_MARKETPLACE_NAME && It ? undefined : Z.get(marketplaceName);
-      let vn = bo === undefined ? undefined : Se(marketplaceName);
-      let co = q || bo !== undefined;
-      let So = () => ({
+      let registryEntry = mergedMarketplaces[marketplaceName];
+      let admissionKind =
+        marketplaceName === OFFICIAL_MARKETPLACE_NAME && officialSourced
+          ? undefined
+          : admissionKinds.get(marketplaceName);
+      let admissionReason = admissionKind === undefined ? undefined : admissionCause(marketplaceName);
+      let registryUnusable = registryReadFailed || admissionKind !== undefined;
+      let marketplaceNotFoundError = () => ({
         type: "marketplace-not-found",
-        source: realCandidate,
+        source: pluginId,
         marketplace: marketplaceName,
-        availableMarketplaces: Object.keys(We),
-        ...(q && {
+        availableMarketplaces: Object.keys(mergedMarketplaces),
+        ...(registryReadFailed && {
           registryReadFailed: true,
         }),
-        ...(bo !== undefined && {
-          registrationHidden: bo,
+        ...(admissionKind !== undefined && {
+          registrationHidden: admissionKind,
         }),
-        ...(vn !== undefined && {
-          registrationHiddenReason: vn,
+        ...(admissionReason !== undefined && {
+          registrationHiddenReason: admissionReason,
         }),
       });
-      let ko =
-        !To &&
-        !co &&
+      let directoryFallback =
+        !registryEntry &&
+        !registryUnusable &&
         marketplaceName === OFFICIAL_MARKETPLACE_NAME &&
         isSourceAllowedByPolicy({
           source: "pluginDirectory",
         });
-      if (!To && blocklist && !ko) {
-        if (co) {
-          if (isDependencyAutoInstallState(Kn)) S.push(So());
-          else logForDebugging(`Skipping load-failure error for disabled plugin ${realCandidate}`);
+      if (!registryEntry && blocklist && !directoryFallback) {
+        if (registryUnusable) {
+          if (isDependencyAutoInstallState(enabledValue)) errors.push(marketplaceNotFoundError());
+          else logForDebugging(`Skipping load-failure error for disabled plugin ${pluginId}`);
           return null;
         }
-        S.push({
+        errors.push({
           type: "marketplace-blocked-by-policy",
-          source: realCandidate,
+          source: pluginId,
           plugin: pluginName,
           marketplace: marketplaceName,
           blockedByBlocklist: strictAllowlist === null,
-          allowedSources: (strictAllowlist ?? []).map((rs) => formatSourceForDisplay(rs)),
+          allowedSources: (strictAllowlist ?? []).map((allowlistSource) =>
+            formatSourceForDisplay(allowlistSource),
+          ),
           sourceUnverifiable: true,
         });
         return null;
       }
-      if (To) {
-        let rs = validateReservedMarketplaceEntry(marketplaceName, To);
-        if (rs) {
-          if (isDependencyAutoInstallState(Kn))
-            S.push({
+      if (registryEntry) {
+        let reservedNameMessage = validateReservedMarketplaceEntry(marketplaceName, registryEntry);
+        if (reservedNameMessage) {
+          if (isDependencyAutoInstallState(enabledValue))
+            errors.push({
               type: "marketplace-load-failed",
-              source: realCandidate,
+              source: pluginId,
               marketplace: marketplaceName,
-              reason: rs,
+              reason: reservedNameMessage,
               untrustedReservedName: true,
             });
-          else logForDebugging(`Skipping reserved-name refusal error for disabled plugin ${realCandidate}`);
+          else logForDebugging(`Skipping reserved-name refusal error for disabled plugin ${pluginId}`);
           return null;
         }
       }
-      if (To && !isSourceAllowedByPolicy(To.source)) {
-        let isBlocked = isSourceInBlocklist(To.source);
-        let Es = getStrictKnownMarketplaces() || [];
-        S.push({
+      if (registryEntry && !isSourceAllowedByPolicy(registryEntry.source)) {
+        let isBlocked = isSourceInBlocklist(registryEntry.source);
+        let allowlist = getStrictKnownMarketplaces() || [];
+        errors.push({
           type: "marketplace-blocked-by-policy",
-          source: realCandidate,
+          source: pluginId,
           plugin: pluginName,
           marketplace: marketplaceName,
           blockedByBlocklist: isBlocked,
-          allowedSources: isBlocked ? [] : Es.map((Nr) => formatSourceForDisplay(Nr)),
-          ...(isPluginDirectorySource(To.source) && isPluginDirectoryDisabledByPolicy()
+          allowedSources: isBlocked
+            ? []
+            : allowlist.map((allowlistSource) => formatSourceForDisplay(allowlistSource)),
+          ...(isPluginDirectorySource(registryEntry.source) && isPluginDirectoryDisabledByPolicy()
             ? {
                 directoryDisabledByOrganization: true,
               }
@@ -4454,71 +4705,75 @@ async function loadPluginsFromMarketplaces({ cacheOnly, preview = false, storage
         return null;
       }
       let result = null;
-      let marketplace = ze.get(marketplaceName);
-      if (marketplace && To) {
+      let marketplace = marketplaceCatalogs.get(marketplaceName);
+      if (marketplace && registryEntry) {
         let entry = marketplace.plugins.find((plugin) => plugin.name === pluginName);
         if (entry)
           result = {
             entry,
-            marketplaceInstallLocation: To.installLocation,
+            marketplaceInstallLocation: registryEntry.installLocation,
           };
-      } else if (ko) result = await findPluginDirectoryEntry(pluginName, storageV5, "load");
-      else result = await getPluginByIdCacheOnly(realCandidate, storageV5);
+      } else if (directoryFallback) result = await findPluginDirectoryEntry(pluginName, storageV5, "load");
+      else result = await getPluginByIdCacheOnly(pluginId, storageV5);
       if (
         !result &&
         marketplaceName === OFFICIAL_MARKETPLACE_NAME &&
-        (To || ko) &&
-        (gt || !!yt.plugins[realCandidate]?.length)
+        (registryEntry || directoryFallback) &&
+        (installedListFailed || !!installedPlugins.plugins[pluginId]?.length)
       )
-        result = await findMissedListingEntry(pluginName, storageV5, ko || !marketplace);
-      let $o = pluginBindingValues(yt.plugins, realCandidate);
-      if (result && isUnboundOfficialPlugin(realCandidate, $o, qt, gt)) {
-        if (isDependencyAutoInstallState(Kn))
-          S.push({
+        result = await findMissedListingEntry(pluginName, storageV5, directoryFallback || !marketplace);
+      let bindingValues = pluginBindingValues(installedPlugins.plugins, pluginId);
+      if (result && isUnboundOfficialPlugin(pluginId, bindingValues, bindings, installedListFailed)) {
+        if (isDependencyAutoInstallState(enabledValue))
+          errors.push({
             type: "generic-error",
-            source: realCandidate,
+            source: pluginId,
             plugin: pluginName,
-            error: `Not loading ${printableName(realCandidate, 200)}: plugin-directory-bindings.json in the plugins folder could not be used (unreadable, a symbolic link or not a file, over 1 MB, damaged, or written by a newer Claude Code), so its ${OFFICIAL_MARKETPLACE_DISPLAY} listing could not be checked against the repository it was installed from. It loads again once the file can be used.`,
+            error: `Not loading ${printableName(pluginId, 200)}: plugin-directory-bindings.json in the plugins folder could not be used (unreadable, a symbolic link or not a file, over 1 MB, damaged, or written by a newer Claude Code), so its ${OFFICIAL_MARKETPLACE_DISPLAY} listing could not be checked against the repository it was installed from. It loads again once the file can be used.`,
           });
         return null;
       }
-      let yo =
-        gt && marketplaceName === OFFICIAL_MARKETPLACE_NAME
-          ? findBindingKeysFor(qt.keys(), realCandidate).flatMap((rs) => {
-              let Es = qt.get(rs);
-              return Es === undefined ? [] : [parseRepoWithRef(Es)];
+      let boundRepoKeys =
+        installedListFailed && marketplaceName === OFFICIAL_MARKETPLACE_NAME
+          ? findBindingKeysFor(bindings.keys(), pluginId).flatMap((bindingKey) => {
+              let repositoryKey = bindings.get(bindingKey);
+              return repositoryKey === undefined ? [] : [parseRepoWithRef(repositoryKey)];
             })
           : [];
-      let Ho = result ? samePluginSource(result.entry.source, undefined) : undefined;
-      let rr = yo.find((rs) => rs !== Ho) ?? yo[0];
+      let entryRepoKey = result ? samePluginSource(result.entry.source, undefined) : undefined;
+      let changedRepoKey = boundRepoKeys.find((repoKey) => repoKey !== entryRepoKey) ?? boundRepoKeys[0];
       if (
         result &&
-        ((rr !== undefined
-          ? rr !== samePluginSource(result.entry.source, undefined)
-          : isDirectoryRepositoryChanged(realCandidate, $o, result.entry.source, qt)) ||
-          (gt &&
+        ((changedRepoKey !== undefined
+          ? changedRepoKey !== samePluginSource(result.entry.source, undefined)
+          : isDirectoryRepositoryChanged(pluginId, bindingValues, result.entry.source, bindings)) ||
+          (installedListFailed &&
             isDirectoryRepositoryChanged(
-              realCandidate,
-              pluginBindingValues(At, realCandidate),
+              pluginId,
+              pluginBindingValues(lenientInstalled, pluginId),
               result.entry.source,
-              qt,
+              bindings,
             )))
       ) {
-        if (isDependencyAutoInstallState(Kn)) {
-          let rs = rr ?? getBoundRepositoryKeys(realCandidate, $o, qt)[0];
+        if (isDependencyAutoInstallState(enabledValue)) {
+          let repoKey = changedRepoKey ?? getBoundRepositoryKeys(pluginId, bindingValues, bindings)[0];
           let sliced = (marketplace?.plugins ?? [])
-            .filter((Nr) => Nr.name !== pluginName && samePluginSource(Nr.source, undefined) === rs)
-            .map((Nr) => Nr.name)
+            .filter(
+              (otherPlugin) =>
+                otherPlugin.name !== pluginName &&
+                samePluginSource(otherPlugin.source, undefined) === repoKey,
+            )
+            .map((otherPlugin) => otherPlugin.name)
             .slice(0, 3);
-          S.push({
+          errors.push({
             type: "plugin-not-found",
-            source: realCandidate,
+            source: pluginId,
             pluginId: pluginName,
             marketplace: marketplaceName,
             removedFromDirectory: true,
             directoryIdentityChanged: true,
-            ...(($o?.length ?? 0) === 0 &&
-              rr === undefined && {
+            ...((bindingValues?.length ?? 0) === 0 &&
+              changedRepoKey === undefined && {
                 directoryHeldWithoutRecord: true,
               }),
             ...(sliced.length > 0 && {
@@ -4529,116 +4784,117 @@ async function loadPluginsFromMarketplaces({ cacheOnly, preview = false, storage
         return null;
       }
       if (!result) {
-        let rs = gt || !!yt.plugins[realCandidate]?.length;
-        let Es = To
+        let hasInstallRecords = installedListFailed || !!installedPlugins.plugins[pluginId]?.length;
+        let directoryCatalog = registryEntry
           ? marketplace
-          : ko && rs && isDependencyAutoInstallState(Kn)
+          : directoryFallback && hasInstallRecords && isDependencyAutoInstallState(enabledValue)
             ? await loadPluginDirectoryMarketplace(pluginName, storageV5)
             : null;
-        if (!isDependencyAutoInstallState(Kn))
-          logForDebugging(`Skipping load-failure error for disabled plugin ${realCandidate}`);
-        else if (!To && !Es) {
-          if (rs || co) {
-            S.push(So());
-            let Nr = Me.get(marketplaceName);
-            let Is = q
+        if (!isDependencyAutoInstallState(enabledValue))
+          logForDebugging(`Skipping load-failure error for disabled plugin ${pluginId}`);
+        else if (!registryEntry && !directoryCatalog) {
+          if (hasInstallRecords || registryUnusable) {
+            errors.push(marketplaceNotFoundError());
+            let skippedReason = skippedMarketplaces.get(marketplaceName);
+            let reason = registryReadFailed
               ? "unknown because known_marketplaces.json could not be read this load"
-              : bo !== undefined
-                ? `recorded in known_marketplaces.json but refused this load (${bo})`
-                : Nr !== undefined
-                  ? `declared under extraKnownMarketplaces but not usable this load: ${Nr}`
+              : admissionKind !== undefined
+                ? `recorded in known_marketplaces.json but refused this load (${admissionKind})`
+                : skippedReason !== undefined
+                  ? `declared under extraKnownMarketplaces but not usable this load: ${skippedReason}`
                   : "not known here: neither recorded in known_marketplaces.json nor declared with a directory or file source under extraKnownMarketplaces in an enabled settings source";
             logMarketplaceNoticeOnce(
-              `not-loaded:${realCandidate}:${Is}`,
-              `plugin ${jsonStringify(realCandidate)} not loaded (hooks module, commands, skills, servers: none of it): its marketplace ${jsonStringify(marketplaceName)} is ${Is}; \`claude plugin marketplace add <path-or-repo>\` registers it`,
+              `not-loaded:${pluginId}:${reason}`,
+              `plugin ${jsonStringify(pluginId)} not loaded (hooks module, commands, skills, servers: none of it): its marketplace ${jsonStringify(marketplaceName)} is ${reason}; \`claude plugin marketplace add <path-or-repo>\` registers it`,
             );
           } else
-            logForDebugging(
-              `Skipping orphaned enabledPlugins entry ${realCandidate}: marketplace not registered`,
-            );
-        } else if (!Es)
-          S.push({
+            logForDebugging(`Skipping orphaned enabledPlugins entry ${pluginId}: marketplace not registered`);
+        } else if (!directoryCatalog)
+          errors.push({
             type: "marketplace-load-failed",
-            source: realCandidate,
+            source: pluginId,
             marketplace: marketplaceName,
             reason: "cache-miss",
-            ...(lt.has(marketplaceName) && {
+            ...(unreadableCatalogs.has(marketplaceName) && {
               catalogReadFailed: true,
             }),
-            ...(lt.has(marketplaceName) &&
-              isRegistryOwnedByName(lt, marketplaceName) &&
+            ...(unreadableCatalogs.has(marketplaceName) &&
+              isRegistryOwnedByName(unreadableCatalogs, marketplaceName) &&
               isAsciiImpersonatingOfficialName(marketplaceName) && {
                 nameRefused: true,
-                ...(We[marketplaceName]?.source.source === "settings" && {
+                ...(mergedMarketplaces[marketplaceName]?.source.source === "settings" && {
                   nameRefusedDeclaredInSettings: true,
                 }),
               }),
-            ...(Yt !== null && marketplaceName === OFFICIAL_MARKETPLACE_NAME
+            ...(directoryPolicyBlock !== null && marketplaceName === OFFICIAL_MARKETPLACE_NAME
               ? {
-                  directoryBlockedBy: Yt,
+                  directoryBlockedBy: directoryPolicyBlock,
                 }
               : {}),
           });
-        else if (rs) {
-          let Nr = marketplaceName === OFFICIAL_MARKETPLACE_NAME;
-          let Is = Nr ? getBoundRepositoryKeys(realCandidate, $o, qt)[0] : undefined;
-          let fs =
-            Is !== undefined
-              ? Es.plugins
+        else if (hasInstallRecords) {
+          let isOfficialName = marketplaceName === OFFICIAL_MARKETPLACE_NAME;
+          let boundRepoKey = isOfficialName
+            ? getBoundRepositoryKeys(pluginId, bindingValues, bindings)[0]
+            : undefined;
+          let renamedTo =
+            boundRepoKey !== undefined
+              ? directoryCatalog.plugins
                   .filter(
                     (plugin) =>
-                      plugin.name !== pluginName && samePluginSource(plugin.source, undefined) === Is,
+                      plugin.name !== pluginName &&
+                      samePluginSource(plugin.source, undefined) === boundRepoKey,
                   )
                   .map((plugin) => plugin.name)
                   .slice(0, 3)
               : [];
-          let as = Nr ? await pluginDirectoryNotInstallableReason(pluginName, storageV5) : undefined;
-          S.push({
+          let notInstallableReason = isOfficialName
+            ? await pluginDirectoryNotInstallableReason(pluginName, storageV5)
+            : undefined;
+          errors.push({
             type: "plugin-not-found",
-            source: realCandidate,
+            source: pluginId,
             pluginId: pluginName,
             marketplace: marketplaceName,
-            ...(Nr
+            ...(isOfficialName
               ? {
                   removedFromDirectory: true,
-                  ...(gt && {
+                  ...(installedListFailed && {
                     registryReadFailed: true,
                   }),
-                  ...(fs.length > 0 && {
-                    directoryRenamedTo: fs,
+                  ...(renamedTo.length > 0 && {
+                    directoryRenamedTo: renamedTo,
                   }),
-                  ...(as !== undefined && {
-                    directoryNotInstallableReason: as,
+                  ...(notInstallableReason !== undefined && {
+                    directoryNotInstallableReason: notInstallableReason,
                   }),
                 }
               : {}),
           });
         } else
-          logForDebugging(
-            `Skipping orphaned enabledPlugins entry ${realCandidate}: not in marketplace catalog`,
-          );
+          logForDebugging(`Skipping orphaned enabledPlugins entry ${pluginId}: not in marketplace catalog`);
         return null;
       }
-      let trustedRoots = getMarketplaceCandidatePaths(realCandidate, We, tryUnwrapTextPayload());
-      let Hr = await pickUsableInstallation(yt.plugins[realCandidate], {
+      let trustedRoots = getMarketplaceCandidatePaths(pluginId, mergedMarketplaces, tryUnwrapTextPayload());
+      let usableInstall = await pickUsableInstallation(installedPlugins.plugins[pluginId], {
         storageV5,
         trustedRoots,
       });
-      let Fr =
-        Hr === undefined
+      let installRecord =
+        usableInstall === undefined
           ? undefined
           : {
-              ...Hr,
-              installPath: resolve_2(getOriginalCwd(), Hr.installPath),
+              ...usableInstall,
+              installPath: resolve_2(getOriginalCwd(), usableInstall.installPath),
             };
-      if (typeof result.entry.source !== "string" && !Fr) {
+      if (typeof result.entry.source !== "string" && !installRecord) {
         if (
           !SETTING_SOURCES.filter(isOperatorSettingSource_2).some(
-            (Es) => getSettingsForSource(Es)?.enabledPlugins?.[realCandidate] === true,
+            (settingSource) => getSettingsForSource(settingSource)?.enabledPlugins?.[pluginId] === true,
           )
         ) {
           let pluginVersion = await calculatePluginVersion(
-            realCandidate,
+            pluginId,
             result.entry.source,
             undefined,
             undefined,
@@ -4648,17 +4904,18 @@ async function loadPluginsFromMarketplaces({ cacheOnly, preview = false, storage
             },
             "sha" in result.entry.source ? result.entry.source.sha : undefined,
           );
-          if (!(await probeSeedForPlugin(realCandidate, pluginVersion, "when-unknown"))) {
-            let Is = isDependencyAutoInstallState(Kn) && (await lstatChildBigintOrUndefined(realCandidate));
-            S.push({
+          if (!(await probeSeedForPlugin(pluginId, pluginVersion, "when-unknown"))) {
+            let seedHasOtherVersion =
+              isDependencyAutoInstallState(enabledValue) && (await lstatChildBigintOrUndefined(pluginId));
+            errors.push({
               type: "plugin-not-installed",
-              source: realCandidate,
+              source: pluginId,
               plugin: result.entry.name,
-              ...(Is && {
+              ...(seedHasOtherVersion && {
                 seedHasOtherVersion: true,
               }),
-              ...(isDependencyAutoInstallState(Kn) &&
-                gt && {
+              ...(isDependencyAutoInstallState(enabledValue) &&
+                installedListFailed && {
                   registryReadFailed: true,
                 }),
             });
@@ -4666,32 +4923,33 @@ async function loadPluginsFromMarketplaces({ cacheOnly, preview = false, storage
           }
         }
       }
-      let cs =
+      let commandSource =
         commandSourceSpecOf(result.entry.source) !== undefined ||
-        (Fr !== undefined && (Fr.sourceCommand !== undefined || Fr.sourceProducerPath !== undefined));
-      let _r = cs || Fr?.previousProducerPaths !== undefined;
-      if (cs && areCommandPluginSourcesDisabledByPolicy()) {
+        (installRecord !== undefined &&
+          (installRecord.sourceCommand !== undefined || installRecord.sourceProducerPath !== undefined));
+      let linkFarmSource = commandSource || installRecord?.previousProducerPaths !== undefined;
+      if (commandSource && areCommandPluginSourcesDisabledByPolicy()) {
         noteHeldForTheAnswer();
-        if (isDependencyAutoInstallState(Kn))
-          S.push({
+        if (isDependencyAutoInstallState(enabledValue))
+          errors.push({
             type: "generic-error",
             orphan: true,
-            source: realCandidate,
+            source: pluginId,
             plugin: result.entry.name,
             error: commandPluginSourcesDisabledMessage(),
           });
         return null;
       }
-      if (isLinkModeCommandSource(result.entry.source) && Fr === undefined) {
-        if (isDependencyAutoInstallState(Kn))
-          S.push({
+      if (isLinkModeCommandSource(result.entry.source) && installRecord === undefined) {
+        if (isDependencyAutoInstallState(enabledValue))
+          errors.push({
             type: "generic-error",
             orphan: true,
-            source: realCandidate,
+            source: pluginId,
             plugin: result.entry.name,
-            error: `Not loading ${printableName(realCandidate, 200)}: it installs as a link farm but has no install record here; ${runCommandHint(
+            error: `Not loading ${printableName(pluginId, 200)}: it installs as a link farm but has no install record here; ${runCommandHint(
               "plugin install",
-              realCandidate,
+              pluginId,
               {
                 tail: "to record it",
                 fallback: "install it explicitly to record it",
@@ -4700,60 +4958,61 @@ async function loadPluginsFromMarketplaces({ cacheOnly, preview = false, storage
           });
         return null;
       }
-      let Cr =
-        Hr?.installPath !== undefined
-          ? classifyMarketplacePath(Hr.installPath, {
+      let pathClass =
+        usableInstall?.installPath !== undefined
+          ? classifyMarketplacePath(usableInstall.installPath, {
               trustedRoots,
             })
           : undefined;
-      let installEntry = Cr?.absolute;
-      let suspect = Cr?.suspect ?? false;
-      let jr =
-        Fr !== undefined &&
-        (Fr.sourceCommand?.endsWith(pluginLinkSchema) === true ||
-          (Fr.sourceCommand === undefined &&
-            (Fr.sourceProducerPath !== undefined || Fr.previousProducerPaths !== undefined) &&
+      let installEntry = pathClass?.absolute;
+      let suspect = pathClass?.suspect ?? false;
+      let isLinkFarm =
+        installRecord !== undefined &&
+        (installRecord.sourceCommand?.endsWith(PLUGIN_LINK_HEADER) === true ||
+          (installRecord.sourceCommand === undefined &&
+            (installRecord.sourceProducerPath !== undefined ||
+              installRecord.previousProducerPaths !== undefined) &&
             isLinkModeCommandSource(result.entry.source)) ||
           suspect ||
-          (_r &&
+          (linkFarmSource &&
             installEntry !== undefined &&
             (await isLiveLinkFarm(installEntry, {
               unclassifiableIsFarm: true,
             }))));
       if (
-        Fr !== undefined &&
-        jr &&
+        installRecord !== undefined &&
+        isLinkFarm &&
         (suspect ||
-          Fr.sourceProducerPath === undefined ||
-          hasDotSegmentAlias(Fr.sourceProducerPath) ||
-          realpathAllowMissing_2(Fr.sourceProducerPath) ||
-          isPathWithin_2(Fr.sourceProducerPath, getOriginalCwd(), {
+          installRecord.sourceProducerPath === undefined ||
+          hasDotSegmentAlias(installRecord.sourceProducerPath) ||
+          realpathAllowMissing_2(installRecord.sourceProducerPath) ||
+          isPathWithin_2(installRecord.sourceProducerPath, getOriginalCwd(), {
             foldCase: true,
           }) ||
           (installEntry !== undefined &&
-            (await hasEntriesOutsideTarget(installEntry, Fr.sourceProducerPath))))
+            (await hasEntriesOutsideTarget(installEntry, installRecord.sourceProducerPath))))
       ) {
-        if (isDependencyAutoInstallState(Kn))
-          S.push({
+        if (isDependencyAutoInstallState(enabledValue))
+          errors.push({
             type: "generic-error",
             orphan: true,
-            source: realCandidate,
+            source: pluginId,
             plugin: result.entry.name,
             error: suspect
-              ? `Not loading ${printableName(realCandidate, 200)}: its recorded install path ${UNSAFE_PATH_EXPLANATION}; ${
+              ? `Not loading ${printableName(pluginId, 200)}: its recorded install path ${UNSAFE_PATH_EXPLANATION}; ${
                   commandSourceSpecOf(result.entry.source) !== undefined
-                    ? runCommandHint("plugin update", realCandidate, {
+                    ? runCommandHint("plugin update", pluginId, {
                         tail: "to re-install it",
                         fallback: "re-install it with an explicit plugin update",
                       })
-                    : runCommandHint("plugin uninstall", realCandidate, {
+                    : runCommandHint("plugin uninstall", pluginId, {
                         tail: "and install it again to re-record it",
                         fallback: "uninstall and install it again to re-record it",
                       })
                 }.`
-              : `Not loading ${printableName(realCandidate, 200)} here: it is served in place from ${printableName(Fr.sourceProducerPath ?? "(unrecorded)", 200)}, which contains the working directory, is a network location, could not be resolved, or no longer matches its cached links \u2014 its content cannot be protected from sandboxed commands; ${runCommandHint(
+              : `Not loading ${printableName(pluginId, 200)} here: it is served in place from ${printableName(installRecord.sourceProducerPath ?? "(unrecorded)", 200)}, which contains the working directory, is a network location, could not be resolved, or no longer matches its cached links \u2014 its content cannot be protected from sandboxed commands; ${runCommandHint(
                   "plugin update",
-                  realCandidate,
+                  pluginId,
                   {
                     tail: "elsewhere to re-resolve it",
                     fallback: "re-resolve it with an explicit plugin update elsewhere",
@@ -4763,26 +5022,26 @@ async function loadPluginsFromMarketplaces({ cacheOnly, preview = false, storage
         return null;
       }
       let linkFarm =
-        Fr !== undefined
-          ? Fr.sourceCommand?.endsWith(pluginLinkSchema) === true
+        installRecord !== undefined
+          ? installRecord.sourceCommand?.endsWith(PLUGIN_LINK_HEADER) === true
           : isLinkModeCommandSource(result.entry.source);
-      let linkFarmProducer = jr ? Fr?.sourceProducerPath : undefined;
-      if (Fr?.claudeaiPluginId !== undefined) {
+      let linkFarmProducer = isLinkFarm ? installRecord?.sourceProducerPath : undefined;
+      if (installRecord?.claudeaiPluginId !== undefined) {
         let source = result.entry.source;
         if (
           typeof source !== "object" ||
           source.source !== "claudeai" ||
-          source.pluginId !== Fr.claudeaiPluginId
+          source.pluginId !== installRecord.claudeaiPluginId
         ) {
-          if (isDependencyAutoInstallState(Kn))
-            S.push({
+          if (isDependencyAutoInstallState(enabledValue))
+            errors.push({
               type: "generic-error",
               refused: true,
-              source: realCandidate,
+              source: pluginId,
               plugin: result.entry.name,
-              error: `Not loading ${printableName(realCandidate, 200)}: it was installed from a claude.ai-hosted marketplace, but that marketplace name now lists ${typeof source === "object" && source.source === "claudeai" ? "a different claude.ai plugin" : "another source"} under this name; ${runCommandHint(
+              error: `Not loading ${printableName(pluginId, 200)}: it was installed from a claude.ai-hosted marketplace, but that marketplace name now lists ${typeof source === "object" && source.source === "claudeai" ? "a different claude.ai plugin" : "another source"} under this name; ${runCommandHint(
                 "plugin uninstall",
-                realCandidate,
+                pluginId,
                 {
                   tail: "and install it again to switch, or remove it",
                   fallback: "uninstall and reinstall it to switch, or remove it",
@@ -4792,99 +5051,110 @@ async function loadPluginsFromMarketplaces({ cacheOnly, preview = false, storage
           return null;
         }
       }
-      let zo = await (cacheOnly
+      let plugin = await (cacheOnly
         ? loadCachedMarketplacePlugin(
             result.entry,
             result.marketplaceInstallLocation,
-            To?.source,
-            realCandidate,
-            Kn === true,
-            S,
-            w,
-            Fr?.installPath,
-            yt.plugins[realCandidate]?.find((rs) => rs.installPath)?.installPath,
+            registryEntry?.source,
+            pluginId,
+            enabledValue === true,
+            errors,
+            warnings,
+            installRecord?.installPath,
+            installedPlugins.plugins[pluginId]?.find((install) => install.installPath)?.installPath,
             {
               storageV5,
               preview,
               linkFarm,
               linkFarmProducer,
-              entryEnabled: isDependencyAutoInstallState(Kn),
-              registryReadFailed: gt,
-              recordedClaudeAiPluginId: Fr?.claudeaiPluginId,
+              entryEnabled: isDependencyAutoInstallState(enabledValue),
+              registryReadFailed: installedListFailed,
+              recordedClaudeAiPluginId: installRecord?.claudeaiPluginId,
             },
           )
         : loadPluginFromMarketplaceEntry(
             result.entry,
             result.marketplaceInstallLocation,
-            To?.source,
-            realCandidate,
-            Kn === true,
-            S,
-            w,
-            Fr?.version,
-            findMatchingSourceCommand(commandSourceSpecOf(result.entry.source), yt.plugins[realCandidate]) ??
-              Fr?.sourceCommand,
+            registryEntry?.source,
+            pluginId,
+            enabledValue === true,
+            errors,
+            warnings,
+            installRecord?.version,
+            findMatchingSourceCommand(
+              commandSourceSpecOf(result.entry.source),
+              installedPlugins.plugins[pluginId],
+            ) ?? installRecord?.sourceCommand,
             {
               storageV5,
               linkFarm,
               linkFarmProducer,
-              entryEnabled: isDependencyAutoInstallState(Kn),
+              entryEnabled: isDependencyAutoInstallState(enabledValue),
               credentials,
-              installRecord: gt ? "unknown" : Fr !== undefined ? "present" : "absent",
-              recordedArchiveSha256: Fr?.archiveSha256,
-              recordedClaudeAiPluginId: Fr?.claudeaiPluginId,
-              recordedGitCommitSha: Fr?.gitCommitSha,
+              installRecord: installedListFailed
+                ? "unknown"
+                : installRecord !== undefined
+                  ? "present"
+                  : "absent",
+              recordedArchiveSha256: installRecord?.archiveSha256,
+              recordedClaudeAiPluginId: installRecord?.claudeaiPluginId,
+              recordedGitCommitSha: installRecord?.gitCommitSha,
             },
           ));
-      if (zo && Fr?.resolvedVersion !== undefined) zo.resolvedVersion = Fr.resolvedVersion;
+      if (plugin && installRecord?.resolvedVersion !== undefined)
+        plugin.resolvedVersion = installRecord.resolvedVersion;
       if (
-        zo &&
-        !weakSet_7.has(zo) &&
-        Fr?.gitCommitSha !== undefined &&
-        resolve_2(Fr.installPath) === resolve_2(zo.path)
+        plugin &&
+        !weakSet_7.has(plugin) &&
+        installRecord?.gitCommitSha !== undefined &&
+        resolve_2(installRecord.installPath) === resolve_2(plugin.path)
       )
-        zo.gitCommitSha = Fr.gitCommitSha;
-      if (zo && Fr?.claudeaiPluginId !== undefined && isServerPluginId(Fr.claudeaiPluginId))
-        zo.serverPluginId = Fr.claudeaiPluginId;
-      if (zo && isLocalMarketplaceEntry(result.entry.source, To?.source)) {
-        zo.readFromFolderAt = now;
+        plugin.gitCommitSha = installRecord.gitCommitSha;
+      if (
+        plugin &&
+        installRecord?.claudeaiPluginId !== undefined &&
+        isServerPluginId(installRecord.claudeaiPluginId)
+      )
+        plugin.serverPluginId = installRecord.claudeaiPluginId;
+      if (plugin && isLocalMarketplaceEntry(result.entry.source, registryEntry?.source)) {
+        plugin.readFromFolderAt = now;
         let { folderReadAt } = getPluginRegistry();
-        if (!preview && !folderReadAt.has(zo.source)) folderReadAt.set(zo.source, now);
+        if (!preview && !folderReadAt.has(plugin.source)) folderReadAt.set(plugin.source, now);
       }
-      if (zo && To) {
-        let err = redactMarketplaceSource(To.source);
+      if (plugin && registryEntry) {
+        let err = redactMarketplaceSource(registryEntry.source);
         if (err !== null) {
-          zo.marketplaceSource = err;
+          plugin.marketplaceSource = err;
           if (
             isOfficialMarketplaceName_3(marketplaceName) &&
             isOfficialMarketplaceSourceVouched(err) &&
-            rn(result.marketplaceInstallLocation) &&
-            no(zo)
+            isInMarketplaceCache(result.marketplaceInstallLocation) &&
+            isPluginCachePath(plugin)
           )
-            zo.officialMarketplaceSourceVouched = true;
+            plugin.officialMarketplaceSourceVouched = true;
           if (
             await isWindowsPluginInsideLocalMarketplace(err, {
               entrySource: result.entry.source,
               marketplaceLocation: result.marketplaceInstallLocation,
-              pluginPath: zo.path,
+              pluginPath: plugin.path,
             })
           )
-            zo.readInPlace = true;
+            plugin.readInPlace = true;
         }
       }
-      return zo;
+      return plugin;
     }),
   );
-  for (let [yn, Kn] of results.entries())
-    if (Kn.status === "fulfilled" && Kn.value) y.push(Kn.value);
-    else if (Kn.status === "rejected") {
-      let error = toError(Kn.reason);
-      let [source, To] = flattened[yn];
+  for (let [index, outcome] of results.entries())
+    if (outcome.status === "fulfilled" && outcome.value) plugins.push(outcome.value);
+    else if (outcome.status === "rejected") {
+      let error = toError(outcome.reason);
+      let [source, enabledValue] = flattened[index];
       logForDebugging(`Failed to load plugin ${source}: ${redactUrlsInMessage(error.message)}`, {
         level: "error",
       });
-      if (isDependencyAutoInstallState(To))
-        S.push(
+      if (isDependencyAutoInstallState(enabledValue))
+        errors.push(
           manifestErrorToPluginError(error, source, firstLineOf(source, "@")) ?? {
             type: "generic-error",
             source,
@@ -4893,62 +5163,64 @@ async function loadPluginsFromMarketplaces({ cacheOnly, preview = false, storage
           },
         );
     }
-  if (!preview) await migrateRenamedPluginsInSettings(Je, storageV5);
-  let ho = gt ? await getInstalledListRefusal(storageV5) : undefined;
-  if (ho !== undefined)
+  if (!preview) await migrateRenamedPluginsInSettings(renames, storageV5);
+  let installedListRefusal = installedListFailed ? await getInstalledListRefusal(storageV5) : undefined;
+  if (installedListRefusal !== undefined)
     return {
-      plugins: y,
-      errors: annotateRegistryReadFailures(S, readInstalledPluginsFile(ho)),
-      warnings: w,
+      plugins,
+      errors: annotateRegistryReadFailures(errors, readInstalledPluginsFile(installedListRefusal)),
+      warnings,
     };
   return {
-    plugins: y,
-    errors: S,
-    warnings: w,
+    plugins,
+    errors,
+    warnings,
   };
 }
 //@ chunk-e6aww6q8.js:4573903-4574093 layout
-function annotateRegistryReadFailures(e, installedListHeldNote) {
-  return e.map((r) =>
-    (r.type === "plugin-cache-miss" || r.type === "plugin-not-installed" || r.type === "plugin-not-found") &&
-    r.registryReadFailed === true
+function annotateRegistryReadFailures(errors, installedListHeldNote) {
+  return errors.map((error) =>
+    (error.type === "plugin-cache-miss" ||
+      error.type === "plugin-not-installed" ||
+      error.type === "plugin-not-found") &&
+    error.registryReadFailed === true
       ? {
-          ...r,
+          ...error,
           installedListHeldNote,
         }
-      : r,
+      : error,
   );
 }
 //@ chunk-e6aww6q8.js:4574093-4574427 layout
-function commandSourceCacheMissError(e, plugin) {
+function commandSourceCacheMissError(pluginId, plugin) {
   return {
     type: "generic-error",
     orphan: true,
-    source: e,
+    source: pluginId,
     plugin,
-    error: `${stripInvisibleKeepEmoji(e)} is installed by running a command, and background command execution is currently switched off, so its missing cache was not rebuilt. Run \`${claudeCommand("plugin update", e) ?? "claude plugin update <plugin>@<marketplace>"}\` in a terminal to rebuild it.`,
+    error: `${stripInvisibleKeepEmoji(pluginId)} is installed by running a command, and background command execution is currently switched off, so its missing cache was not rebuilt. Run \`${claudeCommand("plugin update", pluginId) ?? "claude plugin update <plugin>@<marketplace>"}\` in a terminal to rebuild it.`,
   };
 }
 //@ chunk-e6aww6q8.js:4574427-4575334 layout
-function checkClaudeAiPluginLoadable(e, plugin, source, s, h) {
+function checkClaudeAiPluginLoadable(pluginId, plugin, source, installRecord, recordedClaudeAiPluginId) {
   if (typeof source !== "object" || source.source !== "claudeai") return null;
-  if (s === "unknown")
+  if (installRecord === "unknown")
     return {
       type: "plugin-cache-miss",
-      source: e,
+      source: pluginId,
       plugin,
       installPath: NOT_RECORDED,
       registryReadFailed: true,
     };
-  if (s === "present" && h === undefined)
+  if (installRecord === "present" && recordedClaudeAiPluginId === undefined)
     return {
       type: "generic-error",
       refused: true,
-      source: e,
+      source: pluginId,
       plugin,
-      error: `Not loading ${printableName(e, 200)}: its install record no longer says which claude.ai plugin it came from, so it is not downloaded again; ${runCommandHint(
+      error: `Not loading ${printableName(pluginId, 200)}: its install record no longer says which claude.ai plugin it came from, so it is not downloaded again; ${runCommandHint(
         "plugin uninstall",
-        e,
+        pluginId,
         {
           tail: "and install it again to re-pin it",
           fallback: "uninstall and reinstall it to re-pin it",
@@ -4959,97 +5231,109 @@ function checkClaudeAiPluginLoadable(e, plugin, source, s, h) {
     return {
       type: "generic-error",
       refused: true,
-      source: e,
+      source: pluginId,
       plugin,
-      error: `Not loading ${printableName(e, 200)}: its files are missing and it can't be downloaded again in this session \u2014 claude.ai lists no installable version for it, or its marketplace's catalog isn't readable here (sign in to claude.ai with the organization it was added under, then restart)`,
+      error: `Not loading ${printableName(pluginId, 200)}: its files are missing and it can't be downloaded again in this session \u2014 claude.ai lists no installable version for it, or its marketplace's catalog isn't readable here (sign in to claude.ai with the organization it was added under, then restart)`,
     };
   return null;
 }
 //@ chunk-e6aww6q8.js:4575334-4575469 layout
-function sessionPluginDirFor(e, n) {
-  let replaced = n.replace(/[^a-zA-Z0-9@\-_]/g, "-");
-  let s = createHash("sha256").update(n).digest("hex");
-  return join(e, `${replaced}-${s.slice(0, 8)}`);
+function sessionPluginDirFor(baseDir, pluginId) {
+  let replaced = pluginId.replace(/[^a-zA-Z0-9@\-_]/g, "-");
+  let hash = createHash("sha256").update(pluginId).digest("hex");
+  return join(baseDir, `${replaced}-${hash.slice(0, 8)}`);
 }
 //@ chunk-e6aww6q8.js:4575469-4575749 layout
-function planArchiveExtraction(e, n) {
-  let r = relative(e, n);
-  if (!r || r === ".." || r.startsWith(`..${sep}`) || isAbsolute(r))
+function planArchiveExtraction(sessionCacheDir, extractDir) {
+  let relativePath = relative(sessionCacheDir, extractDir);
+  if (
+    !relativePath ||
+    relativePath === ".." ||
+    relativePath.startsWith(`..${sep}`) ||
+    isAbsolute(relativePath)
+  )
     throw Error("Refusing to extract a plugin archive outside the session plugin cache");
   let str = randomBytes(4).toString("hex");
   return {
-    extractDir: n,
-    staging: `${n}.staging-${str}`,
-    previousPrefix: `${n}.previous-${str}`,
+    extractDir,
+    staging: `${extractDir}.staging-${str}`,
+    previousPrefix: `${extractDir}.previous-${str}`,
   };
 }
 //@ chunk-e6aww6q8.js:4575749-4575765 layout
 var MIXED_ARCHIVE_HASH = "mixed";
 //@ chunk-e6aww6q8.js:4575765-4576369 layout
-async function extractSessionArchive(e, n) {
+async function extractSessionArchive(filePath, plan) {
   let zipExtractionState = getZipExtractionState();
   let seq = ++zipExtractionState.nextSeq;
-  let fileBytes = await getFsImplementation().readFileBytes(e);
-  let y = createHash("sha256").update(fileBytes).digest("hex");
-  let { extractDir } = n;
-  if (zipExtractionState.byDir.get(extractDir)?.archiveHash === y && (await isDirectory(extractDir))) return;
-  let w = zipExtractionState.inFlight.get(extractDir);
-  if (w?.archiveHash === y)
+  let fileBytes = await getFsImplementation().readFileBytes(filePath);
+  let archiveHash = createHash("sha256").update(fileBytes).digest("hex");
+  let { extractDir } = plan;
+  if (
+    zipExtractionState.byDir.get(extractDir)?.archiveHash === archiveHash &&
+    (await isDirectory(extractDir))
+  )
+    return;
+  let inflight = zipExtractionState.inFlight.get(extractDir);
+  if (inflight?.archiveHash === archiveHash)
     try {
-      await w.done;
+      await inflight.done;
       return;
     } catch {}
   let { promise, resolve, reject } = Promise.withResolvers();
   promise.catch(() => {});
-  let Z = {
-    archiveHash: y,
+  let entry = {
+    archiveHash,
     done: promise,
   };
-  zipExtractionState.inFlight.set(extractDir, Z);
-  let Se = (error) => {
-    if (zipExtractionState.inFlight.get(extractDir) === Z) zipExtractionState.inFlight.delete(extractDir);
+  zipExtractionState.inFlight.set(extractDir, entry);
+  let settle = (error) => {
+    if (zipExtractionState.inFlight.get(extractDir) === entry) zipExtractionState.inFlight.delete(extractDir);
     if (error === undefined) resolve();
     else reject(error);
   };
   try {
-    await extractZipToDirectory(fileBytes, n.staging);
+    await extractZipToDirectory(fileBytes, plan.staging);
   } catch (error) {
-    await removeTreeQuietly(n.staging);
-    Se(error);
+    await removeTreeQuietly(plan.staging);
+    settle(error);
     throw error;
   }
   return {
     archive: fileBytes,
-    archiveHash: y,
+    archiveHash,
     seq,
-    settle: Se,
+    settle,
   };
 }
 //@ chunk-e6aww6q8.js:4576369-4576379 layout
 var MAX_PREVIEW_TREES = 2;
 //@ chunk-e6aww6q8.js:4576379-4576672 layout
-async function prunePreviewTrees(zipExtractionState, n, r, s) {
-  let filtered = (zipExtractionState.previews.get(r) ?? []).filter((w) => w !== s);
-  filtered.push(s);
-  let y = filtered.splice(0, Math.max(0, filtered.length - MAX_PREVIEW_TREES));
-  zipExtractionState.previews.set(r, filtered);
-  let mapped = y.map((w) => {
-    let L = removePreviewTree(n, w).finally(() => {
-      if (zipExtractionState.pruning.get(w) === L) zipExtractionState.pruning.delete(w);
+async function prunePreviewTrees(zipExtractionState, sessionCacheDir, extractDir, previewPath) {
+  let filtered = (zipExtractionState.previews.get(extractDir) ?? []).filter(
+    (existingPath) => existingPath !== previewPath,
+  );
+  filtered.push(previewPath);
+  let excessPaths = filtered.splice(0, Math.max(0, filtered.length - MAX_PREVIEW_TREES));
+  zipExtractionState.previews.set(extractDir, filtered);
+  let mapped = excessPaths.map((pathToRemove) => {
+    let removal = removePreviewTree(sessionCacheDir, pathToRemove).finally(() => {
+      if (zipExtractionState.pruning.get(pathToRemove) === removal)
+        zipExtractionState.pruning.delete(pathToRemove);
     });
-    zipExtractionState.pruning.set(w, L);
-    return L;
+    zipExtractionState.pruning.set(pathToRemove, removal);
+    return removal;
   });
   await Promise.all(mapped);
 }
 //@ chunk-e6aww6q8.js:4576672-4576854 layout
-async function removePreviewTree(e, n) {
-  let { previousPrefix } = planArchiveExtraction(e, n);
+async function removePreviewTree(extractDir, targetDir) {
+  let { previousPrefix } = planArchiveExtraction(extractDir, targetDir);
   try {
-    await retryFsOp(n, previousPrefix);
+    await retryFsOp(targetDir, previousPrefix);
   } catch (error) {
     if (!isENOENT(error))
-      logForDebugging(`Could not move aside the preview tree ${n}: ${errorMessage(error)}`, {
+      logForDebugging(`Could not move aside the preview tree ${targetDir}: ${errorMessage(error)}`, {
         level: "warn",
       });
     return;
@@ -5057,9 +5341,9 @@ async function removePreviewTree(e, n) {
   await removeTreeQuietly(previousPrefix);
 }
 //@ chunk-e6aww6q8.js:4576854-4577324 layout
-async function statDirIdentity(e, n) {
+async function statDirIdentity(dirPath, when) {
   try {
-    let { dev, ino, birthtimeMs } = await lstat(e);
+    let { dev, ino, birthtimeMs } = await lstat(dirPath);
     return {
       dev,
       ino,
@@ -5068,39 +5352,47 @@ async function statDirIdentity(e, n) {
   } catch (error) {
     if (isENOENT(error) || getErrnoCode(error) === "ENOTDIR")
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Plugin directory ${e} was removed ${n === "before" ? "before it could be loaded" : "while it was being loaded"}`,
+        `Plugin directory ${dirPath} was removed ${when === "before" ? "before it could be loaded" : "while it was being loaded"}`,
         "plugin extraction tree removed during load",
       );
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Plugin directory ${e} could not be ${n === "before" ? "checked before" : "re-checked after"} loading: ${getErrnoCode(error) ?? errorMessage(error)}`,
+      `Plugin directory ${dirPath} could not be ${when === "before" ? "checked before" : "re-checked after"} loading: ${getErrnoCode(error) ?? errorMessage(error)}`,
       "plugin extraction tree check failed",
     );
   }
 }
 //@ chunk-e6aww6q8.js:4577324-4577560 layout
-async function assertDirUnchanged(e, n) {
-  let r = await statDirIdentity(e, "after");
-  if (r.dev !== n.dev || r.ino !== n.ino || r.birthtimeMs !== n.birthtimeMs)
+async function assertDirUnchanged(dirPath, identity) {
+  let currentIdentity = await statDirIdentity(dirPath, "after");
+  if (
+    currentIdentity.dev !== identity.dev ||
+    currentIdentity.ino !== identity.ino ||
+    currentIdentity.birthtimeMs !== identity.birthtimeMs
+  )
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Plugin directory ${e} was replaced while it was being loaded`,
+      `Plugin directory ${dirPath} was replaced while it was being loaded`,
       "plugin extraction tree replaced during load",
     );
 }
 //@ chunk-e6aww6q8.js:4577560-4578063 layout
-async function extractPreviewArchive(e, sessionPluginCachePath, r) {
+async function extractPreviewArchive(archivePath, sessionCacheDir, extractDir) {
   let zipExtractionState = getZipExtractionState();
-  let fileBytes = await getFsImplementation().readFileBytes(e);
-  let y = createHash("sha256").update(fileBytes).digest("hex");
-  if (zipExtractionState.byDir.get(r)?.archiveHash === y && (await isDirectory(r))) return r;
-  let S = `${r}.preview-${y.slice(0, 32)}`;
-  let { staging } = planArchiveExtraction(sessionPluginCachePath, S);
-  let L = 0;
+  let fileBytes = await getFsImplementation().readFileBytes(archivePath);
+  let archiveHash = createHash("sha256").update(fileBytes).digest("hex");
+  if (
+    zipExtractionState.byDir.get(extractDir)?.archiveHash === archiveHash &&
+    (await isDirectory(extractDir))
+  )
+    return extractDir;
+  let previewDir = `${extractDir}.preview-${archiveHash.slice(0, 32)}`;
+  let { staging } = planArchiveExtraction(sessionCacheDir, previewDir);
+  let attempts = 0;
   for (;;) {
-    await zipExtractionState.pruning.get(S);
-    if (await isDirectory(S)) {
-      if (zipExtractionState.pruning.has(S)) continue;
-      await prunePreviewTrees(zipExtractionState, sessionPluginCachePath, r, S);
-      return S;
+    await zipExtractionState.pruning.get(previewDir);
+    if (await isDirectory(previewDir)) {
+      if (zipExtractionState.pruning.has(previewDir)) continue;
+      await prunePreviewTrees(zipExtractionState, sessionCacheDir, extractDir, previewDir);
+      return previewDir;
     }
     try {
       await extractZipToDirectory(fileBytes, staging);
@@ -5109,43 +5401,43 @@ async function extractPreviewArchive(e, sessionPluginCachePath, r) {
       throw error;
     }
     try {
-      await retryFsOp(staging, S);
+      await retryFsOp(staging, previewDir);
     } catch (error) {
-      let q = await isTargetOccupiedError_2(error, S);
+      let occupied = await isTargetOccupiedError_2(error, previewDir);
       await removeTreeQuietly(staging);
-      if (!q || ++L >= MAX_EXTRACT_ATTEMPTS) throw error;
+      if (!occupied || ++attempts >= MAX_EXTRACT_ATTEMPTS) throw error;
       continue;
     }
-    await prunePreviewTrees(zipExtractionState, sessionPluginCachePath, r, S);
-    return S;
+    await prunePreviewTrees(zipExtractionState, sessionCacheDir, extractDir, previewDir);
+    return previewDir;
   }
 }
 //@ chunk-e6aww6q8.js:4578063-4578073 layout
 var MAX_EXTRACT_ATTEMPTS = 3;
 //@ chunk-e6aww6q8.js:4578073-4578149 layout
-async function isDirectory(e) {
+async function isDirectory(path) {
   try {
-    return (await lstat(e)).isDirectory();
+    return (await lstat(path)).isDirectory();
   } catch {
     return false;
   }
 }
 //@ chunk-e6aww6q8.js:4578149-4578241 layout
-function isWindowsLockError(e) {
-  let errnoCode = getErrnoCode(e);
+function isWindowsLockError(error) {
+  let errnoCode = getErrnoCode(error);
   return (
     getPlatform() === "windows" && (errnoCode === "EPERM" || errnoCode === "EACCES" || errnoCode === "EBUSY")
   );
 }
 //@ chunk-e6aww6q8.js:4578241-4578293 layout
-async function isLockedButPresent(e, n) {
-  return isWindowsLockError(e) && (await isDirectory(n));
+async function isLockedButPresent(error, path) {
+  return isWindowsLockError(error) && (await isDirectory(path));
 }
 //@ chunk-e6aww6q8.js:4578293-4578386 layout
-async function isTargetOccupiedError_2(error, n) {
+async function isTargetOccupiedError_2(error, path) {
   let errnoCode = getErrnoCode(error);
   if (errnoCode === "ENOTEMPTY" || errnoCode === "EEXIST") return true;
-  return isLockedButPresent(error, n);
+  return isLockedButPresent(error, path);
 }
 //@ chunk-e6aww6q8.js:4578386-4578504 layout
 async function removeTreeQuietly(staging) {
@@ -5156,18 +5448,18 @@ async function removeTreeQuietly(staging) {
   });
 }
 //@ chunk-e6aww6q8.js:4578504-4578677 layout
-async function moveIntoPlace(zipExtractionState, n, extractDir) {
+async function moveIntoPlace(zipExtractionState, sourceDir, extractDir) {
   try {
-    await retryFsOp(n, extractDir);
+    await retryFsOp(sourceDir, extractDir);
   } catch (error) {
     if (await isDirectory(extractDir)) return false;
     throw error;
   }
-  let s = zipExtractionState.byDir.get(extractDir);
-  if (s !== undefined)
+  let entry = zipExtractionState.byDir.get(extractDir);
+  if (entry !== undefined)
     zipExtractionState.byDir.set(extractDir, {
       archiveHash: MIXED_ARCHIVE_HASH,
-      seq: s.seq,
+      seq: entry.seq,
     });
   return true;
 }
@@ -5175,39 +5467,39 @@ async function moveIntoPlace(zipExtractionState, n, extractDir) {
 /**
  * 把暂存解压树原子替换到目标解压目录（旧树先移到 .previous-*，Windows 被占用时退化为原地解压）。
  */
-async function swapInExtractedTree({ extractDir, staging, previousPrefix }, s) {
+async function swapInExtractedTree({ extractDir, staging, previousPrefix }, plan) {
   let zipExtractionState = getZipExtractionState();
-  let y = [];
+  let parkedPaths = [];
   try {
     for (let idx = 0; ; idx++) {
-      let w = zipExtractionState.byDir.get(extractDir);
-      if (w !== undefined && w.seq > s.seq) {
+      let current = zipExtractionState.byDir.get(extractDir);
+      if (current !== undefined && current.seq > plan.seq) {
         await removeTreeQuietly(staging);
-        s.settle();
+        plan.settle();
         return;
       }
-      let L = `${previousPrefix}-${idx}`;
-      let G = false;
+      let previousPath = `${previousPrefix}-${idx}`;
+      let locked = false;
       try {
-        await retryFsOp(extractDir, L);
-        y.push(L);
+        await retryFsOp(extractDir, previousPath);
+        parkedPaths.push(previousPath);
       } catch (error) {
         if (!isENOENT(error)) {
           if (!(await isLockedButPresent(error, extractDir))) throw error;
-          G = true;
+          locked = true;
         }
       }
-      let q = zipExtractionState.byDir.get(extractDir);
-      if (q !== undefined && q.seq > s.seq) {
-        if (y.at(-1) === L) {
-          await moveIntoPlace(zipExtractionState, L, extractDir);
-          y.pop();
+      let currentAfter = zipExtractionState.byDir.get(extractDir);
+      if (currentAfter !== undefined && currentAfter.seq > plan.seq) {
+        if (parkedPaths.at(-1) === previousPath) {
+          await moveIntoPlace(zipExtractionState, previousPath, extractDir);
+          parkedPaths.pop();
         }
         await removeTreeQuietly(staging);
-        s.settle();
+        plan.settle();
         return;
       }
-      if (!G)
+      if (!locked)
         try {
           await retryFsOp(staging, extractDir);
           break;
@@ -5217,17 +5509,17 @@ async function swapInExtractedTree({ extractDir, staging, previousPrefix }, s) {
             continue;
           }
           if (!isWindowsLockError(error)) throw error;
-          if (y.at(-1) === L) {
-            await moveIntoPlace(zipExtractionState, L, extractDir);
-            y.pop();
+          if (parkedPaths.at(-1) === previousPath) {
+            await moveIntoPlace(zipExtractionState, previousPath, extractDir);
+            parkedPaths.pop();
           }
-          let Se = zipExtractionState.byDir.get(extractDir);
-          if (Se !== undefined && Se.seq > s.seq) {
+          let currentAgain = zipExtractionState.byDir.get(extractDir);
+          if (currentAgain !== undefined && currentAgain.seq > plan.seq) {
             await removeTreeQuietly(staging);
-            s.settle();
+            plan.settle();
             return;
           }
-          G = true;
+          locked = true;
         }
       logForDebugging(
         `Plugin extraction directory ${extractDir} or its staged copy is held open; extracting the archive in place, so files dropped from it are not cleared this time`,
@@ -5237,193 +5529,193 @@ async function swapInExtractedTree({ extractDir, staging, previousPrefix }, s) {
       );
       zipExtractionState.byDir.set(extractDir, {
         archiveHash: MIXED_ARCHIVE_HASH,
-        seq: s.seq,
+        seq: plan.seq,
       });
-      await extractZipToDirectory(s.archive, extractDir);
+      await extractZipToDirectory(plan.archive, extractDir);
       await removeTreeQuietly(staging);
-      s.settle();
+      plan.settle();
       return;
     }
   } catch (error) {
-    let w = y.pop();
-    if (w !== undefined)
+    let parked = parkedPaths.pop();
+    if (parked !== undefined)
       try {
-        if (!(await moveIntoPlace(zipExtractionState, w, extractDir)))
+        if (!(await moveIntoPlace(zipExtractionState, parked, extractDir)))
           logForDebugging(
-            `A newer extraction of ${extractDir} is live; the one moved aside by a failed swap stays at ${w}`,
+            `A newer extraction of ${extractDir} is live; the one moved aside by a failed swap stays at ${parked}`,
           );
       } catch (error) {
         logForDebugging(
-          `The previous extraction of ${extractDir} could not be restored after a failed swap (${errorMessage(error)}); it was at ${w}`,
+          `The previous extraction of ${extractDir} could not be restored after a failed swap (${errorMessage(error)}); it was at ${parked}`,
           {
             level: "error",
           },
         );
       }
     await removeTreeQuietly(staging);
-    s.settle(error);
+    plan.settle(error);
     throw error;
   }
   zipExtractionState.byDir.set(extractDir, {
-    archiveHash: s.archiveHash,
-    seq: s.seq,
+    archiveHash: plan.archiveHash,
+    seq: plan.seq,
   });
-  s.settle();
+  plan.settle();
 }
 //@ chunk-e6aww6q8.js:4579962-4582994 layout
 /**
  * cacheOnly 模式加载市场插件：只用已有版本化缓存或种子缓存，缺失时报 plugin-cache-miss 并返回 null。
  */
 async function loadCachedMarketplacePlugin(
-  e,
+  entry,
   pluginId,
-  r,
-  realCandidate,
-  h,
-  y,
-  S,
+  marketplaceSource,
+  pluginId_2,
+  reportErrors,
+  errors,
+  warnings,
   installPath,
   installPath_2,
   {
-    storageV5: G,
-    preview: q = false,
-    linkFarm: Z = false,
-    linkFarmProducer: Se,
-    entryEnabled: ke = h,
-    registryReadFailed: we = false,
-    recordedClaudeAiPluginId: Ee,
+    storageV5,
+    preview = false,
+    linkFarm = false,
+    linkFarmProducer,
+    entryEnabled = reportErrors,
+    registryReadFailed = false,
+    recordedClaudeAiPluginId,
   } = {},
 ) {
-  let Ae;
-  let Ie;
-  if (typeof e.source === "string") {
-    let lt = isLocalMarketplaceEntry(e.source, r);
-    if (!lt && installPath) await materializeCachedLinks(installPath, G, Z);
+  let pluginPath;
+  let marketplaceDir;
+  if (typeof entry.source === "string") {
+    let isLocalEntry = isLocalMarketplaceEntry(entry.source, marketplaceSource);
+    if (!isLocalEntry && installPath) await materializeCachedLinks(installPath, storageV5, linkFarm);
     if (
-      !lt &&
+      !isLocalEntry &&
       installPath &&
       (installPath.endsWith(".zip")
         ? await pathExists(installPath)
-        : await cacheDirHasPluginContentStrict(installPath, G))
+        : await cacheDirHasPluginContentStrict(installPath, storageV5))
     )
-      Ae = installPath;
-    else if (!lt) {
-      let Je = null;
+      pluginPath = installPath;
+    else if (!isLocalEntry) {
+      let seedPath = null;
       if (getPluginSeedDirs().length > 0) {
-        let nt = installPath
+        let versionName = installPath
           ? basename(installPath).replace(/\.zip$/, "")
-          : await calculatePluginVersion(realCandidate, e.source, undefined, undefined, {
+          : await calculatePluginVersion(pluginId_2, entry.source, undefined, undefined, {
               kind: "catalog",
-              version: e.version,
+              version: entry.version,
             });
-        Je = await probeSeedForPlugin(realCandidate, nt, "always");
+        seedPath = await probeSeedForPlugin(pluginId_2, versionName, "always");
       }
-      if (Je) {
-        logForDebugging(`Using seed cache for ${realCandidate} at ${Je} (cache-only)`);
-        Ae = Je;
+      if (seedPath) {
+        logForDebugging(`Using seed cache for ${pluginId_2} at ${seedPath} (cache-only)`);
+        pluginPath = seedPath;
       } else {
-        if (h)
-          y.push({
+        if (reportErrors)
+          errors.push({
             type: "plugin-cache-miss",
-            source: realCandidate,
-            plugin: e.name,
+            source: pluginId_2,
+            plugin: entry.name,
             installPath: installPath ?? installPath_2 ?? pluginId,
           });
         return null;
       }
     } else {
-      let Je = seedDirFor(pluginId) !== undefined ? "system" : "workspace";
-      let marketplaceEntryPath = await resolveMarketplaceEntryPath(pluginId, e.source, {
-        marketplaceSource: r,
-        corroboratingSource: marketplaceSourceOfPlugin(realCandidate),
-        storageV5: G,
-        localMarketplaceSpace: Je,
+      let space = seedDirFor(pluginId) !== undefined ? "system" : "workspace";
+      let marketplaceEntryPath = await resolveMarketplaceEntryPath(pluginId, entry.source, {
+        marketplaceSource,
+        corroboratingSource: marketplaceSourceOfPlugin(pluginId_2),
+        storageV5,
+        localMarketplaceSpace: space,
       });
       if (marketplaceEntryPath.kind !== "ok") {
-        if (ke)
-          y.push({
+        if (entryEnabled)
+          errors.push({
             type: "generic-error",
-            source: realCandidate,
-            error: entryResolutionError(marketplaceEntryPath, pluginId, e.source).message,
+            source: pluginId_2,
+            error: entryResolutionError(marketplaceEntryPath, pluginId, entry.source).message,
           });
         return null;
       }
-      Ae = marketplaceEntryPath.entryPath;
-      Ie = marketplaceEntryPath.marketplaceDir;
-      if (!(await localMarketplacePathExists(G, Ae, Je))) {
-        if (ke)
-          y.push({
+      pluginPath = marketplaceEntryPath.entryPath;
+      marketplaceDir = marketplaceEntryPath.marketplaceDir;
+      if (!(await localMarketplacePathExists(storageV5, pluginPath, space))) {
+        if (entryEnabled)
+          errors.push({
             type: "generic-error",
-            source: realCandidate,
-            error: `Plugin directory not found at path: ${printableOrEmpty(Ae)}. Check that the marketplace entry has the correct path.`,
+            source: pluginId_2,
+            error: `Plugin directory not found at path: ${printableOrEmpty(pluginPath)}. Check that the marketplace entry has the correct path.`,
           });
         return null;
       }
     }
   } else {
-    if (installPath) await materializeCachedLinks(installPath, G, Z);
+    if (installPath) await materializeCachedLinks(installPath, storageV5, linkFarm);
     if (
       installPath &&
       (installPath.endsWith(".zip")
         ? await pathExists(installPath)
-        : await cacheDirHasPluginContentStrict(installPath, G))
+        : await cacheDirHasPluginContentStrict(installPath, storageV5))
     )
-      Ae = installPath;
+      pluginPath = installPath;
     else if (!installPath) {
       let any = SETTING_SOURCES.filter(isOperatorSettingSource_2).some(
-        (pt) => getSettingsForSource(pt)?.enabledPlugins?.[realCandidate] === true,
+        (source) => getSettingsForSource(source)?.enabledPlugins?.[pluginId_2] === true,
       );
       let pluginVersion = await calculatePluginVersion(
-        realCandidate,
-        e.source,
+        pluginId_2,
+        entry.source,
         undefined,
         undefined,
         {
           kind: "catalog",
-          version: e.version,
+          version: entry.version,
         },
-        "sha" in e.source ? e.source.sha : undefined,
+        "sha" in entry.source ? entry.source.sha : undefined,
       );
-      let nt;
+      let foundPath;
       if (any) {
-        let versionedZipCachePath = getVersionedZipCachePath(realCandidate, pluginVersion);
-        let versionedCachePath = getVersionedCachePath(realCandidate, pluginVersion);
-        await materializeCachedLinks(versionedCachePath, G, Z);
+        let versionedZipCachePath = getVersionedZipCachePath(pluginId_2, pluginVersion);
+        let versionedCachePath = getVersionedCachePath(pluginId_2, pluginVersion);
+        await materializeCachedLinks(versionedCachePath, storageV5, linkFarm);
         if (isPluginZipCacheEnabled() && (await pathExists(versionedZipCachePath)))
-          nt = versionedZipCachePath;
-        else if (await cacheDirHasPluginContentStrict(versionedCachePath, G)) {
-          await removeCacheInUseMarker(versionedCachePath, G);
-          nt = versionedCachePath;
+          foundPath = versionedZipCachePath;
+        else if (await cacheDirHasPluginContentStrict(versionedCachePath, storageV5)) {
+          await removeCacheInUseMarker(versionedCachePath, storageV5);
+          foundPath = versionedCachePath;
         }
       }
-      if (!nt) {
-        nt = (await probeSeedForPlugin(realCandidate, pluginVersion, "when-unknown")) ?? undefined;
-        if (nt) logForDebugging(`Using seed cache for ${realCandidate} at ${nt} (cache-only)`);
+      if (!foundPath) {
+        foundPath = (await probeSeedForPlugin(pluginId_2, pluginVersion, "when-unknown")) ?? undefined;
+        if (foundPath) logForDebugging(`Using seed cache for ${pluginId_2} at ${foundPath} (cache-only)`);
       }
-      if (nt) Ae = nt;
+      if (foundPath) pluginPath = foundPath;
       else if (any) {
-        if (ke) {
-          let pt = checkClaudeAiPluginLoadable(
-            realCandidate,
-            e.name,
-            e.source,
-            we ? "unknown" : "absent",
+        if (entryEnabled) {
+          let loadableError = checkClaudeAiPluginLoadable(
+            pluginId_2,
+            entry.name,
+            entry.source,
+            registryReadFailed ? "unknown" : "absent",
             undefined,
           );
-          if (e.source.source === "command" && !shouldRefreshCommandPlugins())
-            y.push(commandSourceCacheMissError(realCandidate, e.name));
-          else if (pt !== null) y.push(pt);
+          if (entry.source.source === "command" && !shouldRefreshCommandPlugins())
+            errors.push(commandSourceCacheMissError(pluginId_2, entry.name));
+          else if (loadableError !== null) errors.push(loadableError);
           else {
-            let Et = installPath_2 === undefined && (await lstatChildBigintOrUndefined(realCandidate));
-            y.push({
+            let seedHasOther = installPath_2 === undefined && (await lstatChildBigintOrUndefined(pluginId_2));
+            errors.push({
               type: "plugin-cache-miss",
-              source: realCandidate,
-              plugin: e.name,
+              source: pluginId_2,
+              plugin: entry.name,
               installPath: installPath_2 ?? NOT_RECORDED,
-              ...(we && {
+              ...(registryReadFailed && {
                 registryReadFailed: true,
               }),
-              ...(Et && {
+              ...(seedHasOther && {
                 seedHasOtherVersion: true,
               }),
             });
@@ -5431,78 +5723,92 @@ async function loadCachedMarketplacePlugin(
         }
         return null;
       } else {
-        let pt = ke && (await lstatChildBigintOrUndefined(realCandidate));
-        y.push({
+        let seedHasOther = entryEnabled && (await lstatChildBigintOrUndefined(pluginId_2));
+        errors.push({
           type: "plugin-not-installed",
-          source: realCandidate,
-          plugin: e.name,
-          ...(pt && {
+          source: pluginId_2,
+          plugin: entry.name,
+          ...(seedHasOther && {
             seedHasOtherVersion: true,
           }),
-          ...(ke &&
-            we && {
+          ...(entryEnabled &&
+            registryReadFailed && {
               registryReadFailed: true,
             }),
         });
         return null;
       }
     } else {
-      if (h)
-        if (e.source.source === "command" && !shouldRefreshCommandPlugins())
-          y.push(commandSourceCacheMissError(realCandidate, e.name));
+      if (reportErrors)
+        if (entry.source.source === "command" && !shouldRefreshCommandPlugins())
+          errors.push(commandSourceCacheMissError(pluginId_2, entry.name));
         else
-          y.push(
-            checkClaudeAiPluginLoadable(realCandidate, e.name, e.source, "present", Ee) ?? {
+          errors.push(
+            checkClaudeAiPluginLoadable(
+              pluginId_2,
+              entry.name,
+              entry.source,
+              "present",
+              recordedClaudeAiPluginId,
+            ) ?? {
               type: "plugin-cache-miss",
-              source: realCandidate,
-              plugin: e.name,
+              source: pluginId_2,
+              plugin: entry.name,
               installPath,
             },
           );
       return null;
     }
   }
-  let Me;
-  let We;
-  if (isPluginZipCacheEnabled() && Ae.endsWith(".zip")) {
-    let sessionPluginCachePath = await getSessionPluginCachePath();
-    let Je = sessionPluginDirFor(sessionPluginCachePath, realCandidate);
-    let nt = planArchiveExtraction(sessionPluginCachePath, Je);
-    let pt;
-    We = Ae;
+  let dirIdentity;
+  let extractedFrom;
+  if (isPluginZipCacheEnabled() && pluginPath.endsWith(".zip")) {
+    let baseDir = await getSessionPluginCachePath();
+    let extractDir = sessionPluginDirFor(baseDir, pluginId_2);
+    let plan = planArchiveExtraction(baseDir, extractDir);
+    let stager;
+    extractedFrom = pluginPath;
     try {
-      if (q) Ae = await extractPreviewArchive(Ae, sessionPluginCachePath, Je);
+      if (preview) pluginPath = await extractPreviewArchive(pluginPath, baseDir, extractDir);
       else {
-        pt = await extractSessionArchive(Ae, nt);
-        Ae = Je;
+        stager = await extractSessionArchive(pluginPath, plan);
+        pluginPath = extractDir;
       }
     } catch (error) {
-      logForDebugging(`Failed to extract plugin ZIP ${Ae}: ${error}`, {
+      logForDebugging(`Failed to extract plugin ZIP ${pluginPath}: ${error}`, {
         level: "error",
       });
-      if (ke)
-        y.push({
+      if (entryEnabled)
+        errors.push({
           type: "plugin-cache-miss",
-          source: realCandidate,
-          plugin: e.name,
-          installPath: Ae,
+          source: pluginId_2,
+          plugin: entry.name,
+          installPath: pluginPath,
         });
       return null;
     }
-    if (pt !== undefined) await swapInExtractedTree(nt, pt);
-    Ie = undefined;
-    if (q) Me = await statDirIdentity(Ae, "before");
+    if (stager !== undefined) await swapInExtractedTree(plan, stager);
+    marketplaceDir = undefined;
+    if (preview) dirIdentity = await statDirIdentity(pluginPath, "before");
   }
-  let ze = await finishMarketplacePluginLoad(e, realCandidate, h, y, S, Ae, {
-    storageV5: G,
-    linkFarm: Z,
-    linkFarmProducer: Se,
-    entryEnabled: ke,
-    containmentAnchorDir: Ie,
-  });
-  if (Me !== undefined && ze !== null) await assertDirUnchanged(Ae, Me);
-  if (We !== undefined && ze !== null) ze.extractedFrom = We;
-  return ze;
+  let loaded = await finishMarketplacePluginLoad(
+    entry,
+    pluginId_2,
+    reportErrors,
+    errors,
+    warnings,
+    pluginPath,
+    {
+      storageV5,
+      linkFarm,
+      linkFarmProducer,
+      entryEnabled,
+      containmentAnchorDir: marketplaceDir,
+    },
+  );
+  if (dirIdentity !== undefined && loaded !== null) await assertDirUnchanged(pluginPath, dirIdentity);
+  if (extractedFrom !== undefined && loaded !== null) loaded.extractedFrom = extractedFrom;
+  return loaded;
 }
 //@ chunk-e6aww6q8.js:4582994-4590867 fingerprint = loadPluginFromMarketplaceEntry (0.385)
 /**
@@ -5512,17 +5818,17 @@ async function loadPluginFromMarketplaceEntry(
   entry,
   marketplaceInstallLocation,
   pluginId,
-  s,
-  h,
-  y,
-  S,
+  pluginSourceId,
+  entryEnabled,
+  errors,
+  warnings,
   version,
-  L,
+  installedVersion,
   {
     storageV5,
     linkFarm = false,
     linkFarmProducer,
-    entryEnabled = h,
+    entryEnabled: entryEnabled_2 = entryEnabled,
     credentials,
     installRecord,
     recordedArchiveSha256,
@@ -5534,72 +5840,89 @@ async function loadPluginFromMarketplaceEntry(
   logForDebugging(
     `Loading plugin ${entry.name} from source: ${jsonStringify(redactPluginSourceForLog(entry.source))}`,
   );
-  let We;
-  let ze;
-  let lt;
+  let pluginPath;
+  let marketplaceDir;
+  let shaInfo;
   if (typeof entry.source === "string") {
-    let pt = pluginId !== undefined && isLocalMarketplaceSource(pluginId);
-    let Et = seedDirFor(marketplaceInstallLocation) !== undefined ? "system" : "workspace";
+    let isLocalEntry = pluginId !== undefined && isLocalMarketplaceSource(pluginId);
+    let space = seedDirFor(marketplaceInstallLocation) !== undefined ? "system" : "workspace";
     let marketplaceEntryPath = await resolveMarketplaceEntryPath(marketplaceInstallLocation, entry.source, {
       marketplaceSource: pluginId,
-      corroboratingSource: marketplaceSourceOfPlugin(s),
+      corroboratingSource: marketplaceSourceOfPlugin(pluginSourceId),
       storageV5,
-      localMarketplaceSpace: Et,
+      localMarketplaceSpace: space,
     });
     if (marketplaceEntryPath.kind === "location-error") throw marketplaceEntryPath.error;
     if (marketplaceEntryPath.kind !== "ok") {
-      y.push({
+      errors.push({
         type: "generic-error",
-        source: s,
+        source: pluginSourceId,
         error: entryResolutionError(marketplaceEntryPath, marketplaceInstallLocation, entry.source).message,
       });
       return null;
     }
-    let { marketplaceDir, entryPath } = marketplaceEntryPath;
-    if (!(pt ? await localMarketplacePathExists(storageV5, entryPath, Et) : await pathExists(entryPath))) {
+    let { marketplaceDir: marketplaceDir_2, entryPath } = marketplaceEntryPath;
+    if (
+      !(isLocalEntry
+        ? await localMarketplacePathExists(storageV5, entryPath, space)
+        : await pathExists(entryPath))
+    ) {
       logForDebugging(`Plugin path not found: ${entryPath}`, {
         level: "error",
       });
-      if (entryEnabled)
-        y.push({
+      if (entryEnabled_2)
+        errors.push({
           type: "generic-error",
-          source: s,
+          source: pluginSourceId,
           error: `Plugin directory not found at path: ${printableOrEmpty(entryPath)}. Check that the marketplace entry has the correct path.`,
         });
       return null;
     }
     if (isLocalMarketplaceEntry(entry.source, pluginId)) {
-      We = entryPath;
-      ze = marketplaceDir;
+      pluginPath = entryPath;
+      marketplaceDir = marketplaceDir_2;
     } else
       try {
-        let It;
+        let manifest;
         try {
-          It = (await loadPluginManifest(entryPath, entry.name, entry.source)).manifest;
+          manifest = (await loadPluginManifest(entryPath, entry.name, entry.source)).manifest;
         } catch {}
-        let pluginVersion = await calculatePluginVersion(s, entry.source, It, marketplaceDir, {
-          kind: "catalog",
-          version: entry.version,
-        });
-        let sourcePluginPath = getVersionedCachePath(s, pluginVersion);
-        let Zt = await dirHasRealEntries(sourcePluginPath);
+        let pluginVersion = await calculatePluginVersion(
+          pluginSourceId,
+          entry.source,
+          manifest,
+          marketplaceDir_2,
+          {
+            kind: "catalog",
+            version: entry.version,
+          },
+        );
+        let sourcePluginPath = getVersionedCachePath(pluginSourceId, pluginVersion);
+        let hasCached = await dirHasRealEntries(sourcePluginPath);
         let sha;
-        if (!Zt) {
-          let pn = await probePluginGitHead(marketplaceDir);
-          sha = pn.repo
-            ? (pn.sha ?? undefined)
-            : marketplaceNameOfId(s) === CLAUDE_PLUGINS_OFFICIAL
-              ? ((await pluginVersionOrNull(marketplaceDir)) ?? undefined)
+        if (!hasCached) {
+          let head = await probePluginGitHead(marketplaceDir_2);
+          sha = head.repo
+            ? (head.sha ?? undefined)
+            : marketplaceNameOfId(pluginSourceId) === CLAUDE_PLUGINS_OFFICIAL
+              ? ((await pluginVersionOrNull(marketplaceDir_2)) ?? undefined)
               : undefined;
         }
-        We = await copyPluginToVersionedCache(entryPath, s, pluginVersion, entry, marketplaceDir, {
-          storageV5,
-          linkFarm,
-          credentials,
-        });
-        logForDebugging(`Copied plugin ${entry.name} to versioned cache: ${We}`);
-        if (We === sourcePluginPath && !Zt)
-          lt = {
+        pluginPath = await copyPluginToVersionedCache(
+          entryPath,
+          pluginSourceId,
+          pluginVersion,
+          entry,
+          marketplaceDir_2,
+          {
+            storageV5,
+            linkFarm,
+            credentials,
+          },
+        );
+        logForDebugging(`Copied plugin ${entry.name} to versioned cache: ${pluginPath}`);
+        if (pluginPath === sourcePluginPath && !hasCached)
+          shaInfo = {
             sha,
           };
       } catch (error) {
@@ -5611,10 +5934,10 @@ async function loadPluginFromMarketplaceEntry(
               level: "error",
             },
           );
-          if (entryEnabled)
-            y.push({
+          if (entryEnabled_2)
+            errors.push({
               type: "generic-error",
-              source: s,
+              source: pluginSourceId,
               error: `Plugin ${printableName(entry.name, 200)} could not be copied into the plugin cache (${
                 error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
                   ? printableMessage(error, {
@@ -5631,13 +5954,13 @@ async function loadPluginFromMarketplaceEntry(
             level: "warn",
           },
         );
-        We = entryPath;
-        ze = marketplaceDir;
+        pluginPath = entryPath;
+        marketplaceDir = marketplaceDir_2;
       }
   } else
     try {
       let version_2 = await calculatePluginVersion(
-        s,
+        pluginSourceId,
         entry.source,
         undefined,
         undefined,
@@ -5652,59 +5975,59 @@ async function loadPluginFromMarketplaceEntry(
             },
         "sha" in entry.source ? entry.source.sha : undefined,
       );
-      let versionedPath = getVersionedCachePath(s, version_2);
+      let versionedPath = getVersionedCachePath(pluginSourceId, version_2);
       await materializeCachedLinks(versionedPath, storageV5, linkFarm);
-      let zipPath = getVersionedZipCachePath(s, version_2);
+      let zipPath = getVersionedZipCachePath(pluginSourceId, version_2);
       if (isPluginZipCacheEnabled() && (await pathExists(zipPath))) {
         logForDebugging(`Using versioned cached plugin ZIP ${entry.name} from ${zipPath}`);
-        We = zipPath;
+        pluginPath = zipPath;
       } else if (await cacheDirHasPluginContentStrict(versionedPath, storageV5)) {
         await removeCacheInUseMarker(versionedPath, storageV5);
         logForDebugging(`Using versioned cached plugin ${entry.name} from ${versionedPath}`);
-        We = versionedPath;
+        pluginPath = versionedPath;
       } else {
-        let gt = await probeSeedForPlugin(s, version_2, "when-unknown");
-        if (gt) {
-          We = gt;
-          logForDebugging(`Using seed cache for external plugin ${entry.name} at ${gt}`);
+        let seedPath = await probeSeedForPlugin(pluginSourceId, version_2, "when-unknown");
+        if (seedPath) {
+          pluginPath = seedPath;
+          logForDebugging(`Using seed cache for external plugin ${entry.name} at ${seedPath}`);
         } else {
-          if (entry.source.source === "command" && !h) {
+          if (entry.source.source === "command" && !entryEnabled) {
             logForDebugging(
-              `Not materializing disabled command-sourced plugin ${s}: its command is not run while it is disabled`,
+              `Not materializing disabled command-sourced plugin ${pluginSourceId}: its command is not run while it is disabled`,
             );
             return null;
           }
           if (entry.source.source === "command" && !shouldRefreshCommandPlugins()) {
             logForDebugging(
-              `Plugin ${s}: command-source execution is switched off; not materializing the missing cache dir`,
+              `Plugin ${pluginSourceId}: command-source execution is switched off; not materializing the missing cache dir`,
               {
                 level: "warn",
               },
             );
-            y.push(commandSourceCacheMissError(s, entry.name));
+            errors.push(commandSourceCacheMissError(pluginSourceId, entry.name));
             return null;
           }
-          let At = checkClaudeAiPluginLoadable(
-            s,
+          let loadableIssue = checkClaudeAiPluginLoadable(
+            pluginSourceId,
             entry.name,
             entry.source,
             installRecord,
             recordedClaudeAiPluginId,
           );
-          if (At !== null) {
-            if (entryEnabled) y.push(At);
+          if (loadableIssue !== null) {
+            if (entryEnabled_2) errors.push(loadableIssue);
             return null;
           }
-          if (isNpmPluginId(s) && recordedNpmIntegrity === undefined) {
-            if (entryEnabled)
-              y.push({
+          if (isNpmPluginId(pluginSourceId) && recordedNpmIntegrity === undefined) {
+            if (entryEnabled_2)
+              errors.push({
                 type: "generic-error",
                 refused: true,
-                source: s,
+                source: pluginSourceId,
                 plugin: entry.name,
-                error: `${printableName(s, 200)} was not re-downloaded: its install record carries no integrity to check the download against; ${runCommandHint(
+                error: `${printableName(pluginSourceId, 200)} was not re-downloaded: its install record carries no integrity to check the download against; ${runCommandHint(
                   "plugin uninstall",
-                  s,
+                  pluginSourceId,
                   {
                     tail: "and install it again to re-record it",
                     fallback: "uninstall and install it again to re-record it",
@@ -5713,41 +6036,44 @@ async function loadPluginFromMarketplaceEntry(
               });
             return null;
           }
-          if (s.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`)) {
+          if (pluginSourceId.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`)) {
             if (installRecord === "unknown") {
-              if (entryEnabled)
-                y.push({
+              if (entryEnabled_2)
+                errors.push({
                   type: "plugin-cache-miss",
-                  source: s,
+                  source: pluginSourceId,
                   plugin: entry.name,
                   installPath: NOT_RECORDED,
                   registryReadFailed: true,
                 });
               return null;
             }
-            let Xn = pinnedSha(s, entry.source);
-            if (Xn === undefined || (installRecord === "present" && recordedGitCommitSha !== Xn)) {
-              if (entryEnabled)
-                y.push({
+            let listingSha = pinnedSha(pluginSourceId, entry.source);
+            if (
+              listingSha === undefined ||
+              (installRecord === "present" && recordedGitCommitSha !== listingSha)
+            ) {
+              if (entryEnabled_2)
+                errors.push({
                   type: "generic-error",
                   refused: true,
-                  source: s,
+                  source: pluginSourceId,
                   plugin: entry.name,
                   error:
-                    Xn === undefined
-                      ? `Not loading ${printableName(s, 200)}: its files are missing and its ${OFFICIAL_MARKETPLACE_DISPLAY} listing has no listed commit, so it was not downloaded. Only a change to the listing can fix this.`
+                    listingSha === undefined
+                      ? `Not loading ${printableName(pluginSourceId, 200)}: its files are missing and its ${OFFICIAL_MARKETPLACE_DISPLAY} listing has no listed commit, so it was not downloaded. Only a change to the listing can fix this.`
                       : recordedGitCommitSha === undefined
-                        ? `Not loading ${printableName(s, 200)}: its files are missing and its install record has no commit, so it was not downloaded again; ${runCommandHint(
+                        ? `Not loading ${printableName(pluginSourceId, 200)}: its files are missing and its install record has no commit, so it was not downloaded again; ${runCommandHint(
                             "plugin update",
-                            s,
+                            pluginSourceId,
                             {
                               tail: "to repair it",
                               fallback: "update it to repair it",
                             },
                           )}`
-                        : `Not loading ${printableName(s, 200)}: its files are missing, and the ${OFFICIAL_MARKETPLACE_DISPLAY} now lists another commit than the one installed, so it was not downloaded again; ${runCommandHint(
+                        : `Not loading ${printableName(pluginSourceId, 200)}: its files are missing, and the ${OFFICIAL_MARKETPLACE_DISPLAY} now lists another commit than the one installed, so it was not downloaded again; ${runCommandHint(
                             "plugin update",
-                            s,
+                            pluginSourceId,
                             {
                               tail: "to move to the listed commit",
                               fallback: "update it to move to the listed commit",
@@ -5757,83 +6083,96 @@ async function loadPluginFromMarketplaceEntry(
               return null;
             }
           }
-          let It = undefined;
-          if (It !== undefined && !It.ok) {
-            if (entryEnabled)
-              y.push({
+          let scriptsResult = undefined;
+          if (scriptsResult !== undefined && !scriptsResult.ok) {
+            if (entryEnabled_2)
+              errors.push({
                 type: "generic-error",
                 refused: true,
-                source: s,
+                source: pluginSourceId,
                 plugin: entry.name,
-                error: It.message,
+                error: scriptsResult.message,
               });
             return null;
           }
-          let Yt = gitSha().safeParse(recordedGitCommitSha);
-          let qt =
-            Yt.success &&
+          let shaParse = gitSha().safeParse(recordedGitCommitSha);
+          let pinnedSource =
+            shaParse.success &&
             (entry.source.source === "github" ||
               entry.source.source === "url" ||
               entry.source.source === "git-subdir") &&
             entry.source.sha === undefined &&
             version ===
-              (await calculatePluginVersion(s, entry.source, undefined, undefined, undefined, Yt.data))
+              (await calculatePluginVersion(
+                pluginSourceId,
+                entry.source,
+                undefined,
+                undefined,
+                undefined,
+                shaParse.data,
+              ))
               ? {
                   ...entry.source,
-                  sha: Yt.data,
+                  sha: shaParse.data,
                 }
               : undefined;
-          let Zt =
+          let sourceForFetch =
             typeof entry.source === "object" && entry.source.source === "claudeai" && version_2 !== "unknown"
               ? {
                   ...entry.source,
                   version: version_2,
                 }
               : entry.source;
-          let rn = {
+          let cacheOptions = {
             manifest: {
               name: entry.name,
             },
             archiveAuth: await resolveArchiveDownloadHeaders({
               pluginSource: entry.source,
               pluginName: entry.name,
-              marketplaceName: marketplaceNameOfId(s),
+              marketplaceName: marketplaceNameOfId(pluginSourceId),
               marketplaceSource: pluginId,
-              trustedMarketplaceAuth: findUrlMarketplaceHeaders(pluginId, marketplaceNameOfId(s)),
-              trustedSettingsEntryAuth: findSettingsArchiveEntry(marketplaceNameOfId(s), entry.name),
+              trustedMarketplaceAuth: findUrlMarketplaceHeaders(
+                pluginId,
+                marketplaceNameOfId(pluginSourceId),
+              ),
+              trustedSettingsEntryAuth: findSettingsArchiveEntry(
+                marketplaceNameOfId(pluginSourceId),
+                entry.name,
+              ),
               entry,
               runEntryHelper: false,
             }),
             entryDeclaresComponents: entryDeclaresComponents(entry),
             declaredComponentPaths: entryDeclaredComponentPaths(entry),
-            isDirectoryPlugin: isOfficialDirectoryPlugin(s),
-            directoryPin: pinnedSha(s, Zt) ?? null,
+            isDirectoryPlugin: isOfficialDirectoryPlugin(pluginSourceId),
+            directoryPin: pinnedSha(pluginSourceId, sourceForFetch) ?? null,
             commandSourceConsent:
-              version === undefined && L === undefined
+              version === undefined && installedVersion === undefined
                 ? {
                     kind: "none",
-                    pluginId: s,
+                    pluginId: pluginSourceId,
                   }
                 : {
                     kind: "recorded",
-                    command: L,
-                    pluginId: s,
+                    command: installedVersion,
+                    pluginId: pluginSourceId,
                   },
             storageV5,
             credentials,
-            isNpmMarketplaceLane: isNpmPluginId(s),
+            isNpmMarketplaceLane: isNpmPluginId(pluginSourceId),
             expectedNpmIntegrity: recordedNpmIntegrity,
           };
-          let no =
-            (qt === undefined
+          let cached =
+            (pinnedSource === undefined
               ? undefined
-              : await cachePlugin(qt, rn).then(
-                  async (Xn) => {
-                    let fo = join(Xn.path, ".gitmodules");
-                    if ((await pathPresence(fo)) === "gone") return Xn;
-                    await removeDirectoryTreeNoFollow_2(Xn.path).catch(() => {});
+              : await cachePlugin(pinnedSource, cacheOptions).then(
+                  async (cacheResult) => {
+                    let gitmodulesPath = join(cacheResult.path, ".gitmodules");
+                    if ((await pathPresence(gitmodulesPath)) === "gone") return cacheResult;
+                    await removeDirectoryTreeNoFollow_2(cacheResult.path).catch(() => {});
                     logForDebugging(
-                      `${s} has a .gitmodules file, and a fetch at its installed commit ${qt.sha.substring(0, 12)} brings no submodules; fetching its source as the marketplace lists it instead. \`claude plugin update\` records the commit then in use`,
+                      `${pluginSourceId} has a .gitmodules file, and a fetch at its installed commit ${pinnedSource.sha.substring(0, 12)} brings no submodules; fetching its source as the marketplace lists it instead. \`claude plugin update\` records the commit then in use`,
                       {
                         level: "warn",
                       },
@@ -5842,31 +6181,31 @@ async function loadPluginFromMarketplaceEntry(
                   },
                   (error) => {
                     logForDebugging(
-                      `Could not fetch ${s} at its installed commit ${qt.sha.substring(0, 12)} (${redactUrlsInMessage(errorMessage(error))}); fetching its source as the marketplace lists it instead. \`claude plugin update\` records the commit then in use`,
+                      `Could not fetch ${pluginSourceId} at its installed commit ${pinnedSource.sha.substring(0, 12)} (${redactUrlsInMessage(errorMessage(error))}); fetching its source as the marketplace lists it instead. \`claude plugin update\` records the commit then in use`,
                       {
                         level: "warn",
                       },
                     );
                     return;
                   },
-                )) ?? (await cachePlugin(Zt, rn));
+                )) ?? (await cachePlugin(sourceForFetch, cacheOptions));
           if (
             recordedArchiveSha256 !== undefined &&
-            typeof Zt === "object" &&
-            Zt.source === "claudeai" &&
-            Zt.version === version &&
-            no.contentSha256 !== recordedArchiveSha256
+            typeof sourceForFetch === "object" &&
+            sourceForFetch.source === "claudeai" &&
+            sourceForFetch.version === version &&
+            cached.contentSha256 !== recordedArchiveSha256
           ) {
-            await removeDirectoryTreeNoFollow_2(no.path).catch(() => {});
-            if (entryEnabled)
-              y.push({
+            await removeDirectoryTreeNoFollow_2(cached.path).catch(() => {});
+            if (entryEnabled_2)
+              errors.push({
                 type: "generic-error",
                 refused: true,
-                source: s,
+                source: pluginSourceId,
                 plugin: entry.name,
-                error: `Not loading ${printableName(s, 200)}: the archive claude.ai served for version ${printableName(Zt.version, 64)} does not match the one recorded at install (digest differs); ${runCommandHint(
+                error: `Not loading ${printableName(pluginSourceId, 200)}: the archive claude.ai served for version ${printableName(sourceForFetch.version, 64)} does not match the one recorded at install (digest differs); ${runCommandHint(
                   "plugin uninstall",
-                  s,
+                  pluginSourceId,
                   {
                     tail: "and install it again to accept new content",
                     fallback: "uninstall and reinstall it to accept new content",
@@ -5875,14 +6214,14 @@ async function loadPluginFromMarketplaceEntry(
               });
             return null;
           }
-          let hn =
+          let pluginVersion =
             version_2 !== "unknown" && !commandSourceSpecOf(entry.source)
               ? version_2
               : await calculatePluginVersion(
-                  s,
+                  pluginSourceId,
                   entry.source,
-                  no.manifest,
-                  no.path,
+                  cached.manifest,
+                  cached.path,
                   version !== undefined
                     ? {
                         kind: "installed",
@@ -5892,30 +6231,37 @@ async function loadPluginFromMarketplaceEntry(
                         kind: "catalog",
                         version: entry.version,
                       },
-                  no.gitCommitSha,
-                  no.contentSha256,
+                  cached.gitCommitSha,
+                  cached.contentSha256,
                 );
-          if (no.producerPath !== undefined) recordProducerDir(no.producerPath);
+          if (cached.producerPath !== undefined) recordProducerDir(cached.producerPath);
           let sha =
-            no.gitCommitSha ??
+            cached.gitCommitSha ??
             (getPluginCloneUrl(entry.source) !== null
-              ? ((await pluginGitHead(no.path)) ?? undefined)
+              ? ((await pluginGitHead(cached.path)) ?? undefined)
               : undefined);
-          let versionedCachePath = getVersionedCachePath(s, hn);
-          let Kn = await dirHasRealEntries(versionedCachePath);
-          We = await copyPluginToVersionedCache(no.path, s, hn, entry, undefined, {
-            storageV5,
-            linkFarm,
-            credentials,
-          });
-          if (We === versionedCachePath && !Kn)
-            lt = {
+          let versionedCachePath = getVersionedCachePath(pluginSourceId, pluginVersion);
+          let hadEntries = await dirHasRealEntries(versionedCachePath);
+          pluginPath = await copyPluginToVersionedCache(
+            cached.path,
+            pluginSourceId,
+            pluginVersion,
+            entry,
+            undefined,
+            {
+              storageV5,
+              linkFarm,
+              credentials,
+            },
+          );
+          if (pluginPath === versionedCachePath && !hadEntries)
+            shaInfo = {
               sha,
             };
-          if (no.path !== We && !resolve_2(We).startsWith(resolve_2(no.path) + sep))
-            await removeDirectoryTreeNoFollow_2(no.path).catch((error) => {
+          if (cached.path !== pluginPath && !resolve_2(pluginPath).startsWith(resolve_2(cached.path) + sep))
+            await removeDirectoryTreeNoFollow_2(cached.path).catch((error) => {
               logForDebugging(
-                `Failed to remove the staging tree ${no.path} after publishing: ${errorMessage(error)}`,
+                `Failed to remove the staging tree ${cached.path} after publishing: ${errorMessage(error)}`,
                 {
                   level: "warn",
                 },
@@ -5928,161 +6274,178 @@ async function loadPluginFromMarketplaceEntry(
       logForDebugging(`Failed to cache plugin ${entry.name}: ${errorMsg}`, {
         level: "error",
       });
-      if (entryEnabled)
-        y.push({
+      if (entryEnabled_2)
+        errors.push({
           type: "generic-error",
-          source: s,
+          source: pluginSourceId,
           error: `Failed to download/cache plugin ${printableName(entry.name, 200)}: ${commandSourceErrorMessage(error)}`,
         });
       return null;
     }
-  let Je;
-  if (isPluginZipCacheEnabled() && We.endsWith(".zip")) {
+  let extractedFrom;
+  if (isPluginZipCacheEnabled() && pluginPath.endsWith(".zip")) {
     let sessionDir = await getSessionPluginCachePath();
-    let extractDir = sessionPluginDirFor(sessionDir, s);
-    let yt = planArchiveExtraction(sessionDir, extractDir);
-    let gt;
-    Je = We;
+    let extractDir = sessionPluginDirFor(sessionDir, pluginSourceId);
+    let extractionPlan = planArchiveExtraction(sessionDir, extractDir);
+    let extraction;
+    extractedFrom = pluginPath;
     try {
-      gt = await extractSessionArchive(We, yt);
+      extraction = await extractSessionArchive(pluginPath, extractionPlan);
     } catch (error) {
-      logForDebugging(`Failed to extract plugin ZIP ${We}, deleting corrupt file: ${error}`);
-      await rm_2(We, {
+      logForDebugging(`Failed to extract plugin ZIP ${pluginPath}, deleting corrupt file: ${error}`);
+      await rm_2(pluginPath, {
         force: true,
       }).catch(() => {});
       throw error;
     }
-    if (gt !== undefined) await swapInExtractedTree(yt, gt);
+    if (extraction !== undefined) await swapInExtractedTree(extractionPlan, extraction);
     logForDebugging(`Extracted plugin ZIP to session dir: ${extractDir}`);
-    We = extractDir;
-    ze = undefined;
+    pluginPath = extractDir;
+    marketplaceDir = undefined;
   }
-  let nt = await finishMarketplacePluginLoad(entry, s, h, y, S, We, {
-    storageV5,
-    linkFarm,
-    linkFarmProducer,
+  let plugin = await finishMarketplacePluginLoad(
+    entry,
+    pluginSourceId,
     entryEnabled,
-    containmentAnchorDir: ze,
-  });
-  if (nt && lt !== undefined) {
-    if (lt.sha !== undefined) nt.gitCommitSha = lt.sha;
-    weakSet_7.add(nt);
+    errors,
+    warnings,
+    pluginPath,
+    {
+      storageV5,
+      linkFarm,
+      linkFarmProducer,
+      entryEnabled: entryEnabled_2,
+      containmentAnchorDir: marketplaceDir,
+    },
+  );
+  if (plugin && shaInfo !== undefined) {
+    if (shaInfo.sha !== undefined) plugin.gitCommitSha = shaInfo.sha;
+    weakSet_7.add(plugin);
   }
-  if (nt && Je !== undefined) nt.extractedFrom = Je;
-  return nt;
+  if (plugin && extractedFrom !== undefined) plugin.extractedFrom = extractedFrom;
+  return plugin;
 }
 //@ chunk-e6aww6q8.js:4590867-4593927 layout
 /**
  * 市场插件定位到目录后的收尾：link/producer 目录检查、createPluginFromPath、合并 marketplace 条目中的组件声明（strict=false 时条目即 manifest）。
  */
 async function finishMarketplacePluginLoad(
-  e,
-  n,
-  r,
-  s,
-  h,
-  y,
+  entry,
+  pluginId,
+  requestedEntryEnabled,
+  errors,
+  warnings,
+  pluginPath,
   {
-    storageV5: S,
-    linkFarm: w = false,
-    linkFarmProducer: L,
-    entryEnabled: G = r,
-    containmentAnchorDir: q,
+    storageV5,
+    linkFarm = false,
+    linkFarmProducer,
+    entryEnabled: effectiveEntryEnabled = requestedEntryEnabled,
+    containmentAnchorDir,
   } = {},
 ) {
-  let Z = [];
-  await materializeCachedLinks(y, S, w);
-  let Se;
-  let ke;
-  if (w || L !== undefined) {
-    Se =
-      L !== undefined && !isUntrustedLinkPath(L)
-        ? await resolveContainmentRoots([L, y], "plugin's producer directory")
-        : await resolveContainmentRoots([y], "plugin directory");
-    ke = Se;
-  } else if (q !== undefined) {
-    Se = await resolveContainmentRoots([q], "marketplace directory");
-    ke = await resolveContainmentRoots([y, q], "plugin directory and its marketplace directory");
+  let outErrors = [];
+  await materializeCachedLinks(pluginPath, storageV5, linkFarm);
+  let anchor;
+  let containmentAnchor;
+  if (linkFarm || linkFarmProducer !== undefined) {
+    anchor =
+      linkFarmProducer !== undefined && !isUntrustedLinkPath(linkFarmProducer)
+        ? await resolveContainmentRoots([linkFarmProducer, pluginPath], "plugin's producer directory")
+        : await resolveContainmentRoots([pluginPath], "plugin directory");
+    containmentAnchor = anchor;
+  } else if (containmentAnchorDir !== undefined) {
+    anchor = await resolveContainmentRoots([containmentAnchorDir], "marketplace directory");
+    containmentAnchor = await resolveContainmentRoots(
+      [pluginPath, containmentAnchorDir],
+      "plugin directory and its marketplace directory",
+    );
   } else {
-    Se = await resolveContainmentRoots([y], "plugin directory");
-    ke = Se;
+    anchor = await resolveContainmentRoots([pluginPath], "plugin directory");
+    containmentAnchor = anchor;
   }
-  let { plugin, errors, warnings, hasManifest } = await createPluginFromPath(
-    y,
-    n,
-    r,
-    e.name,
-    e.strict ?? true,
-    S,
-    Se,
+  let {
+    plugin,
+    errors: errors_2,
+    warnings: warnings_2,
+    hasManifest,
+  } = await createPluginFromPath(
+    pluginPath,
+    pluginId,
+    requestedEntryEnabled,
+    entry.name,
+    entry.strict ?? true,
+    storageV5,
+    anchor,
     undefined,
-    ke,
+    containmentAnchor,
   );
-  Z.push(...errors);
-  if (typeof e.source === "object" && "sha" in e.source && e.source.sha) plugin.sha = e.source.sha;
+  outErrors.push(...errors_2);
+  if (typeof entry.source === "object" && "sha" in entry.source && entry.source.sha)
+    plugin.sha = entry.source.sha;
   if (
-    typeof e.source === "string" &&
-    e.source.split(/[\\/]/).every((We) => We === "" || We === ".") &&
-    e.skills !== undefined
+    typeof entry.source === "string" &&
+    entry.source.split(/[\\/]/).every((segment) => segment === "" || segment === ".") &&
+    entry.skills !== undefined
   ) {
-    let We = Array.isArray(e.skills) ? e.skills : [e.skills];
-    if (We.length > 0) {
-      let ze = [];
-      let lt = await validatePluginPaths(
-        We,
-        y,
-        e.name,
-        n,
+    let skillSpecs = Array.isArray(entry.skills) ? entry.skills : [entry.skills];
+    if (skillSpecs.length > 0) {
+      let skillErrors = [];
+      let validSkillPaths = await validatePluginPaths(
+        skillSpecs,
+        pluginPath,
+        entry.name,
+        pluginId,
         "skills",
         "Skill",
         "declared in marketplace entry but",
-        ze,
-        Se,
+        skillErrors,
+        anchor,
         true,
-        S,
+        storageV5,
       );
-      let any = ze.some((nt) => nt.type === "path-traversal");
-      if (lt.length === 0 && any) {
+      let any = skillErrors.some((error) => error.type === "path-traversal");
+      if (validSkillPaths.length === 0 && any) {
         plugin.skillsPath = undefined;
         plugin.skillsPaths = undefined;
-      } else if (lt.length > 0) {
-        let nt = join(y, "skills");
-        let pt = resolve_2(nt);
-        let Et = resolve_2(y);
-        let any = lt.some((At) => {
-          let It = resolve_2(At);
-          return It === pt || It === Et;
+      } else if (validSkillPaths.length > 0) {
+        let skillsDir = join(pluginPath, "skills");
+        let resolvedSkillsDir = resolve_2(skillsDir);
+        let resolvedPluginPath = resolve_2(pluginPath);
+        let any = validSkillPaths.some((skillPath) => {
+          let resolvedSkillPath = resolve_2(skillPath);
+          return resolvedSkillPath === resolvedSkillsDir || resolvedSkillPath === resolvedPluginPath;
         });
         plugin.skillsPath = any ? plugin.skillsPath : undefined;
-        let filtered = lt.filter((At) => {
-          let It = resolve_2(At);
-          return It !== pt && It !== Et;
+        let filtered = validSkillPaths.filter((skillPath) => {
+          let resolvedSkillPath = resolve_2(skillPath);
+          return resolvedSkillPath !== resolvedSkillsDir && resolvedSkillPath !== resolvedPluginPath;
         });
         plugin.skillsPaths = filtered.length > 0 ? filtered : undefined;
       }
     }
   }
   if (!hasManifest) {
-    let We = validatePluginManifest(e, "marketplace-entry", {
-      pluginName: e.name,
-      manifestPath: n,
+    let validation = validatePluginManifest(entry, "marketplace-entry", {
+      pluginName: entry.name,
+      manifestPath: pluginId,
     });
-    if (We.ok) {
-      plugin.manifest = We.manifest;
-      for (let hookNote of We.hookNotes)
-        logForDebugging(`Plugin ${e.name}: ${hookNote}`, {
+    if (validation.ok) {
+      plugin.manifest = validation.manifest;
+      for (let hookNote of validation.hookNotes)
+        logForDebugging(`Plugin ${entry.name}: ${hookNote}`, {
           level: "warn",
         });
     } else {
-      if (We.unloadableGuard) throw new HookValidationError(We.error);
+      if (validation.unloadableGuard) throw new HookValidationError(validation.error);
       logForDebugging(
-        `marketplace entry ${e.name}: canonicalizeManifest rejected an entry that PluginMarketplaceEntrySchema accepted \u2014 falling back to legacy cast. ${We.error}`,
+        `marketplace entry ${entry.name}: canonicalizeManifest rejected an entry that PluginMarketplaceEntrySchema accepted \u2014 falling back to legacy cast. ${validation.error}`,
         {
           level: "warn",
         },
       );
       plugin.manifest = {
-        ...e,
+        ...entry,
         id: undefined,
         source: undefined,
         strict: undefined,
@@ -6092,71 +6455,76 @@ async function finishMarketplacePluginLoad(
     await loadMarketplaceEntryComponents(
       {
         plugin,
-        entry: e,
-        pluginPath: y,
-        pluginId: n,
+        entry,
+        pluginPath,
+        pluginId,
         mode: "assign",
-        errors: Z,
-        anchor: Se,
+        errors: outErrors,
+        anchor,
       },
-      S,
+      storageV5,
     );
   } else if (
-    !e.strict &&
+    !entry.strict &&
     hasManifest &&
-    (e.commands ||
-      e.agents ||
-      e.skills ||
-      e.hooks ||
-      e.outputStyles ||
-      e.themes ||
-      e.experimental?.themes ||
+    (entry.commands ||
+      entry.agents ||
+      entry.skills ||
+      entry.hooks ||
+      entry.outputStyles ||
+      entry.themes ||
+      entry.experimental?.themes ||
       false)
   ) {
     logForDebugging(
-      `Plugin ${e.name} has both plugin.json and marketplace manifest entries for commands/agents/skills/hooks/outputStyles/themes/syntaxHighlighting. This is a conflict.`,
+      `Plugin ${entry.name} has both plugin.json and marketplace manifest entries for commands/agents/skills/hooks/outputStyles/themes/syntaxHighlighting. This is a conflict.`,
       {
         level: "error",
       },
     );
-    if (G)
-      s.push({
+    if (effectiveEntryEnabled)
+      errors.push({
         type: "generic-error",
-        source: n,
-        error: `Plugin ${printableName(e.name, 200)} has conflicting manifests: both plugin.json and marketplace entry specify components. Set strict: true in marketplace entry or remove component specs from one location.`,
+        source: pluginId,
+        error: `Plugin ${printableName(entry.name, 200)} has conflicting manifests: both plugin.json and marketplace entry specify components. Set strict: true in marketplace entry or remove component specs from one location.`,
       });
     return null;
   } else if (hasManifest) {
     let manifest = plugin.manifest;
-    let ze = (lt) => cleanOptionalText_2(lt) !== undefined;
-    if (ze(e.displayName)) manifest.displayName = e.displayName;
-    if (ze(e.description)) manifest.description = e.description;
-    if (e.author !== undefined && ze(e.author.name))
+    let hasText = (value) => cleanOptionalText_2(value) !== undefined;
+    if (hasText(entry.displayName)) manifest.displayName = entry.displayName;
+    if (hasText(entry.description)) manifest.description = entry.description;
+    if (entry.author !== undefined && hasText(entry.author.name))
       manifest.author = {
-        ...e.author,
+        ...entry.author,
       };
-    if (ze(e.homepage)) manifest.homepage = e.homepage;
-    if (ze(e.repository)) manifest.repository = e.repository;
-    if (ze(e.license)) manifest.license = e.license;
-    if (e.keywords?.length) manifest.keywords = [...e.keywords];
+    if (hasText(entry.homepage)) manifest.homepage = entry.homepage;
+    if (hasText(entry.repository)) manifest.repository = entry.repository;
+    if (hasText(entry.license)) manifest.license = entry.license;
+    if (entry.keywords?.length) manifest.keywords = [...entry.keywords];
     await loadMarketplaceEntryComponents(
       {
         plugin,
-        entry: e,
-        pluginPath: y,
-        pluginId: n,
+        entry,
+        pluginPath,
+        pluginId,
         mode: "append",
-        errors: Z,
-        anchor: Se,
+        errors: outErrors,
+        anchor,
       },
-      S,
+      storageV5,
     );
   }
-  if (r) {
-    s.push(...Z);
-    h.push(...warnings);
-    let We = await checkDependencyGap(y, n, e.name, !w && L === undefined && q === undefined);
-    if (We !== undefined) h.push(We);
+  if (requestedEntryEnabled) {
+    errors.push(...outErrors);
+    warnings.push(...warnings_2);
+    let gapWarning = await checkDependencyGap(
+      pluginPath,
+      pluginId,
+      entry.name,
+      !linkFarm && linkFarmProducer === undefined && containmentAnchorDir === undefined,
+    );
+    if (gapWarning !== undefined) warnings.push(gapWarning);
   }
   return plugin;
 }
@@ -6164,54 +6532,58 @@ async function finishMarketplacePluginLoad(
 /**
  * 缓存副本缺依赖时生成 dependencies-refused/not-installed 错误。
  */
-async function checkDependencyGap(e, n, plugin, s) {
-  if (!s) return;
+async function checkDependencyGap(pluginPath, pluginId, plugin, checkEnabled) {
+  if (!checkEnabled) return;
   try {
-    let h = await cacheCopyDependencyGap(e);
-    if (h === undefined) return;
-    return h.kind === "refused"
+    let gap = await cacheCopyDependencyGap(pluginPath);
+    if (gap === undefined) return;
+    return gap.kind === "refused"
       ? {
           type: "dependencies-refused",
-          source: n,
+          source: pluginId,
           plugin,
-          reason: h.reason,
+          reason: gap.reason,
         }
       : {
           type: "dependencies-not-installed",
-          source: n,
+          source: pluginId,
           plugin,
         };
   } catch (error) {
-    logForDebugging(`Could not check the dependencies of ${n}: ${errorMessage(error)}`, {
+    logForDebugging(`Could not check the dependencies of ${pluginId}: ${errorMessage(error)}`, {
       level: "warn",
     });
     return;
   }
 }
 //@ chunk-e6aww6q8.js:4594243-4594401 placement
-async function realPathInsideCache(absolute) {
-  let [n, r] = await Promise.all([
-    realpath(absolute).catch(() => {
+async function realPathInsideCache(filePath) {
+  let [realPath, realCacheRoot] = await Promise.all([
+    realpath(filePath).catch(() => {
       return;
     }),
     realpath(anchoredPluginCachePath()).catch(() => {
       return;
     }),
   ]);
-  return n !== undefined && r !== undefined && isSubpathOf(r, n, false) ? n : undefined;
+  return realPath !== undefined && realCacheRoot !== undefined && isSubpathOf(realCacheRoot, realPath, false)
+    ? realPath
+    : undefined;
 }
 //@ chunk-e6aww6q8.js:4594401-4594637 placement
-async function cacheCopyDependencyGap(absolute) {
+async function cacheCopyDependencyGap(pluginPath) {
   if (isPluginZipCacheEnabled() || isUsingCoworkPlugins()) return;
-  let n = resolve_2(getOriginalCwd(), absolute);
-  let r = anchoredPluginCachePath();
-  if (!isSubpathOf(r, n, false)) return;
-  let s = await lstat(n).catch(() => {
+  let absolutePath = resolve_2(getOriginalCwd(), pluginPath);
+  let cacheRoot = anchoredPluginCachePath();
+  if (!isSubpathOf(cacheRoot, absolutePath, false)) return;
+  let stats = await lstat(absolutePath).catch(() => {
     return;
   });
-  if (s === undefined || !s.isDirectory()) return;
-  let h = await checkLockfileSupported(n);
-  return h !== undefined && (await realPathInsideCache(n)) !== undefined ? h : undefined;
+  if (stats === undefined || !stats.isDirectory()) return;
+  let lockfileInfo = await checkLockfileSupported(absolutePath);
+  return lockfileInfo !== undefined && (await realPathInsideCache(absolutePath)) !== undefined
+    ? lockfileInfo
+    : undefined;
 }
 //@ chunk-e6aww6q8.js:4594637-4596117 placement
 /**
@@ -6219,7 +6591,7 @@ async function cacheCopyDependencyGap(absolute) {
  */
 async function loadMarketplaceEntryComponents(
   { plugin, entry, pluginPath, pluginId, mode, errors, anchor },
-  w,
+  storageV5,
 ) {
   if (entry.commands)
     await finishLoadingPluginFromPath(
@@ -6236,12 +6608,12 @@ async function loadMarketplaceEntryComponents(
         registerInlineContent: false,
         errors,
       },
-      w,
+      storageV5,
     );
   if (entry.agents) {
-    let G = Array.isArray(entry.agents) ? entry.agents : [entry.agents];
-    let q = await validatePluginPaths(
-      G,
+    let agentSpecs = Array.isArray(entry.agents) ? entry.agents : [entry.agents];
+    let validAgents = await validatePluginPaths(
+      agentSpecs,
       pluginPath,
       entry.name,
       pluginId,
@@ -6251,16 +6623,17 @@ async function loadMarketplaceEntryComponents(
       errors,
       anchor,
       false,
-      w,
+      storageV5,
     );
-    if (q.length > 0) plugin.agentsPaths = mode === "append" ? [...(plugin.agentsPaths || []), ...q] : q;
+    if (validAgents.length > 0)
+      plugin.agentsPaths = mode === "append" ? [...(plugin.agentsPaths || []), ...validAgents] : validAgents;
   }
   if (entry.skills) {
-    let G = Array.isArray(entry.skills) ? entry.skills : [entry.skills];
-    let q = resolve_2(join(pluginPath, "skills"));
+    let skillSpecs = Array.isArray(entry.skills) ? entry.skills : [entry.skills];
+    let skillsDirResolved = resolve_2(join(pluginPath, "skills"));
     let filtered = (
       await validatePluginPaths(
-        G,
+        skillSpecs,
         pluginPath,
         entry.name,
         pluginId,
@@ -6270,19 +6643,19 @@ async function loadMarketplaceEntryComponents(
         errors,
         anchor,
         true,
-        w,
+        storageV5,
       )
-    ).filter((Se) => resolve_2(Se) !== q);
+    ).filter((path) => resolve_2(path) !== skillsDirResolved);
     if (mode === "append") {
-      let Se = new Set((plugin.skillsPaths || []).map((we) => resolve_2(we)));
-      let filtered_2 = filtered.filter((we) => !Se.has(resolve_2(we)));
+      let existingSkills = new Set((plugin.skillsPaths || []).map((path) => resolve_2(path)));
+      let filtered_2 = filtered.filter((path) => !existingSkills.has(resolve_2(path)));
       if (filtered_2.length > 0) plugin.skillsPaths = [...(plugin.skillsPaths || []), ...filtered_2];
     } else if (filtered.length > 0) plugin.skillsPaths = filtered;
   }
   if (entry.outputStyles) {
-    let G = Array.isArray(entry.outputStyles) ? entry.outputStyles : [entry.outputStyles];
-    let q = await validatePluginPaths(
-      G,
+    let styleSpecs = Array.isArray(entry.outputStyles) ? entry.outputStyles : [entry.outputStyles];
+    let validStyles = await validatePluginPaths(
+      styleSpecs,
       pluginPath,
       entry.name,
       pluginId,
@@ -6292,16 +6665,17 @@ async function loadMarketplaceEntryComponents(
       errors,
       anchor,
       false,
-      w,
+      storageV5,
     );
-    if (q.length > 0)
-      plugin.outputStylesPaths = mode === "append" ? [...(plugin.outputStylesPaths || []), ...q] : q;
+    if (validStyles.length > 0)
+      plugin.outputStylesPaths =
+        mode === "append" ? [...(plugin.outputStylesPaths || []), ...validStyles] : validStyles;
   }
   let themes = entry.experimental?.themes ?? entry.themes;
   if (themes) {
-    let G = Array.isArray(themes) ? themes : [themes];
-    let q = await validatePluginPaths(
-      G,
+    let themeSpecs = Array.isArray(themes) ? themes : [themes];
+    let validThemes = await validatePluginPaths(
+      themeSpecs,
       pluginPath,
       entry.name,
       pluginId,
@@ -6311,9 +6685,10 @@ async function loadMarketplaceEntryComponents(
       errors,
       anchor,
       false,
-      w,
+      storageV5,
     );
-    if (q.length > 0) plugin.themesPaths = mode === "append" ? [...(plugin.themesPaths || []), ...q] : q;
+    if (validThemes.length > 0)
+      plugin.themesPaths = mode === "append" ? [...(plugin.themesPaths || []), ...validThemes] : validThemes;
   }
   if (entry.hooks) {
     let { hooks, errors: errors_2 } = parseMarketplaceEntryHooks(
@@ -6334,27 +6709,27 @@ async function loadMarketplaceEntryComponents(
   }
 }
 //@ chunk-e6aww6q8.js:4596117-4596782 placement
-async function describePluginDirShape_2(e) {
+async function describePluginDirShape_2(entries) {
   return (
     await Promise.all(
-      e.map(async (r) => {
-        if (r.kind !== "path" || isZipPathCaseInsensitive(r.value)) return [r];
-        let s = resolve_2(r.value);
-        let h = await describePluginDirShape(s);
-        if (h.kind === "plugin")
-          logForDebugging(`--plugin-dir ${s} is one plugin: ${h.marker} at its top marks it`);
-        if (h.kind !== "collection") return [r];
+      entries.map(async (entry) => {
+        if (entry.kind !== "path" || isZipPathCaseInsensitive(entry.value)) return [entry];
+        let resolved = resolve_2(entry.value);
+        let shape = await describePluginDirShape(resolved);
+        if (shape.kind === "plugin")
+          logForDebugging(`--plugin-dir ${resolved} is one plugin: ${shape.marker} at its top marks it`);
+        if (shape.kind !== "collection") return [entry];
         logForDebugging(
-          `--plugin-dir ${s} is a folder of plugins` +
-            (h.isMarketplaceRoot
+          `--plugin-dir ${resolved} is a folder of plugins` +
+            (shape.isMarketplaceRoot
               ? ` (its ${MARKETPLACE_MANIFEST_PATH} lists plugins and is not read here; with no ${PLUGIN_MANIFEST_PATH_2} beside it the folder is not itself a plugin)`
               : " (nothing at its top marks it as one plugin)") +
-            `: loading ${h.children.join(", ") || "none"}` +
-            (h.skipped.length > 0 ? `; no manifest in ${h.skipped.join(", ")}` : ""),
+            `: loading ${shape.children.join(", ") || "none"}` +
+            (shape.skipped.length > 0 ? `; no manifest in ${shape.skipped.join(", ")}` : ""),
         );
-        return h.children.map((child) => ({
-          ...r,
-          value: join(s, child),
+        return shape.children.map((child) => ({
+          ...entry,
+          value: join(resolved, child),
         }));
       }),
     )
@@ -6363,8 +6738,8 @@ async function describePluginDirShape_2(e) {
 //@ chunk-e6aww6q8.js:4596782-4596796 placement
 var PLUGIN_ZIP_FETCH_TIMEOUT_MS = 30000;
 //@ chunk-e6aww6q8.js:4596796-4596830 placement
-function dirHasPluginRoot(e) {
-  return dirHasAnyEntry(e, PLUGIN_ROOT_MARKERS);
+function dirHasPluginRoot(dirPath) {
+  return dirHasAnyEntry(dirPath, PLUGIN_ROOT_MARKERS);
 }
 //@ chunk-e6aww6q8.js:4596830-4596957 placement
 var MANIFEST_COMPONENT_KEYS = [
@@ -6382,138 +6757,145 @@ var THEME_ONLY_KEYS = ["themes"];
 //@ chunk-e6aww6q8.js:4596957-4597666 placement
 function entryDeclaredComponentPaths(entry) {
   if (!entry || typeof entry !== "object") return [];
-  let n = entry;
-  let mapped = MANIFEST_COMPONENT_KEYS.filter((S) => S !== "experimental").map((S) => n[S]);
-  let experimental = n.experimental;
+  let manifest = entry;
+  let mapped = MANIFEST_COMPONENT_KEYS.filter((key) => key !== "experimental").map(
+    (value) => manifest[value],
+  );
+  let experimental = manifest.experimental;
   if (experimental && typeof experimental === "object" && !Array.isArray(experimental)) {
-    let S = experimental;
-    mapped.push(S.themes);
+    let experimentalField = experimental;
+    mapped.push(experimentalField.themes);
   }
-  let h = [];
-  let y = false;
-  for (let S of mapped) {
-    let w = Array.isArray(S)
-      ? S
-      : typeof S === "string"
-        ? [S]
-        : S && typeof S === "object"
-          ? Object.values(S).map((L) => (L && typeof L === "object" && !Array.isArray(L) ? L.source : L))
+  let paths = [];
+  let hadUnsafe = false;
+  for (let fieldValue of mapped) {
+    let list = Array.isArray(fieldValue)
+      ? fieldValue
+      : typeof fieldValue === "string"
+        ? [fieldValue]
+        : fieldValue && typeof fieldValue === "object"
+          ? Object.values(fieldValue).map((item) =>
+              item && typeof item === "object" && !Array.isArray(item) ? item.source : item,
+            )
           : [];
-    for (let L of w) {
-      if (typeof L !== "string" || L.length === 0) continue;
-      if (/^[a-z][a-z\d+.-]*:\/\//i.test(L)) continue;
-      let filePath = L.startsWith("./") ? L.slice(2) : L;
+    for (let item of list) {
+      if (typeof item !== "string" || item.length === 0) continue;
+      if (/^[a-z][a-z\d+.-]*:\/\//i.test(item)) continue;
+      let filePath = item.startsWith("./") ? item.slice(2) : item;
       if (filePath === "" || filePath === ".") continue;
-      if (filePath.split(/[\\/]/).some((q) => /^[. ]+$/.test(q)) || !isSafeZipPath(filePath)) {
-        y = true;
+      if (filePath.split(/[\\/]/).some((segment) => /^[. ]+$/.test(segment)) || !isSafeZipPath(filePath)) {
+        hadUnsafe = true;
         continue;
       }
-      h.push(filePath);
-      if (h.length >= 32) return h;
+      paths.push(filePath);
+      if (paths.length >= 32) return paths;
     }
   }
-  if (h.length === 0 && y) return null;
-  return h;
+  if (paths.length === 0 && hadUnsafe) return null;
+  return paths;
 }
 //@ chunk-e6aww6q8.js:4597666-4597787 placement
 function entryDeclaresComponents(entry) {
   if (!entry || typeof entry !== "object") return false;
-  let n = entry;
-  return MANIFEST_COMPONENT_KEYS.some((r) => (r === "experimental" ? isRecord(n[r]) : isNonEmptyValue(n[r])));
+  let manifest = entry;
+  return MANIFEST_COMPONENT_KEYS.some((key) =>
+    key === "experimental" ? isRecord(manifest[key]) : isNonEmptyValue(manifest[key]),
+  );
 }
 //@ chunk-e6aww6q8.js:4597787-4597967 placement
-function isNonEmptyValue(e) {
-  if (e === undefined || e === null) return false;
-  if (Array.isArray(e)) return e.length > 0;
-  if (typeof e === "string") return e.length > 0;
-  return typeof e === "object" && Object.keys(e).length > 0;
+function isNonEmptyValue(value) {
+  if (value === undefined || value === null) return false;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "string") return value.length > 0;
+  return typeof value === "object" && Object.keys(value).length > 0;
 }
 //@ chunk-e6aww6q8.js:4597967-4598091 placement
 function isRecord(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  let n = value;
-  if (THEME_ONLY_KEYS.some((r) => isNonEmptyValue(n[r]))) return true;
+  let themeValue = value;
+  if (THEME_ONLY_KEYS.some((key) => isNonEmptyValue(themeValue[key]))) return true;
   return false;
 }
 //@ chunk-e6aww6q8.js:4598091-4598149 placement
 var RELATIVE_PATH_RE = /^[A-Za-z0-9_.$-]+(\/[A-Za-z0-9_.$-]+)*$/;
 var MAX_EXAMPLE_PATH_LENGTH = 120;
 //@ chunk-e6aww6q8.js:4598149-4598229 placement
-function examplePathSuffix(e) {
-  if (!e || e.length > MAX_EXAMPLE_PATH_LENGTH || !RELATIVE_PATH_RE.test(e)) return "";
-  return ` (e.g. ${e})`;
+function examplePathSuffix(path) {
+  if (!path || path.length > MAX_EXAMPLE_PATH_LENGTH || !RELATIVE_PATH_RE.test(path)) return "";
+  return ` (e.g. ${path})`;
 }
 //@ chunk-e6aww6q8.js:4598229-4598255 placement
-var MANIFEST_IDENTITY_READ_RELPATHS = [PLUGIN_MANIFEST_PATH_2];
-var MANIFEST_IDENTITY_READ_PATHS = [PLUGIN_MANIFEST_PATH_2, PLUGIN_JSON];
+var MANIFEST_IDENTITY_READ_RELPATHS; // deferred: uses PLUGIN_MANIFEST_DIR (./commandSource.js) of its import cycle while loading; runs once the cycle is complete
+var MANIFEST_IDENTITY_READ_PATHS;
+deferInit("chunk-e6aww6q8.js:4598229", () => {
+  MANIFEST_IDENTITY_READ_RELPATHS = [PLUGIN_MANIFEST_PATH_2];
+  MANIFEST_IDENTITY_READ_PATHS = [PLUGIN_MANIFEST_PATH_2, PLUGIN_JSON];
+});
 //@ chunk-e6aww6q8.js:4598255-4598333 placement
-async function hasManifestIdentityFile(pluginRootInExtracted) {
-  for (let n of MANIFEST_IDENTITY_READ_PATHS)
-    if (await pathExists(join(pluginRootInExtracted, n))) return true;
+async function hasManifestIdentityFile(rootDir) {
+  for (let relPath of MANIFEST_IDENTITY_READ_PATHS) if (await pathExists(join(rootDir, relPath))) return true;
   return false;
 }
 //@ chunk-e6aww6q8.js:4598333-4598464 placement
-async function anyPathExistsUnder(e, n) {
-  let r = resolve_2(e);
-  for (let s of n) {
-    let h = resolve_2(r, s);
-    if (!h.startsWith(r + sep)) continue;
-    if (await pathExists(h)) return true;
+async function anyPathExistsUnder(root, paths) {
+  let resolvedRoot = resolve_2(root);
+  for (let path of paths) {
+    let full = resolve_2(resolvedRoot, path);
+    if (!full.startsWith(resolvedRoot + sep)) continue;
+    if (await pathExists(full)) return true;
   }
   return false;
 }
 //@ chunk-e6aww6q8.js:4598464-4598643 placement
-async function findSingleTopDir(pluginRootInExtracted) {
+async function findSingleTopDir(extractDir) {
   let filtered = (
-    await readdir(pluginRootInExtracted, {
+    await readdir(extractDir, {
       withFileTypes: true,
     })
-  ).filter((r) => r.name !== "__MACOSX" && r.name !== ".DS_Store");
-  return filtered.length === 1 && filtered[0].isDirectory()
-    ? join(pluginRootInExtracted, filtered[0].name)
-    : undefined;
+  ).filter((entry) => entry.name !== "__MACOSX" && entry.name !== ".DS_Store");
+  return filtered.length === 1 && filtered[0].isDirectory() ? join(extractDir, filtered[0].name) : undefined;
 }
 //@ chunk-e6aww6q8.js:4598643-4598714 placement
-function isPluginNameAcceptable(name, n, r) {
-  if (n && !r) return false;
+function isPluginNameAcceptable(name, fromSkillFile, allowEmpty) {
+  if (fromSkillFile && !allowEmpty) return false;
   return name.length === 0 || PLUGIN_NAME_FORBIDDEN_CHARS_RE.test(name);
 }
 //@ chunk-e6aww6q8.js:4598714-4598789 placement
-function directoryPluginFallbackName(e, n) {
-  let replaced = basename(e).replace(/\.zip$/i, "");
-  return n === SYNCED ? stripGenerationSuffix(replaced) : replaced;
+function directoryPluginFallbackName(pluginPath, marketplace) {
+  let replaced = basename(pluginPath).replace(/\.zip$/i, "");
+  return marketplace === SYNCED ? stripGenerationSuffix(replaced) : replaced;
 }
 //@ chunk-e6aww6q8.js:4598789-4598832 placement
-function syncedPluginFolderId(e) {
-  return `${directoryPluginFallbackName(e, SYNCED)}@${SYNCED}`;
+function syncedPluginFolderId(pluginPath) {
+  return `${directoryPluginFallbackName(pluginPath, SYNCED)}@${SYNCED}`;
 }
 //@ chunk-e6aww6q8.js:4598832-4599039 placement
-async function syncedPluginMintedName(e, n) {
-  let r = directoryPluginFallbackName(e, SYNCED);
+async function syncedPluginMintedName(pluginPath, storageV5) {
+  let folderName = directoryPluginFallbackName(pluginPath, SYNCED);
   try {
     let { manifest, manifestPath } = await loadPluginManifest(
-      e,
-      r,
-      `${r}@${SYNCED}`,
+      pluginPath,
+      folderName,
+      `${folderName}@${SYNCED}`,
       [],
       {
         noTelemetry: true,
       },
-      n,
+      storageV5,
     );
-    let y = manifestPath === null || basename(manifestPath) === "SKILL.md";
-    return isPluginNameAcceptable(manifest.name, y, true) ? undefined : manifest.name;
+    let fromSkillFile = manifestPath === null || basename(manifestPath) === "SKILL.md";
+    return isPluginNameAcceptable(manifest.name, fromSkillFile, true) ? undefined : manifest.name;
   } catch {
     return;
   }
 }
 //@ chunk-e6aww6q8.js:4599039-4599129 placement
-function attributionFromManifest(e) {
-  return e.unread === true
+function attributionFromManifest(attribution) {
+  return attribution.unread === true
     ? {}
     : {
         attribution: {
-          marketplaceName: e.marketplaceName,
+          marketplaceName: attribution.marketplaceName,
         },
       };
 }
@@ -6521,20 +6903,27 @@ function attributionFromManifest(e) {
 /**
  * 插件名非法时的 manifest-validation-error。
  */
-function invalidPluginNameError(plugin, source, manifestPath, s, h, y) {
-  let S = manifestPath === null || basename(manifestPath) === "SKILL.md";
-  if (isPluginNameAcceptable(plugin.name, S, s))
+function invalidPluginNameError(
+  plugin,
+  source,
+  manifestPath,
+  isSyncedMarketplace,
+  declaredPath,
+  attribution,
+) {
+  let namedAfterDirectory = manifestPath === null || basename(manifestPath) === "SKILL.md";
+  if (isPluginNameAcceptable(plugin.name, namedAfterDirectory, isSyncedMarketplace))
     return {
       type: "manifest-validation-error",
       source,
       manifestPath: manifestPath ?? plugin.path,
       validationErrors: [
-        `name: "${stripInvisibleKeepEmoji(plugin.name)}" is not a valid plugin name (must be non-empty and must not contain "@", ":", whitespace, path separators, or invisible/control characters)${S ? " \u2014 this plugin is named after its directory; rename the directory" : ""}`,
+        `name: "${stripInvisibleKeepEmoji(plugin.name)}" is not a valid plugin name (must be non-empty and must not contain "@", ":", whitespace, path separators, or invisible/control characters)${namedAfterDirectory ? " \u2014 this plugin is named after its directory; rename the directory" : ""}`,
       ],
-      ...(h !== undefined && {
-        path: h,
+      ...(declaredPath !== undefined && {
+        path: declaredPath,
       }),
-      ...(y !== undefined && attributionFromManifest(y)),
+      ...(attribution !== undefined && attributionFromManifest(attribution)),
     };
   return null;
 }
@@ -6542,32 +6931,32 @@ function invalidPluginNameError(plugin, source, manifestPath, s, h, y) {
 /**
  * 记一次桌面技能目录保留命名空间检查结果。
  */
-function logReservedNamespaceWrapperCheck(e) {
-  if (e.length === 0 || !claimOnce().claim("skill_reserved_namespace_wrapper_check")) return;
-  let folders = e.length;
-  let r = {
+function logReservedNamespaceWrapperCheck(folderChecks) {
+  if (folderChecks.length === 0 || !claimOnce().claim("skill_reserved_namespace_wrapper_check")) return;
+  let folders = folderChecks.length;
+  let desktopFolderFields = {
     desktop_skills_folder_path: fromEnum(
       desktopSkillsPluginDir() === undefined
         ? "not_sent"
-        : e.some((h) => h.isNamedFolder)
+        : folderChecks.some((check) => check.isNamedFolder)
           ? "matched"
           : "not_matched",
     ),
   };
-  if (e.some((h) => h.failedLeg === undefined)) {
+  if (folderChecks.some((check) => check.failedLeg === undefined)) {
     logFeatureOk("skill_reserved_namespace", {
       check: lit_2("desktop_wrapper_marked"),
       folders,
-      ...r,
+      ...desktopFolderFields,
     });
     return;
   }
-  let failedLeg = e[0]?.failedLeg;
+  let failedLeg = folderChecks[0]?.failedLeg;
   if (failedLeg !== undefined)
     logFeatureSad("skill_reserved_namespace", "desktop_wrapper_unmarked", {
       failed_leg: fromEnum(failedLeg),
       folders,
-      ...r,
+      ...desktopFolderFields,
     });
 }
 //@ chunk-e6aww6q8.js:4600076-4600286 placement
@@ -6583,8 +6972,8 @@ function dropUnprintableManifestVersion(plugin) {
   }
 }
 //@ chunk-e6aww6q8.js:4600286-4600471 placement
-function isOperatorSettingSource_2(e) {
-  switch (e) {
+function isOperatorSettingSource_2(settingSource) {
+  switch (settingSource) {
     case "userSettings":
     case "flagSettings":
     case "policySettings":
@@ -6602,34 +6991,37 @@ function isOperatorSettingSource_2(e) {
  * 插件在设置中被显式禁用（可只认操作者设置）。
  */
 function isPluginDisabledBySettings(
-  e,
+  pluginName,
   marketplaceName,
   enabledPluginsIndexed,
-  s,
-  { repoAuthoredContent: h = false, installationPreference: y } = {},
+  alternateName,
+  { repoAuthoredContent = false, installationPreference } = {},
 ) {
-  if (isRequiredPlugin(`${e}@${marketplaceName}`, y)) return false;
-  let S = h ? settingsSourcesReversed() : undefined;
-  let w = (L) => {
-    let pluginSetting = findPluginSetting(L, enabledPluginsIndexed);
+  if (isRequiredPlugin(`${pluginName}@${marketplaceName}`, installationPreference)) return false;
+  let reversedSources = repoAuthoredContent ? settingsSourcesReversed() : undefined;
+  let isDisabledIn = (pluginId) => {
+    let pluginSetting = findPluginSetting(pluginId, enabledPluginsIndexed);
     if (pluginSetting === undefined || pluginSetting.enabled) return false;
-    if (S === undefined) return true;
-    let q = S[pluginSetting.index];
-    return q !== undefined && isOperatorSettingSource_2(q);
+    if (reversedSources === undefined) return true;
+    let settingSource = reversedSources[pluginSetting.index];
+    return settingSource !== undefined && isOperatorSettingSource_2(settingSource);
   };
-  return w(`${e}@${marketplaceName}`) || (s !== undefined && w(`${s}@${marketplaceName}`));
+  return (
+    isDisabledIn(`${pluginName}@${marketplaceName}`) ||
+    (alternateName !== undefined && isDisabledIn(`${alternateName}@${marketplaceName}`))
+  );
 }
 //@ chunk-e6aww6q8.js:4600772-4600925 placement
-function isUnderOriginalCwd(e) {
-  let originalCwd = getOriginalCwd();
+function isUnderOriginalCwd(targetPath) {
+  let path = getOriginalCwd();
   if (
-    isPathWithin_2(originalCwd, e, {
+    isPathWithin_2(path, targetPath, {
       foldCase: true,
     })
   )
     return true;
-  let r = (s) => resolve_2(s).normalize("NFC").toLowerCase();
-  return isPathWithin_2(r(originalCwd), r(e), {
+  let toComparable = (path) => resolve_2(path).normalize("NFC").toLowerCase();
+  return isPathWithin_2(toComparable(path), toComparable(targetPath), {
     alreadyComparable: true,
   });
 }
@@ -6637,8 +7029,10 @@ function isUnderOriginalCwd(e) {
 function ghIsDangerousCallback(_rawCommand, args) {
   return (args ? replaceAll(_rawCommand, args, redactUrlQuery(args)) : _rawCommand)
     .split(/(\s+)/)
-    .map((s) =>
-      s.includes("://") && /["'`<>]/.test(s) && /[@?#]/.test(s) ? REDACTED_URL : redactUrlsInLoadError(s),
+    .map((token) =>
+      token.includes("://") && /["'`<>]/.test(token) && /[@?#]/.test(token)
+        ? REDACTED_URL
+        : redactUrlsInLoadError(token),
     )
     .join("");
 }
@@ -6646,16 +7040,16 @@ function ghIsDangerousCallback(_rawCommand, args) {
 /**
  * 错误文字中的 URL 脱敏（含凭证与查询串）。
  */
-function redactUrlsInLoadError(e) {
-  let replaced = e.replace(/[a-z][a-z0-9+.-]{0,31}:\/\/[^\s"']*/gi, (r, s) => {
-    if (/[?#]/.test(r)) return redactUrlsTracked(r);
-    let index = r.indexOf("@");
-    if (index === -1) return r;
-    let y = s === 0 || /[([]/.test(e[s - 1] ?? "");
-    let sliced = r.slice(r.indexOf("//") + 2, index);
-    return y && index === r.lastIndexOf("@") && !sliced.includes(":")
-      ? redactUrlQuery(r)
-      : redactUrlsTracked(r);
+function redactUrlsInLoadError(rawText) {
+  let replaced = rawText.replace(/[a-z][a-z0-9+.-]{0,31}:\/\/[^\s"']*/gi, (match, matchOffset) => {
+    if (/[?#]/.test(match)) return redactUrlsTracked(match);
+    let index = match.indexOf("@");
+    if (index === -1) return match;
+    let atTokenStart = matchOffset === 0 || /[([]/.test(rawText[matchOffset - 1] ?? "");
+    let sliced = match.slice(match.indexOf("//") + 2, index);
+    return atTokenStart && index === match.lastIndexOf("@") && !sliced.includes(":")
+      ? redactUrlQuery(match)
+      : redactUrlsTracked(match);
   });
   return redactUrlsInMessage(replaced).replace(/\?[^\s"']*/g, "");
 }
@@ -6673,28 +7067,31 @@ async function loadSessionOnlyPlugins(
       errors: [],
       warnings: [],
     };
-  let y;
+  let syncedDirList;
   let results = await Promise.all(
-    specs.map(async (spec, Se) => {
-      let ke = commandIdGeneration();
-      let we =
+    specs.map(async (spec, index) => {
+      let generation = commandIdGeneration();
+      let attribution =
         spec.kind === "url"
           ? {}
           : {
               unread: true,
             };
-      let Ee;
+      let tempDownload;
       let wrapperCheck;
-      let Ie;
+      let successorDir;
       try {
-        let Me;
-        let We;
+        let pluginPath;
+        let previewFile;
         if (spec.kind === "url") {
           let sessionPluginCachePath = await getSessionPluginCachePath();
-          let It = new URL(spec.value);
-          let Yt = It.origin + It.pathname;
-          let qt = basename(It.pathname).replace(/\.zip$/i, "") || "download";
-          Me = join(sessionPluginCachePath, `url-${Se}-${qt.replace(/[^a-zA-Z0-9\-_]/g, "-")}.zip`);
+          let parsedUrl = new URL(spec.value);
+          let urlLabel = parsedUrl.origin + parsedUrl.pathname;
+          let baseName = basename(parsedUrl.pathname).replace(/\.zip$/i, "") || "download";
+          pluginPath = join(
+            sessionPluginCachePath,
+            `url-${index}-${baseName.replace(/[^a-zA-Z0-9\-_]/g, "-")}.zip`,
+          );
           try {
             let response = await fetch(spec.value, {
               ...getProxyFetchOptions({
@@ -6703,89 +7100,94 @@ async function loadSessionOnlyPlugins(
               signal: AbortSignal.timeout(PLUGIN_ZIP_FETCH_TIMEOUT_MS),
             });
             if (!response.ok || !response.body)
-              throw Error(`HTTP ${response.status} ${response.statusText} from ${Yt}`);
-            let rn = Number(response.headers.get("content-length"));
-            if (rn > MAX_SPILL_BYTES)
-              throw Error(`Plugin archive too large (${rn} bytes, max ${MAX_SPILL_BYTES}) from ${Yt}`);
-            let pn = 0;
-            let no = Readable.fromWeb(response.body);
-            no.on("data", (ho) => {
-              pn += ho.byteLength;
-              if (pn > MAX_SPILL_BYTES)
-                no.destroy(Error(`Plugin archive exceeded ${MAX_SPILL_BYTES} bytes from ${Yt}`));
+              throw Error(`HTTP ${response.status} ${response.statusText} from ${urlLabel}`);
+            let contentLength = Number(response.headers.get("content-length"));
+            if (contentLength > MAX_SPILL_BYTES)
+              throw Error(
+                `Plugin archive too large (${contentLength} bytes, max ${MAX_SPILL_BYTES}) from ${urlLabel}`,
+              );
+            let received = 0;
+            let body = Readable.fromWeb(response.body);
+            body.on("data", (chunk) => {
+              received += chunk.byteLength;
+              if (received > MAX_SPILL_BYTES)
+                body.destroy(Error(`Plugin archive exceeded ${MAX_SPILL_BYTES} bytes from ${urlLabel}`));
             });
-            let hn = `${Me}.${preview ? "preview-" : ""}${randomBytes(4).toString("hex")}.part`;
-            Ee = hn;
-            await pipeline(no, createWriteStream(hn));
-            if (preview) We = hn;
+            let partPath = `${pluginPath}.${preview ? "preview-" : ""}${randomBytes(4).toString("hex")}.part`;
+            tempDownload = partPath;
+            await pipeline(body, createWriteStream(partPath));
+            if (preview) previewFile = partPath;
             else {
-              await retryFsOp(hn, Me);
-              Ee = undefined;
+              await retryFsOp(partPath, pluginPath);
+              tempDownload = undefined;
             }
-            logForDebugging(`Downloaded inline plugin from ${Yt}`);
+            logForDebugging(`Downloaded inline plugin from ${urlLabel}`);
           } catch (error) {
-            if (!(await pathExists(Me))) throw error;
-            logForDebugging(`Re-fetch of inline plugin from ${Yt} failed; reusing cached ${Me}`, {
-              level: "warn",
-            });
+            if (!(await pathExists(pluginPath))) throw error;
+            logForDebugging(
+              `Re-fetch of inline plugin from ${urlLabel} failed; reusing cached ${pluginPath}`,
+              {
+                level: "warn",
+              },
+            );
           }
         } else {
-          Me = resolve_2(spec.value);
+          pluginPath = resolve_2(spec.value);
           markSyncedFolderRefused();
-          let At;
+          let firstErrno;
           try {
-            await stat(Me);
+            await stat_2(pluginPath);
           } catch (error) {
-            At = getErrnoCode(error) ?? "UNKNOWN";
+            firstErrno = getErrnoCode(error) ?? "UNKNOWN";
           }
-          let It = At;
-          if (At !== undefined && Me.startsWith("/mnt/")) {
+          let priorErrno = firstErrno;
+          if (firstErrno !== undefined && pluginPath.startsWith("/mnt/")) {
             await sleep(250);
             try {
-              await stat(Me);
+              await stat_2(pluginPath);
               logForDebugging(
-                `Plugin path ${Me}: first stat failed with ${At}, retry succeeded (transient mount race)`,
+                `Plugin path ${pluginPath}: first stat failed with ${firstErrno}, retry succeeded (transient mount race)`,
                 {
                   level: "warn",
                 },
               );
-              At = undefined;
+              firstErrno = undefined;
             } catch (error) {
-              At = getErrnoCode(error) ?? "UNKNOWN";
+              firstErrno = getErrnoCode(error) ?? "UNKNOWN";
             }
           }
-          if (At === "ENOENT" && marketplaceName === SYNCED) {
-            y ??= listSyncedPluginDirsOnly().catch((error) => {
+          if (firstErrno === "ENOENT" && marketplaceName === SYNCED) {
+            syncedDirList ??= listSyncedPluginDirsOnly().catch((error) => {
               logError(error);
               return [];
             });
-            let Yt = Me;
-            let resolvedPath = stripGenerationSuffix(basename(Yt));
-            let found = (await y)
-              .map((rn) => resolve_2(rn))
+            let staleDir = pluginPath;
+            let resolvedPath = stripGenerationSuffix(basename(staleDir));
+            let found = (await syncedDirList)
+              .map((candidate) => resolve_2(candidate))
               .find(
-                (rn) =>
-                  rn !== Yt &&
-                  dirname(rn) === dirname(Yt) &&
-                  stripGenerationSuffix(basename(rn)) === resolvedPath &&
-                  !specs.some((spec) => spec.kind === "path" && resolve_2(spec.value) === rn),
+                (candidate) =>
+                  candidate !== staleDir &&
+                  dirname(candidate) === dirname(staleDir) &&
+                  stripGenerationSuffix(basename(candidate)) === resolvedPath &&
+                  !specs.some((spec) => spec.kind === "path" && resolve_2(spec.value) === candidate),
               );
             if (found !== undefined) {
               markSyncedPluginDirsLoadedHere([found]);
               try {
-                await stat(found);
+                await stat_2(found);
                 logForDebugging(
-                  `Synced plugin dir ${Yt} is gone; the sync manifest now places it at ${found}, loading that`,
+                  `Synced plugin dir ${staleDir} is gone; the sync manifest now places it at ${found}, loading that`,
                   {
                     level: "warn",
                   },
                 );
-                Me = found;
-                At = undefined;
-                Ie = found;
+                pluginPath = found;
+                firstErrno = undefined;
+                successorDir = found;
               } catch (error) {
                 logForDebugging(
-                  `Synced plugin dir ${Yt} is gone and its manifest successor ${found} did not stat either (${getErrnoCode(error) ?? "UNKNOWN"})`,
+                  `Synced plugin dir ${staleDir} is gone and its manifest successor ${found} did not stat either (${getErrnoCode(error) ?? "UNKNOWN"})`,
                   {
                     level: "warn",
                   },
@@ -6793,23 +7195,26 @@ async function loadSessionOnlyPlugins(
               }
             }
           }
-          we = await getPluginAttribution(Me);
-          if (At !== undefined) {
-            let Yt = At !== "ENOENT" ? At : It !== "ENOENT" ? It : undefined;
+          attribution = await getPluginAttribution(pluginPath);
+          if (firstErrno !== undefined) {
+            let errno =
+              firstErrno !== "ENOENT" ? firstErrno : priorErrno !== "ENOENT" ? priorErrno : undefined;
             logForDebugging(
-              `Plugin path does not exist: ${Me} (${At}${Yt && Yt !== At ? `, first ${Yt}` : ""}), skipping`,
+              `Plugin path does not exist: ${pluginPath} (${firstErrno}${errno && errno !== firstErrno ? `, first ${errno}` : ""}), skipping`,
               {
                 level: "warn",
               },
             );
-            let qt = directoryPluginFallbackName(Me, marketplaceName);
+            let fallbackName = directoryPluginFallbackName(pluginPath, marketplaceName);
             if (
-              isPluginDisabledBySettings(qt, marketplaceName, enabledPluginsIndexed, undefined, {
-                repoAuthoredContent: isUnderOriginalCwd(Me),
-                installationPreference: we.installationPreference,
+              isPluginDisabledBySettings(fallbackName, marketplaceName, enabledPluginsIndexed, undefined, {
+                repoAuthoredContent: isUnderOriginalCwd(pluginPath),
+                installationPreference: attribution.installationPreference,
               })
             ) {
-              logForDebugging(`Skipping load-failure error for disabled plugin ${qt}@${marketplaceName}`);
+              logForDebugging(
+                `Skipping load-failure error for disabled plugin ${fallbackName}@${marketplaceName}`,
+              );
               return {
                 plugin: undefined,
                 errors: [],
@@ -6821,11 +7226,11 @@ async function loadSessionOnlyPlugins(
               errors: [
                 {
                   type: "path-not-found",
-                  source: `${marketplaceName}[${Se}]`,
-                  path: Me,
+                  source: `${marketplaceName}[${index}]`,
+                  path: pluginPath,
                   component: "commands",
-                  ...(Yt && {
-                    errno: Yt,
+                  ...(errno && {
+                    errno,
                   }),
                 },
               ],
@@ -6833,54 +7238,60 @@ async function loadSessionOnlyPlugins(
             };
           }
         }
-        let dirName = isZipPathCaseInsensitive(Me);
-        let lt;
-        let Je = directoryPluginFallbackName(Me, marketplaceName);
+        let dirName = isZipPathCaseInsensitive(pluginPath);
+        let dirIdentity;
+        let fallbackName = directoryPluginFallbackName(pluginPath, marketplaceName);
         if (dirName) {
           let sessionPluginCachePath = await getSessionPluginCachePath();
-          let It = join(sessionPluginCachePath, `inline-${Se}-${Je.replace(/[^a-zA-Z0-9\-_]/g, "-")}`);
-          let Yt = It;
-          let qt = We ?? Me;
+          let extractDir = join(
+            sessionPluginCachePath,
+            `inline-${index}-${fallbackName.replace(/[^a-zA-Z0-9\-_]/g, "-")}`,
+          );
+          let extractTarget = extractDir;
+          let archivePath = previewFile ?? pluginPath;
           if (preview) {
-            Yt = await extractPreviewArchive(qt, sessionPluginCachePath, It);
-            logForDebugging(`Previewing inline plugin zip from ${Yt}`);
+            extractTarget = await extractPreviewArchive(archivePath, sessionPluginCachePath, extractDir);
+            logForDebugging(`Previewing inline plugin zip from ${extractTarget}`);
           } else {
-            let Zt = planArchiveExtraction(sessionPluginCachePath, It);
-            let sessionArchive = await extractSessionArchive(qt, Zt);
-            if (sessionArchive !== undefined) {
-              logForDebugging(`Extracted inline plugin zip; swapping it into ${It}`);
-              await swapInExtractedTree(Zt, sessionArchive);
-            } else logForDebugging(`Inline plugin zip unchanged; loading ${It}`);
+            let plan = planArchiveExtraction(sessionPluginCachePath, extractDir);
+            let plan_2 = await extractSessionArchive(archivePath, plan);
+            if (plan_2 !== undefined) {
+              logForDebugging(`Extracted inline plugin zip; swapping it into ${extractDir}`);
+              await swapInExtractedTree(plan, plan_2);
+            } else logForDebugging(`Inline plugin zip unchanged; loading ${extractDir}`);
           }
-          Me = await findPluginRootInExtracted(Yt);
-          if (Me !== Yt) logForDebugging(`Inline plugin zip had wrapper directory; using ${Me}`);
-          if (preview) lt = await statDirIdentity(Me, "before");
+          pluginPath = await findPluginRootInExtracted(extractTarget);
+          if (pluginPath !== extractTarget)
+            logForDebugging(`Inline plugin zip had wrapper directory; using ${pluginPath}`);
+          if (preview) dirIdentity = await statDirIdentity(pluginPath, "before");
         }
         let { plugin, errors, warnings, manifestPath } = await createPluginFromPath(
-          Me,
-          `${Je}@${marketplaceName}`,
+          pluginPath,
+          `${fallbackName}@${marketplaceName}`,
           true,
-          Je,
+          fallbackName,
           true,
           storageV5,
         );
-        if (lt !== undefined) await assertDirUnchanged(Me, lt);
-        let gt = invalidPluginNameError(
+        if (dirIdentity !== undefined) await assertDirUnchanged(pluginPath, dirIdentity);
+        let nameError = invalidPluginNameError(
           plugin,
-          `${marketplaceName}[${Se}]`,
+          `${marketplaceName}[${index}]`,
           manifestPath,
           marketplaceName === SYNCED,
           spec.kind === "path" ? resolve_2(spec.value) : undefined,
-          we,
+          attribution,
         );
-        if (gt) {
+        if (nameError) {
           if (
-            isPluginDisabledBySettings(Je, marketplaceName, enabledPluginsIndexed, plugin.name, {
+            isPluginDisabledBySettings(fallbackName, marketplaceName, enabledPluginsIndexed, plugin.name, {
               repoAuthoredContent: spec.kind === "path" && isUnderOriginalCwd(resolve_2(spec.value)),
-              installationPreference: we.installationPreference,
+              installationPreference: attribution.installationPreference,
             })
           ) {
-            logForDebugging(`Skipping load-failure error for disabled plugin ${Je}@${marketplaceName}`);
+            logForDebugging(
+              `Skipping load-failure error for disabled plugin ${fallbackName}@${marketplaceName}`,
+            );
             return {
               plugin: undefined,
               errors,
@@ -6889,7 +7300,7 @@ async function loadSessionOnlyPlugins(
           }
           return {
             plugin: undefined,
-            errors: [gt, ...errors],
+            errors: [nameError, ...errors],
             warnings,
           };
         }
@@ -6901,46 +7312,53 @@ async function loadSessionOnlyPlugins(
           marketplaceName === INLINE_PLUGIN_MARKETPLACE &&
           isTopHostSession()
         ) {
-          let At =
+          let failedLeg =
             spec.kind !== "path"
               ? "not_a_path"
               : isZipPathCaseInsensitive(spec.value)
                 ? "archive"
                 : undefined;
-          let It = desktopSkillsPluginDir();
-          let Yt =
-            At === undefined && It !== undefined && normalizeRegistryKey(It) === normalizeRegistryKey(Me);
-          if (At === undefined) plugin.accountSkillsWrapper = true;
-          if (Yt) plugin.hostNamedSkillsFolder = true;
+          let desktopSkillsDir = desktopSkillsPluginDir();
+          let isNamedFolder =
+            failedLeg === undefined &&
+            desktopSkillsDir !== undefined &&
+            normalizeRegistryKey(desktopSkillsDir) === normalizeRegistryKey(pluginPath);
+          if (failedLeg === undefined) plugin.accountSkillsWrapper = true;
+          if (isNamedFolder) plugin.hostNamedSkillsFolder = true;
           wrapperCheck = {
-            failedLeg: At,
-            isNamedFolder: Yt,
+            failedLeg,
+            isNamedFolder,
           };
         }
         if (
           marketplaceName === SYNCED &&
           spec.kind === "path" &&
           spec.attestation !== undefined &&
-          Ie === undefined &&
+          successorDir === undefined &&
           plugin.name === spec.attestation.pluginName
         )
           plugin.officialAttestation = {
             marketplace: spec.attestation.marketplace,
           };
-        if (we.serverPluginId !== undefined) plugin.serverPluginId = we.serverPluginId;
-        if (we.installationPreference !== undefined)
-          plugin.installationPreference = we.installationPreference;
-        if (we.marketplaceKind !== undefined && marketplaceName === SYNCED)
-          plugin.marketplaceKind = we.marketplaceKind;
-        if (we.marketplaceName !== undefined) {
-          plugin.attributedMarketplaceName = we.marketplaceName;
-          registerCommandId(plugin.name, marketplaceSuffix(plugin.repository), we.marketplaceName, ke);
+        if (attribution.serverPluginId !== undefined) plugin.serverPluginId = attribution.serverPluginId;
+        if (attribution.installationPreference !== undefined)
+          plugin.installationPreference = attribution.installationPreference;
+        if (attribution.marketplaceKind !== undefined && marketplaceName === SYNCED)
+          plugin.marketplaceKind = attribution.marketplaceKind;
+        if (attribution.marketplaceName !== undefined) {
+          plugin.attributedMarketplaceName = attribution.marketplaceName;
+          registerCommandId(
+            plugin.name,
+            marketplaceSuffix(plugin.repository),
+            attribution.marketplaceName,
+            generation,
+          );
         }
         plugin.enabled = isPluginEnabled_2(
           plugin.source,
           enabledPluginsIndexed,
           plugin.manifest.defaultEnabled,
-          we.installationPreference,
+          attribution.installationPreference,
         );
         if (spec.kind === "path" && spec.skipMcpDiscovery) {
           plugin.skipMcpDiscovery = true;
@@ -6954,31 +7372,32 @@ async function loadSessionOnlyPlugins(
           wrapperCheck,
         };
       } catch (error) {
-        let We = (pt) => ghIsDangerousCallback(pt, spec.kind === "url" ? spec.value : undefined);
-        let errorMsg = We(errorMessage(error));
+        let redact = (message) =>
+          ghIsDangerousCallback(message, spec.kind === "url" ? spec.value : undefined);
+        let errorMsg = redact(errorMessage(error));
         logForDebugging(
-          `Failed to load session plugin from ${spec.kind === "url" ? We(spec.value) : spec.value}: ${errorMsg}`,
+          `Failed to load session plugin from ${spec.kind === "url" ? redact(spec.value) : spec.value}: ${errorMsg}`,
           {
             level: "warn",
           },
         );
-        let lt;
-        let Je;
+        let fallbackName;
+        let path;
         if (spec.kind === "path") {
-          Je = Ie ?? resolve_2(spec.value);
-          lt = directoryPluginFallbackName(Je, marketplaceName);
+          path = successorDir ?? resolve_2(spec.value);
+          fallbackName = directoryPluginFallbackName(path, marketplaceName);
         } else
           try {
-            let pt = new URL(spec.value);
-            let Et = basename(pt.pathname).replace(/\.zip$/i, "") || "download";
-            lt = `url-${Se}-${Et.replace(/[^a-zA-Z0-9\-_]/g, "-")}`;
+            let parsedUrl = new URL(spec.value);
+            let baseName = basename(parsedUrl.pathname).replace(/\.zip$/i, "") || "download";
+            fallbackName = `url-${index}-${baseName.replace(/[^a-zA-Z0-9\-_]/g, "-")}`;
           } catch {}
-        let nt =
-          lt !== undefined && Je !== undefined && !isZipPathCaseInsensitive(Je)
+        let manifestName =
+          fallbackName !== undefined && path !== undefined && !isZipPathCaseInsensitive(path)
             ? await loadPluginManifest(
-                Je,
-                lt,
-                `${lt}@${marketplaceName}`,
+                path,
+                fallbackName,
+                `${fallbackName}@${marketplaceName}`,
                 [],
                 {
                   noTelemetry: true,
@@ -6991,13 +7410,15 @@ async function loadSessionOnlyPlugins(
                 })
             : undefined;
         if (
-          lt !== undefined &&
-          isPluginDisabledBySettings(lt, marketplaceName, enabledPluginsIndexed, nt, {
-            repoAuthoredContent: Je !== undefined && isUnderOriginalCwd(Je),
-            installationPreference: we.installationPreference,
+          fallbackName !== undefined &&
+          isPluginDisabledBySettings(fallbackName, marketplaceName, enabledPluginsIndexed, manifestName, {
+            repoAuthoredContent: path !== undefined && isUnderOriginalCwd(path),
+            installationPreference: attribution.installationPreference,
           })
         ) {
-          logForDebugging(`Skipping load-failure error for disabled plugin ${lt}@${marketplaceName}`);
+          logForDebugging(
+            `Skipping load-failure error for disabled plugin ${fallbackName}@${marketplaceName}`,
+          );
           return {
             plugin: undefined,
             errors: [],
@@ -7009,28 +7430,28 @@ async function loadSessionOnlyPlugins(
           errors: [
             {
               type: "generic-error",
-              source: `${marketplaceName}[${Se}]`,
-              error: `Failed to load plugin: ${commandSourceErrorMessage(error, We)}`,
-              ...(Je !== undefined && {
-                path: Je,
+              source: `${marketplaceName}[${index}]`,
+              error: `Failed to load plugin: ${commandSourceErrorMessage(error, redact)}`,
+              ...(path !== undefined && {
+                path,
               }),
-              ...(nt !== undefined && {
-                manifestName: nt,
+              ...(manifestName !== undefined && {
+                manifestName,
               }),
-              ...attributionFromManifest(we),
+              ...attributionFromManifest(attribution),
             },
           ],
           warnings: [],
         };
       } finally {
-        if (Ee !== undefined) {
-          let Me = Ee;
+        if (tempDownload !== undefined) {
+          let tempPath = tempDownload;
           await retryTransient(() =>
-            rm_2(Me, {
+            rm_2(tempPath, {
               force: true,
             }),
           ).catch((error) => {
-            logForDebugging(`Failed to remove the temporary download ${Me}: ${errorMessage(error)}`, {
+            logForDebugging(`Failed to remove the temporary download ${tempPath}: ${errorMessage(error)}`, {
               level: "warn",
             });
           });
@@ -7038,11 +7459,11 @@ async function loadSessionOnlyPlugins(
       }
     }),
   );
-  let flattened = results.flatMap((Z) => (Z.plugin ? [Z.plugin] : []));
-  let errors = results.flatMap((Z) => Z.errors);
-  let warnings = results.flatMap((Z) => Z.warnings);
-  let flattened_2 = results.flatMap((Z) => (Z.wrapperCheck ? [Z.wrapperCheck] : []));
-  if (flattened_2.length > 0) logReservedNamespaceWrapperCheck(flattened_2);
+  let flattened = results.flatMap((result) => (result.plugin ? [result.plugin] : []));
+  let errors = results.flatMap((result) => result.errors);
+  let warnings = results.flatMap((result) => result.warnings);
+  let folderChecks = results.flatMap((result) => (result.wrapperCheck ? [result.wrapperCheck] : []));
+  if (folderChecks.length > 0) logReservedNamespaceWrapperCheck(folderChecks);
   if (flattened.length > 0) logForDebugging(`Loaded ${flattened.length} directory-loaded plugins`);
   return {
     plugins: flattened,
@@ -7051,62 +7472,62 @@ async function loadSessionOnlyPlugins(
   };
 }
 //@ chunk-e6aww6q8.js:4607537-4607820 placement = isRealPathWithinTeamDir (0.772)
-async function listDirNamesSet(e, n) {
-  let r = isStorageV5Enabled() && e !== undefined ? thinkbackStorageKey(n) : null;
-  if (e !== undefined && r !== null) {
-    let s = await listStorageScopeNames(e, r);
-    if (s.error === undefined) return new Set(s.names.map(({ name: h }) => h));
-    throw Error(formatStorageError(s.error));
+async function listDirNamesSet(storageV5, dir) {
+  let storageKey = isStorageV5Enabled() && storageV5 !== undefined ? thinkbackStorageKey(dir) : null;
+  if (storageV5 !== undefined && storageKey !== null) {
+    let listing = await listStorageScopeNames(storageV5, storageKey);
+    if (listing.error === undefined) return new Set(listing.names.map(({ name }) => name));
+    throw Error(formatStorageError(listing.error));
   }
   try {
-    return new Set(await readdir(n));
+    return new Set(await readdir(dir));
   } catch (error) {
     if (isENOENT(error) || getErrnoCode(error) === "ENOTDIR") return new Set();
     throw error;
   }
 }
 //@ chunk-e6aww6q8.js:4607820-4607906 placement
-async function hasClaudePluginEntry(e, dir, r) {
-  if ((await listDirNamesSet(e, dir)).has(".claude-plugin")) return true;
+async function hasClaudePluginEntry(storageV5, dir, dirName) {
+  if ((await listDirNamesSet(storageV5, dir)).has(".claude-plugin")) return true;
   return false;
 }
 //@ chunk-e6aww6q8.js:4607906-4611594 placement
-async function loadSkillsAsPlugins(storageV5, enabledPluginsBySource = getEnabledPluginsBySource()) {
+async function loadSkillsAsPlugins(storageV5, enabledPluginsIndexed = getEnabledPluginsBySource()) {
   let skillsAsPlugins = await loadSkillsAsPlugins_2(storageV5);
-  let s = [];
-  let h = isPersonalConfigRestricted();
-  let y = 0;
+  let untrusted = [];
+  let restrictPersonal = isPersonalConfigRestricted();
+  let restrictedCount = 0;
   let filtered = skillsAsPlugins.filter((skillsAsPlugin) => {
     if (skillsAsPlugin.scope === "project" && !isWorkspaceTrustedForMarketplace()) {
-      s.push(skillsAsPlugin);
+      untrusted.push(skillsAsPlugin);
       return false;
     }
-    if (skillsAsPlugin.scope === "user" && h) {
-      y++;
+    if (skillsAsPlugin.scope === "user" && restrictPersonal) {
+      restrictedCount++;
       return false;
     }
     return true;
   });
-  if (y > 0)
+  if (restrictedCount > 0)
     logForDebugging(
-      `[skill-as-plugin] not loading plugins from ${y} folder(s) in your own skills directory (CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG); they load as skills only`,
+      `[skill-as-plugin] not loading plugins from ${restrictedCount} folder(s) in your own skills directory (CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG); they load as skills only`,
     );
-  let w = (we, scope, Ae) =>
-    isPluginDisabledBySettings(we, SKILLS_DIR, enabledPluginsBySource, Ae, {
+  let isDisabled = (name, scope, manifestName) =>
+    isPluginDisabledBySettings(name, SKILLS_DIR, enabledPluginsIndexed, manifestName, {
       repoAuthoredContent: scope === "project",
     });
-  let L = await pMap(
+  let results = await pMap(
     filtered,
     async ({ dir, scope }) => {
       await new Promise((resolve) => setImmediate(resolve));
-      let Ae = basename(dir);
+      let dirName = basename(dir);
       try {
-        if (!(await hasClaudePluginEntry(storageV5, dir, Ae).catch(() => false))) return null;
+        if (!(await hasClaudePluginEntry(storageV5, dir, dirName).catch(() => false))) return null;
         let { plugin, errors, warnings, hasManifest, manifestPath } = await createPluginFromPath(
           dir,
-          `${Ae}@${SKILLS_DIR}`,
+          `${dirName}@${SKILLS_DIR}`,
           true,
-          Ae,
+          dirName,
           false,
           storageV5,
         );
@@ -7118,10 +7539,10 @@ async function loadSkillsAsPlugins(storageV5, enabledPluginsBySource = getEnable
                 warnings,
               }
             : null;
-        let Je = invalidPluginNameError(plugin, `${Ae}@${SKILLS_DIR}`, manifestPath, false);
-        if (Je) {
-          if (w(Ae, scope, plugin.name)) {
-            logForDebugging(`Skipping load-failure error for disabled plugin ${Ae}@${SKILLS_DIR}`);
+        let nameError = invalidPluginNameError(plugin, `${dirName}@${SKILLS_DIR}`, manifestPath, false);
+        if (nameError) {
+          if (isDisabled(dirName, scope, plugin.name)) {
+            logForDebugging(`Skipping load-failure error for disabled plugin ${dirName}@${SKILLS_DIR}`);
             return errors.length || warnings.length
               ? {
                   plugin: null,
@@ -7132,7 +7553,7 @@ async function loadSkillsAsPlugins(storageV5, enabledPluginsBySource = getEnable
           }
           return {
             plugin: null,
-            errors: [Je, ...errors],
+            errors: [nameError, ...errors],
             warnings,
           };
         }
@@ -7141,7 +7562,9 @@ async function loadSkillsAsPlugins(storageV5, enabledPluginsBySource = getEnable
         plugin.repository = plugin.source;
         plugin.scope = scope;
         if (scope === "project") {
-          let mapped = (plugin.monitors ?? []).map((pt, Et) => pt.name ?? `#${Et + 1}`);
+          let mapped = (plugin.monitors ?? []).map(
+            (monitor, monitorIndex) => monitor.name ?? `#${monitorIndex + 1}`,
+          );
           if (mapped.length > 0)
             warnings.push({
               type: "project-scope-server-stripped",
@@ -7158,10 +7581,10 @@ async function loadSkillsAsPlugins(storageV5, enabledPluginsBySource = getEnable
           warnings,
         };
       } catch (error) {
-        let Me = await loadPluginManifest(
+        let manifestName = await loadPluginManifest(
           dir,
-          Ae,
-          `${Ae}@${SKILLS_DIR}`,
+          dirName,
+          `${dirName}@${SKILLS_DIR}`,
           [],
           {
             noTelemetry: true,
@@ -7172,16 +7595,16 @@ async function loadSkillsAsPlugins(storageV5, enabledPluginsBySource = getEnable
           .catch(() => {
             return;
           });
-        if (w(Ae, scope, Me)) {
-          logForDebugging(`Skipping load-failure error for disabled plugin ${Ae}@${SKILLS_DIR}`);
+        if (isDisabled(dirName, scope, manifestName)) {
+          logForDebugging(`Skipping load-failure error for disabled plugin ${dirName}@${SKILLS_DIR}`);
           return null;
         }
         return {
           plugin: null,
           errors: [
-            manifestErrorToPluginError(error, `${Ae}@${SKILLS_DIR}`, undefined) ?? {
+            manifestErrorToPluginError(error, `${dirName}@${SKILLS_DIR}`, undefined) ?? {
               type: "generic-error",
-              source: `${Ae}@${SKILLS_DIR}`,
+              source: `${dirName}@${SKILLS_DIR}`,
               error: `Failed to load skill folder as plugin: ${printableMessage(error)}`,
             },
           ],
@@ -7193,213 +7616,240 @@ async function loadSkillsAsPlugins(storageV5, enabledPluginsBySource = getEnable
       concurrency: 32,
     },
   );
-  let G = [];
-  let q = [];
-  let Z = new Map();
-  for (let we of L) {
-    if (!we) continue;
-    if (!we.plugin) {
-      G.push(...we.errors);
-      q.push(...we.warnings);
+  let errors = [];
+  let warnings = [];
+  let pluginsByName = new Map();
+  for (let result of results) {
+    if (!result) continue;
+    if (!result.plugin) {
+      errors.push(...result.errors);
+      warnings.push(...result.warnings);
       continue;
     }
-    let Ee = Z.get(we.plugin.name);
-    if (Ee) {
-      let Ae = Ee.scope !== we.plugin.scope;
-      G.push({
+    let existingPlugin = pluginsByName.get(result.plugin.name);
+    if (existingPlugin) {
+      let scopeDiffers = existingPlugin.scope !== result.plugin.scope;
+      errors.push({
         type: "generic-error",
         orphan: true,
-        source: `${basename(we.plugin.path)}@${SKILLS_DIR}`,
-        error: Ae
-          ? `Not loaded \u2014 your ${printableOrEmpty(displaySkillsDirPath(Ee))} (same plugin name "${quotedPrintable(we.plugin.name)}") shadowed the project's ${printableOrEmpty(displaySkillsDirPath(we.plugin))}. To use the project's copy here, rename or move yours.`
-          : `Not loaded \u2014 same plugin name "${quotedPrintable(we.plugin.name)}" as ${printableOrEmpty(displaySkillsDirPath(Ee))} (which loaded instead). Delete ${printableOrEmpty(displaySkillsDirPath(we.plugin))}, or give it a different "name" in its plugin.json.`,
+        source: `${basename(result.plugin.path)}@${SKILLS_DIR}`,
+        error: scopeDiffers
+          ? `Not loaded \u2014 your ${printableOrEmpty(displaySkillsDirPath(existingPlugin))} (same plugin name "${quotedPrintable(result.plugin.name)}") shadowed the project's ${printableOrEmpty(displaySkillsDirPath(result.plugin))}. To use the project's copy here, rename or move yours.`
+          : `Not loaded \u2014 same plugin name "${quotedPrintable(result.plugin.name)}" as ${printableOrEmpty(displaySkillsDirPath(existingPlugin))} (which loaded instead). Delete ${printableOrEmpty(displaySkillsDirPath(result.plugin))}, or give it a different "name" in its plugin.json.`,
       });
       continue;
     }
-    G.push(...we.errors);
-    q.push(...we.warnings);
-    Z.set(we.plugin.name, we.plugin);
+    errors.push(...result.errors);
+    warnings.push(...result.warnings);
+    pluginsByName.set(result.plugin.name, result.plugin);
   }
-  let Se = [...Z.values()];
-  for (let we of Se)
-    we.enabled = isPluginEnabled_2(we.source, enabledPluginsBySource, we.manifest.defaultEnabled, undefined);
+  let plugins = [...pluginsByName.values()];
+  for (let plugin of plugins)
+    plugin.enabled = isPluginEnabled_2(
+      plugin.source,
+      enabledPluginsIndexed,
+      plugin.manifest.defaultEnabled,
+      undefined,
+    );
   let filtered_2 = (
     await pMap(
-      s,
-      async (we) => {
+      untrusted,
+      async (candidate) => {
         await new Promise((resolve) => setImmediate(resolve));
         try {
-          return (await hasClaudePluginEntry(storageV5, we.dir, basename(we.dir))) ? we : null;
+          return (await hasClaudePluginEntry(storageV5, candidate.dir, basename(candidate.dir)))
+            ? candidate
+            : null;
         } catch {
-          return we;
+          return candidate;
         }
       },
       {
         concurrency: 32,
       },
     )
-  ).filter((we) => we !== null);
+  ).filter((candidate) => candidate !== null);
   if (filtered_2.length > 0) {
-    let we = filtered_2.length;
-    q.push({
+    let suppressedCount = filtered_2.length;
+    warnings.push({
       type: "project-scope-suppressed-untrusted",
       source: `(suppressed)@${SKILLS_DIR}`,
-      count: we,
-      warning: `${we} project-scope ${we === 1 ? "directory" : "directories"} under ./.claude/skills/ that may load as ${we === 1 ? "a plugin" : "plugins"} ${we === 1 ? "was" : "were"} skipped because this workspace was not trusted when plugins were scanned. After accepting the trust dialog, run /reload-plugins (or relaunch) to load what qualifies.`,
+      count: suppressedCount,
+      warning: `${suppressedCount} project-scope ${suppressedCount === 1 ? "directory" : "directories"} under ./.claude/skills/ that may load as ${suppressedCount === 1 ? "a plugin" : "plugins"} ${suppressedCount === 1 ? "was" : "were"} skipped because this workspace was not trusted when plugins were scanned. After accepting the trust dialog, run /reload-plugins (or relaunch) to load what qualifies.`,
     });
   }
   logEvent("tengu_plugin_skills_dir_loaded", {
-    count: Se.length,
-    user_count: count(Se, (we) => we.scope === "user"),
-    project_count: count(Se, (we) => we.scope === "project"),
+    count: plugins.length,
+    user_count: count(plugins, (plugin) => plugin.scope === "user"),
+    project_count: count(plugins, (plugin) => plugin.scope === "project"),
     project_suppressed_count: filtered_2.length,
-    error_count: G.length,
+    error_count: errors.length,
   });
-  if (Se.length > 0) logForDebugging(`Loaded ${Se.length} skills-as-plugins`);
+  if (plugins.length > 0) logForDebugging(`Loaded ${plugins.length} skills-as-plugins`);
   return {
-    plugins: Se,
-    errors: G,
-    warnings: q,
+    plugins,
+    errors,
+    warnings,
   };
 }
 //@ chunk-e6aww6q8.js:4611594-4611707 placement
-function localCopyShadowingSynced(e, n) {
-  let r = nfcLower(e);
-  return n.find(
-    (s) =>
-      s.enabled !== false &&
-      marketplaceSuffix(s.source) !== SYNCED &&
-      pluginNameAliases(s).some((h) => nfcLower(h) === r),
+function localCopyShadowingSynced(pluginName, plugins) {
+  let lowerName = nfcLower(pluginName);
+  return plugins.find(
+    (plugin) =>
+      plugin.enabled !== false &&
+      marketplaceSuffix(plugin.source) !== SYNCED &&
+      pluginNameAliases(plugin).some((alias) => nfcLower(alias) === lowerName),
   );
 }
 //@ chunk-e6aww6q8.js:4611707-4612189 layout
 /**
  * 操作者设置中被禁用的 synced/inline 插件名。
  */
-function collectDisabledInlineNames(e, n) {
-  let filtered = e.filter((S, w) => {
-    let L = n[w];
-    return S !== undefined && L !== undefined && L !== "policySettings" && isOperatorSettingSource_2(L);
+function collectDisabledInlineNames(records, settingSources) {
+  let filtered = records.filter((record, index) => {
+    let settingSource = settingSources[index];
+    return (
+      record !== undefined &&
+      settingSource !== undefined &&
+      settingSource !== "policySettings" &&
+      isOperatorSettingSource_2(settingSource)
+    );
   });
-  let filtered_2 = e.filter((S, w) => S !== undefined && n[w] === "localSettings");
-  let h = new Set();
-  for (let S of [...filtered, ...filtered_2])
-    for (let key of Object.keys(S?.record ?? {})) {
-      let L = normalizePluginId(key);
-      let G = marketplaceSuffix(L);
-      if (G === SYNCED || G === INLINE_PLUGIN_MARKETPLACE) h.add(L);
+  let filtered_2 = records.filter(
+    (record, index) => record !== undefined && settingSources[index] === "localSettings",
+  );
+  let inlinePluginIds = new Set();
+  for (let record of [...filtered, ...filtered_2])
+    for (let key of Object.keys(record?.record ?? {})) {
+      let pluginId = normalizePluginId(key);
+      let suffix = marketplaceSuffix(pluginId);
+      if (suffix === SYNCED || suffix === INLINE_PLUGIN_MARKETPLACE) inlinePluginIds.add(pluginId);
     }
-  let y = new Set();
-  for (let S of h) {
-    let w = nfcLower(S.slice(0, S.lastIndexOf("@")));
-    if (findPluginSetting(S, filtered)?.enabled === false) {
-      y.add(w);
+  let disabledNames = new Set();
+  for (let pluginId of inlinePluginIds) {
+    let pluginName = nfcLower(pluginId.slice(0, pluginId.lastIndexOf("@")));
+    if (findPluginSetting(pluginId, filtered)?.enabled === false) {
+      disabledNames.add(pluginName);
       continue;
     }
-    let L = nfcLower(S);
-    if (filtered_2.some((G) => G?.byFold.get(L)?.enabled === false)) y.add(w);
+    let lowerId = nfcLower(pluginId);
+    if (filtered_2.some((record) => record?.byFold.get(lowerId)?.enabled === false))
+      disabledNames.add(pluginName);
   }
-  return y;
+  return disabledNames;
 }
 //@ chunk-e6aww6q8.js:4612189-4612370 layout
-function countAdmittedPluginNames(e, managedEntries) {
-  let r = new Map();
-  for (let s of e)
+function countAdmittedPluginNames(plugins, managedEntries) {
+  let counts = new Map();
+  for (let plugin of plugins)
     if (
-      s.enabled !== false &&
-      matchPolicyPluginEntry(managedEntries, s.name, s.attributedMarketplaceName).outcome === "admitted"
+      plugin.enabled !== false &&
+      matchPolicyPluginEntry(managedEntries, plugin.name, plugin.attributedMarketplaceName).outcome ===
+        "admitted"
     ) {
-      let h = nfcLower(s.name);
-      r.set(h, (r.get(h) ?? 0) + 1);
+      let lowerName = nfcLower(plugin.name);
+      counts.set(lowerName, (counts.get(lowerName) ?? 0) + 1);
     }
-  return r;
+  return counts;
 }
 //@ chunk-e6aww6q8.js:4612370-4617007 callgraph-fingerprint = mergePluginSources (0.184)
 /**
  * 合并各来源插件（session/marketplace/skills-dir/synced/builtin），同名时按 托管策略 > 会话 > 市场 的优先级去重，托管锁定（managed）条目可强制启用/禁用，记录冲突警告。
  */
 function mergePluginSources(sources) {
-  let n = [];
-  let r = [];
+  let errors = [];
+  let warnings = [];
   let managedEntries = sources.managedEntries;
-  let h = sources.recordedDisableFolds ?? new Set();
-  for (let Se of [sources.session, sources.synced ?? []])
-    for (let ke of Se) {
+  let recordedDisableFolds = sources.recordedDisableFolds ?? new Set();
+  for (let pluginList of [sources.session, sources.synced ?? []])
+    for (let plugin of pluginList) {
       if (
-        matchPolicyPluginEntry(managedEntries, ke.name, ke.attributedMarketplaceName).outcome !== "admitted"
+        matchPolicyPluginEntry(managedEntries, plugin.name, plugin.attributedMarketplaceName).outcome !==
+        "admitted"
       )
         continue;
-      if (h.has(nfcLower(ke.name)) && !isRequiredPlugin(ke.source, ke.installationPreference)) {
-        ke.enabled = false;
-        r.push({
+      if (
+        recordedDisableFolds.has(nfcLower(plugin.name)) &&
+        !isRequiredPlugin(plugin.source, plugin.installationPreference)
+      ) {
+        plugin.enabled = false;
+        warnings.push({
           type: "managed-plugin-disabled-by-settings",
-          source: ke.source,
+          source: plugin.source,
         });
-      } else if (ke.enabled === false) ke.enabled = true;
+      } else if (plugin.enabled === false) plugin.enabled = true;
     }
-  let y = countAdmittedPluginNames(sources.session, managedEntries);
-  let S = countAdmittedPluginNames(sources.synced ?? [], managedEntries);
-  let sessionPlugins = sources.session.filter((Se) => {
-    let ke = matchPolicyPluginEntry(managedEntries, Se.name, Se.attributedMarketplaceName);
-    if (ke.outcome === "locked") {
-      let we =
-        Se.attributedMarketplaceName !== undefined ||
-        Se.serverPluginId !== undefined ||
-        Se.installationPreference !== undefined;
+  let sessionNameCounts = countAdmittedPluginNames(sources.session, managedEntries);
+  let syncedNameCounts = countAdmittedPluginNames(sources.synced ?? [], managedEntries);
+  let sessionPlugins = sources.session.filter((plugin) => {
+    let decision = matchPolicyPluginEntry(managedEntries, plugin.name, plugin.attributedMarketplaceName);
+    if (decision.outcome === "locked") {
+      let isAttributedCopy =
+        plugin.attributedMarketplaceName !== undefined ||
+        plugin.serverPluginId !== undefined ||
+        plugin.installationPreference !== undefined;
       logForDebugging(
-        `Plugin "${Se.name}" from ${we ? "a sync-attributed directory" : "--plugin-dir"} is blocked by managed settings`,
+        `Plugin "${plugin.name}" from ${isAttributedCopy ? "a sync-attributed directory" : "--plugin-dir"} is blocked by managed settings`,
         {
           level: "warn",
         },
       );
-      n.push({
+      errors.push({
         type: "generic-error",
         orphan: true,
-        source: Se.source,
-        plugin: Se.name,
-        error: `${we ? "sync-attributed" : "--plugin-dir"} copy of "${quotedPrintable(Se.name)}" ignored: plugin is locked by managed settings`,
+        source: plugin.source,
+        plugin: plugin.name,
+        error: `${isAttributedCopy ? "sync-attributed" : "--plugin-dir"} copy of "${quotedPrintable(plugin.name)}" ignored: plugin is locked by managed settings`,
       });
       return false;
     }
-    if (ke.outcome === "admitted" && Se.enabled !== false) {
-      let we = nfcLower(Se.name);
-      if ((y.get(we) ?? 0) > 1) {
-        n.push({
+    if (decision.outcome === "admitted" && plugin.enabled !== false) {
+      let lowerName = nfcLower(plugin.name);
+      if ((sessionNameCounts.get(lowerName) ?? 0) > 1) {
+        errors.push({
           type: "generic-error",
           orphan: true,
-          source: Se.source,
-          plugin: Se.name,
-          error: `sync-attributed copy of "${quotedPrintable(Se.name)}" ignored: multiple session copies claim the managed plugin's marketplace, so none is loaded`,
+          source: plugin.source,
+          plugin: plugin.name,
+          error: `sync-attributed copy of "${quotedPrintable(plugin.name)}" ignored: multiple session copies claim the managed plugin's marketplace, so none is loaded`,
         });
         return false;
       }
-      let Ee = nfcLower(Se.name);
-      let Ae =
+      let admittedName = nfcLower(plugin.name);
+      let shadowingPlugin =
         [...sources.marketplace, ...sources.builtin].find(
-          (Ie) => Ie.enabled !== false && pluginNameAliases(Ie).some((Me) => nfcLower(Me) === Ee),
+          (candidatePlugin) =>
+            candidatePlugin.enabled !== false &&
+            pluginNameAliases(candidatePlugin).some((alias) => nfcLower(alias) === admittedName),
         ) ??
         sources.synced?.find(
-          (Ie) =>
-            Ie.enabled !== false &&
-            nfcLower(Ie.name) === Ee &&
-            matchPolicyPluginEntry(managedEntries, Ie.name, Ie.attributedMarketplaceName).outcome ===
-              "admitted",
+          (candidatePlugin) =>
+            candidatePlugin.enabled !== false &&
+            nfcLower(candidatePlugin.name) === admittedName &&
+            matchPolicyPluginEntry(
+              managedEntries,
+              candidatePlugin.name,
+              candidatePlugin.attributedMarketplaceName,
+            ).outcome === "admitted",
         );
-      if (Ae) {
-        logForDebugging(`Admitted session copy of managed plugin "${Se.name}" shadowed by ${Ae.source}`);
-        r.push({
+      if (shadowingPlugin) {
+        logForDebugging(
+          `Admitted session copy of managed plugin "${plugin.name}" shadowed by ${shadowingPlugin.source}`,
+        );
+        warnings.push({
           type: "synced-plugin-shadowed",
           orphan: true,
-          source: Se.source,
-          shadowedBy: stripInvisibleKeepEmoji(Ae.source),
+          source: plugin.source,
+          shadowedBy: stripInvisibleKeepEmoji(shadowingPlugin.source),
         });
         return false;
       }
-      Se.admittedByManagedLock = true;
+      plugin.admittedByManagedLock = true;
       if (sources.managedHooksOnly)
-        r.push({
+        warnings.push({
           type: "managed-hooks-restricted",
-          source: Se.source,
+          source: plugin.source,
         });
     }
     return true;
@@ -7409,112 +7859,128 @@ function mergePluginSources(sources) {
       .filter((sessionPlugin) => sessionPlugin.enabled !== false)
       .map((sessionPlugin) => sessionPlugin.name),
   );
-  let marketplacePlugins = sources.marketplace.filter((Se) => {
-    if (sessionNames.has(Se.name)) {
-      logForDebugging(`Plugin "${Se.name}" from --plugin-dir overrides installed version`);
+  let marketplacePlugins = sources.marketplace.filter((marketplacePlugin) => {
+    if (sessionNames.has(marketplacePlugin.name)) {
+      logForDebugging(`Plugin "${marketplacePlugin.name}" from --plugin-dir overrides installed version`);
       return false;
     }
     return true;
   });
-  let q = [];
+  let skillPlugins = [];
   if (sources.skill?.length) {
-    let Se = new Map();
+    let nameOwners = new Map();
     for (let marketplacePlugin of marketplacePlugins)
-      Se.set(marketplacePlugin.name, `an installed plugin (${marketplacePlugin.source})`);
+      nameOwners.set(marketplacePlugin.name, `an installed plugin (${marketplacePlugin.source})`);
     for (let sessionName of sessionNames)
-      Se.set(sessionName, "a session-only plugin (--plugin-dir / --plugin-url)");
-    q = sources.skill.filter((ke) => {
-      let we =
-        matchPolicyPluginEntry(managedEntries, ke.name).outcome === "locked"
+      nameOwners.set(sessionName, "a session-only plugin (--plugin-dir / --plugin-url)");
+    skillPlugins = sources.skill.filter((skillPlugin) => {
+      let ownerDescription =
+        matchPolicyPluginEntry(managedEntries, skillPlugin.name).outcome === "locked"
           ? "managed settings"
-          : Se.get(ke.name);
-      if (!we) return true;
-      n.push({
+          : nameOwners.get(skillPlugin.name);
+      if (!ownerDescription) return true;
+      errors.push({
         type: "generic-error",
         orphan: true,
-        source: `${basename(ke.path)}@${SKILLS_DIR}`,
-        error: `Not loaded \u2014 the name "${quotedPrintable(ke.name)}" is already taken by ${quotedPrintable(we)}, which takes precedence. Give the plugin at ${printableOrEmpty(displaySkillsDirPath(ke))} a different "name" (in plugin.json or SKILL.md frontmatter) to load this copy.`,
+        source: `${basename(skillPlugin.path)}@${SKILLS_DIR}`,
+        error: `Not loaded \u2014 the name "${quotedPrintable(skillPlugin.name)}" is already taken by ${quotedPrintable(ownerDescription)}, which takes precedence. Give the plugin at ${printableOrEmpty(displaySkillsDirPath(skillPlugin))} a different "name" (in plugin.json or SKILL.md frontmatter) to load this copy.`,
       });
       return false;
     });
   }
-  let Z = [];
+  let syncedPlugins = [];
   if (sources.synced?.length) {
-    let Se = new Map();
-    for (let we of [sessionPlugins, marketplacePlugins, q, sources.builtin])
-      for (let Ee of we)
-        for (let Ae of pluginNameAliases(Ee)) {
-          let Ie = nfcLower(Ae);
-          if (Ee.enabled !== false && !Se.has(Ie)) Se.set(Ie, Ee.source);
+    let localNameOwners = new Map();
+    for (let pluginList of [sessionPlugins, marketplacePlugins, skillPlugins, sources.builtin])
+      for (let plugin of pluginList)
+        for (let alias of pluginNameAliases(plugin)) {
+          let lowerAlias = nfcLower(alias);
+          if (plugin.enabled !== false && !localNameOwners.has(lowerAlias))
+            localNameOwners.set(lowerAlias, plugin.source);
         }
-    let ke = new Map();
-    Z = sources.synced.filter((we) => {
-      let Ee = matchPolicyPluginEntry(managedEntries, we.name, we.attributedMarketplaceName);
-      if (Ee.outcome === "locked") {
-        n.push({
+    let firstSyncedByName = new Map();
+    syncedPlugins = sources.synced.filter((syncedPlugin) => {
+      let decision = matchPolicyPluginEntry(
+        managedEntries,
+        syncedPlugin.name,
+        syncedPlugin.attributedMarketplaceName,
+      );
+      if (decision.outcome === "locked") {
+        errors.push({
           type: "generic-error",
           orphan: true,
-          source: we.source,
-          error: `claude.ai-synced copy of "${we.name}" ignored: plugin is locked by managed settings`,
+          source: syncedPlugin.source,
+          error: `claude.ai-synced copy of "${syncedPlugin.name}" ignored: plugin is locked by managed settings`,
         });
         return false;
       }
-      if (Ee.outcome === "admitted" && we.enabled !== false && (S.get(nfcLower(we.name)) ?? 0) > 1) {
-        n.push({
+      if (
+        decision.outcome === "admitted" &&
+        syncedPlugin.enabled !== false &&
+        (syncedNameCounts.get(nfcLower(syncedPlugin.name)) ?? 0) > 1
+      ) {
+        errors.push({
           type: "generic-error",
           orphan: true,
-          source: we.source,
-          error: `claude.ai-synced copy of "${quotedPrintable(we.name)}" ignored: multiple synced copies claim the managed plugin's marketplace, so none is loaded`,
+          source: syncedPlugin.source,
+          error: `claude.ai-synced copy of "${quotedPrintable(syncedPlugin.name)}" ignored: multiple synced copies claim the managed plugin's marketplace, so none is loaded`,
         });
         return false;
       }
-      let Ae = ke.get(nfcLower(we.name));
-      if (Ae) {
-        n.push({
+      let firstEntry = firstSyncedByName.get(nfcLower(syncedPlugin.name));
+      if (firstEntry) {
+        errors.push({
           type: "generic-error",
           orphan: true,
-          source: `${basename(we.path)}@${SYNCED}`,
+          source: `${basename(syncedPlugin.path)}@${SYNCED}`,
           error:
-            Ae.fate === "used"
-              ? `Not loaded \u2014 the claude.ai-synced copy in ${basename(we.path)}/ declares the same plugin name "${we.name}" as ${basename(Ae.first.path)}/, which is used instead`
-              : Ae.fate === "disabled"
-                ? `Not loaded \u2014 the claude.ai-synced copy in ${basename(we.path)}/ declares the same plugin name "${we.name}" as ${basename(Ae.first.path)}/, which is kept as a disabled row`
-                : `Not loaded \u2014 the claude.ai-synced copy in ${basename(we.path)}/ declares the same plugin name "${we.name}" as ${basename(Ae.first.path)}/ (the first claude.ai copy of that name); only one synced copy per name is considered`,
+            firstEntry.fate === "used"
+              ? `Not loaded \u2014 the claude.ai-synced copy in ${basename(syncedPlugin.path)}/ declares the same plugin name "${syncedPlugin.name}" as ${basename(firstEntry.first.path)}/, which is used instead`
+              : firstEntry.fate === "disabled"
+                ? `Not loaded \u2014 the claude.ai-synced copy in ${basename(syncedPlugin.path)}/ declares the same plugin name "${syncedPlugin.name}" as ${basename(firstEntry.first.path)}/, which is kept as a disabled row`
+                : `Not loaded \u2014 the claude.ai-synced copy in ${basename(syncedPlugin.path)}/ declares the same plugin name "${syncedPlugin.name}" as ${basename(firstEntry.first.path)}/ (the first claude.ai copy of that name); only one synced copy per name is considered`,
         });
         return false;
       }
-      let Ie;
-      let Me = Se.get(nfcLower(we.name));
-      if (Me === undefined || we.enabled === false) Ie = we.enabled === false ? "disabled" : "used";
+      let fate;
+      let shadowingSource = localNameOwners.get(nfcLower(syncedPlugin.name));
+      if (shadowingSource === undefined || syncedPlugin.enabled === false)
+        fate = syncedPlugin.enabled === false ? "disabled" : "used";
       else {
-        logForDebugging(`Synced plugin "${we.name}" shadowed by local copy ${Me}`);
-        r.push({
+        logForDebugging(`Synced plugin "${syncedPlugin.name}" shadowed by local copy ${shadowingSource}`);
+        warnings.push({
           type: "synced-plugin-shadowed",
           orphan: true,
-          source: we.source,
-          shadowedBy: stripInvisibleKeepEmoji(Me),
+          source: syncedPlugin.source,
+          shadowedBy: stripInvisibleKeepEmoji(shadowingSource),
         });
-        Ie = "dropped";
+        fate = "dropped";
       }
-      if (Ie === "used" && Ee.outcome === "admitted") {
-        we.admittedByManagedLock = true;
+      if (fate === "used" && decision.outcome === "admitted") {
+        syncedPlugin.admittedByManagedLock = true;
         if (sources.managedHooksOnly)
-          r.push({
+          warnings.push({
             type: "managed-hooks-restricted",
-            source: we.source,
+            source: syncedPlugin.source,
           });
       }
-      ke.set(nfcLower(we.name), {
-        first: we,
-        fate: Ie,
+      firstSyncedByName.set(nfcLower(syncedPlugin.name), {
+        first: syncedPlugin,
+        fate,
       });
-      return Ie !== "dropped";
+      return fate !== "dropped";
     });
   }
   return {
-    plugins: [...sessionPlugins, ...marketplacePlugins, ...q, ...Z, ...sources.builtin],
-    errors: n,
-    warnings: r,
+    plugins: [
+      ...sessionPlugins,
+      ...marketplacePlugins,
+      ...skillPlugins,
+      ...syncedPlugins,
+      ...sources.builtin,
+    ],
+    errors,
+    warnings,
   };
 }
 //@ chunk-e6aww6q8.js:4617007-4617584 placement
@@ -7528,10 +7994,10 @@ function loadAllPlugins(storageV5, credentials) {
     return pluginRegistry.pluginLoad;
   }
   let loadArm = getLoadArm(storageV5);
-  let h = managedHooksPolicyStamp_2();
+  let policyStamp = managedHooksPolicyStamp_2();
   pluginRegistry.pluginLoadArm = loadArm;
-  let y = async () => {
-    let w = await assemblePluginLoadResult(
+  let loadFull = async () => {
+    let result = await assemblePluginLoadResult(
       () =>
         loadPluginsFromMarketplaces({
           cacheOnly: false,
@@ -7540,46 +8006,46 @@ function loadAllPlugins(storageV5, credentials) {
         }),
       {
         storageV5,
-        readUnder: h,
+        readUnder: policyStamp,
       },
     );
     if (
-      pluginRegistry.pluginLoad === S ||
-      (w.readUnder === managedHooksPolicyStamp_2() &&
+      pluginRegistry.pluginLoad === loadPromise ||
+      (result.readUnder === managedHooksPolicyStamp_2() &&
         (!isStorageV5Enabled() || storageV5 === undefined) &&
         pluginRegistry.pluginLoadArm !== "v5" &&
         pluginRegistry.pluginLoadCacheOnlyArm !== "v5")
     ) {
-      let resolved = Promise.resolve(w);
-      pluginRegistry.pluginLoadMarks.set(resolved, w.readUnder ?? EMPTY_POLICY_STAMP);
+      let resolved = Promise.resolve(result);
+      pluginRegistry.pluginLoadMarks.set(resolved, result.readUnder ?? EMPTY_POLICY_STAMP);
       pluginRegistry.pluginLoadCacheOnly = resolved;
       pluginRegistry.pluginLoadCacheOnlyArm = loadArm;
     }
-    return w;
+    return result;
   };
   notePluginFullLoad();
-  let S = trackPluginLoad(y());
-  pluginRegistry.pluginLoadMarks.set(S, h);
-  pluginRegistry.pluginLoad = S;
-  return S;
+  let loadPromise = trackPluginLoad(loadFull());
+  pluginRegistry.pluginLoadMarks.set(loadPromise, policyStamp);
+  pluginRegistry.pluginLoad = loadPromise;
+  return loadPromise;
 }
 //@ chunk-e6aww6q8.js:4617584-4617634 placement
 function getLoadArm(storageV5) {
   return isStorageV5Enabled() && storageV5 !== undefined ? "v5" : "raw";
 }
 //@ chunk-e6aww6q8.js:4617634-4617837 placement
-function logJoinedLoadArmMismatch(e, n, storageV5) {
-  if (isStorageV5Enabled() && storageV5 !== undefined && n === "raw")
+function logJoinedLoadArmMismatch(label, arm, storageV5) {
+  if (isStorageV5Enabled() && storageV5 !== undefined && arm === "raw")
     logForDebugging(
-      `${e}: joining a plugin load that an earlier caller started without the storage backend (tengu_hover_rest); this caller's backend is not used for it`,
+      `${label}: joining a plugin load that an earlier caller started without the storage backend (tengu_hover_rest); this caller's backend is not used for it`,
     );
 }
 //@ chunk-e6aww6q8.js:4617837-4617913 placement
 /**
  * 是否启用同步插件安装（storageV5 且 CLAUDE_CODE_SYNC_PLUGIN_INSTALL）。
  */
-function shouldFillPluginLoadWithStore(e) {
-  return isStorageV5Enabled() && e !== undefined && !!env.CLAUDE_CODE_SYNC_PLUGIN_INSTALL;
+function shouldFillPluginLoadWithStore(storageV5) {
+  return isStorageV5Enabled() && storageV5 !== undefined && !!env.CLAUDE_CODE_SYNC_PLUGIN_INSTALL;
 }
 //@ chunk-e6aww6q8.js:4617913-4618473 placement
 /**
@@ -7592,7 +8058,7 @@ function loadAllPluginsCacheOnly(storageV5, credentials) {
     return pluginRegistry.pluginLoadCacheOnly;
   }
   pluginRegistry.pluginLoadCacheOnlyArm = getLoadArm(storageV5);
-  let s = env.CLAUDE_CODE_SYNC_PLUGIN_INSTALL ? undefined : managedHooksPolicyStamp_2();
+  let policyStamp = env.CLAUDE_CODE_SYNC_PLUGIN_INSTALL ? undefined : managedHooksPolicyStamp_2();
   pluginRegistry.pluginLoadCacheOnly = trackPluginLoad(
     (async () => {
       if (env.CLAUDE_CODE_SYNC_PLUGIN_INSTALL) {
@@ -7609,19 +8075,20 @@ function loadAllPluginsCacheOnly(storageV5, credentials) {
           }),
         {
           storageV5,
-          readUnder: s,
+          readUnder: policyStamp,
         },
       );
     })(),
   );
-  if (s !== undefined) pluginRegistry.pluginLoadMarks.set(pluginRegistry.pluginLoadCacheOnly, s);
+  if (policyStamp !== undefined)
+    pluginRegistry.pluginLoadMarks.set(pluginRegistry.pluginLoadCacheOnly, policyStamp);
   return pluginRegistry.pluginLoadCacheOnly;
 }
 //@ chunk-e6aww6q8.js:4618473-4618570 placement
-function trackPluginLoad(e) {
+function trackPluginLoad(load) {
   let pluginRegistry = getPluginRegistry();
   pluginRegistry.pluginLoadsRunning++;
-  return e.finally(() => {
+  return load.finally(() => {
     pluginRegistry.pluginLoadsRunning--;
   });
 }
@@ -7635,40 +8102,40 @@ var cacheOnlyLoadOptions = (storageV5) => ({
 /**
  * 返回与当前插件相关设置一致的 cacheOnly 加载结果：缓存的 Promise 标记与当前设置指纹一致就复用，否则重新加载。
  */
-function rereadPluginsCacheOnly(e) {
+function rereadPluginsCacheOnly(storageV5) {
   let pluginRegistry = getPluginRegistry();
-  let r = managedHooksPolicyStamp_2();
+  let stamp = managedHooksPolicyStamp_2();
   let pluginLoadCacheOnly = pluginRegistry.pluginLoadCacheOnly;
   return (
-    (r !== EMPTY_POLICY_STAMP &&
+    (stamp !== EMPTY_POLICY_STAMP &&
     pluginLoadCacheOnly !== undefined &&
-    pluginRegistry.pluginLoadMarks.get(pluginLoadCacheOnly) === r
+    pluginRegistry.pluginLoadMarks.get(pluginLoadCacheOnly) === stamp
       ? pluginLoadCacheOnly
-      : undefined) ?? reloadCacheOnlyUnder(r, e)
+      : undefined) ?? reloadCacheOnlyUnder(stamp, storageV5)
   );
 }
 //@ chunk-e6aww6q8.js:4618765-4619057 placement
-function reloadCacheOnlyUnder(e, storageV5) {
+function reloadCacheOnlyUnder(stamp, storageV5) {
   let pluginRegistry = getPluginRegistry();
   let pluginLoad = pluginRegistry.pluginLoad;
   if (!(
-    e !== EMPTY_POLICY_STAMP &&
+    stamp !== EMPTY_POLICY_STAMP &&
     pluginLoad !== undefined &&
-    pluginRegistry.pluginLoadMarks.get(pluginLoad) === e
+    pluginRegistry.pluginLoadMarks.get(pluginLoad) === stamp
   )) {
     pluginRegistry.pluginLoad = undefined;
     pluginRegistry.pluginLoadArm = undefined;
   }
-  let y = trackPluginLoad(
+  let load = trackPluginLoad(
     assemblePluginLoadResult(() => loadPluginsFromMarketplaces(cacheOnlyLoadOptions(storageV5)), {
       storageV5,
-      readUnder: e,
+      readUnder: stamp,
     }),
   );
-  pluginRegistry.pluginLoadMarks.set(y, e);
+  pluginRegistry.pluginLoadMarks.set(load, stamp);
   pluginRegistry.pluginLoadCacheOnlyArm = getLoadArm(storageV5);
-  pluginRegistry.pluginLoadCacheOnly = y;
-  return y;
+  pluginRegistry.pluginLoadCacheOnly = load;
+  return load;
 }
 //@ chunk-e6aww6q8.js:4619057-4619182 placement
 /**
@@ -7695,86 +8162,90 @@ var BIN_STAT_TIMEOUT_MS = 2000;
 /**
  * 收集已启用（非内置）插件的 bin/ 目录（stat 超时 2 秒，含 shell 元字符的路径丢弃），用于加进 Bash 工具的 PATH。
  */
-async function getEnabledPluginBinPaths(e) {
-  let { enabled } = await loadAllPluginsCacheOnly(e);
+async function getEnabledPluginBinPaths(storageV5) {
+  let { enabled } = await loadAllPluginsCacheOnly(storageV5);
   let filtered = enabled
-    .filter((h) => !h.isBuiltin && h.path)
-    .map((h) => join(h.path, "bin"))
-    .filter((h) => {
-      if (sep !== "\\" && /[:"'$`\\\n\r]/.test(h)) {
-        logForDebugging(`Dropping plugin bin path with shell metacharacters: ${h}`);
+    .filter((plugin) => !plugin.isBuiltin && plugin.path)
+    .map((plugin) => join(plugin.path, "bin"))
+    .filter((binPath) => {
+      if (sep !== "\\" && /[:"'$`\\\n\r]/.test(binPath)) {
+        logForDebugging(`Dropping plugin bin path with shell metacharacters: ${binPath}`);
         return false;
       }
       return true;
     });
   let results = await Promise.all(
-    filtered.map(async (h) => {
+    filtered.map(async (binPath) => {
       try {
         return (
-          await withTimeout_2(stat(h), BIN_STAT_TIMEOUT_MS, `stat timed out after ${BIN_STAT_TIMEOUT_MS}ms`)
+          await withTimeout_2(
+            stat_2(binPath),
+            BIN_STAT_TIMEOUT_MS,
+            `stat timed out after ${BIN_STAT_TIMEOUT_MS}ms`,
+          )
         ).isDirectory();
       } catch (error) {
         let errnoCode = getErrnoCode(error);
         if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR") return false;
         logForDebugging(
-          `Keeping plugin bin path on PATH despite a failed stat (${errnoCode ?? errorMessage(error)}): ${h}`,
+          `Keeping plugin bin path on PATH despite a failed stat (${errnoCode ?? errorMessage(error)}): ${binPath}`,
         );
         return true;
       }
     }),
   );
-  return filtered.filter((h, y) => results[y]);
+  return filtered.filter((binPath, index) => results[index]);
 }
 //@ chunk-e6aww6q8.js:4619739-4620032 layout
 async function listSyncedPluginDirs_2() {
-  let e = {
+  let empty = {
     dirs: [],
     rows: [],
   };
   try {
-    if (!hasSyncedContent() || !syncSettingsEnabled() || isPluginsSyncVetoed()) return e;
+    if (!hasSyncedContent() || !syncSettingsEnabled() || isPluginsSyncVetoed()) return empty;
     markSyncedPluginLaneOpened();
-    let n = hasRegisteredSyncedPluginDirs() ? await getRegisteredSyncedDirs() : null;
-    let r =
-      n === null
+    let registered = hasRegisteredSyncedPluginDirs() ? await getRegisteredSyncedDirs() : null;
+    let rows =
+      registered === null
         ? await listSyncedPluginDirs()
-        : n.flatMap((h) => {
-            let syncedPluginRowId = getSyncedPluginRowId(h);
+        : registered.flatMap((dir) => {
+            let syncedPluginRowId = getSyncedPluginRowId(dir);
             return syncedPluginRowId === undefined
               ? []
               : [
                   {
-                    dir: h,
+                    dir,
                     pluginId: syncedPluginRowId,
                   },
                 ];
           });
-    let s = n ?? r.map(({ dir }) => dir);
-    markSyncedPluginDirsLoadedHere(s);
+    let dirs = registered ?? rows.map(({ dir }) => dir);
+    markSyncedPluginDirsLoadedHere(dirs);
     return {
-      dirs: s,
-      rows: r,
+      dirs,
+      rows,
     };
   } catch (error) {
     logError(error);
-    return e;
+    return empty;
   }
 }
 //@ chunk-e6aww6q8.js:4620032-4620293 layout
-function describeSyncedPluginOutcomes(e) {
+function describeSyncedPluginOutcomes(input) {
   try {
-    let n = mapSyncedDirsToPluginIds(e.manifestRows);
-    let r = new Set(e.merged);
-    return e.synced.map((s) => {
-      let h = dirname(s.path);
-      let y = n.get(skillKeyFromPath(h, s.path));
+    let byKey = mapSyncedDirsToPluginIds(input.manifestRows);
+    let mergedSet = new Set(input.merged);
+    return input.synced.map((plugin) => {
+      let parentDir = dirname(plugin.path);
+      let pluginId = byKey.get(skillKeyFromPath(parentDir, plugin.path));
       return {
-        bucket: basename(h),
-        outcome: classifySyncedPluginOutcome(s, r, e),
-        pluginName: s.name,
-        folder: s.path,
-        ...(y !== undefined && {
-          pluginId: y,
+        bucket: basename(parentDir),
+        outcome: classifySyncedPluginOutcome(plugin, mergedSet, input),
+        pluginName: plugin.name,
+        folder: plugin.path,
+        ...(pluginId !== undefined && {
+          pluginId,
         }),
       };
     });
@@ -7784,61 +8255,67 @@ function describeSyncedPluginOutcomes(e) {
   }
 }
 //@ chunk-e6aww6q8.js:4620293-4620853 layout
-function classifySyncedPluginOutcome(e, n, r) {
-  let s = matchPolicyPluginEntry(r.managedEntries, e.name, e.attributedMarketplaceName);
-  if (s.outcome === "locked") return s.entry.enabled ? "not_loaded" : "held_back";
-  if (!n.has(e) || r.demoted.has(e.source)) return "not_loaded";
-  if (e.enabled) return "loaded";
-  let mapped = r.enabledPluginsIndexed.map((w, L) => {
-    let G = r.sourcesHighFirst[L];
-    return w !== undefined && G !== undefined && isOperatorSettingSource_2(G) ? w : undefined;
+function classifySyncedPluginOutcome(plugin, mergedSet, context) {
+  let policyMatch = matchPolicyPluginEntry(
+    context.managedEntries,
+    plugin.name,
+    plugin.attributedMarketplaceName,
+  );
+  if (policyMatch.outcome === "locked") return policyMatch.entry.enabled ? "not_loaded" : "held_back";
+  if (!mergedSet.has(plugin) || context.demoted.has(plugin.source)) return "not_loaded";
+  if (plugin.enabled) return "loaded";
+  let records = context.enabledPluginsIndexed.map((settingsEntry, index) => {
+    let source = context.sourcesHighFirst[index];
+    return settingsEntry !== undefined && source !== undefined && isOperatorSettingSource_2(source)
+      ? settingsEntry
+      : undefined;
   });
-  let pluginSetting = findPluginSetting(e.source, mapped);
-  if (pluginSetting !== undefined && mapped[pluginSetting.index]?.record[pluginSetting.key] === false)
+  let pluginSetting = findPluginSetting(plugin.source, records);
+  if (pluginSetting !== undefined && records[pluginSetting.index]?.record[pluginSetting.key] === false)
     return "held_back";
-  if (s.outcome !== "admitted") return "not_loaded";
-  return collectDisabledInlineNames(mapped, r.sourcesHighFirst).has(nfcLower(e.name))
+  if (policyMatch.outcome !== "admitted") return "not_loaded";
+  return collectDisabledInlineNames(records, context.sourcesHighFirst).has(nfcLower(plugin.name))
     ? "held_back"
     : "not_loaded";
 }
 //@ chunk-e6aww6q8.js:4620853-4621016 layout
 function mapSyncedDirsToPluginIds(manifestRows) {
-  let n = new Map();
-  let r = new Set();
+  let byKey = new Map();
+  let seenKeys = new Set();
   for (let { dir, pluginId } of manifestRows) {
-    let y = skillKeyFromPath(dirname(dir), dir);
-    if (r.has(y)) {
-      n.delete(y);
+    let key = skillKeyFromPath(dirname(dir), dir);
+    if (seenKeys.has(key)) {
+      byKey.delete(key);
       continue;
     }
-    r.add(y);
-    if (isServerPluginId(pluginId)) n.set(y, pluginId);
+    seenKeys.add(key);
+    if (isServerPluginId(pluginId)) byKey.set(key, pluginId);
   }
-  return n;
+  return byKey;
 }
 //@ chunk-e6aww6q8.js:4621016-4621253 layout
 function collectOfficialAttestations_2(allPlugins) {
-  let n = new Map();
-  let r = new Set();
-  for (let s of allPlugins) {
-    let marketplace = s.officialAttestation?.marketplace;
+  let bySource = new Map();
+  let conflicting = new Set();
+  for (let plugin of allPlugins) {
+    let marketplace = plugin.officialAttestation?.marketplace;
     if (
       marketplace === undefined ||
       !ALLOWED_OFFICIAL_MARKETPLACE_NAMES.has(marketplace) ||
-      (n.has(s.source) && n.get(s.source) !== marketplace)
+      (bySource.has(plugin.source) && bySource.get(plugin.source) !== marketplace)
     )
-      r.add(s.source);
-    else n.set(s.source, marketplace);
+      conflicting.add(plugin.source);
+    else bySource.set(plugin.source, marketplace);
   }
-  for (let s of r) n.delete(s);
-  return n;
+  for (let source of conflicting) bySource.delete(source);
+  return bySource;
 }
 //@ chunk-e6aww6q8.js:4621253-4624204 fingerprint = assemblePluginLoadResult (0.337)
 /**
  * 插件加载总装：并行跑市场加载、会话插件（--plugin-dir/--plugin-url）、claude.ai 同步插件、skills-dir 插件，再合并内置插件，mergePluginSources 去重，verifyAndDemote 处理依赖不满足的降级，最后（非预览且设置未变时）执行副作用：缓存插件 settings、清理旧缓存等。返回 {enabled, disabled, errors, warnings}。
  */
 async function assemblePluginLoadResult(loadMarketplacePlugins, options) {
-  let r = options?.readUnder ?? managedHooksPolicyStamp_2();
+  let readUnder = options?.readUnder ?? managedHooksPolicyStamp_2();
   let inlinePlugins = getOriginalCwdOrNull();
   let builtinResult = areSideloadFlagsDisabledByPolicy();
   if (
@@ -7851,7 +8328,7 @@ async function assemblePluginLoadResult(loadMarketplacePlugins, options) {
         level: "warn",
       },
     );
-  let y = builtinResult
+  let inlineSpecs = builtinResult
     ? []
     : [
         ...getInlinePlugins().map((value) => ({
@@ -7869,10 +8346,10 @@ async function assemblePluginLoadResult(loadMarketplacePlugins, options) {
         })),
       ];
   let enabledPluginsBySource = getEnabledPluginsBySource();
-  let w = checkHooksModulesFlag();
-  let [marketplacePlugins, G, q, skillsAsPlugins] = await Promise.all([
+  let flagCheck = checkHooksModulesFlag();
+  let [marketplacePlugins, sessionResult, syncedResult, skillsAsPlugins] = await Promise.all([
     loadMarketplacePlugins(),
-    describePluginDirShape_2(y).then((specs) =>
+    describePluginDirShape_2(inlineSpecs).then((specs) =>
       loadSessionOnlyPlugins(specs, {
         storageV5: options?.storageV5,
         enabledPluginsIndexed: enabledPluginsBySource,
@@ -7897,20 +8374,20 @@ async function assemblePluginLoadResult(loadMarketplacePlugins, options) {
     })),
     loadSkillsAsPlugins(options?.storageV5, enabledPluginsBySource),
   ]);
-  await w;
+  await flagCheck;
   let builtinPlugins = getBuiltinPlugins();
   let managedEntries = getPolicyEnabledPluginEntries();
-  let we = settingsSourcesReversed();
-  let recordedDisableFolds = collectDisabledInlineNames(enabledPluginsBySource, we);
+  let sourcesHighFirst = settingsSourcesReversed();
+  let recordedDisableFolds = collectDisabledInlineNames(enabledPluginsBySource, sourcesHighFirst);
   let {
     plugins: allPlugins,
     errors: mergeErrors,
     warnings,
   } = mergePluginSources({
-    session: G.plugins,
+    session: sessionResult.plugins,
     marketplace: marketplacePlugins.plugins,
     skill: skillsAsPlugins.plugins,
-    synced: q.plugins,
+    synced: syncedResult.plugins,
     builtin: [...builtinPlugins.enabled, ...builtinPlugins.disabled],
     managedEntries,
     managedHooksOnly: shouldAllowManagedHooksOnlyByPolicy(),
@@ -7918,15 +8395,15 @@ async function assemblePluginLoadResult(loadMarketplacePlugins, options) {
   });
   let syncedSkillOverrides = collectSyncedSkillOverrides({
     merged: allPlugins,
-    synced: q.plugins,
+    synced: syncedResult.plugins,
     pluginIdOf: () => {
-      let yt = mapSyncedDirsToPluginIds(q.manifestRows);
-      return (gt) => yt.get(skillKeyFromPath(dirname(gt.path), gt.path));
+      let idsByKey = mapSyncedDirsToPluginIds(syncedResult.manifestRows);
+      return (plugin) => idsByKey.get(skillKeyFromPath(dirname(plugin.path), plugin.path));
     },
     enabledPluginsIndexed: enabledPluginsBySource,
-    sourcesHighFirst: we,
+    sourcesHighFirst,
   });
-  let ze =
+  let overrideResult =
     syncedSkillOverrides === null
       ? {
           held: [],
@@ -7934,25 +8411,25 @@ async function assemblePluginLoadResult(loadMarketplacePlugins, options) {
           following: [],
         }
       : await syncedSkillOverrides;
-  for (let yt of ze.held) yt.enabled = false;
-  for (let yt of ze.following) yt.followsSyncedSkillState = true;
-  let lt = [
+  for (let plugin of overrideResult.held) plugin.enabled = false;
+  for (let plugin of overrideResult.following) plugin.followsSyncedSkillState = true;
+  let errors = [
     ...marketplacePlugins.errors,
-    ...G.errors,
-    ...q.errors,
+    ...sessionResult.errors,
+    ...syncedResult.errors,
     ...skillsAsPlugins.errors,
     ...mergeErrors,
   ];
-  let Je = [
+  let warnings_2 = [
     ...marketplacePlugins.warnings,
-    ...G.warnings,
-    ...q.warnings,
+    ...sessionResult.warnings,
+    ...syncedResult.warnings,
     ...skillsAsPlugins.warnings,
     ...warnings,
   ];
   let { demoted, errors: depErrors } = verifyAndDemote(allPlugins);
   for (let plugin of allPlugins) if (demoted.has(plugin.source)) plugin.enabled = false;
-  lt.push(...depErrors);
+  errors.push(...depErrors);
   let enabledPlugins = allPlugins.filter((plugin) => plugin.enabled);
   logForDebugging(
     `Found ${allPlugins.length} plugins (${enabledPlugins.length} enabled, ${allPlugins.length - enabledPlugins.length} disabled)`,
@@ -7962,7 +8439,7 @@ async function assemblePluginLoadResult(loadMarketplacePlugins, options) {
     logForDebugging(
       "assemblePluginLoadResult: originalCwd changed mid-scan; skipping side-effects (stale early-kick)",
     );
-  else if (r !== managedHooksPolicyStamp_2()) {
+  else if (readUnder !== managedHooksPolicyStamp_2()) {
     logForDebugging(
       "assemblePluginLoadResult: plugin-affecting settings changed mid-scan; skipping side-effects, answering with a read under the settings in force",
     );
@@ -7971,70 +8448,72 @@ async function assemblePluginLoadResult(loadMarketplacePlugins, options) {
     setAttestedOfficialPluginIds(collectOfficialAttestations_2(allPlugins));
     setLastSyncedLaneLoad(
       describeSyncedPluginOutcomes({
-        synced: q.plugins,
+        synced: syncedResult.plugins,
         merged: allPlugins,
         demoted,
         managedEntries,
         enabledPluginsIndexed: enabledPluginsBySource,
-        sourcesHighFirst: we,
-        manifestRows: q.manifestRows,
+        sourcesHighFirst,
+        manifestRows: syncedResult.manifestRows,
       }),
     );
-    persistSyncedPluginsOff(ze.toWrite, managedHooksPolicyStamp_2);
-    let yt = new Set(enabledPlugins.map((enabledPlugin) => enabledPlugin.source));
-    for (let gt of findUserDisabledOverrides())
-      if (yt.has(gt.pluginId))
-        Je.push({
+    persistSyncedPluginsOff(overrideResult.toWrite, managedHooksPolicyStamp_2);
+    let enabledSources = new Set(enabledPlugins.map((enabledPlugin) => enabledPlugin.source));
+    for (let override of findUserDisabledOverrides())
+      if (enabledSources.has(override.pluginId))
+        warnings_2.push({
           type: "ineffective-disable",
-          source: gt.pluginId,
-          overriddenBy: gt.overriddenBy,
+          source: override.pluginId,
+          overriddenBy: override.overriddenBy,
         });
     releaseUnusedPluginCaches(enabledPlugins, options?.storageV5);
     cachePluginSettings(enabledPlugins);
-    if (lt.length > 0 && allPlugins.length === 0) {
-      let gt = "generic-error";
-      let At = 0;
-      let It = new Map();
-      for (let Yt of lt) {
-        let qt = (It.get(Yt.type) ?? 0) + 1;
-        It.set(Yt.type, qt);
-        if (qt > At || (qt === At && Yt.type < gt)) {
-          gt = Yt.type;
-          At = qt;
+    if (errors.length > 0 && allPlugins.length === 0) {
+      let dominantType = "generic-error";
+      let dominantCount = 0;
+      let counts = new Map();
+      for (let error of errors) {
+        let count = (counts.get(error.type) ?? 0) + 1;
+        counts.set(error.type, count);
+        if (count > dominantCount || (count === dominantCount && error.type < dominantType)) {
+          dominantType = error.type;
+          dominantCount = count;
         }
       }
-      logFeatureBad("plugin_load_all", `plugin_load_total_failure_${gt.replaceAll("-", "_")}`, {
-        error_count: lt.length,
+      logFeatureBad("plugin_load_all", `plugin_load_total_failure_${dominantType.replaceAll("-", "_")}`, {
+        error_count: errors.length,
       });
-    } else if (lt.length > 0) logFeatureSad("plugin_load_all", "plugin_load_partial_failures");
+    } else if (errors.length > 0) logFeatureSad("plugin_load_all", "plugin_load_partial_failures");
     else logFeatureOk("plugin_load_all");
   }
   return {
     enabled: enabledPlugins,
     disabled: allPlugins.filter((plugin) => !plugin.enabled),
-    errors: lt,
-    warnings: Je,
-    readUnder: r,
+    errors,
+    warnings: warnings_2,
+    readUnder,
   };
 }
 //@ chunk-e6aww6q8.js:4624204-4624432 layout = getVersionedZipCachePath (1)
 async function releaseUnusedPluginCaches(pluginId, version) {
   if (isDiskless()) return;
-  let r = anchoredPluginCachePath();
-  let s = syncedPluginsRoot();
-  let flattened = pluginId.flatMap((y) => {
-    if (!y.path || y.path.endsWith(".zip")) return [];
-    return isSubpathOf(r, y.path, false) || isSubpathOf(s, y.path, false) ? [y.path] : [];
+  let cacheRoot = anchoredPluginCachePath();
+  let syncedRoot = syncedPluginsRoot();
+  let versionDirs = pluginId.flatMap((plugin) => {
+    if (!plugin.path || plugin.path.endsWith(".zip")) return [];
+    return isSubpathOf(cacheRoot, plugin.path, false) || isSubpathOf(syncedRoot, plugin.path, false)
+      ? [plugin.path]
+      : [];
   });
-  await Promise.all(flattened.map((y) => writeInUseMarker(y, version)));
-  await sweepInUseMarkers(flattened, version);
+  await Promise.all(versionDirs.map((path) => writeInUseMarker(path, version)));
+  await sweepInUseMarkers(versionDirs, version);
 }
 //@ chunk-e6aww6q8.js:4624432-4624502 placement
 /**
  * 清理不再被会话使用的插件解压目录。
  */
-async function releaseSyncedDirsNotIn(e, n) {
-  await releaseMarkersOutside(syncedPluginsRoot(), new Set(e.map((r) => r.path)), n);
+async function releaseSyncedDirsNotIn(plugins, storageV5) {
+  await releaseMarkersOutside(syncedPluginsRoot(), new Set(plugins.map((plugin) => plugin.path)), storageV5);
 }
 //@ chunk-e6aww6q8.js:4624502-4624736 placement = clearPluginCache (0.483)
 /**
@@ -8055,18 +8534,18 @@ function clearPluginCache(reason) {
 /**
  * 存储后端模式下预先发起一次 cacheOnly 加载以填充缓存；失败则清掉缓存。
  */
-function refillPluginLoadCacheOnly(e, n) {
+function refillPluginLoadCacheOnly(storageV5, label) {
   if (
     !isStorageV5Enabled() ||
-    e === undefined ||
+    storageV5 === undefined ||
     env.CLAUDE_CODE_SYNC_PLUGIN_INSTALL ||
     getPluginRegistry().pluginLoadCacheOnly !== undefined
   )
     return;
-  let allPluginsCacheOnly = loadAllPluginsCacheOnly(e);
+  let allPluginsCacheOnly = loadAllPluginsCacheOnly(storageV5);
   allPluginsCacheOnly.catch(() => {
     if (getPluginRegistry().pluginLoadCacheOnly === allPluginsCacheOnly)
-      clearPluginCache(`${n}: re-fill failed`);
+      clearPluginCache(`${label}: re-fill failed`);
   });
   return allPluginsCacheOnly;
 }
@@ -8089,21 +8568,36 @@ function mergePluginSettings(plugins) {
 //@ chunk-e6aww6q8.js:4625173-4625422 fingerprint = cachePluginSettings (0.667)
 function cachePluginSettings(plugins) {
   let settings = mergePluginSettings(plugins);
-  let r = Object.keys(pluginCommandBase() ?? {}).length > 0;
+  let hadSettings = Object.keys(pluginCommandBase() ?? {}).length > 0;
   setPluginCommandBase(settings);
   if (settings && Object.keys(settings).length > 0) {
     invalidateCommandNames();
     logForDebugging(`Cached plugin settings with keys: ${Object.keys(settings).join(", ")}`);
-  } else if (r) {
+  } else if (hadSettings) {
     invalidateCommandNames();
     logForDebugging("Dropped plugin settings: no enabled plugin supplies any");
   }
 }
 //@ chunk-e6aww6q8.js:4625422-4625529 sole-consumer
-function findMatchingSourceCommand(e, n) {
-  if (!e) return;
-  let r = describeCommandOutputMode(e);
-  return (n && filterInstallationsForCurrentProject(n).find((s) => s.sourceCommand === r))?.sourceCommand;
+function findMatchingSourceCommand(source, installations) {
+  if (!source) return;
+  let mode = describeCommandOutputMode(source);
+  return (
+    installations &&
+    filterInstallationsForCurrentProject(installations).find(
+      (installation) => installation.sourceCommand === mode,
+    )
+  )?.sourceCommand;
+}
+//@ chunk-g6j7q15x.js:4001-4202 fingerprint = validateGitUrl (0.458)
+/**
+ * 判断 URL 类型：file（本机）、hosted（官方地址）、custom_url（其他 http(s)）。
+ */
+function validateGitUrl(url) {
+  if (url.protocol === "file:")
+    return url.hostname === "" || url.hostname === "localhost" ? "file" : undefined;
+  if (url.protocol !== "https:" && url.protocol !== "http:") return;
+  return url.toString() === _ ? "hosted" : "custom_url";
 }
 //@ chunk-3wek6r2k.js:15714-15773 fingerprint = loadAllPluginsCacheOnly (0.661)
 /**
@@ -8116,28 +8610,34 @@ function shouldSyncPluginInstall(isNonInteractiveSession) {
 /**
  * 递归复制目录（带缓存的目录创建）。
  */
-async function copyDir_2(e) {
-  let n = new Map();
-  let t = async (r) => {
-    let s = n.get(r);
-    if (s !== undefined) return s;
-    let o = await readdir(r, {
+async function copyDir_2(root) {
+  let cache = new Map();
+  let listDir = async (dir) => {
+    let cached = cache.get(dir);
+    if (cached !== undefined) return cached;
+    let entries = await readdir(dir, {
       withFileTypes: true,
     }).catch(() => []);
-    n.set(r, o);
-    return o;
+    cache.set(dir, entries);
+    return entries;
   };
-  for (let r of manifestRelativePath) {
-    let parts = r.split("/");
-    let o = parts.pop() ?? "";
-    let a = e;
+  for (let relPath of manifestRelativePath) {
+    let parts = relPath.split("/");
+    let baseName = parts.pop() ?? "";
+    let current = root;
     for (let entry of parts) {
-      a = (await t(a)).some((f) => f.name === entry && f.isDirectory())
-        ? pathModule.join(a, entry)
+      current = (await listDir(current)).some(
+        (childEntry) => childEntry.name === entry && childEntry.isDirectory(),
+      )
+        ? pathModule.join(current, entry)
         : undefined;
-      if (a === undefined) break;
+      if (current === undefined) break;
     }
-    if (a !== undefined && (await t(a)).some((l) => l.name === o && l.isSymbolicLink())) return r;
+    if (
+      current !== undefined &&
+      (await listDir(current)).some((entry) => entry.name === baseName && entry.isSymbolicLink())
+    )
+      return relPath;
   }
   return;
 }
@@ -8145,23 +8645,14 @@ async function copyDir_2(e) {
 /**
  * 从一次 cacheOnly 加载结果中找出缓存缺失的启用插件，供后台补装。
  */
-function loadPluginFromMarketplaceEntryCacheOnly({ enabled, errors }, a) {
-  let r = new Set(enabled.flatMap(pluginNameAliases).map(nfcLower));
-  let s = new Set();
-  for (let error of errors) if (error.type === "plugin-cache-miss") s.add(error.source);
-  let c = new Set();
-  for (let d of a?.enabled ?? []) if (s.has(d.source) && !r.has(nfcLower(d.name))) c.add(d.source);
-  return c;
-}
-//@ chunk-g6j7q15x.js:4001-4202 fingerprint = validateGitUrl (0.458)
-/**
- * 判断 URL 类型：file（本机）、hosted（官方地址）、custom_url（其他 http(s)）。
- */
-function validateGitUrl(url) {
-  if (url.protocol === "file:")
-    return url.hostname === "" || url.hostname === "localhost" ? "file" : undefined;
-  if (url.protocol !== "https:" && url.protocol !== "http:") return;
-  return url.toString() === _ ? "hosted" : "custom_url";
+function loadPluginFromMarketplaceEntryCacheOnly({ enabled, errors }, rootPlugins) {
+  let knownNames = new Set(enabled.flatMap(pluginNameAliases).map(nfcLower));
+  let cacheMissIds = new Set();
+  for (let error of errors) if (error.type === "plugin-cache-miss") cacheMissIds.add(error.source);
+  let missing = new Set();
+  for (let plugin of rootPlugins?.enabled ?? [])
+    if (cacheMissIds.has(plugin.source) && !knownNames.has(nfcLower(plugin.name))) missing.add(plugin.source);
+  return missing;
 }
 export {
   loadAllPluginsCacheOnly,

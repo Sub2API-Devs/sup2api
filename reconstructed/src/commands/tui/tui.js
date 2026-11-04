@@ -52,8 +52,8 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logError } from "../../utils/log.js";
 import { errorMessage } from "../../utils/errors.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
-import { y, R, P } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { useState, useRef, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { sleep } from "../../utils/sleep.js";
@@ -73,9 +73,16 @@ import { TextInput } from "../../components/TextInput.js";
 //@ chunk-18hwfzwa.js:161401-161434 placement
 var RENDERER_NAMES = ["default", "fullscreen"];
 //@ chunk-18hwfzwa.js:161434-161885 placement
-async function relaunchInto(h, extraArgs, messages, L, storageV5, { responseStreaming, trial }) {
+async function relaunchInto(
+  renderer,
+  extraArgs,
+  messages,
+  proactivity,
+  storageV5,
+  { responseStreaming, trial },
+) {
   await ensureLauncherRunnable();
-  let Be = await confirmRelaunch(
+  let confirmed = await confirmRelaunch(
     messages,
     "relaunch",
     {
@@ -84,16 +91,16 @@ async function relaunchInto(h, extraArgs, messages, L, storageV5, { responseStre
     storageV5,
   );
   return relaunchOrExplain(
-    Be,
+    confirmed,
     {
       freshIfNoTranscript: true,
       extraArgs,
-      proactivity: L,
+      proactivity,
       env: {
-        CLAUDE_CODE_TUI_JUST_SWITCHED: h,
-        ...(trial && h === "fullscreen" ? TRIAL_ENV : {}),
+        CLAUDE_CODE_TUI_JUST_SWITCHED: renderer,
+        ...(trial && renderer === "fullscreen" ? TRIAL_ENV : {}),
         ...getScreenReaderEnv(),
-        ...sessionAddDirsEnv(L.toolPermissionContext.additionalWorkingDirectories),
+        ...sessionAddDirsEnv(proactivity.toolPermissionContext.additionalWorkingDirectories),
       },
       dropEnv: [
         "CLAUDE_CODE_NO_FLICKER",
@@ -109,16 +116,16 @@ function relaunchFailedMessage(error) {
   return `Couldn't switch renderers \u2014 ${error instanceof Error ? error.message : String(error)}. The setting was saved; restart Claude Code to apply it.`;
 }
 //@ chunk-18hwfzwa.js:162041-162287 placement
-function cannotSwitchRendererMessage(h, x) {
-  return `Cannot switch renderers in this session \u2014 it has restrictions a restart can't carry over (${x.join("; ")}). Nothing was changed. Running /tui ${h} in a session started without them switches every later session too.`;
+function cannotSwitchRendererMessage(renderer, uncarriedSettings) {
+  return `Cannot switch renderers in this session \u2014 it has restrictions a restart can't carry over (${uncarriedSettings.join("; ")}). Nothing was changed. Running /tui ${renderer} in a session started without them switches every later session too.`;
 }
 //@ chunk-18hwfzwa.js:162287-162473 placement
-function savedWithoutRestartMessage(h) {
-  return `Staying on the default renderer without a restart \u2014 this session now has restrictions a restart can't carry over (${h.join("; ")}); the preference is saved.`;
+function savedWithoutRestartMessage(uncarriedSettings) {
+  return `Staying on the default renderer without a restart \u2014 this session now has restrictions a restart can't carry over (${uncarriedSettings.join("; ")}); the preference is saved.`;
 }
 //@ chunk-18hwfzwa.js:162473-162615 placement
-function savedWithoutRestartForTasksMessage(h) {
-  return `Staying on the ${h} renderer without a restart \u2014 work is now running in the background; the preference is saved.`;
+function savedWithoutRestartForTasksMessage(renderer) {
+  return `Staying on the ${renderer} renderer without a restart \u2014 work is now running in the background; the preference is saved.`;
 }
 //@ chunk-18hwfzwa.js:162615-166208 placement
 /**
@@ -126,15 +133,15 @@ function savedWithoutRestartForTasksMessage(h) {
  */
 var call_2 = async (onDone, context, args) => {
   let lower = args.trim().toLowerCase();
-  let ee = isFullscreenEnvEnabled() ? "fullscreen" : "default";
+  let currentRenderer = isFullscreenEnvEnabled() ? "fullscreen" : "default";
   if (lower === "") {
-    let Lt =
+    let crashNote =
       getFullscreenDecision() === "crash_auto_off"
         ? isFullscreenAutoDisabledForThisVersion()
           ? " (fullscreen was turned off on this machine after it repeatedly failed to start; /tui fullscreen retries)"
           : " (a fullscreen launch on this machine didn't finish starting last time; /tui fullscreen retries)"
         : "";
-    onDone(`Current renderer: ${ee}${Lt}. Usage: /tui <${RENDERER_NAMES.join("|")}>`, {
+    onDone(`Current renderer: ${currentRenderer}${crashNote}. Usage: /tui <${RENDERER_NAMES.join("|")}>`, {
       display: "system",
     });
     return null;
@@ -145,27 +152,27 @@ var call_2 = async (onDone, context, args) => {
     });
     return null;
   }
-  let ke = lower;
-  let Re = () => {
+  let renderer = lower;
+  let carryFlags = () => {
     let toolPermissionContext = getToolPermissionContext(context);
     return [
       ...buildRelaunchArgs(toolPermissionContext, getSessionEffort(context)),
       ...buildPermissionAndAgentArgs(toolPermissionContext, getForkReplayLaunchConfig()),
     ];
   };
-  let Be = () => ({
+  let proactivity = () => ({
     proactivityLevel: context.getProactivityLevel(),
     toolPermissionContext: getToolPermissionContext(context),
   });
-  let He = () => submittedMessages(context);
-  let We = () => isMidTurnStreaming(context);
-  let ze = () => hasRunningBackgroundTask(context.taskRegistry.all());
+  let getMessages = () => submittedMessages(context);
+  let getIsResponseStreaming = () => isMidTurnStreaming(context);
+  let relaunchBlocked = () => hasRunningBackgroundTask(context.taskRegistry.all());
   if (isBgSession()) {
     let fullscreenDecision = getFullscreenDecision();
     let { error } = await updateSettingsForSource(
       "userSettings",
       {
-        tui: ke,
+        tui: renderer,
       },
       undefined,
       context.storageV5,
@@ -182,20 +189,20 @@ var call_2 = async (onDone, context, args) => {
       return null;
     }
     await resetFullscreenAutoDisable(context.storageV5);
-    let Xt = hasCursorUpViewportYankBug();
+    let bugInfo = hasCursorUpViewportYankBug();
     logEvent("tengu_tui_command", {
-      fullscreen: ke === "fullscreen",
-      from: fromEnum(ee),
-      to: fromEnum(ke),
+      fullscreen: renderer === "fullscreen",
+      from: fromEnum(currentRenderer),
+      to: fromEnum(renderer),
       from_entry_path: fromEnum(fullscreenDecision),
       session_age_ms: Math.round(process.uptime() * 1000),
       bounce: false,
-      scroll_decay_curve: Xt.useDecayCurve,
-      scroll_base: Xt.base,
-      scroll_xtermjs: Xt.xtermJs,
+      scroll_decay_curve: bugInfo.useDecayCurve,
+      scroll_base: bugInfo.base,
+      scroll_xtermjs: bugInfo.xtermJs,
     });
     onDone(
-      `Saved. Background sessions always use the fullscreen renderer while attached; the ${ke} renderer will apply to sessions started directly with \`claude\`.`,
+      `Saved. Background sessions always use the fullscreen renderer while attached; the ${renderer} renderer will apply to sessions started directly with \`claude\`.`,
       {
         display: "system",
       },
@@ -211,47 +218,50 @@ var call_2 = async (onDone, context, args) => {
     );
     return null;
   }
-  let Xe = ke === "fullscreen";
-  let rt = Xe === isFullscreenEnvEnabled();
-  if (rt && getInitialSettings_2().tui === ke) {
+  let isFullscreen = renderer === "fullscreen";
+  let alreadyActive = isFullscreen === isFullscreenEnvEnabled();
+  if (alreadyActive && getInitialSettings_2().tui === renderer) {
     await resetFullscreenAutoDisable(context.storageV5);
-    onDone(`Already using the ${ke} renderer.`, {
+    onDone(`Already using the ${renderer} renderer.`, {
       display: "system",
     });
     return null;
   }
-  let kt = (Lt) => {
-    let oo = listUncarriedLaunchSettings(getToolPermissionContext(context), getForkRestrictedLaunchConfig());
-    if (oo.length > 0) {
+  let refusalReason = (deferred) => {
+    let uncarriedSettings = listUncarriedLaunchSettings(
+      getToolPermissionContext(context),
+      getForkRestrictedLaunchConfig(),
+    );
+    if (uncarriedSettings.length > 0) {
       logEvent("tengu_tui_refused", {
         uncarriable: true,
       });
-      return cannotSwitchRendererMessage(ke, oo);
+      return cannotSwitchRendererMessage(renderer, uncarriedSettings);
     }
-    if (ze()) {
+    if (relaunchBlocked()) {
       logEvent("tengu_tui_refused", {
         active_tasks: true,
-        ...(Lt && {
-          deferred: Lt,
+        ...(deferred && {
+          deferred,
         }),
       });
       return "Cannot switch renderers while work is running in the background \u2014 wait for it to finish (or stop it via /tasks), then run /tui again.";
     }
     return;
   };
-  let At;
-  if (!rt) {
-    let Lt = kt();
-    if (Lt === undefined) {
+  let relaunchState;
+  if (!alreadyActive) {
+    let refusal = refusalReason();
+    if (refusal === undefined) {
       await saveResumePoint(context.messages, context.storageV5);
-      Lt = kt(true);
-      At = {
-        flags: Re(),
-        handoff: Be(),
+      refusal = refusalReason(true);
+      relaunchState = {
+        flags: carryFlags(),
+        handoff: proactivity(),
       };
     }
-    if (Lt !== undefined) {
-      onDone(Lt, {
+    if (refusal !== undefined) {
+      onDone(refusal, {
         display: "system",
       });
       return null;
@@ -261,7 +271,7 @@ var call_2 = async (onDone, context, args) => {
   let { error } = await updateSettingsForSource(
     "userSettings",
     {
-      tui: ke,
+      tui: renderer,
     },
     undefined,
     context.storageV5,
@@ -278,53 +288,60 @@ var call_2 = async (onDone, context, args) => {
     return null;
   }
   await resetFullscreenAutoDisable(context.storageV5);
-  let Et = hasCursorUpViewportYankBug();
-  let Dt =
+  let bugInfo = hasCursorUpViewportYankBug();
+  let isBounce =
     (env.CLAUDE_CODE_TUI_JUST_SWITCHED === "fullscreen" ||
       fullscreenDecision === "downsell_on" ||
       fullscreenProbeState.downsellGateCached === true) &&
-    ke === "default";
+    renderer === "default";
   logEvent("tengu_tui_command", {
-    fullscreen: Xe,
-    from: fromEnum(ee),
-    to: fromEnum(ke),
+    fullscreen: isFullscreen,
+    from: fromEnum(currentRenderer),
+    to: fromEnum(renderer),
     from_entry_path: fromEnum(fullscreenDecision),
     session_age_ms: Math.round(process.uptime() * 1000),
-    bounce: Dt,
-    scroll_decay_curve: Et.useDecayCurve,
-    scroll_base: Et.base,
-    scroll_xtermjs: Et.xtermJs,
+    bounce: isBounce,
+    scroll_decay_curve: bugInfo.useDecayCurve,
+    scroll_base: bugInfo.base,
+    scroll_xtermjs: bugInfo.xtermJs,
   });
-  if (rt) {
-    onDone(`Already using the ${ke} renderer.`, {
+  if (alreadyActive) {
+    onDone(`Already using the ${renderer} renderer.`, {
       display: "system",
     });
     return null;
   }
   if (
-    ke === "default" &&
-    (Dt || fullscreenDecision === "gb_on" || fullscreenDecision === "settings_on") &&
+    renderer === "default" &&
+    (isBounce || fullscreenDecision === "gb_on" || fullscreenDecision === "settings_on") &&
     is1PEventLoggingEnabled() &&
     logEventTo1P()
   )
     return jsxProd_default(switchRendererFlow, {
       fromEntryPath: fullscreenDecision,
-      bounce: Dt,
-      revertKind: Dt || fullscreenDecision === "gb_on" ? "same_session" : "later_session",
-      carryFlags: Re,
-      getMessages: He,
-      getIsResponseStreaming: We,
-      proactivity: Be,
-      relaunchBlocked: ze,
+      bounce: isBounce,
+      revertKind: isBounce || fullscreenDecision === "gb_on" ? "same_session" : "later_session",
+      carryFlags,
+      getMessages,
+      getIsResponseStreaming,
+      proactivity,
+      relaunchBlocked,
       storageV5: context.storageV5,
       credentials: context.credentials,
       session: context.session,
       onDone,
     });
-  if (ze()) return refuseRendererSwitchWithTasks(ke, onDone);
-  return relaunchInto(ke, At.flags, He(), At.handoff, context.storageV5, {
-    responseStreaming: We(),
-  }).catch((error) => {
+  if (relaunchBlocked()) return refuseRendererSwitchWithTasks(renderer, onDone);
+  return relaunchInto(
+    renderer,
+    relaunchState.flags,
+    getMessages(),
+    relaunchState.handoff,
+    context.storageV5,
+    {
+      responseStreaming: getIsResponseStreaming(),
+    },
+  ).catch((error) => {
     logError(error);
     onDone(
       isBridgeOrTransport(context.session)
@@ -341,12 +358,12 @@ var call_2 = async (onDone, context, args) => {
   });
 };
 //@ chunk-18hwfzwa.js:166208-166320 placement
-function refuseRendererSwitchWithTasks(h, onDone) {
+function refuseRendererSwitchWithTasks(renderer, onDone) {
   logEvent("tengu_tui_refused", {
     active_tasks: true,
     deferred: true,
   });
-  onDone(savedWithoutRestartForTasksMessage(h), {
+  onDone(savedWithoutRestartForTasksMessage(renderer), {
     display: "system",
   });
   return null;
@@ -360,7 +377,7 @@ var MAX_DESCRIPTION_CHARS = 2000;
  * /tui 切换渲染器的执行流程：校验当前会话能否重启（有后台任务、受限会话等），保存偏好后用 relaunchInto 重启到新渲染器；不能重启时只保存并提示；记录 tengu_tui_optout_reason/tengu_tui_refused。
  */
 function switchRendererFlow(props) {
-  let $ = w(39);
+  let $ = useMemoCache(39);
   let {
     fromEntryPath,
     bounce,
@@ -375,24 +392,24 @@ function switchRendererFlow(props) {
     session,
     onDone,
   } = props;
-  let [kt, At] = y("");
-  let [It, Ot] = y(0);
-  let [Et, Dt] = y(null);
+  let [reason, setReason] = useState("");
+  let [cursorOffset, setCursorOffset] = useState(0);
+  let [submittedReason, setSubmittedReason] = useState(null);
   let { columns } = useTerminalSize();
-  let oo = R(false);
-  let io;
+  let submittedRef = useRef(false);
+  let onSubmit;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    io = (so) => {
-      if (oo.current) {
+    onSubmit = (text) => {
+      if (submittedRef.current) {
         return;
       }
-      oo.current = true;
-      Dt(so.trim());
+      submittedRef.current = true;
+      setSubmittedReason(text.trim());
     };
-    $[0] = io;
-  } else io = $[0];
-  let po = io;
-  let ao;
+    $[0] = onSubmit;
+  } else onSubmit = $[0];
+  let submitReason = onSubmit;
+  let submitEffect;
   if (
     $[1] !== bounce ||
     $[2] !== carryFlags ||
@@ -406,63 +423,63 @@ function switchRendererFlow(props) {
     $[10] !== revertKind ||
     $[11] !== session ||
     $[12] !== storageV5 ||
-    $[13] !== Et
+    $[13] !== submittedReason
   ) {
-    ao = () => {
-      if (Et === null) {
+    submitEffect = () => {
+      if (submittedReason === null) {
         return;
       }
-      let co = false;
+      let cancelled = false;
       (async () => {
-        let bo = sleep(SCROLL_JUMP_LINES * 2);
-        if (Et && Et.toLowerCase().replace(/[^a-z]/g, "") !== EGCOULDNTCOPYTEXT) {
-          let Ao = {
+        let delay = sleep(SCROLL_JUMP_LINES * 2);
+        if (submittedReason && submittedReason.toLowerCase().replace(/[^a-z]/g, "") !== EGCOULDNTCOPYTEXT) {
+          let feedbackFields = {
             from_entry_path: fromEnum(fromEntryPath),
             bounce,
             downsell_gate: fullscreenProbeState.downsellGateCached === true,
             revert_kind: fromEnum(revertKind),
             downsell_seen_count: getGlobalConfig().fullscreenDownsellSeenCount ?? 0,
           };
-          let Bo = AbortSignal.timeout(COPY_TEXT_TIMEOUT_MS);
-          let Ro = await submitFeedbackReport({
-            description: Et,
+          let timeoutSignal = AbortSignal.timeout(COPY_TEXT_TIMEOUT_MS);
+          let report = await submitFeedbackReport({
+            description: submittedReason,
             messages: [],
             lastInterruptedAssistantAPIMessageId: null,
             fields: {
               tui_optout: true,
-              ...Ao,
+              ...feedbackFields,
             },
             maxDescriptionChars: MAX_DESCRIPTION_CHARS,
-            signal: Bo,
+            signal: timeoutSignal,
             credentials,
           }).catch(rejectNudgeOnError);
           await (
-            Ro.success
+            report.success
               ? logFeatureOkAsync("tui_optout_reason")
               : logFeatureBadAsync(
                   "tui_optout_reason",
-                  Ro.failureReason ?? (Bo.aborted ? "timeout" : "unknown"),
+                  report.failureReason ?? (timeoutSignal.aborted ? "timeout" : "unknown"),
                 )
           ).catch(logError);
           await logEventTo1PAwaitable("tengu_tui_optout_reason", {
-            reason_length: Et.length,
-            feedback_id: Ro.success ? sanitizeMarkName(Ro.feedbackId) : undefined,
-            ...Ao,
+            reason_length: submittedReason.length,
+            feedback_id: report.success ? sanitizeMarkName(report.feedbackId) : undefined,
+            ...feedbackFields,
           }).catch(logError);
         }
-        await bo;
-        if (co) {
+        await delay;
+        if (cancelled) {
           return;
         }
-        let Ho = listUncarriedLaunchSettings(
+        let uncarriedSettings = listUncarriedLaunchSettings(
           proactivity().toolPermissionContext,
           getForkRestrictedLaunchConfig(),
         );
-        if (Ho.length > 0) {
+        if (uncarriedSettings.length > 0) {
           logEvent("tengu_tui_refused", {
             uncarriable: true,
           });
-          onDone(savedWithoutRestartMessage(Ho), {
+          onDone(savedWithoutRestartMessage(uncarriedSettings), {
             display: "system",
           });
           return;
@@ -489,7 +506,7 @@ function switchRendererFlow(props) {
         });
       })();
       return () => {
-        co = true;
+        cancelled = true;
       };
     };
     $[1] = bounce;
@@ -504,10 +521,10 @@ function switchRendererFlow(props) {
     $[10] = revertKind;
     $[11] = session;
     $[12] = storageV5;
-    $[13] = Et;
-    $[14] = ao;
-  } else ao = $[14];
-  let Wo;
+    $[13] = submittedReason;
+    $[14] = submitEffect;
+  } else submitEffect = $[14];
+  let submitDeps;
   if (
     $[15] !== bounce ||
     $[16] !== carryFlags ||
@@ -520,10 +537,10 @@ function switchRendererFlow(props) {
     $[23] !== relaunchBlocked ||
     $[24] !== revertKind ||
     $[25] !== storageV5 ||
-    $[26] !== Et
+    $[26] !== submittedReason
   ) {
-    Wo = [
-      Et,
+    submitDeps = [
+      submittedReason,
       fromEntryPath,
       bounce,
       revertKind,
@@ -547,45 +564,45 @@ function switchRendererFlow(props) {
     $[23] = relaunchBlocked;
     $[24] = revertKind;
     $[25] = storageV5;
-    $[26] = Et;
-    $[27] = Wo;
-  } else Wo = $[27];
-  P(ao, Wo);
-  let mn;
-  let Cn;
+    $[26] = submittedReason;
+    $[27] = submitDeps;
+  } else submitDeps = $[27];
+  useEffect(submitEffect, submitDeps);
+  let cancel;
+  let keybindingsContext;
   if ($[28] === MEMO_CACHE_SENTINEL) {
-    mn = () => po("");
-    Cn = {
+    cancel = () => submitReason("");
+    keybindingsContext = {
       context: "Settings",
     };
-    $[28] = mn;
-    $[29] = Cn;
+    $[28] = cancel;
+    $[29] = keybindingsContext;
   } else {
-    mn = $[28];
-    Cn = $[29];
+    cancel = $[28];
+    keybindingsContext = $[29];
   }
-  useKeybinding("confirm:no", mn, Cn);
-  if (Et !== null) {
-    let No;
+  useKeybinding("confirm:no", cancel, keybindingsContext);
+  if (submittedReason !== null) {
+    let switchingBox;
     if ($[30] === MEMO_CACHE_SENTINEL) {
-      No = jsxProd_default(Box, {
+      switchingBox = jsxProd_default(Box, {
         paddingX: 1,
         children: jsxProd_default(Text, {
           dimColor: true,
           children: "Switching back to the classic renderer\u2026",
         }),
       });
-      $[30] = No;
-    } else No = $[30];
-    return No;
+      $[30] = switchingBox;
+    } else switchingBox = $[30];
+    return switchingBox;
   }
   let onCancel;
   if ($[31] === MEMO_CACHE_SENTINEL) {
-    onCancel = () => po("");
+    onCancel = () => submitReason("");
     $[31] = onCancel;
   } else onCancel = $[31];
   let inputGuide;
-  let Yo;
+  let questionText;
   if ($[32] === MEMO_CACHE_SENTINEL) {
     inputGuide = jsxProd_default_2(Byline, {
       children: [
@@ -601,56 +618,63 @@ function switchRendererFlow(props) {
         }),
       ],
     });
-    Yo = jsxProd_default(Text, {
+    questionText = jsxProd_default(Text, {
       children: "To help us make fullscreen mode better, what made you switch back?",
     });
     $[32] = inputGuide;
-    $[33] = Yo;
+    $[33] = questionText;
   } else {
     inputGuide = $[32];
-    Yo = $[33];
+    questionText = $[33];
   }
-  let kn;
+  let promptMark;
   if ($[34] === MEMO_CACHE_SENTINEL) {
-    kn = jsxProd_default(Text, {
+    promptMark = jsxProd_default(Text, {
       children: ">",
     });
-    $[34] = kn;
-  } else kn = $[34];
+    $[34] = promptMark;
+  } else promptMark = $[34];
   const columns_2 = Math.max(10, columns - 8);
-  let bn;
-  if ($[35] !== It || $[36] !== kt || $[37] !== columns_2) {
-    bn = jsxProd_default_2(Dialog, {
+  let dialog;
+  if ($[35] !== cursorOffset || $[36] !== reason || $[37] !== columns_2) {
+    dialog = jsxProd_default_2(Dialog, {
       title: "Fullscreen feedback",
       onCancel,
       isCancelActive: false,
       inputGuide,
       children: [
-        Yo,
+        questionText,
         jsxProd_default_2(Box, {
           flexDirection: "row",
           gap: 1,
           children: [
-            kn,
+            promptMark,
             jsxProd_default(TextInput, {
-              value: kt,
-              onChange: At,
-              onSubmit: po,
+              value: reason,
+              onChange: setReason,
+              onSubmit: submitReason,
               focus: true,
               showCursor: true,
               columns: columns_2,
-              cursorOffset: It,
-              onChangeCursorOffset: Ot,
+              cursorOffset,
+              onChangeCursorOffset: setCursorOffset,
             }),
           ],
         }),
       ],
     });
-    $[35] = It;
-    $[36] = kt;
+    $[35] = cursorOffset;
+    $[36] = reason;
     $[37] = columns_2;
-    $[38] = bn;
-  } else bn = $[38];
-  return bn;
+    $[38] = dialog;
+  } else dialog = $[38];
+  return dialog;
 }
-export { relaunchInto, relaunchFailedMessage };
+export {
+  relaunchInto,
+  relaunchFailedMessage,
+  call_2,
+  cannotSwitchRendererMessage,
+  savedWithoutRestartForTasksMessage,
+  savedWithoutRestartMessage,
+};

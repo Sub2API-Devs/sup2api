@@ -5,12 +5,12 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_constants } from "./constants.js";
 import { require_crc } from "./crc.js";
 
 //@ chunk-spjgqa4y.js:27104-31843 cjs-fingerprint
-var require_parser = x(function (cjsExports, cjsModule) {
+var require_parser = __commonJS(function (cjsExports, cjsModule) {
   var constants = require_constants();
   var CrcCalculator = require_crc();
   var Parser = (cjsModule.exports = function (options, dependencies) {

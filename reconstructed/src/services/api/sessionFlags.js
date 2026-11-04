@@ -10,6 +10,7 @@
  */
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hwmsct5x.js:254646-254668 placement
 /**
@@ -19,7 +20,10 @@ class SessionFlagsReaders {
   readers = null;
 }
 //@ chunk-hwmsct5x.js:254668-254693 placement
-var sessionFlagReadersSlot = new HostScoped(() => new SessionFlagsReaders());
+var sessionFlagReadersSlot; // deferred: uses SessionFlagsReaders of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hwmsct5x.js:254668", () => {
+  sessionFlagReadersSlot = new HostScoped(() => new SessionFlagsReaders());
+});
 //@ chunk-hwmsct5x.js:254693-254730 placement
 function sessionFlagReaders() {
   return sessionFlagReadersSlot.of(getRootSession().host);
@@ -41,10 +45,10 @@ class SessionFlagsHolder {
   get() {
     return this.context;
   }
-  merge(e) {
+  merge(flags) {
     this.context = {
       ...this.context,
-      ...e,
+      ...flags,
     };
   }
   clear() {
@@ -52,18 +56,21 @@ class SessionFlagsHolder {
   }
 }
 //@ chunk-hwmsct5x.js:254915-254940 placement
-var sessionFlagsSlot = new HostScoped(() => new SessionFlagsHolder());
+var sessionFlagsSlot; // deferred: uses SessionFlagsHolder of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hwmsct5x.js:254915", () => {
+  sessionFlagsSlot = new HostScoped(() => new SessionFlagsHolder());
+});
 //@ chunk-hwmsct5x.js:254940-254977 placement
 function sessionFlags() {
   return sessionFlagsSlot.of(getRootSession().host);
 }
 //@ chunk-hwmsct5x.js:254977-255040 placement
-function mergeSessionFlags(e) {
-  if (e === null) {
+function mergeSessionFlags(source) {
+  if (source === null) {
     sessionFlags().clear();
     return;
   }
-  sessionFlags().merge(e);
+  sessionFlags().merge(source);
 }
 //@ chunk-hwmsct5x.js:255040-255073 placement
 function getSessionFlags() {
@@ -80,7 +87,7 @@ function noopSyncPermissionMode() {
 /**
  * 导出函数 `noopMergeSessionFlags`：参数 e。
  */
-function noopMergeSessionFlags(e) {}
+function noopMergeSessionFlags(target) {}
 //@ chunk-hwmsct5x.js:255112-255197 placement
 function syncSessionPermissionMode(currentPermissionMode) {
   if (!sessionFlags().get()?.permissionMode) return;

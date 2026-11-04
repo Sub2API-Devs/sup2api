@@ -5,8 +5,8 @@
  * pieces: chunk-5h78gfwc.js (1)
  * attribution: esm-fingerprint 1
  */
-import { de } from "../lib/jwt_claims_set.js";
-import { Me } from "../jws/compact/sign.js";
+import { JWTClaimsSetVerifier } from "../lib/jwt_claims_set.js";
+import { CompactSign } from "../jws/compact/sign.js";
 import { JWTInvalid } from "../../node/esm/util/errors.js";
 
 //@ chunk-5h78gfwc.js:46950-47558 esm-fingerprint
@@ -14,7 +14,7 @@ class SignJWT {
   #e;
   #t;
   constructor(payload = {}) {
-    this.#t = new de(payload);
+    this.#t = new JWTClaimsSetVerifier(payload);
   }
   setIssuer(issuer) {
     this.#t.iss = issuer;
@@ -49,7 +49,7 @@ class SignJWT {
     return this;
   }
   async sign(key, options) {
-    let sig = new Me(this.#t.data());
+    let sig = new CompactSign(this.#t.data());
     sig.setProtectedHeader(this.#e);
     if (Array.isArray(this.#e?.crit) && this.#e.crit.includes("b64") && this.#e.b64 === false)
       throw new JWTInvalid("JWTs MUST NOT use unencoded payload");

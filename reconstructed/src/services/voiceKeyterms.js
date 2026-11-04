@@ -32,8 +32,8 @@ function splitIdentifier(name) {
   return name
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .split(/[-_./\s]+/)
-    .map((i) => i.trim())
-    .filter((i) => i.length > 2 && i.length <= 20);
+    .map((word) => word.trim())
+    .filter((word) => word.length > 2 && word.length <= 20);
 }
 //@ chunk-a658aeqp.js:18864-18925 file-local
 function fileNameWords(filePath) {

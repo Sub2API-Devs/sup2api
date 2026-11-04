@@ -13,14 +13,14 @@ import { stat, realpath } from "fs/promises";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   zodStrictObject,
-  string,
+  stringSchema,
   _enum,
-  E,
+  numberSchema,
   array,
-  u,
+  objectSchema,
   discriminatedUnion,
   literal,
-  M,
+  booleanSchema,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   MAX_PLAN_PATH_CHARS,
@@ -108,17 +108,17 @@ import { raceWithAbortSignal } from "../../utils/sleep.js";
  */
 var designSyncInputSchema = DoctorLazy(() =>
   zodStrictObject({
-    path: string()
+    path: stringSchema()
       .min(1)
       .max(MAX_PLAN_PATH_CHARS)
       .describe("Path within the project, e.g. components/button/index.html"),
-    localPath: string()
+    localPath: stringSchema()
       .min(1)
       .optional()
       .describe(
         "Path on disk to read file contents from, relative to the localDir approved at finalize_plan. Preferred for anything you have on disk: the tool reads, encodes, and uploads directly so the contents never enter the model context. Mutually exclusive with data.",
       ),
-    data: string()
+    data: stringSchema()
       .optional()
       .describe(
         "Inline file contents (UTF-8 text, or base64 when encoding is " +
@@ -126,27 +126,30 @@ var designSyncInputSchema = DoctorLazy(() =>
           "disk should use localPath instead.",
       ),
     encoding: _enum(["base64"]).optional().describe('Set to "base64" for binary inline data'),
-    mimeType: string().optional(),
+    mimeType: stringSchema().optional(),
   }),
 );
 var designSyncProjectSchema = DoctorLazy(() =>
   zodStrictObject({
-    name: string().min(1).max(255).describe('Short human-readable label ("Primary buttons"), not a path'),
-    path: string()
+    name: stringSchema()
+      .min(1)
+      .max(255)
+      .describe('Short human-readable label ("Primary buttons"), not a path'),
+    path: stringSchema()
       .min(1)
       .max(MAX_PLAN_PATH_CHARS)
       .describe("Project-relative path to the preview/spec file this card renders"),
-    subtitle: string()
+    subtitle: stringSchema()
       .max(255)
       .optional()
       .describe('Variants shown ("Primary / secondary / ghost, 3 sizes")'),
     viewport: zodStrictObject({
-      width: E().int().positive(),
-      height: E().int().positive().optional(),
+      width: numberSchema().int().positive(),
+      height: numberSchema().int().positive().optional(),
     })
       .optional()
       .describe("Card dimensions in the Design System pane"),
-    group: string()
+    group: stringSchema()
       .max(64)
       .optional()
       .describe(
@@ -159,12 +162,12 @@ var designSyncProjectSchema = DoctorLazy(() =>
 var designSyncSchema = DoctorLazy(() =>
   zodStrictObject({
     method: _enum(DESIGNSYNC_METHODS),
-    projectId: string()
+    projectId: stringSchema()
       .min(1)
       .optional()
       .describe("Required for all methods except list_projects and create_project"),
-    path: string().min(1).optional().describe("get_file: file path to read"),
-    writes: array(string().min(1).max(MAX_PLAN_PATH_CHARS))
+    path: stringSchema().min(1).optional().describe("get_file: file path to read"),
+    writes: array(stringSchema().min(1).max(MAX_PLAN_PATH_CHARS))
       .max(256)
       .optional()
       .describe(
@@ -172,13 +175,13 @@ var designSyncSchema = DoctorLazy(() =>
           "pattern and max 256 entries \u2014 use broader globs to cover more " +
           "files rather than enumerating paths.",
       ),
-    deletes: array(string().min(1).max(MAX_PLAN_PATH_CHARS))
+    deletes: array(stringSchema().min(1).max(MAX_PLAN_PATH_CHARS))
       .max(256)
       .optional()
       .describe(
         "finalize_plan: exact paths or glob patterns that will be deleted (same syntax and limits as writes).",
       ),
-    planId: string()
+    planId: stringSchema()
       .min(1)
       .optional()
       .describe(
@@ -191,7 +194,7 @@ var designSyncSchema = DoctorLazy(() =>
         "write_files: file contents to write (max 256 per call \u2014 split " +
           "larger bundles across multiple write_files calls under the same planId).",
       ),
-    paths: array(string().min(1).max(MAX_PLAN_PATH_CHARS))
+    paths: array(stringSchema().min(1).max(MAX_PLAN_PATH_CHARS))
       .max(256)
       .optional()
       .describe(
@@ -199,7 +202,7 @@ var designSyncSchema = DoctorLazy(() =>
           "Design System pane card should be removed. Max 256 per call \u2014 " +
           "split larger batches across multiple calls under the same planId.",
       ),
-    name: string()
+    name: stringSchema()
       .min(1)
       .max(200)
       .optional()
@@ -210,18 +213,18 @@ var designSyncSchema = DoctorLazy(() =>
       .describe(
         "register_assets: cards to register in the Design System pane. Each path must be in the finalized plan. Run after write_files succeeds. Max 256 per call.",
       ),
-    localDir: string()
+    localDir: stringSchema()
       .min(1)
       .optional()
       .describe(
         "finalize_plan: directory the bundle was built into. write_files with localPath may only read files inside this directory. Defaults to the current working directory. Resolved to an absolute path and shown in the permission prompt.",
       ),
-    counts: u({
-      total: E().int().nonnegative(),
-      bad: E().int().nonnegative(),
-      thin: E().int().nonnegative(),
-      variantsIdentical: E().int().nonnegative(),
-      iterations: E().int().nonnegative(),
+    counts: objectSchema({
+      total: numberSchema().int().nonnegative(),
+      bad: numberSchema().int().nonnegative(),
+      thin: numberSchema().int().nonnegative(),
+      variantsIdentical: numberSchema().int().nonnegative(),
+      iterations: numberSchema().int().nonnegative(),
     })
       .optional()
       .describe(
@@ -277,12 +280,12 @@ var DESIGN_SYNC_METHODS = {
   },
 };
 //@ chunk-98n6ge4d.js:17170-17350 placement
-function missingRequiredFields(e) {
-  let n = DESIGN_SYNC_METHODS[e.method];
-  let filtered = n.present.filter((i) => e[i] === undefined);
-  let filtered_2 = n.nonEmpty.filter((i) => {
-    let a = e[i];
-    return a === undefined || (Array.isArray(a) && a.length === 0);
+function missingRequiredFields(input) {
+  let methodSpec = DESIGN_SYNC_METHODS[input.method];
+  let filtered = methodSpec.present.filter((field) => input[field] === undefined);
+  let filtered_2 = methodSpec.nonEmpty.filter((field) => {
+    let value = input[field];
+    return value === undefined || (Array.isArray(value) && value.length === 0);
   });
   return [...filtered, ...filtered_2];
 }
@@ -291,81 +294,81 @@ function missingRequiredFields(e) {
  * Design 同步工具各方法的输出结构（列项目、读项目、列文件、读文件、提交计划、写/删文件、资源登记、建项目等）。
  */
 var NOTICE_FIELD = {
-  notice: string().optional(),
+  notice: stringSchema().optional(),
 };
 var DESIGN_SYNC_OUTPUT_SCHEMA = DoctorLazy(() =>
   discriminatedUnion("method", [
-    u({
+    objectSchema({
       method: literal("list_projects"),
       ...NOTICE_FIELD,
       projects: array(
-        u({
-          projectId: string(),
-          name: string(),
-          ownerDisplayName: string().optional(),
-          isOwned: M().optional(),
-          updatedAt: string().optional(),
+        objectSchema({
+          projectId: stringSchema(),
+          name: stringSchema(),
+          ownerDisplayName: stringSchema().optional(),
+          isOwned: booleanSchema().optional(),
+          updatedAt: stringSchema().optional(),
         }),
       ),
     }),
-    u({
+    objectSchema({
       method: literal("get_project"),
       ...NOTICE_FIELD,
-      projectId: string(),
-      name: string(),
-      type: string().optional(),
-      ownerDisplayName: string().optional(),
-      isOwned: M().optional(),
-      canEdit: M().optional(),
+      projectId: stringSchema(),
+      name: stringSchema(),
+      type: stringSchema().optional(),
+      ownerDisplayName: stringSchema().optional(),
+      isOwned: booleanSchema().optional(),
+      canEdit: booleanSchema().optional(),
     }),
-    u({
+    objectSchema({
       method: literal("list_files"),
       ...NOTICE_FIELD,
-      paths: array(string()),
+      paths: array(stringSchema()),
     }),
-    u({
+    objectSchema({
       method: literal("get_file"),
       ...NOTICE_FIELD,
-      path: string(),
-      content: string(),
-      contentType: string(),
-      isBase64: M(),
-      truncated: M(),
+      path: stringSchema(),
+      content: stringSchema(),
+      contentType: stringSchema(),
+      isBase64: booleanSchema(),
+      truncated: booleanSchema(),
     }),
-    u({
+    objectSchema({
       method: literal("finalize_plan"),
       ...NOTICE_FIELD,
-      planId: string(),
-      writes: array(string()),
-      deletes: array(string()),
+      planId: stringSchema(),
+      writes: array(stringSchema()),
+      deletes: array(stringSchema()),
     }),
-    u({
+    objectSchema({
       method: literal("write_files"),
       ...NOTICE_FIELD,
-      written: E(),
+      written: numberSchema(),
     }),
-    u({
+    objectSchema({
       method: literal("delete_files"),
       ...NOTICE_FIELD,
-      deleted: E(),
+      deleted: numberSchema(),
     }),
-    u({
+    objectSchema({
       method: literal("register_assets"),
       ...NOTICE_FIELD,
-      registered: E(),
+      registered: numberSchema(),
     }),
-    u({
+    objectSchema({
       method: literal("unregister_assets"),
       ...NOTICE_FIELD,
-      unregistered: E(),
+      unregistered: numberSchema(),
     }),
-    u({
+    objectSchema({
       method: literal("create_project"),
       ...NOTICE_FIELD,
-      projectId: string(),
-      name: string(),
+      projectId: stringSchema(),
+      name: stringSchema(),
     }),
-    u({
+    objectSchema({
       method: literal("report_validate"),
       ...NOTICE_FIELD,
     }),
@@ -406,10 +409,15 @@ function describeSyncCall(input) {
     case "finalize_plan":
       return uploadPlanTitle(input);
     case "write_files": {
-      let n = input.files?.length ?? 0;
-      let s = count(input.files ?? [], (i) => i.localPath !== undefined);
-      let r = s > 0 && s < n ? ` (${s} from disk, ${n - s} inline)` : s === n && n > 0 ? " from disk" : "";
-      return `Write ${n} ${plural(n, "file")}${r}`;
+      let fileCount = input.files?.length ?? 0;
+      let fromDiskCount = count(input.files ?? [], (file) => file.localPath !== undefined);
+      let sourceNote =
+        fromDiskCount > 0 && fromDiskCount < fileCount
+          ? ` (${fromDiskCount} from disk, ${fileCount - fromDiskCount} inline)`
+          : fromDiskCount === fileCount && fileCount > 0
+            ? " from disk"
+            : "";
+      return `Write ${fileCount} ${plural(fileCount, "file")}${sourceNote}`;
     }
     case "delete_files":
       return `Delete ${input.paths?.length ?? 0} ${plural(input.paths?.length ?? 0, "file")}`;
@@ -429,14 +437,14 @@ function describeSyncCall(input) {
 /**
  * （切分错误，DesignSync）把 DesignSync 前置条件失败原因（需 /design-login、刷新失败、非 claude.ai 认证、仅必要流量）转成给用户的说明。
  */
-function formatDesignSyncPreconditionMessage(reason, n) {
+function formatDesignSyncPreconditionMessage(reason, context) {
   switch (reason) {
     case "needs_design_login":
-      if (n?.isNonInteractiveSession)
+      if (context?.isNonInteractiveSession)
         return `DesignSync needs design-system authorization, and /design-login cannot run in this non-interactive session. Ask the user to run /design-login once from an interactive Claude Code session on this machine \u2014 headless and SDK runs here then reuse that authorization. If this is claude.ai/code, ask them instead to use Claude Design's "Send to Claude Code Web" (which seeds the project into the workspace) or to provide the project files directly.`;
       return "DesignSync needs design-system authorization. Run /design-login to authorize it with your claude.ai account \u2014 this works even when this session authenticates with an API key or a provider token.";
     case "design_refresh_failed":
-      if (n?.isNonInteractiveSession)
+      if (context?.isNonInteractiveSession)
         return "Could not refresh the design access token (transient error). Retry shortly; if the error persists, the stored credential needs re-authorization from an interactive Claude Code terminal (not available here).";
       return "Could not refresh the design access token (transient error). Retry shortly, or run /design-login to re-authorize.";
     case "wrong_provider":
@@ -461,28 +469,30 @@ var DESIGN_LOGIN_AUTO_PROMPT_MODES = new Set(["default", "acceptEdits", "auto"])
 /**
  * （切分错误，DesignSync）取 design 访问令牌；需要登录且在可交互的允许模式下自动发起登录，否则抛 DesignSyncPreconditionError。
  */
-async function getDesignSyncAccessToken(credentials, n) {
-  let s = await needsDesignLogin(credentials);
+async function getDesignSyncAccessToken(credentials, options) {
+  let loginNeeded = await needsDesignLogin(credentials);
   let designConsentKey = await getDesignConsentKey(credentials);
   if (
     !designConsentKey.ok &&
     designConsentKey.reason === "needs_design_login" &&
-    s &&
-    (n?.askReachesUserAtDecision ?? false) &&
-    !n?.isNonInteractiveSession &&
-    n?.permissionMode !== undefined &&
-    DESIGN_LOGIN_AUTO_PROMPT_MODES.has(n.permissionMode)
+    loginNeeded &&
+    (options?.askReachesUserAtDecision ?? false) &&
+    !options?.isNonInteractiveSession &&
+    options?.permissionMode !== undefined &&
+    DESIGN_LOGIN_AUTO_PROMPT_MODES.has(options.permissionMode)
   ) {
-    let i = await runDesignLogin(n?.signal);
-    if (i.ok) return i.accessToken;
-    throw new DesignSyncPreconditionError(`DesignSync needs design-system authorization. ${i.message}`);
+    let loginResult = await runDesignLogin(options?.signal);
+    if (loginResult.ok) return loginResult.accessToken;
+    throw new DesignSyncPreconditionError(
+      `DesignSync needs design-system authorization. ${loginResult.message}`,
+    );
   }
   if (!designConsentKey.ok) {
-    let i = designConsentKey.detail ? ` (${designConsentKey.detail})` : "";
+    let detail = designConsentKey.detail ? ` (${designConsentKey.detail})` : "";
     throw new DesignSyncPreconditionError(
       `${formatDesignSyncPreconditionMessage(designConsentKey.reason, {
-        isNonInteractiveSession: n?.isNonInteractiveSession,
-      })}${i}`,
+        isNonInteractiveSession: options?.isNonInteractiveSession,
+      })}${detail}`,
     );
   }
   return designConsentKey.accessToken;
@@ -501,12 +511,12 @@ function readConsentNeeded(error) {
   return body.consent;
 }
 //@ chunk-98n6ge4d.js:21691-21847 placement
-function canAskForApproval(e) {
-  let n = e.permissions();
+function canAskForApproval(toolPermissionContext) {
+  let permissions = toolPermissionContext.permissions();
   return (
-    !e.isNonInteractiveSession &&
-    n.mode !== "bypassPermissions" &&
-    !(n.mode === "plan" && n.isBypassPermissionsModeAvailable)
+    !toolPermissionContext.isNonInteractiveSession &&
+    permissions.mode !== "bypassPermissions" &&
+    !(permissions.mode === "plan" && permissions.isBypassPermissionsModeAvailable)
   );
 }
 //@ chunk-98n6ge4d.js:21847-28024 placement
@@ -537,77 +547,85 @@ var DesignSyncTool = buildTool({
   isConcurrencySafe() {
     return false;
   },
-  isReadOnly(e) {
-    return isReadOnlySyncMethod(e.method);
+  isReadOnly(input) {
+    return isReadOnlySyncMethod(input.method);
   },
-  isDestructive(e) {
-    return e.method === "write_files" || e.method === "delete_files" || e.method === "unregister_assets";
+  isDestructive(input) {
+    return (
+      input.method === "write_files" ||
+      input.method === "delete_files" ||
+      input.method === "unregister_assets"
+    );
   },
-  userFacingName(e) {
-    return `Design: ${e?.method === "create_project" ? "Create design system project" : describeSyncCall(e)}`;
+  userFacingName(input) {
+    return `Design: ${input?.method === "create_project" ? "Create design system project" : describeSyncCall(input)}`;
   },
-  getToolUseSummary(e) {
-    return e?.method ? describeSyncCall(e) : null;
+  getToolUseSummary(input) {
+    return input?.method ? describeSyncCall(input) : null;
   },
-  toAutoClassifierInput(e) {
-    if (e.method === "finalize_plan") {
-      let n = (s) => {
-        let r = s ?? [];
-        let i = 50;
-        if (r.length <= 50) return r.join(", ");
-        return `${r.length} paths (too many to list here, so leave the decision to the user)`;
+  toAutoClassifierInput(input) {
+    if (input.method === "finalize_plan") {
+      let summarizePaths = (paths) => {
+        let list = paths ?? [];
+        let maxListed = 50;
+        if (list.length <= 50) return list.join(", ");
+        return `${list.length} paths (too many to list here, so leave the decision to the user)`;
       };
-      return `project ${e.projectId ?? "?"} from ${resolve(getCwd(), e.localDir ?? ".")}: write ${n(e.writes)}; delete ${n(e.deletes)}`;
+      return `project ${input.projectId ?? "?"} from ${resolve(getCwd(), input.localDir ?? ".")}: write ${summarizePaths(input.writes)}; delete ${summarizePaths(input.deletes)}`;
     }
-    if (e.method === "create_project") return `create project "${e.name ?? "?"}"`;
-    return e.method;
+    if (input.method === "create_project") return `create project "${input.name ?? "?"}"`;
+    return input.method;
   },
-  renderToolUseMessage(e, { verbose }) {
-    let s = verbose ? syncApprovalSummary(e) : undefined;
-    if (s !== undefined) return s;
-    if (e.method === "finalize_plan") return shortId(e.projectId);
-    return describeSyncCall(e);
+  renderToolUseMessage(input, { verbose }) {
+    let summary = verbose ? syncApprovalSummary(input) : undefined;
+    if (summary !== undefined) return summary;
+    if (input.method === "finalize_plan") return shortId(input.projectId);
+    return describeSyncCall(input);
   },
-  permissionCard(e, n, notice) {
-    return buildSyncApprovalQuestion(e, notice);
+  permissionCard(input, context, notice) {
+    return buildSyncApprovalQuestion(input, notice);
   },
-  create(e) {
+  create(context) {
     return {
-      async validateInput(n) {
-        let s = missingRequiredFields(n);
-        if (s.length > 0)
+      async validateInput(input) {
+        let missing = missingRequiredFields(input);
+        if (missing.length > 0)
           return {
             result: false,
-            message: `${n.method} requires: ${s.join(", ")}.`,
+            message: `${input.method} requires: ${missing.join(", ")}.`,
             errorCode: 1,
           };
-        if (n.method === "create_project" && n.name !== undefined && !isShowableName(n.name))
+        if (input.method === "create_project" && input.name !== undefined && !isShowableName(input.name))
           return {
             result: false,
             message:
               "create_project: the person approving must be able to read the project's name, and this one can't be shown in full. Choose a name with ordinary spaces and no tabs, line breaks or stacked accents.",
             errorCode: 1,
           };
-        if (n.method === "finalize_plan" && (n.writes?.length ?? 0) === 0 && (n.deletes?.length ?? 0) === 0)
+        if (
+          input.method === "finalize_plan" &&
+          (input.writes?.length ?? 0) === 0 &&
+          (input.deletes?.length ?? 0) === 0
+        )
           return {
             result: false,
             message: "finalize_plan needs at least one write or delete path.",
             errorCode: 1,
           };
-        if (n.method === "write_files")
-          for (let r of n.files ?? []) {
-            let i = r.data !== undefined;
-            let a = r.localPath !== undefined;
-            if (i === a)
+        if (input.method === "write_files")
+          for (let file of input.files ?? []) {
+            let hasData = file.data !== undefined;
+            let hasLocalPath = file.localPath !== undefined;
+            if (hasData === hasLocalPath)
               return {
                 result: false,
-                message: `Each file needs exactly one of "data" or "localPath" (offending path: ${r.path}).`,
+                message: `Each file needs exactly one of "data" or "localPath" (offending path: ${file.path}).`,
                 errorCode: 1,
               };
-            if (a && r.encoding !== undefined)
+            if (hasLocalPath && file.encoding !== undefined)
               return {
                 result: false,
-                message: `"encoding" only applies to inline "data"; localPath files are encoded automatically (offending path: ${r.path}).`,
+                message: `"encoding" only applies to inline "data"; localPath files are encoded automatically (offending path: ${file.path}).`,
                 errorCode: 1,
               };
           }
@@ -615,43 +633,46 @@ var DesignSyncTool = buildTool({
           result: true,
         };
       },
-      async checkPermissions(n) {
-        let s = await checkDesignConsent(e.toolState.get(DesignGateState), e.credentials);
-        let r = {
-          ...n,
-          __consentBitShown: s,
-          __consentAskCanReachUser: canAskForApproval(e),
+      async checkPermissions(input) {
+        let consentBit = await checkDesignConsent(
+          context.toolState.get(DesignGateState),
+          context.credentials,
+        );
+        let updatedInput = {
+          ...input,
+          __consentBitShown: consentBit,
+          __consentAskCanReachUser: canAskForApproval(context),
         };
-        let i = s !== null ? DESIGN_CONSENT_PROMPT(s) : null;
-        let a =
-          (await needsDesignLogin(e.credentials)) && isDesignOAuthConfigured() && !isRemoteEnvironment()
+        let consentMessage = consentBit !== null ? DESIGN_CONSENT_PROMPT(consentBit) : null;
+        let loginMessage =
+          (await needsDesignLogin(context.credentials)) && isDesignOAuthConfigured() && !isRemoteEnvironment()
             ? "DesignSync needs design-system authorization for your claude.ai account. Approving opens your browser to authorize " +
               "access to your org's design-system projects \u2014 this session's " +
               "own authentication is not changed."
             : null;
-        let c =
-          [i, a].filter(Boolean).join(`
+        let gateMessage =
+          [consentMessage, loginMessage].filter(Boolean).join(`
 
 `) || null;
         if (
-          c &&
-          n.method !== "finalize_plan" &&
-          n.method !== "create_project" &&
-          n.method !== "report_validate"
+          gateMessage &&
+          input.method !== "finalize_plan" &&
+          input.method !== "create_project" &&
+          input.method !== "report_validate"
         )
           return {
             behavior: "ask",
-            message: c,
-            updatedInput: r,
+            message: gateMessage,
+            updatedInput,
             localDisplayOnly: true,
             decisionReason: {
               type: "safetyCheck",
               reason:
                 [
-                  i
+                  consentMessage
                     ? "design agent consent \u2014 approving records a server-side grant for Claude agents to write your design projects"
                     : null,
-                  a
+                  loginMessage
                     ? "design login \u2014 approving opens a browser OAuth consent and stores a design credential"
                     : null,
                 ]
@@ -660,14 +681,14 @@ var DesignSyncTool = buildTool({
               classifierApprovable: false,
             },
           };
-        if (n.method === "finalize_plan") {
-          let l;
+        if (input.method === "finalize_plan") {
+          let localDir;
           try {
-            l = await realpathFromCwd(n.localDir);
+            localDir = await realpathFromCwd(input.localDir);
           } catch (error) {
             return {
               behavior: "deny",
-              message: `localDir does not exist or is not accessible: ${n.localDir ?? getCwd()} (${errorMessage(error)})`,
+              message: `localDir does not exist or is not accessible: ${input.localDir ?? getCwd()} (${errorMessage(error)})`,
               decisionReason: {
                 type: "safetyCheck",
                 reason: "localDir not found",
@@ -675,19 +696,21 @@ var DesignSyncTool = buildTool({
               },
             };
           }
-          let filtered = (n.writes ?? []).map(normalizePlanPath).filter((j) => !hasGlobChars(j));
+          let filtered = (input.writes ?? [])
+            .map(normalizePlanPath)
+            .filter((writePath) => !hasGlobChars(writePath));
           let results = await Promise.all(
-            filtered.map(async (j) => {
+            filtered.map(async (writePath) => {
               try {
-                await stat(resolve(l, j));
+                await stat(resolve(localDir, writePath));
                 return true;
               } catch {
                 return false;
               }
             }),
           );
-          let filtered_2 = filtered.filter((j, Y) => !results[Y]);
-          let v =
+          let filtered_2 = filtered.filter((writePath, index) => !results[index]);
+          let missingNote =
             filtered.length - filtered_2.length > 0 && filtered_2.length > 0
               ? `\u26A0 ${filtered_2.length} of ${filtered.length} literal write ${plural(filtered.length, "path")} not found under localDir \u2014 ` +
                 `expected if they use a different localPath or inline data, otherwise check for a typo: ${filtered_2.slice(0, 5).join(", ")}` +
@@ -696,78 +719,86 @@ var DesignSyncTool = buildTool({
           return {
             behavior: "ask",
             message: [
-              c,
+              gateMessage,
               ...syncApprovalLines({
-                projectId: n.projectId ?? "?",
-                localDir: l,
-                writes: n.writes ?? [],
-                deletes: n.deletes ?? [],
+                projectId: input.projectId ?? "?",
+                localDir,
+                writes: input.writes ?? [],
+                deletes: input.deletes ?? [],
               }),
-              v,
-            ].filter((j) => j !== null).join(`
+              missingNote,
+            ].filter((line) => line !== null).join(`
 `),
             updatedInput: {
-              ...r,
-              localDir: l,
+              ...updatedInput,
+              localDir,
             },
             localDisplayOnly: true,
             decisionReason: {
               type: "safetyCheck",
-              reason: c ? WRITE_GRANT_NOTE : REVIEW_UPLOAD_NOTE,
+              reason: gateMessage ? WRITE_GRANT_NOTE : REVIEW_UPLOAD_NOTE,
               classifierApprovable: false,
             },
           };
         }
-        if (n.method === "create_project")
+        if (input.method === "create_project")
           return {
             behavior: "ask",
-            message: [c, ...buildCreateProjectQuestionLines(n.name ?? "?")].filter((l) => l !== null).join(`
+            message: [gateMessage, ...buildCreateProjectQuestionLines(input.name ?? "?")].filter(
+              (line) => line !== null,
+            ).join(`
 `),
-            updatedInput: r,
+            updatedInput,
             localDisplayOnly: true,
             decisionReason: {
               type: "safetyCheck",
-              reason: c ? WRITE_GRANT_NOTE : NEW_PROJECT_NOTE,
+              reason: gateMessage ? WRITE_GRANT_NOTE : NEW_PROJECT_NOTE,
               classifierApprovable: false,
             },
           };
         return {
           behavior: "allow",
-          updatedInput: r,
+          updatedInput,
         };
       },
-      async call(n, s) {
-        let signal = s.signal;
-        if (n.method === "report_validate")
+      async call(input, toolContext) {
+        let signal = toolContext.signal;
+        if (input.method === "report_validate")
           return {
             data: {
               method: "report_validate",
             },
           };
-        let i = e.toolState.get(DesignGateState);
-        let __consentBitShown = n.__consentBitShown ?? null;
-        let c = e.permissions();
-        let __consentAskCanReachUser = n.__consentAskCanReachUser ?? false;
-        let h = __consentAskCanReachUser && canAskForApproval(e);
-        let g = "";
+        let gateState = context.toolState.get(DesignGateState);
+        let __consentBitShown = input.__consentBitShown ?? null;
+        let permissionState = context.permissions();
+        let __consentAskCanReachUser = input.__consentAskCanReachUser ?? false;
+        let canAskUser = __consentAskCanReachUser && canAskForApproval(context);
+        let accessToken = "";
         try {
-          g = await getDesignSyncAccessToken(e.credentials, {
+          accessToken = await getDesignSyncAccessToken(context.credentials, {
             signal,
-            isNonInteractiveSession: e.isNonInteractiveSession,
-            permissionMode: c.mode,
+            isNonInteractiveSession: context.isNonInteractiveSession,
+            permissionMode: permissionState.mode,
             askReachesUserAtDecision: __consentAskCanReachUser,
           });
-          if (__consentBitShown !== null && h && n.method === "finalize_plan")
-            await recordDesignConsent(i, __consentBitShown, e.credentials).catch((error) => {
+          if (__consentBitShown !== null && canAskUser && input.method === "finalize_plan")
+            await recordDesignConsent(gateState, __consentBitShown, context.credentials).catch((error) => {
               logForDebugging(
                 `Proactive design consent POST for finalize_plan failed (${errorMessage(error)}); the next RPC call's 403 intercept will retry.`,
               );
             });
-          let f;
+          let methodResult;
           try {
-            f = await runDesignSyncMethod(i, n, g, signal, e.permissions);
-            if (__consentBitShown !== null && n.method !== "finalize_plan")
-              setDesignConsent(i, __consentBitShown, true);
+            methodResult = await runDesignSyncMethod(
+              gateState,
+              input,
+              accessToken,
+              signal,
+              context.permissions,
+            );
+            if (__consentBitShown !== null && input.method !== "finalize_plan")
+              setDesignConsent(gateState, __consentBitShown, true);
           } catch (error) {
             let consentNeeded = readConsentNeeded(error);
             if (consentNeeded === null) {
@@ -777,45 +808,52 @@ var DesignSyncTool = buildTool({
               )
                 throw new DesignSyncPreconditionError(
                   formatDesignSyncPreconditionMessage("needs_design_login", {
-                    isNonInteractiveSession: e.isNonInteractiveSession,
+                    isNonInteractiveSession: context.isNonInteractiveSession,
                   }),
                 );
               throw error;
             } else if (consentNeeded !== __consentBitShown) {
-              setDesignConsent(i, consentNeeded, false);
+              setDesignConsent(gateState, consentNeeded, false);
               throw new DesignSyncPreconditionError(
                 `${DESIGN_CONSENT_PROMPT(consentNeeded)} The user hasn't granted this yet \u2014 ask them to retry (the prompt will show on the next call) or run /design consent.`,
               );
-            } else if (!h) {
-              setDesignConsent(i, consentNeeded, false);
+            } else if (!canAskUser) {
+              setDesignConsent(gateState, consentNeeded, false);
               throw new DesignSyncPreconditionError(
                 `${DESIGN_CONSENT_PROMPT(consentNeeded)} The user hasn't granted this \u2014 run /design consent to grant it (it can't be approved automatically in this permission mode).`,
               );
             } else {
-              await recordDesignConsent(i, consentNeeded, e.credentials);
-              f = await runDesignSyncMethod(i, n, g, signal, e.permissions);
+              await recordDesignConsent(gateState, consentNeeded, context.credentials);
+              methodResult = await runDesignSyncMethod(
+                gateState,
+                input,
+                accessToken,
+                signal,
+                context.permissions,
+              );
             }
           }
           return {
-            data: f,
+            data: methodResult,
           };
         } catch (error) {
           if (signal.aborted) throw new AbortError();
-          let message = redactOAuthToken(errorMessage(error), g);
+          let message = redactOAuthToken(errorMessage(error), accessToken);
           let telemetryMessage = error?.telemetryMessage;
-          let v = typeof telemetryMessage === "string" ? telemetryMessage : "DesignSync tool call failed";
+          let telemetryDetail =
+            typeof telemetryMessage === "string" ? telemetryMessage : "DesignSync tool call failed";
           if (error instanceof DesignSyncPreconditionError)
-            throw withTelemetryMessage(new DesignSyncPreconditionError(message), v);
-          throw withTelemetryMessage(Error(message), v);
+            throw withTelemetryMessage(new DesignSyncPreconditionError(message), telemetryDetail);
+          throw withTelemetryMessage(Error(message), telemetryDetail);
         }
       },
     };
   },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
     return {
       tool_use_id: toolUseId,
       type: "tool_result",
-      content: jsonStringify(e),
+      content: jsonStringify(result),
     };
   },
 });
@@ -823,9 +861,9 @@ var DesignSyncTool = buildTool({
 /**
  * 必填字段校验，缺失时抛 “<方法> requires \"<字段>\"”。
  */
-function requireField(e, n, method) {
-  if (e === undefined) throw Error(`${method} requires "${n}"`);
-  return e;
+function requireField(value, fieldName, method) {
+  if (value === undefined) throw Error(`${method} requires "${fieldName}"`);
+  return value;
 }
 //@ chunk-98n6ge4d.js:28101-28246 placement
 var TEXT_FILE_EXTENSIONS = new Set([
@@ -862,14 +900,14 @@ async function realpathFromCwd(localDir) {
  * 检查 write_files 的本地路径能否在不询问用户的情况下读取，否则抛出前置条件错误。
  */
 function assertReadableWithoutAsking(path, displayPath, permissionContext) {
-  let r = layeredReadVerdictForPaths([path], permissionContext, {
+  let verdict = layeredReadVerdictForPaths([path], permissionContext, {
     refuseAutomounterShapes: true,
   });
-  switch (r.layer) {
+  switch (verdict.layer) {
     case "allow":
       return;
     case "path-mode-ask":
-      if (r.decision.decisionReason?.type === "workingDir") return;
+      if (verdict.decision.decisionReason?.type === "workingDir") return;
       break;
     case "bare-deny":
     case "path-deny":
@@ -889,23 +927,25 @@ function assertReadableWithoutAsking(path, displayPath, permissionContext) {
 /**
  * 拒绝读取凭证文件、设备或 Claude Code 自己的配置与令牌文件作为上传来源。
  */
-async function assertNotProtectedFile(e, n, s) {
+async function assertNotProtectedFile(path, realPath, displayPath) {
   if (
-    (await isCredentialPath(e, n)) ||
-    [e, n].some((r) => isSensitiveBasenameWithVariants(r) || isCredentialConfigPath_2(r))
+    (await isCredentialPath(path, realPath)) ||
+    [path, realPath].some(
+      (candidate) => isSensitiveBasenameWithVariants(candidate) || isCredentialConfigPath_2(candidate),
+    )
   )
     throw withTelemetryMessage(
       new DesignSyncPreconditionError(
-        `write_files: the localPath for ${s} is or leads to a credential file, a device, or a file that Claude Code keeps for itself (its config and token folders), so it was not read. Nothing in this call was uploaded. Stop and ask the user how to proceed.`,
+        `write_files: the localPath for ${displayPath} is or leads to a credential file, a device, or a file that Claude Code keeps for itself (its config and token folders), so it was not read. Nothing in this call was uploaded. Stop and ask the user how to proceed.`,
       ),
       `${DESIGNSYNC} localPath is a protected file`,
     );
 }
 //@ chunk-98n6ge4d.js:29386-29683 placement
-function hardLinkRefusal(e) {
+function hardLinkRefusal(path) {
   return withTelemetryMessage(
     new DesignSyncPreconditionError(
-      `write_files: the file at the localPath for ${e} is a hard link (it has another name elsewhere whose read permission can't be checked), so it was not read. Nothing in this call was uploaded. Stop and ask the user how to proceed.`,
+      `write_files: the file at the localPath for ${path} is a hard link (it has another name elsewhere whose read permission can't be checked), so it was not read. Nothing in this call was uploaded. Stop and ask the user how to proceed.`,
     ),
     `${DESIGNSYNC} localPath is a hard link`,
   );
@@ -914,9 +954,9 @@ function hardLinkRefusal(e) {
 /**
  * 构造"打开的文件不是检查过的那个文件"的错误。
  */
-function openedFileMismatch(e) {
+function openedFileMismatch(path) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-    `write_files: the file at the localPath for ${e} could not be opened as the file that was checked (it may have been moved or replaced, or the system would not say which file was opened), so it was not read. Nothing in this call was uploaded. Try the call once more; if it fails again, stop and ask the user how to proceed.`,
+    `write_files: the file at the localPath for ${path} could not be opened as the file that was checked (it may have been moved or replaced, or the system would not say which file was opened), so it was not read. Nothing in this call was uploaded. Try the call once more; if it fails again, stop and ask the user how to proceed.`,
     "write_files: the file at localPath could not be opened as the file that was checked",
   );
 }
@@ -925,114 +965,114 @@ function openedFileMismatch(e) {
  * 准备 write_files 的单个文件：只有内联 data 时直接返回；有 localPath 时校验在已批准目录内、长度、非受保护/凭证文件、可无需询问读取、真实路径仍在目录内、不是硬链接、打开的正是检查过的文件、大小上限，然后按扩展名以 utf8 或 base64 读入。
  */
 async function readLocalFileForUpload(file, approvedDir, permissionContext, getPermissionContext) {
-  let displayPath = normalizePlanPath(file.path);
+  let planPath = normalizePlanPath(file.path);
   if (file.localPath === undefined) {
-    if (file.data === undefined) throw Error(`write_files: ${displayPath} has neither data nor localPath`);
+    if (file.data === undefined) throw Error(`write_files: ${planPath} has neither data nor localPath`);
     return {
-      path: displayPath,
+      path: planPath,
       data: file.data,
       encoding: file.encoding,
       mimeType: file.mimeType,
     };
   }
-  if (file.data !== undefined) throw Error(`write_files: ${displayPath} has both data and localPath`);
+  if (file.data !== undefined) throw Error(`write_files: ${planPath} has both data and localPath`);
   if (approvedDir === undefined)
     throw Error(
       "write_files with localPath requires a plan finalized with localDir. Re-run finalize_plan with the bundle directory.",
     );
-  let a = (w) => (w.endsWith(sep) ? w : w + sep);
-  let c = resolve(approvedDir);
-  let path = resolve(c, file.localPath);
-  if (path !== c && !path.startsWith(a(c)))
+  let withTrailingSep = (dir) => (dir.endsWith(sep) ? dir : dir + sep);
+  let approvedRoot = resolve(approvedDir);
+  let path = resolve(approvedRoot, file.localPath);
+  if (path !== approvedRoot && !path.startsWith(withTrailingSep(approvedRoot)))
     throw Error("write_files: localPath must be inside the directory approved at finalize_plan.");
   if (path.length > MAX_SENSITIVE_PATH_LENGTH)
     throw withTelemetryMessage(
       new DesignSyncPreconditionError(
-        `write_files: the full path of the localPath for ${displayPath} is longer than ${MAX_SENSITIVE_PATH_LENGTH} characters, so it was not read. Nothing in this call was uploaded. Stop and ask the user how to proceed.`,
+        `write_files: the full path of the localPath for ${planPath} is longer than ${MAX_SENSITIVE_PATH_LENGTH} characters, so it was not read. Nothing in this call was uploaded. Stop and ask the user how to proceed.`,
       ),
       `${DESIGNSYNC} localPath is too long`,
     );
-  await assertNotProtectedFile(path, path, displayPath);
-  assertReadableWithoutAsking(path, displayPath, getPermissionContext());
-  let path_2 = await realpath(path);
-  if (path_2 !== c && !path_2.startsWith(a(c))) {
+  await assertNotProtectedFile(path, path, planPath);
+  assertReadableWithoutAsking(path, planPath, getPermissionContext());
+  let realPath = await realpath(path);
+  if (realPath !== approvedRoot && !realPath.startsWith(withTrailingSep(approvedRoot))) {
     if (
-      (await realpath(c).catch(() => {
+      (await realpath(approvedRoot).catch(() => {
         return;
-      })) !== c
+      })) !== approvedRoot
     )
       throw Error(
         "write_files: the directory approved at finalize_plan no longer resolves to the path that was approved (it may have been moved, replaced or deleted). Nothing in this call was uploaded. Run finalize_plan again.",
       );
     throw Error("write_files: localPath resolves outside the directory approved at finalize_plan.");
   }
-  await assertNotProtectedFile(path, path_2, displayPath);
-  if (path_2 !== path) assertReadableWithoutAsking(path_2, displayPath, getPermissionContext());
-  let g = await statChain(path_2);
-  if (g === undefined)
+  await assertNotProtectedFile(path, realPath, planPath);
+  if (realPath !== path) assertReadableWithoutAsking(realPath, planPath, getPermissionContext());
+  let stats = await statChain(realPath);
+  if (stats === undefined)
     throw withTelemetryMessage(
       new DesignSyncPreconditionError(
-        `write_files: the localPath for ${displayPath} is not a regular file, or it was moved or replaced while it was checked, so it was not read. Nothing in this call was uploaded. Stop and ask the user how to proceed.`,
+        `write_files: the localPath for ${planPath} is not a regular file, or it was moved or replaced while it was checked, so it was not read. Nothing in this call was uploaded. Stop and ask the user how to proceed.`,
       ),
       `${DESIGNSYNC} localPath is not a regular file`,
     );
-  if (g.nlink > 1n) throw hardLinkRefusal(displayPath);
-  let f;
+  if (stats.nlink > 1n) throw hardLinkRefusal(planPath);
+  let opened;
   try {
-    f = await openReadBoundToApproval(
-      path_2,
-      [path_2],
+    opened = await openReadBoundToApproval(
+      realPath,
+      [realPath],
       permissionContext,
-      getPlatform() === "macos" ? await lastExistingIdentity([path_2]) : undefined,
+      getPlatform() === "macos" ? await lastExistingIdentity([realPath]) : undefined,
       "refused",
     );
   } catch (error) {
-    if (error instanceof SymlinkReadRefusedError) throw openedFileMismatch(displayPath);
+    if (error instanceof SymlinkReadRefusedError) throw openedFileMismatch(planPath);
     throw error;
   }
-  let handle = f.handle;
-  let y;
+  let handle = opened.handle;
+  let contents;
   try {
-    let stats = await handle.stat({
+    let after = await handle.stat({
       bigint: true,
     });
-    if (!stats.isFile()) throw Error("write_files: localPath must be a regular file.");
-    if (stats.nlink > 1n) throw hardLinkRefusal(displayPath);
-    if (didInodeChange(g, stats)) throw openedFileMismatch(displayPath);
+    if (!after.isFile()) throw Error("write_files: localPath must be a regular file.");
+    if (after.nlink > 1n) throw hardLinkRefusal(planPath);
+    if (didInodeChange(stats, after)) throw openedFileMismatch(planPath);
     if (getPlatform() === "linux" || getPlatform() === "wsl") {
-      let j = await readFdTargetPath(handle.fd).catch(() => null);
-      if (j !== undefined && j !== path_2) throw openedFileMismatch(displayPath);
+      let fdPath = await readFdTargetPath(handle.fd).catch(() => null);
+      if (fdPath !== undefined && fdPath !== realPath) throw openedFileMismatch(planPath);
     }
-    if (stats.size > BigInt(MAX_LOCAL_FILE_BYTES))
+    if (after.size > BigInt(MAX_LOCAL_FILE_BYTES))
       throw Error(`write_files: file at localPath exceeds the ${MAX_LOCAL_FILE_BYTES} byte limit.`);
-    y = await handle.readFile();
+    contents = await handle.readFile();
   } finally {
-    await f.close();
+    await opened.close();
   }
-  let lower = extname(path_2).slice(1).toLowerCase();
+  let lower = extname(realPath).slice(1).toLowerCase();
   return TEXT_FILE_EXTENSIONS.has(lower)
     ? {
-        path: displayPath,
-        data: y.toString("utf8"),
+        path: planPath,
+        data: contents.toString("utf8"),
         mimeType: file.mimeType,
       }
     : {
-        path: displayPath,
-        data: y.toString("base64"),
+        path: planPath,
+        data: contents.toString("base64"),
         encoding: "base64",
         mimeType: file.mimeType,
       };
 }
 //@ chunk-98n6ge4d.js:32516-36768 placement
-async function runDesignSyncMethod(e, n, s, permissionContext, getPermissionContext) {
-  switch (n.method) {
+async function runDesignSyncMethod(session, input, credentials, signal, getPermissionContext) {
+  switch (input.method) {
     case "list_projects": {
       let { items } = await listOrgProjects(
-        s,
+        credentials,
         {
           type: PROJECT_TYPE_DESIGN_SYSTEM,
         },
-        permissionContext,
+        signal,
       );
       return {
         method: "list_projects",
@@ -1051,8 +1091,8 @@ async function runDesignSyncMethod(e, n, s, permissionContext, getPermissionCont
       };
     }
     case "get_project": {
-      let projectId = requireField(n.projectId, "projectId", n.method);
-      let designProject = await getDesignProject(s, projectId, permissionContext);
+      let projectId = requireField(input.projectId, "projectId", input.method);
+      let designProject = await getDesignProject(credentials, projectId, signal);
       return {
         method: "get_project",
         projectId: designProject.projectId,
@@ -1064,16 +1104,16 @@ async function runDesignSyncMethod(e, n, s, permissionContext, getPermissionCont
       };
     }
     case "list_files": {
-      let projectId = requireField(n.projectId, "projectId", n.method);
+      let projectId = requireField(input.projectId, "projectId", input.method);
       return {
         method: "list_files",
-        paths: await listDesignFiles(s, projectId, permissionContext),
+        paths: await listDesignFiles(credentials, projectId, signal),
       };
     }
     case "get_file": {
-      let projectId = requireField(n.projectId, "projectId", n.method);
-      let path = requireField(n.path, "path", n.method);
-      let designFile = await getDesignFile(s, projectId, path, undefined, permissionContext);
+      let projectId = requireField(input.projectId, "projectId", input.method);
+      let path = requireField(input.path, "path", input.method);
+      let designFile = await getDesignFile(credentials, projectId, path, undefined, signal);
       return {
         method: "get_file",
         path,
@@ -1084,13 +1124,13 @@ async function runDesignSyncMethod(e, n, s, permissionContext, getPermissionCont
       };
     }
     case "finalize_plan": {
-      let projectId = requireField(n.projectId, "projectId", n.method);
-      let writes = requireField(n.writes, "writes", n.method).map(normalizePlanPath);
-      let deletes = requireField(n.deletes, "deletes", n.method).map(normalizePlanPath);
-      let localDir = await realpathFromCwd(n.localDir);
+      let projectId = requireField(input.projectId, "projectId", input.method);
+      let writes = requireField(input.writes, "writes", input.method).map(normalizePlanPath);
+      let deletes = requireField(input.deletes, "deletes", input.method).map(normalizePlanPath);
+      let localDir = await realpathFromCwd(input.localDir);
       return {
         method: "finalize_plan",
-        planId: registerDesignPlan(e, {
+        planId: registerDesignPlan(session, {
           projectId,
           writes,
           deletes,
@@ -1101,129 +1141,133 @@ async function runDesignSyncMethod(e, n, s, permissionContext, getPermissionCont
       };
     }
     case "write_files": {
-      let projectId = requireField(n.projectId, "projectId", n.method);
-      let c = requireField(n.planId, "planId", n.method);
-      let l = requireField(n.files, "files", n.method);
-      let planByToken = getPlanByToken(e, c);
+      let projectId = requireField(input.projectId, "projectId", input.method);
+      let planId = requireField(input.planId, "planId", input.method);
+      let inputFiles = requireField(input.files, "files", input.method);
+      let planByToken = getPlanByToken(session, planId);
       if (!planByToken || planByToken.projectId !== projectId)
         throw Error("Plan token is missing or does not match this project. Call finalize_plan first.");
-      let filtered = l.map((w) => w.path).filter(isReservedDesignPath);
+      let filtered = inputFiles.map((file) => file.path).filter(isReservedDesignPath);
       if (filtered.length > 0)
         throw Error(
           `Cannot write reserved paths: ${filtered.join(", ")}. CLAUDE.md and .claude/ carry instructions to the design agent and are blocked regardless of the plan.`,
         );
-      let filtered_2 = l
-        .map((w) => normalizePlanPath(w.path))
-        .filter((w) => !pathMatchesAny(w, planByToken.writes));
+      let filtered_2 = inputFiles
+        .map((file) => normalizePlanPath(file.path))
+        .filter((writePath) => !pathMatchesAny(writePath, planByToken.writes));
       if (filtered_2.length > 0)
         throw Error(
           `Cannot write paths outside the finalized plan: ${filtered_2.join(", ")}. Re-run finalize_plan with the full set.`,
         );
-      let m = 32;
+      let batchSize = 32;
       let files = [];
-      for (let w = 0; w < l.length; w += m) {
-        if (permissionContext.aborted) throw new AbortError();
-        let sliced = l.slice(w, w + m);
-        let Y = await raceWithAbortSignal(
+      for (let offset = 0; offset < inputFiles.length; offset += batchSize) {
+        if (signal.aborted) throw new AbortError();
+        let sliced = inputFiles.slice(offset, offset + batchSize);
+        let batchResult = await raceWithAbortSignal(
           Promise.allSettled(
-            sliced.map((k) =>
-              readLocalFileForUpload(k, planByToken.localDir, permissionContext, getPermissionContext),
+            sliced.map((file) =>
+              readLocalFileForUpload(file, planByToken.localDir, signal, getPermissionContext),
             ),
           ),
-          permissionContext,
+          signal,
           () => new AbortError(),
         );
-        for (let k of Y) {
-          if (k.status === "rejected") throw k.reason;
-          files.push(k.value);
+        for (let settled of batchResult) {
+          if (settled.status === "rejected") throw settled.reason;
+          files.push(settled.value);
         }
       }
       return {
         method: "write_files",
-        written: (await writeDesignFiles(s, projectId, files, {}, permissionContext)).length,
+        written: (await writeDesignFiles(credentials, projectId, files, {}, signal)).length,
       };
     }
     case "delete_files": {
-      let projectId = requireField(n.projectId, "projectId", n.method);
-      let c = requireField(n.planId, "planId", n.method);
-      let l = requireField(n.paths, "paths", n.method);
-      let planByToken = getPlanByToken(e, c);
+      let projectId = requireField(input.projectId, "projectId", input.method);
+      let planId = requireField(input.planId, "planId", input.method);
+      let deletePaths = requireField(input.paths, "paths", input.method);
+      let planByToken = getPlanByToken(session, planId);
       if (!planByToken || planByToken.projectId !== projectId)
         throw Error("Plan token is missing or does not match this project. Call finalize_plan first.");
-      let filtered = l.filter(isReservedDesignPath);
+      let filtered = deletePaths.filter(isReservedDesignPath);
       if (filtered.length > 0)
         throw Error(
           `Cannot delete reserved paths: ${filtered.join(", ")}. CLAUDE.md and .claude/ carry instructions to the design agent and are blocked regardless of the plan.`,
         );
-      let filtered_2 = l.map(normalizePlanPath).filter((y) => !pathMatchesAny(y, planByToken.deletes));
+      let filtered_2 = deletePaths
+        .map(normalizePlanPath)
+        .filter((deletePath) => !pathMatchesAny(deletePath, planByToken.deletes));
       if (filtered_2.length > 0)
         throw Error(
           `Cannot delete paths outside the finalized plan: ${filtered_2.join(", ")}. Re-run finalize_plan with the full set.`,
         );
       return {
         method: "delete_files",
-        deleted: await deleteDesignFiles(s, projectId, l.map(normalizePlanPath), permissionContext),
+        deleted: await deleteDesignFiles(credentials, projectId, deletePaths.map(normalizePlanPath), signal),
       };
     }
     case "register_assets": {
-      let projectId = requireField(n.projectId, "projectId", n.method);
-      let c = requireField(n.planId, "planId", n.method);
-      let l = requireField(n.assets, "assets", n.method);
-      let planByToken = getPlanByToken(e, c);
+      let projectId = requireField(input.projectId, "projectId", input.method);
+      let planId = requireField(input.planId, "planId", input.method);
+      let assets = requireField(input.assets, "assets", input.method);
+      let planByToken = getPlanByToken(session, planId);
       if (!planByToken || planByToken.projectId !== projectId)
         throw Error("Plan token is missing or does not match this project. Call finalize_plan first.");
-      let filtered = l
-        .map((m) => normalizePlanPath(m.path))
-        .filter((m) => !pathMatchesAny(m, planByToken.writes));
+      let filtered = assets
+        .map((asset) => normalizePlanPath(asset.path))
+        .filter((assetPath) => !pathMatchesAny(assetPath, planByToken.writes));
       if (filtered.length > 0)
         throw Error(
           `Cannot register paths outside the finalized plan: ${filtered.join(", ")}. Re-run finalize_plan with the full set.`,
         );
-      let f = 0;
-      for (let m of l) {
-        if (permissionContext.aborted) throw new AbortError();
+      let registered = 0;
+      for (let asset of assets) {
+        if (signal.aborted) throw new AbortError();
         await recordDesignAsset(
-          s,
+          credentials,
           projectId,
           {
-            ...m,
-            path: normalizePlanPath(m.path),
+            ...asset,
+            path: normalizePlanPath(asset.path),
           },
-          permissionContext,
+          signal,
         );
-        f++;
+        registered++;
       }
       return {
         method: "register_assets",
-        registered: f,
+        registered,
       };
     }
     case "unregister_assets": {
-      let projectId = requireField(n.projectId, "projectId", n.method);
-      let c = requireField(n.planId, "planId", n.method);
-      let l = requireField(n.paths, "paths", n.method);
-      let planByToken = getPlanByToken(e, c);
+      let projectId = requireField(input.projectId, "projectId", input.method);
+      let planId = requireField(input.planId, "planId", input.method);
+      let paths = requireField(input.paths, "paths", input.method);
+      let planByToken = getPlanByToken(session, planId);
       if (!planByToken || planByToken.projectId !== projectId)
         throw Error("Plan token is missing or does not match this project. Call finalize_plan first.");
-      let filtered = l.map(normalizePlanPath).filter((m) => !pathMatchesAny(m, planByToken.deletes));
+      let filtered = paths
+        .map(normalizePlanPath)
+        .filter((assetPath) => !pathMatchesAny(assetPath, planByToken.deletes));
       if (filtered.length > 0)
         throw Error(
           `Cannot unregister cards for paths outside the finalized plan's deletes: ${filtered.join(", ")}. Re-run finalize_plan with the full set.`,
         );
-      let f = 0;
-      for (let m of l.map(normalizePlanPath)) {
-        if (permissionContext.aborted) throw new AbortError();
-        await deleteDesignAsset(s, projectId, m, permissionContext);
-        f++;
+      let unregistered = 0;
+      for (let assetPath of paths.map(normalizePlanPath)) {
+        if (signal.aborted) throw new AbortError();
+        await deleteDesignAsset(credentials, projectId, assetPath, signal);
+        unregistered++;
       }
       return {
         method: "unregister_assets",
-        unregistered: f,
+        unregistered,
       };
     }
     case "create_project": {
-      let name = requireField(n.name, "name", n.method);
-      let designProject = await createDesignProject(s, name, permissionContext);
+      let name = requireField(input.name, "name", input.method);
+      let designProject = await createDesignProject(credentials, name, signal);
       return {
         method: "create_project",
         projectId: designProject.projectId,
@@ -1236,3 +1280,4 @@ async function runDesignSyncMethod(e, n, s, permissionContext, getPermissionCont
       };
   }
 }
+export { DesignSyncTool };

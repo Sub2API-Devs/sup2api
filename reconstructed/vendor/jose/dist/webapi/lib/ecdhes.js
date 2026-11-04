@@ -5,13 +5,13 @@
  * pieces: chunk-5h78gfwc.js (5)
  * attribution: esm-layout 1, esm-fingerprint 4
  */
-import { concat, fe, encode } from "./buffer_utils.js";
+import { concat, uint32be, encode } from "./buffer_utils.js";
 import { digest } from "./helpers.js";
 import { checkEncCryptoKey } from "./crypto_key.js";
 
 //@ chunk-5h78gfwc.js:12812-12852 esm-layout
 function lengthAndInput(input) {
-  return concat(fe(input.length), input);
+  return concat(uint32be(input.length), input);
 }
 //@ chunk-5h78gfwc.js:12852-13109 esm-fingerprint
 async function concatKdf(Z, L, OtherInfo) {
@@ -21,7 +21,7 @@ async function concatKdf(Z, L, OtherInfo) {
   let dk = new Uint8Array(reps * 32);
   for (let i = 1; i <= reps; i++) {
     let hashInput = new Uint8Array(4 + Z.length + OtherInfo.length);
-    hashInput.set(fe(i), 0);
+    hashInput.set(uint32be(i), 0);
     hashInput.set(Z, 4);
     hashInput.set(OtherInfo, 4 + Z.length);
     let hashResult = await digest("sha256", hashInput);
@@ -43,7 +43,7 @@ async function deriveKey(
   let algorithmID = lengthAndInput(encode(algorithm));
   let partyUInfo = lengthAndInput(apu);
   let partyVInfo = lengthAndInput(apv);
-  let suppPubInfo = fe(keyLength);
+  let suppPubInfo = uint32be(keyLength);
   let suppPrivInfo = new Uint8Array();
   let otherInfo = concat(algorithmID, partyUInfo, partyVInfo, suppPubInfo, suppPrivInfo);
   let Z = new Uint8Array(

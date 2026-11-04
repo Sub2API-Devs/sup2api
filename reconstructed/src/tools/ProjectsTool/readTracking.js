@@ -9,26 +9,30 @@
  * attribution: placement 3
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, array, string, literal } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, array, stringSchema, literal } from "../../../vendor/zod/v4/classic/schemas.js";
 import { normalizeUuidOrNull } from "../../utils/agentId.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-g54kbxqw.js:45738-45886 placement
-var TRACKED_READS_SCHEMA = DoctorLazy(() =>
-  u({
-    reads: array(
-      u({
-        docId: string(),
-        read: u({
-          method: literal("project_read"),
-          path: string(),
-          version: string().optional(),
-          content: string(),
-          created_at: string().nullable(),
+var TRACKED_READS_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-g54kbxqw.js:45738", () => {
+  TRACKED_READS_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      reads: array(
+        objectSchema({
+          docId: stringSchema(),
+          read: objectSchema({
+            method: literal("project_read"),
+            path: stringSchema(),
+            version: stringSchema().optional(),
+            content: stringSchema(),
+            created_at: stringSchema().nullable(),
+          }),
         }),
-      }),
-    ),
-  }),
-);
+      ),
+    }),
+  );
+});
 //@ chunk-g54kbxqw.js:45886-45975 placement
 function trackedProjectReads(attachment) {
   if (!isTrackedReadsPayload(attachment)) return;
@@ -39,7 +43,7 @@ function trackedProjectReads(attachment) {
 /**
  * 判断输入是否符合已跟踪读取的 schema。
  */
-function isTrackedReadsPayload(e) {
-  return TRACKED_READS_SCHEMA().safeParse(e).success;
+function isTrackedReadsPayload(payload) {
+  return TRACKED_READS_SCHEMA().safeParse(payload).success;
 }
 export { trackedProjectReads };

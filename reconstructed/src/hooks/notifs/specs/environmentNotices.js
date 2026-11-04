@@ -39,12 +39,12 @@ import { createSystemMessage } from "../../../utils/messages.js";
 //@ chunk-18hwfzwa.js:1756892-1757422 placement
 var chromeExtensionCheckNoticeSpec = {
   id: "chrome-extension-check",
-  deps: (h) => [h.store],
+  deps: (deps) => [deps.store],
   setup() {
-    let h = false;
+    let isCancelled = false;
     return ({ store }) => {
-      if (getIsRemoteMode() || h) return;
-      h = true;
+      if (getIsRemoteMode() || isCancelled) return;
+      isCancelled = true;
       let chromeFlag = getChromeFlagOverride();
       let globalConfig = getGlobalConfig();
       if (
@@ -63,15 +63,15 @@ var chromeExtensionCheckNoticeSpec = {
       }
       if (isAntBuild()) return;
       isChromeExtensionInstalled()
-        .then((ke) => {
-          if (ke) return;
+        .then((result) => {
+          if (result) return;
           logSetupIssues("chrome", 1);
-          store.setState((Re) => {
-            if (Re.setupIssues.chromeExtensionIssueCount === 1) return Re;
+          store.setState((prev) => {
+            if (prev.setupIssues.chromeExtensionIssueCount === 1) return prev;
             return {
-              ...Re,
+              ...prev,
               setupIssues: {
-                ...Re.setupIssues,
+                ...prev.setupIssues,
                 chromeExtensionIssueCount: 1,
               },
             };
@@ -85,7 +85,7 @@ var chromeExtensionCheckNoticeSpec = {
 var signinOfferNoticeSpec = {
   id: "signin-offer",
   setup() {
-    return (h, x) => {
+    return (state, actions) => {
       return;
     };
   },
@@ -93,15 +93,15 @@ var signinOfferNoticeSpec = {
 //@ chunk-18hwfzwa.js:1757481-1758165 placement
 var complianceTaintNoticeSpec = {
   id: "compliance-taint",
-  deps: (h) => [h.addNotification],
+  deps: (ctx) => [ctx.addNotification],
   setup() {
     let complianceTaints = getComplianceTaints();
     return ({ addNotification }) => {
       if (getIsRemoteMode()) return;
-      function D(complianceTaints_2) {
-        let ee = normalizeComplianceTaints(complianceTaints);
+      function computeTaints(complianceTaints_2) {
+        let normalized = normalizeComplianceTaints(complianceTaints);
         let filtered = normalizeComplianceTaints(complianceTaints_2).filter(
-          (Re) => isKnownComplianceTaint(Re) && !ee.includes(Re),
+          (taint) => isKnownComplianceTaint(taint) && !normalized.includes(taint),
         );
         complianceTaints = complianceTaints_2;
         if (filtered.length > 0)
@@ -113,22 +113,22 @@ var complianceTaintNoticeSpec = {
             text: `${POLICY_LIMITED_NOTICE} \xB7 /status`,
           });
       }
-      D(getComplianceTaints());
-      return onComplianceTaintsChanged(D);
+      computeTaints(getComplianceTaints());
+      return onComplianceTaintsChanged(computeTaints);
     };
   },
 };
 var complianceTaintNoticeSpec_2 = {
   id: "monitoring-notice",
-  deps: (h) => [h.addNotification],
+  deps: (ctx) => [ctx.addNotification],
   setup() {
     let policyNotice = getPolicyNotice();
     return ({ addNotification }) => {
       if (getIsRemoteMode()) return;
-      function D(policyNotice_2) {
-        let ee = policyNotice === null && policyNotice_2 !== null;
+      function computePolicy(policyNotice_2) {
+        let becamePresent = policyNotice === null && policyNotice_2 !== null;
         policyNotice = policyNotice_2;
-        if (ee && policyNotice_2)
+        if (becamePresent && policyNotice_2)
           addNotification({
             key: "monitoring-notice",
             kind: "event",
@@ -139,8 +139,8 @@ var complianceTaintNoticeSpec_2 = {
               : policyNotice_2.text,
           });
       }
-      D(getPolicyNotice());
-      return onPolicyNoticeChanged(D);
+      computePolicy(getPolicyNotice());
+      return onPolicyNoticeChanged(computePolicy);
     };
   },
 };
@@ -151,20 +151,20 @@ var complianceTaintNoticeSpec_2 = {
 var COST_THRESHOLD_USD = 5;
 var costThresholdNoticeSpec = {
   id: "cost-threshold",
-  deps: (h) => {
-    let turnAtRender = h.turnAtRender;
+  deps: (ctx) => {
+    let turnAtRender = ctx.turnAtRender;
     return [
-      h.transcript.getSnapshot(),
+      ctx.transcript.getSnapshot(),
       turnAtRender.isLoading,
-      h.initialMessage,
+      ctx.initialMessage,
       turnAtRender.lastQueryCompletionTime,
-      h.requestDialog,
-      h.storageV5,
-      h.dialogStore,
+      ctx.requestDialog,
+      ctx.storageV5,
+      ctx.dialogStore,
     ];
   },
   setup() {
-    let h = getGlobalConfig().hasAcknowledgedCostThreshold ? false : null;
+    let acknowledged = getGlobalConfig().hasAcknowledgedCostThreshold ? false : null;
     return ({
       turn,
       turnAtRender: { isLoading, lastQueryCompletionTime },
@@ -174,17 +174,17 @@ var costThresholdNoticeSpec = {
       dialogStore,
       storageV5,
     }) => {
-      if (isRemoteSession || isLoading || h === false) return;
+      if (isRemoteSession || isLoading || acknowledged === false) return;
       if (initialMessage !== null || (turn.isInitialMessageInFlight && lastQueryCompletionTime === 0)) return;
-      if (h === null) {
+      if (acknowledged === null) {
         if (getTotalCostUSD() < COST_THRESHOLD_USD) return;
         logEvent("tengu_cost_threshold_reached", {});
-        h = hasConsoleBillingAccess();
-        if (!h) return;
+        acknowledged = hasConsoleBillingAccess();
+        if (!acknowledged) return;
       }
       if (
         getGlobalConfig().hasAcknowledgedCostThreshold ||
-        dialogStore.getState().open.some((We) => We.kind === costThresholdDialogDef.kind)
+        dialogStore.getState().open.some((dialog) => dialog.kind === costThresholdDialogDef.kind)
       )
         return;
       acknowledgeCostThreshold(requestDialog, storageV5);
@@ -194,30 +194,30 @@ var costThresholdNoticeSpec = {
 //@ chunk-18hwfzwa.js:1759190-1759555 placement
 var deviceToolNoticesNoticeSpec = {
   id: "device-tool-notices",
-  deps: (h) => [h.transcript, h.session],
+  deps: (ctx) => [ctx.transcript, ctx.session],
   setup() {
-    let h;
+    let lastNotice;
     return ({ transcript, session }) =>
-      deviceToolNotices.of(session).subscribe((L, ee) => {
-        let ke = h;
+      deviceToolNotices.of(session).subscribe((notice, notices) => {
+        let notice_ = lastNotice;
         if (
-          ke !== undefined &&
-          ke.key === L &&
-          ke.text === ee &&
-          transcript.getSnapshot().some((Be) => Be.uuid === ke.uuid)
+          notice_ !== undefined &&
+          notice_.key === notice &&
+          notice_.text === notices &&
+          transcript.getSnapshot().some((message) => message.uuid === notice_.uuid)
         )
           return;
         let systemMessage = createSystemMessage(
-          ee,
-          L === DEVICE_MCP_NOT_NOW_NOTICE_KEY ? "notice" : "warning",
+          notices,
+          notice === DEVICE_MCP_NOT_NOW_NOTICE_KEY ? "notice" : "warning",
         );
         transcript.apply({
           type: "append",
           messages: [systemMessage],
         });
-        h = {
-          key: L,
-          text: ee,
+        lastNotice = {
+          key: notice,
+          text: notices,
           uuid: systemMessage.uuid,
         };
       });

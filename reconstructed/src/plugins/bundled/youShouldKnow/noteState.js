@@ -29,28 +29,29 @@ function viewOf(view) {
     : null;
 }
 //@ chunk-bss4k1z9.js:31210-31335 placement
-function isRow(e) {
-  if (typeof e !== "object" || !e) return false;
-  let { id, view } = e;
+function isRow(value) {
+  if (typeof value !== "object" || !value) return false;
+  let { id, view } = value;
   return typeof id === "string" && (view === undefined || viewOf(view) !== null);
 }
 //@ chunk-bss4k1z9.js:31335-31379 placement
-var rowsOf = (e) => (Array.isArray(e) ? e.filter(isRow) : []);
+var rowsOf = (value) => (Array.isArray(value) ? value.filter(isRow) : []);
 //@ chunk-bss4k1z9.js:31379-31437 placement
-var droppedOf = (e, t) => rowsOf(e).filter((o) => !t.some((r) => r.id === o.id));
+var droppedOf = (value, rows) =>
+  rowsOf(value).filter((row) => !rows.some((secondRow) => secondRow.id === row.id));
 //@ chunk-bss4k1z9.js:31437-31499 placement
-function forgetDetached(e, t) {
-  for (let o of e) if (!t.includes(o)) e.delete(o);
+function forgetDetached(detached, liveIds) {
+  for (let id of detached) if (!liveIds.includes(id)) detached.delete(id);
 }
 //@ chunk-bss4k1z9.js:31499-31565 placement
-function isBandWatched(e, t, o) {
-  return drawsBand(o ? e.filter((r) => r !== "terminal") : e, t);
+function isBandWatched(surfaces, active, excludeTerminal) {
+  return drawsBand(excludeTerminal ? surfaces.filter((surface) => surface !== "terminal") : surfaces, active);
 }
 //@ chunk-bss4k1z9.js:31565-31591 placement
-var isOfferDue = (askedTurn, turnId, o) => askedTurn === turnId && !o;
+var isOfferDue = (askedTurn, turnId, asked) => askedTurn === turnId && !asked;
 //@ chunk-bss4k1z9.js:31591-31663 placement
-var isUnattendedInFlight = (view, t, o) =>
-  (view?.kind === "explaining" || view?.kind === "making") && !o.has(t);
+var isUnattendedInFlight = (view, turnId, acknowledged) =>
+  (view?.kind === "explaining" || view?.kind === "making") && !acknowledged.has(turnId);
 //@ chunk-bss4k1z9.js:31663-31863 placement
 var leftOpen = ({ view, tag }, leftBy, offersShown) =>
   answered({
@@ -65,8 +66,8 @@ var leftOpen = ({ view, tag }, leftBy, offersShown) =>
     promptsSurvived: storedCount(view.promptsSurvived),
   });
 //@ chunk-bss4k1z9.js:31863-31929 placement
-var openRowsOf = (e) =>
-  e.flatMap(({ view, tag }) =>
+var openRowsOf = (rows) =>
+  rows.flatMap(({ view, tag }) =>
     isOpenView(view)
       ? [
           {
@@ -77,100 +78,106 @@ var openRowsOf = (e) =>
       : [],
   );
 //@ chunk-bss4k1z9.js:31929-31957 placement
-var revive = (e, t) => {
-  e.delete(t);
+var revive = (map, id) => {
+  map.delete(id);
 };
 //@ chunk-bss4k1z9.js:31957-31995 placement
-var rowOf = (e, t) => rowsOf(e).find((o) => o.id === t);
+var rowOf = (state, id) => rowsOf(state).find((row) => row.id === id);
 //@ chunk-bss4k1z9.js:31995-32005 placement
 var SESSIONS_MAX = 32;
 //@ chunk-bss4k1z9.js:32005-32022 placement
 var SHOWN_KEEP_MS = 259200000;
 //@ chunk-bss4k1z9.js:32022-32303 placement
-function withRow(e, t, o = Date.now()) {
-  let filtered = rowsOf(e).filter((u) => u.id !== t.id);
-  let n = 1 + filtered.length - SESSIONS_MAX;
-  if (n <= 0) return [t, ...filtered];
-  let i = ({ view }) => isOpenView(view) && view.shownAt !== undefined && o - view.shownAt < SHOWN_KEEP_MS;
-  let a = filtered.toReversed();
-  let l = new Set([...a.filter((u) => !i(u)), ...a.filter(i)].slice(0, n));
-  return [t, ...filtered.filter((u) => !l.has(u))];
+function withRow(state, row, now = Date.now()) {
+  let filtered = rowsOf(state).filter((thirdRow) => thirdRow.id !== row.id);
+  let evictCount = 1 + filtered.length - SESSIONS_MAX;
+  if (evictCount <= 0) return [row, ...filtered];
+  let isRecentShown = ({ view }) =>
+    isOpenView(view) && view.shownAt !== undefined && now - view.shownAt < SHOWN_KEEP_MS;
+  let reversed = filtered.toReversed();
+  let evicted = new Set(
+    [...reversed.filter((row) => !isRecentShown(row)), ...reversed.filter(isRecentShown)].slice(
+      0,
+      evictCount,
+    ),
+  );
+  return [row, ...filtered.filter((row) => !evicted.has(row))];
 }
 //@ chunk-bss4k1z9.js:32303-32362 placement
-var withViewCleared = (e, sessionId) =>
-  rowsOf(e).map((o) =>
-    o.id === sessionId
+var withViewCleared = (state, sessionId) =>
+  rowsOf(state).map((row) =>
+    row.id === sessionId
       ? {
-          ...o,
+          ...row,
           view: undefined,
         }
-      : o,
+      : row,
   );
 //@ chunk-bss4k1z9.js:32362-32513 placement
-var cleared = (view, t) =>
+var cleared = (view, cleared) =>
   answered({
-    answer: t.answer,
-    clearedBy: t.clearedBy,
+    answer: cleared.answer,
+    clearedBy: cleared.clearedBy,
     msToAnswer: msSince(view.shownAt),
     isTurnInProgress: false,
-    offersShown: t.offersShown,
+    offersShown: cleared.offersShown,
     line: view.line,
-    tag: t.tag,
+    tag: cleared.tag,
   });
 //@ chunk-bss4k1z9.js:32513-32978 placement
-async function takeDown(e, t) {
-  let { sid, confirmed, isConfirmed } = t;
-  let i = await e.store.get("sessions");
-  let a = rowOf(i, sid);
-  let view = a?.view;
+async function takeDown(ctx, args) {
+  let { sid, confirmed, isConfirmed } = args;
+  let state = await ctx.store.get("sessions");
+  let row = rowOf(state, sid);
+  let view = row?.view;
   if (view?.kind !== "off") return;
-  await e.store.set(
+  await ctx.store.set(
     "sessions",
-    withRow(i, {
-      ...a,
+    withRow(state, {
+      ...row,
       id: sid,
       view: undefined,
     }),
   );
-  e.ui.invalidate("ui.render");
+  ctx.ui.invalidate("ui.render");
   if (isConfirmed) confirmed.add(sid);
   await send(
     cleared(view, {
       answer: isConfirmed ? "off_confirmed" : "off_abandoned",
       clearedBy: "prompt",
       offersShown: stringLines(
-        await e.store.get("seen").catch(() => {
+        await ctx.store.get("seen").catch(() => {
           return;
         }),
       ).length,
-      tag: tagOf(a?.tag ?? ""),
+      tag: tagOf(row?.tag ?? ""),
     }),
     {
-      log: (u) => e.telemetry.log(u),
-      mark: (u) => e.telemetry.mark(u),
+      log: (line) => ctx.telemetry.log(line),
+      mark: (mark) => ctx.telemetry.mark(mark),
     },
   );
 }
 //@ chunk-bss4k1z9.js:32978-33266 placement
-async function clearOffLine(e, t, o) {
+async function clearOffLine(ctx, runtime, flags) {
   try {
-    let r = await e.session.id();
-    if (!o.isConfirmed) t.confirmed.delete(r);
-    let n = t.clearing.get(r);
-    if (n !== undefined) {
-      await n;
+    let sid = await ctx.session.id();
+    if (!flags.isConfirmed) runtime.confirmed.delete(sid);
+    let pending = runtime.clearing.get(sid);
+    if (pending !== undefined) {
+      await pending;
       return;
     }
-    let i = takeDown(e, {
-      sid: r,
-      confirmed: t.confirmed,
-      isConfirmed: o.isConfirmed,
+    let task = takeDown(ctx, {
+      sid,
+      confirmed: runtime.confirmed,
+      isConfirmed: flags.isConfirmed,
     });
-    t.clearing.set(r, i);
+    runtime.clearing.set(sid, task);
     try {
-      await i;
+      await task;
     } finally {
-      t.clearing.delete(r);
+      runtime.clearing.delete(sid);
     }
   } catch {}
 }
@@ -180,35 +187,36 @@ var EARLIER_NAMES = ["suggest-learning", "you-should-know"];
 var ownNames = () => [CC_PLUGIN_YOU_SHOULD_KNOW, ...EARLIER_NAMES];
 //@ chunk-bss4k1z9.js:33335-33487 placement
 function isOffCommand(text) {
-  let [t, o, r] = text.trim().split(/\s+/);
+  let [command, subcommand, pluginName] = text.trim().split(/\s+/);
   return (
-    t === "/plugin" &&
-    o === "disable" &&
-    (OFF_COMMAND === `${t} ${o} ${r}` || ownNames().some((n) => r === n || r === `${n}@builtin`))
+    command === "/plugin" &&
+    subcommand === "disable" &&
+    (OFF_COMMAND === `${command} ${subcommand} ${pluginName}` ||
+      ownNames().some((ownName) => pluginName === ownName || pluginName === `${ownName}@builtin`))
   );
 }
 //@ chunk-bss4k1z9.js:33487-33929 placement
-async function ranOffCommand(e, t) {
-  await clearOffLine(e, t, {
+async function ranOffCommand(ctx, runtime) {
+  await clearOffLine(ctx, runtime, {
     isConfirmed: true,
   });
   try {
-    let o = await e.session.id();
-    if (t.confirmed.has(o)) return;
-    t.confirmed.add(o);
+    let sid = await ctx.session.id();
+    if (runtime.confirmed.has(sid)) return;
+    runtime.confirmed.add(sid);
     await send(
       answered({
         answer: "off_confirmed",
         offVia: "typed",
         version: versionMarkOf(
-          await e.session.version().catch(() => {
+          await ctx.session.version().catch(() => {
             return;
           }),
         ),
         msToAnswer: undefined,
         isTurnInProgress: false,
         offersShown: stringLines(
-          await e.store.get("seen").catch(() => {
+          await ctx.store.get("seen").catch(() => {
             return;
           }),
         ).length,
@@ -216,8 +224,8 @@ async function ranOffCommand(e, t) {
         tag: undefined,
       }),
       {
-        log: (r) => e.telemetry.log(r),
-        mark: (r) => e.telemetry.mark(r),
+        log: (line) => ctx.telemetry.log(line),
+        mark: (mark) => ctx.telemetry.mark(mark),
       },
     );
   } catch {}

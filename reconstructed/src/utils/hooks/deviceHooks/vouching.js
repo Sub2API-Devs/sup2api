@@ -56,7 +56,7 @@ import { isPathUnderForPlatform, POSIX_SEP_2, isReachableOrSamePath } from "../h
 import { getErrnoCode } from "../../errors.js";
 import { isAbsolutePlatformPath, normalizeCommandForPlatform } from "../../git.js";
 import { getPlatform } from "../../platform.js";
-import { Uo } from "../../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { omitAlias } from "../../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { EMPTY_PATH_DIR } from "../hookCommandResolution.js";
 import { stripInvisibleChars } from "../../invisibleChars.js";
 import { parseDeviceHookId } from "../deviceHookId.js";
@@ -64,118 +64,126 @@ import { computeContentHash } from "../../commitAttribution.js";
 import { sanitizeDisplayText } from "../../resultError.js";
 import { DEVICE_HOOK_DEFAULT_S } from "../deviceHookForwarder.js";
 import { uniq } from "../../collections.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-mthxbav8.js:22078-45449 placement
 /**
  * 为钩子建立担保（vouching）：比对本地钩子与模板摘要、超时、事件，决定能否代用户在设备上执行。
  */
-function createHookVouching(e) {
-  let n = new Map();
-  let r = new Map();
-  let semaphore = createSemaphore(e);
-  let u = (N, F, X) => {
-    let B =
-      F.local.hook.timeout !== undefined && F.local.hook.timeout > 0
-        ? F.local.hook.timeout * 1000
-        : e.defaultTimeoutMs(isMatcherEvent(F.local.event) ? F.local.event : "Stop");
-    return (N.deadlineMs ?? 2 * B + 2 * REQUEST_TIMEOUT_MS) - (e.now() - X) - REQUEST_TIMEOUT_MS / 2;
+function createHookVouching(deps) {
+  let inFlight = new Map();
+  let translated = new Map();
+  let semaphore = createSemaphore(deps);
+  let deadlineIn = (request, entry, receivedAt) => {
+    let timeoutMs =
+      entry.local.hook.timeout !== undefined && entry.local.hook.timeout > 0
+        ? entry.local.hook.timeout * 1000
+        : deps.defaultTimeoutMs(isMatcherEvent(entry.local.event) ? entry.local.event : "Stop");
+    return (
+      (request.deadlineMs ?? 2 * timeoutMs + 2 * REQUEST_TIMEOUT_MS) -
+      (deps.now() - receivedAt) -
+      REQUEST_TIMEOUT_MS / 2
+    );
   };
-  let S = new Set();
-  let w = new Map();
-  let { repinned, everInReach, answered, withdrawn } = e.memory;
+  let noticed = new Set();
+  let lastWarnAt = new Map();
+  let { repinned, everInReach, answered, withdrawn } = deps.memory;
   let NEGATIVE_INFINITY = Number.NEGATIVE_INFINITY;
-  let x = (N) => {
-    if (N.size > MAX_LABEL_CHARS) {
-      let F = N.keys().next().value;
-      if (F !== undefined) N.delete(F);
+  let trimOldest = (map) => {
+    if (map.size > MAX_LABEL_CHARS) {
+      let oldestKey = map.keys().next().value;
+      if (oldestKey !== undefined) map.delete(oldestKey);
     }
   };
-  let R = (requestId, callbackId, answer) => {
+  let rememberAnswer = (requestId, callbackId, answer) => {
     answered.delete(requestId);
     answered.set(requestId, {
       callbackId,
       answer,
     });
-    x(answered);
+    trimOldest(answered);
   };
-  let j = (requestId) => {
+  let markWithdrawn = (requestId) => {
     withdrawn.delete(requestId);
     withdrawn.add(requestId);
-    x(withdrawn);
+    trimOldest(withdrawn);
   };
-  let M = (N, F, X) => {
-    if (S.has(N)) return;
-    S.add(N);
-    e.onLine(F, X);
+  let noteOnce = (key, line, level) => {
+    if (noticed.has(key)) return;
+    noticed.add(key);
+    deps.onLine(line, level);
   };
-  let q = (N, F) => {
-    let X = e.now();
-    if (X - (w.get(N) ?? Number.NEGATIVE_INFINITY) < 60000) return;
-    w.set(N, X);
-    e.onLine(F, "warning");
+  let warnThrottled = (key, line) => {
+    let now = deps.now();
+    if (now - (lastWarnAt.get(key) ?? Number.NEGATIVE_INFINITY) < 60000) return;
+    lastWarnAt.set(key, now);
+    deps.onLine(line, "warning");
   };
-  let T = (N, F, attestation) =>
-    e.telemetry({
-      outcome: N.outcome,
-      event: N.event ?? null,
-      kind: N.kind ?? null,
-      exitClass: N.exitClass ?? null,
-      translatedPaths: N.translatedPaths ?? 0,
-      replay: N.replay ?? false,
-      blocked: N.blocked ?? false,
-      staged: N.staged ?? false,
-      projectFrame: N.projectFrame ?? false,
-      repinned: N.repinned ?? false,
-      waitedMs: N.waitedMs ?? 0,
-      durationMs: Math.max(0, e.now() - F),
+  let report = (info, startedAt, attestation) =>
+    deps.telemetry({
+      outcome: info.outcome,
+      event: info.event ?? null,
+      kind: info.kind ?? null,
+      exitClass: info.exitClass ?? null,
+      translatedPaths: info.translatedPaths ?? 0,
+      replay: info.replay ?? false,
+      blocked: info.blocked ?? false,
+      staged: info.staged ?? false,
+      projectFrame: info.projectFrame ?? false,
+      repinned: info.repinned ?? false,
+      waitedMs: info.waitedMs ?? 0,
+      durationMs: Math.max(0, deps.now() - startedAt),
       attestation,
     });
-  let P = async (N, hook, X, B, event, ee) => {
-    let pinnedTarget = N.local.pinnedTarget;
-    let G = (ie) => permissionDecisionOutput(event, B.wire, ie);
+  let vouchCommand = async (entry, hook, analysis, site, event, state) => {
+    let pinnedTarget = entry.local.pinnedTarget;
+    let denyOutput = (message) => permissionDecisionOutput(event, site.wire, message);
     if (pinnedTarget === undefined) {
-      if (X !== null && X.kind === "script") {
-        let ie = await realpathWithLinks(X.resolvedPath, e.pin);
-        if (ie === null) {
-          M(
-            `unvouched:unjudgeable:${N.wire.id}`,
-            `Not running ${B.local} for the cloud session: its file cannot be found or judged on this machine.`,
+      if (analysis !== null && analysis.kind === "script") {
+        let realPath = await realpathWithLinks(analysis.resolvedPath, deps.pin);
+        if (realPath === null) {
+          noteOnce(
+            `unvouched:unjudgeable:${entry.wire.id}`,
+            `Not running ${site.local} for the cloud session: its file cannot be found or judged on this machine.`,
             "warning",
           );
           return {
             kind: "refuse",
-            answer: G(`not run \u2014 its file cannot be found or judged on ${ee.displayName}`),
+            answer: denyOutput(`not run \u2014 its file cannot be found or judged on ${state.displayName}`),
             outcome: "pin_unreadable",
           };
         }
-        let ce =
-          everInReach.has(N.wire.id) ||
-          anyPairMatches([X.resolvedPath, ie], [...ee.cloudWritableRoots, ...e.extraWritableRoots()]);
-        if (ce) everInReach.add(N.wire.id);
-        if (ce && N.local.cloudOptIn !== true) {
-          M(
-            `reach:${N.wire.id}`,
-            `Not running ${B.local} for the cloud session: its file now sits where the session can write on this machine, and it is not marked cloud: "device".`,
+        let inReach =
+          everInReach.has(entry.wire.id) ||
+          anyPairMatches(
+            [analysis.resolvedPath, realPath],
+            [...state.cloudWritableRoots, ...deps.extraWritableRoots()],
+          );
+        if (inReach) everInReach.add(entry.wire.id);
+        if (inReach && entry.local.cloudOptIn !== true) {
+          noteOnce(
+            `reach:${entry.wire.id}`,
+            `Not running ${site.local} for the cloud session: its file now sits where the session can write on this machine, and it is not marked cloud: "device".`,
             "info",
           );
           return {
             kind: "refuse",
-            answer: G(
-              `not run \u2014 its file now sits where the cloud session can write on ${ee.displayName} and it is not marked cloud: "device"`,
+            answer: denyOutput(
+              `not run \u2014 its file now sits where the cloud session can write on ${state.displayName} and it is not marked cloud: "device"`,
             ),
             outcome: "in_reach_refused",
           };
         }
-        if (ce) {
-          M(
-            `unvouched:in_reach:${N.wire.id}`,
-            `Not running ${B.local} for the cloud session: it could not be pinned when this session started and now sits where the session can write; review the file, then restart claude --cloud to offer it again.`,
+        if (inReach) {
+          noteOnce(
+            `unvouched:in_reach:${entry.wire.id}`,
+            `Not running ${site.local} for the cloud session: it could not be pinned when this session started and now sits where the session can write; review the file, then restart claude --cloud to offer it again.`,
             "warning",
           );
           return {
             kind: "refuse",
-            answer: G(
-              `not run \u2014 its file could not be pinned on ${ee.displayName} and sits where the cloud session can write; review it there`,
+            answer: denyOutput(
+              `not run \u2014 its file could not be pinned on ${state.displayName} and sits where the cloud session can write; review it there`,
             ),
             outcome: "in_reach_refused",
           };
@@ -183,159 +191,167 @@ function createHookVouching(e) {
       }
       return {
         kind: "run",
-        hook: X !== null && X.kind === "script" ? rewritePathInInput(hook, X, X.resolvedPath) : hook,
+        hook:
+          analysis !== null && analysis.kind === "script"
+            ? rewritePathInInput(hook, analysis, analysis.resolvedPath)
+            : hook,
         staged: null,
         repinned: false,
       };
     }
-    let Y = repinned.get(N.wire.id) ?? pinnedTarget.sha256;
-    let Z = await verifyPinnedScript(
+    let pinnedSha = repinned.get(entry.wire.id) ?? pinnedTarget.sha256;
+    let verification = await verifyPinnedScript(
       {
         ...pinnedTarget,
-        sha256: Y,
+        sha256: pinnedSha,
       },
-      e.pin,
+      deps.pin,
     );
-    let z =
-      everInReach.has(N.wire.id) ||
+    let inReach =
+      everInReach.has(entry.wire.id) ||
       anyPairMatches(
-        [pinnedTarget.path, pinnedTarget.realPath, ...(Z.realPath !== undefined ? [Z.realPath] : [])],
-        [...ee.cloudWritableRoots, ...e.extraWritableRoots()],
+        [
+          pinnedTarget.path,
+          pinnedTarget.realPath,
+          ...(verification.realPath !== undefined ? [verification.realPath] : []),
+        ],
+        [...state.cloudWritableRoots, ...deps.extraWritableRoots()],
       );
-    if (z) everInReach.add(N.wire.id);
-    if (z && N.local.cloudOptIn !== true) {
-      M(
-        `reach:${N.wire.id}`,
-        `Not running ${B.local} for the cloud session: its file now sits where the session can write on this machine, and it is not marked cloud: "device".`,
+    if (inReach) everInReach.add(entry.wire.id);
+    if (inReach && entry.local.cloudOptIn !== true) {
+      noteOnce(
+        `reach:${entry.wire.id}`,
+        `Not running ${site.local} for the cloud session: its file now sits where the session can write on this machine, and it is not marked cloud: "device".`,
         "info",
       );
       return {
         kind: "refuse",
-        answer: G(
-          `not run \u2014 its file now sits where the cloud session can write on ${ee.displayName} and it is not marked cloud: "device"; move it under ~/.claude or mark the entry`,
+        answer: denyOutput(
+          `not run \u2014 its file now sits where the cloud session can write on ${state.displayName} and it is not marked cloud: "device"; move it under ~/.claude or mark the entry`,
         ),
         outcome: "in_reach_refused",
       };
     }
-    let K;
-    let re = Y;
-    let repinned_2 = repinned.has(N.wire.id);
-    if (Z.ok) K = Z.bytes;
-    else if (Z.reason === "changed" && !z && ee.repinChangedScripts) {
-      repinned.set(N.wire.id, Z.current.sha256);
+    let bytes;
+    let sha256 = pinnedSha;
+    let repinned_2 = repinned.has(entry.wire.id);
+    if (verification.ok) bytes = verification.bytes;
+    else if (verification.reason === "changed" && !inReach && state.repinChangedScripts) {
+      repinned.set(entry.wire.id, verification.current.sha256);
       repinned_2 = true;
-      K = Z.current.bytes;
-      re = Z.current.sha256;
-      M(
-        `repin:${N.wire.id}:${Z.current.sha256}`,
-        `${B.local} changed on this machine since it was registered; the cloud session's runs use the current version.`,
+      bytes = verification.current.bytes;
+      sha256 = verification.current.sha256;
+      noteOnce(
+        `repin:${entry.wire.id}:${verification.current.sha256}`,
+        `${site.local} changed on this machine since it was registered; the cloud session's runs use the current version.`,
         "info",
       );
-    } else if (Z.reason === "changed" && !z) {
-      let any = ee.inventory.forwarded.some(
-        (ce) => ce.wire.event === "PreToolUse" && ce.local.pinnedTarget?.path === pinnedTarget.path,
+    } else if (verification.reason === "changed" && !inReach) {
+      let any = state.inventory.forwarded.some(
+        (forwarded) =>
+          forwarded.wire.event === "PreToolUse" && forwarded.local.pinnedTarget?.path === pinnedTarget.path,
       );
-      M(
+      noteOnce(
         `changed:${pinnedTarget.path}${any ? ":guard" : ""}`,
-        `${B.local} changed since it was registered for this cloud session, so it won't run.${any ? " Matching tool calls are blocked." : ""} If you edited it, restart claude --cloud. If not, check the file.`,
+        `${site.local} changed since it was registered for this cloud session, so it won't run.${any ? " Matching tool calls are blocked." : ""} If you edited it, restart claude --cloud. If not, check the file.`,
         "warning",
       );
       return {
         kind: "refuse",
-        answer: G(
-          `not run \u2014 its file changed on ${ee.displayName} since it was registered; it runs again once that machine re-registers it`,
+        answer: denyOutput(
+          `not run \u2014 its file changed on ${state.displayName} since it was registered; it runs again once that machine re-registers it`,
         ),
         outcome: "pin_changed",
       };
-    } else if (Z.reason === "changed") {
-      M(
-        `pin:changed:${N.wire.id}`,
-        `Not running ${B.local} for the cloud session: its file changed while the session could write to it on this machine \u2014 review the file before trusting it again.`,
+    } else if (verification.reason === "changed") {
+      noteOnce(
+        `pin:changed:${entry.wire.id}`,
+        `Not running ${site.local} for the cloud session: its file changed while the session could write to it on this machine \u2014 review the file before trusting it again.`,
         "warning",
       );
       return {
         kind: "refuse",
-        answer: G(
-          `not run \u2014 its file changed on ${ee.displayName} while the cloud session could write to it; review the file there before trusting it again`,
+        answer: denyOutput(
+          `not run \u2014 its file changed on ${state.displayName} while the cloud session could write to it; review the file there before trusting it again`,
         ),
         outcome: "pin_refused",
       };
-    } else if (Z.reason === "multiply_linked" || Z.reason === "relocated") {
-      let ie =
-        Z.reason === "multiply_linked"
+    } else if (verification.reason === "multiply_linked" || verification.reason === "relocated") {
+      let why =
+        verification.reason === "multiply_linked"
           ? "it now has more than one hard link"
           : "its path now leads to a different file than the one registered";
-      M(
-        `pin:${Z.reason}:${N.wire.id}`,
-        `Not running ${B.local} for the cloud session: ${ie} on this machine \u2014 look at the file; if you re-linked or moved it yourself, relaunch claude --cloud here to register it again.`,
+      noteOnce(
+        `pin:${verification.reason}:${entry.wire.id}`,
+        `Not running ${site.local} for the cloud session: ${why} on this machine \u2014 look at the file; if you re-linked or moved it yourself, relaunch claude --cloud here to register it again.`,
         "warning",
       );
       return {
         kind: "refuse",
-        answer: G(`not run \u2014 ${ie} on ${ee.displayName}; review it there`),
+        answer: denyOutput(`not run \u2014 ${why} on ${state.displayName}; review it there`),
         outcome: "pin_refused",
       };
     } else {
-      let replaced = Z.reason.replace("_", " ");
-      M(
-        `pin:${Z.reason}:${N.wire.id}`,
-        `Not running ${B.local} for the cloud session: the file it runs can no longer be read on this machine (${replaced}).`,
+      let replaced = verification.reason.replace("_", " ");
+      noteOnce(
+        `pin:${verification.reason}:${entry.wire.id}`,
+        `Not running ${site.local} for the cloud session: the file it runs can no longer be read on this machine (${replaced}).`,
         "warning",
       );
       return {
         kind: "refuse",
-        answer: G(
-          `not run \u2014 its file on ${ee.displayName} can no longer be read (${replaced}); it runs again once that machine re-registers it`,
+        answer: denyOutput(
+          `not run \u2014 its file on ${state.displayName} can no longer be read (${replaced}); it runs again once that machine re-registers it`,
         ),
-        outcome: z ? "pin_refused" : "pin_unreadable",
+        outcome: inReach ? "pin_refused" : "pin_unreadable",
       };
     }
-    if (X?.kind !== "script" || X.resolvedPath !== pinnedTarget.path) {
-      M(
-        `pin:parse:${N.wire.id}`,
-        `Not running ${B.local} for the cloud session: its command no longer reads as the script that was registered.`,
+    if (analysis?.kind !== "script" || analysis.resolvedPath !== pinnedTarget.path) {
+      noteOnce(
+        `pin:parse:${entry.wire.id}`,
+        `Not running ${site.local} for the cloud session: its command no longer reads as the script that was registered.`,
         "warning",
       );
       return {
         kind: "refuse",
-        answer: G(
-          `not run \u2014 its command on ${ee.displayName} no longer names the script that was registered`,
+        answer: denyOutput(
+          `not run \u2014 its command on ${state.displayName} no longer names the script that was registered`,
         ),
         outcome: "pin_refused",
       };
     }
-    if (!(ee.stageVerifiedBytes === "always" || (ee.stageVerifiedBytes === "in_reach" && z)))
+    if (!(state.stageVerifiedBytes === "always" || (state.stageVerifiedBytes === "in_reach" && inReach)))
       return {
         kind: "run",
-        hook: rewritePathInInput(hook, X, pinnedTarget.path),
+        hook: rewritePathInInput(hook, analysis, pinnedTarget.path),
         staged: null,
         repinned: repinned_2,
       };
     try {
-      let ie = await e.staging.stage(re, K, basename(pinnedTarget.path));
+      let staged = await deps.staging.stage(sha256, bytes, basename(pinnedTarget.path));
       return {
         kind: "run",
-        hook: replaceCommandProgram(hook, X.site, ie.path),
-        staged: ie,
+        hook: replaceCommandProgram(hook, analysis.site, staged.path),
+        staged,
         repinned: repinned_2,
       };
     } catch {
-      M(
-        `stage:${N.wire.id}`,
-        `Not running ${B.local} for the cloud session: couldn't save a private copy of it.${event === "PreToolUse" ? " Matching tool calls are blocked." : ""} If the cloud session can write your temporary folder, set CLAUDE_CODE_TMPDIR to a folder it can't write to and restart claude --cloud.`,
+      noteOnce(
+        `stage:${entry.wire.id}`,
+        `Not running ${site.local} for the cloud session: couldn't save a private copy of it.${event === "PreToolUse" ? " Matching tool calls are blocked." : ""} If the cloud session can write your temporary folder, set CLAUDE_CODE_TMPDIR to a folder it can't write to and restart claude --cloud.`,
         "warning",
       );
       return {
         kind: "refuse",
-        answer: G(
-          `not run \u2014 ${ee.displayName} couldn't save a private copy of it. If this session can write the temporary folder on that machine, set CLAUDE_CODE_TMPDIR there to a folder it can't write to and restart claude --cloud.`,
+        answer: denyOutput(
+          `not run \u2014 ${state.displayName} couldn't save a private copy of it. If this session can write the temporary folder on that machine, set CLAUDE_CODE_TMPDIR there to a folder it can't write to and restart claude --cloud.`,
         ),
         outcome: "staging_failed",
       };
     }
   };
-  let L = async (N, F, X, B, signal) => {
-    let event = X.local.event;
+  let serve = async (request, state, entry, receivedAt, signal) => {
+    let event = entry.local.event;
     if (!isMatcherEvent(event))
       return {
         answer: {},
@@ -343,410 +359,428 @@ function createHookVouching(e) {
           outcome: "event_mismatch",
         },
       };
-    let hook = X.local.hook;
+    let hook = entry.local.hook;
     if (hook.type !== "command" && hook.type !== "http") {
-      let se = permissionDecisionOutput(
+      let answer = permissionDecisionOutput(
         event,
-        `hook on ${F.displayName}`,
+        `hook on ${state.displayName}`,
         "not run \u2014 it is not a kind of hook that machine can run for a cloud session; retry",
       );
       return {
-        answer: se,
+        answer,
         telemetry: {
           event,
           outcome: "unsupported_kind",
-          blocked: isBlockingHookOutput(se),
+          blocked: isBlockingHookOutput(answer),
         },
       };
     }
-    let G = {
+    let baseReport = {
       event,
       kind: hook.type,
     };
-    let Y = hook.type === "command" ? e.parseTarget(hook) : null;
-    let Z = hookDisplayHost(hook, Y);
-    let z = {
-      local: Z,
-      wire: hookWireLabel(hook, Z, F),
+    let analysis = hook.type === "command" ? deps.parseTarget(hook) : null;
+    let localLabel = hookDisplayHost(hook, analysis);
+    let labels = {
+      local: localLabel,
+      wire: hookWireLabel(hook, localLabel, state),
     };
-    if (isPastDeadline(N)) {
-      M(
+    if (isPastDeadline(request)) {
+      noteOnce(
         "stale",
         'A hook request from the cloud session arrived already past its deadline (this machine was asleep, offline, or its stream was running behind). A guard answered "retry"; anything else had no opinion.',
         "warning",
       );
-      let se = permissionDecisionOutput(
+      let answer = permissionDecisionOutput(
         event,
-        z.wire,
-        `not run \u2014 the request reached ${F.displayName} already past its deadline (that machine was asleep or its stream ran behind); retry`,
+        labels.wire,
+        `not run \u2014 the request reached ${state.displayName} already past its deadline (that machine was asleep or its stream ran behind); retry`,
       );
       return {
-        answer: se,
+        answer,
         telemetry: {
-          ...G,
+          ...baseReport,
           outcome: "stale",
-          blocked: isBlockingHookOutput(se),
+          blocked: isBlockingHookOutput(answer),
         },
       };
     }
-    let K = 0;
+    let inputBytes = 0;
     try {
-      let se = jsonStringify(N.input);
-      K = typeof se === "string" ? Buffer.byteLength(se, "utf8") : 0;
+      let json = jsonStringify(request.input);
+      inputBytes = typeof json === "string" ? Buffer.byteLength(json, "utf8") : 0;
     } catch {
-      K = 0;
+      inputBytes = 0;
     }
-    if (K > MAX_HOOK_BODY_BYTES) {
-      let se = vouchPreToolUse(X, F, e, "too_large");
+    if (inputBytes > MAX_HOOK_BODY_BYTES) {
+      let answer = vouchPreToolUse(entry, state, deps, "too_large");
       return {
-        answer: se,
+        answer,
         telemetry: {
-          ...G,
+          ...baseReport,
           outcome: "input_too_large",
-          blocked: isBlockingHookOutput(se),
+          blocked: isBlockingHookOutput(answer),
         },
       };
     }
-    let re = HookInputUnionSchema().safeParse(N.input);
-    if (!re.success || !isSafeHookInputIds(re.data)) {
-      let se = permissionDecisionOutput(
+    let parsed = HookInputUnionSchema().safeParse(request.input);
+    if (!parsed.success || !isSafeHookInputIds(parsed.data)) {
+      let answer = permissionDecisionOutput(
         event,
-        z.wire,
-        `not run \u2014 the event could not be read on ${F.displayName}; retry`,
+        labels.wire,
+        `not run \u2014 the event could not be read on ${state.displayName}; retry`,
       );
       return {
-        answer: se,
+        answer,
         telemetry: {
-          ...G,
+          ...baseReport,
           outcome: "invalid_input",
-          blocked: isBlockingHookOutput(se),
+          blocked: isBlockingHookOutput(answer),
         },
       };
     }
-    if (re.data.hook_event_name !== event) {
-      let se = permissionDecisionOutput(
+    if (parsed.data.hook_event_name !== event) {
+      let answer = permissionDecisionOutput(
         event,
-        z.wire,
-        `not run \u2014 the event does not match the hook it names on ${F.displayName}; retry`,
+        labels.wire,
+        `not run \u2014 the event does not match the hook it names on ${state.displayName}; retry`,
       );
       return {
-        answer: se,
+        answer,
         telemetry: {
-          ...G,
+          ...baseReport,
           outcome: "event_name_mismatch",
-          blocked: isBlockingHookOutput(se),
+          blocked: isBlockingHookOutput(answer),
         },
       };
     }
-    if (F.roots === null) {
-      let se = permissionDecisionOutput(
+    if (state.roots === null) {
+      let answer = permissionDecisionOutput(
         event,
-        z.wire,
-        `not run \u2014 ${F.displayName} does not know this session's directories yet; retry`,
+        labels.wire,
+        `not run \u2014 ${state.displayName} does not know this session's directories yet; retry`,
       );
       return {
-        answer: se,
+        answer,
         telemetry: {
-          ...G,
+          ...baseReport,
           outcome: "no_roots",
-          blocked: isBlockingHookOutput(se),
+          blocked: isBlockingHookOutput(answer),
         },
       };
     }
-    if (!e.trustAccepted()) {
-      let se = permissionDecisionOutput(
+    if (!deps.trustAccepted()) {
+      let answer = permissionDecisionOutput(
         event,
-        z.wire,
-        `not run \u2014 its folder is no longer marked trusted on ${F.displayName}`,
+        labels.wire,
+        `not run \u2014 its folder is no longer marked trusted on ${state.displayName}`,
       );
       return {
-        answer: se,
+        answer,
         telemetry: {
-          ...G,
+          ...baseReport,
           outcome: "untrusted",
-          blocked: isBlockingHookOutput(se),
+          blocked: isBlockingHookOutput(answer),
         },
       };
     }
-    let ne = e.toolAliases?.();
-    if (!hookMatcherMatches(re.data, X.local.matcher, ne))
+    let toolAliases = deps.toolAliases?.();
+    if (!hookMatcherMatches(parsed.data, entry.local.matcher, toolAliases))
       return {
         answer: {},
         telemetry: {
-          ...G,
+          ...baseReport,
           outcome: "event_mismatch",
         },
       };
-    let ae = PATH_POINTERS_BY_EVENT(
-      re.data,
-      F.roots,
+    let translation = PATH_POINTERS_BY_EVENT(
+      parsed.data,
+      state.roots,
       {
-        cloudSessionId: F.cloudSessionId,
+        cloudSessionId: state.cloudSessionId,
       },
-      ne,
+      toolAliases,
     );
-    let input = ae.input;
+    let input = translation.input;
     let keys = Object.keys(input.cloud_session.original.paths);
     let translatedPaths = keys.length;
-    let V = {
-      dir: F.frame.launchDir,
-      real: F.launchDirReal,
+    let launch = {
+      dir: state.frame.launchDir,
+      real: state.launchDirReal,
     };
-    let te = async (cwd) => {
-      let pe = (ge) => isPathUnderForPlatform(ge, V.real) || isPathUnderForPlatform(ge, V.dir);
+    let cwdVerdict = async (cwd) => {
+      let isInside = (path) =>
+        isPathUnderForPlatform(path, launch.real) || isPathUnderForPlatform(path, launch.dir);
       try {
-        return pe(await e.pin.realpath(cwd)) ? "inside" : "unjudgeable";
+        return isInside(await deps.pin.realpath(cwd)) ? "inside" : "unjudgeable";
       } catch (error) {
         if (getErrnoCode(error) !== "ENOENT") return "unjudgeable";
-        let je = await realpathWithLinks(cwd, e.pin);
-        return je !== null && pe(je) ? "missing" : "unjudgeable";
+        let realPath = await realpathWithLinks(cwd, deps.pin);
+        return realPath !== null && isInside(realPath) ? "missing" : "unjudgeable";
       }
     };
-    let le = await te(input.cwd);
-    if (le !== "inside") {
-      e.debug(
-        `[deviceHooks] ${safeLabel(N.requestId)}: translated cwd is ${le === "missing" ? "not an existing directory" : "not judgeable as a directory inside the launch directory"}; running from the launch directory`,
+    let verdict = await cwdVerdict(input.cwd);
+    if (verdict !== "inside") {
+      deps.debug(
+        `[deviceHooks] ${safeLabel(request.requestId)}: translated cwd is ${verdict === "missing" ? "not an existing directory" : "not judgeable as a directory inside the launch directory"}; running from the launch directory`,
       );
       input = {
         ...input,
-        cwd: V.dir,
+        cwd: launch.dir,
       };
     }
-    let inputPaths = collectInputPaths(input, ne);
-    let we = [...keys.filter((se) => isRewritablePath(se, input)), ...inputPaths];
-    let Se = we.length > MAX_COLLECTED_PATHS ? we : await filterPathsInRoots(we, input, V, e.pin);
-    let he = (ae.untranslated.includes("/cwd") || le === "unjudgeable") && inputPaths.length > 0;
-    let flattened = ae.untranslated.flatMap((se) => {
-      let atPath = getAtPath(re.data, se);
-      return isHookInputTopField(se) &&
-        !isToolResponsePath(se, re.data, ne) &&
+    let inputPaths = collectInputPaths(input, toolAliases);
+    let pathPointers = [...keys.filter((pointer) => isRewritablePath(pointer, input)), ...inputPaths];
+    let walkedOutside =
+      pathPointers.length > MAX_COLLECTED_PATHS
+        ? pathPointers
+        : await filterPathsInRoots(pathPointers, input, launch, deps.pin);
+    let cwdMoved =
+      (translation.untranslated.includes("/cwd") || verdict === "unjudgeable") && inputPaths.length > 0;
+    let flattened = translation.untranslated.flatMap((pointer) => {
+      let atPath = getAtPath(parsed.data, pointer);
+      return isHookInputTopField(pointer) &&
+        !isToolResponsePath(pointer, parsed.data, toolAliases) &&
         typeof atPath === "string" &&
-        isPlausibleAbsolutePath(atPath, F.roots)
+        isPlausibleAbsolutePath(atPath, state.roots)
         ? [
             {
-              pointer: se,
+              pointer,
               value: atPath,
             },
           ]
         : [];
     });
-    let Je = async (se) => {
-      if (se.length > MAX_COLLECTED_PATHS)
+    let classifyUntranslated = async (items) => {
+      if (items.length > MAX_COLLECTED_PATHS)
         return {
           waived: [],
-          namingFilesHere: se.map((ge) => ge.pointer),
+          namingFilesHere: items.map((item) => item.pointer),
         };
       let results = await Promise.all(
-        se.map(async ({ pointer, value: je }) => {
-          let Ee = await realpathWithLinks(je, e.pin);
-          let ve = Ee !== null && (isPathUnderForPlatform(Ee, V.real) || isPathUnderForPlatform(Ee, V.dir));
-          let Ye =
-            Ee !== null &&
-            !ve &&
-            (await e.pin.realpath(je).then(
+        items.map(async ({ pointer, value: pathValue }) => {
+          let realPath = await realpathWithLinks(pathValue, deps.pin);
+          let insideProject =
+            realPath !== null &&
+            (isPathUnderForPlatform(realPath, launch.real) || isPathUnderForPlatform(realPath, launch.dir));
+          let missingHere =
+            realPath !== null &&
+            !insideProject &&
+            (await deps.pin.realpath(pathValue).then(
               () => false,
               (error) => getErrnoCode(error) === "ENOENT",
             ));
           return {
             pointer,
-            waived: ve || Ye,
+            waived: insideProject || missingHere,
           };
         }),
       );
       return {
-        waived: results.filter((ge) => ge.waived).map((ge) => ge.pointer),
-        namingFilesHere: results.filter((ge) => !ge.waived).map((ge) => ge.pointer),
+        waived: results.filter((result) => result.waived).map((item) => item.pointer),
+        namingFilesHere: results.filter((item) => !item.waived).map((item) => item.pointer),
       };
     };
-    let Xe = await Je(flattened);
-    let namingFilesHere = Xe.namingFilesHere;
-    let waived = F.denyUnjudgeablePaths ? [] : Xe.waived;
-    let Sn = [
-      ...ae.untranslated.filter((se) => isHookInputTopField(se) && !waived.includes(se)),
-      ...(he ? ["/cwd"] : []),
-      ...Se,
+    let judged = await classifyUntranslated(flattened);
+    let namingFilesHere = judged.namingFilesHere;
+    let waived = state.denyUnjudgeablePaths ? [] : judged.waived;
+    let untranslated = [
+      ...translation.untranslated.filter(
+        (pointer) => isHookInputTopField(pointer) && !waived.includes(pointer),
+      ),
+      ...(cwdMoved ? ["/cwd"] : []),
+      ...walkedOutside,
     ];
-    if (Sn.length > 0) {
-      let se =
-        !he &&
-        Se.length === 0 &&
+    if (untranslated.length > 0) {
+      let containerOnly =
+        !cwdMoved &&
+        walkedOutside.length === 0 &&
         namingFilesHere.length === 0 &&
-        we.length <= MAX_COLLECTED_PATHS &&
-        Sn.every((pe) => isPlausibleAbsolutePath(getAtPath(re.data, pe), F.roots));
-      if (!(se && F.runWithUntranslatedPaths)) {
-        M(
-          `untranslated:${X.wire.id}:${se ? "container" : "unjudgeable"}`,
-          se
-            ? `Skipped ${z.local} for the cloud session: the file it would look at exists only in the cloud, not in the synced project on this machine.`
-            : `Not running ${z.local} for the cloud session: the event names a path this machine could not map to its own files.`,
+        pathPointers.length <= MAX_COLLECTED_PATHS &&
+        untranslated.every((pointer) =>
+          isPlausibleAbsolutePath(getAtPath(parsed.data, pointer), state.roots),
+        );
+      if (!(containerOnly && state.runWithUntranslatedPaths)) {
+        noteOnce(
+          `untranslated:${entry.wire.id}:${containerOnly ? "container" : "unjudgeable"}`,
+          containerOnly
+            ? `Skipped ${labels.local} for the cloud session: the file it would look at exists only in the cloud, not in the synced project on this machine.`
+            : `Not running ${labels.local} for the cloud session: the event names a path this machine could not map to its own files.`,
           "info",
         );
-        let pe =
-          !se || F.denyUnjudgeablePaths
+        let answer =
+          !containerOnly || state.denyUnjudgeablePaths
             ? permissionDecisionOutput(
                 event,
-                z.wire,
-                se
+                labels.wire,
+                containerOnly
                   ? "not run \u2014 the event names a file that exists only in the cloud, so this machine could not judge it"
                   : "not run \u2014 the event names a path this machine could not map to its own files; retry with a plain path inside the project",
               )
             : {};
         return {
-          answer: pe,
+          answer,
           telemetry: {
-            ...G,
+            ...baseReport,
             outcome: "untranslated_skipped",
             translatedPaths,
-            blocked: isBlockingHookOutput(pe),
+            blocked: isBlockingHookOutput(answer),
           },
         };
       }
     }
-    let We = withTranscriptPath(input, await e.emptyTranscriptPath().catch(() => NULL_DEVICE));
+    let input_2 = withTranscriptPath(input, await deps.emptyTranscriptPath().catch(() => NULL_DEVICE));
     if (hook.if) {
-      let se;
+      let condition;
       try {
-        se = await e.evaluateCondition(hook.if, We);
+        condition = await deps.evaluateCondition(hook.if, input_2);
       } catch {
-        se = null;
+        condition = null;
       }
-      if (se === null) {
-        let pe = permissionDecisionOutput(
+      if (condition === null) {
+        let answer = permissionDecisionOutput(
           event,
-          z.wire,
+          labels.wire,
           "not run \u2014 its condition could not be evaluated on this machine; retry",
         );
         return {
-          answer: pe,
+          answer,
           telemetry: {
-            ...G,
+            ...baseReport,
             outcome: "condition_error",
             translatedPaths,
-            blocked: isBlockingHookOutput(pe),
+            blocked: isBlockingHookOutput(answer),
           },
         };
       }
-      if (!se)
+      if (!condition)
         return {
           answer: {},
           telemetry: {
-            ...G,
+            ...baseReport,
             outcome: "condition_false",
             translatedPaths,
           },
         };
     }
-    let _e =
+    let vouched =
       hook.type === "command"
-        ? await P(X, hook, Y, z, event, F)
+        ? await vouchCommand(entry, hook, analysis, labels, event, state)
         : {
             kind: "run",
             hook,
             staged: null,
             repinned: false,
           };
-    if (_e.kind === "refuse")
+    if (vouched.kind === "refuse")
       return {
-        answer: _e.answer,
+        answer: vouched.answer,
         telemetry: {
-          ...G,
-          outcome: _e.outcome,
+          ...baseReport,
+          outcome: vouched.outcome,
           translatedPaths,
-          blocked: isBlockingHookOutput(_e.answer),
+          blocked: isBlockingHookOutput(vouched.answer),
         },
       };
-    let Ue = null;
+    let runDir = null;
     try {
       if (signal.aborted)
         return {
           answer: null,
           telemetry: {
-            ...G,
+            ...baseReport,
             outcome: "cancelled",
           },
         };
-      let se =
-        hook.timeout !== undefined && hook.timeout > 0 ? hook.timeout * 1000 : e.defaultTimeoutMs(event);
-      let pe = () => (N.deadlineMs !== undefined ? N.deadlineMs - (e.now() - B) - REQUEST_TIMEOUT_MS : se);
-      let ge = pe();
-      let je = e.now();
-      let Ee = await semaphore.acquire(ge, signal);
-      let waitedMs = Math.max(0, e.now() - je);
-      let Ye = Ee !== null && pe() < MIN_WAIT_BEFORE_ACQUIRE_MS;
-      if (Ye && Ee !== null) {
-        Ee();
-        Ee = null;
+      let hookTimeoutMs =
+        hook.timeout !== undefined && hook.timeout > 0 ? hook.timeout * 1000 : deps.defaultTimeoutMs(event);
+      let remainingMs = () =>
+        request.deadlineMs !== undefined
+          ? request.deadlineMs - (deps.now() - receivedAt) - REQUEST_TIMEOUT_MS
+          : hookTimeoutMs;
+      let budget = remainingMs();
+      let waitStart = deps.now();
+      let releaseSlot = await semaphore.acquire(budget, signal);
+      let waitedMs = Math.max(0, deps.now() - waitStart);
+      let tooLate = releaseSlot !== null && remainingMs() < MIN_WAIT_BEFORE_ACQUIRE_MS;
+      if (tooLate && releaseSlot !== null) {
+        releaseSlot();
+        releaseSlot = null;
       }
-      if (Ee === null) {
+      if (releaseSlot === null) {
         if (signal.aborted)
           return {
             answer: null,
             telemetry: {
-              ...G,
+              ...baseReport,
               outcome: "cancelled",
               waitedMs,
             },
           };
-        if (!Ye && e.now() - NEGATIVE_INFINITY >= 60000) {
-          NEGATIVE_INFINITY = e.now();
-          e.onLine(
+        if (!tooLate && deps.now() - NEGATIVE_INFINITY >= 60000) {
+          NEGATIVE_INFINITY = deps.now();
+          deps.onLine(
             'The cloud session is asking for more hooks at once than this machine can run in time; some were answered "retry" (guards) or with no opinion.',
             "warning",
           );
         }
-        let st = permissionDecisionOutput(
+        let answer = permissionDecisionOutput(
           event,
-          z.wire,
-          Ye
-            ? `not run \u2014 too little time was left before the cloud session stops waiting for ${F.displayName}; retry`
-            : `not run \u2014 ${F.displayName} is running too many hooks for the cloud session at once; retry`,
+          labels.wire,
+          tooLate
+            ? `not run \u2014 too little time was left before the cloud session stops waiting for ${state.displayName}; retry`
+            : `not run \u2014 ${state.displayName} is running too many hooks for the cloud session at once; retry`,
         );
         return {
-          answer: st,
+          answer,
           telemetry: {
-            ...G,
-            outcome: Ye ? "too_late" : "no_slot",
+            ...baseReport,
+            outcome: tooLate ? "too_late" : "no_slot",
             translatedPaths,
-            blocked: isBlockingHookOutput(st),
+            blocked: isBlockingHookOutput(answer),
             waitedMs,
           },
         };
       }
-      let Ut = Ee;
+      let release = releaseSlot;
       try {
         if (signal.aborted)
           return {
             answer: null,
             telemetry: {
-              ...G,
+              ...baseReport,
               outcome: "cancelled",
               waitedMs,
             },
           };
-        let st = We.cwd === V.dir ? "inside" : await te(We.cwd);
-        let qt = We;
-        if (st !== "inside")
-          qt = {
-            ...We,
-            cwd: V.dir,
+        let cwdVerdict_2 = input_2.cwd === launch.dir ? "inside" : await cwdVerdict(input_2.cwd);
+        let runInput = input_2;
+        if (cwdVerdict_2 !== "inside")
+          runInput = {
+            ...input_2,
+            cwd: launch.dir,
           };
-        let yn =
-          (st === "unjudgeable" && inputPaths.length > 0) ||
-          (we.length <= MAX_COLLECTED_PATHS && (await filterPathsInRoots(we, qt, V, e.pin)).length > 0);
-        let cr = !yn && flattened.length > 0 && (await Je(flattened)).namingFilesHere.length > 0;
-        if (yn || cr) {
-          let fe = permissionDecisionOutput(
+        let movedOutside =
+          (cwdVerdict_2 === "unjudgeable" && inputPaths.length > 0) ||
+          (pathPointers.length <= MAX_COLLECTED_PATHS &&
+            (await filterPathsInRoots(pathPointers, runInput, launch, deps.pin)).length > 0);
+        let namingHere =
+          !movedOutside &&
+          flattened.length > 0 &&
+          (await classifyUntranslated(flattened)).namingFilesHere.length > 0;
+        if (movedOutside || namingHere) {
+          let answer = permissionDecisionOutput(
             event,
-            z.wire,
-            `not run \u2014 a path the event names moved outside the project on ${F.displayName} while it waited; retry`,
+            labels.wire,
+            `not run \u2014 a path the event names moved outside the project on ${state.displayName} while it waited; retry`,
           );
           return {
-            answer: fe,
+            answer,
             telemetry: {
-              ...G,
+              ...baseReport,
               outcome: "untranslated_skipped",
               translatedPaths,
-              blocked: isBlockingHookOutput(fe),
+              blocked: isBlockingHookOutput(answer),
               waitedMs,
             },
           };
@@ -755,254 +789,270 @@ function createHookVouching(e) {
           return {
             answer: null,
             telemetry: {
-              ...G,
+              ...baseReport,
               outcome: "cancelled",
               waitedMs,
             },
           };
-        let min = Math.min(se, pe());
-        if (pe() < MIN_WAIT_BEFORE_ACQUIRE_MS) {
-          let fe = permissionDecisionOutput(
+        let min = Math.min(hookTimeoutMs, remainingMs());
+        if (remainingMs() < MIN_WAIT_BEFORE_ACQUIRE_MS) {
+          let answer = permissionDecisionOutput(
             event,
-            z.wire,
-            `not run \u2014 too little time was left before the cloud session stops waiting for ${F.displayName}; retry`,
+            labels.wire,
+            `not run \u2014 too little time was left before the cloud session stops waiting for ${state.displayName}; retry`,
           );
           return {
-            answer: fe,
+            answer,
             telemetry: {
-              ...G,
+              ...baseReport,
               outcome: "too_late",
               translatedPaths,
-              blocked: isBlockingHookOutput(fe),
+              blocked: isBlockingHookOutput(answer),
               waitedMs,
             },
           };
         }
-        let at = e.hostEnv();
-        let vn = [F.frame.launchDir, F.launchDirReal, ...F.cloudWritableRoots, ...e.extraWritableRoots()];
-        let Rn = (fe) => fe !== POSIX_SEP_2 && !isAbsolutePlatformPath(fe);
-        let St =
-          getPlatform() === "windows" && vn.some(Rn)
+        let hostEnv = deps.hostEnv();
+        let reachInputs = [
+          state.frame.launchDir,
+          state.launchDirReal,
+          ...state.cloudWritableRoots,
+          ...deps.extraWritableRoots(),
+        ];
+        let isBadRoot = (path) => path !== POSIX_SEP_2 && !isAbsolutePlatformPath(path);
+        let reachRoots =
+          getPlatform() === "windows" && reachInputs.some(isBadRoot)
             ? [POSIX_SEP_2]
-            : vn
-                .filter((fe) => !Rn(fe))
-                .map((fe) => (fe === POSIX_SEP_2 ? fe : normalizeCommandForPlatform(resolve(fe))));
-        let lt = await e.childEnvironment(St, at);
-        let ur = (fe) =>
-          St.some((Ne) => isReachableOrSamePath(normalizeCommandForPlatform(resolve(fe)), Ne)) ||
-          (getPlatform() === "windows" && anyPathMatches(fe, St));
-        let En = tokenizeCommandLine(at.CLAUDE_CODE_SHELL_PREFIX ?? "", {
-          home: at.HOME,
-          launchDir: F.frame.launchDir,
+            : reachInputs
+                .filter((path) => !isBadRoot(path))
+                .map((path) => (path === POSIX_SEP_2 ? path : normalizeCommandForPlatform(resolve(path))));
+        let childEnv = await deps.childEnvironment(reachRoots, hostEnv);
+        let isInReach = (candidate) =>
+          reachRoots.some((root) =>
+            isReachableOrSamePath(normalizeCommandForPlatform(resolve(candidate)), root),
+          ) ||
+          (getPlatform() === "windows" && anyPathMatches(candidate, reachRoots));
+        let prefixWords = tokenizeCommandLine(hostEnv.CLAUDE_CODE_SHELL_PREFIX ?? "", {
+          home: hostEnv.HOME,
+          launchDir: state.frame.launchDir,
         });
         let results = await Promise.all(
-          En.map((fe) =>
-            e
-              .placePath(fe)
-              .then((Ne) => (Ne === "unreadable" ? UNPLACEABLE_MARKER : Ne === "absent" ? fe : Ne)),
+          prefixWords.map((word) =>
+            deps
+              .placePath(word)
+              .then((placed) =>
+                placed === "unreadable" ? UNPLACEABLE_MARKER : placed === "absent" ? word : placed,
+              ),
           ),
         );
-        let dt =
-          (results.includes(UNPLACEABLE_MARKER) || [...En, ...results].some(ur)) &&
-          !lt.omit.includes("CLAUDE_CODE_SHELL_PREFIX")
+        let envScrubbed =
+          (results.includes(UNPLACEABLE_MARKER) || [...prefixWords, ...results].some(isInReach)) &&
+          !childEnv.omit.includes("CLAUDE_CODE_SHELL_PREFIX")
             ? {
-                ...lt,
-                omit: [...lt.omit, "CLAUDE_CODE_SHELL_PREFIX"],
-                extra: Uo(lt.extra, "CLAUDE_CODE_SHELL_PREFIX"),
+                ...childEnv,
+                omit: [...childEnv.omit, "CLAUDE_CODE_SHELL_PREFIX"],
+                extra: omitAlias(childEnv.extra, "CLAUDE_CODE_SHELL_PREFIX"),
               }
-            : lt;
+            : childEnv;
         if (
-          at.CLAUDE_CODE_SHELL_PREFIX?.trim() &&
-          _e.hook.type === "command" &&
-          _e.hook.args === undefined &&
-          withShellPrefix(dt) === undefined
+          hostEnv.CLAUDE_CODE_SHELL_PREFIX?.trim() &&
+          vouched.hook.type === "command" &&
+          vouched.hook.args === undefined &&
+          withShellPrefix(envScrubbed) === undefined
         )
-          M(
+          noteOnce(
             "prefix-unwrapped",
             'Hooks marked cloud: "device" run for the cloud session WITHOUT your CLAUDE_CODE_SHELL_PREFIX here: this machine cannot vouch for that wrapper (it is not an absolute path outside what the session can write).',
             "warning",
           );
-        let PATH = dt.extra.PATH;
-        let ut =
+        let PATH = envScrubbed.extra.PATH;
+        let runEnv =
           PATH === undefined || PATH === ""
             ? {
-                ...dt,
+                ...envScrubbed,
                 extra: {
-                  ...dt.extra,
+                  ...envScrubbed.extra,
                   PATH: EMPTY_PATH_DIR,
                 },
               }
-            : dt;
-        let fr = new Set((ut.extra.PATH ?? "").split(delimiter));
-        let filtered = (at.PATH ?? "").split(delimiter).filter((fe) => fe !== "" && !fr.has(fe));
-        if (ut.omit.length > 0)
-          e.debug(`[deviceHooks] ${safeLabel(N.requestId)}: not passing on ${ut.omit.join(", ")}`);
+            : envScrubbed;
+        let keptPathEntries = new Set((runEnv.extra.PATH ?? "").split(delimiter));
+        let filtered = (hostEnv.PATH ?? "")
+          .split(delimiter)
+          .filter((entry) => entry !== "" && !keptPathEntries.has(entry));
+        if (runEnv.omit.length > 0)
+          deps.debug(
+            `[deviceHooks] ${safeLabel(request.requestId)}: not passing on ${runEnv.omit.join(", ")}`,
+          );
         if (filtered.length > 0)
-          M(
+          noteOnce(
             "search-path-trimmed",
             `Hooks the cloud session forwards here run without ${filtered.length} PATH entr${filtered.length === 1 ? "y" : "ies"} the session can write to or that cannot be resolved on this machine (${filtered
               .slice(0, 3)
-              .map((fe) => stripInvisibleChars(fe))
+              .map((entry) => stripInvisibleChars(entry))
               .join(
                 ", ",
               )}${filtered.length > 3 ? ", \u2026" : ""}); a tool installed only there is "not found" for them.`,
             "debug",
           );
-        let ht =
-          _e.hook.type !== "command"
+        let program =
+          vouched.hook.type !== "command"
             ? undefined
-            : _e.hook.args !== undefined
-              ? _e.hook.command.includes("/")
+            : vouched.hook.args !== undefined
+              ? vouched.hook.command.includes("/")
                 ? undefined
-                : _e.hook.command
-              : Y?.kind === "script" && Y.interpreter !== null
-                ? Y.interpreter
+                : vouched.hook.command
+              : analysis?.kind === "script" && analysis.interpreter !== null
+                ? analysis.interpreter
                 : undefined;
-        if (ht !== undefined) {
-          if ((await e.resolveProgram(ht, ut.extra.PATH ?? "", St)) === "in_reach") {
-            M(
-              `program:${ht}`,
-              `Not running hooks through ${ht} for the cloud session: on this machine that name leads to a file the session can write.`,
+        if (program !== undefined) {
+          if ((await deps.resolveProgram(program, runEnv.extra.PATH ?? "", reachRoots)) === "in_reach") {
+            noteOnce(
+              `program:${program}`,
+              `Not running hooks through ${program} for the cloud session: on this machine that name leads to a file the session can write.`,
               "warning",
             );
-            let Ne = permissionDecisionOutput(
+            let answer = permissionDecisionOutput(
               event,
-              z.wire,
-              `not run \u2014 ${ht} on ${F.displayName} leads to a file the cloud session can write`,
+              labels.wire,
+              `not run \u2014 ${program} on ${state.displayName} leads to a file the cloud session can write`,
             );
             return {
-              answer: Ne,
+              answer,
               telemetry: {
-                ...G,
+                ...baseReport,
                 outcome: "in_reach_refused",
                 translatedPaths,
-                blocked: isBlockingHookOutput(Ne),
+                blocked: isBlockingHookOutput(answer),
                 waitedMs,
               },
             };
           }
         }
         if (
-          _e.hook.type === "command" &&
-          X.local.cloudOptIn !== true &&
-          F.unmarkedStartFolder === "private"
+          vouched.hook.type === "command" &&
+          entry.local.cloudOptIn !== true &&
+          state.unmarkedStartFolder === "private"
         ) {
-          Ue = await e.staging.runDirectory().catch(() => null);
-          if (Ue === null) {
-            M(
-              `run-folder:${X.wire.id}`,
-              `Not running ${z.local} for the cloud session: this machine has no private folder to start it in.`,
+          runDir = await deps.staging.runDirectory().catch(() => null);
+          if (runDir === null) {
+            noteOnce(
+              `run-folder:${entry.wire.id}`,
+              `Not running ${labels.local} for the cloud session: this machine has no private folder to start it in.`,
               "warning",
             );
-            let fe = permissionDecisionOutput(
+            let answer = permissionDecisionOutput(
               event,
-              z.wire,
-              `not run \u2014 ${F.displayName} has no private folder to start it in`,
+              labels.wire,
+              `not run \u2014 ${state.displayName} has no private folder to start it in`,
             );
             return {
-              answer: fe,
+              answer,
               telemetry: {
-                ...G,
+                ...baseReport,
                 outcome: "staging_failed",
                 translatedPaths,
-                blocked: isBlockingHookOutput(fe),
+                blocked: isBlockingHookOutput(answer),
                 waitedMs,
               },
             };
           }
         }
-        let pr = e.now();
-        let An = await e.run(
+        let runStart = deps.now();
+        let runResult = await deps.run(
           {
-            hook: _e.hook,
+            hook: vouched.hook,
             event,
-            input: qt,
+            input: runInput,
             timeoutMs: min,
-            env: ut,
-            ...(Ue !== null && {
-              startDirectory: Ue.path,
+            env: runEnv,
+            ...(runDir !== null && {
+              startDirectory: runDir.path,
             }),
           },
-          F.frame,
+          state.frame,
           signal,
         );
-        let Tn = An.aborted === true && !signal.aborted;
-        let ke =
-          Tn && min < se
+        let timedOut = runResult.aborted === true && !signal.aborted;
+        let interpreted =
+          timedOut && min < hookTimeoutMs
             ? {
                 answer: permissionDecisionOutput(
                   event,
-                  z.wire,
-                  `not run to completion \u2014 too little time was left before the cloud session stops waiting for ${F.displayName}; retry`,
+                  labels.wire,
+                  `not run to completion \u2014 too little time was left before the cloud session stops waiting for ${state.displayName}; retry`,
                 ),
                 exitClass: "timeout",
                 blocked: event === "PreToolUse",
                 localWarning: undefined,
               }
-            : interpretHookResult(An, {
+            : interpretHookResult(runResult, {
                 event,
-                label: z.wire,
-                timedOut: Tn,
+                label: labels.wire,
+                timedOut,
                 timeoutMs: min,
-                timeoutFailsClosed: F.timeoutFailsClosed,
+                timeoutFailsClosed: state.timeoutFailsClosed,
               });
-        let Pn = e.now() - pr;
-        if (ke.localWarning !== undefined)
-          q(
-            `${X.wire.id}:${ke.exitClass}`,
-            `cloud \u25B8 ${event} \u25B8 ${ke.localWarning}${Ue !== null && ke.exitClass === "other" ? ` \xB7 ${EMPTY_FOLDER_HINT}` : ""}`,
+        let elapsedMs = deps.now() - runStart;
+        if (interpreted.localWarning !== undefined)
+          warnThrottled(
+            `${entry.wire.id}:${interpreted.exitClass}`,
+            `cloud \u25B8 ${event} \u25B8 ${interpreted.localWarning}${runDir !== null && interpreted.exitClass === "other" ? ` \xB7 ${EMPTY_FOLDER_HINT}` : ""}`,
           );
-        else if (ke.answer !== null && ke.blocked)
-          e.onLine(
-            `cloud \u25B8 ${event}${formatToolNameSuffix(We)} \u25B8 ${z.local} \u25B8 ${isAskOnlyHookOutput(ke.answer) ? "asked" : "blocked"} (${Pn} ms)`,
+        else if (interpreted.answer !== null && interpreted.blocked)
+          deps.onLine(
+            `cloud \u25B8 ${event}${formatToolNameSuffix(input_2)} \u25B8 ${labels.local} \u25B8 ${isAskOnlyHookOutput(interpreted.answer) ? "asked" : "blocked"} (${elapsedMs} ms)`,
             "info",
           );
-        else if (ke.answer !== null && hasVouchedContext(ke.answer))
-          e.onLine(
-            `cloud \u25B8 ${event}${formatToolNameSuffix(We)} \u25B8 ${z.local} \u25B8 added context (${Pn} ms)`,
+        else if (interpreted.answer !== null && hasVouchedContext(interpreted.answer))
+          deps.onLine(
+            `cloud \u25B8 ${event}${formatToolNameSuffix(input_2)} \u25B8 ${labels.local} \u25B8 added context (${elapsedMs} ms)`,
             "debug",
           );
         return {
-          answer: ke.answer,
+          answer: interpreted.answer,
           telemetry: {
-            ...G,
+            ...baseReport,
             outcome:
-              ke.answer === null
+              interpreted.answer === null
                 ? "cancelled"
-                : ke.exitClass === "spawn_failed" ||
-                    (ke.exitClass === "other" && ke.localWarning !== undefined)
+                : interpreted.exitClass === "spawn_failed" ||
+                    (interpreted.exitClass === "other" && interpreted.localWarning !== undefined)
                   ? "run_error"
                   : "answered",
-            exitClass: ke.exitClass,
+            exitClass: interpreted.exitClass,
             translatedPaths,
-            blocked: ke.blocked,
-            staged: _e.staged !== null,
-            projectFrame: _e.hook.type === "command" && Ue === null,
-            repinned: _e.repinned,
+            blocked: interpreted.blocked,
+            staged: vouched.staged !== null,
+            projectFrame: vouched.hook.type === "command" && runDir === null,
+            repinned: vouched.repinned,
             waitedMs,
           },
         };
       } finally {
-        Ut();
+        release();
       }
     } finally {
-      await Promise.all([_e.staged?.release(), Ue?.release()]);
+      await Promise.all([vouched.staged?.release(), runDir?.release()]);
     }
   };
   return {
-    async serve(N, F) {
-      let X = e.now();
-      if (F === null)
+    async serve(request, state) {
+      let startedAt = deps.now();
+      if (state === null)
         return {
           kind: "silent",
           reason: "no_state",
         };
-      if (N.requestId.length > MAX_REQUEST_ID_CHARS || N.callbackId.length > MAX_REQUEST_ID_CHARS) {
-        T(
+      if (
+        request.requestId.length > MAX_REQUEST_ID_CHARS ||
+        request.callbackId.length > MAX_REQUEST_ID_CHARS
+      ) {
+        report(
           {
             outcome: "not_mine",
           },
-          X,
+          startedAt,
           undefined,
         );
         return {
@@ -1010,15 +1060,15 @@ function createHookVouching(e) {
           reason: "not_mine",
         };
       }
-      let deviceHookId = parseDeviceHookId(N.callbackId);
+      let deviceHookId = parseDeviceHookId(request.callbackId);
       let instanceId = deviceHookId?.instanceId;
-      let ee = instanceId !== undefined && F.retiredInstanceIds.has(instanceId);
-      if (!ee && instanceId !== F.instanceId) {
-        T(
+      let retired = instanceId !== undefined && state.retiredInstanceIds.has(instanceId);
+      if (!retired && instanceId !== state.instanceId) {
+        report(
           {
             outcome: "not_mine",
           },
-          X,
+          startedAt,
           undefined,
         );
         return {
@@ -1026,244 +1076,253 @@ function createHookVouching(e) {
           reason: "not_mine",
         };
       }
-      let D = e.judgeSender(N.attestationStatus);
-      let G = (oe, V) => T(oe, V, D?.attestation);
-      if (D?.heldBack === true) {
-        e.debug(
-          `[deviceHooks] ${safeLabel(N.requestId)}: held back for its sender (attestation ${D.attestation.status}) \u2014 no opinion, nothing run`,
+      let verdict = deps.judgeSender(request.attestationStatus);
+      let report_2 = (info, startedAt) => report(info, startedAt, verdict?.attestation);
+      if (verdict?.heldBack === true) {
+        deps.debug(
+          `[deviceHooks] ${safeLabel(request.requestId)}: held back for its sender (attestation ${verdict.attestation.status}) \u2014 no opinion, nothing run`,
         );
-        M("unattested", SENDER_UNVOUCHED_TEXT, "warning");
-        G(
+        noteOnce("unattested", SENDER_UNVOUCHED_TEXT, "warning");
+        report_2(
           {
             outcome: "unattested",
           },
-          X,
+          startedAt,
         );
         return {
           kind: "answer",
           answer: {},
         };
       }
-      if (e.isMuted?.() === true) {
-        e.debug(
-          `[deviceHooks] ${safeLabel(N.requestId)}: serving is switched off (emergency switch) \u2014 no opinion`,
+      if (deps.isMuted?.() === true) {
+        deps.debug(
+          `[deviceHooks] ${safeLabel(request.requestId)}: serving is switched off (emergency switch) \u2014 no opinion`,
         );
-        G(
+        report_2(
           {
             outcome: "muted",
           },
-          X,
+          startedAt,
         );
         return {
           kind: "answer",
           answer: {},
         };
       }
-      if (withdrawn.has(N.requestId)) {
-        e.debug(`[deviceHooks] ${safeLabel(N.requestId)}: withdrawn earlier \u2014 staying silent`);
-        G(
+      if (withdrawn.has(request.requestId)) {
+        deps.debug(`[deviceHooks] ${safeLabel(request.requestId)}: withdrawn earlier \u2014 staying silent`);
+        report_2(
           {
             outcome: "withdrawn_replay",
             replay: true,
           },
-          X,
+          startedAt,
         );
         return {
           kind: "silent",
           reason: "withdrawn",
         };
       }
-      let Y = answered.get(N.requestId);
-      if (Y !== undefined && Y.callbackId === N.callbackId) {
-        e.debug(`[deviceHooks] ${safeLabel(N.requestId)}: replay \u2014 resending the earlier answer`);
-        G(
+      let previous = answered.get(request.requestId);
+      if (previous !== undefined && previous.callbackId === request.callbackId) {
+        deps.debug(
+          `[deviceHooks] ${safeLabel(request.requestId)}: replay \u2014 resending the earlier answer`,
+        );
+        report_2(
           {
             outcome: "cached",
             replay: true,
           },
-          X,
+          startedAt,
         );
         return {
           kind: "answer",
-          answer: Y.answer,
+          answer: previous.answer,
         };
       }
-      if (Y !== undefined) {
-        let oe = permissionDecisionOutput(
+      if (previous !== undefined) {
+        let answer = permissionDecisionOutput(
           deviceHookId?.event === "PreToolUse" ? "PreToolUse" : "Stop",
-          `hook on ${F.displayName}`,
+          `hook on ${state.displayName}`,
           "not run \u2014 its request id was already used for another hook; retry",
         );
-        G(
+        report_2(
           {
             outcome: "replay_mismatch",
-            blocked: isBlockingHookOutput(oe),
+            blocked: isBlockingHookOutput(answer),
           },
-          X,
+          startedAt,
         );
         return {
           kind: "answer",
-          answer: oe,
+          answer,
         };
       }
-      if (n.has(N.requestId))
+      if (inFlight.has(request.requestId))
         return {
           kind: "silent",
           reason: "running",
         };
-      let Z = ee ? undefined : F.inventory.forwarded.find((oe) => oe.wire.id === N.callbackId);
-      if (Z === undefined) {
-        e.debug(
-          `[deviceHooks] ${safeLabel(N.requestId)}: ${ee ? "retired instance" : "not in the current inventory"} \u2014 ${deviceHookId?.event === "PreToolUse" ? "holding the guard" : "no opinion"}`,
+      let entry = retired
+        ? undefined
+        : state.inventory.forwarded.find((forwarded) => forwarded.wire.id === request.callbackId);
+      if (entry === undefined) {
+        deps.debug(
+          `[deviceHooks] ${safeLabel(request.requestId)}: ${retired ? "retired instance" : "not in the current inventory"} \u2014 ${deviceHookId?.event === "PreToolUse" ? "holding the guard" : "no opinion"}`,
         );
-        let oe = permissionDecisionOutput(
+        let answer = permissionDecisionOutput(
           deviceHookId?.event === "PreToolUse" ? "PreToolUse" : "Stop",
-          `hook on ${F.displayName}`,
+          `hook on ${state.displayName}`,
           "not run \u2014 it belongs to a registration that machine has since replaced; retry",
         );
-        G(
+        report_2(
           {
             outcome: "unknown_id",
-            blocked: isBlockingHookOutput(oe),
+            blocked: isBlockingHookOutput(answer),
           },
-          X,
+          startedAt,
         );
         return {
           kind: "answer",
-          answer: oe,
+          answer,
         };
       }
-      if (n.size >= MAX_HOOKS_PER_EVENT) {
-        e.debug(`[deviceHooks] ${safeLabel(N.requestId)}: too many requests in hand \u2014 refusing`);
-        let oe = vouchPreToolUse(Z, F, e);
-        G(
+      if (inFlight.size >= MAX_HOOKS_PER_EVENT) {
+        deps.debug(
+          `[deviceHooks] ${safeLabel(request.requestId)}: too many requests in hand \u2014 refusing`,
+        );
+        let answer = vouchPreToolUse(entry, state, deps);
+        report_2(
           {
             outcome: "overloaded",
-            blocked: isBlockingHookOutput(oe),
+            blocked: isBlockingHookOutput(answer),
           },
-          X,
+          startedAt,
         );
         return {
           kind: "answer",
-          answer: oe,
+          answer,
         };
       }
-      let z = vouchedOutput(Z, N.input, e.defaultShell());
-      let K = z === null ? undefined : r.get(z.key);
-      if (K !== undefined && K.requestId !== N.requestId) {
+      let dedupeKey = vouchedOutput(entry, request.input, deps.defaultShell());
+      let previous_2 = dedupeKey === null ? undefined : translated.get(dedupeKey.key);
+      if (previous_2 !== undefined && previous_2.requestId !== request.requestId) {
         let abortController = new AbortController();
-        n.set(N.requestId, abortController);
-        let V = null;
+        inFlight.set(request.requestId, abortController);
+        let answer = null;
         try {
-          V = await new Promise((resolve) => {
-            let le = e.setTimer(() => resolve("too_late"), Math.max(0, u(N, Z, X)));
+          answer = await new Promise((resolve) => {
+            let timer = deps.setTimer(
+              () => resolve("too_late"),
+              Math.max(0, deadlineIn(request, entry, startedAt)),
+            );
             abortController.signal.addEventListener(
               "abort",
               () => {
-                le.clear();
+                timer.clear();
                 resolve(null);
               },
               {
                 once: true,
               },
             );
-            K.answer.then((ue) => {
-              le.clear();
-              resolve(ue);
+            previous_2.answer.then((answer) => {
+              timer.clear();
+              resolve(answer);
             });
           });
         } finally {
-          n.delete(N.requestId);
+          inFlight.delete(request.requestId);
         }
         if (abortController.signal.aborted) {
-          if (abortController.signal.reason !== DEVICE_HOOKS_DISCONNECT) j(N.requestId);
-          G(
+          if (abortController.signal.reason !== DEVICE_HOOKS_DISCONNECT) markWithdrawn(request.requestId);
+          report_2(
             {
               outcome: "cancelled",
               blocked: false,
             },
-            X,
+            startedAt,
           );
           return {
             kind: "silent",
             reason: "cancelled",
           };
         }
-        if (V === "too_late") {
-          let te = permissionDecisionOutput(
-            isMatcherEvent(Z.local.event) ? Z.local.event : "Stop",
-            `hook on ${F.displayName}`,
-            `not run \u2014 ${F.displayName} could not decide it before the cloud session stops waiting; retry`,
+        if (answer === "too_late") {
+          let answer = permissionDecisionOutput(
+            isMatcherEvent(entry.local.event) ? entry.local.event : "Stop",
+            `hook on ${state.displayName}`,
+            `not run \u2014 ${state.displayName} could not decide it before the cloud session stops waiting; retry`,
           );
-          R(N.requestId, N.callbackId, te);
-          G(
+          rememberAnswer(request.requestId, request.callbackId, answer);
+          report_2(
             {
               outcome: "too_late",
-              blocked: isBlockingHookOutput(te),
+              blocked: isBlockingHookOutput(answer),
             },
-            X,
+            startedAt,
           );
           return {
             kind: "answer",
-            answer: te,
+            answer,
           };
         }
-        if (V !== null) {
-          R(N.requestId, N.callbackId, V);
-          e.debug(
-            `[deviceHooks] ${safeLabel(N.requestId)}: the same hook and invocation as ${safeLabel(K.requestId)} \u2014 answered from its run`,
+        if (answer !== null) {
+          rememberAnswer(request.requestId, request.callbackId, answer);
+          deps.debug(
+            `[deviceHooks] ${safeLabel(request.requestId)}: the same hook and invocation as ${safeLabel(previous_2.requestId)} \u2014 answered from its run`,
           );
-          G(
+          report_2(
             {
               outcome: "same_invocation",
-              blocked: isBlockingHookOutput(V),
+              blocked: isBlockingHookOutput(answer),
             },
-            X,
+            startedAt,
           );
           return {
             kind: "answer",
-            answer: V,
+            answer,
           };
         }
       }
-      let re = () => {};
-      if (z !== null) {
+      let resolveShared = () => {};
+      if (dedupeKey !== null) {
         let answer = new Promise((resolve) => {
-          re = resolve;
+          resolveShared = resolve;
         });
-        r.delete(z.key);
-        r.set(z.key, {
-          requestId: N.requestId,
+        translated.delete(dedupeKey.key);
+        translated.set(dedupeKey.key, {
+          requestId: request.requestId,
           answer,
         });
-        x(r);
+        trimOldest(translated);
       }
-      let ne = null;
+      let sharedAnswer = null;
       let abortController = new AbortController();
-      n.set(N.requestId, abortController);
-      let ie = false;
-      let ce = L(N, F, Z, X, abortController.signal).catch((error) => {
-        e.logError(error);
-        let V = permissionDecisionOutput(
-          isMatcherEvent(Z.local.event) ? Z.local.event : "Stop",
-          `hook on ${F.displayName}`,
+      inFlight.set(request.requestId, abortController);
+      let settled = false;
+      let decision = serve(request, state, entry, startedAt, abortController.signal).catch((error) => {
+        deps.logError(error);
+        let answer = permissionDecisionOutput(
+          isMatcherEvent(entry.local.event) ? entry.local.event : "Stop",
+          `hook on ${state.displayName}`,
           "not run \u2014 an internal error while deciding it; retry",
         );
         return {
-          answer: V,
+          answer,
           telemetry: {
             outcome: "decide_error",
-            blocked: isBlockingHookOutput(V),
+            blocked: isBlockingHookOutput(answer),
           },
         };
       });
-      ce.finally(() => {
-        ie = true;
+      decision.finally(() => {
+        settled = true;
       });
       try {
         let { answer, telemetry } = await new Promise((resolve) => {
-          let we = u(N, Z, X);
-          let Se = e.setTimer(
+          let budget = deadlineIn(request, entry, startedAt);
+          let timer = deps.setTimer(
             () => {
               if (abortController.signal.aborted) {
                 resolve({
@@ -1276,113 +1335,118 @@ function createHookVouching(e) {
                 return;
               }
               abortController.abort(DEVICE_HOOKS_DEADLINE);
-              let he = permissionDecisionOutput(
-                isMatcherEvent(Z.local.event) ? Z.local.event : "Stop",
-                `hook on ${F.displayName}`,
-                `not run \u2014 ${F.displayName} could not decide it before the cloud session stops waiting; retry`,
+              let answer = permissionDecisionOutput(
+                isMatcherEvent(entry.local.event) ? entry.local.event : "Stop",
+                `hook on ${state.displayName}`,
+                `not run \u2014 ${state.displayName} could not decide it before the cloud session stops waiting; retry`,
               );
               resolve({
-                answer: he,
+                answer,
                 telemetry: {
                   outcome: "too_late",
-                  blocked: isBlockingHookOutput(he),
+                  blocked: isBlockingHookOutput(answer),
                 },
               });
             },
-            Math.max(0, we),
+            Math.max(0, budget),
           );
-          ce.then((he) => {
-            Se.clear();
-            resolve(he);
+          decision.then((decided) => {
+            timer.clear();
+            resolve(decided);
           });
         });
         if (
           abortController.signal.reason !== DEVICE_HOOKS_DEADLINE &&
           (answer === null || abortController.signal.aborted)
         ) {
-          if (abortController.signal.reason !== DEVICE_HOOKS_DISCONNECT) j(N.requestId);
-          else if (answer !== null) R(N.requestId, N.callbackId, answer);
-          e.debug(`[deviceHooks] ${safeLabel(N.requestId)}: ${Z.wire.id} withdrawn \u2014 nothing sent`);
-          G(
+          if (abortController.signal.reason !== DEVICE_HOOKS_DISCONNECT) markWithdrawn(request.requestId);
+          else if (answer !== null) rememberAnswer(request.requestId, request.callbackId, answer);
+          deps.debug(
+            `[deviceHooks] ${safeLabel(request.requestId)}: ${entry.wire.id} withdrawn \u2014 nothing sent`,
+          );
+          report_2(
             {
               ...telemetry,
               outcome: "cancelled",
             },
-            X,
+            startedAt,
           );
           return {
             kind: "silent",
             reason: "cancelled",
           };
         }
-        let le = answer ?? {};
-        ne = le;
-        R(N.requestId, N.callbackId, le);
-        e.debug(`[deviceHooks] ${safeLabel(N.requestId)}: ${Z.wire.id} \u2192 ${telemetry.outcome}`);
-        G(telemetry, X);
+        let answer_2 = answer ?? {};
+        sharedAnswer = answer_2;
+        rememberAnswer(request.requestId, request.callbackId, answer_2);
+        deps.debug(
+          `[deviceHooks] ${safeLabel(request.requestId)}: ${entry.wire.id} \u2192 ${telemetry.outcome}`,
+        );
+        report_2(telemetry, startedAt);
         return {
           kind: "answer",
-          answer: le,
+          answer: answer_2,
         };
       } finally {
-        re(ne);
-        if (z !== null && r.get(z.key)?.requestId === N.requestId) r.delete(z.key);
-        if (ie) n.delete(N.requestId);
-        else ce.finally(() => n.delete(N.requestId));
+        resolveShared(sharedAnswer);
+        if (dedupeKey !== null && translated.get(dedupeKey.key)?.requestId === request.requestId)
+          translated.delete(dedupeKey.key);
+        if (settled) inFlight.delete(request.requestId);
+        else decision.finally(() => inFlight.delete(request.requestId));
       }
     },
-    cancel(N, F = "worker") {
-      let X = n.get(N);
-      if (X === undefined) return false;
-      if (F === "worker") {
-        j(N);
-        X.abort();
-      } else X.abort(DEVICE_HOOKS_DISCONNECT);
+    cancel(requestId, origin = "worker") {
+      let controller = inFlight.get(requestId);
+      if (controller === undefined) return false;
+      if (origin === "worker") {
+        markWithdrawn(requestId);
+        controller.abort();
+      } else controller.abort(DEVICE_HOOKS_DISCONNECT);
       return true;
     },
     cancelAll() {
-      let size = n.size;
-      for (let F of n.values()) F.abort(DEVICE_HOOKS_DISCONNECT);
+      let size = inFlight.size;
+      for (let controller of inFlight.values()) controller.abort(DEVICE_HOOKS_DISCONNECT);
       semaphore.refuseAll();
       return size;
     },
-    inFlight: () => n.size,
+    inFlight: () => inFlight.size,
   };
 }
 //@ chunk-mthxbav8.js:45449-45866 placement
-function vouchedOutput(e, n, r) {
-  if (typeof n !== "object" || n === null) return null;
-  let hook = e.local.hook;
-  let u =
+function vouchedOutput(entry, input, defaultShell) {
+  if (typeof input !== "object" || input === null) return null;
+  let hook = entry.local.hook;
+  let hookKey =
     hook.type === "command"
-      ? `command\x00${hook.shell ?? r}\x00${hook.command}\x00${jsonStringify(hook.args ?? null)}\x00${hook.if ?? ""}`
+      ? `command\x00${hook.shell ?? defaultShell}\x00${hook.command}\x00${jsonStringify(hook.args ?? null)}\x00${hook.if ?? ""}`
       : hook.type === "http"
         ? `http\x00${hook.url}\x00${hook.if ?? ""}`
         : null;
-  if (u === null) return null;
-  let S =
-    "tool_use_id" in n && typeof n.tool_use_id === "string"
-      ? `tool\x00${n.tool_use_id}`
-      : `input\x00${computeContentHash(jsonStringify(n))}`;
+  if (hookKey === null) return null;
+  let invocationKey =
+    "tool_use_id" in input && typeof input.tool_use_id === "string"
+      ? `tool\x00${input.tool_use_id}`
+      : `input\x00${computeContentHash(jsonStringify(input))}`;
   return {
-    key: `${e.local.event}\x00${S}\x00${u}`,
+    key: `${entry.local.event}\x00${invocationKey}\x00${hookKey}`,
   };
 }
 //@ chunk-mthxbav8.js:45866-46317 placement
-function vouchPreToolUse(e, n, r, s = "in_hand") {
-  let hook = e.local.hook;
-  if (e.local.event !== "PreToolUse" || (hook.type !== "command" && hook.type !== "http")) return {};
-  let S = null;
+function vouchPreToolUse(entry, state, deps, reason = "in_hand") {
+  let hook = entry.local.hook;
+  if (entry.local.event !== "PreToolUse" || (hook.type !== "command" && hook.type !== "http")) return {};
+  let analysis = null;
   try {
-    S = hook.type === "command" ? r.parseTarget(hook) : null;
+    analysis = hook.type === "command" ? deps.parseTarget(hook) : null;
   } catch {}
-  let w = hookDisplayHost(hook, S);
+  let hostLabel = hookDisplayHost(hook, analysis);
   return permissionDecisionOutput(
     "PreToolUse",
-    hookWireLabel(hook, w, n),
-    s === "too_large"
-      ? `not run \u2014 the event was too large to judge on ${n.displayName}; retry with less`
-      : `not run \u2014 ${n.displayName} has too many hook requests from the cloud session in hand at once; retry`,
+    hookWireLabel(hook, hostLabel, state),
+    reason === "too_large"
+      ? `not run \u2014 the event was too large to judge on ${state.displayName}; retry with less`
+      : `not run \u2014 ${state.displayName} has too many hook requests from the cloud session in hand at once; retry`,
   );
 }
 //@ chunk-mthxbav8.js:46317-46428 placement = isToolReferenceWithName (0.848)
@@ -1405,201 +1469,222 @@ function hasVouchedContext(answer) {
   );
 }
 //@ chunk-mthxbav8.js:46600-46634 placement
-function deviceHookTimeoutMs(e) {
-  return DEVICE_HOOK_DEFAULT_S[e] * 1000;
+function deviceHookTimeoutMs(event) {
+  return DEVICE_HOOK_DEFAULT_S[event] * 1000;
 }
 //@ chunk-mthxbav8.js:46634-46792 placement
 var PATH_LIKE_ENV_RE =
   /^(?:PATH|CDPATH|PYTHONPATH|PYTHONHOME|NODE_PATH|RUBYLIB|PERL5LIB|PERLLIB|GEM_PATH|GEM_HOME|CLASSPATH|LD_LIBRARY_PATH|DYLD_\w+)$/;
 var UNPLACEABLE_MARKER = "\x00unplaceable";
 //@ chunk-mthxbav8.js:46792-48253 placement
-function tokenizeCommandLine(e, { home, launchDir }) {
-  let s = [];
-  let u = "";
-  let S = "";
-  let w = null;
-  let h = () => {
-    if (u !== "")
-      s.push({
-        raw: u,
-        text: S,
+function tokenizeCommandLine(commandLine, { home, launchDir }) {
+  let words = [];
+  let raw = "";
+  let text = "";
+  let quote = null;
+  let flush = () => {
+    if (raw !== "")
+      words.push({
+        raw,
+        text,
       });
-    u = "";
-    S = "";
+    raw = "";
+    text = "";
   };
-  for (let x of e.trim())
-    if (w !== null) {
-      u += x;
-      if (x === w) w = null;
-      else S += x;
-    } else if (x === '"' || x === "'") {
-      w = x;
-      u += x;
-    } else if (x === " " || x === "\t") h();
+  for (let char of commandLine.trim())
+    if (quote !== null) {
+      raw += char;
+      if (char === quote) quote = null;
+      else text += char;
+    } else if (char === '"' || char === "'") {
+      quote = char;
+      raw += char;
+    } else if (char === " " || char === "\t") flush();
     else {
-      u += x;
-      S += x;
+      raw += char;
+      text += char;
     }
-  h();
-  let v = getPlatform() === "windows";
-  let y = (x) => (v ? /[\\/]/.test(x) : x.includes("/"));
-  let C = (x) => (v ? /^(?:[A-Za-z]:[\\/]|[\\/])/.test(x) : x.startsWith("/"));
-  let O = (x) => v && /^[A-Za-z]:(?![\\/])/.test(x);
-  return s.flatMap(({ raw, text }) => {
-    if (v && raw.replace(/'[^']*'|"[^"]*"/g, "").includes("\\")) return [launchDir];
+  flush();
+  let isWindows = getPlatform() === "windows";
+  let hasSlash = (value) => (isWindows ? /[\\/]/.test(value) : value.includes("/"));
+  let isAbsolute = (value) => (isWindows ? /^(?:[A-Za-z]:[\\/]|[\\/])/.test(value) : value.startsWith("/"));
+  let isDriveRelative = (value) => isWindows && /^[A-Za-z]:(?![\\/])/.test(value);
+  return words.flatMap(({ raw, text }) => {
+    if (isWindows && raw.replace(/'[^']*'|"[^"]*"/g, "").includes("\\")) return [launchDir];
     let replaced = text.replace(/^\$(?:HOME\b|\{HOME\})/, "");
     let replaced_2 = raw.replace(/'[^']*'/g, "").replace(/^"?\$\{HOME\}/, "");
     if (/[`$;|&<>]/.test(replaced) || /[*?[{]/.test(replaced_2)) return [launchDir];
     let match = text.match(/^(--?[\w-]+|[A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
     if (match) {
-      let P = match[2];
-      let matches = PATH_LIKE_ENV_RE.test(v ? match[1].toUpperCase() : match[1]);
-      let N = O(P) ? [launchDir] : C(P) ? [P] : y(P) ? [`${launchDir}/${P}`] : [];
+      let value = match[2];
+      let matches = PATH_LIKE_ENV_RE.test(isWindows ? match[1].toUpperCase() : match[1]);
+      let pathLikeEnv = isDriveRelative(value)
+        ? [launchDir]
+        : isAbsolute(value)
+          ? [value]
+          : hasSlash(value)
+            ? [`${launchDir}/${value}`]
+            : [];
       let flattened = (
-        v && !matches
-          ? P.split(":").reduce((acc, Q) => {
+        isWindows && !matches
+          ? value.split(":").reduce((acc, part) => {
               let last = acc.at(-1);
-              if (last !== undefined && /^[A-Za-z]$/.test(last)) acc[acc.length - 1] = `${last}:${Q}`;
-              else acc.push(Q);
+              if (last !== undefined && /^[A-Za-z]$/.test(last)) acc[acc.length - 1] = `${last}:${part}`;
+              else acc.push(part);
               return acc;
             }, [])
-          : P.split(":")
-      ).flatMap((B) =>
-        B === ""
-          ? matches || P.includes(":")
+          : value.split(":")
+      ).flatMap((entry) =>
+        entry === ""
+          ? matches || value.includes(":")
             ? [launchDir]
             : []
-          : O(B)
+          : isDriveRelative(entry)
             ? [launchDir]
-            : C(B)
-              ? [B]
-              : y(B) || matches || B === "." || B === ".."
-                ? [`${launchDir}/${B}`]
+            : isAbsolute(entry)
+              ? [entry]
+              : hasSlash(entry) || matches || entry === "." || entry === ".."
+                ? [`${launchDir}/${entry}`]
                 : [],
       );
-      return uniq([...N, ...flattened]);
+      return uniq([...pathLikeEnv, ...flattened]);
     }
-    let T = text;
+    let text_2 = text;
     if (home !== undefined && home !== "") {
-      if (raw === "~" || raw.startsWith("~/")) T = home + text.slice(1);
+      if (raw === "~" || raw.startsWith("~/")) text_2 = home + text.slice(1);
       else if (/^"?\$\{HOME\}(?=[/"]|$)/.test(raw) && (text === "${HOME}" || text.startsWith("${HOME}/")))
-        T = home + text.slice(7);
+        text_2 = home + text.slice(7);
       else if (/^"?\$HOME(?=[/"]|$)/.test(raw) && (text === "$HOME" || text.startsWith("$HOME/")))
-        T = home + text.slice(5);
+        text_2 = home + text.slice(5);
     }
-    if (O(T)) return [launchDir];
-    if (C(T)) return [T];
-    return y(T) ? [`${launchDir}/${T}`] : [];
+    if (isDriveRelative(text_2)) return [launchDir];
+    if (isAbsolute(text_2)) return [text_2];
+    return hasSlash(text_2) ? [`${launchDir}/${text_2}`] : [];
   });
 }
 //@ chunk-mthxbav8.js:48253-48303 placement
-function anyPathMatches(e, n) {
-  return n.some((r) => isReachableOrSamePath(normalizeCommandForPlatform(e), r));
+function anyPathMatches(commandLine, roots) {
+  return roots.some((root) => isReachableOrSamePath(normalizeCommandForPlatform(commandLine), root));
 }
 //@ chunk-mthxbav8.js:48363-49944 placement
 /**
  * 命令包装器名单（env/nice/timeout/sudo/xargs 等），以及各包装器的带值选项与可超时包装器集合。
  */
-var COMMAND_WRAPPERS_2 = new Set([
-  "env",
-  "nice",
-  "nohup",
-  "exec",
-  "time",
-  "caffeinate",
-  "builtin",
-  "command",
-  "xargs",
-  "sudo",
-  "doas",
-  "runuser",
-  "coproc",
-  "timeout",
-  "gtimeout",
-  "flock",
-  "arch",
-  "setsid",
-  "stdbuf",
-  "unbuffer",
-  "chronic",
-  "busybox",
-  "strace",
-  "ltrace",
-  "entr",
-]);
-var COMMAND_WRAPPERS = new Set(["-w", "--wait", "--timeout", "-E", "--conflict-exit-code"]);
-var WRAPPER_VALUE_OPTIONS = {
-  nice: new Set(["-n", "--adjustment"]),
-  timeout: new Set(["-s", "--signal", "-k", "--kill-after"]),
-  gtimeout: new Set(["-s", "--signal", "-k", "--kill-after"]),
-  sudo: new Set([
-    "-u",
-    "-g",
-    "-C",
-    "-D",
-    "-h",
-    "-p",
-    "-R",
-    "-T",
-    "-U",
-    "--user",
-    "--group",
-    "--host",
-    "--prompt",
-    "--close-from",
-    "--chdir",
-    "--role",
-    "--type",
-    "--other-user",
-  ]),
-  doas: new Set(["-u", "-C"]),
-  runuser: new Set(["-u", "-g", "-G", "--user", "--group", "--supp-group", "-w", "--whitelist-environment"]),
-  xargs: new Set([
-    "-n",
-    "-P",
-    "-I",
-    "-L",
-    "-s",
-    "-d",
-    "-E",
-    "-a",
-    "--arg-file",
-    "--max-args",
-    "--max-procs",
-    "--delimiter",
-  ]),
-  env: new Set(["-u", "-C", "-P", "--unset", "--chdir"]),
-  caffeinate: new Set(["-t", "-w"]),
-  exec: new Set(["-a"]),
-  flock: new Set([...COMMAND_WRAPPERS, "-c", "--command"]),
-  arch: new Set(["-arch", "-e", "-d"]),
-  stdbuf: new Set(["-i", "-o", "-e", "--input", "--output", "--error"]),
-  strace: new Set(["-e", "-o", "-p", "-s", "-P", "-E", "-u", "-a", "-X"]),
-  ltrace: new Set(["-e", "-o", "-p", "-s", "-n", "-u", "-a", "-F"]),
-  ionice: new Set(["-c", "--class", "-n", "--classdata", "-p", "--pid", "-P", "--pgid", "-u", "--uid"]),
-  chrt: new Set(["-T", "--sched-runtime", "-P", "--sched-period", "-D", "--sched-deadline"]),
-  "xvfb-run": new Set([
-    "-n",
-    "--server-num",
-    "-s",
-    "--server-args",
-    "-f",
-    "--auth-file",
-    "-e",
-    "--error-file",
-    "-w",
-    "--wait",
-    "-p",
-    "--xauth-protocol",
-  ]),
-};
-var WRAPPERS_WITH_TIMEOUT = {
-  timeout: 1,
-  gtimeout: 1,
-  flock: 1,
-  chrt: 1,
-  taskset: 1,
-};
+var COMMAND_WRAPPERS_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var COMMAND_WRAPPERS;
+var WRAPPER_VALUE_OPTIONS;
+var WRAPPERS_WITH_TIMEOUT;
+deferInit("chunk-mthxbav8.js:48363", () => {
+  COMMAND_WRAPPERS_2 = new Set([
+    "env",
+    "nice",
+    "nohup",
+    "exec",
+    "time",
+    "caffeinate",
+    "builtin",
+    "command",
+    "xargs",
+    "sudo",
+    "doas",
+    "runuser",
+    "coproc",
+    "timeout",
+    "gtimeout",
+    "flock",
+    "arch",
+    "setsid",
+    "stdbuf",
+    "unbuffer",
+    "chronic",
+    "busybox",
+    "strace",
+    "ltrace",
+    "entr",
+  ]);
+  COMMAND_WRAPPERS = new Set(["-w", "--wait", "--timeout", "-E", "--conflict-exit-code"]);
+  WRAPPER_VALUE_OPTIONS = {
+    nice: new Set(["-n", "--adjustment"]),
+    timeout: new Set(["-s", "--signal", "-k", "--kill-after"]),
+    gtimeout: new Set(["-s", "--signal", "-k", "--kill-after"]),
+    sudo: new Set([
+      "-u",
+      "-g",
+      "-C",
+      "-D",
+      "-h",
+      "-p",
+      "-R",
+      "-T",
+      "-U",
+      "--user",
+      "--group",
+      "--host",
+      "--prompt",
+      "--close-from",
+      "--chdir",
+      "--role",
+      "--type",
+      "--other-user",
+    ]),
+    doas: new Set(["-u", "-C"]),
+    runuser: new Set([
+      "-u",
+      "-g",
+      "-G",
+      "--user",
+      "--group",
+      "--supp-group",
+      "-w",
+      "--whitelist-environment",
+    ]),
+    xargs: new Set([
+      "-n",
+      "-P",
+      "-I",
+      "-L",
+      "-s",
+      "-d",
+      "-E",
+      "-a",
+      "--arg-file",
+      "--max-args",
+      "--max-procs",
+      "--delimiter",
+    ]),
+    env: new Set(["-u", "-C", "-P", "--unset", "--chdir"]),
+    caffeinate: new Set(["-t", "-w"]),
+    exec: new Set(["-a"]),
+    flock: new Set([...COMMAND_WRAPPERS, "-c", "--command"]),
+    arch: new Set(["-arch", "-e", "-d"]),
+    stdbuf: new Set(["-i", "-o", "-e", "--input", "--output", "--error"]),
+    strace: new Set(["-e", "-o", "-p", "-s", "-P", "-E", "-u", "-a", "-X"]),
+    ltrace: new Set(["-e", "-o", "-p", "-s", "-n", "-u", "-a", "-F"]),
+    ionice: new Set(["-c", "--class", "-n", "--classdata", "-p", "--pid", "-P", "--pgid", "-u", "--uid"]),
+    chrt: new Set(["-T", "--sched-runtime", "-P", "--sched-period", "-D", "--sched-deadline"]),
+    "xvfb-run": new Set([
+      "-n",
+      "--server-num",
+      "-s",
+      "--server-args",
+      "-f",
+      "--auth-file",
+      "-e",
+      "--error-file",
+      "-w",
+      "--wait",
+      "-p",
+      "--xauth-protocol",
+    ]),
+  };
+  WRAPPERS_WITH_TIMEOUT = {
+    timeout: 1,
+    gtimeout: 1,
+    flock: 1,
+    chrt: 1,
+    taskset: 1,
+  };
+});
 export {
   COMMAND_WRAPPERS,
   COMMAND_WRAPPERS_2,

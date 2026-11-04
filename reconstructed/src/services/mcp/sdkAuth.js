@@ -23,8 +23,10 @@ async function isDcrRejection(error, serverName, config) {
   )
     return false;
   let { cause } = error;
-  let s = require("./chunk-asne9cp8.js").mcpAuthModule().classifySdkAuthFailure(error.message, cause);
-  if (s !== "dcr_failed" && s !== "dcr_rejected") return false;
+  let failureKind = require("./emitTripwireEvent.lazy.js")
+    .mcpAuthModule()
+    .classifySdkAuthFailure(error.message, cause);
+  if (failureKind !== "dcr_failed" && failureKind !== "dcr_rejected") return false;
   if (!("status" in cause) && !("errorCode" in cause))
     return cause.message === "Incompatible auth server: does not support dynamic client registration";
   if (!(

@@ -16,15 +16,17 @@ import { MAX_SIDE_PATH_DEPTH, validateStorageKey } from "./storage/storageKeys.j
 /**
  * 计算子代理转录旁路文件的存储键（替换 .jsonl 后缀，或在会话 sidecar 空间下按代理路径生成）。
  */
-function subagentSidecarKey(a, t) {
+function subagentSidecarKey(sessionPath, suffix) {
   return mailboxKeyOf(
-    a,
-    (e) => e.replace(/\.jsonl$/, t),
-    (e) => {
-      if (e.namespace !== "transcript" || e.agentId === undefined) return;
-      let n = ["subagents", ...(e.agentRelPath ?? []), `agent-${e.agentId}${t}`];
-      let r = STORAGE_SPACES.sidecar(e.projectKey, e.sessionId, n);
-      return n.length <= MAX_SIDE_PATH_DEPTH && validateStorageKey(r) === undefined ? r : undefined;
+    sessionPath,
+    (path) => path.replace(/\.jsonl$/, suffix),
+    (key) => {
+      if (key.namespace !== "transcript" || key.agentId === undefined) return;
+      let relPath = ["subagents", ...(key.agentRelPath ?? []), `agent-${key.agentId}${suffix}`];
+      let sidecarKey = STORAGE_SPACES.sidecar(key.projectKey, key.sessionId, relPath);
+      return relPath.length <= MAX_SIDE_PATH_DEPTH && validateStorageKey(sidecarKey) === undefined
+        ? sidecarKey
+        : undefined;
     },
   );
 }

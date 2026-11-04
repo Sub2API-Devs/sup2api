@@ -5,12 +5,12 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_version_check } from "./version-check.js";
 import { require_regex } from "./regex.js";
 
 //@ chunk-spjgqa4y.js:8825-9968 cjs-fingerprint
-var require_mode = x(function (cjsExports) {
+var require_mode = __commonJS(function (cjsExports) {
   var VersionCheck = require_version_check();
   var Regex = require_regex();
   cjsExports.NUMERIC = {

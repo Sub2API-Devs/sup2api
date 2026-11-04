@@ -11,6 +11,7 @@
 import { DANGEROUS_SHELL_PREFIXES } from "../../../utils/shell/prefix.js";
 import { JETBRAINS_IDES_2 } from "../../../utils/env.js";
 import { isEnvTruthy, cloudEnvironmentName, githubActionVersion, _ } from "./eventSchema.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-4m46mxx9.js:11914-12064 placement
 /**
@@ -31,11 +32,11 @@ function detectTerminalFromEnv(facts, platform, isInteractive) {
   let lower_2 = (facts.bundleIdentifier ?? "").toLowerCase();
   let term = facts.term ?? "";
   let termProgram = facts.termProgram ?? "";
-  let c = facts.terminalEmulator === "JetBrains-JediTerm";
-  let found = JETBRAINS_IDES_2.find((u) => lower_2.includes(u));
+  let isJetBrains = facts.terminalEmulator === "JetBrains-JediTerm";
+  let found = JETBRAINS_IDES_2.find((ide) => lower_2.includes(ide));
   return (
     [
-      [c && platform !== "darwin", "pycharm"],
+      [isJetBrains && platform !== "darwin", "pycharm"],
       [facts.hasCursorTraceId || lower.includes("cursor"), "cursor"],
       [lower.includes("windsurf"), "windsurf"],
       [lower.includes("antigravity"), "antigravity"],
@@ -44,7 +45,7 @@ function detectTerminalFromEnv(facts, platform, isInteractive) {
       [lower_2.includes("com.google.android.studio"), "androidstudio"],
       [found !== undefined, found ?? ""],
       [facts.hasVisualStudioVersion, "visualstudio"],
-      [c, "pycharm"],
+      [isJetBrains, "pycharm"],
       [term === "xterm-ghostty", "ghostty"],
       [term.includes("kitty"), "kitty"],
       [/^devin([ -]desktop)?$/i.test(termProgram), "windsurf"],
@@ -70,7 +71,7 @@ function detectTerminalFromEnv(facts, platform, isInteractive) {
       [term.includes("termite"), "termite"],
       [term !== "", term],
       [!isInteractive, "non-interactive"],
-    ].find(([u]) => u)?.[1] ?? "unknown"
+    ].find(([flag]) => flag)?.[1] ?? "unknown"
   );
 }
 //@ chunk-4m46mxx9.js:13726-13951 placement
@@ -95,7 +96,7 @@ function githubActionsIds(facts) {
 function splitCommaList(tags) {
   let filtered = (tags ?? "")
     .split(",")
-    .map((r) => r.trim())
+    .map((tag) => tag.trim())
     .filter(Boolean);
   return filtered.length > 0 ? filtered : undefined;
 }
@@ -105,8 +106,8 @@ function splitCommaList(tags) {
  */
 function describeEnvironment(senderContext) {
   let { facts, machine, platform } = senderContext;
-  let n = isEnvTruthy(facts.githubActions);
-  let a = machine.platformRaw === "linux";
+  let isGithubActions = isEnvTruthy(facts.githubActions);
+  let isLinux = machine.platformRaw === "linux";
   return {
     platform,
     platformRaw: machine.platformRaw,
@@ -117,7 +118,7 @@ function describeEnvironment(senderContext) {
     runtimes: machine.runtimes,
     isCi: isEnvTruthy(facts.ci),
     isClaubbit: isEnvTruthy(facts.claubbit),
-    isGithubAction: n,
+    isGithubAction: isGithubActions,
     isClaudeCodeAction: isEnvTruthy(facts.claudeCodeAction),
     isClaudeCodeRemote: isEnvTruthy(facts.claudeCodeRemote),
     isLocalAgentMode: facts.entrypoint === "local-agent",
@@ -127,15 +128,15 @@ function describeEnvironment(senderContext) {
     claudeCodeContainerId: facts.containerId,
     claudeCodeRemoteSessionId: facts.remoteSessionId,
     tags: splitCommaList(facts.tags),
-    githubEventName: n ? facts.githubEventName : undefined,
-    githubActionsRunnerEnvironment: n ? facts.runnerEnvironment : undefined,
-    githubActionsRunnerOs: n ? facts.runnerOs : undefined,
-    githubActionRef: n ? githubActionVersion(facts.githubActionPath) : undefined,
-    githubActionsMetadata: n ? githubActionsIds(facts) : undefined,
+    githubEventName: isGithubActions ? facts.githubEventName : undefined,
+    githubActionsRunnerEnvironment: isGithubActions ? facts.runnerEnvironment : undefined,
+    githubActionsRunnerOs: isGithubActions ? facts.runnerOs : undefined,
+    githubActionRef: isGithubActions ? githubActionVersion(facts.githubActionPath) : undefined,
+    githubActionsMetadata: isGithubActions ? githubActionsIds(facts) : undefined,
     wslVersion: senderContext.wslVersion,
     linuxDistroId: senderContext.distro.id,
     linuxDistroVersion: senderContext.distro.version,
-    linuxKernel: a ? machine.kernel : undefined,
+    linuxKernel: isLinux ? machine.kernel : undefined,
     vcs: senderContext.vcs,
     version: senderContext.engine?.version,
     versionBase: senderContext.engine?.base,
@@ -146,80 +147,80 @@ function describeEnvironment(senderContext) {
 /**
  * 从 os-release 内容中读 ID 或 VERSION_ID。
  */
-var readOsReleaseField = (e, t) =>
-  e
+var readOsReleaseField = (text, key) =>
+  text
     .split(
       `
 `,
     )
     .map((line) => /^(ID|VERSION_ID)=(.*)$/.exec(line))
-    .find((r) => r?.[1] === t)?.[2]
+    .find((match) => match?.[1] === key)?.[2]
     ?.replace(/^"|"$/g, "");
 //@ chunk-4m46mxx9.js:15288-15389 placement
 /**
  * 读取发行版 id 与版本（读取失败为空）。
  */
-async function readDistro(e) {
-  let t;
+async function readDistro(read) {
+  let text;
   try {
-    t = await e();
+    text = await read();
   } catch {
-    t = "";
+    text = "";
   }
   return {
-    id: readOsReleaseField(t, "ID"),
-    version: readOsReleaseField(t, "VERSION_ID"),
+    id: readOsReleaseField(text, "ID"),
+    version: readOsReleaseField(text, "VERSION_ID"),
   };
 }
 //@ chunk-4m46mxx9.js:15389-15537 placement
 /**
  * 从内核版本字符串判断 WSL 版本。
  */
-async function detectWslVersion(e) {
-  let t;
+async function detectWslVersion(read) {
+  let text;
   try {
-    t = (await e()).toLowerCase();
+    text = (await read()).toLowerCase();
   } catch {
     return;
   }
-  let included = t.includes("microsoft");
-  return /wsl(\d+)/.exec(t)?.[1] ?? (included ? "1" : undefined);
+  let included = text.includes("microsoft");
+  return /wsl(\d+)/.exec(text)?.[1] ?? (included ? "1" : undefined);
 }
 //@ chunk-4m46mxx9.js:15537-15886 placement
 /**
  * 读取 /etc/os-release、/proc/version 等判断发行版、WSL、EC2。
  */
-async function readLinuxDistroFacts(e, t) {
-  let [r, i, n, a] = await Promise.all([
-    t
-      ? readDistro(() => e.read("/etc/os-release"))
+async function readLinuxDistroFacts(fs, isLinux) {
+  let [distro, wslVersion, isEc2, isDocker] = await Promise.all([
+    isLinux
+      ? readDistro(() => fs.read("/etc/os-release"))
       : {
           id: undefined,
           version: undefined,
         },
-    t ? detectWslVersion(() => e.read("/proc/version")) : undefined,
-    t
-      ? e.read("/sys/hypervisor/uuid").then(
-          (o) => o.startsWith("ec2"),
+    isLinux ? detectWslVersion(() => fs.read("/proc/version")) : undefined,
+    isLinux
+      ? fs.read("/sys/hypervisor/uuid").then(
+          (uuid) => uuid.startsWith("ec2"),
           () => false,
         )
       : false,
-    t ? e.exists("/.dockerenv").catch(() => false) : false,
+    isLinux ? fs.exists("/.dockerenv").catch(() => false) : false,
   ]);
   return {
-    distro: r,
-    wslVersion: i,
+    distro,
+    wslVersion,
     fileSignals: [
-      ["aws-ec2", n],
-      ["docker", a],
+      ["aws-ec2", isEc2],
+      ["docker", isDocker],
     ],
   };
 }
 //@ chunk-4m46mxx9.js:15886-16050 placement
 function getClaudeJsonPath(env) {
-  let t = env.configDir || env.home || env.userProfile;
-  let r = t?.includes("\\") && !t.includes("/") ? "\\" : "/";
-  return t ? `${t.replace(/[\\/]+$/, "")}${r}.claude.json` : undefined;
+  let baseDir = env.configDir || env.home || env.userProfile;
+  let separator = baseDir?.includes("\\") && !baseDir.includes("/") ? "\\" : "/";
+  return baseDir ? `${baseDir.replace(/[\\/]+$/, "")}${separator}.claude.json` : undefined;
 }
 //@ chunk-4m46mxx9.js:16050-16059 placement
 var MIN_ID_LENGTH = 8;
@@ -237,86 +238,89 @@ function pickValidId(value) {
  */
 async function readClaudeJsonIdentity(readFile, env, includeEmail) {
   let claudeJsonPath = getClaudeJsonPath(env);
-  let n;
+  let parsed;
   try {
-    n = claudeJsonPath === undefined ? undefined : JSON.parse(await readFile(claudeJsonPath));
+    parsed = claudeJsonPath === undefined ? undefined : JSON.parse(await readFile(claudeJsonPath));
   } catch {
-    n = undefined;
+    parsed = undefined;
   }
-  let a = _(n) ? n : {};
-  let oauthAccount = _(a.oauthAccount) ? a.oauthAccount : {};
-  let userID = a.userID;
+  let config = _(parsed) ? parsed : {};
+  let oauthAccount = _(config.oauthAccount) ? config.oauthAccount : {};
+  let userID = config.userID;
   let emailAddress = oauthAccount.emailAddress;
-  let p = typeof userID === "string" && /^[A-Za-z0-9_-]{8,128}$/.test(userID);
-  let u = includeEmail && typeof emailAddress === "string" && emailAddress !== "";
+  let hasUserId = typeof userID === "string" && /^[A-Za-z0-9_-]{8,128}$/.test(userID);
+  let includeEmailOk = includeEmail && typeof emailAddress === "string" && emailAddress !== "";
   return {
-    deviceId: p ? userID : undefined,
+    deviceId: hasUserId ? userID : undefined,
     accountUuid: pickValidId(oauthAccount.accountUuid),
     organizationUuid: pickValidId(oauthAccount.organizationUuid),
-    email: u ? emailAddress : undefined,
+    email: includeEmailOk ? emailAddress : undefined,
   };
 }
 //@ chunk-4m46mxx9.js:16533-16732 placement
 /**
  * 架构名规范化为 x64/arm64/ia32。
  */
-function normalizeArch(e) {
-  let lower = e.trim().toLowerCase();
+function normalizeArch(arch) {
+  let lower = arch.trim().toLowerCase();
   return (
     [
       [lower === "x86_64" || lower === "amd64", "x64"],
       [lower === "aarch64" || lower === "arm64", "arm64"],
       [lower === "x86" || /^i[3-6]86$/.test(lower), "ia32"],
-    ].find(([i]) => i)?.[1] ??
+    ].find(([condition]) => condition)?.[1] ??
     (lower || "unknown")
   );
 }
 //@ chunk-4m46mxx9.js:16732-16972 placement
-var joined = [
-  "uname -s",
-  "uname -r",
-  "uname -m",
-  'for c in npm yarn pnpm; do command -v "$c" >/dev/null 2>&1 && printf "%s," "$c"; done; echo',
-  'for c in bun deno node; do command -v "$c" >/dev/null 2>&1 && printf "%s," "$c"; done; echo',
-].join(`
+var joined; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4m46mxx9.js:16732", () => {
+  joined = [
+    "uname -s",
+    "uname -r",
+    "uname -m",
+    'for c in npm yarn pnpm; do command -v "$c" >/dev/null 2>&1 && printf "%s," "$c"; done; echo',
+    'for c in bun deno node; do command -v "$c" >/dev/null 2>&1 && printf "%s," "$c"; done; echo',
+  ].join(`
 `);
+});
 //@ chunk-4m46mxx9.js:16972-17405 placement
 /**
  * 通过 uname 等读取机器平台、架构、内核信息。
  */
-async function readMachineFacts(run, t) {
-  if (t.os === "Windows_NT")
+async function readMachineFacts(run, env) {
+  if (env.os === "Windows_NT")
     return {
       platformRaw: "win32",
-      arch: normalizeArch(t.processorArchitecture ?? ""),
+      arch: normalizeArch(env.processorArchitecture ?? ""),
       kernel: undefined,
       packageManagers: "",
       runtimes: "",
     };
-  let r;
+  let result;
   try {
-    r = await run(["sh", "-c", joined]);
+    result = await run(["sh", "-c", joined]);
   } catch {
-    r = undefined;
+    result = undefined;
   }
-  let [i = "", n = "", a = "", o = "", c = ""] = (
-    r?.exitCode === 0
-      ? r.stdout.split(`
+  let [platform = "", kernel = "", arch = "", packageManagers = "", runtimes = ""] = (
+    result?.exitCode === 0
+      ? result.stdout.split(`
 `)
       : []
-  ).map((E) => E.trim());
+  ).map((line) => line.trim());
   return {
-    platformRaw: i.toLowerCase() || "unknown",
-    arch: normalizeArch(a),
-    kernel: n || undefined,
-    packageManagers: o.replace(/,$/, ""),
-    runtimes: c.replace(/,$/, ""),
+    platformRaw: platform.toLowerCase() || "unknown",
+    arch: normalizeArch(arch),
+    kernel: kernel || undefined,
+    packageManagers: packageManagers.replace(/,$/, ""),
+    runtimes: runtimes.replace(/,$/, ""),
   };
 }
 //@ chunk-4m46mxx9.js:17405-17511 placement = detectTerminal (0.92)
 function detectTerminal(hostPlatform, platformRaw) {
   return (
-    ["win32", "darwin", "linux"].find((n) => n === hostPlatform) ??
+    ["win32", "darwin", "linux"].find((name) => name === hostPlatform) ??
     (platformRaw === "win32" || platformRaw === "darwin" ? platformRaw : "linux")
   );
 }
@@ -334,18 +338,19 @@ var HEX_RADIX = 16;
 /**
  * 字节数组转十六进制
  */
-var hexOf = (e) => [...new Uint8Array(e)].map((t) => t.toString(HEX_RADIX).padStart(2, "0")).join("");
+var hexOf = (bytes) =>
+  [...new Uint8Array(bytes)].map((byte) => byte.toString(HEX_RADIX).padStart(2, "0")).join("");
 //@ chunk-4m46mxx9.js:17618-17838 placement
 /**
  * git 远程地址规范化为 host/path（小写）。
  */
-function normalizeGitRemote(e) {
-  let trimmed = e.trim();
-  let [, r, i] =
+function normalizeGitRemote(remote) {
+  let trimmed = remote.trim();
+  let [, host, path] =
     /^git@([^:/@]+):(.+?)(?:\.git)?$/.exec(trimmed) ??
     /^(?:https?|ssh):\/\/(?:[^@/?#]*@)?([^/?#@]+)\/(.+?)(?:\.git)?$/.exec(trimmed) ??
     [];
-  return r !== undefined && i !== undefined ? `${r}/${i}`.toLowerCase() : undefined;
+  return host !== undefined && path !== undefined ? `${host}/${path}`.toLowerCase() : undefined;
 }
 //@ chunk-4m46mxx9.js:17838-17848 placement
 /**
@@ -357,17 +362,20 @@ var HEX_RADIX_BYTES = 16;
  * 规范化后的远程地址取 SHA-256 前缀。
  */
 async function hashGitRemote(remote) {
-  let t = remote ? normalizeGitRemote(remote) : undefined;
-  if (t === undefined) return;
-  return hexOf(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t))).slice(0, HEX_RADIX_BYTES);
+  let normalized = remote ? normalizeGitRemote(remote) : undefined;
+  if (normalized === undefined) return;
+  return hexOf(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(normalized))).slice(
+    0,
+    HEX_RADIX_BYTES,
+  );
 }
 //@ chunk-4m46mxx9.js:18000-18087 placement
-function uniqueArray(e) {
-  let t = new Set();
-  return e.filter((r) => {
-    let i = t.has(r);
-    t.add(r);
-    return !i;
+function uniqueArray(values) {
+  let seen = new Set();
+  return values.filter((value) => {
+    let isDuplicate = seen.has(value);
+    seen.add(value);
+    return !isDuplicate;
   });
 }
 export {

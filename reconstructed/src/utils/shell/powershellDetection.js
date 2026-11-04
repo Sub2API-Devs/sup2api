@@ -17,6 +17,18 @@ import { whichAsync, bunWhichOnPath } from "../which.js";
 import { env } from "../env.js";
 import { shellPaths } from "./shellPaths.js";
 
+//@ chunk-q8cqcff6.js:21180-21468 placement
+var POWERSHELL_NONINTERACTIVE_ARGS = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass"];
+var WINDOWS_ROOT_DIR = "C:\\Windows";
+var PROGRAM_FILES_DIR = "C:\\Program Files";
+var SYSTEM32_DIR = `${WINDOWS_ROOT_DIR}\\System32`;
+var WINDOWS_POWERSHELL_DIR = `${SYSTEM32_DIR}\\WindowsPowerShell\\v1.0`;
+var CMD_EXE_PATH = `${SYSTEM32_DIR}\\cmd.exe`;
+var POWERSHELL_EXE_CANDIDATES = [
+  `${PROGRAM_FILES_DIR}\\PowerShell\\7\\pwsh.exe`,
+  `${PROGRAM_FILES_DIR}\\PowerShell\\7-preview\\pwsh.exe`,
+  `${WINDOWS_POWERSHELL_DIR}\\powershell.exe`,
+];
 //@ chunk-e2fknt7w.js:1573-1652 file-local
 async function probePath(p) {
   try {
@@ -29,14 +41,14 @@ async function probePath(p) {
 /**
  * readlink 后再检查目标是否为文件（Windows 应用执行别名 pwsh.exe）。
  */
-async function probeAppExecLink(e) {
-  let n;
+async function probeAppExecLink(linkPath) {
+  let targetPath;
   try {
-    n = await readlink(e);
+    targetPath = await readlink(linkPath);
   } catch {
     return null;
   }
-  return probePath(n);
+  return probePath(targetPath);
 }
 //@ chunk-e2fknt7w.js:1727-2791 fingerprint = findPowerShell (0.39)
 /**
@@ -65,15 +77,15 @@ async function findPowerShell(envPaths) {
   }
   if (getPlatform() === "windows") {
     let { programFiles, localAppData, userProfile } = envPaths ?? getWindowsEnvPaths();
-    let d =
+    let fallbackPath =
       (programFiles ? await probePath(join(programFiles, "PowerShell", "7", "pwsh.exe")) : null) ??
       (localAppData
         ? await probeAppExecLink(join(localAppData, "Microsoft", "WindowsApps", "pwsh.exe"))
         : null) ??
       (userProfile ? await probePath(join(userProfile, ".dotnet", "tools", "pwsh.exe")) : null);
-    if (d) {
+    if (fallbackPath) {
       logFeatureSad("shell_powershell_detect", "windows_fallback_path");
-      return d;
+      return fallbackPath;
     }
   }
   let executableOnPath = await findExecutableOnPath("powershell", envPaths);
@@ -83,17 +95,19 @@ async function findPowerShell(envPaths) {
   }
   if (getPlatform() === "windows") {
     let systemRoot = (envPaths ?? getWindowsEnvPaths()).systemRoot ?? "C:\\Windows";
-    let s = await probePath(join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"));
-    if (s) {
+    let windowsPowerShellPath = await probePath(
+      join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
+    );
+    if (windowsPowerShellPath) {
       logFeatureSad("shell_powershell_detect", "fell_back_to_powershell_5");
-      return s;
+      return windowsPowerShellPath;
     }
   }
   return null;
 }
 //@ chunk-e2fknt7w.js:2791-2856 layout
-async function findExecutableOnPath(e, envPaths) {
-  return envPaths === undefined ? whichAsync(e) : bunWhichOnPath(e, envPaths.path ?? "");
+async function findExecutableOnPath(name, envPaths) {
+  return envPaths === undefined ? whichAsync(name) : bunWhichOnPath(name, envPaths.path ?? "");
 }
 //@ chunk-e2fknt7w.js:2856-2997 layout
 /**
@@ -114,9 +128,9 @@ function getWindowsEnvPaths() {
  */
 function findPowerShellForEnv(envPaths) {
   if (isDiskless()) return Promise.resolve(null);
-  let n = shellPaths();
-  n.organizationsPowerShellPath ??= findPowerShell(envPaths);
-  return n.organizationsPowerShellPath;
+  let hostState = shellPaths();
+  hostState.organizationsPowerShellPath ??= findPowerShell(envPaths);
+  return hostState.organizationsPowerShellPath;
 }
 //@ chunk-e2fknt7w.js:3136-3379 layout
 /**
@@ -124,16 +138,16 @@ function findPowerShellForEnv(envPaths) {
  */
 function getCachedPowerShellPath() {
   if (isDiskless()) return Promise.resolve(null);
-  let e = shellPaths();
-  if (!e.powerShellPath) {
-    e.resolvedPowerShellPath = undefined;
-    let n = findPowerShell().then((powerShell) => {
-      if (e.powerShellPath === n) e.resolvedPowerShellPath = powerShell;
+  let hostState = shellPaths();
+  if (!hostState.powerShellPath) {
+    hostState.resolvedPowerShellPath = undefined;
+    let pending = findPowerShell().then((powerShell) => {
+      if (hostState.powerShellPath === pending) hostState.resolvedPowerShellPath = powerShell;
       return powerShell;
     });
-    e.powerShellPath = n;
+    hostState.powerShellPath = pending;
   }
-  return e.powerShellPath;
+  return hostState.powerShellPath;
 }
 //@ chunk-e2fknt7w.js:3379-3430 layout
 function getResolvedPowerShellPath() {
@@ -141,22 +155,20 @@ function getResolvedPowerShellPath() {
 }
 //@ chunk-e2fknt7w.js:3430-3488 layout
 async function getPowerShellEditionAsync() {
-  let cachedPowerShellPath = await getCachedPowerShellPath();
-  return cachedPowerShellPath ? powerShellEditionFromPath(cachedPowerShellPath) : null;
+  let path = await getCachedPowerShellPath();
+  return path ? powerShellEditionFromPath(path) : null;
 }
 //@ chunk-e2fknt7w.js:3488-3550 layout
 /**
  * 返回已解析 PowerShell 的版本类别（按路径区分 pwsh 与 Windows PowerShell）；未解析成路径时原样返回状态值。
  */
 function getResolvedPowerShellEdition() {
-  let resolvedPowerShellPath = getResolvedPowerShellPath();
-  return typeof resolvedPowerShellPath === "string"
-    ? powerShellEditionFromPath(resolvedPowerShellPath)
-    : resolvedPowerShellPath;
+  let path = getResolvedPowerShellPath();
+  return typeof path === "string" ? powerShellEditionFromPath(path) : path;
 }
 //@ chunk-e2fknt7w.js:3550-3656 fingerprint = getPowerShellEdition (1)
-function powerShellEditionFromPath(e) {
-  return e
+function powerShellEditionFromPath(path) {
+  return path
     .split(/[/\\]/)
     .pop()
     .toLowerCase()
@@ -164,18 +176,6 @@ function powerShellEditionFromPath(e) {
     ? "core"
     : "desktop";
 }
-//@ chunk-q8cqcff6.js:21180-21468 placement
-var POWERSHELL_NONINTERACTIVE_ARGS = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass"];
-var WINDOWS_ROOT_DIR = "C:\\Windows";
-var PROGRAM_FILES_DIR = "C:\\Program Files";
-var SYSTEM32_DIR = `${WINDOWS_ROOT_DIR}\\System32`;
-var WINDOWS_POWERSHELL_DIR = `${SYSTEM32_DIR}\\WindowsPowerShell\\v1.0`;
-var CMD_EXE_PATH = `${SYSTEM32_DIR}\\cmd.exe`;
-var POWERSHELL_EXE_CANDIDATES = [
-  `${PROGRAM_FILES_DIR}\\PowerShell\\7\\pwsh.exe`,
-  `${PROGRAM_FILES_DIR}\\PowerShell\\7-preview\\pwsh.exe`,
-  `${WINDOWS_POWERSHELL_DIR}\\powershell.exe`,
-];
 export {
   getCachedPowerShellPath,
   findPowerShellForEnv,

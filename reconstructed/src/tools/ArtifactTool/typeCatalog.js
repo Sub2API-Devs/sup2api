@@ -28,38 +28,40 @@ var PUBLISHER_TEXT_IS_DATA_NOTE =
 /**
  * 把类型目录的一项格式化成一行（层级 + 标题）。
  */
-function formatCatalogRow(tier, n) {
-  return `- ${isKnownTier(tier) ? `[${tier}] ` : ""}${jsonStringify(n)}`;
+function formatCatalogRow(tier, title) {
+  return `- ${isKnownTier(tier) ? `[${tier}] ` : ""}${jsonStringify(title)}`;
 }
 //@ chunk-8wvtd8sr.js:106149-106231 placement
 /**
  * 取类型行的展示标题，空标题回退 Untitled。
  */
 function typeRowTitle(title) {
-  let n = typeof title === "string" ? sanitizeDisplayTitle(title) : null;
-  return typeRowTitle_2(n ?? "") || "Untitled";
+  let clean = typeof title === "string" ? sanitizeDisplayTitle(title) : null;
+  return typeRowTitle_2(clean ?? "") || "Untitled";
 }
 //@ chunk-8wvtd8sr.js:106231-106702 placement
 /**
  * 格式化类型目录中的一行：标题、截断到上限的单行描述（在空白处截断时加省略号），说明文字视为数据而非指令。
  */
-function formatTypeCatalogRow(e) {
-  let n = typeRowTitle(e.title);
-  let s =
-    typeof e.description === "string" ? truncateSingleLine(e.description, LIST_DESCRIPTION_MAX_RUNES) : null;
-  let r = s === null ? "" : typeRowDescription(s);
-  let h = [...r];
-  let y =
-    h.length <= LIST_DESCRIPTION_MAX_RUNES || h.length <= [...(s ?? "")].length
+function formatTypeCatalogRow(row) {
+  let titleText = typeRowTitle(row.title);
+  let description =
+    typeof row.description === "string"
+      ? truncateSingleLine(row.description, LIST_DESCRIPTION_MAX_RUNES)
+      : null;
+  let described = description === null ? "" : typeRowDescription(description);
+  let chars = [...described];
+  let truncated =
+    chars.length <= LIST_DESCRIPTION_MAX_RUNES || chars.length <= [...(description ?? "")].length
       ? undefined
-      : (/\s/u.test(h[LIST_DESCRIPTION_MAX_RUNES] ?? "")
-          ? h.slice(0, LIST_DESCRIPTION_MAX_RUNES).join("")
-          : h.slice(0, LIST_DESCRIPTION_MAX_RUNES).join("").replace(/\S*$/u, "")
+      : (/\s/u.test(chars[LIST_DESCRIPTION_MAX_RUNES] ?? "")
+          ? chars.slice(0, LIST_DESCRIPTION_MAX_RUNES).join("")
+          : chars.slice(0, LIST_DESCRIPTION_MAX_RUNES).join("").replace(/\S*$/u, "")
         )
           .trimEnd()
           .replace(/\s*\((?:link|label)$/u, "");
-  let p = y === undefined ? r : y.trim() === "" ? "" : `${y}\u2026`;
-  let w = p ? ` \u2014 ${p}` : "";
-  return `${formatCatalogRow(e.tier, n)}${w} \u2014 type_url: ${canonicalArtifactTargetFor(e.type_url, "(unrecognized address)")}`;
+  let excerpt = truncated === undefined ? described : truncated.trim() === "" ? "" : `${truncated}\u2026`;
+  let descriptionNote = excerpt ? ` \u2014 ${excerpt}` : "";
+  return `${formatCatalogRow(row.tier, titleText)}${descriptionNote} \u2014 type_url: ${canonicalArtifactTargetFor(row.type_url, "(unrecognized address)")}`;
 }
 export { typeRowTitle, formatCatalogRow, PUBLISHER_TEXT_IS_DATA_NOTE, formatTypeCatalogRow };

@@ -15,16 +15,27 @@ import { getFsImplementation } from "./fsOperations.js";
 import { logError } from "./log.js";
 import { logForDebugging } from "./debug.js";
 import { uniqueArray } from "../plugins/bundled/telemetry/environment.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-9m6032j0.js:191-257 placement
+/**
+ * looksLikeWslVersion：版本串像 WSL。
+ */
+function looksLikeWslVersion(kernelString) {
+  return kernelString.includes("microsoft") || kernelString.includes("wsl");
+}
 //@ chunk-znrryf4y.js:418-457 sole-consumer
-var platformOverride = identity(
-  {
-    value: false,
-  },
-  (e) => {
-    e.value = false;
-  },
-);
+var platformOverride; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-znrryf4y.js:418", () => {
+  platformOverride = identity(
+    {
+      value: false,
+    },
+    (state) => {
+      state.value = false;
+    },
+  );
+});
 //@ chunk-znrryf4y.js:457-485 affinity
 function platformOverrideValue() {
   return platformOverride.value;
@@ -73,8 +84,8 @@ class PlatformDetector {
       else if (this.sources.platform === "linux") {
         if (this.sources.env.WSL_DISTRO_NAME || this.sources.env.WSL_INTEROP) this.platform = "wsl";
         else {
-          let e = this.kernelString();
-          this.platform = e !== undefined && looksLikeWslVersion(e) ? "wsl" : "linux";
+          let kernelString = this.kernelString();
+          this.platform = kernelString !== undefined && looksLikeWslVersion(kernelString) ? "wsl" : "linux";
         }
       } else this.platform = "unknown";
     } catch (error) {
@@ -89,14 +100,14 @@ class PlatformDetector {
       this.wslVersion = undefined;
       return;
     }
-    let e = this.kernelString();
-    if (e === undefined) {
+    let kernelString = this.kernelString();
+    if (kernelString === undefined) {
       this.wslVersion = undefined;
       return;
     }
-    let match = e.match(/wsl(\d+)/);
+    let match = kernelString.match(/wsl(\d+)/);
     if (match && match[1]) this.wslVersion = match[1];
-    else if (e.includes("microsoft")) this.wslVersion = "1";
+    else if (kernelString.includes("microsoft")) this.wslVersion = "1";
     else this.wslVersion = undefined;
     return this.wslVersion;
   }
@@ -178,8 +189,8 @@ function getPlatform() {
   return getPlatformDetector().getPlatform();
 }
 //@ chunk-znrryf4y.js:3206-3331 layout
-function getPlatformDisplayName(e) {
-  switch (e) {
+function getPlatformDisplayName(platformName) {
+  switch (platformName) {
     case "darwin":
       return "macOS";
     case "win32":
@@ -187,7 +198,7 @@ function getPlatformDisplayName(e) {
     case "linux":
       return "Linux";
     default:
-      return e;
+      return platformName;
   }
 }
 //@ chunk-znrryf4y.js:3331-3373 layout
@@ -242,26 +253,19 @@ var VCS_MARKERS = [
   [".sl", "sapling"],
 ];
 //@ chunk-4m46mxx9.js:18237-18436 shared-adjacent = detectVcs (0.773)
-async function detectVcs_2(list, t, hasP4Port) {
-  let i;
+async function detectVcs_2(list, directory, hasP4Port) {
+  let entries;
   try {
-    i = await list(t);
+    entries = await list(directory);
   } catch {
-    i = [];
+    entries = [];
   }
-  let entries = new Set(i.map((o) => o.name));
-  let a = uniqueArray([
+  let entries_2 = new Set(entries.map((entry) => entry.name));
+  let vcsNames = uniqueArray([
     ...(hasP4Port ? ["perforce"] : []),
-    ...VCS_MARKERS.flatMap(([o, c]) => (entries.has(o) ? [c] : [])),
+    ...VCS_MARKERS.flatMap(([markerFile, vcsName]) => (entries_2.has(markerFile) ? [vcsName] : [])),
   ]);
-  return a.length > 0 ? a.join(",") : undefined;
-}
-//@ chunk-9m6032j0.js:191-257 placement
-/**
- * looksLikeWslVersion：版本串像 WSL。
- */
-function looksLikeWslVersion(n) {
-  return n.includes("microsoft") || n.includes("wsl");
+  return vcsNames.length > 0 ? vcsNames.join(",") : undefined;
 }
 //@ chunk-qchp9vrd.js:201680-201749 fingerprint = SUPPORTED_PLATFORMS (1)
 function SUPPORTED_PLATFORMS() {

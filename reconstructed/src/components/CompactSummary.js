@@ -9,7 +9,7 @@
  * attribution: placement 4, fingerprint 1
  */
 import { init_react_production } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { actionKeysNamespace } from "./pluginUi/render/actionKeys.js";
 import { rewriteToolsUsedSummaryTag } from "../utils/messages/untrustedArtifactContent.js";
 import { getUserMessageText } from "../utils/messages.js";
@@ -19,12 +19,16 @@ import {
   jsxProd_default_2,
 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../ink/components/Text.js";
-import { BLACK_CIRCLE } from "../utils/permissions/autoModeRulesPrompt.js";
+import { BLACK_CIRCLE } from "../constants/figures.js";
 import { MessageResponse } from "./MessageResponse.js";
 import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ah34pb7m.js:37715-37719 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ah34pb7m.js:37715", () => {
+  init_react_production();
+});
 //@ chunk-ah34pb7m.js:37719-37745 placement
 function nullRender() {
   return null;
@@ -33,42 +37,45 @@ function nullRender() {
 /**
  * 为消息（uuid/id/plugin）注册 "Placed" 渲染钩子的动作键输入。
  */
-function usePlacedActionKeys(m) {
-  let f = w(5);
-  let { uuid, id, plugin } = m.message;
-  let h;
-  let M;
-  if (f[0] !== id || f[1] !== plugin || f[2] !== uuid) {
-    h = () => ({
+function usePlacedActionKeys(props) {
+  let $ = useMemoCache(5);
+  let { uuid, id, plugin } = props.message;
+  let buildInput;
+  let inputDeps;
+  if ($[0] !== id || $[1] !== plugin || $[2] !== uuid) {
+    buildInput = () => ({
       requestId: uuid,
       props: {
         id,
         plugin,
       },
     });
-    M = [uuid, id, plugin];
-    f[0] = id;
-    f[1] = plugin;
-    f[2] = uuid;
-    f[3] = h;
-    f[4] = M;
+    inputDeps = [uuid, id, plugin];
+    $[0] = id;
+    $[1] = plugin;
+    $[2] = uuid;
+    $[3] = buildInput;
+    $[4] = inputDeps;
   } else {
-    h = f[3];
-    M = f[4];
+    buildInput = $[3];
+    inputDeps = $[4];
   }
-  return actionKeysNamespace.useRenderHook(actionKeysNamespace.useRenderInput("Placed", h, M), nullRender);
+  return actionKeysNamespace.useRenderHook(
+    actionKeysNamespace.useRenderInput("Placed", buildInput, inputDeps),
+    nullRender,
+  );
 }
 //@ chunk-ah34pb7m.js:38008-38044 placement
 /**
  * 处理压缩摘要文本用于显示。
  */
-function renderCompactSummaryText(m, modelOnlyText) {
-  m = rewriteToolsUsedSummaryTag(m);
-  return m;
+function renderCompactSummaryText(text, modelOnlyText) {
+  text = rewriteToolsUsedSummaryTag(text);
+  return text;
 }
 //@ chunk-ah34pb7m.js:38044-39964 fingerprint = CompactSummary (0.75)
 function CompactSummary(props) {
-  let $ = w(24);
+  let $ = useMemoCache(24);
   let { message, screen } = props;
   let isTranscriptMode = screen === "transcript";
   let t1;

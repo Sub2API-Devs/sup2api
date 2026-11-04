@@ -11,7 +11,14 @@
 import { buildLaptopMemoryAttachment } from "../accountMemory/memoryContext.js";
 import { createAttachmentMessage_2 as createAttachmentMessage, logForDebugging } from "../../utils/debug.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, _enum, array, string, M, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  _enum,
+  array,
+  stringSchema,
+  booleanSchema,
+  numberSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   getFeatureValueWithSource_CACHED_MAY_BE_STALE,
   getFeatureValue_CACHED_MAY_BE_STALE,
@@ -57,6 +64,7 @@ import { lit, fromEnum, fromEnumOpt } from "../analytics/safeMetadata.js";
 import { telemetrySafeModelName } from "../../utils/model/telemetryModelName.js";
 import { getHostedDefaultSmallFastModel } from "../../utils/model/smallFastModel.js";
 import { registerCleanup } from "../../utils/cleanupRegistry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-0h4e7gnq.js:121177-121566 placement
 /**
@@ -64,18 +72,22 @@ import { registerCleanup } from "../../utils/cleanupRegistry.js";
  */
 function insertCoworkMemoryContexts(host, initialMessages) {
   for (let j = initialMessages.length - 1; j >= 0; j--) {
-    let y = initialMessages[j];
-    if (y.type !== "attachment" || y.attachment.type !== "cowork_memory_context" || !y.attachment.anchor)
-      continue;
-    let r = initialMessages[j - 1];
+    let attachmentMessage = initialMessages[j];
     if (
-      r?.type === "attachment" &&
-      r.attachment.type === "cowork_memory_context" &&
-      !r.attachment.anchor &&
-      r.attachment.version === y.attachment.version
+      attachmentMessage.type !== "attachment" ||
+      attachmentMessage.attachment.type !== "cowork_memory_context" ||
+      !attachmentMessage.attachment.anchor
     )
       continue;
-    let laptopMemoryAttachment = buildLaptopMemoryAttachment(host, y.attachment.version);
+    let previousMessage = initialMessages[j - 1];
+    if (
+      previousMessage?.type === "attachment" &&
+      previousMessage.attachment.type === "cowork_memory_context" &&
+      !previousMessage.attachment.anchor &&
+      previousMessage.attachment.version === attachmentMessage.attachment.version
+    )
+      continue;
+    let laptopMemoryAttachment = buildLaptopMemoryAttachment(host, attachmentMessage.attachment.version);
     if (laptopMemoryAttachment !== undefined)
       initialMessages.splice(j, 0, createAttachmentMessage(laptopMemoryAttachment));
   }
@@ -84,43 +96,50 @@ function insertCoworkMemoryContexts(host, initialMessages) {
 /**
  * tengu_groovy_ember 摘要模式开关（full/short）及其 zod schema。
  */
-var TENGU_GROOVY_EMBER = "tengu_groovy_ember";
-var summaryModeSchema = DoctorLazy(() =>
-  u({
-    mode: _enum(["full", "short"]),
-  }).catch({
-    mode: "full",
-  }),
-);
+var TENGU_GROOVY_EMBER; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var summaryModeSchema;
+deferInit("chunk-0h4e7gnq.js:121566", () => {
+  TENGU_GROOVY_EMBER = "tengu_groovy_ember";
+  summaryModeSchema = DoctorLazy(() =>
+    objectSchema({
+      mode: _enum(["full", "short"]),
+    }).catch({
+      mode: "full",
+    }),
+  );
+});
 //@ chunk-0h4e7gnq.js:121655-121744 placement
 function getSummaryMode() {
-  let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_GROOVY_EMBER, null);
+  let { value: flagValue, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_GROOVY_EMBER, null);
   return {
-    mode: summaryModeSchema().parse(e).mode,
+    mode: summaryModeSchema().parse(flagValue).mode,
     source,
   };
 }
 //@ chunk-0h4e7gnq.js:121744-121755 placement
 var DEFAULT_COLD_AFTER_SECONDS = 270;
 //@ chunk-0h4e7gnq.js:121755-121830 placement
-function isColdAfter(ownRequests, n, coldAfterMs) {
-  return ownRequests.lastResponseAt === undefined || n - ownRequests.lastResponseAt >= coldAfterMs;
+function isColdAfter(ownRequests, nowMs, coldAfterMs) {
+  return ownRequests.lastResponseAt === undefined || nowMs - ownRequests.lastResponseAt >= coldAfterMs;
 }
 //@ chunk-0h4e7gnq.js:121830-122039 placement
 /**
  * tengu_wobbly_petal 配置的 schema：哪些会话模型族/SDK 宿主保留摘要 fork、多久算冷（秒），解析失败时取默认。
  */
-var AGENT_SUMMARY_FORK_CONFIG = DoctorLazy(() =>
-  u({
-    sessionModelFamilies: array(string().max(32)).max(16).catch([]),
-    sdkHosts: M().catch(false),
-    coldAfterSeconds: E().min(0).max(3600).catch(DEFAULT_COLD_AFTER_SECONDS),
-  }).catch({
-    sessionModelFamilies: [],
-    sdkHosts: false,
-    coldAfterSeconds: DEFAULT_COLD_AFTER_SECONDS,
-  }),
-);
+var AGENT_SUMMARY_FORK_CONFIG; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0h4e7gnq.js:121830", () => {
+  AGENT_SUMMARY_FORK_CONFIG = DoctorLazy(() =>
+    objectSchema({
+      sessionModelFamilies: array(stringSchema().max(32)).max(16).catch([]),
+      sdkHosts: booleanSchema().catch(false),
+      coldAfterSeconds: numberSchema().min(0).max(3600).catch(DEFAULT_COLD_AFTER_SECONDS),
+    }).catch({
+      sessionModelFamilies: [],
+      sdkHosts: false,
+      coldAfterSeconds: DEFAULT_COLD_AFTER_SECONDS,
+    }),
+  );
+});
 //@ chunk-0h4e7gnq.js:122039-122292 placement
 function getSummaryForkPolicy(sessionModelFamily, sdkAgentProgressSummariesEnabled) {
   try {
@@ -155,124 +174,134 @@ var MAX_RECENT_MESSAGES = 60;
 function summarizeAgentProgress({ task, messages, describeTool, maxTokens }) {
   let sliced = messages.slice(-MAX_RECENT_MESSAGES);
   let sliced_2 = sliced.slice(sliced.findLastIndex(isForkBoilerplateMessage) + 1);
-  let h = [];
-  let k = new Map();
-  let w;
-  let x = false;
-  for (let R of sliced_2)
-    if (R.type === "user") {
-      let { content } = R.message;
-      let Z = Array.isArray(content) ? content.filter(Boolean) : [];
-      x ||=
-        !R.isMeta &&
-        !Z.some((V) => V.type === "tool_result") &&
-        (typeof content === "string" || Z.some((V) => V.type === "text"));
-      for (let V of Z) {
-        if (V.type !== "tool_result") continue;
-        let le = k.get(V.tool_use_id);
-        if (le) le.call = V.is_error === true ? "failed" : "done";
+  let steps = [];
+  let openCalls = new Map();
+  let lastResponseId;
+  let lastTurnHadText = false;
+  for (let message of sliced_2)
+    if (message.type === "user") {
+      let { content } = message.message;
+      let blocks = Array.isArray(content) ? content.filter(Boolean) : [];
+      lastTurnHadText ||=
+        !message.isMeta &&
+        !blocks.some((block) => block.type === "tool_result") &&
+        (typeof content === "string" || blocks.some((block) => block.type === "text"));
+      for (let block of blocks) {
+        if (block.type !== "tool_result") continue;
+        let call = openCalls.get(block.tool_use_id);
+        if (call) call.call = block.is_error === true ? "failed" : "done";
       }
-    } else if (isSummarizableAssistantMessage(R) && Array.isArray(R.message.content)) {
-      let id = R.message.id;
-      w = id;
-      x = false;
-      for (let Z of R.message.content.filter(Boolean))
-        if (Z.type === "text" && typeof Z.text === "string") {
-          let V = truncateForPrompt(Z.text, MAX_LAST_ASSISTANT_TEXT_CHARS);
-          if (V)
-            h.push({
-              text: `said: ${V}`,
+    } else if (isSummarizableAssistantMessage(message) && Array.isArray(message.message.content)) {
+      let id = message.message.id;
+      lastResponseId = id;
+      lastTurnHadText = false;
+      for (let block of message.message.content.filter(Boolean))
+        if (block.type === "text" && typeof block.text === "string") {
+          let text = truncateForPrompt(block.text, MAX_LAST_ASSISTANT_TEXT_CHARS);
+          if (text)
+            steps.push({
+              text: `said: ${text}`,
               responseId: id,
             });
-        } else if (Z.type === "tool_use" && typeof Z.name === "string") {
-          let V =
-            typeof Z.input === "object" && Z.input !== null
+        } else if (block.type === "tool_use" && typeof block.name === "string") {
+          let input =
+            typeof block.input === "object" && block.input !== null
               ? {
-                  ...Z.input,
+                  ...block.input,
                 }
               : {};
-          let description = typeof V.description === "string" ? V.description : "";
-          let j =
-            (Z.name === BASH_TOOL_NAME || Z.name === POWERSHELL_TOOL_NAME) && typeof V.command === "string"
-              ? toOneLineNote(V.command)
+          let description = typeof input.description === "string" ? input.description : "";
+          let commandLine =
+            (block.name === BASH_TOOL_NAME || block.name === POWERSHELL_TOOL_NAME) &&
+            typeof input.command === "string"
+              ? toOneLineNote(input.command)
               : "";
-          let ie =
-            [description, j].find((Te) => truncateForPrompt(Te, MAX_TOOL_SUMMARY_CHARS)) ??
-            describeTool(Z.name, V);
-          let he = truncateForPrompt(ie ? `${Z.name} - ${ie}` : Z.name, MAX_TOOL_SUMMARY_CHARS);
-          let B = ie === description ? truncateForPrompt(j, MAX_TOOL_INPUT_SUMMARY_CHARS) : "";
+          let label =
+            [description, commandLine].find((candidate) =>
+              truncateForPrompt(candidate, MAX_TOOL_SUMMARY_CHARS),
+            ) ?? describeTool(block.name, input);
+          let toolLabel = truncateForPrompt(
+            label ? `${block.name} - ${label}` : block.name,
+            MAX_TOOL_SUMMARY_CHARS,
+          );
+          let inputSummary =
+            label === description ? truncateForPrompt(commandLine, MAX_TOOL_INPUT_SUMMARY_CHARS) : "";
           let replaced = truncateForPrompt(description, MAX_TOOL_SUMMARY_CHARS)
             .replace(/[(\uFF08\uFE59\uFE35\u2768\u276A\u207D\u208D\u2985\uFF5F\u27EE\u2E28\uFD3E]/g, "[")
             .replace(/[)\uFF09\uFE5A\uFE36\u2769\u276B\u207E\u208E\u2986\uFF60\u27EF\u2E29\uFD3F]/g, "]");
-          let Ae = B
-            ? `${truncateForPrompt(Z.name, MAX_TOOL_SUMMARY_CHARS)} - ${B} (described as: ${replaced})`
-            : he;
-          if (Ae) {
-            let Te = {
-              text: Ae,
+          let stepText = inputSummary
+            ? `${truncateForPrompt(block.name, MAX_TOOL_SUMMARY_CHARS)} - ${inputSummary} (described as: ${replaced})`
+            : toolLabel;
+          if (stepText) {
+            let step = {
+              text: stepText,
               call: "open",
               responseId: id,
             };
-            h.push(Te);
-            k.set(Z.id, Te);
+            steps.push(step);
+            openCalls.set(block.id, step);
           }
         }
     }
-  let L = [];
-  for (let R of h)
-    if (R.call === undefined)
-      L.push({
+  let finalSteps = [];
+  for (let step of steps)
+    if (step.call === undefined)
+      finalSteps.push({
         isOpen: false,
-        text: R.text,
+        text: step.text,
       });
-    else if (R.call !== "open")
-      L.push({
+    else if (step.call !== "open")
+      finalSteps.push({
         isOpen: false,
-        text: `did: ${R.text}${R.call === "failed" ? " (failed)" : ""}`,
+        text: `did: ${step.text}${step.call === "failed" ? " (failed)" : ""}`,
       });
-    else if (R.responseId === w && !x)
-      L.push({
+    else if (step.responseId === lastResponseId && !lastTurnHadText)
+      finalSteps.push({
         isOpen: true,
-        text: R.text,
+        text: step.text,
       });
-  if (L.length === 0) return "";
-  let I = "";
-  for (let R = MAX_SUMMARY_PROMPT_BUDGET; R >= 50; R = Math.floor(R / 2)) {
-    let z = truncateForPrompt(task, R);
-    let Z = z
+  if (finalSteps.length === 0) return "";
+  let taskSection = "";
+  for (let budget = MAX_SUMMARY_PROMPT_BUDGET; budget >= 50; budget = Math.floor(budget / 2)) {
+    let taskText = truncateForPrompt(task, budget);
+    let taskBlock = taskText
       ? `<task>
-${z}
+${taskText}
 </task>`
       : "";
-    if (estimateLabelTokens(Z) <= maxTokens / 2) {
-      I = Z;
+    if (estimateLabelTokens(taskBlock) <= maxTokens / 2) {
+      taskSection = taskBlock;
       break;
     }
   }
-  let G = maxTokens - estimateLabelTokens(I);
-  let ee = L.length - 1;
-  for (let j = L.length - 1; j >= 0; j--) {
-    G -= estimateLabelTokens(L[j]?.text ?? "");
-    if (G < 0) break;
-    ee = j;
+  let remaining = maxTokens - estimateLabelTokens(taskSection);
+  let startIndex = finalSteps.length - 1;
+  for (let j = finalSteps.length - 1; j >= 0; j--) {
+    remaining -= estimateLabelTokens(finalSteps[j]?.text ?? "");
+    if (remaining < 0) break;
+    startIndex = j;
   }
-  let sliced_3 = L.slice(ee);
+  let sliced_3 = finalSteps.slice(startIndex);
   return [
-    I,
+    taskSection,
     wrapTag(
       "recent_steps",
-      sliced_3.filter((R) => !R.isOpen),
+      sliced_3.filter((step) => !step.isOpen),
     ),
     wrapTag(
       "started_not_finished",
-      sliced_3.filter((R) => R.isOpen),
+      sliced_3.filter((step) => step.isOpen),
     ),
   ].filter(Boolean).join(`
 `);
 }
 //@ chunk-0h4e7gnq.js:124351-124411 placement
-function isSummarizableAssistantMessage(e) {
-  return e.type === "assistant" && !isSyntheticModelApiErrorMessage(e) && !isVirtualConversationMessage(e);
+function isSummarizableAssistantMessage(message) {
+  return (
+    message.type === "assistant" &&
+    !isSyntheticModelApiErrorMessage(message) &&
+    !isVirtualConversationMessage(message)
+  );
 }
 //@ chunk-0h4e7gnq.js:124411-124541 placement
 function toOneLineNote(command) {
@@ -284,29 +313,29 @@ function toOneLineNote(command) {
   return command.length > MAX_SUMMARY_TEXT_CHARS ? `${joined} \u2026` : joined;
 }
 //@ chunk-0h4e7gnq.js:124541-124628 placement
-function wrapTag(e, n) {
-  return n.length > 0
-    ? `<${e}>
-${n.map((s) => s.text).join(`
+function wrapTag(tag, steps) {
+  return steps.length > 0
+    ? `<${tag}>
+${steps.map((step) => step.text).join(`
 `)}
-</${e}>`
+</${tag}>`
     : "";
 }
 //@ chunk-0h4e7gnq.js:124628-124728 placement
-function estimateLabelTokens(e) {
-  let n = 0;
-  for (let j = 0; j < e.length; j++) if (e.charCodeAt(j) > 127) n++;
-  return (e.length - n) / 3 + n;
+function estimateLabelTokens(text) {
+  let wideChars = 0;
+  for (let j = 0; j < text.length; j++) if (text.charCodeAt(j) > 127) wideChars++;
+  return (text.length - wideChars) / 3 + wideChars;
 }
 //@ chunk-0h4e7gnq.js:124728-124885 placement
-function truncateForPrompt(e, n) {
-  let s = e.trimStart();
-  let y = truncateToLength(s, 4 * n);
-  let r = stripIgnorables(y);
-  let S = truncateToLength(r, n);
-  if (!S) return "";
-  let h = S.length < r.length || y.length < s.length;
-  return escapeXml(foldLookalikeChars(h ? `${S}\u2026` : S));
+function truncateForPrompt(text, maxLen) {
+  let trimmed = text.trimStart();
+  let wideCapped = truncateToLength(trimmed, 4 * maxLen);
+  let stripped = stripIgnorables(wideCapped);
+  let capped = truncateToLength(stripped, maxLen);
+  if (!capped) return "";
+  let truncated = capped.length < stripped.length || wideCapped.length < trimmed.length;
+  return escapeXml(foldLookalikeChars(truncated ? `${capped}\u2026` : capped));
 }
 //@ chunk-0h4e7gnq.js:124885-125049 placement
 /**
@@ -324,16 +353,16 @@ var SINGLE_XML_TAG_RE = /^<([A-Za-z][\w:.-]*)>([^<>]*)<\/\1>$/;
 /**
  * 清洗模型生成的进度标签：去控制字符与首尾空白，含换行、超长、Markdown 块或代码围栏时丢弃；严格模式下再拒绝可疑内容、去掉单层 XML 标签与反引号后递归校验。
  */
-function sanitizeProgressLabel(e, n = false) {
-  let trimmed = stripMemoryTags(e).trim();
+function sanitizeProgressLabel(label, checkTables = false) {
+  let trimmed = stripMemoryTags(label).trim();
   if (LINE_BREAK_RE.test(trimmed)) return null;
-  let y = foldLookalikeChars(stripIgnorables(trimmed));
-  if (!y || (y.length > MAX_LABEL_LENGTH && [...y].length > MAX_LABEL_LENGTH)) return null;
-  if (MARKDOWN_BLOCK_RE.test(y) || CODE_FENCE_RE.test(y)) return null;
-  if (!n) return y;
-  if (hasToolsUsedSummaryTag(y)) return null;
-  let replaced = y.replace(SINGLE_XML_TAG_RE, "$2").replaceAll("`", "");
-  return replaced === y ? y : sanitizeProgressLabel(replaced, true);
+  let folded = foldLookalikeChars(stripIgnorables(trimmed));
+  if (!folded || (folded.length > MAX_LABEL_LENGTH && [...folded].length > MAX_LABEL_LENGTH)) return null;
+  if (MARKDOWN_BLOCK_RE.test(folded) || CODE_FENCE_RE.test(folded)) return null;
+  if (!checkTables) return folded;
+  if (hasToolsUsedSummaryTag(folded)) return null;
+  let label_2 = folded.replace(SINGLE_XML_TAG_RE, "$2").replaceAll("`", "");
+  return label_2 === folded ? folded : sanitizeProgressLabel(label_2, true);
 }
 //@ chunk-0h4e7gnq.js:125322-125818 placement
 /**
@@ -348,13 +377,13 @@ var SUMMARY_MAX_OUTPUT_TOKENS = 2108;
 /**
  * 进度摘要提示词：用 3–5 个词的现在进行时描述最近动作（附好/坏例子），可带上一条摘要要求说新内容。
  */
-function buildSummaryPrompt(previousSummary, n = false) {
+function buildSummaryPrompt(previousSummary, forSubAgent = false) {
   let prevLine = previousSummary
     ? `
-Previous: ${jsonStringify(n ? escapeXml(previousSummary) : previousSummary)} \u2014 ${n ? "keep it if the agent is still doing that; otherwise say what is new" : "say something NEW"}.
+Previous: ${jsonStringify(forSubAgent ? escapeXml(previousSummary) : previousSummary)} \u2014 ${forSubAgent ? "keep it if the agent is still doing that; otherwise say what is new" : "say something NEW"}.
 `
     : "";
-  return `Describe ${n ? "the agent's" : "your"} most recent action in 3-5 words using present tense (-ing). Name the file or function, not the branch.${n ? "" : " Do not use tools."}
+  return `Describe ${forSubAgent ? "the agent's" : "your"} most recent action in 3-5 words using present tense (-ing). Name the file or function, not the branch.${forSubAgent ? "" : " Do not use tools."}
 ${prevLine}
 Good: "Reading runAgent.ts"
 Good: "Fixing null check in validate.ts"
@@ -370,17 +399,17 @@ Bad (branch name): "Analyzed adam/background-summary branch diff"`;
 /**
  * 模型族名（遥测用）。
  */
-function getModelFamily(e) {
-  return modelFamilyOf(e, firstPartyNameToCanonical(e));
+function getModelFamily(model) {
+  return modelFamilyOf(model, firstPartyNameToCanonical(model));
 }
 //@ chunk-0h4e7gnq.js:126568-126780 layout
 /**
  * 遥测：代理模型族、会话模型族、是否走服务端。
  */
-function getSummaryModelFamilies(mainLoopModel, sdkAgentProgressSummariesEnabled) {
+function getSummaryModelFamilies(model, sdkAgentProgressSummariesEnabled) {
   try {
     return {
-      agentModelFamily: getModelFamily(mainLoopModel),
+      agentModelFamily: getModelFamily(model),
       sessionModelFamily: getModelFamily(getMainLoopModel()),
       served: sdkAgentProgressSummariesEnabled ? undefined : getSummaryMode(),
     };
@@ -431,9 +460,9 @@ async function startAgentSummarization({ messages, previousSummary, baseParams, 
 }
 //@ chunk-0h4e7gnq.js:127241-128028 placement
 async function agentSummaryPrompt({ labelLines, notes, previousSummary, subAgent, summaryWriter, signal }) {
-  let h = truncateToLength(stripIgnorables(getInitialSettings_2().language ?? ""), 60);
-  let k = h
-    ? `Write the label in ${h}. Keep technical terms and code identifiers in their original form.`
+  let language = truncateToLength(stripIgnorables(getInitialSettings_2().language ?? ""), 60);
+  let languageInstruction = language
+    ? `Write the label in ${language}. Keep technical terms and code identifiers in their original form.`
     : "Write the label in the language of the task \u2014 a stray word or code token in another language doesn't change it, and neither does the English of these instructions.";
   return [
     await queryHaiku({
@@ -442,7 +471,7 @@ async function agentSummaryPrompt({ labelLines, notes, previousSummary, subAgent
 ${labelLines}
 ${buildSummaryPrompt(previousSummary, true)}
 
-${k}`,
+${languageInstruction}`,
       signal,
       options: {
         model: summaryWriter,
@@ -465,22 +494,22 @@ ${k}`,
 /**
  * 后台代理状态摘要：定时器触发时把代理最新消息整理后调用小模型生成一行标签（agent_summary），消息不够或未变化时跳过，结果写入任务的 summary。
  */
-function startAgentSummaryTimer(taskId, n, params, y, taskRegistry, S = {}) {
+function startAgentSummaryTimer(taskId, params, params_2, getMessages, taskRegistry, options = {}) {
   let sdkAgentProgressSummariesEnabled = getSdkAgentProgressSummariesEnabled();
-  let k = S.waitsMs?.[0] ?? SUMMARY_INTERVAL_MS;
-  let mainLoopModel = params.toolUseContext.options.mainLoopModel;
+  let intervalMs = options.waitsMs?.[0] ?? SUMMARY_INTERVAL_MS;
+  let mainLoopModel = params_2.toolUseContext.options.mainLoopModel;
   let { agentModelFamily, sessionModelFamily, served } = getSummaryModelFamilies(
     mainLoopModel,
     sdkAgentProgressSummariesEnabled,
   );
-  let G = served ?? {
+  let summaryMode = served ?? {
     mode: "full",
     source: undefined,
   };
-  let { agentContext } = params.toolUseContext;
+  let { agentContext } = params_2.toolUseContext;
   let isResume = agentContext?.agentType !== "main" && agentContext?.invocationKind === "resume";
   let now = Date.now();
-  let z = {
+  let stats = {
     calls: 0,
     callsKeptOnFull: 0,
     callsFailed: 0,
@@ -490,221 +519,229 @@ function startAgentSummaryTimer(taskId, n, params, y, taskRegistry, S = {}) {
     callsHeld: 0,
     heldMs: 0,
   };
-  let { forkContextMessages, ...V } = params;
-  let le = null;
-  let j = null;
-  let ie = false;
-  let he = false;
-  let B = new Set();
-  let ce;
-  let Ae;
-  let Te = 0;
-  let O = 0;
-  let q = false;
-  let W = null;
-  let ue = new Set();
-  let pe = 0;
-  let Q = {};
-  let Pe = false;
-  async function Ce() {
-    if (ie) return;
-    let je = false;
-    let Ee = false;
-    let Le = false;
-    logForDebugging(`[AgentSummary] Timer fired for agent ${n}`);
+  let { forkContextMessages, ...baseParams } = params_2;
+  let abortController = null;
+  let timer = null;
+  let stopped = false;
+  let finished = false;
+  let disposers = new Set();
+  let summaryWriter;
+  let heldSince;
+  let heldMs = 0;
+  let lastResponsesBegun = 0;
+  let writerFailed = false;
+  let previousSummary = null;
+  let skipHashes = new Set();
+  let consecutiveRejects = 0;
+  let lastResult = {};
+  let onHold = false;
+  async function tick() {
+    if (stopped) return;
+    let heldThisTick = false;
+    let skippedError = false;
+    let firstErrorSkip = false;
+    logForDebugging(`[AgentSummary] Timer fired for agent ${params}`);
     try {
-      if (he) return;
-      if (served) G = getSummaryMode();
-      let Ue = Ie();
-      let Et = Ue ?? mainLoopModel;
-      let be = Ue === undefined ? "full" : "short";
-      ce = be;
-      let We = y();
-      if (We.length < 3) {
-        logForDebugging(`[AgentSummary] Skipping summary for ${taskId}: not enough messages (${We.length})`);
+      if (finished) return;
+      if (served) summaryMode = getSummaryMode();
+      let writerOverride = resolveWriter();
+      let activeModel = writerOverride ?? mainLoopModel;
+      let mode = writerOverride === undefined ? "full" : "short";
+      summaryWriter = mode;
+      let currentMessages = getMessages();
+      if (currentMessages.length < 3) {
+        logForDebugging(
+          `[AgentSummary] Skipping summary for ${taskId}: not enough messages (${currentMessages.length})`,
+        );
         return;
       }
-      let eo;
-      let tt;
-      let no;
-      let At = We;
-      if (Ue !== undefined) {
-        let Me = taskRegistry.get(taskId);
-        let Xe = tagAndManifestArtifactContent(We, S.priorForeignArtifactContent);
-        let He = summarizeAgentProgress({
-          task: (Me && "prompt" in Me && Me.prompt) || Me?.description || "",
-          messages: We,
-          describeTool: createActivityDescriptionResolver(V.toolUseContext.options.tools),
-          maxTokens: SUMMARY_TOKEN_BUDGET - SUMMARY_TOKEN_RESERVE - estimateLabelTokens(Xe),
+      let onResult;
+      let onNotes;
+      let notesCache;
+      let pendingMessages = currentMessages;
+      if (writerOverride !== undefined) {
+        let task = taskRegistry.get(taskId);
+        let labelLines = tagAndManifestArtifactContent(currentMessages, options.priorForeignArtifactContent);
+        let notes = summarizeAgentProgress({
+          task: (task && "prompt" in task && task.prompt) || task?.description || "",
+          messages: currentMessages,
+          describeTool: createActivityDescriptionResolver(baseParams.toolUseContext.options.tools),
+          maxTokens: SUMMARY_TOKEN_BUDGET - SUMMARY_TOKEN_RESERVE - estimateLabelTokens(labelLines),
         });
-        tt = He;
-        no = "notes unchanged";
-        eo = (pt) => {
-          logForDebugging(`[AgentSummary] Asking for summary from ${He.length} characters of notes`);
+        onNotes = notes;
+        notesCache = "notes unchanged";
+        onResult = (result) => {
+          logForDebugging(`[AgentSummary] Asking for summary from ${notes.length} characters of notes`);
           return agentSummaryPrompt({
-            labelLines: Xe,
-            notes: He,
-            previousSummary: W,
+            labelLines,
+            notes,
+            previousSummary,
             subAgent: {
-              agentContext: V.toolUseContext.agentContext,
-              isNonInteractiveSession: V.toolUseContext.options.isNonInteractiveSession,
-              credentials: V.toolUseContext.credentials,
-              stickyBetas: forkStickyBetaLatches(V.stickyBetas ?? getStickyBetas()),
+              agentContext: baseParams.toolUseContext.agentContext,
+              isNonInteractiveSession: baseParams.toolUseContext.options.isNonInteractiveSession,
+              credentials: baseParams.toolUseContext.credentials,
+              stickyBetas: forkStickyBetaLatches(baseParams.stickyBetas ?? getStickyBetas()),
             },
-            summaryWriter: Ue,
-            signal: pt.signal,
+            summaryWriter: writerOverride,
+            signal: result.signal,
           });
         };
       } else {
-        Ae ??= getSummaryForkPolicy(sessionModelFamily, sdkAgentProgressSummariesEnabled);
-        let Me = filterIncompleteToolCalls(We);
-        At = Me;
-        tt = `${Me.length}:${Me.at(-1)?.uuid ?? ""}`;
-        no = `transcript unchanged (${Me.length} messages)`;
-        eo = (abortController) => {
-          logForDebugging(`[AgentSummary] Forking for summary, ${Me.length} messages in context`);
+        heldSince ??= getSummaryForkPolicy(sessionModelFamily, sdkAgentProgressSummariesEnabled);
+        let filteredMessages = filterIncompleteToolCalls(currentMessages);
+        pendingMessages = filteredMessages;
+        onNotes = `${filteredMessages.length}:${filteredMessages.at(-1)?.uuid ?? ""}`;
+        notesCache = `transcript unchanged (${filteredMessages.length} messages)`;
+        onResult = (abortController) => {
+          logForDebugging(
+            `[AgentSummary] Forking for summary, ${filteredMessages.length} messages in context`,
+          );
           return startAgentSummarization({
-            messages: Me,
-            previousSummary: W,
-            baseParams: V,
+            messages: filteredMessages,
+            previousSummary,
+            baseParams,
             abortController,
           });
         };
       }
-      let zt = new Set(At.map((Me) => Me.uuid));
-      for (let Me of ue)
-        if (!zt.has(Me)) {
+      let freshUuids = new Set(pendingMessages.map((message) => message.uuid));
+      for (let uuid of skipHashes)
+        if (!freshUuids.has(uuid)) {
           logForDebugging(
             `[AgentSummary] Forgetting the previous summary for ${taskId}: the next request would lack a message that went into the summary's own request`,
           );
-          W = null;
-          ue = new Set();
+          previousSummary = null;
+          skipHashes = new Set();
           break;
         }
-      if (tt === "" || tt === Q[be]) {
+      if (onNotes === "" || onNotes === lastResult[mode]) {
         logForDebugging(
-          `[AgentSummary] Skipping summary for ${taskId}: ${tt === "" ? "nothing to describe" : no}`,
+          `[AgentSummary] Skipping summary for ${taskId}: ${onNotes === "" ? "nothing to describe" : notesCache}`,
         );
-        if (!Pe) {
+        if (!onHold) {
           logEvent("tengu_agent_summary_skipped", {
-            reason: tt === "" ? lit("nothing_to_describe") : lit("unchanged"),
-            mode: fromEnum(be),
+            reason: onNotes === "" ? lit("nothing_to_describe") : lit("unchanged"),
+            mode: fromEnum(mode),
           });
-          Pe = true;
+          onHold = true;
         }
         return;
       }
-      let { ownRequests } = S;
-      let Vt =
-        be === "full" &&
+      let { ownRequests } = options;
+      let isCold =
+        mode === "full" &&
         ownRequests !== undefined &&
-        Ae !== undefined &&
-        isColdAfter(ownRequests, Date.now(), Ae.coldAfterMs);
-      let To = Vt && ownRequests.isAwaitingResponse && (Te === 0 || ownRequests.responsesBegun === O);
-      if (To && Ae?.holdsFork && Te < SUMMARY_HOLD_MAX_MS) {
-        if (Te === 0) {
+        heldSince !== undefined &&
+        isColdAfter(ownRequests, Date.now(), heldSince.coldAfterMs);
+      let mustHold =
+        isCold &&
+        ownRequests.isAwaitingResponse &&
+        (heldMs === 0 || ownRequests.responsesBegun === lastResponsesBegun);
+      if (mustHold && heldSince?.holdsFork && heldMs < SUMMARY_HOLD_MAX_MS) {
+        if (heldMs === 0) {
           logForDebugging(
             `[AgentSummary] Holding summary for ${taskId}: the sub-agent's own request has no response yet and its prompt cache is likely cold. Looking again every ${SUMMARY_HOLD_POLL_MS / 1000}s, for ${SUMMARY_HOLD_MAX_MS / 60000} min at most`,
           );
           logEvent("tengu_agent_summary_skipped", {
             reason: lit("awaiting_response"),
-            mode: fromEnum(be),
+            mode: fromEnum(mode),
           });
-          z.callsHeld++;
-          O = ownRequests.responsesBegun;
+          stats.callsHeld++;
+          lastResponsesBegun = ownRequests.responsesBegun;
         }
-        Te += SUMMARY_HOLD_POLL_MS;
-        z.heldMs += SUMMARY_HOLD_POLL_MS;
-        je = true;
+        heldMs += SUMMARY_HOLD_POLL_MS;
+        stats.heldMs += SUMMARY_HOLD_POLL_MS;
+        heldThisTick = true;
         return;
       }
-      if (Te > 0) logForDebugging(`[AgentSummary] The hold for ${taskId} ended after ${Te / 1000}s`);
-      Pe = false;
-      Q[be] = tt;
-      Ee = true;
-      z.calls++;
-      if (be !== G.mode) z.callsKeptOnFull++;
-      if (To) z.callsSentAwaitingResponse++;
-      B.add(be);
-      le = new AbortController();
+      if (heldMs > 0) logForDebugging(`[AgentSummary] The hold for ${taskId} ended after ${heldMs / 1000}s`);
+      onHold = false;
+      lastResult[mode] = onNotes;
+      skippedError = true;
+      stats.calls++;
+      if (mode !== summaryMode.mode) stats.callsKeptOnFull++;
+      if (mustHold) stats.callsSentAwaitingResponse++;
+      disposers.add(mode);
+      abortController = new AbortController();
       let isAwaitingResponse = ownRequests?.isAwaitingResponse;
       let requestsBegun = ownRequests?.requestsBegun;
-      let ze = await eo(le);
-      if (Vt && !isAwaitingResponse && ownRequests.requestsBegun !== requestsBegun) z.callsOvertaken++;
-      if (ie || he) return;
-      let ut = false;
-      for (let Me of ze) {
-        if (Me.type !== "assistant") continue;
-        if (Me.isApiErrorMessage) {
-          Le = true;
+      let reply = await onResult(abortController);
+      if (isCold && !isAwaitingResponse && ownRequests.requestsBegun !== requestsBegun)
+        stats.callsOvertaken++;
+      if (stopped || finished) return;
+      let sawText = false;
+      for (let message of reply) {
+        if (message.type !== "assistant") continue;
+        if (message.isApiErrorMessage) {
+          firstErrorSkip = true;
           logForDebugging(`[AgentSummary] Skipping API error message for ${taskId}`);
           continue;
         }
-        let found = Me.message.content.find((He) => He.type === "text");
+        let found = message.message.content.find((block) => block.type === "text");
         if (found?.type === "text" && found.text.trim()) {
-          ut = true;
+          sawText = true;
           let summary = sanitizeProgressLabel(
-            be === "short" ? unescapeHtmlEntities(found.text) : found.text,
-            be === "short",
+            mode === "short" ? unescapeHtmlEntities(found.text) : found.text,
+            mode === "short",
           );
           if (summary === null) {
-            pe++;
-            let pt =
+            consecutiveRejects++;
+            let replyLines =
               countCharInString(
                 found.text,
                 `
 `,
               ) + 1;
             logForDebugging(
-              `[AgentSummary] Dropping unusable summary reply for ${taskId}: ${found.text.length} chars, ${pt} lines, dropped ${pe} in a row`,
+              `[AgentSummary] Dropping unusable summary reply for ${taskId}: ${found.text.length} chars, ${replyLines} lines, dropped ${consecutiveRejects} in a row`,
             );
             logEvent("tengu_agent_summary_skipped", {
               reason: lit("unusable_reply"),
-              mode: fromEnum(be),
-              writer_model: telemetrySafeModelName(Et),
+              mode: fromEnum(mode),
+              writer_model: telemetrySafeModelName(activeModel),
               reply_chars: found.text.length,
-              reply_lines: pt,
-              consecutive_rejects: pe,
+              reply_lines: replyLines,
+              consecutive_rejects: consecutiveRejects,
             });
           } else {
-            pe = 0;
+            consecutiveRejects = 0;
             logForDebugging(`[AgentSummary] Summary result for ${taskId}: ${summary}`);
-            W = summary;
-            ue = zt;
-            z.linesAccepted++;
+            previousSummary = summary;
+            skipHashes = freshUuids;
+            stats.linesAccepted++;
             updateAgentSummary(taskId, summary, taskRegistry);
           }
           break;
         }
       }
-      if (!ut && !Le) {
+      if (!sawText && !firstErrorSkip) {
         logForDebugging(`[AgentSummary] No text in the reply for ${taskId}`);
         logEvent("tengu_agent_summary_skipped", {
           reason: lit("no_text"),
-          mode: fromEnum(be),
-          writer_model: telemetrySafeModelName(Et),
+          mode: fromEnum(mode),
+          writer_model: telemetrySafeModelName(activeModel),
         });
       }
     } catch (error) {
-      if (!ie && error instanceof Error) {
-        Le = true;
+      if (!stopped && error instanceof Error) {
+        firstErrorSkip = true;
         logError(error);
       }
     } finally {
-      le = null;
-      if (Ee && Le) {
-        z.callsFailed++;
-        q ||= ce === "short";
+      abortController = null;
+      if (skippedError && firstErrorSkip) {
+        stats.callsFailed++;
+        writerFailed ||= summaryWriter === "short";
       }
-      if (!je) Te = 0;
-      if (!ie) me();
+      if (!heldThisTick) heldMs = 0;
+      if (!stopped) scheduleNext();
     }
   }
-  function me() {
-    if (ie) return;
-    j = setTimeout(Ce, Te > 0 ? SUMMARY_HOLD_POLL_MS : k);
+  function scheduleNext() {
+    if (stopped) return;
+    timer = setTimeout(tick, heldMs > 0 ? SUMMARY_HOLD_POLL_MS : intervalMs);
   }
-  function Re() {
+  function hostedSmallModel() {
     if (!served) return;
     try {
       return getHostedDefaultSmallFastModel();
@@ -713,100 +750,101 @@ function startAgentSummaryTimer(taskId, n, params, y, taskRegistry, S = {}) {
       return;
     }
   }
-  function Ie() {
-    return G.mode === "short" && !q ? Re() : undefined;
+  function resolveWriter() {
+    return summaryMode.mode === "short" && !writerFailed ? hostedSmallModel() : undefined;
   }
-  function Je() {
-    if (ie) return;
+  function stop() {
+    if (stopped) return;
     logForDebugging(`[AgentSummary] Stopping summarization for ${taskId}`);
-    ie = true;
-    if (j) {
-      clearTimeout(j);
-      j = null;
+    stopped = true;
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
     }
-    if (le) {
-      le.abort();
-      le = null;
+    if (abortController) {
+      abortController.abort();
+      abortController = null;
     }
-    Ne();
-    Ke();
+    unregisterCleanup();
+    markDisposed();
   }
-  function Ke() {
-    if (he) return;
-    he = true;
+  function markDisposed() {
+    if (finished) return;
+    finished = true;
     try {
-      let je = Ie();
-      let Ee = ce ?? (je === undefined ? "full" : "short");
-      let Le = taskRegistry.get(taskId);
+      let writer = resolveWriter();
+      let finalMode = summaryWriter ?? (writer === undefined ? "full" : "short");
+      let lastTask = taskRegistry.get(taskId);
       logEvent("tengu_agent_summary_stopped", {
-        mode: fromEnum(Ee),
-        config_mode: fromEnum(G.mode),
-        mode_changed: [...B].some((Ue) => Ue !== Ee),
-        config_source: fromEnumOpt(G.source),
+        mode: fromEnum(finalMode),
+        config_mode: fromEnum(summaryMode.mode),
+        mode_changed: [...disposers].some((mode) => mode !== finalMode),
+        config_source: fromEnumOpt(summaryMode.source),
         session_model_family: fromEnum(sessionModelFamily),
         agent_model_family: fromEnum(agentModelFamily),
         agent_model: telemetrySafeModelName(mainLoopModel),
-        writer_model: telemetrySafeModelName(je ?? mainLoopModel),
-        config_writer: telemetrySafeModelName(Re()),
-        writer_failed: q,
-        agent_model_swapped: !!Le && "model" in Le && !!Le.model && Le.model !== mainLoopModel,
+        writer_model: telemetrySafeModelName(writer ?? mainLoopModel),
+        config_writer: telemetrySafeModelName(hostedSmallModel()),
+        writer_failed: writerFailed,
+        agent_model_swapped:
+          !!lastTask && "model" in lastTask && !!lastTask.model && lastTask.model !== mainLoopModel,
         is_sdk_host: sdkAgentProgressSummariesEnabled,
         is_resume: isResume,
         duration_ms: Date.now() - now,
-        calls: z.calls,
-        calls_kept_on_full: z.callsKeptOnFull,
-        calls_failed: z.callsFailed,
-        lines_accepted: z.linesAccepted,
-        holds_fork: Ae?.holdsFork,
-        cold_after_ms: Ae?.coldAfterMs,
-        calls_held: z.callsHeld,
-        held_ms: z.heldMs,
-        calls_sent_awaiting_response: z.callsSentAwaitingResponse,
-        calls_overtaken: z.callsOvertaken,
+        calls: stats.calls,
+        calls_kept_on_full: stats.callsKeptOnFull,
+        calls_failed: stats.callsFailed,
+        lines_accepted: stats.linesAccepted,
+        holds_fork: heldSince?.holdsFork,
+        cold_after_ms: heldSince?.coldAfterMs,
+        calls_held: stats.callsHeld,
+        held_ms: stats.heldMs,
+        calls_sent_awaiting_response: stats.callsSentAwaitingResponse,
+        calls_overtaken: stats.callsOvertaken,
       });
     } catch (error) {
       if (error instanceof Error) logError(error);
     }
   }
-  let Ne = registerCleanup(Ke);
-  me();
+  let unregisterCleanup = registerCleanup(markDisposed);
+  scheduleNext();
   return {
-    stop: Je,
+    stop,
   };
 }
 //@ chunk-0h4e7gnq.js:133367-133423 placement
 /**
  * 导出函数 `mergeTaskProgressIntoTranscript`：参数 e, n, s。
  */
-function mergeTaskProgressIntoTranscript(taskRegistry, n, s) {
-  taskRegistry.updateTranscript(n, (y) => mergeTaskProgressUpdate(y, s));
+function mergeTaskProgressIntoTranscript(taskRegistry, taskId, update) {
+  taskRegistry.updateTranscript(taskId, (transcript) => mergeTaskProgressUpdate(transcript, update));
 }
 //@ chunk-0h4e7gnq.js:133423-133799 placement
 /**
  * 把一次进度更新（回合开始时间、累计暂停、token 数）合并进任务状态，只在值有变化时创建新对象。
  */
-function mergeTaskProgressUpdate(e, n) {
-  let s = e;
-  if (n.turnStartTime !== undefined && n.turnStartTime !== e.turnStartTime)
-    s = {
-      ...s,
-      turnStartTime: n.turnStartTime,
+function mergeTaskProgressUpdate(transcript, update) {
+  let next = transcript;
+  if (update.turnStartTime !== undefined && update.turnStartTime !== transcript.turnStartTime)
+    next = {
+      ...next,
+      turnStartTime: update.turnStartTime,
     };
-  if (n.totalPausedMs !== undefined && n.totalPausedMs !== e.totalPausedMs)
-    s = {
-      ...s,
-      totalPausedMs: n.totalPausedMs,
+  if (update.totalPausedMs !== undefined && update.totalPausedMs !== transcript.totalPausedMs)
+    next = {
+      ...next,
+      totalPausedMs: update.totalPausedMs,
     };
-  if (n.tokenCount !== undefined && n.tokenCount !== e.progress?.tokenCount)
-    s = {
-      ...s,
+  if (update.tokenCount !== undefined && update.tokenCount !== transcript.progress?.tokenCount)
+    next = {
+      ...next,
       progress: {
         toolUseCount: 0,
-        ...e.progress,
-        tokenCount: n.tokenCount,
+        ...transcript.progress,
+        tokenCount: update.tokenCount,
       },
     };
-  return s;
+  return next;
 }
 //@ chunk-0h4e7gnq.js:133799-133809 placement
 var MAX_PROGRESS_ENTRIES = 24;

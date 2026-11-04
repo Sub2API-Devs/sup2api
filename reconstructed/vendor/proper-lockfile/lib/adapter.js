@@ -5,11 +5,11 @@
  * pieces: chunk-bmbhxpfm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_graceful_fs } from "../../graceful-fs/graceful-fs.js";
 
 //@ chunk-bmbhxpfm.js:20904-21622 cjs-fingerprint
-var properLockfileAdapter = x(function (cjsExports, cjsModule) {
+var properLockfileAdapter = __commonJS(function (cjsExports, cjsModule) {
   var fs = require_graceful_fs();
   function createSyncFs(fs) {
     let methods = ["mkdir", "realpath", "stat", "rmdir", "utimes"];

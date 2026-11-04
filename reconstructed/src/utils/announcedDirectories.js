@@ -12,6 +12,7 @@ import { uniq } from "./collections.js";
 import { HostScoped } from "./hostScoped.js";
 import { getRootSession, getOriginalCwdOrNull, getProjectRootOrNull } from "../bootstrap/state.js";
 import { getFsImplementation } from "./fsOperations.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-x4mkkqwd.js:338-752 placement
 /**
@@ -23,20 +24,23 @@ class AnnouncedDirectories {
   get() {
     return this.directories;
   }
-  publish(o) {
+  publish(appState) {
     let sorted = uniq(
-      [...o.additionalWorkingDirectories.values()].map(
+      [...appState.additionalWorkingDirectories.values()].map(
         (additionalWorkingDirectory) => additionalWorkingDirectory.path,
       ),
     ).sort();
     let directories = this.directories;
-    if (directories.length === sorted.length && directories.every((directory, s) => directory === sorted[s]))
+    if (
+      directories.length === sorted.length &&
+      directories.every((directory, index) => directory === sorted[index])
+    )
       return false;
     this.directories = sorted;
     return true;
   }
-  noteAnnounced(o) {
-    for (let t of o) this.announced.add(t);
+  noteAnnounced(directories) {
+    for (let directory of directories) this.announced.add(directory);
   }
   everAnnounced() {
     return [...this.announced];
@@ -50,7 +54,10 @@ class AnnouncedDirectories {
 /**
  * 按宿主隔离的“已宣告目录”状态。
  */
-var announcedDirsByHost = new HostScoped(() => new AnnouncedDirectories());
+var announcedDirsByHost; // deferred: uses AnnouncedDirectories of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-x4mkkqwd.js:752", () => {
+  announcedDirsByHost = new HostScoped(() => new AnnouncedDirectories());
+});
 //@ chunk-x4mkkqwd.js:775-810 placement
 /**
  * 取出当前宿主的已宣告目录状态。

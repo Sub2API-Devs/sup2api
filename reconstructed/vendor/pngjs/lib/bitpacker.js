@@ -5,11 +5,11 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_constants } from "./constants.js";
 
 //@ chunk-spjgqa4y.js:37285-39166 cjs-fingerprint
-var require_bitpacker = x(function (cjsExports, cjsModule) {
+var require_bitpacker = __commonJS(function (cjsExports, cjsModule) {
   var constants = require_constants();
   cjsModule.exports = function (dataIn, width, height, options) {
     let outHasAlpha =

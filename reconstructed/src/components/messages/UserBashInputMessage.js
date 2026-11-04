@@ -8,7 +8,7 @@
  * pieces: chunk-ah34pb7m.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { extractBashInput } from "../../utils/messages/apiNormalization.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
@@ -19,7 +19,7 @@ import { Text, Box } from "../../ink/components/Text.js";
 
 //@ chunk-ah34pb7m.js:104523-105017 fingerprint = UserBashInputMessage (0.791)
 function UserBashInputMessage(props) {
-  let $ = w(8);
+  let $ = useMemoCache(8);
   let { param, addMargin } = props;
   let { text } = param;
   let t2;

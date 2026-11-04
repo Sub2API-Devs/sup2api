@@ -49,7 +49,13 @@ import { nfcLower, MAX_ENTRYPOINT_LINES, normalizeMemoryText } from "../../memdi
 import { STALE_MEMORY_NOTE, BEFORE_RECOMMENDING_SECTION } from "../../memdir/memoryTypes.js";
 import { MEMORY_FRONTMATTER_EXAMPLE_TEXT } from "../../services/extractMemories/prompts.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, string, u, _enum, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  zodStrictObject,
+  stringSchema,
+  objectSchema,
+  _enum,
+  numberSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { splitGraphemes } from "../../utils/intl.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { replaceControlChars } from "../../utils/resultError.js";
@@ -64,19 +70,20 @@ import { areMemoryToolsEnabled } from "../../services/memorySync/availability.js
 import { normalizePathPrefix } from "../../services/orgMemory/storeApi.js";
 import { checkTeamMemSecrets } from "../../services/teamMemorySync/teamMemSecretGuard.js";
 import { AbortError } from "../../utils/errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-a477qqne.js:27326-27419 placement
 /**
  * 上报记忆工具成功事件（动词、存储类型与操作）。
  */
-function logMemoryToolOk(e, kind, r) {
+function logMemoryToolOk(verb, kind, operation) {
   logFeatureOk("memory_tools", {
-    verb: fromEnum(e),
+    verb: fromEnum(verb),
     store_kind: fromEnum(kind),
-    ...(r === undefined
+    ...(operation === undefined
       ? {}
       : {
-          op: fromEnum(r),
+          op: fromEnum(operation),
         }),
   });
 }
@@ -84,9 +91,9 @@ function logMemoryToolOk(e, kind, r) {
 /**
  * 上报记忆工具失败事件（动词、原因与存储类型）。
  */
-function logMemoryToolSad(e, n, kind) {
-  logFeatureSad("memory_tools", n, {
-    verb: fromEnum(e),
+function logMemoryToolSad(verb, reason, kind) {
+  logFeatureSad("memory_tools", reason, {
+    verb: fromEnum(verb),
     ...(kind === undefined
       ? {}
       : {
@@ -95,19 +102,22 @@ function logMemoryToolSad(e, n, kind) {
   });
 }
 //@ chunk-a477qqne.js:27505-27613 placement
-function logVersionConflict(e) {
-  logFeatureSad("memory_tools", e, {
+function logVersionConflict(reason) {
+  logFeatureSad("memory_tools", reason, {
     verb: fromEnum("write"),
   });
   logEvent("tengu_memory_tools_version_conflict", {
-    reason: fromEnum(e),
+    reason: fromEnum(reason),
   });
 }
 //@ chunk-a477qqne.js:27613-27625 placement
 /**
  * 记忆文档的字节上限（读取上限）。
  */
-var MAX_MEMORY_DOC_BYTES = MAX_CONTENT_BYTES;
+var MAX_MEMORY_DOC_BYTES; // deferred: uses memoryIdSchema (../../services/orgMemory/storeErrors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-a477qqne.js:27613", () => {
+  MAX_MEMORY_DOC_BYTES = MAX_CONTENT_BYTES;
+});
 //@ chunk-a477qqne.js:27625-27680 placement
 /**
  * 判断内容是否超过记忆文档上限。
@@ -119,27 +129,30 @@ function isOversizeMemoryContent(content) {
 /**
  * 写入时记忆文档的字节上限。
  */
-var MAX_MEMORY_WRITE_BYTES = MAX_MEMORY_DOC_BYTES;
+var MAX_MEMORY_WRITE_BYTES; // deferred: uses MAX_MEMORY_DOC_BYTES of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-a477qqne.js:27680", () => {
+  MAX_MEMORY_WRITE_BYTES = MAX_MEMORY_DOC_BYTES;
+});
 //@ chunk-a477qqne.js:27691-27749 placement
 /**
  * 拼接非空片段并去掉不可打印字符（用于结果文本）。
  */
-function joinPrintable(...e) {
-  return stripNonPrintable(e.filter(Boolean).join(" "));
+function joinPrintable(...parts) {
+  return stripNonPrintable(parts.filter(Boolean).join(" "));
 }
 //@ chunk-a477qqne.js:27749-28095 placement
 /**
  * 检查记忆内容大小与非空。
  */
-function checkMemoryContent(e) {
-  let n = Buffer.byteLength(e, "utf8");
-  if (n > MAX_MEMORY_WRITE_BYTES)
+function checkMemoryContent(content) {
+  let byteSize = Buffer.byteLength(content, "utf8");
+  if (byteSize > MAX_MEMORY_WRITE_BYTES)
     return {
       outcome: "refused",
       reason: "too_large",
-      message: `Content is ${n} bytes; a memory document is capped at ${MAX_MEMORY_WRITE_BYTES} bytes. Split it into smaller documents.`,
+      message: `Content is ${byteSize} bytes; a memory document is capped at ${MAX_MEMORY_WRITE_BYTES} bytes. Split it into smaller documents.`,
     };
-  if (e.trim() === "")
+  if (content.trim() === "")
     return {
       outcome: "refused",
       reason: "empty_content",
@@ -163,61 +176,73 @@ function isValidMemoryDocumentKey(path) {
 /**
  * 判断记忆文档路径是否合法（不含点开头的段）。
  */
-function isValidMemoryDocumentPath(e) {
-  return !UNSAFE_MEMORY_KEY_RE.test(e) && e.split("/").every((n) => !n.startsWith(".") || n === "");
+function isValidMemoryDocumentPath(documentPath) {
+  return (
+    !UNSAFE_MEMORY_KEY_RE.test(documentPath) &&
+    documentPath.split("/").every((segment) => !segment.startsWith(".") || segment === "")
+  );
 }
 //@ chunk-a477qqne.js:28312-29109 placement
 /**
  * 校验记忆文档路径。
  */
-function validateMemoryPath(e, { trailingSlashAllowed: n = false, rejectUnsafeSegments: r = false } = {}) {
-  let s = n && e.endsWith("/") ? e.slice(0, -1) : e;
-  let i = s.slice(1) === "" ? [] : s.slice(1).split("/");
+function validateMemoryPath(
+  documentPath,
+  { trailingSlashAllowed = false, rejectUnsafeSegments = false } = {},
+) {
+  let trimmedPath =
+    trailingSlashAllowed && documentPath.endsWith("/") ? documentPath.slice(0, -1) : documentPath;
+  let segments = trimmedPath.slice(1) === "" ? [] : trimmedPath.slice(1).split("/");
   if (
-    Buffer.byteLength(e, "utf8") <= 1024 &&
-    !UNSAFE_MEMORY_KEY_RE.test(e) &&
-    i.every((h) => h !== "") &&
-    (!r ||
-      i.every((h) => !PROTECTED_DIR_NAMES.has(foldName(h)) && !DANGEROUS_FILES_LOWER.has(foldName(h)))) &&
-    (n ? i.every((h) => !h.startsWith(".")) : i.length > 0 && isMemoryDocumentKey_2(e))
+    Buffer.byteLength(documentPath, "utf8") <= 1024 &&
+    !UNSAFE_MEMORY_KEY_RE.test(documentPath) &&
+    segments.every((segment) => segment !== "") &&
+    (!rejectUnsafeSegments ||
+      segments.every(
+        (segment) =>
+          !PROTECTED_DIR_NAMES.has(foldName(segment)) && !DANGEROUS_FILES_LOWER.has(foldName(segment)),
+      )) &&
+    (trailingSlashAllowed
+      ? segments.every((segment) => !segment.startsWith("."))
+      : segments.length > 0 && isMemoryDocumentKey_2(documentPath))
   )
     return null;
-  let l = r
+  let reservedNamesNote = rejectUnsafeSegments
     ? " and are not reserved names (skills, commands, agents, hooks, and similar \u2014 creating or changing documents there is blocked, though existing ones can be read and listed)"
     : "";
   return {
     outcome: "refused",
     reason: "invalid_path",
-    message: `${quoteMemoryPath(e)} is not a valid memory path: use at most 1024 bytes, folder segments that do not start with "."${l}, a filename ending in .md, .txt, .json, or .jsonl, and no control characters or backslashes.`,
+    message: `${quoteMemoryPath(documentPath)} is not a valid memory path: use at most 1024 bytes, folder segments that do not start with "."${reservedNamesNote}, a filename ending in .md, .txt, .json, or .jsonl, and no control characters or backslashes.`,
   };
 }
 //@ chunk-a477qqne.js:29109-29510 placement
 /**
  * 在存储中查找文档条目。
  */
-async function findMemoryEntry(e, n, r) {
-  let sliced = n.slice(0, n.lastIndexOf("/") + 1);
-  let i;
+async function findMemoryEntry(backend, documentPath, options) {
+  let sliced = documentPath.slice(0, documentPath.lastIndexOf("/") + 1);
+  let entries;
   try {
-    i = await e.list(sliced, {
+    entries = await backend.list(sliced, {
       depthOne: true,
-      signal: r?.signal,
+      signal: options?.signal,
     });
   } catch (error) {
     if (error instanceof MemoryNotFoundError && error.kind === "store") return null;
     throw error;
   }
-  let found = i.find((l) => l.path === n);
+  let found = entries.find((entry) => entry.path === documentPath);
   if (!found) return null;
   try {
-    let l = await e.read(found.id, {
-      signal: r?.signal,
+    let storedMemory = await backend.read(found.id, {
+      signal: options?.signal,
     });
     return {
       id: found.id,
-      content: l.content,
-      sha256: l.sha256,
-      updatedAt: l.updatedAt,
+      content: storedMemory.content,
+      sha256: storedMemory.sha256,
+      updatedAt: storedMemory.updatedAt,
     };
   } catch (error) {
     if (error instanceof MemoryNotFoundError) return null;
@@ -228,12 +253,12 @@ async function findMemoryEntry(e, n, r) {
 /**
  * 构造记忆访问失败结果并上报。
  */
-function logMemoryErrorResult(e, error) {
-  let r = memoryErrorResult(error);
-  logFeatureBad("memory_tools", r.reason, {
-    verb: fromEnum(e),
+function logMemoryErrorResult(verb, error) {
+  let errorResult = memoryErrorResult(error);
+  logFeatureBad("memory_tools", errorResult.reason, {
+    verb: fromEnum(verb),
   });
-  return r;
+  return errorResult;
 }
 //@ chunk-a477qqne.js:29588-30208 placement
 /**
@@ -265,18 +290,18 @@ function describeMemoryAccessLoss(reason) {
 /**
  * 把记忆存储错误转为工具结果。
  */
-function memoryErrorResult(e) {
-  logForDebugging(`memory-tools: ${e instanceof Error ? e.message : String(e)}`, {
+function memoryErrorResult(error) {
+  logForDebugging(`memory-tools: ${error instanceof Error ? error.message : String(error)}`, {
     level: "debug",
   });
-  if (e instanceof MemoryConflictError)
+  if (error instanceof MemoryConflictError)
     return {
       outcome: "failed",
       reason: "conflict",
       message: `The memory store reported a concurrent change to this document. Read it again with ${MEMORY_READ} and retry with the fresh version token.`,
     };
-  if (e instanceof MemoryNotFoundError)
-    return e.kind === "document"
+  if (error instanceof MemoryNotFoundError)
+    return error.kind === "document"
       ? {
           outcome: "failed",
           reason: "not_found",
@@ -287,13 +312,13 @@ function memoryErrorResult(e) {
           reason: "store_not_found",
           message: "The memory store was not found \u2014 it may not be provisioned yet.",
         };
-  if (e instanceof MemoryPermanentError)
+  if (error instanceof MemoryPermanentError)
     return {
       outcome: "failed",
-      reason: e.reason,
-      message: `The memory store rejected the request: ${describeMemoryAccessLoss(e.reason)}`,
+      reason: error.reason,
+      message: `The memory store rejected the request: ${describeMemoryAccessLoss(error.reason)}`,
     };
-  if (e instanceof MemoryUnavailableError)
+  if (error instanceof MemoryUnavailableError)
     return {
       outcome: "failed",
       reason: "unavailable",
@@ -317,9 +342,9 @@ var memoryItemHooks = null;
 async function labelsMemoryItem(filePath) {
   if (memoryItemHooks === null) return false;
   try {
-    let n = await mapToMirrorPath(filePath);
-    if (!n.endsWith(".md") || !isAutoMemPath(n) || isTeamMemPath(n)) return false;
-    return await memoryItemHooks.labelsMemoryItems(getAutoMemPath(), n);
+    let mirrorPath = await mapToMirrorPath(filePath);
+    if (!mirrorPath.endsWith(".md") || !isAutoMemPath(mirrorPath) || isTeamMemPath(mirrorPath)) return false;
+    return await memoryItemHooks.labelsMemoryItems(getAutoMemPath(), mirrorPath);
   } catch {
     return false;
   }
@@ -328,14 +353,20 @@ async function labelsMemoryItem(filePath) {
 /**
  * 为写入自动记忆文件生成记忆项戳记上下文（主机、会话、agent、是否远程、新旧内容）。
  */
-async function memoryItemStampContext(e, n, previous, content, { remote: i = false } = {}) {
-  if (memoryItemHooks === null || !n.endsWith(".md") || !isAutoMemPath(n) || isTeamMemPath(n)) return;
+async function memoryItemStampContext(toolContext, filePath, previous, content, { remote = false } = {}) {
+  if (
+    memoryItemHooks === null ||
+    !filePath.endsWith(".md") ||
+    !isAutoMemPath(filePath) ||
+    isTeamMemPath(filePath)
+  )
+    return;
   return await memoryItemHooks.memoryItemStampContext({
-    host: e.session.host,
-    sessionId: e.session.id,
-    agentId: e.agentId,
-    remote: i,
-    filePath: n,
+    host: toolContext.session.host,
+    sessionId: toolContext.session.id,
+    agentId: toolContext.agentId,
+    remote,
+    filePath,
     previous,
     content,
     memoryDir: getAutoMemPath(),
@@ -357,13 +388,14 @@ async function mapToMirrorPath(absolutePath) {
         .split(sep)
         .slice(stripTrailingSeparators(normalize(getAutoMemPath())).split(sep).length),
     );
-  let r = await realpathDeepestExisting(stripTrailingSeparators(getMemoryDirNfc())).catch(() =>
+  let memoryRootReal = await realpathDeepestExisting(stripTrailingSeparators(getMemoryDirNfc())).catch(() =>
     stripTrailingSeparators(getMemoryDirNfc()),
   );
   try {
-    let s = await realpathDeepestExisting(mirrorRoot);
-    return nfcLower(s) === nfcLower(r) || nfcLower(s).startsWith(nfcLower(r) + sep)
-      ? join(getMemoryDirNfc(), ...s.split(sep).slice(r.split(sep).length))
+    let mirrorRootReal = await realpathDeepestExisting(mirrorRoot);
+    return nfcLower(mirrorRootReal) === nfcLower(memoryRootReal) ||
+      nfcLower(mirrorRootReal).startsWith(nfcLower(memoryRootReal) + sep)
+      ? join(getMemoryDirNfc(), ...mirrorRootReal.split(sep).slice(memoryRootReal.split(sep).length))
       : mirrorRoot;
   } catch {
     return join(getMemoryDirNfc(), relative(getAutoMemPath(), mirrorRoot));
@@ -384,33 +416,37 @@ async function resolveMirrorRoot(filePath) {
   if (isAutoMemPath(filePath)) return filePath;
   let autoMemPathOrNull = getAutoMemPathOrNull();
   if (autoMemPathOrNull === null) return;
-  let r = stripTrailingSeparators(normalize(autoMemPathOrNull));
+  let autoMemPathNormalized = stripTrailingSeparators(normalize(autoMemPathOrNull));
   let parts = normalize(filePath).split(sep);
-  let i = r.split(sep).length;
-  let joined = parts.slice(0, i).join(sep);
-  if (parts.length <= i || nfcLower(joined) !== nfcLower(r)) return;
-  let [l, h] = await Promise.all([
+  let autoMemSegmentCount = autoMemPathNormalized.split(sep).length;
+  let joined = parts.slice(0, autoMemSegmentCount).join(sep);
+  if (parts.length <= autoMemSegmentCount || nfcLower(joined) !== nfcLower(autoMemPathNormalized)) return;
+  let [candidateStats, memRootStats] = await Promise.all([
     stat(joined).catch(() => {
       return;
     }),
-    stat(r).catch(() => {
+    stat(autoMemPathNormalized).catch(() => {
       return;
     }),
   ]);
-  if (h === undefined) return null;
-  return l !== undefined && l.dev === h.dev && l.ino === h.ino ? join(r, ...parts.slice(i)) : undefined;
+  if (memRootStats === undefined) return null;
+  return candidateStats !== undefined &&
+    candidateStats.dev === memRootStats.dev &&
+    candidateStats.ino === memRootStats.ino
+    ? join(autoMemPathNormalized, ...parts.slice(autoMemSegmentCount))
+    : undefined;
 }
 //@ chunk-a477qqne.js:32383-32529 placement
 /**
  * 通知记忆项模块文件已写入（失败忽略）。
  */
-async function noteMemoryItemWritten(filePath, written, r, rev) {
-  if (memoryItemHooks !== null && r !== undefined)
+async function noteMemoryItemWritten(filePath, written, memoryItem, rev) {
+  if (memoryItemHooks !== null && memoryItem !== undefined)
     try {
       await memoryItemHooks.noteMemoryItemWritten({
         filePath,
         written,
-        item: r,
+        item: memoryItem,
         rev,
         memoryDir: getAutoMemPath(),
       });
@@ -420,44 +456,50 @@ async function noteMemoryItemWritten(filePath, written, r, rev) {
 /**
  * 记录记忆项块被剥离或拒绝的埋点（是否共享存储）。
  */
-function logMemoryItemBlock(sharedItemBlock, n) {
-  let r = {
-    shared_store: n === "shared_store",
+function logMemoryItemBlock(sharedItemBlock, storeKind) {
+  let logFields = {
+    shared_store: storeKind === "shared_store",
   };
   if (sharedItemBlock === "stripped")
     logFeatureOk("laptop_memory_item_block", {
       stripped: true,
-      ...r,
+      ...logFields,
     });
-  else if (sharedItemBlock === "refused") logFeatureSad("laptop_memory_item_block", "refused", r);
+  else if (sharedItemBlock === "refused") logFeatureSad("laptop_memory_item_block", "refused", logFields);
 }
 //@ chunk-a477qqne.js:32755-32963 placement
 /**
  * 匹配 “\n\nAssistant:” 风格的转录标记（含变体字符）。
  */
-var ANTML = "antml:";
-var regExp_3 = new RegExp("<(\\/?)(?:\\/?" + ANTML + ")+([^<>]+)", "gi");
-var regExp_4 = new RegExp("\\n\\nHuman:", "gi");
-var ANTHROPIC_TURN_MARKER_RE =
-  /\n\n[Aa](?:[sS\u017F]{2}|[\u00DF\u1E9E])[iI\u0130](?:[sS\u017F][tT]|[\uFB06\uFB05])[aA][nN][tT]:/gu;
+var ANTML; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var regExp_3;
+var regExp_4;
+var ANTHROPIC_TURN_MARKER_RE;
+deferInit("chunk-a477qqne.js:32755", () => {
+  ANTML = "antml:";
+  regExp_3 = new RegExp("<(\\/?)(?:\\/?" + ANTML + ")+([^<>]+)", "gi");
+  regExp_4 = new RegExp("\\n\\nHuman:", "gi");
+  ANTHROPIC_TURN_MARKER_RE =
+    /\n\n[Aa](?:[sS\u017F]{2}|[\u00DF\u1E9E])[iI\u0130](?:[sS\u017F][tT]|[\uFB06\uFB05])[aA][nN][tT]:/gu;
+});
 //@ chunk-a477qqne.js:32963-33042 placement
 /**
  * 把 antml 标签递归转义成普通文本。
  */
-function escapeAntmlTags(e, n = 0) {
-  let replaced = e.replace(regExp_3, "<$1$2");
-  return replaced === e || n >= 20 ? replaced : escapeAntmlTags(replaced, n + 1);
+function escapeAntmlTags(text, depth = 0) {
+  let text_2 = text.replace(regExp_3, "<$1$2");
+  return text_2 === text || depth >= 20 ? text_2 : escapeAntmlTags(text_2, depth + 1);
 }
 //@ chunk-a477qqne.js:33042-33156 placement
-function escapeTranscriptMarkers(e) {
+function escapeTranscriptMarkers(text) {
   if (
-    !e.includes("<") &&
-    !e.includes(`
+    !text.includes("<") &&
+    !text.includes(`
 
 `)
   )
-    return e;
-  return escapeAntmlTags(e)
+    return text;
+  return escapeAntmlTags(text)
     .replace(
       regExp_4,
       `
@@ -507,114 +549,129 @@ function memoryStoreNote(storeKind) {
 /**
  * 何时访问记忆的指引段落。
  */
-var MEMORY_GUIDANCE =
-  "Read and update your memory often so corrections stick. Treat memories as past snapshots to verify against current sources, not the definitive answer.";
-var MEMORY_WHEN_TO_ACCESS = [
-  "## When to access memories",
-  "- When memories seem relevant, or the user references prior work with them or others in their organization.",
-  "- You MUST access memory when the user explicitly asks you to check, recall, or remember.",
-  `- Call ${MEMORY_LIST_TOOL_NAME} early when context about the project would help, and always before telling the user you do not have something; if a listed document looks relevant, ${MEMORY_READ} it.`,
-  "- If the user says to *ignore* or *not use* memory: Do not apply remembered facts, cite, compare against, or mention memory content.",
-  STALE_MEMORY_NOTE,
-];
-var MEMORY_WHEN_TO_SAVE = `Check each reply before you send it: did the user's latest message correct you or state a preference \u2014 even one phrased as a task instruction or a question? If so, save it in that same reply.
+var MEMORY_GUIDANCE; // deferred: uses MEMORY_FRONTMATTER_EXAMPLE_TEXT (../../services/extractMemories/prompts.js) of its import cycle while loading; runs once the cycle is complete
+var MEMORY_WHEN_TO_ACCESS;
+var MEMORY_WHEN_TO_SAVE;
+var MEMORY_QUALITY_GUIDE;
+var MEMORY_VERSION_RULES;
+var MEMORY_SAVE_STEPS;
+var joined;
+var joined_2;
+var joined_3;
+deferInit("chunk-a477qqne.js:35596", () => {
+  MEMORY_GUIDANCE =
+    "Read and update your memory often so corrections stick. Treat memories as past snapshots to verify against current sources, not the definitive answer.";
+  MEMORY_WHEN_TO_ACCESS = [
+    "## When to access memories",
+    "- When memories seem relevant, or the user references prior work with them or others in their organization.",
+    "- You MUST access memory when the user explicitly asks you to check, recall, or remember.",
+    `- Call ${MEMORY_LIST_TOOL_NAME} early when context about the project would help, and always before telling the user you do not have something; if a listed document looks relevant, ${MEMORY_READ} it.`,
+    "- If the user says to *ignore* or *not use* memory: Do not apply remembered facts, cite, compare against, or mention memory content.",
+    STALE_MEMORY_NOTE,
+  ];
+  MEMORY_WHEN_TO_SAVE = `Check each reply before you send it: did the user's latest message correct you or state a preference \u2014 even one phrased as a task instruction or a question? If so, save it in that same reply.
 
 You MUST save or update memory when:
  - the user corrects you \u2014 points out a mistake, tells you to do something differently, pushes back, or gives you durable, applicable knowledge you lacked \u2014 however it is phrased. A "redo it this way" edit ("cut these comments down to one line", "drop the TL;DR label") counts: apply it and save the preference behind it. A skeptical question ("won't this break X?", "shouldn't this use Y?") counts: answer it, then record the preference behind the question, not the code fact you looked up to answer it; answering isn't saving, so do both. If unsure whether the correction is durable and applicable, try to infer the more abstract, generalizable lesson, if there is one; but scope words ("in this change," "for now") mark a one-off to follow in the session, not a rule to save.
  - you learn something new about your environment \u2014 if tool results show a pattern no longer holds or an expected tool is unavailable, record it; not quirks of a sandbox, CI runner, or container that aren't the user's own setup (a faked or stubbed \`git\`/\`gh\`, a tool missing only from the container). However, avoid recording state that is likely transient, like an endpoint experiencing temporary downtime.
 
 You MUST make memory writes before treating your turn as finished \u2014 before you send the reply that engages the correction or take your next tool step, not after the conversation settles. If your reply answers the user's "why\u2026?", diagnoses what went wrong, applies or proposes a fix, or ends with an offer like "want me to patch it?", the correction has already happened and the memory is due now, in that same reply's tool calls; an offered next step is a finished engagement, not permission to defer \u2014 don't wait for the user to confirm or come back.`;
-var MEMORY_QUALITY_GUIDE = `A good memory is applicable, durable, and legible:
+  MEMORY_QUALITY_GUIDE = `A good memory is applicable, durable, and legible:
  - applicable \u2014 improves future actions: an approach the user corrected or steered you away from, so you don't repeat it, a stated preference, or non-obvious procedures and invariants; not what CLAUDE.md, the code, git history, or a fresh lookup already provides, nor episodes, context, or trivia with no behavioral consequence.
  - durable \u2014 matters in more than one future session: user or team preferences and corrections the user would otherwise restate, recurring workflows and tooling, each written as a reusable rule ("retries above 3 are counterproductive against this service's rate limits," not "changed the retry count to 3 here"); not task state phrased as live status ("in-flight," "awaiting review") or point-in-time snapshots of fast-turnover or session-specific facts (role holders, current IDs, branch/PR inventories, what's fixed vs. unfixed), nor what matters only to this conversation \u2014 if asked to save one, save what was non-obvious about it instead.
  - legible \u2014 readable without the original session: one topic per file, connected full sentences like a short, high-quality Wikipedia article, the why, not just the what; no shorthand, scratchpad prose, or unresolvable references ("the fix," bare ticket IDs).`;
-var MEMORY_VERSION_RULES = [
-  "## Version tokens",
-  `Every ${MEMORY_WRITE} needs if_version. Pass the literal word new for a document that does not yet exist. For a document that already exists, ${MEMORY_READ} it first and pass the version token from that result \u2014 the listing shows paths, not tokens. Never invent a token.`,
-  `If the document changed since you read it, or you pass new for a path that already exists, the write is rejected and returns the current content (when it is within the read cap) and its version \u2014 merge your change into that content and call ${MEMORY_WRITE} again with the returned version.`,
-];
-var MEMORY_SAVE_STEPS = [
-  "## How to save memories",
-  "",
-  "Saving a memory is a two-step process:",
-  "",
-  `**Step 1** \u2014 save the memory as its own document in the store with ${MEMORY_WRITE}, using this frontmatter format:`,
-  "",
-  ...MEMORY_FRONTMATTER_EXAMPLE_TEXT,
-  "",
-  `**Step 2** \u2014 add a pointer to that document in the store's index document with ${MEMORY_WRITE}. The index path is shown as "index" next to the store when you call ${MEMORY_LIST_TOOL_NAME} with no arguments, and in your # Memory instructions when the index is loaded; ${MEMORY_READ} the index first for its version token, or pass new if it does not exist yet. Each entry should be one line, under ~150 characters: \`- [Title](file.md) \u2014 one-line hook\`. The index has no frontmatter. Never write memory content directly into the index.`,
-  "",
-  `- If the index document is shown in your # Memory context, it is loaded into your conversation \u2014 lines after ${MAX_ENTRYPOINT_LINES} are truncated, so keep it concise`,
-  "- Keep the name, description, and type fields in memory documents up-to-date with the content",
-  "- Organize memory semantically by topic, not chronologically \u2014 one subject per document",
-  `- Update memories that turn out to be wrong or outdated by rewriting the document with ${MEMORY_WRITE}; when nothing in a document is worth keeping, replace its content with a one-line note saying it is obsolete and remove its entry from the index`,
-  "- Do not write duplicate memories. First check if there is an existing memory you can update before writing a new one.",
-];
-var joined = [
-  `List the memory documents in a memory store, sorted by path \u2014 each line gives a document's path, size, and last-updated date, but no content (use ${MEMORY_READ} for that). Pass store (the store's id) to choose the store, path_prefix to list one directory, and the cursor from a previous call to continue a long listing. Call with no arguments at all to list the memory stores available in this session \u2014 their ids, a one-line description, whether each is writable or read-only, and the path of each store's index document; that set can change during the session, so re-check it whenever you are unsure which store to use.`,
-  "",
-  `Call ${MEMORY_LIST_TOOL_NAME} early when context about the project or the work in it would help \u2014 and always before telling the user you do not have something. If a listed document looks relevant, ${MEMORY_READ} it.`,
-].join(`
+  MEMORY_VERSION_RULES = [
+    "## Version tokens",
+    `Every ${MEMORY_WRITE} needs if_version. Pass the literal word new for a document that does not yet exist. For a document that already exists, ${MEMORY_READ} it first and pass the version token from that result \u2014 the listing shows paths, not tokens. Never invent a token.`,
+    `If the document changed since you read it, or you pass new for a path that already exists, the write is rejected and returns the current content (when it is within the read cap) and its version \u2014 merge your change into that content and call ${MEMORY_WRITE} again with the returned version.`,
+  ];
+  MEMORY_SAVE_STEPS = [
+    "## How to save memories",
+    "",
+    "Saving a memory is a two-step process:",
+    "",
+    `**Step 1** \u2014 save the memory as its own document in the store with ${MEMORY_WRITE}, using this frontmatter format:`,
+    "",
+    ...MEMORY_FRONTMATTER_EXAMPLE_TEXT,
+    "",
+    `**Step 2** \u2014 add a pointer to that document in the store's index document with ${MEMORY_WRITE}. The index path is shown as "index" next to the store when you call ${MEMORY_LIST_TOOL_NAME} with no arguments, and in your # Memory instructions when the index is loaded; ${MEMORY_READ} the index first for its version token, or pass new if it does not exist yet. Each entry should be one line, under ~150 characters: \`- [Title](file.md) \u2014 one-line hook\`. The index has no frontmatter. Never write memory content directly into the index.`,
+    "",
+    `- If the index document is shown in your # Memory context, it is loaded into your conversation \u2014 lines after ${MAX_ENTRYPOINT_LINES} are truncated, so keep it concise`,
+    "- Keep the name, description, and type fields in memory documents up-to-date with the content",
+    "- Organize memory semantically by topic, not chronologically \u2014 one subject per document",
+    `- Update memories that turn out to be wrong or outdated by rewriting the document with ${MEMORY_WRITE}; when nothing in a document is worth keeping, replace its content with a one-line note saying it is obsolete and remove its entry from the index`,
+    "- Do not write duplicate memories. First check if there is an existing memory you can update before writing a new one.",
+  ];
+  joined = [
+    `List the memory documents in a memory store, sorted by path \u2014 each line gives a document's path, size, and last-updated date, but no content (use ${MEMORY_READ} for that). Pass store (the store's id) to choose the store, path_prefix to list one directory, and the cursor from a previous call to continue a long listing. Call with no arguments at all to list the memory stores available in this session \u2014 their ids, a one-line description, whether each is writable or read-only, and the path of each store's index document; that set can change during the session, so re-check it whenever you are unsure which store to use.`,
+    "",
+    `Call ${MEMORY_LIST_TOOL_NAME} early when context about the project or the work in it would help \u2014 and always before telling the user you do not have something. If a listed document looks relevant, ${MEMORY_READ} it.`,
+  ].join(`
 `);
-var joined_2 = [
-  `Read one memory document from a memory store by its store id and path. The result carries the document's version token \u2014 pass it as if_version when you next ${MEMORY_WRITE} this path in the same store.`,
-  "",
-  MEMORY_GUIDANCE,
-  "",
-  ...MEMORY_WHEN_TO_ACCESS,
-  "",
-  ...BEFORE_RECOMMENDING_SECTION,
-].join(`
+  joined_2 = [
+    `Read one memory document from a memory store by its store id and path. The result carries the document's version token \u2014 pass it as if_version when you next ${MEMORY_WRITE} this path in the same store.`,
+    "",
+    MEMORY_GUIDANCE,
+    "",
+    ...MEMORY_WHEN_TO_ACCESS,
+    "",
+    ...BEFORE_RECOMMENDING_SECTION,
+  ].join(`
 `);
-var joined_3 = [
-  "Save a memory document to a memory store (named by its store id), creating or overwriting the document at the given path. `content` replaces the entire document \u2014 include every line you intend to keep.",
-  "",
-  MEMORY_WHEN_TO_SAVE,
-  "",
-  MEMORY_QUALITY_GUIDE,
-  "",
-  ...MEMORY_VERSION_RULES,
-  "",
-  ...MEMORY_SAVE_STEPS,
-  "",
-  "Never write secrets or credentials into a memory \u2014 project stores are shared with every collaborator, and such writes are refused in every store.",
-].join(`
+  joined_3 = [
+    "Save a memory document to a memory store (named by its store id), creating or overwriting the document at the given path. `content` replaces the entire document \u2014 include every line you intend to keep.",
+    "",
+    MEMORY_WHEN_TO_SAVE,
+    "",
+    MEMORY_QUALITY_GUIDE,
+    "",
+    ...MEMORY_VERSION_RULES,
+    "",
+    ...MEMORY_SAVE_STEPS,
+    "",
+    "Never write secrets or credentials into a memory \u2014 project stores are shared with every collaborator, and such writes are refused in every store.",
+  ].join(`
 `);
+});
 //@ chunk-a477qqne.js:43109-44456 placement
 /**
  * memory_write 的输出 schema。
  */
-var MemoryWriteInputSchema = DoctorLazy(() =>
-  zodStrictObject({
-    store: string().describe(
-      `Id of the memory store to write to (call ${MEMORY_LIST_TOOL_NAME} with no arguments to see the stores available in this session).`,
-    ),
-    path: string().describe("Path of the document to create or update (e.g. /feedback_testing.md)."),
-    content: string().describe(
-      "Full text content to write (UTF-8). Replaces the entire document \u2014 any line you omit is deleted. Line endings are normalized to LF, invisible/format characters are stripped, and other control characters are replaced with U+FFFD. Empty or whitespace-only content is rejected. Capped at 100KB per document.",
-    ),
-    if_version: string()
-      .max(64)
-      .describe(
-        `Pass the 12-character version token from your most recent ${MEMORY_READ} or ${MEMORY_WRITE} of this file. For a file that does not yet exist (not shown in the listing), pass the literal word new (without quotes; an empty string is treated the same way). For any file already in the listing, ${MEMORY_READ} it first to get its version token \u2014 the listing itself does not contain version tokens. Never invent a value.`,
+var MemoryWriteInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var memoryWriteOutputSchema;
+deferInit("chunk-a477qqne.js:43109", () => {
+  MemoryWriteInputSchema = DoctorLazy(() =>
+    zodStrictObject({
+      store: stringSchema().describe(
+        `Id of the memory store to write to (call ${MEMORY_LIST_TOOL_NAME} with no arguments to see the stores available in this session).`,
       ),
-  }),
-);
-var memoryWriteOutputSchema = DoctorLazy(() =>
-  u({
-    outcome: _enum(["ok", "conflict", "missing", "refused", "failed"]),
-    path: string(),
-    store_kind: _enum(["personal", "project"]).optional(),
-    version: string().optional(),
-    bytes: E().optional(),
-    content: string().optional(),
-    op: _enum(["created", "updated"]).optional(),
-    currentVersion: string().optional(),
-    currentContent: string().optional(),
-    reason: string().optional(),
-    message: string().optional(),
-  }),
-);
+      path: stringSchema().describe("Path of the document to create or update (e.g. /feedback_testing.md)."),
+      content: stringSchema().describe(
+        "Full text content to write (UTF-8). Replaces the entire document \u2014 any line you omit is deleted. Line endings are normalized to LF, invisible/format characters are stripped, and other control characters are replaced with U+FFFD. Empty or whitespace-only content is rejected. Capped at 100KB per document.",
+      ),
+      if_version: stringSchema()
+        .max(64)
+        .describe(
+          `Pass the 12-character version token from your most recent ${MEMORY_READ} or ${MEMORY_WRITE} of this file. For a file that does not yet exist (not shown in the listing), pass the literal word new (without quotes; an empty string is treated the same way). For any file already in the listing, ${MEMORY_READ} it first to get its version token \u2014 the listing itself does not contain version tokens. Never invent a value.`,
+        ),
+    }),
+  );
+  memoryWriteOutputSchema = DoctorLazy(() =>
+    objectSchema({
+      outcome: _enum(["ok", "conflict", "missing", "refused", "failed"]),
+      path: stringSchema(),
+      store_kind: _enum(["personal", "project"]).optional(),
+      version: stringSchema().optional(),
+      bytes: numberSchema().optional(),
+      content: stringSchema().optional(),
+      op: _enum(["created", "updated"]).optional(),
+      currentVersion: stringSchema().optional(),
+      currentContent: stringSchema().optional(),
+      reason: stringSchema().optional(),
+      message: stringSchema().optional(),
+    }),
+  );
+});
 //@ chunk-a477qqne.js:44456-44608 placement
 function parseIfVersion(ifVersion) {
   let lower = ifVersion.trim().toLowerCase();
@@ -636,13 +693,13 @@ function parseIfVersion(ifVersion) {
 /**
  * 构造读文件成功结果 {outcome:'ok', path, version, bytes, content, op}。旧版名 isOperator 误配，与 Bash 无关。
  */
-function makeReadOkResult(path, n, op) {
+function makeReadOkResult(path, content, op) {
   return {
     outcome: "ok",
     path,
-    version: memoryVersionHash(n),
-    bytes: Buffer.byteLength(n, "utf8"),
-    content: n,
+    version: memoryVersionHash(content),
+    bytes: Buffer.byteLength(content, "utf8"),
+    content,
     op,
   };
 }
@@ -654,19 +711,19 @@ var MAX_PREVIEW_CHARS = 200;
 var MAX_PREVIEW_SOURCE_CHARS = 2000;
 //@ chunk-a477qqne.js:44738-44934 placement
 function previewMemoryText(content) {
-  let n = normalizeMemoryText(content);
-  let trimmed = n.replace(/[\s\u2800]+/g, " ").trim();
-  let s = splitGraphemes(truncateToLength(trimmed, MAX_PREVIEW_SOURCE_CHARS));
-  return trimmed.length > MAX_PREVIEW_SOURCE_CHARS || s.length > MAX_PREVIEW_CHARS
-    ? `${s.slice(0, MAX_PREVIEW_CHARS).join("")}\u2026 [${Buffer.byteLength(n, "utf8")} bytes in all]`
+  let normalized = normalizeMemoryText(content);
+  let trimmed = normalized.replace(/[\s\u2800]+/g, " ").trim();
+  let graphemes = splitGraphemes(truncateToLength(trimmed, MAX_PREVIEW_SOURCE_CHARS));
+  return trimmed.length > MAX_PREVIEW_SOURCE_CHARS || graphemes.length > MAX_PREVIEW_CHARS
+    ? `${graphemes.slice(0, MAX_PREVIEW_CHARS).join("")}\u2026 [${Buffer.byteLength(normalized, "utf8")} bytes in all]`
     : trimmed;
 }
 //@ chunk-a477qqne.js:44934-44978 placement
 /**
  * 引用每一行。
  */
-function quoteLines(e) {
-  return e
+function quoteLines(text) {
+  return text
     .split(
       `
 `,
@@ -677,47 +734,47 @@ function quoteLines(e) {
 /**
  * 生成“已写入 N 字节、版本为 X”的结果文本。
  */
-function formatWriteResult(e) {
-  return `Wrote ${e.bytes ?? 0} bytes. [version: ${e.version ?? ""}]`;
+function formatWriteResult(result) {
+  return `Wrote ${result.bytes ?? 0} bytes. [version: ${result.version ?? ""}]`;
 }
 //@ chunk-a477qqne.js:45057-45587 placement
 /**
  * 版本冲突结果（附当前内容或拒绝）。
  */
-function versionConflictResult(path, n, r, s) {
-  logVersionConflict(s);
-  let i = memoryVersionHash(n.content);
-  let d = isOversizeMemoryContent(n.content);
-  let l = Buffer.byteLength(n.content, "utf8");
-  let h = d
-    ? ` Its current content is ${l} bytes, over the ${MAX_MEMORY_DOC_BYTES}-byte read cap, so it is withheld here and ${MEMORY_READ} refuses it for the same reason; replace the document wholesale with if_version=${i}, or leave it as is.`
-    : ` Its current content follows \u2014 merge your change into it and call ${MEMORY_WRITE} again with if_version=${i}.`;
+function versionConflictResult(path, memoryEntry, prefixMessage, reason) {
+  logVersionConflict(reason);
+  let currentVersion = memoryVersionHash(memoryEntry.content);
+  let isOversize = isOversizeMemoryContent(memoryEntry.content);
+  let currentBytes = Buffer.byteLength(memoryEntry.content, "utf8");
+  let contentNote = isOversize
+    ? ` Its current content is ${currentBytes} bytes, over the ${MAX_MEMORY_DOC_BYTES}-byte read cap, so it is withheld here and ${MEMORY_READ} refuses it for the same reason; replace the document wholesale with if_version=${currentVersion}, or leave it as is.`
+    : ` Its current content follows \u2014 merge your change into it and call ${MEMORY_WRITE} again with if_version=${currentVersion}.`;
   return {
     outcome: "conflict",
     path,
-    currentVersion: i,
-    currentContent: d ? undefined : normalizeMemoryText(n.content),
-    reason: s,
-    message: r + h,
+    currentVersion,
+    currentContent: isOversize ? undefined : normalizeMemoryText(memoryEntry.content),
+    reason,
+    message: prefixMessage + contentNote,
   };
 }
 //@ chunk-a477qqne.js:45587-45753 placement
 function versionNewOnExisting(path, memoryEntry) {
-  let r = memoryVersionHash(memoryEntry.content);
+  let currentVersion = memoryVersionHash(memoryEntry.content);
   return versionConflictResult(
     path,
     memoryEntry,
-    `if_version=new but "${path}" already exists in the memory store (current version ${r}).`,
+    `if_version=new but "${path}" already exists in the memory store (current version ${currentVersion}).`,
     "version_new_on_existing",
   );
 }
 //@ chunk-a477qqne.js:45753-45914 placement
-function staleVersionResult(path, memoryEntry, r) {
-  let s = memoryVersionHash(memoryEntry.content);
+function staleVersionResult(path, memoryEntry, gaveVersion) {
+  let currentVersion = memoryVersionHash(memoryEntry.content);
   return versionConflictResult(
     path,
     memoryEntry,
-    `"${path}" changed since you last read it (if_version ${r} is stale; current version ${s}).`,
+    `"${path}" changed since you last read it (if_version ${gaveVersion} is stale; current version ${currentVersion}).`,
     "stale_version",
   );
 }
@@ -726,18 +783,23 @@ function staleVersionResult(path, memoryEntry, r) {
  * if_version 非法时的结果。
  */
 function invalidVersionResult(path, raw, memoryEntry) {
-  let s = `if_version "${replaceControlChars(raw)}" is not a version token \u2014 pass the 12-character token from your most recent ${MEMORY_READ} or ${MEMORY_WRITE} of this path, or the literal word new for a document that does not yet exist.`;
+  let explanation = `if_version "${replaceControlChars(raw)}" is not a version token \u2014 pass the 12-character token from your most recent ${MEMORY_READ} or ${MEMORY_WRITE} of this path, or the literal word new for a document that does not yet exist.`;
   if (memoryEntry === null) {
     logVersionConflict("bad_version");
     return {
       outcome: "conflict",
       path,
       reason: "bad_version",
-      message: `${s} "${path}" does not exist yet, so pass if_version=new to create it.`,
+      message: `${explanation} "${path}" does not exist yet, so pass if_version=new to create it.`,
     };
   }
-  let i = memoryVersionHash(memoryEntry.content);
-  return versionConflictResult(path, memoryEntry, `${s} It currently exists at version ${i}.`, "bad_version");
+  let currentVersion = memoryVersionHash(memoryEntry.content);
+  return versionConflictResult(
+    path,
+    memoryEntry,
+    `${explanation} It currently exists at version ${currentVersion}.`,
+    "bad_version",
+  );
 }
 //@ chunk-a477qqne.js:46395-46496 placement
 function missingPathResult(path) {
@@ -752,37 +814,37 @@ function missingPathResult(path) {
 /**
  * 路径冲突结果。
  */
-function pathConflictResult(e, conflictingPath) {
+function pathConflictResult(documentPath, documentPath_2) {
   logMemoryToolSad("write", "path_conflict");
-  let r =
-    conflictingPath !== undefined &&
-    e.startsWith(`${conflictingPath}/`) &&
-    isValidMemoryDocumentPath(conflictingPath)
-      ? `"${conflictingPath}" already occupies an overlapping path`
-      : `a document already exists under "${e}/" or an ancestor of it`;
+  let conflictText =
+    documentPath_2 !== undefined &&
+    documentPath.startsWith(`${documentPath_2}/`) &&
+    isValidMemoryDocumentPath(documentPath_2)
+      ? `"${documentPath_2}" already occupies an overlapping path`
+      : `a document already exists under "${documentPath}/" or an ancestor of it`;
   return {
     outcome: "failed",
-    path: e,
+    path: documentPath,
     reason: "path_conflict",
-    message: `"${e}" cannot be created: ${r}. A document and a prefix of its path cannot coexist \u2014 choose a different path.`,
+    message: `"${documentPath}" cannot be created: ${conflictText}. A document and a prefix of its path cannot coexist \u2014 choose a different path.`,
   };
 }
 //@ chunk-a477qqne.js:46877-47109 placement
-async function createMemoryDoc(backend, path, content, signal) {
+async function createMemoryDoc(backend, normalizedPath, content, signal) {
   try {
-    await backend.create(path, content, {
+    await backend.create(normalizedPath, content, {
       precondition: "not_exists",
       signal,
     });
-    return makeReadOkResult(path, content, "created");
+    return makeReadOkResult(normalizedPath, content, "created");
   } catch (error) {
     if (!(error instanceof MemoryConflictError)) throw error;
-    let memoryEntry = await findMemoryEntry(backend, path, {
+    let memoryEntry = await findMemoryEntry(backend, normalizedPath, {
       signal,
     });
     return memoryEntry === null
-      ? pathConflictResult(path, error.conflictingPath)
-      : versionNewOnExisting(path, memoryEntry);
+      ? pathConflictResult(normalizedPath, error.conflictingPath)
+      : versionNewOnExisting(normalizedPath, memoryEntry);
   }
 }
 //@ chunk-a477qqne.js:47109-47884 placement
@@ -834,17 +896,17 @@ async function updateMemoryDocument(backend, path, content, memoryEntry, signal)
 /**
  * 写入前读取文档内容与版本。
  */
-async function readMemoryForWrite(e, n, content, previous, remote) {
-  let d = await memoryItemStampContext(e, n, previous, content, {
+async function readMemoryForWrite(toolContext, filePath, content, previous, remote) {
+  let stampContext = await memoryItemStampContext(toolContext, filePath, previous, content, {
     remote,
   });
-  if (d === undefined) return;
-  let memoryContent = prepareMemoryContent(n, content, d?.context);
-  let h = normalizeMemoryText(memoryContent.content);
+  if (stampContext === undefined) return;
+  let memoryContent = prepareMemoryContent(filePath, content, stampContext?.context);
+  let normalizedContent = normalizeMemoryText(memoryContent.content);
   return {
-    content: h,
+    content: normalizedContent,
     item: memoryContent.item,
-    rev: d?.rev,
+    rev: stampContext?.rev,
     ...(memoryContent.sharedItemBlock !== undefined && {
       sharedItemBlock: memoryContent.sharedItemBlock,
     }),
@@ -853,7 +915,7 @@ async function readMemoryForWrite(e, n, content, previous, remote) {
           refusal: memoryContent.refusal,
           refusalKind: memoryContent.refusalKind,
         }
-      : h !== memoryContent.content && {
+      : normalizedContent !== memoryContent.content && {
           refusal: emptyRefusalItemKeys(),
           refusalKind: "scrub",
         }),
@@ -864,288 +926,307 @@ async function readMemoryForWrite(e, n, content, previous, remote) {
  * 从 Memory 工具读取结果中取出个人存储的文件路径与内容。
  */
 function personalMemoryReadResult(toolResponse) {
-  let n = memoryWriteOutputSchema().safeParse(toolResponse);
-  return n.success && n.data.outcome === "ok" && n.data.store_kind === "personal"
+  let parsed = memoryWriteOutputSchema().safeParse(toolResponse);
+  return parsed.success && parsed.data.outcome === "ok" && parsed.data.store_kind === "personal"
     ? {
-        filePath: autoMemFilePath(n.data.path),
-        content: n.data.content ?? "",
+        filePath: autoMemFilePath(parsed.data.path),
+        content: parsed.data.content ?? "",
       }
     : null;
 }
 //@ chunk-a477qqne.js:48410-48615 placement
-function memoryWritePermissionPath(e) {
+function memoryWritePermissionPath(documentPath) {
   if (
-    validateMemoryPath(e, {
+    validateMemoryPath(documentPath, {
       rejectUnsafeSegments: true,
     }) !== null ||
-    checkPersonalMemoryPath("personal", e) !== null
+    checkPersonalMemoryPath("personal", documentPath) !== null
   )
     return null;
-  let pathsForPermissionCheck = getPathsForPermissionCheck(autoMemFilePath(e));
-  let r = (i) =>
-    i.endsWith(".md") &&
-    (isAutoMemPathSafeForCarveout(i) || isAutoMemPathSafeForCarveout(normalizeInternalPathRoot(i)));
-  return !hasAutoMemPathOverride() && pathsForPermissionCheck.every(r)
+  let pathsForPermissionCheck = getPathsForPermissionCheck(autoMemFilePath(documentPath));
+  let isCarveoutSafe = (pathSpelling) =>
+    pathSpelling.endsWith(".md") &&
+    (isAutoMemPathSafeForCarveout(pathSpelling) ||
+      isAutoMemPathSafeForCarveout(normalizeInternalPathRoot(pathSpelling)));
+  return !hasAutoMemPathOverride() && pathsForPermissionCheck.every(isCarveoutSafe)
     ? null
-    : (pathsForPermissionCheck.at(-1) ?? autoMemFilePath(e));
+    : (pathsForPermissionCheck.at(-1) ?? autoMemFilePath(documentPath));
 }
 //@ chunk-a477qqne.js:48615-52608 placement
 /**
  * memory_write 工具：保存文档到记忆存储（版本控制）。
  */
-var MemoryWriteTool = buildTool({
-  name: MEMORY_WRITE,
-  searchHint: "save a document to a memory store",
-  shouldDefer: false,
-  backgrounding: "never",
-  maxResultSizeChars: 1 / 0,
-  async description() {
-    return MEMORY_WRITE_DESCRIPTION;
-  },
-  async prompt() {
-    return joined_3;
-  },
-  get inputSchema() {
-    return MemoryWriteInputSchema();
-  },
-  get outputSchema() {
-    return memoryWriteOutputSchema();
-  },
-  userFacingName() {
-    return MEMORY_WRITE;
-  },
-  isEnabled() {
-    return areMemoryToolsEnabled();
-  },
-  toAutoClassifierInput(e) {
-    let n = normalizePathPrefix(e.path);
-    let r = e.store === PERSONAL ? memoryWritePermissionPath(n) : null;
-    let s =
-      r === null
-        ? ""
-        : ` (stores to ${replaceControlChars(r)}, outside the memory directory Claude Code saves to without asking)`;
-    return `write ${e.store}:${n}${s}: ${normalizeMemoryText(e.content)}`;
-  },
-  renderToolUseMessage(e, { verbose }) {
-    let r = typeof e.path === "string" ? normalizePathPrefix(e.path) : undefined;
-    return verbose && typeof e.content === "string"
-      ? joinPrintable(e.store, r, `\u2190 "${previewMemoryText(e.content)}"`)
-      : joinPrintable(e.store, r);
-  },
-  extractSearchText(e) {
-    return e.outcome === "ok"
-      ? [formatWriteResult(e), ...quoteLines(e.content ?? "")].join(`
+var MemoryWriteTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-a477qqne.js:48615", () => {
+  MemoryWriteTool = buildTool({
+    name: MEMORY_WRITE,
+    searchHint: "save a document to a memory store",
+    shouldDefer: false,
+    backgrounding: "never",
+    maxResultSizeChars: 1 / 0,
+    async description() {
+      return MEMORY_WRITE_DESCRIPTION;
+    },
+    async prompt() {
+      return joined_3;
+    },
+    get inputSchema() {
+      return MemoryWriteInputSchema();
+    },
+    get outputSchema() {
+      return memoryWriteOutputSchema();
+    },
+    userFacingName() {
+      return MEMORY_WRITE;
+    },
+    isEnabled() {
+      return areMemoryToolsEnabled();
+    },
+    toAutoClassifierInput(input) {
+      let normalizedPath = normalizePathPrefix(input.path);
+      let outsidePath = input.store === PERSONAL ? memoryWritePermissionPath(normalizedPath) : null;
+      let outsideSuffix =
+        outsidePath === null
+          ? ""
+          : ` (stores to ${replaceControlChars(outsidePath)}, outside the memory directory Claude Code saves to without asking)`;
+      return `write ${input.store}:${normalizedPath}${outsideSuffix}: ${normalizeMemoryText(input.content)}`;
+    },
+    renderToolUseMessage(input, { verbose }) {
+      let normalizedPath = typeof input.path === "string" ? normalizePathPrefix(input.path) : undefined;
+      return verbose && typeof input.content === "string"
+        ? joinPrintable(input.store, normalizedPath, `\u2190 "${previewMemoryText(input.content)}"`)
+        : joinPrintable(input.store, normalizedPath);
+    },
+    extractSearchText(result) {
+      return result.outcome === "ok"
+        ? [formatWriteResult(result), ...quoteLines(result.content ?? "")].join(`
 `)
-      : "";
-  },
-  getActivityDescription(e) {
-    return e?.path ? `Saving memory ${joinPrintable(e.path)}` : "Saving memory";
-  },
-  create(e) {
-    return {
-      async checkPermissions(n) {
-        let mode = e.permissions().mode;
-        let s = n.store === PERSONAL;
-        let i = normalizePathPrefix(n.path);
-        let d = s ? memoryWritePermissionPath(i) : null;
-        if (mode === "auto")
-          return s && d === null
-            ? {
-                behavior: "allow",
-                updatedInput: n,
-                decisionReason: {
-                  type: "other",
-                  reason: AUTO_MEM_WRITE_ALLOW_REASON,
-                },
-              }
-            : {
-                behavior: "passthrough",
-                message: s
-                  ? "Saving this memory document requires classifier review."
-                  : "Saving a shared memory document requires classifier review.",
-              };
-        if (d !== null) {
-          let reason = `${mode === "plan" ? "You are in plan mode, and this" : "This"} personal memory save falls outside the memory directory Claude Code saves to without asking \u2014 it would be stored at ${replaceControlChars(d)}`;
+        : "";
+    },
+    getActivityDescription(input) {
+      return input?.path ? `Saving memory ${joinPrintable(input.path)}` : "Saving memory";
+    },
+    create(toolContext) {
+      return {
+        async checkPermissions(input) {
+          let mode = toolContext.permissions().mode;
+          let isPersonal = input.store === PERSONAL;
+          let normalizedPath = normalizePathPrefix(input.path);
+          let outsidePath = isPersonal ? memoryWritePermissionPath(normalizedPath) : null;
+          if (mode === "auto")
+            return isPersonal && outsidePath === null
+              ? {
+                  behavior: "allow",
+                  updatedInput: input,
+                  decisionReason: {
+                    type: "other",
+                    reason: AUTO_MEM_WRITE_ALLOW_REASON,
+                  },
+                }
+              : {
+                  behavior: "passthrough",
+                  message: isPersonal
+                    ? "Saving this memory document requires classifier review."
+                    : "Saving a shared memory document requires classifier review.",
+                };
+          if (outsidePath !== null) {
+            let reason = `${mode === "plan" ? "You are in plan mode, and this" : "This"} personal memory save falls outside the memory directory Claude Code saves to without asking \u2014 it would be stored at ${replaceControlChars(outsidePath)}`;
+            return {
+              behavior: "ask",
+              message: `Save ${joinPrintable(normalizedPath)} in your personal memory store?${mode === "plan" ? " You are in plan mode." : ""}`,
+              decisionReason: {
+                type: "safetyCheck",
+                reason,
+                classifierApprovable: false,
+              },
+            };
+          }
+          if (mode === "plan")
+            return {
+              behavior: "ask",
+              message: `Save ${joinPrintable(normalizedPath)} in ${isPersonal ? "your personal memory store" : "the shared memory store"}? You are in plan mode.`,
+              decisionReason: {
+                type: "mode",
+                mode: "plan",
+              },
+            };
           return {
-            behavior: "ask",
-            message: `Save ${joinPrintable(i)} in your personal memory store?${mode === "plan" ? " You are in plan mode." : ""}`,
-            decisionReason: {
-              type: "safetyCheck",
-              reason,
-              classifierApprovable: false,
-            },
+            behavior: "allow",
+            updatedInput: input,
           };
-        }
-        if (mode === "plan")
-          return {
-            behavior: "ask",
-            message: `Save ${joinPrintable(i)} in ${s ? "your personal memory store" : "the shared memory store"}? You are in plan mode.`,
-            decisionReason: {
-              type: "mode",
-              mode: "plan",
-            },
-          };
-        return {
-          behavior: "allow",
-          updatedInput: n,
-        };
-      },
-      async call({ store, path, content, if_version: ifVersion }, { signal, remoteCall }) {
-        let h = normalizeMemoryText(content);
-        let y = normalizePathPrefix(path);
-        let memoryStore = resolveMemoryStore({
-          storeId: store,
-          write: true,
-        });
-        if (memoryStore.outcome === "refused") {
-          logMemoryToolSad("write", `refused_${memoryStore.reason}`);
-          return {
-            data: {
-              outcome: "refused",
-              path: y,
-              reason: memoryStore.reason,
-              message: memoryStore.message,
-            },
-            ...memoryUnavailableRemedy(memoryStore),
-          };
-        }
-        let { kind } = memoryStore.served;
-        let S = kind === "personal" ? await mapToMirrorPath(autoMemFilePath(y)) : undefined;
-        let v = S !== undefined ? normalizeMemoryText(prepareContent(S, h)) : h;
-        let I =
-          checkAbsoluteMemoryPath(path, memoryStore.served.promptIndex) ??
-          validateMemoryPath(y, {
-            rejectUnsafeSegments: true,
-          }) ??
-          checkPersonalMemoryPath(kind, y) ??
-          checkMemoryContent(v) ??
-          checkTeamMemSecrets(`${y}
-${v}`);
-        if (I) {
-          logMemoryToolSad("write", `refused_${I.reason}`, kind);
-          return {
-            data: {
-              outcome: "refused",
-              path: y,
-              reason: I.reason,
-              message: I.message,
-            },
-          };
-        }
-        let { backend } = memoryStore;
-        let T = parseIfVersion(ifVersion);
-        try {
-          let memoryEntry = await findMemoryEntry(backend, y, {
-            signal,
+        },
+        async call({ store, path, content, if_version: ifVersion }, { signal, remoteCall }) {
+          let normalizedContent = normalizeMemoryText(content);
+          let normalizedPath = normalizePathPrefix(path);
+          let memoryStore = resolveMemoryStore({
+            storeId: store,
+            write: true,
           });
-          if (signal.aborted) throw new AbortError();
-          let R =
-            S !== undefined
-              ? await readMemoryForWrite(e, S, h, memoryEntry?.content ?? null, remoteCall !== undefined)
-              : undefined;
-          logMemoryItemBlock(R?.sharedItemBlock, kind === "personal" ? "team" : "shared_store");
-          let content = R?.content ?? v;
-          let C =
-            content === v
-              ? undefined
-              : (checkMemoryContent(content) ??
-                checkTeamMemSecrets(`${y}
-${content}`));
-          if (C) {
-            logMemoryToolSad("write", `refused_${C.reason}`, kind);
+          if (memoryStore.outcome === "refused") {
+            logMemoryToolSad("write", `refused_${memoryStore.reason}`);
             return {
               data: {
                 outcome: "refused",
-                path: y,
-                reason: C.reason,
-                message: C.message,
+                path: normalizedPath,
+                reason: memoryStore.reason,
+                message: memoryStore.message,
               },
+              ...memoryUnavailableRemedy(memoryStore),
             };
           }
-          let O = async (x) => {
-            if (x.outcome === "ok") {
-              logMemoryToolOk("write", kind, x.op);
-              if (R !== undefined)
-                await noteMemoryItemWritten(S ?? autoMemFilePath(y), content, R.item, R.rev);
-            }
+          let { kind } = memoryStore.served;
+          let mirrorPath =
+            kind === "personal" ? await mapToMirrorPath(autoMemFilePath(normalizedPath)) : undefined;
+          let contentToWrite =
+            mirrorPath !== undefined
+              ? normalizeMemoryText(prepareContent(mirrorPath, normalizedContent))
+              : normalizedContent;
+          let refusal =
+            checkAbsoluteMemoryPath(path, memoryStore.served.promptIndex) ??
+            validateMemoryPath(normalizedPath, {
+              rejectUnsafeSegments: true,
+            }) ??
+            checkPersonalMemoryPath(kind, normalizedPath) ??
+            checkMemoryContent(contentToWrite) ??
+            checkTeamMemSecrets(`${normalizedPath}
+${contentToWrite}`);
+          if (refusal) {
+            logMemoryToolSad("write", `refused_${refusal.reason}`, kind);
             return {
               data: {
-                ...x,
-                store_kind: kind,
+                outcome: "refused",
+                path: normalizedPath,
+                reason: refusal.reason,
+                message: refusal.message,
               },
             };
-          };
-          switch (T.kind) {
-            case "malformed":
-              return O(invalidVersionResult(y, T.raw, memoryEntry));
-            case "create":
-              return O(
-                memoryEntry === null
-                  ? await createMemoryDoc(backend, y, content, signal)
-                  : versionNewOnExisting(y, memoryEntry),
-              );
-            case "compare": {
-              if (memoryEntry === null) return O(missingPathResult(y));
-              return O(
-                memoryVersionHash(memoryEntry.content) === T.token
-                  ? await updateMemoryDocument(backend, y, content, memoryEntry, signal)
-                  : staleVersionResult(y, memoryEntry, T.token),
-              );
-            }
           }
-        } catch (error) {
-          if (signal.aborted) throw new AbortError();
-          let R = logMemoryErrorResult("write", error);
+          let { backend } = memoryStore;
+          let parsedVersion = parseIfVersion(ifVersion);
+          try {
+            let memoryEntry = await findMemoryEntry(backend, normalizedPath, {
+              signal,
+            });
+            if (signal.aborted) throw new AbortError();
+            let memoryWrite =
+              mirrorPath !== undefined
+                ? await readMemoryForWrite(
+                    toolContext,
+                    mirrorPath,
+                    normalizedContent,
+                    memoryEntry?.content ?? null,
+                    remoteCall !== undefined,
+                  )
+                : undefined;
+            logMemoryItemBlock(memoryWrite?.sharedItemBlock, kind === "personal" ? "team" : "shared_store");
+            let content = memoryWrite?.content ?? contentToWrite;
+            let adjustedRefusal =
+              content === contentToWrite
+                ? undefined
+                : (checkMemoryContent(content) ??
+                  checkTeamMemSecrets(`${normalizedPath}
+${content}`));
+            if (adjustedRefusal) {
+              logMemoryToolSad("write", `refused_${adjustedRefusal.reason}`, kind);
+              return {
+                data: {
+                  outcome: "refused",
+                  path: normalizedPath,
+                  reason: adjustedRefusal.reason,
+                  message: adjustedRefusal.message,
+                },
+              };
+            }
+            let finishResult = async (writeResult) => {
+              if (writeResult.outcome === "ok") {
+                logMemoryToolOk("write", kind, writeResult.op);
+                if (memoryWrite !== undefined)
+                  await noteMemoryItemWritten(
+                    mirrorPath ?? autoMemFilePath(normalizedPath),
+                    content,
+                    memoryWrite.item,
+                    memoryWrite.rev,
+                  );
+              }
+              return {
+                data: {
+                  ...writeResult,
+                  store_kind: kind,
+                },
+              };
+            };
+            switch (parsedVersion.kind) {
+              case "malformed":
+                return finishResult(invalidVersionResult(normalizedPath, parsedVersion.raw, memoryEntry));
+              case "create":
+                return finishResult(
+                  memoryEntry === null
+                    ? await createMemoryDoc(backend, normalizedPath, content, signal)
+                    : versionNewOnExisting(normalizedPath, memoryEntry),
+                );
+              case "compare": {
+                if (memoryEntry === null) return finishResult(missingPathResult(normalizedPath));
+                return finishResult(
+                  memoryVersionHash(memoryEntry.content) === parsedVersion.token
+                    ? await updateMemoryDocument(backend, normalizedPath, content, memoryEntry, signal)
+                    : staleVersionResult(normalizedPath, memoryEntry, parsedVersion.token),
+                );
+              }
+            }
+          } catch (error) {
+            if (signal.aborted) throw new AbortError();
+            let errorResult = logMemoryErrorResult("write", error);
+            return {
+              data: {
+                outcome: "failed",
+                path: normalizedPath,
+                reason: errorResult.reason,
+                message: errorResult.message,
+              },
+            };
+          }
+        },
+      };
+    },
+    mapToolResultToToolResultBlockParam(result, toolUseId) {
+      switch (result.outcome) {
+        case "ok":
           return {
-            data: {
-              outcome: "failed",
-              path: y,
-              reason: R.reason,
-              message: R.message,
-            },
+            tool_use_id: toolUseId,
+            type: "tool_result",
+            content: formatWriteResult(result) + VERSION_FOLLOWUP_NOTE,
           };
-        }
-      },
-    };
-  },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
-    switch (e.outcome) {
-      case "ok":
-        return {
-          tool_use_id: toolUseId,
-          type: "tool_result",
-          content: formatWriteResult(e) + VERSION_FOLLOWUP_NOTE,
-        };
-      case "conflict":
-        return {
-          tool_use_id: toolUseId,
-          type: "tool_result",
-          is_error: true,
-          content:
-            e.currentContent === undefined
-              ? (e.message ?? `${MEMORY_WRITE} conflict`)
-              : `${e.message ?? `${MEMORY_WRITE} conflict`}
-${memoryStoreNote(e.store_kind)}
+        case "conflict":
+          return {
+            tool_use_id: toolUseId,
+            type: "tool_result",
+            is_error: true,
+            content:
+              result.currentContent === undefined
+                ? (result.message ?? `${MEMORY_WRITE} conflict`)
+                : `${result.message ?? `${MEMORY_WRITE} conflict`}
+${memoryStoreNote(result.store_kind)}
 ---
-${e.currentContent}`,
-        };
-      case "missing":
-        return {
-          tool_use_id: toolUseId,
-          type: "tool_result",
-          is_error: true,
-          content: `${MEMORY_WRITE} failed: "${e.path}" does not exist in the memory store. Pass if_version=new to create it.`,
-        };
-      case "refused":
-      case "failed":
-        return {
-          tool_use_id: toolUseId,
-          type: "tool_result",
-          is_error: true,
-          content: e.message ?? `${MEMORY_WRITE} failed: ${e.reason}`,
-        };
-    }
-  },
+${result.currentContent}`,
+          };
+        case "missing":
+          return {
+            tool_use_id: toolUseId,
+            type: "tool_result",
+            is_error: true,
+            content: `${MEMORY_WRITE} failed: "${result.path}" does not exist in the memory store. Pass if_version=new to create it.`,
+          };
+        case "refused":
+        case "failed":
+          return {
+            tool_use_id: toolUseId,
+            type: "tool_result",
+            is_error: true,
+            content: result.message ?? `${MEMORY_WRITE} failed: ${result.reason}`,
+          };
+      }
+    },
+  });
 });
 export {
   validateMemoryPath,

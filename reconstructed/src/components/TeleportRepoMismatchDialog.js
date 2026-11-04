@@ -8,7 +8,7 @@
  * pieces: chunk-s1ks86z4.js (3)
  * attribution: sole-consumer 2, fingerprint 1
  */
-import { init_react_production, y } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState } from "../../vendor/react/cjs/react.production.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -16,7 +16,7 @@ import {
 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { OrderedListWithItem } from "./CustomSelect/selectTable.js";
 import { getDisplayPath } from "../utils/file.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { validateRepoAtPath, removePathFromRepo } from "../utils/githubRepoPathMapping.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { ErrorText } from "./ErrorText.js";
@@ -26,22 +26,22 @@ import { Dialog } from "./design-system/Dialog.js";
 //@ chunk-s1ks86z4.js:14448-14452 sole-consumer
 init_react_production();
 //@ chunk-s1ks86z4.js:14452-14500 sole-consumer
-function renderRepoItem(E) {
+function renderRepoItem(path) {
   return jsxProd_default(
     OrderedListWithItem.Item,
     {
-      label: getDisplayPath(E),
+      label: getDisplayPath(path),
     },
-    E,
+    path,
   );
 }
 //@ chunk-s1ks86z4.js:14500-15718 fingerprint = TeleportRepoMismatchDialog (0.688)
 function TeleportRepoMismatchDialog(props) {
-  let $ = w(15);
+  let $ = useMemoCache(15);
   let { targetRepo, initialPaths, onSelectPath, onCancel, storageV5 } = props;
-  let [availablePaths, setAvailablePaths] = y(initialPaths);
-  let [errorMessage, setErrorMessage] = y(null);
-  let [validating, setValidating] = y(false);
+  let [availablePaths, setAvailablePaths] = useState(initialPaths);
+  let [errorMessage, setErrorMessage] = useState(null);
+  let [validating, setValidating] = useState(false);
   let t1;
   if ($[0] !== availablePaths || $[1] !== onSelectPath || $[2] !== storageV5 || $[3] !== targetRepo) {
     t1 = async (value) => {
@@ -109,12 +109,12 @@ function TeleportRepoMismatchDialog(props) {
                   })
                 : jsxProd_default_2(OrderedListWithItem, {
                     onSelect: (value_0) => {
-                      let B = availablePaths[value_0];
-                      if (B === undefined) {
+                      let selectedPath = availablePaths[value_0];
+                      if (selectedPath === undefined) {
                         onCancel();
                         return;
                       }
-                      handleChange(B);
+                      handleChange(selectedPath);
                     },
                     children: [
                       availablePaths.map(renderRepoItem),
@@ -165,3 +165,4 @@ function TeleportRepoMismatchDialog(props) {
   } else t4 = $[14];
   return t4;
 }
+export { TeleportRepoMismatchDialog };

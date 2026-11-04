@@ -8,7 +8,7 @@
  * pieces: chunk-2m7289t6.js (3)
  * attribution: placement 3
  */
-import { Ar } from "../../../../runtime/bun-runtime.js";
+import { __export } from "../../../../runtime/bun-runtime.js";
 import { stopPeriodicGrowthBookRefresh } from "../../../services/analytics/growthbook.js";
 import { waitForOAuthRefreshLocksReleased } from "../../../utils/auth.js";
 
@@ -18,7 +18,7 @@ import { waitForOAuthRefreshLocksReleased } from "../../../utils/auth.js";
  */
 var PLUGIN_TEST_MODULE_EXPORTS = {};
 //@ chunk-2m7289t6.js:279-327 placement
-Ar(PLUGIN_TEST_MODULE_EXPORTS, {
+__export(PLUGIN_TEST_MODULE_EXPORTS, {
   default: () => PLUGIN_TEST_MODULE_EXPORTS,
   endPluginTest: () => endPluginTest,
 });
@@ -26,12 +26,12 @@ Ar(PLUGIN_TEST_MODULE_EXPORTS, {
 /**
  * plugin test 结束时释放开关保持与登录。
  */
-async function endPluginTest(e) {
+async function endPluginTest(exitCode) {
   stopPeriodicGrowthBookRefresh();
   await Promise.all(
-    [process.stdout, process.stderr].map((r) => new Promise((resolve) => r.write("", resolve))),
+    [process.stdout, process.stderr].map((stream) => new Promise((resolve) => stream.write("", resolve))),
   );
   await waitForOAuthRefreshLocksReleased();
-  process.exit(e);
+  process.exit(exitCode);
 }
-export { endPluginTest };
+export { endPluginTest, PLUGIN_TEST_MODULE_EXPORTS };

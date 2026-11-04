@@ -18,23 +18,23 @@ var LFS_NO_LOCKVERIFY_ARGS = ["-c", "lfs.locksverify=false"];
 /**
  * 导出函数 `anonCredentialHelperArgs`：参数 e，返回 credentialHelperScript("unused", e)。
  */
-function anonCredentialHelperArgs(e) {
-  return credentialHelperScript("unused", e);
+function anonCredentialHelperArgs(envVar) {
+  return credentialHelperScript("unused", envVar);
 }
 //@ chunk-t3sg9e26.js:26700-26815 placement
-function credentialHelperScript(e, n) {
-  return `!f() { if test "$1" = get; then printf 'username=${e}\\npassword=%s\\n' "$${n}"; fi; }; f`;
+function credentialHelperScript(username, envVar) {
+  return `!f() { if test "$1" = get; then printf 'username=${username}\\npassword=%s\\n' "$${envVar}"; fi; }; f`;
 }
 //@ chunk-t3sg9e26.js:26815-26861 placement
 /**
  * 导出函数 `tokenCredentialHelperArgs`：参数 e，返回 credentialHelperScript("x-access-token", e)。
  */
-function tokenCredentialHelperArgs(e) {
-  return credentialHelperScript("x-access-token", e);
+function tokenCredentialHelperArgs(envVar) {
+  return credentialHelperScript("x-access-token", envVar);
 }
 //@ chunk-t3sg9e26.js:26861-27008 placement
-function credentialHelperArgs(e) {
-  let origin = new URL(e).origin;
+function credentialHelperArgs(url) {
+  let origin = new URL(url).origin;
   return [
     "-c",
     "credential.helper=",
@@ -51,15 +51,15 @@ function httpsProxyFromEnv() {
   );
 }
 //@ chunk-t3sg9e26.js:27128-27339 placement
-function remoteProxyArgs(e) {
-  let t = ["", `${new URL(e).origin}.`, `${e}.`];
-  let r = httpsProxyFromEnv();
-  let s = r ? ["-c", `remote.origin.proxy=${r}`] : [];
-  for (let o of t) {
-    if (r) s.push("-c", `http.${o}proxy=${r}`);
-    s.push("-c", `http.${o}sslVerify=true`);
+function remoteProxyArgs(url) {
+  let scopes = ["", `${new URL(url).origin}.`, `${url}.`];
+  let proxy = httpsProxyFromEnv();
+  let args = proxy ? ["-c", `remote.origin.proxy=${proxy}`] : [];
+  for (let scope of scopes) {
+    if (proxy) args.push("-c", `http.${scope}proxy=${proxy}`);
+    args.push("-c", `http.${scope}sslVerify=true`);
   }
-  return s;
+  return args;
 }
 export {
   anonCredentialHelperArgs,

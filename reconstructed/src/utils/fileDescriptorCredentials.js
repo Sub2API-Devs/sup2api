@@ -23,10 +23,10 @@ import { errorMessage } from "./errors.js";
 /**
  * 从文件描述符预读凭据（CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR 等），失败不致命。
  */
-async function primeFileDescriptorCredentials(credentials, r = {}) {
+async function primeFileDescriptorCredentials(credentials, options = {}) {
   try {
     if (!isBareMode()) {
-      if (!env.CLAUDE_CODE_OAUTH_TOKEN && r.bgAuthSnapshot !== "leave")
+      if (!env.CLAUDE_CODE_OAUTH_TOKEN && options.bgAuthSnapshot !== "leave")
         await openCredentialPathPolicy(credentials);
       await getOAuthTokenFromFileDescriptor_2(credentials);
       await getApiKeyFromFileDescriptor_2(credentials);

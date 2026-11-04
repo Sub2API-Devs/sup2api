@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint+context 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:392734-394033 cjs-fingerprint+context
-var require_rib = x(function (cjsExports, cjsModule) {
+var require_rib = __commonJS(function (cjsExports, cjsModule) {
   function rib(hljs) {
     return {
       name: "RenderMan RIB",

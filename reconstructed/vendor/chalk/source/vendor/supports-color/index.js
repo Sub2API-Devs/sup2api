@@ -11,8 +11,8 @@ import tty from "tty";
 import { assembleStyles } from "../ansi-styles/index.js";
 
 //@ chunk-4ymxyb4g.js:2723-2737 esm-layout
-var D = assembleStyles();
-var h = D;
+var ansiStyles = assembleStyles();
+var ansiStylesAlias = ansiStyles;
 //@ chunk-4ymxyb4g.js:2797-2970 esm-fingerprint
 function hasFlag(flag, argv = globalThis.Deno ? globalThis.Deno.args : v.argv) {
   let prefix = flag.startsWith("-") ? "" : flag.length === 1 ? "-" : "--";
@@ -112,4 +112,4 @@ var supportsColor = {
   }),
 };
 var supportsColor_default = supportsColor;
-export { supportsColor_default, h };
+export { supportsColor_default, ansiStylesAlias };

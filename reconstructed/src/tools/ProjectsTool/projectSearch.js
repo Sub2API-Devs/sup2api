@@ -73,52 +73,52 @@ import { raceWithAbortSignal } from "../../utils/sleep.js";
  * Projects 工具按 method 分派到 info/read/search/write/delete/memory 等具体实现。
  */
 async function runProjectsMethod(
-  e,
+  input,
   projectUuid,
   session,
   signal,
   storageV5,
   credentials,
-  w,
-  m,
-  y,
+  nameMatcher,
+  getTokenBudget,
+  formatLongLineNote,
   permissions,
-  x,
-  b,
-  L,
-  W,
+  host,
+  readFileState,
+  findDocInView,
+  getProjectInfo,
 ) {
-  let V = isSessionJwtAuth();
-  switch (e.method) {
+  let isBridge = isSessionJwtAuth();
+  switch (input.method) {
     case "project_info": {
       let projectDetail = await getProjectDetail(projectUuid, signal, credentials);
       return {
         method: "project_info",
-        ...(await W(projectDetail)),
-        docs: projectDetail.documents.flatMap((S) =>
-          S.file_name !== null
+        ...(await getProjectInfo(projectDetail)),
+        docs: projectDetail.documents.flatMap((doc) =>
+          doc.file_name !== null
             ? [
                 {
-                  path: S.file_name,
-                  created_at: S.created_at ?? null,
+                  path: doc.file_name,
+                  created_at: doc.created_at ?? null,
                 },
               ]
             : [],
         ),
-        files: (projectDetail.files ?? []).flatMap((S) =>
-          S.file_name !== null
+        files: (projectDetail.files ?? []).flatMap((file) =>
+          file.file_name !== null
             ? [
                 {
-                  path: S.file_name,
-                  file_kind: S.file_kind,
-                  created_at: S.created_at ?? null,
+                  path: file.file_name,
+                  file_kind: file.file_kind,
+                  created_at: file.created_at ?? null,
                 },
               ]
             : [],
         ),
-        sync_sources: (projectDetail.sync_sources ?? []).map((S) => ({
-          type: S.type,
-          config: S.config,
+        sync_sources: (projectDetail.sync_sources ?? []).map((source) => ({
+          type: source.type,
+          config: source.config,
         })),
         knowledge: {
           knowledge_size: projectDetail.knowledge_stats.knowledge_size,
@@ -127,15 +127,20 @@ async function runProjectsMethod(
       };
     }
     case "project_read": {
-      let R = requireField(e.path, "path", e.method);
+      let docPath = requireField(input.path, "path", input.method);
       let projectDetail = await getProjectDetail(projectUuid, signal, credentials);
-      let O = matchUnicodeName(R, [...projectDocNames(projectDetail), ...projectFileNames(projectDetail)], w);
-      let projectDoc = findProjectDoc(projectDetail, O);
+      let resolvedName = matchUnicodeName(
+        docPath,
+        [...projectDocNames(projectDetail), ...projectFileNames(projectDetail)],
+        nameMatcher,
+      );
+      let projectDoc = findProjectDoc(projectDetail, resolvedName);
       if (!projectDoc) {
-        let projectFile = findProjectFile(projectDetail, O);
-        if (!projectFile) throw notFoundInProjectText(projectDetail, O, e.method);
-        let q = projectFile.file_kind === "document" && e.original === true && isLocalUploadsEnabled();
-        if (projectFile.file_kind === "document" && !q) {
+        let projectFile = findProjectFile(projectDetail, resolvedName);
+        if (!projectFile) throw notFoundInProjectText(projectDetail, resolvedName, input.method);
+        let wantOriginal =
+          projectFile.file_kind === "document" && input.original === true && isLocalUploadsEnabled();
+        if (projectFile.file_kind === "document" && !wantOriginal) {
           let projectFileText = await readProjectFileText(
             projectUuid,
             projectFile.file_uuid,
@@ -144,7 +149,7 @@ async function runProjectsMethod(
           );
           if (projectFileText.file_kind === "document" && projectFileText.content.trim() !== "")
             return readProjectDocContent(
-              O,
+              resolvedName,
               projectFileText.content,
               projectFile.file_uuid,
               session,
@@ -153,16 +158,25 @@ async function runProjectsMethod(
                 created_at: projectFileText.created_at ?? null,
               },
               storageV5,
-              m(),
+              getTokenBudget(),
               null,
-              y,
+              formatLongLineNote,
             );
         }
-        return projectReadMethod(projectUuid, O, projectFile, session, signal, storageV5, credentials, q);
+        return projectReadMethod(
+          projectUuid,
+          resolvedName,
+          projectFile,
+          session,
+          signal,
+          storageV5,
+          credentials,
+          wantOriginal,
+        );
       }
       let projectDoc_2 = await readProjectDoc(projectUuid, projectDoc.uuid, signal, credentials);
       return readProjectDocContent(
-        O,
+        resolvedName,
         projectDoc_2.content,
         projectDoc.uuid,
         session,
@@ -170,21 +184,27 @@ async function runProjectsMethod(
           created_at: projectDoc_2.created_at ?? null,
         },
         storageV5,
-        m(),
+        getTokenBudget(),
         projectDoc_2.estimated_token_count,
-        y,
+        formatLongLineNote,
         docVersionsOffered() ? computeContentHash(projectDoc_2.content) : undefined,
       );
     }
     case "project_search": {
-      let R = requireField(e.query, "query", e.method);
-      let S = e.n ?? 5;
+      let query = requireField(input.query, "query", input.method);
+      let maxResults = input.n ?? 5;
       try {
-        let O = await searchProjectKnowledge(projectUuid, R, S, signal, credentials);
+        let searchResponse = await searchProjectKnowledge(
+          projectUuid,
+          query,
+          maxResults,
+          signal,
+          credentials,
+        );
         return {
           method: "project_search",
           rag: true,
-          hits: extractSearchResults(O),
+          hits: extractSearchResults(searchResponse),
         };
       } catch (error) {
         if (error instanceof ProjectsApiError && error.status === 403) {
@@ -199,13 +219,13 @@ async function runProjectsMethod(
       }
     }
     case "project_write": {
-      let R = requireField(e.path, "path", e.method);
+      let docPath = requireField(input.path, "path", input.method);
       let content =
-        e.local_path !== undefined
-          ? x !== undefined
-            ? await readLocalPathForWrite(e.local_path, x, permissions(), signal)
-            : await writeFromLocalUploads(e.local_path, permissions, b)
-          : requireField(e.content, "content", e.method);
+        input.local_path !== undefined
+          ? host !== undefined
+            ? await readLocalPathForWrite(input.local_path, host, permissions(), signal)
+            : await writeFromLocalUploads(input.local_path, permissions, readFileState)
+          : requireField(input.content, "content", input.method);
       if (content.includes("\x00"))
         throw preconditionError(
           "Write refused; nothing in the project was changed. The content contains NUL bytes, which project docs cannot store (usually a binary or UTF-16 file). Convert it to UTF-8 text (re-encode UTF-16, extract the text from a binary, or remove the NUL bytes), then write again.",
@@ -213,41 +233,43 @@ async function runProjectsMethod(
         );
       let projectDetail = await getProjectDetail(projectUuid, signal, credentials);
       let { path, listed } = resolveListedPath(
-        R,
+        docPath,
         projectDocNames(projectDetail),
         projectFileNames(projectDetail),
-        w,
+        nameMatcher,
       );
       let projectDoc = findProjectDoc(projectDetail, listed);
       if (!projectDoc)
         assertKnowledgeCapacity(projectDetail.knowledge_stats, Buffer.byteLength(content, "utf8"));
       if (
         projectDoc &&
-        e.local_path === undefined &&
-        L !== undefined &&
+        input.local_path === undefined &&
+        findDocInView !== undefined &&
         getFeatureValue_CACHED_MAY_BE_STALE("tengu_lovely_rain", false)
       ) {
-        let te = await readProjectDoc(projectUuid, projectDoc.uuid, signal, credentials).catch((error) => {
-          throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `Write not done; nothing in the project was changed. Before it replaces a doc, this tool reads the doc's current text, and that read failed: ${errorMessage(error).replace(/[.\s]*$/, "")}. Try the same write once more. Do not delete the doc to retry: this tool cannot undo a delete. If it fails again, tell the user that the content was not saved, and offer it to them another way.`,
-            "project_write could not read the doc it would replace",
-          );
-        });
-        let Z = L(te.content);
-        let ne = Buffer.byteLength(te.content, "utf8");
-        let ke = Buffer.byteLength(content, "utf8");
+        let existingDoc = await readProjectDoc(projectUuid, projectDoc.uuid, signal, credentials).catch(
+          (error) => {
+            throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+              `Write not done; nothing in the project was changed. Before it replaces a doc, this tool reads the doc's current text, and that read failed: ${errorMessage(error).replace(/[.\s]*$/, "")}. Try the same write once more. Do not delete the doc to retry: this tool cannot undo a delete. If it fails again, tell the user that the content was not saved, and offer it to them another way.`,
+              "project_write could not read the doc it would replace",
+            );
+          },
+        );
+        let viewCheck = findDocInView(existingDoc.content);
+        let oldBytes = Buffer.byteLength(existingDoc.content, "utf8");
+        let newBytes = Buffer.byteLength(content, "utf8");
         logEvent("tengu_projects_write_text_in_view", {
-          outcome: fromEnum(Z.inView ? "in_view" : "not_in_view"),
-          found_in: fromEnum(Z.foundIn),
-          shrank: 4 * ke < 3 * ne,
-          old_bytes: ne,
-          new_bytes: ke,
-          via_ccr_bridge: V,
+          outcome: fromEnum(viewCheck.inView ? "in_view" : "not_in_view"),
+          found_in: fromEnum(viewCheck.foundIn),
+          shrank: 4 * newBytes < 3 * oldBytes,
+          old_bytes: oldBytes,
+          new_bytes: newBytes,
+          via_ccr_bridge: isBridge,
         });
-        if (!Z.inView)
+        if (!viewCheck.inView)
           throw new ProjectsPreconditionError(PROJECT_UNCERTAIN_WRITE_TEXT, "write_over_a_doc_not_in_view");
       }
-      let q = await (
+      let savedDoc = await (
         projectDoc
           ? fetchProjectWithFallback(
               projectUuid,
@@ -255,10 +277,10 @@ async function runProjectsMethod(
               listed,
               content,
               signal,
-              V,
+              isBridge,
               credentials,
-              e.if_version,
-              e.local_path === undefined && getFeatureValue_CACHED_MAY_BE_STALE("tengu_toasty_owl", false)
+              input.if_version,
+              input.local_path === undefined && getFeatureValue_CACHED_MAY_BE_STALE("tengu_toasty_owl", false)
                 ? MAX_PROJECT_FILE_CHUNK_BYTES
                 : undefined,
             )
@@ -266,119 +288,125 @@ async function runProjectsMethod(
               throw new ProjectSaveError(error, "no_doc");
             })
       ).finally(forgetKeptProjectDetail);
-      let G = {
+      let writeResult = {
         method: "project_write",
         path,
-        doc_uuid: q.uuid,
+        doc_uuid: savedDoc.uuid,
         ...(docVersionsOffered() && {
           version: computeContentHash(content),
         }),
         replaced: projectDoc !== undefined,
-        present_to_user: e.present_to_user ?? false,
-        ...(e.local_path !== undefined
+        present_to_user: input.present_to_user ?? false,
+        ...(input.local_path !== undefined
           ? {
-              local_path: resolveLocalPath(e.local_path),
+              local_path: resolveLocalPath(input.local_path),
             }
           : {}),
       };
       if (projectDoc && docVersionsOffered())
         logFeatureOk("projects_tool_if_version", {
-          sent: e.if_version !== undefined,
+          sent: input.if_version !== undefined,
         });
-      if (e.local_path !== undefined)
-        logWriteByLocalPath("saved", x, {
+      if (input.local_path !== undefined)
+        logWriteByLocalPath("saved", host, {
           replaced: projectDoc !== undefined,
           savedBytes: Buffer.byteLength(content, "utf8"),
         });
-      return G;
+      return writeResult;
     }
     case "project_delete": {
-      let R = requireField(e.path, "path", e.method);
+      let docPath = requireField(input.path, "path", input.method);
       let projectDetail = await getProjectDetail(projectUuid, signal, credentials);
-      let respelledName = resolveRespelledName(
-        R,
+      let fileName = resolveRespelledName(
+        docPath,
         [...projectDocNames(projectDetail), ...projectFileNames(projectDetail)],
         ["NFD"],
-        w,
+        nameMatcher,
       );
-      let projectDoc = findProjectDoc(projectDetail, respelledName);
+      let projectDoc = findProjectDoc(projectDetail, fileName);
       if (!projectDoc) {
-        if (findProjectFile(projectDetail, respelledName))
+        if (findProjectFile(projectDetail, fileName))
           throw Error(
-            `"${safeInline(R)}" is a file upload; project_delete only removes text docs. File uploads can be removed from the project in claude.ai.`,
+            `"${safeInline(docPath)}" is a file upload; project_delete only removes text docs. File uploads can be removed from the project in claude.ai.`,
           );
-        throw notFoundInProjectText(projectDetail, R, e.method);
+        throw notFoundInProjectText(projectDetail, docPath, input.method);
       }
       await deleteProjectDoc(projectUuid, projectDoc.uuid, signal, credentials).finally(
         forgetKeptProjectDetail,
       );
       return {
         method: "project_delete",
-        path: R,
+        path: docPath,
         deleted: true,
         notice: PROJECT_DELETE_REFUSED_TEXT,
       };
     }
     case "project_memory_list": {
-      assertProjectMemoryAvailable(V);
-      let R = await raceWithAbortSignal(
+      assertProjectMemoryAvailable(isBridge);
+      let memory = await raceWithAbortSignal(
         getProjectMemory(projectUuid, credentials),
         signal,
         () => new AbortError(),
       );
-      if (R === null)
+      if (memory === null)
         return {
           method: "project_memory_list",
           files: [],
           truncated: false,
           notice: PROJECT_MEMORY_UNAVAILABLE_TEXT,
         };
-      let sliced = R.files.slice(0, PROJECT_MEMORY_LIST_LIMIT);
-      let O = R.files.length - sliced.length;
+      let sliced = memory.files.slice(0, PROJECT_MEMORY_LIST_LIMIT);
+      let hiddenCount = memory.files.length - sliced.length;
       return {
         method: "project_memory_list",
-        files: sliced.map((z) => ({
-          path: z.path,
-          size_bytes: z.size_bytes,
-          updated_at: z.updated_at,
-          truncated: z.truncated,
+        files: sliced.map((file) => ({
+          path: file.path,
+          size_bytes: file.size_bytes,
+          updated_at: file.updated_at,
+          truncated: file.truncated,
         })),
-        truncated: O > 0 || R.truncated,
+        truncated: hiddenCount > 0 || memory.truncated,
         notice: [
           PROJECT_MEMORY_STALENESS_NOTE,
-          ...(O > 0
+          ...(hiddenCount > 0
             ? [
-                `Showing the first ${sliced.length} of ${R.files.length} memory files; there is no way to list the rest in this session.`,
+                `Showing the first ${sliced.length} of ${memory.files.length} memory files; there is no way to list the rest in this session.`,
               ]
-            : R.truncated
+            : memory.truncated
               ? ["More memory files exist than the server returned."]
               : []),
         ].join(" "),
       };
     }
     case "project_memory_read": {
-      assertProjectMemoryAvailable(V);
-      let R = requireField(e.path, "path", e.method);
-      let S = await raceWithAbortSignal(
+      assertProjectMemoryAvailable(isBridge);
+      let docPath = requireField(input.path, "path", input.method);
+      let memory = await raceWithAbortSignal(
         getProjectMemory(projectUuid, credentials),
         signal,
         () => new AbortError(),
       );
-      if (S === null) throw new ProjectsPreconditionError(PROJECT_MEMORY_UNAVAILABLE_TEXT);
-      let found = S.files.find((file) => file.path === R);
-      if (found === undefined) throw notFoundInFilesText(S, R);
-      let z = createHash("sha256").update(R).digest("hex");
-      let P = await projectTextOrDownload(found.content, "project-memory", z, session, storageV5);
+      if (memory === null) throw new ProjectsPreconditionError(PROJECT_MEMORY_UNAVAILABLE_TEXT);
+      let found = memory.files.find((file) => file.path === docPath);
+      if (found === undefined) throw notFoundInFilesText(memory, docPath);
+      let pathHash = createHash("sha256").update(docPath).digest("hex");
+      let textResult = await projectTextOrDownload(
+        found.content,
+        "project-memory",
+        pathHash,
+        session,
+        storageV5,
+      );
       return {
         method: "project_memory_read",
         path: found.path,
-        ...P,
+        ...textResult,
         size_bytes: found.size_bytes,
         updated_at: found.updated_at,
         truncated: found.truncated,
         notice: [
           PROJECT_MEMORY_STALENESS_NOTE,
-          ...("notice" in P && P.notice !== undefined ? [P.notice] : []),
+          ...("notice" in textResult && textResult.notice !== undefined ? [textResult.notice] : []),
           ...(found.truncated
             ? ["Only the first part of this file is returned: the server cut it at its size cap."]
             : []),
@@ -388,24 +416,25 @@ async function runProjectsMethod(
   }
 }
 //@ chunk-eg496hkq.js:56595-57051 placement
-function extractSearchResults(e) {
-  if (e === null || typeof e !== "object") return [];
-  let n = e;
-  let r = [];
-  for (let s of ["text_results", "rich_content_results"]) {
-    let l = n[s];
-    if (!Array.isArray(l)) continue;
-    for (let h of l) {
-      if (h === null || typeof h !== "object") continue;
-      let w = h;
-      let chunk = w.chunk !== null && typeof w.chunk === "object" ? w.chunk : undefined;
-      r.push({
-        name: typeof w.name === "string" ? w.name : undefined,
-        doc_uuid: typeof w.doc_uuid === "string" ? w.doc_uuid : undefined,
+function extractSearchResults(response) {
+  if (response === null || typeof response !== "object") return [];
+  let body = response;
+  let hits = [];
+  for (let listKey of ["text_results", "rich_content_results"]) {
+    let results = body[listKey];
+    if (!Array.isArray(results)) continue;
+    for (let entry of results) {
+      if (entry === null || typeof entry !== "object") continue;
+      let entryObject = entry;
+      let chunk =
+        entryObject.chunk !== null && typeof entryObject.chunk === "object" ? entryObject.chunk : undefined;
+      hits.push({
+        name: typeof entryObject.name === "string" ? entryObject.name : undefined,
+        doc_uuid: typeof entryObject.doc_uuid === "string" ? entryObject.doc_uuid : undefined,
         text: chunk && typeof chunk.text === "string" ? chunk.text : undefined,
       });
     }
   }
-  return r;
+  return hits;
 }
 export { runProjectsMethod };

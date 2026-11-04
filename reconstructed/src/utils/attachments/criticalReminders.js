@@ -17,45 +17,49 @@ import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 /**
  * 生成关键系统提醒附件，跳过排队命令与工具结果之后的位置。
  */
-function getCriticalReminderAttachment(e, hostStatusNudge, r, isTurnCompanion, tools) {
+function getCriticalReminderAttachment(messages, hostStatusNudge, nowMs, isTurnCompanion, tools) {
   if (!serverHasAnyTool(tools, hostStatusNudge.visibleTools)) return [];
-  let y = new Set();
-  let S;
-  let w;
-  let L;
-  for (let idx = e.length - 1; idx >= 0 && S === undefined; idx--) {
-    let Z = e[idx];
-    if (Z === undefined || isVirtualConversationMessage(Z)) continue;
-    switch (((w = Z.timestamp), Z.type)) {
+  let erroredToolUseIds = new Set();
+  let lastActivityTimestamp;
+  let lastTimestamp;
+  let lastMessageWasUser;
+  for (let idx = messages.length - 1; idx >= 0 && lastActivityTimestamp === undefined; idx--) {
+    let message = messages[idx];
+    if (message === undefined || isVirtualConversationMessage(message)) continue;
+    switch (((lastTimestamp = message.timestamp), message.type)) {
       case "attachment": {
-        let attachment = Z.attachment;
-        let ke =
+        let attachment = message.attachment;
+        let isNudgeReminder =
           attachment.type === "critical_system_reminder" && attachment.content === hostStatusNudge.text;
-        let we = attachment.type === "queued_command" && attachment.projectsUserTurn === true;
-        if (ke || we) S = Z.timestamp;
+        let isProjectsTurn = attachment.type === "queued_command" && attachment.projectsUserTurn === true;
+        if (isNudgeReminder || isProjectsTurn) lastActivityTimestamp = message.timestamp;
         break;
       }
       case "user": {
-        let Se = false;
-        if (Array.isArray(Z.message.content))
-          for (let ke of Z.message.content) {
-            if (ke.type !== "tool_result") continue;
-            Se = true;
-            if (ke.is_error === true) y.add(ke.tool_use_id);
+        let hasToolResult = false;
+        if (Array.isArray(message.message.content))
+          for (let block of message.message.content) {
+            if (block.type !== "tool_result") continue;
+            hasToolResult = true;
+            if (block.is_error === true) erroredToolUseIds.add(block.tool_use_id);
           }
-        if (Se) L ??= getToolEndsTurnKind(Z) === false;
-        else if (!isTurnCompanion(Z)) {
-          L ??= false;
-          S = Z.timestamp;
+        if (hasToolResult) lastMessageWasUser ??= getToolEndsTurnKind(message) === false;
+        else if (!isTurnCompanion(message)) {
+          lastMessageWasUser ??= false;
+          lastActivityTimestamp = message.timestamp;
         }
         break;
       }
       case "assistant": {
-        L ??= false;
-        if (!Array.isArray(Z.message.content)) break;
-        for (let Se of Z.message.content)
-          if (Se.type === "tool_use" && hostStatusNudge.visibleTools.includes(Se.name) && !y.has(Se.id))
-            S = Z.timestamp;
+        lastMessageWasUser ??= false;
+        if (!Array.isArray(message.message.content)) break;
+        for (let block of message.message.content)
+          if (
+            block.type === "tool_use" &&
+            hostStatusNudge.visibleTools.includes(block.name) &&
+            !erroredToolUseIds.has(block.id)
+          )
+            lastActivityTimestamp = message.timestamp;
         break;
       }
       case "progress":
@@ -64,11 +68,11 @@ function getCriticalReminderAttachment(e, hostStatusNudge, r, isTurnCompanion, t
       default:
     }
   }
-  if (L !== true) return [];
-  let G = r - Date.parse(S ?? w ?? "");
-  if (!(G >= hostStatusNudge.seconds * 1000)) return [];
+  if (lastMessageWasUser !== true) return [];
+  let silentMs = nowMs - Date.parse(lastActivityTimestamp ?? lastTimestamp ?? "");
+  if (!(silentMs >= hostStatusNudge.seconds * 1000)) return [];
   logFeatureOk("projects_status_nudge", {
-    silent_seconds: Math.floor(G / 1000),
+    silent_seconds: Math.floor(silentMs / 1000),
   });
   return [
     {

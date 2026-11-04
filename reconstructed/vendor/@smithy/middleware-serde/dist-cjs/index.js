@@ -5,11 +5,11 @@
  * pieces: chunk-83tv5s1x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_protocol_http } from "../../protocol-http/dist-cjs/index.js";
 
 //@ chunk-83tv5s1x.js:339-2070 cjs-fingerprint
-var require_middleware_serde = x(function (cjsExports) {
+var require_middleware_serde = __commonJS(function (cjsExports) {
   var protocolHttp = require_protocol_http();
   var deserializerMiddleware = (options, deserializer) => (next, context) => async (args) => {
     let { response } = await next(args);

@@ -8,7 +8,7 @@
  * pieces: chunk-nq7jz8ya.js (4)
  * attribution: placement 3, fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import {
   jsxProd_default,
@@ -23,7 +23,7 @@ import {
 import { fitVisibleOptionCount, useSelectWheel } from "./select.js";
 import { useMultiSelectState } from "./use-multi-select-state.js";
 import { usePasteIntoInputOption } from "./use-select-input.js";
-import { R, y } from "../../../vendor/react/cjs/react.production.js";
+import { useRef, useState } from "../../../vendor/react/cjs/react.production.js";
 import { useFocusOnMount } from "../../hooks/useFocusOnMount.js";
 import { useStrayClickGuard, useIsWithinStrayWindow } from "./strayClickGuard.js";
 import { Box, Text } from "../../ink/components/Text.js";
@@ -32,67 +32,67 @@ import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/inde
 import { SelectOption } from "./select-option.js";
 
 //@ chunk-nq7jz8ya.js:3281-3319 placement
-function optionDescription(St) {
-  return St.description;
+function optionDescription(option) {
+  return option.description;
 }
 //@ chunk-nq7jz8ya.js:3319-3334 placement
 function noop() {}
 //@ chunk-nq7jz8ya.js:3334-4044 placement
-function SelectMultiAccessible(o) {
-  let d = w(12);
+function SelectMultiAccessible(props) {
+  let $ = useMemoCache(12);
   if (useIsScreenReaderEnabled()) {
-    let u;
+    let multiSelectElement;
     if (
-      d[0] !== o.defaultValue ||
-      d[1] !== o.isDisabled ||
-      d[2] !== o.onCancel ||
-      d[3] !== o.onChange ||
-      d[4] !== o.onFocus ||
-      d[5] !== o.onSubmit ||
-      d[6] !== o.options ||
-      d[7] !== o.refuseInput ||
-      d[8] !== o.submitButtonText
+      $[0] !== props.defaultValue ||
+      $[1] !== props.isDisabled ||
+      $[2] !== props.onCancel ||
+      $[3] !== props.onChange ||
+      $[4] !== props.onFocus ||
+      $[5] !== props.onSubmit ||
+      $[6] !== props.options ||
+      $[7] !== props.refuseInput ||
+      $[8] !== props.submitButtonText
     ) {
-      u = jsxProd_default(MultiSelect, {
-        options: o.options,
-        defaultValue: o.defaultValue,
-        onChange: o.onChange,
-        onSubmit: o.onSubmit,
-        onFocus: o.onFocus,
-        onCancel: o.onCancel,
-        isDisabled: o.isDisabled,
-        submitButtonText: o.submitButtonText,
-        refuseInput: o.refuseInput,
+      multiSelectElement = jsxProd_default(MultiSelect, {
+        options: props.options,
+        defaultValue: props.defaultValue,
+        onChange: props.onChange,
+        onSubmit: props.onSubmit,
+        onFocus: props.onFocus,
+        onCancel: props.onCancel,
+        isDisabled: props.isDisabled,
+        submitButtonText: props.submitButtonText,
+        refuseInput: props.refuseInput,
       });
-      d[0] = o.defaultValue;
-      d[1] = o.isDisabled;
-      d[2] = o.onCancel;
-      d[3] = o.onChange;
-      d[4] = o.onFocus;
-      d[5] = o.onSubmit;
-      d[6] = o.options;
-      d[7] = o.refuseInput;
-      d[8] = o.submitButtonText;
-      d[9] = u;
-    } else u = d[9];
-    return u;
+      $[0] = props.defaultValue;
+      $[1] = props.isDisabled;
+      $[2] = props.onCancel;
+      $[3] = props.onChange;
+      $[4] = props.onFocus;
+      $[5] = props.onSubmit;
+      $[6] = props.options;
+      $[7] = props.refuseInput;
+      $[8] = props.submitButtonText;
+      $[9] = multiSelectElement;
+    } else multiSelectElement = $[9];
+    return multiSelectElement;
   }
-  let u;
-  if (d[10] !== o) {
-    u = jsxProd_default(SelectMulti, {
-      ...o,
+  let selectMultiElement;
+  if ($[10] !== props) {
+    selectMultiElement = jsxProd_default(SelectMulti, {
+      ...props,
     });
-    d[10] = o;
-    d[11] = u;
-  } else u = d[11];
-  return u;
+    $[10] = props;
+    $[11] = selectMultiElement;
+  } else selectMultiElement = $[11];
+  return selectMultiElement;
 }
 //@ chunk-nq7jz8ya.js:4044-8883 fingerprint = SelectMulti (0.732)
 /**
  * 多选：空格切换选中，回车提交选中集合，支持 compact 布局与可输入项。
  */
 function SelectMulti(props) {
-  let $ = w(75);
+  let $ = useMemoCache(75);
   let {
     isDisabled,
     visibleOptionCount,
@@ -112,8 +112,8 @@ function SelectMulti(props) {
     onRemoveImage,
     refuseSubmitFocus,
   } = props;
-  let i = isDisabled === undefined ? false : isDisabled;
-  let he = visibleOptionCount === undefined ? 5 : visibleOptionCount;
+  let isDisabledFlag = isDisabled === undefined ? false : isDisabled;
+  let visibleCountProp = visibleOptionCount === undefined ? 5 : visibleOptionCount;
   let t5;
   if ($[0] !== defaultValue) {
     t5 = defaultValue === undefined ? [] : defaultValue;
@@ -121,14 +121,14 @@ function SelectMulti(props) {
     $[1] = t5;
   } else t5 = $[1];
   let defaultValue_2 = t5;
-  let C = hideIndexes === undefined ? false : hideIndexes;
+  let hideIndexesFlag = hideIndexes === undefined ? false : hideIndexes;
   let any = options.some(optionDescription);
-  const visibleOptionCount_2 = fitVisibleOptionCount(he, any ? "compact-vertical" : "compact");
-  let ge;
+  const visibleOptionCount_2 = fitVisibleOptionCount(visibleCountProp, any ? "compact-vertical" : "compact");
+  let stateOptions;
   if (
     $[2] !== defaultValue_2 ||
-    $[3] !== C ||
-    $[4] !== i ||
+    $[3] !== hideIndexesFlag ||
+    $[4] !== isDisabledFlag ||
     $[5] !== onCancel ||
     $[6] !== onChange ||
     $[7] !== onDownFromLastItem ||
@@ -139,8 +139,8 @@ function SelectMulti(props) {
     $[12] !== submitButtonText ||
     $[13] !== visibleOptionCount_2
   ) {
-    ge = {
-      isDisabled: i,
+    stateOptions = {
+      isDisabled: isDisabledFlag,
       visibleOptionCount: visibleOptionCount_2,
       options,
       defaultValue: defaultValue_2,
@@ -150,12 +150,12 @@ function SelectMulti(props) {
       submitButtonText,
       onSubmit,
       onDownFromLastItem,
-      hideIndexes: C,
+      hideIndexes: hideIndexesFlag,
       refuseSubmitFocus,
     };
     $[2] = defaultValue_2;
-    $[3] = C;
-    $[4] = i;
+    $[3] = hideIndexesFlag;
+    $[4] = isDisabledFlag;
     $[5] = onCancel;
     $[6] = onChange;
     $[7] = onDownFromLastItem;
@@ -165,13 +165,13 @@ function SelectMulti(props) {
     $[11] = refuseSubmitFocus;
     $[12] = submitButtonText;
     $[13] = visibleOptionCount_2;
-    $[14] = ge;
-  } else ge = $[14];
-  let state = useMultiSelectState(ge);
+    $[14] = stateOptions;
+  } else stateOptions = $[14];
+  let state = useMultiSelectState(stateOptions);
   const focusedValue = state.isSubmitFocused ? undefined : state.focusedValue;
-  let f;
+  let pasteOptions;
   if ($[15] !== canPasteImage || $[16] !== options || $[17] !== state.focusOption || $[18] !== focusedValue) {
-    f = {
+    pasteOptions = {
       options,
       focusedValue,
       focusOption: state.focusOption,
@@ -181,73 +181,73 @@ function SelectMulti(props) {
     $[16] = options;
     $[17] = state.focusOption;
     $[18] = focusedValue;
-    $[19] = f;
-  } else f = $[19];
-  let onPaste = usePasteIntoInputOption(f);
-  let F = R(null);
-  useFocusOnMount(F, !i);
-  let [h, E] = y(false);
-  let O = userMessageBackgroundMode();
-  let inverse = !i && h && O === "inverse";
+    $[19] = pasteOptions;
+  } else pasteOptions = $[19];
+  let onPaste = usePasteIntoInputOption(pasteOptions);
+  let containerRef = useRef(null);
+  useFocusOnMount(containerRef, !isDisabledFlag);
+  let [isHovered, setIsHovered] = useState(false);
+  let backgroundMode = userMessageBackgroundMode();
+  let inverse = !isDisabledFlag && isHovered && backgroundMode === "inverse";
   let strayClickGuard = useStrayClickGuard();
   let shouldDropWheel = useIsWithinStrayWindow();
-  let Ke;
+  let wheelOptions;
   if (
-    $[20] !== i ||
+    $[20] !== isDisabledFlag ||
     $[21] !== options.length ||
     $[22] !== shouldDropWheel ||
     $[23] !== state.scrollViewport ||
     $[24] !== state.visibleFromIndex ||
     $[25] !== state.visibleToIndex
   ) {
-    Ke = {
-      isDisabled: i,
+    wheelOptions = {
+      isDisabled: isDisabledFlag,
       visibleFromIndex: state.visibleFromIndex,
       visibleToIndex: state.visibleToIndex,
       optionCount: options.length,
       scrollViewport: state.scrollViewport,
       shouldDropWheel,
     };
-    $[20] = i;
+    $[20] = isDisabledFlag;
     $[21] = options.length;
     $[22] = shouldDropWheel;
     $[23] = state.scrollViewport;
     $[24] = state.visibleFromIndex;
     $[25] = state.visibleToIndex;
-    $[26] = Ke;
-  } else Ke = $[26];
-  let selectWheel = useSelectWheel(Ke);
-  let Be;
-  if ($[27] !== i || $[28] !== strayClickGuard || $[29] !== state) {
-    Be = (Z) =>
-      i || Z.disabled === true
+    $[26] = wheelOptions;
+  } else wheelOptions = $[26];
+  let selectWheel = useSelectWheel(wheelOptions);
+  let clickHandlerCached;
+  if ($[27] !== isDisabledFlag || $[28] !== strayClickGuard || $[29] !== state) {
+    clickHandlerCached = (option) =>
+      isDisabledFlag || option.disabled === true
         ? undefined
-        : (gt) => {
-            if (strayClickGuard(gt)) {
+        : (event) => {
+            if (strayClickGuard(event)) {
               return;
             }
-            if (Z.type === "input") state.focusOption(Z.value);
-            else state.toggleValue(Z.value);
+            if (option.type === "input") state.focusOption(option.value);
+            else state.toggleValue(option.value);
           };
-    $[27] = i;
+    $[27] = isDisabledFlag;
     $[28] = strayClickGuard;
     $[29] = state;
-    $[30] = Be;
-  } else Be = $[30];
-  let ee = Be;
-  let te;
-  let oe;
-  let ie;
+    $[30] = clickHandlerCached;
+  } else clickHandlerCached = $[30];
+  let makeClickHandler = clickHandlerCached;
+  let WindowedTextComponent;
+  let BoxComponent;
+  let wheelProps;
   let children;
   let flexDirection;
   let ref;
-  let _;
+  let containerProps;
   if (
     $[31] !== canPasteImage ||
-    $[32] !== ee ||
+    $[32] !== makeClickHandler ||
     $[33] !== onPaste ||
-    $[34] !== C ||
-    $[35] !== i ||
+    $[34] !== hideIndexesFlag ||
+    $[35] !== isDisabledFlag ||
     $[36] !== onCancel ||
     $[37] !== onImagePaste ||
     $[38] !== onOpenEditor ||
@@ -258,11 +258,11 @@ function SelectMulti(props) {
     $[43] !== state
   ) {
     let maxIndexWidth = options.length.toString().length;
-    oe = Box;
+    BoxComponent = Box;
     flexDirection = "column";
-    ref = F;
-    if ($[51] !== onPaste || $[52] !== i || $[53] !== state.handleKeyDown) {
-      _ = i
+    ref = containerRef;
+    if ($[51] !== onPaste || $[52] !== isDisabledFlag || $[53] !== state.handleKeyDown) {
+      containerProps = isDisabledFlag
         ? {}
         : {
             tabIndex: 0,
@@ -270,20 +270,20 @@ function SelectMulti(props) {
             onPaste,
           };
       $[51] = onPaste;
-      $[52] = i;
+      $[52] = isDisabledFlag;
       $[53] = state.handleKeyDown;
-      $[54] = _;
-    } else _ = $[54];
-    te = WindowedText;
-    ie = selectWheel;
+      $[54] = containerProps;
+    } else containerProps = $[54];
+    WindowedTextComponent = WindowedText;
+    wheelProps = selectWheel;
     children = state.visibleOptions.map((option, index) => {
-      let isOptionFocused = !i && state.focusedValue === option.value && !state.isSubmitFocused;
+      let isOptionFocused = !isDisabledFlag && state.focusedValue === option.value && !state.isSubmitFocused;
       let isSelected = state.selectedValues.includes(option.value);
       let isFirstVisibleOption = option.index === state.visibleFromIndex;
       let isLastVisibleOption = option.index === state.visibleToIndex - 1;
       let areMoreOptionsBelow = state.visibleToIndex < options.length;
       let areMoreOptionsAbove = state.visibleFromIndex > 0;
-      let i_2 = state.visibleFromIndex + index + 1;
+      let i = state.visibleFromIndex + index + 1;
       if (option.type === "input") {
         let inputValue = state.inputValues.get(option.value) || "";
         return jsxProd_default(
@@ -292,13 +292,13 @@ function SelectMulti(props) {
             flexDirection: "column",
             children: jsxProd_default(SelectInputOption, {
               option,
-              onClick: ee(option),
+              onClick: makeClickHandler(option),
               isFocused: isOptionFocused,
               isSelected: false,
               shouldShowDownArrow: areMoreOptionsBelow && isLastVisibleOption,
               shouldShowUpArrow: areMoreOptionsAbove && isFirstVisibleOption,
               maxIndexWidth,
-              index: i_2,
+              index: i,
               inputValue,
               onInputChange: (value) => {
                 state.updateInputValue(option.value, value);
@@ -332,14 +332,14 @@ function SelectMulti(props) {
             isSelected: false,
             shouldShowDownArrow: areMoreOptionsBelow && isLastVisibleOption,
             shouldShowUpArrow: areMoreOptionsAbove && isFirstVisibleOption,
-            onClick: ee(option),
+            onClick: makeClickHandler(option),
             children: [
-              !C &&
+              !hideIndexesFlag &&
                 jsxProd_default(Box, {
                   flexShrink: 0,
                   children: jsxProd_default(Text, {
                     dimColor: true,
-                    children: `${i_2}.`.padEnd(maxIndexWidth),
+                    children: `${i}.`.padEnd(maxIndexWidth),
                   }),
                 }),
               jsxProd_default(Box, {
@@ -370,10 +370,10 @@ function SelectMulti(props) {
       );
     });
     $[31] = canPasteImage;
-    $[32] = ee;
+    $[32] = makeClickHandler;
     $[33] = onPaste;
-    $[34] = C;
-    $[35] = i;
+    $[34] = hideIndexesFlag;
+    $[35] = isDisabledFlag;
     $[36] = onCancel;
     $[37] = onImagePaste;
     $[38] = onOpenEditor;
@@ -382,63 +382,64 @@ function SelectMulti(props) {
     $[41] = pastedContents;
     $[42] = selectWheel;
     $[43] = state;
-    $[44] = te;
-    $[45] = oe;
-    $[46] = ie;
+    $[44] = WindowedTextComponent;
+    $[45] = BoxComponent;
+    $[46] = wheelProps;
     $[47] = children;
     $[48] = flexDirection;
     $[49] = ref;
-    $[50] = _;
+    $[50] = containerProps;
   } else {
-    te = $[44];
-    oe = $[45];
-    ie = $[46];
+    WindowedTextComponent = $[44];
+    BoxComponent = $[45];
+    wheelProps = $[46];
     children = $[47];
     flexDirection = $[48];
     ref = $[49];
-    _ = $[50];
+    containerProps = $[50];
   }
-  let ue;
-  if ($[55] !== te || $[56] !== ie || $[57] !== children) {
-    ue = jsxProd_default(te, {
-      ...ie,
+  let windowedElement;
+  if ($[55] !== WindowedTextComponent || $[56] !== wheelProps || $[57] !== children) {
+    windowedElement = jsxProd_default(WindowedTextComponent, {
+      ...wheelProps,
       children,
     });
-    $[55] = te;
-    $[56] = ie;
+    $[55] = WindowedTextComponent;
+    $[56] = wheelProps;
     $[57] = children;
-    $[58] = ue;
-  } else ue = $[58];
-  let de;
+    $[58] = windowedElement;
+  } else windowedElement = $[58];
+  let submitElement;
   if (
-    $[59] !== i ||
+    $[59] !== isDisabledFlag ||
     $[60] !== onSubmit ||
     $[61] !== strayClickGuard ||
     $[62] !== state ||
     $[63] !== submitButtonText ||
-    $[64] !== O ||
-    $[65] !== h ||
+    $[64] !== backgroundMode ||
+    $[65] !== isHovered ||
     $[66] !== inverse
   ) {
-    de =
+    submitElement =
       submitButtonText &&
       onSubmit &&
       jsxProd_default_2(Box, {
         marginTop: 0,
         gap: 1,
-        onClick: i
+        onClick: isDisabledFlag
           ? undefined
-          : (Ot) => {
-              if (strayClickGuard(Ot)) {
+          : (event) => {
+              if (strayClickGuard(event)) {
                 return;
               }
               onSubmit(state.getSelectedValues());
             },
-        backgroundColor: !i && h && O === "tint" ? USER_MESSAGE_BACKGROUND : undefined,
-        onMouseEnter: () => E(true),
-        onMouseLeave: () => E(false),
+        backgroundColor:
+          !isDisabledFlag && isHovered && backgroundMode === "tint" ? USER_MESSAGE_BACKGROUND : undefined,
+        onMouseEnter: () => setIsHovered(true),
+        onMouseLeave: () => setIsHovered(false),
         children: [
-          !i && state.isSubmitFocused
+          !isDisabledFlag && state.isSubmitFocused
             ? jsxProd_default(Text, {
                 color: "suggestion",
                 inverse,
@@ -451,44 +452,44 @@ function SelectMulti(props) {
           jsxProd_default(Box, {
             marginLeft: 3,
             children: jsxProd_default(Text, {
-              color: !i && state.isSubmitFocused ? "suggestion" : undefined,
+              color: !isDisabledFlag && state.isSubmitFocused ? "suggestion" : undefined,
               bold: true,
               children: submitButtonText,
             }),
           }),
         ],
       });
-    $[59] = i;
+    $[59] = isDisabledFlag;
     $[60] = onSubmit;
     $[61] = strayClickGuard;
     $[62] = state;
     $[63] = submitButtonText;
-    $[64] = O;
-    $[65] = h;
+    $[64] = backgroundMode;
+    $[65] = isHovered;
     $[66] = inverse;
-    $[67] = de;
-  } else de = $[67];
+    $[67] = submitElement;
+  } else submitElement = $[67];
   let t12;
   if (
-    $[68] !== oe ||
+    $[68] !== BoxComponent ||
     $[69] !== flexDirection ||
     $[70] !== ref ||
-    $[71] !== _ ||
-    $[72] !== ue ||
-    $[73] !== de
+    $[71] !== containerProps ||
+    $[72] !== windowedElement ||
+    $[73] !== submitElement
   ) {
-    t12 = jsxProd_default_2(oe, {
+    t12 = jsxProd_default_2(BoxComponent, {
       flexDirection,
       ref,
-      ..._,
-      children: [ue, de],
+      ...containerProps,
+      children: [windowedElement, submitElement],
     });
-    $[68] = oe;
+    $[68] = BoxComponent;
     $[69] = flexDirection;
     $[70] = ref;
-    $[71] = _;
-    $[72] = ue;
-    $[73] = de;
+    $[71] = containerProps;
+    $[72] = windowedElement;
+    $[73] = submitElement;
     $[74] = t12;
   } else t12 = $[74];
   return t12;

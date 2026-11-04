@@ -52,53 +52,53 @@ function findShadowedActions(contextA, contextB, bindings) {
   return shadowed;
 }
 //@ chunk-x1mwqya5.js:19968-20101 placement
-function chordsEqual(n, chord) {
-  if (n.length !== chord.length) return false;
-  for (let k = 0; k < n.length; k++) {
-    let s = n[k];
-    let l = chord[k];
-    if (!s || !l || !keystrokesEqual(s, l)) return false;
+function chordsEqual(left, chord) {
+  if (left.length !== chord.length) return false;
+  for (let k = 0; k < left.length; k++) {
+    let leftKey = left[k];
+    let rightKey = chord[k];
+    if (!leftKey || !rightKey || !keystrokesEqual(leftKey, rightKey)) return false;
   }
   return true;
 }
 //@ chunk-x1mwqya5.js:20101-20161 placement
-function getActionDisplayText(n, r, e) {
-  let actionChord = getActionChord(n, r, e);
+function getActionDisplayText(action, context, bindings) {
+  let actionChord = getActionChord(action, context, bindings);
   return actionChord ? chordToDisplayString(actionChord, getShortcutDisplayPlatform()) : actionChord;
 }
 //@ chunk-x1mwqya5.js:20161-20573 placement
 /**
  * 把 Ink 按键事件转成 Keystroke：enter 用换行字符；macOS 的 Option 特殊字符还原为 alt+键；事件名查表或单字符小写；大写字母隐含 shift（非字母符号的 shift 不算）；alt 与 meta 合并。
  */
-function keyEventToKeystroke(n) {
+function keyEventToKeystroke(keyEvent) {
   let key =
-    n.name === "enter"
+    keyEvent.name === "enter"
       ? `
 `
-      : n.key;
-  let alt = n.meta;
-  if (getPlatform() === "macos" && !n.meta && !n.ctrl && isMacOptionChar(key)) {
+      : keyEvent.key;
+  let alt = keyEvent.meta;
+  if (getPlatform() === "macos" && !keyEvent.meta && !keyEvent.ctrl && isMacOptionChar(key)) {
     key = MACOS_OPTION_CHAR_TO_KEY[key];
     alt = true;
   }
-  let keyName = KEY_EVENT_NAME_TO_KEY[n.name] ?? (key.length === 1 ? key.toLowerCase() : null);
+  let keyName = KEY_EVENT_NAME_TO_KEY[keyEvent.name] ?? (key.length === 1 ? key.toLowerCase() : null);
   if (!keyName) return null;
   let shift =
     !(
-      n.shift &&
+      keyEvent.shift &&
       key.length === 1 &&
-      n.name.length === 1 &&
-      key !== n.name &&
+      keyEvent.name.length === 1 &&
+      key !== keyEvent.name &&
       key.toLowerCase() === key.toUpperCase()
     ) &&
-    (n.shift || (key.length === 1 && key !== key.toLowerCase() && key === key.toUpperCase()));
+    (keyEvent.shift || (key.length === 1 && key !== key.toLowerCase() && key === key.toUpperCase()));
   return {
     key: keyName,
-    ctrl: n.ctrl,
+    ctrl: keyEvent.ctrl,
     alt,
     shift,
     meta: alt,
-    super: n.superKey,
+    super: keyEvent.superKey,
   };
 }
 export { findShadowedActions, keyEventToKeystroke, getActionDisplayText, chordsEqual };

@@ -10,17 +10,9 @@
  */
 import { homedir } from "os";
 import { openSync, writeSync } from "fs";
-import { env } from "./utils/env.js";
+import { init_react_production, useEffect, useState, useRef } from "../vendor/react/cjs/react.production.js";
 import {
-  checkHasTrustDialogAccepted,
-  saveGlobalConfig,
-  getWorkspacePersistedTrustKey,
-  isWorkspacePersistedTrusted,
-  isLocalSettingsGitTracked,
-  markConfigBootPhaseComplete,
-  getGlobalConfig,
-} from "./utils/config.js";
-import {
+  getStrictMcpConfig,
   setSessionTrustAccepted,
   getSessionApprovedMcpServers,
   getRootSession,
@@ -33,20 +25,36 @@ import {
   isOTelInitPending,
   getMeterProvider,
   setStatsStore,
-  getStrictMcpConfig,
 } from "./bootstrap/state.js";
-import { primePlanSlugCollisions } from "./utils/plans.js";
-import { blockingSettingsErrors } from "./utils/settings/settingsNotices.js";
-import { uniq } from "./utils/collections.js";
-import { cleanForDisplay, plural } from "./utils/stringUtils.js";
-import { logFeatureSad, logFeatureBad, logFeatureOk } from "./services/analytics/featureTelemetry.js";
-import { logError } from "./utils/log.js";
-import { toError, errorMessage } from "./utils/errors.js";
-import { showScreen, runSteps } from "./utils/runSteps.js";
+import { collectProjectMcpServerNames } from "./services/mcpServerApproval.js";
+import { getEffectiveProjectMcpServerStatus } from "./services/mcp/utils.js";
+import { formatMcpServerLabel } from "./utils/plugins/lspPluginIntegration.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
 } from "../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { MCPServerApprovalDialog } from "./components/MCPServerApprovalDialog.js";
+import { MCPServerMultiselectDialog } from "./components/MCPServerMultiselectDialog.js";
+import { isBgSession } from "./utils/concurrentSessions.js";
+import { env } from "./utils/env.js";
+import { readJobState, writeStateAtomic, logJobWriteError } from "./services/daemon/jobState.js";
+import { plural, cleanForDisplay } from "./utils/stringUtils.js";
+import {
+  checkHasTrustDialogAccepted,
+  saveGlobalConfig,
+  getWorkspacePersistedTrustKey,
+  isWorkspacePersistedTrusted,
+  isLocalSettingsGitTracked,
+  markConfigBootPhaseComplete,
+  getGlobalConfig,
+} from "./utils/config.js";
+import { primePlanSlugCollisions } from "./utils/plans.js";
+import { blockingSettingsErrors } from "./utils/settings/settingsNotices.js";
+import { uniq } from "./utils/collections.js";
+import { logFeatureSad, logFeatureBad, logFeatureOk } from "./services/analytics/featureTelemetry.js";
+import { logError } from "./utils/log.js";
+import { toError, errorMessage } from "./utils/errors.js";
+import { showScreen, runSteps } from "./utils/runSteps.js";
 import { Text, Box } from "./ink/components/Text.js";
 import { startDeferredPrefetches } from "./cli/startup/prepareSession.js";
 import { recordFullscreenRenderFailure } from "./utils/fullscreenBootGuard.js";
@@ -56,7 +64,6 @@ import {
   shutdownCoordinators,
   gracefulShutdownSync,
 } from "./utils/gracefulShutdown.js";
-import { isBgSession } from "./utils/concurrentSessions.js";
 import { isSupervisedMode, isBareMode, isEnvTruthy } from "./utils/envUtils.js";
 import { trackError } from "./services/errorTracking/errorTracking.js";
 import { isSameRealPath } from "./utils/fsJunctions.js";
@@ -98,8 +105,7 @@ import {
 import { hasSkipDangerousModePermissionPrompt } from "./utils/settings/settings.js";
 import { getAPIProvider } from "./utils/model/providers.js";
 import { withTimeout } from "./utils/sleep.js";
-import { w } from "../vendor/react/compiler-runtime.js";
-import { P, y, R, init_react_production } from "../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../vendor/react/compiler-runtime.js";
 import { fromEnum } from "./services/analytics/safeMetadata.js";
 import { MEMO_CACHE_SENTINEL } from "../runtime/bun-runtime.js";
 import { useApp } from "./ink/components/Input.js";
@@ -107,53 +113,170 @@ import { getBaseRenderOptions } from "./utils/renderOptions.js";
 import { FpsTracker } from "./utils/fpsTracker.js";
 import { createStatsStore } from "./context/stats.js";
 import { isSynchronizedOutputSupported } from "./ink/terminal.js";
-import { collectProjectMcpServerNames } from "./services/mcpServerApproval.js";
-import { getEffectiveProjectMcpServerStatus } from "./services/mcp/utils.js";
-import { formatMcpServerLabel } from "./utils/plugins/lspPluginIntegration.js";
-import { MCPServerApprovalDialog } from "./components/MCPServerApprovalDialog.js";
-import { MCPServerMultiselectDialog } from "./components/MCPServerMultiselectDialog.js";
-import { readJobState, writeStateAtomic, logJobWriteError } from "./services/daemon/jobState.js";
 import { RenderOnceAndExit } from "./utils/staticRender.js";
 import { formatMessageLines } from "./cli/handlers/plugins.js";
 import { exitAfterAnalyticsFlush } from "./cli/exit.js";
+import { deferInit } from "../runtime/deferred-init.js";
 
+//@ chunk-20skp6hd.js:1140-1144 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-20skp6hd.js:1140", () => {
+  init_react_production();
+});
+//@ chunk-20skp6hd.js:2791-2795 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-20skp6hd.js:2791", () => {
+  init_react_production();
+});
+//@ chunk-20skp6hd.js:4353-4564 placement
+/**
+ * 列出待批准的项目 MCP 服务器（严格 MCP 配置时为空），并给出其中来自插件的服务器名。
+ */
+async function getPendingProjectMcpServers(root) {
+  if (getStrictMcpConfig())
+    return {
+      pendingServers: [],
+      pluginServerNames: new Set(),
+    };
+  let { serverNames, pluginServerNames } = await collectProjectMcpServerNames(root);
+  return {
+    pendingServers: serverNames.filter(
+      (serverName) => getEffectiveProjectMcpServerStatus(serverName) === "pending",
+    ),
+    pluginServerNames,
+  };
+}
+//@ chunk-20skp6hd.js:4885-5222 placement
+/**
+ * 有待批准的项目 MCP 服务器时显示批准对话框（单个或多选），并在后台任务中标记等待批准。
+ */
+async function projectMcpApprovalDialog({ pendingServers, pluginServerNames }, onDone, storageV5) {
+  if (pendingServers.length === 0) return null;
+  let restoreState;
+  restoreState = await markJobBlockedOnMcpApproval(
+    pendingServers.map((pendingServer) =>
+      formatMcpServerLabel(pendingServer, pluginServerNames.has(pendingServer)),
+    ),
+    storageV5,
+  );
+  let onDone_2 = (result) => {
+    restoreJobStateAfterApproval(restoreState, storageV5)
+      .catch(() => {})
+      .then(() => onDone(result));
+  };
+  let [firstServer, ...restServers] = pendingServers;
+  return firstServer !== undefined && restServers.length === 0
+    ? jsxProd_default(MCPServerApprovalDialog, {
+        serverName: firstServer,
+        isPluginServer: pluginServerNames.has(firstServer),
+        onDone: onDone_2,
+      })
+    : jsxProd_default(MCPServerMultiselectDialog, {
+        serverNames: pendingServers,
+        pluginServerNames,
+        onDone: onDone_2,
+      });
+}
+//@ chunk-20skp6hd.js:5222-5691 placement
+/**
+ * 后台任务中把作业状态标记为"等待批准新的项目 MCP 服务器"，返回原状态以便之后恢复。
+ */
+async function markJobBlockedOnMcpApproval(serverLabels, storageV5) {
+  {
+    if (!isBgSession()) return;
+    let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
+    if (!CLAUDE_JOB_DIR) return;
+    let jobState = await readJobState(CLAUDE_JOB_DIR, storageV5);
+    if (!jobState) return;
+    let serverCount = serverLabels.length;
+    let serverWord = plural(serverCount, "server");
+    let needsWord = plural(serverCount, "needs", "need");
+    try {
+      await writeStateAtomic(
+        CLAUDE_JOB_DIR,
+        {
+          ...jobState,
+          state: "blocked",
+          detail: `${serverCount} new MCP ${serverWord} ${needsWord} approval`,
+          tempo: "blocked",
+          needs: `approve ${serverCount} new project MCP ${serverWord} (${serverLabels.join(", ")}) \u2014 attach to respond`,
+          updatedAt: new Date().toISOString(),
+        },
+        storageV5,
+      );
+      return {
+        state: jobState.state,
+        tempo: jobState.tempo,
+        needs: jobState.needs,
+        detail: jobState.detail,
+      };
+    } catch (error) {
+      logJobWriteError(error);
+    }
+  }
+  return;
+}
+//@ chunk-20skp6hd.js:5691-5919 placement
+async function restoreJobStateAfterApproval(restoreState, storageV5) {
+  {
+    if (!restoreState || !isBgSession()) return;
+    let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
+    if (!CLAUDE_JOB_DIR) return;
+    let jobState = await readJobState(CLAUDE_JOB_DIR, storageV5);
+    if (!jobState || jobState.state !== "blocked") return;
+    try {
+      await writeStateAtomic(
+        CLAUDE_JOB_DIR,
+        {
+          ...jobState,
+          ...restoreState,
+          block: undefined,
+          updatedAt: new Date().toISOString(),
+        },
+        storageV5,
+      );
+    } catch (error) {
+      logJobWriteError(error);
+    }
+  }
+}
 //@ chunk-7fw14qgv.js:2904-2934 sole-consumer
 /**
  * 把回调以 false 调用
  */
-function setFlagFalse(ot) {
-  return ot(false);
+function setFlagFalse(setFlag) {
+  return setFlag(false);
 }
 //@ chunk-7fw14qgv.js:2934-2975 sole-consumer
 /**
  * 执行重新启动
  */
-function execRelaunch(nt) {
-  return nt.execRelaunch();
+function execRelaunch(relauncher) {
+  return relauncher.execRelaunch();
 }
 //@ chunk-7fw14qgv.js:2975-3035 sole-consumer
 /**
  * 先清理再重新启动
  */
-function prepareAndRelaunch(it) {
-  it();
-  import("./chunk-sv7j935w.js").then(execRelaunch);
+function prepareAndRelaunch(cleanup) {
+  cleanup();
+  import("./utils/relaunch.js").then(execRelaunch);
 }
 //@ chunk-7fw14qgv.js:3035-3085 affinity
 /**
  * 状态置为 save-failed
  */
-function markSaveFailed(at) {
+function markSaveFailed(state) {
   return {
-    ...at,
+    ...state,
     phase: "save-failed",
   };
 }
 //@ chunk-7fw14qgv.js:3085-3142 facade-exports
-function adoptPersistedWorkspaceTrust(o) {
+function adoptPersistedWorkspaceTrust(projectRoot) {
   if (env.CLAUBBIT || !checkHasTrustDialogAccepted()) return;
   setSessionTrustAccepted(true);
-  primePlanSlugCollisions(o);
+  primePlanSlugCollisions(projectRoot);
 }
 //@ chunk-7fw14qgv.js:3142-3713 facade-exports
 function completeOnboarding(storageV5) {
@@ -177,15 +300,17 @@ function completeOnboarding(storageV5) {
   );
 }
 //@ chunk-7fw14qgv.js:3713-4336 facade-exports
-function projectMcpApprovalStep(o, p) {
-  return async (u) => {
-    let pendingProjectMcpServers = await getPendingProjectMcpServers(o);
-    let T = blockingSettingsErrors();
+function projectMcpApprovalStep(storageV5, notify) {
+  return async (finish) => {
+    let pendingProjectMcpServers = await getPendingProjectMcpServers(storageV5);
+    let settingsErrors = blockingSettingsErrors();
     if (pendingProjectMcpServers.pendingServers.length === 0) return null;
-    if (T.length > 0) {
-      let joined = uniq(T.flatMap((C) => (C.file ? [cleanForDisplay(C.file)] : []))).join(", ");
+    if (settingsErrors.length > 0) {
+      let joined = uniq(
+        settingsErrors.flatMap((error) => (error.file ? [cleanForDisplay(error.file)] : [])),
+      ).join(", ");
       logFeatureSad("mcp_project_approval_dialog", "mcp_project_approval_skipped_settings_errors");
-      p({
+      notify({
         key: "mcp-approval-skipped",
         text: `skipping .mcp.json server approval (settings errors${joined ? ` in ${joined}` : ""}) \xB7 run \`claude doctor\` to list them, fix them, then restart`,
       });
@@ -196,15 +321,15 @@ function projectMcpApprovalStep(o, p) {
         pendingProjectMcpServers,
         (result) => {
           try {
-            let C = mcpApprovalPersistNotice(result);
-            if (C) p(C);
+            let notice = mcpApprovalPersistNotice(result);
+            if (notice) notify(notice);
           } catch (error) {
             logError(toError(error));
           } finally {
-            u();
+            finish();
           }
         },
-        o,
+        storageV5,
       );
     } catch (error) {
       logFeatureBad("mcp_project_approval_dialog", "mcp_project_approval_dialog_threw");
@@ -226,7 +351,7 @@ function mcpApprovalPersistNotice(result) {
   }
   let workspaceKey = getWorkspacePersistedTrustKey();
   if (
-    getSessionApprovedMcpServers().some((u) => u.workspaceKey === workspaceKey) &&
+    getSessionApprovedMcpServers().some((entry) => entry.workspaceKey === workspaceKey) &&
     !isWorkspacePersistedTrusted() &&
     isLocalSettingsGitTracked({
       onIndeterminate: "tracked",
@@ -245,30 +370,30 @@ function mcpApprovalPersistNotice(result) {
 /**
  * endInkWithError：在 Ink 里显示红色错误后卸载并退出。
  */
-async function endInkWithError(o, p) {
+async function endInkWithError(root, message) {
   showScreen(
-    o,
+    root,
     jsxProd_default(Text, {
       color: "error",
-      children: p,
+      children: message,
     }),
   );
-  o.unmount();
-  await recordExitWithMessageCause(p);
+  root.unmount();
+  await recordExitWithMessageCause(message);
 }
 //@ chunk-7fw14qgv.js:5168-5313 layout
-async function recordExitWithMessageCause(o) {
-  let { setBgExitCause, setBgExitDetail } = await import("./chunk-ped6a95p.js");
+async function recordExitWithMessageCause(message) {
+  let { setBgExitCause, setBgExitDetail } = await import("./utils/bgExitSidecars.js");
   setBgExitCause("exit_with_message");
-  setBgExitDetail("exit_with_message", o);
+  setBgExitDetail("exit_with_message", message);
 }
 //@ chunk-7fw14qgv.js:5313-5443 facade-exports
 /**
  * 显示“Loading your organization's managed settings…”等待提示。
  */
-function showSettingsLoadHold(o) {
+function showSettingsLoadHold(root) {
   showScreen(
-    o,
+    root,
     jsxProd_default(Box, {
       paddingX: 1,
       children: jsxProd_default(Text, {
@@ -293,40 +418,40 @@ async function exitWithError(root, message, beforeExit, unsentPrompt) {
 /**
  * exitWithMessage：渲染一段（可带颜色的）文本后卸载 Ink、执行 beforeExit、优雅退出。
  */
-async function exitWithMessage(o, p, u) {
-  let color = u?.color;
-  let exitCode = u?.exitCode ?? 1;
-  let A = color
+async function exitWithMessage(root, message, options) {
+  let color = options?.color;
+  let exitCode = options?.exitCode ?? 1;
+  let messageElement = color
     ? jsxProd_default(Text, {
         color,
-        children: p,
+        children: message,
       })
     : jsxProd_default(Text, {
-        children: p,
+        children: message,
       });
   showScreen(
-    o,
-    u?.unsentPrompt
+    root,
+    options?.unsentPrompt
       ? jsxProd_default_2(Box, {
           flexDirection: "column",
           children: [
-            A,
+            messageElement,
             jsxProd_default(Text, {
               children: `
 Your message was not sent:
-${u.unsentPrompt}`,
+${options.unsentPrompt}`,
             }),
           ],
         })
-      : A,
+      : messageElement,
   );
-  o.unmount();
-  await u?.beforeExit?.();
-  if (exitCode !== 0) await recordExitWithMessageCause(p);
-  let { flushAnalyticsSinks } = await import("./chunk-r3wdn2dp.js");
+  root.unmount();
+  await options?.beforeExit?.();
+  if (exitCode !== 0) await recordExitWithMessageCause(message);
+  let { flushAnalyticsSinks } = await import("./utils/gracefulShutdown.js");
   await flushAnalyticsSinks();
-  let { drainRegisteredWriteQueues } = await import("./chunk-kqc5kgje.js");
-  let { withTimeout } = await import("./chunk-c1wxfrj3.js");
+  let { drainRegisteredWriteQueues } = await import("./utils/settings/writeQueues.js");
+  let { withTimeout } = await import("./utils/sleep.js");
   await withTimeout(drainRegisteredWriteQueues(), 2000, "write queue drain timeout (exitWithMessage)").catch(
     () => {},
   );
@@ -342,8 +467,8 @@ function showSetupDialog(root, renderer, options) {
       root,
       [
         (done) =>
-          renderer((C) => {
-            resolve(C);
+          renderer((result) => {
+            resolve(result);
             done();
           }),
       ],
@@ -359,22 +484,26 @@ function showSetupDialog(root, renderer, options) {
 /**
  * renderAndRun：把元素挂到 Ink 根，等待退出；渲染期未处理异常写入错误并退出。
  */
-async function renderAndRun(root, p, session, storageV5, credentials) {
-  let A = showScreen(root, p);
+async function renderAndRun(root, element, host, storageV5, credentials) {
+  let screenHandle = showScreen(root, element);
   markConfigBootPhaseComplete();
-  startDeferredPrefetches(session, storageV5, credentials);
+  startDeferredPrefetches(host, storageV5, credentials);
   try {
     if (
-      (await Promise.race([root.waitUntilExit().then(() => "exited"), A.replaced.then(() => "replaced")])) ===
-      "replaced"
+      (await Promise.race([
+        root.waitUntilExit().then(() => "exited"),
+        screenHandle.replaced.then(() => "replaced"),
+      ])) === "replaced"
     )
       return;
   } catch (error) {
     let error_2 = toError(error);
-    let F = (await recordFullscreenRenderFailure().catch(() => false))
+    let fullscreenNote = (await recordFullscreenRenderFailure().catch(() => false))
       ? " It happened while the fullscreen renderer was starting, so the next launch will use the classic renderer (CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1 forces that any time)."
       : "";
-    emitExitMessage(`Claude Code exited after an unrecoverable interface error (${error_2.message}).${F}`);
+    emitExitMessage(
+      `Claude Code exited after an unrecoverable interface error (${error_2.message}).${fullscreenNote}`,
+    );
     if (isBgSession() || isSupervisedMode()) throw error;
     try {
       trackError(error_2, "unhandled_rejection");
@@ -382,7 +511,7 @@ async function renderAndRun(root, p, session, storageV5, credentials) {
     await gracefulShutdown(1, "other");
     return;
   }
-  await shutdownCoordinators.of(session.host).runBeforeInteractiveShutdown();
+  await shutdownCoordinators.of(host.host).runBeforeInteractiveShutdown();
   await gracefulShutdown(0);
 }
 //@ chunk-7fw14qgv.js:6914-6955 layout
@@ -393,105 +522,108 @@ var POST_ONBOARDING_GB_LABEL = "GB post-onboarding init";
  * 显示启动前的设置屏（showSetupScreens）：工作区信任、onboarding、MCP 项目审批、Chrome 提议等，返回 onboarding 结果。
  */
 async function showSetupScreens(
-  o,
-  p,
+  session,
+  root,
   permissionMode,
   allowDangerouslySkipPermissions,
   commands,
   claudeInChrome,
   devChannels,
   offerClaudeInChrome,
-  E,
-  F,
+  storageV5,
+  credentials,
   askCloudDefaultReason,
 ) {
-  let k = {
+  let setupResult = {
     onboardingShown: false,
     onboardingSkippedSignIn: false,
     mcpApprovalSkipWarning: null,
     claudeInChromeAccepted: false,
   };
-  let O = (mcpApprovalSkipWarning) => {
-    k.mcpApprovalSkipWarning = mcpApprovalSkipWarning;
+  let setSkipWarning = (mcpApprovalSkipWarning) => {
+    setupResult.mcpApprovalSkipWarning = mcpApprovalSkipWarning;
   };
   if (isBgSession() || env.CLAUDE_BRIDGE_REATTACH_SESSION) {
-    let I = checkHasTrustDialogAccepted();
-    let h = I || (env.CLAUDE_BG_WORKSPACE_TRUSTED === true && isSameRealPath(getOriginalCwd(), homedir()));
-    if (!h)
+    let trustAccepted = checkHasTrustDialogAccepted();
+    let isTrusted =
+      trustAccepted ||
+      (env.CLAUDE_BG_WORKSPACE_TRUSTED === true && isSameRealPath(getOriginalCwd(), homedir()));
+    if (!isTrusted)
       logForDebugging(
         "Workspace trust is not recorded for this directory; continuing as an untrusted session (hooks and project settings env stay off)",
         {
           level: "warn",
         },
       );
-    let _ = [
+    let steps = [
       () => {
-        if (h) setSessionTrustAccepted(true);
+        if (isTrusted) setSessionTrustAccepted(true);
         resetGrowthBook({
           preservePendingExposures: true,
         });
         initializeGrowthBook().catch((error) => logError(toError(error)));
-        if (h) {
-          prefetchGitStatus(o);
-          import("./chunk-c7p56eem.js")
-            .then((D) => D.loadHooksModulesHeldForTrust(E, F))
+        if (isTrusted) {
+          prefetchGitStatus(session);
+          import("./utils/plugins/loadPluginHooks.js")
+            .then((mod) => mod.loadHooksModulesHeldForTrust(storageV5, credentials))
             .catch((error) => logError(toError(error)));
         }
         return null;
       },
-      projectMcpApprovalStep(E, O),
+      projectMcpApprovalStep(storageV5, setSkipWarning),
       () => {
-        if (h) {
+        if (isTrusted) {
           applyConfigEnvironmentVariables();
-          import("./chunk-fhdzwff4.js").then((D) => D.maybePrewarmRecallIndex(o));
-          primePlanSlugCollisions(E);
+          import("./isDesktopEntrypointExempted.lazy.js").then((mod) => mod.maybePrewarmRecallIndex(session));
+          primePlanSlugCollisions(storageV5);
         }
-        releaseGrowthBookHold(o.host);
+        releaseGrowthBookHold(session.host);
         capturePolicySnapshot();
-        if (h) {
-          if (!I && !getIsRemoteMode() && !isBareMode()) startMemoryWatcherLazy(E, F);
-          setImmediate(initializeTelemetryAfterTrust, E);
+        if (isTrusted) {
+          if (!trustAccepted && !getIsRemoteMode() && !isBareMode())
+            startMemoryWatcherLazy(storageV5, credentials);
+          setImmediate(initializeTelemetryAfterTrust, storageV5);
         }
         return null;
       },
     ];
-    await runSteps(p, _, {
-      session: o,
-      storageV5: E,
+    await runSteps(root, steps, {
+      session,
+      storageV5,
     });
-    return k;
+    return setupResult;
   }
   if (isEnvTruthy(false) || env.IS_DEMO) {
-    adoptPersistedWorkspaceTrust(E);
-    releaseGrowthBookHold(o.host);
+    adoptPersistedWorkspaceTrust(storageV5);
+    releaseGrowthBookHold(session.host);
     capturePolicySnapshot();
-    return k;
+    return setupResult;
   }
   await runSteps(
-    p,
+    root,
     setupSteps(
       {
-        session: o,
+        session,
         permissionMode,
         allowDangerouslySkipPermissions,
         commands,
         claudeInChrome,
         devChannels,
         offerClaudeInChrome,
-        storageV5: E,
-        credentials: F,
+        storageV5,
+        credentials,
         askCloudDefaultReason,
       },
-      k,
+      setupResult,
     ),
     {
-      session: o,
+      session,
       onChangeAppState,
       marksJobBlocked: true,
-      storageV5: E,
+      storageV5,
     },
   );
-  return k;
+  return setupResult;
 }
 //@ chunk-7fw14qgv.js:8171-13351 facade-exports = showSetupScreens (0.356)
 /**
@@ -510,43 +642,43 @@ function setupSteps(
     credentials,
     askCloudDefaultReason,
   },
-  M,
+  setupResult,
 ) {
   let config = getGlobalConfig();
-  let O = false;
-  let I = true;
+  let showedTrustDialog = false;
+  let trustAccepted = true;
   return [
-    (h) => {
+    (done) => {
       if (
         config.hasCompletedOnboarding &&
         env.CLAUDE_CODE_POWERUP_ONBOARDING !== "banner" &&
         env.CLAUDE_CODE_POWERUP_ONBOARDING !== "step"
       )
         return null;
-      M.onboardingShown = true;
-      return import("./chunk-p8fze0jh.js").then(({ Onboarding }) =>
+      setupResult.onboardingShown = true;
+      return import("./components/Onboarding.js").then(({ Onboarding }) =>
         jsxProd_default(Onboarding, {
           host: session.host,
           orgConfigGateFollows: true,
           onDone: ({ skippedSignIn }) => {
-            M.onboardingSkippedSignIn = skippedSignIn;
+            setupResult.onboardingSkippedSignIn = skippedSignIn;
             completeOnboarding(storageV5);
-            h();
+            done();
           },
         }),
       );
     },
     (onDone) => {
       if (env.CLAUBBIT) return null;
-      I = checkHasTrustDialogAccepted();
-      if (I && !hasUngatedTrustSources()) return null;
-      O = true;
-      return (I ? Promise.resolve(false) : inheritsRelaunchHomeTrust()).then((_) => {
-        if (_) {
+      trustAccepted = checkHasTrustDialogAccepted();
+      if (trustAccepted && !hasUngatedTrustSources()) return null;
+      showedTrustDialog = true;
+      return (trustAccepted ? Promise.resolve(false) : inheritsRelaunchHomeTrust()).then((inheritedTrust) => {
+        if (inheritedTrust) {
           setHomeTrustDialogAccepted(true);
           return null;
         }
-        return import("./chunk-8rmevhsy.js").then(({ TrustDialog }) =>
+        return import("./components/TrustDialog/TrustDialog.js").then(({ TrustDialog }) =>
           jsxProd_default(TrustDialog, {
             commands,
             onDone,
@@ -557,13 +689,13 @@ function setupSteps(
     () => {
       if (env.CLAUBBIT) return null;
       setSessionTrustAccepted(true);
-      if (O) {
+      if (showedTrustDialog) {
         clearPluginCache("post-trust: re-discover project @skills-dir plugins");
         if (shouldFillPluginLoadWithStore(credentials))
           loadAllPluginsCacheOnly(storageV5, credentials).catch(() => {});
       }
-      import("./chunk-c7p56eem.js")
-        .then((h) => h.loadHooksModulesHeldForTrust(storageV5, credentials))
+      import("./utils/plugins/loadPluginHooks.js")
+        .then((mod) => mod.loadHooksModulesHeldForTrust(storageV5, credentials))
         .catch((error) => logError(toError(error)));
       resetGrowthBook({
         preservePendingExposures: true,
@@ -579,18 +711,18 @@ function setupSteps(
       if (env.CLAUBBIT) return null;
       return null;
     },
-    (h) =>
+    (done) =>
       env.CLAUBBIT
         ? null
         : projectMcpApprovalStep(storageV5, (done) => {
-            M.mcpApprovalSkipWarning = done;
-          })(h),
+            setupResult.mcpApprovalSkipWarning = done;
+          })(done),
     async (done) => {
       if (env.CLAUBBIT || !(await shouldShowExternalIncludesDialog(session, storageV5))) return null;
       let externalIncludes = getExternalClaudeMdIncludes(
         await getMemoryFilesCached(session, true, storageV5, credentials),
       );
-      let { ClaudeMdExternalIncludesDialog } = await import("./chunk-pqxfhfwa.js");
+      let { ClaudeMdExternalIncludesDialog } = await import("./components/ClaudeMdExternalIncludesDialog.js");
       return jsxProd_default(ClaudeMdExternalIncludesDialog, {
         onDone: () => done(),
         isStandaloneDialog: true,
@@ -602,65 +734,66 @@ function setupSteps(
       updateDeepLinkTerminalPreference(storageV5);
       applyConfigEnvironmentVariables();
       releaseGrowthBookHold(session.host);
-      import("./chunk-fhdzwff4.js").then((done) => done.maybePrewarmRecallIndex(session));
+      import("./isDesktopEntrypointExempted.lazy.js").then((done) => done.maybePrewarmRecallIndex(session));
       primePlanSlugCollisions(storageV5);
       capturePolicySnapshot();
-      if (O && !I && !getIsRemoteMode() && !isBareMode()) startMemoryWatcherLazy(storageV5, credentials);
-      if (M.onboardingShown) registerCleanup(exportTelemetryWhileStartPending);
+      if (showedTrustDialog && !trustAccepted && !getIsRemoteMode() && !isBareMode())
+        startMemoryWatcherLazy(storageV5, credentials);
+      if (setupResult.onboardingShown) registerCleanup(exportTelemetryWhileStartPending);
       else setImmediate(initializeTelemetryAfterTrust, storageV5);
       return shouldHoldForOnboarding(session.host, config) ? awaitGrowthBookAfterOnboarding() : null;
     },
-    async (h) => null,
-    async (h) => {
+    async (done) => null,
+    async (done) => {
       if (
         !(await isQualifiedForGrove(storageV5, credentials)) ||
         (await wasGroveRecentlyConfirmed(credentials))
       )
         return null;
-      let { GroveDialog } = await import("./chunk-xjw8k0v4.js");
+      let { GroveDialog } = await import("./components/grove/Grove.js");
       return jsxProd_default(GroveDialog, {
         showIfAlreadyViewed: false,
-        location: M.onboardingShown ? "onboarding" : "policy_update_modal",
-        onDone: (D) => {
-          if (D !== "escape") {
-            h();
+        location: setupResult.onboardingShown ? "onboarding" : "policy_update_modal",
+        onDone: (result) => {
+          if (result !== "escape") {
+            done();
             return;
           }
           logEvent("tengu_grove_policy_exited", {});
           gracefulShutdownSync(0);
-          M.onboardingShown = false;
-          M.claudeInChromeAccepted = false;
-          h("stop");
+          setupResult.onboardingShown = false;
+          setupResult.claudeInChromeAccepted = false;
+          done("stop");
         },
       });
     },
-    async (h) => {
+    async (done) => {
       if (getProTrialStatus().status !== "not_started") return null;
-      let { ProTrialStartScreen } = await import("./chunk-5qm79scx.js");
+      let { ProTrialStartScreen } = await import("./components/ProTrialStartScreen.js");
       logEvent("tengu_pro_trial_start_screen_shown", {});
       return jsxProd_default(ProTrialStartScreen, {
-        onDone: () => h(),
+        onDone: () => done(),
         storageV5,
         credentials,
       });
     },
-    async (h) => {
-      if (!M.onboardingShown) return null;
-      let { resolvePowerupDiscoveryArm } = await import("./chunk-qnzjpqzw.js");
+    async (done) => {
+      if (!setupResult.onboardingShown) return null;
+      let { resolvePowerupDiscoveryArm } = await import("./commands/powerup/discoveryCopy.js");
       if (resolvePowerupDiscoveryArm() !== "step") return null;
-      let { PowerupDiscoveryStep } = await import("./chunk-e1ykjvh2.js");
+      let { PowerupDiscoveryStep } = await import("./components/PowerupDiscoveryStep.js");
       return jsxProd_default(PowerupDiscoveryStep, {
-        onDone: () => h(),
+        onDone: () => done(),
       });
     },
-    (h) => {
+    (done) => {
       let unapprovedCustomApiKey = getUnapprovedCustomApiKey();
       if (!unapprovedCustomApiKey) return null;
       return wrapFullPageNotice(
-        import("./chunk-0e7yb7k9.js").then(({ ApproveApiKey }) =>
+        import("./components/ApproveApiKey.js").then(({ ApproveApiKey }) =>
           jsxProd_default(ApproveApiKey, {
             customApiKeyTruncated: unapprovedCustomApiKey,
-            onDone: () => h(),
+            onDone: () => done(),
           }),
         ),
       );
@@ -668,14 +801,14 @@ function setupSteps(
     createProviderUpgradeStep("bedrock", storageV5),
     createProviderUpgradeStep("vertex", storageV5),
     async (done) => {
-      let _;
+      let fallbackResult;
       try {
-        _ = await apply3PDefaultFallbacks();
+        fallbackResult = await apply3PDefaultFallbacks();
       } catch (error) {
         logError(error);
         return null;
       }
-      let { lines, hasHardFailure } = _;
+      let { lines, hasHardFailure } = fallbackResult;
       if (lines.length === 0) return null;
       return jsxProd_default(DelayedCallback, {
         afterMs: hasHardFailure ? 4000 : 1500,
@@ -701,7 +834,7 @@ function setupSteps(
         hasSkipDangerousModePermissionPrompt()
       )
         return null;
-      return import("./chunk-styvqsd2.js").then(({ BypassPermissionsModeDialog }) =>
+      return import("./components/BypassPermissionsModeDialog.js").then(({ BypassPermissionsModeDialog }) =>
         jsxProd_default(BypassPermissionsModeDialog, {
           onAccept: () => done(),
           storageV5,
@@ -715,11 +848,11 @@ function setupSteps(
       if (!devChannels || devChannels.length === 0) return null;
       let [{ isChannelsOffForSession }, { isChannelsPolicyBlocked }, { getSettingsForSource }] =
         await Promise.all([
-          import("./chunk-crv2zsgh.js"),
-          import("./chunk-5t1s95gq.js"),
-          import("./chunk-0crvnfjy.js"),
+          import("./services/mcp/channelAllowlist.js"),
+          import("./services/mcp/channelNotification.js"),
+          import("./utils/settings/settings.lazy.js"),
         ]);
-      let L = () => {
+      let finish = () => {
         let mapped = devChannels.map((devChannel) => ({
           ...devChannel,
           dev: true,
@@ -732,14 +865,14 @@ function setupSteps(
         getAPIProvider() !== "firstParty" ||
         isChannelsPolicyBlocked(getSettingsForSource("policySettings"))
       ) {
-        L();
+        finish();
         return null;
       }
-      let { DevChannelsDialog } = await import("./chunk-jmdd9gvn.js");
+      let { DevChannelsDialog } = await import("./components/DevChannelsDialog.js");
       return jsxProd_default(DevChannelsDialog, {
         channels: devChannels,
         onAccept: () => {
-          L();
+          finish();
           done();
         },
       });
@@ -747,23 +880,23 @@ function setupSteps(
     (done) => {
       if (!claudeInChrome || getGlobalConfig().hasCompletedClaudeInChromeOnboarding) return null;
       return wrapFullPageNotice(
-        import("./chunk-hthm3h8y.js").then(({ ClaudeInChromeOnboarding }) =>
+        import("./components/ClaudeInChromeOnboarding.js").then(({ ClaudeInChromeOnboarding }) =>
           jsxProd_default(ClaudeInChromeOnboarding, {
             onDone: () => done(),
           }),
         ),
       );
     },
-    async (h) => {
+    async (done) => {
       if (!offerClaudeInChrome) return null;
-      let { isChromeExtensionInstalled } = await import("./chunk-2jvt0tn4.js");
-      let D = await withTimeout(
+      let { isChromeExtensionInstalled } = await import("./utils/claudeInChrome/setup.js");
+      let pairedDeviceId = await withTimeout(
         isChromeExtensionInstalled(),
         1500,
         "chrome extension scan timed out before offer",
       ).catch(() => true);
-      let U = Boolean(getGlobalConfig().chromeExtension?.pairedDeviceId);
-      if (!D && !U) {
+      let hasPairedDevice = Boolean(getGlobalConfig().chromeExtension?.pairedDeviceId);
+      if (!pairedDeviceId && !hasPairedDevice) {
         logForDebugging("[Claude in Chrome] Skipping offer: extension not present locally (stale cache)");
         return null;
       }
@@ -776,20 +909,20 @@ function setupSteps(
         "tengu_chrome_auto_enable",
         false,
       );
-      let Y = getGlobalConfig().claudeInChromeDefaultEnabled !== undefined;
-      let { isChromeServerPolicyDenied } = await import("./chunk-5t6stktg.js");
-      let { isClaudeInChromeAllowed } = await import("./chunk-2jvt0tn4.js");
+      let hasChromeDefault = getGlobalConfig().claudeInChromeDefaultEnabled !== undefined;
+      let { isChromeServerPolicyDenied } = await import("./utils/claudeInChrome/serverPolicy.js");
+      let { isClaudeInChromeAllowed } = await import("./utils/claudeInChrome/setup.js");
       if (isChromeServerPolicyDenied() || !isClaudeInChromeAllowed()) {
         logForDebugging(
           "[Claude in Chrome] Skipping offer: blocked by enterprise MCP config, managed deniedMcpServers policy, or organization policy (allow_claude_browser_extension)",
         );
         return null;
       }
-      if (Y) {
+      if (hasChromeDefault) {
         logForDebugging(
           "[Claude in Chrome] Skipping offer: decision already recorded (another instance answered)",
         );
-        M.claudeInChromeAccepted = getGlobalConfig().claudeInChromeDefaultEnabled === true;
+        setupResult.claudeInChromeAccepted = getGlobalConfig().claudeInChromeDefaultEnabled === true;
         return null;
       }
       if (!featureValue_CACHED_MAY_BE_STALE) {
@@ -798,11 +931,11 @@ function setupSteps(
         );
         return null;
       }
-      let { ChromeAutoEnableDialog } = await import("./chunk-p5jda2d9.js");
+      let { ChromeAutoEnableDialog } = await import("./components/ChromeAutoEnableDialog.js");
       return jsxProd_default(ChromeAutoEnableDialog, {
-        onDone: (done) => {
-          M.claudeInChromeAccepted = done;
-          h();
+        onDone: (done_2) => {
+          setupResult.claudeInChromeAccepted = done_2;
+          done();
         },
         isDontAskMode: permissionMode === "dontAsk",
         isAutoMode: permissionMode === "auto",
@@ -818,7 +951,7 @@ async function exportTelemetryWhileStartPending() {
   try {
     if (isOTelInitPending() && getMeterProvider() === null) {
       await initializeTelemetryForExit();
-      let { flushTelemetry } = await import("./chunk-9vvvg0d3.js");
+      let { flushTelemetry } = await import("./utils/telemetry/bigQueryExportIntervalMs.lazy.js");
       await flushTelemetry();
     }
   } catch (error) {
@@ -828,12 +961,15 @@ async function exportTelemetryWhileStartPending() {
   }
 }
 //@ chunk-7fw14qgv.js:13562-13701 layout
-async function wrapFullPageNotice(o) {
-  let [p, { FullPageNotice }] = await Promise.all([o, import("./chunk-g1ymramv.js")]);
-  return p === null
+async function wrapFullPageNotice(noticePromise) {
+  let [noticeElement, { FullPageNotice }] = await Promise.all([
+    noticePromise,
+    import("./components/design-system/NoticeUnderScene.js"),
+  ]);
+  return noticeElement === null
     ? null
     : jsxProd_default(FullPageNotice, {
-        children: p,
+        children: noticeElement,
       });
 }
 //@ chunk-7fw14qgv.js:13701-13970 layout
@@ -852,25 +988,25 @@ async function awaitGrowthBookAfterOnboarding() {
 }
 //@ chunk-7fw14qgv.js:13970-14183 layout
 function DelayedCallback(props) {
-  let T = w(4);
+  let $ = useMemoCache(4);
   let { afterMs, onDone, children } = props;
-  let A;
-  let C;
-  if (T[0] !== afterMs || T[1] !== onDone) {
-    A = () => {
+  let timerEffect;
+  let timerDeps;
+  if ($[0] !== afterMs || $[1] !== onDone) {
+    timerEffect = () => {
       let timer = setTimeout(onDone, afterMs);
       return () => clearTimeout(timer);
     };
-    C = [afterMs, onDone];
-    T[0] = afterMs;
-    T[1] = onDone;
-    T[2] = A;
-    T[3] = C;
+    timerDeps = [afterMs, onDone];
+    $[0] = afterMs;
+    $[1] = onDone;
+    $[2] = timerEffect;
+    $[3] = timerDeps;
   } else {
-    A = T[2];
-    C = T[3];
+    timerEffect = $[2];
+    timerDeps = $[3];
   }
-  P(A, C);
+  useEffect(timerEffect, timerDeps);
   return children;
 }
 //@ chunk-7fw14qgv.js:14183-14553 layout
@@ -889,99 +1025,99 @@ var PROVIDER_UPGRADE_EVENTS = {
   },
 };
 //@ chunk-7fw14qgv.js:14553-16017 layout
-function createProviderUpgradeStep(o, storageV5) {
-  let u = PROVIDER_UPGRADE_EVENTS[o];
-  return async (x) => {
-    if (getAPIProvider() !== o) return null;
+function createProviderUpgradeStep(provider, storageV5) {
+  let events = PROVIDER_UPGRADE_EVENTS[provider];
+  return async (done) => {
+    if (getAPIProvider() !== provider) return null;
     try {
-      let [T, { upgradeKey }] = await Promise.all([
-        o === "bedrock"
-          ? import("./chunk-a7mvp1gg.js").then((k) =>
-              withProbeDeadline("bedrock-upgrade", k.findBedrockUpgradeCandidates()).then((O) =>
-                O.map((I) => ({
-                  ...I,
-                  toId: I.toBedrockId,
+      let [candidates, { upgradeKey }] = await Promise.all([
+        provider === "bedrock"
+          ? import("./utils/model/bedrockDefaultCheck.js").then((mod) =>
+              withProbeDeadline("bedrock-upgrade", mod.findBedrockUpgradeCandidates()).then((rawCandidates) =>
+                rawCandidates.map((candidate) => ({
+                  ...candidate,
+                  toId: candidate.toBedrockId,
                 })),
               ),
             )
-          : import("./chunk-5wnerh16.js").then((k) =>
-              withProbeDeadline("vertex-upgrade", k.findVertexUpgradeCandidates()).then((O) =>
-                O.map((I) => ({
-                  ...I,
-                  toId: I.toVertexId,
+          : import("./utils/model/checkVertexDefaultAvailability.lazy.js").then((mod) =>
+              withProbeDeadline("vertex-upgrade", mod.findVertexUpgradeCandidates()).then((rawCandidates) =>
+                rawCandidates.map((candidate) => ({
+                  ...candidate,
+                  toId: candidate.toVertexId,
                 })),
               ),
             ),
-        import("./chunk-rf3fzhp0.js"),
+        import("./utils/model/stalePins.js"),
       ]);
-      let C =
-        (o === "bedrock"
+      let declined =
+        (provider === "bedrock"
           ? getGlobalConfig().bedrockDeclinedUpgrades
           : getGlobalConfig().vertexDeclinedUpgrades) ?? {};
-      let filtered = T.filter((k) => C[k.tier] !== upgradeKey(k));
+      let filtered = candidates.filter((candidate) => declined[candidate.tier] !== upgradeKey(candidate));
       if (filtered.length === 0) return null;
       let [{ updateSettingsForSource }, { ThirdPartyModelUpgradeDialog }] = await Promise.all([
-        import("./chunk-0crvnfjy.js"),
-        import("./chunk-jxwr2fwk.js"),
+        import("./utils/settings/settings.lazy.js"),
+        import("./components/ThirdPartyModelUpgradeDialog.lazy.js"),
       ]);
-      async function M(k, O) {
-        let tier = fromEnum(k.tier);
-        if (!O) {
-          await saveGlobalConfig((D) => {
-            let U = o === "bedrock" ? "bedrockDeclinedUpgrades" : "vertexDeclinedUpgrades";
+      async function answer(candidate, accepted) {
+        let tier = fromEnum(candidate.tier);
+        if (!accepted) {
+          await saveGlobalConfig((config) => {
+            let configKey = provider === "bedrock" ? "bedrockDeclinedUpgrades" : "vertexDeclinedUpgrades";
             return {
-              ...D,
-              [U]: {
-                ...D[U],
-                [k.tier]: upgradeKey(k),
+              ...config,
+              [configKey]: {
+                ...config[configKey],
+                [candidate.tier]: upgradeKey(candidate),
               },
             };
           }, storageV5);
-          logEvent(u.declined, {
+          logEvent(events.declined, {
             tier,
-            from_key: fromEnum(k.fromKey),
-            to_key: fromEnum(k.toKey),
+            from_key: fromEnum(candidate.fromKey),
+            to_key: fromEnum(candidate.toKey),
           });
           return false;
         }
-        let h =
-          k.tier === "haiku"
+        let envPatch =
+          candidate.tier === "haiku"
             ? {
-                ANTHROPIC_DEFAULT_HAIKU_MODEL: k.toId,
-                ...(k.envVar === "ANTHROPIC_SMALL_FAST_MODEL" && {
-                  ANTHROPIC_SMALL_FAST_MODEL: k.toId,
+                ANTHROPIC_DEFAULT_HAIKU_MODEL: candidate.toId,
+                ...(candidate.envVar === "ANTHROPIC_SMALL_FAST_MODEL" && {
+                  ANTHROPIC_SMALL_FAST_MODEL: candidate.toId,
                 }),
               }
             : {
-                [k.envVar]: k.toId,
+                [candidate.envVar]: candidate.toId,
               };
         let { error } = await updateSettingsForSource(
           "userSettings",
           {
-            env: h,
+            env: envPatch,
           },
           undefined,
           storageV5,
         );
         if (error) {
-          logEvent(u.saveFailed, {
+          logEvent(events.saveFailed, {
             tier,
           });
           return false;
         }
-        for (let key of Object.keys(h)) process.env[key] = k.toId;
-        logEvent(u.accepted, {
+        for (let key of Object.keys(envPatch)) process.env[key] = candidate.toId;
+        logEvent(events.accepted, {
           tier,
-          from_key: fromEnum(k.fromKey),
-          to_key: fromEnum(k.toKey),
+          from_key: fromEnum(candidate.fromKey),
+          to_key: fromEnum(candidate.toKey),
         });
         return true;
       }
       return jsxProd_default(ProviderUpgradeDialog, {
-        provider: o,
+        provider,
         pending: filtered,
-        answer: M,
-        onDone: () => x(),
+        answer,
+        onDone: () => done(),
         Dialog: ThirdPartyModelUpgradeDialog,
       });
     } catch (error) {
@@ -992,54 +1128,54 @@ function createProviderUpgradeStep(o, storageV5) {
 }
 //@ chunk-7fw14qgv.js:16017-17824 layout
 function ProviderUpgradeDialog(props) {
-  let C = w(27);
+  let $ = useMemoCache(27);
   let { provider, pending, answer, onDone, Dialog } = props;
-  let b;
-  if (C[0] === MEMO_CACHE_SENTINEL) {
-    b = {
+  let initialState;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    initialState = {
       at: 0,
       acceptedAny: false,
       phase: "asking",
     };
-    C[0] = b;
-  } else b = C[0];
-  let [E, F] = y(b);
-  let { at, acceptedAny, phase } = E;
+    $[0] = initialState;
+  } else initialState = $[0];
+  let [state, setState] = useState(initialState);
+  let { at, acceptedAny, phase } = state;
   let { exit } = useApp();
-  let h = R(null);
-  let _ = pending[at];
-  let D;
-  if (C[1] !== pending.length) {
-    D = (U) =>
-      F((L) => {
-        let acceptedAny = L.acceptedAny || U;
-        if (L.at + 1 < pending.length) {
+  let lastIndexRef = useRef(null);
+  let current = pending[at];
+  let advance;
+  if ($[1] !== pending.length) {
+    advance = (accepted) =>
+      setState((previous) => {
+        let acceptedAny = previous.acceptedAny || accepted;
+        if (previous.at + 1 < pending.length) {
           return {
-            at: L.at + 1,
+            at: previous.at + 1,
             acceptedAny,
             phase: "asking",
           };
         }
         return {
-          ...L,
+          ...previous,
           acceptedAny,
           phase: acceptedAny ? "relaunching" : "done",
         };
       });
-    C[1] = pending.length;
-    C[2] = D;
-  } else D = C[2];
-  let G = D;
-  let J;
-  let ne;
-  if (C[3] !== G || C[4] !== exit || C[5] !== onDone || C[6] !== phase || C[7] !== provider) {
-    J = () => {
+    $[1] = pending.length;
+    $[2] = advance;
+  } else advance = $[2];
+  let advanceOne = advance;
+  let phaseEffect;
+  let phaseDeps;
+  if ($[3] !== advanceOne || $[4] !== exit || $[5] !== onDone || $[6] !== phase || $[7] !== provider) {
+    phaseEffect = () => {
       if (phase === "done") {
         onDone();
         return;
       }
       if (phase === "save-failed") {
-        let timer = setTimeout(setFlagFalse, 2000, G);
+        let timer = setTimeout(setFlagFalse, 2000, advanceOne);
         return () => clearTimeout(timer);
       }
       if (phase === "relaunching") {
@@ -1048,61 +1184,61 @@ function ProviderUpgradeDialog(props) {
         return () => clearTimeout(timer);
       }
     };
-    ne = [phase, provider, G, onDone, exit];
-    C[3] = G;
-    C[4] = exit;
-    C[5] = onDone;
-    C[6] = phase;
-    C[7] = provider;
-    C[8] = J;
-    C[9] = ne;
+    phaseDeps = [phase, provider, advanceOne, onDone, exit];
+    $[3] = advanceOne;
+    $[4] = exit;
+    $[5] = onDone;
+    $[6] = phase;
+    $[7] = provider;
+    $[8] = phaseEffect;
+    $[9] = phaseDeps;
   } else {
-    J = C[8];
-    ne = C[9];
+    phaseEffect = $[8];
+    phaseDeps = $[9];
   }
-  P(J, ne);
+  useEffect(phaseEffect, phaseDeps);
   if (phase === "relaunching" && acceptedAny) {
-    let W;
-    if (C[10] === MEMO_CACHE_SENTINEL) {
-      W = jsxProd_default(Text, {
+    let restartingElement;
+    if ($[10] === MEMO_CACHE_SENTINEL) {
+      restartingElement = jsxProd_default(Text, {
         dimColor: true,
         children: "Restarting Claude Code to apply the new model\u2026",
       });
-      C[10] = W;
-    } else W = C[10];
-    return W;
+      $[10] = restartingElement;
+    } else restartingElement = $[10];
+    return restartingElement;
   }
-  if (_ === undefined || phase === "done") {
+  if (current === undefined || phase === "done") {
     return null;
   }
   if (phase === "save-failed") {
-    const W = TIER_LABELS[_.tier];
-    let q;
-    if (C[11] !== W) {
-      q = jsxProd_default_2(Text, {
+    const tierLabel = TIER_LABELS[current.tier];
+    let errorElement;
+    if ($[11] !== tierLabel) {
+      errorElement = jsxProd_default_2(Text, {
         color: "error",
-        children: ["Failed to save ", W, " upgrade to settings."],
+        children: ["Failed to save ", tierLabel, " upgrade to settings."],
       });
-      C[11] = W;
-      C[12] = q;
-    } else q = C[12];
-    return q;
+      $[11] = tierLabel;
+      $[12] = errorElement;
+    } else errorElement = $[12];
+    return errorElement;
   }
-  const tierLabel = TIER_LABELS[_.tier];
+  const tierLabel = TIER_LABELS[current.tier];
   let onDone_2;
-  if (C[13] !== G || C[14] !== answer || C[15] !== at || C[16] !== _ || C[17] !== onDone) {
-    onDone_2 = (Me) => {
-      if (h.current === at) {
+  if ($[13] !== advanceOne || $[14] !== answer || $[15] !== at || $[16] !== current || $[17] !== onDone) {
+    onDone_2 = (answerIndex) => {
+      if (lastIndexRef.current === at) {
         return;
       }
-      h.current = at;
-      answer(_, Me).then(
-        (Re) => {
-          if (Me && !Re) {
-            F(markSaveFailed);
+      lastIndexRef.current = at;
+      answer(current, answerIndex).then(
+        (answerResult) => {
+          if (answerIndex && !answerResult) {
+            setState(markSaveFailed);
             return;
           }
-          G(Re);
+          advanceOne(answerResult);
         },
         (error) => {
           logError(error);
@@ -1110,44 +1246,44 @@ function ProviderUpgradeDialog(props) {
         },
       );
     };
-    C[13] = G;
-    C[14] = answer;
-    C[15] = at;
-    C[16] = _;
-    C[17] = onDone;
-    C[18] = onDone_2;
-  } else onDone_2 = C[18];
-  let xe;
+    $[13] = advanceOne;
+    $[14] = answer;
+    $[15] = at;
+    $[16] = current;
+    $[17] = onDone;
+    $[18] = onDone_2;
+  } else onDone_2 = $[18];
+  let dialogElement;
   if (
-    C[19] !== Dialog ||
-    C[20] !== at ||
-    C[21] !== _.fromMarketingName ||
-    C[22] !== _.toId ||
-    C[23] !== _.toMarketingName ||
-    C[24] !== tierLabel ||
-    C[25] !== onDone_2
+    $[19] !== Dialog ||
+    $[20] !== at ||
+    $[21] !== current.fromMarketingName ||
+    $[22] !== current.toId ||
+    $[23] !== current.toMarketingName ||
+    $[24] !== tierLabel ||
+    $[25] !== onDone_2
   ) {
-    xe = jsxProd_default(
+    dialogElement = jsxProd_default(
       Dialog,
       {
         tierLabel,
-        fromName: _.fromMarketingName,
-        toName: _.toMarketingName,
-        toProviderId: _.toId,
+        fromName: current.fromMarketingName,
+        toName: current.toMarketingName,
+        toProviderId: current.toId,
         onDone: onDone_2,
       },
       at,
     );
-    C[19] = Dialog;
-    C[20] = at;
-    C[21] = _.fromMarketingName;
-    C[22] = _.toId;
-    C[23] = _.toMarketingName;
-    C[24] = tierLabel;
-    C[25] = onDone_2;
-    C[26] = xe;
-  } else xe = C[26];
-  return xe;
+    $[19] = Dialog;
+    $[20] = at;
+    $[21] = current.fromMarketingName;
+    $[22] = current.toId;
+    $[23] = current.toMarketingName;
+    $[24] = tierLabel;
+    $[25] = onDone_2;
+    $[26] = dialogElement;
+  } else dialogElement = $[26];
+  return dialogElement;
 }
 //@ chunk-7fw14qgv.js:17824-18587 facade-exports = getRenderContext (0.98)
 /**
@@ -1161,12 +1297,12 @@ function getRenderContext(exitOnCtrlC) {
   let stats = createStatsStore();
   setStatsStore(stats);
   let frameTimingLogPath = env.CLAUDE_CODE_FRAME_TIMING_LOG;
-  let C = -1;
-  let b = 0;
+  let frameLogFd = -1;
+  let frameCount = 0;
   let max = Math.max(1, env.CLAUDE_CODE_FRAME_TIMING_SAMPLE_EVERY || 1);
   if (frameTimingLogPath)
     try {
-      C = openSync(frameTimingLogPath, "a");
+      frameLogFd = openSync(frameTimingLogPath, "a");
     } catch {}
   return {
     getFpsMetrics: () => fpsTracker.getMetrics(),
@@ -1176,21 +1312,21 @@ function getRenderContext(exitOnCtrlC) {
       onFrame: (event) => {
         fpsTracker.record(event.durationMs);
         stats.observe("frame_duration_ms", event.durationMs);
-        if (C >= 0 && event.phases) {
-          let M = b++ % max === 0;
-          let k =
+        if (frameLogFd >= 0 && event.phases) {
+          let shouldSampleResources = frameCount++ % max === 0;
+          let frameLogLine =
             JSON.stringify({
               total: event.durationMs,
               at: Date.now(),
               ...event.phases,
-              ...(M && {
+              ...(shouldSampleResources && {
                 rss: process.memoryUsage.rss(),
                 cpu: process.cpuUsage(),
               }),
             }) +
             `
 `;
-          writeSync(C, k);
+          writeSync(frameLogFd, frameLogLine);
         }
         if (isSynchronizedOutputSupported()) return;
         for (let flicker of event.flickers) {
@@ -1209,134 +1345,36 @@ function getRenderContext(exitOnCtrlC) {
   };
 }
 //@ chunk-7fw14qgv.js:18587-18671 affinity
-function startMemoryWatcherLazy(o, p) {
-  import("./chunk-6cezjbyv.js").then((u) => u.startMemoryWatcher(o, p));
-}
-//@ chunk-20skp6hd.js:1140-1144 placement
-init_react_production();
-//@ chunk-20skp6hd.js:2791-2795 placement
-init_react_production();
-//@ chunk-20skp6hd.js:4353-4564 placement
-/**
- * 列出待批准的项目 MCP 服务器（严格 MCP 配置时为空），并给出其中来自插件的服务器名。
- */
-async function getPendingProjectMcpServers(root) {
-  if (getStrictMcpConfig())
-    return {
-      pendingServers: [],
-      pluginServerNames: new Set(),
-    };
-  let { serverNames, pluginServerNames } = await collectProjectMcpServerNames(root);
-  return {
-    pendingServers: serverNames.filter(
-      (serverName) => getEffectiveProjectMcpServerStatus(serverName) === "pending",
-    ),
-    pluginServerNames,
-  };
-}
-//@ chunk-20skp6hd.js:4885-5222 placement
-/**
- * 有待批准的项目 MCP 服务器时显示批准对话框（单个或多选），并在后台任务中标记等待批准。
- */
-async function projectMcpApprovalDialog({ pendingServers, pluginServerNames }, d, o) {
-  if (pendingServers.length === 0) return null;
-  let l;
-  l = await markJobBlockedOnMcpApproval(
-    pendingServers.map((pendingServer) =>
-      formatMcpServerLabel(pendingServer, pluginServerNames.has(pendingServer)),
-    ),
-    o,
+function startMemoryWatcherLazy(storageV5, credentials) {
+  import("./services/memorySync/memoryWatcher.js").then((mod) =>
+    mod.startMemoryWatcher(storageV5, credentials),
   );
-  let onDone = (v) => {
-    restoreJobStateAfterApproval(l, o)
-      .catch(() => {})
-      .then(() => d(v));
-  };
-  let [m, ...b] = pendingServers;
-  return m !== undefined && b.length === 0
-    ? jsxProd_default(MCPServerApprovalDialog, {
-        serverName: m,
-        isPluginServer: pluginServerNames.has(m),
-        onDone,
-      })
-    : jsxProd_default(MCPServerMultiselectDialog, {
-        serverNames: pendingServers,
-        pluginServerNames,
-        onDone,
-      });
-}
-//@ chunk-20skp6hd.js:5222-5691 placement
-/**
- * 后台任务中把作业状态标记为"等待批准新的项目 MCP 服务器"，返回原状态以便之后恢复。
- */
-async function markJobBlockedOnMcpApproval(t, u) {
-  {
-    if (!isBgSession()) return;
-    let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
-    if (!CLAUDE_JOB_DIR) return;
-    let jobState = await readJobState(CLAUDE_JOB_DIR, u);
-    if (!jobState) return;
-    let l = t.length;
-    let f = plural(l, "server");
-    let m = plural(l, "needs", "need");
-    try {
-      await writeStateAtomic(
-        CLAUDE_JOB_DIR,
-        {
-          ...jobState,
-          state: "blocked",
-          detail: `${l} new MCP ${f} ${m} approval`,
-          tempo: "blocked",
-          needs: `approve ${l} new project MCP ${f} (${t.join(", ")}) \u2014 attach to respond`,
-          updatedAt: new Date().toISOString(),
-        },
-        u,
-      );
-      return {
-        state: jobState.state,
-        tempo: jobState.tempo,
-        needs: jobState.needs,
-        detail: jobState.detail,
-      };
-    } catch (error) {
-      logJobWriteError(error);
-    }
-  }
-  return;
-}
-//@ chunk-20skp6hd.js:5691-5919 placement
-async function restoreJobStateAfterApproval(t, u) {
-  {
-    if (!t || !isBgSession()) return;
-    let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
-    if (!CLAUDE_JOB_DIR) return;
-    let jobState = await readJobState(CLAUDE_JOB_DIR, u);
-    if (!jobState || jobState.state !== "blocked") return;
-    try {
-      await writeStateAtomic(
-        CLAUDE_JOB_DIR,
-        {
-          ...jobState,
-          ...t,
-          block: undefined,
-          updatedAt: new Date().toISOString(),
-        },
-        u,
-      );
-    } catch (error) {
-      logJobWriteError(error);
-    }
-  }
 }
 //@ chunk-d4eg9at2.js:10206-10308 fingerprint = renderAndRun (1)
-function renderAndRun_2(s, o, i) {
-  s.render(
+function renderAndRun_2(root, message, exitCode) {
+  root.render(
     jsxProd_default(RenderOnceAndExit, {
       children: jsxProd_default(Text, {
-        children: formatMessageLines(o),
+        children: formatMessageLines(message),
       }),
     }),
   );
-  s.waitUntilExit().then(() => exitAfterAnalyticsFlush(i));
+  root.waitUntilExit().then(() => exitAfterAnalyticsFlush(exitCode));
 }
-export { showSetupDialog, exitWithMessage, renderAndRun, renderAndRun_2, getPendingProjectMcpServers };
+export {
+  showSetupDialog,
+  exitWithMessage,
+  renderAndRun,
+  renderAndRun_2,
+  getPendingProjectMcpServers,
+  adoptPersistedWorkspaceTrust,
+  completeOnboarding,
+  endInkWithError,
+  exitWithError,
+  exportTelemetryWhileStartPending,
+  getRenderContext,
+  projectMcpApprovalStep,
+  setupSteps,
+  showSettingsLoadHold,
+  showSetupScreens,
+};

@@ -13,28 +13,28 @@
 /**
  * 构造 InvalidArgument 形态的存储错误。
  */
-function invalidStorageArgument(argument, t) {
+function invalidStorageArgument(argument, reason) {
   return {
     code: "InvalidArgument",
     argument,
-    ...(t !== undefined && {
-      reason: t,
+    ...(reason !== undefined && {
+      reason,
     }),
   };
 }
 //@ chunk-2tgyb8s4.js:276-499 placement
-function unavailableStorageError(failureClass = "unknown", t) {
+function unavailableStorageError(failureClass = "unknown", details) {
   return {
     code: "Unavailable",
     failureClass,
-    ...(t?.key !== undefined && {
-      key: t.key,
+    ...(details?.key !== undefined && {
+      key: details.key,
     }),
-    ...(t?.retryAfterMs !== undefined && {
-      retryAfterMs: t.retryAfterMs,
+    ...(details?.retryAfterMs !== undefined && {
+      retryAfterMs: details.retryAfterMs,
     }),
-    ...(t?.telemetryCode !== undefined && {
-      telemetryCode: t.telemetryCode,
+    ...(details?.telemetryCode !== undefined && {
+      telemetryCode: details.telemetryCode,
     }),
   };
 }
@@ -69,8 +69,8 @@ var STOREFENCED = "StoreFenced";
 /**
  * 是否为存储被 fence 的失败。
  */
-function isStoreFencedError(e) {
-  return e.code === "Failed" && "telemetryCode" in e && e.telemetryCode === STOREFENCED;
+function isStoreFencedError(error) {
+  return error.code === "Failed" && "telemetryCode" in error && error.telemetryCode === STOREFENCED;
 }
 //@ chunk-2tgyb8s4.js:912-999 placement
 var SOURCENOTREGULAR = "SourceNotRegular";

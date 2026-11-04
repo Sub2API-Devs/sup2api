@@ -8,9 +8,9 @@
  * pieces: chunk-fr4xjkmb.js (10)
  * attribution: placement 10
  */
-import { init_react_production, y } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
 import { stripAnsi } from "../../utils/stripAnsi.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
@@ -38,8 +38,8 @@ init_react_production();
 var CHECKLIST_WIDTH_RESERVE = 2;
 var MAX_CHECKLIST_VISIBLE_LINES = 6;
 //@ chunk-fr4xjkmb.js:14288-14391 placement = _temp18 (1)
-function sanitizePromptLine(C) {
-  return stripAnsi(C)
+function sanitizePromptLine(line) {
+  return stripAnsi(line)
     .replace(
       /\r\n|\r/g,
       `
@@ -53,33 +53,33 @@ function sanitizePromptLine(C) {
  * 云会话创建期间可先输入消息的提示行。
  */
 function CloudPromptLine(props) {
-  let h = w(8);
+  let $ = useMemoCache(8);
   let { text, onChange, onKey, onReturn } = props;
   let { columns } = useTerminalSize();
-  let [m, l] = y(text.length);
-  let o;
-  if (h[0] === MEMO_CACHE_SENTINEL) {
-    o = jsxProd_default(PromptInputModeIndicator, {
+  let [cursorOffset, setCursorOffset] = useState(text.length);
+  let modeIndicator;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    modeIndicator = jsxProd_default(PromptInputModeIndicator, {
       mode: "prompt",
       isLoading: false,
     });
-    h[0] = o;
-  } else o = h[0];
+    $[0] = modeIndicator;
+  } else modeIndicator = $[0];
   const columns_2 = Math.max(1, columns - CHECKLIST_WIDTH_RESERVE);
-  let R;
+  let row;
   if (
-    h[1] !== m ||
-    h[2] !== onChange ||
-    h[3] !== onKey ||
-    h[4] !== onReturn ||
-    h[5] !== columns_2 ||
-    h[6] !== text
+    $[1] !== cursorOffset ||
+    $[2] !== onChange ||
+    $[3] !== onKey ||
+    $[4] !== onReturn ||
+    $[5] !== columns_2 ||
+    $[6] !== text
   ) {
-    R = jsxProd_default_2(Box, {
+    row = jsxProd_default_2(Box, {
       flexDirection: "row",
       marginTop: 1,
       children: [
-        o,
+        modeIndicator,
         jsxProd_default(TextInput, {
           value: text,
           onChange,
@@ -95,38 +95,38 @@ function CloudPromptLine(props) {
           showCursor: true,
           columns: columns_2,
           maxVisibleLines: MAX_CHECKLIST_VISIBLE_LINES,
-          cursorOffset: m,
-          onChangeCursorOffset: l,
+          cursorOffset,
+          onChangeCursorOffset: setCursorOffset,
         }),
       ],
     });
-    h[1] = m;
-    h[2] = onChange;
-    h[3] = onKey;
-    h[4] = onReturn;
-    h[5] = columns_2;
-    h[6] = text;
-    h[7] = R;
-  } else R = h[7];
-  return R;
+    $[1] = cursorOffset;
+    $[2] = onChange;
+    $[3] = onKey;
+    $[4] = onReturn;
+    $[5] = columns_2;
+    $[6] = text;
+    $[7] = row;
+  } else row = $[7];
+  return row;
 }
 //@ chunk-fr4xjkmb.js:15077-15109 placement
 function nowMs() {
   return Date.now();
 }
 //@ chunk-fr4xjkmb.js:15109-15146 placement
-function initialSetupStep(Ke) {
-  return setupStepLabel(Ke, "new");
+function initialSetupStep(step) {
+  return setupStepLabel(step, "new");
 }
 //@ chunk-fr4xjkmb.js:15146-15207 placement
-function pendingStepLine(ie) {
+function pendingStepLine(step) {
   return jsxProd_default(
     BootstrapStatusLine,
     {
       status: "pending",
-      label: ie,
+      label: step,
     },
-    ie,
+    step,
   );
 }
 //@ chunk-fr4xjkmb.js:15207-17271 placement
@@ -134,142 +134,142 @@ function pendingStepLine(ie) {
  * 云会话创建进度清单（容器准备、克隆、安装脚本、启动 CC），可取消，期间可先打字。
  */
 function CloudCreateChecklist(props) {
-  let o = w(40);
+  let $ = useMemoCache(40);
   let { state, cancelling, onCancel, hasPromptLine, isQuestionWaiting } = props;
   let { columns } = useTerminalSize();
-  let [l, h] = y(nowMs);
-  let x;
-  if (o[0] === MEMO_CACHE_SENTINEL) {
-    x = () => h(Date.now());
-    o[0] = x;
-  } else x = o[0];
-  useInterval(x, 1000);
-  let R;
-  if (o[1] !== hasPromptLine) {
-    R = () => (hasPromptLine ? openEarlyInputField() : "");
-    o[1] = hasPromptLine;
-    o[2] = R;
-  } else R = o[2];
-  let [d, ke] = y(R);
-  let [g, Z] = y(false);
-  let ee;
-  if (o[3] !== state) {
-    ee = uploadProgressPhase(state);
-    o[3] = state;
-    o[4] = ee;
-  } else ee = o[4];
-  let u = ee === "created";
-  let v;
-  if (o[5] !== onCancel || o[6] !== d) {
-    v = () => (d === "" ? onCancel() : false);
-    o[5] = onCancel;
-    o[6] = d;
-    o[7] = v;
-  } else v = o[7];
-  let te;
-  if (o[8] !== onCancel || o[9] !== v) {
-    te = {
+  let [now, setNow] = useState(nowMs);
+  let tickNow;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    tickNow = () => setNow(Date.now());
+    $[0] = tickNow;
+  } else tickNow = $[0];
+  useInterval(tickNow, 1000);
+  let initialPrompt;
+  if ($[1] !== hasPromptLine) {
+    initialPrompt = () => (hasPromptLine ? openEarlyInputField() : "");
+    $[1] = hasPromptLine;
+    $[2] = initialPrompt;
+  } else initialPrompt = $[2];
+  let [earlyInput, setEarlyInput] = useState(initialPrompt);
+  let [isSending, setIsSending] = useState(false);
+  let uploadPhase;
+  if ($[3] !== state) {
+    uploadPhase = uploadProgressPhase(state);
+    $[3] = state;
+    $[4] = uploadPhase;
+  } else uploadPhase = $[4];
+  let isCreated = uploadPhase === "created";
+  let exitHandler;
+  if ($[5] !== onCancel || $[6] !== earlyInput) {
+    exitHandler = () => (earlyInput === "" ? onCancel() : false);
+    $[5] = onCancel;
+    $[6] = earlyInput;
+    $[7] = exitHandler;
+  } else exitHandler = $[7];
+  let keymap;
+  if ($[8] !== onCancel || $[9] !== exitHandler) {
+    keymap = {
       "app:interrupt": onCancel,
-      "app:exit": v,
+      "app:exit": exitHandler,
     };
-    o[8] = onCancel;
-    o[9] = v;
-    o[10] = te;
-  } else te = o[10];
-  let De = te;
-  const isActive = !u;
-  let oe;
-  if (o[11] !== isActive) {
-    oe = {
+    $[8] = onCancel;
+    $[9] = exitHandler;
+    $[10] = keymap;
+  } else keymap = $[10];
+  let globalKeymap = keymap;
+  const isActive = !isCreated;
+  let keymapContext;
+  if ($[11] !== isActive) {
+    keymapContext = {
       context: "Global",
       isActive,
     };
-    o[11] = isActive;
-    o[12] = oe;
-  } else oe = o[12];
-  MessageActionsKeybindings(De, oe);
-  let ne;
-  if (o[13] === MEMO_CACHE_SENTINEL) {
-    ne = createSetupProgress(0, {
+    $[11] = isActive;
+    $[12] = keymapContext;
+  } else keymapContext = $[12];
+  MessageActionsKeybindings(globalKeymap, keymapContext);
+  let statusView;
+  if ($[13] === MEMO_CACHE_SENTINEL) {
+    statusView = createSetupProgress(0, {
       wake: false,
     }).steps.map(initialSetupStep);
-    o[13] = ne;
-  } else ne = o[13];
-  let We = ne;
+    $[13] = statusView;
+  } else statusView = $[13];
+  let stepRows = statusView;
   let children;
-  if (o[14] !== state) {
+  if ($[14] !== state) {
     children = cloudCreateTitle(state);
-    o[14] = state;
-    o[15] = children;
-  } else children = o[15];
-  let L;
-  if (o[16] !== children) {
-    L = jsxProd_default(Text, {
+    $[14] = state;
+    $[15] = children;
+  } else children = $[15];
+  let progressRows;
+  if ($[16] !== children) {
+    progressRows = jsxProd_default(Text, {
       bold: true,
       children,
     });
-    o[16] = children;
-    o[17] = L;
-  } else L = o[17];
-  let O;
-  if (o[18] !== columns || o[19] !== l || o[20] !== state) {
-    O = state.steps.map((step) =>
+    $[16] = children;
+    $[17] = progressRows;
+  } else progressRows = $[17];
+  let promptRow;
+  if ($[18] !== columns || $[19] !== now || $[20] !== state) {
+    promptRow = state.steps.map((step) =>
       jsxProd_default(
         ChecklistStep,
         {
           step,
           state,
-          now: l,
+          now,
           columns,
         },
         step.id,
       ),
     );
-    o[18] = columns;
-    o[19] = l;
-    o[20] = state;
-    o[21] = O;
-  } else O = o[21];
-  let N;
-  if (o[22] !== u) {
-    N = !u && We.map(pendingStepLine);
-    o[22] = u;
-    o[23] = N;
-  } else N = o[23];
-  let k;
-  if (o[24] !== hasPromptLine || o[25] !== d || o[26] !== g) {
-    k =
+    $[18] = columns;
+    $[19] = now;
+    $[20] = state;
+    $[21] = promptRow;
+  } else promptRow = $[21];
+  let hintText;
+  if ($[22] !== isCreated) {
+    hintText = !isCreated && stepRows.map(pendingStepLine);
+    $[22] = isCreated;
+    $[23] = hintText;
+  } else hintText = $[23];
+  let layout;
+  if ($[24] !== hasPromptLine || $[25] !== earlyInput || $[26] !== isSending) {
+    layout =
       hasPromptLine &&
       jsxProd_default(CloudPromptLine, {
-        text: d,
+        text: earlyInput,
         onChange: (buffer) => {
-          ke(buffer);
+          setEarlyInput(buffer);
           editEarlyInputField(buffer);
-          Z(false);
+          setIsSending(false);
         },
         onKey: noteEarlyInputFieldKey,
         onReturn: () => {
-          if (!g) {
+          if (!isSending) {
             logEvent("tengu_cloud_create_prompt_return_ignored", {});
-            Z(true);
+            setIsSending(true);
           }
         },
       });
-    o[24] = hasPromptLine;
-    o[25] = d;
-    o[26] = g;
-    o[27] = k;
-  } else k = o[27];
-  let D;
+    $[24] = hasPromptLine;
+    $[25] = earlyInput;
+    $[26] = isSending;
+    $[27] = layout;
+  } else layout = $[27];
+  let pendingRow;
   if (
-    o[28] !== cancelling ||
-    o[29] !== u ||
-    o[30] !== hasPromptLine ||
-    o[31] !== isQuestionWaiting ||
-    o[32] !== g
+    $[28] !== cancelling ||
+    $[29] !== isCreated ||
+    $[30] !== hasPromptLine ||
+    $[31] !== isQuestionWaiting ||
+    $[32] !== isSending
   ) {
-    D =
-      !u &&
+    pendingRow =
+      !isCreated &&
       jsxProd_default(Box, {
         marginTop: 1,
         children: jsxProd_default(Text, {
@@ -283,7 +283,7 @@ function CloudCreateChecklist(props) {
                     ? "Typing is paused until the prompt opens"
                     : isQuestionWaiting
                       ? "A question is waiting. Pause typing to see it"
-                      : g
+                      : isSending
                         ? "Not sent. You can send your message once the session opens"
                         : "You can send your message once the session opens",
               }),
@@ -297,67 +297,74 @@ function CloudCreateChecklist(props) {
           }),
         }),
       });
-    o[28] = cancelling;
-    o[29] = u;
-    o[30] = hasPromptLine;
-    o[31] = isQuestionWaiting;
-    o[32] = g;
-    o[33] = D;
-  } else D = o[33];
-  let ae;
-  if (o[34] !== L || o[35] !== O || o[36] !== N || o[37] !== k || o[38] !== D) {
-    ae = jsxProd_default_2(Box, {
+    $[28] = cancelling;
+    $[29] = isCreated;
+    $[30] = hasPromptLine;
+    $[31] = isQuestionWaiting;
+    $[32] = isSending;
+    $[33] = pendingRow;
+  } else pendingRow = $[33];
+  let inner;
+  if (
+    $[34] !== progressRows ||
+    $[35] !== promptRow ||
+    $[36] !== hintText ||
+    $[37] !== layout ||
+    $[38] !== pendingRow
+  ) {
+    inner = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginTop: 1,
-      children: [L, O, N, k, D],
+      children: [progressRows, promptRow, hintText, layout, pendingRow],
     });
-    o[34] = L;
-    o[35] = O;
-    o[36] = N;
-    o[37] = k;
-    o[38] = D;
-    o[39] = ae;
-  } else ae = o[39];
-  return ae;
+    $[34] = progressRows;
+    $[35] = promptRow;
+    $[36] = hintText;
+    $[37] = layout;
+    $[38] = pendingRow;
+    $[39] = inner;
+  } else inner = $[39];
+  return inner;
 }
 //@ chunk-fr4xjkmb.js:17271-17719 placement
 /**
  * 清单中的一个步骤行（状态、注释、详情）。
  */
 function ChecklistStep(props) {
-  let f = w(10);
+  let $ = useMemoCache(10);
   let { step, state, now, columns } = props;
-  let m;
-  if (f[0] !== now || f[1] !== state || f[2] !== step) {
-    m = teleportProgressRow(step, state, now);
-    f[0] = now;
-    f[1] = state;
-    f[2] = step;
-    f[3] = m;
-  } else m = f[3];
-  let l = m;
-  let h;
+  let progress;
+  if ($[0] !== now || $[1] !== state || $[2] !== step) {
+    progress = teleportProgressRow(step, state, now);
+    $[0] = now;
+    $[1] = state;
+    $[2] = step;
+    $[3] = progress;
+  } else progress = $[3];
+  let rowInfo = progress;
+  let statusLine;
   if (
-    f[4] !== columns ||
-    f[5] !== step.status ||
-    f[6] !== l.annotation ||
-    f[7] !== l.detail ||
-    f[8] !== l.label
+    $[4] !== columns ||
+    $[5] !== step.status ||
+    $[6] !== rowInfo.annotation ||
+    $[7] !== rowInfo.detail ||
+    $[8] !== rowInfo.label
   ) {
-    h = jsxProd_default(BootstrapStatusLine, {
+    statusLine = jsxProd_default(BootstrapStatusLine, {
       status: step.status,
-      label: l.label,
-      annotation: l.annotation,
-      detail: l.detail,
+      label: rowInfo.label,
+      annotation: rowInfo.annotation,
+      detail: rowInfo.detail,
       columns,
       detailOverflow: "wrap",
     });
-    f[4] = columns;
-    f[5] = step.status;
-    f[6] = l.annotation;
-    f[7] = l.detail;
-    f[8] = l.label;
-    f[9] = h;
-  } else h = f[9];
-  return h;
+    $[4] = columns;
+    $[5] = step.status;
+    $[6] = rowInfo.annotation;
+    $[7] = rowInfo.detail;
+    $[8] = rowInfo.label;
+    $[9] = statusLine;
+  } else statusLine = $[9];
+  return statusLine;
 }
+export { CloudCreateChecklist };

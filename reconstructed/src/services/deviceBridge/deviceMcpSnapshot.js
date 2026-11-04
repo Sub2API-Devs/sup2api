@@ -11,7 +11,14 @@
 import { join, dirname } from "path";
 import { hostname } from "os";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, literal, string, record, union, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  literal,
+  stringSchema,
+  record,
+  union,
+  array,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { computeContentHash } from "../../utils/commitAttribution.js";
 import { jsonStringifyRaw, jsonParse, jsonStringify } from "../../utils/slowOperations.js";
 import { TOOL_META_KEYS } from "../../bridge/deviceRegistration.js";
@@ -36,20 +43,20 @@ var MAX_SNAPSHOT_NAME_CHARS = 128;
 /**
  * 该服务器的快照是否有新增或变化。
  */
-function hasSnapshotChanges(e) {
-  return e.added.length > 0 || e.changed.length > 0;
+function hasSnapshotChanges(snapshot) {
+  return snapshot.added.length > 0 || snapshot.changed.length > 0;
 }
 //@ chunk-251gbqc0.js:815-957 placement
 var DEVICE_MCP_SNAPSHOT_SCHEMA = DoctorLazy(() =>
-  u({
+  objectSchema({
     version: literal(SNAPSHOT_SCHEMA_VERSION),
-    hostname: string(),
-    servers: record(string(), union([record(string(), string()), literal("declined")])),
+    hostname: stringSchema(),
+    servers: record(stringSchema(), union([record(stringSchema(), stringSchema()), literal("declined")])),
     withheld: record(
-      string(),
-      u({
-        added: array(string()),
-        changed: array(string()),
+      stringSchema(),
+      objectSchema({
+        added: array(stringSchema()),
+        changed: array(stringSchema()),
       }),
     ),
   }),
@@ -58,13 +65,13 @@ var DEVICE_MCP_SNAPSHOT_SCHEMA = DoctorLazy(() =>
 /**
  * 计算 MCP 工具外观（名称、描述、输入 schema、搜索提示）的内容哈希，用于检测工具变更。
  */
-function hashToolShape(e) {
-  let _meta = typeof e._meta === "object" && e._meta !== null ? e._meta : {};
+function hashToolShape(tool) {
+  let _meta = typeof tool._meta === "object" && tool._meta !== null ? tool._meta : {};
   return computeContentHash(
     jsonStringifyRaw({
-      name: e.name,
-      description: e.description,
-      inputSchema: e.inputSchema,
+      name: tool.name,
+      description: tool.description,
+      inputSchema: tool.inputSchema,
       searchHint: _meta[TOOL_META_KEYS.searchHint],
     }),
   );
@@ -73,40 +80,42 @@ function hashToolShape(e) {
 /**
  * 生成工具名到形状哈希的映射。
  */
-function toolShapeHashes(e) {
-  return Object.fromEntries(e.map((r) => [r.name, hashToolShape(r)]));
+function toolShapeHashes(tools) {
+  return Object.fromEntries(tools.map((tool) => [tool.name, hashToolShape(tool)]));
 }
 //@ chunk-251gbqc0.js:1206-1453 placement
-function diffToolHashes(e, r) {
-  if (r === "declined")
+function diffToolHashes(current, previous) {
+  if (previous === "declined")
     return {
       added: [],
       changed: [],
     };
-  let filtered = Object.keys(e).filter((key) => !Object.hasOwn(r, key));
-  let filtered_2 = Object.keys(e).filter((key) => Object.hasOwn(r, key) && r[key] !== e[key]);
-  if (filtered.length === 0 && filtered_2.length === 0) return;
+  let entries = Object.keys(current).filter((key) => !Object.hasOwn(previous, key));
+  let entries_2 = Object.keys(current).filter(
+    (key) => Object.hasOwn(previous, key) && previous[key] !== current[key],
+  );
+  if (entries.length === 0 && entries_2.length === 0) return;
   return {
-    added: clipSnapshotEntries(filtered),
-    changed: clipSnapshotEntries(filtered_2),
+    added: clipSnapshotEntries(entries),
+    changed: clipSnapshotEntries(entries_2),
   };
 }
 //@ chunk-251gbqc0.js:1453-1512 placement
 /**
  * 把快照条目裁剪成最多 8 组、每组名字最多 128 字符。
  */
-function clipSnapshotEntries(e) {
-  return e.slice(0, MAX_SNAPSHOT_SERVERS).map((r) => r.slice(0, MAX_SNAPSHOT_NAME_CHARS));
+function clipSnapshotEntries(entries) {
+  return entries.slice(0, MAX_SNAPSHOT_SERVERS).map((entry) => entry.slice(0, MAX_SNAPSHOT_NAME_CHARS));
 }
 //@ chunk-251gbqc0.js:1512-1617 placement
 /**
  * 合并设备 MCP 快照：服务器以新快照为准覆盖旧快照，保留新快照的 withheld。
  */
-function mergeSnapshot(deviceMcpSnapshot, r) {
-  if (r === undefined) return deviceMcpSnapshot;
+function mergeSnapshot(deviceMcpSnapshot, base) {
+  if (base === undefined) return deviceMcpSnapshot;
   return {
     servers: {
-      ...r.servers,
+      ...base.servers,
       ...deviceMcpSnapshot.servers,
     },
     withheld: deviceMcpSnapshot.withheld,
@@ -116,46 +125,48 @@ function mergeSnapshot(deviceMcpSnapshot, r) {
 /**
  * 把当前各服务器的工具哈希与快照对比：新服务器直接记入；已知服务器的新增/变化工具记为扣留（需重新同意）；返回扣留明细、下一版快照与是否有变化。
  */
-function reconcileSnapshot(byServer, r) {
-  let i = new Map();
-  let n = {
-    ...r.servers,
+function reconcileSnapshot(byServer, snapshot) {
+  let withheld = new Map();
+  let servers = {
+    ...snapshot.servers,
   };
-  let s = false;
-  for (let [a, y] of byServer) {
-    let f = toolShapeHashes(y);
-    let l = Object.hasOwn(r.servers, a) ? r.servers[a] : undefined;
-    if (l === undefined) {
-      n[a] = f;
-      s = true;
+  let addedServers = false;
+  for (let [serverName, tools] of byServer) {
+    let hashes = toolShapeHashes(tools);
+    let previous = Object.hasOwn(snapshot.servers, serverName) ? snapshot.servers[serverName] : undefined;
+    if (previous === undefined) {
+      servers[serverName] = hashes;
+      addedServers = true;
       continue;
     }
-    let S = diffToolHashes(f, l);
-    if (S !== undefined) i.set(a, S);
+    let diff = diffToolHashes(hashes, previous);
+    if (diff !== undefined) withheld.set(serverName, diff);
   }
-  let c = Object.fromEntries([...i].filter(([, a]) => hasSnapshotChanges(a)));
+  let changedWithheld = Object.fromEntries(
+    [...withheld].filter(([, entries]) => hasSnapshotChanges(entries)),
+  );
   return {
-    withheld: i,
+    withheld,
     next: {
-      servers: n,
-      withheld: c,
+      servers,
+      withheld: changedWithheld,
     },
-    changed: s || jsonStringifyRaw(c) !== jsonStringifyRaw(r.withheld),
+    changed: addedServers || jsonStringifyRaw(changedWithheld) !== jsonStringifyRaw(snapshot.withheld),
   };
 }
 //@ chunk-251gbqc0.js:1960-2097 placement
 /**
  * 按用户选择更新快照中的服务器同意状态（接受则删除记录，拒绝则标记 declined），并清空 withheld。
  */
-function applyConsentChoice(e, r, i) {
-  let n = {
-    ...e.servers,
+function applyConsentChoice(snapshot, serverNames, choice) {
+  let servers = {
+    ...snapshot.servers,
   };
-  for (let s of r)
-    if (i === "accepted") delete n[s];
-    else n[s] = "declined";
+  for (let serverName of serverNames)
+    if (choice === "accepted") delete servers[serverName];
+    else servers[serverName] = "declined";
   return {
-    servers: n,
+    servers,
     withheld: {},
   };
 }
@@ -164,45 +175,46 @@ function applyConsentChoice(e, r, i) {
  * 读取设备 MCP 工具快照：读不到返回 unreadable，没有文件或主机名不一致/格式错误时返回空快照。
  */
 async function readDeviceMcpSnapshot(snapshotStore) {
-  let r = {
+  let initial = {
     servers: {},
     withheld: {},
   };
-  let i;
+  let text;
   try {
-    i = await snapshotStore.readText();
+    text = await snapshotStore.readText();
   } catch (error) {
     logForDebugging(`device-mcp snapshot: store unreadable (${errorMessage(error)})`, {
       level: "warn",
     });
     return "unreadable";
   }
-  if (i === undefined) return r;
+  if (text === undefined) return initial;
   try {
-    let n = DEVICE_MCP_SNAPSHOT_SCHEMA().safeParse(jsonParse(i));
-    return n.success && normalizeHostname(n.data.hostname) === normalizeHostname(snapshotStore.hostname())
+    let parsed = DEVICE_MCP_SNAPSHOT_SCHEMA().safeParse(jsonParse(text));
+    return parsed.success &&
+      normalizeHostname(parsed.data.hostname) === normalizeHostname(snapshotStore.hostname())
       ? {
-          servers: n.data.servers,
-          withheld: n.data.withheld,
+          servers: parsed.data.servers,
+          withheld: parsed.data.withheld,
         }
-      : r;
+      : initial;
   } catch {
-    return r;
+    return initial;
   }
 }
 //@ chunk-251gbqc0.js:2453-2681 placement
 /**
  * 把设备 MCP 快照（版本、主机名、服务器与 withheld）写成 JSON 文件，失败时返回 false。
  */
-async function writeDeviceMcpSnapshot(e, snapshotStore) {
+async function writeDeviceMcpSnapshot(snapshot, snapshotStore) {
   try {
     await snapshotStore.writeText(
       jsonStringify(
         {
           version: SNAPSHOT_SCHEMA_VERSION,
           hostname: normalizeHostname(snapshotStore.hostname()),
-          servers: e.servers,
-          withheld: e.withheld,
+          servers: snapshot.servers,
+          withheld: snapshot.withheld,
         },
         null,
         2,
@@ -237,15 +249,15 @@ function resetSnapshotHint() {
  * 为设备 MCP 快照建立读写对象：启用 v5 存储时用存储的 state 键，否则用本地文件（0600 原子写）。
  */
 function createSnapshotStore(storageV5) {
-  let r = isStorageV5Enabled() && storageV5 !== undefined ? storageV5 : undefined;
-  let i = STORAGE_SPACES.state(DEVICE_MCP_SNAPSHOT);
+  let storage = isStorageV5Enabled() && storageV5 !== undefined ? storageV5 : undefined;
+  let snapshotKey = STORAGE_SPACES.state(DEVICE_MCP_SNAPSHOT);
   return {
     readText: async () => {
-      if (r) {
-        let text = await r.readText([i]);
+      if (storage) {
+        let text = await storage.readText([snapshotKey]);
         if (!text.ok) throw Error("device-mcp snapshot read failed");
-        let s = text.value.items[0];
-        return s.found ? s.value : undefined;
+        let item = text.value.items[0];
+        return item.found ? item.value : undefined;
       }
       try {
         return await getFileReader().read(snapshotFilePath());
@@ -254,11 +266,11 @@ function createSnapshotStore(storageV5) {
         throw error;
       }
     },
-    writeText: async (n) => {
-      if (r) {
+    writeText: async (text) => {
+      if (storage) {
         if (
           !(
-            await r.write(i, n, {
+            await storage.write(snapshotKey, text, {
               mode: 384,
             })
           ).ok
@@ -266,9 +278,9 @@ function createSnapshotStore(storageV5) {
           throw Error("device-mcp snapshot write failed");
         return;
       }
-      let s = snapshotFilePath();
-      await getFileReader().mkdir(dirname(s), 448);
-      await getFileReader().atomicWrite(s, n, 384);
+      let filePath = snapshotFilePath();
+      await getFileReader().mkdir(dirname(filePath), 448);
+      await getFileReader().atomicWrite(filePath, text, 384);
     },
     hostname,
   };

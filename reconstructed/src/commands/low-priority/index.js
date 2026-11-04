@@ -23,7 +23,7 @@ var lowPriorityCommandDefinition = {
   supportsNonInteractive: false,
   isEnabled: () => isClaudeAISubscriber() && (isLowPriorityActive() || isLowPriorityEnabled()),
   isHidden: true,
-  load: () => import("./chunk-khcb6nvd.js"),
+  load: () => import("../statusline/call.lazy.js"),
 };
 var lowPriorityCommand = lowPriorityCommandDefinition;
 export { lowPriorityCommand };

@@ -46,9 +46,10 @@ import { groupByApiRound } from "../../services/compact/compact.js";
 //@ chunk-e6aww6q8.js:3385228-3385240 sole-consumer
 var MAX_REPEATED_PROMPT_CHARS = 500;
 //@ chunk-e6aww6q8.js:3385240-3385340 sole-consumer
-function transcriptMentions(e, n) {
-  return (e ?? []).some(
-    (r) => r.type === "user" && indexOfKmp(getContentText(r.message.content) ?? "", n, 0) !== -1,
+function transcriptMentions(messages, needle) {
+  return (messages ?? []).some(
+    (message) =>
+      message.type === "user" && indexOfKmp(getContentText(message.message.content) ?? "", needle, 0) !== -1,
   );
 }
 //@ chunk-e6aww6q8.js:3385340-3390612 fingerprint = execPromptHook (0.669)
@@ -67,24 +68,24 @@ async function execPromptHook(
   hookTimeoutMs_2,
 ) {
   let effectiveToolUseID = toolUseID || `hook-${randomUUID()}`;
-  let q = hookEvent === "Stop" || hookEvent === "SubagentStop";
+  let isStopEvent = hookEvent === "Stop" || hookEvent === "SubagentStop";
   try {
-    let Z = q
+    let promptText = isStopEvent
       ? `Based on the conversation transcript above, has the following stopping condition been satisfied? Answer based on transcript evidence only.
 
 Condition: ${hook.prompt}`
       : hook.prompt;
-    let processedPrompt = substituteArguments(Z, jsonInput);
+    let processedPrompt = substituteArguments(promptText, jsonInput);
     logForDebugging(`Hooks: Processing prompt hook with prompt: ${processedPrompt}`);
     let userMessage = createUserMessage({
       content: processedPrompt,
     });
-    let we = hook.model ?? getSmallFastModel();
-    let Ee = (lt) =>
+    let model = hook.model ?? getSmallFastModel();
+    let buildMessages = (ratio) =>
       messages && messages.length > 0
-        ? [...truncateStopHookTranscript(messages, we, lt), userMessage]
+        ? [...truncateStopHookTranscript(messages, model, ratio), userMessage]
         : [userMessage];
-    let messages_2 = Ee();
+    let messages_2 = buildMessages();
     logForDebugging(`Hooks: Querying model with ${messages_2.length} messages`);
     let hookTimeoutMs_3 = hookTimeoutMs(hook, 30000);
     let now = Date.now();
@@ -92,7 +93,7 @@ Condition: ${hook.prompt}`
       timeoutMs: hookTimeoutMs_3,
     });
     try {
-      let lt = `You are evaluating a stop-condition hook in Claude Code. Read the conversation transcript carefully, then judge whether the user-provided condition is satisfied.
+      let stopSystemPrompt = `You are evaluating a stop-condition hook in Claude Code. Read the conversation transcript carefully, then judge whether the user-provided condition is satisfied.
 
 ${HOOK_OK_SEMANTICS}
 
@@ -104,7 +105,7 @@ Your response must be a JSON object with one of these shapes:
 Always include a "reason" field, quoting specific text from the transcript whenever possible. If the transcript does not contain clear evidence that the condition is satisfied, return {"ok": false, "reason": "insufficient evidence in transcript"}.
 
 Only use {"ok": false, "impossible": true} when the condition is genuinely unachievable in this session \u2014 for example: the condition is self-contradictory, it depends on a resource or capability that is unavailable, or the assistant has explicitly tried, exhausted reasonable approaches, and stated it cannot be done. Apply your own judgment when deciding this \u2014 the assistant claiming the goal is impossible is evidence, not proof; independently confirm the condition is genuinely unachievable rather than deferring to the assistant's self-assessment. Do not use it just because the goal has not been reached yet or because progress is slow. When in doubt, return {"ok": false} without "impossible".`;
-      let Je = `You are evaluating a hook in Claude Code. The user's text says what to check. Decide whether the action may go ahead.
+      let hookSystemPrompt = `You are evaluating a hook in Claude Code. The user's text says what to check. Decide whether the action may go ahead.
 
 ${HOOK_OK_SEMANTICS}
 
@@ -113,10 +114,10 @@ Your response must be a JSON object with one of these shapes:
 - {"ok": false, "reason": "<why the action is blocked>"}
 
 Always include a "reason" field.`;
-      let nt = (messages) =>
+      let queryWith = (messages) =>
         queryModelWithoutStreaming({
           messages,
-          systemPrompt: asSystemPrompt([q ? lt : Je]),
+          systemPrompt: asSystemPrompt([isStopEvent ? stopSystemPrompt : hookSystemPrompt]),
           thinkingConfig: {
             type: "disabled",
             mechanical: true,
@@ -127,7 +128,7 @@ Always include a "reason" field.`;
             async getToolPermissionContext() {
               return getToolPermissionContext(toolUseContext);
             },
-            model: we,
+            model,
             toolChoice: undefined,
             isNonInteractiveSession: true,
             hasAppendSystemPrompt: false,
@@ -161,14 +162,14 @@ Always include a "reason" field.`;
             },
           },
         });
-      let response = await nt(messages_2);
+      let response = await queryWith(messages_2);
       if (isPromptTooLongMessage_2(response) && messages && messages.length > 0) {
         logEvent("tengu_hook_prompt_too_long_retry", {
-          evaluatorModel: telemetrySafeModelName(we),
+          evaluatorModel: telemetrySafeModelName(model),
         });
-        messages_2 = Ee(PROMPT_TOO_LONG_RETRY_RATIO / 2);
+        messages_2 = buildMessages(PROMPT_TOO_LONG_RETRY_RATIO / 2);
         logForDebugging(`Hooks: evaluator prompt too long; retrying with ${messages_2.length} messages`);
-        response = await nt(messages_2);
+        response = await queryWith(messages_2);
       }
       cleanupSignal();
       if (response.isApiErrorMessage) {
@@ -209,7 +210,7 @@ Always include a "reason" field.`;
         });
       }
       if (!parsed.data.ok) {
-        if (parsed.data.impossible === true && q) {
+        if (parsed.data.impossible === true && isStopEvent) {
           logForDebugging(`Hooks: Prompt hook condition judged impossible: ${parsed.data.reason}`);
           return {
             hook,
@@ -226,20 +227,20 @@ Always include a "reason" field.`;
           };
         }
         logForDebugging(`Hooks: Prompt hook condition was not met: ${parsed.data.reason}`);
-        let It = transcriptMentions(messages, `[${hook.prompt}]:`)
+        let reasonText = transcriptMentions(messages, `[${hook.prompt}]:`)
           ? truncateWithCount(hook.prompt, MAX_REPEATED_PROMPT_CHARS)
           : hook.prompt;
         return {
           hook,
           outcome: "blocking",
           blockingError: {
-            blockingError: `[${It}]: ${parsed.data.reason}`,
-            command: It,
+            blockingError: `[${reasonText}]: ${parsed.data.reason}`,
+            command: reasonText,
             ...promptEndingFields(hookEvent, {
               reason: parsed.data.reason,
             }),
           },
-          preventContinuation: !q && hook.continueOnBlock !== true,
+          preventContinuation: !isStopEvent && hook.continueOnBlock !== true,
           stopReason: parsed.data.reason,
         };
       }
@@ -259,23 +260,26 @@ Always include a "reason" field.`;
     } catch (error) {
       cleanupSignal();
       if (combinedSignal.aborted) {
-        let Je = !toolUseContext.abortController.signal.aborted;
-        if (Je) {
-          let nt = Date.now() - now;
+        let timedOut = !toolUseContext.abortController.signal.aborted;
+        if (timedOut) {
+          let durationMs = Date.now() - now;
           let min = Math.min(hookTimeoutMs_3, hookTimeoutMs_2 ?? 1 / 0);
-          logForDebugging(`Hooks: prompt hook (${hookEvent}) timed out after ${nt}ms (limit ${min}ms)`, {
-            level: "warn",
-          });
+          logForDebugging(
+            `Hooks: prompt hook (${hookEvent}) timed out after ${durationMs}ms (limit ${min}ms)`,
+            {
+              level: "warn",
+            },
+          );
           logEvent("tengu_hook_prompt_timeout", {
             hookEvent: fromEnum(hookEvent),
             timeoutMs: min,
-            durationMs: nt,
+            durationMs,
           });
         }
         return {
           hook,
           outcome: "cancelled",
-          timedOut: Je,
+          timedOut,
         };
       }
       throw error;
@@ -297,61 +301,61 @@ var PROMPT_TOO_LONG_RETRY_RATIO = 0.5;
 //@ chunk-e6aww6q8.js:3390624-3390805 placement = getTokenUsage (0.835)
 function getTokenUsage_2(message) {
   for (let idx = message.length - 1; idx >= 0; idx--) {
-    let r = message[idx];
+    let message_2 = message[idx];
     if (
-      r.type === "assistant" &&
-      "usage" in r.message &&
-      r.message.model !== SYNTHETIC_MODEL &&
-      r.isUnmetered !== true
+      message_2.type === "assistant" &&
+      "usage" in message_2.message &&
+      message_2.message.model !== SYNTHETIC_MODEL &&
+      message_2.isUnmetered !== true
     )
-      return totalTokensOf(r.message.usage);
+      return totalTokensOf(message_2.message.usage);
   }
   return 0;
 }
 //@ chunk-e6aww6q8.js:3390805-3390941 placement
-function estimateMessagesTokens(e) {
-  let n = 0;
-  for (let r of e)
-    n +=
-      r.type === "assistant" || r.type === "user"
-        ? roughTokenCountEstimationForContent(r.message.content)
-        : jsonStringify(r).length / 4;
-  return Math.ceil(n);
+function estimateMessagesTokens(messages) {
+  let total = 0;
+  for (let message of messages)
+    total +=
+      message.type === "assistant" || message.type === "user"
+        ? roughTokenCountEstimationForContent(message.message.content)
+        : jsonStringify(message).length / 4;
+  return Math.ceil(total);
 }
 //@ chunk-e6aww6q8.js:3390941-3391747 placement
 /**
  * Stop 钩子提示评估时截断过长的转录。
  */
-function truncateStopHookTranscript(message, n, r = PROMPT_TOO_LONG_RETRY_RATIO) {
-  let s = has1mSuffix_2(n) || modelHasNative1MContext(n) ? 1e6 : CONTEXT_WINDOW_THRESHOLD;
-  let floored = Math.floor(s * r);
-  if (getTokenUsage_2(message) <= floored) return message;
-  let y = groupByApiRound(message);
-  let S = 0;
-  let w = y.length;
-  for (let idx = y.length - 1; idx >= 0; idx--) {
-    let Z = estimateMessagesTokens(y[idx]);
-    if (w < y.length && S + Z > floored) break;
-    S += Z;
-    w = idx;
+function truncateStopHookTranscript(messages, model, ratio = PROMPT_TOO_LONG_RETRY_RATIO) {
+  let windowSize = has1mSuffix_2(model) || modelHasNative1MContext(model) ? 1e6 : CONTEXT_WINDOW_THRESHOLD;
+  let floored = Math.floor(windowSize * ratio);
+  if (getTokenUsage_2(messages) <= floored) return messages;
+  let rounds = groupByApiRound(messages);
+  let keptTokens = 0;
+  let keptFrom = rounds.length;
+  for (let idx = rounds.length - 1; idx >= 0; idx--) {
+    let roundTokens = estimateMessagesTokens(rounds[idx]);
+    if (keptFrom < rounds.length && keptTokens + roundTokens > floored) break;
+    keptTokens += roundTokens;
+    keptFrom = idx;
   }
-  let L = y.slice(w).flat();
-  let G = message.length - L.length;
-  if (G <= 0) return message;
+  let keptMessages = rounds.slice(keptFrom).flat();
+  let droppedCount = messages.length - keptMessages.length;
+  if (droppedCount <= 0) return messages;
   logForDebugging(
-    `Hooks: truncated Stop transcript ${message.length}\u2192${L.length} msgs (budget ${floored}, model ${n})`,
+    `Hooks: truncated Stop transcript ${messages.length}\u2192${keptMessages.length} msgs (budget ${floored}, model ${model})`,
   );
   logEvent("tengu_hook_prompt_transcript_truncated", {
-    droppedMessages: G,
-    keptMessages: L.length,
+    droppedMessages: droppedCount,
+    keptMessages: keptMessages.length,
     budget: floored,
-    evaluatorModel: telemetrySafeModelName(n),
+    evaluatorModel: telemetrySafeModelName(model),
   });
   return [
     createUserMessage({
-      content: `[Earlier conversation truncated to fit the hook evaluator's context window \u2014 ${G} earlier messages omitted. Evaluate the condition against the recent transcript below; if the required evidence may be in the omitted prefix, return {"ok": false, "reason": "insufficient evidence in transcript"}.]`,
+      content: `[Earlier conversation truncated to fit the hook evaluator's context window \u2014 ${droppedCount} earlier messages omitted. Evaluate the condition against the recent transcript below; if the required evidence may be in the omitted prefix, return {"ok": false, "reason": "insufficient evidence in transcript"}.]`,
     }),
-    ...L,
+    ...keptMessages,
   ];
 }
 export { execPromptHook };

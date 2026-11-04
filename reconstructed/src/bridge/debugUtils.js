@@ -15,14 +15,20 @@ import { isAlreadyPrintable } from "../utils/printableName.js";
 import { logForDebugging } from "../utils/debug.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-m8z86bna.js:406-553 fingerprint = SECRET_FIELD_NAMES (0.892)
 /**
  * 调试日志截断长度与需脱敏的字段名（session_ingress_token、environment_secret、access_token、secret、token）。
  */
-var DEBUG_MSG_LIMIT = 2000;
-var SECRET_FIELD_NAMES = ["session_ingress_token", "environment_secret", "access_token", "secret", "token"];
-var SECRET_PATTERN = new RegExp(`"(${SECRET_FIELD_NAMES.join("|")})"\\s*:\\s*"[^"]*"`, "g");
+var DEBUG_MSG_LIMIT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SECRET_FIELD_NAMES;
+var SECRET_PATTERN;
+deferInit("chunk-m8z86bna.js:406", () => {
+  DEBUG_MSG_LIMIT = 2000;
+  SECRET_FIELD_NAMES = ["session_ingress_token", "environment_secret", "access_token", "secret", "token"];
+  SECRET_PATTERN = new RegExp(`"(${SECRET_FIELD_NAMES.join("|")})"\\s*:\\s*"[^"]*"`, "g");
+});
 //@ chunk-m8z86bna.js:553-607 layout
 function redactSecrets(text) {
   return text.replace(SECRET_PATTERN, '"$1":"[REDACTED]"');
@@ -61,21 +67,21 @@ function hashIdForLog(value) {
 /**
  * 安全输出日志用 token：只允许短的单词字符，否则输出 <类型>。
  */
-function safeLogToken(e) {
-  return typeof e === "string" && /^[\w.-]{1,64}$/.test(e) ? e : `<${typeof e}>`;
+function safeLogToken(value) {
+  return typeof value === "string" && /^[\w.-]{1,64}$/.test(value) ? value : `<${typeof value}>`;
 }
 //@ chunk-m8z86bna.js:1005-1139 fingerprint = extractHttpStatus (1)
 /**
  * 错误消息附带响应体的 error message（若是单行纯文本）。
  */
 function describeAxiosError(err) {
-  let n = errorMessage(err);
+  let message = errorMessage(err);
   if (err && typeof err === "object" && "response" in err) {
     let response = err.response;
     let plainErrorDetail = extractPlainErrorDetail(response?.data);
-    if (plainErrorDetail) return `${n}: ${plainErrorDetail}`;
+    if (plainErrorDetail) return `${message}: ${plainErrorDetail}`;
   }
-  return n;
+  return message;
 }
 //@ chunk-m8z86bna.js:1139-1318 layout
 /**
@@ -83,12 +89,12 @@ function describeAxiosError(err) {
  */
 function parseRetryAfterMs(header, now = Date.now()) {
   if (!header) return;
-  let r = Number(header);
-  if (Number.isFinite(r) && r >= 0) return r * 1000;
+  let seconds = Number(header);
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
   let timestamp = Date.parse(header);
   if (Number.isFinite(timestamp)) {
-    let s = timestamp - now;
-    return s > 0 ? s : undefined;
+    let deltaMs = timestamp - now;
+    return deltaMs > 0 ? deltaMs : undefined;
   }
   return;
 }
@@ -113,8 +119,8 @@ function extractErrorDetail(data) {
 /**
  * 取错误 message 并确保是可展示的单行纯文本。
  */
-function extractPlainErrorDetail(e) {
-  let text = extractErrorDetail(e);
+function extractPlainErrorDetail(body) {
+  let text = extractErrorDetail(body);
   return text ? plainServiceText(text, "error_message") : undefined;
 }
 //@ chunk-m8z86bna.js:1640-1917 layout
@@ -136,9 +142,9 @@ function plainServiceText(text, source) {
 /**
  * 从错误响应体取 error.details.error_code。
  */
-function extractErrorCode(e) {
-  if (!e || typeof e !== "object" || !("error" in e)) return;
-  let error = e.error;
+function extractErrorCode(body) {
+  if (!body || typeof body !== "object" || !("error" in body)) return;
+  let error = body.error;
   if (!error || typeof error !== "object" || !("details" in error)) return;
   let details = error.details;
   if (
@@ -154,14 +160,14 @@ function extractErrorCode(e) {
 /**
  * 记 tengu_bridge_repl_skipped（REPL 桥未启动的原因）。
  */
-function logBridgeSkip(reason, debugMsg, r, o) {
+function logBridgeSkip(reason, debugMsg, v2, extraAttributes) {
   if (debugMsg) logForDebugging(debugMsg);
   logEvent("tengu_bridge_repl_skipped", {
     reason: fromEnum(reason),
-    ...(r !== undefined && {
-      v2: r,
+    ...(v2 !== undefined && {
+      v2,
     }),
-    ...o,
+    ...extraAttributes,
   });
 }
 export {

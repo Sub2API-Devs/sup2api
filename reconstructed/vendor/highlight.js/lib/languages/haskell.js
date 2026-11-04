@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:185869-188089 cjs-fingerprint
-var require_haskell = x(function (cjsExports, cjsModule) {
+var require_haskell = __commonJS(function (cjsExports, cjsModule) {
   function haskell(hljs) {
     let COMMENT = {
       variants: [
@@ -55,7 +55,7 @@ var require_haskell = x(function (cjsExports, cjsModule) {
       end: /\}/,
       contains: LIST.contains,
     };
-    let u = {
+    let NUMBER = {
       className: "number",
       relevance: 0,
       variants: [
@@ -143,7 +143,7 @@ var require_haskell = x(function (cjsExports, cjsModule) {
           ],
         },
         hljs.QUOTE_STRING_MODE,
-        u,
+        NUMBER,
         CONSTRUCTOR,
         hljs.inherit(hljs.TITLE_MODE, {
           begin: "^[_a-z][\\w']*",

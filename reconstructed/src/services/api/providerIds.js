@@ -26,17 +26,17 @@ var PROVIDER_ID_PREFIXES = [
 /**
  * 导出函数 `containsProviderId`：参数 e，返回 PROVIDER_ID_PREFIXES.some((n) => e.includes(n))。
  */
-function containsProviderId(e) {
-  return PROVIDER_ID_PREFIXES.some((n) => e.includes(n));
+function containsProviderId(requestId) {
+  return PROVIDER_ID_PREFIXES.some((prefix) => requestId.includes(prefix));
 }
 //@ chunk-e6aww6q8.js:227223-227298 placement
 /**
  * 导出函数 `anyMessageHasProviderId`：参数 e，返回 e.some((n) => { try { return Uue(jsonStringify(n)); } catch { return !0; } }); } export { jbt, Uue }。
  */
-function anyMessageHasProviderId(e) {
-  return e.some((n) => {
+function anyMessageHasProviderId(messages) {
+  return messages.some((message) => {
     try {
-      return containsProviderId(jsonStringify(n));
+      return containsProviderId(jsonStringify(message));
     } catch {
       return true;
     }

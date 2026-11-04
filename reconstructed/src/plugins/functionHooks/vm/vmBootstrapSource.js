@@ -13,19 +13,20 @@
 /**
  * 元素构造器必须返回对象，否则抛 TypeError。
  */
-function requireElement(e) {
-  if (typeof e !== "object" || !e) throw TypeError("the element constructor did not build an element");
-  return e;
+function requireElement(element) {
+  if (typeof element !== "object" || !element)
+    throw TypeError("the element constructor did not build an element");
+  return element;
 }
 //@ chunk-4121qate.js:9651-9768 placement
 function createFunctionNameMarks() {
   let weakMap = new WeakMap();
   return {
-    mark: (o, r) => {
-      weakMap.set(o, r);
-      return o;
+    mark: (fn, name) => {
+      weakMap.set(fn, name);
+      return fn;
     },
-    nameOf: (o) => (typeof o === "function" ? weakMap.get(o) : undefined),
+    nameOf: (fn) => (typeof fn === "function" ? weakMap.get(fn) : undefined),
   };
 }
 //@ chunk-4121qate.js:9768-9781 placement
@@ -1198,5 +1199,5 @@ var VM_PRELUDE_SOURCE = String.raw`(helpers => {
 /**
  * 前置 'use strict'
  */
-var withUseStrict = (e) => `'use strict';${e}`;
+var withUseStrict = (source) => `'use strict';${source}`;
 export { functionNameMarks, withUseStrict, VM_BOOTSTRAP_SOURCE, requireElement, VM_PRELUDE_SOURCE };

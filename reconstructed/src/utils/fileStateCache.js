@@ -25,14 +25,14 @@ var MAX_SERIALIZED_ERROR_CHARS = 512;
 /**
  * 序列化设置错误列表。
  */
-function serializeSettingsErrors(e) {
-  return e.map(serializeSettingsError);
+function serializeSettingsErrors(errors) {
+  return errors.map(serializeSettingsError);
 }
 //@ chunk-dcmhvw5a.js:428860-429514 placement
 /**
  * 序列化单条设置错误。
  */
-function serializeSettingsError(e) {
+function serializeSettingsError(settingsError) {
   let {
     file,
     severity,
@@ -54,9 +54,9 @@ function serializeSettingsError(e) {
     expected,
     suggestion,
     invalidValue,
-    ...ee
-  } = e;
-  let Z = ee;
+    ...extraErrorFields
+  } = settingsError;
+  let extraErrorFieldsAlias = extraErrorFields;
   return {
     file,
     severity,
@@ -81,27 +81,29 @@ function serializeSettingsError(e) {
   };
 }
 //@ chunk-dcmhvw5a.js:429514-429611 placement
-function serializeErrorText(e) {
-  let n = asciiOnly(e.replace(/\s+/gu, " "));
-  return n.length > MAX_SERIALIZED_ERROR_CHARS ? `${n.slice(0, MAX_SERIALIZED_ERROR_CHARS - 1)}\u2026` : n;
+function serializeErrorText(text) {
+  let collapsedText = asciiOnly(text.replace(/\s+/gu, " "));
+  return collapsedText.length > MAX_SERIALIZED_ERROR_CHARS
+    ? `${collapsedText.slice(0, MAX_SERIALIZED_ERROR_CHARS - 1)}\u2026`
+    : collapsedText;
 }
 //@ chunk-82kqcve8.js:80891-81142 fingerprint = cloneFileStateCache (0.55)
 /**
  * 复制 readFileState（同容量），可把 seededFromContext 置为 false，保留 start-only 标记；子代理/分叉用。
  */
-function cloneFileStateCache(readFileState, n) {
+function cloneFileStateCache(readFileState, options) {
   let cloned = createRemoteFileState(readFileState.max, readFileState.maxSize);
-  let s = readFileState.dump();
-  if (n?.stripSeededFromContext) {
-    for (let h of s)
-      if (h[1].value?.seededFromContext)
-        h[1].value = {
-          ...h[1].value,
+  let dumpedEntries = readFileState.dump();
+  if (options?.stripSeededFromContext) {
+    for (let cacheEntry of dumpedEntries)
+      if (cacheEntry[1].value?.seededFromContext)
+        cacheEntry[1].value = {
+          ...cacheEntry[1].value,
           seededFromContext: false,
         };
   }
-  cloned.load(s);
-  for (let h of readFileState.startOnlyPaths()) cloned.markStartOnly(h);
+  cloned.load(dumpedEntries);
+  for (let startOnlyPath of readFileState.startOnlyPaths()) cloned.markStartOnly(startOnlyPath);
   return cloned;
 }
 //@ chunk-82kqcve8.js:81142-81269 layout
@@ -109,10 +111,11 @@ function cloneFileStateCache(readFileState, n) {
  * 清空 readFileState，但保留启动时预置的记忆文件记录。
  */
 function clearFileStateCacheKeepingSeeds(readFileState) {
-  let n = [];
-  for (let [r, s] of readFileState.entries()) if (s.startupMemorySeed) n.push([r, s]);
+  let seedEntries = [];
+  for (let [filePath, cacheEntry] of readFileState.entries())
+    if (cacheEntry.startupMemorySeed) seedEntries.push([filePath, cacheEntry]);
   readFileState.clear();
-  for (let [r, s] of n) readFileState.set(r, s);
+  for (let [filePath, cacheEntry] of seedEntries) readFileState.set(filePath, cacheEntry);
 }
 //@ chunk-82kqcve8.js:81269-81394 callgraph-fingerprint = mergeFileStateCaches (1)
 /**

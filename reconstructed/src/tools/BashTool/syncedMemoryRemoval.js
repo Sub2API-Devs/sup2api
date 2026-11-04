@@ -17,21 +17,25 @@ import { errorMessage } from "../../utils/errors.js";
 /**
  * 一次删除大量同步记忆文件前提示等待或分批。
  */
-async function guardSyncedMemoryRemoval(e, n) {
-  if ((e.multiStoreState ?? e.userMultiStoreState) === null) return;
+async function guardSyncedMemoryRemoval(session, extractTargets) {
+  if ((session.multiStoreState ?? session.userMultiStoreState) === null) return;
   try {
-    let r = await n();
-    let s =
-      r.length > 0
-        ? await withTimeout_2(e.massDeleteHoldExposure(r), DISK_PROBE_TIMEOUT_MS, "disk probe timed out")
+    let targets = await extractTargets();
+    let probe =
+      targets.length > 0
+        ? await withTimeout_2(
+            session.massDeleteHoldExposure(targets),
+            DISK_PROBE_TIMEOUT_MS,
+            "disk probe timed out",
+          )
         : null;
-    if (s === null) return;
-    let { threshold, missingNow, targetsOnDisk } = s;
-    let w = threshold - missingNow;
+    if (probe === null) return;
+    let { threshold, missingNow, targetsOnDisk } = probe;
+    let allowedNow = threshold - missingNow;
     return {
       result: false,
       errorCode: 13,
-      message: `This would remove ${missingNow + targetsOnDisk} synced memory files at once (${missingNow} already missing, ${targetsOnDisk} named here), so nothing was removed. Memory sync holds deletions when more than ${threshold} synced files are missing at the same time, and restores them all. ${w > 0 ? `Remove at most ${w} now, wait` : "Wait"} about a minute for memory sync to apply the pending deletions, then continue.`,
+      message: `This would remove ${missingNow + targetsOnDisk} synced memory files at once (${missingNow} already missing, ${targetsOnDisk} named here), so nothing was removed. Memory sync holds deletions when more than ${threshold} synced files are missing at the same time, and restores them all. ${allowedNow > 0 ? `Remove at most ${allowedNow} now, wait` : "Wait"} about a minute for memory sync to apply the pending deletions, then continue.`,
     };
   } catch (error) {
     logForDebugging(`memory removal cap: check failed: ${errorMessage(error)}`, {

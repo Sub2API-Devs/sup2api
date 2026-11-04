@@ -9,9 +9,16 @@
  * attribution: fingerprint 5, callgraph-fingerprint 2, sole-consumer 3, affinity 1, file-local 1, layout 2, facade-majority 6
  */
 import { isAbsolute, resolve } from "path";
-import { init_react_production, y, fo, Qr } from "../../../vendor/react/cjs/react.production.js";
+import { getPlansDirectory } from "../../utils/plans.js";
+import { getDisplayPath } from "../../utils/file.js";
+import {
+  init_react_production,
+  useState,
+  suspenseTypeExport,
+  use,
+} from "../../../vendor/react/cjs/react.production.js";
 import { lineWidth } from "../../ink/line-width-cache.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
   jsxProd_default,
@@ -21,11 +28,9 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { useHighlightedLineHeights, HighlightedCode } from "../../components/HighlightedCode.js";
 import { plural, getFirstLine } from "../../utils/stringUtils.js";
-import { getDisplayPath } from "../../utils/file.js";
 import { FilePathLink } from "../../components/FilePathLink.js";
 import { OverflowHint, CtrlOToExpand } from "../../components/CtrlOToExpand.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
-import { getPlansDirectory } from "../../utils/plans.js";
 import { FileEditToolUseRejectedMessage } from "../../components/FileEditToolUseRejectedMessage.js";
 import { getCwd } from "../../utils/cwd.js";
 import { openForDiff, settingsWriteGateText } from "../../utils/settings/settingsReview.js";
@@ -38,31 +43,59 @@ import { extractTag } from "../../utils/messages.js";
 import { FallbackToolUseErrorMessage } from "../../components/FallbackToolUseErrorMessage.js";
 import { isScratchpadDisplayPath } from "../../utils/permissions/filesystem.js";
 import { FileEditToolUpdatedMessage } from "../../components/FileEditToolUpdatedMessage.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-e6aww6q8.js:1412415-1412500 fingerprint = userFacingName (1)
+/**
+ * Write 的用户可见名：计划文件 "Updated plan"，否则 "Write"。
+ */
+function userFacingName(input) {
+  if (input?.file_path?.startsWith(getPlansDirectory())) return "Updated plan";
+  return "Write";
+}
+//@ chunk-e6aww6q8.js:1412500-1412568 callgraph-fingerprint = getToolUseSummary (1)
+/**
+ * Write 工具使用摘要：显示路径。
+ */
+function getToolUseSummary_3(input) {
+  if (!input?.file_path) return null;
+  return getDisplayPath(input.file_path);
+}
+//@ chunk-e6aww6q8.js:4648833-4648901 callgraph-fingerprint = renderToolUseMessage (0.52)
+/**
+ * Edit/Write 工具调用渲染：显示路径。
+ */
+function renderToolUseMessage_2(input) {
+  if (!input?.file_path) return null;
+  return getDisplayPath(input.file_path);
+}
 //@ chunk-ek7g58h7.js:1019-1023 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ek7g58h7.js:1019", () => {
+  init_react_production();
+});
 //@ chunk-ek7g58h7.js:1072-1318 sole-consumer = measureText (0.861)
 function countWrappedLines(text, maxWidth, limit = 1 / 0) {
   let noWrap = maxWidth <= 0 || !Number.isFinite(maxWidth);
-  let d = 0;
-  let f = 0;
-  while (f <= text.length) {
+  let lineCount = 0;
+  let offset = 0;
+  while (offset <= text.length) {
     let end = text.indexOf(
       `
 `,
-      f,
+      offset,
     );
-    let line = end === -1 ? text.substring(f) : text.substring(f, end);
-    if (noWrap) d++;
+    let line = end === -1 ? text.substring(offset) : text.substring(offset, end);
+    if (noWrap) lineCount++;
     else {
-      let g = lineWidth(line);
-      d += g === 0 ? 1 : Math.ceil(g / maxWidth);
+      let width = lineWidth(line);
+      lineCount += width === 0 ? 1 : Math.ceil(width / maxWidth);
     }
-    if (d > limit) return d;
+    if (lineCount > limit) return lineCount;
     if (end === -1) break;
-    f = end + 1;
+    offset = end + 1;
   }
-  return d;
+  return lineCount;
 }
 //@ chunk-ek7g58h7.js:1318-1356 sole-consumer
 /**
@@ -85,224 +118,225 @@ function countLines(content) {
 }
 //@ chunk-ek7g58h7.js:1443-1591 layout
 function PreviousContentReplacedNote() {
-  let i = w(1);
-  let o;
-  if (i[0] === MEMO_CACHE_SENTINEL) {
-    o = jsxProd_default(Text, {
+  let $ = useMemoCache(1);
+  let element;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    element = jsxProd_default(Text, {
       dimColor: true,
       children: " \u2014 previous content replaced (no diff shown)",
     });
-    i[0] = o;
-  } else o = i[0];
-  return o;
+    $[0] = element;
+  } else element = $[0];
+  return element;
 }
 //@ chunk-ek7g58h7.js:1591-3786 facade-majority = FileWriteToolCreatedMessage (0.46)
 /**
  * Write 新建文件结果的终端渲染：显示行数与带高亮的内容预览（非 verbose 时截断）。
  */
 function FileWriteToolCreatedMessage(props) {
-  let h = w(51);
+  let $ = useMemoCache(51);
   let { filePath, content, verbose, replacedUndiffedContent } = props;
-  let f = replacedUndiffedContent === undefined ? false : replacedUndiffedContent;
+  let replacedUndiffed = replacedUndiffedContent === undefined ? false : replacedUndiffedContent;
   let { columns } = useTerminalSize();
   let max = Math.max(1, columns - 12);
-  let g = content || "(No content)";
+  let fullContent = content || "(No content)";
   let numLines = countLines(content);
-  let b;
-  if (h[0] !== g || h[1] !== max || h[2] !== verbose) {
-    b = verbose
-      ? g
-      : g
+  let previewContent;
+  if ($[0] !== fullContent || $[1] !== max || $[2] !== verbose) {
+    previewContent = verbose
+      ? fullContent
+      : fullContent
           .split(LINE_SEPARATOR)
           .slice(0, MAX_PREVIEW_LINES)
           .join(LINE_SEPARATOR)
           .slice(0, MAX_PREVIEW_LINES * (max + 1));
-    h[0] = g;
-    h[1] = max;
-    h[2] = verbose;
-    h[3] = b;
-  } else b = h[3];
-  let x = b;
-  let highlightedLineHeights = useHighlightedLineHeights(verbose ? "" : x, filePath, max);
-  let ke;
-  if (h[4] !== g) {
-    ke = g.split(LINE_SEPARATOR, MAX_PREVIEW_LINES);
-    h[4] = g;
-    h[5] = ke;
-  } else ke = h[5];
-  let _ = ke;
-  let Te;
-  if (h[6] !== x || h[7] !== verbose) {
-    Te = verbose ? [] : x.split(LINE_SEPARATOR);
-    h[6] = x;
-    h[7] = verbose;
-    h[8] = Te;
-  } else Te = h[8];
-  let ae = Te;
-  let le;
-  let C;
-  let T;
-  if (h[9] !== highlightedLineHeights || h[10] !== ae || h[11] !== _) {
-    let W = MAX_PREVIEW_LINES;
-    T = 0;
-    C = 0;
-    le = false;
-    for (const [We, V] of highlightedLineHeights.entries()) {
-      let ce = ae[We] ?? "";
-      if (W === 0) {
+    $[0] = fullContent;
+    $[1] = max;
+    $[2] = verbose;
+    $[3] = previewContent;
+  } else previewContent = $[3];
+  let shownContent = previewContent;
+  let highlightedLineHeights = useHighlightedLineHeights(verbose ? "" : shownContent, filePath, max);
+  let contentLines;
+  if ($[4] !== fullContent) {
+    contentLines = fullContent.split(LINE_SEPARATOR, MAX_PREVIEW_LINES);
+    $[4] = fullContent;
+    $[5] = contentLines;
+  } else contentLines = $[5];
+  let firstLines = contentLines;
+  let previewLines;
+  if ($[6] !== shownContent || $[7] !== verbose) {
+    previewLines = verbose ? [] : shownContent.split(LINE_SEPARATOR);
+    $[6] = shownContent;
+    $[7] = verbose;
+    $[8] = previewLines;
+  } else previewLines = $[8];
+  let previewLineTexts = previewLines;
+  let isTruncated;
+  let shownChars;
+  let shownLineCount;
+  if ($[9] !== highlightedLineHeights || $[10] !== previewLineTexts || $[11] !== firstLines) {
+    let linesLeft = MAX_PREVIEW_LINES;
+    shownLineCount = 0;
+    shownChars = 0;
+    isTruncated = false;
+    for (const [lineIndex, lineHeight] of highlightedLineHeights.entries()) {
+      let lineText = previewLineTexts[lineIndex] ?? "";
+      if (linesLeft === 0) {
         break;
       }
-      if (V > W || ce !== _[We]) {
-        C = C + Math.floor((ce.length * Math.min(V, W)) / V);
-        le = true;
+      if (lineHeight > linesLeft || lineText !== firstLines[lineIndex]) {
+        shownChars =
+          shownChars + Math.floor((lineText.length * Math.min(lineHeight, linesLeft)) / lineHeight);
+        isTruncated = true;
         break;
       }
-      W = W - V;
-      T++;
-      C = C + (ce.length + LINE_SEPARATOR.length);
+      linesLeft = linesLeft - lineHeight;
+      shownLineCount++;
+      shownChars = shownChars + (lineText.length + LINE_SEPARATOR.length);
     }
-    h[9] = highlightedLineHeights;
-    h[10] = ae;
-    h[11] = _;
-    h[12] = le;
-    h[13] = C;
-    h[14] = T;
+    $[9] = highlightedLineHeights;
+    $[10] = previewLineTexts;
+    $[11] = firstLines;
+    $[12] = isTruncated;
+    $[13] = shownChars;
+    $[14] = shownLineCount;
   } else {
-    le = h[12];
-    C = h[13];
-    T = h[14];
+    isTruncated = $[12];
+    shownChars = $[13];
+    shownLineCount = $[14];
   }
-  let Ie = T === numLines - 1 && _[T] === "";
-  let count = numLines - T - (Ie ? 1 : 0);
-  let hiddenChars = le ? content.length - C : undefined;
-  let Y;
-  if (h[15] !== numLines) {
-    Y = jsxProd_default(Text, {
+  let trailingBlankLine = shownLineCount === numLines - 1 && firstLines[shownLineCount] === "";
+  let count = numLines - shownLineCount - (trailingBlankLine ? 1 : 0);
+  let hiddenChars = isTruncated ? content.length - shownChars : undefined;
+  let lineCountElement;
+  if ($[15] !== numLines) {
+    lineCountElement = jsxProd_default(Text, {
       bold: true,
       children: numLines,
     });
-    h[15] = numLines;
-    h[16] = Y;
-  } else Y = h[16];
-  let q;
-  if (h[17] !== numLines) {
-    q = plural(numLines, "line");
-    h[17] = numLines;
-    h[18] = q;
-  } else q = h[18];
+    $[15] = numLines;
+    $[16] = lineCountElement;
+  } else lineCountElement = $[16];
+  let linesWord;
+  if ($[17] !== numLines) {
+    linesWord = plural(numLines, "line");
+    $[17] = numLines;
+    $[18] = linesWord;
+  } else linesWord = $[18];
   let children;
-  if (h[19] !== filePath || h[20] !== verbose) {
+  if ($[19] !== filePath || $[20] !== verbose) {
     children = verbose ? filePath : getDisplayPath(filePath);
-    h[19] = filePath;
-    h[20] = verbose;
-    h[21] = children;
-  } else children = h[21];
-  let G;
-  if (h[22] !== filePath || h[23] !== children) {
-    G = jsxProd_default(Text, {
+    $[19] = filePath;
+    $[20] = verbose;
+    $[21] = children;
+  } else children = $[21];
+  let pathElement;
+  if ($[22] !== filePath || $[23] !== children) {
+    pathElement = jsxProd_default(Text, {
       bold: true,
       children: jsxProd_default(FilePathLink, {
         filePath,
         children,
       }),
     });
-    h[22] = filePath;
-    h[23] = children;
-    h[24] = G;
-  } else G = h[24];
-  let J;
-  if (h[25] !== f) {
-    J = f && jsxProd_default(PreviousContentReplacedNote, {});
-    h[25] = f;
-    h[26] = J;
-  } else J = h[26];
-  let Q;
-  if (h[27] !== Y || h[28] !== q || h[29] !== G || h[30] !== J) {
-    Q = jsxProd_default_2(Text, {
-      children: ["Wrote ", Y, " ", q, " to", " ", G, J],
+    $[22] = filePath;
+    $[23] = children;
+    $[24] = pathElement;
+  } else pathElement = $[24];
+  let replacedNote;
+  if ($[25] !== replacedUndiffed) {
+    replacedNote = replacedUndiffed && jsxProd_default(PreviousContentReplacedNote, {});
+    $[25] = replacedUndiffed;
+    $[26] = replacedNote;
+  } else replacedNote = $[26];
+  let header;
+  if ($[27] !== lineCountElement || $[28] !== linesWord || $[29] !== pathElement || $[30] !== replacedNote) {
+    header = jsxProd_default_2(Text, {
+      children: ["Wrote ", lineCountElement, " ", linesWord, " to", " ", pathElement, replacedNote],
     });
-    h[27] = Y;
-    h[28] = q;
-    h[29] = G;
-    h[30] = J;
-    h[31] = Q;
-  } else Q = h[31];
+    $[27] = lineCountElement;
+    $[28] = linesWord;
+    $[29] = pathElement;
+    $[30] = replacedNote;
+    $[31] = header;
+  } else header = $[31];
   const overflowY = verbose ? undefined : "hidden";
   const maxHeight = verbose ? undefined : MAX_PREVIEW_LINES;
   const width = verbose ? undefined : max;
   let children_2;
-  if (h[32] !== x || h[33] !== filePath || h[34] !== max) {
+  if ($[32] !== shownContent || $[33] !== filePath || $[34] !== max) {
     children_2 = jsxProd_default(HighlightedCode, {
-      code: x,
+      code: shownContent,
       filePath,
       width: max,
     });
-    h[32] = x;
-    h[33] = filePath;
-    h[34] = max;
-    h[35] = children_2;
-  } else children_2 = h[35];
+    $[32] = shownContent;
+    $[33] = filePath;
+    $[34] = max;
+    $[35] = children_2;
+  } else children_2 = $[35];
   let children_3;
-  if (h[36] !== width || h[37] !== children_2) {
+  if ($[36] !== width || $[37] !== children_2) {
     children_3 = jsxProd_default(Box, {
       flexDirection: "column",
       flexShrink: 0,
       width,
       children: children_2,
     });
-    h[36] = width;
-    h[37] = children_2;
-    h[38] = children_3;
-  } else children_3 = h[38];
-  let I;
-  if (h[39] !== overflowY || h[40] !== maxHeight || h[41] !== children_3) {
-    I = jsxProd_default(Box, {
+    $[36] = width;
+    $[37] = children_2;
+    $[38] = children_3;
+  } else children_3 = $[38];
+  let clippedContent;
+  if ($[39] !== overflowY || $[40] !== maxHeight || $[41] !== children_3) {
+    clippedContent = jsxProd_default(Box, {
       flexDirection: "column",
       overflowY,
       maxHeight,
       children: children_3,
     });
-    h[39] = overflowY;
-    h[40] = maxHeight;
-    h[41] = children_3;
-    h[42] = I;
-  } else I = h[42];
-  let X;
-  if (h[43] !== hiddenChars || h[44] !== count || h[45] !== verbose) {
-    X =
+    $[39] = overflowY;
+    $[40] = maxHeight;
+    $[41] = children_3;
+    $[42] = clippedContent;
+  } else clippedContent = $[42];
+  let overflowHint;
+  if ($[43] !== hiddenChars || $[44] !== count || $[45] !== verbose) {
+    overflowHint =
       !verbose &&
       jsxProd_default(OverflowHint, {
         count,
         hiddenChars,
         expandable: true,
       });
-    h[43] = hiddenChars;
-    h[44] = count;
-    h[45] = verbose;
-    h[46] = X;
-  } else X = h[46];
-  let De;
-  if (h[47] !== Q || h[48] !== I || h[49] !== X) {
-    De = jsxProd_default(MessageResponse, {
+    $[43] = hiddenChars;
+    $[44] = count;
+    $[45] = verbose;
+    $[46] = overflowHint;
+  } else overflowHint = $[46];
+  let message;
+  if ($[47] !== header || $[48] !== clippedContent || $[49] !== overflowHint) {
+    message = jsxProd_default(MessageResponse, {
       children: jsxProd_default_2(Box, {
         flexDirection: "column",
-        children: [Q, I, X],
+        children: [header, clippedContent, overflowHint],
       }),
     });
-    h[47] = Q;
-    h[48] = I;
-    h[49] = X;
-    h[50] = De;
-  } else De = h[50];
-  return De;
+    $[47] = header;
+    $[48] = clippedContent;
+    $[49] = overflowHint;
+    $[50] = message;
+  } else message = $[50];
+  return message;
 }
 //@ chunk-ek7g58h7.js:3786-3942 layout
 /**
  * update 结果但 structuredPatch 为空、originalFile 为 null（旧内容过大未 diff）时为真。
  */
-function isUpdateWithOmittedDiff({ type: i, content, structuredPatch, originalFile }) {
+function isUpdateWithOmittedDiff({ type: resultType, content, structuredPatch, originalFile }) {
   return (
-    i === "update" &&
+    resultType === "update" &&
     Array.isArray(structuredPatch) &&
     structuredPatch.length === 0 &&
     originalFile === null &&
@@ -311,12 +345,12 @@ function isUpdateWithOmittedDiff({ type: i, content, structuredPatch, originalFi
   );
 }
 //@ chunk-ek7g58h7.js:3942-4117 facade-majority = isResultTruncated (0.818)
-function isResultTruncated(i, { columns }) {
-  let { type: c, content } = i;
-  if (c !== "create" && !isUpdateWithOmittedDiff(i)) return false;
+function isResultTruncated(result, { columns }) {
+  let { type: resultType, content } = result;
+  if (resultType !== "create" && !isUpdateWithOmittedDiff(result)) return false;
   if (typeof content !== "string") return false;
-  let d = content.endsWith(LINE_SEPARATOR) ? MAX_PREVIEW_LINES + 1 : MAX_PREVIEW_LINES;
-  return exceedsWrappedLineLimit(content, Math.max(1, columns - 12), d);
+  let lineBudget = content.endsWith(LINE_SEPARATOR) ? MAX_PREVIEW_LINES + 1 : MAX_PREVIEW_LINES;
+  return exceedsWrappedLineLimit(content, Math.max(1, columns - 12), lineBudget);
 }
 //@ chunk-ek7g58h7.js:4117-4289 facade-majority = renderToolUseMessage (1)
 function renderToolUseMessage(file_path, { verbose }) {
@@ -338,7 +372,7 @@ function renderToolUseRejectedMessage({ file_path, content }, { style, verbose }
 }
 //@ chunk-ek7g58h7.js:4401-5107 fingerprint = WriteRejectionDiff (1)
 function WriteRejectionDiff(props) {
-  let $ = w(20);
+  let $ = useMemoCache(20);
   let { filePath, content, style, verbose } = props;
   let t1;
   if ($[0] !== content || $[1] !== filePath) {
@@ -347,7 +381,7 @@ function WriteRejectionDiff(props) {
     $[1] = filePath;
     $[2] = t1;
   } else t1 = $[2];
-  let [dataPromise] = y(t1);
+  let [dataPromise] = useState(t1);
   let t2;
   if ($[3] !== content) {
     t2 = getFirstLine(content);
@@ -398,7 +432,7 @@ function WriteRejectionDiff(props) {
   } else children = $[16];
   let t5;
   if ($[17] !== createFallback || $[18] !== children) {
-    t5 = jsxProd_default(fo, {
+    t5 = jsxProd_default(suspenseTypeExport, {
       fallback: createFallback,
       children,
     });
@@ -410,9 +444,9 @@ function WriteRejectionDiff(props) {
 }
 //@ chunk-ek7g58h7.js:5107-5644 fingerprint = WriteRejectionBody (0.819)
 function WriteRejectionBody(props) {
-  let $ = w(8);
+  let $ = useMemoCache(8);
   let { promise, filePath, firstLine, createFallback, style, verbose } = props;
-  let data = Qr(promise);
+  let data = use(promise);
   if (data.type === "create") {
     return createFallback;
   }
@@ -521,26 +555,26 @@ function renderToolUseErrorMessage(result, { verbose, toolDenialKind }) {
   });
 }
 //@ chunk-ek7g58h7.js:6304-6474 facade-majority
-function renderToolResultMessage(i, o, { style, verbose }) {
-  if (i.staged && i.filePath)
+function renderToolResultMessage(result, progressMessages, { style, verbose }) {
+  if (result.staged && result.filePath)
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(Text, {
         dimColor: true,
-        children: settingsWriteGateText(i.stagedWording),
+        children: settingsWriteGateText(result.stagedWording),
       }),
     });
-  return renderToolResultMessage_2(i, o, {
+  return renderToolResultMessage_2(result, progressMessages, {
     style,
     verbose,
   });
 }
 //@ chunk-ek7g58h7.js:6474-7479 fingerprint = renderToolResultMessage (0.785)
 function renderToolResultMessage_2(
-  i,
+  result,
   _progressMessagesForMessage,
   { style, verbose, replacedUndiffedContent = false },
 ) {
-  let { filePath = "", content, structuredPatch, type, originalFile } = i;
+  let { filePath = "", content, structuredPatch, type, originalFile } = result;
   if (!filePath) return null;
   switch (type) {
     case "create": {
@@ -602,10 +636,10 @@ function renderToolResultMessage_2(
       });
     }
     case "update": {
-      if (isUpdateWithOmittedDiff(i))
+      if (isUpdateWithOmittedDiff(result))
         return renderToolResultMessage_2(
           {
-            ...i,
+            ...result,
             type: "create",
           },
           _progressMessagesForMessage,
@@ -629,28 +663,14 @@ function renderToolResultMessage_2(
     }
   }
 }
-//@ chunk-e6aww6q8.js:1412415-1412500 fingerprint = userFacingName (1)
-/**
- * Write 的用户可见名：计划文件 "Updated plan"，否则 "Write"。
- */
-function userFacingName(input) {
-  if (input?.file_path?.startsWith(getPlansDirectory())) return "Updated plan";
-  return "Write";
-}
-//@ chunk-e6aww6q8.js:1412500-1412568 callgraph-fingerprint = getToolUseSummary (1)
-/**
- * Write 工具使用摘要：显示路径。
- */
-function getToolUseSummary_3(input) {
-  if (!input?.file_path) return null;
-  return getDisplayPath(input.file_path);
-}
-//@ chunk-e6aww6q8.js:4648833-4648901 callgraph-fingerprint = renderToolUseMessage (0.52)
-/**
- * Edit/Write 工具调用渲染：显示路径。
- */
-function renderToolUseMessage_2(e) {
-  if (!e?.file_path) return null;
-  return getDisplayPath(e.file_path);
-}
-export { userFacingName, getToolUseSummary_3, renderToolUseMessage_2, FileWriteToolCreatedMessage };
+export {
+  userFacingName,
+  getToolUseSummary_3,
+  renderToolUseMessage_2,
+  FileWriteToolCreatedMessage,
+  isResultTruncated,
+  renderToolResultMessage,
+  renderToolUseErrorMessage,
+  renderToolUseMessage,
+  renderToolUseRejectedMessage,
+};

@@ -41,3 +41,4 @@ async function call(args, context) {
       value: `Couldn't open browser. Visit: ${SLACK_APP_URL}`,
     };
 }
+export { call };

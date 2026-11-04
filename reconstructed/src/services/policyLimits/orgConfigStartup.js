@@ -35,13 +35,13 @@ import { withDeadline } from "../../utils/sleep.js";
 /**
  * 因组织配置拒绝退出
  */
-async function exitForOrgConfig(e, print) {
-  let { exitRefusingManagedConfig } = await import("./chunk-jpd29r7p.js");
+async function exitForOrgConfig(evaluation, print) {
+  let { exitRefusingManagedConfig } = await import("../../cli/managedConfigRefusal.js");
   return exitRefusingManagedConfig({
     message:
-      e.message ??
+      evaluation.message ??
       "Claude Code couldn't load your organization's settings, which it requires before a session can start.",
-    reason: gateBlockReasonCode(e.decision),
+    reason: gateBlockReasonCode(evaluation.decision),
     print,
     beforeExit: settlePendingGateWork,
   });
@@ -50,21 +50,21 @@ async function exitForOrgConfig(e, print) {
 /**
  * 组织配置闸门选项
  */
-function orgConfigGateOptions(e, t) {
+function orgConfigGateOptions(interactive, options) {
   return {
-    surface: e ? "startup" : "noninteractive",
+    surface: interactive ? "startup" : "noninteractive",
     authRecoveryCommand: false,
-    ...(t.afterSignIn === true && {
+    ...(options.afterSignIn === true && {
       afterSignIn: true,
     }),
-    ...(t.fetchFlag !== undefined && {
-      fetchFlag: t.fetchFlag,
+    ...(options.fetchFlag !== undefined && {
+      fetchFlag: options.fetchFlag,
     }),
-    ...(t.isFlagFetchHeld !== undefined && {
-      isFlagFetchHeld: t.isFlagFetchHeld,
+    ...(options.isFlagFetchHeld !== undefined && {
+      isFlagFetchHeld: options.isFlagFetchHeld,
     }),
-    ...(t.isFlagCacheEmpty !== undefined && {
-      isFlagCacheEmpty: t.isFlagCacheEmpty,
+    ...(options.isFlagCacheEmpty !== undefined && {
+      isFlagCacheEmpty: options.isFlagCacheEmpty,
     }),
   };
 }
@@ -72,72 +72,73 @@ function orgConfigGateOptions(e, t) {
 /**
  * 启动早期执行组织配置闸门，不满足时拒绝启动。
  */
-async function refuseOrgConfigEarlyAtStartup(e = {}) {
-  let t = e.interactive ?? !getIsNonInteractiveSession();
-  let r = orgConfigGateOptions(t, e);
-  let peek = e.peek ?? orgConfigGateQuick;
-  let n = peek(r);
+async function refuseOrgConfigEarlyAtStartup(options = {}) {
+  let interactive = options.interactive ?? !getIsNonInteractiveSession();
+  let gateOptions = orgConfigGateOptions(interactive, options);
+  let peek = options.peek ?? orgConfigGateQuick;
+  let evaluation = peek(gateOptions);
   profileCheckpoint("org_config_gate_phase_one");
-  if (n.decision.verdict !== "refused") return;
-  if (n.flagSource === "disk" || n.flagSource === "fallback") {
-    let isFlagFetchHeld_2 = e.isFlagFetchHeld ?? isFlagFetchHeld;
+  if (evaluation.decision.verdict !== "refused") return;
+  if (evaluation.flagSource === "disk" || evaluation.flagSource === "fallback") {
+    let isFlagFetchHeld_2 = options.isFlagFetchHeld ?? isFlagFetchHeld;
     if (isFlagFetchHeld_2()) return;
-    if (isFlagSourceUntrusted(n.flagSource, isFlagFetchHeld_2, e.isFlagCacheEmpty)) {
-      await initGrowthBookWithDeadline(n.flag.budgetMs, e.fetchFlag);
-      n = peek(r);
-      if (n.decision.verdict !== "refused") return;
+    if (isFlagSourceUntrusted(evaluation.flagSource, isFlagFetchHeld_2, options.isFlagCacheEmpty)) {
+      await initGrowthBookWithDeadline(evaluation.flag.budgetMs, options.fetchFlag);
+      evaluation = peek(gateOptions);
+      if (evaluation.decision.verdict !== "refused") return;
     }
   }
-  await logOrgConfigGate(n, n.outcomes);
-  return enforceOrgConfigGate(n, r, t, e);
+  await logOrgConfigGate(evaluation, evaluation.outcomes);
+  return enforceOrgConfigGate(evaluation, gateOptions, interactive, options);
 }
 //@ chunk-r2x77faw.js:1469-1634 placement
-async function enforceOrgConfigGateAtStartup(e = {}) {
-  let t = e.interactive ?? !getIsNonInteractiveSession();
-  let r = orgConfigGateOptions(t, e);
-  let a = await (e.evaluate ?? awaitOrgConfigGate)(r);
+async function enforceOrgConfigGateAtStartup(options = {}) {
+  let interactive = options.interactive ?? !getIsNonInteractiveSession();
+  let gateOptions = orgConfigGateOptions(interactive, options);
+  let evaluation = await (options.evaluate ?? awaitOrgConfigGate)(gateOptions);
   profileCheckpoint("org_config_gate_phase_two");
-  if (!isGateBlocking(a.decision)) return;
-  return enforceOrgConfigGate(a, r, t, e);
+  if (!isGateBlocking(evaluation.decision)) return;
+  return enforceOrgConfigGate(evaluation, gateOptions, interactive, options);
 }
 //@ chunk-r2x77faw.js:1634-1938 placement
-async function enforceOrgConfigGateHeadless(e, t = {}) {
-  let r = orgConfigGateOptions(false, t);
-  let { armed } = await readOrgConfigDecision(r, t);
+async function enforceOrgConfigGateHeadless(work, options = {}) {
+  let gateOptions = orgConfigGateOptions(false, options);
+  let { armed } = await readOrgConfigDecision(gateOptions, options);
   profileCheckpoint("org_config_gate_headless");
   if (!armed) return;
-  let n = t.readPolicySlot ?? (() => getSettingsForSource("policySettings"));
-  let i = n();
-  let o = await e();
-  if (!o.valid) return o;
+  let readPolicySettings = options.readPolicySlot ?? (() => getSettingsForSource("policySettings"));
+  let policySettingsBefore = readPolicySettings();
+  let workResult = await work();
+  if (!workResult.valid) return workResult;
   await enforceOrgConfigGateAtStartup({
-    ...t,
+    ...options,
     interactive: false,
   });
-  return (t.settingsInHand ?? (() => currentSettingsOutcome().reason === "ok"))() && n() === i
-    ? o
+  return (options.settingsInHand ?? (() => currentSettingsOutcome().reason === "ok"))() &&
+    readPolicySettings() === policySettingsBefore
+    ? workResult
     : undefined;
 }
 //@ chunk-r2x77faw.js:1938-2269 placement
-async function enforceOrgConfigGateOnLaunchLane(e = {}) {
-  let t = orgConfigGateOptions(true, e);
-  let orgConfigDecision = await readOrgConfigDecision(t, e);
+async function enforceOrgConfigGateOnLaunchLane(options = {}) {
+  let gateOptions = orgConfigGateOptions(true, options);
+  let evaluation = await readOrgConfigDecision(gateOptions, options);
   profileCheckpoint("org_config_gate_launch_lane");
-  if (!orgConfigDecision.armed) return;
-  if (!isGateBlocking(orgConfigDecision.decision)) {
-    logOrgConfigGate(orgConfigDecision, orgConfigDecision.outcomes);
+  if (!evaluation.armed) return;
+  if (!isGateBlocking(evaluation.decision)) {
+    logOrgConfigGate(evaluation, evaluation.outcomes);
     return;
   }
-  if (!(e.attended ?? !isUnattendedInteractiveSession()) || e.showBlockedScreen === undefined) {
-    await (e.retryFetches ?? reevaluateSettingsGate)();
+  if (!(options.attended ?? !isUnattendedInteractiveSession()) || options.showBlockedScreen === undefined) {
+    await (options.retryFetches ?? reevaluateSettingsGate)();
     return enforceOrgConfigGateAtStartup({
-      ...e,
+      ...options,
       interactive: true,
     });
   }
-  await logOrgConfigGate(orgConfigDecision, orgConfigDecision.outcomes);
-  return enforceOrgConfigGate(orgConfigDecision, t, true, {
-    ...e,
+  await logOrgConfigGate(evaluation, evaluation.outcomes);
+  return enforceOrgConfigGate(evaluation, gateOptions, true, {
+    ...options,
     retryFirst: true,
   });
 }
@@ -145,93 +146,102 @@ async function enforceOrgConfigGateOnLaunchLane(e = {}) {
 /**
  * 读组织配置闸门判定
  */
-async function readOrgConfigDecision(e, t) {
-  let peek = t.peek ?? orgConfigGateQuick;
-  let a = peek(e);
-  if (isUnarmedFallback(a, t.isFlagFetchHeld, t.isFlagCacheEmpty)) {
-    await growthBookReady(t.fetchFlag);
-    a = peek(e);
+async function readOrgConfigDecision(gateOptions, options) {
+  let peek = options.peek ?? orgConfigGateQuick;
+  let evaluation = peek(gateOptions);
+  if (isUnarmedFallback(evaluation, options.isFlagFetchHeld, options.isFlagCacheEmpty)) {
+    await growthBookReady(options.fetchFlag);
+    evaluation = peek(gateOptions);
   }
-  return retryGateAfterOutcomes(a, () => peek(e), t.primeSettingsCacheAge);
+  return retryGateAfterOutcomes(evaluation, () => peek(gateOptions), options.primeSettingsCacheAge);
 }
 //@ chunk-r2x77faw.js:2440-3227 placement
 /**
  * 执行组织配置闸门
  */
-async function enforceOrgConfigGate(e, t, r, a) {
-  let n = a.exit ?? ((s) => exitForOrgConfig(s, a.printMessage));
-  let reportFinal = a.reportFinal ?? logOrgConfigGate;
-  if (!r || !(a.attended ?? !isUnattendedInteractiveSession())) {
-    let s = e;
-    if (!r) {
-      let f = await retryAfterCredentialRefresh(e, t, a);
-      if (f !== undefined) {
-        if (!isGateBlocking(f.decision)) {
-          await reportFinal(f, undefined, {
+async function enforceOrgConfigGate(evaluation, gateOptions, interactive, options) {
+  let exit = options.exit ?? ((evaluation) => exitForOrgConfig(evaluation, options.printMessage));
+  let reportFinal = options.reportFinal ?? logOrgConfigGate;
+  if (!interactive || !(options.attended ?? !isUnattendedInteractiveSession())) {
+    let finalEvaluation = evaluation;
+    if (!interactive) {
+      let retried = await retryAfterCredentialRefresh(evaluation, gateOptions, options);
+      if (retried !== undefined) {
+        if (!isGateBlocking(retried.decision)) {
+          await reportFinal(retried, undefined, {
             outcome: "passed",
-            recoveredAfterMs: f.decision.blockedMs,
+            recoveredAfterMs: retried.decision.blockedMs,
           });
           return;
         }
-        s = f;
+        finalEvaluation = retried;
       }
     }
-    await reportFinal(s, undefined, {
+    await reportFinal(finalEvaluation, undefined, {
       outcome: "exit",
     });
-    return n(s);
+    return exit(finalEvaluation);
   }
-  let o = await a.showBlockedScreen?.();
-  if (o === undefined) {
-    await reportFinal(e, undefined, {
+  let blockedScreen = await options.showBlockedScreen?.();
+  if (blockedScreen === undefined) {
+    await reportFinal(evaluation, undefined, {
       outcome: "exit",
     });
-    return n(e);
+    return exit(evaluation);
   }
-  let g = a.now ?? (() => performance.now());
-  let u = g() - e.decision.blockedMs;
-  let c = e;
-  let O = 0;
-  let m = await o(
-    e,
+  let now = options.now ?? (() => performance.now());
+  let startedAt = now() - evaluation.decision.blockedMs;
+  let latestEvaluation = evaluation;
+  let attempt = 0;
+  let outcome = await blockedScreen(
+    evaluation,
     async () => {
-      await (a.retryFetches ?? reevaluateSettingsGate)();
-      O += 1;
-      c = (a.reevaluate ?? orgConfigGateSync)(t, Math.max(0, Math.round(g() - u)), O);
-      return c;
+      await (options.retryFetches ?? reevaluateSettingsGate)();
+      attempt += 1;
+      latestEvaluation = (options.reevaluate ?? orgConfigGateSync)(
+        gateOptions,
+        Math.max(0, Math.round(now() - startedAt)),
+        attempt,
+      );
+      return latestEvaluation;
     },
     {
-      retryNow: a.retryFirst === true,
+      retryNow: options.retryFirst === true,
     },
   );
-  if (m === "passed") {
-    await reportFinal(c, undefined, {
+  if (outcome === "passed") {
+    await reportFinal(latestEvaluation, undefined, {
       outcome: "passed",
-      recoveredAfterMs: Math.max(0, Math.round(g() - u)),
+      recoveredAfterMs: Math.max(0, Math.round(now() - startedAt)),
     });
     return;
   }
-  await reportFinal(c, undefined, {
-    outcome: m,
+  await reportFinal(latestEvaluation, undefined, {
+    outcome,
   });
-  return n(c);
+  return exit(latestEvaluation);
 }
 //@ chunk-r2x77faw.js:3227-3571 placement
 /**
  * 凭据刷新导致不可用时重试
  */
-async function retryAfterCredentialRefresh(e, t, r) {
-  let { decision, flag } = e;
+async function retryAfterCredentialRefresh(evaluation, gateOptions, options) {
+  let { decision, flag } = evaluation;
   if (decision.verdict !== "blocked" || decision.reason !== "unavailable_credential_refresh") return;
-  let i = flag.budgetMs - decision.blockedMs;
-  if (i <= 0) return;
-  let o = r.now ?? (() => performance.now());
-  let g = o();
+  let remainingMs = flag.budgetMs - decision.blockedMs;
+  if (remainingMs <= 0) return;
+  let now = options.now ?? (() => performance.now());
+  let startedAt = now();
   await withDeadline(
-    (r.retryFetches ?? reevaluateSettingsGate)().catch(() => {}),
-    i,
+    (options.retryFetches ?? reevaluateSettingsGate)().catch(() => {}),
+    remainingMs,
   );
-  let max = Math.max(0, Math.round(o() - g));
-  return (r.reevaluate ?? orgConfigGateSync)(t, decision.blockedMs + max, 1);
+  let max = Math.max(0, Math.round(now() - startedAt));
+  return (options.reevaluate ?? orgConfigGateSync)(gateOptions, decision.blockedMs + max, 1);
 }
-export { refuseOrgConfigEarlyAtStartup, enforceOrgConfigGateHeadless, enforceOrgConfigGateAtStartup };
+export {
+  refuseOrgConfigEarlyAtStartup,
+  enforceOrgConfigGateHeadless,
+  enforceOrgConfigGateAtStartup,
+  enforceOrgConfigGateOnLaunchLane,
+};

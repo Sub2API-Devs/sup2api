@@ -42,34 +42,44 @@ import { getLastLiveMainThreadRequestAt } from "../../bootstrap/state.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../analytics/featureTelemetry.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-xx1vmpsq.js:32409-32616 placement
 /**
  * 回合前预热 API 认证的常量与共享状态：3 s 超时、60 s 退避、2 s 宽限，以及在途去重与事件信号。
  */
-var API_AUTH_WARM_TIMEOUT_MS = 3000;
-var AUTH_WARM_TIMEOUT_TEXT = "auth warm timed out";
-var AUTH_WARM_BACKOFF_MS = 60000;
-var AUTH_WARM_OWNER_GRACE_MS = 60000;
-var AUTH_WARM_LAPSE_DELAY_MS = 2000;
-var authWarmState = identity(
-  {
-    inFlight: false,
-    backOffUntil: 0,
-    scheduled: undefined,
-  },
-  (e) => {
-    e.inFlight = false;
-    e.backOffUntil = 0;
-    clearTimeout(e.scheduled);
-    e.scheduled = undefined;
-  },
-);
-var authWarmEvents = createSignal();
+var API_AUTH_WARM_TIMEOUT_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var AUTH_WARM_TIMEOUT_TEXT;
+var AUTH_WARM_BACKOFF_MS;
+var AUTH_WARM_OWNER_GRACE_MS;
+var AUTH_WARM_LAPSE_DELAY_MS;
+var authWarmState;
+var authWarmEvents;
+deferInit("chunk-xx1vmpsq.js:32409", () => {
+  API_AUTH_WARM_TIMEOUT_MS = 3000;
+  AUTH_WARM_TIMEOUT_TEXT = "auth warm timed out";
+  AUTH_WARM_BACKOFF_MS = 60000;
+  AUTH_WARM_OWNER_GRACE_MS = 60000;
+  AUTH_WARM_LAPSE_DELAY_MS = 2000;
+  authWarmState = identity(
+    {
+      inFlight: false,
+      backOffUntil: 0,
+      scheduled: undefined,
+    },
+    (state) => {
+      state.inFlight = false;
+      state.backOffUntil = 0;
+      clearTimeout(state.scheduled);
+      state.scheduled = undefined;
+    },
+  );
+  authWarmEvents = createSignal();
+});
 //@ chunk-xx1vmpsq.js:32616-32750 placement
-function emitAuthWarmReported(e) {
+function emitAuthWarmReported(report) {
   try {
-    authWarmEvents.emit(e);
+    authWarmEvents.emit(report);
   } catch (error) {
     logForDebugging(
       `[apiAuthWarm] a subscriber to authWarmReported threw; the request is unaffected: ${errorMessage(error)}`,
@@ -77,21 +87,21 @@ function emitAuthWarmReported(e) {
   }
 }
 //@ chunk-xx1vmpsq.js:32750-32809 placement
-function runScheduledWarm(e, s) {
+function runScheduledWarm(credentials, storageV5) {
   authWarmState.scheduled = undefined;
-  maybeWarmApiAuth(e, s, "lapse_timer");
+  maybeWarmApiAuth(credentials, storageV5, "lapse_timer");
 }
 //@ chunk-xx1vmpsq.js:32809-33519 placement
 /**
  * 回合开始前按需预热 API 认证（/v1/me）：第一方/网关、退避与在途去重，结果供后续请求使用。
  */
-function maybeWarmApiAuth(credentials, storageV5, n = "turn_start") {
+function maybeWarmApiAuth(credentials, storageV5, trigger = "turn_start") {
   try {
     let now = Date.now();
-    let r = (verdict, lastFullCheckAt) =>
+    let reportVerdict = (verdict, lastFullCheckAt) =>
       emitAuthWarmReported({
         kind: "decided",
-        trigger: n,
+        trigger,
         verdict,
         at: now,
         lastFullCheckAt,
@@ -106,41 +116,41 @@ function maybeWarmApiAuth(credentials, storageV5, n = "turn_start") {
       !isPolicyAllowed("allow_api_auth_warm") ||
       !isClaudeAISubscriber()
     ) {
-      r("off");
+      reportVerdict("off");
       return;
     }
-    let T = msSinceLastFullCheck(now);
+    let msSinceFullCheck = msSinceLastFullCheck(now);
     if (authWarmState.inFlight) {
-      r("in_flight", T);
+      reportVerdict("in_flight", msSinceFullCheck);
       return;
     }
     if (now < authWarmState.backOffUntil) {
-      r("paused", T);
+      reportVerdict("paused", msSinceFullCheck);
       return;
     }
     let elapsedSinceFullCheck = getElapsedSinceFullCheck(now);
     if (elapsedSinceFullCheck !== undefined && elapsedSinceFullCheck < tenantLifetimeMs) {
-      let I = tenantLifetimeMs - elapsedSinceFullCheck;
-      if (n !== "owner_present" || I > AUTH_WARM_OWNER_GRACE_MS) {
-        r("fresh", T);
+      let msUntilLapse = tenantLifetimeMs - elapsedSinceFullCheck;
+      if (trigger !== "owner_present" || msUntilLapse > AUTH_WARM_OWNER_GRACE_MS) {
+        reportVerdict("fresh", msSinceFullCheck);
         return;
       }
       if (authWarmState.scheduled === undefined) {
         authWarmState.scheduled = setTimeout(
           runScheduledWarm,
-          I + AUTH_WARM_LAPSE_DELAY_MS,
+          msUntilLapse + AUTH_WARM_LAPSE_DELAY_MS,
           credentials,
           storageV5,
         );
         authWarmState.scheduled.unref?.();
       }
-      r("scheduled", T);
+      reportVerdict("scheduled", msSinceFullCheck);
       return;
     }
     noteFullCheckAt(now, tenantLifetimeMs);
     authWarmState.inFlight = true;
-    r("fired", T);
-    warmApiAuth(now, elapsedSinceFullCheck, n, credentials, storageV5)
+    reportVerdict("fired", msSinceFullCheck);
+    warmApiAuth(now, elapsedSinceFullCheck, trigger, credentials, storageV5)
       .finally(() => {
         authWarmState.inFlight = false;
       })
@@ -150,11 +160,11 @@ function maybeWarmApiAuth(credentials, storageV5, n = "turn_start") {
   }
 }
 //@ chunk-xx1vmpsq.js:33519-34645 placement
-async function warmApiAuth(e, elapsedSinceFullCheck, n, credentials, storageV5) {
+async function warmApiAuth(sentAt, elapsedSinceFullCheck, trigger, credentials, storageV5) {
   let startTime = performance.now();
-  let T = AbortSignal.timeout(API_AUTH_WARM_TIMEOUT_MS);
-  let C;
-  let I;
+  let abortSignal = AbortSignal.timeout(API_AUTH_WARM_TIMEOUT_MS);
+  let clientBuildMs;
+  let failureKind;
   try {
     await withTimeout(
       getAnthropicClient({
@@ -163,10 +173,10 @@ async function warmApiAuth(e, elapsedSinceFullCheck, n, credentials, storageV5) 
         credentials,
         storageV5,
       }).then((anthropicClient) => {
-        C = Math.round(performance.now() - startTime);
-        T.throwIfAborted();
+        clientBuildMs = Math.round(performance.now() - startTime);
+        abortSignal.throwIfAborted();
         return anthropicClient.get("/v1/me", {
-          signal: T,
+          signal: abortSignal,
           headers: {
             "anthropic-beta": OAUTH_BETA_HEADER,
           },
@@ -177,62 +187,65 @@ async function warmApiAuth(e, elapsedSinceFullCheck, n, credentials, storageV5) 
     );
   } catch (error) {
     if (
-      T.aborted ||
+      abortSignal.aborted ||
       error instanceof APIConnectionTimeoutError ||
       error instanceof APIUserAbortError ||
       (error instanceof Error && error.message === AUTH_WARM_TIMEOUT_TEXT)
     )
-      I = "timeout";
-    else if (error instanceof APIError && error.status !== undefined) I = `http_${error.status}`;
-    else if (error instanceof APIConnectionError || error instanceof TypeError) I = "connection";
+      failureKind = "timeout";
+    else if (error instanceof APIError && error.status !== undefined) failureKind = `http_${error.status}`;
+    else if (error instanceof APIConnectionError || error instanceof TypeError) failureKind = "connection";
     else if (
       error instanceof OAuthRefreshDeadError ||
       error instanceof OAuthAccountOnHoldError ||
       error instanceof StoredLoginHeldBackError
     )
-      I = "auth";
+      failureKind = "auth";
     else {
-      I = "other";
+      failureKind = "other";
       logError(error);
     }
   }
   let rounded = Math.round(performance.now() - startTime);
-  let R = (getLastLiveMainThreadRequestAt() ?? 0) > e;
-  let E = {
+  let modelCallDuringWarm = (getLastLiveMainThreadRequestAt() ?? 0) > sentAt;
+  let featureProps = {
     total_ms: rounded,
-    ...(C !== undefined && {
-      client_build_ms: C,
+    ...(clientBuildMs !== undefined && {
+      client_build_ms: clientBuildMs,
     }),
     ...(elapsedSinceFullCheck !== undefined && {
       since_full_auth_check_s: Math.round(elapsedSinceFullCheck / 1000),
     }),
-    model_call_during_warm: R,
-    trigger: fromEnum(n),
+    model_call_during_warm: modelCallDuringWarm,
+    trigger: fromEnum(trigger),
   };
-  let A = I === undefined || I === "http_404";
+  let checked = failureKind === undefined || failureKind === "http_404";
   let now = Date.now();
-  if (A) advanceFullCheckMark(e, now);
-  else if (n !== "turn_start" && !R) clearFullCheckMarkIf(e);
+  if (checked) advanceFullCheckMark(sentAt, now);
+  else if (trigger !== "turn_start" && !modelCallDuringWarm) clearFullCheckMarkIf(sentAt);
   emitAuthWarmReported({
     kind: "settled",
-    sentAt: e,
+    sentAt,
     answeredAt: now,
     totalMs: rounded,
-    checked: A,
-    modelCallDuringWarm: R,
+    checked,
+    modelCallDuringWarm,
   });
-  if (I === undefined) logFeatureOk("api_auth_warm", E);
-  else if (I === "http_404") logFeatureSad("api_auth_warm", I, E);
+  if (failureKind === undefined) logFeatureOk("api_auth_warm", featureProps);
+  else if (failureKind === "http_404") logFeatureSad("api_auth_warm", failureKind, featureProps);
   else {
     authWarmState.backOffUntil = Date.now() + AUTH_WARM_BACKOFF_MS;
-    logFeatureBad("api_auth_warm", I, E);
+    logFeatureBad("api_auth_warm", failureKind, featureProps);
   }
 }
 //@ chunk-xx1vmpsq.js:34645-34727 placement
-var authWarmNoticeStateSlot = new SessionRootSlot(() => ({
-  noticed: false,
-  countedClear: false,
-  countedStop: false,
-  countedNotice: false,
-}));
+var authWarmNoticeStateSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-xx1vmpsq.js:34645", () => {
+  authWarmNoticeStateSlot = new SessionRootSlot(() => ({
+    noticed: false,
+    countedClear: false,
+    countedStop: false,
+    countedNotice: false,
+  }));
+});
 export { authWarmNoticeStateSlot, maybeWarmApiAuth };

@@ -160,7 +160,7 @@ function globTokenToRegex(token) {
   }
 }
 //@ chunk-r0ads4ty.js:3754-3804 esm-fingerprint
-function xTt(globPattern) {
+function globToRegex(globPattern) {
   return `^${parseGlob(globPattern).map(globTokenToRegex).join("")}$`;
 }
-export { escapeRegexLiteral, xTt, globTokenToRegex, GlobTokenKind, parseGlob };
+export { escapeRegexLiteral, globToRegex, globTokenToRegex, GlobTokenKind, parseGlob };

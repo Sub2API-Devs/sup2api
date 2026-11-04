@@ -12,6 +12,7 @@ import { platform, homedir } from "os";
 import { readFile, copyFile, writeFile, mkdir } from "fs/promises";
 import { join, dirname } from "path";
 import { randomBytes } from "crypto";
+import { currentIdeDetectionState, IDE_NOT_YET_COMPUTED, isVSCodeIde } from "../../utils/ide.js";
 import { env } from "../../utils/env.js";
 import { setupShellCompletion } from "../../utils/completionCache.js";
 import { saveGlobalConfig, getGlobalConfig } from "../../utils/config.js";
@@ -20,10 +21,10 @@ import { execFileNoThrow } from "../../utils/execFileNoThrow.js";
 import { color } from "../../components/design-system/color.js";
 import { logError } from "../../utils/log.js";
 import { getPlatform, macOSMajorVersion } from "../../utils/platform.js";
-import { parseJsonc, setJsoncProperty, addItemToJSONCArray, stripBom } from "../../utils/json.js";
+import { parseJsonc_2, setJsoncProperty, addItemToJSONCArray, stripBom } from "../../utils/json.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { isFsInaccessible, isENOENT } from "../../utils/errors.js";
-import { io } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { memoizeAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { pathExists } from "../../utils/fsSafety/atomicWriteStaging.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
@@ -37,9 +38,27 @@ import {
 import { isScreenReaderMode } from "../../utils/accessibility/screenReader.js";
 import { writeFileAtomic } from "../../utils/atomicPublishWrite.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
-import { b8e, KOn, applyEdits } from "../../../vendor/jsonc-parser/lib/esm/main.js";
-import { currentIdeDetectionState, IDE_NOT_YET_COMPUTED, isVSCodeIde } from "../../utils/ide.js";
+import { parseJsonc, modifyJsonc, applyEdits } from "../../../vendor/jsonc-parser/lib/esm/main.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-e6aww6q8.js:3235972-3236107 fingerprint = getNativeCSIuTerminalDisplayName (0.555)
+function getNativeCSIuTerminalDisplayName_2() {
+  let detectionState = currentIdeDetectionState();
+  if (detectionState.supportedVSCodeTerminal === IDE_NOT_YET_COMPUTED)
+    detectionState.supportedVSCodeTerminal = isVSCodeIde(env.terminal);
+  return detectionState.supportedVSCodeTerminal;
+}
+//@ chunk-xafnw064.js:256-441 facade-exports = shouldOfferTerminalSetup (1)
+function shouldOfferTerminalSetup() {
+  return (
+    (platform() === "darwin" && env.terminal === "Apple_Terminal") ||
+    env.terminal === "vscode" ||
+    env.terminal === "cursor" ||
+    env.terminal === "windsurf" ||
+    env.terminal === "alacritty" ||
+    env.terminal === "zed"
+  );
+}
 //@ chunk-7p2hc4jn.js:2478-2622 fingerprint = NATIVE_CSIU_TERMINALS (0.87)
 /**
  * NATIVE_CSIU_TERMINALS：同旧版。
@@ -81,7 +100,7 @@ function emptySuffix() {
 //@ chunk-7p2hc4jn.js:3047-3867 facade-exports = setupTerminal (0.804)
 async function setupTerminal(host, theme, storageV5) {
   let result = "";
-  let o = true;
+  let anyInstalled = true;
   switch (env.terminal) {
     case "Apple_Terminal":
       result = await enableOptionAsMetaForTerminal(theme, storageV5);
@@ -105,16 +124,16 @@ async function setupTerminal(host, theme, storageV5) {
       result = await installBindingsForAlacritty(theme);
       break;
     case "zed": {
-      let u = await installBindingsForZed(theme);
-      result = u.message;
-      o = u.installed;
+      let zedResult = await installBindingsForZed(theme);
+      result = zedResult.message;
+      anyInstalled = zedResult.installed;
       break;
     }
     case null:
       break;
   }
   await saveGlobalConfig((current) => {
-    if (o && SHIFT_ENTER_BINDING_TERMINALS.includes(env.terminal ?? "")) {
+    if (anyInstalled && SHIFT_ENTER_BINDING_TERMINALS.includes(env.terminal ?? "")) {
       if (current.shiftEnterKeyBindingInstalled === true) return current;
       return {
         ...current,
@@ -136,7 +155,7 @@ var ITERM_CLIPBOARD_SETTING_PATH =
   'iTerm2 \u2192 Settings \u2192 General \u2192 Selection \u2192 check "Applications in terminal may access clipboard"';
 //@ chunk-7p2hc4jn.js:3992-4778 facade-exports
 async function enableITerm2ClipboardAccess(theme) {
-  let r = sequential.dim(ITERM_CLIPBOARD_SETTING_PATH);
+  let settingsPathHint = sequential.dim(ITERM_CLIPBOARD_SETTING_PATH);
   try {
     let { stdout, code } = await execFileNoThrow("defaults", [
       "read",
@@ -153,11 +172,11 @@ async function enableITerm2ClipboardAccess(theme) {
       "true",
     ]);
     if (code_2 !== 0)
-      return `${color("warning", theme)("Couldn't update iTerm2 clipboard setting.")}${NEWLINE}${r}${NEWLINE}${NEWLINE}`;
+      return `${color("warning", theme)("Couldn't update iTerm2 clipboard setting.")}${NEWLINE}${settingsPathHint}${NEWLINE}${NEWLINE}`;
     return `${color("success", theme)('Enabled "Applications in terminal may access clipboard" in iTerm2')}${NEWLINE}${sequential.dim("Restart iTerm2 for this to take effect. Undo: defaults write com.googlecode.iterm2 AllowClipboardAccess -bool false")}${NEWLINE}${NEWLINE}`;
   } catch (error) {
     logError(error);
-    return `${color("warning", theme)("Couldn't update iTerm2 clipboard setting.")}${NEWLINE}${r}${NEWLINE}${NEWLINE}`;
+    return `${color("warning", theme)("Couldn't update iTerm2 clipboard setting.")}${NEWLINE}${settingsPathHint}${NEWLINE}${NEWLINE}`;
   }
 }
 //@ chunk-7p2hc4jn.js:4778-4840 facade-exports = isShiftEnterKeyBindingInstalled (1)
@@ -217,7 +236,7 @@ No configuration needed. Just use Shift+Enter to add newlines.${emptySuffix()}`;
     if (currentPlatform === "macos")
       platformTerminals = `   \u2022 macOS: Apple Terminal
 `;
-    let h =
+    let remoteITermNote =
       env.LC_TERMINAL === "iTerm2"
         ? `${NEWLINE}${NEWLINE}You appear to be connected from iTerm2 on another machine. For /copy to reach your local clipboard, on that machine open:${NEWLINE}${sequential.dim(ITERM_CLIPBOARD_SETTING_PATH)}`
         : "";
@@ -233,7 +252,7 @@ ${platformTerminals}   \u2022 IDE: VSCode, Cursor, Devin Desktop, Zed
    \u2022 Other: Alacritty
 3. Return to tmux/screen - settings will persist
 
-${sequential.dim("Note: iTerm2, WezTerm, Ghostty, Kitty, Warp, and Windows Terminal support Shift+Enter natively.")}${h}${emptySuffix()}`;
+${sequential.dim("Note: iTerm2, WezTerm, Ghostty, Kitty, Warp, and Windows Terminal support Shift+Enter natively.")}${remoteITermNote}${emptySuffix()}`;
     onDone(message);
     return null;
   }
@@ -257,11 +276,11 @@ async function readVSCodeScrollSensitivity(host) {
         encoding: "utf-8",
       },
     );
-    let jsonc = parseJsonc(file);
-    let o = isPlainObject(jsonc) ? jsonc[VSCODE_SCROLL_SENSITIVITY_KEY] : undefined;
+    let jsonc = parseJsonc_2(file);
+    let sensitivityValue = isPlainObject(jsonc) ? jsonc[VSCODE_SCROLL_SENSITIVITY_KEY] : undefined;
     return {
       editor: vsCodeFamilyName,
-      sensitivity: typeof o === "number" ? o : null,
+      sensitivity: typeof sensitivityValue === "number" ? sensitivityValue : null,
       recommended: VSCODE_RECOMMENDED_SCROLL_SENSITIVITY,
     };
   } catch (error) {
@@ -291,91 +310,94 @@ function getVSCodeFamilyName() {
  * 解析 VSCode 系编辑器（VSCode、Devin Desktop/Windsurf 等）的用户配置目录，按平台拼路径，结果按编辑器名与 home 目录缓存。
  */
 class VSCodeUserDirResolver {
-  pathFor = io(
-    async (e) => {
-      let r = (n) =>
+  pathFor = memoizeAlias(
+    async (editorName) => {
+      let userDirFor = (folderName) =>
         join(
           homedir(),
           platform() === "win32"
-            ? join("AppData", "Roaming", n, "User")
+            ? join("AppData", "Roaming", folderName, "User")
             : platform() === "darwin"
-              ? join("Library", "Application Support", n, "User")
-              : join(".config", n, "User"),
+              ? join("Library", "Application Support", folderName, "User")
+              : join(".config", folderName, "User"),
         );
-      if (e === "VSCode") return r("Code");
-      if (e === "Devin Desktop") {
-        let n = r("Devin");
-        return (await pathExists(n)) ? n : r("Windsurf");
+      if (editorName === "VSCode") return userDirFor("Code");
+      if (editorName === "Devin Desktop") {
+        let devinDir = userDirFor("Devin");
+        return (await pathExists(devinDir)) ? devinDir : userDirFor("Windsurf");
       }
-      return r(e);
+      return userDirFor(editorName);
     },
-    (e) => `${e}:${homedir()}`,
+    (editorName) => `${editorName}:${homedir()}`,
   );
 }
 //@ chunk-7p2hc4jn.js:7631-7657 facade-exports
-var vscodeUserDirectories = new HostScoped(() => new VSCodeUserDirResolver());
+var vscodeUserDirectories; // deferred: uses VSCodeUserDirResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-7p2hc4jn.js:7631", () => {
+  vscodeUserDirectories = new HostScoped(() => new VSCodeUserDirResolver());
+});
 //@ chunk-7p2hc4jn.js:8767-10303 facade-exports
-async function installVSCodeGpuAccelerationOff(e, r, n) {
-  let s = sequential.dim(
-    `To fix garbled text, set "${VSCODE_GPU_ACCELERATION_KEY}": "${GPU_ACCELERATION_OFF}" in ${r} settings (undo: set it back to "auto").`,
+async function installVSCodeGpuAccelerationOff(host, editor, theme) {
+  let manualHint = sequential.dim(
+    `To fix garbled text, set "${VSCODE_GPU_ACCELERATION_KEY}": "${GPU_ACCELERATION_OFF}" in ${editor} settings (undo: set it back to "auto").`,
   );
   if (isVSCodeRemoteSSH()) {
     logFeatureSad("terminal_setup_gpu_accel", "remote_ssh");
-    return `${s}${NEWLINE}`;
+    return `${manualHint}${NEWLINE}`;
   }
-  let o = join(await vscodeUserDirectories.of(e).pathFor(r), "settings.json");
+  let settingsPath = join(await vscodeUserDirectories.of(host).pathFor(editor), "settings.json");
   try {
     let content = "{}";
-    let d = false;
+    let settingsExists = false;
     try {
-      content = await readFile(o, {
+      content = await readFile(settingsPath, {
         encoding: "utf-8",
       });
-      d = true;
+      settingsExists = true;
     } catch (error) {
       if (!isFsInaccessible(error)) throw error;
     }
-    let jsonc = parseJsonc(content);
+    let jsonc = parseJsonc_2(content);
     if (!isPlainObject(jsonc)) {
       logFeatureSad("terminal_setup_gpu_accel", "not_json_object");
-      return `${color("warning", n)(`${r} settings.json isn't a JSON object; not modifying it.`)}${NEWLINE}${s}${NEWLINE}`;
+      return `${color("warning", theme)(`${editor} settings.json isn't a JSON object; not modifying it.`)}${NEWLINE}${manualHint}${NEWLINE}`;
     }
     if (jsonc[VSCODE_GPU_ACCELERATION_KEY] === GPU_ACCELERATION_OFF) {
       logFeatureOk("terminal_setup_gpu_accel");
-      return `${color("success", n)(`${r} GPU acceleration already off; leaving as-is`)}${NEWLINE}${sequential.dim(`See ${o}`)}${NEWLINE}`;
+      return `${color("success", theme)(`${editor} GPU acceleration already off; leaving as-is`)}${NEWLINE}${sequential.dim(`See ${settingsPath}`)}${NEWLINE}`;
     }
-    let x = setJsoncProperty(content, VSCODE_GPU_ACCELERATION_KEY, GPU_ACCELERATION_OFF);
-    if (x === content) {
+    let updatedContent = setJsoncProperty(content, VSCODE_GPU_ACCELERATION_KEY, GPU_ACCELERATION_OFF);
+    if (updatedContent === content) {
       logFeatureSad("terminal_setup_gpu_accel", "write_failed");
-      return `${color("warning", n)(`Couldn't update ${r} settings.json.`)}${NEWLINE}${s}${NEWLINE}`;
+      return `${color("warning", theme)(`Couldn't update ${editor} settings.json.`)}${NEWLINE}${manualHint}${NEWLINE}`;
     }
-    if (d) {
-      let T = `${o}.${randomBytes(4).toString("hex")}.bak`;
+    if (settingsExists) {
+      let backupPath = `${settingsPath}.${randomBytes(4).toString("hex")}.bak`;
       try {
-        await copyFile(o, T);
+        await copyFile(settingsPath, backupPath);
       } catch {
         logFeatureSad("terminal_setup_gpu_accel", "backup_failed");
-        return `${color("warning", n)(`Couldn't back up ${r} settings.json; not modifying it.`)}${NEWLINE}${s}${NEWLINE}`;
+        return `${color("warning", theme)(`Couldn't back up ${editor} settings.json; not modifying it.`)}${NEWLINE}${manualHint}${NEWLINE}`;
       }
     }
-    await writeFile(o, x, {
+    await writeFile(settingsPath, updatedContent, {
       encoding: "utf-8",
     });
     logFeatureOk("terminal_setup_gpu_accel");
-    return `${color("success", n)(`Turned off ${r} GPU acceleration to fix garbled text`)}${NEWLINE}${sequential.dim(`Reload the ${r} window to apply. Undo: set "${VSCODE_GPU_ACCELERATION_KEY}" back to "auto".`)}${NEWLINE}${sequential.dim(`See ${o}`)}${NEWLINE}`;
+    return `${color("success", theme)(`Turned off ${editor} GPU acceleration to fix garbled text`)}${NEWLINE}${sequential.dim(`Reload the ${editor} window to apply. Undo: set "${VSCODE_GPU_ACCELERATION_KEY}" back to "auto".`)}${NEWLINE}${sequential.dim(`See ${settingsPath}`)}${NEWLINE}`;
   } catch (error) {
     logFeatureSad("terminal_setup_gpu_accel", "write_failed");
     logForDebugging(
-      `Couldn't update ${r} settings.json at ${o}: ${error instanceof Error ? error.message : String(error)}`,
+      `Couldn't update ${editor} settings.json at ${settingsPath}: ${error instanceof Error ? error.message : String(error)}`,
       {
         level: "error",
       },
     );
-    return `${color("warning", n)(`Couldn't update ${r} settings.json.`)}${NEWLINE}${s}${NEWLINE}`;
+    return `${color("warning", theme)(`Couldn't update ${editor} settings.json.`)}${NEWLINE}${manualHint}${NEWLINE}`;
   }
 }
 //@ chunk-7p2hc4jn.js:10303-12236 fingerprint = installBindingsForVSCodeTerminal (0.827)
-async function installBindingsForVSCodeTerminal(e, editor = "VSCode", theme) {
+async function installBindingsForVSCodeTerminal(host, editor = "VSCode", theme) {
   if (isVSCodeRemoteSSH())
     return `${color("warning", theme)(`Cannot install keybindings from a remote ${editor} session.`)}${NEWLINE}${NEWLINE}${editor} keybindings must be installed on your local machine, not the remote server.${NEWLINE}${NEWLINE}To install the Shift+Enter keybinding:${NEWLINE}1. Open ${editor} on your local machine (not connected to remote)${NEWLINE}2. Open the Command Palette (Cmd/Ctrl+Shift+P) \u2192 "Preferences: Open Keyboard Shortcuts (JSON)"${NEWLINE}3. Add this keybinding (the file must be a JSON array):${NEWLINE}${NEWLINE}${sequential.dim(`[
   {
@@ -385,10 +407,10 @@ async function installBindingsForVSCodeTerminal(e, editor = "VSCode", theme) {
     "when": "terminalFocus"
   }
 ]`)}${NEWLINE}`;
-  let s = await vscodeUserDirectories.of(e).pathFor(editor);
-  let keybindingsPath = join(s, "keybindings.json");
+  let userDir = await vscodeUserDirectories.of(host).pathFor(editor);
+  let keybindingsPath = join(userDir, "keybindings.json");
   try {
-    await mkdir(s, {
+    await mkdir(userDir, {
       recursive: true,
     });
     let content = "[]";
@@ -399,7 +421,7 @@ async function installBindingsForVSCodeTerminal(e, editor = "VSCode", theme) {
         encoding: "utf-8",
       });
       fileExists = true;
-      keybindings = parseJsonc(content) ?? [];
+      keybindings = parseJsonc_2(content) ?? [];
     } catch (e) {
       if (!isFsInaccessible(e)) throw e;
     }
@@ -425,10 +447,10 @@ async function installBindingsForVSCodeTerminal(e, editor = "VSCode", theme) {
         binding.key === newItem.key && binding.command === newItem.command && binding.when === newItem.when,
     );
     if (existingBinding) {
-      let A = sequential.dim(`See ${keybindingsPath}`);
+      let seePathHint = sequential.dim(`See ${keybindingsPath}`);
       if (existingBinding.args?.text === newItem.args.text)
-        return `${color("success", theme)(`${editor} terminal Shift+Enter key binding already configured`)}${NEWLINE}${A}${NEWLINE}`;
-      return `${color("warning", theme)(`${editor} already has a Shift+Enter terminal binding with different args; leaving it as-is.`)}${NEWLINE}${A}${NEWLINE}`;
+        return `${color("success", theme)(`${editor} terminal Shift+Enter key binding already configured`)}${NEWLINE}${seePathHint}${NEWLINE}`;
+      return `${color("warning", theme)(`${editor} already has a Shift+Enter terminal binding with different args; leaving it as-is.`)}${NEWLINE}${seePathHint}${NEWLINE}`;
     }
     let updatedContent = addItemToJSONCArray(content, newItem);
     await writeFile(keybindingsPath, updatedContent, {
@@ -490,13 +512,13 @@ async function disableAudioBellForProfile(profileName) {
   return true;
 }
 //@ chunk-7p2hc4jn.js:12975-15209 fingerprint = enableOptionAsMetaForTerminal (0.816)
-async function enableOptionAsMetaForTerminal(theme, r) {
-  let n = (macOSMajorVersion() ?? 0) >= 27;
-  let s = isScreenReaderMode();
-  if (n && s)
+async function enableOptionAsMetaForTerminal(theme, storageV5) {
+  let supportsShiftReturn = (macOSMajorVersion() ?? 0) >= 27;
+  let screenReaderMode = isScreenReaderMode();
+  if (supportsShiftReturn && screenReaderMode)
     return `${color("success", theme)("No Terminal.app changes needed.")}${NEWLINE}${sequential.dim("Shift+Return already enters a newline on this macOS version, and screen-reader mode leaves the audible bell setting unchanged.")}${NEWLINE}`;
   try {
-    if (!(await backupTerminalPreferences(r)))
+    if (!(await backupTerminalPreferences(storageV5)))
       throw Error("Failed to create backup of Terminal.app preferences, bailing out");
     let { stdout: defaultProfile, code: readCode } = await execFileNoThrow("defaults", [
       "read",
@@ -513,36 +535,46 @@ async function enableOptionAsMetaForTerminal(theme, r) {
       throw Error("Failed to read startup Terminal.app profile");
     let wasAnyProfileUpdated = false;
     let defaultProfileName = defaultProfile.trim();
-    let optionAsMetaEnabled = n ? false : await enableOptionAsMetaForProfile(defaultProfileName);
-    let audioBellDisabled = s ? false : await disableAudioBellForProfile(defaultProfileName);
+    let optionAsMetaEnabled = supportsShiftReturn
+      ? false
+      : await enableOptionAsMetaForProfile(defaultProfileName);
+    let audioBellDisabled = screenReaderMode ? false : await disableAudioBellForProfile(defaultProfileName);
     if (optionAsMetaEnabled || audioBellDisabled) wasAnyProfileUpdated = true;
     let startupProfileName = startupProfile.trim();
     if (startupProfileName !== defaultProfileName) {
-      let startupOptionAsMetaEnabled = n ? false : await enableOptionAsMetaForProfile(startupProfileName);
-      let startupAudioBellDisabled = s ? false : await disableAudioBellForProfile(startupProfileName);
+      let startupOptionAsMetaEnabled = supportsShiftReturn
+        ? false
+        : await enableOptionAsMetaForProfile(startupProfileName);
+      let startupAudioBellDisabled = screenReaderMode
+        ? false
+        : await disableAudioBellForProfile(startupProfileName);
       if (startupOptionAsMetaEnabled || startupAudioBellDisabled) wasAnyProfileUpdated = true;
     }
     if (!wasAnyProfileUpdated) {
-      if (n) throw Error("Failed to disable audio bell for any Terminal.app profile");
-      if (s) throw Error("Failed to enable Option as Meta key for any Terminal.app profile");
+      if (supportsShiftReturn) throw Error("Failed to disable audio bell for any Terminal.app profile");
+      if (screenReaderMode) throw Error("Failed to enable Option as Meta key for any Terminal.app profile");
       throw Error("Failed to enable Option as Meta key or disable audio bell for any Terminal.app profile");
     }
     await execFileNoThrow("killall", ["cfprefsd"]);
-    await markTerminalSetupComplete(r);
-    let Z = [color("success", theme)("Configured Terminal.app settings:")];
-    if (!n) Z.push(color("success", theme)('- Enabled "Use Option as Meta key"'));
-    if (!s) Z.push(color("success", theme)("- Disabled the audible bell"));
-    else Z.push(sequential.dim("- Left the audible bell setting unchanged (screen-reader mode uses it)"));
-    let ee = n
+    await markTerminalSetupComplete(storageV5);
+    let successLines = [color("success", theme)("Configured Terminal.app settings:")];
+    if (!supportsShiftReturn)
+      successLines.push(color("success", theme)('- Enabled "Use Option as Meta key"'));
+    if (!screenReaderMode) successLines.push(color("success", theme)("- Disabled the audible bell"));
+    else
+      successLines.push(
+        sequential.dim("- Left the audible bell setting unchanged (screen-reader mode uses it)"),
+      );
+    let newlineHint = supportsShiftReturn
       ? sequential.dim("Shift+Return will now enter a newline.")
       : sequential.dim("Option+Enter will now enter a newline.");
-    return `${Z.join(NEWLINE)}${NEWLINE}${ee}${NEWLINE}${sequential.dim("You must restart Terminal.app for changes to take effect.")}${NEWLINE}`;
+    return `${successLines.join(NEWLINE)}${NEWLINE}${newlineHint}${NEWLINE}${sequential.dim("You must restart Terminal.app for changes to take effect.")}${NEWLINE}`;
   } catch (error) {
     logForDebugging(`Terminal.app setup failed: ${error instanceof Error ? error.message : String(error)}`, {
       level: "error",
     });
-    let restoreResult = await checkAndRestoreTerminalBackup(r);
-    let errorMessage = n
+    let restoreResult = await checkAndRestoreTerminalBackup(storageV5);
+    let errorMessage = supportsShiftReturn
       ? "Failed to disable the audio bell for Terminal.app."
       : "Failed to enable Option as Meta key for Terminal.app.";
     if (restoreResult.status === "restored")
@@ -626,30 +658,33 @@ chars = "\\u001B\\r"
 //@ chunk-7p2hc4jn.js:16609-16648 layout
 var ZED_SHIFT_ENTER_ACTION = ["terminal::SendText", "\x1B\r"];
 //@ chunk-7p2hc4jn.js:16648-16742 layout
-function isZedTerminalShiftEnterBinding(e) {
+function isZedTerminalShiftEnterBinding(keymapEntry) {
   return (
-    isPlainObject(e) && e.context === "Terminal" && isPlainObject(e.bindings) && "shift-enter" in e.bindings
+    isPlainObject(keymapEntry) &&
+    keymapEntry.context === "Terminal" &&
+    isPlainObject(keymapEntry.bindings) &&
+    "shift-enter" in keymapEntry.bindings
   );
 }
 //@ chunk-7p2hc4jn.js:16742-19065 fingerprint = installBindingsForZed (0.572)
 async function installBindingsForZed(theme) {
   let XDG_CONFIG_HOME = getPlatform() === "linux" ? env.XDG_CONFIG_HOME : undefined;
-  let n = XDG_CONFIG_HOME ? join(XDG_CONFIG_HOME, "zed") : join(homedir(), ".config", "zed");
-  let keymapPath = join(n, "keymap.json");
-  let o = sequential.dim(`See ${keymapPath}`);
-  let u = sequential.dim(
+  let zedDir = XDG_CONFIG_HOME ? join(XDG_CONFIG_HOME, "zed") : join(homedir(), ".config", "zed");
+  let keymapPath = join(zedDir, "keymap.json");
+  let seePathHint = sequential.dim(`See ${keymapPath}`);
+  let manualHint = sequential.dim(
     `To add the binding yourself, add this block to the keymap array in ${keymapPath}:${NEWLINE}{ "context": "Terminal", "bindings": { "shift-enter": ["terminal::SendText", "\\u001b\\r"] } }`,
   );
-  let message = `${color("success", theme)("Installed Zed Shift+Enter key binding")}${NEWLINE}${o}${NEWLINE}`;
-  let message_2 = `${color("warning", theme)("Couldn't read your Zed keymap, so it was left unchanged.")}${NEWLINE}${u}${NEWLINE}`;
-  let message_3 = `${color("warning", theme)("Your Zed keymap isn't a readable list of keybindings, so it was left unchanged.")}${NEWLINE}${u}${NEWLINE}`;
+  let message = `${color("success", theme)("Installed Zed Shift+Enter key binding")}${NEWLINE}${seePathHint}${NEWLINE}`;
+  let message_2 = `${color("warning", theme)("Couldn't read your Zed keymap, so it was left unchanged.")}${NEWLINE}${manualHint}${NEWLINE}`;
+  let message_3 = `${color("warning", theme)("Your Zed keymap isn't a readable list of keybindings, so it was left unchanged.")}${NEWLINE}${manualHint}${NEWLINE}`;
   try {
-    await mkdir(n, {
+    await mkdir(zedDir, {
       recursive: true,
     });
-    let T = null;
+    let existingText = null;
     try {
-      T = await readFile(keymapPath, {
+      existingText = await readFile(keymapPath, {
         encoding: "utf-8",
       });
     } catch (error) {
@@ -660,7 +695,7 @@ async function installBindingsForZed(theme) {
           installed: false,
         };
     }
-    if (T === null || stripBom(T).trim() === "") {
+    if (existingText === null || stripBom(existingText).trim() === "") {
       await writeFileAtomic(
         keymapPath,
         jsonStringify(
@@ -683,19 +718,19 @@ async function installBindingsForZed(theme) {
         installed: true,
       };
     }
-    let E = [];
-    let text = stripBom(T);
-    let F = b8e(text, E, {
+    let parseErrors = [];
+    let text = stripBom(existingText);
+    let keymap = parseJsonc(text, parseErrors, {
       allowTrailingComma: true,
     });
-    if (E.length > 0 || !Array.isArray(F))
+    if (parseErrors.length > 0 || !Array.isArray(keymap))
       return {
         message: message_3,
         installed: false,
       };
-    if (F.some(isZedTerminalShiftEnterBinding))
+    if (keymap.some(isZedTerminalShiftEnterBinding))
       return {
-        message: `${color("success", theme)("Zed Shift+Enter key binding already configured")}${NEWLINE}${o}${NEWLINE}`,
+        message: `${color("success", theme)("Zed Shift+Enter key binding already configured")}${NEWLINE}${seePathHint}${NEWLINE}`,
         installed: true,
       };
     let randomSha = randomBytes(4).toString("hex");
@@ -710,25 +745,27 @@ async function installBindingsForZed(theme) {
         },
       );
       return {
-        message: `${color("warning", theme)("Couldn't back up your Zed keymap; not modifying it.")}${NEWLINE}${u}${NEWLINE}`,
+        message: `${color("warning", theme)("Couldn't back up your Zed keymap; not modifying it.")}${NEWLINE}${manualHint}${NEWLINE}`,
         installed: false,
       };
     }
-    let index = F.findIndex((k) => isPlainObject(k) && k.context === "Terminal" && isPlainObject(k.bindings));
+    let index = keymap.findIndex(
+      (entry) => isPlainObject(entry) && entry.context === "Terminal" && isPlainObject(entry.bindings),
+    );
     let formattingOptions = {
       insertSpaces: true,
       tabSize: 2,
     };
-    let H = null;
+    let updatedText = null;
     try {
       let edits =
         index >= 0
-          ? KOn(text, [index, "bindings", "shift-enter"], ZED_SHIFT_ENTER_ACTION, {
+          ? modifyJsonc(text, [index, "bindings", "shift-enter"], ZED_SHIFT_ENTER_ACTION, {
               formattingOptions,
             })
-          : KOn(
+          : modifyJsonc(
               text,
-              [F.length],
+              [keymap.length],
               {
                 context: "Terminal",
                 bindings: {
@@ -740,7 +777,7 @@ async function installBindingsForZed(theme) {
                 isArrayInsertion: true,
               },
             );
-      H = edits.length > 0 ? applyEdits(text, edits) : null;
+      updatedText = edits.length > 0 ? applyEdits(text, edits) : null;
     } catch (error) {
       logForDebugging(
         `Failed to edit Zed keymap: ${error instanceof Error ? error.message : String(error)}`,
@@ -749,19 +786,24 @@ async function installBindingsForZed(theme) {
         },
       );
     }
-    let K = [];
-    let V =
-      H === null
+    let verifyErrors = [];
+    let verified =
+      updatedText === null
         ? null
-        : b8e(H, K, {
+        : parseJsonc(updatedText, verifyErrors, {
             allowTrailingComma: true,
           });
-    if (H === null || K.length > 0 || !Array.isArray(V) || !V.some(isZedTerminalShiftEnterBinding))
+    if (
+      updatedText === null ||
+      verifyErrors.length > 0 ||
+      !Array.isArray(verified) ||
+      !verified.some(isZedTerminalShiftEnterBinding)
+    )
       return {
-        message: `${color("warning", theme)("Couldn't update your Zed keymap, so it was left unchanged.")}${NEWLINE}${u}${NEWLINE}`,
+        message: `${color("warning", theme)("Couldn't update your Zed keymap, so it was left unchanged.")}${NEWLINE}${manualHint}${NEWLINE}`,
         installed: false,
       };
-    await writeFileAtomic(keymapPath, H);
+    await writeFileAtomic(keymapPath, updatedText);
     return {
       message,
       installed: true,
@@ -775,24 +817,6 @@ async function installBindingsForZed(theme) {
     );
     throw Error("Failed to install Zed Shift+Enter key binding");
   }
-}
-//@ chunk-e6aww6q8.js:3235972-3236107 fingerprint = getNativeCSIuTerminalDisplayName (0.555)
-function getNativeCSIuTerminalDisplayName_2() {
-  let e = currentIdeDetectionState();
-  if (e.supportedVSCodeTerminal === IDE_NOT_YET_COMPUTED)
-    e.supportedVSCodeTerminal = isVSCodeIde(env.terminal);
-  return e.supportedVSCodeTerminal;
-}
-//@ chunk-xafnw064.js:256-441 facade-exports = shouldOfferTerminalSetup (1)
-function shouldOfferTerminalSetup() {
-  return (
-    (platform() === "darwin" && env.terminal === "Apple_Terminal") ||
-    env.terminal === "vscode" ||
-    env.terminal === "cursor" ||
-    env.terminal === "windsurf" ||
-    env.terminal === "alacritty" ||
-    env.terminal === "zed"
-  );
 }
 export {
   supportsShiftEnter,
@@ -808,4 +832,8 @@ export {
   vscodeUserDirectories,
   markBackslashReturnUsed,
   readVSCodeScrollSensitivity,
+  call,
+  enableITerm2ClipboardAccess,
+  installVSCodeGpuAccelerationOff,
+  isShiftEnterKeyBindingInstalled,
 };

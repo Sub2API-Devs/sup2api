@@ -44,55 +44,59 @@ import { logError } from "../../../utils/log.js";
 import { finiteOrZero, hasErrorField, isAgentEvalRow } from "./runRegistry.js";
 import { sleep } from "../../../utils/sleep.js";
 import { createWorkflowVmContext } from "../../../services/workflow/runScript.js";
+import { beginDeferredInits } from "../../../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 2 modules closed by ./runRegistry.js;
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("src/tools/WorkflowTool/world/runRegistry.js");
 //@ chunk-y1shfdfm.js:25123-25172 placement
 var STOP_REASONS = ["user", "model", "stop", "runaway", "pause"];
 //@ chunk-y1shfdfm.js:25194-25857 placement
-async function runScriptInContext(e, r) {
-  let n;
+async function runScriptInContext(script, runtime) {
+  let settled;
   try {
-    let w = e.runInContext(r.vmContext, timeoutOption(VM_ABORT_TIMEOUT_MS));
-    n = await r.settle(w);
+    let promise = script.runInContext(runtime.vmContext, timeoutOption(VM_ABORT_TIMEOUT_MS));
+    settled = await runtime.settle(promise);
   } catch (error) {
-    let h = r.errorInfo(error);
-    if (h.stack)
+    let errorInfo = runtime.errorInfo(error);
+    if (errorInfo.stack)
       logForDebugging(
         `Workflow v2 script error stack:
-${h.stack}`,
+${errorInfo.stack}`,
         {
           level: "error",
         },
       );
     return {
-      error: summarizeError(h),
-      thrown: h,
+      error: summarizeError(errorInfo),
+      thrown: errorInfo,
     };
   }
-  let s = n.v;
-  if (typeof s === "function")
+  let rawValue = settled.v;
+  if (typeof rawValue === "function")
     return {
       error: "workflow result cannot be a function",
     };
-  if (s === null || typeof s !== "object") {
-    if (typeof s === "bigint" || typeof s === "symbol")
+  if (rawValue === null || typeof rawValue !== "object") {
+    if (typeof rawValue === "bigint" || typeof rawValue === "symbol")
       return {
-        error: `workflow result is not JSON-serializable (a ${typeof s})`,
+        error: `workflow result is not JSON-serializable (a ${typeof rawValue})`,
       };
     return {
-      value: s,
+      value: rawValue,
     };
   }
-  let i = r.sanitize(s);
+  let sanitized = runtime.sanitize(rawValue);
   try {
-    let w;
+    let cloned;
     try {
-      w = clone(i);
+      cloned = clone(sanitized);
     } catch {
-      w = jsonParse(jsonStringify(i) ?? "null");
+      cloned = jsonParse(jsonStringify(sanitized) ?? "null");
     }
-    jsonStringify(w);
+    jsonStringify(cloned);
     return {
-      value: w,
+      value: cloned,
     };
   } catch {
     return {
@@ -101,701 +105,736 @@ ${h.stack}`,
   }
 }
 //@ chunk-y1shfdfm.js:25857-26040 placement
-function isInsideChildWorkflow(e, r, n) {
-  let s = e.rows[r]?.in ?? HOST_SCOPE;
-  while (s !== HOST_SCOPE && s !== n) {
-    let i = e.rows[s];
-    if (!i) return false;
-    if (i.kind === "eval" && i.fact.topic === "workflow" && i.fact.child === true) return true;
-    s = i.in;
+function isInsideChildWorkflow(world, addr, boundaryAddr) {
+  let cursor = world.rows[addr]?.in ?? HOST_SCOPE;
+  while (cursor !== HOST_SCOPE && cursor !== boundaryAddr) {
+    let row = world.rows[cursor];
+    if (!row) return false;
+    if (row.kind === "eval" && row.fact.topic === "workflow" && row.fact.child === true) return true;
+    cursor = row.in;
   }
   return false;
 }
 //@ chunk-y1shfdfm.js:26040-26249 placement
-function resolveRuleOrigin(e, r, n) {
-  let { addr, by } = r;
+function resolveRuleOrigin(world, row, boundaryAddr) {
+  let { addr, by } = row;
   for (;;) {
     if (!by.startsWith("rule:")) return addr;
-    let w = Number(by.slice(5));
-    if (!Number.isSafeInteger(w) || w < 0 || w >= addr || !e.within(w, n)) return;
-    let h = e.rows[w];
-    if (!h) return;
-    addr = w;
-    by = h.by;
+    let ruleAddr = Number(by.slice(5));
+    if (
+      !Number.isSafeInteger(ruleAddr) ||
+      ruleAddr < 0 ||
+      ruleAddr >= addr ||
+      !world.within(ruleAddr, boundaryAddr)
+    )
+      return;
+    let ruleRow = world.rows[ruleAddr];
+    if (!ruleRow) return;
+    addr = ruleAddr;
+    by = ruleRow.by;
   }
 }
 //@ chunk-y1shfdfm.js:26249-26310 placement
 /**
  * 判断某行是否属于当前脚本可触发的规则（不在子工作流内且能解析来源）。
  */
-function isValidRuleRow(world, r, n) {
-  return !isInsideChildWorkflow(world, r.addr, n) && resolveRuleOrigin(world, r, n) !== undefined;
+function isValidRuleRow(world, row, boundaryAddr) {
+  return (
+    !isInsideChildWorkflow(world, row.addr, boundaryAddr) &&
+    resolveRuleOrigin(world, row, boundaryAddr) !== undefined
+  );
 }
 //@ chunk-y1shfdfm.js:26310-30512 placement
 /**
  * 为工作流脚本 VM 构建宿主 API（agent/spawn/world 操作等），处理跨 VM 边界的克隆与包装。
  */
-function createWorkflowHostApi(e) {
-  let { ctx, world, killSignal } = e;
+function createWorkflowHostApi(options) {
+  let { ctx, world, killSignal } = options;
   let childWorkflow = ctx.childWorkflow;
   let { clone } = ctx.vmBoundary;
   let childPhaseNamer = makeChildPhaseNamer();
-  let k = new Map();
-  let y = new Map();
-  function R() {
+  let pendingAwaits = new Map();
+  let liveChildren = new Map();
+  function abortError() {
     return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "Workflow aborted",
       "workflow v2: child workflow retracted by kill",
     );
   }
-  function I(P) {
-    return world.settled(P).then(async (B) => {
-      let L = k.get(P);
-      switch ((k.delete(P), B.status)) {
+  function awaitChild(addr) {
+    return world.settled(addr).then(async (settled) => {
+      let failure = pendingAwaits.get(addr);
+      switch ((pendingAwaits.delete(addr), settled.status)) {
         case "done": {
-          await world.whenIdle(P);
-          if (killSignal.aborted) throw R();
-          if (world.rows[P]?.status === "retracted") return null;
+          await world.whenIdle(addr);
+          if (killSignal.aborted) throw abortError();
+          if (world.rows[addr]?.status === "retracted") return null;
           let mapped = world
             .read(
               {
                 topic: "result",
               },
               {
-                in: P,
+                in: addr,
               },
             )
-            .filter((Z) => isValidRuleRow(world, Z, P))
-            .map((Z) => Z.fact);
-          return mapped.length > 0 ? clone(mapped) : clone(B.value);
+            .filter((row) => isValidRuleRow(world, row, addr))
+            .map((row) => row.fact);
+          return mapped.length > 0 ? clone(mapped) : clone(settled.value);
         }
         case "failed": {
-          if (L) throw createSealedError(L.message, L.name, L.rendered);
+          if (failure) throw createSealedError(failure.message, failure.name, failure.rendered);
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            B.error ?? "child workflow failed",
+            settled.error ?? "child workflow failed",
             "workflow v2: awaited child workflow failed",
           );
         }
         case "retracted":
-          if (killSignal.aborted) throw R();
+          if (killSignal.aborted) throw abortError();
           return null;
         default:
           return null;
       }
     });
   }
-  function x(error, B) {
+  function describeError(error, errorInfo) {
     if (error instanceof Error)
       return {
         name: error.name,
         message: error.message,
       };
-    let L = (B ?? e.errorInfo)(error);
+    let info = (errorInfo ?? options.errorInfo)(error);
     return {
-      name: L.name,
-      message: L.message,
+      name: info.name,
+      message: info.message,
     };
   }
-  function V(P) {
-    let B = y.get(P);
-    if (B) {
-      B.cutRequested = true;
+  function cutChild(addr) {
+    let child = liveChildren.get(addr);
+    if (child) {
+      child.cutRequested = true;
       return;
     }
-    world.retract(P);
+    world.retract(addr);
   }
-  async function G(P, B, L) {
+  async function spawnChild(args, value, nodeOptions) {
     if (childWorkflow.abortSignal?.aborted) return new Promise(() => {});
-    let H = {
-      in: P.in,
+    let scope = {
+      in: args.in,
     };
-    let by = P.by;
-    if (world.isRetractedScope(H.in)) {
-      if (killSignal.aborted) throw R();
+    let by = args.by;
+    if (world.isRetractedScope(scope.in)) {
+      if (killSignal.aborted) throw abortError();
       return null;
     }
-    let re;
-    let me;
+    let clonedValue;
+    let cloneError;
     try {
-      re = childWorkflow.intakeClone(B);
+      clonedValue = childWorkflow.intakeClone(value);
     } catch (error) {
-      me = {
+      cloneError = {
         error,
       };
     }
     let fact = parseFact({
       topic: "workflow",
-      ...(typeof re === "string"
+      ...(typeof clonedValue === "string"
         ? {
-            name: re,
+            name: clonedValue,
           }
-        : re !== null && typeof re === "object" && "scriptPath" in re && typeof re.scriptPath === "string"
+        : clonedValue !== null &&
+            typeof clonedValue === "object" &&
+            "scriptPath" in clonedValue &&
+            typeof clonedValue.scriptPath === "string"
           ? {
-              scriptPath: re.scriptPath,
+              scriptPath: clonedValue.scriptPath,
             }
           : {}),
       founding: true,
       child: true,
     });
     let abortController = new AbortController();
-    let ee = world.rows.length;
-    let ke = world.subscribe((j) => {
-      if (j.kind === "retracted" && j.row.addr === ee) {
-        ke();
-        y.delete(ee);
+    let childAddr = world.rows.length;
+    let unsubscribe = world.subscribe((event) => {
+      if (event.kind === "retracted" && event.row.addr === childAddr) {
+        unsubscribe();
+        liveChildren.delete(childAddr);
         abortController.abort();
       }
     });
-    y.set(ee, {
+    liveChildren.set(childAddr, {
       cutRequested: false,
     });
-    async function O() {
-      let j;
+    async function runChild() {
+      let errorInfo;
       let childName;
       let phase;
-      let _e;
-      let X;
+      let vmScript;
+      let childContext;
       try {
-        if (me) throw me.error;
-        let childWorkflow_2 = await resolveChildWorkflow(childWorkflow, re);
+        if (cloneError) throw cloneError.error;
+        let childWorkflow_2 = await resolveChildWorkflow(childWorkflow, clonedValue);
         if (abortController.signal.aborted) return;
-        let ve = compileWorkflowScript(childWorkflow_2.scriptBody);
-        if (!ve.ok) {
-          let xe = `workflow('${childWorkflow_2.childName}'): ${ve.error}`;
-          throw Error(xe);
+        let compiled = compileWorkflowScript(childWorkflow_2.scriptBody);
+        if (!compiled.ok) {
+          let compileError = `workflow('${childWorkflow_2.childName}'): ${compiled.error}`;
+          throw Error(compileError);
         }
         childName = childWorkflow_2.childName;
-        _e = ve.vmScript;
+        vmScript = compiled.vmScript;
         phase = childPhaseNamer(childName);
         let timers = createVmTimers(
           childWorkflow.abortSignal
             ? AbortSignal.any([childWorkflow.abortSignal, abortController.signal])
             : abortController.signal,
         );
-        e.registerTimers(timers);
-        X = createChildVmContext(childWorkflow, childName, phase, timers);
-        j = X.errorInfo;
-        timers.bindVMInvoke(vmModule_2.runInContext("(fn => { fn() })", X.childCtx));
-        for (let [xe, tr] of [
+        options.registerTimers(timers);
+        childContext = createChildVmContext(childWorkflow, childName, phase, timers);
+        errorInfo = childContext.errorInfo;
+        timers.bindVMInvoke(vmModule_2.runInContext("(fn => { fn() })", childContext.childCtx));
+        for (let [hookName, hook] of [
           ["parallel", childWorkflow.hooks.parallel],
           ["pipeline", childWorkflow.hooks.pipeline],
         ]) {
-          let Ee = tr;
-          let Ae = (...He) => (abortController.signal.aborted ? new Promise(() => {}) : Ee(...He));
-          Object.defineProperty(X.childCtx, xe, {
-            value: X.asyncWrap(wrapHostFnForVm(Ae)),
+          let hostHook = hook;
+          let guardedHook = (...hookArgs) =>
+            abortController.signal.aborted ? new Promise(() => {}) : hostHook(...hookArgs);
+          Object.defineProperty(childContext.childCtx, hookName, {
+            value: childContext.asyncWrap(wrapHostFnForVm(guardedHook)),
             writable: true,
             enumerable: true,
             configurable: true,
           });
         }
-        Object.defineProperty(X.childCtx, "args", {
-          value: L === undefined ? undefined : X.clone(L),
+        Object.defineProperty(childContext.childCtx, "args", {
+          value: nodeOptions === undefined ? undefined : childContext.clone(nodeOptions),
           writable: true,
           enumerable: true,
           configurable: true,
         });
-        let Se = y.get(ee)?.cutRequested === true;
-        y.delete(ee);
-        if (Se) {
-          world.retract(ee);
+        let cutRequested = liveChildren.get(childAddr)?.cutRequested === true;
+        liveChildren.delete(childAddr);
+        if (cutRequested) {
+          world.retract(childAddr);
           return;
         }
         childWorkflow.hooks.reservePhase(phase, "child");
         childWorkflow.hooks.log(`${SMALL_TRIANGLE_RIGHT} running dynamic workflow ${childName}`);
-        let Ke = {
-          vmContext: X.childCtx,
+        let childRun = {
+          vmContext: childContext.childCtx,
           hooks: {
             ...childWorkflow.hooks,
-            agent: X.agent,
+            agent: childContext.agent,
           },
           childSpawnMemoRef: {},
-          vmToStr: X.toStr,
-          vmOwnString: X.ownString,
-          vmStringify: X.stringify,
+          vmToStr: childContext.toStr,
+          vmOwnString: childContext.ownString,
+          vmStringify: childContext.stringify,
           timers,
           vmBoundary: {
-            clone: X.clone,
-            call: X.call,
-            settle: X.settle,
-            sanitize: X.sanitize,
-            asyncWrap: X.asyncWrap,
-            syncWrap: X.syncWrap,
+            clone: childContext.clone,
+            call: childContext.call,
+            settle: childContext.settle,
+            sanitize: childContext.sanitize,
+            asyncWrap: childContext.asyncWrap,
+            syncWrap: childContext.syncWrap,
           },
           childWorkflow,
         };
-        e.installWords(Ke, ee, abortController.signal, P.spawnMemo);
+        options.installWords(childRun, childAddr, abortController.signal, args.spawnMemo);
       } catch (error) {
-        y.delete(ee);
+        liveChildren.delete(childAddr);
         abortController.abort();
-        let { name: ve, message } = x(error, j);
-        let Se = truncateMiddle(message);
-        k.set(ee, {
-          name: ve,
-          message: Se,
-          rendered: `${ve}: ${Se}`,
+        let { name: errorName, message } = describeError(error, errorInfo);
+        let shortMessage = truncateMiddle(message);
+        pendingAwaits.set(childAddr, {
+          name: errorName,
+          message: shortMessage,
+          rendered: `${errorName}: ${shortMessage}`,
         });
-        childWorkflow.hooks.log(`${SMALL_TRIANGLE_RIGHT} workflow() failed to start: ${Se}`);
+        childWorkflow.hooks.log(`${SMALL_TRIANGLE_RIGHT} workflow() failed to start: ${shortMessage}`);
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          Se,
+          shortMessage,
           "workflow v2: child workflow failed to start",
         );
       }
-      let ce = await runScriptInContext(_e, {
-        vmContext: X.childCtx,
-        settle: X.settle,
-        sanitize: X.sanitize,
-        errorInfo: X.errorInfo,
+      let scriptOutcome = await runScriptInContext(vmScript, {
+        vmContext: childContext.childCtx,
+        settle: childContext.settle,
+        sanitize: childContext.sanitize,
+        errorInfo: childContext.errorInfo,
       });
       if (abortController.signal.aborted) return;
-      if (ce.thrown) {
-        k.set(ee, {
-          name: ce.thrown.name,
-          message: truncateMiddle(ce.thrown.message),
-          rendered: ce.error,
+      if (scriptOutcome.thrown) {
+        pendingAwaits.set(childAddr, {
+          name: scriptOutcome.thrown.name,
+          message: truncateMiddle(scriptOutcome.thrown.message),
+          rendered: scriptOutcome.error,
         });
-        childWorkflow.hooks.log(`${SMALL_TRIANGLE_RIGHT} ${childName} failed: ${ce.error}`);
+        childWorkflow.hooks.log(`${SMALL_TRIANGLE_RIGHT} ${childName} failed: ${scriptOutcome.error}`);
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          ce.error,
+          scriptOutcome.error,
           "workflow v2: child workflow script failed",
         );
       }
-      if (ce.error !== undefined) {
-        childWorkflow.hooks.log(`${SMALL_TRIANGLE_RIGHT} ${childName} failed: ${ce.error}`);
+      if (scriptOutcome.error !== undefined) {
+        childWorkflow.hooks.log(`${SMALL_TRIANGLE_RIGHT} ${childName} failed: ${scriptOutcome.error}`);
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          ce.error,
+          scriptOutcome.error,
           "workflow v2: child workflow result refused",
         );
       }
       childWorkflow.hooks.log(`${SMALL_TRIANGLE_RIGHT} ${childName} done`);
-      return ce.value;
+      return scriptOutcome.value;
     }
-    let le;
+    let landedAddr;
     try {
-      le = world.eval(
+      landedAddr = world.eval(
         fact,
-        (j) => {
-          j.addEventListener("abort", () => abortController.abort(), {
+        (evalContext) => {
+          evalContext.addEventListener("abort", () => abortController.abort(), {
             once: true,
           });
-          return O();
+          return runChild();
         },
         by,
-        H,
+        scope,
       );
     } catch (error) {
-      ke();
-      y.delete(ee);
-      if (!world.isRetractedScope(H.in)) {
-        let { message } = x(error, undefined);
-        let we =
+      unsubscribe();
+      liveChildren.delete(childAddr);
+      if (!world.isRetractedScope(scope.in)) {
+        let { message } = describeError(error, undefined);
+        let label =
           typeof fact.name === "string"
             ? fact.name
             : typeof fact.scriptPath === "string"
               ? `workflow(${fact.scriptPath})`
               : "workflow()";
-        childWorkflow.hooks.recordFailure(`${SMALL_TRIANGLE_RIGHT} ${we}: ${truncateMiddle(message)}`);
+        childWorkflow.hooks.recordFailure(`${SMALL_TRIANGLE_RIGHT} ${label}: ${truncateMiddle(message)}`);
         childWorkflow.hooks.log(
           `${SMALL_TRIANGLE_RIGHT} workflow() failed to start: ${truncateMiddle(message)}`,
         );
       }
       throw error;
     }
-    if (le !== ee) {
-      ke();
-      y.delete(ee);
+    if (landedAddr !== childAddr) {
+      unsubscribe();
+      liveChildren.delete(childAddr);
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `child workflow row landed at ${le}, expected ${ee}`,
+        `child workflow row landed at ${landedAddr}, expected ${childAddr}`,
         "workflow v2: child founding address mismatch",
       );
     }
-    return I(le);
+    return awaitChild(landedAddr);
   }
   return {
-    workflow: G,
-    cut: V,
+    workflow: spawnChild,
+    cut: cutChild,
   };
 }
 //@ chunk-y1shfdfm.js:30534-30573 placement
 /**
  * 是否为数组（辅助判断）。
  */
-function isArray(e) {
-  return Array.isArray(e);
+function isArray(value) {
+  return Array.isArray(value);
 }
 //@ chunk-y1shfdfm.js:30573-30672 placement
 /**
  * 把内部行裁剪成对外暴露的字段（地址、来源、状态、值、错误、事实）。
  */
-function toPublicRow(e) {
+function toPublicRow(value) {
   return {
-    addr: e.addr,
-    by: e.by,
-    status: e.status,
-    value: e.value,
-    error: e.error,
-    fact: e.fact,
+    addr: value.addr,
+    by: value.by,
+    status: value.status,
+    value: value.value,
+    error: value.error,
+    fact: value.fact,
   };
 }
 //@ chunk-y1shfdfm.js:30672-31090 placement
-function parsePlacementOptions(e) {
-  if (e === undefined || e === null) return false;
-  if (typeof e !== "object" || Array.isArray(e))
+function parsePlacementOptions(world) {
+  if (world === undefined || world === null) return false;
+  if (typeof world !== "object" || Array.isArray(world))
     throw TypeError("placement options must be an object: {top: true} or nothing");
-  let r = e;
-  if (Object.keys(r).some((key) => key !== "top"))
+  let boundaryAddr = world;
+  if (Object.keys(boundaryAddr).some((key) => key !== "top"))
     throw TypeError("unknown placement option \u2014 the only one is top (a boolean)");
-  if (r.top !== undefined && typeof r.top !== "boolean")
+  if (boundaryAddr.top !== undefined && typeof boundaryAddr.top !== "boolean")
     throw TypeError("placement option top must be a boolean");
-  return r.top === true;
+  return boundaryAddr.top === true;
 }
 //@ chunk-y1shfdfm.js:31090-36466 placement
 /**
  * 为脚本提供 world（put/retract/read/rule 等）绑定，带作用域信号与 spawn 记忆。
  */
-function createWorldBindings(e, r, n, s, { scopeSignal: i, inheritedSpawnMemo: w } = {}) {
-  let { clone, call: k, settle, sanitize, asyncWrap, syncWrap } = e.vmBoundary;
-  let { vmContext, hooks } = e;
-  let P = (v) => syncWrap(sanitizeAndLogError(v));
+function createWorldBindings(
+  hostContext,
+  world,
+  rootAddr,
+  killSignal,
+  { scopeSignal, inheritedSpawnMemo } = {},
+) {
+  let { clone, call: callFn, settle, sanitize, asyncWrap, syncWrap } = hostContext.vmBoundary;
+  let { vmContext, hooks } = hostContext;
+  let guard = (thrown) => syncWrap(sanitizeAndLogError(thrown));
   let vmErrorDescriber = createVmErrorDescriber(vmContext);
-  let L = {
+  let defaultPlacement = {
     by: "script",
-    in: n,
+    in: rootAddr,
     memo: "chain",
   };
-  let H = L;
-  function Z(v, S) {
-    let W = H;
-    H = v;
+  let currentPlacement = defaultPlacement;
+  function withPlacement(placement, body) {
+    let previousPlacement = currentPlacement;
+    currentPlacement = placement;
     try {
-      return v.memo === "none" ? e.hooks.withLanesInert(S) : S();
+      return placement.memo === "none" ? hostContext.hooks.withLanesInert(body) : body();
     } finally {
-      H = W;
+      currentPlacement = previousPlacement;
     }
   }
-  let re = {
-    in: n,
+  let rootPattern = {
+    in: rootAddr,
   };
-  let me = (v, S) =>
-    parsePlacementOptions(S)
-      ? re
+  let resolvePlacement = (placement, options) =>
+    parsePlacementOptions(options)
+      ? rootPattern
       : {
-          in: v.in,
+          in: placement.in,
         };
-  let he = vmModule_2.runInContext(
+  let makeFrozenWords = vmModule_2.runInContext(
     "(() => { const freeze = Object.freeze; return (put, read, on, retract, agent, workflow) => freeze({ put, read, on, retract, agent, workflow }) })()",
     vmContext,
   );
-  function ae(v) {
-    let S;
+  function runGuarded(thunk) {
+    let settled;
     try {
-      S = settle(v());
+      settled = settle(thunk());
     } catch (error) {
-      return Promise.reject(ee(error));
+      return Promise.reject(describeThrown(error));
     }
-    return S.then(
-      (W) => O(W.v),
+    return settled.then(
+      (settledValue) => publicValue(settledValue.v),
       (error) => {
-        throw ee(error);
+        throw describeThrown(error);
       },
     );
   }
-  function ee(error) {
-    return ke(vmErrorDescriber(error));
+  function describeThrown(error) {
+    return toTelemetryError(vmErrorDescriber(error));
   }
-  function ke(v) {
+  function toTelemetryError(described) {
     return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      v.message ? `${v.name}: ${v.message}` : v.name,
+      described.message ? `${described.name}: ${described.message}` : described.name,
       "workflow v2: VM code threw",
     );
   }
-  function O(v) {
-    let S = sanitize(v);
-    if (S === null || typeof S !== "object") return S;
-    let W = jsonStringify(S);
-    return W === undefined ? undefined : jsonParse(W);
+  function publicValue(value) {
+    let sanitized = sanitize(value);
+    if (sanitized === null || typeof sanitized !== "object") return sanitized;
+    let json = jsonStringify(sanitized);
+    return json === undefined ? undefined : jsonParse(json);
   }
-  function le(v, S) {
-    if (typeof v !== "function")
+  function assertFunction(candidate, message) {
+    if (typeof candidate !== "function")
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        S,
+        message,
         "workflow v2: word expected a function",
       );
   }
-  let j = () => s.aborted || i?.aborted === true;
-  let q = (v) => v.memo === "chain" && r.rows[n]?.status !== "pending";
-  let we = P((v) => {
-    if (j()) return clone([]);
-    let pattern = parsePattern(O(v) ?? {});
-    return clone(r.read(pattern, re).map(toPublicRow));
+  let isAborted = () => killSignal.aborted || scopeSignal?.aborted === true;
+  let isScopeIdle = (placement) => placement.memo === "chain" && world.rows[rootAddr]?.status !== "pending";
+  let readWord = guard((patternInput) => {
+    if (isAborted()) return clone([]);
+    let pattern = parsePattern(publicValue(patternInput) ?? {});
+    return clone(world.read(pattern, rootPattern).map(toPublicRow));
   });
-  function _e(v) {
-    return j() || (r.isRetractedScope(v.in) && !Re(v));
+  function isDeadScope(placement) {
+    return isAborted() || (world.isRetractedScope(placement.in) && !isLiveAddr(placement));
   }
-  function X(v) {
-    return P((S, W) => {
-      let Q = v();
-      if (_e(Q)) return -1;
-      let de = me(Q, O(W));
-      if (r.isRetractedScope(de.in)) return -1;
-      return r.put(parseFact(O(S)), Q.by, de);
+  function putWord(thunk) {
+    return guard((factInput, optsInput) => {
+      let placement = thunk();
+      if (isDeadScope(placement)) return -1;
+      let parsedPlacement = resolvePlacement(placement, publicValue(optsInput));
+      if (world.isRetractedScope(parsedPlacement.in)) return -1;
+      return world.put(parseFact(publicValue(factInput)), placement.by, parsedPlacement);
     });
   }
-  function ce(v) {
-    return P((S, W, Q) => {
-      let de = v();
-      if (_e(de)) return -1;
-      let atLeastPattern = parseAtLeastPattern(O(S) ?? {});
-      le(W, "on() expects a function");
-      let Ie = me(de, O(Q));
-      if (r.isRetractedScope(Ie.in)) return -1;
-      let Pe = -1;
-      Pe = r.on(
+  function onWord(thunk) {
+    return guard((patternInput, handler, optsInput) => {
+      let placement = thunk();
+      if (isDeadScope(placement)) return -1;
+      let atLeastPattern = parseAtLeastPattern(publicValue(patternInput) ?? {});
+      assertFunction(handler, "on() expects a function");
+      let parsedPlacement = resolvePlacement(placement, publicValue(optsInput));
+      if (world.isRetractedScope(parsedPlacement.in)) return -1;
+      let ruleId = -1;
+      ruleId = world.on(
         atLeastPattern,
-        (Le, or, Je, qe) => {
-          let sr = isArray(Le) ? Le.map(toPublicRow) : toPublicRow(Le);
-          let ze = {
-            by: `rule:${Pe}`,
-            in: Je,
+        (matchedRows, nextRows, rulePlacement, journal) => {
+          let publicRows = isArray(matchedRows) ? matchedRows.map(toPublicRow) : toPublicRow(matchedRows);
+          let rulePlacementObj = {
+            by: `rule:${ruleId}`,
+            in: rulePlacement,
             memo: "none",
           };
-          weakMap_2.set(ze, qe);
-          let Oe = Wr(ze);
-          return Z(ze, () => ae(() => k(W, clone(sr), clone(or), Oe)));
+          weakMap_2.set(rulePlacementObj, journal);
+          let publicJournal = makeRules(rulePlacementObj);
+          return withPlacement(rulePlacementObj, () =>
+            runGuarded(() => callFn(handler, clone(publicRows), clone(nextRows), publicJournal)),
+          );
         },
-        de.by,
-        Ie,
+        placement.by,
+        parsedPlacement,
       );
-      return Pe;
+      return ruleId;
     });
   }
   let weakMap = new WeakMap();
   let weakMap_2 = new WeakMap();
-  function Re(v) {
-    let S = weakMap.get(v);
-    if (S === undefined) return false;
-    let W = r.rows[S];
-    return W !== undefined && !r.isRetractedScope(W.in);
+  function isLiveAddr(addr) {
+    let rowIndex = weakMap.get(addr);
+    if (rowIndex === undefined) return false;
+    let row = world.rows[rowIndex];
+    return row !== undefined && !world.isRetractedScope(row.in);
   }
-  function Se(v) {
-    return P((S) => {
-      if (typeof S !== "number" || !Number.isSafeInteger(S))
+  function retractWord(thunk) {
+    return guard((targetAddr) => {
+      if (typeof targetAddr !== "number" || !Number.isSafeInteger(targetAddr))
         throw TypeError("retract() expects an address (a number)");
-      if (j() || S === n || !r.within(S, n)) return false;
-      let W = v();
-      if (!Re(W) && r.isRetractedScope(W.in)) return false;
-      let Q = r.within(W.in, S);
-      let de = Q ? weakMap_2.get(W) : undefined;
-      let se = Q ? weakMap.get(W) : undefined;
-      de?.keep(S);
-      let Ie = r.retract(S);
-      if (Q && Ie) {
-        if (se === undefined || r.within(se, S)) weakMap.set(W, S);
-        de?.keep(weakMap.get(W));
-      } else if (Q) de?.keep(se);
-      return Ie;
+      if (isAborted() || targetAddr === rootAddr || !world.within(targetAddr, rootAddr)) return false;
+      let placement = thunk();
+      if (!isLiveAddr(placement) && world.isRetractedScope(placement.in)) return false;
+      let withinTarget = world.within(placement.in, targetAddr);
+      let journalHandle = withinTarget ? weakMap_2.get(placement) : undefined;
+      let lastAddr = withinTarget ? weakMap.get(placement) : undefined;
+      journalHandle?.keep(targetAddr);
+      let retractResult = world.retract(targetAddr);
+      if (withinTarget && retractResult) {
+        if (lastAddr === undefined || world.within(lastAddr, targetAddr)) weakMap.set(placement, targetAddr);
+        journalHandle?.keep(weakMap.get(placement));
+      } else if (withinTarget) journalHandle?.keep(lastAddr);
+      return retractResult;
     });
   }
-  let Ke = new Set();
-  let xe = new Map();
-  function tr(v) {
-    return r.settled(v).then((S) => {
-      switch (S.status) {
+  let skippedAddrs = new Set();
+  let agentErrors = new Map();
+  function awaitSettled(addr) {
+    return world.settled(addr).then((settled) => {
+      switch (settled.status) {
         case "done":
-          return clone(S.value);
+          return clone(settled.value);
         case "failed": {
-          if (Ke.has(v)) return null;
-          let W = xe.get(v);
-          if (W) throw createSealedError(W.message, W.name);
+          if (skippedAddrs.has(addr)) return null;
+          let sealedError = agentErrors.get(addr);
+          if (sealedError) throw createSealedError(sealedError.message, sealedError.name);
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            S.error ?? "agent failed",
+            settled.error ?? "agent failed",
             "workflow v2: awaited agent failed",
           );
         }
         case "retracted":
-          if (s.aborted)
+          if (killSignal.aborted)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
               "Workflow aborted",
               "workflow v2: awaited agent retracted by kill",
             );
-          if (i?.aborted) return new Promise(() => {});
+          if (scopeSignal?.aborted) return new Promise(() => {});
           return null;
         default:
           return null;
       }
     });
   }
-  let Ee = asyncWrap(wrapHostFnForVm(async (v) => v));
-  let Ae = vmModule_2.runInContext(
+  let identityHostFn = asyncWrap(wrapHostFnForVm(async (value) => value));
+  let neverPromise = vmModule_2.runInContext(
     "(() => { const P = Promise; return () => new P(() => {}) })()",
     vmContext,
   );
-  function He(v) {
-    return P((S, W) => {
-      if (j()) return k(Ae);
-      let Q = v();
-      if (q(Q)) return k(Ae);
-      if (!Re(Q) && r.isRetractedScope(Q.in)) return k(Ee, null);
-      let de = O(W);
-      let se = de !== null && typeof de === "object" && !Array.isArray(de) ? de : {};
-      let Ie = e.vmToStr(S);
+  function agentWord(thunk) {
+    return guard((prompt, optsInput) => {
+      if (isAborted()) return callFn(neverPromise);
+      let placement = thunk();
+      if (isScopeIdle(placement)) return callFn(neverPromise);
+      if (!isLiveAddr(placement) && world.isRetractedScope(placement.in)) return callFn(identityHostFn, null);
+      let opts = publicValue(optsInput);
+      let optsObject = opts !== null && typeof opts === "object" && !Array.isArray(opts) ? opts : {};
+      let promptText = hostContext.vmToStr(prompt);
       let label =
-        typeof se.label === "string" ? se.label : truncateToLength(Ie, 60).replace(/\s+/g, " ").trim();
-      let fact = se.fact !== null && typeof se.fact === "object" && !Array.isArray(se.fact) ? se.fact : {};
+        typeof optsObject.label === "string"
+          ? optsObject.label
+          : truncateToLength(promptText, 60).replace(/\s+/g, " ").trim();
+      let fact =
+        optsObject.fact !== null && typeof optsObject.fact === "object" && !Array.isArray(optsObject.fact)
+          ? optsObject.fact
+          : {};
       let fact_2 = parseFact({
         ...fact,
         topic: "agent",
         label,
-        ...(typeof se.phase === "string" && {
-          phase: se.phase,
+        ...(typeof optsObject.phase === "string" && {
+          phase: optsObject.phase,
         }),
       });
-      let Je = me(
-        Q,
-        se.top === undefined
+      let agentPlacement = resolvePlacement(
+        placement,
+        optsObject.top === undefined
           ? undefined
           : {
-              top: se.top,
+              top: optsObject.top,
             },
       );
-      if (r.isRetractedScope(Je.in)) return k(Ee, null);
-      let qe = r.rows.length;
-      let sr = r.eval(
+      if (world.isRetractedScope(agentPlacement.in)) return callFn(identityHostFn, null);
+      let agentAddr = world.rows.length;
+      let evalReturn = world.eval(
         fact_2,
-        (ze) =>
-          hooks.agent(S, W, ze, nr(Q), i).then(
-            (Oe) => {
-              if (Oe === null || Oe === undefined) {
-                Ke.add(qe);
+        (abortSignal) =>
+          hooks.agent(prompt, optsInput, abortSignal, spawnMemoFor(placement), scopeSignal).then(
+            (agentResult) => {
+              if (agentResult === null || agentResult === undefined) {
+                skippedAddrs.add(agentAddr);
                 throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
                   "agent produced no result (skipped, blocked, or gave up after retries)",
                   "workflow v2: agent resolved without a result",
                 );
               }
-              return O(Oe);
+              return publicValue(agentResult);
             },
             (error) => {
-              let xr = vmErrorDescriber(error);
-              xe.set(qe, xr);
-              throw ke(xr);
+              let describedError = vmErrorDescriber(error);
+              agentErrors.set(agentAddr, describedError);
+              throw toTelemetryError(describedError);
             },
           ),
-        Q.by,
-        Je,
+        placement.by,
+        agentPlacement,
       );
-      return k(Ee, tr(sr));
+      return callFn(identityHostFn, awaitSettled(evalReturn));
     });
   }
-  function nr(v) {
-    if (v.memo === "none") return new WorkflowJournalStub();
-    if (w !== undefined) return w;
-    let S = r.rows[n];
-    return S === undefined || S.status === "pending" ? undefined : new WorkflowJournalStub();
+  function spawnMemoFor(placement) {
+    if (placement.memo === "none") return new WorkflowJournalStub();
+    if (inheritedSpawnMemo !== undefined) return inheritedSpawnMemo;
+    let rootRow = world.rows[rootAddr];
+    return rootRow === undefined || rootRow.status === "pending" ? undefined : new WorkflowJournalStub();
   }
-  let $e = () => H;
-  e.childSpawnMemoRef.get = () => nr(H);
-  let ft = X($e);
-  let pt = ce($e);
-  let mt = Se($e);
-  let wt = He($e);
-  function Wr(v) {
-    let S = () => (H === L ? v : H);
-    return he(X(S), we, ce(S), Se(S), He(S), Tr(S));
+  let getPlacement = () => currentPlacement;
+  hostContext.childSpawnMemoRef.get = () => spawnMemoFor(currentPlacement);
+  let boundPut = putWord(getPlacement);
+  let boundOn = onWord(getPlacement);
+  let boundRetract = retractWord(getPlacement);
+  let boundAgent = agentWord(getPlacement);
+  function makeRules(placement) {
+    let scopedPlacement = () => (currentPlacement === defaultPlacement ? placement : currentPlacement);
+    return makeFrozenWords(
+      putWord(scopedPlacement),
+      readWord,
+      onWord(scopedPlacement),
+      retractWord(scopedPlacement),
+      agentWord(scopedPlacement),
+      workflowWord(scopedPlacement),
+    );
   }
-  let ht = P((v) => {
-    if (typeof v !== "string" || v === "")
+  let varWord = guard((name) => {
+    if (typeof name !== "string" || name === "")
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         "v(name) expects a non-empty string",
         "workflow v2: v() expects a name",
       );
     return clone({
-      $var: v,
+      $var: name,
     });
   });
-  let gt = P((v, S) => {
-    let of = parsePattern(O(S) ?? {});
-    if (typeof v !== "number" || !Number.isSafeInteger(v) || v < 0)
+  let atleastWord = guard((count, patternInput) => {
+    let of = parsePattern(publicValue(patternInput) ?? {});
+    if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         "atleast(N, pattern) expects a non-negative integer",
         "workflow v2: atleast() expects a count",
       );
     return clone({
-      $atleast: v,
+      $atleast: count,
       of,
     });
   });
-  for (let [v, S] of [
-    ["put", ft],
-    ["read", we],
-    ["on", pt],
-    ["retract", mt],
-    ["agent", wt],
-    ["v", ht],
-    ["atleast", gt],
-    [WORKFLOW_VM_WORDS, P(() => Wr(H))],
+  for (let [wordName, wordFn] of [
+    ["put", boundPut],
+    ["read", readWord],
+    ["on", boundOn],
+    ["retract", boundRetract],
+    ["agent", boundAgent],
+    ["v", varWord],
+    ["atleast", atleastWord],
+    [WORKFLOW_VM_WORDS, guard(() => makeRules(currentPlacement))],
   ])
-    Object.defineProperty(vmContext, v, {
-      value: S,
+    Object.defineProperty(vmContext, wordName, {
+      value: wordFn,
       writable: false,
       enumerable: true,
       configurable: false,
     });
-  let Cr = new Set();
-  let { workflow, cut } = i
+  let childTimers = new Set();
+  let { workflow, cut } = scopeSignal
     ? {
         workflow: () => rejectNestedWorkflow(),
         cut: () => {},
       }
     : createWorkflowHostApi({
-        ctx: e,
-        world: r,
-        killSignal: s,
-        installWords: (v, S, scopeSignal, inheritedSpawnMemo) => {
-          createWorldBindings(v, r, S, s, {
+        ctx: hostContext,
+        world,
+        killSignal,
+        installWords: (childWorld, childAddr, scopeSignal, inheritedSpawnMemo) => {
+          createWorldBindings(childWorld, world, childAddr, killSignal, {
             scopeSignal,
             inheritedSpawnMemo,
           });
         },
-        registerTimers: (v) => {
-          Cr.add(v);
+        registerTimers: (timers) => {
+          childTimers.add(timers);
         },
         errorInfo: vmErrorDescriber,
       });
-  function Tr(v) {
-    return P((S, W) => {
-      if (j()) return k(Ae);
-      let Q = v();
-      if (q(Q)) return k(Ae);
-      if (_e(Q)) return k(Ee, null);
-      let de = {
-        in: Q.in,
-        by: Q.by,
-        spawnMemo: nr(Q),
+  function workflowWord(getPlacement) {
+    return guard((scriptRef, args) => {
+      if (isAborted()) return callFn(neverPromise);
+      let placement = getPlacement();
+      if (isScopeIdle(placement)) return callFn(neverPromise);
+      if (isDeadScope(placement)) return callFn(identityHostFn, null);
+      let childCall = {
+        in: placement.in,
+        by: placement.by,
+        spawnMemo: spawnMemoFor(placement),
       };
-      let se = asyncWrap(wrapHostFnForVm((Ie, Pe) => workflow(de, Ie, Pe)));
-      return k(se, S, W);
+      let wrappedWorkflow = asyncWrap(
+        wrapHostFnForVm((scriptRef, args) => workflow(childCall, scriptRef, args)),
+      );
+      return callFn(wrappedWorkflow, scriptRef, args);
     });
   }
   Object.defineProperty(vmContext, "workflow", {
-    value: Tr($e),
+    value: workflowWord(getPlacement),
     writable: false,
     enumerable: true,
     configurable: false,
   });
   vmModule_2.runInContext("delete globalThis.eval", vmContext);
   return {
-    as(by, S) {
-      return Z(
+    as(by, body) {
+      return withPlacement(
         {
           by,
-          in: n,
+          in: rootAddr,
           memo: "none",
         },
-        S,
+        body,
       );
     },
     clearChildTimers() {
-      for (let v of Cr) v.clear();
+      for (let timers of childTimers) timers.clear();
     },
     cutChild: cut,
   };
@@ -814,7 +853,7 @@ var RUNAWAY_RUN_KILLED_TEXT =
  * 把停止原因规范成已知值，未知记为 unknown。
  */
 function normalizeStopReason(reason) {
-  return STOP_REASONS.find((r) => r === reason) ?? "unknown";
+  return STOP_REASONS.find((workflowSize) => workflowSize === reason) ?? "unknown";
 }
 //@ chunk-y1shfdfm.js:36793-48223 placement
 /**
@@ -829,8 +868,8 @@ class WorkflowScriptRun {
   words;
   vmErrorInfo;
   logs = [];
-  log(e) {
-    if (this.logs.length < MAX_RUN_LOGS) this.logs.push(truncateMiddle(e));
+  log(line) {
+    if (this.logs.length < MAX_RUN_LOGS) this.logs.push(truncateMiddle(line));
   }
   sink;
   killed = false;
@@ -852,18 +891,18 @@ class WorkflowScriptRun {
     this.vmScript = vmScript;
     this.world = world;
   }
-  static lost(runId, world, n, priorScopes = []) {
-    let i = new WorkflowScriptRun(runId, undefined, world);
-    i.scope = n;
-    i.priorScopes = priorScopes;
-    i.retractPriorLives();
-    i.lostOnResume = true;
-    let w = i.killRecord();
-    if (w !== undefined || world.isRetractedScope(n)) {
-      i.kill("stop");
-      if (w !== undefined) i.killedSize = w;
+  static lost(runId, world, scope, priorScopes = []) {
+    let run = new WorkflowScriptRun(runId, undefined, world);
+    run.scope = scope;
+    run.priorScopes = priorScopes;
+    run.retractPriorLives();
+    run.lostOnResume = true;
+    let killRecord = run.killRecord();
+    if (killRecord !== undefined || world.isRetractedScope(scope)) {
+      run.kill("stop");
+      if (killRecord !== undefined) run.killedSize = killRecord;
     }
-    return i;
+    return run;
   }
   lostOnResume = false;
   get isLost() {
@@ -891,17 +930,17 @@ class WorkflowScriptRun {
   }
   steered = false;
   afterKillReported = false;
-  noteCallAfterKill(e) {
+  noteCallAfterKill(nextAction) {
     if (!this.killed || this.lostOnResume || this.afterKillReported || this.killedSize === undefined) return;
     this.afterKillReported = true;
     logFeatureOk("workflow_after_kill", {
-      next_action: fromEnum(e),
+      next_action: fromEnum(nextAction),
       seconds_since_kill: Math.round((Date.now() - this.killedSize.at) / 1000),
     });
   }
   msSinceLaunch() {
-    let e = this.world.rows[this.scope];
-    return e ? Date.now() - e.at : 0;
+    let runRow = this.world.rows[this.scope];
+    return runRow ? Date.now() - runRow.at : 0;
   }
   get pending() {
     return this.scope < 0 ? 0 : this.world.pending(this.scope);
@@ -922,15 +961,15 @@ class WorkflowScriptRun {
       pending: this.pending,
     };
   }
-  kill(e) {
+  kill(reason) {
     this.killed = true;
     this.controller.abort();
     if (this.scope >= 0 && !this.world.isRetractedScope(this.scope)) {
-      let r = this.status();
+      let statusCounts = this.status();
       this.killedSize = {
         at: Date.now(),
-        reason: e,
-        ...r,
+        reason,
+        ...statusCounts,
         rules: count(
           this.world.read(
             {
@@ -940,19 +979,19 @@ class WorkflowScriptRun {
               in: this.scope,
             },
           ),
-          (i) => i.kind === "sub",
+          (row) => row.kind === "sub",
         ),
         agents: this.ctx?.hooks.getAgentCount() ?? 0,
       };
       if (!this.lostOnResume)
         logFeatureOk("workflow_kill", {
-          reason: fromEnum(e),
-          rows: r.rows,
+          reason: fromEnum(reason),
+          rows: statusCounts.rows,
           agents: this.killedSize.agents,
           ms_since_launch: this.msSinceLaunch(),
         });
       this.world.retract(this.scope);
-      let { at, ...s } = this.killedSize;
+      let { at, ...killFields } = this.killedSize;
       try {
         if (this.killRecord() === undefined)
           this.world.put(
@@ -960,7 +999,7 @@ class WorkflowScriptRun {
               topic: "run",
               runId: this.runId,
               killed: true,
-              ...s,
+              ...killFields,
             },
             "host",
             {
@@ -979,42 +1018,42 @@ class WorkflowScriptRun {
     this.words = undefined;
   }
   killRecord() {
-    let e = this.killRecordRow();
-    if (!e) return;
+    let row = this.killRecordRow();
+    if (!row) return;
     return {
-      at: finiteOrZero(e.at),
-      reason: normalizeStopReason(e.fact.reason),
-      rows: finiteOrZero(e.fact.rows),
-      pending: finiteOrZero(e.fact.pending),
-      rules: finiteOrZero(e.fact.rules),
-      agents: finiteOrZero(e.fact.agents),
+      at: finiteOrZero(row.at),
+      reason: normalizeStopReason(row.fact.reason),
+      rows: finiteOrZero(row.fact.rows),
+      pending: finiteOrZero(row.fact.pending),
+      rules: finiteOrZero(row.fact.rules),
+      agents: finiteOrZero(row.fact.agents),
     };
   }
   cutUnawaitedScriptChildren() {
     let words = this.words;
     if (!words) return;
-    for (let r of this.world.rows) {
+    for (let row of this.world.rows) {
       if (
-        r.status === "retracted" ||
-        r.by !== "script" ||
-        r.in !== this.scope ||
-        r.kind !== "eval" ||
-        r.fact.topic !== "workflow" ||
-        r.fact.child !== true
+        row.status === "retracted" ||
+        row.by !== "script" ||
+        row.in !== this.scope ||
+        row.kind !== "eval" ||
+        row.fact.topic !== "workflow" ||
+        row.fact.child !== true
       )
         continue;
-      if (r.status === "pending" || this.childHasOwnWork(r.addr)) words.cutChild(r.addr);
+      if (row.status === "pending" || this.childHasOwnWork(row.addr)) words.cutChild(row.addr);
     }
   }
-  childHasOwnWork(e) {
-    if (this.world.isIdle(e)) return false;
+  childHasOwnWork(childAddr) {
+    if (this.world.isIdle(childAddr)) return false;
     let rows = this.world.rows;
-    for (let i = e + 1; i < rows.length; i++) {
-      let s = rows[i];
+    for (let i = childAddr + 1; i < rows.length; i++) {
+      let row = rows[i];
       if (
-        !(s.status === "pending" || (s.kind === "sub" && !this.world.isIdle(s.addr))) ||
-        !this.world.within(s.addr, e) ||
-        !isValidRuleRow(this.world, s, e)
+        !(row.status === "pending" || (row.kind === "sub" && !this.world.isIdle(row.addr))) ||
+        !this.world.within(row.addr, childAddr) ||
+        !isValidRuleRow(this.world, row, childAddr)
       )
         continue;
       return true;
@@ -1033,16 +1072,16 @@ class WorkflowScriptRun {
           in: HOST_SCOPE,
         },
       )
-      .find((e) => e.in === HOST_SCOPE && e.kind === "put" && e.by === "host");
+      .find((row) => row.in === HOST_SCOPE && row.kind === "put" && row.by === "host");
   }
-  async run(e, r, sink, s) {
+  async run(toolContext, canUseTool, sink, options) {
     this.sink = sink;
     let now = Date.now();
     if (this.scope < 0)
       try {
-        let O;
+        let loadedJournal;
         try {
-          O = s.journal ? await s.journal.load() : undefined;
+          loadedJournal = options.journal ? await options.journal.load() : undefined;
         } catch (error) {
           logFeatureBad("workflow_run", "journal_load_failed", {
             duration_ms: Date.now() - now,
@@ -1050,11 +1089,11 @@ class WorkflowScriptRun {
           throw error;
         }
         if (this.killed) {
-          let le = Date.now() - now;
+          let durationMs = Date.now() - now;
           logFeatureSad("workflow_run", "killed", {
             agents: 0,
             rows: 0,
-            duration_ms: le,
+            duration_ms: durationMs,
             reopened: false,
             error_results: 0,
           });
@@ -1063,11 +1102,11 @@ class WorkflowScriptRun {
             agentCount: 0,
             logs: [],
             failures: [],
-            durationMs: le,
+            durationMs,
           };
         }
         try {
-          this.found(e, r, s, O);
+          this.found(toolContext, canUseTool, options, loadedJournal);
         } catch (error) {
           this.scope = -1;
           this.priorScopes = [];
@@ -1087,100 +1126,110 @@ class WorkflowScriptRun {
     this.words?.clearChildTimers();
     let reportedRows = this.reportedRows;
     this.reportedRows = this.world.rows.length;
-    let h = this.world.rows[this.scope];
-    let k =
-      h?.status === "failed" && this.scope >= reportedRows
-        ? h.error
+    let runRow = this.world.rows[this.scope];
+    let errorText =
+      runRow?.status === "failed" && this.scope >= reportedRows
+        ? runRow.error
         : this.killedSize?.reason === "runaway" && !this.reportedRunaway
           ? RUNAWAY_RUN_KILLED_TEXT
           : undefined;
-    let y = k === RUNAWAY_RUN_KILLED_TEXT;
-    if (y) this.reportedRunaway = true;
-    let R = {
+    let isRunaway = errorText === RUNAWAY_RUN_KILLED_TEXT;
+    if (isRunaway) this.reportedRunaway = true;
+    let scopePattern = {
       in: this.scope,
     };
-    let I = (O) => O.addr >= reportedRows && this.ownRow(O);
+    let isNewOwnRow = (row) => row.addr >= reportedRows && this.ownRow(row);
     let logs = this.logs.slice(this.reportedLogs);
     this.reportedLogs = this.logs.length;
-    let V = this.ctx?.hooks.getFailures() ?? [];
+    let hookFailures = this.ctx?.hooks.getFailures() ?? [];
     let filtered = this.world
       .read(
         {
           topic: "script",
           status: "failed",
         },
-        R,
+        scopePattern,
       )
-      .filter((O) => I(O) && O.addr !== this.scope);
+      .filter((row) => isNewOwnRow(row) && row.addr !== this.scope);
     let sorted = [
       ...this.world.read(
         {
           topic: "workflow",
           status: "failed",
         },
-        R,
+        scopePattern,
       ),
       ...this.world.read(
         {
           topic: "workflow",
           status: "retracted",
         },
-        R,
+        scopePattern,
       ),
     ]
       .filter(
-        (O) => O.addr >= reportedRows && O.kind === "eval" && O.fact.child === true && O.error !== undefined,
+        (row) =>
+          row.addr >= reportedRows &&
+          row.kind === "eval" &&
+          row.fact.child === true &&
+          row.error !== undefined,
       )
-      .sort((O, le) => O.addr - le.addr);
+      .sort((left, right) => left.addr - right.addr);
     let failures = [
-      ...V.slice(this.reportedFailures),
+      ...hookFailures.slice(this.reportedFailures),
       ...this.world
         .read(
           {
             topic: "error",
           },
-          R,
+          scopePattern,
         )
-        .filter(I)
-        .map((O) => truncateMiddle(`error: ${jsonStringify(O.fact)}`)),
-      ...filtered.map((O) => truncateMiddle(`script error: ${O.error ?? ""}`)),
-      ...sorted.map((O) =>
+        .filter(isNewOwnRow)
+        .map((row) => truncateMiddle(`error: ${jsonStringify(row.fact)}`)),
+      ...filtered.map((row) => truncateMiddle(`script error: ${row.error ?? ""}`)),
+      ...sorted.map((row) =>
         truncateMiddle(
-          `${SMALL_TRIANGLE_RIGHT} ${typeof O.fact.name === "string" ? O.fact.name : typeof O.fact.scriptPath === "string" ? `workflow(${O.fact.scriptPath})` : "workflow()"}: ${O.error ?? ""}`,
+          `${SMALL_TRIANGLE_RIGHT} ${typeof row.fact.name === "string" ? row.fact.name : typeof row.fact.scriptPath === "string" ? `workflow(${row.fact.scriptPath})` : "workflow()"}: ${row.error ?? ""}`,
         ),
       ),
     ];
-    this.reportedFailures = V.length;
+    this.reportedFailures = hookFailures.length;
     let mapped = this.world
       .read(
         {
           topic: "result",
         },
-        R,
+        scopePattern,
       )
-      .filter(I)
-      .map((O) => O.fact);
-    let H = mapped.length === 0 && h?.status === "done" && this.scope >= reportedRows;
-    let Z = H ? h.value : undefined;
-    let result = H ? Z : mapped.length === 0 && k !== undefined ? null : mapped;
-    let me = H ? (Array.isArray(Z) ? Z : Z === undefined || Z === null ? [] : [Z]) : mapped;
-    let result_2 = H && Array.isArray(Z) && Z.length === 0 ? 1 : me.length;
+      .filter(isNewOwnRow)
+      .map((row) => row.fact);
+    let usedRunValue = mapped.length === 0 && runRow?.status === "done" && this.scope >= reportedRows;
+    let runValue = usedRunValue ? runRow.value : undefined;
+    let result = usedRunValue ? runValue : mapped.length === 0 && errorText !== undefined ? null : mapped;
+    let resultItems = usedRunValue
+      ? Array.isArray(runValue)
+        ? runValue
+        : runValue === undefined || runValue === null
+          ? []
+          : [runValue]
+      : mapped;
+    let result_2 = usedRunValue && Array.isArray(runValue) && runValue.length === 0 ? 1 : resultItems.length;
     let agentCount = this.killedSize?.agents ?? this.ctx?.hooks.getAgentCount() ?? 0;
-    let ee = this.ctx?.hooks.getToolsUsed() ?? this.toolsUsedAtKill;
+    let toolsUsed = this.ctx?.hooks.getToolsUsed() ?? this.toolsUsedAtKill;
     let durationMs = Date.now() - now;
     this.logSettlement({
       result: result_2,
-      errorResults: count(me, hasErrorField),
-      scriptError: k === undefined ? undefined : y ? "runaway" : "script_failed",
+      errorResults: count(resultItems, hasErrorField),
+      scriptError: errorText === undefined ? undefined : isRunaway ? "runaway" : "script_failed",
       errors:
         count(
           this.world.read(
             {
               topic: "error",
             },
-            R,
+            scopePattern,
           ),
-          I,
+          isNewOwnRow,
         ) +
         filtered.length +
         sorted.length,
@@ -1195,19 +1244,19 @@ class WorkflowScriptRun {
       ...(this.carriedForeignArtifactContent && {
         foreignArtifactContent: true,
       }),
-      ...(ee.length > 0 && {
-        toolsUsed: ee,
+      ...(toolsUsed.length > 0 && {
+        toolsUsed,
       }),
       usageLimitDenial: this.ctx?.hooks.takeUsageLimitDenial(),
       durationMs,
-      ...(k !== undefined && {
-        error: k,
+      ...(errorText !== undefined && {
+        error: errorText,
       }),
     };
   }
-  logSettlement(e) {
-    let r = {
-      agents: e.agentCount,
+  logSettlement(settlement) {
+    let fields = {
+      agents: settlement.agentCount,
       rows:
         this.killedSize?.rows ??
         this.world.read(
@@ -1216,35 +1265,35 @@ class WorkflowScriptRun {
             in: this.scope,
           },
         ).length,
-      duration_ms: e.durationMs,
+      duration_ms: settlement.durationMs,
       reopened: this.settlements > 0,
-      error_results: e.errorResults,
+      error_results: settlement.errorResults,
     };
     this.settlements++;
-    if (e.scriptError !== undefined) {
-      logFeatureBad("workflow_run", e.scriptError, r);
+    if (settlement.scriptError !== undefined) {
+      logFeatureBad("workflow_run", settlement.scriptError, fields);
       return;
     }
     if (this.killed) {
-      logFeatureSad("workflow_run", "killed", r);
+      logFeatureSad("workflow_run", "killed", fields);
       return;
     }
-    if (e.result > e.errorResults) {
+    if (settlement.result > settlement.errorResults) {
       logFeatureOk("workflow_run", {
-        ...r,
-        rule_errors: e.errors,
+        ...fields,
+        rule_errors: settlement.errors,
       });
       return;
     }
-    if (e.errorResults > 0) {
-      logFeatureBad("workflow_run", "error_result", r);
+    if (settlement.errorResults > 0) {
+      logFeatureBad("workflow_run", "error_result", fields);
       return;
     }
-    logFeatureSad("workflow_run", e.errors > 0 ? "rule_error" : "no_result", r);
+    logFeatureSad("workflow_run", settlement.errors > 0 ? "rule_error" : "no_result", fields);
   }
   settlements = 0;
   reportedRunaway = false;
-  requireOp(e) {
+  requireOp(verb) {
     try {
       this.requireOpen();
       this.requireFounded();
@@ -1253,87 +1302,87 @@ class WorkflowScriptRun {
         "workflow_steer",
         this.killed ? "killed" : this.lostOnResume ? "lost_on_resume" : "not_founded",
         {
-          verb: fromEnum(e),
+          verb: fromEnum(verb),
         },
       );
       throw error;
     }
   }
-  put(e) {
+  put(fact) {
     this.requireOp("put");
-    let r = this.world.put(parseFact(e), MODEL, {
+    let addr = this.world.put(parseFact(fact), MODEL, {
       in: this.scope,
     });
     this.steered = true;
-    return r;
+    return addr;
   }
-  retract(e) {
+  retract(addr) {
     this.requireOp("retract");
-    if (e === this.scope || !this.world.within(e, this.scope)) return false;
-    let r = this.world.retract(e);
-    if (r) this.steered = true;
-    return r;
+    if (addr === this.scope || !this.world.within(addr, this.scope)) return false;
+    let retracted = this.world.retract(addr);
+    if (retracted) this.steered = true;
+    return retracted;
   }
-  read(e) {
+  read(patternInput) {
     if (this.scope < 0) return [];
-    let pattern = parsePattern(e ?? {});
-    return [...this.priorScopes, this.scope].flatMap((n) =>
+    let pattern = parsePattern(patternInput ?? {});
+    return [...this.priorScopes, this.scope].flatMap((scopeAddr) =>
       this.world
         .read(pattern, {
-          in: n,
+          in: scopeAddr,
         })
         .map(toPublicRow),
     );
   }
   markSteer() {
-    let e = {
+    let snapshot = {
       rows: this.world.rows.length,
       retracted: 0,
       pendingAgents: new Set(),
     };
-    for (let r of this.rowsInRun())
-      if (r.status === "retracted") e.retracted++;
-      else if (r.status === "pending" && isAgentEvalRow(r)) e.pendingAgents.add(r.addr);
-    return e;
+    for (let row of this.rowsInRun())
+      if (row.status === "retracted") snapshot.retracted++;
+      else if (row.status === "pending" && isAgentEvalRow(row)) snapshot.pendingAgents.add(row.addr);
+    return snapshot;
   }
-  reportSteer(e, r) {
+  reportSteer(verb, before) {
     if (this.scope < 0) return;
-    let n = 0;
-    let s = 0;
-    let i = 0;
-    let w = 0;
-    for (let h of this.rowsInRun()) {
-      let k = h.addr >= r.rows;
-      if (k && h.kind === "put") n++;
-      if (h.status === "retracted") s++;
-      if (!isAgentEvalRow(h)) continue;
-      if (k) i++;
-      if (h.status === "retracted" && (k || r.pendingAgents.has(h.addr))) w++;
+    let putCount = 0;
+    let retractedCount = 0;
+    let agentsSpawned = 0;
+    let agentsAborted = 0;
+    for (let row of this.rowsInRun()) {
+      let isNew = row.addr >= before.rows;
+      if (isNew && row.kind === "put") putCount++;
+      if (row.status === "retracted") retractedCount++;
+      if (!isAgentEvalRow(row)) continue;
+      if (isNew) agentsSpawned++;
+      if (row.status === "retracted" && (isNew || before.pendingAgents.has(row.addr))) agentsAborted++;
     }
     logFeatureOk("workflow_steer", {
-      verb: fromEnum(e),
-      rows_put: n,
-      rows_retracted: s - r.retracted,
-      agents_spawned: i,
-      agents_aborted: w,
+      verb: fromEnum(verb),
+      rows_put: putCount,
+      rows_retracted: retractedCount - before.retracted,
+      agents_spawned: agentsSpawned,
+      agents_aborted: agentsAborted,
       ms_since_launch: this.msSinceLaunch(),
       run_state: fromEnum(this.state()),
     });
   }
-  ownRow(e) {
-    if (e.by === "host" && e.fact.topic === "error" && e.fact.kind === "rule") return true;
-    if (!this.inChildWorkflow(e.addr)) return true;
-    let ruleOrigin = resolveRuleOrigin(this.world, e, this.scope);
+  ownRow(row) {
+    if (row.by === "host" && row.fact.topic === "error" && row.fact.kind === "rule") return true;
+    if (!this.inChildWorkflow(row.addr)) return true;
+    let ruleOrigin = resolveRuleOrigin(this.world, row, this.scope);
     return ruleOrigin !== undefined && !this.inChildWorkflow(ruleOrigin);
   }
-  inChildWorkflow(e) {
-    return isInsideChildWorkflow(this.world, e, this.scope);
+  inChildWorkflow(addr) {
+    return isInsideChildWorkflow(this.world, addr, this.scope);
   }
   rowsInRun() {
     if (this.scope < 0) return [];
-    return this.world.rows.filter((e) => this.world.within(e.addr, this.scope));
+    return this.world.rows.filter((row) => this.world.within(row.addr, this.scope));
   }
-  beginScript(e) {
+  beginScript(source) {
     this.requireOp("script");
     if (!this.ctx || !this.words) {
       logFeatureBad("workflow_steer", "no_context", {
@@ -1343,19 +1392,19 @@ class WorkflowScriptRun {
         error: "run has no context yet",
       };
     }
-    let r = compileWorkflowScript(e, {
+    let compiled = compileWorkflowScript(source, {
       bindWords: true,
     });
-    if (!r.ok) {
+    if (!compiled.ok) {
       logFeatureBad("workflow_steer", "compile_failed", {
         verb: lit("script"),
       });
       return {
-        error: r.error,
+        error: compiled.error,
       };
     }
     let addr = this.evalScript(
-      r.vmScript,
+      compiled.vmScript,
       {
         topic: "script",
         via: MODEL,
@@ -1371,25 +1420,25 @@ class WorkflowScriptRun {
       addr,
     };
   }
-  async awaitScript(e) {
-    await Promise.race([this.world.settled(e), sleep(WORLD_SETTLE_TIMEOUT_MS)]);
-    let r = this.world.rows[e];
-    return r.status === "failed"
+  async awaitScript(scriptAddr) {
+    await Promise.race([this.world.settled(scriptAddr), sleep(WORLD_SETTLE_TIMEOUT_MS)]);
+    let scriptRow = this.world.rows[scriptAddr];
+    return scriptRow.status === "failed"
       ? {
-          error: r.error,
+          error: scriptRow.error,
         }
       : {};
   }
-  async script(e) {
-    let r = this.beginScript(e);
-    if ("error" in r)
+  async script(source) {
+    let beginResult = this.beginScript(source);
+    if ("error" in beginResult)
       return {
-        error: r.error,
+        error: beginResult.error,
       };
-    let n = await this.awaitScript(r.addr);
+    let awaitResult = await this.awaitScript(beginResult.addr);
     return {
-      addr: r.addr,
-      ...n,
+      addr: beginResult.addr,
+      ...awaitResult,
     };
   }
   killReason() {
@@ -1423,53 +1472,54 @@ class WorkflowScriptRun {
       });
     });
   }
-  found(e, canUseTool, n, s) {
+  found(toolContext, canUseTool, options, envMode) {
     let context = {
-      ...e,
+      ...toolContext,
       abortController: this.controller,
     };
-    let workflowVmContext = createWorkflowVmContext(
+    let hostContext = createWorkflowVmContext(
       context,
       canUseTool,
-      (k) => {
-        if (k.type === "progress" && k.data.type === "workflow_log") this.log(k.data.message);
-        this.sink?.onProgress(k);
+      (progress) => {
+        if (progress.type === "progress" && progress.data.type === "workflow_log")
+          this.log(progress.data.message);
+        this.sink?.onProgress(progress);
       },
       this.runId,
-      (k, y) => this.sink?.onAgentController(k, y),
-      n.args,
-      n.seedPhaseTitles,
-      n.tokenBudget,
-      n.journal,
-      s,
-      n.workflowName,
-      n.invokingRequestId,
-      n.parentPromptId,
-      (k) => this.sink?.onRateLimitWait?.(k),
+      (agentKey, abort) => this.sink?.onAgentController(agentKey, abort),
+      options.args,
+      options.seedPhaseTitles,
+      options.tokenBudget,
+      options.journal,
+      envMode,
+      options.workflowName,
+      options.invokingRequestId,
+      options.parentPromptId,
+      (rateLimitWait) => this.sink?.onRateLimitWait?.(rateLimitWait),
     );
-    this.ctx = workflowVmContext;
-    this.vmErrorInfo = createVmErrorDescriber(workflowVmContext.vmContext);
+    this.ctx = hostContext;
+    this.vmErrorInfo = createVmErrorDescriber(hostContext.vmContext);
     this.priorScopes = this.world.rows
-      .filter((k) => isFoundingScriptRow(k) && k.fact.runId === this.runId)
-      .map((k) => k.addr);
+      .filter((row) => isFoundingScriptRow(row) && row.fact.runId === this.runId)
+      .map((row) => row.addr);
     this.scope = this.world.rows.length;
-    let h = this.world.subscribe((k) => {
-      if (k.kind === "runaway" && k.scope === this.scope) {
-        h();
+    let unsubscribe = this.world.subscribe((event) => {
+      if (event.kind === "runaway" && event.scope === this.scope) {
+        unsubscribe();
         this.kill("runaway");
       }
     });
-    this.controller.signal.addEventListener("abort", h, {
+    this.controller.signal.addEventListener("abort", unsubscribe, {
       once: true,
     });
     try {
-      this.words = createWorldBindings(workflowVmContext, this.world, this.scope, this.controller.signal);
+      this.words = createWorldBindings(hostContext, this.world, this.scope, this.controller.signal);
       if (!this.vmScript)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
           "a run restored from the journal cannot be founded",
           "workflow v2: found() on a lost run",
         );
-      let k = this.evalScript(
+      let foundingAddr = this.evalScript(
         this.vmScript,
         {
           topic: "script",
@@ -1481,57 +1531,57 @@ class WorkflowScriptRun {
           in: HOST_SCOPE,
         },
       );
-      if (k !== this.scope)
+      if (foundingAddr !== this.scope)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `founding row landed at ${k}, expected ${this.scope}`,
+          `founding row landed at ${foundingAddr}, expected ${this.scope}`,
           "workflow v2: founding address mismatch",
         );
       this.retractPriorLives();
-      let y = this.killRecordRow();
-      if (y !== undefined) this.world.retract(y.addr);
-      this.world.settled(this.scope).then((R) => {
-        if (R.status === "retracted" || this.controller.signal.aborted) return;
+      let killRow = this.killRecordRow();
+      if (killRow !== undefined) this.world.retract(killRow.addr);
+      this.world.settled(this.scope).then((settled) => {
+        if (settled.status === "retracted" || this.controller.signal.aborted) return;
         this.cutUnawaitedScriptChildren();
       });
     } catch (error) {
-      h();
+      unsubscribe();
       throw error;
     }
   }
-  evalScript(e, r, n, s, i) {
+  evalScript(vmScript, fact, by, placement, placementMode) {
     let ctx = this.ctx;
     let words = this.words;
-    let k = {
+    let runContext = {
       vmContext: ctx.vmContext,
       settle: ctx.vmBoundary.settle,
       sanitize: ctx.vmBoundary.sanitize,
       errorInfo: this.vmErrorInfo,
     };
-    let y = () => runScriptInContext(e, k);
+    let runIt = () => runScriptInContext(vmScript, runContext);
     return this.world.eval(
-      r,
+      fact,
       () =>
-        (i === undefined ? y() : words.as(i, y)).then((R) => {
-          if (R.error)
+        (placementMode === undefined ? runIt() : words.as(placementMode, runIt)).then((outcome) => {
+          if (outcome.error)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              R.error,
+              outcome.error,
               "workflow v2: script failed",
             );
-          return R.value;
+          return outcome.value;
         }),
-      n,
-      s,
+      by,
+      placement,
     );
   }
 }
 //@ chunk-y1shfdfm.js:48223-48333 placement
-function isFoundingScriptRow(e) {
+function isFoundingScriptRow(row) {
   return (
-    e.in === HOST_SCOPE &&
-    e.kind === "eval" &&
-    e.by === "host" &&
-    e.fact.topic === "script" &&
-    e.fact.founding === true
+    row.in === HOST_SCOPE &&
+    row.kind === "eval" &&
+    row.by === "host" &&
+    row.fact.topic === "script" &&
+    row.fact.founding === true
   );
 }
 export { isFoundingScriptRow, WorkflowScriptRun, STOP_REASONS };

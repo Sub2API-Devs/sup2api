@@ -5,10 +5,10 @@
  * pieces: chunk-ke7ft91e.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-ke7ft91e.js:307-3961 cjs-fingerprint
-var require_middleware_stack = x(function (cjsExports) {
+var require_middleware_stack = __commonJS(function (cjsExports) {
   var getAllAliases = (name, aliases) => {
     let _aliases = [];
     if (name) _aliases.push(name);

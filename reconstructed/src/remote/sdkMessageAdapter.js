@@ -10,21 +10,23 @@
  */
 import { randomUUID } from "crypto";
 import {
+  fromSDKCompactMetadata,
   isBareApiErrorMessage,
   sanitizeApiErrorMessage,
   sanitizeTextBlocks,
   isApiErrorMessage,
   isHttpStatus,
   sanitizedMessageText,
-  fromSDKCompactMetadata,
   nonExecutionKindOf,
 } from "../utils/messages/mappers.js";
+import { isProbeWrittenValue } from "../utils/model/thirdPartyModelDefaults.js";
+import { normalizeAgentIdOrNull } from "../utils/agentId.js";
 import { logForDebugging, createAttachmentMessage_2 as createAttachmentMessage } from "../utils/debug.js";
 import { stripAnsi } from "../utils/stripAnsi.js";
 import { readWorkerEpoch, capFrameDepth } from "./wireFrameShape.js";
 import {
   sanitizeDisplayText,
-  MARKDOWN_BREAK_CHARS,
+  MARKDOWN_BREAK_RE,
   MAX_MARKDOWN_SAFE_LENGTH,
   tailLines,
 } from "../utils/resultError.js";
@@ -33,7 +35,7 @@ import { logFeatureSad } from "../services/analytics/featureTelemetry.js";
 import { sameAutocompactState } from "../services/compact/autoCompactStatus.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum, lit } from "../services/analytics/safeMetadata.js";
-import { En, wi } from "../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2, import_reject } from "../../vendor/lodash-es/_inlinedHelpers.js";
 import {
   getLimitsAccountEpoch,
   getLatestLimitStatus,
@@ -53,9 +55,245 @@ import { mapToolResultImages } from "../cli/transports/ccrMessageMapping.js";
 import { isNonHumanInboundOrigin } from "../utils/backgroundSessionResume.js";
 import { buildRefusalMessage } from "../services/api/safeguardMessages.js";
 import { machineLabelForMessage } from "../bridge/deviceRegistration.js";
-import { isProbeWrittenValue } from "../utils/model/thirdPartyModelDefaults.js";
-import { normalizeAgentIdOrNull } from "../utils/agentId.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-0h4e7gnq.js:14624-14668 fingerprint = convertStreamEvent (1)
+var convertStreamEvent = (msg) => ({
+  type: "stream_event",
+  event: msg,
+});
+//@ chunk-0h4e7gnq.js:14668-14779 affinity
+var inputJsonDeltaEvent = (event) =>
+  convertStreamEvent({
+    type: "content_block_delta",
+    index: event.index,
+    delta: {
+      type: "input_json_delta",
+      partial_json: event.json,
+    },
+  });
+//@ chunk-0h4e7gnq.js:14779-14876 affinity
+var textDeltaEvent = (event) =>
+  convertStreamEvent({
+    type: "content_block_delta",
+    index: event.index,
+    delta: {
+      type: "text_delta",
+      text: event.text,
+    },
+  });
+//@ chunk-0h4e7gnq.js:14876-15003 affinity
+var thinkingDeltaEvent = (event) =>
+  convertStreamEvent({
+    type: "content_block_delta",
+    index: event.index,
+    delta: {
+      type: "thinking_delta",
+      thinking: event.text,
+      estimated_tokens: null,
+    },
+  });
+//@ chunk-0h4e7gnq.js:15003-15132 affinity
+function deltaEventForKind(delta) {
+  switch (delta.kind) {
+    case "text":
+      return textDeltaEvent(delta);
+    case "thinking":
+      return thinkingDeltaEvent(delta);
+    case "input":
+      return inputJsonDeltaEvent(delta);
+    default:
+      return textDeltaEvent(delta);
+  }
+}
+//@ chunk-0h4e7gnq.js:38969-39244 fingerprint = convertCompactBoundaryMessage (0.876)
+/**
+ * 把 SDK compact_boundary 消息转成本地"Conversation compacted"系统消息。
+ */
+function convertCompactBoundaryMessage(msg) {
+  return {
+    type: "system",
+    subtype: "compact_boundary",
+    content: "Conversation compacted",
+    level: "info",
+    compactMetadata: fromSDKCompactMetadata(msg.compact_metadata),
+    ...(msg.logical_parent_uuid !== undefined && {
+      logicalParentUuid: msg.logical_parent_uuid,
+    }),
+    uuid: msg.uuid,
+    timestamp: new Date().toISOString(),
+  };
+}
+//@ chunk-0h4e7gnq.js:39244-39932 placement
+/**
+ * SDK model_refusal_fallback 事件转为内部 system 消息。
+ */
+function createRefusalFallbackMessage(frame) {
+  return {
+    type: "system",
+    subtype: "model_refusal_fallback",
+    content: frame.content,
+    level: "warning",
+    trigger: frame.trigger,
+    direction: frame.direction,
+    ...(frame.scope !== undefined && {
+      scope: frame.scope,
+    }),
+    originalModel: frame.original_model,
+    fallbackModel: frame.fallback_model,
+    requestId: frame.request_id,
+    apiRefusalCategory: frame.api_refusal_category,
+    apiRefusalExplanation: frame.api_refusal_explanation,
+    ...(frame.saw_cyber_refusal && {
+      sawCyberRefusal: true,
+    }),
+    ...(frame.retracted_message_uuids !== undefined && {
+      retractedMessageUuids: frame.retracted_message_uuids,
+    }),
+    ...(frame.refused_user_message_uuid !== undefined && {
+      refusedUserMessageUuid: frame.refused_user_message_uuid,
+    }),
+    ...(frame.provisional && {
+      provisional: frame.provisional,
+    }),
+    isMeta: false,
+    uuid: frame.uuid,
+    timestamp: new Date().toISOString(),
+  };
+}
+//@ chunk-0h4e7gnq.js:39932-40292 placement
+/**
+ * SDK model_refusal_no_fallback 事件转为内部 system 消息。
+ */
+function createRefusalNoFallbackMessage(frame) {
+  return {
+    type: "system",
+    subtype: "model_refusal_no_fallback",
+    content: frame.content,
+    level: "warning",
+    originalModel: frame.original_model,
+    requestId: frame.request_id,
+    apiRefusalCategory: frame.api_refusal_category,
+    apiRefusalExplanation: frame.api_refusal_explanation,
+    refusedUserMessageUuid: frame.refused_user_message_uuid,
+    isMeta: false,
+    uuid: frame.uuid,
+    timestamp: new Date().toISOString(),
+  };
+}
+//@ chunk-0h4e7gnq.js:40526-40882 placement
+/**
+ * SDK model_consent_fallback 事件转为内部 system 消息。
+ */
+function createConsentFallbackMessage(frame) {
+  return {
+    type: "system",
+    subtype: "model_consent_fallback",
+    content: frame.content,
+    level: "warning",
+    choice: frame.choice,
+    originalModel: frame.original_model,
+    originalModelName: isProbeWrittenValue(frame.original_model_name) ? frame.original_model_name : undefined,
+    fallbackModel: frame.fallback_model,
+    persistedAsDefault: frame.persisted_as_default,
+    isMeta: false,
+    uuid: frame.uuid,
+    timestamp: new Date().toISOString(),
+  };
+}
+//@ chunk-0h4e7gnq.js:46697-46808 placement = createToolUseSummaryMessage (0.751)
+function createToolUseSummaryMessage(frame) {
+  return {
+    type: "tool_use_summary",
+    summary: frame.summary,
+    preceding_tool_use_ids: frame.precedingToolUseIds,
+  };
+}
+//@ chunk-0h4e7gnq.js:46808-46946 placement
+/**
+ * 把限额事件转成 SDK 的 rate limit 信息（状态、重置时间、类型、是否用超额）。
+ */
+function toRateLimitInfo(rateLimitInfo) {
+  return {
+    status: rateLimitInfo.status,
+    resetsAt: rateLimitInfo.resetsAt ?? null,
+    rateLimitType: rateLimitInfo.rateLimitType ?? null,
+    isUsingOverage: rateLimitInfo.isUsingOverage ?? false,
+  };
+}
+//@ chunk-0h4e7gnq.js:47070-48384 placement
+/**
+ * 把内部限流状态转成 SDK rate_limit 事件的载荷：status、是否有统一限流回退、升级路径，以及存在时才带上的重置时间、类型、用量、超额状态/范围/周期用量、错误码、能否购买额度等字段（limitScope 输出为 overageScope）。
+ */
+function toSdkRateLimitInfo(limits, { unifiedRateLimitFallbackAvailable, upgradePaths }) {
+  return {
+    status: limits.status,
+    unifiedRateLimitFallbackAvailable,
+    ...(upgradePaths !== undefined && {
+      upgradePaths,
+    }),
+    ...(limits.resetsAt !== undefined && {
+      resetsAt: limits.resetsAt,
+    }),
+    ...(limits.rateLimitType !== undefined && {
+      rateLimitType: limits.rateLimitType,
+    }),
+    ...(limits.utilization !== undefined && {
+      utilization: limits.utilization,
+    }),
+    ...(limits.overageStatus !== undefined && {
+      overageStatus: limits.overageStatus,
+    }),
+    ...(limits.overageResetsAt !== undefined && {
+      overageResetsAt: limits.overageResetsAt,
+    }),
+    ...(limits.overageDisabledReason !== undefined && {
+      overageDisabledReason: limits.overageDisabledReason,
+    }),
+    ...(limits.limitScope !== undefined && {
+      overageScope: limits.limitScope,
+    }),
+    ...(limits.isUsingOverage !== undefined && {
+      isUsingOverage: limits.isUsingOverage,
+    }),
+    ...(limits.overageInUse !== undefined && {
+      overageInUse: limits.overageInUse,
+    }),
+    ...(limits.surpassedThreshold !== undefined && {
+      surpassedThreshold: limits.surpassedThreshold,
+    }),
+    ...(limits.rateLimitGraceActive === true && {
+      rateLimitGraceActive: true,
+    }),
+    ...(limits.overagePeriodMonthly !== undefined && {
+      overagePeriodMonthly: {
+        utilization: limits.overagePeriodMonthly.utilization,
+      },
+    }),
+    ...(limits.overagePeriodChannel !== undefined && {
+      overagePeriodChannel: {
+        utilization: limits.overagePeriodChannel.utilization,
+      },
+    }),
+    ...(limits.errorCode !== undefined && {
+      errorCode: limits.errorCode,
+    }),
+    ...(limits.canUserPurchaseCredits !== undefined && {
+      canUserPurchaseCredits: limits.canUserPurchaseCredits,
+    }),
+    ...(limits.hasChargeableSavedPaymentMethod !== undefined && {
+      hasChargeableSavedPaymentMethod: limits.hasChargeableSavedPaymentMethod,
+    }),
+  };
+}
+//@ chunk-kj4ctmv0.js:447-582 placement
+function convertToolProgressMessage(msg) {
+  let launchedAgentId =
+    msg.type === "system" && msg.subtype === "informational" ? msg.launchedAgentId : undefined;
+  return launchedAgentId !== undefined && normalizeAgentIdOrNull(launchedAgentId) !== null
+    ? launchedAgentId
+    : undefined;
+}
 //@ chunk-3xdfvx0n.js:1283-1294 placement
 var cloudMemoryToolUseIdsReader = null;
 //@ chunk-3xdfvx0n.js:1294-1545 placement
@@ -77,14 +315,14 @@ function isControlFrame(parsed) {
  * SDK assistant → 本地 assistant 消息（remoteSourced，带 API 错误字段、verification_required 改写、云记忆工具 ID）。
  */
 function convertAssistantMessage(msg) {
-  let n = isBareApiErrorMessage(msg);
-  let r = cloudMemoryToolUseIdsReader?.cloudMemoryToolUseIds(msg.tool_use_meta) ?? [];
+  let isBareError = isBareApiErrorMessage(msg);
+  let cloudMemoryToolUseIds = cloudMemoryToolUseIdsReader?.cloudMemoryToolUseIds(msg.tool_use_meta) ?? [];
   return {
     type: "assistant",
     message:
       msg.error === "verification_required"
         ? sanitizeApiErrorMessage(msg.message)
-        : n
+        : isBareError
           ? {
               ...msg.message,
               content: sanitizeTextBlocks(msg.message.content),
@@ -98,7 +336,7 @@ function convertAssistantMessage(msg) {
     ...(isApiErrorMessage(msg) && {
       isApiErrorMessage: true,
     }),
-    ...(n && {
+    ...(isBareError && {
       sessionFailureNotice: true,
     }),
     ...(isHttpStatus(msg.api_error_status) && {
@@ -114,8 +352,8 @@ function convertAssistantMessage(msg) {
       apiErrorCode: msg.api_error_code,
     }),
     ...false,
-    ...(r.length > 0 && {
-      cloudMemoryToolUseIds: r,
+    ...(cloudMemoryToolUseIds.length > 0 && {
+      cloudMemoryToolUseIds,
     }),
   };
 }
@@ -131,8 +369,8 @@ function convertStreamEventFrame(frame) {
 }
 //@ chunk-3xdfvx0n.js:2321-2501 layout
 function ensureFrameUuid(uuid) {
-  let n = uuid;
-  if (typeof n === "string" && n !== "" && uuid !== undefined) return uuid;
+  let candidateUuid = uuid;
+  if (typeof candidateUuid === "string" && candidateUuid !== "" && uuid !== undefined) return uuid;
   logForDebugging("[sdkMessageAdapter] frame uuid missing or not a string \u2014 minting one", {
     level: "error",
   });
@@ -153,7 +391,10 @@ function hasStringContent(frame) {
 function filterDisplayableErrors(errors) {
   if (!Array.isArray(errors)) return [];
   return errors.filter(
-    (n) => typeof n === "string" && !n.startsWith("[ede_diagnostic]") && !n.startsWith("[session_crash]"),
+    (entry) =>
+      typeof entry === "string" &&
+      !entry.startsWith("[ede_diagnostic]") &&
+      !entry.startsWith("[session_crash]"),
   );
 }
 //@ chunk-3xdfvx0n.js:2821-3356 fingerprint = convertResultMessage (0.662)
@@ -177,12 +418,12 @@ function convertResultMessage(msg) {
     );
     return null;
   }
-  let r = filterDisplayableErrors(errors);
-  if (r.length === 0) return null;
+  let displayableErrors = filterDisplayableErrors(errors);
+  if (displayableErrors.length === 0) return null;
   return {
     type: "system",
     subtype: "informational",
-    content: sanitizedMessageText(r.join(", ")),
+    content: sanitizedMessageText(displayableErrors.join(", ")),
     level: "warning",
     fromRemoteErrorResult: true,
     uuid: ensureFrameUuid(msg.uuid),
@@ -340,16 +581,20 @@ function parseGoalState(goal) {
   };
 }
 //@ chunk-3xdfvx0n.js:6237-6364 layout
-var AUTOCOMPACT_SOURCES = {
-  env: true,
-  settings: true,
-  clientdata: true,
-  experiment: true,
-  "model-default": true,
-  "unknown-model": true,
-  auto: true,
-};
-var AUTOCOMPACT_SOURCE_SET = new Set(Object.keys(AUTOCOMPACT_SOURCES));
+var AUTOCOMPACT_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var AUTOCOMPACT_SOURCE_SET;
+deferInit("chunk-3xdfvx0n.js:6237", () => {
+  AUTOCOMPACT_SOURCES = {
+    env: true,
+    settings: true,
+    clientdata: true,
+    experiment: true,
+    "model-default": true,
+    "unknown-model": true,
+    auto: true,
+  };
+  AUTOCOMPACT_SOURCE_SET = new Set(Object.keys(AUTOCOMPACT_SOURCES));
+});
 //@ chunk-3xdfvx0n.js:6364-6897 layout
 /**
  * 解析远程 autocompact 状态帧，格式不对时丢弃并记 remote_autocompact_frame_drop。
@@ -387,30 +632,30 @@ function parseAutocompactState(frame) {
 function adoptRemoteAutocompactState(setAppState, frame, via) {
   let autocompactState = parseAutocompactState(frame);
   if (autocompactState === undefined) {
-    setAppState((m) =>
-      m.remoteAutocompactState === undefined
-        ? m
+    setAppState((state) =>
+      state.remoteAutocompactState === undefined
+        ? state
         : {
-            ...m,
+            ...state,
             remoteAutocompactState: undefined,
           },
     );
     return;
   }
-  let i = false;
-  setAppState((m) => {
+  let changed = false;
+  setAppState((state) => {
     if (
-      m.remoteAutocompactState !== undefined &&
-      sameAutocompactState(m.remoteAutocompactState, autocompactState)
+      state.remoteAutocompactState !== undefined &&
+      sameAutocompactState(state.remoteAutocompactState, autocompactState)
     )
-      return m;
-    i = true;
+      return state;
+    changed = true;
     return {
-      ...m,
+      ...state,
       remoteAutocompactState: autocompactState,
     };
   });
-  if (!i) return;
+  if (!changed) return;
   logEvent("tengu_remote_autocompact_state_adopted", {
     via,
     enabled: autocompactState.enabled,
@@ -419,21 +664,21 @@ function adoptRemoteAutocompactState(setAppState, frame, via) {
   });
 }
 //@ chunk-3xdfvx0n.js:7297-7359 layout
-var shallowEqualDefined = (e, currentLimits) =>
-  En(
-    wi(e, (r) => r === undefined),
-    wi(currentLimits, (r) => r === undefined),
+var shallowEqualDefined = (next, currentLimits) =>
+  import_sortedIndex_2(
+    import_reject(next, (value) => value === undefined),
+    import_reject(currentLimits, (value) => value === undefined),
   );
 //@ chunk-3xdfvx0n.js:7359-8660 layout
 /**
  * 远程速率限制采纳器：缓冲 rate_limit 帧，账户切换时丢弃，seed/history 来源的过期信息跳过，采纳时更新本地限额状态并记遥测。
  */
 function createRemoteRateLimitAdopter(isEnabled, via) {
-  let r = [];
+  let heldFrames = [];
   let limitsAccountEpoch = getLimitsAccountEpoch();
-  let i = false;
-  let m = false;
-  let g = (frames) => {
+  let flushScheduled = false;
+  let disposed = false;
+  let dropAcrossAccounts = (frames) => {
     if (!isEnabled()) return;
     logEvent("tengu_remote_rate_limits_dropped", {
       via: fromEnum(via),
@@ -441,19 +686,19 @@ function createRemoteRateLimitAdopter(isEnabled, via) {
       frames,
     });
   };
-  let y = (_, w) => {
+  let adoptFrames = (frames, viaKind) => {
     if (!isEnabled()) return;
-    let latestLimitStatus = getLatestLimitStatus(_);
+    let latestLimitStatus = getLatestLimitStatus(frames);
     if (latestLimitStatus === undefined) return;
     if (
-      (w === "seed" || w === "history") &&
+      (viaKind === "seed" || viaKind === "history") &&
       (extractQuotaStatusFromHeaders_2(latestLimitStatus.info) ||
         (latestLimitStatus.info.resetsAt === undefined &&
           latestLimitStatus.info.overageResetsAt === undefined))
     )
       return;
     let currentLimits = getCurrentLimits();
-    let I = {
+    let nextLimits = {
       ...toSdkRateLimitInfo(latestLimitStatus.info, {
         unifiedRateLimitFallbackAvailable: currentLimits.unifiedRateLimitFallbackAvailable,
         upgradePaths: currentLimits.upgradePaths,
@@ -468,70 +713,70 @@ function createRemoteRateLimitAdopter(isEnabled, via) {
         lowPriorityMaxWaitSeconds: currentLimits.lowPriorityMaxWaitSeconds,
       }),
     };
-    if (areLimitsObserved() && shallowEqualDefined(I, currentLimits)) return;
-    emitLimitsStatusChange(I);
+    if (areLimitsObserved() && shallowEqualDefined(nextLimits, currentLimits)) return;
+    emitLimitsStatusChange(nextLimits);
     logEvent("tengu_remote_rate_limits_adopted", {
-      via: fromEnum(w),
+      via: fromEnum(viaKind),
       status: fromEnum(latestLimitStatus.info.status),
       degradation: fromEnum(latestLimitStatus.degradation),
-      frames: _.length,
+      frames: frames.length,
     });
   };
-  let d = (_, w) => {
-    if (m) return;
+  let adoptSafely = (frames, viaKind) => {
+    if (disposed) return;
     try {
-      y(_, w);
+      adoptFrames(frames, viaKind);
     } catch (error) {
       logError(error);
     }
   };
-  let S = (_ = via) => {
-    i = false;
-    let w = r;
-    r = [];
-    if (w.length === 0) return;
+  let flushHeld = (viaKind = via) => {
+    flushScheduled = false;
+    let frames = heldFrames;
+    heldFrames = [];
+    if (frames.length === 0) return;
     if (limitsAccountEpoch !== getLimitsAccountEpoch()) {
-      g(w.length);
+      dropAcrossAccounts(frames.length);
       return;
     }
-    d(w, _);
+    adoptSafely(frames, viaKind);
   };
-  let h = (_) => {
+  let holdFrame = (frame) => {
     let limitsAccountEpoch_2 = getLimitsAccountEpoch();
-    if (r.length > 0 && limitsAccountEpoch_2 !== limitsAccountEpoch) {
-      g(r.length);
-      r = [];
+    if (heldFrames.length > 0 && limitsAccountEpoch_2 !== limitsAccountEpoch) {
+      dropAcrossAccounts(heldFrames.length);
+      heldFrames = [];
     }
     limitsAccountEpoch = limitsAccountEpoch_2;
-    r.push(_);
+    heldFrames.push(frame);
   };
   return {
-    adopt(_, w) {
-      S();
-      d(_, w);
+    adopt(frames, viaKind) {
+      flushHeld();
+      adoptSafely(frames, viaKind);
     },
-    push(_) {
-      if (m) return;
-      h(_);
-      if (!i) {
-        i = true;
+    push(frame) {
+      if (disposed) return;
+      holdFrame(frame);
+      if (!flushScheduled) {
+        flushScheduled = true;
         queueMicrotask(() => {
-          if (i) S();
+          if (flushScheduled) flushHeld();
         });
       }
     },
-    hold(_) {
-      if (m) return;
-      h(_);
+    hold(frame) {
+      if (disposed) return;
+      holdFrame(frame);
     },
-    settle(_) {
-      if (!i) S(_);
+    settle(viaKind) {
+      if (!flushScheduled) flushHeld(viaKind);
     },
-    hasHeld: () => r.length > 0 && !i,
-    flush: () => S(),
+    hasHeld: () => heldFrames.length > 0 && !flushScheduled,
+    flush: () => flushHeld(),
     dispose() {
-      m = true;
-      r = [];
+      disposed = true;
+      heldFrames = [];
     },
   };
 }
@@ -558,8 +803,8 @@ function convertSDKMessage(msg, opts) {
       };
     case "user": {
       let content = msg.message?.content;
-      if (Array.isArray(content) && content.some((m) => m.type === "tool_result")) {
-        let m = nonExecutionKindOf(msg.tool_result_meta, content);
+      if (Array.isArray(content) && content.some((block) => block.type === "tool_result")) {
+        let denialKind = nonExecutionKindOf(msg.tool_result_meta, content);
         return {
           type: "message",
           message: {
@@ -572,8 +817,8 @@ function convertSDKMessage(msg, opts) {
             remoteSourced: true,
             ...false,
             ...undefined,
-            ...(m !== undefined && {
-              remoteToolDenialKind: m,
+            ...(denialKind !== undefined && {
+              remoteToolDenialKind: denialKind,
             }),
           },
         };
@@ -586,15 +831,15 @@ function convertSDKMessage(msg, opts) {
         return {
           type: "ignored",
         };
-      let i =
+      let isInterrupt =
         content === INTERRUPT_MESSAGE ||
         (Array.isArray(content) &&
           content.some(
-            (m) =>
-              m.type === "text" &&
-              (m.text === INTERRUPT_MESSAGE || m.text === INTERRUPT_MESSAGE_FOR_TOOL_USE),
+            (block) =>
+              block.type === "text" &&
+              (block.text === INTERRUPT_MESSAGE || block.text === INTERRUPT_MESSAGE_FOR_TOOL_USE),
           ));
-      if (opts?.convertUserTextMessages || i) {
+      if (opts?.convertUserTextMessages || isInterrupt) {
         if (typeof content === "string" || Array.isArray(content))
           return {
             type: "message",
@@ -643,22 +888,22 @@ function convertSDKMessage(msg, opts) {
               type: "stream_request_start",
             },
           };
-        let r = convertStatusMessage(msg);
-        return r
+        let statusMessage = convertStatusMessage(msg);
+        return statusMessage
           ? {
               type: "message",
-              message: r,
+              message: statusMessage,
             }
           : {
               type: "ignored",
             };
       }
       if (msg.subtype === "compact_boundary") {
-        let r = convertRemoteCompactBoundary(msg);
-        return r
+        let boundaryMessage = convertRemoteCompactBoundary(msg);
+        return boundaryMessage
           ? {
               type: "message",
-              message: r,
+              message: boundaryMessage,
             }
           : {
               type: "ignored",
@@ -681,7 +926,7 @@ function convertSDKMessage(msg, opts) {
                     msg.api_refusal_category ?? null,
                   )
                 : sanitizeDisplayText(typeof msg.content === "string" ? msg.content : "", {
-                    drop: MARKDOWN_BREAK_CHARS,
+                    drop: MARKDOWN_BREAK_RE,
                     maxCodeUnits: MAX_MARKDOWN_SAFE_LENGTH,
                   }),
             level: "warning",
@@ -766,7 +1011,7 @@ function convertSDKMessage(msg, opts) {
         };
       }
       if (msg.subtype === "tool_host_result") {
-        let r = Array.isArray(msg.lines)
+        let lines = Array.isArray(msg.lines)
           ? msg.lines
               .filter((line) => typeof line === "string")
               .slice(0, 32)
@@ -775,16 +1020,16 @@ function convertSDKMessage(msg, opts) {
                   maxCodeUnits: 2100,
                 }),
               )
-              .filter((g) => g.trim() !== "")
+              .filter((line) => line.trim() !== "")
           : [];
-        let s =
+        let label =
           typeof msg.label === "string"
             ? sanitizeDisplayText(msg.label, {
                 maxCodeUnits: 320,
               })
             : undefined;
-        let i = msg.unverified === true && s !== undefined && s.trim() !== "";
-        if (typeof msg.tool_use_id !== "string" || (r.length === 0 && !i))
+        let isUnverified = msg.unverified === true && label !== undefined && label.trim() !== "";
+        if (typeof msg.tool_use_id !== "string" || (lines.length === 0 && !isUnverified))
           return {
             type: "ignored",
           };
@@ -796,11 +1041,11 @@ function convertSDKMessage(msg, opts) {
               type: "tool_host_result_lines",
               toolUseID: msg.tool_use_id,
               host: machineLabelForMessage(typeof msg.host?.name === "string" ? msg.host.name : ""),
-              lines: r,
-              ...(s !== undefined && {
-                label: s,
+              lines,
+              ...(label !== undefined && {
+                label,
               }),
-              ...(i && {
+              ...(isUnverified && {
                 unverified: true,
               }),
             },
@@ -904,243 +1149,6 @@ function convertSDKMessage(msg, opts) {
         type: "ignored",
       };
   }
-}
-//@ chunk-0h4e7gnq.js:14624-14668 fingerprint = convertStreamEvent (1)
-var convertStreamEvent = (msg) => ({
-  type: "stream_event",
-  event: msg,
-});
-//@ chunk-0h4e7gnq.js:14668-14779 affinity
-var inputJsonDeltaEvent = (e) =>
-  convertStreamEvent({
-    type: "content_block_delta",
-    index: e.index,
-    delta: {
-      type: "input_json_delta",
-      partial_json: e.json,
-    },
-  });
-//@ chunk-0h4e7gnq.js:14779-14876 affinity
-var textDeltaEvent = (e) =>
-  convertStreamEvent({
-    type: "content_block_delta",
-    index: e.index,
-    delta: {
-      type: "text_delta",
-      text: e.text,
-    },
-  });
-//@ chunk-0h4e7gnq.js:14876-15003 affinity
-var thinkingDeltaEvent = (e) =>
-  convertStreamEvent({
-    type: "content_block_delta",
-    index: e.index,
-    delta: {
-      type: "thinking_delta",
-      thinking: e.text,
-      estimated_tokens: null,
-    },
-  });
-//@ chunk-0h4e7gnq.js:15003-15132 affinity
-function deltaEventForKind(e) {
-  switch (e.kind) {
-    case "text":
-      return textDeltaEvent(e);
-    case "thinking":
-      return thinkingDeltaEvent(e);
-    case "input":
-      return inputJsonDeltaEvent(e);
-    default:
-      return textDeltaEvent(e);
-  }
-}
-//@ chunk-0h4e7gnq.js:38969-39244 fingerprint = convertCompactBoundaryMessage (0.876)
-/**
- * 把 SDK compact_boundary 消息转成本地"Conversation compacted"系统消息。
- */
-function convertCompactBoundaryMessage(msg) {
-  return {
-    type: "system",
-    subtype: "compact_boundary",
-    content: "Conversation compacted",
-    level: "info",
-    compactMetadata: fromSDKCompactMetadata(msg.compact_metadata),
-    ...(msg.logical_parent_uuid !== undefined && {
-      logicalParentUuid: msg.logical_parent_uuid,
-    }),
-    uuid: msg.uuid,
-    timestamp: new Date().toISOString(),
-  };
-}
-//@ chunk-0h4e7gnq.js:39244-39932 placement
-/**
- * SDK model_refusal_fallback 事件转为内部 system 消息。
- */
-function createRefusalFallbackMessage(e) {
-  return {
-    type: "system",
-    subtype: "model_refusal_fallback",
-    content: e.content,
-    level: "warning",
-    trigger: e.trigger,
-    direction: e.direction,
-    ...(e.scope !== undefined && {
-      scope: e.scope,
-    }),
-    originalModel: e.original_model,
-    fallbackModel: e.fallback_model,
-    requestId: e.request_id,
-    apiRefusalCategory: e.api_refusal_category,
-    apiRefusalExplanation: e.api_refusal_explanation,
-    ...(e.saw_cyber_refusal && {
-      sawCyberRefusal: true,
-    }),
-    ...(e.retracted_message_uuids !== undefined && {
-      retractedMessageUuids: e.retracted_message_uuids,
-    }),
-    ...(e.refused_user_message_uuid !== undefined && {
-      refusedUserMessageUuid: e.refused_user_message_uuid,
-    }),
-    ...(e.provisional && {
-      provisional: e.provisional,
-    }),
-    isMeta: false,
-    uuid: e.uuid,
-    timestamp: new Date().toISOString(),
-  };
-}
-//@ chunk-0h4e7gnq.js:39932-40292 placement
-/**
- * SDK model_refusal_no_fallback 事件转为内部 system 消息。
- */
-function createRefusalNoFallbackMessage(e) {
-  return {
-    type: "system",
-    subtype: "model_refusal_no_fallback",
-    content: e.content,
-    level: "warning",
-    originalModel: e.original_model,
-    requestId: e.request_id,
-    apiRefusalCategory: e.api_refusal_category,
-    apiRefusalExplanation: e.api_refusal_explanation,
-    refusedUserMessageUuid: e.refused_user_message_uuid,
-    isMeta: false,
-    uuid: e.uuid,
-    timestamp: new Date().toISOString(),
-  };
-}
-//@ chunk-0h4e7gnq.js:40526-40882 placement
-/**
- * SDK model_consent_fallback 事件转为内部 system 消息。
- */
-function createConsentFallbackMessage(e) {
-  return {
-    type: "system",
-    subtype: "model_consent_fallback",
-    content: e.content,
-    level: "warning",
-    choice: e.choice,
-    originalModel: e.original_model,
-    originalModelName: isProbeWrittenValue(e.original_model_name) ? e.original_model_name : undefined,
-    fallbackModel: e.fallback_model,
-    persistedAsDefault: e.persisted_as_default,
-    isMeta: false,
-    uuid: e.uuid,
-    timestamp: new Date().toISOString(),
-  };
-}
-//@ chunk-0h4e7gnq.js:46697-46808 placement = createToolUseSummaryMessage (0.751)
-function createToolUseSummaryMessage(e) {
-  return {
-    type: "tool_use_summary",
-    summary: e.summary,
-    preceding_tool_use_ids: e.precedingToolUseIds,
-  };
-}
-//@ chunk-0h4e7gnq.js:46808-46946 placement
-/**
- * 把限额事件转成 SDK 的 rate limit 信息（状态、重置时间、类型、是否用超额）。
- */
-function toRateLimitInfo(rateLimitInfo) {
-  return {
-    status: rateLimitInfo.status,
-    resetsAt: rateLimitInfo.resetsAt ?? null,
-    rateLimitType: rateLimitInfo.rateLimitType ?? null,
-    isUsingOverage: rateLimitInfo.isUsingOverage ?? false,
-  };
-}
-//@ chunk-0h4e7gnq.js:47070-48384 placement
-/**
- * 把内部限流状态转成 SDK rate_limit 事件的载荷：status、是否有统一限流回退、升级路径，以及存在时才带上的重置时间、类型、用量、超额状态/范围/周期用量、错误码、能否购买额度等字段（limitScope 输出为 overageScope）。
- */
-function toSdkRateLimitInfo(limits, { unifiedRateLimitFallbackAvailable, upgradePaths }) {
-  return {
-    status: limits.status,
-    unifiedRateLimitFallbackAvailable,
-    ...(upgradePaths !== undefined && {
-      upgradePaths,
-    }),
-    ...(limits.resetsAt !== undefined && {
-      resetsAt: limits.resetsAt,
-    }),
-    ...(limits.rateLimitType !== undefined && {
-      rateLimitType: limits.rateLimitType,
-    }),
-    ...(limits.utilization !== undefined && {
-      utilization: limits.utilization,
-    }),
-    ...(limits.overageStatus !== undefined && {
-      overageStatus: limits.overageStatus,
-    }),
-    ...(limits.overageResetsAt !== undefined && {
-      overageResetsAt: limits.overageResetsAt,
-    }),
-    ...(limits.overageDisabledReason !== undefined && {
-      overageDisabledReason: limits.overageDisabledReason,
-    }),
-    ...(limits.limitScope !== undefined && {
-      overageScope: limits.limitScope,
-    }),
-    ...(limits.isUsingOverage !== undefined && {
-      isUsingOverage: limits.isUsingOverage,
-    }),
-    ...(limits.overageInUse !== undefined && {
-      overageInUse: limits.overageInUse,
-    }),
-    ...(limits.surpassedThreshold !== undefined && {
-      surpassedThreshold: limits.surpassedThreshold,
-    }),
-    ...(limits.rateLimitGraceActive === true && {
-      rateLimitGraceActive: true,
-    }),
-    ...(limits.overagePeriodMonthly !== undefined && {
-      overagePeriodMonthly: {
-        utilization: limits.overagePeriodMonthly.utilization,
-      },
-    }),
-    ...(limits.overagePeriodChannel !== undefined && {
-      overagePeriodChannel: {
-        utilization: limits.overagePeriodChannel.utilization,
-      },
-    }),
-    ...(limits.errorCode !== undefined && {
-      errorCode: limits.errorCode,
-    }),
-    ...(limits.canUserPurchaseCredits !== undefined && {
-      canUserPurchaseCredits: limits.canUserPurchaseCredits,
-    }),
-    ...(limits.hasChargeableSavedPaymentMethod !== undefined && {
-      hasChargeableSavedPaymentMethod: limits.hasChargeableSavedPaymentMethod,
-    }),
-  };
-}
-//@ chunk-kj4ctmv0.js:447-582 placement
-function convertToolProgressMessage(msg) {
-  let launchedAgentId =
-    msg.type === "system" && msg.subtype === "informational" ? msg.launchedAgentId : undefined;
-  return launchedAgentId !== undefined && normalizeAgentIdOrNull(launchedAgentId) !== null
-    ? launchedAgentId
-    : undefined;
 }
 export {
   convertStreamEvent,

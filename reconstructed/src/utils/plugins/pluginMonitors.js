@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (9)
  * attribution: placement 9
  */
-import { init_react_production, P } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import {
   loadPluginOptions,
   marketplaceSource,
@@ -46,100 +46,111 @@ import { useAppStoreDirect, useSetAppState, useAppState } from "../../state/AppS
 import { useSetVoiceState } from "../../context/voice.js";
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 import { suggestionCacheBySessionRoot } from "../suggestions/suggestionCache.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:213490-213494 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:213490", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:213861-213865 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:213861", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:213865-214530 placement
-async function resolvePluginMonitorCommand(monitor, x, D) {
-  let L = x.manifest.userConfig ? await loadPluginOptions(marketplaceSource(x), D) : undefined;
-  if (L && hasUserConfigVariables(monitor.command, L))
+async function resolvePluginMonitorCommand(monitor, plugin, credentials) {
+  let options = plugin.manifest.userConfig
+    ? await loadPluginOptions(marketplaceSource(plugin), credentials)
+    : undefined;
+  if (options && hasUserConfigVariables(monitor.command, options))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Monitor "${monitor.name}" from plugin ${x.name} references \${user_config.*} in its command. The substituted value would be passed to a shell. Monitor commands cannot safely reference \${user_config.*}; have the monitor script read the value from a config file or prompt instead.`,
+      `Monitor "${monitor.name}" from plugin ${plugin.name} references \${user_config.*} in its command. The substituted value would be passed to a shell. Monitor commands cannot safely reference \${user_config.*}; have the monitor script read the value from a config file or prompt instead.`,
       "plugin monitor command references ${user_config.*}",
     );
-  let ee = (command) => {
-    let Re = substitutePluginVariables(command, x);
+  let expand = (command) => {
+    let substituted = substitutePluginVariables(command, plugin);
     return runWithPluginWriteScope(
       {
-        pluginSource: x.source,
+        pluginSource: plugin.source,
       },
-      () => expandMcpCredentialEnvVars(Re).expanded,
+      () => expandMcpCredentialEnvVars(substituted).expanded,
     );
   };
   return {
     name: monitor.name,
-    command: ee(monitor.command),
+    command: expand(monitor.command),
     description: monitor.description,
     when: monitor.when,
-    pluginName: x.name,
-    pluginId: x.source,
-    pluginRoot: x.path,
+    pluginName: plugin.name,
+    pluginId: plugin.source,
+    pluginRoot: plugin.path,
   };
 }
 //@ chunk-18hwfzwa.js:214530-214879 placement
-async function resolvePluginMonitors(h, credentials) {
-  let D = [];
-  let L = false;
-  for (let ee of h) {
-    let monitors = ee.monitors;
+async function resolvePluginMonitors(plugins, credentials) {
+  let commands = [];
+  let hadFailure = false;
+  for (let plugin of plugins) {
+    let monitors = plugin.monitors;
     if (!monitors) continue;
     for (let monitor of monitors)
       try {
-        D.push(await resolvePluginMonitorCommand(monitor, ee, credentials));
+        commands.push(await resolvePluginMonitorCommand(monitor, plugin, credentials));
       } catch (error) {
-        L = true;
-        logForDebugging(`plugin ${ee.name}: failed to resolve monitor "${monitor.name}": ${error}`, {
+        hadFailure = true;
+        logForDebugging(`plugin ${plugin.name}: failed to resolve monitor "${monitor.name}": ${error}`, {
           level: "error",
         });
       }
   }
-  if (L) logFeatureBad("plugin_load_monitors", "plugin_load_monitors_resolve_failed");
+  if (hadFailure) logFeatureBad("plugin_load_monitors", "plugin_load_monitors_resolve_failed");
   else logFeatureOk("plugin_load_monitors");
-  return D;
+  return commands;
 }
 //@ chunk-18hwfzwa.js:214879-215163 placement
 function rateLimitMonitorOutput(
-  h,
-  x,
-  D = enqueueMonitorEvent,
-  L = createTokenBucket(BUCKET_CAPACITY, TOKEN_REFILL_MS),
+  monitor,
+  output,
+  enqueue = enqueueMonitorEvent,
+  bucket = createTokenBucket(BUCKET_CAPACITY, TOKEN_REFILL_MS),
 ) {
-  let ee = 0;
-  function ke() {
-    if (ee === 0) return;
-    D(
-      h.description,
-      `[plugin monitor "${h.name}" suppressed ${ee} events \u2014 output rate exceeded]`,
-      x.id,
+  let suppressed = 0;
+  function flushSuppressed() {
+    if (suppressed === 0) return;
+    enqueue(
+      monitor.description,
+      `[plugin monitor "${monitor.name}" suppressed ${suppressed} events \u2014 output rate exceeded]`,
+      output.id,
     );
-    ee = 0;
+    suppressed = 0;
   }
   return {
-    onBatch: (Re) => {
-      if (!L.tryConsume()) {
-        ee++;
+    onBatch: (batch) => {
+      if (!bucket.tryConsume()) {
+        suppressed++;
         return;
       }
-      ke();
-      D(h.description, Re, x.id);
+      flushSuppressed();
+      enqueue(monitor.description, batch, output.id);
     },
-    onExit: ke,
+    onExit: flushSuppressed,
   };
 }
 //@ chunk-18hwfzwa.js:215163-215899 placement
-async function startPluginMonitor(h, host, D) {
+async function startPluginMonitor(resolvedMonitor, host, context) {
   if (shouldDisableAllHooksIncludingManaged()) return;
   if (shouldSkipHookDueToTrust()) {
-    logForDebugging(`Skipping plugin monitor ${h.pluginName}:${h.name} - workspace trust not accepted`);
+    logForDebugging(
+      `Skipping plugin monitor ${resolvedMonitor.pluginName}:${resolvedMonitor.name} - workspace trust not accepted`,
+    );
     return;
   }
-  let L = {};
-  let ee = rateLimitMonitorOutput(h, L);
-  let streamLineBatcher = createStreamLineBatcher(ee.onBatch);
+  let outputSnapshot = {};
+  let limiter = rateLimitMonitorOutput(resolvedMonitor, outputSnapshot);
+  let streamLineBatcher = createStreamLineBatcher(limiter.onBatch);
   let projectConfigRoot = getProjectConfigRoot();
-  let Be = await exec(h.command, D.abortController.signal, defaultShellKind(), {
+  let shellCommand = await exec(resolvedMonitor.command, context.abortController.signal, defaultShellKind(), {
     host,
     ...(projectConfigRoot !== null && {
       cwd: projectConfigRoot,
@@ -148,69 +159,71 @@ async function startPluginMonitor(h, host, D) {
     shouldUseSandbox: false,
     onStdout: streamLineBatcher.onData,
     toolCgroupClass: "plugin",
-    storageV5: D.storageV5,
-    bunOptionsFor: (We) => bunOptionsGuard(h.pluginId, We),
+    storageV5: context.storageV5,
+    bunOptionsFor: (command) => bunOptionsGuard(resolvedMonitor.pluginId, command),
   });
-  L.id = Be.taskOutput.taskId;
-  let He = await backgroundShellCommand(
+  outputSnapshot.id = shellCommand.taskOutput.taskId;
+  let background = await backgroundShellCommand(
     {
-      command: h.command,
-      description: h.description,
-      shellCommand: Be,
+      command: resolvedMonitor.command,
+      description: resolvedMonitor.description,
+      shellCommand,
       toolUseId: undefined,
       agentId: undefined,
       kind: "monitor",
     },
-    D,
+    context,
   );
-  Be.result.then(async () => {
+  shellCommand.result.then(async () => {
     try {
       try {
         streamLineBatcher.flush(true);
-        ee.onExit();
+        limiter.onExit();
       } finally {
-        let { terminalNotification } = await He.settled;
+        let { terminalNotification } = await background.settled;
         if (terminalNotification) enqueueShellTerminalNotification(terminalNotification);
       }
     } catch (error) {
       logError(error);
     }
   });
-  return L.id;
+  return outputSnapshot.id;
 }
 //@ chunk-18hwfzwa.js:215899-216443 placement
 /**
  * 启动插件声明的 monitor（后台命令，输出作为事件送入会话）：按 always/on-skill-invoke 触发方式，未接受工作区信任时跳过，失败记录 plugin_arm_monitor。
  */
 async function armPluginMonitors(
-  h,
-  x,
+  armed,
+  shouldArm,
   host,
-  L,
-  ee = startPluginMonitor,
-  ke = getPluginRegistry().armedMonitorKeys,
+  context,
+  startMonitor = startPluginMonitor,
+  armedKeys = getPluginRegistry().armedMonitorKeys,
 ) {
   if (isCustomizationDisabled("pluginMonitors")) return;
   if (getIsNonInteractiveSession()) return;
-  let Re = shouldAllowManagedHooksOnlyByPolicy() || policySettingsUnreadable();
-  let filtered = h.filter((We) => !arePluginHooksHeld(We) && (!Re || isManagedHookAllowed(We.source)));
-  let He = false;
-  for (let We of await resolvePluginMonitors(filtered, L.credentials)) {
-    if (!x(We)) continue;
-    let ze = `${We.pluginName}:${We.name}`;
-    if (ke.has(ze)) continue;
-    ke.add(ze);
+  let managedOnly = shouldAllowManagedHooksOnlyByPolicy() || policySettingsUnreadable();
+  let plugins = armed.filter(
+    (plugin) => !arePluginHooksHeld(plugin) && (!managedOnly || isManagedHookAllowed(plugin.source)),
+  );
+  let hadFailure = false;
+  for (let monitor of await resolvePluginMonitors(plugins, context.credentials)) {
+    if (!shouldArm(monitor)) continue;
+    let key = `${monitor.pluginName}:${monitor.name}`;
+    if (armedKeys.has(key)) continue;
+    armedKeys.add(key);
     try {
-      if ((await ee(We, host, L)) === undefined) ke.delete(ze);
+      if ((await startMonitor(monitor, host, context)) === undefined) armedKeys.delete(key);
     } catch (error) {
-      ke.delete(ze);
-      He = true;
-      logForDebugging(`plugin monitor ${ze}: failed to arm: ${error}`, {
+      armedKeys.delete(key);
+      hadFailure = true;
+      logForDebugging(`plugin monitor ${key}: failed to arm: ${error}`, {
         level: "error",
       });
     }
   }
-  if (He) logFeatureSad("plugin_arm_monitor", "plugin_arm_monitor_failed");
+  if (hadFailure) logFeatureSad("plugin_arm_monitor", "plugin_arm_monitor_failed");
   else logFeatureOk("plugin_arm_monitor");
 }
 //@ chunk-18hwfzwa.js:216443-216886 placement
@@ -220,26 +233,29 @@ function shouldArmPluginMonitors({ enabled }) {
   let setAppState = useSetAppState();
   let setVoiceState = useSetVoiceState();
   let { storageV5, credentials } = useTheme_2();
-  let Be = useAppState((He) => He.plugins.enabled);
-  P(() => {
+  let enabled_2 = useAppState((state) => state.plugins.enabled);
+  useEffect(() => {
     if (!enabled) return;
-    let He = () => ({
+    let makeContext = () => ({
       abortController: new AbortController(),
       taskRegistry: setVoiceState,
       storageV5,
       credentials,
     });
-    armPluginMonitors(Be, (We) => We.when === "always", session.host, He());
-    return suggestionCacheBySessionRoot.of(session).skillInvoked.subscribe((We) => {
+    armPluginMonitors(enabled_2, (monitor) => monitor.when === "always", session.host, makeContext());
+    return suggestionCacheBySessionRoot.of(session).skillInvoked.subscribe((skillName) => {
       armPluginMonitors(
         appStoreDirect.getState().plugins.enabled,
-        (ze) => ze.when === `on-skill-invoke:${We}`,
+        (monitor) => monitor.when === `on-skill-invoke:${skillName}`,
         session.host,
-        He(),
+        makeContext(),
       );
     });
-  }, [enabled, Be, session, appStoreDirect, setAppState, setVoiceState, storageV5, credentials]);
+  }, [enabled, enabled_2, session, appStoreDirect, setAppState, setVoiceState, storageV5, credentials]);
 }
 //@ chunk-18hwfzwa.js:216886-216890 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:216886", () => {
+  init_react_production();
+});
 export { shouldArmPluginMonitors };

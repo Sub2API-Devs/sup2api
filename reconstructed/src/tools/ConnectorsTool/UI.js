@@ -14,12 +14,13 @@ import { Text } from "../../ink/components/Text.js";
 import { plural } from "../../utils/stringUtils.js";
 
 //@ chunk-jrhqpnjr.js:4532-4677 placement
-function renderToolResultMessage(o) {
+function renderToolResultMessage(result) {
   return jsxProd_default(MessageResponse, {
     children: jsxProd_default(Text, {
-      children: o.opt_in_required
-        ? o.message
-        : `${o.connectors.length} ${plural(o.connectors.length, "connector")}`,
+      children: result.opt_in_required
+        ? result.message
+        : `${result.connectors.length} ${plural(result.connectors.length, "connector")}`,
     }),
   });
 }
+export { renderToolResultMessage };

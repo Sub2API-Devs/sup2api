@@ -5,12 +5,12 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_parser_sync } from "./parser-sync.js";
 import { require_packer_sync } from "./packer-sync.js";
 
 //@ chunk-spjgqa4y.js:47987-48112 cjs-fingerprint
-var require_png_sync = x(function (cjsExports) {
+var require_png_sync = __commonJS(function (cjsExports) {
   var parse = require_parser_sync();
   var pack = require_packer_sync();
   cjsExports.read = function (buffer, options) {

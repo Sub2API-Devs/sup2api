@@ -34,239 +34,240 @@ function clampTemplateTimeoutS(timeoutS) {
   return Math.min(600, Math.max(5, Math.round(timeoutS ?? 60)));
 }
 //@ chunk-5ac1fnqf.js:1119-1331 placement
-function classifyTemplateRegistration(o, m) {
-  if (o === undefined) return "unknown_template";
-  if (!o.digests.some((digest) => digest.sha256 === m.digest)) return "version_mismatch";
-  if (m.event !== o.event || !isMatcherEvent(m.event)) return "event_not_allowed";
+function classifyTemplateRegistration(template, registration) {
+  if (template === undefined) return "unknown_template";
+  if (!template.digests.some((digest) => digest.sha256 === registration.digest)) return "version_mismatch";
+  if (registration.event !== template.event || !isMatcherEvent(registration.event))
+    return "event_not_allowed";
   return "awaiting_upload";
 }
 //@ chunk-5ac1fnqf.js:1331-9485 placement
 /**
  * 设备钩子 worker 主体：策略禁用、等待、转发钩子到云会话
  */
-function runDeviceHooksWorker(o) {
-  let m = null;
-  let v = new Map();
-  let y = new Map();
-  o.registry.onLeaseExpired((l) => o.forwarder.removeForOwner(l.instanceId));
-  let M = () =>
-    o.policy.pluginOnly() ||
-    o.policy.customizationDisabled() ||
-    o.policy.managedOnly() ||
-    o.policy.allDisabled();
-  let b = () => {
-    let l = o.registry.current();
-    if (l !== null) {
-      o.forwarder.removeForOwner(l.instanceId);
-      o.templateRunner.remove(l.instanceId);
+function runDeviceHooksWorker(deps) {
+  let flagRead = null;
+  let shownTemplates = new Map();
+  let attestedInstances = new Map();
+  deps.registry.onLeaseExpired((lease) => deps.forwarder.removeForOwner(lease.instanceId));
+  let hooksDisabled = () =>
+    deps.policy.pluginOnly() ||
+    deps.policy.customizationDisabled() ||
+    deps.policy.managedOnly() ||
+    deps.policy.allDisabled();
+  let resetAll = () => {
+    let current = deps.registry.current();
+    if (current !== null) {
+      deps.forwarder.removeForOwner(current.instanceId);
+      deps.templateRunner.remove(current.instanceId);
     }
-    o.registry.clear();
-    y.clear();
-    o.templates.clear();
+    deps.registry.clear();
+    attestedInstances.clear();
+    deps.templates.clear();
   };
-  let O = async () => {
-    let shared = m !== null && !m.settled;
-    if (m === null || m.settled) {
-      let i = {
-        promise: o.readAccountFlags(),
-        startedAt: o.now(),
+  let readFlagsShared = async () => {
+    let shared = flagRead !== null && !flagRead.settled;
+    if (flagRead === null || flagRead.settled) {
+      let entry = {
+        promise: deps.readAccountFlags(),
+        startedAt: deps.now(),
         settled: false,
       };
-      i.promise.then(
-        () => (i.settled = true),
-        () => (i.settled = true),
+      entry.promise.then(
+        () => (entry.settled = true),
+        () => (entry.settled = true),
       );
-      m = i;
+      flagRead = entry;
     }
-    let s = m;
-    let a = o.now();
-    let max = Math.max(0, o.flagWaitCapMs - (a - s.startedAt));
+    let sharedRead = flagRead;
+    let now = deps.now();
+    let max = Math.max(0, deps.flagWaitCapMs - (now - sharedRead.startedAt));
     return {
       state:
         (await withDeadline(
-          s.promise.then(
-            (i) => (i ? "on" : "off"),
+          sharedRead.promise.then(
+            (on) => (on ? "on" : "off"),
             () => "pending",
           ),
           max,
         )) ?? "pending",
-      waitMs: o.now() - a,
+      waitMs: deps.now() - now,
       shared,
     };
   };
-  let A = async () => {
-    let l = {
+  let awaitFlags = async () => {
+    let result = {
       flagWaitMs: 0,
       sharedFlagRead: false,
     };
-    if (M()) {
-      b();
+    if (hooksDisabled()) {
+      resetAll();
       return {
         ok: false,
         error: "hook_forwarding_disabled: policy",
         outcome: "disabled_policy",
-        ...l,
+        ...result,
       };
     }
-    let s = await O();
-    let a = {
-      flagWaitMs: s.waitMs,
-      sharedFlagRead: s.shared,
+    let waited = await readFlagsShared();
+    let outcome = {
+      flagWaitMs: waited.waitMs,
+      sharedFlagRead: waited.shared,
     };
-    if (s.state === "pending")
+    if (waited.state === "pending")
       return {
         ok: false,
         error: "hook_forwarding_not_ready: feature flags not yet available; retry",
         outcome: "not_ready",
-        ...a,
+        ...outcome,
       };
-    if (s.state === "off") {
-      b();
+    if (waited.state === "off") {
+      resetAll();
       return {
         ok: false,
         error: "hook_forwarding_disabled: flag_off",
         outcome: "disabled_flag_off",
-        ...a,
+        ...outcome,
       };
     }
-    if (M()) {
-      b();
+    if (hooksDisabled()) {
+      resetAll();
       return {
         ok: false,
         error: "hook_forwarding_disabled: policy",
         outcome: "disabled_policy",
-        ...a,
+        ...outcome,
       };
     }
     return {
       ok: true,
-      ...a,
+      ...outcome,
     };
   };
-  let P = async (l) => {
-    let s = {
+  let handleRegister = async (message) => {
+    let outcome = {
       flagWaitMs: 0,
       sharedFlagRead: false,
     };
-    if (jsonStringifyRaw(l).length > MAX_REGISTRATION_BODY_CHARS)
+    if (jsonStringifyRaw(message).length > MAX_REGISTRATION_BODY_CHARS)
       return {
         ok: false,
         error: "invalid_registration: request larger than 64 KiB",
         outcome: "invalid",
-        ...s,
+        ...outcome,
       };
-    let a = SDKRegisterDeviceHooksRegisterDeviceHooksMessageSchema().safeParse(l.request);
-    if (!a.success)
+    let parsed = SDKRegisterDeviceHooksRegisterDeviceHooksMessageSchema().safeParse(message.request);
+    if (!parsed.success)
       return {
         ok: false,
-        error: `invalid_registration: ${sanitizeDisplayText(a.error.issues[0]?.message ?? "malformed", {
+        error: `invalid_registration: ${sanitizeDisplayText(parsed.error.issues[0]?.message ?? "malformed", {
           maxCodeUnits: ERROR_TEXT_MAX_CHARS,
         })}`,
         outcome: "invalid",
-        ...s,
+        ...outcome,
       };
-    if (a.data.worker_epoch !== undefined && a.data.worker_epoch !== o.workerEpoch)
+    if (parsed.data.worker_epoch !== undefined && parsed.data.worker_epoch !== deps.workerEpoch)
       return {
         ok: false,
-        error: `stale_worker_epoch: worker epoch is ${o.workerEpoch}`,
+        error: `stale_worker_epoch: worker epoch is ${deps.workerEpoch}`,
         outcome: "stale_epoch",
-        ...s,
+        ...outcome,
       };
-    let c = await A();
-    return c.ok
+    let flags = await awaitFlags();
+    return flags.ok
       ? {
           ok: true,
-          parsed: a.data,
-          flagWaitMs: c.flagWaitMs,
-          sharedFlagRead: c.sharedFlagRead,
+          parsed: parsed.data,
+          flagWaitMs: flags.flagWaitMs,
+          sharedFlagRead: flags.sharedFlagRead,
         }
-      : c;
+      : flags;
   };
-  let T = async (l) => {
-    let s = await P(l);
-    if (!s.ok) {
-      o.telemetry.register({
-        outcome: s.outcome,
+  let handleUpload = async (message) => {
+    let upload = await handleRegister(message);
+    if (!upload.ok) {
+      deps.telemetry.register({
+        outcome: upload.outcome,
         accepted: 0,
         ignored: 0,
         templatesAwaitingUpload: 0,
         templatesRefused: 0,
-        flagWaitMs: s.flagWaitMs,
-        sharedFlagRead: s.sharedFlagRead,
+        flagWaitMs: upload.flagWaitMs,
+        sharedFlagRead: upload.sharedFlagRead,
       });
       return {
         kind: "error",
-        error: s.error,
+        error: upload.error,
       };
     }
-    let parsed = s.parsed;
-    let c = o.projectRoot();
-    let u = o.cwd();
+    let parsed = upload.parsed;
+    let projectRoot = deps.projectRoot();
+    let cwd = deps.cwd();
     let success = RegisterDeviceHooksResponseSchema().safeParse({
       status: "unregistered",
-      project_dir: c,
-      cwd: u,
-      worker_epoch: o.workerEpoch,
+      project_dir: projectRoot,
+      cwd,
+      worker_epoch: deps.workerEpoch,
     }).success;
-    let d = {
-      project_dir: c,
-      cwd: success ? u : c,
-      worker_epoch: o.workerEpoch,
+    let reply = {
+      project_dir: projectRoot,
+      cwd: success ? cwd : projectRoot,
+      worker_epoch: deps.workerEpoch,
     };
-    let D = (e, n) => {
-      if (o.registry.removeOwner(parsed.instance_id)) {
-        o.forwarder.removeForOwner(parsed.instance_id);
-        o.templateRunner.remove(parsed.instance_id);
+    let refusalText = (ignored, templatesRefused) => {
+      if (deps.registry.removeOwner(parsed.instance_id)) {
+        deps.forwarder.removeForOwner(parsed.instance_id);
+        deps.templateRunner.remove(parsed.instance_id);
       }
-      y.delete(parsed.instance_id);
-      o.telemetry.register({
+      attestedInstances.delete(parsed.instance_id);
+      deps.telemetry.register({
         outcome: "unregistered",
         accepted: 0,
-        ignored: e.length,
+        ignored: ignored.length,
         templatesAwaitingUpload: 0,
-        templatesRefused: n.length,
-        flagWaitMs: s.flagWaitMs,
-        sharedFlagRead: s.sharedFlagRead,
+        templatesRefused: templatesRefused.length,
+        flagWaitMs: upload.flagWaitMs,
+        sharedFlagRead: upload.sharedFlagRead,
       });
       return {
         kind: "success",
         response: {
           status: "unregistered",
-          ...d,
-          ...(e.length > 0 && {
-            ignored_ids: e.slice(0, 128),
+          ...reply,
+          ...(ignored.length > 0 && {
+            ignored_ids: ignored.slice(0, 128),
           }),
-          ...(n.length > 0 && {
-            templates: [...n],
+          ...(templatesRefused.length > 0 && {
+            templates: [...templatesRefused],
           }),
         },
       };
     };
-    if (parsed.hooks.length === 0 && parsed.templates.length === 0) return D([], []);
-    let k = [];
-    let _ = [];
-    let S = new Set();
+    if (parsed.hooks.length === 0 && parsed.templates.length === 0) return refusalText([], []);
+    let entries = [];
+    let hookIds = [];
+    let seen = new Set();
     for (let hook of parsed.hooks) {
       let deviceHookId = parseDeviceHookId(hook.id);
-      let p =
+      let matchedEvent =
         hook.matcher === undefined ||
         hook.matcher === "" ||
         hook.matcher === "*" ||
         MATCHER_NAME_RE.test(hook.matcher);
-      let C = S.has(hook.id);
-      S.add(hook.id);
+      let duplicate = seen.has(hook.id);
+      seen.add(hook.id);
       if (
-        C ||
+        duplicate ||
         deviceHookId === null ||
         deviceHookId.instanceId !== parsed.instance_id ||
         deviceHookId.event !== hook.event ||
         !isMatcherEvent(hook.event) ||
-        !p
+        !matchedEvent
       ) {
-        _.push(hook.id);
+        hookIds.push(hook.id);
         continue;
       }
-      k.push({
+      entries.push({
         id: hook.id,
         event: hook.event,
         ...(hook.matcher !== undefined &&
@@ -283,124 +284,130 @@ function runDeviceHooksWorker(o) {
         targetPinned: hook.target_pinned === true,
       });
     }
-    let f = {};
-    let R = new Map();
-    let g = new Map();
-    let r = new Set();
-    let W = y.get(parsed.instance_id) ?? new Map();
-    let h = new Map();
-    let q = (template) => {
-      let n = W.get(template);
-      if (n === undefined) return false;
-      R.set(n.matcher, template);
-      f[n.event] = [...(f[n.event] ?? []), n.matcher];
-      h.set(template, n);
-      r.add(template);
+    let hooksByEvent = {};
+    let templateEvents = new Map();
+    let statuses = new Map();
+    let settledTemplates = new Set();
+    let byTemplate = attestedInstances.get(parsed.instance_id) ?? new Map();
+    let eventEntries = new Map();
+    let isSettled = (template) => {
+      let pending = byTemplate.get(template);
+      if (pending === undefined) return false;
+      templateEvents.set(pending.matcher, template);
+      hooksByEvent[pending.event] = [...(hooksByEvent[pending.event] ?? []), pending.matcher];
+      eventEntries.set(template, pending);
+      settledTemplates.add(template);
       return true;
     };
-    let K = (e, timeout) => {
-      if (!isPreToolUseTemplate(e) || !v.get(parsed.instance_id)?.has(e.id)) return;
-      let p = {
-        matcher: e.matcher,
+    let holdTemplate = (templateMessage, timeout) => {
+      if (
+        !isPreToolUseTemplate(templateMessage) ||
+        !shownTemplates.get(parsed.instance_id)?.has(templateMessage.id)
+      )
+        return;
+      let eventHook = {
+        matcher: templateMessage.matcher,
         hooks: [
           {
             type: "callback",
             timeout,
             callback: async () => {
-              o.telemetry.templateStandInBlocked?.({
-                template: e.id,
+              deps.telemetry.templateStandInBlocked?.({
+                template: templateMessage.id,
               });
               return {
                 decision: "block",
-                reason: `cloud template ${e.id} could not be installed on this worker; matching calls are blocked until it is (register again to retry)`,
+                reason: `cloud template ${templateMessage.id} could not be installed on this worker; matching calls are blocked until it is (register again to retry)`,
               };
             },
           },
         ],
       };
-      R.set(p, e.id);
-      f[e.event] = [...(f[e.event] ?? []), p];
-      h.set(e.id, {
-        event: e.event,
-        matcher: p,
+      templateEvents.set(eventHook, templateMessage.id);
+      hooksByEvent[templateMessage.event] = [...(hooksByEvent[templateMessage.event] ?? []), eventHook];
+      eventEntries.set(templateMessage.id, {
+        event: templateMessage.event,
+        matcher: eventHook,
       });
-      r.add(e.id);
+      settledTemplates.add(templateMessage.id);
     };
-    let N = new Map(parsed.templates.map((template) => [template.template, template]));
-    for (let e of N.values()) {
-      let n = o.templates.template(e.template);
-      let p = classifyTemplateRegistration(n, e);
-      let C = p === "awaiting_upload" ? o.templates.bytesFor(e.digest) : undefined;
-      if (n === undefined || C === undefined) {
-        g.set(e.template, {
-          template: e.template,
-          status: p,
+    let pendingTemplates = new Map(parsed.templates.map((template) => [template.template, template]));
+    for (let registeredTemplate of pendingTemplates.values()) {
+      let stagedTemplate = deps.templates.template(registeredTemplate.template);
+      let classification = classifyTemplateRegistration(stagedTemplate, registeredTemplate);
+      let bytes =
+        classification === "awaiting_upload" ? deps.templates.bytesFor(registeredTemplate.digest) : undefined;
+      if (stagedTemplate === undefined || bytes === undefined) {
+        statuses.set(registeredTemplate.template, {
+          template: registeredTemplate.template,
+          status: classification,
         });
-        if (!q(e.template) && n !== undefined) K(n, clampTemplateTimeoutS(e.timeout_s));
+        if (!isSettled(registeredTemplate.template) && stagedTemplate !== undefined)
+          holdTemplate(stagedTemplate, clampTemplateTimeoutS(registeredTemplate.timeout_s));
         continue;
       }
-      let timeout = clampTemplateTimeoutS(e.timeout_s);
-      if ((await o.templateRunner.resolveInterpreter()) === null) {
-        g.set(e.template, {
-          template: e.template,
+      let timeout = clampTemplateTimeoutS(registeredTemplate.timeout_s);
+      if ((await deps.templateRunner.resolveInterpreter()) === null) {
+        statuses.set(registeredTemplate.template, {
+          template: registeredTemplate.template,
           status: "interpreter_unavailable",
         });
-        if (!q(e.template)) K(n, timeout);
+        if (!isSettled(registeredTemplate.template)) holdTemplate(stagedTemplate, timeout);
         continue;
       }
-      let j;
+      let hook;
       try {
-        j = await withDeadline(
-          o.templateRunner.prepare(n, e.digest, C, timeout),
+        hook = await withDeadline(
+          deps.templateRunner.prepare(stagedTemplate, registeredTemplate.digest, bytes, timeout),
           TEMPLATE_PREPARE_TIMEOUT_MS,
         );
-        if (j === undefined) throw Error("template prepare timed out");
+        if (hook === undefined) throw Error("template prepare timed out");
       } catch (error) {
         logForDebugging(
-          `[deviceHooks] template ${e.template} install failed: ${error instanceof Error ? error.message : String(error)}`,
+          `[deviceHooks] template ${registeredTemplate.template} install failed: ${error instanceof Error ? error.message : String(error)}`,
           {
             level: "error",
           },
         );
-        g.set(e.template, {
-          template: e.template,
+        statuses.set(registeredTemplate.template, {
+          template: registeredTemplate.template,
           status: "install_failed",
         });
-        if (!q(e.template)) K(n, timeout);
+        if (!isSettled(registeredTemplate.template)) holdTemplate(stagedTemplate, timeout);
         continue;
       }
-      let L = {
-        matcher: n.matcher,
+      let installedHook = {
+        matcher: stagedTemplate.matcher,
         hooks: [
           {
             type: "callback",
             timeout,
-            callback: j,
+            callback: hook,
           },
         ],
       };
-      R.set(L, n.id);
-      f[n.event] = [...(f[n.event] ?? []), L];
-      h.set(n.id, {
-        event: n.event,
-        matcher: L,
+      templateEvents.set(installedHook, stagedTemplate.id);
+      hooksByEvent[stagedTemplate.event] = [...(hooksByEvent[stagedTemplate.event] ?? []), installedHook];
+      eventEntries.set(stagedTemplate.id, {
+        event: stagedTemplate.event,
+        matcher: installedHook,
       });
-      g.set(e.template, {
-        template: e.template,
+      statuses.set(registeredTemplate.template, {
+        template: registeredTemplate.template,
         status: "installed",
       });
     }
-    let E = [...g.values()];
-    if (M()) {
-      b();
-      o.telemetry.register({
+    let statusList = [...statuses.values()];
+    if (hooksDisabled()) {
+      resetAll();
+      deps.telemetry.register({
         outcome: "disabled_policy",
         accepted: 0,
         ignored: 0,
         templatesAwaitingUpload: 0,
         templatesRefused: 0,
-        flagWaitMs: s.flagWaitMs,
-        sharedFlagRead: s.sharedFlagRead,
+        flagWaitMs: upload.flagWaitMs,
+        sharedFlagRead: upload.sharedFlagRead,
       });
       return {
         kind: "error",
@@ -408,72 +415,81 @@ function runDeviceHooksWorker(o) {
       };
     }
     let leaseS = parsed.lease_s ?? DEFAULT_LEASE_S;
-    let z = o.now() + leaseS * 1000;
-    let w = {
+    let leaseExpiresAt = deps.now() + leaseS * 1000;
+    let inventory = {
       instanceId: parsed.instance_id,
       displayName:
         sanitizeDisplayText(parsed.display_name ?? "", {
           maxCodeUnits: MAX_TITLE_LENGTH,
         }) || parsed.instance_id,
-      epoch: o.workerEpoch,
-      leaseExpiresAt: z,
-      entries: k,
-      templates: [...N.values()].flatMap((e) => {
-        let status = g.get(e.template)?.status;
-        let p = r.has(e.template) ? (h.get(e.template)?.event ?? e.event) : e.event;
-        return (status === "awaiting_upload" || status === "installed" || r.has(e.template)) &&
-          isMatcherEvent(p)
+      epoch: deps.workerEpoch,
+      leaseExpiresAt,
+      entries,
+      templates: [...pendingTemplates.values()].flatMap((template) => {
+        let status = statuses.get(template.template)?.status;
+        let matchedEvent = settledTemplates.has(template.template)
+          ? (eventEntries.get(template.template)?.event ?? template.event)
+          : template.event;
+        return (status === "awaiting_upload" ||
+          status === "installed" ||
+          settledTemplates.has(template.template)) &&
+          isMatcherEvent(matchedEvent)
           ? [
               {
-                template: e.template,
-                digest: e.digest,
-                event: p,
-                ...(e.timeout_s !== undefined && {
-                  timeoutS: e.timeout_s,
+                template: template.template,
+                digest: template.digest,
+                event: matchedEvent,
+                ...(template.timeout_s !== undefined && {
+                  timeoutS: template.timeout_s,
                 }),
               },
             ]
           : [];
       }),
     };
-    if (w.entries.length === 0 && w.templates.length === 0) return D(_, E);
-    let { replaced, awaySince } = o.registry.replaceOwner(w);
+    if (inventory.entries.length === 0 && inventory.templates.length === 0)
+      return refusalText(hookIds, statusList);
+    let { replaced, awaySince } = deps.registry.replaceOwner(inventory);
     if (replaced !== undefined) {
-      o.forwarder.removeForOwner(replaced);
-      o.templateRunner.remove(replaced);
-      y.delete(replaced);
+      deps.forwarder.removeForOwner(replaced);
+      deps.templateRunner.remove(replaced);
+      attestedInstances.delete(replaced);
     }
-    o.forwarder.installForOwner(w);
-    o.templateRunner.install(w.instanceId, f, (e, n) => R.get(n) ?? "template");
-    y.set(w.instanceId, h);
-    let V = v.get(w.instanceId) ?? new Set();
-    for (let e of g.values()) if (e.status === "installed") V.add(e.template);
-    v.set(w.instanceId, V);
-    let J = count(E, (e) => e.status === "awaiting_upload");
-    let Q = count(E, (e) => e.status === "installed");
-    o.telemetry.register({
+    deps.forwarder.installForOwner(inventory);
+    deps.templateRunner.install(
+      inventory.instanceId,
+      hooksByEvent,
+      (template, templateId) => templateEvents.get(templateId) ?? "template",
+    );
+    attestedInstances.set(inventory.instanceId, eventEntries);
+    let installed = shownTemplates.get(inventory.instanceId) ?? new Set();
+    for (let status of statuses.values()) if (status.status === "installed") installed.add(status.template);
+    shownTemplates.set(inventory.instanceId, installed);
+    let awaitingUpload = count(statusList, (status) => status.status === "awaiting_upload");
+    let installedCount = count(statusList, (status) => status.status === "installed");
+    deps.telemetry.register({
       outcome: "accepted",
-      accepted: k.length,
-      ignored: _.length,
-      templatesAwaitingUpload: J,
-      templatesInstalled: Q,
-      templatesRefused: E.length - J - Q,
-      flagWaitMs: s.flagWaitMs,
-      sharedFlagRead: s.sharedFlagRead,
+      accepted: entries.length,
+      ignored: hookIds.length,
+      templatesAwaitingUpload: awaitingUpload,
+      templatesInstalled: installedCount,
+      templatesRefused: statusList.length - awaitingUpload - installedCount,
+      flagWaitMs: upload.flagWaitMs,
+      sharedFlagRead: upload.sharedFlagRead,
     });
     return {
       kind: "success",
       response: {
         status: "registered",
-        ...d,
+        ...reply,
         lease_s: leaseS,
-        lease_expires_at: new Date(z).toISOString(),
-        accepted: k.length,
-        ignored: _.length,
-        ...(_.length > 0 && {
-          ignored_ids: _.slice(0, 128),
+        lease_expires_at: new Date(leaseExpiresAt).toISOString(),
+        accepted: entries.length,
+        ignored: hookIds.length,
+        ...(hookIds.length > 0 && {
+          ignored_ids: hookIds.slice(0, 128),
         }),
-        templates: E,
+        templates: statusList,
         ...(replaced !== undefined && {
           replaced_owner: replaced,
         }),
@@ -483,80 +499,82 @@ function runDeviceHooksWorker(o) {
       },
     };
   };
-  let x = 400000;
-  let U = async (l) => {
-    let s = (outcome, template = "unknown", bytes = 0) =>
-      o.telemetry.upload({
+  let maxBytes = 400000;
+  let handleUploadMessage = async (message) => {
+    let reply = (outcome, template = "unknown", bytes = 0) =>
+      deps.telemetry.upload({
         outcome,
         template,
         bytes,
       });
-    if (jsonStringifyRaw(l).length > x) {
-      s("invalid");
+    if (jsonStringifyRaw(message).length > maxBytes) {
+      reply("invalid");
       return {
         kind: "error",
         error: "invalid_upload: request larger than 400 KB",
       };
     }
-    let a = SDKUploadDeviceHookTemplateUploadDeviceHookTemplateMessageSchema().safeParse(l.request);
-    if (!a.success) {
-      s("invalid");
+    let parsed = SDKUploadDeviceHookTemplateUploadDeviceHookTemplateMessageSchema().safeParse(
+      message.request,
+    );
+    if (!parsed.success) {
+      reply("invalid");
       return {
         kind: "error",
-        error: `invalid_upload: ${sanitizeDisplayText(a.error.issues[0]?.message ?? "malformed", {
+        error: `invalid_upload: ${sanitizeDisplayText(parsed.error.issues[0]?.message ?? "malformed", {
           maxCodeUnits: ERROR_TEXT_MAX_CHARS,
         })}`,
       };
     }
-    let c = a.data;
-    if (c.worker_epoch !== undefined && c.worker_epoch !== o.workerEpoch) {
-      s("stale_epoch", c.template);
+    let upload = parsed.data;
+    if (upload.worker_epoch !== undefined && upload.worker_epoch !== deps.workerEpoch) {
+      reply("stale_epoch", upload.template);
       return {
         kind: "error",
-        error: `stale_worker_epoch: worker epoch is ${o.workerEpoch}`,
+        error: `stale_worker_epoch: worker epoch is ${deps.workerEpoch}`,
       };
     }
-    let u = await A();
-    if (!u.ok) {
-      s(u.outcome, c.template);
+    let flags = await awaitFlags();
+    if (!flags.ok) {
+      reply(flags.outcome, upload.template);
       return {
         kind: "error",
-        error: u.error,
+        error: flags.error,
       };
     }
-    let i = o.templates.accept({
-      template: c.template,
-      digest: c.digest,
-      contentBase64: c.content_base64,
+    let accepted = deps.templates.accept({
+      template: upload.template,
+      digest: upload.digest,
+      contentBase64: upload.content_base64,
     });
-    if (!i.ok) {
-      s(i.kind, c.template);
+    if (!accepted.ok) {
+      reply(accepted.kind, upload.template);
       return {
         kind: "error",
-        error: i.error,
+        error: accepted.error,
       };
     }
-    s(i.status, i.template.id, i.bytes);
+    reply(accepted.status, accepted.template.id, accepted.bytes);
     return {
       kind: "success",
       response: {
-        template: i.template.id,
-        digest: c.digest,
-        status: i.status,
+        template: accepted.template.id,
+        digest: upload.digest,
+        status: accepted.status,
       },
     };
   };
   return {
-    async handle(l) {
-      switch (l.request.subtype) {
+    async handle(message) {
+      switch (message.request.subtype) {
         case "register_device_hooks":
-          return T(l);
+          return handleUpload(message);
         case "upload_device_hook_template":
-          return U(l);
+          return handleUploadMessage(message);
         default:
           return {
             kind: "error",
-            error: `Unsupported control request subtype: ${l.request.subtype}`,
+            error: `Unsupported control request subtype: ${message.request.subtype}`,
           };
       }
     },
@@ -570,102 +588,102 @@ function positiveEpoch(workerEpoch) {
 /**
  * 云会话 worker 侧的设备钩子主体：按需加载依赖，建立钩子注册表与转发器（记录 tengu_device_hook_forwarded），根据策略（仅插件、自定义禁用、仅托管、全部禁用）与账户开关决定是否启用，并处理模板注册。
  */
-async function startDeviceHooksWorker(o) {
+async function startDeviceHooksWorker(deps) {
   let [
-    { isRestrictedToPluginOnly: m },
-    { isCustomizationDisabled: v },
-    { shouldHoldDeviceHooksByPolicy: y, shouldDisableAllHooksIncludingManaged: M },
-    { isAccountGateServed: b, isViolinAmatiEnabled: O },
-    { getToolServingFlagAnsweredOff: A, isToolServingEnabled: P },
-    { refreshGrowthBookFeatures: T },
-    { createDeviceHookRegistry: x, productionRegistryTimer: U },
-    { createDeviceHookForwarder: l, productionForwarderTimer: s },
-    { createDeviceHookTemplateStore: a },
-    { productionDeviceHookTemplateRunner: c, telemetryTemplateId: u },
-    { logEvent: i },
-    { fromEnum: d },
-    { logFeatureBad: D, logFeatureOk: k, logFeatureSad: _ },
+    { isRestrictedToPluginOnly },
+    { isCustomizationDisabled },
+    { shouldHoldDeviceHooksByPolicy, shouldDisableAllHooksIncludingManaged },
+    { isAccountGateServed, isViolinAmatiEnabled },
+    { getToolServingFlagAnsweredOff, isToolServingEnabled },
+    { refreshGrowthBookFeatures },
+    { createDeviceHookRegistry, productionRegistryTimer },
+    { createDeviceHookForwarder, productionForwarderTimer },
+    { createDeviceHookTemplateStore },
+    { productionDeviceHookTemplateRunner, telemetryTemplateId },
+    { logEvent },
+    { fromEnum },
+    { logFeatureBad, logFeatureOk, logFeatureSad },
   ] = await Promise.all([
-    import("./chunk-j7cx0xp0.js"),
-    import("./chunk-kz1hsbpq.js"),
-    import("./chunk-xjx4z12z.js"),
-    import("./chunk-m288yvvf.js"),
-    import("./chunk-x9yaktkd.js"),
-    import("./chunk-6df1d6re.js"),
-    import("./chunk-phgcpy6c.js"),
-    import("./chunk-mfz5tce2.js"),
-    import("./chunk-6vmp3d2t.js"),
-    import("./chunk-y47q51t0.js"),
-    import("./chunk-ezz35vxh.js"),
-    import("./chunk-01ass7n1.js"),
-    import("./chunk-53at0fec.js"),
+    import("../../settings/pluginOnlyPolicy.js"),
+    import("../../settings/customizationDisabled.js"),
+    import("../hooksConfigSnapshot.js"),
+    import("../../../services/analytics/violinGates.js"),
+    import("../../../services/analytics/violinWillowGate.js"),
+    import("../../../services/analytics/ATIS_REQUEST_HEADER.lazy.js"),
+    import("../../../services/deviceBridge/deviceHookRegistry.js"),
+    import("../deviceHookForwarder.js"),
+    import("../createDeviceHookTemplateStore.lazy.js"),
+    import("../productionDeviceHookTemplateRunner.lazy.js"),
+    import("../../../services/analytics/index.js"),
+    import("../../../services/analytics/safeMetadata.js"),
+    import("../../../services/analytics/featureTelemetry.js"),
   ]);
-  let registry = x({
+  let registry = createDeviceHookRegistry({
     now: Date.now,
-    setTimer: U,
-    onLeaseExpired: () => i("tengu_device_hooks_lease_expired", {}),
+    setTimer: productionRegistryTimer,
+    onLeaseExpired: () => logEvent("tengu_device_hooks_lease_expired", {}),
   });
-  let forwarder = l({
+  let forwarder = createDeviceHookForwarder({
     registry,
-    sender: o.sender,
-    toolAliases: o.toolAliases,
+    sender: deps.sender,
+    toolAliases: deps.toolAliases,
     now: Date.now,
-    setTimer: s,
+    setTimer: productionForwarderTimer,
     telemetry: {
-      forwarded: (r) =>
-        i("tengu_device_hook_forwarded", {
-          event: d(r.event),
-          outcome: d(r.outcome),
-          fields_dropped: r.fieldsDropped,
-          blocked: r.blocked,
-          rtt_ms: r.rttMs,
-          error_replies_ignored: r.errorRepliesIgnored,
-          malformed_replies_ignored: r.malformedRepliesIgnored,
+      forwarded: (report) =>
+        logEvent("tengu_device_hook_forwarded", {
+          event: fromEnum(report.event),
+          outcome: fromEnum(report.outcome),
+          fields_dropped: report.fieldsDropped,
+          blocked: report.blocked,
+          rtt_ms: report.rttMs,
+          error_replies_ignored: report.errorRepliesIgnored,
+          malformed_replies_ignored: report.malformedRepliesIgnored,
         }),
     },
   });
-  let R = {
+  let deps_2 = {
     policy: {
-      pluginOnly: () => m("hooks"),
-      customizationDisabled: () => v("hooks"),
-      managedOnly: y,
-      allDisabled: M,
+      pluginOnly: () => isRestrictedToPluginOnly("hooks"),
+      customizationDisabled: () => isCustomizationDisabled("hooks"),
+      managedOnly: shouldHoldDeviceHooksByPolicy,
+      allDisabled: shouldDisableAllHooksIncludingManaged,
     },
     readAccountFlags: async () => {
-      let [r, W] = await Promise.all([
-        P({
+      let [gates, accountGate] = await Promise.all([
+        isToolServingEnabled({
           cloudClient: true,
         }),
-        O(),
+        isViolinAmatiEnabled(),
       ]);
-      if (r && W) {
+      if (gates && accountGate) {
         if (!alwaysTrue()) return true;
-        i("tengu_device_hooks_shelved", {
-          side: d("worker"),
+        logEvent("tengu_device_hooks_shelved", {
+          side: fromEnum("worker"),
         });
         return false;
       }
-      let h =
-        A({
+      let accountGate_2 =
+        getToolServingFlagAnsweredOff({
           cloudClient: true,
-        }) ?? (!W && b("tengu_violin_amati") ? "tengu_violin_amati" : undefined);
-      if (h === undefined) {
-        T().catch(() => {});
+        }) ?? (!accountGate && isAccountGateServed("tengu_violin_amati") ? "tengu_violin_amati" : undefined);
+      if (accountGate_2 === undefined) {
+        refreshGrowthBookFeatures().catch(() => {});
         throw Error("account flags not served yet");
       }
-      i("tengu_device_hooks_account_flag_off", {
-        flag: d(h),
+      logEvent("tengu_device_hooks_account_flag_off", {
+        flag: fromEnum(accountGate_2),
       });
       return false;
     },
     flagWaitCapMs: 5000,
     now: Date.now,
-    workerEpoch: positiveEpoch(o.workerEpoch),
-    projectRoot: o.projectRoot,
-    cwd: o.cwd,
+    workerEpoch: positiveEpoch(deps.workerEpoch),
+    projectRoot: deps.projectRoot,
+    cwd: deps.cwd,
     registry,
     forwarder,
-    templates: a(),
+    templates: createDeviceHookTemplateStore(),
     templateRunner: isDiskless()
       ? {
           resolveInterpreter: async () => null,
@@ -675,50 +693,51 @@ async function startDeviceHooksWorker(o) {
           install: () => {},
           remove: () => {},
         }
-      : c(o.projectRoot),
+      : productionDeviceHookTemplateRunner(deps.projectRoot),
     telemetry: {
-      templateStandInBlocked: (r) =>
-        i("tengu_device_hook_template_run", {
-          template: d(u(r.template)),
-          outcome: d("stand_in_blocked"),
+      templateStandInBlocked: (report) =>
+        logEvent("tengu_device_hook_template_run", {
+          template: fromEnum(telemetryTemplateId(report.template)),
+          outcome: fromEnum("stand_in_blocked"),
           duration_ms: 0,
         }),
-      upload: (r) =>
-        i("tengu_device_hook_template_upload", {
-          outcome: d(r.outcome),
-          template: d(u(r.template)),
-          bytes: r.bytes,
+      upload: (report) =>
+        logEvent("tengu_device_hook_template_upload", {
+          outcome: fromEnum(report.outcome),
+          template: fromEnum(telemetryTemplateId(report.template)),
+          bytes: report.bytes,
         }),
-      register: (r) => {
-        i("tengu_device_hooks_register", {
-          outcome: d(r.outcome),
-          accepted: r.accepted,
-          ignored: r.ignored,
-          templates_awaiting_upload: r.templatesAwaitingUpload,
-          templates_installed: r.templatesInstalled ?? 0,
-          templates_refused: r.templatesRefused,
-          flag_wait_ms: r.flagWaitMs,
-          shared_flag_read: r.sharedFlagRead,
+      register: (report) => {
+        logEvent("tengu_device_hooks_register", {
+          outcome: fromEnum(report.outcome),
+          accepted: report.accepted,
+          ignored: report.ignored,
+          templates_awaiting_upload: report.templatesAwaitingUpload,
+          templates_installed: report.templatesInstalled ?? 0,
+          templates_refused: report.templatesRefused,
+          flag_wait_ms: report.flagWaitMs,
+          shared_flag_read: report.sharedFlagRead,
         });
-        if (r.outcome === "accepted" || r.outcome === "unregistered")
-          k("device_hooks_register", {
-            accepted: r.accepted,
+        if (report.outcome === "accepted" || report.outcome === "unregistered")
+          logFeatureOk("device_hooks_register", {
+            accepted: report.accepted,
           });
-        else if (r.outcome === "not_ready") _("device_hooks_register", r.outcome);
-        else D("device_hooks_register", r.outcome);
+        else if (report.outcome === "not_ready") logFeatureSad("device_hooks_register", report.outcome);
+        else logFeatureBad("device_hooks_register", report.outcome);
       },
     },
   };
   let now = Date.now();
   return {
-    ...R,
+    ...deps_2,
     readAccountFlags: () => {
       let now_2 = Date.now();
       if (now_2 - now >= SWEEP_INTERVAL_MS) {
         now = now_2;
-        T().catch(() => {});
+        refreshGrowthBookFeatures().catch(() => {});
       }
-      return R.readAccountFlags();
+      return deps_2.readAccountFlags();
     },
   };
 }
+export { runDeviceHooksWorker, startDeviceHooksWorker };

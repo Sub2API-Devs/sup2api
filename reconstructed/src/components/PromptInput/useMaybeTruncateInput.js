@@ -10,28 +10,32 @@
  */
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { selectDraftValue, selectPastedContents } from "../../screens/repl/PromptDraft.js";
-import { y, P } from "../../../vendor/react/cjs/react.production.js";
+import { useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { maybeTruncateInput } from "./inputPaste.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:877127-877167 affinity
-var TRUNCATE_EDIT_ATTRIBUTION = Object.freeze({
-  kind: "landing",
+var TRUNCATE_EDIT_ATTRIBUTION; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:877127", () => {
+  TRUNCATE_EDIT_ATTRIBUTION = Object.freeze({
+    kind: "landing",
+  });
 });
 //@ chunk-18hwfzwa.js:877167-877453 fingerprint = useMaybeTruncateInput (0.694)
-function useMaybeTruncateInput(draft, x) {
+function useMaybeTruncateInput(draft, setCursorOffset) {
   let value = useStoreSelector(draft, selectDraftValue);
   let pastedContents = useStoreSelector(draft, selectPastedContents);
-  let [hasAppliedTruncationToInput, setHasAppliedTruncationToInput] = y(false);
-  P(() => {
+  let [hasAppliedTruncationToInput, setHasAppliedTruncationToInput] = useState(false);
+  useEffect(() => {
     if (hasAppliedTruncationToInput) return;
     if (value.length <= 1e4) return;
     let { newInput, newPastedContents } = maybeTruncateInput(value, pastedContents);
     draft.attribute(TRUNCATE_EDIT_ATTRIBUTION, () => draft.setValue(newInput));
-    draft.setCursorOffset(x(newInput));
+    draft.setCursorOffset(setCursorOffset(newInput));
     draft.setPastedContents(newPastedContents);
     setHasAppliedTruncationToInput(true);
-  }, [value, hasAppliedTruncationToInput, pastedContents, draft, x]);
-  P(() => {
+  }, [value, hasAppliedTruncationToInput, pastedContents, draft, setCursorOffset]);
+  useEffect(() => {
     if (value === "") setHasAppliedTruncationToInput(false);
   }, [value]);
 }

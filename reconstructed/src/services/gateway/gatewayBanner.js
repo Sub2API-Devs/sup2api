@@ -31,30 +31,30 @@ var CONTROL_CHAR_ESCAPES = {
   "\t": "\\t",
 };
 //@ chunk-2f906bwf.js:461-601 placement
-function escapeControlChars(e) {
-  return e.replace(
+function escapeControlChars(text) {
+  return text.replace(
     /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g,
-    (r) => CONTROL_CHAR_ESCAPES[r] ?? `\\u${r.charCodeAt(0).toString(16).padStart(4, "0")}`,
+    (char) => CONTROL_CHAR_ESCAPES[char] ?? `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`,
   );
 }
 //@ chunk-2f906bwf.js:601-713 placement
 /**
  * 按级别写 [gateway] 日志到 stderr。
  */
-function gatewayLog(e, r) {
-  if (LEVEL_ORDER[e] < getGatewayLogLevel()) return;
-  process.stderr.write(`[gateway] ${new Date().toISOString()} ${e} ${escapeControlChars(r)}
+function gatewayLog(level, message) {
+  if (LEVEL_ORDER[level] < getGatewayLogLevel()) return;
+  process.stderr.write(`[gateway] ${new Date().toISOString()} ${level} ${escapeControlChars(message)}
 `);
 }
 //@ chunk-2f906bwf.js:713-815 placement
 /**
  * 以 JSON 行写结构化网关事件到 stderr。
  */
-function gatewayJsonLog(evt, r) {
+function gatewayJsonLog(evt, fields) {
   process.stderr.write(`${JSON.stringify({
     ts: new Date().toISOString(),
     evt,
-    ...r,
+    ...fields,
   })}
 `);
 }
@@ -62,7 +62,7 @@ function gatewayJsonLog(evt, r) {
 /**
  * 打印 claude gateway 启动横幅：监听地址、遥测导出、客户端 IP 来源、OIDC、客户路由推理与策略 webhook。
  */
-function printGatewayBanner(gatewayConfig, r) {
+function printGatewayBanner(gatewayConfig, listenInfo) {
   process.stderr.write(
     `
 \u250C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510
@@ -72,18 +72,18 @@ function printGatewayBanner(gatewayConfig, r) {
       `\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518
 `,
   );
-  let d = r.tls ? "https" : "http";
-  let filtered = ["metrics", "logs", "traces"].filter((t) =>
-    gatewayConfig.telemetry.forward_to.some((o) => o[t]),
+  let scheme = listenInfo.tls ? "https" : "http";
+  let filtered = ["metrics", "logs", "traces"].filter((signal) =>
+    gatewayConfig.telemetry.forward_to.some((destination) => destination[signal]),
   );
-  gatewayLog("info", `claude gateway listening on ${d}://${r.hostname}:${r.port}`);
+  gatewayLog("info", `claude gateway listening on ${scheme}://${listenInfo.hostname}:${listenInfo.port}`);
   if (gatewayConfig.listen.public_url) gatewayLog("info", `public_url ${gatewayConfig.listen.public_url}`);
-  let n = gatewayConfig.listen.trusted_proxies.length;
+  let proxyCount = gatewayConfig.listen.trusted_proxies.length;
   gatewayLog(
     "info",
-    n === 0
+    proxyCount === 0
       ? "client IPs: TCP peer address (listen.trusted_proxies empty)"
-      : `client IPs: X-Forwarded-For via listen.trusted_proxies (${n} ${n === 1 ? "entry" : "entries"})`,
+      : `client IPs: X-Forwarded-For via listen.trusted_proxies (${proxyCount} ${proxyCount === 1 ? "entry" : "entries"})`,
   );
   if (gatewayConfig.oidc) {
     gatewayLog("info", `oidc issuer ${gatewayConfig.oidc.issuer}`);
@@ -113,21 +113,21 @@ function printGatewayBanner(gatewayConfig, r) {
       ? "telemetry relay: not configured"
       : `telemetry relay: ${gatewayConfig.telemetry.forward_to.length} destination(s), signals enabled: ${filtered.join(",") || "none"}`,
   );
-  for (let t of gatewayConfig.telemetry.forward_to) {
-    let { host, hostname } = new URL(t.url);
-    if (!isIP(hostname.replace(/^\[|\]$/g, "")) && getUsableProxyUrl() && shouldBypassProxy(t.url))
+  for (let destination of gatewayConfig.telemetry.forward_to) {
+    let { host, hostname } = new URL(destination.url);
+    if (!isIP(hostname.replace(/^\[|\]$/g, "")) && getUsableProxyUrl() && shouldBypassProxy(destination.url))
       gatewayLog("info", `telemetry relay: ${host} matches NO_PROXY; exports to it skip the proxy`);
   }
-  gatewayLog("info", `managed settings: ${r.managed ? "configured" : "not configured"}`);
+  gatewayLog("info", `managed settings: ${listenInfo.managed ? "configured" : "not configured"}`);
   gatewayLog(
     "info",
-    `upstream requests: at most ${r.outboundLimit} at once per process (set BUN_CONFIG_MAX_HTTP_REQUESTS to change)`,
+    `upstream requests: at most ${listenInfo.outboundLimit} at once per process (set BUN_CONFIG_MAX_HTTP_REQUESTS to change)`,
   );
   let filtered_2 = gatewayConfig.upstreams.filter((upstream) => upstream.provider !== "anthropic");
   if (gatewayConfig.timeouts.operator_set && filtered_2.length > 0)
     gatewayLog(
       "info",
-      `timeouts.upstream_ttfb_ms: ${gatewayConfig.timeouts.upstream_ttfb_ms} ms also applies to streaming and count_tokens requests on ${filtered_2.map((t) => t.name).join(", ")} (older gateways applied it to provider: anthropic upstreams only)`,
+      `timeouts.upstream_ttfb_ms: ${gatewayConfig.timeouts.upstream_ttfb_ms} ms also applies to streaming and count_tokens requests on ${filtered_2.map((upstream) => upstream.name).join(", ")} (older gateways applied it to provider: anthropic upstreams only)`,
     );
   let readinessGraceSeconds = gatewayConfig.store.readiness_grace_seconds;
   if (readinessGraceSeconds > 0)

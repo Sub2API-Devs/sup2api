@@ -46,18 +46,18 @@ var MS_PER_SECOND = 1000;
 //@ chunk-bss4k1z9.js:18236-18274 placement
 var RELEASE_BASE = /^(\d+)\.(\d+)\.(\d+)(-dev)?$/;
 //@ chunk-bss4k1z9.js:18274-18561 placement
-function versionMarkOf(e) {
-  let match = RELEASE_BASE.exec(e?.base ?? "");
+function versionMarkOf(version) {
+  let match = RELEASE_BASE.exec(version?.base ?? "");
   if (!match) return;
-  let o = Number(match[1]);
-  let r = Number(match[2]);
-  let n = Number(match[3]);
-  if (![o, r, n].every(Number.isSafeInteger)) return;
-  let timestamp = Date.parse(e?.builtAt ?? "");
+  let major = Number(match[1]);
+  let minor = Number(match[2]);
+  let patch = Number(match[3]);
+  if (![major, minor, patch].every(Number.isSafeInteger)) return;
+  let timestamp = Date.parse(version?.builtAt ?? "");
   return {
-    major: o,
-    minor: r,
-    patch: n,
+    major,
+    minor,
+    patch,
     isDev: match[4] !== undefined,
     ...(Number.isFinite(timestamp) && {
       builtAtS: Math.floor(timestamp / MS_PER_SECOND),
@@ -78,84 +78,84 @@ var versionProps = (version) =>
         }),
       };
 //@ chunk-bss4k1z9.js:18726-19272 placement
-var answered = (e) => ({
+var answered = (event) => ({
   entry: {
     event: "you_should_know_answered",
     props: {
-      answer: choiceOf(e.answer, ANSWERS),
-      ...msToAnswerProp(e.msToAnswer),
-      turn_in_progress: e.isTurnInProgress,
-      offers_shown: e.offersShown,
-      ...(e.iteration !== undefined && {
-        iteration: e.iteration,
+      answer: choiceOf(event.answer, ANSWERS),
+      ...msToAnswerProp(event.msToAnswer),
+      turn_in_progress: event.isTurnInProgress,
+      offers_shown: event.offersShown,
+      ...(event.iteration !== undefined && {
+        iteration: event.iteration,
       }),
-      ...(e.promptOrigin !== undefined && {
-        prompt_origin: choiceOf(e.promptOrigin, PROMPT_ORIGINS),
+      ...(event.promptOrigin !== undefined && {
+        prompt_origin: choiceOf(event.promptOrigin, PROMPT_ORIGINS),
       }),
-      ...(e.promptsSurvived !== undefined && {
-        prompts_survived: e.promptsSurvived,
+      ...(event.promptsSurvived !== undefined && {
+        prompts_survived: event.promptsSurvived,
       }),
-      ...(e.leftBy !== undefined && {
-        left_by: choiceOf(e.leftBy, LEFT_BY),
+      ...(event.leftBy !== undefined && {
+        left_by: choiceOf(event.leftBy, LEFT_BY),
       }),
-      ...versionProps(e.version),
-      ...(e.clearedBy !== undefined && {
-        cleared_by: choiceOf(e.clearedBy, CLEARED_BY),
+      ...versionProps(event.version),
+      ...(event.clearedBy !== undefined && {
+        cleared_by: choiceOf(event.clearedBy, CLEARED_BY),
       }),
-      ...(e.offVia !== undefined && {
-        off_via: choiceOf(e.offVia, OFF_VIA),
+      ...(event.offVia !== undefined && {
+        off_via: choiceOf(event.offVia, OFF_VIA),
       }),
-      ...lineKind(e.line),
-      ...tagOpener(e.tag),
+      ...lineKind(event.line),
+      ...tagOpener(event.tag),
     },
   },
 });
 //@ chunk-bss4k1z9.js:19272-19494 placement
-var explained = (e) => ({
+var explained = (event) => ({
   entry: {
     event: "you_should_know_explained",
     props: {
-      outcome: choiceOf(e.outcome, EXPLAINED_OUTCOMES),
-      direction: choiceOf(e.direction, EXPLAIN_DIRECTIONS),
-      latency_ms: e.latencyMs,
-      ...usageProps(e.usage),
+      outcome: choiceOf(event.outcome, EXPLAINED_OUTCOMES),
+      direction: choiceOf(event.direction, EXPLAIN_DIRECTIONS),
+      latency_ms: event.latencyMs,
+      ...usageProps(event.usage),
     },
   },
-  mark: markOf("learn_explain", e.outcome === "shown" ? "ok" : "bad", e.outcome),
+  mark: markOf("learn_explain", event.outcome === "shown" ? "ok" : "bad", event.outcome),
 });
 //@ chunk-bss4k1z9.js:19494-19639 placement
-var page = (e) => ({
+var page = (event) => ({
   entry: {
     event: "learn_page",
     props: {
-      outcome: choiceOf(e.outcome, PAGE_OUTCOMES),
-      fork_ms: e.forkMs,
-      total_ms: e.totalMs,
-      ...usageProps(e.usage),
+      outcome: choiceOf(event.outcome, PAGE_OUTCOMES),
+      fork_ms: event.forkMs,
+      total_ms: event.totalMs,
+      ...usageProps(event.usage),
     },
   },
-  mark: pageMark(e.outcome),
+  mark: pageMark(event.outcome),
 });
 //@ chunk-bss4k1z9.js:19639-19829 placement
-var proposed = (e) => ({
+var proposed = (event) => ({
   entry: {
     event: "you_should_know_proposed",
     props: {
-      outcome: choiceOf(e.outcome, PROPOSED_OUTCOMES),
-      ...tagOpener(e.tag),
-      step: e.step,
-      latency_ms: e.latencyMs,
-      ...usageProps(e.usage),
-      offers_shown: e.offersShown,
+      outcome: choiceOf(event.outcome, PROPOSED_OUTCOMES),
+      ...tagOpener(event.tag),
+      step: event.step,
+      latency_ms: event.latencyMs,
+      ...usageProps(event.usage),
+      offers_shown: event.offersShown,
     },
   },
-  mark: proposedMark(e),
+  mark: proposedMark(event),
 });
 //@ chunk-bss4k1z9.js:19829-19922 placement
-async function send(e, t) {
+async function send(event, sink) {
   try {
-    await t.log(e.entry);
-    if (e.mark) await t.mark(e.mark);
+    await sink.log(event.entry);
+    if (event.mark) await sink.mark(event.mark);
   } catch {
     return;
   }
@@ -163,10 +163,13 @@ async function send(e, t) {
 //@ chunk-bss4k1z9.js:19922-19931 placement
 var CLOCK_LENGTH = 8;
 //@ chunk-bss4k1z9.js:19931-20123 placement
-function checkLineOf(e) {
-  let t = (e.latencyMs / MS_PER_SECOND).toFixed(1);
-  let sliced = new Date(e.at).toTimeString().slice(0, CLOCK_LENGTH);
-  return `debug \xB7 check ${e.number} \xB7 step ${e.step} \xB7 ` + `${e.outcome} \xB7 ${t}s \xB7 ${sliced}`;
+function checkLineOf(check) {
+  let seconds = (check.latencyMs / MS_PER_SECOND).toFixed(1);
+  let sliced = new Date(check.at).toTimeString().slice(0, CLOCK_LENGTH);
+  return (
+    `debug \xB7 check ${check.number} \xB7 step ${check.step} \xB7 ` +
+    `${check.outcome} \xB7 ${seconds}s \xB7 ${sliced}`
+  );
 }
 export {
   CLOCK_LENGTH,

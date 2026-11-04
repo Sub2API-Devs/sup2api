@@ -42,9 +42,9 @@ import { waitForAttachmentFiles } from "../../bridge/attachmentFilesWait.js";
 
 //@ chunk-x1hcas72.js:1158-1434 placement
 /**
- * 可放置文件类型
+ * placeFilesByName 的预算常量：PLACEMENT_TIME_BUDGET_MS=3000 是单次放置的默认时间预算（不是文件数），MAX_COPIED_BYTES=134217728 是字节预算；名字曾按“文件类型/复制上限”误起。
  */
-var PLACEABLE_FILE_TYPES = 3000;
+var PLACEMENT_TIME_BUDGET_MS = 3000;
 var COPIED_BYTES_LIMIT = 134217728;
 var PLACEABLE_DATA_EXTENSIONS = new Set([
   "csv",
@@ -75,113 +75,123 @@ var PROJECT_FILE_NAMES = new Set([
 ]);
 var TEST_TEXT_FILE_RE = /^test.*\.txt$/;
 //@ chunk-x1hcas72.js:1434-1754 placement
-function fileNameRefusal(e) {
-  if (e.includes(posix.sep)) return "has_directory";
-  if (Buffer.byteLength(e) > MAX_HOME_FILE_NAME_LENGTH) return "too_long";
-  if (!isWellFormedString(e)) return "odd_spelling";
-  let l = homePathProblem(e);
-  if (l !== undefined) return l;
-  let o = foldName(e);
-  let index = o.lastIndexOf(".");
+function fileNameRefusal(name) {
+  if (name.includes(posix.sep)) return "has_directory";
+  if (Buffer.byteLength(name) > MAX_HOME_FILE_NAME_LENGTH) return "too_long";
+  if (!isWellFormedString(name)) return "odd_spelling";
+  let problem = homePathProblem(name);
+  if (problem !== undefined) return problem;
+  let folded = foldName(name);
+  let index = folded.lastIndexOf(".");
   if (index <= 0) return "no_suffix";
-  if (!PLACEABLE_DATA_EXTENSIONS.has(o.slice(index + 1))) return "not_data";
-  return PROJECT_FILE_NAMES.has(o) || TEST_TEXT_FILE_RE.test(o) ? "project_file" : undefined;
+  if (!PLACEABLE_DATA_EXTENSIONS.has(folded.slice(index + 1))) return "not_data";
+  return PROJECT_FILE_NAMES.has(folded) || TEST_TEXT_FILE_RE.test(folded) ? "project_file" : undefined;
 }
 //@ chunk-x1hcas72.js:1754-2415 placement
 /**
  * 按名放置单个文件
  */
-async function placeOneFile(homeFilesRoot, { fileUuid, name: o }, d) {
-  let r = await checkHomeTarget(homeFilesRoot, o);
-  if (r !== undefined)
+async function placeOneFile(homeDir, { fileUuid, name }, maxBytes) {
+  let targetCheck = await checkHomeTarget(homeDir, name);
+  if (targetCheck !== undefined)
     return {
-      outcome: r.outcome === "refused_name" ? `refused_${r.refusal}` : r.outcome,
+      outcome:
+        targetCheck.outcome === "refused_name" ? `refused_${targetCheck.refusal}` : targetCheck.outcome,
       bytes: 0,
     };
-  let t = writtenInUploadsDir(fileUuid, undefined);
-  if (t === undefined)
+  let uploadSource = writtenInUploadsDir(fileUuid, undefined);
+  if (uploadSource === undefined)
     return {
       outcome: "source_missing",
       bytes: 0,
     };
-  if (t.size > d)
+  if (uploadSource.size > maxBytes)
     return {
       outcome: "over_byte_budget",
       bytes: 0,
     };
-  let peerFileBounded = await readPeerFileBounded(t.path, t.size);
-  if (peerFileBounded === null)
+  let bytes = await readPeerFileBounded(uploadSource.path, uploadSource.size);
+  if (bytes === null)
     return {
       outcome: "source_unreadable",
       bytes: 0,
     };
-  if (computeContentHash(peerFileBounded) !== t.sha256)
+  if (computeContentHash(bytes) !== uploadSource.sha256)
     return {
       outcome: "source_changed",
       bytes: 0,
     };
-  let u = await placeBytesAsHomeFile(homeFilesRoot, o, peerFileBounded, undefined);
-  if (u.outcome === "placed")
+  let placeResult = await placeBytesAsHomeFile(homeDir, name, bytes, undefined);
+  if (placeResult.outcome === "placed")
     await notePlacedCopy(
-      homeFilesRoot,
+      homeDir,
       {
         fileUuid,
-        name: o,
+        name,
       },
-      t,
+      uploadSource,
     );
-  return u.outcome === "refused_name"
+  return placeResult.outcome === "refused_name"
     ? {
-        outcome: `refused_${u.refusal}`,
+        outcome: `refused_${placeResult.refusal}`,
         bytes: 0,
       }
     : {
-        outcome: u.outcome,
-        bytes: u.outcome === "placed" ? peerFileBounded.length : 0,
+        outcome: placeResult.outcome,
+        bytes: placeResult.outcome === "placed" ? bytes.length : 0,
       };
 }
 //@ chunk-x1hcas72.js:2415-2485 placement
-async function placeBytesAsHomeFile(e, l, o, d) {
-  return await withBytesInTemporaryFile(e, l, o, (r) => publishHomeFile(r, e, l, d));
+async function placeBytesAsHomeFile(homeDir, relativePath, bytes, judgedPaths) {
+  return await withBytesInTemporaryFile(homeDir, relativePath, bytes, (stagePath) =>
+    publishHomeFile(stagePath, homeDir, relativePath, judgedPaths),
+  );
 }
 //@ chunk-x1hcas72.js:2485-2748 placement
-async function withBytesInTemporaryFile(e, l, o, d) {
-  let joined = posix.join(e, `${stageTmpStem(l)}${Date.now()}.${Math.random().toString(36).slice(2)}`);
-  let t = await open(joined, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | READ_LIMITS, 384);
+async function withBytesInTemporaryFile(homeDir, relativePath, bytes, fn) {
+  let joined = posix.join(
+    homeDir,
+    `${stageTmpStem(relativePath)}${Date.now()}.${Math.random().toString(36).slice(2)}`,
+  );
+  let handle = await open(
+    joined,
+    constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | READ_LIMITS,
+    384,
+  );
   try {
     try {
-      await t.writeFile(o);
+      await handle.writeFile(bytes);
     } finally {
-      await t.close();
+      await handle.close();
     }
-    return await d(joined);
+    return await fn(joined);
   } finally {
     await unlink(joined).catch(() => {});
   }
 }
 //@ chunk-x1hcas72.js:2748-3151 placement
-async function notePlacedCopy(e, { fileUuid, name: o }, { size, sha256 }) {
-  let t = filesPlacedByNameRegistry();
-  let s = nfc(o);
-  let joined = posix.join(e, o);
-  let h = t.get(s);
-  t.delete(s);
-  let w = await lstat(joined).catch(() => {
+async function notePlacedCopy(homeDir, { fileUuid, name }, { size, sha256 }) {
+  let registry = filesPlacedByNameRegistry();
+  let registryKey = nfc(name);
+  let joined = posix.join(homeDir, name);
+  let previous = registry.get(registryKey);
+  registry.delete(registryKey);
+  let placedStat = await lstat(joined).catch(() => {
     return;
   });
-  if (w === undefined) return;
-  let S = t.size >= PLACED_BY_NAME_LIMITS && t.keys().next().value;
-  if (typeof S === "string") t.delete(S);
-  t.set(s, {
+  if (placedStat === undefined) return;
+  let oldestKey = registry.size >= PLACED_BY_NAME_LIMITS && registry.keys().next().value;
+  if (typeof oldestKey === "string") registry.delete(oldestKey);
+  registry.set(registryKey, {
     path: joined,
     fileUuid: fileUuid.toLowerCase(),
-    dev: w.dev,
-    ino: w.ino,
-    mtimeMs: Math.floor(w.mtimeMs),
+    dev: placedStat.dev,
+    ino: placedStat.ino,
+    mtimeMs: Math.floor(placedStat.mtimeMs),
     size,
     sha256,
-    ...(h !== undefined &&
-      h.path !== joined && {
+    ...(previous !== undefined &&
+      previous.path !== joined && {
         ambiguous: true,
       }),
   });
@@ -200,64 +210,73 @@ var EMPTY_PLACEMENT_STATS = {
 /**
  * 按名字把文件放到用户 home 工作文件夹。
  */
-async function placeFilesByName(e, l, o = PLACEABLE_FILE_TYPES, d = COPIED_BYTES_LIMIT) {
-  let { fileNames } = e;
+async function placeFilesByName(
+  args,
+  runContext,
+  timeBudgetMs = PLACEMENT_TIME_BUDGET_MS,
+  byteLimit = COPIED_BYTES_LIMIT,
+) {
+  let { fileNames } = args;
   if (fileNames === undefined) return;
   let startTime = performance.now();
-  let { outcome, filesWait, counts, lastErrorCode, ...S } =
+  let { outcome, filesWait, counts, lastErrorCode, ...statsRest } =
     fileNames === "malformed"
       ? {
           ...EMPTY_PLACEMENT_STATS,
           outcome: "malformed",
         }
-      : await placeFilesUnchecked(fileNames, e, l, o, d).catch((error) => ({
+      : await placeFilesUnchecked(fileNames, args, runContext, timeBudgetMs, byteLimit).catch((error) => ({
           ...EMPTY_PLACEMENT_STATS,
           outcome: "failed",
           lastErrorCode: sanitizeErrnoForTelemetry(error) ?? lit("unknown"),
         }));
-  let C = fileNames === "malformed" ? 0 : fileNames.length;
-  let F = {
+  let filesListed = fileNames === "malformed" ? 0 : fileNames.length;
+  let eventFields = {
     outcome: fromEnum(outcome),
     files_wait: fromEnum(filesWait),
-    files_wait_ms: S.filesWaitMs,
+    files_wait_ms: statsRest.filesWaitMs,
     duration_ms: Math.round(performance.now() - startTime),
-    approx_copied_bytes: Number(S.copiedBytes.toPrecision(2)),
-    files_listed: C,
-    files_named_in_call: S.namedInCall,
-    files_named_in_call_placed: S.namedInCallPlaced,
-    files_named_in_call_already_present: S.namedInCallAlreadyPresent,
-    ...identityMap(counts, (y, E) => `files_${E}`),
+    approx_copied_bytes: Number(statsRest.copiedBytes.toPrecision(2)),
+    files_listed: filesListed,
+    files_named_in_call: statsRest.namedInCall,
+    files_named_in_call_placed: statsRest.namedInCallPlaced,
+    files_named_in_call_already_present: statsRest.namedInCallAlreadyPresent,
+    ...identityMap(counts, (outcomeName, outcomeCount) => `files_${outcomeCount}`),
     ...(lastErrorCode !== undefined && {
       last_error_code: lastErrorCode,
     }),
   };
-  logEvent("tengu_turn_handoff_files_by_name", F);
+  logEvent("tengu_turn_handoff_files_by_name", eventFields);
   logForDiagnosticsNoPII(
     lastErrorCode !== undefined || outcome === "malformed" ? "warn" : "info",
     "turn_handoff_files_by_name",
-    F,
+    eventFields,
   );
-  let I = (counts.placed ?? 0) + (counts.already_present ?? 0) + (counts.present_under_another_name ?? 0);
-  let T = sumByAliasField(Object.entries(counts), ([y, E]) =>
-    y.startsWith("refused_") || y === "repeated_name" || y === "path_occupied" ? E : 0,
+  let placedOrPresent =
+    (counts.placed ?? 0) + (counts.already_present ?? 0) + (counts.present_under_another_name ?? 0);
+  let refusedCount = sumByAliasField(Object.entries(counts), ([outcomeName, outcomeCount]) =>
+    outcomeName.startsWith("refused_") || outcomeName === "repeated_name" || outcomeName === "path_occupied"
+      ? outcomeCount
+      : 0,
   );
   if (outcome === "aborted");
   else if (outcome === "not_applicable") logFeatureSad("ccr_turn_handoff_files_by_name", outcome);
   else if (outcome !== "finished") logFeatureBad("ccr_turn_handoff_files_by_name", outcome);
-  else if (T === C) logFeatureSad("ccr_turn_handoff_files_by_name", "all_skipped_by_rule");
-  else if (I + T === C) logFeatureOk("ccr_turn_handoff_files_by_name");
-  else if (I > 0) logFeatureSad("ccr_turn_handoff_files_by_name", "some_files_absent");
+  else if (refusedCount === filesListed)
+    logFeatureSad("ccr_turn_handoff_files_by_name", "all_skipped_by_rule");
+  else if (placedOrPresent + refusedCount === filesListed) logFeatureOk("ccr_turn_handoff_files_by_name");
+  else if (placedOrPresent > 0) logFeatureSad("ccr_turn_handoff_files_by_name", "some_files_absent");
   else logFeatureBad("ccr_turn_handoff_files_by_name", "all_files_absent");
 }
 //@ chunk-x1hcas72.js:4680-6337 placement
 /**
  * 按名放置文件的主流程
  */
-async function placeFilesUnchecked(fileNames, l, o, d, r) {
+async function placeFilesUnchecked(fileNames, args, runContext, timeBudgetMs, byteBudget) {
   let homeFilesRoot = getHomeFilesRoot();
-  let [s, u] = await Promise.all(
-    [getCwd(), homeFilesRoot].map((n) =>
-      realpath(n).catch(() => {
+  let [cwdReal, homeRootReal] = await Promise.all(
+    [getCwd(), homeFilesRoot].map((dir) =>
+      realpath(dir).catch(() => {
         return;
       }),
     ),
@@ -265,80 +284,89 @@ async function placeFilesUnchecked(fileNames, l, o, d, r) {
   if (
     !isClaudeAiChatOrigin() ||
     !isFirstPartyRemoteSession(env.CLAUDE_CODE_REMOTE_SESSION_ID, env.CLAUDE_CODE_ENVIRONMENT_KIND) ||
-    u === undefined ||
-    s !== u
+    homeRootReal === undefined ||
+    cwdReal !== homeRootReal
   )
     return {
       ...EMPTY_PLACEMENT_STATS,
       outcome: "not_applicable",
     };
   let startTime = performance.now();
-  let filesWait = await waitForAttachmentFiles(o);
+  let filesWait = await waitForAttachmentFiles(runContext);
   let filesWaitMs = Math.round(performance.now() - startTime);
   await sweepStaleStageTmps(homeFilesRoot, STAGE_TMP_PREFIX);
   await ensurePlacedByNameRead();
-  let last = l.messages.at(-1);
-  let F =
+  let last = args.messages.at(-1);
+  let toolInputStrings =
     last?.type === "assistant" && Array.isArray(last.message.content)
-      ? last.message.content.flatMap((n) =>
-          n.type === "tool_use" &&
-          l.toolUseIDs.includes(n.id) &&
-          typeof n.input === "object" &&
-          n.input !== null
-            ? Object.values(n.input).flatMap((p) =>
-                typeof p === "string" ? [p, p.replaceAll("\\", "")] : [],
+      ? last.message.content.flatMap((block) =>
+          block.type === "tool_use" &&
+          args.toolUseIDs.includes(block.id) &&
+          typeof block.input === "object" &&
+          block.input !== null
+            ? Object.values(block.input).flatMap((inputValue) =>
+                typeof inputValue === "string" ? [inputValue, inputValue.replaceAll("\\", "")] : [],
               )
             : [],
         )
       : [];
-  let I = new Set(fileNames.filter(({ name: n }) => n !== "" && F.some((p) => p.includes(n))));
-  let T = new Map();
-  for (let { name: n, fileUuid } of fileNames) T.set(n, (T.get(n) ?? new Set()).add(fileUuid.toLowerCase()));
-  let y = {};
-  let E = new Set();
-  let O = 0;
-  let M = 0;
-  let L = 0;
-  let x;
-  let B = false;
-  let D = performance.now() + d;
-  for (let n of fileNames.toSorted((p, _) => Number(I.has(_)) - Number(I.has(p)))) {
-    if (o.aborted) {
-      B = true;
+  let namedInCall = new Set(
+    fileNames.filter(
+      ({ name: fileName }) =>
+        fileName !== "" && toolInputStrings.some((inputString) => inputString.includes(fileName)),
+    ),
+  );
+  let nameToUuids = new Map();
+  for (let { name: namedEntry, fileUuid } of fileNames)
+    nameToUuids.set(namedEntry, (nameToUuids.get(namedEntry) ?? new Set()).add(fileUuid.toLowerCase()));
+  let counts = {};
+  let placedUuids = new Set();
+  let copiedBytes = 0;
+  let namedInCallPlaced = 0;
+  let namedInCallAlreadyPresent = 0;
+  let lastErrorCode;
+  let aborted = false;
+  let deadline = performance.now() + timeBudgetMs;
+  for (let fileEntry of fileNames.toSorted(
+    (leftEntry, rightEntry) => Number(namedInCall.has(rightEntry)) - Number(namedInCall.has(leftEntry)),
+  )) {
+    if (runContext.aborted) {
+      aborted = true;
       break;
     }
-    let p = fileNameRefusal(n.name);
-    let _;
-    if (p !== undefined) _ = `refused_${p}`;
-    else if (T.get(n.name)?.size !== 1) _ = "repeated_name";
-    else if (E.has(n.fileUuid.toLowerCase())) _ = "present_under_another_name";
-    else if (performance.now() > D) _ = "over_time_budget";
+    let refusal = fileNameRefusal(fileEntry.name);
+    let fileOutcome;
+    if (refusal !== undefined) fileOutcome = `refused_${refusal}`;
+    else if (nameToUuids.get(fileEntry.name)?.size !== 1) fileOutcome = "repeated_name";
+    else if (placedUuids.has(fileEntry.fileUuid.toLowerCase())) fileOutcome = "present_under_another_name";
+    else if (performance.now() > deadline) fileOutcome = "over_time_budget";
     else
       try {
-        let P = await placeOneFile(homeFilesRoot, n, r - O);
-        _ = P.outcome;
-        O += P.bytes;
+        let placeResult = await placeOneFile(homeFilesRoot, fileEntry, byteBudget - copiedBytes);
+        fileOutcome = placeResult.outcome;
+        copiedBytes += placeResult.bytes;
       } catch (error) {
-        x = sanitizeErrnoForTelemetry(error) ?? lit("unknown");
-        _ = "copy_failed";
+        lastErrorCode = sanitizeErrnoForTelemetry(error) ?? lit("unknown");
+        fileOutcome = "copy_failed";
       }
-    y[_] = (y[_] ?? 0) + 1;
-    if (_ === "placed" || _ === "already_present") E.add(n.fileUuid.toLowerCase());
-    if (I.has(n) && _ === "placed") M++;
-    else if (I.has(n) && _ === "already_present") L++;
+    counts[fileOutcome] = (counts[fileOutcome] ?? 0) + 1;
+    if (fileOutcome === "placed" || fileOutcome === "already_present")
+      placedUuids.add(fileEntry.fileUuid.toLowerCase());
+    if (namedInCall.has(fileEntry) && fileOutcome === "placed") namedInCallPlaced++;
+    else if (namedInCall.has(fileEntry) && fileOutcome === "already_present") namedInCallAlreadyPresent++;
   }
-  if ((y.placed ?? 0) > 0) await loadFilesPlacedByName();
+  if ((counts.placed ?? 0) > 0) await loadFilesPlacedByName();
   return {
-    outcome: B ? "aborted" : "finished",
+    outcome: aborted ? "aborted" : "finished",
     filesWait,
     filesWaitMs,
-    copiedBytes: O,
-    namedInCall: I.size,
-    namedInCallPlaced: M,
-    namedInCallAlreadyPresent: L,
-    counts: y,
-    ...(x !== undefined && {
-      lastErrorCode: x,
+    copiedBytes,
+    namedInCall: namedInCall.size,
+    namedInCallPlaced,
+    namedInCallAlreadyPresent,
+    counts,
+    ...(lastErrorCode !== undefined && {
+      lastErrorCode,
     }),
   };
 }
@@ -348,4 +376,5 @@ export {
   fileNameRefusal,
   withBytesInTemporaryFile,
   notePlacedCopy,
+  placeFilesByName,
 };

@@ -39,13 +39,13 @@ function takeArrowBoost(jediTerm) {
   return pendingArrowBoost;
 }
 //@ chunk-24t3dkzb.js:5756-5957 placement
-function isJediTermScrollBugConfirmed(r) {
-  if (r.bugConfirmed) return true;
+function isJediTermScrollBugConfirmed(state) {
+  if (state.bugConfirmed) return true;
   if (
     process.env.INTELLIJ_TERMINAL_COMMAND_BLOCKS_REWORKED !== undefined ||
     process.env.INTELLIJ_TERMINAL_COMMAND_BLOCKS !== undefined
   ) {
-    r.bugConfirmed = true;
+    state.bugConfirmed = true;
     return true;
   }
   return false;
@@ -65,38 +65,38 @@ function fixJediTermWheelInput(state, items, now, onBugDetected) {
   }
   let rewritten = null;
   for (let k = 0; k < items.length; k++) {
-    let a = items[k];
-    if (a.kind !== "key") {
-      rewritten?.push(a);
+    let item = items[k];
+    if (item.kind !== "key") {
+      rewritten?.push(item);
       continue;
     }
-    if (a.name === "wheelup" || a.name === "wheeldown") {
+    if (item.name === "wheelup" || item.name === "wheeldown") {
       if (now - state.lastWheelTime > WHEEL_GESTURE_GAP_MS) {
         state.lastWheelDownTime = 0;
         resetJediTermGesture(state);
       }
       state.lastWheelTime = now;
-      if (a.name === "wheeldown") state.lastWheelDownTime = now;
+      if (item.name === "wheeldown") state.lastWheelDownTime = now;
       if (
-        a.name === "wheelup" &&
+        item.name === "wheelup" &&
         now - state.lastWheelDownTime < WHEEL_FLIP_MS &&
         isJediTermScrollBugConfirmed(state)
       ) {
         rewritten ??= items.slice(0, k);
         rewritten.push({
-          ...a,
+          ...item,
           name: "wheeldown",
         });
         continue;
       }
-      rewritten?.push(a);
+      rewritten?.push(item);
       continue;
     }
     if (
-      (a.name === "up" || a.name === "down") &&
-      !a.ctrl &&
-      !a.meta &&
-      !a.shift &&
+      (item.name === "up" || item.name === "down") &&
+      !item.ctrl &&
+      !item.meta &&
+      !item.shift &&
       now - state.lastWheelTime < ARROW_AFTER_WHEEL_MS
     ) {
       if (!state.notified) {
@@ -107,7 +107,7 @@ function fixJediTermWheelInput(state, items, now, onBugDetected) {
       rewritten ??= items.slice(0, k);
       continue;
     }
-    rewritten?.push(a);
+    rewritten?.push(item);
   }
   return rewritten ?? items;
 }

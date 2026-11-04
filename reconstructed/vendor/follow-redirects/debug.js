@@ -5,11 +5,11 @@
  * pieces: chunk-h6b7mazd.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_debug_2 } from "../debug/src/index.js";
 
 //@ chunk-h6b7mazd.js:37343-37518 cjs-fingerprint
-var require_debug = x(function (cjsExports, cjsModule) {
+var require_debug = __commonJS(function (cjsExports, cjsModule) {
   var debug;
   cjsModule.exports = function () {
     if (!debug) {

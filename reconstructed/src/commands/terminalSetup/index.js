@@ -51,18 +51,18 @@ var terminalSetupCommandDefinition = {
 };
 var terminalSetupCommand = terminalSetupCommandDefinition;
 //@ chunk-e6aww6q8.js:1763428-1763678 placement
-function waitForStoreValue(e, n, r) {
-  if (e.getSnapshot() === n || r?.aborted) return Promise.resolve();
+function waitForStoreValue(store, value, signal) {
+  if (store.getSnapshot() === value || signal?.aborted) return Promise.resolve();
   return new Promise((resolve) => {
-    let h = () => {
-      y();
-      r?.removeEventListener("abort", h);
+    let finish = () => {
+      unsubscribe();
+      signal?.removeEventListener("abort", finish);
       resolve();
     };
-    let y = e.subscribe(() => {
-      if (e.getSnapshot() === n) h();
+    let unsubscribe = store.subscribe(() => {
+      if (store.getSnapshot() === value) finish();
     });
-    r?.addEventListener("abort", h, {
+    signal?.addEventListener("abort", finish, {
       once: true,
     });
   });
@@ -71,14 +71,14 @@ function waitForStoreValue(e, n, r) {
 /**
  * 等待 store 值变为 false。
  */
-function waitForFalse(e, signal) {
-  return waitForStoreValue(e, false, signal);
+function waitForFalse(store, signal) {
+  return waitForStoreValue(store, false, signal);
 }
 //@ chunk-e6aww6q8.js:1763715-1763752 placement
 /**
  * 等待 store 值变为 true。
  */
-function waitForTrue(turnActivity, signal) {
-  return waitForStoreValue(turnActivity, true, signal);
+function waitForTrue(store, signal) {
+  return waitForStoreValue(store, true, signal);
 }
 export { waitForFalse, waitForTrue, stubTerminalSetupCommand, terminalSetupCommand };

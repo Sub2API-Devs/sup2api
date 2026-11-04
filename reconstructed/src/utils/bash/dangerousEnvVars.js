@@ -44,10 +44,11 @@ var GIT_REDIRECT_ENV_PATTERN =
   "GIT_(?:DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|NAMESPACE|REFERENCE_BACKEND|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|CONFIG\\w*)";
 var regExp_5 = new RegExp(`^${GIT_REDIRECT_ENV_PATTERN}${SHELL_ASSIGNMENT_SUFFIX}`, "i");
 //@ chunk-0sfjpx19.js:131782-131919 placement
-function buildOptionAbbrevPattern(e, n) {
-  let r = "";
-  for (let j = e.length - 1; j >= n; j--) r = `(?:${e[j] === "-" ? "-" : e[j]}${r})?`;
-  return `${e.slice(0, n)}${r}(?![A-Za-z0-9_-])`;
+function buildOptionAbbrevPattern(optionName, prefixLength) {
+  let pattern = "";
+  for (let j = optionName.length - 1; j >= prefixLength; j--)
+    pattern = `(?:${optionName[j] === "-" ? "-" : optionName[j]}${pattern})?`;
+  return `${optionName.slice(0, prefixLength)}${pattern}(?![A-Za-z0-9_-])`;
 }
 //@ chunk-0sfjpx19.js:131919-132246 placement
 /**

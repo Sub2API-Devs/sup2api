@@ -56,8 +56,8 @@ async function getConfiguredGlobalGitignorePath(cwd) {
 /**
  * 全局 gitignore 路径：core.excludesfile，否则 $XDG_CONFIG_HOME/git/ignore 或 ~/.config/git/ignore。
  */
-function getGlobalGitignorePath(e) {
-  let trimmed = e.trim();
+function getGlobalGitignorePath(excludesFile) {
+  let trimmed = excludesFile.trim();
   if (trimmed) {
     if (trimmed === "~" || trimmed.startsWith("~/")) return join(homedir(), trimmed.slice(2));
     if (isAbsolute(trimmed)) return trimmed;
@@ -79,8 +79,8 @@ async function addFileGlobRuleToGitignore(filename, cwd = getCwd()) {
       };
     let replaced = filename.replaceAll("\\", "/");
     let gitignoreEntry = `**/${replaced}`;
-    let S = replaced.endsWith("/") ? `${replaced}sample-file.txt` : replaced;
-    if (await isPathGitignoredBool(S, cwd))
+    let probePath = replaced.endsWith("/") ? `${replaced}sample-file.txt` : replaced;
+    if (await isPathGitignoredBool(probePath, cwd))
       return {
         written: false,
         effective: true,
@@ -98,9 +98,9 @@ async function addFileGlobRuleToGitignore(filename, cwd = getCwd()) {
           })
         ).includes(gitignoreEntry)
       ) {
-        let O = (await isTrackedInIndex(S, cwd)) ? "already_tracked" : "excludesfile_not_read";
+        let reason = (await isTrackedInIndex(probePath, cwd)) ? "already_tracked" : "excludesfile_not_read";
         logForDebugging(
-          `[gitignore] '${gitignoreEntry}' already present in ${globalGitignorePath} but git check-ignore reports not-ignored \u2014 ${describeGitignoreIneffective(O, S)}`,
+          `[gitignore] '${gitignoreEntry}' already present in ${globalGitignorePath} but git check-ignore reports not-ignored \u2014 ${describeGitignoreIneffective(reason, probePath)}`,
           {
             level: "warn",
           },
@@ -108,7 +108,7 @@ async function addFileGlobRuleToGitignore(filename, cwd = getCwd()) {
         return {
           written: false,
           effective: false,
-          reason: O,
+          reason,
         };
       }
       await appendFile(
@@ -127,10 +127,10 @@ ${gitignoreEntry}
         );
       else throw e;
     }
-    if (!(await isPathGitignoredBool(S, cwd))) {
-      let P = (await isTrackedInIndex(S, cwd)) ? "already_tracked" : "excludesfile_not_read";
+    if (!(await isPathGitignoredBool(probePath, cwd))) {
+      let reason = (await isTrackedInIndex(probePath, cwd)) ? "already_tracked" : "excludesfile_not_read";
       logForDebugging(
-        `[gitignore] wrote '${gitignoreEntry}' to ${globalGitignorePath} but git check-ignore still reports not-ignored \u2014 ${describeGitignoreIneffective(P, S)}`,
+        `[gitignore] wrote '${gitignoreEntry}' to ${globalGitignorePath} but git check-ignore still reports not-ignored \u2014 ${describeGitignoreIneffective(reason, probePath)}`,
         {
           level: "warn",
         },
@@ -138,7 +138,7 @@ ${gitignoreEntry}
       return {
         written: true,
         effective: false,
-        reason: P,
+        reason,
       };
     }
     return {
@@ -159,10 +159,10 @@ ${gitignoreEntry}
   }
 }
 //@ chunk-q8cqcff6.js:6612-6763 placement
-async function isTrackedInIndex(e, cwd) {
+async function isTrackedInIndex(path, cwd) {
   let { code } = await execFileNoThrowWithCwd(
     "git",
-    [...GIT_SAFE_GLOBAL_ARGS, "ls-files", "--error-unmatch", "--", e],
+    [...GIT_SAFE_GLOBAL_ARGS, "ls-files", "--error-unmatch", "--", path],
     {
       preserveOutputOnError: false,
       cwd,
@@ -172,9 +172,9 @@ async function isTrackedInIndex(e, cwd) {
   return code === 0;
 }
 //@ chunk-q8cqcff6.js:6763-6929 placement
-function describeGitignoreIneffective(e, n) {
-  return e === "already_tracked"
-    ? `'${n}' is tracked in the index; gitignore rules do not apply to tracked files`
+function describeGitignoreIneffective(reason, pattern) {
+  return reason === "already_tracked"
+    ? `'${pattern}' is tracked in the index; gitignore rules do not apply to tracked files`
     : "core.excludesfile may point elsewhere";
 }
 export { addFileGlobRuleToGitignore, isPathGitignored, isPathGitignoredBool };

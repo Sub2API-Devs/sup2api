@@ -11,6 +11,7 @@
 import { createSignal } from "../../utils/signal.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { logForDebugging } from "../../utils/debug.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-n3mhm88b.js:298-516 placement
 /**
@@ -18,44 +19,48 @@ import { logForDebugging } from "../../utils/debug.js";
  */
 function createBufferedEmitter() {
   let signal = createSignal();
-  let e = new Map();
-  let o = 0;
+  let buffered = new Map();
+  let subscriberCount = 0;
   return {
-    emit(i, s) {
-      if (o === 0) {
-        e.set(i, s);
+    emit(key, payload) {
+      if (subscriberCount === 0) {
+        buffered.set(key, payload);
         return;
       }
-      signal.emit(i, s);
+      signal.emit(key, payload);
     },
-    subscribe(i) {
-      o++;
-      let s = [...e];
-      e.clear();
-      for (let [g, l] of s) i(g, l);
-      let c = signal.subscribe(i);
-      let n = true;
+    subscribe(listener) {
+      subscriberCount++;
+      let replayed = [...buffered];
+      buffered.clear();
+      for (let [key, payload] of replayed) listener(key, payload);
+      let unsubscribe = signal.subscribe(listener);
+      let active = true;
       return () => {
-        if (n) {
-          n = false;
-          o--;
-          c();
+        if (active) {
+          active = false;
+          subscriberCount--;
+          unsubscribe();
         }
       };
     },
   };
 }
 //@ chunk-n3mhm88b.js:516-559 placement
-var deviceToolNotices = new SessionRootSlot(createBufferedEmitter);
-var DEVICE_MCP_NOT_NOW_NOTICE_KEY = "device-mcp-not-now";
+var deviceToolNotices; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+var DEVICE_MCP_NOT_NOW_NOTICE_KEY;
+deferInit("chunk-n3mhm88b.js:516", () => {
+  deviceToolNotices = new SessionRootSlot(createBufferedEmitter);
+  DEVICE_MCP_NOT_NOW_NOTICE_KEY = "device-mcp-not-now";
+});
 //@ chunk-n3mhm88b.js:559-641 placement
 /**
  * 设备工具通知的发射器。
  */
-function deviceToolNoticesTo(r) {
-  return (e, o) => {
-    logForDebugging(`[remote-tools] ${e}: ${o}`);
-    deviceToolNotices.of(r).emit(e, o);
+function deviceToolNoticesTo(host) {
+  return (key, message) => {
+    logForDebugging(`[remote-tools] ${key}: ${message}`);
+    deviceToolNotices.of(host).emit(key, message);
   };
 }
 export { deviceToolNotices, DEVICE_MCP_NOT_NOW_NOTICE_KEY, deviceToolNoticesTo };

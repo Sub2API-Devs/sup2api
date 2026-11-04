@@ -8,8 +8,17 @@
  * pieces: chunk-6vnxsn99.js (1), chunk-wyqg6m3h.js (10)
  * attribution: placement 11
  */
-import { Ar } from "../../../../runtime/bun-runtime.js";
+import { isRemoteSessionAvailable } from "../../../remote/remoteMode.js";
+import {
+  getBuiltinPlugin,
+  getBuiltinPlugins,
+  registerBuiltinPlugin,
+  builtinHooksModuleRef,
+  getModsFolderPath,
+} from "../../builtinPlugins.js";
 import { CC_PLUGIN_DIFF } from "../diff/index.js";
+import { isBundledModLive } from "../../../components/permissions/AskUserQuestionPermissionRequest/uiRenderHook.js";
+import { __export } from "../../../../runtime/bun-runtime.js";
 import { STORE_ID } from "./DiffPane.js";
 import { availabilityFlag, diffPaneHooks } from "./hooks.js";
 import { storeEventQueued, markPaneAsked, paneKey } from "../../functionHooks/panes.js";
@@ -23,47 +32,51 @@ import {
   getFeatureValue_CACHED_MAY_BE_STALE,
 } from "../../../services/analytics/growthbook.js";
 import { getGlobalConfig } from "../../../utils/config.js";
-import {
-  registerBuiltinPlugin,
-  builtinHooksModuleRef,
-  getModsFolderPath,
-  getBuiltinPlugin,
-  getBuiltinPlugins,
-} from "../../builtinPlugins.js";
 import { diffPaneManifest } from "./manifest.js";
-import { isRemoteSessionAvailable } from "../../../remote/remoteMode.js";
-import { isBundledModLive } from "../../../components/permissions/AskUserQuestionPermissionRequest/uiRenderHook.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
+//@ chunk-6vnxsn99.js:62167-62273 placement
+function isDiffPaneAvailable() {
+  return (
+    !isRemoteSessionAvailable() &&
+    getBuiltinPlugin(CC_PLUGIN_DIFF)?.isAvailable?.() === true &&
+    getBuiltinPlugins().enabled.some((plugin) => plugin.name === CC_PLUGIN_DIFF) &&
+    isBundledModLive(CC_PLUGIN_DIFF)
+  );
+}
 //@ chunk-wyqg6m3h.js:5213-5223 placement
 var diffPaneModule = {};
 //@ chunk-wyqg6m3h.js:5223-5483 placement
-Ar(diffPaneModule, {
-  MOD_FOLDER: () => MOD_FOLDER,
-  PLUGIN_DESCRIPTION: () => PLUGIN_DESCRIPTION,
-  PLUGIN_NAME: () => CC_PLUGIN_DIFF,
-  STORE_ID: () => STORE_ID,
-  availabilityFlag: () => availabilityFlag,
-  carryPanelPreference: () => carryPanelPreference,
-  default: () => diffPaneModule,
-  isAvailable: () => isAvailable,
-  isOfferedNow: () => isOfferedNow,
-  isOnByDefault: () => isOnByDefault,
-  isPaneDrawable: () => isPaneDrawable,
-  registerPlugin: () => registerPlugin,
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wyqg6m3h.js:5223", () => {
+  __export(diffPaneModule, {
+    MOD_FOLDER: () => MOD_FOLDER,
+    PLUGIN_DESCRIPTION: () => PLUGIN_DESCRIPTION,
+    PLUGIN_NAME: () => CC_PLUGIN_DIFF,
+    STORE_ID: () => STORE_ID,
+    availabilityFlag: () => availabilityFlag,
+    carryPanelPreference: () => carryPanelPreference,
+    default: () => diffPaneModule,
+    isAvailable: () => isAvailable,
+    isOfferedNow: () => isOfferedNow,
+    isOnByDefault: () => isOnByDefault,
+    isPaneDrawable: () => isPaneDrawable,
+    registerPlugin: () => registerPlugin,
+  });
 });
 //@ chunk-wyqg6m3h.js:64119-64346 placement = outputSchema (0.36)
 /**
  * 读取 diff 面板的已保存开关（缺省时把内置面板的旧偏好迁过来），开启时注册 diff 插件面板。与 ConfigTool 无关。
  */
 async function carryPanelPreference(diffSidebarOpen) {
-  let o = await storeEventQueued(
+  let storedOpen = await storeEventQueued(
     {
       event: "get",
       key: STORE_OPEN_KEY,
     },
     STORE_ID,
   );
-  if (o === undefined && diffSidebarOpen !== undefined) {
+  if (storedOpen === undefined && diffSidebarOpen !== undefined) {
     await storeEventQueued(
       {
         event: "set",
@@ -74,7 +87,7 @@ async function carryPanelPreference(diffSidebarOpen) {
     );
     logForDebugging(`diff: carried the built-in panel's saved preference (${diffSidebarOpen})`);
   }
-  if ((o ?? diffSidebarOpen) === true) markPaneAsked(paneKey(CC_PLUGIN_DIFF, PANE_ID));
+  if ((storedOpen ?? diffSidebarOpen) === true) markPaneAsked(paneKey(CC_PLUGIN_DIFF, PANE_ID));
 }
 //@ chunk-wyqg6m3h.js:64346-64356 placement
 var isOnByDefault = true;
@@ -106,13 +119,15 @@ function registerPlugin() {
     ),
   });
 }
-//@ chunk-6vnxsn99.js:62167-62273 placement
-function isDiffPaneAvailable() {
-  return (
-    !isRemoteSessionAvailable() &&
-    getBuiltinPlugin(CC_PLUGIN_DIFF)?.isAvailable?.() === true &&
-    getBuiltinPlugins().enabled.some((e) => e.name === CC_PLUGIN_DIFF) &&
-    isBundledModLive(CC_PLUGIN_DIFF)
-  );
-}
-export { isDiffPaneAvailable };
+export {
+  isDiffPaneAvailable,
+  MOD_FOLDER,
+  PLUGIN_DESCRIPTION,
+  carryPanelPreference,
+  diffPaneModule,
+  isAvailable,
+  isOfferedNow,
+  isOnByDefault,
+  isPaneDrawable,
+  registerPlugin,
+};

@@ -5,115 +5,109 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-xkyzvvf1.js (8)
- * attribution: placement 8
+ * pieces: chunk-xkyzvvf1.js (7)
+ * attribution: placement 7
  */
-import { hu } from "../../vendor/zod/v4/classic/schemas.js";
+import { custom } from "../../vendor/zod/v4/classic/schemas.js";
 
-//@ chunk-xkyzvvf1.js:227-257 placement
-/**
- * 无效工具名使用的占位文本。
- */
-var INVALID_TOOL_NAME_TEXT = "(invalid tool name)";
 //@ chunk-xkyzvvf1.js:257-285 placement
 /**
  * 深度冻结工具名（占位实现，转调 hu）。
  */
-function deepFreezeToolName(e) {
-  return hu(e);
+function deepFreezeToolName(toolName) {
+  return custom(toolName);
 }
 //@ chunk-xkyzvvf1.js:285-310 placement
 /**
  * 原样返回输入（占位）。
  */
-function identityFreeze(e) {
-  return e;
+function identityFreeze(value) {
+  return value;
 }
 //@ chunk-xkyzvvf1.js:310-335 placement
 /**
  * 原样返回输入（占位）。
  */
-function identityFreeze2(e) {
-  return e;
+function identityFreeze2(value) {
+  return value;
 }
 //@ chunk-xkyzvvf1.js:335-360 placement
 /**
  * 原样返回输入（占位）。
  */
-function identityFreeze3(e) {
-  return e;
+function identityFreeze3(value) {
+  return value;
 }
 //@ chunk-xkyzvvf1.js:360-385 placement
 /**
  * 原样返回输入（占位）。
  */
-function identityFreeze4(e) {
-  return e;
+function identityFreeze4(value) {
+  return value;
 }
 //@ chunk-xkyzvvf1.js:385-857 placement
-function mintDisplayedUpdates(e) {
-  if (Object.getPrototypeOf(e) !== Array.prototype)
+function mintDisplayedUpdates(input) {
+  if (Object.getPrototypeOf(input) !== Array.prototype)
     throw TypeError("mintDisplayedUpdates: non-plain array in mint input \u2014 plain data only");
-  if (!Number.isSafeInteger(e.length) || e.length < 0)
+  if (!Number.isSafeInteger(input.length) || input.length < 0)
     throw TypeError("mintDisplayedUpdates: non-integer length in mint input \u2014 plain data only");
-  let o = [];
-  for (let i = 0; i < e.length; i++) {
-    if (!(i in e)) throw TypeError("mintDisplayedUpdates: sparse mint input \u2014 plain data only");
-    o.push(deepFreezePlainData(e[i]));
+  let frozen = [];
+  for (let i = 0; i < input.length; i++) {
+    if (!(i in input)) throw TypeError("mintDisplayedUpdates: sparse mint input \u2014 plain data only");
+    frozen.push(deepFreezePlainData(input[i]));
   }
-  return Object.freeze(o);
+  return Object.freeze(frozen);
 }
 //@ chunk-xkyzvvf1.js:857-2216 placement
 /**
  * 深度冻结纯数据（拒绝函数、非纯原型、稀疏数组）
  */
-function deepFreezePlainData(e, o = new WeakMap()) {
-  if (typeof e === "function")
+function deepFreezePlainData(value, seen = new WeakMap()) {
+  if (typeof value === "function")
     throw TypeError("deepFreezePlainData: function in mint input \u2014 plain data only");
-  if (e !== null && typeof e === "object") {
-    let r = o.get(e);
-    if (r !== undefined) return r;
-    let prototypeOf = Object.getPrototypeOf(e);
+  if (value !== null && typeof value === "object") {
+    let memo = seen.get(value);
+    if (memo !== undefined) return memo;
+    let prototypeOf = Object.getPrototypeOf(value);
     if (
-      !(Array.isArray(e)
+      !(Array.isArray(value)
         ? prototypeOf === Array.prototype
         : prototypeOf === Object.prototype || prototypeOf === null)
     )
       throw TypeError("deepFreezePlainData: non-plain prototype in mint input \u2014 plain data only");
-    let ownPropertyDescriptors = Object.getOwnPropertyDescriptors(e);
+    let ownPropertyDescriptors = Object.getOwnPropertyDescriptors(value);
     for (let key of Object.keys(ownPropertyDescriptors)) {
-      let n = ownPropertyDescriptors[key];
-      if (n && (n.get !== undefined || n.set !== undefined))
+      let descriptor = ownPropertyDescriptors[key];
+      if (descriptor && (descriptor.get !== undefined || descriptor.set !== undefined))
         throw TypeError("deepFreezePlainData: accessor property in mint input \u2014 plain data only");
     }
-    if (Object.getOwnPropertySymbols(e).length > 0)
+    if (Object.getOwnPropertySymbols(value).length > 0)
       throw TypeError("deepFreezePlainData: symbol-keyed property in mint input \u2014 plain data only");
     for (let key of Object.keys(ownPropertyDescriptors)) {
-      let n = ownPropertyDescriptors[key];
-      if (n && n.enumerable === false && !(Array.isArray(e) && key === "length"))
+      let descriptor = ownPropertyDescriptors[key];
+      if (descriptor && descriptor.enumerable === false && !(Array.isArray(value) && key === "length"))
         throw TypeError("deepFreezePlainData: non-enumerable property in mint input \u2014 plain data only");
     }
-    let a = Array.isArray(e) ? [] : {};
-    o.set(e, a);
+    let copy = Array.isArray(value) ? [] : {};
+    seen.set(value, copy);
     for (let key of Object.keys(ownPropertyDescriptors)) {
-      if (Array.isArray(e) && key === "length") continue;
+      if (Array.isArray(value) && key === "length") continue;
       if (key === "__proto__" || key === "constructor")
         throw TypeError("deepFreezePlainData: prototype-key property in mint input \u2014 plain data only");
-      let n = ownPropertyDescriptors[key];
-      Object.defineProperty(a, key, {
-        value: deepFreezePlainData(n?.value, o),
+      let descriptor = ownPropertyDescriptors[key];
+      Object.defineProperty(copy, key, {
+        value: deepFreezePlainData(descriptor?.value, seen),
         enumerable: true,
         writable: false,
         configurable: false,
       });
     }
-    Object.freeze(a);
-    return a;
+    Object.freeze(copy);
+    return copy;
   }
-  return e;
+  return value;
 }
 export {
-  INVALID_TOOL_NAME_TEXT,
   identityFreeze4,
   identityFreeze3,
   mintDisplayedUpdates,

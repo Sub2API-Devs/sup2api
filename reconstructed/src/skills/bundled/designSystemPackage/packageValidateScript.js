@@ -18,3 +18,4 @@ var packageMjs3a0e4e2aPath = __cc_resource_0;
  * design-system 打包技能附带的 package 校验脚本文本。
  */
 var packageMjs3a0e4e2a = readEmbeddedTextSync(packageMjs3a0e4e2aPath, import.meta.dirname);
+export { packageMjs3a0e4e2a };

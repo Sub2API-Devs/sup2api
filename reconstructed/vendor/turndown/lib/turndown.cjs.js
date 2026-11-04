@@ -548,10 +548,10 @@ function filterValue(rule, node, options) {
   } else throw TypeError("`filter` needs to be a string, array, or function");
 }
 //@ chunk-vwj6ccer.js:243756-244353 esm-fingerprint
-function collapseWhitespace(e) {
-  var { element, isBlock, isVoid } = e;
+function collapseWhitespace(context) {
+  var { element, isBlock, isVoid } = context;
   var isPre =
-    e.isPre ||
+    context.isPre ||
     function (node) {
       return node.nodeName === "PRE";
     };
@@ -795,7 +795,7 @@ TurndownService.prototype = {
     if (!canConvert(input))
       throw TypeError(input + " is not a string, or an element/document/fragment node.");
     if (input === "") return "";
-    var output = Kc.call(this, new RootNode(input, this.options));
+    var output = processChildren.call(this, new RootNode(input, this.options));
     return postProcess.call(this, output);
   },
   use: function (plugin) {
@@ -817,21 +817,21 @@ TurndownService.prototype = {
     return this;
   },
   escape: function (string) {
-    return escapes.reduce(function (accumulator, r) {
-      return accumulator.replace(r[0], r[1]);
+    return escapes.reduce(function (accumulator, escapePair) {
+      return accumulator.replace(escapePair[0], escapePair[1]);
     }, string);
   },
 };
 //@ chunk-vwj6ccer.js:247666-247886 esm-fingerprint
-function Kc(parentNode) {
-  var t = this;
+function processChildren(parentNode) {
+  var service = this;
   return reduce.call(
     parentNode.childNodes,
     function (output, node) {
-      node = new Node(node, t.options);
+      node = new Node(node, service.options);
       var replacement = "";
-      if (node.nodeType === 3) replacement = node.isCode ? node.nodeValue : t.escape(node.nodeValue);
-      else if (node.nodeType === 1) replacement = replacementForNode.call(t, node);
+      if (node.nodeType === 3) replacement = node.isCode ? node.nodeValue : service.escape(node.nodeValue);
+      else if (node.nodeType === 1) replacement = replacementForNode.call(service, node);
       return join(output, replacement);
     },
     "",
@@ -839,16 +839,16 @@ function Kc(parentNode) {
 }
 //@ chunk-vwj6ccer.js:247886-248066 esm-fingerprint
 function postProcess(output) {
-  var t = this;
+  var service = this;
   this.rules.forEach(function (rule) {
-    if (typeof rule.append === "function") output = join(output, rule.append(t.options));
+    if (typeof rule.append === "function") output = join(output, rule.append(service.options));
   });
   return output.replace(/^[\t\r\n]+/, "").replace(/[\t\r\n\s]+$/, "");
 }
 //@ chunk-vwj6ccer.js:248066-248246 esm-fingerprint
 function replacementForNode(node) {
   var rule = this.rules.forNode(node);
-  var content = Kc.call(this, node);
+  var content = processChildren.call(this, node);
   var whitespace = node.flankingWhitespace;
   if (whitespace.leading || whitespace.trailing) content = content.trim();
   return whitespace.leading + rule.replacement(content, node, this.options) + whitespace.trailing;
@@ -873,3 +873,4 @@ function canConvert(input) {
 }
 //@ chunk-vwj6ccer.js:248482-248492 esm-layout
 var TurndownService_default = TurndownService;
+export { TurndownService_default };

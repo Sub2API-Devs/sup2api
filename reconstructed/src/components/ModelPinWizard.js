@@ -9,7 +9,12 @@
  * attribution: placement 10
  */
 import { env } from "../utils/env.js";
-import { init_react_production, Q, y, P } from "../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useMemo,
+  useState,
+  useEffect,
+} from "../../vendor/react/cjs/react.production.js";
 import { useWizard } from "./wizard/useWizard.js";
 import {
   jsxProd_default,
@@ -22,11 +27,12 @@ import { Box, Text } from "../ink/components/Text.js";
 import { TIER_LABELS } from "../utils/model/thirdPartyDefaultFallbacks.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 import { supports1mBeta, modelHasNative1MContext } from "../utils/model/contextWindow1m.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { StatusIcon } from "./design-system/StatusIcon.js";
 import { Spinner } from "./Spinner.js";
 import { strip1mSuffix } from "../utils/model/modelIds.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-095ptjmr.js:3989-4030 placement
 /**
@@ -43,42 +49,50 @@ function readEnvModelPins() {
   };
 }
 //@ chunk-095ptjmr.js:4204-4208 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-095ptjmr.js:4204", () => {
+  init_react_production();
+});
 //@ chunk-095ptjmr.js:4208-6032 placement
 /**
  * 第三方提供方（Bedrock/Vertex）配置向导中的"固定模型版本"步骤：对 sonnet/opus/haiku/fable 各探测候选模型，可一键固定可用模型（可选 1M 上下文）、手动逐档选择或跳过使用默认。
  */
 function ModelPinStep({ provider, onPins }) {
   let { goBack, goNext, wizardData } = useWizard();
-  let t = Q(() => provider.resolveTierDefaults(wizardData), []);
-  let c = Q(() => readEnvModelPins(), []);
-  let [l, d] = y(() =>
-    Object.fromEntries(MODEL_PIN_FAMILIES.map((a) => [a, c[a] ?? t[a].auto ?? t[a].fallback])),
+  let tierDefaults = useMemo(() => provider.resolveTierDefaults(wizardData), []);
+  let existingPins = useMemo(() => readEnvModelPins(), []);
+  let [pins, setPins] = useState(() =>
+    Object.fromEntries(
+      MODEL_PIN_FAMILIES.map((family) => [
+        family,
+        existingPins[family] ?? tierDefaults[family].auto ?? tierDefaults[family].fallback,
+      ]),
+    ),
   );
-  let [x, h] = y({
+  let [probeStates, setProbeStates] = useState({
     sonnet: "pending",
     opus: "pending",
     haiku: "pending",
     fable: "pending",
   });
-  let [R, z] = y("summary");
-  let mapped = MODEL_PIN_FAMILIES.map((a) =>
+  let [view, setView] = useState("summary");
+  let mapped = MODEL_PIN_FAMILIES.map((family) =>
     jsxProd_default(
       ModelProbe,
       {
-        candidate: l[a],
-        probe: (k) => provider.probe(wizardData, k),
-        onState: (k) =>
-          h((B) => ({
-            ...B,
-            [a]: k,
+        candidate: pins[family],
+        probe: (modelId) => provider.probe(wizardData, modelId),
+        onState: (state) =>
+          setProbeStates((prev) => ({
+            ...prev,
+            [family]: state,
           })),
       },
-      a,
+      family,
     ),
   );
-  if (R !== "summary") {
-    let picking = R.picking;
+  if (view !== "summary") {
+    let picking = view.picking;
     return jsxProd_default_2(Fragment, {
       children: [
         mapped,
@@ -88,59 +102,59 @@ function ModelPinStep({ provider, onPins }) {
             tier: picking,
             provider,
             wizardData,
-            fallback: t[picking].fallback,
-            current: l[picking],
-            existingPin: c[picking],
-            onPick: (k) => {
-              d((F) => ({
-                ...F,
-                [picking]: k,
+            fallback: tierDefaults[picking].fallback,
+            current: pins[picking],
+            existingPin: existingPins[picking],
+            onPick: (modelId) => {
+              setPins((prev) => ({
+                ...prev,
+                [picking]: modelId,
               }));
               let index = MODEL_PIN_FAMILIES.indexOf(picking);
-              let J = MODEL_PIN_FAMILIES[index + 1];
-              z(
-                J
+              let nextFamily = MODEL_PIN_FAMILIES[index + 1];
+              setView(
+                nextFamily
                   ? {
-                      picking: J,
+                      picking: nextFamily,
                     }
                   : "summary",
               );
             },
-            onCancel: () => z("summary"),
+            onCancel: () => setView("summary"),
           },
           picking,
         ),
       ],
     });
   }
-  let v =
-    MODEL_PIN_FAMILIES.every((a) => x[a] !== "pending") &&
-    MODEL_PIN_FAMILIES.some((a) => x[a] !== "pending" && x[a].ok);
-  let u =
-    v &&
-    MODEL_PIN_FAMILIES.some((a) => {
-      let k = x[a];
-      return k !== "pending" && k.ok && isPinnableModel(l[a]);
+  let allProbedWithOk =
+    MODEL_PIN_FAMILIES.every((family) => probeStates[family] !== "pending") &&
+    MODEL_PIN_FAMILIES.some((family) => probeStates[family] !== "pending" && probeStates[family].ok);
+  let canPin1m =
+    allProbedWithOk &&
+    MODEL_PIN_FAMILIES.some((family) => {
+      let state = probeStates[family];
+      return state !== "pending" && state.ok && isPinnableModel(pins[family]);
     });
-  let onChange = (a) => {
-    if (a === "manual") {
-      z({
+  let onChange = (choice) => {
+    if (choice === "manual") {
+      setView({
         picking: "sonnet",
       });
       return;
     }
-    if (a === "pin" || a === "pin1m") {
-      let k = (B) => {
-        let J = x[B];
-        if (J === "pending" || !J.ok) return;
-        let F = l[B];
-        return a === "pin1m" && isPinnableModel(F) ? ensure1mSuffix(F) : F;
+    if (choice === "pin" || choice === "pin1m") {
+      let pickFor = (family) => {
+        let state = probeStates[family];
+        if (state === "pending" || !state.ok) return;
+        let modelId = pins[family];
+        return choice === "pin1m" && isPinnableModel(modelId) ? ensure1mSuffix(modelId) : modelId;
       };
       onPins({
-        pinSonnet: k("sonnet"),
-        pinOpus: k("opus"),
-        pinHaiku: k("haiku"),
-        pinFable: k("fable"),
+        pinSonnet: pickFor("sonnet"),
+        pinOpus: pickFor("opus"),
+        pinHaiku: pickFor("haiku"),
+        pinFable: pickFor("fable"),
       });
     } else
       onPins({
@@ -170,23 +184,23 @@ function ModelPinStep({ provider, onPins }) {
                   dimColor: true,
                   children: "Each candidate is tested with a one-token request:",
                 }),
-                MODEL_PIN_FAMILIES.map((a) =>
+                MODEL_PIN_FAMILIES.map((family) =>
                   jsxProd_default(
                     ModelProbeStatusRow,
                     {
-                      label: TIER_LABELS[a],
-                      modelId: l[a],
-                      state: x[a],
+                      label: TIER_LABELS[family],
+                      modelId: pins[family],
+                      state: probeStates[family],
                       reasonLabel: provider.reasonLabel,
                     },
-                    a,
+                    family,
                   ),
                 ),
               ],
             }),
             jsxProd_default(ModelSelector, {
               options: [
-                ...(v
+                ...(allProbedWithOk
                   ? [
                       {
                         label: "Pin the working models",
@@ -194,7 +208,7 @@ function ModelPinStep({ provider, onPins }) {
                       },
                     ]
                   : []),
-                ...(u
+                ...(canPin1m
                   ? [
                       {
                         label: "Pin the working models with 1M context",
@@ -221,42 +235,42 @@ function ModelPinStep({ provider, onPins }) {
   });
 }
 //@ chunk-095ptjmr.js:6032-6087 placement
-function isPinnableModel(f) {
+function isPinnableModel(model) {
   return (
-    supports1mBeta(f) &&
-    !modelHasNative1MContext(f, {
+    supports1mBeta(model) &&
+    !modelHasNative1MContext(model, {
       byItsOwnName: true,
     })
   );
 }
 //@ chunk-095ptjmr.js:6140-6420 placement
 function ModelProbe(props) {
-  let b = w(6);
+  let $ = useMemoCache(6);
   let { candidate, probe, onState } = props;
-  let t;
-  if (b[0] !== candidate || b[1] !== onState || b[2] !== probe) {
-    t = () => {
-      let c = false;
+  let probeEffect;
+  if ($[0] !== candidate || $[1] !== onState || $[2] !== probe) {
+    probeEffect = () => {
+      let isCancelled = false;
       onState("pending");
-      probe(candidate).then((l) => {
-        if (!c) onState(l);
+      probe(candidate).then((state) => {
+        if (!isCancelled) onState(state);
       });
       return () => {
-        c = true;
+        isCancelled = true;
       };
     };
-    b[0] = candidate;
-    b[1] = onState;
-    b[2] = probe;
-    b[3] = t;
-  } else t = b[3];
-  let d;
-  if (b[4] !== candidate) {
-    d = [candidate];
-    b[4] = candidate;
-    b[5] = d;
-  } else d = b[5];
-  P(t, d);
+    $[0] = candidate;
+    $[1] = onState;
+    $[2] = probe;
+    $[3] = probeEffect;
+  } else probeEffect = $[3];
+  let probeDeps;
+  if ($[4] !== candidate) {
+    probeDeps = [candidate];
+    $[4] = candidate;
+    $[5] = probeDeps;
+  } else probeDeps = $[5];
+  useEffect(probeEffect, probeDeps);
   return null;
 }
 //@ chunk-095ptjmr.js:6420-7500 placement
@@ -268,62 +282,65 @@ function TierModelPicker({
   provider,
   wizardData,
   fallback,
-  current: b,
+  current: currentCandidate,
   existingPin,
   onPick,
   onCancel,
 }) {
-  let d = Q(() => {
-    let u = provider.listTierCandidates(tier, wizardData);
-    for (let m of [fallback, b, existingPin]) if (m && !u.includes(m)) u.push(m);
-    return u;
-  }, [tier, fallback, b, existingPin]);
-  let [x, h] = y(() => Object.fromEntries(d.map((u) => [u, "pending"])));
-  P(() => {
-    let u = false;
-    for (let m of d)
-      provider.probe(wizardData, m).then((a) => {
-        if (!u)
-          h((k) => ({
-            ...k,
-            [m]: a,
+  let candidates = useMemo(() => {
+    let candidateList = provider.listTierCandidates(tier, wizardData);
+    for (let candidate of [fallback, currentCandidate, existingPin])
+      if (candidate && !candidateList.includes(candidate)) candidateList.push(candidate);
+    return candidateList;
+  }, [tier, fallback, currentCandidate, existingPin]);
+  let [states, setStates] = useState(() =>
+    Object.fromEntries(candidates.map((candidate) => [candidate, "pending"])),
+  );
+  useEffect(() => {
+    let cancelled = false;
+    for (let candidate of candidates)
+      provider.probe(wizardData, candidate).then((state) => {
+        if (!cancelled)
+          setStates((prev) => ({
+            ...prev,
+            [candidate]: state,
           }));
       });
     return () => {
-      u = true;
+      cancelled = true;
     };
   }, []);
-  let all = d.every((u) => x[u] !== "pending");
-  let z = (u) => {
-    let m = x[u];
-    return m !== undefined && m !== "pending" && m.ok;
+  let all = candidates.every((candidate) => states[candidate] !== "pending");
+  let isOk = (candidate) => {
+    let state = states[candidate];
+    return state !== undefined && state !== "pending" && state.ok;
   };
-  let A = Q(() => {
-    if (!all) return d;
-    return [...d].sort((u, m) => (z(u) ? 0 : 1) - (z(m) ? 0 : 1));
-  }, [d, x, all]);
-  let options = A.map((u) => ({
-    value: u,
+  let sorted = useMemo(() => {
+    if (!all) return candidates;
+    return [...candidates].sort((left, right) => (isOk(left) ? 0 : 1) - (isOk(right) ? 0 : 1));
+  }, [candidates, states, all]);
+  let options = sorted.map((candidate) => ({
+    value: candidate,
     label: jsxProd_default(CandidateStatusRow, {
-      id: u,
-      state: x[u] ?? "pending",
+      id: candidate,
+      state: states[candidate] ?? "pending",
       reasonLabel: provider.reasonLabel,
       suffix:
-        u === existingPin
+        candidate === existingPin
           ? "(currently pinned)"
-          : u === fallback
+          : candidate === fallback
             ? "(built-in default)"
-            : u === b
+            : candidate === currentCandidate
               ? "(selected)"
               : undefined,
     }),
   }));
-  let v = () => {
-    for (let u of provider.preferOnSettle ?? []) {
-      let m = u === "current" ? b : fallback;
-      if (z(m)) return m;
+  let preferred = () => {
+    for (let preference of provider.preferOnSettle ?? []) {
+      let candidate = preference === "current" ? currentCandidate : fallback;
+      if (isOk(candidate)) return candidate;
     }
-    return A.find(z);
+    return sorted.find(isOk);
   };
   return jsxProd_default(WizardDialogLayout, {
     subtitle: `Pin ${TIER_LABELS[tier]} model`,
@@ -339,7 +356,7 @@ function TierModelPicker({
           ModelSelector,
           {
             options,
-            defaultValue: all ? v() : b,
+            defaultValue: all ? preferred() : currentCandidate,
             onChange: onPick,
             onCancel,
           },
@@ -354,243 +371,243 @@ function TierModelPicker({
  * （误归此处）模型档位候选的状态行组件：pending/ok/error 三态图标 + id + 后缀 + 失败原因。
  */
 function CandidateStatusRow(props) {
-  let t = w(19);
+  let $ = useMemoCache(19);
   let { id, state, suffix, reasonLabel } = props;
   if (state === "pending") {
-    let c;
-    if (t[0] === MEMO_CACHE_SENTINEL) {
-      c = jsxProd_default(StatusIcon, {
+    let pendingIcon;
+    if ($[0] === MEMO_CACHE_SENTINEL) {
+      pendingIcon = jsxProd_default(StatusIcon, {
         status: "pending",
         withSpace: true,
       });
-      t[0] = c;
-    } else c = t[0];
-    let l;
-    if (t[1] !== suffix) {
-      l =
+      $[0] = pendingIcon;
+    } else pendingIcon = $[0];
+    let pendingSuffix;
+    if ($[1] !== suffix) {
+      pendingSuffix =
         suffix &&
         jsxProd_default_2(Text, {
           dimColor: true,
           children: [" ", suffix],
         });
-      t[1] = suffix;
-      t[2] = l;
-    } else l = t[2];
-    let d;
-    if (t[3] !== id || t[4] !== l) {
-      d = jsxProd_default_2(Text, {
-        children: [c, id, l],
+      $[1] = suffix;
+      $[2] = pendingSuffix;
+    } else pendingSuffix = $[2];
+    let pendingRow;
+    if ($[3] !== id || $[4] !== pendingSuffix) {
+      pendingRow = jsxProd_default_2(Text, {
+        children: [pendingIcon, id, pendingSuffix],
       });
-      t[3] = id;
-      t[4] = l;
-      t[5] = d;
-    } else d = t[5];
-    return d;
+      $[3] = id;
+      $[4] = pendingSuffix;
+      $[5] = pendingRow;
+    } else pendingRow = $[5];
+    return pendingRow;
   }
   if (state.ok) {
-    let c;
-    if (t[6] === MEMO_CACHE_SENTINEL) {
-      c = jsxProd_default(StatusIcon, {
+    let successIcon;
+    if ($[6] === MEMO_CACHE_SENTINEL) {
+      successIcon = jsxProd_default(StatusIcon, {
         status: "success",
         withSpace: true,
       });
-      t[6] = c;
-    } else c = t[6];
-    let l;
-    if (t[7] !== suffix) {
-      l =
+      $[6] = successIcon;
+    } else successIcon = $[6];
+    let successSuffix;
+    if ($[7] !== suffix) {
+      successSuffix =
         suffix &&
         jsxProd_default_2(Text, {
           dimColor: true,
           children: [" ", suffix],
         });
-      t[7] = suffix;
-      t[8] = l;
-    } else l = t[8];
-    let d;
-    if (t[9] !== id || t[10] !== l) {
-      d = jsxProd_default_2(Text, {
-        children: [c, id, l],
+      $[7] = suffix;
+      $[8] = successSuffix;
+    } else successSuffix = $[8];
+    let successRow;
+    if ($[9] !== id || $[10] !== successSuffix) {
+      successRow = jsxProd_default_2(Text, {
+        children: [successIcon, id, successSuffix],
       });
-      t[9] = id;
-      t[10] = l;
-      t[11] = d;
-    } else d = t[11];
-    return d;
+      $[9] = id;
+      $[10] = successSuffix;
+      $[11] = successRow;
+    } else successRow = $[11];
+    return successRow;
   }
-  let c;
-  if (t[12] === MEMO_CACHE_SENTINEL) {
-    c = jsxProd_default(StatusIcon, {
+  let errorIcon;
+  if ($[12] === MEMO_CACHE_SENTINEL) {
+    errorIcon = jsxProd_default(StatusIcon, {
       status: "error",
       withSpace: true,
     });
-    t[12] = c;
-  } else c = t[12];
-  const l = suffix && ` ${suffix}`;
-  const d = reasonLabel[state.reason];
-  let x;
-  if (t[13] !== d) {
-    x = jsxProd_default_2(Text, {
+    $[12] = errorIcon;
+  } else errorIcon = $[12];
+  const errorSuffix = suffix && ` ${suffix}`;
+  const reasonText = reasonLabel[state.reason];
+  let reasonElement;
+  if ($[13] !== reasonText) {
+    reasonElement = jsxProd_default_2(Text, {
       color: "error",
-      children: ["(", d, ")"],
+      children: ["(", reasonText, ")"],
     });
-    t[13] = d;
-    t[14] = x;
-  } else x = t[14];
-  let h;
-  if (t[15] !== id || t[16] !== l || t[17] !== x) {
-    h = jsxProd_default_2(Text, {
+    $[13] = reasonText;
+    $[14] = reasonElement;
+  } else reasonElement = $[14];
+  let errorRow;
+  if ($[15] !== id || $[16] !== errorSuffix || $[17] !== reasonElement) {
+    errorRow = jsxProd_default_2(Text, {
       dimColor: true,
-      children: [c, id, l, " ", x],
+      children: [errorIcon, id, errorSuffix, " ", reasonElement],
     });
-    t[15] = id;
-    t[16] = l;
-    t[17] = x;
-    t[18] = h;
-  } else h = t[18];
-  return h;
+    $[15] = id;
+    $[16] = errorSuffix;
+    $[17] = reasonElement;
+    $[18] = errorRow;
+  } else errorRow = $[18];
+  return errorRow;
 }
 //@ chunk-095ptjmr.js:8456-9639 placement
 /**
  * 模型探测状态行：pending 显示 spinner，成功绿色显示模型 id，失败显示原因。
  */
 function ModelProbeStatusRow(props) {
-  let t = w(26);
+  let $ = useMemoCache(26);
   let { label, modelId, state, reasonLabel } = props;
   if (state === "pending") {
-    let c;
-    let l;
-    if (t[0] === MEMO_CACHE_SENTINEL) {
-      c = jsxProd_default(Text, {
+    let indent;
+    let spinnerElement;
+    if ($[0] === MEMO_CACHE_SENTINEL) {
+      indent = jsxProd_default(Text, {
         children: "  ",
       });
-      l = jsxProd_default(Spinner, {});
-      t[0] = c;
-      t[1] = l;
+      spinnerElement = jsxProd_default(Spinner, {});
+      $[0] = indent;
+      $[1] = spinnerElement;
     } else {
-      c = t[0];
-      l = t[1];
+      indent = $[0];
+      spinnerElement = $[1];
     }
-    let d;
-    if (t[2] !== label) {
-      d = label.padEnd(7);
-      t[2] = label;
-      t[3] = d;
-    } else d = t[3];
-    let x;
-    if (t[4] !== modelId || t[5] !== d) {
-      x = jsxProd_default_2(Box, {
+    let labelText;
+    if ($[2] !== label) {
+      labelText = label.padEnd(7);
+      $[2] = label;
+      $[3] = labelText;
+    } else labelText = $[3];
+    let boxElement;
+    if ($[4] !== modelId || $[5] !== labelText) {
+      boxElement = jsxProd_default_2(Box, {
         children: [
-          c,
-          l,
+          indent,
+          spinnerElement,
           jsxProd_default_2(Text, {
-            children: [" ", d, "\u2192 ", modelId],
+            children: [" ", labelText, "\u2192 ", modelId],
           }),
         ],
       });
-      t[4] = modelId;
-      t[5] = d;
-      t[6] = x;
-    } else x = t[6];
-    return x;
+      $[4] = modelId;
+      $[5] = labelText;
+      $[6] = boxElement;
+    } else boxElement = $[6];
+    return boxElement;
   }
   if (state.ok) {
-    let c;
-    if (t[7] === MEMO_CACHE_SENTINEL) {
-      c = jsxProd_default(StatusIcon, {
+    let successIcon;
+    if ($[7] === MEMO_CACHE_SENTINEL) {
+      successIcon = jsxProd_default(StatusIcon, {
         status: "success",
         withSpace: true,
       });
-      t[7] = c;
-    } else c = t[7];
-    let l;
-    if (t[8] !== label) {
-      l = label.padEnd(7);
-      t[8] = label;
-      t[9] = l;
-    } else l = t[9];
-    let d;
-    if (t[10] !== modelId) {
-      d = jsxProd_default(Text, {
+      $[7] = successIcon;
+    } else successIcon = $[7];
+    let labelText;
+    if ($[8] !== label) {
+      labelText = label.padEnd(7);
+      $[8] = label;
+      $[9] = labelText;
+    } else labelText = $[9];
+    let modelElement;
+    if ($[10] !== modelId) {
+      modelElement = jsxProd_default(Text, {
         color: "success",
         children: modelId,
       });
-      t[10] = modelId;
-      t[11] = d;
-    } else d = t[11];
-    let x;
-    if (t[12] !== l || t[13] !== d) {
-      x = jsxProd_default_2(Text, {
-        children: ["  ", c, l, "\u2192 ", d],
+      $[10] = modelId;
+      $[11] = modelElement;
+    } else modelElement = $[11];
+    let successRow;
+    if ($[12] !== labelText || $[13] !== modelElement) {
+      successRow = jsxProd_default_2(Text, {
+        children: ["  ", successIcon, labelText, "\u2192 ", modelElement],
       });
-      t[12] = l;
-      t[13] = d;
-      t[14] = x;
-    } else x = t[14];
-    return x;
+      $[12] = labelText;
+      $[13] = modelElement;
+      $[14] = successRow;
+    } else successRow = $[14];
+    return successRow;
   }
-  let c;
-  if (t[15] === MEMO_CACHE_SENTINEL) {
-    c = jsxProd_default(StatusIcon, {
+  let errorIcon;
+  if ($[15] === MEMO_CACHE_SENTINEL) {
+    errorIcon = jsxProd_default(StatusIcon, {
       status: "error",
       withSpace: true,
     });
-    t[15] = c;
-  } else c = t[15];
-  let l;
-  if (t[16] !== label) {
-    l = label.padEnd(7);
-    t[16] = label;
-    t[17] = l;
-  } else l = t[17];
-  let d;
-  if (t[18] !== modelId) {
-    d = jsxProd_default(Text, {
+    $[15] = errorIcon;
+  } else errorIcon = $[15];
+  let labelText;
+  if ($[16] !== label) {
+    labelText = label.padEnd(7);
+    $[16] = label;
+    $[17] = labelText;
+  } else labelText = $[17];
+  let modelElement;
+  if ($[18] !== modelId) {
+    modelElement = jsxProd_default(Text, {
       dimColor: true,
       children: modelId,
     });
-    t[18] = modelId;
-    t[19] = d;
-  } else d = t[19];
-  const x = reasonLabel[state.reason];
-  let h;
-  if (t[20] !== x) {
-    h = jsxProd_default_2(Text, {
+    $[18] = modelId;
+    $[19] = modelElement;
+  } else modelElement = $[19];
+  const reasonText = reasonLabel[state.reason];
+  let reasonElement;
+  if ($[20] !== reasonText) {
+    reasonElement = jsxProd_default_2(Text, {
       color: "error",
-      children: ["(", x, ")"],
+      children: ["(", reasonText, ")"],
     });
-    t[20] = x;
-    t[21] = h;
-  } else h = t[21];
-  let R;
-  if (t[22] !== l || t[23] !== d || t[24] !== h) {
-    R = jsxProd_default_2(Text, {
-      children: ["  ", c, l, "\u2192 ", d, " ", h],
+    $[20] = reasonText;
+    $[21] = reasonElement;
+  } else reasonElement = $[21];
+  let errorRow;
+  if ($[22] !== labelText || $[23] !== modelElement || $[24] !== reasonElement) {
+    errorRow = jsxProd_default_2(Text, {
+      children: ["  ", errorIcon, labelText, "\u2192 ", modelElement, " ", reasonElement],
     });
-    t[22] = l;
-    t[23] = d;
-    t[24] = h;
-    t[25] = R;
-  } else R = t[25];
-  return R;
+    $[22] = labelText;
+    $[23] = modelElement;
+    $[24] = reasonElement;
+    $[25] = errorRow;
+  } else errorRow = $[25];
+  return errorRow;
 }
 //@ chunk-095ptjmr.js:9639-10088 placement
 /**
  * 用一次 1 token 请求探测模型可用性：创建客户端失败用 g 映射原因；401→auth、403→permission、400/404→model、429 视为可用、无状态码→network。
  */
-async function probeModelAccess(f, o, g) {
-  let p;
+async function probeModelAccess(getClient, modelId, describeError) {
+  let client;
   try {
-    p = await f();
+    client = await getClient();
   } catch (error) {
     return {
       ok: false,
-      reason: g(error),
+      reason: describeError(error),
     };
   }
   try {
-    await p.messages.create({
-      model: strip1mSuffix(o),
+    await client.messages.create({
+      model: strip1mSuffix(modelId),
       max_tokens: 1,
       messages: [
         {

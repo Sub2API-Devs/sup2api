@@ -12,7 +12,14 @@ import { join } from "path";
 import { homedir } from "os";
 import { byteLengthOf } from "./callResults.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { string, discriminatedUnion, u, literal, _enum, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  stringSchema,
+  discriminatedUnion,
+  objectSchema,
+  literal,
+  _enum,
+  booleanSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   REMOTE_TOOL_REFUSAL_CODES,
   ERROR_OUTCOME_CODES,
@@ -25,74 +32,84 @@ import { logForDebugging } from "../../utils/debug.js";
 import { logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { toJsonLine, jsonParseRaw } from "../../utils/slowOperations.js";
 import { shortHash } from "../../utils/shortHash.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:327269-327585 placement
 /**
  * 判断沙箱配置是否削弱了隔离（允许 Apple Events、弱化嵌套沙箱、非 mac/Windows 允许嵌套用户命名空间、mac 弱化网络隔离、允许本地绑定、Mach lookup 白名单）。
  */
-function weakensSandboxIsolation(e, platform) {
-  let r = platform === "macos" || platform === "unknown";
+function weakensSandboxIsolation(sandbox, platform) {
+  let macLike = platform === "macos" || platform === "unknown";
   return (
-    e.allowAppleEvents === true ||
-    e.enableWeakerNestedSandbox === true ||
-    (platform !== "macos" && platform !== "windows" && e.allowNestedUserNamespaces === true) ||
-    (r && e.enableWeakerNetworkIsolation === true) ||
-    ((r || platform === "windows") && e.network?.allowLocalBinding === true) ||
-    (e.network?.allowMachLookup?.length ?? 0) > 0
+    sandbox.allowAppleEvents === true ||
+    sandbox.enableWeakerNestedSandbox === true ||
+    (platform !== "macos" && platform !== "windows" && sandbox.allowNestedUserNamespaces === true) ||
+    (macLike && sandbox.enableWeakerNetworkIsolation === true) ||
+    ((macLike || platform === "windows") && sandbox.network?.allowLocalBinding === true) ||
+    (sandbox.network?.allowMachLookup?.length ?? 0) > 0
   );
 }
 //@ chunk-s61vbvea.js:327644-327865 placement
 /**
  * 远程调用日志的终态与限额：joined_retry/replaced_by_retry 等终态集合，以及日志版本、文件大小、天数、条数上限与 TTL。
  */
-var JOINED_RETRY = "joined_retry";
-var REPLACED_BY_RETRY = "replaced_by_retry";
-var TERMINAL_CALL_STATES = new Set(["denied_by_session", "withdrawn", REPLACED_BY_RETRY, JOINED_RETRY]);
-var DISOWNED = "disowned";
-var LOST_IN_RESTART = "lost_in_restart";
-var CALL_LOG_LIMITS = {
-  maxCalls: 1024,
-  maxResults: 64,
-  maxResultBytes: 8388608,
-  resultTtlMs: 1800000,
-};
-var MAX_QUERIES_SINCE_REPORT = 10;
+var JOINED_RETRY; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var REPLACED_BY_RETRY;
+var TERMINAL_CALL_STATES;
+var DISOWNED;
+var LOST_IN_RESTART;
+var CALL_LOG_LIMITS;
+var MAX_QUERIES_SINCE_REPORT;
+deferInit("chunk-s61vbvea.js:327644", () => {
+  JOINED_RETRY = "joined_retry";
+  REPLACED_BY_RETRY = "replaced_by_retry";
+  TERMINAL_CALL_STATES = new Set(["denied_by_session", "withdrawn", REPLACED_BY_RETRY, JOINED_RETRY]);
+  DISOWNED = "disowned";
+  LOST_IN_RESTART = "lost_in_restart";
+  CALL_LOG_LIMITS = {
+    maxCalls: 1024,
+    maxResults: 64,
+    maxResultBytes: 8388608,
+    resultTtlMs: 1800000,
+  };
+  MAX_QUERIES_SINCE_REPORT = 10;
+});
 //@ chunk-s61vbvea.js:327865-332016 placement
 /**
  * 远程提供工具调用日志的内存模型（received/running/completed/failed）
  */
-function ServedCallLog(callRecordBounds = CALL_LOG_LIMITS, n = Date.now) {
-  let r = new Map();
-  let s = 0;
-  let h = false;
-  let y = (L) => {
-    s -= L.result?.bytes ?? 0;
-    L.result = undefined;
+function ServedCallLog(callRecordBounds = CALL_LOG_LIMITS, now = Date.now) {
+  let records = new Map();
+  let resultBytes = 0;
+  let droppedPrior = false;
+  let dropResult = (record) => {
+    resultBytes -= record.result?.bytes ?? 0;
+    record.result = undefined;
   };
-  let S = (L) => L.summary.state === "completed" || L.summary.state === "failed";
-  let w = (L) => {
-    if (!S(L)) return false;
-    if (L.summary.code !== JOINED_RETRY || L.summary.joinedCallId === undefined) return true;
-    let q = r.get(L.summary.joinedCallId);
-    return q === undefined || S(q);
+  let isSettled = (record) => record.summary.state === "completed" || record.summary.state === "failed";
+  let isDroppable = (record) => {
+    if (!isSettled(record)) return false;
+    if (record.summary.code !== JOINED_RETRY || record.summary.joinedCallId === undefined) return true;
+    let joinedRecord = records.get(record.summary.joinedCallId);
+    return joinedRecord === undefined || isSettled(joinedRecord);
   };
-  let R = (L, q) => {
-    r.set(L, q);
-    let sliced = [...r]
-      .filter(([Z, ee]) => Z !== L && w(ee))
-      .slice(0, Math.max(0, r.size - callRecordBounds.maxCalls));
-    for (let [Z, ee] of sliced) {
-      y(ee);
-      r.delete(Z);
+  let storeRecord = (callId, record) => {
+    records.set(callId, record);
+    let sliced = [...records]
+      .filter(([id, entry]) => id !== callId && isDroppable(entry))
+      .slice(0, Math.max(0, records.size - callRecordBounds.maxCalls));
+    for (let [id, entry] of sliced) {
+      dropResult(entry);
+      records.delete(id);
     }
-    h ||= sliced.some(([, Z]) => Z.priorEpoch === undefined);
+    droppedPrior ||= sliced.some(([, entry]) => entry.priorEpoch === undefined);
   };
-  let x = (L) => {
-    let { summary, receivedAt, result: Z, priorEpoch, outputSoFar } = j(L);
+  let trimmedCall = (record) => {
+    let { summary, receivedAt, result, priorEpoch, outputSoFar } = checkResultTtl(record);
     return {
       summary,
       receivedAt,
-      result: Z?.value,
+      result: result?.value,
       ...(priorEpoch !== undefined && {
         priorEpoch,
       }),
@@ -101,51 +118,54 @@ function ServedCallLog(callRecordBounds = CALL_LOG_LIMITS, n = Date.now) {
       }),
     };
   };
-  let P = (callId, q) => ({
+  let withCallId = (callId, record) => ({
     callId,
-    call: x(q),
+    call: trimmedCall(record),
   });
-  let j = (L) => {
-    if (L.result !== undefined && n() - L.summary.servedAt > callRecordBounds.resultTtlMs) y(L);
-    return L;
+  let checkResultTtl = (record) => {
+    if (record.result !== undefined && now() - record.summary.servedAt > callRecordBounds.resultTtlMs)
+      dropResult(record);
+    return record;
   };
-  let G = (L, q) => {
-    let Q = n();
-    let Z = r.get(L);
-    if (Z) {
-      let ae = S(Z);
+  let applySummary = (callId, summary) => {
+    let nowMs = now();
+    let record = records.get(callId);
+    if (record) {
+      let wasSettled = isSettled(record);
       if (
-        ae &&
-        !S({
-          ...Z,
+        wasSettled &&
+        !isSettled({
+          ...record,
           summary: {
-            ...q,
-            servedAt: Q,
+            ...summary,
+            servedAt: nowMs,
           },
         })
       )
-        return Z;
-      y(Z);
-      Z.summary = {
-        ...q,
-        servedAt: Q,
+        return record;
+      dropResult(record);
+      record.summary = {
+        ...summary,
+        servedAt: nowMs,
       };
-      if (q.state !== "running" || q.started !== true) Z.outputSoFar = undefined;
-      if (!ae && S(Z)) {
-        let filtered = [...r].filter(([re, he]) => re === L || he.summary.joinedCallId === L);
-        for (let [re, he] of filtered) {
-          r.delete(re);
-          r.set(re, he);
+      if (summary.state !== "running" || summary.started !== true) record.outputSoFar = undefined;
+      if (!wasSettled && isSettled(record)) {
+        let filtered = [...records].filter(
+          ([id, entry]) => id === callId || entry.summary.joinedCallId === callId,
+        );
+        for (let [id, entry] of filtered) {
+          records.delete(id);
+          records.set(id, entry);
         }
       }
-      return Z;
+      return record;
     }
-    let ee = {
+    let result = {
       summary: {
-        ...q,
-        servedAt: Q,
+        ...summary,
+        servedAt: nowMs,
       },
-      receivedAt: Q,
+      receivedAt: nowMs,
       result: undefined,
       retryKey: undefined,
       workerEpoch: undefined,
@@ -155,27 +175,27 @@ function ServedCallLog(callRecordBounds = CALL_LOG_LIMITS, n = Date.now) {
       reportedQueryStatus: undefined,
       outputSoFar: undefined,
     };
-    R(L, ee);
-    return ee;
+    storeRecord(callId, result);
+    return result;
   };
   return {
-    lookup(L) {
-      let q = r.get(L);
-      return q === undefined ? undefined : x(q);
+    lookup(callId) {
+      let record = records.get(callId);
+      return record === undefined ? undefined : trimmedCall(record);
     },
-    receive(L, q) {
-      if (r.has(L)) return false;
-      let Q = n();
-      R(L, {
+    receive(callId, options) {
+      if (records.has(callId)) return false;
+      let nowMs = now();
+      storeRecord(callId, {
         summary: {
           state: "received",
-          servedAt: Q,
+          servedAt: nowMs,
         },
-        receivedAt: Q,
+        receivedAt: nowMs,
         result: undefined,
-        retryKey: q?.retryKey,
-        workerEpoch: q?.workerEpoch,
-        late: q?.late === true,
+        retryKey: options?.retryKey,
+        workerEpoch: options?.workerEpoch,
+        late: options?.late === true,
         priorEpoch: undefined,
         queriesSinceReported: 0,
         reportedQueryStatus: undefined,
@@ -183,13 +203,13 @@ function ServedCallLog(callRecordBounds = CALL_LOG_LIMITS, n = Date.now) {
       });
       return true;
     },
-    rekey(L, retryKey) {
-      let Q = r.get(L);
-      if (Q !== undefined) Q.retryKey = retryKey;
+    rekey(callId, retryKey) {
+      let record = records.get(callId);
+      if (record !== undefined) record.retryKey = retryKey;
     },
     seed({ callId, summary, servedAt, priorEpoch }) {
-      if (r.has(callId)) return;
-      R(callId, {
+      if (records.has(callId)) return;
+      storeRecord(callId, {
         summary: {
           ...summary,
           servedAt,
@@ -205,142 +225,146 @@ function ServedCallLog(callRecordBounds = CALL_LOG_LIMITS, n = Date.now) {
         outputSoFar: undefined,
       });
     },
-    remember(L, q) {
-      G(L, q);
+    remember(callId, outcome) {
+      applySummary(callId, outcome);
     },
-    noteOutput(L, outputSoFar) {
-      let Q = r.get(L);
-      let Z =
-        Q?.summary.code === JOINED_RETRY && Q.summary.joinedCallId !== undefined
-          ? r.get(Q.summary.joinedCallId)
-          : Q;
-      if (Z?.summary.state === "running" && Z.summary.started === true) Z.outputSoFar = outputSoFar;
+    noteOutput(callId, outputSoFar) {
+      let record = records.get(callId);
+      let output =
+        record?.summary.code === JOINED_RETRY && record.summary.joinedCallId !== undefined
+          ? records.get(record.summary.joinedCallId)
+          : record;
+      if (output?.summary.state === "running" && output.summary.started === true)
+        output.outputSoFar = outputSoFar;
     },
-    settle(L, q, Q) {
-      let Z = G(L, Q);
-      let ee = byteLengthOf(q);
-      if (ee > callRecordBounds.maxResultBytes) return;
-      let filtered = [...r.values()].filter((re) => re.result !== undefined);
-      let se = filtered.length + 1 - callRecordBounds.maxResults;
-      for (let re of filtered) {
-        if (se <= 0 && s + ee <= callRecordBounds.maxResultBytes) break;
-        y(re);
-        se -= 1;
+    settle(callId, result, summary) {
+      let record = applySummary(callId, summary);
+      let bytes = byteLengthOf(result);
+      if (bytes > callRecordBounds.maxResultBytes) return;
+      let filtered = [...records.values()].filter((withResult) => withResult.result !== undefined);
+      let overflow = filtered.length + 1 - callRecordBounds.maxResults;
+      for (let entry of filtered) {
+        if (overflow <= 0 && resultBytes + bytes <= callRecordBounds.maxResultBytes) break;
+        dropResult(entry);
+        overflow -= 1;
       }
-      y(Z);
-      Z.result = {
-        value: q,
-        bytes: ee,
+      dropResult(record);
+      record.result = {
+        value: result,
+        bytes,
       };
-      s += ee;
+      resultBytes += bytes;
     },
-    retryOf(L) {
-      let q = r.get(L);
-      if (q?.retryKey === undefined || q.workerEpoch === undefined) return;
-      let Q = (ae) => {
+    retryOf(callId) {
+      let record = records.get(callId);
+      if (record?.retryKey === undefined || record.workerEpoch === undefined) return;
+      let lookupCall = (callId) => {
         if (
-          ae.summary.code === JOINED_RETRY ||
-          ae.summary.code === REPLACED_BY_RETRY ||
-          ae.summary.code === "stale"
+          callId.summary.code === JOINED_RETRY ||
+          callId.summary.code === REPLACED_BY_RETRY ||
+          callId.summary.code === "stale"
         )
           return false;
-        return !S(ae) || ae.summary.servedAt > q.receivedAt;
+        return !isSettled(callId) || callId.summary.servedAt > record.receivedAt;
       };
-      let Z = new Map();
-      for (let ae of r.values())
-        if (ae.summary.joinedCallId !== undefined) {
-          let se =
-            ae.workerEpoch === undefined
+      let byJoinedId = new Map();
+      for (let entry of records.values())
+        if (entry.summary.joinedCallId !== undefined) {
+          let isJoined =
+            entry.workerEpoch === undefined
               ? Number.POSITIVE_INFINITY
-              : ae.late
-                ? ae.workerEpoch
-                : ae.workerEpoch + 1;
-          let re = Z.get(ae.summary.joinedCallId);
-          Z.set(ae.summary.joinedCallId, re === undefined ? se : Math.max(re, se));
+              : entry.late
+                ? entry.workerEpoch
+                : entry.workerEpoch + 1;
+          let carrier = byJoinedId.get(entry.summary.joinedCallId);
+          byJoinedId.set(
+            entry.summary.joinedCallId,
+            carrier === undefined ? isJoined : Math.max(carrier, isJoined),
+          );
         }
-      let ee;
-      for (let [callId, se] of r)
+      let found;
+      for (let [callId_2, joinedId] of records)
         if (
-          callId !== L &&
-          se.retryKey === q.retryKey &&
-          se.workerEpoch !== undefined &&
-          se.workerEpoch < q.workerEpoch &&
-          Q(se)
+          callId_2 !== callId &&
+          joinedId.retryKey === record.retryKey &&
+          joinedId.workerEpoch !== undefined &&
+          joinedId.workerEpoch < record.workerEpoch &&
+          lookupCall(joinedId)
         ) {
-          let re = Z.get(callId);
-          if (re === undefined) return P(callId, se);
-          if (ee === undefined && q.workerEpoch >= re)
-            ee = {
-              id: callId,
-              entry: se,
+          let carrier = byJoinedId.get(callId_2);
+          if (carrier === undefined) return withCallId(callId_2, joinedId);
+          if (found === undefined && record.workerEpoch >= carrier)
+            found = {
+              id: callId_2,
+              entry: joinedId,
             };
         }
-      return ee === undefined ? undefined : P(ee.id, ee.entry);
+      return found === undefined ? undefined : withCallId(found.id, found.entry);
     },
-    carryQuestion(L, q, askId) {
-      let Z = r.get(L);
-      let ee = r.get(q);
+    carryQuestion(callId, retryCallId, askId) {
+      let record = records.get(callId);
+      let retryRecord = records.get(retryCallId);
       if (
-        Z === undefined ||
-        ee === undefined ||
-        ee.summary.code !== JOINED_RETRY ||
-        ee.summary.joinedCallId !== L ||
-        Z.workerEpoch === undefined ||
-        ee.workerEpoch === undefined ||
-        ee.workerEpoch <= Z.workerEpoch
+        record === undefined ||
+        retryRecord === undefined ||
+        retryRecord.summary.code !== JOINED_RETRY ||
+        retryRecord.summary.joinedCallId !== callId ||
+        record.workerEpoch === undefined ||
+        retryRecord.workerEpoch === undefined ||
+        retryRecord.workerEpoch <= record.workerEpoch
       )
         return false;
-      y(ee);
-      ee.summary = {
+      dropResult(retryRecord);
+      retryRecord.summary = {
         state: "asked",
         askId,
-        servedAt: n(),
+        servedAt: now(),
       };
-      G(L, {
+      applySummary(callId, {
         state: "failed",
         code: JOINED_RETRY,
-        joinedCallId: q,
+        joinedCallId: retryCallId,
       });
       return true;
     },
-    newestRetryJoinedTo(L) {
-      let q = r.get(L);
-      if (q?.workerEpoch === undefined) return;
-      let Q;
-      for (let [Z, ee] of r)
+    newestRetryJoinedTo(callId) {
+      let record = records.get(callId);
+      if (record?.workerEpoch === undefined) return;
+      let newest;
+      for (let [id, entry] of records)
         if (
-          ee.summary.code === JOINED_RETRY &&
-          ee.summary.joinedCallId === L &&
-          ee.workerEpoch !== undefined &&
-          ee.workerEpoch > q.workerEpoch &&
-          (Q === undefined || ee.workerEpoch > Q.epoch)
+          entry.summary.code === JOINED_RETRY &&
+          entry.summary.joinedCallId === callId &&
+          entry.workerEpoch !== undefined &&
+          entry.workerEpoch > record.workerEpoch &&
+          (newest === undefined || entry.workerEpoch > newest.epoch)
         )
-          Q = {
-            id: Z,
-            epoch: ee.workerEpoch,
+          newest = {
+            id,
+            epoch: entry.workerEpoch,
           };
-      return Q?.id;
+      return newest?.id;
     },
-    countOutcomeQuery(L, q) {
-      let Q = r.get(L);
-      if (Q === undefined) return;
-      Q.queriesSinceReported += 1;
-      let queriesSinceReported = Q.queriesSinceReported;
-      let ee = Q.reportedQueryStatus !== q || queriesSinceReported >= MAX_QUERIES_SINCE_REPORT;
-      if (ee) {
-        Q.queriesSinceReported = 0;
-        Q.reportedQueryStatus = q;
+    countOutcomeQuery(callId, kind) {
+      let record = records.get(callId);
+      if (record === undefined) return;
+      record.queriesSinceReported += 1;
+      let queriesSinceReported = record.queriesSinceReported;
+      let outcome = record.reportedQueryStatus !== kind || queriesSinceReported >= MAX_QUERIES_SINCE_REPORT;
+      if (outcome) {
+        record.queriesSinceReported = 0;
+        record.reportedQueryStatus = kind;
       }
       return {
-        report: ee,
+        report: outcome,
         sinceReported: queriesSinceReported,
       };
     },
     get forgotAny() {
-      return h;
+      return droppedPrior;
     },
     get retainedBytes() {
-      return s;
+      return resultBytes;
     },
   };
 }
@@ -360,105 +384,112 @@ function servedCallsDir() {
 /**
  * 服务调用日志文件名格式与日志行 schema（started、disowned、leg 等记录）。
  */
-var SERVED_CALL_LOG_FILE_RE = /^\d{8}T\d{6}Z_[A-Za-z0-9-]{1,128}\.jsonl$/;
-var servedCallLogLineSchema = DoctorLazy(() => {
-  let e = string().min(1).max(512);
-  return discriminatedUnion("t", [
-    u({
-      t: literal("started"),
-      at: string(),
-      epoch: e,
-      caller: e,
-      call_id: e,
-    }),
-    u({
-      t: literal("disowned"),
-      at: string(),
-      epoch: e,
-      caller: e,
-      call_id: e,
-    }),
-    u({
-      t: literal("leg"),
-      at: string(),
-      epoch: e,
-      caller: e,
-      call_id: e,
-      record: u({
-        state: _enum(["received", "running", "asked", "completed", "failed"]),
-        code: string().min(1).max(64).optional(),
-        ended_as: string().min(1).max(64).optional(),
-        ran_nothing: M().optional(),
-        is_error: M().optional(),
+var SERVED_CALL_LOG_FILE_RE; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var servedCallLogLineSchema;
+var servedCallCodeSchema;
+var servedCallEndedAsSchema;
+deferInit("chunk-s61vbvea.js:332134", () => {
+  SERVED_CALL_LOG_FILE_RE = /^\d{8}T\d{6}Z_[A-Za-z0-9-]{1,128}\.jsonl$/;
+  servedCallLogLineSchema = DoctorLazy(() => {
+    let shortString = stringSchema().min(1).max(512);
+    return discriminatedUnion("t", [
+      objectSchema({
+        t: literal("started"),
+        at: stringSchema(),
+        epoch: shortString,
+        caller: shortString,
+        call_id: shortString,
       }),
-    }),
-  ]);
+      objectSchema({
+        t: literal("disowned"),
+        at: stringSchema(),
+        epoch: shortString,
+        caller: shortString,
+        call_id: shortString,
+      }),
+      objectSchema({
+        t: literal("leg"),
+        at: stringSchema(),
+        epoch: shortString,
+        caller: shortString,
+        call_id: shortString,
+        record: objectSchema({
+          state: _enum(["received", "running", "asked", "completed", "failed"]),
+          code: stringSchema().min(1).max(64).optional(),
+          ended_as: stringSchema().min(1).max(64).optional(),
+          ran_nothing: booleanSchema().optional(),
+          is_error: booleanSchema().optional(),
+        }),
+      }),
+    ]);
+  });
+  servedCallCodeSchema = DoctorLazy(() =>
+    _enum([
+      ...REMOTE_TOOL_REFUSAL_CODES,
+      ...ERROR_OUTCOME_CODES,
+      ...RAN_OUTCOME_KINDS,
+      DISOWNED,
+      JOINED_RETRY,
+      REPLACED_BY_RETRY,
+      LOST_IN_RESTART,
+    ]),
+  );
+  servedCallEndedAsSchema = DoctorLazy(() => _enum(WITHDRAW_REASON_CODES).exclude(["unrecognized"]));
 });
-var servedCallCodeSchema = DoctorLazy(() =>
-  _enum([
-    ...REMOTE_TOOL_REFUSAL_CODES,
-    ...ERROR_OUTCOME_CODES,
-    ...RAN_OUTCOME_KINDS,
-    DISOWNED,
-    JOINED_RETRY,
-    REPLACED_BY_RETRY,
-    LOST_IN_RESTART,
-  ]),
-);
-var servedCallEndedAsSchema = DoctorLazy(() => _enum(WITHDRAW_REASON_CODES).exclude(["unrecognized"]));
 //@ chunk-s61vbvea.js:332692-335464 placement
-function writeServedCallLog(e) {
-  let { epoch } = e;
-  let r = e.dir ?? servedCallsDir();
-  let s = e.storage ?? getFileReader();
-  let h = e.now ?? (() => new Date());
+function writeServedCallLog(options) {
+  let { epoch } = options;
+  let dir = options.dir ?? servedCallsDir();
+  let storage = options.storage ?? getFileReader();
+  let now = options.now ?? (() => new Date());
   let resolved = Promise.resolve();
-  let S;
-  let w;
-  let R = false;
-  let x = new Set();
-  let P = new Set();
-  let j = (Z, error) => {
-    let ae = getErrnoCode(error) ?? (error instanceof Error ? error.name : "unknown");
-    if (!x.has(`${Z}:${ae}`)) {
-      x.add(`${Z}:${ae}`);
-      logForDebugging(`[remote-tools] served-call log ${Z}: ${ae}`, {
+  let mkdirPromise;
+  let segment;
+  let loggedOk = false;
+  let toldFailures = new Set();
+  let featureFailures = new Set();
+  let reportFailure = (kind, error) => {
+    let code = getErrnoCode(error) ?? (error instanceof Error ? error.name : "unknown");
+    if (!toldFailures.has(`${kind}:${code}`)) {
+      toldFailures.add(`${kind}:${code}`);
+      logForDebugging(`[remote-tools] served-call log ${kind}: ${code}`, {
         level: "warn",
       });
     }
-    if (!P.has(Z)) {
-      P.add(Z);
-      logFeatureSad("remote_tool_call_log", Z);
+    if (!featureFailures.has(kind)) {
+      featureFailures.add(kind);
+      logFeatureSad("remote_tool_call_log", kind);
     }
   };
-  let G;
-  let L;
-  let q = async () => {
-    let Z;
+  let priorLoadedResult;
+  let loadPromise;
+  let loadPrior = async () => {
+    let files;
     try {
-      Z = await s.list(r);
+      files = await storage.list(dir);
     } catch (error) {
       if (isENOENT(error)) return new Map();
       throw error;
     }
-    let ee = `_${epoch}.jsonl`;
-    let sliced = Z.filter((he) => SERVED_CALL_LOG_FILE_RE.test(he) && !he.endsWith(ee))
+    let ownSuffix = `_${epoch}.jsonl`;
+    let sliced = files
+      .filter((name) => SERVED_CALL_LOG_FILE_RE.test(name) && !name.endsWith(ownSuffix))
       .sort()
       .reverse()
       .slice(0, MAX_LOG_DAYS);
-    let se = new Map();
-    for (let he of sliced) {
-      let Se;
+    let latestLines = new Map();
+    for (let name of sliced) {
+      let tail;
       try {
-        Se = await s.readTail(join(r, he), MAX_LOG_FILE_BYTES, {
+        tail = await storage.readTail(join(dir, name), MAX_LOG_FILE_BYTES, {
           noFollow: true,
         });
       } catch (error) {
-        j("load_failed", error);
+        reportFailure("load_failed", error);
         continue;
       }
-      let str = Se.toString("utf8");
-      if (Se.length >= MAX_LOG_FILE_BYTES) {
+      let str = tail.toString("utf8");
+      if (tail.length >= MAX_LOG_FILE_BYTES) {
         let index = str.indexOf(`
 `);
         str = index === -1 ? "" : str.slice(index + 1);
@@ -466,138 +497,138 @@ function writeServedCallLog(e) {
       for (let line of str.split(`
 `)) {
         let servedCallLogLine = parseServedCallLogLine(line);
-        let Ee = servedCallLogLine === undefined ? NaN : Date.parse(servedCallLogLine.at);
-        if (servedCallLogLine === undefined || servedCallLogLine.epoch === epoch || !Number.isFinite(Ee))
+        let at = servedCallLogLine === undefined ? NaN : Date.parse(servedCallLogLine.at);
+        if (servedCallLogLine === undefined || servedCallLogLine.epoch === epoch || !Number.isFinite(at))
           continue;
-        let Ie = `${servedCallLogLine.caller}\x00${servedCallLogLine.call_id}`;
-        let ke = se.get(Ie);
-        if (ke === undefined && se.size >= MAX_LOG_ENTRIES) continue;
+        let key = `${servedCallLogLine.caller}\x00${servedCallLogLine.call_id}`;
+        let held = latestLines.get(key);
+        if (held === undefined && latestLines.size >= MAX_LOG_ENTRIES) continue;
         if (
-          ke === undefined ||
-          (servedCallLogLine.t !== "disowned" && ke.line.t === "disowned") ||
-          (Ee >= ke.at && (servedCallLogLine.t !== "disowned" || ke.line.t === "disowned"))
+          held === undefined ||
+          (servedCallLogLine.t !== "disowned" && held.line.t === "disowned") ||
+          (at >= held.at && (servedCallLogLine.t !== "disowned" || held.line.t === "disowned"))
         )
-          se.set(Ie, {
+          latestLines.set(key, {
             line: servedCallLogLine,
-            at: Ee,
+            at,
           });
       }
     }
-    let re = new Map();
-    for (let { line, at } of se.values()) {
-      let ce = re.get(line.caller) ?? [];
-      ce.push(servedCallRecordFromLogLine(line, at));
-      re.set(line.caller, ce);
+    let byCaller = new Map();
+    for (let { line, at } of latestLines.values()) {
+      let calls = byCaller.get(line.caller) ?? [];
+      calls.push(servedCallRecordFromLogLine(line, at));
+      byCaller.set(line.caller, calls);
     }
-    for (let [he, Se] of re) {
-      Se.sort((ce, we) => ce.servedAt - we.servedAt);
-      re.set(he, Se.slice(-MAX_CALLS_PER_SORT));
+    for (let [caller, calls] of byCaller) {
+      calls.sort((left, right) => left.servedAt - right.servedAt);
+      byCaller.set(caller, calls.slice(-MAX_CALLS_PER_SORT));
     }
-    return re;
+    return byCaller;
   };
-  let Q = {
+  let sortDay = {
     day: "",
     bySort: new Map(),
   };
   return {
-    note(Z) {
-      let ee = h();
-      let ae = `${ee.toISOString().replace(/[-:]/g, "").slice(0, 15)}Z`;
-      let sliced = ae.slice(0, 8);
-      let re = false;
-      if (Z.t === "refused_request") {
-        if (Q.day !== sliced)
-          Q = {
+    note(entry) {
+      let nowDate = now();
+      let stamp = `${nowDate.toISOString().replace(/[-:]/g, "").slice(0, 15)}Z`;
+      let sliced = stamp.slice(0, 8);
+      let capReached = false;
+      if (entry.t === "refused_request") {
+        if (sortDay.day !== sliced)
+          sortDay = {
             day: sliced,
             bySort: new Map(),
           };
-        let ke = `${Z.caller}\x00${Z.what}\x00${Z.variant_of_listed}`;
-        let Me = Q.bySort.get(ke) ?? new Set();
-        let We = `${Z.length}\x00${Z.name_hash}`;
-        if (Me.has(We) || Me.size >= MAX_SORT_KEYS) return;
-        Q.bySort.set(ke, Me.add(We));
-        re = Me.size === MAX_SORT_KEYS;
+        let groupKey = `${entry.caller}\x00${entry.what}\x00${entry.variant_of_listed}`;
+        let seen = sortDay.bySort.get(groupKey) ?? new Set();
+        let valueKey = `${entry.length}\x00${entry.name_hash}`;
+        if (seen.has(valueKey) || seen.size >= MAX_SORT_KEYS) return;
+        sortDay.bySort.set(groupKey, seen.add(valueKey));
+        capReached = seen.size === MAX_SORT_KEYS;
       }
-      let { t: he, ...Se } = Z;
+      let { t: kind, ...rest } = entry;
       let jsonLine = toJsonLine({
-        t: he,
-        at: ee.toISOString(),
+        t: kind,
+        at: nowDate.toISOString(),
         epoch,
-        ...Se,
-        ...(re && {
+        ...rest,
+        ...(capReached && {
           more_not_written: true,
         }),
       });
-      let we = Buffer.byteLength(jsonLine, "utf8");
-      let ie = "";
-      if (w === undefined || w.day !== sliced || w.bytes + we > MAX_LOG_FILE_BYTES) {
-        let ke = `${ae}_${epoch}.jsonl`;
-        if (w === undefined || ke !== w.name) {
-          ie = toJsonLine({
+      let bytes = Buffer.byteLength(jsonLine, "utf8");
+      let header = "";
+      if (segment === undefined || segment.day !== sliced || segment.bytes + bytes > MAX_LOG_FILE_BYTES) {
+        let name = `${stamp}_${epoch}.jsonl`;
+        if (segment === undefined || name !== segment.name) {
+          header = toJsonLine({
             t: "segment",
             v: CALL_LOG_VERSION,
             epoch,
             pid: process.pid,
-            started_at: ee.toISOString(),
-            handle_hash: shortHash(e.targetName),
+            started_at: nowDate.toISOString(),
+            handle_hash: shortHash(options.targetName),
           });
-          w = {
-            name: ke,
+          segment = {
+            name,
             day: sliced,
-            bytes: Buffer.byteLength(ie, "utf8"),
+            bytes: Buffer.byteLength(header, "utf8"),
           };
         }
       }
-      w.bytes += we;
-      let Ee = join(r, w.name);
-      let Ie = ie + jsonLine;
+      segment.bytes += bytes;
+      let filePath = join(dir, segment.name);
+      let payload = header + jsonLine;
       resolved = resolved.then(async () => {
         try {
-          S ??= s.mkdir(r, 448).catch((error) => {
-            S = undefined;
+          mkdirPromise ??= storage.mkdir(dir, 448).catch((error) => {
+            mkdirPromise = undefined;
             throw error;
           });
-          await S;
-          await s.append(Ee, Ie, 384);
-          if (!R) {
-            R = true;
+          await mkdirPromise;
+          await storage.append(filePath, payload, 384);
+          if (!loggedOk) {
+            loggedOk = true;
             logFeatureOk("remote_tool_call_log");
           }
         } catch (error) {
-          if (isENOENT(error)) S = undefined;
-          j("append_failed", error);
+          if (isENOENT(error)) mkdirPromise = undefined;
+          reportFailure("append_failed", error);
         }
       });
     },
     get priorLoaded() {
-      return G !== undefined;
+      return priorLoadedResult !== undefined;
     },
     loadPrior() {
-      if (L === undefined) {
-        let Z = q().then(
-          (ae) => {
-            G = ae;
+      if (loadPromise === undefined) {
+        let loadOnce = loadPrior().then(
+          (byCaller) => {
+            priorLoadedResult = byCaller;
           },
           (error) => {
-            G ??= new Map();
-            j("load_failed", error);
+            priorLoadedResult ??= new Map();
+            reportFailure("load_failed", error);
           },
         );
         let promise = new Promise((resolve) => {
           let timer = setTimeout(() => {
-            if (G === undefined) {
-              G = new Map();
-              j("load_timeout", Error("load_timeout"));
+            if (priorLoadedResult === undefined) {
+              priorLoadedResult = new Map();
+              reportFailure("load_timeout", Error("load_timeout"));
             }
             resolve();
-          }, e.loadTimeoutMs ?? LOG_LOAD_TIMEOUT_MS);
-          Z.then(() => clearTimeout(timer));
+          }, options.loadTimeoutMs ?? LOG_LOAD_TIMEOUT_MS);
+          loadOnce.then(() => clearTimeout(timer));
         });
-        L = Promise.race([Z, promise]);
+        loadPromise = Promise.race([loadOnce, promise]);
       }
-      return L;
+      return loadPromise;
     },
-    priorCallsFor: (Z) => G?.get(Z) ?? [],
+    priorCallsFor: (caller) => priorLoadedResult?.get(caller) ?? [],
     flush: () => resolved,
   };
 }
@@ -605,8 +636,8 @@ function writeServedCallLog(e) {
 function parseServedCallLogLine(line) {
   if (line === "") return;
   try {
-    let n = servedCallLogLineSchema().safeParse(jsonParseRaw(line));
-    return n.success ? n.data : undefined;
+    let parsed = servedCallLogLineSchema().safeParse(jsonParseRaw(line));
+    return parsed.success ? parsed.data : undefined;
   } catch {
     return;
   }
@@ -649,18 +680,18 @@ function servedCallRecordFromLogLine(call, servedAt) {
             },
           };
         case "failed": {
-          let s =
+          let code =
             call.record.code === undefined ? undefined : servedCallCodeSchema().safeParse(call.record.code);
-          let h = servedCallEndedAsSchema().safeParse(call.record.ended_as);
+          let endedAs = servedCallEndedAsSchema().safeParse(call.record.ended_as);
           return {
             ...base,
             summary: {
               state: "failed",
-              ...(s !== undefined && {
-                code: s.success ? s.data : "unrecognized",
+              ...(code !== undefined && {
+                code: code.success ? code.data : "unrecognized",
               }),
-              ...(h.success && {
-                endedAs: h.data,
+              ...(endedAs.success && {
+                endedAs: endedAs.data,
               }),
               ...(call.record.ran_nothing === true && {
                 ranNothing: true,

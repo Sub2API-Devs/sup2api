@@ -15,18 +15,18 @@ import { truncateToLength } from "./stringUtils.js";
 /**
  * 把行分隔符替换为空格。
  */
-function collapseLineBreaks(n) {
-  return n.replace(/[\r\n\u2028\u2029]+/g, " ");
+function collapseLineBreaks(text) {
+  return text.replace(/[\r\n\u2028\u2029]+/g, " ");
 }
 //@ chunk-33en6jc2.js:324-516 placement
 /**
  * 去除不可打印字符后按长度截断，并注明还有多少字符未显示。
  */
-function truncateWithNotice(n, r) {
-  let e = stripNonPrintable(n);
-  if (e.length <= r) return e;
-  let t = truncateToLength(e, r);
-  let o = Array.from(e.slice(t.length)).length;
-  return `${t} \u2026 (${o} more characters follow that are NOT shown in this message)`;
+function truncateWithNotice(text, max) {
+  let cleaned = stripNonPrintable(text);
+  if (cleaned.length <= max) return cleaned;
+  let head = truncateToLength(cleaned, max);
+  let remainingCount = Array.from(cleaned.slice(head.length)).length;
+  return `${head} \u2026 (${remainingCount} more characters follow that are NOT shown in this message)`;
 }
 export { truncateWithNotice, collapseLineBreaks };

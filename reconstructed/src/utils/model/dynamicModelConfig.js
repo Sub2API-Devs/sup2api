@@ -22,11 +22,17 @@ import {
   APIUserAbortError,
   APIError,
 } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:2503901-2503981 placement
-var DYNAMIC_CONFIG_TIMEOUT_MS = 5000;
-var TIMEOUT_MESSAGE = "dynamic model config fetch timed out";
-var IN_FLIGHT_MARKER = Symbol("in-flight");
+var DYNAMIC_CONFIG_TIMEOUT_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var TIMEOUT_MESSAGE;
+var IN_FLIGHT_MARKER;
+deferInit("chunk-e6aww6q8.js:2503901", () => {
+  DYNAMIC_CONFIG_TIMEOUT_MS = 5000;
+  TIMEOUT_MESSAGE = "dynamic model config fetch timed out";
+  IN_FLIGHT_MARKER = Symbol("in-flight");
+});
 //@ chunk-e6aww6q8.js:2503981-2504005 placement
 /**
  * 判断动态模型配置是否启用（此构建恒为 false）。
@@ -38,9 +44,9 @@ function isDynamicModelConfigEnabled() {
 /**
  * 拉取动态模型配置（未启用时返回 null）。
  */
-function fetchDynamicModelConfig(resolvedInitialModel, n, r) {
+function fetchDynamicModelConfig(resolvedInitialModel, signal, options) {
   if (!isDynamicModelConfigEnabled()) return Promise.resolve(null);
-  return getOrFetchModelConfig(toProviderWireModelId(resolvedInitialModel), n, r);
+  return getOrFetchModelConfig(toProviderWireModelId(resolvedInitialModel), signal, options);
 }
 //@ chunk-e6aww6q8.js:2504086-2504317 placement
 /**
@@ -48,47 +54,47 @@ function fetchDynamicModelConfig(resolvedInitialModel, n, r) {
  */
 async function awaitModelConfigFetch(model, credentials, storageV5) {
   if (!isDynamicModelConfigEnabled()) return;
-  let s = getOrFetchModelConfig(toProviderWireModelId(model), credentials, storageV5);
+  let fetchPromise = getOrFetchModelConfig(toProviderWireModelId(model), credentials, storageV5);
   let startTime = performance.now();
-  if ((await Promise.race([s, Promise.resolve(IN_FLIGHT_MARKER)])) === IN_FLIGHT_MARKER) {
-    await s;
+  if ((await Promise.race([fetchPromise, Promise.resolve(IN_FLIGHT_MARKER)])) === IN_FLIGHT_MARKER) {
+    await fetchPromise;
     logFeatureSad("model_config_fetch", "request_waited", {
       waited_ms: Math.round(performance.now() - startTime),
     });
   }
 }
 //@ chunk-e6aww6q8.js:2504317-2504433 placement
-function getOrFetchModelConfig(providerWireModelId, credentials, storageV5) {
+function getOrFetchModelConfig(modelId, credentials, storageV5) {
   let modelConfigs = getProviderState().providerCache.modelConfigs;
-  let h = modelConfigs.get(providerWireModelId);
-  if (h === undefined) {
-    h = logDynamicModelConfig(providerWireModelId, credentials, storageV5);
-    modelConfigs.set(providerWireModelId, h);
+  let pending = modelConfigs.get(modelId);
+  if (pending === undefined) {
+    pending = logDynamicModelConfig(modelId, credentials, storageV5);
+    modelConfigs.set(modelId, pending);
   }
-  return h;
+  return pending;
 }
 //@ chunk-e6aww6q8.js:2504433-2505397 placement
-async function logDynamicModelConfig(e, credentials, storageV5) {
+async function logDynamicModelConfig(modelId, credentials, storageV5) {
   let startTime = performance.now();
-  let h = AbortSignal.timeout(DYNAMIC_CONFIG_TIMEOUT_MS);
-  let y;
+  let timeoutSignal = AbortSignal.timeout(DYNAMIC_CONFIG_TIMEOUT_MS);
+  let clientMs;
   try {
-    let S = await withTimeout_2(
+    let config = await withTimeout_2(
       getAnthropicClient({
         maxRetries: 0,
         agentContext: mainAgentContext(),
         credentials,
         storageV5,
       }).then((anthropicClient) => {
-        y = Math.round(performance.now() - startTime);
-        h.throwIfAborted();
+        clientMs = Math.round(performance.now() - startTime);
+        timeoutSignal.throwIfAborted();
         return anthropicClient.models.retrieve(
-          e,
+          modelId,
           {
             betas: isClaudeAISubscriber() ? [OAUTH_BETA_HEADER] : undefined,
           },
           {
-            signal: h,
+            signal: timeoutSignal,
           },
         );
       }),
@@ -97,37 +103,37 @@ async function logDynamicModelConfig(e, credentials, storageV5) {
     );
     let rounded = Math.round(performance.now() - startTime);
     logForDebugging(
-      `[modelConfig] ${e} \u2192 ${S.id}: max_input_tokens=${S.max_input_tokens} max_tokens=${S.max_tokens} (client ${y}ms, total ${rounded}ms)`,
+      `[modelConfig] ${modelId} \u2192 ${config.id}: max_input_tokens=${config.max_input_tokens} max_tokens=${config.max_tokens} (client ${clientMs}ms, total ${rounded}ms)`,
     );
     logFeatureOk("model_config_fetch", {
       fetch_ms: rounded,
-      ...(y !== undefined && {
-        client_ms: y,
+      ...(clientMs !== undefined && {
+        client_ms: clientMs,
       }),
     });
-    return S;
+    return config;
   } catch (error) {
     let rounded = Math.round(performance.now() - startTime);
     logForDebugging(
-      `[modelConfig] ${e}: ${error instanceof Error ? error.message : String(error)} (${rounded}ms)`,
+      `[modelConfig] ${modelId}: ${error instanceof Error ? error.message : String(error)} (${rounded}ms)`,
       {
         level: "error",
       },
     );
-    let L = "connection";
+    let failureKind = "connection";
     if (
-      h.aborted ||
+      timeoutSignal.aborted ||
       (error instanceof Error && error.message === TIMEOUT_MESSAGE) ||
       error instanceof APIConnectionTimeoutError ||
       error instanceof APIUserAbortError
     )
-      L = "timeout";
+      failureKind = "timeout";
     else if (error instanceof APIError && error.status !== undefined)
-      L = error.status === 404 ? "not_found" : `http_${error.status}`;
-    logFeatureBad("model_config_fetch", L, {
+      failureKind = error.status === 404 ? "not_found" : `http_${error.status}`;
+    logFeatureBad("model_config_fetch", failureKind, {
       fetch_ms: rounded,
-      ...(y !== undefined && {
-        client_ms: y,
+      ...(clientMs !== undefined && {
+        client_ms: clientMs,
       }),
     });
     return null;

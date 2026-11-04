@@ -9,8 +9,8 @@
  * attribution: fingerprint 3, layout 1
  */
 import { wrapAnsi } from "../ink/wrapAnsi.js";
-import { Rh } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { memo } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTheme } from "./design-system/ThemeProvider.js";
 import { useScrollViewportSize } from "./ScrollViewportContext.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
@@ -29,7 +29,12 @@ import { renderWithSafeLinks } from "../utils/markdownInlineRendering.js";
 import { formatTokenWindowed, summarizeMarkdownText, padAligned } from "../utils/markdown.js";
 import { stripAnsi } from "../utils/stripAnsi.js";
 import { bunStringWidth } from "../ink/stringWidth.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-cwwxybjc.js:991-1032 fingerprint = ANSI_BOLD_END (0.532)
+var ANSI_RESET = "\x1B[0m";
+var ANSI_DIM = "\x1B[2m";
+var ANSI_NORMAL_INTENSITY = "\x1B[22m";
 //@ chunk-bc20zedk.js:11866-12030 fingerprint = wrapText (1)
 function wrapText(text, width, options) {
   if (width <= 0) return [text];
@@ -50,65 +55,68 @@ function wrapText(text, width, options) {
 /**
  * Markdown 表格组件：按主题、宽度与读屏模式生成表格；结果为 ANSI 文本时直接输出，否则交给表格布局组件。
  */
-var MarkdownTableView = Rh(function (props) {
-  let $ = w(15);
-  let { token, highlight, forceWidth, linkCap, isWindowed } = props;
-  let [theme] = useTheme();
-  let { columns } = useScrollViewportSize(useTerminalSize());
-  let screenReader = useIsScreenReaderEnabled();
-  let width = forceWidth ?? columns;
-  let layoutMemo;
-  if (
-    $[0] !== highlight ||
-    $[1] !== screenReader ||
-    $[2] !== isWindowed ||
-    $[3] !== linkCap ||
-    $[4] !== width ||
-    $[5] !== theme ||
-    $[6] !== token
-  ) {
-    layoutMemo = MarkdownTable(token, width, theme, highlight, linkCap, screenReader, isWindowed);
-    $[0] = highlight;
-    $[1] = screenReader;
-    $[2] = isWindowed;
-    $[3] = linkCap;
-    $[4] = width;
-    $[5] = theme;
-    $[6] = token;
-    $[7] = layoutMemo;
-  } else layoutMemo = $[7];
-  let layout = layoutMemo;
-  if (layout.kind === "ansi") {
-    let ansiNode;
-    if ($[8] !== layout.text) {
-      ansiNode = jsxProd_default(Ansi, {
-        children: layout.text,
+var MarkdownTableView; // deferred: uses useTheme (./design-system/ThemeProvider.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-bc20zedk.js:12030", () => {
+  MarkdownTableView = memo(function (props) {
+    let $ = useMemoCache(15);
+    let { token, highlight, forceWidth, linkCap, isWindowed } = props;
+    let [theme] = useTheme();
+    let { columns } = useScrollViewportSize(useTerminalSize());
+    let screenReader = useIsScreenReaderEnabled();
+    let width = forceWidth ?? columns;
+    let layoutMemo;
+    if (
+      $[0] !== highlight ||
+      $[1] !== screenReader ||
+      $[2] !== isWindowed ||
+      $[3] !== linkCap ||
+      $[4] !== width ||
+      $[5] !== theme ||
+      $[6] !== token
+    ) {
+      layoutMemo = MarkdownTable(token, width, theme, highlight, linkCap, screenReader, isWindowed);
+      $[0] = highlight;
+      $[1] = screenReader;
+      $[2] = isWindowed;
+      $[3] = linkCap;
+      $[4] = width;
+      $[5] = theme;
+      $[6] = token;
+      $[7] = layoutMemo;
+    } else layoutMemo = $[7];
+    let layout = layoutMemo;
+    if (layout.kind === "ansi") {
+      let ansiNode;
+      if ($[8] !== layout.text) {
+        ansiNode = jsxProd_default(Ansi, {
+          children: layout.text,
+        });
+        $[8] = layout.text;
+        $[9] = ansiNode;
+      } else ansiNode = $[9];
+      return ansiNode;
+    }
+    let tableNode;
+    if (
+      $[10] !== layout.headers ||
+      $[11] !== layout.rows ||
+      $[12] !== layout.truncatedCount ||
+      $[13] !== width
+    ) {
+      tableNode = jsxProd_default(layoutMarkdownTable, {
+        headers: layout.headers,
+        rows: layout.rows,
+        terminalWidth: width,
+        truncatedCount: layout.truncatedCount,
       });
-      $[8] = layout.text;
-      $[9] = ansiNode;
-    } else ansiNode = $[9];
-    return ansiNode;
-  }
-  let tableNode;
-  if (
-    $[10] !== layout.headers ||
-    $[11] !== layout.rows ||
-    $[12] !== layout.truncatedCount ||
-    $[13] !== width
-  ) {
-    tableNode = jsxProd_default(layoutMarkdownTable, {
-      headers: layout.headers,
-      rows: layout.rows,
-      terminalWidth: width,
-      truncatedCount: layout.truncatedCount,
-    });
-    $[10] = layout.headers;
-    $[11] = layout.rows;
-    $[12] = layout.truncatedCount;
-    $[13] = width;
-    $[14] = tableNode;
-  } else tableNode = $[14];
-  return tableNode;
+      $[10] = layout.headers;
+      $[11] = layout.rows;
+      $[12] = layout.truncatedCount;
+      $[13] = width;
+      $[14] = tableNode;
+    } else tableNode = $[14];
+    return tableNode;
+  });
 });
 //@ chunk-bc20zedk.js:12707-15392 fingerprint = MarkdownTable (0.688)
 /**
@@ -116,12 +124,12 @@ var MarkdownTableView = Rh(function (props) {
  */
 function MarkdownTable(token, width, theme, highlight, linkCap, screenReader, windowed) {
   let max = Math.max(0, token.rows.length - MAX_RENDER_ROWS);
-  let x = max > 0 ? token.rows.slice(0, MAX_RENDER_ROWS) : token.rows;
-  let h = new Map();
+  let visibleRows = max > 0 ? token.rows.slice(0, MAX_RENDER_ROWS) : token.rows;
+  let cellCache = new Map();
   function formatCell(tokens) {
-    let F = h.get(tokens);
-    if (F !== undefined) return F;
-    let K = renderWithSafeLinks(
+    let cached = cellCache.get(tokens);
+    if (cached !== undefined) return cached;
+    let formatted = renderWithSafeLinks(
       tokens,
       () =>
         tokens
@@ -138,16 +146,16 @@ function MarkdownTable(token, width, theme, highlight, linkCap, screenReader, wi
           )
           .join("") ?? "",
     );
-    h.set(tokens, K);
-    return K;
+    cellCache.set(tokens, formatted);
+    return formatted;
   }
   function getPlainText(tokens) {
     return stripAnsi(formatCell(tokens));
   }
   if (screenReader) {
     let text = summarizeMarkdownText(
-      token.header.map((F) => getPlainText(F.tokens)),
-      x.map((F) => F.map((K) => getPlainText(K.tokens))),
+      token.header.map((cell) => getPlainText(cell.tokens)),
+      visibleRows.map((row) => row.map((cell) => getPlainText(cell.tokens))),
     );
     if (max > 0)
       text += `
@@ -160,7 +168,7 @@ ${moreRowsText(max)}`;
   function getMinWidth(tokens) {
     let words = getPlainText(tokens)
       .split(/\s+/)
-      .filter((V) => V.length > 0);
+      .filter((word) => word.length > 0);
     if (words.length === 0) return LIST_LEVEL_INDENT;
     return Math.max(...words.map((w_0) => bunStringWidth(w_0)), LIST_LEVEL_INDENT);
   }
@@ -169,12 +177,12 @@ ${moreRowsText(max)}`;
   }
   let minWidths = token.header.map((header, colIndex) => {
     let maxMinWidth = getMinWidth(header.tokens);
-    for (let row of x) maxMinWidth = Math.max(maxMinWidth, getMinWidth(row[colIndex]?.tokens));
+    for (let row of visibleRows) maxMinWidth = Math.max(maxMinWidth, getMinWidth(row[colIndex]?.tokens));
     return maxMinWidth;
   });
   let idealWidths = token.header.map((header, colIndex) => {
     let maxIdeal = getIdealWidth(header.tokens);
-    for (let row of x) maxIdeal = Math.max(maxIdeal, getIdealWidth(row[colIndex]?.tokens));
+    for (let row of visibleRows) maxIdeal = Math.max(maxIdeal, getIdealWidth(row[colIndex]?.tokens));
     return maxIdeal;
   });
   let numCols = token.header.length;
@@ -188,7 +196,7 @@ ${moreRowsText(max)}`;
   else if (totalMin <= availableWidth) {
     let extraSpace = availableWidth - totalMin;
     let overflows = idealWidths.map((ideal, i) => ideal - minWidths[i]);
-    let totalOverflow = overflows.reduce((sum, te) => sum + te, 0);
+    let totalOverflow = overflows.reduce((sum, overflow) => sum + overflow, 0);
     columnWidths = minWidths.map((min, i_0) => {
       if (totalOverflow === 0) return min;
       let extra = Math.floor((overflows[i_0] / totalOverflow) * extraSpace);
@@ -208,7 +216,7 @@ ${moreRowsText(max)}`;
       });
       maxLines = Math.max(maxLines, wrapped.length);
     }
-    for (let row of x)
+    for (let row of visibleRows)
       for (let i_2 = 0; i_2 < row.length; i_2++) {
         let content = formatCell(row[i_2]?.tokens);
         let wrapped = wrapText(content, columnWidths[i_2], {
@@ -218,19 +226,19 @@ ${moreRowsText(max)}`;
       }
     return maxLines;
   }
-  let G = calculateMaxRowLines() > BLOCK_QUOTE_INDENT;
-  function q() {
-    if (x.length === 0)
+  let needsVertical = calculateMaxRowLines() > BLOCK_QUOTE_INDENT;
+  function renderVertical() {
+    if (visibleRows.length === 0)
       return {
         kind: "vertical",
         headers: [],
-        rows: [token.header.map((v) => formatCell(v.tokens))],
+        rows: [token.header.map((cell) => formatCell(cell.tokens))],
         truncatedCount: max,
       };
     return {
       kind: "vertical",
-      headers: token.header.map((v) => getPlainText(v.tokens).trim()),
-      rows: x.map((v) => v.map((F) => formatCell(F.tokens))),
+      headers: token.header.map((cell) => getPlainText(cell.tokens).trim()),
+      rows: visibleRows.map((row) => row.map((cell) => formatCell(cell.tokens))),
       truncatedCount: max,
     };
   }
@@ -273,31 +281,27 @@ ${moreRowsText(max)}`;
     });
     return line;
   }
-  if (G) return q();
-  let Z = [];
-  Z.push(renderBorderLine("top"));
-  Z.push(...renderRowLines(token.header, true));
-  Z.push(renderBorderLine("middle"));
-  x.forEach((row, rowIndex) => {
-    Z.push(...renderRowLines(row, false));
-    if (rowIndex < x.length - 1) Z.push(renderBorderLine("middle"));
+  if (needsVertical) return renderVertical();
+  let lines = [];
+  lines.push(renderBorderLine("top"));
+  lines.push(...renderRowLines(token.header, true));
+  lines.push(renderBorderLine("middle"));
+  visibleRows.forEach((row, rowIndex) => {
+    lines.push(...renderRowLines(row, false));
+    if (rowIndex < visibleRows.length - 1) lines.push(renderBorderLine("middle"));
   });
-  Z.push(renderBorderLine("bottom"));
-  let oe = 0;
-  for (let v of Z) {
-    let F = bunStringWidth(stripAnsi(v));
-    if (F > oe) oe = F;
+  lines.push(renderBorderLine("bottom"));
+  let maxLineWidth = 0;
+  for (let line of lines) {
+    let lineWidth = bunStringWidth(stripAnsi(line));
+    if (lineWidth > maxLineWidth) maxLineWidth = lineWidth;
   }
-  if (oe > width - CODE_LIST_TAB_WIDTH) return q();
-  if (max > 0) Z.push(moreRowsText(max));
+  if (maxLineWidth > width - CODE_LIST_TAB_WIDTH) return renderVertical();
+  if (max > 0) lines.push(moreRowsText(max));
   return {
     kind: "ansi",
-    text: Z.join(`
+    text: lines.join(`
 `),
   };
 }
-//@ chunk-cwwxybjc.js:991-1032 fingerprint = ANSI_BOLD_END (0.532)
-var ANSI_RESET = "\x1B[0m";
-var ANSI_DIM = "\x1B[2m";
-var ANSI_NORMAL_INTENSITY = "\x1B[22m";
 export { wrapText, MarkdownTableView, ANSI_RESET, ANSI_DIM, ANSI_NORMAL_INTENSITY };

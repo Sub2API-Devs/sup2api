@@ -19,20 +19,20 @@ import { logForDebugging } from "../../utils/debug.js";
  */
 async function mcpProxyFetchOptions(url) {
   if (!getUsableProxyUrl()) {
-    let r = agentProxyEnv();
-    if (r.HTTPS_PROXY && URL.parse(url)?.protocol === "https:") {
-      let n = {
-        url: r.HTTPS_PROXY,
-        noProxy: r.NO_PROXY,
+    let agentEnv = agentProxyEnv();
+    if (agentEnv.HTTPS_PROXY && URL.parse(url)?.protocol === "https:") {
+      let fallbackProxy = {
+        url: agentEnv.HTTPS_PROXY,
+        noProxy: agentEnv.NO_PROXY,
       };
       let proxyFetchOptions = getProxyFetchOptions({
         url,
-        fallbackProxy: n,
+        fallbackProxy,
       });
-      if (proxyFetchOptions.proxy === undefined || !r.SSL_CERT_FILE) return proxyFetchOptions;
+      if (proxyFetchOptions.proxy === undefined || !agentEnv.SSL_CERT_FILE) return proxyFetchOptions;
       let ca;
       try {
-        ca = await readFile(r.SSL_CERT_FILE, "utf8");
+        ca = await readFile(agentEnv.SSL_CERT_FILE, "utf8");
       } catch (error) {
         logForDebugging(
           `MCP agent-proxy fallback: failed to read CA bundle: ${error instanceof Error ? error.message : String(error)}`,
@@ -44,7 +44,7 @@ async function mcpProxyFetchOptions(url) {
       return getProxyFetchOptions({
         url,
         fallbackProxy: {
-          ...n,
+          ...fallbackProxy,
           ca,
         },
       });

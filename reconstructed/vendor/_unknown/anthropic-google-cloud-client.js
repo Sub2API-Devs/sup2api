@@ -2,7 +2,7 @@
  * _unknown/anthropic-google-cloud-client.js
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * third-party: _unknown/anthropic-google-cloud-client.js
- * pieces: chunk-e7naa6k8.js (2)
+ * pieces: chunk-e7naa6k8.js (1)
  * attribution: placement 2
  */
 import { Anthropic } from "../@anthropic-ai/sdk/client.mjs";
@@ -12,27 +12,27 @@ import { readEnv } from "../@anthropic-ai/bedrock-sdk/internal/utils/env.mjs";
 import {
   CREDENTIAL_OPTIONS,
   GLOBAL,
-  N,
-  H,
-  c,
-  p,
-  O,
-  E,
-  d,
-  b,
-  m,
+  workspaceInvokeURL,
+  NO_PROJECT_HINT,
+  _AnthropicGoogleCloud_instances,
+  _AnthropicGoogleCloud_bearerTokenProvider,
+  _AnthropicGoogleCloud_googleAuth,
+  _AnthropicGoogleCloud_authClient,
+  _AnthropicGoogleCloud_authClientPromise,
+  _AnthropicGoogleCloud_workspaceURL,
+  _AnthropicGoogleCloud_organizationURL,
   HTTPS_UNRESOLVED_INVALID,
-  a,
-  G,
+  __classPrivateFieldSet,
+  organizationInvokeURL,
   import_google_auth_library,
-  P,
-  f,
-  g,
-  Z,
-  T,
-  B,
+  GOOGLE_CLOUD_PLATFORM_SCOPE,
+  __classPrivateFieldGet,
+  _AnthropicGoogleCloud_isBaseURLOverridden,
+  ORGANIZATIONS_PATH_PREFIX,
+  _AnthropicGoogleCloud_awaitReady,
+  _AnthropicGoogleCloud_getBearerToken,
 } from "../@anthropic-ai/bedrock-sdk/internal/decoders/line.mjs";
-import { D } from "../@anthropic-ai/bedrock-sdk/internal/utils/values.mjs";
+import { isAbsoluteURL } from "../@anthropic-ai/bedrock-sdk/internal/utils/values.mjs";
 import { buildHeaders } from "../@anthropic-ai/bedrock-sdk/internal/headers.mjs";
 import { VERSION as VERSION_2 } from "../@anthropic-ai/sdk/version.mjs";
 
@@ -49,42 +49,42 @@ class AnthropicGoogleCloud extends Anthropic {
       "The deprecated text Completions API is not available on Claude Platform on Google Cloud",
     );
   }
-  set completions(e) {}
+  set completions(value) {}
   constructor({
-    baseURL: e = readEnv("ANTHROPIC_GOOGLE_CLOUD_BASE_URL"),
-    project: t = readEnv("ANTHROPIC_GOOGLE_CLOUD_PROJECT") ?? readEnv("GOOGLE_CLOUD_PROJECT"),
-    location: o = readEnv("ANTHROPIC_GOOGLE_CLOUD_LOCATION"),
-    workspaceId: r = readEnv("ANTHROPIC_GOOGLE_CLOUD_WORKSPACE_ID"),
-    bearerTokenProvider: n,
-    googleAuth: s,
-    authClient: i,
-    skipAuth: l = false,
-    ...k
+    baseURL = readEnv("ANTHROPIC_GOOGLE_CLOUD_BASE_URL"),
+    project = readEnv("ANTHROPIC_GOOGLE_CLOUD_PROJECT") ?? readEnv("GOOGLE_CLOUD_PROJECT"),
+    location = readEnv("ANTHROPIC_GOOGLE_CLOUD_LOCATION"),
+    workspaceId = readEnv("ANTHROPIC_GOOGLE_CLOUD_WORKSPACE_ID"),
+    bearerTokenProvider,
+    googleAuth,
+    authClient,
+    skipAuth = false,
+    ...opts
   } = {}) {
-    if (i && s)
+    if (authClient && googleAuth)
       throw new AnthropicError(
         "The `authClient` and `googleAuth` arguments are mutually exclusive; only one can be passed at a time.",
       );
-    if (l && (n || s || i))
+    if (skipAuth && (bearerTokenProvider || googleAuth || authClient))
       throw new AnthropicError(
         "The `skipAuth` option is mutually exclusive with `bearerTokenProvider`, `googleAuth`, and `authClient`; `skipAuth` disables authentication entirely.",
       );
-    for (let x of CREDENTIAL_OPTIONS)
-      if (k[x] != null)
+    for (let credentialOption of CREDENTIAL_OPTIONS)
+      if (opts[credentialOption] != null)
         throw new AnthropicError(
-          `The \`${x}\` option is not supported by AnthropicGoogleCloud; authentication uses a Google bearer token (\`bearerTokenProvider\`, \`googleAuth\`/\`authClient\`, or Application Default Credentials).`,
+          `The \`${credentialOption}\` option is not supported by AnthropicGoogleCloud; authentication uses a Google bearer token (\`bearerTokenProvider\`, \`googleAuth\`/\`authClient\`, or Application Default Credentials).`,
         );
-    o = o || GLOBAL;
-    let w = e;
-    let S = false;
-    if (!w)
-      if (t) {
-        if (r) w = N(t, o, r);
-      } else if (l) throw new AnthropicError(`No project was given. ${H}`);
-      else S = true;
+    location = location || GLOBAL;
+    let resolvedBaseURL = baseURL;
+    let projectMustResolve = false;
+    if (!resolvedBaseURL)
+      if (project) {
+        if (workspaceId) resolvedBaseURL = workspaceInvokeURL(project, location, workspaceId);
+      } else if (skipAuth) throw new AnthropicError(`No project was given. ${NO_PROJECT_HINT}`);
+      else projectMustResolve = true;
     super({
-      baseURL: w ?? null,
-      ...k,
+      baseURL: resolvedBaseURL ?? null,
+      ...opts,
       apiKey: null,
       authToken: null,
       ...{
@@ -97,106 +97,178 @@ class AnthropicGoogleCloud extends Anthropic {
         },
       },
     });
-    c.add(this);
-    p.set(this, undefined);
-    O.set(this, undefined);
-    E.set(this, undefined);
-    d.set(this, undefined);
-    b.set(this, undefined);
-    m.set(this, HTTPS_UNRESOLVED_INVALID);
-    this.project = t ?? null;
-    this.location = o ?? null;
-    this.workspaceId = r;
-    this.skipAuth = l;
-    a(this, p, n, "f");
-    a(this, O, s ?? null, "f");
-    a(this, E, i ?? null, "f");
-    if (!e) {
-      a(this, b, (this.baseURL = w ?? HTTPS_UNRESOLVED_INVALID), "f");
-      if (t) a(this, m, G(t, o), "f");
+    _AnthropicGoogleCloud_instances.add(this);
+    _AnthropicGoogleCloud_bearerTokenProvider.set(this, undefined);
+    _AnthropicGoogleCloud_googleAuth.set(this, undefined);
+    _AnthropicGoogleCloud_authClient.set(this, undefined);
+    _AnthropicGoogleCloud_authClientPromise.set(this, undefined);
+    _AnthropicGoogleCloud_workspaceURL.set(this, undefined);
+    _AnthropicGoogleCloud_organizationURL.set(this, HTTPS_UNRESOLVED_INVALID);
+    this.project = project ?? null;
+    this.location = location ?? null;
+    this.workspaceId = workspaceId;
+    this.skipAuth = skipAuth;
+    __classPrivateFieldSet(this, _AnthropicGoogleCloud_bearerTokenProvider, bearerTokenProvider, "f");
+    __classPrivateFieldSet(this, _AnthropicGoogleCloud_googleAuth, googleAuth ?? null, "f");
+    __classPrivateFieldSet(this, _AnthropicGoogleCloud_authClient, authClient ?? null, "f");
+    if (!baseURL) {
+      __classPrivateFieldSet(
+        this,
+        _AnthropicGoogleCloud_workspaceURL,
+        (this.baseURL = resolvedBaseURL ?? HTTPS_UNRESOLVED_INVALID),
+        "f",
+      );
+      if (project)
+        __classPrivateFieldSet(
+          this,
+          _AnthropicGoogleCloud_organizationURL,
+          organizationInvokeURL(project, location),
+          "f",
+        );
     }
-    let A;
-    if (!l && !n)
-      if (i) a(this, d, Promise.resolve(i), "f");
+    let googleAuth_2;
+    if (!skipAuth && !bearerTokenProvider)
+      if (authClient)
+        __classPrivateFieldSet(
+          this,
+          _AnthropicGoogleCloud_authClientPromise,
+          Promise.resolve(authClient),
+          "f",
+        );
       else {
-        A =
-          s ??
+        googleAuth_2 =
+          googleAuth ??
           new import_google_auth_library.GoogleAuth({
-            scopes: P,
+            scopes: GOOGLE_CLOUD_PLATFORM_SCOPE,
           });
-        a(this, d, A.getClient(), "f");
-        f(this, d, "f").catch(() => {});
+        __classPrivateFieldSet(this, _AnthropicGoogleCloud_authClientPromise, googleAuth_2.getClient(), "f");
+        __classPrivateFieldGet(this, _AnthropicGoogleCloud_authClientPromise, "f").catch(() => {});
       }
-    if (!S) this.ready = Promise.resolve();
+    if (!projectMustResolve) this.ready = Promise.resolve();
     else {
-      let x =
-        A ??
-        s ??
+      let googleAuthInstance =
+        googleAuth_2 ??
+        googleAuth ??
         new import_google_auth_library.GoogleAuth({
-          scopes: P,
-          ...(i
+          scopes: GOOGLE_CLOUD_PLATFORM_SCOPE,
+          ...(authClient
             ? {
-                authClient: i,
+                authClient,
               }
             : {}),
         });
-      let v = o;
-      this.ready = x.getProjectId().then(
-        (h) => {
-          this.project = h;
-          if (f(this, c, "m", g).call(this)) return;
-          a(this, m, G(h, v), "f");
-          if (r) a(this, b, (this.baseURL = N(h, v, r)), "f");
+      let resolvedLocation = location;
+      this.ready = googleAuthInstance.getProjectId().then(
+        (projectId) => {
+          this.project = projectId;
+          if (
+            __classPrivateFieldGet(
+              this,
+              _AnthropicGoogleCloud_instances,
+              "m",
+              _AnthropicGoogleCloud_isBaseURLOverridden,
+            ).call(this)
+          )
+            return;
+          __classPrivateFieldSet(
+            this,
+            _AnthropicGoogleCloud_organizationURL,
+            organizationInvokeURL(projectId, resolvedLocation),
+            "f",
+          );
+          if (workspaceId)
+            __classPrivateFieldSet(
+              this,
+              _AnthropicGoogleCloud_workspaceURL,
+              (this.baseURL = workspaceInvokeURL(projectId, resolvedLocation, workspaceId)),
+              "f",
+            );
         },
         (cause) => {
-          let j = new AnthropicError(
-            `No project was given and it could not be resolved from Google credentials. ${H}`,
+          let projectError = new AnthropicError(
+            `No project was given and it could not be resolved from Google credentials. ${NO_PROJECT_HINT}`,
           );
-          j.cause = cause;
-          throw j;
+          projectError.cause = cause;
+          throw projectError;
         },
       );
       this.ready.catch(() => {});
     }
   }
-  withOptions(e) {
+  withOptions(options) {
     return super.withOptions({
       project: this.project ?? undefined,
       location: this.location ?? undefined,
       workspaceId: this.workspaceId,
-      bearerTokenProvider: f(this, p, "f"),
-      googleAuth: f(this, O, "f") ?? undefined,
-      authClient: f(this, E, "f") ?? undefined,
+      bearerTokenProvider: __classPrivateFieldGet(this, _AnthropicGoogleCloud_bearerTokenProvider, "f"),
+      googleAuth: __classPrivateFieldGet(this, _AnthropicGoogleCloud_googleAuth, "f") ?? undefined,
+      authClient: __classPrivateFieldGet(this, _AnthropicGoogleCloud_authClient, "f") ?? undefined,
       skipAuth: this.skipAuth,
-      baseURL: f(this, c, "m", g).call(this) ? this.baseURL : undefined,
-      ...e,
+      baseURL: __classPrivateFieldGet(
+        this,
+        _AnthropicGoogleCloud_instances,
+        "m",
+        _AnthropicGoogleCloud_isBaseURLOverridden,
+      ).call(this)
+        ? this.baseURL
+        : undefined,
+      ...options,
     });
   }
-  buildURL(url, t, o) {
-    if (f(this, c, "m", g).call(this) || D(url)) return super.buildURL(url, t, o);
-    if (url.startsWith(Z)) return super.buildURL(f(this, m, "f") + url, t, o);
+  buildURL(url, query, defaultBaseURL) {
+    if (
+      __classPrivateFieldGet(
+        this,
+        _AnthropicGoogleCloud_instances,
+        "m",
+        _AnthropicGoogleCloud_isBaseURLOverridden,
+      ).call(this) ||
+      isAbsoluteURL(url)
+    )
+      return super.buildURL(url, query, defaultBaseURL);
+    if (url.startsWith(ORGANIZATIONS_PATH_PREFIX))
+      return super.buildURL(
+        __classPrivateFieldGet(this, _AnthropicGoogleCloud_organizationURL, "f") + url,
+        query,
+        defaultBaseURL,
+      );
     if (!this.workspaceId)
       throw new AnthropicError(
         "No workspace ID found. Set `workspaceId` in the constructor or the `ANTHROPIC_GOOGLE_CLOUD_WORKSPACE_ID` environment variable.",
       );
-    return super.buildURL(url, t, o);
+    return super.buildURL(url, query, defaultBaseURL);
   }
-  async prepareOptions(e) {
-    await super.prepareOptions(e);
-    await f(this, c, "m", T).call(this);
+  async prepareOptions(options) {
+    await super.prepareOptions(options);
+    await __classPrivateFieldGet(
+      this,
+      _AnthropicGoogleCloud_instances,
+      "m",
+      _AnthropicGoogleCloud_awaitReady,
+    ).call(this);
   }
-  async buildRequest(e, t = {}) {
-    await f(this, c, "m", T).call(this);
-    return await super.buildRequest(e, t);
+  async buildRequest(options, requestOptions = {}) {
+    await __classPrivateFieldGet(
+      this,
+      _AnthropicGoogleCloud_instances,
+      "m",
+      _AnthropicGoogleCloud_awaitReady,
+    ).call(this);
+    return await super.buildRequest(options, requestOptions);
   }
-  async authHeaders(e) {
+  async authHeaders(opts) {
     if (this.skipAuth) return;
-    let headers = buildHeaders([this._options.defaultHeaders, e.headers]);
+    let headers = buildHeaders([this._options.defaultHeaders, opts.headers]);
     if (headers.values.get("authorization") || headers.nulls.has("authorization")) return;
-    let o = await f(this, c, "m", B).call(this);
+    let token = await __classPrivateFieldGet(
+      this,
+      _AnthropicGoogleCloud_instances,
+      "m",
+      _AnthropicGoogleCloud_getBearerToken,
+    ).call(this);
     return buildHeaders([
       {
-        Authorization: `Bearer ${o}`,
+        Authorization: `Bearer ${token}`,
       },
     ]);
   }
@@ -207,25 +279,4 @@ class AnthropicGoogleCloud extends Anthropic {
     return `AnthropicGoogleCloud/JS ${VERSION_2}`;
   }
 }
-//@ chunk-e7naa6k8.js:6243-6703 placement
-p = new WeakMap();
-O = new WeakMap();
-E = new WeakMap();
-d = new WeakMap();
-b = new WeakMap();
-m = new WeakMap();
-c = new WeakSet();
-g = function () {
-  return this.baseURL !== f(this, b, "f");
-};
-T = async function () {
-  if (!f(this, c, "m", g).call(this)) await this.ready;
-};
-B = async function () {
-  if (f(this, p, "f")) return await f(this, p, "f").call(this);
-  let t = await f(this, d, "f");
-  let { token } = await t.getAccessToken();
-  if (!token)
-    throw new AnthropicError("Failed to obtain a Google access token from Application Default Credentials.");
-  return token;
-};
+export { AnthropicGoogleCloud };

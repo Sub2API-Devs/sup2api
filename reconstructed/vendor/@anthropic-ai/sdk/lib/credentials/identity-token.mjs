@@ -11,7 +11,7 @@ import { AnthropicError } from "../../core/error.mjs";
 function identityTokenFromFile(path) {
   if (!path) throw new AnthropicError("Identity token file path is empty");
   return async () => {
-    let { fs } = await import("./chunk-a60jm9e8.js");
+    let { fs } = await import("../../../../../src/child_process.lazy.js");
     let content;
     try {
       content = await fs.promises.readFile(path, "utf-8");

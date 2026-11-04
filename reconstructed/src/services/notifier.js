@@ -27,16 +27,12 @@ import { logForDebugging } from "../utils/debug.js";
 /**
  * 发送桌面通知：先执行 Notification hooks，再按 preferredNotifChannel（默认 auto）选择通道发送，打 tengu_notification_method_used（通道、类型、终端）。
  */
-async function sendNotification(
-  notification,
-  terminal,
-  { storageV5: o, credentials: r, hookOrigin: s } = {},
-) {
+async function sendNotification(notification, terminal, { storageV5, credentials, hookOrigin } = {}) {
   let preferredChannel = resolveSetting("preferredNotifChannel", "auto").value;
   await executeNotificationHooks(getSessionIdentity(), notification, {
-    storageV5: o,
-    credentials: r,
-    hookOrigin: s,
+    storageV5,
+    credentials,
+    hookOrigin,
   });
   let methodUsed = await NOTIFICATION_CHANNELS(preferredChannel, notification, terminal);
   if (methodUsed === "error") logFeatureBad("notification_show", "send_failed");

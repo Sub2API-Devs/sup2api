@@ -5,11 +5,11 @@
  * pieces: chunk-798ashq9.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_minimal } from "./util/minimal.js";
 
 //@ chunk-798ashq9.js:30944-34145 cjs-fingerprint
-var require_writer = x(function (cjsExports, cjsModule) {
+var require_writer = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = Writer;
   var util = require_minimal();
   var BufferWriter;
@@ -135,7 +135,7 @@ var require_writer = x(function (cjsExports, cjsModule) {
         buf.set(val, pos);
       }
     : function (val, buf, pos) {
-        for (var i = 0; i < val.length; ++i) buf[pos + i] = val[i];
+        for (var idx = 0; idx < val.length; ++idx) buf[pos + idx] = val[idx];
       };
   Writer.prototype.bytes = function (value) {
     var len = value.length >>> 0;

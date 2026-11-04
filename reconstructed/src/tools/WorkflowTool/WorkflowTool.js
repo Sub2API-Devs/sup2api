@@ -21,7 +21,13 @@ import {
 import { isWorkflowAuthoringSkillVisible } from "../../skills/skillVisibility.js";
 import { WORKFLOW_AUTHORING } from "../../skills/bundled/bundledSkillNames.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, string, unknown, u, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  zodStrictObject,
+  stringSchema,
+  unknown,
+  objectSchema,
+  _enum,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   MAX_SCRIPT_FILE_BYTES,
   loadWorkflowScriptFile,
@@ -103,9 +109,9 @@ var STREAM_INPUT_EXEMPT_KEYS = new Set(["args"]);
 /**
  * 打开工作流 world 日志并收集运行状态。
  */
-async function reopenWorldJournal(e) {
-  await openWorldJournal(e.session, e.storageV5);
-  collectRunStatuses(worldStateOf(e.session), e.toolState.get(RunIndex));
+async function reopenWorldJournal(runContext) {
+  await openWorldJournal(runContext.session, runContext.storageV5);
+  collectRunStatuses(worldStateOf(runContext.session), runContext.toolState.get(RunIndex));
 }
 //@ chunk-y1shfdfm.js:55835-55856 placement
 /**
@@ -115,9 +121,9 @@ function workflowScriptExtension() {
   return;
 }
 //@ chunk-y1shfdfm.js:55856-56048 placement
-function authoringSkillHint(e, tools) {
-  return e.name === undefined &&
-    (e.script !== undefined || e.scriptPath !== undefined) &&
+function authoringSkillHint(input, tools) {
+  return input.name === undefined &&
+    (input.script !== undefined || input.scriptPath !== undefined) &&
     isWorkflowAuthoringSkillVisible(tools)
     ? `
 Load the \`${WORKFLOW_AUTHORING}\` skill for the script reference if you have not, fix the script, and retry.`
@@ -138,7 +144,7 @@ var HIDDEN_CONTROL_CHARS_REASON =
   "script contains control characters that would be hidden in the approval dialog";
 var workflowInputSchema = DoctorLazy(() =>
   zodStrictObject({
-    script: string()
+    script: stringSchema()
       .max(MAX_SCRIPT_FILE_BYTES)
       .refine(isAllPrintable, HIDDEN_CONTROL_CHARS_REASON)
       .optional()
@@ -146,16 +152,19 @@ var workflowInputSchema = DoctorLazy(() =>
         "Self-contained workflow script. Must begin with `export const meta = { name, description, phases }` (pure literal, no computed values) followed by the script body using agent()/parallel()/pipeline()/phase()." +
           (workflowScriptExtension()?.SCRIPT_DESCRIPTION_V2 ?? ""),
       ),
-    name: string()
-      .refine((e) => stripFormatChars(e) === e, "contains control or invisible format characters")
+    name: stringSchema()
+      .refine(
+        (nameValue) => stripFormatChars(nameValue) === nameValue,
+        "contains control or invisible format characters",
+      )
       .optional()
       .describe(
         "Name of a predefined workflow (built-in or from .claude/workflows/). Resolves to a self-contained script.",
       ),
-    description: string()
+    description: stringSchema()
       .optional()
       .describe("Ignored \u2014 set the workflow description in the script's `meta` block."),
-    title: string()
+    title: stringSchema()
       .optional()
       .describe("Ignored \u2014 set the workflow title in the script's `meta` block."),
     args: unknown()
@@ -165,13 +174,16 @@ var workflowInputSchema = DoctorLazy(() =>
           "JSON-encoded string \u2014 a stringified list breaks `args.filter`/" +
           "`args.map` in the script. Use for parameterized named workflows (e.g. a research question).",
       ),
-    scriptPath: string()
-      .refine((e) => stripFormatChars(e) === e, "contains control or invisible format characters")
+    scriptPath: stringSchema()
+      .refine(
+        (pathValue) => stripFormatChars(pathValue) === pathValue,
+        "contains control or invisible format characters",
+      )
       .optional()
       .describe(
         "Path to a workflow script file on disk. Every Workflow invocation persists its script under the session directory and returns the path in the tool result. To iterate, edit that file with Write/Edit and re-invoke Workflow with the same `scriptPath` instead of re-sending the full script. Takes precedence over `script` and `name`.",
       ),
-    resumeFromRunId: string()
+    resumeFromRunId: stringSchema()
       .regex(WORKFLOW_RUN_ID_PATTERN)
       .optional()
       .describe(
@@ -179,49 +191,49 @@ var workflowInputSchema = DoctorLazy(() =>
       ),
     ...(workflowScriptExtension()?.runOpFields() ?? {}),
     ...false,
-  }).refine((e) => e.script || e.name || e.scriptPath || e.runId, {
+  }).refine((input) => input.script || input.name || input.scriptPath || input.runId, {
     message: "Must provide script, name, scriptPath, or runId",
   }),
 );
 var workflowOutputSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     status: _enum([
       "async_launched",
       "remote_launched",
       ...(workflowScriptExtension() ? [workflowScriptExtension().RUN_OP_STATUS] : []),
     ]),
-    taskId: string(),
+    taskId: stringSchema(),
     taskType: _enum(["local_workflow", "remote_agent"])
       .optional()
       .describe(
         "TaskType of the registered background task \u2014 'local_workflow' for in-process runs, 'remote_agent' when remote:true dispatches to CCR. Set on all new writes; absent only on transcripts written before this field existed.",
       ),
-    workflowName: string()
+    workflowName: stringSchema()
       .optional()
       .describe(
         "meta.name from the workflow script \u2014 same value as task_started.workflow_name. Set on all new writes; absent only on transcripts written before this field existed.",
       ),
-    runId: string()
+    runId: stringSchema()
       .optional()
       .describe(
         "Local workflow run identifier for resumeFromRunId. Absent for remote_launched (the CCR session URL is the resume handle there) and on transcripts written before this field existed.",
       ),
-    summary: string().optional(),
-    transcriptDir: string()
+    summary: stringSchema().optional(),
+    transcriptDir: stringSchema()
       .optional()
       .describe("Directory where subagent transcripts are written during execution"),
-    scriptPath: string()
+    scriptPath: stringSchema()
       .optional()
       .describe(
         "Path to the persisted workflow script for this invocation. Editable via Write/Edit; pass back as `scriptPath` to re-run without resending the script.",
       ),
-    sessionUrl: string().optional().describe("CCR session URL when status is remote_launched"),
-    warning: string()
+    sessionUrl: stringSchema().optional().describe("CCR session URL when status is remote_launched"),
+    warning: stringSchema()
       .optional()
       .describe(
         "Non-blocking heads-up (e.g. local git state diverges from the pushed branch the cloud session will clone)",
       ),
-    error: string().optional().describe("Set if syntax check failed"),
+    error: stringSchema().optional().describe("Set if syntax check failed"),
     ...(workflowScriptExtension()?.runOpOutputFields() ?? {}),
   }),
 );
@@ -233,48 +245,50 @@ class WorkflowInputError extends Error {
   }
 }
 //@ chunk-y1shfdfm.js:59650-60381 placement
-async function loadWorkflowScript(e, permissionContext, storageV5) {
-  if (e.scriptPath) {
-    let s;
-    let i;
-    if (e.script) {
-      s = e.script;
-      i = resolve(getCwd(), e.scriptPath);
+async function loadWorkflowScript(input, runContext, storageV5) {
+  if (input.scriptPath) {
+    let script;
+    let resolvedPath;
+    if (input.script) {
+      script = input.script;
+      resolvedPath = resolve(getCwd(), input.scriptPath);
     } else {
-      let workflowScriptFile = await loadWorkflowScriptFile(e.scriptPath, permissionContext);
+      let workflowScriptFile = await loadWorkflowScriptFile(input.scriptPath, runContext);
       if ("error" in workflowScriptFile) return workflowScriptFile;
-      s = workflowScriptFile.script;
-      i = workflowScriptFile.path;
+      script = workflowScriptFile.script;
+      resolvedPath = workflowScriptFile.path;
     }
-    if (getBundledWorkflows().some((w) => w.script === s || w.v2Script === s))
+    if (getBundledWorkflows().some((bundled) => bundled.script === script || bundled.v2Script === script))
       return {
-        script: s,
-        resolvedScriptPath: i,
+        script,
+        resolvedScriptPath: resolvedPath,
         source: "built-in",
         scriptMatchesDefinition: true,
       };
     return {
-      script: s,
-      resolvedScriptPath: i,
+      script,
+      resolvedScriptPath: resolvedPath,
     };
   }
-  if (e.name) {
-    let workflowByName = await findWorkflowByName(e.name, getCwd(), storageV5);
+  if (input.name) {
+    let workflowByName = await findWorkflowByName(input.name, getCwd(), storageV5);
     if (!workflowByName) {
-      let joined = (await allWorkflowsForHost(getCwd(), storageV5)).map((w) => w.name).join(", ");
+      let joined = (await allWorkflowsForHost(getCwd(), storageV5))
+        .map((workflow) => workflow.name)
+        .join(", ");
       return {
-        error: `Workflow "${e.name}" not found. Available: ${joined || "(none)"}`,
+        error: `Workflow "${input.name}" not found. Available: ${joined || "(none)"}`,
       };
     }
     return {
-      script: e.script ?? workflowByName.script,
+      script: input.script ?? workflowByName.script,
       source: workflowByName.source,
-      scriptMatchesDefinition: e.script === undefined || e.script === workflowByName.script,
+      scriptMatchesDefinition: input.script === undefined || input.script === workflowByName.script,
     };
   }
-  if (e.script)
+  if (input.script)
     return {
-      script: e.script,
+      script: input.script,
     };
   return {
     error: "Must provide script, name, or scriptPath",
@@ -291,67 +305,67 @@ function hiddenScriptResumeNote(resumeFromRunId) {
   return `Run ${resumeFromRunId} hides its script, so its script is not shown here; the resume runs only the script the run was launched with.`;
 }
 //@ chunk-y1shfdfm.js:60642-60757 placement
-function readRunJournal(resumeFromRunId, scriptPath, n) {
-  return readWorkflowJournal(resumeFromRunId, n.toolState, n.taskRegistry, () =>
+function readRunJournal(resumeFromRunId, scriptPath, runContext) {
+  return readWorkflowJournal(resumeFromRunId, runContext.toolState, runContext.taskRegistry, () =>
     loadResumeJournal(
       resumeFromRunId,
       scriptPath,
-      n.storageV5,
-      n.signal,
-      n.toolState.get(WorkflowResumeState),
+      runContext.storageV5,
+      runContext.signal,
+      runContext.toolState.get(WorkflowResumeState),
     ),
   );
 }
 //@ chunk-y1shfdfm.js:60757-61257 placement
-function workflowRunContext(e, r) {
+function workflowRunContext(baseContext, callOptions) {
   return {
     get session() {
-      return e.session;
+      return baseContext.session;
     },
     get storageV5() {
-      return e.storageV5;
+      return baseContext.storageV5;
     },
     get credentials() {
-      return e.credentials;
+      return baseContext.credentials;
     },
     get agentId() {
-      return e.agentId;
+      return baseContext.agentId;
     },
     get agentContext() {
-      return e.agentContext;
+      return baseContext.agentContext;
     },
     get taskRegistry() {
-      return e.taskRegistry;
+      return baseContext.taskRegistry;
     },
     get toolState() {
-      return e.toolState;
+      return baseContext.toolState;
     },
     get tools() {
-      return e.tools;
+      return baseContext.tools;
     },
     get messages() {
-      return e.messages;
+      return baseContext.messages;
     },
     get permissions() {
-      return e.permissions;
+      return baseContext.permissions;
     },
     get toolUseId() {
-      return r.toolUseId;
+      return callOptions.toolUseId;
     },
     get signal() {
-      return r.signal;
+      return callOptions.signal;
     },
     get abortController() {
       return {
-        signal: r.signal,
+        signal: callOptions.signal,
       };
     },
   };
 }
 //@ chunk-y1shfdfm.js:61257-61378 placement
-function requireRunEngine(e) {
-  if (!e.runEngine) throw Error("Workflow: launching needs the executor (call.runEngine)");
-  return e.runEngine;
+function requireRunEngine(runContext) {
+  if (!runContext.runEngine) throw Error("Workflow: launching needs the executor (call.runEngine)");
+  return runContext.runEngine;
 }
 //@ chunk-y1shfdfm.js:61378-72084 placement
 /**
@@ -365,22 +379,22 @@ var WorkflowTool = buildTool({
   backgrounding: "never",
   maxResultSizeChars: 1e5,
   isEnabled: () => isWorkflowsAvailable(),
-  async prompt(e) {
+  async prompt(options) {
     return (
       workflowToolDescription(
-        isWorkflowAuthoringSkillVisible(e?.tools),
+        isWorkflowAuthoringSkillVisible(options?.tools),
         leanRewriteOf({
-          model: e?.model,
-          leanRewrite: e?.leanRewrite,
+          model: options?.model,
+          leanRewrite: options?.leanRewrite,
         }),
       ) +
       workflowSizePromptLine(getGlobalConfig().workflowSizeGuideline, isProSubscriber()) +
       emptyPromptSuffix()
     );
   },
-  async description(e, r) {
+  async description(input, ctx) {
     return (
-      workflowToolDescription(isWorkflowAuthoringSkillVisible(r?.tools)) +
+      workflowToolDescription(isWorkflowAuthoringSkillVisible(ctx?.tools)) +
       workflowSizePromptLine(getGlobalConfig().workflowSizeGuideline, isProSubscriber()) +
       emptyPromptSuffix()
     );
@@ -391,46 +405,48 @@ var WorkflowTool = buildTool({
   get outputSchema() {
     return workflowOutputSchema();
   },
-  coerceInput: (e) =>
-    parseWorkflowArgs(e, {
+  coerceInput: (rawInput) =>
+    parseWorkflowArgs(rawInput, {
       apply: isWorkflowToolEnabled(),
     }),
   streamedInputRepairExemptKeys: () => (isWorkflowToolEnabled() ? undefined : STREAM_INPUT_EXEMPT_KEYS),
-  toAutoClassifierInput(e) {
-    let r = workflowScriptExtension();
-    if (r && typeof e.runId === "string") return r.runOpClassifierInput(e);
-    if (e.script && e.scriptPath)
-      return `${e.script}
+  toAutoClassifierInput(input) {
+    let scriptExtension = workflowScriptExtension();
+    if (scriptExtension && typeof input.runId === "string")
+      return scriptExtension.runOpClassifierInput(input);
+    if (input.script && input.scriptPath)
+      return `${input.script}
 
-scriptPath: ${e.scriptPath}`;
-    if (e.script && e.name)
-      return `${e.script}
+scriptPath: ${input.scriptPath}`;
+    if (input.script && input.name)
+      return `${input.script}
 
-name: ${e.name}`;
-    return e.script || e.scriptPath || e.name || "";
+name: ${input.name}`;
+    return input.script || input.scriptPath || input.name || "";
   },
   userFacingName() {
     return "Workflow";
   },
-  getToolUseSummary(e) {
-    let r = e ? describeWorldOp(e) : undefined;
-    if (r && workflowScriptExtension()) return `workflow ${r.runId} \xB7 ${worldOpVerbs(r) ?? "?"}`;
-    if (e?.scriptPath) {
-      let n = basename(stripFormatChars(e.scriptPath));
-      return e.script ? `${n} \xB7 ${workflowScriptSummary(e.script)}` : n;
+  getToolUseSummary(input) {
+    let worldOp = input ? describeWorldOp(input) : undefined;
+    if (worldOp && workflowScriptExtension())
+      return `workflow ${worldOp.runId} \xB7 ${worldOpVerbs(worldOp) ?? "?"}`;
+    if (input?.scriptPath) {
+      let baseName = basename(stripFormatChars(input.scriptPath));
+      return input.script ? `${baseName} \xB7 ${workflowScriptSummary(input.script)}` : baseName;
     }
-    if (e?.name)
-      return e.script
-        ? `dynamic workflow: ${stripFormatChars(e.name)} \xB7 ${workflowScriptSummary(e.script)}`
-        : `dynamic workflow: ${stripFormatChars(e.name)}`;
-    if (!e?.script) return null;
-    return workflowScriptSummary(e.script);
+    if (input?.name)
+      return input.script
+        ? `dynamic workflow: ${stripFormatChars(input.name)} \xB7 ${workflowScriptSummary(input.script)}`
+        : `dynamic workflow: ${stripFormatChars(input.name)}`;
+    if (!input?.script) return null;
+    return workflowScriptSummary(input.script);
   },
-  create(e) {
+  create(toolContext) {
     return {
-      async validateInput(r, n) {
-        let s = workflowRunContext(e, n);
-        if (isServerFallbackDiscard(s.signal)) return RETRACTED_DISPATCH_RESULT;
+      async validateInput(input, callOptions) {
+        let runContext = workflowRunContext(toolContext, callOptions);
+        if (isServerFallbackDiscard(runContext.signal)) return RETRACTED_DISPATCH_RESULT;
         let workflowsUnavailableReason = getWorkflowsUnavailableReason();
         if (workflowsUnavailableReason !== undefined) {
           let remedy = {
@@ -460,25 +476,25 @@ name: ${e.name}`;
                 remedy,
               };
         }
-        if (typeof r.runId === "string") {
-          let y = workflowScriptExtension();
-          if (!y)
+        if (typeof input.runId === "string") {
+          let scriptExtension = workflowScriptExtension();
+          if (!scriptExtension)
             return {
               result: false,
               message: "runId is not a field of this tool here.",
               errorCode: 9,
             };
-          await reopenWorldJournal(s);
-          let R = await y.validateRunOp(r, s);
-          if (R) return R;
+          await reopenWorldJournal(runContext);
+          let validation = await scriptExtension.validateRunOp(input, runContext);
+          if (validation) return validation;
         }
         if (workflowNameOnlyEnv()) {
           let filtered = [
-            r.script && "script",
-            r.scriptPath && "scriptPath",
-            r.resumeFromRunId && "resumeFromRunId",
-            r.remote && "remote",
-          ].filter((R) => Boolean(R));
+            input.script && "script",
+            input.scriptPath && "scriptPath",
+            input.resumeFromRunId && "resumeFromRunId",
+            input.remote && "remote",
+          ].filter((flag) => Boolean(flag));
           if (filtered.length > 0)
             return {
               result: false,
@@ -486,156 +502,159 @@ name: ${e.name}`;
               errorCode: 8,
             };
         }
-        if (r.scriptPath) {
-          let y = scriptPathRefusal(r.scriptPath, s);
-          if (y !== null)
+        if (input.scriptPath) {
+          let pathRefusal = scriptPathRefusal(input.scriptPath, runContext);
+          if (pathRefusal !== null)
             return {
               result: false,
-              message: y,
+              message: pathRefusal,
               errorCode: 15,
             };
         }
-        let w;
-        if (r.resumeFromRunId) {
-          let workflowTaskByRun = findWorkflowTaskByRun(r.resumeFromRunId, s);
+        let label;
+        if (input.resumeFromRunId) {
+          let workflowTaskByRun = findWorkflowTaskByRun(input.resumeFromRunId, runContext);
           if (workflowTaskByRun)
             return {
               result: false,
               message: workflowTaskByRun,
               errorCode: 3,
             };
-          let R = await probeWorkflowResume(
-            r.resumeFromRunId,
-            r.scriptPath,
-            s.storageV5,
-            s.signal,
-            s.toolState.get(WorkflowResumeState),
+          let resumeProbe = await probeWorkflowResume(
+            input.resumeFromRunId,
+            input.scriptPath,
+            runContext.storageV5,
+            runContext.signal,
+            runContext.toolState.get(WorkflowResumeState),
           );
-          if (isServerFallbackDiscard(s.signal)) return RETRACTED_DISPATCH_RESULT;
-          if (R.kind === "refused")
+          if (isServerFallbackDiscard(runContext.signal)) return RETRACTED_DISPATCH_RESULT;
+          if (resumeProbe.kind === "refused")
             return {
               result: false,
-              message: R.message,
+              message: resumeProbe.message,
               errorCode: 16,
             };
-          if (r.scriptPath) w = restoredScriptFor(R, r.scriptPath);
+          if (input.scriptPath) label = restoredScriptFor(resumeProbe, input.scriptPath);
         }
-        let workflowScript = await loadWorkflowScript(r, s, s.storageV5);
-        if ("error" in workflowScript && w !== undefined)
+        let workflowScript = await loadWorkflowScript(input, runContext, runContext.storageV5);
+        if ("error" in workflowScript && label !== undefined)
           workflowScript = await loadWorkflowScript(
             {
-              ...r,
-              script: w,
+              ...input,
+              script: label,
             },
-            s,
-            s.storageV5,
+            runContext,
+            runContext.storageV5,
           );
-        if (isServerFallbackDiscard(s.signal)) return RETRACTED_DISPATCH_RESULT;
+        if (isServerFallbackDiscard(runContext.signal)) return RETRACTED_DISPATCH_RESULT;
         if ("error" in workflowScript) {
-          if (r.name && !r.scriptPath) logFeatureBad("workflow_resolve", "not_found");
+          if (input.name && !input.scriptPath) logFeatureBad("workflow_resolve", "not_found");
           return {
             result: false,
             message: workflowScript.error,
             errorCode: 1,
           };
         }
-        if (r.name && !r.scriptPath) logFeatureOk("workflow_resolve");
+        if (input.name && !input.scriptPath) logFeatureOk("workflow_resolve");
         if (!isAllPrintable(workflowScript.script))
           return {
             result: false,
-            message: `${r.scriptPath ? `Workflow script file ${r.scriptPath}` : `The file of workflow "${r.name}"`} contains a control character that an approval prompt cannot show, such as an escape byte or a carriage return that is not part of a CRLF line ending. Remove it from the file and try again.`,
+            message: `${input.scriptPath ? `Workflow script file ${input.scriptPath}` : `The file of workflow "${input.name}"`} contains a control character that an approval prompt cannot show, such as an escape byte or a carriage return that is not part of a CRLF line ending. Remove it from the file and try again.`,
             errorCode: 17,
           };
         let workflowScript_2 = parseWorkflowScript(workflowScript.script);
         if ("error" in workflowScript_2)
           return {
             result: false,
-            message: `Invalid workflow script: ${workflowScript_2.error}${authoringSkillHint(r, s.tools)}`,
+            message: `Invalid workflow script: ${workflowScript_2.error}${authoringSkillHint(input, runContext.tools)}`,
             errorCode: 2,
           };
-        if (r.script && usesNondeterministicTime(workflowScript_2.scriptBody))
+        if (input.script && usesNondeterministicTime(workflowScript_2.scriptBody))
           return {
             result: false,
-            message: `Workflow scripts must be deterministic: Date.now()/Math.random()/new Date() are unavailable (breaks resume). Stamp results after the workflow returns, or pass timestamps via args.${authoringSkillHint(r, s.tools)}`,
+            message: `Workflow scripts must be deterministic: Date.now()/Math.random()/new Date() are unavailable (breaks resume). Stamp results after the workflow returns, or pass timestamps via args.${authoringSkillHint(input, runContext.tools)}`,
             errorCode: 4,
           };
         return {
           result: true,
         };
       },
-      async checkPermissions(r, n) {
-        let permissionContext = workflowRunContext(e, n);
-        let i = permissionContext.permissions();
-        let w = describeWorldOp(r) !== undefined;
-        let h = r.scriptPath || w ? undefined : r.name;
-        let k = (L) => (h ? getContentRulesMapForToolName(i, WORKFLOW_TOOL_NAME, L).get(h) : undefined);
-        let y = k("deny");
-        if (y)
+      async checkPermissions(input, callOptions) {
+        let workflowContext = workflowRunContext(toolContext, callOptions);
+        let permissionState = workflowContext.permissions();
+        let isWorldOp = describeWorldOp(input) !== undefined;
+        let ruleName = input.scriptPath || isWorldOp ? undefined : input.name;
+        let ruleFor = (behavior) =>
+          ruleName
+            ? getContentRulesMapForToolName(permissionState, WORKFLOW_TOOL_NAME, behavior).get(ruleName)
+            : undefined;
+        let denyRule = ruleFor("deny");
+        if (denyRule)
           return {
             behavior: "deny",
-            message: `Workflow ${h} blocked by permission rules`,
+            message: `Workflow ${ruleName} blocked by permission rules`,
             decisionReason: {
               type: "rule",
-              rule: y,
+              rule: denyRule,
             },
           };
-        let R = w ? describeWorldOp(r) : undefined;
-        if (R && worldOpVerbs(R) === "read")
+        let worldOp = isWorldOp ? describeWorldOp(input) : undefined;
+        if (worldOp && worldOpVerbs(worldOp) === "read")
           return {
             behavior: "allow",
-            updatedInput: r,
+            updatedInput: input,
             decisionReason: {
               type: "other",
               reason: READ_ONLY_AUTO_ALLOW_REASON,
             },
           };
-        let I = r;
-        let x;
-        if (w);
-        else if (r.scriptPath) {
-          let workflowScriptFile = await loadWorkflowScriptFile(r.scriptPath, permissionContext);
-          let H =
+        let effectiveInput = input;
+        let hiddenNote;
+        if (isWorldOp);
+        else if (input.scriptPath) {
+          let workflowScriptFile = await loadWorkflowScriptFile(input.scriptPath, workflowContext);
+          let restoredScript =
             "error" in workflowScriptFile &&
-            r.resumeFromRunId &&
-            scriptPathRefusal(r.scriptPath, permissionContext) === null
+            input.resumeFromRunId &&
+            scriptPathRefusal(input.scriptPath, workflowContext) === null
               ? restoredScriptFor(
                   await probeWorkflowResume(
-                    r.resumeFromRunId,
-                    r.scriptPath,
-                    permissionContext.storageV5,
-                    permissionContext.signal,
-                    permissionContext.toolState.get(WorkflowResumeState),
+                    input.resumeFromRunId,
+                    input.scriptPath,
+                    workflowContext.storageV5,
+                    workflowContext.signal,
+                    workflowContext.toolState.get(WorkflowResumeState),
                   ),
-                  r.scriptPath,
+                  input.scriptPath,
                 )
               : undefined;
-          let Z =
-            r.resumeFromRunId == null
+          let journal =
+            input.resumeFromRunId == null
               ? undefined
-              : await readRunJournal(r.resumeFromRunId, r.scriptPath, permissionContext);
-          if (Z?.kind === "refused")
+              : await readRunJournal(input.resumeFromRunId, input.scriptPath, workflowContext);
+          if (journal?.kind === "refused")
             return {
               behavior: "deny",
-              message: Z.reason,
+              message: journal.reason,
               decisionReason: {
                 type: "other",
                 reason: "workflow resume refused",
               },
             };
           if (
-            Z?.kind === "hidden" &&
-            r.resumeFromRunId != null &&
-            (H !== undefined || !("error" in workflowScriptFile))
+            journal?.kind === "hidden" &&
+            input.resumeFromRunId != null &&
+            (restoredScript !== undefined || !("error" in workflowScriptFile))
           ) {
-            I = {
-              ...r,
+            effectiveInput = {
+              ...input,
               script: undefined,
             };
-            x = hiddenScriptResumeNote(r.resumeFromRunId);
-          } else if (H !== undefined)
-            I = {
-              ...r,
-              script: H,
+            hiddenNote = hiddenScriptResumeNote(input.resumeFromRunId);
+          } else if (restoredScript !== undefined)
+            effectiveInput = {
+              ...input,
+              script: restoredScript,
             };
           else if ("error" in workflowScriptFile)
             return {
@@ -647,64 +666,64 @@ name: ${e.name}`;
               },
             };
           else
-            I = {
-              ...r,
+            effectiveInput = {
+              ...input,
               script: workflowScriptFile.script,
             };
-        } else if (r.name) {
-          let workflowByName = await findWorkflowByName(r.name, getCwd(), permissionContext.storageV5);
-          I = {
-            ...r,
+        } else if (input.name) {
+          let workflowByName = await findWorkflowByName(input.name, getCwd(), workflowContext.storageV5);
+          effectiveInput = {
+            ...input,
             script: workflowByName?.script,
           };
         }
-        let V =
-          (w && workflowScriptExtension()?.RUN_OP_CONSENT_MESSAGE) ||
+        let consentMessage =
+          (isWorldOp && workflowScriptExtension()?.RUN_OP_CONSENT_MESSAGE) ||
           "Review dynamic workflow before running";
-        let message = x === undefined ? V : `${V}. ${x}`;
-        let P = k("ask");
-        if (P)
+        let message = hiddenNote === undefined ? consentMessage : `${consentMessage}. ${hiddenNote}`;
+        let askRule = ruleFor("ask");
+        if (askRule)
           return {
             behavior: "ask",
             message,
-            updatedInput: I,
+            updatedInput: effectiveInput,
             decisionReason: {
               type: "rule",
-              rule: P,
+              rule: askRule,
             },
-            ...(x !== undefined && {
+            ...(hiddenNote !== undefined && {
               suppressAlwaysAllowRule: true,
             }),
           };
-        let B = k("allow");
-        if (B)
+        let allowRule = ruleFor("allow");
+        if (allowRule)
           return {
             behavior: "allow",
-            updatedInput: I,
+            updatedInput: effectiveInput,
             decisionReason: {
               type: "rule",
-              rule: B,
+              rule: allowRule,
             },
           };
         return {
           behavior: "ask",
           message,
-          updatedInput: I,
-          ...(x !== undefined && {
+          updatedInput: effectiveInput,
+          ...(hiddenNote !== undefined && {
             decisionReason: {
               type: "other",
-              reason: x,
+              reason: hiddenNote,
             },
             suppressAlwaysAllowRule: true,
           }),
-          ...(h && {
+          ...(ruleName && {
             suggestions: [
               {
                 type: "addRules",
                 rules: [
                   {
                     toolName: WORKFLOW_TOOL_NAME,
-                    ruleContent: h,
+                    ruleContent: ruleName,
                   },
                 ],
                 behavior: "allow",
@@ -714,141 +733,148 @@ name: ${e.name}`;
           }),
         };
       },
-      async call(r, n) {
-        let s = workflowRunContext(e, n);
-        let { parentMessage } = n;
-        if (s.agentId !== undefined && isAgentStopPending(s.agentId)) {
+      async call(input, callOptions) {
+        let runContext = workflowRunContext(toolContext, callOptions);
+        let { parentMessage } = callOptions;
+        if (runContext.agentId !== undefined && isAgentStopPending(runContext.agentId)) {
           logFeatureBad("subagent_launch", "workflow_spawner_stop_pending");
           throw new WorkflowInputError(
             "This agent has been stopped and its stop is still completing; it cannot launch workflows or act on existing runs.",
           );
         }
-        if (typeof r.runId === "string") {
-          let j = workflowScriptExtension();
-          if (!j) throw new WorkflowInputError("runId is not a field of this tool here.");
-          await reopenWorldJournal(s);
-          let q = await j.callRunOp(r, s);
-          if (q)
+        if (typeof input.runId === "string") {
+          let scriptExtension = workflowScriptExtension();
+          if (!scriptExtension) throw new WorkflowInputError("runId is not a field of this tool here.");
+          await reopenWorldJournal(runContext);
+          let runOpResult = await scriptExtension.callRunOp(input, runContext);
+          if (runOpResult)
             return {
               data: {
-                status: j.RUN_OP_STATUS,
+                status: scriptExtension.RUN_OP_STATUS,
                 taskId: "",
-                runId: q.runId,
-                runOp: q.runOp,
+                runId: runOpResult.runId,
+                runOp: runOpResult.runOp,
               },
             };
         }
-        if (r.resumeFromRunId) {
-          let workflowTaskByRun = findWorkflowTaskByRun(r.resumeFromRunId, s);
+        if (input.resumeFromRunId) {
+          let workflowTaskByRun = findWorkflowTaskByRun(input.resumeFromRunId, runContext);
           if (workflowTaskByRun) throw new WorkflowInputError(workflowTaskByRun);
-          let runJournal = await readRunJournal(r.resumeFromRunId, r.scriptPath, s);
+          let runJournal = await readRunJournal(input.resumeFromRunId, input.scriptPath, runContext);
           if (runJournal.kind === "refused") throw new WorkflowInputError(runJournal.reason);
           let resumeRestored = await ensureResumeRestored(
-            r.resumeFromRunId,
-            r.scriptPath,
-            s.storageV5,
-            s.signal,
-            s.toolState.get(WorkflowResumeState),
+            input.resumeFromRunId,
+            input.scriptPath,
+            runContext.storageV5,
+            runContext.signal,
+            runContext.toolState.get(WorkflowResumeState),
           );
           if (resumeRestored !== null) throw new WorkflowInputError(resumeRestored);
         }
-        let workflowScript = await loadWorkflowScript(r, s, s.storageV5);
+        let workflowScript = await loadWorkflowScript(input, runContext, runContext.storageV5);
         if ("error" in workflowScript) throw new WorkflowInputError(workflowScript.error);
         let { script, source, resolvedScriptPath } = workflowScript;
-        let R = (script) => {
-          let q =
-            r.resumeFromRunId == null
+        let assertScriptAllowed = (script) => {
+          let hiddenSha =
+            input.resumeFromRunId == null
               ? undefined
-              : hiddenScriptSha(r.resumeFromRunId, s.toolState, s.taskRegistry);
-          if (q === "") throw new WorkflowInputError(HIDDEN_SCRIPT_RESUME_REFUSAL);
-          if (q !== undefined && q !== computeContentHash(script))
+              : hiddenScriptSha(input.resumeFromRunId, runContext.toolState, runContext.taskRegistry);
+          if (hiddenSha === "") throw new WorkflowInputError(HIDDEN_SCRIPT_RESUME_REFUSAL);
+          if (hiddenSha !== undefined && hiddenSha !== computeContentHash(script))
             throw new WorkflowInputError(
               "This workflow run hides its script, so it can only be resumed with its original script file, unedited. To run a changed script, start a new run without resumeFromRunId.",
             );
-          return q;
+          return hiddenSha;
         };
-        R(script);
-        let I = source === "built-in" && workflowScript.scriptMatchesDefinition === true;
+        assertScriptAllowed(script);
+        let isVerbatimBuiltIn = source === "built-in" && workflowScript.scriptMatchesDefinition === true;
         let workflowScript_2 = parseWorkflowScript(script);
         if ("error" in workflowScript_2)
           throw new WorkflowInputError(`Invalid workflow script: ${workflowScript_2.error}`);
-        let V = r.resumeFromRunId ?? `wf_${randomUUID().slice(0, 12)}`;
+        let runId = input.resumeFromRunId ?? `wf_${randomUUID().slice(0, 12)}`;
         let taskId = generateTaskId("local_workflow");
         let summary = workflowScript_2.meta.description;
-        let B = workflowScript_2.meta.name;
-        let L = compileWorkflowScript(workflowScript_2.scriptBody);
-        if (!L.ok) {
+        let workflowName = workflowScript_2.meta.name;
+        let compiled = compileWorkflowScript(workflowScript_2.scriptBody);
+        if (!compiled.ok) {
           logFeatureBad("task_local_workflow", "compile_failed");
           return {
             data: {
               status: "async_launched",
               taskId,
               taskType: "local_workflow",
-              workflowName: B,
-              runId: V,
+              workflowName,
+              runId,
               summary,
-              error: `${L.error}${authoringSkillHint(r, s.tools)}`,
+              error: `${compiled.error}${authoringSkillHint(input, runContext.tools)}`,
             },
           };
         }
-        let transcriptDir = subagentWorkflowDir(V);
-        let Z = resolvedScriptPath ?? resolveWorkflowScriptPath(B, V, script, s.storageV5);
-        mirrorWorkflowScript(V, Z, script, s.toolState.get(WorkflowResumeState));
-        let re = r.scriptPath ? undefined : source;
-        let me = r.scriptPath ? "scriptPath" : (source ?? "inline");
-        let he = agentNameForTelemetry(B, re, I);
-        let ae = agentLabelForTelemetry(workflowScript_2.meta.description, re, I);
+        let transcriptDir = subagentWorkflowDir(runId);
+        let scriptFilePath =
+          resolvedScriptPath ?? resolveWorkflowScriptPath(workflowName, runId, script, runContext.storageV5);
+        mirrorWorkflowScript(runId, scriptFilePath, script, runContext.toolState.get(WorkflowResumeState));
+        let sourceKind = input.scriptPath ? undefined : source;
+        let invocationMode = input.scriptPath ? "scriptPath" : (source ?? "inline");
+        let telemetryName = agentNameForTelemetry(workflowName, sourceKind, isVerbatimBuiltIn);
+        let telemetryDescription = agentLabelForTelemetry(
+          workflowScript_2.meta.description,
+          sourceKind,
+          isVerbatimBuiltIn,
+        );
         logEvent("tengu_workflow_launched", {
-          invocation_mode: lit(r.scriptPath ? "scriptPath" : r.name ? "named" : "inline"),
-          workflow_source: fromEnum(me),
-          workflow_name: he,
-          workflow_description: ae,
+          invocation_mode: lit(input.scriptPath ? "scriptPath" : input.name ? "named" : "inline"),
+          workflow_source: fromEnum(invocationMode),
+          workflow_name: telemetryName,
+          workflow_description: telemetryDescription,
           phase_count: workflowScript_2.meta.phases?.length ?? 0,
-          launched_from_subagent: s.agentId != null,
-          has_args: r.args != null,
-          is_resume: r.resumeFromRunId != null,
+          launched_from_subagent: runContext.agentId != null,
+          has_args: input.args != null,
+          is_resume: input.resumeFromRunId != null,
           script_size_chars: script.length,
         });
-        if (r.resumeFromRunId == null)
+        if (input.resumeFromRunId == null)
           resolveWorkflowRun({
-            toolState: s.toolState,
-            taskRegistry: s.taskRegistry,
-            name: isBuiltInWithFlag(re, I) ? workerOnlySkillName(B) : undefined,
-            runId: V,
+            toolState: runContext.toolState,
+            taskRegistry: runContext.taskRegistry,
+            name: isBuiltInWithFlag(sourceKind, isVerbatimBuiltIn)
+              ? workerOnlySkillName(workflowName)
+              : undefined,
+            runId,
           });
-        let ee = {
-          workflowRunId: V,
+        let launchRequest = {
+          workflowRunId: runId,
           script,
-          scriptPath: Z,
-          args: r.args,
+          scriptPath: scriptFilePath,
+          args: input.args,
           meta: workflowScript_2.meta,
-          vmScript: L.vmScript,
-          toolUseId: s.toolUseId,
+          vmScript: compiled.vmScript,
+          toolUseId: runContext.toolUseId,
           transcriptDir,
           telemetry: {
-            source: me,
-            name: he,
-            description: ae,
-            scriptIsVerbatimBuiltIn: I,
+            source: invocationMode,
+            name: telemetryName,
+            description: telemetryDescription,
+            scriptIsVerbatimBuiltIn: isVerbatimBuiltIn,
           },
           invokingRequestId: parentMessage?.requestId,
-          parentPromptId: promptIdForRequest(s.messages(), s.agentContext),
+          parentPromptId: promptIdForRequest(runContext.messages(), runContext.agentContext),
         };
-        let ke = requireRunEngine(n);
-        let O = (j) => ke(launchWorkflowRun, j);
-        if (r.resumeFromRunId) {
-          let workflowTaskByRun = findWorkflowTaskByRun(r.resumeFromRunId, s);
+        let runEngine = requireRunEngine(callOptions);
+        let launchRun = (launchArgs) => runEngine(launchWorkflowRun, launchArgs);
+        if (input.resumeFromRunId) {
+          let workflowTaskByRun = findWorkflowTaskByRun(input.resumeFromRunId, runContext);
           if (workflowTaskByRun) {
             logFeatureBad("task_local_workflow", "resume_collision");
             throw new WorkflowInputError(workflowTaskByRun);
           }
         }
-        let le = R(script) !== undefined;
-        O({
-          ...ee,
+        let hasHiddenSha = assertScriptAllowed(script) !== undefined;
+        launchRun({
+          ...launchRequest,
           taskId,
-          isResume: r.resumeFromRunId != null,
-          ...(le && {
+          isResume: input.resumeFromRunId != null,
+          ...(hasHiddenSha && {
             withholdScriptFromSdkEvents: true,
           }),
         });
@@ -857,98 +883,98 @@ name: ${e.name}`;
             status: "async_launched",
             taskId,
             taskType: "local_workflow",
-            workflowName: B,
-            runId: V,
+            workflowName,
+            runId,
             summary,
             transcriptDir,
-            scriptPath: Z,
+            scriptPath: scriptFilePath,
           },
         };
       },
     };
   },
-  renderToolUseMessage(e, { verbose }) {
-    let n = describeWorldOp(e);
-    let s = workflowScriptExtension();
-    if (n && s) return s.renderRunOp(n, verbose);
-    if (e.scriptPath) {
-      let i = stripFormatChars(e.scriptPath);
-      let w = verbose ? i : basename(i);
-      if (!e.script) return w;
+  renderToolUseMessage(input, { verbose }) {
+    let worldOp = describeWorldOp(input);
+    let scriptExtension = workflowScriptExtension();
+    if (worldOp && scriptExtension) return scriptExtension.renderRunOp(worldOp, verbose);
+    if (input.scriptPath) {
+      let scriptPathText = stripFormatChars(input.scriptPath);
+      let displayPath = verbose ? scriptPathText : basename(scriptPathText);
+      if (!input.script) return displayPath;
       return verbose
-        ? `${i}
-${e.script}`
-        : `${w} \xB7 ${workflowScriptSummary(e.script)}`;
+        ? `${scriptPathText}
+${input.script}`
+        : `${displayPath} \xB7 ${workflowScriptSummary(input.script)}`;
     }
-    if (e.name) {
-      let i = stripFormatChars(e.name);
-      if (!e.script) return `dynamic workflow: ${i}`;
+    if (input.name) {
+      let nameText = stripFormatChars(input.name);
+      if (!input.script) return `dynamic workflow: ${nameText}`;
       return verbose
-        ? `dynamic workflow: ${i}
-${e.script}`
-        : `dynamic workflow: ${i} \xB7 ${workflowScriptSummary(e.script)}`;
+        ? `dynamic workflow: ${nameText}
+${input.script}`
+        : `dynamic workflow: ${nameText} \xB7 ${workflowScriptSummary(input.script)}`;
     }
-    if (!e.script) return null;
-    return verbose ? e.script : workflowScriptSummary(e.script);
+    if (!input.script) return null;
+    return verbose ? input.script : workflowScriptSummary(input.script);
   },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
-    if (e.error)
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
+    if (result.error)
       return {
         tool_use_id: toolUseId,
         type: "tool_result",
         content: `Workflow script has a syntax error and was not launched:
-${e.error}`,
+${result.error}`,
         is_error: true,
       };
-    let n = workflowScriptExtension()?.runOpToolResultText(e.runId, e.runOp);
-    if (n)
+    let runOpText = workflowScriptExtension()?.runOpToolResultText(result.runId, result.runOp);
+    if (runOpText)
       return {
         tool_use_id: toolUseId,
         type: "tool_result",
-        content: n.content,
-        is_error: n.isError,
+        content: runOpText.content,
+        is_error: runOpText.isError,
       };
-    if (e.status === "remote_launched")
+    if (result.status === "remote_launched")
       return {
         tool_use_id: toolUseId,
         type: "tool_result",
         content:
-          `Workflow launched in a remote CCR session. Task ID: ${e.taskId}
-Session: ${e.sessionUrl}
+          `Workflow launched in a remote CCR session. Task ID: ${result.taskId}
+Session: ${result.sessionUrl}
 ` +
-          (e.summary
-            ? `Summary: ${e.summary}
+          (result.summary
+            ? `Summary: ${result.summary}
 `
             : "") +
-          (e.warning
-            ? `Warning: ${e.warning}
+          (result.warning
+            ? `Warning: ${result.warning}
 `
             : "") +
           `
 The workflow runs against a fresh clone of the pushed branch; phase progress is visible at the session URL, not in /workflows. You will be notified when it completes.`,
         is_error: false,
       };
-    let s = e.summary
+    let summaryLine = result.summary
       ? `
-Summary: ${e.summary}`
+Summary: ${result.summary}`
       : "";
-    let i = e.transcriptDir
+    let transcriptLine = result.transcriptDir
       ? `
-Transcript dir: ${e.transcriptDir}`
+Transcript dir: ${result.transcriptDir}`
       : "";
-    let w = e.scriptPath
+    let scriptLine = result.scriptPath
       ? `
-Script file: ${e.scriptPath}
-(Edit this file with Write/Edit and re-invoke Workflow with {scriptPath: "${e.scriptPath}"} to iterate without resending the script.)`
+Script file: ${result.scriptPath}
+(Edit this file with Write/Edit and re-invoke Workflow with {scriptPath: "${result.scriptPath}"} to iterate without resending the script.)`
       : "";
-    let h =
-      e.runId && e.scriptPath
+    let resumeLine =
+      result.runId && result.scriptPath
         ? `
-Run ID: ${e.runId}
-To resume after editing the script: Workflow({scriptPath: "${e.scriptPath}", resumeFromRunId: "${e.runId}"}) \u2014 completed agents return cached results (cached results may themselves be empty \u2014 inspect journal.jsonl before assuming there is something to recover).`
+Run ID: ${result.runId}
+To resume after editing the script: Workflow({scriptPath: "${result.scriptPath}", resumeFromRunId: "${result.runId}"}) \u2014 completed agents return cached results (cached results may themselves be empty \u2014 inspect journal.jsonl before assuming there is something to recover).`
         : "";
-    let k = (e.runId, "");
-    let content = `Workflow launched in background. Task ID: ${e.taskId}${s}${i}${w}${h}${k}
+    let extraLine = (result.runId, "");
+    let content = `Workflow launched in background. Task ID: ${result.taskId}${summaryLine}${transcriptLine}${scriptLine}${resumeLine}${extraLine}
 
 You will be notified when it completes. Use /workflows to watch live progress.`;
     return {
@@ -963,30 +989,30 @@ You will be notified when it completes. Use /workflows to watch live progress.`;
 function workflowScriptSummary(script) {
   let workflowScript = parseWorkflowScript(script);
   if (!("error" in workflowScript)) return stripFormatChars(workflowScript.meta.description);
-  let n =
+  let firstLine =
     script
       .split(
         `
 `,
       )
       .find((line) => line.trim()) ?? truncateToLength(script, 40);
-  let s =
-    bunStringWidth(n) > MAX_WORKFLOW_TITLE_CHARS || n.length > MAX_WORKFLOW_TITLE_CHARS
-      ? truncateToLength(n, MAX_WORKFLOW_TITLE_CHARS - 1) + "\u2026"
-      : n;
-  let i =
+  let title =
+    bunStringWidth(firstLine) > MAX_WORKFLOW_TITLE_CHARS || firstLine.length > MAX_WORKFLOW_TITLE_CHARS
+      ? truncateToLength(firstLine, MAX_WORKFLOW_TITLE_CHARS - 1) + "\u2026"
+      : firstLine;
+  let lineCount =
     countCharInString(
       script,
       `
 `,
     ) + 1;
-  let w = formatOverflowHint(i - 1);
-  let h = stripFormatChars(s);
-  return w ? `${h} ${w}` : h;
+  let overflowHint = formatOverflowHint(lineCount - 1);
+  let cleanTitle = stripFormatChars(title);
+  return overflowHint ? `${cleanTitle} ${overflowHint}` : cleanTitle;
 }
 //@ chunk-y1shfdfm.js:72309-73217 placement
-function findWorkflowTaskByRun(resumeFromRunId, r) {
-  for (let [key, value] of Object.entries(r.taskRegistry?.all() ?? {})) {
+function findWorkflowTaskByRun(resumeFromRunId, toolContext) {
+  for (let [key, value] of Object.entries(toolContext.taskRegistry?.all() ?? {})) {
     if (value.type !== "local_workflow" || value.workflowRunId !== resumeFromRunId) continue;
     if (value.status === "running")
       return `Workflow ${resumeFromRunId} is still running (task ${key}). Stop it first with ${TASKSTOP}({taskId: "${key}"}) before resuming.`;
@@ -995,8 +1021,9 @@ function findWorkflowTaskByRun(resumeFromRunId, r) {
         ? `Workflow ${resumeFromRunId} is paused but its run has not exited yet (task ${key}); its agents are being stopped. Resuming now would run two copies of its agents against the same journal \u2014 wait for it to exit.`
         : `Workflow ${resumeFromRunId} is not running but its run has not exited yet (task ${key}). Resuming now would run two copies of its agents against the same journal. Run ${TASKSTOP}({taskId: "${key}"}) on it or wait for it to exit.`;
   }
-  let n = r.toolState.get(RunIndex).byId.get(resumeFromRunId);
-  if (n !== undefined && !n.isKilled && n.isActive)
+  let runEntry = toolContext.toolState.get(RunIndex).byId.get(resumeFromRunId);
+  if (runEntry !== undefined && !runEntry.isKilled && runEntry.isActive)
     return `Workflow ${resumeFromRunId} is still running. Wait for it to settle, or stop it first with ${TASKSTOP}, before resuming.`;
   return;
 }
+export { WorkflowTool };

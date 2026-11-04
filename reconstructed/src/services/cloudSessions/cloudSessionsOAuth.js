@@ -45,12 +45,12 @@ async function readCloudSessionsOAuthAsync(credentials) {
   }
 }
 //@ chunk-4r7nqnx2.js:1083-1302 placement
-function hasCloudSessionsTokenForOrg(e) {
+function hasCloudSessionsTokenForOrg(orgUuid) {
   try {
     let cloudSessionsOauth = getSecureStorage().read()?.cloudSessionsOauth;
     return (
       cloudSessionsOauth !== undefined &&
-      cloudSessionsOauth.organizationUuid === e &&
+      cloudSessionsOauth.organizationUuid === orgUuid &&
       Boolean(cloudSessionsOauth.accessToken)
     );
   } catch (error) {
@@ -64,25 +64,25 @@ function hasCloudSessionsTokenForOrg(e) {
 /**
  * 保存云会话 OAuth 令牌（条件写入、竞争检测）。
  */
-async function saveCloudSessionsOAuth(cloudSessionsOauth, s) {
+async function saveCloudSessionsOAuth(cloudSessionsOauth, options) {
   try {
-    let k = false;
-    let u = await getSecureStorage().mutate((r) => {
-      if (s?.onlyIf && !s.onlyIf(r.cloudSessionsOauth)) {
-        k = true;
-        return r;
+    let raced = false;
+    let nextState = await getSecureStorage().mutate((state) => {
+      if (options?.onlyIf && !options.onlyIf(state.cloudSessionsOauth)) {
+        raced = true;
+        return state;
       }
       return {
-        ...r,
+        ...state,
         cloudSessionsOauth,
       };
     });
-    return k
+    return raced
       ? {
-          ...u,
+          ...nextState,
           raced: true,
         }
-      : u;
+      : nextState;
   } catch (error) {
     logForDebugging(`Failed to save the cloud-sessions OAuth tokens: ${errorMessage(error)}`, {
       level: "error",
@@ -94,15 +94,15 @@ async function saveCloudSessionsOAuth(cloudSessionsOauth, s) {
   }
 }
 //@ chunk-4r7nqnx2.js:1650-1898 placement
-async function clearCloudSessionsOAuthIf(e) {
+async function clearCloudSessionsOAuthIf(predicate) {
   try {
-    await getSecureStorage().mutate((s) => {
-      if (!s.cloudSessionsOauth || !e(s.cloudSessionsOauth)) return s;
-      let k = {
-        ...s,
+    await getSecureStorage().mutate((state) => {
+      if (!state.cloudSessionsOauth || !predicate(state.cloudSessionsOauth)) return state;
+      let next = {
+        ...state,
       };
-      delete k.cloudSessionsOauth;
-      return k;
+      delete next.cloudSessionsOauth;
+      return next;
     });
   } catch (error) {
     logForDebugging(`Failed to clear the cloud-sessions OAuth tokens: ${errorMessage(error)}`, {
@@ -149,7 +149,7 @@ async function refreshCloudSessionsOAuth({ organizationUuid, refusedAccessToken,
     };
   }
   try {
-    return await withOauthSlotRefreshLock(OAUTH_REFRESH_LOCK_NAME, async (r) => {
+    return await withOauthSlotRefreshLock(OAUTH_REFRESH_LOCK_NAME, async (lock) => {
       let freshCloudSessionsOAuth = await readFreshCloudSessionsOAuth();
       if (
         !freshCloudSessionsOAuth?.accessToken ||
@@ -173,13 +173,13 @@ async function refreshCloudSessionsOAuth({ organizationUuid, refusedAccessToken,
         freshCloudSessionsOAuth.scopes.length === 0
       ) {
         let refreshToken = freshCloudSessionsOAuth.refreshToken;
-        await clearCloudSessionsOAuthIf((c) => c.refreshToken === refreshToken);
+        await clearCloudSessionsOAuthIf((stored) => stored.refreshToken === refreshToken);
         return {
           ok: false,
           reason: "needs_sign_in",
         };
       }
-      if (r.isCompromised()) {
+      if (lock.isCompromised()) {
         logFeatureSad("oauth_token_refresh", "cloud_sessions_oauth_refresh_lock_compromised");
         return {
           ok: false,
@@ -189,44 +189,46 @@ async function refreshCloudSessionsOAuth({ organizationUuid, refusedAccessToken,
       }
       let refreshToken = freshCloudSessionsOAuth.refreshToken;
       try {
-        let n = await refreshOAuthToken(refreshToken, {
+        let refreshed = await refreshOAuthToken(refreshToken, {
           clientId: freshCloudSessionsOAuth.clientId,
           scopes: freshCloudSessionsOAuth.scopes,
           skipProfileFetch: true,
         });
-        if (!n.refreshToken || !n.expiresAt) {
-          if (n.refreshToken && n.refreshToken !== refreshToken)
-            await revokeOAuthToken(n.refreshToken, freshCloudSessionsOAuth.clientId);
+        if (!refreshed.refreshToken || !refreshed.expiresAt) {
+          if (refreshed.refreshToken && refreshed.refreshToken !== refreshToken)
+            await revokeOAuthToken(refreshed.refreshToken, freshCloudSessionsOAuth.clientId);
           return {
             ok: false,
             reason: "refresh_failed",
             detail: "the server's reply had no refresh token or expiry",
           };
         }
-        if (!n.scopes.includes(CLAUDE_AI_SESSIONS_SCOPE)) {
-          await revokeOAuthToken(n.refreshToken, freshCloudSessionsOAuth.clientId);
-          await clearCloudSessionsOAuthIf((h) => h.refreshToken === refreshToken);
+        if (!refreshed.scopes.includes(CLAUDE_AI_SESSIONS_SCOPE)) {
+          await revokeOAuthToken(refreshed.refreshToken, freshCloudSessionsOAuth.clientId);
+          await clearCloudSessionsOAuthIf((stored) => stored.refreshToken === refreshToken);
           return {
             ok: false,
             reason: "needs_sign_in",
             detail: "refresh response missing the sessions scope",
           };
         }
-        let c = await saveCloudSessionsOAuth(
+        let saveResult = await saveCloudSessionsOAuth(
           {
-            accessToken: n.accessToken,
-            refreshToken: n.refreshToken,
-            expiresAt: n.expiresAt,
-            scopes: n.scopes.filter((scope) => CLOUD_SESSIONS_OAUTH_SCOPES.some((p) => p === scope)),
+            accessToken: refreshed.accessToken,
+            refreshToken: refreshed.refreshToken,
+            expiresAt: refreshed.expiresAt,
+            scopes: refreshed.scopes.filter((scope) =>
+              CLOUD_SESSIONS_OAUTH_SCOPES.some((allowedScope) => allowedScope === scope),
+            ),
             clientId: freshCloudSessionsOAuth.clientId,
             organizationUuid: freshCloudSessionsOAuth.organizationUuid,
           },
           {
-            onlyIf: (h) => h?.refreshToken === refreshToken,
+            onlyIf: (current) => current?.refreshToken === refreshToken,
           },
         );
-        if (c.raced) {
-          await revokeOAuthToken(n.refreshToken, freshCloudSessionsOAuth.clientId);
+        if (saveResult.raced) {
+          await revokeOAuthToken(refreshed.refreshToken, freshCloudSessionsOAuth.clientId);
           let freshCloudSessionsOAuth_2 = await readFreshCloudSessionsOAuth();
           return freshCloudSessionsOAuth_2?.accessToken &&
             freshCloudSessionsOAuth_2.organizationUuid === organizationUuid &&
@@ -240,7 +242,7 @@ async function refreshCloudSessionsOAuth({ organizationUuid, refusedAccessToken,
                 reason: "needs_sign_in",
               };
         }
-        if (!c.success)
+        if (!saveResult.success)
           logForDebugging(
             "Cloud-sessions OAuth refresh succeeded but the new token could not be saved; using it for this session only.",
             {
@@ -249,10 +251,10 @@ async function refreshCloudSessionsOAuth({ organizationUuid, refusedAccessToken,
           );
         return {
           ok: true,
-          accessToken: n.accessToken,
+          accessToken: refreshed.accessToken,
         };
       } catch (error) {
-        if (r.isCompromised()) {
+        if (lock.isCompromised()) {
           let freshCloudSessionsOAuth = await readFreshCloudSessionsOAuth();
           if (
             freshCloudSessionsOAuth?.accessToken &&
@@ -272,7 +274,7 @@ async function refreshCloudSessionsOAuth({ organizationUuid, refusedAccessToken,
           };
         }
         if (isInvalidGrantError(error)) {
-          await clearCloudSessionsOAuthIf((c) => c.refreshToken === refreshToken);
+          await clearCloudSessionsOAuthIf((stored) => stored.refreshToken === refreshToken);
           return {
             ok: false,
             reason: "needs_sign_in",

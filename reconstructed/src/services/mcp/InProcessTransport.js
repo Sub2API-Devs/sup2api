@@ -44,10 +44,10 @@ class InProcessTransport {
  * createLinkedTransportPair：创建并互相绑定两个 InProcessTransport，返回 [clientSide, serverSide]，用于 Chrome/Computer Use 等进程内 MCP 服务器。
  */
 function createLinkedTransportPair() {
-  let e = new InProcessTransport();
-  let s = new InProcessTransport();
-  e._setPeer(s);
-  s._setPeer(e);
-  return [e, s];
+  let clientSide = new InProcessTransport();
+  let serverSide = new InProcessTransport();
+  clientSide._setPeer(serverSide);
+  serverSide._setPeer(clientSide);
+  return [clientSide, serverSide];
 }
 export { createLinkedTransportPair };

@@ -23,7 +23,14 @@ import { createAssistantMessage } from "../messages.js";
 import { clearToolUsePermissionState } from "../../components/permissions/hooks.js";
 import { isSameDecision, isRequestFailedReason, isCanUseToolFailureReason } from "./decisionIdentity.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, record, string, unknown, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  record,
+  stringSchema,
+  unknown,
+  booleanSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-jns1cm6f.js:755-774 placement
 var CONFIRM = "confirm_";
@@ -43,48 +50,48 @@ function canPromptForConfirmation(toolUseContext) {
 /**
  * 用 AskUserQuestion 的形式向用户发问并返回选择（dontAsk、无人可问时直接返回）。
  */
-async function confirmWithUser(e) {
-  let { toolUseContext, source } = e;
+async function confirmWithUser(request) {
+  let { toolUseContext, source } = request;
   if (!canPromptForConfirmation(toolUseContext))
     return {
       kind: "unanswered",
       reason: "no_one_to_ask",
     };
-  let n;
+  let outcome;
   try {
-    n = await validateConfirmQuestion(e);
+    outcome = await validateConfirmQuestion(request);
   } catch (error) {
     if (toolUseContext.abortController.signal.aborted) {
       logForDebugging(`confirmWithUser(${source}): ask aborted with the turn: ${errorMessage(error)}`);
-      n = {
+      outcome = {
         kind: "aborted",
       };
     } else {
       logError(error);
-      n = {
+      outcome = {
         kind: "unanswered",
         reason: "error",
       };
     }
   }
-  let a = {
+  let sourceFields = {
     source_hash: shortHash(source),
   };
-  switch (n.kind) {
+  switch (outcome.kind) {
     case "chose":
     case "declined":
     case "aborted":
       logFeatureOk("permission_confirm_with_user", {
-        ...a,
-        answer: fromEnum(n.kind),
+        ...sourceFields,
+        answer: fromEnum(outcome.kind),
       });
       break;
     case "unanswered":
-      if (n.reason === "error") logFeatureBad("permission_confirm_with_user", "error", a);
-      else logFeatureSad("permission_confirm_with_user", n.reason, a);
+      if (outcome.reason === "error") logFeatureBad("permission_confirm_with_user", "error", sourceFields);
+      else logFeatureSad("permission_confirm_with_user", outcome.reason, sourceFields);
       break;
   }
-  return n;
+  return outcome;
 }
 //@ chunk-jns1cm6f.js:1478-2546 placement
 async function validateConfirmQuestion({
@@ -96,7 +103,7 @@ async function validateConfirmQuestion({
   choices,
   personOnly,
 }) {
-  let h = AskUserQuestionTool.inputSchema.safeParse({
+  let parsed = AskUserQuestionTool.inputSchema.safeParse({
     questions: [
       {
         question,
@@ -112,52 +119,58 @@ async function validateConfirmQuestion({
       source,
     },
   });
-  if (!h.success)
+  if (!parsed.success)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `confirmWithUser(${source}): the question does not satisfy the AskUserQuestion schema: ${h.error.message}`,
+      `confirmWithUser(${source}): the question does not satisfy the AskUserQuestion schema: ${parsed.error.message}`,
       "confirmWithUser: the question does not satisfy the AskUserQuestion schema",
     );
-  let U = await AskUserQuestionTool.checkPermissions(h.data, toolUseContext);
-  if (U.behavior !== "ask")
+  let permission = await AskUserQuestionTool.checkPermissions(parsed.data, toolUseContext);
+  if (permission.behavior !== "ask")
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `confirmWithUser(${source}): AskUserQuestion.checkPermissions answered ${U.behavior}, not ask`,
+      `confirmWithUser(${source}): AskUserQuestion.checkPermissions answered ${permission.behavior}, not ask`,
       "confirmWithUser: AskUserQuestion.checkPermissions did not answer ask",
     );
-  let A = {
-    ...U,
+  let forcedDecision = {
+    ...permission,
     forcedByCaller: true,
     ...(personOnly === true && {
       personOnly: true,
     }),
   };
-  let w = `${CONFIRM}${randomUUID()}`;
+  let toolUseId = `${CONFIRM}${randomUUID()}`;
   let active = transportStateByHost.of(toolUseContext.session).active;
-  active?.watchConfirmAnswerEvent(w);
-  let _;
-  let b = await canUseTool(
+  active?.watchConfirmAnswerEvent(toolUseId);
+  let answerEventId;
+  let decision = await canUseTool(
     AskUserQuestionTool,
-    h.data,
+    parsed.data,
     toolUseContext,
     createAssistantMessage({
       content: [],
     }),
-    w,
-    A,
+    toolUseId,
+    forcedDecision,
   ).finally(() => {
-    clearToolUsePermissionState(toolUseContext.session, w);
-    _ = active?.takeConfirmAnswerEventId(w);
+    clearToolUsePermissionState(toolUseContext.session, toolUseId);
+    answerEventId = active?.takeConfirmAnswerEventId(toolUseId);
   });
-  let y = describeConfirmOutcome(b, A, toolUseContext.abortController.signal, question, choices);
-  return y.kind === "chose" && _ !== undefined
+  let described = describeConfirmOutcome(
+    decision,
+    forcedDecision,
+    toolUseContext.abortController.signal,
+    question,
+    choices,
+  );
+  return described.kind === "chose" && answerEventId !== undefined
     ? {
-        ...y,
-        answerEventId: _,
+        ...described,
+        answerEventId,
       }
-    : y;
+    : described;
 }
 //@ chunk-jns1cm6f.js:2546-3377 placement
-function describeConfirmOutcome(e, r, signal, question, choices) {
-  if (isSameDecision(e, r))
+function describeConfirmOutcome(decision, forcedDecision, signal, question, choices) {
+  if (isSameDecision(decision, forcedDecision))
     return {
       kind: "unanswered",
       reason: "no_one_to_ask",
@@ -166,25 +179,25 @@ function describeConfirmOutcome(e, r, signal, question, choices) {
     return {
       kind: "aborted",
     };
-  switch (e.behavior) {
+  switch (decision.behavior) {
     case "allow": {
-      let s = confirmUpdatedInputSchema().safeParse(e.updatedInput);
-      if (!s.success)
+      let updatedInput = confirmUpdatedInputSchema().safeParse(decision.updatedInput);
+      if (!updatedInput.success)
         return {
           kind: "unanswered",
           reason: "no_selection",
         };
-      if (s.data.followUp === true)
+      if (updatedInput.data.followUp === true)
         return {
           kind: "declined",
         };
-      let k = formatAnswerValue(s.data.answers?.[question]);
-      if (k === "")
+      let answer = formatAnswerValue(updatedInput.data.answers?.[question]);
+      if (answer === "")
         return {
           kind: "unanswered",
           reason: "no_selection",
         };
-      let found = choices.find((U) => collapseWhitespace(U.label) === k);
+      let found = choices.find((choice) => collapseWhitespace(choice.label) === answer);
       return found !== undefined
         ? {
             kind: "chose",
@@ -192,18 +205,19 @@ function describeConfirmOutcome(e, r, signal, question, choices) {
           }
         : {
             kind: "declined",
-            typedAnswer: k,
+            typedAnswer: answer,
           };
     }
     case "deny":
-      if (e.decisionReason.type === "other" && isRequestFailedReason(e.decisionReason.reason))
+      if (decision.decisionReason.type === "other" && isRequestFailedReason(decision.decisionReason.reason))
         return {
           kind: "unanswered",
           reason: "host_closed",
         };
       if (
-        e.decisionReason.type === "asyncAgent" ||
-        (e.decisionReason.type === "other" && isCanUseToolFailureReason(e.decisionReason.reason))
+        decision.decisionReason.type === "asyncAgent" ||
+        (decision.decisionReason.type === "other" &&
+          isCanUseToolFailureReason(decision.decisionReason.reason))
       )
         return {
           kind: "unanswered",
@@ -219,20 +233,24 @@ function describeConfirmOutcome(e, r, signal, question, choices) {
   }
 }
 //@ chunk-jns1cm6f.js:3377-3451 placement
-var confirmUpdatedInputSchema = DoctorLazy(() =>
-  u({
-    answers: record(string(), unknown()).optional(),
-    followUp: M().optional(),
-  }),
-);
+var confirmUpdatedInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-jns1cm6f.js:3377", () => {
+  confirmUpdatedInputSchema = DoctorLazy(() =>
+    objectSchema({
+      answers: record(stringSchema(), unknown()).optional(),
+      followUp: booleanSchema().optional(),
+    }),
+  );
+});
 //@ chunk-jns1cm6f.js:3451-3585 placement
-function formatAnswerValue(e) {
-  if (typeof e === "string") return collapseWhitespace(e);
-  if (Array.isArray(e)) return collapseWhitespace(e.filter((r) => typeof r === "string").join(", "));
+function formatAnswerValue(answer) {
+  if (typeof answer === "string") return collapseWhitespace(answer);
+  if (Array.isArray(answer))
+    return collapseWhitespace(answer.filter((part) => typeof part === "string").join(", "));
   return "";
 }
 //@ chunk-jns1cm6f.js:3585-3635 placement
-function collapseWhitespace(e) {
-  return e.replace(/\s+/g, " ").trim();
+function collapseWhitespace(text) {
+  return text.replace(/\s+/g, " ").trim();
 }
 export { confirmWithUser, canPromptForConfirmation, CONFIRM };

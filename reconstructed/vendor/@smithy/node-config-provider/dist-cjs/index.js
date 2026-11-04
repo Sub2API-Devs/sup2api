@@ -5,48 +5,48 @@
  * pieces: chunk-b93kvvbs.js (1), chunk-edce4vxq.js (1)
  * attribution: cjs-fingerprint 1, cjs-require-graph 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_property_provider } from "../../property-provider/dist-cjs/index.js";
 import { require_shared_ini_file_loader } from "../../shared-ini-file-loader/dist-cjs/index.js";
 import { require_index_native } from "../../core/dist-cjs/submodules/config/index.native.js";
 
 //@ chunk-b93kvvbs.js:298-1420 cjs-fingerprint
-var require_node_config_provider = x(function (cjsExports) {
+var require_node_config_provider = __commonJS(function (cjsExports) {
   var import_property_provider = require_property_provider();
-  var l = require_shared_ini_file_loader();
-  function d(e) {
+  var import_shared_ini_file_loader = require_shared_ini_file_loader();
+  function getSelectorName(functionString) {
     try {
-      let o = new Set(Array.from(e.match(/([A-Z_]){3,}/g) ?? []));
-      o.delete("CONFIG");
-      o.delete("CONFIG_PREFIX_SEPARATOR");
-      o.delete("ENV");
-      return [...o].join(", ");
+      let constants = new Set(Array.from(functionString.match(/([A-Z_]){3,}/g) ?? []));
+      constants.delete("CONFIG");
+      constants.delete("CONFIG_PREFIX_SEPARATOR");
+      constants.delete("ENV");
+      return [...constants].join(", ");
     } catch (error) {
-      return e;
+      return functionString;
     }
   }
-  var h = (environmentVariableSelector, o) => async () => {
+  var fromEnv = (environmentVariableSelector, options) => async () => {
     try {
-      let config = environmentVariableSelector(process.env, o);
+      let config = environmentVariableSelector(process.env, options);
       if (config === undefined) throw Error();
       return config;
     } catch (e) {
       throw new import_property_provider.CredentialsProviderError(
-        e.message || `Not found in ENV: ${d(environmentVariableSelector.toString())}`,
+        e.message || `Not found in ENV: ${getSelectorName(environmentVariableSelector.toString())}`,
         {
-          logger: o?.logger,
+          logger: options?.logger,
         },
       );
     }
   };
-  var w =
+  var fromSharedConfigFiles =
     (configFileSelector, { preferredFile = "config", ...init } = {}) =>
     async () => {
-      let profile = l.getProfileName(init);
-      let { configFile, credentialsFile } = await l.loadSharedConfigFiles(init);
+      let profile = import_shared_ini_file_loader.getProfileName(init);
+      let { configFile, credentialsFile } = await import_shared_ini_file_loader.loadSharedConfigFiles(init);
       let profileFromCredentials = credentialsFile[profile] || {};
       let profileFromConfig = configFile[profile] || {};
-      let m =
+      let mergedProfile =
         preferredFile === "config"
           ? {
               ...profileFromCredentials,
@@ -57,92 +57,107 @@ var require_node_config_provider = x(function (cjsExports) {
               ...profileFromCredentials,
             };
       try {
-        let f = configFileSelector(m, preferredFile === "config" ? configFile : credentialsFile);
-        if (f === undefined) throw Error();
-        return f;
+        let configValue = configFileSelector(
+          mergedProfile,
+          preferredFile === "config" ? configFile : credentialsFile,
+        );
+        if (configValue === undefined) throw Error();
+        return configValue;
       } catch (e) {
         throw new import_property_provider.CredentialsProviderError(
           e.message ||
-            `Not found in config files w/ profile [${profile}]: ${d(configFileSelector.toString())}`,
+            `Not found in config files w/ profile [${profile}]: ${getSelectorName(configFileSelector.toString())}`,
           {
             logger: init.logger,
           },
         );
       }
     };
-  var F = (func) => typeof func === "function";
-  var u = (defaultValue) =>
-    F(defaultValue) ? async () => await defaultValue() : import_property_provider.fromStatic(defaultValue);
-  var loadConfig = ({ environmentVariableSelector, configFileSelector, default: defaultValue }, n = {}) => {
-    let { signingName, logger } = n;
-    let s = {
+  var isFunction = (func) => typeof func === "function";
+  var fromStatic = (defaultValue) =>
+    isFunction(defaultValue)
+      ? async () => await defaultValue()
+      : import_property_provider.fromStatic(defaultValue);
+  var loadConfig = (
+    { environmentVariableSelector, configFileSelector, default: defaultValue },
+    configuration = {},
+  ) => {
+    let { signingName, logger } = configuration;
+    let envOptions = {
       signingName,
       logger,
     };
     return import_property_provider.memoize(
       import_property_provider.chain(
-        h(environmentVariableSelector, s),
-        w(configFileSelector, n),
-        u(defaultValue),
+        fromEnv(environmentVariableSelector, envOptions),
+        fromSharedConfigFiles(configFileSelector, configuration),
+        fromStatic(defaultValue),
       ),
     );
   };
   cjsExports.loadConfig = loadConfig;
 });
 //@ chunk-edce4vxq.js:166742-168080 cjs-require-graph
-var require_node_config_provider_2 = x(function (cjsExports) {
-  var qd = require_index_native();
-  var pi = require_node_config_provider();
-  var Hd = require_property_provider();
-  var Gd = "AWS_EXECUTION_ENV";
-  var mi = "AWS_REGION";
-  var gi = "AWS_DEFAULT_REGION";
-  var Xd = "AWS_EC2_METADATA_DISABLED";
-  var Wd = ["in-region", "cross-region", "mobile", "standard", "legacy"];
+var require_node_config_provider_2 = __commonJS(function (cjsExports) {
+  var configResolverModule = require_index_native();
+  var nodeConfigProviderModule = require_node_config_provider();
+  var propertyProviderModule = require_property_provider();
+  var AWS_EXECUTION_ENV = "AWS_EXECUTION_ENV";
+  var AWS_REGION_ENV = "AWS_REGION";
+  var AWS_DEFAULT_REGION_ENV = "AWS_DEFAULT_REGION";
+  var ENV_IMDS_DISABLED = "AWS_EC2_METADATA_DISABLED";
+  var DEFAULTS_MODE_OPTIONS = ["in-region", "cross-region", "mobile", "standard", "legacy"];
   var path = "/latest/meta-data/placement/region";
-  var Qd = "AWS_DEFAULTS_MODE";
-  var Yd = "defaults_mode";
-  var Jd = {
-    environmentVariableSelector: (e) => e[Qd],
-    configFileSelector: (e) => e[Yd],
+  var AWS_DEFAULTS_MODE_ENV = "AWS_DEFAULTS_MODE";
+  var AWS_DEFAULTS_MODE_CONFIG = "defaults_mode";
+  var NODE_DEFAULTS_MODE_CONFIG_OPTIONS = {
+    environmentVariableSelector: (env) => env[AWS_DEFAULTS_MODE_ENV],
+    configFileSelector: (profile) => profile[AWS_DEFAULTS_MODE_CONFIG],
     default: "legacy",
   };
   var resolveDefaultsModeConfig = ({
-    region: e = pi.loadConfig(qd.NODE_REGION_CONFIG_OPTIONS),
-    defaultsMode: t = pi.loadConfig(Jd),
+    region = nodeConfigProviderModule.loadConfig(configResolverModule.NODE_REGION_CONFIG_OPTIONS),
+    defaultsMode = nodeConfigProviderModule.loadConfig(NODE_DEFAULTS_MODE_CONFIG_OPTIONS),
   } = {}) =>
-    Hd.memoize(async () => {
-      let r = typeof t === "function" ? await t() : t;
-      switch (r?.toLowerCase()) {
+    propertyProviderModule.memoize(async () => {
+      let mode = typeof defaultsMode === "function" ? await defaultsMode() : defaultsMode;
+      switch (mode?.toLowerCase()) {
         case "auto":
-          return eh(e);
+          return resolveNodeDefaultsModeAuto(region);
         case "in-region":
         case "cross-region":
         case "mobile":
         case "standard":
         case "legacy":
-          return Promise.resolve(r?.toLocaleLowerCase());
+          return Promise.resolve(mode?.toLocaleLowerCase());
         case undefined:
           return Promise.resolve("legacy");
         default:
-          throw Error(`Invalid parameter for "defaultsMode", expect ${Wd.join(", ")}, got ${r}`);
+          throw Error(
+            `Invalid parameter for "defaultsMode", expect ${DEFAULTS_MODE_OPTIONS.join(", ")}, got ${mode}`,
+          );
       }
     });
-  var eh = async (e) => {
-    if (e) {
-      let t = typeof e === "function" ? await e() : e;
-      let r = await th();
-      if (!r) return "standard";
-      if (t === r) return "in-region";
+  var resolveNodeDefaultsModeAuto = async (clientRegion) => {
+    if (clientRegion) {
+      let resolvedRegion = typeof clientRegion === "function" ? await clientRegion() : clientRegion;
+      let inferredRegion = await inferPhysicalRegion();
+      if (!inferredRegion) return "standard";
+      if (resolvedRegion === inferredRegion) return "in-region";
       else return "cross-region";
     }
     return "standard";
   };
-  var th = async () => {
-    if (process.env[Gd] && (process.env[mi] || process.env[gi])) return process.env[mi] ?? process.env[gi];
-    if (!process.env[Xd])
+  var inferPhysicalRegion = async () => {
+    if (
+      process.env[AWS_EXECUTION_ENV] &&
+      (process.env[AWS_REGION_ENV] || process.env[AWS_DEFAULT_REGION_ENV])
+    )
+      return process.env[AWS_REGION_ENV] ?? process.env[AWS_DEFAULT_REGION_ENV];
+    if (!process.env[ENV_IMDS_DISABLED])
       try {
-        let { getInstanceMetadataEndpoint, httpRequest } = await import("./chunk-7bg2190x.js");
+        let { getInstanceMetadataEndpoint, httpRequest } =
+          await import("../../credential-provider-imds/dist-cjs/ENV_CMDS_FULL_URI.lazy.js");
         let instanceMetadataEndpoint = await getInstanceMetadataEndpoint();
         return (
           await httpRequest({

@@ -62,29 +62,34 @@ import { isAxiosError } from "../../../vendor/axios/dist/esm/axios.js";
 /**
  * 生成"读不到会话 GitHub 代理 CA 证书"的错误文案。
  */
-function proxyCaBundleError(e) {
-  return `could not read this session's GitHub proxy CA bundle (${e}).`;
+function proxyCaBundleError(errnoCode) {
+  return `could not read this session's GitHub proxy CA bundle (${errnoCode}).`;
 }
 //@ chunk-fy5kn7m3.js:27565-27641 placement
-function jqArgs(e, platform) {
-  return [...(platform === "windows" ? ["--binary"] : []), "-r", "-c", ` ${e}`];
+function jqArgs(expression, platform) {
+  return [...(platform === "windows" ? ["--binary"] : []), "-r", "-c", ` ${expression}`];
 }
 //@ chunk-fy5kn7m3.js:27641-31289 placement
 /**
  * 内置 `gh api` 实现：在没有 GitHub CLI 的云会话中，经会话 GitHub 代理转发 REST 请求，填充 {owner}/{repo}/{branch}，校验主机与路径，支持分页、字段、--jq。
  */
-async function runBuiltinGhApi(options, t, ghesHosts) {
+async function runBuiltinGhApi(options, context, ghesHosts) {
   if (isEssentialTrafficOnly())
     throw new GhApiRequestError(
       "the built-in gh api is off in this session: nonessential network traffic is disabled (CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC)",
     );
-  let apiBase = t.apiOrigin ?? githubApiBase(GITHUB_HOST);
+  let apiBase = context.apiOrigin ?? githubApiBase(GITHUB_HOST);
   let absoluteEndpoint = resolveAbsoluteEndpoint(options.endpoint, apiBase, ghesHosts);
-  let a = new GhRepoContext(t.cwd, t.ghRepo, absoluteEndpoint?.host ?? options.host, ghesHosts);
-  let fieldParams = await buildFieldParams(options.rawFields, options.typedFields, async (w) => {
-    if (w.startsWith("@")) return (await readInputBody(w.slice(1), t)).toString("utf8");
-    if (/^[+-]?\d+$/.test(w) && Number.isSafeInteger(Number(w))) return Number(w);
-    switch (w) {
+  let repoContext = new GhRepoContext(
+    context.cwd,
+    context.ghRepo,
+    absoluteEndpoint?.host ?? options.host,
+    ghesHosts,
+  );
+  let params = await buildFieldParams(options.rawFields, options.typedFields, async (value) => {
+    if (value.startsWith("@")) return (await readInputBody(value.slice(1), context)).toString("utf8");
+    if (/^[+-]?\d+$/.test(value) && Number.isSafeInteger(Number(value))) return Number(value);
+    switch (value) {
       case "true":
         return true;
       case "false":
@@ -92,17 +97,17 @@ async function runBuiltinGhApi(options, t, ghesHosts) {
       case "null":
         return null;
       default:
-        return a.fill(w, false);
+        return repoContext.fill(value, false);
     }
   });
-  let h = options.inputFile !== undefined;
-  let upper = (options.method ?? (fieldParams.size > 0 || h ? "POST" : "GET")).toUpperCase();
+  let hasInputFile = options.inputFile !== undefined;
+  let upper = (options.method ?? (params.size > 0 || hasInputFile ? "POST" : "GET")).toUpperCase();
   if (options.paginate && upper !== "GET")
     throw new GhApiRequestError(
       "the `--paginate` option is not supported for non-GET requests; with fields the method is POST unless `-X GET` sends them as query parameters",
     );
-  let y = await a.fill(options.endpoint, true);
-  let absoluteEndpoint_2 = resolveAbsoluteEndpoint(y, apiBase, ghesHosts);
+  let filledEndpoint = await repoContext.fill(options.endpoint, true);
+  let absoluteEndpoint_2 = resolveAbsoluteEndpoint(filledEndpoint, apiBase, ghesHosts);
   if (
     absoluteEndpoint_2?.host !== absoluteEndpoint?.host ||
     absoluteEndpoint_2?.apiBase !== absoluteEndpoint?.apiBase
@@ -110,48 +115,48 @@ async function runBuiltinGhApi(options, t, ghesHosts) {
     throw new GhApiRequestError(
       "filling in {owner}, {repo} or {branch} would change the host of the endpoint: spell the endpoint out",
     );
-  let b = absoluteEndpoint_2?.host ?? options.host ?? a.pathFilledFromHost();
+  let requestedHost = absoluteEndpoint_2?.host ?? options.host ?? repoContext.pathFilledFromHost();
   let { host, apiBase: apiBase_2 } =
-    absoluteEndpoint_2 ?? resolveTargetHost(b ?? GITHUB_HOST, apiBase, ghesHosts);
-  let G;
+    absoluteEndpoint_2 ?? resolveTargetHost(requestedHost ?? GITHUB_HOST, apiBase, ghesHosts);
+  let hostNote;
   if (host !== GITHUB_HOST && ghesHosts === ANY) {
-    let w =
+    let hostSource =
       absoluteEndpoint_2 !== undefined
         ? "the host in the endpoint URL"
         : options.host !== undefined
           ? "the host --hostname names"
-          : `the host of ${remoteDescription(a.pathFilledFromRemote())}`;
-    G = `${host}, not ${GITHUB_HOST}: ${w}.`;
+          : `the host of ${remoteDescription(repoContext.pathFilledFromRemote())}`;
+    hostNote = `${host}, not ${GITHUB_HOST}: ${hostSource}.`;
   }
-  let S = ghIsDangerousCallback(y, apiBase_2);
-  let H;
-  if (upper === "GET" || h) {
-    for (let [w, U] of flattenParamEntries(fieldParams)) S.searchParams.append(w, U);
-    if (options.inputFile !== undefined) H = await readInputBody(options.inputFile, t);
-  } else if (fieldParams.size > 0) H = Buffer.from(jsonStringify(mapToPlainObject(fieldParams)), "utf8");
-  if (options.paginate && !S.searchParams.has("per_page")) S.searchParams.set("per_page", "100");
-  let headers = ghRequestHeaders(options.headers, H !== undefined);
-  let N = options.jq === undefined ? undefined : whichOnPath("jq", t.path);
-  if (N === null)
+  let url = ghIsDangerousCallback(filledEndpoint, apiBase_2);
+  let body;
+  if (upper === "GET" || hasInputFile) {
+    for (let [key, value] of flattenParamEntries(params)) url.searchParams.append(key, value);
+    if (options.inputFile !== undefined) body = await readInputBody(options.inputFile, context);
+  } else if (params.size > 0) body = Buffer.from(jsonStringify(mapToPlainObject(params)), "utf8");
+  if (options.paginate && !url.searchParams.has("per_page")) url.searchParams.set("per_page", "100");
+  let headers = ghRequestHeaders(options.headers, body !== undefined);
+  let jqPath = options.jq === undefined ? undefined : whichOnPath("jq", context.path);
+  if (jqPath === null)
     throw new GhApiRequestError(
       "--jq needs jq, which is not installed on this machine (not found on PATH): run the command without --jq and pipe the output to a JSON tool that is installed.",
     );
   try {
-    new X509Certificate(t.ca);
+    new X509Certificate(context.ca);
   } catch {
     throw new GhApiRequestError(proxyCaBundleError("no certificate in it"));
   }
-  let z = {
-    ca: t.ca,
+  let tlsOptions = {
+    ca: context.ca,
     rejectUnauthorized: true,
   };
-  let L = new ConnectProxyAgent(t.proxyUrl, z);
-  L.options = {
-    ...L.options,
-    ...z,
+  let agent = new ConnectProxyAgent(context.proxyUrl, tlsOptions);
+  agent.options = {
+    ...agent.options,
+    ...tlsOptions,
   };
-  let nt = {
-    httpsAgent: L,
+  let requestOptions = {
+    httpsAgent: agent,
     proxy: false,
     responseType: "arraybuffer",
     validateStatus: () => true,
@@ -160,152 +165,160 @@ async function runBuiltinGhApi(options, t, ghesHosts) {
     maxBodyLength: GH_API_DEFAULTS_2,
     timeout: PROXY_CONNECT_TIMEOUT_MS,
   };
-  let he = G !== undefined;
-  let ue = {
+  let willNoteHost = hostNote !== undefined;
+  let statusState = {
     answered: false,
   };
-  let W = false;
-  let ce = false;
+  let wroteArrayOpen = false;
+  let wroteArrayItem = false;
   for (;;) {
-    let w;
+    let response;
     try {
-      w = await requestFollowingRedirects(
+      response = await requestFollowingRedirects(
         {
           method: upper,
-          url: S,
-          body: H,
+          url,
+          body,
           headers,
         },
-        nt,
+        requestOptions,
         apiBase_2,
-        ue,
+        statusState,
       );
     } catch (error) {
-      let v = he && requestHostNote(G, ue.answered, isClientStatus(findProxyError(error)?.connectStatus));
-      if (!v) throw error;
-      await t.write(
+      let refusalNote =
+        willNoteHost &&
+        requestHostNote(hostNote, statusState.answered, isClientStatus(findProxyError(error)?.connectStatus));
+      if (!refusalNote) throw error;
+      await context.write(
         "stderr",
-        `gh: ${ghProxyRefusalText(error, t.statusUrl)}
-${v}`,
+        `gh: ${ghProxyRefusalText(error, context.statusUrl)}
+${refusalNote}`,
       );
       return 1;
     }
-    let U = w.status > 299;
-    let Y = G;
-    G = undefined;
-    if (Y !== undefined && !U) await t.write("stderr", requestHostNote(Y, true, false));
-    let pe = options.paginate ? /<([^>]+)>;\s*rel="next"/.exec(String(w.headers.link ?? ""))?.[1] : undefined;
-    if (options.include) await t.write("stdout", formatResponseHead(w));
-    let F = w.data;
-    if (F.length > 0 && !options.silent)
-      if (N !== undefined && options.jq !== undefined && !U) {
-        let R = await execFileNoThrowWithCwd(N, jqArgs(options.jq, getPlatform()), {
-          cwd: t.cwd,
-          input: F,
+    let isErrorStatus = response.status > 299;
+    let pendingHostNote = hostNote;
+    hostNote = undefined;
+    if (pendingHostNote !== undefined && !isErrorStatus)
+      await context.write("stderr", requestHostNote(pendingHostNote, true, false));
+    let nextUrl = options.paginate
+      ? /<([^>]+)>;\s*rel="next"/.exec(String(response.headers.link ?? ""))?.[1]
+      : undefined;
+    if (options.include) await context.write("stdout", formatResponseHead(response));
+    let bodyBuffer = response.data;
+    if (bodyBuffer.length > 0 && !options.silent)
+      if (jqPath !== undefined && options.jq !== undefined && !isErrorStatus) {
+        let jqResult = await execFileNoThrowWithCwd(jqPath, jqArgs(options.jq, getPlatform()), {
+          cwd: context.cwd,
+          input: bodyBuffer,
           timeout: PROXY_CONNECT_TIMEOUT_MS,
           stripFinalNewline: false,
           preserveOutputOnError: true,
         });
-        await t.write("stdout", R.stdout);
-        if (R.code !== 0) {
-          await t.write("stderr", escapeControlChars(R.stderr));
+        await context.write("stdout", jqResult.stdout);
+        if (jqResult.code !== 0) {
+          await context.write("stderr", escapeControlChars(jqResult.stderr));
           return 1;
         }
       } else if (
         options.paginate &&
         !options.include &&
-        !U &&
-        /[/+]json(;|$)/.test(String(w.headers["content-type"] ?? "")) &&
-        F[0] === OPEN_BRACKET_CODE &&
-        F.at(-1) === CLOSE_BRACKET_CODE
+        !isErrorStatus &&
+        /[/+]json(;|$)/.test(String(response.headers["content-type"] ?? "")) &&
+        bodyBuffer[0] === OPEN_BRACKET_CODE &&
+        bodyBuffer.at(-1) === CLOSE_BRACKET_CODE
       ) {
-        let chunk = F.subarray(1, -1);
-        if (!W) {
-          await t.write("stdout", "[");
-          W = true;
+        let chunk = bodyBuffer.subarray(1, -1);
+        if (!wroteArrayOpen) {
+          await context.write("stdout", "[");
+          wroteArrayOpen = true;
         }
-        if (chunk.some((v) => !HEADER_VALUE_SPACE_CODES.has(v))) {
-          if (ce) await t.write("stdout", ",");
-          await t.write("stdout", chunk);
-          ce = true;
+        if (chunk.some((byte) => !HEADER_VALUE_SPACE_CODES.has(byte))) {
+          if (wroteArrayItem) await context.write("stdout", ",");
+          await context.write("stdout", chunk);
+          wroteArrayItem = true;
         }
-      } else await t.write("stdout", F);
-    if (U) {
-      await t.write(
+      } else await context.write("stdout", bodyBuffer);
+    if (isErrorStatus) {
+      await context.write(
         "stderr",
-        `gh: ${escapeControlChars(describeApiError(w.status, F))}
+        `gh: ${escapeControlChars(describeApiError(response.status, bodyBuffer))}
 `,
       );
-      let included = [401, 403, 404].includes(w.status);
-      let v = he && requestHostNote(Y, true, included || w.headers["x-proxy-error"] !== undefined);
-      if (v) await t.write("stderr", v);
-      else if (ghesHosts !== ANY && b === undefined && ghesHosts.length > 0 && included)
-        await t.write(
+      let included = [401, 403, 404].includes(response.status);
+      let statusNote =
+        willNoteHost &&
+        requestHostNote(pendingHostNote, true, included || response.headers["x-proxy-error"] !== undefined);
+      if (statusNote) await context.write("stderr", statusNote);
+      else if (ghesHosts !== ANY && requestedHost === undefined && ghesHosts.length > 0 && included)
+        await context.write(
           "stderr",
           `this request went to ${GITHUB_HOST}; for a repository on ${ghesHosts.join(" or ")}, add --hostname <host> or write the endpoint as repos/{owner}/{repo}/...
 `,
         );
       return 1;
     }
-    if (pe === undefined) {
-      if (W) await t.write("stdout", "]");
+    if (nextUrl === undefined) {
+      if (wroteArrayOpen) await context.write("stdout", "]");
       return 0;
     }
-    S = preserveQueryOnRepoRedirect(ghIsDangerousCallback(pe, apiBase_2), S, apiBase_2);
+    url = preserveQueryOnRepoRedirect(ghIsDangerousCallback(nextUrl, apiBase_2), url, apiBase_2);
   }
 }
 //@ chunk-fy5kn7m3.js:31289-31411 placement
 /**
  * 错误输出中附加请求去往的主机说明。
  */
-function requestHostNote(e, t, s) {
-  if (e === undefined)
-    return s
+function requestHostNote(host, answered, withProxyNote) {
+  if (host === undefined)
+    return withProxyNote
       ? `${ACTIONS_PROXY_NOTE}
 `
       : "";
-  return `this request ${t ? "went to" : "was for"} ${e}${s ? ` ${ACTIONS_PROXY_NOTE}` : ""}
+  return `this request ${answered ? "went to" : "was for"} ${host}${withProxyNote ? ` ${ACTIONS_PROXY_NOTE}` : ""}
 `;
 }
 //@ chunk-fy5kn7m3.js:31411-31704 placement
 /**
  * /repositories/<id> 重定向到 /repos/<owner>/<repo> 时保留原查询串。
  */
-function preserveQueryOnRepoRedirect(e, t, apiBase) {
+function preserveQueryOnRepoRedirect(url, apiUrl, apiBase) {
   let replaced = new URL(apiBase).pathname.replace(/\/$/, "");
-  let match = /^\/repositories\/\d+(\/.*?)?\/?$/.exec(e.pathname.slice(replaced.length));
-  let match_2 = /^\/repos\/[^/]+\/[^/]+(\/.*?)?\/?$/.exec(t.pathname.slice(replaced.length));
-  if (match === null || match_2 === null || match[1] !== match_2[1]) return e;
-  let d = new URL(t);
-  d.search = e.search;
-  return d;
+  let match = /^\/repositories\/\d+(\/.*?)?\/?$/.exec(url.pathname.slice(replaced.length));
+  let match_2 = /^\/repos\/[^/]+\/[^/]+(\/.*?)?\/?$/.exec(apiUrl.pathname.slice(replaced.length));
+  if (match === null || match_2 === null || match[1] !== match_2[1]) return url;
+  let apiUrl_2 = new URL(apiUrl);
+  apiUrl_2.search = url.search;
+  return apiUrl_2;
 }
 //@ chunk-fy5kn7m3.js:31704-32096 placement
 /**
  * 发送请求并跟随重定向（有次数上限，303 等改为 GET/HEAD，每跳校验目标）。
  */
-async function requestFollowingRedirects(e, t, apiBase, r) {
-  let n = e;
+async function requestFollowingRedirects(request, options, apiBase, statusState) {
+  let currentRequest = request;
   for (let j = 0; ; j++) {
-    let d = await sendByMethod(n, t);
-    r.answered = true;
-    let location = d.headers.location;
-    if (!REDIRECT_STATUS_SET.has(d.status) || typeof location !== "string" || location === "") return d;
+    let response = await sendByMethod(currentRequest, options);
+    statusState.answered = true;
+    let location = response.headers.location;
+    if (!REDIRECT_STATUS_SET.has(response.status) || typeof location !== "string" || location === "")
+      return response;
     if (j === MAX_PAGINATION_PAGES)
       throw new GhApiRequestError(`stopped after ${MAX_PAGINATION_PAGES} redirects`);
-    let url = checkGhRedirect(location, n.url, apiBase);
-    n =
-      d.status === 307 || d.status === 308
+    let url = checkGhRedirect(location, currentRequest.url, apiBase);
+    currentRequest =
+      response.status === 307 || response.status === 308
         ? {
-            ...n,
+            ...currentRequest,
             url,
           }
         : {
-            method: n.method === "HEAD" ? "HEAD" : "GET",
+            method: currentRequest.method === "HEAD" ? "HEAD" : "GET",
             url,
             body: undefined,
             headers: {
-              ...n.headers,
+              ...currentRequest.headers,
               "content-type": false,
             },
           };
@@ -315,28 +328,28 @@ async function requestFollowingRedirects(e, t, apiBase, r) {
 /**
  * 按方法调用外部 HTTP 客户端（仅 GET/HEAD/POST/PUT/PATCH/DELETE）。
  */
-function sendByMethod({ method, url, body, headers }, n) {
-  let a = {
-    ...n,
+function sendByMethod({ method, url, body, headers }, options) {
+  let requestOptions = {
+    ...options,
     headers,
   };
   switch (method) {
     case "GET":
       return externalHttp.get(url.href, {
-        ...a,
+        ...requestOptions,
         data: body,
       });
     case "HEAD":
-      return externalHttp.head(url.href, a);
+      return externalHttp.head(url.href, requestOptions);
     case "POST":
-      return externalHttp.post(url.href, body ?? Buffer.alloc(0), a);
+      return externalHttp.post(url.href, body ?? Buffer.alloc(0), requestOptions);
     case "PUT":
-      return externalHttp.put(url.href, body ?? Buffer.alloc(0), a);
+      return externalHttp.put(url.href, body ?? Buffer.alloc(0), requestOptions);
     case "PATCH":
-      return externalHttp.patch(url.href, body ?? Buffer.alloc(0), a);
+      return externalHttp.patch(url.href, body ?? Buffer.alloc(0), requestOptions);
     case "DELETE":
       return externalHttp.delete(url.href, {
-        ...a,
+        ...requestOptions,
         data: body,
       });
     default:
@@ -347,18 +360,18 @@ function sendByMethod({ method, url, body, headers }, n) {
 /**
  * 解析目标主机与 API 基址（github.com、已配置的 GHE 或任意 GHE 校验）。
  */
-function resolveTargetHost(e, apiBase, s) {
-  if (e === GITHUB_HOST)
+function resolveTargetHost(host, apiBase, ghesHosts) {
+  if (host === GITHUB_HOST)
     return {
-      host: e,
+      host,
       apiBase,
     };
-  if (s !== ANY)
+  if (ghesHosts !== ANY)
     return {
-      host: e,
-      apiBase: githubApiBase(e),
+      host,
+      apiBase: githubApiBase(host),
     };
-  let enterpriseHost = resolveEnterpriseHost(e);
+  let enterpriseHost = resolveEnterpriseHost(host);
   if ("refusal" in enterpriseHost) throw new GhApiRequestError(enterpriseHost.refusal);
   return enterpriseHost;
 }
@@ -366,25 +379,30 @@ function resolveTargetHost(e, apiBase, s) {
 /**
  * 端点是完整 URL 时校验主机与同源，返回目标主机。
  */
-function resolveAbsoluteEndpoint(e, apiBase, s) {
-  let index = e.indexOf("://");
+function resolveAbsoluteEndpoint(endpoint, apiBase, ghesHosts) {
+  let index = endpoint.indexOf("://");
   if (index === -1) return;
-  assertCleanEndpoint(e);
-  let n = e.slice(index + 3).search(/[/?#]/);
-  let a = n === -1 ? e : e.slice(0, index + 3 + n);
-  if (!/[/?#]/.test(e.slice(0, index)) && hasRepoPlaceholder(a))
+  assertCleanEndpoint(endpoint);
+  let pathStart = endpoint.slice(index + 3).search(/[/?#]/);
+  let authority = pathStart === -1 ? endpoint : endpoint.slice(0, index + 3 + pathStart);
+  if (!/[/?#]/.test(endpoint.slice(0, index)) && hasRepoPlaceholder(authority))
     throw new GhApiRequestError(
       "{owner}, {repo} and {branch} are filled in only in the path and query of an endpoint: this one is a URL with a placeholder before its path",
     );
-  let originalUrl = URL.parse(e);
+  let originalUrl = URL.parse(endpoint);
   if (!originalUrl) throw new GhApiRequestError(INVALID_ENDPOINT_PATH_TEXT);
-  let h = s !== ANY && s.includes(originalUrl.hostname);
-  let l =
+  let isServedHost = ghesHosts !== ANY && ghesHosts.includes(originalUrl.hostname);
+  let isOwnEnterpriseHost =
     originalUrl.protocol === "https:" &&
     originalUrl.hostname !== new URL(apiBase).hostname &&
     !isGithubDotCom(originalUrl.hostname);
-  if (l && !h && s !== ANY) throw new GhApiRequestError(hostNotServedText(originalUrl.hostname, s));
-  let targetHost = resolveTargetHost(h || l ? originalUrl.hostname : GITHUB_HOST, apiBase, s);
+  if (isOwnEnterpriseHost && !isServedHost && ghesHosts !== ANY)
+    throw new GhApiRequestError(hostNotServedText(originalUrl.hostname, ghesHosts));
+  let targetHost = resolveTargetHost(
+    isServedHost || isOwnEnterpriseHost ? originalUrl.hostname : GITHUB_HOST,
+    apiBase,
+    ghesHosts,
+  );
   if (!isSameOriginWithoutCredentials(originalUrl, new URL(targetHost.apiBase)))
     throw new GhApiRequestError(restPathOnlyText(targetHost.apiBase));
   return targetHost;
@@ -402,26 +420,30 @@ function isClientStatus(connectStatus) {
 //@ chunk-fy5kn7m3.js:33400-33712 placement = ghIsDangerousCallback (0.808)
 function ghIsDangerousCallback(_rawCommand, args) {
   assertCleanEndpoint(_rawCommand);
-  let s;
+  let parsedUrl;
   try {
-    if (_rawCommand.includes("://")) s = new URL(_rawCommand);
+    if (_rawCommand.includes("://")) parsedUrl = new URL(_rawCommand);
     else {
       let replaced = new URL(args).pathname.replace(/^\/|\/$/g, "");
       let replaced_2 = _rawCommand.replace(/^\//, "");
-      let a = replaced !== "" && `${replaced_2.toLowerCase()}/`.startsWith(`${replaced.toLowerCase()}/`);
-      s = new URL(a ? replaced_2.slice(replaced.length).replace(/^\//, "") : replaced_2, `${args}/`);
+      let stripApiBase =
+        replaced !== "" && `${replaced_2.toLowerCase()}/`.startsWith(`${replaced.toLowerCase()}/`);
+      parsedUrl = new URL(
+        stripApiBase ? replaced_2.slice(replaced.length).replace(/^\//, "") : replaced_2,
+        `${args}/`,
+      );
     }
   } catch {
     throw new GhApiRequestError(INVALID_ENDPOINT_PATH_TEXT);
   }
-  return checkSameOriginPath(s, args, restPathOnlyText(args));
+  return checkSameOriginPath(parsedUrl, args, restPathOnlyText(args));
 }
 //@ chunk-fy5kn7m3.js:33712-33853 placement
 /**
  * 端点含制表符、换行、控制字符或反斜杠时报错。
  */
-function assertCleanEndpoint(e) {
-  if (/[\p{Cc}\\]|(?! )\s/u.test(e))
+function assertCleanEndpoint(endpoint) {
+  if (/[\p{Cc}\\]|(?! )\s/u.test(endpoint))
     throw new GhApiRequestError(
       "the endpoint contains a tab, a line break, a control character or a backslash",
     );
@@ -430,25 +452,31 @@ function assertCleanEndpoint(e) {
 /**
  * 只接受 REST 路径的提示。
  */
-function restPathOnlyText(e) {
-  return `this gh sends requests to ${e.replace("https://", "")} only; give a REST path such as repos/{owner}/{repo}/pulls`;
+function restPathOnlyText(apiBase) {
+  return `this gh sends requests to ${apiBase.replace("https://", "")} only; give a REST path such as repos/{owner}/{repo}/pulls`;
 }
 //@ chunk-fy5kn7m3.js:33988-34774 placement
-function checkGhRedirect(location, url, s) {
-  let r;
+function checkGhRedirect(location, url, apiBase) {
+  let redirectUrl;
   try {
-    r = new URL(location, url);
+    redirectUrl = new URL(location, url);
   } catch {
     throw new GhApiRequestError("refusing a redirect whose Location is not a URL");
   }
-  let n = r.host === "" || r.host.length > MAX_PAGE_BODY_BYTES ? "another host" : `${r.protocol}//${r.host}`;
-  let a = r.username === "" && r.password === "" ? "" : " with a username or password in its URL";
-  let d = new URL(s);
+  let hostLabel =
+    redirectUrl.host === "" || redirectUrl.host.length > MAX_PAGE_BODY_BYTES
+      ? "another host"
+      : `${redirectUrl.protocol}//${redirectUrl.host}`;
+  let credentialNote =
+    redirectUrl.username === "" && redirectUrl.password === ""
+      ? ""
+      : " with a username or password in its URL";
+  let baseUrl = new URL(apiBase);
   return checkSameOriginPath(
-    r,
-    s,
-    `refusing a redirect to ${n}${a}: this gh sends requests to ${s} only, and running the command again or with other flags will not change that.` +
-      (r.hostname !== "" && r.hostname !== d.hostname
+    redirectUrl,
+    apiBase,
+    `refusing a redirect to ${hostLabel}${credentialNote}: this gh sends requests to ${apiBase} only, and running the command again or with other flags will not change that.` +
+      (redirectUrl.hostname !== "" && redirectUrl.hostname !== baseUrl.hostname
         ? " GitHub serves logs, archives, artifacts and release files from other hosts, which this built-in gh does not contact."
         : "") +
       (ACTIONS_ENDPOINT_RE.test(url.pathname)
@@ -472,39 +500,39 @@ function isSameOriginWithoutCredentials(originalUrl, redirectUrl) {
 /**
  * 校验 URL 与 API 基址同源且路径在其下，去掉 hash。
  */
-function checkSameOriginPath(originalUrl, t, s) {
-  let redirectUrl = new URL(t);
-  if (!isSameOriginWithoutCredentials(originalUrl, redirectUrl)) throw new GhApiRequestError(s);
-  let n = checkEndpointPath(originalUrl.pathname, redirectUrl.pathname !== "/");
-  if (n !== undefined) throw new GhApiRequestError(n);
+function checkSameOriginPath(originalUrl, location, refusalText) {
+  let redirectUrl = new URL(location);
+  if (!isSameOriginWithoutCredentials(originalUrl, redirectUrl)) throw new GhApiRequestError(refusalText);
+  let pathProblem = checkEndpointPath(originalUrl.pathname, redirectUrl.pathname !== "/");
+  if (pathProblem !== undefined) throw new GhApiRequestError(pathProblem);
   if (redirectUrl.pathname !== "/" && !originalUrl.pathname.startsWith(`${redirectUrl.pathname}/`))
-    throw new GhApiRequestError(s);
+    throw new GhApiRequestError(refusalText);
   originalUrl.hash = "";
   return originalUrl;
 }
 //@ chunk-fy5kn7m3.js:35099-36225 placement
-function ghRequestHeaders(headers, t) {
-  let s = {
+function ghRequestHeaders(headers, hasBody) {
+  let headerMap = {
     accept: "*/*",
     "x-github-api-version": GITHUB_API_VERSION,
-    "content-type": t && "application/json; charset=utf-8",
+    "content-type": hasBody && "application/json; charset=utf-8",
   };
-  for (let r of headers) {
-    let index = r.indexOf(":");
+  for (let header of headers) {
+    let index = header.indexOf(":");
     if (index === -1)
-      throw new GhApiRequestError(`header "${truncateLabel(r)}" requires a value separated by ':'`);
-    let lower = r.slice(0, index).trim().toLowerCase();
-    let trimmed = r.slice(index + 1).trim();
+      throw new GhApiRequestError(`header "${truncateLabel(header)}" requires a value separated by ':'`);
+    let lower = header.slice(0, index).trim().toLowerCase();
+    let trimmed = header.slice(index + 1).trim();
     if (!ALLOWED_HEADER_NAMES.has(lower))
       throw new GhApiRequestError(
         `the ${/^[a-z0-9-]+$/.test(lower) ? `${lower} ` : ""}header cannot be set through this session's GitHub proxy; headers that can: ${[...ALLOWED_HEADER_NAMES].join(", ")}`,
       );
     if (/[^\P{Cc}\t]/u.test(trimmed))
       throw new GhApiRequestError(`the ${lower} header value contains a control character`);
-    s[lower] = trimmed;
+    headerMap[lower] = trimmed;
   }
   return {
-    ...s,
+    ...headerMap,
     authorization: `token ${PROXY_INJECTED_MARKER}`,
     "user-agent": `claude-code-gh-standin/${
       {
@@ -525,44 +553,49 @@ function ghRequestHeaders(headers, t) {
 /**
  * 读取 --input（文件或标准输入），超过上限时报错。
  */
-async function readInputBody(e, t) {
-  let s = new GhApiRequestError(
-    `${e === "-" ? "standard input" : truncateLabel(e)} is larger than ${GH_API_DEFAULTS_2 / 1048576} MB, the most this gh sends`,
+async function readInputBody(source, context) {
+  let tooLargeError = new GhApiRequestError(
+    `${source === "-" ? "standard input" : truncateLabel(source)} is larger than ${GH_API_DEFAULTS_2 / 1048576} MB, the most this gh sends`,
   );
-  if (e === "-") {
-    let n = [];
-    let a = 0;
-    for await (let d of t.stdin) {
-      let buffer = Buffer.from(d);
-      a += buffer.length;
-      if (a > GH_API_DEFAULTS_2) throw s;
-      n.push(buffer);
+  if (source === "-") {
+    let chunks = [];
+    let totalBytes = 0;
+    for await (let chunk of context.stdin) {
+      let buffer = Buffer.from(chunk);
+      totalBytes += buffer.length;
+      if (totalBytes > GH_API_DEFAULTS_2) throw tooLargeError;
+      chunks.push(buffer);
     }
-    return Buffer.concat(n);
+    return Buffer.concat(chunks);
   }
-  let r;
+  let body;
   try {
-    await using n = await open(e, "r");
-    r = await readHandleUpTo(n, GH_API_DEFAULTS_2 + 1);
+    await using handle = await open(source, "r");
+    body = await readHandleUpTo(handle, GH_API_DEFAULTS_2 + 1);
   } catch (error) {
     throw new GhApiRequestError(
-      `could not read ${truncateLabel(e)} (${getErrnoCode(error) ?? "unreadable"})`,
+      `could not read ${truncateLabel(source)} (${getErrnoCode(error) ?? "unreadable"})`,
     );
   }
-  if (r.length > GH_API_DEFAULTS_2) throw s;
-  return r;
+  if (body.length > GH_API_DEFAULTS_2) throw tooLargeError;
+  return body;
 }
 //@ chunk-fy5kn7m3.js:36646-36955 placement
 /**
  * 把状态行与响应头格式化为 HTTP/1.1 头文本（--include）。
  */
-function formatResponseHead(e) {
-  let t = [`HTTP/1.1 ${e.status} ${e.statusText}`.trimEnd()];
-  for (let [key, value] of Object.entries(e.headers).sort(([n], [a]) => (n < a ? -1 : n > a ? 1 : 0))) {
-    let replaced = key.replace(/(^|-)([a-z])/g, (a, d, h) => `${d}${h.toUpperCase()}`);
-    for (let a of Array.isArray(value) ? value : [value]) t.push(`${replaced}: ${String(a)}`);
+function formatResponseHead(response) {
+  let lines = [`HTTP/1.1 ${response.status} ${response.statusText}`.trimEnd()];
+  for (let [key, value] of Object.entries(response.headers).sort(([leftKey], [rightKey]) =>
+    leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0,
+  )) {
+    let replaced = key.replace(
+      /(^|-)([a-z])/g,
+      (whole, separator, letter) => `${separator}${letter.toUpperCase()}`,
+    );
+    for (let value_2 of Array.isArray(value) ? value : [value]) lines.push(`${replaced}: ${String(value_2)}`);
   }
-  return `${t.join(`\r
+  return `${lines.join(`\r
 `)}\r
 \r
 `;
@@ -571,26 +604,26 @@ function formatResponseHead(e) {
 /**
  * 从 GitHub 错误响应体提取 message/errors 文本。
  */
-function describeApiError(status, t) {
-  let s;
+function describeApiError(status, body) {
+  let parsed;
   try {
-    s = t.length <= MAX_JQ_INPUT_BYTES ? jsonParse(t.toString("utf8")) : undefined;
+    parsed = body.length <= MAX_JQ_INPUT_BYTES ? jsonParse(body.toString("utf8")) : undefined;
   } catch {
-    s = undefined;
+    parsed = undefined;
   }
-  let r = ghApiErrorSchema().safeParse(s);
-  if (!r.success) return `HTTP ${status}`;
-  let { message, errors } = r.data;
+  let result = ghApiErrorSchema().safeParse(parsed);
+  if (!result.success) return `HTTP ${status}`;
+  let { message, errors } = result.data;
   if (typeof errors === "string" && errors !== "") return message ? `${errors} (${message})` : errors;
   if (message) return `${message} (HTTP ${status})`;
-  let d = [];
-  for (let h of Array.isArray(errors) ? errors : []) {
-    let l = ghApiMessageSchema().safeParse(h);
-    if (typeof h === "string") d.push(h);
-    else if (l.success) d.push(l.data.message);
+  let messages = [];
+  for (let entry of Array.isArray(errors) ? errors : []) {
+    let parsedEntry = ghApiMessageSchema().safeParse(entry);
+    if (typeof entry === "string") messages.push(entry);
+    else if (parsedEntry.success) messages.push(parsedEntry.data.message);
   }
-  return d.length > 0
-    ? d.join(`
+  return messages.length > 0
+    ? messages.join(`
 `)
     : `HTTP ${status}`;
 }
@@ -605,14 +638,17 @@ function ghProxyRefusalText(error, statusUrl) {
   let proxyError = findProxyError(error);
   if (proxyError !== undefined) {
     let connectStatus = proxyError.connectStatus;
-    let a = describeHttpStatus(connectStatus);
+    let statusText = describeHttpStatus(connectStatus);
     if (isClientStatus(connectStatus))
-      return `this session's GitHub proxy refused the connection (${a}); do not retry unchanged`;
-    let d = String(proxyError.headers["retry-after"] ?? "");
-    let h = /^\d{1,3}$/.test(d) ? Number(d) : 0;
-    let l = h > 1 && h <= MAX_REDIRECTS ? `${h} seconds` : "a few seconds";
+      return `this session's GitHub proxy refused the connection (${statusText}); do not retry unchanged`;
+    let retryAfterValue = String(proxyError.headers["retry-after"] ?? "");
+    let retryAfterSeconds = /^\d{1,3}$/.test(retryAfterValue) ? Number(retryAfterValue) : 0;
+    let waitText =
+      retryAfterSeconds > 1 && retryAfterSeconds <= MAX_REDIRECTS
+        ? `${retryAfterSeconds} seconds`
+        : "a few seconds";
     return (
-      `this session's GitHub proxy could not open the connection (${a}); nothing was sent. This can be temporary: wait ${l} and run the command once more. ` +
+      `this session's GitHub proxy could not open the connection (${statusText}); nothing was sent. This can be temporary: wait ${waitText} and run the command once more. ` +
       (statusUrl === undefined
         ? "If it fails again, stop."
         : `If it fails again, stop and read GET ${statusUrl} for the proxy's state.`)
@@ -621,7 +657,7 @@ function ghProxyRefusalText(error, statusUrl) {
   if (isAxiosError(error) && error.message.includes("maxContentLength"))
     return `the response is larger than ${GH_API_DEFAULTS / 1048576} MB, the most this gh reads; ask for less (per_page, a narrower endpoint)`;
   if (isAxiosError(error) && error.message.includes("maxBodyLength")) return "the request body is too large";
-  let r = isAxiosError(error) ? error.code : getErrnoCode(error);
-  return `could not reach GitHub through this session's GitHub proxy${r === undefined ? "" : ` (${r})`}`;
+  let code = isAxiosError(error) ? error.code : getErrnoCode(error);
+  return `could not reach GitHub through this session's GitHub proxy${code === undefined ? "" : ` (${code})`}`;
 }
 export { runBuiltinGhApi, ghProxyRefusalText, proxyCaBundleError };

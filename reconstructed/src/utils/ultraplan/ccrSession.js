@@ -54,8 +54,8 @@ class ExitPlanModeScanner {
       if (m.type === "assistant")
         for (let block of m.message.content) {
           if (block.type !== "tool_use") continue;
-          let y = block;
-          if (y.name === EXITPLANMODE_2) this.exitPlanCalls.push(y.id);
+          let toolUseBlock = block;
+          if (toolUseBlock.name === EXITPLANMODE_2) this.exitPlanCalls.push(toolUseBlock.id);
         }
       else if (m.type === "user") {
         let content = m.message.content;
@@ -74,13 +74,13 @@ class ExitPlanModeScanner {
       for (let i = this.exitPlanCalls.length - 1; i >= 0; i--) {
         let id = this.exitPlanCalls[i];
         if (this.rejectedIds.has(id)) continue;
-        let y = this.results.get(id);
-        if (!y)
+        let result = this.results.get(id);
+        if (!result)
           found = {
             kind: "pending",
           };
-        else if (y.is_error === true) {
-          let teleportPlan = extractTeleportPlan(y.content);
+        else if (result.is_error === true) {
+          let teleportPlan = extractTeleportPlan(result.content);
           found =
             teleportPlan !== null
               ? {
@@ -94,7 +94,7 @@ class ExitPlanModeScanner {
         } else
           found = {
             kind: "approved",
-            plan: extractApprovedPlan(y.content),
+            plan: extractApprovedPlan(result.content),
           };
         break;
       }
@@ -126,7 +126,7 @@ class ExitPlanModeScanner {
 async function pollForApprovedExitPlanMode(sessionId, timeoutMs, onPhaseChange, shouldStop, credentials) {
   let deadline = Date.now() + timeoutMs;
   let scanner = new ExitPlanModeScanner();
-  let w = {
+  let stats = {
     eventsReceived: 0,
     firstEventAt: undefined,
     lastEventAt: undefined,
@@ -148,9 +148,9 @@ async function pollForApprovedExitPlanMode(sessionId, timeoutMs, onPhaseChange, 
       failures = 0;
       if (newEvents.length > 0) {
         let now = Date.now();
-        w.eventsReceived += newEvents.length;
-        w.firstEventAt ??= now;
-        w.lastEventAt = now;
+        stats.eventsReceived += newEvents.length;
+        stats.firstEventAt ??= now;
+        stats.lastEventAt = now;
       }
     } catch (e) {
       if (!isTransientNetworkError(e))
@@ -158,7 +158,7 @@ async function pollForApprovedExitPlanMode(sessionId, timeoutMs, onPhaseChange, 
           e instanceof Error ? e.message : String(e),
           "network_or_unknown",
           scanner.rejectCount,
-          w,
+          stats,
           {
             cause: e,
           },
@@ -168,7 +168,7 @@ async function pollForApprovedExitPlanMode(sessionId, timeoutMs, onPhaseChange, 
           "Lost connection to the cloud session after repeated retries \u2014 the session may still be running",
           "network_or_unknown",
           scanner.rejectCount,
-          w,
+          stats,
           {
             cause: e,
           },
@@ -184,7 +184,7 @@ async function pollForApprovedExitPlanMode(sessionId, timeoutMs, onPhaseChange, 
         e instanceof Error ? e.message : String(e),
         "extract_marker_missing",
         scanner.rejectCount,
-        w,
+        stats,
       );
     }
     if (result.kind === "approved")
@@ -204,7 +204,7 @@ async function pollForApprovedExitPlanMode(sessionId, timeoutMs, onPhaseChange, 
         `cloud session ended (${result.subtype}) before plan approval`,
         "terminated",
         scanner.rejectCount,
-        w,
+        stats,
       );
     let quietIdle =
       (sessionStatus === "idle" || sessionStatus === "requires_action") && newEvents.length === 0;
@@ -217,14 +217,14 @@ async function pollForApprovedExitPlanMode(sessionId, timeoutMs, onPhaseChange, 
     await sleep(POLL_INTERVAL_MS);
   }
   let rounded = Math.round(timeoutMs / 60000);
-  let Se = rounded === 1 ? "minute" : "minutes";
+  let minuteUnit = rounded === 1 ? "minute" : "minutes";
   throw new UltraplanPollError(
     scanner.everSeenPending
-      ? `no approval after ${rounded} ${Se}`
-      : `ExitPlanMode never reached after ${rounded} ${Se} (the remote container failed to start, or session ID mismatch?)`,
+      ? `no approval after ${rounded} ${minuteUnit}`
+      : `ExitPlanMode never reached after ${rounded} ${minuteUnit} (the remote container failed to start, or session ID mismatch?)`,
     scanner.everSeenPending ? "timeout_pending" : "timeout_no_plan",
     scanner.rejectCount,
-    w,
+    stats,
   );
 }
 //@ chunk-e6aww6q8.js:2013559-2013668 callgraph-witnessed = contentToText (0)
@@ -232,7 +232,7 @@ function contentToText(content) {
   return typeof content === "string"
     ? content
     : Array.isArray(content)
-      ? content.map((n) => ("text" in n ? n.text : "")).join("")
+      ? content.map((content) => ("text" in content ? content.text : "")).join("")
       : "";
 }
 //@ chunk-e6aww6q8.js:2013668-2013783 callgraph-witnessed = extractTeleportPlan (1)

@@ -66,10 +66,12 @@ function getLongTurnNudgeConfig() {
     typeof featureValue_CACHED_MAY_BE_STALE.impressionKey === "string"
       ? featureValue_CACHED_MAY_BE_STALE.impressionKey
       : "";
-  let a = (i, d) =>
-    typeof i === "number" && Number.isFinite(i) ? Math.min(24, Math.max(0, Math.trunc(i))) : d;
-  let dayStartHour = a(featureValue_CACHED_MAY_BE_STALE.dayStartHour, 7);
-  let dayEndHour = a(featureValue_CACHED_MAY_BE_STALE.dayEndHour, 21);
+  let clampHour = (value, fallback) =>
+    typeof value === "number" && Number.isFinite(value)
+      ? Math.min(24, Math.max(0, Math.trunc(value)))
+      : fallback;
+  let dayStartHour = clampHour(featureValue_CACHED_MAY_BE_STALE.dayStartHour, 7);
+  let dayEndHour = clampHour(featureValue_CACHED_MAY_BE_STALE.dayEndHour, 21);
   return {
     thresholdSec,
     probability,
@@ -83,26 +85,26 @@ function getLongTurnNudgeConfig() {
 /**
  * 判断当前时间是否在白天时段内（起止配置无效时视为总是）。
  */
-function isWithinDayHours(longTurnNudgeConfig, o = new Date()) {
+function isWithinDayHours(longTurnNudgeConfig, now = new Date()) {
   if (longTurnNudgeConfig.dayStartHour >= longTurnNudgeConfig.dayEndHour) return true;
-  let hours = o.getHours();
+  let hours = now.getHours();
   return hours >= longTurnNudgeConfig.dayStartHour && hours < longTurnNudgeConfig.dayEndHour;
 }
 //@ chunk-pzv0vqyf.js:1621-1697 placement
 /**
  * 全局配置里的某个计数加一并保存。
  */
-function bumpGlobalConfigCount(e, o) {
-  let n = (getGlobalConfig()[e] ?? 0) + 1;
+function bumpGlobalConfigCount(field, storageV5) {
+  let nextValue = (getGlobalConfig()[field] ?? 0) + 1;
   saveGlobalConfig(
-    (r) =>
-      (r[e] ?? 0) >= n
-        ? r
+    (config) =>
+      (config[field] ?? 0) >= nextValue
+        ? config
         : {
-            ...r,
-            [e]: n,
+            ...config,
+            [field]: nextValue,
           },
-    o,
+    storageV5,
   );
 }
 //@ chunk-pzv0vqyf.js:1755-2115 placement
@@ -110,20 +112,27 @@ function bumpGlobalConfigCount(e, o) {
  * 权限请求时 Remote Control 提示配置（tengu_rc_permission_nudge）。
  */
 function getPermissionNudgeConfig() {
-  let e;
+  let rawConfig;
   let CLAUDE_CODE_RC_PERMISSION_NUDGE = antEnv.CLAUDE_CODE_RC_PERMISSION_NUDGE;
   if (CLAUDE_CODE_RC_PERMISSION_NUDGE)
     try {
-      e = jsonParse(CLAUDE_CODE_RC_PERMISSION_NUDGE);
+      rawConfig = jsonParse(CLAUDE_CODE_RC_PERMISSION_NUDGE);
     } catch {
-      e = undefined;
+      rawConfig = undefined;
     }
-  e ??= getFeatureValue_CACHED_MAY_BE_STALE("tengu_rc_permission_nudge", DEFAULT_TRANSCRIPT_ASK_CONFIG);
-  let n = (r, t) => (typeof r === "number" && Number.isFinite(r) ? r : t);
+  rawConfig ??= getFeatureValue_CACHED_MAY_BE_STALE(
+    "tengu_rc_permission_nudge",
+    DEFAULT_TRANSCRIPT_ASK_CONFIG,
+  );
+  let asNumber = (value, fallback) =>
+    typeof value === "number" && Number.isFinite(value) ? value : fallback;
   return {
-    afterPromptCount: Math.max(1, n(e?.afterPromptCount, DEFAULT_TRANSCRIPT_ASK_CONFIG.afterPromptCount)),
-    probability: n(e?.probability, DEFAULT_TRANSCRIPT_ASK_CONFIG.probability),
-    maxImpressions: n(e?.maxImpressions, DEFAULT_TRANSCRIPT_ASK_CONFIG.maxImpressions),
+    afterPromptCount: Math.max(
+      1,
+      asNumber(rawConfig?.afterPromptCount, DEFAULT_TRANSCRIPT_ASK_CONFIG.afterPromptCount),
+    ),
+    probability: asNumber(rawConfig?.probability, DEFAULT_TRANSCRIPT_ASK_CONFIG.probability),
+    maxImpressions: asNumber(rawConfig?.maxImpressions, DEFAULT_TRANSCRIPT_ASK_CONFIG.maxImpressions),
   };
 }
 //@ chunk-pzv0vqyf.js:2115-2236 placement
@@ -202,11 +211,11 @@ function canShowLongTurnNudge(longTurnNudgeConfig) {
  */
 function recordLongTurnNudgeShown(longTurnNudgeConfig, storageV5) {
   if (longTurnNudgeConfig.maxImpressions >= 0)
-    saveGlobalConfig((n) => {
-      let r = (n.rcLongTurnNudgeSeenKey ?? "") === longTurnNudgeConfig.impressionKey;
+    saveGlobalConfig((config) => {
+      let isSameKey = (config.rcLongTurnNudgeSeenKey ?? "") === longTurnNudgeConfig.impressionKey;
       return {
-        ...n,
-        rcLongTurnNudgeSeenCount: r ? (n.rcLongTurnNudgeSeenCount ?? 0) + 1 : 1,
+        ...config,
+        rcLongTurnNudgeSeenCount: isSameKey ? (config.rcLongTurnNudgeSeenCount ?? 0) + 1 : 1,
         rcLongTurnNudgeSeenKey: longTurnNudgeConfig.impressionKey,
       };
     }, storageV5);
@@ -226,9 +235,9 @@ function canShowPermissionNudge(maxImpressions) {
  */
 function recordPermissionNudgeShown(storageV5) {
   saveGlobalConfig(
-    (o) => ({
-      ...o,
-      rcPermissionNudgeSeenCount: (o.rcPermissionNudgeSeenCount ?? 0) + 1,
+    (config) => ({
+      ...config,
+      rcPermissionNudgeSeenCount: (config.rcPermissionNudgeSeenCount ?? 0) + 1,
     }),
     storageV5,
   );
@@ -270,8 +279,8 @@ function getKairosReadyNudgeConfig() {
 /**
  * 是否发送"会话已就绪，可在手机上继续"推送：已连接且未静音，不是后台/子代理会话，推送次数未达上限。
  */
-function canSendReadyPush(kairosReadyNudgeConfig, replBridgeExplicit, n) {
-  if (!replBridgeExplicit || n) return false;
+function canSendReadyPush(kairosReadyNudgeConfig, replBridgeExplicit, alreadyPushed) {
+  if (!replBridgeExplicit || alreadyPushed) return false;
   if (isBgSession() || getAgentId() != null) return false;
   if (kairosReadyNudgeConfig.maxImpressions === 0) return false;
   if (kairosReadyNudgeConfig.maxImpressions < 0) return true;
@@ -288,11 +297,11 @@ function canSendReadyPush(kairosReadyNudgeConfig, replBridgeExplicit, n) {
  */
 function recordReadyPushSent(kairosReadyNudgeConfig, storageV5) {
   if (kairosReadyNudgeConfig.maxImpressions >= 0)
-    saveGlobalConfig((n) => {
-      let r = (n.remoteControlReadyPushKey ?? "") === kairosReadyNudgeConfig.impressionKey;
+    saveGlobalConfig((config) => {
+      let isSameKey = (config.remoteControlReadyPushKey ?? "") === kairosReadyNudgeConfig.impressionKey;
       return {
-        ...n,
-        remoteControlReadyPushCount: r ? (n.remoteControlReadyPushCount ?? 0) + 1 : 1,
+        ...config,
+        remoteControlReadyPushCount: isSameKey ? (config.remoteControlReadyPushCount ?? 0) + 1 : 1,
         remoteControlReadyPushKey: kairosReadyNudgeConfig.impressionKey,
       };
     }, storageV5);
@@ -305,11 +314,11 @@ function recordReadyPushSent(kairosReadyNudgeConfig, storageV5) {
 function markRemoteControlUsed(storageV5) {
   if (getGlobalConfig().hasUsedRemoteControl) return;
   saveGlobalConfig(
-    (o) =>
-      o.hasUsedRemoteControl
-        ? o
+    (config) =>
+      config.hasUsedRemoteControl
+        ? config
         : {
-            ...o,
+            ...config,
             hasUsedRemoteControl: true,
           },
     storageV5,
@@ -318,8 +327,8 @@ function markRemoteControlUsed(storageV5) {
 //@ chunk-pzv0vqyf.js:4358-4391 placement
 var REMOTE_SURFACES = ["mobile", "web", "desktop"];
 //@ chunk-pzv0vqyf.js:4391-4536 placement
-function toRemoteSurface(e) {
-  switch (e) {
+function toRemoteSurface(platform) {
+  switch (platform) {
     case "ios":
     case "android":
       return "mobile";
@@ -335,18 +344,18 @@ function toRemoteSurface(e) {
 /**
  * 记下用户通过哪种客户端（mobile/web/desktop）使用过 Remote Control（去重写入全局配置）。
  */
-function recordRemoteSurfaceSeen(clientPlatform, o) {
-  let remoteSurface = toRemoteSurface(clientPlatform);
+function recordRemoteSurfaceSeen(platform, storageV5) {
+  let remoteSurface = toRemoteSurface(platform);
   if (!remoteSurface) return;
   if (getSeenRemoteSurfaces(getGlobalConfig()).includes(remoteSurface)) return;
-  saveGlobalConfig((r) => {
-    let seenRemoteSurfaces = getSeenRemoteSurfaces(r);
-    if (seenRemoteSurfaces.includes(remoteSurface)) return r;
+  saveGlobalConfig((config) => {
+    let seenRemoteSurfaces = getSeenRemoteSurfaces(config);
+    if (seenRemoteSurfaces.includes(remoteSurface)) return config;
     return {
-      ...r,
+      ...config,
       remoteControlSurfacesSeen: [...seenRemoteSurfaces, remoteSurface],
     };
-  }, o);
+  }, storageV5);
 }
 //@ chunk-pzv0vqyf.js:4706-4818 placement
 /**
@@ -360,10 +369,10 @@ function getUntriedRemoteSurface() {
   return included ? "web" : "mobile";
 }
 //@ chunk-pzv0vqyf.js:4818-4927 placement
-function getSeenRemoteSurfaces(globalConfig) {
-  let remoteControlSurfacesSeen = globalConfig.remoteControlSurfacesSeen;
+function getSeenRemoteSurfaces(config) {
+  let remoteControlSurfacesSeen = config.remoteControlSurfacesSeen;
   return Array.isArray(remoteControlSurfacesSeen)
-    ? remoteControlSurfacesSeen.filter((n) => REMOTE_SURFACES.some((r) => r === n))
+    ? remoteControlSurfacesSeen.filter((surface) => REMOTE_SURFACES.some((known) => known === surface))
     : [];
 }
 export {

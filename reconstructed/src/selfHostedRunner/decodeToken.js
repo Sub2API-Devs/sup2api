@@ -16,45 +16,45 @@ import { withBoundedTimeout } from "../utils/boundedTimeout.js";
 import { runnerApiBaseUrl } from "../services/selfHostedRunner/runnerApi.js";
 
 //@ chunk-xwsbadxw.js:3950-4551 placement
-function parseDecodeTokenArgs(r) {
-  let t = {
+function parseDecodeTokenArgs(argv) {
+  let options = {
     header: false,
     verify: true,
     checkExpiry: true,
     help: false,
   };
-  for (let i = 0; i < r.length; i++) {
-    let n = r[i];
-    switch (n) {
+  for (let i = 0; i < argv.length; i++) {
+    let arg = argv[i];
+    switch (arg) {
       case "--help":
       case "-h":
-        t.help = true;
+        options.help = true;
         break;
       case "--header":
-        t.header = true;
+        options.header = true;
         break;
       case "--verify":
-        t.verify = true;
+        options.verify = true;
         break;
       case "--no-verify":
-        t.verify = false;
+        options.verify = false;
         break;
       case "--no-check-expiry":
-        t.checkExpiry = false;
+        options.checkExpiry = false;
         break;
       case "--api-url": {
-        let o = r[++i];
-        if (o === undefined) throw Error("decode-token: --api-url requires a value");
-        t.apiUrl = o;
+        let value = argv[++i];
+        if (value === undefined) throw Error("decode-token: --api-url requires a value");
+        options.apiUrl = value;
         break;
       }
       default:
-        if (n.startsWith("-")) throw Error(`decode-token: unknown flag ${n}`);
-        if (t.token !== undefined) throw Error("decode-token: at most one positional token argument");
-        t.token = n;
+        if (arg.startsWith("-")) throw Error(`decode-token: unknown flag ${arg}`);
+        if (options.token !== undefined) throw Error("decode-token: at most one positional token argument");
+        options.token = arg;
     }
   }
-  return t;
+  return options;
 }
 //@ chunk-xwsbadxw.js:4551-4866 placement
 /**
@@ -80,19 +80,19 @@ function splitJwt(decodeToken) {
 /**
  * 解码 base64url 段并解析为 JSON 对象，字符非法、JSON 无效或不是对象时抛错。
  */
-function decodeJwtJson(r, t) {
-  if (!/^[A-Za-z0-9_-]+$/.test(r))
-    throw Error(`decode-token: ${t} is not valid base64url (unexpected characters)`);
-  let str = Buffer.from(r, "base64url").toString("utf8");
-  let n;
+function decodeJwtJson(segment, label) {
+  if (!/^[A-Za-z0-9_-]+$/.test(segment))
+    throw Error(`decode-token: ${label} is not valid base64url (unexpected characters)`);
+  let str = Buffer.from(segment, "base64url").toString("utf8");
+  let parsed;
   try {
-    n = jsonParse(str);
+    parsed = jsonParse(str);
   } catch (error) {
-    throw Error(`decode-token: ${t} is not valid JSON: ${error}`);
+    throw Error(`decode-token: ${label} is not valid JSON: ${error}`);
   }
-  if (n === null || typeof n !== "object" || Array.isArray(n))
-    throw Error(`decode-token: ${t} is not a JSON object`);
-  return n;
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed))
+    throw Error(`decode-token: ${label} is not a JSON object`);
+  return parsed;
 }
 //@ chunk-xwsbadxw.js:5240-5271 placement
 var ALG_TO_KEY_TYPE = {
@@ -103,50 +103,53 @@ var ALG_TO_KEY_TYPE = {
 /**
  * 校验 JWT 的 exp/nbf（含容差），过期或未生效时抛错。
  */
-function assertTokenTimeValid(payload, t = Math.floor(Date.now() / 1000), e = 60) {
+function assertTokenTimeValid(payload, nowSec = Math.floor(Date.now() / 1000), skewSec = 60) {
   let { exp, nbf } = payload;
   if (typeof exp !== "number") throw Error("decode-token: token has no numeric `exp` claim");
-  if (t > exp + e)
+  if (nowSec > exp + skewSec)
     throw Error(
-      `decode-token: token EXPIRED at ${new Date(exp * 1000).toISOString()} (${Math.round(t - exp)}s ago)`,
+      `decode-token: token EXPIRED at ${new Date(exp * 1000).toISOString()} (${Math.round(nowSec - exp)}s ago)`,
     );
-  if (typeof nbf === "number" && t + e < nbf)
+  if (typeof nbf === "number" && nowSec + skewSec < nbf)
     throw Error(`decode-token: token not valid until ${new Date(nbf * 1000).toISOString()}`);
 }
 //@ chunk-xwsbadxw.js:5654-6897 placement
 /**
  * decode-token：解析 JWT 头（只支持 ES256/RS256）并可校验签名
  */
-async function decodeRunnerToken(r) {
-  let alg = r.header.alg;
-  let kid = r.header.kid;
+async function decodeRunnerToken(options) {
+  let alg = options.header.alg;
+  let kid = options.header.kid;
   if (typeof alg !== "string" || typeof kid !== "string")
     throw Error("decode-token: JWT header is missing `alg` or `kid` \u2014 cannot select a JWKS key");
-  let n = ALG_TO_KEY_TYPE[alg];
-  if (!n) throw Error(`decode-token: unsupported alg=${alg} \u2014 only ES256 and RS256 are supported`);
-  let o;
+  let keyType = ALG_TO_KEY_TYPE[alg];
+  if (!keyType) throw Error(`decode-token: unsupported alg=${alg} \u2014 only ES256 and RS256 are supported`);
+  let jwksResponse;
   try {
-    o = await r.fetchFn(r.jwksUrl, {
+    jwksResponse = await options.fetchFn(options.jwksUrl, {
       ...getProxyFetchOptions({
-        url: r.jwksUrl,
+        url: options.jwksUrl,
       }),
       ...getTLSFetchOptions(undefined),
       signal: AbortSignal.timeout(30000),
     });
   } catch (error) {
-    throw Error(`decode-token: failed to fetch JWKS from ${r.jwksUrl}: ${error}`);
+    throw Error(`decode-token: failed to fetch JWKS from ${options.jwksUrl}: ${error}`);
   }
-  if (!o.ok) throw Error(`decode-token: JWKS fetch returned ${o.status} ${o.statusText} for ${r.jwksUrl}`);
-  let found = (await o.json()).keys?.find((key) => key.kid === kid);
+  if (!jwksResponse.ok)
+    throw Error(
+      `decode-token: JWKS fetch returned ${jwksResponse.status} ${jwksResponse.statusText} for ${options.jwksUrl}`,
+    );
+  let found = (await jwksResponse.json()).keys?.find((key) => key.kid === kid);
   if (!found)
     throw Error(
-      `decode-token: no JWKS key with kid=${kid} at ${r.jwksUrl} \u2014 ` +
+      `decode-token: no JWKS key with kid=${kid} at ${options.jwksUrl} \u2014 ` +
         "token may be signed by a different environment (try --api-url).",
     );
-  if (found.kty !== n)
-    throw Error(`decode-token: JWKS key kid=${kid} has kty=${found.kty} but alg=${alg} needs kty=${n}`);
-  let c = "sha256";
-  let d =
+  if (found.kty !== keyType)
+    throw Error(`decode-token: JWKS key kid=${kid} has kty=${found.kty} but alg=${alg} needs kty=${keyType}`);
+  let hashAlg = "sha256";
+  let key =
     alg === "ES256"
       ? {
           key: createPublicKey({
@@ -161,10 +164,10 @@ async function decodeRunnerToken(r) {
             format: "jwk",
           }),
         };
-  let buffer = Buffer.from(`${r.headerB64}.${r.payloadB64}`, "utf8");
-  let buffer_2 = Buffer.from(r.signatureB64, "base64url");
-  if (!verify(c, buffer, d, buffer_2)) throw Error("decode-token: signature verification FAILED");
-  if (r.checkExpiry !== false) assertTokenTimeValid(r.payload);
+  let buffer = Buffer.from(`${options.headerB64}.${options.payloadB64}`, "utf8");
+  let buffer_2 = Buffer.from(options.signatureB64, "base64url");
+  if (!verify(hashAlg, buffer, key, buffer_2)) throw Error("decode-token: signature verification FAILED");
+  if (options.checkExpiry !== false) assertTokenTimeValid(options.payload);
   return {
     kid,
   };
@@ -176,31 +179,31 @@ var STDIN_TOKEN_TIMEOUT_MS = 5000;
 /**
  * 从非 TTY 的标准输入读取令牌，超过大小上限时抛错。
  */
-async function readTokenFromStdin(r = process.stdin) {
-  if (r.isTTY) return "";
-  let t = [];
-  let e = 0;
-  for await (let n of r) {
-    let buffer = Buffer.from(n);
-    e += buffer.length;
-    if (e > MAX_STDIN_TOKEN_BYTES)
+async function readTokenFromStdin(stdin = process.stdin) {
+  if (stdin.isTTY) return "";
+  let chunks = [];
+  let byteCount = 0;
+  for await (let chunk of stdin) {
+    let buffer = Buffer.from(chunk);
+    byteCount += buffer.length;
+    if (byteCount > MAX_STDIN_TOKEN_BYTES)
       throw Error(
         `decode-token: stdin exceeds ${MAX_STDIN_TOKEN_BYTES / 1024} KiB; session-ingress JWTs are ~1 KB. Pass the token as an argument or set $CLAUDE_CODE_SESSION_ACCESS_TOKEN.`,
       );
-    t.push(buffer);
+    chunks.push(buffer);
   }
-  return Buffer.concat(t).toString("utf8");
+  return Buffer.concat(chunks).toString("utf8");
 }
 //@ chunk-xwsbadxw.js:7258-7611 placement
 /**
  * 按优先级取令牌：命令行参数、CLAUDE_CODE_SESSION_ACCESS_TOKEN、标准输入（带超时），都没有时抛错。
  */
-async function resolveDecodeToken(token, env, e = process.stdin, n = STDIN_TOKEN_TIMEOUT_MS) {
+async function resolveDecodeToken(token, env, stdin = process.stdin, timeoutMs = STDIN_TOKEN_TIMEOUT_MS) {
   if (token?.trim()) return token.trim();
   let trimmed = env.CLAUDE_CODE_SESSION_ACCESS_TOKEN?.trim();
   if (trimmed) return trimmed;
   let trimmed_2 = (
-    await withBoundedTimeout(readTokenFromStdin(e), n, "decode-token: reading token from stdin")
+    await withBoundedTimeout(readTokenFromStdin(stdin), timeoutMs, "decode-token: reading token from stdin")
   ).trim();
   if (trimmed_2) return trimmed_2;
   throw Error(
@@ -257,42 +260,42 @@ Examples:
     claude self-hosted-runner decode-token --no-verify
 `;
 //@ chunk-xwsbadxw.js:9832-10602 placement
-async function verifyRunnerToken(r) {
-  let t;
+async function verifyRunnerToken(argv) {
+  let options;
   try {
-    t = parseDecodeTokenArgs(r);
+    options = parseDecodeTokenArgs(argv);
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : error}
 `);
     process.exit(1);
   }
-  if (t.help) {
+  if (options.help) {
     process.stdout.write(DECODE_TOKEN_USAGE);
     process.exit(0);
   }
   try {
-    let decodeToken = await resolveDecodeToken(t.token, process.env);
+    let decodeToken = await resolveDecodeToken(options.token, process.env);
     let { headerB64, payloadB64, signatureB64 } = splitJwt(decodeToken);
-    let i = decodeJwtJson(headerB64, "header");
-    let c = decodeJwtJson(payloadB64, "payload");
-    if (t.verify) {
-      let jwksUrl = `${(t.apiUrl ?? runnerApiBaseUrl()).replace(/\/+$/, "")}/v1/code/.well-known/jwks.json`;
+    let header = decodeJwtJson(headerB64, "header");
+    let payload = decodeJwtJson(payloadB64, "payload");
+    if (options.verify) {
+      let jwksUrl = `${(options.apiUrl ?? runnerApiBaseUrl()).replace(/\/+$/, "")}/v1/code/.well-known/jwks.json`;
       let { kid } = await decodeRunnerToken({
         headerB64,
         payloadB64,
         signatureB64,
-        header: i,
-        payload: c,
+        header,
+        payload,
         jwksUrl,
         fetchFn: fetch,
-        checkExpiry: t.checkExpiry,
+        checkExpiry: options.checkExpiry,
       });
-      let a = t.checkExpiry ? "sig+exp" : "sig only, exp SKIPPED";
-      process.stderr.write(`verified (kid=${kid}, ${a})
+      let checksText = options.checkExpiry ? "sig+exp" : "sig only, exp SKIPPED";
+      process.stderr.write(`verified (kid=${kid}, ${checksText})
 `);
     }
-    let d = t.header ? i : c;
-    process.stdout.write(`${jsonStringify(d, null, 2)}
+    let output = options.header ? header : payload;
+    process.stdout.write(`${jsonStringify(output, null, 2)}
 `);
     process.exit(0);
   } catch (error) {
@@ -301,3 +304,4 @@ async function verifyRunnerToken(r) {
     process.exit(1);
   }
 }
+export { verifyRunnerToken };

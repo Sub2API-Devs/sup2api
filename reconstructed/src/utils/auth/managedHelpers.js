@@ -15,38 +15,39 @@ import { logForDebugging } from "../debug.js";
 import { isHttpMcpServeInvocation } from "../../entrypoints/mcpServeArgs.js";
 import { identity as identity_2 } from "../identity.js";
 import { getSettingsForSource } from "../settings/settings.js";
-import { withHostEnvRestored, hostWrittenEnvNames } from "../settings/managedSettingsFiles.js";
+import { withHostEnvRestored, hostWrittenEnvNames } from "../settings/hostEnvWrites.js";
 import { uniq } from "../collections.js";
 import { hostOwnedEnvNames } from "../plugins/securityDefaultPlugin.js";
 import { formatNameList } from "../secureStorage/credentialLegs.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:487365-487446 placement
 /**
  * 判断该 helper 命令是否来自已合并的 hook 答案（因此不运行）。
  */
-function isHookedMergeAnswer(e) {
+function isHookedMergeAnswer(settingName) {
   let { answers } = commandSyncNameState().hookedMerge;
-  return answers !== null && answers.values.has(e);
+  return answers !== null && answers.values.has(settingName);
 }
 //@ chunk-aepeg2w5.js:487446-487919 placement
 /**
  * 固定登录进程中 helper 命令不运行的提示。
  */
-function warnPinnedHelper(e, n) {
-  if (isStoredLoginPinned() && isHookedMergeAnswer(e)) {
-    if (claimOnce().claim(`pinned_runs_no_answered_helper:${e}`))
+function warnPinnedHelper(settingName, value) {
+  if (isStoredLoginPinned() && isHookedMergeAnswer(settingName)) {
+    if (claimOnce().claim(`pinned_runs_no_answered_helper:${settingName}`))
       logForDebugging(
-        `${e}: this process is pinned to the stored login and uses that credential; a hook's answer stands as the setting, and its command is not run.`,
+        `${settingName}: this process is pinned to the stored login and uses that credential; a hook's answer stands as the setting, and its command is not run.`,
         {
           level: "warn",
         },
       );
-    return commandSyncNameState().hookedMerge.computed?.[e];
+    return commandSyncNameState().hookedMerge.computed?.[settingName];
   }
-  if (!n || !isHttpMcpServeInvocation()) return n;
-  if (claimOnce().claim(`daemon_runs_no_helper:${e}`))
+  if (!value || !isHttpMcpServeInvocation()) return value;
+  if (claimOnce().claim(`daemon_runs_no_helper:${settingName}`))
     logForDebugging(
-      `${e}: a tool server's daemon runs no helper; the setting stands and its command is not run.`,
+      `${settingName}: a tool server's daemon runs no helper; the setting stands and its command is not run.`,
       {
         level: "warn",
       },
@@ -57,34 +58,39 @@ function warnPinnedHelper(e, n) {
 /**
  * 匹配云相关环境变量前缀（AWS_、CLOUDSDK_、GOOGLE_ 等）。
  */
-var CLOUD_ENV_VARS = new Set([
-  "AWS_DEFAULT_PROFILE",
-  "AWS_DEFAULT_REGION",
-  "AWS_PROFILE",
-  "AWS_REGION",
-  "CLOUD_ML_REGION",
-  "CLOUDSDK_ACTIVE_CONFIG_NAME",
-  "CLOUDSDK_COMPUTE_REGION",
-  "CLOUDSDK_COMPUTE_ZONE",
-  "CLOUDSDK_CORE_ACCOUNT",
-  "CLOUDSDK_CORE_PROJECT",
-  "GCLOUD_PROJECT",
-  "GOOGLE_CLOUD_PROJECT",
-]);
-var CLOUD_ENV_VAR_PREFIX_RE =
-  /^(?:VERTEX_REGION_CLAUDE_\w+|(?:(?:ACCOUNT|CLUSTER|COST_CENT(?:ER|RE)|CUSTOMER|DEPARTMENT|ENVIRONMENT|ID|LOCATION|NAME|NAMESPACE|ORG|ORGANIZATION|PROFILE|PROJECT|REGION|ROLE|STAGE|TEAM|TENANT|WORKSPACE|ZONE)(?:_|$))+)$/;
-var CLOUD_ENV_VAR_NAME_RE = /^[A-Za-z0-9_][\w.-]*$/;
+var CLOUD_ENV_VARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var CLOUD_ENV_VAR_PREFIX_RE;
+var CLOUD_ENV_VAR_NAME_RE;
+deferInit("chunk-aepeg2w5.js:487919", () => {
+  CLOUD_ENV_VARS = new Set([
+    "AWS_DEFAULT_PROFILE",
+    "AWS_DEFAULT_REGION",
+    "AWS_PROFILE",
+    "AWS_REGION",
+    "CLOUD_ML_REGION",
+    "CLOUDSDK_ACTIVE_CONFIG_NAME",
+    "CLOUDSDK_COMPUTE_REGION",
+    "CLOUDSDK_COMPUTE_ZONE",
+    "CLOUDSDK_CORE_ACCOUNT",
+    "CLOUDSDK_CORE_PROJECT",
+    "GCLOUD_PROJECT",
+    "GOOGLE_CLOUD_PROJECT",
+  ]);
+  CLOUD_ENV_VAR_PREFIX_RE =
+    /^(?:VERTEX_REGION_CLAUDE_\w+|(?:(?:ACCOUNT|CLUSTER|COST_CENT(?:ER|RE)|CUSTOMER|DEPARTMENT|ENVIRONMENT|ID|LOCATION|NAME|NAMESPACE|ORG|ORGANIZATION|PROFILE|PROJECT|REGION|ROLE|STAGE|TEAM|TENANT|WORKSPACE|ZONE)(?:_|$))+)$/;
+  CLOUD_ENV_VAR_NAME_RE = /^[A-Za-z0-9_][\w.-]*$/;
+});
 //@ chunk-aepeg2w5.js:488444-488499 placement
 /**
  * 匹配 CLOUDSDK_CORE_ACCOUNT 的账号格式（可含 @ 域名）。
  */
 var CLOUD_ACCOUNT_ENV_RE = /^[A-Za-z0-9_][\w.-]*(?:@[A-Za-z0-9][\w.-]*)?$/;
 //@ chunk-aepeg2w5.js:488499-488626 placement
-function isCloudAccountEnvValue(e, n) {
-  let upper = e.toUpperCase();
+function isCloudAccountEnvValue(envKey, envValue) {
+  let upper = envKey.toUpperCase();
   return (
-    n !== undefined &&
-    (upper === "CLOUDSDK_CORE_ACCOUNT" ? CLOUD_ACCOUNT_ENV_RE : CLOUD_ENV_VAR_NAME_RE).test(n) &&
+    envValue !== undefined &&
+    (upper === "CLOUDSDK_CORE_ACCOUNT" ? CLOUD_ACCOUNT_ENV_RE : CLOUD_ENV_VAR_NAME_RE).test(envValue) &&
     (CLOUD_ENV_VARS.has(upper) || CLOUD_ENV_VAR_PREFIX_RE.test(upper))
   );
 }
@@ -92,13 +98,16 @@ function isCloudAccountEnvValue(e, n) {
 /**
  * 记录托管 helper 环境注入情况的缓存。
  */
-var managedHelperEnvCache = identity_2(new Map(), (e) => e.clear());
+var managedHelperEnvCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:488626", () => {
+  managedHelperEnvCache = identity_2(new Map(), (map) => map.clear());
+});
 //@ chunk-aepeg2w5.js:488660-488717 placement
 /**
  * 条件成立时返回保留仓库值的标记。
  */
-function keepsRepositoryValueIf(e) {
-  return e?.()
+function keepsRepositoryValueIf(check) {
+  return check?.()
     ? {
         keepsRepositoryValue: isCloudAccountEnvValue,
       }
@@ -108,32 +117,32 @@ function keepsRepositoryValueIf(e) {
 /**
  * 策略设置一致时排除项目设置注入的环境变量再运行 helper。
  */
-function managedHelperSettingsGate(e, n, r, isProjectScopeTrustAccepted) {
-  return getSettingsForSource("policySettings")?.[e] === n
-    ? withHostEnvRestored(r, keepsRepositoryValueIf(isProjectScopeTrustAccepted))
-    : r();
+function managedHelperSettingsGate(settingName, settingValue, run, isProjectScopeTrustAccepted) {
+  return getSettingsForSource("policySettings")?.[settingName] === settingValue
+    ? withHostEnvRestored(run, keepsRepositoryValueIf(isProjectScopeTrustAccepted))
+    : run();
 }
 //@ chunk-aepeg2w5.js:488792-489130 placement
 /**
  * 运行组织托管的 helper 时排除项目设置注入的环境变量。
  */
-function runManagedHelperWithoutProjectEnv(e, n, r, isProjectScopeTrustAccepted) {
-  if (getSettingsForSource("policySettings")?.[e] !== n) {
-    managedHelperEnvCache.delete(e);
-    return r();
+function runManagedHelperWithoutProjectEnv(settingName, settingValue, run, isProjectScopeTrustAccepted) {
+  if (getSettingsForSource("policySettings")?.[settingName] !== settingValue) {
+    managedHelperEnvCache.delete(settingName);
+    return run();
   }
-  let h = keepsRepositoryValueIf(isProjectScopeTrustAccepted);
-  let y = withHostEnvRestored(r, h);
-  let S = uniq([...hostWrittenEnvNames(h.keepsRepositoryValue), ...hostOwnedEnvNames()]);
-  managedHelperEnvCache.set(e, {
-    command: n,
-    names: S,
+  let envPolicy = keepsRepositoryValueIf(isProjectScopeTrustAccepted);
+  let result = withHostEnvRestored(run, envPolicy);
+  let droppedNames = uniq([...hostWrittenEnvNames(envPolicy.keepsRepositoryValue), ...hostOwnedEnvNames()]);
+  managedHelperEnvCache.set(settingName, {
+    command: settingValue,
+    names: droppedNames,
   });
-  if (S.length > 0)
+  if (droppedNames.length > 0)
     logForDebugging(
-      `${e} is the organization's and started without what the repository settings' env or a person's plugin's $.env.set wrote to ${formatNameList(S)}`,
+      `${settingName} is the organization's and started without what the repository settings' env or a person's plugin's $.env.set wrote to ${formatNameList(droppedNames)}`,
     );
-  return y;
+  return result;
 }
 //@ chunk-aepeg2w5.js:489130-489436 placement
 /**
@@ -142,11 +151,12 @@ function runManagedHelperWithoutProjectEnv(e, n, r, isProjectScopeTrustAccepted)
 function managedHelperEnvNotes() {
   return [...managedHelperEnvCache]
     .filter(
-      ([e, { command: n, names: r }]) => r.length > 0 && getSettingsForSource("policySettings")?.[e] === n,
+      ([settingName, { command, names }]) =>
+        names.length > 0 && getSettingsForSource("policySettings")?.[settingName] === command,
     )
     .map(
-      ([e, { names: n }]) =>
-        `Managed ${e} started without ${formatNameList(n)} from project settings env or a plugin. Set them in managed settings env, ~/.claude/settings.json or the shell you start Claude Code from.`,
+      ([settingName, { names }]) =>
+        `Managed ${settingName} started without ${formatNameList(names)} from project settings env or a plugin. Set them in managed settings env, ~/.claude/settings.json or the shell you start Claude Code from.`,
     );
 }
 export {

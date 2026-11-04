@@ -84,59 +84,73 @@ var resourceLinkSchema = DoctorLazy(() =>
   }),
 );
 //@ chunk-ta5f9qat.js:12507-13641 placement
-async function mcpContentToNotificationText(e, r, a, n = MAX_PERSIST_BYTES) {
-  let s;
-  if (typeof e === "string") s = e;
+async function mcpContentToNotificationText(
+  content,
+  session,
+  truncateOptions,
+  persistBudget = MAX_PERSIST_BYTES,
+) {
+  let text;
+  if (typeof content === "string") text = content;
   else {
-    let c = [];
-    for (let o of e ?? []) {
-      let { text, bytesPersisted } = await contentBlockToText(o, n, r);
-      n -= bytesPersisted;
-      c.push(text);
+    let parts = [];
+    for (let block of content ?? []) {
+      let { text, bytesPersisted } = await contentBlockToText(block, persistBudget, session);
+      persistBudget -= bytesPersisted;
+      parts.push(text);
     }
-    s = c.join(`
+    text = parts.join(`
 `);
   }
   try {
-    let c = await truncateMcpContentIfNeeded(s, a);
-    let o = typeof c === "string" ? c : s;
+    let truncatedText = await truncateMcpContentIfNeeded(text, truncateOptions);
+    let displayText = typeof truncatedText === "string" ? truncatedText : text;
     let maxMcpOutputChars = getMaxMcpOutputChars();
-    if (o === s && (s.length > maxMcpOutputChars || escapeXml(s).length > maxMcpOutputChars))
-      o = truncateBeforeEscape(s, maxMcpOutputChars);
-    if (o === s)
+    if (
+      displayText === text &&
+      (text.length > maxMcpOutputChars || escapeXml(text).length > maxMcpOutputChars)
+    )
+      displayText = truncateBeforeEscape(text, maxMcpOutputChars);
+    if (displayText === text)
       return {
-        text: s,
+        text,
       };
-    if (s.length > n)
+    if (text.length > persistBudget)
       return {
-        text: o,
+        text: displayText,
         savedHint: "[The portion truncated above was not saved: the per-result persist budget is exhausted.]",
       };
-    let d = `mcp-task-result-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    let l = await persistBinaryContent(Buffer.from(s, "utf8"), "text/plain", d, undefined, r);
-    if ("error" in l) {
+    let persistKey = `mcp-task-result-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    let persisted = await persistBinaryContent(
+      Buffer.from(text, "utf8"),
+      "text/plain",
+      persistKey,
+      undefined,
+      session,
+    );
+    if ("error" in persisted) {
       if (toolResultStoreOrNull() !== undefined)
         return {
-          text: o,
+          text: displayText,
           savedHint: TRUNCATED_UNSAVED_TEXT,
         };
       return {
-        text: o,
+        text: displayText,
       };
     }
-    n -= l.size;
-    let u = getPlatform() === "windows" ? "python" : "python3";
-    let replaced = l.filepath.replaceAll("\\", "/").replaceAll("'", "'\\''");
-    let k = isMultiLineWithinWidth(s)
+    persistBudget -= persisted.size;
+    let pythonBin = getPlatform() === "windows" ? "python" : "python3";
+    let replaced = persisted.filepath.replaceAll("\\", "/").replaceAll("'", "'\\''");
+    let readHint = isMultiLineWithinWidth(text)
       ? "use Read to retrieve the portion truncated above"
-      : `its lines are too long for Read's offset/limit \u2014 slice by character range via Bash instead, e.g. ${u} -c 'print(open("${replaced}").read()[A:B])' in ~${MAX_MCP_EVENT_CHARS.toLocaleString()}-char spans`;
+      : `its lines are too long for Read's offset/limit \u2014 slice by character range via Bash instead, e.g. ${pythonBin} -c 'print(open("${replaced}").read()[A:B])' in ~${MAX_MCP_EVENT_CHARS.toLocaleString()}-char spans`;
     return {
-      text: o,
-      savedHint: `[The complete ${s.length}-character output was saved to ${l.filepath}; ${k}.]`,
+      text: displayText,
+      savedHint: `[The complete ${text.length}-character output was saved to ${persisted.filepath}; ${readHint}.]`,
     };
   } catch {
     return {
-      text: truncateToLength(s, getMaxMcpOutputChars()),
+      text: truncateToLength(text, getMaxMcpOutputChars()),
     };
   }
 }
@@ -146,46 +160,46 @@ async function mcpContentToNotificationText(e, r, a, n = MAX_PERSIST_BYTES) {
  */
 var MAX_MCP_EVENT_CHARS = 80000;
 //@ chunk-ta5f9qat.js:13653-13778 placement
-function isMultiLineWithinWidth(e) {
-  let r = 0;
-  let a = 0;
+function isMultiLineWithinWidth(text) {
+  let lineStart = 0;
+  let lineCount = 0;
   for (;;) {
-    let index = e.indexOf(
+    let index = text.indexOf(
       `
 `,
-      r,
+      lineStart,
     );
-    if ((index === -1 ? e.length : index) - r > MAX_MCP_EVENT_CHARS) return false;
-    if (index === -1) return a > 0;
-    a++;
-    r = index + 1;
+    if ((index === -1 ? text.length : index) - lineStart > MAX_MCP_EVENT_CHARS) return false;
+    if (index === -1) return lineCount > 0;
+    lineCount++;
+    lineStart = index + 1;
   }
 }
 //@ chunk-ta5f9qat.js:13778-15441 placement
 /**
  * 把 MCP 任务结果中的一个内容块转为通知文本：文本原样，资源/资源链接给出描述，图片等二进制块按预算解码后写入磁盘并返回保存说明（过大、超预算、非法 base64 或写盘失败时返回对应提示）；同时返回写入字节数。
  */
-async function contentBlockToText(block, r, a) {
+async function contentBlockToText(block, persistBudget, session) {
   if (block.type === "text" && typeof block.text === "string")
     return {
       text: block.text,
       bytesPersisted: 0,
     };
-  let n = binaryContentBlockSchema().safeParse(block);
-  if (!n.success) {
-    let i = embeddedTextResourceSchema().safeParse(block);
-    if (i.success) {
-      let { uri, text } = i.data.resource;
+  let binaryParsed = binaryContentBlockSchema().safeParse(block);
+  if (!binaryParsed.success) {
+    let resourceParsed = embeddedTextResourceSchema().safeParse(block);
+    if (resourceParsed.success) {
+      let { uri, text } = resourceParsed.data.resource;
       return {
         text: uri ? `[Resource at ${uri}] ${text}` : text,
         bytesPersisted: 0,
       };
     }
-    let d = resourceLinkSchema().safeParse(block);
-    if (d.success) {
-      let { name: l, uri, description } = d.data;
+    let linkParsed = resourceLinkSchema().safeParse(block);
+    if (linkParsed.success) {
+      let { name: linkName, uri, description } = linkParsed.data;
       return {
-        text: `[Resource link: ${l}] ${uri}${description ? ` (${description})` : ""}`,
+        text: `[Resource link: ${linkName}] ${uri}${description ? ` (${description})` : ""}`,
         bytesPersisted: 0,
       };
     }
@@ -194,35 +208,35 @@ async function contentBlockToText(block, r, a) {
       bytesPersisted: 0,
     };
   }
-  let s =
-    "source" in n.data
+  let blob =
+    "source" in binaryParsed.data
       ? {
-          data: n.data.source.data,
-          mimeType: n.data.source.media_type,
+          data: binaryParsed.data.source.data,
+          mimeType: binaryParsed.data.source.media_type,
         }
-      : "resource" in n.data
+      : "resource" in binaryParsed.data
         ? {
-            data: n.data.resource.blob,
-            mimeType: n.data.resource.mimeType,
+            data: binaryParsed.data.resource.blob,
+            mimeType: binaryParsed.data.resource.mimeType,
           }
         : {
-            data: n.data.data,
-            mimeType: n.data.mimeType,
+            data: binaryParsed.data.data,
+            mimeType: binaryParsed.data.mimeType,
           };
-  let c = (s.data.length * 3) / 4;
-  if (c > MAX_PERSIST_BYTES)
+  let estimatedBytes = (blob.data.length * 3) / 4;
+  if (estimatedBytes > MAX_PERSIST_BYTES)
     return {
       text: `[${block.type} content too large to save]`,
       bytesPersisted: 0,
     };
-  if (c > r)
+  if (estimatedBytes > persistBudget)
     return {
       text: `[${block.type} content skipped: per-result persist budget exhausted]`,
       bytesPersisted: 0,
     };
-  let o;
+  let decoded;
   try {
-    o = atob(s.data);
+    decoded = atob(blob.data);
   } catch {
     logForDebugging("MCP task result block is not valid base64", {
       level: "error",
@@ -233,22 +247,33 @@ async function contentBlockToText(block, r, a) {
     };
   }
   try {
-    let i = `mcp-task-result-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    let d = await persistBinaryContent(Buffer.from(o, "latin1"), s.mimeType, i, undefined, a);
-    if ("error" in d) {
+    let persistKey = `mcp-task-result-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    let persisted = await persistBinaryContent(
+      Buffer.from(decoded, "latin1"),
+      blob.mimeType,
+      persistKey,
+      undefined,
+      session,
+    );
+    if ("error" in persisted) {
       if (toolResultStoreOrNull() !== undefined)
         return {
-          text: binaryNotSavedNotice(s.mimeType, o.length),
+          text: binaryNotSavedNotice(blob.mimeType, decoded.length),
           bytesPersisted: 0,
         };
       return {
-        text: `[${block.type} content (${s.mimeType ?? "unknown type"}) could not be saved to disk: ${d.error}]`,
+        text: `[${block.type} content (${blob.mimeType ?? "unknown type"}) could not be saved to disk: ${persisted.error}]`,
         bytesPersisted: 0,
       };
     }
     return {
-      text: getBinaryBlobSavedMessage(d.filepath, s.mimeType, d.size, `[${block.type} result] `),
-      bytesPersisted: d.size,
+      text: getBinaryBlobSavedMessage(
+        persisted.filepath,
+        blob.mimeType,
+        persisted.size,
+        `[${block.type} result] `,
+      ),
+      bytesPersisted: persisted.size,
     };
   } catch (error) {
     logForDebugging(`persisting MCP task result block failed: ${String(error)}`, {
@@ -276,59 +301,63 @@ function boundMcpStatusMessage(statusMessage) {
     : trimmed;
 }
 //@ chunk-ta5f9qat.js:15668-16158 placement
-function buildMcpTaskNotification(e) {
-  let r = sanitizeTaskLabel(e.mcpTaskId);
-  let n = `MCP task ${LABEL_PATTERN.test(r) ? r : shortTaskLabel(e.mcpTaskId)} (${mcpTaskKey(e.serverName, e.toolName)}) ${e.status}.`;
-  let s = boundMcpStatusMessage(e.statusMessage) ?? "no detail";
-  let c =
-    e.status === "completed"
-      ? (e.resultText ?? "")
-      : e.status === "failed"
-        ? `Task failed: ${s}`
-        : e.statusMessage !== undefined
-          ? `Task cancelled: ${s}`
+function buildMcpTaskNotification(event) {
+  let labelText = sanitizeTaskLabel(event.mcpTaskId);
+  let summary = `MCP task ${LABEL_PATTERN.test(labelText) ? labelText : shortTaskLabel(event.mcpTaskId)} (${mcpTaskKey(event.serverName, event.toolName)}) ${event.status}.`;
+  let statusDetail = boundMcpStatusMessage(event.statusMessage) ?? "no detail";
+  let body =
+    event.status === "completed"
+      ? (event.resultText ?? "")
+      : event.status === "failed"
+        ? `Task failed: ${statusDetail}`
+        : event.statusMessage !== undefined
+          ? `Task cancelled: ${statusDetail}`
           : "Task was cancelled by the server.";
-  let o = e.resultHint
+  let hintBlock = event.resultHint
     ? `
 
-${escapeXml(e.resultHint)}`
+${escapeXml(event.resultHint)}`
     : "";
   return formatTaskNotification({
-    taskId: e.registryId,
-    status: e.status,
-    summary: escapeXml(n),
+    taskId: event.registryId,
+    status: event.status,
+    summary: escapeXml(summary),
     body: `
 <result>
-${escapeXmlTruncated(c, getMaxMcpOutputChars() - o.length)}${o}
+${escapeXmlTruncated(body, getMaxMcpOutputChars() - hintBlock.length)}${hintBlock}
 </result>`,
   });
 }
 //@ chunk-ta5f9qat.js:16158-16894 placement
-async function restoreMcpTasks(e) {
+async function restoreMcpTasks(session) {
   if (!isMcpTasksEnabled()) return;
-  let r;
+  let records;
   try {
-    r = await listTaskMetadata(e.storageV5);
+    records = await listTaskMetadata(session.storageV5);
   } catch (error) {
     logFeatureBad("mcp_task_restore", "list_failed");
     logForDebugging(`restoreMcpTasks list failed: ${String(error)}`);
     return;
   }
-  for (let a of r) {
-    if (a.protocol === "sep2663") {
-      logForDebugging(`restoreMcpTasks: sep2663 sidecar ${a.taskId} needs the v2 runtime; parked`);
+  for (let record of records) {
+    if (record.protocol === "sep2663") {
+      logForDebugging(`restoreMcpTasks: sep2663 sidecar ${record.taskId} needs the v2 runtime; parked`);
       continue;
     }
-    if (a.protocol !== undefined) {
-      logForDebugging(`restoreMcpTasks: sidecar ${a.taskId} has unknown protocol '${a.protocol}'; parked`, {
-        level: "error",
-      });
+    if (record.protocol !== undefined) {
+      logForDebugging(
+        `restoreMcpTasks: sidecar ${record.taskId} has unknown protocol '${record.protocol}'; parked`,
+        {
+          level: "error",
+        },
+      );
       continue;
     }
     logForDebugging(
-      `restoreMcpTasks: deleting the resume record for MCP task ${a.taskId} (server '${a.serverName}', server task ${shortTaskLabel(a.mcpTaskId)}): it used the 2025-11-25 tasks protocol, which this version no longer supports; the task was not cancelled on the server`,
+      `restoreMcpTasks: deleting the resume record for MCP task ${record.taskId} (server '${record.serverName}', server task ${shortTaskLabel(record.mcpTaskId)}): it used the 2025-11-25 tasks protocol, which this version no longer supports; the task was not cancelled on the server`,
     );
-    removeMcpTaskMetadataSafe(a.taskId, e.storageV5);
+    removeMcpTaskMetadataSafe(record.taskId, session.storageV5);
   }
   logFeatureOk("mcp_task_restore");
 }
+export { boundMcpStatusMessage, buildMcpTaskNotification, mcpContentToNotificationText, restoreMcpTasks };

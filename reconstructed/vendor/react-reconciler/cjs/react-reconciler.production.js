@@ -5,26 +5,26 @@
  * pieces: chunk-bzr73sfg.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { init_react_production, addTransitionType } from "../../react/cjs/react.production.js";
 import {
   init_scheduler_production,
-  bl,
-  as,
+  unstableScheduleCallback,
+  unstableCancelCallback,
   shouldYieldToHost_default,
-  ss,
-  Yn,
-  os,
-  ls,
-  gl,
-  rs,
+  unstableRequestPaint,
+  unstableNow,
+  unstableImmediatePriority,
+  unstableUserBlockingPriority,
+  unstableNormalPriority,
+  unstableIdlePriority,
 } from "../../scheduler/cjs/scheduler.production.js";
 
 //@ chunk-bzr73sfg.js:6890-126116 cjs-fingerprint
-var require_react_reconciler_production = x(function (cjsExports, cjsModule) {
+var require_react_reconciler_production = __commonJS(function (cjsExports, cjsModule) {
   init_react_production();
   init_scheduler_production();
-  cjsModule.exports = function (n) {
+  cjsModule.exports = function (hostConfig) {
     function createFiber(tag, pendingProps, key, mode) {
       return new FiberNode(tag, pendingProps, key, mode);
     }
@@ -487,7 +487,7 @@ var require_react_reconciler_production = x(function (cjsExports, cjsModule) {
       return 2 < lanes ? (8 < lanes ? ((lanes & 134217727) !== 0 ? 32 : 268435456) : 8) : 2;
     }
     function setIsStrictModeForDevtools(newIsStrictMode) {
-      if (typeof log === "function") Z0(newIsStrictMode);
+      if (typeof log === "function") strictModeHook(newIsStrictMode);
       if (injectedHook && typeof injectedHook.setStrictMode === "function")
         try {
           injectedHook.setStrictMode(rendererID, newIsStrictMode);
@@ -856,12 +856,12 @@ Error generating stack: ` +
         fiber = fiber.memoizedState;
         fiber = fiber !== null ? fiber.dehydrated : null;
         if (!fiber) throw Error(formatProdErrorMessage(317));
-        nextHydratableInstance = M0(fiber);
+        nextHydratableInstance = getNextHydratableInstanceAfterSuspenseInstance(fiber);
       } else if (tag === 31) {
         fiber = fiber.memoizedState;
         fiber = fiber !== null ? fiber.dehydrated : null;
         if (!fiber) throw Error(formatProdErrorMessage(317));
-        nextHydratableInstance = R0(fiber);
+        nextHydratableInstance = getNextHydratableInstanceAfterActivityInstance(fiber);
       } else
         nextHydratableInstance =
           supportsSingletons && tag === 27
@@ -1060,9 +1060,9 @@ Error generating stack: ` +
     }
     function noop$1() {}
     function ensureRootIsScheduled(root) {
-      if (root !== Xr && root.next === null) {
-        if (Xr === null) firstScheduledRoot = Xr = root;
-        else Xr = Xr.next = root;
+      if (root !== lastScheduledRoot && root.next === null) {
+        if (lastScheduledRoot === null) firstScheduledRoot = lastScheduledRoot = root;
+        else lastScheduledRoot = lastScheduledRoot.next = root;
       }
       mightHavePendingSyncWork = true;
       if (!didScheduleMicrotask) {
@@ -1126,18 +1126,18 @@ Error generating stack: ` +
       if (currentEventTransitionLane !== 0 && shouldAttemptEagerTransition())
         syncTransitionLanes = currentEventTransitionLane;
       for (var currentTime = now(), prev = null, root = firstScheduledRoot; root !== null;) {
-        var R = root.next;
+        var nextRoot = root.next;
         var nextLanes = scheduleTaskForRootDuringMicrotask(root, currentTime);
         if (nextLanes === 0) {
           root.next = null;
-          if (prev === null) firstScheduledRoot = R;
-          else prev.next = R;
-          if (R === null) Xr = prev;
+          if (prev === null) firstScheduledRoot = nextRoot;
+          else prev.next = nextRoot;
+          if (nextRoot === null) lastScheduledRoot = prev;
         } else {
           prev = root;
           if (syncTransitionLanes !== 0 || (nextLanes & 3) !== 0) mightHavePendingSyncWork = true;
         }
-        root = R;
+        root = nextRoot;
       }
       if (!(pendingEffectsStatus !== 0 && pendingEffectsStatus !== 5))
         flushSyncWorkAcrossRoots_impl(syncTransitionLanes, false);
@@ -1253,14 +1253,14 @@ Error generating stack: ` +
     }
     function entangleAsyncAction(transition, thenable) {
       if (currentEntangledListeners === null) {
-        var h = (currentEntangledListeners = []);
+        var listeners = (currentEntangledListeners = []);
         currentEntangledPendingCount = 0;
         currentEntangledLane = requestTransitionLane();
         currentEntangledActionThenable = {
           status: "pending",
           value: undefined,
           then: function (resolve) {
-            h.push(resolve);
+            listeners.push(resolve);
           },
         };
       }
@@ -1667,7 +1667,7 @@ Error generating stack: ` +
       }
       function reconcileChildrenArray(returnFiber, currentFirstChild, newChildren, lanes) {
         for (
-          var _e = null,
+          var resultingFirstChild = null,
             previousNewFiber = null,
             oldFiber = currentFirstChild,
             newIdx = (currentFirstChild = 0),
@@ -1687,7 +1687,7 @@ Error generating stack: ` +
           if (shouldTrackSideEffects && oldFiber && newFiber.alternate === null)
             deleteChild(returnFiber, oldFiber);
           currentFirstChild = placeChild(newFiber, currentFirstChild, newIdx);
-          if (previousNewFiber === null) _e = newFiber;
+          if (previousNewFiber === null) resultingFirstChild = newFiber;
           else previousNewFiber.sibling = newFiber;
           previousNewFiber = newFiber;
           oldFiber = nextOldFiber;
@@ -1695,20 +1695,20 @@ Error generating stack: ` +
         if (newIdx === newChildren.length) {
           deleteRemainingChildren(returnFiber, oldFiber);
           if (isHydrating) pushTreeFork(returnFiber, newIdx);
-          return _e;
+          return resultingFirstChild;
         }
         if (oldFiber === null) {
           for (; newIdx < newChildren.length; newIdx++) {
             oldFiber = createChild(returnFiber, newChildren[newIdx], lanes);
             if (oldFiber !== null) {
               currentFirstChild = placeChild(oldFiber, currentFirstChild, newIdx);
-              if (previousNewFiber === null) _e = oldFiber;
+              if (previousNewFiber === null) resultingFirstChild = oldFiber;
               else previousNewFiber.sibling = oldFiber;
               previousNewFiber = oldFiber;
             }
           }
           if (isHydrating) pushTreeFork(returnFiber, newIdx);
-          return _e;
+          return resultingFirstChild;
         }
         for (oldFiber = mapRemainingChildren(oldFiber); newIdx < newChildren.length; newIdx++) {
           nextOldFiber = updateFromMap(oldFiber, returnFiber, newIdx, newChildren[newIdx], lanes);
@@ -1716,7 +1716,7 @@ Error generating stack: ` +
             if (shouldTrackSideEffects && nextOldFiber.alternate !== null)
               oldFiber.delete(nextOldFiber.key === null ? newIdx : nextOldFiber.key);
             currentFirstChild = placeChild(nextOldFiber, currentFirstChild, newIdx);
-            if (previousNewFiber === null) _e = nextOldFiber;
+            if (previousNewFiber === null) resultingFirstChild = nextOldFiber;
             else previousNewFiber.sibling = nextOldFiber;
             previousNewFiber = nextOldFiber;
           }
@@ -1726,12 +1726,12 @@ Error generating stack: ` +
             return deleteChild(returnFiber, child);
           });
         if (isHydrating) pushTreeFork(returnFiber, newIdx);
-        return _e;
+        return resultingFirstChild;
       }
       function reconcileChildrenIterator(returnFiber, currentFirstChild, newChildren, lanes) {
         if (newChildren == null) throw Error(formatProdErrorMessage(151));
         for (
-          var _e = null,
+          var resultingFirstChild = null,
             previousNewFiber = null,
             oldFiber = currentFirstChild,
             newIdx = (currentFirstChild = 0),
@@ -1752,7 +1752,7 @@ Error generating stack: ` +
           if (shouldTrackSideEffects && oldFiber && newFiber.alternate === null)
             deleteChild(returnFiber, oldFiber);
           currentFirstChild = placeChild(newFiber, currentFirstChild, newIdx);
-          if (previousNewFiber === null) _e = newFiber;
+          if (previousNewFiber === null) resultingFirstChild = newFiber;
           else previousNewFiber.sibling = newFiber;
           previousNewFiber = newFiber;
           oldFiber = nextOldFiber;
@@ -1760,20 +1760,20 @@ Error generating stack: ` +
         if (step.done) {
           deleteRemainingChildren(returnFiber, oldFiber);
           if (isHydrating) pushTreeFork(returnFiber, newIdx);
-          return _e;
+          return resultingFirstChild;
         }
         if (oldFiber === null) {
           for (; !step.done; newIdx++, step = newChildren.next()) {
             step = createChild(returnFiber, step.value, lanes);
             if (step !== null) {
               currentFirstChild = placeChild(step, currentFirstChild, newIdx);
-              if (previousNewFiber === null) _e = step;
+              if (previousNewFiber === null) resultingFirstChild = step;
               else previousNewFiber.sibling = step;
               previousNewFiber = step;
             }
           }
           if (isHydrating) pushTreeFork(returnFiber, newIdx);
-          return _e;
+          return resultingFirstChild;
         }
         for (oldFiber = mapRemainingChildren(oldFiber); !step.done; newIdx++, step = newChildren.next()) {
           step = updateFromMap(oldFiber, returnFiber, newIdx, step.value, lanes);
@@ -1781,7 +1781,7 @@ Error generating stack: ` +
             if (shouldTrackSideEffects && step.alternate !== null)
               oldFiber.delete(step.key === null ? newIdx : step.key);
             currentFirstChild = placeChild(step, currentFirstChild, newIdx);
-            if (previousNewFiber === null) _e = step;
+            if (previousNewFiber === null) resultingFirstChild = step;
             else previousNewFiber.sibling = step;
             previousNewFiber = step;
           }
@@ -1791,7 +1791,7 @@ Error generating stack: ` +
             return deleteChild(returnFiber, child);
           });
         if (isHydrating) pushTreeFork(returnFiber, newIdx);
-        return _e;
+        return resultingFirstChild;
       }
       function reconcileChildFibersImpl(returnFiber, currentFirstChild, newChild, lanes) {
         if (
@@ -2089,7 +2089,7 @@ Error generating stack: ` +
       var current = workInProgress.alternate;
       if (current !== null && ((current = current.updateQueue), queue === current)) {
         var newFirst = null;
-        var M = null;
+        var newLast = null;
         queue = queue.firstBaseUpdate;
         if (queue !== null) {
           do {
@@ -2100,17 +2100,17 @@ Error generating stack: ` +
               callback: null,
               next: null,
             };
-            if (M === null) newFirst = M = clone;
-            else M = M.next = clone;
+            if (newLast === null) newFirst = newLast = clone;
+            else newLast = newLast.next = clone;
             queue = queue.next;
           } while (queue !== null);
-          if (M === null) newFirst = M = capturedUpdate;
-          else M = M.next = capturedUpdate;
-        } else newFirst = M = capturedUpdate;
+          if (newLast === null) newFirst = newLast = capturedUpdate;
+          else newLast = newLast.next = capturedUpdate;
+        } else newFirst = newLast = capturedUpdate;
         queue = {
           baseState: current.baseState,
           firstBaseUpdate: newFirst,
-          lastBaseUpdate: M,
+          lastBaseUpdate: newLast,
           shared: current.shared,
           callbacks: current.callbacks,
         };
@@ -2450,9 +2450,10 @@ Error generating stack: ` +
         var nextCurrentHook = currentlyRenderingFiber.alternate;
         nextCurrentHook = nextCurrentHook !== null ? nextCurrentHook.memoizedState : null;
       } else nextCurrentHook = currentHook.next;
-      var s = workInProgressHook === null ? currentlyRenderingFiber.memoizedState : workInProgressHook.next;
-      if (s !== null) {
-        workInProgressHook = s;
+      var nextWorkInProgressHook =
+        workInProgressHook === null ? currentlyRenderingFiber.memoizedState : workInProgressHook.next;
+      if (nextWorkInProgressHook !== null) {
+        workInProgressHook = nextWorkInProgressHook;
         currentHook = nextCurrentHook;
       } else {
         if (nextCurrentHook === null) {
@@ -2557,9 +2558,9 @@ Error generating stack: ` +
       var pendingQueue = queue.pending;
       if (pendingQueue !== null) {
         if (baseQueue !== null) {
-          var H = baseQueue.next;
+          var firstBaseUpdate = baseQueue.next;
           baseQueue.next = pendingQueue.next;
-          pendingQueue.next = H;
+          pendingQueue.next = firstBaseUpdate;
         }
         current.baseQueue = baseQueue = pendingQueue;
         queue.pending = null;
@@ -2568,8 +2569,8 @@ Error generating stack: ` +
       if (baseQueue === null) hook.memoizedState = pendingQueue;
       else {
         current = baseQueue.next;
-        var Z = (H = null);
-        var le = null;
+        var newFirst = (firstBaseUpdate = null);
+        var newLast = null;
         var update = current;
         var didReadFromEntangledAsyncAction$51 = false;
         do {
@@ -2581,8 +2582,8 @@ Error generating stack: ` +
           ) {
             var revertLane = update.revertLane;
             if (revertLane === 0) {
-              if (le !== null)
-                le = le.next = {
+              if (newLast !== null)
+                newLast = newLast.next = {
                   lane: 0,
                   revertLane: 0,
                   gesture: null,
@@ -2606,10 +2607,10 @@ Error generating stack: ` +
                 eagerState: update.eagerState,
                 next: null,
               };
-              if (le === null) {
-                Z = le = updateLane;
-                H = pendingQueue;
-              } else le = le.next = updateLane;
+              if (newLast === null) {
+                newFirst = newLast = updateLane;
+                firstBaseUpdate = pendingQueue;
+              } else newLast = newLast.next = updateLane;
               currentlyRenderingFiber.lanes |= revertLane;
               workInProgressRootSkippedLanes |= revertLane;
             }
@@ -2626,17 +2627,17 @@ Error generating stack: ` +
               eagerState: update.eagerState,
               next: null,
             };
-            if (le === null) {
-              Z = le = revertLane;
-              H = pendingQueue;
-            } else le = le.next = revertLane;
+            if (newLast === null) {
+              newFirst = newLast = revertLane;
+              firstBaseUpdate = pendingQueue;
+            } else newLast = newLast.next = revertLane;
             currentlyRenderingFiber.lanes |= updateLane;
             workInProgressRootSkippedLanes |= updateLane;
           }
           update = update.next;
         } while (update !== null && update !== current);
-        if (le === null) H = pendingQueue;
-        else le.next = Z;
+        if (newLast === null) firstBaseUpdate = pendingQueue;
+        else newLast.next = newFirst;
         if (
           !objectIs(pendingQueue, hook.memoizedState) &&
           ((didReceiveUpdate = true),
@@ -2645,8 +2646,8 @@ Error generating stack: ` +
         )
           throw reducer;
         hook.memoizedState = pendingQueue;
-        hook.baseState = H;
-        hook.baseQueue = le;
+        hook.baseState = firstBaseUpdate;
+        hook.baseQueue = newLast;
         queue.lastRenderedState = pendingQueue;
       }
       if (baseQueue === null) queue.lanes = 0;
@@ -3879,7 +3880,7 @@ Error generating stack: ` +
           } else {
             current = prevState.treeContext;
             if (supportsHydration) {
-              nextHydratableInstance = h0(dehydrated);
+              nextHydratableInstance = getFirstHydratableChildWithinActivityInstance(dehydrated);
               hydrationParentFiber = workInProgress;
               isHydrating = true;
               hydrationErrors = null;
@@ -4339,7 +4340,7 @@ Error generating stack: ` +
             } else {
               current = prevState.treeContext;
               if (supportsHydration) {
-                nextHydratableInstance = m0(nextPrimaryChildren);
+                nextHydratableInstance = getFirstHydratableChildWithinSuspenseInstance(nextPrimaryChildren);
                 hydrationParentFiber = workInProgress;
                 isHydrating = true;
                 hydrationErrors = null;
@@ -5859,9 +5860,9 @@ Error generating stack: ` +
         else ref.current = null;
     }
     function commitHostMount(finishedWork) {
-      var { type: s, memoizedProps, stateNode } = finishedWork;
+      var { type, memoizedProps, stateNode } = finishedWork;
       try {
-        commitMount(stateNode, s, memoizedProps, finishedWork);
+        commitMount(stateNode, type, memoizedProps, finishedWork);
       } catch (error) {
         captureCommitPhaseError(finishedWork, finishedWork.return, error);
       }
@@ -8077,11 +8078,11 @@ Error generating stack: ` +
                   case 5:
                   case 27:
                     var hostFiber = workInProgress;
-                    var { type: le, pendingProps } = hostFiber;
+                    var { type, pendingProps } = hostFiber;
                     if (
                       resource
                         ? preloadResource(resource)
-                        : preloadInstance(hostFiber.stateNode, le, pendingProps)
+                        : preloadInstance(hostFiber.stateNode, type, pendingProps)
                     ) {
                       workInProgressSuspendedReason = 0;
                       workInProgressThrownValue = null;
@@ -8393,7 +8394,7 @@ Error generating stack: ` +
         if ((finishedWork.subtreeFlags & 10256) !== 0 || (finishedWork.flags & 10256) !== 0)
           pendingEffectsStatus = 5;
         else {
-          wm(finishedWork);
+          detachAlternateSiblingsFrom(finishedWork);
           pendingEffectsStatus = 0;
           pendingFinishedWork = pendingEffectsRoot = null;
           releaseRootPooledCache(root, root.pendingLanes);
@@ -8487,7 +8488,7 @@ Error generating stack: ` +
           try {
             injectedHook.onPostCommitFiberRoot(rendererID, root$jscomp$0);
           } catch (err) {}
-        wm(root$jscomp$0.current);
+        detachAlternateSiblingsFrom(root$jscomp$0.current);
         return true;
       } finally {
         setCurrentUpdatePriority(previousPriority);
@@ -8495,11 +8496,11 @@ Error generating stack: ` +
         releaseRootPooledCache(root, remainingLanes);
       }
     }
-    function wm(o) {
-      var s = o;
+    function detachAlternateSiblingsFrom(parentFiber) {
+      var fiber = parentFiber;
       for (;;) {
-        var alternate = s.alternate;
-        var y = false;
+        var alternate = fiber.alternate;
+        var siblingWasDetached = false;
         if (alternate !== null) {
           if (
             alternate.memoizedProps !== null ||
@@ -8511,21 +8512,21 @@ Error generating stack: ` +
             alternate.memoizedProps = null;
             alternate.dependencies = null;
             alternate.pendingProps = null;
-            y = true;
+            siblingWasDetached = true;
           }
         }
-        if ((y || s === o) && s.child !== null) {
-          s.child.return = s;
-          s = s.child;
+        if ((siblingWasDetached || fiber === parentFiber) && fiber.child !== null) {
+          fiber.child.return = fiber;
+          fiber = fiber.child;
           continue;
         }
-        if (s === o) return;
-        for (; s.sibling === null;) {
-          if (s.return === null || s.return === o) return;
-          s = s.return;
+        if (fiber === parentFiber) return;
+        for (; fiber.sibling === null;) {
+          if (fiber.return === null || fiber.return === parentFiber) return;
+          fiber = fiber.return;
         }
-        s.sibling.return = s.return;
-        s = s.sibling;
+        fiber.sibling.return = fiber.return;
+        fiber = fiber.sibling;
       }
     }
     function captureCommitPhaseErrorOnRoot(rootFiber, sourceFiber, error) {
@@ -8959,7 +8960,7 @@ Error generating stack: ` +
       markRetryLaneImpl(fiber, retryLane);
       if ((fiber = fiber.alternate)) markRetryLaneImpl(fiber, retryLane);
     }
-    var Ke = {};
+    var internals = {};
     var assign = Object.assign;
     var REACT_LEGACY_ELEMENT_TYPE = Symbol.for("react.element");
     var REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element");
@@ -8990,23 +8991,24 @@ Error generating stack: ` +
       prepareForCommit,
       resetAfterCommit,
       createInstance,
-    } = n;
-    n.cloneMutableInstance;
-    var { appendInitialChild, finalizeInitialChildren, shouldSetTextContent, createTextInstance } = n;
-    n.cloneMutableTextInstance;
-    var { scheduleTimeout, cancelTimeout, noTimeout, isPrimaryRenderer } = n;
-    n.warnsIfNotActing;
-    var { supportsMutation, supportsPersistence, supportsHydration, getInstanceFromNode } = n;
-    n.beforeActiveInstanceBlur;
-    var preparePortalMount = n.preparePortalMount;
-    n.prepareScopeUpdate;
-    n.getInstanceFromScope;
-    var { setCurrentUpdatePriority, getCurrentUpdatePriority, resolveUpdatePriority } = n;
-    n.trackSchedulerEvent;
-    n.resolveEventType;
-    n.resolveEventTimeStamp;
-    var { shouldAttemptEagerTransition, detachDeletedInstance } = n;
-    n.requestPostPaintCallback;
+    } = hostConfig;
+    hostConfig.cloneMutableInstance;
+    var { appendInitialChild, finalizeInitialChildren, shouldSetTextContent, createTextInstance } =
+      hostConfig;
+    hostConfig.cloneMutableTextInstance;
+    var { scheduleTimeout, cancelTimeout, noTimeout, isPrimaryRenderer } = hostConfig;
+    hostConfig.warnsIfNotActing;
+    var { supportsMutation, supportsPersistence, supportsHydration, getInstanceFromNode } = hostConfig;
+    hostConfig.beforeActiveInstanceBlur;
+    var preparePortalMount = hostConfig.preparePortalMount;
+    hostConfig.prepareScopeUpdate;
+    hostConfig.getInstanceFromScope;
+    var { setCurrentUpdatePriority, getCurrentUpdatePriority, resolveUpdatePriority } = hostConfig;
+    hostConfig.trackSchedulerEvent;
+    hostConfig.resolveEventType;
+    hostConfig.resolveEventTimeStamp;
+    var { shouldAttemptEagerTransition, detachDeletedInstance } = hostConfig;
+    hostConfig.requestPostPaintCallback;
     var {
       maySuspendCommit,
       maySuspendCommitOnUpdate,
@@ -9014,12 +9016,12 @@ Error generating stack: ` +
       preloadInstance,
       startSuspendingCommit,
       suspendInstance,
-    } = n;
-    n.suspendOnActiveViewTransition;
-    var waitForCommitToBeReady = n.waitForCommitToBeReady;
-    n.getSuspendedCommitReason;
-    var { NotPendingTransition, HostTransitionContext, resetFormInstance } = n;
-    n.bindToConsole;
+    } = hostConfig;
+    hostConfig.suspendOnActiveViewTransition;
+    var waitForCommitToBeReady = hostConfig.waitForCommitToBeReady;
+    hostConfig.getSuspendedCommitReason;
+    var { NotPendingTransition, HostTransitionContext, resetFormInstance } = hostConfig;
+    hostConfig.bindToConsole;
     var {
       supportsMicrotasks,
       scheduleMicrotask,
@@ -9045,25 +9047,25 @@ Error generating stack: ` +
       hideTextInstance,
       unhideInstance,
       unhideTextInstance,
-    } = n;
-    n.cancelViewTransitionName;
-    n.cancelRootViewTransitionName;
-    n.restoreRootViewTransitionName;
-    n.cloneRootViewTransitionContainer;
-    n.removeRootViewTransitionClone;
-    n.measureClonedInstance;
-    n.hasInstanceChanged;
-    n.hasInstanceAffectedParent;
-    n.startViewTransition;
-    n.startGestureTransition;
-    n.stopViewTransition;
-    n.getCurrentGestureOffset;
-    n.createViewTransitionInstance;
-    var clearContainer = n.clearContainer;
-    n.createFragmentInstance;
-    n.updateFragmentInstanceFiber;
-    n.commitNewChildToFragmentInstance;
-    n.deleteChildFromFragmentInstance;
+    } = hostConfig;
+    hostConfig.cancelViewTransitionName;
+    hostConfig.cancelRootViewTransitionName;
+    hostConfig.restoreRootViewTransitionName;
+    hostConfig.cloneRootViewTransitionContainer;
+    hostConfig.removeRootViewTransitionClone;
+    hostConfig.measureClonedInstance;
+    hostConfig.hasInstanceChanged;
+    hostConfig.hasInstanceAffectedParent;
+    hostConfig.startViewTransition;
+    hostConfig.startGestureTransition;
+    hostConfig.stopViewTransition;
+    hostConfig.getCurrentGestureOffset;
+    hostConfig.createViewTransitionInstance;
+    var clearContainer = hostConfig.clearContainer;
+    hostConfig.createFragmentInstance;
+    hostConfig.updateFragmentInstanceFiber;
+    hostConfig.commitNewChildToFragmentInstance;
+    hostConfig.deleteChildFromFragmentInstance;
     var {
       cloneInstance,
       createContainerChildSet,
@@ -9082,8 +9084,8 @@ Error generating stack: ` +
       getNextHydratableSiblingAfterSingleton,
       getFirstHydratableChild,
       getFirstHydratableChildWithinContainer,
-      getFirstHydratableChildWithinActivityInstance: h0,
-      getFirstHydratableChildWithinSuspenseInstance: m0,
+      getFirstHydratableChildWithinActivityInstance,
+      getFirstHydratableChildWithinSuspenseInstance,
       getFirstHydratableChildWithinSingleton,
       canHydrateInstance,
       canHydrateTextInstance,
@@ -9093,27 +9095,27 @@ Error generating stack: ` +
       hydrateTextInstance,
       hydrateActivityInstance,
       hydrateSuspenseInstance,
-      getNextHydratableInstanceAfterActivityInstance: R0,
-      getNextHydratableInstanceAfterSuspenseInstance: M0,
+      getNextHydratableInstanceAfterActivityInstance,
+      getNextHydratableInstanceAfterSuspenseInstance,
       commitHydratedInstance,
       commitHydratedContainer,
       commitHydratedActivityInstance,
       commitHydratedSuspenseInstance,
       finalizeHydratedChildren,
       flushHydrationEvents,
-    } = n;
-    n.clearActivityBoundary;
-    var clearSuspenseBoundary = n.clearSuspenseBoundary;
-    n.clearActivityBoundaryFromContainer;
+    } = hostConfig;
+    hostConfig.clearActivityBoundary;
+    var clearSuspenseBoundary = hostConfig.clearSuspenseBoundary;
+    hostConfig.clearActivityBoundaryFromContainer;
     var {
       clearSuspenseBoundaryFromContainer,
       hideDehydratedBoundary,
       unhideDehydratedBoundary,
       shouldDeleteUnhydratedTailInstances,
-    } = n;
-    n.diffHydratedPropsForDevWarnings;
-    n.diffHydratedTextForDevWarnings;
-    n.describeHydratableInstanceForDevWarnings;
+    } = hostConfig;
+    hostConfig.diffHydratedPropsForDevWarnings;
+    hostConfig.diffHydratedTextForDevWarnings;
+    hostConfig.describeHydratableInstanceForDevWarnings;
     var {
       validateHydratableInstance,
       validateHydratableTextInstance,
@@ -9137,7 +9139,7 @@ Error generating stack: ` +
       releaseSingletonInstance,
       isHostSingletonType,
       isSingletonScope,
-    } = n;
+    } = hostConfig;
     var valueStack = [];
     var index$jscomp$0 = -1;
     var emptyContextObject = {};
@@ -9146,17 +9148,17 @@ Error generating stack: ` +
     var nextTransitionUpdateLane = 256;
     var nextTransitionDeferredLane = 262144;
     var nextRetryLane = 4194304;
-    var scheduleCallback$3 = bl;
-    var cancelCallback$1 = as;
+    var scheduleCallback$3 = unstableScheduleCallback;
+    var cancelCallback$1 = unstableCancelCallback;
     var shouldYield = shouldYieldToHost_default;
-    var requestPaint = ss;
-    var now = Yn;
-    var ImmediatePriority = os;
-    var UserBlockingPriority = ls;
-    var NormalPriority$1 = gl;
-    var IdlePriority = rs;
+    var requestPaint = unstableRequestPaint;
+    var now = unstableNow;
+    var ImmediatePriority = unstableImmediatePriority;
+    var UserBlockingPriority = unstableUserBlockingPriority;
+    var NormalPriority$1 = unstableNormalPriority;
+    var IdlePriority = unstableIdlePriority;
     var log = undefined;
-    var Z0 = undefined;
+    var strictModeHook = undefined;
     var rendererID = null;
     var injectedHook = null;
     var objectIs = typeof Object.is === "function" ? Object.is : is;
@@ -9226,8 +9228,8 @@ Error generating stack: ` +
               });
             };
           };
-    var scheduleCallback$2 = bl;
-    var NormalPriority = gl;
+    var scheduleCallback$2 = unstableScheduleCallback;
+    var NormalPriority = unstableNormalPriority;
     var CacheContext = {
       $$typeof: REACT_CONTEXT_TYPE,
       Consumer: null,
@@ -9237,7 +9239,7 @@ Error generating stack: ` +
       _threadCount: 0,
     };
     var firstScheduledRoot = null;
-    var Xr = null;
+    var lastScheduledRoot = null;
     var didScheduleMicrotask = false;
     var mightHavePendingSyncWork = false;
     var isFlushingWork = false;
@@ -9682,14 +9684,14 @@ Error generating stack: ` +
     var pendingRecoverableErrors = null;
     var nestedUpdateCount = 0;
     var rootWithNestedUpdates = null;
-    Ke.attemptContinuousHydration = function (fiber) {
+    internals.attemptContinuousHydration = function (fiber) {
       if (fiber.tag === 13 || fiber.tag === 31) {
         var root = enqueueConcurrentRenderForLane(fiber, 67108864);
         if (root !== null) scheduleUpdateOnFiber(root, fiber, 67108864);
         markRetryLaneIfNotHydrated(fiber, 67108864);
       }
     };
-    Ke.attemptHydrationAtCurrentPriority = function (fiber) {
+    internals.attemptHydrationAtCurrentPriority = function (fiber) {
       if (fiber.tag === 13 || fiber.tag === 31) {
         var lane = requestUpdateLane();
         lane = getBumpedLaneForHydrationByLane(lane);
@@ -9698,7 +9700,7 @@ Error generating stack: ` +
         markRetryLaneIfNotHydrated(fiber, lane);
       }
     };
-    Ke.attemptSynchronousHydration = function (fiber) {
+    internals.attemptSynchronousHydration = function (fiber) {
       switch (fiber.tag) {
         case 3:
           fiber = fiber.stateNode;
@@ -9727,16 +9729,16 @@ Error generating stack: ` +
           markRetryLaneIfNotHydrated(fiber, 2);
       }
     };
-    Ke.batchedUpdates = function (fn, a) {
+    internals.batchedUpdates = function (fn, a) {
       return fn(a);
     };
-    Ke.createComponentSelector = function (component) {
+    internals.createComponentSelector = function (component) {
       return {
         $$typeof: COMPONENT_TYPE,
         value: component,
       };
     };
-    Ke.createContainer = function (
+    internals.createContainer = function (
       containerInfo,
       tag,
       hydrationCallbacks,
@@ -9763,13 +9765,13 @@ Error generating stack: ` +
         onDefaultTransitionIndicator,
       );
     };
-    Ke.createHasPseudoClassSelector = function (selectors) {
+    internals.createHasPseudoClassSelector = function (selectors) {
       return {
         $$typeof: HAS_PSEUDO_CLASS_TYPE,
         value: selectors,
       };
     };
-    Ke.createHydrationContainer = function (
+    internals.createHydrationContainer = function (
       initialChildren,
       callback,
       containerInfo,
@@ -9812,7 +9814,7 @@ Error generating stack: ` +
       ensureRootIsScheduled(initialChildren);
       return initialChildren;
     };
-    Ke.createPortal = function (children, containerInfo, implementation) {
+    internals.createPortal = function (children, containerInfo, implementation) {
       var key = 3 < arguments.length && arguments[3] !== undefined ? arguments[3] : null;
       return {
         $$typeof: REACT_PORTAL_TYPE,
@@ -9822,34 +9824,34 @@ Error generating stack: ` +
         implementation,
       };
     };
-    Ke.createRoleSelector = function (role) {
+    internals.createRoleSelector = function (role) {
       return {
         $$typeof: ROLE_TYPE,
         value: role,
       };
     };
-    Ke.createTestNameSelector = function (id) {
+    internals.createTestNameSelector = function (id) {
       return {
         $$typeof: TEST_NAME_TYPE,
         value: id,
       };
     };
-    Ke.createTextSelector = function (text) {
+    internals.createTextSelector = function (text) {
       return {
         $$typeof: TEXT_TYPE,
         value: text,
       };
     };
-    Ke.defaultOnCaughtError = function (error) {
+    internals.defaultOnCaughtError = function (error) {
       console.error(error);
     };
-    Ke.defaultOnRecoverableError = function (error) {
+    internals.defaultOnRecoverableError = function (error) {
       reportGlobalError(error);
     };
-    Ke.defaultOnUncaughtError = function (error) {
+    internals.defaultOnUncaughtError = function (error) {
       reportGlobalError(error);
     };
-    Ke.deferredUpdates = function (fn) {
+    internals.deferredUpdates = function (fn) {
       var prevTransition = ReactSharedInternals.T;
       var previousPriority = getCurrentUpdatePriority();
       try {
@@ -9861,7 +9863,7 @@ Error generating stack: ` +
         ReactSharedInternals.T = prevTransition;
       }
     };
-    Ke.discreteUpdates = function (fn, a, b, c, d) {
+    internals.discreteUpdates = function (fn, a, b, c, d) {
       var prevTransition = ReactSharedInternals.T;
       var previousPriority = getCurrentUpdatePriority();
       try {
@@ -9874,8 +9876,8 @@ Error generating stack: ` +
         if (executionContext === 0) workInProgressRootRenderTargetTime = now() + 500;
       }
     };
-    Ke.findAllNodes = findAllNodes;
-    Ke.findBoundingRects = function (hostRoot, selectors) {
+    internals.findAllNodes = findAllNodes;
+    internals.findBoundingRects = function (hostRoot, selectors) {
       if (!supportsTestSelectors) throw Error(formatProdErrorMessage(363));
       selectors = findAllNodes(hostRoot, selectors);
       hostRoot = [];
@@ -9936,17 +9938,17 @@ Error generating stack: ` +
       }
       return hostRoot;
     };
-    Ke.findHostInstance = findHostInstance;
-    Ke.findHostInstanceWithNoPortals = function (fiber) {
+    internals.findHostInstance = findHostInstance;
+    internals.findHostInstanceWithNoPortals = function (fiber) {
       fiber = findCurrentFiberUsingSlowPath(fiber);
       fiber = fiber !== null ? findCurrentHostFiberWithNoPortalsImpl(fiber) : null;
       return fiber === null ? null : getPublicInstance(fiber.stateNode);
     };
-    Ke.findHostInstanceWithWarning = function (component) {
+    internals.findHostInstanceWithWarning = function (component) {
       return findHostInstance(component);
     };
-    Ke.flushPassiveEffects = flushPendingEffects;
-    Ke.flushSyncFromReconciler = function (fn) {
+    internals.flushPassiveEffects = flushPendingEffects;
+    internals.flushSyncFromReconciler = function (fn) {
       var prevExecutionContext = executionContext;
       executionContext |= 1;
       var prevTransition = ReactSharedInternals.T;
@@ -9962,8 +9964,8 @@ Error generating stack: ` +
         if ((executionContext & 6) === 0) flushSyncWorkAcrossRoots_impl(0, false);
       }
     };
-    Ke.flushSyncWork = flushSyncWork;
-    Ke.focusWithin = function (hostRoot, selectors) {
+    internals.flushSyncWork = flushSyncWork;
+    internals.focusWithin = function (hostRoot, selectors) {
       if (!supportsTestSelectors) throw Error(formatProdErrorMessage(363));
       hostRoot = findFiberRootForHostRoot(hostRoot);
       selectors = findPaths(hostRoot, selectors);
@@ -9981,7 +9983,7 @@ Error generating stack: ` +
       }
       return false;
     };
-    Ke.getFindAllNodesFailureDescription = function (hostRoot, selectors) {
+    internals.getFindAllNodesFailureDescription = function (hostRoot, selectors) {
       if (!supportsTestSelectors) throw Error(formatProdErrorMessage(363));
       var maxSelectorIndex = 0;
       var matchedNames = [];
@@ -10020,7 +10022,7 @@ No matching component was found for:
       }
       return null;
     };
-    Ke.getPublicRootInstance = function (container) {
+    internals.getPublicRootInstance = function (container) {
       container = container.current;
       if (!container.child) return null;
       switch (container.child.tag) {
@@ -10031,7 +10033,7 @@ No matching component was found for:
           return container.child.stateNode;
       }
     };
-    Ke.injectIntoDevTools = function () {
+    internals.injectIntoDevTools = function () {
       var internals = {
         bundleType: 0,
         version: rendererVersion,
@@ -10054,10 +10056,10 @@ No matching component was found for:
       }
       return internals;
     };
-    Ke.isAlreadyRendering = function () {
+    internals.isAlreadyRendering = function () {
       return (executionContext & 6) !== 0;
     };
-    Ke.observeVisibleRects = function (hostRoot, selectors, callback, options) {
+    internals.observeVisibleRects = function (hostRoot, selectors, callback, options) {
       if (!supportsTestSelectors) throw Error(formatProdErrorMessage(363));
       hostRoot = findAllNodes(hostRoot, selectors);
       var disconnect = setupIntersectionObserver(hostRoot, callback, options).disconnect;
@@ -10067,13 +10069,13 @@ No matching component was found for:
         },
       };
     };
-    Ke.shouldError = function () {
+    internals.shouldError = function () {
       return null;
     };
-    Ke.shouldSuspend = function () {
+    internals.shouldSuspend = function () {
       return false;
     };
-    Ke.startHostTransition = function (formFiber, pendingState, action, formData) {
+    internals.startHostTransition = function (formFiber, pendingState, action, formData) {
       if (formFiber.tag !== 5) throw Error(formatProdErrorMessage(476));
       var queue = ensureFormComponentIsStateful(formFiber).queue;
       startTransition(
@@ -10091,17 +10093,17 @@ No matching component was found for:
             },
       );
     };
-    Ke.updateContainer = function (element, container, parentComponent, callback) {
+    internals.updateContainer = function (element, container, parentComponent, callback) {
       var current = container.current;
       var lane = requestUpdateLane();
       updateContainerImpl(current, lane, element, container, parentComponent, callback);
       return lane;
     };
-    Ke.updateContainerSync = function (element, container, parentComponent, callback) {
+    internals.updateContainerSync = function (element, container, parentComponent, callback) {
       updateContainerImpl(container.current, 2, element, container, parentComponent, callback);
       return 2;
     };
-    return Ke;
+    return internals;
   };
   cjsModule.exports.default = cjsModule.exports;
   Object.defineProperty(cjsModule.exports, "__esModule", {

@@ -31,6 +31,7 @@ var goalNonInteractiveCommand = {
     return !getIsNonInteractiveSession();
   },
   isEnabled: () => getIsNonInteractiveSession() || getIsRemoteMode(),
-  load: () => import("./chunk-s4441tej.js"),
+  load: () => import("./goal.js"),
 };
 var goalCommand = goalCommandDefinition;
+export { goalCommand, goalNonInteractiveCommand };

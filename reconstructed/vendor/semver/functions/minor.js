@@ -5,11 +5,11 @@
  * pieces: chunk-bwbq4xvm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_semver } from "../classes/semver.js";
 
 //@ chunk-bwbq4xvm.js:11296-11376 cjs-fingerprint
-var require_minor = x(function (cjsExports, cjsModule) {
+var require_minor = __commonJS(function (cjsExports, cjsModule) {
   var SemVer = require_semver();
   var minor = (a, loose) => new SemVer(a, loose).minor;
   cjsModule.exports = minor;

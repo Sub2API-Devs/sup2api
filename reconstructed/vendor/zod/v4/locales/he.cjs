@@ -5,11 +5,11 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_util } from "../core/util.cjs";
 
 //@ chunk-1ny7cxrt.js:282390-293096 cjs-fingerprint
-var require_he = x(function (cjsExports, cjsModule) {
+var require_he = __commonJS(function (cjsExports, cjsModule) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||
     (Object.create
@@ -168,8 +168,8 @@ var require_he = x(function (cjsExports, cjsModule) {
       return t ?? TypeNames.unknown.label;
     };
     let withDefinite = (t) => `\u05D4${typeLabel(t)}`;
-    let verbFor = (u) =>
-      (typeEntry(u)?.gender ?? "m") === "f"
+    let verbFor = (typeName) =>
+      (typeEntry(typeName)?.gender ?? "m") === "f"
         ? "\u05E6\u05E8\u05D9\u05DB\u05D4 \u05DC\u05D4\u05D9\u05D5\u05EA"
         : "\u05E6\u05E8\u05D9\u05DA \u05DC\u05D4\u05D9\u05D5\u05EA";
     let getSizing = (origin) => {
@@ -413,11 +413,11 @@ var require_he = x(function (cjsExports, cjsModule) {
             return `\u05D4\u05DE\u05D7\u05E8\u05D5\u05D6\u05EA \u05D7\u05D9\u05D9\u05D1\u05EA \u05DC\u05D4\u05EA\u05D0\u05D9\u05DD \u05DC\u05EA\u05D1\u05E0\u05D9\u05EA ${_issue.pattern}`;
           let nounEntry = FormatDictionary[_issue.format];
           let noun = nounEntry?.label ?? _issue.format;
-          let b =
+          let genderForm =
             (nounEntry?.gender ?? "m") === "f"
               ? "\u05EA\u05E7\u05D9\u05E0\u05D4"
               : "\u05EA\u05E7\u05D9\u05DF";
-          return `${noun} \u05DC\u05D0 ${b}`;
+          return `${noun} \u05DC\u05D0 ${genderForm}`;
         }
         case "not_multiple_of":
           return `\u05DE\u05E1\u05E4\u05E8 \u05DC\u05D0 \u05EA\u05E7\u05D9\u05DF: \u05D7\u05D9\u05D9\u05D1 \u05DC\u05D4\u05D9\u05D5\u05EA \u05DE\u05DB\u05E4\u05DC\u05D4 \u05E9\u05DC ${issue.divisor}`;

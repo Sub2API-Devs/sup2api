@@ -44,24 +44,24 @@ async function defaultCloudEnvironment(storageV5, credentials) {
       printableName(environmentsAndPools.environmentsError, 200),
       "request_failed",
     );
-  let r = (selectedTarget) => selectedTarget.kind !== "bridge";
-  let a =
-    environmentsAndPools.selectedTarget !== null && r(environmentsAndPools.selectedTarget)
+  let notBridge = (selectedTarget) => selectedTarget.kind !== "bridge";
+  let target =
+    environmentsAndPools.selectedTarget !== null && notBridge(environmentsAndPools.selectedTarget)
       ? environmentsAndPools.selectedTarget
-      : (findFirst(environmentsAndPools.availableTargets, r) ?? null);
-  if (a === null) return null;
+      : (findFirst(environmentsAndPools.availableTargets, notBridge) ?? null);
+  if (target === null) return null;
   return {
-    id: isSelfHostedPool(a),
-    name: printableName(a.name, 60),
-    kind: a.kind,
+    id: isSelfHostedPool(target),
+    name: printableName(target.name, 60),
+    kind: target.kind,
   };
 }
 //@ chunk-dz3q485w.js:13096-13184 placement
 /**
  * 取仓库标识，非字符串时为空串。
  */
-function repoSlugOrEmpty(repo, n) {
-  return repo.kind === "github" && (!isRepoAccessUnverified(repo) || isAnthropicRepoText(n))
+function repoSlugOrEmpty(repo, repoText) {
+  return repo.kind === "github" && (!isRepoAccessUnverified(repo) || isAnthropicRepoText(repoText))
     ? `${repo.owner}/${repo.name}`
     : "";
 }
@@ -92,7 +92,7 @@ function githubRepoUrl(owner, name) {
 }
 //@ chunk-dz3q485w.js:13604-13788 placement
 async function hasUnpushedCommits(cwd) {
-  let n = await execFileNoThrowWithCwd(
+  let result = await execFileNoThrowWithCwd(
     gitExe(),
     [...GIT_SAFE_GLOBAL_ARGS, "rev-list", "--max-count=1", "HEAD", "--not", "--remotes=origin"],
     {
@@ -100,7 +100,7 @@ async function hasUnpushedCommits(cwd) {
       preserveOutputOnError: false,
     },
   );
-  return n.code === 0 && n.stdout.trim() !== "";
+  return result.code === 0 && result.stdout.trim() !== "";
 }
 //@ chunk-dz3q485w.js:13788-14193 placement
 /**
@@ -117,8 +117,13 @@ async function resolveRepoFact(gitRoot, checkAccess, signal) {
   let [branch, remoteUrlForDir] = await Promise.all([getBranch(gitRoot), getRemoteUrlForDir(gitRoot)]);
   let branch_2 = stripAnsiAndControls(branch);
   let hasOrigin = remoteUrlForDir !== null;
-  let h = remoteUrlForDir === null ? null : parseGitRemote(remoteUrlForDir);
-  if (h === null || !isGithubDotCom(h.host) || !isValidGithubOwner(h.owner) || !isValidGithubRepo(h.name))
+  let remote = remoteUrlForDir === null ? null : parseGitRemote(remoteUrlForDir);
+  if (
+    remote === null ||
+    !isGithubDotCom(remote.host) ||
+    !isValidGithubOwner(remote.owner) ||
+    !isValidGithubRepo(remote.name)
+  )
     return {
       repo: {
         kind: "no-github-remote",
@@ -131,9 +136,9 @@ async function resolveRepoFact(gitRoot, checkAccess, signal) {
     repo: {
       kind: "github",
       branch: branch_2,
-      owner: h.owner,
-      name: h.name,
-      access: checkAccess ? await checkGithubRepoAccess(h.owner, h.name, signal) : null,
+      owner: remote.owner,
+      name: remote.name,
+      access: checkAccess ? await checkGithubRepoAccess(remote.owner, remote.name, signal) : null,
     },
     hasOrigin,
   };
@@ -142,58 +147,62 @@ async function resolveRepoFact(gitRoot, checkAccess, signal) {
 /**
  * 检查 GitHub 仓库的访问情况：是否可访问、是否安装了 App、默认分支、是否暂时无法判断、GitHub 是否未关联。
  */
-async function checkGithubRepoAccess(owner, name, s) {
-  let r = await checkGithubAppInstalled(owner, name, s);
+async function checkGithubRepoAccess(owner, name, signal) {
+  let appCheck = await checkGithubAppInstalled(owner, name, signal);
   return {
-    accessible: r.linkedAccountAccess === "ok" || r.defaultBranch !== null || r.appInstalled,
-    appInstalled: r.appInstalled,
-    defaultBranch: r.defaultBranch,
-    transient: r.transient,
-    githubNotConnected: r.linkedAccountAccess === "github_not_connected",
+    accessible:
+      appCheck.linkedAccountAccess === "ok" || appCheck.defaultBranch !== null || appCheck.appInstalled,
+    appInstalled: appCheck.appInstalled,
+    defaultBranch: appCheck.defaultBranch,
+    transient: appCheck.transient,
+    githubNotConnected: appCheck.linkedAccountAccess === "github_not_connected",
   };
 }
 //@ chunk-dz3q485w.js:14476-14516 placement
-function isSamePath(e, n) {
-  return samePath(resolve(e), resolve(n));
+function isSamePath(firstPath, secondPath) {
+  return samePath(resolve(firstPath), resolve(secondPath));
 }
 //@ chunk-dz3q485w.js:14516-14765 placement
-function isSameRepoPath(projectPath, n, s) {
-  if (isSamePath(projectPath, n)) return true;
-  let r = (c) => {
-    let h = relative(resolve(c), resolve(n));
-    return h === "" || (h !== ".." && !h.startsWith(".." + sep) && !isAbsolute(h));
+function isSameRepoPath(projectPath, worktreePath, candidateRoots) {
+  if (isSamePath(projectPath, worktreePath)) return true;
+  let isUnder = (root) => {
+    let relativePath = relative(resolve(root), resolve(worktreePath));
+    return (
+      relativePath === "" ||
+      (relativePath !== ".." && !relativePath.startsWith(".." + sep) && !isAbsolute(relativePath))
+    );
   };
-  let a = s.filter(r).sort((c, h) => h.length - c.length)[0];
-  if (a === undefined) return false;
-  let l = relative(a, n);
-  return s.some((c) => isSamePath(join(c, l), projectPath));
+  let bestRoot = candidateRoots.filter(isUnder).sort((a, b) => b.length - a.length)[0];
+  if (bestRoot === undefined) return false;
+  let relativePath = relative(bestRoot, worktreePath);
+  return candidateRoots.some((root) => isSamePath(join(root, relativePath), projectPath));
 }
 //@ chunk-dz3q485w.js:14765-15117 placement
 /**
  * 列出与当前仓库属于同一 git 公共目录的工作树路径（排除不安全或无法解析的路径）。
  */
-async function sameRepoWorktrees(e) {
-  let worktreePaths = await getWorktreePaths(e);
-  let gitDir = await resolveGitDir(e);
-  let r = gitDir === null ? null : ((await getCommonDir(gitDir)) ?? gitDir);
+async function sameRepoWorktrees(cwd) {
+  let worktreePaths = await getWorktreePaths(cwd);
+  let gitDir = await resolveGitDir(cwd);
+  let commonDir = gitDir === null ? null : ((await getCommonDir(gitDir)) ?? gitDir);
   let results = await Promise.all(
     worktreePaths.map(async (worktreePath) => {
       if (!isAbsolute(worktreePath) || hasDotSegment(worktreePath)) return false;
-      if (isSamePath(worktreePath, e)) return true;
+      if (isSamePath(worktreePath, cwd)) return true;
       if (
-        r === null ||
+        commonDir === null ||
         isNetworkMountRoot(worktreePath) ||
-        isOnForeignMount(worktreePath, e) ||
-        rawPointerPathIsUnsafe(worktreePath, e)
+        isOnForeignMount(worktreePath, cwd) ||
+        rawPointerPathIsUnsafe(worktreePath, cwd)
       )
         return false;
-      let c = await resolveGitDir(worktreePath).catch(() => null);
-      if (c === null) return false;
-      let h = (await getCommonDir(c).catch(() => null)) ?? c;
-      return isSamePath(h, r);
+      let thisGitDir = await resolveGitDir(worktreePath).catch(() => null);
+      if (thisGitDir === null) return false;
+      let thisCommonDir = (await getCommonDir(thisGitDir).catch(() => null)) ?? thisGitDir;
+      return isSamePath(thisCommonDir, commonDir);
     }),
   );
-  return worktreePaths.filter((worktreePath, c) => results[c]);
+  return worktreePaths.filter((worktreePath, index) => results[index]);
 }
 export {
   sameRepoWorktrees,

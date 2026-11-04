@@ -60,20 +60,25 @@ import { errorMessage } from "../../utils/errors.js";
 import { appendCallerFrame } from "../../plugins/functionHooks/apiDispatch.js";
 import { clone } from "../../utils/slowOperations.js";
 import { getHookCaller } from "../../utils/agentContext.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3767655-3767731 placement
 /**
  * 把「子命令+」形式的决策原因拆成列表。
  */
-function splitSubcommandReason(e) {
-  return e.startsWith(SUBCOMMANDS) ? e.slice(SUBCOMMANDS.length).split("+") : [e];
+function splitSubcommandReason(reasonCode) {
+  return reasonCode.startsWith(SUBCOMMANDS) ? reasonCode.slice(SUBCOMMANDS.length).split("+") : [reasonCode];
 }
 //@ chunk-e6aww6q8.js:3767731-3767799 placement
 /**
  * 决策原因的正则与额外允许的特殊原因。
  */
-var DECISION_REASON_REGEX = /^[A-Za-z][A-Za-z+:-]{0,199}$/;
-var SPECIAL_DECISION_REASONS = new Set([`hook:${TOOL_CHECK}`]);
+var DECISION_REASON_REGEX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SPECIAL_DECISION_REASONS;
+deferInit("chunk-e6aww6q8.js:3767731", () => {
+  DECISION_REASON_REGEX = /^[A-Za-z][A-Za-z+:-]{0,199}$/;
+  SPECIAL_DECISION_REASONS = new Set([`hook:${TOOL_CHECK}`]);
+});
 //@ chunk-e6aww6q8.js:3767799-3767873 placement
 /**
  * 决策原因合规（匹配正则或属于特殊原因）才返回，否则 undefined。
@@ -88,8 +93,8 @@ function sanitizeDecisionReason(reasonCode) {
 /**
  * 列表里有该原因就用它，否则归为 other。
  */
-function pickReasonFromList(e, n) {
-  return e.includes(n) ? n : "other";
+function pickReasonFromList(candidates, value) {
+  return candidates.includes(value) ? value : "other";
 }
 //@ chunk-e6aww6q8.js:3767922-3768058 placement
 function toDecisionRecord(permissionDecision) {
@@ -118,8 +123,11 @@ function logToolDecision({
 /**
  * 按名字找工具；找不到时若是被遮蔽的搜索工具名也返回该名。
  */
-function toolNameForTelemetry(e, n) {
-  return e.find((r) => toolMatchesName(r, n))?.name ?? (getShadowedSearchToolNames().has(n) ? n : undefined);
+function toolNameForTelemetry(tools, toolName) {
+  return (
+    tools.find((tool) => toolMatchesName(tool, toolName))?.name ??
+    (getShadowedSearchToolNames().has(toolName) ? toolName : undefined)
+  );
 }
 //@ chunk-e6aww6q8.js:3768299-3768361 placement
 /**
@@ -139,66 +147,77 @@ function classifyToolNameKind(name) {
 /**
  * 工具权限决策原因的遥测枚举（过于复杂、静态分析、多个 cd 等）。
  */
-var TOOL_DECISION_REASONS = "tengu_snoopy_creek";
-var ASK_DECISION_TOOLS = new Set([ASKUSERQUESTION, EXITPLANMODE_2]);
-var REASON_CATEGORY_MAP = {
-  "too-complex": "static_analysis",
-  semantics: "static_analysis",
-  "multi-cd": "static_analysis",
-  "cd-git-compound": "static_analysis",
-  "cd-compound-write": "static_analysis",
-  "cd-compound-read": "static_analysis",
-  "cd-compound-redirect": "static_analysis",
-  "dangerous-path": "static_analysis",
-  "flag-validation": "static_analysis",
-  "cd-multi-positional": "static_analysis",
-  "process-substitution": "static_analysis",
-  "shell-expansion": "static_analysis",
-  "net-redirect": "static_analysis",
-  "shell-operators": "static_analysis",
-  "sed-dangerous": "static_analysis",
-  "assigned-variable": "static_analysis",
-  "loop-later-pass": "static_analysis",
-  "working-dir": "safety_check",
-  "safety-check": "safety_check",
-  "ask-rule": "permission_rule",
-  "no-rule-match": undefined,
-  "other-untagged": undefined,
-};
-var reasonCategoryMap = new Map(Object.entries(REASON_CATEGORY_MAP));
-var STATIC_ANALYSIS_REASONS = new Set(
-  [...reasonCategoryMap].filter(([, e]) => e === "static_analysis").map(([e]) => e),
-);
-var SAFETY_EVENT_CATEGORIES = [
-  "safety_check",
-  "managed_policy",
-  "permission_rule",
-  "static_analysis",
-  "hook",
-  "auto_mode_block",
-  "auto_mode_no_verdict",
-  "permission_mode",
-  "sandbox_override",
-];
-var HOOK_PUSHBACK_SOURCES = [
-  "config",
-  "classifier",
-  "hook",
-  "user_temporary",
-  "user_permanent",
-  "user_reject",
-  "user_abort",
-];
+var TOOL_DECISION_REASONS; // deferred: uses ASKUSERQUESTION (../../tools/AskUserQuestionTool/prompt.js) of its import cycle while loading; runs once the cycle is complete
+var ASK_DECISION_TOOLS;
+var REASON_CATEGORY_MAP;
+var reasonCategoryMap;
+var STATIC_ANALYSIS_REASONS;
+var SAFETY_EVENT_CATEGORIES;
+var HOOK_PUSHBACK_SOURCES;
+deferInit("chunk-e6aww6q8.js:3768510", () => {
+  TOOL_DECISION_REASONS = "tengu_snoopy_creek";
+  ASK_DECISION_TOOLS = new Set([ASKUSERQUESTION, EXITPLANMODE_2]);
+  REASON_CATEGORY_MAP = {
+    "too-complex": "static_analysis",
+    semantics: "static_analysis",
+    "multi-cd": "static_analysis",
+    "cd-git-compound": "static_analysis",
+    "cd-compound-write": "static_analysis",
+    "cd-compound-read": "static_analysis",
+    "cd-compound-redirect": "static_analysis",
+    "dangerous-path": "static_analysis",
+    "flag-validation": "static_analysis",
+    "cd-multi-positional": "static_analysis",
+    "process-substitution": "static_analysis",
+    "shell-expansion": "static_analysis",
+    "net-redirect": "static_analysis",
+    "shell-operators": "static_analysis",
+    "sed-dangerous": "static_analysis",
+    "assigned-variable": "static_analysis",
+    "loop-later-pass": "static_analysis",
+    "working-dir": "safety_check",
+    "safety-check": "safety_check",
+    "ask-rule": "permission_rule",
+    "no-rule-match": undefined,
+    "other-untagged": undefined,
+  };
+  reasonCategoryMap = new Map(Object.entries(REASON_CATEGORY_MAP));
+  STATIC_ANALYSIS_REASONS = new Set(
+    [...reasonCategoryMap]
+      .filter(([, category]) => category === "static_analysis")
+      .map(([reasonKey]) => reasonKey),
+  );
+  SAFETY_EVENT_CATEGORIES = [
+    "safety_check",
+    "managed_policy",
+    "permission_rule",
+    "static_analysis",
+    "hook",
+    "auto_mode_block",
+    "auto_mode_no_verdict",
+    "permission_mode",
+    "sandbox_override",
+  ];
+  HOOK_PUSHBACK_SOURCES = [
+    "config",
+    "classifier",
+    "hook",
+    "user_temporary",
+    "user_permanent",
+    "user_reject",
+    "user_abort",
+  ];
+});
 //@ chunk-e6aww6q8.js:3769669-3770174 placement
 /**
  * 按决策记录推导安全事件类别：原因码映射（策略规则单独归类）、异步代理归为权限模式、用户拒绝/中止；无原因码时按沙箱违规（网络或其他）。
  */
 function getSafetyEventCategory(decision, sandboxViolations) {
   if (decision.reasonCode !== undefined) {
-    let r =
+    let category =
       decision.circuitBreaker !== undefined ? "safety_check" : categorizeReasonCode(decision.reasonCode);
-    if (r === "permission_rule" && decision.ruleSource === "policySettings") return "managed_policy";
-    if (r !== undefined) return r;
+    if (category === "permission_rule" && decision.ruleSource === "policySettings") return "managed_policy";
+    if (category !== undefined) return category;
     if (decision.reasonType === "asyncAgent") return "permission_mode";
     if (decision.decision === "reject") {
       if (decision.source === "user_reject" || decision.source === "user_abort") return "user_rejected";
@@ -236,7 +255,9 @@ function logToolSafetyEvent({
       {
         category: fromEnum(category),
         decision: fromEnum(record.decision),
-        decision_source: fromEnum(HOOK_PUSHBACK_SOURCES.find((G) => G === record.source) ?? "other"),
+        decision_source: fromEnum(
+          HOOK_PUSHBACK_SOURCES.find((source) => source === record.source) ?? "other",
+        ),
         reason_type: fromEnumOpt(record.reasonType),
         reason_code: sanitizeDecisionReason(record.reasonCode),
         rule_source: fromEnumOpt(record.ruleSource),
@@ -272,7 +293,7 @@ function logToolSafetyEvent({
 function logHookPushbackEvent({ pushback, permissionMode, agentContext }) {
   try {
     if (!isToolDecisionTelemetryOn()) return false;
-    let s =
+    let pushbackWithTool =
       pushback.hookEvent === "post_tool_use" || pushback.hookEvent === "post_tool_use_failure"
         ? pushback
         : undefined;
@@ -282,11 +303,16 @@ function logHookPushbackEvent({ pushback, permissionMode, agentContext }) {
         decision: fromEnum("sent_back"),
         decision_source: fromEnum("hook"),
         hook_event: fromEnum(pushback.hookEvent),
-        ...(s !== undefined && getToolTelemetryFields(s.tool, getToolClass(s.tool), s.toolCatalog)),
+        ...(pushbackWithTool !== undefined &&
+          getToolTelemetryFields(
+            pushbackWithTool.tool,
+            getToolClass(pushbackWithTool.tool),
+            pushbackWithTool.toolCatalog,
+          )),
         permission_mode: fromEnum(toExternalPermissionMode(permissionMode)),
       },
       {
-        toolUseId: s?.toolUseId,
+        toolUseId: pushbackWithTool?.toolUseId,
       },
       agentContext,
     );
@@ -337,15 +363,18 @@ function isToolDecisionTelemetryOn() {
 }
 //@ chunk-e6aww6q8.js:3771860-3772047 placement
 function getToolTelemetryFields(tool, toolClass, toolCatalog) {
-  let s;
-  if (toolClass === "mcp") s = sanitizeToolNameWithMcpFlag(tool.name, true);
+  let telemetryToolName;
+  if (toolClass === "mcp") telemetryToolName = sanitizeToolNameWithMcpFlag(tool.name, true);
   else {
-    let h = toolNameForTelemetry(toolCatalog.getAllBaseTools(), tool.name);
-    s = h !== undefined ? sanitizeToolNameForAnalytics(h) : fromEnum(classifyToolNameKind(tool.name));
+    let baseToolName = toolNameForTelemetry(toolCatalog.getAllBaseTools(), tool.name);
+    telemetryToolName =
+      baseToolName !== undefined
+        ? sanitizeToolNameForAnalytics(baseToolName)
+        : fromEnum(classifyToolNameKind(tool.name));
   }
   return {
     tool_class: fromEnum(toolClass),
-    tool_name: s,
+    tool_name: telemetryToolName,
     ...toolSourceMetadata(tool.mcpInfo),
   };
 }
@@ -353,29 +382,29 @@ function getToolTelemetryFields(tool, toolClass, toolCatalog) {
 /**
  * 同时发出 tengu_safety_event 与 OTel safety_event（附沙箱开关、违规数；OTel 中特定工具名归为 other_tool，分类器类别只在开启工具详情日志时带上）。
  */
-function emitSafetyEvent(e, { toolUseId, sandboxViolationCount }, agentContext) {
-  let h = SandboxManager.isSandboxingEnabled();
+function emitSafetyEvent(fields, { toolUseId, sandboxViolationCount }, agentContext) {
+  let isSandboxing = SandboxManager.isSandboxingEnabled();
   logEvent("tengu_safety_event", {
-    ...e,
+    ...fields,
     tool_use_id: sanitizeMarkName(toolUseId),
     sandbox_violation_count: sandboxViolationCount,
-    sandbox_enabled: h,
+    sandbox_enabled: isSandboxing,
   });
   logOTelEvent(
     "safety_event",
     {
-      ...e,
+      ...fields,
       tool_name:
-        e.tool_name !== undefined && EXTRA_READ_LIKE_TOOLS.includes(e.tool_name)
+        fields.tool_name !== undefined && EXTRA_READ_LIKE_TOOLS.includes(fields.tool_name)
           ? fromEnum("other_tool")
-          : e.tool_name,
+          : fields.tool_name,
       classifier_category: isToolDetailsLoggingEnabled()
-        ? sanitizeRuleCategory(e.classifier_category)
+        ? sanitizeRuleCategory(fields.classifier_category)
         : undefined,
       tool_use_id: toolUseId,
       sandbox_violation_count:
         sandboxViolationCount === undefined ? undefined : String(sandboxViolationCount),
-      sandbox_enabled: String(h),
+      sandbox_enabled: String(isSandboxing),
     },
     agentContext,
   );
@@ -393,8 +422,8 @@ function categorizeReasonCode(reasonCode) {
       return reasonCategoryMap.get(detail);
     case "subcommands": {
       if (detail === "") return;
-      let h = new Set(splitSubcommandReason(reasonCode).map(categorizeReasonCode));
-      return SAFETY_EVENT_CATEGORIES.find((y) => h.has(y));
+      let categories = new Set(splitSubcommandReason(reasonCode).map(categorizeReasonCode));
+      return SAFETY_EVENT_CATEGORIES.find((category) => categories.has(category));
     }
     case "rule":
       return detail === "policySettings" ? "managed_policy" : "permission_rule";
@@ -421,17 +450,22 @@ function categorizeReasonCode(reasonCode) {
   }
 }
 //@ chunk-e6aww6q8.js:3773224-3773296 placement
-var EXTRA_READ_LIKE_TOOLS = [];
-var FILE_LIKE_TOOL_NAMES = new Set([
-  FILE_READ_TOOL_NAME,
-  FILE_EDIT_TOOL_NAME,
-  FILE_WRITE_TOOL_NAME,
-  NOTEBOOK_EDIT_TOOL_NAME,
-  GLOB_TOOL_NAME,
-  GREP_TOOL_NAME,
-  ...EXTRA_READ_LIKE_TOOLS,
-]);
-var SHELL_LIKE_TOOL_NAMES = new Set([BASH_TOOL_NAME, MONITOR]);
+var EXTRA_READ_LIKE_TOOLS; // deferred: uses GREP_TOOL_NAME (../../tools/GrepTool/prompt.js) of its import cycle while loading; runs once the cycle is complete
+var FILE_LIKE_TOOL_NAMES;
+var SHELL_LIKE_TOOL_NAMES;
+deferInit("chunk-e6aww6q8.js:3773224", () => {
+  EXTRA_READ_LIKE_TOOLS = [];
+  FILE_LIKE_TOOL_NAMES = new Set([
+    FILE_READ_TOOL_NAME,
+    FILE_EDIT_TOOL_NAME,
+    FILE_WRITE_TOOL_NAME,
+    NOTEBOOK_EDIT_TOOL_NAME,
+    GLOB_TOOL_NAME,
+    GREP_TOOL_NAME,
+    ...EXTRA_READ_LIKE_TOOLS,
+  ]);
+  SHELL_LIKE_TOOL_NAMES = new Set([BASH_TOOL_NAME, MONITOR]);
+});
 //@ chunk-e6aww6q8.js:3773296-3773512 placement
 function getToolClass(tool) {
   if (tool.mcpInfo !== undefined || tool.isMcp === true) return "mcp";
@@ -445,41 +479,43 @@ function getToolClass(tool) {
 /**
  * 递归去掉值为 undefined 且原对象中没有的键（数组保持索引）。
  */
-function stripUndefinedFields(e, n) {
-  let r = Array.isArray(e);
-  if (!r && !isPlainDataObject(e)) return e;
-  let h = Array.isArray(n) || isPlainDataObject(n) ? n : {};
-  let y = Object.fromEntries(
-    Object.entries(e)
-      .filter(([key, value]) => value !== undefined || Object.hasOwn(h, key))
-      .map(([key, value]) => [key, stripUndefinedFields(value, Reflect.get(h, key))]),
+function stripUndefinedFields(value, previous) {
+  let isArrayValue = Array.isArray(value);
+  if (!isArrayValue && !isPlainDataObject(value)) return value;
+  let previousObject = Array.isArray(previous) || isPlainDataObject(previous) ? previous : {};
+  let stripped = Object.fromEntries(
+    Object.entries(value)
+      .filter(([key, value]) => value !== undefined || Object.hasOwn(previousObject, key))
+      .map(([key, value]) => [key, stripUndefinedFields(value, Reflect.get(previousObject, key))]),
   );
-  return r
+  return isArrayValue
     ? Object.defineProperties(
-        Array.from(e, () => {
+        Array.from(value, () => {
           return;
         }),
-        Object.getOwnPropertyDescriptors(y),
+        Object.getOwnPropertyDescriptors(stripped),
       )
-    : y;
+    : stripped;
 }
 //@ chunk-e6aww6q8.js:3773840-3773943 placement
-function getHookOriginChain(e) {
-  let { hookOrigin, hookCaller } = e;
-  let s = hookCaller === undefined ? [] : [hookCaller];
-  return hookOrigin !== undefined && hookOrigin.length > 0 ? hookOrigin : s;
+function getHookOriginChain(hookInfo) {
+  let { hookOrigin, hookCaller } = hookInfo;
+  let callerChain = hookCaller === undefined ? [] : [hookCaller];
+  return hookOrigin !== undefined && hookOrigin.length > 0 ? hookOrigin : callerChain;
 }
 //@ chunk-e6aww6q8.js:3773943-3774114 placement
-function callerHasCatch(e) {
-  let n = getHookOriginChain(e).at(-1) ?? "";
-  let r = isRewrittenOrigin(n) ? n.of : n;
-  let found = getPluginRegistry().loadedModules.find((loadedModule) => loadedModule.name === originPlugin(r));
-  return typeof r === "string" || found === undefined || found.hasCatch(r.registration);
+function callerHasCatch(hookInfo) {
+  let bottomOrigin = getHookOriginChain(hookInfo).at(-1) ?? "";
+  let origin = isRewrittenOrigin(bottomOrigin) ? bottomOrigin.of : bottomOrigin;
+  let found = getPluginRegistry().loadedModules.find(
+    (loadedModule) => loadedModule.name === originPlugin(origin),
+  );
+  return typeof origin === "string" || found === undefined || found.hasCatch(origin.registration);
 }
 //@ chunk-e6aww6q8.js:3774157-3774374 placement
-function isInputUnchanged(e, n, stripUndefinedFields = (s) => s) {
+function isInputUnchanged(call, hookUpdatedInput, stripUndefinedFields = (input) => input) {
   try {
-    return isDeepStrictEqual(n, stripUndefinedFields(e.input, n));
+    return isDeepStrictEqual(hookUpdatedInput, stripUndefinedFields(call.input, hookUpdatedInput));
   } catch (error) {
     logForDebugging(
       `a plugin's own call holds an input that cannot be compared value for value, so it reads as rewritten beneath: ${errorMessage(error)}`,
@@ -494,7 +530,8 @@ function isInputUnchanged(e, n, stripUndefinedFields = (s) => s) {
 /**
  * 判断两组工具输入是否未变（忽略 undefined 字段再比一次）。
  */
-var inputsUnchanged = (e, n) => isInputUnchanged(e, n) || isInputUnchanged(e, n, stripUndefinedFields);
+var inputsUnchanged = (call, hookUpdatedInput) =>
+  isInputUnchanged(call, hookUpdatedInput) || isInputUnchanged(call, hookUpdatedInput, stripUndefinedFields);
 //@ chunk-e6aww6q8.js:3774412-3774423 placement
 var PLAIN_KESTREL_DEFAULT = true;
 //@ chunk-e6aww6q8.js:3774423-3774468 placement
@@ -504,22 +541,24 @@ var PLAIN_KESTREL_DEFAULT = true;
 var isPlainKestrelOn = () =>
   getFeatureValue_CACHED_MAY_BE_STALE("tengu_plain_kestrel", PLAIN_KESTREL_DEFAULT) !== false;
 //@ chunk-e6aww6q8.js:3774468-3774715 placement
-function propagateLentModules(hookOrigin, n) {
-  let r = hookOrigin === undefined ? hookOrigin : lentModulesByChain().get(hookOrigin);
-  let s = new Map(hookOrigin?.map((y, S) => [y, r?.[S]]));
-  let h = {
+function propagateLentModules(hookOrigin, nextChain) {
+  let previousLent = hookOrigin === undefined ? hookOrigin : lentModulesByChain().get(hookOrigin);
+  let lentByOrigin = new Map(hookOrigin?.map((origin, index) => [origin, previousLent?.[index]]));
+  let defaultLent = {
     until: Number.POSITIVE_INFINITY,
     isLent: false,
     isHeld: false,
   };
-  if (r !== undefined)
+  if (previousLent !== undefined)
     lentModulesByChain().set(
-      n,
-      n.map(
-        (y) =>
-          s.get(y) ?? {
-            ...h,
-            until: isRewrittenOrigin(y) ? (s.get(y.of)?.until ?? h.until) : h.until,
+      nextChain,
+      nextChain.map(
+        (origin) =>
+          lentByOrigin.get(origin) ?? {
+            ...defaultLent,
+            until: isRewrittenOrigin(origin)
+              ? (lentByOrigin.get(origin.of)?.until ?? defaultLent.until)
+              : defaultLent.until,
           },
       ),
     );
@@ -528,35 +567,35 @@ function propagateLentModules(hookOrigin, n) {
 /**
  * 插件自身发起的调用到达底层时调用帧已变：重写钩子来源链并同步借出模块信息，记调试日志。
  */
-function rebaseHookOrigin(e) {
-  let { hookOrigin, hookCaller } = e;
-  let hookOriginChain = getHookOriginChain(e);
-  let last = hookOriginChain.at(-1);
-  if (last === undefined || isRewrittenOrigin(last)) return hookOriginChain;
-  let y = appendCallerFrame(hookOriginChain, rewrittenMarker(last));
-  propagateLentModules(hookOrigin, y);
+function rebaseHookOrigin(hookInfo) {
+  let { hookOrigin, hookCaller } = hookInfo;
+  let chain = getHookOriginChain(hookInfo);
+  let last = chain.at(-1);
+  if (last === undefined || isRewrittenOrigin(last)) return chain;
+  let rebasedChain = appendCallerFrame(chain, rewrittenMarker(last));
+  propagateLentModules(hookOrigin, rebasedChain);
   logForDebugging(
-    `plugin ${hookCaller}'s own call did not arrive at the bottom as it was raised: its calling frame is no longer the caller's (origin ${labeledOriginChain(y)})`,
+    `plugin ${hookCaller}'s own call did not arrive at the bottom as it was raised: its calling frame is no longer the caller's (origin ${labeledOriginChain(rebasedChain)})`,
   );
-  return y;
+  return rebasedChain;
 }
 //@ chunk-e6aww6q8.js:3774990-3775071 placement
 /**
  * 输入变化时重设 hook 来源，否则原样返回。
  */
-function rebaseOriginIfInputChanged(e, n, r) {
-  return n === undefined || !isPlainKestrelOn() || inputsUnchanged(n, r)
-    ? e
+function rebaseOriginIfInputChanged(call, pluginCall, hookUpdatedInput) {
+  return pluginCall === undefined || !isPlainKestrelOn() || inputsUnchanged(pluginCall, hookUpdatedInput)
+    ? call
     : {
-        ...e,
-        hookOrigin: rebaseHookOrigin(e),
+        ...call,
+        hookOrigin: rebaseHookOrigin(call),
       };
 }
 //@ chunk-e6aww6q8.js:3775071-3775232 placement
-function cloneCallInput(e) {
+function cloneCallInput(input) {
   try {
     return {
-      input: clone(e),
+      input: clone(input),
     };
   } catch (error) {
     logForDebugging(
@@ -569,20 +608,25 @@ function cloneCallInput(e) {
   }
 }
 //@ chunk-e6aww6q8.js:3775232-3775353 placement
-function rebaseBatchHookOrigins(e, n, hookUpdatedInput) {
-  let [s] = e;
-  if (n === undefined || !isPlainKestrelOn() || inputsUnchanged(n, hookUpdatedInput) || s === undefined)
+function rebaseBatchHookOrigins(calls, pluginCall, hookUpdatedInput) {
+  let [firstCall] = calls;
+  if (
+    pluginCall === undefined ||
+    !isPlainKestrelOn() ||
+    inputsUnchanged(pluginCall, hookUpdatedInput) ||
+    firstCall === undefined
+  )
     return;
-  let hookOrigin = rebaseHookOrigin(s);
-  for (let S of e) S.hookOrigin = hookOrigin;
+  let hookOrigin = rebaseHookOrigin(firstCall);
+  for (let call of calls) call.hookOrigin = hookOrigin;
 }
 //@ chunk-e6aww6q8.js:3775353-3775711 placement
 /**
  * 插件调用的输入无法复制时：调用方有 .catch 则放行；否则上报插件问题（只报一次）。
  */
-function checkUncopyableCall(e, hookCaller) {
+function checkUncopyableCall(toolUseContext, hookCaller) {
   try {
-    if (callerHasCatch(e))
+    if (callerHasCatch(toolUseContext))
       return {
         input: undefined,
       };
@@ -608,10 +652,10 @@ function checkUncopyableCall(e, hookCaller) {
 /**
  * 有 hook 调用方且开关打开时克隆输入，克隆失败走备选处理。
  */
-function clonedHookInput(toolUseContext, n) {
+function clonedHookInput(toolUseContext, input) {
   let hookCaller = getHookCaller(toolUseContext);
   return hookCaller !== undefined && isPlainKestrelOn()
-    ? (cloneCallInput(n) ?? checkUncopyableCall(toolUseContext, hookCaller))
+    ? (cloneCallInput(input) ?? checkUncopyableCall(toolUseContext, hookCaller))
     : undefined;
 }
 export {

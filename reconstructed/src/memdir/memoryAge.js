@@ -18,10 +18,10 @@ function memoryAgeDays(mtimeMs) {
  * 记忆超过 1 天时生成"这条记忆已 N 天，需核实"的提示文字。
  */
 function memoryFreshnessText(mtimeMs) {
-  let n = memoryAgeDays(mtimeMs);
-  if (n <= 1) return "";
+  let ageDays = memoryAgeDays(mtimeMs);
+  if (ageDays <= 1) return "";
   return (
-    `This memory is ${n} days old. ` +
+    `This memory is ${ageDays} days old. ` +
     "Memories are point-in-time observations, not live state \u2014 " +
     "claims about code behavior or file:line citations may be outdated. Verify against current code before asserting as fact."
   );

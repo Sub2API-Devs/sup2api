@@ -13,13 +13,17 @@ import { getDeprecationStatusLine } from "../../utils/model/deprecation.js";
 //@ chunk-18hwfzwa.js:1758852-1759190 fingerprint = useDeprecationWarningNotification (0.754)
 var useDeprecationWarningNotification = {
   id: "model-deprecation-warning",
-  deps: (h) => [h.mainLoopModel, h.userSpecifiedModel, h.addNotification],
+  deps: (noticeState) => [
+    noticeState.mainLoopModel,
+    noticeState.userSpecifiedModel,
+    noticeState.addNotification,
+  ],
   setup() {
-    let h = null;
+    let lastWarning = null;
     return ({ addNotification, mainLoopModel, userSpecifiedModel }) => {
       let deprecationWarning = getDeprecationStatusLine(userSpecifiedModel ?? mainLoopModel);
-      if (deprecationWarning && deprecationWarning !== h) {
-        h = deprecationWarning;
+      if (deprecationWarning && deprecationWarning !== lastWarning) {
+        lastWarning = deprecationWarning;
         addNotification({
           key: "model-deprecation-warning",
           kind: "warning",
@@ -28,7 +32,7 @@ var useDeprecationWarningNotification = {
           priority: "high",
         });
       }
-      if (!deprecationWarning) h = null;
+      if (!deprecationWarning) lastWarning = null;
     };
   },
 };

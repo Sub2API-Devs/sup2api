@@ -109,55 +109,61 @@ import { prefetchApiKeyFromApiKeyHelperIfSafe } from "./utils/auth.js";
 import { HostScoped } from "./utils/hostScoped.js";
 
 //@ chunk-fhdzwff4.js:12919-13043 placement
-function bindInboxOnFlagRefresh(o, s) {
-  let r = false;
-  let _ = onGrowthBookRefresh(() => {
+function bindInboxOnFlagRefresh(inboxOptions, session) {
+  let didBind = false;
+  let unsubscribe = onGrowthBookRefresh(() => {
     if (
-      r ||
+      didBind ||
       isShuttingDown() ||
       getIsRemoteMode() ||
       isRestrictedSession() ||
       !isCrossSessionMessagingEnabled()
     )
       return;
-    r = true;
-    _();
-    return lateBindCrossSessionInbox(o, s);
+    didBind = true;
+    unsubscribe();
+    return lateBindCrossSessionInbox(inboxOptions, session);
   });
-  registerCleanup(async () => _());
-  return _;
+  registerCleanup(async () => unsubscribe());
+  return unsubscribe;
 }
 //@ chunk-fhdzwff4.js:13043-13979 placement
 /**
  * 开关在启动后打开时补绑定跨会话收件箱
  */
-async function lateBindCrossSessionInbox(o, s) {
-  let r = await import("./chunk-cgamr0t5.js");
-  let _;
+async function lateBindCrossSessionInbox(inboxOptions, session) {
+  let inboxModule = await import("./utils/udsMessaging.js");
+  let closeInbox;
   try {
-    _ = await r.startCrossSessionInbox(o, s);
+    closeInbox = await inboxModule.startCrossSessionInbox(inboxOptions, session);
   } catch (error) {
     if (error instanceof CliUserError)
       logForDebugging(`[uds-messaging] Late bind refused: ${error.message}`, {
         level: "warn",
       });
     else logError(error);
-    logFeatureBad("agents_cross_session_inbox", `${r.getUdsStartFailureCause() ?? "bind_failed"}_late`);
+    logFeatureBad(
+      "agents_cross_session_inbox",
+      `${inboxModule.getUdsStartFailureCause() ?? "bind_failed"}_late`,
+    );
     return;
   }
-  if (!_) {
-    logFeatureBad("agents_cross_session_inbox", `${r.getUdsStartFailureCause() ?? "bind_failed"}_late`);
+  if (!closeInbox) {
+    logFeatureBad(
+      "agents_cross_session_inbox",
+      `${inboxModule.getUdsStartFailureCause() ?? "bind_failed"}_late`,
+    );
     return;
   }
   if (isTerminalShutdown()) {
-    await _();
+    await closeInbox();
     logForDebugging("[uds-messaging] Late bind landed during shutdown \u2014 torn down, not published");
     logFeatureSad("agents_cross_session_inbox", "shutdown_discarded");
     return;
   }
   logForDebugging("[uds-messaging] Late bind: gate enabled by a GrowthBook refresh after startup");
   publishInboundAvailability();
-  let udsStartDegradedCause = r.getUdsStartDegradedCause();
+  let udsStartDegradedCause = inboxModule.getUdsStartDegradedCause();
   if (udsStartDegradedCause)
     logFeatureSad("agents_cross_session_inbox", udsStartDegradedCause, {
       bind_late: true,
@@ -166,17 +172,18 @@ async function lateBindCrossSessionInbox(o, s) {
     logFeatureOk("agents_cross_session_inbox", {
       bind_late: true,
     });
-  let { updateSessionMessagingSocketPath } = await import("./chunk-gtq2y7h2.js");
-  let udsMessagingSocketPath = r.getUdsMessagingSocketPath();
-  if (udsMessagingSocketPath !== undefined) await updateSessionMessagingSocketPath(udsMessagingSocketPath, s);
+  let { updateSessionMessagingSocketPath } = await import("./utils/concurrentSessions.js");
+  let udsMessagingSocketPath = inboxModule.getUdsMessagingSocketPath();
+  if (udsMessagingSocketPath !== undefined)
+    await updateSessionMessagingSocketPath(udsMessagingSocketPath, session);
 }
 //@ chunk-fhdzwff4.js:13979-14030 placement
 /**
  * 先记录错误再把同一个错误抛出。
  */
-function logThenRethrow(o, error) {
+function logThenRethrow(promise, error) {
   logError(error);
-  return o.then(() => {
+  return promise.then(() => {
     throw error;
   });
 }
@@ -199,47 +206,47 @@ async function adoptBackgroundWorktree(cwd, options) {
   let worktreePath = options?.worktreePath || undefined;
   if (options?.worktreeHookBased || (worktreePath === undefined && !isWorktreeMadeElsewhereStub()))
     return null;
-  let _ = await realpath(cwd).catch(() => cwd);
+  let realCwd = await realpath(cwd).catch(() => cwd);
   if (!(
     worktreePath === undefined ||
     worktreePath === cwd ||
-    worktreePath === _ ||
-    resolve(worktreePath) === _
+    worktreePath === realCwd ||
+    resolve(worktreePath) === realCwd
   ))
     return null;
-  let canonicalGitRoot = findCanonicalGitRoot(cwd);
-  if (!canonicalGitRoot || !isLinkedWorktree(cwd) || !isAgentWorktreeOf(cwd, canonicalGitRoot)) return null;
+  let storageV5 = findCanonicalGitRoot(cwd);
+  if (!storageV5 || !isLinkedWorktree(cwd) || !isAgentWorktreeOf(cwd, storageV5)) return null;
   let replaced = basename(cwd).replaceAll("+", "/");
   try {
     validateWorktreeSlug(replaced);
   } catch {
     return null;
   }
-  let S = await checkWorktreeIsolation(cwd, [], gitRootsForPath(cwd, canonicalGitRoot));
-  if (!S.ok) {
-    logForDebugging(`[worktree] bg boot: not adopting ${cwd} \u2014 ${S.message}`, {
+  let isolationCheck = await checkWorktreeIsolation(cwd, [], gitRootsForPath(cwd, storageV5));
+  if (!isolationCheck.ok) {
+    logForDebugging(`[worktree] bg boot: not adopting ${cwd} \u2014 ${isolationCheck.message}`, {
       level: "warn",
     });
     return null;
   }
   if (worktreePath === undefined && !(await isWorktreeMadeElsewhere(cwd))) return null;
-  let y = await lockClaudeWorktree(cwd, canonicalGitRoot, replaced, "session");
-  if (!y || !(await isLockHolderProcess(cwd, canonicalGitRoot))) {
+  let lockResult = await lockClaudeWorktree(cwd, storageV5, replaced, "session");
+  if (!lockResult || !(await isLockHolderProcess(cwd, storageV5))) {
     await sleep(250);
-    y = await lockClaudeWorktree(cwd, canonicalGitRoot, replaced, "session");
-    if (y && !(await isLockHolderProcess(cwd, canonicalGitRoot)))
+    lockResult = await lockClaudeWorktree(cwd, storageV5, replaced, "session");
+    if (lockResult && !(await isLockHolderProcess(cwd, storageV5)))
       logForDebugging(`[worktree] bg boot: adopted ${cwd} but no worktree lock names this process`, {
         level: "warn",
       });
   }
-  if (!y) return null;
+  if (!lockResult) return null;
   if (worktreePath === undefined) {
-    if (await isLockHolderProcess(cwd, canonicalGitRoot))
-      registerCleanup(() => releaseOwnWorktreeLock(cwd, canonicalGitRoot));
+    if (await isLockHolderProcess(cwd, storageV5))
+      registerCleanup(() => releaseOwnWorktreeLock(cwd, storageV5));
     return null;
   }
-  let n = {
-    originalCwd: canonicalGitRoot,
+  let worktreeState = {
+    originalCwd: storageV5,
     worktreePath: cwd,
     worktreeName: replaced,
     worktreeBranch: worktreeBranchName(replaced),
@@ -248,17 +255,17 @@ async function adoptBackgroundWorktree(cwd, options) {
     hookBased: false,
     enteredExisting: false,
   };
-  restoreWorktreeSession(n);
-  saveWorktreeState(n);
-  return n;
+  restoreWorktreeSession(worktreeState);
+  saveWorktreeState(worktreeState);
+  return worktreeState;
 }
 //@ chunk-fhdzwff4.js:15976-16059 sole-consumer
 /**
  * 当前进程是否持有该 worktree 的锁。
  */
-async function isLockHolderProcess(cwd, canonicalGitRoot) {
+async function isLockHolderProcess(cwd, storageV5) {
   try {
-    return claudeWorktreeLockPid(await readWorktreeLockReason(cwd, canonicalGitRoot)) === process.pid;
+    return claudeWorktreeLockPid(await readWorktreeLockReason(cwd, storageV5)) === process.pid;
   } catch {
     return false;
   }
@@ -271,16 +278,16 @@ async function setup(
   cwd,
   permissionMode,
   allowDangerouslySkipPermissions,
-  _,
+  worktreeRequested,
   worktreeName,
-  tmuxEnabled,
-  b,
-  S,
-  y,
-  n,
-  E,
-  O,
-  oe = true,
+  unused,
+  agentId,
+  prInfo,
+  messagingSocketPath,
+  storageV5,
+  credentials,
+  resumeAsIs,
+  reanchorWatcher = true,
 ) {
   initManagedModulesPending();
   logForDiagnosticsNoPII("info", "setup_started");
@@ -290,16 +297,16 @@ async function setup(
     process.exit(1);
   }
   if (env.CLAUDE_BG_BACKEND === "daemon") {
-    let e = getFeatureValue_CACHED_MAY_BE_STALE("tengu_bg_worker_ctty", true)
+    let cttyOutcome = getFeatureValue_CACHED_MAY_BE_STALE("tengu_bg_worker_ctty", true)
       ? await acquireControllingTty()
       : (await hasControllingTty())
         ? "already"
         : "switched_off";
     switch (
       (logForDiagnosticsNoPII("info", "bg_worker_ctty", {
-        outcome: e,
+        outcome: cttyOutcome,
       }),
-      e)
+      cttyOutcome)
     ) {
       case "acquired":
         markOwnsControllingTerminal();
@@ -309,37 +316,37 @@ async function setup(
         markOwnsControllingTerminal();
         break;
       case "failed":
-        logFeatureSad("bg_worker_ctty", e);
+        logFeatureSad("bg_worker_ctty", cttyOutcome);
         break;
       case "ffi_unavailable":
       case "not_a_tty":
-        logFeatureSad("bg_worker_ctty", e);
+        logFeatureSad("bg_worker_ctty", cttyOutcome);
         break;
       case "unsupported":
       case "switched_off":
         break;
     }
   }
-  if (b) switchSession(identityAgentId(b), "startup_custom_id");
+  if (agentId) switchSession(identityAgentId(agentId), "startup_custom_id");
   udsEnv.unset("CLAUDE_CODE_MESSAGING_SOCKET");
   udsEnv.unset("CLAUDE_CODE_MESSAGING_TOKEN");
-  if (!isBareMode() || y !== undefined)
+  if (!isBareMode() || messagingSocketPath !== undefined)
     if (isRestrictedSession())
       logForDebugging(
-        y === undefined
+        messagingSocketPath === undefined
           ? "[uds-messaging] Skipped: restricted session"
           : "[uds-messaging] Skipped: restricted session (--messaging-socket-path ignored)",
       );
     else if (!isCrossSessionMessagingEnabled()) {
       if (!getIsRemoteMode()) {
-        if (y !== undefined) {
-          let e = await import("./chunk-cgamr0t5.js");
-          await e.validateExplicitMessagingSocketPath(y);
+        if (messagingSocketPath !== undefined) {
+          let inboxModule = await import("./utils/udsMessaging.js");
+          await inboxModule.validateExplicitMessagingSocketPath(messagingSocketPath);
         }
         logForDebugging(
           "[uds-messaging] Skipped: cross-session messaging gate off (will late-bind if a GrowthBook refresh enables it)",
         );
-        bindInboxOnFlagRefresh(y, n);
+        bindInboxOnFlagRefresh(messagingSocketPath, storageV5);
       } else logForDebugging("[uds-messaging] Skipped: cross-session messaging gate off");
     } else if (getIsRemoteMode()) logForDebugging("[uds-messaging] Skipped: remote thin client");
     else {
@@ -347,36 +354,37 @@ async function setup(
       profileCheckpoint("setup_uds_start");
       ownProcStartAsync().catch(() => {});
       ownPidDomain().catch(() => {});
-      let u = await import("./chunk-cgamr0t5.js");
+      let inboxModule = await import("./utils/udsMessaging.js");
       profileCheckpoint("setup_uds_imported");
-      let C = await u.startCrossSessionInbox(y, n, {
+      let closeInbox = await inboxModule.startCrossSessionInbox(messagingSocketPath, storageV5, {
         profileStartup: true,
       });
       profileCheckpoint("setup_uds_end");
-      if (C) {
-        let udsStartDegradedCause = u.getUdsStartDegradedCause();
+      if (closeInbox) {
+        let udsStartDegradedCause = inboxModule.getUdsStartDegradedCause();
         if (udsStartDegradedCause) logFeatureSad("agents_cross_session_inbox", udsStartDegradedCause);
         else logFeatureOk("agents_cross_session_inbox");
-      } else logFeatureBad("agents_cross_session_inbox", u.getUdsStartFailureCause() ?? "bind_failed");
-      let P = performance.now() - startTime;
-      recordPhase("setup_uds_messaging_ms", P, startTime);
+      } else
+        logFeatureBad("agents_cross_session_inbox", inboxModule.getUdsStartFailureCause() ?? "bind_failed");
+      let bindMs = performance.now() - startTime;
+      recordPhase("setup_uds_messaging_ms", bindMs, startTime);
       logEvent("tengu_uds_startup_bind", {
-        durationMs: Math.round(P),
-        bound: !!C,
+        durationMs: Math.round(bindMs),
+        bound: !!closeInbox,
       });
     }
   if (process.env.CLAUDE_BG_BACKEND === "daemon") {
-    let { startRendezvousServer } = await import("./chunk-bc1hsbps.js");
-    startRendezvousServer(n);
+    let { startRendezvousServer } = await import("./services/daemon/rendezvous.js");
+    startRendezvousServer(storageV5);
   }
   await captureTeammateModeSnapshotIfEnabled();
   {
-    let { installObserverSpawner } = await import("./chunk-3h5pdzw6.js");
+    let { installObserverSpawner } = await import("./tasks/installObserverSpawner.lazy.js");
     installObserverSpawner(getRootSession());
   }
   if (!getIsNonInteractiveSession()) {
     if (isAgentSwarmsEnabled()) {
-      let restoredIterm2Backup = await checkAndRestoreITerm2Backup(n);
+      let restoredIterm2Backup = await checkAndRestoreITerm2Backup(storageV5);
       if (restoredIterm2Backup.status === "restored")
         console.log(
           sequential.yellow(
@@ -391,7 +399,7 @@ async function setup(
         );
     }
     try {
-      let restoredTerminalBackup = await checkAndRestoreTerminalBackup(n);
+      let restoredTerminalBackup = await checkAndRestoreTerminalBackup(storageV5);
       if (restoredTerminalBackup.status === "restored")
         console.log(
           sequential.yellow(
@@ -419,7 +427,8 @@ async function setup(
     process.exit(1);
   }
   let hooksStart = performance.now();
-  if (isStorageV5Enabled() && n !== undefined) await updateHooksConfigSnapshotThroughBackend(n);
+  if (isStorageV5Enabled() && storageV5 !== undefined)
+    await updateHooksConfigSnapshotThroughBackend(storageV5);
   else captureHooksConfigSnapshotFromLoadedSettings();
   recordPhase("setup_hooks_snapshot_ms", performance.now() - hooksStart, hooksStart);
   logForDiagnosticsNoPII("info", "setup_hooks_captured", {
@@ -427,20 +436,20 @@ async function setup(
   });
   if (!getIsRemoteMode()) {
     let startTime = performance.now();
-    initialize(cwd, n, E);
+    initialize(cwd, storageV5, credentials);
     recordPhase("setup_file_watcher_ms", performance.now() - startTime, startTime);
   }
   let startTime = performance.now();
-  if (_) {
-    setInlinePlugins(getInlinePlugins().map((h) => resolve(h)));
-    setInlinePluginsNoMcp(getInlinePluginsNoMcp().map((h) => resolve(h)));
+  if (worktreeRequested) {
+    setInlinePlugins(getInlinePlugins().map((pluginPath) => resolve(pluginPath)));
+    setInlinePluginsNoMcp(getInlinePluginsNoMcp().map((pluginPath) => resolve(pluginPath)));
     if (isPluginInstallBypassed() || env.CLAUDE_CODE_SYNC_PLUGIN_INSTALL)
       logForDebugging(
         "plugin worktree hooks not registered before creating the worktree: startup lists no plugins here",
       );
     else {
-      let { registerPluginWorktreeHooks } = await import("./chunk-c7p56eem.js");
-      await registerPluginWorktreeHooks(n, E).catch((error) => {
+      let { registerPluginWorktreeHooks } = await import("./utils/plugins/loadPluginHooks.js");
+      await registerPluginWorktreeHooks(storageV5, credentials).catch((error) => {
         logForDebugging(
           `plugin worktree hooks not registered before creating the worktree (a plugin's WorktreeCreate hook will not run): ${errorMessage(error)}`,
           {
@@ -458,7 +467,7 @@ async function setup(
       );
       process.exit(1);
     }
-    let slug = S?.number ? `pr-${S.number}` : (worktreeName ?? getPlanSlug());
+    let slug = prInfo?.number ? `pr-${prInfo.number}` : (worktreeName ?? getPlanSlug());
     let tmuxSessionName;
     let mainRepoRoot = null;
     if (inGit) {
@@ -475,21 +484,18 @@ async function setup(
         processChdir(mainRepoRoot);
         setCwd(mainRepoRoot);
       }
-      tmuxSessionName = tmuxEnabled
-        ? generateTmuxSessionName(mainRepoRoot, worktreeBranchName(slug))
-        : undefined;
-    } else
-      tmuxSessionName = tmuxEnabled ? generateTmuxSessionName(getCwd(), worktreeBranchName(slug)) : undefined;
-    let x;
+      tmuxSessionName = unused ? generateTmuxSessionName(mainRepoRoot, worktreeBranchName(slug)) : undefined;
+    } else tmuxSessionName = unused ? generateTmuxSessionName(getCwd(), worktreeBranchName(slug)) : undefined;
+    let worktree;
     try {
-      x = await createWorktreeForSession(getSessionId(), slug, tmuxSessionName, {
-        prNumber: S?.number,
-        prForge: S?.forge,
-        resumeAsIs: O,
+      worktree = await createWorktreeForSession(getSessionId(), slug, tmuxSessionName, {
+        prNumber: prInfo?.number,
+        prForge: prInfo?.forge,
+        resumeAsIs,
         fromCwd: cwd,
         repoRoot: mainRepoRoot ?? undefined,
-        storageV5: n,
-        credentials: E,
+        storageV5,
+        credentials,
       });
     } catch (error) {
       process.stderr.write(
@@ -500,19 +506,19 @@ async function setup(
       process.exit(1);
     }
     logEvent("tengu_worktree_created", {
-      tmux_enabled: tmuxEnabled,
-      ...(O && {
+      tmux_enabled: unused,
+      ...(resumeAsIs && {
         for_cloud_attach: true,
-        ...(!x.hookBased && {
-          resumed_existing: x.resumedExisting === true,
+        ...(!worktree.hookBased && {
+          resumed_existing: worktree.resumedExisting === true,
         }),
       }),
     });
-    let L = false;
-    if (tmuxEnabled && tmuxSessionName) {
-      let tmuxResult = await createTmuxSessionForWorktree(tmuxSessionName, x.worktreePath);
+    let didCreateTmux = false;
+    if (unused && tmuxSessionName) {
+      let tmuxResult = await createTmuxSessionForWorktree(tmuxSessionName, worktree.worktreePath);
       if (tmuxResult.created) {
-        L = true;
+        didCreateTmux = true;
         console.log(
           sequential.green(`Created tmux session: ${sequential.bold(tmuxSessionName)}
 To attach: ${sequential.bold(`tmux attach -t ${tmuxSessionName}`)}`),
@@ -520,46 +526,49 @@ To attach: ${sequential.bold(`tmux attach -t ${tmuxSessionName}`)}`),
       } else console.error(sequential.yellow(`Warning: Failed to create tmux session: ${tmuxResult.error}`));
     }
     try {
-      processChdir(x.worktreePath);
+      processChdir(worktree.worktreePath);
     } catch (error) {
       let mainRepoRoot = sanitizeErrnoForTelemetry(error);
       if (!mainRepoRoot) throw error;
-      let R;
+      let chdirProblem;
       if (mainRepoRoot === "ENOENT" || mainRepoRoot === "ENOTDIR")
-        R = x.hookBased
+        chdirProblem = worktree.hookBased
           ? "does not exist or is not a directory. The path came from a " +
             "WorktreeCreate hook \u2014 the hook must print the directory it " +
             "created as the last line of its stdout."
           : "does not exist or is not a directory. It may have been removed out from under this session; retrying will recreate it.";
       else if (mainRepoRoot === "EACCES" || mainRepoRoot === "EPERM")
-        R = `is not accessible (${mainRepoRoot}). Check the directory's permissions.`;
-      else R = `cannot be entered (${errorMessage(error)}).`;
+        chdirProblem = `is not accessible (${mainRepoRoot}). Check the directory's permissions.`;
+      else chdirProblem = `cannot be entered (${errorMessage(error)}).`;
       process.stderr.write(
-        sequential.red(`Error: worktree directory ${x.worktreePath} ${R}
+        sequential.red(`Error: worktree directory ${worktree.worktreePath} ${chdirProblem}
 `),
       );
       logError(error);
-      if (L && tmuxSessionName) await killTmuxSession(tmuxSessionName);
+      if (didCreateTmux && tmuxSessionName) await killTmuxSession(tmuxSessionName);
       setBgExitCause(`worktree_chdir:${mainRepoRoot}`);
       await flushAnalyticsSinks();
       process.exit(1);
     }
-    setCwd(x.worktreePath);
+    setCwd(worktree.worktreePath);
     setOriginalCwd(getCwd());
     setProjectRoot(getCwd());
-    if (oe) reanchorGitFileWatcher();
-    saveWorktreeState(x);
+    if (reanchorWatcher) reanchorGitFileWatcher();
+    saveWorktreeState(worktree);
     clearMemoryFilesCacheForHost();
-    if (isStorageV5Enabled() && n !== undefined) await updateHooksConfigSnapshotThroughBackend(n);
+    if (isStorageV5Enabled() && storageV5 !== undefined)
+      await updateHooksConfigSnapshotThroughBackend(storageV5);
     else updateHooksConfigSnapshot();
     getPlansDirectory.cache.clear?.();
-    primePlanSlugCollisions(n);
+    primePlanSlugCollisions(storageV5);
     recordPhase("setup_worktree_ms", performance.now() - startTime, startTime);
   } else if (isBgSession() && !getCurrentWorktreeSession()) {
     let startTime = performance.now();
     try {
       let bgJobDir = getBgJobDir();
-      let options = bgJobDir ? await (await import("./chunk-bytagq68.js")).readJobState(bgJobDir, n) : null;
+      let options = bgJobDir
+        ? await (await import("./services/daemon/jobState.js")).readJobState(bgJobDir, storageV5)
+        : null;
       await adoptBackgroundWorktree(cwd, options);
     } catch (error) {
       logForDebugging(`[worktree] bg adopt-time reclaim skipped: ${errorMessage(error)}`);
@@ -571,37 +580,44 @@ To attach: ${sequential.bold(`tmux attach -t ${tmuxSessionName}`)}`),
   logForDiagnosticsNoPII("info", "setup_background_jobs_launched");
   profileCheckpoint("setup_before_prefetch");
   logForDiagnosticsNoPII("info", "setup_prefetch_starting");
-  let te = isSyncPluginInstallMode();
+  let isSyncInstall = isSyncPluginInstallMode();
   if (!isPluginInstallBypassed()) {
-    if (shouldFillPluginLoadWithStore(E)) loadAllPluginsCacheOnly(n, E).catch(() => {});
-    warmCommandSourceCaches(getProjectRoot(), n);
+    if (shouldFillPluginLoadWithStore(credentials))
+      loadAllPluginsCacheOnly(storageV5, credentials).catch(() => {});
+    warmCommandSourceCaches(getProjectRoot(), storageV5);
   }
   let pluginRegistry = getPluginRegistry();
   pluginRegistry.hookRegistrationOwed = pluginRegistry.hookRegistrationEpoch === 0;
-  pluginRegistry.hooksLoadAtStartup = import("./chunk-c7p56eem.js").then((e) => {
-    if (te) return;
-    let u = e.loadPluginHooks(n, E).catch((error) => {
+  pluginRegistry.hooksLoadAtStartup = import("./utils/plugins/loadPluginHooks.js").then((hooksModule) => {
+    if (isSyncInstall) return;
+    let hooksLoad = hooksModule.loadPluginHooks(storageV5, credentials).catch((error) => {
       logForDebugging(`plugin hooks prefetch: ${errorMessage(error)}`);
     });
     try {
-      e.setupPluginHookHotReload(n, E);
+      hooksModule.setupPluginHookHotReload(storageV5, credentials);
     } catch (error) {
-      return logThenRethrow(u, error);
+      return logThenRethrow(hooksLoad, error);
     }
-    return u;
+    return hooksLoad;
   });
   if (!isBareMode()) {
-    import("./chunk-a3vwvaw0.js").then((m) => m.registerSessionFileAccessHooks());
-    import("./chunk-e9cc3yq9.js").then((e) => e.registerUltrareviewPostCommitHook());
-    import("./chunk-m2yw48pg.js").then((m) => m.registerWebSetupPostPushHook());
+    import("./utils/sessionFileAccessHooks.js").then((m) => m.registerSessionFileAccessHooks());
+    import("./commands/review/registerUltrareviewPostCommitHook.lazy.js").then((ultrareviewModule) =>
+      ultrareviewModule.registerUltrareviewPostCommitHook(),
+    );
+    import("./services/cloudSessions/registerWebSetupPostPushHook.lazy.js").then((m) =>
+      m.registerWebSetupPostPushHook(),
+    );
     if (!getIsRemoteMode() && checkHasTrustDialogAccepted())
-      import("./chunk-6cezjbyv.js").then((m) => m.startMemoryWatcher(n, E));
+      import("./services/memorySync/memoryWatcher.js").then((m) =>
+        m.startMemoryWatcher(storageV5, credentials),
+      );
   }
   initSinks();
   logEvent("tengu_started", {
     trigger_id: sanitizeMarkName(env.CLAUDE_CODE_TRIGGER_ID),
-    worktree_flag: _,
-    tmux_flag: tmuxEnabled,
+    worktree_flag: worktreeRequested,
+    tmux_flag: unused,
     in_tmux_worktree: Boolean(env.CLAUDE_CODE_TMUX_SESSION && env.TMUX),
   });
   prefetchApiKeyIfUnpinned();
@@ -620,12 +636,15 @@ To attach: ${sequential.bold(`tmux attach -t ${tmuxSessionName}`)}`),
   profileCheckpoint("setup_after_prefetch");
   {
     let startTime = performance.now();
-    let u = [
-      loadCustomThemes(n),
-      ...(isStorageV5Enabled() && n !== undefined ? [warmKeybindingsFromBackend(keybindingsState, n)] : []),
+    let pendingTasks = [
+      loadCustomThemes(storageV5),
+      ...(isStorageV5Enabled() && storageV5 !== undefined
+        ? [warmKeybindingsFromBackend(keybindingsState, storageV5)]
+        : []),
     ];
-    if (!isBareMode() && !getIsNonInteractiveSession()) u.push(fetchReleaseNotes(undefined, n));
-    await Promise.all(u);
+    if (!isBareMode() && !getIsNonInteractiveSession())
+      pendingTasks.push(fetchReleaseNotes(undefined, storageV5));
+    await Promise.all(pendingTasks);
     recordPhase("setup_release_notes_ms", performance.now() - startTime, startTime);
   }
   if (permissionMode === "bypassPermissions" || allowDangerouslySkipPermissions) {
@@ -672,14 +691,14 @@ To attach: ${sequential.bold(`tmux attach -t ${tmuxSessionName}`)}`),
 /**
  * 恒返回 false 的占位判断。
  */
-function alwaysFalseHt(o) {
+function alwaysFalseHt(session) {
   return false;
 }
 //@ chunk-fhdzwff4.js:24892-24916 sole-consumer
 /**
  * 恒返回 false 的占位判断。
  */
-function alwaysFalseOt(o) {
+function alwaysFalseOt(session) {
   return false;
 }
 //@ chunk-fhdzwff4.js:24916-24955 sole-consumer
@@ -724,44 +743,59 @@ var memoryPrewarmClaimSlots = new HostScoped(() => new OneShotClaim());
 /**
  * 交互会话（非恢复/继续）在信任已接受、记忆与索引召回开启时，后台预热记忆索引；有组织记忆决策时先等待决策落定。每宿主只做一次。
  */
-function prewarmMemoryRecall(o) {
-  if (!memoryPrewarmClaimSlots.of(o.host).claim()) return;
+function prewarmMemoryRecall(session) {
+  if (!memoryPrewarmClaimSlots.of(session.host).claim()) return;
   if (getIsRemoteMode() || !checkHasTrustDialogAccepted()) return;
   (async () => {
-    let [memdirModule, recallModule, _] = await Promise.all([
-      import("./chunk-5bkgthks.js"),
-      import("./chunk-5051d7ze.js"),
-      import("./chunk-xbqr939z.js"),
+    let [memdirModule, recallModule, fenceModule] = await Promise.all([
+      import("./memdir/paths.lazy.js"),
+      import("./memdir/memoryScan.js"),
+      import("./utils/permissions/readBlock.js"),
     ]);
     if (
       !process.argv.some(
         (arg) =>
           /^-(?!-)[A-Za-z]*[cr]/.test(arg) ||
-          ["--resume", "--continue", "--from-pr"].some((p) => arg === p || arg.startsWith(`${p}=`)),
+          ["--resume", "--continue", "--from-pr"].some((flag) => arg === flag || arg.startsWith(`${flag}=`)),
       ) &&
       recallModule.loadedIndexExclusions() === null &&
       memdirModule.isAutoMemoryEnabled() &&
-      !_.isAutoMemReadFenced() &&
+      !fenceModule.isAutoMemReadFenced() &&
       memdirModule.isMemoryRecallEnabled() &&
       memdirModule.isIndexRecallEnabled()
     ) {
-      let w = await import("./chunk-vp5gef34.js");
-      let p = await import("./chunk-n61y4e8f.js");
-      let b = await import("./chunk-g13qtecd.js");
-      let S = await import("./chunk-r9fd71r4.js");
-      let y = await import("./chunk-q86bmmjg.js");
-      if (b.isMultiStoreSyncAvailable() || y.hasOrgMemoryDecisionRunStarted()) {
-        await p.waitForOrgMemoryDecisionSettled(
-          S.FIRST_STORE_PULL_WAIT_DEADLINE_MS,
+      let prewarmModule = await import("./memdir/prewarmMemoryIndex.lazy.js");
+      let orgMemoryModule = await import("./services/orgMemory/orgMemoryDecision.js");
+      let multiStoreModule = await import("./services/memorySync/availability.js");
+      let pullModule = await import("./services/orgMemory/storePulls.js");
+      let orgDecisionModule = await import("./services/orgMemory/discovery.js");
+      if (
+        multiStoreModule.isMultiStoreSyncAvailable() ||
+        orgDecisionModule.hasOrgMemoryDecisionRunStarted()
+      ) {
+        await orgMemoryModule.waitForOrgMemoryDecisionSettled(
+          pullModule.FIRST_STORE_PULL_WAIT_DEADLINE_MS,
           new AbortController().signal,
         );
-        if (p.getOrgMemoryDecision().state === "undecided") return;
+        if (orgMemoryModule.getOrgMemoryDecision().state === "undecided") return;
       }
       await memdirModule.getAutoMemPathState().warmCanonicalWcRoot();
-      let n = recallModule.recallVisibleTeamMounts(memdirModule.getAutoMemPath());
-      w.prewarmMemoryIndex(o, memdirModule.getAutoMemPath(), memdirModule.activeSessionLogExcluder(), (E) =>
-        recallModule.isRecallVisiblePath(E, n),
+      let visibleMounts = recallModule.recallVisibleTeamMounts(memdirModule.getAutoMemPath());
+      prewarmModule.prewarmMemoryIndex(
+        session,
+        memdirModule.getAutoMemPath(),
+        memdirModule.activeSessionLogExcluder(),
+        (candidatePath) => recallModule.isRecallVisiblePath(candidatePath, visibleMounts),
       );
     }
   })().catch((error) => logForDebugging(`recall prewarm skipped: ${errorMessage(error)}`));
 }
+export {
+  alwaysFalseHt,
+  alwaysFalseOt,
+  prewarmMemoryRecall,
+  prefetchApiKeyIfUnpinned,
+  memoryPrewarmClaimSlots,
+  setup,
+  shouldShowStartupDialogs,
+};

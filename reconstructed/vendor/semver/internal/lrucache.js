@@ -5,10 +5,10 @@
  * pieces: chunk-bwbq4xvm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-bwbq4xvm.js:13833-14215 cjs-fingerprint
-var require_lrucache = x(function (cjsExports, cjsModule) {
+var require_lrucache = __commonJS(function (cjsExports, cjsModule) {
   class LRUCache {
     constructor() {
       this.max = 1000;

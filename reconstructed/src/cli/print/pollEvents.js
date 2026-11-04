@@ -52,7 +52,7 @@ import { DoctorLazy } from "../handlers/util.js";
 import {
   array,
   zodStrictObject,
-  string,
+  stringSchema,
   _enum,
   discriminatedUnion,
 } from "../../../vendor/zod/v4/classic/schemas.js";
@@ -122,14 +122,15 @@ import { isAllPrintable } from "../../utils/truncateGraphemes.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { runToolUse, hasTypeField } from "../../services/tools/toolExecution.js";
 import { createAssistantMessage, extractTextContent_2 } from "../../utils/messages.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-tyg7f3ek.js:550209-553442 placement
 /**
  * 处理 SDK poll_event 请求：校验 kind/事件/授权/大小与权限模式（仅 auto），按组盖章入队唤醒模型。
  */
-function handlePollEvent(request, n) {
+function handlePollEvent(request, context) {
   if (!isPollEventIngressActive()) {
-    n.reply({
+    context.reply({
       subtype: "error",
       error: "poll-event delivery is not enabled for this session",
     });
@@ -137,129 +138,131 @@ function handlePollEvent(request, n) {
   }
   if (isHostIngressPollEvents()) {
     logFeatureBad("poll_event_delivery", "own_events_only");
-    n.reply({
+    context.reply({
       subtype: "error",
       error:
         "poll event rejected: this session takes no poll events from its host, because the host did not set CLAUDE_CODE_POLL_EVENTS for it",
     });
     return;
   }
-  let r =
+  let validated =
     request.events === undefined
       ? validatePollEventFields(request)
       : "poll_event: events is not supported by this build";
-  if (typeof r === "string") {
-    n.reply({
+  if (typeof validated === "string") {
+    context.reply({
       subtype: "error",
-      error: r,
+      error: validated,
     });
     return;
   }
-  let mode = n.engineState().toolPermissionContext.mode;
+  let mode = context.engineState().toolPermissionContext.mode;
   if (mode !== "auto") {
     logFeatureBad("poll_event_delivery", "mode_not_auto");
-    let w = n.redactsPersistedLane() ? toExternalPermissionMode(mode) : mode;
-    n.reply({
+    let modeLabel = context.redactsPersistedLane() ? toExternalPermissionMode(mode) : mode;
+    context.reply({
       subtype: "error",
-      error: `poll event rejected: poll events require permission mode "auto" (got "${w}") \u2014 the event channel's protections route event-driven commands through the auto-mode classifier. Run with --permission-mode auto.`,
+      error: `poll event rejected: poll events require permission mode "auto" (got "${modeLabel}") \u2014 the event channel's protections route event-driven commands through the auto-mode classifier. Run with --permission-mode auto.`,
     });
     return;
   }
-  let h =
-    count(n.messageQueue.getCommandQueueSnapshot(), isPollEventMode) +
-    n.messageQueue.pollEventAdmissionsPending();
-  if (h + r.length > POLL_KIND_DEFAULT_TIMEOUT_MS) {
+  let queuedCount =
+    count(context.messageQueue.getCommandQueueSnapshot(), isPollEventMode) +
+    context.messageQueue.pollEventAdmissionsPending();
+  if (queuedCount + validated.length > POLL_KIND_DEFAULT_TIMEOUT_MS) {
     logFeatureBad("poll_event_delivery", "queue_cap_peek");
-    n.reply({
+    context.reply({
       subtype: "error",
       error:
-        r.length === 1
+        validated.length === 1
           ? `poll event rejected: ${POLL_KIND_DEFAULT_TIMEOUT_MS} events already queued`
-          : `poll event rejected: the queue holds at most ${POLL_KIND_DEFAULT_TIMEOUT_MS} events (${h} queued, ${r.length} arriving)`,
+          : `poll event rejected: the queue holds at most ${POLL_KIND_DEFAULT_TIMEOUT_MS} events (${queuedCount} queued, ${validated.length} arriving)`,
     });
     return;
   }
-  let y = [];
-  for (let w of r) {
-    let P = "element" in w ? validatePollEventGroup(w) : validatePollEventBatch(w);
-    if (typeof P === "string") {
-      n.reply({
+  let events = [];
+  for (let event of validated) {
+    let validatedEvent = "element" in event ? validatePollEventGroup(event) : validatePollEventBatch(event);
+    if (typeof validatedEvent === "string") {
+      context.reply({
         subtype: "error",
-        error: `poll event rejected: ${P}`,
+        error: `poll event rejected: ${validatedEvent}`,
       });
       return;
     }
-    y.push(P);
+    events.push(validatedEvent);
   }
-  let reduced = y.reduce((acc, { stampedBytes }) => acc + stampedBytes, 0);
-  if (y.length > 1 && reduced > MAX_POLL_EVENT_BATCH_BYTES) {
+  let reduced = events.reduce((acc, { stampedBytes }) => acc + stampedBytes, 0);
+  if (events.length > 1 && reduced > MAX_POLL_EVENT_BATCH_BYTES) {
     logFeatureBad("poll_event_delivery", "group_too_large");
-    n.reply({
+    context.reply({
       subtype: "error",
       error: `poll event rejected: the group is ${reduced} bytes after nonce stamping (cap ${MAX_POLL_EVENT_BATCH_BYTES})`,
     });
     return;
   }
-  let reduced_2 = y.reduce(
+  let reduced_2 = events.reduce(
     (acc, { input }) => acc + (input.declared === undefined ? 0 : eventByteLength(input.declared.fields)),
     0,
   );
-  if (y.length > 1 && reduced_2 > MAX_POLL_EVENT_BATCH_BYTES) {
+  if (events.length > 1 && reduced_2 > MAX_POLL_EVENT_BATCH_BYTES) {
     logFeatureBad("poll_event_delivery", "group_too_large");
-    n.reply({
+    context.reply({
       subtype: "error",
       error: `poll event rejected: the group's fields are ${reduced_2} bytes as sent (cap ${MAX_POLL_EVENT_BATCH_BYTES})`,
     });
     return;
   }
-  for (let w of y) n.messageQueue.beginPollEventAdmission();
-  n.ingressTail.current = n.ingressTail.current
+  for (let event of events) context.messageQueue.beginPollEventAdmission();
+  context.ingressTail.current = context.ingressTail.current
     .then(async () => {
-      if (n.stopped.aborted) {
-        for (let L of y) n.messageQueue.endPollEventAdmission();
+      if (context.stopped.aborted) {
+        for (let event of events) context.messageQueue.endPollEventAdmission();
         return;
       }
-      let w;
-      for (let { hookText } of y) {
+      let blockingError;
+      for (let { hookText } of events) {
         try {
-          for await (let q of executeUserPromptSubmitHooksForSession(
-            n.session,
-            n.sessionHooks,
+          for await (let result of executeUserPromptSubmitHooksForSession(
+            context.session,
+            context.sessionHooks,
             hookText,
-            n.engineState().toolPermissionContext.mode,
-            n.stopped,
-            n.storageV5,
-            n.credentials,
+            context.engineState().toolPermissionContext.mode,
+            context.stopped,
+            context.storageV5,
+            context.credentials,
           ))
-            if (q.blockingError) {
-              w = getUserPromptSubmitHookBlockingMessage(q.blockingError);
+            if (result.blockingError) {
+              blockingError = getUserPromptSubmitHookBlockingMessage(result.blockingError);
               break;
             }
         } catch (error) {
           if (isAbortError(error)) logForDebugging("poll-event enqueue hook pass aborted");
-          else logHandlerFailure(n.redactsPersistedLane(), "poll_event", error);
+          else logHandlerFailure(context.redactsPersistedLane(), "poll_event", error);
         }
-        if (w !== undefined || n.stopped.aborted) break;
+        if (blockingError !== undefined || context.stopped.aborted) break;
       }
-      for (let L of y) n.messageQueue.endPollEventAdmission();
-      if (n.stopped.aborted) return;
-      if (w !== undefined) {
+      for (let event of events) context.messageQueue.endPollEventAdmission();
+      if (context.stopped.aborted) return;
+      if (blockingError !== undefined) {
         logFeatureBad("poll_event_delivery", "hook_blocked");
-        n.reply({
+        context.reply({
           subtype: "error",
-          error: n.redactsPersistedLane() ? "poll event rejected by hook" : `poll event rejected: ${w}`,
+          error: context.redactsPersistedLane()
+            ? "poll event rejected by hook"
+            : `poll event rejected: ${blockingError}`,
         });
         return;
       }
-      let mapped = y.map(({ input }) => input);
+      let mapped = events.map(({ input }) => input);
       (mapped.length === 1
-        ? n.messageQueue.enqueuePollEvent(mapped[0])
-        : n.messageQueue.enqueuePollEventGroup(mapped)
+        ? context.messageQueue.enqueuePollEvent(mapped[0])
+        : context.messageQueue.enqueuePollEventGroup(mapped)
       )
         .then(
           async () => {
-            await n.flushSessionStorage();
-            n.reply({
+            await context.flushSessionStorage();
+            context.reply({
               subtype: "success",
               response: {
                 delivered: true,
@@ -267,49 +270,52 @@ function handlePollEvent(request, n) {
             });
           },
           (error) => {
-            let q = errorMessage(error);
-            if (n.redactsPersistedLane())
-              logForDebugging(`poll_event enqueue: ${q}`, {
+            let message = errorMessage(error);
+            if (context.redactsPersistedLane())
+              logForDebugging(`poll_event enqueue: ${message}`, {
                 level: "error",
               });
-            n.reply({
+            context.reply({
               subtype: "error",
-              error: n.redactsPersistedLane() ? "poll_event failed" : q,
+              error: context.redactsPersistedLane() ? "poll_event failed" : message,
             });
           },
         )
-        .catch((error) => logHandlerFailure(n.redactsPersistedLane(), "poll_event", error));
+        .catch((error) => logHandlerFailure(context.redactsPersistedLane(), "poll_event", error));
     })
-    .catch((error) => logHandlerFailure(n.redactsPersistedLane(), "poll_event", error));
+    .catch((error) => logHandlerFailure(context.redactsPersistedLane(), "poll_event", error));
 }
 //@ chunk-tyg7f3ek.js:553442-553454 placement
 var MAX_SENDER_ID_BYTES = 1024;
 //@ chunk-tyg7f3ek.js:553454-553625 placement
-var pollEventBatchSchema = DoctorLazy(() =>
-  array(
-    zodStrictObject({
-      kind: string(),
-      at: string(),
-      fields: eventFieldsSchema(),
-      from: zodStrictObject({
-        authority: _enum(PEER_AUTHORITIES),
-        id: string()
-          .refine((e) => Buffer.byteLength(e, "utf8") <= MAX_SENDER_ID_BYTES)
-          .optional(),
-      }).optional(),
-    }),
-  )
-    .min(1)
-    .max(MAX_POLL_EVENTS_PER_BATCH),
-);
+var pollEventBatchSchema; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-tyg7f3ek.js:553454", () => {
+  pollEventBatchSchema = DoctorLazy(() =>
+    array(
+      zodStrictObject({
+        kind: stringSchema(),
+        at: stringSchema(),
+        fields: eventFieldsSchema(),
+        from: zodStrictObject({
+          authority: _enum(PEER_AUTHORITIES),
+          id: stringSchema()
+            .refine((id) => Buffer.byteLength(id, "utf8") <= MAX_SENDER_ID_BYTES)
+            .optional(),
+        }).optional(),
+      }),
+    )
+      .min(1)
+      .max(MAX_POLL_EVENTS_PER_BATCH),
+  );
+});
 //@ chunk-tyg7f3ek.js:553625-554437 placement
-function validatePollEventFields(e) {
-  let { kind, event } = e;
-  let { authority, sender_id: senderId, sender_text: senderText } = e;
+function validatePollEventFields(request) {
+  let { kind, event } = request;
+  let { authority, sender_id: senderId, sender_text: senderText } = request;
   if (
     typeof kind !== "string" ||
     typeof event !== "string" ||
-    (e.wake !== undefined && typeof e.wake !== "boolean") ||
+    (request.wake !== undefined && typeof request.wake !== "boolean") ||
     (authority !== undefined && !isPeerAuthority(authority)) ||
     (senderId !== undefined &&
       (typeof senderId !== "string" || Buffer.byteLength(senderId, "utf8") > MAX_SENDER_ID_BYTES)) ||
@@ -318,8 +324,8 @@ function validatePollEventFields(e) {
         Buffer.byteLength(senderText, "utf8") > MAX_POLL_EVENT_ENVELOPE_BYTES))
   )
     return `poll_event: kind and event must be strings; wake, when present, a boolean; authority, when present, one of ${PEER_AUTHORITIES.join("|")}; sender_id and sender_text, when present, strings`;
-  let S = senderText !== undefined && indexOfKmp(event, escapeXmlText(senderText), 0) !== -1;
-  if (senderText !== undefined && !S)
+  let carriesSenderText = senderText !== undefined && indexOfKmp(event, escapeXmlText(senderText), 0) !== -1;
+  if (senderText !== undefined && !carriesSenderText)
     logForDebugging(
       "poll_event: sender_text dropped from provenance \u2014 the event does not carry it (derivation contract violated)",
     );
@@ -327,7 +333,7 @@ function validatePollEventFields(e) {
     {
       kind,
       element: event,
-      wake: e.wake,
+      wake: request.wake,
       provenance:
         authority === undefined
           ? undefined
@@ -336,7 +342,7 @@ function validatePollEventFields(e) {
               ...(senderId !== undefined && {
                 senderId,
               }),
-              ...(S && {
+              ...(carriesSenderText && {
                 senderText,
               }),
             },
@@ -344,105 +350,107 @@ function validatePollEventFields(e) {
   ];
 }
 //@ chunk-tyg7f3ek.js:554437-555432 placement
-function validatePollEventGroup(e) {
-  if (!isValidPollEventKind(e.kind)) {
+function validatePollEventGroup(event) {
+  if (!isValidPollEventKind(event.kind)) {
     logFeatureBad("poll_event_delivery", "invalid_kind");
     return "invalid kind (a lowercase letter, then lowercase letters, digits and hyphens, at most 64 characters)";
   }
-  if (mentionsReservedKind(e.kind)) {
+  if (mentionsReservedKind(event.kind)) {
     logFeatureBad("poll_event_delivery", "reserved_kind");
-    return `kind "${sanitizeTelemetryString(e.kind)}" is reserved for a trusted in-process producer`;
+    return `kind "${sanitizeTelemetryString(event.kind)}" is reserved for a trusted in-process producer`;
   }
-  if (eventDeclarations().has(e.kind)) {
+  if (eventDeclarations().has(event.kind)) {
     logFeatureBad("poll_event_delivery", "declared_kind_as_element");
-    return `kind "${e.kind}" is declared: send it as fields, in events`;
+    return `kind "${event.kind}" is declared: send it as fields, in events`;
   }
-  let n = Buffer.byteLength(e.element, "utf8");
-  if (n > MAX_POLL_EVENT_ENVELOPE_BYTES) {
+  let byteLength = Buffer.byteLength(event.element, "utf8");
+  if (byteLength > MAX_POLL_EVENT_ENVELOPE_BYTES) {
     logFeatureBad("poll_event_delivery", "envelope_too_large");
-    return `envelope is ${n} bytes (cap ${MAX_POLL_EVENT_ENVELOPE_BYTES})`;
+    return `envelope is ${byteLength} bytes (cap ${MAX_POLL_EVENT_ENVELOPE_BYTES})`;
   }
-  let pollEventEnvelope = parsePollEventEnvelope(e.element);
+  let pollEventEnvelope = parsePollEventEnvelope(event.element);
   if (!pollEventEnvelope.ok) {
     logFeatureBad("poll_event_delivery", "validation_failed");
     return pollEventEnvelope.reason;
   }
-  if (pollEventEnvelope.kind !== e.kind) {
+  if (pollEventEnvelope.kind !== event.kind) {
     logFeatureBad("poll_event_delivery", "kind_mismatch");
-    return `element kind "${sanitizeTelemetryString(pollEventEnvelope.kind)}" does not match declared kind "${sanitizeTelemetryString(e.kind)}"`;
+    return `element kind "${sanitizeTelemetryString(pollEventEnvelope.kind)}" does not match declared kind "${sanitizeTelemetryString(event.kind)}"`;
   }
   return {
     input: {
-      kind: e.kind,
-      element: e.element,
-      wake: e.wake,
-      provenance: e.provenance,
+      kind: event.kind,
+      element: event.element,
+      wake: event.wake,
+      provenance: event.provenance,
     },
-    hookText: e.element,
-    stampedBytes: Buffer.byteLength(e.element, "utf8") + envelopeLengthFor("element"),
+    hookText: event.element,
+    stampedBytes: Buffer.byteLength(event.element, "utf8") + envelopeLengthFor("element"),
   };
 }
 //@ chunk-tyg7f3ek.js:555432-556550 placement
-function validatePollEventBatch(e) {
-  if (!isValidPollEventKind(e.kind)) {
+function validatePollEventBatch(group) {
+  if (!isValidPollEventKind(group.kind)) {
     logFeatureBad("poll_event_delivery", "invalid_kind");
     return "invalid kind (a lowercase letter, then lowercase letters, digits and hyphens, at most 64 characters)";
   }
-  let n = eventDeclarations().get(e.kind);
-  if (n === undefined) {
+  let declaration = eventDeclarations().get(group.kind);
+  if (declaration === undefined) {
     logFeatureBad("poll_event_delivery", "undeclared_kind");
-    let S = eventDeclarationFault();
-    return S === undefined
-      ? `kind "${e.kind}" is not declared`
-      : `kind "${e.kind}" is not declared: the host's declarations were refused (${sanitizeTelemetryString(S)})`;
+    let fault = eventDeclarationFault();
+    return fault === undefined
+      ? `kind "${group.kind}" is not declared`
+      : `kind "${group.kind}" is not declared: the host's declarations were refused (${sanitizeTelemetryString(fault)})`;
   }
   let pollEventEnvelope = buildPollEventEnvelope({
-    declaration: n,
-    at: e.at,
-    fields: e.fields,
+    declaration,
+    at: group.at,
+    fields: group.fields,
   });
   if (!pollEventEnvelope.ok) {
     logFeatureBad("poll_event_delivery", "fields_invalid");
     return pollEventEnvelope.reason;
   }
   let declared = {
-    declaration: n,
-    at: e.at,
+    declaration,
+    at: group.at,
     fields: pollEventEnvelope.fields,
   };
-  let h = Buffer.byteLength(pollEventEnvelope.envelope, "utf8") + envelopeLengthFor("json");
-  if (h > MAX_POLL_EVENT_ENVELOPE_BYTES) {
+  let stampedBytes = Buffer.byteLength(pollEventEnvelope.envelope, "utf8") + envelopeLengthFor("json");
+  if (stampedBytes > MAX_POLL_EVENT_ENVELOPE_BYTES) {
     logFeatureBad("poll_event_delivery", "envelope_too_large");
-    return `envelope is ${h} bytes after nonce stamping (cap ${MAX_POLL_EVENT_ENVELOPE_BYTES})`;
+    return `envelope is ${stampedBytes} bytes after nonce stamping (cap ${MAX_POLL_EVENT_ENVELOPE_BYTES})`;
   }
-  let y =
-    e.from === undefined || e.from.authority === "world-event"
+  let senderText =
+    group.from === undefined || group.from.authority === "world-event"
       ? undefined
       : autoModeFieldsText({
-          declaration: n,
+          declaration,
           fields: pollEventEnvelope.fields,
         });
   return {
     input: {
-      kind: e.kind,
+      kind: group.kind,
       declared,
-      wake: e.wake,
+      wake: group.wake,
       provenance:
-        e.from === undefined
+        group.from === undefined
           ? undefined
           : {
-              authority: e.from.authority,
-              ...(e.from.id !== undefined && {
-                senderId: e.from.id,
+              authority: group.from.authority,
+              ...(group.from.id !== undefined && {
+                senderId: group.from.id,
               }),
-              ...(y !== undefined && {
-                senderText: y,
+              ...(senderText !== undefined && {
+                senderText,
               }),
             },
     },
-    hookText: [e.kind, e.at, collectFieldStrings(pollEventEnvelope.fields)].filter((S) => S !== "").join(`
+    hookText: [group.kind, group.at, collectFieldStrings(pollEventEnvelope.fields)].filter(
+      (part) => part !== "",
+    ).join(`
 `),
-    stampedBytes: h,
+    stampedBytes,
   };
 }
 //@ chunk-tyg7f3ek.js:556550-556852 placement
@@ -457,10 +465,10 @@ function ackPollEventRow({ row, rowsInFlight, tearingDown, ack, flushSessionStor
   return {
     flushSessionStorage: () =>
       flushSessionStorage().finally(() => ackPollEventRowOnce(row, rowsInFlight, ack)),
-    reply: (S) => {
-      if (S.subtype === "error" && tearingDown()) return;
+    reply: (replyMessage) => {
+      if (replyMessage.subtype === "error" && tearingDown()) return;
       try {
-        reply(S);
+        reply(replyMessage);
       } finally {
         ackPollEventRowOnce(row, rowsInFlight, ack);
       }
@@ -468,8 +476,8 @@ function ackPollEventRow({ row, rowsInFlight, tearingDown, ack, flushSessionStor
   };
 }
 //@ chunk-tyg7f3ek.js:556852-556891 placement
-function ackPollEventRowOnce(row, rowsInFlight, r) {
-  if (rowsInFlight.delete(row)) r(row);
+function ackPollEventRowOnce(row, rowsInFlight, ack) {
+  if (rowsInFlight.delete(row)) ack(row);
 }
 //@ chunk-tyg7f3ek.js:556940-558008 placement
 /**
@@ -488,41 +496,40 @@ async function handleReloadPluginsAddPlugins({ addPlugins, fromOffMachine }) {
       code: "sideload_disabled",
       message: "reload_plugins add_plugins is disabled by managed settings (disableSideloadFlags)",
     };
-  let r = array(SDKLocalMessageSchema()).safeParse(addPlugins);
-  if (!r.success || r.data.some((R) => !isAbsolute(R.path)))
+  let parsed = array(SDKLocalMessageSchema()).safeParse(addPlugins);
+  if (!parsed.success || parsed.data.some((entry) => !isAbsolute(entry.path)))
     return {
       kind: "refused",
       code: "invalid",
       message:
         'reload_plugins add_plugins must be a list of { type: "local", path } entries with absolute paths',
     };
-  let mapped = r.data.map((R) => ({
-    path: resolve(R.path),
-    withoutMcp: R.skipMcpDiscovery === true,
+  let mapped = parsed.data.map((entry) => ({
+    path: resolve(entry.path),
+    withoutMcp: entry.skipMcpDiscovery === true,
   }));
-  let h = [];
-  let y = [];
-  function S() {
-    setInlinePlugins(withoutPluginDirs(getInlinePlugins(), h));
-    setInlinePluginsNoMcp(withoutPluginDirs(getInlinePluginsNoMcp(), y));
+  let pluginDirs = [];
+  let mcpOffDirs = [];
+  function restore() {
+    setInlinePlugins(withoutPluginDirs(getInlinePlugins(), pluginDirs));
+    setInlinePluginsNoMcp(withoutPluginDirs(getInlinePluginsNoMcp(), mcpOffDirs));
   }
   try {
     await rebuildSandboxForPluginDir(() => {
       let inlinePlugins = getInlinePlugins();
       let inlinePluginsNoMcp = getInlinePluginsNoMcp();
-      y = withoutPluginDirs(mergePluginDirs(mapped.filter((P) => P.withoutMcp).map((P) => P.path)), [
-        ...inlinePlugins,
-        ...inlinePluginsNoMcp,
-      ]);
-      h = withoutPluginDirs(mergePluginDirs(mapped.filter((P) => !P.withoutMcp).map((P) => P.path)), [
-        ...inlinePlugins,
-        ...inlinePluginsNoMcp,
-        ...y,
-      ]);
-      if (h.length === 0 && y.length === 0) return;
-      setInlinePluginsNoMcp([...inlinePluginsNoMcp, ...y]);
-      setInlinePlugins([...inlinePlugins, ...h]);
-      return S;
+      mcpOffDirs = withoutPluginDirs(
+        mergePluginDirs(mapped.filter((entry) => entry.withoutMcp).map((entry) => entry.path)),
+        [...inlinePlugins, ...inlinePluginsNoMcp],
+      );
+      pluginDirs = withoutPluginDirs(
+        mergePluginDirs(mapped.filter((entry) => !entry.withoutMcp).map((entry) => entry.path)),
+        [...inlinePlugins, ...inlinePluginsNoMcp, ...mcpOffDirs],
+      );
+      if (pluginDirs.length === 0 && mcpOffDirs.length === 0) return;
+      setInlinePluginsNoMcp([...inlinePluginsNoMcp, ...mcpOffDirs]);
+      setInlinePlugins([...inlinePlugins, ...pluginDirs]);
+      return restore;
     });
   } catch (error) {
     return {
@@ -533,7 +540,7 @@ async function handleReloadPluginsAddPlugins({ addPlugins, fromOffMachine }) {
   }
   return {
     kind: "joined",
-    restore: S,
+    restore,
   };
 }
 //@ chunk-tyg7f3ek.js:558008-558189 placement
@@ -541,13 +548,14 @@ function listSkillsForSdk(skillToolCommands, commands, commands_2) {
   let isFolderAlias = folderNameAliasCheck();
   let commandLookup = buildCommandLookup(commands_2);
   return {
-    skills: dropSyncedClashes(skillToolCommands, commands).map((S) => {
-      let { builtin, ...w } = toSlashCommand(S, isFolderAlias);
-      let P = commandLookup.get(w.name);
-      let L = P !== undefined && isBuiltinCommand(P) && isBuiltinCommand(S);
+    skills: dropSyncedClashes(skillToolCommands, commands).map((command) => {
+      let { builtin, ...fields } = toSlashCommand(command, isFolderAlias);
+      let registered = commandLookup.get(fields.name);
+      let isBuiltinBoth =
+        registered !== undefined && isBuiltinCommand(registered) && isBuiltinCommand(command);
       return {
-        ...w,
-        ...(L && {
+        ...fields,
+        ...(isBuiltinBoth && {
           builtin: true,
         }),
       };
@@ -555,31 +563,31 @@ function listSkillsForSdk(skillToolCommands, commands, commands_2) {
   };
 }
 //@ chunk-tyg7f3ek.js:558189-558345 placement
-var faultAddress = (e) => ({
+var faultAddress = (fault) => ({
   address: {
-    plugin: e.plugin,
-    component: e.component,
-    requestId: e.instance_id,
-    key: e.client,
-    module: e.module,
+    plugin: fault.plugin,
+    component: fault.component,
+    requestId: fault.instance_id,
+    key: fault.client,
+    module: fault.module,
   },
   report: {
-    phase: e.phase,
-    reason: e.reason,
+    phase: fault.phase,
+    reason: fault.reason,
   },
 });
 //@ chunk-tyg7f3ek.js:558345-558493 placement
 function describeClientFault(error) {
-  let [n] = error.issues;
-  if (n === undefined) return "ui_client_fault: malformed";
-  return `ui_client_fault: ${n.path.join(".") || "request"}: ` + n.message;
+  let [issue] = error.issues;
+  if (issue === undefined) return "ui_client_fault: malformed";
+  return `ui_client_fault: ${issue.path.join(".") || "request"}: ` + issue.message;
 }
 //@ chunk-tyg7f3ek.js:558493-558638 placement
 async function handleClientFault(request) {
-  let n = SDKUiClientFaultUiClientFaultMessageSchema().safeParse(request);
-  if (!n.success) throw new WireSafeControlError(describeClientFault(n.error));
+  let parsed = SDKUiClientFaultUiClientFaultMessageSchema().safeParse(request);
+  if (!parsed.success) throw new WireSafeControlError(describeClientFault(parsed.error));
   return {
-    handled: (await render.clientFault(faultAddress(n.data))) !== undefined,
+    handled: (await render.clientFault(faultAddress(parsed.data))) !== undefined,
   };
 }
 //@ chunk-tyg7f3ek.js:558638-558651 placement
@@ -595,16 +603,16 @@ function truncateToolOutput(props) {
       };
 }
 //@ chunk-tyg7f3ek.js:558747-558861 placement
-function withToolUseId(component, toolUseId, r) {
-  return (component !== "ToolUse" && component !== "ToolResult") || typeof r.tool_use_id === "string"
-    ? r
+function withToolUseId(component, toolUseId, props) {
+  return (component !== "ToolUse" && component !== "ToolResult") || typeof props.tool_use_id === "string"
+    ? props
     : {
-        ...r,
+        ...props,
         tool_use_id: toolUseId,
       };
 }
 //@ chunk-tyg7f3ek.js:558861-558901 placement
-var surfaceClientId = (e) => e.client_id ?? defaultScopeKey(e.surface);
+var surfaceClientId = (request) => request.client_id ?? defaultScopeKey(request.surface);
 //@ chunk-tyg7f3ek.js:558901-559030 placement
 function paneTarget(request, clientId) {
   let { component } = request;
@@ -618,30 +626,34 @@ function paneTarget(request, clientId) {
 }
 //@ chunk-tyg7f3ek.js:559030-559208 placement
 function uiRenderProps(request) {
-  let n = withToolUseId(request.component, request.instance_id, truncateToolOutput(request.props));
-  let { onScreen, ...s } = n;
-  let h = MESSAGE_COMPONENT_NAMES.has(request.component);
-  let S =
+  let propsWithTool = withToolUseId(
+    request.component,
+    request.instance_id,
+    truncateToolOutput(request.props),
+  );
+  let { onScreen, ...rest } = propsWithTool;
+  let isMessageComponent = MESSAGE_COMPONENT_NAMES.has(request.component);
+  let onScreenField =
     request.on_screen !== undefined
       ? {
           onScreen: request.on_screen,
         }
       : {};
-  return h
+  return isMessageComponent
     ? {
-        ...s,
-        ...S,
+        ...rest,
+        ...onScreenField,
       }
-    : n;
+    : propsWithTool;
 }
 //@ chunk-tyg7f3ek.js:559208-560243 placement
 /**
  * 为远程客户端（IDE/网页）渲染插件 UI 面板：加入名册、按视口生成树并回传。
  */
-async function renderPluginSurface(e, n) {
-  let { request, by, signal } = e;
+async function renderPluginSurface(options, roster) {
+  let { request, by, signal } = options;
   let clientId = surfaceClientId(request);
-  let joined = n.rosterMemory.join({
+  let joined = roster.rosterMemory.join({
     client: {
       surface: request.surface,
       clientId,
@@ -655,14 +667,14 @@ async function renderPluginSurface(e, n) {
   });
   joined.attaching;
   if (!joined.isAdmitted) return;
-  if (!joined.wasOnRoster) n.givePluginUiTo(joined.isFirstClient);
-  let R = n.paneRosterPushes();
+  if (!joined.wasOnRoster) roster.givePluginUiTo(joined.isFirstClient);
+  let pushes = roster.paneRosterPushes();
   pruneDetachedClients();
-  if (joined.isPutBack) n.tellPaneRoster(R);
-  let w = paneTarget(request, clientId);
-  if (w !== undefined)
+  if (joined.isPutBack) roster.tellPaneRoster(pushes);
+  let pane = paneTarget(request, clientId);
+  if (pane !== undefined)
     attachPaneClient({
-      ...w,
+      ...pane,
       ...paneStateFields(request.props),
       ...(request.content_rows !== undefined && {
         contentRows: request.content_rows,
@@ -671,9 +683,9 @@ async function renderPluginSurface(e, n) {
         keyed: request.keyed,
       }),
     });
-  await import("./chunk-gfbwkdce.js");
+  await import("../../plugins/functionHooks/ui/BOOLEAN_PROPS.lazy.js");
   await vscodeHookRegistrationInFlight(request.surface);
-  let P = await render.run({
+  let rendered = await render.run({
     surface: request.surface,
     component: request.component,
     requestId: request.instance_id,
@@ -683,22 +695,22 @@ async function renderPluginSurface(e, n) {
     props: uiRenderProps(request),
   });
   if (signal?.aborted) return;
-  if (n.isRemoteTransport() && !isClientAttached(clientId)) return;
-  if (w !== undefined)
+  if (roster.isRemoteTransport() && !isClientAttached(clientId)) return;
+  if (pane !== undefined)
     updatePaneSurface({
-      ...w,
-      tree: P.tree,
+      ...pane,
+      tree: rendered.tree,
     });
-  let q = Object.keys(P.clientModules).length > 0;
+  let hasClientModules = Object.keys(rendered.clientModules).length > 0;
   return {
-    tree: P.tree,
-    props: P.props,
-    rewritten: P.rewritten,
+    tree: rendered.tree,
+    props: rendered.props,
+    rewritten: rendered.rewritten,
     hooked: hasRenderHookingSite(request.component, request.surface),
-    ...(q && {
-      client_modules: P.clientModules,
+    ...(hasClientModules && {
+      client_modules: rendered.clientModules,
     }),
-    drawn_by: P.drawnBy,
+    drawn_by: rendered.drawnBy,
     ...(request.bench !== undefined && {
       bench: request.bench,
     }),
@@ -706,96 +718,107 @@ async function renderPluginSurface(e, n) {
 }
 //@ chunk-tyg7f3ek.js:560243-560365 placement
 var MAX_UI_RETRIES = 3;
-var isOnRoster = (e, n) =>
-  e === undefined ||
-  e.some((r) => r.surface === n.surface && r.component === n.component && r.requestId === n.instance_id);
+var isOnRoster = (roster, request) =>
+  roster === undefined ||
+  roster.some(
+    (entry) =>
+      entry.surface === request.surface &&
+      entry.component === request.component &&
+      entry.requestId === request.instance_id,
+  );
 //@ chunk-tyg7f3ek.js:560365-560938 placement
-async function renderPluginSurfaceWithRetry(render_2, by, r) {
-  let s = surfaceClientId(render_2);
-  let h = false;
-  let y = render.onInvalidate((S) => {
-    h ||= isOnRoster(S, render_2);
+async function renderPluginSurfaceWithRetry(request, by, roster) {
+  let clientId = surfaceClientId(request);
+  let overtaken = false;
+  let unsubscribe = render.onInvalidate((rosterNext) => {
+    overtaken ||= isOnRoster(rosterNext, request);
   });
   try {
-    for (let S = 0; S < MAX_UI_RETRIES; S += 1) {
-      h = false;
-      let w =
-        isClientAttached(s) && !r.isPanelAttachOwed()
+    for (let attempt = 0; attempt < MAX_UI_RETRIES; attempt += 1) {
+      overtaken = false;
+      let drawn =
+        isClientAttached(clientId) && !roster.isPanelAttachOwed()
           ? await renderPluginSurface(
               {
-                request: render_2,
+                request,
                 by,
               },
-              r,
+              roster,
             )
           : undefined;
-      if (!isClientAttached(s)) {
+      if (!isClientAttached(clientId)) {
         logFeatureSad("plugin_function_hooks_press_drawn", "client_gone");
         return;
       }
-      if (w === undefined) {
+      if (drawn === undefined) {
         logFeatureSad("plugin_function_hooks_press_drawn", "draw_refused");
         return;
       }
-      if (!h) {
+      if (!overtaken) {
         logFeatureOk("plugin_function_hooks_press_drawn");
-        return w;
+        return drawn;
       }
     }
     logFeatureSad("plugin_function_hooks_press_drawn", "draw_overtaken");
     return;
   } catch (error) {
-    logHandlerFailure(r.redactsPersistedLane(), "ui_press", error);
+    logHandlerFailure(roster.redactsPersistedLane(), "ui_press", error);
     logFeatureSad("plugin_function_hooks_press_drawn", "draw_failed");
     return;
   } finally {
-    y();
+    unsubscribe();
   }
 }
 //@ chunk-tyg7f3ek.js:560938-561005 placement
-var DESKTOP_UI_EVENT_SUBTYPES = new Set(["ui_client_press", "ui_message", "ui_client_fault"]);
+var DESKTOP_UI_EVENT_SUBTYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-tyg7f3ek.js:560938", () => {
+  DESKTOP_UI_EVENT_SUBTYPES = new Set(["ui_client_press", "ui_message", "ui_client_fault"]);
+});
 //@ chunk-tyg7f3ek.js:561005-561119 placement
-var sdkUiMessageSchema = DoctorLazy(() =>
-  discriminatedUnion("subtype", [
-    SDKUiPressUiPressMessageSchema(),
-    SDKUiInputUiInputMessageSchema(),
-    SDKUiSelectUiSelectMessageSchema(),
-    SDKUiScrollUiScrollMessageSchema(),
-    SDKUiFocusUiFocusMessageSchema(),
-    SDKUiPromptEditUiPromptEditMessageSchema(),
-    SDKUiPromptAutocompleteUiPromptAutocompleteMessageSchema(),
-    SDKUiPanesUiPanesMessageSchema(),
-    SDKUiPaneShowUiPaneShowMessageSchema(),
-    SDKUiPaneFocusUiPaneFocusMessageSchema(),
-    SDKUiCloseUiCloseMessageSchema(),
-    SDKUiClientPressUiClientPressMessageSchema(),
-    SDKUiMessageUiMessageMessageSchema(),
-    SDKUiClientFaultUiClientFaultMessageSchema(),
-  ]),
-);
+var sdkUiMessageSchema; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-tyg7f3ek.js:561005", () => {
+  sdkUiMessageSchema = DoctorLazy(() =>
+    discriminatedUnion("subtype", [
+      SDKUiPressUiPressMessageSchema(),
+      SDKUiInputUiInputMessageSchema(),
+      SDKUiSelectUiSelectMessageSchema(),
+      SDKUiScrollUiScrollMessageSchema(),
+      SDKUiFocusUiFocusMessageSchema(),
+      SDKUiPromptEditUiPromptEditMessageSchema(),
+      SDKUiPromptAutocompleteUiPromptAutocompleteMessageSchema(),
+      SDKUiPanesUiPanesMessageSchema(),
+      SDKUiPaneShowUiPaneShowMessageSchema(),
+      SDKUiPaneFocusUiPaneFocusMessageSchema(),
+      SDKUiCloseUiCloseMessageSchema(),
+      SDKUiClientPressUiClientPressMessageSchema(),
+      SDKUiMessageUiMessageMessageSchema(),
+      SDKUiClientFaultUiClientFaultMessageSchema(),
+    ]),
+  );
+});
 //@ chunk-tyg7f3ek.js:561119-561425 placement
-function parseSurfaceRequest(e, n) {
-  let r = sdkUiMessageSchema().safeParse(e);
-  if (!r.success) return;
-  let clientId = "client_id" in r.data ? r.data.client_id : undefined;
-  let h = DESKTOP_UI_EVENT_SUBTYPES.has(r.data.subtype) ? DESKTOP : undefined;
-  let y = "surface" in r.data ? r.data.surface : h;
-  let R = y !== undefined ? defaultScopeKey(y) : undefined;
-  let w = clientId ?? R;
-  let L = w !== undefined ? n(w) : undefined;
-  return w !== undefined && L !== undefined
+function parseSurfaceRequest(payload, resolveSurface) {
+  let parsed = sdkUiMessageSchema().safeParse(payload);
+  if (!parsed.success) return;
+  let clientId = "client_id" in parsed.data ? parsed.data.client_id : undefined;
+  let desktopSurface = DESKTOP_UI_EVENT_SUBTYPES.has(parsed.data.subtype) ? DESKTOP : undefined;
+  let surface = "surface" in parsed.data ? parsed.data.surface : desktopSurface;
+  let defaultSurface = surface !== undefined ? defaultScopeKey(surface) : undefined;
+  let resolvedClientId = clientId ?? defaultSurface;
+  let surfaceName = resolvedClientId !== undefined ? resolveSurface(resolvedClientId) : undefined;
+  return resolvedClientId !== undefined && surfaceName !== undefined
     ? {
-        surface: L,
-        clientId: w,
+        surface: surfaceName,
+        clientId: resolvedClientId,
       }
     : undefined;
 }
 //@ chunk-tyg7f3ek.js:561425-561473 placement
-var findSurfaceClient = (e) => clientRegistry.list().find((n) => n.clientId === e);
+var findSurfaceClient = (clientId) => clientRegistry.list().find((client) => client.clientId === clientId);
 //@ chunk-tyg7f3ek.js:561473-561577 placement
-function noteSurfaceClientHeard(request) {
+function noteSurfaceClientHeard(payload) {
   try {
-    let surfaceRequest = parseSurfaceRequest(request, (r) => findSurfaceClient(r)?.surface);
+    let surfaceRequest = parseSurfaceRequest(payload, (clientId) => findSurfaceClient(clientId)?.surface);
     if (surfaceRequest !== undefined) clientRegistry.heard(surfaceRequest.clientId);
   } catch (error) {
     logError(toError(error));
@@ -804,13 +827,13 @@ function noteSurfaceClientHeard(request) {
 //@ chunk-tyg7f3ek.js:561577-561587 placement
 var MAX_RECENT_SURFACE_DECLARATIONS = 64;
 //@ chunk-tyg7f3ek.js:561587-562827 placement
-function createSurfaceDeclarationTracker(e, n) {
-  let r = new Map();
-  function s(clientId, declaredBy) {
+function createSurfaceDeclarationTracker(host, senderStands) {
+  let declarations = new Map();
+  function remember(clientId, declaredBy) {
     let surfaceClient = findSurfaceClient(clientId);
     if (surfaceClient !== undefined)
       setBoundedRecent(
-        r,
+        declarations,
         [
           clientId,
           {
@@ -821,79 +844,85 @@ function createSurfaceDeclarationTracker(e, n) {
         MAX_RECENT_SURFACE_DECLARATIONS,
       );
   }
-  function h(clientId) {
-    let L = e.isRemoteTransport() ? r.get(clientId) : undefined;
-    let q = L !== undefined && e.senderStands(L.declaredBy);
-    if (L !== undefined && !q) r.delete(clientId);
-    return q ? L : undefined;
+  function trusted(clientId) {
+    let declaration = host.isRemoteTransport() ? declarations.get(clientId) : undefined;
+    let stands = declaration !== undefined && host.senderStands(declaration.declaredBy);
+    if (declaration !== undefined && !stands) declarations.delete(clientId);
+    return stands ? declaration : undefined;
   }
-  function y(w) {
-    let P = clientRegistry.list();
-    let any = P.some((Se) => Se.clientId === w.client.clientId);
-    let q = any ? undefined : h(w.client.clientId);
-    let viewport = w.client.viewport ?? q?.declared.viewport;
-    let G = e.senderStands(w.by);
-    let attaching = G
+  function join(joinArgs) {
+    let clients = clientRegistry.list();
+    let any = clients.some((client) => client.clientId === joinArgs.client.clientId);
+    let previous = any ? undefined : trusted(joinArgs.client.clientId);
+    let viewport = joinArgs.client.viewport ?? previous?.declared.viewport;
+    let stands = host.senderStands(joinArgs.by);
+    let attaching = stands
       ? raiseSessionAttach(
           {
-            surface: w.client.surface,
-            clientId: w.client.clientId,
+            surface: joinArgs.client.surface,
+            clientId: joinArgs.client.clientId,
             ...(viewport !== undefined && {
               viewport,
             }),
           },
-          w.answers ?? q?.declared.answers,
+          joinArgs.answers ?? previous?.declared.answers,
         )
       : Promise.resolve(false);
-    let declaredBy = w.declares ? undefined : q?.declaredBy;
-    let Ae = any && !w.declares;
-    let Ue =
-      !Ae && n(w.client.clientId, w.by) && (declaredBy === undefined || n(w.client.clientId, declaredBy));
-    let ce = Ae ? G : Ue;
-    let nt = !any && !r.has(w.client.clientId);
-    if (ce && (w.declares || nt)) s(w.client.clientId, w.by);
+    let declaredBy = joinArgs.declares ? undefined : previous?.declaredBy;
+    let alreadyListed = any && !joinArgs.declares;
+    let canDeclare =
+      !alreadyListed &&
+      senderStands(joinArgs.client.clientId, joinArgs.by) &&
+      (declaredBy === undefined || senderStands(joinArgs.client.clientId, declaredBy));
+    let isAdmitted = alreadyListed ? stands : canDeclare;
+    let firstSeen = !any && !declarations.has(joinArgs.client.clientId);
+    if (isAdmitted && (joinArgs.declares || firstSeen)) remember(joinArgs.client.clientId, joinArgs.by);
     return {
-      isAdmitted: ce,
+      isAdmitted,
       wasOnRoster: any,
-      isPutBack: ce && q !== undefined,
-      isFirstClient: P.length === 0,
+      isPutBack: isAdmitted && previous !== undefined,
+      isFirstClient: clients.length === 0,
       attaching,
     };
   }
-  function S(w) {
+  function readmit(request) {
     try {
-      let L = e.isRemoteTransport()
-        ? parseSurfaceRequest(w.request, (G) => r.get(G)?.declared.surface)
+      let surfaceRequest = host.isRemoteTransport()
+        ? parseSurfaceRequest(request.request, (clientId) => declarations.get(clientId)?.declared.surface)
         : undefined;
-      if (!(L !== undefined && findSurfaceClient(L.clientId) === undefined && h(L.clientId) !== undefined))
+      if (!(
+        surfaceRequest !== undefined &&
+        findSurfaceClient(surfaceRequest.clientId) === undefined &&
+        trusted(surfaceRequest.clientId) !== undefined
+      ))
         return;
-      let x = y({
-        client: L,
+      let joined = join({
+        client: surfaceRequest,
         answers: undefined,
         declares: false,
-        by: w,
+        by: request,
       });
-      x.attaching;
-      if (x.isAdmitted) e.welcomeBack();
+      joined.attaching;
+      if (joined.isAdmitted) host.welcomeBack();
     } catch (error) {
       logError(toError(error));
     }
   }
   return {
-    join: y,
-    readmit: S,
-    forget: (w) => void r.delete(w),
+    join,
+    readmit,
+    forget: (clientId) => void declarations.delete(clientId),
   };
 }
 //@ chunk-tyg7f3ek.js:562827-563051 placement
-function applyPermissionModeChange(e, toolPermissionContext) {
-  let r = guardPermissionModeChange(e.mode, toolPermissionContext);
-  if (!r.ok) return r;
-  setAccountSetPermissionMode(r.mode);
-  if (toolPermissionContext.mode === r.mode)
+function applyPermissionModeChange(request, toolPermissionContext) {
+  let guarded = guardPermissionModeChange(request.mode, toolPermissionContext);
+  if (!guarded.ok) return guarded;
+  setAccountSetPermissionMode(guarded.mode);
+  if (toolPermissionContext.mode === guarded.mode)
     return {
       ok: true,
-      mode: r.mode,
+      mode: guarded.mode,
       context: toolPermissionContext,
     };
   setImmediate(() => {
@@ -901,10 +930,10 @@ function applyPermissionModeChange(e, toolPermissionContext) {
   });
   return {
     ok: true,
-    mode: r.mode,
+    mode: guarded.mode,
     context: {
-      ...transitionPermissionMode(toolPermissionContext.mode, r.mode, toolPermissionContext),
-      mode: r.mode,
+      ...transitionPermissionMode(toolPermissionContext.mode, guarded.mode, toolPermissionContext),
+      mode: guarded.mode,
     },
   };
 }
@@ -918,56 +947,57 @@ class RemoteMcpTaskTracker {
   get isBusy() {
     return this.#o > 0;
   }
-  hasRunningTask(e) {
-    for (let n of this.#n) {
-      if (e[n]?.status === "running") return true;
-      this.#n.delete(n);
+  hasRunningTask(tasks) {
+    for (let taskId of this.#n) {
+      if (tasks[taskId]?.status === "running") return true;
+      this.#n.delete(taskId);
     }
     return false;
   }
-  async answer(e, n, r, s) {
-    let h = this.#t.get(e);
-    if (h !== undefined) return h;
-    if (r.readsSessionStream) {
-      if (r.storedAt === undefined || r.joinedAt === undefined) {
+  async answer(requestId, request, timing, context) {
+    let existing = this.#t.get(requestId);
+    if (existing !== undefined) return existing;
+    if (timing.readsSessionStream) {
+      if (timing.storedAt === undefined || timing.joinedAt === undefined) {
         logFeatureSad("remote_start_shell_task", "join_time_unknown");
         throw new WireSafeControlError(
           "start_shell_task: this worker cannot tell whether it started before or after the request was sent",
         );
       }
-      if (r.storedAt < r.joinedAt) {
+      if (timing.storedAt < timing.joinedAt) {
         logFeatureSad("remote_start_shell_task", "sent_before_start");
         throw new WireSafeControlError(
           "start_shell_task: the request was sent before this worker started; send it again",
         );
       }
     }
-    if (r.heldMs !== undefined && r.heldMs > BANG_COMMAND_MAX_AGE_MS) {
+    if (timing.heldMs !== undefined && timing.heldMs > BANG_COMMAND_MAX_AGE_MS) {
       logFeatureSad("remote_start_shell_task", "late");
       throw new WireSafeControlError("start_shell_task: the request is too old to run; send it again");
     }
-    let { cancellableControlRequests } = s;
-    let childAbortController = createChildAbortController(s.sessionAbortController);
-    cancellableControlRequests.set(e, childAbortController);
+    let { cancellableControlRequests } = context;
+    let childAbortController = createChildAbortController(context.sessionAbortController);
+    cancellableControlRequests.set(requestId, childAbortController);
     this.#o++;
-    let R = withFeatureTelemetry("remote_start_shell_task", () =>
-      runSdkHostCommand(n, s.canUseTool, s.toolUseContext(childAbortController)),
+    let run = withFeatureTelemetry("remote_start_shell_task", () =>
+      runSdkHostCommand(request, context.canUseTool, context.toolUseContext(childAbortController)),
     ).finally(() => {
       this.#o--;
-      if (cancellableControlRequests.get(e) === childAbortController) cancellableControlRequests.delete(e);
+      if (cancellableControlRequests.get(requestId) === childAbortController)
+        cancellableControlRequests.delete(requestId);
     });
-    this.#t.set(e, R);
-    let w = await R;
-    if (w.status === "started") this.#n.add(w.task_id);
-    return w;
+    this.#t.set(requestId, run);
+    let result = await run;
+    if (result.status === "started") this.#n.add(result.task_id);
+    return result;
   }
 }
 //@ chunk-tyg7f3ek.js:564218-566023 placement
 /**
  * SDK 宿主请求在本机执行命令（command/args/cwd/env 校验），返回输出。
  */
-async function runSdkHostCommand(e, canUseTool, r) {
-  let { command, args = [], cwd, env = {}, description } = e;
+async function runSdkHostCommand(request, canUseTool, context) {
+  let { command, args = [], cwd, env = {}, description } = request;
   if (
     typeof command !== "string" ||
     command === "" ||
@@ -986,7 +1016,7 @@ async function runSdkHostCommand(e, canUseTool, r) {
     ...Object.entries(env).map(([key, value]) => `${key}=${shellQuoteIfNeeded(value)}`),
     ...[command, ...args].map(shellQuoteIfNeeded),
   ].join(" ");
-  let P = {
+  let toolUse = {
     type: "tool_use",
     id: `toolu_start_shell_task_${randomUUID().replaceAll("-", "")}`,
     name: BASH_TOOL_NAME,
@@ -996,8 +1026,8 @@ async function runSdkHostCommand(e, canUseTool, r) {
           ? joined
           : `cd ${shellQuoteIfNeeded(cwd.startsWith("-") ? `./${cwd}` : cwd)} && ${joined}`,
       run_in_background: true,
-      ...(e.timeout_ms !== undefined && {
-        timeout: e.timeout_ms,
+      ...(request.timeout_ms !== undefined && {
+        timeout: request.timeout_ms,
       }),
       ...(description !== undefined && {
         description,
@@ -1007,62 +1037,62 @@ async function runSdkHostCommand(e, canUseTool, r) {
       type: "direct",
     },
   };
-  let L;
-  let q = "the Bash call gave no result";
-  for await (let x of runToolUse(
-    P,
+  let result;
+  let lastText = "the Bash call gave no result";
+  for await (let messageItem of runToolUse(
+    toolUse,
     createAssistantMessage({
-      content: [P],
+      content: [toolUse],
       isVirtual: true,
     }),
     canUseTool,
     {
-      ...r,
-      clientRequestedToolUseId: P.id,
+      ...context,
+      clientRequestedToolUseId: toolUse.id,
     },
     () => new Date().toISOString(),
   )) {
-    if (hasTypeField(x) || x.message.type !== "user") continue;
-    let { message } = x;
+    if (hasTypeField(messageItem) || messageItem.message.type !== "user") continue;
+    let { message } = messageItem;
     let content = message.message.content;
-    let re =
+    let block =
       typeof content === "string"
         ? undefined
-        : content.find((ce) => ce.type === "tool_result" && ce.tool_use_id === P.id);
-    if (re?.type !== "tool_result") continue;
-    let Ae =
-      typeof re.content === "string"
-        ? re.content
+        : content.find((block) => block.type === "tool_result" && block.tool_use_id === toolUse.id);
+    if (block?.type !== "tool_result") continue;
+    let text =
+      typeof block.content === "string"
+        ? block.content
         : extractTextContent_2(
-            re.content ?? [],
+            block.content ?? [],
             `
 `,
           );
-    let Ue =
-      Object.values(r.taskRegistry.all()).find((ce) => ce.toolUseId === P.id)?.id ??
+    let taskId =
+      Object.values(context.taskRegistry.all()).find((task) => task.toolUseId === toolUse.id)?.id ??
       (typeof message.toolUseResult === "object" &&
       message.toolUseResult !== null &&
       "backgroundTaskId" in message.toolUseResult
         ? message.toolUseResult.backgroundTaskId
         : undefined);
     if (message.toolDenialKind !== undefined)
-      L = {
+      result = {
         status: "denied",
-        message: Ae,
+        message: text,
       };
-    else if (typeof Ue === "string")
-      L = {
+    else if (typeof taskId === "string")
+      result = {
         status: "started",
-        task_id: Ue,
+        task_id: taskId,
       };
-    else q = Ae;
+    else lastText = text;
   }
-  if (L === undefined)
+  if (result === undefined)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `start_shell_task: ${q}`,
+      `start_shell_task: ${lastText}`,
       "start_shell_task: the Bash call failed",
     );
-  return L;
+  return result;
 }
 //@ chunk-tyg7f3ek.js:566023-566112 placement = singleQuoteForEval (1)
 function shellQuoteIfNeeded(s) {

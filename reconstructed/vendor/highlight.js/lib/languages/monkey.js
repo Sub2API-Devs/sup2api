@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:302076-303563 cjs-fingerprint
-var require_monkey = x(function (cjsExports, cjsModule) {
+var require_monkey = __commonJS(function (cjsExports, cjsModule) {
   function monkey(hljs) {
     let NUMBER = {
       className: "number",

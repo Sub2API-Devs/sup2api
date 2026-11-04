@@ -39,33 +39,33 @@ var externalBuildMembership = new HostScoped(
   () => new ExternalBuildMembership(() => externalBuildModelConfig),
 );
 //@ chunk-hwmsct5x.js:252710-252796 placement
-function modelKeysOverriddenExternally(e, n) {
-  if (!Array.isArray(e)) return false;
-  return matchesModelKeyPattern(e, n.mainModelOverrideKeys());
+function modelKeysOverriddenExternally(patterns, config) {
+  if (!Array.isArray(patterns)) return false;
+  return matchesModelKeyPattern(patterns, config.mainModelOverrideKeys());
 }
 //@ chunk-hwmsct5x.js:252796-253043 placement
-function matchesModelKeyPattern(e, n) {
-  let r = new Set();
-  let s = [];
-  for (let h of e) {
-    if (typeof h !== "string") continue;
-    if (h.length > 1 && h.endsWith("*")) s.push(h.slice(0, -1));
-    else r.add(h);
+function matchesModelKeyPattern(patterns, keys) {
+  let exactKeys = new Set();
+  let prefixes = [];
+  for (let pattern of patterns) {
+    if (typeof pattern !== "string") continue;
+    if (pattern.length > 1 && pattern.endsWith("*")) prefixes.push(pattern.slice(0, -1));
+    else exactKeys.add(pattern);
   }
-  if (r.size === 0 && s.length === 0) return false;
-  return n.some((h) => r.has(h) || s.some((y) => h.startsWith(y)));
+  if (exactKeys.size === 0 && prefixes.length === 0) return false;
+  return keys.some((key) => exactKeys.has(key) || prefixes.some((prefix) => key.startsWith(prefix)));
 }
 //@ chunk-hwmsct5x.js:253043-253321 placement
-function readModelOverrideConfig(e) {
-  if (!e || typeof e !== "object") return {};
-  let n = e;
-  let r = (h) => (typeof h === "string" && h.trim() !== "" ? h : undefined);
-  let severity = n.severity;
+function readModelOverrideConfig(config) {
+  if (!config || typeof config !== "object") return {};
+  let record = config;
+  let readString = (value) => (typeof value === "string" && value.trim() !== "" ? value : undefined);
+  let severity = record.severity;
   return {
-    model: r(n.model),
-    s1Suffix: r(n.s1Suffix),
-    s2Suffix: r(n.s2Suffix),
-    s1Prefill: r(n.s1Prefill)?.trimEnd(),
+    model: readString(record.model),
+    s1Suffix: readString(record.s1Suffix),
+    s2Suffix: readString(record.s2Suffix),
+    s1Prefill: readString(record.s1Prefill)?.trimEnd(),
     severity: severity !== null && typeof severity === "object" ? severity : undefined,
   };
 }
@@ -110,74 +110,76 @@ var SF_TOKEN_RE = /^[A-Za-z*][A-Za-z0-9!#$%&'*+\-.^_`|~:/]*$/;
 var NON_PRINTABLE_RE = /[^\x20-\x7E]/g;
 var SF_MAX_INTEGER = 999999999999999;
 //@ chunk-hwmsct5x.js:253667-253700 placement
-function isSfToken(e) {
-  return SF_TOKEN_RE.test(e);
+function isSfToken(value) {
+  return SF_TOKEN_RE.test(value);
 }
 //@ chunk-hwmsct5x.js:253700-253733 placement
 function isSfKey(key) {
   return SF_KEY_RE.test(key);
 }
 //@ chunk-hwmsct5x.js:253733-253811 placement
-function quoteSfString(e) {
-  return `"${e.replace(NON_PRINTABLE_RE, "?").replace(/[\\"]/g, (r) => `\\${r}`)}"`;
+function quoteSfString(value) {
+  return `"${value.replace(NON_PRINTABLE_RE, "?").replace(/[\\"]/g, (char) => `\\${char}`)}"`;
 }
 //@ chunk-hwmsct5x.js:253811-254052 placement
-function serializeSfItem(e) {
-  switch (e.type) {
+function serializeSfItem(item) {
+  switch (item.type) {
     case "token":
-      return isSfToken(e.value) ? e.value : undefined;
+      return isSfToken(item.value) ? item.value : undefined;
     case "string":
-      return quoteSfString(e.value);
+      return quoteSfString(item.value);
     case "integer":
-      return Number.isInteger(e.value) && Math.abs(e.value) <= SF_MAX_INTEGER ? String(e.value) : undefined;
+      return Number.isInteger(item.value) && Math.abs(item.value) <= SF_MAX_INTEGER
+        ? String(item.value)
+        : undefined;
     case "boolean":
-      return e.value ? "?1" : "?0";
+      return item.value ? "?1" : "?0";
   }
 }
 //@ chunk-hwmsct5x.js:254052-254203 placement
-function serializeSfMember(e) {
-  if (e.type !== "innerList") return serializeSfItem(e);
-  let n = [];
-  for (let item of e.items) {
-    let s = serializeSfItem(item);
-    if (s === undefined) return;
-    n.push(s);
+function serializeSfMember(member) {
+  if (member.type !== "innerList") return serializeSfItem(member);
+  let parts = [];
+  for (let item of member.items) {
+    let serialized = serializeSfItem(item);
+    if (serialized === undefined) return;
+    parts.push(serialized);
   }
-  return `(${n.join(" ")})`;
+  return `(${parts.join(" ")})`;
 }
 //@ chunk-hwmsct5x.js:254203-254646 placement
 /**
  * 按 RFC 8941 结构化字段把 {key, value} 列表序列化为字典头值（key=value, …）：跳过非法键、过长键/值、无法序列化的值与超出成员上限者，并通过 onDrop 回调报告原因。
  */
 function serializeSfDictionary(
-  e,
-  { maxMembers: n = 1 / 0, maxKeyLength: r = 1 / 0, maxValueLength: s = 1 / 0, onDrop: h } = {},
+  members,
+  { maxMembers = 1 / 0, maxKeyLength = 1 / 0, maxValueLength = 1 / 0, onDrop } = {},
 ) {
-  let y = new Map();
-  for (let { key, value: S } of e) {
+  let serialized = new Map();
+  for (let { key, value } of members) {
     if (!isSfKey(key)) {
-      h?.(key, "invalid_key");
+      onDrop?.(key, "invalid_key");
       continue;
     }
-    if (key.length > r) {
-      h?.(key, "key_too_long");
+    if (key.length > maxKeyLength) {
+      onDrop?.(key, "key_too_long");
       continue;
     }
-    let E = serializeSfMember(S);
-    if (E === undefined) {
-      h?.(key, "invalid_value");
+    let text = serializeSfMember(value);
+    if (text === undefined) {
+      onDrop?.(key, "invalid_value");
       continue;
     }
-    if (E.length > s) {
-      h?.(key, "value_too_long");
+    if (text.length > maxValueLength) {
+      onDrop?.(key, "value_too_long");
       continue;
     }
-    if (!y.has(key) && y.size >= n) {
-      h?.(key, "too_many_members");
+    if (!serialized.has(key) && serialized.size >= maxMembers) {
+      onDrop?.(key, "too_many_members");
       continue;
     }
-    y.set(key, E);
+    serialized.set(key, text);
   }
-  return [...y].map(([w, S]) => `${w}=${S}`).join(", ");
+  return [...serialized].map(([key, text]) => `${key}=${text}`).join(", ");
 }
 export { sfToken, sfString, sfInnerList, isTextField, sfBoolean, serializeSfDictionary };

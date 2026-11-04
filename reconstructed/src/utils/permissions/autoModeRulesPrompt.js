@@ -5,16 +5,11 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-dcmhvw5a.js (35)
- * attribution: placement 35
+ * pieces: chunk-dcmhvw5a.js (27)
+ * attribution: placement 27
  */
 import { RESTRICTION_KEYS, SEC_DEFAULT_PLUGIN_ID } from "../settings/managedRestrictionKeys.js";
-import { $ZodType } from "../../../vendor/zod/v4/core/schemas.js";
-import { ZodType } from "../../../vendor/zod/v4/classic/schemas.js";
-import { Fr } from "../../../vendor/zod/v4/core/core.js";
-import { processSchema } from "../../../vendor/zod/v4/core/to-json-schema.js";
-import { defineLazy, cleanRegex } from "../../../vendor/zod/v4/core/util.js";
-import { getPlatform } from "../platform.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-dcmhvw5a.js:195295-195324 placement
 /**
@@ -24,24 +19,27 @@ function isExactlyTrue(atPath) {
   return atPath === true;
 }
 //@ chunk-dcmhvw5a.js:195324-195458 placement
-function isPolicyModOptionValue(e) {
+function isPolicyModOptionValue(value) {
   return (
-    e !== false &&
-    (["string", "number", "boolean"].includes(typeof e) ||
-      (Array.isArray(e) && e.every((n) => typeof n === "string")))
+    value !== false &&
+    (["string", "number", "boolean"].includes(typeof value) ||
+      (Array.isArray(value) && value.every((item) => typeof item === "string")))
   );
 }
 //@ chunk-dcmhvw5a.js:195458-195598 placement
-var HOST_POLICY_HOLD_PATHS = [
-  ...RESTRICTION_KEYS.settings.map((setting) => ({
-    path: [setting],
-    holds: isExactlyTrue,
-  })),
-  ...RESTRICTION_KEYS.policyModOptions.map((policyModOption) => ({
-    path: ["pluginConfigs", SEC_DEFAULT_PLUGIN_ID, "options", policyModOption],
-    holds: isPolicyModOptionValue,
-  })),
-];
+var HOST_POLICY_HOLD_PATHS; // deferred: uses SEC_DEFAULT_PLUGIN_ID (../settings/managedRestrictionKeys.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:195458", () => {
+  HOST_POLICY_HOLD_PATHS = [
+    ...RESTRICTION_KEYS.settings.map((setting) => ({
+      path: [setting],
+      holds: isExactlyTrue,
+    })),
+    ...RESTRICTION_KEYS.policyModOptions.map((policyModOption) => ({
+      path: ["pluginConfigs", SEC_DEFAULT_PLUGIN_ID, "options", policyModOption],
+      holds: isPolicyModOptionValue,
+    })),
+  ];
+});
 //@ chunk-dcmhvw5a.js:195598-195617 placement
 /**
  * 规则列表中代表默认规则的 $defaults 占位。
@@ -51,49 +49,53 @@ var DEFAULTS_PLACEHOLDER = "$defaults";
 /**
  * replacesDefaultRules：规则列表是否不含 $defaults（完全替换默认规则）。
  */
-function replacesDefaultRules(e) {
-  return (e ?? []).some((n) => n !== "$defaults");
+function replacesDefaultRules(rules) {
+  return (rules ?? []).some((rule) => rule !== "$defaults");
 }
 //@ chunk-dcmhvw5a.js:195674-195734 placement
 /**
  * 规则列表是否完全替换默认规则。
  */
-function replacesDefaults(allow) {
-  return !!allow?.length && !allow.includes("$defaults");
+function replacesDefaults(rules) {
+  return !!rules?.length && !rules.includes("$defaults");
 }
 //@ chunk-dcmhvw5a.js:195734-195886 placement
 /**
  * 展开列表中的 "$defaults" 占位为默认项（只展开一次），其余项经转换函数映射；列表为空时返回默认项副本。
  */
-function expandDefaultsPlaceholder(e, n, r) {
-  if (!e?.length) return [...n];
-  let s = false;
-  let a = [];
-  for (let c of e) {
-    if (c === "$defaults") {
-      if (!s) {
-        a.push(...n);
-        s = true;
+function expandDefaultsPlaceholder(rules, defaults, formatRule) {
+  if (!rules?.length) return [...defaults];
+  let insertedDefaults = false;
+  let result = [];
+  for (let rule of rules) {
+    if (rule === "$defaults") {
+      if (!insertedDefaults) {
+        result.push(...defaults);
+        insertedDefaults = true;
       }
       continue;
     }
-    a.push(r(c));
+    result.push(formatRule(rule));
   }
-  return a;
+  return result;
 }
 //@ chunk-dcmhvw5a.js:195886-195959 placement
-function renderUserDenyRulesBlock(e, n) {
-  return expandDefaultsPlaceholder(e, n.length > 0 ? [n] : [], (r) => `- ${r}`).join(`
+function renderUserDenyRulesBlock(rules, settingsRules) {
+  return expandDefaultsPlaceholder(
+    rules,
+    settingsRules.length > 0 ? [settingsRules] : [],
+    (rule) => `- ${rule}`,
+  ).join(`
 `);
 }
 //@ chunk-dcmhvw5a.js:195959-196600 placement
 /**
  * 生成分类器提示中的用户 deny 规则段落。
  */
-function userDenyRulesSection(e) {
-  if (e.length === 0) return "";
+function userDenyRulesSection(rules) {
+  if (rules.length === 0) return "";
   return (
-    `- User Deny Rules: The user has configured these permission deny rules: ${e.map((r) => `\`${r}\``).join(", ")}. Each rule names a tool and (optionally) an argument pattern that is already hard-blocked for that tool. ` +
+    `- User Deny Rules: The user has configured these permission deny rules: ${rules.map((rule) => `\`${rule}\``).join(", ")}. Each rule names a tool and (optionally) an argument pattern that is already hard-blocked for that tool. ` +
     "Block the action if it accomplishes the same effect via a different tool \u2014 e.g. using Bash with " +
     "`python -c`, `sed -i`, `cat >`, heredocs, or similar to write or edit a file that an Edit/Write/MultiEdit deny rule covers, or otherwise routing around a deny rule by switching tools. The named tool itself is enforced separately; your job here is to catch circumvention."
   );
@@ -110,66 +112,69 @@ var SETTINGS_DENY_RULES_TAG = "<settings_deny_rules>";
 /**
  * 把用户规则填入 auto mode 分类器提示模板槽位。
  */
-function fillAutoModeRuleSlots(e, n, { collapseEmptySlotLines }) {
-  let s = {
-    user_allow_rules_to_replace: n.allow,
-    user_soft_deny_rules_to_replace: n.softDeny,
-    user_hard_deny_rules_to_replace: n.hardDeny,
-    user_environment_to_replace: n.environment,
+function fillAutoModeRuleSlots(text, values, { collapseEmptySlotLines }) {
+  let rulesBySlot = {
+    user_allow_rules_to_replace: values.allow,
+    user_soft_deny_rules_to_replace: values.softDeny,
+    user_hard_deny_rules_to_replace: values.hardDeny,
+    user_environment_to_replace: values.environment,
   };
-  let a = "";
-  for (let c = 0; c < e.length;) {
-    let g = -1;
-    let m = -1;
-    let f = null;
-    let h = null;
-    for (let C of USER_RULE_TEMPLATE_SLOTS) {
-      let w = `<${C}>`;
-      let index = e.indexOf(w, c);
-      if (index === -1 || (g !== -1 && index > g)) continue;
-      let v = `</${C}>`;
-      let index_2 = e.indexOf(v, index + w.length);
+  let result = "";
+  for (let cursor = 0; cursor < text.length;) {
+    let slotStart = -1;
+    let slotEnd = -1;
+    let slotInner = null;
+    let slotName = null;
+    for (let candidateSlot of USER_RULE_TEMPLATE_SLOTS) {
+      let openTag = `<${candidateSlot}>`;
+      let index = text.indexOf(openTag, cursor);
+      if (index === -1 || (slotStart !== -1 && index > slotStart)) continue;
+      let closeTag = `</${candidateSlot}>`;
+      let index_2 = text.indexOf(closeTag, index + openTag.length);
       if (index_2 === -1) continue;
-      g = index;
-      m = index_2 + v.length;
-      f = e.slice(index + w.length, index_2);
-      h = C;
+      slotStart = index;
+      slotEnd = index_2 + closeTag.length;
+      slotInner = text.slice(index + openTag.length, index_2);
+      slotName = candidateSlot;
     }
-    let index = e.indexOf(SETTINGS_DENY_RULES_TAG, c);
-    if (index !== -1 && (g === -1 || index < g)) {
-      g = index;
-      m = index + SETTINGS_DENY_RULES_TAG.length;
-      h = null;
+    let index = text.indexOf(SETTINGS_DENY_RULES_TAG, cursor);
+    if (index !== -1 && (slotStart === -1 || index < slotStart)) {
+      slotStart = index;
+      slotEnd = index + SETTINGS_DENY_RULES_TAG.length;
+      slotName = null;
     }
-    if (g === -1) {
-      a += e.slice(c);
+    if (slotStart === -1) {
+      result += text.slice(cursor);
       break;
     }
-    let b = h === null ? n.settingsDenyBlock : renderUserDenyRulesBlock(s[h], f ?? "");
-    a += e.slice(c, g);
-    let S = e.startsWith(
+    let replacement =
+      slotName === null
+        ? values.settingsDenyBlock
+        : renderUserDenyRulesBlock(rulesBySlot[slotName], slotInner ?? "");
+    result += text.slice(cursor, slotStart);
+    let trailingNewline = text.startsWith(
       `
 `,
-      m,
+      slotEnd,
     )
       ? `
 `
       : "";
-    a += collapseEmptySlotLines
-      ? b &&
-        `${b}
+    result += collapseEmptySlotLines
+      ? replacement &&
+        `${replacement}
 `
-      : b + S;
-    c = m + S.length;
+      : replacement + trailingNewline;
+    cursor = slotEnd + trailingNewline.length;
   }
-  return a;
+  return result;
 }
 //@ chunk-dcmhvw5a.js:197470-197559 placement
 /**
  * normalizeRuleSlug：规则名规范化为小写下划线。
  */
-function normalizeRuleSlug(e) {
-  return e
+function normalizeRuleSlug(text) {
+  return text
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
@@ -179,8 +184,8 @@ function normalizeRuleSlug(e) {
  * ruleIdFromBracketPrefix：从 “[规则名]” 前缀提取规则 id。
  */
 function ruleIdFromBracketPrefix(reason) {
-  let n = /^\[([^[\]]{1,80})\]/.exec(reason)?.[1];
-  return (n && normalizeRuleSlug(n)) || undefined;
+  let prefix = /^\[([^[\]]{1,80})\]/.exec(reason)?.[1];
+  return (prefix && normalizeRuleSlug(prefix)) || undefined;
 }
 //@ chunk-dcmhvw5a.js:197641-199858 placement
 /**
@@ -284,20 +289,26 @@ var UNTRUSTED_CONTENT_RULE_IDS = [
 /**
  * EXTRA_AUTO_MODE_RULE_IDS：预留的空规则数组（供合并）；ALL_AUTO_MODE_RULE_ID_SET：auto 模式规则 id 的集合；ALL_AUTO_MODE_RULE_ID_SET_WITH_UNTRUSTED：基础规则 + 不可信内容规则集合（同一声明共 4 个绑定）。
  */
-var EXTRA_AUTO_MODE_RULE_IDS = [];
-var ALL_AUTO_MODE_RULE_ID_SET = new Set([...AUTO_MODE_RULE_IDS, ...EXTRA_AUTO_MODE_RULE_IDS]);
-var ALL_AUTO_MODE_RULE_ID_SET_WITH_UNTRUSTED = new Set([
-  ...ALL_AUTO_MODE_RULE_ID_SET,
-  ...UNTRUSTED_CONTENT_RULE_IDS,
-]);
-var ALL_AUTO_MODE_RULE_ID_SET_WITH_COWORK = new Set([...ALL_AUTO_MODE_RULE_ID_SET, ...COWORK_RULE_IDS]);
+var EXTRA_AUTO_MODE_RULE_IDS; // deferred: uses AUTO_MODE_RULE_IDS of its import cycle while loading; runs once the cycle is complete
+var ALL_AUTO_MODE_RULE_ID_SET;
+var ALL_AUTO_MODE_RULE_ID_SET_WITH_UNTRUSTED;
+var ALL_AUTO_MODE_RULE_ID_SET_WITH_COWORK;
+deferInit("chunk-dcmhvw5a.js:199858", () => {
+  EXTRA_AUTO_MODE_RULE_IDS = [];
+  ALL_AUTO_MODE_RULE_ID_SET = new Set([...AUTO_MODE_RULE_IDS, ...EXTRA_AUTO_MODE_RULE_IDS]);
+  ALL_AUTO_MODE_RULE_ID_SET_WITH_UNTRUSTED = new Set([
+    ...ALL_AUTO_MODE_RULE_ID_SET,
+    ...UNTRUSTED_CONTENT_RULE_IDS,
+  ]);
+  ALL_AUTO_MODE_RULE_ID_SET_WITH_COWORK = new Set([...ALL_AUTO_MODE_RULE_ID_SET, ...COWORK_RULE_IDS]);
+});
 //@ chunk-dcmhvw5a.js:199954-200089 placement
 /**
  * 字符串是否含控制字符（Tab 以外的 C0、C1、U+2028/2029）。
  */
-function hasControlChars(e) {
-  for (let j = 0; j < e.length; j++) {
-    let code = e.charCodeAt(j);
+function hasControlChars(text) {
+  for (let j = 0; j < text.length; j++) {
+    let code = text.charCodeAt(j);
     if ((code < 32 && code !== 9) || (code >= 127 && code <= 159) || code === 8232 || code === 8233)
       return true;
   }
@@ -310,20 +321,20 @@ var INVISIBLE_RULE_CHAR_RE =
 /**
  * hasInvisibleRuleChars：规则文本是否含不可见字符。
  */
-function hasInvisibleRuleChars(e) {
-  return INVISIBLE_RULE_CHAR_RE.test(e);
+function hasInvisibleRuleChars(text) {
+  return INVISIBLE_RULE_CHAR_RE.test(text);
 }
 //@ chunk-dcmhvw5a.js:200224-200438 placement
 /**
  * 检查用户规则文本是否含模板标记（<settings_、用户规则槽位、<cc_automode 区域标签），返回问题类型或 null。
  */
-function findTemplateInjection(e) {
+function findTemplateInjection(text) {
   if (
-    e.includes("<settings_") ||
-    USER_RULE_TEMPLATE_SLOTS.some((n) => e.includes(`<${n}`) || e.includes(`</${n}`))
+    text.includes("<settings_") ||
+    USER_RULE_TEMPLATE_SLOTS.some((slot) => text.includes(`<${slot}`) || text.includes(`</${slot}`))
   )
     return "template_token";
-  if (e.includes("<cc_automode") || e.includes("</cc_automode")) return "region_tag";
+  if (text.includes("<cc_automode") || text.includes("</cc_automode")) return "region_tag";
   return null;
 }
 //@ chunk-dcmhvw5a.js:200438-200592 placement
@@ -340,54 +351,55 @@ var AUTO_MODE_SECTION_ENV_VARS = {
 /**
  * isAcceptableRuleText：规则文本可用（非空、无控制字符、无模板注入）。
  */
-function isAcceptableRuleText(e) {
+function isAcceptableRuleText(text) {
   return (
-    e.trim().length > 0 &&
-    !hasControlChars(e) &&
-    !hasInvisibleRuleChars(e) &&
-    findTemplateInjection(e) === null
+    text.trim().length > 0 &&
+    !hasControlChars(text) &&
+    !hasInvisibleRuleChars(text) &&
+    findTemplateInjection(text) === null
   );
 }
 //@ chunk-dcmhvw5a.js:200665-200873 placement
-function parseRuleOverrideList(e) {
-  if (!Array.isArray(e) || !e.every((s) => s === null || typeof s === "string")) return null;
-  let n = new Set(e);
-  n.delete(DEFAULTS_PLACEHOLDER);
-  let filtered = [...n].filter((s) => s !== null && isAcceptableRuleText(s));
+function parseRuleOverrideList(value) {
+  if (!Array.isArray(value) || !value.every((entry) => entry === null || typeof entry === "string"))
+    return null;
+  let unique = new Set(value);
+  unique.delete(DEFAULTS_PLACEHOLDER);
+  let filtered = [...unique].filter((entry) => entry !== null && isAcceptableRuleText(entry));
   return {
     entries: filtered,
-    refused: n.size - filtered.length,
+    refused: unique.size - filtered.length,
   };
 }
 //@ chunk-dcmhvw5a.js:200873-201257 placement
 /**
  * 读取 auto mode 规则覆盖（不可读的标记出来）。
  */
-function readAutoModeRuleOverrides(e) {
-  let n = {};
-  let r = {};
-  for (let a of AUTO_MODE_RULE_SECTIONS) {
-    let c = e?.[a];
-    if (c === undefined) continue;
-    let ruleOverrideList = parseRuleOverrideList(c);
+function readAutoModeRuleOverrides(source) {
+  let rules = {};
+  let refused = {};
+  for (let section of AUTO_MODE_RULE_SECTIONS) {
+    let rawList = source?.[section];
+    if (rawList === undefined) continue;
+    let ruleOverrideList = parseRuleOverrideList(rawList);
     if (ruleOverrideList === null) {
-      r[a] = "unreadable";
+      refused[section] = "unreadable";
       continue;
     }
-    if (ruleOverrideList.refused > 0) r[a] = ruleOverrideList.refused;
-    if (ruleOverrideList.entries.length > 0) n[a] = ruleOverrideList.entries;
+    if (ruleOverrideList.refused > 0) refused[section] = ruleOverrideList.refused;
+    if (ruleOverrideList.entries.length > 0) rules[section] = ruleOverrideList.entries;
   }
-  let s =
-    (r.soft_deny !== undefined || r.environment !== undefined) &&
-    (n.allow !== undefined || n.environment !== undefined);
-  if (s) {
-    delete n.allow;
-    delete n.environment;
+  let grantsWithheld =
+    (refused.soft_deny !== undefined || refused.environment !== undefined) &&
+    (rules.allow !== undefined || rules.environment !== undefined);
+  if (grantsWithheld) {
+    delete rules.allow;
+    delete rules.environment;
   }
   return {
-    rules: n,
-    refused: r,
-    grantsWithheld: s,
+    rules,
+    refused,
+    grantsWithheld,
   };
 }
 //@ chunk-dcmhvw5a.js:201257-201380 placement
@@ -395,175 +407,49 @@ function readAutoModeRuleOverrides(e) {
  * 给每个存在的规则段在开头补上 $defaults 占位，保留内置默认规则。
  */
 function prependDefaultsToSections(rules) {
-  let n = {};
-  for (let r of AUTO_MODE_RULE_SECTIONS) {
-    let s = rules[r];
-    if (s !== undefined) n[r] = [DEFAULTS_PLACEHOLDER, ...s];
+  let result = {};
+  for (let section of AUTO_MODE_RULE_SECTIONS) {
+    let entries = rules[section];
+    if (entries !== undefined) result[section] = [DEFAULTS_PLACEHOLDER, ...entries];
   }
-  return Object.keys(n).length > 0 ? n : undefined;
-}
-//@ chunk-dcmhvw5a.js:201422-202068 placement
-/**
- * 延迟可选的 zod 类型。
- */
-var ZodDeferredOptional = $ZodType;
-var zodDeferredOptionalInner = ZodType;
-var createDeferredOptional = Fr("ZodDeferredOptional", (e, n) => {
-  ZodDeferredOptional.init(e, n);
-  zodDeferredOptionalInner.init(e, n);
-  e._zod.optin = "optional";
-  e._zod.optout = "optional";
-  Object.defineProperty(e._zod, "innerType", {
-    get: n.built,
-    configurable: true,
-  });
-  e._zod.processJSONSchema = (r, s, a) => {
-    let c = n.getter();
-    processSchema(c, r, a);
-    r.seen.get(e).ref = c;
-  };
-  defineLazy(e._zod, "values", () => {
-    let values = n.getter()._zod.values;
-    return values ? new Set([...values, undefined]) : undefined;
-  });
-  defineLazy(e._zod, "pattern", () => {
-    let pattern = n.getter()._zod.pattern;
-    return pattern ? new RegExp(`^(${cleanRegex(pattern.source)})?$`) : undefined;
-  });
-  defineLazy(e._zod, "propValues", () => n.getter()._zod.propValues);
-  e._zod.parse = (r, s) => {
-    if (r.value === undefined) return r;
-    return n.getter()._zod.run(r, s);
-  };
-  e.unwrap = n.getter;
-});
-//@ chunk-dcmhvw5a.js:202068-202545 placement
-/**
- * 创建延迟可选 schema（惰性 getter）。
- */
-function deferredOptional(e) {
-  let n;
-  return new createDeferredOptional({
-    type: "lazy",
-    getter: () => {
-      if (n === undefined) {
-        let s = e();
-        if (s._zod.optin !== undefined)
-          throw Error(
-            "deferredOptional(): the schema the build callback returned already handles a missing key itself (.optional(), .catch(), .default(), .prefault(), z.preprocess(), or a union or wrapper holding one). Return the plain schema and let deferredOptional() make it optional, or use that schema with .optional() without deferring it.",
-          );
-        n = s;
-      }
-      return n;
-    },
-    built: () => n,
-  });
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 //@ chunk-dcmhvw5a.js:202545-202697 placement
 /**
  * API 提供方类型列表（anthropic、bedrock、vertex、foundry、gateway 等）及其集合。
  */
-var API_PROVIDER_KINDS = [
-  "anthropic",
-  "customEndpoint",
-  "bedrock",
-  "vertex",
-  "foundry",
-  "anthropicAws",
-  "mantle",
-  "gateway",
-];
-var ANTHROPIC_PROVIDER_ID_RE = /^anthropic[A-Z][A-Za-z0-9]*$/;
-var API_PROVIDER_KIND_SET = new Set(API_PROVIDER_KINDS);
+var API_PROVIDER_KINDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ANTHROPIC_PROVIDER_ID_RE;
+var API_PROVIDER_KIND_SET;
+deferInit("chunk-dcmhvw5a.js:202545", () => {
+  API_PROVIDER_KINDS = [
+    "anthropic",
+    "customEndpoint",
+    "bedrock",
+    "vertex",
+    "foundry",
+    "anthropicAws",
+    "mantle",
+    "gateway",
+  ];
+  ANTHROPIC_PROVIDER_ID_RE = /^anthropic[A-Z][A-Za-z0-9]*$/;
+  API_PROVIDER_KIND_SET = new Set(API_PROVIDER_KINDS);
+});
 //@ chunk-dcmhvw5a.js:202697-202750 placement
 /**
  * isApiProviderKind：是否为已知 API 提供方类型。
  */
-function isApiProviderKind(e) {
-  return typeof e === "string" && API_PROVIDER_KIND_SET.has(e);
+function isApiProviderKind(kind) {
+  return typeof kind === "string" && API_PROVIDER_KIND_SET.has(kind);
 }
 //@ chunk-dcmhvw5a.js:202750-202811 placement
 /**
  * isAnthropicProviderId：提供方类型或其 Anthropic id 形式。
  */
-function isAnthropicProviderId(allowedProvider) {
-  return (
-    isApiProviderKind(allowedProvider) ||
-    (typeof allowedProvider === "string" && ANTHROPIC_PROVIDER_ID_RE.test(allowedProvider))
-  );
+function isAnthropicProviderId(kind) {
+  return isApiProviderKind(kind) || (typeof kind === "string" && ANTHROPIC_PROVIDER_ID_RE.test(kind));
 }
-//@ chunk-dcmhvw5a.js:202811-203165 placement = getReservedShortcuts (1)
-/**
- * 界面符号常量（圆点、星号等）。
- */
-var BLACK_CIRCLE = getPlatform() === "macos" ? "\u23FA" : "\u25CF";
-var BULLET_OPERATOR = "\u2219";
-var BULLET = "\u2022";
-var TELEPHONE_RECORDER = "\u2315";
-var TEARDROP_ASTERISK = "\u273B";
-var FOUR_POINTED_STAR = "\u2726";
-var DIAGONAL = "\u2571";
-var THEREFORE = "\u2234";
-var PROPORTION = "\u2237";
-var BECAUSE = "\u2235";
-var SPINNER_DOTS = [THEREFORE, PROPORTION, BECAUSE, PROPORTION];
-var DOTTED_CIRCLE = "\u25CC";
-var UP_ARROW = "\u2191";
-var DOWN_ARROW = "\u2193";
-var DOWN_RIGHT_ARROW = "\u21B3";
-var LEFT_ARROW = "\u2190";
-var RIGHT_ARROW = "\u2192";
-var RETURN_SYMBOL = "\u23CE";
-var LIGHTNING = "\u21AF";
-var WHITE_CIRCLE = "\u25CB";
-var HALF_CIRCLE = "\u25D0";
-var FILLED_CIRCLE = "\u25CF";
-var FISHEYE = "\u25C9";
-var DIAMOND_IN_DIAMOND = "\u25C8";
-var BULLSEYE = "\u25CE";
-//@ chunk-dcmhvw5a.js:203165-203239 placement
-/**
- * 暂停/播放/刷新/箭头符号。
- */
-var PAUSE_GLYPH = "\u23F8";
-var FAST_FORWARD_GLYPH = "\u23F5\u23F5";
-var REFRESH_GLYPH = "\u21BB";
-var BACK_ARROW_GLYPH = "\u2190";
-var CIRCLE_MARK_GLYPH = "\u2442";
-//@ chunk-dcmhvw5a.js:203239-203304 placement
-/**
- * 菱形、警告等符号。
- */
-var DIAMOND_GLYPH = "\u25C7";
-var FILLED_DIAMOND_GLYPH = "\u25C6";
-var REFERENCE_GLYPH = "\u203B";
-var WARNING_GLYPH = "\u26A0";
-var BOXED_DIAMOND_GLYPH = "\u29C9";
-//@ chunk-dcmhvw5a.js:203304-203339 placement
-/**
- * withBoxedDiamond：给文本加双线菱形前缀。
- */
-function withBoxedDiamond(e) {
-  return `${BOXED_DIAMOND_GLYPH} ${e}`;
-}
-//@ chunk-dcmhvw5a.js:203339-203381 placement
-/**
- * VERTICAL_LEFT_BAR_GLYPH：竖条符号（▎）；FULL_BLOCK_GLYPH：实心方块符号（█）；HORIZONTAL_LINE_GLYPH：横线符号（─）（同一声明共 3 个绑定）。
- */
-var VERTICAL_LEFT_BAR_GLYPH = "\u258E";
-var FULL_BLOCK_GLYPH = "\u2588";
-var HORIZONTAL_LINE_GLYPH = "\u2500";
-//@ chunk-dcmhvw5a.js:203381-203409 placement
-/**
- * HEAVY_VERTICAL_BAR_GLYPH：粗竖线符号（┃）；NO_BREAK_SPACE：不换行空格常量（同一声明共 2 个绑定）。
- */
-var HEAVY_VERTICAL_BAR_GLYPH = "\u2503";
-var NO_BREAK_SPACE = "\xA0";
 export {
-  SPINNER_DOTS,
-  PROPORTION,
-  NO_BREAK_SPACE,
-  WARNING_GLYPH,
   ALL_AUTO_MODE_RULE_ID_SET_WITH_COWORK,
   UNTRUSTED_CONTENT_RULE_IDS,
   AUTO_MODE_RULE_IDS,
@@ -572,26 +458,7 @@ export {
   ALL_AUTO_MODE_RULE_ID_SET_WITH_UNTRUSTED,
   ruleIdFromBracketPrefix,
   ALL_AUTO_MODE_RULE_ID_SET,
-  BLACK_CIRCLE,
   DEFAULTS_PLACEHOLDER,
-  CIRCLE_MARK_GLYPH,
-  UP_ARROW,
-  DOWN_ARROW,
-  WHITE_CIRCLE,
-  HALF_CIRCLE,
-  FILLED_CIRCLE,
-  FISHEYE,
-  DIAMOND_IN_DIAMOND,
-  PAUSE_GLYPH,
-  BOXED_DIAMOND_GLYPH,
-  TEARDROP_ASTERISK,
-  LIGHTNING,
-  BULLSEYE,
-  DOWN_RIGHT_ARROW,
-  FILLED_DIAMOND_GLYPH,
-  DIAMOND_GLYPH,
-  LEFT_ARROW,
-  FAST_FORWARD_GLYPH,
   normalizeRuleSlug,
   userDenyRulesSection,
   fillAutoModeRuleSlots,
@@ -603,31 +470,12 @@ export {
   AUTO_MODE_SECTION_ENV_VARS,
   readAutoModeRuleOverrides,
   prependDefaultsToSections,
-  FULL_BLOCK_GLYPH,
   replacesDefaults,
-  deferredOptional,
   isApiProviderKind,
   API_PROVIDER_KINDS,
-  createDeferredOptional,
   isAnthropicProviderId,
-  HEAVY_VERTICAL_BAR_GLYPH,
-  BULLET_OPERATOR,
-  DIAGONAL,
-  FOUR_POINTED_STAR,
-  BACK_ARROW_GLYPH,
-  RETURN_SYMBOL,
-  THEREFORE,
-  REFERENCE_GLYPH,
-  REFRESH_GLYPH,
-  BULLET,
-  DOTTED_CIRCLE,
-  HORIZONTAL_LINE_GLYPH,
   isPolicyModOptionValue,
   isExactlyTrue,
   HOST_POLICY_HOLD_PATHS,
   isAcceptableRuleText,
-  TELEPHONE_RECORDER,
-  VERTICAL_LEFT_BAR_GLYPH,
-  withBoxedDiamond,
-  RIGHT_ARROW,
 };

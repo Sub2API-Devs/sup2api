@@ -9,7 +9,14 @@
  * attribution: placement 4
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, E, _enum, M, literal } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  stringSchema,
+  numberSchema,
+  _enum,
+  booleanSchema,
+  literal,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   MAX_DIRECTORY_PATH_LENGTH,
   safeSerializedPermissionContextSchema,
@@ -48,9 +55,9 @@ var READFILEFORREMOTE = "ReadFileForRemote";
 var MAX_REMOTE_READ_BYTES = 4194304;
 var MAX_REMOTE_READ_SERVE_BYTES = 3000000;
 var remoteReadInputSchema = DoctorLazy(() =>
-  u({
-    path: string().max(MAX_DIRECTORY_PATH_LENGTH),
-    max_bytes: E().optional(),
+  objectSchema({
+    path: stringSchema().max(MAX_DIRECTORY_PATH_LENGTH),
+    max_bytes: numberSchema().optional(),
     encoding: _enum(["utf-8", "base64"]).optional(),
   }),
 );
@@ -62,10 +69,10 @@ var remoteReadWithContextInputSchema = DoctorLazy(() =>
     .strict(),
 );
 var remoteReadResultSchema = DoctorLazy(() =>
-  u({
-    file: u({
-      contents: string().refine(isWithinSizeLimit),
-      truncated: M().optional(),
+  objectSchema({
+    file: objectSchema({
+      contents: stringSchema().refine(isWithinSizeLimit),
+      truncated: booleanSchema().optional(),
       encoding: literal("base64").optional(),
     }).optional(),
   }),
@@ -74,7 +81,7 @@ var remoteReadResultSchema = DoctorLazy(() =>
 /**
  * 远程调用"读文件"：用启动时权限上下文合并当前策略/用户/项目设置的拒绝与询问规则，在这些规则与工作目录限制下读取文件（有大小上限），返回文本或"read denied"。
  */
-async function serveReadFileForRemote(input, c, context) {
+async function serveReadFileForRemote(input, signal, context) {
   if (isPlainObject(input) && exceedsSerializedContextLimit(input.permission_context))
     throw Error("permission_context is too large");
   let {
@@ -83,15 +90,20 @@ async function serveReadFileForRemote(input, c, context) {
     max_bytes: maxBytes,
     encoding,
   } = remoteReadWithContextInputSchema().parse(input);
-  let i = context.launchPermissionContext && remoteReadPermissionContext(context.launchPermissionContext);
-  let s =
-    i &&
+  let launchContext =
+    context.launchPermissionContext && remoteReadPermissionContext(context.launchPermissionContext);
+  let read =
+    launchContext &&
     (await readFileForRemote(
       path,
       maxBytes && Math.min(maxBytes, MAX_REMOTE_READ_SERVE_BYTES),
       {
-        ...buildNativeDoctorDiagnostics(permissionContext, i, getSessionProject(context.session).originalCwd),
-        ...(i.blockReadsOutsideWorkingDirectories && {
+        ...buildNativeDoctorDiagnostics(
+          permissionContext,
+          launchContext,
+          getSessionProject(context.session).originalCwd,
+        ),
+        ...(launchContext.blockReadsOutsideWorkingDirectories && {
           blockReadsOutsideWorkingDirectories: true,
         }),
       },
@@ -102,11 +114,11 @@ async function serveReadFileForRemote(input, c, context) {
     ).catch(() => {
       return;
     }));
-  if (s && !isWithinSizeLimit(s.contents)) throw Error("the file is too large to send back as text");
+  if (read && !isWithinSizeLimit(read.contents)) throw Error("the file is too large to send back as text");
   return {
-    summary: s ? `${s.contents.length} characters` : "read denied",
+    summary: read ? `${read.contents.length} characters` : "read denied",
     output: {
-      file: s,
+      file: read,
     },
   };
 }
@@ -117,34 +129,34 @@ async function serveReadFileForRemote(input, c, context) {
 function remoteReadPermissionContext(launchContext) {
   let error = [...getPolicySettingsLoadErrors()];
   let permissionRulesForSource = getPermissionRulesForSource("policySettings");
-  let l = [getSettingsForSource("policySettings")];
-  for (let [t, a] of [
+  let policySettingsList = [getSettingsForSource("policySettings")];
+  for (let [source, filePath] of [
     ["userSettings", getSettingsFilePathForSource("userSettings")],
     ["projectSettings", getSettingsFilePathForSource("projectSettings")],
     ["localSettings", getSettingsFilePathForSource("localSettings")],
     ["localSettings", getLegacyLocalSettingsFilePath()],
   ])
-    if (a !== undefined) {
-      let settingsFileUncached = parseSettingsFileUncached(a);
+    if (filePath !== undefined) {
+      let settingsFileUncached = parseSettingsFileUncached(filePath);
       error.push(...settingsFileUncached.errors);
-      permissionRulesForSource.push(...settingsJsonToRules(settingsFileUncached.settings, t));
-      l.push(settingsFileUncached.settings);
+      permissionRulesForSource.push(...settingsJsonToRules(settingsFileUncached.settings, source));
+      policySettingsList.push(settingsFileUncached.settings);
     }
   logSkippedInvalidSetting(isReportableDiagnostic(error).slice(0, 10));
   if (policyLoadFailureRefusesPluginHooks()) return;
-  let n = applyPermissionRulesToPermissionContext(
+  let context = applyPermissionRulesToPermissionContext(
     launchContext,
-    permissionRulesForSource.filter((t) => t.ruleBehavior !== "allow"),
+    permissionRulesForSource.filter((rule) => rule.ruleBehavior !== "allow"),
     {
       announce: false,
     },
   );
-  return getDenyRuleForTool(n, READ_PATH_PROBE) || getAskRuleForTool(n, READ_PATH_PROBE)
+  return getDenyRuleForTool(context, READ_PATH_PROBE) || getAskRuleForTool(context, READ_PATH_PROBE)
     ? undefined
     : {
-        ...n,
-        blockReadsOutsideWorkingDirectories: l.some(
-          (t) => t?.permissions?.blockReadsOutsideWorkingDirectories,
+        ...context,
+        blockReadsOutsideWorkingDirectories: policySettingsList.some(
+          (settings) => settings?.permissions?.blockReadsOutsideWorkingDirectories,
         ),
       };
 }

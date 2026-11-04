@@ -21,15 +21,15 @@ import { runAutoCompactIfNeeded } from "../services/compact/autoCompact.js";
 /**
  * 调用工具的 backfillObservableInput 补全可观察输入（失败时原样传递）。
  */
-function backfillObservableInput(toolByName, n, name) {
-  if (toolByName === undefined) return stripSendMessageArgs(name, n);
+function backfillObservableInput(toolByName, input, toolName) {
+  if (toolByName === undefined) return stripSendMessageArgs(toolName, input);
   if (!toolByName.backfillObservableInput) return null;
-  let s = {
-    ...n,
+  let observableInput = {
+    ...input,
   };
   try {
-    let h = toolByName.backfillObservableInput(s) === true;
-    return Object.keys(s).some((key) => !(key in n)) || h ? s : null;
+    let backfilled = toolByName.backfillObservableInput(observableInput) === true;
+    return Object.keys(observableInput).some((key) => !(key in input)) || backfilled ? observableInput : null;
   } catch (error) {
     if (error instanceof NullBytePathError || error instanceof UnstablePathError) {
       logForDebugging(
@@ -38,15 +38,15 @@ function backfillObservableInput(toolByName, n, name) {
       return null;
     }
     logError(withTelemetryMessage(toError(error), "backfillObservableInput threw"));
-    return stripSendMessageArgs(name, n);
+    return stripSendMessageArgs(toolName, input);
   }
 }
 //@ chunk-ha3km179.js:143374-143423 placement
 /**
  * 去掉可观察字段
  */
-function stripSendMessageArgs(e, n) {
-  return e === SENDMESSAGE ? (stripObservableFields(n) ?? null) : null;
+function stripSendMessageArgs(toolName, input) {
+  return toolName === SENDMESSAGE ? (stripObservableFields(input) ?? null) : null;
 }
 //@ chunk-ha3km179.js:143460-143553 fingerprint = productionDeps (0.873)
 /**

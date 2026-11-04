@@ -26,7 +26,7 @@ import { logEvent } from "../../services/analytics/index.js";
 import { lit } from "../../services/analytics/safeMetadata.js";
 import { withDeadline } from "../../utils/sleep.js";
 import { DoctorLazy } from "../handlers/util.js";
-import { zodStrictObject, string, record, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import { zodStrictObject, stringSchema, record, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
 import { NOTEBOOK_EDIT_TOOL_NAME } from "../../tools/NotebookEditTool/constants.js";
@@ -74,6 +74,7 @@ import { isToolResultOnlyUserMessage } from "../../services/api/claude.js";
 import { normalizeAttestationStatus, meetsAttestationLevel } from "../../bridge/deviceAttestation.js";
 import { isUiSurfaceName } from "../sdkMcpManifests.js";
 import { CLOUD_PLUGINS_FORWARDED_KEY } from "../../utils/plugins/cloudPluginForwarding.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-z4g2ta8k.js:11186-11240 placement
 /**
@@ -83,22 +84,25 @@ function isTurnHandoffResumeEnabled() {
   return !isDiskless() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_steady_puppy", false);
 }
 //@ chunk-z4g2ta8k.js:11361-11426 placement
-function withEnvelopeFlag(featureValue_CACHED_MAY_BE_STALE, n) {
-  if (!n) return featureValue_CACHED_MAY_BE_STALE;
+function withEnvelopeFlag(featureValue_CACHED_MAY_BE_STALE, hosted) {
+  if (!hosted) return featureValue_CACHED_MAY_BE_STALE;
   return {
     ...(isPlainObject(featureValue_CACHED_MAY_BE_STALE) ? featureValue_CACHED_MAY_BE_STALE : {}),
     envelope: true,
   };
 }
 //@ chunk-z4g2ta8k.js:11456-11510 placement
-var GROWTHBOOK_REFRESH_INFLIGHT = identity(
-  {
-    inFlight: undefined,
-  },
-  (e) => {
-    e.inFlight = undefined;
-  },
-);
+var GROWTHBOOK_REFRESH_INFLIGHT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-z4g2ta8k.js:11456", () => {
+  GROWTHBOOK_REFRESH_INFLIGHT = identity(
+    {
+      inFlight: undefined,
+    },
+    (state) => {
+      state.inFlight = undefined;
+    },
+  );
+});
 //@ chunk-z4g2ta8k.js:11510-11658 placement
 /**
  * 确保 GrowthBook 特性是新鲜的：初始化后若不新鲜则发起（合并并发的）刷新并等待。
@@ -146,10 +150,10 @@ function logHandoffFlagAdvert() {
 /**
  * 回合开始时在时限内等待 carried_writes 特性开关就绪，记录等待耗时事件，返回该能力是否开启。
  */
-async function awaitCarriedWritesFlag(e = CARRIED_WRITES_FLAG_WAIT_MS) {
+async function awaitCarriedWritesFlag(waitMs = CARRIED_WRITES_FLAG_WAIT_MS) {
   if (!carriedWritesFlagState().served) {
     let startTime = performance.now();
-    await withDeadline(ensureFreshGrowthBook(), e);
+    await withDeadline(ensureFreshGrowthBook(), waitMs);
     logEvent("tengu_turn_handoff_flag_wait", {
       capability: lit("carried_writes"),
       at: lit("turn_start"),
@@ -160,14 +164,17 @@ async function awaitCarriedWritesFlag(e = CARRIED_WRITES_FLAG_WAIT_MS) {
   return isCarriedWritesEnabled();
 }
 //@ chunk-z4g2ta8k.js:12221-12285 placement
-var SAID_CARRIED_WRITES_STATE = identity(
-  {
-    saidCarriedWrites: false,
-  },
-  (e) => {
-    e.saidCarriedWrites = false;
-  },
-);
+var SAID_CARRIED_WRITES_STATE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-z4g2ta8k.js:12221", () => {
+  SAID_CARRIED_WRITES_STATE = identity(
+    {
+      saidCarriedWrites: false,
+    },
+    (state) => {
+      state.saidCarriedWrites = false;
+    },
+  );
+});
 //@ chunk-z4g2ta8k.js:12285-12323 placement
 function markSaidCarriedWrites() {
   SAID_CARRIED_WRITES_STATE.saidCarriedWrites = true;
@@ -183,87 +190,98 @@ function hasSaidCarriedWrites() {
 /**
  * 携带写（carried writes）相关常量与 schema：单文件 8MiB、路径 1024 字节上限、权限拒绝文案表、handoff 与 tool_use 校验 schema、可携带写的工具名集合。
  */
-var CARRIED_WRITE_REFUSALS = 16;
-var MAX_CARRIED_WRITE_BYTES = 8388608;
-var MAX_CARRIED_WRITE_PATH_BYTES = 1024;
-var CARRIED_WRITE_PERMISSION_REFUSALS = {
-  would_ask: "this session's permission mode would ask before a Write",
-  auto_mode: "carried Writes are not placed in auto mode",
-};
-var CARRIED_WRITE_REFUSAL_TEXT = {
-  switched_off: "carried Writes are not switched on just now, though this worker announced them",
-  no_write_tool: "this session's Write tool is missing or is not the built-in one",
-  odd_input: "an answered Write's input is not a path and content alone",
-  result_text: "an answered Write's result is not the Write tool's success text",
-  edited: "an Edit or NotebookEdit in the turn may have changed a file a Write made",
-  refused_name: "an answered Write names a file that may not be written under the home directory",
-  nested: "one answered Write's file is a directory on another's path",
-  too_many: `the answered Writes name more than ${CARRIED_WRITE_REFUSALS} files`,
-  too_large: `the answered Writes hold more than ${MAX_CARRIED_WRITE_BYTES} bytes`,
-  not_home: "this session's working directory is not its home directory",
-  ...CARRIED_WRITE_PERMISSION_REFUSALS,
-};
-var handoffMessageSchema = DoctorLazy(() =>
-  zodStrictObject({
-    file_path: string(),
-    content: string(),
-  }),
-);
-var toolUseInputSchema = DoctorLazy(() => record(string(), unknown()));
-var CARRIED_WRITE_TOOL_NAMES = new Map([
-  [FILE_WRITE_TOOL_NAME, "file_path"],
-  [FILE_EDIT_TOOL_NAME, "file_path"],
-  [NOTEBOOK_EDIT_TOOL_NAME, "notebook_path"],
-]);
+var CARRIED_WRITE_REFUSALS; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_CARRIED_WRITE_BYTES;
+var MAX_CARRIED_WRITE_PATH_BYTES;
+var CARRIED_WRITE_PERMISSION_REFUSALS;
+var CARRIED_WRITE_REFUSAL_TEXT;
+var handoffMessageSchema;
+var toolUseInputSchema;
+var CARRIED_WRITE_TOOL_NAMES;
+deferInit("chunk-z4g2ta8k.js:12366", () => {
+  CARRIED_WRITE_REFUSALS = 16;
+  MAX_CARRIED_WRITE_BYTES = 8388608;
+  MAX_CARRIED_WRITE_PATH_BYTES = 1024;
+  CARRIED_WRITE_PERMISSION_REFUSALS = {
+    would_ask: "this session's permission mode would ask before a Write",
+    auto_mode: "carried Writes are not placed in auto mode",
+  };
+  CARRIED_WRITE_REFUSAL_TEXT = {
+    switched_off: "carried Writes are not switched on just now, though this worker announced them",
+    no_write_tool: "this session's Write tool is missing or is not the built-in one",
+    odd_input: "an answered Write's input is not a path and content alone",
+    result_text: "an answered Write's result is not the Write tool's success text",
+    edited: "an Edit or NotebookEdit in the turn may have changed a file a Write made",
+    refused_name: "an answered Write names a file that may not be written under the home directory",
+    nested: "one answered Write's file is a directory on another's path",
+    too_many: `the answered Writes name more than ${CARRIED_WRITE_REFUSALS} files`,
+    too_large: `the answered Writes hold more than ${MAX_CARRIED_WRITE_BYTES} bytes`,
+    not_home: "this session's working directory is not its home directory",
+    ...CARRIED_WRITE_PERMISSION_REFUSALS,
+  };
+  handoffMessageSchema = DoctorLazy(() =>
+    zodStrictObject({
+      file_path: stringSchema(),
+      content: stringSchema(),
+    }),
+  );
+  toolUseInputSchema = DoctorLazy(() => record(stringSchema(), unknown()));
+  CARRIED_WRITE_TOOL_NAMES = new Map([
+    [FILE_WRITE_TOOL_NAME, "file_path"],
+    [FILE_EDIT_TOOL_NAME, "file_path"],
+    [NOTEBOOK_EDIT_TOOL_NAME, "notebook_path"],
+  ]);
+});
 //@ chunk-z4g2ta8k.js:13422-13500 placement
 /**
  * 在工具表里找非 MCP 的 Write 工具（携带写的落盘目标）。
  */
-function findFileWriteTool(e, toolAliases) {
-  let toolByName = findToolByName(e, FILE_WRITE_TOOL_NAME, toolAliases);
+function findFileWriteTool(tools, toolAliases) {
+  let toolByName = findToolByName(tools, FILE_WRITE_TOOL_NAME, toolAliases);
   return toolByName?.name === FILE_WRITE_TOOL_NAME && toolByName.isMcp !== true ? toolByName : undefined;
 }
 //@ chunk-z4g2ta8k.js:13500-15125 placement
-function collectCarriedWrites(e, carriedWrites, fileWriteTool) {
-  let s = new Map();
-  let h = new Set();
-  for (let O of e) {
-    if (O.type !== "user" || !Array.isArray(O.message.content)) continue;
-    for (let A of O.message.content) {
-      if (A.type !== "tool_result") continue;
-      let x = s.has(A.tool_use_id);
-      s.set(A.tool_use_id, x ? undefined : getSoleTextContent(A.content));
-      if (x) h.delete(A.tool_use_id);
-      else if (A.is_error === true) h.add(A.tool_use_id);
+function collectCarriedWrites(messages, carriedWrites, fileWriteTool) {
+  let results = new Map();
+  let errors = new Set();
+  for (let row of messages) {
+    if (row.type !== "user" || !Array.isArray(row.message.content)) continue;
+    for (let block of row.message.content) {
+      if (block.type !== "tool_result") continue;
+      let duplicate = results.has(block.tool_use_id);
+      results.set(block.tool_use_id, duplicate ? undefined : getSoleTextContent(block.content));
+      if (duplicate) errors.delete(block.tool_use_id);
+      else if (block.is_error === true) errors.add(block.tool_use_id);
     }
   }
-  let y = new Map();
-  let S = new Set();
-  let k = false;
-  for (let O of e) {
-    if (O.type !== "assistant" || !Array.isArray(O.message.content)) continue;
-    for (let A of O.message.content) {
-      let x = A.type === "tool_use" ? CARRIED_WRITE_TOOL_NAMES.get(A.name) : undefined;
-      if (A.type !== "tool_use" || x === undefined || !s.has(A.id) || h.has(A.id)) continue;
-      let U = toolUseInputSchema().safeParse(A.input).data?.[x];
-      if (typeof U !== "string") {
-        if (A.name === FILE_WRITE_TOOL_NAME) return "odd_input";
-        k = true;
+  let writes = new Map();
+  let edited = new Set();
+  let editedOther = false;
+  for (let row of messages) {
+    if (row.type !== "assistant" || !Array.isArray(row.message.content)) continue;
+    for (let block of row.message.content) {
+      let field = block.type === "tool_use" ? CARRIED_WRITE_TOOL_NAMES.get(block.name) : undefined;
+      if (block.type !== "tool_use" || field === undefined || !results.has(block.id) || errors.has(block.id))
+        continue;
+      let value = toolUseInputSchema().safeParse(block.input).data?.[field];
+      if (typeof value !== "string") {
+        if (block.name === FILE_WRITE_TOOL_NAME) return "odd_input";
+        editedOther = true;
         continue;
       }
-      let M = homeRelativePath(U, carriedWrites);
-      if (M === undefined) continue;
-      if (A.name !== FILE_WRITE_TOOL_NAME) {
-        S.add(M);
+      let relative = homeRelativePath(value, carriedWrites);
+      if (relative === undefined) continue;
+      if (block.name !== FILE_WRITE_TOOL_NAME) {
+        edited.add(relative);
         continue;
       }
-      let T = handoffMessageSchema().safeParse(A.input);
-      if (!T.success) return "odd_input";
+      let parsed = handoffMessageSchema().safeParse(block.input);
+      if (!parsed.success) return "odd_input";
       if (fileWriteTool === undefined) return "no_write_tool";
-      let { file_path: filePath, content } = T.data;
-      let G = s.get(A.id);
+      let { file_path: filePath, content } = parsed.data;
+      let resultText = results.get(block.id);
       if (
-        G === undefined ||
+        resultText === undefined ||
         !["create", "update"].some(
           (type) =>
             fileWriteTool.mapToolResultToToolResultBlockParam(
@@ -271,64 +289,66 @@ function collectCarriedWrites(e, carriedWrites, fileWriteTool) {
                 type,
                 filePath,
               },
-              A.id,
-            ).content === G,
+              block.id,
+            ).content === resultText,
         )
       )
         return "result_text";
-      y.set(M, {
-        relativePath: M,
+      writes.set(relative, {
+        relativePath: relative,
         filePath,
         content,
-        toolUseID: A.id,
-        assistantMessage: O,
+        toolUseID: block.id,
+        assistantMessage: row,
       });
     }
   }
-  if (y.size === 0) return;
-  if (k) return "edited";
-  if (y.size > CARRIED_WRITE_REFUSALS) return "too_many";
-  let P = 0;
-  for (let { relativePath, filePath, content } of y.values()) {
-    if (S.has(relativePath)) return "edited";
+  if (writes.size === 0) return;
+  if (editedOther) return "edited";
+  if (writes.size > CARRIED_WRITE_REFUSALS) return "too_many";
+  let totalBytes = 0;
+  for (let { relativePath, filePath, content } of writes.values()) {
+    if (edited.has(relativePath)) return "edited";
     if (
       homePathProblem(relativePath) !== undefined ||
       !isWellFormedString(filePath) ||
       Buffer.byteLength(relativePath) > MAX_CARRIED_WRITE_PATH_BYTES ||
-      relativePath.split(posix.sep).some((U) => U === "" || Buffer.byteLength(U) > MAX_HOME_FILE_NAME_LENGTH)
+      relativePath
+        .split(posix.sep)
+        .some((segment) => segment === "" || Buffer.byteLength(segment) > MAX_HOME_FILE_NAME_LENGTH)
     )
       return "refused_name";
     for (let dir = posix.dirname(relativePath); dir !== "."; dir = posix.dirname(dir))
-      if (y.has(dir)) return "nested";
-    P += Buffer.byteLength(content);
+      if (writes.has(dir)) return "nested";
+    totalBytes += Buffer.byteLength(content);
   }
-  if (P > MAX_CARRIED_WRITE_BYTES) return "too_large";
-  return carriedWrites.cwd === carriedWrites.home ? [...y.values()] : "not_home";
+  if (totalBytes > MAX_CARRIED_WRITE_BYTES) return "too_large";
+  return carriedWrites.cwd === carriedWrites.home ? [...writes.values()] : "not_home";
 }
 //@ chunk-z4g2ta8k.js:15125-15200 placement
 /**
  * 根据权限模式判断携带写被拒的原因：auto 模式为 auto_mode，会询问时为 would_ask。
  */
-function carriedWritePermissionRefusal(e) {
-  if (!isAutoClassifierActive(e)) return;
-  return e === "auto" ? "auto_mode" : "would_ask";
+function carriedWritePermissionRefusal(mode) {
+  if (!isAutoClassifierActive(mode)) return;
+  return mode === "auto" ? "auto_mode" : "would_ask";
 }
 //@ chunk-z4g2ta8k.js:15200-15302 placement
-function homeRelativePath(e, { cwd, home }) {
-  let s = expandPathOrNull(e, cwd);
-  return s?.startsWith(home + posix.sep) ? s.slice(home.length + 1) : undefined;
+function homeRelativePath(path, { cwd, home }) {
+  let expanded = expandPathOrNull(path, cwd);
+  return expanded?.startsWith(home + posix.sep) ? expanded.slice(home.length + 1) : undefined;
 }
 //@ chunk-z4g2ta8k.js:15302-15499 placement = extractErrorTypeFromData (1)
 function getSoleTextContent(data) {
   if (typeof data === "string") return data;
-  let n = data?.length === 1 ? data[0] : undefined;
-  return typeof n === "object" &&
-    n !== null &&
-    "type" in n &&
-    n.type === "text" &&
-    "text" in n &&
-    typeof n.text === "string"
-    ? n.text
+  let block = data?.length === 1 ? data[0] : undefined;
+  return typeof block === "object" &&
+    block !== null &&
+    "type" in block &&
+    block.type === "text" &&
+    "text" in block &&
+    typeof block.text === "string"
+    ? block.text
     : undefined;
 }
 //@ chunk-z4g2ta8k.js:15499-15540 placement
@@ -341,51 +361,51 @@ function callSafely(onBegan) {
 }
 //@ chunk-z4g2ta8k.js:15540-16947 placement
 function waitForTurnPromptUploads({ listTurnPromptsWaitedOn, write, now = () => performance.now() }) {
-  let s = null;
-  let h = {
+  let ahead = null;
+  let state = {
     kind: "none",
   };
-  let y = new Set();
-  function S(P, isRunnerTold) {
-    h = {
+  let answered = new Set();
+  function seedAnswer(prompt, isRunnerTold) {
+    state = {
       kind: "uploading",
       isFor: "this_wait",
       isRunnerTold,
     };
-    y = new Set(listTurnPromptsWaitedOn());
-    let A = now();
-    callSafely(P.onBegan);
-    (async () => P.upload())()
+    answered = new Set(listTurnPromptsWaitedOn());
+    let startedAt = now();
+    callSafely(prompt.onBegan);
+    (async () => prompt.upload())()
       .catch((error) => {
         logError(toError(error));
         return "rejected";
       })
-      .then((outcome) => k(P, outcome, now() - A));
+      .then((outcome) => finish(prompt, outcome, now() - startedAt));
   }
-  function k(P, outcome, ms) {
+  function finish(prompt, outcome, ms) {
     let { isFor, isRunnerTold } =
-      h.kind === "uploading"
-        ? h
+      state.kind === "uploading"
+        ? state
         : {
             isFor: "nobody",
             isRunnerTold: false,
           };
     if (isFor === "a_later_wait") {
       callSafely(() =>
-        P.onAnswered({
+        prompt.onAnswered({
           outcome,
           ms,
           ledTo: "uploads_again",
         }),
       );
-      S(P, isRunnerTold);
+      seedAnswer(prompt, isRunnerTold);
       return;
     }
-    h = {
+    state = {
       kind: isFor === "this_wait" ? "told" : "none",
     };
     callSafely(() =>
-      P.onAnswered({
+      prompt.onAnswered({
         outcome,
         ms,
         ledTo:
@@ -400,13 +420,15 @@ function waitForTurnPromptUploads({ listTurnPromptsWaitedOn, write, now = () => 
   }
   return {
     stateChanged() {
-      let P = s === null ? [] : listTurnPromptsWaitedOn();
-      let O = h.kind === "none" || (h.kind === "uploading" && h.isFor === "nobody");
-      let A = P.some((x) => !y.has(x)) || (P.length > 0 && O && P.length < y.size);
-      if (h.kind === "uploading") {
-        if (P.length === 0) {
-          if (h.isFor === "a_later_wait") y = new Set();
-          h = {
+      let prompts = ahead === null ? [] : listTurnPromptsWaitedOn();
+      let idle = state.kind === "none" || (state.kind === "uploading" && state.isFor === "nobody");
+      let changed =
+        prompts.some((key) => !answered.has(key)) ||
+        (prompts.length > 0 && idle && prompts.length < answered.size);
+      if (state.kind === "uploading") {
+        if (prompts.length === 0) {
+          if (state.isFor === "a_later_wait") answered = new Set();
+          state = {
             kind: "uploading",
             isFor: "nobody",
             isRunnerTold: false,
@@ -414,41 +436,41 @@ function waitForTurnPromptUploads({ listTurnPromptsWaitedOn, write, now = () => 
           write();
           return;
         }
-        if (A)
-          h = {
-            ...h,
+        if (changed)
+          state = {
+            ...state,
             isFor: "a_later_wait",
           };
-        else if (h.isFor === "nobody")
-          h = {
-            ...h,
+        else if (state.isFor === "nobody")
+          state = {
+            ...state,
             isFor: "this_wait",
           };
-        if (h.isRunnerTold) write();
+        if (state.isRunnerTold) write();
         return;
       }
-      if (s === null || !A) {
-        h = {
-          kind: P.length > 0 ? "told" : "none",
+      if (ahead === null || !changed) {
+        state = {
+          kind: prompts.length > 0 ? "told" : "none",
         };
         write();
         return;
       }
-      S(s, false);
+      seedAnswer(ahead, false);
     },
     resultGoesNext() {
-      if (h.kind === "uploading" && h.isFor !== "nobody" && !h.isRunnerTold) {
-        h = {
-          ...h,
+      if (state.kind === "uploading" && state.isFor !== "nobody" && !state.isRunnerTold) {
+        state = {
+          ...state,
           isRunnerTold: true,
         };
         write();
       }
     },
-    setUploadAhead(P) {
-      s = P;
-      if (P === null && h.kind === "uploading")
-        h = {
+    setUploadAhead(nextAhead) {
+      ahead = nextAhead;
+      if (nextAhead === null && state.kind === "uploading")
+        state = {
           kind: "uploading",
           isFor: "nobody",
           isRunnerTold: false,
@@ -457,36 +479,39 @@ function waitForTurnPromptUploads({ listTurnPromptsWaitedOn, write, now = () => 
   };
 }
 //@ chunk-z4g2ta8k.js:16984-17071 placement
-var CARRIED_TOOL_NAMES = [
-  BASH_TOOL_NAME,
-  FILE_WRITE_TOOL_NAME,
-  FILE_EDIT_TOOL_NAME,
-  FILE_READ_TOOL_NAME,
-  GLOB_TOOL_NAME,
-  GREP_TOOL_NAME,
-  AGENT,
-  NOTEBOOK_EDIT_TOOL_NAME,
-  WEBFETCH,
-  WEBSEARCH,
-  TASKSTOP,
-  SEARCH_MCP_REGISTRY_TOOL_NAME,
-  SUGGEST_CONNECTORS_TOOL_NAME,
-  LIST_CONNECTORS_TOOL_NAME,
-  SKILL,
-  ARTIFACT_TOOL_NAME,
-  ...[...TRIGGER_TOOL_NAMES, ...REPO_TOOL_NAMES].map(remoteMcpToolName),
-];
+var CARRIED_TOOL_NAMES; // deferred: uses GREP_TOOL_NAME (../../tools/GrepTool/prompt.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-z4g2ta8k.js:16984", () => {
+  CARRIED_TOOL_NAMES = [
+    BASH_TOOL_NAME,
+    FILE_WRITE_TOOL_NAME,
+    FILE_EDIT_TOOL_NAME,
+    FILE_READ_TOOL_NAME,
+    GLOB_TOOL_NAME,
+    GREP_TOOL_NAME,
+    AGENT,
+    NOTEBOOK_EDIT_TOOL_NAME,
+    WEBFETCH,
+    WEBSEARCH,
+    TASKSTOP,
+    SEARCH_MCP_REGISTRY_TOOL_NAME,
+    SUGGEST_CONNECTORS_TOOL_NAME,
+    LIST_CONNECTORS_TOOL_NAME,
+    SKILL,
+    ARTIFACT_TOOL_NAME,
+    ...[...TRIGGER_TOOL_NAMES, ...REPO_TOOL_NAMES].map(remoteMcpToolName),
+  ];
+});
 //@ chunk-z4g2ta8k.js:17071-17307 placement
 /**
  * 判断回合交接是否可用：仅限托管云 worker（有 SDK 地址与远程会话 id、非自定义环境）且未被禁用。
  */
-function turnHandoffAdmission(e) {
-  if (!e.sdkUrl || !e.remoteSessionId || e.environmentKind !== undefined)
+function turnHandoffAdmission(options) {
+  if (!options.sdkUrl || !options.remoteSessionId || options.environmentKind !== undefined)
     return {
       admitted: false,
       reason: "not_managed_cloud_worker",
     };
-  if (e.disabled)
+  if (options.disabled)
     return {
       admitted: false,
       reason: "disabled",
@@ -501,40 +526,45 @@ function turnHandoffAdmission(e) {
 /**
  * 判断是否携带在途写入：交接已准入、配置了中继、持久化转录且不是共享后端。
  */
-function shouldCarryWrites(e) {
-  return e.admission.admitted && e.relayConfigured && e.persistsTranscript && !e.sharedBackend;
+function shouldCarryWrites(options) {
+  return (
+    options.admission.admitted &&
+    options.relayConfigured &&
+    options.persistsTranscript &&
+    !options.sharedBackend
+  );
 }
 //@ chunk-z4g2ta8k.js:17410-17785 placement
 /**
  * 生成 worker 注册时声明的 turn_handoff 能力（工具、epoch、暂存文件、relay 标记、home 文件与携带写入等）；未准入且原因是 disabled 时显式发 null。
  */
-function turnHandoffRegistration(e, workerEpoch, r, s, h) {
-  if (e.admitted)
+function turnHandoffRegistration(admission, workerEpoch, relayMarker, carriesFiles, carriesWrites) {
+  if (admission.admitted)
     return {
       turn_handoff: {
         v: 1,
-        tools: e.tools,
+        tools: admission.tools,
         worker_epoch: workerEpoch,
         staged_files: true,
         no_query_first: true,
         shared_message_id: true,
         requires_rewind_request_id: true,
-        ...(r && {
+        ...(relayMarker && {
           relay_marker: true,
         }),
-        ...(s && {
+        ...(carriesFiles && {
           home_files: true,
           file_names: true,
-          ...(h && {
+          ...(carriesWrites && {
             carried_writes: true,
           }),
         }),
-        ...(e.hydratesCarriedLines && {
+        ...(admission.hydratesCarriedLines && {
           hydrates_carried_lines: true,
         }),
       },
     };
-  return e.reason === "disabled"
+  return admission.reason === "disabled"
     ? {
         turn_handoff: null,
       }
@@ -585,10 +615,10 @@ var RECOVERED_BY_RESTART_NOTE =
 /**
  * 构造回合交接应答 {requestId, tipUuid}。
  */
-function buildTurnHandoffReply(requestId, n) {
+function buildTurnHandoffReply(requestId, messages) {
   return {
     requestId,
-    tipUuid: lastConversationMessage(n)?.uuid ?? null,
+    tipUuid: lastConversationMessage(messages)?.uuid ?? null,
   };
 }
 //@ chunk-z4g2ta8k.js:18528-18571 placement
@@ -620,61 +650,67 @@ function serviceClockStoredAt({ storedAt, serviceNow, machineNow }) {
 /**
  * 云 worker 接手回合（turn_handoff）：校验交接载荷（消息、tool_use_ids、记忆上下文、required rewind），把消息追加到本地转录并恢复在途写入，非法时返回 invalid_handoff。
  */
-function applyTurnHandoff(e, n) {
+function applyTurnHandoff(request, context) {
   let {
     relay_marker: relayMarker,
     memory_context: memoryContext,
     message_client_platform: messageClientPlatform,
     file_names: fileNames,
-    ...S
-  } = e;
-  for (let [w, I] of [
+    ...rest
+  } = request;
+  for (let [field, limit] of [
     ["messages", MAX_HANDOFF_MESSAGES],
     ["tool_use_ids", MAX_HANDOFF_TOOL_USE_IDS],
   ]) {
-    let H = arrayTooBigMessage(e[w], I);
-    if (H !== undefined)
+    let error = arrayTooBigMessage(request[field], limit);
+    if (error !== undefined)
       return {
         kind: "error",
-        error: `invalid_handoff: ${w} ${H}`,
+        error: `invalid_handoff: ${field} ${error}`,
       };
   }
-  let messages = e.messages;
-  let P = Array.isArray(messages) ? messages : [];
-  for (let [w, I] of P.entries()) {
-    let message = typeof I === "object" && I !== null && "message" in I ? I.message : undefined;
-    let se = arrayTooBigMessage(
-      typeof message === "object" && message !== null && "content" in message ? message.content : undefined,
+  let messages = request.messages;
+  let messagesList = Array.isArray(messages) ? messages : [];
+  for (let [index, message] of messagesList.entries()) {
+    let message_2 =
+      typeof message === "object" && message !== null && "message" in message ? message.message : undefined;
+    let error = arrayTooBigMessage(
+      typeof message_2 === "object" && message_2 !== null && "content" in message_2
+        ? message_2.content
+        : undefined,
       MAX_CONTENT_BYTES,
     );
-    if (se !== undefined)
+    if (error !== undefined)
       return {
         kind: "error",
-        error: `invalid_handoff: messages.${w}.message.content ${se}`,
+        error: `invalid_handoff: messages.${index}.message.content ${error}`,
       };
   }
-  let O =
+  let clientPlatform =
     typeof messageClientPlatform === "string" && isDefinedHumanClientPlatform(messageClientPlatform)
       ? messageClientPlatform
       : undefined;
   let element = SDKTurnHandoffTurnHandoffMessageSchema().shape.messages.element;
-  for (let [w, I] of P.entries()) {
-    let H = typeof I === "object" && I !== null && "type" in I ? I.type : undefined;
-    if (element.options.find((option) => option.shape.type.value === H)?.safeParse(I).success !== true)
+  for (let [index, message] of messagesList.entries()) {
+    let type =
+      typeof message === "object" && message !== null && "type" in message ? message.type : undefined;
+    if (
+      element.options.find((option) => option.shape.type.value === type)?.safeParse(message).success !== true
+    )
       return {
         kind: "error",
-        error: `invalid_handoff: messages.${w} Invalid input`,
+        error: `invalid_handoff: messages.${index} Invalid input`,
       };
   }
-  let x = (
-    P.length > 0 ? handoffWithoutMessagesSchema() : SDKTurnHandoffTurnHandoffMessageSchema()
-  ).safeParse(S);
-  if (!x.success)
+  let parsed = (
+    messagesList.length > 0 ? handoffWithoutMessagesSchema() : SDKTurnHandoffTurnHandoffMessageSchema()
+  ).safeParse(rest);
+  if (!parsed.success)
     return {
       kind: "error",
-      error: `invalid_handoff: ${issuePathString(x.error.issues[0]?.path)} ${x.error.issues[0]?.message ?? "unparseable"}`,
+      error: `invalid_handoff: ${issuePathString(parsed.error.issues[0]?.path)} ${parsed.error.issues[0]?.message ?? "unparseable"}`,
     };
-  let { messages: messages_2, tool_use_ids: toolUseIds } = e;
+  let { messages: messages_2, tool_use_ids: toolUseIds } = request;
   if (new Set(toolUseIds).size !== toolUseIds.length)
     return {
       kind: "error",
@@ -685,22 +721,22 @@ function applyTurnHandoff(e, n) {
       kind: "error",
       error: "invalid_handoff: message uuids repeat",
     };
-  for (let [w, I] of messages_2.entries()) {
-    if (typeof I.uuid !== "string")
+  for (let [index, message] of messages_2.entries()) {
+    if (typeof message.uuid !== "string")
       return {
         kind: "error",
         error: "invalid_handoff: every message needs a uuid",
       };
     if (
-      (I.type === "user" && (I.isSynthetic === true || I.is_virtual)) ||
-      (I.type === "assistant" && (I.is_meta === true || I.is_virtual))
+      (message.type === "user" && (message.isSynthetic === true || message.is_virtual)) ||
+      (message.type === "assistant" && (message.is_meta === true || message.is_virtual))
     )
       return {
         kind: "error",
-        error: `invalid_handoff: messages.${w} is not a plain conversation line`,
+        error: `invalid_handoff: messages.${index} is not a plain conversation line`,
       };
   }
-  let message = toInternalMessages(
+  let mapped = toInternalMessages(
     messages_2.map((message) =>
       message.type === "user"
         ? {
@@ -720,433 +756,461 @@ function applyTurnHandoff(e, n) {
             message: message.message,
           },
     ),
-  ).map((w, I) => {
-    if (w.type !== "assistant" && w.type !== "user") return w;
-    let H = messages_2[I];
-    let imageFileUuids = "image_file_uuids" in H ? H.image_file_uuids : undefined;
+  ).map((message, index) => {
+    if (message.type !== "assistant" && message.type !== "user") return message;
+    let source = messages_2[index];
+    let imageFileUuids = "image_file_uuids" in source ? source.image_file_uuids : undefined;
     return {
-      ...w,
+      ...message,
       handedOff: true,
-      ...(w.type === "user" &&
+      ...(message.type === "user" &&
         Array.isArray(imageFileUuids) &&
         imageFileUuids.length > 0 &&
-        imageFileUuids.length <= countImageParts(w.message.content) &&
+        imageFileUuids.length <= countImageParts(message.message.content) &&
         imageFileUuids.every((imageFileUuid) => typeof imageFileUuid === "string") && {
           imageFileUuids,
         }),
-      ...(I === 0 &&
-        w.type === "user" &&
-        O !== undefined &&
-        !hasTeammateMessageEnvelope(w.message.content) && {
+      ...(index === 0 &&
+        message.type === "user" &&
+        clientPlatform !== undefined &&
+        !hasTeammateMessageEnvelope(message.message.content) && {
           origin: {
             kind: "human",
           },
         }),
     };
   });
-  let last = message.at(-1);
-  let z = message[0];
-  let G =
-    O !== undefined && z?.type === "user" && !hasTeammateMessageEnvelope(z.message.content) ? O : undefined;
-  if (message.length !== messages_2.length || last?.type !== "assistant")
+  let last = mapped.at(-1);
+  let firstMessage = mapped[0];
+  let firstPlatform =
+    clientPlatform !== undefined &&
+    firstMessage?.type === "user" &&
+    !hasTeammateMessageEnvelope(firstMessage.message.content)
+      ? clientPlatform
+      : undefined;
+  if (mapped.length !== messages_2.length || last?.type !== "assistant")
     return {
       kind: "error",
       error: "invalid_handoff: the last message is not an assistant message",
     };
-  for (let w of message)
+  for (let handedMessage of mapped)
     if (
-      w.type === "user" &&
-      Array.isArray(w.message.content) &&
-      w.message.content.some((I) => I.type === "tool_use")
+      handedMessage.type === "user" &&
+      Array.isArray(handedMessage.message.content) &&
+      handedMessage.message.content.some((block) => block.type === "tool_use")
     )
       return {
         kind: "error",
-        error: `invalid_handoff: user message ${sanitizeTelemetryString(w.uuid)} holds a tool_use block`,
+        error: `invalid_handoff: user message ${sanitizeTelemetryString(handedMessage.uuid)} holds a tool_use block`,
       };
-  let L = new Map();
+  let lastCalls = new Map();
   if (Array.isArray(last.message.content))
-    for (let w of last.message.content) {
-      if (w.type !== "tool_use") continue;
-      if (L.has(w.id))
+    for (let block of last.message.content) {
+      if (block.type !== "tool_use") continue;
+      if (lastCalls.has(block.id))
         return {
           kind: "error",
-          error: `invalid_handoff: tool_use ${sanitizeTelemetryString(w.id)} repeats`,
+          error: `invalid_handoff: tool_use ${sanitizeTelemetryString(block.id)} repeats`,
         };
-      L.set(w.id, w);
+      lastCalls.set(block.id, block);
     }
-  let j;
+  let kind;
   if (toolUseIds.length > 0) {
-    if (e.stopped)
+    if (request.stopped)
       return {
         kind: "error",
         error: "invalid_handoff: a stopped turn names no calls to run",
       };
-    j = "run";
-  } else if (e.stopped) {
-    if (L.size === 0)
+    kind = "run";
+  } else if (request.stopped) {
+    if (lastCalls.size === 0)
       return {
         kind: "error",
         error: "invalid_handoff: a stopped turn ends with calls that have not run",
       };
-    j = "stopped";
-  } else j = "history";
-  let ae = new Set();
-  let de = new Set();
-  for (let message of n.messages) {
+    kind = "stopped";
+  } else kind = "history";
+  let conversationCallIds = new Set();
+  let answeredIds = new Set();
+  for (let message of context.messages) {
     if ((message.type !== "user" && message.type !== "assistant") || !Array.isArray(message.message.content))
       continue;
-    for (let I of message.message.content)
-      if (message.type === "assistant" && I.type === "tool_use") ae.add(I.id);
-      else if (message.type === "user" && I.type === "tool_result") de.add(I.tool_use_id);
+    for (let block of message.message.content)
+      if (message.type === "assistant" && block.type === "tool_use") conversationCallIds.add(block.id);
+      else if (message.type === "user" && block.type === "tool_result") answeredIds.add(block.tool_use_id);
   }
-  let ne = (toolUseId) => n.handledToolUseIds.has(toolUseId) || de.has(toolUseId);
-  let filtered = (n.mcpClients ?? []).filter(isClaudeCodeRemoteServer);
+  let isTaken = (toolUseId) => context.handledToolUseIds.has(toolUseId) || answeredIds.has(toolUseId);
+  let clients = (context.mcpClients ?? []).filter(isClaudeCodeRemoteServer);
   for (let toolUseId of toolUseIds) {
-    let I = L.get(toolUseId);
-    if (I === undefined)
+    let call = lastCalls.get(toolUseId);
+    if (call === undefined)
       return {
         kind: "error",
         error: `invalid_handoff: tool_use ${sanitizeTelemetryString(toolUseId)} is not in the last message`,
       };
-    if (!n.acceptedTools.includes(I.name))
+    if (!context.acceptedTools.includes(call.name))
       return {
         kind: "error",
-        error: `unsupported_tool: ${sanitizeTelemetryString(I.name)}`,
+        error: `unsupported_tool: ${sanitizeTelemetryString(call.name)}`,
       };
-    if (ne(toolUseId)) continue;
-    let H = findToolByName(n.tools, I.name, n.toolAliases) !== undefined;
-    let se = isPendingMcpToolName(I.name, filtered);
-    if (mcpInfoFromString(I.name) === null ? !H : filtered.length === 0 || (!H && !se))
+    if (isTaken(toolUseId)) continue;
+    let hasTool = findToolByName(context.tools, call.name, context.toolAliases) !== undefined;
+    let isPendingMcp = isPendingMcpToolName(call.name, clients);
+    if (
+      mcpInfoFromString(call.name) === null ? !hasTool : clients.length === 0 || (!hasTool && !isPendingMcp)
+    )
       return {
         kind: "error",
-        error: `unknown_tool: ${sanitizeTelemetryString(I.name)}`,
+        error: `unknown_tool: ${sanitizeTelemetryString(call.name)}`,
       };
   }
-  let ue = new Set(n.messages.map((message) => message.uuid));
-  let Z = 0;
-  let be = false;
-  if (j === "run") {
+  let conversationUuids = new Set(context.messages.map((message) => message.uuid));
+  let firstNewIndex = 0;
+  let continues = false;
+  if (kind === "run") {
     if (
-      toolUseIds.every((toolUseId) => n.recoveredToolUseIds.has(toolUseId)) &&
-      !toolUseIds.every((toolUseId) => de.has(toolUseId))
+      toolUseIds.every((toolUseId) => context.recoveredToolUseIds.has(toolUseId)) &&
+      !toolUseIds.every((toolUseId) => answeredIds.has(toolUseId))
     )
       return {
         kind: "error",
         error: RECOVERED_BY_RESTART_NOTE,
       };
-    let w = count(toolUseIds, ne);
-    if (w === toolUseIds.length)
+    let takenCount = count(toolUseIds, isTaken);
+    if (takenCount === toolUseIds.length)
       return {
         kind: "duplicate",
       };
-    if (w > 0)
+    if (takenCount > 0)
       return {
         kind: "error",
         error: "invalid_handoff: some of the named calls are already taken or answered",
       };
-    let I = message[0];
-    if (I?.type !== "user" || isToolResultMessage(I) || !isNotEmptyMessage(I))
+    let firstMessage = mapped[0];
+    if (
+      firstMessage?.type !== "user" ||
+      isToolResultMessage(firstMessage) ||
+      !isNotEmptyMessage(firstMessage)
+    )
       return {
         kind: "error",
         error:
           "invalid_handoff: a request that names calls to run must start with the user's message, not empty and not a tool result",
       };
-    if (n.requestAgeMs !== undefined && n.requestAgeMs > REWIND_REQUEST_MAX_AGE_MS)
+    if (context.requestAgeMs !== undefined && context.requestAgeMs > REWIND_REQUEST_MAX_AGE_MS)
       return {
         kind: "error",
         error: `expired: the session service has held this request for over ${REWIND_REQUEST_MAX_AGE_MS / 60000} minutes; its calls were not run`,
-        expiredAtAgeMs: n.requestAgeMs,
+        expiredAtAgeMs: context.requestAgeMs,
       };
-    if (n.pendingHandoff)
+    if (context.pendingHandoff)
       return {
         kind: "error",
         error: "invalid_handoff: another handed-off turn is still queued",
       };
-    if (n.runningHandoff)
+    if (context.runningHandoff)
       return {
         kind: "error",
         error: "invalid_handoff: another handed-off turn is still running",
       };
-    if (message.some((H) => ue.has(H.uuid)))
+    if (mapped.some((message) => conversationUuids.has(message.uuid)))
       return {
         kind: "error",
         error: "invalid_handoff: the turn carries messages the conversation already holds",
       };
   } else {
-    let lastToolUseAssistantMessage = findLastToolUseAssistantMessage(message);
-    let I = (ee) => findLastToolUseAssistantMessage(ee.messages)?.uuid === lastToolUseAssistantMessage.uuid;
-    if (n.runningHandoff && I(n.runningHandoff))
+    let lastToolUseAssistantMessage = findLastToolUseAssistantMessage(mapped);
+    let isOlder = (message) =>
+      findLastToolUseAssistantMessage(message.messages)?.uuid === lastToolUseAssistantMessage.uuid;
+    if (context.runningHandoff && isOlder(context.runningHandoff))
       return {
         kind: "duplicate",
-        ...(j === "stopped" &&
-          n.runningHandoff.kind === "run" && {
+        ...(kind === "stopped" &&
+          context.runningHandoff.kind === "run" && {
             stopRunning: true,
           }),
       };
-    if (n.pendingHandoff && I(n.pendingHandoff)) {
-      if (n.pendingHandoff.kind === j || n.pendingHandoff.kind === "stopped")
+    if (context.pendingHandoff && isOlder(context.pendingHandoff)) {
+      if (context.pendingHandoff.kind === kind || context.pendingHandoff.kind === "stopped")
         return {
           kind: "duplicate",
         };
-      let messages = n.pendingHandoff.messages;
-      let ie =
+      let messages = context.pendingHandoff.messages;
+      let firstNewIndex =
         messages.findIndex((message) => message.uuid === lastToolUseAssistantMessage.uuid) + 1 ||
         messages.length;
       if (
-        message.length < ie ||
+        mapped.length < firstNewIndex ||
         messages
-          .slice(0, ie)
+          .slice(0, firstNewIndex)
           .some(
-            (message_2, nt) =>
-              message[nt].uuid !== message_2.uuid ||
-              message[nt].type !== message_2.type ||
-              !arraysEqual(getToolUseAndResultIds(message[nt]), getToolUseAndResultIds(message_2)),
+            (message, index) =>
+              mapped[index].uuid !== message.uuid ||
+              mapped[index].type !== message.type ||
+              !arraysEqual(getToolUseAndResultIds(mapped[index]), getToolUseAndResultIds(message)),
           )
       )
         return {
           kind: "error",
           error: "invalid_handoff: the turn does not carry the lines of its pending delivery",
         };
-      be = true;
+      continues = true;
     }
-    let H = new Map(n.messages.map((message) => [message.uuid, message]));
-    while (Z < message.length && H.has(message[Z].uuid)) {
-      let ee = message[Z];
-      let ie = H.get(ee.uuid);
-      if (ie.type !== ee.type || !arraysEqual(getToolUseAndResultIds(ie), getToolUseAndResultIds(ee)))
+    let byUuid = new Map(context.messages.map((message) => [message.uuid, message]));
+    while (firstNewIndex < mapped.length && byUuid.has(mapped[firstNewIndex].uuid)) {
+      let lookupUuid = mapped[firstNewIndex];
+      let matched = byUuid.get(lookupUuid.uuid);
+      if (
+        matched.type !== lookupUuid.type ||
+        !arraysEqual(getToolUseAndResultIds(matched), getToolUseAndResultIds(lookupUuid))
+      )
         return {
           kind: "error",
           error: "invalid_handoff: the turn carries messages the conversation already holds",
         };
-      Z++;
+      firstNewIndex++;
     }
-    if (message.some((ee, ie) => ie > Z && ue.has(ee.uuid)))
+    if (mapped.some((message, index) => index > firstNewIndex && conversationUuids.has(message.uuid)))
       return {
         kind: "error",
         error: "invalid_handoff: the turn carries messages the conversation already holds out of order",
       };
-    let se = new Set();
-    for (let message_2 of n.messages)
+    let answeredIds = new Set();
+    for (let message of context.messages)
       if (
-        message_2.type === "user" &&
-        Array.isArray(message_2.message.content) &&
-        !message.some((ie, Pe) => Pe < Z && ie.uuid === message_2.uuid)
+        message.type === "user" &&
+        Array.isArray(message.message.content) &&
+        !mapped.some((message_2, index) => index < firstNewIndex && message_2.uuid === message.uuid)
       ) {
-        for (let ie of message_2.message.content) if (ie.type === "tool_result") se.add(ie.tool_use_id);
+        for (let block of message.message.content)
+          if (block.type === "tool_result") answeredIds.add(block.tool_use_id);
       }
     let toolUseAndResultIds = getToolUseAndResultIds(lastToolUseAssistantMessage);
-    let Tt = count(toolUseAndResultIds, (ee) => se.has(ee));
-    if (toolUseAndResultIds.length > 0 && Tt === toolUseAndResultIds.length)
+    let unansweredCount = count(toolUseAndResultIds, (toolUseId) => answeredIds.has(toolUseId));
+    if (toolUseAndResultIds.length > 0 && unansweredCount === toolUseAndResultIds.length)
       return {
         kind: "duplicate",
       };
-    if (Tt > 0)
+    if (unansweredCount > 0)
       return {
         kind: "error",
         error: "invalid_handoff: some of the calls are already answered",
       };
     if (
-      Z < message.length &&
+      firstNewIndex < mapped.length &&
       toolUseAndResultIds.length > 0 &&
-      toolUseAndResultIds.every((toolUseAndResultId) => n.recoveredToolUseIds.has(toolUseAndResultId))
+      toolUseAndResultIds.every((toolUseAndResultId) => context.recoveredToolUseIds.has(toolUseAndResultId))
     )
       return {
         kind: "error",
         error: RECOVERED_BY_RESTART_NOTE,
       };
-    for (let ee of message.slice(0, Z)) {
-      let ie = H.get(ee.uuid);
-      if ((ie.type !== "assistant" && ie.type !== "user") || ie.handedOff !== true)
+    for (let priorRow of mapped.slice(0, firstNewIndex)) {
+      let matched = byUuid.get(priorRow.uuid);
+      if ((matched.type !== "assistant" && matched.type !== "user") || matched.handedOff !== true)
         return {
           kind: "error",
           error: "invalid_handoff: the turn carries messages the conversation already holds",
         };
     }
     if (
-      Z > 0 &&
-      !(j === "history" && Z === message.length) &&
-      lastConversationMessage(n.messages)?.uuid !== message[Z - 1].uuid
+      firstNewIndex > 0 &&
+      !(kind === "history" && firstNewIndex === mapped.length) &&
+      lastConversationMessage(context.messages)?.uuid !== mapped[firstNewIndex - 1].uuid
     )
       return {
         kind: "error",
         error: "invalid_handoff: the conversation has moved on past the part of the turn it holds",
       };
-    if (n.pendingHandoff && !be)
+    if (context.pendingHandoff && !continues)
       return {
         kind: "error",
         error: "invalid_handoff: another handed-off turn is still queued",
       };
-    if (n.runningHandoff)
+    if (context.runningHandoff)
       return {
         kind: "error",
         error: "invalid_handoff: another handed-off turn is still running",
       };
   }
-  let requiresRewindRequestId = e.requires_rewind_request_id;
-  if (requiresRewindRequestId !== undefined && Z === 0 && !be) {
-    let w = sanitizeTelemetryString(requiresRewindRequestId);
-    let appliedRewind = n.appliedRewind;
+  let requiresRewindRequestId = request.requires_rewind_request_id;
+  if (requiresRewindRequestId !== undefined && firstNewIndex === 0 && !continues) {
+    let sanitizedRequestId = sanitizeTelemetryString(requiresRewindRequestId);
+    let appliedRewind = context.appliedRewind;
     if (appliedRewind === undefined)
       return requiredRewindError(
         "unknown",
-        `this worker has carried out no rewind_conversation: request ${w} was answered by an earlier worker, refused, or not read yet`,
+        `this worker has carried out no rewind_conversation: request ${sanitizedRequestId} was answered by an earlier worker, refused, or not read yet`,
       );
     if (appliedRewind.requestId !== requiresRewindRequestId)
       return requiredRewindError(
         "other",
-        `the last rewind this worker carried out is not rewind_conversation request ${w}: that one was refused, not read yet, or followed by another rewind`,
+        `the last rewind this worker carried out is not rewind_conversation request ${sanitizedRequestId}: that one was refused, not read yet, or followed by another rewind`,
       );
-    if ((lastConversationMessage(n.messages)?.uuid ?? null) !== appliedRewind.tipUuid)
+    if ((lastConversationMessage(context.messages)?.uuid ?? null) !== appliedRewind.tipUuid)
       return requiredRewindError(
         "moved_on",
-        `the conversation has moved on since rewind_conversation request ${w} cut it`,
+        `the conversation has moved on since rewind_conversation request ${sanitizedRequestId} cut it`,
       );
-    if (n.linesWaitingAhead === true)
+    if (context.linesWaitingAhead === true)
       return requiredRewindError(
         "lines_waiting",
-        `other messages or a turn in progress wait to be added before this turn since rewind_conversation request ${w} cut it`,
+        `other messages or a turn in progress wait to be added before this turn since rewind_conversation request ${sanitizedRequestId} cut it`,
       );
   }
-  if (j === "stopped" && L.size > MAX_HANDOFF_TOOL_USE_IDS)
+  if (kind === "stopped" && lastCalls.size > MAX_HANDOFF_TOOL_USE_IDS)
     return {
       kind: "error",
       error: `invalid_handoff: a stopped turn ends with more than ${MAX_HANDOFF_TOOL_USE_IDS} calls`,
     };
-  let sliced = message.slice(Z);
-  let Ae = n.refusalOfAppended?.(sliced);
-  if (Ae !== undefined)
+  let sliced = mapped.slice(firstNewIndex);
+  let refusal = context.refusalOfAppended?.(sliced);
+  if (refusal !== undefined)
     return {
       kind: "error",
-      error: `invalid_handoff: ${Ae}`,
+      error: `invalid_handoff: ${refusal}`,
     };
-  let Be = new Set(be ? n.pendingHandoff.messages.flatMap(getToolUseAndResultIds) : []);
-  let _e = new Set();
-  for (let message of n.messages)
-    if (message.type === "assistant" && typeof message.message.id === "string") _e.add(message.message.id);
-  let Me = new Set();
-  let Te;
-  let Se = [];
-  let he = false;
-  for (let w of Z > 0 ? n.messages : [])
-    if (w.type === "assistant") {
-      Te = w.handedOff === true ? w.message.id : undefined;
-      Se = getToolUseAndResultIds(w);
-      he = false;
-    } else if (w.type === "user") {
-      he = isToolResultsOnlyForIds(w, Se);
-      if (!he) {
-        Te = undefined;
-        Se = [];
+  let pendingIds = new Set(continues ? context.pendingHandoff.messages.flatMap(getToolUseAndResultIds) : []);
+  let conversationMessageIds = new Set();
+  for (let message of context.messages)
+    if (message.type === "assistant" && typeof message.message.id === "string")
+      conversationMessageIds.add(message.message.id);
+  let seenMessageIds = new Set();
+  let lastMessageId;
+  let lastCallIds = [];
+  let resultsOnly = false;
+  for (let message of firstNewIndex > 0 ? context.messages : [])
+    if (message.type === "assistant") {
+      lastMessageId = message.handedOff === true ? message.message.id : undefined;
+      lastCallIds = getToolUseAndResultIds(message);
+      resultsOnly = false;
+    } else if (message.type === "user") {
+      resultsOnly = isToolResultsOnlyForIds(message, lastCallIds);
+      if (!resultsOnly) {
+        lastMessageId = undefined;
+        lastCallIds = [];
       }
     }
-  for (let w of sliced) {
-    if (w.type !== "assistant") {
-      he = isToolResultsOnlyForIds(w, Se);
-      if (!he) {
-        Te = undefined;
-        Se = [];
+  for (let message of sliced) {
+    if (message.type !== "assistant") {
+      resultsOnly = isToolResultsOnlyForIds(message, lastCallIds);
+      if (!resultsOnly) {
+        lastMessageId = undefined;
+        lastCallIds = [];
       }
       continue;
     }
-    let I =
-      he &&
-      w.message.id === Te &&
-      Array.isArray(w.message.content) &&
-      w.message.content.length > 0 &&
-      w.message.content.every((H) => H.type === "tool_use");
-    Te = w.message.id;
-    Se = getToolUseAndResultIds(w);
-    he = false;
-    if (I) {
-      Me.add(w.message.id);
+    let sameMessageContinues =
+      resultsOnly &&
+      message.message.id === lastMessageId &&
+      Array.isArray(message.message.content) &&
+      message.message.content.length > 0 &&
+      message.message.content.every((block) => block.type === "tool_use");
+    lastMessageId = message.message.id;
+    lastCallIds = getToolUseAndResultIds(message);
+    resultsOnly = false;
+    if (sameMessageContinues) {
+      seenMessageIds.add(message.message.id);
       continue;
     }
-    if (Me.has(w.message.id))
+    if (seenMessageIds.has(message.message.id))
       return {
         kind: "error",
-        error: `invalid_handoff: message_id_repeats: assistant message id ${sanitizeTelemetryString(w.message.id)} repeats (allowed only in the next assistant message, of tool calls alone, with only results of the previous assistant message's calls between)`,
+        error: `invalid_handoff: message_id_repeats: assistant message id ${sanitizeTelemetryString(message.message.id)} repeats (allowed only in the next assistant message, of tool calls alone, with only results of the previous assistant message's calls between)`,
       };
-    if (_e.has(w.message.id))
+    if (conversationMessageIds.has(message.message.id))
       return {
         kind: "error",
-        error: `invalid_handoff: assistant message id ${sanitizeTelemetryString(w.message.id)} is already in the conversation`,
+        error: `invalid_handoff: assistant message id ${sanitizeTelemetryString(message.message.id)} is already in the conversation`,
       };
-    Me.add(w.message.id);
+    seenMessageIds.add(message.message.id);
   }
-  let R = new Set();
-  let W = new Set();
-  for (let [w, I] of message.entries()) {
-    if ((I.type !== "user" && I.type !== "assistant") || !Array.isArray(I.message.content)) continue;
-    for (let H of I.message.content)
-      if (I.type === "assistant" && H.type === "tool_use") {
-        if (w >= Z && (ae.has(H.id) || (n.handledToolUseIds.has(H.id) && !Be.has(H.id))))
+  let callIds = new Set();
+  let unansweredCalls = new Set();
+  for (let [index, handedMessage] of mapped.entries()) {
+    if (
+      (handedMessage.type !== "user" && handedMessage.type !== "assistant") ||
+      !Array.isArray(handedMessage.message.content)
+    )
+      continue;
+    for (let block of handedMessage.message.content)
+      if (handedMessage.type === "assistant" && block.type === "tool_use") {
+        if (
+          index >= firstNewIndex &&
+          (conversationCallIds.has(block.id) ||
+            (context.handledToolUseIds.has(block.id) && !pendingIds.has(block.id)))
+        )
           return {
             kind: "error",
-            error: `invalid_handoff: tool_use ${sanitizeTelemetryString(H.id)} is already in the conversation or taken`,
+            error: `invalid_handoff: tool_use ${sanitizeTelemetryString(block.id)} is already in the conversation or taken`,
           };
-        if (R.has(H.id))
+        if (callIds.has(block.id))
           return {
             kind: "error",
-            error: `invalid_handoff: tool_use ${sanitizeTelemetryString(H.id)} repeats`,
+            error: `invalid_handoff: tool_use ${sanitizeTelemetryString(block.id)} repeats`,
           };
-        R.add(H.id);
-        if (!(I === last && (j === "stopped" || toolUseIds.includes(H.id)))) W.add(H.id);
-      } else if (I.type === "user" && H.type === "tool_result") {
-        if (!R.has(H.tool_use_id))
+        callIds.add(block.id);
+        if (!(handedMessage === last && (kind === "stopped" || toolUseIds.includes(block.id))))
+          unansweredCalls.add(block.id);
+      } else if (handedMessage.type === "user" && block.type === "tool_result") {
+        if (!callIds.has(block.tool_use_id))
           return {
             kind: "error",
-            error: `invalid_handoff: tool_result ${sanitizeTelemetryString(H.tool_use_id)} answers no earlier tool_use in the turn`,
+            error: `invalid_handoff: tool_result ${sanitizeTelemetryString(block.tool_use_id)} answers no earlier tool_use in the turn`,
           };
-        if (w >= Z && de.has(H.tool_use_id))
+        if (index >= firstNewIndex && answeredIds.has(block.tool_use_id))
           return {
             kind: "error",
-            error: `invalid_handoff: tool_result ${sanitizeTelemetryString(H.tool_use_id)} answers a call the conversation already answers`,
+            error: `invalid_handoff: tool_result ${sanitizeTelemetryString(block.tool_use_id)} answers a call the conversation already answers`,
           };
-        W.delete(H.tool_use_id);
+        unansweredCalls.delete(block.tool_use_id);
       }
   }
-  for (let w of W)
+  for (let callId of unansweredCalls)
     return {
       kind: "error",
-      error: L.has(w)
-        ? `invalid_handoff: tool_use ${sanitizeTelemetryString(w)} in the last message is not named`
-        : `invalid_handoff: tool_use ${sanitizeTelemetryString(w)} has no result`,
+      error: lastCalls.has(callId)
+        ? `invalid_handoff: tool_use ${sanitizeTelemetryString(callId)} in the last message is not named`
+        : `invalid_handoff: tool_use ${sanitizeTelemetryString(callId)} has no result`,
     };
-  let Y;
-  if ((j === "run" || j === "history") && relayMarker !== undefined && relayMarker !== null) {
-    let w = SDKTurnHandoffTurnHandoffMessageSchema().shape.relay_marker.unwrap().safeParse(relayMarker);
-    Y = w.success
+  let relayMark;
+  if ((kind === "run" || kind === "history") && relayMarker !== undefined && relayMarker !== null) {
+    let parsed = SDKTurnHandoffTurnHandoffMessageSchema().shape.relay_marker.unwrap().safeParse(relayMarker);
+    relayMark = parsed.success
       ? {
-          uuid: w.data.uuid,
-          content: w.data.content,
+          uuid: parsed.data.uuid,
+          content: parsed.data.content,
         }
       : "malformed";
   }
-  let we;
+  let memoryLine;
   if (
-    (j === "run" || (j === "history" && !message.some((w) => ue.has(w.uuid)))) &&
+    (kind === "run" ||
+      (kind === "history" && !mapped.some((message) => conversationUuids.has(message.uuid)))) &&
     memoryContext !== undefined &&
     memoryContext !== null
   ) {
-    let w = SDKTurnHandoffTurnHandoffMessageSchema().shape.memory_context.unwrap().safeParse(memoryContext);
-    if (!w.success)
+    let parsed = SDKTurnHandoffTurnHandoffMessageSchema()
+      .shape.memory_context.unwrap()
+      .safeParse(memoryContext);
+    if (!parsed.success)
       logForDebugging(
-        `turn_handoff: ${["memory_context", ...(w.error.issues[0]?.path ?? [])].map(String).join(".")}: ${w.error.issues[0]?.message ?? "unparseable"}; the turn goes on without it`,
+        `turn_handoff: ${["memory_context", ...(parsed.error.issues[0]?.path ?? [])].map(String).join(".")}: ${parsed.error.issues[0]?.message ?? "unparseable"}; the turn goes on without it`,
         {
           level: "warn",
         },
       );
-    else if ((w.data.version === null) !== (w.data.content === null))
+    else if ((parsed.data.version === null) !== (parsed.data.content === null))
       logForDebugging(
-        `turn_handoff: memory_context has ${w.data.version === null ? "content but no version" : "a version but no content"}; the turn goes on without it`,
+        `turn_handoff: memory_context has ${parsed.data.version === null ? "content but no version" : "a version but no content"}; the turn goes on without it`,
         {
           level: "warn",
         },
       );
     else if (
-      ue.has(w.data.uuid) ||
-      message.some((I) => I.uuid === w.data.uuid) ||
-      w.data.uuid === relayMarker?.uuid
+      conversationUuids.has(parsed.data.uuid) ||
+      mapped.some((message) => message.uuid === parsed.data.uuid) ||
+      parsed.data.uuid === relayMarker?.uuid
     )
       logForDebugging(
         "turn_handoff: memory_context.uuid is already used in the request or the conversation; the turn goes on without it",
@@ -1155,8 +1219,8 @@ function applyTurnHandoff(e, n) {
         },
       );
     else {
-      let { uuid, version, content } = w.data;
-      we = createAttachmentMessage(
+      let { uuid, version, content } = parsed.data;
+      memoryLine = createAttachmentMessage(
         {
           type: "cowork_memory_context",
           version,
@@ -1169,75 +1233,77 @@ function applyTurnHandoff(e, n) {
       );
     }
   }
-  let ce;
-  if (j === "run" && fileNames !== undefined && fileNames !== null) {
-    let w = SDKTurnHandoffTurnHandoffMessageSchema().shape.file_names.unwrap();
-    let I =
+  let handedFileNames;
+  if (kind === "run" && fileNames !== undefined && fileNames !== null) {
+    let schema = SDKTurnHandoffTurnHandoffMessageSchema().shape.file_names.unwrap();
+    let parsed =
       arrayTooBigMessage(fileNames, MAX_HANDOFF_TOOL_RESULT_IDS) === undefined
-        ? w.safeParse(fileNames)
+        ? schema.safeParse(fileNames)
         : undefined;
-    if (I?.success !== true) ce = "malformed";
-    else if (I.data.length > 0)
-      ce = I.data.map((H) => ({
-        fileUuid: H.file_uuid,
-        name: H.name,
+    if (parsed?.success !== true) handedFileNames = "malformed";
+    else if (parsed.data.length > 0)
+      handedFileNames = parsed.data.map((entry) => ({
+        fileUuid: entry.file_uuid,
+        name: entry.name,
       }));
   }
-  let fe;
-  if (j === "run" && n.carriedWrites) {
-    let carriedWrites = collectCarriedWrites(
-      message,
-      n.carriedWrites,
-      findFileWriteTool(n.tools, n.toolAliases),
+  let carriedWrites;
+  if (kind === "run" && context.carriedWrites) {
+    let carriedWrites_2 = collectCarriedWrites(
+      mapped,
+      context.carriedWrites,
+      findFileWriteTool(context.tools, context.toolAliases),
     );
-    let I =
-      typeof carriedWrites === "string"
-        ? carriedWrites
-        : carriedWrites &&
-          (n.carriedWrites.switchedOn
-            ? carriedWritePermissionRefusal(n.carriedWrites.permissionMode)
+    let value =
+      typeof carriedWrites_2 === "string"
+        ? carriedWrites_2
+        : carriedWrites_2 &&
+          (context.carriedWrites.switchedOn
+            ? carriedWritePermissionRefusal(context.carriedWrites.permissionMode)
             : "switched_off");
-    if (I !== undefined)
+    if (value !== undefined)
       return {
         kind: "error",
-        error: `invalid_handoff: carried_writes_${I}: ${CARRIED_WRITE_REFUSAL_TEXT[I]}`,
-        carriedWrites: I,
+        error: `invalid_handoff: carried_writes_${value}: ${CARRIED_WRITE_REFUSAL_TEXT[value]}`,
+        carriedWrites: value,
       };
-    fe = typeof carriedWrites === "string" ? undefined : carriedWrites;
+    carriedWrites = typeof carriedWrites_2 === "string" ? undefined : carriedWrites_2;
   }
-  let taken = [...R].filter((w) => !ae.has(w) && (!n.handledToolUseIds.has(w) || Be.has(w)));
-  for (let w of R) n.handledToolUseIds.add(w);
+  let taken = [...callIds].filter(
+    (id) => !conversationCallIds.has(id) && (!context.handledToolUseIds.has(id) || pendingIds.has(id)),
+  );
+  for (let id of callIds) context.handledToolUseIds.add(id);
   let handedOffTurn = {
-    kind: j,
+    kind,
     messages:
-      j === "run"
-        ? message.map((w, I) =>
-            w.type === "assistant" && I === message.length - 1
+      kind === "run"
+        ? mapped.map((handedMessage, index) =>
+            handedMessage.type === "assistant" && index === mapped.length - 1
               ? {
-                  ...w,
+                  ...handedMessage,
                   handedOffLive: toToolUseIdSet(toolUseIds),
                 }
-              : w,
+              : handedMessage,
           )
-        : message,
+        : mapped,
     toolUseIDs: toolUseIds,
-    ...(Y !== undefined && {
-      relayMarker: Y,
+    ...(relayMark !== undefined && {
+      relayMarker: relayMark,
     }),
-    ...(we && {
-      memoryLine: we,
+    ...(memoryLine && {
+      memoryLine,
     }),
-    ...(ce !== undefined && {
-      fileNames: ce,
+    ...(handedFileNames !== undefined && {
+      fileNames: handedFileNames,
     }),
-    ...(fe !== undefined && {
-      carriedWrites: fe,
+    ...(carriedWrites !== undefined && {
+      carriedWrites,
     }),
-    ...(Z > 0 && {
+    ...(firstNewIndex > 0 && {
       continues: true,
     }),
   };
-  if (be)
+  if (continues)
     return {
       kind: "converted",
       handedOffTurn,
@@ -1247,51 +1313,59 @@ function applyTurnHandoff(e, n) {
     kind: "accepted",
     handedOffTurn,
     taken,
-    ...(G !== undefined && {
-      clientPlatform: G,
+    ...(firstPlatform !== undefined && {
+      clientPlatform: firstPlatform,
     }),
   };
 }
 //@ chunk-z4g2ta8k.js:31502-31631 placement
-function requiredRewindError(e, n) {
+function requiredRewindError(code, text) {
   return {
     kind: "error",
-    error: `invalid_handoff: required_rewind_${e}: ${n}; nothing was appended`,
-    requiredRewind: e,
+    error: `invalid_handoff: required_rewind_${code}: ${text}; nothing was appended`,
+    requiredRewind: code,
   };
 }
 //@ chunk-z4g2ta8k.js:31631-31662 placement
-function remoteMcpToolName(e) {
-  return buildMcpToolName(CLAUDE_CODE_REMOTE, e);
+function remoteMcpToolName(name) {
+  return buildMcpToolName(CLAUDE_CODE_REMOTE, name);
 }
 //@ chunk-z4g2ta8k.js:31662-31861 placement = countToolCallsSince (1)
-function getToolUseAndResultIds(e) {
-  return (e.type === "user" || e.type === "assistant") && Array.isArray(e.message.content)
-    ? e.message.content.flatMap((block) =>
+function getToolUseAndResultIds(row) {
+  return (row.type === "user" || row.type === "assistant") && Array.isArray(row.message.content)
+    ? row.message.content.flatMap((block) =>
         block.type === "tool_use" ? [block.id] : block.type === "tool_result" ? [block.tool_use_id] : [],
       )
     : [];
 }
 //@ chunk-z4g2ta8k.js:31861-31949 placement
-function isToolResultsOnlyForIds(e, n) {
-  return isToolResultOnlyUserMessage(e) && e.message.content.every((r) => n.includes(r.tool_use_id));
+function isToolResultsOnlyForIds(row, callIds) {
+  return (
+    isToolResultOnlyUserMessage(row) &&
+    row.message.content.every((block) => callIds.includes(block.tool_use_id))
+  );
 }
 //@ chunk-z4g2ta8k.js:31949-32019 placement
 function arraysEqual(toolUseAndResultIds, toolUseAndResultIds_2) {
   return (
     toolUseAndResultIds.length === toolUseAndResultIds_2.length &&
-    toolUseAndResultIds.every((r, s) => r === toolUseAndResultIds_2[s])
+    toolUseAndResultIds.every((a, b) => a === toolUseAndResultIds_2[b])
   );
 }
 //@ chunk-z4g2ta8k.js:32019-32059 placement
-var handoffWithoutMessagesSchema = DoctorLazy(() =>
-  SDKTurnHandoffTurnHandoffMessageSchema().omit({
-    messages: true,
-  }),
-);
+var handoffWithoutMessagesSchema; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-z4g2ta8k.js:32019", () => {
+  handoffWithoutMessagesSchema = DoctorLazy(() =>
+    SDKTurnHandoffTurnHandoffMessageSchema().omit({
+      messages: true,
+    }),
+  );
+});
 //@ chunk-z4g2ta8k.js:32059-32166 placement
-function arrayTooBigMessage(e, n) {
-  return Array.isArray(e) && e.length > n ? `Too big: expected array to have <=${n} items` : undefined;
+function arrayTooBigMessage(value, limit) {
+  return Array.isArray(value) && value.length > limit
+    ? `Too big: expected array to have <=${limit} items`
+    : undefined;
 }
 //@ chunk-z4g2ta8k.js:32166-32245 placement
 function issuePathString(path) {
@@ -1304,40 +1378,43 @@ var REFUSE = "refuse";
 /**
  * 按设备证明状态与等级下限判 pass/drop；状态缺省（UNSPECIFIED）时由 unstamped 选项决定是否放行。
  */
-function judgeDeviceAttestationLevel(e, { floor: n = VERIFIED_BY_GATE, unstamped: r = REFUSE } = {}) {
-  let s = normalizeAttestationStatus(e.device_attestation_status);
-  if (meetsAttestationLevel(s, n))
+function judgeDeviceAttestationLevel(frame, { floor = VERIFIED_BY_GATE, unstamped = REFUSE } = {}) {
+  let status = normalizeAttestationStatus(frame.device_attestation_status);
+  if (meetsAttestationLevel(status, floor))
     return {
       verdict: "pass",
-      status: s,
+      status,
     };
-  if (s === "UNSPECIFIED" && r === "pass")
+  if (status === "UNSPECIFIED" && unstamped === "pass")
     return {
       verdict: "pass",
-      status: s,
+      status,
     };
   return {
     verdict: "drop",
-    status: s,
+    status,
   };
 }
 //@ chunk-z4g2ta8k.js:32509-32596 placement
-function dropServiceVouchedAttestation(e) {
-  let n = judgeDeviceAttestationLevel(e);
-  return n.status === "SERVICE_VOUCHED"
+function dropServiceVouchedAttestation(frame) {
+  let verdict = judgeDeviceAttestationLevel(frame);
+  return verdict.status === "SERVICE_VOUCHED"
     ? {
-        ...n,
+        ...verdict,
         verdict: "drop",
       }
-    : n;
+    : verdict;
 }
 //@ chunk-z4g2ta8k.js:32596-32714 placement
-var ATTESTED_REQUEST_SUBTYPES = new Set([
-  "remote_tools_announce",
-  "register_device_hooks",
-  "upload_device_hook_template",
-  "apply_flag_settings",
-]);
+var ATTESTED_REQUEST_SUBTYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-z4g2ta8k.js:32596", () => {
+  ATTESTED_REQUEST_SUBTYPES = new Set([
+    "remote_tools_announce",
+    "register_device_hooks",
+    "upload_device_hook_template",
+    "apply_flag_settings",
+  ]);
+});
 //@ chunk-z4g2ta8k.js:32714-33069 placement
 /**
  * 识别需要设备证明的 control_request 子类型：界面类返回 ui_surface，apply_flag_settings 只在带云插件转发键时算，其他非白名单子类型返回 undefined。

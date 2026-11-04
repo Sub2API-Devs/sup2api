@@ -59,14 +59,15 @@ import { env } from "../../utils/env.js";
 import { isDiskless } from "../../bootstrap/state.js";
 import { planDisplayNameFromProfile } from "./validateOauthToken.js";
 import { classifyOAuthErrorResponse, HTTPS_CLAUDE_AI_RESTRICTED, ACCOUNT_ON_HOLD } from "./oauthErrors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:295624-295741 placement
 var API_KEY_NOT_CREATED_MESSAGE =
   "The server did not create an API key and gave no readable reason. If this keeps happening, contact support.";
 //@ chunk-aepeg2w5.js:295741-295825 placement
 class KeyMintRefusedError extends Error {
-  constructor(message, n) {
-    super(message, n);
+  constructor(message, options) {
+    super(message, options);
     this.name = "KeyMintRefusedError";
   }
 }
@@ -74,8 +75,8 @@ class KeyMintRefusedError extends Error {
 /**
  * 判断是否为需要二次验证或被拒铸币的错误。
  */
-function isVerificationOrMintRefusal(e) {
-  return e instanceof VerificationRequiredError || e instanceof KeyMintRefusedError;
+function isVerificationOrMintRefusal(error) {
+  return error instanceof VerificationRequiredError || error instanceof KeyMintRefusedError;
 }
 //@ chunk-aepeg2w5.js:295881-295911 layout
 /**
@@ -84,9 +85,9 @@ function isVerificationOrMintRefusal(e) {
 var TOKEN_CONFIG_TTL_MS = 86400000;
 var REFRESH_TOKEN_EXPIRY_MS = 2592000000;
 //@ chunk-aepeg2w5.js:295911-296007 facade-exports
-function resolveRefreshTokenExpiresAt(refreshTokenExpiresIn, n) {
+function resolveRefreshTokenExpiresAt(refreshTokenExpiresIn, hasExpiry) {
   if (typeof refreshTokenExpiresIn === "number") return Date.now() + refreshTokenExpiresIn * 1000;
-  return n ? Date.now() + REFRESH_TOKEN_EXPIRY_MS : undefined;
+  return hasExpiry ? Date.now() + REFRESH_TOKEN_EXPIRY_MS : undefined;
 }
 //@ chunk-aepeg2w5.js:296007-296036 facade-exports
 function shouldUseClaudeAIAuth(scopes) {
@@ -189,31 +190,32 @@ async function exchangeCodeForTokens(
 async function refreshOAuthToken(
   refreshToken,
   {
-    scopes: n,
-    expiresIn: r,
-    clientId: s,
-    skipProfileFetch: h,
-    signal: y,
-    telemetryContext: S,
-    invalidScopeRetried: w,
-    storageV5: R,
+    scopes: requestedScopes,
+    expiresIn: expiresInSeconds,
+    clientId,
+    skipProfileFetch,
+    signal,
+    telemetryContext,
+    invalidScopeRetried,
+    storageV5,
   } = {},
 ) {
-  let x = Array.isArray(n) && n.length ? n : claudeAiLoginScopes();
+  let scopes =
+    Array.isArray(requestedScopes) && requestedScopes.length ? requestedScopes : claudeAiLoginScopes();
   let requestBody = {
     grant_type: "refresh_token",
     refresh_token: refreshToken,
-    client_id: s ?? getOauthConfig().CLIENT_ID,
-    scope: x.join(" "),
+    client_id: clientId ?? getOauthConfig().CLIENT_ID,
+    scope: scopes.join(" "),
   };
-  if (r !== undefined) requestBody.expires_in = r;
+  if (expiresInSeconds !== undefined) requestBody.expires_in = expiresInSeconds;
   try {
     let response = await axios_default.post(getOauthConfig().TOKEN_URL, requestBody, {
       headers: {
         "Content-Type": "application/json",
       },
       timeout: 30000,
-      signal: y,
+      signal,
       ...FAST_MODE_CHECK_HTTP_OPTIONS,
     });
     if (response.status !== 200) throw Error(`Token refresh failed: ${response.statusText}`);
@@ -225,24 +227,24 @@ async function refreshOAuthToken(
     } = data;
     let expiresAt = Date.now() + expiresIn * 1000;
     let refreshTokenExpiresAt = resolveRefreshTokenExpiresAt(data.refresh_token_expires_in, false);
-    let scopes = parseScopes(data.scope);
+    let scopes_2 = parseScopes(data.scope);
     logEvent("tengu_oauth_token_refresh_success", {
-      plugins_scope_requested: x.includes(CLAUDE_AI_PLUGINS_SCOPE),
-      plugins_scope_granted: scopes.includes(CLAUDE_AI_PLUGINS_SCOPE),
+      plugins_scope_requested: scopes.includes(CLAUDE_AI_PLUGINS_SCOPE),
+      plugins_scope_granted: scopes_2.includes(CLAUDE_AI_PLUGINS_SCOPE),
     });
     logFeatureOk("oauth_token_refresh");
     let config = getGlobalConfig();
-    let Se = h ? null : getClaudeAIOAuthTokens();
-    let ae = consumeProfileStamp(Se);
-    let ie =
+    let previousTokens = skipProfileFetch ? null : getClaudeAIOAuthTokens();
+    let stampConsumed = consumeProfileStamp(previousTokens);
+    let accountNeedsRefresh =
       config.oauthAccount?.billingType !== undefined &&
       config.oauthAccount?.accountCreatedAt !== undefined &&
       config.oauthAccount?.subscriptionCreatedAt !== undefined &&
       config.oauthAccount?.ccOnboardingFlags !== undefined &&
-      Se?.subscriptionType != null &&
-      Se?.rateLimitTier != null &&
-      !ae;
-    let profileInfo = h || ie ? null : await fetchProfileInfo(accessToken);
+      previousTokens?.subscriptionType != null &&
+      previousTokens?.rateLimitTier != null &&
+      !stampConsumed;
+    let profileInfo = skipProfileFetch || accountNeedsRefresh ? null : await fetchProfileInfo(accessToken);
     if (profileInfo && config.oauthAccount) {
       let updates = {};
       if (profileInfo.displayName !== undefined) updates.displayName = profileInfo.displayName;
@@ -272,7 +274,7 @@ async function refreshOAuthToken(
                 }
               : current.oauthAccount,
           }),
-          R,
+          storageV5,
         );
     }
     return {
@@ -280,10 +282,10 @@ async function refreshOAuthToken(
       refreshToken: newRefreshToken,
       expiresAt,
       refreshTokenExpiresAt,
-      scopes,
-      clientId: s,
-      ...reconcileSubscriptionType(Se, profileInfo),
-      rateLimitTier: profileInfo?.rateLimitTier ?? Se?.rateLimitTier ?? null,
+      scopes: scopes_2,
+      clientId,
+      ...reconcileSubscriptionType(previousTokens, profileInfo),
+      rateLimitTier: profileInfo?.rateLimitTier ?? previousTokens?.rateLimitTier ?? null,
       profile: profileInfo?.rawProfile,
       ...(profileInfo?.rawProfile !== undefined && {
         profileOriginStamped: profileInfo.originStamped === true,
@@ -297,20 +299,21 @@ async function refreshOAuthToken(
         : undefined,
     };
   } catch (error) {
-    let L = w === true && isInvalidScopeError(error);
+    let scopeRetry = invalidScopeRetried === true && isInvalidScopeError(error);
     logEvent("tengu_oauth_token_refresh_failure", {
       ...errorTelemetryFields(error),
       ...extractOAuthErrorFields(error),
-      ...(S && {
-        context: fromEnum(S),
+      ...(telemetryContext && {
+        context: fromEnum(telemetryContext),
       }),
-      ...(L && {
+      ...(scopeRetry && {
         context: lit("invalid_scope_retried"),
       }),
     });
     if (isAccountOnHoldError(error)) logFeatureBad("oauth_token_refresh", "oauth_refresh_account_on_hold");
     else if (isInvalidGrantError(error)) logFeatureBad("oauth_token_refresh", "oauth_refresh_invalid_grant");
-    else if (!y?.aborted && !S && !L) logFeatureSad("oauth_token_refresh", "oauth_refresh_request_failed");
+    else if (!signal?.aborted && !telemetryContext && !scopeRetry)
+      logFeatureSad("oauth_token_refresh", "oauth_refresh_request_failed");
     throw error;
   }
 }
@@ -318,7 +321,7 @@ async function refreshOAuthToken(
 /**
  * 吊销令牌：POST <TOKEN_URL>/revoke（token、token_type_hint、client_id），5 秒超时，用于登出。
  */
-async function revokeOAuthTokenAcknowledged(token, n, tokenTypeHint = "refresh_token") {
+async function revokeOAuthTokenAcknowledged(token, clientId, tokenTypeHint = "refresh_token") {
   try {
     let headers =
       (
@@ -327,7 +330,7 @@ async function revokeOAuthTokenAcknowledged(token, n, tokenTypeHint = "refresh_t
           {
             token,
             token_type_hint: tokenTypeHint,
-            client_id: n ?? getOauthConfig().CLIENT_ID,
+            client_id: clientId ?? getOauthConfig().CLIENT_ID,
           },
           {
             headers: {
@@ -367,7 +370,7 @@ async function revokeOAuthToken(refreshToken, clientId) {
 /**
  * 拉取 ROLES_URL（organization_role / workspace_role）并写入 oauthAccount。
  */
-async function fetchAndStoreUserRoles(accessToken, n) {
+async function fetchAndStoreUserRoles(accessToken, storageV5) {
   let response = await axios_default.get(getOauthConfig().ROLES_URL, {
     headers: {
       "User-Agent": claudeCodeUserAgent(),
@@ -398,7 +401,7 @@ async function fetchAndStoreUserRoles(accessToken, n) {
           }
         : current.oauthAccount,
     }),
-    n,
+    storageV5,
   );
   logEvent("tengu_oauth_roles_stored", {
     org_role:
@@ -410,7 +413,7 @@ async function fetchAndStoreUserRoles(accessToken, n) {
 /**
  * Console 登录后用 OAuth 令牌调用 API_KEY_URL 创建 API key 并保存（tengu_oauth_api_key）。
  */
-async function createAndStoreApiKey(accessToken, n) {
+async function createAndStoreApiKey(accessToken, storageV5) {
   try {
     let response = await axios_default.post(getOauthConfig().API_KEY_URL, null, {
       headers: {
@@ -421,7 +424,7 @@ async function createAndStoreApiKey(accessToken, n) {
     });
     let apiKey = response.data?.raw_key;
     if (apiKey) {
-      await saveApiKey(apiKey, n);
+      await saveApiKey(apiKey, storageV5);
       logEvent("tengu_oauth_api_key", {
         status: lit("success"),
         statusCode: response.status,
@@ -445,13 +448,16 @@ async function createAndStoreApiKey(accessToken, n) {
         cause: error,
       });
     }
-    let h = verificationErrorMessage(error);
+    let verificationMessage = verificationErrorMessage(error);
     let status = axios_default.isAxiosError(error) ? error.response?.status : undefined;
-    if (h !== null && status !== undefined && status >= 400 && status < 500) {
+    if (verificationMessage !== null && status !== undefined && status >= 400 && status < 500) {
       logFeatureBad("oauth_create_api_key", "oauth_api_key_refused");
-      throw new KeyMintRefusedError(sanitizeVerificationMessage(h) ?? API_KEY_NOT_CREATED_MESSAGE, {
-        cause: error,
-      });
+      throw new KeyMintRefusedError(
+        sanitizeVerificationMessage(verificationMessage) ?? API_KEY_NOT_CREATED_MESSAGE,
+        {
+          cause: error,
+        },
+      );
     }
     logFeatureBad("oauth_create_api_key", "oauth_api_key_request_failed");
     throw error;
@@ -461,17 +467,20 @@ async function createAndStoreApiKey(accessToken, n) {
 /**
  * 令牌是否已过期或 5 分钟内过期（expiresAt 为 null 视为不过期）。
  */
-function isOAuthTokenExpired(expiresAt, n = Date.now()) {
+function isOAuthTokenExpired(expiresAt, now = Date.now()) {
   if (expiresAt === null) return false;
-  return n + 300000 >= expiresAt;
+  return now + 300000 >= expiresAt;
 }
 //@ chunk-aepeg2w5.js:302710-302829 facade-exports = fetchProfileInfo (0.606)
-var SUBSCRIPTION_TYPE_BY_ORG_TYPE = new Map([
-  ["claude_max", "max"],
-  ["claude_pro", "pro"],
-  ["claude_enterprise", "enterprise"],
-  ["claude_team", "team"],
-]);
+var SUBSCRIPTION_TYPE_BY_ORG_TYPE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:302710", () => {
+  SUBSCRIPTION_TYPE_BY_ORG_TYPE = new Map([
+    ["claude_max", "max"],
+    ["claude_pro", "pro"],
+    ["claude_enterprise", "enterprise"],
+    ["claude_team", "team"],
+  ]);
+});
 //@ chunk-aepeg2w5.js:302829-302888 facade-exports
 /**
  * organization_type → 订阅类型（claude_max→max、claude_pro→pro、claude_enterprise→enterprise、claude_team→team）。
@@ -482,39 +491,42 @@ function subscriptionTypeForOrganizationType(organizationType) {
   );
 }
 //@ chunk-aepeg2w5.js:302888-302928 layout
-var profileStampState = identity_2(
-  {
-    spent: false,
-  },
-  (e) => {
-    e.spent = false;
-  },
-);
+var profileStampState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:302888", () => {
+  profileStampState = identity_2(
+    {
+      spent: false,
+    },
+    (state) => {
+      state.spent = false;
+    },
+  );
+});
 //@ chunk-aepeg2w5.js:302928-302995 layout
-function consumeProfileStamp(e) {
-  if (profileStampState.spent || !isUnmarkedStoredPlan(e)) return false;
+function consumeProfileStamp(tokens) {
+  if (profileStampState.spent || !isUnmarkedStoredPlan(tokens)) return false;
   profileStampState.spent = true;
   return true;
 }
 //@ chunk-aepeg2w5.js:302995-303750 layout
-function reconcileSubscriptionType(e, profileInfo) {
-  let subscriptionType = e?.subscriptionType ?? null;
-  let subscriptionTypeSource = e?.subscriptionTypeSource;
-  let h = subscriptionType === null || subscriptionTypeSource === "profile";
-  let y = isProvisionalProfilePlan(e);
+function reconcileSubscriptionType(tokens, profileInfo) {
+  let subscriptionType = tokens?.subscriptionType ?? null;
+  let subscriptionTypeSource = tokens?.subscriptionTypeSource;
+  let trustsExisting = subscriptionType === null || subscriptionTypeSource === "profile";
+  let isProvisional = isProvisionalProfilePlan(tokens);
   let subscriptionType_2 = profileInfo?.subscriptionType ?? null;
-  let w =
+  let profileWins =
     subscriptionType_2 !== null &&
     profileInfo?.originStamped === true &&
-    (y || !isProfilePlanDowngrade(subscriptionType, subscriptionType_2));
-  if (!h) {
-    if (w && subscriptionType_2 !== subscriptionType)
+    (isProvisional || !isProfilePlanDowngrade(subscriptionType, subscriptionType_2));
+  if (!trustsExisting) {
+    if (profileWins && subscriptionType_2 !== subscriptionType)
       return {
         subscriptionType: subscriptionType_2,
         subscriptionTypeSource: "profile",
         subscriptionTypeVerifiedAt: Date.now(),
       };
-    return subscriptionTypeSource === "sign_in" || (w && subscriptionType_2 === subscriptionType)
+    return subscriptionTypeSource === "sign_in" || (profileWins && subscriptionType_2 === subscriptionType)
       ? {
           subscriptionType,
           subscriptionTypeSource: "sign_in",
@@ -523,17 +535,17 @@ function reconcileSubscriptionType(e, profileInfo) {
           subscriptionType,
         };
   }
-  if (w)
+  if (profileWins)
     return {
       subscriptionType: subscriptionType_2,
       subscriptionTypeSource: "profile",
       subscriptionTypeVerifiedAt: Date.now(),
     };
-  if (subscriptionType !== null && (!y || subscriptionType_2 === null))
+  if (subscriptionType !== null && (!isProvisional || subscriptionType_2 === null))
     return {
       subscriptionType,
       subscriptionTypeSource: "profile",
-      subscriptionTypeVerifiedAt: e?.subscriptionTypeVerifiedAt,
+      subscriptionTypeVerifiedAt: tokens?.subscriptionTypeVerifiedAt,
     };
   return subscriptionType_2 === null
     ? {
@@ -551,7 +563,7 @@ function reconcileSubscriptionType(e, profileInfo) {
 async function fetchProfileInfo(accessToken) {
   let oauthProfileWithOriginFromOauthToken = await getOauthProfileWithOriginFromOauthToken(accessToken);
   let profile = oauthProfileWithOriginFromOauthToken?.profile;
-  let h = {
+  let info = {
     subscriptionType: subscriptionTypeForOrganizationType(profile?.organization?.organization_type),
     rateLimitTier: profile?.organization?.rate_limit_tier ?? null,
     seatTier: profile?.organization?.seat_tier ?? null,
@@ -561,14 +573,14 @@ async function fetchProfileInfo(accessToken) {
     claudeCodeTrialEndsAt: profile?.organization?.claude_code_trial_ends_at ?? null,
     claudeCodeTrialDurationDays: profile?.organization?.claude_code_trial_duration_days ?? null,
   };
-  if (profile?.account?.display_name) h.displayName = profile.account.display_name;
-  if (profile?.account?.full_name) h.fullName = profile.account.full_name;
-  if (profile?.account?.created_at) h.accountCreatedAt = profile.account.created_at;
+  if (profile?.account?.display_name) info.displayName = profile.account.display_name;
+  if (profile?.account?.full_name) info.fullName = profile.account.full_name;
+  if (profile?.account?.created_at) info.accountCreatedAt = profile.account.created_at;
   if (profile?.organization?.subscription_created_at)
-    h.subscriptionCreatedAt = profile.organization.subscription_created_at;
+    info.subscriptionCreatedAt = profile.organization.subscription_created_at;
   logEvent("tengu_oauth_profile_fetch_success", {});
   return {
-    ...h,
+    ...info,
     rawProfile: profile,
     originStamped: oauthProfileWithOriginFromOauthToken?.stamped,
   };
@@ -592,11 +604,11 @@ async function getOrganizationUUID() {
 /**
  * oauthAccount 缺字段时拉 profile 补全（可覆盖 env 提供的账户信息）。
  */
-async function populateOAuthAccountInfoIfNeeded(credentials, n, r = true) {
+async function populateOAuthAccountInfoIfNeeded(credentials, storageV5, refresh = true) {
   let envAccountUuid = env.CLAUDE_CODE_ACCOUNT_UUID;
   let envUserEmail = env.CLAUDE_CODE_USER_EMAIL;
   let envOrganizationUuid = env.CLAUDE_CODE_ORGANIZATION_UUID;
-  let S =
+  let envAccountInfo =
     !isDiskless() && envAccountUuid && envUserEmail && envOrganizationUuid
       ? {
           accountUuid: envAccountUuid,
@@ -604,11 +616,11 @@ async function populateOAuthAccountInfoIfNeeded(credentials, n, r = true) {
           organizationUuid: envOrganizationUuid,
         }
       : null;
-  if (S && !getGlobalConfig().oauthAccount) storeOAuthAccountInfo(S, n);
-  if (r)
+  if (envAccountInfo && !getGlobalConfig().oauthAccount) storeOAuthAccountInfo(envAccountInfo, storageV5);
+  if (refresh)
     await checkAndRefreshOAuthTokenIfNeeded({
       credentials,
-      storageV5: n,
+      storageV5,
     });
   else {
     let claudeAIOAuthTokens = await getClaudeAIOAuthTokensAsync(credentials);
@@ -616,9 +628,9 @@ async function populateOAuthAccountInfoIfNeeded(credentials, n, r = true) {
   }
   let config = getGlobalConfig();
   let profileFetchedAt = config.oauthAccount?.profileFetchedAt;
-  let x = profileFetchedAt !== undefined && Date.now() - profileFetchedAt < TOKEN_CONFIG_TTL_MS;
+  let profileFresh = profileFetchedAt !== undefined && Date.now() - profileFetchedAt < TOKEN_CONFIG_TTL_MS;
   let config_2 = getStoredOAuthTierVerifiedAt();
-  let F =
+  let needsVerificationCheck =
     isVerificationRequired() &&
     (config_2 === undefined
       ? getClaudeAIOAuthTokens()?.subscriptionType === null &&
@@ -631,8 +643,8 @@ async function populateOAuthAccountInfoIfNeeded(credentials, n, r = true) {
       config.oauthAccount.accountCreatedAt !== undefined &&
       config.oauthAccount.subscriptionCreatedAt !== undefined &&
       config.oauthAccount.ccOnboardingFlags !== undefined &&
-      x &&
-      !F) ||
+      profileFresh &&
+      !needsVerificationCheck) ||
     !isClaudeAISubscriber() ||
     !hasProfileScope()
   )
@@ -642,7 +654,7 @@ async function populateOAuthAccountInfoIfNeeded(credentials, n, r = true) {
   let profile = await getOauthProfileWithOriginFromOauthToken(tokens.accessToken);
   let profile_2 = profile?.profile;
   if (!profile_2?.account || !profile_2.organization) return false;
-  if (S)
+  if (envAccountInfo)
     logForDebugging("OAuth profile fetch succeeded, overriding env var account info", {
       level: "info",
     });
@@ -664,38 +676,42 @@ async function populateOAuthAccountInfoIfNeeded(credentials, n, r = true) {
       planDisplayName: getPlanDisplayName(profile_2),
       profileFetchedAt: Date.now(),
     },
-    n,
+    storageV5,
   );
   await recordStoredLoginPlan(tokens, profile_2, profile?.stamped === true, credentials);
   return true;
 }
 //@ chunk-aepeg2w5.js:306619-307249 layout
-async function recordStoredLoginPlan(tokens, profile, originStamped, credentials) {
-  let h = tokens.subscriptionTypeSource === "profile" || isUnmarkedStoredPlan(tokens);
-  if ((tokens.subscriptionType !== null && !h) || !tokens.refreshToken || !credentialIsOwnStoredLogin())
+async function recordStoredLoginPlan(stored, profile, originStamped, credentials) {
+  let planUntrusted = stored.subscriptionTypeSource === "profile" || isUnmarkedStoredPlan(stored);
+  if (
+    (stored.subscriptionType !== null && !planUntrusted) ||
+    !stored.refreshToken ||
+    !credentialIsOwnStoredLogin()
+  )
     return;
-  let y = subscriptionTypeForOrganizationType(profile.organization.organization_type);
-  if (y === null) return;
-  let S = await backfillStoredOAuthTier({
-    expectedRefreshToken: tokens.refreshToken,
-    subscriptionType: y,
+  let subscriptionType = subscriptionTypeForOrganizationType(profile.organization.organization_type);
+  if (subscriptionType === null) return;
+  let backfillResult = await backfillStoredOAuthTier({
+    expectedRefreshToken: stored.refreshToken,
+    subscriptionType,
     rateLimitTier: profile.organization.rate_limit_tier ?? null,
     verifiedAt: Date.now(),
     originStamped,
     credentials,
   });
   logForDebugging(
-    S === "written"
-      ? `OAuth: recorded the stored login plan (${y}) from the profile`
-      : S === "reverified" || S === "confirmed"
-        ? `OAuth: profile re-read confirms the stored login plan (${y}; ${S})`
-        : `OAuth: stored login plan not recorded from the profile (${S})`,
+    backfillResult === "written"
+      ? `OAuth: recorded the stored login plan (${subscriptionType}) from the profile`
+      : backfillResult === "reverified" || backfillResult === "confirmed"
+        ? `OAuth: profile re-read confirms the stored login plan (${subscriptionType}; ${backfillResult})`
+        : `OAuth: stored login plan not recorded from the profile (${backfillResult})`,
   );
 }
 //@ chunk-aepeg2w5.js:307249-307324 layout
-function getPlanDisplayName(e) {
+function getPlanDisplayName(profile) {
   return credentialIsOwnStoredLogin()
-    ? planDisplayNameFromProfile(e)
+    ? planDisplayNameFromProfile(profile)
     : (getGlobalConfig().oauthAccount?.planDisplayName ?? null);
 }
 //@ chunk-aepeg2w5.js:307324-308809 facade-exports = storeOAuthAccountInfo (0.667)
@@ -769,17 +785,17 @@ function storeOAuthAccountInfo(
   }, storageV5);
 }
 //@ chunk-aepeg2w5.js:308809-309012 layout
-function parseOAuthErrorBody(e) {
-  if (!e || typeof e !== "object")
+function parseOAuthErrorBody(body) {
+  if (!body || typeof body !== "object")
     return {
       code: undefined,
       description: undefined,
     };
-  let n = e;
-  let error = n.error;
+  let record = body;
+  let error = record.error;
   return {
     code: typeof error === "string" ? error : error && typeof error === "object" ? error.type : undefined,
-    description: n.error_description,
+    description: record.error_description,
   };
 }
 //@ chunk-aepeg2w5.js:309012-309170 facade-exports = isTransientNetworkError (1)
@@ -819,7 +835,10 @@ function isOAuthTokenRequestRefused(error) {
   return axios_default.isAxiosError(error) && isNonRetryableClientError(error.response?.status);
 }
 //@ chunk-aepeg2w5.js:309633-309706 layout
-var FATAL_OAUTH_ERROR_CODES = new Set(["invalid_client", "invalid_scope", "unauthorized_client"]);
+var FATAL_OAUTH_ERROR_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:309633", () => {
+  FATAL_OAUTH_ERROR_CODES = new Set(["invalid_client", "invalid_scope", "unauthorized_client"]);
+});
 //@ chunk-aepeg2w5.js:309706-309850 facade-exports = isTransientNetworkError (1)
 function isExpectedOAuthTokenError(error) {
   if (!axios_default.isAxiosError(error) || error.response?.status !== 400) return false;
@@ -841,21 +860,23 @@ function extractOAuthErrorFields(error) {
   return {
     oauth_error_status: fromNumber(error.response.status),
     oauth_error_type: sanitizedOAuthErrorTypeForTelemetry(code),
-    oauth_error_description: fromEnumOpt(TERMINAL_REFRESH_ERRORS.find((s) => s === description)),
+    oauth_error_description: fromEnumOpt(
+      TERMINAL_REFRESH_ERRORS.find((candidate) => candidate === description),
+    ),
   };
 }
 //@ chunk-aepeg2w5.js:310237-310369 facade-exports
-async function restoreOAuthAccountAfterRefusedRefresh(storedOauthAccountInfo, n) {
+async function restoreOAuthAccountAfterRefusedRefresh(storedOauthAccountInfo, storageV5) {
   await saveGlobalConfig(
-    (r) =>
-      r.oauthAccount?.accountUuid === storedOauthAccountInfo.accountUuid &&
-      !isDeepStrictEqual(r.oauthAccount, storedOauthAccountInfo)
+    (config) =>
+      config.oauthAccount?.accountUuid === storedOauthAccountInfo.accountUuid &&
+      !isDeepStrictEqual(config.oauthAccount, storedOauthAccountInfo)
         ? {
-            ...r,
+            ...config,
             oauthAccount: storedOauthAccountInfo,
           }
-        : r,
-    n,
+        : config,
+    storageV5,
   );
 }
 export {
@@ -869,11 +890,11 @@ export {
   isInvalidScopeError,
   getAccountOnHoldErrorUrl,
   revokeOAuthToken,
+  storeOAuthAccountInfo,
   restoreOAuthAccountAfterRefusedRefresh,
   fetchProfileInfo,
   subscriptionTypeForOrganizationType,
   isVerificationOrMintRefusal,
-  storeOAuthAccountInfo,
   SUBSCRIPTION_TYPE_BY_ORG_TYPE,
   populateOAuthAccountInfoIfNeeded,
   buildAuthUrl,
@@ -883,4 +904,6 @@ export {
   fetchAndStoreUserRoles,
   createAndStoreApiKey,
   revokeOAuthTokenAcknowledged,
+  extractOAuthErrorFields,
+  isOAuthTokenRequestRefused,
 };

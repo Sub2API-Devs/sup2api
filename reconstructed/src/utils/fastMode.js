@@ -62,6 +62,7 @@ import { apiKeyForHost } from "../services/analytics/telemetryCredentialGuard.js
 import { eagerParseCliFlag } from "./cliArgs.js";
 import { invalidateCommandNames } from "./settings/commandSyncNames.js";
 import { syncRespawnFlag } from "../services/daemon/jobState.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:354620-354705 callgraph-witnessed = isFastModeEnabled (0.649)
 /**
@@ -127,9 +128,9 @@ function isRemoteOrgFastModeEnabled() {
 /**
  * fast mode 开且 getFastModeUnavailableReason 为空。
  */
-function isFastModeAvailable(e) {
+function isFastModeAvailable(model) {
   if (!isFastModeEnabled()) return false;
-  return getFastModeUnavailableMessage(e) === null;
+  return getFastModeUnavailableMessage(model) === null;
 }
 //@ chunk-aepeg2w5.js:355109-355319 layout
 /**
@@ -169,26 +170,35 @@ function getDisabledReasonMessage(disabledReason, authType) {
  */
 function getFastModeUnavailableReasonCode(
   model,
-  { sessionOptIn: n = false, sessionOnly: r = false, orgStatus = fastModeState.orgStatus } = {},
+  { sessionOptIn = false, sessionOnly = false, orgStatus = fastModeState.orgStatus } = {},
 ) {
   if (!isFastModeEnabled()) return getAPIProvider() !== "firstParty" ? "not_first_party" : "disabled_by_env";
   if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_penguins_off", null) !== null) return "unknown";
   if (!isModelAllowed(defaultOpusAlias())) {
-    let S = model !== undefined ? (model ?? getDefaultMainLoopModelSetting()) : getMainLoopModel();
-    if (!(!isRemoteControlChannelAvailable() && supportsFastMode(S) && isModelAllowed(S)))
+    let mainLoopModel =
+      model !== undefined ? (model ?? getDefaultMainLoopModelSetting()) : getMainLoopModel();
+    if (!(
+      !isRemoteControlChannelAvailable() &&
+      supportsFastMode(mainLoopModel) &&
+      isModelAllowed(mainLoopModel)
+    ))
       return "model_not_allowed";
   }
-  let h = n || getSettingsForSource("flagSettings")?.fastMode === true;
+  let optedIn = sessionOptIn || getSettingsForSource("flagSettings")?.fastMode === true;
   if (getSettingsForSource("policySettings")?.fastMode === false) return "preference";
-  if ((n || r) && getSettingsForSource("policySettings")?.fastModePerSessionOptIn === true)
+  if (
+    (sessionOptIn || sessionOnly) &&
+    getSettingsForSource("policySettings")?.fastModePerSessionOptIn === true
+  )
     return "preference";
-  if (getIsNonInteractiveSession() && preferThirdPartyAuthentication() && !h) return "sdk_opt_in_required";
-  let y = h && !isRemoteManagedEntrypoint();
-  if (orgStatus.status === "pending" && !shouldSkipFastModeOrgCheck() && !y) return "pending";
+  if (getIsNonInteractiveSession() && preferThirdPartyAuthentication() && !optedIn)
+    return "sdk_opt_in_required";
+  let active = optedIn && !isRemoteManagedEntrypoint();
+  if (orgStatus.status === "pending" && !shouldSkipFastModeOrgCheck() && !active) return "pending";
   if (orgStatus.status === "disabled" && (!shouldSkipFastModeOrgCheck() || orgStatus.source === "server")) {
     if (
       isTransientFastModeReason(orgStatus.reason) &&
-      ((env.CLAUDE_CODE_SKIP_FAST_MODE_NETWORK_ERRORS && !isRemoteManagedEntrypoint()) || y)
+      ((env.CLAUDE_CODE_SKIP_FAST_MODE_NETWORK_ERRORS && !isRemoteManagedEntrypoint()) || active)
     )
       return null;
     return orgStatus.reason;
@@ -199,8 +209,8 @@ function getFastModeUnavailableReasonCode(
 /**
  * 原因码转文案并打调试日志，可用时 null。
  */
-function getFastModeUnavailableMessage(e, fastModeCheckOptions = {}) {
-  let fastModeUnavailableReasonCode = getFastModeUnavailableReasonCode(e, fastModeCheckOptions);
+function getFastModeUnavailableMessage(model, fastModeCheckOptions = {}) {
+  let fastModeUnavailableReasonCode = getFastModeUnavailableReasonCode(model, fastModeCheckOptions);
   if (fastModeUnavailableReasonCode === null) return null;
   let fastModeUnavailableReason = getFastModeUnavailableReason(fastModeUnavailableReasonCode);
   logForDebugging(`Fast mode unavailable: ${fastModeUnavailableReason}`);
@@ -256,66 +266,74 @@ function defaultOpusAlias() {
 /**
  * 判断某请求模型在给定条件下是否走快速模式（需快速模式可用且满足模型/账号条件）。
  */
-function isFastModeOnForRequestModel(e, n, r) {
+function isFastModeOnForRequestModel(model, fastMode, options) {
   if (!isFastModeEnabled()) return false;
-  return isFastModeOnForModel(e, r) && (isRemoteSessionAvailable() || isFastModeAvailable() || n);
+  return (
+    isFastModeOnForModel(model, options) && (isRemoteSessionAvailable() || isFastModeAvailable() || fastMode)
+  );
 }
 //@ chunk-aepeg2w5.js:357384-357473 placement
 /**
  * 判断快速模式设置是否当前生效（开关、模型支持与组织设置均满足）。
  */
-function isFastModeSettingActive(e) {
+function isFastModeSettingActive(fastMode) {
   if (!isFastModeEnabled()) return false;
-  if (!isFastModeAvailable(e)) return false;
-  if (!supportsFastMode(e)) return false;
+  if (!isFastModeAvailable(fastMode)) return false;
+  if (!supportsFastMode(fastMode)) return false;
   return isFastModeSettingOn(getInitialSettings_2());
 }
 //@ chunk-aepeg2w5.js:357473-357680 placement
 /**
  * 判断设置中的 fast mode 是否生效：开启且不要求按会话选择，或按会话选择时由 --settings 打开（策略强制按会话选择时不算）。
  */
-function isFastModeSettingOn(e, n) {
-  if (e.fastMode !== true) return false;
-  if (!e.fastModePerSessionOptIn) return true;
+function isFastModeSettingOn(settings, fastMode) {
+  if (settings.fastMode !== true) return false;
+  if (!settings.fastModePerSessionOptIn) return true;
   if (getSettingsForSource("policySettings")?.fastModePerSessionOptIn === true) return false;
-  return (n ? n.flagFastMode : getSettingsForSource("flagSettings")?.fastMode) === true;
+  return (fastMode ? fastMode.flagFastMode : getSettingsForSource("flagSettings")?.fastMode) === true;
 }
 //@ chunk-aepeg2w5.js:357806-357873 placement
 /**
  * 比较设置中的快速模式与当前实际状态是否不一致。
  */
-function fastModeSettingDiverges(e) {
-  let n = isFastModeSettingOn(e.settings);
-  return n !== e.fastMode || isFastModeOrgPending(n);
+function fastModeSettingDiverges(input) {
+  let settingOn = isFastModeSettingOn(input.settings);
+  return settingOn !== input.fastMode || isFastModeOrgPending(settingOn);
 }
 //@ chunk-aepeg2w5.js:357873-357991 placement
-function isFastModeOrgPending(e) {
-  let orgStatus = fastModeState.orgStatus;
-  let r = orgStatus.status === "pending" || (orgStatus.status === "disabled" && orgStatus.source === "guess");
-  return e && isRemoteManagedEntrypoint() && r;
+function isFastModeOrgPending(orgStatus) {
+  let orgStatus_2 = fastModeState.orgStatus;
+  let pending =
+    orgStatus_2.status === "pending" || (orgStatus_2.status === "disabled" && orgStatus_2.source === "guess");
+  return orgStatus && isRemoteManagedEntrypoint() && pending;
 }
 //@ chunk-aepeg2w5.js:357991-358070 placement
 /**
  * 订阅组织级快速模式变化，立即触发一次并返回退订函数。
  */
-function subscribeOrgFastModeChange(e, n, storageV5) {
-  let s = () => {
-    if (isFastModeEnabled() && isRemoteManagedEntrypoint()) refreshFastModeFromSettings(e, n, storageV5);
+function subscribeOrgFastModeChange(listener, options, options_2) {
+  let onChange = () => {
+    if (isFastModeEnabled() && isRemoteManagedEntrypoint())
+      refreshFastModeFromSettings(listener, options, options_2);
   };
-  let h = onOrgFastModeChange(s);
-  s();
-  return h;
+  let unsubscribe = onOrgFastModeChange(onChange);
+  onChange();
+  return unsubscribe;
 }
 //@ chunk-aepeg2w5.js:358070-358248 placement
 /**
  * 模型是否支持快速模式。
  */
-function supportsFastMode(e) {
+function supportsFastMode(model) {
   if (!isFastModeEnabled()) return false;
-  let n = e ?? getDefaultMainLoopModelSetting();
-  let userSpecifiedModel = parseUserSpecifiedModel(n);
-  let s = modelSupportsCapability(getCanonicalName(userSpecifiedModel), "fast_mode", userSpecifiedModel);
-  if (s !== undefined) return s;
+  let resolvedModel = model ?? getDefaultMainLoopModelSetting();
+  let userSpecifiedModel = parseUserSpecifiedModel(resolvedModel);
+  let supports = modelSupportsCapability(
+    getCanonicalName(userSpecifiedModel),
+    "fast_mode",
+    userSpecifiedModel,
+  );
+  if (supports !== undefined) return supports;
   let lower = userSpecifiedModel.toLowerCase();
   return lower.includes("opus-4-8") || lower.includes("opus-5");
 }
@@ -323,23 +341,23 @@ function supportsFastMode(e) {
 /**
  * 快速模式是否生效。
  */
-function isFastModeActive(e, fastMode) {
+function isFastModeActive(model, fastMode) {
   if (isRemoteSessionAvailable()) {
-    if (e === null) return !!fastMode;
-    return !!fastMode && supportsFastMode(e);
+    if (model === null) return !!fastMode;
+    return !!fastMode && supportsFastMode(model);
   }
-  if (!supportsFastMode(e)) return false;
-  return !!fastMode || isFastModeSettingActive(e);
+  if (!supportsFastMode(model)) return false;
+  return !!fastMode || isFastModeSettingActive(model);
 }
 //@ chunk-aepeg2w5.js:358350-358498 placement
 /**
  * 模型切换导致快速模式开关时上报。
  */
-function reportFastModeToggle(fastMode, n) {
-  if (!!fastMode === n) return;
+function reportFastModeToggle(fastMode, enabled) {
+  if (!!fastMode === enabled) return;
   logEvent("tengu_fast_mode_toggled", {
-    enabled: n,
-    source: fromEnum(n ? "model_switch_restore" : "model_switch_downgrade"),
+    enabled,
+    source: fromEnum(enabled ? "model_switch_restore" : "model_switch_downgrade"),
     remote: isRemoteControlChannelAvailable(),
   });
 }
@@ -409,36 +427,39 @@ class FastModeState {
   rearmCreditsExhaustedNotice() {
     this.creditsExhaustedNotifiedThisTurn = false;
   }
-  beginPrefetchWindow(e, n) {
-    if (e - this.lastPrefetchAt < n) return false;
-    this.lastPrefetchAt = e;
+  beginPrefetchWindow(model, apiKey) {
+    if (model - this.lastPrefetchAt < apiKey) return false;
+    this.lastPrefetchAt = model;
     return true;
   }
   trackInflightPrefetch(inflightPrefetch) {
     this.inflightPrefetch = inflightPrefetch;
   }
-  clearInflightPrefetch(e) {
-    if (this.inflightPrefetch === e) this.inflightPrefetch = null;
+  clearInflightPrefetch(prefetchKey) {
+    if (this.inflightPrefetch === prefetchKey) this.inflightPrefetch = null;
   }
 }
 //@ chunk-aepeg2w5.js:359882-359915 placement
 /**
  * 按宿主隔离的快速模式状态（冷却触发/结束信号）。
  */
-var fastModeState = identity_2(new FastModeState(), (e) => e.reset());
+var fastModeState; // deferred: uses FastModeState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:359882", () => {
+  fastModeState = identity_2(new FastModeState(), (state) => state.reset());
+});
 //@ chunk-aepeg2w5.js:359915-359972 placement
 /**
  * 订阅"快速模式进入冷却"事件。
  */
-function onFastModeCooldownTriggered(e) {
-  return fastModeState.cooldownTriggered.subscribe(e);
+function onFastModeCooldownTriggered(cooldown) {
+  return fastModeState.cooldownTriggered.subscribe(cooldown);
 }
 //@ chunk-aepeg2w5.js:359972-360027 placement
 /**
  * 订阅"快速模式冷却结束"事件。
  */
-function onFastModeCooldownExpired(e) {
-  return fastModeState.cooldownExpired.subscribe(e);
+function onFastModeCooldownExpired(cooldown) {
+  return fastModeState.cooldownExpired.subscribe(cooldown);
 }
 //@ chunk-aepeg2w5.js:360027-360303 fingerprint = getFastModeRuntimeState (0.617)
 /**
@@ -520,13 +541,13 @@ function handleFastModeRejectedByAPI(storageV5) {
 /**
  * fallback 模型拒绝 fast 时记入本会话集合，该模型此后用标准速度，并发事件。
  */
-function markFallbackModelFastRejected(e) {
-  let n = strippedCanonicalName(e);
-  fastModeState.everFastRejectedModels.add(n);
-  if (fastModeState.fastRejectedFallbackModels.has(n)) return;
-  fastModeState.fastRejectedFallbackModels.add(n);
-  logForDebugging(`Fast mode rejected for fallback model ${e}; using standard speed for it this session`);
-  fastModeState.fallbackModelFastRejected.emit(e);
+function markFallbackModelFastRejected(model) {
+  let canonical = strippedCanonicalName(model);
+  fastModeState.everFastRejectedModels.add(canonical);
+  if (fastModeState.fastRejectedFallbackModels.has(canonical)) return;
+  fastModeState.fastRejectedFallbackModels.add(canonical);
+  logForDebugging(`Fast mode rejected for fallback model ${model}; using standard speed for it this session`);
+  fastModeState.fallbackModelFastRejected.emit(model);
   fastModeState.fastRejectedFallbackModelsChanged.emit();
 }
 //@ chunk-aepeg2w5.js:361262-361408 layout
@@ -542,8 +563,8 @@ function clearFastRejectedFallbackModels() {
 /**
  * 订阅 fast 被拒 fallback 模型集合变化。
  */
-function onFastRejectedFallbackModelsChanged(e) {
-  return fastModeState.fastRejectedFallbackModelsChanged.subscribe(e);
+function onFastRejectedFallbackModelsChanged(models) {
+  return fastModeState.fastRejectedFallbackModelsChanged.subscribe(models);
 }
 //@ chunk-aepeg2w5.js:361481-361577 layout
 /**
@@ -561,10 +582,10 @@ function isFallbackModelFastRejected(model) {
 /**
  * 当前（或给定）模型是否在 fast 被拒集合中。
  */
-function isMainModelFastRejected(mainLoopModel) {
+function isMainModelFastRejected(modelName) {
   try {
     return isFallbackModelFastRejected(
-      parseUserSpecifiedModel(mainLoopModel ?? getDefaultMainLoopModelSetting()),
+      parseUserSpecifiedModel(modelName ?? getDefaultMainLoopModelSetting()),
     );
   } catch (error) {
     logError(toError(error));
@@ -577,8 +598,11 @@ function isMainModelFastRejected(mainLoopModel) {
  */
 function wasEverFastRejected(model) {
   try {
-    let n = strippedCanonicalName(model);
-    return fastModeState.fastRejectedFallbackModels.has(n) || fastModeState.everFastRejectedModels.has(n);
+    let canonical = strippedCanonicalName(model);
+    return (
+      fastModeState.fastRejectedFallbackModels.has(canonical) ||
+      fastModeState.everFastRejectedModels.has(canonical)
+    );
   } catch (error) {
     logError(toError(error));
     return false;
@@ -588,29 +612,29 @@ function wasEverFastRejected(model) {
 /**
  * 会话开了 fast 且该模型未被拒。
  */
-function isFastModeOnForModel(e, n) {
-  return !!e && !isMainModelFastRejected(n);
+function isFastModeOnForModel(model, fastMode) {
+  return !!model && !isMainModelFastRejected(fastMode);
 }
 //@ chunk-aepeg2w5.js:361824-361884 layout
 /**
  * 开了 fast 但模型被拒时返回 model_not_allowed。
  */
-function getFastRejectedReason(e, fastMode) {
-  return fastMode && isMainModelFastRejected(e) ? "model_not_allowed" : null;
+function getFastRejectedReason(model, fastMode) {
+  return fastMode && isMainModelFastRejected(model) ? "model_not_allowed" : null;
 }
 //@ chunk-aepeg2w5.js:361884-361949 layout
 /**
  * 订阅 fallback 模型 fast 被拒事件。
  */
-function onFallbackModelFastRejected(e) {
-  return fastModeState.fallbackModelFastRejected.subscribe(e);
+function onFallbackModelFastRejected(model) {
+  return fastModeState.fallbackModelFastRejected.subscribe(model);
 }
 //@ chunk-aepeg2w5.js:361949-362005 layout
 /**
  * 订阅超额拒绝事件（参数为提示文案）。
  */
-function onFastModeOverageRejection(e) {
-  return fastModeState.overageRejection.subscribe(e);
+function onFastModeOverageRejection(model) {
+  return fastModeState.overageRejection.subscribe(model);
 }
 //@ chunk-aepeg2w5.js:362005-362774 fingerprint = getOverageDisabledMessage (0.709)
 /**
@@ -738,14 +762,14 @@ var FAST_MODE_DISABLED_REASONS = ["free", "preference", "extra_usage_disabled", 
  */
 function normalizeFastModeDisabledReason(disabledReason) {
   if (disabledReason == null) return "preference";
-  return FAST_MODE_DISABLED_REASONS.find((n) => n === disabledReason) ?? "unknown";
+  return FAST_MODE_DISABLED_REASONS.find((knownReason) => knownReason === disabledReason) ?? "unknown";
 }
 //@ chunk-aepeg2w5.js:363942-363999 layout
 /**
  * 订阅组织 fast 启用状态变化。
  */
-function onOrgFastModeChange(e) {
-  return fastModeState.orgFastModeChange.subscribe(e);
+function onOrgFastModeChange(listener) {
+  return fastModeState.orgFastModeChange.subscribe(listener);
 }
 //@ chunk-aepeg2w5.js:363999-364086 layout
 /**
@@ -765,13 +789,17 @@ function isTransientFastModeReason(reason) {
 /**
  * 更新组织状态，启用状态或禁用原因变化时发 orgFastModeChange。
  */
-function resolveFastModeStatusFromCache(e) {
-  let n = fastModeState.replaceOrgStatus(e);
-  if (e.status === "pending") return;
-  let r = n.status !== "pending" ? n.status === "enabled" : getGlobalConfig().penguinModeOrgEnabled === true;
-  let s = e.status === "enabled";
-  let h = n.status === "disabled" && e.status === "disabled" && n.reason !== e.reason;
-  if (r !== s || h) fastModeState.orgFastModeChange.emit(s);
+function resolveFastModeStatusFromCache(orgStatus) {
+  let replaced = fastModeState.replaceOrgStatus(orgStatus);
+  if (orgStatus.status === "pending") return;
+  let status =
+    replaced.status !== "pending"
+      ? replaced.status === "enabled"
+      : getGlobalConfig().penguinModeOrgEnabled === true;
+  let isEnabled = orgStatus.status === "enabled";
+  let reason =
+    replaced.status === "disabled" && orgStatus.status === "disabled" && replaced.reason !== orgStatus.reason;
+  if (status !== isEnabled || reason) fastModeState.orgFastModeChange.emit(isEnabled);
 }
 //@ chunk-aepeg2w5.js:364430-364441 layout
 /**
@@ -865,13 +893,13 @@ async function prefetchFastModeStatus(credentials, credentials_2) {
     return fastModeState.inflightPrefetch;
   }
   let apiKey = getAnthropicApiKeySafe();
-  let s = apiKeyForHost(apiKey);
-  let h = !!apiKey && !s;
-  if (!(getClaudeAIOAuthTokens()?.accessToken && canFetchFastModeStatusWithOAuth()) && !s) {
+  let hashedKey = apiKeyForHost(apiKey);
+  let isBareKey = !!apiKey && !hashedKey;
+  if (!(getClaudeAIOAuthTokens()?.accessToken && canFetchFastModeStatusWithOAuth()) && !hashedKey) {
     if (isOrgFastModeDisabledByServer() || isRemoteOrgFastModeEnabled()) return;
     let isAnt = false;
     let cachedEnabled = isOrgFastModeEnabledCached();
-    let F = hasSessionIngressAuthForFastMode() || h;
+    let canUseSessionAuth = hasSessionIngressAuthForFastMode() || isBareKey;
     resolveFastModeStatusFromCache(
       isAnt || cachedEnabled
         ? {
@@ -879,7 +907,7 @@ async function prefetchFastModeStatus(credentials, credentials_2) {
           }
         : {
             status: "disabled",
-            reason: F ? "unknown" : "preference",
+            reason: canUseSessionAuth ? "unknown" : "preference",
             source: "guess",
           },
     );
@@ -896,9 +924,9 @@ async function prefetchFastModeStatus(credentials, credentials_2) {
         ? {
             accessToken: currentTokens.accessToken,
           }
-        : s
+        : hashedKey
           ? {
-              apiKey: s,
+              apiKey: hashedKey,
             }
           : null;
     if (!auth) throw Error("No auth available");
@@ -960,77 +988,91 @@ async function prefetchFastModeStatus(credentials, credentials_2) {
         `Org fast mode: ${status.enabled ? "enabled" : `disabled (${status.disabled_reason ?? "preference"})`}`,
       );
     } catch (err) {
-      let F = isOrgFastModeEnabledCached();
-      let L = axios_default.isAxiosError(err) ? err.response?.data : undefined;
-      let G =
+      let orgEnabled = isOrgFastModeEnabledCached();
+      let errorBody = axios_default.isAxiosError(err) ? err.response?.data : undefined;
+      let responseStatus =
         axios_default.isAxiosError(err) &&
         err.response?.status === 403 &&
-        typeof L === "object" &&
-        L !== null &&
-        "error" in L &&
-        typeof L.error === "object" &&
-        L.error !== null &&
-        "type" in L.error &&
-        L.error.type === "permission_error" &&
+        typeof errorBody === "object" &&
+        errorBody !== null &&
+        "error" in errorBody &&
+        typeof errorBody.error === "object" &&
+        errorBody.error !== null &&
+        "type" in errorBody.error &&
+        errorBody.error.type === "permission_error" &&
         !!getClaudeAIOAuthTokens()?.accessToken &&
         canFetchFastModeStatusWithOAuth() &&
         !hasProfileScope();
       if (!isOrgFastModeDisabledByServer() && !isRemoteOrgFastModeEnabled())
         resolveFastModeStatusFromCache(
-          F
+          orgEnabled
             ? {
                 status: "enabled",
               }
             : {
                 status: "disabled",
-                reason: G ? "unknown" : "network_error",
+                reason: responseStatus ? "unknown" : "network_error",
                 source: "guess",
               },
         );
-      let j =
+      let result =
         fastModeState.orgStatus.status === "disabled"
           ? `disabled (${fastModeState.orgStatus.reason})`
           : isRemoteOrgFastModeEnabled()
             ? "enabled (the server's own earlier answer)"
             : "enabled (cached)";
-      if (G) {
+      if (responseStatus) {
         logForDebugging(
-          `Org fast mode status endpoint does not admit this session token (permission_error), standing on ${j}`,
+          `Org fast mode status endpoint does not admit this session token (permission_error), standing on ${result}`,
         );
         logEvent("tengu_org_penguin_mode_fetch_refused", {});
       } else {
-        logForDebugging(`Failed to fetch org fast mode status, standing on ${j}: ${err}`, {
+        logForDebugging(`Failed to fetch org fast mode status, standing on ${result}: ${err}`, {
           level: "error",
         });
         logEvent("tengu_org_penguin_mode_fetch_failed", {});
       }
     }
   }
-  let R = doFetch();
-  fastModeState.trackInflightPrefetch(R);
-  R.finally(() => fastModeState.clearInflightPrefetch(R));
-  return R;
+  let response = doFetch();
+  fastModeState.trackInflightPrefetch(response);
+  response.finally(() => fastModeState.clearInflightPrefetch(response));
+  return response;
+}
+//@ chunk-gptvg45j.js:338-487 placement
+/**
+ * 命令行带 --fast-mode 时同步内联 flag 设置与重启参数，使 fast mode 切换在重启后保持。
+ */
+function syncFastModeFlag(globalConfig, storageV5) {
+  let flagValue = eagerParseCliFlag("--fast-mode");
+  if (flagValue !== "on" && flagValue !== "off") return;
+  setFlagSettingsInline({
+    ...(getFlagSettingsInline() ?? {}),
+    fastMode: globalConfig,
+  });
+  invalidateCommandNames();
+  syncRespawnFlag("--fast-mode", [], globalConfig ? "on" : "off", undefined, storageV5);
 }
 //@ chunk-93kwxas0.js:7781-7961 callgraph-fingerprint = getInitialFastModeSetting (0.251)
 /**
  * 初始 fast 状态：fast mode 总开关开、设置（含 policySettings.fastMode 与 flag）要求、模型支持且无不可用原因时为 "on"。
  */
-function getInitialFastModeSetting(h, E) {
+function getInitialFastModeSetting(model, flagFastMode) {
   if (!isFastModeEnabled()) return;
   let settings = getInitialSettings_2();
-  return (E === undefined
+  return (flagFastMode === undefined
     ? isFastModeSettingOn(settings)
     : isFastModeSettingOn(
         {
           ...settings,
-          fastMode: getSettingsForSource("policySettings")?.fastMode ?? E,
+          fastMode: getSettingsForSource("policySettings")?.fastMode ?? flagFastMode,
         },
         {
-          flagFastMode: E,
+          flagFastMode,
         },
       )) &&
-    supportsFastMode(h) &&
-    getFastModeUnavailableReasonCode(h, buildFastModeCheckOptions(E)) === null
+    supportsFastMode(model) &&
+    getFastModeUnavailableReasonCode(model, buildFastModeCheckOptions(flagFastMode)) === null
     ? "on"
     : "off";
 }
@@ -1038,33 +1080,19 @@ function getInitialFastModeSetting(h, E) {
 /**
  * {orgStatus: 当前猜测的组织状态, sessionOptIn}。
  */
-function buildFastModeCheckOptions(h) {
+function buildFastModeCheckOptions(sessionOptIn) {
   return {
     orgStatus: guessOrgFastModeStatus(),
-    sessionOptIn: h === true,
+    sessionOptIn: sessionOptIn === true,
   };
-}
-//@ chunk-gptvg45j.js:338-487 placement
-/**
- * 命令行带 --fast-mode 时同步内联 flag 设置与重启参数，使 fast mode 切换在重启后保持。
- */
-function syncFastModeFlag(e, n) {
-  let o = eagerParseCliFlag("--fast-mode");
-  if (o !== "on" && o !== "off") return;
-  setFlagSettingsInline({
-    ...(getFlagSettingsInline() ?? {}),
-    fastMode: e,
-  });
-  invalidateCommandNames();
-  syncRespawnFlag("--fast-mode", [], e ? "on" : "off", undefined, n);
 }
 export {
   supportsFastMode,
   getFastModeState,
   getFastModeUnavailableReasonCode,
   getFastRejectedReason,
-  isFastModeSettingActive,
   isFastModeEnabled,
+  isFastModeSettingActive,
   getFastModeUnavailableMessage,
   isFastModeAvailable,
   isFastModeOnForRequestModel,
@@ -1073,14 +1101,14 @@ export {
   isFastModeActive,
   reportFastModeToggle,
   isFastModeSettingOn,
-  getFastModeRuntimeState,
-  defaultOpusAlias,
-  defaultOpusLabel,
+  isFastModeOrgPending,
   prefetchFastModeStatus,
+  defaultOpusAlias,
   clearFastRejectedFallbackModels,
   hasSessionIngressAuthForFastMode,
   syncFastModeFlag,
-  isFastModeOrgPending,
+  defaultOpusLabel,
+  getFastModeRuntimeState,
   isFastModeOnForModel,
   isFastModeCooldown,
   subscribeOrgFastModeChange,

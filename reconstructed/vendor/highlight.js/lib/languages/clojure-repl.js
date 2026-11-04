@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:69559-69747 cjs-fingerprint
-var require_clojure_repl = x(function (cjsExports, cjsModule) {
+var require_clojure_repl = __commonJS(function (cjsExports, cjsModule) {
   function clojureRepl(hljs) {
     return {
       name: "Clojure REPL",

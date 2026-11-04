@@ -18,3 +18,4 @@ var emitPath = __cc_resource_0;
  * design-system 打包技能附带的 emit 脚本文本。
  */
 var emit = readEmbeddedTextSync(emitPath, import.meta.dirname);
+export { emit };

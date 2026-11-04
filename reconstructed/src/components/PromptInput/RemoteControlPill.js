@@ -13,24 +13,25 @@ import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { getBridgeStatus } from "../../bridge/bridgeStatusUtil.js";
-import { init_react_production, P } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { sequential } from "../../utils/sequential.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../../state/AppState.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Link, Text } from "../../ink/components/Text.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ag5x7vhf.js:46516-46546 placement
 var RC_ACTIVE_BADGE_KEY = "rc-active-badge";
 var MAX_VERBOSE_RC_IMPRESSIONS = 5;
 //@ chunk-ag5x7vhf.js:46546-46681 placement
 function isVerboseRcActive() {
-  let m = bridgeHostState();
-  if (m.verboseRcActive === undefined)
-    m.verboseRcActive =
+  let hostState = bridgeHostState();
+  if (hostState.verboseRcActive === undefined)
+    hostState.verboseRcActive =
       (getGlobalConfig().seenNotifications?.[RC_ACTIVE_BADGE_KEY] ?? 0) < MAX_VERBOSE_RC_IMPRESSIONS;
-  return m.verboseRcActive;
+  return hostState.verboseRcActive;
 }
 //@ chunk-ag5x7vhf.js:46681-46735 placement
 function rcPillLabel(label) {
@@ -39,18 +40,18 @@ function rcPillLabel(label) {
 //@ chunk-ag5x7vhf.js:46735-46840 placement
 function withFromCliParam(appState) {
   try {
-    let h = new URL(appState);
-    h.searchParams.set("from", "cli");
-    return h.toString();
+    let url = new URL(appState);
+    url.searchParams.set("from", "cli");
+    return url.toString();
   } catch {
     return appState;
   }
 }
 //@ chunk-ag5x7vhf.js:46840-46910 placement
-function logRcPillClicked(m, h) {
+function logRcPillClicked(trigger, label) {
   logEvent("tengu_rc_pill_clicked", {
-    trigger: fromEnum(m),
-    label: fromEnum(h),
+    trigger: fromEnum(trigger),
+    label: fromEnum(label),
   });
 }
 //@ chunk-ag5x7vhf.js:46910-47101 placement
@@ -68,14 +69,14 @@ function RemoteControlPill(state) {
 }
 //@ chunk-ag5x7vhf.js:47101-47313 placement
 function recordRcActiveImpression(storageV5) {
-  let h = bridgeHostState();
-  if (h.rcActiveImpressionRecorded) return;
+  let hostState = bridgeHostState();
+  if (hostState.rcActiveImpressionRecorded) return;
   if (!isVerboseRcActive()) return;
-  h.rcActiveImpressionRecorded = true;
-  saveGlobalConfig((x) => {
-    let seenNotifications = x.seenNotifications ?? {};
+  hostState.rcActiveImpressionRecorded = true;
+  saveGlobalConfig((config) => {
+    let seenNotifications = config.seenNotifications ?? {};
     return {
-      ...x,
+      ...config,
       seenNotifications: {
         ...seenNotifications,
         [RC_ACTIVE_BADGE_KEY]: (seenNotifications[RC_ACTIVE_BADGE_KEY] ?? 0) + 1,
@@ -84,81 +85,87 @@ function recordRcActiveImpression(storageV5) {
   }, storageV5);
 }
 //@ chunk-ag5x7vhf.js:47313-47317 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:47313", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:47317-47364 placement = _temp4 (1)
 function selectBridgeSessionUrl(s) {
   return s.replBridgeSessionUrl;
 }
 //@ chunk-ag5x7vhf.js:47788-47883 placement
-function shortRcLabel(m) {
-  return sequential.level === 0 && m.label !== "/rc active" ? m.label.replace(/^\/rc/, "rc") : "rc";
+function shortRcLabel(label) {
+  return sequential.level === 0 && label.label !== "/rc active" ? label.label.replace(/^\/rc/, "rc") : "rc";
 }
 //@ chunk-ag5x7vhf.js:47883-48674 placement
 function RemoteControlStatus(props) {
-  let A = w(16);
+  let $ = useMemoCache(16);
   let { status, highlighted, compact } = props;
-  let k = highlighted === undefined ? false : highlighted;
+  let isHighlighted = highlighted === undefined ? false : highlighted;
   let appState = useAppState(selectBridgeSessionUrl);
   let { storageV5 } = useTheme_2();
-  let D = compact !== undefined;
-  let L;
-  let V;
-  if (A[0] !== D || A[1] !== status.label || A[2] !== storageV5) {
-    L = () => {
-      if (!D && status.label === "/rc active") recordRcActiveImpression(storageV5);
+  let isCompact = compact !== undefined;
+  let onPress;
+  let deps;
+  if ($[0] !== isCompact || $[1] !== status.label || $[2] !== storageV5) {
+    onPress = () => {
+      if (!isCompact && status.label === "/rc active") recordRcActiveImpression(storageV5);
     };
-    V = [D, status.label, storageV5];
-    A[0] = D;
-    A[1] = status.label;
-    A[2] = storageV5;
-    A[3] = L;
-    A[4] = V;
+    deps = [isCompact, status.label, storageV5];
+    $[0] = isCompact;
+    $[1] = status.label;
+    $[2] = storageV5;
+    $[3] = onPress;
+    $[4] = deps;
   } else {
-    L = A[3];
-    V = A[4];
+    onPress = $[3];
+    deps = $[4];
   }
-  P(L, V);
-  let W;
-  if (A[5] !== compact?.label || A[6] !== status.label) {
-    W = compact?.label ?? rcPillLabel(status.label);
-    A[5] = compact?.label;
-    A[6] = status.label;
-    A[7] = W;
-  } else W = A[7];
-  let z = W;
-  let K = k ? "background" : undefined;
-  const color = compact?.ink.color ?? K ?? status.color;
+  useEffect(onPress, deps);
+  let labelText;
+  if ($[5] !== compact?.label || $[6] !== status.label) {
+    labelText = compact?.label ?? rcPillLabel(status.label);
+    $[5] = compact?.label;
+    $[6] = status.label;
+    $[7] = labelText;
+  } else labelText = $[7];
+  let rcLabel = labelText;
+  let backgroundColor = isHighlighted ? "background" : undefined;
+  const color = compact?.ink.color ?? backgroundColor ?? status.color;
   const bold = compact?.ink.bold;
-  const inverse = compact?.ink.inverse ?? k;
+  const inverse = compact?.ink.inverse ?? isHighlighted;
   let children;
-  if (A[8] !== z || A[9] !== appState) {
+  if ($[8] !== rcLabel || $[9] !== appState) {
     children = appState
       ? jsxProd_default(Link, {
           url: withFromCliParam(appState),
-          children: z,
+          children: rcLabel,
         })
-      : z;
-    A[8] = z;
-    A[9] = appState;
-    A[10] = children;
-  } else children = A[10];
-  let ge;
-  if (A[11] !== color || A[12] !== bold || A[13] !== inverse || A[14] !== children) {
-    ge = jsxProd_default(Text, {
+      : rcLabel;
+    $[8] = rcLabel;
+    $[9] = appState;
+    $[10] = children;
+  } else children = $[10];
+  let textElement;
+  if ($[11] !== color || $[12] !== bold || $[13] !== inverse || $[14] !== children) {
+    textElement = jsxProd_default(Text, {
       color,
       bold,
       inverse,
       wrap: "truncate",
       children,
     });
-    A[11] = color;
-    A[12] = bold;
-    A[13] = inverse;
-    A[14] = children;
-    A[15] = ge;
-  } else ge = A[15];
-  return ge;
+    $[11] = color;
+    $[12] = bold;
+    $[13] = inverse;
+    $[14] = children;
+    $[15] = textElement;
+  } else textElement = $[15];
+  return textElement;
 }
 //@ chunk-ag5x7vhf.js:48674-48678 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:48674", () => {
+  init_react_production();
+});
 export { RemoteControlPill, RemoteControlStatus, shortRcLabel, rcPillLabel, logRcPillClicked };

@@ -18,11 +18,12 @@ import { mcpInfoFromString, MCP_TOOL_PREFIX } from "../../services/mcp/mcpString
 import { normalizeNameForMCP, CLAUDE_AI_NAME_PREFIX, CLAUDE_AI } from "../../services/mcp/normalization.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { sanitizeCloudText } from "./headlessCloudClient.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-3wek6r2k.js:19020-19250 placement
-function collectDisallowedToolRules(e) {
-  let o = splitRuleList([...e]);
-  let found = o.find(hasUnclosedRuleParen);
+function collectDisallowedToolRules(rules) {
+  let split = splitRuleList([...rules]);
+  let found = split.find(hasUnclosedRuleParen);
   if (found !== undefined)
     return {
       kind: "unclosed",
@@ -31,13 +32,13 @@ function collectDisallowedToolRules(e) {
   return getFeatureValue_CACHED_MAY_BE_STALE(HOSTED_RULES_FLAG, true) === false
     ? {
         kind: "rules",
-        rules: o,
+        rules: split,
         blocksNothing: [],
       }
     : {
         kind: "rules",
-        rules: uniq([...o, ...o.flatMap(claudeAiRuleRespellings)]),
-        blocksNothing: uniq(o.filter(isClaudeAiWildcardRule)),
+        rules: uniq([...split, ...split.flatMap(claudeAiRuleRespellings)]),
+        blocksNothing: uniq(split.filter(isClaudeAiWildcardRule)),
       };
 }
 //@ chunk-3wek6r2k.js:19250-19669 placement
@@ -45,7 +46,7 @@ function lostDisallowedTools(blocksNothing) {
   if (blocksNothing.length === 0) return [];
   let joined = blocksNothing
     .slice(0, 8)
-    .map((n) => `"${quotedPrintable(n, 64)}"`)
+    .map((rule) => `"${quotedPrintable(rule, 64)}"`)
     .join(", ");
   return [
     {
@@ -56,52 +57,53 @@ function lostDisallowedTools(blocksNothing) {
   ];
 }
 //@ chunk-3wek6r2k.js:19669-19810 placement
-function parseMcpRuleTool(e) {
-  let o = classifyRuleParens(e);
-  if (o.kind === "malformed") return null;
-  let n = o.kind === "call" ? o.toolName : e;
-  let r = mcpInfoFromString(n);
-  return r === null
+function parseMcpRuleTool(rule) {
+  let parens = classifyRuleParens(rule);
+  if (parens.kind === "malformed") return null;
+  let toolName = parens.kind === "call" ? parens.toolName : rule;
+  let mcpInfo = mcpInfoFromString(toolName);
+  return mcpInfo === null
     ? null
     : {
-        ...r,
-        name: n,
+        ...mcpInfo,
+        name: toolName,
       };
 }
 //@ chunk-3wek6r2k.js:19810-19849 placement
-function isAnthropicMcpToolName(e) {
-  return normalizeNameForMCP(CLAUDE_AI_NAME_PREFIX + e) === CLAUDE_AI + e;
+function isAnthropicMcpToolName(name) {
+  return normalizeNameForMCP(CLAUDE_AI_NAME_PREFIX + name) === CLAUDE_AI + name;
 }
 //@ chunk-3wek6r2k.js:19849-20029 placement
-function claudeAiRuleRespellings(e) {
-  let mcpRuleTool = parseMcpRuleTool(e);
+function claudeAiRuleRespellings(rule) {
+  let mcpRuleTool = parseMcpRuleTool(rule);
   if (!mcpRuleTool?.serverName.startsWith(CLAUDE_AI)) return [];
-  let sliced = mcpRuleTool.serverName.slice(CLAUDE_AI.length);
-  return isAnthropicMcpToolName(sliced)
-    ? [`${MCP_TOOL_PREFIX}${sliced}__${mcpRuleTool.toolName ?? "*"}${e.slice(mcpRuleTool.name.length)}`]
+  let name = mcpRuleTool.serverName.slice(CLAUDE_AI.length);
+  return isAnthropicMcpToolName(name)
+    ? [`${MCP_TOOL_PREFIX}${name}__${mcpRuleTool.toolName ?? "*"}${rule.slice(mcpRuleTool.name.length)}`]
     : [];
 }
 //@ chunk-3wek6r2k.js:20029-20151 placement
-function isClaudeAiWildcardRule(e) {
-  let serverName = parseMcpRuleTool(e)?.serverName ?? "";
+function isClaudeAiWildcardRule(rule) {
+  let serverName = parseMcpRuleTool(rule)?.serverName ?? "";
   return (
     serverName.includes("*") &&
     (serverName.startsWith(CLAUDE_AI) || serverName.startsWith(`${CLAUDE_AI.slice(0, -1)}*`))
   );
 }
 //@ chunk-3wek6r2k.js:20151-20447 placement
-function disallowedToolsTelemetry(e = []) {
-  let o = new Set(e);
-  let n = new Set(e.flatMap(claudeAiRuleRespellings));
+function disallowedToolsTelemetry(rules = []) {
+  let known = new Set(rules);
+  let respelled = new Set(rules.flatMap(claudeAiRuleRespellings));
   return {
-    disallowed_tools_connector_both_names_count: count(e, (r) =>
-      claudeAiRuleRespellings(r).some((u) => o.has(u)),
+    disallowed_tools_connector_both_names_count: count(rules, (rule) =>
+      claudeAiRuleRespellings(rule).some((respelling) => known.has(respelling)),
     ),
     disallowed_tools_connector_local_name_only_count: count(
-      e,
-      (r) => !n.has(r) && claudeAiRuleRespellings(r).some((u) => !o.has(u)),
+      rules,
+      (rule) =>
+        !respelled.has(rule) && claudeAiRuleRespellings(rule).some((respelling) => !known.has(respelling)),
     ),
-    disallowed_tools_connector_wildcard_count: count(e, isClaudeAiWildcardRule),
+    disallowed_tools_connector_wildcard_count: count(rules, isClaudeAiWildcardRule),
   };
 }
 //@ chunk-3wek6r2k.js:20484-20563 placement
@@ -115,104 +117,115 @@ var NOT_SUPPORTED_IN_CLOUD = "is not supported in a cloud-hosted session";
 var LOCAL_PATH_IN_CLOUD = "names a path on this machine; the agent's files are in the cloud container";
 var UNAVAILABLE_WHILE_DRIVING_CLOUD = "is not available while this process drives a cloud-hosted session";
 //@ chunk-3wek6r2k.js:20766-20912 placement
-function cloudOptionsRefusal(e) {
-  return `these options cannot apply to a cloud-hosted session, where the agent runs in the cloud container; remove: ${e.join(", ")}`;
+function cloudOptionsRefusal(names) {
+  return `these options cannot apply to a cloud-hosted session, where the agent runs in the cloud container; remove: ${names.join(", ")}`;
 }
 //@ chunk-3wek6r2k.js:20912-21504 placement
 /**
  * 云托管会话的限制文案与集合：bypassPermissions/文件回滚/MCP 变更不可用的说明，本地处理的控制请求子类型列表，以及允许透传的 settings 键。
  */
-var HOSTED_SESSION_REFUSAL_TEXT = "bypassPermissions is not available in a cloud-hosted session";
-var REWIND_UNAVAILABLE_IN_CLOUD =
-  "file rewinding is not available in a cloud-hosted session: the cloud agent keeps no file checkpoints";
-var MCP_CHANGES_UNAVAILABLE_IN_CLOUD =
-  "MCP server changes are not available in a cloud-hosted session yet; this machine's MCP servers reach cloud sessions through the device link";
-var CLOUD_LOCAL_CONTROL_TYPES = new Set([
-  "mcp_read_resource_v1",
-  "sdk_mcp_tools_list_changed",
-  "sdk_mcp_manifests",
-  "register_repo_root_v1",
-  "interrupt_requeue_taken_v1",
-  "start_shell_task_v1",
-]);
-var CLOUD_ALLOWED_SETTINGS_KEYS = new Set([
-  "model",
-  "advisorModel",
-  "effortLevel",
-  "ultracode",
-  "fastMode",
-  "viewMode",
-  "alwaysThinkingEnabled",
-]);
+var HOSTED_SESSION_REFUSAL_TEXT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var REWIND_UNAVAILABLE_IN_CLOUD;
+var MCP_CHANGES_UNAVAILABLE_IN_CLOUD;
+var CLOUD_LOCAL_CONTROL_TYPES;
+var CLOUD_ALLOWED_SETTINGS_KEYS;
+deferInit("chunk-3wek6r2k.js:20912", () => {
+  HOSTED_SESSION_REFUSAL_TEXT = "bypassPermissions is not available in a cloud-hosted session";
+  REWIND_UNAVAILABLE_IN_CLOUD =
+    "file rewinding is not available in a cloud-hosted session: the cloud agent keeps no file checkpoints";
+  MCP_CHANGES_UNAVAILABLE_IN_CLOUD =
+    "MCP server changes are not available in a cloud-hosted session yet; this machine's MCP servers reach cloud sessions through the device link";
+  CLOUD_LOCAL_CONTROL_TYPES = new Set([
+    "mcp_read_resource_v1",
+    "sdk_mcp_tools_list_changed",
+    "sdk_mcp_manifests",
+    "register_repo_root_v1",
+    "interrupt_requeue_taken_v1",
+    "start_shell_task_v1",
+  ]);
+  CLOUD_ALLOWED_SETTINGS_KEYS = new Set([
+    "model",
+    "advisorModel",
+    "effortLevel",
+    "ultracode",
+    "fastMode",
+    "viewMode",
+    "alwaysThinkingEnabled",
+  ]);
+});
 //@ chunk-3wek6r2k.js:21504-21588 placement
-function controlRequestSubtypeOf(e) {
-  return typeof e === "object" && e !== null && "subtype" in e ? e.subtype : undefined;
+function controlRequestSubtypeOf(message) {
+  return typeof message === "object" && message !== null && "subtype" in message
+    ? message.subtype
+    : undefined;
 }
 //@ chunk-3wek6r2k.js:21588-21751 placement
-function routeHostedControlRequest(e, o) {
-  let n = hostedControlRequestRoute(e, o);
-  return n === null
+function routeHostedControlRequest(request, options) {
+  let route = hostedControlRequestRoute(request, options);
+  return route === null
     ? {
         route: {
           kind: "reject",
-          error: `${describeRequestSubtype(controlRequestSubtypeOf(e))} ${NOT_SUPPORTED_IN_CLOUD}`,
+          error: `${describeRequestSubtype(controlRequestSubtypeOf(request))} ${NOT_SUPPORTED_IN_CLOUD}`,
         },
         telemetrySubtype: "unknown",
       }
     : {
-        route: n,
-        telemetrySubtype: e.subtype,
+        route,
+        telemetrySubtype: request.subtype,
       };
 }
 //@ chunk-3wek6r2k.js:21751-21760 placement
 var MAX_LISTED_REQUEST_TYPES = 8;
 //@ chunk-3wek6r2k.js:21760-21894 placement
-function listForRefusal(e) {
-  let mapped = e.slice(0, MAX_LISTED_REQUEST_TYPES).map((n) => truncateToLength(sanitizeCloudText(n), 64));
-  return e.length > MAX_LISTED_REQUEST_TYPES
-    ? `${mapped.join(", ")} (and ${e.length - MAX_LISTED_REQUEST_TYPES} more)`
+function listForRefusal(names) {
+  let mapped = names
+    .slice(0, MAX_LISTED_REQUEST_TYPES)
+    .map((name) => truncateToLength(sanitizeCloudText(name), 64));
+  return names.length > MAX_LISTED_REQUEST_TYPES
+    ? `${mapped.join(", ")} (and ${names.length - MAX_LISTED_REQUEST_TYPES} more)`
     : mapped.join(", ");
 }
 //@ chunk-3wek6r2k.js:21894-21986 placement
-function describeRequestSubtype(e) {
-  return typeof e === "string"
-    ? truncateToLength(sanitizeCloudText(e), 64)
+function describeRequestSubtype(subtype) {
+  return typeof subtype === "string"
+    ? truncateToLength(sanitizeCloudText(subtype), 64)
     : "a request without a string subtype";
 }
 //@ chunk-3wek6r2k.js:21986-26721 placement
 /**
  * 决定云托管会话中各 SDK 控制请求的去向：转发给云 worker、在本地处理或拒绝（如 set_proactivity_level、apply_flag_settings 的部分键）。
  */
-function hostedControlRequestRoute(e, o) {
-  let n = {
+function hostedControlRequestRoute(request, options) {
+  let forwardNow = {
     kind: "forward",
     holdsLaterSends: false,
   };
-  let r = {
+  let forwardHeld = {
     kind: "forward",
     holdsLaterSends: true,
   };
-  if (e.subtype === "set_proactivity_level")
+  if (request.subtype === "set_proactivity_level")
     return {
       kind: "reject",
       error: "set_proactivity_level is not available in a cloud-hosted session yet",
     };
-  switch (e.subtype) {
+  switch (request.subtype) {
     case "initialize":
     case "interrupt":
     case "end_session":
     case "cancel_async_message":
       return {
         kind: "local",
-        handler: e.subtype,
+        handler: request.subtype,
       };
     case "set_permission_mode":
-      return o.strict && e.mode === "bypassPermissions"
+      return options.strict && request.mode === "bypassPermissions"
         ? {
             kind: "reject",
             error: HOSTED_SESSION_REFUSAL_TEXT,
           }
-        : r;
+        : forwardHeld;
     case "set_model":
     case "set_max_thinking_tokens":
     case "mcp_toggle":
@@ -222,27 +235,27 @@ function hostedControlRequestRoute(e, o) {
     case "set_mcp_permission_mode_override":
     case "set_chrome_browser_hints":
     case "set_prompt_suggestions_paused":
-      return r;
+      return forwardHeld;
     case "reload_plugins":
-      return isNonEmptyValue(e.add_plugins)
+      return isNonEmptyValue(request.add_plugins)
         ? {
             kind: "reject",
             error: `reload_plugins add_plugins ${LOCAL_PATH_IN_CLOUD}`,
           }
-        : r;
+        : forwardHeld;
     case "apply_flag_settings": {
-      let u = unknownKeys(e.settings);
-      return u === null
+      let unknownSettingKeys = unknownKeys(request.settings);
+      return unknownSettingKeys === null
         ? {
             kind: "reject",
             error: "apply_flag_settings requires settings to be an object",
           }
-        : u.length > 0
+        : unknownSettingKeys.length > 0
           ? {
               kind: "reject",
-              error: `apply_flag_settings keys not available in a cloud-hosted session: ${listForRefusal(u)}`,
+              error: `apply_flag_settings keys not available in a cloud-hosted session: ${listForRefusal(unknownSettingKeys)}`,
             }
-          : r;
+          : forwardHeld;
     }
     case "update_settings":
       return {
@@ -274,7 +287,7 @@ function hostedControlRequestRoute(e, o) {
     case "get_cloud_session_transcript":
       return {
         kind: "reject",
-        error: `${e.subtype} is not available in a cloud-hosted session`,
+        error: `${request.subtype} is not available in a cloud-hosted session`,
       };
     case "get_chrome_dialog":
       return {
@@ -297,14 +310,14 @@ function hostedControlRequestRoute(e, o) {
         error: "get_sandbox_dialog is not available in a cloud-hosted session",
       };
     case "rewind_conversation":
-      return r;
+      return forwardHeld;
     case "fork_conversation":
       return {
         kind: "reject",
         error: "fork_conversation is not available in a cloud-hosted session",
       };
     case "seed_read_state":
-      return r;
+      return forwardHeld;
     case "rewind_files":
       return {
         kind: "reject",
@@ -334,11 +347,11 @@ function hostedControlRequestRoute(e, o) {
     case "generate_session_title":
     case "side_question":
     case "mcp_call":
-      return n;
+      return forwardNow;
     case "prefetch_attachments":
-      return n;
+      return forwardNow;
     case "rename_session":
-      return n;
+      return forwardNow;
     case "mcp_set_servers":
       return {
         kind: "reject",
@@ -350,7 +363,7 @@ function hostedControlRequestRoute(e, o) {
     case "register_repo_root":
       return {
         kind: "reject",
-        error: `${e.subtype} ${LOCAL_PATH_IN_CLOUD}`,
+        error: `${request.subtype} ${LOCAL_PATH_IN_CLOUD}`,
       };
     case "remote_control":
     case "channel_enable":
@@ -364,7 +377,7 @@ function hostedControlRequestRoute(e, o) {
     case "set_color":
       return {
         kind: "reject",
-        error: `${e.subtype} ${UNAVAILABLE_WHILE_DRIVING_CLOUD}`,
+        error: `${request.subtype} ${UNAVAILABLE_WHILE_DRIVING_CLOUD}`,
       };
     case "mcp_message":
       return {
@@ -391,14 +404,14 @@ function hostedControlRequestRoute(e, o) {
     case "mcp_tasks_changed":
       return {
         kind: "reject",
-        error: `${e.subtype} is sent to a cloud agent by the service, not by a host`,
+        error: `${request.subtype} is sent to a cloud agent by the service, not by a host`,
       };
     case "register_device_hooks":
     case "upload_device_hook_template":
     case "remote_tools_announce":
       return {
         kind: "reject",
-        error: `${e.subtype} is sent to a cloud agent by the attached client, not by a host`,
+        error: `${request.subtype} is sent to a cloud agent by the attached client, not by a host`,
       };
     case "can_use_tool":
     case "hook_callback":
@@ -413,7 +426,7 @@ function hostedControlRequestRoute(e, o) {
     case "remote_control_work_secret":
       return {
         kind: "reject",
-        error: `${e.subtype} is agent-originated and cannot be sent by a host`,
+        error: `${request.subtype} is agent-originated and cannot be sent by a host`,
       };
     default:
       return null;
@@ -425,60 +438,67 @@ function unknownKeys(settings) {
   return Object.keys(settings).filter((key) => !CLOUD_ALLOWED_SETTINGS_KEYS.has(key));
 }
 //@ chunk-3wek6r2k.js:26845-27558 placement
-var CLOUD_OPTION_TREATMENT = {
-  systemPrompt: "lost",
-  appendSystemPrompt: "lost",
-  agents: "lost",
-  jsonSchema: "lost",
-  skills: "lost",
-  title: "preference",
-  planModeInstructions: "lost",
-  systemPromptSnapshot: "lost",
-  toolAliases: "lost",
-  codeRunningMcpTools: "lost",
-  excludeDynamicSections: "preference",
-  appendSubagentSystemPrompt: "lost",
-  promptSuggestions: "preference",
-  agentProgressSummaries: "preference",
-  forwardSubagentText: "lost",
-  forwardNestedSubagentToolCalls: "lost",
-  webSearchIsolationExemptMcpServers: "lost",
-  supportedDialogKinds: "preference",
-  perTaskStopAffordance: "lost",
-  rapidFollowupPreempt: "preference",
-  rendersChromeSetupOffer: "lost",
-  plugins: "lost",
-  workspaceTrust: "preference",
-  proactivity: "preference",
-  attachServeRequest: "preference",
-};
-var keys = Object.keys(CLOUD_OPTION_TREATMENT);
+var CLOUD_OPTION_TREATMENT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var keys;
+deferInit("chunk-3wek6r2k.js:26845", () => {
+  CLOUD_OPTION_TREATMENT = {
+    systemPrompt: "lost",
+    appendSystemPrompt: "lost",
+    agents: "lost",
+    jsonSchema: "lost",
+    skills: "lost",
+    title: "preference",
+    planModeInstructions: "lost",
+    systemPromptSnapshot: "lost",
+    toolAliases: "lost",
+    codeRunningMcpTools: "lost",
+    excludeDynamicSections: "preference",
+    appendSubagentSystemPrompt: "lost",
+    promptSuggestions: "preference",
+    agentProgressSummaries: "preference",
+    forwardSubagentText: "lost",
+    forwardNestedSubagentToolCalls: "lost",
+    webSearchIsolationExemptMcpServers: "lost",
+    supportedDialogKinds: "preference",
+    perTaskStopAffordance: "lost",
+    rapidFollowupPreempt: "preference",
+    rendersChromeSetupOffer: "lost",
+    plugins: "lost",
+    workspaceTrust: "preference",
+    proactivity: "preference",
+    attachServeRequest: "preference",
+  };
+  keys = Object.keys(CLOUD_OPTION_TREATMENT);
+});
 //@ chunk-3wek6r2k.js:27558-27595 placement
-function cloudOptionTreatment(e) {
-  return CLOUD_OPTION_TREATMENT[e] ?? "lost";
+function cloudOptionTreatment(optionName) {
+  return CLOUD_OPTION_TREATMENT[optionName] ?? "lost";
 }
 //@ chunk-3wek6r2k.js:27595-27610 placement
-var EMPTY_LOST_FEATURE_SET = new Set();
+var EMPTY_LOST_FEATURE_SET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3wek6r2k.js:27595", () => {
+  EMPTY_LOST_FEATURE_SET = new Set();
+});
 //@ chunk-3wek6r2k.js:27610-27720 placement
 function hasNonEmptyArrays(hooks) {
   return (
     typeof hooks === "object" &&
     hooks !== null &&
-    Object.values(hooks).some((o) => Array.isArray(o) && o.length > 0)
+    Object.values(hooks).some((value) => Array.isArray(value) && value.length > 0)
   );
 }
 //@ chunk-3wek6r2k.js:27720-28093 placement
-function agentDefinitionRestricts(e) {
-  if (typeof e !== "object" || e === null) return false;
-  let tools = "tools" in e ? e.tools : undefined;
-  let disallowedTools = "disallowedTools" in e ? e.disallowedTools : undefined;
-  let hooks = "hooks" in e ? e.hooks : undefined;
-  let permissionMode = "permissionMode" in e ? e.permissionMode : undefined;
-  let p = (S) => Array.isArray(S) && S.length === 1 && S[0] === "*";
-  let h = (disallowedTools) => Array.isArray(disallowedTools) && disallowedTools.length > 0;
+function agentDefinitionRestricts(agentDefinition) {
+  if (typeof agentDefinition !== "object" || agentDefinition === null) return false;
+  let tools = "tools" in agentDefinition ? agentDefinition.tools : undefined;
+  let disallowedTools = "disallowedTools" in agentDefinition ? agentDefinition.disallowedTools : undefined;
+  let hooks = "hooks" in agentDefinition ? agentDefinition.hooks : undefined;
+  let permissionMode = "permissionMode" in agentDefinition ? agentDefinition.permissionMode : undefined;
+  let isWildcardOnly = (value) => Array.isArray(value) && value.length === 1 && value[0] === "*";
+  let isNonEmptyList = (disallowedTools) => Array.isArray(disallowedTools) && disallowedTools.length > 0;
   return (
-    (tools !== undefined && !p(tools)) ||
-    (h(disallowedTools) && !p(disallowedTools)) ||
+    (tools !== undefined && !isWildcardOnly(tools)) ||
+    (isNonEmptyList(disallowedTools) && !isWildcardOnly(disallowedTools)) ||
     hasNonEmptyArrays(hooks) ||
     permissionMode === "plan" ||
     permissionMode === "dontAsk"
@@ -497,43 +517,47 @@ var CLOUD_LOST_FEATURE_TEXT =
   "agent definitions that list tools or hooks, or set a permission mode, are not enforced by a cloud session";
 var STRUCTURED_OUTPUT_UNAVAILABLE_TEXT = "structured output is not delivered to a cloud session yet";
 //@ chunk-3wek6r2k.js:28444-28954 placement
-function lostSdkFeatures(e, o, n = EMPTY_LOST_FEATURE_SET) {
-  let r = hasNonEmptyArrays(e.hooks);
-  let sdkMcpServers = e.sdkMcpServers;
-  let p = Array.isArray(sdkMcpServers) && sdkMcpServers.length > 0;
-  let h = e.jsonSchema !== undefined;
-  let S = restrictedAgentNames(e.agents);
-  let y = [
-    ...(r ? ["hooks"] : []),
-    ...(p ? ["sdkMcpServers"] : []),
-    ...(S.length > 0 ? ["agents"] : []),
-    ...(h ? ["jsonSchema"] : []),
+function lostSdkFeatures(options, mode, ignoredFeatures = EMPTY_LOST_FEATURE_SET) {
+  let hasHooks = hasNonEmptyArrays(options.hooks);
+  let sdkMcpServers = options.sdkMcpServers;
+  let hasSdkMcpServers = Array.isArray(sdkMcpServers) && sdkMcpServers.length > 0;
+  let hasJsonSchema = options.jsonSchema !== undefined;
+  let agentNames = restrictedAgentNames(options.agents);
+  let lostFeatures = [
+    ...(hasHooks ? ["hooks"] : []),
+    ...(hasSdkMcpServers ? ["sdkMcpServers"] : []),
+    ...(agentNames.length > 0 ? ["agents"] : []),
+    ...(hasJsonSchema ? ["jsonSchema"] : []),
   ];
   let filtered = keys.filter(
-    (E) => e[E] !== undefined && !n.has(E) && !y.includes(E) && !isEmptySystemPrompt(E, e[E]),
+    (key) =>
+      options[key] !== undefined &&
+      !ignoredFeatures.has(key) &&
+      !lostFeatures.includes(key) &&
+      !isEmptySystemPrompt(key, options[key]),
   );
-  if (y.length > 0 && o === "strict")
+  if (lostFeatures.length > 0 && mode === "strict")
     return {
       outcome: "reject",
       error: cloudOptionsRefusal(
-        y.map((E) =>
-          E === "jsonSchema"
+        lostFeatures.map((feature) =>
+          feature === "jsonSchema"
             ? `jsonSchema (${STRUCTURED_OUTPUT_UNAVAILABLE_TEXT})`
-            : E === "agents"
-              ? `agents (${listForRefusal(S)}: ${CLOUD_LOST_FEATURE_TEXT})`
-              : E,
+            : feature === "agents"
+              ? `agents (${listForRefusal(agentNames)}: ${CLOUD_LOST_FEATURE_TEXT})`
+              : feature,
         ),
       ),
       ignored: filtered,
     };
   return {
     outcome: "accept",
-    ignored: [...y, ...filtered],
+    ignored: [...lostFeatures, ...filtered],
   };
 }
 //@ chunk-3wek6r2k.js:28954-29040 placement
-function isEmptySystemPrompt(e, o) {
-  return e === "systemPrompt" && Array.isArray(o) && o.length === 1 && o[0] === "";
+function isEmptySystemPrompt(key, value) {
+  return key === "systemPrompt" && Array.isArray(value) && value.length === 1 && value[0] === "";
 }
 export {
   disallowedToolsTelemetry,

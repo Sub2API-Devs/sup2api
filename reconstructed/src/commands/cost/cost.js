@@ -32,13 +32,13 @@ import { plural } from "../../utils/stringUtils.js";
 /**
  * 格式化 /cost 中的使用行为统计（近 24 小时与近 7 天），无数据时返回 null。
  */
-function formatBehaviors(a) {
-  let { behaviors } = a;
-  if (!behaviors) return null;
+function formatBehaviors(behaviors) {
+  let { behaviors: behaviors_2 } = behaviors;
+  if (!behaviors_2) return null;
   let filtered = [
-    formatUsagePeriod("Last 24h", behaviors.day),
-    formatUsagePeriod("Last 7d", behaviors.week),
-  ].filter((i) => i !== null);
+    formatUsagePeriod("Last 24h", behaviors_2.day),
+    formatUsagePeriod("Last 7d", behaviors_2.week),
+  ].filter((behavior) => behavior !== null);
   if (filtered.length === 0) return null;
   return [
     _,
@@ -53,10 +53,10 @@ function formatBehaviors(a) {
 //@ chunk-9689amr8.js:12929-12972 sole-consumer
 var _ = "What's contributing to your usage?";
 //@ chunk-9689amr8.js:12972-13258 sole-consumer
-function usageReportFromData(a) {
-  let rateLimits = a.rate_limits;
-  let r = UsageReportSchema().safeParse({
-    session: a.session,
+function usageReportFromData(data) {
+  let rateLimits = data.rate_limits;
+  let parsed = UsageReportSchema().safeParse({
+    session: data.session,
     rate_limits:
       rateLimits === null
         ? null
@@ -65,106 +65,109 @@ function usageReportFromData(a) {
             extra_usage: rateLimits.extra_usage,
           },
   });
-  if (!r.success) {
-    logForDebugging(`usage_report: twin dropped, the usage data failed its schema: ${r.error.message}`, {
+  if (!parsed.success) {
+    logForDebugging(`usage_report: twin dropped, the usage data failed its schema: ${parsed.error.message}`, {
       level: "warn",
     });
     return;
   }
-  return r.data;
+  return parsed.data;
 }
 //@ chunk-9689amr8.js:13258-14587 callgraph-fingerprint = call (0.272)
 /**
  * /usage（旧 /cost）无头实现：订阅用户显示当前在用订阅额度还是超额、模型分组用量和近 24h/7d 使用分布；网关用户显示花费上限与重置时间；其他显示本会话总花费。
  */
 var costCall = async (args, context) => {
-  let r = getSubscriptionType() !== null || hasProfileScope();
-  if (isClaudeAISubscriber() && r && !isUsageBasedBilling()) {
-    let s;
+  let isSubscriber = getSubscriptionType() !== null || hasProfileScope();
+  if (isClaudeAISubscriber() && isSubscriber && !isUsageBasedBilling()) {
+    let limits;
     if (getCurrentLimits().isUsingOverage)
-      s =
+      limits =
         "You are currently using your overages to power your Claude Code usage. We will automatically switch you back to your subscription rate limits when they reset";
-    else s = "You are currently using your subscription to power your Claude Code usage";
+    else limits = "You are currently using your subscription to power your Claude Code usage";
     let isNonInteractiveSession = getIsNonInteractiveSession();
-    let n = isUsageScanAllowed();
-    let l = await projectModelScopedUsage({
-      includeBehaviors: isNonInteractiveSession && !isBridgeOrTransport(context.session) && n.allowed,
+    let scanAllowed = isUsageScanAllowed();
+    let projection = await projectModelScopedUsage({
+      includeBehaviors:
+        isNonInteractiveSession && !isBridgeOrTransport(context.session) && scanAllowed.allowed,
       storageV5: context.storageV5,
       credentials: context.credentials,
     });
-    let u = Usage(l);
-    if (u)
-      s += `
+    let report = Usage(projection);
+    if (report)
+      limits += `
 
-${u}`;
-    let { behaviors } = l;
-    let c = mayTransportPersist(context.session) && {
+${report}`;
+    let { behaviors } = projection;
+    let remoteOverrides = mayTransportPersist(context.session) && {
       recommendations: undefined,
     };
-    let f =
+    let localBehaviors =
       behaviors && !isBridgeOrTransport(context.session)
         ? formatBehaviors({
-            ...l,
+            ...projection,
             behaviors: {
               day: {
                 ...behaviors.day,
-                ...c,
+                ...remoteOverrides,
               },
               week: {
                 ...behaviors.week,
-                ...c,
+                ...remoteOverrides,
               },
             },
           })
         : null;
-    if (f)
-      s += `
+    if (localBehaviors)
+      limits += `
 
-${f}`;
+${localBehaviors}`;
     else if (
       isNonInteractiveSession &&
       !isBridgeOrTransport(context.session) &&
-      !n.allowed &&
+      !scanAllowed.allowed &&
       isClaudeAISubscriber()
     )
-      s += `
+      limits += `
 
 ${_}
-${n.reason}`;
+${scanAllowed.reason}`;
     if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_amber_lark", false)) {
-      let d = formatCostBreakdown();
-      if (d)
-        s += `
+      let breakdown = formatCostBreakdown();
+      if (breakdown)
+        limits += `
 
-${sequential.dim(d)}`;
+${sequential.dim(breakdown)}`;
     }
-    let g = usageReportFromData(l);
+    let usageReport = usageReportFromData(projection);
     return {
       type: "text",
-      value: s,
-      ...(g !== undefined && {
-        usageReport: g,
+      value: limits,
+      ...(usageReport !== undefined && {
+        usageReport,
       }),
     };
   }
-  let i = stripAnsi(formatTotalCost());
+  let totalCost = stripAnsi(formatTotalCost());
   if (getAPIProvider() === "gateway") {
-    let s = await refreshGatewayUsage(context.credentials);
+    let gatewayUsage = await refreshGatewayUsage(context.credentials);
     let overage = getRawUtilization().overage;
-    if (s) {
-      i += `
+    if (gatewayUsage) {
+      totalCost += `
 
-Spend limit: ${formatCurrency(s.used, s.currency)} / ${formatCurrency(s.limit, s.currency)} spent${s.period ? ` ${SPEND_PERIOD_LABELS[s.period]}` : ""} (${Math.round(s.utilization)}%)`;
-      let n = s.resetsAt ? formatResetTime(Date.parse(s.resetsAt) / 1000, true, true, true) : undefined;
-      if (n) i += ` \xB7 resets ${n}`;
+Spend limit: ${formatCurrency(gatewayUsage.used, gatewayUsage.currency)} / ${formatCurrency(gatewayUsage.limit, gatewayUsage.currency)} spent${gatewayUsage.period ? ` ${SPEND_PERIOD_LABELS[gatewayUsage.period]}` : ""} (${Math.round(gatewayUsage.utilization)}%)`;
+      let resetsAt = gatewayUsage.resetsAt
+        ? formatResetTime(Date.parse(gatewayUsage.resetsAt) / 1000, true, true, true)
+        : undefined;
+      if (resetsAt) totalCost += ` \xB7 resets ${resetsAt}`;
     } else if (overage)
-      i += `
+      totalCost += `
 
 Spend limit: ${Math.round(overage.utilization * 100)}% used \xB7 resets ${formatResetTime(overage.resets_at, true, true, true)}`;
   }
   return {
     type: "text",
-    value: i,
+    value: totalCost,
   };
 };
 var MAX_LISTED_ITEMS = 8;
@@ -175,16 +178,16 @@ var MAX_LISTED_ITEMS = 8;
 function formatUsagePeriod(label, period) {
   let recommendations = period.recommendations ?? [];
   let topLines = [
-    formatTopList("Top skills", period.skills, (n) => `/${n}`),
+    formatTopList("Top skills", period.skills, (name) => `/${name}`),
     formatTopList("Top subagents", period.agents),
     formatTopList("Top plugins", period.plugins),
     formatTopList("Top MCP servers", period.mcp_servers),
-  ].filter((n) => n !== null);
+  ].filter((line) => line !== null);
   if (recommendations.length === 0 && topLines.length === 0) return null;
-  let s = `${period.request_count} ${plural(period.request_count, "request")}`;
-  let o = `${period.session_count} ${plural(period.session_count, "session")}`;
+  let requestLine = `${period.request_count} ${plural(period.request_count, "request")}`;
+  let sessionLine = `${period.session_count} ${plural(period.session_count, "session")}`;
   return [
-    `${label} \xB7 ${s} \xB7 ${o}`,
+    `${label} \xB7 ${requestLine} \xB7 ${sessionLine}`,
     ...recommendations.map(
       (recommendation) =>
         `  ${String(recommendation.pct).padStart(2)}%  ${recommendation.title}${recommendation.detail ? ` \xB7 ${recommendation.detail}` : ""}`,
@@ -194,12 +197,13 @@ function formatUsagePeriod(label, period) {
 `);
 }
 //@ chunk-9689amr8.js:15105-15281 sole-consumer
-function formatTopList(a, e, r) {
-  if (e.length === 0) return null;
-  let joined = e
+function formatTopList(title, items, formatItem) {
+  if (items.length === 0) return null;
+  let joined = items
     .slice(0, MAX_LISTED_ITEMS)
-    .map((o) => `${r ? r(o.name) : o.name} ${o.pct}%`)
+    .map((item) => `${formatItem ? formatItem(item.name) : item.name} ${item.pct}%`)
     .join(", ");
-  let s = e.length - MAX_LISTED_ITEMS;
-  return `${a}: ${joined}${s > 0 ? `, +${s} more` : ""}`;
+  let hiddenCount = items.length - MAX_LISTED_ITEMS;
+  return `${title}: ${joined}${hiddenCount > 0 ? `, +${hiddenCount} more` : ""}`;
 }
+export { costCall, formatBehaviors };

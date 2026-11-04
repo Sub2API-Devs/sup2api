@@ -8,10 +8,11 @@
  * pieces: chunk-6cc2zqkz.js (1), chunk-aepeg2w5.js (67), chunk-e7z1g8a9.js (1)
  * attribution: fingerprint 4, placement 65
  */
-import { writeFile, unlink, mkdir, chmod, readFile, lstat, readdir } from "fs/promises";
 import { join, basename, sep } from "path";
+import { writeFile, unlink, mkdir, chmod, readFile, lstat, readdir } from "fs/promises";
 import { statSync, unlinkSync } from "fs";
 import { homedir } from "os";
+import { getClaudeConfigDir, isEnvTruthy } from "./envUtils.js";
 import { getWorktreeSessionState } from "./worktree.js";
 import { getPlatform } from "./platform.js";
 import { REPLY_ACROSS_DEFAULT_DIRS } from "./peerAddress.js";
@@ -33,7 +34,6 @@ import {
 } from "../bootstrap/state.js";
 import { env, udsEnv } from "./env.js";
 import { envDynamicProbe } from "./envDynamic.js";
-import { isEnvTruthy, getClaudeConfigDir } from "./envUtils.js";
 import {
   looksLikeFullHostProcessTable,
   getProcessStartTimeAsync,
@@ -50,7 +50,6 @@ import {
   sessionSlug,
   keepsSessionId,
   isValidLocalTaskId,
-  jobStorageSpace,
   sanitizeVersion,
 } from "../services/analytics/metadata.js";
 import { jsonStringify, jsonParse } from "./slowOperations.js";
@@ -58,8 +57,9 @@ import { ownPidDomain, ownPidSpace } from "./pidSpace.js";
 import { isTopHostSession, isClaudecodeSession } from "./sessionShape.js";
 import { getAgentId, isNestedInteractiveClaudeSession } from "./teammate.js";
 import { isStorageV5Enabled } from "./hoverRest.js";
+import { jobStorageSpace } from "../services/daemon/jobState.js";
 import { MAX_SESSION_RECORD_BYTES } from "./sessionRecords.js";
-import { authenticatePeer, AUTH_MESSAGE_TYPE, MAX_PEER_NOTICE_LENGTH } from "./sessionPeers.js";
+import { authenticatePeer, PEER_KEY_FILE_RE, MAX_PEER_NOTICE_LENGTH } from "./sessionPeers.js";
 import { isProcessRunning } from "./genericProcessUtils.js";
 import { readSmallFileOrNull } from "./readSmallFile.js";
 import { sleep } from "./sleep.js";
@@ -68,7 +68,12 @@ import { logEvent } from "../services/analytics/index.js";
 import { sanitizeMarkName } from "./startupMarks.js";
 import { execFileNoThrow } from "./execFileNoThrow.js";
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-e7z1g8a9.js:4175-4216 fingerprint = getSessionsDir (1)
+function getSessionsDir() {
+  return join(getClaudeConfigDir(), "sessions");
+}
 //@ chunk-aepeg2w5.js:836002-836057 placement
 /**
  * 读取恢复提示里的 worktree 名。
@@ -101,8 +106,8 @@ function getBgTakeover() {
 /**
  * 记录某 agent 已派生（用于隔离证据）。
  */
-function recordSpawnedAgentIsolation(e) {
-  getWorktreeSessionState().agentIsolationEvidence.recordSpawned(e);
+function recordSpawnedAgentIsolation(evidence) {
+  getWorktreeSessionState().agentIsolationEvidence.recordSpawned(evidence);
 }
 //@ chunk-aepeg2w5.js:836250-836316 placement
 /**
@@ -129,15 +134,15 @@ function wasAgentCleanlyRemoved(agentId) {
 /**
  * 判断该 cwd 是否已标记为无法做 agent 隔离。
  */
-function isIsolationUnavailableForCwd(e) {
-  return getWorktreeSessionState().isolationUnavailableCwd === e;
+function isIsolationUnavailableForCwd(cwd) {
+  return getWorktreeSessionState().isolationUnavailableCwd === cwd;
 }
 //@ chunk-aepeg2w5.js:836513-836562 placement
 /**
  * 标记某 cwd 无法做 agent 隔离。
  */
-function markIsolationUnavailableForCwd(e) {
-  getWorktreeSessionState().markIsolationUnavailable(e);
+function markIsolationUnavailableForCwd(cwd) {
+  getWorktreeSessionState().markIsolationUnavailable(cwd);
 }
 //@ chunk-aepeg2w5.js:836562-836640 placement
 /**
@@ -167,18 +172,21 @@ function peerFeatures() {
   ];
 }
 //@ chunk-aepeg2w5.js:836792-837003 placement
-var sessionRecordSchema = DoctorLazy(() =>
-  create({
-    pid: create_3(),
-    sessionId: create_2(),
-    cwd: create_2().optional(),
-    startedAt: create_3(),
-    version: create_2().optional(),
-    kind: create_26(["interactive", "bg", "daemon", "daemon-worker"]),
-    entrypoint: create_2().optional(),
-    pidDomain: create_2().optional(),
-  }),
-);
+var sessionRecordSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:836792", () => {
+  sessionRecordSchema = DoctorLazy(() =>
+    create({
+      pid: create_3(),
+      sessionId: create_2(),
+      cwd: create_2().optional(),
+      startedAt: create_3(),
+      version: create_2().optional(),
+      kind: create_26(["interactive", "bg", "daemon", "daemon-worker"]),
+      entrypoint: create_2().optional(),
+      pidDomain: create_2().optional(),
+    }),
+  );
+});
 //@ chunk-aepeg2w5.js:837003-839326 placement
 /**
  * 会话注册状态（异常退出扫描、pid 文件写链、注册名、旧名）。
@@ -204,68 +212,68 @@ class SessionRegistryState {
   registration = undefined;
   registrySweepPermitted = undefined;
   registeredNameChanged = createSignal();
-  setRegisteredName(e, n, r) {
+  setRegisteredName(name, source, givenAtLaunch) {
     let registeredName = this.registeredName;
     let now = Date.now();
-    let y = slugifySessionName(e);
+    let slug = slugifySessionName(name);
     let sessionId = getSessionId();
-    let w = r ?? registeredName?.givenAtLaunch;
-    if (registeredName && slugifySessionName(registeredName.name) === y) {
+    let launchGiven = givenAtLaunch ?? registeredName?.givenAtLaunch;
+    if (registeredName && slugifySessionName(registeredName.name) === slug) {
       this.registeredName = {
-        name: e,
-        source: n,
+        name,
+        source,
         since: registeredName.since,
         sessionId,
-        ...(w && {
-          givenAtLaunch: w,
+        ...(launchGiven && {
+          givenAtLaunch: launchGiven,
         }),
       };
-      if (registeredName.name !== e || registeredName.source !== n) this.registeredNameChanged.emit();
+      if (registeredName.name !== name || registeredName.source !== source) this.registeredNameChanged.emit();
       return;
     }
     if (registeredName) this.heldNames.set(slugifySessionName(registeredName.name), registeredName.source);
-    this.heldNames.delete(y);
-    this.formerNames = this.formerNames.filter((formerName) => slugifySessionName(formerName.name) !== y);
+    this.heldNames.delete(slug);
+    this.formerNames = this.formerNames.filter((formerName) => slugifySessionName(formerName.name) !== slug);
     if (
       registeredName &&
       (registeredName.source !== "derived" || isStableAddressEnabled()) &&
       now - registeredName.since >= SESSION_NAME_FRESH_MS
     ) {
-      let R = slugifySessionName(registeredName.name);
+      let formerSlug = slugifySessionName(registeredName.name);
       this.formerNames = [
         {
           name: registeredName.name,
           until: now,
           sessionId: registeredName.sessionId,
         },
-        ...this.formerNames.filter((formerName) => slugifySessionName(formerName.name) !== R),
+        ...this.formerNames.filter((formerName) => slugifySessionName(formerName.name) !== formerSlug),
       ].slice(0, MAX_FORMER_NAMES);
     }
     this.registeredName = {
-      name: e,
-      source: n,
+      name,
+      source,
       since: now,
       sessionId,
-      ...(r && {
-        givenAtLaunch: r,
+      ...(givenAtLaunch && {
+        givenAtLaunch,
       }),
     };
-    if (n !== "derived" && this.liveSessionId !== undefined)
+    if (source !== "derived" && this.liveSessionId !== undefined)
       this.conversationNames.delete(this.liveSessionId);
     this.registeredNameChanged.emit();
   }
-  setAsideRegisteredName(e, n) {
+  setAsideRegisteredName(sessionId, currentSessionId) {
     let registeredName = this.registeredName;
     if (registeredName === undefined) return;
     this.heldNames.set(slugifySessionName(registeredName.name), registeredName.source);
-    this.conversationNames.delete(e);
-    this.conversationNames.set(e, {
+    this.conversationNames.delete(sessionId);
+    this.conversationNames.set(sessionId, {
       name: registeredName.name,
       source: registeredName.source,
     });
     if (this.conversationNames.size > MAX_SESSION_CONVERSATION_NAMES) {
       for (let key of this.conversationNames.keys())
-        if (key !== n) {
+        if (key !== currentSessionId) {
           this.conversationNames.delete(key);
           break;
         }
@@ -275,8 +283,8 @@ class SessionRegistryState {
   setUncleanExitsScanned(uncleanExitsScanned) {
     this.uncleanExitsScanned = uncleanExitsScanned;
   }
-  markUncleanExitReported(e) {
-    this.reportedUncleanExitPaths.add(e);
+  markUncleanExitReported(path) {
+    this.reportedUncleanExitPaths.add(path);
   }
   setWatchedCache(watchedCache) {
     this.watchedCache = watchedCache;
@@ -312,7 +320,10 @@ class SessionRegistryState {
 /**
  * 按宿主隔离的会话登记状态。
  */
-var sessionRegistryByHost = new HostScoped(() => new SessionRegistryState());
+var sessionRegistryByHost; // deferred: uses SessionRegistryState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:839326", () => {
+  sessionRegistryByHost = new HostScoped(() => new SessionRegistryState());
+});
 //@ chunk-aepeg2w5.js:839351-839388 placement
 function getSessionRegistryState() {
   return sessionRegistryByHost.of(getRootSession().host);
@@ -378,14 +389,16 @@ function getPidFileKey() {
   return STORAGE_SPACES.session(`${process.pid}.json`);
 }
 //@ chunk-aepeg2w5.js:840041-840365 placement
-async function touchFleetViewHeartbeat(e) {
-  if (e) {
+async function touchFleetViewHeartbeat(storageV5) {
+  if (storageV5) {
     try {
-      let n = await e.write(getHeartbeatKey(), String(Date.now()), {
+      let writeResult = await storageV5.write(getHeartbeatKey(), String(Date.now()), {
         publishDiscipline: "inPlace",
       });
-      if (!n.ok && !isAbsentParentError(n.error))
-        logForDebugging(`[concurrentSessions] heartbeat touch failed: ${formatStorageError(n.error)}`);
+      if (!writeResult.ok && !isAbsentParentError(writeResult.error))
+        logForDebugging(
+          `[concurrentSessions] heartbeat touch failed: ${formatStorageError(writeResult.error)}`,
+        );
     } catch (error) {
       logForDebugging(`[concurrentSessions] heartbeat touch failed: ${errorMessage(error)}`);
     }
@@ -396,10 +409,10 @@ async function touchFleetViewHeartbeat(e) {
   } catch {}
 }
 //@ chunk-aepeg2w5.js:840365-840467 placement
-async function clearFleetViewHeartbeat(e) {
-  if (e) {
+async function clearFleetViewHeartbeat(storageV5) {
+  if (storageV5) {
     try {
-      await e.delete(getHeartbeatKey());
+      await storageV5.delete(getHeartbeatKey());
     } catch {}
     return;
   }
@@ -413,9 +426,9 @@ async function clearFleetViewHeartbeat(e) {
  */
 var WATCHED_CACHE_TTL_MS = 1000;
 //@ chunk-aepeg2w5.js:840479-840553 placement
-function getWatchedCacheIfFresh(sessionRegistryState, n) {
+function getWatchedCacheIfFresh(sessionRegistryState, nowMs) {
   let { watchedCache } = sessionRegistryState;
-  return watchedCache && n - watchedCache.at < WATCHED_CACHE_TTL_MS ? watchedCache.value : undefined;
+  return watchedCache && nowMs - watchedCache.at < WATCHED_CACHE_TTL_MS ? watchedCache.value : undefined;
 }
 //@ chunk-aepeg2w5.js:840553-840797 placement
 function isBeingWatched() {
@@ -423,61 +436,61 @@ function isBeingWatched() {
   let now = Date.now();
   let watchedCacheIfFresh = getWatchedCacheIfFresh(sessionRegistryState, now);
   if (watchedCacheIfFresh !== undefined) return watchedCacheIfFresh;
-  let s = false;
+  let watched = false;
   try {
     let { mtimeMs } = statSync(join(getSessionsDir(), FLEETVIEW_HEARTBEAT_FILE));
-    s = now - mtimeMs < FLEETVIEW_HEARTBEAT_STALE_MS;
+    watched = now - mtimeMs < FLEETVIEW_HEARTBEAT_STALE_MS;
   } catch (error) {
     if (!isENOENT(error))
       logForDebugging(`[concurrentSessions] heartbeat stat failed: ${errorMessage(error)}`);
   }
   sessionRegistryState.setWatchedCache({
     at: now,
-    value: s,
+    value: watched,
   });
-  return s;
+  return watched;
 }
 //@ chunk-aepeg2w5.js:840797-841217 placement
-async function isBeingWatchedV5(e) {
+async function isBeingWatchedV5(storageV5) {
   let sessionRegistryState = getSessionRegistryState();
   let now = Date.now();
   let watchedCacheIfFresh = getWatchedCacheIfFresh(sessionRegistryState, now);
   if (watchedCacheIfFresh !== undefined) return watchedCacheIfFresh;
-  let h;
+  let heartbeatMs;
   try {
-    let R = await e.statMeta(getHeartbeatKey());
-    if (R.ok) h = R.value.mtimeMs;
-    else if (R.error.code !== "NotFound")
-      logForDebugging(`[concurrentSessions] heartbeat stat failed: ${formatStorageError(R.error)}`);
+    let statResult = await storageV5.statMeta(getHeartbeatKey());
+    if (statResult.ok) heartbeatMs = statResult.value.mtimeMs;
+    else if (statResult.error.code !== "NotFound")
+      logForDebugging(`[concurrentSessions] heartbeat stat failed: ${formatStorageError(statResult.error)}`);
   } catch (error) {
     logForDebugging(`[concurrentSessions] heartbeat stat failed: ${errorMessage(error)}`);
   }
   let now_2 = Date.now();
-  let S = h !== undefined && now_2 - h < FLEETVIEW_HEARTBEAT_STALE_MS;
+  let watched = heartbeatMs !== undefined && now_2 - heartbeatMs < FLEETVIEW_HEARTBEAT_STALE_MS;
   let watchedCache = sessionRegistryState.watchedCache;
   if (!watchedCache || watchedCache.at < now)
     sessionRegistryState.setWatchedCache({
       at: now_2,
-      value: S,
+      value: watched,
     });
-  return S;
+  return watched;
 }
 //@ chunk-aepeg2w5.js:841217-841280 placement
-function registerSession(e) {
+function registerSession(storageV5) {
   let sessionRegistryState = getSessionRegistryState();
-  let r = registerSession_2(sessionRegistryState, e);
-  sessionRegistryState.registration = r;
-  return r;
+  let registration = registerSession_2(sessionRegistryState, storageV5);
+  sessionRegistryState.registration = registration;
+  return registration;
 }
 //@ chunk-aepeg2w5.js:841280-843999 fingerprint = registerSession (0.359)
 async function registerSession_2(sessionRegistryState, storageV5) {
   if (!shouldRegisterPidFile()) return false;
   let deferred = Promise.withResolvers();
   sessionRegistryState.setPidFileWriteChain(deferred.promise);
-  let s = envSessionKind() ?? "interactive";
-  sessionRegistryState.bornSpare = s === "bg" && env.CLAUDE_BG_SOURCE === "spare";
-  let h = sessionRegistryState.bornSpare && !(await jobStateExists(storageV5));
-  let y = env.CLAUDE_CODE_SESSION_NAME
+  let sessionKind = envSessionKind() ?? "interactive";
+  sessionRegistryState.bornSpare = sessionKind === "bg" && env.CLAUDE_BG_SOURCE === "spare";
+  let isSpare = sessionRegistryState.bornSpare && !(await jobStateExists(storageV5));
+  let envName = env.CLAUDE_CODE_SESSION_NAME
     ? sanitizeSessionTitle(env.CLAUDE_CODE_SESSION_NAME) || undefined
     : undefined;
   let dir = getSessionsDir();
@@ -505,18 +518,18 @@ async function registerSession_2(sessionRegistryState, storageV5) {
       mode: 448,
     });
     await chmod(dir, 448);
-    let x = y
+    let initialName = envName
       ? {
-          name: y,
+          name: envName,
           source: "user",
         }
-      : s === "interactive"
+      : sessionKind === "interactive"
         ? {
             name: sessionSlug(getOriginalCwd(), getSessionId()),
             source: "derived",
           }
         : undefined;
-    let P = jsonStringify({
+    let pidFileData = jsonStringify({
       pid: process.pid,
       sessionId: getSessionId(),
       cwd: getOriginalCwd(),
@@ -535,7 +548,7 @@ async function registerSession_2(sessionRegistryState, storageV5) {
       }.VERSION,
       peerProtocol: PEER_PROTOCOL,
       peerFeatures: peerFeatures(),
-      kind: s,
+      kind: sessionKind,
       entrypoint: env.CLAUDE_CODE_ENTRYPOINT,
       hostSessionId: ownDesktopHostSessionId(),
       pidDomain: await ownPidDomain(),
@@ -547,54 +560,62 @@ async function registerSession_2(sessionRegistryState, storageV5) {
         messagingSocketPath: udsEnv.CLAUDE_CODE_MESSAGING_SOCKET,
       },
       ...{
-        name: x?.name,
-        nameSource: x?.source === "derived" ? "derived" : undefined,
+        name: initialName?.name,
+        nameSource: initialName?.source === "derived" ? "derived" : undefined,
         nameSince: Date.now(),
         logPath: env.CLAUDE_CODE_SESSION_LOG,
         agent: env.CLAUDE_CODE_AGENT,
-        jobId: s === "bg" && env.CLAUDE_JOB_DIR ? basename(env.CLAUDE_JOB_DIR) : undefined,
-        spare: h ? true : undefined,
+        jobId: sessionKind === "bg" && env.CLAUDE_JOB_DIR ? basename(env.CLAUDE_JOB_DIR) : undefined,
+        spare: isSpare ? true : undefined,
       },
     });
     if (storageV5) {
-      let F = await storageV5.write(getPidFileKey(), P, {
+      let writeResult = await storageV5.write(getPidFileKey(), pidFileData, {
         publishDiscipline: "inPlace",
       });
-      if (!F.ok) {
-        logForDebugging(`[concurrentSessions] v5 pid-file write failed: ${formatStorageError(F.error)}`);
+      if (!writeResult.ok) {
+        logForDebugging(
+          `[concurrentSessions] v5 pid-file write failed: ${formatStorageError(writeResult.error)}`,
+        );
         throw Error("v5 pid-file write failed");
       }
-    } else await writeFile(pidFile, P);
+    } else await writeFile(pidFile, pidFileData);
     sessionRegistryState.registered = true;
-    if (h) startSpareClaimPoll(storageV5);
-    if (x && sessionRegistryState.registeredName === undefined)
-      sessionRegistryState.setRegisteredName(x.name, x.source, x.source === "derived" ? undefined : true);
+    if (isSpare) startSpareClaimPoll(storageV5);
+    if (initialName && sessionRegistryState.registeredName === undefined)
+      sessionRegistryState.setRegisteredName(
+        initialName.name,
+        initialName.source,
+        initialName.source === "derived" ? undefined : true,
+      );
     sessionRegistryState.liveSessionId = getSessionId();
-    onSessionSwitch((F, L) => {
+    onSessionSwitch((nextSessionId, previousSessionId) => {
       let sessionRegistryState = getSessionRegistryState();
       let { registeredName, liveSessionId } = sessionRegistryState;
-      sessionRegistryState.liveSessionId = F;
-      if (isStableAddressEnabled() && keepsSessionId(L)) {
+      sessionRegistryState.liveSessionId = nextSessionId;
+      if (isStableAddressEnabled() && keepsSessionId(previousSessionId)) {
         sessionRegistryState.adoptions++;
-        let q = sessionRegistryState.conversationNames.get(F);
-        let Q =
+        let heldName = sessionRegistryState.conversationNames.get(nextSessionId);
+        let sessionChanged =
           registeredName !== undefined &&
           registeredName.source !== "derived" &&
           !registeredName.givenAtLaunch &&
-          registeredName.sessionId !== F;
-        if (Q && liveSessionId !== undefined) sessionRegistryState.setAsideRegisteredName(liveSessionId, F);
-        if (registeredName?.source === "derived" || Q) {
-          updateSessionName(sessionSlug(getOriginalCwd(), F), storageV5, "derived");
-          if (q !== undefined) sessionRegistryState.restoreSetAsideName?.(q.name, q.source);
+          registeredName.sessionId !== nextSessionId;
+        if (sessionChanged && liveSessionId !== undefined)
+          sessionRegistryState.setAsideRegisteredName(liveSessionId, nextSessionId);
+        if (registeredName?.source === "derived" || sessionChanged) {
+          updateSessionName(sessionSlug(getOriginalCwd(), nextSessionId), storageV5, "derived");
+          if (heldName !== undefined)
+            sessionRegistryState.restoreSetAsideName?.(heldName.name, heldName.source);
         } else if (registeredName !== undefined)
           sessionRegistryState.registeredName = {
             ...registeredName,
-            sessionId: F,
+            sessionId: nextSessionId,
           };
       }
       updatePidFile(
         {
-          sessionId: F,
+          sessionId: nextSessionId,
           parkedJobId: undefined,
           updatedAt: Date.now(),
         },
@@ -620,45 +641,49 @@ async function registerSession_2(sessionRegistryState, storageV5) {
   }
 }
 //@ chunk-aepeg2w5.js:843999-844740 fingerprint = updatePidFile (0.503)
-async function updatePidFile(e, n) {
+async function updatePidFile(patch, storageV5) {
   let pidFile = join(getSessionsDir(), `${process.pid}.json`);
   let sessionRegistryState = getSessionRegistryState();
-  let h = sessionRegistryState.pidFileWriteChain.then(async () => {
+  let writeChain = sessionRegistryState.pidFileWriteChain.then(async () => {
     try {
-      if (n) {
-        let S = await n.read([getPidFileKey()]);
-        if (!S.ok) {
-          logForDebugging(`[concurrentSessions] updatePidFile failed: ${formatStorageError(S.error)}`);
+      if (storageV5) {
+        let readResult = await storageV5.read([getPidFileKey()]);
+        if (!readResult.ok) {
+          logForDebugging(
+            `[concurrentSessions] updatePidFile failed: ${formatStorageError(readResult.error)}`,
+          );
           return false;
         }
-        let w = S.value.items[0];
-        if (!w?.found) {
+        let item = readResult.value.items[0];
+        if (!item?.found) {
           logForDebugging("[concurrentSessions] updatePidFile failed: pid file not found");
           return false;
         }
-        let data = jsonParse(Buffer.from(w.value).toString("utf8"));
-        let x = await n.write(
+        let data = jsonParse(Buffer.from(item.value).toString("utf8"));
+        let writeResult = await storageV5.write(
           getPidFileKey(),
           jsonStringify({
             ...data,
-            ...e,
+            ...patch,
           }),
           {
             publishDiscipline: "inPlace",
           },
         );
-        if (!x.ok) {
-          logForDebugging(`[concurrentSessions] updatePidFile failed: ${formatStorageError(x.error)}`);
+        if (!writeResult.ok) {
+          logForDebugging(
+            `[concurrentSessions] updatePidFile failed: ${formatStorageError(writeResult.error)}`,
+          );
           return false;
         }
         return true;
       }
-      let y = jsonParse(await readFile(pidFile, "utf8"));
+      let currentData = jsonParse(await readFile(pidFile, "utf8"));
       await writeFile(
         pidFile,
         jsonStringify({
-          ...y,
-          ...e,
+          ...currentData,
+          ...patch,
         }),
       );
       return true;
@@ -668,37 +693,37 @@ async function updatePidFile(e, n) {
     }
   });
   sessionRegistryState.setPidFileWriteChain(
-    h.then(() => {
+    writeChain.then(() => {
       return;
     }),
   );
-  return h;
+  return writeChain;
 }
 //@ chunk-aepeg2w5.js:844740-845205 placement
-async function updateSessionName(e, n, r = "user", s) {
-  if (!e) return false;
+async function updateSessionName(name, storageV5, source = "user", givenAtLaunch) {
+  if (!name) return false;
   let sessionRegistryState = getSessionRegistryState();
-  sessionRegistryState.setRegisteredName(e, r, s);
-  let S =
+  sessionRegistryState.setRegisteredName(name, source, givenAtLaunch);
+  let writeResult =
     (await updatePidFile(
       {
-        name: e,
-        nameSource: r,
+        name,
+        nameSource: source,
         formerNames:
           sessionRegistryState.formerNames.length > 0 ? sessionRegistryState.formerNames : undefined,
         nameSince: sessionRegistryState.registeredName?.since ?? Date.now(),
         updatedAt: Date.now(),
       },
-      n,
+      storageV5,
     )) || !shouldRegisterPidFile();
-  if (!S)
+  if (!writeResult)
     logForDebugging(
-      `[session-name] "${e}" applied locally but the session registry record was not updated \u2014 other sessions may keep showing the old name (see "updatePidFile failed" above)`,
+      `[session-name] "${name}" applied locally but the session registry record was not updated \u2014 other sessions may keep showing the old name (see "updatePidFile failed" above)`,
       {
         level: "warn",
       },
     );
-  return S;
+  return writeResult;
 }
 //@ chunk-aepeg2w5.js:845205-845284 placement
 function ownDesktopHostSessionId() {
@@ -710,115 +735,116 @@ function shouldRegisterPidFile() {
   return !isDiskless() && getAgentId() == null && !isNestedInteractiveClaudeSession();
 }
 //@ chunk-aepeg2w5.js:845329-845737 placement
-async function adoptSuppliedSessionTitle(e, storageV5) {
-  let r = sanitizeSessionTitle(e);
+async function adoptSuppliedSessionTitle(title, storageV5) {
+  let sanitizedTitle = sanitizeSessionTitle(title);
   await whenSessionRegistered();
   let sessionRegistryState = getSessionRegistryState();
   let registeredName = sessionRegistryState.registeredName;
   if (
-    !r ||
+    !sanitizedTitle ||
     registeredName === undefined ||
     !(
       registeredName.source === "derived" ||
-      (registeredName.source === "auto" && slugifySessionName(registeredName.name) !== slugifySessionName(r))
+      (registeredName.source === "auto" &&
+        slugifySessionName(registeredName.name) !== slugifySessionName(sanitizedTitle))
     )
   )
     return false;
-  let y = await updateSessionName(r, storageV5, "auto");
+  let applied = await updateSessionName(sanitizedTitle, storageV5, "auto");
   let registeredName_2 = sessionRegistryState.registeredName;
-  if (!y && registeredName_2?.name === r && registeredName_2.source === "auto") {
-    let w = slugifySessionName(registeredName.name);
+  if (!applied && registeredName_2?.name === sanitizedTitle && registeredName_2.source === "auto") {
+    let slug = slugifySessionName(registeredName.name);
     sessionRegistryState.registeredName = registeredName;
-    sessionRegistryState.heldNames.delete(w);
+    sessionRegistryState.heldNames.delete(slug);
     sessionRegistryState.formerNames = sessionRegistryState.formerNames.filter(
-      (formerName) => slugifySessionName(formerName.name) !== w,
+      (formerName) => slugifySessionName(formerName.name) !== slug,
     );
     sessionRegistryState.registeredNameChanged.emit();
   }
-  return y;
+  return applied;
 }
 //@ chunk-aepeg2w5.js:845737-845818 placement
-async function updateSessionMessagingSocketPath(messagingSocketPath, n) {
+async function updateSessionMessagingSocketPath(messagingSocketPath, storageV5) {
   await updatePidFile(
     {
       messagingSocketPath,
       updatedAt: Date.now(),
     },
-    n,
+    storageV5,
   );
 }
 //@ chunk-aepeg2w5.js:845818-845874 placement = updateSessionBridgeId (1)
-async function updateSessionBridgeId(bridgeSessionId, n) {
+async function updateSessionBridgeId(bridgeSessionId, storageV5) {
   await updatePidFile(
     {
       bridgeSessionId,
     },
-    n,
+    storageV5,
   );
 }
 //@ chunk-aepeg2w5.js:845874-845947 placement
-async function markSessionParked(parkedJobId, n) {
+async function markSessionParked(parkedJobId, storageV5) {
   await updatePidFile(
     {
       parkedJobId,
       updatedAt: Date.now(),
     },
-    n,
+    storageV5,
   );
 }
 //@ chunk-aepeg2w5.js:845947-846023 placement
-async function clearSessionParked(e) {
+async function clearSessionParked(storageV5) {
   await updatePidFile(
     {
       parkedJobId: undefined,
       updatedAt: Date.now(),
     },
-    e,
+    storageV5,
   );
 }
 //@ chunk-aepeg2w5.js:846023-846212 placement
-function updateSessionConvertedSkillsAsk(e, n) {
+function updateSessionConvertedSkillsAsk(value, storageV5) {
   let sessionRegistryState = getSessionRegistryState();
-  sessionRegistryState.asksForConvertedSkills = e;
-  if (sessionRegistryState.asksForConvertedSkillsOnRecord === e) return;
+  sessionRegistryState.asksForConvertedSkills = value;
+  if (sessionRegistryState.asksForConvertedSkillsOnRecord === value) return;
   updatePidFile(
     {
-      asksForConvertedSkills: e,
+      asksForConvertedSkills: value,
     },
-    n,
-  ).then((s) => {
-    if (s) sessionRegistryState.asksForConvertedSkillsOnRecord = e;
+    storageV5,
+  ).then((updated) => {
+    if (updated) sessionRegistryState.asksForConvertedSkillsOnRecord = value;
   });
 }
 //@ chunk-aepeg2w5.js:846212-846419 placement
 /**
  * 更新本会话 pid 文件（status、updatedAt 等）。
  */
-async function updateSessionActivity(e, storageV5) {
+async function updateSessionActivity(activity, storageV5) {
   let now = Date.now();
-  let sessionRegistryState = getSessionRegistryState();
-  let h = sessionRegistryState.bornSpare && e.status === "busy";
-  let y = await updatePidFile(
+  let registry = getSessionRegistryState();
+  let becameBusy = registry.bornSpare && activity.status === "busy";
+  let writeResult = await updatePidFile(
     {
-      ...e,
+      ...activity,
       updatedAt: now,
-      ...(e.status !== undefined && {
+      ...(activity.status !== undefined && {
         statusUpdatedAt: now,
       }),
-      ...(h && {
+      ...(becameBusy && {
         spare: undefined,
       }),
     },
     storageV5,
   );
-  if (h && y) stopSpareClaimPoll(sessionRegistryState);
-  return y || !shouldRegisterPidFile();
+  if (becameBusy && writeResult) stopSpareClaimPoll(registry);
+  return writeResult || !shouldRegisterPidFile();
 }
 //@ chunk-aepeg2w5.js:846419-846519 placement
-function stopSpareClaimPoll(e) {
-  if (e.spareClaimPoll !== undefined) {
-    clearInterval(e.spareClaimPoll);
-    e.spareClaimPoll = undefined;
+function stopSpareClaimPoll(registry) {
+  if (registry.spareClaimPoll !== undefined) {
+    clearInterval(registry.spareClaimPoll);
+    registry.spareClaimPoll = undefined;
   }
 }
 //@ chunk-aepeg2w5.js:846519-846617 placement
@@ -836,21 +862,23 @@ async function clearSpareClaim(storageV5) {
   );
 }
 //@ chunk-aepeg2w5.js:846617-846906 placement
-async function jobStateExists(e) {
-  let bgJobDir = getBgJobDir();
-  if (!bgJobDir) return false;
-  if (isStorageV5Enabled() && e !== undefined) {
-    let r = jobStorageSpace(bgJobDir, ["state.json"]);
-    if (r !== undefined)
+async function jobStateExists(storageV5) {
+  let jobDirPath = getBgJobDir();
+  if (!jobDirPath) return false;
+  if (isStorageV5Enabled() && storageV5 !== undefined) {
+    let stateKey = jobStorageSpace(jobDirPath, ["state.json"]);
+    if (stateKey !== undefined)
       try {
-        let s = await e.statMeta(r);
-        return s.ok || (s.error.code !== "NotFound" && s.error.code !== "Unavailable");
+        let statResult = await storageV5.statMeta(stateKey);
+        return (
+          statResult.ok || (statResult.error.code !== "NotFound" && statResult.error.code !== "Unavailable")
+        );
       } catch {
         return false;
       }
   }
   try {
-    await lstat(join(bgJobDir, "state.json"));
+    await lstat(join(jobDirPath, "state.json"));
     return true;
   } catch (error) {
     return !isENOENT(error);
@@ -864,64 +892,64 @@ var SPARE_CLAIM_POLL_MS = 1000;
 //@ chunk-aepeg2w5.js:846918-847046 placement
 function startSpareClaimPoll(storageV5) {
   let sessionRegistryState = getSessionRegistryState();
-  let r = {
+  let state = {
     registry: sessionRegistryState,
     storageV5,
     clearing: false,
   };
-  sessionRegistryState.spareClaimPoll = setInterval(pollSpareClaim, SPARE_CLAIM_POLL_MS, r);
+  sessionRegistryState.spareClaimPoll = setInterval(pollSpareClaim, SPARE_CLAIM_POLL_MS, state);
   sessionRegistryState.spareClaimPoll.unref();
 }
 //@ chunk-aepeg2w5.js:847046-847242 placement
-function pollSpareClaim(e) {
-  if (e.clearing || e.registry.spareClaimPoll === undefined) return;
-  e.clearing = true;
-  jobStateExists(e.storageV5)
-    .then((n) => (n ? clearSpareClaim(e.storageV5) : false))
-    .then((n) => {
-      if (n) stopSpareClaimPoll(e.registry);
+function pollSpareClaim(claimState) {
+  if (claimState.clearing || claimState.registry.spareClaimPoll === undefined) return;
+  claimState.clearing = true;
+  jobStateExists(claimState.storageV5)
+    .then((exists) => (exists ? clearSpareClaim(claimState.storageV5) : false))
+    .then((cleared) => {
+      if (cleared) stopSpareClaimPoll(claimState.registry);
     })
     .finally(() => {
-      e.clearing = false;
+      claimState.clearing = false;
     });
 }
 //@ chunk-aepeg2w5.js:847242-847497 placement
-async function readSessionRecord(e, n) {
+async function readSessionRecord(storageV5, fileName) {
   try {
-    let r = await e.read([
+    let readResult = await storageV5.read([
       {
-        key: STORAGE_SPACES.session(n),
+        key: STORAGE_SPACES.session(fileName),
         offset: 0,
         length: MAX_SESSION_RECORD_BYTES + 1,
       },
     ]);
-    let s = r.ok ? r.value.items[0] : undefined;
-    if (!s?.found || s.value.byteLength > MAX_SESSION_RECORD_BYTES) return null;
-    return sessionRecordSchema().safeParse(jsonParse(Buffer.from(s.value).toString("utf8")));
+    let item = readResult.ok ? readResult.value.items[0] : undefined;
+    if (!item?.found || item.value.byteLength > MAX_SESSION_RECORD_BYTES) return null;
+    return sessionRecordSchema().safeParse(jsonParse(Buffer.from(item.value).toString("utf8")));
   } catch {
     return null;
   }
 }
 //@ chunk-aepeg2w5.js:847497-847605 placement
-async function deleteSessionRecord(e, n) {
+async function deleteSessionRecord(storageV5, sessionId) {
   try {
-    let r = await e.delete(STORAGE_SPACES.session(n));
-    return r.ok && r.value.existed;
+    let deleteResult = await storageV5.delete(STORAGE_SPACES.session(sessionId));
+    return deleteResult.ok && deleteResult.value.existed;
   } catch {
     return false;
   }
 }
 //@ chunk-aepeg2w5.js:847605-847745 placement
-async function authenticateSessionPeer(e) {
-  return authenticatePeer(e, {
+async function authenticateSessionPeer(storageV5) {
+  return authenticatePeer(storageV5, {
     partialOnCap: true,
-    onIssue: (n, r) =>
+    onIssue: (key, secret) =>
       logForDebugging(
-        `[concurrentSessions] session list ${n}`,
-        r === undefined
+        `[concurrentSessions] session list ${key}`,
+        secret === undefined
           ? undefined
           : {
-              level: r,
+              level: secret,
             },
       ),
   });
@@ -938,155 +966,166 @@ function isPosixPathOnWindows(cwd) {
   return getPlatform() === "windows" && cwd !== undefined && cwd.startsWith("/");
 }
 //@ chunk-aepeg2w5.js:847868-848115 placement
-async function reapKeysOfReapedRecord(e, n, r, s) {
-  if (isStorageV5Enabled() && s !== undefined) {
-    let y = await authenticateSessionPeer(s);
-    if (y === undefined) return;
-    await removeStaleSessionFiles(y, e, n, r, (S) =>
-      s.delete(STORAGE_SPACES.session(S)).then(
+async function reapKeysOfReapedRecord(sessionsDir, pid, pidDomain, storageV5) {
+  if (isStorageV5Enabled() && storageV5 !== undefined) {
+    let files = await authenticateSessionPeer(storageV5);
+    if (files === undefined) return;
+    await removeStaleSessionFiles(files, sessionsDir, pid, pidDomain, (fileName) =>
+      storageV5.delete(STORAGE_SPACES.session(fileName)).then(
         () => {},
         () => {},
       ),
     );
     return;
   }
-  let h;
+  let entries;
   try {
-    h = await readdir(e);
+    entries = await readdir(sessionsDir);
   } catch {
     return;
   }
-  await removeStaleSessionFiles(h, e, n, r, (y) => unlink(join(e, y)).catch(() => {}));
+  await removeStaleSessionFiles(entries, sessionsDir, pid, pidDomain, (fileName) =>
+    unlink(join(sessionsDir, fileName)).catch(() => {}),
+  );
 }
 //@ chunk-aepeg2w5.js:848115-848335 placement
-async function removeStaleSessionFiles(e, n, r, s, h) {
-  let y = `${r}.`;
+async function removeStaleSessionFiles(files, sessionsDir, pid, pidDomain, removeFile) {
+  let prefix = `${pid}.`;
   await Promise.all(
-    e.map(async (S) => {
-      if (!S.startsWith(y) || !AUTH_MESSAGE_TYPE.test(S)) return;
-      let recordPidDomain = await readRecordPidDomain(join(n, S));
-      if (recordPidDomain !== undefined && recordPidDomain !== s) return;
-      if (r === process.pid || !isProcessProvablyGone(r)) return;
-      await h(S);
+    files.map(async (fileName) => {
+      if (!fileName.startsWith(prefix) || !PEER_KEY_FILE_RE.test(fileName)) return;
+      let recordPidDomain = await readRecordPidDomain(join(sessionsDir, fileName));
+      if (recordPidDomain !== undefined && recordPidDomain !== pidDomain) return;
+      if (pid === process.pid || !isProcessProvablyGone(pid)) return;
+      await removeFile(fileName);
     }),
   );
 }
 //@ chunk-aepeg2w5.js:848335-848656 placement
-function mayReapRecordFromThisDomain(e, n, r = []) {
+function mayReapRecordFromThisDomain(record, pidDomain, peerDomains = []) {
   let platform = getPlatform();
-  let h = !getIsInteractive();
-  if (e === null) {
-    if (r.some((y) => y !== undefined && y !== n)) return false;
-    return platform !== "windows" && !(platform === "macos" && h);
+  let isNonInteractive = !getIsInteractive();
+  if (record === null) {
+    if (peerDomains.some((peerDomain) => peerDomain !== undefined && peerDomain !== pidDomain)) return false;
+    return platform !== "windows" && !(platform === "macos" && isNonInteractive);
   }
-  if (e.pidDomain !== undefined) return e.pidDomain === n;
+  if (record.pidDomain !== undefined) return record.pidDomain === pidDomain;
   switch (platform) {
     case "windows":
-      return !isPosixPathOnWindows(e.cwd);
+      return !isPosixPathOnWindows(record.cwd);
     case "macos":
-      return !h || e.cwd === undefined || e.cwd.startsWith(homedir() + sep) || e.cwd === homedir();
+      return (
+        !isNonInteractive ||
+        record.cwd === undefined ||
+        record.cwd.startsWith(homedir() + sep) ||
+        record.cwd === homedir()
+      );
     default:
       return true;
   }
 }
 //@ chunk-aepeg2w5.js:848656-851082 placement
-async function countConcurrentSessions(e) {
+async function countConcurrentSessions(storageV5) {
   let sessionsDir = getSessionsDir();
-  let r;
-  if (e) {
-    let P = await authenticateSessionPeer(e);
-    if (P === undefined) return 0;
-    r = P;
+  let entries;
+  if (storageV5) {
+    let authenticatedFiles = await authenticateSessionPeer(storageV5);
+    if (authenticatedFiles === undefined) return 0;
+    entries = authenticatedFiles;
   } else
     try {
-      r = await readdir(sessionsDir);
+      entries = await readdir(sessionsDir);
     } catch (error) {
       if (!isFsInaccessible(error))
         logForDebugging(`[concurrentSessions] readdir failed: ${errorMessage(error)}`);
       return 0;
     }
   let sessionRegistryState = getSessionRegistryState();
-  let h = await sessionRegistryState.isRegistrySweepPermitted();
-  let y = h ? await ownPidDomain() : "";
+  let sweepPermitted = await sessionRegistryState.isRegistrySweepPermitted();
+  let pidDomain = sweepPermitted ? await ownPidDomain() : "";
   logForDebugging(
-    `[sessionRegistry] sweep ${h ? `permitted (domain ${y})` : "declined by isRegistrySweepPermitted() \u2014 dead records are left in place (neither counted nor deleted)"}`,
+    `[sessionRegistry] sweep ${sweepPermitted ? `permitted (domain ${pidDomain})` : "declined by isRegistrySweepPermitted() \u2014 dead records are left in place (neither counted nor deleted)"}`,
   );
-  let S = 0;
-  let w = new Set();
-  let R = new Set();
-  let x = new Map();
-  for (let P of r) {
-    let match = AUTH_MESSAGE_TYPE.exec(P);
+  let liveCount = 0;
+  let keptPids = new Set();
+  let reapedPids = new Set();
+  let peerFilesByPid = new Map();
+  for (let fileName of entries) {
+    let match = PEER_KEY_FILE_RE.exec(fileName);
     if (match) {
-      let L = parseInt(match[1], 10);
-      x.set(L, [...(x.get(L) ?? []), P]);
+      let filePid = parseInt(match[1], 10);
+      peerFilesByPid.set(filePid, [...(peerFilesByPid.get(filePid) ?? []), fileName]);
     }
   }
-  for (let P of r) {
-    if (!/^\d+\.json$/.test(P)) continue;
-    let F = parseInt(P.slice(0, -5), 10);
-    if (F === process.pid) {
-      S++;
+  for (let fileName of entries) {
+    if (!/^\d+\.json$/.test(fileName)) continue;
+    let filePid = parseInt(fileName.slice(0, -5), 10);
+    if (filePid === process.pid) {
+      liveCount++;
       continue;
     }
-    if (isProcessRunning(F)) {
-      S++;
+    if (isProcessRunning(filePid)) {
+      liveCount++;
       continue;
     }
-    if (!isProcessProvablyGone(F)) continue;
-    if (!h) continue;
-    let L = join(sessionsDir, P);
-    let G = e
-      ? await readSessionRecord(e, P)
-      : await readSmallFileOrNull(L, MAX_SESSION_RECORD_BYTES)
+    if (!isProcessProvablyGone(filePid)) continue;
+    if (!sweepPermitted) continue;
+    let filePath = join(sessionsDir, fileName);
+    let parseResult = storageV5
+      ? await readSessionRecord(storageV5, fileName)
+      : await readSmallFileOrNull(filePath, MAX_SESSION_RECORD_BYTES)
           .then((smallFileOrNull) =>
             smallFileOrNull === null ? null : sessionRecordSchema().safeParse(jsonParse(smallFileOrNull)),
           )
           .catch(() => null);
-    let j = G?.success ? G.data : null;
-    if (j === null) {
+    let record = parseResult?.success ? parseResult.data : null;
+    if (record === null) {
       await sleep(MAX_PEER_NOTICE_LENGTH);
-      let Q = e
-        ? await readSessionRecord(e, P)
-        : await readSmallFileOrNull(L, MAX_SESSION_RECORD_BYTES)
+      let retryParseResult = storageV5
+        ? await readSessionRecord(storageV5, fileName)
+        : await readSmallFileOrNull(filePath, MAX_SESSION_RECORD_BYTES)
             .then((smallFileOrNull) =>
               smallFileOrNull === null ? null : sessionRecordSchema().safeParse(jsonParse(smallFileOrNull)),
             )
             .catch(() => null);
-      j = Q?.success ? Q.data : null;
+      record = retryParseResult?.success ? retryParseResult.data : null;
     }
-    let ee =
-      j === null
-        ? await Promise.all((x.get(F) ?? []).map((Q) => readRecordPidDomain(join(sessionsDir, Q))))
+    let peerDomains =
+      record === null
+        ? await Promise.all(
+            (peerFilesByPid.get(filePid) ?? []).map((peerFileName) =>
+              readRecordPidDomain(join(sessionsDir, peerFileName)),
+            ),
+          )
         : [];
-    if (!mayReapRecordFromThisDomain(j, y, ee)) {
-      w.add(F);
+    if (!mayReapRecordFromThisDomain(record, pidDomain, peerDomains)) {
+      keptPids.add(filePid);
       continue;
     }
-    if (!isProcessProvablyGone(F)) {
-      w.add(F);
+    if (!isProcessProvablyGone(filePid)) {
+      keptPids.add(filePid);
       continue;
     }
-    R.add(F);
+    reapedPids.add(filePid);
     if (
-      (e
-        ? await deleteSessionRecord(e, P)
-        : await unlink(L).then(
+      (storageV5
+        ? await deleteSessionRecord(storageV5, fileName)
+        : await unlink(filePath).then(
             () => true,
             () => false,
           )) &&
       !sessionRegistryState.uncleanExitsScanned &&
-      j !== null &&
-      j.kind === "interactive" &&
-      !isIdeOrSdkEntrypoint(j.entrypoint) &&
-      !sessionRegistryState.reportedUncleanExitPaths.has(L)
+      record !== null &&
+      record.kind === "interactive" &&
+      !isIdeOrSdkEntrypoint(record.entrypoint) &&
+      !sessionRegistryState.reportedUncleanExitPaths.has(filePath)
     ) {
-      logForDebugging(`Prior session exited uncleanly: ${j.sessionId} (v${j.version ?? "?"})`);
+      logForDebugging(`Prior session exited uncleanly: ${record.sessionId} (v${record.version ?? "?"})`);
       logEvent("tengu_unclean_exit", {
-        session_age_sec: Math.round((Date.now() - j.startedAt) / 1000),
-        prior_version: sanitizeVersion(j.version),
+        session_age_sec: Math.round((Date.now() - record.startedAt) / 1000),
+        prior_version: sanitizeVersion(record.version),
         on_current_version:
-          j.version ===
+          record.version ===
           {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -1098,26 +1137,30 @@ async function countConcurrentSessions(e) {
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION,
-        prior_session_id: sanitizeMarkName(j.sessionId),
+        prior_session_id: sanitizeMarkName(record.sessionId),
       });
-      sessionRegistryState.markUncleanExitReported(L);
+      sessionRegistryState.markUncleanExitReported(filePath);
     }
   }
-  if (h)
-    for (let P of r) {
-      let match = AUTH_MESSAGE_TYPE.exec(P);
+  if (sweepPermitted)
+    for (let fileName of entries) {
+      let match = PEER_KEY_FILE_RE.exec(fileName);
       if (!match) continue;
-      let L = parseInt(match[1], 10);
-      if (L === process.pid || w.has(L) || !isProcessProvablyGone(L)) continue;
-      let recordPidDomain = await readRecordPidDomain(join(sessionsDir, P));
-      if (!(recordPidDomain !== undefined ? recordPidDomain === y : R.has(L) || getPlatform() === "linux"))
+      let filePid = parseInt(match[1], 10);
+      if (filePid === process.pid || keptPids.has(filePid) || !isProcessProvablyGone(filePid)) continue;
+      let recordPidDomain = await readRecordPidDomain(join(sessionsDir, fileName));
+      if (
+        !(recordPidDomain !== undefined
+          ? recordPidDomain === pidDomain
+          : reapedPids.has(filePid) || getPlatform() === "linux")
+      )
         continue;
-      if (!isProcessProvablyGone(L)) continue;
-      if (e) deleteSessionRecord(e, P).catch(() => {});
-      else unlink(join(sessionsDir, P)).catch(() => {});
+      if (!isProcessProvablyGone(filePid)) continue;
+      if (storageV5) deleteSessionRecord(storageV5, fileName).catch(() => {});
+      else unlink(join(sessionsDir, fileName)).catch(() => {});
     }
-  if (h) sessionRegistryState.setUncleanExitsScanned(true);
-  return S;
+  if (sweepPermitted) sessionRegistryState.setUncleanExitsScanned(true);
+  return liveCount;
 }
 //@ chunk-aepeg2w5.js:851082-851136 placement
 var TMUX_LOCATION_RE = /^[A-Za-z0-9_.-]{1,64}:@?\d{1,6}\.%?\d{1,6}$/;
@@ -1142,9 +1185,14 @@ async function getTmuxPaneId() {
 /**
  * 按会话根缓存的 tmux 查询结果。
  */
-var TMUX_QUERY_TIMEOUT_MS = 1000;
-var tmuxQueryCacheByRoot = new SessionRootSlot(() => new Map());
-var ANSI_ESCAPE_RE = /\x1b\[[0-9;]*m/g;
+var TMUX_QUERY_TIMEOUT_MS; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+var tmuxQueryCacheByRoot;
+var ANSI_ESCAPE_RE;
+deferInit("chunk-aepeg2w5.js:851362", () => {
+  TMUX_QUERY_TIMEOUT_MS = 1000;
+  tmuxQueryCacheByRoot = new SessionRootSlot(() => new Map());
+  ANSI_ESCAPE_RE = /\x1b\[[0-9;]*m/g;
+});
 //@ chunk-6cc2zqkz.js:5352-5496 fingerprint = countConcurrentSessions (0.372)
 async function countConcurrentSessions_2() {
   return {
@@ -1156,10 +1204,6 @@ async function countConcurrentSessions_2() {
         ? await getProcessStartTimeAsync(process.pid)
         : undefined,
   };
-}
-//@ chunk-e7z1g8a9.js:4175-4216 fingerprint = getSessionsDir (1)
-function getSessionsDir() {
-  return join(getClaudeConfigDir(), "sessions");
 }
 export {
   isBgSession,
@@ -1210,4 +1254,6 @@ export {
   updateSessionConvertedSkillsAsk,
   isBeingWatched,
   isBeingWatchedV5,
+  getHeldSessionNames,
+  updateSessionMessagingSocketPath,
 };

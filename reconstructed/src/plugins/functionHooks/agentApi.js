@@ -28,12 +28,13 @@ import { maxSubagents, lastAssistantText } from "./toolCallHooks.js";
 import { SLOW_HOOK_REPORT_INTERVAL_MS_2 } from "./dispatch/slowHookReports.js";
 import { sleep } from "../../utils/sleep.js";
 import { claimTaskNotification } from "../../utils/task/framework.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3730319-3730484 placement
-function validateAgentDefinition(e) {
-  let { name: n, ...r } = e;
-  let joined = (AgentJsonSchema().safeParse(r).error?.issues ?? [])
-    .map((h) => [...h.path.map(String), h.message].join(": "))
+function validateAgentDefinition(definition) {
+  let { name, ...rest } = definition;
+  let joined = (AgentJsonSchema().safeParse(rest).error?.issues ?? [])
+    .map((issue) => [...issue.path.map(String), issue.message].join(": "))
     .join("; ");
   return joined === "" ? undefined : joined;
 }
@@ -41,62 +42,64 @@ function validateAgentDefinition(e) {
 /**
  * $.agent.register 实现：校验代理定义，键为"插件显示名:代理名"；内容未变则跳过，否则登记或替换并刷新代理列表。
  */
-async function registerAgentForPlugin(e, { pluginName, pluginStorageId, pluginRoot }) {
+async function registerAgentForPlugin(definition, { pluginName, pluginStorageId, pluginRoot }) {
   requireBoundSession(pluginName, "$.agent.register");
-  let h = validateAgentDefinition(e);
-  let y = `${pluginDisplayKey(pluginName, pluginStorageId)}:${e.name}`;
-  if (h !== undefined) {
+  let problem = validateAgentDefinition(definition);
+  let agentId = `${pluginDisplayKey(pluginName, pluginStorageId)}:${definition.name}`;
+  if (problem !== undefined) {
     logFeatureBad("plugin_function_hooks_register_agent", "invalid_definition");
-    throw new HooksError(`${pluginName}: $.agent.register: "${e.name}" refused: ${h}`);
+    throw new HooksError(`${pluginName}: $.agent.register: "${definition.name}" refused: ${problem}`);
   }
-  let S = registeredAgentsTable.held(y);
+  let existing = registeredAgentsTable.held(agentId);
   if (
-    S !== undefined &&
-    S.pluginId === pluginStorageId &&
-    S.pluginRoot === pluginRoot &&
-    stableStringifySafe(S.spec) === stableStringifySafe(e)
+    existing !== undefined &&
+    existing.pluginId === pluginStorageId &&
+    existing.pluginRoot === pluginRoot &&
+    stableStringifySafe(existing.spec) === stableStringifySafe(definition)
   ) {
-    logForDebugging(`$.agent.register (${pluginName}): ${y} unchanged; not re-registered`);
+    logForDebugging(`$.agent.register (${pluginName}): ${agentId} unchanged; not re-registered`);
     return {
-      agent: y,
+      agent: agentId,
     };
   }
   registeredAgentsTable.register({
     plugin: pluginName,
     pluginId: pluginStorageId,
     pluginRoot,
-    spec: e,
+    spec: definition,
   });
-  logForDebugging(`$.agent.register (${pluginName}): ${y} ${S === undefined ? "listed" : "replaced"}`);
+  logForDebugging(
+    `$.agent.register (${pluginName}): ${agentId} ${existing === undefined ? "listed" : "replaced"}`,
+  );
   logFeatureOk("plugin_function_hooks_register_agent");
   await refreshAgentsAndDefinitions();
   return {
-    agent: y,
+    agent: agentId,
   };
 }
 //@ chunk-e6aww6q8.js:3750768-3751183 placement
 /**
  * 把代理/队友任务状态映射为对外状态：running 时区分等待/空闲，completed 时按保活原因与是否在收尾区分 running/waiting/idle/completed，paused→idle。
  */
-function agentDisplayStatus(e, n) {
-  let r = e.type === "in_process_teammate";
-  switch (e.status) {
+function agentDisplayStatus(task, isTeammate) {
+  let isTeammateTask = task.type === "in_process_teammate";
+  switch (task.status) {
     case "running": {
-      let s = (r ? e.awaitingPlanApproval : e.isIdle) === true;
-      let h = e.isIdle === true;
-      return s ? "waiting" : h ? "idle" : "running";
+      let isWaiting = (isTeammateTask ? task.awaitingPlanApproval : task.isIdle) === true;
+      let isIdle = task.isIdle === true;
+      return isWaiting ? "waiting" : isIdle ? "idle" : "running";
     }
     case "completed": {
-      let s = r ? [] : [...(e.keepaliveReasons ?? [])];
-      let h = !r && e.finalizing === true;
-      let any = s.some((w) => w !== FLAG_IDLE_WINDOW);
-      let S = !r && (n || s.length > 0);
-      return h ? "running" : any ? "waiting" : S ? "idle" : "completed";
+      let keepaliveReasons = isTeammateTask ? [] : [...(task.keepaliveReasons ?? [])];
+      let isFinalizing = !isTeammateTask && task.finalizing === true;
+      let any = keepaliveReasons.some((reason) => reason !== FLAG_IDLE_WINDOW);
+      let canBeIdle = !isTeammateTask && (isTeammate || keepaliveReasons.length > 0);
+      return isFinalizing ? "running" : any ? "waiting" : canBeIdle ? "idle" : "completed";
     }
     case "paused":
       return "idle";
     default:
-      return e.status;
+      return task.status;
   }
 }
 //@ chunk-e6aww6q8.js:3751546-3752385 placement
@@ -104,79 +107,80 @@ function agentDisplayStatus(e, n) {
  * $.agent.list 实现：遍历任务注册表中的本地代理与进程内队友，按代理去重，给出 id、队友 id、描述、类型、状态、父 id、发起插件与名字。
  */
 async function listAgentsForPlugin(plugin) {
-  let n = requireBoundSession(plugin, "$.agent.list").toolContext(new AbortController());
-  let { agentNameRegistry } = createToolUseContextView(n).namedAgents();
-  let s = new Map();
-  for (let [G, q] of agentNameRegistry) s.set(q, G);
+  let toolContext = requireBoundSession(plugin, "$.agent.list").toolContext(new AbortController());
+  let { agentNameRegistry } = createToolUseContextView(toolContext).namedAgents();
+  let nameToAgent = new Map();
+  for (let [agentId, name] of agentNameRegistry) nameToAgent.set(name, agentId);
   let { spawnProvenance } = getPluginRegistry();
-  let y = new Map();
-  let S = new Set();
-  let values = Object.values(n.taskRegistry.all());
-  let hiddenTeammateIds = await getHiddenTeammateIds(values, n.storageV5);
-  for (let G of values) {
-    let q = describeAgentTask(G);
-    let Z = G.type === "local_agent" || G.type === "in_process_teammate";
-    let Se = isTerminalTaskStatus(G.status);
-    if (q === undefined || !Z) continue;
-    if (Se && S.has(q.id)) continue;
-    if (!Se) S.add(q.id);
-    let { id, teammateId, parentId } = q;
+  let entries = new Map();
+  let seenLiveIds = new Set();
+  let values = Object.values(toolContext.taskRegistry.all());
+  let hiddenTeammateIds = await getHiddenTeammateIds(values, toolContext.storageV5);
+  for (let task of values) {
+    let described = describeAgentTask(task);
+    let isAgentTask = task.type === "local_agent" || task.type === "in_process_teammate";
+    let isTerminal = isTerminalTaskStatus(task.status);
+    if (described === undefined || !isAgentTask) continue;
+    if (isTerminal && seenLiveIds.has(described.id)) continue;
+    if (!isTerminal) seenLiveIds.add(described.id);
+    let { id, teammateId, parentId } = described;
     let hookCaller = spawnProvenance.get(id)?.hookCaller;
-    let Ie = q.name ?? s.get(id);
-    let Me = hiddenTeammateIds.has(id) ? "idle" : agentDisplayStatus(G, Ie !== undefined);
-    let We = Me === "idle" && hasRunningBackgroundWorkForAgent(identityAgentId2(id), n.taskRegistry);
-    y.set(id, {
+    let displayName = described.name ?? nameToAgent.get(id);
+    let status = hiddenTeammateIds.has(id) ? "idle" : agentDisplayStatus(task, displayName !== undefined);
+    let row =
+      status === "idle" && hasRunningBackgroundWorkForAgent(identityAgentId2(id), toolContext.taskRegistry);
+    entries.set(id, {
       id,
       ...(teammateId !== undefined && {
         teammateId,
       }),
-      description: q.description,
-      type: q.type,
-      status: We ? "waiting" : Me,
+      description: described.description,
+      type: described.type,
+      status: row ? "waiting" : status,
       ...(parentId !== undefined && {
         parentId,
       }),
       ...(hookCaller !== undefined && {
         spawnedBy: hookCaller,
       }),
-      ...(Ie !== undefined && {
-        name: Ie,
+      ...(displayName !== undefined && {
+        name: displayName,
       }),
     });
   }
-  return [...y.values()];
+  return [...entries.values()];
 }
 //@ chunk-e6aww6q8.js:3971994-3972395 placement
 /**
  * $.agent.spawn 并发控制：每个插件同时运行的派生数有上限，超出拒绝；以 launch-only 方式调用工具，仍在运行的派生结束后才释放计数。
  */
-function createAgentSpawner(e = toolCallForPlugin, n = maxSubagents) {
-  let r = new Map();
+function createAgentSpawner(runTool = toolCallForPlugin, getMaxSpawns = maxSubagents) {
+  let runningByPlugin = new Map();
   return {
-    spawn: async (s, h) => {
-      let { plugin } = h;
-      let S = r.get(plugin) ?? 0;
-      let w = n();
-      if (S >= w) {
-        logForDebugging(`$.agent.spawn (${plugin}): ${S} running at once; refused`);
-        throw new HooksError(`${plugin}: $.agent.spawn refused: ${w} spawns are running at once`);
+    spawn: async (input, context) => {
+      let { plugin } = context;
+      let running = runningByPlugin.get(plugin) ?? 0;
+      let maxSpawns = getMaxSpawns();
+      if (running >= maxSpawns) {
+        logForDebugging(`$.agent.spawn (${plugin}): ${running} running at once; refused`);
+        throw new HooksError(`${plugin}: $.agent.spawn refused: ${maxSpawns} spawns are running at once`);
       }
-      r.set(plugin, S + 1);
-      let L = () => {
-        r.set(plugin, (r.get(plugin) ?? 1) - 1);
+      runningByPlugin.set(plugin, running + 1);
+      let release = () => {
+        runningByPlugin.set(plugin, (runningByPlugin.get(plugin) ?? 1) - 1);
       };
-      let G = false;
+      let wasLeftRunning = false;
       try {
-        return await e(s, {
-          ...h,
+        return await runTool(input, {
+          ...context,
           isLaunchOnly: true,
-          leftRunning: (q) => {
-            G = true;
-            q.finally(L);
+          leftRunning: (taskId) => {
+            wasLeftRunning = true;
+            taskId.finally(release);
           },
         });
       } finally {
-        if (!G) L();
+        if (!wasLeftRunning) release();
       }
     },
   };
@@ -185,7 +189,8 @@ function createAgentSpawner(e = toolCallForPlugin, n = maxSubagents) {
 /**
  * 取最后一条助手文本
  */
-var lastAssistantTextOf = (e, n) => lastAssistantText(e.getTranscript(n)?.messages ?? []);
+var lastAssistantTextOf = (registry, agentId) =>
+  lastAssistantText(registry.getTranscript(agentId)?.messages ?? []);
 //@ chunk-e6aww6q8.js:3972448-3972460 placement
 /**
  * 150
@@ -205,40 +210,43 @@ var SECONDS_PER_MINUTE = 60;
 /**
  * 慢钩子上报间隔
  */
-var SLOW_HOOK_REPORT_MS = SLOW_HOOK_MINUTES * SECONDS_PER_MINUTE * SLOW_HOOK_REPORT_INTERVAL_MS_2;
+var SLOW_HOOK_REPORT_MS; // deferred: uses SLOW_HOOK_REPORT_INTERVAL_MS_2 (./dispatch/slowHookReports.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3972482", () => {
+  SLOW_HOOK_REPORT_MS = SLOW_HOOK_MINUTES * SECONDS_PER_MINUTE * SLOW_HOOK_REPORT_INTERVAL_MS_2;
+});
 //@ chunk-e6aww6q8.js:3972501-3972661 placement
 function evictedAnswerResult(registry, agentId, pluginName) {
-  let s = lastAssistantTextOf(registry, agentId);
-  return s === ""
+  let lastText = lastAssistantTextOf(registry, agentId);
+  return lastText === ""
     ? {
         text: `${pluginName}: $.agent.spawn: the subagent's record was evicted before its answer was read`,
         isError: true,
       }
     : {
-        text: s,
+        text: lastText,
       };
 }
 //@ chunk-e6aww6q8.js:3972661-3972757 placement
 /**
  * 轮询等待代理结束
  */
-async function waitForAgentDone(e, n) {
+async function waitForAgentDone(registry, agentId) {
   for (;;) {
-    let r = e.get(n);
-    if (r === undefined || isTerminalTaskStatus(r.status)) return;
+    let task = registry.get(agentId);
+    if (task === undefined || isTerminalTaskStatus(task.status)) return;
     await sleep(AGENT_WAIT_POLL_MS);
   }
 }
 //@ chunk-e6aww6q8.js:3972757-3972859 placement
-function abandonWaitResult(registry, n, text) {
-  registry.update(n, (s) => ({
-    ...s,
+function abandonWaitResult(registry, agentId, text) {
+  registry.update(agentId, (task) => ({
+    ...task,
     notified: false,
   }));
   return {
     text,
     isError: true,
-    settled: waitForAgentDone(registry, n),
+    settled: waitForAgentDone(registry, agentId),
   };
 }
 //@ chunk-e6aww6q8.js:3972859-3973570 placement
@@ -253,40 +261,42 @@ async function awaitSpawnedAgentAnswer({
   settleWaitMs = SLOW_HOOK_REPORT_MS,
 }) {
   let now = Date.now();
-  let S;
+  let claimedTaskId;
   for (;;) {
-    let found = Object.values(registry.all()).find((q) => q.type === "local_agent" && q.agentId === agentId);
+    let found = Object.values(registry.all()).find(
+      (task) => task.type === "local_agent" && task.agentId === agentId,
+    );
     if (found) {
-      if (S === undefined) {
-        S = found.id;
-        claimTaskNotification(S, registry);
+      if (claimedTaskId === undefined) {
+        claimedTaskId = found.id;
+        claimTaskNotification(claimedTaskId, registry);
       }
       if (isTerminalTaskStatus(found.status)) {
-        let q = lastAssistantTextOf(registry, agentId);
+        let lastText = lastAssistantTextOf(registry, agentId);
         if (found.status === "completed")
           return {
-            text: q,
+            text: lastText,
           };
-        let Z = "error" in found && typeof found.error === "string" ? found.error : q;
+        let errorText = "error" in found && typeof found.error === "string" ? found.error : lastText;
         return {
-          text: `${pluginName}: $.agent.spawn: the subagent ${found.status}${Z ? `: ${Z}` : ""}`,
+          text: `${pluginName}: $.agent.spawn: the subagent ${found.status}${errorText ? `: ${errorText}` : ""}`,
           isError: true,
         };
       }
-    } else if (S !== undefined) return evictedAnswerResult(registry, agentId, pluginName);
-    let L = Date.now() - now >= (S === undefined ? SLOW_HOOK_REPORT_MS : settleWaitMs);
+    } else if (claimedTaskId !== undefined) return evictedAnswerResult(registry, agentId, pluginName);
+    let errorText = Date.now() - now >= (claimedTaskId === undefined ? SLOW_HOOK_REPORT_MS : settleWaitMs);
     let text = signal.aborted
       ? `${pluginName}: $.agent.spawn aborted`
-      : L
+      : errorText
         ? `${pluginName}: $.agent.spawn: no answer within ${SLOW_HOOK_MINUTES} minutes`
         : undefined;
     if (text !== undefined) {
-      if (S === undefined)
+      if (claimedTaskId === undefined)
         return {
           text,
           isError: true,
         };
-      return abandonWaitResult(registry, S, text);
+      return abandonWaitResult(registry, claimedTaskId, text);
     }
     await sleep(AGENT_WAIT_POLL_MS);
   }

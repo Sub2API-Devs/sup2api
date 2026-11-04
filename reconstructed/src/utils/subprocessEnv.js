@@ -59,6 +59,7 @@ import { ccrBridgeEnvVarNames } from "../services/mcp/ccrMcpUrls.js";
 import { getSessionTokenEnvKeys } from "./sessionAccessToken.js";
 import { isStoredLoginPinned } from "../cli/headlessCloud/attachServe.js";
 import { toolServerEnvAccessor } from "./subprocessEnvLoader.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-rtnapjwv.js:944-970 placement
 var SSH_PLACEHOLDER = "ssh-placeholder";
@@ -66,11 +67,11 @@ var SSH_PLACEHOLDER = "ssh-placeholder";
 /**
  * 判断环境是否为 SSH 远程转发的占位认证：存在 ANTHROPIC_UNIX_SOCKET、没有 auth token，且 OAuth token 或 API key 之一为 ssh-placeholder 而另一个为空。
  */
-function isSshPlaceholderAuth(e) {
-  let { CLAUDE_CODE_OAUTH_TOKEN, ANTHROPIC_API_KEY } = e;
+function isSshPlaceholderAuth(env) {
+  let { CLAUDE_CODE_OAUTH_TOKEN, ANTHROPIC_API_KEY } = env;
   return (
-    !!e.ANTHROPIC_UNIX_SOCKET &&
-    !e.ANTHROPIC_AUTH_TOKEN &&
+    !!env.ANTHROPIC_UNIX_SOCKET &&
+    !env.ANTHROPIC_AUTH_TOKEN &&
     ((CLAUDE_CODE_OAUTH_TOKEN === "ssh-placeholder" && !ANTHROPIC_API_KEY) ||
       (ANTHROPIC_API_KEY === "ssh-placeholder" && !CLAUDE_CODE_OAUTH_TOKEN))
   );
@@ -87,13 +88,13 @@ var BG_DISPATCHER_IDENTITY_ENV_VARS = [
 /**
  * 生成传给后台调度子进程的订阅类型与限速等级环境变量。
  */
-function buildBgDispatcherEnv(e) {
+function buildBgDispatcherEnv(options) {
   return {
-    ...(e.subscriptionType && {
-      CLAUDE_BG_DISPATCHER_SUBSCRIPTION_TYPE: e.subscriptionType,
+    ...(options.subscriptionType && {
+      CLAUDE_BG_DISPATCHER_SUBSCRIPTION_TYPE: options.subscriptionType,
     }),
-    ...(e.rateLimitTier && {
-      CLAUDE_BG_DISPATCHER_RATE_LIMIT_TIER: e.rateLimitTier,
+    ...(options.rateLimitTier && {
+      CLAUDE_BG_DISPATCHER_RATE_LIMIT_TIER: options.rateLimitTier,
     }),
   };
 }
@@ -134,8 +135,8 @@ var PROXY_INJECTED_MARKER = "proxy-injected";
  */
 function getSandboxBwrapPath() {
   return getAllPolicyTierSettings()
-    .map((e) => e.sandbox?.bwrapPath)
-    .find((e) => e != null);
+    .map((tier) => tier.sandbox?.bwrapPath)
+    .find((path) => path != null);
 }
 //@ chunk-rtnapjwv.js:2023-2100 placement
 /**
@@ -143,8 +144,8 @@ function getSandboxBwrapPath() {
  */
 function getSandboxSocatPath() {
   return getAllPolicyTierSettings()
-    .map((e) => e.sandbox?.socatPath)
-    .find((e) => e != null);
+    .map((tier) => tier.sandbox?.socatPath)
+    .find((path) => path != null);
 }
 //@ chunk-rtnapjwv.js:2164-2189 placement
 var PROXY_VALUE_UNSAFE_RE = /[ \t\n\v\f\r'"]/;
@@ -153,51 +154,51 @@ var PROXY_VALUE_UNSAFE_RE = /[ \t\n\v\f\r'"]/;
  * 为子进程生成代理环境变量（含 Java 参数）。
  */
 function proxyEnvForSubprocess(env) {
-  let n = env.HTTP_PROXY || env.http_proxy || env.CLAUDE_CODE_HTTP_PROXY;
-  let r = env.HTTPS_PROXY || env.https_proxy || env.CLAUDE_CODE_HTTPS_PROXY;
-  let s = noProxyUnion(env);
-  if (!n && !r) return {};
-  let proxyUrl = parseProxyUrl(n);
-  let proxyUrl_2 = parseProxyUrl(r);
+  let httpProxy = env.HTTP_PROXY || env.http_proxy || env.CLAUDE_CODE_HTTP_PROXY;
+  let httpsProxy = env.HTTPS_PROXY || env.https_proxy || env.CLAUDE_CODE_HTTPS_PROXY;
+  let noProxy = noProxyUnion(env);
+  if (!httpProxy && !httpsProxy) return {};
+  let proxyUrl = parseProxyUrl(httpProxy);
+  let proxyUrl_2 = parseProxyUrl(httpsProxy);
   if (!proxyUrl_2.host) proxyUrl_2 = proxyUrl;
-  let _ = {};
-  let a = (O, E) => {
-    if (E && env[O] === undefined) _[O] = E;
+  let out = {};
+  let setIfUnset = (name, value) => {
+    if (value && env[name] === undefined) out[name] = value;
   };
-  a("YARN_HTTP_PROXY", n);
-  a("YARN_HTTPS_PROXY", r);
-  a("npm_config_proxy", n);
-  a("npm_config_https_proxy", r);
-  a("npm_config_noproxy", s);
-  a("GLOBAL_AGENT_HTTP_PROXY", n);
-  a("GLOBAL_AGENT_HTTPS_PROXY", r);
-  a("GLOBAL_AGENT_NO_PROXY", s);
-  a("ELECTRON_GET_USE_PROXY", "1");
-  a("DOCKER_HTTP_PROXY", n);
-  a("DOCKER_HTTPS_PROXY", r);
+  setIfUnset("YARN_HTTP_PROXY", httpProxy);
+  setIfUnset("YARN_HTTPS_PROXY", httpsProxy);
+  setIfUnset("npm_config_proxy", httpProxy);
+  setIfUnset("npm_config_https_proxy", httpsProxy);
+  setIfUnset("npm_config_noproxy", noProxy);
+  setIfUnset("GLOBAL_AGENT_HTTP_PROXY", httpProxy);
+  setIfUnset("GLOBAL_AGENT_HTTPS_PROXY", httpsProxy);
+  setIfUnset("GLOBAL_AGENT_NO_PROXY", noProxy);
+  setIfUnset("ELECTRON_GET_USE_PROXY", "1");
+  setIfUnset("DOCKER_HTTP_PROXY", httpProxy);
+  setIfUnset("DOCKER_HTTPS_PROXY", httpsProxy);
   if (proxyUrl_2.host) {
-    a("CLOUDSDK_PROXY_TYPE", "http");
-    a("CLOUDSDK_PROXY_ADDRESS", proxyUrl_2.host);
-    a("CLOUDSDK_PROXY_PORT", proxyUrl_2.port);
-    a("CLOUDSDK_PROXY_USERNAME", proxyUrl_2.user);
-    a("CLOUDSDK_PROXY_PASSWORD", proxyUrl_2.pass);
+    setIfUnset("CLOUDSDK_PROXY_TYPE", "http");
+    setIfUnset("CLOUDSDK_PROXY_ADDRESS", proxyUrl_2.host);
+    setIfUnset("CLOUDSDK_PROXY_PORT", proxyUrl_2.port);
+    setIfUnset("CLOUDSDK_PROXY_USERNAME", proxyUrl_2.user);
+    setIfUnset("CLOUDSDK_PROXY_PASSWORD", proxyUrl_2.pass);
   }
-  a("FSSPEC_GCS", '{"session_kwargs": {"trust_env": true}}');
+  setIfUnset("FSSPEC_GCS", '{"session_kwargs": {"trust_env": true}}');
   if (proxyUrl_2.host) {
     let JAVA_TOOL_OPTIONS = env.JAVA_TOOL_OPTIONS;
     if (!JAVA_TOOL_OPTIONS?.includes("-Dhttps.proxyHost=")) {
-      let E = javaProxyArgs(proxyUrl, proxyUrl_2, s);
-      _.JAVA_TOOL_OPTIONS = JAVA_TOOL_OPTIONS ? `${JAVA_TOOL_OPTIONS} ${E}` : E;
+      let javaArgs = javaProxyArgs(proxyUrl, proxyUrl_2, noProxy);
+      out.JAVA_TOOL_OPTIONS = JAVA_TOOL_OPTIONS ? `${JAVA_TOOL_OPTIONS} ${javaArgs}` : javaArgs;
     }
   }
-  return _;
+  return out;
 }
 //@ chunk-rtnapjwv.js:3109-3512 placement
 /**
  * 解析代理 URL 为主机、端口、用户、密码。
  */
-function parseProxyUrl(e) {
-  if (!e)
+function parseProxyUrl(url) {
+  if (!url)
     return {
       host: "",
       port: "",
@@ -205,8 +206,8 @@ function parseProxyUrl(e) {
       pass: "",
     };
   try {
-    let n = new URL(e);
-    if (!n.hostname)
+    let parsed = new URL(url);
+    if (!parsed.hostname)
       return {
         host: "",
         port: "",
@@ -214,10 +215,13 @@ function parseProxyUrl(e) {
         pass: "",
       };
     return {
-      host: n.hostname.startsWith("[") && n.hostname.endsWith("]") ? n.hostname.slice(1, -1) : n.hostname,
-      port: n.port || (n.protocol === "https:" ? "443" : "80"),
-      user: decodeURIComponent(n.username),
-      pass: decodeURIComponent(n.password),
+      host:
+        parsed.hostname.startsWith("[") && parsed.hostname.endsWith("]")
+          ? parsed.hostname.slice(1, -1)
+          : parsed.hostname,
+      port: parsed.port || (parsed.protocol === "https:" ? "443" : "80"),
+      user: decodeURIComponent(parsed.username),
+      pass: decodeURIComponent(parsed.password),
     };
   } catch {
     return {
@@ -232,33 +236,33 @@ function parseProxyUrl(e) {
 /**
  * 生成 Java 代理系统属性参数。
  */
-function javaProxyArgs(proxyUrl, proxyUrl_2, r) {
-  let s = [];
-  let C = (c, _) => {
-    if (_ && !PROXY_VALUE_UNSAFE_RE.test(_)) s.push(`-D${c}=${_}`);
+function javaProxyArgs(proxyUrl, proxyUrl_2, noProxy) {
+  let args = [];
+  let addProp = (name, value) => {
+    if (value && !PROXY_VALUE_UNSAFE_RE.test(value)) args.push(`-D${name}=${value}`);
   };
-  C("http.proxyHost", proxyUrl.host);
-  C("http.proxyPort", proxyUrl.port);
-  C("https.proxyHost", proxyUrl_2.host);
-  C("https.proxyPort", proxyUrl_2.port);
-  C("http.proxyUser", proxyUrl.user);
-  C("http.proxyPassword", proxyUrl.pass);
-  C("https.proxyUser", proxyUrl_2.user);
-  C("https.proxyPassword", proxyUrl_2.pass);
-  if (r) C("http.nonProxyHosts", toNoProxyPattern(r));
-  s.push("-Djdk.http.auth.tunneling.disabledSchemes=");
-  s.push("-Djdk.http.auth.proxying.disabledSchemes=");
-  return s.join(" ");
+  addProp("http.proxyHost", proxyUrl.host);
+  addProp("http.proxyPort", proxyUrl.port);
+  addProp("https.proxyHost", proxyUrl_2.host);
+  addProp("https.proxyPort", proxyUrl_2.port);
+  addProp("http.proxyUser", proxyUrl.user);
+  addProp("http.proxyPassword", proxyUrl.pass);
+  addProp("https.proxyUser", proxyUrl_2.user);
+  addProp("https.proxyPassword", proxyUrl_2.pass);
+  if (noProxy) addProp("http.nonProxyHosts", toNoProxyPattern(noProxy));
+  args.push("-Djdk.http.auth.tunneling.disabledSchemes=");
+  args.push("-Djdk.http.auth.proxying.disabledSchemes=");
+  return args.join(" ");
 }
 //@ chunk-rtnapjwv.js:3978-4134 placement
-function toNoProxyPattern(e) {
-  return e
+function toNoProxyPattern(value) {
+  return value
     .split(/[,\s]+/)
-    .map((n) => n.trim())
+    .map((entry) => entry.trim())
     .filter(Boolean)
-    .flatMap((n) => {
-      if (n.startsWith(".")) return [`*${n}`];
-      return parseIpv4Cidr(n) ?? [n];
+    .flatMap((entry) => {
+      if (entry.startsWith(".")) return [`*${entry}`];
+      return parseIpv4Cidr(entry) ?? [entry];
     })
     .join("|");
 }
@@ -266,46 +270,50 @@ function toNoProxyPattern(e) {
 /**
  * 解析 IPv4 CIDR。
  */
-function parseIpv4Cidr(e) {
-  let match = e.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(\d{1,2})$/);
+function parseIpv4Cidr(cidr) {
+  let match = cidr.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(\d{1,2})$/);
   if (!match) return;
-  let r = [Number(match[1]), Number(match[2]), Number(match[3]), Number(match[4])];
-  let s = Number(match[5]);
-  if (r.some((E) => E > 255) || s < 8 || s > 24) return [e];
-  let floored = Math.floor(s / 8);
-  let c = s % 8;
-  if (c === 0) return [`${r.slice(0, floored).join(".")}.*`];
-  let _ = 2 ** (8 - c);
-  if (_ > 16) return [e];
-  let a = r[floored] - (r[floored] % _);
-  let O = [];
-  for (let E = a; E < a + _; E++) O.push(`${[...r.slice(0, floored), E].join(".")}.*`);
-  return O;
+  let octets = [Number(match[1]), Number(match[2]), Number(match[3]), Number(match[4])];
+  let prefixBits = Number(match[5]);
+  if (octets.some((octet) => octet > 255) || prefixBits < 8 || prefixBits > 24) return [cidr];
+  let floored = Math.floor(prefixBits / 8);
+  let hostBits = prefixBits % 8;
+  if (hostBits === 0) return [`${octets.slice(0, floored).join(".")}.*`];
+  let blockSize = 2 ** (8 - hostBits);
+  if (blockSize > 16) return [cidr];
+  let blockStart = octets[floored] - (octets[floored] % blockSize);
+  let patterns = [];
+  for (let lastOctet = blockStart; lastOctet < blockStart + blockSize; lastOctet++)
+    patterns.push(`${[...octets.slice(0, floored), lastOctet].join(".")}.*`);
+  return patterns;
 }
 //@ chunk-rtnapjwv.js:4560-5201 placement
-var BG_WORKER_IDENTITY_ENV_VARS = [
-  "CLAUDE_CODE_SESSION_KIND",
-  "CLAUDE_BG_SOURCE",
-  "CLAUDE_BG_ISOLATION",
-  "CLAUDE_BG_BACKEND",
-  "CLAUDE_CODE_SESSION_NAME",
-  "CLAUDE_CODE_RESUME_INTERRUPTED_TURN",
-  "CLAUDE_CODE_RESUME_INTERRUPTED_TURN_MAX_AGE_MS",
-  "CLAUDE_CODE_RESUME_PROMPT",
-  "CLAUDE_CODE_RESUME_SHOWS_CUT_OFF_CALLS",
-  "CLAUDE_CODE_RESUME_REASON",
-  "CLAUDE_CODE_RESUME_SOURCE_ALIVE",
-  "CLAUDE_CODE_SESSION_BEGAN_AS_COPY",
-  "CLAUDE_BG_POST_CLEAR_RESPAWN",
-  "CLAUDE_BG_SESSION_PERMISSION_RULES",
-  "CLAUDE_BG_MEMORY_TOGGLED_OFF",
-  "CLAUDE_BG_AUTO_MEMORY_OFF",
-  "CLAUDE_BG_WORKSPACE_TRUSTED",
-  "CLAUDE_BG_CARRIED_PROMPTS_SHA256",
-  "CLAUDE_BG_GATEWAY_WITHHELD",
-  "CLAUDE_CODE_RELAUNCH_HOME_TRUST",
-  ...BG_DISPATCHER_IDENTITY_ENV_VARS,
-];
+var BG_WORKER_IDENTITY_ENV_VARS; // deferred: uses BG_DISPATCHER_IDENTITY_ENV_VARS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-rtnapjwv.js:4560", () => {
+  BG_WORKER_IDENTITY_ENV_VARS = [
+    "CLAUDE_CODE_SESSION_KIND",
+    "CLAUDE_BG_SOURCE",
+    "CLAUDE_BG_ISOLATION",
+    "CLAUDE_BG_BACKEND",
+    "CLAUDE_CODE_SESSION_NAME",
+    "CLAUDE_CODE_RESUME_INTERRUPTED_TURN",
+    "CLAUDE_CODE_RESUME_INTERRUPTED_TURN_MAX_AGE_MS",
+    "CLAUDE_CODE_RESUME_PROMPT",
+    "CLAUDE_CODE_RESUME_SHOWS_CUT_OFF_CALLS",
+    "CLAUDE_CODE_RESUME_REASON",
+    "CLAUDE_CODE_RESUME_SOURCE_ALIVE",
+    "CLAUDE_CODE_SESSION_BEGAN_AS_COPY",
+    "CLAUDE_BG_POST_CLEAR_RESPAWN",
+    "CLAUDE_BG_SESSION_PERMISSION_RULES",
+    "CLAUDE_BG_MEMORY_TOGGLED_OFF",
+    "CLAUDE_BG_AUTO_MEMORY_OFF",
+    "CLAUDE_BG_WORKSPACE_TRUSTED",
+    "CLAUDE_BG_CARRIED_PROMPTS_SHA256",
+    "CLAUDE_BG_GATEWAY_WITHHELD",
+    "CLAUDE_CODE_RELAUNCH_HOME_TRUST",
+    ...BG_DISPATCHER_IDENTITY_ENV_VARS,
+  ];
+});
 //@ chunk-rtnapjwv.js:5201-5741 placement
 /**
  * 子进程环境清洗状态（锁存值、脚本调用计数）。
@@ -337,9 +345,12 @@ class SubprocessEnvState {
   }
 }
 //@ chunk-rtnapjwv.js:5741-5780 placement
-var subprocessEnvState = identity(new SubprocessEnvState(), (e) => {
-  e.reset();
-  clearSanitizedEnvCache();
+var subprocessEnvState; // deferred: uses SubprocessEnvState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-rtnapjwv.js:5741", () => {
+  subprocessEnvState = identity(new SubprocessEnvState(), (state) => {
+    state.reset();
+    clearSanitizedEnvCache();
+  });
 });
 //@ chunk-rtnapjwv.js:5780-5885 placement
 class SubprocessEnvState_2 {
@@ -349,14 +360,17 @@ class SubprocessEnvState_2 {
   hipaaTierNoticeGiven = false;
 }
 //@ chunk-rtnapjwv.js:5885-5908 placement
-var subprocessEnvStateByHost = new HostScoped(() => new SubprocessEnvState_2());
+var subprocessEnvStateByHost; // deferred: uses SubprocessEnvState_2 of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-rtnapjwv.js:5885", () => {
+  subprocessEnvStateByHost = new HostScoped(() => new SubprocessEnvState_2());
+});
 //@ chunk-rtnapjwv.js:5908-6065 placement
 function isScrubEnabled() {
   let scrubEnabledLatched = subprocessEnvState.scrubEnabledLatched;
   if (scrubEnabledLatched !== undefined) return scrubEnabledLatched;
-  let n = isEnvTruthy(process.env.CLAUDE_CODE_SUBPROCESS_ENV_SCRUB);
-  subprocessEnvState.setScrubEnabledLatched(n);
-  return n;
+  let enabled = isEnvTruthy(process.env.CLAUDE_CODE_SUBPROCESS_ENV_SCRUB);
+  subprocessEnvState.setScrubEnabledLatched(enabled);
+  return enabled;
 }
 //@ chunk-rtnapjwv.js:6065-6216 placement = isReplModeEnabled (0.161)
 /**
@@ -368,26 +382,31 @@ function shouldScrubSubprocessEnv() {
   return process.env.CLAUDE_CODE_ENTRYPOINT === "local-agent";
 }
 //@ chunk-rtnapjwv.js:6216-6432 placement
-var DOTENV_FILE_NAMES = [
-  ".env",
-  ".env.local",
-  ".env.development",
-  ".env.development.local",
-  ".env.test",
-  ".env.test.local",
-  ".env.production",
-  ".env.production.local",
-];
-var SYSTEM_TOP_DIRS = ["home", "root", "tmp", "var", "opt", "run", "mnt"].map((e) => `/${e}`);
-var CURRENT_DIR = ".";
+var DOTENV_FILE_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SYSTEM_TOP_DIRS;
+var CURRENT_DIR;
+deferInit("chunk-rtnapjwv.js:6216", () => {
+  DOTENV_FILE_NAMES = [
+    ".env",
+    ".env.local",
+    ".env.development",
+    ".env.development.local",
+    ".env.test",
+    ".env.test.local",
+    ".env.production",
+    ".env.production.local",
+  ];
+  SYSTEM_TOP_DIRS = ["home", "root", "tmp", "var", "opt", "run", "mnt"].map((dir) => `/${dir}`);
+  CURRENT_DIR = ".";
+});
 //@ chunk-rtnapjwv.js:6432-6535 placement = isInClaudeFolder (1)
 function isInClaudeFolder(filePath) {
-  let n = new Set();
-  for (let r of [storageRootFor, findCanonicalGitRoot, noUncachedRoot])
+  let dirs = new Set();
+  for (let rootResolver of [storageRootFor, findCanonicalGitRoot, noUncachedRoot])
     try {
-      n.add(`${resolveLocalSettingsStoreRoot(filePath, r)}/.claude`);
+      dirs.add(`${resolveLocalSettingsStoreRoot(filePath, rootResolver)}/.claude`);
     } catch {}
-  return [...n];
+  return [...dirs];
 }
 //@ chunk-rtnapjwv.js:6535-6650 placement
 function isScrubSandboxAvailable() {
@@ -399,22 +418,22 @@ function isScrubSandboxAvailable() {
 async function assertScrubSandboxAvailable() {
   initEnvScrubFlag();
   if (!isScrubEnabled()) return;
-  let e = homedir();
+  let homeDir = homedir();
   let filePath = getOriginalCwd();
-  let r = process.env.GITHUB_ENV ? dirname(process.env.GITHUB_ENV) : undefined;
+  let githubEnvDir = process.env.GITHUB_ENV ? dirname(process.env.GITHUB_ENV) : undefined;
   let envGithubWorkspace = process.env.GITHUB_WORKSPACE;
   subprocessEnvState.setScrubSandboxAvailableLatched(sandboxBinaryPath() !== null);
   let filtered = (process.env.PATH ?? "")
     .split(":")
-    .map((E) => (E ? posix.normalize(E).replace(/\/+$/, "") : E))
-    .filter((E) => E && SYSTEM_TOP_DIRS.some((D) => E.startsWith(`${D}/`)));
+    .map((pathEntry) => (pathEntry ? posix.normalize(pathEntry).replace(/\/+$/, "") : pathEntry))
+    .filter((pathEntry) => pathEntry && SYSTEM_TOP_DIRS.some((topDir) => pathEntry.startsWith(`${topDir}/`)));
   subprocessEnvState.setScrubPathsLatched({
-    home: e,
+    home: homeDir,
     originalCwd: filePath,
     claudeConfigDir: process.env.CLAUDE_CONFIG_DIR,
     federationCacheDir: federationCacheDir() ?? undefined,
     canonicalClaudeDirs: isInClaudeFolder(filePath),
-    runnerFileCommandsDir: r,
+    runnerFileCommandsDir: githubEnvDir,
     workspace: envGithubWorkspace,
     GITHUB_ACTION_PATH: process.env.GITHUB_ACTION_PATH,
     GITHUB_EVENT_PATH: process.env.GITHUB_EVENT_PATH,
@@ -434,18 +453,18 @@ async function assertScrubSandboxAvailable() {
   try {
     childProcessTmpDir();
   } catch {}
-  for (let E of [
-    `${e}/.gitconfig`,
-    `${e}/.bash_profile`,
-    `${e}/.bashrc`,
-    `${e}/.bash_aliases`,
-    `${e}/.profile`,
-    `${e}/.zshrc`,
-    `${e}/.bunfig.toml`,
-    `${e}/.netrc`,
-    `${e}/.npmrc`,
-    `${e}/.yarnrc`,
-    `${e}/.yarnrc.yml`,
+  for (let stubFilePath of [
+    `${homeDir}/.gitconfig`,
+    `${homeDir}/.bash_profile`,
+    `${homeDir}/.bashrc`,
+    `${homeDir}/.bash_aliases`,
+    `${homeDir}/.profile`,
+    `${homeDir}/.zshrc`,
+    `${homeDir}/.bunfig.toml`,
+    `${homeDir}/.netrc`,
+    `${homeDir}/.npmrc`,
+    `${homeDir}/.yarnrc`,
+    `${homeDir}/.yarnrc.yml`,
     `${filePath}/.npmrc`,
     `${filePath}/.yarnrc`,
     `${filePath}/.yarnrc.yml`,
@@ -456,28 +475,28 @@ async function assertScrubSandboxAvailable() {
     `${filePath}/yarn.lock`,
     `${filePath}/pnpm-lock.yaml`,
     "/tmp/inline-comments-buffer.jsonl",
-    ...DOTENV_FILE_NAMES.map((D) => `${filePath}/${D}`),
+    ...DOTENV_FILE_NAMES.map((name) => `${filePath}/${name}`),
   ])
     try {
-      await mkdir(dirname(E), {
+      await mkdir(dirname(stubFilePath), {
         recursive: true,
       });
-      await (await open(E, "a")).close();
+      await (await open(stubFilePath, "a")).close();
     } catch {}
-  for (let E of [
-    `${e}/.config/gh`,
-    `${e}/.config/glab-cli`,
-    `${e}/.config/git`,
-    `${e}/.config/pip`,
-    `${e}/.pip`,
+  for (let dirPath of [
+    `${homeDir}/.config/gh`,
+    `${homeDir}/.config/glab-cli`,
+    `${homeDir}/.config/git`,
+    `${homeDir}/.config/pip`,
+    `${homeDir}/.pip`,
     `${filePath}/.claude/commands`,
     `${filePath}/.claude/agents`,
     `${filePath}/node_modules/.bin`,
-    ...(r ? [r] : []),
+    ...(githubEnvDir ? [githubEnvDir] : []),
     ...filtered,
   ])
     try {
-      await mkdir(E, {
+      await mkdir(dirPath, {
         recursive: true,
       });
     } catch {}
@@ -490,22 +509,22 @@ async function assertScrubSandboxAvailable() {
     await mkdir(`${envGithubWorkspace}/.github`, {
       recursive: true,
     }).catch(() => {});
-    for (let E of [
+    for (let filePath of [
       `${envGithubWorkspace}/.git/config`,
       `${envGithubWorkspace}/.git/config.worktree`,
       `${envGithubWorkspace}/.git/info/exclude`,
       `${envGithubWorkspace}/.gitmodules`,
     ])
       try {
-        await (await open(E, "a")).close();
+        await (await open(filePath, "a")).close();
       } catch {}
     try {
-      let E = await open(`${envGithubWorkspace}/.git/commondir`, "wx");
-      await E.writeFile(CURRENT_DIR);
-      await E.close();
+      let handle = await open(`${envGithubWorkspace}/.git/commondir`, "wx");
+      await handle.writeFile(CURRENT_DIR);
+      await handle.close();
     } catch {}
   }
-  let O = [
+  let stubFiles = [
     "bunfig.toml",
     "package.json",
     ".npmrc",
@@ -525,16 +544,16 @@ async function assertScrubSandboxAvailable() {
     await (await open(`${filePath}/.git/config.worktree`, "a")).close();
   } catch {}
   try {
-    let E = await open(`${filePath}/.git/commondir`, "wx");
-    await E.writeFile(CURRENT_DIR);
-    await E.close();
+    let handle = await open(`${filePath}/.git/commondir`, "wx");
+    await handle.writeFile(CURRENT_DIR);
+    await handle.close();
   } catch {}
   try {
     await appendFile(
       `${filePath}/.git/info/exclude`,
       `
 # claude-code scrub-mode stubs
-${O.map((E) => `/${E}`).join(`
+${stubFiles.map((fileName) => `/${fileName}`).join(`
 `)}
 `,
     );
@@ -552,29 +571,32 @@ function latchScriptCaps() {
     return;
   }
   try {
-    let n = jsonParse(envClaudeCodeScriptCaps);
-    if (n && typeof n === "object" && !Array.isArray(n)) {
-      let r = pickByHelper(n, (s, C) => typeof s === "number" && Number.isFinite(s) && C.trim().length > 0);
-      subprocessEnvState.setScriptCapsLatched(Object.keys(r).length > 0 ? r : null);
+    let parsed = jsonParse(envClaudeCodeScriptCaps);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      let caps = pickByHelper(
+        parsed,
+        (value, key) => typeof value === "number" && Number.isFinite(value) && key.trim().length > 0,
+      );
+      subprocessEnvState.setScriptCapsLatched(Object.keys(caps).length > 0 ? caps : null);
     } else subprocessEnvState.setScriptCapsLatched(null);
   } catch {
     subprocessEnvState.setScriptCapsLatched(null);
   }
 }
 //@ chunk-rtnapjwv.js:10109-10518 placement
-function enforceScriptCaps(e) {
+function enforceScriptCaps(text) {
   if (!isScrubEnabled()) return;
   latchScriptCaps();
   if (!subprocessEnvState.scriptCapsLatched) return;
   let { scriptCapsLatched, scriptCallCounts } = subprocessEnvState;
   for (let [key, value] of Object.entries(scriptCapsLatched)) {
-    let c = e.split(key).length - 1;
-    if (c > 0) {
-      let _ = (scriptCallCounts.get(key) ?? 0) + c;
-      scriptCallCounts.set(key, _);
-      if (_ > value)
+    let occurrences = text.split(key).length - 1;
+    if (occurrences > 0) {
+      let totalCalls = (scriptCallCounts.get(key) ?? 0) + occurrences;
+      scriptCallCounts.set(key, totalCalls);
+      if (totalCalls > value)
         throw Error(
-          `Script call limit exceeded: ${key} has been called ${_} times (cap: ${value}). This limit prevents data exfiltration via repeated write operations in untrusted-input workflows.`,
+          `Script call limit exceeded: ${key} has been called ${totalCalls} times (cap: ${value}). This limit prevents data exfiltration via repeated write operations in untrusted-input workflows.`,
         );
     }
   }
@@ -600,18 +622,18 @@ function setSettingsEnvForChildren(settingsEnvForChildren) {
   subprocessEnvStateByHost.of(getRootSession().host).settingsEnvForChildren = settingsEnvForChildren;
 }
 //@ chunk-rtnapjwv.js:10792-10871 placement
-function settingsEnvKeptForChildren(e) {
+function settingsEnvKeptForChildren(name) {
   let { settingsEnvForChildren } = subprocessEnvStateByHost.of(getRootSession().host);
-  return settingsEnvForChildren[spellingIn(settingsEnvForChildren, e)];
+  return settingsEnvForChildren[spellingIn(settingsEnvForChildren, name)];
 }
 //@ chunk-rtnapjwv.js:10871-10905 placement
 function settingsPathForChildren() {
   return settingsEnvKeptForChildren("PATH");
 }
 //@ chunk-rtnapjwv.js:10905-11000 placement
-function inheritedByChildren(e) {
+function inheritedByChildren(name) {
   let { settingsEnvForChildren } = subprocessEnvStateByHost.of(getRootSession().host);
-  return settingsEnvForChildren[spellingIn(settingsEnvForChildren, e)] ?? process.env[e];
+  return settingsEnvForChildren[spellingIn(settingsEnvForChildren, name)] ?? process.env[name];
 }
 //@ chunk-rtnapjwv.js:11000-11011 placement
 var DAEMON_FORCE_COLOR_VALUE = "3";
@@ -626,33 +648,36 @@ function withholdsDaemonForceColor() {
   return !Object.hasOwn(settingsEnvForChildren, spellingIn(settingsEnvForChildren, "FORCE_COLOR"));
 }
 //@ chunk-rtnapjwv.js:11207-11350 placement
-function spellingIn(e, n) {
-  if (getPlatform() !== "windows" || Object.hasOwn(e, n)) return n;
-  let upper = n.toUpperCase();
-  return Object.keys(e).find((key) => key.toUpperCase() === upper) ?? n;
+function spellingIn(env, name) {
+  if (getPlatform() !== "windows" || Object.hasOwn(env, name)) return name;
+  let upper = name.toUpperCase();
+  return Object.keys(env).find((key) => key.toUpperCase() === upper) ?? name;
 }
 //@ chunk-rtnapjwv.js:11350-11435 placement
-function isArtifactDevBaseUrlVar(e) {
-  return e.startsWith("CLAUDE_CODE_ARTIFACT") && e.endsWith("_BASE_URL");
+function isArtifactDevBaseUrlVar(name) {
+  return name.startsWith("CLAUDE_CODE_ARTIFACT") && name.endsWith("_BASE_URL");
 }
 //@ chunk-rtnapjwv.js:11435-11517 placement
-function armedRunnerShedsName(e) {
-  let upper = e.toUpperCase();
+function armedRunnerShedsName(name) {
+  let name_2 = name.toUpperCase();
   return (
-    !isGitConfigOrProxyEnvName(e) &&
-    isSecretEnvName(e) &&
-    !CREDENTIAL_ENV_VARS.has(upper) &&
-    !isNonSecretClaudeCodeEnvName(upper)
+    !isGitConfigOrProxyEnvName(name) &&
+    isSecretEnvName(name) &&
+    !CREDENTIAL_ENV_VARS.has(name_2) &&
+    !isNonSecretClaudeCodeEnvName(name_2)
   );
 }
 //@ chunk-rtnapjwv.js:11517-11562 placement
-var HIPAA_CREDENTIAL_KEY_SET = new Set(AUTH_TOKEN_ENV_VARS.map((e) => e.toUpperCase()));
+var HIPAA_CREDENTIAL_KEY_SET; // deferred: uses ARTIFACT_PROVIDER_ENV_VARS (./managedEnvConstants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-rtnapjwv.js:11517", () => {
+  HIPAA_CREDENTIAL_KEY_SET = new Set(AUTH_TOKEN_ENV_VARS.map((name) => name.toUpperCase()));
+});
 //@ chunk-rtnapjwv.js:11562-11787 placement
 function hipaaCredentialScrubKeys() {
   if (!hipaaWithholdsChildCredentials()) return [];
-  let e = subprocessEnvStateByHost.of(getRootSession().host);
-  if (!e.hipaaTierNoticeGiven) {
-    e.hipaaTierNoticeGiven = true;
+  let state = subprocessEnvStateByHost.of(getRootSession().host);
+  if (!state.hipaaTierNoticeGiven) {
+    state.hipaaTierNoticeGiven = true;
     logForDebugging(
       "HIPAA: withholding this CLI's Anthropic credentials from child processes and config ${VAR} expansion",
     );
@@ -664,38 +689,41 @@ function hipaaWithholdsChildCredentials() {
   return hasComplianceTaint("hipaa");
 }
 //@ chunk-rtnapjwv.js:11821-11866 placement
-var CHILD_SCRUBBED_CREDENTIAL_KEY_SET = new Set(flattened_2.map((e) => e.toUpperCase()));
+var CHILD_SCRUBBED_CREDENTIAL_KEY_SET; // deferred: uses flattened (./settings/policyHelper/helperExec.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-rtnapjwv.js:11821", () => {
+  CHILD_SCRUBBED_CREDENTIAL_KEY_SET = new Set(flattened_2.map((name) => name.toUpperCase()));
+});
 //@ chunk-rtnapjwv.js:11866-11993 placement
 function isChildScrubbedCredentialFamily(upperCase) {
-  let replaced = upperCase.replace(/^INPUT_/, "");
+  let name = upperCase.replace(/^INPUT_/, "");
   return (
-    isArtifactDevBaseUrlVar(replaced) ||
-    isHelperEnvVar(replaced) ||
-    replaced.startsWith("OTEL_") ||
-    replaced === "CLAUDE_CODE_OTEL_DIAG_STDERR"
+    isArtifactDevBaseUrlVar(name) ||
+    isHelperEnvVar(name) ||
+    name.startsWith("OTEL_") ||
+    name === "CLAUDE_CODE_OTEL_DIAG_STDERR"
   );
 }
 //@ chunk-rtnapjwv.js:11993-12118 placement
-function isSshPlaceholderCredential(e, n) {
+function isSshPlaceholderCredential(name, env) {
   return (
-    (e === "CLAUDE_CODE_OAUTH_TOKEN" || e === "ANTHROPIC_API_KEY") &&
-    n[e] === SSH_PLACEHOLDER &&
-    n.ANTHROPIC_UNIX_SOCKET !== undefined
+    (name === "CLAUDE_CODE_OAUTH_TOKEN" || name === "ANTHROPIC_API_KEY") &&
+    env[name] === SSH_PLACEHOLDER &&
+    env.ANTHROPIC_UNIX_SOCKET !== undefined
   );
 }
 //@ chunk-rtnapjwv.js:12118-12923 placement
 function childScrubbedCredentialKeys() {
   let env = process.env;
-  let n = (r) =>
-    isSshPlaceholderCredential(r, env) &&
-    !Object.keys(env).some((key) => key !== r && key.toUpperCase() === r);
+  let isKeptPlaceholder = (name) =>
+    isSshPlaceholderCredential(name, env) &&
+    !Object.keys(env).some((key) => key !== name && key.toUpperCase() === name);
   return [
-    ...AUTH_TOKEN_ENV_VARS.filter((r) => !n(r)),
+    ...AUTH_TOKEN_ENV_VARS.filter((name) => !isKeptPlaceholder(name)),
     ...Object.keys(env).filter((key) => isChildScrubbedCredentialFamily(key.toUpperCase())),
     ...getHostManagedProviderConflicts(env),
     ...ccrBridgeEnvVarNames(),
     ...getSessionTokenEnvKeys(),
-    ...hipaaCredentialScrubKeys().filter((r) => !n(r)),
+    ...hipaaCredentialScrubKeys().filter((key) => !isKeptPlaceholder(key)),
     "CLAUDE_CODE_SUBSCRIPTION_TYPE",
     "CLAUDE_CODE_RATE_LIMIT_TIER",
     "CLAUDE_CODE_PLUGIN_ATTRIBUTION",
@@ -715,20 +743,24 @@ function childScrubbedCredentialKeys() {
   ];
 }
 //@ chunk-rtnapjwv.js:12923-13146 placement
-var BUN_GC_ENV_KEYS = new Set([
-  "BUN_GC_TIMER_INTERVAL",
-  "BUN_GC_TIMER_DISABLE",
-  "BUN_GC_RUNS_UNTIL_SKIP_RELEASE_ACCESS",
-  "BUN_IDLE_GC_SECONDS",
-]);
-var MIMALLOC_ENV_KEYS = new Set([
-  "MIMALLOC_PURGE_HOLES_MIN_INTERVAL",
-  "MIMALLOC_PURGE_DELAY",
-  "MIMALLOC_PURGE_HOLES",
-]);
+var BUN_GC_ENV_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MIMALLOC_ENV_KEYS;
+deferInit("chunk-rtnapjwv.js:12923", () => {
+  BUN_GC_ENV_KEYS = new Set([
+    "BUN_GC_TIMER_INTERVAL",
+    "BUN_GC_TIMER_DISABLE",
+    "BUN_GC_RUNS_UNTIL_SKIP_RELEASE_ACCESS",
+    "BUN_IDLE_GC_SECONDS",
+  ]);
+  MIMALLOC_ENV_KEYS = new Set([
+    "MIMALLOC_PURGE_HOLES_MIN_INTERVAL",
+    "MIMALLOC_PURGE_DELAY",
+    "MIMALLOC_PURGE_HOLES",
+  ]);
+});
 //@ chunk-rtnapjwv.js:13146-13368 placement
-function isRuntimeTuningEnvKey(e) {
-  let upper = e.toUpperCase();
+function isRuntimeTuningEnvKey(name) {
+  let upper = name.toUpperCase();
   return (
     upper.startsWith("BUN_JSC_") ||
     BUN_GC_ENV_KEYS.has(upper) ||
@@ -739,156 +771,157 @@ function isRuntimeTuningEnvKey(e) {
   );
 }
 //@ chunk-rtnapjwv.js:13368-18946 placement
-function subprocessEnv(e) {
-  let n = subprocessEnvStateByHost.of(getRootSession().host);
-  let r = n.getAgentProxyEnv?.() ?? {};
-  let s = Object.keys(r).length > 0;
-  let { settingsEnvForChildren } = n;
-  let c = Object.keys(settingsEnvForChildren).length > 0;
+function subprocessEnv(baseEnv) {
+  let hostState = subprocessEnvStateByHost.of(getRootSession().host);
+  let agentProxyEnv = hostState.getAgentProxyEnv?.() ?? {};
+  let hasAgentProxy = Object.keys(agentProxyEnv).length > 0;
+  let { settingsEnvForChildren } = hostState;
+  let hasSettingsEnv = Object.keys(settingsEnvForChildren).length > 0;
   let env_2 = process.env;
-  if (c || e !== undefined) {
+  if (hasSettingsEnv || baseEnv !== undefined) {
     env_2 = {
-      ...e,
+      ...baseEnv,
       ...process.env,
     };
     for (let [key, value] of Object.entries(settingsEnvForChildren)) env_2[spellingIn(env_2, key)] = value;
   }
-  let a = env.CLAUDE_CODE_REMOTE === true;
-  let O = a
+  let isRemote = env.CLAUDE_CODE_REMOTE === true;
+  let proxyEnv = isRemote
     ? proxyEnvForSubprocess(
-        s
+        hasAgentProxy
           ? {
               ...env_2,
-              ...r,
+              ...agentProxyEnv,
             }
           : env_2,
       )
     : {};
-  let E = Object.keys(O).length > 0;
-  let D = shouldScrubSubprocessEnv();
-  let Q =
+  let hasProxyEnv = Object.keys(proxyEnv).length > 0;
+  let scrubbing = shouldScrubSubprocessEnv();
+  let hipaaCredentialsPresent =
     Object.keys(process.env).some((key) => HIPAA_CREDENTIAL_KEY_SET.has(key.toUpperCase())) ||
     Object.keys(process.env).some((key) => isChildScrubbedCredentialFamily(key.toUpperCase())) ||
     process.env.CLAUDE_CODE_SUBSCRIPTION_TYPE !== undefined ||
     process.env.CLAUDE_CODE_RATE_LIMIT_TIER !== undefined;
   let hostManagedProviderConflicts = getHostManagedProviderConflicts(process.env);
-  let Z = ccrBridgeEnvVarNames();
+  let bridgeEnvNames = ccrBridgeEnvVarNames();
   let sessionTokenEnvKeys = getSessionTokenEnvKeys();
-  let b =
+  let hipaaSheds =
     hipaaWithholdsChildCredentials() &&
     Object.keys(process.env).some((key) => CHILD_SCRUBBED_CREDENTIAL_KEY_SET.has(envVarToUpperSnake(key)));
-  let N = false;
-  N = BG_WORKER_IDENTITY_ENV_VARS.some((o) => process.env[o] !== undefined);
+  let workerIdentityPresent = false;
+  workerIdentityPresent = BG_WORKER_IDENTITY_ENV_VARS.some((name) => process.env[name] !== undefined);
   let any = Object.keys(process.env).some((key) =>
     /^(INPUT_)?(OTEL_|CLAUDE_CODE_OTEL_DIAG_STDERR$)/i.test(key),
   );
-  let re =
+  let hasAttribution =
     env.CLAUDE_CODE_PLUGIN_ATTRIBUTION !== undefined || env.CLAUDE_CODE_SKILL_ATTRIBUTION !== undefined;
-  let oe = env.CLAUDE_CODE_QUESTION_EXTENDED || env.CLAUDE_CODE_QUESTION_OPTIONAL_DESCRIPTIONS;
+  let hasQuestionFlags = env.CLAUDE_CODE_QUESTION_EXTENDED || env.CLAUDE_CODE_QUESTION_OPTIONAL_DESCRIPTIONS;
   let CLAUDE_CODE_AGENT_PROGRESS_SUMMARIES = env.CLAUDE_CODE_AGENT_PROGRESS_SUMMARIES;
-  let ie = env.CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH || env.CLAUDE_CODE_SDK_HAS_SESSIONS_OAUTH_REFRESH;
+  let hasSdkOAuthRefresh =
+    env.CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH || env.CLAUDE_CODE_SDK_HAS_SESSIONS_OAUTH_REFRESH;
   let CLAUDE_CODE_SDK_READS_SESSION_STATE = env.CLAUDE_CODE_SDK_READS_SESSION_STATE;
   let CLAUDE_CODE_SDK_READS_STARTUP_MARKS = env.CLAUDE_CODE_SDK_READS_STARTUP_MARKS;
-  let ce = isStoredLoginPinned();
-  let ae = env.CLAUDE_CODE_REMOTE_TOOLS_HOST_ALLOWS_UNATTENDED;
+  let pinnedLogin = isStoredLoginPinned();
+  let remoteToolsUnattended = env.CLAUDE_CODE_REMOTE_TOOLS_HOST_ALLOWS_UNATTENDED;
   let any_2 = Object.keys(env_2).some(
     (key) => key.toUpperCase() === "CLAUDE_CODE_REMOTE_TOOLS_HOST_IDLE_RELEASE_MINUTES",
   );
   let any_3 = Object.keys(env_2).some((key) => key.toUpperCase() === "CLAUDE_CODE_REMOTE_TOOLS_FORWARD");
-  let le =
+  let hasBridgeChildFlags =
     env.CLAUDE_CODE_BRIDGE_CHILD_AUTO_DEFAULT ||
     env.CLAUDE_CODE_BRIDGE_CHILD_ARTIFACT ||
     env.CLAUDE_CODE_BRIDGE_CHILD_MACHINE_SETTINGS ||
     env.CLAUDE_CODE_BRIDGE_CHILD_PROJECTS_ENTRYPOINT ||
     env.CLAUDE_CODE_BRIDGE_CHILD_CLI_ENTRYPOINT;
   let CLAUDE_CODE_CONFIG_PROBE = env.CLAUDE_CODE_CONFIG_PROBE;
-  let ue = env.CLAUDE_CODE_MCP_STARTUP_WAIT_MS !== undefined;
+  let hasMcpStartupWait = env.CLAUDE_CODE_MCP_STARTUP_WAIT_MS !== undefined;
   let CLAUDE_CODE_REMOTE_MCP_CONFIG = env.CLAUDE_CODE_REMOTE_MCP_CONFIG;
   let CLAUDE_CODE_MCP_APPS_HOST = env.CLAUDE_CODE_MCP_APPS_HOST;
-  let Se = env.CLAUDE_CODE_UPFRONT_TOOLS !== undefined;
+  let hasUpfrontTools = env.CLAUDE_CODE_UPFRONT_TOOLS !== undefined;
   let CLAUDE_CODE_ATTACHMENTS_BY_PATH = env.CLAUDE_CODE_ATTACHMENTS_BY_PATH;
-  let fe = env.CLAUDE_CODE_SLEEP_COMPACT || env.CLAUDE_CODE_SLEEP_COMPACT_AFTER_MS !== undefined;
-  let Re = env.CLAUDE_CODE_RESUME_SESSIONSTART_HOOKS_WAIT_MS !== undefined;
-  let Le = env.CLAUDE_CODE_ARTIFACT_SHARE !== undefined;
+  let hasSleepCompact = env.CLAUDE_CODE_SLEEP_COMPACT || env.CLAUDE_CODE_SLEEP_COMPACT_AFTER_MS !== undefined;
+  let hasResumeHookWait = env.CLAUDE_CODE_RESUME_SESSIONSTART_HOOKS_WAIT_MS !== undefined;
+  let hasArtifactShare = env.CLAUDE_CODE_ARTIFACT_SHARE !== undefined;
   let CLAUDE_CODE_AUTOUPDATER_DISABLED_BY_HOST = env.CLAUDE_CODE_AUTOUPDATER_DISABLED_BY_HOST;
   let any_4 = Object.keys(env_2).some((key) => key.toUpperCase() === "CLAUDE_CODE_ARTIFACT_VERSIONS");
   let any_5 = Object.keys(env_2).some((key) => key.toUpperCase() === "CLAUDE_CODE_HOST_GUARDS_ARTIFACTS_MCP");
-  let Pe =
+  let hasResourceWarnings =
     env.CLAUDE_CODE_WARN_DISK_FREE_GIB !== undefined ||
     env.CLAUDE_CODE_WARN_MEMORY_FREE_GIB !== undefined ||
     env.CCR_BYOC_RESOURCE_WATCHDOG_TELEMETRY;
-  let me = env.CLAUDE_CHROME_TAB_GROUP_KEY !== undefined;
+  let hasChromeTabGroup = env.CLAUDE_CHROME_TAB_GROUP_KEY !== undefined;
   let any_6 = Object.keys(env_2).some(
     (key) => key.toUpperCase() === "CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS",
   );
-  let Ne = env.CLAUDE_CODE_HOST_PROMPT_SUPERSEDES_RECORD;
-  let He =
+  let hostPromptSupersedes = env.CLAUDE_CODE_HOST_PROMPT_SUPERSEDES_RECORD;
+  let hasMcpServeSettings =
     toolServerEnvAccessor.CLAUDE_CODE_MCP_SERVE_SETTINGS !== undefined ||
     toolServerEnvAccessor.CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS !== undefined ||
     toolServerEnvAccessor.CLAUDE_CODE_MCP_SERVE_WORKSPACE_ROOT !== undefined;
-  let U = false;
-  U = Object.keys(env_2).some(isRelaunchProactivityVar);
-  let v = a && Object.keys(env_2).some(isRuntimeTuningEnvKey);
-  let ye = false;
+  let hasRelaunchProactivity = false;
+  hasRelaunchProactivity = Object.keys(env_2).some(isRelaunchProactivityVar);
+  let hasRuntimeTuning = isRemote && Object.keys(env_2).some(isRuntimeTuningEnvKey);
+  let hasExtra = false;
   if (
-    e === undefined &&
-    !s &&
-    !E &&
-    !D &&
-    !N &&
-    !Q &&
+    baseEnv === undefined &&
+    !hasAgentProxy &&
+    !hasProxyEnv &&
+    !scrubbing &&
+    !workerIdentityPresent &&
+    !hipaaCredentialsPresent &&
     !hostManagedProviderConflicts.length &&
-    !Z.length &&
+    !bridgeEnvNames.length &&
     !sessionTokenEnvKeys.length &&
-    !b &&
+    !hipaaSheds &&
     !any &&
-    !c &&
-    !re &&
-    !oe &&
+    !hasSettingsEnv &&
+    !hasAttribution &&
+    !hasQuestionFlags &&
     !CLAUDE_CODE_AGENT_PROGRESS_SUMMARIES &&
-    !ie &&
+    !hasSdkOAuthRefresh &&
     !CLAUDE_CODE_SDK_READS_SESSION_STATE &&
     !CLAUDE_CODE_SDK_READS_STARTUP_MARKS &&
-    !ce &&
-    !ae &&
+    !pinnedLogin &&
+    !remoteToolsUnattended &&
     !any_2 &&
     !any_3 &&
-    !le &&
+    !hasBridgeChildFlags &&
     !CLAUDE_CODE_CONFIG_PROBE &&
-    !ue &&
+    !hasMcpStartupWait &&
     !CLAUDE_CODE_REMOTE_MCP_CONFIG &&
     !CLAUDE_CODE_MCP_APPS_HOST &&
-    !Se &&
+    !hasUpfrontTools &&
     !CLAUDE_CODE_ATTACHMENTS_BY_PATH &&
-    !fe &&
-    !Re &&
-    !Le &&
+    !hasSleepCompact &&
+    !hasResumeHookWait &&
+    !hasArtifactShare &&
     !CLAUDE_CODE_AUTOUPDATER_DISABLED_BY_HOST &&
-    !Pe &&
+    !hasResourceWarnings &&
     !any_4 &&
     !any_5 &&
-    !me &&
+    !hasChromeTabGroup &&
     !any_6 &&
-    !Ne &&
-    !He &&
-    !U &&
-    !v &&
-    !ye
+    !hostPromptSupersedes &&
+    !hasMcpServeSettings &&
+    !hasRelaunchProactivity &&
+    !hasRuntimeTuning &&
+    !hasExtra
   )
     return process.env;
-  let H = {
-    ...r,
-    ...O,
+  let mergedProxyEnv = {
+    ...agentProxyEnv,
+    ...proxyEnv,
   };
-  let d = {
+  let envOut = {
     ...env_2,
   };
-  for (let key of Object.keys(H)) {
-    let p = spellingIn(d, key);
-    if (p !== key) delete d[p];
+  for (let key of Object.keys(mergedProxyEnv)) {
+    let existingKey = spellingIn(envOut, key);
+    if (existingKey !== key) delete envOut[existingKey];
   }
-  Object.assign(d, H);
-  let $e = new Set(
+  Object.assign(envOut, mergedProxyEnv);
+  let scrubKeySet = new Set(
     [
       ...childScrubbedCredentialKeys(),
       "CLAUDE_CODE_SUBSCRIPTION_TYPE",
@@ -926,64 +959,65 @@ function subprocessEnv(e) {
       "CCR_BYOC_RESOURCE_WATCHDOG_TELEMETRY",
       "CLAUDE_CHROME_TAB_GROUP_KEY",
       "CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS",
-    ].map((o) => o.toUpperCase()),
+    ].map((name) => name.toUpperCase()),
   );
-  for (let key of Object.keys(d))
+  for (let key of Object.keys(envOut))
     if (
-      $e.has(key.toUpperCase()) ||
+      scrubKeySet.has(key.toUpperCase()) ||
       isChildScrubbedCredentialFamily(key.toUpperCase()) ||
-      (HIPAA_CREDENTIAL_KEY_SET.has(key.toUpperCase()) && !isSshPlaceholderCredential(key, d)) ||
-      (b &&
+      (HIPAA_CREDENTIAL_KEY_SET.has(key.toUpperCase()) && !isSshPlaceholderCredential(key, envOut)) ||
+      (hipaaSheds &&
         CHILD_SCRUBBED_CREDENTIAL_KEY_SET.has(envVarToUpperSnake(key)) &&
-        (key.includes("-") || !isSshPlaceholderCredential(key, d)))
+        (key.includes("-") || !isSshPlaceholderCredential(key, envOut)))
     )
-      delete d[key];
-  for (let o of BG_WORKER_IDENTITY_ENV_VARS) delete d[o];
-  if (withholdsDaemonForceColor()) delete d[spellingIn(d, "FORCE_COLOR")];
-  for (let key of Object.keys(d)) if (key.startsWith("OTEL_")) delete d[key];
-  delete d.CLAUDE_CODE_OTEL_DIAG_STDERR;
-  delete d.CLAUDE_CODE_PLUGIN_ATTRIBUTION;
-  delete d.CLAUDE_CODE_SKILL_ATTRIBUTION;
-  if (U) {
-    for (let key of Object.keys(d)) if (isRelaunchProactivityVar(key)) delete d[key];
+      delete envOut[key];
+  for (let name of BG_WORKER_IDENTITY_ENV_VARS) delete envOut[name];
+  if (withholdsDaemonForceColor()) delete envOut[spellingIn(envOut, "FORCE_COLOR")];
+  for (let key of Object.keys(envOut)) if (key.startsWith("OTEL_")) delete envOut[key];
+  delete envOut.CLAUDE_CODE_OTEL_DIAG_STDERR;
+  delete envOut.CLAUDE_CODE_PLUGIN_ATTRIBUTION;
+  delete envOut.CLAUDE_CODE_SKILL_ATTRIBUTION;
+  if (hasRelaunchProactivity) {
+    for (let key of Object.keys(envOut)) if (isRelaunchProactivityVar(key)) delete envOut[key];
   }
-  if (v) {
-    for (let key of Object.keys(d)) if (isRuntimeTuningEnvKey(key)) delete d[key];
+  if (hasRuntimeTuning) {
+    for (let key of Object.keys(envOut)) if (isRuntimeTuningEnvKey(key)) delete envOut[key];
   }
-  if (!D) return d;
+  if (!scrubbing) return envOut;
   let scrubbedEnvNames_2 = getScrubbedEnvNames();
-  let Ge = scrubbedEnvNames().length > 0;
-  for (let [key, value] of Object.entries(d)) {
-    if (value === PROXY_INJECTED_MARKER && Object.hasOwn(r, key)) continue;
-    if (isSshPlaceholderCredential(key, d)) continue;
+  let hasScrubbedNames = scrubbedEnvNames().length > 0;
+  for (let [key, value] of Object.entries(envOut)) {
+    if (value === PROXY_INJECTED_MARKER && Object.hasOwn(agentProxyEnv, key)) continue;
+    if (isSshPlaceholderCredential(key, envOut)) continue;
     if (
       scrubbedEnvNames_2.has(envVarToUpperSnake(key)) ||
       BUNDLE_CREDENTIAL_ENV_REGEX.test(key) ||
       isCredentialUserEnv(key) ||
-      (Ge && armedRunnerShedsName(key))
+      (hasScrubbedNames && armedRunnerShedsName(key))
     ) {
-      delete d[key];
+      delete envOut[key];
       continue;
     }
     if (value === undefined || isGitConfigOrProxyEnvName(key)) continue;
-    let A = typeof value === "string" ? value : String(value);
+    let text = typeof value === "string" ? value : String(value);
     if (isPackageIndexEnv(key)) {
-      let f = sanitizeIndexUrlEnv(key, A);
-      if (f.value !== A) d[key] = f.value;
-      if (f.cut) {
-        let R = indexFallbackEnv(key, f.value);
-        if (R !== undefined && !hasAnyIndexEnv(d, R.name)) d[R.name] = R.value;
+      let sanitized = sanitizeIndexUrlEnv(key, text);
+      if (sanitized.value !== text) envOut[key] = sanitized.value;
+      if (sanitized.cut) {
+        let fallback = indexFallbackEnv(key, sanitized.value);
+        if (fallback !== undefined && !hasAnyIndexEnv(envOut, fallback.name))
+          envOut[fallback.name] = fallback.value;
       }
       continue;
     }
-    let T = redactJvmOptionsEnvValue(key, A);
-    if (T === undefined) {
-      if (containsCredential(A)) delete d[key];
-    } else if (T !== A)
-      if (T === "") delete d[key];
-      else d[key] = T;
+    let redacted = redactJvmOptionsEnvValue(key, text);
+    if (redacted === undefined) {
+      if (containsCredential(text)) delete envOut[key];
+    } else if (redacted !== text)
+      if (redacted === "") delete envOut[key];
+      else envOut[key] = redacted;
   }
-  return d;
+  return envOut;
 }
 //@ chunk-rtnapjwv.js:18946-19103 placement
 function shouldUseMcpAllowlistEnv() {
@@ -995,29 +1029,29 @@ function shouldUseMcpAllowlistEnv() {
 //@ chunk-rtnapjwv.js:19103-21194 placement
 function scrubSandboxConfig() {
   let scrubPathsLatched = subprocessEnvState.scrubPathsLatched;
-  let n = scrubPathsLatched?.home ?? homedir();
+  let homeDir = scrubPathsLatched?.home ?? homedir();
   let filePath = scrubPathsLatched?.originalCwd ?? getOriginalCwd();
   let GITHUB_ACTION_PATH = scrubPathsLatched?.GITHUB_ACTION_PATH ?? process.env.GITHUB_ACTION_PATH;
-  let C =
+  let runnerCommandsDir =
     scrubPathsLatched?.runnerFileCommandsDir ??
     (process.env.GITHUB_ENV ? dirname(process.env.GITHUB_ENV) : undefined);
-  let c = scrubPathsLatched?.workspace ?? process.env.GITHUB_WORKSPACE;
-  let _ =
-    c && posix.resolve(c) !== posix.resolve(filePath)
+  let workspace = scrubPathsLatched?.workspace ?? process.env.GITHUB_WORKSPACE;
+  let workspacePaths =
+    workspace && posix.resolve(workspace) !== posix.resolve(filePath)
       ? [
-          `${c}/.git/hooks`,
-          `${c}/.git/config`,
-          `${c}/.git/config.lock`,
-          `${c}/.git/config.worktree`,
-          `${c}/.git/config.worktree.lock`,
-          `${c}/.git/commondir`,
-          `${c}/.git/worktrees`,
-          `${c}/.git/modules`,
-          `${c}/.git/info/exclude`,
-          `${c}/.git/glab-cli`,
-          `${c}/.gitmodules`,
-          `${c}/.github`,
-          `${c}/.claude`,
+          `${workspace}/.git/hooks`,
+          `${workspace}/.git/config`,
+          `${workspace}/.git/config.lock`,
+          `${workspace}/.git/config.worktree`,
+          `${workspace}/.git/config.worktree.lock`,
+          `${workspace}/.git/commondir`,
+          `${workspace}/.git/worktrees`,
+          `${workspace}/.git/modules`,
+          `${workspace}/.git/info/exclude`,
+          `${workspace}/.git/glab-cli`,
+          `${workspace}/.gitmodules`,
+          `${workspace}/.github`,
+          `${workspace}/.claude`,
         ]
       : [];
   return {
@@ -1031,36 +1065,36 @@ function scrubSandboxConfig() {
         "/run/dbus",
         "/run/user",
         scrubPathsLatched?.federationCacheDir ?? federationCacheDir(),
-      ].filter((a) => !!a),
+      ].filter((path) => !!path),
       denyWrite: [
-        `${n}/.bash_profile`,
-        `${n}/.bashrc`,
-        `${n}/.bash_aliases`,
-        `${n}/.bash_login`,
-        `${n}/.bash_logout`,
-        `${n}/.profile`,
-        `${n}/.zshrc`,
-        `${n}/.zprofile`,
-        `${n}/.zshenv`,
-        `${n}/.zlogin`,
-        `${n}/.zlogout`,
-        `${n}/.claude`,
-        `${n}/.claude.json`,
+        `${homeDir}/.bash_profile`,
+        `${homeDir}/.bashrc`,
+        `${homeDir}/.bash_aliases`,
+        `${homeDir}/.bash_login`,
+        `${homeDir}/.bash_logout`,
+        `${homeDir}/.profile`,
+        `${homeDir}/.zshrc`,
+        `${homeDir}/.zprofile`,
+        `${homeDir}/.zshenv`,
+        `${homeDir}/.zlogin`,
+        `${homeDir}/.zlogout`,
+        `${homeDir}/.claude`,
+        `${homeDir}/.claude.json`,
         scrubPathsLatched?.claudeConfigDir ?? process.env.CLAUDE_CONFIG_DIR,
-        `${n}/.gitconfig`,
-        `${n}/.config/git`,
-        `${n}/.bunfig.toml`,
+        `${homeDir}/.gitconfig`,
+        `${homeDir}/.config/git`,
+        `${homeDir}/.bunfig.toml`,
         `${filePath}/bunfig.toml`,
         `${filePath}/package.json`,
-        ...DOTENV_FILE_NAMES.map((a) => `${filePath}/${a}`),
-        `${n}/.npmrc`,
+        ...DOTENV_FILE_NAMES.map((name) => `${filePath}/${name}`),
+        `${homeDir}/.npmrc`,
         `${filePath}/.npmrc`,
-        `${n}/.yarnrc`,
-        `${n}/.yarnrc.yml`,
+        `${homeDir}/.yarnrc`,
+        `${homeDir}/.yarnrc.yml`,
         `${filePath}/.yarnrc`,
         `${filePath}/.yarnrc.yml`,
-        `${n}/.config/pip`,
-        `${n}/.pip`,
+        `${homeDir}/.config/pip`,
+        `${homeDir}/.pip`,
         `${filePath}/package-lock.json`,
         `${filePath}/yarn.lock`,
         `${filePath}/pnpm-lock.yaml`,
@@ -1070,21 +1104,21 @@ function scrubSandboxConfig() {
         `${filePath}/.claude`,
         ...(scrubPathsLatched?.canonicalClaudeDirs ?? isInClaudeFolder(filePath)),
         `${filePath}/.github`,
-        `${n}/.local/bin`,
-        `${n}/runners`,
-        `${n}/actions-runner`,
+        `${homeDir}/.local/bin`,
+        `${homeDir}/runners`,
+        `${homeDir}/actions-runner`,
         "/tmp/inline-comments-buffer.jsonl",
         ...(scrubPathsLatched?.pathDirs ?? []),
-        C,
+        runnerCommandsDir,
         GITHUB_ACTION_PATH,
         GITHUB_ACTION_PATH && GITHUB_ACTION_PATH.includes("/_actions/")
           ? GITHUB_ACTION_PATH.slice(0, GITHUB_ACTION_PATH.indexOf("/_actions/") + 9)
           : undefined,
         scrubPathsLatched?.GITHUB_EVENT_PATH ?? process.env.GITHUB_EVENT_PATH,
-        `${n}/.config/gh`,
-        `${n}/.config/glab-cli`,
-        `${n}/.netrc`,
-        `${n}/.ssh`,
+        `${homeDir}/.config/gh`,
+        `${homeDir}/.config/glab-cli`,
+        `${homeDir}/.netrc`,
+        `${homeDir}/.ssh`,
         `${filePath}/.git/hooks`,
         `${filePath}/.git/config`,
         `${filePath}/.git/config.lock`,
@@ -1095,31 +1129,31 @@ function scrubSandboxConfig() {
         `${filePath}/.gitmodules`,
         `${filePath}/.git/info/exclude`,
         `${filePath}/.git/glab-cli`,
-        ..._,
-      ].filter((a) => !!a),
+        ...workspacePaths,
+      ].filter((path) => !!path),
     },
   };
 }
 //@ chunk-rtnapjwv.js:21194-21265 placement
-function isRelaunchProactivityVar(e) {
-  return e.startsWith("CLAUDE_CODE_RELAUNCH_PROACTIVITY_");
+function isRelaunchProactivityVar(name) {
+  return name.startsWith("CLAUDE_CODE_RELAUNCH_PROACTIVITY_");
 }
 //@ chunk-rtnapjwv.js:21265-21271 placement
 var scrubbedEnvNamesCache;
 //@ chunk-rtnapjwv.js:21271-21408 placement
 function getScrubbedEnvNames() {
-  let e = scrubbedEnvNames();
-  let n = e.length > 0;
-  if (scrubbedEnvNamesCache?.armed !== n)
+  let armedNames = scrubbedEnvNames();
+  let armed = armedNames.length > 0;
+  if (scrubbedEnvNamesCache?.armed !== armed)
     scrubbedEnvNamesCache = {
-      armed: n,
-      names: new Set([...flattened, ...e].map((r) => r.toUpperCase())),
+      armed,
+      names: new Set([...flattened, ...armedNames].map((name) => name.toUpperCase())),
     };
   return scrubbedEnvNamesCache.names;
 }
 //@ chunk-3zy56vtn.js:8263-8318 fingerprint = subprocessEnv (0.782)
-function subprocessEnv_2(e) {
-  return e.flatMap((n) => [n, `INPUT_${n}`]);
+function subprocessEnv_2(names) {
+  return names.flatMap((name) => [name, `INPUT_${name}`]);
 }
 export {
   subprocessEnv,
@@ -1157,4 +1191,6 @@ export {
   holdsDaemonForceColor,
   BG_WORKER_IDENTITY_ENV_VARS,
   isArtifactDevBaseUrlVar,
+  registerAgentProxyEnvFn,
+  registerGhStandinDirFn,
 };

@@ -5,11 +5,11 @@
  * pieces: chunk-798ashq9.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_minimal } from "./minimal.js";
 
 //@ chunk-798ashq9.js:25873-27725 cjs-fingerprint
-var require_longbits = x(function (cjsExports, cjsModule) {
+var require_longbits = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = LongBits;
   var util = require_minimal();
   function LongBits(lo, hi) {

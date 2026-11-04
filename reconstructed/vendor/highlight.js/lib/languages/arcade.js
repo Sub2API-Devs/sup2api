@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:10611-15444 cjs-fingerprint
-var require_arcade = x(function (cjsExports, cjsModule) {
+var require_arcade = __commonJS(function (cjsExports, cjsModule) {
   function arcade(hljs) {
     let regex = hljs.regex;
     let IDENT_RE = "[A-Za-z_][0-9A-Za-z_]*";

@@ -18,21 +18,22 @@ import {
 } from "./commandSemantics.js";
 import { COMMON_ALIASES } from "../../utils/powershell/parser.js";
 import { COMMON_BACKGROUND_COMMANDS } from "../BashTool/BashTool.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3106355-3106689 placement
 /**
  * 解析命令的基础名：去掉调用运算符与引号，取路径最后一段转小写，并剥离 .exe/.cmd/.bat 原生扩展名（记录是否有扩展名）。
  */
-function parseCommandBase(e) {
-  let replaced = e.trim().replace(/^[&.]\s+/, "");
+function parseCommandBase(command) {
+  let replaced = command.trim().replace(/^[&.]\s+/, "");
   let match = /^"([^"]*)"|^'([^']*)'/.exec(replaced);
-  let s = match?.[1] ?? match?.[2] ?? (replaced.split(/\s+/)[0] || "").replace(/^["']|["']$/g, "");
-  let lower = (s.split(/[\\/]/).pop() || s).toLowerCase();
-  let S = ["exe", "cmd", "bat"].find((w) => lower.endsWith("." + w)) ?? null;
+  let commandToken = match?.[1] ?? match?.[2] ?? (replaced.split(/\s+/)[0] || "").replace(/^["']|["']$/g, "");
+  let lower = (commandToken.split(/[\\/]/).pop() || commandToken).toLowerCase();
+  let nativeExtension = ["exe", "cmd", "bat"].find((extension) => lower.endsWith("." + extension)) ?? null;
   return {
-    base: S ? lower.slice(0, -(S.length + 1)) : lower,
-    hadNativeExt: S !== null,
-    nativeExt: S,
+    base: nativeExtension ? lower.slice(0, -(nativeExtension.length + 1)) : lower,
+    hadNativeExt: nativeExtension !== null,
+    nativeExt: nativeExtension,
   };
 }
 //@ chunk-e6aww6q8.js:3106689-3108024 placement
@@ -41,25 +42,25 @@ function parseCommandBase(e) {
  */
 function lastCommandSegment(command) {
   let segments = [];
-  let r = 0;
-  let s = false;
-  let h = false;
-  let y = true;
-  let S = false;
-  let w = false;
+  let segmentStart = 0;
+  let andGated = false;
+  let piped = false;
+  let pipelineSimple = true;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
   for (let idx = 0; idx < command.length; idx++) {
-    let ke = command[idx];
-    if (S) {
-      if (ke === "'") S = false;
+    let char = command[idx];
+    if (inSingleQuote) {
+      if (char === "'") inSingleQuote = false;
       continue;
     }
-    if (w) {
-      if (ke === "`") idx++;
-      else if (ke === '"') w = false;
+    if (inDoubleQuote) {
+      if (char === "`") idx++;
+      else if (char === '"') inDoubleQuote = false;
       continue;
     }
     if (
-      ke === "#" &&
+      char === "#" &&
       (idx === 0 ||
         command[idx - 1] === " " ||
         command[idx - 1] === "\t" ||
@@ -69,9 +70,9 @@ function lastCommandSegment(command) {
         command[idx - 1] === "\r")
     ) {
       segments.push({
-        text: command.slice(r, idx),
-        andGated: s,
-        piped: h,
+        text: command.slice(segmentStart, idx),
+        andGated,
+        piped,
       });
       while (
         idx + 1 < command.length &&
@@ -81,115 +82,115 @@ function lastCommandSegment(command) {
         command[idx + 1] !== "\r"
       )
         idx++;
-      r = idx + 1;
-      h = false;
+      segmentStart = idx + 1;
+      piped = false;
       continue;
     }
-    if (ke === "'") {
-      S = true;
+    if (char === "'") {
+      inSingleQuote = true;
       continue;
     }
-    if (ke === '"') {
-      w = true;
+    if (char === '"') {
+      inDoubleQuote = true;
       continue;
     }
     if (
-      ke === "(" ||
-      ke === ")" ||
-      ke === "{" ||
-      ke === "}" ||
-      (ke === ">" && command.slice(idx - 1, idx + 3) !== "2>&1")
+      char === "(" ||
+      char === ")" ||
+      char === "{" ||
+      char === "}" ||
+      (char === ">" && command.slice(idx - 1, idx + 3) !== "2>&1")
     )
-      y = false;
+      pipelineSimple = false;
     if (
-      ke === ";" ||
-      ke === "|" ||
-      ke ===
+      char === ";" ||
+      char === "|" ||
+      char ===
         `
 ` ||
-      ke === "\r"
+      char === "\r"
     ) {
-      if (ke === "|" && command[idx + 1] === "|") y = false;
+      if (char === "|" && command[idx + 1] === "|") pipelineSimple = false;
       segments.push({
-        text: command.slice(r, idx),
-        andGated: s,
-        piped: h,
+        text: command.slice(segmentStart, idx),
+        andGated,
+        piped,
       });
-      r = idx + 1;
-      h = ke === "|";
-      if (!h) s = false;
+      segmentStart = idx + 1;
+      piped = char === "|";
+      if (!piped) andGated = false;
       continue;
     }
-    if (ke === "&") {
+    if (char === "&") {
       if (command[idx + 1] === "&") {
         segments.push({
-          text: command.slice(r, idx),
-          andGated: s,
-          piped: h,
+          text: command.slice(segmentStart, idx),
+          andGated,
+          piped,
         });
         idx++;
-        r = idx + 1;
-        s = true;
-        h = false;
-        y = false;
+        segmentStart = idx + 1;
+        andGated = true;
+        piped = false;
+        pipelineSimple = false;
         continue;
       }
-      let we = command[idx - 1];
-      if ((we === " " || we === "\t") && command.slice(r, idx).trim() !== "") {
+      let previousChar = command[idx - 1];
+      if ((previousChar === " " || previousChar === "\t") && command.slice(segmentStart, idx).trim() !== "") {
         segments.push({
-          text: command.slice(r, idx),
-          andGated: s,
-          piped: h,
+          text: command.slice(segmentStart, idx),
+          andGated,
+          piped,
         });
-        r = idx + 1;
-        s = false;
-        h = false;
+        segmentStart = idx + 1;
+        andGated = false;
+        piped = false;
       }
     }
   }
   segments.push({
-    text: command.slice(r),
-    andGated: s,
-    piped: h,
+    text: command.slice(segmentStart),
+    andGated,
+    piped,
   });
   let lastIndex = segments.findLastIndex((segment) => segment.text.trim());
-  let G = segments[lastIndex];
-  if (!G)
+  let lastSegment = segments[lastIndex];
+  if (!lastSegment)
     return {
       segment: command,
       andGated: false,
       feeder: undefined,
     };
-  let q = lastIndex;
-  while (y && q > 0 && segments[q].piped) {
-    let Se = /^\s*([\w-]+)(?=\s|$)/.exec(segments[q].text)?.[1]?.toLowerCase() ?? "";
-    if (!PIPELINE_PASSTHROUGH_CMDLETS.has(COMMON_ALIASES[Se]?.toLowerCase() ?? Se)) break;
-    q--;
+  let feederIndex = lastIndex;
+  while (pipelineSimple && feederIndex > 0 && segments[feederIndex].piped) {
+    let cmdBandlet = /^\s*([\w-]+)(?=\s|$)/.exec(segments[feederIndex].text)?.[1]?.toLowerCase() ?? "";
+    if (!PIPELINE_PASSTHROUGH_CMDLETS.has(COMMON_ALIASES[cmdBandlet]?.toLowerCase() ?? cmdBandlet)) break;
+    feederIndex--;
   }
-  let text = segments[q].text;
+  let text = segments[feederIndex].text;
   return {
-    segment: G.text,
-    andGated: G.andGated,
-    feeder: q !== lastIndex && text.trim() ? text : undefined,
+    segment: lastSegment.text,
+    andGated: lastSegment.andGated,
+    feeder: feederIndex !== lastIndex && text.trim() ? text : undefined,
   };
 }
 //@ chunk-e6aww6q8.js:3108024-3108353 placement
 /**
  * 若命令是 git，返回其子命令（跳过选项，-C/-c 连同参数一起跳过）。
  */
-function gitSubcommand(e) {
-  let replaced = e.trim().replace(/^[&.]\s+/, "");
-  let s = /^"[^"]*"|^'[^']*'/.exec(replaced)?.[0] ?? replaced.split(/\s+/)[0] ?? "";
-  if (parseCommandBase(s).base !== "git") return;
-  replaced = replaced.slice(s.length);
-  let h = ["git", ...replaced.trim().split(/\s+/).filter(Boolean)];
-  for (let idx = 1; idx < h.length; idx++) {
-    let S = h[idx];
-    if (S.startsWith("-")) {
-      if (S === "-C" || S === "-c") idx++;
+function gitSubcommand(command) {
+  let replaced = command.trim().replace(/^[&.]\s+/, "");
+  let commandToken = /^"[^"]*"|^'[^']*'/.exec(replaced)?.[0] ?? replaced.split(/\s+/)[0] ?? "";
+  if (parseCommandBase(commandToken).base !== "git") return;
+  replaced = replaced.slice(commandToken.length);
+  let tokens = ["git", ...replaced.trim().split(/\s+/).filter(Boolean)];
+  for (let idx = 1; idx < tokens.length; idx++) {
+    let token = tokens[idx];
+    if (token.startsWith("-")) {
+      if (token === "-C" || token === "-c") idx++;
       continue;
     }
-    return S;
+    return token;
   }
   return;
 }
@@ -197,92 +198,103 @@ function gitSubcommand(e) {
 /**
  * 命令遥测分类用表：已知的外部/网络命令名（winget、choco、az、robocopy、certutil 等）与 cmdlet 动词列表。
  */
-var KNOWN_EXTERNAL_COMMANDS = [
-  ...COMMON_BACKGROUND_COMMANDS,
-  "Invoke-WebRequest",
-  "winget",
-  "choco",
-  "az",
-  "powershell",
-  "cmd",
-  "reg",
-  "sc",
-  "net",
-  "where",
-  "tasklist",
-  "taskkill",
-  "robocopy",
-  "xcopy",
-  "icacls",
-  "certutil",
-  "schtasks",
-];
-var CMDLET_VERBS = [
-  "get",
-  "set",
-  "new",
-  "remove",
-  "test",
-  "start",
-  "stop",
-  "restart",
-  "invoke",
-  "add",
-  "copy",
-  "move",
-  "select",
-  "where",
-  "foreach",
-  "write",
-  "out",
-  "import",
-  "export",
-  "convertto",
-  "convertfrom",
-];
+var KNOWN_EXTERNAL_COMMANDS; // deferred: uses COMMON_BACKGROUND_COMMANDS (../BashTool/BashTool.js) of its import cycle while loading; runs once the cycle is complete
+var CMDLET_VERBS;
+deferInit("chunk-e6aww6q8.js:3108353", () => {
+  KNOWN_EXTERNAL_COMMANDS = [
+    ...COMMON_BACKGROUND_COMMANDS,
+    "Invoke-WebRequest",
+    "winget",
+    "choco",
+    "az",
+    "powershell",
+    "cmd",
+    "reg",
+    "sc",
+    "net",
+    "where",
+    "tasklist",
+    "taskkill",
+    "robocopy",
+    "xcopy",
+    "icacls",
+    "certutil",
+    "schtasks",
+  ];
+  CMDLET_VERBS = [
+    "get",
+    "set",
+    "new",
+    "remove",
+    "test",
+    "start",
+    "stop",
+    "restart",
+    "invoke",
+    "add",
+    "copy",
+    "move",
+    "select",
+    "where",
+    "foreach",
+    "write",
+    "out",
+    "import",
+    "export",
+    "convertto",
+    "convertfrom",
+  ];
+});
 //@ chunk-e6aww6q8.js:3108707-3108892 placement = DIRECTORY_CHANGE_CMDLETS (0.655)
 /**
  * PowerShell 命令遥测分类用的三张表：已知外部/网络命令小写→原名、cmdlet 动词→cmdlet_<动词> 标签、只作后备标签的 location/write 类 cmdlet。属于命令分析遥测，不是 parser 本身（旧版名 DIRECTORY_CHANGE_CMDLETS 错配）。
  */
-var KNOWN_PS_COMMANDS_BY_LOWER = new Map(KNOWN_EXTERNAL_COMMANDS.map((e) => [e.toLowerCase(), e]));
-var CMDLET_VERB_TELEMETRY_LABELS = new Map(CMDLET_VERBS.map((e) => [e, `cmdlet_${e}`]));
-var LOW_SIGNAL_CMDLETS = new Set([
-  "set-location",
-  "push-location",
-  "pop-location",
-  "write-output",
-  "write-host",
-]);
+var KNOWN_PS_COMMANDS_BY_LOWER; // deferred: uses KNOWN_EXTERNAL_COMMANDS of its import cycle while loading; runs once the cycle is complete
+var CMDLET_VERB_TELEMETRY_LABELS;
+var LOW_SIGNAL_CMDLETS;
+deferInit("chunk-e6aww6q8.js:3108707", () => {
+  KNOWN_PS_COMMANDS_BY_LOWER = new Map(
+    KNOWN_EXTERNAL_COMMANDS.map((commandName) => [commandName.toLowerCase(), commandName]),
+  );
+  CMDLET_VERB_TELEMETRY_LABELS = new Map(CMDLET_VERBS.map((verb) => [verb, `cmdlet_${verb}`]));
+  LOW_SIGNAL_CMDLETS = new Set([
+    "set-location",
+    "push-location",
+    "pop-location",
+    "write-output",
+    "write-host",
+  ]);
+});
 //@ chunk-e6aww6q8.js:3108892-3109350 placement
 /**
  * 为遥测给 PowerShell 命令归类：先找已知外部/网络命令，其次按 cmdlet 动词映射成 cmdlet_<动词> 标签（location/write 类仅作后备），都不匹配返回 other。
  */
 function classifyPowerShellCommand(command) {
-  let mapped = command.split(/[\r\n;|&]/).map((h) => {
-    let replaced = h.replace(/^\s*\$[\w:.{}]+\s*\+?=\s*/, "");
-    if (replaced !== h && /^['"]/.test(replaced.trimStart())) return "";
-    let { base, hadNativeExt } = parseCommandBase(replaced);
+  let mapped = command.split(/[\r\n;|&]/).map((part) => {
+    let command = part.replace(/^\s*\$[\w:.{}]+\s*\+?=\s*/, "");
+    if (command !== part && /^['"]/.test(command.trimStart())) return "";
+    let { base, hadNativeExt } = parseCommandBase(command);
     if (hadNativeExt) return base;
     return COMMON_ALIASES[base]?.toLowerCase() ?? base;
   });
-  for (let h of mapped) {
-    let y = KNOWN_PS_COMMANDS_BY_LOWER.get(h);
-    if (y) return y;
+  for (let commandName of mapped) {
+    let knownCommand = KNOWN_PS_COMMANDS_BY_LOWER.get(commandName);
+    if (knownCommand) return knownCommand;
   }
-  let r;
-  let s = true;
-  for (let h of mapped) {
-    if (!h.trim()) continue;
-    let y = /^([a-z]+)-\w+$/.exec(h)?.[1];
-    let S = y && CMDLET_VERB_TELEMETRY_LABELS.get(y);
-    if (S && LOW_SIGNAL_CMDLETS.has(h)) {
-      r ??= S;
+  let lowSignalLabel;
+  let onlyLowSignal = true;
+  for (let commandName of mapped) {
+    if (!commandName.trim()) continue;
+    let verb = /^([a-z]+)-\w+$/.exec(commandName)?.[1];
+    let verbLabel = verb && CMDLET_VERB_TELEMETRY_LABELS.get(verb);
+    if (verbLabel && LOW_SIGNAL_CMDLETS.has(commandName)) {
+      lowSignalLabel ??= verbLabel;
       continue;
     }
-    s = false;
-    if (S) return S;
+    onlyLowSignal = false;
+    if (verbLabel) return verbLabel;
   }
-  return (s ? r : undefined) ?? "other";
+  return (onlyLowSignal ? lowSignalLabel : undefined) ?? "other";
 }
 //@ chunk-e6aww6q8.js:3109350-3113826 placement
 /**
@@ -385,9 +397,9 @@ var POWERFUL_ERROR_KIND_RULES = [
 /**
  * 对 PowerShell 错误输出分类：空、匹配已知模式、被杀（143/137）、命令未找到（9009/49）或其他。
  */
-function classifyPowerShellError(e, code) {
-  if (!e.trim()) return "empty";
-  for (let [r, s] of POWERFUL_ERROR_KIND_RULES) if (s.test(e)) return r;
+function classifyPowerShellError(output, code) {
+  if (!output.trim()) return "empty";
+  for (let [kind, pattern] of POWERFUL_ERROR_KIND_RULES) if (pattern.test(output)) return kind;
   if (code === 143 || code === 137) return "exit_killed";
   if (code === 9009 || code === 49) return "exit_9009_not_found";
   return "other";
@@ -396,82 +408,87 @@ function classifyPowerShellError(e, code) {
 /**
  * 命令遥测分类用的两张表：Bash 内置/常见 Unix 命令名（在 PowerShell 中误用时识别），以及常见开发工具名。
  */
-var BASH_BUILTIN_NAMES = new Set([
-  "head",
-  "tail",
-  "which",
-  "touch",
-  "grep",
-  "sed",
-  "awk",
-  "wc",
-  "chmod",
-  "chown",
-  "ln",
-  "cut",
-  "tr",
-  "uniq",
-  "xargs",
-  "env",
-  "seq",
-  "realpath",
-  "readlink",
-  "basename",
-  "dirname",
-  "printf",
-  "source",
-  "export",
-  "unset",
-  "true",
-  "false",
-  "yes",
-  "stat",
-  "find",
-  "less",
-  "sudo",
-]);
-var DEV_TOOL_NAMES = new Set([
-  "git",
-  "gh",
-  "node",
-  "npm",
-  "npx",
-  "yarn",
-  "pnpm",
-  "bun",
-  "python",
-  "python3",
-  "pip",
-  "pip3",
-  "cargo",
-  "rustc",
-  "go",
-  "dotnet",
-  "java",
-  "javac",
-  "mvn",
-  "gradle",
-  "make",
-  "cmake",
-  "docker",
-  "kubectl",
-  "terraform",
-  "az",
-  "aws",
-  "gcloud",
-  "curl",
-  "wget",
-  "jq",
-  "code",
-]);
+var BASH_BUILTIN_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DEV_TOOL_NAMES;
+deferInit("chunk-e6aww6q8.js:3114014", () => {
+  BASH_BUILTIN_NAMES = new Set([
+    "head",
+    "tail",
+    "which",
+    "touch",
+    "grep",
+    "sed",
+    "awk",
+    "wc",
+    "chmod",
+    "chown",
+    "ln",
+    "cut",
+    "tr",
+    "uniq",
+    "xargs",
+    "env",
+    "seq",
+    "realpath",
+    "readlink",
+    "basename",
+    "dirname",
+    "printf",
+    "source",
+    "export",
+    "unset",
+    "true",
+    "false",
+    "yes",
+    "stat",
+    "find",
+    "less",
+    "sudo",
+  ]);
+  DEV_TOOL_NAMES = new Set([
+    "git",
+    "gh",
+    "node",
+    "npm",
+    "npx",
+    "yarn",
+    "pnpm",
+    "bun",
+    "python",
+    "python3",
+    "pip",
+    "pip3",
+    "cargo",
+    "rustc",
+    "go",
+    "dotnet",
+    "java",
+    "javac",
+    "mvn",
+    "gradle",
+    "make",
+    "cmake",
+    "docker",
+    "kubectl",
+    "terraform",
+    "az",
+    "aws",
+    "gcloud",
+    "curl",
+    "wget",
+    "jq",
+    "code",
+  ]);
+});
 //@ chunk-e6aww6q8.js:3114522-3114777 placement
 /**
  * 对"命令未识别"错误分类：Bash 内置命令、开发工具或其他。
  */
-function classifyNotRecognizedCommand(e) {
-  let n = /'([^']+)' is not recognized/i.exec(e) ?? /CommandNotFoundException.*?\[([^\],]+)/.exec(e);
-  if (!n) return null;
-  let replaced = n[1].toLowerCase().replace(/\.exe$/, "");
+function classifyNotRecognizedCommand(output) {
+  let match =
+    /'([^']+)' is not recognized/i.exec(output) ?? /CommandNotFoundException.*?\[([^\],]+)/.exec(output);
+  if (!match) return null;
+  let replaced = match[1].toLowerCase().replace(/\.exe$/, "");
   if (BASH_BUILTIN_NAMES.has(replaced)) return "bash_builtin";
   if (DEV_TOOL_NAMES.has(replaced)) return "dev_tool";
   return "other";
@@ -495,8 +512,8 @@ var POWERSHELL_PARSE_ERROR_KINDS = [
 /**
  * 按错误文本判断属于哪种 PowerShell 解析错误。
  */
-function classifyPowerShellParseErrorKind(e) {
-  for (let [n, r] of POWERSHELL_PARSE_ERROR_KINDS) if (r.test(e)) return n;
+function classifyPowerShellParseErrorKind(output) {
+  for (let [kind, pattern] of POWERSHELL_PARSE_ERROR_KINDS) if (pattern.test(output)) return kind;
   return null;
 }
 //@ chunk-e6aww6q8.js:3115648-3116007 placement
@@ -516,43 +533,43 @@ function detectBashSyntax(command) {
 /**
  * 按命令语义解释 PowerShell 退出码：取最后一段（或管道上游）命令的基名，git grep/diff 与已知命令用专门解释器，否则用默认解释器。
  */
-function interpretCommandResult(command, n, r, s) {
-  let h = lastCommandSegment(command);
-  let y = r.trim() !== "" || s.trim() !== "";
-  let S = (y ? undefined : h.feeder) ?? h.segment;
-  let { base, nativeExt } = parseCommandBase(S);
+function interpretCommandResult(command, exitCode, stdout, stderr) {
+  let lastSegment = lastCommandSegment(command);
+  let hasOutput = stdout.trim() !== "" || stderr.trim() !== "";
+  let interpretedCommand = (hasOutput ? undefined : lastSegment.feeder) ?? lastSegment.segment;
+  let { base, nativeExt } = parseCommandBase(interpretedCommand);
   if (base === "git") {
-    let q = gitSubcommand(S);
-    if (q === "grep") return NO_MATCHES_INTERPRETER(n, r, s);
-    if (q === "diff") return FILES_DIFFER_INTERPRETER(n, r, s);
+    let subcommand = gitSubcommand(interpretedCommand);
+    if (subcommand === "grep") return NO_MATCHES_INTERPRETER(exitCode, stdout, stderr);
+    if (subcommand === "diff") return FILES_DIFFER_INTERPRETER(exitCode, stdout, stderr);
   }
   return (
-    (nativeExt === "exe" && y ? NATIVE_EXE_EXIT_INTERPRETERS.get(base) : undefined) ??
+    (nativeExt === "exe" && hasOutput ? NATIVE_EXE_EXIT_INTERPRETERS.get(base) : undefined) ??
     EXIT_INTERPRETERS.get(base) ??
     defaultExitInterpreter
-  )(n, r, s);
+  )(exitCode, stdout, stderr);
 }
 //@ chunk-e6aww6q8.js:3116289-3116462 placement
 /**
  * 在 interpretCommandResult 基础上：非零退出且命令由 && 门控、输出含解析/未找到错误或 FINDSTR 报错时，退回默认（视为错误）解释。
  */
-function interpretPowerShellResult(command, exitCode, r, s) {
-  let h = interpretCommandResult(command, exitCode, r, s);
-  if (exitCode === 0 || h.isError) return h;
-  let y = `${r}
-${s}`;
+function interpretPowerShellResult(command, exitCode, stdout, stderr) {
+  let result = interpretCommandResult(command, exitCode, stdout, stderr);
+  if (exitCode === 0 || result.isError) return result;
+  let combinedOutput = `${stdout}
+${stderr}`;
   return lastCommandSegment(command).andGated ||
-    NOT_RECOGNIZED_RE.test(y) ||
-    COMMAND_NOT_FOUND_RE.test(y) ||
-    /^FINDSTR: /m.test(y)
-    ? defaultExitInterpreter(exitCode, r, s)
-    : h;
+    NOT_RECOGNIZED_RE.test(combinedOutput) ||
+    COMMAND_NOT_FOUND_RE.test(combinedOutput) ||
+    /^FINDSTR: /m.test(combinedOutput)
+    ? defaultExitInterpreter(exitCode, stdout, stderr)
+    : result;
 }
 //@ chunk-e6aww6q8.js:3116462-3116579 placement
-function mentionsKnownPath(e) {
-  if (PARSER_ERROR_RE.test(e)) return true;
-  for (let [, n] of e.matchAll(INVOKE_EXPRESSION_ERROR_RE))
-    if (n !== undefined && classifyPowerShellParseErrorKind(n) !== null) return true;
+function mentionsKnownPath(text) {
+  if (PARSER_ERROR_RE.test(text)) return true;
+  for (let [, innerMessage] of text.matchAll(INVOKE_EXPRESSION_ERROR_RE))
+    if (innerMessage !== undefined && classifyPowerShellParseErrorKind(innerMessage) !== null) return true;
   return false;
 }
 export {

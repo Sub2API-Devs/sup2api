@@ -36,7 +36,7 @@ import {
   isSnapshotOnlySession,
 } from "./remoteSettingsState.js";
 import { getClaudeConfigDir, isSameConfigDir, getClaudeConfigDirOrNull } from "../../utils/envUtils.js";
-import { En, wi } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2, import_reject } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { jsonParse } from "../../utils/slowOperations.js";
 import { stripBom } from "../../utils/json.js";
 import { isFileTooLargeError, readFileSync, decodeTextBuffer } from "../../utils/fileRead.js";
@@ -68,7 +68,8 @@ import {
 import { platformSettingsChain } from "../../utils/settings/marketplaceSettingsAliases.js";
 import { invalidateCommandNames, commandSyncNameState } from "../../utils/settings/commandSyncNames.js";
 import { restrictionsOfUnvouchedDocumentUnsafe, CREDENTIAL_LIST_PATHS } from "./unvouchedRestrictions.js";
-import { Ji } from "../../../vendor/lodash-es/uniqBy.js";
+import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-dcmhvw5a.js:402126-402247 placement
 function hostSessionSkipsSharedCache() {
@@ -109,10 +110,10 @@ var MAX_REMOTE_SETTINGS_FILE_BYTES = 8388608;
 /**
  * 把磁盘上的远程设置副本收窄为限制键集合（仅在开启相关处理时），未收窄则原样返回。
  */
-function narrowToRestrictions(e) {
-  if (e === null || !hasManagedOrCoworkSurface()) return e;
-  let restrictionSettings = extractRestrictionSettings(e);
-  return En(restrictionSettings, e) ? e : restrictionSettings;
+function narrowToRestrictions(settings) {
+  if (settings === null || !hasManagedOrCoworkSurface()) return settings;
+  let restrictionSettings = extractRestrictionSettings(settings);
+  return import_sortedIndex_2(restrictionSettings, settings) ? settings : restrictionSettings;
 }
 //@ chunk-dcmhvw5a.js:402534-403040 placement
 /**
@@ -120,29 +121,29 @@ function narrowToRestrictions(e) {
  */
 function loadStoredRemoteSettings() {
   if (hostSessionSkipsSharedCache()) return null;
-  let e = currentRemoteSettingsState_2();
-  let storedCopyRefusal = e.storedCopyRefusal;
+  let state = currentRemoteSettingsState_2();
+  let storedCopyRefusal = state.storedCopyRefusal;
   if (
     storedCopyRefusal !== null &&
     isManagedSettingsCopyTrustEnforced() &&
     Date.now() - storedCopyRefusal.atMs < MAX_BACKEND_SETTINGS_BYTES
   ) {
-    e.storedCopyTrust = {
+    state.storedCopyTrust = {
       trusted: false,
       reason: storedCopyRefusal.reason,
     };
     return null;
   }
-  e.storedCopyTrust = "not_asked";
-  e.storedCopyRefusal = null;
-  e.refusedCopyHelperTier = null;
+  state.storedCopyTrust = "not_asked";
+  state.storedCopyRefusal = null;
+  state.refusedCopyHelperTier = null;
   try {
     let remoteSettingsFileStable = readRemoteSettingsFileStable();
     if (remoteSettingsFileStable === null) return null;
-    let s = jsonParse(stripBom(remoteSettingsFileStable));
-    if (!s || typeof s !== "object" || Array.isArray(s)) return null;
-    let a = stripReservedKeys(s);
-    return checkStoredCopyTrust(a) ? a : null;
+    let parsed = jsonParse(stripBom(remoteSettingsFileStable));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    let settings = stripReservedKeys(parsed);
+    return checkStoredCopyTrust(settings) ? settings : null;
   } catch (error) {
     if (isFileTooLargeError(error))
       logForDebugging(
@@ -155,32 +156,33 @@ function loadStoredRemoteSettings() {
 /**
  * 检查远程设置副本的信任（组织固定、签名）。
  */
-function checkStoredCopyTrust(e) {
-  let n = currentRemoteSettingsState_2();
+function checkStoredCopyTrust(settings) {
+  let state = currentRemoteSettingsState_2();
   if (
     !isManagedSettingsCopyTrustEnforced() ||
-    !n.storedCopyGateCovers ||
+    !state.storedCopyGateCovers ||
     getRemoteSettingsPathOverride() !== undefined ||
-    n.evalPolicySnapshotOnly
+    state.evalPolicySnapshotOnly
   ) {
-    n.storedCopyTrust = "not_asked";
+    state.storedCopyTrust = "not_asked";
     return true;
   }
-  let storedCopyOrgPin = n.storedCopyOrgPin;
+  let storedCopyOrgPin = state.storedCopyOrgPin;
   if (storedCopyOrgPin.kind === "read") {
-    let a = verifyStoredCopy(e, storedCopyOrgPin.orgs);
-    if (a.trusted) {
-      n.storedCopyTrust = a;
+    let verdict = verifyStoredCopy(settings, storedCopyOrgPin.orgs);
+    if (verdict.trusted) {
+      state.storedCopyTrust = verdict;
       return true;
     }
-    refuseStoredCopy(e, a.reason, isSoftVerificationFailure(a.reason));
+    refuseStoredCopy(settings, verdict.reason, isSoftVerificationFailure(verdict.reason));
     return false;
   }
-  let s = e.forceRemoteSettingsRefresh === true ? verifyStoredCopy(e, undefined) : undefined;
+  let softVerdict =
+    settings.forceRemoteSettingsRefresh === true ? verifyStoredCopy(settings, undefined) : undefined;
   refuseStoredCopy(
-    e,
+    settings,
     "org_pin_unknown",
-    s !== undefined && (s.trusted || isSoftVerificationFailure(s.reason)),
+    softVerdict !== undefined && (softVerdict.trusted || isSoftVerificationFailure(softVerdict.reason)),
   );
   return false;
 }
@@ -188,13 +190,13 @@ function checkStoredCopyTrust(e) {
 /**
  * 校验远程设置副本签名。
  */
-function verifyStoredCopy(e, pinnedOrgs) {
+function verifyStoredCopy(settings, pinnedOrgs) {
   try {
     return verifySignedCache({
       kind: "managed-settings",
       cachePath: getSettingsPath(),
-      body: servedBodyOf(e),
-      bodySha: computeChecksum(servedBodyOf(e)),
+      body: servedBodyOf(settings),
+      bodySha: computeChecksum(servedBodyOf(settings)),
       account: currentRemoteSettingsState_2().storedAccountReader?.(),
       pinnedOrgs,
       nowMs: Date.now(),
@@ -214,20 +216,22 @@ function verifyStoredCopy(e, pinnedOrgs) {
 /**
  * 拒绝不可信的远程设置副本。
  */
-function refuseStoredCopy(e, n, r) {
-  let s = currentRemoteSettingsState_2();
-  s.storedCopyTrust = {
+function refuseStoredCopy(settings, reason, mayForceRefresh) {
+  let state = currentRemoteSettingsState_2();
+  state.storedCopyTrust = {
     trusted: false,
-    reason: n,
+    reason,
   };
-  s.storedCopyRefusal = {
+  state.storedCopyRefusal = {
     atMs: Date.now(),
-    reason: n,
-    forcesRefresh: r && e.forceRemoteSettingsRefresh === true,
+    reason,
+    forcesRefresh: mayForceRefresh && settings.forceRemoteSettingsRefresh === true,
   };
-  s.refusedCopyHelperTier = isSoftVerificationFailure(n) ? helperTierFor(e) : null;
-  s.seedConsentBaseline(e);
-  logForDebugging(`Remote settings: the stored copy is not trusted at rest (${n}); treating it as absent`);
+  state.refusedCopyHelperTier = isSoftVerificationFailure(reason) ? helperTierFor(settings) : null;
+  state.seedConsentBaseline(settings);
+  logForDebugging(
+    `Remote settings: the stored copy is not trusted at rest (${reason}); treating it as absent`,
+  );
 }
 //@ chunk-dcmhvw5a.js:404093-404268 placement = hasApiKeyHelper (1)
 function helperTierOf(settings) {
@@ -236,70 +240,72 @@ function helperTierOf(settings) {
   return typeof apiKeyHelper === "string" && apiKeyHelper.trim() !== ""
     ? {
         apiKeyHelper,
-        env: pickByHelper(isPlainObject_2(env) ? env : {}, (s) => typeof s === "string"),
+        env: pickByHelper(isPlainObject_2(env) ? env : {}, (value) => typeof value === "string"),
       }
     : null;
 }
 //@ chunk-dcmhvw5a.js:404268-404403 placement
-function helperTierFor(e) {
-  let [n] = orderedPlatformLayers(e);
-  if (e === null || n === undefined) return helperTierOf(e);
-  let [r, s] = n;
+function helperTierFor(settings) {
+  let [layer] = orderedPlatformLayers(settings);
+  if (settings === null || layer === undefined) return helperTierOf(settings);
+  let [layerName, layerSettings] = layer;
   return helperTierOf(
-    isMergingPolicyHelper(e, r)
+    isMergingPolicyHelper(settings, layerName)
       ? {
-          ...e,
-          ...s,
+          ...settings,
+          ...layerSettings,
           env: {
-            ...e.env,
-            ...s.env,
+            ...settings.env,
+            ...layerSettings.env,
           },
         }
-      : s,
+      : layerSettings,
   );
 }
 //@ chunk-dcmhvw5a.js:404403-404499 placement
 /**
  * 会话缓存的 helper 层级：缓存等于已验证载荷时按其自身层级判定，否则按别的规则。
  */
-function helperTierOfSessionCache(e) {
-  return e.sessionCache === e.verifiedPayload ? helperTierOf(e.sessionCache) : helperTierFor(e.sessionCache);
+function helperTierOfSessionCache(state) {
+  return state.sessionCache === state.verifiedPayload
+    ? helperTierOf(state.sessionCache)
+    : helperTierFor(state.sessionCache);
 }
 //@ chunk-dcmhvw5a.js:404499-404856 placement
 function getRemoteHelperTier() {
-  let e = currentRemoteSettingsState_2();
-  let helperTierReadAtMs = e.helperTierReadAtMs;
+  let state = currentRemoteSettingsState_2();
+  let helperTierReadAtMs = state.helperTierReadAtMs;
   if (
-    e.sessionCache === null &&
+    state.sessionCache === null &&
     (helperTierReadAtMs === null || Date.now() - helperTierReadAtMs >= MAX_BACKEND_SETTINGS_BYTES)
   ) {
-    e.helperTierReadAtMs = Date.now();
+    state.helperTierReadAtMs = Date.now();
     getRemoteManagedSettingsRawCache();
   }
-  let { sessionCache, refusedCopyHelperTier, droppedHelperTier } = e;
-  let c = helperTierOfSessionCache(e);
-  if (c !== null) return c;
+  let { sessionCache, refusedCopyHelperTier, droppedHelperTier } = state;
+  let tier = helperTierOfSessionCache(state);
+  if (tier !== null) return tier;
   if (sessionCache === null && refusedCopyHelperTier !== null) return refusedCopyHelperTier;
   if (droppedHelperTier === null) return null;
-  let g = inheritedProviderEnv(droppedHelperTier, sessionCache);
-  return Object.keys(g).length === 0
+  let env = inheritedProviderEnv(droppedHelperTier, sessionCache);
+  return Object.keys(env).length === 0
     ? null
     : {
         ...droppedHelperTier,
-        env: g,
+        env,
       };
 }
 //@ chunk-dcmhvw5a.js:404856-405073 placement
 function inheritedProviderEnv(droppedHelperTier, sessionCache) {
   let env = droppedHelperTier.env ?? {};
   let env_2 = isPlainObject_2(sessionCache?.env) ? sessionCache.env : {};
-  let a = {};
-  for (let c of ["ANTHROPIC_BASE_URL", "CLAUDE_CODE_API_BASE_URL", ...PROVIDER_ENV_FLAGS]) {
-    let trimmed = getEnvCaseInsensitive(env, c)?.trim();
-    if (trimmed && trimmed === process.env[c]?.trim() && getEnvCaseInsensitive(env_2, c) === undefined)
-      a[c] = trimmed;
+  let inherited = {};
+  for (let name of ["ANTHROPIC_BASE_URL", "CLAUDE_CODE_API_BASE_URL", ...PROVIDER_ENV_FLAGS]) {
+    let trimmed = getEnvCaseInsensitive(env, name)?.trim();
+    if (trimmed && trimmed === process.env[name]?.trim() && getEnvCaseInsensitive(env_2, name) === undefined)
+      inherited[name] = trimmed;
   }
-  return a;
+  return inherited;
 }
 //@ chunk-dcmhvw5a.js:405073-405159 placement
 function isConfirmedHelperHeld() {
@@ -308,11 +314,11 @@ function isConfirmedHelperHeld() {
 }
 //@ chunk-dcmhvw5a.js:405159-405407 placement
 function getRemoteHelperGap() {
-  let e = currentRemoteSettingsState_2();
-  if (helperTierOfSessionCache(e) !== null)
-    return e.sessionCache === e.verifiedPayload ? null : "settings_unloaded";
-  if (e.sessionCache === null && e.refusedCopyHelperTier !== null) return "settings_unloaded";
-  return e.droppedHelperTier === null ? null : "restart_needed";
+  let state = currentRemoteSettingsState_2();
+  if (helperTierOfSessionCache(state) !== null)
+    return state.sessionCache === state.verifiedPayload ? null : "settings_unloaded";
+  if (state.sessionCache === null && state.refusedCopyHelperTier !== null) return "settings_unloaded";
+  return state.droppedHelperTier === null ? null : "restart_needed";
 }
 //@ chunk-dcmhvw5a.js:405407-405419 placement
 var MAX_HELPER_CONSENT_BYTES = 4096;
@@ -363,18 +369,26 @@ function getBackendView() {
   return backendView;
 }
 //@ chunk-dcmhvw5a.js:405933-405993 placement
-var Ls = STORAGE_SPACES.state("remote-settings");
-var Ns = STORAGE_SPACES.state(HELPER_CONSENT_STATE_ID);
-var MAX_STORAGE_EVENT_LAG_MS = 2000;
+var REMOTE_SETTINGS_STATE_ID; // deferred: uses SETTINGS_FILENAME (./remoteSettingsState.js) of its import cycle while loading; runs once the cycle is complete
+var CONSENT_STATE_STORAGE_ID;
+var MAX_STORAGE_EVENT_LAG_MS;
+deferInit("chunk-dcmhvw5a.js:405933", () => {
+  REMOTE_SETTINGS_STATE_ID = STORAGE_SPACES.state("remote-settings");
+  CONSENT_STATE_STORAGE_ID = STORAGE_SPACES.state(HELPER_CONSENT_STATE_ID);
+  MAX_STORAGE_EVENT_LAG_MS = 2000;
+});
 //@ chunk-dcmhvw5a.js:405993-406058 placement
-function remoteSettingsFileWritten(e, n) {
-  currentRemoteSettingsState_2().backendView?.written(e === "cache" ? Ls : Ns, n);
+function remoteSettingsFileWritten(which, text) {
+  currentRemoteSettingsState_2().backendView?.written(
+    which === "cache" ? REMOTE_SETTINGS_STATE_ID : CONSENT_STATE_STORAGE_ID,
+    text,
+  );
 }
 //@ chunk-dcmhvw5a.js:406058-406388 placement
 async function primeRemoteManagedSettingsCache(storageV5) {
   if (!isStorageV5Enabled() || storageV5 === undefined) return;
-  let n = currentRemoteSettingsState_2();
-  if (n.backendView !== undefined) return n.backendView.priming;
+  let state = currentRemoteSettingsState_2();
+  if (state.backendView !== undefined) return state.backendView.priming;
   if (getRemoteSettingsPathOverride() !== undefined) {
     logForDebugging(
       "Remote settings: storage prime skipped (CLAUDE_CODE_REMOTE_SETTINGS_PATH override); disk probe stays",
@@ -382,46 +396,46 @@ async function primeRemoteManagedSettingsCache(storageV5) {
     return;
   }
   if (hostSessionSkipsSharedCache()) return;
-  let r = new RemoteSettingsStorageWatcher(storageV5);
-  n.backendView = r;
-  r.priming = watchRemoteSettingsStorage(r, storageV5, n);
-  return r.priming;
+  let watcher = new RemoteSettingsStorageWatcher(storageV5);
+  state.backendView = watcher;
+  watcher.priming = watchRemoteSettingsStorage(watcher, storageV5, state);
+  return watcher.priming;
 }
 //@ chunk-dcmhvw5a.js:406388-406999 placement
 /**
  * 订阅存储中的远程设置变化。
  */
-async function watchRemoteSettingsStorage(e, n, r) {
+async function watchRemoteSettingsStorage(watcher, storageV5, state) {
   try {
-    for (let key of [Ns, Ls]) {
-      let a = await n.subscribe(
+    for (let key of [CONSENT_STATE_STORAGE_ID, REMOTE_SETTINGS_STATE_ID]) {
+      let subscription = await storageV5.subscribe(
         {
           target: "key",
           key,
         },
-        (c) => e.onEvent(c),
+        (event) => watcher.onEvent(event),
         {
           maxObservationLagMs: MAX_STORAGE_EVENT_LAG_MS,
         },
       );
-      if (!a.ok) {
-        e.standDown(`watch refused: ${formatStorageError(a.error)}`, "warn");
+      if (!subscription.ok) {
+        watcher.standDown(`watch refused: ${formatStorageError(subscription.error)}`, "warn");
         return;
       }
-      if (e.stoodDown) {
-        unsubscribeSafe(a.value);
+      if (watcher.stoodDown) {
+        unsubscribeSafe(subscription.value);
         return;
       }
-      e.subscriptions.push(a.value);
+      watcher.subscriptions.push(subscription.value);
     }
-    if (!(await e.settled()) || !(await e.readUnobserved())) return;
-    if (e.stoodDown) return;
-    e.ready = true;
+    if (!(await watcher.settled()) || !(await watcher.readUnobserved())) return;
+    if (watcher.stoodDown) return;
+    watcher.ready = true;
     logForDebugging(
-      `Remote settings: primed from storage (${describeCachedContent(e.content)}; helper consent ${e.attestation === undefined ? "not attested" : "attested"}${r.sessionCache !== null ? "; cache already loaded, serving later loads" : ""})`,
+      `Remote settings: primed from storage (${describeCachedContent(watcher.content)}; helper consent ${watcher.attestation === undefined ? "not attested" : "attested"}${state.sessionCache !== null ? "; cache already loaded, serving later loads" : ""})`,
     );
   } catch (error) {
-    e.standDown(`prime failed: ${errorMessage(error)}`);
+    watcher.standDown(`prime failed: ${errorMessage(error)}`);
   }
 }
 //@ chunk-dcmhvw5a.js:406999-410132 placement
@@ -437,164 +451,164 @@ class RemoteSettingsStorageWatcher {
   stoodDown = false;
   configHome = getClaudeConfigDirOrNull();
   subscriptions = [];
-  cache = makeWatchEntry(Ls, "cache file");
-  sidecar = makeWatchEntry(Ns, "helper consent sidecar");
+  cache = makeWatchEntry(REMOTE_SETTINGS_STATE_ID, "cache file");
+  sidecar = makeWatchEntry(CONSENT_STATE_STORAGE_ID, "helper consent sidecar");
   work = Promise.resolve(true);
   steps = 0;
   lastCacheStep = 0;
   constructor(storageV5) {
     this.storageV5 = storageV5;
   }
-  onEvent(e) {
+  onEvent(event) {
     if (this.stoodDown) return;
-    if (!e.ok) {
-      this.standDown(`watch ended: ${formatStorageError(e.error)}`);
+    if (!event.ok) {
+      this.standDown(`watch ended: ${formatStorageError(event.error)}`);
       return;
     }
-    let n = this.heldOf(e.value.key);
-    if (n === undefined) return;
-    if (e.value.kind === "snapshot" && n.begun) return;
-    this.take(n, eventValue(e.value));
+    let entry = this.heldOf(event.value.key);
+    if (entry === undefined) return;
+    if (event.value.kind === "snapshot" && entry.begun) return;
+    this.take(entry, eventValue(event.value));
   }
   settled() {
-    return this.work.then((e) => e && !this.stoodDown);
+    return this.work.then((ok) => ok && !this.stoodDown);
   }
   readUnobserved() {
-    for (let e of [this.cache, this.sidecar]) if (!e.observed) this.take(e);
+    for (let entry of [this.cache, this.sidecar]) if (!entry.observed) this.take(entry);
     return this.settled();
   }
-  written(e, n) {
-    let r = this.stoodDown ? undefined : this.heldOf(e);
-    if (r === undefined) return;
-    r.begun = true;
-    r.generation++;
-    if (r === this.cache) this.sidecar.generation++;
-    this.advance(r);
-    if (n !== null && Buffer.byteLength(n, "utf8") > MAX_STORAGE_VIEW_BYTES) {
-      this.standDown(`oversize ${r.label}`);
+  written(space, text) {
+    let entry = this.stoodDown ? undefined : this.heldOf(space);
+    if (entry === undefined) return;
+    entry.begun = true;
+    entry.generation++;
+    if (entry === this.cache) this.sidecar.generation++;
+    this.advance(entry);
+    if (text !== null && Buffer.byteLength(text, "utf8") > MAX_STORAGE_VIEW_BYTES) {
+      this.standDown(`oversize ${entry.label}`);
       return;
     }
-    this.install(r, n);
-    this.follow(r, n === null);
+    this.install(entry, text);
+    this.follow(entry, text === null);
   }
-  heldOf(e) {
-    let n = storageSpaceId(e);
-    return n === this.cache.id ? this.cache : n === this.sidecar.id ? this.sidecar : undefined;
+  heldOf(space) {
+    let spaceId = storageSpaceId(space);
+    return spaceId === this.cache.id ? this.cache : spaceId === this.sidecar.id ? this.sidecar : undefined;
   }
-  take(e, n) {
-    e.begun = true;
-    if (n !== undefined) {
-      e.pendingRead = undefined;
-      let generation = e.generation;
-      this.queue(e, () => (e.generation === generation ? this.fill(e, n) : !this.stoodDown));
+  take(entry, change) {
+    entry.begun = true;
+    if (change !== undefined) {
+      entry.pendingRead = undefined;
+      let generation = entry.generation;
+      this.queue(entry, () => (entry.generation === generation ? this.fill(entry, change) : !this.stoodDown));
     }
-    return this.follow(e, n === undefined);
+    return this.follow(entry, change === undefined);
   }
-  follow(e, n) {
-    if (n && e.pendingRead === undefined) {
-      let r = this.queue(e, () => {
-        if (e.pendingRead === r) e.pendingRead = undefined;
-        return this.read(e);
+  follow(entry, mayRead) {
+    if (mayRead && entry.pendingRead === undefined) {
+      let step = this.queue(entry, () => {
+        if (entry.pendingRead === step) entry.pendingRead = undefined;
+        return this.read(entry);
       });
-      e.pendingRead = r;
+      entry.pendingRead = step;
     }
-    if (e === this.cache && (this.sidecar.pendingRead ?? 0) < this.lastCacheStep) {
+    if (entry === this.cache && (this.sidecar.pendingRead ?? 0) < this.lastCacheStep) {
       this.sidecar.pendingRead = undefined;
       return this.take(this.sidecar);
     }
     return this.work;
   }
-  queue(e, n) {
-    let r = this.advance(e);
-    this.work = this.work.then(n).catch((error) => {
+  queue(entry, step) {
+    let step_2 = this.advance(entry);
+    this.work = this.work.then(step).catch((error) => {
       this.standDown(`refresh failed: ${errorMessage(error)}`);
       return false;
     });
-    return r;
+    return step_2;
   }
-  advance(e) {
-    let n = ++this.steps;
-    if (e === this.cache) this.lastCacheStep = n;
-    return n;
+  advance(entry) {
+    let step = ++this.steps;
+    if (entry === this.cache) this.lastCacheStep = step;
+    return step;
   }
-  async read(e) {
+  async read(entry) {
     if (this.stoodDown) return false;
-    let generation = e.generation;
+    let generation = entry.generation;
     try {
-      let r = await this.storageV5.read([
+      let result = await this.storageV5.read([
         {
-          key: e.key,
+          key: entry.key,
           offset: 0,
           length: MAX_STORAGE_VIEW_BYTES + 1,
         },
       ]);
-      if (e.generation !== generation) {
-        if (!r.ok)
+      if (entry.generation !== generation) {
+        if (!result.ok)
           logForDebugging(
-            `Remote settings: a superseded read of the ${e.label} failed (${formatStorageError(r.error)}); ignored`,
+            `Remote settings: a superseded read of the ${entry.label} failed (${formatStorageError(result.error)}); ignored`,
           );
         return !this.stoodDown;
       }
-      if (!r.ok) {
-        if (storageErrorCode(r.error) === "ELOOP") {
+      if (!result.ok) {
+        if (storageErrorCode(result.error) === "ELOOP") {
           logForDebugging(
-            `Remote settings: the ${e.label} is a symlink; not read with the storage flag on (strict rule for files only Claude Code writes)`,
+            `Remote settings: the ${entry.label} is a symlink; not read with the storage flag on (strict rule for files only Claude Code writes)`,
             {
               level: "warn",
             },
           );
-          return this.fill(e, null);
+          return this.fill(entry, null);
         }
-        this.standDown(`read failed: ${formatStorageError(r.error)}`);
+        this.standDown(`read failed: ${formatStorageError(result.error)}`);
         return false;
       }
-      let s = r.value.items[0];
-      if (s.found && s.totalBytes > MAX_STORAGE_VIEW_BYTES) {
-        this.standDown(`oversize ${e.label}`);
+      let item = result.value.items[0];
+      if (item.found && item.totalBytes > MAX_STORAGE_VIEW_BYTES) {
+        this.standDown(`oversize ${entry.label}`);
         return false;
       }
-      return this.fill(e, s.found ? s.value : null);
+      return this.fill(entry, item.found ? item.value : null);
     } catch (error) {
       this.standDown(`read failed: ${errorMessage(error)}`);
       return false;
     }
   }
-  fill(e, n) {
+  fill(entry, bytes) {
     if (this.stoodDown) return false;
-    if (n !== null && n.byteLength > MAX_STORAGE_VIEW_BYTES) {
-      this.standDown(`oversize ${e.label}`);
+    if (bytes !== null && bytes.byteLength > MAX_STORAGE_VIEW_BYTES) {
+      this.standDown(`oversize ${entry.label}`);
       return false;
     }
-    this.install(e, n === null ? null : decodeTextBuffer(n));
+    this.install(entry, bytes === null ? null : decodeTextBuffer(bytes));
     return true;
   }
-  install(e, n) {
-    if (e === this.cache) {
-      if (e.observed && this.ready)
-        logForDebugging(`Remote settings: storage view refreshed (${describeCachedContent(n)})`);
-      this.content = n;
+  install(entry, text) {
+    if (entry === this.cache) {
+      if (entry.observed && this.ready)
+        logForDebugging(`Remote settings: storage view refreshed (${describeCachedContent(text)})`);
+      this.content = text;
       this.attestation = undefined;
-    } else this.attestation = n?.trim() || undefined;
-    e.observed = true;
+    } else this.attestation = text?.trim() || undefined;
+    entry.observed = true;
   }
-  standDown(e, level = "debug") {
-    let r = currentRemoteSettingsState_2();
-    if (r.backendView === this) r.backendView = undefined;
+  standDown(reason, level = "debug") {
+    let state = currentRemoteSettingsState_2();
+    if (state.backendView === this) state.backendView = undefined;
     if (this.stoodDown) return;
     this.stoodDown = true;
     this.content = null;
     this.attestation = undefined;
     for (let subscription of this.subscriptions.splice(0)) unsubscribeSafe(subscription);
-    logForDebugging(`Remote settings: storage view stood down (${e}); disk probe serves`, {
+    logForDebugging(`Remote settings: storage view stood down (${reason}); disk probe serves`, {
       level,
     });
   }
 }
 //@ chunk-dcmhvw5a.js:410132-410234 placement
-function makeWatchEntry(e, label) {
+function makeWatchEntry(key, label) {
   return {
-    key: e,
-    id: storageSpaceId(e),
+    key,
+    id: storageSpaceId(key),
     label,
     observed: false,
     begun: false,
@@ -603,9 +617,9 @@ function makeWatchEntry(e, label) {
   };
 }
 //@ chunk-dcmhvw5a.js:410234-410352 placement
-function unsubscribeSafe(e) {
+function unsubscribeSafe(subscription) {
   try {
-    e.unsubscribe();
+    subscription.unsubscribe();
   } catch (error) {
     logForDebugging(`Remote settings: storage unsubscribe failed: ${errorMessage(error)}`, {
       level: "warn",
@@ -613,12 +627,12 @@ function unsubscribeSafe(e) {
   }
 }
 //@ chunk-dcmhvw5a.js:410352-410476 placement
-function eventValue(e) {
-  switch (e.kind) {
+function eventValue(event) {
+  switch (event.kind) {
     case "snapshot":
-      return "absent" in e ? undefined : e.value;
+      return "absent" in event ? undefined : event.value;
     case "updated":
-      return e.value;
+      return event.value;
     default:
       return;
   }
@@ -627,103 +641,107 @@ function eventValue(e) {
 /**
  * 日志用描述：缓存内容为空时 "absent"，否则 "N chars"。
  */
-function describeCachedContent(e) {
-  return e === null ? "absent" : `${e.length} chars`;
+function describeCachedContent(text) {
+  return text === null ? "absent" : `${text.length} chars`;
 }
 //@ chunk-dcmhvw5a.js:410536-412299 placement
 /**
  * 未验证的远程设置中扣下的环境变量键。
  */
-var UNVERIFIED_WITHHELD_ENV_KEYS = new Set(
-  [
-    ...NETWORK_ENV_VARS,
-    "CLAUDE_CODE_PROXY_RESOLVES_HOSTS",
-    "CLAUDE_CODE_ENABLE_PROXY_AUTH_HELPER",
-    "CLAUDE_CODE_PROXY_AUTH_HELPER_TTL_MS",
-    "API_FORCE_IDLE_TIMEOUT",
-    "ANTHROPIC_UNIX_SOCKET",
-    "NODE_OPTIONS",
-    ...PROVIDER_SELECTION_ENV_VARS,
-    ...BASE_URL_ENV_VARS,
-    "AWS_ENDPOINT_URL_STS",
-    "AWS_ENDPOINT_URL",
-    "AWS_ENDPOINT_URL_SSO",
-    "AWS_ENDPOINT_URL_SSO_OIDC",
-    "AWS_ENDPOINT_URL_BEDROCK",
-    "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
-    ...HOST_ONLY_ENV_VARS,
-    ...AWS_CREDENTIAL_ENV_VARS,
-    ...GCE_METADATA_ENV_VARS,
-    "CLOUDSDK_CONFIG",
-    "GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES",
-    "GCLOUD_PROJECT",
-    "CLAUDE_CODE_CUSTOM_OAUTH_URL",
-    ...PROVIDER_CREDENTIAL_ENV_VARS,
-    "CLAUDE_CODE_API_BASE_URL",
-    "CLAUDE_CODE_OAUTH_REFRESH_TOKEN",
-    "CLAUDE_CODE_OAUTH_SCOPES",
-    "CLAUDE_CODE_OAUTH_CLIENT_ID",
-    "CLAUDE_CODE_SESSION_ACCESS_TOKEN",
-    "CLAUDE_SESSION_INGRESS_TOKEN_FILE",
-    "CLAUDE_CODE_ENVIRONMENT_KIND",
-    "CLAUDE_CODE_REMOTE_SESSION_ID",
-    "ANTHROPIC_FEDERATION_RULE_ID",
-    "ANTHROPIC_ORGANIZATION_ID",
-    "ANTHROPIC_WORKSPACE_ID",
-    "ANTHROPIC_SERVICE_ACCOUNT_ID",
-    "ANTHROPIC_IDENTITY_TOKEN",
-    "ANTHROPIC_IDENTITY_TOKEN_FILE",
-    "ANTHROPIC_SCOPE",
-    "ANTHROPIC_PROFILE",
-    "ANTHROPIC_CONFIG_DIR",
-    "CLAUDE_CODE_FEDERATION_CACHE_DIR",
-    "HOME",
-    "XDG_CONFIG_HOME",
-    "APPDATA",
-    "USERPROFILE",
-    "HOMEDRIVE",
-    "HOMEPATH",
-    "PROGRAMDATA",
-    "ALLUSERSPROFILE",
-    "ANTHROPIC_CUSTOM_HEADERS",
-    "CLAUDE_CODE_HOST_CREDS_FILE",
-    "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
-    "CLAUDE_CODE_HOST_AUTH_ENV_VAR",
-    "CLAUDE_CONFIG_DIR",
-    "CLAUDE_SECURESTORAGE_CONFIG_DIR",
-    "CLAUDE_CODE_REMOTE_SETTINGS_PATH",
-    "CLAUDE_CODE_MANAGED_SETTINGS_PATH",
-    "CLAUDE_CODE_DISABLE_ADMIN_ENV_UNION",
-    "CLAUDE_CODE_MOCK_REMOTE_SETTINGS",
-    "USE_LOCAL_OAUTH",
-    "USE_STAGING_OAUTH",
-    "CLAUDE_LOCAL_OAUTH_API_BASE",
-    "CLAUDE_LOCAL_OAUTH_APPS_BASE",
-    "CLAUDE_LOCAL_OAUTH_CONSOLE_BASE",
-    "CLAUDE_BRIDGE_BASE_URL",
-    "CLAUDE_BRIDGE_OAUTH_TOKEN",
-    "CLAUDE_BRIDGE_SESSION_INGRESS_URL",
-    "CLAUDE_REMOTE_TOOLS_BRIDGE_URL",
-    "CLAUDE_CODE_GB_BASE_URL",
-  ].map((e) => e.toUpperCase()),
-);
+var UNVERIFIED_WITHHELD_ENV_KEYS; // deferred: uses NETWORK_ENV_VARS (../../utils/managedEnvConstants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:410536", () => {
+  UNVERIFIED_WITHHELD_ENV_KEYS = new Set(
+    [
+      ...NETWORK_ENV_VARS,
+      "CLAUDE_CODE_PROXY_RESOLVES_HOSTS",
+      "CLAUDE_CODE_ENABLE_PROXY_AUTH_HELPER",
+      "CLAUDE_CODE_PROXY_AUTH_HELPER_TTL_MS",
+      "API_FORCE_IDLE_TIMEOUT",
+      "ANTHROPIC_UNIX_SOCKET",
+      "NODE_OPTIONS",
+      ...PROVIDER_SELECTION_ENV_VARS,
+      ...BASE_URL_ENV_VARS,
+      "AWS_ENDPOINT_URL_STS",
+      "AWS_ENDPOINT_URL",
+      "AWS_ENDPOINT_URL_SSO",
+      "AWS_ENDPOINT_URL_SSO_OIDC",
+      "AWS_ENDPOINT_URL_BEDROCK",
+      "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
+      ...HOST_ONLY_ENV_VARS,
+      ...AWS_CREDENTIAL_ENV_VARS,
+      ...GCE_METADATA_ENV_VARS,
+      "CLOUDSDK_CONFIG",
+      "GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES",
+      "GCLOUD_PROJECT",
+      "CLAUDE_CODE_CUSTOM_OAUTH_URL",
+      ...PROVIDER_CREDENTIAL_ENV_VARS,
+      "CLAUDE_CODE_API_BASE_URL",
+      "CLAUDE_CODE_OAUTH_REFRESH_TOKEN",
+      "CLAUDE_CODE_OAUTH_SCOPES",
+      "CLAUDE_CODE_OAUTH_CLIENT_ID",
+      "CLAUDE_CODE_SESSION_ACCESS_TOKEN",
+      "CLAUDE_SESSION_INGRESS_TOKEN_FILE",
+      "CLAUDE_CODE_ENVIRONMENT_KIND",
+      "CLAUDE_CODE_REMOTE_SESSION_ID",
+      "ANTHROPIC_FEDERATION_RULE_ID",
+      "ANTHROPIC_ORGANIZATION_ID",
+      "ANTHROPIC_WORKSPACE_ID",
+      "ANTHROPIC_SERVICE_ACCOUNT_ID",
+      "ANTHROPIC_IDENTITY_TOKEN",
+      "ANTHROPIC_IDENTITY_TOKEN_FILE",
+      "ANTHROPIC_SCOPE",
+      "ANTHROPIC_PROFILE",
+      "ANTHROPIC_CONFIG_DIR",
+      "CLAUDE_CODE_FEDERATION_CACHE_DIR",
+      "HOME",
+      "XDG_CONFIG_HOME",
+      "APPDATA",
+      "USERPROFILE",
+      "HOMEDRIVE",
+      "HOMEPATH",
+      "PROGRAMDATA",
+      "ALLUSERSPROFILE",
+      "ANTHROPIC_CUSTOM_HEADERS",
+      "CLAUDE_CODE_HOST_CREDS_FILE",
+      "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
+      "CLAUDE_CODE_HOST_AUTH_ENV_VAR",
+      "CLAUDE_CONFIG_DIR",
+      "CLAUDE_SECURESTORAGE_CONFIG_DIR",
+      "CLAUDE_CODE_REMOTE_SETTINGS_PATH",
+      "CLAUDE_CODE_MANAGED_SETTINGS_PATH",
+      "CLAUDE_CODE_DISABLE_ADMIN_ENV_UNION",
+      "CLAUDE_CODE_MOCK_REMOTE_SETTINGS",
+      "USE_LOCAL_OAUTH",
+      "USE_STAGING_OAUTH",
+      "CLAUDE_LOCAL_OAUTH_API_BASE",
+      "CLAUDE_LOCAL_OAUTH_APPS_BASE",
+      "CLAUDE_LOCAL_OAUTH_CONSOLE_BASE",
+      "CLAUDE_BRIDGE_BASE_URL",
+      "CLAUDE_BRIDGE_OAUTH_TOKEN",
+      "CLAUDE_BRIDGE_SESSION_INGRESS_URL",
+      "CLAUDE_REMOTE_TOOLS_BRIDGE_URL",
+      "CLAUDE_CODE_GB_BASE_URL",
+    ].map((name) => name.toUpperCase()),
+  );
+});
 //@ chunk-dcmhvw5a.js:412299-412464 placement
-function withholdUnverifiedEnv(e) {
-  if (!e || (!e.env && !("managedMcpServers" in e))) return e;
-  let { managedMcpServers, ...r } = e;
-  return e.env
+function withholdUnverifiedEnv(settings) {
+  if (!settings || (!settings.env && !("managedMcpServers" in settings))) return settings;
+  let { managedMcpServers, ...rest } = settings;
+  return settings.env
     ? {
-        ...r,
-        env: wi(e.env, (s, a) => UNVERIFIED_WITHHELD_ENV_KEYS.has(a.toUpperCase())),
+        ...rest,
+        env: import_reject(settings.env, (value, key) => UNVERIFIED_WITHHELD_ENV_KEYS.has(key.toUpperCase())),
       }
-    : r;
+    : rest;
 }
 //@ chunk-dcmhvw5a.js:412464-412585 placement
-function withholdUnverifiedCacheKeys(e) {
-  return "managedMcpServers" in e ||
-    (!!e.env && Object.keys(e.env).some((key) => UNVERIFIED_WITHHELD_ENV_KEYS.has(key.toUpperCase())))
-    ? (withholdUnverifiedEnv(e) ?? e)
-    : e;
+function withholdUnverifiedCacheKeys(settings) {
+  return "managedMcpServers" in settings ||
+    (!!settings.env &&
+      Object.keys(settings.env).some((key) => UNVERIFIED_WITHHELD_ENV_KEYS.has(key.toUpperCase())))
+    ? (withholdUnverifiedEnv(settings) ?? settings)
+    : settings;
 }
 //@ chunk-dcmhvw5a.js:412585-412702 placement
 function unverifiedRemoteCacheWithholdsProvisions() {
@@ -735,106 +753,107 @@ function unverifiedRemoteCacheWithholdsProvisions() {
   )
     return false;
   if (hasManagedMcpServers(remoteManagedSettingsRawCache)) return true;
-  return orderedPlatformLayers(remoteManagedSettingsRawCache).some(([, n]) => hasManagedMcpServers(n));
+  return orderedPlatformLayers(remoteManagedSettingsRawCache).some(([, layer]) =>
+    hasManagedMcpServers(layer),
+  );
 }
 //@ chunk-dcmhvw5a.js:412702-412825 placement
-function orderedPlatformLayers(e) {
-  let n = policyHelperSlots(e);
-  if (n.length === 0) return [];
-  return [...platformSettingsChain().chain, undefined].flatMap((r) =>
-    n.filter(([s]) => isPolicyHelperPath(s) === r),
+function orderedPlatformLayers(settings) {
+  let entries = policyHelperSlots(settings);
+  if (entries.length === 0) return [];
+  return [...platformSettingsChain().chain, undefined].flatMap((chainEntry) =>
+    entries.filter(([path]) => isPolicyHelperPath(path) === chainEntry),
   );
 }
 //@ chunk-dcmhvw5a.js:412825-412903 placement
 /**
  * 判断一份远程设置里是否声明了托管的 MCP 服务器。
  */
-function hasManagedMcpServers(e) {
-  let managedMcpServers = e.managedMcpServers;
+function hasManagedMcpServers(settings) {
+  let managedMcpServers = settings.managedMcpServers;
   return isPlainObject_2(managedMcpServers) && Object.keys(managedMcpServers).length > 0;
 }
 //@ chunk-dcmhvw5a.js:412903-412964 placement
 /**
  * 给定载荷是否被视为已验证（等于已验证载荷，或配置了路径覆盖）。
  */
-function isVerifiedOrOverridden(e, remoteManagedSettingsRawCache) {
-  return remoteManagedSettingsRawCache === e.verifiedPayload || Boolean(getRemoteSettingsPathOverride());
+function isVerifiedOrOverridden(state, payload) {
+  return payload === state.verifiedPayload || Boolean(getRemoteSettingsPathOverride());
 }
 //@ chunk-dcmhvw5a.js:412964-413359 placement
 function getRemoteManagedSettingsRawCache() {
-  let e = currentRemoteSettingsState_2();
-  if (!getRemoteSettingsPathOverride() && e.eligible !== true) return e.heldSoFar(null);
-  if (e.sessionCache) {
-    if (e.sessionCache !== e.seededUnjudged || !isManagedSettingsCopyTrustEnforced()) return e.sessionCache;
-    e.sessionCache = null;
-    e.seededUnjudged = null;
+  let state = currentRemoteSettingsState_2();
+  if (!getRemoteSettingsPathOverride() && state.eligible !== true) return state.heldSoFar(null);
+  if (state.sessionCache) {
+    if (state.sessionCache !== state.seededUnjudged || !isManagedSettingsCopyTrustEnforced())
+      return state.sessionCache;
+    state.sessionCache = null;
+    state.seededUnjudged = null;
     invalidateCommandNames();
   }
-  let n = getBackendView() !== undefined;
+  let hasBackendView = getBackendView() !== undefined;
   let storedRemoteSettings = loadStoredRemoteSettings();
   if (storedRemoteSettings) {
-    e.seedFromDisk(storedRemoteSettings);
-    e.seededUnjudged = isManagedSettingsCopyTrustEnforced() ? null : e.sessionCache;
-    if (n) commandSyncNameState().invalidatePolicyLayer();
+    state.seedFromDisk(storedRemoteSettings);
+    state.seededUnjudged = isManagedSettingsCopyTrustEnforced() ? null : state.sessionCache;
+    if (hasBackendView) commandSyncNameState().invalidatePolicyLayer();
     else invalidateCommandNames();
-    return e.sessionCache;
+    return state.sessionCache;
   }
-  return e.heldSoFar(null);
+  return state.heldSoFar(null);
 }
 //@ chunk-dcmhvw5a.js:413359-413774 placement
-function getRemoteManagedSettingsSyncFromCache(e) {
-  let remoteManagedSettingsRawCache = getRemoteManagedSettingsRawCache();
-  let r = currentRemoteSettingsState_2();
-  let s = isVerifiedOrOverridden(r, remoteManagedSettingsRawCache)
-    ? remoteManagedSettingsRawCache
-    : unverifiedViewOf(r, remoteManagedSettingsRawCache);
-  if (s === null || !isSnapshotOnlySession()) return s;
-  if (r.projectedView?.raw !== s)
-    r.projectedView = {
-      raw: s,
-      view: restrictionsOfUnvouchedDocumentUnsafe(s),
+function getRemoteManagedSettingsSyncFromCache(parseSettings) {
+  let payload = getRemoteManagedSettingsRawCache();
+  let state = currentRemoteSettingsState_2();
+  let baseSettings = isVerifiedOrOverridden(state, payload) ? payload : unverifiedViewOf(state, payload);
+  if (baseSettings === null || !isSnapshotOnlySession()) return baseSettings;
+  if (state.projectedView?.raw !== baseSettings)
+    state.projectedView = {
+      raw: baseSettings,
+      view: restrictionsOfUnvouchedDocumentUnsafe(baseSettings),
     };
-  let view = r.projectedView.view;
-  if (!e) return view;
-  if (r.projectedParse?.raw !== s) {
-    let c = {
+  let view = state.projectedView.view;
+  if (!parseSettings) return view;
+  if (state.projectedParse?.raw !== baseSettings) {
+    let merged = {
       ...view,
     };
-    deepMergeInto(c, restrictionsOfUnvouchedDocumentUnsafe(e(s)) ?? {});
+    deepMergeInto(merged, restrictionsOfUnvouchedDocumentUnsafe(parseSettings(baseSettings)) ?? {});
     if (isDiskless())
       for (let { path, names } of CREDENTIAL_LIST_PATHS) {
-        let flattened = [view, c].flatMap((h) => getAtPath(h, path) ?? []);
-        if (flattened.length > 0) setAtPath(c, path, Ji(flattened, names));
+        let flattened = [view, merged].flatMap((settings) => getAtPath(settings, path) ?? []);
+        if (flattened.length > 0) setAtPath(merged, path, uniqByExport(flattened, names));
       }
-    r.projectedParse = {
-      raw: s,
-      view: c,
+    state.projectedParse = {
+      raw: baseSettings,
+      view: merged,
     };
   }
-  return r.projectedParse.view;
+  return state.projectedParse.view;
 }
 //@ chunk-dcmhvw5a.js:413774-413899 placement
-function deepMergeInto(e, n) {
-  for (let [key, value] of Object.entries(n)) {
-    let a = e[key];
-    if (a !== value && isPlainObject_2(a) && isPlainObject_2(value)) {
-      let c = {
-        ...a,
+function deepMergeInto(target, source) {
+  for (let [key, value] of Object.entries(source)) {
+    let current = target[key];
+    if (current !== value && isPlainObject_2(current) && isPlainObject_2(value)) {
+      let merged = {
+        ...current,
       };
-      deepMergeInto(c, value);
-      e[key] = c;
-    } else e[key] = value;
+      deepMergeInto(merged, value);
+      target[key] = merged;
+    } else target[key] = value;
   }
 }
 //@ chunk-dcmhvw5a.js:413899-414034 placement
-function unverifiedViewOf(e, remoteManagedSettingsRawCache) {
-  if (remoteManagedSettingsRawCache === null) return null;
-  if (e.unverifiedView?.raw !== remoteManagedSettingsRawCache)
-    e.unverifiedView = {
-      raw: remoteManagedSettingsRawCache,
-      view: withholdUnverifiedEnv(remoteManagedSettingsRawCache),
+function unverifiedViewOf(state, settings) {
+  if (settings === null) return null;
+  if (state.unverifiedView?.raw !== settings)
+    state.unverifiedView = {
+      raw: settings,
+      view: withholdUnverifiedEnv(settings),
     };
-  return e.unverifiedView.view;
+  return state.unverifiedView.view;
 }
 export {
   hostSessionSkipsSharedCache,

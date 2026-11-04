@@ -10,21 +10,21 @@ import { toInteger_default } from "./toInteger.js";
 //@ chunk-bwbq4xvm.js:151035-151064 placement
 var FUNC_ERROR_TEXT = "Expected a function";
 //@ chunk-bwbq4xvm.js:151064-151220 placement
-function before(e, s) {
-  var n;
-  if (typeof s != "function") throw TypeError(FUNC_ERROR_TEXT);
-  e = toInteger_default(e);
+function before(nArg, func) {
+  var result;
+  if (typeof func != "function") throw TypeError(FUNC_ERROR_TEXT);
+  nArg = toInteger_default(nArg);
   return function () {
-    if (--e > 0) n = s.apply(this, arguments);
-    if (e <= 1) s = undefined;
-    return n;
+    if (--nArg > 0) result = func.apply(this, arguments);
+    if (nArg <= 1) func = undefined;
+    return result;
   };
 }
 //@ chunk-bwbq4xvm.js:151220-151230 placement
 var beforeExport = before;
 //@ chunk-bwbq4xvm.js:151230-151260 placement
-function once(e) {
-  return beforeExport(2, e);
+function once(func) {
+  return beforeExport(2, func);
 }
 //@ chunk-bwbq4xvm.js:151260-151270 placement
 /**

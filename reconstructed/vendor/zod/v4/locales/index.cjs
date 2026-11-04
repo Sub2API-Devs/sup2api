@@ -5,7 +5,7 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_ar } from "./ar.cjs";
 import { require_az } from "./az.cjs";
 import { require_be } from "./be.cjs";
@@ -70,7 +70,7 @@ import { require_zh_TW } from "./zh-TW.cjs";
 import { require_yo } from "./yo.cjs";
 
 //@ chunk-1ny7cxrt.js:501263-508147 cjs-fingerprint
-var require_locales = x(function (cjsExports) {
+var require_locales = __commonJS(function (cjsExports) {
   var __importDefault =
     (cjsExports && cjsExports.__importDefault) ||
     function (mod) {

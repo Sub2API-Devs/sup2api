@@ -17,7 +17,8 @@ import { STREAM_READ_CHUNK_BYTES } from "../../remote/SessionsV2Client.js";
  * 用 @anthropic-ai/mcpb 的 schema 校验 MCPB manifest，失败抛带细节的错误。
  */
 async function validateManifest(manifestJson) {
-  let { McpbManifestSchema } = await import("./chunk-64s30qnv.js");
+  let { McpbManifestSchema } =
+    await import("../../../vendor/@anthropic-ai/mcpb/dist/McpbManifestSchema.lazy.js");
   let parseResult = McpbManifestSchema.safeParse(manifestJson);
   if (!parseResult.success) {
     let errors = parseResult.error.flatten();
@@ -61,16 +62,16 @@ async function parseAndValidateManifestFromBytes(manifestData) {
   if (!reader) return;
   try {
     let uint8Array = new Uint8Array(STREAM_READ_CHUNK_BYTES);
-    let i = 0;
+    let totalBytes = 0;
     for (;;) {
-      let { done: r, value: S } = await reader.read();
-      if (r || !S) break;
-      let min = Math.min(S.length, STREAM_READ_CHUNK_BYTES - i);
-      uint8Array.set(S.subarray(0, min), i);
-      i += min;
-      if (i >= STREAM_READ_CHUNK_BYTES) break;
+      let { done, value: chunk } = await reader.read();
+      if (done || !chunk) break;
+      let min = Math.min(chunk.length, STREAM_READ_CHUNK_BYTES - totalBytes);
+      uint8Array.set(chunk.subarray(0, min), totalBytes);
+      totalBytes += min;
+      if (totalBytes >= STREAM_READ_CHUNK_BYTES) break;
     }
-    return jsonParse(new TextDecoder().decode(uint8Array.subarray(0, i)));
+    return jsonParse(new TextDecoder().decode(uint8Array.subarray(0, totalBytes)));
   } catch {
     return;
   } finally {

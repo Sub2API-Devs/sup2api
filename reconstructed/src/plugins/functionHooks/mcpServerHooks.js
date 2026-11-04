@@ -12,15 +12,16 @@ import { moduleStore } from "../../services/mcp/mcpClientCapabilities.js";
 import { currentSurfaceBinding } from "./surfaceBinding.js";
 import { normalizeNameForMCP } from "../../services/mcp/normalization.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:55650-55739 placement
 /**
  * 忘掉并移除某 MCP 服务器
  */
-function forgetMcpServerFor(e) {
-  let n = moduleStore.serverKey(e);
-  moduleStore.forget(e);
-  if (n !== undefined) currentSurfaceBinding()?.removeMcpServer(n);
+function forgetMcpServerFor(plugin) {
+  let serverKey = moduleStore.serverKey(plugin);
+  moduleStore.forget(plugin);
+  if (serverKey !== undefined) currentSurfaceBinding()?.removeMcpServer(serverKey);
 }
 //@ chunk-e6aww6q8.js:55739-55775 placement = getMcpPrefix (1)
 var buildRawMcpToolName = (serverName, name) => `mcp__${normalizeNameForMCP(serverName)}__${name}`;
@@ -29,19 +30,22 @@ var buildRawMcpToolName = (serverName, name) => `mcp__${normalizeNameForMCP(serv
  * 简单可变槽
  */
 function createSlot() {
-  let e;
+  let slotValue;
   return {
-    set: (n) => {
-      e = n;
+    set: (value) => {
+      slotValue = value;
     },
-    current: () => e,
+    current: () => slotValue,
   };
 }
 //@ chunk-e6aww6q8.js:55833-55847 placement
 /**
  * 工具调用槽
  */
-var toolCallSlot = createSlot();
+var toolCallSlot; // deferred: uses createSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:55833", () => {
+  toolCallSlot = createSlot();
+});
 //@ chunk-e6aww6q8.js:55847-55873 placement
 /**
  * 设置当前工具调用
@@ -53,27 +57,37 @@ var setCurrentToolCall = (pluginToolsServerHost) => {
 /**
  * 当前工具调用
  */
-var currentToolCall = toolCallSlot.current;
+var currentToolCall; // deferred: uses toolCallSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:55873", () => {
+  currentToolCall = toolCallSlot.current;
+});
 //@ chunk-e6aww6q8.js:55893-55991 placement
 /**
  * 工具是否属于某服务器
  */
-function isToolFromServer(e, tool) {
-  let r = moduleStore.serverKey(e);
-  return r !== undefined && moduleStore.list(e).some((s) => buildRawMcpToolName(r, s.name) === tool);
+function isToolFromServer(plugin, tool) {
+  let serverKey = moduleStore.serverKey(plugin);
+  return (
+    serverKey !== undefined &&
+    moduleStore.list(plugin).some((serverTool) => buildRawMcpToolName(serverKey, serverTool.name) === tool)
+  );
 }
 //@ chunk-e6aww6q8.js:55991-56007 placement
-var list = moduleStore.list;
+var list; // deferred: uses moduleStore (../../services/mcp/mcpClientCapabilities.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:55991", () => {
+  list = moduleStore.list;
+});
 //@ chunk-e6aww6q8.js:56007-56202 placement
 /**
  * 若插件登记的工具已原样出现在会话工具中，返回其 mcp__服务器__工具 全名。
  */
-function registeredMcpToolName(e, n, r) {
-  let found = moduleStore.list(r).find((L) => L.name === n.name);
-  let h = moduleStore.serverKey(r);
-  if (found === undefined || h === undefined || jsonStringify(found) !== jsonStringify(n)) return;
-  let rawMcpToolName = buildRawMcpToolName(h, n.name);
-  return e.tools().some((L) => L.name === rawMcpToolName) ? rawMcpToolName : undefined;
+function registeredMcpToolName(connection, serverTool, plugin) {
+  let found = moduleStore.list(plugin).find((listedTool) => listedTool.name === serverTool.name);
+  let serverKey = moduleStore.serverKey(plugin);
+  if (found === undefined || serverKey === undefined || jsonStringify(found) !== jsonStringify(serverTool))
+    return;
+  let rawMcpToolName = buildRawMcpToolName(serverKey, serverTool.name);
+  return connection.tools().some((tool) => tool.name === rawMcpToolName) ? rawMcpToolName : undefined;
 }
 export {
   forgetMcpServerFor,

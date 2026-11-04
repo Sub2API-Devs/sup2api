@@ -17,6 +17,7 @@ import { getServerKey } from "./auth.js";
 import { needsClientRegistration } from "./registrationStatus.js";
 import { logMCPDebug } from "../../utils/log.js";
 import { McpCredentialStoreUnavailableError } from "./client.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-cyj440je.js:6430-6557 placement
 /**
@@ -28,27 +29,32 @@ async function readMcpOAuthStore(challenge) {
   return secureStorageForMcp === READ_FAILED ? undefined : secureStorageForMcp?.mcpOAuth;
 }
 //@ chunk-cyj440je.js:6557-6738 placement
-var FAILED_READ_RETRY_MS = 1000;
-var EMPTY_READ_CACHE_MS = 30000;
-var credentialReadState = new HostScoped(() => ({
-  inFlight: null,
-  verdict: undefined,
-  settledAt: 0,
-  seenPopulated: false,
-  generation: 0,
-  keychainOnly: {
+var FAILED_READ_RETRY_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var EMPTY_READ_CACHE_MS;
+var credentialReadState;
+deferInit("chunk-cyj440je.js:6557", () => {
+  FAILED_READ_RETRY_MS = 1000;
+  EMPTY_READ_CACHE_MS = 30000;
+  credentialReadState = new HostScoped(() => ({
     inFlight: null,
     verdict: undefined,
     settledAt: 0,
-    cacheGeneration: 0,
-  },
-}));
+    seenPopulated: false,
+    generation: 0,
+    keychainOnly: {
+      inFlight: null,
+      verdict: undefined,
+      settledAt: 0,
+      cacheGeneration: 0,
+    },
+  }));
+});
 //@ chunk-cyj440je.js:6738-6799 placement
 /**
  * 判断读取结果是否为空（区别于 READ_FAILED）。
  */
-function isEmptyRead(e) {
-  return e !== READ_FAILED && (!e || Object.keys(e).length === 0);
+function isEmptyRead(data) {
+  return data !== READ_FAILED && (!data || Object.keys(data).length === 0);
 }
 //@ chunk-cyj440je.js:6799-8093 placement
 /**
@@ -58,19 +64,20 @@ async function readSecureStorageForMcp(challenge) {
   let storage = getSecureStorage();
   if (challenge !== undefined) {
     let keychainOnly = credentialReadState.of(getRootSession().host).keychainOnly;
-    let v =
+    let recentEmptyVerdict =
       keychainOnly.verdict === "answered" &&
       keychainOnly.cacheGeneration === getKeychainCacheState().generation &&
       Date.now() - keychainOnly.settledAt < EMPTY_READ_CACHE_MS;
     let secureStorageForMcp = await readSecureStorageForMcp();
     let readAsyncStrict = storage.readAsyncStrict;
-    if (secureStorageForMcp === READ_FAILED || !readAsyncStrict || v) return secureStorageForMcp;
+    if (secureStorageForMcp === READ_FAILED || !readAsyncStrict || recentEmptyVerdict)
+      return secureStorageForMcp;
     let { serverName, serverConfig } = challenge;
     let serverKey = getServerKey(serverName, serverConfig);
-    let R = secureStorageForMcp?.mcpOAuth?.[serverKey];
+    let storedAuth = secureStorageForMcp?.mcpOAuth?.[serverKey];
     if (
-      R?.accessToken ||
-      R?.refreshToken ||
+      storedAuth?.accessToken ||
+      storedAuth?.refreshToken ||
       (!challenge.challenged &&
         !needsClientRegistration(serverName, serverConfig, secureStorageForMcp?.mcpOAuth)) ||
       !getIsNonInteractiveSession() ||
@@ -84,19 +91,19 @@ async function readSecureStorageForMcp(challenge) {
       .call(storage, undefined, {
         inaccessibleAs: "failure",
       })
-      .then((y) => {
-        keychainOnly.verdict = y === READ_FAILED ? "failed" : "answered";
+      .then((strictResult) => {
+        keychainOnly.verdict = strictResult === READ_FAILED ? "failed" : "answered";
         keychainOnly.settledAt = Date.now();
         keychainOnly.cacheGeneration = cacheGeneration;
-        return y;
+        return strictResult;
       })
       .finally(() => {
         keychainOnly.inFlight = null;
       });
     let inFlight = await keychainOnly.inFlight;
     if (inFlight === READ_FAILED || !challenge.challenged) return inFlight ?? secureStorageForMcp;
-    let M = inFlight?.mcpOAuth?.[serverKey];
-    if (!M?.accessToken && !M?.refreshToken) return inFlight ?? secureStorageForMcp;
+    let lateAuth = inFlight?.mcpOAuth?.[serverKey];
+    if (!lateAuth?.accessToken && !lateAuth?.refreshToken) return inFlight ?? secureStorageForMcp;
     logMCPDebug(
       serverName,
       "Stored credentials turned up only after the server challenged a request sent without them; failing that request so the next one sends them",
@@ -123,23 +130,23 @@ async function readSecureStorageForMcp(challenge) {
 /**
  * 标记读取状态见过内容并递增代号。
  */
-function markPopulated(e) {
-  e.seenPopulated = true;
-  e.generation++;
-  if (e.verdict === "empty") e.verdict = undefined;
+function markPopulated(readState) {
+  readState.seenPopulated = true;
+  readState.generation++;
+  if (readState.verdict === "empty") readState.verdict = undefined;
 }
 //@ chunk-cyj440je.js:8181-8407 placement
-async function settleStrictRead(readState, r) {
+async function settleStrictRead(readState, strictReader) {
   try {
     let generation = readState.generation;
-    let n = await r();
-    if (n !== READ_FAILED && !isEmptyRead(n)) {
+    let result = await strictReader();
+    if (result !== READ_FAILED && !isEmptyRead(result)) {
       readState.verdict = undefined;
       markPopulated(readState);
-    } else if (generation !== readState.generation) return n;
-    else readState.verdict = n === READ_FAILED ? "failed" : "empty";
+    } else if (generation !== readState.generation) return result;
+    else readState.verdict = result === READ_FAILED ? "failed" : "empty";
     readState.settledAt = Date.now();
-    return n;
+    return result;
   } finally {
     readState.inFlight = null;
   }

@@ -28,7 +28,7 @@ var C4E_UPSELL_REGISTRY = new C4EUpsellRegistry();
 /**
  * 把某个命令的 isC4EUpsellCommandEnabled 判定注册到注册表。
  */
-function registerC4EUpsellGate(e) {
-  C4E_UPSELL_REGISTRY.register(e.isC4EUpsellCommandEnabled);
+function registerC4EUpsellGate(gate) {
+  C4E_UPSELL_REGISTRY.register(gate.isC4EUpsellCommandEnabled);
 }
 export { C4E_UPSELL_REGISTRY, registerC4EUpsellGate };

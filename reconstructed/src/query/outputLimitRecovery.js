@@ -84,12 +84,12 @@ var THINKING_LIMIT_NOTE = " The last attempt reached the limit while still think
 /**
  * 输出达到 max_tokens 时是否用提示让模型继续（tengu_rosy_pebble）。
  */
-function shouldNudgeOutputLimitResume(assistantMessages, attempt, querySource) {
+function shouldNudgeOutputLimitResume(responses, attempt, querySource) {
   try {
-    let s = endsWithThinkingOnly(assistantMessages);
-    let message = assistantMessages.findLast((M) => !M.isApiErrorMessage)?.message;
+    let endsWithThinking = endsWithThinkingOnly(responses);
+    let message = responses.findLast((message) => !message.isApiErrorMessage)?.message;
     let last = message?.content.at(-1);
-    let S =
+    let reopenBlock =
       message?.stop_reason === "max_tokens" &&
       last?.type === "text" &&
       last.text.trim() !== "" &&
@@ -98,8 +98,8 @@ function shouldNudgeOutputLimitResume(assistantMessages, attempt, querySource) {
       getFeatureValue_CACHED_MAY_BE_STALE("tengu_rosy_pebble", false);
     logFeatureSad(
       "query_output_limit_recovery",
-      s ? "nudged_thinking_discarded" : "nudged_resume",
-      S
+      endsWithThinking ? "nudged_thinking_discarded" : "nudged_resume",
+      reopenBlock
         ? {
             attempt,
             nudge_name: lit("reopen_block"),
@@ -108,8 +108,8 @@ function shouldNudgeOutputLimitResume(assistantMessages, attempt, querySource) {
             attempt,
           },
     );
-    if (S) return OUTPUT_LIMIT_CUT_TEXT;
-    return s && alwaysFalse() ? OUTPUT_LIMIT_REASONING_RESUME_TEXT : OUTPUT_LIMIT_RESUME;
+    if (reopenBlock) return OUTPUT_LIMIT_CUT_TEXT;
+    return endsWithThinking && alwaysFalse() ? OUTPUT_LIMIT_REASONING_RESUME_TEXT : OUTPUT_LIMIT_RESUME;
   } catch (error) {
     logForDebugging("[output-limit-recovery] nudge choice threw; keeping the resume nudge", {
       level: "warn",
@@ -124,34 +124,37 @@ function shouldNudgeOutputLimitResume(assistantMessages, attempt, querySource) {
  */
 function recoverExhaustedOutput({ withheld, responses, model, isNonInteractiveSession, agentId }) {
   try {
-    let y = endsWithThinkingOnly(responses);
-    logFeatureBad("query_output_limit_recovery", y ? "exhausted_thinking_discarded" : "exhausted_resume");
-    let S = withheld.message.content[0];
+    let endsThinkingOnly = endsWithThinkingOnly(responses);
+    logFeatureBad(
+      "query_output_limit_recovery",
+      endsThinkingOnly ? "exhausted_thinking_discarded" : "exhausted_resume",
+    );
+    let firstBlock = withheld.message.content[0];
     if (
-      !y ||
+      !endsThinkingOnly ||
       !alwaysFalse() ||
       withheld.message.content.length !== 1 ||
-      S?.type !== "text" ||
+      firstBlock?.type !== "text" ||
       responses.findLast((response) => !response.isApiErrorMessage)?.effort === EFFORT_LEVELS[0] ||
       !modelSupportsEffort(model)
     )
       return withheld;
-    let M =
+    let effortHintPath =
       !isNonInteractiveSession && agentId === undefined && canSuggestSlashCommands()
         ? artifactPathPrefix("effort")
         : undefined;
-    let R =
-      M === undefined
+    let effortHint =
+      effortHintPath === undefined
         ? " Lower the effort level to leave room for a reply."
-        : ` Lower the effort level with ${M} to leave room for a reply.`;
+        : ` Lower the effort level with ${effortHintPath} to leave room for a reply.`;
     return {
       ...withheld,
       message: {
         ...withheld.message,
         content: [
           {
-            ...S,
-            text: S.text + THINKING_LIMIT_NOTE + R,
+            ...firstBlock,
+            text: firstBlock.text + THINKING_LIMIT_NOTE + effortHint,
           },
         ],
       },
@@ -180,11 +183,11 @@ function reportOutputLimitRecovery({ transition, resumed, request, responses, wi
       return;
     }
     let last_2 = request.findLast(
-      (M) =>
-        M.type === "user" &&
-        (M.message.content === OUTPUT_LIMIT_REASONING_RESUME_TEXT ||
-          M.message.content === OUTPUT_LIMIT_RESUME ||
-          M.message.content === OUTPUT_LIMIT_CUT_TEXT),
+      (message) =>
+        message.type === "user" &&
+        (message.message.content === OUTPUT_LIMIT_REASONING_RESUME_TEXT ||
+          message.message.content === OUTPUT_LIMIT_RESUME ||
+          message.message.content === OUTPUT_LIMIT_CUT_TEXT),
     );
     if (last === undefined || last_2?.type !== "user") return;
     logFeatureOk("query_output_limit_recovery", {
@@ -224,11 +227,15 @@ function announceOutputLimitRecovery(transition, agentId) {
 /**
  * 最后一条因 max_tokens 结束，且全部内容都是思考块。
  */
-function endsWithThinkingOnly(e) {
-  let filtered = e.filter((r) => !r.isApiErrorMessage);
+function endsWithThinkingOnly(responses) {
+  let filtered = responses.filter((response) => !response.isApiErrorMessage);
   return (
     filtered.at(-1)?.message.stop_reason === "max_tokens" &&
-    filtered.every((r) => r.message.content.length > 0 && r.message.content.every((s) => isThinkingBlock(s)))
+    filtered.every(
+      (response) =>
+        response.message.content.length > 0 &&
+        response.message.content.every((block) => isThinkingBlock(block)),
+    )
   );
 }
 //@ chunk-ha3km179.js:146115-146655 placement
@@ -237,7 +244,7 @@ function endsWithThinkingOnly(e) {
  */
 function reportTurnEnd({ terminal, querySource, agentContext, hasActiveGoal, startedAt }) {
   try {
-    let y = classifyQuerySource(querySource);
+    let sourceKind = classifyQuerySource(querySource);
     logEvent("tengu_turn_end", {
       terminal_reason: fromEnum(terminal.reason),
       error_kind: fromEnumOpt(
@@ -246,10 +253,10 @@ function reportTurnEnd({ terminal, querySource, agentContext, hasActiveGoal, sta
       is_error: isErrorTerminalReason(terminal.reason),
       turn_count: terminal.reason === "max_turns" ? terminal.turnCount : undefined,
       is_subagent: isNonMainSessionSubagent(agentContext),
-      goal_active: y === "main" && isMainAgent(agentContext) && hasActiveGoal,
+      goal_active: sourceKind === "main" && isMainAgent(agentContext) && hasActiveGoal,
       duration_ms: Math.max(0, Math.round(performance.now() - startedAt)),
       query_source: agentTypeForTelemetry(querySource),
-      query_source_category: fromEnumOpt(y),
+      query_source_category: fromEnumOpt(sourceKind),
     });
   } catch (error) {
     logForDebugging(`tengu_turn_end: analytics sink threw, event dropped: ${errorMessage(error)}`, {
@@ -274,13 +281,13 @@ function newFallbackRecord(originalModel, toModel, toModelIsConfigured, reason) 
 /**
  * 连续回退时合并回退记录。
  */
-function chainFallbackRecord(e, fallbackRecord) {
-  return e?.toModel === fallbackRecord.fromModel
+function chainFallbackRecord(previousRecord, fallbackRecord) {
+  return previousRecord?.toModel === fallbackRecord.fromModel
     ? {
         ...fallbackRecord,
-        fromModel: e.fromModel,
-        leftModels: [...e.leftModels, ...fallbackRecord.leftModels],
-        allOverloaded: e.allOverloaded && fallbackRecord.allOverloaded,
+        fromModel: previousRecord.fromModel,
+        leftModels: [...previousRecord.leftModels, ...fallbackRecord.leftModels],
+        allOverloaded: previousRecord.allOverloaded && fallbackRecord.allOverloaded,
       }
     : fallbackRecord;
 }
@@ -288,17 +295,19 @@ function chainFallbackRecord(e, fallbackRecord) {
 /**
  * 回退到上下文窗口更小的模型时生成说明后缀。
  */
-function describeFallbackWindow(fallbackRecord, n) {
+function describeFallbackWindow(fallbackRecord, previousRecord) {
   try {
-    let r = contextWindowsOf(fallbackRecord);
-    let s = canFallBackToConfiguredFamily(n, fallbackRecord.fromModel);
+    let windows = contextWindowsOf(fallbackRecord);
+    let keepHint = canFallBackToConfiguredFamily(previousRecord, fallbackRecord.fromModel);
     return {
-      ...r,
+      ...windows,
       noticeSuffix:
-        r.toWindow >= r.fromWindow
+        windows.toWindow >= windows.fromWindow
           ? ""
-          : ` \xB7 context window ${formatCompactTokens(r.fromWindow)} \u2192 ${formatCompactTokens(r.toWindow)} tokens` +
-            (s === undefined ? "" : ` (to keep ${formatCompactTokens(r.fromWindow)}, ${s})`),
+          : ` \xB7 context window ${formatCompactTokens(windows.fromWindow)} \u2192 ${formatCompactTokens(windows.toWindow)} tokens` +
+            (keepHint === undefined
+              ? ""
+              : ` (to keep ${formatCompactTokens(windows.fromWindow)}, ${keepHint})`),
     };
   } catch (error) {
     logError(error);
@@ -310,69 +319,71 @@ function describeFallbackWindow(fallbackRecord, n) {
  * 回退到上下文窗口更小的模型时生成说明。
  */
 function fallbackWindowNotice({ fallback, mainLoopModel, configuredWindow }) {
-  let s = {
+  let plainNotice = {
     content: AUTOCOMPACT_THRASHING_NOTICE,
     afterShrinkingFallback: false,
   };
-  if (fallback === undefined || fallback.toModel !== mainLoopModel) return s;
+  if (fallback === undefined || fallback.toModel !== mainLoopModel) return plainNotice;
   try {
-    let h = contextWindowsOf(fallback);
+    let windows = contextWindowsOf(fallback);
     if (
-      h.toWindow >= h.fromWindow ||
+      windows.toWindow >= windows.fromWindow ||
       getAutoCompactWindow(getModelContextInfo(fallback.toModel), configuredWindow).window >=
         getAutoCompactWindow(getModelContextInfo(fallback.fromModel), configuredWindow).window
     )
-      return s;
-    let y = renderModelName(fallback.fromModel);
-    let S = canFallBackToConfiguredFamily(fallback, fallback.fromModel);
+      return plainNotice;
+    let fromModelName = renderModelName(fallback.fromModel);
+    let keepHint = canFallBackToConfiguredFamily(fallback, fallback.fromModel);
     return {
       content:
-        `${AUTOCOMPACT_THRASHING_TEXT} The likely cause: while working on this response, Claude Code fell back from ${y} to ${renderModelName(fallback.toModel)} and runs that model with a ${formatCompactTokens(h.toWindow)}-token context window on your provider, instead of ${formatCompactTokens(h.fromWindow)}. Your next message tries ${y} first. ` +
-        (S === undefined
-          ? `To avoid this, use a fallback model with a ${formatCompactTokens(h.fromWindow)} context window, or use /clear to start fresh.`
-          : `To keep ${formatCompactTokens(h.fromWindow)}, ${S}.`),
+        `${AUTOCOMPACT_THRASHING_TEXT} The likely cause: while working on this response, Claude Code fell back from ${fromModelName} to ${renderModelName(fallback.toModel)} and runs that model with a ${formatCompactTokens(windows.toWindow)}-token context window on your provider, instead of ${formatCompactTokens(windows.fromWindow)}. Your next message tries ${fromModelName} first. ` +
+        (keepHint === undefined
+          ? `To avoid this, use a fallback model with a ${formatCompactTokens(windows.fromWindow)} context window, or use /clear to start fresh.`
+          : `To keep ${formatCompactTokens(windows.fromWindow)}, ${keepHint}.`),
       afterShrinkingFallback: true,
     };
   } catch (error) {
     logError(error);
-    return s;
+    return plainNotice;
   }
 }
 //@ chunk-ha3km179.js:147994-148082 placement
 /**
  * 两个模型的上下文窗口
  */
-function contextWindowsOf(e) {
+function contextWindowsOf(fallbackRecord) {
   let sdkBetas = getSdkBetas();
   return {
-    fromWindow: getContextWindow(e.fromModel, sdkBetas),
-    toWindow: getContextWindow(e.toModel, sdkBetas),
+    fromWindow: getContextWindow(fallbackRecord.fromModel, sdkBetas),
+    toWindow: getContextWindow(fallbackRecord.toModel, sdkBetas),
   };
 }
 //@ chunk-ha3km179.js:148082-148417 placement
 /**
  * 所有模型过载时能否回退到配置的同族模型。
  */
-function canFallBackToConfiguredFamily(e, fromModel) {
-  if (!e.toModelIsConfigured || !has1mSuffix_2(fromModel) || !e.allOverloaded) return;
-  let r = append1mSuffixIfMissing(e.toModel);
-  if (e.leftModels.some((leftModel) => leftModel.toLowerCase() === r.toLowerCase())) return;
-  let canonicalName = getCanonicalName(r);
-  let h = modelFamilyOf(r, canonicalName);
-  return (h === "opus"
+function canFallBackToConfiguredFamily(fallbackRecord, fromModel) {
+  if (!fallbackRecord.toModelIsConfigured || !has1mSuffix_2(fromModel) || !fallbackRecord.allOverloaded)
+    return;
+  let familyModel = append1mSuffixIfMissing(fallbackRecord.toModel);
+  if (fallbackRecord.leftModels.some((leftModel) => leftModel.toLowerCase() === familyModel.toLowerCase()))
+    return;
+  let canonicalName = getCanonicalName(familyModel);
+  let family = modelFamilyOf(familyModel, canonicalName);
+  return (family === "opus"
     ? shouldProbeThirdPartyDefaults()
-    : h === "sonnet"
+    : family === "sonnet"
       ? shouldProbeThirdPartyDefaultsAlt()
       : true) && getCatalogEntry(strip1mSuffix(canonicalName))?.context?.supports_1m_beta === true
-    ? `use ${r} for this entry in your fallback model list`
+    ? `use ${familyModel} for this entry in your fallback model list`
     : undefined;
 }
 //@ chunk-ha3km179.js:148417-148459 placement
 /**
  * 紧凑 token 文本
  */
-function formatCompactTokens(e) {
-  return formatTokens(e).toUpperCase();
+function formatCompactTokens(tokenCount) {
+  return formatTokens(tokenCount).toUpperCase();
 }
 //@ chunk-ha3km179.js:148459-148619 placement
 var IMAGE_ERROR_TOOL_CANCEL_TEXT =
@@ -381,8 +392,8 @@ var IMAGE_ERROR_TOOL_CANCEL_TEXT =
 /**
  * 回合出错导致工具调用取消的说明。
  */
-function turnErrorToolCancelText(e) {
-  return `The turn ended on an error, so this tool call was cancelled. If it had already started, some of its effects may have happened. Error: ${e}`;
+function turnErrorToolCancelText(errorText) {
+  return `The turn ended on an error, so this tool call was cancelled. If it had already started, some of its effects may have happened. Error: ${errorText}`;
 }
 //@ chunk-ha3km179.js:148781-148961 placement
 var TOOL_CANCEL_FAILURE_MESSAGES = {
@@ -394,12 +405,12 @@ var TOOL_CANCEL_FAILURE_MESSAGES = {
 /**
  * 重置流式工具执行器，取回已完成结果。
  */
-function resetStreamingToolExecutor(attemptState, n) {
+function resetStreamingToolExecutor(attemptState, cancelReason) {
   let answeredToolUseIds = new Set(toolResultIds(attemptState));
   let finishedResults = [];
   try {
     finishedResults = attemptState.streamingToolExecutor.takeFinishedResults();
-    let { removes } = discardInFlightTools(attemptState.streamingToolExecutor, n);
+    let { removes } = discardInFlightTools(attemptState.streamingToolExecutor, cancelReason);
     attemptState.rebuildStreamingToolExecutor();
     return {
       removes,
@@ -407,7 +418,7 @@ function resetStreamingToolExecutor(attemptState, n) {
       finishedResults,
     };
   } catch (error) {
-    logError(withTelemetryMessage(toError(error), TOOL_CANCEL_FAILURE_MESSAGES[n]));
+    logError(withTelemetryMessage(toError(error), TOOL_CANCEL_FAILURE_MESSAGES[cancelReason]));
     return {
       removes: undefined,
       answeredToolUseIds,
@@ -433,10 +444,12 @@ function completedToolUseIds(attemptState) {
 /**
  * 工具结果中的 tool_use_id 列表。
  */
-function toolResultIds(e) {
-  return e.toolResults.flatMap((toolResult) =>
+function toolResultIds(attemptState) {
+  return attemptState.toolResults.flatMap((toolResult) =>
     toolResult.type === "user" && Array.isArray(toolResult.message.content)
-      ? toolResult.message.content.filter((r) => r.type === "tool_result").map((r) => r.tool_use_id)
+      ? toolResult.message.content
+          .filter((block) => block.type === "tool_result")
+          .map((block) => block.tool_use_id)
       : [],
   );
 }

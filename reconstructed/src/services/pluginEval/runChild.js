@@ -61,7 +61,7 @@ import { GREP_TOOL_NAME } from "../../tools/GrepTool/prompt.js";
 import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
 
 //@ chunk-qchp9vrd.js:122550-123081 placement
-async function readRunTraceHistory(e) {
+async function readRunTraceHistory(input) {
   let {
     case_,
     sandbox,
@@ -72,10 +72,10 @@ async function readRunTraceHistory(e) {
     growthbookOverrides,
     mocks,
     credential,
-  } = e;
+  } = input;
   let joined = path.join(sandbox.outDir, "trace.jsonl");
-  let T = await checkAddDirsInsideCase(case_);
-  let evalFence = await buildEvalFence(case_, T);
+  let addDirs = await checkAddDirsInsideCase(case_);
+  let evalFence = await buildEvalFence(case_, addDirs);
   let runChildArgs = await buildRunChildArgs(
     case_,
     sandbox,
@@ -83,41 +83,35 @@ async function readRunTraceHistory(e) {
     disallowedTools,
     modelOverride,
     mocks?.configPath,
-    T,
+    addDirs,
     evalFence,
   );
-  let childEnv = buildChildEnv(
-    case_,
-    sandbox,
-    artifactPublishGranted,
-    growthbookOverrides,
-    mocks !== undefined,
-  );
-  await checkGitVersionForEval(childEnv);
+  let env = buildChildEnv(case_, sandbox, artifactPublishGranted, growthbookOverrides, mocks !== undefined);
+  await checkGitVersionForEval(env);
   await writeChildManagedPolicy(sandbox);
   let restoredCostUsd = case_.context.history_file
     ? await readHistoryCost(
         await resolveCaseFileInsideSuite(case_, case_.context.history_file, "history_file"),
       )
     : 0;
-  let X = credential ? await passApiKeyToChild(credential) : null;
+  let credentialHelper = credential ? await passApiKeyToChild(credential) : null;
   try {
-    return await prepareRunChildConfig(e, runChildArgs, childEnv, joined, X, {
-      addDirs: T,
+    return await prepareRunChildConfig(input, runChildArgs, env, joined, credentialHelper, {
+      addDirs,
       readScope: evalFence,
       restoredCostUsd,
     });
   } finally {
-    await X?.cleanup();
+    await credentialHelper?.cleanup();
   }
 }
 //@ chunk-qchp9vrd.js:123081-123170 placement
 /**
  * 读取历史文件里的累计花费（失败为 0）。
  */
-async function readHistoryCost(caseFileInsideSuite) {
+async function readHistoryCost(transcriptPath) {
   try {
-    return (await loadTranscriptFromFile(caseFileInsideSuite)).costState?.totalCostUSD ?? 0;
+    return (await loadTranscriptFromFile(transcriptPath)).costState?.totalCostUSD ?? 0;
   } catch {
     return 0;
   }
@@ -127,11 +121,11 @@ async function readHistoryCost(caseFileInsideSuite) {
  * 准备子会话的配置目录：网关 ANTHROPIC_CUSTOM_HEADERS、git 配置、settings。
  */
 async function prepareRunChildConfig(
-  e,
+  input,
   runChildArgs,
-  childEnv,
+  envVars,
   tracePath,
-  s,
+  credentialHelper,
   { addDirs, readScope, restoredCostUsd },
 ) {
   let {
@@ -144,144 +138,144 @@ async function prepareRunChildConfig(
     mocks,
     signal,
     credential,
-  } = e;
-  if (s) {
-    let Z = new Set(Object.keys(s.env).map((key) => key.toUpperCase()));
-    for (let key of Object.keys(childEnv)) if (Z.has(key.toUpperCase())) delete childEnv[key];
-    Object.assign(childEnv, s.env);
+  } = input;
+  if (credentialHelper) {
+    let helperKeys = new Set(Object.keys(credentialHelper.env).map((key) => key.toUpperCase()));
+    for (let key of Object.keys(envVars)) if (helperKeys.has(key.toUpperCase())) delete envVars[key];
+    Object.assign(envVars, credentialHelper.env);
   }
   if (credential)
-    for (let key of Object.keys(childEnv)) {
+    for (let key of Object.keys(envVars)) {
       let upper = key.toUpperCase();
-      if (CHILD_AUTH_ENV_VARS.has(upper)) delete childEnv[key];
+      if (CHILD_AUTH_ENV_VARS.has(upper)) delete envVars[key];
       else if (upper === "ANTHROPIC_CUSTOM_HEADERS") {
         if (credential.kind === "gateway" && credential.authorizationHeaderIsCredential) continue;
-        let Q =
+        let authHeaderRe =
           credential.kind === "gateway" ? /^\s*authorization\s*:/i : /^\s*(authorization|x-api-key)\s*:/i;
-        let filtered = (childEnv[key] ?? "").split(/\r?\n/).filter((line) => !Q.test(line));
-        if (filtered.some((we) => we.trim() !== ""))
-          childEnv[key] = filtered.join(`
+        let filtered = (envVars[key] ?? "").split(/\r?\n/).filter((line) => !authHeaderRe.test(line));
+        if (filtered.some((headerLine) => headerLine.trim() !== ""))
+          envVars[key] = filtered.join(`
 `);
-        else delete childEnv[key];
+        else delete envVars[key];
       }
     }
-  await checkAwsCredentialPointers(sandbox, childEnv);
-  for (let Z of [path.join(".config", "git"), path.join(".local", "lib"), ...AWS_CACHE_DIRS])
-    await mkdir(path.join(sandbox.home, Z), {
+  await checkAwsCredentialPointers(sandbox, envVars);
+  for (let cacheDir of [path.join(".config", "git"), path.join(".local", "lib"), ...AWS_CACHE_DIRS])
+    await mkdir(path.join(sandbox.home, cacheDir), {
       recursive: true,
     });
-  await buildEvalSandboxSettings(sandbox, allowedTools, operatorAllowedTools, case_, childEnv, undefined, {
+  await buildEvalSandboxSettings(sandbox, allowedTools, operatorAllowedTools, case_, envVars, undefined, {
     addDirs,
     readScope,
   });
-  let [W = process.execPath, ...G] = getSelfExecArgv();
-  let J = [...G, ...runChildArgs];
+  let [execPath = process.execPath, ...execArgs] = getSelfExecArgv();
+  let childArgs = [...execArgs, ...runChildArgs];
   return await new Promise((resolve, reject) => {
-    let Q = [];
-    let Se = "";
-    let we = 0;
-    let Be = "";
-    let Je = false;
-    let Ee = false;
-    let Qe = false;
-    let ye = null;
-    let je = [];
-    let pt = mocks ? findMockServersInInit(mocks) : null;
-    let Pt = case_.execution.timeout_seconds * 1000;
-    let ce = spawn(W, J, {
+    let traceEvents = [];
+    let stdoutBuffer = "";
+    let stdoutBytes = 0;
+    let stderrTail = "";
+    let timedOut = false;
+    let stdoutOverflow = false;
+    let finished = false;
+    let mockFailure = null;
+    let mockWatches = [];
+    let mockWatcher = mocks ? findMockServersInInit(mocks) : null;
+    let timeoutMs = case_.execution.timeout_seconds * 1000;
+    let child = spawn(execPath, childArgs, {
       cwd: sandbox.cwd,
-      env: childEnv,
-      stdio: s?.viaFd ? ["pipe", "pipe", "pipe", "pipe"] : ["pipe", "pipe", "pipe"],
+      env: envVars,
+      stdio: credentialHelper?.viaFd ? ["pipe", "pipe", "pipe", "pipe"] : ["pipe", "pipe", "pipe"],
       windowsHide: true,
       detached: getPlatform() !== "windows",
       ...cgroupSpawnOptions("agent"),
     });
-    let At = () => {
-      if (ce.pid === undefined || getPlatform() === "windows") return;
+    let killProcessGroup = () => {
+      if (child.pid === undefined || getPlatform() === "windows") return;
       try {
-        process.kill(-ce.pid, "SIGKILL");
+        process.kill(-child.pid, "SIGKILL");
       } catch {}
     };
-    let B = () => {
-      if (getPlatform() === "windows" && ce.pid !== undefined) {
-        execFileNoThrow("taskkill", ["/T", "/F", "/PID", String(ce.pid)]).then(() => {
-          if (ce.exitCode === null && ce.signalCode === null) ce.kill("SIGKILL");
+    let killChild = () => {
+      if (getPlatform() === "windows" && child.pid !== undefined) {
+        execFileNoThrow("taskkill", ["/T", "/F", "/PID", String(child.pid)]).then(() => {
+          if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
         });
         return;
       }
-      At();
-      ce.kill("SIGKILL");
+      killProcessGroup();
+      child.kill("SIGKILL");
     };
-    process.on("exit", At);
-    if (credential && s?.viaFd) {
-      let he = ce.stdio[3];
-      if (he && "end" in he) {
-        he.on("error", () => {});
-        let xe;
+    process.on("exit", killProcessGroup);
+    if (credential && credentialHelper?.viaFd) {
+      let credentialFd = child.stdio[3];
+      if (credentialFd && "end" in credentialFd) {
+        credentialFd.on("error", () => {});
+        let credentialValue;
         switch (credential.kind) {
           case "oauth":
-            xe = credential.accessToken;
+            credentialValue = credential.accessToken;
             break;
           case "gateway":
-            xe = credential.jwt;
+            credentialValue = credential.jwt;
             break;
           case "apiKey":
-            xe = credential.apiKey;
+            credentialValue = credential.apiKey;
             break;
         }
-        he.end(
-          xe +
+        credentialFd.end(
+          credentialValue +
             `
 `,
         );
       }
     }
-    ce.stdin?.on("error", () => {});
-    ce.stdin?.end(case_.execution.prompt);
+    child.stdin?.on("error", () => {});
+    child.stdin?.end(case_.execution.prompt);
     let timer = setTimeout(() => {
-      Je = true;
-      B();
-    }, Pt);
-    let _e = false;
-    let Ae = () => {
-      _e = true;
-      B();
+      timedOut = true;
+      killChild();
+    }, timeoutMs);
+    let interrupted = false;
+    let onAbort = () => {
+      interrupted = true;
+      killChild();
     };
-    if (signal.aborted) Ae();
+    if (signal.aborted) onAbort();
     else
-      signal.addEventListener("abort", Ae, {
+      signal.addEventListener("abort", onAbort, {
         once: true,
       });
-    ce.stdout.setEncoding("utf8");
-    ce.stdout.on("data", (he) => {
-      we += he.length;
-      if (we > MAX_STUB_PUBLISH_BYTES) {
-        if (!Ee) {
-          Ee = true;
-          B();
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdoutBytes += chunk.length;
+      if (stdoutBytes > MAX_STUB_PUBLISH_BYTES) {
+        if (!stdoutOverflow) {
+          stdoutOverflow = true;
+          killChild();
         }
         return;
       }
-      Se += he;
-      let xe;
+      stdoutBuffer += chunk;
+      let newlineIndex;
       while (
-        (xe = Se.indexOf(`
+        (newlineIndex = stdoutBuffer.indexOf(`
 `)) !== -1
       ) {
-        let trimmed = Se.slice(0, xe).trim();
-        Se = Se.slice(xe + 1);
+        let trimmed = stdoutBuffer.slice(0, newlineIndex).trim();
+        stdoutBuffer = stdoutBuffer.slice(newlineIndex + 1);
         if (!trimmed) continue;
         try {
-          let Ne = jsonParse(trimmed);
-          Q.push(Ne);
-          if (verbose) logForDebugging(`eval trace: ${Ne.type}`);
-          if (pt !== null && ye === null)
-            je.push(
-              Promise.resolve(pt(Ne)).then(
-                (ot) => {
-                  if (ot !== null && ye === null) {
-                    ye = ot;
-                    B();
+          let event = jsonParse(trimmed);
+          traceEvents.push(event);
+          if (verbose) logForDebugging(`eval trace: ${event.type}`);
+          if (mockWatcher !== null && mockFailure === null)
+            mockWatches.push(
+              Promise.resolve(mockWatcher(event)).then(
+                (failure) => {
+                  if (failure !== null && mockFailure === null) {
+                    mockFailure = failure;
+                    killChild();
                   }
                 },
                 (error) => {
@@ -294,66 +288,74 @@ async function prepareRunChildConfig(
         } catch {}
       }
     });
-    ce.stderr.setEncoding("utf8");
-    ce.stderr.on("data", (he) => {
-      if (Be.length < 65536) Be += he;
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => {
+      if (stderrTail.length < 65536) stderrTail += chunk;
     });
-    function De(he) {
-      if (Qe) return;
-      Qe = true;
+    function finish(exitInfo) {
+      if (finished) return;
+      finished = true;
       clearTimeout(timer);
-      signal.removeEventListener("abort", Ae);
-      process.removeListener("exit", At);
-      let xe = summarizeRunTrace(Q, Je, he, tracePath, {
-        shellGranted: SHELL_TOOLS.some((Me) => hasToolRule(allowedTools, Me)),
+      signal.removeEventListener("abort", onAbort);
+      process.removeListener("exit", killProcessGroup);
+      let runTrace = summarizeRunTrace(traceEvents, timedOut, exitInfo, tracePath, {
+        shellGranted: SHELL_TOOLS.some((shellTool) => hasToolRule(allowedTools, shellTool)),
         restoredCostUsd,
       });
-      xe.killedInFlight = Je || _e || Ee;
+      runTrace.killedInFlight = timedOut || interrupted || stdoutOverflow;
       writeFile(
         tracePath,
-        Q.map((Me) => jsonStringify(Me)).join(`
+        traceEvents.map((event) => jsonStringify(event)).join(`
 `),
       )
         .catch(() => {})
         .then(async () => {
           if (mocks)
             try {
-              await Promise.all(je);
+              await Promise.all(mockWatches);
               let mockCallLog = await readMockCallLog(mocks.callLogPath, mocks.nonce);
-              xe.mockCalls = mockCallLog.records;
-              annotateMockedToolCalls(xe.toolCalls, mocks);
-              let Ne = ye !== null || xe.killedInFlight;
-              let ot = verifyMockCallLog(
-                xe.toolCalls,
+              runTrace.mockCalls = mockCallLog.records;
+              annotateMockedToolCalls(runTrace.toolCalls, mocks);
+              let skippedVerification = mockFailure !== null || runTrace.killedInFlight;
+              let callLogProblem = verifyMockCallLog(
+                runTrace.toolCalls,
                 mockCallLog.truncated ? null : mockCallLog.records,
                 mocks,
-                ye !== null || _e ? "unprovokable" : xe.killedInFlight ? "provokable" : null,
+                mockFailure !== null || interrupted
+                  ? "unprovokable"
+                  : runTrace.killedInFlight
+                    ? "provokable"
+                    : null,
               );
-              if (ye === null && ot !== null)
-                ye = {
+              if (mockFailure === null && callLogProblem !== null)
+                mockFailure = {
                   kind: "integrity",
                   message:
-                    Ne && xe.error !== null
-                      ? `${xe.error} \xB7 ${ot} (the child was killed before it reported which calls it refused itself; a call its own hook blocked is counted as unserved)`
-                      : ot,
+                    skippedVerification && runTrace.error !== null
+                      ? `${runTrace.error} \xB7 ${callLogProblem} (the child was killed before it reported which calls it refused itself; a call its own hook blocked is counted as unserved)`
+                      : callLogProblem,
                 };
-              if (ye !== null && ye.kind !== "abort") {
-                let nt =
-                  ye.kind === "registration" && Be.length > 0
-                    ? `${ye.message} \xB7 child stderr: ${Be.slice(-1000)}`
-                    : ye.message;
-                let error = xe.endedOnApiError ? xe.error : null;
-                xe.error = error !== null && !nt.startsWith(error) ? `${error} \xB7 ${nt}` : nt;
-                xe.mockSetupFailure = ye.kind;
-              } else if (ye !== null) {
-                xe.aborted = ye.abort ?? {
+              if (mockFailure !== null && mockFailure.kind !== "abort") {
+                let failureMessage =
+                  mockFailure.kind === "registration" && stderrTail.length > 0
+                    ? `${mockFailure.message} \xB7 child stderr: ${stderrTail.slice(-1000)}`
+                    : mockFailure.message;
+                let error = runTrace.endedOnApiError ? runTrace.error : null;
+                runTrace.error =
+                  error !== null && !failureMessage.startsWith(error)
+                    ? `${error} \xB7 ${failureMessage}`
+                    : failureMessage;
+                runTrace.mockSetupFailure = mockFailure.kind;
+              } else if (mockFailure !== null) {
+                runTrace.aborted = mockFailure.abort ?? {
                   server: "?",
                   tool: "?",
-                  reason: ye.message,
+                  reason: mockFailure.message,
                 };
-                xe.error = null;
+                runTrace.error = null;
               }
-              xe.mockTally = mocks.mockedTools.length > 0 ? summarizeMockUsage(xe.toolCalls, mocks) : null;
+              runTrace.mockTally =
+                mocks.mockedTools.length > 0 ? summarizeMockUsage(runTrace.toolCalls, mocks) : null;
             } catch (error) {
               logForDebugging(`eval: reading mock call log failed: ${error}`, {
                 level: "error",
@@ -361,15 +363,18 @@ async function prepareRunChildConfig(
             }
           try {
             if (artifactPublishGranted) {
-              let found = Q.find((ot) => ot.type === "system" && ot.subtype === "init");
-              let [Ne] = mcpToolNames(PUBLISH_TOOL_NAMES);
-              if (found !== undefined && !(Array.isArray(found.tools) && found.tools.includes(Ne)))
+              let found = traceEvents.find((event) => event.type === "system" && event.subtype === "init");
+              let [publishToolName] = mcpToolNames(PUBLISH_TOOL_NAMES);
+              if (
+                found !== undefined &&
+                !(Array.isArray(found.tools) && found.tools.includes(publishToolName))
+              )
                 throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-                  `the run was granted artifact publishing but the child was not offered ${Ne}, so the local Artifacts server did not attach: its grader counts would read 0`,
+                  `the run was granted artifact publishing but the child was not offered ${publishToolName}, so the local Artifacts server did not attach: its grader counts would read 0`,
                   "eval: artifacts stand-in not offered",
                 );
-              xe.artifactPublishes.push(
-                ...(await collectStubPublishes(sandbox, collectStubArtifactSlugs(Q))),
+              runTrace.artifactPublishes.push(
+                ...(await collectStubPublishes(sandbox, collectStubArtifactSlugs(traceEvents))),
               );
             }
           } catch (error) {
@@ -379,46 +384,46 @@ async function prepareRunChildConfig(
             reject(error);
             return;
           }
-          resolve(xe);
+          resolve(runTrace);
         });
     }
-    ce.on("error", (he) =>
-      De({
+    child.on("error", (error) =>
+      finish({
         kind: "error",
-        message: String(he),
+        message: String(error),
       }),
     );
-    ce.on("close", (he, xe) => {
-      At();
-      De(
-        _e
+    child.on("close", (code, signalName) => {
+      killProcessGroup();
+      finish(
+        interrupted
           ? {
               kind: "error",
               message: "interrupted",
             }
-          : Ee
+          : stdoutOverflow
             ? {
                 kind: "error",
                 message: `subprocess stdout exceeded ${MAX_STUB_PUBLISH_BYTES} bytes \u2014 killed`,
               }
-            : ye !== null
+            : mockFailure !== null
               ? {
                   kind: "error",
-                  message: ye.message,
+                  message: mockFailure.message,
                 }
-              : Je
+              : timedOut
                 ? {
                     kind: "error",
                     message: `timed out after ${case_.execution.timeout_seconds}s`,
                   }
-                : he === 0
+                : code === 0
                   ? {
                       kind: "ok",
                     }
                   : {
                       kind: "exit",
-                      code: he ?? `signal ${xe ?? "unknown"}`,
-                      stderrTail: Be.slice(-2000),
+                      code: code ?? `signal ${signalName ?? "unknown"}`,
+                      stderrTail: stderrTail.slice(-2000),
                     },
       );
     });
@@ -432,47 +437,49 @@ async function buildRunChildArgs(
   case_,
   sandbox,
   allowedTools,
-  disallowedTools,
+  extraNames,
   modelOverride,
   configPath,
-  w,
+  addDirs,
   evalFence,
 ) {
-  let y = ["-p"];
-  y.push("--output-format", "stream-json");
-  y.push("--verbose");
-  y.push("--max-turns", String(case_.execution.max_turns));
-  y.push("--permission-mode", "dontAsk");
-  y.push("--setting-sources", "user");
-  let R = modelOverride ?? case_.execution.model;
-  if (R) y.push(`--model=${R}`);
-  for (let pluginDir of case_.pluginDirs) y.push("--plugin-dir", pluginDir);
-  let S = await withPathDirectories(uniq([...case_.pluginDirsUnderTest, case_.caseDir]));
-  for (let x of [sandbox.root, ...S, ...w])
-    checkPathSegmentWhitespace(x, x === sandbox.root ? "sandbox" : "plugin/case/add_dirs");
-  let T = uniq([
+  let args = ["-p"];
+  args.push("--output-format", "stream-json");
+  args.push("--verbose");
+  args.push("--max-turns", String(case_.execution.max_turns));
+  args.push("--permission-mode", "dontAsk");
+  args.push("--setting-sources", "user");
+  let model = modelOverride ?? case_.execution.model;
+  if (model) args.push(`--model=${model}`);
+  for (let pluginDir of case_.pluginDirs) args.push("--plugin-dir", pluginDir);
+  let pluginDirs = await withPathDirectories(uniq([...case_.pluginDirsUnderTest, case_.caseDir]));
+  for (let dir of [sandbox.root, ...pluginDirs, ...addDirs])
+    checkPathSegmentWhitespace(dir, dir === sandbox.root ? "sandbox" : "plugin/case/add_dirs");
+  let allowedRules = uniq([
     ...scopeWriteToolRules(
       scopeReadToolRules(
         anchorRelativeRules(allowedTools, sandbox.cwd),
-        [sandbox.home, sandbox.tmpDir, ...evalFence.readRoots, ...w],
+        [sandbox.home, sandbox.tmpDir, ...evalFence.readRoots, ...addDirs],
         evalFence.readFiles,
       ),
       [sandbox.cwd, sandbox.tmpDir],
     ),
-    ...w.flatMap((x) =>
-      [FILE_READ_TOOL_NAME, GLOB_TOOL_NAME, GREP_TOOL_NAME].map((j) => `${j}(${toSandboxRulePath(x)}/**)`),
+    ...addDirs.flatMap((addDir) =>
+      [FILE_READ_TOOL_NAME, GLOB_TOOL_NAME, GREP_TOOL_NAME].map(
+        (toolName) => `${toolName}(${toSandboxRulePath(addDir)}/**)`,
+      ),
     ),
   ]);
-  if (T.length > 0) y.push(`--allowed-tools=${T.join(",")}`);
-  let N = [
+  if (allowedRules.length > 0) args.push(`--allowed-tools=${allowedRules.join(",")}`);
+  let disallowedRules = [
     `${FILE_READ_TOOL_NAME}(${toSandboxRulePath(sandbox.configDir)}/**)`,
     `${FILE_EDIT_TOOL_NAME}(${toSandboxRulePath(sandbox.configDir)}/**)`,
     `${FILE_READ_TOOL_NAME}(${toSandboxRulePath(sandbox.outDir)}/**)`,
     `${FILE_EDIT_TOOL_NAME}(${toSandboxRulePath(sandbox.outDir)}/**)`,
-    ...S.map((x) => `${FILE_EDIT_TOOL_NAME}(${toSandboxRulePath(x)}/**)`),
-    ...GIT_TOP_ENTRIES.flatMap((x) => [
-      `${FILE_EDIT_TOOL_NAME}(${toSandboxRulePath(path.join(sandbox.cwd, x))})`,
-      `${FILE_EDIT_TOOL_NAME}(${toSandboxRulePath(path.join(sandbox.cwd, x))}/**)`,
+    ...pluginDirs.map((pluginDir) => `${FILE_EDIT_TOOL_NAME}(${toSandboxRulePath(pluginDir)}/**)`),
+    ...GIT_TOP_ENTRIES.flatMap((entry) => [
+      `${FILE_EDIT_TOOL_NAME}(${toSandboxRulePath(path.join(sandbox.cwd, entry))})`,
+      `${FILE_EDIT_TOOL_NAME}(${toSandboxRulePath(path.join(sandbox.cwd, entry))}/**)`,
     ]),
     `${FILE_EDIT_TOOL_NAME}(${toSandboxRulePath(path.join(sandbox.cwd, EVAL_ARTIFACTS_DIR))})`,
     `${FILE_EDIT_TOOL_NAME}(${toSandboxRulePath(path.join(sandbox.cwd, EVAL_ARTIFACTS_DIR))}/**)`,
@@ -482,14 +489,17 @@ async function buildRunChildArgs(
       `${FILE_EDIT_TOOL_NAME}(${toSandboxRulePath(denyPath)}/**)`,
     ]),
   ];
-  if (getPlatform() !== "windows") N.push(PROC_READ_RULE);
-  N.push(...buildDisallowedTools(allowedTools, disallowedTools));
-  y.push(`--disallowed-tools=${N.join(",")}`);
+  if (getPlatform() !== "windows") disallowedRules.push(PROC_READ_RULE);
+  disallowedRules.push(...buildDisallowedTools(allowedTools, extraNames));
+  args.push(`--disallowed-tools=${disallowedRules.join(",")}`);
   if (case_.context.history_file)
-    y.push("--resume", await resolveCaseFileInsideSuite(case_, case_.context.history_file, "history_file"));
+    args.push(
+      "--resume",
+      await resolveCaseFileInsideSuite(case_, case_.context.history_file, "history_file"),
+    );
   if (case_.execution.append_system_prompt)
-    y.push(`--append-system-prompt=${case_.execution.append_system_prompt}`);
-  if (configPath !== undefined) y.push(`--mcp-config=${configPath}`);
-  return y;
+    args.push(`--append-system-prompt=${case_.execution.append_system_prompt}`);
+  if (configPath !== undefined) args.push(`--mcp-config=${configPath}`);
+  return args;
 }
 export { readRunTraceHistory };

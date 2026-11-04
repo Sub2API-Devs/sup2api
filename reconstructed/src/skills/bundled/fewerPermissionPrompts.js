@@ -28,14 +28,14 @@ function registerFewerPermissionPromptsSkill() {
     description:
       "Scan your transcripts for common read-only Bash and MCP tool calls, then add a prioritized allowlist to project .claude/settings.json to reduce permission prompts.",
     userInvocable: true,
-    async getPromptForCommand(e) {
+    async getPromptForCommand(args) {
       let text = getFewerPermissionPromptsPrompt();
-      if (e)
+      if (args)
         text += `
 
 ## Additional instructions from the user
 
-${e}`;
+${args}`;
       return [
         {
           type: "text",

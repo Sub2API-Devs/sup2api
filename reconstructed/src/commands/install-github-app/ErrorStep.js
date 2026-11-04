@@ -13,7 +13,7 @@ import {
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { BulletRow } from "../../components/design-system/BulletRow.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { GITHUB_ACTION_SETUP_DOCS_URL } from "../../constants/github-app.js";
@@ -30,20 +30,20 @@ function renderErrorInstruction(instruction, index) {
 }
 //@ chunk-4v9zy7gn.js:30695-31502 fingerprint = ErrorStep (0.389)
 function ErrorStep(props) {
-  let $ = w(11);
+  let $ = useMemoCache(11);
   let { error, errorReason, errorInstructions } = props;
-  let u;
+  let errorLine;
   if ($[0] !== error) {
-    u = jsxProd_default_2(Text, {
+    errorLine = jsxProd_default_2(Text, {
       color: "error",
       children: ["Error: ", error],
     });
     $[0] = error;
-    $[1] = u;
-  } else u = $[1];
-  let o;
+    $[1] = errorLine;
+  } else errorLine = $[1];
+  let reasonLine;
   if ($[2] !== errorReason) {
-    o =
+    reasonLine =
       errorReason &&
       jsxProd_default(Box, {
         marginTop: 1,
@@ -53,11 +53,11 @@ function ErrorStep(props) {
         }),
       });
     $[2] = errorReason;
-    $[3] = o;
-  } else o = $[3];
-  let v;
+    $[3] = reasonLine;
+  } else reasonLine = $[3];
+  let instructions;
   if ($[4] !== errorInstructions) {
-    v =
+    instructions =
       errorInstructions.length > 0 &&
       jsxProd_default_2(Box, {
         flexDirection: "column",
@@ -75,11 +75,11 @@ function ErrorStep(props) {
         ],
       });
     $[4] = errorInstructions;
-    $[5] = v;
-  } else v = $[5];
-  let A;
+    $[5] = instructions;
+  } else instructions = $[5];
+  let statusLine;
   if ($[6] === MEMO_CACHE_SENTINEL) {
-    A = jsxProd_default(Box, {
+    statusLine = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default_2(Text, {
         dimColor: true,
@@ -93,19 +93,19 @@ function ErrorStep(props) {
         ],
       }),
     });
-    $[6] = A;
-  } else A = $[6];
-  let g;
-  if ($[7] !== u || $[8] !== o || $[9] !== v) {
-    g = jsxProd_default_2(Box, {
+    $[6] = statusLine;
+  } else statusLine = $[6];
+  let footer;
+  if ($[7] !== errorLine || $[8] !== reasonLine || $[9] !== instructions) {
+    footer = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [u, o, v, A],
+      children: [errorLine, reasonLine, instructions, statusLine],
     });
-    $[7] = u;
-    $[8] = o;
-    $[9] = v;
-    $[10] = g;
-  } else g = $[10];
-  return g;
+    $[7] = errorLine;
+    $[8] = reasonLine;
+    $[9] = instructions;
+    $[10] = footer;
+  } else footer = $[10];
+  return footer;
 }
 export { ErrorStep };

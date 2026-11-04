@@ -16,6 +16,7 @@ import { toError } from "../../utils/errors.js";
 import { logPluginScopedError } from "../../utils/plugins/pluginScopedWrite.js";
 import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:589869-589895 affinity
 /**
@@ -110,9 +111,9 @@ class LSPDiagnosticRegistry {
           file.diagnostics.push(diag);
         }
     }
-    let r = [];
-    for (let { file } of byUri.values()) if (file.diagnostics.length > 0) r.push(file);
-    return r;
+    let result = [];
+    for (let { file } of byUri.values()) if (file.diagnostics.length > 0) result.push(file);
+    return result;
   }
   takePending() {
     logForDebugging(`LSP Diagnostics: Checking registry - ${this.pending.size} pending`);
@@ -150,7 +151,9 @@ class LSPDiagnosticRegistry {
     let totalDelivered = 0;
     let truncatedCount = 0;
     for (let file of dedupedFiles) {
-      file.diagnostics.sort((Se, ke) => severityToNumber(Se.severity) - severityToNumber(ke.severity));
+      file.diagnostics.sort(
+        (left, right) => severityToNumber(left.severity) - severityToNumber(right.severity),
+      );
       if (file.diagnostics.length > MAX_DIAGNOSTICS_PER_FILE) {
         truncatedCount += file.diagnostics.length - MAX_DIAGNOSTICS_PER_FILE;
         file.diagnostics = file.diagnostics.slice(0, MAX_DIAGNOSTICS_PER_FILE);
@@ -220,10 +223,10 @@ class LSPDiagnosticRegistry {
   }
   clearPendingForFile(fileUri) {
     let purgedCount = 0;
-    for (let [r, pendingEntry] of this.pending) {
+    for (let [pendingId, pendingEntry] of this.pending) {
       let filtered = pendingEntry.files.filter((file) => file.uri !== fileUri);
       if (filtered.length === pendingEntry.files.length) continue;
-      if (filtered.length === 0) this.pending.delete(r);
+      if (filtered.length === 0) this.pending.delete(pendingId);
       else pendingEntry.files = filtered;
       purgedCount++;
     }
@@ -238,48 +241,51 @@ class LSPDiagnosticRegistry {
 /**
  * 按 context.root 懒建 LSPDiagnosticRegistry 的 WeakMap 容器（tt.of(ctx)）；316 把旧版的模块级单例改成每会话根一份。
  */
-var lspDiagnosticRegistryByRoot = new SessionRootSlot(() => new LSPDiagnosticRegistry());
+var lspDiagnosticRegistryByRoot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:593739", () => {
+  lspDiagnosticRegistryByRoot = new SessionRootSlot(() => new LSPDiagnosticRegistry());
+});
 //@ chunk-e6aww6q8.js:593766-593805 placement
 /**
  * 把 LSP 推来的诊断登记到当前会话的诊断登记表，等待下一轮作为附件投递。
  */
-function registerPendingLSPDiagnostic(context, n) {
-  lspDiagnosticRegistryByRoot.of(context).register(n);
+function registerPendingLSPDiagnostic(context, diagnostics) {
+  lspDiagnosticRegistryByRoot.of(context).register(diagnostics);
 }
 //@ chunk-e6aww6q8.js:593805-593851 placement
 /**
  * 取出当前会话待投递的 LSP 诊断（去重、截断后）；附件系统在每轮构造 lsp 诊断附件时调用。
  */
-function checkForLSPDiagnostics(e) {
-  return lspDiagnosticRegistryByRoot.of(e).takePending();
+function checkForLSPDiagnostics(toolUseContext) {
+  return lspDiagnosticRegistryByRoot.of(toolUseContext).takePending();
 }
 //@ chunk-e6aww6q8.js:593851-593891 placement
 /**
  * 清空当前会话待投递的 LSP 诊断。
  */
-function clearAllLSPDiagnostics(e) {
-  lspDiagnosticRegistryByRoot.of(e).clearPending();
+function clearAllLSPDiagnostics(toolUseContext) {
+  lspDiagnosticRegistryByRoot.of(toolUseContext).clearPending();
 }
 //@ chunk-e6aww6q8.js:593891-593927 placement
 /**
  * 重置当前会话的诊断登记表（待投递与已投递记录）。
  */
-function resetAllLSPDiagnosticState(e) {
-  lspDiagnosticRegistryByRoot.of(e).resetAll();
+function resetAllLSPDiagnosticState(toolUseContext) {
+  lspDiagnosticRegistryByRoot.of(toolUseContext).resetAll();
 }
 //@ chunk-e6aww6q8.js:593927-593979 placement
 /**
  * 清除某文件的已投递诊断记录（文件被编辑后允许重新投递）。
  */
-function clearDeliveredDiagnosticsForFile(session, absolutePath) {
-  lspDiagnosticRegistryByRoot.of(session).clearDeliveredForFile(absolutePath);
+function clearDeliveredDiagnosticsForFile(session, filePath) {
+  lspDiagnosticRegistryByRoot.of(session).clearDeliveredForFile(filePath);
 }
 //@ chunk-e6aww6q8.js:593979-594029 placement
 /**
  * 删除待投递诊断中引用某文件的条目。
  */
-function clearPendingDiagnosticsForFile(session, absolutePath) {
-  lspDiagnosticRegistryByRoot.of(session).clearPendingForFile(absolutePath);
+function clearPendingDiagnosticsForFile(session, filePath) {
+  lspDiagnosticRegistryByRoot.of(session).clearPendingForFile(filePath);
 }
 export {
   resetAllLSPDiagnosticState,

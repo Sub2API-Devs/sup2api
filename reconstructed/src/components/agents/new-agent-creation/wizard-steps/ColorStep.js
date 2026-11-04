@@ -10,7 +10,7 @@
  */
 import { init_react_production } from "../../../../../vendor/react/cjs/react.production.js";
 import { notificationChannelLabel } from "../../../../commands/config/configSettings.js";
-import { w } from "../../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../../runtime/bun-runtime.js";
 import {
   jsxProd_default_2,
@@ -24,21 +24,25 @@ import { merged as merged_2 } from "../../../CustomSelect/selectA11y.js";
 import { renderMobileNotice } from "../../../Settings/Config.js";
 import { Box } from "../../../../ink/components/Text.js";
 import { Dialog } from "../../../design-system/Dialog.js";
+import { beginDeferredInits } from "../../../../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 2 modules closed by ../../../Settings/Config.js;
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("src/components/Settings/Config.js");
 //@ chunk-9h8dr0qb.js:11300-11304 placement
 init_react_production();
 //@ chunk-9h8dr0qb.js:11304-11348 placement
-function notificationChannelOption(J) {
+function notificationChannelOption(channel) {
   return {
-    value: J,
-    label: notificationChannelLabel(J),
+    value: channel,
+    label: notificationChannelLabel(channel),
   };
 }
 //@ chunk-9h8dr0qb.js:11348-11363 placement
 function noop_4() {}
 //@ chunk-9h8dr0qb.js:11363-12815 callgraph-fingerprint = ColorStep (0.188)
 function ColorStep(props) {
-  let $ = w(26);
+  let $ = useMemoCache(26);
   let {
     channel,
     showInputNeededRow,
@@ -77,9 +81,9 @@ function ColorStep(props) {
     options = NOTIFICATION_CHANNELS.map(notificationChannelOption);
     $[1] = options;
   } else options = $[1];
-  let B;
+  let channelField;
   if ($[2] !== channel || $[3] !== onChangeChannel) {
-    B = jsxProd_default(merged_2.Field, {
+    channelField = jsxProd_default(merged_2.Field, {
       label: "Channel",
       children: jsxProd_default(merged_2.Select, {
         value: channel,
@@ -89,11 +93,11 @@ function ColorStep(props) {
     });
     $[2] = channel;
     $[3] = onChangeChannel;
-    $[4] = B;
-  } else B = $[4];
-  let H;
+    $[4] = channelField;
+  } else channelField = $[4];
+  let inputNeededField;
   if ($[5] !== inputNeededEnabled || $[6] !== onChangeInputNeeded || $[7] !== showInputNeededRow) {
-    H =
+    inputNeededField =
       showInputNeededRow &&
       jsxProd_default(merged_2.Field, {
         label: "Notify when Claude needs you",
@@ -105,11 +109,11 @@ function ColorStep(props) {
     $[5] = inputNeededEnabled;
     $[6] = onChangeInputNeeded;
     $[7] = showInputNeededRow;
-    $[8] = H;
-  } else H = $[8];
-  let K;
+    $[8] = inputNeededField;
+  } else inputNeededField = $[8];
+  let doneField;
   if ($[9] !== doneEnabled || $[10] !== onChangeDone || $[11] !== showDoneRow) {
-    K =
+    doneField =
       showDoneRow &&
       jsxProd_default(merged_2.Field, {
         label: "Notify when Claude is done",
@@ -121,39 +125,39 @@ function ColorStep(props) {
     $[9] = doneEnabled;
     $[10] = onChangeDone;
     $[11] = showDoneRow;
-    $[12] = K;
-  } else K = $[12];
-  let ee;
-  if ($[13] !== B || $[14] !== H || $[15] !== K) {
-    ee = jsxProd_default_2(merged_2, {
+    $[12] = doneField;
+  } else doneField = $[12];
+  let fieldsBox;
+  if ($[13] !== channelField || $[14] !== inputNeededField || $[15] !== doneField) {
+    fieldsBox = jsxProd_default_2(merged_2, {
       visibleCount: 6,
-      children: [B, H, K],
+      children: [channelField, inputNeededField, doneField],
     });
-    $[13] = B;
-    $[14] = H;
-    $[15] = K;
-    $[16] = ee;
-  } else ee = $[16];
-  let ne;
+    $[13] = channelField;
+    $[14] = inputNeededField;
+    $[15] = doneField;
+    $[16] = fieldsBox;
+  } else fieldsBox = $[16];
+  let mobileNotice;
   if ($[17] !== showDoneRow || $[18] !== showInputNeededRow) {
-    ne = (showInputNeededRow || showDoneRow) && jsxProd_default(renderMobileNotice, {});
+    mobileNotice = (showInputNeededRow || showDoneRow) && jsxProd_default(renderMobileNotice, {});
     $[17] = showDoneRow;
     $[18] = showInputNeededRow;
-    $[19] = ne;
-  } else ne = $[19];
+    $[19] = mobileNotice;
+  } else mobileNotice = $[19];
   let children;
-  if ($[20] !== ee || $[21] !== ne) {
+  if ($[20] !== fieldsBox || $[21] !== mobileNotice) {
     children = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [ee, ne],
+      children: [fieldsBox, mobileNotice],
     });
-    $[20] = ee;
-    $[21] = ne;
+    $[20] = fieldsBox;
+    $[21] = mobileNotice;
     $[22] = children;
   } else children = $[22];
-  let L;
+  let dialog;
   if ($[23] !== onClose || $[24] !== children) {
-    L = jsxProd_default(Dialog, {
+    dialog = jsxProd_default(Dialog, {
       title: "Notifications",
       onCancel: onClose,
       hideBorder: true,
@@ -162,8 +166,8 @@ function ColorStep(props) {
     });
     $[23] = onClose;
     $[24] = children;
-    $[25] = L;
-  } else L = $[25];
-  return L;
+    $[25] = dialog;
+  } else dialog = $[25];
+  return dialog;
 }
 export { noop_4, ColorStep };

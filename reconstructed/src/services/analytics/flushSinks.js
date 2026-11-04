@@ -11,6 +11,7 @@
 import { sleep } from "../../utils/sleep.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { onProcessRootHost } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-c13g0cfa.js:297-711 placement
 /**
@@ -24,18 +25,18 @@ async function flushAnalyticsSinks() {
       shutdownTasks.length = 0;
     }
     let [
-      { settle1PEventLoggingBeforeExit: e, shutdown1PEventLogging: r },
-      { shutdownDatadog: n },
-      { shutdownErrorTracking: a },
+      { settle1PEventLoggingBeforeExit: settle1P, shutdown1PEventLogging: shutdown1P },
+      { shutdownDatadog },
+      { shutdownErrorTracking },
     ] = await Promise.all([
-      import("./chunk-3x77zjqp.js"),
-      import("./chunk-195bxx7h.js"),
-      import("./chunk-vpst3pmt.js"),
+      import("./firstPartyEventLogger.js"),
+      import("./datadog.js"),
+      import("../errorTracking/datadogErrorSink.js"),
     ]);
-    let i = e();
-    let c = [r(), n(), a()];
-    await Promise.race([Promise.all(c), sleep(500)]);
-    await i;
+    let settled = settle1P();
+    let shutdowns = [shutdown1P(), shutdownDatadog(), shutdownErrorTracking()];
+    await Promise.race([Promise.all(shutdowns), sleep(500)]);
+    await settled;
   } catch {}
 }
 //@ chunk-c13g0cfa.js:711-728 placement
@@ -46,13 +47,16 @@ class ShutdownTaskList {
   tasks = [];
 }
 //@ chunk-c13g0cfa.js:728-751 placement
-var shutdownTasksSlot = new HostScoped(() => new ShutdownTaskList());
+var shutdownTasksSlot; // deferred: uses ShutdownTaskList of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-c13g0cfa.js:728", () => {
+  shutdownTasksSlot = new HostScoped(() => new ShutdownTaskList());
+});
 //@ chunk-c13g0cfa.js:751-783 placement
 function getShutdownTasks() {
   return onProcessRootHost(shutdownTasksSlot).tasks;
 }
 //@ chunk-c13g0cfa.js:783-825 placement
-function registerPreFlushTask(s) {
-  getShutdownTasks().push(s.catch(() => {}));
+function registerPreFlushTask(task) {
+  getShutdownTasks().push(task.catch(() => {}));
 }
 export { flushAnalyticsSinks, registerPreFlushTask };

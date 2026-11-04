@@ -60,12 +60,12 @@ function sessionProgressProbe(host) {
     : undefined;
 }
 //@ chunk-qmsrnapp.js:2465-2528 placement
-function missedProbesSince(e, since) {
-  return e.missed().filter((o) => o.writtenAt >= since);
+function missedProbesSince(probe, since) {
+  return probe.missed().filter((miss) => miss.writtenAt >= since);
 }
 //@ chunk-qmsrnapp.js:2528-2664 placement
-function silentCallDecision(e, timing) {
-  let writtenAt = e[timing.suspectProbes - 1]?.writtenAt;
+function silentCallDecision(misses, timing) {
+  let writtenAt = misses[timing.suspectProbes - 1]?.writtenAt;
   return writtenAt === undefined
     ? undefined
     : {
@@ -76,8 +76,8 @@ function silentCallDecision(e, timing) {
 /**
  * 判断给定探测记录里是否还有在 n 时刻仍未到期的可疑探测。
  */
-function anyProbeStillPending(e, decidedAt, timing) {
-  return e.slice(timing.suspectProbes).some((r) => r.writtenAt + r.waitedMs >= decidedAt);
+function anyProbeStillPending(misses, decidedAt, timing) {
+  return misses.slice(timing.suspectProbes).some((miss) => miss.writtenAt + miss.waitedMs >= decidedAt);
 }
 //@ chunk-qmsrnapp.js:2752-2814 placement
 /**
@@ -114,22 +114,22 @@ function watchSilentCall({
   try {
     if (sessionProgressProbe(host) === undefined || checkMisses < 2) return NOOP_PROGRESS_WATCH;
     let abortController = new AbortController();
-    let h = AbortSignal.any([signal, abortController.signal]);
-    let p;
+    let combinedSignal = AbortSignal.any([signal, abortController.signal]);
+    let acceptedAtMs;
     return {
       onAccepted: () => {
-        if (p !== undefined || h.aborted) return;
-        p = now();
+        if (acceptedAtMs !== undefined || combinedSignal.aborted) return;
+        acceptedAtMs = now();
         pollSilentCall({
           host,
-          since: p,
-          signal: h,
+          since: acceptedAtMs,
+          signal: combinedSignal,
           timing,
           wait,
           now,
         }).catch(logWatchFailure);
       },
-      acceptedAt: () => p,
+      acceptedAt: () => acceptedAtMs,
       stop: () => abortController.abort(),
     };
   } catch (error) {
@@ -140,41 +140,45 @@ function watchSilentCall({
 //@ chunk-qmsrnapp.js:3244-3659 placement
 async function pollSilentCall({ host, since, signal, timing, wait, now }) {
   while (!signal.aborted) {
-    let u = sessionProgressProbe(host);
-    let h = u?.quietForMs();
-    if (u === undefined || h === undefined) return;
-    let p = missedProbesSince(u, since);
-    let y = silentCallDecision(p, timing);
-    if (y !== undefined) {
-      if (!anyProbeStillPending(p, y.decidedAt, timing))
-        await u.probe(decidingWindowMs(y.decidedAt, timing, now()));
+    let probe = sessionProgressProbe(host);
+    let quietForMs = probe?.quietForMs();
+    if (probe === undefined || quietForMs === undefined) return;
+    let misses = missedProbesSince(probe, since);
+    let decision = silentCallDecision(misses, timing);
+    if (decision !== undefined) {
+      if (!anyProbeStillPending(misses, decision.decidedAt, timing))
+        await probe.probe(decidingWindowMs(decision.decidedAt, timing, now()));
       return;
     }
-    let min = Math.min(h, now() - since);
+    let min = Math.min(quietForMs, now() - since);
     if (min < timing.silentBeforeProbeMs) {
       await wait(Math.min(timing.silentBeforeProbeMs, timing.silentBeforeProbeMs - min), signal);
       continue;
     }
-    if ((await u.probe()) !== false) return;
+    if ((await probe.probe()) !== false) return;
   }
 }
 //@ chunk-qmsrnapp.js:3659-3770 placement
-function decidingWindowMs(decidedAt, timing, o) {
+function decidingWindowMs(decidedAt, timing, nowMs) {
   return Math.min(
     timing.redialStartedAfterMs + timing.decidingWindowMs,
-    Math.max(timing.decidingWindowMs, decidedAt - o),
+    Math.max(timing.decidingWindowMs, decidedAt - nowMs),
   );
 }
 //@ chunk-qmsrnapp.js:3770-4034 placement
-function startStillHereProbe(e) {
+function startStillHereProbe(options) {
   try {
-    let n = sessionProgressProbe(e.host);
-    if (n === undefined || silentCallDecision(missedProbesSince(n, e.since), e.timing) === undefined) return;
+    let probe = sessionProgressProbe(options.host);
+    if (
+      probe === undefined ||
+      silentCallDecision(missedProbesSince(probe, options.since), options.timing) === undefined
+    )
+      return;
     let abortController = new AbortController();
     return {
       done: probeStillHere({
-        ...e,
-        signal: AbortSignal.any([e.signal, abortController.signal]),
+        ...options,
+        signal: AbortSignal.any([options.signal, abortController.signal]),
       })
         .catch(logWatchFailure)
         .then((probed) => ({
@@ -188,49 +192,51 @@ function startStillHereProbe(e) {
 }
 //@ chunk-qmsrnapp.js:4034-4392 placement
 async function probeStillHere({ host, since, signal, timing, now }) {
-  for (let p of [1, 2]) {
-    let y = sessionProgressProbe(host);
-    let _ = y === undefined ? [] : missedProbesSince(y, since);
-    let S = silentCallDecision(_, timing);
-    if (signal.aborted || y === undefined || S === undefined) return;
-    if (anyProbeStillPending(_, S.decidedAt, timing)) return false;
-    let k = await y.probe(decidingWindowMs(S.decidedAt, timing, now()));
-    if (k !== false) return k;
+  for (let pass of [1, 2]) {
+    let probe = sessionProgressProbe(host);
+    let misses = probe === undefined ? [] : missedProbesSince(probe, since);
+    let decision = silentCallDecision(misses, timing);
+    if (signal.aborted || probe === undefined || decision === undefined) return;
+    if (anyProbeStillPending(misses, decision.decidedAt, timing)) return false;
+    let alive = await probe.probe(decidingWindowMs(decision.decidedAt, timing, now()));
+    if (alive !== false) return alive;
   }
-  let i = sessionProgressProbe(host);
-  let u = i === undefined ? [] : missedProbesSince(i, since);
-  let h = silentCallDecision(u, timing);
-  return h !== undefined && anyProbeStillPending(u, h.decidedAt, timing) ? false : undefined;
+  let probe = sessionProgressProbe(host);
+  let misses = probe === undefined ? [] : missedProbesSince(probe, since);
+  let decision = silentCallDecision(misses, timing);
+  return decision !== undefined && anyProbeStillPending(misses, decision.decidedAt, timing)
+    ? false
+    : undefined;
 }
 //@ chunk-qmsrnapp.js:4392-4980 placement
 function classifySilentCall({ host, since, probed, checkWrittenAt, timing, now }) {
   try {
-    let u = sessionProgressProbe(host);
-    let h = u === undefined ? [] : missedProbesSince(u, since);
-    let p = silentCallDecision(h, timing);
-    if (u === undefined || probed === true || p === undefined)
+    let probe = sessionProgressProbe(host);
+    let misses = probe === undefined ? [] : missedProbesSince(probe, since);
+    let decision = silentCallDecision(misses, timing);
+    if (probe === undefined || probed === true || decision === undefined)
       return {
         kind: "undecided",
       };
-    if (probed !== false || !anyProbeStillPending(h, p.decidedAt, timing))
+    if (probed !== false || !anyProbeStillPending(misses, decision.decidedAt, timing))
       return {
         kind: "probe_inconclusive",
       };
-    let y = u.ownStreamFrameAt();
+    let ownStreamFrameAt = probe.ownStreamFrameAt();
     if (
-      y === undefined ||
-      y < checkWrittenAt + timing.ownStreamProofAfterMs ||
-      y < now() - timing.ownStreamKeepaliveMs - timing.ownStreamProofAfterMs
+      ownStreamFrameAt === undefined ||
+      ownStreamFrameAt < checkWrittenAt + timing.ownStreamProofAfterMs ||
+      ownStreamFrameAt < now() - timing.ownStreamKeepaliveMs - timing.ownStreamProofAfterMs
     )
       return {
         kind: "own_stream_quiet",
       };
-    u.giveUp();
-    let _ = [...h.map((S) => S.writtenAt), checkWrittenAt];
+    probe.giveUp();
+    let checkTimes = [...misses.map((miss) => miss.writtenAt), checkWrittenAt];
     return {
       kind: "given_up",
-      checks: _.length,
-      intervalMs: (Math.max(..._) - Math.min(..._)) / (_.length - 1),
+      checks: checkTimes.length,
+      intervalMs: (Math.max(...checkTimes) - Math.min(...checkTimes)) / (checkTimes.length - 1),
     };
   } catch (error) {
     logWatchFailure(error);
@@ -247,9 +253,9 @@ var PLAN_CLASSIFIER = "plan_classifier";
 var ANNOUNCES_RETURN = "announces_return";
 var PROGRESS_POLL_MIN_MS = 3000;
 //@ chunk-qmsrnapp.js:5108-5199 placement
-function clampedHostLimit(e, n) {
-  let { min, max } = SERVING_LIMIT_BOUNDS[n];
-  return sanitizeInt(e.description?.limits[n] ?? DEFAULT_SERVING_LIMITS[n], min, max);
+function clampedHostLimit(server, limitName) {
+  let { min, max } = SERVING_LIMIT_BOUNDS[limitName];
+  return sanitizeInt(server.description?.limits[limitName] ?? DEFAULT_SERVING_LIMITS[limitName], min, max);
 }
 //@ chunk-qmsrnapp.js:5199-5338 placement
 function progressCheckTiming(host) {
@@ -268,12 +274,12 @@ function hostAnnouncesReturn(host) {
   return host.description?.capabilities?.includes(ANNOUNCES_RETURN) === true;
 }
 //@ chunk-qmsrnapp.js:5478-5530 placement
-function isSessionTransport(e) {
-  return e.transport.kind === "session";
+function isSessionTransport(host) {
+  return host.transport.kind === "session";
 }
 //@ chunk-qmsrnapp.js:5530-5600 placement
-function hasCapability(e) {
-  return e.description?.capabilities?.includes(PLAN_CLASSIFIER) === true;
+function hasCapability(server) {
+  return server.description?.capabilities?.includes(PLAN_CLASSIFIER) === true;
 }
 //@ chunk-qmsrnapp.js:5600-5676 placement = handleAutoModeTransition (0.799)
 function isAutoModeCapableHost(host) {
@@ -284,8 +290,8 @@ function isAutoModeCapableHost(host) {
   );
 }
 //@ chunk-qmsrnapp.js:5676-5754 placement
-function hasSessionCapability(e) {
-  return isSessionTransport(e) && e.description?.capabilities?.includes(STANDING_APPROVALS) === true;
+function hasSessionCapability(host) {
+  return isSessionTransport(host) && host.description?.capabilities?.includes(STANDING_APPROVALS) === true;
 }
 //@ chunk-qmsrnapp.js:5754-5832 placement
 function hasSessionCapabilityPair(host) {
@@ -313,60 +319,60 @@ async function awaitRemoteCallWithProgress({
   sleep: sleep_2 = sleep,
   now = Date.now,
 }) {
-  let P = outcomeQueryEnvelope(callId);
-  let T = 0;
-  let A = 0;
-  let I = 0;
-  let R;
+  let queryEnvelope = outcomeQueryEnvelope(callId);
+  let attempts = 0;
+  let misses = 0;
+  let unboundMisses = 0;
+  let unreachableSinceMs;
   let epochChanged = false;
-  let W;
-  let V;
+  let lateResult;
+  let resolveLate;
   let promise = new Promise((resolve) => {
-    V = () => resolve("late");
+    resolveLate = () => resolve("late");
   });
-  let Y = ranBefore;
-  let X = false;
-  let w;
-  let L;
-  held?.late.then((j) => {
-    if (isTransportFailure(j)) held = undefined;
-    else if (j.kind === "result" && j.envelope?.outcome === "in_progress") {
-      Y ||= j.envelope.state === "running";
-      if (j.envelope.state === "running") onOutput?.(j.envelope.output_tail);
-      A = 0;
-      I = 0;
-      L = undefined;
+  let ranSomewhere = ranBefore;
+  let sawRunning = false;
+  let stillHereProbe;
+  let silentVerdict;
+  held?.late.then((late) => {
+    if (isTransportFailure(late)) held = undefined;
+    else if (late.kind === "result" && late.envelope?.outcome === "in_progress") {
+      ranSomewhere ||= late.envelope.state === "running";
+      if (late.envelope.state === "running") onOutput?.(late.envelope.output_tail);
+      misses = 0;
+      unboundMisses = 0;
+      silentVerdict = undefined;
       held = undefined;
     } else {
-      W = j;
-      V();
+      lateResult = late;
+      resolveLate();
     }
   });
-  let D = (j) => {
+  let finish = (verdict) => {
     logRemoteTools(callId, "check-in ended", {
-      verdict: j.kind,
-      attempts: T,
-      misses: A,
+      verdict: verdict.kind,
+      attempts,
+      misses,
       held: held !== undefined,
     });
-    w?.stop();
-    if (L === "ended") logFeatureOk("rtc_silent_call");
-    else if (L !== undefined && j.kind === "host_unresponsive" && !j.stillConnected)
-      logFeatureSad("rtc_silent_call", L);
+    stillHereProbe?.stop();
+    if (silentVerdict === "ended") logFeatureOk("rtc_silent_call");
+    else if (silentVerdict !== undefined && verdict.kind === "host_unresponsive" && !verdict.stillConnected)
+      logFeatureSad("rtc_silent_call", silentVerdict);
     return {
-      verdict: j,
-      attempts: T,
-      misses: A,
+      verdict,
+      attempts,
+      misses,
       epochChanged,
     };
   };
-  let C = () => W === undefined && host.transport.saidAsleep?.() === true;
-  let x = () =>
-    D({
+  let hostAsleep = () => lateResult === undefined && host.transport.saidAsleep?.() === true;
+  let asleepVerdict = () =>
+    finish({
       kind: "host_asleep",
-      whileRunning: held !== undefined || Y,
+      whileRunning: held !== undefined || ranSomewhere,
     });
-  let le = () =>
+  let nextPauseMs = () =>
     fullJitterBackoffMs({
       baseMs: timing.intervalMs,
       capMs: timing.intervalMs,
@@ -375,31 +381,31 @@ async function awaitRemoteCallWithProgress({
       random: timing.random,
     });
   await (held === undefined
-    ? sleep_2(Math.min(PROGRESS_POLL_MIN_MS, le()), signal)
+    ? sleep_2(Math.min(PROGRESS_POLL_MIN_MS, nextPauseMs()), signal)
     : Promise.race([promise, Promise.resolve()]));
   while (!signal.aborted) {
-    if (W !== undefined) {
+    if (lateResult !== undefined) {
       logRemoteTools(callId, "late answer taken on the standing request", {
-        heard: W.kind,
-        after_misses: A,
+        heard: lateResult.kind,
+        after_misses: misses,
       });
-      return D({
+      return finish({
         kind: "late",
-        transported: W,
+        transported: lateResult,
       });
     }
-    if (C()) {
-      A += 1;
-      if (T === 0 || A >= timing.misses) return x();
-      await Promise.race([sleep_2(le(), signal), promise]);
+    if (hostAsleep()) {
+      misses += 1;
+      if (attempts === 0 || misses >= timing.misses) return asleepVerdict();
+      await Promise.race([sleep_2(nextPauseMs(), signal), promise]);
       continue;
     }
-    T += 1;
-    onAttempt?.(X);
+    attempts += 1;
+    onAttempt?.(sawRunning);
     let checkWrittenAt = now();
-    w?.stop();
-    w =
-      silentSince !== undefined && A + 1 < timing.misses
+    stillHereProbe?.stop();
+    stillHereProbe =
+      silentSince !== undefined && misses + 1 < timing.misses
         ? startStillHereProbe({
             host,
             since: silentSince,
@@ -410,7 +416,7 @@ async function awaitRemoteCallWithProgress({
         : undefined;
     let winner = await Promise.race([
       host.transport
-        .call(toolName, {}, P, {
+        .call(toolName, {}, queryEnvelope, {
           signal,
           deadlineMs: Math.min(timing.intervalMs, host.transport.limits.defaultDeadlineMs),
           toolUseId: callId,
@@ -422,41 +428,41 @@ async function awaitRemoteCallWithProgress({
       promise,
     ]);
     if (winner === "late" || winner.kind !== "timed_out") {
-      w?.stop();
-      w = undefined;
+      stillHereProbe?.stop();
+      stillHereProbe = undefined;
     }
-    if (winner === "late" || W !== undefined) continue;
+    if (winner === "late" || lateResult !== undefined) continue;
     switch (winner.kind) {
       case "result": {
-        let q = interpretCallOutcome(winner, dispatchEpoch);
-        let Q = winner.envelope === undefined ? undefined : hostEpochOf(winner.envelope);
-        epochChanged = dispatchEpoch !== undefined && Q !== undefined && Q !== dispatchEpoch;
-        if (q.kind === "query_turned_away") {
-          A += 1;
-          R = undefined;
+        let interpreted = interpretCallOutcome(winner, dispatchEpoch);
+        let epoch = winner.envelope === undefined ? undefined : hostEpochOf(winner.envelope);
+        epochChanged = dispatchEpoch !== undefined && epoch !== undefined && epoch !== dispatchEpoch;
+        if (interpreted.kind === "query_turned_away") {
+          misses += 1;
+          unreachableSinceMs = undefined;
           break;
         }
-        if (q.kind !== "still_running") return D(q);
-        if (q.state === "awaiting_approval" && held === undefined)
-          return D({
+        if (interpreted.kind !== "still_running") return finish(interpreted);
+        if (interpreted.state === "awaiting_approval" && held === undefined)
+          return finish({
             kind: "ask_lost",
           });
-        Y ||= q.state === "running";
-        if (q.state === "running") onOutput?.(q.output);
-        X = true;
-        A = 0;
-        I = 0;
-        R = undefined;
-        L = undefined;
+        ranSomewhere ||= interpreted.state === "running";
+        if (interpreted.state === "running") onOutput?.(interpreted.output);
+        sawRunning = true;
+        misses = 0;
+        unboundMisses = 0;
+        unreachableSinceMs = undefined;
+        silentVerdict = undefined;
         break;
       }
       case "cancelled":
-        return D({
+        return finish({
           kind: "cancelled",
         });
       case "host_gone":
         if (held === undefined)
-          return D({
+          return finish({
             kind: "gone",
             transported: {
               ...winner,
@@ -466,8 +472,8 @@ async function awaitRemoteCallWithProgress({
         await Promise.race([promise, sleep_2(timing.intervalMs, signal)]);
         continue;
       case "timed_out":
-        A += 1;
-        R = undefined;
+        misses += 1;
+        unreachableSinceMs = undefined;
         break;
       case "dropped":
       case "unreachable":
@@ -475,41 +481,41 @@ async function awaitRemoteCallWithProgress({
       case "approval_unverified":
       case "transport_error":
         if (isUnverifiedRefusal(winner)) {
-          A += 1;
-          R = undefined;
-          if (isRefusedDrop(winner)) I += 1;
+          misses += 1;
+          unreachableSinceMs = undefined;
+          if (isRefusedDrop(winner)) unboundMisses += 1;
           break;
         }
         if (winner.kind === "transport_error" && winner.unreadableResult === true)
-          return D({
+          return finish({
             kind: "unknown",
             why: "unreadable",
           });
-        R ??= now();
-        if (now() - R >= timing.unreachableBudgetMs)
-          return D({
+        unreachableSinceMs ??= now();
+        if (now() - unreachableSinceMs >= timing.unreachableBudgetMs)
+          return finish({
             kind: "unreachable",
           });
         break;
     }
     logRemoteTools(callId, "check-in answered", {
-      attempt: T,
+      attempt: attempts,
       heard: winner.kind,
-      misses: A,
+      misses,
     });
-    if (silentSince !== undefined && w !== undefined && winner.kind === "timed_out") {
-      let q = sleep_2(le(), signal).then(() => {
+    if (silentSince !== undefined && stillHereProbe !== undefined && winner.kind === "timed_out") {
+      let probeWait = sleep_2(nextPauseMs(), signal).then(() => {
         return;
       });
       let winner = await Promise.race([
-        w.done,
-        q,
+        stillHereProbe.done,
+        probeWait,
         promise.then(() => {
           return;
         }),
       ]);
-      if (W === undefined && !signal.aborted && !C()) {
-        let Z = classifySilentCall({
+      if (lateResult === undefined && !signal.aborted && !hostAsleep()) {
+        let silentDecision = classifySilentCall({
           host,
           since: silentSince,
           probed: winner?.probed,
@@ -517,35 +523,36 @@ async function awaitRemoteCallWithProgress({
           timing: silentCallTiming,
           now,
         });
-        if (winner !== undefined && Z.kind === "given_up") {
-          L = "ended";
-          return D({
+        if (winner !== undefined && silentDecision.kind === "given_up") {
+          silentVerdict = "ended";
+          return finish({
             kind: "host_unresponsive",
-            misses: Z.checks,
-            whileRunning: held !== undefined || Y,
+            misses: silentDecision.checks,
+            whileRunning: held !== undefined || ranSomewhere,
             stillConnected: false,
-            intervalMs: Z.intervalMs,
+            intervalMs: silentDecision.intervalMs,
           });
         }
-        if (Z.kind !== "undecided" && Z.kind !== "given_up") L = winner === undefined ? "probe_late" : Z.kind;
+        if (silentDecision.kind !== "undecided" && silentDecision.kind !== "given_up")
+          silentVerdict = winner === undefined ? "probe_late" : silentDecision.kind;
       }
-      await Promise.race([q, promise]);
+      await Promise.race([probeWait, promise]);
       continue;
     }
-    if (A >= timing.misses) {
-      if (C()) return x();
-      if (I === A)
-        return D({
+    if (misses >= timing.misses) {
+      if (hostAsleep()) return asleepVerdict();
+      if (unboundMisses === misses)
+        return finish({
           kind: "unbound",
-          misses: A,
-          whileRunning: Y,
+          misses,
+          whileRunning: ranSomewhere,
         });
       let promise_2 = new Promise((resolve) => {
         signal.addEventListener("abort", () => resolve(undefined), {
           once: true,
         });
       });
-      let Q = Promise.resolve()
+      let probeLive = Promise.resolve()
         .then(() =>
           host.transport.probeLive?.({
             signal,
@@ -554,26 +561,26 @@ async function awaitRemoteCallWithProgress({
         .catch(() => {
           return;
         });
-      let Z = signal.aborted ? undefined : await Promise.race([Q, promise_2, promise]);
-      if (W !== undefined)
-        return D({
+      let stillConnected = signal.aborted ? undefined : await Promise.race([probeLive, promise_2, promise]);
+      if (lateResult !== undefined)
+        return finish({
           kind: "late",
-          transported: W,
+          transported: lateResult,
         });
       if (signal.aborted)
-        return D({
+        return finish({
           kind: "cancelled",
         });
-      return D({
+      return finish({
         kind: "host_unresponsive",
-        misses: A,
-        whileRunning: held !== undefined || Y,
-        stillConnected: Z === true,
+        misses,
+        whileRunning: held !== undefined || ranSomewhere,
+        stillConnected: stillConnected === true,
       });
     }
-    await Promise.race([sleep_2(le(), signal), promise]);
+    await Promise.race([sleep_2(nextPauseMs(), signal), promise]);
   }
-  return D({
+  return finish({
     kind: "cancelled",
   });
 }

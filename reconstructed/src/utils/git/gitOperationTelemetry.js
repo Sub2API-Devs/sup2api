@@ -17,8 +17,8 @@ import { getPrCounter } from "../../bootstrap/state.js";
 //@ chunk-29pqxdaf.js:1635-1645 placement
 var zipObject = baseZipObject;
 //@ chunk-29pqxdaf.js:1645-1689 placement
-function zipOrEmpty(e, n) {
-  return zipObject(e || [], n || [], assignValueIfDifferent);
+function zipOrEmpty(keys, values) {
+  return zipObject(keys || [], values || [], assignValueIfDifferent);
 }
 //@ chunk-29pqxdaf.js:1689-1700 placement
 /**

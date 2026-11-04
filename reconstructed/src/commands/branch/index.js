@@ -17,7 +17,7 @@ var branchCommandDefinition = {
   name: "branch",
   description: "Create a branch of the current conversation at this point",
   argumentHint: "[name]",
-  load: () => import("./chunk-khj4kcw5.js"),
+  load: () => import("./branchAndResume.lazy.js"),
 };
 var branchCommand = branchCommandDefinition;
 export { branchCommand };

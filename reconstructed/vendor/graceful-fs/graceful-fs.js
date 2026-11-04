@@ -5,13 +5,13 @@
  * pieces: chunk-bmbhxpfm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 import { require_polyfills } from "./polyfills.js";
 import { require_legacy_streams } from "./legacy-streams.js";
 import { require_clone } from "./clone.js";
 
 //@ chunk-bmbhxpfm.js:6170-11354 cjs-fingerprint
-var require_graceful_fs = x(function (cjsExports, cjsModule) {
+var require_graceful_fs = __commonJS(function (cjsExports, cjsModule) {
   var fs = importMetaRequire("fs");
   var polyfills = require_polyfills();
   var legacy = require_legacy_streams();

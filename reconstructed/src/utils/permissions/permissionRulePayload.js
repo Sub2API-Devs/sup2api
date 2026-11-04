@@ -34,21 +34,27 @@ import { peekSessionFeatureValues } from "../../bootstrap/sessionFeatureValues.j
 import { marketplaceSuffix, normalizePluginId } from "../plugins/pluginIdentifier.js";
 import { SYNCED } from "../telemetry/pluginTelemetry.js";
 import { isTopHostSession } from "../sessionShape.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-sfy7bm1n.js:1377-1477 placement
-var BOT_PROTECTED_TENGU_ATOMIC_MAGPIE = "bot_protected_tengu_atomic_magpie";
-var NON_PERSISTED_RULE_SOURCES = new Set(["session", "cliArg"]);
-var webRestrictedProcessFlag = new HostScoped(() => ({
-  value: false,
-}));
+var BOT_PROTECTED_TENGU_ATOMIC_MAGPIE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var NON_PERSISTED_RULE_SOURCES;
+var webRestrictedProcessFlag;
+deferInit("chunk-sfy7bm1n.js:1377", () => {
+  BOT_PROTECTED_TENGU_ATOMIC_MAGPIE = "bot_protected_tengu_atomic_magpie";
+  NON_PERSISTED_RULE_SOURCES = new Set(["session", "cliArg"]);
+  webRestrictedProcessFlag = new HostScoped(() => ({
+    value: false,
+  }));
+});
 //@ chunk-sfy7bm1n.js:1477-1576 placement = getServerUrl (1)
-function getServerUrl(e, r) {
+function getServerUrl(serverName, config) {
   if (
-    e === HEARTHBOT &&
-    !isCliOwnedConfig(r) &&
-    "url" in r &&
-    typeof r.url === "string" &&
-    isCcrUrlWithoutCredentials(r.url)
+    serverName === HEARTHBOT &&
+    !isCliOwnedConfig(config) &&
+    "url" in config &&
+    typeof config.url === "string" &&
+    isCcrUrlWithoutCredentials(config.url)
   )
     onProcessRootHost(webRestrictedProcessFlag).value = true;
 }
@@ -66,26 +72,30 @@ function isWebToolRestrictedInRelay(name) {
     )
   )
     return false;
-  let r = getFeatureValueWithSource_CACHED_MAY_BE_STALE(BOT_PROTECTED_TENGU_ATOMIC_MAGPIE, false);
-  return !(r.value === true && r.source === "payload" && !hasGrowthBookUsedNonDefaultHost());
+  let featureValue = getFeatureValueWithSource_CACHED_MAY_BE_STALE(BOT_PROTECTED_TENGU_ATOMIC_MAGPIE, false);
+  return !(
+    featureValue.value === true &&
+    featureValue.source === "payload" &&
+    !hasGrowthBookUsedNonDefaultHost()
+  );
 }
 //@ chunk-sfy7bm1n.js:1744-1863 placement
-function matchesRestrictedWebRule(toolName) {
-  let r = typeof toolName !== "string";
-  let o = !r && hasWildcard(toolName);
+function matchesRestrictedWebRule(pattern) {
+  let isBroad = typeof pattern !== "string";
+  let hasWildcardPattern = !isBroad && hasWildcard(pattern);
   return [WEBFETCH, WEBSEARCH].some(
-    (n) =>
-      (r || o || canonicalToolName(toolName) === n) &&
-      isWebToolRestrictedInRelay(n) &&
-      (!o || matchRulePattern(toolName, n)),
+    (webToolName) =>
+      (isBroad || hasWildcardPattern || canonicalToolName(pattern) === webToolName) &&
+      isWebToolRestrictedInRelay(webToolName) &&
+      (!hasWildcardPattern || matchRulePattern(pattern, webToolName)),
   );
 }
 //@ chunk-sfy7bm1n.js:1863-1903 placement
 /**
  * isRestrictedNonSessionRule：非会话来源的受限规则。
  */
-function isRestrictedNonSessionRule(e, toolName) {
-  return !NON_PERSISTED_RULE_SOURCES.has(e) && isWebToolRestrictedInRelay(toolName);
+function isRestrictedNonSessionRule(source, toolName) {
+  return !NON_PERSISTED_RULE_SOURCES.has(source) && isWebToolRestrictedInRelay(toolName);
 }
 //@ chunk-sfy7bm1n.js:1903-1940 placement
 function isWebToolRestrictedInThisSession() {
@@ -95,10 +105,11 @@ function isWebToolRestrictedInThisSession() {
 /**
  * 权限更新是否格式不合法：非对象，或规则类更新的 rules 不是数组、条目缺 toolName 或 ruleContent 非字符串。
  */
-function isMalformedRuleUpdate(e) {
-  if (typeof e !== "object" || e === null) return true;
-  if (e.type !== "addRules" && e.type !== "replaceRules" && e.type !== "removeRules") return false;
-  let rules = "rules" in e ? e.rules : undefined;
+function isMalformedRuleUpdate(update) {
+  if (typeof update !== "object" || update === null) return true;
+  if (update.type !== "addRules" && update.type !== "replaceRules" && update.type !== "removeRules")
+    return false;
+  let rules = "rules" in update ? update.rules : undefined;
   return (
     !Array.isArray(rules) ||
     rules.some(
@@ -112,44 +123,51 @@ function isMalformedRuleUpdate(e) {
   );
 }
 //@ chunk-sfy7bm1n.js:2305-3000 placement
-function applyPermissionRulePayload(e, r, o) {
-  if ((e.type !== "removeRules" && e.type !== "replaceRules") || e.behavior === "allow") return;
-  if (e.type === "replaceRules") {
-    if (o === undefined)
-      return e.rules.length === 0
+function applyPermissionRulePayload(update, isRestrictedTool, toolPermissionContext) {
+  if ((update.type !== "removeRules" && update.type !== "replaceRules") || update.behavior === "allow")
+    return;
+  if (update.type === "replaceRules") {
+    if (toolPermissionContext === undefined)
+      return update.rules.length === 0
         ? []
         : [
             {
               type: "addRules",
-              rules: e.rules,
-              behavior: e.behavior,
-              destination: e.destination,
+              rules: update.rules,
+              behavior: update.behavior,
+              destination: update.destination,
             },
           ];
-    let s = (e.behavior === "deny" ? o.alwaysDenyRules : o.alwaysAskRules) ?? {};
-    let l = Object.hasOwn(s, e.destination) ? s[e.destination] : undefined;
-    let m = Array.isArray(l) ? l : [];
-    let u = (c) => formatPermissionRule(permissionRuleValueFromString(c));
-    let a = new Set(e.rules.map((rule) => u(formatPermissionRule(rule))));
-    let filtered = m
-      .map((c) => permissionRuleValueFromString(c))
-      .filter((c) => r(c.toolName) && !a.has(u(formatPermissionRule(c))));
+    let ruleTables =
+      (update.behavior === "deny"
+        ? toolPermissionContext.alwaysDenyRules
+        : toolPermissionContext.alwaysAskRules) ?? {};
+    let rawRules = Object.hasOwn(ruleTables, update.destination) ? ruleTables[update.destination] : undefined;
+    let existingRules = Array.isArray(rawRules) ? rawRules : [];
+    let ruleKey = (ruleString) => formatPermissionRule(permissionRuleValueFromString(ruleString));
+    let incomingKeys = new Set(update.rules.map((rule) => ruleKey(formatPermissionRule(rule))));
+    let filtered = existingRules
+      .map((rawRule) => permissionRuleValueFromString(rawRule))
+      .filter(
+        (value) =>
+          isRestrictedTool(value.toolName) && !incomingKeys.has(ruleKey(formatPermissionRule(value))),
+      );
     return filtered.length === 0
       ? undefined
       : [
           {
-            ...e,
-            rules: [...e.rules, ...filtered],
+            ...update,
+            rules: [...update.rules, ...filtered],
           },
         ];
   }
-  let filtered = e.rules.filter((rule) => !r(rule.toolName));
-  if (filtered.length === e.rules.length) return;
+  let filtered = update.rules.filter((rule) => !isRestrictedTool(rule.toolName));
+  if (filtered.length === update.rules.length) return;
   return filtered.length === 0
     ? []
     : [
         {
-          ...e,
+          ...update,
           rules: filtered,
         },
       ];
@@ -158,52 +176,53 @@ function applyPermissionRulePayload(e, r, o) {
 /**
  * filterPermissionUpdatePayload：过滤权限更新载荷中的受限 Web 工具。
  */
-function filterPermissionUpdatePayload(updatedPermissions, r) {
-  if (!isWebToolRestrictedInThisSession()) return updatedPermissions;
-  return filterRestrictedAllowUpdates(updatedPermissions, matchesRestrictedWebRule, r);
+function filterPermissionUpdatePayload(updates, toolPermissionContext) {
+  if (!isWebToolRestrictedInThisSession()) return updates;
+  return filterRestrictedAllowUpdates(updates, matchesRestrictedWebRule, toolPermissionContext);
 }
 //@ chunk-sfy7bm1n.js:3053-3387 placement
 /**
  * 过滤权限更新：丢弃格式不合法的更新，应用规则载荷转换，并从 allow 规则中去掉受限工具；无变化时返回原数组。
  */
-function filterRestrictedAllowUpdates(e, r, o) {
-  let n = false;
-  let flattened = e.flatMap((l) => {
-    if (isMalformedRuleUpdate(l)) {
-      n = true;
+function filterRestrictedAllowUpdates(updates, isRestrictedTool, toolPermissionContext) {
+  let changed = false;
+  let flattened = updates.flatMap((update) => {
+    if (isMalformedRuleUpdate(update)) {
+      changed = true;
       return [];
     }
-    let m = applyPermissionRulePayload(l, r, o);
-    if (m !== undefined) {
-      n = true;
-      return m;
+    let replacement = applyPermissionRulePayload(update, isRestrictedTool, toolPermissionContext);
+    if (replacement !== undefined) {
+      changed = true;
+      return replacement;
     }
-    if ((l.type !== "addRules" && l.type !== "replaceRules") || l.behavior !== "allow") return [l];
-    let filtered = l.rules.filter((rule) => !r(rule.toolName));
-    if (filtered.length === l.rules.length) return [l];
-    n = true;
+    if ((update.type !== "addRules" && update.type !== "replaceRules") || update.behavior !== "allow")
+      return [update];
+    let filtered = update.rules.filter((rule) => !isRestrictedTool(rule.toolName));
+    if (filtered.length === update.rules.length) return [update];
+    changed = true;
     return filtered.length === 0
       ? []
       : [
           {
-            ...l,
+            ...update,
             rules: filtered,
           },
         ];
   });
-  return n ? flattened : e;
+  return changed ? flattened : updates;
 }
 //@ chunk-sfy7bm1n.js:3387-3657 placement
 /**
  * 为 WebSearch 建议整工具规则，为 WebFetch 建议 domain:主机名 规则（URL 无效或含 * 时不建议）。
  */
-function suggestWebToolRule(tool, r) {
+function suggestWebToolRule(tool, input) {
   let toolNameForPermissionCheck = getToolNameForPermissionCheck_2(tool);
   if (toolNameForPermissionCheck === WEBSEARCH)
     return {
       toolName: toolNameForPermissionCheck,
     };
-  let url = typeof r === "object" && r !== null && "url" in r ? r.url : undefined;
+  let url = typeof input === "object" && input !== null && "url" in input ? input.url : undefined;
   if (toolNameForPermissionCheck !== WEBFETCH || typeof url !== "string") return;
   try {
     let hostname = new URL(url).hostname;
@@ -218,51 +237,54 @@ function suggestWebToolRule(tool, r) {
   }
 }
 //@ chunk-sfy7bm1n.js:3657-4204 placement
-function normalizePermissionUpdate(e, r, toolPermissionContext) {
-  if (!isWebToolRestrictedInThisSession()) return e;
-  let n = false;
-  let flattened = e.flatMap((l) => {
-    if (isMalformedRuleUpdate(l)) {
-      n = true;
+function normalizePermissionUpdate(updates, suggestedRule, toolPermissionContext) {
+  if (!isWebToolRestrictedInThisSession()) return updates;
+  let changed = false;
+  let flattened = updates.flatMap((update) => {
+    if (isMalformedRuleUpdate(update)) {
+      changed = true;
       return [];
     }
-    let m = applyPermissionRulePayload(l, matchesRestrictedWebRule, toolPermissionContext);
-    if (m !== undefined) {
-      n = true;
-      return m;
+    let replacement = applyPermissionRulePayload(update, matchesRestrictedWebRule, toolPermissionContext);
+    if (replacement !== undefined) {
+      changed = true;
+      return replacement;
     }
-    if ((l.type !== "addRules" && l.type !== "replaceRules") || l.behavior !== "allow") return [l];
-    let filtered = l.rules.filter((rule) => matchesRestrictedWebRule(rule.toolName));
-    if (filtered.length === 0) return [l];
-    n = true;
-    let filtered_2 = l.rules.filter((rule) => !matchesRestrictedWebRule(rule.toolName));
-    let f =
-      l.type === "addRules" && r !== undefined
+    if ((update.type !== "addRules" && update.type !== "replaceRules") || update.behavior !== "allow")
+      return [update];
+    let filtered = update.rules.filter((rule) => matchesRestrictedWebRule(rule.toolName));
+    if (filtered.length === 0) return [update];
+    changed = true;
+    let filtered_2 = update.rules.filter((rule) => !matchesRestrictedWebRule(rule.toolName));
+    let downgraded =
+      update.type === "addRules" && suggestedRule !== undefined
         ? filtered.filter(
-            (c) => canonicalToolName(c.toolName) === r.toolName && c.ruleContent === r.ruleContent,
+            (rule) =>
+              canonicalToolName(rule.toolName) === suggestedRule.toolName &&
+              rule.ruleContent === suggestedRule.ruleContent,
           )
         : [];
     return [
       ...(filtered_2.length > 0
         ? [
             {
-              ...l,
+              ...update,
               rules: filtered_2,
             },
           ]
         : []),
-      ...(f.length > 0
+      ...(downgraded.length > 0
         ? [
             {
-              ...l,
+              ...update,
               destination: "session",
-              rules: f,
+              rules: downgraded,
             },
           ]
         : []),
     ];
   });
-  return n ? flattened : e;
+  return changed ? flattened : updates;
 }
 //@ chunk-sfy7bm1n.js:4204-4231 placement
 var TENGU_STEADY_FINCH = "tengu_steady_finch";
@@ -284,10 +306,10 @@ function steadyFinchEnabled() {
 /**
  * isSyncedMarketplacePlugin：已同步市场里的插件 id。
  */
-function isSyncedMarketplacePlugin(repository) {
+function isSyncedMarketplacePlugin(pluginId) {
   return (
-    repository !== undefined &&
-    marketplaceSuffix(normalizePluginId(repository)) === SYNCED &&
+    pluginId !== undefined &&
+    marketplaceSuffix(normalizePluginId(pluginId)) === SYNCED &&
     areSkillsConvertedAsPlugins()
   );
 }
@@ -295,8 +317,8 @@ function isSyncedMarketplacePlugin(repository) {
 /**
  * isSkillPluginSurfaceEnabled：技能插件表面是否生效。
  */
-function isSkillPluginSurfaceEnabled(e) {
-  return isTopHostSession() || (!e && areSkillsConvertedAsPlugins() && !isCcsTenant());
+function isSkillPluginSurfaceEnabled(topHost) {
+  return isTopHostSession() || (!topHost && areSkillsConvertedAsPlugins() && !isCcsTenant());
 }
 //@ chunk-sfy7bm1n.js:4431-4464 placement
 /**
@@ -306,9 +328,9 @@ function isTopHostSkillPluginSession() {
   return isTopHostSession() && areSkillsConvertedAsPlugins();
 }
 export {
-  isWebToolRestrictedInRelay,
   isRestrictedNonSessionRule,
   isSkillPluginSurfaceEnabled,
+  isWebToolRestrictedInRelay,
   normalizePermissionUpdate,
   isSyncedMarketplacePlugin,
   areSkillsConvertedAsPlugins,

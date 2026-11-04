@@ -8,7 +8,7 @@
  * pieces: chunk-j2fh7g5w.js (1)
  * attribution: placement 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -20,48 +20,48 @@ import { Text, Box } from "../../ink/components/Text.js";
  * 暗色文本，可附带提示（hint）。
  */
 function HintText(props) {
-  let c = w(9);
+  let $ = useMemoCache(9);
   let { children, hint } = props;
   if (!hint) {
-    let o;
-    if (c[0] !== children) {
-      o = jsxProd_default(Text, {
+    let childText;
+    if ($[0] !== children) {
+      childText = jsxProd_default(Text, {
         dimColor: true,
         children,
       });
-      c[0] = children;
-      c[1] = o;
-    } else o = c[1];
-    return o;
+      $[0] = children;
+      $[1] = childText;
+    } else childText = $[1];
+    return childText;
   }
-  let o;
-  if (c[2] !== children) {
-    o = jsxProd_default(Text, {
+  let childText_;
+  if ($[2] !== children) {
+    childText_ = jsxProd_default(Text, {
       dimColor: true,
       children,
     });
-    c[2] = children;
-    c[3] = o;
-  } else o = c[3];
-  let d;
-  if (c[4] !== hint) {
-    d = jsxProd_default(Text, {
+    $[2] = children;
+    $[3] = childText_;
+  } else childText_ = $[3];
+  let hintText;
+  if ($[4] !== hint) {
+    hintText = jsxProd_default(Text, {
       dimColor: true,
       children: hint,
     });
-    c[4] = hint;
-    c[5] = d;
-  } else d = c[5];
-  let a;
-  if (c[6] !== o || c[7] !== d) {
-    a = jsxProd_default_2(Box, {
+    $[4] = hint;
+    $[5] = hintText;
+  } else hintText = $[5];
+  let column;
+  if ($[6] !== childText_ || $[7] !== hintText) {
+    column = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [o, d],
+      children: [childText_, hintText],
     });
-    c[6] = o;
-    c[7] = d;
-    c[8] = a;
-  } else a = c[8];
-  return a;
+    $[6] = childText_;
+    $[7] = hintText;
+    $[8] = column;
+  } else column = $[8];
+  return column;
 }
 export { HintText };

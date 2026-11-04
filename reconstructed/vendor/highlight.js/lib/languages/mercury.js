@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:296565-298615 cjs-fingerprint
-var require_mercury = x(function (cjsExports, cjsModule) {
+var require_mercury = __commonJS(function (cjsExports, cjsModule) {
   function mercury(hljs) {
     let keywords = {
       keyword:

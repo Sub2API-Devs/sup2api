@@ -56,23 +56,23 @@ async function kickPolicyLimitsLoadForDiagnostic() {
   try {
     if (getResponseFromCache() !== null) return;
   } catch {}
-  let e = await import("./chunk-qchbrsbw.js");
-  e.initializePolicyLimitsLoadingPromise();
-  let o = bridgeHostState();
-  if (o.diagnosticPolicyKick === undefined) {
-    let policyLimits = e.loadPolicyLimits();
+  let policyModule = await import("../services/policyLimits/DefaultPolicyLimitsClientSlot.lazy.js");
+  policyModule.initializePolicyLimitsLoadingPromise();
+  let hostState = bridgeHostState();
+  if (hostState.diagnosticPolicyKick === undefined) {
+    let policyLimits = policyModule.loadPolicyLimits();
     policyLimits
       .catch(() => {})
       .finally(() => {
-        o.diagnosticPolicyKick = undefined;
+        hostState.diagnosticPolicyKick = undefined;
       });
-    o.diagnosticPolicyKick = withTimeout(
+    hostState.diagnosticPolicyKick = withTimeout(
       policyLimits,
-      e.POLICY_LIMITS_COLD_AWAIT_MS,
+      policyModule.POLICY_LIMITS_COLD_AWAIT_MS,
       "bridge_diagnostic_policy_limits",
     ).catch(() => {});
   }
-  await o.diagnosticPolicyKick;
+  await hostState.diagnosticPolicyKick;
 }
 //@ chunk-71c4j971.js:15464-15563 placement
 function getRemoteControlPolicyVerdict() {
@@ -323,11 +323,11 @@ function readSessionLivePreviewFlag() {
 //@ chunk-71c4j971.js:17594-17784 placement
 function isBridgeServerSessionConfigEnabled() {
   {
-    let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
+    let { value: featureValue, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
       "tengu_bridge_apply_server_session_config",
       true,
     );
-    if (e !== false) return true;
+    if (featureValue !== false) return true;
     if (source === "override") return false;
     return !(source === "payload" && getUserAttributes().organizationUUID);
   }
@@ -393,23 +393,23 @@ function getBridgeSubagentFrameGate() {
   };
 }
 //@ chunk-71c4j971.js:18607-18997 placement
-function applyRemoteControlToAppState(e, remoteControlAtStartup) {
-  if (e.replBridgeOutboundOnly && !remoteControlAtStartup)
-    return e.replBridgeSessionGroupingId !== undefined
+function applyRemoteControlToAppState(appState, remoteControlAtStartup) {
+  if (appState.replBridgeOutboundOnly && !remoteControlAtStartup)
+    return appState.replBridgeSessionGroupingId !== undefined
       ? {
-          ...e,
+          ...appState,
           replBridgeSessionGroupingId: undefined,
         }
-      : e;
-  if (e.replBridgeEnabled === remoteControlAtStartup && !e.replBridgeOutboundOnly)
-    return !remoteControlAtStartup && e.replBridgeSessionGroupingId !== undefined
+      : appState;
+  if (appState.replBridgeEnabled === remoteControlAtStartup && !appState.replBridgeOutboundOnly)
+    return !remoteControlAtStartup && appState.replBridgeSessionGroupingId !== undefined
       ? {
-          ...e,
+          ...appState,
           replBridgeSessionGroupingId: undefined,
         }
-      : e;
+      : appState;
   return {
-    ...e,
+    ...appState,
     replBridgeEnabled: remoteControlAtStartup,
     replBridgeOutboundOnly: false,
     ...(!remoteControlAtStartup && {
@@ -464,4 +464,8 @@ export {
   applyRemoteControlToAppState,
   isQuotaRejectedReemitEnabled,
   isBridgeTurnKeepAwakeEnabled,
+  isCcrV2BridgeCreateEnabled,
+  isUdsEnableRemoteControlEnabled,
+  isWorkingCopySourceNamingEnabled,
+  readSessionLivePreviewFlag,
 };

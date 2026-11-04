@@ -20,3 +20,4 @@ function disableCoreDumpsForSessionTunnel() {
   )
     disableCoreDumps(() => {});
 }
+export { disableCoreDumpsForSessionTunnel };

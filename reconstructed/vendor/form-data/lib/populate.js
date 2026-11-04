@@ -5,10 +5,10 @@
  * pieces: chunk-h6b7mazd.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-h6b7mazd.js:21335-21450 cjs-require-graph
-var require_populate = x(function (cjsExports, cjsModule) {
+var require_populate = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = function (dst, src) {
     Object.keys(src).forEach(function (prop) {
       dst[prop] = dst[prop] || src[prop];

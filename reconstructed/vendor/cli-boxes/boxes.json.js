@@ -5,10 +5,10 @@
  * pieces: chunk-zxbmtfmw.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-zxbmtfmw.js:264-1413 cjs-fingerprint
-var cliBoxesData = x(function (cjsExports, cjsModule) {
+var cliBoxesData = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = {
     single: {
       topLeft: "\u250C",

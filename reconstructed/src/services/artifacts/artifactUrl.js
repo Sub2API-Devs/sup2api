@@ -21,6 +21,7 @@ import { claudeAiEnvironment } from "../../constants/claudeAiOrigin.js";
 import { isNonWslUncPath, isNetworkMountPath, classifyHomeMount } from "../../utils/networkPaths.js";
 import { getPathsForNetworkScreen } from "../../utils/fsOperations.js";
 import { VERSION_MAX_ENTRIES } from "./publishInstanceFiles.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-jv307fw4.js:1750-2215 placement
 /**
@@ -74,53 +75,54 @@ var FAMILY_DISPLAY_NAMES = {
   project: "project",
 };
 //@ chunk-jv307fw4.js:2215-2856 placement
-function classifyClaudeAiPath(e) {
-  let [n, r, s] = e;
-  if (n === undefined) return "other";
-  if (n === "artifact") return r === undefined ? "artifact_bare" : "artifact";
-  if (n === "artifacts") return r === undefined || r === "design" ? "artifacts_gallery" : "chat_artifact";
-  if (n === "public" && r === "artifacts") return "chat_artifact";
-  if (n === "code") {
-    if (r === "artifact" || r === "frame") return s === undefined ? "artifact_bare" : "artifact";
-    if (r === "artifacts") return "artifacts_gallery";
-    return r === undefined ? "other" : "code_session";
+function classifyClaudeAiPath(parts) {
+  let [family, sub, rest] = parts;
+  if (family === undefined) return "other";
+  if (family === "artifact") return sub === undefined ? "artifact_bare" : "artifact";
+  if (family === "artifacts")
+    return sub === undefined || sub === "design" ? "artifacts_gallery" : "chat_artifact";
+  if (family === "public" && sub === "artifacts") return "chat_artifact";
+  if (family === "code") {
+    if (sub === "artifact" || sub === "frame") return rest === undefined ? "artifact_bare" : "artifact";
+    if (sub === "artifacts") return "artifacts_gallery";
+    return sub === undefined ? "other" : "code_session";
   }
-  if (n === "epitaxy") {
-    if (r === "artifact") return "epitaxy_artifact";
-    return r === undefined ? "other" : "epitaxy";
+  if (family === "epitaxy") {
+    if (sub === "artifact") return "epitaxy_artifact";
+    return sub === undefined ? "other" : "epitaxy";
   }
-  let a = Object.hasOwn(CLAUDE_AI_URL_FAMILIES, n) ? CLAUDE_AI_URL_FAMILIES[n] : undefined;
-  if (a === undefined || (a.needsId && r === undefined)) return "other";
-  return a.family;
+  let urlFamily = Object.hasOwn(CLAUDE_AI_URL_FAMILIES, family) ? CLAUDE_AI_URL_FAMILIES[family] : undefined;
+  if (urlFamily === undefined || (urlFamily.needsId && sub === undefined)) return "other";
+  return urlFamily.family;
 }
 //@ chunk-jv307fw4.js:2856-3186 placement
 /**
  * 解析 claude.ai 链接，识别 artifact/frame 参数、环境与链接族（chat/share/project/design…）。
  */
-function parseArtifactUrl(e) {
-  let n = canonicalizeArtifactUrlInput(e);
-  let r = claudeAiWebEnvOf(n);
-  if (r === null) return null;
-  let s;
+function parseArtifactUrl(input) {
+  let canonical = canonicalizeArtifactUrlInput(input);
+  let env = claudeAiWebEnvOf(canonical);
+  if (env === null) return null;
+  let url;
   try {
-    s = new URL(n);
+    url = new URL(canonical);
   } catch {
     return null;
   }
-  let a = s.searchParams.get("artifact") || s.searchParams.get("frame");
-  let l = null;
-  if (a !== null) {
-    let lower = a.toLowerCase();
-    l = ARTIFACT_SLUG_RE.test(lower) ? lower : decodeBase58Uuid(a);
+  let artifactParam = url.searchParams.get("artifact") || url.searchParams.get("frame");
+  let out = null;
+  if (artifactParam !== null) {
+    let lower = artifactParam.toLowerCase();
+    out = ARTIFACT_SLUG_RE.test(lower) ? lower : decodeBase58Uuid(artifactParam);
   }
   return {
-    family: classifyClaudeAiPath(s.pathname.split("/").filter((d) => d !== "")),
-    env: r,
+    family: classifyClaudeAiPath(url.pathname.split("/").filter((segment) => segment !== "")),
+    env,
     artifact:
-      l === null
+      out === null
         ? null
         : {
-            slug: l,
+            slug: out,
           },
   };
 }
@@ -128,72 +130,80 @@ function parseArtifactUrl(e) {
 /**
  * 用户传入的不是 artifact URL 时，生成说明（是哪种 claude.ai 链接、该如何改用 artifact 自身 URL）。
  */
-function explainNonArtifactUrl(e, n = {}) {
-  let r = `not an artifact URL: ${e} \u2014`;
-  let artifactUrl = parseArtifactUrl(e);
-  let a = artifactUrl === null ? undefined : FAMILY_DISPLAY_NAMES[artifactUrl.family];
-  if (artifactUrl !== null && a !== undefined && artifactUrl.artifact !== null) {
-    let b = artifactViewerUrlFor({
+function explainNonArtifactUrl(input, options = {}) {
+  let lead = `not an artifact URL: ${input} \u2014`;
+  let artifactUrl = parseArtifactUrl(input);
+  let familyName = artifactUrl === null ? undefined : FAMILY_DISPLAY_NAMES[artifactUrl.family];
+  if (artifactUrl !== null && familyName !== undefined && artifactUrl.artifact !== null) {
+    let viewerUrl = artifactViewerUrlFor({
       slug: artifactUrl.artifact.slug,
       env: artifactUrl.env,
     });
-    return `${r} that is a claude.ai ${a} link; pass the artifact's own URL (${b}) as \`${n.field ?? "url"}\`.`;
+    return `${lead} that is a claude.ai ${familyName} link; pass the artifact's own URL (${viewerUrl}) as \`${options.field ?? "url"}\`.`;
   }
   if (artifactUrl?.family === "design") {
-    let b = n.designToolName === undefined ? "" : `; use the ${n.designToolName} tool`;
-    return `${r} that is a Claude Design link, which the ${ARTIFACT_TOOL_NAME} tool cannot open${b}.`;
+    let toolHint = options.designToolName === undefined ? "" : `; use the ${options.designToolName} tool`;
+    return `${lead} that is a Claude Design link, which the ${ARTIFACT_TOOL_NAME} tool cannot open${toolHint}.`;
   }
   if (
     artifactUrl?.family === "chat_artifact" ||
-    /^https:\/\/(?:www\.)?claude\.site(?:[/?#]|$)/.test(canonicalizeArtifactUrlInput(e.trim()))
+    /^https:\/\/(?:www\.)?claude\.site(?:[/?#]|$)/.test(canonicalizeArtifactUrlInput(input.trim()))
   )
-    return `${r} that is an artifact from a claude.ai chat (the chat's artifact panel or its public page), which is separate from artifacts published with this tool and has no ${artifactLinkShapeHint()} link, so this tool cannot read it. If the user wants its content used here, ask them to paste it or save it to a file in this session; if they meant one of their published artifacts, action: "list" shows those.`;
-  if (a !== undefined)
-    return `${r} that is a claude.ai ${a} link, not a published artifact, and this tool cannot read a ${a}. If the user meant an artifact shown in that ${a}, ask them for the artifact's own ${artifactLinkShapeHint()} link or find it with action: "list"; otherwise ask them to paste the content they want used.`;
-  let trimmed = e.trim();
-  let h = ARTIFACT_SLUG_RE.test(trimmed.toLowerCase()) ? trimmed.toLowerCase() : decodeBase58Uuid(trimmed);
-  if (artifactUrl === null && h !== null)
-    return `${r} that looks like an artifact id on its own; if it is one, pass the full link ${artifactViewerUrlFor(
+    return `${lead} that is an artifact from a claude.ai chat (the chat's artifact panel or its public page), which is separate from artifacts published with this tool and has no ${artifactLinkShapeHint()} link, so this tool cannot read it. If the user wants its content used here, ask them to paste it or save it to a file in this session; if they meant one of their published artifacts, action: "list" shows those.`;
+  if (familyName !== undefined)
+    return `${lead} that is a claude.ai ${familyName} link, not a published artifact, and this tool cannot read a ${familyName}. If the user meant an artifact shown in that ${familyName}, ask them for the artifact's own ${artifactLinkShapeHint()} link or find it with action: "list"; otherwise ask them to paste the content they want used.`;
+  let trimmed = input.trim();
+  let slugOk = ARTIFACT_SLUG_RE.test(trimmed.toLowerCase())
+    ? trimmed.toLowerCase()
+    : decodeBase58Uuid(trimmed);
+  if (artifactUrl === null && slugOk !== null)
+    return `${lead} that looks like an artifact id on its own; if it is one, pass the full link ${artifactViewerUrlFor(
       {
-        slug: h,
+        slug: slugOk,
         env: claudeAiEnvironment(),
       },
-    )} as \`${n.field ?? "url"}\`.`;
-  return `${r} pass the artifact's ${artifactLinkShapeHint()} link (action: "list" shows them).`;
+    )} as \`${options.field ?? "url"}\`.`;
+  return `${lead} pass the artifact's ${artifactLinkShapeHint()} link (action: "list" shows them).`;
 }
 //@ chunk-jv307fw4.js:4841-5012 placement
-async function readExactBytes(e, n) {
-  let r = Buffer.alloc(n + 1);
-  let s = 0;
-  while (s < r.length) {
-    let { bytesRead } = await e.read(r, s, r.length - s, s);
+async function readExactBytes(stream, length) {
+  let buffer = Buffer.alloc(length + 1);
+  let offset = 0;
+  while (offset < buffer.length) {
+    let { bytesRead } = await stream.read(buffer, offset, buffer.length - offset, offset);
     if (bytesRead === 0) break;
-    s += bytesRead;
+    offset += bytesRead;
   }
-  return s === n ? r.subarray(0, n) : null;
+  return offset === length ? buffer.subarray(0, length) : null;
 }
 //@ chunk-jv307fw4.js:5143-5186 placement
-function isProtectedPath(e) {
-  return isNonWslUncPath(e) || isNetworkMountPath(e) || classifyHomeMount(e);
+function isProtectedPath(path) {
+  return isNonWslUncPath(path) || isNetworkMountPath(path) || classifyHomeMount(path);
 }
 //@ chunk-jv307fw4.js:5186-5270 placement
-function pathTouchesProtected(e) {
-  if (isProtectedPath(e)) return true;
-  let { paths, vetted } = getPathsForNetworkScreen(e);
+function pathTouchesProtected(url) {
+  if (isProtectedPath(url)) return true;
+  let { paths, vetted } = getPathsForNetworkScreen(url);
   return !vetted || paths.some(isProtectedPath);
 }
 //@ chunk-jv307fw4.js:5270-5312 placement
-function classifyArtifactUrl(e) {
-  return isNonWslUncPath(e) || isNetworkMountPath(e) || classifyHomeMount(e);
+function classifyArtifactUrl(url) {
+  return isNonWslUncPath(url) || isNetworkMountPath(url) || classifyHomeMount(url);
 }
 //@ chunk-jv307fw4.js:5312-5349 placement
 /**
  * 发布路径长度上限 512 与单个 URL 段 255 字符。
  */
-var MAX_PUBLISHED_PATH_LENGTH = 512;
-var MAX_URL_SEGMENT_CHARS = 255;
-var MAX_VERSION_INDEX = VERSION_MAX_ENTRIES - 1;
-var MAX_SEGMENT_WITH_SLASH = MAX_URL_SEGMENT_CHARS + 1;
+var MAX_PUBLISHED_PATH_LENGTH; // deferred: uses XML_CONTENT_TYPES (./publishInstanceFiles.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_URL_SEGMENT_CHARS;
+var MAX_VERSION_INDEX;
+var MAX_SEGMENT_WITH_SLASH;
+deferInit("chunk-jv307fw4.js:5312", () => {
+  MAX_PUBLISHED_PATH_LENGTH = 512;
+  MAX_URL_SEGMENT_CHARS = 255;
+  MAX_VERSION_INDEX = VERSION_MAX_ENTRIES - 1;
+  MAX_SEGMENT_WITH_SLASH = MAX_URL_SEGMENT_CHARS + 1;
+});
 export {
   MAX_PUBLISHED_PATH_LENGTH,
   MAX_URL_SEGMENT_CHARS,

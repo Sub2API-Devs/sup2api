@@ -5,12 +5,12 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_constants } from "./constants.js";
 import { require_utils } from "./utils.js";
 
 //@ chunk-fq0cr76a.js:302511-317963 cjs-fingerprint
-var require_parse = x(function (cjsExports, cjsModule) {
+var require_parse = __commonJS(function (cjsExports, cjsModule) {
   var constants = require_constants();
   var utils = require_utils();
   var { MAX_LENGTH, POSIX_REGEX_SOURCE, REGEX_NON_SPECIAL_CHARS, REGEX_SPECIAL_CHARS_BACKREF, REPLACEMENTS } =
@@ -28,7 +28,7 @@ var require_parse = x(function (cjsExports, cjsModule) {
   };
   var syntaxError = (type, char) =>
     `Missing ${type}: "${char}" - use "\\\\${char}" to match literal characters`;
-  var iN = (input) => {
+  var splitBranches = (input) => {
     let parts = [];
     let bracket = 0;
     let paren = 0;
@@ -84,7 +84,7 @@ var require_parse = x(function (cjsExports, cjsModule) {
     }
     return true;
   };
-  var oN = (branch) => {
+  var normalizeBranch = (branch) => {
     let value = branch.trim();
     let changed = true;
     while (changed === true) {
@@ -98,7 +98,7 @@ var require_parse = x(function (cjsExports, cjsModule) {
     return value.replace(/\\(.)/g, "$1");
   };
   var hasRepeatedCharPrefixOverlap = (branches) => {
-    let values = branches.map(oN).filter(Boolean);
+    let values = branches.map(normalizeBranch).filter(Boolean);
     for (let i = 0; i < values.length; i++)
       for (let j = i + 1; j < values.length; j++) {
         let a = values[i];
@@ -157,20 +157,20 @@ var require_parse = x(function (cjsExports, cjsModule) {
     }
   };
   var getStarExtglobSequenceChars = (branch) => {
-    let n = 0;
-    let r = [];
-    while (n < branch.length) {
-      let repeatedExtglob = parseRepeatedExtglob(branch.slice(n), false);
+    let position = 0;
+    let chars = [];
+    while (position < branch.length) {
+      let repeatedExtglob = parseRepeatedExtglob(branch.slice(position), false);
       if (!repeatedExtglob || repeatedExtglob.type !== "*") return;
-      let mapped = iN(repeatedExtglob.body).map((S) => S.trim());
+      let mapped = splitBranches(repeatedExtglob.body).map((piece) => piece.trim());
       if (mapped.length !== 1) return;
-      let b = oN(mapped[0]);
-      if (!b || b.length !== 1) return;
-      r.push(b);
-      n += repeatedExtglob.end + 1;
+      let normalized = normalizeBranch(mapped[0]);
+      if (!normalized || normalized.length !== 1) return;
+      chars.push(normalized);
+      position += repeatedExtglob.end + 1;
     }
-    if (r.length < 1) return;
-    return `${r.length === 1 ? utils.escapeRegex(r[0]) : `[${r.map((ch) => utils.escapeRegex(ch)).join("")}]`}*`;
+    if (chars.length < 1) return;
+    return `${chars.length === 1 ? utils.escapeRegex(chars[0]) : `[${chars.map((ch) => utils.escapeRegex(ch)).join("")}]`}*`;
   };
   var buildCharClassStar = (pattern) => {
     let depth = 0;
@@ -188,11 +188,11 @@ var require_parse = x(function (cjsExports, cjsModule) {
       return {
         risky: false,
       };
-    let r =
+    let maxRecursion =
       typeof options.maxExtglobRecursion === "number"
         ? options.maxExtglobRecursion
         : constants.DEFAULT_MAX_EXTGLOB_RECURSION;
-    let branches = iN(body).map((branch) => branch.trim());
+    let branches = splitBranches(body).map((branch) => branch.trim());
     if (branches.length > 1) {
       if (
         branches.some((branch) => branch === "") ||
@@ -210,7 +210,7 @@ var require_parse = x(function (cjsExports, cjsModule) {
           risky: true,
           safeOutput: starExtglobSequenceChars,
         };
-      if (buildCharClassStar(branch) > r)
+      if (buildCharClassStar(branch) > maxRecursion)
         return {
           risky: true,
         };

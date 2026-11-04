@@ -28,29 +28,34 @@ var MAX_DIRECTORY_PAGES = 20;
  * 判断 MCP 服务器是否在技能扩展中声明支持 directoryRead（v2 副本）。
  */
 function serverDeclaresDirectoryRead(capabilities) {
-  let e = capabilities?.extensions?.[IO_MODELCONTEXTPROTOCOL_SKILLS];
-  return e != null && typeof e === "object" && "directoryRead" in e && e.directoryRead === true;
+  let extension = capabilities?.extensions?.[IO_MODELCONTEXTPROTOCOL_SKILLS];
+  return (
+    extension != null &&
+    typeof extension === "object" &&
+    "directoryRead" in extension &&
+    extension.directoryRead === true
+  );
 }
 //@ chunk-gnpzvx0v.js:3616-4273 placement
 /**
  * 分页读取 MCP 服务器的 resources/directory/read。
  */
-async function readMcpDirectory(r, e, signal) {
-  if (!serverDeclaresDirectoryRead(r.capabilities))
+async function readMcpDirectory(connection, uri, signal) {
+  if (!serverDeclaresDirectoryRead(connection.capabilities))
     throw Error("readMcpDirectory called on a server without directoryRead capability");
-  let t = [];
-  let o;
-  let s = 0;
+  let entries = [];
+  let cursor;
+  let pages = 0;
   do {
-    let i;
+    let page;
     try {
-      i = await identityId2(r.client).request(
+      page = await identityId2(connection.client).request(
         {
           method: "resources/directory/read",
           params: {
-            uri: e,
-            ...(o && {
-              cursor: o,
+            uri,
+            ...(cursor && {
+              cursor,
             }),
           },
         },
@@ -61,22 +66,23 @@ async function readMcpDirectory(r, e, signal) {
         },
       );
     } catch (error) {
-      if (s === 0 || !(error instanceof ProtocolError && error.code === ProtocolErrorCode.InvalidParams))
+      if (pages === 0 || !(error instanceof ProtocolError && error.code === ProtocolErrorCode.InvalidParams))
         throw error;
       logMCPDebug(
-        r.name,
-        `resources/directory/read ${e}: page ${s + 1} returned InvalidParams on cursor; returning ${t.length} entries from prior pages`,
+        connection.name,
+        `resources/directory/read ${uri}: page ${pages + 1} returned InvalidParams on cursor; returning ${entries.length} entries from prior pages`,
       );
-      return t;
+      return entries;
     }
-    t.push(...i.resources);
-    o = i.nextCursor;
-    s++;
-  } while (o && s < MAX_DIRECTORY_PAGES);
-  if (o)
+    entries.push(...page.resources);
+    cursor = page.nextCursor;
+    pages++;
+  } while (cursor && pages < MAX_DIRECTORY_PAGES);
+  if (cursor)
     logMCPDebug(
-      r.name,
-      `resources/directory/read ${e}: stopped at ${MAX_DIRECTORY_PAGES} pages with more pending`,
+      connection.name,
+      `resources/directory/read ${uri}: stopped at ${MAX_DIRECTORY_PAGES} pages with more pending`,
     );
-  return t;
+  return entries;
 }
+export { readMcpDirectory, serverDeclaresDirectoryRead };

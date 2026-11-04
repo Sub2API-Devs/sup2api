@@ -14,7 +14,11 @@ import {
 import { DefaultAuthorityHost, DefaultAuthority, DefaultTenantId } from "../constants.js";
 import { LogLevel } from "../../../../msal-common/dist/logger/Logger.mjs";
 import { AbortError } from "../../../../abort-controller/AbortError.js";
+import { beginDeferredInits } from "../../../../../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 4 modules closed by ../client/identityClient.js;
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("vendor/@azure/identity/dist/esm/client/identityClient.js");
 //@ chunk-mrx6y2r5.js:286534-286569 esm-fingerprint
 var logger_4 = credentialLogger("IdentityUtils");
 var LatestAuthenticationRecordVersion = "1.0";
@@ -51,7 +55,7 @@ function getKnownAuthorities(tenantId, authorityHost, disableInstanceDiscovery) 
   return [];
 }
 //@ chunk-mrx6y2r5.js:287176-287486 esm-fingerprint
-var Is =
+var getAuthCapabilities =
   (credLogger, platform = isNodeLike_default ? "Node" : "Browser") =>
   (level, message, containsPii) => {
     if (containsPii) return;
@@ -86,7 +90,7 @@ function getMSALLogLevel(logLevel) {
   }
 }
 //@ chunk-mrx6y2r5.js:287648-288512 esm-fingerprint
-function Ur(scopes, error, getTokenOptions) {
+function handleMsalError(scopes, error, getTokenOptions) {
   if (error.name === "AuthError" || error.name === "ClientAuthError" || error.name === "BrowserAuthError") {
     let msalError = error;
     switch (msalError.errorCode) {
@@ -153,10 +157,10 @@ export {
   getAuthority,
   getAuthorityHost,
   getKnownAuthorities,
-  Is,
+  getAuthCapabilities,
   getMSALLogLevel,
   publicToMsal,
-  Ur,
+  handleMsalError,
   ensureValidMsalToken,
   msalToPublic,
 };

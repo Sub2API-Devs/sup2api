@@ -16,43 +16,43 @@ var MAX_LINE_CHARS = 1048576;
 /**
  * 按行读取流（UTF-8 解码），逐行回调。
  */
-function readStreamLines(o, r) {
-  let d = new StringDecoder("utf8");
-  let e = "";
-  let t = false;
-  let l = (i) => {
-    if (t) return;
-    e += typeof i === "string" ? i : d.write(i);
-    let f;
+function readStreamLines(stream, onLine) {
+  let decoder = new StringDecoder("utf8");
+  let pending = "";
+  let stopped = false;
+  let onData = (chunk) => {
+    if (stopped) return;
+    pending += typeof chunk === "string" ? chunk : decoder.write(chunk);
+    let newlineIndex;
     while (
-      (f = e.indexOf(`
+      (newlineIndex = pending.indexOf(`
 `)) >= 0
     ) {
-      let sliced = e.slice(0, f);
-      e = e.slice(f + 1);
-      if (sliced) r(sliced);
+      let sliced = pending.slice(0, newlineIndex);
+      pending = pending.slice(newlineIndex + 1);
+      if (sliced) onLine(sliced);
     }
-    if (e.length > MAX_LINE_CHARS) {
-      t = true;
-      e = "";
-      if ("destroy" in o) o.destroy();
-    }
-  };
-  let n = () => {
-    if (t) return;
-    e += d.end();
-    if (e) {
-      r(e);
-      e = "";
+    if (pending.length > MAX_LINE_CHARS) {
+      stopped = true;
+      pending = "";
+      if ("destroy" in stream) stream.destroy();
     }
   };
-  o.on("data", l);
-  o.on("end", n);
-  o.on("close", n);
+  let flush = () => {
+    if (stopped) return;
+    pending += decoder.end();
+    if (pending) {
+      onLine(pending);
+      pending = "";
+    }
+  };
+  stream.on("data", onData);
+  stream.on("end", flush);
+  stream.on("close", flush);
   return () => {
-    o.off("data", l);
-    o.off("end", n);
-    o.off("close", n);
+    stream.off("data", onData);
+    stream.off("end", flush);
+    stream.off("close", flush);
   };
 }
 export { readStreamLines };

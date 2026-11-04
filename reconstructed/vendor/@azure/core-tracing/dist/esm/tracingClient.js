@@ -5,32 +5,32 @@
  * pieces: chunk-mrx6y2r5.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Qn } from "./instrumenter.js";
+import { getInstrumenter } from "./instrumenter.js";
 import { AZURE_TRACING_SYMBOLS } from "./tracingContext.js";
 
 //@ chunk-mrx6y2r5.js:58616-59724 esm-fingerprint
 function createTracingClient(options) {
   let { namespace, packageName, packageVersion } = options;
   function startSpan(name, operationOptions, spanOptions) {
-    var m;
-    let p = Qn().startSpan(
+    var spanContext;
+    let span = getInstrumenter().startSpan(
       name,
       Object.assign(Object.assign({}, spanOptions), {
         packageName,
         packageVersion,
         tracingContext:
-          (m =
+          (spanContext =
             operationOptions === null || operationOptions === undefined
               ? undefined
-              : operationOptions.tracingOptions) === null || m === undefined
+              : operationOptions.tracingOptions) === null || spanContext === undefined
             ? undefined
-            : m.tracingContext,
+            : spanContext.tracingContext,
       }),
     );
-    let { tracingContext, span } = p;
+    let { tracingContext, span: span_2 } = span;
     if (!tracingContext.getValue(AZURE_TRACING_SYMBOLS.namespace))
       tracingContext = tracingContext.setValue(AZURE_TRACING_SYMBOLS.namespace, namespace);
-    span.setAttribute("az.namespace", tracingContext.getValue(AZURE_TRACING_SYMBOLS.namespace));
+    span_2.setAttribute("az.namespace", tracingContext.getValue(AZURE_TRACING_SYMBOLS.namespace));
     let updatedOptions = Object.assign({}, operationOptions, {
       tracingOptions: Object.assign(
         Object.assign(
@@ -45,7 +45,7 @@ function createTracingClient(options) {
       ),
     });
     return {
-      span,
+      span: span_2,
       updatedOptions,
     };
   }
@@ -70,13 +70,13 @@ function createTracingClient(options) {
     }
   }
   function withContext(context, callback, ...callbackArgs) {
-    return Qn().withContext(context, callback, ...callbackArgs);
+    return getInstrumenter().withContext(context, callback, ...callbackArgs);
   }
   function parseTraceparentHeader(traceparentHeader) {
-    return Qn().parseTraceparentHeader(traceparentHeader);
+    return getInstrumenter().parseTraceparentHeader(traceparentHeader);
   }
   function createRequestHeaders(tracingContext) {
-    return Qn().createRequestHeaders(tracingContext);
+    return getInstrumenter().createRequestHeaders(tracingContext);
   }
   return {
     startSpan,

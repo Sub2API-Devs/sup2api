@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:92608-96657 cjs-fingerprint
-var require_csharp = x(function (cjsExports, cjsModule) {
+var require_csharp = __commonJS(function (cjsExports, cjsModule) {
   function csharp(hljs) {
     let BUILT_IN_KEYWORDS = [
       "bool",

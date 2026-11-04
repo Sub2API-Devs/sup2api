@@ -124,17 +124,17 @@ function isRemoteControlDeploymentAvailable() {
   return !isRemoteControlHardDisabled() && !isRunningInRemoteEnvironment() && isBridgeFirstParty();
 }
 //@ chunk-71c4j971.js:4355-4404 placement
-async function isBridgeEnabledBlocking(e) {
-  return (await getBridgeBlockedCode(e)) === null;
+async function isBridgeEnabledBlocking(options) {
+  return (await getBridgeBlockedCode(options)) === null;
 }
 //@ chunk-71c4j971.js:4404-4735 placement
-async function getBridgeBlockedCode(e) {
+async function getBridgeBlockedCode(options) {
   if (isBridgeForceEnabledByBuild()) return null;
   if (isRemoteControlHardDisabled()) return "managed_disabled";
   if (!isBridgeFirstParty()) return "not_first_party";
   if (isRunningInRemoteEnvironment()) return "cloud_session";
   if (!isSubscriberSafe()) return hasClaudeAIInferenceScope() ? "not_subscription_auth" : "not_signed_in";
-  await prefetchBridgePlanInfo(e);
+  await prefetchBridgePlanInfo(options);
   if (isBridgeSubscriptionEligible() || (await checkGate_CACHED_OR_BLOCKING("tengu_ccr_bridge"))) return null;
   if (!isGrowthBookEnabled()) return "flags_disabled";
   return hasFreshGrowthBookFeatures() ? "gate_off" : "flags_unreachable";
@@ -162,43 +162,43 @@ function describeRemoteControlPolicyDenial() {
   );
 }
 //@ chunk-71c4j971.js:4988-5613 placement
-function connectedBridgePolicyRefusal(e) {
-  let o = e ? ["allow_remote_control", "allow_remote_sessions"] : ["allow_remote_control"];
+function connectedBridgePolicyRefusal(isConnected) {
+  let policyKeys = isConnected ? ["allow_remote_control", "allow_remote_sessions"] : ["allow_remote_control"];
   try {
-    for (let n of o) {
-      let r = policyDenyKind(n);
-      switch (r) {
+    for (let policyKey of policyKeys) {
+      let denyKind = policyDenyKind(policyKey);
+      switch (denyKind) {
         case null:
         case "cache_miss":
         case "route_missing":
           continue;
         case "latched": {
           if (!isSessionVerdictFromServerFetch() && !isPrincipalNeverServedByPolicy()) continue;
-          let { featureLabel, verb } = policyKeyLabel(n);
+          let { featureLabel, verb } = policyKeyLabel(policyKey);
           return {
-            policy: n,
-            kind: r,
+            policy: policyKey,
+            kind: denyKind,
             detail: policyBlockedMessage(featureLabel, verb),
           };
         }
         case "org_denied":
           if (
-            getResponseFromCache()?.restrictions[n]?.allowed !== false &&
+            getResponseFromCache()?.restrictions[policyKey]?.allowed !== false &&
             !isSessionVerdictFromServerFetch() &&
             !isPrincipalNeverServedByPolicy()
           )
             continue;
           return {
-            policy: n,
-            kind: r,
+            policy: policyKey,
+            kind: denyKind,
             detail:
-              n === "allow_remote_control"
+              policyKey === "allow_remote_control"
                 ? REMOTE_CONTROL_TURNED_OFF_MESSAGE
                 : "Session mirroring was turned off by your organization's policy (allow_remote_sessions).",
           };
         default:
           return {
-            policy: n,
+            policy: policyKey,
             kind: "org_denied",
             detail: REMOTE_CONTROL_TURNED_OFF_MESSAGE,
           };
@@ -245,14 +245,14 @@ async function getBridgeDisabledDiagnosis() {
       }),
     );
   await prefetchBridgePlanInfo(undefined);
-  let e = isBridgeEntitlementHintAvailable();
-  if (!e && !hasProfileScopeSafe())
+  let hasEntitlementHint = isBridgeEntitlementHintAvailable();
+  if (!hasEntitlementHint && !hasProfileScopeSafe())
     return bridgeBlockedResult(
       "token_scope_limited",
       nullStub3() ??
         "Remote Control requires a full-scope login token. Long-lived tokens (from `claude setup-token` or CLAUDE_CODE_OAUTH_TOKEN) are limited to inference-only for security reasons. Run `claude auth login` to use Remote Control.",
     );
-  if (!e && !getOauthAccountInfo_2()?.organizationUuid)
+  if (!hasEntitlementHint && !getOauthAccountInfo_2()?.organizationUuid)
     return bridgeBlockedResult(
       "no_organization",
       "Unable to determine your organization for Remote Control eligibility. Run `claude auth login` to refresh your account information.",
@@ -269,11 +269,11 @@ async function getBridgeDisabledDiagnosis() {
     };
   if (isBridgeSubscriptionEligible()) return null;
   if (!isGrowthBookEnabled()) {
-    let n = diagnoseBridgeDisabledByEnv();
-    if (n)
+    let blockingEnvVar = diagnoseBridgeDisabledByEnv();
+    if (blockingEnvVar)
       return bridgeBlockedResult(
         "flags_disabled",
-        `Remote Control requires feature-flag evaluation, which is disabled because ${n} is set. Unset it (or run in a shell without it) to use Remote Control.`,
+        `Remote Control requires feature-flag evaluation, which is disabled because ${blockingEnvVar} is set. Unset it (or run in a shell without it) to use Remote Control.`,
       );
     if (env.DISABLE_GROWTHBOOK)
       return bridgeBlockedResult(
@@ -337,20 +337,20 @@ function isAuthoritativeTaintDenial({ policyVerdict, policyDenialIsAuthoritative
 function getRemoteControlPolicyLockReason() {
   if (isBridgeForceEnabledByBuild()) return null;
   if (isRemoteControlHardDisabled()) return REMOTE_CONTROL_DISABLED_BY_POLICY_MESSAGE;
-  let e = bridgeHostState();
+  let hostState = bridgeHostState();
   let policyCacheRevision = getPolicyCacheRevision();
-  let remoteControlLockReason = e.remoteControlLockReason;
+  let remoteControlLockReason = hostState.remoteControlLockReason;
   if (
     remoteControlLockReason !== undefined &&
     remoteControlLockReason.policyCacheRevision === policyCacheRevision
   )
     return remoteControlLockReason.reason;
-  let r = describeRemoteControlPolicyVerdict();
-  e.remoteControlLockReason = {
+  let reason = describeRemoteControlPolicyVerdict();
+  hostState.remoteControlLockReason = {
     policyCacheRevision,
-    reason: r,
+    reason,
   };
-  return r;
+  return reason;
 }
 //@ chunk-71c4j971.js:8726-8824 placement
 function describeRemoteControlPolicyVerdict() {
@@ -371,10 +371,12 @@ function remoteControlPolicyDeniedReason() {
 //@ chunk-71c4j971.js:8955-9928 placement
 function getBridgeAuthDebugInfo() {
   if (!isDebugMode()) return "";
-  let e = (o) => (o ? "set" : "unset");
+  let describeFlag = (value) => (value ? "set" : "unset");
   try {
     let claudeAIOAuthTokens = getClaudeAIOAuthTokens();
-    let filtered = Object.values(THIRD_PARTY_PROVIDER_ENV_VARS).filter((r) => isEnvTruthy(process.env[r]));
+    let filtered = Object.values(THIRD_PARTY_PROVIDER_ENV_VARS).filter((envVarName) =>
+      isEnvTruthy(process.env[envVarName]),
+    );
     return [
       "",
       "[debug] Remote Control auth state:",
@@ -385,12 +387,12 @@ function getBridgeAuthDebugInfo() {
       `  isClaudeAISubscriber=${isSubscriberSafe()}`,
       `  hasProfileScope=${hasProfileScopeSafe()}`,
       `  oauthAccount.organizationUuid=${getOauthAccountInfo_2()?.organizationUuid ? "set" : "unset"}`,
-      `  ANTHROPIC_API_KEY=${e(process.env.ANTHROPIC_API_KEY)}`,
-      `  ANTHROPIC_AUTH_TOKEN=${e(process.env.ANTHROPIC_AUTH_TOKEN)}`,
+      `  ANTHROPIC_API_KEY=${describeFlag(process.env.ANTHROPIC_API_KEY)}`,
+      `  ANTHROPIC_AUTH_TOKEN=${describeFlag(process.env.ANTHROPIC_AUTH_TOKEN)}`,
       `  apiKeyHelper=${getConfiguredApiKeyHelper() ? "set" : "unset"}`,
-      `  CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR=${e(process.env.CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR)}`,
-      `  CLAUDE_CODE_OAUTH_TOKEN=${e(process.env.CLAUDE_CODE_OAUTH_TOKEN)}`,
-      `  ANTHROPIC_UNIX_SOCKET=${e(process.env.ANTHROPIC_UNIX_SOCKET)}`,
+      `  CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR=${describeFlag(process.env.CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR)}`,
+      `  CLAUDE_CODE_OAUTH_TOKEN=${describeFlag(process.env.CLAUDE_CODE_OAUTH_TOKEN)}`,
+      `  ANTHROPIC_UNIX_SOCKET=${describeFlag(process.env.ANTHROPIC_UNIX_SOCKET)}`,
       `  3P env=${filtered.length ? filtered.join(",") : "none"}`,
       ...describeGrowthBookStateForDiagnostic(),
     ].join(`
@@ -405,13 +407,13 @@ function getBridgeAuthDebugInfo() {
  * 生成 Remote Control 诊断用的 GrowthBook 状态行（是否启用、被谁关闭、DISABLE_GROWTHBOOK、特性缓存新鲜度等）。
  */
 function describeGrowthBookStateForDiagnostic() {
-  let e = (r) => (r ? "set" : "unset");
+  let describeFlag = (value) => (value ? "set" : "unset");
   let allGrowthBookFeatures = getAllGrowthBookFeatures();
   let cachedGrowthBookFeaturesAt = getCachedGrowthBookFeaturesAt();
   return [
     `  isGrowthBookEnabled=${isGrowthBookEnabled()}`,
     `  telemetryDisabledBy=${diagnoseBridgeDisabledByEnv() ?? "none"}`,
-    `  DISABLE_GROWTHBOOK=${e(process.env.DISABLE_GROWTHBOOK)}`,
+    `  DISABLE_GROWTHBOOK=${describeFlag(process.env.DISABLE_GROWTHBOOK)}`,
     `  hasFreshGrowthBookFeatures=${hasFreshGrowthBookFeatures()}`,
     `  growthBookFeaturesLoaded=${Object.keys(allGrowthBookFeatures).length}`,
     `  growthBookLastFetched=${cachedGrowthBookFeaturesAt ? `${formatDurationShort(Date.now() - cachedGrowthBookFeaturesAt)} ago` : "never"}`,
@@ -429,53 +431,56 @@ async function getBridgeDoctorInfo() {
   refreshGrowthBookAfterAuthChange();
   await ensurePolicyLimitsLoadedForDiagnostic();
   let bridgeDisabledReason = await getBridgeDisabledReasonAsync();
-  let o = diagnoseBridgeDisabledByEnv() ?? (env.DISABLE_GROWTHBOOK ? "DISABLE_GROWTHBOOK" : null);
-  let n = isBridgeFirstParty();
-  let r = !isRemoteControlHardDisabled();
-  let a = hasClaudeAIInferenceScope();
-  let _ = isSubscriberSafe();
-  let D = isBridgeEntitlementHintAvailable();
-  let R = D || hasProfileScopeSafe();
-  let A = D || !!getOauthAccountInfo_2()?.organizationUuid;
+  let telemetryBlockReason =
+    diagnoseBridgeDisabledByEnv() ?? (env.DISABLE_GROWTHBOOK ? "DISABLE_GROWTHBOOK" : null);
+  let isFirstParty = isBridgeFirstParty();
+  let notPolicyDisabled = !isRemoteControlHardDisabled();
+  let hasInferenceScope = hasClaudeAIInferenceScope();
+  let isSubscriber = isSubscriberSafe();
+  let hasEntitlementHint = isBridgeEntitlementHintAvailable();
+  let hasProfileScope = hasEntitlementHint || hasProfileScopeSafe();
+  let hasOrganization = hasEntitlementHint || !!getOauthAccountInfo_2()?.organizationUuid;
   let remoteControlPolicyVerdict = getRemoteControlPolicyVerdict();
-  let S = hasLoadedPolicyLimitsCache();
-  let V = isAuthoritativeTaintDenial({
+  let policyLimitsLoaded = hasLoadedPolicyLimitsCache();
+  let isTaintDenial = isAuthoritativeTaintDenial({
     policyVerdict: remoteControlPolicyVerdict,
-    policyDenialIsAuthoritative: S,
+    policyDenialIsAuthoritative: policyLimitsLoaded,
     currentTaints: getCurrentTaints(),
   });
-  let B = isGrowthBookEnabled();
-  let h = isBridgeSubscriptionEligible();
-  let T = h || (await checkGate_CACHED_OR_BLOCKING("tengu_ccr_bridge"));
-  let I = hasFreshGrowthBookFeatures();
+  let growthBookEnabled = isGrowthBookEnabled();
+  let planEligible = isBridgeSubscriptionEligible();
+  let gateEnabled = planEligible || (await checkGate_CACHED_OR_BLOCKING("tengu_ccr_bridge"));
+  let hasFreshFeatures = hasFreshGrowthBookFeatures();
   let checks = [
     {
-      label: n
+      label: isFirstParty
         ? "Connected to the Anthropic API (api.anthropic.com)"
         : "Not connected to the Anthropic API (api.anthropic.com)",
-      ok: n,
+      ok: isFirstParty,
     },
     {
-      label: r
+      label: notPolicyDisabled
         ? "Not disabled by org policy (disableRemoteControl)"
         : "Disabled by org policy (disableRemoteControl)",
-      ok: r,
+      ok: notPolicyDisabled,
     },
     {
-      label: a ? "Signed in to claude.ai" : "Not signed in to claude.ai",
-      ok: a,
+      label: hasInferenceScope ? "Signed in to claude.ai" : "Not signed in to claude.ai",
+      ok: hasInferenceScope,
     },
     {
-      label: _ ? "claude.ai subscription active" : "claude.ai subscription auth not active",
-      ok: _,
+      label: isSubscriber ? "claude.ai subscription active" : "claude.ai subscription auth not active",
+      ok: isSubscriber,
     },
     {
-      label: R ? "Sign-in includes the user:profile scope" : "Sign-in is missing the user:profile scope",
-      ok: R,
+      label: hasProfileScope
+        ? "Sign-in includes the user:profile scope"
+        : "Sign-in is missing the user:profile scope",
+      ok: hasProfileScope,
     },
     {
-      label: A ? "Organization resolved" : "Organization not resolved",
-      ok: A,
+      label: hasOrganization ? "Organization resolved" : "Organization not resolved",
+      ok: hasOrganization,
     },
     {
       label:
@@ -483,31 +488,31 @@ async function getBridgeDoctorInfo() {
           ? "Org policy allows Remote Control (allow_remote_control)"
           : remoteControlPolicyVerdict === "unavailable"
             ? "Org policy could not be verified (allow_remote_control)"
-            : !S
+            : !policyLimitsLoaded
               ? "Org policy not loaded, see the Organization policy line above (allow_remote_control)"
               : "Org policy does not allow Remote Control (allow_remote_control)",
       ok: remoteControlPolicyVerdict === "allowed",
-      detail: V ? ORG_CONFIG_NOT_ADMIN_SETTING_DETAIL : undefined,
+      detail: isTaintDenial ? ORG_CONFIG_NOT_ADMIN_SETTING_DETAIL : undefined,
     },
     {
-      label: B ? "Feature-flag evaluation enabled" : "Feature-flag evaluation disabled",
-      ok: B || h,
-      detail: o
-        ? h
-          ? `disabled by ${o}; Remote Control does not need it on a paid plan`
-          : `disabled by ${o}`
+      label: growthBookEnabled ? "Feature-flag evaluation enabled" : "Feature-flag evaluation disabled",
+      ok: growthBookEnabled || planEligible,
+      detail: telemetryBlockReason
+        ? planEligible
+          ? `disabled by ${telemetryBlockReason}; Remote Control does not need it on a paid plan`
+          : `disabled by ${telemetryBlockReason}`
         : undefined,
     },
     {
-      label: T
+      label: gateEnabled
         ? "Remote Control enabled for this account"
-        : I
+        : hasFreshFeatures
           ? "Remote Control not enabled for this account"
           : "Remote Control availability could not be verified",
-      ok: T,
-      detail: h
+      ok: gateEnabled,
+      detail: planEligible
         ? "decided from your plan, feature flags are off"
-        : I
+        : hasFreshFeatures
           ? undefined
           : "no server response this session",
     },
@@ -515,14 +520,14 @@ async function getBridgeDoctorInfo() {
   return {
     disabledReason:
       bridgeDisabledReason !== null &&
-      n &&
-      r &&
-      a &&
-      _ &&
-      R &&
-      A &&
+      isFirstParty &&
+      notPolicyDisabled &&
+      hasInferenceScope &&
+      isSubscriber &&
+      hasProfileScope &&
+      hasOrganization &&
       remoteControlPolicyVerdict === "denied" &&
-      !S
+      !policyLimitsLoaded
         ? "Remote Control needs your organization's policy, which isn't loaded \u2014 see the Organization policy line above."
         : bridgeDisabledReason,
     inRemoteSession: false,
@@ -538,8 +543,8 @@ function getCachedGrowthBookFeaturesAt() {
   }
 }
 //@ chunk-71c4j971.js:12388-12571 placement
-function formatDurationShort(e) {
-  let rounded = Math.round(e / 1000);
+function formatDurationShort(durationMs) {
+  let rounded = Math.round(durationMs / 1000);
   if (rounded < 120) return `${rounded}s`;
   let rounded_2 = Math.round(rounded / 60);
   if (rounded_2 < 120) return `${rounded_2}m`;
@@ -560,8 +565,9 @@ function describeAuthPrecedenceBlocker({ prefix, suffix }) {
     if (process.env.ANTHROPIC_AUTH_TOKEN)
       return `${prefix} ANTHROPIC_AUTH_TOKEN is set, so this session is using API-key auth \u2014 unset it (or run in a shell without it) ${suffix}`;
     let { source: source_2 } = getAuthTokenSource();
-    let a = describeHowToDisableAuthTokenSource(source_2);
-    if (source_2 !== "none" && a) return `${prefix} This session is using ${source_2} auth \u2014 ${a}`;
+    let disableHint = describeHowToDisableAuthTokenSource(source_2);
+    if (source_2 !== "none" && disableHint)
+      return `${prefix} This session is using ${source_2} auth \u2014 ${disableHint}`;
     if (process.env.ANTHROPIC_UNIX_SOCKET)
       return `${prefix} ANTHROPIC_UNIX_SOCKET is set without CLAUDE_CODE_OAUTH_TOKEN, so requests on the socket carry no claude.ai login (on a claude ssh remote: the local machine is API-key-authed).`;
   } catch {}
@@ -586,10 +592,10 @@ function describeNonFirstPartyBridgeBlock() {
     return `${REMOTE_CONTROL_FIRST_PARTY_ONLY} ${THIRD_PARTY_PROVIDER_ENV_VARS[apiProvider]} is set, so this session is using ${THIRD_PARTY_PROVIDER_LABELS[apiProvider]} \u2014 ${UNSET_IT_CLAUSE}`;
   }
   if (!isActualFirstPartyAnthropicBaseUrl()) {
-    let o = env._CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL
+    let assumeFlagNote = env._CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL
       ? " (_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL does not apply to Remote Control.)"
       : "";
-    return `${REMOTE_CONTROL_FIRST_PARTY_ONLY} ANTHROPIC_BASE_URL is set and does not point at api.anthropic.com, so this session is using a custom endpoint \u2014 ${UNSET_IT_CLAUSE}${o}`;
+    return `${REMOTE_CONTROL_FIRST_PARTY_ONLY} ANTHROPIC_BASE_URL is set and does not point at api.anthropic.com, so this session is using a custom endpoint \u2014 ${UNSET_IT_CLAUSE}${assumeFlagNote}`;
   }
   if (env.ANTHROPIC_UNIX_SOCKET)
     return `${REMOTE_CONTROL_FIRST_PARTY_ONLY} ANTHROPIC_UNIX_SOCKET is set, so this session sends requests through a local socket rather than to api.anthropic.com \u2014 ${UNSET_IT_CLAUSE}`;
@@ -638,4 +644,6 @@ export {
   describeRemoteControlPolicyDenial,
   describeAuthPrecedenceBlocker,
   getBridgeEntitlementBlocker,
+  getBridgeAuthDebugInfo,
+  remoteControlPolicyDeniedReason,
 };

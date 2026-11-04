@@ -10,15 +10,15 @@ import { getUserAgentValue } from "../util/userAgent.js";
 import { Sanitizer } from "../../../../../@typespec/ts-http-runtime/dist/esm/util/sanitizer.js";
 import { createTracingClient } from "../../../../core-tracing/dist/esm/tracingClient.js";
 import { SDK_VERSION_2 } from "../constants.js";
-import { ut } from "../../../../../@typespec/ts-http-runtime/dist/esm/policies/agentPolicy.js";
+import { coreRestPipelineLogger } from "../../../../../@typespec/ts-http-runtime/dist/esm/policies/agentPolicy.js";
 import { getErrorMessage } from "../../../../core-util/dist/esm/error.js";
-import { Wo } from "../util/file.js";
+import { createFileBody } from "../util/file.js";
 
 //@ chunk-mrx6y2r5.js:59724-59734 esm-layout
 var RestError_default = RestError;
 //@ chunk-mrx6y2r5.js:59734-59762 esm-layout
-function Xn(e) {
-  return isRestError(e);
+function createSpan(userAgent) {
+  return isRestError(userAgent);
 }
 //@ chunk-mrx6y2r5.js:59762-59785 esm-fingerprint
 var TRACINGPOLICY = "tracingPolicy";
@@ -65,7 +65,7 @@ function tryCreateTracingClient() {
       packageVersion: SDK_VERSION_2,
     });
   } catch (error) {
-    ut.warning(`Error when creating the TracingClient: ${getErrorMessage(error)}`);
+    coreRestPipelineLogger.warning(`Error when creating the TracingClient: ${getErrorMessage(error)}`);
     return;
   }
 }
@@ -93,7 +93,7 @@ function tryCreateSpan(tracingClient, request, spanAttributes) {
       tracingContext: updatedOptions.tracingOptions.tracingContext,
     };
   } catch (e) {
-    ut.warning(`Skipping creating a tracing span due to an error: ${getErrorMessage(e)}`);
+    coreRestPipelineLogger.warning(`Skipping creating a tracing span due to an error: ${getErrorMessage(e)}`);
     return;
   }
 }
@@ -102,12 +102,12 @@ function tryProcessError(span, error) {
   try {
     span.setStatus({
       status: "error",
-      error: Wo(error) ? error : undefined,
+      error: createFileBody(error) ? error : undefined,
     });
-    if (Xn(error) && error.statusCode) span.setAttribute("http.status_code", error.statusCode);
+    if (createSpan(error) && error.statusCode) span.setAttribute("http.status_code", error.statusCode);
     span.end();
   } catch (e) {
-    ut.warning(`Skipping tracing span processing due to an error: ${getErrorMessage(e)}`);
+    coreRestPipelineLogger.warning(`Skipping tracing span processing due to an error: ${getErrorMessage(e)}`);
   }
 }
 //@ chunk-mrx6y2r5.js:61166-61450 esm-fingerprint
@@ -122,7 +122,7 @@ function tryProcessResponse(span, response) {
       });
     span.end();
   } catch (e) {
-    ut.warning(`Skipping tracing span processing due to an error: ${getErrorMessage(e)}`);
+    coreRestPipelineLogger.warning(`Skipping tracing span processing due to an error: ${getErrorMessage(e)}`);
   }
 }
-export { tracingPolicy, Xn, RestError_default };
+export { tracingPolicy, createSpan, RestError_default };

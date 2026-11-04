@@ -29,8 +29,8 @@ var NO_BG_AGENT_FALSE_TEXT =
 /**
  * 按是否允许后台启动返回对应说明文案。
  */
-function backgroundLaunchRuleText(e) {
-  return e ? NO_BG_AGENT_FALSE_TEXT : NO_BG_AGENT_TEXT;
+function backgroundLaunchRuleText(launchesByDefault) {
+  return launchesByDefault ? NO_BG_AGENT_FALSE_TEXT : NO_BG_AGENT_TEXT;
 }
 //@ chunk-e6aww6q8.js:581041-581107 placement
 /**
@@ -63,14 +63,14 @@ function admitsWakeSafe(backgroundLaunchRule, agentId) {
 /**
  * 执行后台启动规则的 ask()/confirm()，校验返回值并处理拒绝或中止。
  */
-function runBackgroundLaunchRules(e, n) {
-  let r;
+function runBackgroundLaunchRules(rule, request) {
+  let answer;
   let message;
   try {
-    let h = e.ask(n);
-    if (h === undefined || h === null) return;
-    if (!isConfirmableLaunchAnswer(h)) {
-      Promise.resolve(h).catch(() => {});
+    let admission = rule.ask(request);
+    if (admission === undefined || admission === null) return;
+    if (!isConfirmableLaunchAnswer(admission)) {
+      Promise.resolve(admission).catch(() => {});
       logError(
         Error(
           "A background launch rule's ask() returned something other than undefined or an admission (a promise, if ask is async). The call was not admitted.",
@@ -78,18 +78,18 @@ function runBackgroundLaunchRules(e, n) {
       );
       return;
     }
-    r = h;
-    message = backgroundLaunchRuleText(e.launchesByDefault === true);
+    answer = admission;
+    message = backgroundLaunchRuleText(rule.launchesByDefault === true);
   } catch (error) {
-    logLaunchRuleError(error, "ask", n.signal);
+    logLaunchRuleError(error, "ask", request.signal);
     return;
   }
   return {
-    confirm(h) {
+    confirm(signal) {
       try {
-        let y = r.confirm(h);
-        if (y === undefined) return;
-        let launchRuleAnswer = parseLaunchRuleAnswer(y);
+        let confirmation = answer.confirm(signal);
+        if (confirmation === undefined) return;
+        let launchRuleAnswer = parseLaunchRuleAnswer(confirmation);
         if (launchRuleAnswer?.kind === "refused") return launchRuleAnswer;
         if (launchRuleAnswer?.kind === "closed")
           return launchRuleAnswer.message.trim() === ""
@@ -98,8 +98,8 @@ function runBackgroundLaunchRules(e, n) {
                 message,
               }
             : launchRuleAnswer;
-        if (launchRuleAnswer?.kind === "aborted" && h.aborted) return launchRuleAnswer;
-        Promise.resolve(y).catch(() => {});
+        if (launchRuleAnswer?.kind === "aborted" && signal.aborted) return launchRuleAnswer;
+        Promise.resolve(confirmation).catch(() => {});
         logError(
           launchRuleAnswer !== undefined
             ? Error(
@@ -114,8 +114,8 @@ function runBackgroundLaunchRules(e, n) {
           message,
         };
       } catch (error) {
-        logLaunchRuleError(error, "confirm", h);
-        return isAbortError(error) && h.aborted
+        logLaunchRuleError(error, "confirm", signal);
+        return isAbortError(error) && signal.aborted
           ? {
               kind: "aborted",
             }
@@ -125,11 +125,11 @@ function runBackgroundLaunchRules(e, n) {
             };
       }
     },
-    handOver(h) {
+    handOver(task) {
       try {
-        let y = r.registered(h);
-        if (y === undefined) return true;
-        Promise.resolve(y).catch(() => {});
+        let handover = answer.registered(task);
+        if (handover === undefined) return true;
+        Promise.resolve(handover).catch(() => {});
         logError(
           Error(
             "A background launch rule's registered() returned a value (a promise, if it is async). It must return nothing. The task was ended and the call refused.",
@@ -137,20 +137,20 @@ function runBackgroundLaunchRules(e, n) {
         );
         return false;
       } catch (error) {
-        logLaunchRuleError(error, "registered", n.signal);
+        logLaunchRuleError(error, "registered", request.signal);
         return false;
       }
     },
   };
 }
 //@ chunk-e6aww6q8.js:582618-583524 placement
-function runBackgroundMoveRules(e, n) {
-  let r;
+function runBackgroundMoveRules(request, isBackgrounded) {
+  let rule;
   try {
     let backgroundLaunchRule = getHostAgentPolicy().backgroundLaunchRule;
     if (backgroundLaunchRule === undefined) return true;
-    if (!n || isForegroundAgentMoveDisabled()) return false;
-    r = backgroundLaunchRule;
+    if (!isBackgrounded || isForegroundAgentMoveDisabled()) return false;
+    rule = backgroundLaunchRule;
   } catch (error) {
     logError(
       Object.assign(
@@ -166,9 +166,9 @@ function runBackgroundMoveRules(e, n) {
     return false;
   }
   try {
-    let s = r.admitMove?.(e);
-    if (s === true || s === false) return s;
-    Promise.resolve(s).catch(() => {});
+    let moveAnswer = rule.admitMove?.(request);
+    if (moveAnswer === true || moveAnswer === false) return moveAnswer;
+    Promise.resolve(moveAnswer).catch(() => {});
     logError(
       Error(
         "A background launch rule's admitMove() returned something other than true or false (a promise, if it is async). The agent stays in the foreground.",
@@ -199,13 +199,15 @@ function errorMessageString(error) {
   }
 }
 //@ chunk-e6aww6q8.js:583619-583712 placement
-function isConfirmableLaunchAnswer(e) {
-  return isPlainObject_5(e) && typeof e.confirm === "function" && typeof e.registered === "function";
+function isConfirmableLaunchAnswer(value) {
+  return (
+    isPlainObject_5(value) && typeof value.confirm === "function" && typeof value.registered === "function"
+  );
 }
 //@ chunk-e6aww6q8.js:583712-583968 placement
-function parseLaunchRuleAnswer(e) {
-  if (!isPlainObject_5(e)) return;
-  let { kind, message } = e;
+function parseLaunchRuleAnswer(value) {
+  if (!isPlainObject_5(value)) return;
+  let { kind, message } = value;
   if (kind === "aborted")
     return {
       kind: "aborted",
@@ -223,9 +225,9 @@ function parseLaunchRuleAnswer(e) {
     : undefined;
 }
 //@ chunk-e6aww6q8.js:583968-584072 placement
-function logLaunchRuleError(error, n, signal) {
+function logLaunchRuleError(error, method, signal) {
   if (isAbortError(error) && signal.aborted) {
-    logForDebugging(`background launch rule: ${n} aborted: ${errorMessage(error)}`);
+    logForDebugging(`background launch rule: ${method} aborted: ${errorMessage(error)}`);
     return;
   }
   logError(error);

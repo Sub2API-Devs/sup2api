@@ -11,19 +11,20 @@
 import { isAbsolute } from "path";
 import { escapeXmlControlChars } from "../../utils/permissions/checkRegistry.js";
 import { partiallySanitizeUnicode } from "../../utils/sanitization.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:90403-90574 placement
 /**
  * 构造 frontmatter 解析结果（原样内容、可选问题与绝对路径），以及只有问题的结果。
  */
-var buildFrontmatterResult = (frontmatterAsWritten, n, asWrittenProblem) => ({
+var buildFrontmatterResult = (frontmatterAsWritten, comment, asWrittenProblem) => ({
   frontmatterAsWritten,
   ...(asWrittenProblem !== undefined && {
     frontmatterProblem: asWrittenProblem,
   }),
-  ...(n !== undefined &&
-    isAbsolute(n) && {
-      path: n,
+  ...(comment !== undefined &&
+    isAbsolute(comment) && {
+      path: comment,
     }),
 });
 var frontmatterProblemResult = (frontmatterProblem) => ({
@@ -31,63 +32,68 @@ var frontmatterProblemResult = (frontmatterProblem) => ({
   frontmatterProblem,
 });
 //@ chunk-s61vbvea.js:90574-90842 placement
-function scrubMemoryKeys(frontmatter, n) {
-  let r = {
+function scrubMemoryKeys(frontmatter, filePath) {
+  let scrubState = {
     copies: new Map(),
     hasCollided: false,
   };
   let { frontmatterAsWritten, asWrittenProblem } = frontmatter;
-  let y;
-  let S;
+  let scrubbed;
+  let problem;
   try {
-    y = scrubObjectPaths(frontmatterAsWritten, r);
-    S = asWrittenProblem && scrubString(asWrittenProblem);
+    scrubbed = scrubObjectPaths(frontmatterAsWritten, scrubState);
+    problem = asWrittenProblem && scrubString(asWrittenProblem);
   } catch {
-    return buildFrontmatterResult({}, n, "could not be scrubbed");
+    return buildFrontmatterResult({}, filePath, "could not be scrubbed");
   }
-  return r.hasCollided
-    ? buildFrontmatterResult({}, n, "has two keys that read the same once scrubbed")
-    : buildFrontmatterResult(y, n, S);
+  return scrubState.hasCollided
+    ? buildFrontmatterResult({}, filePath, "has two keys that read the same once scrubbed")
+    : buildFrontmatterResult(scrubbed, filePath, problem);
 }
 //@ chunk-s61vbvea.js:90842-90896 placement
 /**
  * 清洗字符串里的 U+2028/2029 并做 Unicode 部分清洗。
  */
-var scrubString = (e) => escapeXmlControlChars(partiallySanitizeUnicode(e).replace(/[\u2028\u2029]/g, ""));
+var scrubString = (text) =>
+  escapeXmlControlChars(partiallySanitizeUnicode(text).replace(/[\u2028\u2029]/g, ""));
 //@ chunk-s61vbvea.js:90896-91139 placement
-function scrubValuePaths(e, n) {
-  if (typeof e === "string") return scrubString(e);
-  if (typeof e !== "object" || e === null) return e;
-  let r = n.copies.get(e);
-  if (r !== undefined) return r;
-  if (!Array.isArray(e)) return scrubObjectPaths(e, n);
-  let s = [];
-  n.copies.set(e, s);
-  for (let h of e) s.push(scrubValuePaths(h, n));
-  return s;
+function scrubValuePaths(value, state) {
+  if (typeof value === "string") return scrubString(value);
+  if (typeof value !== "object" || value === null) return value;
+  let existing = state.copies.get(value);
+  if (existing !== undefined) return existing;
+  if (!Array.isArray(value)) return scrubObjectPaths(value, state);
+  let scrubbed = [];
+  state.copies.set(value, scrubbed);
+  for (let item of value) scrubbed.push(scrubValuePaths(item, state));
+  return scrubbed;
 }
 //@ chunk-s61vbvea.js:91139-91358 placement
-function scrubObjectPaths(e, n) {
-  let r = {};
-  n.copies.set(e, r);
-  for (let [key, value] of Object.entries(e)) {
-    let y = scrubString(key);
-    n.hasCollided ||= Object.hasOwn(r, y);
-    Object.defineProperty(r, y, {
-      value: scrubValuePaths(value, n),
+function scrubObjectPaths(value, state) {
+  let scrubbed = {};
+  state.copies.set(value, scrubbed);
+  for (let [key, value_2] of Object.entries(value)) {
+    let scrubbedKey = scrubString(key);
+    state.hasCollided ||= Object.hasOwn(scrubbed, scrubbedKey);
+    Object.defineProperty(scrubbed, scrubbedKey, {
+      value: scrubValuePaths(value_2, state),
       enumerable: true,
       writable: true,
       configurable: true,
     });
   }
-  return r;
+  return scrubbed;
 }
 //@ chunk-s61vbvea.js:91656-91706 placement
 /**
  * 上述错误码集合。
  */
-var NON_REGULAR_ERRORS = ["ELOOP", "ENXIO", "EISDIR"];
-var nonRegularErrorSet = new Set(NON_REGULAR_ERRORS);
+var NON_REGULAR_ERRORS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var nonRegularErrorSet;
+deferInit("chunk-s61vbvea.js:91656", () => {
+  NON_REGULAR_ERRORS = ["ELOOP", "ENXIO", "EISDIR"];
+  nonRegularErrorSet = new Set(NON_REGULAR_ERRORS);
+});
 //@ chunk-s61vbvea.js:91706-91751 placement
 /**
  * 判断错误码是否属于非普通文件错误。

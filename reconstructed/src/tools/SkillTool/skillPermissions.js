@@ -48,15 +48,19 @@ import { urlPatternToRegex as urlPatternToRegex_2 } from "../../utils/stringUtil
 /**
  * 判断 Skill 权限规则是否匹配某技能：按普通名称（名称、别名、未限定名等）与打包名称（带插件前缀的需满足命名空间条件）逐一比对。
  */
-function matchesSkillRule(e, n, r) {
-  let { ordinary, packaging } = skillRuleNames(n, r);
-  if (matchesWildcardSkillRule(e, ordinary, packaging, r)) return true;
+function matchesSkillRule(ruleContent, skillName, command) {
+  let { ordinary, packaging } = skillRuleNames(skillName, command);
+  if (matchesWildcardSkillRule(ruleContent, ordinary, packaging, command)) return true;
   return (
-    ordinary.some((y) => skillMatchesPermissionRule(e, y)) ||
-    packaging.some((y) => {
-      if (!skillMatchesPermissionRule(e, y)) return false;
-      let { prefix } = parseSkillPermissionRule(e);
-      return prefix === undefined || prefix === y || isSkillPluginSurfaceEnabled(isUntrustedSkillSource(r));
+    ordinary.some((name) => skillMatchesPermissionRule(ruleContent, name)) ||
+    packaging.some((name) => {
+      if (!skillMatchesPermissionRule(ruleContent, name)) return false;
+      let { prefix } = parseSkillPermissionRule(ruleContent);
+      return (
+        prefix === undefined ||
+        prefix === name ||
+        isSkillPluginSurfaceEnabled(isUntrustedSkillSource(command))
+      );
     })
   );
 }
@@ -64,19 +68,19 @@ function matchesSkillRule(e, n, r) {
 /**
  * 判断技能名是否匹配任一条技能规则。
  */
-function skillAllowedByRules(e, skillName, r) {
-  let { ordinary, packaging } = skillRuleNames(skillName, r, true);
-  return matchesWildcardSkillRule(e, ordinary, packaging, r);
+function skillAllowedByRules(ruleContent, skillName, command) {
+  let { ordinary, packaging } = skillRuleNames(skillName, command, true);
+  return matchesWildcardSkillRule(ruleContent, ordinary, packaging, command);
 }
 //@ chunk-e6aww6q8.js:3254106-3254268 placement
-function matchesWildcardSkillRule(e, ordinary, packaging, s) {
-  let match = SKILL_RULE_PREFIX_RE.exec(e);
+function matchesWildcardSkillRule(ruleContent, ordinary, packaging, command) {
+  let match = SKILL_RULE_PREFIX_RE.exec(ruleContent);
   if (match === null) return false;
   let trimmed = match[1].trim();
   return (
-    ordinary.some((S) => matchWildcard(trimmed, S)) ||
-    ((!trimmed.includes("*") || isSkillPluginSurfaceEnabled(isUntrustedSkillSource(s))) &&
-      packaging.some((S) => matchWildcard(trimmed, S)))
+    ordinary.some((name) => matchWildcard(trimmed, name)) ||
+    ((!trimmed.includes("*") || isSkillPluginSurfaceEnabled(isUntrustedSkillSource(command))) &&
+      packaging.some((name) => matchWildcard(trimmed, name)))
   );
 }
 //@ chunk-e6aww6q8.js:3254268-3254298 placement
@@ -88,72 +92,86 @@ var SKILL_RULE_PREFIX_RE = /^\s*skill\s*:(.*)$/s;
 /**
  * 列出技能用于权限规则匹配的名称：普通名称（规则名、全名、命令名、别名、未限定名、旧别名、拒绝匹配名、目录名）与打包名称。
  */
-function skillRuleNames(e, n, r = false) {
-  if (n === undefined)
+function skillRuleNames(skillName, command, packagingOnly = false) {
+  if (command === undefined)
     return {
-      ordinary: [e],
+      ordinary: [skillName],
       packaging: [],
     };
   return {
     ordinary: [
-      e,
-      n.name,
-      ...(r ? [] : [getCommandName_2(n)]),
-      ...(n.aliases ?? []),
-      ...(n.type === "prompt" && !r && n.unqualifiedName != null ? [n.unqualifiedName] : []),
-      ...(n.type === "prompt" && !r ? (n.shedAliases ?? []) : []),
-      ...(n.type === "prompt" && !r ? (n.denyMatchNames ?? []) : []),
-      ...(n.type === "prompt" && !r && n.directoryListingName !== undefined ? [n.directoryListingName] : []),
+      skillName,
+      command.name,
+      ...(packagingOnly ? [] : [getCommandName_2(command)]),
+      ...(command.aliases ?? []),
+      ...(command.type === "prompt" && !packagingOnly && command.unqualifiedName != null
+        ? [command.unqualifiedName]
+        : []),
+      ...(command.type === "prompt" && !packagingOnly ? (command.shedAliases ?? []) : []),
+      ...(command.type === "prompt" && !packagingOnly ? (command.denyMatchNames ?? []) : []),
+      ...(command.type === "prompt" && !packagingOnly && command.directoryListingName !== undefined
+        ? [command.directoryListingName]
+        : []),
     ],
-    packaging: skillAliasesForList(n),
+    packaging: skillAliasesForList(command),
   };
 }
 //@ chunk-e6aww6q8.js:3254701-3255028 placement
 /**
  * 判断允许规则对保留命名空间技能的匹配结果：allow、no-match，或因非持有者/命名空间边界而被暂缓。
  */
-function reservedSkillRuleMatch(e, skillName, command) {
-  let s = command && getSyncedSkillUnqualifiedAlias(command);
-  let h = [skillName, ...(command !== undefined ? [command.name] : []), ...(s !== undefined ? [s] : [])];
-  let any = h.some((G) => skillMatchesPermissionRule(e, G));
+function reservedSkillRuleMatch(ruleContent, skillName, command) {
+  let syncedAlias = command && getSyncedSkillUnqualifiedAlias(command);
+  let names = [
+    skillName,
+    ...(command !== undefined ? [command.name] : []),
+    ...(syncedAlias !== undefined ? [syncedAlias] : []),
+  ];
+  let any = names.some((name) => skillMatchesPermissionRule(ruleContent, name));
   if (!isPlaidHarborOn()) return any ? "allow" : "no-match";
-  let S = command !== undefined && isSyncedOrManagedSkill(command);
-  let any_2 = h.some((G) => skillRuleMatches(e, G));
-  if (h.some((G) => skillRuleMatches(e, G) && (S || !usesReservedSkillNamespace(G)))) return "allow";
+  let isSyncedOrManaged = command !== undefined && isSyncedOrManagedSkill(command);
+  let any_2 = names.some((name) => skillRuleMatches(ruleContent, name));
+  if (
+    names.some(
+      (name) =>
+        skillRuleMatches(ruleContent, name) && (isSyncedOrManaged || !usesReservedSkillNamespace(name)),
+    )
+  )
+    return "allow";
   if (!any) return "no-match";
   return any_2 ? "held-back-nonholder" : "held-back-boundary";
 }
 //@ chunk-e6aww6q8.js:3255028-3255864 placement
-function describeSyncedSkillRuleScope(rule, n, r) {
+function describeSyncedSkillRuleScope(rule, skillName, state) {
   let { prefix } = parseSkillPermissionRule(rule);
   let lower = prefix?.toLowerCase();
-  let y =
+  let coversSynced =
     lower !== undefined
       ? SYNCED_SKILL_PREFIXES.includes(lower) || hasSyncedSkillPrefix(lower)
       : hasSyncedSkillPrefix(rule.toLowerCase());
-  let S = getReservedSkillNamespace(n) ?? n;
-  let w = y
+  let namespace = getReservedSkillNamespace(skillName) ?? skillName;
+  let scopeNote = coversSynced
     ? `Skill(${rule}) only covers skills synced from your claude.ai account.`
-    : `Skill(${rule}) does not cover "${S}:" names, which are reserved for skills synced from your claude.ai account.`;
-  switch (r.kind) {
+    : `Skill(${rule}) does not cover "${namespace}:" names, which are reserved for skills synced from your claude.ai account.`;
+  switch (state.kind) {
     case "nonholder":
-      return `${w} ${n} ${r.pluginName !== undefined ? `comes from the plugin "${r.pluginName}"` : "is not synced"}, so no rule for that name can pre-approve it; it needs approval each time.`;
+      return `${scopeNote} ${skillName} ${state.pluginName !== undefined ? `comes from the plugin "${state.pluginName}"` : "is not synced"}, so no rule for that name can pre-approve it; it needs approval each time.`;
     case "boundary":
       return lower !== undefined && SYNCED_SKILL_PREFIXES.includes(lower)
-        ? `Skill(${rule}) only covers names starting with "${prefix}:". Add Skill(${n}) to allow ${n} without asking.`
-        : y
-          ? `Skill(${rule}) only covers ${prefix} and names starting with "${prefix}:". Add Skill(${n}) to allow ${n} without asking.`
-          : `${w} Add Skill(${n}) to allow ${n} without asking.`;
+        ? `Skill(${rule}) only covers names starting with "${prefix}:". Add Skill(${skillName}) to allow ${skillName} without asking.`
+        : coversSynced
+          ? `Skill(${rule}) only covers ${prefix} and names starting with "${prefix}:". Add Skill(${skillName}) to allow ${skillName} without asking.`
+          : `${scopeNote} Add Skill(${skillName}) to allow ${skillName} without asking.`;
   }
 }
 //@ chunk-e6aww6q8.js:3255864-3256285 placement
 /**
  * 技能不能由 Skill 工具调用时给模型的提示：请用户自己运行，或在协调模式下说明协调者与 worker 都不能调用。
  */
-function notInvocableHint(commandName, n = false) {
+function notInvocableHint(commandName, isWorker = false) {
   if (!isCoordinatorMode_2())
     return `Ask the user to run /${commandName} themselves \u2014 it cannot be invoked via the ${SKILL} tool.`;
-  return n
+  return isWorker
     ? `It cannot be invoked via the ${SKILL} tool in this session, by the coordinator or by workers \u2014 the user can run /${commandName} by typing it themselves.`
     : `It cannot be invoked via the ${SKILL} tool in this session, by the coordinator or by workers \u2014 tell the user /${commandName} is not available here.`;
 }
@@ -161,15 +179,15 @@ function notInvocableHint(commandName, n = false) {
 /**
  * Skill 工具权限检查：技能未加载、禁止模型调用等情况。
  */
-function checkSkillPermission(e, n) {
-  let { commandName, userTypedThisTurn, isMainSession, permissionContext } = n;
-  if (e.type === "prompt" && e.loadDefinition !== undefined && !userTypedThisTurn)
+function checkSkillPermission(command, options) {
+  let { commandName, userTypedThisTurn, isMainSession, permissionContext } = options;
+  if (command.type === "prompt" && command.loadDefinition !== undefined && !userTypedThisTurn)
     return {
       reason: "not_loaded",
       message: `Skill ${commandName} could not be loaded. Proceed without it.`,
       errorCode: 10,
     };
-  if (e.disableModelInvocation && !userTypedThisTurn)
+  if (command.disableModelInvocation && !userTypedThisTurn)
     return {
       reason: "disable_model_invocation",
       message: `Skill ${commandName} cannot be used with ${SKILL} tool due to disable-model-invocation. ${notInvocableHint(commandName)} Do not replicate this skill's workflow by other means \u2014 it is reserved for explicit user invocation.`,
@@ -179,7 +197,7 @@ function checkSkillPermission(e, n) {
     let sessionSkillAllowlist = getSessionSkillAllowlist();
     if (
       sessionSkillAllowlist !== undefined &&
-      filterCommandsByAllowlist([e], sessionSkillAllowlist).length === 0
+      filterCommandsByAllowlist([command], sessionSkillAllowlist).length === 0
     )
       return {
         reason: "not_allowlisted",
@@ -187,77 +205,78 @@ function checkSkillPermission(e, n) {
         errorCode: 8,
       };
   }
-  let S = describeSkillHiddenBehindPlugin(e);
-  if (S !== undefined)
+  let hiddenBehindPluginNote = describeSkillHiddenBehindPlugin(command);
+  if (hiddenBehindPluginNote !== undefined)
     return {
       reason: "override_disabled",
-      message: S,
+      message: hiddenBehindPluginNote,
       errorCode: 7,
       killSwitchOnly: false,
       hiddenBehindPlugin: true,
     };
-  let skillOverrideState = getSkillOverrideState(e);
+  let skillOverrideState = getSkillOverrideState(command);
   if (skillOverrideState === "off" || (skillOverrideState === "user-invocable-only" && !userTypedThisTurn)) {
-    let initialSettings = getInitialSettings_2();
-    let G = isBuiltinSkillGated(e, initialSettings);
-    let skillOverrideAll = resolveSkillOverrideAll(e);
-    let Z = skillOverrideAll === "user-invocable-only" || skillOverrideAll === "off";
-    let Se = G && !isBundledSkillsDisabled(initialSettings) ? bundledSkillsDeniedReason() : null;
-    let ke = "by the disableBundledSkills setting or CLAUDE_CODE_DISABLE_BUNDLED_SKILLS env var";
+    let context = getInitialSettings_2();
+    let isBundledGated = isBuiltinSkillGated(command, context);
+    let skillOverrideAll = resolveSkillOverrideAll(command);
+    let alsoOverridden = skillOverrideAll === "user-invocable-only" || skillOverrideAll === "off";
+    let bundledDeniedReason =
+      isBundledGated && !isBundledSkillsDisabled(context) ? bundledSkillsDeniedReason() : null;
+    let denySourceText = "by the disableBundledSkills setting or CLAUDE_CODE_DISABLE_BUNDLED_SKILLS env var";
     return {
       reason: "override_disabled",
       message:
-        Se !== null
-          ? `Skill ${commandName} is disabled for model invocation: ${Se}${Z ? " It is also turned off by an explicit skillOverrides entry." : ""}`
-          : `Skill ${commandName} is disabled for model invocation ${G ? (Z ? "by the disableBundledSkills setting or CLAUDE_CODE_DISABLE_BUNDLED_SKILLS env var, and by an explicit skillOverrides entry" : "by the disableBundledSkills setting or CLAUDE_CODE_DISABLE_BUNDLED_SKILLS env var") : "in skillOverrides settings"}`,
+        bundledDeniedReason !== null
+          ? `Skill ${commandName} is disabled for model invocation: ${bundledDeniedReason}${alsoOverridden ? " It is also turned off by an explicit skillOverrides entry." : ""}`
+          : `Skill ${commandName} is disabled for model invocation ${isBundledGated ? (alsoOverridden ? "by the disableBundledSkills setting or CLAUDE_CODE_DISABLE_BUNDLED_SKILLS env var, and by an explicit skillOverrides entry" : "by the disableBundledSkills setting or CLAUDE_CODE_DISABLE_BUNDLED_SKILLS env var") : "in skillOverrides settings"}`,
       errorCode: 7,
-      killSwitchOnly: G && !Z,
+      killSwitchOnly: isBundledGated && !alsoOverridden,
     };
   }
-  if (e.type !== "prompt") {
-    let L = e.type === "local-jsx" ? "UI" : "built-in CLI";
+  if (command.type !== "prompt") {
+    let commandTypeLabel = command.type === "local-jsx" ? "UI" : "built-in CLI";
     return {
       reason: "not_prompt_type",
-      message: `${commandName} is a ${L} command, not a skill. ${notInvocableHint(commandName, true)}`,
+      message: `${commandName} is a ${commandTypeLabel} command, not a skill. ${notInvocableHint(commandName, true)}`,
       errorCode: 5,
     };
   }
-  if (e.isMcp && e.loadedFrom !== "mcp")
+  if (command.isMcp && command.loadedFrom !== "mcp")
     return {
       reason: "mcp_prompt",
       message: `${commandName} is an MCP prompt, not a skill. ${notInvocableHint(commandName)}`,
       errorCode: 12,
     };
   if (permissionContext !== undefined) {
-    let L =
+    let denyRule =
       getDenyRuleForTool(permissionContext, {
         name: SKILL,
       }) ??
       getDenyRuleForTool(
         permissionContext,
         {
-          name: normalizedSkillToolName(e.name),
-          aliasSkillToolNames: skillAlternateNames(e),
-          packagingAliasSkillToolNames: otherSkillAliases(e),
+          name: normalizedSkillToolName(command.name),
+          aliasSkillToolNames: skillAlternateNames(command),
+          packagingAliasSkillToolNames: otherSkillAliases(command),
         },
         undefined,
-        isUntrustedSkillSource(e),
+        isUntrustedSkillSource(command),
       );
-    if (L)
+    if (denyRule)
       return {
         reason: "deny_rule",
         message: "Skill execution blocked by permission rules",
         errorCode: 11,
-        rule: L,
+        rule: denyRule,
       };
     let contentRulesMapForToolName = getContentRulesMapForToolName(permissionContext, SKILL, "deny");
-    for (let [q, Z] of contentRulesMapForToolName.entries())
-      if (matchesSkillRule(q, commandName, e))
+    for (let [ruleContent, rule] of contentRulesMapForToolName.entries())
+      if (matchesSkillRule(ruleContent, commandName, command))
         return {
           reason: "deny_rule",
           message: "Skill execution blocked by permission rules",
           errorCode: 11,
-          rule: Z,
+          rule,
         };
   }
   return null;
@@ -266,22 +285,22 @@ function checkSkillPermission(e, n) {
 /**
  * 把技能名转成 “/name” 形式的匹配正则（前后要是词边界）。
  */
-function slashSkillRuleRegex(e) {
-  return new RegExp(`(?<!\\S)/${urlPatternToRegex_2(e)}(?=$|\\s)`);
+function slashSkillRuleRegex(commandName) {
+  return new RegExp(`(?<!\\S)/${urlPatternToRegex_2(commandName)}(?=$|\\s)`);
 }
 //@ chunk-e6aww6q8.js:3258636-3258722 placement
 /**
  * 判断给定位置前后是否为词边界（空白或首尾）。
  */
-function isWordBoundaryAt(e, start, end) {
-  return (start === 0 || /\s/.test(e[start - 1])) && (end === e.length || /\s/.test(e[end]));
+function isWordBoundaryAt(text, start, end) {
+  return (start === 0 || /\s/.test(text[start - 1])) && (end === text.length || /\s/.test(text[end]));
 }
 //@ chunk-e6aww6q8.js:3258722-3258765 placement
 /**
  * 判断技能来源不可信（不是受信来源）。
  */
-function isUntrustedSkillSource(e) {
-  return e !== undefined && !isTrustedSkillSource(e);
+function isUntrustedSkillSource(source) {
+  return source !== undefined && !isTrustedSkillSource(source);
 }
 export {
   checkSkillPermission,

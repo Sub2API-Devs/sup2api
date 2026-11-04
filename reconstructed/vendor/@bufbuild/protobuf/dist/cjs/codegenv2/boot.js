@@ -5,12 +5,12 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_restore_json_names } from "./restore-json-names.js";
 import { require_registry } from "../registry.js";
 
 //@ chunk-fq0cr76a.js:375937-378224 cjs-require-graph
-var require_boot = x(function (cjsExports) {
+var require_boot = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

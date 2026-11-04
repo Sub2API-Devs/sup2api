@@ -5,7 +5,11 @@
  * pieces: chunk-r1g76qsy.js (1), chunk-zykv69v4.js (1)
  * attribution: cjs-fingerprint 2
  */
-import { J, Eo } from "../../@modelcontextprotocol/core/(bundler runtime of a pre-bundled dist file).js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
+import {
+  initModule,
+  interopDefault,
+} from "../../@modelcontextprotocol/core/(bundler runtime of a pre-bundled dist file).js";
 import {
   require_ref_error,
   require_code_2,
@@ -19,10 +23,201 @@ import {
   require_core,
   require_validation_error,
 } from "../../ajv/dist/core.js";
-import { x } from "../../../runtime/bun-runtime.js";
 
+//@ chunk-zykv69v4.js:416-8167 cjs-fingerprint
+var require_formats_2 = __commonJS(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.formatNames = cjsExports.fastFormats = cjsExports.fullFormats = undefined;
+  function fmtDef(validate, compare) {
+    return {
+      validate,
+      compare,
+    };
+  }
+  cjsExports.fullFormats = {
+    date: fmtDef(date, compareDate),
+    time: fmtDef(getTime(true), compareTime),
+    "date-time": fmtDef(getDateTime(true), compareDateTime),
+    "iso-time": fmtDef(getTime(), compareIsoTime),
+    "iso-date-time": fmtDef(getDateTime(), compareIsoDateTime),
+    duration: /^P(?!$)((\d+Y)?(\d+M)?(\d+D)?(T(?=\d)(\d+H)?(\d+M)?(\d+S)?)?|(\d+W)?)$/,
+    uri,
+    "uri-reference":
+      /^(?:[a-z][a-z0-9+\-.]*:)?(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[0-9a-f]{2})*@)?(?:\[(?:(?:(?:(?:[0-9a-f]{1,4}:){6}|::(?:[0-9a-f]{1,4}:){5}|(?:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){4}|(?:(?:[0-9a-f]{1,4}:){0,1}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){3}|(?:(?:[0-9a-f]{1,4}:){0,2}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){2}|(?:(?:[0-9a-f]{1,4}:){0,3}[0-9a-f]{1,4})?::[0-9a-f]{1,4}:|(?:(?:[0-9a-f]{1,4}:){0,4}[0-9a-f]{1,4})?::)(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[0-9a-f]{1,4}:){0,5}[0-9a-f]{1,4})?::[0-9a-f]{1,4}|(?:(?:[0-9a-f]{1,4}:){0,6}[0-9a-f]{1,4})?::)|[Vv][0-9a-f]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'"()*+,;=]|%[0-9a-f]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})*)*)?|(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})*)*)?(?:\?(?:[a-z0-9\-._~!$&'"()*+,;=:@/?]|%[0-9a-f]{2})*)?(?:#(?:[a-z0-9\-._~!$&'"()*+,;=:@/?]|%[0-9a-f]{2})*)?$/i,
+    "uri-template":
+      /^(?:(?:[^\x00-\x20"'<>%\\^`{|}]|%[0-9a-f]{2})|\{[+#./;?&=,!@|]?(?:[a-z0-9_]|%[0-9a-f]{2})+(?::[1-9][0-9]{0,3}|\*)?(?:,(?:[a-z0-9_]|%[0-9a-f]{2})+(?::[1-9][0-9]{0,3}|\*)?)*\})*$/i,
+    url: /^(?:https?|ftp):\/\/(?:\S+(?::\S*)?@)?(?:(?!(?:10|127)(?:\.\d{1,3}){3})(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z0-9\u{00a1}-\u{ffff}]+-)*[a-z0-9\u{00a1}-\u{ffff}]+)(?:\.(?:[a-z0-9\u{00a1}-\u{ffff}]+-)*[a-z0-9\u{00a1}-\u{ffff}]+)*(?:\.(?:[a-z\u{00a1}-\u{ffff}]{2,})))(?::\d{2,5})?(?:\/[^\s]*)?$/iu,
+    email:
+      /^[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i,
+    hostname:
+      /^(?=.{1,253}\.?$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[-0-9a-z]{0,61}[0-9a-z])?)*\.?$/i,
+    ipv4: /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/,
+    ipv6: /^((([0-9a-f]{1,4}:){7}([0-9a-f]{1,4}|:))|(([0-9a-f]{1,4}:){6}(:[0-9a-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){5}(((:[0-9a-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){4}(((:[0-9a-f]{1,4}){1,3})|((:[0-9a-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){3}(((:[0-9a-f]{1,4}){1,4})|((:[0-9a-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){2}(((:[0-9a-f]{1,4}){1,5})|((:[0-9a-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){1}(((:[0-9a-f]{1,4}){1,6})|((:[0-9a-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9a-f]{1,4}){1,7})|((:[0-9a-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))$/i,
+    regex,
+    uuid: /^(?:urn:uuid:)?[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i,
+    "json-pointer": /^(?:\/(?:[^~/]|~0|~1)*)*$/,
+    "json-pointer-uri-fragment": /^#(?:\/(?:[a-z0-9_\-.!$&'()*+,;:=@]|%[0-9a-f]{2}|~0|~1)*)*$/i,
+    "relative-json-pointer": /^(?:0|[1-9][0-9]*)(?:#|(?:\/(?:[^~/]|~0|~1)*)*)$/,
+    byte,
+    int32: {
+      type: "number",
+      validate: validateInt32,
+    },
+    int64: {
+      type: "number",
+      validate: validateInt64,
+    },
+    float: {
+      type: "number",
+      validate: validateNumber,
+    },
+    double: {
+      type: "number",
+      validate: validateNumber,
+    },
+    password: true,
+    binary: true,
+  };
+  cjsExports.fastFormats = {
+    ...cjsExports.fullFormats,
+    date: fmtDef(/^\d\d\d\d-[0-1]\d-[0-3]\d$/, compareDate),
+    time: fmtDef(/^(?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d(?::?\d\d)?)$/i, compareTime),
+    "date-time": fmtDef(
+      /^\d\d\d\d-[0-1]\d-[0-3]\dt(?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d(?::?\d\d)?)$/i,
+      compareDateTime,
+    ),
+    "iso-time": fmtDef(
+      /^(?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d(?::?\d\d)?)?$/i,
+      compareIsoTime,
+    ),
+    "iso-date-time": fmtDef(
+      /^\d\d\d\d-[0-1]\d-[0-3]\d[t\s](?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d(?::?\d\d)?)?$/i,
+      compareIsoDateTime,
+    ),
+    uri: /^(?:[a-z][a-z0-9+\-.]*:)(?:\/?\/)?[^\s]*$/i,
+    "uri-reference": /^(?:(?:[a-z][a-z0-9+\-.]*:)?\/?\/)?(?:[^\\\s#][^\s#]*)?(?:#[^\\\s]*)?$/i,
+    email:
+      /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/i,
+  };
+  cjsExports.formatNames = Object.keys(cjsExports.fullFormats);
+  function isLeapYear(year) {
+    return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  }
+  var DATE = /^(\d\d\d\d)-(\d\d)-(\d\d)$/;
+  var DAYS = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  function date(str) {
+    let matches = DATE.exec(str);
+    if (!matches) return false;
+    let year = +matches[1];
+    let month = +matches[2];
+    let day = +matches[3];
+    return (
+      month >= 1 && month <= 12 && day >= 1 && day <= (month === 2 && isLeapYear(year) ? 29 : DAYS[month])
+    );
+  }
+  function compareDate(d1, d2) {
+    if (!(d1 && d2)) return;
+    if (d1 > d2) return 1;
+    if (d1 < d2) return -1;
+    return 0;
+  }
+  var TIME = /^(\d\d):(\d\d):(\d\d(?:\.\d+)?)(z|([+-])(\d\d)(?::?(\d\d))?)?$/i;
+  function getTime(strictTimeZone) {
+    return function (str) {
+      let matches = TIME.exec(str);
+      if (!matches) return false;
+      let hr = +matches[1];
+      let min = +matches[2];
+      let sec = +matches[3];
+      let tz = matches[4];
+      let tzSign = matches[5] === "-" ? -1 : 1;
+      let tzH = +(matches[6] || 0);
+      let tzM = +(matches[7] || 0);
+      if (tzH > 23 || tzM > 59 || (strictTimeZone && !tz)) return false;
+      if (hr <= 23 && min <= 59 && sec < 60) return true;
+      let utcMin = min - tzM * tzSign;
+      let utcHr = hr - tzH * tzSign - (utcMin < 0 ? 1 : 0);
+      return (utcHr === 23 || utcHr === -1) && (utcMin === 59 || utcMin === -1) && sec < 61;
+    };
+  }
+  function compareTime(s1, s2) {
+    if (!(s1 && s2)) return;
+    let t1 = new Date("2020-01-01T" + s1).valueOf();
+    let t2 = new Date("2020-01-01T" + s2).valueOf();
+    if (!(t1 && t2)) return;
+    return t1 - t2;
+  }
+  function compareIsoTime(t1, t2) {
+    if (!(t1 && t2)) return;
+    let a1 = TIME.exec(t1);
+    let a2 = TIME.exec(t2);
+    if (!(a1 && a2)) return;
+    t1 = a1[1] + a1[2] + a1[3];
+    t2 = a2[1] + a2[2] + a2[3];
+    if (t1 > t2) return 1;
+    if (t1 < t2) return -1;
+    return 0;
+  }
+  var DATE_TIME_SEPARATOR = /t|\s/i;
+  function getDateTime(strictTimeZone) {
+    let time = getTime(strictTimeZone);
+    return function (str) {
+      let dateTime = str.split(DATE_TIME_SEPARATOR);
+      return dateTime.length === 2 && date(dateTime[0]) && time(dateTime[1]);
+    };
+  }
+  function compareDateTime(dt1, dt2) {
+    if (!(dt1 && dt2)) return;
+    let d1 = new Date(dt1).valueOf();
+    let d2 = new Date(dt2).valueOf();
+    if (!(d1 && d2)) return;
+    return d1 - d2;
+  }
+  function compareIsoDateTime(dt1, dt2) {
+    if (!(dt1 && dt2)) return;
+    let [d1, t1] = dt1.split(DATE_TIME_SEPARATOR);
+    let [d2, t2] = dt2.split(DATE_TIME_SEPARATOR);
+    let res = compareDate(d1, d2);
+    if (res === undefined) return;
+    return res || compareTime(t1, t2);
+  }
+  var NOT_URI_FRAGMENT = /\/|:/;
+  var URI =
+    /^(?:[a-z][a-z0-9+\-.]*:)(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[0-9a-f]{2})*@)?(?:\[(?:(?:(?:(?:[0-9a-f]{1,4}:){6}|::(?:[0-9a-f]{1,4}:){5}|(?:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){4}|(?:(?:[0-9a-f]{1,4}:){0,1}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){3}|(?:(?:[0-9a-f]{1,4}:){0,2}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){2}|(?:(?:[0-9a-f]{1,4}:){0,3}[0-9a-f]{1,4})?::[0-9a-f]{1,4}:|(?:(?:[0-9a-f]{1,4}:){0,4}[0-9a-f]{1,4})?::)(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[0-9a-f]{1,4}:){0,5}[0-9a-f]{1,4})?::[0-9a-f]{1,4}|(?:(?:[0-9a-f]{1,4}:){0,6}[0-9a-f]{1,4})?::)|[Vv][0-9a-f]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'()*+,;=]|%[0-9a-f]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)?|(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)(?:\?(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?(?:#(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?$/i;
+  function uri(str) {
+    return NOT_URI_FRAGMENT.test(str) && URI.test(str);
+  }
+  var BYTE = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/gm;
+  function byte(str) {
+    BYTE.lastIndex = 0;
+    return BYTE.test(str);
+  }
+  var MIN_INT32 = -2147483648;
+  var MAX_INT32 = 2147483647;
+  function validateInt32(value) {
+    return Number.isInteger(value) && value <= MAX_INT32 && value >= MIN_INT32;
+  }
+  function validateInt64(value) {
+    return Number.isInteger(value);
+  }
+  function validateNumber() {
+    return true;
+  }
+  var Z_ANCHOR = /[^\\]\\Z/;
+  function regex(str) {
+    if (Z_ANCHOR.test(str)) return false;
+    try {
+      new RegExp(str);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+});
 //@ chunk-r1g76qsy.js:197840-255842 cjs-fingerprint
-var require_id = J((cjsExports) => {
+var require_id = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -34,7 +229,7 @@ var require_id = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_ref = J((cjsExports) => {
+var require_ref = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -50,10 +245,10 @@ var require_ref = J((cjsExports) => {
     schemaType: "string",
     code(cxt) {
       let { gen, schema: $ref, it } = cxt;
-      let { baseId, schemaEnv: env, validateName, opts, self: S } = it;
+      let { baseId, schemaEnv: env, validateName, opts, self: ajv } = it;
       let { root } = env;
       if (($ref === "#" || $ref === "#/") && baseId === root.baseId) return callRootRef();
-      let schOrEnv = compile_1.resolveRef.call(S, root, baseId, $ref);
+      let schOrEnv = compile_1.resolveRef.call(ajv, root, baseId, $ref);
       if (schOrEnv === undefined) throw new ref_error_1.default(it.opts.uriResolver, baseId, $ref);
       if (schOrEnv instanceof compile_1.SchemaEnv) return callValidate(schOrEnv);
       return inlineRefSchema(schOrEnv);
@@ -172,7 +367,7 @@ var require_ref = J((cjsExports) => {
   cjsExports.callRef = callRef;
   cjsExports.default = def;
 });
-var require_core_3 = J((cjsExports) => {
+var require_core_3 = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -192,7 +387,7 @@ var require_core_3 = J((cjsExports) => {
   ];
   cjsExports.default = core;
 });
-var require_limitNumber = J((cjsExports) => {
+var require_limitNumber = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -237,7 +432,7 @@ var require_limitNumber = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_multipleOf = J((cjsExports) => {
+var require_multipleOf = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -263,7 +458,7 @@ var require_multipleOf = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_ucs2length = J((cjsExports) => {
+var require_ucs2length = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -285,7 +480,7 @@ var require_ucs2length = J((cjsExports) => {
   cjsExports.default = ucs2length;
   ucs2length.code = 'require("ajv/dist/runtime/ucs2length").default';
 });
-var require_limitLength = J((cjsExports) => {
+var require_limitLength = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -316,7 +511,7 @@ var require_limitLength = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_pattern = J((cjsExports) => {
+var require_pattern = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -353,12 +548,12 @@ var require_pattern = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_limitProperties = J((cjsExports) => {
+var require_limitProperties = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   let codegen_1 = require_codegen();
-  let r = {
+  let def = {
     keyword: ["maxProperties", "minProperties"],
     type: "object",
     schemaType: "number",
@@ -376,9 +571,9 @@ var require_limitProperties = J((cjsExports) => {
       cxt.fail$data(codegen_1._`Object.keys(${data}).length ${op} ${schemaCode}`);
     },
   };
-  cjsExports.default = r;
+  cjsExports.default = def;
 });
-var require_required = J((cjsExports) => {
+var require_required = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -410,8 +605,8 @@ var require_required = J((cjsExports) => {
             (props === null || props === undefined ? undefined : props[requiredKey]) === undefined &&
             !definedProperties.has(requiredKey)
           ) {
-            let C = `required property "${requiredKey}" is not defined at "${it.schemaEnv.baseId + it.errSchemaPath}" (strictRequired)`;
-            (0, util_1.checkStrictMode)(it, C, it.opts.strictRequired);
+            let msg = `required property "${requiredKey}" is not defined at "${it.schemaEnv.baseId + it.errSchemaPath}" (strictRequired)`;
+            (0, util_1.checkStrictMode)(it, msg, it.opts.strictRequired);
           }
       }
       function allErrorsMode() {
@@ -459,12 +654,12 @@ var require_required = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_limitItems = J((cjsExports) => {
+var require_limitItems = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   let codegen_1 = require_codegen();
-  let r = {
+  let def = {
     keyword: ["maxItems", "minItems"],
     type: "array",
     schemaType: "number",
@@ -482,9 +677,9 @@ var require_limitItems = J((cjsExports) => {
       cxt.fail$data(codegen_1._`${data}.length ${op} ${schemaCode}`);
     },
   };
-  cjsExports.default = r;
+  cjsExports.default = def;
 });
-var require_equal = J((cjsExports) => {
+var require_equal = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -492,7 +687,7 @@ var require_equal = J((cjsExports) => {
   equal.code = 'require("ajv/dist/runtime/equal").default';
   cjsExports.default = equal;
 });
-var require_uniqueItems = J((cjsExports) => {
+var require_uniqueItems = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -506,9 +701,9 @@ var require_uniqueItems = J((cjsExports) => {
     schemaType: "boolean",
     $data: true,
     error: {
-      message: ({ params: { i, j } }) =>
-        codegen_1.str`must NOT have duplicate items (items ## ${j} and ${i} are identical)`,
-      params: ({ params: { i, j } }) => codegen_1._`{i: ${i}, j: ${j}}`,
+      message: ({ params: { i: earlierIndex, j } }) =>
+        codegen_1.str`must NOT have duplicate items (items ## ${j} and ${earlierIndex} are identical)`,
+      params: ({ params: { i: earlierIndex, j } }) => codegen_1._`{i: ${earlierIndex}, j: ${j}}`,
     },
     code(cxt) {
       let { gen, data, $data, schema, parentSchema, schemaCode, it } = cxt;
@@ -569,7 +764,7 @@ var require_uniqueItems = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_const = J((cjsExports) => {
+var require_const = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -592,7 +787,7 @@ var require_const = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_enum = J((cjsExports) => {
+var require_enum = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -640,7 +835,7 @@ var require_enum = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_validation_2 = J((cjsExports) => {
+var require_validation_2 = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -676,7 +871,7 @@ var require_validation_2 = J((cjsExports) => {
   ];
   cjsExports.default = validation;
 });
-var require_additionalItems = J((cjsExports) => {
+var require_additionalItems = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -736,7 +931,7 @@ var require_additionalItems = J((cjsExports) => {
   cjsExports.validateAdditionalItems = validateAdditionalItems;
   cjsExports.default = def;
 });
-var require_items = J((cjsExports) => {
+var require_items = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -791,7 +986,7 @@ var require_items = J((cjsExports) => {
   cjsExports.validateTuple = validateTuple;
   cjsExports.default = def;
 });
-var require_prefixItems = J((cjsExports) => {
+var require_prefixItems = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -805,15 +1000,15 @@ var require_prefixItems = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_items2020 = J((cjsExports) => {
+var require_items2020 = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   let codegen_1 = require_codegen();
-  let r = require_util();
-  let s = require_code_2();
-  let a = require_additionalItems();
-  let n = {
+  let utilModule = require_util();
+  let codeModule = require_code_2();
+  let additionalItemsModule = require_additionalItems();
+  let def = {
     keyword: "items",
     type: "array",
     schemaType: ["object", "boolean"],
@@ -826,14 +1021,14 @@ var require_items2020 = J((cjsExports) => {
       let { schema, parentSchema, it } = cxt;
       let { prefixItems } = parentSchema;
       it.items = true;
-      if ((0, r.alwaysValidSchema)(it, schema)) return;
-      if (prefixItems) (0, a.validateAdditionalItems)(cxt, prefixItems);
-      else cxt.ok((0, s.validateArray)(cxt));
+      if ((0, utilModule.alwaysValidSchema)(it, schema)) return;
+      if (prefixItems) (0, additionalItemsModule.validateAdditionalItems)(cxt, prefixItems);
+      else cxt.ok((0, codeModule.validateArray)(cxt));
     },
   };
-  cjsExports.default = n;
+  cjsExports.default = def;
 });
-var require_contains = J((cjsExports) => {
+var require_contains = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -930,7 +1125,7 @@ var require_contains = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_dependencies = J((cjsExports) => {
+var require_dependencies = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -1021,7 +1216,7 @@ var require_dependencies = J((cjsExports) => {
   cjsExports.validateSchemaDeps = validateSchemaDeps;
   cjsExports.default = def;
 });
-var require_propertyNames = J((cjsExports) => {
+var require_propertyNames = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -1063,7 +1258,7 @@ var require_propertyNames = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_additionalProperties = J((cjsExports) => {
+var require_additionalProperties = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -1160,7 +1355,7 @@ var require_additionalProperties = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_properties = J((cjsExports) => {
+var require_properties = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -1213,7 +1408,7 @@ var require_properties = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_patternProperties = J((cjsExports) => {
+var require_patternProperties = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -1283,7 +1478,7 @@ var require_patternProperties = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_not = J((cjsExports) => {
+var require_not = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -1320,7 +1515,7 @@ var require_not = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_anyOf = J((cjsExports) => {
+var require_anyOf = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -1335,7 +1530,7 @@ var require_anyOf = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_oneOf = J((cjsExports) => {
+var require_oneOf = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -1396,7 +1591,7 @@ var require_oneOf = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_allOf = J((cjsExports) => {
+var require_allOf = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -1424,7 +1619,7 @@ var require_allOf = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_if = J((cjsExports) => {
+var require_if = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -1495,7 +1690,7 @@ var require_if = J((cjsExports) => {
   }
   cjsExports.default = def;
 });
-var require_thenElse = J((cjsExports) => {
+var require_thenElse = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -1510,48 +1705,48 @@ var require_thenElse = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_format_6 = J((cjsExports) => {
+var require_format_6 = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
-  let t = require_additionalItems();
-  let r = require_prefixItems();
-  let s = require_items();
-  let a = require_items2020();
-  let n = require_contains();
-  let i = require_dependencies();
-  let l = require_propertyNames();
-  let c = require_additionalProperties();
-  let d = require_properties();
-  let m = require_patternProperties();
-  let _ = require_not();
-  let w = require_anyOf();
-  let P = require_oneOf();
-  let y = require_allOf();
-  let v = require_if();
-  let p = require_thenElse();
-  function h(S = false) {
-    let f = [
-      _.default,
-      w.default,
-      P.default,
-      y.default,
-      v.default,
-      p.default,
-      l.default,
-      c.default,
-      i.default,
-      d.default,
-      m.default,
+  let additionalItemsModule = require_additionalItems();
+  let prefixItemsModule = require_prefixItems();
+  let itemsModule = require_items();
+  let items2020Module = require_items2020();
+  let containsModule = require_contains();
+  let dependenciesModule = require_dependencies();
+  let propertyNamesModule = require_propertyNames();
+  let additionalPropertiesModule = require_additionalProperties();
+  let propertiesModule = require_properties();
+  let patternPropertiesModule = require_patternProperties();
+  let notModule = require_not();
+  let anyOfModule = require_anyOf();
+  let oneOfModule = require_oneOf();
+  let allOfModule = require_allOf();
+  let ifModule = require_if();
+  let thenElseModule = require_thenElse();
+  function applicator(draft2019 = false) {
+    let vocabularies = [
+      notModule.default,
+      anyOfModule.default,
+      oneOfModule.default,
+      allOfModule.default,
+      ifModule.default,
+      thenElseModule.default,
+      propertyNamesModule.default,
+      additionalPropertiesModule.default,
+      dependenciesModule.default,
+      propertiesModule.default,
+      patternPropertiesModule.default,
     ];
-    if (S) f.push(r.default, a.default);
-    else f.push(t.default, s.default);
-    f.push(n.default);
-    return f;
+    if (draft2019) vocabularies.push(prefixItemsModule.default, items2020Module.default);
+    else vocabularies.push(additionalItemsModule.default, itemsModule.default);
+    vocabularies.push(containsModule.default);
+    return vocabularies;
   }
-  cjsExports.default = h;
+  cjsExports.default = applicator;
 });
-var require_format = J((cjsExports) => {
+var require_format = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -1567,13 +1762,13 @@ var require_format = J((cjsExports) => {
     },
     code(cxt, ruleType) {
       let { gen, data, $data, schema, schemaCode, it } = cxt;
-      let { opts, errSchemaPath, schemaEnv, self: y } = it;
+      let { opts, errSchemaPath, schemaEnv, self: ajvInstance } = it;
       if (!opts.validateFormats) return;
       if ($data) validate$DataFormat();
       else validateFormat();
       function validate$DataFormat() {
         let fmts = gen.scopeValue("formats", {
-          ref: y.formats,
+          ref: ajvInstance.formats,
           code: opts.code.formats,
         });
         let fDef = gen.const("fDef", codegen_1._`${fmts}[${schemaCode}]`);
@@ -1601,7 +1796,7 @@ var require_format = J((cjsExports) => {
         }
       }
       function validateFormat() {
-        let formatDef = y.formats[schema];
+        let formatDef = ajvInstance.formats[schema];
         if (!formatDef) {
           unknownFormat();
           return;
@@ -1611,7 +1806,7 @@ var require_format = J((cjsExports) => {
         if (fmtType === ruleType) cxt.pass(validCondition());
         function unknownFormat() {
           if (opts.strictSchema === false) {
-            y.logger.warn(unknownMsg());
+            ajvInstance.logger.warn(unknownMsg());
             return;
           }
           throw Error(unknownMsg());
@@ -1649,14 +1844,14 @@ var require_format = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_format_2 = J((cjsExports) => {
+var require_format_2 = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
-  let t = [require_format().default];
-  cjsExports.default = t;
+  let formatPlugins = [require_format().default];
+  cjsExports.default = formatPlugins;
 });
-var require_metadata = J((cjsExports) => {
+var require_metadata = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -1672,7 +1867,7 @@ var require_metadata = J((cjsExports) => {
   ];
   cjsExports.contentVocabulary = ["contentMediaType", "contentEncoding", "contentSchema"];
 });
-var require_draft7 = J((cjsExports) => {
+var require_draft7 = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -1691,7 +1886,7 @@ var require_draft7 = J((cjsExports) => {
   ];
   cjsExports.default = draft7Vocabularies;
 });
-var require_types = J((cjsExports) => {
+var require_types = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -1702,14 +1897,14 @@ var require_types = J((cjsExports) => {
     DiscrError.Mapping = "mapping";
   })(DiscrError || (cjsExports.DiscrError = DiscrError = {}));
 });
-var require_discriminator = J((cjsExports) => {
+var require_discriminator = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   let codegen_1 = require_codegen();
   let types_1 = require_types();
   let compile_1 = require_compile();
-  let a = require_ref_error();
+  let refErrorModule = require_ref_error();
   let util_1 = require_util();
   let def = {
     keyword: "discriminator",
@@ -1785,7 +1980,7 @@ var require_discriminator = J((cjsExports) => {
             let $ref = sch.$ref;
             sch = compile_1.resolveRef.call(it.self, it.schemaEnv.root, it.baseId, $ref);
             if (sch instanceof compile_1.SchemaEnv) sch = sch.schema;
-            if (sch === undefined) throw new a.default(it.opts.uriResolver, it.baseId, $ref);
+            if (sch === undefined) throw new refErrorModule.default(it.opts.uriResolver, it.baseId, $ref);
           }
           let propSch =
             (_a = sch === null || sch === undefined ? undefined : sch.properties) === null || _a === undefined
@@ -1818,7 +2013,7 @@ var require_discriminator = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_json_schema_draft_07 = J((cjsExports, cjsModule) => {
+var require_json_schema_draft_07 = initModule((cjsExports, cjsModule) => {
   cjsModule.exports = {
     $schema: "http://json-schema.org/draft-07/schema#",
     $id: "http://json-schema.org/draft-07/schema#",
@@ -2050,7 +2245,7 @@ var require_json_schema_draft_07 = J((cjsExports, cjsModule) => {
     default: true,
   };
 });
-var require_ajv = J((cjsExports, cjsModule) => {
+var require_ajv = initModule((cjsExports, cjsModule) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -2157,7 +2352,7 @@ var require_ajv = J((cjsExports, cjsModule) => {
     },
   });
 });
-var require_dynamicAnchor = J((cjsExports) => {
+var require_dynamicAnchor = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -2180,9 +2375,9 @@ var require_dynamicAnchor = J((cjsExports) => {
   }
   cjsExports.dynamicAnchor = dynamicAnchor;
   function _getValidate(cxt) {
-    let { schemaEnv, schema, self: _ } = cxt.it;
+    let { schemaEnv, schema, self: ajvInstance } = cxt.it;
     let { root, baseId, localRefs, meta } = schemaEnv.root;
-    let { schemaId } = _.opts;
+    let { schemaId } = ajvInstance.opts;
     let sch = new compile_1.SchemaEnv({
       schema,
       schemaId,
@@ -2191,12 +2386,12 @@ var require_dynamicAnchor = J((cjsExports) => {
       localRefs,
       meta,
     });
-    compile_1.compileSchema.call(_, sch);
+    compile_1.compileSchema.call(ajvInstance, sch);
     return (0, ref_1.getValidate)(cxt, sch);
   }
   cjsExports.default = def;
 });
-var require_dynamicRef = J((cjsExports) => {
+var require_dynamicRef = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -2241,7 +2436,7 @@ var require_dynamicRef = J((cjsExports) => {
   cjsExports.dynamicRef = dynamicRef;
   cjsExports.default = def;
 });
-var require_recursiveAnchor = J((cjsExports) => {
+var require_recursiveAnchor = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -2257,7 +2452,7 @@ var require_recursiveAnchor = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_recursiveRef = J((cjsExports) => {
+var require_recursiveRef = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -2269,18 +2464,23 @@ var require_recursiveRef = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_format_3 = J((cjsExports) => {
+var require_format_3 = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   let format_1 = require_dynamicAnchor();
-  let r = require_dynamicRef();
-  let s = require_recursiveAnchor();
-  let a = require_recursiveRef();
-  let format = [format_1.default, r.default, s.default, a.default];
+  let dynamicRefModule = require_dynamicRef();
+  let recursiveAnchorModule = require_recursiveAnchor();
+  let recursiveRefModule = require_recursiveRef();
+  let format = [
+    format_1.default,
+    dynamicRefModule.default,
+    recursiveAnchorModule.default,
+    recursiveRefModule.default,
+  ];
   cjsExports.default = format;
 });
-var require_dependentRequired = J((cjsExports) => {
+var require_dependentRequired = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -2294,7 +2494,7 @@ var require_dependentRequired = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_dependentSchemas = J((cjsExports) => {
+var require_dependentSchemas = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -2307,7 +2507,7 @@ var require_dependentSchemas = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_limitContains = J((cjsExports) => {
+var require_limitContains = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -2323,17 +2523,17 @@ var require_limitContains = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_format_4 = J((cjsExports) => {
+var require_format_4 = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   let format_1 = require_dependentRequired();
-  let r = require_dependentSchemas();
-  let s = require_limitContains();
-  let format = [format_1.default, r.default, s.default];
+  let dependentSchemasModule = require_dependentSchemas();
+  let limitContainsModule = require_limitContains();
+  let format = [format_1.default, dependentSchemasModule.default, limitContainsModule.default];
   cjsExports.default = format;
 });
-var require_unevaluatedProperties = J((cjsExports) => {
+var require_unevaluatedProperties = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -2401,7 +2601,7 @@ var require_unevaluatedProperties = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_unevaluatedItems = J((cjsExports) => {
+var require_unevaluatedItems = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -2448,41 +2648,41 @@ var require_unevaluatedItems = J((cjsExports) => {
   };
   cjsExports.default = def;
 });
-var require_format_5 = J((cjsExports) => {
+var require_format_5 = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   let format_1 = require_unevaluatedProperties();
-  let r = require_unevaluatedItems();
-  let format = [format_1.default, r.default];
+  let unevaluatedItemsModule = require_unevaluatedItems();
+  let format = [format_1.default, unevaluatedItemsModule.default];
   cjsExports.default = format;
 });
-var require_draft7_2 = J((cjsExports) => {
+var require_draft7_2 = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   let validation_1 = require_core_3();
-  let r = require_validation_2();
+  let validationModule = require_validation_2();
   let applicator_1 = require_format_6();
   let core_1 = require_format_3();
-  let n = require_format_4();
-  let i = require_format_5();
+  let formatModule4 = require_format_4();
+  let formatModule5 = require_format_5();
   let format_1 = require_format_2();
   let metadata_1 = require_metadata();
   let draft7Vocabularies = [
     core_1.default,
     validation_1.default,
-    r.default,
+    validationModule.default,
     (0, applicator_1.default)(true),
     format_1.default,
     metadata_1.metadataVocabulary,
     metadata_1.contentVocabulary,
-    n.default,
-    i.default,
+    formatModule4.default,
+    formatModule5.default,
   ];
   cjsExports.default = draft7Vocabularies;
 });
-var require_schema = J((cjsExports, cjsModule) => {
+var require_schema = initModule((cjsExports, cjsModule) => {
   cjsModule.exports = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: "https://json-schema.org/draft/2020-12/schema",
@@ -2563,7 +2763,7 @@ var require_schema = J((cjsExports, cjsModule) => {
     },
   };
 });
-var require_applicator = J((cjsExports, cjsModule) => {
+var require_applicator = initModule((cjsExports, cjsModule) => {
   cjsModule.exports = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: "https://json-schema.org/draft/2020-12/meta/applicator",
@@ -2646,7 +2846,7 @@ var require_applicator = J((cjsExports, cjsModule) => {
     },
   };
 });
-var require_unevaluated = J((cjsExports, cjsModule) => {
+var require_unevaluated = initModule((cjsExports, cjsModule) => {
   cjsModule.exports = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: "https://json-schema.org/draft/2020-12/meta/unevaluated",
@@ -2666,7 +2866,7 @@ var require_unevaluated = J((cjsExports, cjsModule) => {
     },
   };
 });
-var require_content = J((cjsExports, cjsModule) => {
+var require_content = initModule((cjsExports, cjsModule) => {
   cjsModule.exports = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: "https://json-schema.org/draft/2020-12/meta/content",
@@ -2689,7 +2889,7 @@ var require_content = J((cjsExports, cjsModule) => {
     },
   };
 });
-var require_core_2 = J((cjsExports, cjsModule) => {
+var require_core_2 = initModule((cjsExports, cjsModule) => {
   cjsModule.exports = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: "https://json-schema.org/draft/2020-12/meta/core",
@@ -2755,7 +2955,7 @@ var require_core_2 = J((cjsExports, cjsModule) => {
     },
   };
 });
-var require_format_annotation = J((cjsExports, cjsModule) => {
+var require_format_annotation = initModule((cjsExports, cjsModule) => {
   cjsModule.exports = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: "https://json-schema.org/draft/2020-12/meta/format-annotation",
@@ -2772,7 +2972,7 @@ var require_format_annotation = J((cjsExports, cjsModule) => {
     },
   };
 });
-var require_meta_data = J((cjsExports, cjsModule) => {
+var require_meta_data = initModule((cjsExports, cjsModule) => {
   cjsModule.exports = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: "https://json-schema.org/draft/2020-12/meta/meta-data",
@@ -2809,7 +3009,7 @@ var require_meta_data = J((cjsExports, cjsModule) => {
     },
   };
 });
-var require_validation = J((cjsExports, cjsModule) => {
+var require_validation = initModule((cjsExports, cjsModule) => {
   cjsModule.exports = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: "https://json-schema.org/draft/2020-12/meta/validation",
@@ -2922,7 +3122,7 @@ var require_validation = J((cjsExports, cjsModule) => {
     },
   };
 });
-var require_json_schema_2020_12 = J((cjsExports) => {
+var require_json_schema_2020_12 = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -2953,7 +3153,7 @@ var require_json_schema_2020_12 = J((cjsExports) => {
   }
   cjsExports.default = addMetaSchema2020;
 });
-var require_2020 = J((cjsExports, cjsModule) => {
+var require_2020 = initModule((cjsExports, cjsModule) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -3065,7 +3265,7 @@ var require_2020 = J((cjsExports, cjsModule) => {
     },
   });
 });
-var require_formats = J((cjsExports) => {
+var require_formats = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -3256,7 +3456,7 @@ var require_formats = J((cjsExports) => {
     }
   }
 });
-var require_limit = J((cjsExports) => {
+var require_limit = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -3299,14 +3499,14 @@ var require_limit = J((cjsExports) => {
     error,
     code(cxt) {
       let { gen, data, schemaCode, keyword, it } = cxt;
-      let { opts, self: y } = it;
+      let { opts, self: ajvInstance } = it;
       if (!opts.validateFormats) return;
-      let fCxt = new ajv_1.KeywordCxt(it, y.RULES.all.format.definition, "format");
+      let fCxt = new ajv_1.KeywordCxt(it, ajvInstance.RULES.all.format.definition, "format");
       if (fCxt.$data) validate$DataFormat();
       else validateFormat();
       function validate$DataFormat() {
         let fmts = gen.scopeValue("formats", {
-          ref: y.formats,
+          ref: ajvInstance.formats,
           code: opts.code.formats,
         });
         let fmt = gen.const("fmt", codegen_1._`${fmts}[${fCxt.schemaCode}]`);
@@ -3321,7 +3521,7 @@ var require_limit = J((cjsExports) => {
       }
       function validateFormat() {
         let format = fCxt.schema;
-        let fmtDef = y.formats[format];
+        let fmtDef = ajvInstance.formats[format];
         if (!fmtDef || fmtDef === true) return;
         if (typeof fmtDef != "object" || fmtDef instanceof RegExp || typeof fmtDef.compare != "function")
           throw Error(`"${keyword}": format "${format}" does not define "compare" function`);
@@ -3346,7 +3546,7 @@ var require_limit = J((cjsExports) => {
   };
   cjsExports.default = formatLimitPlugin;
 });
-var require_ajv_formats = J((cjsExports, cjsModule) => {
+var require_ajv_formats = initModule((cjsExports, cjsModule) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -3365,9 +3565,9 @@ var require_ajv_formats = J((cjsExports, cjsModule) => {
       addFormats(ajv, opts, formats_1.fullFormats, fullName);
       return ajv;
     }
-    let [_, exportName] =
+    let [formats, exportName] =
       opts.mode === "fast" ? [formats_1.fastFormats, fastName] : [formats_1.fullFormats, fullName];
-    addFormats(ajv, opts.formats || formats_1.formatNames, _, exportName);
+    addFormats(ajv, opts.formats || formats_1.formatNames, formats, exportName);
     if (opts.keywords) (0, limit_1.default)(ajv);
     return ajv;
   };
@@ -3389,204 +3589,12 @@ var require_ajv_formats = J((cjsExports, cjsModule) => {
   });
   cjsExports.default = formatsPlugin;
 });
-var wd = require_ajv();
-var $d = require_2020();
-var import_ajv_formats = Eo(require_ajv_formats(), 1);
+var ajvModule = require_ajv();
+var Ajv2020 = require_2020();
+var import_ajv_formats = interopDefault(require_ajv_formats(), 1);
 var DRAFT_2020_12_URIS = new Set([
   "https://json-schema.org/draft/2020-12/schema",
   "http://json-schema.org/draft/2020-12/schema",
 ]);
-var Td = import_ajv_formats.default;
-//@ chunk-zykv69v4.js:416-8167 cjs-fingerprint
-var require_formats_2 = x(function (cjsExports) {
-  Object.defineProperty(cjsExports, "__esModule", {
-    value: true,
-  });
-  cjsExports.formatNames = cjsExports.fastFormats = cjsExports.fullFormats = undefined;
-  function fmtDef(validate, compare) {
-    return {
-      validate,
-      compare,
-    };
-  }
-  cjsExports.fullFormats = {
-    date: fmtDef(date, compareDate),
-    time: fmtDef(getTime(true), compareTime),
-    "date-time": fmtDef(getDateTime(true), compareDateTime),
-    "iso-time": fmtDef(getTime(), compareIsoTime),
-    "iso-date-time": fmtDef(getDateTime(), compareIsoDateTime),
-    duration: /^P(?!$)((\d+Y)?(\d+M)?(\d+D)?(T(?=\d)(\d+H)?(\d+M)?(\d+S)?)?|(\d+W)?)$/,
-    uri,
-    "uri-reference":
-      /^(?:[a-z][a-z0-9+\-.]*:)?(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[0-9a-f]{2})*@)?(?:\[(?:(?:(?:(?:[0-9a-f]{1,4}:){6}|::(?:[0-9a-f]{1,4}:){5}|(?:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){4}|(?:(?:[0-9a-f]{1,4}:){0,1}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){3}|(?:(?:[0-9a-f]{1,4}:){0,2}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){2}|(?:(?:[0-9a-f]{1,4}:){0,3}[0-9a-f]{1,4})?::[0-9a-f]{1,4}:|(?:(?:[0-9a-f]{1,4}:){0,4}[0-9a-f]{1,4})?::)(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[0-9a-f]{1,4}:){0,5}[0-9a-f]{1,4})?::[0-9a-f]{1,4}|(?:(?:[0-9a-f]{1,4}:){0,6}[0-9a-f]{1,4})?::)|[Vv][0-9a-f]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'"()*+,;=]|%[0-9a-f]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})*)*)?|(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})*)*)?(?:\?(?:[a-z0-9\-._~!$&'"()*+,;=:@/?]|%[0-9a-f]{2})*)?(?:#(?:[a-z0-9\-._~!$&'"()*+,;=:@/?]|%[0-9a-f]{2})*)?$/i,
-    "uri-template":
-      /^(?:(?:[^\x00-\x20"'<>%\\^`{|}]|%[0-9a-f]{2})|\{[+#./;?&=,!@|]?(?:[a-z0-9_]|%[0-9a-f]{2})+(?::[1-9][0-9]{0,3}|\*)?(?:,(?:[a-z0-9_]|%[0-9a-f]{2})+(?::[1-9][0-9]{0,3}|\*)?)*\})*$/i,
-    url: /^(?:https?|ftp):\/\/(?:\S+(?::\S*)?@)?(?:(?!(?:10|127)(?:\.\d{1,3}){3})(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z0-9\u{00a1}-\u{ffff}]+-)*[a-z0-9\u{00a1}-\u{ffff}]+)(?:\.(?:[a-z0-9\u{00a1}-\u{ffff}]+-)*[a-z0-9\u{00a1}-\u{ffff}]+)*(?:\.(?:[a-z\u{00a1}-\u{ffff}]{2,})))(?::\d{2,5})?(?:\/[^\s]*)?$/iu,
-    email:
-      /^[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i,
-    hostname:
-      /^(?=.{1,253}\.?$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[-0-9a-z]{0,61}[0-9a-z])?)*\.?$/i,
-    ipv4: /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/,
-    ipv6: /^((([0-9a-f]{1,4}:){7}([0-9a-f]{1,4}|:))|(([0-9a-f]{1,4}:){6}(:[0-9a-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){5}(((:[0-9a-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){4}(((:[0-9a-f]{1,4}){1,3})|((:[0-9a-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){3}(((:[0-9a-f]{1,4}){1,4})|((:[0-9a-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){2}(((:[0-9a-f]{1,4}){1,5})|((:[0-9a-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){1}(((:[0-9a-f]{1,4}){1,6})|((:[0-9a-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9a-f]{1,4}){1,7})|((:[0-9a-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))$/i,
-    regex,
-    uuid: /^(?:urn:uuid:)?[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i,
-    "json-pointer": /^(?:\/(?:[^~/]|~0|~1)*)*$/,
-    "json-pointer-uri-fragment": /^#(?:\/(?:[a-z0-9_\-.!$&'()*+,;:=@]|%[0-9a-f]{2}|~0|~1)*)*$/i,
-    "relative-json-pointer": /^(?:0|[1-9][0-9]*)(?:#|(?:\/(?:[^~/]|~0|~1)*)*)$/,
-    byte,
-    int32: {
-      type: "number",
-      validate: validateInt32,
-    },
-    int64: {
-      type: "number",
-      validate: validateInt64,
-    },
-    float: {
-      type: "number",
-      validate: validateNumber,
-    },
-    double: {
-      type: "number",
-      validate: validateNumber,
-    },
-    password: true,
-    binary: true,
-  };
-  cjsExports.fastFormats = {
-    ...cjsExports.fullFormats,
-    date: fmtDef(/^\d\d\d\d-[0-1]\d-[0-3]\d$/, compareDate),
-    time: fmtDef(/^(?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d(?::?\d\d)?)$/i, compareTime),
-    "date-time": fmtDef(
-      /^\d\d\d\d-[0-1]\d-[0-3]\dt(?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d(?::?\d\d)?)$/i,
-      compareDateTime,
-    ),
-    "iso-time": fmtDef(
-      /^(?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d(?::?\d\d)?)?$/i,
-      compareIsoTime,
-    ),
-    "iso-date-time": fmtDef(
-      /^\d\d\d\d-[0-1]\d-[0-3]\d[t\s](?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d(?::?\d\d)?)?$/i,
-      compareIsoDateTime,
-    ),
-    uri: /^(?:[a-z][a-z0-9+\-.]*:)(?:\/?\/)?[^\s]*$/i,
-    "uri-reference": /^(?:(?:[a-z][a-z0-9+\-.]*:)?\/?\/)?(?:[^\\\s#][^\s#]*)?(?:#[^\\\s]*)?$/i,
-    email:
-      /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/i,
-  };
-  cjsExports.formatNames = Object.keys(cjsExports.fullFormats);
-  function isLeapYear(year) {
-    return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
-  }
-  var DATE = /^(\d\d\d\d)-(\d\d)-(\d\d)$/;
-  var DAYS = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  function date(str) {
-    let matches = DATE.exec(str);
-    if (!matches) return false;
-    let year = +matches[1];
-    let month = +matches[2];
-    let day = +matches[3];
-    return (
-      month >= 1 && month <= 12 && day >= 1 && day <= (month === 2 && isLeapYear(year) ? 29 : DAYS[month])
-    );
-  }
-  function compareDate(d1, d2) {
-    if (!(d1 && d2)) return;
-    if (d1 > d2) return 1;
-    if (d1 < d2) return -1;
-    return 0;
-  }
-  var TIME = /^(\d\d):(\d\d):(\d\d(?:\.\d+)?)(z|([+-])(\d\d)(?::?(\d\d))?)?$/i;
-  function getTime(strictTimeZone) {
-    return function (str) {
-      let matches = TIME.exec(str);
-      if (!matches) return false;
-      let hr = +matches[1];
-      let min = +matches[2];
-      let sec = +matches[3];
-      let tz = matches[4];
-      let tzSign = matches[5] === "-" ? -1 : 1;
-      let tzH = +(matches[6] || 0);
-      let tzM = +(matches[7] || 0);
-      if (tzH > 23 || tzM > 59 || (strictTimeZone && !tz)) return false;
-      if (hr <= 23 && min <= 59 && sec < 60) return true;
-      let utcMin = min - tzM * tzSign;
-      let utcHr = hr - tzH * tzSign - (utcMin < 0 ? 1 : 0);
-      return (utcHr === 23 || utcHr === -1) && (utcMin === 59 || utcMin === -1) && sec < 61;
-    };
-  }
-  function compareTime(s1, s2) {
-    if (!(s1 && s2)) return;
-    let t1 = new Date("2020-01-01T" + s1).valueOf();
-    let t2 = new Date("2020-01-01T" + s2).valueOf();
-    if (!(t1 && t2)) return;
-    return t1 - t2;
-  }
-  function compareIsoTime(t1, t2) {
-    if (!(t1 && t2)) return;
-    let a1 = TIME.exec(t1);
-    let a2 = TIME.exec(t2);
-    if (!(a1 && a2)) return;
-    t1 = a1[1] + a1[2] + a1[3];
-    t2 = a2[1] + a2[2] + a2[3];
-    if (t1 > t2) return 1;
-    if (t1 < t2) return -1;
-    return 0;
-  }
-  var DATE_TIME_SEPARATOR = /t|\s/i;
-  function getDateTime(strictTimeZone) {
-    let time = getTime(strictTimeZone);
-    return function (str) {
-      let dateTime = str.split(DATE_TIME_SEPARATOR);
-      return dateTime.length === 2 && date(dateTime[0]) && time(dateTime[1]);
-    };
-  }
-  function compareDateTime(dt1, dt2) {
-    if (!(dt1 && dt2)) return;
-    let d1 = new Date(dt1).valueOf();
-    let d2 = new Date(dt2).valueOf();
-    if (!(d1 && d2)) return;
-    return d1 - d2;
-  }
-  function compareIsoDateTime(dt1, dt2) {
-    if (!(dt1 && dt2)) return;
-    let [d1, t1] = dt1.split(DATE_TIME_SEPARATOR);
-    let [d2, t2] = dt2.split(DATE_TIME_SEPARATOR);
-    let res = compareDate(d1, d2);
-    if (res === undefined) return;
-    return res || compareTime(t1, t2);
-  }
-  var NOT_URI_FRAGMENT = /\/|:/;
-  var URI =
-    /^(?:[a-z][a-z0-9+\-.]*:)(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[0-9a-f]{2})*@)?(?:\[(?:(?:(?:(?:[0-9a-f]{1,4}:){6}|::(?:[0-9a-f]{1,4}:){5}|(?:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){4}|(?:(?:[0-9a-f]{1,4}:){0,1}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){3}|(?:(?:[0-9a-f]{1,4}:){0,2}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){2}|(?:(?:[0-9a-f]{1,4}:){0,3}[0-9a-f]{1,4})?::[0-9a-f]{1,4}:|(?:(?:[0-9a-f]{1,4}:){0,4}[0-9a-f]{1,4})?::)(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[0-9a-f]{1,4}:){0,5}[0-9a-f]{1,4})?::[0-9a-f]{1,4}|(?:(?:[0-9a-f]{1,4}:){0,6}[0-9a-f]{1,4})?::)|[Vv][0-9a-f]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'()*+,;=]|%[0-9a-f]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)?|(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)(?:\?(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?(?:#(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?$/i;
-  function uri(str) {
-    return NOT_URI_FRAGMENT.test(str) && URI.test(str);
-  }
-  var BYTE = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/gm;
-  function byte(str) {
-    BYTE.lastIndex = 0;
-    return BYTE.test(str);
-  }
-  var MIN_INT32 = -2147483648;
-  var MAX_INT32 = 2147483647;
-  function validateInt32(value) {
-    return Number.isInteger(value) && value <= MAX_INT32 && value >= MIN_INT32;
-  }
-  function validateInt64(value) {
-    return Number.isInteger(value);
-  }
-  function validateNumber() {
-    return true;
-  }
-  var Z_ANCHOR = /[^\\]\\Z/;
-  function regex(str) {
-    if (Z_ANCHOR.test(str)) return false;
-    try {
-      new RegExp(str);
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-});
-export { $d, Td, DRAFT_2020_12_URIS, wd, require_formats_2 };
+var formatsPlugin = import_ajv_formats.default;
+export { Ajv2020, formatsPlugin, DRAFT_2020_12_URIS, ajvModule, require_formats_2 };

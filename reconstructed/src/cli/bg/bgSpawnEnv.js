@@ -66,23 +66,24 @@ import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../services/analy
 import { lit } from "../../services/analytics/safeMetadata.js";
 import { sleep } from "../../utils/sleep.js";
 import { killJob } from "../../daemon/jobs/killJob.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-bg51yd13.js:72350-72602 placement
 function getSecureStorageConfigDir() {
-  let e = {};
-  let env = process.env;
-  for (let o of BACKGROUND_ALLOWED_ENV_NAMES) {
-    let r = env[o];
-    if (r === undefined) continue;
-    if (ENV_FORCE_PASSTHROUGH_NAMES.has(o)) {
-      if (isEnvTruthy(r)) e[o] = "1";
+  let env = {};
+  let env_2 = process.env;
+  for (let name of BACKGROUND_ALLOWED_ENV_NAMES) {
+    let value = env_2[name];
+    if (value === undefined) continue;
+    if (ENV_FORCE_PASSTHROUGH_NAMES.has(name)) {
+      if (isEnvTruthy(value)) env[name] = "1";
       continue;
     }
-    if (r === "" && o !== "CLAUDE_SECURESTORAGE_CONFIG_DIR") continue;
-    e[o] = r;
+    if (value === "" && name !== "CLAUDE_SECURESTORAGE_CONFIG_DIR") continue;
+    env[name] = value;
   }
-  if (isProviderManagedByHost()) e.CLAUDE_CODE_HOST_GATEWAY_LINEAGE = "1";
-  return e;
+  if (isProviderManagedByHost()) env.CLAUDE_CODE_HOST_GATEWAY_LINEAGE = "1";
+  return env;
 }
 //@ chunk-bg51yd13.js:72602-72838 placement
 /**
@@ -90,16 +91,19 @@ function getSecureStorageConfigDir() {
  */
 function collectProviderPassthroughEnv(providerEnv) {
   if (isHostManagedEnvironment(process.env)) return {};
-  let n = {};
-  for (let o of PROVIDER_ENDPOINT_PAIRS) {
-    if (!process.env[o.endpoint] || (o.selection !== undefined && !isEnvTruthy(providerEnv[o.selection])))
+  let passthrough = {};
+  for (let pair of PROVIDER_ENDPOINT_PAIRS) {
+    if (
+      !process.env[pair.endpoint] ||
+      (pair.selection !== undefined && !isEnvTruthy(providerEnv[pair.selection]))
+    )
       continue;
-    for (let r of [o.endpoint, ...o.companions]) {
-      let s = process.env[r];
-      if (s) n[r] = s;
+    for (let name of [pair.endpoint, ...pair.companions]) {
+      let value = process.env[name];
+      if (value) passthrough[name] = value;
     }
   }
-  return n;
+  return passthrough;
 }
 //@ chunk-bg51yd13.js:72838-72921 placement
 function sanitizeLogLine(detail) {
@@ -111,47 +115,53 @@ function sanitizeLogLine(detail) {
   );
 }
 //@ chunk-bg51yd13.js:72921-73203 placement
-var PASSTHROUGH_ENV_VARS = new Set([
-  ...PROVIDER_SELECTION_ENV_VARS,
-  "CLAUDE_CODE_HOST_GATEWAY_LINEAGE",
-  "AWS_CONFIG_FILE",
-  "AWS_SHARED_CREDENTIALS_FILE",
-  "AWS_PROFILE",
-  "AWS_REGION",
-  "AWS_DEFAULT_REGION",
-  "ANTHROPIC_BEDROCK_REGION_PREFIX",
-  "GOOGLE_APPLICATION_CREDENTIALS",
-  "GOOGLE_CLOUD_PROJECT",
-  "GCLOUD_PROJECT",
-  "CLAUDE_CONFIG_DIR",
-]);
+var PASSTHROUGH_ENV_VARS; // deferred: uses PROVIDER_ENV_VARS (../../utils/managedEnvConstants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-bg51yd13.js:72921", () => {
+  PASSTHROUGH_ENV_VARS = new Set([
+    ...PROVIDER_SELECTION_ENV_VARS,
+    "CLAUDE_CODE_HOST_GATEWAY_LINEAGE",
+    "AWS_CONFIG_FILE",
+    "AWS_SHARED_CREDENTIALS_FILE",
+    "AWS_PROFILE",
+    "AWS_REGION",
+    "AWS_DEFAULT_REGION",
+    "ANTHROPIC_BEDROCK_REGION_PREFIX",
+    "GOOGLE_APPLICATION_CREDENTIALS",
+    "GOOGLE_CLOUD_PROJECT",
+    "GCLOUD_PROJECT",
+    "CLAUDE_CONFIG_DIR",
+  ]);
+});
 //@ chunk-bg51yd13.js:73203-73311 placement
-function toBgAgentTemplate(e) {
+function toBgAgentTemplate(agent) {
   return {
-    name: e.agentType,
-    description: e.whenToUse,
-    initialPrompt: e.initialPrompt,
-    color: e.color,
+    name: agent.agentType,
+    description: agent.whenToUse,
+    initialPrompt: agent.initialPrompt,
+    color: agent.color,
   };
 }
 //@ chunk-bg51yd13.js:73311-73327 placement
 /**
  * 后台会话的默认 agent 模板（由 CLAUDE_AGENT 转成后台用的形状）。
  */
-var DEFAULT_BG_AGENT_TEMPLATE = toBgAgentTemplate(CLAUDE_AGENT);
+var DEFAULT_BG_AGENT_TEMPLATE; // deferred: uses toBgAgentTemplate of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-bg51yd13.js:73311", () => {
+  DEFAULT_BG_AGENT_TEMPLATE = toBgAgentTemplate(CLAUDE_AGENT);
+});
 //@ chunk-bg51yd13.js:73327-73670 placement
 /**
  * 按 --agent 名字解析后台会话模板：先在用户代理列表里按名字（或 插件:名字 后缀）找，再查内置代理，含冒号的当作插件代理名；都没有时返回默认模板。
  */
-function resolveBgAgentTemplate(e, n) {
-  if (!e?.agent) return DEFAULT_BG_AGENT_TEMPLATE;
-  let agent = e.agent;
+function resolveBgAgentTemplate(defaults, templates) {
+  if (!defaults?.agent) return DEFAULT_BG_AGENT_TEMPLATE;
+  let agent = defaults.agent;
   let lower = agent.toLowerCase();
-  let s =
-    n?.find((u) => u.name.toLowerCase() === lower) ??
-    n?.find((u) => u.name.toLowerCase().endsWith(`:${lower}`));
-  if (s) return s;
-  let found = getBuiltInAgents().find((u) => u.agentType.toLowerCase() === lower);
+  let userMatch =
+    templates?.find((template) => template.name.toLowerCase() === lower) ??
+    templates?.find((template) => template.name.toLowerCase().endsWith(`:${lower}`));
+  if (userMatch) return userMatch;
+  let found = getBuiltInAgents().find((agent) => agent.agentType.toLowerCase() === lower);
   if (found)
     return {
       ...DEFAULT_BG_AGENT_TEMPLATE,
@@ -162,7 +172,7 @@ function resolveBgAgentTemplate(e, n) {
       ...DEFAULT_BG_AGENT_TEMPLATE,
       name: agent,
     };
-  return n
+  return templates
     ? DEFAULT_BG_AGENT_TEMPLATE
     : {
         ...DEFAULT_BG_AGENT_TEMPLATE,
@@ -173,125 +183,130 @@ function resolveBgAgentTemplate(e, n) {
 /**
  * 读取当前目录可用的代理定义，过滤掉内置与运行时注册的代理，转成后台会话模板列表。
  */
-async function listUserAgentTemplates(cwd, n) {
-  let { activeAgents } = await getAgentDefinitionsWithOverrides(cwd, n);
+async function listUserAgentTemplates(cwd, storage) {
+  let { activeAgents } = await getAgentDefinitionsWithOverrides(cwd, storage);
   return activeAgents
     .filter((activeAgent) => !isBuiltInAgent(activeAgent) && !isRunTimeRegisteredAgent(activeAgent))
     .map(toBgAgentTemplate);
 }
 //@ chunk-bg51yd13.js:73774-74134 placement
-async function findGitRoot(e) {
-  let n;
+async function findGitRoot(dir) {
+  let entries;
   try {
-    n = await readdir(e, {
+    entries = await readdir(dir, {
       withFileTypes: true,
     });
   } catch {
     return {};
   }
-  let mapped = n
-    .filter((s) => (s.isDirectory() || s.isSymbolicLink()) && !s.name.startsWith(".") && !/\s/.test(s.name))
-    .map(async (s) => {
-      let l = join(e, s.name);
+  let mapped = entries
+    .filter(
+      (entry) =>
+        (entry.isDirectory() || entry.isSymbolicLink()) &&
+        !entry.name.startsWith(".") &&
+        !/\s/.test(entry.name),
+    )
+    .map(async (entry) => {
+      let childPath = join(dir, entry.name);
       try {
-        await stat(join(l, ".git"));
-        return [s.name, l];
+        await stat(join(childPath, ".git"));
+        return [entry.name, childPath];
       } catch {
         return null;
       }
     });
-  let filtered = (await Promise.all(mapped)).filter((s) => s !== null);
+  let filtered = (await Promise.all(mapped)).filter((pair) => pair !== null);
   return Object.fromEntries(filtered);
 }
 //@ chunk-bg51yd13.js:74134-75312 placement
 /**
  * 把粘贴的图片写到会话 tmp 目录，并把消息中的图片换成路径引用。
  */
-async function materializePastedImages(e, n, o, storageV5, s = "path") {
-  let filtered = parsePastedRefs(e).filter((A) => n[A.id]?.type === "image");
-  if (filtered.length === 0) return e;
-  let u = join(getJobDir(o), "tmp");
-  let mapped = filtered.map((A) => {
-    let R = n[A.id];
-    let buffer = Buffer.from(R.content, "base64");
-    let D = (R.mediaType ?? "image/png").split("/")[1] || "png";
+async function materializePastedImages(text, pastedById, short, storage, renderMode = "path") {
+  let filtered = parsePastedRefs(text).filter((ref) => pastedById[ref.id]?.type === "image");
+  if (filtered.length === 0) return text;
+  let tmpDir = join(getJobDir(short), "tmp");
+  let mapped = filtered.map((ref) => {
+    let pasted = pastedById[ref.id];
+    let buffer = Buffer.from(pasted.content, "base64");
+    let ext = (pasted.mediaType ?? "image/png").split("/")[1] || "png";
     let contentHash = computeContentHash(buffer);
-    let name = `pasted-${contentHash.slice(0, 12)}.${D}`;
+    let name = `pasted-${contentHash.slice(0, 12)}.${ext}`;
     return {
-      ref: A,
+      ref,
       bytes: buffer,
       digest: contentHash,
       name,
     };
   });
-  let p =
+  let useStorage =
     isStorageV5Enabled() &&
-    storageV5 !== undefined &&
-    isValidKeySegment(o) &&
-    mapped.every((A) => isValidKeySegment(A.name));
-  await ensureJobTmpFolder(o, p ? storageV5 : undefined);
-  let w = e;
+    storage !== undefined &&
+    isValidKeySegment(short) &&
+    mapped.every((image) => isValidKeySegment(image.name));
+  await ensureJobTmpFolder(short, useStorage ? storage : undefined);
+  let output = text;
   for (let j = mapped.length - 1; j >= 0; j--) {
-    let { ref, bytes, digest, name: S } = mapped[j];
-    let E = join(u, S);
-    if (p) {
-      let x = STORAGE_SPACES.job(o, ["tmp", S]);
-      let P = await storageV5.write(x, bytes, COPY_ON_CREATE_WRITE_OPTIONS);
-      let T = P.ok || (await storageDigestMatches(storageV5, x, bytes, digest));
-      if (!T) {
-        await storageV5.delete(x);
-        P = await storageV5.write(x, bytes, COPY_ON_CREATE_WRITE_OPTIONS);
-        T = P.ok || (await storageDigestMatches(storageV5, x, bytes, digest));
+    let { ref, bytes, digest, name } = mapped[j];
+    let path = join(tmpDir, name);
+    if (useStorage) {
+      let key = STORAGE_SPACES.job(short, ["tmp", name]);
+      let writeResult = await storage.write(key, bytes, COPY_ON_CREATE_WRITE_OPTIONS);
+      let isWritten = writeResult.ok || (await storageDigestMatches(storage, key, bytes, digest));
+      if (!isWritten) {
+        await storage.delete(key);
+        writeResult = await storage.write(key, bytes, COPY_ON_CREATE_WRITE_OPTIONS);
+        isWritten = writeResult.ok || (await storageDigestMatches(storage, key, bytes, digest));
       }
-      if (!T && !P.ok) {
-        let N = formatStorageError(P.error);
-        logForDebugging(`pasted-image write failed: ${N}`, {
+      if (!isWritten && !writeResult.ok) {
+        let detail = formatStorageError(writeResult.error);
+        logForDebugging(`pasted-image write failed: ${detail}`, {
           level: "error",
         });
         throw Object.assign(
           new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `pasted-image write failed: ${N}`,
+            `pasted-image write failed: ${detail}`,
             "pasted-image write failed",
           ),
-          "telemetryCode" in P.error && P.error.telemetryCode !== undefined
+          "telemetryCode" in writeResult.error && writeResult.error.telemetryCode !== undefined
             ? {
-                code: P.error.telemetryCode,
+                code: writeResult.error.telemetryCode,
               }
             : {},
         );
       }
     } else {
-      let x = await writeIfMissing(E, bytes);
+      let tempPath = await writeIfMissing(path, bytes);
       try {
         if (getPlatform() === "windows")
           await retryTransient(
             () =>
-              rm(E, {
+              rm(path, {
                 force: true,
               }),
-            E,
+            path,
           );
-        await retryFsOp(x, E);
+        await retryFsOp(tempPath, path);
       } catch (error) {
-        await rm(x, {
+        await rm(tempPath, {
           force: true,
         }).catch(() => {});
         throw error;
       }
     }
-    w =
-      w.slice(0, ref.index) +
-      (s === "note" ? `[Image not shown, read it from ${E}]` : E) +
-      w.slice(ref.index + ref.match.length);
+    output =
+      output.slice(0, ref.index) +
+      (renderMode === "note" ? `[Image not shown, read it from ${path}]` : path) +
+      output.slice(ref.index + ref.match.length);
   }
-  return w;
+  return output;
 }
 //@ chunk-bg51yd13.js:75312-75349 placement
 /**
  * 设置 spare 池的额外启动参数。
  */
-function setSpareExtraArgs(e) {
-  bgSparePool().setExtraArgs(e);
+function setSpareExtraArgs(args) {
+  bgSparePool().setExtraArgs(args);
 }
 //@ chunk-bg51yd13.js:75349-75386 placement
 /**
@@ -320,18 +335,18 @@ function buildDispatchArgs(defaults) {
 /**
  * 派发一个后台会话（没有会话 id 时生成 UUID），并以其前 8 位登记到在途派发表。
  */
-function dispatchBgSessionTracked(e, n, o, r) {
-  let s = o?.sessionId ?? randomUUID();
+function dispatchBgSessionTracked(template, intent, options, storage) {
+  let sessionId = options?.sessionId ?? randomUUID();
   return trackBgDispatch(
-    s.slice(0, 8),
+    sessionId.slice(0, 8),
     dispatchBgSession(
-      e,
-      n,
+      template,
+      intent,
       {
-        ...o,
-        sessionId: s,
+        ...options,
+        sessionId,
       },
-      r,
+      storage,
     ),
   );
 }
@@ -339,27 +354,27 @@ function dispatchBgSessionTracked(e, n, o, r) {
 /**
  * 派发一个后台会话（含 Routines 预备、性能打点）。
  */
-async function dispatchBgSession(e, n, o, r) {
-  let { sessionId, targetCwd, routine, defaults, displayIntent } = o;
+async function dispatchBgSession(template, intent, options, storage) {
+  let { sessionId, targetCwd, routine, defaults, displayIntent } = options;
   if (routine) {
     await waitForPolicyLimitsToLoad();
-    let T = policyDeniedReason(ALLOW_ROUTINES, "Routines", "are", ROUTINES_POLICY_DISABLED_TEXT);
-    if (T) {
+    let deniedReason = policyDeniedReason(ALLOW_ROUTINES, "Routines", "are", ROUTINES_POLICY_DISABLED_TEXT);
+    if (deniedReason) {
       logOrgPolicyDenied(ALLOW_ROUTINES, "dispatch");
       return {
         ok: false,
-        error: T,
+        error: deniedReason,
       };
     }
   }
   logForDebugging("[PERF:bg-dispatch-start]");
   let sliced = sessionId.slice(0, 8);
-  let A = targetCwd ?? getCwd();
-  let R = routine ? flagArgs("--routine", routine) : flagArgs("--agent", e.name);
-  let h = [...bgSparePool().extraArgs, ...R, ...buildDispatchArgs(defaults)];
+  let cwd = targetCwd ?? getCwd();
+  let templateArgs = routine ? flagArgs("--routine", routine) : flagArgs("--agent", template.name);
+  let respawnFlags = [...bgSparePool().extraArgs, ...templateArgs, ...buildDispatchArgs(defaults)];
   let jobDir = getJobDir(sliced);
   try {
-    await ensureJobTmpFolder(sliced, r);
+    await ensureJobTmpFolder(sliced, storage);
     await writeStateAtomic(
       jobDir,
       makeInitialState({
@@ -368,22 +383,22 @@ async function dispatchBgSession(e, n, o, r) {
               name: routine,
               description: "",
             }
-          : e,
+          : template,
         routine,
-        respawnFlags: h,
-        intent: n,
+        respawnFlags,
+        intent,
         displayIntent,
         ...(routine &&
-          !n && {
+          !intent && {
             tempo: "idle",
             detail: "(idle \u2014 waiting for trigger)",
           }),
         providerEnv: callerProviderEnv(),
         sessionId,
-        cwd: A,
-        originCwd: A,
+        cwd,
+        originCwd: cwd,
       }),
-      r,
+      storage,
     );
   } catch (error) {
     await rm(jobDir, {
@@ -399,16 +414,35 @@ async function dispatchBgSession(e, n, o, r) {
       error: `Couldn't create the job \u2014 ${errorMessage(error)}`,
     };
   }
-  let S = [...h, ...(n ? ["--", n] : [])];
+  let childArgs = [...respawnFlags, ...(intent ? ["--", intent] : [])];
   let now = Date.now();
-  let bgSession = await spawnBgSession(S, sessionId, "fleet", A, undefined, undefined, undefined, r);
-  let P = !bgSession.ok && (bgSession.reason === "gate_blocked" || bgSession.reason === "cwd_gone");
+  let bgSession = await spawnBgSession(
+    childArgs,
+    sessionId,
+    "fleet",
+    cwd,
+    undefined,
+    undefined,
+    undefined,
+    storage,
+  );
+  let isExpectedGateFailure =
+    !bgSession.ok && (bgSession.reason === "gate_blocked" || bgSession.reason === "cwd_gone");
   if (!bgSession.ok && !bgSession.alive && bgSession.reason === "ack_timeout" && Date.now() - now < 2000) {
     logForDebugging(`bg: dispatch fast-failed (${Date.now() - now}ms) \u2014 retrying once`, {
       level: "warn",
     });
     await sleep(500);
-    bgSession = await spawnBgSession(S, sessionId, "fleet", A, undefined, undefined, undefined, r);
+    bgSession = await spawnBgSession(
+      childArgs,
+      sessionId,
+      "fleet",
+      cwd,
+      undefined,
+      undefined,
+      undefined,
+      storage,
+    );
   }
   if (!bgSession.ok) {
     if (bgSession.alive) {
@@ -419,7 +453,7 @@ async function dispatchBgSession(e, n, o, r) {
         alive: true,
       };
     }
-    if (!P) await killJob(sliced, undefined, undefined, r).catch(() => {});
+    if (!isExpectedGateFailure) await killJob(sliced, undefined, undefined, storage).catch(() => {});
     await rm(jobDir, {
       recursive: true,
       force: true,

@@ -40,7 +40,7 @@ import { whichAsync } from "../which.js";
 import { getPluginRegistry } from "./pluginLoadState.js";
 import { isGitMissingMessageSupported } from "../git/gitMissingMessage.js";
 import { isCustomizationDisabled } from "../settings/customizationDisabled.js";
-import { skillOverridesSchema } from "../settings/types.js";
+import { SKILL_OVERRIDE_COMPONENTS } from "../settings/types.js";
 import { isRestrictedToPluginOnly } from "../settings/pluginOnlyPolicy.js";
 import { areLocalPluginDirsAllowedByPolicy } from "./marketplacePolicy.js";
 import { getThinkbackSkillDir, thinkbackUserConfigSpace } from "./pluginLinks.js";
@@ -57,15 +57,16 @@ import {
   foldNameForSync,
 } from "./syncedItems.js";
 import { getFileReader } from "../fileStore.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:724536-724785 placement
 /**
  * 读取目录项：存在插件根标志（非插件 manifest 的 .claude-plugin 市场目录除外）时返回 {kind:"plugin", marker}； 否则返回 collection（含 plugin.json 的子目录为 children、其余 skipped，以及是否市场根）。
  */
-async function describePluginDirShape(e) {
-  let n;
+async function describePluginDirShape(dir) {
+  let entries;
   try {
-    n = await readdir(e, {
+    entries = await readdir(dir, {
       withFileTypes: true,
     });
   } catch (error) {
@@ -74,11 +75,11 @@ async function describePluginDirShape(e) {
       errno: getErrnoCode(error) ?? "UNKNOWN",
     };
   }
-  let isMarketplaceRoot = await isMarketplaceOnlyManifestDir(e, n);
-  let s = isMarketplaceRoot ? n.filter((y) => y.name !== PLUGIN_MANIFEST_DIR) : n;
-  let pluginRootMarker = await findPluginRootMarker(e, s);
+  let isMarketplaceRoot = await isMarketplaceOnlyManifestDir(dir, entries);
+  let nonMeta = isMarketplaceRoot ? entries.filter((entry) => entry.name !== PLUGIN_MANIFEST_DIR) : entries;
+  let pluginRootMarker = await findPluginRootMarker(dir, nonMeta);
   return pluginRootMarker === undefined
-    ? listPluginCollection(e, s, isMarketplaceRoot)
+    ? listPluginCollection(dir, nonMeta, isMarketplaceRoot)
     : {
         kind: "plugin",
         marker: pluginRootMarker,
@@ -88,56 +89,60 @@ async function describePluginDirShape(e) {
 /**
  * isNotDotPrefixed：不以点开头。
  */
-var isNotDotPrefixed = (e) => !e.startsWith(".");
+var isNotDotPrefixed = (name) => !name.startsWith(".");
 //@ chunk-e6aww6q8.js:724817-724938 placement
-async function isMarketplaceOnlyManifestDir(e, n) {
+async function isMarketplaceOnlyManifestDir(dir, entries) {
   return (
-    n.some((r) => r.name === PLUGIN_MANIFEST_DIR) &&
-    (await probeFileOpen(join(e, PLUGIN_MANIFEST_PATH_2))) === "absent" &&
-    (await probeFileOpen(join(e, MARKETPLACE_MANIFEST_PATH))) === "there"
+    entries.some((entry) => entry.name === PLUGIN_MANIFEST_DIR) &&
+    (await probeFileOpen(join(dir, PLUGIN_MANIFEST_PATH_2))) === "absent" &&
+    (await probeFileOpen(join(dir, MARKETPLACE_MANIFEST_PATH))) === "there"
   );
 }
 //@ chunk-e6aww6q8.js:724938-725280 placement
 /**
  * 找出使目录成为插件根的标志项。
  */
-async function findPluginRootMarker(e, n) {
-  let filtered = n.map((w) => w.name).filter(isPluginRootMarker);
-  let h =
+async function findPluginRootMarker(dir, entries) {
+  let filtered = entries.map((entry) => entry.name).filter(isPluginRootMarker);
+  let markers =
     filtered.includes(".mcp.json") &&
-    (await lstat(join(e, ".mcp.json")).then(
-      (w) => w.isFile() && w.size === 0,
+    (await lstat(join(dir, ".mcp.json")).then(
+      (stat) => stat.isFile() && stat.size === 0,
       (error) => getErrnoCode(error) === "ENOENT",
     ))
-      ? filtered.filter((w) => w !== ".mcp.json")
+      ? filtered.filter((marker) => marker !== ".mcp.json")
       : filtered;
-  let found = h.find((w) => !isPluginComponentDir(w));
+  let found = markers.find((marker) => !isPluginComponentDir(marker));
   if (found !== undefined) return found;
-  let results = await Promise.all(h.map((w) => probeFileOpen(join(e, w, PLUGIN_MANIFEST_PATH_2))));
-  return h.find((w, L) => results[L] === "absent");
+  let results = await Promise.all(
+    markers.map((marker) => probeFileOpen(join(dir, marker, PLUGIN_MANIFEST_PATH_2))),
+  );
+  return markers.find((marker, index) => results[index] === "absent");
 }
 //@ chunk-e6aww6q8.js:725280-725581 placement
 /**
  * 列出含 plugin.json 的子目录与跳过的子目录。
  */
-async function listPluginCollection(e, n, isMarketplaceRoot) {
-  let s = n
-    .filter((y) => y.isDirectory() || y.isSymbolicLink())
-    .map((y) => y.name)
+async function listPluginCollection(root, entries, isMarketplaceRoot) {
+  let candidates = entries
+    .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
+    .map((entry) => entry.name)
     .filter(isNotDotPrefixed)
     .toSorted();
-  let results = await Promise.all(s.map((y) => probeFileOpen(join(e, y, PLUGIN_MANIFEST_PATH_2))));
+  let results = await Promise.all(
+    candidates.map((name) => probeFileOpen(join(root, name, PLUGIN_MANIFEST_PATH_2))),
+  );
   return {
     kind: "collection",
-    children: s.filter((y, S) => results[S] !== "absent"),
-    skipped: s.filter((y, S) => results[S] === "absent"),
+    children: candidates.filter((name, index) => results[index] !== "absent"),
+    skipped: candidates.filter((name, index) => results[index] === "absent"),
     isMarketplaceRoot,
   };
 }
 //@ chunk-e6aww6q8.js:725581-725741 placement
-async function probeFileOpen(e) {
+async function probeFileOpen(path) {
   try {
-    await (await open(e, constants.O_RDONLY | O_NONBLOCK)).close();
+    await (await open(path, constants.O_RDONLY | O_NONBLOCK)).close();
     return "there";
   } catch (error) {
     let errnoCode = getErrnoCode(error);
@@ -148,13 +153,13 @@ async function probeFileOpen(e) {
 /**
  * 校验插件清单（plugin.json）结构，报告字段错误。
  */
-function validatePluginManifest(e, n, r) {
-  let s = formatManifestErrorHeading(n, r);
-  if (!isPlainObject_5(e))
+function validatePluginManifest(candidate, documentKind, options) {
+  let heading = formatManifestErrorHeading(documentKind, options);
+  if (!isPlainObject_5(candidate))
     return {
       ok: false,
       unloadableGuard: false,
-      error: `${s}
+      error: `${heading}
 
 Validation errors: manifest must be an object`,
       errors: [
@@ -165,106 +170,115 @@ Validation errors: manifest must be an object`,
       ],
       rawCandidate: null,
     };
-  let h = {
-    ...e,
+  let manifest = {
+    ...candidate,
   };
-  if (n === "marketplace-entry") {
-    delete h.id;
-    delete h.source;
-    delete h.strict;
+  if (documentKind === "marketplace-entry") {
+    delete manifest.id;
+    delete manifest.source;
+    delete manifest.strict;
   }
-  let y = new Set();
-  let S = [];
-  let w = [];
-  let L = {};
-  if (isPlainObject_5(h.experimental)) {
-    for (let [key, value] of Object.entries(h.experimental)) if (!y.has(key)) L[key] = value;
+  let experimentalKeys = new Set();
+  let errors = [];
+  let unloadableGuards = [];
+  let unliftedExperimental = {};
+  if (isPlainObject_5(manifest.experimental)) {
+    for (let [key, value] of Object.entries(manifest.experimental))
+      if (!experimentalKeys.has(key)) unliftedExperimental[key] = value;
   }
-  for (let [Ee, Ae] of [
-    [h, "top level"],
+  for (let [hooksHost, hostLabel] of [
+    [manifest, "top level"],
     [
       {
-        unlifted: L,
+        unlifted: unliftedExperimental,
       },
       "`experimental`",
     ],
   ])
-    if (hasNestedHooks(Ee, PLUGIN_SKIPPED_KEYS))
-      w.push({
+    if (hasNestedHooks(hooksHost, PLUGIN_SKIPPED_KEYS))
+      unloadableGuards.push({
         path: "hooks",
-        message: `PreToolUse/PermissionRequest hooks are declared at the ${Ae} outside "hooks" (or under an unrecognized key) \u2014 ${UNLOADABLE_GUARD_NOTE}`,
+        message: `PreToolUse/PermissionRequest hooks are declared at the ${hostLabel} outside "hooks" (or under an unrecognized key) \u2014 ${UNLOADABLE_GUARD_NOTE}`,
       });
-  if (Array.isArray(h.hooks) && h.hooks.some((hook) => Array.isArray(hook) && hasGuardHooks_2(hook)))
-    w.push({
+  if (
+    Array.isArray(manifest.hooks) &&
+    manifest.hooks.some((hook) => Array.isArray(hook) && hasGuardHooks_2(hook))
+  )
+    unloadableGuards.push({
       path: "hooks",
       message: `a nested array holds PreToolUse/PermissionRequest hooks this build cannot load \u2014 ${UNLOADABLE_GUARD_NOTE}`,
     });
-  if (h.hooks !== undefined && typeof h.hooks === "object") h.hooks = clone(h.hooks);
-  let G = isPlainObject_5(h.hooks)
-    ? [[h.hooks, "hooks"]]
-    : Array.isArray(h.hooks)
-      ? h.hooks.flatMap((hook, Ae) => (isPlainObject_5(hook) ? [[hook, `hooks.${Ae}`]] : []))
+  if (manifest.hooks !== undefined && typeof manifest.hooks === "object")
+    manifest.hooks = clone(manifest.hooks);
+  let hookEntries = isPlainObject_5(manifest.hooks)
+    ? [[manifest.hooks, "hooks"]]
+    : Array.isArray(manifest.hooks)
+      ? manifest.hooks.flatMap((hook, hookIndex) =>
+          isPlainObject_5(hook) ? [[hook, `hooks.${hookIndex}`]] : [],
+        )
       : [];
-  let q = [];
-  for (let [Ee, Ae] of G) {
-    let Ie = validateHooksSetting(Ee);
-    q.push(...Ie.notes.map((note) => note.replace(/^hooks/, Ae)));
-    w.push(
-      ...Ie.unloadableGuards.map((unloadableGuard) => ({
-        path: Ae,
-        message: `${unloadableGuard.replace(/^hooks/, Ae)} \u2014 ${UNLOADABLE_GUARD_NOTE}`,
+  let hookNotes = [];
+  for (let [hooksValue, hooksPath] of hookEntries) {
+    let hookValidation = validateHooksSetting(hooksValue);
+    hookNotes.push(...hookValidation.notes.map((note) => note.replace(/^hooks/, hooksPath)));
+    unloadableGuards.push(
+      ...hookValidation.unloadableGuards.map((unloadableGuard) => ({
+        path: hooksPath,
+        message: `${unloadableGuard.replace(/^hooks/, hooksPath)} \u2014 ${UNLOADABLE_GUARD_NOTE}`,
       })),
     );
   }
-  let Z = getManifestSchemaForDocument(h).safeParse(h);
-  if (Z.success && S.length === 0 && w.length === 0)
+  let schemaResult = getManifestSchemaForDocument(manifest).safeParse(manifest);
+  if (schemaResult.success && errors.length === 0 && unloadableGuards.length === 0)
     return {
       ok: true,
-      manifest: Z.data,
-      rawCandidate: h,
-      hookNotes: q,
+      manifest: schemaResult.data,
+      rawCandidate: manifest,
+      hookNotes,
     };
-  let Se = Z.success
+  let schemaIssues = schemaResult.success
     ? []
-    : Z.error.issues.map((issue) => {
-        let Ae = issue.path.length > 0 ? String(issue.path[0]) : "";
+    : schemaResult.error.issues.map((issue) => {
+        let firstPathSegment = issue.path.length > 0 ? String(issue.path[0]) : "";
         let joined = issue.path.join(".");
         return {
-          path: y.has(Ae) ? `experimental.${joined}` : joined,
+          path: experimentalKeys.has(firstPathSegment) ? `experimental.${joined}` : joined,
           message: issue.message,
         };
       });
-  let ke = [...w, ...S, ...Se];
-  let joined = ke.map((Ee) => (Ee.path ? `${Ee.path}: ${Ee.message}` : Ee.message)).join(", ");
+  let problems = [...unloadableGuards, ...errors, ...schemaIssues];
+  let joined = problems
+    .map((problem) => (problem.path ? `${problem.path}: ${problem.message}` : problem.message))
+    .join(", ");
   return {
     ok: false,
-    unloadableGuard: w.length > 0,
-    error: `${s}
+    unloadableGuard: unloadableGuards.length > 0,
+    error: `${heading}
 
 Validation errors: ${joined}`,
-    errors: ke,
-    rawCandidate: h,
-    manifest: Z.success ? Z.data : undefined,
+    errors: problems,
+    rawCandidate: manifest,
+    manifest: schemaResult.success ? schemaResult.data : undefined,
   };
 }
 //@ chunk-e6aww6q8.js:727515-727842 placement
 /**
  * manifest 无效时的标题（plugin.json/SKILL.md/市场条目）。
  */
-function formatManifestErrorHeading(e, n) {
-  switch (e) {
+function formatManifestErrorHeading(documentKind, options) {
+  switch (documentKind) {
     case "plugin-json":
-      return `Plugin ${n.pluginName} has an invalid manifest file at ${n.manifestPath}.`;
+      return `Plugin ${options.pluginName} has an invalid manifest file at ${options.manifestPath}.`;
     case "skill-md":
-      return `Skill ${n.pluginName} has invalid plugin-manifest frontmatter at ${n.manifestPath}.`;
+      return `Skill ${options.pluginName} has invalid plugin-manifest frontmatter at ${options.manifestPath}.`;
     case "marketplace-entry":
-      return `Marketplace entry ${n.pluginName} has an invalid manifest.`;
+      return `Marketplace entry ${options.pluginName} has an invalid manifest.`;
   }
 }
 //@ chunk-e6aww6q8.js:727842-727904 placement
-async function hasGitOnPath(e) {
+async function hasGitOnPath(binaryName) {
   try {
-    return !!(await whichAsync(e));
+    return !!(await whichAsync(binaryName));
   } catch {
     return false;
   }
@@ -301,49 +315,54 @@ var MANIFEST_ERROR_CLASSES = {
   containment: "manifest_containment_refused",
 };
 //@ chunk-e6aww6q8.js:986000-986114 placement
-class ManifestLoadError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  manifestPath;
-  problems;
-  constructor(e, n, r, manifestPath, problems) {
-    super(e, n, r);
-    this.manifestPath = manifestPath;
-    this.problems = problems;
-  }
-}
+let ManifestLoadError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:986000", () => {
+  ManifestLoadError = class ManifestLoadError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    manifestPath;
+    problems;
+    constructor(message, errorCode, telemetryCode, manifestPath, problems) {
+      super(message, errorCode, telemetryCode);
+      this.manifestPath = manifestPath;
+      this.problems = problems;
+    }
+  };
+});
 //@ chunk-e6aww6q8.js:986114-986521 placement
 /**
  * 分页列出存储作用域下的直接条目名。
  */
-async function listStorageScopeNames(e, n) {
-  let r = [];
-  let s;
+async function listStorageScopeNames(storage, query) {
+  let names = [];
+  let cursor;
   do {
-    let h = await e.listEntries(n, {
+    let page = await storage.listEntries(query, {
       skipScopeStats: true,
       skipKeyStats: true,
-      ...(s !== undefined && {
-        cursor: s,
+      ...(cursor !== undefined && {
+        cursor,
       }),
     });
-    if (!h.ok)
+    if (!page.ok)
       return {
-        names: r,
-        error: h.error,
+        names,
+        error: page.error,
       };
-    for (let item of h.value.items) {
-      let S = item.kind === "scope" ? item.scope : item.key;
-      if (S.namespace !== n.namespace || !("relPath" in S)) continue;
-      let last = S.relPath?.at(-1);
+    for (let item of page.value.items) {
+      let entryRef = item.kind === "scope" ? item.scope : item.key;
+      if (entryRef.namespace !== query.namespace || !("relPath" in entryRef)) continue;
+      let last = entryRef.relPath?.at(-1);
       if (last !== undefined)
-        r.push({
+        names.push({
           name: last,
           kind: item.kind,
         });
     }
-    s = h.value.cursor;
-  } while (s !== undefined);
+    cursor = page.value.cursor;
+  } while (cursor !== undefined);
   return {
-    names: r,
+    names,
   };
 }
 //@ chunk-e6aww6q8.js:986521-986669 placement
@@ -373,82 +392,82 @@ function isSkillCustomizationBookingAllowed(plugin, hasManifest) {
 /**
  * 在未禁用技能定制且策略允许本地插件目录时，扫描用户与项目的 skills 目录，按同步清单排除已同步的文件夹， 把其余带插件结构的文件夹当作 skills-dir 插件加载。
  */
-async function loadSkillsAsPlugins_2(e) {
+async function loadSkillsAsPlugins_2(storageV5) {
   if (
     isCustomizationDisabled("skills") ||
-    skillOverridesSchema.some((h) => isRestrictedToPluginOnly(h)) ||
+    SKILL_OVERRIDE_COMPONENTS.some((schema) => isRestrictedToPluginOnly(schema)) ||
     !areLocalPluginDirsAllowedByPolicy()
   )
     return [];
-  let thinkbackSkillDir = getThinkbackSkillDir();
-  if (thinkbackSkillDir === null) return [];
-  let r = [];
+  let path = getThinkbackSkillDir();
+  if (path === null) return [];
+  let rootDirs = [];
   if (isSettingSourceEnabled("userSettings"))
-    r.push({
-      dir: thinkbackSkillDir,
+    rootDirs.push({
+      dir: path,
       scope: "user",
     });
   if (isSettingSourceEnabled("projectSettings")) {
-    let h = join(getProjectConfigRoot() ?? getOriginalCwd(), ".claude", "skills");
-    let y = (S) => realpath(S).catch(() => S);
-    if (h !== thinkbackSkillDir && (await y(h)) !== (await y(thinkbackSkillDir)))
-      r.push({
-        dir: h,
+    let projectSkillsDir = join(getProjectConfigRoot() ?? getOriginalCwd(), ".claude", "skills");
+    let realOrSelf = (path) => realpath(path).catch(() => path);
+    if (projectSkillsDir !== path && (await realOrSelf(projectSkillsDir)) !== (await realOrSelf(path)))
+      rootDirs.push({
+        dir: projectSkillsDir,
         scope: "project",
       });
   }
-  let s = [];
-  for (let { dir, scope } of r)
+  let found = [];
+  for (let { dir, scope } of rootDirs)
     try {
       if (scope === "user") {
-        if (isStorageV5Enabled() && e !== undefined) {
-          let S = await listStorageScopeNames(e, {
+        if (isStorageV5Enabled() && storageV5 !== undefined) {
+          let listing = await listStorageScopeNames(storageV5, {
             namespace: "userConfigDir",
             dir: "skills",
           });
-          if (S.error !== undefined) {
-            let error = S.error;
+          if (listing.error !== undefined) {
+            let error = listing.error;
             if (!("telemetryCode" in error && isFsInaccessibleCode(error.telemetryCode)))
               logForDebugging(`[skill-as-plugin] readdir ${dir} failed: ${formatStorageError(error)}`, {
                 level: "warn",
               });
           }
-          let mapped = S.names.map(({ name: G, kind }) => ({
-            name: G,
+          let mapped = listing.names.map(({ name, kind }) => ({
+            name,
             isKey: kind === "key",
           }));
-          let syncedSkillNames = await readSyncedSkillNames(dir, e);
+          let syncedSkillNames = await readSyncedSkillNames(dir, storageV5);
           if (syncedSkillNames === "claim-all") {
             logForDebugging(
               `[plugins] skills-dir plugin adoption skipped: ${join(dir, SYNCED_MANIFEST_FILE)} is unreadable or not a valid sync manifest, so no folder in ${dir} is adopted as a plugin until that file is fixed or removed`,
             );
             continue;
           }
-          for (let { name: G, isKey } of mapped) {
+          for (let { name, isKey } of mapped) {
             if (
-              syncedSkillNames.has(foldNameForSkill(G)) ||
-              (isKey && foldNameForSkill(G) === SYNCED_MANIFEST_FILE)
+              syncedSkillNames.has(foldNameForSkill(name)) ||
+              (isKey && foldNameForSkill(name) === SYNCED_MANIFEST_FILE)
             )
               continue;
-            if (isSyncedDirName(G)) {
+            if (isSyncedDirName(name)) {
               logForDebugging(
-                `[plugins] skipping skills-dir entry '${G}': the sync-owned root name is never adopted as a plugin`,
+                `[plugins] skipping skills-dir entry '${name}': the sync-owned root name is never adopted as a plugin`,
               );
               continue;
             }
-            if (isHiddenFoldName(G)) {
+            if (isHiddenFoldName(name)) {
               logForDebugging(
-                `[plugins] skipping hidden skills-dir entry '${G}': dot-prefixed dirs are never adopted as plugins`,
+                `[plugins] skipping hidden skills-dir entry '${name}': dot-prefixed dirs are never adopted as plugins`,
               );
               continue;
             }
-            s.push({
-              dir: join(dir, G),
+            found.push({
+              dir: join(dir, name),
               scope,
             });
           }
         } else {
-          let S = await getFileReader().listEntries(dir);
+          let entries = await getFileReader().listEntries(dir);
           let syncedSkillNames = await readSyncedSkillNames(dir);
           if (syncedSkillNames === "claim-all") {
             logForDebugging(
@@ -456,35 +475,35 @@ async function loadSkillsAsPlugins_2(e) {
             );
             continue;
           }
-          for (let L of S) {
-            if (syncedSkillNames.has(foldNameForSkill(L.name))) continue;
-            if (isSyncedDirName(L.name)) {
+          for (let entry of entries) {
+            if (syncedSkillNames.has(foldNameForSkill(entry.name))) continue;
+            if (isSyncedDirName(entry.name)) {
               logForDebugging(
-                `[plugins] skipping skills-dir entry '${L.name}': the sync-owned root name is never adopted as a plugin`,
+                `[plugins] skipping skills-dir entry '${entry.name}': the sync-owned root name is never adopted as a plugin`,
               );
               continue;
             }
-            if (isHiddenFoldName(L.name)) {
+            if (isHiddenFoldName(entry.name)) {
               logForDebugging(
-                `[plugins] skipping hidden skills-dir entry '${L.name}': dot-prefixed dirs are never adopted as plugins`,
+                `[plugins] skipping hidden skills-dir entry '${entry.name}': dot-prefixed dirs are never adopted as plugins`,
               );
               continue;
             }
-            if (!L.isFile)
-              s.push({
-                dir: join(dir, L.name),
+            if (!entry.isFile)
+              found.push({
+                dir: join(dir, entry.name),
                 scope,
               });
           }
         }
       } else {
-        let S = await readdir(dir, {
+        let entries = await readdir(dir, {
           withFileTypes: true,
         });
-        for (let w of S)
-          if (w.isDirectory() || w.isSymbolicLink())
-            s.push({
-              dir: join(dir, w.name),
+        for (let entry of entries)
+          if (entry.isDirectory() || entry.isSymbolicLink())
+            found.push({
+              dir: join(dir, entry.name),
               scope,
             });
       }
@@ -494,32 +513,32 @@ async function loadSkillsAsPlugins_2(e) {
           level: "warn",
         });
     }
-  return s;
+  return found;
 }
 //@ chunk-e6aww6q8.js:988822-989195 placement
 /**
  * 读技能同步清单，读失败返回 claim-all。
  */
-async function readSyncedSkillNames(dir, n) {
-  let r;
-  let s =
-    isStorageV5Enabled() && n !== undefined
-      ? thinkbackUserConfigSpace(join(dir, SYNCED_MANIFEST_FILE))
+async function readSyncedSkillNames(root, storageV5) {
+  let text;
+  let storageKey =
+    isStorageV5Enabled() && storageV5 !== undefined
+      ? thinkbackUserConfigSpace(join(root, SYNCED_MANIFEST_FILE))
       : null;
-  if (n !== undefined && s !== null) {
-    let h = await n.read([s]);
-    if (!h.ok) return "claim-all";
-    let y = h.value.items[0];
-    if (y === undefined) return "claim-all";
-    if (!y.found) return new Set();
-    r = Buffer.from(y.value).toString("utf-8");
+  if (storageV5 !== undefined && storageKey !== null) {
+    let readResult = await storageV5.read([storageKey]);
+    if (!readResult.ok) return "claim-all";
+    let item = readResult.value.items[0];
+    if (item === undefined) return "claim-all";
+    if (!item.found) return new Set();
+    text = Buffer.from(item.value).toString("utf-8");
   } else
     try {
-      r = await getFileReader().read(join(dir, "manifest.json"));
+      text = await getFileReader().read(join(root, "manifest.json"));
     } catch (error) {
       return isENOENT(error) ? new Set() : "claim-all";
     }
-  return parseSkillsSyncManifest(r, dir);
+  return parseSkillsSyncManifest(text, root);
 }
 //@ chunk-e6aww6q8.js:989195-989207 placement
 var foldNameForSkill = foldNameForSync;

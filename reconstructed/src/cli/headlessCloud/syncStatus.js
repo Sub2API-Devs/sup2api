@@ -14,32 +14,44 @@ import { plural } from "../../utils/stringUtils.js";
 import { SEED_UNAUTHORIZED_REASON } from "../../services/homeSeed/writeHomeSettings.js";
 import { HOME_SEED_PARTIAL_REASONS } from "../../services/homeSeed/notices.js";
 import { classifyCloudPluginsWorkerReply } from "./cloudPlugins.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-z7wtv7tg.js:32703-33099 placement
 /**
  * 同步状态行的标题、等待提示、条目名与顺序、标记字符与常用状态值。
  */
-var SYNC_STATUS_HEADING = "Synced from this computer:";
-var WAITING_MESSAGE_TEXTS = {
-  files: "A message is waiting \xB7 esc to take it back",
-  settings: "A message is waiting for your settings to upload \xB7 esc to take it back",
-};
-var SYNC_ITEM_LABELS = {
-  projectFiles: "Project files",
-  settings: "Settings",
-  plugins: "Plugins",
-  localTools: "Local tools",
-};
-var SYNC_ITEM_ORDER = ["projectFiles", "settings", "plugins"];
-var tick = figures_default.tick;
-var cross = figures_default.cross;
-var PENDING_MARK = "\u2026";
-var SYNCED_STATUS = {
-  mark: "synced",
-};
-var PENDING_STATUS = {
-  mark: "pending",
-};
+var SYNC_STATUS_HEADING; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var WAITING_MESSAGE_TEXTS;
+var SYNC_ITEM_LABELS;
+var SYNC_ITEM_ORDER;
+var tick;
+var cross;
+var PENDING_MARK;
+var SYNCED_STATUS;
+var PENDING_STATUS;
+deferInit("chunk-z7wtv7tg.js:32703", () => {
+  SYNC_STATUS_HEADING = "Synced from this computer:";
+  WAITING_MESSAGE_TEXTS = {
+    files: "A message is waiting \xB7 esc to take it back",
+    settings: "A message is waiting for your settings to upload \xB7 esc to take it back",
+  };
+  SYNC_ITEM_LABELS = {
+    projectFiles: "Project files",
+    settings: "Settings",
+    plugins: "Plugins",
+    localTools: "Local tools",
+  };
+  SYNC_ITEM_ORDER = ["projectFiles", "settings", "plugins"];
+  tick = figures_default.tick;
+  cross = figures_default.cross;
+  PENDING_MARK = "\u2026";
+  SYNCED_STATUS = {
+    mark: "synced",
+  };
+  PENDING_STATUS = {
+    mark: "pending",
+  };
+});
 //@ chunk-z7wtv7tg.js:33099-33147 placement
 function notSyncedStatus(words) {
   return {
@@ -48,8 +60,8 @@ function notSyncedStatus(words) {
   };
 }
 //@ chunk-z7wtv7tg.js:33147-33253 placement
-function getSyncMark(e) {
-  switch (e.mark) {
+function getSyncMark(status) {
+  switch (status.mark) {
     case "synced":
       return tick;
     case "pending":
@@ -59,79 +71,79 @@ function getSyncMark(e) {
   }
 }
 //@ chunk-z7wtv7tg.js:33253-33436 placement
-function formatSyncItem(e, n) {
-  let r = `${getSyncMark(n)} ${e}`;
-  switch (n.mark) {
+function formatSyncItem(status, label) {
+  let words = `${getSyncMark(label)} ${status}`;
+  switch (label.mark) {
     case "synced":
-      return n.note === undefined ? r : `${r} (${n.note})`;
+      return label.note === undefined ? words : `${words} (${label.note})`;
     case "pending":
-      return r;
+      return words;
     case "not_synced":
-      return `${r} \u2014 ${n.words}`;
+      return `${words} \u2014 ${label.words}`;
   }
 }
 //@ chunk-z7wtv7tg.js:33436-33594 placement
-function buildSyncStatusLines(e) {
+function buildSyncStatusLines(sync) {
   return [
     SYNC_STATUS_HEADING,
-    ...SYNC_ITEM_ORDER.flatMap((n) => {
-      let r = e[n];
-      return r === undefined ? [] : [formatSyncItem(SYNC_ITEM_LABELS[n], r)];
+    ...SYNC_ITEM_ORDER.flatMap((key) => {
+      let value = sync[key];
+      return value === undefined ? [] : [formatSyncItem(SYNC_ITEM_LABELS[key], value)];
     }),
-    ...(e.localTools === undefined ? [] : [formatSyncItem(SYNC_ITEM_LABELS.localTools, e.localTools)]),
+    ...(sync.localTools === undefined ? [] : [formatSyncItem(SYNC_ITEM_LABELS.localTools, sync.localTools)]),
   ];
 }
 //@ chunk-z7wtv7tg.js:33594-33771 placement
 /**
  * 把同步状态拼成一行："Synced from this computer:" 加各条目状态，附上关闭期间说明与仓库信任说明。
  */
-function formatSyncStatusLine(syncStatusFromRemote) {
-  let [n, ...r] = buildSyncStatusLines(syncStatusFromRemote);
-  let s = `${n} ${r.join(" \xB7 ")}`;
-  let i = repositoryTrustNote(syncStatusFromRemote);
-  let k = i === undefined ? s : `${s}. ${i}`;
-  let R = describeRepositoryTrust(syncStatusFromRemote);
-  if (R === undefined) return k;
-  return i === undefined ? `${k}. ${R}.` : `${k} ${R}.`;
+function formatSyncStatusLine(sync) {
+  let [parts, ...rest] = buildSyncStatusLines(sync);
+  let line = `${parts} ${rest.join(" \xB7 ")}`;
+  let withNote = repositoryTrustNote(sync);
+  let trust = withNote === undefined ? line : `${line}. ${withNote}`;
+  let first = describeRepositoryTrust(sync);
+  if (first === undefined) return trust;
+  return withNote === undefined ? `${trust}. ${first}.` : `${trust} ${first}.`;
 }
 //@ chunk-z7wtv7tg.js:33771-33794 placement
 /**
  * 仓库信任说明：当前构建恒返回 undefined，不做标记。
  */
-function repositoryTrustNote(e) {
+function repositoryTrustNote(sync) {
   return;
 }
 //@ chunk-z7wtv7tg.js:33794-33916 placement
 /**
  * 取同步状态中的仓库信任说明；未设置或无需标记时为 undefined。
  */
-function describeRepositoryTrust(e) {
-  if (e.repositoryTrust === undefined || e.repositoryTrust === "nothing_to_mark") return;
-  return repositoryTrustConsentText(e.repositoryTrust);
+function describeRepositoryTrust(sync) {
+  if (sync.repositoryTrust === undefined || sync.repositoryTrust === "nothing_to_mark") return;
+  return repositoryTrustConsentText(sync.repositoryTrust);
 }
 //@ chunk-z7wtv7tg.js:33916-34071 placement
 /**
  * 比较两份同步状态是否相同（关闭时、仓库信任、本地工具与各分项）。
  */
-function isSameSyncStatus(cloudSessionSync, n) {
+function isSameSyncStatus(cloudSessionSync, a) {
   return (
-    cloudSessionSync.whileClosed === n.whileClosed &&
-    cloudSessionSync.repositoryTrust === n.repositoryTrust &&
-    syncItemListsEqual(cloudSessionSync.localTools, n.localTools) &&
-    SYNC_ITEM_ORDER.every((r) => syncItemListsEqual(cloudSessionSync[r], n[r]))
+    cloudSessionSync.whileClosed === a.whileClosed &&
+    cloudSessionSync.repositoryTrust === a.repositoryTrust &&
+    syncItemListsEqual(cloudSessionSync.localTools, a.localTools) &&
+    SYNC_ITEM_ORDER.every((b) => syncItemListsEqual(cloudSessionSync[b], a[b]))
   );
 }
 //@ chunk-z7wtv7tg.js:34071-34250 placement
 /**
  * 计算本地工具同步状态：有上游原因且未开启时显示该原因；开启时显示由本机服务，否则显示未服务本会话。
  */
-function getLocalToolsSyncStatus(e, n, r) {
-  if (n !== undefined && e?.on !== true) return notSyncedStatus(n);
-  if (e === undefined) return;
-  return e.on
+function getLocalToolsSyncStatus(served, fallback, buffer) {
+  if (fallback !== undefined && served?.on !== true) return notSyncedStatus(fallback);
+  if (served === undefined) return;
+  return served.on
     ? {
         mark: "synced",
-        note: `served by this machine (${e.name})`,
+        note: `served by this machine (${served.name})`,
       }
     : notSyncedStatus("not serving this session");
 }
@@ -142,8 +154,8 @@ function syncItemListsEqual(localTools, localTools_2) {
     : syncItemsEqual(localTools, localTools_2);
 }
 //@ chunk-z7wtv7tg.js:34311-34355 placement
-function syncItemsEqual(e, n) {
-  return formatSyncItem("", e) === formatSyncItem("", n);
+function syncItemsEqual(a, b) {
+  return formatSyncItem("", a) === formatSyncItem("", b);
 }
 //@ chunk-z7wtv7tg.js:34355-34579 placement
 /**
@@ -169,34 +181,36 @@ function mapRecordWhereToReason(sessionRecordLookup) {
 /**
  * 目录同步状态：state 为 absent 且 reason 为 not_offered 时返回 undefined，否则取目录同步状态。
  */
-function directorySyncStatusOrUndefined(e, n) {
-  return e.state === "absent" && e.reason === "not_offered" ? undefined : getDirectorySyncStatus(e, n);
+function directorySyncStatusOrUndefined(sync, mark) {
+  return sync.state === "absent" && sync.reason === "not_offered"
+    ? undefined
+    : getDirectorySyncStatus(sync, mark);
 }
 //@ chunk-z7wtv7tg.js:34664-34856 placement
-function getDirectorySyncStatus(e, n) {
-  switch (e.state) {
+function getDirectorySyncStatus(sync, trust) {
+  switch (sync.state) {
     case "seeding":
     case "armed":
-      return notSyncedStatus(describeSyncOffReason("off", undefined, n));
+      return notSyncedStatus(describeSyncOffReason("off", undefined, trust));
     case "absent":
-      return notSyncedStatus(describeSyncOffReason(e.state, e.reason, n));
+      return notSyncedStatus(describeSyncOffReason(sync.state, sync.reason, trust));
     case "off":
     case "stopped":
-      return notSyncedStatus(describeSyncOffReason(e.state, e.reason, n));
+      return notSyncedStatus(describeSyncOffReason(sync.state, sync.reason, trust));
   }
 }
 //@ chunk-z7wtv7tg.js:34856-34879 placement
 /**
  * 空函数占位（syncStatus 的回调默认值）。
  */
-function noop_2(e) {
+function noop_2(sync) {
   return;
 }
 //@ chunk-z7wtv7tg.js:34879-34904 placement
 /**
  * 空函数占位（syncStatus 的另一个默认回调）。
  */
-function noop_3(e) {
+function noop_3(sync) {
   return false;
 }
 //@ chunk-z7wtv7tg.js:34904-34958 placement
@@ -224,7 +238,7 @@ var ALL_SYNC_REASON_TEXTS = {
   not_seeded: SYNC_REASON_TEXTS.not_set_up,
 };
 //@ chunk-z7wtv7tg.js:35248-35402 placement
-function describeSyncOffReason(state, reason, r, s) {
+function describeSyncOffReason(state, reason, syncState, syncReason) {
   return (
     (reason !== undefined && Object.hasOwn(ALL_SYNC_REASON_TEXTS, reason)
       ? ALL_SYNC_REASON_TEXTS[reason]
@@ -248,39 +262,39 @@ function normalizeNoProjectFiles(seedSyncState) {
     : seedSyncState;
 }
 //@ chunk-z7wtv7tg.js:35559-36779 placement
-function describeProjectFilesSync(e) {
-  if (e.kind === "absent") return notSyncedStatus(SETTINGS_ABSENT_TEXTS[e.reason]);
-  let { outcome, readBack } = e;
+function describeProjectFilesSync(state) {
+  if (state.kind === "absent") return notSyncedStatus(SETTINGS_ABSENT_TEXTS[state.reason]);
+  let { outcome, readBack } = state;
   if (outcome === undefined) return PENDING_STATUS;
   let keptForCredential = outcome.keptForCredential;
-  let i = outcome.keptAsLinks === undefined ? [] : [describeKeptLinks(outcome.keptAsLinks)];
+  let runOutcome = outcome.keptAsLinks === undefined ? [] : [describeKeptLinks(outcome.keptAsLinks)];
   if (outcome.kind === "none") {
-    let h = [
+    let kept = [
       ...(keptForCredential === undefined
         ? []
         : [
             `${describeKeptFiles(keptForCredential)} kept here: ${plural(keptForCredential.others + (keptForCredential.claudeMd ? 1 : 0), "it looks like it holds", "they look like they hold")} a credential`,
           ]),
-      ...i,
+      ...runOutcome,
     ];
     return notSyncedStatus(
-      h.length > 0 && outcome.reason === "nothing_to_send"
-        ? h.join("; also ")
+      kept.length > 0 && outcome.reason === "nothing_to_send"
+        ? kept.join("; also ")
         : describeUserSettingsSyncState(outcome.reason),
     );
   }
-  let k = [
+  let kept = [
     ...(keptForCredential === undefined ? [] : [`without ${describeKeptFiles(keptForCredential)}`]),
-    ...i,
+    ...runOutcome,
   ];
-  let R =
-    k.length === 0
+  let settingsNote =
+    kept.length === 0
       ? SYNCED_STATUS
       : {
           mark: "synced",
-          note: k.join("; also "),
+          note: kept.join("; also "),
         };
-  let S =
+  let session =
     outcome.settingsRefused === undefined
       ? undefined
       : notSyncedStatus(
@@ -292,13 +306,16 @@ function describeProjectFilesSync(e) {
     case "sent":
     case "unchanged":
     case "conflict_resolved":
-      return S ?? (readBack === undefined ? R : describeSettingsApplyTiming(readBack, R));
+      return (
+        session ??
+        (readBack === undefined ? settingsNote : describeSettingsApplyTiming(readBack, settingsNote))
+      );
     case "deadline":
       return (
-        S ??
+        session ??
         (readBack === undefined
           ? notSyncedStatus("the upload took too long")
-          : describeSettingsApplyTiming(readBack, R))
+          : describeSettingsApplyTiming(readBack, settingsNote))
       );
     case "raced":
       return notSyncedStatus("another launch of this session sent its settings first");
@@ -323,19 +340,19 @@ function describeKeptFiles({ claudeMd, others }) {
 }
 //@ chunk-z7wtv7tg.js:36914-37099 placement
 function describeKeptLinks({ names, more }) {
-  let r = more > 0 ? `${names.join(", ")} and ${more} more` : names.join(" and ");
+  let extraCount = more > 0 ? `${names.join(", ")} and ${more} more` : names.join(" and ");
   return names.length + more === 1
-    ? `${r} is a link, so it wasn't sent`
-    : `${r} are links, so they weren't sent`;
+    ? `${extraCount} is a link, so it wasn't sent`
+    : `${extraCount} are links, so they weren't sent`;
 }
 //@ chunk-z7wtv7tg.js:37099-37521 placement
-function describeSettingsApplyTiming(readBack, n) {
+function describeSettingsApplyTiming(readBack, sync) {
   switch (readBack.verdict) {
     case "applied_before_first_ask":
     case "applied_late":
-      return readBack.left === null ? n : notSyncedStatus(HOME_SEED_PARTIAL_REASONS[readBack.left]);
+      return readBack.left === null ? sync : notSyncedStatus(HOME_SEED_PARTIAL_REASONS[readBack.left]);
     case "behind":
-      return n;
+      return sync;
     case "not_applied":
       return notSyncedStatus("the cloud session could not apply them");
     case "stale":
@@ -423,10 +440,10 @@ var PLUGINS_ABSENT_TEXTS = {
 /**
  * 根据插件转发状态给出同步标记：等待中、未转发原因、紧急关闭、准入结果（未启用、拒绝、未同意）或 worker 回复。
  */
-function getPluginsSyncStatus(e) {
-  if (e.kind === "pending") return PENDING_STATUS;
-  if (e.kind === "absent") return notSyncedStatus(PLUGINS_ABSENT_TEXTS[e.reason]);
-  let { state } = e;
+function getPluginsSyncStatus(plugins) {
+  if (plugins.kind === "pending") return PENDING_STATUS;
+  if (plugins.kind === "absent") return notSyncedStatus(PLUGINS_ABSENT_TEXTS[plugins.reason]);
+  let { state } = plugins;
   if (state.muted) return notSyncedStatus(EMERGENCY_OFF_TEXT);
   if (!state.settled || state.answerPending) return PENDING_STATUS;
   switch (state.admission) {
@@ -441,8 +458,8 @@ function getPluginsSyncStatus(e) {
   }
 }
 //@ chunk-z7wtv7tg.js:39572-40204 placement
-function describePluginsSyncState(e) {
-  switch (e) {
+function describePluginsSyncState(source) {
+  switch (source) {
     case "not_asked":
       return "no plugins to send from this machine";
     case "read_failed":
@@ -467,8 +484,8 @@ function describePluginsSyncState(e) {
 }
 //@ chunk-z7wtv7tg.js:40204-40332 placement
 function getAdmittedPluginsStatus(state) {
-  let n = classifyCloudPluginsWorkerReply(state.notice);
-  if (n !== undefined) return notSyncedStatus(PLUGINS_WORKER_REPLY_TEXTS[n]);
+  let plugins = classifyCloudPluginsWorkerReply(state.notice);
+  if (plugins !== undefined) return notSyncedStatus(PLUGINS_WORKER_REPLY_TEXTS[plugins]);
   return state.notice === undefined && state.gaveUp !== undefined
     ? notSyncedStatus(describePluginsSyncState(state.gaveUp))
     : SYNCED_STATUS;
@@ -489,30 +506,30 @@ var PLUGINS_WORKER_REPLY_TEXTS = {
 /**
  * 由远程会话报告的状态构造同步状态：项目文件、设置、插件、关闭期间状态与仓库信任。
  */
-function buildSyncStatusFromRemote(e, n) {
-  let directorySync = e.directory_sync;
+function buildSyncStatusFromRemote(info, directorySync) {
+  let directorySync_2 = info.directory_sync;
   return {
     projectFiles: notSyncedStatus(
       describeSyncOffReason(
-        directorySync.state === "stopped" ? "stopped" : "off",
-        directorySync.reason,
+        directorySync_2.state === "stopped" ? "stopped" : "off",
+        directorySync_2.reason,
         {
-          fromUpload: directorySync.started_from_upload === true,
+          fromUpload: directorySync_2.started_from_upload === true,
         },
-        n,
+        directorySync,
       ),
     ),
-    settings: getForwardedStatus(e.settings),
-    plugins: getForwardedStatus(e.plugins),
-    ...getWhileClosedStatus(directorySync),
-    ...(e.repository_trust !== undefined && {
-      repositoryTrust: e.repository_trust,
+    settings: getForwardedStatus(info.settings),
+    plugins: getForwardedStatus(info.plugins),
+    ...getWhileClosedStatus(directorySync_2),
+    ...(info.repository_trust !== undefined && {
+      repositoryTrust: info.repository_trust,
     }),
   };
 }
 //@ chunk-z7wtv7tg.js:40942-41174 placement
 function getWhileClosedStatus(directorySync) {
-  let n = noop_2(
+  let syncInfo = noop_2(
     directorySync.state === "armed"
       ? {
           state: "armed",
@@ -528,19 +545,19 @@ function getWhileClosedStatus(directorySync) {
           state: directorySync.state,
         },
   );
-  return n === undefined
+  return syncInfo === undefined
     ? {}
     : {
-        whileClosed: n,
+        whileClosed: syncInfo,
       };
 }
 //@ chunk-z7wtv7tg.js:41174-41362 placement
-function getForwardedStatus(e) {
-  if (e === undefined) return notSyncedStatus("not enabled for this launch");
-  if (e.state === "forwarded") return SYNCED_STATUS;
+function getForwardedStatus(trust) {
+  if (trust === undefined) return notSyncedStatus("not enabled for this launch");
+  if (trust.state === "forwarded") return SYNCED_STATUS;
   return notSyncedStatus(
-    e.reason !== undefined && returnNull(e.reason)
-      ? DEVICE_BINDING_STATUS_TEXTS[e.reason]
+    trust.reason !== undefined && returnNull(trust.reason)
+      ? DEVICE_BINDING_STATUS_TEXTS[trust.reason]
       : "not sent from this machine",
   );
 }
@@ -549,40 +566,43 @@ function returnNull(reason) {
   return Object.hasOwn(DEVICE_BINDING_STATUS_TEXTS, reason);
 }
 //@ chunk-z7wtv7tg.js:41404-42685 placement
-var DEVICE_BINDING_STATUS_TEXTS = {
-  unsupported: SETTINGS_ABSENT_TEXTS.unsupported,
-  flag_off: SETTINGS_ABSENT_TEXTS.not_enabled,
-  launch_flag: SETTINGS_ABSENT_TEXTS.launch_keeps_them,
-  declined: SETTINGS_ABSENT_TEXTS.kept_on_this_machine,
-  no_consent: "not decided yet on this machine",
-  unbound: "this session is not bound to this machine",
-  switched_off: PLUGINS_ABSENT_TEXTS.switched_off,
-  bound_elsewhere: "this machine could not show that this session is bound to it",
-  binding_unknown: "could not check this session's binding",
-  not_seeded: SETTINGS_ABSENT_TEXTS.not_sent,
-  nothing_to_forward: "nothing to send from this machine",
-  nothing_to_send: "nothing to send from this machine",
-  rules_unreadable: "a settings file here has errors",
-  plan_failed: "preparing them failed",
-  user_settings_disabled: "this launch does not load your user settings",
-  muted: EMERGENCY_OFF_TEXT,
-  too_slow: "preparing them took too long",
-  no_project_files: SETTINGS_ABSENT_TEXTS.no_project_files,
-  self_hosted_runner: NOT_SENT_SELF_HOSTED_TEXT,
-  home_unvettable: "your settings folder could not be fully examined",
-  aborted: "the upload was cancelled",
-  deadline: "the upload took too long",
-  raced: "another launch of this session sent its settings first",
-  not_forwarded_at_create: NO_SEND_RECORD_TEXT,
-  lane_full: "the session holds as many uploaded files as it may",
-  unavailable: "not available for this session",
-  unauthorized: SEED_UNAUTHORIZED_REASON,
-  failed: "the upload failed",
-  ...SETTINGS_REFUSAL_TEXTS,
-  ...PLUGINS_WORKER_REPLY_TEXTS,
-  unreadable: "your plugin choices here could not be read",
-  could_not_send: "they could not be sent this time",
-};
+var DEVICE_BINDING_STATUS_TEXTS; // deferred: uses SETTINGS_REFUSAL_TEXTS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-z7wtv7tg.js:41404", () => {
+  DEVICE_BINDING_STATUS_TEXTS = {
+    unsupported: SETTINGS_ABSENT_TEXTS.unsupported,
+    flag_off: SETTINGS_ABSENT_TEXTS.not_enabled,
+    launch_flag: SETTINGS_ABSENT_TEXTS.launch_keeps_them,
+    declined: SETTINGS_ABSENT_TEXTS.kept_on_this_machine,
+    no_consent: "not decided yet on this machine",
+    unbound: "this session is not bound to this machine",
+    switched_off: PLUGINS_ABSENT_TEXTS.switched_off,
+    bound_elsewhere: "this machine could not show that this session is bound to it",
+    binding_unknown: "could not check this session's binding",
+    not_seeded: SETTINGS_ABSENT_TEXTS.not_sent,
+    nothing_to_forward: "nothing to send from this machine",
+    nothing_to_send: "nothing to send from this machine",
+    rules_unreadable: "a settings file here has errors",
+    plan_failed: "preparing them failed",
+    user_settings_disabled: "this launch does not load your user settings",
+    muted: EMERGENCY_OFF_TEXT,
+    too_slow: "preparing them took too long",
+    no_project_files: SETTINGS_ABSENT_TEXTS.no_project_files,
+    self_hosted_runner: NOT_SENT_SELF_HOSTED_TEXT,
+    home_unvettable: "your settings folder could not be fully examined",
+    aborted: "the upload was cancelled",
+    deadline: "the upload took too long",
+    raced: "another launch of this session sent its settings first",
+    not_forwarded_at_create: NO_SEND_RECORD_TEXT,
+    lane_full: "the session holds as many uploaded files as it may",
+    unavailable: "not available for this session",
+    unauthorized: SEED_UNAUTHORIZED_REASON,
+    failed: "the upload failed",
+    ...SETTINGS_REFUSAL_TEXTS,
+    ...PLUGINS_WORKER_REPLY_TEXTS,
+    unreadable: "your plugin choices here could not be read",
+    could_not_send: "they could not be sent this time",
+  };
+});
 export {
   mapRecordWhereToReason,
   noop_2,

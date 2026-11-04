@@ -47,9 +47,10 @@ import { createCodeSession, isCreateSessionFailure, isCredentialsRejection } fro
 import { getBridgeBaseUrl } from "./bridgeConfig.js";
 import { getMainLoopModel } from "../utils/model/model.js";
 import { getMcpConfigByName } from "../services/mcp/config.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1566504-1566521 placement
-function noopHandler(h) {}
+function noopHandler(unused) {}
 //@ chunk-18hwfzwa.js:1566521-1566548 placement
 /**
  * REPL 侧桥接控制上下文的占位：恒返回 null（本构建不提供对话框）。
@@ -68,7 +69,7 @@ async function noBridgeControlContextAsync() {
 /**
  * REPL 侧拒绝弹对话框：返回 {token: Symbol, handle: null}，表示不在本地开对话框。
  */
-function refusedBridgeDialogToken(h) {
+function refusedBridgeDialogToken(unused) {
   return {
     token: Symbol("remote-control dialog"),
     handle: null,
@@ -78,32 +79,32 @@ function refusedBridgeDialogToken(h) {
 /**
  * 空的桥接对话框回调占位（两参数，无操作）。
  */
-function noopBridgeDialogCallback(h, x) {}
+function noopBridgeDialogCallback(unused, unusedOther) {}
 //@ chunk-18hwfzwa.js:1566674-1566763 placement
 /**
  * 返回固定的拒绝分享结果：{outcome: {is:'refused', why:'threw'}, line: 说明文字}。
  */
-async function refusedShareOutcome(h, x) {
-  let D = {
+async function refusedShareOutcome(share, unused) {
+  let outcome = {
     is: "refused",
     why: "threw",
   };
   return {
-    outcome: D,
-    line: describeShareOutcome(h, D),
+    outcome,
+    line: describeShareOutcome(share, outcome),
   };
 }
 //@ chunk-18hwfzwa.js:1566763-1567204 placement
 /**
  * 按分享结果（is/why）返回说明文字；当前构建中该分支被常量 false 关掉，总是返回空串。
  */
-function describeShareOutcome(h, x) {
+function describeShareOutcome(share, outcome) {
   if (false)
-    switch (x.is) {
+    switch (outcome.is) {
       case "shared":
       case "already_shared":
       case "refused":
-        switch (x.why) {
+        switch (outcome.why) {
           case "no_connection":
           case "dialog_closed":
           case "not_listed":
@@ -132,7 +133,7 @@ function describeShareOutcome(h, x) {
 function withdrawBridgeInboundMessage(queue, uuid) {
   if (queue.isFoldInFlight(uuid)) return false;
   return (
-    queue.removeByFilter((L) => L.uuid === uuid && L.bridgeOrigin === true, {
+    queue.removeByFilter((message) => message.uuid === uuid && message.bridgeOrigin === true, {
       reason: "cancelled_by_sender",
     }).length > 0 || queue.withdrawInboundIngest(uuid)
   );
@@ -168,63 +169,63 @@ var FORK_FAILED_RESULT = {
  * 包装请求处理函数：同一 requestId 的并发请求共享同一个 Promise，已完成的结果按 requestId 缓存（最多 FORK_RESULT_CACHE_MAX 条，先进先出淘汰）。
  */
 function dedupeByRequestId(handler) {
-  let x = new Map();
-  let D = new Map();
-  return (L, ee) => {
-    let ke = D.get(ee.requestId);
-    if (ke) return Promise.resolve(ke);
-    let Re = x.get(ee.requestId);
-    if (Re) return Re;
-    let Be = handler(L, ee)
-      .then((He) => {
-        D.set(ee.requestId, He);
-        if (D.size > FORK_RESULT_CACHE_MAX) {
-          let We = D.keys().next().value;
-          if (We !== undefined) D.delete(We);
+  let inFlight = new Map();
+  let settled = new Map();
+  return (session, request) => {
+    let cached = settled.get(request.requestId);
+    if (cached) return Promise.resolve(cached);
+    let pending = inFlight.get(request.requestId);
+    if (pending) return pending;
+    let promise = handler(session, request)
+      .then((result) => {
+        settled.set(request.requestId, result);
+        if (settled.size > FORK_RESULT_CACHE_MAX) {
+          let oldestId = settled.keys().next().value;
+          if (oldestId !== undefined) settled.delete(oldestId);
         }
-        return He;
+        return result;
       })
       .finally(() => {
-        x.delete(ee.requestId);
+        inFlight.delete(request.requestId);
       });
-    x.set(ee.requestId, Be);
-    return Be;
+    inFlight.set(request.requestId, promise);
+    return promise;
   };
 }
 //@ chunk-18hwfzwa.js:1568175-1571993 placement
 /**
  * 处理 Remote Control 发来的会话分叉请求（rc fork conversation）。
  */
-async function handleRcForkConversation(h, x, D) {
-  let L = false;
-  let ee = (Ro, Ho = "") => {
-    if (L) return;
-    L = true;
-    if (Ro === "ok") logFeatureOk("rc_repl_fork_conversation");
-    else if (Ro === "sad") logFeatureSad("rc_repl_fork_conversation", Ho);
-    else logFeatureBad("rc_repl_fork_conversation", Ho);
+async function handleRcForkConversation(request, state, host) {
+  let logged = false;
+  let logOnce = (leg, code = "") => {
+    if (logged) return;
+    logged = true;
+    if (leg === "ok") logFeatureOk("rc_repl_fork_conversation");
+    else if (leg === "sad") logFeatureSad("rc_repl_fork_conversation", code);
+    else logFeatureBad("rc_repl_fork_conversation", code);
   };
-  let ke = (Ro, Ho = FORK_REFUSAL_REASONS[Ro]) => {
-    if (Ro !== "unsupported") ee("sad", Ho);
+  let refuse = (errorCode, reason = FORK_REFUSAL_REASONS[errorCode]) => {
+    if (errorCode !== "unsupported") logOnce("sad", reason);
     return {
       forked: false,
-      error: Ro,
-      reason: FORK_REFUSAL_REASONS[Ro],
+      error: errorCode,
+      reason: FORK_REFUSAL_REASONS[errorCode],
     };
   };
-  let Re = (Ro) => {
-    ee("bad", Ro);
+  let fail = (reason) => {
+    logOnce("bad", reason);
     return FORK_FAILED_RESULT;
   };
-  let targetMessageUuid = h.target_message_uuid;
+  let targetMessageUuid = request.target_message_uuid;
   if (targetMessageUuid !== undefined && typeof targetMessageUuid !== "string")
     throw new WireSafeControlError("fork_conversation: target_message_uuid must be a string");
-  let title = h.title;
+  let title = request.title;
   if (title !== undefined && typeof title !== "string")
     throw new WireSafeControlError("fork_conversation: title must be a string");
-  let reference = D.ownBridgeSessionId();
+  let reference = host.ownBridgeSessionId();
   if (!isFirstPartyProvider() || isEssentialTrafficOnly() || reference === undefined)
-    return ke("unsupported");
+    return refuse("unsupported");
   if (
     !isAgentsFleetEnabled() ||
     isSafeMode() ||
@@ -233,103 +234,114 @@ async function handleRcForkConversation(h, x, D) {
     isCoordinatorMode_2()
   )
     return FORK_UNSUPPORTED_RESULT;
-  if (D.queuedCommandCount() > 0) return ke("commands queued");
-  if (D.isTurnActive()) return ke("turn running");
-  if (x.promptPending) return ke("prompt pending");
-  if (isTranscriptPersistenceDisabled()) return ke("history suppressed", "persistence_disabled");
-  let sliced = D.getMessages().slice();
+  if (host.queuedCommandCount() > 0) return refuse("commands queued");
+  if (host.isTurnActive()) return refuse("turn running");
+  if (state.promptPending) return refuse("prompt pending");
+  if (isTranscriptPersistenceDisabled()) return refuse("history suppressed", "persistence_disabled");
+  let sliced = host.getMessages().slice();
   let messages;
-  let rt;
-  let kt;
+  let targetUuid;
+  let prefillText;
   if (targetMessageUuid !== undefined) {
     let rewindTarget = findRewindTarget(sliced, targetMessageUuid);
-    if (!rewindTarget) return ke("target not found");
-    if (hasCronToolUse(sliced, rewindTarget.index)) return ke("target splits a tool call");
+    if (!rewindTarget) return refuse("target not found");
+    if (hasCronToolUse(sliced, rewindTarget.index)) return refuse("target splits a tool call");
     messages = sliced.slice(0, rewindTarget.index);
-    rt = rewindTarget.uuid;
-    kt = rewindTarget.prefillText ?? undefined;
+    targetUuid = rewindTarget.uuid;
+    prefillText = rewindTarget.prefillText ?? undefined;
   } else messages = sliced;
   let resumeAtLeaf = lastResumableMessage(messages)?.uuid ?? null;
   let sessionId = getSessionId();
-  if (isRemoteEgressSuppressedFor(pinSessionId(sessionId))) return ke("history suppressed");
+  if (isRemoteEgressSuppressedFor(pinSessionId(sessionId))) return refuse("history suppressed");
   let title_2 = deriveForkTitle(title, messages);
-  let createSession = D.createSession ?? createForkCodeSession;
-  let Dt =
-    D.uploadHistory ??
-    ((Ro, Ho, Io) =>
-      uploadForkDisplayHistory(Ro, Ho, Io, "rc_repl_fork_conversation", D.host, D.getTools?.()));
-  let archiveSession = D.archiveSession ?? archiveAbandonedForkSession;
-  let notifyFailure = D.notifyFailure ?? postForkFailureNotice;
-  let Xt = D.loadBackground ?? (() => import("./chunk-7c7hjd56.js"));
-  let io = null;
-  let so = false;
-  let po = "none";
-  let ao = () => po;
-  let co = (id) => ({
+  let createSession = host.createSession ?? createForkCodeSession;
+  let uploadHistory =
+    host.uploadHistory ??
+    ((sessionId, messages, credentials) =>
+      uploadForkDisplayHistory(
+        sessionId,
+        messages,
+        credentials,
+        "rc_repl_fork_conversation",
+        host.host,
+        host.getTools?.(),
+      ));
+  let archiveSession = host.archiveSession ?? archiveAbandonedForkSession;
+  let notifyFailure = host.notifyFailure ?? postForkFailureNotice;
+  let loadBackground = host.loadBackground ?? (() => import("../utils/background/spawnBackgroundFork.js"));
+  let childSessionId = null;
+  let outcomeDecided = false;
+  let outcomeState = "none";
+  let getOutcomeState = () => outcomeState;
+  let forkedResult = (id) => ({
     forked: true,
     sessionId: inSessionIdCostumeOf(reference, id),
-    ...(rt !== undefined && {
-      targetMessageUuid: rt,
+    ...(targetUuid !== undefined && {
+      targetMessageUuid: targetUuid,
     }),
-    ...(kt !== undefined && {
-      prefillText: kt,
+    ...(prefillText !== undefined && {
+      prefillText,
     }),
   });
-  let bo = (Ro, Ho) => {
-    so = true;
-    let Io = io;
-    if (Io !== null && po === "forked") {
-      notifyFailure(Io, D.credentials).then(() => archiveSession(Io, D.credentials));
-      return Re(Ho);
+  let abandonChild = (finish, reason) => {
+    outcomeDecided = true;
+    let child = childSessionId;
+    if (child !== null && outcomeState === "forked") {
+      notifyFailure(child, host.credentials).then(() => archiveSession(child, host.credentials));
+      return fail(reason);
     }
-    if (Io !== null) archiveSession(Io, D.credentials);
-    return Ro();
+    if (child !== null) archiveSession(child, host.credentials);
+    return finish();
   };
-  let Bo = await withDeadline(
+  let answer = await withDeadline(
     (async () => {
       try {
-        let Ro = await checkForkHistorySuppressed(sessionId, D.storageV5);
-        if (ao() === "failed") return FORK_FAILED_RESULT;
-        if (Ro !== null) return ke("history suppressed", Ro);
+        let suppression = await checkForkHistorySuppressed(sessionId, host.storageV5);
+        if (getOutcomeState() === "failed") return FORK_FAILED_RESULT;
+        if (suppression !== null) return refuse("history suppressed", suppression);
         let session = await createSession({
           title: title_2,
           tags: [REMOTE_CONTROL_FORK, `${REMOTE_CONTROL_FORK_PARENT}${toCompatSessionId(reference)}`],
-          sessionGroupingId: D.ownSessionGroupingId(),
-          credentials: D.credentials,
+          sessionGroupingId: host.ownSessionGroupingId(),
+          credentials: host.credentials,
         });
-        if (session === null) return Re("session_create_failed");
+        if (session === null) return fail("session_create_failed");
         let sessionId_2 = session.sessionId;
-        if (ao() === "failed") {
-          archiveSession(sessionId_2, D.credentials);
+        if (getOutcomeState() === "failed") {
+          archiveSession(sessionId_2, host.credentials);
           return FORK_FAILED_RESULT;
         }
-        io = sessionId_2;
-        let Wo = await checkForkHistorySuppressed(sessionId, D.storageV5);
-        if (Wo !== null) return bo(() => ke("history suppressed", Wo), "history_suppressed_after_answer");
-        let mn = await Dt(sessionId_2, messages, D.credentials);
-        if (mn !== null) return bo(() => Re(mn), `${mn}_after_answer`);
-        let { spawnBackgroundFork, deriveBackgroundSeed } = await Xt();
-        let messages_2 = D.getMessages();
+        childSessionId = sessionId_2;
+        let suppressionAfterAnswer = await checkForkHistorySuppressed(sessionId, host.storageV5);
+        if (suppressionAfterAnswer !== null)
+          return abandonChild(
+            () => refuse("history suppressed", suppressionAfterAnswer),
+            "history_suppressed_after_answer",
+          );
+        let uploadError = await uploadHistory(sessionId_2, messages, host.credentials);
+        if (uploadError !== null) return abandonChild(() => fail(uploadError), `${uploadError}_after_answer`);
+        let { spawnBackgroundFork, deriveBackgroundSeed } = await loadBackground();
+        let messages_2 = host.getMessages();
         if (
           targetMessageUuid !== undefined &&
           findRewindTarget(messages_2.slice(0, sliced.length), targetMessageUuid) === null
         )
-          return bo(() => ke("target not found"), "target_not_found_after_answer");
-        if (messages.some((bn, Go) => messages_2[Go]?.uuid !== bn.uuid))
-          return bo(() => Re("conversation_changed"), "conversation_changed_after_answer");
-        let launchState = D.getLaunchState();
-        let kn = deriveBackgroundSeed(messages, "", "(forked)") ?? {
+          return abandonChild(() => refuse("target not found"), "target_not_found_after_answer");
+        if (messages.some((message, index) => messages_2[index]?.uuid !== message.uuid))
+          return abandonChild(() => fail("conversation_changed"), "conversation_changed_after_answer");
+        let context = host.getLaunchState();
+        let seed = deriveBackgroundSeed(messages, "", "(forked)") ?? {
           intent: "(forked)",
           name: getCurrentSessionDisplayTitle(sessionId),
         };
         let backgroundFork = await spawnBackgroundFork(
-          kn,
+          seed,
           null,
-          launchState.sessionEffort,
-          getPermissionModeCycle(launchState),
-          launchState.toolPermissionContext.additionalWorkingDirectories,
-          launchState.toolPermissionContext.alwaysAllowRules,
-          launchState.toolPermissionContext.alwaysDenyRules,
+          context.sessionEffort,
+          getPermissionModeCycle(context),
+          context.toolPermissionContext.additionalWorkingDirectories,
+          context.toolPermissionContext.alwaysAllowRules,
+          context.toolPermissionContext.alwaysDenyRules,
           "remote_fork",
           messages_2,
           {
@@ -340,67 +352,66 @@ async function handleRcForkConversation(h, x, D) {
               queued: 0,
               kinds: [],
             },
-            proactivityLevel: promptProactivityLevel(launchState),
-            storageV5: D.storageV5,
-            credentials: D.credentials,
+            proactivityLevel: promptProactivityLevel(context),
+            storageV5: host.storageV5,
+            credentials: host.credentials,
             extraEnv: buildBridgeReattachEnv(sessionId_2, undefined, false, session.sessionGroupingId),
           },
         );
         if (!backgroundFork.ok)
-          return bo(
+          return abandonChild(
             () =>
               backgroundFork.reason === "fork_point_missing"
-                ? ke("target not found")
-                : Re(backgroundFork.reason ?? "spawn_failed"),
+                ? refuse("target not found")
+                : fail(backgroundFork.reason ?? "spawn_failed"),
             "spawn_failed_after_answer",
           );
-        await D.recordChildBridgeSession(backgroundFork.short, sessionId_2, session.sessionGroupingId).catch(
-          (error) =>
+        await host
+          .recordChildBridgeSession(backgroundFork.short, sessionId_2, session.sessionGroupingId)
+          .catch((error) =>
             logForDebugging(
               `[rc-fork] Could not record the fork's session in job ${backgroundFork.short}: ${errorMessage(error)}`,
               {
                 level: "warn",
               },
             ),
-        );
-        ee("ok");
-        return co(sessionId_2);
+          );
+        logOnce("ok");
+        return forkedResult(sessionId_2);
       } catch (error) {
         logForDebugging(`[rc-fork] fork_conversation failed: ${errorMessage(error)}`, {
           level: "error",
         });
-        return bo(() => Re("exception"), "exception_after_answer");
+        return abandonChild(() => fail("exception"), "exception_after_answer");
       }
     })(),
     FORK_ANSWER_DEADLINE_MS,
-    D.armAnswerDeadline,
+    host.armAnswerDeadline,
   );
-  if (Bo !== undefined) return Bo;
-  if (io !== null && !so) {
-    po = "forked";
-    return co(io);
+  if (answer !== undefined) return answer;
+  if (childSessionId !== null && !outcomeDecided) {
+    outcomeState = "forked";
+    return forkedResult(childSessionId);
   }
-  po = "failed";
-  return Re("deadline");
+  outcomeState = "failed";
+  return fail("deadline");
 }
 //@ chunk-18hwfzwa.js:1571993-1572260 placement
 /**
  * 生成分叉会话标题：优先用请求给的标题；其次当前会话标题加 " (fork)"；再次从人类消息推导（截到 FORK_TITLE_MAX_LENGTH）；都没有则 "Forked session"。
  */
 function deriveForkTitle(requestedTitle, messages) {
-  let D = (Re) => sanitizeSessionTitle(Re).replace(/\s+/g, " ").trim();
-  let L = requestedTitle !== undefined ? D(requestedTitle) : "";
-  if (L) return L;
+  let normalizeTitle = (raw) => sanitizeSessionTitle(raw).replace(/\s+/g, " ").trim();
+  let requested = requestedTitle !== undefined ? normalizeTitle(requestedTitle) : "";
+  if (requested) return requested;
   let currentSessionDisplayTitle = getCurrentSessionDisplayTitle(getSessionId());
-  let ke = currentSessionDisplayTitle ? D(`${currentSessionDisplayTitle} (fork)`) : "";
-  if (ke) return ke;
+  let fromCurrent = currentSessionDisplayTitle ? normalizeTitle(`${currentSessionDisplayTitle} (fork)`) : "";
+  if (fromCurrent) return fromCurrent;
   for (let message of messages) {
-    let titleFromHumanTurn = deriveTitleFromHumanTurn(message);
-    let He =
-      titleFromHumanTurn === undefined
-        ? ""
-        : truncateToLength(D(titleFromHumanTurn), FORK_TITLE_MAX_LENGTH).trim();
-    if (He) return He;
+    let raw = deriveTitleFromHumanTurn(message);
+    let fromTurn =
+      raw === undefined ? "" : truncateToLength(normalizeTitle(raw), FORK_TITLE_MAX_LENGTH).trim();
+    if (fromTurn) return fromTurn;
   }
   return "Forked session";
 }
@@ -458,13 +469,16 @@ async function createForkCodeSession({ title, tags, sessionGroupingId, credentia
     : null;
 }
 //@ chunk-18hwfzwa.js:1572980-1573075 placement
-var READ_ONLY_CONTROL_COMMAND_NAMES = new Set([
-  "get_usage",
-  "mcp_status",
-  "get_context_usage",
-  "stop_task",
-  "background_tasks",
-]);
+var READ_ONLY_CONTROL_COMMAND_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1572980", () => {
+  READ_ONLY_CONTROL_COMMAND_NAMES = new Set([
+    "get_usage",
+    "mcp_status",
+    "get_context_usage",
+    "stop_task",
+    "background_tasks",
+  ]);
+});
 //@ chunk-18hwfzwa.js:1573075-1573966 placement
 function makeBridgeControlContext({
   session,
@@ -495,9 +509,9 @@ function makeBridgeControlContext({
         tools,
       };
     },
-    isKnownMcpServer: (He) =>
-      engineStore.getState().mcp.clients.some((client) => client.name === He) ||
-      getMcpConfigByName(He) !== null,
+    isKnownMcpServer: (serverName) =>
+      engineStore.getState().mcp.clients.some((client) => client.name === serverName) ||
+      getMcpConfigByName(serverName) !== null,
     contextUsageInputs: () => {
       let {
         tools,

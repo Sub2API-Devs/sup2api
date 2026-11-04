@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:188089-190267 cjs-fingerprint
-var require_haxe = x(function (cjsExports, cjsModule) {
+var require_haxe = __commonJS(function (cjsExports, cjsModule) {
   function haxe(hljs) {
     let HAXE_NUMBER_RE =
       /(-?)(\b0[xX][a-fA-F0-9_]+|(\b\d+(\.[\d_]*)?|\.[\d_]+)(([eE][-+]?\d+)|i32|u32|i64|f64)?)/;

@@ -5,13 +5,13 @@
  * pieces: chunk-j3x7ed1b.js (1)
  * attribution: esm-layout 1
  */
-import { Re } from "../../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_client } from "../../core/dist-cjs/submodules/client/index.js";
 import { require_property_provider } from "../../../@smithy/property-provider/dist-cjs/index.js";
 
 //@ chunk-j3x7ed1b.js:335-1021 esm-layout
-var client = Re(require_client());
-var propertyProvider = Re(require_property_provider());
+var client = __toESM(require_client());
+var propertyProvider = __toESM(require_property_provider());
 var ENV_KEY = "AWS_ACCESS_KEY_ID";
 var ENV_SECRET = "AWS_SECRET_ACCESS_KEY";
 var ENV_SESSION = "AWS_SESSION_TOKEN";

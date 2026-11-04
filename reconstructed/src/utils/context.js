@@ -44,12 +44,15 @@ function calculateContextPercentages(currentUsage, contextWindowSize) {
 /**
  * clientdata 的 heather_vale（全局或按模型）给出的默认输出 token。
  */
-function getClientDataDefaultOutputTokens(e, n) {
-  let heatherVale = getCachedClientData(e)?.heather_vale;
+function getClientDataDefaultOutputTokens(model, antModel) {
+  let heatherVale = getCachedClientData(model)?.heather_vale;
   if (typeof heatherVale !== "number") {
     let heatherVale_2 = getCachedClientData()?.heather_vale;
-    let h = typeof heatherVale_2 === "number" ? getFetchedClientData()?.heather_vale : heatherVale_2;
-    heatherVale = typeof h === "object" && h !== null && !Array.isArray(h) ? h[n] : undefined;
+    let override = typeof heatherVale_2 === "number" ? getFetchedClientData()?.heather_vale : heatherVale_2;
+    heatherVale =
+      typeof override === "object" && override !== null && !Array.isArray(override)
+        ? override[antModel]
+        : undefined;
   }
   if (typeof heatherVale !== "number" || !Number.isInteger(heatherVale) || heatherVale <= 0) return null;
   return heatherVale;
@@ -59,45 +62,46 @@ function getClientDataDefaultOutputTokens(e, n) {
  * 模型 max_output_tokens：{default, upperLimit}；来源依次为模型目录覆盖、目录 max_output_tokens、claude-3 老模型固定值、默认 32000/128000；再受 clientdata 默认值与能力表 max_tokens 约束。
  */
 function getModelMaxOutputTokens(model) {
-  let n;
-  let r;
+  let defaultTokens;
+  let maxTokens;
   let antModel = getCanonicalName(model);
-  let h = servedMaxOutputTokens(model, antModel);
+  let servedMax = servedMaxOutputTokens(model, antModel);
   let maxOutputTokens = getCatalogEntry(antModel)?.max_output_tokens;
-  if (h !== undefined) {
-    r = h;
-    n = Math.min(maxOutputTokens?.default ?? SMALL_FAST_MAX_OUTPUT_TOKENS, h);
+  if (servedMax !== undefined) {
+    maxTokens = servedMax;
+    defaultTokens = Math.min(maxOutputTokens?.default ?? SMALL_FAST_MAX_OUTPUT_TOKENS, servedMax);
   } else if (maxOutputTokens) {
-    n = maxOutputTokens.default;
-    r = maxOutputTokens.upper;
+    defaultTokens = maxOutputTokens.default;
+    maxTokens = maxOutputTokens.upper;
   } else if (antModel === "claude-3-opus" || antModel === "claude-3-haiku") {
-    n = 4096;
-    r = 4096;
+    defaultTokens = 4096;
+    maxTokens = 4096;
   } else if (antModel === "claude-3-sonnet") {
-    n = 8192;
-    r = 8192;
+    defaultTokens = 8192;
+    maxTokens = 8192;
   } else {
-    n = SMALL_FAST_MAX_OUTPUT_TOKENS;
-    r = MAX_OUTPUT_TOKENS_LIMIT;
+    defaultTokens = SMALL_FAST_MAX_OUTPUT_TOKENS;
+    maxTokens = MAX_OUTPUT_TOKENS_LIMIT;
   }
-  let S = servedDefaultOutputTokens(model, antModel) ?? getClientDataDefaultOutputTokens(model, antModel);
-  if (S !== null) n = Math.min(S, r);
+  let result =
+    servedDefaultOutputTokens(model, antModel) ?? getClientDataDefaultOutputTokens(model, antModel);
+  if (result !== null) defaultTokens = Math.min(result, maxTokens);
   let cap = getModelCapability(model);
   if (cap?.max_tokens && cap.max_tokens >= 4096) {
-    r = cap.max_tokens;
-    n = Math.min(n, r);
+    maxTokens = cap.max_tokens;
+    defaultTokens = Math.min(defaultTokens, maxTokens);
   }
   return {
-    default: n,
-    upperLimit: r,
+    default: defaultTokens,
+    upperLimit: maxTokens,
   };
 }
 //@ chunk-e6aww6q8.js:1550371-1550615 callgraph-fingerprint = getContextWindowForModel (0.4)
 /**
  * 第一方直连、未禁用 1M、窗口 <1M 等条件下是否对未知模型强制窗口。旧版名 getContextWindowForModel 为错配（返回布尔）。
  */
-function shouldEnforceUnknownModelWindow(e) {
-  let { model, contextWindow } = e;
+function shouldEnforceUnknownModelWindow(model) {
+  let { model: model_2, contextWindow } = model;
   if (
     getAPIProvider() !== "firstParty" ||
     isFirstPartyAnthropicBaseUrl() ||
@@ -110,10 +114,10 @@ function shouldEnforceUnknownModelWindow(e) {
   if (
     CLAUDE_CODE_MAX_CONTEXT_TOKENS !== undefined &&
     CLAUDE_CODE_MAX_CONTEXT_TOKENS > 0 &&
-    isCompactDisabledOrCustom(model)
+    isCompactDisabledOrCustom(model_2)
   )
     return false;
-  return isUnrecognizedModelWindow(e);
+  return isUnrecognizedModelWindow(model);
 }
 export {
   calculateContextPercentages,

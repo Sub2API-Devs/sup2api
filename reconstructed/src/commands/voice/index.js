@@ -24,7 +24,7 @@ var voiceCommandDefinition = {
     return !isVoiceModeAvailable();
   },
   supportsNonInteractive: false,
-  load: () => import("./chunk-vrdyygyr.js"),
+  load: () => import("./voice.js"),
 };
 var voiceCommand = voiceCommandDefinition;
 export { voiceCommand };

@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (10)
  * attribution: placement 8, fingerprint 2
  */
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { useIsScreenReaderEnabled } from "../../../ink/components/ErrorBoundary.js";
 import {
   jsxProd_default,
@@ -26,24 +26,25 @@ import { repeatString } from "../../../utils/stringUtils.js";
 import { truncate as truncate_2 } from "../../../ink/wrap-text.js";
 import { ELLIPSIS } from "../../../ink/styles.js";
 import { Ansi } from "../../../ink/components/AnsiText.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1270669-1271136 placement
 function PreviewBox(props) {
-  let $ = w(7);
+  let $ = useMemoCache(7);
   let settings = useIsScreenReaderEnabled();
   let children;
   if ($[0] !== settings || $[1] !== props.runs) {
-    let ee;
+    let renderRun;
     if ($[3] !== settings) {
-      ee = (ke, Re) => {
-        switch (ke.kind) {
+      renderRun = (run, key) => {
+        switch (run.kind) {
           case "text": {
             return jsxProd_default(
               Text,
               {
-                children: ke.text,
+                children: run.text,
               },
-              Re,
+              key,
             );
           }
           case "fileLink": {
@@ -51,43 +52,46 @@ function PreviewBox(props) {
               ? jsxProd_default(
                   Text,
                   {
-                    children: ke.label,
+                    children: run.label,
                   },
-                  Re,
+                  key,
                 )
               : jsxProd_default(
                   Link,
                   {
-                    url: ke.url,
-                    fallback: `${ke.label} (${ke.path})`,
-                    children: ke.label,
+                    url: run.url,
+                    fallback: `${run.label} (${run.path})`,
+                    children: run.label,
                   },
-                  Re,
+                  key,
                 );
           }
         }
       };
       $[3] = settings;
-      $[4] = ee;
-    } else ee = $[4];
-    children = props.runs.map(ee);
+      $[4] = renderRun;
+    } else renderRun = $[4];
+    children = props.runs.map(renderRun);
     $[0] = settings;
     $[1] = props.runs;
     $[2] = children;
   } else children = $[2];
-  let ee;
+  let previewText;
   if ($[5] !== children) {
-    ee = jsxProd_default(Text, {
+    previewText = jsxProd_default(Text, {
       color: "inactive",
       children,
     });
     $[5] = children;
-    $[6] = ee;
-  } else ee = $[6];
-  return ee;
+    $[6] = previewText;
+  } else previewText = $[6];
+  return previewText;
 }
 //@ chunk-18hwfzwa.js:1271136-1271140 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1271136", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1271140-1271251 placement
 /**
  * 问题预览框的最大长度，以及预览无法完整显示时的提示文本。
@@ -96,14 +100,17 @@ var MAX_PREVIEW_LENGTH = 2000;
 var PREVIEW_WITHHELD_TEXT =
   "(preview cannot be shown in full \u2014 compare the option labels and descriptions instead)";
 //@ chunk-18hwfzwa.js:1271251-1271255 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1271251", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1271255-1271287 placement
-function layoutNode(_o) {
-  return squashSingleText(_o);
+function layoutNode(node) {
+  return squashSingleText(node);
 }
 //@ chunk-18hwfzwa.js:1271287-1271318 placement
-function nodeWidth(cn) {
-  return bunStringWidth(cn);
+function nodeWidth(text) {
+  return bunStringWidth(text);
 }
 //@ chunk-18hwfzwa.js:1271318-1271476 fingerprint = BOX_CHARS (1)
 var BOX_CHARS = {
@@ -118,7 +125,7 @@ var BOX_CHARS = {
 };
 //@ chunk-18hwfzwa.js:1271755-1274144 fingerprint = PreviewBoxBody (0.928)
 function PreviewBoxBody(props) {
-  let $ = w(37);
+  let $ = useMemoCache(37);
   let { content, maxLines, minHeight, minWidth, maxWidth, highlight } = props;
   let minWidth_2 = minWidth === undefined ? 40 : minWidth;
   let { columns: terminalWidth } = useTerminalSize();
@@ -135,10 +142,10 @@ function PreviewBoxBody(props) {
   } else t2 = $[3];
   let rendered = t2;
   let max = Math.max(1, effectiveMaxWidth - 4);
-  let Ot;
+  let containerComponent;
   let bottomBorder;
   let flexDirection;
-  let Lt;
+  let topBorderElement;
   let t5;
   let truncationBar;
   if (
@@ -155,20 +162,20 @@ function PreviewBoxBody(props) {
 `,
       )
       .map(layoutNode);
-    let so;
+    let wrapLine;
     if ($[16] !== max) {
-      so = (po) =>
-        bunStringWidth(po) > max
-          ? wrapAnsi(po, max, {
+      wrapLine = (line) =>
+        bunStringWidth(line) > max
+          ? wrapAnsi(line, max, {
               hard: true,
               trim: false,
             }).split(`
 `)
-          : po;
+          : line;
       $[16] = max;
-      $[17] = so;
-    } else so = $[17];
-    let contentLines = mapped.flatMap(so);
+      $[17] = wrapLine;
+    } else wrapLine = $[17];
+    let contentLines = mapped.flatMap(wrapLine);
     let isTruncated = contentLines.length > effectiveMaxLines;
     let truncatedLines = isTruncated ? contentLines.slice(0, effectiveMaxLines) : contentLines;
     let effectiveMinHeight = Math.min(minHeight ?? 0, effectiveMaxLines);
@@ -177,22 +184,22 @@ function PreviewBoxBody(props) {
     let contentWidth = Math.max(minWidth_2, ...lines.map(nodeWidth));
     let max_2 = Math.max(4, Math.min(contentWidth + 4, effectiveMaxWidth));
     let innerWidth = max_2 - 4;
-    const mn = max_2 - 2;
-    let Cn;
-    if ($[18] !== mn) {
-      Cn = repeatString(BOX_CHARS.horizontal, mn);
-      $[18] = mn;
-      $[19] = Cn;
-    } else Cn = $[19];
-    let topBorder = `${BOX_CHARS.topLeft}${Cn}${BOX_CHARS.topRight}`;
-    const vo = max_2 - 2;
-    let Yo;
-    if ($[20] !== vo) {
-      Yo = repeatString(BOX_CHARS.horizontal, vo);
-      $[20] = vo;
-      $[21] = Yo;
-    } else Yo = $[21];
-    bottomBorder = `${BOX_CHARS.bottomLeft}${Yo}${BOX_CHARS.bottomRight}`;
+    const topBorderWidth = max_2 - 2;
+    let topBorderFill;
+    if ($[18] !== topBorderWidth) {
+      topBorderFill = repeatString(BOX_CHARS.horizontal, topBorderWidth);
+      $[18] = topBorderWidth;
+      $[19] = topBorderFill;
+    } else topBorderFill = $[19];
+    let topBorder = `${BOX_CHARS.topLeft}${topBorderFill}${BOX_CHARS.topRight}`;
+    const bottomBorderWidth = max_2 - 2;
+    let bottomBorderFill;
+    if ($[20] !== bottomBorderWidth) {
+      bottomBorderFill = repeatString(BOX_CHARS.horizontal, bottomBorderWidth);
+      $[20] = bottomBorderWidth;
+      $[21] = bottomBorderFill;
+    } else bottomBorderFill = $[21];
+    bottomBorder = `${BOX_CHARS.bottomLeft}${bottomBorderFill}${BOX_CHARS.bottomRight}`;
     truncationBar = isTruncated
       ? (() => {
           let hiddenCount = contentLines.length - effectiveMaxLines;
@@ -202,21 +209,21 @@ function PreviewBoxBody(props) {
           return `${BOX_CHARS.teeLeft}${label}${BOX_CHARS.horizontal.repeat(fillWidth)}${BOX_CHARS.teeRight}`;
         })()
       : null;
-    Ot = Box;
+    containerComponent = Box;
     flexDirection = "column";
     if ($[22] !== topBorder) {
-      Lt = jsxProd_default(Text, {
+      topBorderElement = jsxProd_default(Text, {
         dimColor: true,
         children: topBorder,
       });
       $[22] = topBorder;
-      $[23] = Lt;
-    } else Lt = $[23];
+      $[23] = topBorderElement;
+    } else topBorderElement = $[23];
     let t8;
     if ($[24] !== innerWidth) {
       t8 = (line, index) => {
-        let Sn = innerWidth > 0 ? truncate_2(line, innerWidth, "end") : null;
-        let displayLine = innerWidth < 1 ? "" : Sn ? Sn.head + ELLIPSIS : line;
+        let truncatedLine = innerWidth > 0 ? truncate_2(line, innerWidth, "end") : null;
+        let displayLine = innerWidth < 1 ? "" : truncatedLine ? truncatedLine.head + ELLIPSIS : line;
         let padding = " ".repeat(Math.max(0, innerWidth - bunStringWidth(displayLine)));
         return jsxProd_default_2(
           Box,
@@ -249,17 +256,17 @@ function PreviewBoxBody(props) {
     $[7] = minWidth_2;
     $[8] = rendered;
     $[9] = max;
-    $[10] = Ot;
+    $[10] = containerComponent;
     $[11] = bottomBorder;
     $[12] = flexDirection;
-    $[13] = Lt;
+    $[13] = topBorderElement;
     $[14] = t5;
     $[15] = truncationBar;
   } else {
-    Ot = $[10];
+    containerComponent = $[10];
     bottomBorder = $[11];
     flexDirection = $[12];
-    Lt = $[13];
+    topBorderElement = $[13];
     t5 = $[14];
     truncationBar = $[15];
   }
@@ -285,20 +292,20 @@ function PreviewBoxBody(props) {
   } else t7 = $[29];
   let t8;
   if (
-    $[30] !== Ot ||
+    $[30] !== containerComponent ||
     $[31] !== flexDirection ||
-    $[32] !== Lt ||
+    $[32] !== topBorderElement ||
     $[33] !== t5 ||
     $[34] !== t6 ||
     $[35] !== t7
   ) {
-    t8 = jsxProd_default_2(Ot, {
+    t8 = jsxProd_default_2(containerComponent, {
       flexDirection,
-      children: [Lt, t5, t6, t7],
+      children: [topBorderElement, t5, t6, t7],
     });
-    $[30] = Ot;
+    $[30] = containerComponent;
     $[31] = flexDirection;
-    $[32] = Lt;
+    $[32] = topBorderElement;
     $[33] = t5;
     $[34] = t6;
     $[35] = t7;
@@ -307,7 +314,13 @@ function PreviewBoxBody(props) {
   return t8;
 }
 //@ chunk-18hwfzwa.js:1274144-1274148 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1274144", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1274148-1274152 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1274148", () => {
+  init_react_production();
+});
 export { PreviewBoxBody, PREVIEW_WITHHELD_TEXT, PreviewBox, MAX_PREVIEW_LENGTH };

@@ -5,22 +5,22 @@
  * pieces: chunk-2tyrgda4.js (3)
  * attribution: esm-layout 2, esm-fingerprint 1
  */
-import { Xa } from "../../../../../../../runtime/bun-runtime.js";
+import { __esm } from "../../../../../../../runtime/bun-runtime.js";
 import {
   init_content_encryption,
   init_content_encryption_4,
   init_content_encryption_2,
 } from "../../../../webapi/lib/content_encryption.js";
-import { init_aesgcmkw } from "../../../../browser/lib/aesgcmkw.js";
+import { init_aesgcmkw } from "../../../../browser/runtime/encrypt.js";
 import { init_validate, init_validate_2 } from "../../../../webapi/lib/validate.js";
 import { init_encrypt_2, FlattenedEncrypt } from "../flattened/encrypt.js";
 import { init_base64url } from "../../../../browser/runtime/base64url.js";
 import { init_options_2 } from "../../../../webapi/lib/options.js";
 
 //@ chunk-2tyrgda4.js:36110-36117 esm-layout
-var Gr;
+var jweEncryptInit;
 //@ chunk-2tyrgda4.js:36117-36188 esm-layout
-var init_encrypt_3 = Xa(() => {
+var init_encrypt_3 = __esm(() => {
   init_content_encryption();
   init_aesgcmkw();
   init_validate();
@@ -30,7 +30,7 @@ var init_encrypt_3 = Xa(() => {
   init_validate_2();
   init_base64url();
   init_options_2();
-  Gr = Symbol();
+  jweEncryptInit = Symbol();
 });
 //@ chunk-2tyrgda4.js:36188-36693 esm-fingerprint
 class CompactEncrypt {
@@ -58,4 +58,4 @@ class CompactEncrypt {
     return [jwe.protected, jwe.encrypted_key, jwe.iv, jwe.ciphertext, jwe.tag].join(".");
   }
 }
-export { init_encrypt_3, Gr };
+export { init_encrypt_3, jweEncryptInit, CompactEncrypt };

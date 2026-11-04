@@ -8,12 +8,12 @@
  * pieces: chunk-095ptjmr.js (1)
  * attribution: fingerprint 1
  */
-import { Se } from "../../../vendor/react/cjs/react.production.js";
+import { useContext } from "../../../vendor/react/cjs/react.production.js";
 import { wizardSlot } from "./WizardProvider.js";
 
 //@ chunk-095ptjmr.js:2900-3004 fingerprint = useWizard (1)
 function useWizard() {
-  let context = Se(wizardSlot);
+  let context = useContext(wizardSlot);
   if (!context) throw Error("useWizard must be used within a WizardProvider");
   return context;
 }

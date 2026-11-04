@@ -30,80 +30,82 @@ function replayWithoutLaptopMemory() {
 }
 //@ chunk-18hwfzwa.js:1468986-1470318 placement
 function withoutLaptopMemoryText(
-  h,
-  x,
-  D = () => {
+  memorySnapshotLines,
+  messages,
+  findToolResult = () => {
     return;
   },
 ) {
-  let sorted = h.filter((ze) => ze.trim() !== "").sort((ze, Xe) => Xe.trim().length - ze.trim().length);
-  if (sorted.length === 0) return;
-  let ee = removeLaptopMemoryText(sorted, x);
-  if (ee.keys === 0)
+  let memorySnapshotLines_2 = memorySnapshotLines
+    .filter((line) => line.trim() !== "")
+    .sort((a, b) => b.trim().length - a.trim().length);
+  if (memorySnapshotLines_2.length === 0) return;
+  let removed = removeLaptopMemoryText(memorySnapshotLines_2, messages);
+  if (removed.keys === 0)
     throw new ReplayMisalignmentError(
       "request-replay: withoutLaptopMemoryText made no search text for the account-memory snapshots shown; this request is not recorded",
     );
-  if (ee.hits === 0) {
-    assertMemoryRemoved(sorted, x, MAX_PROBE_LINES, D);
+  if (removed.hits === 0) {
+    assertMemoryRemoved(memorySnapshotLines_2, messages, MAX_PROBE_LINES, findToolResult);
     return;
   }
   let findMemory = (content) => {
-    let Xe = removeLaptopMemoryText(sorted, [
+    let removed = removeLaptopMemoryText(memorySnapshotLines_2, [
       {
         role: "user",
         content,
       },
     ]);
     return {
-      remains: Xe.messages[0]?.content,
-      hits: Xe.hits,
+      remains: removed.messages[0]?.content,
+      hits: removed.hits,
     };
   };
   let state = {
     placeholders: 0,
   };
-  let Be = [];
-  let He = ee.messages.length === x.length;
-  let mapped = x.map((ze, Xe) => {
-    if (ze.role !== "user") return ze;
+  let placeholderIndices = [];
+  let aligned = removed.messages.length === messages.length;
+  let messages_2 = messages.map((message, index) => {
+    if (message.role !== "user") return message;
     let stripped;
-    if (He) stripped = ee.messages[Xe].content;
+    if (aligned) stripped = removed.messages[index].content;
     else {
-      let It = findMemory(ze.content);
-      if (It.hits === 0) return ze;
-      stripped = It.remains;
+      let removed = findMemory(message.content);
+      if (removed.hits === 0) return message;
+      stripped = removed.remains;
     }
     let placeholders = state.placeholders;
-    let content = replaceMemoryInContent(ze.content, stripped, findMemory, state);
-    if (state.placeholders === placeholders) return ze;
-    Be.push(Xe);
+    let content = replaceMemoryInContent(message.content, stripped, findMemory, state);
+    if (state.placeholders === placeholders) return message;
+    placeholderIndices.push(index);
     return {
-      ...ze,
+      ...message,
       content,
     };
   });
-  if (removeLaptopMemoryText(sorted, mapped).hits !== 0)
+  if (removeLaptopMemoryText(memorySnapshotLines_2, messages_2).hits !== 0)
     throw new ReplayMisalignmentError(
       "request-replay: withoutLaptopMemoryText still finds account-memory snapshot text after the cut; this request is not recorded",
     );
-  assertMemoryRemoved(sorted, mapped, MAX_PROBE_LINES, D);
+  assertMemoryRemoved(memorySnapshotLines_2, messages_2, MAX_PROBE_LINES, findToolResult);
   assertMemoryRemoved(
-    sorted,
-    Be.map((ze) => mapped[ze]),
+    memorySnapshotLines_2,
+    placeholderIndices.map((index) => messages_2[index]),
     Number.POSITIVE_INFINITY,
-    D,
+    findToolResult,
   );
-  if (state.placeholders === 0 || state.placeholders > ee.hits)
+  if (state.placeholders === 0 || state.placeholders > removed.hits)
     throw new ReplayMisalignmentError(
       "request-replay: the placeholders do not match the cuts withoutLaptopMemoryText reported; this request is not recorded",
     );
   return {
-    messages: mapped,
+    messages: messages_2,
     cut: {
       kind: "laptop-account-memory",
-      cuts: ee.hits,
+      cuts: removed.hits,
       placeholders: state.placeholders,
-      messages: Be,
+      messages: placeholderIndices,
     },
   };
 }
@@ -115,38 +117,43 @@ function replaceMemoryInContent(content, stripped, findMemory, state) {
   if (typeof content === "string")
     return alignStrippedText(content, typeof stripped === "string" ? stripped : "", state);
   let alignedArrays = Array.isArray(stripped) && stripped.length === content.length;
-  return content.map((ke, Re) => {
-    let Be;
-    if (alignedArrays) Be = stripped[Re];
+  return content.map((block, index) => {
+    let strippedBlock;
+    if (alignedArrays) strippedBlock = stripped[index];
     else {
-      let memory = findMemory([ke]);
-      if (memory.hits === 0) return ke;
-      Be = firstOrUndefined(memory.remains);
+      let memory = findMemory([block]);
+      if (memory.hits === 0) return block;
+      strippedBlock = firstOrUndefined(memory.remains);
     }
-    if (isTextBlock(ke)) {
-      let He = alignStrippedText(ke.text, Be !== undefined && isTextBlock(Be) ? Be.text : "", state);
-      if (He === ke.text) return ke;
+    if (isTextBlock(block)) {
+      let alignedText = alignStrippedText(
+        block.text,
+        strippedBlock !== undefined && isTextBlock(strippedBlock) ? strippedBlock.text : "",
+        state,
+      );
+      if (alignedText === block.text) return block;
       return {
-        ...ke,
-        text: He,
+        ...block,
+        text: alignedText,
       };
     }
-    if (isToolResultBlock(ke) && ke.content !== undefined) {
-      let content = Be !== undefined && isToolResultBlock(Be) ? Be.content : undefined;
+    if (isToolResultBlock(block) && block.content !== undefined) {
+      let content =
+        strippedBlock !== undefined && isToolResultBlock(strippedBlock) ? strippedBlock.content : undefined;
       if (content === undefined || content === "") {
-        let memory = findMemory(ke.content);
-        if (memory.hits === 0) return ke;
+        let memory = findMemory(block.content);
+        if (memory.hits === 0) return block;
         content = memory.remains;
       }
       let placeholders = state.placeholders;
-      let content_2 = replaceMemoryInContent(ke.content, content, findMemory, state);
-      if (state.placeholders === placeholders) return ke;
+      let content_2 = replaceMemoryInContent(block.content, content, findMemory, state);
+      if (state.placeholders === placeholders) return block;
       return {
-        ...ke,
+        ...block,
         content: content_2,
       };
     }
-    return ke;
+    return block;
   });
 }
 //@ chunk-18hwfzwa.js:1470954-1471006 placement
@@ -163,7 +170,7 @@ function alignStrippedText(original, stripped, state) {
   let originalIndex = 0;
   let strippedIndex = 0;
   while (originalIndex < original.length) {
-    let Re = strippedIndex;
+    let segmentStart = strippedIndex;
     while (
       originalIndex < original.length &&
       strippedIndex < stripped.length &&
@@ -173,7 +180,7 @@ function alignStrippedText(original, stripped, state) {
       strippedIndex++;
     }
     if (
-      strippedIndex > Re &&
+      strippedIndex > segmentStart &&
       originalIndex < original.length &&
       isHighSurrogate(original.charCodeAt(originalIndex - 1)) &&
       isLowSurrogate(original.charCodeAt(originalIndex))
@@ -181,30 +188,30 @@ function alignStrippedText(original, stripped, state) {
       originalIndex--;
       strippedIndex--;
     }
-    parts.push(stripped.slice(Re, strippedIndex));
+    parts.push(stripped.slice(segmentStart, strippedIndex));
     if (originalIndex >= original.length) break;
     parts.push(MEMORY_SNAPSHOT_PLACEHOLDER);
     state.placeholders++;
     if (strippedIndex >= stripped.length) break;
     let sliced = stripped.slice(strippedIndex);
-    let He = original.length - sliced.length;
-    let We =
-      sliced.length < 32 && He > originalIndex && original.endsWith(sliced)
-        ? He
+    let tailStart = original.length - sliced.length;
+    let nextIndex =
+      sliced.length < 32 && tailStart > originalIndex && original.endsWith(sliced)
+        ? tailStart
         : original.indexOf(sliced.slice(0, 32), originalIndex + 1);
-    if (We === -1) throw misalignedReplayError();
-    originalIndex = We;
+    if (nextIndex === -1) throw misalignedReplayError();
+    originalIndex = nextIndex;
   }
   if (strippedIndex < stripped.length) throw misalignedReplayError();
   return parts.join("");
 }
 //@ chunk-18hwfzwa.js:1471512-1471554 placement
-function isHighSurrogate(h) {
-  return h >= 55296 && h <= 56319;
+function isHighSurrogate(code) {
+  return code >= 55296 && code <= 56319;
 }
 //@ chunk-18hwfzwa.js:1471554-1471596 placement
-function isLowSurrogate(h) {
-  return h >= 56320 && h <= 57343;
+function isLowSurrogate(code) {
+  return code >= 56320 && code <= 57343;
 }
 //@ chunk-18hwfzwa.js:1471596-1471747 placement
 function misalignedReplayError() {
@@ -216,23 +223,24 @@ function misalignedReplayError() {
 /**
  * 确认账号记忆快照的行没有残留在模型轮次之外（除允许的工具结果），否则抛错使该请求不被记录。
  */
-function assertMemoryRemoved(h, x, D, findToolResult) {
-  let messages = x.filter((Re) => Re.role !== "assistant");
-  let serialized = messages.map((Re) => jsonStringify(Re));
-  for (let Re of h) {
-    let sliced = Re.split(
-      `
+function assertMemoryRemoved(memorySnapshotLines, messages, maxProbeLines, findToolResult) {
+  let messages_2 = messages.filter((message) => message.role !== "assistant");
+  let serialized = messages_2.map((message) => jsonStringify(message));
+  for (let snapshot of memorySnapshotLines) {
+    let sliced = snapshot
+      .split(
+        `
 `,
-    )
+      )
       .map((line) => line.trim())
-      .filter((He) => He.length >= MIN_PROBE_LINE_LENGTH)
-      .sort((He, We) => We.length - He.length)
-      .slice(0, D);
-    for (let He of sliced) {
-      let escapedLine = jsonStringify(He).slice(1, -1);
+      .filter((line) => line.length >= MIN_PROBE_LINE_LENGTH)
+      .sort((a, b) => b.length - a.length)
+      .slice(0, maxProbeLines);
+    for (let probeLine of sliced) {
+      let escapedLine = jsonStringify(probeLine).slice(1, -1);
       if (
-        serialized.some((ze) => ze.includes(escapedLine)) &&
-        !isOnlyInToolResults(messages, serialized, He, escapedLine, findToolResult)
+        serialized.some((serializedMessage) => serializedMessage.includes(escapedLine)) &&
+        !isOnlyInToolResults(messages_2, serialized, probeLine, escapedLine, findToolResult)
       )
         throw new ReplayMisalignmentError(
           "request-replay: a line of a shown account-memory snapshot is still present outside the model's turns; this request is not recorded",
@@ -246,34 +254,38 @@ function assertMemoryRemoved(h, x, D, findToolResult) {
  */
 function isOnlyInToolResults(messages, serialized, line, escapedLine, findToolResult) {
   let seenToolUseIds = new Set();
-  for (let [Re, Be] of messages.entries()) {
-    let He = countOccurrences(serialized[Re], escapedLine);
-    if (He === 0) continue;
-    if (!Array.isArray(Be.content)) return false;
-    let We = 0;
-    for (let ze of Be.content) {
-      let Xe = countOccurrences(jsonStringify(ze), escapedLine);
-      if (Xe === 0) continue;
-      if (!isToolResultBlock(ze) || typeof ze.tool_use_id !== "string" || seenToolUseIds.has(ze.tool_use_id))
-        return false;
-      seenToolUseIds.add(ze.tool_use_id);
-      let rt = jsonStringify(ze.content ?? "");
-      if (rt.includes(MEMORY_SNAPSHOT_PLACEHOLDER)) return false;
-      let toolResult = findToolResult(ze.tool_use_id);
-      let At = plainTextOf(ze.content);
-      let It = toolResult && plainTextOf(toolResult.content);
+  for (let [index, message] of messages.entries()) {
+    let messageCount = countOccurrences(serialized[index], escapedLine);
+    if (messageCount === 0) continue;
+    if (!Array.isArray(message.content)) return false;
+    let countedInMessage = 0;
+    for (let block of message.content) {
+      let blockCount = countOccurrences(jsonStringify(block), escapedLine);
+      if (blockCount === 0) continue;
       if (
-        toolResult === undefined ||
-        At === undefined ||
-        It === undefined ||
-        Xe !== countOccurrences(rt, escapedLine) ||
-        Xe > countOccurrences(jsonStringify(toolResult.content ?? ""), escapedLine) ||
-        countOccurrences(At, line) > countOccurrences(It, line)
+        !isToolResultBlock(block) ||
+        typeof block.tool_use_id !== "string" ||
+        seenToolUseIds.has(block.tool_use_id)
       )
         return false;
-      We += Xe;
+      seenToolUseIds.add(block.tool_use_id);
+      let serializedContent = jsonStringify(block.content ?? "");
+      if (serializedContent.includes(MEMORY_SNAPSHOT_PLACEHOLDER)) return false;
+      let toolResult = findToolResult(block.tool_use_id);
+      let blockText = plainTextOf(block.content);
+      let toolResultText = toolResult && plainTextOf(toolResult.content);
+      if (
+        toolResult === undefined ||
+        blockText === undefined ||
+        toolResultText === undefined ||
+        blockCount !== countOccurrences(serializedContent, escapedLine) ||
+        blockCount > countOccurrences(jsonStringify(toolResult.content ?? ""), escapedLine) ||
+        countOccurrences(blockText, line) > countOccurrences(toolResultText, line)
+      )
+        return false;
+      countedInMessage += blockCount;
     }
-    if (We !== He) return false;
+    if (countedInMessage !== messageCount) return false;
   }
   return true;
 }
@@ -284,29 +296,34 @@ function isOnlyInToolResults(messages, serialized, line, escapedLine, findToolRe
 function plainTextOf(content) {
   if (content === undefined || typeof content === "string") return content ?? "";
   if (!Array.isArray(content)) return;
-  let x = [];
-  for (let D of content) {
-    if (typeof D !== "object" || D === null) return;
-    let { type: L, text, cache_control: cacheControl, ...Re } = D;
-    if (L !== "text" || typeof text !== "string" || Object.keys(Re).length > 0) return;
-    x.push(text);
+  let texts = [];
+  for (let block of content) {
+    if (typeof block !== "object" || block === null) return;
+    let { type, text, cache_control: cacheControl, ...rest } = block;
+    if (type !== "text" || typeof text !== "string" || Object.keys(rest).length > 0) return;
+    texts.push(text);
   }
-  return x.join(`
+  return texts.join(`
 `);
 }
 //@ chunk-18hwfzwa.js:1473112-1473206 placement
-function countOccurrences(h, x) {
-  let D = 0;
-  for (let index = h.indexOf(x); index !== -1; index = h.indexOf(x, index + x.length)) D++;
-  return D;
+function countOccurrences(haystack, needle) {
+  let count = 0;
+  for (
+    let index = haystack.indexOf(needle);
+    index !== -1;
+    index = haystack.indexOf(needle, index + needle.length)
+  )
+    count++;
+  return count;
 }
 //@ chunk-18hwfzwa.js:1473206-1473283 placement
-function isTextBlock(h) {
-  return h.type === "text" && "text" in h && typeof h.text === "string";
+function isTextBlock(block) {
+  return block.type === "text" && "text" in block && typeof block.text === "string";
 }
 //@ chunk-18hwfzwa.js:1473283-1473329 placement
-function isToolResultBlock(h) {
-  return h.type === "tool_result";
+function isToolResultBlock(block) {
+  return block.type === "tool_result";
 }
 //@ chunk-18hwfzwa.js:1473329-1473426 placement
 /**
@@ -315,7 +332,7 @@ function isToolResultBlock(h) {
 var laptopMemoryTipsPluginEnabled = () =>
   !isRemoteSessionAvailable() &&
   getBuiltinPlugin(CC_PLUGIN_TIPS)?.isAvailable?.() === true &&
-  getBuiltinPlugins().enabled.some((h) => h.name === CC_PLUGIN_TIPS) &&
+  getBuiltinPlugins().enabled.some((plugin) => plugin.name === CC_PLUGIN_TIPS) &&
   isBundledModLive(CC_PLUGIN_TIPS);
 //@ chunk-18hwfzwa.js:1473426-1473473 placement
 /**

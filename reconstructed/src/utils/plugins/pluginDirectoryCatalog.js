@@ -12,7 +12,15 @@ import { join } from "path";
 import { unlink, lstat } from "fs/promises";
 import { INVISIBLE_CHAR_CLASS_SOURCE } from "../sanitization.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, literal, string, array, unknown, M, record } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  literal,
+  stringSchema,
+  array,
+  unknown,
+  booleanSchema,
+  record,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { getPluginsDirectory, sanitizePluginIdLower } from "./pluginDirectories.js";
 import {
   readPluginsDirJsonFile,
@@ -22,7 +30,7 @@ import {
   findBindingKeysFor,
 } from "./pluginDirectoryBindings.js";
 import { dateToFilename_2, logError } from "../log.js";
-import { Ji } from "../../../vendor/lodash-es/uniqBy.js";
+import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import {
   parseDirectoryListing,
   searchPluginDirectory,
@@ -74,10 +82,10 @@ var CLAUDE_CODE = "claude_code";
 var REPOSITORY_URL_RE = /^https:\/\/(?!-)[A-Za-z0-9._-]+\/[^\s\\?#%]+$/;
 var regExp = new RegExp(`[\\\\:${INVISIBLE_CHAR_CLASS_SOURCE}]|[^\\S ]|^ |[ .]$|~\\d`, "u");
 //@ chunk-s67w32sp.js:4492-4569 placement
-function stripTrailingSlashes(e) {
-  let n = e.length;
-  while (n > 0 && e[n - 1] === "/") n--;
-  return e.slice(0, n);
+function stripTrailingSlashes(text) {
+  let len = text.length;
+  while (len > 0 && text[len - 1] === "/") len--;
+  return text.slice(0, len);
 }
 //@ chunk-s67w32sp.js:4569-4580 placement
 var MAX_NAME_LENGTH = 255;
@@ -94,82 +102,82 @@ function isSafeNfcName(cwd) {
 }
 //@ chunk-s67w32sp.js:4679-5018 placement
 /**
- * pluginDirectoryCacheSchema：插件目录缓存 schema；pluginDirectoryCacheSchemaWithSchema：带 schema 版本的缓存 schema（同一声明共 2 个绑定）。
+ * 插件目录缓存 schema：Xe 是带 schema 版本的缓存 schema；Je 是不带版本的最小 schema；Ve 是 listing 的最长保留时间 90 天。
  */
 var PluginDirectoryCacheSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     schemaVersion: literal(PLUGIN_DIRECTORY_CACHE_VERSION),
-    fetchedAt: string(),
+    fetchedAt: stringSchema(),
     listings: array(unknown()),
-    listingsOmitted: M().optional().catch(undefined),
-    entryNames: record(string(), unknown()).optional().catch(undefined),
-    entryNameClaims: record(string(), unknown()).optional().catch(undefined),
+    listingsOmitted: booleanSchema().optional().catch(undefined),
+    entryNames: record(stringSchema(), unknown()).optional().catch(undefined),
+    entryNameClaims: record(stringSchema(), unknown()).optional().catch(undefined),
     missedListings: array(unknown()).optional().catch(undefined),
   }),
 );
 var pluginDirectoryCacheSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     version: literal(1),
-    fetchedAt: string(),
+    fetchedAt: stringSchema(),
     listings: array(unknown()),
   }),
 );
-var pluginDirectoryCacheSchemaWithSchema = 7776000000;
+var LISTING_MAX_AGE_MS = 7776000000;
 //@ chunk-s67w32sp.js:5018-5050 placement
 function pluginDirectoryCachePath() {
   return join(getPluginsDirectory(), PLUGIN_DIRECTORY_CACHE_FILE);
 }
 //@ chunk-s67w32sp.js:5139-5239 placement
 var EntryNameClaimSchema = DoctorLazy(() =>
-  u({
-    repositoryKey: string().optional().catch(undefined),
-    lastSeen: string().optional().catch(undefined),
+  objectSchema({
+    repositoryKey: stringSchema().optional().catch(undefined),
+    lastSeen: stringSchema().optional().catch(undefined),
   }),
 );
 //@ chunk-s67w32sp.js:5239-5305 placement
-function sanitizeEntryNameClaim(e) {
-  let n = EntryNameClaimSchema().safeParse(e);
-  return n.success ? n.data : {};
+function sanitizeEntryNameClaim(claim) {
+  let result = EntryNameClaimSchema().safeParse(claim);
+  return result.success ? result.data : {};
 }
 //@ chunk-s67w32sp.js:5305-6291 placement
-async function readPluginDirectoryCache(e) {
+async function readPluginDirectoryCache(failureState) {
   let pluginsDirJsonFile = await readPluginsDirJsonFile(
     PLUGIN_DIRECTORY_CACHE_FILE,
     MAX_PLUGIN_DIRECTORY_CACHE_BYTES,
     "cache",
   );
   if (pluginsDirJsonFile.state === "read") {
-    let w = PluginDirectoryCacheSchema().safeParse(pluginsDirJsonFile.json);
-    if (!w.success) return null;
+    let parseResult = PluginDirectoryCacheSchema().safeParse(pluginsDirJsonFile.json);
+    if (!parseResult.success) return null;
     return {
-      fetchedAt: dateToFilename_2(w.data.fetchedAt),
-      ...(w.data.listingsOmitted === true
+      fetchedAt: dateToFilename_2(parseResult.data.fetchedAt),
+      ...(parseResult.data.listingsOmitted === true
         ? {
             listings: [],
             unparseableRows: 0,
             namesOnly: true,
           }
-        : parseDirectoryListings(w.data.listings)),
+        : parseDirectoryListings(parseResult.data.listings)),
       missed:
-        w.data.listingsOmitted === true
+        parseResult.data.listingsOmitted === true
           ? []
-          : Ji(
-              (w.data.missedListings ?? []).flatMap((c) => {
-                let f = missedListingSchema().safeParse(c);
-                let r = f.success ? parseDirectoryListing(f.data.listing) : undefined;
-                return f.success && r && isEntryIdWithinLimit(r)
+          : uniqByExport(
+              (parseResult.data.missedListings ?? []).flatMap((raw) => {
+                let result = missedListingSchema().safeParse(raw);
+                let listing = result.success ? parseDirectoryListing(result.data.listing) : undefined;
+                return result.success && listing && isEntryIdWithinLimit(listing)
                   ? [
                       {
-                        listing: r,
-                        missedAt: f.data.missedAt,
+                        listing,
+                        missedAt: result.data.missedAt,
                       },
                     ]
                   : [];
               }),
-              (c) => c.listing.id,
+              (entry) => entry.listing.id,
             ),
       entryNames: new Map(
-        Object.entries(w.data.entryNames ?? {}).flatMap(([key, value]) =>
+        Object.entries(parseResult.data.entryNames ?? {}).flatMap(([key, value]) =>
           typeof value === "string" &&
           isValidPluginIdSegmentLength(value) &&
           Buffer.byteLength(JSON.stringify(key), "utf8") <= MAX_ENTRY_ID_BYTES
@@ -178,7 +186,7 @@ async function readPluginDirectoryCache(e) {
                   key,
                   {
                     name: value,
-                    ...sanitizeEntryNameClaim(w.data.entryNameClaims?.[key]),
+                    ...sanitizeEntryNameClaim(parseResult.data.entryNameClaims?.[key]),
                   },
                 ],
               ]
@@ -188,7 +196,7 @@ async function readPluginDirectoryCache(e) {
     };
   }
   if (pluginsDirJsonFile.state === "unusable") {
-    if (e) e.readFailed = pluginsDirJsonFile.readFailed;
+    if (failureState) failureState.readFailed = pluginsDirJsonFile.readFailed;
     return null;
   }
   let pluginsDirJsonFile_2 = await readPluginsDirJsonFile(
@@ -196,14 +204,14 @@ async function readPluginDirectoryCache(e) {
     MAX_PLUGIN_DIRECTORY_CACHE_BYTES,
     "cache",
   );
-  let i =
+  let legacyResult =
     pluginsDirJsonFile_2.state === "read"
       ? pluginDirectoryCacheSchema().safeParse(pluginsDirJsonFile_2.json)
       : undefined;
-  if (!i?.success) return null;
+  if (!legacyResult?.success) return null;
   return {
-    fetchedAt: dateToFilename_2(i.data.fetchedAt),
-    ...parseDirectoryListings(i.data.listings),
+    fetchedAt: dateToFilename_2(legacyResult.data.fetchedAt),
+    ...parseDirectoryListings(legacyResult.data.listings),
     entryNames: new Map(),
     missed: [],
     fromLegacyFile: true,
@@ -211,20 +219,20 @@ async function readPluginDirectoryCache(e) {
 }
 //@ chunk-s67w32sp.js:6291-6460 placement
 function parseDirectoryListings(listings) {
-  let filtered = listings.flatMap((i) => parseDirectoryListing(i) ?? []).filter(isEntryIdWithinLimit);
-  let a = Ji(filtered, (i) => i.id);
+  let filtered = listings.flatMap((raw) => parseDirectoryListing(raw) ?? []).filter(isEntryIdWithinLimit);
+  let deduped = uniqByExport(filtered, (listing) => listing.id);
   return {
-    listings: a,
+    listings: deduped,
     unparseableRows: listings.length - filtered.length,
-    ...(a.length < filtered.length && {
+    ...(deduped.length < filtered.length && {
       repeatedIds: true,
     }),
   };
 }
 //@ chunk-s67w32sp.js:6460-6505 placement
 var missedListingSchema = DoctorLazy(() =>
-  u({
-    missedAt: string(),
+  objectSchema({
+    missedAt: stringSchema(),
     listing: unknown(),
   }),
 );
@@ -232,39 +240,39 @@ var missedListingSchema = DoctorLazy(() =>
 /**
  * 序列化插件目录缓存（条目、漏列项、名字与认领）。
  */
-function serializeCatalogCache(fetchedAt, listings, a, i, w) {
+function serializeCatalogCache(fetchedAt, listings, entryNames, omitted, missed) {
   return jsonStringify({
     schemaVersion: PLUGIN_DIRECTORY_CACHE_VERSION,
     fetchedAt,
     listings,
-    ...(i && {
+    ...(omitted && {
       listingsOmitted: true,
     }),
-    ...(!i &&
-      w.length > 0 && {
-        missedListings: w.map(({ missedAt, listing }) => ({
+    ...(!omitted &&
+      missed.length > 0 && {
+        missedListings: missed.map(({ missedAt, listing }) => ({
           missedAt,
           listing,
         })),
       }),
-    entryNames: Object.fromEntries([...a].map(([c, f]) => [c, f.name])),
+    entryNames: Object.fromEntries([...entryNames].map(([id, entry]) => [id, entry.name])),
     entryNameClaims: Object.fromEntries(
-      [...a].map(([c, { repositoryKey: f, lastSeen: r }]) => [
-        c,
+      [...entryNames].map(([id, { repositoryKey: repoKey, lastSeen }]) => [
+        id,
         {
-          repositoryKey: f,
-          lastSeen: r,
+          repositoryKey: repoKey,
+          lastSeen,
         },
       ]),
     ),
   });
 }
 //@ chunk-s67w32sp.js:6880-7105 placement
-function entryNameClaimBytes(e, n) {
-  let { repositoryKey, lastSeen } = n;
+function entryNameClaimBytes(id, entry) {
+  let { repositoryKey, lastSeen } = entry;
   return (
-    2 * Buffer.byteLength(JSON.stringify(e), "utf8") +
-    Buffer.byteLength(JSON.stringify(n.name), "utf8") +
+    2 * Buffer.byteLength(JSON.stringify(id), "utf8") +
+    Buffer.byteLength(JSON.stringify(entry.name), "utf8") +
     Buffer.byteLength(
       JSON.stringify({
         repositoryKey,
@@ -283,141 +291,146 @@ var MAX_OWNER_SEGMENT = 32;
 var MAX_ENTRY_NAME_BYTES = 1024;
 var MAX_NAME_CLAIMS_BYTES = 12582912;
 //@ chunk-s67w32sp.js:7155-7228 placement
-function isEntryIdWithinLimit(e) {
-  return Buffer.byteLength(JSON.stringify(e.id), "utf8") <= MAX_ENTRY_ID_BYTES;
+function isEntryIdWithinLimit(listing) {
+  return Buffer.byteLength(JSON.stringify(listing.id), "utf8") <= MAX_ENTRY_ID_BYTES;
 }
 //@ chunk-s67w32sp.js:7228-7270 placement
-function isValidPluginIdSegmentLength(e) {
-  return e.length <= MAX_PLUGIN_ID_SEGMENT && isValidPluginIdSegment(e);
+function isValidPluginIdSegmentLength(segment) {
+  return segment.length <= MAX_PLUGIN_ID_SEGMENT && isValidPluginIdSegment(segment);
 }
 //@ chunk-s67w32sp.js:7270-8661 placement
-async function namesThatFit(e, n, a, i = MAX_NAME_CLAIMS_BYTES) {
-  let w = 0;
-  let c = 0;
-  let f = new Map();
-  for (let [s, m] of e) {
-    let S = m;
-    let y = entryNameClaimBytes(s, S);
-    if (y > MAX_ENTRY_NAME_BYTES) {
-      S = {
-        name: m.name,
-        lastSeen: m.lastSeen,
+async function namesThatFit(names, installedIds, installRecords, budget = MAX_NAME_CLAIMS_BYTES) {
+  let strippedCount = 0;
+  let totalBytes = 0;
+  let sized = new Map();
+  for (let [id, entry] of names) {
+    let claim = entry;
+    let bytes = entryNameClaimBytes(id, claim);
+    if (bytes > MAX_ENTRY_NAME_BYTES) {
+      claim = {
+        name: entry.name,
+        lastSeen: entry.lastSeen,
       };
-      y = entryNameClaimBytes(s, S);
-      w++;
+      bytes = entryNameClaimBytes(id, claim);
+      strippedCount++;
     }
-    f.set(s, {
-      claim: S,
-      bytes: y,
+    sized.set(id, {
+      claim,
+      bytes,
     });
-    c += y;
+    totalBytes += bytes;
   }
-  if (w === 0 && c <= i) return e;
-  let r = new Set(f.keys());
-  if (c > i) {
-    let s = await listInstalledOfficialNames(a);
-    if (s === undefined) {
-      for (let k of [true, false]) {
-        for (let [g, D] of f)
-          if (n.has(g) === k && D.claim.repositoryKey !== undefined) {
-            let h = {
-              name: D.claim.name,
-              lastSeen: D.claim.lastSeen,
+  if (strippedCount === 0 && totalBytes <= budget) return names;
+  let keep = new Set(sized.keys());
+  if (totalBytes > budget) {
+    let currentNames = await listInstalledOfficialNames(installRecords);
+    if (currentNames === undefined) {
+      for (let wanted of [true, false]) {
+        for (let [id, item] of sized)
+          if (installedIds.has(id) === wanted && item.claim.repositoryKey !== undefined) {
+            let stripped = {
+              name: item.claim.name,
+              lastSeen: item.claim.lastSeen,
             };
-            let b = entryNameClaimBytes(g, h);
-            c += b - D.bytes;
-            f.set(g, {
-              claim: h,
-              bytes: b,
+            let bytes = entryNameClaimBytes(id, stripped);
+            totalBytes += bytes - item.bytes;
+            sized.set(id, {
+              claim: stripped,
+              bytes,
             });
-            w++;
+            strippedCount++;
           }
-        if (c <= i) break;
+        if (totalBytes <= budget) break;
       }
       logForDebugging(
-        `Plugin directory cache: the kept entry names are past ${i} bytes and the install records (installed_plugins.json) could not be read, so none is dropped; ${c > i ? "they do not fit even without their repositories, so the cache file is left as it is until the install records can be read" : `${w} are written without their repository`}`,
+        `Plugin directory cache: the kept entry names are past ${budget} bytes and the install records (installed_plugins.json) could not be read, so none is dropped; ${totalBytes > budget ? "they do not fit even without their repositories, so the cache file is left as it is until the install records can be read" : `${strippedCount} are written without their repository`}`,
       );
-      return c > i ? undefined : new Map([...f].map(([k, { claim: g }]) => [k, g]));
+      return totalBytes > budget ? undefined : new Map([...sized].map(([id, { claim }]) => [id, claim]));
     }
-    let sorted = [...f].sort(([k, g], [D, h]) => {
-      let b = s.has(g.claim.name);
-      let E = s.has(h.claim.name);
-      if (b !== E) return b ? -1 : 1;
-      let lastSeen = g.claim.lastSeen ?? "";
-      let lastSeen_2 = h.claim.lastSeen ?? "";
+    let sorted = [...sized].sort(([leftId, leftItem], [rightId, rightItem]) => {
+      let leftInstalled = currentNames.has(leftItem.claim.name);
+      let rightInstalled = currentNames.has(rightItem.claim.name);
+      if (leftInstalled !== rightInstalled) return leftInstalled ? -1 : 1;
+      let lastSeen = leftItem.claim.lastSeen ?? "";
+      let lastSeen_2 = rightItem.claim.lastSeen ?? "";
       if (lastSeen !== lastSeen_2) return lastSeen > lastSeen_2 ? -1 : 1;
-      return k < D ? -1 : k > D ? 1 : 0;
+      return leftId < rightId ? -1 : leftId > rightId ? 1 : 0;
     });
-    let S = new Set();
-    let y = i;
-    for (let [k, { bytes: g }] of sorted) {
-      if (g > y) break;
-      y -= g;
-      S.add(k);
+    let kept = new Set();
+    let remaining = budget;
+    for (let [id, { bytes }] of sorted) {
+      if (bytes > remaining) break;
+      remaining -= bytes;
+      kept.add(id);
     }
-    r = S;
+    keep = kept;
   }
   logForDebugging(
-    `Plugin directory cache: ${w} entry name(s) written without their repository (each was past ${MAX_ENTRY_NAME_BYTES} bytes), ${f.size - r.size} let go (all names together may take ${i} bytes)`,
+    `Plugin directory cache: ${strippedCount} entry name(s) written without their repository (each was past ${MAX_ENTRY_NAME_BYTES} bytes), ${sized.size - keep.size} let go (all names together may take ${budget} bytes)`,
   );
-  return new Map([...f].filter(([s]) => r.has(s)).map(([s, { claim: m }]) => [s, m]));
+  return new Map([...sized].filter(([id]) => keep.has(id)).map(([id, { claim }]) => [id, claim]));
 }
 //@ chunk-s67w32sp.js:8661-8735 placement
-async function tryDirectoryFetch(e, n, a = false) {
+async function tryDirectoryFetch(fetchDirectory, withInstallRecords, allPages = false) {
   try {
-    return await e(n, a);
+    return await fetchDirectory(withInstallRecords, allPages);
   } catch (error) {
     logError(error);
     return;
   }
 }
 //@ chunk-s67w32sp.js:8735-8902 placement
-async function listInstalledOfficialNames(e) {
-  let n = await tryDirectoryFetch(e, true);
-  if (n === undefined) return;
-  let a = `@${OFFICIAL_MARKETPLACE_NAME}`;
+async function listInstalledOfficialNames(fetchDirectory) {
+  let installed = await tryDirectoryFetch(fetchDirectory, true);
+  if (installed === undefined) return;
+  let suffix = `@${OFFICIAL_MARKETPLACE_NAME}`;
   return new Set(
-    Object.keys(n)
-      .filter((key) => key.endsWith(a))
-      .map((key) => key.slice(0, -a.length)),
+    Object.keys(installed)
+      .filter((key) => key.endsWith(suffix))
+      .map((key) => key.slice(0, -suffix.length)),
   );
 }
 //@ chunk-s67w32sp.js:8902-8954 placement
-function isWithinCacheBytes(e) {
-  return Buffer.byteLength(e, "utf8") <= MAX_PLUGIN_DIRECTORY_CACHE_BYTES;
+function isWithinCacheBytes(text) {
+  return Buffer.byteLength(text, "utf8") <= MAX_PLUGIN_DIRECTORY_CACHE_BYTES;
 }
 //@ chunk-s67w32sp.js:8954-9776 placement
-async function writePluginDirectoryCache(e, listings, names, i, w) {
+async function writePluginDirectoryCache(fetchedAt, listings, names, installRecords, missed) {
   if (isDiskless())
     return {
       wrote: "diskless",
       names,
     };
-  let c = false;
-  let f = names;
+  let wasNamesOnly = false;
+  let curNames = names;
   try {
-    let r = serializeCatalogCache(e, listings, f, false, w);
-    if (!isWithinCacheBytes(r) && w.length > 0) r = serializeCatalogCache(e, listings, f, false, []);
-    if (!isWithinCacheBytes(r)) {
+    let text = serializeCatalogCache(fetchedAt, listings, curNames, false, missed);
+    if (!isWithinCacheBytes(text) && missed.length > 0)
+      text = serializeCatalogCache(fetchedAt, listings, curNames, false, []);
+    if (!isWithinCacheBytes(text)) {
       logForDebugging(
-        `Plugin directory cache: writing it without its listings, because whole it would be ${Buffer.byteLength(r, "utf8")} bytes and a cache file past ${MAX_PLUGIN_DIRECTORY_CACHE_BYTES} bytes is not read back`,
+        `Plugin directory cache: writing it without its listings, because whole it would be ${Buffer.byteLength(text, "utf8")} bytes and a cache file past ${MAX_PLUGIN_DIRECTORY_CACHE_BYTES} bytes is not read back`,
       );
-      c = true;
-      r = serializeCatalogCache(e, [], f, true, []);
-      let s = new Set(listings.map((m) => m.id));
-      for (let m = MAX_NAME_CLAIMS_BYTES / 2; !isWithinCacheBytes(r) && m >= 1; m = Math.floor(m / 2)) {
-        let S = await namesThatFit(names, s, i, m);
-        if (S === undefined)
+      wasNamesOnly = true;
+      text = serializeCatalogCache(fetchedAt, [], curNames, true, []);
+      let listingIds = new Set(listings.map((listing) => listing.id));
+      for (
+        let budget = MAX_NAME_CLAIMS_BYTES / 2;
+        !isWithinCacheBytes(text) && budget >= 1;
+        budget = Math.floor(budget / 2)
+      ) {
+        let trimmed = await namesThatFit(names, listingIds, installRecords, budget);
+        if (trimmed === undefined)
           return {
             wrote: "not-written",
             names,
           };
-        f = S;
-        r = serializeCatalogCache(e, [], f, true, []);
+        curNames = trimmed;
+        text = serializeCatalogCache(fetchedAt, [], curNames, true, []);
       }
     }
     await getFsImplementation().mkdir(getPluginsDirectory());
-    await writeFileAtomic(pluginDirectoryCachePath(), r, 384);
+    await writeFileAtomic(pluginDirectoryCachePath(), text, 384);
   } catch (error) {
     logForDebugging(`Failed to write plugin directory cache: ${errorMessage(error)}`);
     return {
@@ -432,18 +445,18 @@ async function writePluginDirectoryCache(e, listings, names, i, w) {
       logForDebugging(`Failed to remove the old plugin directory cache: ${errorMessage(error)}`);
   }
   return {
-    wrote: c ? "names-only" : "written",
-    names: f,
+    wrote: wasNamesOnly ? "names-only" : "written",
+    names: curNames,
   };
 }
 //@ chunk-s67w32sp.js:9776-10257 placement
 /**
  * 搜索失败原因转结果。
  */
-function toSearchFailure(e) {
-  switch (e.reason) {
+function toSearchFailure(failure) {
+  switch (failure.reason) {
     case "unavailable":
-      if (e.cause !== "policy")
+      if (failure.cause !== "policy")
         return {
           ok: false,
           reason: "failed",
@@ -452,8 +465,8 @@ function toSearchFailure(e) {
       return {
         ok: false,
         reason: "policy",
-        message: e.message,
-        blockedBy: e.blockedBy,
+        message: failure.message,
+        blockedBy: failure.blockedBy,
       };
     case "not-served":
       return {
@@ -471,7 +484,7 @@ function toSearchFailure(e) {
       return {
         ok: false,
         reason: "failed",
-        message: e.message,
+        message: failure.message,
       };
   }
 }
@@ -479,36 +492,36 @@ function toSearchFailure(e) {
 /**
  * 在总超时与首答超时内遍历插件目录。
  */
-async function walkWithTimeouts(e, deadlineMs, firstAnswerMs) {
-  let i = AbortSignal.timeout(deadlineMs);
+async function walkWithTimeouts(signal, deadlineMs, firstAnswerMs) {
+  let deadlineSignal = AbortSignal.timeout(deadlineMs);
   let abortController = new AbortController();
-  let c = {
+  let progress = {
     pages: 0,
     answered: false,
   };
   let timer = setTimeout(
-    (s, m) => {
-      if (!s.answered) m.abort();
+    (state, controller) => {
+      if (!state.answered) controller.abort();
     },
     Math.min(firstAnswerMs, deadlineMs),
-    c,
+    progress,
     abortController,
   );
-  let r = AbortSignal.any([i, abortController.signal]);
+  let combined = AbortSignal.any([deadlineSignal, abortController.signal]);
   try {
     return await Promise.race([
-      walkPluginDirectory(e === undefined ? r : AbortSignal.any([e, r]), c),
+      walkPluginDirectory(signal === undefined ? combined : AbortSignal.any([signal, combined]), progress),
       new Promise((resolve) => {
-        r.addEventListener(
+        combined.addEventListener(
           "abort",
           () =>
             resolve({
-              pages: c.pages,
+              pages: progress.pages,
               unparseableRows: 0,
               result: {
                 ok: false,
                 reason: "failed",
-                message: DIRECTORY_REFRESH_TTL_MS,
+                message: DIRECTORY_NO_ANSWER_TEXT,
               },
               backoffMs: BACKOFF_MS,
             }),
@@ -523,69 +536,72 @@ async function walkWithTimeouts(e, deadlineMs, firstAnswerMs) {
   }
 }
 //@ chunk-s67w32sp.js:10708-10759 placement
+/**
+ * 插件目录请求的超时：at 是单次响应的时限（cbr）；ot 是首个答复的默认时限 15000 ms；Ne 是超时时的说明文案 "it did not answer in time"。
+ */
 var MAX_DIRECTORY_RESPONSE_MS = OFFICIAL_MARKETPLACE_NAME_CHECK_TTL_MS;
-var DIRECTORY_NO_ANSWER_TEXT = 15000;
-var DIRECTORY_REFRESH_TTL_MS = "it did not answer in time";
+var DEFAULT_FIRST_ANSWER_MS = 15000;
+var DIRECTORY_NO_ANSWER_TEXT = "it did not answer in time";
 //@ chunk-s67w32sp.js:10759-11533 placement
-async function walkPluginDirectory(signal, n) {
-  let a = [];
-  let i = new Set();
-  let w;
-  let c = 0;
+async function walkPluginDirectory(signal, progress) {
+  let listings = [];
+  let seenIds = new Set();
+  let pageToken;
+  let page = 0;
   let unparseableRows = 0;
-  while (c < MAX_DIRECTORY_PAGES) {
-    c++;
-    if (n) n.pages = c;
-    let r = await searchPluginDirectory({
+  while (page < MAX_DIRECTORY_PAGES) {
+    page++;
+    if (progress) progress.pages = page;
+    let response = await searchPluginDirectory({
       query: "",
-      pageToken: w,
+      pageToken,
       signal,
       pageSize: DIRECTORY_PAGE_SIZE,
       include: DESCRIPTION,
       keepTokenWhenEmpty: true,
     });
-    if (!r.ok)
+    if (!response.ok)
       return {
-        pages: c,
+        pages: page,
         unparseableRows,
-        result: toSearchFailure(r),
-        ...(r.reason === "failed" && {
-          backoffMs: Math.max(BACKOFF_MS, r.retryAfterMs ?? 0),
-          ...(r.retryAfterMs !== undefined && {
-            serviceDelayMs: r.retryAfterMs,
+        result: toSearchFailure(response),
+        ...(response.reason === "failed" && {
+          backoffMs: Math.max(BACKOFF_MS, response.retryAfterMs ?? 0),
+          ...(response.retryAfterMs !== undefined && {
+            serviceDelayMs: response.retryAfterMs,
           }),
         }),
       };
-    if (n) n.answered = true;
-    let filtered = r.page.listings.filter(isEntryIdWithinLimit);
-    unparseableRows += r.page.skippedRows + r.page.listings.length - filtered.length;
-    for (let m of filtered) {
-      if (i.has(m.id))
+    if (progress) progress.answered = true;
+    let filtered = response.page.listings.filter(isEntryIdWithinLimit);
+    unparseableRows += response.page.skippedRows + response.page.listings.length - filtered.length;
+    for (let listing of filtered) {
+      if (seenIds.has(listing.id))
         return {
-          pages: c,
+          pages: page,
           unparseableRows,
           result: DUPLICATE_LISTING_FAILURE,
           backoffMs: BACKOFF_MS,
         };
-      i.add(m.id);
+      seenIds.add(listing.id);
     }
-    a.push(...filtered);
-    w = r.page.nextPageToken;
-    if (r.page.truncated || (w !== undefined && c === MAX_DIRECTORY_PAGES))
+    listings.push(...filtered);
+    pageToken = response.page.nextPageToken;
+    if (response.page.truncated || (pageToken !== undefined && page === MAX_DIRECTORY_PAGES))
       return {
-        pages: c,
+        pages: page,
         unparseableRows,
         result: INCOMPLETE_LIST_FAILURE,
         backoffMs: BACKOFF_MS,
       };
-    if (w === undefined) break;
+    if (pageToken === undefined) break;
   }
   return {
-    pages: c,
+    pages: page,
     unparseableRows,
     result: {
       ok: true,
-      listings: a,
+      listings,
     },
   };
 }
@@ -609,7 +625,8 @@ function pluginDirectoryWalkReadiness() {
 }
 //@ chunk-s67w32sp.js:11802-11902 placement
 async function awaitPluginDirectoryPolicyVerdict() {
-  let { awaitPolicyLimitsColdStart } = await import("./chunk-qchbrsbw.js");
+  let { awaitPolicyLimitsColdStart } =
+    await import("../../services/policyLimits/DefaultPolicyLimitsClientSlot.lazy.js");
   await awaitPolicyLimitsColdStart();
 }
 //@ chunk-s67w32sp.js:11902-11981 placement
@@ -617,12 +634,15 @@ function notePluginDirectoryWalkTimedOut() {
   let now = Date.now();
   commandSourceSession().lastFailedWalk = {
     at: now,
-    reason: DIRECTORY_REFRESH_TTL_MS,
+    reason: DIRECTORY_NO_ANSWER_TEXT,
     failedAt: now,
   };
 }
 //@ chunk-s67w32sp.js:11981-11996 placement
-var isRecentTimestamp = 3600000;
+/**
+ * 判定时间戳是否可信：dt 是允许时钟超前的容差 3600000 ms；F 是失败后的退避时长。
+ */
+var CLOCK_SKEW_TOLERANCE_MS = 3600000;
 //@ chunk-s67w32sp.js:11996-12243 placement
 function pluginDirectoryFailedWalkWindow() {
   let lastFailedWalk = commandSourceSession().lastFailedWalk;
@@ -630,7 +650,7 @@ function pluginDirectoryFailedWalkWindow() {
   let now = Date.now();
   if (
     now - lastFailedWalk.at >= BACKOFF_MS ||
-    lastFailedWalk.at - now > isRecentTimestamp ||
+    lastFailedWalk.at - now > CLOCK_SKEW_TOLERANCE_MS ||
     lastFailedWalk.failedAt > now
   )
     return;
@@ -645,8 +665,8 @@ function pluginDirectoryFailedWalkWindow() {
 }
 //@ chunk-s67w32sp.js:12243-12307 placement
 function MISSED_LISTING_MAX_AGE_MS(fetchedAt) {
-  let n = Date.now() - Date.parse(fetchedAt);
-  return n >= 0 && n < CACHE_FRESH_MS;
+  let ageMs = Date.now() - Date.parse(fetchedAt);
+  return ageMs >= 0 && ageMs < CACHE_FRESH_MS;
 }
 //@ chunk-s67w32sp.js:12307-13254 placement
 async function loadPluginDirectoryCatalog({
@@ -654,24 +674,24 @@ async function loadPluginDirectoryCatalog({
   forceRefresh = false,
   trigger = "other",
   deadlineMs = MAX_DIRECTORY_RESPONSE_MS,
-  firstAnswerMs = DIRECTORY_NO_ANSWER_TEXT,
+  firstAnswerMs = DEFAULT_FIRST_ANSWER_MS,
   installRecords,
 }) {
-  let f = commandSourceSession();
-  let catalogLoadInFlight = f.catalogLoadInFlight;
+  let session = commandSourceSession();
+  let catalogLoadInFlight = session.catalogLoadInFlight;
   if (
     signal === undefined &&
     catalogLoadInFlight !== undefined &&
     (catalogLoadInFlight.forceRefresh || !forceRefresh)
   )
     return catalogLoadInFlight.load;
-  let s = (async () => {
+  let load = (async () => {
     let now = Date.now();
-    let S = {
+    let state = {
       readFailed: false,
     };
-    let pluginDirectoryCache = await readPluginDirectoryCache(S);
-    let { catalog, pages, judged, ...h } = await refreshPluginDirectory(
+    let pluginDirectoryCache = await readPluginDirectoryCache(state);
+    let { catalog, pages, judged, ...details } = await refreshPluginDirectory(
       pluginDirectoryCache,
       forceRefresh,
       signal,
@@ -679,15 +699,16 @@ async function loadPluginDirectoryCatalog({
         deadlineMs,
         firstAnswerMs,
       },
-      S.readFailed,
+      state.readFailed,
       installRecords,
     );
-    f.staleCatalogFetchedAt = catalog.ok && catalog.staleReason !== undefined ? catalog.fetchedAt : undefined;
-    let b = pluginDirectoryCache
+    session.staleCatalogFetchedAt =
+      catalog.ok && catalog.staleReason !== undefined ? catalog.fetchedAt : undefined;
+    let cacheAgeMin = pluginDirectoryCache
       ? Math.round((now - Date.parse(pluginDirectoryCache.fetchedAt)) / 60000)
       : undefined;
     logDirectoryCatalogLoad({
-      ...h,
+      ...details,
       trigger,
       pages,
       listingCount: catalog.ok ? catalog.listings.length : 0,
@@ -697,20 +718,21 @@ async function loadPluginDirectoryCatalog({
         judged?.entryNames ?? new Map(),
       ),
       durationMs: Date.now() - now,
-      cacheAgeMin: pluginDirectoryCache && Date.parse(pluginDirectoryCache.fetchedAt) !== 0 ? b : undefined,
+      cacheAgeMin:
+        pluginDirectoryCache && Date.parse(pluginDirectoryCache.fetchedAt) !== 0 ? cacheAgeMin : undefined,
     });
     if (!catalog.ok && catalog.blockedBy !== undefined) logDirectoryBlockedOnce(catalog.blockedBy);
     return catalog;
   })();
-  if (signal !== undefined) return s;
-  f.catalogLoadInFlight = {
+  if (signal !== undefined) return load;
+  session.catalogLoadInFlight = {
     forceRefresh,
-    load: s,
+    load,
   };
   try {
-    return await s;
+    return await load;
   } finally {
-    if (f.catalogLoadInFlight?.load === s) f.catalogLoadInFlight = undefined;
+    if (session.catalogLoadInFlight?.load === load) session.catalogLoadInFlight = undefined;
   }
 }
 //@ chunk-s67w32sp.js:13254-16547 placement
@@ -722,49 +744,49 @@ async function refreshPluginDirectory(
   readFailed,
   installRecords,
 ) {
-  let r = commandSourceSession();
-  let s = pluginDirectoryCache?.namesOnly ? null : pluginDirectoryCache;
-  if (s?.repeatedIds)
+  let session = commandSourceSession();
+  let cache = pluginDirectoryCache?.namesOnly ? null : pluginDirectoryCache;
+  if (cache?.repeatedIds)
     logForDebugging(
       "Plugin directory: the cached list names a listing more than once (Claude Code 2.1.287 wrote such files), so it is treated as out of date",
     );
   if (
-    s &&
+    cache &&
     !forceRefresh &&
     isPluginDirectoryAccessAllowed() &&
-    !s.fromLegacyFile &&
-    !s.repeatedIds &&
-    MISSED_LISTING_MAX_AGE_MS(s.fetchedAt)
+    !cache.fromLegacyFile &&
+    !cache.repeatedIds &&
+    MISSED_LISTING_MAX_AGE_MS(cache.fetchedAt)
   )
     return {
       outcome: "fresh_cache",
       pages: 0,
-      judged: s,
+      judged: cache,
       catalog: {
         ok: true,
-        listings: s.listings,
-        fetchedAt: s.fetchedAt,
-        entryNames: s.entryNames,
+        listings: cache.listings,
+        fetchedAt: cache.fetchedAt,
+        entryNames: cache.entryNames,
       },
     };
   if (!isPluginDirectoryAccessAllowed()) await awaitPluginDirectoryPolicyVerdict();
-  let lastFailedWalk = r.lastFailedWalk;
+  let lastFailedWalk = session.lastFailedWalk;
   if (
     !forceRefresh &&
     lastFailedWalk !== undefined &&
     Date.now() - lastFailedWalk.at < BACKOFF_MS &&
     isPluginDirectoryAccessAllowed()
   )
-    return s
+    return cache
       ? {
           outcome: "backoff",
           pages: 0,
-          judged: s,
+          judged: cache,
           catalog: {
             ok: true,
-            listings: s.listings,
-            fetchedAt: s.fetchedAt,
-            entryNames: s.entryNames,
+            listings: cache.listings,
+            fetchedAt: cache.fetchedAt,
+            entryNames: cache.entryNames,
             staleReason: lastFailedWalk.reason,
             laterMayHelp: true,
           },
@@ -786,40 +808,40 @@ async function refreshPluginDirectory(
   let {
     pages,
     unparseableRows,
-    result: g,
+    result: walk,
     backoffMs,
     serviceDelayMs,
   } = await walkWithTimeouts(signal, deadlineMs, firstAnswerMs);
-  if (!g.ok) {
+  if (!walk.ok) {
     if (backoffMs !== undefined) {
       let now = Date.now();
-      r.lastFailedWalk = {
+      session.lastFailedWalk = {
         at: now + backoffMs - BACKOFF_MS,
-        reason: g.message,
+        reason: walk.message,
         failedAt: now,
         ...(serviceDelayMs !== undefined && {
           serviceDelayMs,
         }),
       };
     }
-    if (s && g.reason === "failed")
+    if (cache && walk.reason === "failed")
       return {
-        ...(g === DUPLICATE_LISTING_FAILURE
+        ...(walk === DUPLICATE_LISTING_FAILURE
           ? {
               outcome: "stale_duplicate_id",
             }
           : {
               outcome: "stale_failed",
-              incompleteWalk: g === INCOMPLETE_LIST_FAILURE,
+              incompleteWalk: walk === INCOMPLETE_LIST_FAILURE,
             }),
         pages,
-        judged: s,
+        judged: cache,
         catalog: {
           ok: true,
-          listings: s.listings,
-          fetchedAt: s.fetchedAt,
-          entryNames: s.entryNames,
-          staleReason: g.message,
+          listings: cache.listings,
+          fetchedAt: cache.fetchedAt,
+          entryNames: cache.entryNames,
+          staleReason: walk.message,
           ...(backoffMs !== undefined && {
             laterMayHelp: true,
           }),
@@ -828,17 +850,17 @@ async function refreshPluginDirectory(
     let catalog =
       backoffMs !== undefined
         ? {
-            ...g,
+            ...walk,
             laterMayHelp: true,
           }
-        : g;
-    if (g === DUPLICATE_LISTING_FAILURE)
+        : walk;
+    if (walk === DUPLICATE_LISTING_FAILURE)
       return {
         outcome: "duplicate_id",
         pages,
         catalog,
       };
-    return g === INCOMPLETE_LIST_FAILURE
+    return walk === INCOMPLETE_LIST_FAILURE
       ? {
           outcome: "incomplete",
           pages,
@@ -846,97 +868,103 @@ async function refreshPluginDirectory(
         }
       : {
           outcome: "refused",
-          refusal: g.reason,
-          blockedByOrganization: g.blockedBy !== undefined,
+          refusal: walk.reason,
+          blockedByOrganization: walk.blockedBy !== undefined,
           pages,
           catalog,
         };
   }
   let iso = new Date().toISOString();
-  let E = pluginDirectoryCache?.entryNames ?? new Map();
-  let { names, repairs } = await repairCollisionRenames(E, g.listings, installRecords);
-  let P = new Map();
-  let B = new Set();
-  for (let L of directoryListingsToEntries(g.listings, names)) {
-    B.add(L.name);
-    P.set(L.listing.id, {
-      name: L.name,
-      repositoryKey: L.repositoryKey,
+  let cachedNames = pluginDirectoryCache?.entryNames ?? new Map();
+  let { names, repairs } = await repairCollisionRenames(cachedNames, walk.listings, installRecords);
+  let freshNames = new Map();
+  let usedNames = new Set();
+  for (let entry of directoryListingsToEntries(walk.listings, names)) {
+    usedNames.add(entry.name);
+    freshNames.set(entry.listing.id, {
+      name: entry.name,
+      repositoryKey: entry.repositoryKey,
       lastSeen: iso,
     });
   }
-  let ae = await tryDirectoryFetch(installRecords, false);
-  for (let [L, I] of names) {
-    if (P.has(L) || B.has(I.name)) continue;
-    let U = Date.now() - Date.parse(I.lastSeen ?? "");
+  let installed = await tryDirectoryFetch(installRecords, false);
+  for (let [id, entry] of names) {
+    if (freshNames.has(id) || usedNames.has(entry.name)) continue;
+    let ageMs = Date.now() - Date.parse(entry.lastSeen ?? "");
     if (
-      ae !== undefined &&
-      U > pluginDirectoryCacheSchemaWithSchema &&
-      !Object.hasOwn(ae, `${I.name}@${OFFICIAL_MARKETPLACE_NAME}`)
+      installed !== undefined &&
+      ageMs > LISTING_MAX_AGE_MS &&
+      !Object.hasOwn(installed, `${entry.name}@${OFFICIAL_MARKETPLACE_NAME}`)
     )
       continue;
-    P.set(L, {
-      ...I,
-      lastSeen: Number.isFinite(U) && U >= 0 ? new Date(Date.parse(I.lastSeen ?? "")).toISOString() : iso,
+    freshNames.set(id, {
+      ...entry,
+      lastSeen:
+        Number.isFinite(ageMs) && ageMs >= 0 ? new Date(Date.parse(entry.lastSeen ?? "")).toISOString() : iso,
     });
   }
-  let ce = {
-    listings: g.listings,
+  let judged = {
+    listings: walk.listings,
     unparseableRows,
-    entryNames: P,
+    entryNames: freshNames,
   };
-  let de = s ? Date.now() - Date.parse(s.fetchedAt) : NaN;
+  let cacheAgeMs = cache ? Date.now() - Date.parse(cache.fetchedAt) : NaN;
   if (
-    s &&
-    de >= 0 &&
-    de < MISSED_LISTING_TTL_MS &&
-    !g.listings.some(idTailSlug) &&
-    s.listings.some(idTailSlug)
+    cache &&
+    cacheAgeMs >= 0 &&
+    cacheAgeMs < MISSED_LISTING_TTL_MS &&
+    !walk.listings.some(idTailSlug) &&
+    cache.listings.some(idTailSlug)
   ) {
-    let L =
-      g.listings.length === 0
+    let reason =
+      walk.listings.length === 0
         ? "it returned an empty list"
         : "it returned no plugins this version of Claude Code can install";
-    logForDebugging(`Plugin directory: ${L}; keeping the cached catalogue`, {
+    logForDebugging(`Plugin directory: ${reason}; keeping the cached catalogue`, {
       level: "warn",
     });
     let now = Date.now();
-    r.lastFailedWalk = {
+    session.lastFailedWalk = {
       at: now,
-      reason: L,
+      reason,
       failedAt: now,
     };
     return {
       outcome: "stale_empty",
       pages,
-      judged: ce,
+      judged,
       catalog: {
         ok: true,
-        listings: s.listings,
-        fetchedAt: s.fetchedAt,
-        entryNames: s.entryNames,
-        staleReason: L,
-        ...(g.listings.length === 0 && {
+        listings: cache.listings,
+        fetchedAt: cache.fetchedAt,
+        entryNames: cache.entryNames,
+        staleReason: reason,
+        ...(walk.listings.length === 0 && {
           laterMayHelp: true,
         }),
       },
     };
   }
-  r.lastFailedWalk = undefined;
-  let j = readFailed
+  session.lastFailedWalk = undefined;
+  let fitted = readFailed
     ? undefined
-    : await namesThatFit(P, new Set(g.listings.map((listing) => listing.id)), installRecords);
-  let Fe = j === undefined ? [] : await keepMissedListings(s, g.listings, B, iso, installRecords);
-  let H =
-    j === undefined ? undefined : await revertLegacyRenames(j, repairs, E, names, g.listings, installRecords);
-  let namesRepaired = H?.repaired ?? 0;
+    : await namesThatFit(freshNames, new Set(walk.listings.map((listing) => listing.id)), installRecords);
+  let missed =
+    fitted === undefined
+      ? []
+      : await keepMissedListings(cache, walk.listings, usedNames, iso, installRecords);
+  let repaired =
+    fitted === undefined
+      ? undefined
+      : await revertLegacyRenames(fitted, repairs, cachedNames, names, walk.listings, installRecords);
+  let namesRepaired = repaired?.repaired ?? 0;
   let { wrote, names: names_2 } =
-    H === undefined
+    repaired === undefined
       ? {
           wrote: "not-written",
-          names: P,
+          names: freshNames,
         }
-      : await writePluginDirectoryCache(iso, g.listings, H.names, installRecords, Fe);
+      : await writePluginDirectoryCache(iso, walk.listings, repaired.names, installRecords, missed);
   return {
     outcome:
       wrote === "names-only"
@@ -949,12 +977,12 @@ async function refreshPluginDirectory(
       namesRepaired,
     }),
     judged: {
-      ...ce,
+      ...judged,
       entryNames: names_2,
     },
     catalog: {
       ok: true,
-      listings: g.listings,
+      listings: walk.listings,
       fetchedAt: iso,
       entryNames: names_2,
       walked: true,
@@ -963,59 +991,68 @@ async function refreshPluginDirectory(
   };
 }
 //@ chunk-s67w32sp.js:16547-16562 placement
-var hasListingSource = 7200000;
+/**
+ * 插件从 listing 里消失后的宽限期 7200000 ms（2 小时）：只有在宽限期之后的又一次遍历仍缺失，才真正丢弃。
+ */
+var DELISTING_GRACE_MS = 7200000;
 //@ chunk-s67w32sp.js:16562-17573 placement
 /**
  * 对比上次缓存与本次遍历：漏列且仍被已安装插件使用、未被新名字占用的条目保留（记录首次漏列时间）， 超过保留期（he）后丢弃。
  */
-async function keepMissedListings(e, listings, a, i, w) {
-  if (e === null) return [];
-  let c = new Set(listings.map((g) => g.id));
-  let f = new Set(e.listings.map((listing) => listing.id));
-  let filtered = e.missed.filter(({ listing }) => !f.has(listing.id));
-  let s = [
-    ...e.listings
-      .filter((listing) => !c.has(listing.id))
+async function keepMissedListings(cache, listings, namesInUse, now, fetchDirectory) {
+  if (cache === null) return [];
+  let freshIds = new Set(listings.map((listing) => listing.id));
+  let knownIds = new Set(cache.listings.map((listing) => listing.id));
+  let filtered = cache.missed.filter(({ listing }) => !knownIds.has(listing.id));
+  let candidates = [
+    ...cache.listings
+      .filter((listing) => !freshIds.has(listing.id))
       .map((listing) => ({
         listing,
       })),
-    ...filtered.filter(({ listing }) => !c.has(listing.id)),
+    ...filtered.filter(({ listing }) => !freshIds.has(listing.id)),
   ];
-  if (s.length === 0) return [];
-  let m = s.every(({ listing }) => e.entryNames.has(listing.id))
+  if (candidates.length === 0) return [];
+  let namesById = candidates.every(({ listing }) => cache.entryNames.has(listing.id))
     ? undefined
     : new Map(
         directoryListingsToEntries(
-          [...e.listings, ...filtered.map(({ listing }) => listing)],
-          e.entryNames,
-        ).map((g) => [g.listing.id, g.name]),
+          [...cache.listings, ...filtered.map(({ listing }) => listing)],
+          cache.entryNames,
+        ).map((entry) => [entry.listing.id, entry.name]),
       );
-  let S = await listInstalledOfficialNames(w);
-  let timestamp = Date.parse(i);
-  let k = [];
-  for (let { listing, missedAt } of s) {
-    let h = m?.get(listing.id) ?? e.entryNames.get(listing.id)?.name;
-    if (h === undefined || a.has(h) || (S !== undefined && !S.has(h)) || !idTailSlug(listing)) continue;
+  let installed = await listInstalledOfficialNames(fetchDirectory);
+  let timestamp = Date.parse(now);
+  let kept = [];
+  for (let { listing, missedAt } of candidates) {
+    let name = namesById?.get(listing.id) ?? cache.entryNames.get(listing.id)?.name;
+    if (
+      name === undefined ||
+      namesInUse.has(name) ||
+      (installed !== undefined && !installed.has(name)) ||
+      !idTailSlug(listing)
+    )
+      continue;
     let timestamp_2 = Date.parse(missedAt ?? "");
-    let E = Number.isFinite(timestamp_2) && timestamp_2 <= timestamp ? timestamp_2 : timestamp;
-    if (timestamp - E < hasListingSource)
-      k.push({
+    let since = Number.isFinite(timestamp_2) && timestamp_2 <= timestamp ? timestamp_2 : timestamp;
+    if (timestamp - since < DELISTING_GRACE_MS)
+      kept.push({
         listing,
-        missedAt: new Date(E).toISOString(),
+        missedAt: new Date(since).toISOString(),
       });
   }
   logForDebugging(
-    `Plugin directory: this walk did not list ${s.length} listing(s) the saved catalog had; keeping ${k.length} that installed plugins use, so they still load until a walk at least ${hasListingSource / 3600000} hours after the first miss also misses them`,
+    `Plugin directory: this walk did not list ${candidates.length} listing(s) the saved catalog had; keeping ${kept.length} that installed plugins use, so they still load until a walk at least ${DELISTING_GRACE_MS / 3600000} hours after the first miss also misses them`,
   );
-  return k;
+  return kept;
 }
 //@ chunk-s67w32sp.js:17573-17611 placement
 function idTailSlug(listing) {
   return "source" in directoryListingSource(listing);
 }
 //@ chunk-s67w32sp.js:17611-17872 placement
-function tallyDirectoryEntries(e, unparseable, a) {
-  let i = {
+function tallyDirectoryEntries(listings, unparseable, namesById) {
+  let tally = {
     installable: 0,
     unparseable,
     skipped: {
@@ -1026,17 +1063,17 @@ function tallyDirectoryEntries(e, unparseable, a) {
     },
     nameClashes: 0,
   };
-  for (let w of directoryListingsToEntries(e, a)) {
-    if (w.nameClashed) i.nameClashes++;
-    if ("entry" in w.result) i.installable++;
-    else i.skipped[w.result.skipped]++;
+  for (let entry of directoryListingsToEntries(listings, namesById)) {
+    if (entry.nameClashed) tally.nameClashes++;
+    if ("entry" in entry.result) tally.installable++;
+    else tally.skipped[entry.result.skipped]++;
   }
-  return i;
+  return tally;
 }
 //@ chunk-s67w32sp.js:17872-18635 placement
-function directoryListingSource(e) {
-  let { surfaces } = e;
-  let { url, path, reviewed_commit: reviewedCommit } = e.source.repository;
+function directoryListingSource(listing) {
+  let { surfaces } = listing;
+  let { url, path, reviewed_commit: reviewedCommit } = listing.source.repository;
   if (surfaces?.length && !surfaces.includes(CLAUDE_CODE))
     return {
       skipped: "other_surface",
@@ -1053,13 +1090,16 @@ function directoryListingSource(e) {
     /^https:\/\/[^/]*\.(?::\d*)?(?:\/|$)/.test(url) ||
     stripTrailingSlashes(url.replace(/^https:\/\/[^/]+\//, ""))
       .split("/")
-      .some((r) => r === "" || r === "." || r === ".." || r.toLowerCase() === ".git")
+      .some(
+        (segment) =>
+          segment === "" || segment === "." || segment === ".." || segment.toLowerCase() === ".git",
+      )
   )
     return {
       skipped: "bad_url",
     };
-  let c = stripTrailingSlashes(url);
-  if (/\.git$/i.test(c) && !c.endsWith(".git"))
+  let normalizedUrl = stripTrailingSlashes(url);
+  if (/\.git$/i.test(normalizedUrl) && !normalizedUrl.endsWith(".git"))
     return {
       skipped: "bad_url",
     };
@@ -1067,203 +1107,234 @@ function directoryListingSource(e) {
     return {
       skipped: "bad_url",
     };
-  let f = path === undefined ? undefined : stripTrailingSlashes(path);
-  if (path && !f?.split("/").every(isSafeNfcName))
+  let normalizedPath = path === undefined ? undefined : stripTrailingSlashes(path);
+  if (path && !normalizedPath?.split("/").every(isSafeNfcName))
     return {
       skipped: "bad_path",
     };
   return {
-    source: f
+    source: normalizedPath
       ? {
           source: "git-subdir",
-          url: c,
-          path: f,
+          url: normalizedUrl,
+          path: normalizedPath,
           sha: reviewedCommit,
         }
       : {
           source: "url",
-          url: `${c.replace(/\.git$/, "")}.git`,
+          url: `${normalizedUrl.replace(/\.git$/, "")}.git`,
           sha: reviewedCommit,
         },
   };
 }
 //@ chunk-s67w32sp.js:18635-18817 placement
-function slugifyName(e) {
-  let replaced = e.toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
-  let a = (c) => c === "-" || c === "." || c === "_";
-  let i = 0;
-  let w = replaced.length;
-  while (i < w && a(replaced[i])) i++;
-  while (w > i && a(replaced[w - 1])) w--;
-  return replaced.slice(i, w);
+function slugifyName(rawName) {
+  let replaced = rawName.toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
+  let isTrimChar = (char) => char === "-" || char === "." || char === "_";
+  let start = 0;
+  let end = replaced.length;
+  while (start < end && isTrimChar(replaced[start])) start++;
+  while (end > start && isTrimChar(replaced[end - 1])) end--;
+  return replaced.slice(start, end);
 }
 //@ chunk-s67w32sp.js:18817-18859 placement
-function pluginDirectoryMarketplaceConfig(id) {
-  return slugifyName(id).slice(-8) || "x";
+function pluginDirectoryMarketplaceConfig(rawName) {
+  return slugifyName(rawName).slice(-8) || "x";
 }
 //@ chunk-s67w32sp.js:18859-20838 placement
 /**
  * 为插件目录条目分配稳定的本地名（沿用旧名、按仓库迁移、冲突加后缀）。
  */
-function assignDirectoryEntryNames(e, n) {
-  let mapped = e.map((h) => {
-    let { url, path } = h.source.repository;
+function assignDirectoryEntryNames(entries, knownNames) {
+  let mapped = entries.map((entry) => {
+    let { url, path } = entry.source.repository;
     let filtered = url
       .replace(/\.git$/, "")
       .split("/")
       .filter(Boolean);
     let base =
       [
-        slugifyName(h.name),
+        slugifyName(entry.name),
         slugifyName(path?.split("/").filter(Boolean).at(-1) ?? ""),
         slugifyName(filtered.at(-1) ?? ""),
       ]
-        .map((P) => P.slice(0, MAX_LOCAL_NAME_SEGMENT).replace(/[-._]+$/, ""))
-        .find((P) => P !== "" && isValidPluginIdSegment(P)) ?? "plugin";
+        .map((segment) => segment.slice(0, MAX_LOCAL_NAME_SEGMENT).replace(/[-._]+$/, ""))
+        .find((candidateName) => candidateName !== "" && isValidPluginIdSegment(candidateName)) ?? "plugin";
     return {
-      id: h.id,
+      id: entry.id,
       base,
       repositoryKey: normalizePluginRepoUrl(url, path),
       owner: slugifyName(filtered.at(-2) ?? "")
         .slice(0, MAX_OWNER_SEGMENT)
         .replace(/[-._]+$/, ""),
-      idTail: pluginDirectoryMarketplaceConfig(h.id),
-      sortKey: `${h.id}
+      idTail: pluginDirectoryMarketplaceConfig(entry.id),
+      sortKey: `${entry.id}
 ${url}
 ${path ?? ""}`,
     };
   });
-  let i = new Map();
-  for (let { id } of mapped) i.set(id, (i.get(id) ?? 0) + 1);
-  let w = new Map();
-  for (let [h, { name: b }] of [...n].sort(([E], [N]) => (E < N ? -1 : 1)))
-    if (isValidPluginIdSegmentLength(b) && !w.has(b)) w.set(b, h);
-  let c = new Map();
-  for (let [h, b] of [...w].sort(([, E], [, N]) =>
-    i.has(E) !== i.has(N) ? (i.has(E) ? -1 : 1) : E < N ? -1 : 1,
+  let idCounts = new Map();
+  for (let { id } of mapped) idCounts.set(id, (idCounts.get(id) ?? 0) + 1);
+  let nameOwners = new Map();
+  for (let [bindingKey, { name }] of [...knownNames].sort(([leftKey], [rightKey]) =>
+    leftKey < rightKey ? -1 : 1,
   ))
-    if (!c.has(sanitizePluginIdLower(h)))
-      c.set(sanitizePluginIdLower(h), {
-        name: h,
-        id: b,
+    if (isValidPluginIdSegmentLength(name) && !nameOwners.has(name)) nameOwners.set(name, bindingKey);
+  let ownerByName = new Map();
+  for (let [name, id] of [...nameOwners].sort(([, leftId], [, rightId]) =>
+    idCounts.has(leftId) !== idCounts.has(rightId)
+      ? idCounts.has(leftId)
+        ? -1
+        : 1
+      : leftId < rightId
+        ? -1
+        : 1,
+  ))
+    if (!ownerByName.has(sanitizePluginIdLower(name)))
+      ownerByName.set(sanitizePluginIdLower(name), {
+        name,
+        id,
       });
-  let f = new Map();
-  let r = new Map();
-  for (let h of mapped)
-    if (h.repositoryKey !== undefined && i.get(h.id) === 1 && !n.has(h.id)) {
-      let b = r.get(h.repositoryKey) ?? [];
-      b.push(h.id);
-      r.set(h.repositoryKey, b);
+  let nameById = new Map();
+  let idsByRepoKey = new Map();
+  for (let info of mapped)
+    if (info.repositoryKey !== undefined && idCounts.get(info.id) === 1 && !knownNames.has(info.id)) {
+      let ids = idsByRepoKey.get(info.repositoryKey) ?? [];
+      ids.push(info.id);
+      idsByRepoKey.set(info.repositoryKey, ids);
     }
-  for (let h of r.values()) h.sort();
-  for (let [h, { name: b, id: E }] of c) {
-    let repositoryKey = n.get(E)?.repositoryKey;
-    if (repositoryKey === undefined || i.has(E)) continue;
-    let R = r.get(parseRepoWithRef(repositoryKey))?.shift();
-    if (R !== undefined) {
-      c.set(h, {
-        name: b,
-        id: R,
+  for (let ids of idsByRepoKey.values()) ids.sort();
+  for (let [normalizedName, { name, id }] of ownerByName) {
+    let repositoryKey = knownNames.get(id)?.repositoryKey;
+    if (repositoryKey === undefined || idCounts.has(id)) continue;
+    let assignedId = idsByRepoKey.get(parseRepoWithRef(repositoryKey))?.shift();
+    if (assignedId !== undefined) {
+      ownerByName.set(normalizedName, {
+        name,
+        id: assignedId,
       });
-      f.set(R, b);
+      nameById.set(assignedId, name);
     }
   }
   let mapped_2 = mapped.map(({ id }) => {
-    let b = f.get(id) ?? n.get(id)?.name;
-    let E = b === undefined ? undefined : c.get(sanitizePluginIdLower(b));
-    return b !== undefined && E?.id === id && E.name === b && i.get(id) === 1 ? b : undefined;
+    let assignedName = nameById.get(id) ?? knownNames.get(id)?.name;
+    let owner = assignedName === undefined ? undefined : ownerByName.get(sanitizePluginIdLower(assignedName));
+    return assignedName !== undefined &&
+      owner?.id === id &&
+      owner.name === assignedName &&
+      idCounts.get(id) === 1
+      ? assignedName
+      : undefined;
   });
-  let mapped_3 = mapped.map((h, b) => mapped_2[b] ?? h.base);
-  let S = () => {
-    let h = new Map();
-    for (let b of mapped_3) {
-      let E = sanitizePluginIdLower(b);
-      h.set(E, (h.get(E) ?? 0) + 1);
+  let mapped_3 = mapped.map((entry, index) => mapped_2[index] ?? entry.base);
+  let findClashing = () => {
+    let nameCounts = new Map();
+    for (let candidateName of mapped_3) {
+      let candidateKey = sanitizePluginIdLower(candidateName);
+      nameCounts.set(candidateKey, (nameCounts.get(candidateKey) ?? 0) + 1);
     }
-    return mapped.flatMap((b, E) => {
-      let N = sanitizePluginIdLower(mapped_3[E] ?? b.base);
-      let R = c.get(N);
-      return mapped_2[E] === undefined && ((h.get(N) ?? 0) > 1 || (R !== undefined && R.id !== b.id))
-        ? E
+    return mapped.flatMap((entry, index) => {
+      let normalizedName = sanitizePluginIdLower(mapped_3[index] ?? entry.base);
+      let owner = ownerByName.get(normalizedName);
+      return mapped_2[index] === undefined &&
+        ((nameCounts.get(normalizedName) ?? 0) > 1 || (owner !== undefined && owner.id !== entry.id))
+        ? index
         : [];
     });
   };
   let mapped_4 = mapped.map(() => 0);
   for (let j = 0; j < 3; j++)
-    for (let b of S()) {
-      let E = mapped[b];
-      let max = Math.max(j, mapped_4[b] ?? 0);
-      let R = max === 0 && E?.owner === "" ? 1 : max;
-      let P = R === 0 ? E?.owner : R === 1 ? E?.idTail : R === 2 && E ? shortHash(E.id) : undefined;
-      if (P !== undefined) {
-        mapped_3[b] = `${mapped_3[b]}-${P}`;
-        mapped_4[b] = R + 1;
+    for (let index of findClashing()) {
+      let entry = mapped[index];
+      let max = Math.max(j, mapped_4[index] ?? 0);
+      let level = max === 0 && entry?.owner === "" ? 1 : max;
+      let suffix =
+        level === 0
+          ? entry?.owner
+          : level === 1
+            ? entry?.idTail
+            : level === 2 && entry
+              ? shortHash(entry.id)
+              : undefined;
+      if (suffix !== undefined) {
+        mapped_3[index] = `${mapped_3[index]}-${suffix}`;
+        mapped_4[index] = level + 1;
       }
     }
-  let k = new Set([...c.keys(), ...mapped_3.map(sanitizePluginIdLower)]);
-  let g = (h) => mapped[h]?.sortKey ?? "";
-  let sorted = S().sort((h, b) => (g(h) === g(b) ? 0 : g(h) < g(b) ? -1 : 1));
-  for (let h of sorted) {
-    let b = 2;
-    while (k.has(sanitizePluginIdLower(`${mapped_3[h]}-${b}`))) b++;
-    let E = `${mapped_3[h]}-${b}`;
-    mapped_3[h] = E;
-    k.add(sanitizePluginIdLower(E));
+  let usedNames = new Set([...ownerByName.keys(), ...mapped_3.map(sanitizePluginIdLower)]);
+  let sortKeyOf = (index) => mapped[index]?.sortKey ?? "";
+  let sorted = findClashing().sort((leftIndex, rightIndex) =>
+    sortKeyOf(leftIndex) === sortKeyOf(rightIndex)
+      ? 0
+      : sortKeyOf(leftIndex) < sortKeyOf(rightIndex)
+        ? -1
+        : 1,
+  );
+  for (let index of sorted) {
+    let suffix = 2;
+    while (usedNames.has(sanitizePluginIdLower(`${mapped_3[index]}-${suffix}`))) suffix++;
+    let finalName = `${mapped_3[index]}-${suffix}`;
+    mapped_3[index] = finalName;
+    usedNames.add(sanitizePluginIdLower(finalName));
   }
-  return mapped_3.map((h, b) => ({
-    name: h,
-    clashed: h !== mapped[b]?.base,
+  return mapped_3.map((name, index) => ({
+    name,
+    clashed: name !== mapped[index]?.base,
   }));
 }
 //@ chunk-s67w32sp.js:20838-20977 placement
-function isCollisionSuffixedName(e, n) {
-  let match = /-([1-9][0-9]*)$/.exec(e);
+function isCollisionSuffixedName(name, listing) {
+  let match = /-([1-9][0-9]*)$/.exec(name);
   return (
     match !== null &&
     Number(match[1]) >= 3 &&
-    e.slice(0, match.index).endsWith(`-${pluginDirectoryMarketplaceConfig(n.id)}-${shortHash(n.id)}`)
+    name
+      .slice(0, match.index)
+      .endsWith(`-${pluginDirectoryMarketplaceConfig(listing.id)}-${shortHash(listing.id)}`)
   );
 }
 //@ chunk-s67w32sp.js:20977-21697 placement
 /**
  * 读安装记录与绑定，给出名字是否被占用、仓库唯一绑定名。
  */
-async function loadNameBindingEvidence(e) {
-  let n = await tryDirectoryFetch(e, true, true);
-  let a = await bindingsWithReadFailure();
-  if (n === undefined || isUnreadableBindings(a)) return;
-  let i = `@${OFFICIAL_MARKETPLACE_NAME}`;
-  let filtered = Object.keys(n).filter(isOfficialPluginDirectoryId);
-  let c = [...a.keys()];
-  let f = (m) =>
-    findBindingKeysFor(filtered, m).flatMap((S) => {
-      let y = n[S];
-      return Array.isArray(y) ? y : [];
+async function loadNameBindingEvidence(installRecords) {
+  let installed = await tryDirectoryFetch(installRecords, true, true);
+  let bindings = await bindingsWithReadFailure();
+  if (installed === undefined || isUnreadableBindings(bindings)) return;
+  let suffix = `@${OFFICIAL_MARKETPLACE_NAME}`;
+  let filtered = Object.keys(installed).filter(isOfficialPluginDirectoryId);
+  let boundKeys = [...bindings.keys()];
+  let installsFor = (id) =>
+    findBindingKeysFor(filtered, id).flatMap((key) => {
+      let value = installed[key];
+      return Array.isArray(value) ? value : [];
     });
-  let r = (m) =>
-    typeof m === "object" &&
-    m !== null &&
-    "directoryRepositoryKey" in m &&
-    typeof m.directoryRepositoryKey === "string" &&
-    m.directoryRepositoryKey !== ""
-      ? parseRepoWithRef(m.directoryRepositoryKey)
+  let repoKeyOf = (installation) =>
+    typeof installation === "object" &&
+    installation !== null &&
+    "directoryRepositoryKey" in installation &&
+    typeof installation.directoryRepositoryKey === "string" &&
+    installation.directoryRepositoryKey !== ""
+      ? parseRepoWithRef(installation.directoryRepositoryKey)
       : undefined;
-  let s = new Map();
-  for (let m of filtered) {
-    let mapped = f(m).map(r);
-    let y = mapped[0];
+  let byRepo = new Map();
+  for (let id of filtered) {
+    let mapped = installsFor(id).map(repoKeyOf);
+    let repoKey = mapped[0];
     if (
-      y !== undefined &&
-      mapped.every((k) => k === y) &&
-      findBindingKeysFor(c, m).every((k) => parseRepoWithRef(a.get(k) ?? "") === y)
+      repoKey !== undefined &&
+      mapped.every((key) => key === repoKey) &&
+      findBindingKeysFor(boundKeys, id).every((key) => parseRepoWithRef(bindings.get(key) ?? "") === repoKey)
     )
-      s.set(y, [...(s.get(y) ?? []), m]);
+      byRepo.set(repoKey, [...(byRepo.get(repoKey) ?? []), id]);
   }
   return {
-    holds: (m) => f(`${m}${i}`).length > 0 || findBindingKeysFor(c, `${m}${i}`).length > 0,
-    onlyNameBoundTo: (m) => {
-      let S = s.get(m) ?? [];
-      return S.length === 1 ? S[0]?.slice(0, -i.length) : undefined;
+    holds: (name) =>
+      installsFor(`${name}${suffix}`).length > 0 ||
+      findBindingKeysFor(boundKeys, `${name}${suffix}`).length > 0,
+    onlyNameBoundTo: (repoKey) => {
+      let ids = byRepo.get(repoKey) ?? [];
+      return ids.length === 1 ? ids[0]?.slice(0, -suffix.length) : undefined;
     },
   };
 }
@@ -1271,159 +1342,161 @@ async function loadNameBindingEvidence(e) {
 /**
  * 修复被加冲突后缀的条目名，改回安装插件使用的名字。
  */
-async function repairCollisionRenames(e, listings, a) {
-  let filtered = listings.filter((y) => {
-    let k = e.get(y.id)?.name;
-    return k !== undefined && isCollisionSuffixedName(k, y);
+async function repairCollisionRenames(cachedNames, listings, installRecords) {
+  let filtered = listings.filter((listing) => {
+    let name = cachedNames.get(listing.id)?.name;
+    return name !== undefined && isCollisionSuffixedName(name, listing);
   });
   if (filtered.length === 0)
     return {
-      names: e,
+      names: cachedNames,
       repairs: [],
     };
-  let nameBindingEvidence = await loadNameBindingEvidence(a);
+  let nameBindingEvidence = await loadNameBindingEvidence(installRecords);
   if (nameBindingEvidence === undefined)
     return {
-      names: e,
+      names: cachedNames,
       repairs: [],
     };
-  let c = (y) => {
-    let k = directoryListingSource(y);
-    return "source" in k ? samePluginSource(k.source, undefined) : undefined;
+  let sourceKeyOf = (listing) => {
+    let sourceKey = directoryListingSource(listing);
+    return "source" in sourceKey ? samePluginSource(sourceKey.source, undefined) : undefined;
   };
-  let f = new Map();
-  for (let y of listings) {
-    let { url, path } = y.source.repository;
-    for (let D of new Set([c(y), normalizePluginRepoUrl(url, path)].flatMap((h) => h ?? [])))
-      f.set(D, (f.get(D) ?? 0) + 1);
+  let countBySource = new Map();
+  for (let listing of listings) {
+    let { url, path } = listing.source.repository;
+    for (let key of new Set(
+      [sourceKeyOf(listing), normalizePluginRepoUrl(url, path)].flatMap((key) => key ?? []),
+    ))
+      countBySource.set(key, (countBySource.get(key) ?? 0) + 1);
   }
-  let r = new Map();
-  let s = (name, id, g) => {
-    let D = sanitizePluginIdLower(name);
-    let h = r.get(D) ?? new Set();
-    if (g) h.add(id);
-    else h.delete(id);
-    r.set(D, h);
+  let nameOwner = new Map();
+  let track = (pluginName, id, add) => {
+    let sanitized = sanitizePluginIdLower(pluginName);
+    let owners = nameOwner.get(sanitized) ?? new Set();
+    if (add) owners.add(id);
+    else owners.delete(id);
+    nameOwner.set(sanitized, owners);
   };
-  for (let [y, k] of e) s(k.name, y, true);
-  let m = new Map(e);
-  let S = [];
-  for (let y of filtered) {
-    let k = m.get(y.id);
-    let g = c(y);
-    if (k === undefined || g === undefined) continue;
-    if ((f.get(g) ?? 0) !== 1) continue;
-    if (nameBindingEvidence.holds(k.name)) continue;
-    let D = nameBindingEvidence.onlyNameBoundTo(g);
+  for (let [id, entry] of cachedNames) track(entry.name, id, true);
+  let names = new Map(cachedNames);
+  let repairs = [];
+  for (let listing of filtered) {
+    let current = names.get(listing.id);
+    let sourceKey = sourceKeyOf(listing);
+    if (current === undefined || sourceKey === undefined) continue;
+    if ((countBySource.get(sourceKey) ?? 0) !== 1) continue;
+    if (nameBindingEvidence.holds(current.name)) continue;
+    let boundName = nameBindingEvidence.onlyNameBoundTo(sourceKey);
     if (
-      D === undefined ||
-      D === k.name ||
-      !isValidPluginIdSegmentLength(D) ||
-      [...(r.get(sanitizePluginIdLower(D)) ?? [])].some((h) => h !== y.id)
+      boundName === undefined ||
+      boundName === current.name ||
+      !isValidPluginIdSegmentLength(boundName) ||
+      [...(nameOwner.get(sanitizePluginIdLower(boundName)) ?? [])].some((id) => id !== listing.id)
     )
       continue;
-    m.set(y.id, {
-      ...k,
-      name: D,
+    names.set(listing.id, {
+      ...current,
+      name: boundName,
     });
-    s(k.name, y.id, false);
-    s(D, y.id, true);
-    S.push({
-      id: y.id,
-      key: g,
-      name: D,
+    track(current.name, listing.id, false);
+    track(boundName, listing.id, true);
+    repairs.push({
+      id: listing.id,
+      key: sourceKey,
+      name: boundName,
     });
   }
   return {
-    names: m,
-    repairs: S,
+    names,
+    repairs,
   };
 }
 //@ chunk-s67w32sp.js:22634-23602 placement
 /**
  * 撤销 2.1.287 改过的名字（安装记录能证明时）。
  */
-async function revertLegacyRenames(e, repairs, a, names, listings, c) {
+async function revertLegacyRenames(cachedNames, repairs, cachedNames2, names, listings, installRecords) {
   if (repairs.length === 0)
     return {
-      names: e,
+      names: cachedNames,
       repaired: 0,
     };
-  let nameBindingEvidence = await loadNameBindingEvidence(c);
-  let r = [];
-  let s = 0;
-  for (let { id, key, name: g } of repairs) {
-    let D = a.get(id)?.name;
+  let nameBindingEvidence = await loadNameBindingEvidence(installRecords);
+  let keepIds = [];
+  let repaired = 0;
+  for (let { id, key, name: newName } of repairs) {
+    let cachedName = cachedNames2.get(id)?.name;
     if (
-      D !== undefined &&
+      cachedName !== undefined &&
       (nameBindingEvidence === undefined ||
-        nameBindingEvidence.holds(D) ||
-        nameBindingEvidence.onlyNameBoundTo(key) !== g)
+        nameBindingEvidence.holds(cachedName) ||
+        nameBindingEvidence.onlyNameBoundTo(key) !== newName)
     )
-      r.push(id);
-    else if (e.has(id)) s++;
+      keepIds.push(id);
+    else if (cachedNames.has(id)) repaired++;
   }
-  if (s + r.length > 0)
+  if (repaired + keepIds.length > 0)
     logForDebugging(
-      `Plugin directory: of ${s + r.length} listing(s) Claude Code 2.1.287 had renamed, gave ${s} back the name their installed plugin uses` +
-        (r.length === 0
+      `Plugin directory: of ${repaired + keepIds.length} listing(s) Claude Code 2.1.287 had renamed, gave ${repaired} back the name their installed plugin uses` +
+        (keepIds.length === 0
           ? ""
           : nameBindingEvidence === undefined
-            ? `; kept the 2.1.287 name for ${r.length} because the install records or bindings file could not be read again`
-            : `; kept the 2.1.287 name for ${r.length} because a plugin is now installed under it, or the install records and bindings no longer prove the name it was given back`),
+            ? `; kept the 2.1.287 name for ${keepIds.length} because the install records or bindings file could not be read again`
+            : `; kept the 2.1.287 name for ${keepIds.length} because a plugin is now installed under it, or the install records and bindings no longer prove the name it was given back`),
     );
-  if (r.length === 0)
+  if (keepIds.length === 0)
     return {
-      names: e,
-      repaired: s,
+      names: cachedNames,
+      repaired,
     };
-  let m = new Map(names);
-  for (let y of r) {
-    let k = a.get(y);
-    if (k !== undefined) m.set(y, k);
+  let baseNames = new Map(names);
+  for (let id of keepIds) {
+    let entry = cachedNames2.get(id);
+    if (entry !== undefined) baseNames.set(id, entry);
   }
-  let S = new Map(e);
-  for (let y of directoryListingsToEntries(listings, m)) {
-    let k = S.get(y.listing.id);
-    if (k !== undefined)
-      S.set(y.listing.id, {
-        ...k,
-        name: y.name,
+  let updated = new Map(cachedNames);
+  for (let entry of directoryListingsToEntries(listings, baseNames)) {
+    let existing = updated.get(entry.listing.id);
+    if (existing !== undefined)
+      updated.set(entry.listing.id, {
+        ...existing,
+        name: entry.name,
       });
   }
   return {
-    names: S,
-    repaired: s,
+    names: updated,
+    repaired,
   };
 }
 //@ chunk-s67w32sp.js:23602-24221 placement
-function directoryListingsToEntries(e, n) {
-  let a = assignDirectoryEntryNames(e, n);
-  let i = [];
-  for (let [w, c] of e.entries()) {
-    let f = a[w]?.name ?? c.id;
-    let r = directoryListingSource(c);
-    let { url, path } = c.source.repository;
-    let trimmed = stripInvisibleKeepNewlines(c.summary || c.description || "").trim();
-    let trimmed_2 = stripInvisibleKeepEmoji(c.name).trim();
-    let trimmed_3 = stripInvisibleKeepEmoji(c.release?.version ?? "").trim();
-    let trimmed_4 = stripInvisibleKeepEmoji(c.publisher?.name ?? "").trim();
-    let trimmed_5 = stripInvisibleKeepEmoji(c.links?.documentation ?? "").trim();
-    let h = trimmed_5.startsWith("https://") ? trimmed_5 : "";
-    i.push({
-      name: f,
-      nameClashed: a[w]?.clashed ?? false,
-      listing: c,
+function directoryListingsToEntries(listings, names) {
+  let assigned = assignDirectoryEntryNames(listings, names);
+  let entries = [];
+  for (let [index, listing] of listings.entries()) {
+    let name = assigned[index]?.name ?? listing.id;
+    let source = directoryListingSource(listing);
+    let { url, path } = listing.source.repository;
+    let trimmed = stripInvisibleKeepNewlines(listing.summary || listing.description || "").trim();
+    let trimmed_2 = stripInvisibleKeepEmoji(listing.name).trim();
+    let trimmed_3 = stripInvisibleKeepEmoji(listing.release?.version ?? "").trim();
+    let trimmed_4 = stripInvisibleKeepEmoji(listing.publisher?.name ?? "").trim();
+    let trimmed_5 = stripInvisibleKeepEmoji(listing.links?.documentation ?? "").trim();
+    let homepage = trimmed_5.startsWith("https://") ? trimmed_5 : "";
+    entries.push({
+      name,
+      nameClashed: assigned[index]?.clashed ?? false,
+      listing,
       repositoryKey: normalizePluginRepoUrl(url, path),
       result:
-        "skipped" in r
-          ? r
+        "skipped" in source
+          ? source
           : {
               entry: {
-                name: f,
-                source: r.source,
+                name,
+                source: source.source,
                 ...(trimmed_2 !== "" &&
-                  trimmed_2 !== f && {
+                  trimmed_2 !== name && {
                     displayName: trimmed_2,
                   }),
                 ...(trimmed && {
@@ -1437,8 +1510,8 @@ function directoryListingsToEntries(e, n) {
                     name: trimmed_4,
                   },
                 }),
-                ...(h && {
-                  homepage: h,
+                ...(homepage && {
+                  homepage,
                 }),
                 repository: url,
                 strict: true,
@@ -1446,10 +1519,14 @@ function directoryListingsToEntries(e, n) {
             },
     });
   }
-  return i;
+  return entries;
 }
 //@ chunk-s67w32sp.js:24221-24438 placement
-function synthesizePluginDirectoryMarketplace(e, n, a = directoryListingsToEntries(e, n)) {
+function synthesizePluginDirectoryMarketplace(
+  listings,
+  names,
+  entries = directoryListingsToEntries(listings, names),
+) {
   return {
     name: OFFICIAL_MARKETPLACE_NAME,
     owner: {
@@ -1458,7 +1535,7 @@ function synthesizePluginDirectoryMarketplace(e, n, a = directoryListingsToEntri
     metadata: {
       description: `Plugins listed by the ${OFFICIAL_MARKETPLACE_DISPLAY}, installed at their listed commit`,
     },
-    plugins: a.flatMap((i) => ("entry" in i.result ? i.result.entry : [])),
+    plugins: entries.flatMap((entry) => ("entry" in entry.result ? entry.result.entry : [])),
   };
 }
 //@ chunk-s67w32sp.js:24438-24640 placement
@@ -1469,28 +1546,28 @@ var ENTRY_SKIP_REASONS = {
   bad_path: "its folder path is not valid",
 };
 //@ chunk-s67w32sp.js:24640-24712 placement
-async function pluginDirectoryNotInstallableMessage(e) {
-  let n = await pluginDirectoryNotInstallableReason(e);
-  return n === undefined ? undefined : pluginDirectoryNotInstallableSentence(e, n);
+async function pluginDirectoryNotInstallableMessage(name) {
+  let reason = await pluginDirectoryNotInstallableReason(name);
+  return reason === undefined ? undefined : pluginDirectoryNotInstallableSentence(name, reason);
 }
 //@ chunk-s67w32sp.js:24712-24830 placement
-function pluginDirectoryNotInstallableSentence(e, n) {
-  return `"${e}" is listed in the ${OFFICIAL_MARKETPLACE_DISPLAY} but cannot be installed by this version of Claude Code (${n}).`;
+function pluginDirectoryNotInstallableSentence(name, reason) {
+  return `"${name}" is listed in the ${OFFICIAL_MARKETPLACE_DISPLAY} but cannot be installed by this version of Claude Code (${reason}).`;
 }
 //@ chunk-s67w32sp.js:24830-24993 placement
-async function pluginDirectoryNotInstallableReason(e) {
+async function pluginDirectoryNotInstallableReason(name) {
   let pluginDirectoryCache = await readPluginDirectoryCache();
   let found = directoryListingsToEntries(
     pluginDirectoryCache?.listings ?? [],
     pluginDirectoryCache?.entryNames ?? new Map(),
-  ).find((i) => i.name === e);
+  ).find((entry) => entry.name === name);
   return found && "skipped" in found.result ? ENTRY_SKIP_REASONS[found.result.skipped] : undefined;
 }
 //@ chunk-s67w32sp.js:24993-25074 placement
 var PLUGIN_DIRECTORY_MARKETPLACE_JSON = "plugin-directory-marketplace.json";
 var pluginDirectoryMarketplacePath = DoctorLazy(() =>
-  u({
-    enabled: M().optional(),
+  objectSchema({
+    enabled: booleanSchema().optional(),
   }),
 );
 //@ chunk-s67w32sp.js:25074-25106 placement
@@ -1506,15 +1583,15 @@ async function readPluginDirectoryMarketplaceChoice() {
     MAX_SEGMENT_SLUG_LENGTH,
     "on/off file",
   );
-  let n = commandSourceSession();
+  let session = commandSourceSession();
   let readFailed = pluginsDirJsonFile.state === "unusable" && pluginsDirJsonFile.readFailed;
-  if (readFailed && n.marketplaceChoice !== undefined) return n.marketplaceChoice;
-  let i =
+  if (readFailed && session.marketplaceChoice !== undefined) return session.marketplaceChoice;
+  let parsed =
     pluginsDirJsonFile.state === "read"
       ? pluginDirectoryMarketplacePath().safeParse(pluginsDirJsonFile.json)
       : undefined;
-  let enabled = i?.success ? i.data.enabled : undefined;
-  let c =
+  let enabled = parsed?.success ? parsed.data.enabled : undefined;
+  let choice =
     enabled === undefined
       ? {
           enabled: encapsulatedPebbleEnabled(),
@@ -1524,30 +1601,30 @@ async function readPluginDirectoryMarketplaceChoice() {
           enabled,
           source: "user_choice",
         };
-  if (!readFailed) n.marketplaceChoice = c;
-  return c;
+  if (!readFailed) session.marketplaceChoice = choice;
+  return choice;
 }
 //@ chunk-s67w32sp.js:25490-25537 placement
 async function isPluginDirectoryMarketplaceEnabled() {
   return (await readPluginDirectoryMarketplaceChoice()).enabled;
 }
 //@ chunk-s67w32sp.js:25537-25835 placement
-async function setPluginDirectoryMarketplaceEnabled(e) {
+async function setPluginDirectoryMarketplaceEnabled(enabled) {
   if (isDiskless())
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `This session doesn't save settings, so the ${OFFICIAL_MARKETPLACE_DISPLAY} can't be turned ${e ? "on" : "off"}`,
+      `This session doesn't save settings, so the ${OFFICIAL_MARKETPLACE_DISPLAY} can't be turned ${enabled ? "on" : "off"}`,
       "plugin directory marketplace toggled in a diskless session",
     );
   await getFsImplementation().mkdir(getPluginsDirectory());
   await writeFileAtomic(
     MAX_PLUGIN_DIRECTORY_MARKETPLACE_BYTES(),
     jsonStringify({
-      enabled: e,
+      enabled,
     }),
     384,
   );
   commandSourceSession().marketplaceChoice = {
-    enabled: e,
+    enabled,
     source: "user_choice",
   };
 }
@@ -1558,8 +1635,8 @@ async function pluginDirectoryRegistryEntry() {
   let lastUpdated = new Date(0).toISOString();
   if (!isDiskless())
     try {
-      let n = await lstat(pluginDirectoryCachePath());
-      if (n.isFile()) lastUpdated = n.mtime.toISOString();
+      let stat = await lstat(pluginDirectoryCachePath());
+      if (stat.isFile()) lastUpdated = stat.mtime.toISOString();
     } catch {}
   return {
     source: {
@@ -1580,16 +1657,16 @@ var SWITCH_PURPOSE_LABELS = {
 var CATALOG_TTL_MS = 1800000;
 var weakMap = new WeakMap();
 //@ chunk-s67w32sp.js:26210-26345 placement
-function isPluginDirectoryEntryFromAFreshWalk(e) {
-  let n = weakMap.get(e);
-  if (n === undefined) return false;
-  let a = Date.now() - n.wall;
-  let i = performance.now() - n.mono;
-  return a >= 0 && a < CATALOG_TTL_MS && i >= 0 && i < CATALOG_TTL_MS;
+function isPluginDirectoryEntryFromAFreshWalk(plugin) {
+  let walkStarted = weakMap.get(plugin);
+  if (walkStarted === undefined) return false;
+  let wallAge = Date.now() - walkStarted.wall;
+  let monoAge = performance.now() - walkStarted.mono;
+  return wallAge >= 0 && wallAge < CATALOG_TTL_MS && monoAge >= 0 && monoAge < CATALOG_TTL_MS;
 }
 //@ chunk-s67w32sp.js:26345-27908 placement
 async function loadPluginDirectoryMarketplace(
-  e,
+  mode,
   {
     forInstalledPlugin = false,
     onlyMissedListings = false,
@@ -1599,14 +1676,14 @@ async function loadPluginDirectoryMarketplace(
     installRecords,
   },
 ) {
-  let r = purpose === "load" ? undefined : purpose;
-  if (r !== undefined && (e !== "refresh" || forInstalledPlugin))
+  let neededPurpose = purpose === "load" ? undefined : purpose;
+  if (neededPurpose !== undefined && (mode !== "refresh" || forInstalledPlugin))
     return {
       marketplace: null,
-      message: `no fresh list was asked for, which ${SWITCH_PURPOSE_LABELS[r]} needs (an internal error)`,
-      notFreshEnoughFor: r,
+      message: `no fresh list was asked for, which ${SWITCH_PURPOSE_LABELS[neededPurpose]} needs (an internal error)`,
+      notFreshEnoughFor: neededPurpose,
     };
-  if (e === "cache-only") {
+  if (mode === "cache-only") {
     if (!forInstalledPlugin && !isPluginDirectoryAccessAllowed())
       return {
         marketplace: null,
@@ -1625,25 +1702,25 @@ async function loadPluginDirectoryMarketplace(
           pluginDirectoryCache.entryNames,
         ),
       };
-    let S = new Set(pluginDirectoryCache.listings.map((listing) => listing.id));
-    let mapped = pluginDirectoryCache.missed
-      .filter(({ listing }) => !S.has(listing.id))
+    let freshIds = new Set(pluginDirectoryCache.listings.map((listing) => listing.id));
+    let listings = pluginDirectoryCache.missed
+      .filter(({ listing }) => !freshIds.has(listing.id))
       .map(({ listing }) => listing);
     return {
       marketplace: synthesizePluginDirectoryMarketplace(
-        mapped,
+        listings,
         pluginDirectoryCache.entryNames,
-        mapped.length === 0
+        listings.length === 0
           ? []
           : directoryListingsToEntries(
-              [...pluginDirectoryCache.listings, ...mapped],
+              [...pluginDirectoryCache.listings, ...listings],
               pluginDirectoryCache.entryNames,
             ).slice(pluginDirectoryCache.listings.length),
       ),
     };
   }
   let pluginDirectoryCatalog = await loadPluginDirectoryCatalog({
-    forceRefresh: e === "refresh",
+    forceRefresh: mode === "refresh",
     trigger,
     signal,
     installRecords,
@@ -1652,40 +1729,42 @@ async function loadPluginDirectoryMarketplace(
     return {
       marketplace: null,
       message: pluginDirectoryCatalog.message,
-      ...(r !== undefined && {
-        notFreshEnoughFor: r,
+      ...(neededPurpose !== undefined && {
+        notFreshEnoughFor: neededPurpose,
       }),
       ...(pluginDirectoryCatalog.laterMayHelp && {
         laterMayHelp: true,
       }),
     };
-  if (r !== undefined) {
+  if (neededPurpose !== undefined) {
     if (pluginDirectoryCatalog.staleReason !== undefined || pluginDirectoryCatalog.walked !== true)
       return {
         marketplace: null,
         message:
           pluginDirectoryCatalog.staleReason ??
           "only the list saved on this machine answered, not the Directory itself",
-        notFreshEnoughFor: r,
+        notFreshEnoughFor: neededPurpose,
         ...(pluginDirectoryCatalog.laterMayHelp && {
           laterMayHelp: true,
         }),
       };
-    let m = new Set();
-    let S = new Map();
+    let reviewerMarked = new Set();
+    let notInstallable = new Map();
     let directoryMarketplace = buildDirectoryMarketplace(
       pluginDirectoryCatalog.listings,
       pluginDirectoryCatalog.entryNames,
-      m,
-      S,
+      reviewerMarked,
+      notInstallable,
     );
     if (pluginDirectoryCatalog.walkStarted !== undefined)
       for (let plugin of directoryMarketplace.plugins)
         weakMap.set(plugin, pluginDirectoryCatalog.walkStarted);
     return {
       marketplace: directoryMarketplace,
-      reviewerMarkedNames: m,
-      notInstallable: new Map([...S].map(([k, g]) => [k, ENTRY_SKIP_REASONS[g]])),
+      reviewerMarkedNames: reviewerMarked,
+      notInstallable: new Map(
+        [...notInstallable].map(([name, skipKind]) => [name, ENTRY_SKIP_REASONS[skipKind]]),
+      ),
     };
   }
   return {
@@ -1702,17 +1781,39 @@ async function loadPluginDirectoryMarketplace(
 /**
  * 由条目合成插件目录市场并更新会话里的条目名与审核标记。
  */
-function buildDirectoryMarketplace(listings, entryNames, a, i) {
-  let w = directoryListingsToEntries(listings, entryNames);
-  for (let s of w) if ("skipped" in s.result) i?.set(s.name, s.result.skipped);
-  let c = synthesizePluginDirectoryMarketplace(listings, entryNames, w);
-  let f = commandSourceSession();
-  f.catalogEntryNames = new Set(c.plugins.map((plugin) => plugin.name));
-  let flattened = w.flatMap((s) =>
-    "entry" in s.result && isDirectoryListingReviewerMarked(s.listing) ? s.name : [],
+function buildDirectoryMarketplace(listings, entryNames, reviewerMarked, notInstallable) {
+  let entries = directoryListingsToEntries(listings, entryNames);
+  for (let entry of entries)
+    if ("skipped" in entry.result) notInstallable?.set(entry.name, entry.result.skipped);
+  let marketplace = synthesizePluginDirectoryMarketplace(listings, entryNames, entries);
+  let session = commandSourceSession();
+  session.catalogEntryNames = new Set(marketplace.plugins.map((plugin) => plugin.name));
+  let flattened = entries.flatMap((entry) =>
+    "entry" in entry.result && isDirectoryListingReviewerMarked(entry.listing) ? entry.name : [],
   );
-  f.reviewerMarkedEntryNames = new Set(flattened);
-  for (let s of flattened) a?.add(s);
-  f.isAccessAllowed = () => isPluginDirectoryAccessAllowed();
-  return c;
+  session.reviewerMarkedEntryNames = new Set(flattened);
+  for (let name of flattened) reviewerMarked?.add(name);
+  session.isAccessAllowed = () => isPluginDirectoryAccessAllowed();
+  return marketplace;
 }
+export {
+  awaitPluginDirectoryPolicyVerdict,
+  directoryListingSource,
+  directoryListingsToEntries,
+  entryNameClaimBytes,
+  isPluginDirectoryEntryFromAFreshWalk,
+  isPluginDirectoryMarketplaceEnabled,
+  loadPluginDirectoryCatalog,
+  loadPluginDirectoryMarketplace,
+  namesThatFit,
+  notePluginDirectoryWalkTimedOut,
+  pluginDirectoryFailedWalkWindow,
+  pluginDirectoryNotInstallableMessage,
+  pluginDirectoryNotInstallableReason,
+  pluginDirectoryNotInstallableSentence,
+  pluginDirectoryRegistryEntry,
+  pluginDirectoryWalkReadiness,
+  readPluginDirectoryMarketplaceChoice,
+  setPluginDirectoryMarketplaceEnabled,
+  synthesizePluginDirectoryMarketplace,
+};

@@ -8,6 +8,8 @@
  * pieces: chunk-18hwfzwa.js (9), chunk-q6rfp6n3.js (5)
  * attribution: placement 14
  */
+import { fromSanitizer_SANITIZER_OUTPUT_ONLY, lit, fromEnum } from "../services/analytics/safeMetadata.js";
+import { sendNotification } from "../services/notifier.js";
 import { env } from "./env.js";
 import {
   isTmuxControlMode,
@@ -19,15 +21,115 @@ import { getTerminalProbeState, getXtversionName } from "../ink/terminalCapabili
 import { setRendererModeForAnalytics, onAttacherCapsChange, getAttacherCaps } from "../bootstrap/state.js";
 import { logEvent } from "../services/analytics/index.js";
 import { sanitizeVersion } from "../services/analytics/metadata.js";
-import { fromEnum, fromSanitizer_SANITIZER_OUTPUT_ONLY, lit } from "../services/analytics/safeMetadata.js";
 import { isSynchronizedOutputSupported, getSecondRootError } from "../ink/terminal.js";
 import { getLinuxClipboardToolName, isVteTerminal } from "../ink/termio/osc.js";
-import { init_react_production, yt, P } from "../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useSyncExternalStore,
+  useEffect,
+} from "../../vendor/react/cjs/react.production.js";
 import { useStdin } from "../components/design-system/ThemeProvider.js";
 import { useIsFullscreen } from "../ink/renderModeContext.js";
 import { sleep } from "./sleep.js";
-import { sendNotification } from "../services/notifier.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-q6rfp6n3.js:598-641 placement
+var TERMINAL_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/;
+//@ chunk-q6rfp6n3.js:641-727 placement
+/**
+ * 校验终端名，不合规记 nonconforming。
+ */
+function sanitizeTerminalName(name) {
+  if (name == null) return;
+  if (TERMINAL_NAME_RE.test(name)) return fromSanitizer_SANITIZER_OUTPUT_ONLY(name);
+  return lit("nonconforming");
+}
+//@ chunk-q6rfp6n3.js:727-1357 placement
+/**
+ * 已知终端名与版本号格式正则。
+ */
+var KNOWN_TERMINAL_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var VERSION_PATTERNS;
+var VERSION_PREFIX_RE;
+var NAME_REST_RE;
+var DASHED_NAME_REST_RE;
+var TRAILING_PUNCT_RE;
+deferInit("chunk-q6rfp6n3.js:727", () => {
+  KNOWN_TERMINAL_NAMES = new Set([
+    "Apple_Terminal",
+    "contour",
+    "foot",
+    "ghostty",
+    "iTerm.app",
+    "iTerm2",
+    "kitty",
+    "Konsole",
+    "libghostty",
+    "libvterm",
+    "mintty",
+    "Rio",
+    "ShellFish",
+    "SwiftTerm",
+    "Tabby",
+    "terminology",
+    "Termius",
+    "tmux",
+    "VTE",
+    "Warp",
+    "WezTerm",
+    "xterm",
+    "xterm-ghostty",
+    "XTerm",
+    "xterm.js",
+    "Zap",
+    "Zellij",
+  ]);
+  VERSION_PATTERNS = [
+    /^(?:next-)?v?\d{1,8}(?:\.\d{1,8}){0,5}[a-z]?$/,
+    /^\d{1,8}\.\d{1,8}\.\d{1,8}-?(?:alpha|beta|rc|pre|dev)\.?\d{0,8}$/,
+    /^\d{8}[-_]\d{6}[-_][0-9a-f]{8}$/,
+    /^v\d\.\d{4}(?:\.\d{2}){4}\.(?:stable|preview|beta|dev)_\d{2}$/,
+  ];
+  VERSION_PREFIX_RE = /^\d{1,8}(?:\.\d{1,8}){1,3}/;
+  NAME_REST_RE = /^([A-Za-z][A-Za-z0-9_.]*)(.*)$/;
+  DASHED_NAME_REST_RE = /^([A-Za-z][A-Za-z0-9_.-]*[A-Za-z0-9_.])(.*)$/;
+  TRAILING_PUNCT_RE = /[):]{1,4}$/;
+});
+//@ chunk-q6rfp6n3.js:1357-1822 placement
+/**
+ * 把终端版本回复规范为 “名字(版本)” 等安全形式。
+ */
+function sanitizeTerminalReply(xtversionName) {
+  if (xtversionName === undefined) return lit("no_reply");
+  let name = xtversionName.length <= 128 ? NAME_REST_RE.exec(xtversionName) : null;
+  if (!name) return lit("other");
+  let match = DASHED_NAME_REST_RE.exec(xtversionName);
+  let [, reply = "", versionText = ""] = match && KNOWN_TERMINAL_NAMES.has(match[1] ?? "") ? match : name;
+  if (!KNOWN_TERMINAL_NAMES.has(reply)) return lit("other");
+  if (versionText === "") return fromSanitizer_SANITIZER_OUTPUT_ONLY(reply);
+  let separator = versionText[0];
+  let replaced = versionText.slice(1).replace(TRAILING_PUNCT_RE, "");
+  if (replaced === "") return fromSanitizer_SANITIZER_OUTPUT_ONLY(separator === "(" ? `${reply}()` : reply);
+  let version = VERSION_PATTERNS.some((pattern) => pattern.test(replaced))
+    ? replaced
+    : (VERSION_PREFIX_RE.exec(replaced)?.[0] ?? "other");
+  switch (separator) {
+    case "(":
+      return fromSanitizer_SANITIZER_OUTPUT_ONLY(`${reply}(${version})`);
+    case " ":
+    case "-":
+      return fromSanitizer_SANITIZER_OUTPUT_ONLY(`${reply}${separator}${version}`);
+    default:
+      return fromSanitizer_SANITIZER_OUTPUT_ONLY(`${reply} ${version}`);
+  }
+}
+//@ chunk-q6rfp6n3.js:1822-1867 placement
+/**
+ * 异步发送通知（包一层 sendNotification）。
+ */
+async function notifyAsync(notification, terminal, options = {}) {
+  await sendNotification(notification, terminal, options);
+}
 //@ chunk-18hwfzwa.js:207065-207200 placement
 function detectTerminalMultiplexer() {
   if (env.TMUX) return isTmuxControlMode() ? "tmux_cc" : "tmux";
@@ -61,124 +163,53 @@ function terminalProbeFields(fullscreenDecision) {
   };
 }
 //@ chunk-18hwfzwa.js:207650-207654 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:207650", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:207782-207786 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:207782", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:208031-208035 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:208031", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:920856-920860 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:920856", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:920860-921229 placement
 function queryTerminalBackground() {
   let { internal_querier: internalQuerier } = useStdin();
-  let x = yt(onAttacherCapsChange, () => getAttacherCaps()?.terminal ?? env.terminal);
+  let terminal = useSyncExternalStore(
+    onAttacherCapsChange,
+    () => getAttacherCaps()?.terminal ?? env.terminal,
+  );
   let isFullscreen = useIsFullscreen();
-  P(() => {
+  useEffect(() => {
     if (!isFullscreen || !internalQuerier) return;
-    if (x !== "iTerm.app" && x !== "Apple_Terminal") return;
-    let L = getSecondRootError().get(process.stdout);
-    if (!L) return;
+    if (terminal !== "iTerm.app" && terminal !== "Apple_Terminal") return;
+    let prober = getSecondRootError().get(process.stdout);
+    if (!prober) return;
     let abortController = new AbortController();
     (async () => {
       while (!abortController.signal.aborted) {
-        await L.probeExternalClear(internalQuerier);
+        await prober.probeExternalClear(internalQuerier);
         await sleep(200, abortController.signal, {
           unref: true,
         });
       }
     })();
     return () => abortController.abort();
-  }, [isFullscreen, internalQuerier, x]);
+  }, [isFullscreen, internalQuerier, terminal]);
 }
 //@ chunk-18hwfzwa.js:921229-921233 placement
-init_react_production();
-//@ chunk-q6rfp6n3.js:598-641 placement
-var TERMINAL_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/;
-//@ chunk-q6rfp6n3.js:641-727 placement
-/**
- * 校验终端名，不合规记 nonconforming。
- */
-function sanitizeTerminalName(e) {
-  if (e == null) return;
-  if (TERMINAL_NAME_RE.test(e)) return fromSanitizer_SANITIZER_OUTPUT_ONLY(e);
-  return lit("nonconforming");
-}
-//@ chunk-q6rfp6n3.js:727-1357 placement
-/**
- * 已知终端名与版本号格式正则。
- */
-var KNOWN_TERMINAL_NAMES = new Set([
-  "Apple_Terminal",
-  "contour",
-  "foot",
-  "ghostty",
-  "iTerm.app",
-  "iTerm2",
-  "kitty",
-  "Konsole",
-  "libghostty",
-  "libvterm",
-  "mintty",
-  "Rio",
-  "ShellFish",
-  "SwiftTerm",
-  "Tabby",
-  "terminology",
-  "Termius",
-  "tmux",
-  "VTE",
-  "Warp",
-  "WezTerm",
-  "xterm",
-  "xterm-ghostty",
-  "XTerm",
-  "xterm.js",
-  "Zap",
-  "Zellij",
-]);
-var VERSION_PATTERNS = [
-  /^(?:next-)?v?\d{1,8}(?:\.\d{1,8}){0,5}[a-z]?$/,
-  /^\d{1,8}\.\d{1,8}\.\d{1,8}-?(?:alpha|beta|rc|pre|dev)\.?\d{0,8}$/,
-  /^\d{8}[-_]\d{6}[-_][0-9a-f]{8}$/,
-  /^v\d\.\d{4}(?:\.\d{2}){4}\.(?:stable|preview|beta|dev)_\d{2}$/,
-];
-var VERSION_PREFIX_RE = /^\d{1,8}(?:\.\d{1,8}){1,3}/;
-var NAME_REST_RE = /^([A-Za-z][A-Za-z0-9_.]*)(.*)$/;
-var DASHED_NAME_REST_RE = /^([A-Za-z][A-Za-z0-9_.-]*[A-Za-z0-9_.])(.*)$/;
-var TRAILING_PUNCT_RE = /[):]{1,4}$/;
-//@ chunk-q6rfp6n3.js:1357-1822 placement
-/**
- * 把终端版本回复规范为 “名字(版本)” 等安全形式。
- */
-function sanitizeTerminalReply(xtversionName) {
-  if (xtversionName === undefined) return lit("no_reply");
-  let n = xtversionName.length <= 128 ? NAME_REST_RE.exec(xtversionName) : null;
-  if (!n) return lit("other");
-  let match = DASHED_NAME_REST_RE.exec(xtversionName);
-  let [, r = "", s = ""] = match && KNOWN_TERMINAL_NAMES.has(match[1] ?? "") ? match : n;
-  if (!KNOWN_TERMINAL_NAMES.has(r)) return lit("other");
-  if (s === "") return fromSanitizer_SANITIZER_OUTPUT_ONLY(r);
-  let l = s[0];
-  let replaced = s.slice(1).replace(TRAILING_PUNCT_RE, "");
-  if (replaced === "") return fromSanitizer_SANITIZER_OUTPUT_ONLY(l === "(" ? `${r}()` : r);
-  let d = VERSION_PATTERNS.some((_) => _.test(replaced))
-    ? replaced
-    : (VERSION_PREFIX_RE.exec(replaced)?.[0] ?? "other");
-  switch (l) {
-    case "(":
-      return fromSanitizer_SANITIZER_OUTPUT_ONLY(`${r}(${d})`);
-    case " ":
-    case "-":
-      return fromSanitizer_SANITIZER_OUTPUT_ONLY(`${r}${l}${d}`);
-    default:
-      return fromSanitizer_SANITIZER_OUTPUT_ONLY(`${r} ${d}`);
-  }
-}
-//@ chunk-q6rfp6n3.js:1822-1867 placement
-/**
- * 异步发送通知（包一层 sendNotification）。
- */
-async function notifyAsync(notification, terminal, o = {}) {
-  await sendNotification(notification, terminal, o);
-}
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:921229", () => {
+  init_react_production();
+});
 export { queryTerminalBackground, notifyAsync, sanitizeTerminalName, logTerminalProbe };

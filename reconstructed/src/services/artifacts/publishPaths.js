@@ -112,17 +112,17 @@ function validateFilesPath(path, { removal = false } = {}) {
 /**
  * 导出函数 `isServiceViewPath`：参数 e，返回 e.startsWith("_") || e === "index.html.json" || e === ".json"。
  */
-function isServiceViewPath(e) {
-  return e.startsWith("_") || e === "index.html.json" || e === ".json";
+function isServiceViewPath(path) {
+  return path.startsWith("_") || path === "index.html.json" || path === ".json";
 }
 //@ chunk-jv307fw4.js:7355-7587 placement
 /**
  * 校验读取路径：规范化后不能是 artifact 服务自带的视图路径，合法时返回键名，否则返回错误消息。
  */
 function validateReadPath(path) {
-  let n = validatePublishedPath(path, "path");
-  if ("errMsg" in n) return n;
-  let { nfc } = n;
+  let validated = validatePublishedPath(path, "path");
+  if ("errMsg" in validated) return validated;
+  let { nfc } = validated;
   if (isServiceViewPath(nfc))
     return {
       errMsg: `path ${safeJsonQuote(path)} names one of the artifact service's own views, not a published file; list_files shows the readable paths`,
@@ -142,55 +142,60 @@ var THUMBNAIL_EXT_RE = /\.(?:png|jpe?g)$/i;
  * 校验缩略图 href：必须是 .png/.jpg/.jpeg 文件，合法时返回相对路径。
  */
 function validateThumbnailHref(path) {
-  let n = validatePublishedPath(path, "thumbnail href");
-  if ("errMsg" in n) return n;
-  if (!THUMBNAIL_EXT_RE.test(n.nfc))
+  let validated = validatePublishedPath(path, "thumbnail href");
+  if ("errMsg" in validated) return validated;
+  if (!THUMBNAIL_EXT_RE.test(validated.nfc))
     return {
       errMsg: `thumbnail href ${JSON.stringify(path)} is not a .png, .jpg or .jpeg file \u2014 custom thumbnails are PNG or JPEG images`,
     };
   return {
-    rel: n.nfc,
+    rel: validated.nfc,
   };
 }
 //@ chunk-jv307fw4.js:7868-7948 placement
 /**
  * 导出函数 `isUnderAnchor`：参数 e, n, r，返回 e === n || e.startsWith(n + sep) || e === r || e.startsWith(r + sep)。
  */
-function isUnderAnchor(e, n, r) {
-  return e === n || e.startsWith(n + sep) || e === r || e.startsWith(r + sep);
+function isUnderAnchor(localPath, lexAnchor, realAnchor) {
+  return (
+    localPath === lexAnchor ||
+    localPath.startsWith(lexAnchor + sep) ||
+    localPath === realAnchor ||
+    localPath.startsWith(realAnchor + sep)
+  );
 }
 //@ chunk-jv307fw4.js:7948-8068 placement
 /**
  * 把路径中的根前缀从旧根替换为新根（不在旧根下时原样返回）。
  */
-function remapRootPrefix(e, cwd, realCwd) {
-  let s = normalizeTrailingSlash(normalize(cwd));
-  if (s === realCwd) return e;
-  if (e === s) return realCwd;
-  return e.startsWith(s + sep) ? realCwd + e.slice(s.length) : e;
+function remapRootPrefix(path, cwd, realCwd) {
+  let normalizedCwd = normalizeTrailingSlash(normalize(cwd));
+  if (normalizedCwd === realCwd) return path;
+  if (path === normalizedCwd) return realCwd;
+  return path.startsWith(normalizedCwd + sep) ? realCwd + path.slice(normalizedCwd.length) : path;
 }
 //@ chunk-jv307fw4.js:8068-8129 placement
 /**
  * 导出函数 `normalizeTrailingSlash`：参数 e，返回 replaced === "" ? e : replaced。
  */
-function normalizeTrailingSlash(e) {
-  let replaced = e.replace(/\/+$/, "");
-  return replaced === "" ? e : replaced;
+function normalizeTrailingSlash(path) {
+  let replaced = path.replace(/\/+$/, "");
+  return replaced === "" ? path : replaced;
 }
 //@ chunk-jv307fw4.js:8129-8350 placement
 /**
  * 把用户给的路径解析为本地绝对路径：网络路径、~ 开头、越出基准目录的相对路径返回 null；绝对路径规范化；相对路径接到基准目录下。
  */
-function resolveLocalPath(from, n) {
+function resolveLocalPath(from, cwd) {
   if (classifyArtifactUrl(from)) return null;
   if (from === "~" || from.startsWith(`~${sep}`) || from.startsWith("~/")) return null;
   if (isAbsolute(from)) {
-    let s = normalize(from);
-    return classifyArtifactUrl(s) ? null : s;
+    let normalized = normalize(from);
+    return classifyArtifactUrl(normalized) ? null : normalized;
   }
-  let r = normalize(from);
-  if (r === ".." || r.startsWith(`..${sep}`)) return null;
-  return join(n, r);
+  let normalized = normalize(from);
+  if (normalized === ".." || normalized.startsWith(`..${sep}`)) return null;
+  return join(cwd, normalized);
 }
 //@ chunk-jv307fw4.js:8350-8563 placement
 /**
@@ -203,33 +208,33 @@ function describeUnsafeSymlink(from) {
 /**
  * 沿符号链接链最多追 40 层，遇到网络目标、链接文本含 ..、链接过多或指向受保护位置时判定为不安全；不是链接时返回 false。
  */
-async function isUnsafeSymlinkChain(e) {
-  let n = normalizeTrailingSlash(e);
+async function isUnsafeSymlinkChain(path) {
+  let current = normalizeTrailingSlash(path);
   for (let j = 0; j < 40; j++) {
-    let s;
+    let link;
     try {
-      s = await readlink(n);
+      link = await readlink(current);
     } catch {
       return false;
     }
-    if (isOnForeignMount(s, dirname(n))) return true;
-    if (s.split(/\/+/).includes("..")) return true;
-    n = normalizeTrailingSlash(isAbsolute(s) ? normalize(s) : join(dirname(n), s));
-    if (classifyArtifactUrl(n)) return true;
+    if (isOnForeignMount(link, dirname(current))) return true;
+    if (link.split(/\/+/).includes("..")) return true;
+    current = normalizeTrailingSlash(isAbsolute(link) ? normalize(link) : join(dirname(current), link));
+    if (classifyArtifactUrl(current)) return true;
   }
   return true;
 }
 //@ chunk-jv307fw4.js:8780-8837 placement
 function underAnyAnchor(localPath, anchors) {
-  return anchors.some((r) => isUnderAnchor(localPath, r.lex, r.real));
+  return anchors.some((anchor) => isUnderAnchor(localPath, anchor.lex, anchor.real));
 }
 //@ chunk-jv307fw4.js:8837-8910 placement
 function isUnderRealRoot(realRoot, anchors) {
-  return anchors.some((r) => realRoot === r.real || realRoot.startsWith(r.real + sep));
+  return anchors.some((anchor) => realRoot === anchor.real || realRoot.startsWith(anchor.real + sep));
 }
 //@ chunk-jv307fw4.js:8910-8968 placement
-function isRealDirectory(e) {
-  return !e.isSymbolicLink() && e.isDirectory();
+function isRealDirectory(stat) {
+  return !stat.isSymbolicLink() && stat.isDirectory();
 }
 //@ chunk-jv307fw4.js:8968-9304 placement
 /**
@@ -237,31 +242,34 @@ function isRealDirectory(e) {
  */
 async function getScratchpadAnchor(scratchpadDir) {
   if (scratchpadDir === undefined || !isAbsolute(scratchpadDir)) return [];
-  let n = normalizeTrailingSlash(normalize(scratchpadDir));
-  let r;
+  let normalized = normalizeTrailingSlash(normalize(scratchpadDir));
+  let stat;
   try {
-    r = await lstat(n);
+    stat = await lstat(normalized);
   } catch (error) {
     return isENOENT(error)
       ? [
           {
             kind: "scratchpad",
-            lex: n,
-            real: n,
+            lex: normalized,
+            real: normalized,
           },
         ]
       : [];
   }
-  if (!isRealDirectory(r) || (await isUnsafeSymlinkChain(n))) return [];
-  let real = await realpath(n).catch(() => n);
-  let a = await lstat(n).catch(() => {
+  if (!isRealDirectory(stat) || (await isUnsafeSymlinkChain(normalized))) return [];
+  let real = await realpath(normalized).catch(() => normalized);
+  let scratchpadStat = await lstat(normalized).catch(() => {
     return;
   });
-  return a !== undefined && isRealDirectory(a) && a.ino === r.ino && a.dev === r.dev
+  return scratchpadStat !== undefined &&
+    isRealDirectory(scratchpadStat) &&
+    scratchpadStat.ino === stat.ino &&
+    scratchpadStat.dev === stat.dev
     ? [
         {
           kind: "scratchpad",
-          lex: n,
+          lex: normalized,
           real,
         },
       ]
@@ -271,52 +279,54 @@ async function getScratchpadAnchor(scratchpadDir) {
 /**
  * 为会话额外工作目录建立发布锚点（目录、非不安全链接、真实路径不是网络路径、两次 lstat 一致），评测受限模式下原样接受原始 cwd。
  */
-async function getWorkingDirAnchors(e, n) {
-  let r = [];
-  for (let s of e ?? []) {
-    if (!isAbsolute(s) || classifyArtifactUrl(s)) continue;
-    let a = normalizeTrailingSlash(normalize(s));
-    if (a === n.lex || a === n.real) continue;
+async function getWorkingDirAnchors(dirs, cwdAnchor) {
+  let anchors = [];
+  for (let dir of dirs ?? []) {
+    if (!isAbsolute(dir) || classifyArtifactUrl(dir)) continue;
+    let normalized = normalizeTrailingSlash(normalize(dir));
+    if (normalized === cwdAnchor.lex || normalized === cwdAnchor.real) continue;
     try {
-      let l = await lstat(a);
-      if (!isRealDirectory(l) || (await isUnsafeSymlinkChain(a))) continue;
-      if (env.CLAUDE_CODE_EVAL_CONFINED && a === getOriginalCwd()) {
-        r.push({
+      let stat = await lstat(normalized);
+      if (!isRealDirectory(stat) || (await isUnsafeSymlinkChain(normalized))) continue;
+      if (env.CLAUDE_CODE_EVAL_CONFINED && normalized === getOriginalCwd()) {
+        anchors.push({
           kind: "dir",
-          lex: a,
-          real: a,
+          lex: normalized,
+          real: normalized,
         });
         continue;
       }
-      let d = await realpath(a);
-      if (classifyArtifactUrl(d)) continue;
-      let h = await lstat(a);
-      if (isRealDirectory(h) && h.ino === l.ino && h.dev === l.dev)
-        r.push({
+      let real = await realpath(normalized);
+      if (classifyArtifactUrl(real)) continue;
+      let recheck = await lstat(normalized);
+      if (isRealDirectory(recheck) && recheck.ino === stat.ino && recheck.dev === stat.dev)
+        anchors.push({
           kind: "dir",
-          lex: a,
-          real: d,
+          lex: normalized,
+          real,
         });
     } catch {}
   }
-  return r;
+  return anchors;
 }
 //@ chunk-jv307fw4.js:9715-10086 placement
 /**
  * 描述允许发布的锚点位置（一个或多个工作目录，及可选 scratchpad），用于错误提示。
  */
 function describeAnchorSet(anchors) {
-  let filtered = anchors.filter((a) => a.kind !== "scratchpad");
-  let joined = filtered.map((a) => jsonStringify(a.lex)).join(", ");
-  let s = anchors.some((a) => a.kind === "scratchpad") ? " or your scratchpad directory" : "";
+  let filtered = anchors.filter((anchor) => anchor.kind !== "scratchpad");
+  let joined = filtered.map((anchor) => jsonStringify(anchor.lex)).join(", ");
+  let scratchpadNote = anchors.some((anchor) => anchor.kind === "scratchpad")
+    ? " or your scratchpad directory"
+    : "";
   return filtered.length > 1
     ? {
-        where: `the session's working directories (${joined})${s}`,
+        where: `the session's working directories (${joined})${scratchpadNote}`,
         under: "a path under one of them",
       }
     : {
-        where: `the working directory (${joined})${s}`,
-        under: s === "" ? "a path under it" : "a path under one of them",
+        where: `the working directory (${joined})${scratchpadNote}`,
+        under: scratchpadNote === "" ? "a path under it" : "a path under one of them",
       };
 }
 //@ chunk-jv307fw4.js:10086-10268 placement
@@ -333,14 +343,14 @@ function describeAnchor(anchor) {
  */
 async function resolvePublishBase(cwd, root, options) {
   let realCwd = await realpath(cwd);
-  let a = {
+  let cwdAnchor = {
     kind: "cwd",
     lex: normalizeTrailingSlash(normalize(cwd)),
     real: realCwd,
   };
   let anchors = [
-    a,
-    ...(await getWorkingDirAnchors(options?.workingDirs, a)),
+    cwdAnchor,
+    ...(await getWorkingDirAnchors(options?.workingDirs, cwdAnchor)),
     ...(await getScratchpadAnchor(options?.scratchpadDir)),
   ];
   let { where, under } = describeAnchorSet(anchors);
@@ -369,10 +379,10 @@ async function resolvePublishBase(cwd, root, options) {
       errMsg: `root: ${JSON.stringify(root)} is outside ${where} \u2014 pass ${under}`,
     };
   let absRoot = isAbsolute(normalizedRoot) ? normalizedRoot : join(realCwd, normalizedRoot);
-  let v = options?.denyPath?.(absRoot, false, root);
-  if (v !== undefined)
+  let denied = options?.denyPath?.(absRoot, false, root);
+  if (denied !== undefined)
     return {
-      errMsg: v,
+      errMsg: denied,
     };
   if (pathTouchesProtected(absRoot) || (await isUnsafeSymlinkChain(absRoot)))
     return {
@@ -396,15 +406,15 @@ async function resolvePublishBase(cwd, root, options) {
         ? `root: ${jsonStringify(root)} is a link from ${describeAnchor(anchor)} into ${describeAnchor(anchors.find((anchor) => isUnderRealRoot(realRoot, [anchor])) ?? anchor)} \u2014 pass the directory it points to instead`
         : `root: ${JSON.stringify(root)} resolves outside ${where} \u2014 the publish base must lie within it`,
     };
-  let k;
+  let rootStat;
   try {
-    k = await stat(realRoot);
+    rootStat = await stat(realRoot);
   } catch {
     return {
       errMsg: `root: ${JSON.stringify(root)} not found`,
     };
   }
-  if (!k.isDirectory())
+  if (!rootStat.isDirectory())
     return {
       errMsg: `root: ${JSON.stringify(root)} is not a directory`,
     };
@@ -421,7 +431,7 @@ async function resolvePublishBase(cwd, root, options) {
 /**
  * 解析发布文件的锚定根目录（真实路径/词法路径），校验在期望根下并给出错误。
  */
-async function resolvePublishRoot(e, cwd, root, options) {
+async function resolvePublishRoot(files, cwd, root, options) {
   let publishBase = await resolvePublishBase(cwd, root, options);
   if ("errMsg" in publishBase) return publishBase;
   let { anchors, realRoot, lexRoot } = publishBase;
@@ -433,27 +443,27 @@ async function resolvePublishRoot(e, cwd, root, options) {
         "was approved \u2014 it changed between approval and publishing; " +
         "retry the publish",
     };
-  if (e.length === 0)
+  if (files.length === 0)
     return {
       errMsg: "files: the file map is empty \u2014 list at least one file",
     };
-  if (e.length > MAX_URL_SEGMENT_CHARS)
+  if (files.length > MAX_URL_SEGMENT_CHARS)
     return {
-      errMsg: `files: ${e.length} files + index.html exceeds the ${MAX_URL_SEGMENT_CHARS + 1} entries one publish may name; send at most ${MAX_URL_SEGMENT_CHARS} now and the rest in another publish to the same url`,
+      errMsg: `files: ${files.length} files + index.html exceeds the ${MAX_URL_SEGMENT_CHARS + 1} entries one publish may name; send at most ${MAX_URL_SEGMENT_CHARS} now and the rest in another publish to the same url`,
     };
-  let P = [];
-  let v = new Set();
-  let N = 0;
-  for (let k of e) {
-    let W = validateFilesPath(k.to);
-    if ("errMsg" in W) return W;
-    let key = W.key;
-    if (v.has(key))
+  let resolved = [];
+  let seen = new Set();
+  let totalSize = 0;
+  for (let file of files) {
+    let validated = validateFilesPath(file.to);
+    if ("errMsg" in validated) return validated;
+    let key = validated.key;
+    if (seen.has(key))
       return {
         errMsg: `files: published path ${safeJsonQuote(key)} appears more than once`,
       };
-    v.add(key);
-    let from = k.from;
+    seen.add(key);
+    let from = file.from;
     if (classifyArtifactUrl(from))
       return {
         errMsg: `files: ${JSON.stringify(from)} is a network path \u2014 only files under ${where} can be published`,
@@ -462,8 +472,8 @@ async function resolvePublishRoot(e, cwd, root, options) {
       return {
         errMsg: `files: ${JSON.stringify(from)} \u2014 "~" is not expanded here; pass a base-relative or absolute path`,
       };
-    let K = isAbsolute(from) ? undefined : normalize(from);
-    if (K !== undefined && (K === ".." || K.startsWith(`..${sep}`)))
+    let normalizedFrom = isAbsolute(from) ? undefined : normalize(from);
+    if (normalizedFrom !== undefined && (normalizedFrom === ".." || normalizedFrom.startsWith(`..${sep}`)))
       return {
         errMsg:
           `files: ${JSON.stringify(from)} escapes the publish base \u2014 ` +
@@ -478,18 +488,19 @@ async function resolvePublishRoot(e, cwd, root, options) {
       return {
         errMsg: `files: ${JSON.stringify(from)} is outside ${where} \u2014 pass ${under}`,
       };
-    let E = options?.denyPath?.(localPath, false, from);
-    if (E !== undefined)
+    let denied = options?.denyPath?.(localPath, false, from);
+    if (denied !== undefined)
       return {
-        errMsg: E,
+        errMsg: denied,
       };
     if (lexRoot !== realRoot) {
-      let x = K ?? (localPath.startsWith(realRoot + sep) ? relative(realRoot, localPath) : undefined);
-      if (x !== undefined) {
-        let I = options?.denyPath?.(join(lexRoot, x), true, from);
-        if (I !== undefined)
+      let relativeFrom =
+        normalizedFrom ?? (localPath.startsWith(realRoot + sep) ? relative(realRoot, localPath) : undefined);
+      if (relativeFrom !== undefined) {
+        let denied = options?.denyPath?.(join(lexRoot, relativeFrom), true, from);
+        if (denied !== undefined)
           return {
-            errMsg: I,
+            errMsg: denied,
           };
       }
     }
@@ -497,9 +508,9 @@ async function resolvePublishRoot(e, cwd, root, options) {
       return {
         errMsg: describeUnsafeSymlink(from),
       };
-    let U;
+    let real;
     try {
-      U = await realpath(localPath);
+      real = await realpath(localPath);
     } catch (error) {
       return {
         errMsg: `files: ${JSON.stringify(from)} not found`,
@@ -508,28 +519,28 @@ async function resolvePublishRoot(e, cwd, root, options) {
         }),
       };
     }
-    if (classifyArtifactUrl(U))
+    if (classifyArtifactUrl(real))
       return {
         errMsg: `files: ${JSON.stringify(from)} resolves to a network path \u2014 only files under ${where} can be published`,
       };
-    if (!isUnderRealRoot(U, anchors))
+    if (!isUnderRealRoot(real, anchors))
       return {
         errMsg: `files: ${JSON.stringify(from)} resolves outside ${where} (symlink?) \u2014 only files under it can be published`,
       };
-    if (U !== localPath) {
-      let x = options?.denyPath?.(U, true, from);
-      if (x !== undefined)
+    if (real !== localPath) {
+      let denied = options?.denyPath?.(real, true, from);
+      if (denied !== undefined)
         return {
-          errMsg: x,
+          errMsg: denied,
         };
     }
     try {
-      let x = await lstat(U);
-      if (x.isSymbolicLink())
+      let stat = await lstat(real);
+      if (stat.isSymbolicLink())
         return {
           errMsg: `files: ${JSON.stringify(from)} changed to a symlink after it was checked \u2014 retry the publish`,
         };
-      if (!x.isFile())
+      if (!stat.isFile())
         return {
           errMsg: `files: ${JSON.stringify(from)} is not a regular file`,
         };
@@ -541,9 +552,9 @@ async function resolvePublishRoot(e, cwd, root, options) {
         }),
       };
     }
-    let A;
+    let handle;
     try {
-      A = await open(U, constants.O_RDONLY | (constants.O_NOFOLLOW | constants.O_NONBLOCK));
+      handle = await open(real, constants.O_RDONLY | (constants.O_NOFOLLOW | constants.O_NONBLOCK));
     } catch (error) {
       if (error?.code === "ELOOP")
         return {
@@ -557,10 +568,10 @@ async function resolvePublishRoot(e, cwd, root, options) {
       };
     }
     let content;
-    let H;
+    let type;
     try {
       try {
-        if ((await lstat(U)).isSymbolicLink())
+        if ((await lstat(real)).isSymbolicLink())
           return {
             errMsg: `files: ${JSON.stringify(from)} changed to a symlink after it was checked \u2014 retry the publish`,
           };
@@ -572,7 +583,7 @@ async function resolvePublishRoot(e, cwd, root, options) {
           }),
         };
       }
-      let stats = await A.stat();
+      let stats = await handle.stat();
       if (!stats.isFile())
         return {
           errMsg: `files: ${JSON.stringify(from)} is not a regular file`,
@@ -586,19 +597,19 @@ async function resolvePublishRoot(e, cwd, root, options) {
           errMsg: `files: ${JSON.stringify(from)} is ${Math.ceil(stats.size / 1024 / 1024)}MB (per-file max ${MAX_ARTIFACT_BYTES / 1024 / 1024}MB)`,
           tooLarge: true,
         };
-      N += stats.size;
-      if (N > MANIFEST_REQUEST_BUDGET)
+      totalSize += stats.size;
+      if (totalSize > MANIFEST_REQUEST_BUDGET)
         return {
           errMsg: `files: total content exceeds ${MANIFEST_REQUEST_BUDGET / 1024 / 1024}MB at ${JSON.stringify(from)} \u2014 the most one publish sends; publish the files up to it now and the rest in another publish to the same url (a version may total ${VERSION_TOTAL_BYTES / 1024 / 1024}MB)`,
         };
-      H = k.contentType ?? contentTypeForPath(key);
-      if (H === undefined)
+      type = file.contentType ?? contentTypeForPath(key);
+      if (type === undefined)
         return {
           errMsg: unservableFileMessage("files", key),
           notServedPath: key,
         };
       try {
-        let exactBytes = await readExactBytes(A, stats.size);
+        let exactBytes = await readExactBytes(handle, stats.size);
         if (exactBytes === null)
           return {
             errMsg: `files: ${JSON.stringify(from)} changed while it was read \u2014 retry the publish`,
@@ -609,41 +620,41 @@ async function resolvePublishRoot(e, cwd, root, options) {
           errMsg: `files: ${JSON.stringify(from)} could not be read`,
         };
       }
-      P.push({
+      resolved.push({
         path: key,
         content,
-        contentType: H,
-        ...(k.live !== undefined && {
-          live: k.live,
+        contentType: type,
+        ...(file.live !== undefined && {
+          live: file.live,
         }),
-        ...(k.reseed === true && {
+        ...(file.reseed === true && {
           reseed: true,
         }),
       });
     } finally {
-      await A.close();
+      await handle.close();
     }
   }
   return {
-    files: P,
+    files: resolved,
   };
 }
 //@ chunk-jv307fw4.js:16062-16408 placement
 /**
  * 按发布根规则读取缩略图文件（png/jpg），返回其内容或带缺失/过大标志的错误。
  */
-async function readThumbnailFile(href, fromAbs, r, s) {
-  let a = /\.png$/i.test(fromAbs) ? ".png" : ".jpg";
+async function readThumbnailFile(href, fromAbs, options, credentials) {
+  let ext = /\.png$/i.test(fromAbs) ? ".png" : ".jpg";
   let publishRoot = await resolvePublishRoot(
     [
       {
-        to: `thumbnail${a}`,
+        to: `thumbnail${ext}`,
         from: fromAbs,
       },
     ],
-    r,
+    options,
     undefined,
-    s,
+    credentials,
   );
   if ("errMsg" in publishRoot)
     return {

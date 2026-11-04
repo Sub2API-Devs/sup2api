@@ -22,6 +22,7 @@ import {
 } from "./oauthErrors.js";
 import { logError } from "../../utils/log.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-b8krr1px.js:661-671 affinity
 /**
@@ -32,199 +33,202 @@ var MAX_ECHOED_TEXT_CHARS = 200;
 /**
  * 本地 OAuth 回调服务器：http.createServer 监听 127.0.0.1 随机端口的 /callback，校验 state 后取 code，并重定向到成功页。
  */
-class AuthCodeListener {
-  localServer;
-  port = 0;
-  promiseResolver = null;
-  promiseRejecter = null;
-  expectedState = null;
-  pendingResponse = null;
-  callbackPath;
-  codeReceived = false;
-  constructor(callbackPath = "/callback") {
-    this.localServer = createServer();
-    this.callbackPath = callbackPath;
-  }
-  async start(port) {
-    return new Promise((resolve, reject) => {
-      this.localServer.once("error", (err) => {
-        logFeatureBad("oauth_callback_listener", "oauth_callback_server_start_failed");
-        reject(
-          Error(`Failed to start OAuth callback server: ${err.message}`, {
-            cause: err,
-          }),
-        );
+let AuthCodeListener; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-b8krr1px.js:671", () => {
+  AuthCodeListener = class AuthCodeListener {
+    localServer;
+    port = 0;
+    promiseResolver = null;
+    promiseRejecter = null;
+    expectedState = null;
+    pendingResponse = null;
+    callbackPath;
+    codeReceived = false;
+    constructor(callbackPath = "/callback") {
+      this.localServer = createServer();
+      this.callbackPath = callbackPath;
+    }
+    async start(port) {
+      return new Promise((resolve, reject) => {
+        this.localServer.once("error", (err) => {
+          logFeatureBad("oauth_callback_listener", "oauth_callback_server_start_failed");
+          reject(
+            Error(`Failed to start OAuth callback server: ${err.message}`, {
+              cause: err,
+            }),
+          );
+        });
+        this.localServer.listen(port ?? 0, "127.0.0.1", () => {
+          let address = this.localServer.address();
+          this.port = address.port;
+          resolve(this.port);
+        });
       });
-      this.localServer.listen(port ?? 0, "127.0.0.1", () => {
-        let address = this.localServer.address();
-        this.port = address.port;
-        resolve(this.port);
+    }
+    getPort() {
+      return this.port;
+    }
+    hasPendingResponse() {
+      return this.pendingResponse !== null;
+    }
+    async waitForAuthorization(state, onReady) {
+      return new Promise((resolve, reject) => {
+        this.promiseResolver = resolve;
+        this.promiseRejecter = reject;
+        this.expectedState = state;
+        this.startLocalListener(onReady);
       });
-    });
-  }
-  getPort() {
-    return this.port;
-  }
-  hasPendingResponse() {
-    return this.pendingResponse !== null;
-  }
-  async waitForAuthorization(state, onReady) {
-    return new Promise((resolve, reject) => {
-      this.promiseResolver = resolve;
-      this.promiseRejecter = reject;
-      this.expectedState = state;
-      this.startLocalListener(onReady);
-    });
-  }
-  handleSuccessRedirect(scopes, customHandler) {
-    if (!this.pendingResponse) return;
-    if (customHandler) {
-      customHandler(this.pendingResponse, scopes);
+    }
+    handleSuccessRedirect(scopes, customHandler) {
+      if (!this.pendingResponse) return;
+      if (customHandler) {
+        customHandler(this.pendingResponse, scopes);
+        this.pendingResponse = null;
+        logEvent("tengu_oauth_automatic_redirect", {
+          custom_handler: true,
+        });
+        return;
+      }
+      let successUrl = shouldUseClaudeAIAuth(scopes)
+        ? getOauthConfig().CLAUDEAI_SUCCESS_URL
+        : getOauthConfig().CONSOLE_SUCCESS_URL;
+      this.pendingResponse.writeHead(302, {
+        Location: successUrl,
+      });
+      this.pendingResponse.end();
       this.pendingResponse = null;
-      logEvent("tengu_oauth_automatic_redirect", {
-        custom_handler: true,
+      logEvent("tengu_oauth_automatic_redirect", {});
+    }
+    handleErrorRedirect() {
+      if (!this.pendingResponse) return;
+      let errorUrl = getOauthConfig().CLAUDEAI_SUCCESS_URL;
+      this.pendingResponse.writeHead(302, {
+        Location: errorUrl,
       });
-      return;
+      this.pendingResponse.end();
+      this.pendingResponse = null;
+      logEvent("tengu_oauth_automatic_redirect_error", {});
     }
-    let successUrl = shouldUseClaudeAIAuth(scopes)
-      ? getOauthConfig().CLAUDEAI_SUCCESS_URL
-      : getOauthConfig().CONSOLE_SUCCESS_URL;
-    this.pendingResponse.writeHead(302, {
-      Location: successUrl,
-    });
-    this.pendingResponse.end();
-    this.pendingResponse = null;
-    logEvent("tengu_oauth_automatic_redirect", {});
-  }
-  handleErrorRedirect() {
-    if (!this.pendingResponse) return;
-    let errorUrl = getOauthConfig().CLAUDEAI_SUCCESS_URL;
-    this.pendingResponse.writeHead(302, {
-      Location: errorUrl,
-    });
-    this.pendingResponse.end();
-    this.pendingResponse = null;
-    logEvent("tengu_oauth_automatic_redirect_error", {});
-  }
-  startLocalListener(onReady) {
-    this.localServer.on("request", this.handleRedirect.bind(this));
-    this.localServer.on("error", this.handleError.bind(this));
-    onReady();
-  }
-  handleRedirect(req, res) {
-    let parsedUrl = new URL(req.url || "", `http://${req.headers.host || "localhost"}`);
-    if (parsedUrl.pathname !== this.callbackPath) {
-      res.writeHead(404);
-      res.end();
-      return;
+    startLocalListener(onReady) {
+      this.localServer.on("request", this.handleRedirect.bind(this));
+      this.localServer.on("error", this.handleError.bind(this));
+      onReady();
     }
-    let authCode = parsedUrl.searchParams.get("code") ?? undefined;
-    let state = parsedUrl.searchParams.get("state") ?? undefined;
-    let s = parsedUrl.searchParams.get("error") ?? undefined;
-    if (!authCode && s && isRestrictedLinksEnabled()) {
-      this.respondToErrorCallback({
-        error: s,
-        errorDescription: parsedUrl.searchParams.get("error_description") ?? undefined,
-        errorUri: parsedUrl.searchParams.get("error_uri") ?? undefined,
-        state,
-        res,
+    handleRedirect(req, res) {
+      let parsedUrl = new URL(req.url || "", `http://${req.headers.host || "localhost"}`);
+      if (parsedUrl.pathname !== this.callbackPath) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      let authCode = parsedUrl.searchParams.get("code") ?? undefined;
+      let state = parsedUrl.searchParams.get("state") ?? undefined;
+      let errorCode = parsedUrl.searchParams.get("error") ?? undefined;
+      if (!authCode && errorCode && isRestrictedLinksEnabled()) {
+        this.respondToErrorCallback({
+          error: errorCode,
+          errorDescription: parsedUrl.searchParams.get("error_description") ?? undefined,
+          errorUri: parsedUrl.searchParams.get("error_uri") ?? undefined,
+          state,
+          res,
+        });
+        return;
+      }
+      this.validateAndRespond(authCode, state, res);
+    }
+    validateAndRespond(authCode, state, res) {
+      if (state === this.expectedState && this.answerIfCodeReceived(res)) return;
+      if (!authCode) {
+        logFeatureBad("oauth_callback_listener", "oauth_callback_no_code");
+        res.writeHead(400);
+        res.end("Authorization code not found");
+        this.reject(Error("No authorization code received"));
+        return;
+      }
+      if (this.rejectOnStateMismatch(state, res)) return;
+      this.codeReceived = true;
+      this.pendingResponse = res;
+      logFeatureOk("oauth_callback_listener");
+      this.resolve(authCode);
+    }
+    respondToErrorCallback({ error, errorDescription, errorUri, state, res }) {
+      if (this.rejectOnStateMismatch(state, res)) return;
+      if (this.answerIfCodeReceived(res)) return;
+      let onHold = errorDescription === ACCOUNT_ON_HOLD;
+      logFeatureBad(
+        "oauth_callback_listener",
+        onHold ? "oauth_callback_account_on_hold" : "oauth_callback_authorize_error",
+      );
+      res.writeHead(200, {
+        "Content-Type": "text/plain; charset=utf-8",
       });
-      return;
+      res.end(
+        onHold
+          ? "Your account is on hold. You can close this window."
+          : "Sign-in was canceled or failed. You can close this window.",
+      );
+      this.reject(
+        new OAuthCallbackError(
+          sanitizeEchoedText(error),
+          errorDescription === undefined ? undefined : sanitizeEchoedText(errorDescription),
+          onHold ? isClaudeAiOrigin(errorUri) : undefined,
+        ),
+      );
     }
-    this.validateAndRespond(authCode, state, res);
-  }
-  validateAndRespond(authCode, state, res) {
-    if (state === this.expectedState && this.answerIfCodeReceived(res)) return;
-    if (!authCode) {
-      logFeatureBad("oauth_callback_listener", "oauth_callback_no_code");
+    answerIfCodeReceived(res) {
+      if (!this.codeReceived) return false;
+      res.writeHead(200, {
+        "Content-Type": "text/plain; charset=utf-8",
+      });
+      res.end("Sign-in is already finishing. You can close this window.");
+      return true;
+    }
+    rejectOnStateMismatch(state, res) {
+      if (state === this.expectedState) return false;
+      logFeatureBad("oauth_callback_listener", "oauth_callback_state_mismatch");
       res.writeHead(400);
-      res.end("Authorization code not found");
-      this.reject(Error("No authorization code received"));
-      return;
+      res.end("Invalid state parameter");
+      this.reject(Error("Invalid state parameter"));
+      return true;
     }
-    if (this.rejectOnStateMismatch(state, res)) return;
-    this.codeReceived = true;
-    this.pendingResponse = res;
-    logFeatureOk("oauth_callback_listener");
-    this.resolve(authCode);
-  }
-  respondToErrorCallback({ error, errorDescription, errorUri, state, res }) {
-    if (this.rejectOnStateMismatch(state, res)) return;
-    if (this.answerIfCodeReceived(res)) return;
-    let s = errorDescription === ACCOUNT_ON_HOLD;
-    logFeatureBad(
-      "oauth_callback_listener",
-      s ? "oauth_callback_account_on_hold" : "oauth_callback_authorize_error",
-    );
-    res.writeHead(200, {
-      "Content-Type": "text/plain; charset=utf-8",
-    });
-    res.end(
-      s
-        ? "Your account is on hold. You can close this window."
-        : "Sign-in was canceled or failed. You can close this window.",
-    );
-    this.reject(
-      new OAuthCallbackError(
-        sanitizeEchoedText(error),
-        errorDescription === undefined ? undefined : sanitizeEchoedText(errorDescription),
-        s ? isClaudeAiOrigin(errorUri) : undefined,
-      ),
-    );
-  }
-  answerIfCodeReceived(e) {
-    if (!this.codeReceived) return false;
-    e.writeHead(200, {
-      "Content-Type": "text/plain; charset=utf-8",
-    });
-    e.end("Sign-in is already finishing. You can close this window.");
-    return true;
-  }
-  rejectOnStateMismatch(e, r) {
-    if (e === this.expectedState) return false;
-    logFeatureBad("oauth_callback_listener", "oauth_callback_state_mismatch");
-    r.writeHead(400);
-    r.end("Invalid state parameter");
-    this.reject(Error("Invalid state parameter"));
-    return true;
-  }
-  handleError(err) {
-    logFeatureBad("oauth_callback_listener", "oauth_callback_server_error");
-    logError(err);
-    this.close();
-    this.reject(err);
-  }
-  resolve(authorizationCode) {
-    if (this.promiseResolver) {
-      this.promiseResolver(authorizationCode);
-      this.promiseResolver = null;
-      this.promiseRejecter = null;
+    handleError(err) {
+      logFeatureBad("oauth_callback_listener", "oauth_callback_server_error");
+      logError(err);
+      this.close();
+      this.reject(err);
     }
-  }
-  reject(error) {
-    if (this.promiseRejecter) {
-      this.promiseRejecter(error);
-      this.promiseResolver = null;
-      this.promiseRejecter = null;
+    resolve(authorizationCode) {
+      if (this.promiseResolver) {
+        this.promiseResolver(authorizationCode);
+        this.promiseResolver = null;
+        this.promiseRejecter = null;
+      }
     }
-  }
-  close() {
-    if (this.pendingResponse) this.handleErrorRedirect();
-    if (this.localServer) {
-      this.localServer.removeAllListeners();
-      this.localServer.close();
+    reject(error) {
+      if (this.promiseRejecter) {
+        this.promiseRejecter(error);
+        this.promiseResolver = null;
+        this.promiseRejecter = null;
+      }
     }
-  }
-  [Symbol.dispose]() {
-    this.close();
-  }
-}
+    close() {
+      if (this.pendingResponse) this.handleErrorRedirect();
+      if (this.localServer) {
+        this.localServer.removeAllListeners();
+        this.localServer.close();
+      }
+    }
+    [Symbol.dispose]() {
+      this.close();
+    }
+  };
+});
 //@ chunk-b8krr1px.js:4544-4622 layout
 /**
  * 清洗要回显的文本（去控制字符并截断）。
  */
-function sanitizeEchoedText(e) {
-  return truncateToLength(e.replace(/[\p{Cc}\p{Cf}\p{Cs}\u2028\u2029]/gu, ""), MAX_ECHOED_TEXT_CHARS);
+function sanitizeEchoedText(text) {
+  return truncateToLength(text.replace(/[\p{Cc}\p{Cf}\p{Cs}\u2028\u2029]/gu, ""), MAX_ECHOED_TEXT_CHARS);
 }
 //@ chunk-b8krr1px.js:4622-4844 placement
 class AuthCodeRefusedError extends Error {

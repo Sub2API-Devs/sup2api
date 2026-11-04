@@ -13,8 +13,8 @@
 /**
  * 生成网关协议说明（登录、推理、托管设置等 wire contract）的 Markdown 文本。
  */
-function buildGatewayProtocolDoc(e) {
-  let t = e.oidcConfigured
+function buildGatewayProtocolDoc(options) {
+  let doc = options.oidcConfigured
     ? `# Claude Code gateway protocol
 
 This is the wire contract the Claude Code CLI uses to talk to this gateway:
@@ -781,8 +781,8 @@ Anthropic Messages API, Claude Code settings reference, OTLP spec.
 
 `}## Flow`,
       );
-  return e.criEnabled
-    ? t +
+  return options.criEnabled
+    ? doc +
         `
 ## Customer-routed inference
 
@@ -904,6 +904,6 @@ and posts to fixed paths under it, with query strings it controls (e.g.
 Clients also send telemetry to Anthropic directly; it does not traverse
 this gateway.
 `
-    : t;
+    : doc;
 }
 export { buildGatewayProtocolDoc };

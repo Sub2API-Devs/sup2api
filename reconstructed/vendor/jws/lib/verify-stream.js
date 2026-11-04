@@ -5,15 +5,15 @@
  * pieces: chunk-82d8c88w.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_safe_buffer } from "../../safe-buffer/index.js";
 import { require_data_stream } from "./data-stream.js";
 import { require_jwa } from "../../jwa/index.js";
 import { require_tostring } from "./tostring.js";
 
 //@ chunk-82d8c88w.js:9091-10995 cjs-fingerprint
-var require_verify_stream = x(function (cjsExports, cjsModule) {
-  var Ee = require_safe_buffer().Buffer;
+var require_verify_stream = __commonJS(function (cjsExports, cjsModule) {
+  var BufferCtor = require_safe_buffer().Buffer;
   var DataStream = require_data_stream();
   var jwa = require_jwa();
   var Stream = importMetaRequire("stream");
@@ -33,7 +33,7 @@ var require_verify_stream = x(function (cjsExports, cjsModule) {
   }
   function headerFromJWS(jwsSig) {
     var encodedHeader = jwsSig.split(".", 1)[0];
-    return safeJsonParse(Ee.from(encodedHeader, "base64").toString("binary"));
+    return safeJsonParse(BufferCtor.from(encodedHeader, "base64").toString("binary"));
   }
   function securedInputFromJWS(jwsSig) {
     return jwsSig.split(".", 2).join(".");
@@ -44,7 +44,7 @@ var require_verify_stream = x(function (cjsExports, cjsModule) {
   function payloadFromJWS(jwsSig, encoding) {
     encoding = encoding || "utf8";
     var payload = jwsSig.split(".")[1];
-    return Ee.from(payload, "base64").toString(encoding);
+    return BufferCtor.from(payload, "base64").toString(encoding);
   }
   function isValidJws(string) {
     return JWS_REGEX.test(string) && !!headerFromJWS(string);

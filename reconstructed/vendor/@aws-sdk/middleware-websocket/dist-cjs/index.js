@@ -5,11 +5,11 @@
  * pieces: chunk-3cddmtk7.js (4)
  * attribution: esm-layout 1, esm-fingerprint 3
  */
-import { Re } from "../../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_protocol_http } from "../../../@smithy/protocol-http/dist-cjs/index.js";
 
 //@ chunk-3cddmtk7.js:10978-10994 esm-layout
-var import_protocol_http = Re(require_protocol_http());
+var import_protocol_http = __toESM(require_protocol_http());
 //@ chunk-3cddmtk7.js:10994-11046 esm-fingerprint
 var isWebSocketRequest = (toSign) => toSign.protocol === "ws:" || toSign.protocol === "wss:";
 //@ chunk-3cddmtk7.js:11046-11394 esm-fingerprint
@@ -46,7 +46,7 @@ var resolveWebSocketConfig = (input) => {
   return Object.assign(input, {
     signer: async (authScheme) => {
       let signerObj = await signer(authScheme);
-      if (wt(signerObj))
+      if (isFunction(signerObj))
         return new WebsocketSignatureV4({
           signer: signerObj,
         });
@@ -54,5 +54,5 @@ var resolveWebSocketConfig = (input) => {
     },
   });
 };
-var wt = (signerObj) => !!signerObj;
+var isFunction = (signerObj) => !!signerObj;
 export { resolveWebSocketConfig };

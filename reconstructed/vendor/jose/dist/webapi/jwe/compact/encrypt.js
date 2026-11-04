@@ -5,13 +5,13 @@
  * pieces: chunk-5h78gfwc.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Re } from "../flattened/encrypt.js";
+import { FlattenedEncrypt } from "../flattened/encrypt.js";
 
 //@ chunk-5h78gfwc.js:45018-45478 esm-fingerprint
-class Ue {
+class CompactEncrypt {
   #e;
   constructor(plaintext) {
-    this.#e = new Re(plaintext);
+    this.#e = new FlattenedEncrypt(plaintext);
   }
   setContentEncryptionKey(cek) {
     this.#e.setContentEncryptionKey(cek);
@@ -34,4 +34,4 @@ class Ue {
     return [jwe.protected, jwe.encrypted_key, jwe.iv, jwe.ciphertext, jwe.tag].join(".");
   }
 }
-export { Ue };
+export { CompactEncrypt };

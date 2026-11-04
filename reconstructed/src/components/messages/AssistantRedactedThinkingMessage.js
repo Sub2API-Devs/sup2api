@@ -8,7 +8,7 @@
  * pieces: chunk-ah34pb7m.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
   jsxProd_default_2,
@@ -18,7 +18,7 @@ import { Text, Box } from "../../ink/components/Text.js";
 
 //@ chunk-ah34pb7m.js:43247-43543 fingerprint = AssistantRedactedThinkingMessage (0.369)
 function AssistantRedactedThinkingMessage(props) {
-  let $ = w(3);
+  let $ = useMemoCache(3);
   let { addMargin } = props;
   const marginTop = (addMargin === undefined ? false : addMargin) ? 1 : 0;
   let children;

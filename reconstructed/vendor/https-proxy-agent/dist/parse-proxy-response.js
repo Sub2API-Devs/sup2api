@@ -5,11 +5,11 @@
  * pieces: chunk-hq88884p.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_debug_2 } from "../../debug/src/index.js";
 
 //@ chunk-hq88884p.js:20967-22404 cjs-fingerprint
-var require_parse_proxy_response = x(function (cjsExports) {
+var require_parse_proxy_response = __commonJS(function (cjsExports) {
   var __importDefault =
     (cjsExports && cjsExports.__importDefault) ||
     function (mod) {

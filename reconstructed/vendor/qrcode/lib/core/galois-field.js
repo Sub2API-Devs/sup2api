@@ -5,10 +5,10 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:6599-6966 cjs-fingerprint
-var require_galois_field = x(function (cjsExports) {
+var require_galois_field = __commonJS(function (cjsExports) {
   var EXP_TABLE = new Uint8Array(512);
   var LOG_TABLE = new Uint8Array(256);
   (function () {

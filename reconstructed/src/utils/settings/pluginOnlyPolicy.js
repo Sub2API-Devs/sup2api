@@ -9,6 +9,7 @@
  * attribution: facade-exports 2, fingerprint 1
  */
 import { getSettingsForSource } from "./settings.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-2jdf5m4m.js:510-652 facade-exports = isRestrictedToPluginOnly (1)
 /**
@@ -21,7 +22,10 @@ function isRestrictedToPluginOnly(surface) {
   return false;
 }
 //@ chunk-2jdf5m4m.js:652-726 fingerprint = ADMIN_TRUSTED_SOURCES (1)
-var ADMIN_TRUSTED_SOURCES = new Set(["plugin", "policySettings", "built-in", "builtin", "bundled"]);
+var ADMIN_TRUSTED_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-2jdf5m4m.js:652", () => {
+  ADMIN_TRUSTED_SOURCES = new Set(["plugin", "policySettings", "built-in", "builtin", "bundled"]);
+});
 //@ chunk-2jdf5m4m.js:726-769 facade-exports
 function isSourceAdminTrusted(source) {
   return source !== undefined && ADMIN_TRUSTED_SOURCES.has(source);

@@ -23,51 +23,54 @@ import { UNIQUENESS_REFINE_2 } from "../../tools/AskUserQuestionTool/AskUserQues
 import { EXITPLANMODE } from "../../tools/ExitPlanModeTool/constants.js";
 import { sessionIdBody } from "../../bridge/sessionIdCompat.js";
 import { describeCloudSession } from "../../utils/telemetry/memorySummary.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1723680-1724267 placement
 /**
  * 解析 AskUserQuestion 的输入：取问题与选项，生成 “answer: 问题 (选项…)” 摘要。
  */
-function summarizePendingQuestions(e) {
-  let n = typeof e === "object" && e !== null ? e : undefined;
-  let questions = Array.isArray(n?.questions) ? n.questions : [];
-  let s = [];
-  let h = "";
+function summarizePendingQuestions(block) {
+  let blockObject = typeof block === "object" && block !== null ? block : undefined;
+  let questions = Array.isArray(blockObject?.questions) ? blockObject.questions : [];
+  let validQuestions = [];
+  let firstQuestionText = "";
   for (let question of questions) {
-    let L = question;
-    if (typeof L?.question !== "string") continue;
-    h ||= L.question;
-    let G = Array.isArray(L.options)
-      ? L.options.flatMap((option) => {
-          let Z = option;
-          return typeof Z?.label === "string"
+    let questionEntry = question;
+    if (typeof questionEntry?.question !== "string") continue;
+    firstQuestionText ||= questionEntry.question;
+    let options = Array.isArray(questionEntry.options)
+      ? questionEntry.options.flatMap((option) => {
+          let optionEntry = option;
+          return typeof optionEntry?.label === "string"
             ? [
                 {
-                  label: Z.label,
-                  description: typeof Z.description === "string" ? Z.description : "",
+                  label: optionEntry.label,
+                  description: typeof optionEntry.description === "string" ? optionEntry.description : "",
                 },
               ]
             : [];
         })
       : [];
-    if (G.length > 0)
-      s.push({
-        question: L.question,
-        options: G,
+    if (options.length > 0)
+      validQuestions.push({
+        question: questionEntry.question,
+        options,
       });
   }
-  let joined = s[0]?.options.map((option) => option.label).join(" \xB7 ");
+  let joined = validQuestions[0]?.options.map((option) => option.label).join(" \xB7 ");
   return {
-    text: h ? truncateAttentionText(`answer: ${h}${joined ? ` (${joined})` : ""}`) : "answer question",
-    questions: s.length > 0 ? s : undefined,
+    text: firstQuestionText
+      ? truncateAttentionText(`answer: ${firstQuestionText}${joined ? ` (${joined})` : ""}`)
+      : "answer question",
+    questions: validQuestions.length > 0 ? validQuestions : undefined,
   };
 }
 //@ chunk-e6aww6q8.js:1724267-1724325 placement
 /**
  * 函数 truncateAttentionText（压缩空白后按上限截断）。
  */
-function truncateAttentionText(e) {
-  return truncateWithEllipsis_3(e.replace(/\s+/g, " ").trim(), MAX_HEADLINE_LENGTH);
+function truncateAttentionText(text) {
+  return truncateWithEllipsis_3(text.replace(/\s+/g, " ").trim(), MAX_HEADLINE_LENGTH);
 }
 //@ chunk-e6aww6q8.js:1724325-1724393 placement
 /**
@@ -80,153 +83,157 @@ function looksLikeApproveLine(needs) {
 /**
  * Fleet 中"需要关注"种类（权限、对话框、elicitation、托管设置等）到显示文字的对照表。
  */
-var ATTENTION_KIND_LABELS = [
-  "elicitation",
-  "sandbox",
-  "managed-settings",
-  "permission",
-  "dialog",
-  "elicitation-queued",
-  "sandbox-queued",
-];
-var attentionRegistryStore = (() => {
-  let signal = createSignal();
-  let n = {
-    sandbox: null,
-    "sandbox-queued": null,
-    permission: null,
-    elicitation: null,
-    "elicitation-queued": null,
-    "managed-settings": null,
-    dialog: null,
-  };
-  let r = null;
-  let s = new Map();
-  let opened = 0;
-  let y = null;
-  function S() {
-    let ke;
-    for (let we of s.values()) {
-      if (we.order === y) return we.block;
-      if (
-        ke === undefined ||
-        (we.onTop ? !ke.onTop || we.opened > ke.opened : !ke.onTop && we.order < ke.order)
-      )
-        ke = we;
+var ATTENTION_KIND_LABELS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var attentionRegistryStore;
+deferInit("chunk-e6aww6q8.js:1724393", () => {
+  ATTENTION_KIND_LABELS = [
+    "elicitation",
+    "sandbox",
+    "managed-settings",
+    "permission",
+    "dialog",
+    "elicitation-queued",
+    "sandbox-queued",
+  ];
+  attentionRegistryStore = (() => {
+    let signal = createSignal();
+    let byKind = {
+      sandbox: null,
+      "sandbox-queued": null,
+      permission: null,
+      elicitation: null,
+      "elicitation-queued": null,
+      "managed-settings": null,
+      dialog: null,
+    };
+    let currentBlock = null;
+    let openAsks = new Map();
+    let opened = 0;
+    let visibleAskId = null;
+    function topAskBlock() {
+      let best;
+      for (let ask of openAsks.values()) {
+        if (ask.order === visibleAskId) return ask.block;
+        if (
+          best === undefined ||
+          (ask.onTop ? !best.onTop || ask.opened > best.opened : !best.onTop && ask.order < best.order)
+        )
+          best = ask;
+      }
+      return best?.block ?? null;
     }
-    return ke?.block ?? null;
-  }
-  let w = 8;
-  let L = 240;
-  let G = new Map();
-  function q(ke) {
-    return truncateWithEllipsis_3(
-      ke
-        .replace(/[^\x20-\x7e]/g, " ")
-        .replace(/ {2,}/g, " ")
-        .trim(),
-      L,
-    );
-  }
-  function Z(ke) {
-    let we = ke.toolUseID === undefined ? undefined : G.get(ke.toolUseID);
-    return we === undefined
-      ? ke
-      : {
-          ...ke,
-          text: truncateAttentionText(`${q(we)} \xB7 ${ke.text}`),
-        };
-  }
-  function Se() {
-    let ke = null;
-    for (let we of ATTENTION_KIND_LABELS) {
-      let Ee = n[we];
-      if (Ee) {
-        ke = Z(Ee);
-        break;
-      }
+    let maxHookFailures = 8;
+    let maxHookFailureChars = 240;
+    let hookFailures = new Map();
+    function cleanHookText(text) {
+      return truncateWithEllipsis_3(
+        text
+          .replace(/[^\x20-\x7e]/g, " ")
+          .replace(/ {2,}/g, " ")
+          .trim(),
+        maxHookFailureChars,
+      );
     }
-    if (ke?.text === r?.text) return;
-    r = ke;
-    signal.emit(ke);
-  }
-  return {
-    subscribe: signal.subscribe,
-    current() {
-      return r;
-    },
-    emit(ke, we = "permission") {
-      let Ee =
-        ke === null
-          ? null
-          : typeof ke === "string"
-            ? {
-                text: ke,
-              }
-            : ke;
-      if (we === "permission" && Ee === null) {
-        s.clear();
-        y = null;
+    function withHookFailure(block) {
+      let hookFailure = block.toolUseID === undefined ? undefined : hookFailures.get(block.toolUseID);
+      return hookFailure === undefined
+        ? block
+        : {
+            ...block,
+            text: truncateAttentionText(`${cleanHookText(hookFailure)} \xB7 ${block.text}`),
+          };
+    }
+    function publishCurrent() {
+      let next = null;
+      for (let kind of ATTENTION_KIND_LABELS) {
+        let block = byKind[kind];
+        if (block) {
+          next = withHookFailure(block);
+          break;
+        }
       }
-      if (n[we]?.text === Ee?.text) return;
-      n[we] = Ee;
-      Se();
-    },
-    openAsk(ke, we) {
-      opened += 1;
-      s.set(ke.toolUseID, {
-        block: ke,
-        ...we,
-        opened,
-      });
-      n.permission = S();
-      Se();
-    },
-    showAsk(ke) {
-      if (ke === y) return;
-      y = ke;
-      n.permission = S();
-      Se();
-    },
-    closeAsk(ke) {
-      if (!s.delete(ke)) return;
-      n.permission = S();
-      Se();
-    },
-    noteHookFailure(ke, we) {
-      G.delete(ke);
-      G.set(ke, we);
-      if (G.size > w) {
-        let toolUseID = n.permission?.toolUseID;
-        for (let key of G.keys())
-          if (key !== toolUseID) {
-            G.delete(key);
-            break;
-          }
-      }
-      Se();
-    },
-    clearHookFailure(ke) {
-      G.delete(ke);
-    },
-  };
-})();
+      if (next?.text === currentBlock?.text) return;
+      currentBlock = next;
+      signal.emit(next);
+    }
+    return {
+      subscribe: signal.subscribe,
+      current() {
+        return currentBlock;
+      },
+      emit(value, kind = "permission") {
+        let block =
+          value === null
+            ? null
+            : typeof value === "string"
+              ? {
+                  text: value,
+                }
+              : value;
+        if (kind === "permission" && block === null) {
+          openAsks.clear();
+          visibleAskId = null;
+        }
+        if (byKind[kind]?.text === block?.text) return;
+        byKind[kind] = block;
+        publishCurrent();
+      },
+      openAsk(block, opts) {
+        opened += 1;
+        openAsks.set(block.toolUseID, {
+          block,
+          ...opts,
+          opened,
+        });
+        byKind.permission = topAskBlock();
+        publishCurrent();
+      },
+      showAsk(toolUseId) {
+        if (toolUseId === visibleAskId) return;
+        visibleAskId = toolUseId;
+        byKind.permission = topAskBlock();
+        publishCurrent();
+      },
+      closeAsk(toolUseId) {
+        if (!openAsks.delete(toolUseId)) return;
+        byKind.permission = topAskBlock();
+        publishCurrent();
+      },
+      noteHookFailure(toolUseId, failureText) {
+        hookFailures.delete(toolUseId);
+        hookFailures.set(toolUseId, failureText);
+        if (hookFailures.size > maxHookFailures) {
+          let toolUseID = byKind.permission?.toolUseID;
+          for (let key of hookFailures.keys())
+            if (key !== toolUseID) {
+              hookFailures.delete(key);
+              break;
+            }
+        }
+        publishCurrent();
+      },
+      clearHookFailure(toolUseId) {
+        hookFailures.delete(toolUseId);
+      },
+    };
+  })();
+});
 //@ chunk-e6aww6q8.js:1725885-1726095 placement
 /**
  * 清理控制字符与零宽字素，按长度上限截断并加省略号。
  */
-function sanitizeAttentionText(e) {
-  if (typeof e !== "string") return "";
-  let n = sanitizeDisplayText(
-    replaceControlChars(toWellFormedString(truncateToLength(e, 4 * MAX_HEADLINE_LENGTH))),
+function sanitizeAttentionText(text) {
+  if (typeof text !== "string") return "";
+  let clean = sanitizeDisplayText(
+    replaceControlChars(toWellFormedString(truncateToLength(text, 4 * MAX_HEADLINE_LENGTH))),
   );
-  let r = e.length > 4 * MAX_HEADLINE_LENGTH || n.length > MAX_HEADLINE_LENGTH - 2;
-  let s = "";
+  let truncated = text.length > 4 * MAX_HEADLINE_LENGTH || clean.length > MAX_HEADLINE_LENGTH - 2;
+  let out = "";
   for (let { segment } of getGraphemeSegmenter().segment(
-    r ? truncateToLength(n, MAX_HEADLINE_LENGTH - 2) : n,
+    truncated ? truncateToLength(clean, MAX_HEADLINE_LENGTH - 2) : clean,
   ))
-    s += bunStringWidth(segment) === 0 ? " " : segment;
-  return sanitizeDisplayText(r ? `${s} \u2026` : s);
+    out += bunStringWidth(segment) === 0 ? " " : segment;
+  return sanitizeDisplayText(truncated ? `${out} \u2026` : out);
 }
 //@ chunk-e6aww6q8.js:1726095-1726119 placement
 /**
@@ -239,7 +246,7 @@ function returnFalseAttention() {
 /**
  * 函数 emptyMergedJobs（恒返回空数组）。
  */
-async function emptyMergedJobs(e) {
+async function emptyMergedJobs(options) {
   return [];
 }
 //@ chunk-e6aww6q8.js:1726150-1726264 placement
@@ -264,76 +271,77 @@ class CloudListPartialError extends Error {}
 /**
  * 为 Fleet 视图描述会话需要用户处理的事项（审批计划、批准工具、阻塞等）。
  */
-function describeSessionAttention(e) {
-  let { state, tempo, reason } = describeSessionFailure(e);
-  let sources = e.config?.sources;
-  let y = sanitizeAttentionText(
+function describeSessionAttention(session) {
+  let { state, tempo, reason } = describeSessionFailure(session);
+  let sources = session.config?.sources;
+  let repoUrl = sanitizeAttentionText(
     Array.isArray(sources) ? sources.find((source) => source?.type === "git_repository")?.url : undefined,
   );
-  let S = sanitizeAttentionText(e.title);
-  let postTurnSummary = e.external_metadata?.post_turn_summary;
-  let L =
+  let title = sanitizeAttentionText(session.title);
+  let postTurnSummary = session.external_metadata?.post_turn_summary;
+  let statusDetail =
     sanitizeStatusDetail(postTurnSummary?.status_detail) ||
-    sanitizeStatusDetail(e.external_metadata?.task_summary);
-  let G =
+    sanitizeStatusDetail(session.external_metadata?.task_summary);
+  let recentAction =
     terminalOutcome(state) === "success" && postTurnSummary?.reply === undefined
       ? sanitizeStatusDetail(postTurnSummary?.recent_action)
       : "";
-  let q = sanitizeStatusDetail(postTurnSummary?.needs_action);
-  let outcomes = e.config?.outcomes;
+  let needsAction = sanitizeStatusDetail(postTurnSummary?.needs_action);
+  let outcomes = session.config?.outcomes;
   let gitInfo = Array.isArray(outcomes)
     ? outcomes.find((outcome) => outcome?.type === "git_repository")?.git_info
     : undefined;
-  let pendingAction = e.worker_status === "requires_action" ? e.external_metadata?.pending_action : undefined;
-  let we =
+  let pendingAction =
+    session.worker_status === "requires_action" ? session.external_metadata?.pending_action : undefined;
+  let toolLabel =
     [pendingAction?.display_tool_name, pendingAction?.tool_name]
       .map(sanitizeAttentionText)
-      .find((Ie) => /^[A-Za-z][A-Za-z0-9_-]{0,127}$/.test(Ie)) ?? "a tool";
-  let Ee = sanitizeAttentionText(pendingAction?.action_description);
+      .find((candidate) => /^[A-Za-z][A-Za-z0-9_-]{0,127}$/.test(candidate)) ?? "a tool";
+  let actionDescription = sanitizeAttentionText(pendingAction?.action_description);
   let needs =
     tempo === "blocked"
       ? pendingAction?.tool_name === ASKUSERQUESTION
         ? summarizePendingQuestions(UNIQUENESS_REFINE_2(pendingAction.input)).text
         : pendingAction?.tool_name === EXITPLANMODE
           ? "approve plan"
-          : typeof pendingAction?.tool_name === "string" && Ee !== ""
+          : typeof pendingAction?.tool_name === "string" && actionDescription !== ""
             ? truncateAttentionText(
                 pendingAction.tool_name.startsWith("dialog:")
-                  ? `awaiting input: ${Ee}`
-                  : `approve ${we}: ${Ee}`,
+                  ? `awaiting input: ${actionDescription}`
+                  : `approve ${toolLabel}: ${actionDescription}`,
               )
-            : truncateAttentionText(q ? `awaiting input: ${q}` : "awaiting input")
+            : truncateAttentionText(needsAction ? `awaiting input: ${needsAction}` : "awaiting input")
       : undefined;
   return {
     state,
     detail:
       reason ||
-      L ||
+      statusDetail ||
       truncateAttentionText(
         [gitInfo?.repo, Array.isArray(gitInfo?.branches) ? gitInfo.branches[0] : undefined]
           .map(sanitizeStatusDetail)
-          .filter((Ie) => Ie !== "")
+          .filter((part) => part !== "")
           .join(" \xB7 "),
       ) ||
       "no summary yet",
     tempo,
     needs,
-    output: G
+    output: recentAction
       ? {
-          result: G,
+          result: recentAction,
         }
       : null,
     children: null,
     linkScanOffset: 0,
     template: "remote",
     respawnFlags: [],
-    name: S || undefined,
-    intent: sanitizeAttentionText(e.id),
-    sessionId: e.id,
-    cwd: y || "remote",
-    originCwd: y || "remote",
-    createdAt: e.created_at,
-    updatedAt: e.last_event_at ?? e.created_at,
+    name: title || undefined,
+    intent: sanitizeAttentionText(session.id),
+    sessionId: session.id,
+    cwd: repoUrl || "remote",
+    originCwd: repoUrl || "remote",
+    createdAt: session.created_at,
+    updatedAt: session.last_event_at ?? session.created_at,
     firstTerminalAt: null,
     backend: "remote",
   };
@@ -342,19 +350,23 @@ function describeSessionAttention(e) {
 /**
  * 把尚未出现在列表里的 remote-pending 会话追加进来；内容不变时返回原数组。
  */
-function mergePendingRemoteJobs(e, n) {
-  let r = new Set(n.map((y) => sessionIdBody(y.state.sessionId)));
-  let filtered = e.filter(
-    (y) => y.id.startsWith("remote-pending-") && !r.has(sessionIdBody(y.state.sessionId)),
+function mergePendingRemoteJobs(previous, incoming) {
+  let incomingSessionIds = new Set(incoming.map((job) => sessionIdBody(job.state.sessionId)));
+  let filtered = previous.filter(
+    (job) =>
+      job.id.startsWith("remote-pending-") && !incomingSessionIds.has(sessionIdBody(job.state.sessionId)),
   );
-  let h = [...n, ...filtered];
-  return e.length === h.length &&
-    e.every(
-      (y, S) =>
-        y.id === h[S].id && y.activity === h[S].activity && true && shallowJobStateEqual(y.state, h[S].state),
+  let merged = [...incoming, ...filtered];
+  return previous.length === merged.length &&
+    previous.every(
+      (job, jobIndex) =>
+        job.id === merged[jobIndex].id &&
+        job.activity === merged[jobIndex].activity &&
+        true &&
+        shallowJobStateEqual(job.state, merged[jobIndex].state),
     )
-    ? e
-    : h;
+    ? previous
+    : merged;
 }
 //@ chunk-e6aww6q8.js:1727973-1728205 placement
 /**
@@ -363,41 +375,48 @@ function mergePendingRemoteJobs(e, n) {
 function shallowJobStateEqual(state, state_2) {
   let keys = Object.keys(state);
   if (keys.length !== Object.keys(state_2).length) return false;
-  return keys.every((s) => {
-    let h = state[s];
-    let y = state_2[s];
-    if (h === y) return true;
-    return typeof h === "object" && typeof y === "object" && h !== null && y !== null && Bun.deepEquals(h, y);
+  return keys.every((key) => {
+    let left = state[key];
+    let right = state_2[key];
+    if (left === right) return true;
+    return (
+      typeof left === "object" &&
+      typeof right === "object" &&
+      left !== null &&
+      right !== null &&
+      Bun.deepEquals(left, right)
+    );
   });
 }
 //@ chunk-e6aww6q8.js:1728205-1728285 placement
-function isPausedNeedingAction(e) {
-  return e.status === "paused" && e.worker_status === "requires_action";
+function isPausedNeedingAction(session) {
+  return session.status === "paused" && session.worker_status === "requires_action";
 }
 //@ chunk-e6aww6q8.js:1728285-1729506 placement
 /**
  * 为 Fleet 视图描述一个会话失败的原因（如云环境启动失败）。
  */
-function describeSessionFailure(e) {
-  let startupFailure = describeCloudSession(e).startup_failure;
+function describeSessionFailure(session) {
+  let startupFailure = describeCloudSession(session).startup_failure;
   if (startupFailure !== undefined) {
-    let message = e.external_metadata?.last_init_error?.message;
-    let s = typeof message === "string" && message.length > 4000 && !startupFailure.endsWith("\u2026");
+    let message = session.external_metadata?.last_init_error?.message;
+    let isTruncated =
+      typeof message === "string" && message.length > 4000 && !startupFailure.endsWith("\u2026");
     return {
       state: "failed",
       tempo: "idle",
       reason:
-        sanitizeAttentionText(s ? `${startupFailure} \u2026` : startupFailure) ||
+        sanitizeAttentionText(isTruncated ? `${startupFailure} \u2026` : startupFailure) ||
         "the cloud environment failed to start",
     };
   }
-  if (e.worker_status === "requires_action")
+  if (session.worker_status === "requires_action")
     return {
-      state: isPausedNeedingAction(e) ? "blocked" : "working",
+      state: isPausedNeedingAction(session) ? "blocked" : "working",
       tempo: "blocked",
     };
-  if (e.worker_status === "idle" || e.status === "paused")
-    switch (e.status_bucket) {
+  if (session.worker_status === "idle" || session.status === "paused")
+    switch (session.status_bucket) {
       case "blocked":
         return {
           state: "blocked",
@@ -408,7 +427,7 @@ function describeSessionFailure(e) {
           state: "failed",
           tempo: "idle",
           reason:
-            sanitizeStatusDetail(e.external_metadata?.post_turn_summary?.status_detail) ||
+            sanitizeStatusDetail(session.external_metadata?.post_turn_summary?.status_detail) ||
             "the last turn failed",
         };
       case "working":
@@ -422,7 +441,7 @@ function describeSessionFailure(e) {
           tempo: "idle",
         };
       default:
-        return e.worker_status === "idle"
+        return session.worker_status === "idle"
           ? {
               state: "done",
               tempo: "idle",
@@ -433,16 +452,16 @@ function describeSessionFailure(e) {
               reason: "paused \xB7 reply to resume",
             };
     }
-  if (e.worker_status === "running" && e.connection_status === "disconnected")
+  if (session.worker_status === "running" && session.connection_status === "disconnected")
     return {
       state: "stopped",
       tempo: "idle",
       reason: "lost contact with the cloud environment",
     };
   if (
-    e.worker_status === undefined ||
-    e.worker_status === null ||
-    e.worker_status === "WORKER_STATUS_UNSPECIFIED"
+    session.worker_status === undefined ||
+    session.worker_status === null ||
+    session.worker_status === "WORKER_STATUS_UNSPECIFIED"
   )
     return {
       state: "working",
@@ -455,9 +474,9 @@ function describeSessionFailure(e) {
   };
 }
 //@ chunk-e6aww6q8.js:1729506-1729603 placement
-function sanitizeStatusDetail(e) {
-  let n = sanitizeAttentionText(e);
-  return /[\p{L}\p{N}]/u.test(n) && !n.startsWith("[ede_diagnostic]") ? n : "";
+function sanitizeStatusDetail(detail) {
+  let clean = sanitizeAttentionText(detail);
+  return /[\p{L}\p{N}]/u.test(clean) && !clean.startsWith("[ede_diagnostic]") ? clean : "";
 }
 export {
   attentionRegistryStore,

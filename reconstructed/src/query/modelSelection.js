@@ -32,8 +32,14 @@ import { FallbackTriggeredError } from "../services/api/withRetry.js";
 /**
  * 回合实际使用的模型：依次取拒绝覆盖、授权覆盖、实时切换覆盖、链上模型、主模型。
  */
-function effectiveTurnModel(e) {
-  return e.refusalOverride ?? e.consentOverride ?? e.liveSwitchOverride ?? e.chainModel ?? e.primaryModel;
+function effectiveTurnModel(selection) {
+  return (
+    selection.refusalOverride ??
+    selection.consentOverride ??
+    selection.liveSwitchOverride ??
+    selection.chainModel ??
+    selection.primaryModel
+  );
 }
 //@ chunk-e6aww6q8.js:2405025-2405052 placement
 /**
@@ -46,15 +52,15 @@ function mainLoopModelOverride() {
 /**
  * 查询循环中检查是否需要换模型：会话选择变化时采用新选择；当前模型不在可用列表时沿可用性降级链找下一个或回到会话模型。
  */
-function checkModelSwitch(e) {
-  let { pickSeen, livePick, sessionModel, turn, resolveLiveModel } = e;
-  let S = turn.refusalOverride !== undefined || turn.consentOverride !== undefined;
+function checkModelSwitch(options) {
+  let { pickSeen, livePick, sessionModel, turn, resolveLiveModel } = options;
+  let overrideLatched = turn.refusalOverride !== undefined || turn.consentOverride !== undefined;
   if (livePick !== pickSeen) {
     let liveModel = resolveLiveModel();
     return {
       pick: livePick,
       adopt:
-        liveModel !== sessionModel || S
+        liveModel !== sessionModel || overrideLatched
           ? {
               model: liveModel,
               latch: "session_pick",
@@ -63,28 +69,32 @@ function checkModelSwitch(e) {
     };
   }
   try {
-    let w = turn.chain[turn.chainIndex];
-    let L = effectiveTurnModel({
+    let chainModel = turn.chain[turn.chainIndex];
+    let effectiveModel = effectiveTurnModel({
       ...turn,
-      chainModel: w,
+      chainModel,
     });
-    if (isModelAdmittedByAvailableModels(L)) return;
-    let G = !S && turn.liveSwitchOverride === undefined && turn.chainIndex > 0 && w !== undefined;
-    if (G)
+    if (isModelAdmittedByAvailableModels(effectiveModel)) return;
+    let canAdvanceChain =
+      !overrideLatched &&
+      turn.liveSwitchOverride === undefined &&
+      turn.chainIndex > 0 &&
+      chainModel !== undefined;
+    if (canAdvanceChain)
       for (let idx = turn.chainIndex + 1; idx < turn.chain.length; idx++) {
-        let Se = turn.chain[idx];
-        if (Se !== undefined && isModelAdmittedByAvailableModels(Se))
+        let candidateModel = turn.chain[idx];
+        if (candidateModel !== undefined && isModelAdmittedByAvailableModels(candidateModel))
           return {
             pick: livePick,
             adopt: {
-              model: Se,
+              model: candidateModel,
               latch: "availability_chain",
               chainIndex: idx,
             },
           };
       }
     let liveModel = resolveLiveModel();
-    if (liveModel === L || (G && liveModel === turn.primaryModel)) return;
+    if (liveModel === effectiveModel || (canAdvanceChain && liveModel === turn.primaryModel)) return;
     return {
       pick: livePick,
       adopt: {
@@ -101,22 +111,22 @@ function checkModelSwitch(e) {
 /**
  * 采用新模型后的可用性降级链：有配置的降级时保留原链，否则为新模型构建链。
  */
-function adoptedFallbackChain(e) {
+function adoptedFallbackChain(options) {
   try {
-    if (configuredAvailabilityFallbacks(e.primaryModel, e.configuredFallbacks).length > 0)
+    if (configuredAvailabilityFallbacks(options.primaryModel, options.configuredFallbacks).length > 0)
       return {
-        chain: e.chain,
-        chainIndex: e.chainIndex,
+        chain: options.chain,
+        chainIndex: options.chainIndex,
       };
     return {
-      chain: buildAvailabilityFallbackChain(e.adoptedModel, e.configuredFallbacks),
+      chain: buildAvailabilityFallbackChain(options.adoptedModel, options.configuredFallbacks),
       chainIndex: 0,
     };
   } catch (error) {
     logError(error);
     return {
-      chain: e.chain,
-      chainIndex: e.chainIndex,
+      chain: options.chain,
+      chainIndex: options.chainIndex,
     };
   }
 }
@@ -124,12 +134,12 @@ function adoptedFallbackChain(e) {
 /**
  * 为当前降级位置找下一个模型：先找同族降级，否则在宿主提供的访问降级模型中选一个未用过且被策略允许的。
  */
-function nextFallbackModel(modelChain, chainIndex, r) {
-  let { hostModels, runsHostModel } = hostFallbackModels(chainIndex, r);
-  let y = runsHostModel ? undefined : familyFallbackModel(modelChain, chainIndex, r);
-  if (y !== undefined || hostModels.length === 0) return y;
+function nextFallbackModel(modelChain, chainIndex, currentModel) {
+  let { hostModels, runsHostModel } = hostFallbackModels(chainIndex, currentModel);
+  let familyModel = runsHostModel ? undefined : familyFallbackModel(modelChain, chainIndex, currentModel);
+  if (familyModel !== undefined || hostModels.length === 0) return familyModel;
   try {
-    if (chainIndex !== modelChain.length - 1 || r !== modelChain[chainIndex]) return;
+    if (chainIndex !== modelChain.length - 1 || currentModel !== modelChain[chainIndex]) return;
     return hostModels.find(
       (hostModel) =>
         !modelChain.some(sameLowerName(hostModel)) &&
@@ -142,20 +152,20 @@ function nextFallbackModel(modelChain, chainIndex, r) {
   }
 }
 //@ chunk-e6aww6q8.js:2406201-2406404 placement
-function familyFallbackModel(e, n, r) {
+function familyFallbackModel(modelChain, chainIndex, currentModel) {
   try {
-    let s = e[n - 1];
+    let previousModel = modelChain[chainIndex - 1];
     if (
-      n !== e.length - 1 ||
-      r !== e[n] ||
-      isExactModelPick(r) ||
-      isTierDefaultModelEnv(r) ||
-      (s !== undefined && findOlderAccessibleModel(s) === r)
+      chainIndex !== modelChain.length - 1 ||
+      currentModel !== modelChain[chainIndex] ||
+      isExactModelPick(currentModel) ||
+      isTierDefaultModelEnv(currentModel) ||
+      (previousModel !== undefined && findOlderAccessibleModel(previousModel) === currentModel)
     )
       return;
-    let olderAccessibleModel = findOlderAccessibleModel(r);
+    let olderAccessibleModel = findOlderAccessibleModel(currentModel);
     return olderAccessibleModel !== undefined &&
-      !e.some((y) => strip1mSuffix(y) === strip1mSuffix(olderAccessibleModel))
+      !modelChain.some((model) => strip1mSuffix(model) === strip1mSuffix(olderAccessibleModel))
       ? olderAccessibleModel
       : undefined;
   } catch (error) {
@@ -167,31 +177,31 @@ function familyFallbackModel(e, n, r) {
 /**
  * 宿主提供的访问降级模型，以及当前是否正运行在宿主模型上。
  */
-function hostFallbackModels(e, n) {
+function hostFallbackModels(chainIndex, currentModel) {
   try {
     let accessFallbackModels = loadAccessFallbackModels();
-    let s = mainLoopModelOverride();
-    let h = s === undefined ? getInitialMainLoopModel() : s;
+    let modelOverride = mainLoopModelOverride();
+    let baseModel = modelOverride === undefined ? getInitialMainLoopModel() : modelOverride;
     let models =
       accessFallbackModels !== undefined &&
-      typeof h === "string" &&
-      sameLowerName(accessFallbackModels.for)(h)
+      typeof baseModel === "string" &&
+      sameLowerName(accessFallbackModels.for)(baseModel)
         ? accessFallbackModels.models
         : [];
     if (
       models.length === 0 ||
       isModelFallbackDisabled() ||
-      getProviderForModel(n) !== "firstParty" ||
+      getProviderForModel(currentModel) !== "firstParty" ||
       !getFeatureValue_CACHED_MAY_BE_STALE("tengu_mossy_crown", true)
     )
       return {
         hostModels: [],
         runsHostModel: false,
       };
-    let S = sameLowerName(n);
+    let sameAsCurrent = sameLowerName(currentModel);
     return {
       hostModels: models,
-      runsHostModel: models.some(S) && (e > 0 || !S(getMainLoopModel())),
+      runsHostModel: models.some(sameAsCurrent) && (chainIndex > 0 || !sameAsCurrent(getMainLoopModel())),
     };
   } catch (error) {
     logError(error);
@@ -205,16 +215,20 @@ function hostFallbackModels(e, n) {
 /**
  * 小写后同名比较
  */
-function sameLowerName(e) {
-  let lower = strip1mSuffix(e).toLowerCase();
-  return (r) => strip1mSuffix(r).toLowerCase() === lower;
+function sameLowerName(modelName) {
+  let lower = strip1mSuffix(modelName).toLowerCase();
+  return (otherModel) => strip1mSuffix(otherModel).toLowerCase() === lower;
 }
 //@ chunk-e6aww6q8.js:2406846-2406920 placement
 /**
  * 是否回退到该模型
  */
-function isFallbackTo(e, n) {
-  return e !== undefined && n instanceof FallbackTriggeredError && n.fallbackModel === e;
+function isFallbackTo(accessFallbackModel, error) {
+  return (
+    accessFallbackModel !== undefined &&
+    error instanceof FallbackTriggeredError &&
+    error.fallbackModel === accessFallbackModel
+  );
 }
 export {
   mainLoopModelOverride,

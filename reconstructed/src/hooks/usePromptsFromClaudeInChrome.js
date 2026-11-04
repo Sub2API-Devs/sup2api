@@ -12,13 +12,20 @@ import { logFeatureOk, logFeatureSad } from "../services/analytics/featureTeleme
 import { logForDebugging } from "../utils/debug.js";
 import { toError } from "../utils/errors.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, literal, string, _enum, E } from "../../vendor/zod/v4/classic/schemas.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import {
+  objectSchema,
+  literal,
+  stringSchema,
+  _enum,
+  numberSchema,
+} from "../../vendor/zod/v4/classic/schemas.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useCommandQueueOrDefault } from "../context/QueuedMessageContext.js";
-import { R, P } from "../../vendor/react/cjs/react.production.js";
+import { useRef, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { getSessionBypassPermissionsMode } from "../bootstrap/state.js";
 import { CLAUDE_IN_CHROME_MCP_SERVER_NAME } from "../utils/claudeInChrome/common.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:216890-216906 placement
 function noopChromeEffect() {}
@@ -27,69 +34,72 @@ function logChromePermissionSyncOk() {
   return logFeatureOk("chrome_permission_sync");
 }
 //@ chunk-18hwfzwa.js:216956-217102 placement
-function syncChromePermissionMode(At) {
+function syncChromePermissionMode(error) {
   logFeatureSad("chrome_permission_sync", "set_mode_failed");
-  logForDebugging(`claude-in-chrome set_permission_mode failed: ${toError(At).message}`, {
+  logForDebugging(`claude-in-chrome set_permission_mode failed: ${toError(error).message}`, {
     level: "error",
   });
 }
 //@ chunk-18hwfzwa.js:217102-217314 fingerprint = ClaudeInChromePromptNotificationSchema (0.878)
-var ClaudeInChromePromptNotificationSchema = DoctorLazy(() =>
-  u({
-    method: literal("notifications/message"),
-    params: u({
-      prompt: string(),
-      image: u({
-        type: literal("base64"),
-        media_type: _enum(["image/jpeg", "image/png", "image/gif", "image/webp"]),
-        data: string(),
-      }).optional(),
-      tabId: E().optional(),
+var ClaudeInChromePromptNotificationSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:217102", () => {
+  ClaudeInChromePromptNotificationSchema = DoctorLazy(() =>
+    objectSchema({
+      method: literal("notifications/message"),
+      params: objectSchema({
+        prompt: stringSchema(),
+        image: objectSchema({
+          type: literal("base64"),
+          media_type: _enum(["image/jpeg", "image/png", "image/gif", "image/webp"]),
+          data: stringSchema(),
+        }).optional(),
+        tabId: numberSchema().optional(),
+      }),
     }),
-  }),
-);
+  );
+});
 //@ chunk-18hwfzwa.js:217314-217953 fingerprint = usePromptsFromClaudeInChrome (0.707)
 /**
  * 订阅 Claude in Chrome 的 notifications/message：把带图片的提示提交到会话，必要时切换权限模式（set_permission_mode）。
  */
 function usePromptsFromClaudeInChrome(mcpClients, toolPermissionMode) {
-  let $ = w(8);
+  let $ = useMemoCache(8);
   let commandQueueOrDefault = useCommandQueueOrDefault();
-  R(undefined);
-  let ee;
+  useRef(undefined);
+  let effectDeps;
   if ($[0] !== mcpClients || $[1] !== commandQueueOrDefault) {
-    ee = [mcpClients, commandQueueOrDefault];
+    effectDeps = [mcpClients, commandQueueOrDefault];
     $[0] = mcpClients;
     $[1] = commandQueueOrDefault;
-    $[2] = ee;
-  } else ee = $[2];
-  P(noopChromeEffect, ee);
-  let ke;
+    $[2] = effectDeps;
+  } else effectDeps = $[2];
+  useEffect(noopChromeEffect, effectDeps);
+  let initialChromeMode;
   if ($[3] === MEMO_CACHE_SENTINEL) {
-    ke = getChromePermissionMode();
-    $[3] = ke;
-  } else ke = $[3];
-  let Re = R(ke);
-  let clientRef = R(undefined);
-  let He;
-  let We;
+    initialChromeMode = getChromePermissionMode();
+    $[3] = initialChromeMode;
+  } else initialChromeMode = $[3];
+  let lastChromeModeRef = useRef(initialChromeMode);
+  let clientRef = useRef(undefined);
+  let syncPermissionMode;
+  let syncDeps;
   if ($[4] !== mcpClients || $[5] !== toolPermissionMode) {
-    He = () => {
+    syncPermissionMode = () => {
       let chromeClient = findChromeClient(mcpClients);
       let client = chromeClient?.client;
       if (clientRef.current !== client) {
         clientRef.current = client;
-        Re.current = getChromePermissionMode();
+        lastChromeModeRef.current = getChromePermissionMode();
       }
       if (!chromeClient) {
         return;
       }
       let chromeMode = toolPermissionMode === "bypassPermissions" ? "skip_all_permission_checks" : "ask";
-      if (Re.current === chromeMode) {
+      if (lastChromeModeRef.current === chromeMode) {
         return;
       }
-      Re.current = chromeMode;
-      let { callIdeRpc } = require("./chunk-asne9cp8.js").mcpClientModule();
+      lastChromeModeRef.current = chromeMode;
+      let { callIdeRpc } = require("../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
       callIdeRpc(
         "set_permission_mode",
         {
@@ -100,16 +110,16 @@ function usePromptsFromClaudeInChrome(mcpClients, toolPermissionMode) {
         .then(logChromePermissionSyncOk)
         .catch(syncChromePermissionMode);
     };
-    We = [mcpClients, toolPermissionMode];
+    syncDeps = [mcpClients, toolPermissionMode];
     $[4] = mcpClients;
     $[5] = toolPermissionMode;
-    $[6] = He;
-    $[7] = We;
+    $[6] = syncPermissionMode;
+    $[7] = syncDeps;
   } else {
-    He = $[6];
-    We = $[7];
+    syncPermissionMode = $[6];
+    syncDeps = $[7];
   }
-  P(He, We);
+  useEffect(syncPermissionMode, syncDeps);
 }
 //@ chunk-18hwfzwa.js:217953-218015 placement = PERMISSION_MODES (0.642)
 /**

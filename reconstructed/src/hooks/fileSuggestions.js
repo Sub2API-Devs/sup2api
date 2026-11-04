@@ -8,10 +8,10 @@
  * pieces: chunk-1b5x3jje.js (1), chunk-axmbhcjg.js (1), chunk-czffketc.js (1), chunk-e6aww6q8.js (1), chunk-x3qn5k1g.js (35)
  * attribution: placement 1, fingerprint 10, sole-consumer 3, facade-exports 7, layout 14, callgraph-fingerprint 1, file-local 2, callgraph-witnessed 1
  */
-import { statSync } from "fs";
 import * as pathModule from "path";
-import { win32, posix } from "path";
-import { Re } from "../../runtime/bun-runtime.js";
+import { posix, win32 } from "path";
+import { statSync } from "fs";
+import { __toESM } from "../../runtime/bun-runtime.js";
 import { require_ignore } from "../../vendor/ignore/index.js";
 import { createSignal } from "../utils/signal.js";
 import { findGitRoot, gitExe } from "../utils/git.js";
@@ -39,9 +39,35 @@ import { resolveFileSuggestionHook } from "../utils/hooks/hookPolicy.js";
 import { createBaseHookInput, executeFileSuggestionCommand } from "../utils/hooks.js";
 import { expandPath } from "../utils/path.js";
 import { platformPath } from "../utils/posixPaths.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-czffketc.js:960-1080 fingerprint = pathListSignature (0.682)
+function pathListSignature(paths) {
+  return paths.replace(/[^\0-\x7f]/g, (char) => {
+    let upper = char.toUpperCase();
+    return upper.length === 1 && upper.charCodeAt(0) > 127 ? upper : char;
+  });
+}
+//@ chunk-e6aww6q8.js:3295980-3296114 fingerprint = collectDirectoryNames (0.672)
+function collectDirectoryNames(mountRoot, path) {
+  let names = [];
+  let normalized = posix.normalize(posix.join("/", path));
+  for (;;) {
+    names.push(normalized === "/" ? mountRoot : posix.join(mountRoot, normalized));
+    if (normalized === "/") return names;
+    normalized = posix.dirname(normalized);
+  }
+}
+//@ chunk-1b5x3jje.js:191-202 placement
+/**
+ * 导出值：MAX_FILE_SUGGESTIONS（15）；位于「@ 文件建议：git ls-files / ripgrep 建项目文件索引、.ignore/.rgignore、后台刷新、模糊匹配生成建议并应用」模块。
+ */
+var MAX_FILE_SUGGESTIONS = 15;
 //@ chunk-x3qn5k1g.js:933-951 sole-consumer
-var fileSuggestionSignal = Re(require_ignore(), 1);
+var fileSuggestionSignal; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x3qn5k1g.js:933", () => {
+  fileSuggestionSignal = __toESM(require_ignore(), 1);
+});
 //@ chunk-x3qn5k1g.js:1004-1529 sole-consumer
 /**
  * 创建文件建议索引缓存的初始状态。
@@ -73,7 +99,10 @@ function createFileIndexCache() {
   };
 }
 //@ chunk-x3qn5k1g.js:1529-1541 facade-exports
-var globalFileIndexCache = createFileIndexCache();
+var globalFileIndexCache; // deferred: uses createFileIndexCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-x3qn5k1g.js:1529", () => {
+  globalFileIndexCache = createFileIndexCache();
+});
 //@ chunk-x3qn5k1g.js:1541-2079 facade-exports
 function resetFileIndexCache(globalFileIndexCache) {
   globalFileIndexCache.fileIndex = null;
@@ -99,13 +128,13 @@ function resetFileIndexCache(globalFileIndexCache) {
   globalFileIndexCache.indexLoadCount++;
 }
 //@ chunk-x3qn5k1g.js:2079-2232 fingerprint = getPathsForSuggestions (0.353)
-function getPathsForSuggestions(e, i, s, indexBaseDir) {
-  let o = ++e.indexLoadCount;
-  let r = i.loadFromFileListAsync(s);
-  r.queryable.then(() => {
-    if (e.indexLoadCount === o) e.indexBaseDir = indexBaseDir;
+function getPathsForSuggestions(cache, index, paths, indexBaseDir) {
+  let loadCount = ++cache.indexLoadCount;
+  let load = index.loadFromFileListAsync(paths);
+  load.queryable.then(() => {
+    if (cache.indexLoadCount === loadCount) cache.indexBaseDir = indexBaseDir;
   });
-  return r.done;
+  return load.done;
 }
 //@ chunk-x3qn5k1g.js:2232-2533 layout
 /**
@@ -114,21 +143,21 @@ function getPathsForSuggestions(e, i, s, indexBaseDir) {
 function hashPathList(paths) {
   let n_2 = paths.length;
   let stride = Math.max(1, Math.floor(n_2 / 500));
-  let n = -2128831035;
+  let hash = -2128831035;
   for (let i = 0; i < n_2; i += stride) {
-    let r = paths[i];
-    for (let j = 0; j < r.length; j++) n = ((n ^ r.charCodeAt(j)) * 16777619) | 0;
-    n = (n * 16777619) | 0;
+    let path = paths[i];
+    for (let j = 0; j < path.length; j++) hash = ((hash ^ path.charCodeAt(j)) * 16777619) | 0;
+    hash = (hash * 16777619) | 0;
   }
   if (n_2 > 0) {
     let last = paths[n_2 - 1];
-    for (let j = 0; j < last.length; j++) n = ((n ^ last.charCodeAt(j)) * 16777619) | 0;
+    for (let j = 0; j < last.length; j++) hash = ((hash ^ last.charCodeAt(j)) * 16777619) | 0;
   }
-  return `${n_2}:${(n >>> 0).toString(16)}`;
+  return `${n_2}:${(hash >>> 0).toString(16)}`;
 }
 //@ chunk-x3qn5k1g.js:2533-2573 layout
-function suggestionCacheKey(e, paths) {
-  return `${e}\x00${hashPathList(paths)}`;
+function suggestionCacheKey(baseDir, paths) {
+  return `${baseDir}\x00${hashPathList(paths)}`;
 }
 //@ chunk-x3qn5k1g.js:2573-2685 fingerprint = getGitIndexMtime (1)
 function getGitIndexMtime() {
@@ -143,24 +172,24 @@ function getGitIndexMtime() {
 //@ chunk-x3qn5k1g.js:2685-2921 layout
 async function rebasePaths(paths, fromDir, toDir) {
   if (toDir === fromDir) return paths;
-  let n = Array(paths.length);
+  let out = Array(paths.length);
   let chunkStart = performance.now();
   for (let k = 0; k < paths.length; k++) {
     let joined = pathModule.join(fromDir, paths[k]);
-    n[k] = pathModule.relative(toDir, joined);
+    out[k] = pathModule.relative(toDir, joined);
     if ((k & 255) === 255 && performance.now() - chunkStart > CHUNK_MS) {
       await yieldToEventLoop();
       chunkStart = performance.now();
     }
   }
-  return n;
+  return out;
 }
 //@ chunk-x3qn5k1g.js:2921-3419 fingerprint = mergeUntrackedIntoNormalizedCache (0.685)
-async function mergeUntrackedIntoNormalizedCache(cache, files, indexBaseDir) {
+async function mergeUntrackedIntoNormalizedCache(cache, files, cwd) {
   if (files.length === 0) return;
   if (!cache.fileIndex) return;
   let untrackedDirs = await getDirectoryNamesAsync(files);
-  if (cache.normalizedTrackedInputs?.cwd !== indexBaseDir) return;
+  if (cache.normalizedTrackedInputs?.cwd !== cwd) return;
   let allPaths = [
     ...cache.cachedTrackedFiles,
     ...cache.cachedConfigFiles,
@@ -168,12 +197,12 @@ async function mergeUntrackedIntoNormalizedCache(cache, files, indexBaseDir) {
     ...files,
     ...untrackedDirs,
   ];
-  let sig = suggestionCacheKey(indexBaseDir, allPaths);
+  let sig = suggestionCacheKey(cwd, allPaths);
   if (sig === cache.loadedMergedSignature) {
     logForDebugging("[FileIndex] skipped index rebuild \u2014 merged paths unchanged");
     return;
   }
-  if (await getPathsForSuggestions(cache, cache.fileIndex, allPaths, indexBaseDir)) {
+  if (await getPathsForSuggestions(cache, cache.fileIndex, allPaths, cwd)) {
     cache.loadedMergedSignature = sig;
     logForDebugging(
       `[FileIndex] rebuilt index with ${cache.cachedTrackedFiles.length} tracked + ${files.length} untracked files`,
@@ -181,18 +210,18 @@ async function mergeUntrackedIntoNormalizedCache(cache, files, indexBaseDir) {
   }
 }
 //@ chunk-x3qn5k1g.js:3419-4129 fingerprint = loadRipgrepIgnorePatterns (0.602)
-async function loadRipgrepIgnorePatterns(e, repoRoot, s) {
-  let cacheKey = `${repoRoot}:${s}`;
-  if (e.ignorePatternsCacheKey === cacheKey) return e.ignorePatternsCache;
+async function loadRipgrepIgnorePatterns(cache, repoRoot, cwd) {
+  let cacheKey = `${repoRoot}:${cwd}`;
+  if (cache.ignorePatternsCacheKey === cacheKey) return cache.ignorePatternsCache;
   let fs = getFsImplementation();
   let ignoreFiles = [".ignore", ".rgignore"];
-  let c = uniq([repoRoot, s]);
-  let p = fileSuggestionSignal.default();
-  let u = false;
-  let f = false;
-  let g = [];
-  let m = [];
-  let paths = ignoreFiles.flatMap((dir) => c.map((C) => pathModule.join(C, dir)));
+  let roots = uniq([repoRoot, cwd]);
+  let signal = fileSuggestionSignal.default();
+  let found = false;
+  let hasNegation = false;
+  let augmentations = [];
+  let rules = [];
+  let paths = ignoreFiles.flatMap((dir) => roots.map((root) => pathModule.join(root, dir)));
   let contents = await Promise.all(
     paths.map((path) =>
       fs
@@ -205,21 +234,21 @@ async function loadRipgrepIgnorePatterns(e, repoRoot, s) {
   for (let [i, content] of contents.entries()) {
     if (content === null) continue;
     let lines = filterUsableIgnorePatterns(splitNonEmptyLines(content), "file_suggestions_ignore");
-    p.add(lines);
-    u = true;
+    signal.add(lines);
+    found = true;
     let ignoreFile = parseIgnoreFile(
       lines,
       pathModule.relative(repoRoot, pathModule.dirname(paths[i])).replaceAll(pathModule.sep, "/"),
     );
-    f ||= ignoreFile.hasNegation;
-    g.push(...ignoreFile.augmentations);
-    m.push(...ignoreFile.rules);
+    hasNegation ||= ignoreFile.hasNegation;
+    augmentations.push(...ignoreFile.augmentations);
+    rules.push(...ignoreFile.rules);
     logForDebugging(`[FileIndex] loaded ignore patterns from ${paths[i]}`);
   }
-  let result = u ? p : null;
-  e.ignorePatternsCache = result;
-  e.ignorePatternsCacheKey = cacheKey;
-  e.ignoreReincludeGlobs = f ? [...g, ...m] : [];
+  let result = found ? signal : null;
+  cache.ignorePatternsCache = result;
+  cache.ignorePatternsCacheKey = cacheKey;
+  cache.ignoreReincludeGlobs = hasNegation ? [...augmentations, ...rules] : [];
   return result;
 }
 //@ chunk-x3qn5k1g.js:4129-4510 layout
@@ -227,69 +256,69 @@ async function loadRipgrepIgnorePatterns(e, repoRoot, s) {
  * 把 .ignore/.rgignore 行转成 ripgrep 规则：注释与空行跳过、取反规则记录 re-include glob、其余规则加 "!" 前缀；返回规则、是否有取反、re-include 列表。
  */
 function parseIgnoreFile(lines, baseDir) {
-  let s = [];
-  let n = [];
+  let augmentations = [];
+  let rules = [];
   let hasNegation = false;
-  let r = urlPatternToRegex(baseDir);
+  let pattern = urlPatternToRegex(baseDir);
   for (let line of lines) {
-    let p = line.endsWith("\\ ") ? line : line.trimEnd();
-    if (p === "" || p.startsWith("#")) continue;
-    let u = p.startsWith("!");
-    let f = u ? p.slice(1) : p;
-    if (f === "") continue;
-    let g = anchorIgnorePattern(f, r);
-    if (u) {
+    let line_2 = line.endsWith("\\ ") ? line : line.trimEnd();
+    if (line_2 === "" || line_2.startsWith("#")) continue;
+    let isNegation = line_2.startsWith("!");
+    let body = isNegation ? line_2.slice(1) : line_2;
+    if (body === "") continue;
+    let anchored = anchorIgnorePattern(body, pattern);
+    if (isNegation) {
       hasNegation = true;
-      n.push(g);
-      if (!g.endsWith("**")) {
-        let replaced = g.replace(/\/+$/, "");
-        s.push(isRelativeName(replaced) ? `**/${replaced}/**` : `${replaced}/**`);
+      rules.push(anchored);
+      if (!anchored.endsWith("**")) {
+        let name = anchored.replace(/\/+$/, "");
+        augmentations.push(isRelativeName(name) ? `**/${name}/**` : `${name}/**`);
       }
-    } else n.push(`!${g}`);
+    } else rules.push(`!${anchored}`);
   }
   return {
     hasNegation,
-    augmentations: s,
-    rules: n,
+    augmentations,
+    rules,
   };
 }
 //@ chunk-x3qn5k1g.js:4510-4586 layout
-function isRelativeName(e) {
-  return !e.startsWith("/") && !e.replace(/\/+$/, "").includes("/");
+function isRelativeName(name) {
+  return !name.startsWith("/") && !name.replace(/\/+$/, "").includes("/");
 }
 //@ chunk-x3qn5k1g.js:4586-4664 layout = urlPatternToRegex (1)
 function urlPatternToRegex(pattern) {
   return pattern.replace(/[[\]{}*?\\]/g, "\\$&").replace(/^[!#]/, "\\$&");
 }
 //@ chunk-x3qn5k1g.js:4664-4776 layout
-function anchorIgnorePattern(e, i) {
-  if (i === "") return e;
-  if (e.startsWith("/")) return `${i}${e}`;
-  return isRelativeName(e) ? `${i}/**/${e}` : `${i}/${e}`;
+function anchorIgnorePattern(pattern, baseDir) {
+  if (baseDir === "") return pattern;
+  if (pattern.startsWith("/")) return `${baseDir}${pattern}`;
+  return isRelativeName(pattern) ? `${baseDir}/**/${pattern}` : `${baseDir}/${pattern}`;
 }
 //@ chunk-x3qn5k1g.js:4776-5002 layout
-async function filterIgnored(e, i) {
-  let s = [];
+async function filterIgnored(ignore, paths) {
+  let kept = [];
   let startTime = performance.now();
-  for (let k = 0; k < i.length; k++) {
-    let r = i[k];
-    if (!fileSuggestionSignal.default.isPathValid(r) || !e.ignores(r)) s.push(r);
+  for (let k = 0; k < paths.length; k++) {
+    let path = paths[k];
+    if (!fileSuggestionSignal.default.isPathValid(path) || !ignore.ignores(path)) kept.push(path);
     if ((k & 255) === 255 && performance.now() - startTime > CHUNK_MS) {
       await yieldToEventLoop();
       startTime = performance.now();
     }
   }
-  return s;
+  return kept;
 }
 //@ chunk-x3qn5k1g.js:5002-6446 fingerprint = getFilesUsingGit (0.778)
 /**
  * 用 git ls-files（含子模块，core.quotepath=false）列出已跟踪与未跟踪文件；非 git 仓库返回 null。
  */
-async function getFilesUsingGit(cache, abortSignal, respectGitignore, n) {
+async function getFilesUsingGit(cache, abortSignal, respectGitignore, cwd) {
   let startTime = Date.now();
   let cacheGeneration = cache.cacheGeneration;
   logForDebugging("[FileIndex] getFilesUsingGit called");
-  let repoRoot = findGitRoot(n);
+  let repoRoot = findGitRoot(cwd);
   if (!repoRoot) {
     logForDebugging("[FileIndex] not a git repo, returning null");
     return null;
@@ -313,16 +342,16 @@ async function getFilesUsingGit(cache, abortSignal, respectGitignore, n) {
       return null;
     }
     let normalizedTrackedInputs = cache.normalizedTrackedInputs;
-    let g;
-    let m = null;
+    let files;
+    let normalizedInputs = null;
     if (
       normalizedTrackedInputs !== null &&
       normalizedTrackedInputs.repoRoot === repoRoot &&
-      normalizedTrackedInputs.cwd === n &&
+      normalizedTrackedInputs.cwd === cwd &&
       normalizedTrackedInputs.rawStdout === trackedResult.stdout &&
       cache.cachedTrackedFiles.length > 0
     ) {
-      g = cache.cachedTrackedFiles;
+      files = cache.cachedTrackedFiles;
       logForDebugging("[FileIndex] skipped path normalization \u2014 raw git paths unchanged");
     } else {
       let trackedFiles = trackedResult.stdout
@@ -332,35 +361,35 @@ async function getFilesUsingGit(cache, abortSignal, respectGitignore, n) {
 `,
         )
         .filter(Boolean);
-      g = await rebasePaths(trackedFiles, repoRoot, n);
-      let ignorePatterns = await loadRipgrepIgnorePatterns(cache, repoRoot, n);
+      files = await rebasePaths(trackedFiles, repoRoot, cwd);
+      let ignorePatterns = await loadRipgrepIgnorePatterns(cache, repoRoot, cwd);
       if (ignorePatterns) {
-        let beforeCount = g.length;
-        g = await filterIgnored(ignorePatterns, g);
-        logForDebugging(`[FileIndex] applied ignore patterns: ${beforeCount} -> ${g.length} files`);
+        let beforeCount = files.length;
+        files = await filterIgnored(ignorePatterns, files);
+        logForDebugging(`[FileIndex] applied ignore patterns: ${beforeCount} -> ${files.length} files`);
       }
-      m = {
+      normalizedInputs = {
         repoRoot,
-        cwd: n,
+        cwd,
         rawStdout: trackedResult.stdout,
       };
     }
     if (cacheGeneration !== cache.cacheGeneration) {
       logForDebugging("[FileIndex] discarding refresh results \u2014 cache was reset mid-refresh");
-      return g;
+      return files;
     }
-    if (m !== null) cache.normalizedTrackedInputs = m;
-    cache.cachedTrackedFiles = g;
+    if (normalizedInputs !== null) cache.normalizedTrackedInputs = normalizedInputs;
+    cache.cachedTrackedFiles = files;
     let duration = Date.now() - startTime;
-    logForDebugging(`[FileIndex] git ls-files: ${g.length} tracked files in ${duration}ms`);
+    logForDebugging(`[FileIndex] git ls-files: ${files.length} tracked files in ${duration}ms`);
     logEvent("tengu_file_suggestions_git_ls_files", {
-      file_count: g.length,
-      tracked_count: g.length,
+      file_count: files.length,
+      tracked_count: files.length,
       untracked_count: 0,
       duration_ms: duration,
     });
-    fetchUntrackedFiles(cache, repoRoot, n, respectGitignore);
-    return g;
+    fetchUntrackedFiles(cache, repoRoot, cwd, respectGitignore);
+    return files;
   } catch (error) {
     logForDebugging(`[FileIndex] git ls-files error: ${errorMessage(error)}`);
     return null;
@@ -380,9 +409,9 @@ async function getDirectoryNamesAsync(files) {
   return [...directoryNames].map((directoryName) => directoryName + pathModule.sep);
 }
 //@ chunk-x3qn5k1g.js:6644-6782 layout
-function addParentDirs(files, i, s, directoryNames) {
-  for (let o = i; o < s; o++) {
-    let dir = pathModule.dirname(files[o]);
+function addParentDirs(files, from, to, directoryNames) {
+  for (let index = from; index < to; index++) {
+    let dir = pathModule.dirname(files[index]);
     while (dir !== "." && !directoryNames.has(dir)) {
       let dir_2 = pathModule.dirname(dir);
       if (dir_2 === dir) break;
@@ -392,25 +421,30 @@ function addParentDirs(files, i, s, directoryNames) {
   }
 }
 //@ chunk-x3qn5k1g.js:6782-6893 layout
-async function listClaudeConfigFiles(e, storage) {
+async function listClaudeConfigFiles(cwd, storage) {
   return (
-    await Promise.all(CLAUDE_CONFIG_DIRECTORIES.map((n) => loadMarkdownFilesCached(n, e, storage)))
-  ).flatMap((n) => n.map((o) => o.filePath));
+    await Promise.all(CLAUDE_CONFIG_DIRECTORIES.map((dir) => loadMarkdownFilesCached(dir, cwd, storage)))
+  ).flatMap((files) => files.map((file) => file.filePath));
 }
 //@ chunk-x3qn5k1g.js:6893-7015 layout = VCS_DIRECTORIES_TO_EXCLUDE (0.922)
 /**
  * VCS 目录列表及对应的 rg --glob 排除参数（目录形式与名称形式）。
  */
-var VCS_DIRECTORIES = [".git", ".svn", ".hg", ".bzr", ".jj", ".sl"];
-var VCS_DIR_EXCLUDE_GLOB_ARGS = VCS_DIRECTORIES.flatMap((e) => ["--glob", `!${e}/`]);
-var VCS_EXCLUDE_GLOB_ARGS = VCS_DIRECTORIES.flatMap((e) => ["--glob", `!${e}`]);
+var VCS_DIRECTORIES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var VCS_DIR_EXCLUDE_GLOB_ARGS;
+var VCS_EXCLUDE_GLOB_ARGS;
+deferInit("chunk-x3qn5k1g.js:6893", () => {
+  VCS_DIRECTORIES = [".git", ".svn", ".hg", ".bzr", ".jj", ".sl"];
+  VCS_DIR_EXCLUDE_GLOB_ARGS = VCS_DIRECTORIES.flatMap((dir) => ["--glob", `!${dir}/`]);
+  VCS_EXCLUDE_GLOB_ARGS = VCS_DIRECTORIES.flatMap((dir) => ["--glob", `!${dir}`]);
+});
 //@ chunk-x3qn5k1g.js:7015-7642 fingerprint = getProjectFiles (0.929)
 /**
  * 获取项目文件列表：优先 git ls-files，失败回落 ripgrep --files（可选尊重 .gitignore）。
  */
-async function getProjectFiles(abortSignal, abortSignal_2, s, n) {
-  logForDebugging(`[FileIndex] getProjectFiles called, respectGitignore=${s}`);
-  let gitFiles = await getFilesUsingGit(abortSignal, abortSignal_2, s, n);
+async function getProjectFiles(abortSignal, abortSignal_2, respectGitignore, cwd) {
+  logForDebugging(`[FileIndex] getProjectFiles called, respectGitignore=${respectGitignore}`);
+  let gitFiles = await getFilesUsingGit(abortSignal, abortSignal_2, respectGitignore, cwd);
   if (gitFiles !== null) {
     logForDebugging(`[FileIndex] using git ls-files result (${gitFiles.length} files)`);
     return gitFiles;
@@ -418,16 +452,16 @@ async function getProjectFiles(abortSignal, abortSignal_2, s, n) {
   logForDebugging("[FileIndex] git ls-files returned null, falling back to ripgrep");
   abortSignal.normalizedTrackedInputs = null;
   let startTime = Date.now();
-  let c = null;
+  let cacheKey = null;
   let files;
   {
     let rgArgs = ["--files", "--follow", "--hidden", ...VCS_DIR_EXCLUDE_GLOB_ARGS];
-    if (!s) rgArgs.push("--no-ignore-vcs");
-    files = await ripGrep_2(rgArgs, n, abortSignal_2, {
+    if (!respectGitignore) rgArgs.push("--no-ignore-vcs");
+    files = await ripGrep_2(rgArgs, cwd, abortSignal_2, {
       searchOtherAppsData: true,
     });
   }
-  let relativePaths = files.map((file) => pathModule.relative(n, file));
+  let relativePaths = files.map((file) => pathModule.relative(cwd, file));
   let duration = Date.now() - startTime;
   logForDebugging(`[FileIndex] ripgrep: ${relativePaths.length} files in ${duration}ms`);
   logEvent("tengu_file_suggestions_ripgrep", {
@@ -441,28 +475,28 @@ async function getProjectFiles(abortSignal, abortSignal_2, s, n) {
  * 建立已跟踪文件索引：取项目文件（git 或 ripgrep，尊重 gitignore 设置）与 .claude 配置文件，加入目录名；路径签名没变则跳过重建。10 秒超时。
  */
 async function buildTrackedFileIndex(cache, storage) {
-  let s = AbortSignal.timeout(1e4);
-  let n = (cache.fileIndex ??= new FileIndex());
+  let timeoutSignal = AbortSignal.timeout(1e4);
+  let index = (cache.fileIndex ??= new FileIndex());
   let deferred = Promise.withResolvers();
   cache.trackedBuildPromise = deferred.promise;
   try {
     let initialSettings = getInitialSettings_2();
     let globalConfig = getGlobalConfig();
-    let p = initialSettings.respectGitignore ?? globalConfig.respectGitignore ?? true;
-    let indexBaseDir = getCwd();
-    let [projectFiles, g] = await Promise.all([
-      getProjectFiles(cache, s, p, indexBaseDir),
-      listClaudeConfigFiles(indexBaseDir, storage),
+    let respectGitignore = initialSettings.respectGitignore ?? globalConfig.respectGitignore ?? true;
+    let cwd = getCwd();
+    let [projectFiles, configFiles] = await Promise.all([
+      getProjectFiles(cache, timeoutSignal, respectGitignore, cwd),
+      listClaudeConfigFiles(cwd, storage),
     ]);
-    cache.cachedConfigFiles = g;
-    let files = [...projectFiles, ...g];
+    cache.cachedConfigFiles = configFiles;
+    let files = [...projectFiles, ...configFiles];
     let directoryNames = await getDirectoryNamesAsync(files);
     cache.cachedTrackedDirs = directoryNames;
-    let F = [...directoryNames, ...files];
-    let I = suggestionCacheKey(indexBaseDir, F);
-    if (I !== cache.loadedTrackedSignature) {
-      if (await getPathsForSuggestions(cache, n, F, indexBaseDir)) {
-        cache.loadedTrackedSignature = I;
+    let allPaths = [...directoryNames, ...files];
+    let signature = suggestionCacheKey(cwd, allPaths);
+    if (signature !== cache.loadedTrackedSignature) {
+      if (await getPathsForSuggestions(cache, index, allPaths, cwd)) {
+        cache.loadedTrackedSignature = signature;
         cache.loadedMergedSignature = null;
       }
     } else logForDebugging("[FileIndex] skipped index rebuild \u2014 tracked paths unchanged");
@@ -473,7 +507,7 @@ async function buildTrackedFileIndex(cache, storage) {
   } finally {
     deferred.resolve();
   }
-  return n;
+  return index;
 }
 //@ chunk-x3qn5k1g.js:8293-8399 file-local
 function commonPrefixLength(a, b) {
@@ -485,14 +519,14 @@ function commonPrefixLength(a, b) {
 //@ chunk-x3qn5k1g.js:8399-8556 facade-exports = _temp (1)
 function findLongestCommonPrefix(item) {
   if (item.length === 0) return "";
-  let mapped = item.map((n) => n.displayText);
-  let s = mapped[0];
+  let mapped = item.map((item) => item.displayText);
+  let prefix = mapped[0];
   for (let k = 1; k < mapped.length; k++) {
-    let o = mapped[k];
-    s = commonPrefixLength(s, o);
-    if (s === "") return "";
+    let text = mapped[k];
+    prefix = commonPrefixLength(prefix, text);
+    if (prefix === "") return "";
   }
-  return s;
+  return prefix;
 }
 //@ chunk-x3qn5k1g.js:8556-8646 fingerprint = createFileSuggestionItem (1)
 function createFileSuggestionItem(filePath, score) {
@@ -508,9 +542,9 @@ function createFileSuggestionItem(filePath, score) {
   };
 }
 //@ chunk-x3qn5k1g.js:8646-8730 layout
-function scoreSuggestions(e) {
-  let sliced = e.slice(0, MAX_FILE_SUGGESTIONS);
-  return sliced.map((s, n) => createFileSuggestionItem(s, n / Math.max(sliced.length, 1)));
+function scoreSuggestions(paths) {
+  let sliced = paths.slice(0, MAX_FILE_SUGGESTIONS);
+  return sliced.map((path, index) => createFileSuggestionItem(path, index / Math.max(sliced.length, 1)));
 }
 //@ chunk-x3qn5k1g.js:8730-8760 layout
 var SUGGESTION_DEBOUNCE_MS = 5000;
@@ -576,22 +610,28 @@ async function getDirectoryNames(cwd) {
   }
 }
 //@ chunk-x3qn5k1g.js:9762-9834 facade-exports
-async function generateFileSuggestions(e, partialPath, s = false, n) {
-  let { items } = await generateFileSuggestionsWithBase(e, partialPath, s, n);
+async function generateFileSuggestions(cwd, partialPath, includeDirectories = false, context) {
+  let { items } = await generateFileSuggestionsWithBase(cwd, partialPath, includeDirectories, context);
   return items;
 }
 //@ chunk-x3qn5k1g.js:9834-10861 facade-exports = generateFileSuggestions (0.84)
 /**
  * 生成 @ 文件建议：用缓存的文件索引做模糊匹配（partial/full），远程会话时走 file_suggestions RPC；记录耗时。
  */
-async function generateFileSuggestionsWithBase(e, partialPath, s, n, o = true) {
+async function generateFileSuggestionsWithBase(
+  cwd,
+  partialPath,
+  includeDirectories,
+  context,
+  useHook = true,
+) {
   if (isDiskless())
     return {
       items: [],
       baseDir: undefined,
     };
   if (isRemoteSessionAvailable()) {
-    if (!partialPath && !s)
+    if (!partialPath && !includeDirectories)
       return {
         items: [],
         baseDir: undefined,
@@ -601,14 +641,15 @@ async function generateFileSuggestionsWithBase(e, partialPath, s, n, o = true) {
       baseDir: undefined,
     };
   }
-  let cwd = getCwd();
-  if (!partialPath && !s)
+  let cwd_2 = getCwd();
+  if (!partialPath && !includeDirectories)
     return {
       items: [],
-      baseDir: cwd,
+      baseDir: cwd_2,
     };
   if (
-    (o ? resolveFileSuggestionHook(getInitialSettings_2().fileSuggestion) : undefined)?.type === "command"
+    (useHook ? resolveFileSuggestionHook(getInitialSettings_2().fileSuggestion) : undefined)?.type ===
+    "command"
   ) {
     let input = {
       id: getSessionId(),
@@ -618,37 +659,37 @@ async function generateFileSuggestionsWithBase(e, partialPath, s, n, o = true) {
       },
     };
     let input_2 = {
-      ...createBaseHookInput(input, cwd),
+      ...createBaseHookInput(input, cwd_2),
       query: partialPath,
     };
-    let g = await executeFileSuggestionCommand(input, input_2);
+    let hooked = await executeFileSuggestionCommand(input, input_2);
     return {
-      items: scoreSuggestions(g),
-      baseDir: cwd,
+      items: scoreSuggestions(hooked),
+      baseDir: cwd_2,
     };
   }
   if (partialPath === "" || partialPath === "." || partialPath === "./") {
-    let results = await getDirectoryNames(cwd);
-    startBackgroundCacheRefresh(e, n);
+    let results = await getDirectoryNames(cwd_2);
+    startBackgroundCacheRefresh(cwd, context);
     return {
       items: scoreSuggestions(results),
-      baseDir: cwd,
+      baseDir: cwd_2,
     };
   }
   let startTime = Date.now();
   try {
-    let wasBuilding = e.fileListRefreshPromise !== null;
-    startBackgroundCacheRefresh(e, n);
+    let wasBuilding = cwd.fileListRefreshPromise !== null;
+    startBackgroundCacheRefresh(cwd, context);
     let normalizedPath = partialPath;
     let currentDirPrefix = "." + pathModule.sep;
     if (partialPath.startsWith(currentDirPrefix)) normalizedPath = partialPath.substring(2);
     if (normalizedPath.startsWith("~")) normalizedPath = expandPath(normalizedPath);
-    let matches = e.fileIndex
-      ? e.fileIndex
+    let matches = cwd.fileIndex
+      ? cwd.fileIndex
           .search(normalizedPath, MAX_FILE_SUGGESTIONS)
-          .map((I) => createFileSuggestionItem(I.path, I.score))
+          .map((item) => createFileSuggestionItem(item.path, item.score))
       : [];
-    let baseDir = e.indexBaseDir ?? cwd;
+    let baseDir = cwd.indexBaseDir ?? cwd_2;
     let duration = Date.now() - startTime;
     logForDebugging(
       `[FileIndex] generateFileSuggestions: ${matches.length} results in ${duration}ms (${wasBuilding ? "partial" : "full"} index)`,
@@ -667,7 +708,7 @@ async function generateFileSuggestionsWithBase(e, partialPath, s, n, o = true) {
     logError(error);
     return {
       items: [],
-      baseDir: cwd,
+      baseDir: cwd_2,
     };
   }
 }
@@ -706,13 +747,13 @@ function applyFileSuggestion({ suggestion, input, partialPath, startPos, onInput
  */
 function fetchUntrackedFiles(cache, repoRoot, cwd, respectGitignore) {
   if (cache.untrackedFetchPromise) return;
-  let o = respectGitignore
+  let ignorePrefix = respectGitignore
     ? ["-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard"]
     : ["-c", "core.quotepath=false", "ls-files", "--others"];
   let cacheGeneration = cache.cacheGeneration;
-  let c = respectGitignore && cache.ignoreReincludeGlobs.length > 0;
-  let p =
-    c && Date.now() >= cache.reincludeRetryAtMs
+  let hasReinclude = respectGitignore && cache.ignoreReincludeGlobs.length > 0;
+  let untrackedPromise =
+    hasReinclude && Date.now() >= cache.reincludeRetryAtMs
       ? ripGrep_2(
           [
             "--files",
@@ -727,9 +768,9 @@ function fetchUntrackedFiles(cache, repoRoot, cwd, respectGitignore) {
             rejectOnPartial: true,
           },
         )
-          .then((u) => {
-            if (cacheGeneration === cache.cacheGeneration) cache.lastReincludedFiles = u;
-            return u;
+          .then((untracked) => {
+            if (cacheGeneration === cache.cacheGeneration) cache.lastReincludedFiles = untracked;
+            return untracked;
           })
           .catch((error) => {
             logForDebugging(`[FileIndex] .ignore re-include listing failed: ${errorMessage(error)}`);
@@ -737,38 +778,42 @@ function fetchUntrackedFiles(cache, repoRoot, cwd, respectGitignore) {
               cache.reincludeRetryAtMs = Date.now() + SUGGESTION_CACHE_TTL_MS;
             return cache.lastReincludedFiles;
           })
-      : Promise.resolve(c ? cache.lastReincludedFiles : []);
+      : Promise.resolve(hasReinclude ? cache.lastReincludedFiles : []);
   cache.untrackedFetchPromise = Promise.all([
-    execFileNoThrowWithCwd(gitExe(), o, {
+    execFileNoThrowWithCwd(gitExe(), ignorePrefix, {
       timeout: 1e4,
       cwd: repoRoot,
     }),
-    p,
+    untrackedPromise,
   ])
-    .then(async ([u, f]) => {
+    .then(async ([tracked, untrackedRaw]) => {
       await cache.trackedBuildPromise;
       if (cacheGeneration !== cache.cacheGeneration) return;
-      if (u.code !== 0) return;
-      let paths = u.stdout
+      if (tracked.code !== 0) return;
+      let paths = tracked.stdout
         .trim()
         .split(
           `
 `,
         )
         .filter(Boolean);
-      for (let F of f.map((I) => pathModule.normalize(I).replaceAll(pathModule.sep, "/")).sort())
-        paths.push(F);
-      let m = await rebasePaths(paths, repoRoot, cwd);
-      let ripgrepIgnorePatterns = await loadRipgrepIgnorePatterns(cache, repoRoot, cwd);
-      if (ripgrepIgnorePatterns && m.length > 0) {
-        let F = m.length;
-        m = await filterIgnored(ripgrepIgnorePatterns, m);
-        logForDebugging(`[FileIndex] applied ignore patterns to untracked: ${F} -> ${m.length} files`);
+      for (let path of untrackedRaw
+        .map((path_) => pathModule.normalize(path_).replaceAll(pathModule.sep, "/"))
+        .sort())
+        paths.push(path);
+      let rebased = await rebasePaths(paths, repoRoot, cwd);
+      let ignore = await loadRipgrepIgnorePatterns(cache, repoRoot, cwd);
+      if (ignore && rebased.length > 0) {
+        let count_ = rebased.length;
+        rebased = await filterIgnored(ignore, rebased);
+        logForDebugging(
+          `[FileIndex] applied ignore patterns to untracked: ${count_} -> ${rebased.length} files`,
+        );
       }
       logForDebugging(
-        `[FileIndex] background untracked fetch: ${m.length} files (${f.length} re-included by .ignore)`,
+        `[FileIndex] background untracked fetch: ${rebased.length} files (${untrackedRaw.length} re-included by .ignore)`,
       );
-      return mergeUntrackedIntoNormalizedCache(cache, m, cwd);
+      return mergeUntrackedIntoNormalizedCache(cache, rebased, cwd);
     })
     .catch((error) => {
       logForDebugging(`[FileIndex] background untracked fetch failed: ${error}`);
@@ -777,11 +822,6 @@ function fetchUntrackedFiles(cache, repoRoot, cwd, respectGitignore) {
       cache.untrackedFetchPromise = null;
     });
 }
-//@ chunk-1b5x3jje.js:191-202 placement
-/**
- * 导出值：MAX_FILE_SUGGESTIONS（15）；位于「@ 文件建议：git ls-files / ripgrep 建项目文件索引、.ignore/.rgignore、后台刷新、模糊匹配生成建议并应用」模块。
- */
-var MAX_FILE_SUGGESTIONS = 15;
 //@ chunk-axmbhcjg.js:9150-9323 fingerprint = normalizeGitPaths (0.68)
 function normalizeGitPaths(files, repoRoot, originalCwd = platformPath) {
   let relativePath = originalCwd.relative(files, repoRoot);
@@ -794,23 +834,6 @@ function normalizeGitPaths(files, repoRoot, originalCwd = platformPath) {
     ? relativePath
     : null;
 }
-//@ chunk-czffketc.js:960-1080 fingerprint = pathListSignature (0.682)
-function pathListSignature(paths) {
-  return paths.replace(/[^\0-\x7f]/g, (e) => {
-    let upper = e.toUpperCase();
-    return upper.length === 1 && upper.charCodeAt(0) > 127 ? upper : e;
-  });
-}
-//@ chunk-e6aww6q8.js:3295980-3296114 fingerprint = collectDirectoryNames (0.672)
-function collectDirectoryNames(mountRoot, path) {
-  let r = [];
-  let normalized = posix.normalize(posix.join("/", path));
-  for (;;) {
-    r.push(normalized === "/" ? mountRoot : posix.join(mountRoot, normalized));
-    if (normalized === "/") return r;
-    normalized = posix.dirname(normalized);
-  }
-}
 export {
   globalFileIndexCache,
   startBackgroundCacheRefresh,
@@ -822,4 +845,5 @@ export {
   pathListSignature,
   collectDirectoryNames,
   MAX_FILE_SUGGESTIONS,
+  generateFileSuggestionsWithBase,
 };

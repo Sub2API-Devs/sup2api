@@ -15,6 +15,7 @@ import { getClaudeConfigDir } from "../envUtils.js";
 import { isDiskless, getRootSession } from "../../bootstrap/state.js";
 import { getOauthConfig } from "../../constants/oauth.js";
 import { HostScoped } from "../hostScoped.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-gwwacf44.js:442-465 fingerprint = CREDENTIALS_SERVICE_SUFFIX (1)
 var CREDENTIALS_SERVICE_SUFFIX = "-credentials";
@@ -45,11 +46,13 @@ function getMacOsKeychainStorageServiceName(serviceSuffix = "") {
     envClaudeSecurestorageConfigDir !== undefined
       ? !envClaudeSecurestorageConfigDir
       : !process.env.CLAUDE_CONFIG_DIR;
-  let r =
+  let configDir =
     envClaudeSecurestorageConfigDir !== undefined
       ? envClaudeSecurestorageConfigDir.normalize("NFC")
       : getClaudeConfigDir();
-  let dirHash = isDefaultDir ? "" : `-${createHash("sha256").update(r).digest("hex").substring(0, 8)}`;
+  let dirHash = isDefaultDir
+    ? ""
+    : `-${createHash("sha256").update(configDir).digest("hex").substring(0, 8)}`;
   return `Claude Code${getOauthConfig().OAUTH_FILE_SUFFIX}${serviceSuffix}${dirHash}`;
 }
 //@ chunk-gwwacf44.js:906-932 layout
@@ -59,14 +62,14 @@ var SAFE_USERNAME_PATTERN = /^[a-zA-Z0-9._-]+$/;
  * 钥匙串账户名：USER 或 os.userInfo，非 [A-Za-z0-9._-] 时用 claude-code-user。
  */
 function getUsername() {
-  let e;
+  let username;
   try {
-    e = process.env.USER || userInfo().username;
+    username = process.env.USER || userInfo().username;
   } catch {
-    e = "claude-code-user";
+    username = "claude-code-user";
   }
-  if (!SAFE_USERNAME_PATTERN.test(e)) return "claude-code-user";
-  return e;
+  if (!SAFE_USERNAME_PATTERN.test(username)) return "claude-code-user";
+  return username;
 }
 //@ chunk-gwwacf44.js:1064-1078 layout
 var KEYCHAIN_CACHE_TTL_MS = 30000;
@@ -84,7 +87,10 @@ class KeychainCacheState {
   legacyApiKeyPrefetch = null;
 }
 //@ chunk-gwwacf44.js:1229-1252 layout
-var KEYCHAIN_CACHE_PER_HOST = new HostScoped(() => new KeychainCacheState());
+var KEYCHAIN_CACHE_PER_HOST; // deferred: uses KeychainCacheState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-gwwacf44.js:1229", () => {
+  KEYCHAIN_CACHE_PER_HOST = new HostScoped(() => new KeychainCacheState());
+});
 //@ chunk-gwwacf44.js:1252-1289 layout
 function getKeychainCacheState() {
   return KEYCHAIN_CACHE_PER_HOST.of(getRootSession().host);
@@ -118,8 +124,8 @@ function clearKeychainCache() {
   keychainCacheState.lastReadFailure = null;
 }
 //@ chunk-gwwacf44.js:1528-1689 fingerprint = primeKeychainCacheFromPrefetch (0.831)
-function primeKeychainCacheFromPrefetch(stdout, n, t = getKeychainCacheState()) {
-  if (t.cache.cachedAt !== 0 || t.generation !== n) return;
+function primeKeychainCacheFromPrefetch(stdout, generation, state = getKeychainCacheState()) {
+  if (state.cache.cachedAt !== 0 || state.generation !== generation) return;
   let data = null;
   if (stdout)
     try {
@@ -127,7 +133,7 @@ function primeKeychainCacheFromPrefetch(stdout, n, t = getKeychainCacheState()) 
     } catch {
       return;
     }
-  t.cache = {
+  state.cache = {
     data,
     cachedAt: Date.now(),
   };

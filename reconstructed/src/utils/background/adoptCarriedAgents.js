@@ -30,16 +30,17 @@ import { logForDebugging } from "../debug.js";
 import { emitTaskNotification } from "../task/taskNotifications.js";
 import { HiddenScriptShaCache } from "../../services/workflow/journalEntries.js";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:323945-324132 placement
-var enqueueCarriedAgentFailure = (h, x) =>
-  h.enqueuePendingNotification({
+var enqueueCarriedAgentFailure = (messageQueue, payload) =>
+  messageQueue.enqueuePendingNotification({
     value: formatTaskNotification({
-      taskId: x.taskId,
+      taskId: payload.taskId,
       status: "failed",
-      summary: x.summary,
+      summary: payload.summary,
     }),
-    agentId: x.agentId,
+    agentId: payload.agentId,
     mode: "task-notification",
     skipAttachments: true,
     priority: "next",
@@ -52,49 +53,53 @@ var CARRIED_UNCONFIRMED_TEXT =
   "this session could not confirm from its own records that its owner launched it and that it is still running. If it is yours, a message to it may continue it.";
 var MAIN_OWNER_KEY = "";
 //@ chunk-18hwfzwa.js:324372-325336 placement
-async function reconcileCarriedAgents(h, fork, queue) {
+async function reconcileCarriedAgents(agents, fork, queue) {
   let carriedAgentsContext = createCarriedAgentsContext(fork, queue);
   let { depthOfParked } = carriedAgentsContext;
-  let ke = [];
-  let Re = new Set();
-  let Be = new Set();
-  let He = new Map();
-  for (let ze of h.toSorted((Xe, rt) => (Xe.spawnDepth ?? 0) - (rt.spawnDepth ?? 0))) {
-    let { agentId, parentAgentId } = ze;
-    if (normalizeAgentIdOrNull(agentId) === null || Re.has(agentId)) {
+  let registered = [];
+  let takenUp = new Set();
+  let reported = new Set();
+  let failuresByAgent = new Map();
+  for (let agent of agents.toSorted(
+    (leftAgent, rightAgent) => (leftAgent.spawnDepth ?? 0) - (rightAgent.spawnDepth ?? 0),
+  )) {
+    let { agentId, parentAgentId } = agent;
+    if (normalizeAgentIdOrNull(agentId) === null || takenUp.has(agentId)) {
       carriedAgentsContext.telemetryFailureCodes.add("adopt_agent_entry_dropped");
       continue;
     }
-    let kt = parentAgentId === undefined ? 0 : depthOfParked.get(parentAgentId);
+    let parentDepth = parentAgentId === undefined ? 0 : depthOfParked.get(parentAgentId);
     let owner =
-      parentAgentId !== undefined && kt !== undefined ? identityAgentId2(parentAgentId) : mainAgentId();
-    let Ot = await takeUpCarriedAgentSafe(ze, kt, carriedAgentsContext);
-    if (typeof Ot !== "string") {
-      Re.add(agentId);
-      He.delete(agentId);
-      Be.delete(agentId);
-      ke.push(Ot);
-    } else if (Ot === "toldOfLink") {
-      if (parentAgentId === undefined) Be.add(agentId);
-    } else if (He.get(agentId)?.outcome !== "leftToReconcile")
-      He.set(agentId, {
+      parentAgentId !== undefined && parentDepth !== undefined
+        ? identityAgentId2(parentAgentId)
+        : mainAgentId();
+    let outcome = await takeUpCarriedAgentSafe(agent, parentDepth, carriedAgentsContext);
+    if (typeof outcome !== "string") {
+      takenUp.add(agentId);
+      failuresByAgent.delete(agentId);
+      reported.delete(agentId);
+      registered.push(outcome);
+    } else if (outcome === "toldOfLink") {
+      if (parentAgentId === undefined) reported.add(agentId);
+    } else if (failuresByAgent.get(agentId)?.outcome !== "leftToReconcile")
+      failuresByAgent.set(agentId, {
         owner,
-        outcome: Ot,
+        outcome,
       });
   }
-  let We = new Map();
-  for (let [ze, { owner: Xe, outcome: rt }] of He) {
-    if (rt === "leftToReconcile") continue;
-    if (rt === "handedBack") carriedAgentsContext.telemetryFailureCodes.add("adopt_agent_not_vouched");
-    We.set(Xe, [...(We.get(Xe) ?? []), ze]);
-    if (Xe === mainAgentId()) Be.add(ze);
+  let failuresByOwner = new Map();
+  for (let [agentId, { owner, outcome }] of failuresByAgent) {
+    if (outcome === "leftToReconcile") continue;
+    if (outcome === "handedBack") carriedAgentsContext.telemetryFailureCodes.add("adopt_agent_not_vouched");
+    failuresByOwner.set(owner, [...(failuresByOwner.get(owner) ?? []), agentId]);
+    if (owner === mainAgentId()) reported.add(agentId);
   }
-  for (let [agentId, Xe] of We) adoptFailureSummary(agentId, Xe, queue);
+  for (let [agentId, agentIds] of failuresByOwner) adoptFailureSummary(agentId, agentIds, queue);
   for (let telemetryFailureCode of carriedAgentsContext.telemetryFailureCodes)
     logFeatureSad("task_local_agent", telemetryFailureCode);
   return {
-    registered: ke,
-    reported: Be,
+    registered,
+    reported,
   };
 }
 //@ chunk-18hwfzwa.js:325336-325446 placement
@@ -106,9 +111,9 @@ var createCarriedAgentsContext = (fork, queue) => ({
   telemetryFailureCodes: new Set(),
 });
 //@ chunk-18hwfzwa.js:325446-325581 placement
-async function takeUpCarriedAgentSafe(agent, x, context) {
+async function takeUpCarriedAgentSafe(agent, parentDepth, context) {
   try {
-    return await takeUpCarriedAgent(agent, x, context);
+    return await takeUpCarriedAgent(agent, parentDepth, context);
   } catch (error) {
     context.telemetryFailureCodes.add("adopt_take_up_threw");
     logError(error);
@@ -119,45 +124,56 @@ async function takeUpCarriedAgentSafe(agent, x, context) {
 /**
  * 决定一个随后台会话带过来的子代理如何处理：父会话未启动过它、已完成、已停止且未复活时交还（handedBack）；元数据与父代理一致时链接其转录并接管；否则留待对账。
  */
-async function takeUpCarriedAgent(agent, x, context) {
+async function takeUpCarriedAgent(agent, parentDepth, context) {
   let { agentId, parentAgentId } = agent;
-  if (x === undefined) return classifyUnclaimedAgent(agentId, context);
+  if (parentDepth === undefined) return classifyUnclaimedAgent(agentId, context);
   let ownerLaunchPlan = await getOwnerLaunchPlan(parentAgentId, context);
   if (!ownerLaunchPlan.launchedAgentIds.has(agentId))
     return parentAgentId === undefined ? "handedBack" : classifyUnclaimedAgent(agentId, context);
-  let Re = ownerLaunchPlan.asyncAgents.get(agentId);
+  let launchPlanAgent = ownerLaunchPlan.asyncAgents.get(agentId);
   let carriedAgentMetaPath = await findCarriedAgentMetaPath(agent);
-  let He =
+  let metadata =
     carriedAgentMetaPath === null
       ? null
       : await readAgentMetadataAtPath(carriedAgentMetaPath, context.fork.storageV5);
-  if (He?.finished !== undefined) return "handedBack";
-  let We = ownerLaunchPlan.stoppedAt.get(agentId);
-  let revivedAt = He?.revivedAt;
+  if (metadata?.finished !== undefined) return "handedBack";
+  let stoppedAt = ownerLaunchPlan.stoppedAt.get(agentId);
+  let revivedAt = metadata?.revivedAt;
   if (
     (ownerLaunchPlan.stoppedTaskIds.has(agentId) || ownerLaunchPlan.endedTaskIds.has(agentId)) &&
-    !(typeof revivedAt === "number" && We !== undefined && revivedAt > We && revivedAt <= Date.now())
+    !(
+      typeof revivedAt === "number" &&
+      stoppedAt !== undefined &&
+      revivedAt > stoppedAt &&
+      revivedAt <= Date.now()
+    )
   )
     return "handedBack";
-  return He !== null &&
-    (He.parentAgentId === parentAgentId ||
-      (He.parentAgentId === undefined && ownerLaunchPlan.launchedHereAgentIds.has(agentId)))
-    ? linkAdoptedAgentTranscripts(withCarriedDescription(agent, Re, carriedSpawnDepth(x, He)), Re, context)
+  return metadata !== null &&
+    (metadata.parentAgentId === parentAgentId ||
+      (metadata.parentAgentId === undefined && ownerLaunchPlan.launchedHereAgentIds.has(agentId)))
+    ? linkAdoptedAgentTranscripts(
+        withCarriedDescription(agent, launchPlanAgent, carriedSpawnDepth(parentDepth, metadata)),
+        launchPlanAgent,
+        context,
+      )
     : classifyUnclaimedAgent(agentId, context);
 }
 //@ chunk-18hwfzwa.js:326222-326470 placement
 async function findCarriedAgentMetaPath(agent) {
   if (agent.transcriptPath === undefined)
     return toAgentMetaPath(getAgentTranscriptPath(identityAgentId2(agent.agentId)));
-  let x = currentRestoreSource();
-  if (x === null) return null;
-  let D = join(
-    dirname(x.transcriptPath),
-    x.sessionId,
+  let restoreSource = currentRestoreSource();
+  if (restoreSource === null) return null;
+  let candidatePath = join(
+    dirname(restoreSource.transcriptPath),
+    restoreSource.sessionId,
     "subagents",
     basename(getAgentTranscriptPath(identityAgentId2(agent.agentId))),
   );
-  return (await realpathNativeAsync(D)) === agent.transcriptPath ? toAgentMetaPath(D) : null;
+  return (await realpathNativeAsync(candidatePath)) === agent.transcriptPath
+    ? toAgentMetaPath(candidatePath)
+    : null;
 }
 //@ chunk-18hwfzwa.js:326470-326580 placement
 async function classifyUnclaimedAgent(agentId, context) {
@@ -165,84 +181,88 @@ async function classifyUnclaimedAgent(agentId, context) {
   return asyncAgents.has(agentId) ? "leftToReconcile" : "handedBack";
 }
 //@ chunk-18hwfzwa.js:326580-326771 placement
-async function getOwnerLaunchPlan(h, x) {
-  let D = h ?? MAIN_OWNER_KEY;
-  let L = x.launchesByOwner.get(D);
-  if (L !== undefined) return L;
-  let ee;
+async function getOwnerLaunchPlan(ownerAgentId, context) {
+  let ownerKey = ownerAgentId ?? MAIN_OWNER_KEY;
+  let cachedPlan = context.launchesByOwner.get(ownerKey);
+  if (cachedPlan !== undefined) return cachedPlan;
+  let plan;
   try {
-    ee = planResumeOfBackgroundTasks(await getOwnerMessages(h, x.fork));
+    plan = planResumeOfBackgroundTasks(await getOwnerMessages(ownerAgentId, context.fork));
   } catch (error) {
     logError(error);
-    ee = planResumeOfBackgroundTasks([]);
+    plan = planResumeOfBackgroundTasks([]);
   }
-  x.launchesByOwner.set(D, ee);
-  return ee;
+  context.launchesByOwner.set(ownerKey, plan);
+  return plan;
 }
 //@ chunk-18hwfzwa.js:326771-326885 placement
-async function getOwnerMessages(h, fork) {
-  if (h === undefined) return fork.initialMessages;
-  return (await getAgentTranscript(identityAgentId2(h), fork.storageV5))?.messages ?? [];
+async function getOwnerMessages(ownerAgentId, fork) {
+  if (ownerAgentId === undefined) return fork.initialMessages;
+  return (await getAgentTranscript(identityAgentId2(ownerAgentId), fork.storageV5))?.messages ?? [];
 }
 //@ chunk-18hwfzwa.js:326885-327007 placement
-var toAgentMetaPath = (h) => h.replace(/\.jsonl$/, ".meta.json");
-var carriedSpawnDepth = (h, x) => Math.max(h + 1, Number.isInteger(x.spawnDepth) ? (x.spawnDepth ?? 0) : 0);
+var toAgentMetaPath = (path) => path.replace(/\.jsonl$/, ".meta.json");
+var carriedSpawnDepth = (parentDepth, agent) =>
+  Math.max(parentDepth + 1, Number.isInteger(agent.spawnDepth) ? (agent.spawnDepth ?? 0) : 0);
 //@ chunk-18hwfzwa.js:327007-327115 placement
-function carriedAgentDescription(h) {
-  return h?.launchedByAgentTool === true || h?.launchedByForkedSkill === true
-    ? sanitizeMetadataText(h?.description)
+function carriedAgentDescription(agent) {
+  return agent?.launchedByAgentTool === true || agent?.launchedByForkedSkill === true
+    ? sanitizeMetadataText(agent?.description)
     : undefined;
 }
 //@ chunk-18hwfzwa.js:327115-327257 placement
-var withCarriedDescription = (agent, x, spawnDepth) => ({
+var withCarriedDescription = (agent, launchPlanAgent, spawnDepth) => ({
   ...agent,
-  description: carriedAgentDescription(x),
+  description: carriedAgentDescription(launchPlanAgent),
   spawnDepth,
 });
-var withForkedSkillName = (h, x) => ({
-  ...h,
-  forkedSkillName: h.forkedSkillName ?? x.forkedSkillNameFromSidecar,
+var withForkedSkillName = (agent, linkResult) => ({
+  ...agent,
+  forkedSkillName: agent.forkedSkillName ?? linkResult.forkedSkillNameFromSidecar,
 });
 //@ chunk-18hwfzwa.js:327257-327669 placement
-async function linkAdoptedAgentTranscripts(h, x, context) {
+async function linkAdoptedAgentTranscripts(agent, launchPlanAgent, context) {
   let { taskRegistry, storageV5 } = context.fork;
   try {
     registerResumedAgentPlaceholder(
       withForkedSkillName(
-        h,
-        await linkAdoptedAgentTranscript(h, {
+        agent,
+        await linkAdoptedAgentTranscript(agent, {
           storageV5,
         }),
       ),
       taskRegistry,
     );
-    context.depthOfParked.set(h.agentId, h.spawnDepth ?? 0);
-    return h;
+    context.depthOfParked.set(agent.agentId, agent.spawnDepth ?? 0);
+    return agent;
   } catch (error) {
-    let Re = !classifyAdoptLinkFailure(h).emit && x !== undefined;
-    if (!Re) emitAdoptAgentFailed(h, "transcript link failed", taskRegistry, context.queue);
+    let silent = !classifyAdoptLinkFailure(agent).emit && launchPlanAgent !== undefined;
+    if (!silent) emitAdoptAgentFailed(agent, "transcript link failed", taskRegistry, context.queue);
     context.telemetryFailureCodes.add("adopt_link_failed");
-    logForDebugging(`[adopt] agent ${h.agentId} skipped: ${error}`, {
+    logForDebugging(`[adopt] agent ${agent.agentId} skipped: ${error}`, {
       level: "warn",
     });
-    return Re ? "leftToReconcile" : "toldOfLink";
+    return silent ? "leftToReconcile" : "toldOfLink";
   }
 }
 //@ chunk-18hwfzwa.js:327669-327980 placement
-function adoptFailureSummary(agentId, x, D) {
-  for (let Be of x)
-    emitTaskNotification(Be, "failed", {
+function adoptFailureSummary(agentId, agentIds, queue) {
+  for (let agentId of agentIds)
+    emitTaskNotification(agentId, "failed", {
       summary: `Background agent ${CARRIED_NOT_RESUMED_TEXT}`,
     });
-  let joined = x
+  let joined = agentIds
     .slice(0, MAX_LISTED_CARRIED_AGENTS)
-    .map((Be) => Be.slice(-CARRIED_AGENT_ID_TAIL_CHARS))
+    .map((agentId) => agentId.slice(-CARRIED_AGENT_ID_TAIL_CHARS))
     .join(", ");
-  let ke = x.length > MAX_LISTED_CARRIED_AGENTS ? ` and ${x.length - MAX_LISTED_CARRIED_AGENTS} more` : "";
-  let Re = `Background agent (id ending ${joined}${ke})`;
-  enqueueCarriedAgentFailure(D, {
+  let moreText =
+    agentIds.length > MAX_LISTED_CARRIED_AGENTS
+      ? ` and ${agentIds.length - MAX_LISTED_CARRIED_AGENTS} more`
+      : "";
+  let subject = `Background agent (id ending ${joined}${moreText})`;
+  enqueueCarriedAgentFailure(queue, {
     taskId: "carried-agents",
-    summary: `${Re} ${CARRIED_NOT_RESUMED_TEXT}: ${CARRIED_UNCONFIRMED_TEXT}`,
+    summary: `${subject} ${CARRIED_NOT_RESUMED_TEXT}: ${CARRIED_UNCONFIRMED_TEXT}`,
     agentId,
   });
 }
@@ -250,26 +270,29 @@ function adoptFailureSummary(agentId, x, D) {
 var CANNOT_ASK_APPROVAL_NOTE =
   " This session's permission mode cannot ask for approval, so the run will not continue in this session unless that call is already allowed.";
 //@ chunk-18hwfzwa.js:328129-328739 placement
-function resumeCarriedWorkflow(h, x, messageQueue) {
+function resumeCarriedWorkflow(workflow, context, messageQueue) {
   try {
-    x.taskRegistry.remove(h.taskId);
+    context.taskRegistry.remove(workflow.taskId);
     if (
-      Object.values(x.taskRegistry.all()).some(
-        (Re) =>
-          Re.type === "local_workflow" && Re.status === "running" && Re.workflowRunId === h.workflowRunId,
+      Object.values(context.taskRegistry.all()).some(
+        (task) =>
+          task.type === "local_workflow" &&
+          task.status === "running" &&
+          task.workflowRunId === workflow.workflowRunId,
       )
     )
       return;
-    let ee = h.withholdScriptFromSdkEvents === true;
-    let ke = !ee && x.permissionMode === "dontAsk";
-    if (ee) x.toolState.get(HiddenScriptShaCache).scriptSha256ById.set(h.workflowRunId, "");
+    let withholdsScript = workflow.withholdScriptFromSdkEvents === true;
+    let cannotAsk = !withholdsScript && context.permissionMode === "dontAsk";
+    if (withholdsScript)
+      context.toolState.get(HiddenScriptShaCache).scriptSha256ById.set(workflow.workflowRunId, "");
     emitAdoptWorkflowFailed(
-      h,
-      ee
+      workflow,
+      withholdsScript
         ? "it hides its script, so what launched it starts it again"
         : "a carried workflow runs again only through the Workflow tool",
       messageQueue,
-      ke ? CANNOT_ASK_APPROVAL_NOTE : "",
+      cannotAsk ? CANNOT_ASK_APPROVAL_NOTE : "",
     );
     logFeatureSad("task_local_workflow", "adopt_resume_needs_consent");
   } catch (error) {
@@ -278,7 +301,13 @@ function resumeCarriedWorkflow(h, x, messageQueue) {
   }
 }
 //@ chunk-18hwfzwa.js:328739-328743 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:328739", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:328743-328747 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:328743", () => {
+  init_react_production();
+});
 export { reconcileCarriedAgents, resumeCarriedWorkflow };

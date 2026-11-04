@@ -9,10 +9,10 @@
  * attribution: callgraph-fingerprint 1, sole-consumer 1, fingerprint 2
  */
 import { replaceLineBreaks } from "../../../utils/permissions/approvalPayloadSerialization.js";
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../../../state/AppState.js";
 import { useIsScreenReaderEnabled } from "../../../ink/components/ErrorBoundary.js";
-import { y, R } from "../../../../vendor/react/cjs/react.production.js";
+import { useState, useRef } from "../../../../vendor/react/cjs/react.production.js";
 import { useEditorMode } from "../../../utils/subagentStatusLine.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import { resolveEditorCommand } from "../../../utils/editor.js";
@@ -47,12 +47,12 @@ function selectToolPermissionContextMode(s) {
   return s.toolPermissionContext.mode;
 }
 //@ chunk-18hwfzwa.js:1287066-1287178 sole-consumer
-function toSelectOption(Hi) {
+function toSelectOption(option) {
   return {
     type: "text",
-    value: Hi.value,
-    label: Hi.displayLabel,
-    description: replaceLineBreaks(Hi.displayDescription),
+    value: option.value,
+    label: option.displayLabel,
+    description: replaceLineBreaks(option.displayDescription),
   };
 }
 //@ chunk-18hwfzwa.js:1287222-1287263 fingerprint = _temp4 (1)
@@ -61,7 +61,7 @@ function isNotOtherOption(v) {
 }
 //@ chunk-18hwfzwa.js:1287263-1293852 fingerprint = QuestionView (0.754)
 function QuestionView(props) {
-  let $ = w(76);
+  let $ = useMemoCache(76);
   let {
     wouldTakeAnswer,
     question,
@@ -86,51 +86,51 @@ function QuestionView(props) {
     onRemoveImage,
   } = props;
   let hideSubmitTab_2 = hideSubmitTab === undefined ? false : hideSubmitTab;
-  let so = useAppState(selectToolPermissionContextMode) === "plan";
+  let isPlanMode = useAppState(selectToolPermissionContextMode) === "plan";
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let [isFooterFocused, setIsFooterFocused] = y(false);
-  let [bo, Ao] = y(false);
+  let [isFooterFocused, setIsFooterFocused] = useState(false);
+  let [isEditorValue, setEditorValue] = useState(false);
   let editorMode = useEditorMode();
-  let [Ro, Ho] = y(null);
-  let takesEscape = Ro?.takesEscape ?? false;
-  let mn;
+  let [vimState, setVimState] = useState(null);
+  let takesEscape = vimState?.takesEscape ?? false;
+  let editorName;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     let editor = resolveEditorCommand();
-    mn = editor ? toIDEDisplayName(editor) : null;
-    $[0] = mn;
-  } else mn = $[0];
-  let No = mn;
-  let vo;
+    editorName = editor ? toIDEDisplayName(editor) : null;
+    $[0] = editorName;
+  } else editorName = $[0];
+  let editorName_2 = editorName;
+  let handleFocus;
   if ($[1] !== onTextInputFocus) {
-    vo = (value) => {
+    handleFocus = (value) => {
       let isOther = value === "__other__";
-      Ao(isOther);
+      setEditorValue(isOther);
       onTextInputFocus(isOther);
     };
     $[1] = onTextInputFocus;
-    $[2] = vo;
-  } else vo = $[2];
-  let handleFocus = vo;
-  let bn;
+    $[2] = handleFocus;
+  } else handleFocus = $[2];
+  let handleFocus_2 = handleFocus;
+  let focusFooter;
   if ($[3] === MEMO_CACHE_SENTINEL) {
-    bn = () => {
+    focusFooter = () => {
       setIsFooterFocused(true);
     };
-    $[3] = bn;
-  } else bn = $[3];
-  let handleDownFromLastItem = bn;
-  let hn;
+    $[3] = focusFooter;
+  } else focusFooter = $[3];
+  let handleDownFromLastItem = focusFooter;
+  let blurFooter;
   if ($[4] === MEMO_CACHE_SENTINEL) {
-    hn = () => {
+    blurFooter = () => {
       setIsFooterFocused(false);
     };
-    $[4] = hn;
-  } else hn = $[4];
-  let Mn = hn;
+    $[4] = blurFooter;
+  } else blurFooter = $[4];
+  let blurFooterHandler = blurFooter;
   let deferredPasteForwarding = useDeferredPasteForwarding(!isFooterFocused);
-  let Sn;
+  let onPaste;
   if ($[5] !== canPasteImage || $[6] !== deferredPasteForwarding || $[7] !== isFooterFocused) {
-    Sn = (event) => {
+    onPaste = (event) => {
       if (!isFooterFocused || !isForwardablePaste(event, canPasteImage)) {
         return;
       }
@@ -141,22 +141,26 @@ function QuestionView(props) {
     $[5] = canPasteImage;
     $[6] = deferredPasteForwarding;
     $[7] = isFooterFocused;
-    $[8] = Sn;
-  } else Sn = $[8];
-  let onPaste = Sn;
-  let cn = question.options.length + 1 + 1;
-  let Dn;
+    $[8] = onPaste;
+  } else onPaste = $[8];
+  let onPaste_2 = onPaste;
+  let chatRowNumber = question.options.length + 1 + 1;
+  let onKeyDown;
   if (
-    $[9] !== cn ||
+    $[9] !== chatRowNumber ||
     $[10] !== isFooterFocused ||
-    $[11] !== bo ||
+    $[11] !== isEditorValue ||
     $[12] !== isScreenReaderEnabled ||
     $[13] !== onCancel ||
     $[14] !== onRespondToClaude
   ) {
-    Dn = (e) => {
+    onKeyDown = (e) => {
       if (!isFooterFocused) {
-        if (!isScreenReaderEnabled && !bo && normalizeFullWidthDigits_2(e.key) === String(cn)) {
+        if (
+          !isScreenReaderEnabled &&
+          !isEditorValue &&
+          normalizeFullWidthDigits_2(e.key) === String(chatRowNumber)
+        ) {
           e.preventDefault();
           onRespondToClaude();
         }
@@ -164,10 +168,10 @@ function QuestionView(props) {
       }
       if (e.key === "up" || (e.ctrl && e.key === "p")) {
         e.preventDefault();
-        Mn();
+        blurFooterHandler();
         return;
       }
-      if (e.key === "return" || normalizeFullWidthDigits_2(e.key) === String(cn)) {
+      if (e.key === "return" || normalizeFullWidthDigits_2(e.key) === String(chatRowNumber)) {
         e.preventDefault();
         onRespondToClaude();
         return;
@@ -177,27 +181,27 @@ function QuestionView(props) {
         onCancel();
       }
     };
-    $[9] = cn;
+    $[9] = chatRowNumber;
     $[10] = isFooterFocused;
-    $[11] = bo;
+    $[11] = isEditorValue;
     $[12] = isScreenReaderEnabled;
     $[13] = onCancel;
     $[14] = onRespondToClaude;
-    $[15] = Dn;
-  } else Dn = $[15];
-  let onKeyDown = Dn;
+    $[15] = onKeyDown;
+  } else onKeyDown = $[15];
+  let onKeyDown_2 = onKeyDown;
   let textOptions = question.options.map(toSelectOption);
   let key = question.key;
   let questionState = questionStates[key];
-  let Zn = R(null);
-  let Un;
+  let lastTypedRef = useRef(null);
+  let onOpenEditor;
   if (
     $[16] !== onUpdateQuestionState ||
     $[17] !== question.multiSelect ||
     $[18] !== key ||
     $[19] !== wouldTakeAnswer
   ) {
-    Un = async (currentValue, setValue) => {
+    onOpenEditor = async (currentValue, setValue) => {
       if (!wouldTakeAnswer()) {
         return;
       }
@@ -221,9 +225,9 @@ function QuestionView(props) {
     $[17] = question.multiSelect;
     $[18] = key;
     $[19] = wouldTakeAnswer;
-    $[20] = Un;
-  } else Un = $[20];
-  let onOpenEditor = Un;
+    $[20] = onOpenEditor;
+  } else onOpenEditor = $[20];
+  let onOpenEditor_2 = onOpenEditor;
   const placeholder = question.multiSelect ? "Type something" : "Type something.";
   const initialValue = questionState?.textInputValue ?? "";
   let vimEditing;
@@ -231,7 +235,7 @@ function QuestionView(props) {
     vimEditing = editorMode
       ? {
           takesEscape,
-          onStateChange: Ho,
+          onStateChange: setVimState,
         }
       : undefined;
     $[21] = editorMode;
@@ -249,7 +253,7 @@ function QuestionView(props) {
       if (!wouldTakeAnswer()) {
         return false;
       }
-      Zn.current = {
+      lastTypedRef.current = {
         question: key,
         value,
       };
@@ -267,9 +271,9 @@ function QuestionView(props) {
     $[27] = wouldTakeAnswer;
     $[28] = onChange;
   } else onChange = $[28];
-  let Ur;
+  let otherOption;
   if ($[29] !== initialValue || $[30] !== vimEditing || $[31] !== onChange || $[32] !== placeholder) {
-    Ur = {
+    otherOption = {
       type: "input",
       value: "__other__",
       label: "Other",
@@ -283,12 +287,12 @@ function QuestionView(props) {
     $[30] = vimEditing;
     $[31] = onChange;
     $[32] = placeholder;
-    $[33] = Ur;
-  } else Ur = $[33];
-  let Zr = Ur;
-  let wr;
+    $[33] = otherOption;
+  } else otherOption = $[33];
+  let otherOption_2 = otherOption;
+  let chatOption;
   if ($[34] !== isScreenReaderEnabled || $[35] !== question.multiSelect) {
-    wr =
+    chatOption =
       isScreenReaderEnabled && !question.multiSelect
         ? [
             {
@@ -300,12 +304,12 @@ function QuestionView(props) {
         : [];
     $[34] = isScreenReaderEnabled;
     $[35] = question.multiSelect;
-    $[36] = wr;
-  } else wr = $[36];
-  let zr = wr;
-  let options = [...textOptions, Zr, ...zr];
+    $[36] = chatOption;
+  } else chatOption = $[36];
+  let chatOption_2 = chatOption;
+  let options = [...textOptions, otherOption_2, ...chatOption_2];
   if (!question.multiSelect && question.options.some(hasOptionPreview) && !isScreenReaderEnabled) {
-    let $r;
+    let previewView;
     if (
       $[37] !== answers ||
       $[38] !== currentQuestionIndex ||
@@ -323,7 +327,7 @@ function QuestionView(props) {
       $[50] !== questions ||
       $[51] !== wouldTakeAnswer
     ) {
-      $r = jsxProd_default(PreviewQuestionView, {
+      previewView = jsxProd_default(PreviewQuestionView, {
         wouldTakeAnswer,
         question,
         questions,
@@ -355,14 +359,14 @@ function QuestionView(props) {
       $[49] = questionStates;
       $[50] = questions;
       $[51] = wouldTakeAnswer;
-      $[52] = $r;
-    } else $r = $[52];
-    return $r;
+      $[52] = previewView;
+    } else previewView = $[52];
+    return previewView;
   }
-  let $r;
-  if ($[53] !== so || $[54] !== planFilePath) {
-    $r =
-      so &&
+  let planBar;
+  if ($[53] !== isPlanMode || $[54] !== planFilePath) {
+    planBar =
+      isPlanMode &&
       planFilePath &&
       jsxProd_default_2(Box, {
         flexDirection: "column",
@@ -382,25 +386,25 @@ function QuestionView(props) {
           }),
         ],
       });
-    $[53] = so;
+    $[53] = isPlanMode;
     $[54] = planFilePath;
-    $[55] = $r;
-  } else $r = $[55];
-  let Yr;
+    $[55] = planBar;
+  } else planBar = $[55];
+  let topDivider;
   if ($[56] === MEMO_CACHE_SENTINEL) {
-    Yr = jsxProd_default(Divider, {
+    topDivider = jsxProd_default(Divider, {
       color: "inactive",
     });
-    $[56] = Yr;
-  } else Yr = $[56];
-  let Er;
+    $[56] = topDivider;
+  } else topDivider = $[56];
+  let navBar;
   if (
     $[57] !== answers ||
     $[58] !== currentQuestionIndex ||
     $[59] !== hideSubmitTab_2 ||
     $[60] !== questions
   ) {
-    Er = jsxProd_default(QuestionNavigationBar, {
+    navBar = jsxProd_default(QuestionNavigationBar, {
       questions,
       currentQuestionIndex,
       answers,
@@ -410,8 +414,8 @@ function QuestionView(props) {
     $[58] = currentQuestionIndex;
     $[59] = hideSubmitTab_2;
     $[60] = questions;
-    $[61] = Er;
-  } else Er = $[61];
+    $[61] = navBar;
+  } else navBar = $[61];
   let children;
   if ($[62] !== question.displayBody || $[63] !== question.displayQuestion.text) {
     children =
@@ -436,27 +440,27 @@ function QuestionView(props) {
     $[63] = question.displayQuestion.text;
     $[64] = children;
   } else children = $[64];
-  let ms;
+  let questionBlock;
   if ($[65] !== question.displayQuestion.needsGutter || $[66] !== children) {
-    ms = jsxProd_default(Blockquote, {
+    questionBlock = jsxProd_default(Blockquote, {
       multiline: question.displayQuestion.needsGutter,
       children,
     });
     $[65] = question.displayQuestion.needsGutter;
     $[66] = children;
-    $[67] = ms;
-  } else ms = $[67];
-  let oi;
+    $[67] = questionBlock;
+  } else questionBlock = $[67];
+  let footerHints;
   if (
-    $[68] !== cn ||
+    $[68] !== chatRowNumber ||
     $[69] !== isFooterFocused ||
-    $[70] !== bo ||
+    $[70] !== isEditorValue ||
     $[71] !== isScreenReaderEnabled ||
-    $[72] !== Ro ||
+    $[72] !== vimState ||
     $[73] !== takesEscape ||
     $[74] !== questions
   ) {
-    oi =
+    footerHints =
       !isScreenReaderEnabled &&
       jsxProd_default_2(Fragment, {
         children: [
@@ -480,7 +484,7 @@ function QuestionView(props) {
                       }),
                   jsxProd_default_2(Text, {
                     color: isFooterFocused ? "suggestion" : undefined,
-                    children: [cn, ". Chat about this"],
+                    children: [chatRowNumber, ". Chat about this"],
                   }),
                 ],
               }),
@@ -493,10 +497,10 @@ function QuestionView(props) {
               dimColor: true,
               children: jsxProd_default_2(Byline, {
                 children: [
-                  Ro &&
-                    Ro.mode !== "NORMAL" &&
+                  vimState &&
+                    vimState.mode !== "NORMAL" &&
                     jsxProd_default_2(Text, {
-                      children: ["-- ", Ro.mode, " --"],
+                      children: ["-- ", vimState.mode, " --"],
                     }),
                   jsxProd_default(KeyboardShortcutHint, {
                     chord: "enter",
@@ -510,11 +514,11 @@ function QuestionView(props) {
                     : jsxProd_default(Text, {
                         children: "Tab/Arrow keys to navigate",
                       }),
-                  bo &&
-                    No &&
+                  isEditorValue &&
+                    editorName_2 &&
                     jsxProd_default(KeyboardShortcutHint, {
                       chord: "ctrl+g",
-                      action: `edit in ${No}`,
+                      action: `edit in ${editorName_2}`,
                     }),
                   !takesEscape &&
                     jsxProd_default(KeyboardShortcutHint, {
@@ -527,31 +531,31 @@ function QuestionView(props) {
           }),
         ],
       });
-    $[68] = cn;
+    $[68] = chatRowNumber;
     $[69] = isFooterFocused;
-    $[70] = bo;
+    $[70] = isEditorValue;
     $[71] = isScreenReaderEnabled;
-    $[72] = Ro;
+    $[72] = vimState;
     $[73] = takesEscape;
     $[74] = questions;
-    $[75] = oi;
-  } else oi = $[75];
+    $[75] = footerHints;
+  } else footerHints = $[75];
   return jsxProd_default_2(Box, {
     flexDirection: "column",
     marginTop: 0,
     tabIndex: 0,
     autoFocus: true,
-    onKeyDown,
-    onPaste,
+    onKeyDown: onKeyDown_2,
+    onPaste: onPaste_2,
     children: [
-      $r,
-      Yr,
+      planBar,
+      topDivider,
       jsxProd_default_2(Box, {
         flexDirection: "column",
         paddingTop: 0,
         children: [
-          Er,
-          ms,
+          navBar,
+          questionBlock,
           jsxProd_default_2(Box, {
             flexDirection: "column",
             children: [
@@ -575,8 +579,8 @@ function QuestionView(props) {
                             true,
                           );
                           let textInput = values.includes("__other__")
-                            ? Zn.current?.question === key
-                              ? Zn.current.value
+                            ? lastTypedRef.current?.question === key
+                              ? lastTypedRef.current.value
                               : questionStates[key]?.textInputValue
                             : undefined;
                           let finalValues = values
@@ -584,7 +588,7 @@ function QuestionView(props) {
                             .concat(textInput ? [textInput] : []);
                           onAnswer(key, finalValues, undefined, false);
                         },
-                        onFocus: handleFocus,
+                        onFocus: handleFocus_2,
                         onCancel,
                         submitButtonText: currentQuestionIndex === questions.length - 1 ? "Submit" : "Next",
                         onSubmit: () => {
@@ -595,7 +599,7 @@ function QuestionView(props) {
                         },
                         onDownFromLastItem: handleDownFromLastItem,
                         isDisabled: isFooterFocused,
-                        onOpenEditor,
+                        onOpenEditor: onOpenEditor_2,
                         canPasteImage,
                         onImagePaste,
                         pastedContents,
@@ -627,12 +631,12 @@ function QuestionView(props) {
                             value === "__other__" ? questionStates[key]?.textInputValue : undefined;
                           onAnswer(key, value, textInput);
                         },
-                        onFocus: handleFocus,
+                        onFocus: handleFocus_2,
                         onCancel,
                         onDownFromLastItem: handleDownFromLastItem,
                         isDisabled: isFooterFocused,
                         layout: "compact-vertical",
-                        onOpenEditor,
+                        onOpenEditor: onOpenEditor_2,
                         canPasteImage,
                         onImagePaste,
                         pastedContents,
@@ -641,7 +645,7 @@ function QuestionView(props) {
                       question.key,
                     ),
               }),
-              oi,
+              footerHints,
             ],
           }),
         ],

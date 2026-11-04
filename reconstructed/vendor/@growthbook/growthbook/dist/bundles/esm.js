@@ -8,12 +8,12 @@
 import { promiseTimeout, getAutoExperimentChangeType } from "./esm.min.js";
 
 //@ chunk-aepeg2w5.js:6509-6567 esm-layout
-function pu() {
-  let e = null;
+function subscribe() {
+  let value = null;
   return {
-    get: () => e,
-    set: (n) => {
-      e = n;
+    get: () => value,
+    set: (value_2) => {
+      value = value_2;
     },
   };
 }
@@ -337,7 +337,7 @@ async function refreshFeatures(_ref4) {
   });
 }
 //@ chunk-aepeg2w5.js:11856-11925 esm-fingerprint
-function subscribe(instance) {
+function subscribe_2(instance) {
   let key = getKey(instance);
   let subs = subscribedInstances.get(key) || new Set();
   subs.add(instance);
@@ -640,7 +640,7 @@ function startStreaming(instance, options) {
   if (options.streaming) {
     if (!instance.getClientKey()) throw Error("Must specify clientKey to enable streaming");
     if (options.payload) startAutoRefresh(instance, true);
-    subscribe(instance);
+    subscribe_2(instance);
   }
 }
 //@ chunk-aepeg2w5.js:16136-16221 esm-fingerprint
@@ -1073,8 +1073,8 @@ function attribute(selector, attribute, mutate) {
   });
 }
 //@ chunk-aepeg2w5.js:21618-22416 esm-fingerprint
-function gM(e) {
-  var { selector, action, value, attribute: attr, parentSelector, insertBeforeSelector } = e;
+function declarative(_ref2) {
+  var { selector, action, value, attribute: attr, parentSelector, insertBeforeSelector } = _ref2;
   if (attr === "html") {
     if (action === "append")
       return html(selector, function (val) {
@@ -1121,14 +1121,14 @@ function gM(e) {
   return nullController;
 }
 //@ chunk-aepeg2w5.js:22416-22490 esm-fingerprint
-var _M = {
+var index = {
   html,
   classes,
   attribute,
   position,
-  declarative: gM,
+  declarative,
 };
-var K_ = _M;
+var experiments = index;
 //@ chunk-aepeg2w5.js:22490-22500 esm-layout
 var _regexCache = {};
 //@ chunk-aepeg2w5.js:22500-22773 esm-fingerprint
@@ -1897,9 +1897,9 @@ async function getAllStickyBucketAssignmentDocs(ctx, stickyBucketService, data) 
   return stickyBucketService.getAllAssignments(attributes);
 }
 //@ chunk-aepeg2w5.js:35176-35271 esm-fingerprint
-function getStickyBucketAttributes(ctx, n) {
+function getStickyBucketAttributes(ctx, assignments) {
   let attributes = {};
-  deriveStickyBucketIdentifierAttributes(ctx, n).forEach((attr) => {
+  deriveStickyBucketIdentifierAttributes(ctx, assignments).forEach((attr) => {
     let { hashValue } = getHashAttribute(ctx, attr);
     attributes[attr] = toString(hashValue);
   });
@@ -2611,7 +2611,7 @@ class GrowthBook {
     }
     if (changes.domMutations)
       changes.domMutations.forEach((mutation) => {
-        undo.push(K_.declarative(mutation).revert);
+        undo.push(experiments.declarative(mutation).revert);
       });
     return () => {
       undo.forEach((fn) => fn());
@@ -2637,4 +2637,4 @@ class GrowthBook {
     return !!this._options.enableDevMode;
   }
 }
-export { pu, getPolyfills, setPolyfills, helpers, GrowthBook };
+export { subscribe, getPolyfills, setPolyfills, helpers, GrowthBook };

@@ -15,7 +15,7 @@ import {
   discriminatedUnion,
   looseObject,
   literal,
-  string,
+  stringSchema,
   array,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { dedupeSessionStartRows, appendSessionStartRows } from "../../utils/transcript/deserialize.js";
@@ -33,6 +33,7 @@ import { markResumeHooksWaitShadow, recordHooksInitWait } from "../../utils/star
 import { env } from "../../utils/env.js";
 import { isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
 import { invalidateSessionEnvCache } from "../../utils/sessionEnvironment.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-tyg7f3ek.js:504394-504502 placement
 function logLateSessionStartHookFailure(error) {
@@ -45,9 +46,9 @@ function lateHookTimeoutMs() {
   return 1e4;
 }
 //@ chunk-tyg7f3ek.js:504527-504803 placement
-function holdSessionStartHookContent(e) {
-  if (e.type !== "attachment") return;
-  let attachment = e.attachment;
+function holdSessionStartHookContent(message) {
+  if (message.type !== "attachment") return;
+  let attachment = message.attachment;
   if (attachment.type === "hook_success" && attachment.content !== "")
     return createAttachmentMessage({
       ...attachment,
@@ -63,54 +64,57 @@ function holdSessionStartHookContent(e) {
   return;
 }
 //@ chunk-tyg7f3ek.js:504803-505069 placement
-var heldSessionStartRowSchema = DoctorLazy(() =>
-  discriminatedUnion("type", [
-    looseObject({
-      type: literal("hook_success"),
-      hookEvent: literal("SessionStart"),
-      hookName: string(),
-      content: literal(""),
-      heldContent: string().min(1),
-    }),
-    looseObject({
-      type: literal("hook_additional_context"),
-      hookEvent: literal("SessionStart"),
-      hookName: string(),
-      content: array(string()).length(0),
-      heldContent: array(string()).min(1),
-    }),
-  ]),
-);
+var heldSessionStartRowSchema; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-tyg7f3ek.js:504803", () => {
+  heldSessionStartRowSchema = DoctorLazy(() =>
+    discriminatedUnion("type", [
+      looseObject({
+        type: literal("hook_success"),
+        hookEvent: literal("SessionStart"),
+        hookName: stringSchema(),
+        content: literal(""),
+        heldContent: stringSchema().min(1),
+      }),
+      looseObject({
+        type: literal("hook_additional_context"),
+        hookEvent: literal("SessionStart"),
+        hookName: stringSchema(),
+        content: array(stringSchema()).length(0),
+        heldContent: array(stringSchema()).min(1),
+      }),
+    ]),
+  );
+});
 //@ chunk-tyg7f3ek.js:505069-505478 placement
-function releaseHeldSessionStartRow(e) {
-  if (e.type !== "attachment") return;
-  let n = heldSessionStartRowSchema().safeParse(e.attachment);
-  if (!n.success) return;
-  let attachment = e.attachment;
-  if (attachment.type === "hook_success" && n.data.type === "hook_success") {
-    let { heldContent, ...h } = attachment;
+function releaseHeldSessionStartRow(message) {
+  if (message.type !== "attachment") return;
+  let parsed = heldSessionStartRowSchema().safeParse(message.attachment);
+  if (!parsed.success) return;
+  let attachment = message.attachment;
+  if (attachment.type === "hook_success" && parsed.data.type === "hook_success") {
+    let { heldContent, ...rest } = attachment;
     return createAttachmentMessage({
-      ...h,
-      content: n.data.heldContent,
+      ...rest,
+      content: parsed.data.heldContent,
     });
   }
-  if (attachment.type === "hook_additional_context" && n.data.type === "hook_additional_context") {
-    let { heldContent, ...h } = attachment;
+  if (attachment.type === "hook_additional_context" && parsed.data.type === "hook_additional_context") {
+    let { heldContent, ...rest } = attachment;
     return createAttachmentMessage({
-      ...h,
-      content: n.data.heldContent,
+      ...rest,
+      content: parsed.data.heldContent,
     });
   }
   return;
 }
 //@ chunk-tyg7f3ek.js:505478-505752 placement
-function releaseHeldSessionStartRows(e) {
+function releaseHeldSessionStartRows(messages) {
   try {
-    let n = dedupeSessionStartRows(
-      e,
-      e.flatMap((r) => releaseHeldSessionStartRow(r) ?? []),
+    let released = dedupeSessionStartRows(
+      messages,
+      messages.flatMap((message) => releaseHeldSessionStartRow(message) ?? []),
     );
-    return n.length > 0 ? [n] : [];
+    return released.length > 0 ? [released] : [];
   } catch (error) {
     logFeatureBad("plugin_late_session_start_hooks", "held_rows_unreadable");
     logForDebugging(
@@ -123,23 +127,23 @@ function releaseHeldSessionStartRows(e) {
   }
 }
 //@ chunk-tyg7f3ek.js:505752-505996 placement
-function appendLateSessionStartRows({ conversation, append, waiting }, s) {
-  let h = dedupeSessionStartRows([...conversation(), ...waiting.flat()], s);
-  if (h.length === 0) return;
+function appendLateSessionStartRows({ conversation, append, waiting }, rows) {
+  let rowsToAppend = dedupeSessionStartRows([...conversation(), ...waiting.flat()], rows);
+  if (rowsToAppend.length === 0) return;
   if (isToolResultForToolUse(conversation())) {
-    waiting.push(h);
+    waiting.push(rowsToAppend);
     return;
   }
-  let mapped = h.map((R) => holdSessionStartHookContent(R));
-  let filtered = h.filter((R, w) => mapped[w] !== undefined);
+  let mapped = rowsToAppend.map((row) => holdSessionStartHookContent(row));
+  let filtered = rowsToAppend.filter((row, index) => mapped[index] !== undefined);
   if (filtered.length > 0) waiting.push(filtered);
-  append(h.map((R, w) => mapped[w] ?? R));
+  append(rowsToAppend.map((row, index) => mapped[index] ?? row));
 }
 //@ chunk-tyg7f3ek.js:505996-506054 placement
-function clearLateSessionStartRows(e, overdueSessionStartHooks) {
+function clearLateSessionStartRows(state, overdueSessionStartHooks) {
   overdueSessionStartHooks?.abort();
-  e.waiting.length = 0;
-  e.clears++;
+  state.waiting.length = 0;
+  state.clears++;
 }
 //@ chunk-tyg7f3ek.js:506054-506406 placement
 function flushWaitingSessionStartRows({ conversation, append, waiting }) {
@@ -148,9 +152,9 @@ function flushWaitingSessionStartRows({ conversation, append, waiting }) {
     logFeatureSad("plugin_late_session_start_hooks", "rows_wait_call_open");
     return;
   }
-  for (let s of waiting.splice(0))
+  for (let rows of waiting.splice(0))
     try {
-      append(dedupeSessionStartRows(conversation(), s));
+      append(dedupeSessionStartRows(conversation(), rows));
     } catch (error) {
       logFeatureBad("plugin_late_session_start_hooks", "overdue_append_failed");
       logForDebugging(`SessionStart hook output could not be appended (dropped): ${errorMessage(error)}`, {
@@ -162,31 +166,31 @@ function flushWaitingSessionStartRows({ conversation, append, waiting }) {
 /**
  * 新加载插件的 SessionStart 钩子在会话开始后补跑，并把输出作为附件行追加到转录。
  */
-function runLateSessionStartHooks(e) {
-  let { session, storageV5, credentials } = e;
-  let h;
+function runLateSessionStartHooks(state) {
+  let { session, storageV5, credentials } = state;
+  let owed;
   try {
-    h = owedSessionStartHooks();
+    owed = owedSessionStartHooks();
   } catch (error) {
     logFeatureBad("plugin_late_session_start_hooks", "listing_failed");
     logLateSessionStartHookFailure(error);
   }
-  if (h === undefined) return;
-  let { source, newPluginsOnly } = h;
-  let { clears } = e;
-  let w = false;
-  let P = false;
-  let L = (async () => {
+  if (owed === undefined) return;
+  let { source, newPluginsOnly } = owed;
+  let { clears } = state;
+  let finished = false;
+  let overtook = false;
+  let run = (async () => {
     try {
-      let q = await runStartupHooks(session, {
+      let rows = await runStartupHooks(session, {
         kind: "session-start",
         source,
         newPluginsOnly,
         storageV5,
         credentials,
       });
-      if (e.clears === clears) appendLateSessionStartRows(e, q);
-      if (P) logFeatureSad("plugin_late_session_start_hooks", "turn_went_ahead");
+      if (state.clears === clears) appendLateSessionStartRows(state, rows);
+      if (overtook) logFeatureSad("plugin_late_session_start_hooks", "turn_went_ahead");
       else logFeatureOk("plugin_late_session_start_hooks");
     } catch (error) {
       logFeatureBad("plugin_late_session_start_hooks", "dispatch_failed");
@@ -195,30 +199,30 @@ function runLateSessionStartHooks(e) {
   })()
     .catch(logLateSessionStartHookFailure)
     .finally(() => {
-      w = true;
+      finished = true;
     });
-  return withDeadline(L, lateHookTimeoutMs()).then(() => {
-    P = !w;
+  return withDeadline(run, lateHookTimeoutMs()).then(() => {
+    overtook = !finished;
   });
 }
 //@ chunk-tyg7f3ek.js:507003-507014 placement
 var RESUME_HOOK_WAIT_MS = 1e4;
 //@ chunk-tyg7f3ek.js:507014-507227 placement
-async function waitForResumeSessionStartHooks(e, n) {
-  let r = "empty_transcript";
-  if (e.messages.length > 0) {
-    r = "ended_in_time";
-    withDeadline(e.sessionStartHooks.promise, n).then(
-      (s) => {
-        if (s === undefined) r = lateHookWaitVerdict();
+async function waitForResumeSessionStartHooks(restored, timeoutMs) {
+  let verdict = "empty_transcript";
+  if (restored.messages.length > 0) {
+    verdict = "ended_in_time";
+    withDeadline(restored.sessionStartHooks.promise, timeoutMs).then(
+      (rows) => {
+        if (rows === undefined) verdict = lateHookWaitVerdict();
       },
       () => {},
     );
   }
   try {
-    return await appendSessionStartRows(e);
+    return await appendSessionStartRows(restored);
   } finally {
-    if (isDatadogAllowed()) markResumeHooksWaitShadow(r);
+    if (isDatadogAllowed()) markResumeHooksWaitShadow(verdict);
   }
 }
 //@ chunk-tyg7f3ek.js:507227-507324 placement
@@ -233,51 +237,53 @@ function lateHookWaitVerdict() {
 /**
  * resume 时按 CLAUDE_CODE_RESUME_SESSIONSTART_HOOKS_WAIT_MS 或托管策略等待 SessionStart 钩子结束。
  */
-async function maybeWaitForSessionStartHooks(e, n, r = RESUME_HOOK_WAIT_MS) {
-  let s = env.CLAUDE_CODE_RESUME_SESSIONSTART_HOOKS_WAIT_MS;
-  if (s === undefined && n !== undefined && isRemoteManagedEnvironment() && isDatadogAllowed())
-    return waitForResumeSessionStartHooks(e, r);
-  if (s === undefined || n === undefined || e.messages.length === 0) return appendSessionStartRows(e);
+async function maybeWaitForSessionStartHooks(restored, late, timeoutMs = RESUME_HOOK_WAIT_MS) {
+  let envTimeout = env.CLAUDE_CODE_RESUME_SESSIONSTART_HOOKS_WAIT_MS;
+  if (envTimeout === undefined && late !== undefined && isRemoteManagedEnvironment() && isDatadogAllowed())
+    return waitForResumeSessionStartHooks(restored, timeoutMs);
+  if (envTimeout === undefined || late === undefined || restored.messages.length === 0)
+    return appendSessionStartRows(restored);
   let startTime = performance.now();
-  let sessionStartHooks = e.sessionStartHooks;
-  if ((await withDeadline(sessionStartHooks.promise, s)) !== undefined) {
+  let sessionStartHooks = restored.sessionStartHooks;
+  if ((await withDeadline(sessionStartHooks.promise, envTimeout)) !== undefined) {
     logFeatureOk("hook_session_start_resume_wait");
-    return appendSessionStartRows(e);
+    return appendSessionStartRows(restored);
   }
-  let S = sessionStartWaitReason();
-  if (S !== undefined) {
-    logFeatureSad("hook_session_start_resume_wait", S);
+  let reason = sessionStartWaitReason();
+  if (reason !== undefined) {
+    logFeatureSad("hook_session_start_resume_wait", reason);
     logForDebugging(
-      `SessionStart hooks are still running after ${s} ms: waiting until they end, because an administrator's hook may be among them (${S})`,
+      `SessionStart hooks are still running after ${envTimeout} ms: waiting until they end, because an administrator's hook may be among them (${reason})`,
     );
-    return appendSessionStartRows(e);
+    return appendSessionStartRows(restored);
   }
   logFeatureSad("hook_session_start_resume_wait", "went_ahead");
   logForDebugging(
-    `SessionStart hooks are still running after ${s} ms: reading messages now, their output joins a later turn`,
+    `SessionStart hooks are still running after ${envTimeout} ms: reading messages now, their output joins a later turn`,
   );
   recordHooksInitWait(performance.now() - startTime, startTime);
-  sessionStartHooks.promise.finally(n.holdActivity());
-  let R = sessionStartHooks.progress === undefined ? [] : overtakeSessionStart(sessionStartHooks.progress);
-  let w = dedupeSessionStartRows(e.messages, R);
-  e.messages.push(...w);
-  let P = new Set(R);
-  n.overdue({
+  sessionStartHooks.promise.finally(late.holdActivity());
+  let overtaken =
+    sessionStartHooks.progress === undefined ? [] : overtakeSessionStart(sessionStartHooks.progress);
+  let rows = dedupeSessionStartRows(restored.messages, overtaken);
+  restored.messages.push(...rows);
+  let overtakenSet = new Set(overtaken);
+  late.overdue({
     ...sessionStartHooks,
-    promise: sessionStartHooks.promise.then((L) => L.filter((q) => !P.has(q))),
+    promise: sessionStartHooks.promise.then((rows) => rows.filter((row) => !overtakenSet.has(row))),
   });
-  return w;
+  return rows;
 }
 //@ chunk-tyg7f3ek.js:508277-508678 placement
-function appendSessionStartHooksWhenDone(e, overdueSessionStartHooks, r) {
-  let { clears } = e;
+function appendSessionStartHooksWhenDone(state, overdueSessionStartHooks, report) {
+  let { clears } = state;
   overdueSessionStartHooks.promise
-    .then((h) => {
-      if (e.clears !== clears) return;
+    .then((rows) => {
+      if (state.clears !== clears) return;
       invalidateSessionEnvCache();
-      appendLateSessionStartRows(e, h);
+      appendLateSessionStartRows(state, rows);
       if (overdueSessionStartHooks.progress?.lateInitialUserMessage)
-        r(overdueSessionStartHooks.progress.lateInitialUserMessage);
+        report(overdueSessionStartHooks.progress.lateInitialUserMessage);
     })
     .catch((error) => {
       logFeatureBad("hook_session_start_resume_wait", "late_rows_lost");

@@ -8,7 +8,7 @@
  * pieces: chunk-vrb44rx7.js (3)
  * attribution: sole-consumer 2, fingerprint 1
  */
-import { init_react_production, ce, y } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useCallback, useState } from "../../../vendor/react/cjs/react.production.js";
 import {
   jsxProd_default_2,
   jsxProd_default,
@@ -43,17 +43,21 @@ import { getMcpConfigByName } from "../../services/mcp/config.js";
 import { isConnectedOrCached } from "../../skills/bundled/scheduleRemoteAgents.js";
 import { CapabilitiesSection } from "./CapabilitiesSection.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-vrb44rx7.js:26810-26814 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vrb44rx7.js:26810", () => {
+  init_react_production();
+});
 //@ chunk-vrb44rx7.js:26814-27437 sole-consumer
 /**
  * stdio 服务器状态文字：disabled / connected（工具获取失败、无工具）/ connecting / failed。
  */
-function renderStdioServerStatus(client, serverToolsCount, k) {
+function renderStdioServerStatus(client, serverToolsCount, theme) {
   if (client.type === "disabled")
     return jsxProd_default_2(Text, {
-      children: [color("inactive", k)(figures_default.radioOff), " disabled"],
+      children: [color("inactive", theme)(figures_default.radioOff), " disabled"],
     });
   if (client.type === "connected") {
     if (client.toolsListError)
@@ -115,31 +119,32 @@ function MCPStdioServerMenu({
   onComplete,
   borderless = false,
 }) {
-  let D = ce(
-    (he, ...W) => onComplete(typeof he === "string" ? sanitizeTelemetryString(he) : he, ...W),
+  let complete = useCallback(
+    (message, ...rest) =>
+      onComplete(typeof message === "string" ? sanitizeTelemetryString(message) : message, ...rest),
     [onComplete],
   );
   let exitState = useAppStateSession();
-  let [L] = useTheme();
+  let [theme] = useTheme();
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let mcp = useAppState((he) => he.mcp);
+  let mcp = useAppState((state) => state.mcp);
   let reconnectMcpServer = useMcpReconnect();
   let toggleMcpServer = useMcpToggleEnabled();
-  let [isReconnecting, setIsReconnecting] = y(false);
-  let handleToggleEnabled = ce(async () => {
+  let [isReconnecting, setIsReconnecting] = useState(false);
+  let handleToggleEnabled = useCallback(async () => {
     let wasEnabled = server.client.type !== "disabled";
     try {
       await toggleMcpServer(server.name);
       onCancel();
     } catch (err) {
-      D(
+      complete(
         formatMcpOperationFailure(err, server.name, wasEnabled ? "disable" : "enable", {
           config: server.config,
           persistsOffBox: isBridgeOrTransport(exitState),
         }),
       );
     }
-  }, [server.client.type, server.name, server.config, toggleMcpServer, onCancel, D, exitState]);
+  }, [server.client.type, server.name, server.config, toggleMcpServer, onCancel, complete, exitState]);
   let capitalizedServerName = capitalize(String(server.name));
   let serverCommandsCount = filterMcpPromptsByServer(mcp.commands, server.name).length;
   let menuOptions = [];
@@ -231,7 +236,7 @@ function MCPStdioServerMenu({
                   jsxProd_default(Fragment, {
                     children: "Status:",
                   }),
-                  renderStdioServerStatus(server.client, serverToolsCount, L),
+                  renderStdioServerStatus(server.client, serverToolsCount, theme),
                 ],
               }),
               server.displayEndpoint !== mcpTransportType(server.config) &&
@@ -322,9 +327,9 @@ function MCPStdioServerMenu({
                 let { message } = handleReconnectResult(result, server.name, {
                   persistsOffBox: isBridgeOrTransport(exitState),
                 });
-                D?.(message);
+                complete?.(message);
               } catch (err) {
-                D?.(
+                complete?.(
                   handleReconnectError(err, server.name, {
                     config: server.config,
                     persistsOffBox: isBridgeOrTransport(exitState),

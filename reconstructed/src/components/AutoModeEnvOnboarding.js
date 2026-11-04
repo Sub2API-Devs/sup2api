@@ -27,9 +27,9 @@ import { hasNoticeImpression } from "./LogoV2/CondensedLogo.js";
 import { isActingAsBgJob } from "../utils/concurrentSessions.js";
 import { getIsRemoteMode } from "../bootstrap/state.js";
 import { env } from "../utils/env.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useClock } from "../ink/components/ClockContext.js";
-import { R, P } from "../../vendor/react/cjs/react.production.js";
+import { useRef, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import {
@@ -48,28 +48,28 @@ function logAutoModeEnvOnboardingShown() {
   }
 }
 //@ chunk-18hwfzwa.js:149150-149205 placement
-function clearAutoModeEnvPrompt(io) {
+function clearAutoModeEnvPrompt(state) {
   return {
-    ...io,
+    ...state,
     autoModeEnvSetup: undefined,
   };
 }
 //@ chunk-18hwfzwa.js:149205-149301 placement
-function dismissAutoModeEnvPrompt(so) {
+function dismissAutoModeEnvPrompt(state) {
   return {
-    ...so,
+    ...state,
     autoModeEnvSetup: {
-      ...so.autoModeEnvSetup,
+      ...state.autoModeEnvSetup,
       dismissedAt: Date.now(),
     },
   };
 }
 //@ chunk-18hwfzwa.js:149301-149387 placement
-function markAutoModeEnvPromptDismissed(po) {
+function markAutoModeEnvPromptDismissed(state) {
   return {
-    ...po,
+    ...state,
     autoModeEnvSetup: {
-      ...po.autoModeEnvSetup,
+      ...state.autoModeEnvSetup,
       dismissed: true,
     },
   };
@@ -123,33 +123,33 @@ function shouldShowAutoModeEnvOnboarding(state) {
 var AUTO_MODE_ENV_NOTICE_DEBOUNCE_MS = 500;
 //@ chunk-18hwfzwa.js:149947-151490 placement
 function AutoModeEnvOnboardingDialog(props) {
-  let $ = w(21);
+  let $ = useMemoCache(21);
   let { onAccept, onLater, onDismiss } = props;
   let clock = useClock();
-  let Re;
+  let now;
   if ($[0] !== clock) {
-    Re = clock.now();
+    now = clock.now();
     $[0] = clock;
-    $[1] = Re;
-  } else Re = $[1];
-  let Be = R(Re);
+    $[1] = now;
+  } else now = $[1];
+  let lastShownAtRef = useRef(now);
   let { storageV5 } = useTheme_2();
-  let We;
+  let shownDeps;
   if ($[2] === MEMO_CACHE_SENTINEL) {
-    We = [];
-    $[2] = We;
-  } else We = $[2];
-  P(logAutoModeEnvOnboardingShown, We);
-  let ze;
+    shownDeps = [];
+    $[2] = shownDeps;
+  } else shownDeps = $[2];
+  useEffect(logAutoModeEnvOnboardingShown, shownDeps);
+  let handleChoose;
   if ($[3] !== clock || $[4] !== onAccept || $[5] !== onDismiss || $[6] !== onLater || $[7] !== storageV5) {
-    ze = function It(Xe) {
-      let rt = clock.now();
-      let kt = Be.current;
-      Be.current = Math.max(rt, kt);
-      if (rt - kt < AUTO_MODE_ENV_NOTICE_DEBOUNCE_MS) {
+    handleChoose = function choice(now) {
+      let previousShownAt = clock.now();
+      let lastShownAt = lastShownAtRef.current;
+      lastShownAtRef.current = Math.max(previousShownAt, lastShownAt);
+      if (previousShownAt - lastShownAt < AUTO_MODE_ENV_NOTICE_DEBOUNCE_MS) {
         return;
       }
-      At: switch (Xe) {
+      At: switch (now) {
         case "accept": {
           logEvent("tengu_auto_mode_env_onboarding_accept", {});
           if (getGlobalConfig().autoModeEnvSetup) saveGlobalConfig(clearAutoModeEnvPrompt, storageV5);
@@ -174,26 +174,26 @@ function AutoModeEnvOnboardingDialog(props) {
     $[5] = onDismiss;
     $[6] = onLater;
     $[7] = storageV5;
-    $[8] = ze;
-  } else ze = $[8];
-  let It = ze;
+    $[8] = handleChoose;
+  } else handleChoose = $[8];
+  let choose = handleChoose;
   let onCancel;
-  if ($[9] !== It) {
-    onCancel = () => It("later");
-    $[9] = It;
+  if ($[9] !== choose) {
+    onCancel = () => choose("later");
+    $[9] = choose;
     $[10] = onCancel;
   } else onCancel = $[10];
-  let Et;
+  let introBox;
   if ($[11] === MEMO_CACHE_SENTINEL) {
-    Et = jsxProd_default(Box, {
+    introBox = jsxProd_default(Box, {
       flexDirection: "column",
       gap: 1,
       children: jsxProd_default(Text, {
         children: "Auto mode works better when it knows your environment. Takes about a minute.",
       }),
     });
-    $[11] = Et;
-  } else Et = $[11];
+    $[11] = introBox;
+  } else introBox = $[11];
   let options;
   if ($[12] === MEMO_CACHE_SENTINEL) {
     options = [
@@ -213,34 +213,34 @@ function AutoModeEnvOnboardingDialog(props) {
     $[12] = options;
   } else options = $[12];
   let onCancel_2;
-  if ($[13] !== It) {
-    onCancel_2 = () => It("later");
-    $[13] = It;
+  if ($[13] !== choose) {
+    onCancel_2 = () => choose("later");
+    $[13] = choose;
     $[14] = onCancel_2;
   } else onCancel_2 = $[14];
-  let oo;
-  if ($[15] !== It || $[16] !== onCancel_2) {
-    oo = jsxProd_default(ModelSelector, {
+  let selector;
+  if ($[15] !== choose || $[16] !== onCancel_2) {
+    selector = jsxProd_default(ModelSelector, {
       options,
-      onChange: It,
+      onChange: choose,
       onCancel: onCancel_2,
     });
-    $[15] = It;
+    $[15] = choose;
     $[16] = onCancel_2;
-    $[17] = oo;
-  } else oo = $[17];
-  let Xt;
-  if ($[18] !== onCancel || $[19] !== oo) {
-    Xt = jsxProd_default_2(Dialog, {
+    $[17] = selector;
+  } else selector = $[17];
+  let dialog;
+  if ($[18] !== onCancel || $[19] !== selector) {
+    dialog = jsxProd_default_2(Dialog, {
       title: "Teach auto mode about your environment?",
       onCancel,
-      children: [Et, oo],
+      children: [introBox, selector],
     });
     $[18] = onCancel;
-    $[19] = oo;
-    $[20] = Xt;
-  } else Xt = $[20];
-  return Xt;
+    $[19] = selector;
+    $[20] = dialog;
+  } else dialog = $[20];
+  return dialog;
 }
 export {
   shouldOfferAutoModeEnvOnboarding,

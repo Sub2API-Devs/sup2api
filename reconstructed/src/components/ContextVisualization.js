@@ -5,10 +5,11 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ContextVisualization.tsx
- * pieces: chunk-10q8r8ck.js (27), chunk-ag5x7vhf.js (5), chunk-e6aww6q8.js (1)
- * attribution: fingerprint 11, file-local 2, layout 7, callgraph-fingerprint 8, placement 3, sole-consumer 2
+ * pieces: chunk-10q8r8ck.js (27), chunk-e6aww6q8.js (1)
+ * attribution: fingerprint 10, file-local 2, layout 7, callgraph-fingerprint 8, placement 1
  */
 import { randomUUID } from "crypto";
+import { HostScoped } from "../utils/hostScoped.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -20,15 +21,24 @@ import { formatTokens, formatTokenEstimate } from "../utils/format.js";
 import { getDisplayPath } from "../utils/file.js";
 import { CLAUDE_AI_SYNC_LABEL } from "../utils/settings/commandSyncNames.js";
 import { getSourceDisplayName } from "../utils/settings/constants.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { plural } from "../utils/stringUtils.js";
 import { contextOverflowNotice } from "../commands/context/context-noninteractive.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { getPublicModelDisplayName } from "../utils/model/modelDisplay.js";
 import { generateContextSuggestions } from "../utils/contextSuggestions.js";
 import { ContextSuggestions } from "./ContextSuggestions.js";
-import { HostScoped } from "../utils/hostScoped.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-e6aww6q8.js:3505549-3505608 fingerprint = groupBySource (0.692)
+var groupBySource; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3505549", () => {
+  groupBySource = new HostScoped(() => ({
+    tokens: new WeakMap(),
+    next: 0,
+    host: randomUUID(),
+  }));
+});
 //@ chunk-10q8r8ck.js:17306-17394 fingerprint = _temp (1)
 function isTokenCategory(cat) {
   return (
@@ -139,14 +149,14 @@ function isUnloadedTool_2(t_4) {
   return !t_4.isLoaded;
 }
 //@ chunk-10q8r8ck.js:18298-18369 placement = createYogaLayoutNode (1)
-function renderNamedNode(fs, xs) {
+function renderNamedNode(node, key) {
   return jsxProd_default(
     TreeConnectors.Node,
     {
       dimColor: true,
-      children: fs.name,
+      children: node.name,
     },
-    xs,
+    key,
   );
 }
 //@ chunk-10q8r8ck.js:18369-18508 callgraph-fingerprint = _temp27 (0.279)
@@ -260,8 +270,8 @@ function renderSkillRow(skill, i_8) {
   );
 }
 //@ chunk-10q8r8ck.js:19177-19342 layout
-function renderSkillSourceGroup(a) {
-  let [Do, Ns] = a;
+function renderSkillSourceGroup(entry) {
+  let [sourceName, rows] = entry;
   return jsxProd_default_2(
     Box,
     {
@@ -270,15 +280,15 @@ function renderSkillSourceGroup(a) {
       children: [
         jsxProd_default(Text, {
           dimColor: true,
-          children: Do,
+          children: sourceName,
         }),
         jsxProd_default(TreeConnectors, {
           variant: "tree",
-          children: Ns.map(renderSkillRow),
+          children: rows.map(renderSkillRow),
         }),
       ],
     },
-    Do,
+    sourceName,
   );
 }
 //@ chunk-10q8r8ck.js:19342-19430 fingerprint = SOURCE_DISPLAY_ORDER (0.815)
@@ -309,62 +319,62 @@ function groupBySourceDisplayName(items) {
   for (let [key, group] of groups.entries())
     groups.set(
       key,
-      group.sort((u, c) => c.tokens - u.tokens),
+      group.sort((left, right) => right.tokens - left.tokens),
     );
-  let m = new Map();
+  let ordered = new Map();
   for (let source of CATEGORY_DISPLAY_ORDER) {
-    let l = groups.get(source);
-    if (l) m.set(source, l);
+    let group = groups.get(source);
+    if (group) ordered.set(source, group);
     let sorted = [...groups.keys()].filter((key) => key.startsWith(source + " (")).sort();
-    for (let c of sorted) m.set(c, groups.get(c));
+    for (let key of sorted) ordered.set(key, groups.get(key));
   }
-  for (let [i, l] of groups) if (!m.has(i)) m.set(i, l);
-  return m;
+  for (let [key, group] of groups) if (!ordered.has(key)) ordered.set(key, group);
+  return ordered;
 }
 //@ chunk-10q8r8ck.js:19872-20229 layout
 /**
  * 渲染折叠项摘要：数量加名词复数与 token 数。
  */
 function CollapsedCountSummary(props) {
-  let $ = w(9);
+  let $ = useMemoCache(9);
   let { count, noun, tokens } = props;
-  let u;
+  let noun_2;
   if ($[0] !== count || $[1] !== noun) {
-    u = plural(count, noun);
+    noun_2 = plural(count, noun);
     $[0] = count;
     $[1] = noun;
-    $[2] = u;
-  } else u = $[2];
-  let c;
+    $[2] = noun_2;
+  } else noun_2 = $[2];
+  let tokensText;
   if ($[3] !== tokens) {
-    c = formatTokens(tokens);
+    tokensText = formatTokens(tokens);
     $[3] = tokens;
-    $[4] = c;
-  } else c = $[4];
-  let x;
-  if ($[5] !== count || $[6] !== u || $[7] !== c) {
-    x = jsxProd_default(TreeConnectors, {
+    $[4] = tokensText;
+  } else tokensText = $[4];
+  let node;
+  if ($[5] !== count || $[6] !== noun_2 || $[7] !== tokensText) {
+    node = jsxProd_default(TreeConnectors, {
       variant: "tree",
       children: jsxProd_default_2(TreeConnectors.Node, {
         dimColor: true,
-        children: [count, " ", u, " \xB7 ", c, " tokens"],
+        children: [count, " ", noun_2, " \xB7 ", tokensText, " tokens"],
       }),
     });
     $[5] = count;
-    $[6] = u;
-    $[7] = c;
-    $[8] = x;
-  } else x = $[8];
-  return x;
+    $[6] = noun_2;
+    $[7] = tokensText;
+    $[8] = node;
+  } else node = $[8];
+  return node;
 }
 //@ chunk-10q8r8ck.js:20229-27146 fingerprint = ContextVisualization (0.419)
 /**
  * /context：按类别统计估算 token（系统提示、系统工具、MCP 工具、自定义 agent、记忆文件、技能、消息、自动压缩缓冲、空闲），用彩色格子图与明细树显示。
  */
 function ContextVisualization(props) {
-  let $ = w(129);
+  let $ = useMemoCache(129);
   let { data, collapseDetailSections } = props;
-  let i = collapseDetailSections === undefined ? false : collapseDetailSections;
+  let isCollapsed = collapseDetailSections === undefined ? false : collapseDetailSections;
   let {
     categories,
     totalTokens,
@@ -382,42 +392,42 @@ function ContextVisualization(props) {
     skills,
     messageBreakdown,
   } = data;
-  let po;
+  let deferredToolsCached;
   if ($[0] !== deferredBuiltinTools) {
-    po = deferredBuiltinTools === undefined ? [] : deferredBuiltinTools;
+    deferredToolsCached = deferredBuiltinTools === undefined ? [] : deferredBuiltinTools;
     $[0] = deferredBuiltinTools;
-    $[1] = po;
-  } else po = $[1];
-  let ze = po;
-  let fe;
-  let xe;
-  let ke;
-  let ye;
-  let To;
-  let P;
-  let ee;
-  let oe;
-  let Ce;
-  let te;
-  let he;
+    $[1] = deferredToolsCached;
+  } else deferredToolsCached = $[1];
+  let deferredTools = deferredToolsCached;
+  let DetailBox;
+  let UsageBox;
+  let OuterBox;
+  let hasDetails;
+  let hasDeferredTools;
+  let hasDeferredMcp;
+  let spaceElement;
+  let estimateLabel;
+  let categoryRows;
+  let freeSpaceRow;
+  let autocompactRow;
   let flexDirection;
   let gap;
-  let se;
+  let gridElement;
   let flexDirection_2;
   let paddingLeft;
-  let ne;
-  let ie;
+  let titleText;
+  let overflowNotice;
   let flexDirection_3;
   let gap_2;
   let flexShrink;
-  let ae;
-  let le;
-  let ce;
+  let modelDisplayName;
+  let modelIdText;
+  let tokenSummary;
   if (
     $[2] !== agents.length ||
     $[3] !== categories ||
     $[4] !== data ||
-    $[5] !== ze.length ||
+    $[5] !== deferredTools.length ||
     $[6] !== gridRows ||
     $[7] !== mcpTools.length ||
     $[8] !== memoryFiles.length ||
@@ -428,50 +438,50 @@ function ContextVisualization(props) {
     $[13] !== totalTokens
   ) {
     let visibleCategories = categories.filter(isTokenCategory);
-    let F;
+    let hasDeferredMcpCached;
     if ($[38] !== categories) {
-      F = categories.some(isDeferredMcpCategory);
+      hasDeferredMcpCached = categories.some(isDeferredMcpCategory);
       $[38] = categories;
-      $[39] = F;
-    } else F = $[39];
-    P = F;
-    To = ze.length > 0;
+      $[39] = hasDeferredMcpCached;
+    } else hasDeferredMcpCached = $[39];
+    hasDeferredMcp = hasDeferredMcpCached;
+    hasDeferredTools = deferredTools.length > 0;
     let autocompactCategory = categories.find(isMessagesCategory);
-    let _;
+    let overflowNoticeText;
     if ($[40] !== data) {
-      _ = contextOverflowNotice(data);
+      overflowNoticeText = contextOverflowNotice(data);
       $[40] = data;
-      $[41] = _;
-    } else _ = $[41];
-    let Me = _;
-    ye =
+      $[41] = overflowNoticeText;
+    } else overflowNoticeText = $[41];
+    let overflowNotice_2 = overflowNoticeText;
+    hasDetails =
       mcpTools.length > 0 ||
       agents.length > 0 ||
       memoryFiles.length > 0 ||
       (skills?.tokens ?? 0) > 0 ||
       false;
-    ke = Box;
+    OuterBox = Box;
     flexDirection_2 = "column";
     paddingLeft = 1;
     if ($[42] === MEMO_CACHE_SENTINEL) {
-      ne = jsxProd_default(Text, {
+      titleText = jsxProd_default(Text, {
         bold: true,
         children: "Context Usage",
       });
-      $[42] = ne;
-    } else ne = $[42];
-    if ($[43] !== Me) {
-      ie =
-        Me &&
+      $[42] = titleText;
+    } else titleText = $[42];
+    if ($[43] !== overflowNotice_2) {
+      overflowNotice =
+        overflowNotice_2 &&
         jsxProd_default(Text, {
           color: "error",
           wrap: "wrap",
-          children: Me,
+          children: overflowNotice_2,
         });
-      $[43] = Me;
-      $[44] = ie;
-    } else ie = $[44];
-    xe = Box;
+      $[43] = overflowNotice_2;
+      $[44] = overflowNotice;
+    } else overflowNotice = $[44];
+    UsageBox = Box;
     flexDirection = "row";
     gap = 2;
     let children;
@@ -481,75 +491,75 @@ function ContextVisualization(props) {
       $[46] = children;
     } else children = $[46];
     if ($[47] !== children) {
-      se = jsxProd_default(Box, {
+      gridElement = jsxProd_default(Box, {
         flexDirection: "column",
         flexShrink: 0,
         children,
       });
       $[47] = children;
-      $[48] = se;
-    } else se = $[48];
-    fe = Box;
+      $[48] = gridElement;
+    } else gridElement = $[48];
+    DetailBox = Box;
     flexDirection_3 = "column";
     gap_2 = 0;
     flexShrink = 0;
     if ($[49] !== model) {
-      ae =
+      modelDisplayName =
         getPublicModelDisplayName(model) &&
         jsxProd_default(Text, {
           children: getPublicModelDisplayName(model),
         });
       $[49] = model;
-      $[50] = ae;
-    } else ae = $[50];
+      $[50] = modelDisplayName;
+    } else modelDisplayName = $[50];
     if ($[51] !== model) {
-      le = jsxProd_default(Text, {
+      modelIdText = jsxProd_default(Text, {
         dimColor: true,
         children: model,
       });
       $[51] = model;
-      $[52] = le;
-    } else le = $[52];
-    let D;
+      $[52] = modelIdText;
+    } else modelIdText = $[52];
+    let usedTokensText;
     if ($[53] !== totalTokens) {
-      D = formatTokens(totalTokens);
+      usedTokensText = formatTokens(totalTokens);
       $[53] = totalTokens;
-      $[54] = D;
-    } else D = $[54];
-    let N;
+      $[54] = usedTokensText;
+    } else usedTokensText = $[54];
+    let maxTokensText;
     if ($[55] !== rawMaxTokens) {
-      N = formatTokens(rawMaxTokens);
+      maxTokensText = formatTokens(rawMaxTokens);
       $[55] = rawMaxTokens;
-      $[56] = N;
-    } else N = $[56];
-    if ($[57] !== percentage || $[58] !== D || $[59] !== N) {
-      ce = jsxProd_default_2(Text, {
+      $[56] = maxTokensText;
+    } else maxTokensText = $[56];
+    if ($[57] !== percentage || $[58] !== usedTokensText || $[59] !== maxTokensText) {
+      tokenSummary = jsxProd_default_2(Text, {
         dimColor: true,
-        children: [D, "/", N, " tokens (", percentage, "%)"],
+        children: [usedTokensText, "/", maxTokensText, " tokens (", percentage, "%)"],
       });
       $[57] = percentage;
-      $[58] = D;
-      $[59] = N;
-      $[60] = ce;
-    } else ce = $[60];
+      $[58] = usedTokensText;
+      $[59] = maxTokensText;
+      $[60] = tokenSummary;
+    } else tokenSummary = $[60];
     if ($[61] === MEMO_CACHE_SENTINEL) {
-      ee = jsxProd_default(Text, {
+      spaceElement = jsxProd_default(Text, {
         children: " ",
       });
-      oe = jsxProd_default(Text, {
+      estimateLabel = jsxProd_default(Text, {
         dimColor: true,
         italic: true,
         children: "Estimated usage by category",
       });
-      $[61] = ee;
-      $[62] = oe;
+      $[61] = spaceElement;
+      $[62] = estimateLabel;
     } else {
-      ee = $[61];
-      oe = $[62];
+      spaceElement = $[61];
+      estimateLabel = $[62];
     }
-    let z;
+    let renderCategoryRow;
     if ($[63] !== rawMaxTokens) {
-      z = (cat, index) => {
+      renderCategoryRow = (cat, index) => {
         let tokenDisplay = formatTokens(cat.tokens);
         let percentDisplay = cat.isDeferred ? "N/A" : `${((cat.tokens / rawMaxTokens) * 100).toFixed(1)}%`;
         let isReserved = cat.name === AUTOCOMPACT_BUFFER_CATEGORY;
@@ -576,11 +586,11 @@ function ContextVisualization(props) {
         );
       };
       $[63] = rawMaxTokens;
-      $[64] = z;
-    } else z = $[64];
-    Ce = visibleCategories.map(z);
+      $[64] = renderCategoryRow;
+    } else renderCategoryRow = $[64];
+    categoryRows = visibleCategories.map(renderCategoryRow);
     if ($[65] !== categories || $[66] !== rawMaxTokens) {
-      te =
+      freeSpaceRow =
         (categories.find(isFreeSpaceCategory)?.tokens ?? 0) > 0 &&
         jsxProd_default_2(Box, {
           children: [
@@ -605,9 +615,9 @@ function ContextVisualization(props) {
         });
       $[65] = categories;
       $[66] = rawMaxTokens;
-      $[67] = te;
-    } else te = $[67];
-    he =
+      $[67] = freeSpaceRow;
+    } else freeSpaceRow = $[67];
+    autocompactRow =
       autocompactCategory &&
       autocompactCategory.tokens > 0 &&
       jsxProd_default_2(Box, {
@@ -634,7 +644,7 @@ function ContextVisualization(props) {
     $[2] = agents.length;
     $[3] = categories;
     $[4] = data;
-    $[5] = ze.length;
+    $[5] = deferredTools.length;
     $[6] = gridRows;
     $[7] = mcpTools.length;
     $[8] = memoryFiles.length;
@@ -643,108 +653,123 @@ function ContextVisualization(props) {
     $[11] = rawMaxTokens;
     $[12] = skills?.tokens;
     $[13] = totalTokens;
-    $[14] = fe;
-    $[15] = xe;
-    $[16] = ke;
-    $[17] = ye;
-    $[18] = To;
-    $[19] = P;
-    $[20] = ee;
-    $[21] = oe;
-    $[22] = Ce;
-    $[23] = te;
-    $[24] = he;
+    $[14] = DetailBox;
+    $[15] = UsageBox;
+    $[16] = OuterBox;
+    $[17] = hasDetails;
+    $[18] = hasDeferredTools;
+    $[19] = hasDeferredMcp;
+    $[20] = spaceElement;
+    $[21] = estimateLabel;
+    $[22] = categoryRows;
+    $[23] = freeSpaceRow;
+    $[24] = autocompactRow;
     $[25] = flexDirection;
     $[26] = gap;
-    $[27] = se;
+    $[27] = gridElement;
     $[28] = flexDirection_2;
     $[29] = paddingLeft;
-    $[30] = ne;
-    $[31] = ie;
+    $[30] = titleText;
+    $[31] = overflowNotice;
     $[32] = flexDirection_3;
     $[33] = gap_2;
     $[34] = flexShrink;
-    $[35] = ae;
-    $[36] = le;
-    $[37] = ce;
+    $[35] = modelDisplayName;
+    $[36] = modelIdText;
+    $[37] = tokenSummary;
   } else {
-    fe = $[14];
-    xe = $[15];
-    ke = $[16];
-    ye = $[17];
-    To = $[18];
-    P = $[19];
-    ee = $[20];
-    oe = $[21];
-    Ce = $[22];
-    te = $[23];
-    he = $[24];
+    DetailBox = $[14];
+    UsageBox = $[15];
+    OuterBox = $[16];
+    hasDetails = $[17];
+    hasDeferredTools = $[18];
+    hasDeferredMcp = $[19];
+    spaceElement = $[20];
+    estimateLabel = $[21];
+    categoryRows = $[22];
+    freeSpaceRow = $[23];
+    autocompactRow = $[24];
     flexDirection = $[25];
     gap = $[26];
-    se = $[27];
+    gridElement = $[27];
     flexDirection_2 = $[28];
     paddingLeft = $[29];
-    ne = $[30];
-    ie = $[31];
+    titleText = $[30];
+    overflowNotice = $[31];
     flexDirection_3 = $[32];
     gap_2 = $[33];
     flexShrink = $[34];
-    ae = $[35];
-    le = $[36];
-    ce = $[37];
+    modelDisplayName = $[35];
+    modelIdText = $[36];
+    tokenSummary = $[37];
   }
-  let F;
+  let rightColumn;
   if (
-    $[68] !== fe ||
-    $[69] !== ee ||
-    $[70] !== oe ||
-    $[71] !== Ce ||
-    $[72] !== te ||
-    $[73] !== he ||
+    $[68] !== DetailBox ||
+    $[69] !== spaceElement ||
+    $[70] !== estimateLabel ||
+    $[71] !== categoryRows ||
+    $[72] !== freeSpaceRow ||
+    $[73] !== autocompactRow ||
     $[74] !== flexDirection_3 ||
     $[75] !== gap_2 ||
     $[76] !== flexShrink ||
-    $[77] !== ae ||
-    $[78] !== le ||
-    $[79] !== ce
+    $[77] !== modelDisplayName ||
+    $[78] !== modelIdText ||
+    $[79] !== tokenSummary
   ) {
-    F = jsxProd_default_2(fe, {
+    rightColumn = jsxProd_default_2(DetailBox, {
       flexDirection: flexDirection_3,
       gap: gap_2,
       flexShrink,
-      children: [ae, le, ce, ee, oe, Ce, te, he],
+      children: [
+        modelDisplayName,
+        modelIdText,
+        tokenSummary,
+        spaceElement,
+        estimateLabel,
+        categoryRows,
+        freeSpaceRow,
+        autocompactRow,
+      ],
     });
-    $[68] = fe;
-    $[69] = ee;
-    $[70] = oe;
-    $[71] = Ce;
-    $[72] = te;
-    $[73] = he;
+    $[68] = DetailBox;
+    $[69] = spaceElement;
+    $[70] = estimateLabel;
+    $[71] = categoryRows;
+    $[72] = freeSpaceRow;
+    $[73] = autocompactRow;
     $[74] = flexDirection_3;
     $[75] = gap_2;
     $[76] = flexShrink;
-    $[77] = ae;
-    $[78] = le;
-    $[79] = ce;
-    $[80] = F;
-  } else F = $[80];
-  let _;
-  if ($[81] !== xe || $[82] !== flexDirection || $[83] !== gap || $[84] !== se || $[85] !== F) {
-    _ = jsxProd_default_2(xe, {
+    $[77] = modelDisplayName;
+    $[78] = modelIdText;
+    $[79] = tokenSummary;
+    $[80] = rightColumn;
+  } else rightColumn = $[80];
+  let usageRow;
+  if (
+    $[81] !== UsageBox ||
+    $[82] !== flexDirection ||
+    $[83] !== gap ||
+    $[84] !== gridElement ||
+    $[85] !== rightColumn
+  ) {
+    usageRow = jsxProd_default_2(UsageBox, {
       flexDirection,
       gap,
-      children: [se, F],
+      children: [gridElement, rightColumn],
     });
-    $[81] = xe;
+    $[81] = UsageBox;
     $[82] = flexDirection;
     $[83] = gap;
-    $[84] = se;
-    $[85] = F;
-    $[86] = _;
-  } else _ = $[86];
-  let B;
+    $[84] = gridElement;
+    $[85] = rightColumn;
+    $[86] = usageRow;
+  } else usageRow = $[86];
+  let autocompactRowElement;
   if ($[87] !== autocompactSource || $[88] !== rawMaxTokens) {
-    B =
+    autocompactRowElement =
       autocompactSource !== "auto" &&
       jsxProd_default_2(Box, {
         marginTop: 1,
@@ -766,11 +791,11 @@ function ContextVisualization(props) {
       });
     $[87] = autocompactSource;
     $[88] = rawMaxTokens;
-    $[89] = B;
-  } else B = $[89];
-  let D;
-  if ($[90] !== i || $[91] !== P || $[92] !== mcpTools) {
-    D =
+    $[89] = autocompactRowElement;
+  } else autocompactRowElement = $[89];
+  let mcpToolsElement;
+  if ($[90] !== isCollapsed || $[91] !== hasDeferredMcp || $[92] !== mcpTools) {
+    mcpToolsElement =
       mcpTools.length > 0 &&
       jsxProd_default_2(Box, {
         flexDirection: "column",
@@ -784,15 +809,17 @@ function ContextVisualization(props) {
               }),
               jsxProd_default_2(Text, {
                 dimColor: true,
-                children: [" ", "\xB7 /mcp", P ? " (loaded on-demand)" : ""],
+                children: [" ", "\xB7 /mcp", hasDeferredMcp ? " (loaded on-demand)" : ""],
               }),
             ],
           }),
-          i
+          isCollapsed
             ? jsxProd_default(CollapsedCountSummary, {
                 count: mcpTools.length,
                 noun: "tool",
-                tokens: mcpTools.filter((mcpTool) => !P || mcpTool.isLoaded).reduce(addTokens, 0),
+                tokens: mcpTools
+                  .filter((mcpTool) => !hasDeferredMcp || mcpTool.isLoaded)
+                  .reduce(addTokens, 0),
               })
             : jsxProd_default_2(Fragment, {
                 children: [
@@ -811,7 +838,7 @@ function ContextVisualization(props) {
                         }),
                       ],
                     }),
-                  P &&
+                  hasDeferredMcp &&
                     mcpTools.some(isUnloadedTool) &&
                     jsxProd_default_2(Box, {
                       flexDirection: "column",
@@ -827,7 +854,7 @@ function ContextVisualization(props) {
                         }),
                       ],
                     }),
-                  !P &&
+                  !hasDeferredMcp &&
                     jsxProd_default(TreeConnectors, {
                       variant: "tree",
                       children: mcpTools.map(renderMcpToolDetailRow),
@@ -836,16 +863,16 @@ function ContextVisualization(props) {
               }),
         ],
       });
-    $[90] = i;
-    $[91] = P;
+    $[90] = isCollapsed;
+    $[91] = hasDeferredMcp;
     $[92] = mcpTools;
-    $[93] = D;
-  } else D = $[93];
-  const N = ((systemTools && systemTools.length > 0) || To) && false;
-  const z = systemPromptSections && systemPromptSections.length > 0 && false;
-  let be;
-  if ($[94] !== agents || $[95] !== i) {
-    be =
+    $[93] = mcpToolsElement;
+  } else mcpToolsElement = $[93];
+  const systemToolsElement = ((systemTools && systemTools.length > 0) || hasDeferredTools) && false;
+  const systemPromptElement = systemPromptSections && systemPromptSections.length > 0 && false;
+  let agentsElement;
+  if ($[94] !== agents || $[95] !== isCollapsed) {
+    agentsElement =
       agents.length > 0 &&
       jsxProd_default_2(Box, {
         flexDirection: "column",
@@ -863,7 +890,7 @@ function ContextVisualization(props) {
               }),
             ],
           }),
-          i
+          isCollapsed
             ? jsxProd_default(CollapsedCountSummary, {
                 count: agents.length,
                 noun: "agent",
@@ -873,12 +900,12 @@ function ContextVisualization(props) {
         ],
       });
     $[94] = agents;
-    $[95] = i;
-    $[96] = be;
-  } else be = $[96];
-  let Ae;
-  if ($[97] !== i || $[98] !== memoryFiles) {
-    Ae =
+    $[95] = isCollapsed;
+    $[96] = agentsElement;
+  } else agentsElement = $[96];
+  let memoryFilesElement;
+  if ($[97] !== isCollapsed || $[98] !== memoryFiles) {
+    memoryFilesElement =
       memoryFiles.length > 0 &&
       jsxProd_default_2(Box, {
         flexDirection: "column",
@@ -896,7 +923,7 @@ function ContextVisualization(props) {
               }),
             ],
           }),
-          i
+          isCollapsed
             ? jsxProd_default(CollapsedCountSummary, {
                 count: memoryFiles.length,
                 noun: "file",
@@ -908,13 +935,13 @@ function ContextVisualization(props) {
               }),
         ],
       });
-    $[97] = i;
+    $[97] = isCollapsed;
     $[98] = memoryFiles;
-    $[99] = Ae;
-  } else Ae = $[99];
-  let Re;
-  if ($[100] !== i || $[101] !== skills) {
-    Re =
+    $[99] = memoryFilesElement;
+  } else memoryFilesElement = $[99];
+  let skillsElement;
+  if ($[100] !== isCollapsed || $[101] !== skills) {
+    skillsElement =
       skills &&
       skills.tokens > 0 &&
       jsxProd_default_2(Box, {
@@ -933,7 +960,7 @@ function ContextVisualization(props) {
               }),
             ],
           }),
-          i
+          isCollapsed
             ? jsxProd_default(CollapsedCountSummary, {
                 count: skills.skillFrontmatter.length,
                 noun: "skill",
@@ -944,16 +971,16 @@ function ContextVisualization(props) {
               ),
         ],
       });
-    $[100] = i;
+    $[100] = isCollapsed;
     $[101] = skills;
-    $[102] = Re;
-  } else Re = $[102];
-  const je = messageBreakdown && false;
-  let Ee;
-  if ($[103] !== i || $[104] !== ye) {
-    Ee =
-      i &&
-      ye &&
+    $[102] = skillsElement;
+  } else skillsElement = $[102];
+  const messageBreakdownElement = messageBreakdown && false;
+  let expandHint;
+  if ($[103] !== isCollapsed || $[104] !== hasDetails) {
+    expandHint =
+      isCollapsed &&
+      hasDetails &&
       jsxProd_default(Box, {
         marginTop: 1,
         children: jsxProd_default(Text, {
@@ -961,221 +988,88 @@ function ContextVisualization(props) {
           children: "/context all to expand",
         }),
       });
-    $[103] = i;
-    $[104] = ye;
-    $[105] = Ee;
-  } else Ee = $[105];
-  let Pe;
+    $[103] = isCollapsed;
+    $[104] = hasDetails;
+    $[105] = expandHint;
+  } else expandHint = $[105];
+  let detailsElement;
   if (
-    $[106] !== B ||
-    $[107] !== D ||
-    $[108] !== N ||
-    $[109] !== z ||
-    $[110] !== be ||
-    $[111] !== Ae ||
-    $[112] !== Re ||
-    $[113] !== je ||
-    $[114] !== Ee
+    $[106] !== autocompactRowElement ||
+    $[107] !== mcpToolsElement ||
+    $[108] !== systemToolsElement ||
+    $[109] !== systemPromptElement ||
+    $[110] !== agentsElement ||
+    $[111] !== memoryFilesElement ||
+    $[112] !== skillsElement ||
+    $[113] !== messageBreakdownElement ||
+    $[114] !== expandHint
   ) {
-    Pe = jsxProd_default_2(Box, {
+    detailsElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginLeft: -1,
-      children: [B, D, N, z, be, Ae, Re, je, Ee],
+      children: [
+        autocompactRowElement,
+        mcpToolsElement,
+        systemToolsElement,
+        systemPromptElement,
+        agentsElement,
+        memoryFilesElement,
+        skillsElement,
+        messageBreakdownElement,
+        expandHint,
+      ],
     });
-    $[106] = B;
-    $[107] = D;
-    $[108] = N;
-    $[109] = z;
-    $[110] = be;
-    $[111] = Ae;
-    $[112] = Re;
-    $[113] = je;
-    $[114] = Ee;
-    $[115] = Pe;
-  } else Pe = $[115];
+    $[106] = autocompactRowElement;
+    $[107] = mcpToolsElement;
+    $[108] = systemToolsElement;
+    $[109] = systemPromptElement;
+    $[110] = agentsElement;
+    $[111] = memoryFilesElement;
+    $[112] = skillsElement;
+    $[113] = messageBreakdownElement;
+    $[114] = expandHint;
+    $[115] = detailsElement;
+  } else detailsElement = $[115];
   let suggestions;
   if ($[116] !== data) {
     suggestions = generateContextSuggestions(data);
     $[116] = data;
     $[117] = suggestions;
   } else suggestions = $[117];
-  let $e;
+  let suggestionsElement;
   if ($[118] !== suggestions) {
-    $e = jsxProd_default(ContextSuggestions, {
+    suggestionsElement = jsxProd_default(ContextSuggestions, {
       suggestions,
     });
     $[118] = suggestions;
-    $[119] = $e;
-  } else $e = $[119];
-  let fo;
+    $[119] = suggestionsElement;
+  } else suggestionsElement = $[119];
+  let rootElement;
   if (
-    $[120] !== ke ||
+    $[120] !== OuterBox ||
     $[121] !== flexDirection_2 ||
     $[122] !== paddingLeft ||
-    $[123] !== ne ||
-    $[124] !== ie ||
-    $[125] !== _ ||
-    $[126] !== Pe ||
-    $[127] !== $e
+    $[123] !== titleText ||
+    $[124] !== overflowNotice ||
+    $[125] !== usageRow ||
+    $[126] !== detailsElement ||
+    $[127] !== suggestionsElement
   ) {
-    fo = jsxProd_default_2(ke, {
+    rootElement = jsxProd_default_2(OuterBox, {
       flexDirection: flexDirection_2,
       paddingLeft,
-      children: [ne, ie, _, Pe, $e],
+      children: [titleText, overflowNotice, usageRow, detailsElement, suggestionsElement],
     });
-    $[120] = ke;
+    $[120] = OuterBox;
     $[121] = flexDirection_2;
     $[122] = paddingLeft;
-    $[123] = ne;
-    $[124] = ie;
-    $[125] = _;
-    $[126] = Pe;
-    $[127] = $e;
-    $[128] = fo;
-  } else fo = $[128];
-  return fo;
+    $[123] = titleText;
+    $[124] = overflowNotice;
+    $[125] = usageRow;
+    $[126] = detailsElement;
+    $[127] = suggestionsElement;
+    $[128] = rootElement;
+  } else rootElement = $[128];
+  return rootElement;
 }
-//@ chunk-ag5x7vhf.js:25016-25130 placement
-function renderScrollTestLine(k, _) {
-  return jsxProd_default_2(
-    Text,
-    {
-      dimColor: true,
-      children: [
-        "  ",
-        k.num,
-        k.text &&
-          jsxProd_default_2(Fragment, {
-            children: ["  ", k.indent, k.text],
-          }),
-      ],
-    },
-    _,
-  );
-}
-//@ chunk-ag5x7vhf.js:25130-25141 placement
-var SCROLL_TEST_LINE_COUNT = 200;
-//@ chunk-ag5x7vhf.js:25247-25541 fingerprint = _temp25 (0.357)
-/**
- * 全屏布局里的"scroll test"占位区块：生成固定行数的拉丁文编号行，用于测试滚动，关闭对话框后消失。
- */
-function ScrollTestFiller() {
-  let $ = w(2);
-  let h;
-  if ($[0] === MEMO_CACHE_SENTINEL) {
-    h = buildScrollTestLines(SCROLL_TEST_LINE_COUNT);
-    $[0] = h;
-  } else h = $[0];
-  let x = h;
-  let T;
-  if ($[1] === MEMO_CACHE_SENTINEL) {
-    T = jsxProd_default_2(Box, {
-      flexDirection: "column",
-      marginTop: 1,
-      children: [
-        jsxProd_default(Text, {
-          dimColor: true,
-          children: "\u2500\u2500 scroll test \u2014 disappears when you close the dialog \u2500\u2500",
-        }),
-        x.map(renderScrollTestLine),
-      ],
-    });
-    $[1] = T;
-  } else T = $[1];
-  return T;
-}
-//@ chunk-ag5x7vhf.js:25541-27152 sole-consumer
-/**
- * 滚动测试用的拉丁文填充文本。
- */
-var SCROLL_TEST_LOREM =
-  "Vivere omnes beate volunt sed ad pervidendum quid sit quod beatam vitam efficiat caligant et adeo non est facile consequi beatam vitam ut eo quisque ab ea longius recedat quo ad illam concitatius fertur si via lapsus est quae ubi in contrarium ducit ipsa velocitas maioris intervalli causa fit proponendum est itaque primum quid sit quod adpetamus tunc circumspiciendum qua contendere illo celerrime possimus intellecturi in ipso itinere si modo rectum erit quantum cotidie profligetur quantoque propius ab eo simus ad quod nos cupiditas naturalis inpellit quam diu quidem passim vagamur non ducem secuti sed fremitum et clamorem dissonum in diversa vocantium conteretur vita inter errores brevis etiam si dies noctesque bonae menti laboremus decernatur itaque et quo tendamus et qua non sine perito aliquo cui explorata sint ea in quae procedimus quoniam quidem non eadem hic quae in ceteris peregrinationibus condicio est in illis comprensus aliquis limes et interrogati incolae non patiuntur errare at hic tritissima quaeque via et celeberrima maxime decipit nihil ergo magis praestandum est quam ne pecorum ritu sequamur antecedentium gregem pergentes non quo eundum est sed quo itur atqui nulla res nos maioribus malis implicat quam quod ad rumorem componimur optima rati ea quae magno adsensu recepta sunt quodque exempla nobis pro bonis multa sunt nec ad rationem sed ad similitudinem vivimus ";
-var SCROLL_TEST_LINE_WIDTH = 56;
-var SCROLL_TEST_PARAGRAPH_SHAPES = [
-  {
-    lines: 1,
-    indent: 0,
-  },
-  {
-    lines: 5,
-    indent: 0,
-  },
-  {
-    lines: 3,
-    indent: 2,
-  },
-  {
-    lines: 2,
-    indent: 0,
-  },
-  {
-    lines: 7,
-    indent: 0,
-  },
-  {
-    lines: 4,
-    indent: 2,
-  },
-  {
-    lines: 1,
-    indent: 0,
-  },
-  {
-    lines: 6,
-    indent: 0,
-  },
-  {
-    lines: 2,
-    indent: 2,
-  },
-  {
-    lines: 3,
-    indent: 0,
-  },
-];
-//@ chunk-ag5x7vhf.js:27152-27597 sole-consumer
-/**
- * 用填充文本生成指定行数的滚动测试行，每行带行号。
- */
-function buildScrollTestLines(m) {
-  let parts = SCROLL_TEST_LOREM.trim().split(/\s+/);
-  let x = String(m).length;
-  let T = [];
-  let k = 0;
-  let _ = 0;
-  while (T.length < m) {
-    let I = SCROLL_TEST_PARAGRAPH_SHAPES[_ % SCROLL_TEST_PARAGRAPH_SHAPES.length];
-    _++;
-    let indent = " ".repeat(I.indent);
-    for (let idx = 0; idx < I.lines && T.length < m; idx++) {
-      let V = idx === I.lines - 1 ? 12 + ((_ * 11) % 28) : SCROLL_TEST_LINE_WIDTH;
-      let W = [];
-      let z = 0;
-      while (z < V) {
-        let K = parts[k % parts.length];
-        W.push(K);
-        z += K.length + 1;
-        k++;
-      }
-      T.push({
-        num: String(T.length + 1).padStart(x),
-        text: W.join(" "),
-        indent,
-      });
-    }
-    if (T.length < m)
-      T.push({
-        num: String(T.length + 1).padStart(x),
-        text: "",
-        indent: "",
-      });
-  }
-  return T;
-}
-//@ chunk-e6aww6q8.js:3505549-3505608 fingerprint = groupBySource (0.692)
-var groupBySource = new HostScoped(() => ({
-  tokens: new WeakMap(),
-  next: 0,
-  host: randomUUID(),
-}));
-export { ContextVisualization, groupBySource, ScrollTestFiller };
+export { ContextVisualization, groupBySource };

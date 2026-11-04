@@ -39,15 +39,15 @@ import { getChatFileRoots } from "../../utils/stageFileRoots.js";
 import { layeredReadVerdictForPaths } from "../../utils/permissions/filesystem.js";
 
 //@ chunk-eg496hkq.js:26949-27106 placement
-function unicodeNameMatcher(e, n, r) {
-  return (s, l) => {
-    let h = projectsPermissionContext(e, l, n, r);
+function unicodeNameMatcher(input, callOptions, toolContext) {
+  return (foundName, form) => {
+    let permissionKind = projectsPermissionContext(input, form, callOptions, toolContext);
     logEvent("tengu_projects_unicode_name_match", {
-      method: fromEnum(e.method),
-      form: fromEnum(l),
-      blocked_by: fromEnumOpt(h),
+      method: fromEnum(input.method),
+      form: fromEnum(form),
+      blocked_by: fromEnumOpt(permissionKind),
     });
-    return h === undefined;
+    return permissionKind === undefined;
   };
 }
 //@ chunk-eg496hkq.js:27106-29123 placement
@@ -96,7 +96,7 @@ var PROJECT_WRITE_RECOVERY_TEXT =
  */
 function classifySaveFailure({ cause, at }) {
   let status = cause instanceof ProjectsApiError ? cause.status : undefined;
-  let s =
+  let failureKind =
     status === undefined
       ? RETRYABLE_ERRNO_CODES.has(getErrnoCode(cause) ?? "")
         ? "may_pass"
@@ -108,35 +108,36 @@ function classifySaveFailure({ cause, at }) {
           : status === 0 || (status >= 400 && status < 500)
             ? "refused"
             : "unknown";
-  let l = "and offer it to them another way.";
-  if (s === "gone" || (s === "refused" && at === "no_doc"))
+  let fallbackOffer = "and offer it to them another way.";
+  if (failureKind === "gone" || (failureKind === "refused" && at === "no_doc"))
     return " Tell the user that the content was not saved, and offer it to them another way.";
-  let h = "Tell the user that the new content may not have been saved, and offer it to them another way.";
+  let maybeSavedNote =
+    "Tell the user that the new content may not have been saved, and offer it to them another way.";
   if (at === "no_doc")
-    return s === "may_pass"
+    return failureKind === "may_pass"
       ? " The content may not be in the project. Call project_read on this path: if it returns the content, the save went through late; if not, try the same project_write again, up to two retries in total. If it still fails, tell the user that it was not saved, and offer it to them another way."
       : " The content may not be in the project. Tell the user that it may not have been saved, and offer it to them another way.";
-  let w =
+  let noDeleteNote =
     "Do not delete it to retry: this tool cannot undo a delete, and if the retry failed too, the doc would be lost.";
-  if (s === "refused")
-    return ` This call changed nothing: the doc at this path is still there. ${w} Tell the user that this save did not go through, and offer the new content to them another way.`;
+  if (failureKind === "refused")
+    return ` This call changed nothing: the doc at this path is still there. ${noDeleteNote} Tell the user that this save did not go through, and offer the new content to them another way.`;
   if (at === "doc_beside_new") {
-    let y = `The old doc at this path was not removed. ${w} The new content may have been saved late as a second doc at this path.`;
-    return s === "may_pass"
-      ? ` ${y} ${PROJECT_WRITE_RECOVERY_TEXT} If that fails too, tell the user that the new content may not have been saved, and offer it to them another way.`
-      : ` ${y} ${h}`;
+    let oldDocNote = `The old doc at this path was not removed. ${noDeleteNote} The new content may have been saved late as a second doc at this path.`;
+    return failureKind === "may_pass"
+      ? ` ${oldDocNote} ${PROJECT_WRITE_RECOVERY_TEXT} If that fails too, tell the user that the new content may not have been saved, and offer it to them another way.`
+      : ` ${oldDocNote} ${maybeSavedNote}`;
   }
-  let m =
+  let staleDocNote =
     "The doc at this path was not removed: it holds its old content, or the new content if the save went through late.";
-  return s === "may_pass"
-    ? ` ${m} ${w} Try the same project_write again, up to two retries in total. If it still fails, tell the user that the new content was not saved, and offer it to them another way.`
-    : ` ${m} ${w} ${h}`;
+  return failureKind === "may_pass"
+    ? ` ${staleDocNote} ${noDeleteNote} Try the same project_write again, up to two retries in total. If it still fails, tell the user that the new content was not saved, and offer it to them another way.`
+    : ` ${staleDocNote} ${noDeleteNote} ${maybeSavedNote}`;
 }
 //@ chunk-eg496hkq.js:31539-31711 placement
-function assertKnowledgeCapacity(knowledgeStats, n) {
+function assertKnowledgeCapacity(knowledgeStats, byteSize) {
   if (knowledgeStats.max_knowledge_size <= 0) return;
-  let r = Math.ceil(n / BYTES_PER_KNOWLEDGE_TOKEN);
-  if (knowledgeStats.knowledge_size + r > knowledgeStats.max_knowledge_size)
+  let writeTokens = Math.ceil(byteSize / BYTES_PER_KNOWLEDGE_TOKEN);
+  if (knowledgeStats.knowledge_size + writeTokens > knowledgeStats.max_knowledge_size)
     throw new ProjectsPreconditionError(PROJECT_SIZE_LIMIT_TEXT, "write_would_exceed_project_size_limit");
 }
 //@ chunk-eg496hkq.js:31711-31829 placement
@@ -172,35 +173,35 @@ var LOCAL_PATH_REASONS = [
   "project_knowledge_full",
 ];
 //@ chunk-eg496hkq.js:32468-32502 placement
-function preconditionError(e, n) {
-  return new ProjectsPreconditionError(e, n);
+function preconditionError(message, reasonCode) {
+  return new ProjectsPreconditionError(message, reasonCode);
 }
 //@ chunk-eg496hkq.js:32502-32758 placement
-function logWriteByLocalPath(e, n, r = {}) {
+function logWriteByLocalPath(outcome, host, details = {}) {
   logEvent("tengu_projects_write_by_local_path", {
-    outcome: fromEnum(e),
-    reason: fromEnumOpt(r.reason),
-    failed_step: fromEnumOpt(r.failedStep),
-    read_from: fromEnum(n !== undefined ? "tool_container" : isDiskless() ? "none" : "local_disk"),
-    replaced: r.replaced,
-    saved_bytes: r.savedBytes,
+    outcome: fromEnum(outcome),
+    reason: fromEnumOpt(details.reason),
+    failed_step: fromEnumOpt(details.failedStep),
+    read_from: fromEnum(host !== undefined ? "tool_container" : isDiskless() ? "none" : "local_disk"),
+    replaced: details.replaced,
+    saved_bytes: details.savedBytes,
     via_ccr_bridge: isSessionJwtAuth(),
   });
 }
 //@ chunk-eg496hkq.js:32758-33095 placement
-function logWriteFailure(error, signal, r) {
-  let s = error instanceof ProjectSaveError ? error.cause : error;
-  if (signal.aborted) logWriteByLocalPath("cancelled", r);
-  else if (s instanceof ProjectsPreconditionError)
-    logWriteByLocalPath("refused", r, {
-      reason: LOCAL_PATH_REASONS.find((l) => l === s.reasonCode),
+function logWriteFailure(error, signal, host) {
+  let cause = error instanceof ProjectSaveError ? error.cause : error;
+  if (signal.aborted) logWriteByLocalPath("cancelled", host);
+  else if (cause instanceof ProjectsPreconditionError)
+    logWriteByLocalPath("refused", host, {
+      reason: LOCAL_PATH_REASONS.find((reason) => reason === cause.reasonCode),
     });
-  else if (s instanceof ProjectsApiError && s.errorCode === "project_knowledge_full")
-    logWriteByLocalPath("refused", r, {
+  else if (cause instanceof ProjectsApiError && cause.errorCode === "project_knowledge_full")
+    logWriteByLocalPath("refused", host, {
       reason: "project_knowledge_full",
     });
   else
-    logWriteByLocalPath("failed", r, {
+    logWriteByLocalPath("failed", host, {
       failedStep: error instanceof ProjectSaveError ? "save" : "other",
     });
 }
@@ -208,22 +209,22 @@ function logWriteFailure(error, signal, r) {
 /**
  * 校验并读取 project_write 的 local_path（绝对路径、长度、在 cwd 内、大小限制等）。
  */
-async function readLocalPathForWrite(localPath, n, r, s) {
+async function readLocalPathForWrite(localPath, host, toolContext, signal) {
   if (!isAbsolute(localPath) || localPath.length > MAX_SENSITIVE_PATH_LENGTH)
     throw preconditionError(
       `project_write: local_path must be an absolute path of at most ${MAX_SENSITIVE_PATH_LENGTH} characters in this session.`,
       isAbsolute(localPath) ? "local_path_too_long" : "local_path_not_absolute",
     );
-  if (n.ruleItCannotApply(r) !== undefined)
+  if (host.ruleItCannotApply(toolContext) !== undefined)
     throw preconditionError(LOCAL_PATH_UNAVAILABLE_TEXT, "local_path_not_available");
   if (isNotebookPath(resolve(localPath.trim())))
     throw preconditionError(
       "project_write: a notebook is not uploaded by local_path in this session. Pass its text as content.",
       "local_path_notebook",
     );
-  let l = await n.read(localPath, s);
-  if (l.ok && l.text.length <= LOCAL_READ_CHUNK_BYTES) return l.text;
-  switch (l.ok ? "over_the_cap" : l.code) {
+  let readResult = await host.read(localPath, signal);
+  if (readResult.ok && readResult.text.length <= LOCAL_READ_CHUNK_BYTES) return readResult.text;
+  switch (readResult.ok ? "over_the_cap" : readResult.code) {
     case "read_it_first":
       throw preconditionError(
         "project_write: Read the whole file at local_path first (again, if you read, wrote or edited it earlier in this chat), or pass its text as content.",
@@ -266,64 +267,72 @@ async function readLocalPathForWrite(localPath, n, r, s) {
 /**
  * 本地路径是否受保护（配置文件或敏感目录），受保护则拒绝上传。
  */
-async function isProtectedLocalPath(e, n, r) {
-  return r ? isUnderSandboxPath(n) || (await isInClaudeConfigDir(n)) : isCredentialPath(e, n);
+async function isProtectedLocalPath(localPath, resolvedPath, fromChatRoot) {
+  return fromChatRoot
+    ? isUnderSandboxPath(resolvedPath) || (await isInClaudeConfigDir(resolvedPath))
+    : isCredentialPath(localPath, resolvedPath);
 }
 //@ chunk-eg496hkq.js:35433-35579 placement
-function anyTrackedReadMatches(e, n, r) {
-  return e.some((s) => {
-    let l = n.get(s);
+function anyTrackedReadMatches(paths, readFileState, currentText) {
+  return paths.some((path) => {
+    let readState = readFileState.get(path);
     return (
-      hasFullFileContent(l) &&
-      (r === undefined ||
-        (l.readBaseline !== undefined
-          ? matchesContentDigest(l.readBaseline, stripBomAndCarriageReturn(r))
-          : matchesNormalizedContent(l, r)))
+      hasFullFileContent(readState) &&
+      (currentText === undefined ||
+        (readState.readBaseline !== undefined
+          ? matchesContentDigest(readState.readBaseline, stripBomAndCarriageReturn(currentText))
+          : matchesNormalizedContent(readState, currentText)))
     );
   });
 }
 //@ chunk-eg496hkq.js:35579-39443 placement
-async function writeFromLocalUploads(localPath, n, r) {
+async function writeFromLocalUploads(localPath, permissions, readFileState) {
   if (isDiskless()) throw preconditionError(LOCAL_PATH_UNAVAILABLE_TEXT, "local_path_not_available");
-  let s = (P) => (P.endsWith(sep) ? P : P + sep);
-  let l = resolve(getOriginalCwd());
-  let h = resolve(l, localPath);
-  let w =
-    r !== undefined &&
+  let withSep = (path) => (path.endsWith(sep) ? path : path + sep);
+  let cwd = resolve(getOriginalCwd());
+  let absolutePath = resolve(cwd, localPath);
+  let chatFileRoots =
+    readFileState !== undefined &&
     isClaudeAiChatOrigin() &&
     isFirstPartyRemoteSession(env.CLAUDE_CODE_REMOTE_SESSION_ID, env.CLAUDE_CODE_ENVIRONMENT_KIND)
       ? getChatFileRoots()
       : [];
-  let found = [l, ...w].find((P) => h === P || h.startsWith(s(P)));
+  let found = [cwd, ...chatFileRoots].find(
+    (root) => absolutePath === root || absolutePath.startsWith(withSep(root)),
+  );
   if (found === undefined)
     throw preconditionError(
       "project_write: local_path must be inside the working directory.",
       "local_path_outside_cwd",
     );
-  if (h.length > MAX_SENSITIVE_PATH_LENGTH)
+  if (absolutePath.length > MAX_SENSITIVE_PATH_LENGTH)
     throw preconditionError("project_write: no file exists at local_path.", "local_path_too_long");
-  let y =
+  let protectedRefusal =
     "project_write: local_path must not name a credential file, a device, or a file that Claude Code keeps for itself (its config and token folders).";
-  let j = (P) => {
-    let I = layeredReadVerdictForPaths([P], n(), {
+  let assertReadable = (path) => {
+    let verdict = layeredReadVerdictForPaths([path], permissions(), {
       refuseAutomounterShapes: true,
     });
     if (
-      I.layer !== "allow" &&
-      !(I.layer === "path-mode-ask" && I.decision.decisionReason?.type === "workingDir")
+      verdict.layer !== "allow" &&
+      !(verdict.layer === "path-mode-ask" && verdict.decision.decisionReason?.type === "workingDir")
     )
       throw preconditionError(
         "project_write: this session may not read the file at local_path without asking (a permission rule or setting, a network path, or links that cannot be followed), so it cannot be uploaded by path.",
         "local_path_read_needs_permission",
       );
   };
-  let x = found !== l && found === w[0];
-  if (await isProtectedLocalPath(h, h, x)) throw preconditionError(y, "local_path_protected_file");
-  j(h);
-  let b;
-  let L;
+  let outsideCwd = found !== cwd && found === chatFileRoots[0];
+  if (await isProtectedLocalPath(absolutePath, absolutePath, outsideCwd))
+    throw preconditionError(protectedRefusal, "local_path_protected_file");
+  assertReadable(absolutePath);
+  let realPath;
+  let realRoot;
   try {
-    [b, L] = await Promise.all([realpath(h), found !== l ? found : realpath(found)]);
+    [realPath, realRoot] = await Promise.all([
+      realpath(absolutePath),
+      found !== cwd ? found : realpath(found),
+    ]);
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR" || errnoCode === "ENAMETOOLONG")
@@ -335,26 +344,27 @@ async function writeFromLocalUploads(localPath, n, r) {
       );
     throw error;
   }
-  if (b !== L && !b.startsWith(s(L)))
+  if (realPath !== realRoot && !realPath.startsWith(withSep(realRoot)))
     throw Error("project_write: local_path resolves outside the working directory.");
-  if (await isProtectedLocalPath(h, b, x)) throw preconditionError(y, "local_path_protected_file");
-  j(b);
-  let W =
+  if (await isProtectedLocalPath(absolutePath, realPath, outsideCwd))
+    throw preconditionError(protectedRefusal, "local_path_protected_file");
+  assertReadable(realPath);
+  let readFirstRefusal =
     "project_write: Read the whole file at local_path first, or pass its text as content. Outside the working directory, a file is uploaded by path only when this session has read all of it and it has not changed since.";
-  let V = [h, b];
-  if (found !== l && V.some(isNotebookPath))
+  let trackedPaths = [absolutePath, realPath];
+  if (found !== cwd && trackedPaths.some(isNotebookPath))
     throw preconditionError(
       "project_write: a notebook outside the working directory is not uploaded by local_path. Pass its text as content.",
       "local_path_notebook",
     );
-  if (found !== l && !(r && anyTrackedReadMatches(V, r)))
-    throw preconditionError(W, "local_path_file_not_read_yet");
+  if (found !== cwd && !(readFileState && anyTrackedReadMatches(trackedPaths, readFileState)))
+    throw preconditionError(readFirstRefusal, "local_path_file_not_read_yet");
   let O_NOFOLLOW = constants.O_NOFOLLOW;
   let O_NONBLOCK = constants.O_NONBLOCK ?? 0;
-  let O = 0;
-  let z;
+  let extraOpenFlags = 0;
+  let handle;
   try {
-    z = await open(b, constants.O_RDONLY | O_NOFOLLOW | O | O_NONBLOCK);
+    handle = await open(realPath, constants.O_RDONLY | O_NOFOLLOW | extraOpenFlags | O_NONBLOCK);
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "ENOENT")
@@ -373,27 +383,29 @@ async function writeFromLocalUploads(localPath, n, r) {
     throw error;
   }
   try {
-    let stats = await z.stat({
+    let stats = await handle.stat({
       bigint: true,
     });
-    let I = "project_write: local_path was replaced during the upload.";
+    let replacedMessage = "project_write: local_path was replaced during the upload.";
     {
-      let ne = await realpath(`/proc/self/fd/${z.fd}`).catch(() => null);
-      if (ne !== null && ne !== b) throw Error("project_write: local_path was replaced during the upload.");
+      let fdTarget = await realpath(`/proc/self/fd/${handle.fd}`).catch(() => null);
+      if (fdTarget !== null && fdTarget !== realPath)
+        throw Error("project_write: local_path was replaced during the upload.");
     }
-    let q;
-    let G;
+    let recheckPath;
+    let recheckStats;
     try {
-      q = await realpath(h);
-      G = await stat(q, {
+      recheckPath = await realpath(absolutePath);
+      recheckStats = await stat(recheckPath, {
         bigint: true,
       });
     } catch {
       throw Error("project_write: local_path was replaced during the upload.");
     }
-    if (q !== b) throw Error("project_write: local_path was replaced during the upload.");
-    if (G.dev !== stats.dev) throw Error("project_write: local_path was replaced during the upload.");
-    if (stats.ino !== 0n && G.ino !== stats.ino)
+    if (recheckPath !== realPath) throw Error("project_write: local_path was replaced during the upload.");
+    if (recheckStats.dev !== stats.dev)
+      throw Error("project_write: local_path was replaced during the upload.");
+    if (stats.ino !== 0n && recheckStats.ino !== stats.ino)
       throw Error("project_write: local_path was replaced during the upload.");
     if (!stats.isFile())
       throw preconditionError(
@@ -410,13 +422,13 @@ async function writeFromLocalUploads(localPath, n, r) {
         `project_write: file at local_path exceeds the ${MAX_LOCAL_UPLOAD_BYTES}-byte limit.`,
         "local_path_file_too_large",
       );
-    let str = (await z.readFile()).toString("utf8");
-    if (found === l) return str;
-    if (!(r && anyTrackedReadMatches(V, r, str)))
-      throw preconditionError(W, "local_path_file_differs_from_read");
-    return stripBomAndCarriageReturn(str);
+    let currentText = (await handle.readFile()).toString("utf8");
+    if (found === cwd) return currentText;
+    if (!(readFileState && anyTrackedReadMatches(trackedPaths, readFileState, currentText)))
+      throw preconditionError(readFirstRefusal, "local_path_file_differs_from_read");
+    return stripBomAndCarriageReturn(currentText);
   } finally {
-    await z.close();
+    await handle.close();
   }
 }
 export {

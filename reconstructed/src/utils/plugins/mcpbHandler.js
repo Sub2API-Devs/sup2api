@@ -12,7 +12,7 @@ import { join, dirname } from "path";
 import { createHash } from "crypto";
 import { writeFile, chmod } from "fs/promises";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { createJsonStore } from "../jsonStore.js";
 import { trustedPluginSetting, pluginIdAliases } from "./pluginConfigSources.js";
 import { getSecureStorage } from "../secureStorage/index.js";
@@ -40,18 +40,22 @@ import { logPluginFetch, classifyFetchError } from "./fetchTelemetry.js";
 import { DEFAULT_FILE_MODE, unzipFile, parseZipModes } from "../dxt/zip.js";
 import { parseJsonBytes } from "../dxt/helpers.js";
 import { isShortLinkSpan, README_LINE_BREAK_CHARS } from "./validate/readmeAndListing.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-vr8smdd9.js:10741-10863 sole-consumer
-var McpbCacheMetadataSchema = DoctorLazy(() =>
-  u({
-    source: string(),
-    contentHash: string(),
-    extractedPath: string(),
-    cachedAt: string(),
-    lastChecked: string(),
-    sourceMtimeMs: E().optional(),
-  }),
-);
+var McpbCacheMetadataSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-vr8smdd9.js:10741", () => {
+  McpbCacheMetadataSchema = DoctorLazy(() =>
+    objectSchema({
+      source: stringSchema(),
+      contentHash: stringSchema(),
+      extractedPath: stringSchema(),
+      cachedAt: stringSchema(),
+      lastChecked: stringSchema(),
+      sourceMtimeMs: numberSchema().optional(),
+    }),
+  );
+});
 //@ chunk-vr8smdd9.js:10863-10925 fingerprint = isMcpbSource (1)
 /**
  * 来源是否为 MCPB 包（.mcpb 或旧名 .dxt）。
@@ -94,10 +98,10 @@ function pluginServerKey(pluginId, serverName) {
 /**
  * 读取某插件 MCP 服务器的用户配置：非敏感值来自 settings，敏感值来自安全存储 pluginSecrets["插件/服务器"]。
  */
-async function loadMcpServerUserConfig(pluginId, serverName, n) {
+async function loadMcpServerUserConfig(pluginId, serverName, storageV5) {
   try {
     let nonSensitive = trustedPluginSetting(pluginId).mcpServers?.[serverName];
-    let sensitive = (await getSecureStorage().readAsync(n))?.pluginSecrets?.[
+    let sensitive = (await getSecureStorage().readAsync(storageV5))?.pluginSecrets?.[
       pluginServerKey(pluginId, serverName)
     ];
     if (!nonSensitive && !sensitive) return null;
@@ -117,7 +121,7 @@ async function loadMcpServerUserConfig(pluginId, serverName, n) {
 /**
  * 保存某插件 MCP 服务器的用户配置（敏感值进安全存储）。
  */
-async function saveMcpServerUserConfig(pluginId, serverName, config, schema, a, f) {
+async function saveMcpServerUserConfig(pluginId, serverName, config, schema, storageV5, credentials) {
   try {
     let nonSensitive = {};
     let sensitive = {};
@@ -126,74 +130,77 @@ async function saveMcpServerUserConfig(pluginId, serverName, config, schema, a, 
       else nonSensitive[key] = value;
     let sensitiveKeysInThisSave = new Set(Object.keys(sensitive));
     let nonSensitiveKeysInThisSave = new Set(Object.keys(nonSensitive));
-    let x = pluginServerKey(pluginId, serverName);
-    let w = 0;
-    let result = await getSecureStorage().mutate((T) => {
-      let existingInSecureStorage = T.pluginSecrets?.[x];
+    let serverKey = pluginServerKey(pluginId, serverName);
+    let scrubbedCount = 0;
+    let result = await getSecureStorage().mutate((store) => {
+      let existingInSecureStorage = store.pluginSecrets?.[serverKey];
       let secureScrubbed = existingInSecureStorage
-        ? filterEntriesToNullProto(existingInSecureStorage, (v, key) => !nonSensitiveKeysInThisSave.has(key))
+        ? filterEntriesToNullProto(
+            existingInSecureStorage,
+            (existingValue, key) => !nonSensitiveKeysInThisSave.has(key),
+          )
         : undefined;
-      w =
+      scrubbedCount =
         secureScrubbed && existingInSecureStorage
           ? Object.keys(existingInSecureStorage).length - Object.keys(secureScrubbed).length
           : 0;
-      if (Object.keys(sensitive).length === 0 && w === 0) return T;
+      if (Object.keys(sensitive).length === 0 && scrubbedCount === 0) return store;
       return {
-        ...T,
+        ...store,
         pluginSecrets: {
-          ...T.pluginSecrets,
-          [x]: {
+          ...store.pluginSecrets,
+          [serverKey]: {
             ...secureScrubbed,
             ...sensitive,
           },
         },
       };
-    }, f);
-    if (!result.success) throw Error(`Failed to save sensitive config to secure storage for ${x}`);
+    }, credentials);
+    if (!result.success) throw Error(`Failed to save sensitive config to secure storage for ${serverKey}`);
     if (result.warning)
       logForDebugging(`Server secrets save warning: ${result.warning}`, {
         level: "warn",
       });
-    if (w > 0)
+    if (scrubbedCount > 0)
       logForDebugging(
-        `saveMcpServerUserConfig: scrubbed ${w} stale non-sensitive key(s) from secureStorage for ${x}`,
+        `saveMcpServerUserConfig: scrubbed ${scrubbedCount} stale non-sensitive key(s) from secureStorage for ${serverKey}`,
       );
     let pluginConfigs = getSettingsForSourceForUpkeep("userSettings")?.pluginConfigs;
-    let b = {};
-    let M = 0;
-    for (let T of pluginIdAliases(pluginId)) {
-      let keysToScrubFromSettings = Object.keys(pluginConfigs?.[T]?.mcpServers?.[serverName] ?? {}).filter(
-        (k) => sensitiveKeysInThisSave.has(k),
-      );
+    let updates = {};
+    let scrubbedSettingsCount = 0;
+    for (let alias of pluginIdAliases(pluginId)) {
+      let keysToScrubFromSettings = Object.keys(
+        pluginConfigs?.[alias]?.mcpServers?.[serverName] ?? {},
+      ).filter((k) => sensitiveKeysInThisSave.has(k));
       let scrubbed = Object.fromEntries(
         keysToScrubFromSettings.map((keysToScrubFromSetting) => [keysToScrubFromSetting, undefined]),
       );
-      let v = T === pluginId ? nonSensitive : {};
-      if (Object.keys(v).length > 0 || keysToScrubFromSettings.length > 0) {
-        b[T] = {
+      let values = alias === pluginId ? nonSensitive : {};
+      if (Object.keys(values).length > 0 || keysToScrubFromSettings.length > 0) {
+        updates[alias] = {
           mcpServers: {
             [serverName]: {
-              ...v,
+              ...values,
               ...scrubbed,
             },
           },
         };
-        M += keysToScrubFromSettings.length;
+        scrubbedSettingsCount += keysToScrubFromSettings.length;
       }
     }
-    if (Object.keys(b).length > 0) {
+    if (Object.keys(updates).length > 0) {
       let result = await updateSettingsForSource(
         "userSettings",
         {
-          pluginConfigs: b,
+          pluginConfigs: updates,
         },
         undefined,
-        a,
+        storageV5,
       );
       if (result.error) throw result.error;
-      if (M > 0)
+      if (scrubbedSettingsCount > 0)
         logForDebugging(
-          `saveMcpServerUserConfig: scrubbed ${M} plaintext sensitive key(s) from settings.json for ${pluginId}/${serverName}`,
+          `saveMcpServerUserConfig: scrubbed ${scrubbedSettingsCount} plaintext sensitive key(s) from settings.json for ${pluginId}/${serverName}`,
         );
     }
     logForDebugging(
@@ -251,7 +258,8 @@ function validateUserConfig(values, schema) {
  * 由 MCPB manifest 与解压目录生成 MCP 服务器配置（动态导入 @anthropic-ai/mcpb 的 getMcpConfigForManifest，代入用户配置与系统目录）。
  */
 async function generateMcpConfig(manifest, extractedPath, userConfig = {}) {
-  let { getMcpConfigForManifest } = await import("./chunk-64s30qnv.js");
+  let { getMcpConfigForManifest } =
+    await import("../../../vendor/@anthropic-ai/mcpb/dist/McpbManifestSchema.lazy.js");
   let mcpConfig = await getMcpConfigForManifest({
     manifest,
     extensionPath: extractedPath,
@@ -267,11 +275,11 @@ async function generateMcpConfig(manifest, extractedPath, userConfig = {}) {
     logError(error);
     throw error;
   }
-  let f = stdioIdentityDiff(manifest.server.mcp_config, mcpConfig);
+  let diff = stdioIdentityDiff(manifest.server.mcp_config, mcpConfig);
   return {
     ...mcpConfig,
-    ...(f && {
-      configuredCommand: f,
+    ...(diff && {
+      configuredCommand: diff,
     }),
   };
 }
@@ -296,9 +304,9 @@ async function saveCacheMetadata(cacheDir, source, metadata) {
  * 下载 .mcpb/.dxt 包（记录 tengu_plugin_remote_fetch），返回字节。
  */
 async function downloadMcpb(url, destPath, onProgress) {
-  let s = redactUrlQuery(url);
-  logForDebugging(`Downloading MCPB from ${s}`);
-  if (onProgress) onProgress(`Downloading ${s}...`);
+  let redactedUrl = redactUrlQuery(url);
+  logForDebugging(`Downloading MCPB from ${redactedUrl}`);
+  if (onProgress) onProgress(`Downloading ${redactedUrl}...`);
   let started = performance.now();
   let fetchTelemetryFired = false;
   try {
@@ -323,9 +331,9 @@ async function downloadMcpb(url, destPath, onProgress) {
   } catch (error) {
     if (!fetchTelemetryFired)
       logPluginFetch("mcpb", url, "failure", performance.now() - started, classifyFetchError(error));
-    let errorMsg = redactUrlsInMessage(replaceAll(errorMessage(error), url, s));
-    let fullError = Error(`Failed to download MCPB file from ${s}: ${errorMsg}`);
-    logForDebugging(`Failed to download MCPB file from ${s}: ${errorMsg}`, {
+    let errorMsg = redactUrlsInMessage(replaceAll(errorMessage(error), url, redactedUrl));
+    let fullError = Error(`Failed to download MCPB file from ${redactedUrl}: ${errorMsg}`);
+    logForDebugging(`Failed to download MCPB file from ${redactedUrl}: ${errorMsg}`, {
       level: "error",
     });
     throw fullError;
@@ -386,16 +394,16 @@ async function checkMcpbChanged(source, pluginPath) {
     return true;
   }
   if (!isUrl_2(source)) {
-    let f = join(pluginPath, source);
+    let localSource = join(pluginPath, source);
     let localPath = join(pluginPath, redactUrlQuery(source));
     let stats;
     try {
-      stats = await fs.stat(f);
+      stats = await fs.stat(localSource);
     } catch (error) {
       if (getErrnoCode(error) === "ENOENT") logForDebugging(`MCPB source file missing: ${localPath}`);
       else
         logForDebugging(
-          `MCPB source file inaccessible: ${localPath}: ${replaceAll(String(error), f, localPath)}`,
+          `MCPB source file inaccessible: ${localPath}: ${replaceAll(String(error), localSource, localPath)}`,
           {
             level: "error",
           },
@@ -425,13 +433,13 @@ async function loadMcpbFile(
   providedUserConfig,
   forceConfigDialog,
   storageV5,
-  c,
+  hostStorage,
 ) {
-  let g = redactUrlQuery(source);
+  let redactedSource = redactUrlQuery(source);
   let fs = getFsImplementation();
   let cacheDir = getMcpbCacheDir(pluginPath);
   await fs.mkdir(cacheDir);
-  logForDebugging(`Loading MCPB from source: ${g}`);
+  logForDebugging(`Loading MCPB from source: ${redactedSource}`);
   let metadata = await loadCacheMetadata(cacheDir, source);
   if (metadata && !(await checkMcpbChanged(source, pluginPath))) {
     logForDebugging(`Using cached MCPB from ${metadata.extractedPath} (hash: ${metadata.contentHash})`);
@@ -453,7 +461,7 @@ async function loadMcpbFile(
     let manifest = await parseJsonBytes(manifestData);
     if (manifest.user_config && Object.keys(manifest.user_config).length > 0) {
       let serverName = manifest.name;
-      let savedConfig = await loadMcpServerUserConfig(pluginId, serverName, c);
+      let savedConfig = await loadMcpServerUserConfig(pluginId, serverName, hostStorage);
       let userConfig = providedUserConfig || savedConfig || {};
       let validation = validateUserConfig(userConfig, manifest.user_config);
       if (forceConfigDialog || !validation.valid)
@@ -473,7 +481,7 @@ async function loadMcpbFile(
           providedUserConfig,
           manifest.user_config ?? {},
           storageV5,
-          c,
+          hostStorage,
         );
       let mcpConfig = await generateMcpConfig(manifest, metadata.extractedPath, userConfig);
       return {
@@ -500,24 +508,24 @@ async function loadMcpbFile(
     mcpbData = await downloadMcpb(source, destPath, onProgress);
   } else {
     let localPath = join(pluginPath, source);
-    if (onProgress) onProgress(`Loading ${g}...`);
+    if (onProgress) onProgress(`Loading ${redactedSource}...`);
     try {
       mcpbData = await fs.readFileBytes(localPath);
       destPath = localPath;
       sourceMtimeMs = Math.floor((await fs.stat(localPath)).mtimeMs);
     } catch (error) {
-      let _ = join(pluginPath, g);
+      let redactedPath = join(pluginPath, redactedSource);
       if (isENOENT(error)) {
-        let err = Error(`MCPB file not found: ${_}`);
-        logForDebugging(`MCPB file not found: ${_}`, {
+        let err = Error(`MCPB file not found: ${redactedPath}`);
+        logForDebugging(`MCPB file not found: ${redactedPath}`, {
           level: "error",
         });
         throw err;
       }
-      throw localPath === _
+      throw localPath === redactedPath
         ? error
         : new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            replaceAll(errorMessage(error), localPath, _),
+            replaceAll(errorMessage(error), localPath, redactedPath),
             "MCPB local file read failed",
           );
     }
@@ -549,7 +557,7 @@ async function loadMcpbFile(
   await extractMcpbContents(unzipped, extractPath, modes, onProgress);
   if (manifest.user_config && Object.keys(manifest.user_config).length > 0) {
     let serverName = manifest.name;
-    let savedConfig = await loadMcpServerUserConfig(pluginId, serverName, c);
+    let savedConfig = await loadMcpServerUserConfig(pluginId, serverName, hostStorage);
     let userConfig = providedUserConfig || savedConfig || {};
     let validation = validateUserConfig(userConfig, manifest.user_config);
     if (forceConfigDialog || !validation.valid) {
@@ -579,7 +587,7 @@ async function loadMcpbFile(
         providedUserConfig,
         manifest.user_config ?? {},
         storageV5,
-        c,
+        hostStorage,
       );
     if (onProgress) onProgress("Generating MCP server configuration...");
     let mcpConfig = await generateMcpConfig(manifest, extractPath, userConfig);
@@ -620,38 +628,46 @@ async function loadMcpbFile(
 }
 //@ chunk-5aas12zq.js:25474-25909 fingerprint = isUrl (1)
 function isUrl(source) {
-  let n = [];
-  let t = -1;
-  let r = -1;
-  let s = -1;
+  let links = [];
+  let urlStart = -1;
+  let urlEnd = -1;
+  let closeBracket = -1;
   let index = source.indexOf("[");
   while (index !== -1) {
-    if (s <= index) {
-      s = source.indexOf("]", index + 1);
-      if (s === -1) break;
+    if (closeBracket <= index) {
+      closeBracket = source.indexOf("]", index + 1);
+      if (closeBracket === -1) break;
     }
-    let a = s + 2;
-    let l = source.startsWith("https://", a) ? 8 : source.startsWith("http://", a) ? 7 : 0;
-    if (source[s + 1] === "(" && l > 0 && isShortLinkSpan(source, index + 1, s)) {
-      if (a < t || a >= r) {
-        t = a;
-        r = a;
-        while (r < source.length && !README_LINE_BREAK_CHARS.includes(source[r] ?? "")) r++;
+    let contentStart = closeBracket + 2;
+    let schemeLength = source.startsWith("https://", contentStart)
+      ? 8
+      : source.startsWith("http://", contentStart)
+        ? 7
+        : 0;
+    if (
+      source[closeBracket + 1] === "(" &&
+      schemeLength > 0 &&
+      isShortLinkSpan(source, index + 1, closeBracket)
+    ) {
+      if (contentStart < urlStart || contentStart >= urlEnd) {
+        urlStart = contentStart;
+        urlEnd = contentStart;
+        while (urlEnd < source.length && !README_LINE_BREAK_CHARS.includes(source[urlEnd] ?? "")) urlEnd++;
       }
-      if (source[r] === ")" && r > a + l) {
-        n.push({
+      if (source[urlEnd] === ")" && urlEnd > contentStart + schemeLength) {
+        links.push({
           start: index,
-          end: r + 1,
-          text: source.slice(index + 1, s),
-          url: source.slice(a, r),
+          end: urlEnd + 1,
+          text: source.slice(index + 1, closeBracket),
+          url: source.slice(contentStart, urlEnd),
         });
-        index = source.indexOf("[", r + 1);
+        index = source.indexOf("[", urlEnd + 1);
         continue;
       }
     }
     index = source.indexOf("[", index + 1);
   }
-  return n;
+  return links;
 }
 export {
   isMcpbSource,

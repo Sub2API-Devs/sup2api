@@ -18,15 +18,15 @@ import { logForDebugging } from "../utils/debug.js";
  * 判断是否低内存：阈值来自 tengu_bg_low_mem_mb；macOS 用 Bun 的 memoryPressureLevel，其他平台用空闲内存。
  */
 function getLowMemoryState() {
-  let e = getFeatureValue_CACHED_MAY_BE_STALE("tengu_bg_low_mem_mb", 1024) * 1024 * 1024;
-  if (e <= 0)
+  let thresholdBytes = getFeatureValue_CACHED_MAY_BE_STALE("tengu_bg_low_mem_mb", 1024) * 1024 * 1024;
+  if (thresholdBytes <= 0)
     return {
       lowMem: false,
       level: undefined,
     };
   if (getPlatform() !== "macos")
     return {
-      lowMem: freemem() < e,
+      lowMem: freemem() < thresholdBytes,
       level: undefined,
     };
   let memoryPressureLevel = readMemoryPressureLevel();
@@ -52,8 +52,8 @@ var critical = MEMORY_LEVEL_COST.critical;
 //@ chunk-22p96rmv.js:612-812 placement
 function readMemoryPressureLevel() {
   try {
-    let e = Bun.ant.memoryPressureLevel();
-    return e === null ? undefined : MEMORY_LEVEL_COST[e];
+    let level = Bun.ant.memoryPressureLevel();
+    return level === null ? undefined : MEMORY_LEVEL_COST[level];
   } catch (error) {
     logForDebugging(
       `bg low-mem: memoryPressureLevel failed: ${error instanceof Error ? error.message : String(error)}`,

@@ -10,6 +10,7 @@
  */
 import { createStore } from "./store.js";
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-8swanma2.js:263-419 placement
 /**
@@ -31,46 +32,49 @@ function createPromptInputStore() {
 /**
  * 按会话保存的输入框状态存储容器。
  */
-var promptInputStoreSlots = new SessionRootSlot(() => createPromptInputStore());
+var promptInputStoreSlots; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-8swanma2.js:419", () => {
+  promptInputStoreSlots = new SessionRootSlot(() => createPromptInputStore());
+});
 //@ chunk-8swanma2.js:441-471 placement
 /**
  * 取某会话的输入框状态存储。
  */
-function promptInputStoreFor(n) {
-  return promptInputStoreSlots.of(n);
+function promptInputStoreFor(session) {
+  return promptInputStoreSlots.of(session);
 }
 //@ chunk-8swanma2.js:471-517 placement
 /**
  * 取输入框当前文本。
  */
-function promptInputValue(n) {
-  return promptInputStoreFor(n).getState().value;
+function promptInputValue(session) {
+  return promptInputStoreFor(session).getState().value;
 }
 //@ chunk-8swanma2.js:517-885 placement
 /**
  * 设置输入值；清空时记录深链预填文本并清除启动警告。
  */
-function setPromptValue(n, e) {
-  n.setState((t) => {
-    if (t.value === e) return t;
-    if (t.value !== "" && e === "") {
-      let trimmed = t.value.trim();
-      let r =
-        t.launchWarning?.type === "deep-link" && t.launchWarning.text === undefined
-          ? new Set(t.linkSuppliedTexts).add(trimmed)
-          : t.linkSuppliedTexts;
+function setPromptValue(store, value) {
+  store.setState((state) => {
+    if (state.value === value) return state;
+    if (state.value !== "" && value === "") {
+      let trimmed = state.value.trim();
+      let linkSuppliedTexts =
+        state.launchWarning?.type === "deep-link" && state.launchWarning.text === undefined
+          ? new Set(state.linkSuppliedTexts).add(trimmed)
+          : state.linkSuppliedTexts;
       return {
-        ...t,
-        value: e,
+        ...state,
+        value,
         launchWarning: null,
-        linkSuppliedTexts: r,
-        submittedLinkPrefill: r.has(trimmed) ? t.value : null,
+        linkSuppliedTexts,
+        submittedLinkPrefill: linkSuppliedTexts.has(trimmed) ? state.value : null,
         cameBack: false,
       };
     }
     return {
-      ...t,
-      value: e,
+      ...state,
+      value,
     };
   });
 }
@@ -85,13 +89,18 @@ function setPromptValueFor(sessionOrUndefined) {
 /**
  * 用户编辑由深链提供的文本后仍记为深链文本。
  */
-function noteLinkSuppliedEdit(session, e, t) {
-  promptInputStoreFor(session).setState((o) => {
-    let trimmed = t.trim();
-    if (trimmed === "" || o.linkSuppliedTexts.has(trimmed) || !o.linkSuppliedTexts.has(e.trim())) return o;
+function noteLinkSuppliedEdit(session, previousText, nextText) {
+  promptInputStoreFor(session).setState((state) => {
+    let trimmed = nextText.trim();
+    if (
+      trimmed === "" ||
+      state.linkSuppliedTexts.has(trimmed) ||
+      !state.linkSuppliedTexts.has(previousText.trim())
+    )
+      return state;
     return {
-      ...o,
-      linkSuppliedTexts: new Set(o.linkSuppliedTexts).add(trimmed),
+      ...state,
+      linkSuppliedTexts: new Set(state.linkSuppliedTexts).add(trimmed),
     };
   });
 }
@@ -99,20 +108,20 @@ function noteLinkSuppliedEdit(session, e, t) {
 /**
  * 设置草稿暂存内容。
  */
-function setPromptStash(sessionOrUndefined, e) {
-  setPromptValue(promptInputStoreFor(sessionOrUndefined), e);
+function setPromptStash(sessionOrUndefined, value) {
+  setPromptValue(promptInputStoreFor(sessionOrUndefined), value);
 }
 //@ chunk-8swanma2.js:1185-1249 placement
 /**
  * 设置输入框是否激活。
  */
-function setPromptActive(n, e) {
-  n.setState((t) =>
-    t.stash === e
-      ? t
+function setPromptActive(store, stashValue) {
+  store.setState((state) =>
+    state.stash === stashValue
+      ? state
       : {
-          ...t,
-          stash: e,
+          ...state,
+          stash: stashValue,
         },
   );
 }
@@ -120,13 +129,13 @@ function setPromptActive(n, e) {
 /**
  * 设置某会话输入框的激活状态。
  */
-function setPromptActiveFor(n, e) {
-  n.setState((t) =>
-    t.active === e
-      ? t
+function setPromptActiveFor(store, active) {
+  store.setState((state) =>
+    state.active === active
+      ? state
       : {
-          ...t,
-          active: e,
+          ...state,
+          active,
         },
   );
 }
@@ -134,21 +143,21 @@ function setPromptActiveFor(n, e) {
 /**
  * 设置 Vim 模式。
  */
-function setPromptVimMode(session, e) {
-  setPromptActiveFor(promptInputStoreFor(session), e);
+function setPromptVimMode(session, vimMode) {
+  setPromptActiveFor(promptInputStoreFor(session), vimMode);
 }
 //@ chunk-8swanma2.js:1346-1447 placement
 /**
  * 设置“回到输入框”标记（有内容时）。
  */
-function setCameBack(n, cameBack) {
-  n.setState((t) => {
-    let o = cameBack && t.value !== "";
-    return t.cameBack === o
-      ? t
+function setCameBack(store, cameBack) {
+  store.setState((state) => {
+    let nextCameBack = cameBack && state.value !== "";
+    return state.cameBack === nextCameBack
+      ? state
       : {
-          ...t,
-          cameBack: o,
+          ...state,
+          cameBack: nextCameBack,
         };
   });
 }
@@ -156,13 +165,13 @@ function setCameBack(n, cameBack) {
 /**
  * 设置某会话的启动警告。
  */
-function setLaunchWarningFor(session, e) {
-  promptInputStoreFor(session).setState((t) =>
-    t.vimMode === e
-      ? t
+function setLaunchWarningFor(session, vimMode) {
+  promptInputStoreFor(session).setState((state) =>
+    state.vimMode === vimMode
+      ? state
       : {
-          ...t,
-          vimMode: e,
+          ...state,
+          vimMode,
         },
   );
 }
@@ -170,24 +179,24 @@ function setLaunchWarningFor(session, e) {
 /**
  * 设置启动警告（深链时记录预填文本）。
  */
-function setLaunchWarning(n, launchWarning) {
-  n.setState((t) => {
-    let o = launchWarning.type === "deep-link" ? launchWarning.text?.trim() : undefined;
-    let r =
-      o === undefined || t.linkSuppliedTexts.has(o)
-        ? t.linkSuppliedTexts
-        : new Set(t.linkSuppliedTexts).add(o);
-    let i =
-      t.launchWarning?.type === launchWarning.type &&
-      t.launchWarning.prefillLength === launchWarning.prefillLength
-        ? t.launchWarning
-        : launchWarning;
-    return i === t.launchWarning && r === t.linkSuppliedTexts
-      ? t
+function setLaunchWarning(store, warning) {
+  store.setState((state) => {
+    let linkText = warning.type === "deep-link" ? warning.text?.trim() : undefined;
+    let linkSuppliedTexts =
+      linkText === undefined || state.linkSuppliedTexts.has(linkText)
+        ? state.linkSuppliedTexts
+        : new Set(state.linkSuppliedTexts).add(linkText);
+    let nextWarning =
+      state.launchWarning?.type === warning.type &&
+      state.launchWarning.prefillLength === warning.prefillLength
+        ? state.launchWarning
+        : warning;
+    return nextWarning === state.launchWarning && linkSuppliedTexts === state.linkSuppliedTexts
+      ? state
       : {
-          ...t,
-          launchWarning: i,
-          linkSuppliedTexts: r,
+          ...state,
+          launchWarning: nextWarning,
+          linkSuppliedTexts,
         };
   });
 }
@@ -195,8 +204,8 @@ function setLaunchWarning(n, launchWarning) {
 /**
  * 设置某会话的启动警告（会话版入口）。
  */
-function setPromptLaunchWarning(n, e) {
-  setLaunchWarning(promptInputStoreFor(n), e);
+function setPromptLaunchWarning(session, warning) {
+  setLaunchWarning(promptInputStoreFor(session), warning);
 }
 export {
   setPromptLaunchWarning,

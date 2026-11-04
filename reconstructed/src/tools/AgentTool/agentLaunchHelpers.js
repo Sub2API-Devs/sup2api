@@ -48,11 +48,11 @@ function getBackgroundedToolUseId(assistantMessage, toolUseId, backgroundByDefau
 /**
  * 在任务表中找 cwd 位于给定路径之下、仍占用的任务（用于判断 worktree 能否删除）。
  */
-function findTaskOccupyingPath(tasks, paths, isOccupying = (f) => !isTerminalTaskStatus(f.status)) {
-  for (let f of Object.values(tasks)) {
-    let cwd = f.cwd;
-    if (cwd === undefined || !isOccupying(f)) continue;
-    if (paths.some((path) => pathInWorkingPath(cwd, path))) return f;
+function findTaskOccupyingPath(tasks, paths, isOccupying = (task) => !isTerminalTaskStatus(task.status)) {
+  for (let task of Object.values(tasks)) {
+    let cwd = task.cwd;
+    if (cwd === undefined || !isOccupying(task)) continue;
+    if (paths.some((path) => pathInWorkingPath(cwd, path))) return task;
   }
   return;
 }
@@ -70,43 +70,46 @@ function isTaskStillOccupying(task, taskRegistry) {
  * worktree 被其他任务占用而保留时，订阅 agentSettled/taskEvicted 事件，等无占用者后释放 worktree 锁。
  */
 function watchWorktreeForRelease(watch) {
-  let e = {
+  let state = {
     ...watch,
     resuming: new Set(),
     subscriptions: [],
   };
-  e.subscriptions.push(
-    getTaskRunState().agentSettled.subscribe((s, f, y) =>
-      maybeReleaseWorktreeLock(e, s, y?.stranded === true, false),
+  state.subscriptions.push(
+    getTaskRunState().agentSettled.subscribe((agentId, settledInfo, details) =>
+      maybeReleaseWorktreeLock(state, agentId, details?.stranded === true, false),
     ),
-    getTaskRunState().taskEvicted.subscribe((s) => maybeReleaseWorktreeLock(e, s, false, true)),
+    getTaskRunState().taskEvicted.subscribe((taskId) => maybeReleaseWorktreeLock(state, taskId, false, true)),
   );
-  maybeReleaseWorktreeLock(e, undefined, false, false);
+  maybeReleaseWorktreeLock(state, undefined, false, false);
 }
 //@ chunk-0tkmvwy0.js:3922-4446 placement
 /**
  * 代理结束时更新后台锁：仍有活任务则保持，否则释放。
  */
-function maybeReleaseWorktreeLock(n, e, s, f) {
+function maybeReleaseWorktreeLock(state, agentOrTaskId, isStranded, evicted) {
   try {
-    let y = e !== undefined && unwrapAbortReason(getTaskKillController(e)?.signal.reason) === "background";
-    if (e !== undefined && s) n.resuming.add(e);
-    else if (e !== undefined) n.resuming.delete(e);
+    let backgroundedHandoff =
+      agentOrTaskId !== undefined &&
+      unwrapAbortReason(getTaskKillController(agentOrTaskId)?.signal.reason) === "background";
+    if (agentOrTaskId !== undefined && isStranded) state.resuming.add(agentOrTaskId);
+    else if (agentOrTaskId !== undefined) state.resuming.delete(agentOrTaskId);
     if (
-      n.findOccupant(
+      state.findOccupant(
         (task) =>
-          !(f && task.id === e) && (n.resuming.has(task.id) || isTaskStillOccupying(task, n.taskRegistry)),
+          !(evicted && task.id === agentOrTaskId) &&
+          (state.resuming.has(task.id) || isTaskStillOccupying(task, state.taskRegistry)),
       ) !== undefined &&
-      !y
+      !backgroundedHandoff
     )
       return;
-    for (let subscription of n.subscriptions) subscription();
+    for (let subscription of state.subscriptions) subscription();
     logForDebugging(
-      `Agent worktree ${n.worktreePath}: ${y ? "a /background handoff was seen; lock kept" : "no live task is left in it; releasing its lock"}`,
+      `Agent worktree ${state.worktreePath}: ${backgroundedHandoff ? "a /background handoff was seen; lock kept" : "no live task is left in it; releasing its lock"}`,
     );
-    if (!y) {
-      let S = releaseOwnWorktreeLock(n.worktreePath, n.gitRoot);
-      S.finally(registerCleanup(() => S));
+    if (!backgroundedHandoff) {
+      let releasePromise = releaseOwnWorktreeLock(state.worktreePath, state.gitRoot);
+      releasePromise.finally(registerCleanup(() => releasePromise));
     }
   } catch (error) {
     if (!isAbortError(error)) logError(error);
@@ -117,19 +120,19 @@ function maybeReleaseWorktreeLock(n, e, s, f) {
  * isolation:"remote" 不可用时记录原因，有 git 根则回退 "worktree"，否则本地运行。
  */
 function getRemoteIsolationFallback(restricted) {
-  let e = Boolean(env.CLAUDE_CODE_REMOTE);
-  let s = isDiskless();
-  let f = !e && canRunAgentInWorktree();
-  let y = restricted ? "(--restricted)" : "(no claude.ai login or feature gate off)";
-  let _ = e
+  let insideCcrSession = Boolean(env.CLAUDE_CODE_REMOTE);
+  let isDisklessSession = isDiskless();
+  let canUseWorktree = !insideCcrSession && canRunAgentInWorktree();
+  let unavailableReason = restricted ? "(--restricted)" : "(no claude.ai login or feature gate off)";
+  let fallbackDetail = insideCcrSession
     ? "(already inside a CCR session); running as a local agent"
-    : s
+    : isDisklessSession
       ? "(the session has no disk); running as a local agent"
-      : f
-        ? `${y}; falling back to isolation:'worktree'`
-        : `${y} and no git root; running as a local agent`;
-  logForDebugging(`[remote agent] isolation:'remote' is unavailable ${_}`);
-  return f ? "worktree" : undefined;
+      : canUseWorktree
+        ? `${unavailableReason}; falling back to isolation:'worktree'`
+        : `${unavailableReason} and no git root; running as a local agent`;
+  logForDebugging(`[remote agent] isolation:'remote' is unavailable ${fallbackDetail}`);
+  return canUseWorktree ? "worktree" : undefined;
 }
 //@ chunk-0tkmvwy0.js:4880-5029 placement
 /**
@@ -150,16 +153,16 @@ var toSpawnHookInput = (agentInput, spawn) => ({
  */
 function resolveEffectiveIsolation(options) {
   let { agent, isolation, restricted } = options;
-  let y = isolation ?? agent.isolation;
-  if (y !== undefined && isWebFetchAgent(agent)) {
+  let isolationMode = isolation ?? agent.isolation;
+  if (isolationMode !== undefined && isWebFetchAgent(agent)) {
     logForDebugging(
-      `[web-fetch agent] isolation:'${y}' ignored; the built-in web-fetch agent always runs as a local agent`,
+      `[web-fetch agent] isolation:'${isolationMode}' ignored; the built-in web-fetch agent always runs as a local agent`,
     );
     return;
   }
-  return y === "remote" && (!isRemoteAgentIsolationAvailable() || restricted)
+  return isolationMode === "remote" && (!isRemoteAgentIsolationAvailable() || restricted)
     ? getRemoteIsolationFallback(restricted)
-    : y;
+    : isolationMode;
 }
 //@ chunk-0tkmvwy0.js:5278-5566 placement
 /**
@@ -169,12 +172,12 @@ function isSameRuleDecision(previous, next) {
   let decisionReason = previous?.decisionReason;
   let decisionReason_2 = next.decisionReason;
   if (decisionReason?.type !== "rule" || decisionReason_2?.type !== "rule") return false;
-  let [y, _] = [decisionReason.rule, decisionReason_2.rule];
+  let [previousRule, nextRule] = [decisionReason.rule, decisionReason_2.rule];
   return (
-    y.source === _.source &&
-    y.ruleBehavior === _.ruleBehavior &&
-    y.ruleValue.toolName === _.ruleValue.toolName &&
-    y.ruleValue.ruleContent === _.ruleValue.ruleContent
+    previousRule.source === nextRule.source &&
+    previousRule.ruleBehavior === nextRule.ruleBehavior &&
+    previousRule.ruleValue.toolName === nextRule.ruleValue.toolName &&
+    previousRule.ruleValue.ruleContent === nextRule.ruleValue.ruleContent
   );
 }
 //@ chunk-0tkmvwy0.js:5566-5576 placement
@@ -193,18 +196,19 @@ var NO_INTERRUPT_ABORT = false;
  */
 function decideAgentLaunchMode(options) {
   let { agent, wantsBackground, callerIsInProcessTeammate } = options;
-  let y = callerIsInProcessTeammate || options.callerIsHeadlessSubagent;
-  let _ =
+  let inheritsBackgrounding = callerIsInProcessTeammate || options.callerIsHeadlessSubagent;
+  let asyncByDefault =
     (options.isCoordinator && !callerIsInProcessTeammate) ||
     options.forceAsync ||
-    (!y && wantsBackground !== false);
+    (!inheritsBackgrounding && wantsBackground !== false);
   let effectiveIsolation = resolveEffectiveIsolation(options);
-  let I = wantsBackground === true || agent.background === true || (!isWebFetchAgent(agent) && _);
-  let Y = effectiveIsolation === "remote";
+  let wantsAsync =
+    wantsBackground === true || agent.background === true || (!isWebFetchAgent(agent) && asyncByDefault);
+  let isRemoteLaunch = effectiveIsolation === "remote";
   return {
     effectiveIsolation,
-    isRemoteLaunch: Y,
-    shouldRunAsync: Y || (I && !options.backgroundTasksDisabled),
+    isRemoteLaunch,
+    shouldRunAsync: isRemoteLaunch || (wantsAsync && !options.backgroundTasksDisabled),
   };
 }
 export {

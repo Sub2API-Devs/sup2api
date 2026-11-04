@@ -21,11 +21,11 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growt
 /**
  * 去除提示中的不可见字符并记录移除统计。
  */
-function sanitizePromptText_2(e, n) {
-  let { text, removed } = stripInvisiblePromptText(e);
-  if (removed.removedTotal > 0) stripInvisiblePromptChars(removed, n);
+function sanitizePromptText_2(text, surface) {
+  let { text: text_2, removed } = stripInvisiblePromptText(text);
+  if (removed.removedTotal > 0) stripInvisiblePromptChars(removed, surface);
   return {
-    text,
+    text: text_2,
     removedTotal: removed.removedTotal,
   };
 }
@@ -33,64 +33,65 @@ function sanitizePromptText_2(e, n) {
 /**
  * 展开粘贴文本引用（[Pasted text #N]）。
  */
-function expandPastedTextRefs(e, n) {
-  let r = stripInvisiblePromptText(e);
-  let { removed, text } = r;
-  let y = n;
+function expandPastedTextRefs(input, pastedContents) {
+  let stripped = stripInvisiblePromptText(input);
+  let { removed, text } = stripped;
+  let pasted = pastedContents;
   let pastedRefs = parsePastedRefs(text);
-  let w = new Map();
+  let lineCountChanges = new Map();
   for (let { id } of pastedRefs) {
-    let G = y[id];
-    if (G?.type !== "text") continue;
-    let q = stripInvisiblePromptText(G.content);
-    if (q.text !== G.content) {
-      if (y === n)
-        y = {
-          ...n,
+    let entry = pasted[id];
+    if (entry?.type !== "text") continue;
+    let strippedEntry = stripInvisiblePromptText(entry.content);
+    if (strippedEntry.text !== entry.content) {
+      if (pasted === pastedContents)
+        pasted = {
+          ...pastedContents,
         };
-      y[id] = {
-        ...G,
-        content: q.text,
+      pasted[id] = {
+        ...entry,
+        content: strippedEntry.text,
       };
-      addRemovalCounts(removed, q.removed);
-      let pastedTextRefNumLines = getPastedTextRefNumLines(q.text);
-      if (pastedTextRefNumLines !== getPastedTextRefNumLines(G.content)) w.set(id, pastedTextRefNumLines);
+      addRemovalCounts(removed, strippedEntry.removed);
+      let pastedTextRefNumLines = getPastedTextRefNumLines(strippedEntry.text);
+      if (pastedTextRefNumLines !== getPastedTextRefNumLines(entry.content))
+        lineCountChanges.set(id, pastedTextRefNumLines);
     }
   }
-  for (let L of Object.values(y)) {
-    if (L.type !== "text" || !L.inline) continue;
-    let trimmed = stripInvisiblePromptText(L.content).text.trim();
-    if (trimmed === L.content) continue;
-    let found = nfcVariants(L.content).find((ke) => e.includes(ke));
-    let Z =
-      found === undefined || found === L.content ? trimmed : stripInvisiblePromptText(found).text.trim();
-    let Se = text.includes(Z) ? Z : trimmed;
-    if (y === n)
-      y = {
-        ...n,
+  for (let entry of Object.values(pasted)) {
+    if (entry.type !== "text" || !entry.inline) continue;
+    let trimmed = stripInvisiblePromptText(entry.content).text.trim();
+    if (trimmed === entry.content) continue;
+    let found = nfcVariants(entry.content).find((variant) => input.includes(variant));
+    let strippedCandidate =
+      found === undefined || found === entry.content ? trimmed : stripInvisiblePromptText(found).text.trim();
+    let replacement = text.includes(strippedCandidate) ? strippedCandidate : trimmed;
+    if (pasted === pastedContents)
+      pasted = {
+        ...pastedContents,
       };
-    if (Se === "") delete y[L.id];
+    if (replacement === "") delete pasted[entry.id];
     else
-      y[L.id] = {
-        ...L,
-        content: Se,
+      pasted[entry.id] = {
+        ...entry,
+        content: replacement,
       };
   }
-  if (w.size > 0)
+  if (lineCountChanges.size > 0)
     for (let idx = pastedRefs.length - 1; idx >= 0; idx--) {
-      let G = pastedRefs[idx];
-      let q = w.get(G.id);
-      if (q === undefined) continue;
-      let Z = G.match.startsWith("[Pasted text #")
-        ? formatPastedTextRef(G.id, q)
-        : G.match.startsWith("[...Truncated text #")
-          ? `[...Truncated text #${G.id} +${q} lines...]`
-          : G.match;
-      text = text.slice(0, G.index) + Z + text.slice(G.index + G.match.length);
+      let ref = pastedRefs[idx];
+      let newLineCount = lineCountChanges.get(ref.id);
+      if (newLineCount === undefined) continue;
+      let newRefText = ref.match.startsWith("[Pasted text #")
+        ? formatPastedTextRef(ref.id, newLineCount)
+        : ref.match.startsWith("[...Truncated text #")
+          ? `[...Truncated text #${ref.id} +${newLineCount} lines...]`
+          : ref.match;
+      text = text.slice(0, ref.index) + newRefText + text.slice(ref.index + ref.match.length);
     }
   return {
     input: text,
-    pastedContents: y,
+    pastedContents: pasted,
     removed,
   };
 }
@@ -98,8 +99,8 @@ function expandPastedTextRefs(e, n) {
 /**
  * 判断是否不需要提示"已移除不可见字符"：非 prompt 模式、空文本、含双向控制字符、斜杠/叹号命令或内置命令。
  */
-function skipInvisibleCharsNotice(e, removed, mode) {
-  let trimmed = e.trim();
+function skipInvisibleCharsNotice(text, removed, mode) {
+  let trimmed = text.trim();
   return (
     mode !== "prompt" ||
     trimmed === "" ||
@@ -118,9 +119,9 @@ function forceRedraw() {
   });
 }
 //@ chunk-e6aww6q8.js:68504-69013 placement
-function stripInvisiblePromptChars(removed, n) {
+function stripInvisiblePromptChars(removed, surface) {
   logEvent("tengu_prompt_invisible_strip", {
-    surface: fromEnum(n),
+    surface: fromEnum(surface),
     removed_total: removed.removedTotal,
     removed_tags: removed.removedByClass.tags,
     removed_bidi: removed.removedByClass.bidi,
@@ -142,11 +143,11 @@ function stripInvisiblePromptChars(removed, n) {
   logFeatureOk("input_invisible_strip");
 }
 //@ chunk-e6aww6q8.js:69013-69273 placement
-function stripInvisiblePromptText(e) {
-  let n = stripInvisibleChars_2(e);
-  if (n.text === e || !tranquilCloudOn())
+function stripInvisiblePromptText(text) {
+  let stripped = stripInvisibleChars_2(text);
+  if (stripped.text === text || !tranquilCloudOn())
     return {
-      text: e,
+      text,
       removed: {
         removedTotal: 0,
         removedByClass: {
@@ -157,15 +158,15 @@ function stripInvisiblePromptText(e) {
           other: 0,
         },
         keptConditional: 0,
-        textLength: e.length,
+        textLength: text.length,
       },
     };
-  let { text, ...s } = n;
+  let { text: text_2, ...removed } = stripped;
   return {
-    text,
+    text: text_2,
     removed: {
-      ...s,
-      textLength: e.length,
+      ...removed,
+      textLength: text.length,
     },
   };
 }
@@ -186,8 +187,8 @@ function tranquilCloudOn() {
  * sanitizePromptText：按开关清洗提示词文本。
  */
 function sanitizePromptText() {
-  let e = tranquilCloudOn();
-  return (n) => (e ? stripInvisibleChars_2(n).text : n);
+  let enabled = tranquilCloudOn();
+  return (text) => (enabled ? stripInvisibleChars_2(text).text : text);
 }
 export {
   sanitizePromptText,

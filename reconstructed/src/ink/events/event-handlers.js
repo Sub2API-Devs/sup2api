@@ -13,10 +13,10 @@
 /**
  * 把 scrollTop 限制在可滚动范围内。
  */
-function clampScrollTop(n) {
-  let scrollTop = n.scrollTop ?? 0;
-  if (n.scrollHeight === undefined) return scrollTop;
-  return Math.min(scrollTop, Math.max(0, n.scrollHeight - (n.scrollViewportHeight ?? 0)));
+function clampScrollTop(element) {
+  let scrollTop = element.scrollTop ?? 0;
+  if (element.scrollHeight === undefined) return scrollTop;
+  return Math.min(scrollTop, Math.max(0, element.scrollHeight - (element.scrollViewportHeight ?? 0)));
 }
 //@ chunk-bzr73sfg.js:187644-188315 fingerprint = HANDLER_FOR_EVENT (0.754)
 /**
@@ -77,4 +77,4 @@ var EVENT_HANDLER_PROPS = new Set([
   "onMouseLeave",
   "onPointer",
 ]);
-export { clampScrollTop, HANDLER_FOR_EVENT, RAW_MODE_HANDLER_PROPS, EVENT_HANDLER_PROPS };
+export { clampScrollTop, RAW_MODE_HANDLER_PROPS, EVENT_HANDLER_PROPS, HANDLER_FOR_EVENT };

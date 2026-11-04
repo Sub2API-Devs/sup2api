@@ -59,8 +59,8 @@ function isArtifactPathMounted() {
 /**
  * 非挂载模式下的路径前缀。
  */
-function artifactPathPrefix(e) {
-  return isArtifactMountMode() ? undefined : `/${e}`;
+function artifactPathPrefix(path) {
+  return isArtifactMountMode() ? undefined : `/${path}`;
 }
 export {
   isArtifactMountMode,

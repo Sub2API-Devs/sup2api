@@ -17,12 +17,13 @@ import { plural } from "../../utils/stringUtils.js";
 /**
  * 连接器建议结果。
  */
-function renderSuggestConnectorsResult(o) {
+function renderSuggestConnectorsResult(result) {
   return jsxProd_default(MessageResponse, {
     children: jsxProd_default(Text, {
-      children: o.opt_in_required
-        ? o.message
-        : `${o.connectors.length} ${plural(o.connectors.length, "connector")}`,
+      children: result.opt_in_required
+        ? result.message
+        : `${result.connectors.length} ${plural(result.connectors.length, "connector")}`,
     }),
   });
 }
+export { renderSuggestConnectorsResult };

@@ -20,53 +20,55 @@ import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 /**
  * 读取 PDF 提取后的页面文件，确保提取目录位于会话工具结果目录内。
  */
-async function readPdfExtractedPages(storageV5, outputDir, v5SidecarScope) {
-  if (v5SidecarScope === undefined && pathModule_2.dirname(outputDir) !== toolResultsDir())
+async function readPdfExtractedPages(storage, outputDir, scope) {
+  if (scope === undefined && pathModule_2.dirname(outputDir) !== toolResultsDir())
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `PDF extraction directory is outside the session tool-results store: ${outputDir}`,
       "pdf extraction dir outside tool-results",
     );
-  let s;
-  let h;
-  if (v5SidecarScope?.pageNames !== undefined) {
-    if (v5SidecarScope.pageNames.length === 0)
+  let scope_2;
+  let pageNames;
+  if (scope?.pageNames !== undefined) {
+    if (scope.pageNames.length === 0)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `PDF extraction handed over no page names: ${outputDir}`,
         "pdf extraction no page names",
       );
-    s = v5SidecarScope;
-    h = v5SidecarScope.pageNames;
+    scope_2 = scope;
+    pageNames = scope.pageNames;
   } else {
-    let L = await listPdfSidecarPages(storageV5, outputDir, v5SidecarScope);
-    if (!L.ok)
+    let listing = await listPdfSidecarPages(storage, outputDir, scope);
+    if (!listing.ok)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Failed to list extracted PDF pages: ${L.code} (${outputDir})`,
+        `Failed to list extracted PDF pages: ${listing.code} (${outputDir})`,
         "pdf extraction listing failed",
       );
-    if (L.names.length === 0 && !L.directoryExists)
+    if (listing.names.length === 0 && !listing.directoryExists)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `PDF extraction directory disappeared before readback: ${outputDir}`,
         "pdf extraction dir missing",
       );
-    s = L.scope;
-    h = L.names;
+    scope_2 = listing.scope;
+    pageNames = listing.names;
   }
-  let { projectKey, sessionId, relPath } = s;
+  let { projectKey, sessionId, relPath } = scope_2;
   return Promise.all(
-    h.map(async (L) => {
-      let G = await storageV5.read([STORAGE_SPACES.sidecar(projectKey, sessionId, [...relPath, L])]);
-      if (!G.ok)
+    pageNames.map(async (pageName) => {
+      let readResult = await storage.read([
+        STORAGE_SPACES.sidecar(projectKey, sessionId, [...relPath, pageName]),
+      ]);
+      if (!readResult.ok)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `Failed to read extracted PDF page: ${G.error.code} (${pathModule_2.join(outputDir, L)})`,
+          `Failed to read extracted PDF page: ${readResult.error.code} (${pathModule_2.join(outputDir, pageName)})`,
           "pdf extraction page read failed",
         );
-      let q = G.value.items[0];
-      if (q === undefined || !q.found)
+      let item = readResult.value.items[0];
+      if (item === undefined || !item.found)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `Extracted PDF page disappeared during read: ${pathModule_2.join(outputDir, L)}`,
+          `Extracted PDF page disappeared during read: ${pathModule_2.join(outputDir, pageName)}`,
           "pdf extraction page missing",
         );
-      return Buffer.from(q.value);
+      return Buffer.from(item.value);
     }),
   );
 }

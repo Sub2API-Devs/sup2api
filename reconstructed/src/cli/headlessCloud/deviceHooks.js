@@ -34,73 +34,74 @@ var DEVICE_HOOKS_TIMER_MS = 5000;
 /**
  * 无头云会话的"本机钩子"特性：检查同意书、向云会话注册本机钩子并在空闲时休眠，报告 off 原因（未同意、被拒、空闲等）。
  */
-function createDeviceHooksFeature(e) {
-  let enabled = e.enabled ?? isHookForwardingEnabled;
-  let setTimer = e.setTimer ?? unrefTimeout;
-  let now = e.now ?? Date.now;
-  return async (h) => {
+function createDeviceHooksFeature(options) {
+  let enabled = options.enabled ?? isHookForwardingEnabled;
+  let setTimer = options.setTimer ?? unrefTimeout;
+  let now = options.now ?? Date.now;
+  return async (session) => {
     if (!enabled()) return;
-    let y = h.trigger === "attach";
-    if (!h.bound) return deviceHooksOffFeature("not_bound", y);
-    let memory = e.memory;
-    let w = e.consentDeps ?? readDeviceHooksConsent(h.storageV5);
-    switch (await waitForConsentAnswer(memory.consentPin, w, h.signal, setTimer)) {
+    let isAttach = session.trigger === "attach";
+    if (!session.bound) return deviceHooksOffFeature("not_bound", isAttach);
+    let memory = options.memory;
+    let consentDeps = options.consentDeps ?? readDeviceHooksConsent(session.storageV5);
+    switch (await waitForConsentAnswer(memory.consentPin, consentDeps, session.signal, setTimer)) {
       case "declined":
-        return deviceHooksOffFeature("declined", y, "stored");
+        return deviceHooksOffFeature("declined", isAttach, "stored");
       case "aborted":
-        return deviceHooksOffFeature("detached", y);
+        return deviceHooksOffFeature("detached", isAttach);
       case "unreadable":
         logFeatureBad("device_hooks_client_register", "consent_unreadable");
-        return deviceHooksOffFeature("unreadable", y);
+        return deviceHooksOffFeature("unreadable", isAttach);
       case "unset":
-        return deviceHooksOffFeature("no_consent", y, "default");
+        return deviceHooksOffFeature("no_consent", isAttach, "default");
       case "accepted":
         break;
     }
-    let k = (e.launchDir ?? getOriginalCwd)();
+    let launchDir = (options.launchDir ?? getOriginalCwd)();
     let noticeBacklog = createNoticeBacklog();
     let line;
-    let P;
-    let N = null;
-    let L = false;
+    let mounts;
+    let tools = null;
+    let stopped = false;
     let deviceHookForwarding = startDeviceHookForwarding({
-      launchDir: k,
-      cloudSessionId: h.sessionId,
+      launchDir,
+      cloudSessionId: session.sessionId,
       memory,
-      getTools: e.getTools,
-      storageV5: h.storageV5,
-      manager: () => N,
+      getTools: options.getTools,
+      storageV5: session.storageV5,
+      manager: () => tools,
       syncRoot: () => {
-        let dirSync = h.dirSync;
+        let dirSync = session.dirSync;
         if (!dirSync) return null;
         let { state } = dirSync.sync.state();
         return state === "armed" || state === "seeding" ? dirSync.gitRoot : null;
       },
       onLine: ({ line: line_2, level }) => {
         line = line_2;
-        if (level === "warning") P = line_2;
+        if (level === "warning") mounts = line_2;
         noticeBacklog.publish(line_2, level);
       },
-      registerCleanup: e.attach?.registerCleanup ?? registerCleanup,
+      registerCleanup: options.attach?.registerCleanup ?? registerCleanup,
       subscribeSettingsChanges:
-        e.attach?.subscribeSettingsChanges ?? ((Y) => settingsChangeDetector.subscribe(Y)),
-      trustAccepted: e.attach?.trustAccepted ?? (() => isWorkspacePersistedTrusted(k)),
-      ...(e.attach?.createSession && {
-        createSession: e.attach.createSession,
+        options.attach?.subscribeSettingsChanges ??
+        ((trustAccepted) => settingsChangeDetector.subscribe(trustAccepted)),
+      trustAccepted: options.attach?.trustAccepted ?? (() => isWorkspacePersistedTrusted(launchDir)),
+      ...(options.attach?.createSession && {
+        createSession: options.attach.createSession,
       }),
-      ...(e.attach?.createSender && {
-        createSender: e.attach.createSender,
+      ...(options.attach?.createSender && {
+        createSender: options.attach.createSender,
       }),
-      ...(e.attach?.subscribeConsent && {
-        subscribeConsent: e.attach.subscribeConsent,
+      ...(options.attach?.subscribeConsent && {
+        subscribeConsent: options.attach.subscribeConsent,
       }),
     });
     return {
       feature: "hooks",
       status: noticeBacklog,
       sessionCallbacks: deviceHookForwarding.callbacks,
-      onSession(Y) {
-        N = Y.manager;
+      onSession(createSession) {
+        tools = createSession.manager;
       },
       onStreamConnected: () => deviceHookForwarding.onStreamConnected(),
       onWorkerInit: () => deviceHookForwarding.onWorkerInit(),
@@ -109,58 +110,58 @@ function createDeviceHooksFeature(e) {
       onTurnEnded: () => deviceHookForwarding.onTurnEnded(),
       beforeSend: () => deviceHookForwarding.beforeSend(),
       report: () => {
-        let Y = deviceHookForwarding.snapshot();
-        if (Y.lastOutcome === "registered") P = undefined;
+        let wanted = deviceHookForwarding.snapshot();
+        if (wanted.lastOutcome === "registered") mounts = undefined;
         return deviceHooksStatusReport(
-          Y,
-          memory.senderFor(k),
+          wanted,
+          memory.senderFor(launchDir),
           {
             line,
-            warning: P,
+            warning: mounts,
           },
           now(),
         );
       },
       async dispose() {
-        if (L) return;
-        L = true;
+        if (stopped) return;
+        stopped = true;
         deviceHookForwarding.dispose();
       },
     };
   };
 }
 //@ chunk-fe6rs39h.js:15912-16329 placement
-function deviceHooksStatusReport(e, n, s, r) {
-  let h = deviceHooksOffReason(e, n.standing);
-  if (h !== null) {
-    let S = s.warning ?? s.line;
+function deviceHooksStatusReport(feature, memory, result, session) {
+  let reason = deviceHooksOffReason(feature, memory.standing);
+  if (reason !== null) {
+    let message = result.warning ?? result.line;
     return {
       state: "off",
-      reason: h,
-      ...(h === "declined" && {
+      reason,
+      ...(reason === "declined" && {
         source: "stored",
       }),
-      ...(S !== undefined && {
-        message: truncateToLength(S, 200),
+      ...(message !== undefined && {
+        message: truncateToLength(message, 200),
       }),
     };
   }
-  let y = deviceHooksRegistrationState(n, r);
-  if (y !== null)
+  let idleReason = deviceHooksRegistrationState(memory, session);
+  if (idleReason !== null)
     return {
       state: "idle",
       source: "stored",
-      reason: y,
+      reason: idleReason,
       message:
-        n.standing.kind === "dormant" && n.standing.senderUnverified
+        memory.standing.kind === "dormant" && memory.standing.senderUnverified
           ? SENDER_UNVERIFIED_TEXT
-          : DEVICE_HOOKS_OFF_MESSAGES[y],
+          : DEVICE_HOOKS_OFF_MESSAGES[idleReason],
     };
   return {
     state: "forwarded",
     source: "stored",
-    ...(s.line !== undefined && {
-      message: truncateToLength(s.line, 200),
+    ...(result.line !== undefined && {
+      message: truncateToLength(result.line, 200),
     }),
   };
 }
@@ -172,9 +173,9 @@ var DEVICE_HOOKS_OFF_MESSAGES = {
     "Hooks from this machine are not registered with this cloud session yet: it has not answered (it may be asleep); they are registered when it is next used.",
 };
 //@ chunk-fe6rs39h.js:16701-17409 placement
-function deviceHooksOffReason(e, standing) {
-  if (e.phase === "stopped") return e.stoppedReason ?? "stopped";
-  switch (e.lastOutcome) {
+function deviceHooksOffReason(state, standing) {
+  if (state.phase === "stopped") return state.stoppedReason ?? "stopped";
+  switch (state.lastOutcome) {
     case "no_consent":
     case "consent_distrusted":
     case "disabled":
@@ -183,16 +184,17 @@ function deviceHooksOffReason(e, standing) {
     case "nothing_to_offer":
     case "flag_off":
     case "flag_unanswered":
-      return e.lastOutcome;
+      return state.lastOutcome;
     case "muted":
-      return e.phase === "registering" ? null : "muted";
+      return state.phase === "registering" ? null : "muted";
     case "unregistered":
       return standing.kind === "kept_none" ? "kept_none" : "nothing_to_offer";
     case "not_ready":
     case "stale_epoch":
-      return standing.kind === "paused" && e.phase !== "registering" ? "paused" : null;
+      return standing.kind === "paused" && state.phase !== "registering" ? "paused" : null;
     case "failed":
-      if (e.phase === "registering" || e.phase === "registered" || standing.kind === "dormant") return null;
+      if (state.phase === "registering" || state.phase === "registered" || standing.kind === "dormant")
+        return null;
       return standing.kind === "paused" ? "paused" : "failed";
     case null:
     case "registered":
@@ -202,43 +204,43 @@ function deviceHooksOffReason(e, standing) {
   }
 }
 //@ chunk-fe6rs39h.js:17409-17746 placement
-function waitForConsentAnswer(consentPin, n, signal, setTimer) {
+function waitForConsentAnswer(consentPin, memory, signal, setTimer) {
   if (signal.aborted) return Promise.resolve("aborted");
-  let h = () => {};
+  let cleanup = () => {};
   let promise = new Promise((resolve) => {
-    let w = () => resolve("unreadable");
-    let R = () => resolve("aborted");
-    let k = setTimer(w, DEVICE_HOOKS_TIMER_MS);
-    signal.addEventListener("abort", R, {
+    let unreadable = () => resolve("unreadable");
+    let aborted = () => resolve("aborted");
+    let timer = setTimer(unreadable, DEVICE_HOOKS_TIMER_MS);
+    signal.addEventListener("abort", aborted, {
       once: true,
     });
-    h = () => {
-      k.clear();
-      signal.removeEventListener("abort", R);
+    cleanup = () => {
+      timer.clear();
+      signal.removeEventListener("abort", aborted);
     };
     (consentPin.current?.origin === "given"
       ? consentPin.current.value
-      : readDeviceHooksConsentChoice(n)
-    ).then(resolve, w);
+      : readDeviceHooksConsentChoice(memory)
+    ).then(resolve, unreadable);
   });
-  promise.then(() => h());
+  promise.then(() => cleanup());
   return promise;
 }
 //@ chunk-fe6rs39h.js:17746-17939 placement
-function deviceHooksOffFeature(e, reattach, s) {
+function deviceHooksOffFeature(reason, reattach, isAttach) {
   logEvent("tengu_device_hooks_headless_off", {
-    reason: fromEnum(e),
+    reason: fromEnum(reason),
     reattach,
   });
   return {
     feature: "hooks",
     report: () => ({
       state: "off",
-      reason: e,
-      ...(s && {
-        source: s,
+      reason,
+      ...(isAttach && {
+        source: isAttach,
       }),
-      ...(e === "no_consent" && {
+      ...(reason === "no_consent" && {
         message: DEVICE_HOOKS_UNDECIDED_MESSAGE,
       }),
     }),

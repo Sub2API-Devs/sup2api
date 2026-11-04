@@ -5,13 +5,14 @@
  * pieces: chunk-p86mcgbc.js (15)
  * attribution: esm-fingerprint 10, esm-layout 5
  */
-import { Xa } from "../../../runtime/bun-runtime.js";
+import { __esm } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-p86mcgbc.js:227-349 esm-fingerprint
-function getIteratorFn(t) {
-  if (t === null || typeof t !== "object") return null;
-  t = (MAYBE_ITERATOR_SYMBOL && t[MAYBE_ITERATOR_SYMBOL]) || t["@@iterator"];
-  return typeof t === "function" ? t : null;
+function getIteratorFn(maybeIterable) {
+  if (maybeIterable === null || typeof maybeIterable !== "object") return null;
+  maybeIterable =
+    (MAYBE_ITERATOR_SYMBOL && maybeIterable[MAYBE_ITERATOR_SYMBOL]) || maybeIterable["@@iterator"];
+  return typeof maybeIterable === "function" ? maybeIterable : null;
 }
 //@ chunk-p86mcgbc.js:349-425 esm-fingerprint
 function Component(props, context, updater) {
@@ -51,7 +52,7 @@ function isValidElement(object) {
   return typeof object === "object" && object !== null && object.$$typeof === REACT_ELEMENT_TYPE;
 }
 //@ chunk-p86mcgbc.js:731-825 esm-fingerprint
-function K(key) {
+function escapeUserProvidedKey(key) {
   var escaperLookup = {
     "=": "=0",
     ":": "=2",
@@ -66,7 +67,7 @@ function K(key) {
 //@ chunk-p86mcgbc.js:825-918 esm-fingerprint
 function getElementKey(element, index) {
   return typeof element === "object" && element !== null && element.key != null
-    ? K("" + element.key)
+    ? escapeUserProvidedKey("" + element.key)
     : index.toString(36);
 }
 //@ chunk-p86mcgbc.js:918-1309 esm-fingerprint
@@ -156,17 +157,17 @@ function mapIntoArray(children, array, escapedPrefix, nameSoFar, callback) {
   invokeCallback = 0;
   var nextNamePrefix = nameSoFar === "" ? "." : nameSoFar + ":";
   if (isArrayImpl(children))
-    for (var i = 0; i < children.length; i++) {
-      nameSoFar = children[i];
-      type = nextNamePrefix + getElementKey(nameSoFar, i);
+    for (var childIndex = 0; childIndex < children.length; childIndex++) {
+      nameSoFar = children[childIndex];
+      type = nextNamePrefix + getElementKey(nameSoFar, childIndex);
       invokeCallback += mapIntoArray(nameSoFar, array, escapedPrefix, type, callback);
     }
   else {
-    i = getIteratorFn(children);
-    if (typeof i === "function")
-      for (children = i.call(children), i = 0; !(nameSoFar = children.next()).done;) {
+    childIndex = getIteratorFn(children);
+    if (typeof childIndex === "function")
+      for (children = childIndex.call(children), childIndex = 0; !(nameSoFar = children.next()).done;) {
         nameSoFar = nameSoFar.value;
-        type = nextNamePrefix + getElementKey(nameSoFar, i++);
+        type = nextNamePrefix + getElementKey(nameSoFar, childIndex++);
         invokeCallback += mapIntoArray(nameSoFar, array, escapedPrefix, type, callback);
       }
     else if (type === "object") {
@@ -197,13 +198,13 @@ function mapChildren(children, func, context) {
 //@ chunk-p86mcgbc.js:2450-4107 esm-layout
 var REACT_ELEMENT_TYPE;
 var REACT_PORTAL_TYPE;
-var Y;
-var I;
+var REACT_FRAGMENT_TYPE;
+var REACT_CONSUMER_TYPE;
 var REACT_CONTEXT_TYPE;
-var L;
-var k;
+var REACT_SUSPENSE_TYPE;
+var REACT_MEMO_TYPE;
 var REACT_LAZY_TYPE;
-var b;
+var REACT_ACTIVITY_TYPE;
 var MAYBE_ITERATOR_SYMBOL;
 var ReactNoopUpdateQueue;
 var assign;
@@ -214,15 +215,15 @@ var ReactSharedInternals;
 var hasOwnProperty;
 var userProvidedKeyEscapeRegex;
 var reportGlobalError;
-var W;
-var g5r;
-var Fy;
+var ReactChildren;
+var activityTypeExport;
+var childrenExport;
 var REACT_PROFILER_TYPE;
-var Kc;
+var fragmentTypeExport;
 var PureComponent_default;
-var fo;
+var suspenseTypeExport;
 var addTransitionType;
-var qt = function (defaultValue) {
+var createContext = function (defaultValue) {
   defaultValue = {
     $$typeof: REACT_CONTEXT_TYPE,
     _currentValue: defaultValue,
@@ -233,12 +234,12 @@ var qt = function (defaultValue) {
   };
   defaultValue.Provider = defaultValue;
   defaultValue.Consumer = {
-    $$typeof: I,
+    $$typeof: REACT_CONSUMER_TYPE,
     _context: defaultValue,
   };
   return defaultValue;
 };
-var Vc = function (type, config, children) {
+var createElement = function (type, config, children) {
   var propName;
   var props = {};
   var key = null;
@@ -254,8 +255,8 @@ var Vc = function (type, config, children) {
   var childrenLength = arguments.length - 2;
   if (childrenLength === 1) props.children = children;
   else if (1 < childrenLength) {
-    for (var childArray = Array(childrenLength), i = 0; i < childrenLength; i++)
-      childArray[i] = arguments[i + 2];
+    for (var childArray = Array(childrenLength), argIndex = 0; argIndex < childrenLength; argIndex++)
+      childArray[argIndex] = arguments[argIndex + 2];
     props.children = childArray;
   }
   if (type && type.defaultProps)
@@ -263,25 +264,25 @@ var Vc = function (type, config, children) {
       if (props[propName] === undefined) props[propName] = childrenLength[propName];
   return ReactElement(type, key, props);
 };
-var a5o = function () {
+var createRef = function () {
   return {
     current: null,
   };
 };
 var isValidElement_default;
-var Rh = function (type, e) {
+var memo = function (type, compare) {
   return {
-    $$typeof: k,
+    $$typeof: REACT_MEMO_TYPE,
     type,
-    compare: e === undefined ? null : e,
+    compare: compare === undefined ? null : compare,
   };
 };
-var h5r = function (t) {
+var startTransition = function (scope) {
   var prevTransition = ReactSharedInternals.T;
   var currentTransition = {};
   ReactSharedInternals.T = currentTransition;
   try {
-    var returnValue = t();
+    var returnValue = scope();
     var onStartTransitionFinish = ReactSharedInternals.S;
     if (onStartTransitionFinish !== null) onStartTransitionFinish(currentTransition, returnValue);
     if (typeof returnValue === "object" && returnValue !== null && typeof returnValue.then === "function")
@@ -294,65 +295,65 @@ var h5r = function (t) {
     ReactSharedInternals.T = prevTransition;
   }
 };
-var Qr = function (t) {
-  return ReactSharedInternals.H.use(t);
+var use = function (usable) {
+  return ReactSharedInternals.H.use(usable);
 };
-var ce = function (callback, deps) {
+var useCallback = function (callback, deps) {
   return ReactSharedInternals.H.useCallback(callback, deps);
 };
-var Se = function (Context) {
+var useContext = function (Context) {
   return ReactSharedInternals.H.useContext(Context);
 };
-var eJ = function (value, initialValue) {
+var useDeferredValue = function (value, initialValue) {
   return ReactSharedInternals.H.useDeferredValue(value, initialValue);
 };
-var P = function (create, deps) {
+var useEffect = function (create, deps) {
   return ReactSharedInternals.H.useEffect(create, deps);
 };
-var Oo = function (callback) {
+var useEffectEvent = function (callback) {
   return ReactSharedInternals.H.useEffectEvent(callback);
 };
-var l5o = function () {
+var useId = function () {
   return ReactSharedInternals.H.useId();
 };
-var vxe = function (ref, create, deps) {
+var useImperativeHandle = function (ref, create, deps) {
   return ReactSharedInternals.H.useImperativeHandle(ref, create, deps);
 };
-var NSe = function (create, deps) {
+var useInsertionEffect = function (create, deps) {
   return ReactSharedInternals.H.useInsertionEffect(create, deps);
 };
-var zt = function (create, deps) {
+var useLayoutEffect = function (create, deps) {
   return ReactSharedInternals.H.useLayoutEffect(create, deps);
 };
-var Q = function (create, deps) {
+var useMemo = function (create, deps) {
   return ReactSharedInternals.H.useMemo(create, deps);
 };
-var Uy = function (t, e, init) {
-  return ReactSharedInternals.H.useReducer(t, e, init);
+var useReducer = function (reducer, initialArg, init) {
+  return ReactSharedInternals.H.useReducer(reducer, initialArg, init);
 };
-var R = function (initialValue) {
+var useRef = function (initialValue) {
   return ReactSharedInternals.H.useRef(initialValue);
 };
-var y = function (initialState) {
+var useState = function (initialState) {
   return ReactSharedInternals.H.useState(initialState);
 };
-var yt = function (subscribe, getSnapshot, getServerSnapshot) {
+var useSyncExternalStore = function (subscribe, getSnapshot, getServerSnapshot) {
   return ReactSharedInternals.H.useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 };
-var y5r = function () {
+var useTransition = function () {
   return ReactSharedInternals.H.useTransition();
 };
 //@ chunk-p86mcgbc.js:4107-5964 esm-layout
-var init_react_production = Xa(() => {
+var init_react_production = __esm(() => {
   REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element");
   REACT_PORTAL_TYPE = Symbol.for("react.portal");
-  Y = Symbol.for("react.fragment");
-  I = Symbol.for("react.consumer");
+  REACT_FRAGMENT_TYPE = Symbol.for("react.fragment");
+  REACT_CONSUMER_TYPE = Symbol.for("react.consumer");
   REACT_CONTEXT_TYPE = Symbol.for("react.context");
-  L = Symbol.for("react.suspense");
-  k = Symbol.for("react.memo");
+  REACT_SUSPENSE_TYPE = Symbol.for("react.suspense");
+  REACT_MEMO_TYPE = Symbol.for("react.memo");
   REACT_LAZY_TYPE = Symbol.for("react.lazy");
-  b = Symbol.for("react.activity");
+  REACT_ACTIVITY_TYPE = Symbol.for("react.activity");
   MAYBE_ITERATOR_SYMBOL = Symbol.iterator;
   ReactNoopUpdateQueue = {
     isMounted: function () {
@@ -410,7 +411,7 @@ var init_react_production = Xa(() => {
           }
           console.error(error);
         };
-  W = {
+  ReactChildren = {
     map: mapChildren,
     forEach: function (children, forEachFunc, forEachContext) {
       mapChildren(
@@ -441,44 +442,44 @@ var init_react_production = Xa(() => {
       return children;
     },
   };
-  g5r = b;
-  Fy = W;
+  activityTypeExport = REACT_ACTIVITY_TYPE;
+  childrenExport = ReactChildren;
   REACT_PROFILER_TYPE = Component;
-  Kc = Y;
+  fragmentTypeExport = REACT_FRAGMENT_TYPE;
   PureComponent_default = PureComponent;
-  fo = L;
+  suspenseTypeExport = REACT_SUSPENSE_TYPE;
   addTransitionType = ReactSharedInternals;
   isValidElement_default = isValidElement;
 });
 export {
-  qt,
-  Se,
-  Fy,
+  createContext,
+  useContext,
+  childrenExport,
   isValidElement_default,
   init_react_production,
-  y,
-  R,
-  vxe,
-  zt,
-  P,
-  Q,
-  ce,
-  yt,
-  Rh,
-  fo,
-  Oo,
-  Kc,
-  Uy,
-  Vc,
-  eJ,
-  Qr,
-  h5r,
-  NSe,
-  g5r,
-  y5r,
+  useState,
+  useRef,
+  useImperativeHandle,
+  useLayoutEffect,
+  useEffect,
+  useMemo,
+  useCallback,
+  useSyncExternalStore,
+  memo,
+  suspenseTypeExport,
+  useEffectEvent,
+  fragmentTypeExport,
+  useReducer,
+  createElement,
+  useDeferredValue,
+  use,
+  startTransition,
+  useInsertionEffect,
+  activityTypeExport,
+  useTransition,
   REACT_PROFILER_TYPE,
   addTransitionType,
   PureComponent_default,
-  a5o,
-  l5o,
+  createRef,
+  useId,
 };

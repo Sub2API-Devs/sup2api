@@ -30,8 +30,8 @@ var ZERO_USAGE = {
 /**
  * 按负载测试分块大小算出需要多少块。
  */
-function loadTestChunks(t) {
-  return Math.max(1, Math.ceil(t / LOAD_TEST_CHUNKS));
+function loadTestChunks(replyTokens) {
+  return Math.max(1, Math.ceil(replyTokens / LOAD_TEST_CHUNKS));
 }
 //@ chunk-hde10cf2.js:1860-2381 placement
 function buildLoadTestMessage(replyTokens) {
@@ -62,12 +62,12 @@ function buildLoadTestMessage(replyTokens) {
       {
         length: testChunks,
       },
-      (n, o) => ({
+      (replyTokens, message) => ({
         type: "content_block_delta",
         index: 0,
         delta: {
           type: "text_delta",
-          text: o === 0 ? LOAD_TEST_REPLY_PREFIX : LOAD_TEST_TEXT,
+          text: message === 0 ? LOAD_TEST_REPLY_PREFIX : LOAD_TEST_TEXT,
         },
       }),
     ),
@@ -91,69 +91,69 @@ function buildLoadTestMessage(replyTokens) {
   ];
 }
 //@ chunk-hde10cf2.js:2381-2891 placement
-function encodeEventStreamFrame(t) {
+function encodeEventStreamFrame(payload) {
   let buffer = Buffer.concat(
     [
       [":message-type", "event"],
       [":event-type", "chunk"],
       [":content-type", "application/json"],
-    ].map(([o, c]) =>
+    ].map(([name, value]) =>
       Buffer.concat([
-        Buffer.from([o.length]),
-        Buffer.from(o),
-        Buffer.from([7, c.length >> 8, c.length & 255]),
-        Buffer.from(c),
+        Buffer.from([name.length]),
+        Buffer.from(name),
+        Buffer.from([7, value.length >> 8, value.length & 255]),
+        Buffer.from(value),
       ]),
     ),
   );
-  let n = Buffer.alloc(12 + buffer.length + t.length + 4);
-  n.writeUInt32BE(n.length, 0);
-  n.writeUInt32BE(buffer.length, 4);
-  n.writeUInt32BE(Bun.hash.crc32(n.subarray(0, 8)), 8);
-  buffer.copy(n, 12);
-  n.set(t, 12 + buffer.length);
-  n.writeUInt32BE(Bun.hash.crc32(n.subarray(0, n.length - 4)), n.length - 4);
-  return n;
+  let frame = Buffer.alloc(12 + buffer.length + payload.length + 4);
+  frame.writeUInt32BE(frame.length, 0);
+  frame.writeUInt32BE(buffer.length, 4);
+  frame.writeUInt32BE(Bun.hash.crc32(frame.subarray(0, 8)), 8);
+  buffer.copy(frame, 12);
+  frame.set(payload, 12 + buffer.length);
+  frame.writeUInt32BE(Bun.hash.crc32(frame.subarray(0, frame.length - 4)), frame.length - 4);
+  return frame;
 }
 //@ chunk-hde10cf2.js:2891-3277 placement
-async function checkSpendTableEmpty(t, r) {
-  if ((await r`SELECT 1 FROM spend WHERE cents > 0 LIMIT 1`).length > 0)
+async function checkSpendTableEmpty(url, sql) {
+  if ((await sql`SELECT 1 FROM spend WHERE cents > 0 LIMIT 1`).length > 0)
     throw Error(
       "load_test_mode is on, but the database at store.postgres_url already holds real spend (a spend row above 0 cents). A load test writes made-up developers into it, so it must not share a database with real developers. Point store.postgres_url at its own empty database.",
     );
-  return streamLoadTestReply(t);
+  return streamLoadTestReply(url);
 }
 //@ chunk-hde10cf2.js:3277-3329 placement
 /**
  * 按数量选择单复数形式（"1 reply" / "2 replies"）。
  */
-function plural(t, r, n = `${r}s`) {
-  return `${t} ${t === 1 ? r : n}`;
+function plural(count, singular, pluralForm = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : pluralForm}`;
 }
 //@ chunk-hde10cf2.js:3329-7759 placement
 /**
  * 生成 load-test 模式的 SSE/事件流回复（按 reply_tokens 与 reply_seconds 节奏）。
  */
-function streamLoadTestReply(t, r = LOAD_TEST_MAX) {
-  let loadTestMessage = buildLoadTestMessage(t.reply_tokens);
-  let o = t.reply_seconds * 1000;
+function streamLoadTestReply(config, logEveryMs = LOAD_TEST_MAX) {
+  let loadTestMessage = buildLoadTestMessage(config.reply_tokens);
+  let replyMs = config.reply_seconds * 1000;
   let loadTestDevices = openLoadTestDevices();
-  let mapped = loadTestMessage.map((e) =>
+  let frames = loadTestMessage.map((event) =>
     encodeEventStreamFrame(
       Buffer.from(
         jsonStringify({
-          bytes: Buffer.from(jsonStringify(e)).toString("base64"),
+          bytes: Buffer.from(jsonStringify(event)).toString("base64"),
         }),
       ),
     ),
   );
-  let mapped_2 = loadTestMessage.map((e) =>
-    Buffer.from(`event: ${e.type}
-data: ${jsonStringify(e)}
+  let frames_2 = loadTestMessage.map((event) =>
+    Buffer.from(`event: ${event.type}
+data: ${jsonStringify(event)}
 
 `),
   );
-  let p = jsonStringify({
+  let jsonBody = jsonStringify({
     id: "msg_loadtest",
     type: "message",
     role: "assistant",
@@ -161,29 +161,31 @@ data: ${jsonStringify(e)}
     content: [
       {
         type: "text",
-        text: LOAD_TEST_REPLY_PREFIX + LOAD_TEST_TEXT.repeat(Math.max(0, loadTestChunks(t.reply_tokens) - 1)),
+        text:
+          LOAD_TEST_REPLY_PREFIX +
+          LOAD_TEST_TEXT.repeat(Math.max(0, loadTestChunks(config.reply_tokens) - 1)),
       },
     ],
     stop_reason: "end_turn",
     stop_sequence: null,
     usage: ZERO_USAGE,
   });
-  let buffer = Buffer.from(p);
-  let d = new Set();
-  let y;
-  let h = false;
-  let E = 0;
-  let k = 0;
-  let w = 0;
-  let T = 0;
-  let L = new Set();
-  let v = 0;
-  let M = 0;
-  let A = 0;
-  let x = 0;
-  let U = 0;
-  let B = 0;
-  let O = {
+  let buffer = Buffer.from(jsonBody);
+  let openReplies = new Set();
+  let reportTimer;
+  let closed = false;
+  let windowStartMs = 0;
+  let arrivalsInWindow = 0;
+  let bodiesInWindow = 0;
+  let bodyBytesInWindow = 0;
+  let developersInWindow = new Set();
+  let finishedInWindow = 0;
+  let hungUpInWindow = 0;
+  let checkFaultsInWindow = 0;
+  let writeFaultsInWindow = 0;
+  let lateTotalMs = 0;
+  let worstLateMs = 0;
+  let EMPTY_TOTALS = {
     since: 0,
     lastBusyAt: 0,
     arrivals: 0,
@@ -196,183 +198,196 @@ data: ${jsonStringify(e)}
     peakOpen: 0,
     worstLateMs: 0,
   };
-  let u = {
-    ...O,
+  let totals = {
+    ...EMPTY_TOTALS,
   };
-  function R(e) {
-    if (h) return;
-    if (!y) {
-      E = e;
-      y = setInterval(se, LOAD_TEST_REPEAT);
+  function markBusy(nowMs) {
+    if (closed) return;
+    if (!reportTimer) {
+      windowStartMs = nowMs;
+      reportTimer = setInterval(reportTick, LOAD_TEST_REPEAT);
     }
-    if (u.since === 0) u.since = e;
+    if (totals.since === 0) totals.since = nowMs;
   }
-  function F(e) {
-    if (h) return;
-    R(performance.now());
-    v++;
-    U += e;
-    B = Math.max(B, e);
+  function recordFinished(lateMs) {
+    if (closed) return;
+    markBusy(performance.now());
+    finishedInWindow++;
+    lateTotalMs += lateMs;
+    worstLateMs = Math.max(worstLateMs, lateMs);
   }
-  function I() {
-    if (!h) M++;
+  function recordHungUp() {
+    if (!closed) hungUpInWindow++;
   }
-  function ee() {
-    if (h) return;
-    R(performance.now());
-    k++;
+  function recordArrival() {
+    if (closed) return;
+    markBusy(performance.now());
+    arrivalsInWindow++;
   }
-  function te(e, l) {
-    if (h) return;
-    w++;
-    T += e;
-    L.add(l);
+  function recordBodyRead(bodyBytes, developerKey) {
+    if (closed) return;
+    bodiesInWindow++;
+    bodyBytesInWindow += bodyBytes;
+    developersInWindow.add(developerKey);
   }
-  function ne(e) {
-    if (h) return;
-    R(performance.now());
-    if (e === "check") A++;
-    else x++;
+  function recordSpendFault(kind) {
+    if (closed) return;
+    markBusy(performance.now());
+    if (kind === "check") checkFaultsInWindow++;
+    else writeFaultsInWindow++;
   }
-  function P(e, l) {
-    return `${plural(e, "spend check")} failed, ${plural(l, "spend write")} failed`;
+  function describeSpendFaults(checks, writes) {
+    return `${plural(checks, "spend check")} failed, ${plural(writes, "spend write")} failed`;
   }
-  function q(e) {
-    let max = Math.max(1, (e - E) / 1000);
-    let f = k + v + M + A + x + d.size > 0;
-    if (f) {
-      let g = w > 0 ? T / w / 1000 : 0;
+  function flushWindow(nowMs) {
+    let max = Math.max(1, (nowMs - windowStartMs) / 1000);
+    let busy =
+      arrivalsInWindow +
+        finishedInWindow +
+        hungUpInWindow +
+        checkFaultsInWindow +
+        writeFaultsInWindow +
+        openReplies.size >
+      0;
+    if (busy) {
+      let meanBodyKb = bodiesInWindow > 0 ? bodyBytesInWindow / bodiesInWindow / 1000 : 0;
       gatewayLog(
         "info",
-        `load test, last ${Math.round(max)} s: ${(k / max).toFixed(1)} requests/s arrived` +
-          (w > 0
-            ? `, ${(w / max).toFixed(1)}/s with their body read (mean body ${g < 10 ? g.toFixed(1) : Math.round(g)} KB, from ${plural(L.size, "developer")})`
+        `load test, last ${Math.round(max)} s: ${(arrivalsInWindow / max).toFixed(1)} requests/s arrived` +
+          (bodiesInWindow > 0
+            ? `, ${(bodiesInWindow / max).toFixed(1)}/s with their body read (mean body ${meanBodyKb < 10 ? meanBodyKb.toFixed(1) : Math.round(meanBodyKb)} KB, from ${plural(developersInWindow.size, "developer")})`
             : "") +
-          `, ${(v / max).toFixed(1)} replies/s finished, ${plural(d.size, "reply", "replies")} open now, ${plural(M, "client")} hung up early, ${P(A, x)}` +
-          (v > 0
-            ? `; replies ended ${Math.round(U / v)} ms past reply_seconds on average (worst ${Math.round(B)} ms)`
+          `, ${(finishedInWindow / max).toFixed(1)} replies/s finished, ${plural(openReplies.size, "reply", "replies")} open now, ${plural(hungUpInWindow, "client")} hung up early, ${describeSpendFaults(checkFaultsInWindow, writeFaultsInWindow)}` +
+          (finishedInWindow > 0
+            ? `; replies ended ${Math.round(lateTotalMs / finishedInWindow)} ms past reply_seconds on average (worst ${Math.round(worstLateMs)} ms)`
             : ""),
       );
-      u.lastBusyAt = e;
+      totals.lastBusyAt = nowMs;
     }
-    u.arrivals += k;
-    u.bodies += w;
-    u.finished += v;
-    u.hungUp += M;
-    u.checkFaults += A;
-    u.writeFaults += x;
-    u.peakArrivalsPerS = Math.max(u.peakArrivalsPerS, k / max);
-    u.worstLateMs = Math.max(u.worstLateMs, B);
-    E = e;
-    k = 0;
-    w = 0;
-    T = 0;
-    L.clear();
-    v = 0;
-    M = 0;
-    A = 0;
-    x = 0;
-    U = 0;
-    B = 0;
-    return f;
+    totals.arrivals += arrivalsInWindow;
+    totals.bodies += bodiesInWindow;
+    totals.finished += finishedInWindow;
+    totals.hungUp += hungUpInWindow;
+    totals.checkFaults += checkFaultsInWindow;
+    totals.writeFaults += writeFaultsInWindow;
+    totals.peakArrivalsPerS = Math.max(totals.peakArrivalsPerS, arrivalsInWindow / max);
+    totals.worstLateMs = Math.max(totals.worstLateMs, worstLateMs);
+    windowStartMs = nowMs;
+    arrivalsInWindow = 0;
+    bodiesInWindow = 0;
+    bodyBytesInWindow = 0;
+    developersInWindow.clear();
+    finishedInWindow = 0;
+    hungUpInWindow = 0;
+    checkFaultsInWindow = 0;
+    writeFaultsInWindow = 0;
+    lateTotalMs = 0;
+    worstLateMs = 0;
+    return busy;
   }
-  function z() {
-    if (h) return;
-    let e = u;
-    if (e.arrivals + e.finished + e.hungUp + e.checkFaults + e.writeFaults > 0) {
-      let max = Math.max(0, e.arrivals - e.bodies);
+  function logSummary() {
+    if (closed) return;
+    let snapshot = totals;
+    if (
+      snapshot.arrivals + snapshot.finished + snapshot.hungUp + snapshot.checkFaults + snapshot.writeFaults >
+      0
+    ) {
+      let max = Math.max(0, snapshot.arrivals - snapshot.bodies);
       gatewayLog(
         "info",
-        `load test summary, over ${Math.max(1, Math.round((e.lastBusyAt - e.since) / 1000))} s: ${plural(e.arrivals, "request")} arrived${max > 0 ? ` (${max} refused before their body was read)` : ""}, ${plural(e.finished, "reply", "replies")} finished, ${plural(e.hungUp, "client")} hung up early, ${P(e.checkFaults, e.writeFaults)}. Peaks: ${e.peakArrivalsPerS.toFixed(1)} requests/s in the busiest window, ${plural(e.peakOpen, "reply", "replies")} open at once.` +
-          (d.size > 0 ? ` ${plural(d.size, "reply", "replies")} still open.` : "") +
-          (e.finished > 0
-            ? ` The worst reply ended ${Math.round(e.worstLateMs)} ms past reply_seconds.`
+        `load test summary, over ${Math.max(1, Math.round((snapshot.lastBusyAt - snapshot.since) / 1000))} s: ${plural(snapshot.arrivals, "request")} arrived${max > 0 ? ` (${max} refused before their body was read)` : ""}, ${plural(snapshot.finished, "reply", "replies")} finished, ${plural(snapshot.hungUp, "client")} hung up early, ${describeSpendFaults(snapshot.checkFaults, snapshot.writeFaults)}. Peaks: ${snapshot.peakArrivalsPerS.toFixed(1)} requests/s in the busiest window, ${plural(snapshot.peakOpen, "reply", "replies")} open at once.` +
+          (openReplies.size > 0 ? ` ${plural(openReplies.size, "reply", "replies")} still open.` : "") +
+          (snapshot.finished > 0
+            ? ` The worst reply ended ${Math.round(snapshot.worstLateMs)} ms past reply_seconds.`
             : ""),
       );
     }
-    u = {
-      ...O,
+    totals = {
+      ...EMPTY_TOTALS,
     };
   }
-  function re() {
-    if (h) return;
-    q(performance.now());
-    z();
-    h = true;
-    clearInterval(y);
-    y = undefined;
+  function closeAll() {
+    if (closed) return;
+    flushWindow(performance.now());
+    logSummary();
+    closed = true;
+    clearInterval(reportTimer);
+    reportTimer = undefined;
   }
-  function se() {
+  function reportTick() {
     let startTime = performance.now();
-    if (d.size === 0) y?.unref?.();
-    if (startTime - E >= r) {
-      if (!q(startTime)) {
-        z();
-        clearInterval(y);
-        y = undefined;
+    if (openReplies.size === 0) reportTimer?.unref?.();
+    if (startTime - windowStartMs >= logEveryMs) {
+      if (!flushWindow(startTime)) {
+        logSummary();
+        clearInterval(reportTimer);
+        reportTimer = undefined;
       }
     }
   }
-  function N(e, l, signal) {
+  function streamFrames(frames, contentType, signal) {
     let headers = {
-      "content-type": l,
+      "content-type": contentType,
     };
-    if (o === 0) {
-      let buffer = Buffer.concat(e);
+    if (replyMs === 0) {
+      let buffer = Buffer.concat(frames);
       loadTestDevices.receive(buffer);
-      F(0);
+      recordFinished(0);
       return new Response(buffer, {
         headers,
       });
     }
-    let a;
-    let W = () => {
-      if (!d.has(a)) return;
+    let reply;
+    let pump = () => {
+      if (!openReplies.has(reply)) return;
       let max = Math.max(
-        a.sent + 1,
-        Math.min(e.length, Math.floor(((performance.now() - a.startedAt) / o) * e.length)),
+        reply.sent + 1,
+        Math.min(
+          frames.length,
+          Math.floor(((performance.now() - reply.startedAt) / replyMs) * frames.length),
+        ),
       );
       try {
-        while (a.sent < max) {
-          let K = e[a.sent++];
-          a.ctrl.enqueue(K);
-          loadTestDevices.receive(K);
+        while (reply.sent < max) {
+          let frame = frames[reply.sent++];
+          reply.ctrl.enqueue(frame);
+          loadTestDevices.receive(frame);
         }
       } catch {
-        if (d.delete(a)) I();
+        if (openReplies.delete(reply)) recordHungUp();
         return;
       }
-      if (a.sent === e.length) {
-        d.delete(a);
+      if (reply.sent === frames.length) {
+        openReplies.delete(reply);
         try {
-          a.ctrl.close();
+          reply.ctrl.close();
         } catch {}
-        F(Math.max(0, performance.now() - a.startedAt - o));
+        recordFinished(Math.max(0, performance.now() - reply.startedAt - replyMs));
         return;
       }
-      let ae = a.startedAt + ((a.sent + 1) * o) / e.length;
-      a.timer = setTimeout(W, Math.ceil(Math.max(0, ae - performance.now())));
+      let nextAt = reply.startedAt + ((reply.sent + 1) * replyMs) / frames.length;
+      reply.timer = setTimeout(pump, Math.ceil(Math.max(0, nextAt - performance.now())));
     };
     let readableStream = new ReadableStream({
-      start(b) {
-        a = {
-          ctrl: b,
-          frames: e,
+      start(controller) {
+        reply = {
+          ctrl: controller,
+          frames,
           sent: 0,
           startedAt: performance.now(),
         };
-        d.add(a);
-        if (!h) u.peakOpen = Math.max(u.peakOpen, d.size);
-        R(a.startedAt);
-        y?.ref?.();
-        a.timer = setTimeout(W, Math.ceil(o / e.length));
+        openReplies.add(reply);
+        if (!closed) totals.peakOpen = Math.max(totals.peakOpen, openReplies.size);
+        markBusy(reply.startedAt);
+        reportTimer?.ref?.();
+        reply.timer = setTimeout(pump, Math.ceil(replyMs / frames.length));
         signal?.addEventListener(
           "abort",
           () => {
-            if (d.delete(a)) {
-              clearTimeout(a.timer);
-              I();
-              b.error(signal.reason);
+            if (openReplies.delete(reply)) {
+              clearTimeout(reply.timer);
+              recordHungUp();
+              controller.error(signal.reason);
             }
           },
           {
@@ -381,9 +396,9 @@ data: ${jsonStringify(e)}
         );
       },
       cancel() {
-        if (d.delete(a)) {
-          clearTimeout(a.timer);
-          I();
+        if (openReplies.delete(reply)) {
+          clearTimeout(reply.timer);
+          recordHungUp();
         }
       },
     });
@@ -392,45 +407,45 @@ data: ${jsonStringify(e)}
     });
   }
   return {
-    fetch: async (e, l) => {
-      l?.signal?.throwIfAborted();
-      loadTestDevices.send(l?.body);
-      let pathname = new URL(e instanceof Request ? e.url : String(e)).pathname;
+    fetch: async (input, init) => {
+      init?.signal?.throwIfAborted();
+      loadTestDevices.send(init?.body);
+      let pathname = new URL(input instanceof Request ? input.url : String(input)).pathname;
       if (pathname.endsWith("/count_tokens") || pathname.includes("count-tokens"))
         return Response.json({
           input_tokens: 0,
         });
       if (pathname.endsWith("/invoke-with-response-stream"))
-        return N(mapped, "application/vnd.amazon.eventstream", l?.signal);
-      let g = pathname.endsWith("/invoke") || pathname.endsWith(":rawPredict");
-      if (pathname.endsWith(":streamRawPredict") || (!g && toLatin1(l?.body)))
-        return N(mapped_2, "text/event-stream", l?.signal);
+        return streamFrames(frames, "application/vnd.amazon.eventstream", init?.signal);
+      let isInvoke = pathname.endsWith("/invoke") || pathname.endsWith(":rawPredict");
+      if (pathname.endsWith(":streamRawPredict") || (!isInvoke && toLatin1(init?.body)))
+        return streamFrames(frames_2, "text/event-stream", init?.signal);
       loadTestDevices.receive(buffer);
-      F(0);
-      return new Response(p, {
+      recordFinished(0);
+      return new Response(jsonBody, {
         headers: {
           "content-type": "application/json",
         },
       });
     },
-    arrived: ee,
-    bodyRead: te,
-    spendFault: ne,
-    close: re,
+    arrived: recordArrival,
+    bodyRead: recordBodyRead,
+    spendFault: recordSpendFault,
+    close: closeAll,
     socketCostSimulated: loadTestDevices.real,
   };
 }
 //@ chunk-hde10cf2.js:7759-8852 placement
 function openLoadTestDevices() {
-  let t = -1;
-  let r = -1;
+  let nullFd = -1;
+  let zeroFd = -1;
   try {
-    t = openSync("/dev/null", "r+");
-    r = openSync("/dev/zero", "r");
-    if (![fstatSync(t), fstatSync(r)].every((i) => i.isCharacterDevice()))
+    nullFd = openSync("/dev/null", "r+");
+    zeroFd = openSync("/dev/zero", "r");
+    if (![fstatSync(nullFd), fstatSync(zeroFd)].every((stats) => stats.isCharacterDevice()))
       throw Error("not a character device");
   } catch {
-    for (let s of [t, r]) if (s >= 0) closeSync(s);
+    for (let fd of [nullFd, zeroFd]) if (fd >= 0) closeSync(fd);
     gatewayLog(
       "warn",
       "load_test_mode: this host has no /dev/null or /dev/zero, so CPU per replica will read about a quarter to a third lower than in production. The load test still runs.",
@@ -442,14 +457,14 @@ function openLoadTestDevices() {
     };
   }
   let uint8Array = new Uint8Array(LOAD_TEST_BYTES);
-  let o = false;
-  let c = (s, i, p) => {
-    if (o) return;
+  let failed = false;
+  let copyThrough = (source, offset, length) => {
+    if (failed) return;
     try {
-      writeSync(t, s, i, p);
-      readSync(r, uint8Array, 0, Math.min(p, uint8Array.length), null);
+      writeSync(nullFd, source, offset, length);
+      readSync(zeroFd, uint8Array, 0, Math.min(length, uint8Array.length), null);
     } catch (error) {
-      o = true;
+      failed = true;
       gatewayLog(
         "warn",
         `load_test_mode: simulating a connection's kernel work failed (${error instanceof Error ? error.message : String(error)}), so it stops here and CPU per replica will read lower than in production. The load test still runs.`,
@@ -458,25 +473,26 @@ function openLoadTestDevices() {
   };
   return {
     real: true,
-    send(s) {
-      let i =
-        typeof s === "string"
-          ? Buffer.from(s)
-          : s instanceof ArrayBuffer
-            ? new Uint8Array(s)
-            : ArrayBuffer.isView(s)
-              ? new Uint8Array(s.buffer, s.byteOffset, s.byteLength)
+    send(body) {
+      let bytes =
+        typeof body === "string"
+          ? Buffer.from(body)
+          : body instanceof ArrayBuffer
+            ? new Uint8Array(body)
+            : ArrayBuffer.isView(body)
+              ? new Uint8Array(body.buffer, body.byteOffset, body.byteLength)
               : null;
-      if (!i) return;
-      for (let p = 0; p < i.length; p += LOAD_TEST_BYTES) c(i, p, Math.min(LOAD_TEST_BYTES, i.length - p));
+      if (!bytes) return;
+      for (let offset = 0; offset < bytes.length; offset += LOAD_TEST_BYTES)
+        copyThrough(bytes, offset, Math.min(LOAD_TEST_BYTES, bytes.length - offset));
     },
-    receive(s) {
-      c(s, 0, s.length);
-      for (let i = 0; i < LOAD_TEST_WORDS && !o; i++)
+    receive(chunk) {
+      copyThrough(chunk, 0, chunk.length);
+      for (let index = 0; index < LOAD_TEST_WORDS && !failed; index++)
         try {
-          writeSync(t, s, 0, 1);
+          writeSync(nullFd, chunk, 0, 1);
         } catch {
-          o = true;
+          failed = true;
         }
     },
   };
@@ -488,23 +504,23 @@ function openLoadTestDevices() {
 var BRACKET_CLOSE_CODE = 34;
 var BRACKET_OPEN_CODE = 92;
 //@ chunk-hde10cf2.js:8867-9064 placement
-function jsonDepthDelta(t, r, n) {
-  let o = 0;
-  let c = false;
-  for (let s = r; s < n; s++) {
-    let code = t.charCodeAt(s);
-    if (c) {
-      if (code === BRACKET_OPEN_CODE) s++;
-      else if (code === BRACKET_CLOSE_CODE) c = false;
-    } else if (code === BRACKET_CLOSE_CODE) c = true;
-    else if (code === 123 || code === 91) o++;
-    else if (code === 125 || code === 93) o--;
+function jsonDepthDelta(text, from, to) {
+  let depth = 0;
+  let inString = false;
+  for (let index = from; index < to; index++) {
+    let code = text.charCodeAt(index);
+    if (inString) {
+      if (code === BRACKET_OPEN_CODE) index++;
+      else if (code === BRACKET_CLOSE_CODE) inString = false;
+    } else if (code === BRACKET_CLOSE_CODE) inString = true;
+    else if (code === 123 || code === 91) depth++;
+    else if (code === 125 || code === 93) depth--;
   }
-  return o;
+  return depth;
 }
 //@ chunk-hde10cf2.js:9064-9413 placement
 function toLatin1(body) {
-  let r =
+  let rawBody =
     typeof body === "string"
       ? body
       : ArrayBuffer.isView(body)
@@ -512,10 +528,15 @@ function toLatin1(body) {
         : body instanceof ArrayBuffer
           ? Buffer.from(body).toString("latin1")
           : "";
-  for (let n of r.matchAll(/"stream"\s*:\s*true/g)) {
-    let o = n.index + n[0].length;
-    if (n.index < r.length - o ? jsonDepthDelta(r, 0, n.index) === 1 : jsonDepthDelta(r, o, r.length) === -1)
+  for (let index of rawBody.matchAll(/"stream"\s*:\s*true/g)) {
+    let char = index.index + index[0].length;
+    if (
+      index.index < rawBody.length - char
+        ? jsonDepthDelta(rawBody, 0, index.index) === 1
+        : jsonDepthDelta(rawBody, char, rawBody.length) === -1
+    )
       return true;
   }
   return false;
 }
+export { checkSpendTableEmpty };

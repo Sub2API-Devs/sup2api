@@ -78,102 +78,114 @@ import { getCanonicalName } from "./model/canonicalModelName.js";
 import { stripAnyVersatileSuffix } from "./model/modelIds.js";
 import { MAX_PROGRESS_ENTRIES } from "../services/AgentSummary/agentSummary.js";
 import { interruptedPromptUuid, countUserPromptsFromEntries_5 } from "../cli/print/wakeRouter.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:518079-518335 placement
 /**
  * 由加载结果构造某会话的完整日志：选最新叶子建对话链，附带标题、tag、PR、模式、worktree、文件历史、署名、内容替换等元数据。
  */
-async function getLastSessionLog(e, n, storageV5, precedingEntries) {
-  let sessionTranscript = await loadSessionTranscript(e, n, storageV5, precedingEntries);
+async function getLastSessionLog(sessionId, host, storageV5, precedingEntries) {
+  let sessionTranscript = await loadSessionTranscript(sessionId, host, storageV5, precedingEntries);
   let { sessionFile, v5Read } = sessionTranscript;
-  let w = await sessionLogFromTranscriptLoad(e, sessionTranscript, {
+  let sessionLog = await sessionLogFromTranscriptLoad(sessionId, sessionTranscript, {
     path: sessionFile,
     modifiedAt: async () =>
       v5Read !== undefined ? new Date(v5Read.mtimeMs) : (await stat(sessionFile)).mtime,
   });
-  if (w !== null && precedingEntries?.length)
+  if (sessionLog !== null && precedingEntries?.length)
     currentTranscriptStore().primeFilelessResume(
-      e,
-      precedingEntries.map((L) => L.uuid),
+      sessionId,
+      precedingEntries.map((entry) => entry.uuid),
     );
-  return w;
+  return sessionLog;
 }
 //@ chunk-e6aww6q8.js:1630550-1630800 fingerprint = restoreSkillStateFromMessages (0.719)
 /**
  * 判断某技能内容在历史里以正文（body）还是 invoked_skills 附件（attachment）形式出现，都没有返回 null。
  */
-function restoreSkillStateFromMessages(e, n) {
-  let r = false;
-  for (let idx = e.length - 1; idx >= 0; idx--) {
-    let h = e[idx];
-    if (h.type === "attachment") {
-      let attachment = h.attachment;
+function restoreSkillStateFromMessages(messages, target) {
+  let anyAttached = false;
+  for (let idx = messages.length - 1; idx >= 0; idx--) {
+    let message = messages[idx];
+    if (message.type === "attachment") {
+      let attachment = message.attachment;
       if (
-        !r &&
+        !anyAttached &&
         attachment.type === "invoked_skills" &&
-        attachment.skills.some((skill) => skill.content === n)
+        attachment.skills.some((skill) => skill.content === target)
       )
-        r = true;
+        anyAttached = true;
       continue;
     }
-    if (metaMessageText(h) === n) return "body";
+    if (metaMessageText(message) === target) return "body";
   }
-  return r ? "attachment" : null;
+  return anyAttached ? "attachment" : null;
 }
 //@ chunk-e6aww6q8.js:1807896-1808028 placement
 /**
  * 已知的 stop_reason 值。
  */
-var STOP_REASONS = [
-  "end_turn",
-  "tool_use",
-  "max_tokens",
-  "stop_sequence",
-  "pause_turn",
-  "refusal",
-  "model_context_window_exceeded",
-];
-var weakMap_8 = new WeakMap();
+var STOP_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var weakMap_8;
+deferInit("chunk-e6aww6q8.js:1807896", () => {
+  STOP_REASONS = [
+    "end_turn",
+    "tool_use",
+    "max_tokens",
+    "stop_sequence",
+    "pause_turn",
+    "refusal",
+    "model_context_window_exceeded",
+  ];
+  weakMap_8 = new WeakMap();
+});
 //@ chunk-e6aww6q8.js:1808028-1808799 placement
 /**
  * 加载会话时记录 transcript 尾部诊断（最后几行类型、最后提示位置、停止原因）。
  */
-function recordTailDiagnostics(e, n, r, s, h, y) {
-  if (!env.CLAUDE_CODE_DIAGNOSTICS_FILE && !y) return;
+function recordTailDiagnostics(session, messages, isPromptBoundary, isRealMessage, baseFields, force) {
+  if (!env.CLAUDE_CODE_DIAGNOSTICS_FILE && !force) return;
   try {
-    let S = [];
+    let tailRows = [];
     let rowsAfterTail = 0;
-    let L = false;
-    let G = n.length - 1;
-    for (; G >= 0; G--) {
-      let Z = n[G];
-      if (Z.isSidechain) continue;
-      if (Z.type !== "user" && Z.type !== "assistant") {
-        rowsAfterTail += S.length === 0 ? 1 : 0;
+    let sawSynthetic = false;
+    let lastPromptIndex = messages.length - 1;
+    for (; lastPromptIndex >= 0; lastPromptIndex--) {
+      let message = messages[lastPromptIndex];
+      if (message.isSidechain) continue;
+      if (message.type !== "user" && message.type !== "assistant") {
+        rowsAfterTail += tailRows.length === 0 ? 1 : 0;
         continue;
       }
-      if (S.length < 3) S.push(Z);
-      if (Z.type === "user") {
-        if (r(Z)) break;
-        L ||= !s(Z);
+      if (tailRows.length < 3) tailRows.push(message);
+      if (message.type === "user") {
+        if (isPromptBoundary(message)) break;
+        sawSynthetic ||= !isRealMessage(message);
       }
     }
-    for (let idx = G - 1; idx >= 0 && S.length < 3; idx--) {
-      let Se = n[idx];
-      if (!Se.isSidechain && (Se.type === "user" || Se.type === "assistant")) S.push(Se);
+    for (let idx = lastPromptIndex - 1; idx >= 0 && tailRows.length < 3; idx--) {
+      let message = messages[idx];
+      if (!message.isSidechain && (message.type === "user" || message.type === "assistant"))
+        tailRows.push(message);
     }
-    let timestamp = Date.parse(S[0]?.timestamp ?? "");
-    weakMap_8.set(e, {
-      ...h,
-      tailRows: [classifyTailMessage(S[0]), classifyTailMessage(S[1]), classifyTailMessage(S[2])],
+    let timestamp = Date.parse(tailRows[0]?.timestamp ?? "");
+    weakMap_8.set(session, {
+      ...baseFields,
+      tailRows: [
+        classifyTailMessage(tailRows[0]),
+        classifyTailMessage(tailRows[1]),
+        classifyTailMessage(tailRows[2]),
+      ],
       rowsAfterTail,
       lastReplyStopReason: stopReasonOf(
-        S.find((Z) => Z.type === "assistant" && classifyTailMessage(Z) !== "assistant_synthetic"),
+        tailRows.find(
+          (row) => row.type === "assistant" && classifyTailMessage(row) !== "assistant_synthetic",
+        ),
       ),
       tailWrittenAtMs: Number.isFinite(timestamp) ? timestamp : undefined,
-      lastPromptUuid: n[G]?.uuid,
-      lastPromptOpensLastTurn: G >= 0 && !L,
-      rowsAfterLastPrompt: n.length - 1 - G,
+      lastPromptUuid: messages[lastPromptIndex]?.uuid,
+      lastPromptOpensLastTurn: lastPromptIndex >= 0 && !sawSynthetic,
+      rowsAfterLastPrompt: messages.length - 1 - lastPromptIndex,
     });
   } catch (error) {
     logError(error);
@@ -183,8 +195,8 @@ function recordTailDiagnostics(e, n, r, s, h, y) {
 /**
  * 按对象查 WeakMap 里的缓存值。
  */
-function weakMapLookup(e) {
-  return e === undefined ? undefined : weakMap_8.get(e);
+function weakMapLookup(session) {
+  return session === undefined ? undefined : weakMap_8.get(session);
 }
 //@ chunk-e6aww6q8.js:1808851-1808878 placement
 /**
@@ -196,59 +208,67 @@ var MAX_RESUME_TAIL_AGE_MS = 3600000;
 /**
  * 续接诊断遥测字段（尾部行、停止原因、无结果的工具调用等）。
  */
-function tailDiagnosticsFields(e, n) {
-  if (e === undefined || (e.lastPromptUuid !== undefined && e.lastPromptUuid !== n.uuid)) return;
-  let r =
-    e.tailWrittenAtMs === undefined || e.tailWrittenAtMs > n.nowMs ? undefined : n.nowMs - e.tailWrittenAtMs;
-  if (r !== undefined && r >= MAX_RESUME_TAIL_AGE_MS) return;
+function tailDiagnosticsFields(diagnostics, context) {
+  if (
+    diagnostics === undefined ||
+    (diagnostics.lastPromptUuid !== undefined && diagnostics.lastPromptUuid !== context.uuid)
+  )
+    return;
+  let ageMs =
+    diagnostics.tailWrittenAtMs === undefined || diagnostics.tailWrittenAtMs > context.nowMs
+      ? undefined
+      : context.nowMs - diagnostics.tailWrittenAtMs;
+  if (ageMs !== undefined && ageMs >= MAX_RESUME_TAIL_AGE_MS) return;
   return {
-    finished_because: e.because,
-    stored_tail_row: e.tailRows[0],
-    stored_row_before_tail: e.tailRows[1],
-    stored_row_2_before_tail: e.tailRows[2],
-    rows_after_tail: e.rowsAfterTail,
-    last_reply_stop_reason: e.lastReplyStopReason,
-    ...(r !== undefined && {
-      stored_tail_age_ms: r,
+    finished_because: diagnostics.because,
+    stored_tail_row: diagnostics.tailRows[0],
+    stored_row_before_tail: diagnostics.tailRows[1],
+    stored_row_2_before_tail: diagnostics.tailRows[2],
+    rows_after_tail: diagnostics.rowsAfterTail,
+    last_reply_stop_reason: diagnostics.lastReplyStopReason,
+    ...(ageMs !== undefined && {
+      stored_tail_age_ms: ageMs,
     }),
-    tool_calls_without_result: e.callsWithoutResult,
-    api_error_stepped_over: e.apiErrorSteppedOver,
-    invisible_reply_dropped: e.invisibleReplyDropped,
-    last_prompt: e.lastPromptUuid === undefined ? "none_loaded" : "this_message",
-    rows_after_last_prompt: e.rowsAfterLastPrompt,
-    commands_dequeued: n.commandsDequeued,
-    could_send_result: classifyTranscriptTail(e, r, n),
+    tool_calls_without_result: diagnostics.callsWithoutResult,
+    api_error_stepped_over: diagnostics.apiErrorSteppedOver,
+    invisible_reply_dropped: diagnostics.invisibleReplyDropped,
+    last_prompt: diagnostics.lastPromptUuid === undefined ? "none_loaded" : "this_message",
+    rows_after_last_prompt: diagnostics.rowsAfterLastPrompt,
+    commands_dequeued: context.commandsDequeued,
+    could_send_result: classifyTranscriptTail(diagnostics, ageMs, context),
   };
 }
 //@ chunk-e6aww6q8.js:1809667-1810427 placement
 /**
  * 判断转录尾部状态（最后提示未加载、工具调用无结果等）。
  */
-function classifyTranscriptTail(e, n, r) {
-  if (e.lastPromptUuid === undefined) return "last_prompt_not_loaded";
-  if (!e.lastPromptOpensLastTurn) return "another_turn_may_follow";
-  if (e.callsWithoutResult > 0) return "tool_call_without_result";
-  let [s] = e.tailRows;
-  if (s === "assistant_synthetic") return "tail_written_by_cli";
-  if (e.because !== "reply" && e.because !== "terminal_tool_result") return "tail_not_a_reply";
-  if (s === "assistant_text") {
-    if (e.lastReplyStopReason !== "end_turn" && e.lastReplyStopReason !== "stop_sequence")
+function classifyTranscriptTail(diagnostics, ageMs, context) {
+  if (diagnostics.lastPromptUuid === undefined) return "last_prompt_not_loaded";
+  if (!diagnostics.lastPromptOpensLastTurn) return "another_turn_may_follow";
+  if (diagnostics.callsWithoutResult > 0) return "tool_call_without_result";
+  let [firstRow] = diagnostics.tailRows;
+  if (firstRow === "assistant_synthetic") return "tail_written_by_cli";
+  if (diagnostics.because !== "reply" && diagnostics.because !== "terminal_tool_result")
+    return "tail_not_a_reply";
+  if (firstRow === "assistant_text") {
+    if (diagnostics.lastReplyStopReason !== "end_turn" && diagnostics.lastReplyStopReason !== "stop_sequence")
       return "reply_not_ended";
-  } else if (e.because !== "terminal_tool_result" || s !== "user_tool_result") return "tail_not_a_reply";
-  if (n === undefined || n >= TAIL_TOO_OLD_MS) return "tail_too_old";
-  if (r.commandsDequeued > 0) return "process_dequeued_a_command";
-  if (r.rerunOwed) return "rerun_owed";
-  return r.shuttingDown ? "shutting_down" : "yes";
+  } else if (diagnostics.because !== "terminal_tool_result" || firstRow !== "user_tool_result")
+    return "tail_not_a_reply";
+  if (ageMs === undefined || ageMs >= TAIL_TOO_OLD_MS) return "tail_too_old";
+  if (context.commandsDequeued > 0) return "process_dequeued_a_command";
+  if (context.rerunOwed) return "rerun_owed";
+  return context.shuttingDown ? "shutting_down" : "yes";
 }
 //@ chunk-e6aww6q8.js:1810427-1810591 placement
 /**
  * 助手消息的停止原因类别。
  */
-function stopReasonOf(e) {
-  if (e === undefined) return "no_reply_in_tail";
-  let stopReason = e.message?.stop_reason;
+function stopReasonOf(message) {
+  if (message === undefined) return "no_reply_in_tail";
+  let stopReason = message.message?.stop_reason;
   if (stopReason === undefined || stopReason === null) return "not_stored";
-  return STOP_REASONS.find((r) => r === stopReason) ?? "other";
+  return STOP_REASONS.find((knownReason) => knownReason === stopReason) ?? "other";
 }
 //@ chunk-e6aww6q8.js:1810591-1810667 placement
 /**
@@ -264,7 +284,10 @@ class ConversationRecoveryMetrics {
 /**
  * 按宿主隔离的会话恢复指标。
  */
-var conversationRecoveryMetricsByHost = new HostScoped(() => new ConversationRecoveryMetrics());
+var conversationRecoveryMetricsByHost; // deferred: uses ConversationRecoveryMetrics of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1810667", () => {
+  conversationRecoveryMetricsByHost = new HostScoped(() => new ConversationRecoveryMetrics());
+});
 //@ chunk-e6aww6q8.js:1810694-1810733 placement
 /**
  * 取出当前宿主的会话恢复指标。
@@ -343,17 +366,17 @@ var WORKER_RESTARTED_PROMPT = [
 class HostClassifierContextRegistry {
   #e = new Map();
   #t = 0;
-  register(e) {
-    let n = e;
-    if (typeof n.hostClassifierContext !== "string" || n.uuid === undefined) return;
-    let r = singleToolResultId(n);
-    if (r === undefined) return;
-    let s = wakeupDedupKey(n.uuid, r);
-    if (!this.#e.has(s) && this.#e.size >= WAKEUP_ORIGIN_TTL_MS) {
-      let h = this.#e.keys().next().value;
-      if (h !== undefined) this.#e.delete(h);
+  register(message) {
+    let row = message;
+    if (typeof row.hostClassifierContext !== "string" || row.uuid === undefined) return;
+    let resultId = singleToolResultId(row);
+    if (resultId === undefined) return;
+    let key = wakeupDedupKey(row.uuid, resultId);
+    if (!this.#e.has(key) && this.#e.size >= WAKEUP_ORIGIN_TTL_MS) {
+      let oldestKey = this.#e.keys().next().value;
+      if (oldestKey !== undefined) this.#e.delete(oldestKey);
     }
-    this.#e.set(s, n.hostClassifierContext);
+    this.#e.set(key, row.hostClassifierContext);
   }
   clear() {
     this.#e.clear();
@@ -362,28 +385,31 @@ class HostClassifierContextRegistry {
   getEpoch() {
     return this.#t;
   }
-  degradeRestored(e) {
-    for (let n of e) {
-      let r = n;
-      if (typeof r.hostClassifierContext !== "string" || r.uuid === undefined) continue;
-      let s = singleToolResultId(r);
-      if (s === undefined) continue;
-      this.#e.delete(wakeupDedupKey(r.uuid, s));
+  degradeRestored(rows) {
+    for (let row of rows) {
+      let message = row;
+      if (typeof message.hostClassifierContext !== "string" || message.uuid === undefined) continue;
+      let resultId = singleToolResultId(message);
+      if (resultId === undefined) continue;
+      this.#e.delete(wakeupDedupKey(message.uuid, resultId));
     }
   }
-  isLive(e) {
-    let n = e;
-    if (typeof n.hostClassifierContext !== "string" || n.uuid === undefined) return false;
-    let r = singleToolResultId(n);
-    if (r === undefined) return false;
-    return this.#e.get(wakeupDedupKey(n.uuid, r)) === n.hostClassifierContext;
+  isLive(message) {
+    let row = message;
+    if (typeof row.hostClassifierContext !== "string" || row.uuid === undefined) return false;
+    let resultId = singleToolResultId(row);
+    if (resultId === undefined) return false;
+    return this.#e.get(wakeupDedupKey(row.uuid, resultId)) === row.hostClassifierContext;
   }
 }
 //@ chunk-e6aww6q8.js:1816209-1816236 placement
 /**
  * 按宿主隔离的分类器上下文注册表。
  */
-var classifierContextByHost = new HostScoped(() => new HostClassifierContextRegistry());
+var classifierContextByHost; // deferred: uses HostClassifierContextRegistry of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1816209", () => {
+  classifierContextByHost = new HostScoped(() => new HostClassifierContextRegistry());
+});
 //@ chunk-e6aww6q8.js:1816236-1816274 placement
 /**
  * 取出当前宿主的分类器上下文注册表。
@@ -430,19 +456,19 @@ function isLiveClassifiedRun(message) {
 /**
  * 拼接 fork 标记（会话|边界时间|父会话）。
  */
-function formatForkMarker(forkSessionId, n, forkParentSessionId) {
-  return `${forkSessionId}|${n}${forkParentSessionId ? `|${forkParentSessionId}` : ""}`;
+function formatForkMarker(forkSessionId, boundaryAt, forkParentSessionId) {
+  return `${forkSessionId}|${boundaryAt}${forkParentSessionId ? `|${forkParentSessionId}` : ""}`;
 }
 //@ chunk-e6aww6q8.js:1816504-1816680 placement
 /**
  * 解析 fork 标记 “会话|边界时间|父会话”。
  */
-function parseForkMarker(e) {
-  if (!e) return null;
-  let parts = e.split("|");
+function parseForkMarker(marker) {
+  if (!marker) return null;
+  let parts = marker.split("|");
   if (parts.length === 1)
     return {
-      boundaryAt: e,
+      boundaryAt: marker,
     };
   return {
     ...(parts[0] && {
@@ -458,8 +484,8 @@ function parseForkMarker(e) {
 /**
  * fork 标记转为任务状态字段。
  */
-function forkMarkerFields(e) {
-  let forkMarker = parseForkMarker(e);
+function forkMarkerFields(marker) {
+  let forkMarker = parseForkMarker(marker);
   if (forkMarker?.sessionId === undefined || !/^\d{4}-\d{2}-\d{2}T/.test(forkMarker.boundaryAt)) return null;
   return {
     forkSourceAlive: true,
@@ -474,17 +500,21 @@ function forkMarkerFields(e) {
 /**
  * 服务端工具类型的集合。
  */
-var SERVER_TOOL_TYPES = {
-  advisor: true,
-  bash_code_execution: true,
-  code_execution: true,
-  text_editor_code_execution: true,
-  tool_search_tool_bm25: true,
-  tool_search_tool_regex: true,
-  web_fetch: true,
-  web_search: true,
-};
-var SERVER_TOOL_TYPE_SET = new Set(Object.keys(SERVER_TOOL_TYPES));
+var SERVER_TOOL_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SERVER_TOOL_TYPE_SET;
+deferInit("chunk-e6aww6q8.js:1816932", () => {
+  SERVER_TOOL_TYPES = {
+    advisor: true,
+    bash_code_execution: true,
+    code_execution: true,
+    text_editor_code_execution: true,
+    tool_search_tool_bm25: true,
+    tool_search_tool_regex: true,
+    web_fetch: true,
+    web_search: true,
+  };
+  SERVER_TOOL_TYPE_SET = new Set(Object.keys(SERVER_TOOL_TYPES));
+});
 //@ chunk-e6aww6q8.js:1817132-1817187 placement
 /**
  * 判断字符串是否为服务端工具类型。
@@ -531,16 +561,16 @@ function migrateLegacyAttachmentTypes(message) {
 /**
  * 去掉 text 字段不是字符串的文本块。
  */
-function dropMalformedTextBlocks(e) {
-  if (e.type !== "assistant" && e.type !== "user") return null;
-  let content = e.message.content;
+function dropMalformedTextBlocks(message) {
+  if (message.type !== "assistant" && message.type !== "user") return null;
+  let content = message.message.content;
   if (!Array.isArray(content)) return null;
-  let filtered = content.filter((s) => s.type !== "text" || typeof s.text === "string");
+  let filtered = content.filter((block) => block.type !== "text" || typeof block.text === "string");
   if (filtered.length === content.length) return null;
   return {
-    ...e,
+    ...message,
     message: {
-      ...e.message,
+      ...message.message,
       content: filtered,
     },
   };
@@ -577,16 +607,16 @@ function resumeReasonFromEnv() {
 /**
  * 某 uuid 是否为最后一条有效消息。
  */
-function isTailMessage(e, n) {
-  if (n === undefined) return false;
-  for (let idx = e.length - 1; idx >= 0; idx--) {
-    let s = e[idx];
-    if (s.type !== "user" && s.type !== "assistant") continue;
-    if (s.uuid === n) return true;
+function isTailMessage(messages, uuid) {
+  if (uuid === undefined) return false;
+  for (let idx = messages.length - 1; idx >= 0; idx--) {
+    let message = messages[idx];
+    if (message.type !== "user" && message.type !== "assistant") continue;
+    if (message.uuid === uuid) return true;
     if (
-      !isContextAppendMessage(s) &&
-      !isQueueTranscriptOnlyUserMessage(s) &&
-      !(s.type === "assistant" && isUnattendedStartUnconfirmed(s))
+      !isContextAppendMessage(message) &&
+      !isQueueTranscriptOnlyUserMessage(message) &&
+      !(message.type === "assistant" && isUnattendedStartUnconfirmed(message))
     )
       return false;
   }
@@ -597,28 +627,29 @@ function isTailMessage(e, n) {
  * CLAUDE_CODE_RESUME_INTERRUPTED_TURN_MAX_AGE_MS 的值。
  */
 function envResumeMaxAge() {
-  let e = env.CLAUDE_CODE_RESUME_INTERRUPTED_TURN_MAX_AGE_MS;
-  if (!e) return;
-  let n = Number(e);
-  if (n === 0) return 0;
-  return Number.isFinite(n) && n > 0 ? n : 3600000;
+  let rawValue = env.CLAUDE_CODE_RESUME_INTERRUPTED_TURN_MAX_AGE_MS;
+  if (!rawValue) return;
+  let parsed = Number(rawValue);
+  if (parsed === 0) return 0;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 3600000;
 }
 //@ chunk-e6aww6q8.js:1827769-1828053 placement
 /**
  * 远程会话中断回合自动续接的时间上限（环境变量或开关）。
  */
-function interruptedTurnResumePolicy(e) {
-  if (e && isClaudeAiChatRemote() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_rosy_puddle", true)) return;
-  let n = envResumeMaxAge();
-  if (n !== undefined)
-    return n
+function interruptedTurnResumePolicy(isRemote) {
+  if (isRemote && isClaudeAiChatRemote() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_rosy_puddle", true))
+    return;
+  let envMaxAge = envResumeMaxAge();
+  if (envMaxAge !== undefined)
+    return envMaxAge
       ? {
-          maxAgeMs: n,
+          maxAgeMs: envMaxAge,
           source: "env",
         }
       : undefined;
   if (
-    e ||
+    isRemote ||
     !isClaudeAiChatRemote() ||
     isAgentSdkEntrypoint() ||
     getCcrDerivedSurface() === "remote_cowork_trigger"
@@ -644,27 +675,27 @@ var MAX_RESUME_AGE_MS = 2592000000;
 /**
  * 判断最后一条消息是否已超过续接年龄。
  */
-function isResumeTooOld(e, maxAgeMs = envResumeMaxAge()) {
+function isResumeTooOld(messages, maxAgeMs = envResumeMaxAge()) {
   if (!maxAgeMs) return false;
-  let r = lastMessageAgeMs(e);
-  return r === undefined || r >= maxAgeMs;
+  let ageMs = lastMessageAgeMs(messages);
+  return ageMs === undefined || ageMs >= maxAgeMs;
 }
 //@ chunk-e6aww6q8.js:1828160-1828397 placement
 /**
  * 最后一条有效消息距今的毫秒数。
  */
-function lastMessageAgeMs(e) {
-  for (let idx = e.length - 1; idx >= 0; idx--) {
-    let r = e[idx];
+function lastMessageAgeMs(messages) {
+  for (let idx = messages.length - 1; idx >= 0; idx--) {
+    let message = messages[idx];
     if (
-      r.type === "system" ||
-      r.type === "progress" ||
-      isContextAppendMessage(r) ||
-      isQueueTranscriptOnlyUserMessage(r) ||
-      (r.type === "assistant" && isUnattendedStartUnconfirmed(r))
+      message.type === "system" ||
+      message.type === "progress" ||
+      isContextAppendMessage(message) ||
+      isQueueTranscriptOnlyUserMessage(message) ||
+      (message.type === "assistant" && isUnattendedStartUnconfirmed(message))
     )
       continue;
-    let timestamp = Date.parse(r.timestamp ?? "");
+    let timestamp = Date.parse(message.timestamp ?? "");
     if (Number.isFinite(timestamp)) return Date.now() - timestamp;
   }
   return;
@@ -682,10 +713,10 @@ var MAX_REFUSAL_RETRY_AGE_MS = 2592000000;
  * 拒答重试的时间上限（环境变量、开关或默认）。
  */
 function refusalRetryMaxAge() {
-  let e = envResumeMaxAge();
-  if (e)
+  let envMaxAge = envResumeMaxAge();
+  if (envMaxAge)
     return {
-      maxAgeMs: e,
+      maxAgeMs: envMaxAge,
       source: "env",
     };
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SHIMMERING_CHERNY, null);
@@ -708,8 +739,8 @@ function refusalRetryMaxAge() {
 /**
  * 消息时间是否早于 n 毫秒前（无时间视为旧）。
  */
-function isOlderThan(e, maxAgeMs) {
-  let timestamp = Date.parse(e.timestamp ?? "");
+function isOlderThan(message, maxAgeMs) {
+  let timestamp = Date.parse(message.timestamp ?? "");
   return !Number.isFinite(timestamp) || Math.abs(Date.now() - timestamp) >= maxAgeMs;
 }
 //@ chunk-e6aww6q8.js:1828785-1828984 placement
@@ -730,37 +761,37 @@ function newerMessage(skippedApiErrorRow, skippedApiErrorRow_2) {
  * 恢复中断的回合（打印模式、REPL 恢复、合成继续、重新提交）。
  */
 function resumeInterruptedTurn(
-  e,
+  surface,
   message,
-  { deferred: r, pendingActionClass: s, cutOffAgentCalls: h, tail: y } = {},
+  { deferred, pendingActionClass, cutOffAgentCalls, tail } = {},
 ) {
   logEvent("tengu_resume_interrupted_turn", {
-    surface: e === "print" ? lit_2("print") : lit_2("repl_restore"),
+    surface: surface === "print" ? lit_2("print") : lit_2("repl_restore"),
     kind: message.isMeta ? lit_2("synthetic_continue") : lit_2("resubmit"),
-    ...(r !== undefined && {
-      deferred: r,
+    ...(deferred !== undefined && {
+      deferred,
     }),
-    ...(s !== undefined && {
-      pending_action_class: s,
+    ...(pendingActionClass !== undefined && {
+      pending_action_class: pendingActionClass,
     }),
-    ...(h !== undefined && {
-      cut_off_agent_calls: h,
+    ...(cutOffAgentCalls !== undefined && {
+      cut_off_agent_calls: cutOffAgentCalls,
     }),
-    ...(y !== undefined && {
-      tail_kind: fromEnum(y.kind),
-      api_error_stepped_over: y.apiErrorSteppedOver,
-      invisible_reply_dropped: y.invisibleReplyDropped,
-      ...(y.ageMinutes !== undefined && {
-        tail_age_min: y.ageMinutes,
+    ...(tail !== undefined && {
+      tail_kind: fromEnum(tail.kind),
+      api_error_stepped_over: tail.apiErrorSteppedOver,
+      invisible_reply_dropped: tail.invisibleReplyDropped,
+      ...(tail.ageMinutes !== undefined && {
+        tail_age_min: tail.ageMinutes,
       }),
-      ...(y.shutdownStamped !== undefined && {
-        tail_shutdown_stamped: y.shutdownStamped,
+      ...(tail.shutdownStamped !== undefined && {
+        tail_shutdown_stamped: tail.shutdownStamped,
       }),
-      ...(y.cutOffCalls !== undefined && {
-        cut_off_calls_shown: y.cutOffCalls.shown,
-        cut_off_calls_hidden: y.cutOffCalls.hidden,
-        cut_off_calls_answered_in_turn: y.cutOffCalls.inTurn,
-        repeats_previous_cut_off_call: y.cutOffCalls.repeatsPrevious,
+      ...(tail.cutOffCalls !== undefined && {
+        cut_off_calls_shown: tail.cutOffCalls.shown,
+        cut_off_calls_hidden: tail.cutOffCalls.hidden,
+        cut_off_calls_answered_in_turn: tail.cutOffCalls.inTurn,
+        repeats_previous_cut_off_call: tail.cutOffCalls.repeatsPrevious,
       }),
     }),
   });
@@ -788,8 +819,8 @@ function showsCutOffCalls() {
 /**
  * 判断尾消息是否为带截断调用的中断提示。
  */
-function isInterruptedTail(e) {
-  return e?.kind === "interrupted_prompt" && e.tail?.cutOffCalls !== undefined;
+function isInterruptedTail(state) {
+  return state?.kind === "interrupted_prompt" && state.tail?.cutOffCalls !== undefined;
 }
 //@ chunk-e6aww6q8.js:1830026-1830039 placement
 /**
@@ -802,42 +833,55 @@ var RESUME_LOG_PROBE_MS = 2000;
  */
 async function findLatestResumableLog({ storageV5, forkSession, onNewestRunningInBackground }) {
   let logs = fetchLogs(undefined, storageV5);
-  let h;
-  let y = new Set();
+  let claimedSessionIds;
+  let unprovableIds = new Set();
   try {
-    let { listAllLiveSessions } = await import("./chunk-ewxn4535.js");
-    let { ownPidDomain } = await import("./chunk-vctscj6m.js");
-    let [L, G] = await Promise.all([
+    let { listAllLiveSessions } = await import("./udsMessaging/SessionRecordsUnreadableError.lazy.js");
+    let { ownPidDomain } = await import("./pidSpace.js");
+    let [runningSessions, ownDomain] = await Promise.all([
       listAllLiveSessions(storageV5, {
         rejectUnreadable: true,
       }),
       ownPidDomain(),
     ]);
-    if (L.every((q) => q.kind === "interactive" || (q.kind && q.sessionId))) {
-      h = new Set();
-      for (let q of L) {
-        if (q.kind === "interactive" || !q.sessionId) continue;
-        h.add(q.sessionId);
-        if (q.pidDomain !== undefined && q.pidDomain !== G) y.add(q.sessionId);
+    if (
+      runningSessions.every(
+        (session) => session.kind === "interactive" || (session.kind && session.sessionId),
+      )
+    ) {
+      claimedSessionIds = new Set();
+      for (let session of runningSessions) {
+        if (session.kind === "interactive" || !session.sessionId) continue;
+        claimedSessionIds.add(session.sessionId);
+        if (session.pidDomain !== undefined && session.pidDomain !== ownDomain)
+          unprovableIds.add(session.sessionId);
       }
     }
   } catch {}
   return findFirstMessageLog(
     await logs,
-    (S) => {
-      if (S.bookkeepingOnly) return false;
-      if (!forkSession && S.continuedInSessionId !== undefined && h?.has(S.continuedInSessionId)) {
+    (logEntry) => {
+      if (logEntry.bookkeepingOnly) return false;
+      if (
+        !forkSession &&
+        logEntry.continuedInSessionId !== undefined &&
+        claimedSessionIds?.has(logEntry.continuedInSessionId)
+      ) {
         onNewestRunningInBackground?.({
-          sessionId: S.continuedInSessionId,
-          provable: !y.has(S.continuedInSessionId),
+          sessionId: logEntry.continuedInSessionId,
+          provable: !unprovableIds.has(logEntry.continuedInSessionId),
         });
         return "stop";
       }
-      if (S.superseded) return false;
+      if (logEntry.superseded) return false;
       if (forkSession) return true;
-      let sessionIdFromLog = getSessionIdFromLog(S);
-      if (sessionIdFromLog !== undefined && h?.has(sessionIdFromLog)) return false;
-      if (h === undefined && (S.sessionKind || S.continuedInSessionId !== undefined)) return false;
+      let sessionIdFromLog = getSessionIdFromLog(logEntry);
+      if (sessionIdFromLog !== undefined && claimedSessionIds?.has(sessionIdFromLog)) return false;
+      if (
+        claimedSessionIds === undefined &&
+        (logEntry.sessionKind || logEntry.continuedInSessionId !== undefined)
+      )
+        return false;
       return true;
     },
     storageV5,
@@ -847,12 +891,12 @@ async function findLatestResumableLog({ storageV5, forkSession, onNewestRunningI
 /**
  * loadConversationForResume：按参数加载会话（最新一个/会话 id/转录路径/fork），反序列化、修复、检测中断，返回 messages、sessionId 与元数据；通知 onSessionResolved。
  */
-async function loadConversationForResume(sessionRef, n, options) {
-  let s;
-  let h = (sessionId, transcriptPath) => {
+async function loadConversationForResume(sessionRef, sessionArg, options) {
+  let copyPromise;
+  let startCopy = (sessionId, transcriptPath) => {
     let onSessionResolved = options.onSessionResolved;
     if (onSessionResolved === undefined) return;
-    s ??= Promise.resolve()
+    copyPromise ??= Promise.resolve()
       .then(() =>
         onSessionResolved({
           sessionId: identityAgentId(sessionId),
@@ -861,65 +905,67 @@ async function loadConversationForResume(sessionRef, n, options) {
       )
       .catch((error) => logForDebugging(`resume: onSessionResolved hook failed: ${errorMessage(error)}`));
   };
-  let y = () => {
-    s?.then((S) => S?.()).catch(() => {});
+  let abandonCopy = () => {
+    copyPromise?.then((result) => result?.()).catch(() => {});
   };
   try {
     let log = null;
     let messages = null;
-    let L = false;
-    let G = false;
+    let isSameSession = false;
+    let isChildFork = false;
     let sessionId;
-    let Z;
-    let Se = false;
+    let unreadableErrno;
+    let ranInBackground = false;
     if (sessionRef === undefined)
       log = await findLatestResumableLog({
         storageV5: options.storageV5,
         forkSession: options.forkSession,
-        onNewestRunningInBackground: (qt) => {
-          Se = true;
-          options.onNewestRunningInBackground?.(qt);
+        onNewestRunningInBackground: (info) => {
+          ranInBackground = true;
+          options.onNewestRunningInBackground?.(info);
         },
       });
-    else if (n && typeof sessionRef === "string") {
-      log = await getLastSessionLog(sessionRef, n, options.storageV5);
+    else if (sessionArg && typeof sessionRef === "string") {
+      log = await getLastSessionLog(sessionRef, sessionArg, options.storageV5);
       sessionId = log?.messages.at(-1)?.sessionId ?? log?.sessionId ?? sessionRef;
     } else if (typeof sessionRef === "string") {
-      let qt = options.precedingRows?.rows.length
+      let precedingCount = options.precedingRows?.rows.length
         ? toTranscriptEntries(options.precedingRows.rows, sessionRef)
         : undefined;
       log =
-        (await getLastSessionLog(sessionRef, undefined, options.storageV5, qt)) ??
+        (await getLastSessionLog(sessionRef, undefined, options.storageV5, precedingCount)) ??
         (await findLogInWorktrees(sessionRef, options.storageV5)) ??
         (await findLogById(sessionRef, options.storageV5));
       sessionId = sessionRef;
     } else log = sessionRef;
     if (!log && !messages) {
-      logFeatureSad("session_resume", Se ? "running_in_background" : "not_found");
+      logFeatureSad("session_resume", ranInBackground ? "running_in_background" : "not_found");
       return null;
     }
     if (log) {
       if (isLiteLog(log))
         log = await loadFullLog(log, {
-          onTranscriptUnreadable: (no) => {
-            Z = no;
+          onTranscriptUnreadable: (errno) => {
+            unreadableErrno = errno;
           },
           storageV5: options.storageV5,
         });
       if (!sessionId) sessionId = getSessionIdFromLog(log);
       options.beforeUse?.(log, sessionId);
       let targetSessionId = isValidAdoptedSessionId(sessionId, options) ? sessionId : undefined;
-      let Zt = options.forkSession ? undefined : targetSessionId;
+      let copyTargetSessionId = options.forkSession ? undefined : targetSessionId;
       if (sessionId) {
-        h(sessionId, log.fullPath);
-        if (s === undefined) await copyPlanForResume(log, targetSessionId, options.storageV5);
-        else await Promise.all([copyPlanForResume(log, targetSessionId, options.storageV5), s]);
+        startCopy(sessionId, log.fullPath);
+        if (copyPromise === undefined) await copyPlanForResume(log, targetSessionId, options.storageV5);
+        else await Promise.all([copyPlanForResume(log, targetSessionId, options.storageV5), copyPromise]);
       }
       let id = parseForkMarker(env.CLAUDE_CODE_RESUME_SOURCE_ALIVE);
-      let pn = sessionId ?? getSessionId();
-      L = id !== null && (id.sessionId === undefined || id.sessionId === pn || id.parentSessionId === pn);
-      G = options.forkSession && id?.parentSessionId === pn;
-      if (!L) copyFileHistoryForResume(log, Zt, options.storageV5);
+      let ownSessionId = sessionId ?? getSessionId();
+      isSameSession =
+        id !== null &&
+        (id.sessionId === undefined || id.sessionId === ownSessionId || id.parentSessionId === ownSessionId);
+      isChildFork = options.forkSession && id?.parentSessionId === ownSessionId;
+      if (!isSameSession) copyFileHistoryForResume(log, copyTargetSessionId, options.storageV5);
       messages = log.messages;
       checkResumeConsistency(messages);
       censusResumeAnnouncements(messages, log.fileSize);
@@ -928,13 +974,13 @@ async function loadConversationForResume(sessionRef, n, options) {
     messages = dropRetractedMessages_2(messages);
     messages = dropMalformedAttachments(messages);
     restoreInvokedSkills(messages);
-    let fullPath = log?.fullPath ?? n;
-    let Ee = fullPath
+    let fullPath = log?.fullPath ?? sessionArg;
+    let deferredToolUse = fullPath
       ? ((await findDeferredToolMarkerInTranscript(fullPath, options.storageV5)) ?? undefined)
       : undefined;
     let copiedSessionOwnId = options.copiedSessionOwnId;
-    let Ie =
-      Ee === undefined ||
+    let deferredMatch =
+      deferredToolUse === undefined ||
       copiedSessionOwnId === undefined ||
       messages.some(
         (message) =>
@@ -942,28 +988,32 @@ async function loadConversationForResume(sessionRef, n, options) {
           "sessionId" in message &&
           message.sessionId === copiedSessionOwnId &&
           Array.isArray(message.message.content) &&
-          message.message.content.some((Zt) => Zt.type === "tool_use" && Zt.id === Ee.toolUseID),
+          message.message.content.some(
+            (block) => block.type === "tool_use" && block.id === deferredToolUse.toolUseID,
+          ),
       )
-        ? Ee
+        ? deferredToolUse
         : undefined;
     let msgsLoaded = messages.length;
     let stored = messages;
     let uuid = messages.at(-1)?.uuid;
-    let lt =
-      options.precedingRows?.first === true && options.precedingRows.rows.some((qt) => qt.uuid === uuid);
+    let uuidInPreceding =
+      options.precedingRows?.first === true && options.precedingRows.rows.some((row) => row.uuid === uuid);
     if (env.CLAUDE_CODE_RESUME_SHOWS_CUT_OFF_CALLS === true)
       await withDeadline(
         initializeGrowthBook().catch(() => null),
         RESUME_LOG_PROBE_MS,
       );
-    let Je = deserializeMessagesImpl(
+    let deserialized = deserializeMessagesImpl(
       messages,
-      Ie ? new Set([Ie.toolUseID]) : undefined,
+      deferredMatch ? new Set([deferredMatch.toolUseID]) : undefined,
       options.replyOnResume,
       log?.rewindAnchorUuid ??
-        options.precedingRows?.rows.findLast((qt) => qt.type === "user" || qt.type === "assistant")?.uuid,
+        options.precedingRows?.rows.findLast(
+          (message) => message.type === "user" || message.type === "assistant",
+        )?.uuid,
       options.resumeInterruptedTurn,
-      G,
+      isChildFork,
       options.hostAnswerableToolUseIds,
       options.restoredCardToolUseId,
       options.hostLogsFinishedTail,
@@ -975,9 +1025,9 @@ async function loadConversationForResume(sessionRef, n, options) {
           },
       options.showsCutOffAgentCalls,
     );
-    messages = Je.messages;
+    messages = deserialized.messages;
     if (log) {
-      let turnInterruptionState = Je.turnInterruptionState;
+      let turnInterruptionState = deserialized.turnInterruptionState;
       reportResumeLoad({
         log,
         stored,
@@ -987,14 +1037,14 @@ async function loadConversationForResume(sessionRef, n, options) {
             : turnInterruptionState.message.isMeta
               ? "continue"
               : "resubmit",
-        rescueSuppressed: Je.rescueSuppressed,
+        rescueSuppressed: deserialized.rescueSuppressed,
         rewound: log.rewindAnchorUuid !== undefined,
         autoResume: Boolean(options.resumeInterruptedTurn ?? env.CLAUDE_CODE_RESUME_INTERRUPTED_TURN),
         openerVouched:
           turnInterruptionState.kind !== "none" &&
           (!turnInterruptionState.message.isMeta ||
             turnInterruptionState.interruptedTurnUserMessageUuid !== undefined),
-        supersededCalls: Je.supersededToolUseIds.size,
+        supersededCalls: deserialized.supersededToolUseIds.size,
         cutOffCalls:
           turnInterruptionState.kind !== "none" && turnInterruptionState.tail?.cutOffCalls !== undefined
             ? {
@@ -1002,16 +1052,19 @@ async function loadConversationForResume(sessionRef, n, options) {
                 ...turnInterruptionState.tail.cutOffCalls,
               }
             : undefined,
-        isTypedPrompt: (Zt) => findLastUserPromptUuid([Zt]) === Zt.uuid,
+        isTypedPrompt: (message) => findLastUserPromptUuid([message]) === message.uuid,
       });
     }
     let startTime = performance.now();
-    let pt =
-      options.forkSession || lt || (sessionId !== undefined && !isValidAdoptedSessionId(sessionId, options))
+    let orphaned =
+      options.forkSession ||
+      uuidInPreceding ||
+      (sessionId !== undefined && !isValidAdoptedSessionId(sessionId, options))
         ? "fork"
         : "resume";
     let resumedMessages = messages;
-    let yt = !options.forkSession && isValidAdoptedSessionId(sessionId, options) ? sessionId : getSessionId();
+    let resumeSessionId =
+      !options.forkSession && isValidAdoptedSessionId(sessionId, options) ? sessionId : getSessionId();
     let progress = {
       rows: [],
       additionalContexts: [],
@@ -1019,36 +1072,36 @@ async function loadConversationForResume(sessionRef, n, options) {
       lateInitialUserMessage: undefined,
     };
     let { sessionStartHooksWaitFor } = options;
-    let hookRun = startHookRun("tail", (qt) =>
-      processSessionStartHooks(getSessionIdentity(), pt, {
-        sessionId: yt,
-        sessionTitle: getCurrentSessionTitle(getSessionId()) ?? (G ? undefined : log?.customTitle),
+    let hookRun = startHookRun("tail", (hookAbort) =>
+      processSessionStartHooks(getSessionIdentity(), orphaned, {
+        sessionId: resumeSessionId,
+        sessionTitle: getCurrentSessionTitle(getSessionId()) ?? (isChildFork ? undefined : log?.customTitle),
         resumedMessages,
-        orphaned: qt,
+        orphaned: hookAbort,
         progress,
         holdHooksUntil:
           sessionStartHooksWaitFor &&
           (async () => {
-            await sessionStartHooksWaitFor(qt);
+            await sessionStartHooksWaitFor(hookAbort);
             startTime = performance.now();
           }),
         storageV5: options.storageV5,
         credentials: options.credentials,
-      }).then((Zt) => {
-        if (qt.aborted) return Zt;
+      }).then((hooksResult) => {
+        if (hookAbort.aborted) return hooksResult;
         recordPhase("hooks_init_ms", performance.now() - startTime, startTime);
-        let rn = takePendingHookSessionTitle();
-        if (rn) applyResumeHookSessionTitle(rn, yt, options.storageV5);
-        return Zt;
+        let pendingTitle = takePendingHookSessionTitle();
+        if (pendingTitle) applyResumeHookSessionTitle(pendingTitle, resumeSessionId, options.storageV5);
+        return hooksResult;
       }),
     );
     setRecoveryCounts({
       msgsLoaded,
       msgsInJsonl,
     });
-    if (Z !== undefined)
+    if (unreadableErrno !== undefined)
       logFeatureSad("session_resume", "transcript_unreadable", {
-        errno: Z,
+        errno: unreadableErrno,
       });
     else logFeatureOk("session_resume");
     return {
@@ -1057,22 +1110,22 @@ async function loadConversationForResume(sessionRef, n, options) {
         ...hookRun,
         progress,
       },
-      turnInterruptionState: Je.turnInterruptionState,
-      supersededToolUseIds: Je.supersededToolUseIds,
-      supersededToolNames: Je.supersededToolNames,
-      answeredToolUseIds: Je.answeredToolUseIds,
-      rescueSuppressed: Je.rescueSuppressed,
-      deferredToolUse: Ie,
-      fileHistorySnapshots: L ? undefined : log?.fileHistorySnapshots,
+      turnInterruptionState: deserialized.turnInterruptionState,
+      supersededToolUseIds: deserialized.supersededToolUseIds,
+      supersededToolNames: deserialized.supersededToolNames,
+      answeredToolUseIds: deserialized.answeredToolUseIds,
+      rescueSuppressed: deserialized.rescueSuppressed,
+      deferredToolUse: deferredMatch,
+      fileHistorySnapshots: isSameSession ? undefined : log?.fileHistorySnapshots,
       attributionSnapshots: log?.attributionSnapshots,
       contentReplacements: log?.contentReplacements,
       sessionId,
-      agentName: G ? undefined : log?.agentName,
+      agentName: isChildFork ? undefined : log?.agentName,
       agentColor: log?.agentColor,
       agentSetting: log?.agentSetting,
-      customTitle: G ? undefined : log?.customTitle,
+      customTitle: isChildFork ? undefined : log?.customTitle,
       ...withEndedByModel({}, getEndedByModel(log)),
-      aiTitle: G ? undefined : log?.aiTitle,
+      aiTitle: isChildFork ? undefined : log?.aiTitle,
       tag: log?.tag,
       relocatedCwd: log?.relocatedCwd,
       projectPath: log?.projectPath,
@@ -1103,11 +1156,11 @@ async function loadConversationForResume(sessionRef, n, options) {
   } catch (error) {
     if (error instanceof ResumeRefusedError) {
       logFeatureSad("session_resume", "refused");
-      y();
+      abandonCopy();
       throw error;
     }
     logFeatureBad("session_resume", "load_failed");
-    y();
+    abandonCopy();
     if (isTranscriptLoadError(error))
       logForDebugging(`loadConversationForResume failed (${getErrnoCode(error)}): ${errorMessage(error)}`, {
         level: "error",
@@ -1121,10 +1174,14 @@ async function loadConversationForResume(sessionRef, n, options) {
  * 在各 worktree 的项目目录中找会话日志。
  */
 async function findLogInWorktrees(sessionRef, storageV5) {
-  let r = wrapStorageSource(getTranscriptStorageContext(storageV5));
-  for (let s of await getWorktreePaths(getOriginalCwd()))
-    for (let h of await findProjectDirs(s, r)) {
-      let lastSessionLog = await getLastSessionLog(sessionRef, join(h, `${sessionRef}.jsonl`), storageV5);
+  let storageSource = wrapStorageSource(getTranscriptStorageContext(storageV5));
+  for (let worktreePath of await getWorktreePaths(getOriginalCwd()))
+    for (let projectDir of await findProjectDirs(worktreePath, storageSource)) {
+      let lastSessionLog = await getLastSessionLog(
+        sessionRef,
+        join(projectDir, `${sessionRef}.jsonl`),
+        storageV5,
+      );
       if (lastSessionLog) {
         logEvent("tengu_resume_worktree_fallback", {});
         return lastSessionLog;
@@ -1151,106 +1208,122 @@ async function findLogById(sessionRef, storageV5) {
 /**
  * require chunk-vswknp5v（BRIEF_TOOL_NAME/LEGACY_BRIEF_TOOL_NAME）与 chunk-cv3kgbt2（isBriefEnabled 等）。
  */
-var briefToolModule = require("./chunk-vswknp5v.js");
-var briefEnablementModule = require("./chunk-cv3kgbt2.js");
-var BRIEF_TOOL_NAME = briefToolModule.BRIEF_TOOL_NAME;
-var LEGACY_BRIEF_TOOL_NAME = briefToolModule.LEGACY_BRIEF_TOOL_NAME;
+var briefToolModule; // deferred: loads other modules while loading; runs once its import cycle is complete
+var briefEnablementModule;
+var BRIEF_TOOL_NAME;
+var LEGACY_BRIEF_TOOL_NAME;
+deferInit("chunk-e6aww6q8.js:3310099", () => {
+  briefToolModule = require("../tools/BriefTool/prompt.js");
+  briefEnablementModule = require("../tools/BriefTool/BriefTool.js");
+  BRIEF_TOOL_NAME = briefToolModule.BRIEF_TOOL_NAME;
+  LEGACY_BRIEF_TOOL_NAME = briefToolModule.LEGACY_BRIEF_TOOL_NAME;
+});
 //@ chunk-0h4e7gnq.js:133809-133923 placement
 /**
  * 内容块中有非空文本。
  */
 function hasNonEmptyText(content) {
   return content
-    .filter((n) => n.type === "text" && typeof n.text === "string")
-    .some((n) => n.text.trim().length > 0);
+    .filter((block) => block.type === "text" && typeof block.text === "string")
+    .some((block) => block.text.trim().length > 0);
 }
 //@ chunk-0h4e7gnq.js:133923-134539 placement
-function dropRetractedOnResume(e, n) {
-  let s = dropRetractedMessages(e);
-  if (n?.suppressDropTelemetry !== true && s.length !== e.length)
+function dropRetractedOnResume(messages, options) {
+  let liveMessages = dropRetractedMessages(messages);
+  if (options?.suppressDropTelemetry !== true && liveMessages.length !== messages.length)
     logEvent("tengu_resume_retracted_dropped", {
-      dropped: e.length - s.length,
-      chain_length: e.length,
+      dropped: messages.length - liveMessages.length,
+      chain_length: messages.length,
     });
-  let y = (x) =>
-    x.type === "system" && "subtype" in x && x.subtype === "model_refusal_fallback" && x.scope === "local";
-  let r = (x) => getCanonicalName(stripAnyVersatileSuffix(x));
-  let last = s.findLast(
-    (x) => x.type === "assistant" && !x.isApiErrorMessage && hasNonEmptyText(x.message.content),
+  let isLocalRefusalFallback = (message) =>
+    message.type === "system" &&
+    "subtype" in message &&
+    message.subtype === "model_refusal_fallback" &&
+    message.scope === "local";
+  let canonicalizeModel = (modelName) => getCanonicalName(stripAnyVersatileSuffix(modelName));
+  let last = liveMessages.findLast(
+    (message) =>
+      message.type === "assistant" && !message.isApiErrorMessage && hasNonEmptyText(message.message.content),
   );
   if (last === undefined)
     return {
-      live: s,
+      live: liveMessages,
       notice: undefined,
     };
-  let h = stringOrUndefined(last.message.model);
-  if (h === undefined)
+  let lastModel = stringOrUndefined(last.message.model);
+  if (lastModel === undefined)
     return {
-      live: s,
+      live: liveMessages,
       notice: undefined,
     };
-  let k = r(h);
-  let notice = s.findLast((x) => {
-    if (!y(x)) return false;
-    let L = stringOrUndefined(x.fallbackModel);
-    return L !== undefined && r(L) === k;
+  let canonicalModel = canonicalizeModel(lastModel);
+  let notice = liveMessages.findLast((message) => {
+    if (!isLocalRefusalFallback(message)) return false;
+    let fallbackModel = stringOrUndefined(message.fallbackModel);
+    return fallbackModel !== undefined && canonicalizeModel(fallbackModel) === canonicalModel;
   });
   return {
-    live: s,
+    live: liveMessages,
     notice,
   };
 }
 //@ chunk-0h4e7gnq.js:134539-134590 placement
-function stringOrUndefined(e) {
-  return typeof e === "string" ? e : undefined;
+function stringOrUndefined(value) {
+  return typeof value === "string" ? value : undefined;
 }
 //@ chunk-0h4e7gnq.js:134590-134868 placement
 /**
  * 去掉被拒答回退撤回的消息。
  */
-function dropRetractedMessages(e) {
-  let n = new Set(
-    e.flatMap((s) =>
-      s.type === "system" && s.subtype === "model_refusal_fallback" && s.retractedMessageUuids !== undefined
-        ? s.retractedMessageUuids.map((retractedMessageUuid) =>
+function dropRetractedMessages(messages) {
+  let retractedUuids = new Set(
+    messages.flatMap((message) =>
+      message.type === "system" &&
+      message.subtype === "model_refusal_fallback" &&
+      message.retractedMessageUuids !== undefined
+        ? message.retractedMessageUuids.map((retractedMessageUuid) =>
             retractedMessageUuid.slice(0, MAX_PROGRESS_ENTRIES),
           )
         : [],
     ),
   );
-  if (n.size === 0) return e;
-  return e.filter((s) => s.type === "system" || !n.has(s.uuid.slice(0, MAX_PROGRESS_ENTRIES)));
+  if (retractedUuids.size === 0) return messages;
+  return messages.filter(
+    (message) =>
+      message.type === "system" || !retractedUuids.has(message.uuid.slice(0, MAX_PROGRESS_ENTRIES)),
+  );
 }
 //@ chunk-tyg7f3ek.js:326687-326938 callgraph-fingerprint = isTerminalToolResult (0.709)
 /**
  * 轮次是否已正常结束：assistant 无 tool_use 且有非空文本，或非关机中断的 user 消息。
  */
-function isTerminalToolResult(e) {
-  if (e.type === "assistant") {
-    let content = Array.isArray(e.message.content) ? e.message.content : [];
+function isTerminalToolResult(message) {
+  if (message.type === "assistant") {
+    let content = Array.isArray(message.message.content) ? message.message.content : [];
     return (
-      !content.some((r) => r.type === "tool_use") &&
-      content.some((r) => r.type === "text" && r.text.trim() !== "")
+      !content.some((block) => block.type === "tool_use") &&
+      content.some((block) => block.type === "text" && block.text.trim() !== "")
     );
   }
-  return e.type === "user" && !isHarnessMetaMessage(e) && e.interruptedByShutdown !== true;
+  return message.type === "user" && !isHarnessMetaMessage(message) && message.interruptedByShutdown !== true;
 }
 //@ chunk-tyg7f3ek.js:326938-327185 fingerprint = detectTurnInterruption (0.439)
 /**
  * 检测 interrupted_prompt：被打断的提示之后没有已完成的回答时返回该提示 uuid。
  */
-function detectTurnInterruption(e, n) {
-  let r = interruptedPromptUuid(e);
-  let lastMessageIdx = n.findLastIndex((y) => y.uuid === r);
-  if (e?.kind !== "interrupted_prompt" || lastMessageIdx === -1) return;
-  let h;
-  for (let y of n.slice(lastMessageIdx + 1))
-    if (!isInterruptMarkerRow(y)) h = countUserPromptsFromEntries_5(y) ? y : h;
-    else if (y.uuid !== e.message.uuid) {
-      if (h !== undefined && isTerminalToolResult(h)) return;
-      h = undefined;
+function detectTurnInterruption(state, messages) {
+  let promptUuid = interruptedPromptUuid(state);
+  let lastMessageIdx = messages.findLastIndex((message) => message.uuid === promptUuid);
+  if (state?.kind !== "interrupted_prompt" || lastMessageIdx === -1) return;
+  let lastPromptRow;
+  for (let message of messages.slice(lastMessageIdx + 1))
+    if (!isInterruptMarkerRow(message))
+      lastPromptRow = countUserPromptsFromEntries_5(message) ? message : lastPromptRow;
+    else if (message.uuid !== state.message.uuid) {
+      if (lastPromptRow !== undefined && isTerminalToolResult(lastPromptRow)) return;
+      lastPromptRow = undefined;
     }
-  return r;
+  return promptUuid;
 }
 export {
   BRIEF_TOOL_NAME,

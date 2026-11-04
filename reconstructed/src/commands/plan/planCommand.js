@@ -20,20 +20,20 @@ import { Box, Text } from "../../ink/components/Text.js";
  * /extra-usage 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
 var callPlanCommand = async (onDone, context) => {
-  let { call: t } = await import("./chunk-2gtphf4m.js");
-  let o = await t(
-    (a, c) =>
+  let { call } = await import("../usage-credits/usageCredits.js");
+  let result = await call(
+    (result, options) =>
       onDone(
-        a
+        result
           ? `${RENAME_NOTICE}
 
-${a}`
+${result}`
           : RENAME_NOTICE,
-        c,
+        options,
       ),
     context,
   );
-  if (o == null) return o;
+  if (result == null) return result;
   return jsxProd_default_2(Box, {
     flexDirection: "column",
     children: [
@@ -41,7 +41,8 @@ ${a}`
         dimColor: true,
         children: RENAME_NOTICE,
       }),
-      o,
+      result,
     ],
   });
 };
+export { callPlanCommand };

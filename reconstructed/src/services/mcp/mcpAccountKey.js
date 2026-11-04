@@ -20,8 +20,8 @@ import { getCliOwnedState } from "./cliOwnedClients.js";
 /**
  * 取当前会话可用且被允许的技能命令。
  */
-async function getSessionSkillCommands(e, storageV5) {
-  return filterCommandsByAllowlist(await getSkillToolCommands(e, storageV5), getSessionSkillAllowlist());
+async function getSessionSkillCommands(cwd, storageV5) {
+  return filterCommandsByAllowlist(await getSkillToolCommands(cwd, storageV5), getSessionSkillAllowlist());
 }
 //@ chunk-e6aww6q8.js:2303421-2303434 placement
 /**
@@ -40,8 +40,8 @@ function isDiscoveryCacheOn() {
  * 发现缓存是否可用（关闭原因为空或仅键不可用）。
  */
 function isDiscoveryCacheUsable() {
-  let e = discoveryCacheOffReason();
-  return e === undefined || e === "key-unavailable";
+  let offReason = discoveryCacheOffReason();
+  return offReason === undefined || offReason === "key-unavailable";
 }
 //@ chunk-e6aww6q8.js:2303537-2303571 placement
 /**
@@ -91,9 +91,9 @@ function latchCacheOff() {
 //@ chunk-e6aww6q8.js:2303911-2304096 placement
 function computeDiscoveryCacheOffReason(discoveryCacheStore) {
   if (env.MCP_DISCOVERY_CACHE === false) return "env-disabled";
-  let n = discoveryCacheStore.killSwitch?.();
-  if (n === false) return "kill-switch";
-  if (env.MCP_DISCOVERY_CACHE !== true && n !== true) return "not-enabled";
+  let killSwitchState = discoveryCacheStore.killSwitch?.();
+  if (killSwitchState === false) return "kill-switch";
+  if (env.MCP_DISCOVERY_CACHE !== true && killSwitchState !== true) return "not-enabled";
   return;
 }
 //@ chunk-e6aww6q8.js:2304096-2304163 placement
@@ -111,15 +111,15 @@ function resolveMcpAccountIdentity() {
       kind: "unwired",
       token: ACCT_UNWIRED,
     };
-  let n = accountResolver();
-  if (!n)
+  let account = accountResolver();
+  if (!account)
     return {
       kind: "logged-out",
       token: ACCT_LOGGED_OUT,
     };
-  let accountUuid = n.accountUuid ?? "";
-  let organizationUuid = n.organizationUuid ?? "";
-  if (!accountUuid || !n.credentialInstalled)
+  let accountUuid = account.accountUuid ?? "";
+  let organizationUuid = account.organizationUuid ?? "";
+  if (!accountUuid || !account.credentialInstalled)
     return {
       kind: "incomplete",
       token: ACCT_INCOMPLETE,
@@ -162,40 +162,40 @@ class DiscoveryCacheStore {
   eraResolver = () => "legacy";
   deleteGenerationByCacheKey = new Map();
   readGateForTest;
-  constructor(e) {
-    this.storage = e?.storage ?? new LocalFileStore();
-    this.storageV5 = e?.storageV5;
-    this.accountResolver = e?.accountResolver;
-    this.killSwitch = e?.killSwitch;
+  constructor(options) {
+    this.storage = options?.storage ?? new LocalFileStore();
+    this.storageV5 = options?.storageV5;
+    this.accountResolver = options?.accountResolver;
+    this.killSwitch = options?.killSwitch;
   }
-  serializeWrite(e, n) {
-    let r = this.#e;
-    if (r === null) return this.pathWrites.run(e, n);
-    return this.pathWrites.run(e, () => r.then(n));
+  serializeWrite(path, operation) {
+    let pendingFlush = this.#e;
+    if (pendingFlush === null) return this.pathWrites.run(path, operation);
+    return this.pathWrites.run(path, () => pendingFlush.then(operation));
   }
-  async drain(e) {
+  async drain(timeoutMs) {
     if (this.pathWrites.size === 0) return;
     await Promise.race([
       this.pathWrites.settle(),
-      sleep(e, undefined, {
+      sleep(timeoutMs, undefined, {
         unref: true,
       }),
     ]);
   }
-  async dispose(e) {
+  async dispose(timeoutMs) {
     try {
-      await this.drain(e);
+      await this.drain(timeoutMs);
     } finally {
       this.flushCleanup?.();
       this.flushCleanup = undefined;
     }
   }
-  succeed(e) {
-    if (e.pathWrites.size === 0) return;
-    let n = e.pathWrites.settle().then(() => {
-      if (this.#e === n) this.#e = null;
+  succeed(state) {
+    if (state.pathWrites.size === 0) return;
+    let flushPromise = state.pathWrites.settle().then(() => {
+      if (this.#e === flushPromise) this.#e = null;
     });
-    this.#e = n;
+    this.#e = flushPromise;
   }
 }
 //@ chunk-e6aww6q8.js:2305434-2305550 placement

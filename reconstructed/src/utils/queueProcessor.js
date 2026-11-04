@@ -27,12 +27,16 @@ import { parseSlashCommand } from "./slashCommandParsing.js";
 import { findCommand, isCommandEnabled } from "../commands.js";
 import { lastTextBlockText } from "./historyFile.js";
 import { resolveSlashCommand } from "../screens/repl/PromptSubmitController.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1661153-1661157 placement
 /**
  * 惰性模块初始化调用 j()。
  */
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1661153", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1661157-1661253 placement
 /**
  * 队首可处理命令仍在审查（screeningPending）时不取，否则按优先级取下一个。
@@ -47,13 +51,15 @@ function peekNextProcessableCommand(queue) {
  */
 function processQueueIfReady({ queue, executeInput, waitsOnSessionStart = () => true, screeningStale }) {
   if (getActiveMessageQueue() !== undefined) {
-    let kt = queue.peek((cmd) => isSendableQueuedCommand(cmd) && isGoalIdleCheckinPaused(cmd.uuid));
-    let At = kt ?? peekNextProcessableCommand(queue);
-    if (!At || (kt === undefined && waitsOnSessionStart(At)))
+    let pausedCheckin = queue.peek(
+      (cmd) => isSendableQueuedCommand(cmd) && isGoalIdleCheckinPaused(cmd.uuid),
+    );
+    let next = pausedCheckin ?? peekNextProcessableCommand(queue);
+    if (!next || (pausedCheckin === undefined && waitsOnSessionStart(next)))
       return {
         processed: false,
       };
-    drainOneQueuedCommand(queue, At, executeInput);
+    drainOneQueuedCommand(queue, next, executeInput);
     return {
       processed: true,
     };
@@ -70,82 +76,86 @@ function processQueueIfReady({ queue, executeInput, waitsOnSessionStart = () => 
     };
   }
   let targetMode = next.mode;
-  let Re = next.shouldQuery === false;
-  let Be = false;
-  let He = 0;
-  let We = true;
-  let ze = false;
-  let Xe = false;
-  let rt = queue.dequeueAllMatching((cmd) => {
-    if (Be) return false;
+  let noQuery = next.shouldQuery === false;
+  let stop = false;
+  let selected = 0;
+  let allowNoQuery = true;
+  let sawNext = false;
+  let blockedByStale = false;
+  let batch = queue.dequeueAllMatching((cmd) => {
+    if (stop) return false;
     if (isMainAgentCommand(cmd) && cmd.screeningPending === true) {
-      Be = true;
+      stop = true;
       return false;
     }
     if (isMainAgentCommand(cmd)) {
       if (!sameSchedulingPlugin(cmd, next)) {
-        Be = ze;
-        Xe = true;
+        stop = sawNext;
+        blockedByStale = true;
         return false;
       }
-      if (Xe && cmd !== next) return false;
+      if (blockedByStale && cmd !== next) return false;
     }
-    let At =
-      We &&
+    let submittedNoQuery =
+      allowNoQuery &&
       isMainAgentCommand(cmd) &&
       cmd.drainOnly !== true &&
       cmd.promptSubmitted !== undefined &&
       cmd.promptSubmitted.stopped === undefined &&
       screeningStale !== undefined &&
       !screeningStale(cmd.promptSubmitted);
-    if (isMainAgentCommand(cmd) && (cmd.promptSubmitted !== undefined || cmd.drainOnly === true) && !At) {
-      Be = true;
-      if (He > 0) return false;
+    if (
+      isMainAgentCommand(cmd) &&
+      (cmd.promptSubmitted !== undefined || cmd.drainOnly === true) &&
+      !submittedNoQuery
+    ) {
+      stop = true;
+      if (selected > 0) return false;
     }
-    let It =
+    let drainable =
       isActiveMainAgentCommand(cmd) &&
       !isSlashCommand(cmd) &&
       cmd.mode === targetMode &&
-      (cmd.shouldQuery === false) === Re;
-    if (He > 0 && cmd.ideSelection?.text) {
-      Be = true;
+      (cmd.shouldQuery === false) === noQuery;
+    if (selected > 0 && cmd.ideSelection?.text) {
+      stop = true;
       return false;
     }
     if (
-      He > 0 &&
-      We &&
+      selected > 0 &&
+      allowNoQuery &&
       isMainAgentCommand(cmd) &&
-      !(At && It && typeof cmd.value === "string" && !cmd.value.includes("@"))
+      !(submittedNoQuery && drainable && typeof cmd.value === "string" && !cmd.value.includes("@"))
     ) {
-      Be = true;
+      stop = true;
       return false;
     }
-    if (It) {
-      He++;
-      We = At;
-      ze ||= cmd === next;
+    if (drainable) {
+      selected++;
+      allowNoQuery = submittedNoQuery;
+      sawNext ||= cmd === next;
     }
-    return It;
+    return drainable;
   });
-  if (rt.length === 0)
+  if (batch.length === 0)
     return {
       processed: false,
     };
-  reportQueuedSubmissions(rt, "turn_end");
-  markMessagesRead(rt);
-  queue.setInFlightDrainBatch(rt);
-  executeInput(rt).finally(() => queue.clearInFlightDrainBatch(rt));
+  reportQueuedSubmissions(batch, "turn_end");
+  markMessagesRead(batch);
+  queue.setInFlightDrainBatch(batch);
+  executeInput(batch).finally(() => queue.clearInFlightDrainBatch(batch));
   return {
     processed: true,
   };
 }
 //@ chunk-18hwfzwa.js:1662561-1662712 placement
-function drainOneQueuedCommand(queue, x, executeInput) {
-  let L = [queue.dequeue((ee) => ee === x)];
-  reportQueuedSubmissions(L, "turn_end");
-  markMessagesRead(L);
-  queue.setInFlightDrainBatch(L);
-  executeInput(L).finally(() => queue.clearInFlightDrainBatch(L));
+function drainOneQueuedCommand(queue, command, executeInput) {
+  let drained = [queue.dequeue((candidate) => candidate === command)];
+  reportQueuedSubmissions(drained, "turn_end");
+  markMessagesRead(drained);
+  queue.setInFlightDrainBatch(drained);
+  executeInput(drained).finally(() => queue.clearInFlightDrainBatch(drained));
 }
 //@ chunk-18hwfzwa.js:1662712-1662742 placement
 /**
@@ -154,33 +164,41 @@ function drainOneQueuedCommand(queue, x, executeInput) {
 var NOOP_UNSUBSCRIBE = () => () => {};
 var neverSubscribed = () => false;
 //@ chunk-18hwfzwa.js:1662742-1662859 placement
-var NON_INTERRUPTING_DIALOGS = new Set([
-  "managed_settings_security",
-  "sandbox_network_access",
-  "mcp_url_elicitation",
-]);
-var TENGU_WOOLLY_OWL = "tengu_woolly_owl";
+var NON_INTERRUPTING_DIALOGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var TENGU_WOOLLY_OWL;
+deferInit("chunk-18hwfzwa.js:1662742", () => {
+  NON_INTERRUPTING_DIALOGS = new Set([
+    "managed_settings_security",
+    "sandbox_network_access",
+    "mcp_url_elicitation",
+  ]);
+  TENGU_WOOLLY_OWL = "tengu_woolly_owl";
+});
 //@ chunk-18hwfzwa.js:1662859-1663151 placement
 /**
  * 桥接来的斜杠命令是否不可用
  */
-function isBridgeSlashCommandUnavailable(h, commands) {
-  if (h.bridgeOrigin !== true || h.textNotTyped === true || !isHumanOrigin(h.origin)) return false;
+function isBridgeSlashCommandUnavailable(command, commands) {
+  if (command.bridgeOrigin !== true || command.textNotTyped === true || !isHumanOrigin(command.origin))
+    return false;
   if (getFeatureValue_CACHED_MAY_BE_STALE(TENGU_WOOLLY_OWL, false)) return false;
-  if (typeof h.value !== "string" || !h.value.startsWith("/")) return false;
-  let slashCommand = parseSlashCommand(h.value);
+  if (typeof command.value !== "string" || !command.value.startsWith("/")) return false;
+  let slashCommand = parseSlashCommand(command.value);
   if (!slashCommand) return false;
-  let command = findCommand(slashCommand.commandName, commands);
+  let command_2 = findCommand(slashCommand.commandName, commands);
   return (
-    command !== undefined && command.type === "local" && command.name === "clear" && isCommandEnabled(command)
+    command_2 !== undefined &&
+    command_2.type === "local" &&
+    command_2.name === "clear" &&
+    isCommandEnabled(command_2)
   );
 }
 //@ chunk-18hwfzwa.js:1663151-1663315 placement = prependModeCharacterToInput (1)
 function prependModeCharacterToInput_2(input, mode) {
-  let D = input.mode === "bash" ? null : lastTextBlockText(input.value);
-  let L = D === null || !D.startsWith("/") ? null : parseSlashCommand(D);
-  let ee = L === null ? undefined : resolveSlashCommand(L, mode);
-  return ee !== undefined && isCommandEnabled(ee) ? ee : undefined;
+  let textBlock = input.mode === "bash" ? null : lastTextBlockText(input.value);
+  let slashCommand = textBlock === null || !textBlock.startsWith("/") ? null : parseSlashCommand(textBlock);
+  let resolved = slashCommand === null ? undefined : resolveSlashCommand(slashCommand, mode);
+  return resolved !== undefined && isCommandEnabled(resolved) ? resolved : undefined;
 }
 export {
   NON_INTERRUPTING_DIALOGS,

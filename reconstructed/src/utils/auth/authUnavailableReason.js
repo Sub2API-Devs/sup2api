@@ -24,7 +24,7 @@ import { ALLOW_PLUGIN_PUBLISH_KEY } from "../../services/plugins/publish/publish
 /**
  * 取数组里第一个非 false 的值。
  */
-var firstTruthy = (o) => o.find((m) => m !== false) || undefined;
+var firstTruthy = (values) => values.find((value) => value !== false) || undefined;
 //@ chunk-381d7r01.js:610-726 placement
 function isEnvOauthTokenSource() {
   let { source } = getAuthTokenSource();

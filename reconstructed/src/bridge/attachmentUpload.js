@@ -63,15 +63,15 @@ import { openWithAbort } from "../utils/fsSafety/pathRevalidation.js";
 import { safeResolvePath, getFsImplementation } from "../utils/fsOperations.js";
 
 //@ chunk-7kpfrhzn.js:12531-12625 placement
-function logUploadFailure(e, r, n) {
+function logUploadFailure(code, meta, serverCode) {
   logFeatureSad(
     "bridge_attachment_upload",
-    e,
-    n === undefined
-      ? r
+    code,
+    serverCode === undefined
+      ? meta
       : {
-          ...r,
-          server_error_code: fromEnum(n),
+          ...meta,
+          server_error_code: fromEnum(serverCode),
         },
   );
 }
@@ -79,70 +79,70 @@ function logUploadFailure(e, r, n) {
 /**
  * 解析上传响应：201 取 file_uuid；413 解析服务器上限（图片单独提示）；其他状态转错误，并判断是否可重发。
  */
-function handleUploadResponse(e, r, n, a, h) {
-  if (e.status === 201) {
-    let b = uploadSuccessSchema().safeParse(e.data);
-    if (!b.success) {
-      logUploadDebug(`unexpected response shape for ${r}: ${b.error.message}`);
-      h("bad_response");
+function handleUploadResponse(response, filename, size, telemetry, reportFailure) {
+  if (response.status === 201) {
+    let parsed = uploadSuccessSchema().safeParse(response.data);
+    if (!parsed.success) {
+      logUploadDebug(`unexpected response shape for ${filename}: ${parsed.error.message}`);
+      reportFailure("bad_response");
       return {
         error: "upload failed: unexpected server response",
       };
     }
-    logUploadDebug(`uploaded ${r} \u2192 ${b.data.file_uuid} (${n} bytes)`);
-    logFeatureOk("bridge_attachment_upload", a);
-    return b.data;
+    logUploadDebug(`uploaded ${filename} \u2192 ${parsed.data.file_uuid} (${size} bytes)`);
+    logFeatureOk("bridge_attachment_upload", telemetry);
+    return parsed.data;
   }
   logUploadDebug(
-    `upload failed for ${r}: status=${e.status} body=${jsonStringify(e.data ?? null).slice(0, 200)}`,
+    `upload failed for ${filename}: status=${response.status} body=${jsonStringify(response.data ?? null).slice(0, 200)}`,
   );
-  let errorCode = extractErrorCode(e.data);
-  let m = imageErrorCodeOrUndefined(errorCode);
-  let y =
+  let errorCode = extractErrorCode(response.data);
+  let imageErrorCode = imageErrorCodeOrUndefined(errorCode);
+  let isBusyOrTimeout =
     errorCode === "upload_busy" ||
     errorCode === "upload_timeout" ||
-    e.status === 529 ||
-    (typeof e.headers === "object" && e.headers !== null && "retry-after" in e.headers);
-  h(
-    httpStatusFailureCode(e.status),
-    m,
-    e.status < 500
+    response.status === 529 ||
+    (typeof response.headers === "object" && response.headers !== null && "retry-after" in response.headers);
+  reportFailure(
+    httpStatusFailureCode(response.status),
+    imageErrorCode,
+    response.status < 500
       ? undefined
-      : y
+      : isBusyOrTimeout
         ? "any_post"
         : errorCode !== undefined
           ? "reason_not_temporary"
-          : TEMPORARY_HTTP_STATUSES.has(e.status)
+          : TEMPORARY_HTTP_STATUSES.has(response.status)
             ? undefined
             : "status_not_temporary",
   );
-  let w = (error) => ({
+  let toError = (error) => ({
     error,
-    ...(m !== undefined && {
-      errorCode: m,
+    ...(imageErrorCode !== undefined && {
+      errorCode: imageErrorCode,
     }),
   });
-  if (e.status === 413) {
-    let b = uploadTooLargeSchema().safeParse(e.data);
-    let details = b.success ? b.data.error.details : undefined;
+  if (response.status === 413) {
+    let tooLarge = uploadTooLargeSchema().safeParse(response.data);
+    let details = tooLarge.success ? tooLarge.data.error.details : undefined;
     if (errorCode === "image_too_large")
-      return w(`${formatUploadLimitError(n, details?.max_bytes)} for images`);
+      return toError(`${formatUploadLimitError(size, details?.max_bytes)} for images`);
     if (details !== undefined)
       bridgeHostState().uploadLimitTold = {
         maxBytes: details.max_bytes,
         atMs: Date.now(),
       };
-    return w(formatUploadLimitError(n, details?.max_bytes));
+    return toError(formatUploadLimitError(size, details?.max_bytes));
   }
-  return w(`upload failed: server returned ${e.status}`);
+  return toError(`upload failed: server returned ${response.status}`);
 }
 //@ chunk-7kpfrhzn.js:13694-13898 placement
-function buildUploadHeaders(token, boundary, n, uploadLane) {
+function buildUploadHeaders(token, boundary, contentLength, uploadLane) {
   return {
     "User-Agent": claudeCodeUserAgent(),
     Authorization: `Bearer ${token}`,
     "Content-Type": `multipart/form-data; boundary=${boundary}`,
-    "Content-Length": n.toString(),
+    "Content-Length": contentLength.toString(),
     ...(uploadLane !== undefined && {
       "x-claude-code-upload-lane": uploadLane,
     }),
@@ -152,99 +152,108 @@ function buildUploadHeaders(token, boundary, n, uploadLane) {
 /**
  * 以 multipart 方式 POST 一个 buffer 到上传地址（35 秒超时），返回 file_uuid 或错误并记录失败分类。
  */
-async function uploadBuffer(e, r, n, signal, h, credentials, m = (y, w) => logUploadFailure(y, h, w)) {
-  let y = checkUploadAllowed(h);
-  if (y) {
-    logUploadDebug(`skip ${r}: policy/provider gate denied`);
-    return y;
+async function uploadBuffer(
+  content,
+  filename,
+  size,
+  signal,
+  telemetry,
+  credentials,
+  onFailure = (code, serverCode) => logUploadFailure(code, telemetry, serverCode),
+) {
+  let gated = checkUploadAllowed(telemetry);
+  if (gated) {
+    logUploadDebug(`skip ${filename}: policy/provider gate denied`);
+    return gated;
   }
-  if (e.length > MAX_UPLOAD_BYTES) {
-    logUploadDebug(`skip ${r}: ${e.length} bytes exceeds ${MAX_UPLOAD_BYTES} limit`);
-    m("too_large");
+  if (content.length > MAX_UPLOAD_BYTES) {
+    logUploadDebug(`skip ${filename}: ${content.length} bytes exceeds ${MAX_UPLOAD_BYTES} limit`);
+    onFailure("too_large");
     return {
-      error: formatUploadLimitError(e.length, MAX_UPLOAD_BYTES),
+      error: formatUploadLimitError(content.length, MAX_UPLOAD_BYTES),
     };
   }
-  let uploadAuth = await getUploadAuth(credentials);
-  if (!uploadAuth) {
+  let route = await getUploadAuth(credentials);
+  if (!route) {
     logUploadDebug("skip: no oauth token");
-    m("no_token");
+    onFailure("no_token");
     return {
       error: "upload failed: no OAuth token available",
     };
   }
-  if (isBridgeFileLoginRefused(uploadAuth)) {
-    m("stored_login_refused");
+  if (isBridgeFileLoginRefused(route)) {
+    onFailure("stored_login_refused");
     return {
       error: new StoredLoginHeldBackError(storedLoginRefusalReason()).message,
     };
   }
-  let { boundary, head, tail } = multipartParts(r, n);
-  let buffer = Buffer.concat([head, e, tail]);
+  let { boundary, head, tail } = multipartParts(filename, size);
+  let buffer = Buffer.concat([head, content, tail]);
   let abortController = new AbortController();
   let stallTimer = createStallTimer(abortController, UPLOAD_TIMEOUT_MS);
   try {
-    let L = await axios_default.post(getUploadUrl(uploadAuth), buffer, {
-      headers: buildUploadHeaders(uploadAuth.token, boundary, buffer.length, h?.upload_lane),
+    let response = await axios_default.post(getUploadUrl(route), buffer, {
+      headers: buildUploadHeaders(route.token, boundary, buffer.length, telemetry?.upload_lane),
       timeout: UPLOAD_TIMEOUT_MS,
       signal:
         signal === undefined ? abortController.signal : AbortSignal.any([signal, abortController.signal]),
       validateStatus: () => true,
       maxRedirects: 0,
     });
-    return handleUploadResponse(L, r, e.length, h, m);
+    return handleUploadResponse(response, filename, content.length, telemetry, onFailure);
   } catch (error) {
-    logUploadDebug(`upload threw for ${r}: ${error}`);
-    let R = stallTimer.fired() && signal?.aborted !== true;
-    let F = !R && axios_default.isCancel(error);
-    m(
-      F ? "aborted" : "network_error",
+    logUploadDebug(`upload threw for ${filename}: ${error}`);
+    let stallTimedOut = stallTimer.fired() && signal?.aborted !== true;
+    let aborted = !stallTimedOut && axios_default.isCancel(error);
+    onFailure(
+      aborted ? "aborted" : "network_error",
       undefined,
       NON_TEMPORARY_ERRNOS.has(getErrnoCode(error)) ? "cause_not_temporary" : undefined,
     );
     return {
-      error: F
+      error: aborted
         ? "upload aborted"
-        : `upload failed: network error (${R ? `timeout of ${UPLOAD_TIMEOUT_MS}ms exceeded` : errorMessage(error)})`,
+        : `upload failed: network error (${stallTimedOut ? `timeout of ${UPLOAD_TIMEOUT_MS}ms exceeded` : errorMessage(error)})`,
     };
   } finally {
     stallTimer.clear();
   }
 }
 //@ chunk-7kpfrhzn.js:14933-14994 placement
-function countUploadPost(e) {
-  e.made++;
-  e.firstAtMs ??= e.clock.monotonicNow();
+function countUploadPost(counter) {
+  counter.made++;
+  counter.firstAtMs ??= counter.clock.monotonicNow();
 }
 //@ chunk-7kpfrhzn.js:14994-15231 placement
-function getResendBlocker(e, r) {
+function getResendBlocker(counter, size) {
   let { underWay, lastFailedAtMs } = bridgeHostState().uploadResends;
-  let h = e.clock.monotonicNow();
+  let now = counter.clock.monotonicNow();
   if (
-    h >
-    e.firstAtMs + (r > MIN_RESEND_MAX_BYTES || e.max > 2 ? RESEND_DEADLINE_LONG_MS : RESEND_DEADLINE_MS)
+    now >
+    counter.firstAtMs +
+      (size > MIN_RESEND_MAX_BYTES || counter.max > 2 ? RESEND_DEADLINE_LONG_MS : RESEND_DEADLINE_MS)
   )
     return "past_deadline";
-  if (lastFailedAtMs !== undefined && h - lastFailedAtMs < RESEND_COOLDOWN_MS) return "cooling_down";
+  if (lastFailedAtMs !== undefined && now - lastFailedAtMs < RESEND_COOLDOWN_MS) return "cooling_down";
   return underWay >= MAX_CONCURRENT_RESENDS ? "too_many_at_once" : undefined;
 }
 //@ chunk-7kpfrhzn.js:15231-15495 placement
-async function waitForResendSlot(e, r, n) {
-  let resendBlocker = getResendBlocker(e, r);
+async function waitForResendSlot(counter, size, signal) {
+  let resendBlocker = getResendBlocker(counter, size);
   if (resendBlocker !== undefined) return resendBlocker;
   await sleep(
     fullJitterBackoffMs({
       baseMs: BACKOFF_BASE_MS,
-      attempt: e.made - 1,
+      attempt: counter.made - 1,
       floorMs: BACKOFF_FLOOR_MS,
     }),
-    n,
+    signal,
     {
-      clock: e.clock,
+      clock: counter.clock,
     },
   );
-  if (n?.aborted) return "aborted";
-  let resendBlocker_2 = getResendBlocker(e, r);
+  if (signal?.aborted) return "aborted";
+  let resendBlocker_2 = getResendBlocker(counter, size);
   if (resendBlocker_2 !== undefined) return resendBlocker_2;
   let uploadResends = bridgeHostState().uploadResends;
   uploadResends.underWay++;
@@ -256,16 +265,16 @@ async function waitForResendSlot(e, r, n) {
 /**
  * 带重发的上传循环：网络错误/断连/5xx 且未超出次数、大小、截止时间与并发限制时退避后重发。
  */
-async function uploadWithResends(e, r, n, signal, h) {
-  let s = h;
-  let m;
+async function uploadWithResends(post, file, counter, signal, meta) {
+  let currentMeta = meta;
+  let releaseSlot;
   for (;;) {
-    let y;
-    let w;
+    let failure;
+    let result;
     try {
-      countUploadPost(n);
-      w = await e(s, (code, serverCode, bars, bytesHanded) => {
-        y = {
+      countUploadPost(counter);
+      result = await post(currentMeta, (code, serverCode, bars, bytesHanded) => {
+        failure = {
           code,
           serverCode,
           bars,
@@ -273,34 +282,36 @@ async function uploadWithResends(e, r, n, signal, h) {
         };
       });
     } finally {
-      m?.();
-      m = undefined;
+      releaseSlot?.();
+      releaseSlot = undefined;
     }
-    if (y === undefined) return w;
-    let { code, serverCode, bars, bytesHanded } = y;
-    let found = RESENDABLE_FAILURE_CODES.find((L) => L === code);
-    let v =
-      found === undefined || bars === "any_post" || n.made >= n.max
+    if (failure === undefined) return result;
+    let { code, serverCode, bars, bytesHanded } = failure;
+    let found = RESENDABLE_FAILURE_CODES.find((resendableCode) => resendableCode === code);
+    let resendBlocker =
+      found === undefined || bars === "any_post" || counter.made >= counter.max
         ? undefined
         : (bars ??
-          (r.size > Math.min(n.resendMaxBytes, getKnownServerUploadLimit() ?? 1 / 0)
+          (file.size > Math.min(counter.resendMaxBytes, getKnownServerUploadLimit() ?? 1 / 0)
             ? "over_size_limit"
-            : await waitForResendSlot(n, r.size, signal)));
-    if (typeof v === "function") {
-      m = v;
-      logUploadDebug(`posting ${r.filename} again after ${code} (post ${n.made + 1} of at most ${n.max})`);
-      s = {
-        ...h,
-        post_number: n.made + 1,
+            : await waitForResendSlot(counter, file.size, signal)));
+    if (typeof resendBlocker === "function") {
+      releaseSlot = resendBlocker;
+      logUploadDebug(
+        `posting ${file.filename} again after ${code} (post ${counter.made + 1} of at most ${counter.max})`,
+      );
+      currentMeta = {
+        ...meta,
+        post_number: counter.made + 1,
         failed_before: fromEnumOpt(found),
       };
       continue;
     }
-    if (v === "aborted") {
+    if (resendBlocker === "aborted") {
       logUploadFailure(
         "aborted",
         {
-          ...s,
+          ...currentMeta,
           failed_before: fromEnumOpt(found),
         },
         undefined,
@@ -309,18 +320,18 @@ async function uploadWithResends(e, r, n, signal, h) {
         error: "upload aborted",
       };
     }
-    if (n.max > 1 && n.made > 1 && found !== undefined)
-      bridgeHostState().uploadResends.lastFailedAtMs = n.clock.monotonicNow();
+    if (counter.max > 1 && counter.made > 1 && found !== undefined)
+      bridgeHostState().uploadResends.lastFailedAtMs = counter.clock.monotonicNow();
     logUploadFailure(
       code,
       {
-        ...s,
-        ...(v !== undefined && {
-          resend_withheld: fromEnum(v),
+        ...currentMeta,
+        ...(resendBlocker !== undefined && {
+          resend_withheld: fromEnum(resendBlocker),
         }),
-        ...("error" in w &&
+        ...("error" in result &&
           isResendableFailure(code, bars, bytesHanded) &&
-          isTransientUploadFailure(w.error, w.errorCode) && {
+          isTransientUploadFailure(result.error, result.errorCode) && {
             answer_may_be_lost: true,
           }),
         ...(bytesHanded !== undefined && {
@@ -329,73 +340,81 @@ async function uploadWithResends(e, r, n, signal, h) {
       },
       serverCode,
     );
-    return w;
+    return result;
   }
 }
 //@ chunk-7kpfrhzn.js:16416-18448 placement
 /**
  * 通过 door 通道把文件写入项目文件夹；重名时用带时间戳的新名再试一次。
  */
-async function uploadToProjectFolder(e, r, door, a) {
-  let { telemetry } = a;
-  let s = checkUploadAllowed(telemetry);
-  if (s) {
-    logUploadDebug(`skip ${e}: policy/provider gate denied`);
-    return s;
+async function uploadToProjectFolder(filePath, size, door, options) {
+  let { telemetry } = options;
+  let gated = checkUploadAllowed(telemetry);
+  if (gated) {
+    logUploadDebug(`skip ${filePath}: policy/provider gate denied`);
+    return gated;
   }
-  if (r > BRIEF_UPLOAD_LIMITS) {
+  if (size > BRIEF_UPLOAD_LIMITS) {
     logFeatureSad("bridge_attachment_upload", "too_large", telemetry);
     return {
-      error: `${formatMiB(r)} exceeds the ${BRIEF_UPLOAD_LIMITS / 1048576} MiB limit for the project folder`,
+      error: `${formatMiB(size)} exceeds the ${BRIEF_UPLOAD_LIMITS / 1048576} MiB limit for the project folder`,
     };
   }
-  let m = a.filename ?? basename(e);
-  if (!UPLOAD_FILENAME_RE.test(m) || m === ".." || normalizeUploadFileName(m)) {
+  let fileName = options.filename ?? basename(filePath);
+  if (!UPLOAD_FILENAME_RE.test(fileName) || fileName === ".." || normalizeUploadFileName(fileName)) {
     logFeatureSad("bridge_attachment_upload", "project_name_rejected", telemetry);
     return {
-      error: `not sent: the file name '${m}' cannot be placed in the project folder`,
+      error: `not sent: the file name '${fileName}' cannot be placed in the project folder`,
     };
   }
   let content;
   try {
-    content = await withOpenedFile(e, a.identity, a.signal, BRIEF_UPLOAD_LIMITS, a.waitForTurn);
+    content = await withOpenedFile(
+      filePath,
+      options.identity,
+      options.signal,
+      BRIEF_UPLOAD_LIMITS,
+      options.waitForTurn,
+    );
   } catch (error) {
     logFeatureSad("bridge_attachment_upload", "read_failed", telemetry);
     return {
       error: `upload failed: could not read file (${error instanceof Error ? error.message : error})`,
     };
   }
-  let w = checkUploadAllowed(telemetry);
-  if (w) {
-    logUploadDebug(`skip ${e}: policy/provider gate denied after the wait for a turn`);
-    return w;
+  let gatedAfterWait = checkUploadAllowed(telemetry);
+  if (gatedAfterWait) {
+    logUploadDebug(`skip ${filePath}: policy/provider gate denied after the wait for a turn`);
+    return gatedAfterWait;
   }
-  for (let b of [m, timestampedFileName(m)]) {
-    if (a.signal?.aborted) {
+  for (let candidateName of [fileName, timestampedFileName(fileName)]) {
+    if (options.signal?.aborted) {
       logFeatureSad("bridge_attachment_upload", "aborted", telemetry);
       return {
         error: "upload aborted",
       };
     }
-    let U = await writeProjectFiles({
+    let writeResult = await writeProjectFiles({
       door,
       items: [
         {
-          path: `/${b}`,
+          path: `/${candidateName}`,
           content,
         },
       ],
-      signal: a.signal,
+      signal: options.signal,
     });
-    if (!U.ok)
-      switch ((logFeatureSad("bridge_attachment_upload", U.reason, telemetry), U.reason)) {
+    if (!writeResult.ok)
+      switch (
+        (logFeatureSad("bridge_attachment_upload", writeResult.reason, telemetry), writeResult.reason)
+      ) {
         case "aborted":
           return {
             error: "upload aborted",
           };
         case "http_error":
           return {
-            error: `upload failed: the project folder refused the file (${(U.code ?? `status ${U.status}`).replaceAll("_", " ")})`,
+            error: `upload failed: the project folder refused the file (${(writeResult.code ?? `status ${writeResult.status}`).replaceAll("_", " ")})`,
           };
         case "no_token":
           return {
@@ -408,17 +427,17 @@ async function uploadToProjectFolder(e, r, door, a) {
             error: "upload failed: the request to the project folder did not complete; try again",
           };
       }
-    let A = U.results.length === 1 ? U.results[0] : undefined;
-    if (A === undefined) {
+    let writeItem = writeResult.results.length === 1 ? writeResult.results[0] : undefined;
+    if (writeItem === undefined) {
       logFeatureSad("bridge_attachment_upload", "bad_response", telemetry);
       return {
         error: "upload failed: the project folder gave no answer for the file",
       };
     }
-    let errorReason = A.error_reason;
+    let errorReason = writeItem.error_reason;
     if (errorReason === undefined) {
       logFeatureOk("bridge_attachment_upload", telemetry);
-      return `${PROJECT_FILES_MOUNT_PATH}/${b}`;
+      return `${PROJECT_FILES_MOUNT_PATH}/${candidateName}`;
     }
     if (errorReason !== "project_file_write_rejected") {
       logFeatureSad("bridge_attachment_upload", "project_write_refused", telemetry);
@@ -429,46 +448,48 @@ async function uploadToProjectFolder(e, r, door, a) {
   }
   logFeatureSad("bridge_attachment_upload", "project_name_taken", telemetry);
   return {
-    error: `upload failed: a file named ${m} is already in the project folder`,
+    error: `upload failed: a file named ${fileName} is already in the project folder`,
   };
 }
 //@ chunk-7kpfrhzn.js:18448-19227 placement
 /**
  * 上传桥接会话的附件：路径必须经过校验，按大小分块上传。
  */
-async function uploadBridgeAttachment(e, r, n) {
-  if (r === null) throw Error("the file at this path could not be vouched for");
+async function uploadBridgeAttachment(filePath, approvedIdentity, options) {
+  if (approvedIdentity === null) throw Error("the file at this path could not be vouched for");
   let platform = getPlatform();
-  let h =
+  let openFlags =
     platform === "windows"
       ? constants.O_RDONLY
       : constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK | (constants.O_NOCTTY ?? 0);
-  let s = r !== undefined;
-  let m = await openWithAbort(e, h, platform, s, n);
+  let checkIdentity = approvedIdentity !== undefined;
+  let handle = await openWithAbort(filePath, openFlags, platform, checkIdentity, options);
   try {
-    let stats = await m.stat({
+    let stats = await handle.stat({
       bigint: true,
     });
     if (!stats.isFile()) throw Error("not a regular file");
-    if (r && (stats.dev !== r.dev || stats.ino !== r.ino))
+    if (approvedIdentity && (stats.dev !== approvedIdentity.dev || stats.ino !== approvedIdentity.ino))
       throw Error("the file at this path is not the one approved");
-    let w =
-      s && (platform === "linux" || platform === "wsl")
-        ? await readlink(`/proc/self/fd/${m.fd}`).catch(() => {
+    let resolvedPath =
+      checkIdentity && (platform === "linux" || platform === "wsl")
+        ? await readlink(`/proc/self/fd/${handle.fd}`).catch(() => {
             return;
           })
         : undefined;
-    if (w !== undefined && w !== e) throw Error("it opened at a different path than approved");
-    if (s && w === undefined) {
-      let b = safeResolvePath(getFsImplementation(), e);
-      if (!b.isCanonical || b.resolvedPath !== e) throw Error("it re-resolved elsewhere once opened");
+    if (resolvedPath !== undefined && resolvedPath !== filePath)
+      throw Error("it opened at a different path than approved");
+    if (checkIdentity && resolvedPath === undefined) {
+      let safePath = safeResolvePath(getFsImplementation(), filePath);
+      if (!safePath.isCanonical || safePath.resolvedPath !== filePath)
+        throw Error("it re-resolved elsewhere once opened");
     }
     return {
-      handle: m,
+      handle,
       size: Number(stats.size),
     };
   } catch (error) {
-    await m.close();
+    await handle.close();
     throw error;
   }
 }
@@ -483,4 +504,5 @@ export {
   logUploadFailure,
   buildUploadHeaders,
   handleUploadResponse,
+  uploadToProjectFolder,
 };

@@ -73,10 +73,10 @@ onmessage = ({ data }) => {
 }
 `;
 var stdioWriterOps = {
-  openOwn(e) {
+  openOwn(fd) {
     try {
-      if (isatty(e)) {
-        let nonBlockingStdoutFd = openNonBlockingStdoutFd(e);
+      if (isatty(fd)) {
+        let nonBlockingStdoutFd = openNonBlockingStdoutFd(fd);
         return (
           nonBlockingStdoutFd.fd ?? {
             refused: `the terminal could not be opened a second time: ${nonBlockingStdoutFd.errno ?? nonBlockingStdoutFd.reason}`,
@@ -84,15 +84,15 @@ var stdioWriterOps = {
           }
         );
       }
-      let n = fstatSync(e);
-      if (!n.isFIFO())
+      let stat = fstatSync(fd);
+      if (!stat.isFIFO())
         return {
-          refused: n.isSocket()
+          refused: stat.isSocket()
             ? "a socket cannot be opened a second time"
             : "only a terminal, or a pipe on Linux, can be opened a second time",
-          writtenHere: n.isFile() || n.isCharacterDevice() || getPlatform() === "windows",
+          writtenHere: stat.isFile() || stat.isCharacterDevice() || getPlatform() === "windows",
         };
-      return openSync(`/proc/self/fd/${e}`, constants.O_WRONLY | constants.O_NONBLOCK | READ_LIMITS);
+      return openSync(`/proc/self/fd/${fd}`, constants.O_WRONLY | constants.O_NONBLOCK | READ_LIMITS);
     } catch (error) {
       return {
         refused: `it could not be opened a second time: ${getErrnoCode(error) ?? "unknown"}`,
@@ -100,151 +100,160 @@ var stdioWriterOps = {
       };
     }
   },
-  sameFile(e, n) {
+  sameFile(firstPath, secondPath) {
     try {
-      let [r, m] = [fstatSync(e), fstatSync(n)];
-      return r.dev === m.dev && r.ino === m.ino && r.rdev === m.rdev;
+      let [firstStat, secondStat] = [fstatSync(firstPath), fstatSync(secondPath)];
+      return (
+        firstStat.dev === secondStat.dev &&
+        firstStat.ino === secondStat.ino &&
+        firstStat.rdev === secondStat.rdev
+      );
     } catch {
       return false;
     }
   },
-  writeSync: (e, n, r) => writeSync(e, n, r),
+  writeSync: (fd, buffer, offset) => writeSync(fd, buffer, offset),
   writeOnAThread(fd, onmessage) {
     let int32Array = new Int32Array(new SharedArrayBuffer(16));
-    let m;
-    let a;
-    let t;
+    let worker;
+    let lastWriteAt;
+    let errorCode;
     try {
-      let c = URL.createObjectURL(
+      let workerUrl = URL.createObjectURL(
         new Blob([WRITER_THREAD_SOURCE], {
           type: "application/javascript",
         }),
       );
-      m = new Worker(c);
-      m.unref?.();
-      m.onmessage = onmessage;
-      m.onerror = () => {
-        m = undefined;
+      worker = new Worker(workerUrl);
+      worker.unref?.();
+      worker.onmessage = onmessage;
+      worker.onerror = () => {
+        worker = undefined;
       };
-      m.postMessage({
+      worker.postMessage({
         fd,
         shared: int32Array,
         errnos: WRITE_ERRNOS,
       });
     } catch {
-      m = undefined;
+      worker = undefined;
     }
-    let i = (code) => {
+    let reportCode = (code) => {
       throw Object.assign(Error("the thread did not write the bytes"), {
         code,
       });
     };
     return {
-      write: (c, l) => {
-        if (t !== undefined) {
-          let code = t;
-          t = undefined;
-          i(code);
+      write: (buffer, offset) => {
+        if (errorCode !== undefined) {
+          let code = errorCode;
+          errorCode = undefined;
+          reportCode(code);
         }
-        let b = Atomics.load(int32Array, 0);
-        if (b === SLOT_DONE) {
-          let [w, S] = [Atomics.load(int32Array, 1), Atomics.load(int32Array, 2)];
+        let slot = Atomics.load(int32Array, 0);
+        if (slot === SLOT_DONE) {
+          let [errnoValue, writtenBytes] = [Atomics.load(int32Array, 1), Atomics.load(int32Array, 2)];
           Atomics.store(int32Array, 0, SLOT_IDLE);
-          if (S > 0) {
-            let code = WRITE_ERRNOS[S - 1] ?? "unknown";
-            if (w === 0) i(code);
-            t = code;
+          if (writtenBytes > 0) {
+            let code = WRITE_ERRNOS[writtenBytes - 1] ?? "unknown";
+            if (errnoValue === 0) reportCode(code);
+            errorCode = code;
           }
-          return w;
+          return errnoValue;
         }
         if (
-          b === SLOT_WRITING &&
+          slot === SLOT_WRITING &&
           Atomics.load(int32Array, 3) === 0 &&
-          a !== undefined &&
-          performance.now() - a > THREAD_START_TIMEOUT_MS
+          lastWriteAt !== undefined &&
+          performance.now() - lastWriteAt > THREAD_START_TIMEOUT_MS
         ) {
-          m?.terminate();
-          m = undefined;
+          worker?.terminate();
+          worker = undefined;
           Atomics.store(int32Array, 0, SLOT_IDLE);
         }
-        if (m === undefined)
+        if (worker === undefined)
           throw Object.assign(Error("the thread could not be started"), {
             code: "NO_THREAD",
           });
-        if (b === SLOT_IDLE) {
+        if (slot === SLOT_IDLE) {
           Atomics.store(int32Array, 0, SLOT_WRITING);
-          a = performance.now();
-          m.postMessage(Uint8Array.prototype.slice.call(c, l, l + THREAD_WRITE_CHUNK_BYTES));
+          lastWriteAt = performance.now();
+          worker.postMessage(
+            Uint8Array.prototype.slice.call(buffer, offset, offset + THREAD_WRITE_CHUNK_BYTES),
+          );
         }
         throw Object.assign(Error("the thread has the bytes"), {
           code: "EINPROGRESS",
         });
       },
-      wait(c) {
-        Atomics.wait(int32Array, 0, SLOT_WRITING, c);
+      wait(timeoutMs) {
+        Atomics.wait(int32Array, 0, SLOT_WRITING, timeoutMs);
       },
     };
   },
-  sleep(e) {
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, e);
+  sleep(ms) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
   },
 };
 //@ chunk-3nztfxrw.js:30995-36063 placement
 /**
  * 打开 runner 的标准输出写入器（非阻塞描述符、独立线程、EPIPE 处理）
  */
-function openStdioWriter(e) {
-  let io = e.io ?? stdioWriterOps;
-  let clock = e.clock ?? systemClock;
-  let m = (h, name) => {
-    let v = io.openOwn(h);
-    let L = typeof v === "number" ? v : h;
-    let M = typeof v === "number" || v.writtenHere ? undefined : io.writeOnAThread(h, () => q(H));
-    let H = {
+function openStdioWriter(options) {
+  let io = options.io ?? stdioWriterOps;
+  let clock = options.clock ?? systemClock;
+  let openOne = (fd, name) => {
+    let opened = io.openOwn(fd);
+    let target = typeof opened === "number" ? opened : fd;
+    let info =
+      typeof opened === "number" || opened.writtenHere
+        ? undefined
+        : io.writeOnAThread(fd, () => flush(channel));
+    let channel = {
       name,
-      fd: L,
+      fd: target,
       via:
-        typeof v === "number"
+        typeof opened === "number"
           ? "a non-blocking descriptor"
-          : v.writtenHere
+          : opened.writtenHere
             ? "the descriptor this process was given"
             : "the descriptor this process was given, on a thread of its own",
-      because: typeof v === "number" ? undefined : v.refused,
-      write: M?.write ?? ((Q, oe) => io.writeSync(L, Q, oe)),
-      waitForTheThread: M?.wait,
+      because: typeof opened === "number" ? undefined : opened.refused,
+      write: info?.write ?? ((buffer, offset) => io.writeSync(target, buffer, offset)),
+      waitForTheThread: info?.wait,
       waiting: [],
       waitingBytes: 0,
       gone: false,
       unannounced: 0,
       retryMs: MAX_RECENT_REQUESTS,
     };
-    return H;
+    return channel;
   };
-  let a = io.sameFile(1, 2);
-  let t = m(1, a ? "stdout and stderr" : "stdout");
-  let i = a ? t : m(2, "stderr");
-  let s = a ? [t] : [t, i];
-  let c = {};
-  let l = new Set();
+  let sameTarget = io.sameFile(1, 2);
+  let stdoutChannel = openOne(1, sameTarget ? "stdout and stderr" : "stdout");
+  let stderrChannel = sameTarget ? stdoutChannel : openOne(2, "stderr");
+  let channels = sameTarget ? [stdoutChannel] : [stdoutChannel, stderrChannel];
+  let failedLines = {};
+  let reportedErrors = new Set();
   let droppedLines = 0;
-  let w = false;
-  let S = false;
-  function T(h, lines) {
-    h.unannouncedSinceMs ??= clock.monotonicNow();
-    h.unannounced += lines;
+  let closed = false;
+  let exiting = false;
+  function noteDropped(channel, lines) {
+    channel.unannouncedSinceMs ??= clock.monotonicNow();
+    channel.unannounced += lines;
     droppedLines += lines;
   }
-  function N(h) {
-    if (h.unannounced > 0) {
-      let unannounced = h.unannounced;
-      h.unannounced = 0;
-      let max = Math.max(1, Math.ceil((clock.monotonicNow() - (h.unannouncedSinceMs ?? 0)) / 1000));
-      let L = e.stamp(
-        `[runner:log] ${unannounced === 1 ? "1 log line" : `${unannounced} log lines`} to ${h.name} ${unannounced === 1 ? "was" : "were"} dropped over ${max} s: whatever reads ${h.name} was paused or too slow`,
+  function takeNext(channel) {
+    if (channel.unannounced > 0) {
+      let unannounced = channel.unannounced;
+      channel.unannounced = 0;
+      let max = Math.max(1, Math.ceil((clock.monotonicNow() - (channel.unannouncedSinceMs ?? 0)) / 1000));
+      let notice = options.stamp(
+        `[runner:log] ${unannounced === 1 ? "1 log line" : `${unannounced} log lines`} to ${channel.name} ${unannounced === 1 ? "was" : "were"} dropped over ${max} s: whatever reads ${channel.name} was paused or too slow`,
       );
-      let M = {
+      let noticeHead = {
         bytes: Buffer.from(
-          L +
+          notice +
             `
 `,
         ),
@@ -252,240 +261,246 @@ function openStdioWriter(e) {
         lines: 0,
         announces: unannounced,
       };
-      let H = h.waitForTheThread === undefined ? undefined : D(h);
-      return H === undefined
-        ? M
+      let buffered = channel.waitForTheThread === undefined ? undefined : takeQueued(channel);
+      return buffered === undefined
+        ? noticeHead
         : {
-            bytes: Buffer.concat([M.bytes, H.bytes]),
+            bytes: Buffer.concat([noticeHead.bytes, buffered.bytes]),
             offset: 0,
-            lines: H.lines,
+            lines: buffered.lines,
             announces: unannounced,
-            notice: L,
+            notice,
           };
     }
-    return D(h);
+    return takeQueued(channel);
   }
-  function D(h) {
-    let y = h.waiting.shift();
-    if (y === undefined) return;
-    h.waitingBytes -= y.bytes.length;
-    if (h.waitForTheThread === undefined)
+  function takeQueued(channel) {
+    let first = channel.waiting.shift();
+    if (first === undefined) return;
+    channel.waitingBytes -= first.bytes.length;
+    if (channel.waitForTheThread === undefined)
       return {
-        bytes: y.bytes,
+        bytes: first.bytes,
         offset: 0,
-        lines: y.lines,
+        lines: first.lines,
         announces: 0,
       };
-    let v = [y];
-    let L = y.bytes.length;
-    while (h.waiting.length > 0 && L + h.waiting[0].bytes.length <= THREAD_WRITE_CHUNK_BYTES) {
-      let M = h.waiting.shift();
-      h.waitingBytes -= M.bytes.length;
-      L += M.bytes.length;
-      v.push(M);
+    let parts = [first];
+    let totalBytes = first.bytes.length;
+    while (
+      channel.waiting.length > 0 &&
+      totalBytes + channel.waiting[0].bytes.length <= THREAD_WRITE_CHUNK_BYTES
+    ) {
+      let next = channel.waiting.shift();
+      channel.waitingBytes -= next.bytes.length;
+      totalBytes += next.bytes.length;
+      parts.push(next);
     }
     return {
       bytes:
-        v.length === 1
-          ? y.bytes
+        parts.length === 1
+          ? first.bytes
           : Buffer.concat(
-              v.map((M) => M.bytes),
-              L,
+              parts.map((part) => part.bytes),
+              totalBytes,
             ),
       offset: 0,
-      lines: v.reduce((acc, H) => acc + H.lines, 0),
+      lines: parts.reduce((acc, part) => acc + part.lines, 0),
       announces: 0,
     };
   }
-  function R(h, head) {
+  function afterHeadWritten(channel, head) {
     if (head.announces > 0) {
-      e.onOwnLine?.(head.notice ?? head.bytes.toString().trimEnd());
-      if (h.unannounced === 0) h.unannouncedSinceMs = undefined;
+      options.onOwnLine?.(head.notice ?? head.bytes.toString().trimEnd());
+      if (channel.unannounced === 0) channel.unannouncedSinceMs = undefined;
     }
-    h.retryMs = MAX_RECENT_REQUESTS;
+    channel.retryMs = MAX_RECENT_REQUESTS;
   }
-  function A(h, y = "stdout") {
-    let v = e.stamp(h);
-    e.onOwnLine?.(v);
-    if (!S) ne.write(y, v);
+  function stampAndWrite(text, target = "stdout") {
+    let stamped = options.stamp(text);
+    options.onOwnLine?.(stamped);
+    if (!exiting) writerApi.write(target, stamped);
   }
-  function F(h, y) {
-    h.waiting.push(y);
-    h.waitingBytes += y.bytes.length;
-    while (h.waitingBytes > MAX_REQUEST_BODY_BYTES && h.waiting.length > 1) {
-      let v = h.waiting.shift();
-      h.waitingBytes -= v.bytes.length;
-      T(h, v.lines);
+  function enqueue(channel, head) {
+    channel.waiting.push(head);
+    channel.waitingBytes += head.bytes.length;
+    while (channel.waitingBytes > MAX_REQUEST_BODY_BYTES && channel.waiting.length > 1) {
+      let dropped = channel.waiting.shift();
+      channel.waitingBytes -= dropped.bytes.length;
+      noteDropped(channel, dropped.lines);
     }
   }
-  function K(h) {
-    h.write = (y, v) => io.writeSync(h.fd, y, v);
-    h.waitForTheThread = undefined;
-    h.via = "the descriptor this process was given";
-    h.because = `${h.because ?? "it could not be opened a second time"}, and no thread could write to it`;
-    A(
-      `[runner:warn] The thread that writes this process's ${h.name} could not start, or it stopped, so this process writes there itself. If nothing reads ${h.name}, that can hold this process up. Make sure something reads it, such as the journal or a log file.`,
-      h === t ? "stderr" : "stdout",
+  function fallBackToSyncWrites(channel) {
+    channel.write = (buffer, offset) => io.writeSync(channel.fd, buffer, offset);
+    channel.waitForTheThread = undefined;
+    channel.via = "the descriptor this process was given";
+    channel.because = `${channel.because ?? "it could not be opened a second time"}, and no thread could write to it`;
+    stampAndWrite(
+      `[runner:warn] The thread that writes this process's ${channel.name} could not start, or it stopped, so this process writes there itself. If nothing reads ${channel.name}, that can hold this process up. Make sure something reads it, such as the journal or a log file.`,
+      channel === stdoutChannel ? "stderr" : "stdout",
     );
   }
-  function X(h, head, v) {
-    let L = !l.has(`${h.name} ${v}`);
-    l.add(`${h.name} ${v}`);
-    let M =
+  function markWriteFailed(channel, head, code) {
+    let firstForCode = !reportedErrors.has(`${channel.name} ${code}`);
+    reportedErrors.add(`${channel.name} ${code}`);
+    let remaining =
       head.offset === 0
         ? head
         : {
             bytes: head.bytes.subarray(head.offset),
             lines: countNewlines(head.bytes.subarray(head.offset)),
           };
-    if (!STREAM_GONE_CODES.has(v)) {
-      c[v] = (c[v] ?? 0) + M.lines;
-      if (L)
-        A(
-          `[runner:warn] A write to this process's ${h.name} failed (${v}), so some log lines are missing there. This process keeps running. If this error happens again on ${h.name}, it will not be reported.`,
-          h === t ? "stderr" : "stdout",
+    if (!STREAM_GONE_CODES.has(code)) {
+      failedLines[code] = (failedLines[code] ?? 0) + remaining.lines;
+      if (firstForCode)
+        stampAndWrite(
+          `[runner:warn] A write to this process's ${channel.name} failed (${code}), so some log lines are missing there. This process keeps running. If this error happens again on ${channel.name}, it will not be reported.`,
+          channel === stdoutChannel ? "stderr" : "stdout",
         );
       return;
     }
-    h.gone = true;
-    let H = [M, ...h.waiting];
-    h.waiting = [];
-    h.waitingBytes = 0;
-    h.unannounced = 0;
-    h.unannouncedSinceMs = undefined;
-    A(
-      `[runner:warn] Nobody can read this process's ${h.name} anymore (${v}), so nothing more is written there.` +
-        (h === t && !i.gone ? " Status lines go to stderr from here on." : ""),
+    channel.gone = true;
+    let heads = [remaining, ...channel.waiting];
+    channel.waiting = [];
+    channel.waitingBytes = 0;
+    channel.unannounced = 0;
+    channel.unannouncedSinceMs = undefined;
+    stampAndWrite(
+      `[runner:warn] Nobody can read this process's ${channel.name} anymore (${code}), so nothing more is written there.` +
+        (channel === stdoutChannel && !stderrChannel.gone ? " Status lines go to stderr from here on." : ""),
     );
-    if (h === t && !i.gone) {
-      for (let Q of H)
-        if (Q.lines > 0)
-          F(i, {
-            bytes: Q.bytes,
-            lines: Q.lines,
+    if (channel === stdoutChannel && !stderrChannel.gone) {
+      for (let head of heads)
+        if (head.lines > 0)
+          enqueue(stderrChannel, {
+            bytes: head.bytes,
+            lines: head.lines,
           });
-      q(i);
+      flush(stderrChannel);
     }
   }
-  function V(h) {
-    while (!h.gone) {
-      h.head ??= N(h);
-      let head = h.head;
+  function pump(channel) {
+    while (!channel.gone) {
+      channel.head ??= takeNext(channel);
+      let head = channel.head;
       if (head === undefined) return;
-      let v = "EAGAIN";
+      let code = "EAGAIN";
       try {
-        let L = h.write(head.bytes, head.offset);
-        head.offset += L;
-        if (L > 0) {
+        let written = channel.write(head.bytes, head.offset);
+        head.offset += written;
+        if (written > 0) {
           if (head.offset >= head.bytes.length) {
-            h.head = undefined;
-            R(h, head);
+            channel.head = undefined;
+            afterHeadWritten(channel, head);
           }
           continue;
         }
       } catch (error) {
-        v = getErrnoCode(error) ?? "unknown";
+        code = getErrnoCode(error) ?? "unknown";
       }
-      if (v === "EINTR") continue;
-      if (v === "NO_THREAD") {
-        K(h);
+      if (code === "EINTR") continue;
+      if (code === "NO_THREAD") {
+        fallBackToSyncWrites(channel);
         continue;
       }
-      if (v !== "EAGAIN" && v !== "EINPROGRESS") {
-        h.head = undefined;
-        X(h, head, v);
+      if (code !== "EAGAIN" && code !== "EINPROGRESS") {
+        channel.head = undefined;
+        markWriteFailed(channel, head, code);
         continue;
       }
-      if (v === "EAGAIN" && head.offset === 0) {
-        h.head = undefined;
-        h.unannounced += head.announces;
+      if (code === "EAGAIN" && head.offset === 0) {
+        channel.head = undefined;
+        channel.unannounced += head.announces;
         if (head.announces === 0) {
-          h.waiting.unshift({
+          channel.waiting.unshift({
             bytes: head.bytes,
             lines: head.lines,
           });
-          h.waitingBytes += head.bytes.length;
+          channel.waitingBytes += head.bytes.length;
         }
       }
-      if (!w && !S && h.cancelRetry === undefined) {
-        h.cancelRetry = clock.setTimeout(
+      if (!closed && !exiting && channel.cancelRetry === undefined) {
+        channel.cancelRetry = clock.setTimeout(
           () => {
-            h.cancelRetry = undefined;
-            q(h);
+            channel.cancelRetry = undefined;
+            flush(channel);
           },
-          h.retryMs,
+          channel.retryMs,
           {
             unref: true,
           },
         );
-        h.retryMs = Math.min(h.retryMs * 2, HEALTH_PORT_LOW);
+        channel.retryMs = Math.min(channel.retryMs * 2, HEALTH_PORT_LOW);
       }
       return;
     }
   }
-  function q(h) {
-    if (!w) V(h);
+  function flush(channel) {
+    if (!closed) pump(channel);
   }
-  function ae(h) {
-    let y = clock.monotonicNow() + h;
+  function drainFor(budgetMs) {
+    let deadline = clock.monotonicNow() + budgetMs;
     for (;;) {
-      for (let H of s) q(H);
-      let any = s.some((H) => H.head !== undefined || H.waiting.length > 0);
-      let L = y - clock.monotonicNow();
-      if (!any || L <= 0) return;
-      let found = s.find((H) => H.head !== undefined && H.waitForTheThread !== undefined);
-      if (found?.waitForTheThread) found.waitForTheThread(Math.min(L, HEALTH_PORT_LOW));
-      else io.sleep(Math.min(L, MAX_RECENT_REQUESTS));
+      for (let channel of channels) flush(channel);
+      let any = channels.some((channel) => channel.head !== undefined || channel.waiting.length > 0);
+      let remainingMs = deadline - clock.monotonicNow();
+      if (!any || remainingMs <= 0) return;
+      let found = channels.find(
+        (channel) => channel.head !== undefined && channel.waitForTheThread !== undefined,
+      );
+      if (found?.waitForTheThread) found.waitForTheThread(Math.min(remainingMs, HEALTH_PORT_LOW));
+      else io.sleep(Math.min(remainingMs, MAX_RECENT_REQUESTS));
     }
   }
-  let Z = () => {
-    S = true;
-    ae(HEALTH_PORT_HIGH);
+  let onProcessExit = () => {
+    exiting = true;
+    drainFor(HEALTH_PORT_HIGH);
   };
-  let ne = {
-    write(h, y) {
-      let v = h === "stdout" ? t : i;
-      let L = v.gone ? i : v;
-      if (w || L.gone) return;
-      F(L, {
+  let writerApi = {
+    write(target, text) {
+      let channel = target === "stdout" ? stdoutChannel : stderrChannel;
+      let destination = channel.gone ? stderrChannel : channel;
+      if (closed || destination.gone) return;
+      enqueue(destination, {
         bytes: Buffer.from(
-          y +
+          text +
             `
 `,
         ),
         lines: 1,
       });
-      q(L);
+      flush(destination);
     },
     stats: () => ({
-      queuedBytes: s.reduce(
-        (acc, y) => acc + y.waitingBytes + (y.head ? y.head.bytes.length - y.head.offset : 0),
+      queuedBytes: channels.reduce(
+        (acc, channel) =>
+          acc + channel.waitingBytes + (channel.head ? channel.head.bytes.length - channel.head.offset : 0),
         0,
       ),
       droppedLines,
       failedLines: {
-        ...c,
+        ...failedLines,
       },
     }),
     describe: () =>
       "log lines reach " +
-      s
+      channels
         .map(
-          (h) =>
-            `${h.name}${a ? " (same place)" : ""} through ${h.via}` +
-            (h.because === undefined ? "" : ` (because ${h.because})`),
+          (channel) =>
+            `${channel.name}${sameTarget ? " (same place)" : ""} through ${channel.via}` +
+            (channel.because === undefined ? "" : ` (because ${channel.because})`),
         )
         .join("; "),
     close() {
-      if (w) return;
-      S = true;
-      ae(HEALTH_PORT_HIGH);
-      w = true;
-      process.off("exit", Z);
-      for (let h of s) h.cancelRetry?.();
+      if (closed) return;
+      exiting = true;
+      drainFor(HEALTH_PORT_HIGH);
+      closed = true;
+      process.off("exit", onProcessExit);
+      for (let channel of channels) channel.cancelRetry?.();
     },
   };
-  process.on("exit", Z);
-  return ne;
+  process.on("exit", onProcessExit);
+  return writerApi;
 }
 export { openStdioWriter };

@@ -17,13 +17,13 @@ import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { logForDebugging } from "./debug.js";
 
 //@ chunk-fhdzwff4.js:14223-14294 fingerprint = markITerm2SetupComplete (1)
-async function markITerm2SetupComplete(o) {
+async function markITerm2SetupComplete(config) {
   await saveGlobalConfig(
     (current) => ({
       ...current,
       iterm2SetupInProgress: false,
     }),
-    o,
+    config,
   );
 }
 //@ chunk-fhdzwff4.js:14294-14402 fingerprint = getIterm2RecoveryInfo (1)
@@ -42,7 +42,7 @@ function getITerm2PlistPath() {
 /**
  * 若上次修改 iTerm2 配置中断，则从备份恢复 com.googlecode.iterm2.plist。
  */
-async function checkAndRestoreITerm2Backup(o) {
+async function checkAndRestoreITerm2Backup(config) {
   let { inProgress, backupPath } = getIterm2RecoveryInfo();
   if (!inProgress)
     return {
@@ -52,7 +52,7 @@ async function checkAndRestoreITerm2Backup(o) {
     has_backup_path: fromEnum(backupPath ? "true" : "false"),
   });
   if (!backupPath) {
-    await markITerm2SetupComplete(o);
+    await markITerm2SetupComplete(config);
     return {
       status: "no_backup",
     };
@@ -60,14 +60,14 @@ async function checkAndRestoreITerm2Backup(o) {
   try {
     await stat(backupPath);
   } catch {
-    await markITerm2SetupComplete(o);
+    await markITerm2SetupComplete(config);
     return {
       status: "no_backup",
     };
   }
   try {
     await copyFile(backupPath, getITerm2PlistPath());
-    await markITerm2SetupComplete(o);
+    await markITerm2SetupComplete(config);
     return {
       status: "restored",
     };
@@ -75,7 +75,7 @@ async function checkAndRestoreITerm2Backup(o) {
     logForDebugging(`Failed to restore iTerm2 settings with: ${restoreError}`, {
       level: "error",
     });
-    await markITerm2SetupComplete(o);
+    await markITerm2SetupComplete(config);
     return {
       status: "failed",
       backupPath,

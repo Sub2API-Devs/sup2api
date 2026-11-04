@@ -27,12 +27,12 @@ import { filterWatchedTypeRoots, readToolTypes, writePluginTypeRoot } from "./ty
 /**
  * 附 alwaysLoad 元信息
  */
-function alwaysLoadMeta(e) {
-  return e.isDeferred === undefined
+function alwaysLoadMeta(tool) {
+  return tool.isDeferred === undefined
     ? {}
     : {
         _meta: {
-          "anthropic/alwaysLoad": e.isDeferred === false,
+          "anthropic/alwaysLoad": tool.isDeferred === false,
         },
       };
 }
@@ -40,83 +40,84 @@ function alwaysLoadMeta(e) {
 /**
  * 为插件经 $.tool.register 注册的工具创建内部 MCP 服务器。
  */
-async function createPluginToolsServer(e, n) {
-  let [{ Server: r }, { CallToolRequestSchema: s, ListToolsRequestSchema: h }] = await Promise.all([
-    import("./chunk-j8ekdm69.js"),
-    import("./chunk-5yf1tzb2.js"),
+async function createPluginToolsServer(pluginName, generation) {
+  let [{ Server }, { CallToolRequestSchema, ListToolsRequestSchema }] = await Promise.all([
+    import("../../../vendor/@modelcontextprotocol/sdk/dist/esm/server/index.js"),
+    import("../../../vendor/@modelcontextprotocol/sdk/dist/esm/types.js"),
   ]);
-  let y = pluginDisplayKey(e, pluginStorageIdOf(e));
-  let S = new r(
+  let displayKey = pluginDisplayKey(pluginName, pluginStorageIdOf(pluginName));
+  let server = new Server(
     {
-      name: e,
-      version: `plugin-tools-${n}`,
+      name: pluginName,
+      version: `plugin-tools-${generation}`,
     },
     {
       capabilities: {
         tools: {},
       },
-      instructions: `Tools registered by the ${e} plugin through $.tool.register.`,
+      instructions: `Tools registered by the ${pluginName} plugin through $.tool.register.`,
     },
   );
-  S.setRequestHandler(h, () => ({
-    tools: list(e).map((w) => ({
-      name: w.name,
-      description: w.description,
+  server.setRequestHandler(ListToolsRequestSchema, () => ({
+    tools: list(pluginName).map((tool) => ({
+      name: tool.name,
+      description: tool.description,
       inputSchema: {
-        ...w.inputSchema,
+        ...tool.inputSchema,
         type: "object",
       },
-      ...alwaysLoadMeta(w),
+      ...alwaysLoadMeta(tool),
     })),
   }));
-  S.setRequestHandler(s, (w) => ({
+  server.setRequestHandler(CallToolRequestSchema, (request) => ({
     isError: true,
     content: [
       {
         type: "text",
-        text: `${e} registered the tool ${w.params.name} but no tool.call hook answered this call: add on("tool.call", { tool: "mcp__${y}__${w.params.name}" }, ($, e) => ({ result: ... })) to the plugin.`,
+        text: `${pluginName} registered the tool ${request.params.name} but no tool.call hook answered this call: add on("tool.call", { tool: "mcp__${displayKey}__${request.params.name}" }, ($, e) => ({ result: ... })) to the plugin.`,
       },
     ],
   }));
-  return S;
+  return server;
 }
 //@ chunk-e6aww6q8.js:4158475-4158517 placement
 /**
  * 惰性 MCP SDK
  */
-var lazyMcpSdkModule = () => import("./chunk-fnpxnq1a.js");
+var lazyMcpSdkModule = () =>
+  import("../../../vendor/@modelcontextprotocol/sdk/dist/esm/server/webStandardStreamableHttp.js");
 //@ chunk-e6aww6q8.js:4158517-4158991 placement
 /**
  * 本地回环 MCP 服务器的请求处理：校验密钥与插件名，只接受 POST，为插件工具建立无状态 HTTP 传输。
  */
-async function handlePluginToolsRequest(e, n, r) {
-  let [, s = "", h = ""] = new URL(e.url).pathname.split("/");
-  let y = decodeUriOrUndefined(h);
-  let S = y === undefined ? undefined : r.get(y);
-  if (s !== n.secret || y === undefined || S === undefined)
+async function handlePluginToolsRequest(request, serverConfig, registrations) {
+  let [, secretPart = "", pluginPart = ""] = new URL(request.url).pathname.split("/");
+  let pluginName = decodeUriOrUndefined(pluginPart);
+  let generation = pluginName === undefined ? undefined : registrations.get(pluginName);
+  if (secretPart !== serverConfig.secret || pluginName === undefined || generation === undefined)
     return new Response("not found", {
       status: HTTP_NOT_FOUND,
     });
-  if (e.method !== "POST")
+  if (request.method !== "POST")
     return new Response("method not allowed", {
       status: HTTP_METHOD_NOT_ALLOWED,
       headers: {
         Allow: "POST",
       },
     });
-  let L = new (await lazyMcpSdkModule()).WebStandardStreamableHTTPServerTransport({
+  let transport = new (await lazyMcpSdkModule()).WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
   });
-  await (await createPluginToolsServer(y, S)).connect(L);
-  return L.handleRequest(e);
+  await (await createPluginToolsServer(pluginName, generation)).connect(transport);
+  return transport.handleRequest(request);
 }
 //@ chunk-e6aww6q8.js:4158991-4159179 placement
-var pluginToolsServerConfig = (e) => ({
-  key: pluginDisplayKey(e.pluginName, pluginStorageIdOf(e.pluginName)),
+var pluginToolsServerConfig = (args) => ({
+  key: pluginDisplayKey(args.pluginName, pluginStorageIdOf(args.pluginName)),
   config: {
     type: "http",
-    url: `http://127.0.0.1:${e.port}/${e.secret}/${encodeURIComponent(e.pluginName)}?v=${e.version}`,
+    url: `http://127.0.0.1:${args.port}/${args.secret}/${encodeURIComponent(args.pluginName)}?v=${args.version}`,
     scope: "dynamic",
   },
 });
@@ -125,39 +126,39 @@ var pluginToolsServerConfig = (e) => ({
  * 懒启动 127.0.0.1 上的回环 MCP 服务器（随机密钥），为每个插件生成带版本号的 http MCP 配置。
  */
 function createPluginToolsServerHost() {
-  let e = new Map();
-  let n;
-  function r() {
-    if (!n) {
-      let s = {
+  let versionsByPlugin = new Map();
+  let server;
+  function ensureServer() {
+    if (!server) {
+      let config = {
         port: 0,
         secret: randomUUID(),
       };
-      let h = Bun.serve({
+      let started = Bun.serve({
         hostname: "127.0.0.1",
         port: 0,
-        fetch: (y) => handlePluginToolsRequest(y, s, e),
+        fetch: (request) => handlePluginToolsRequest(request, config, versionsByPlugin),
       });
-      h.unref();
-      registerCleanup(() => h.stop(true));
-      s.port = h.port ?? 0;
-      n = s;
-      logForDebugging(`$.tool.register: loopback MCP server listening on 127.0.0.1:${n.port}`);
+      started.unref();
+      registerCleanup(() => started.stop(true));
+      config.port = started.port ?? 0;
+      server = config;
+      logForDebugging(`$.tool.register: loopback MCP server listening on 127.0.0.1:${server.port}`);
     }
-    return n;
+    return server;
   }
-  return (s, h) => {
-    let y = (e.get(s) ?? 0) + 1;
-    e.set(s, y);
-    let { port, secret } = r();
+  return (pluginName, tools) => {
+    let version = (versionsByPlugin.get(pluginName) ?? 0) + 1;
+    versionsByPlugin.set(pluginName, version);
+    let { port, secret } = ensureServer();
     logForDebugging(
-      `$.tool.register (${s}): ${h.length} tool(s) served at 127.0.0.1:${port}/<secret>/${s} v${y}`,
+      `$.tool.register (${pluginName}): ${tools.length} tool(s) served at 127.0.0.1:${port}/<secret>/${pluginName} v${version}`,
     );
     return pluginToolsServerConfig({
-      pluginName: s,
+      pluginName,
       port,
       secret,
-      version: y,
+      version,
     });
   };
 }
@@ -173,14 +174,14 @@ function installPluginToolsServer() {
 /**
  * 为开发中的插件写出类型根目录（读取一次工具类型后并行写）。
  */
-function writeAllTypeRoots(e, n) {
-  watchedPluginRecords.set(n);
-  let r = filterWatchedTypeRoots(e);
-  return r.length === 0
+function writeAllTypeRoots(plugins, version) {
+  watchedPluginRecords.set(version);
+  let targets = filterWatchedTypeRoots(plugins);
+  return targets.length === 0
     ? Promise.resolve()
     : pluginDirQueue(async () => {
         let tools = await readToolTypes(false);
-        await Promise.all(r.map((y) => writePluginTypeRoot(y, n, tools)));
+        await Promise.all(targets.map((plugin) => writePluginTypeRoot(plugin, version, tools)));
       });
 }
 export { installPluginToolsServer, writeAllTypeRoots };

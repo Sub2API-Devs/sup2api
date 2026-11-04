@@ -23,7 +23,7 @@ import { refreshGrowthBookFeatures } from "../../services/analytics/growthbook.j
 /**
  * 切换提供商后重置相关缓存。
  */
-function resetProviderBoundCaches(o) {
+function resetProviderBoundCaches(provider) {
   resetModelStrings();
   clearBetasCaches();
   getProviderState().providerCache = createProviderCache();
@@ -32,6 +32,6 @@ function resetProviderBoundCaches(o) {
   clearAwsCredentialsCache();
   clearGcpCredentialsCache();
   resetDatadogInit();
-  if (o === "firstParty") refreshGrowthBookFeatures();
+  if (provider === "firstParty") refreshGrowthBookFeatures();
 }
 export { resetProviderBoundCaches };

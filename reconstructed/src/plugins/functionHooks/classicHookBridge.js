@@ -8,9 +8,9 @@
  * pieces: chunk-e6aww6q8.js (29)
  * attribution: placement 27, affinity 1, sole-consumer 1
  */
-import { wi, wS } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_reject, pickAlias } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { mergeHookAggregates_2 } from "../../entrypoints/sdk/coreSchemas.js";
-import { Uo } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { extractMode } from "../../components/permissions/PermissionDecisionDebugInfo.js";
 import { classicSiteName, noteWithheldPostToolUse } from "./toolCallHooks.js";
 import { awaitHooksRespawnUnlessSessionEnd, hookMembersFor, hookOriginFromStack } from "./hookDispatch.js";
@@ -23,13 +23,13 @@ import { stripAnsi } from "../../utils/stripAnsi.js";
 //@ chunk-e6aww6q8.js:37217-37325 placement
 function stripNonAllowInterrupt(decision) {
   if (decision.behavior === "allow") return decision;
-  let { interrupt, ...r } = decision;
+  let { interrupt, ...rest } = decision;
   return interrupt === true
     ? {
-        ...r,
+        ...rest,
         interrupt,
       }
-    : r;
+    : rest;
 }
 //@ chunk-e6aww6q8.js:37325-38105 placement
 /**
@@ -37,7 +37,7 @@ function stripNonAllowInterrupt(decision) {
  */
 function toHookAggregateFields(hookResult, hookEvent) {
   let { permissionBehavior, permissionRequestResult } = hookResult;
-  let h =
+  let hasPermission =
     hookEvent === "PreModelSwitch" &&
     (permissionBehavior === "allow" || permissionBehavior === "deny" || permissionBehavior === "ask");
   let decision = hookEvent === "PermissionRequest" ? permissionRequestResult : undefined;
@@ -46,8 +46,8 @@ function toHookAggregateFields(hookResult, hookEvent) {
     preventContinuation: hookResult.preventContinuation === true || undefined,
     stopReason: hookResult.stopReason,
     additionalContext: hookResult.additionalContexts,
-    permissionDecision: h ? permissionBehavior : undefined,
-    permissionDecisionReason: h ? hookResult.hookPermissionDecisionReason : undefined,
+    permissionDecision: hasPermission ? permissionBehavior : undefined,
+    permissionDecisionReason: hasPermission ? hookResult.hookPermissionDecisionReason : undefined,
     decision: decision && stripNonAllowInterrupt(decision),
     updatedToolOutput: hookResult.updatedToolOutput,
     updatedMCPToolOutput: hookResult.updatedMCPToolOutput,
@@ -61,7 +61,7 @@ function toHookAggregateFields(hookResult, hookEvent) {
   };
 }
 //@ chunk-e6aww6q8.js:38105-38139 placement
-var omitUndefined = (e) => wi(e, (n) => n === undefined);
+var omitUndefined = (value) => import_reject(value, (entry) => entry === undefined);
 //@ chunk-e6aww6q8.js:38139-38175 placement
 var emptyHookAggregate = () => ({
   result: {},
@@ -72,13 +72,16 @@ var emptyHookAggregate = () => ({
  * 消费钩子结果流并逐个合并，返回 {result, yields}。
  */
 async function aggregateHookResults(results, hookEvent) {
-  let r = emptyHookAggregate();
+  let aggregate = emptyHookAggregate();
   for await (let result of results)
-    r = {
-      result: mergeHookAggregates_2(r.result, omitUndefined(toHookAggregateFields(result, hookEvent))),
-      yields: [...r.yields, result],
+    aggregate = {
+      result: mergeHookAggregates_2(
+        aggregate.result,
+        omitUndefined(toHookAggregateFields(result, hookEvent)),
+      ),
+      yields: [...aggregate.yields, result],
     };
-  return r;
+  return aggregate;
 }
 //@ chunk-e6aww6q8.js:38887-39007 placement
 var isBlockingAggregate = (result) =>
@@ -87,33 +90,39 @@ var isBlockingAggregate = (result) =>
   result.permissionDecision === "deny" ||
   result.decision?.behavior === "deny";
 //@ chunk-e6aww6q8.js:39007-39148 placement
-var mergeIntoBelowAggregate = (e, n) => ({
-  ...mergeHookAggregates_2(e, omitUndefined(n)),
+var mergeIntoBelowAggregate = (below, above) => ({
+  ...mergeHookAggregates_2(below, omitUndefined(above)),
   ...omitUndefined(
-    Uo(e, ["additionalContext", "watchPaths", "permissionDecision", "permissionDecisionReason", "decision"]),
+    omitAlias(below, [
+      "additionalContext",
+      "watchPaths",
+      "permissionDecision",
+      "permissionDecisionReason",
+      "decision",
+    ]),
   ),
 });
 //@ chunk-e6aww6q8.js:39148-39273 placement
-function blockReasonOf(e) {
-  return e.block === undefined && e.permissionDecision === "deny"
-    ? (e.permissionDecisionReason ?? "Blocked by hook")
-    : e.block;
+function blockReasonOf(result) {
+  return result.block === undefined && result.permissionDecision === "deny"
+    ? (result.permissionDecisionReason ?? "Blocked by hook")
+    : result.block;
 }
 //@ chunk-e6aww6q8.js:39452-39825 sole-consumer
 /**
  * 从经典钩子结果中取出权限相关字段（决定、原因、decision）。
  */
-function permissionFieldsOf(e) {
-  let { permissionDecision, permissionDecisionReason, decision } = e;
-  let h = {};
-  if (permissionDecision !== undefined) h.permissionBehavior = permissionDecision;
-  if (permissionDecisionReason !== undefined) h.hookPermissionDecisionReason = permissionDecisionReason;
-  if (decision === undefined) return h;
-  h.permissionRequestResult = extractMode(decision);
-  h.permissionBehavior = decision.behavior === "allow" ? "allow" : "deny";
+function permissionFieldsOf(result) {
+  let { permissionDecision, permissionDecisionReason, decision } = result;
+  let fields = {};
+  if (permissionDecision !== undefined) fields.permissionBehavior = permissionDecision;
+  if (permissionDecisionReason !== undefined) fields.hookPermissionDecisionReason = permissionDecisionReason;
+  if (decision === undefined) return fields;
+  fields.permissionRequestResult = extractMode(decision);
+  fields.permissionBehavior = decision.behavior === "allow" ? "allow" : "deny";
   let updatedInput = decision.behavior === "allow" ? decision.updatedInput : undefined;
-  if (updatedInput !== undefined) h.updatedInput = updatedInput;
-  return h;
+  if (updatedInput !== undefined) fields.updatedInput = updatedInput;
+  return fields;
 }
 //@ chunk-e6aww6q8.js:39825-39992 placement
 var PASSTHROUGH_HOOK_FIELDS = [
@@ -131,67 +140,70 @@ var PASSTHROUGH_HOOK_FIELDS = [
 /**
  * 把经典钩子的结果转换为钩子运行器的 yield 形状（阻断错误、权限字段等）。
  */
-function toClassicYield(e, n, command) {
-  let s = blockReasonOf(e);
-  let h = permissionFieldsOf(e);
-  if (s !== undefined)
-    h.blockingError = n.find((S) => S.blockingError?.blockingError === s)?.blockingError ?? {
-      blockingError: s,
+function toClassicYield(result, results, command) {
+  let blockReason = blockReasonOf(result);
+  let fields = permissionFieldsOf(result);
+  if (blockReason !== undefined)
+    fields.blockingError = results.find((entry) => entry.blockingError?.blockingError === blockReason)
+      ?.blockingError ?? {
+      blockingError: blockReason,
       command,
     };
-  if (e.preventContinuation === true) h.preventContinuation = true;
-  if (e.stopReason !== undefined) h.stopReason = e.stopReason;
-  if (e.additionalContext !== undefined && e.additionalContext.length > 0)
-    h.additionalContexts = e.additionalContext;
-  for (let S of PASSTHROUGH_HOOK_FIELDS)
-    if (e[S] !== undefined)
-      Object.assign(h, {
-        [S]: e[S],
+  if (result.preventContinuation === true) fields.preventContinuation = true;
+  if (result.stopReason !== undefined) fields.stopReason = result.stopReason;
+  if (result.additionalContext !== undefined && result.additionalContext.length > 0)
+    fields.additionalContexts = result.additionalContext;
+  for (let entry of PASSTHROUGH_HOOK_FIELDS)
+    if (result[entry] !== undefined)
+      Object.assign(fields, {
+        [entry]: result[entry],
       });
-  return h;
+  return fields;
 }
 //@ chunk-e6aww6q8.js:40436-40589 placement
-var createClassicCoreHandler = (runClassicHooks, n) => ({
+var createClassicCoreHandler = (runClassicHooks, onManaged) => ({
   name: "core",
   isCore: true,
   budgetMs: 0,
-  async run(r) {
-    let s = await aggregateHookResults(
-      runClassicHooks(r, {
+  async run(input) {
+    let result = await aggregateHookResults(
+      runClassicHooks(input, {
         managedHooksExcluded: true,
       }),
-      r.hook_event_name,
+      input.hook_event_name,
     );
-    n(s);
-    return s.result;
+    onManaged(result);
+    return result.result;
   },
 });
 //@ chunk-e6aww6q8.js:40589-40606 placement
 var MANAGED = "managed";
 //@ chunk-e6aww6q8.js:40606-40795 placement
-var createManagedClassicHandler = (runClassicHooks, n) => ({
+var createManagedClassicHandler = (runClassicHooks, onManaged) => ({
   name: MANAGED,
   isManaged: true,
   budgetMs: 0,
-  async run(r, s) {
-    let h = await aggregateHookResults(
-      runClassicHooks(r, {
+  async run(input, result) {
+    let managed = await aggregateHookResults(
+      runClassicHooks(input, {
         managedHooksOnly: true,
       }),
-      r.hook_event_name,
+      input.hook_event_name,
     );
-    n(h);
-    return isBlockingAggregate(h.result) ? h.result : mergeIntoBelowAggregate(h.result, await s(r));
+    onManaged(managed);
+    return isBlockingAggregate(managed.result)
+      ? managed.result
+      : mergeIntoBelowAggregate(managed.result, await result(input));
   },
 });
 //@ chunk-e6aww6q8.js:40795-41085 placement
 /**
  * 把 settings 钩子结果放进函数钩子链：托管钩子在最前、插件 classic.<事件> 钩子居中、普通 settings 钩子在底部；钩子进程重启时等待后重试。
  */
-function runClassicHookChain(e) {
-  let { hookInput, managed, core, signal, origin, withheld } = e;
+function runClassicHookChain(options) {
+  let { hookInput, managed, core, signal, origin, withheld } = options;
   let event = classicSiteName(hookInput.hook_event_name);
-  let L = awaitHooksRespawnUnlessSessionEnd(
+  let summary = awaitHooksRespawnUnlessSessionEnd(
     {
       event,
       e: hookInput,
@@ -199,8 +211,8 @@ function runClassicHookChain(e) {
     },
     signal,
   );
-  return L !== undefined
-    ? L.then(() => runClassicHookChain(e))
+  return summary !== undefined
+    ? summary.then(() => runClassicHookChain(options))
     : (() =>
         reportChainFailure({
           e: hookInput,
@@ -210,31 +222,34 @@ function runClassicHookChain(e) {
               withheld,
             }),
             core,
-          ].filter((Z) => Z !== undefined),
+          ].filter((core) => core !== undefined),
           site: classicSite(event),
           signal,
           origin: hookOriginFromStack(origin),
         }))();
 }
 //@ chunk-e6aww6q8.js:41085-41202 placement
-var expandPermissionFields = (e) =>
+var expandPermissionFields = (fields) =>
   uniq(
-    e.flatMap((n) => {
-      let r = ["permissionDecision", "permissionDecisionReason"];
-      return r.includes(n) ? r : [n];
+    fields.flatMap((field) => {
+      let names = ["permissionDecision", "permissionDecisionReason"];
+      return names.includes(field) ? names : [field];
     }),
   );
 //@ chunk-e6aww6q8.js:41202-41260 placement
 /**
  * 合并托管与核心的钩子结果
  */
-var mergeHookAggregates = (e) => mergeHookAggregates_2(e.managed?.result ?? {}, e.core?.result ?? {});
+var mergeHookAggregates = (aggregate) =>
+  mergeHookAggregates_2(aggregate.managed?.result ?? {}, aggregate.core?.result ?? {});
 //@ chunk-e6aww6q8.js:41260-41942 placement
-function bridgeClassicHookResult(e, event) {
-  let r = event === "PreModelSwitch";
-  switch (e) {
+function bridgeClassicHookResult(reason, event) {
+  let isPreModelSwitch = event === "PreModelSwitch";
+  switch (reason) {
     case "block":
-      return r ? ["blockingError"] : ["blockingError", "permissionBehavior", "hookPermissionDecisionReason"];
+      return isPreModelSwitch
+        ? ["blockingError"]
+        : ["blockingError", "permissionBehavior", "hookPermissionDecisionReason"];
     case "additionalContext":
       return ["additionalContexts"];
     case "permissionDecision":
@@ -253,7 +268,7 @@ function bridgeClassicHookResult(e, event) {
     case "updatedMCPToolOutput":
     case "retry":
     case "displayContent":
-      return [e];
+      return [reason];
     default:
       return [];
   }
@@ -262,18 +277,20 @@ function bridgeClassicHookResult(e, event) {
 /**
  * 比较经典钩子结果与托管/核心 yield 的差异，列出不一致的字段。
  */
-function diffClassicYields(e, n, r) {
-  let s = [...(n.managed?.yields ?? []), ...(n.core?.yields ?? [])];
-  let h = e;
-  let y = mergeHookAggregates(n);
-  let filtered = uniq([...Object.keys(h), ...Object.keys(y)]).filter(
-    (Z) => stableStringifySafe(h[Z]) !== stableStringifySafe(y[Z]),
+function diffClassicYields(input, aggregate, info) {
+  let yields = [...(aggregate.managed?.yields ?? []), ...(aggregate.core?.yields ?? [])];
+  let before = input;
+  let after = mergeHookAggregates(aggregate);
+  let fields = uniq([...Object.keys(before), ...Object.keys(after)]).filter(
+    (key) => stableStringifySafe(before[key]) !== stableStringifySafe(after[key]),
   );
-  if (filtered.length === 0) return s;
-  let w = new Set(filtered.flatMap((Z) => bridgeClassicHookResult(Z, r.event)));
-  let filtered_2 = s.map((Z) => wi(Z, (Se, ke) => w.has(ke))).filter((Z) => Object.keys(Z).length > 0);
-  let classicYield = toClassicYield(wS(e, expandPermissionFields(filtered)), s, r.command);
-  return Object.keys(classicYield).length === 0 ? filtered_2 : [...filtered_2, classicYield];
+  if (fields.length === 0) return yields;
+  let changed = new Set(fields.flatMap((key) => bridgeClassicHookResult(key, info.event)));
+  let filtered = yields
+    .map((entry) => import_reject(entry, (value, key) => changed.has(key)))
+    .filter((entry) => Object.keys(entry).length > 0);
+  let classicYield = toClassicYield(pickAlias(input, expandPermissionFields(fields)), yields, info.command);
+  return Object.keys(classicYield).length === 0 ? filtered : [...filtered, classicYield];
 }
 //@ chunk-e6aww6q8.js:42329-42640 placement
 /**
@@ -287,17 +304,17 @@ async function* runClassicEventThroughHooks({
   signal,
   origin,
 }) {
-  let S = {};
+  let collected = {};
   yield* diffClassicYields(
     await runClassicHookChain({
       hookInput,
       managed: managedRanAbove
         ? undefined
         : createManagedClassicHandler(runClassicHooks, (managed) => {
-            S.managed = managed;
+            collected.managed = managed;
           }),
       core: createClassicCoreHandler(runClassicHooks, (core) => {
-        S.core = core;
+        collected.core = core;
       }),
       signal,
       origin,
@@ -305,7 +322,7 @@ async function* runClassicEventThroughHooks({
         withheld: () => noteWithheldPostToolUse(hookInput),
       }),
     }),
-    S,
+    collected,
     {
       event,
       command: `${classicSiteName(event)} hook`,
@@ -342,25 +359,25 @@ function splitOutputLines(output) {
 /**
  * 从成功且未被扣留的钩子输出中取第一个非空 worktree 路径。
  */
-function firstWorktreePathOutput(e) {
-  return e
-    .filter((n) => n.succeeded && !n.answerHeld)
-    .map((n) => splitOutputLines(n.output))
-    .find((n) => n.length > 0);
+function firstWorktreePathOutput(results) {
+  return results
+    .filter((result) => result.succeeded && !result.answerHeld)
+    .map((result) => splitOutputLines(result.output))
+    .find((lines) => lines.length > 0);
 }
 //@ chunk-e6aww6q8.js:42898-43025 placement
-function summarizeOutsideReplResults(e, event) {
-  let found = e.find((h) => h.blocked);
-  let s = event === "WorktreeCreate";
+function summarizeOutsideReplResults(results, event) {
+  let found = results.find((result) => result.blocked);
+  let isWorktreeCreate = event === "WorktreeCreate";
   return omitUndefined({
     block: found?.output,
-    worktreePath: s ? firstWorktreePathOutput(e) : undefined,
+    worktreePath: isWorktreeCreate ? firstWorktreePathOutput(results) : undefined,
   });
 }
 //@ chunk-e6aww6q8.js:43025-43300 placement
-var createOutsideReplHandler = (e, n, r) => ({
-  name: n.managedHooksOnly === true ? MANAGED : "core",
-  ...(n.managedHooksOnly === true
+var createOutsideReplHandler = (config, options, collect) => ({
+  name: options.managedHooksOnly === true ? MANAGED : "core",
+  ...(options.managedHooksOnly === true
     ? {
         isManaged: true,
       }
@@ -368,12 +385,14 @@ var createOutsideReplHandler = (e, n, r) => ({
         isCore: true,
       }),
   budgetMs: 0,
-  async run(s, h) {
-    let y = n.managedHooksOnly === true;
-    let S = await e.runClassicHooks(s, n);
-    r(S);
-    let w = summarizeOutsideReplResults(S, e.event);
-    return !y || w.block !== undefined ? w : mergeIntoBelowAggregate(w, await h(s));
+  async run(input, next) {
+    let isManagedOnly = options.managedHooksOnly === true;
+    let results = await config.runClassicHooks(input, options);
+    collect(results);
+    let summary = summarizeOutsideReplResults(results, config.event);
+    return !isManagedOnly || summary.block !== undefined
+      ? summary
+      : mergeIntoBelowAggregate(summary, await next(input));
   },
 });
 //@ chunk-e6aww6q8.js:43300-43362 placement
@@ -390,68 +409,72 @@ var succeededResult = (command, output) => ({
 /**
  * 在 REPL 之外运行经典钩子时调和各结果（阻断与 WorktreeCreate 路径一致性）。
  */
-function reconcileOutsideReplResults(e, n, r) {
-  let s = summarizeOutsideReplResults(e, r.event);
-  let h = n.block === s.block;
-  let y = r.event !== "WorktreeCreate" || n.worktreePath === s.worktreePath;
-  let filtered = e.filter((G) => (h || !G.blocked) && (y || firstWorktreePathOutput([G]) === undefined));
-  let block = h ? undefined : n.block;
-  let worktreePath = y ? undefined : n.worktreePath;
+function reconcileOutsideReplResults(results, aggregate, info) {
+  let summary = summarizeOutsideReplResults(results, info.event);
+  let isBlockSame = aggregate.block === summary.block;
+  let isWorktreePathSame = info.event !== "WorktreeCreate" || aggregate.worktreePath === summary.worktreePath;
+  let filtered = results.filter(
+    (result) =>
+      (isBlockSame || !result.blocked) &&
+      (isWorktreePathSame || firstWorktreePathOutput([result]) === undefined),
+  );
+  let block = isBlockSame ? undefined : aggregate.block;
+  let worktreePath = isWorktreePathSame ? undefined : aggregate.worktreePath;
   return [
     ...filtered,
-    ...(block === undefined ? [] : [blockedResult(r.command, block)]),
-    ...(worktreePath === undefined ? [] : [succeededResult(r.command, worktreePath)]),
+    ...(block === undefined ? [] : [blockedResult(info.command, block)]),
+    ...(worktreePath === undefined ? [] : [succeededResult(info.command, worktreePath)]),
   ];
 }
 //@ chunk-e6aww6q8.js:43671-44052 placement
 /**
  * 非 REPL 场景（如 WorktreeCreate）下运行函数钩子链：托管与普通 settings 钩子分别在两端，最后把钩子改写的阻断/worktree 路径合并回结果列表。
  */
-async function runOutsideReplHookChain(e) {
-  let event = classicSiteName(e.event);
-  let r = awaitHooksRespawnUnlessSessionEnd(
+async function runOutsideReplHookChain(options) {
+  let event = classicSiteName(options.event);
+  let respawn = awaitHooksRespawnUnlessSessionEnd(
     {
       event,
-      e: e.hookInput,
+      e: options.hookInput,
       origin: undefined,
     },
-    e.signal,
+    options.signal,
   );
-  if (r !== undefined) {
-    await r;
-    return runOutsideReplHookChain(e);
+  if (respawn !== undefined) {
+    await respawn;
+    return runOutsideReplHookChain(options);
   }
-  let s = [];
-  let h = (y) => {
-    s.push(...y);
+  let results = [];
+  let collect = (yields) => {
+    results.push(...yields);
   };
   return reconcileOutsideReplResults(
-    s,
+    results,
     await reportChainFailure({
       handlers: [
         createOutsideReplHandler(
-          e,
+          options,
           {
             managedHooksOnly: true,
           },
-          h,
+          collect,
         ),
-        ...hookMembersFor(event, e.origin),
+        ...hookMembersFor(event, options.origin),
         createOutsideReplHandler(
-          e,
+          options,
           {
             managedHooksExcluded: true,
           },
-          h,
+          collect,
         ),
       ],
-      e: e.hookInput,
+      e: options.hookInput,
       site: classicSite(event),
-      signal: e.signal,
-      origin: hookOriginFromStack(e.origin),
+      signal: options.signal,
+      origin: hookOriginFromStack(options.origin),
     }),
     {
-      event: e.event,
+      event: options.event,
       command: `${event} hook`,
     },
   );
@@ -460,9 +483,11 @@ async function runOutsideReplHookChain(e) {
 /**
  * 在钩子成员列表前后加上可选的首/尾处理器。
  */
-function withChainEnds(e, n, r) {
-  let s = r === undefined ? [] : [r];
-  return e === undefined || n.length === 0 ? [...n, ...s] : [e, ...n, ...s];
+function withChainEnds(head, middle, tail) {
+  let tailItems = tail === undefined ? [] : [tail];
+  return head === undefined || middle.length === 0
+    ? [...middle, ...tailItems]
+    : [head, ...middle, ...tailItems];
 }
 export {
   omitUndefined,

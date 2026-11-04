@@ -36,243 +36,252 @@ import { isUltracodeActive } from "../../utils/effort.js";
 import { spawnStatsSlots } from "../../tasks/taskState.js";
 import { GENERAL_PURPOSE_AGENT } from "./built-in/generalPurposeAgent.js";
 import { getExploreAgentModel } from "../../utils/model/agent.js";
-import { M } from "../../../vendor/zod/v4/classic/schemas.js";
+import { booleanSchema } from "../../../vendor/zod/v4/classic/schemas.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-0tkmvwy0.js:48361-53565 placement
 /**
  * Agent 工具定义（name "Agent"，别名 "Task"）：call 经 runEngine 调用 callAgentTool；checkPermissions 在 auto/plan(auto) 模式下除免审 web-fetch 派发外一律 passthrough 交分类器，其他模式直接 allow。isReadOnly/isConcurrencySafe 恒 true，maxResultSizeChars 100000，backgrounding "self"。mapToolResultToToolResultBlockParam 按 status（completed/async_launched/remote_launched/teammate_spawned）拼回传文本，completed 附 agentId 与 <usage>。
  */
-var AgentTool = buildTool({
-  async prompt({
-    agents,
-    tools,
-    getToolPermissionContext,
-    allowedAgentTypes,
-    model,
-    leanPrompt,
-    leanRewrite,
-    querySource,
-  }) {
-    let permissionContext = await getToolPermissionContext();
-    let isCoordinator = isCoordinatorMode_2();
-    let { available } = getForkAvailability(agents, allowedAgentTypes, permissionContext);
-    let generalPurposeAvailable = isGeneralPurposeAgentAvailable(agents, allowedAgentTypes);
-    return await getPrompt({
+var AgentTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0tkmvwy0.js:48361", () => {
+  AgentTool = buildTool({
+    async prompt({
+      agents,
+      tools,
+      getToolPermissionContext,
+      allowedAgentTypes,
       model,
-      isCoordinator,
-      forkAvailable: available,
-      generalPurposeAvailable,
-      continueAvailable: hasSendMessageTool(tools),
       leanPrompt,
       leanRewrite,
-      subagentBudgetNote: getSubagentBudgetNote(querySource),
-      modelMix: querySourceHints(querySource),
-    });
-  },
-  name: AGENT,
-  searchHint: "delegate work to a subagent",
-  aliases: [TASK],
-  backgrounding: "self",
-  maxResultSizeChars: MAX_AGENT_OUTPUT_TOKENS,
-  get preserveToolUseResultInSubagents() {
-    return getFeatureValue_SESSION_PINNED("tengu_velvety_sprout", false) === true;
-  },
-  async description() {
-    return "Launch a new agent";
-  },
-  get inputSchema() {
-    return getAgentInputSchema();
-  },
-  coerceInput: dropRelativeEffortInput,
-  get outputSchema() {
-    return agentOutputSchema();
-  },
-  create(n) {
-    return {
-      call(agentInput, s) {
-        if (!s.runEngine)
-          return Promise.reject(Error("Agent: launching needs the executor (call.runEngine)"));
-        return s.runEngine(callAgentTool, {
-          agentInput,
-          assistantMessage: s.parentMessage,
-          onProgress: s.onProgress,
-          timing: s.timing,
-          ...false,
-        });
-      },
-      async checkPermissions(e, s) {
-        if (!isAutoClassifierActive(n.permissions().mode))
-          return {
-            behavior: "allow",
-            updatedInput: e,
-          };
-        if (
-          await s.runEngine(tryAutoApproveWebFetchDispatch, {
-            input: e,
-          })
-        )
-          return {
-            behavior: "allow",
-            updatedInput: e,
-          };
-        return {
-          behavior: "passthrough",
-          message: "Agent tool requires permission to spawn subagents.",
-        };
-      },
-    };
-  },
-  isReadOnly() {
-    return true;
-  },
-  toAutoClassifierInput(n) {
-    let e = n;
-    let filtered = [e.subagent_type].filter((y) => y !== undefined);
-    return `${filtered.length > 0 ? `(${filtered.join(", ")}): ` : ": "}${e.prompt}`;
-  },
-  isConcurrencySafe() {
-    return true;
-  },
-  userFacingName,
-  getActivityDescription(n) {
-    return n?.description?.replace(/\s+/g, " ").trim() || "Running task";
-  },
-  restoreTransientForRemap: restoreCanContinueAgent,
-  mapToolResultToToolResultBlockParam(n, toolUseId) {
-    let s = n;
-    if (typeof s === "object" && s !== null && "status" in s && s.status === "teammate_spawned") {
-      let f = s;
+      querySource,
+    }) {
+      let permissionContext = await getToolPermissionContext();
+      let isCoordinator = isCoordinatorMode_2();
+      let { available } = getForkAvailability(agents, allowedAgentTypes, permissionContext);
+      let generalPurposeAvailable = isGeneralPurposeAgentAvailable(agents, allowedAgentTypes);
+      return await getPrompt({
+        model,
+        isCoordinator,
+        forkAvailable: available,
+        generalPurposeAvailable,
+        continueAvailable: hasSendMessageTool(tools),
+        leanPrompt,
+        leanRewrite,
+        subagentBudgetNote: getSubagentBudgetNote(querySource),
+        modelMix: querySourceHints(querySource),
+      });
+    },
+    name: AGENT,
+    searchHint: "delegate work to a subagent",
+    aliases: [TASK],
+    backgrounding: "self",
+    maxResultSizeChars: MAX_AGENT_OUTPUT_TOKENS,
+    get preserveToolUseResultInSubagents() {
+      return getFeatureValue_SESSION_PINNED("tengu_velvety_sprout", false) === true;
+    },
+    async description() {
+      return "Launch a new agent";
+    },
+    get inputSchema() {
+      return getAgentInputSchema();
+    },
+    coerceInput: dropRelativeEffortInput,
+    get outputSchema() {
+      return agentOutputSchema();
+    },
+    create(createdTool) {
       return {
-        tool_use_id: toolUseId,
-        type: "tool_result",
-        content: [
-          {
-            type: "text",
-            text: `Spawned successfully. (This tool result is internal metadata \u2014 never quote or paste any part of it, including the ID below, into a user-facing reply.)
-agent_id: ${f.agent_id}
-name: ${f.name}
-The agent is now running and will receive instructions via mailbox.`,
-          },
-        ],
-      };
-    }
-    if (n.status === "remote_launched") {
-      let f = n;
-      return {
-        tool_use_id: toolUseId,
-        type: "tool_result",
-        content: [
-          {
-            type: "text",
-            text: `Cloud agent launched. (This tool result is internal metadata \u2014 never quote or paste any part of it, including the ID below, into a user-facing reply.)
-taskId: ${f.taskId}
-session_url: ${f.sessionUrl}
-output_file: ${f.outputFile} (final results land here only after the completion notification; until then it holds a partial, still-growing event log)
-The agent is running in the cloud. You will be notified automatically when it completes. Do not report or predict its results before that notification arrives.
-In your own words, briefly tell the user what you launched \u2014 do not echo this tool result \u2014 and end your response.`,
-          },
-        ],
-      };
-    }
-    if (n.status === "async_launched") {
-      let f = `Async agent launched successfully. (This tool result is internal metadata \u2014 never quote or paste any part of it, including the agentId below, into a user-facing reply.)
-agentId: ${n.agentId} (internal ID - do not mention to user.${n.canContinueAgent === false ? "" : ` Use ${SENDMESSAGE} with to: '${n.agentId}', summary: '<5-10 word recap>' to continue this agent.`})
-The agent is working in the background. You will be notified automatically when it completes. You know nothing about its results until that notification arrives \u2014 do not report, assume, or predict them; continue other work or respond to the user in the meantime.`;
-      let y =
-        n.canReadOutputFile && n.outputFile
-          ? `Do not duplicate this agent's work \u2014 avoid working with the same files or topics it is using.
-output_file: ${n.outputFile}
-Do NOT ${FILE_READ_TOOL_NAME} or tail this file via the shell tool \u2014 it is the full subagent JSONL transcript and reading it will overflow your context. If the user asks for progress, say the agent is still running; you'll get a completion notification.`
-          : "In your own words, briefly tell the user what you launched \u2014 do not echo this tool result. Agent results will arrive in a subsequent message. If the user asks for progress, say the agent is still running.";
-      let text = `${f}
-${y}${
-        n.sharesCwd
-          ? `
-${warnConcurrentWriteAgents}`
-          : ""
-      }`;
-      return {
-        tool_use_id: toolUseId,
-        type: "tool_result",
-        content: [
-          {
-            type: "text",
-            text,
-          },
-        ],
-      };
-    }
-    if (n.status === "completed") {
-      let f = n.worktreePath
-        ? `
-worktreePath: ${n.worktreePath}${
-            n.worktreeBranch
-              ? `
-worktreeBranch: ${n.worktreeBranch}`
-              : ""
-          }`
-        : "";
-      let y =
-        n.content.length > 0
-          ? n.content
-          : [
-              {
-                type: "text",
-                text: "(Subagent completed but returned no output.)",
-              },
-            ];
-      let _ = isHandbackProvenanceEnabled()
-        ? buildHandbackResultContent(
-            y,
-            n.content.length > 0 ? n.harnessNoteCount : 0,
-            n.content.length > 0 ? n.harnessTailCount : 0,
-            n.harnessSectionHash,
+        call(agentInput, callContext) {
+          if (!callContext.runEngine)
+            return Promise.reject(Error("Agent: launching needs the executor (call.runEngine)"));
+          return callContext.runEngine(callAgentTool, {
+            agentInput,
+            assistantMessage: callContext.parentMessage,
+            onProgress: callContext.onProgress,
+            timing: callContext.timing,
+            ...false,
+          });
+        },
+        async checkPermissions(input, callContext) {
+          if (!isAutoClassifierActive(createdTool.permissions().mode))
+            return {
+              behavior: "allow",
+              updatedInput: input,
+            };
+          if (
+            await callContext.runEngine(tryAutoApproveWebFetchDispatch, {
+              input,
+            })
           )
-        : y;
-      if (n.agentType && FAST_BUILTIN_AGENTS.has(n.agentType) && !f)
-        return {
-          tool_use_id: toolUseId,
-          type: "tool_result",
-          content: _,
-        };
-      let S =
-        n.canContinueAgent === false
-          ? ""
-          : ` (use ${SENDMESSAGE} with to: '${n.agentId}', summary: '<5-10 word recap>' to continue this agent)`;
-      let I = `agentId: ${n.agentId}${S}${f}
-<usage>subagent_tokens: ${n.totalTokens}
-tool_uses: ${n.totalToolUseCount}
-duration_ms: ${n.totalDurationMs}</usage>`;
-      if (_ !== y && _.length === 1)
+            return {
+              behavior: "allow",
+              updatedInput: input,
+            };
+          return {
+            behavior: "passthrough",
+            message: "Agent tool requires permission to spawn subagents.",
+          };
+        },
+      };
+    },
+    isReadOnly() {
+      return true;
+    },
+    toAutoClassifierInput(input) {
+      let record = input;
+      let filtered = [record.subagent_type].filter((value) => value !== undefined);
+      return `${filtered.length > 0 ? `(${filtered.join(", ")}): ` : ": "}${record.prompt}`;
+    },
+    isConcurrencySafe() {
+      return true;
+    },
+    userFacingName,
+    getActivityDescription(input) {
+      return input?.description?.replace(/\s+/g, " ").trim() || "Running task";
+    },
+    restoreTransientForRemap: restoreCanContinueAgent,
+    mapToolResultToToolResultBlockParam(result, toolUseId) {
+      let record = result;
+      if (
+        typeof record === "object" &&
+        record !== null &&
+        "status" in record &&
+        record.status === "teammate_spawned"
+      ) {
+        let teammateResult = record;
         return {
           tool_use_id: toolUseId,
           type: "tool_result",
           content: [
             {
               type: "text",
-              text:
-                _[0].text +
-                `
-` +
-                I,
+              text: `Spawned successfully. (This tool result is internal metadata \u2014 never quote or paste any part of it, including the ID below, into a user-facing reply.)
+agent_id: ${teammateResult.agent_id}
+name: ${teammateResult.name}
+The agent is now running and will receive instructions via mailbox.`,
             },
           ],
         };
-      return {
-        tool_use_id: toolUseId,
-        type: "tool_result",
-        content: [
-          ..._,
-          {
-            type: "text",
-            text: I,
-          },
-        ],
-      };
-    }
-    logFeatureBad("subagent_launch", "subagent_unexpected_result_status");
-    throw Error(`Unexpected agent tool result status: ${n.status}`);
-  },
+      }
+      if (result.status === "remote_launched") {
+        let remoteResult = result;
+        return {
+          tool_use_id: toolUseId,
+          type: "tool_result",
+          content: [
+            {
+              type: "text",
+              text: `Cloud agent launched. (This tool result is internal metadata \u2014 never quote or paste any part of it, including the ID below, into a user-facing reply.)
+taskId: ${remoteResult.taskId}
+session_url: ${remoteResult.sessionUrl}
+output_file: ${remoteResult.outputFile} (final results land here only after the completion notification; until then it holds a partial, still-growing event log)
+The agent is running in the cloud. You will be notified automatically when it completes. Do not report or predict its results before that notification arrives.
+In your own words, briefly tell the user what you launched \u2014 do not echo this tool result \u2014 and end your response.`,
+            },
+          ],
+        };
+      }
+      if (result.status === "async_launched") {
+        let head = `Async agent launched successfully. (This tool result is internal metadata \u2014 never quote or paste any part of it, including the agentId below, into a user-facing reply.)
+agentId: ${result.agentId} (internal ID - do not mention to user.${result.canContinueAgent === false ? "" : ` Use ${SENDMESSAGE} with to: '${result.agentId}', summary: '<5-10 word recap>' to continue this agent.`})
+The agent is working in the background. You will be notified automatically when it completes. You know nothing about its results until that notification arrives \u2014 do not report, assume, or predict them; continue other work or respond to the user in the meantime.`;
+        let outputFileNote =
+          result.canReadOutputFile && result.outputFile
+            ? `Do not duplicate this agent's work \u2014 avoid working with the same files or topics it is using.
+output_file: ${result.outputFile}
+Do NOT ${FILE_READ_TOOL_NAME} or tail this file via the shell tool \u2014 it is the full subagent JSONL transcript and reading it will overflow your context. If the user asks for progress, say the agent is still running; you'll get a completion notification.`
+            : "In your own words, briefly tell the user what you launched \u2014 do not echo this tool result. Agent results will arrive in a subsequent message. If the user asks for progress, say the agent is still running.";
+        let text = `${head}
+${outputFileNote}${
+          result.sharesCwd
+            ? `
+${warnConcurrentWriteAgents}`
+            : ""
+        }`;
+        return {
+          tool_use_id: toolUseId,
+          type: "tool_result",
+          content: [
+            {
+              type: "text",
+              text,
+            },
+          ],
+        };
+      }
+      if (result.status === "completed") {
+        let worktreeNote = result.worktreePath
+          ? `
+worktreePath: ${result.worktreePath}${
+              result.worktreeBranch
+                ? `
+worktreeBranch: ${result.worktreeBranch}`
+                : ""
+            }`
+          : "";
+        let content =
+          result.content.length > 0
+            ? result.content
+            : [
+                {
+                  type: "text",
+                  text: "(Subagent completed but returned no output.)",
+                },
+              ];
+        let contentWithNotes = isHandbackProvenanceEnabled()
+          ? buildHandbackResultContent(
+              content,
+              result.content.length > 0 ? result.harnessNoteCount : 0,
+              result.content.length > 0 ? result.harnessTailCount : 0,
+              result.harnessSectionHash,
+            )
+          : content;
+        if (result.agentType && FAST_BUILTIN_AGENTS.has(result.agentType) && !worktreeNote)
+          return {
+            tool_use_id: toolUseId,
+            type: "tool_result",
+            content: contentWithNotes,
+          };
+        let continueNote =
+          result.canContinueAgent === false
+            ? ""
+            : ` (use ${SENDMESSAGE} with to: '${result.agentId}', summary: '<5-10 word recap>' to continue this agent)`;
+        let usageText = `agentId: ${result.agentId}${continueNote}${worktreeNote}
+<usage>subagent_tokens: ${result.totalTokens}
+tool_uses: ${result.totalToolUseCount}
+duration_ms: ${result.totalDurationMs}</usage>`;
+        if (contentWithNotes !== content && contentWithNotes.length === 1)
+          return {
+            tool_use_id: toolUseId,
+            type: "tool_result",
+            content: [
+              {
+                type: "text",
+                text:
+                  contentWithNotes[0].text +
+                  `
+` +
+                  usageText,
+              },
+            ],
+          };
+        return {
+          tool_use_id: toolUseId,
+          type: "tool_result",
+          content: [
+            ...contentWithNotes,
+            {
+              type: "text",
+              text: usageText,
+            },
+          ],
+        };
+      }
+      logFeatureBad("subagent_launch", "subagent_unexpected_result_status");
+      throw Error(`Unexpected agent tool result status: ${result.status}`);
+    },
+  });
 });
 //@ chunk-0tkmvwy0.js:53565-53745 placement
 /**
@@ -299,15 +308,15 @@ function getForkAvailability(activeAgents, allowedAgentTypes, permissionContext)
  * 并发子代理上限检查：超过 CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS（默认 20）时返回 AgentPreconditionError（tengu_amber_kestrel 或 ultracode 豁免）。
  */
 function checkSubagentConcurrencyLimit(toolUseContext) {
-  let e = maxConcurrentSubagents();
-  if (toolUseContext.taskRegistry.getConcurrentSubagents() < e) return;
+  let limit = maxConcurrentSubagents();
+  if (toolUseContext.taskRegistry.getConcurrentSubagents() < limit) return;
   if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_amber_kestrel", false)) return;
   let appState = toolUseContext.getAppState();
   if (isUltracodeActive(appState.ultracode, toolUseContext.rootToolSurface.mainLoopModel)) return;
   logFeatureBad("subagent_launch", "subagent_concurrency_cap");
   spawnStatsSlots.of(toolUseContext.session).recordRefused("concurrency_limit");
   return new AgentPreconditionError(
-    `Concurrent subagent limit reached. You can run ${e} subagents at once. Do not retry. If the user wants more concurrent subagents, ask them to increase CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS.`,
+    `Concurrent subagent limit reached. You can run ${limit} subagents at once. Do not retry. If the user wants more concurrent subagents, ask them to increase CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS.`,
   );
 }
 //@ chunk-0tkmvwy0.js:54248-54451 placement
@@ -315,12 +324,14 @@ function checkSubagentConcurrencyLimit(toolUseContext) {
  * general-purpose 代理是否可用（决定 subagent_type 能否省略）。
  */
 function isGeneralPurposeAgentAvailable(activeAgents, allowedAgentTypes) {
-  let s = normalizeAgentName(GENERAL_PURPOSE_AGENT.agentType);
-  let filtered = activeAgents.filter((activeAgent) => normalizeAgentName(activeAgent.agentType) === s);
-  let y = (S) => allowedAgentTypes?.includes(S.agentType) ?? true;
-  let found = filtered.find((S) => S.agentType === GENERAL_PURPOSE_AGENT.agentType);
-  if (found) return y(found);
-  return filtered.length === 1 && y(filtered[0]);
+  let generalPurposeNormalized = normalizeAgentName(GENERAL_PURPOSE_AGENT.agentType);
+  let filtered = activeAgents.filter(
+    (activeAgent) => normalizeAgentName(activeAgent.agentType) === generalPurposeNormalized,
+  );
+  let isAllowed = (agent) => allowedAgentTypes?.includes(agent.agentType) ?? true;
+  let agent = filtered.find((agent) => agent.agentType === GENERAL_PURPOSE_AGENT.agentType);
+  if (agent) return isAllowed(agent);
+  return filtered.length === 1 && isAllowed(filtered[0]);
 }
 //@ chunk-0tkmvwy0.js:54451-54957 placement
 /**
@@ -360,19 +371,21 @@ function getAgentModelInheritCap(agentDefinition, parentModel) {
 function findAgentByNormalizedType(activeAgents, offeredAgents, agentType) {
   let found = offeredAgents.find((offeredAgent) => offeredAgent.agentType === agentType);
   if (found) return found;
-  let y = normalizeAgentName(agentType);
-  if (!y) return;
-  let filtered = activeAgents.filter((activeAgent) => normalizeAgentName(activeAgent.agentType) === y);
+  let normalizedType = normalizeAgentName(agentType);
+  if (!normalizedType) return;
+  let filtered = activeAgents.filter(
+    (activeAgent) => normalizeAgentName(activeAgent.agentType) === normalizedType,
+  );
   if (filtered.length !== 1) return;
-  let S = filtered[0];
-  return offeredAgents.some((offeredAgent) => offeredAgent.agentType === S.agentType) ? S : undefined;
+  let match = filtered[0];
+  return offeredAgents.some((offeredAgent) => offeredAgent.agentType === match.agentType) ? match : undefined;
 }
 //@ chunk-0tkmvwy0.js:55312-55502 placement
 /**
  * @internal canContinueAgent 输出字段 schema。
  */
 function canContinueAgentSchema() {
-  return M()
+  return booleanSchema()
     .optional()
     .describe(
       "@internal False when the calling agent cannot continue this agent with a follow-up message (it holds no messaging tool); absent means it can.",

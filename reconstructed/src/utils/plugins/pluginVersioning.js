@@ -8,9 +8,12 @@
  * pieces: chunk-e6aww6q8.js (18), chunk-f3qhjfah.js (2)
  * attribution: placement 18, fingerprint 2
  */
+import { join, resolve as resolve_2, relative, isAbsolute, sep } from "path";
 import { createHash } from "crypto";
-import { resolve as resolve_2, relative, isAbsolute, sep, join } from "path";
 import { pathToFileURL } from "url";
+import { getClaudeConfigDir } from "../envUtils.js";
+import { splitPluginCachePath } from "./pluginDirectories.js";
+import { areValidKeySegments } from "../storage/storageSpaces.js";
 import { getSettingsForSourceWriteSeed } from "../settings/settings.js";
 import { getInstalledPlugins, isInstallationRelevantToCurrentProject } from "./installedPluginsManager.js";
 import {
@@ -18,7 +21,7 @@ import {
   OFFICIAL_MARKETPLACE_DISPLAY,
   isNpmPluginSource,
 } from "./officialMarketplaceNames.js";
-import { Re } from "../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_semver_3 } from "../../../vendor/semver/index.js";
 import { printableName } from "../printableName.js";
 import { pinnedSha, withShaSuffix } from "./pluginSourceUrl.js";
@@ -32,36 +35,69 @@ import { githubRepoToCloneUrl } from "./pluginLoader.js";
 import { pluginGitUrlError } from "./pluginDirectoryTelemetry.js";
 import { lsRemoteMarketplace } from "./marketplaceGitCheckout.js";
 import { redactUrlQuery } from "../redaction/urlRedaction.js";
-import { getClaudeConfigDir } from "../envUtils.js";
-import { splitPluginCachePath } from "./pluginDirectories.js";
-import { areValidKeySegments } from "../storage/storageSpaces.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-f3qhjfah.js:2695-2741 fingerprint = getVersionFromPath (0.904)
+/**
+ * 旧版插件缓存根目录 <configHome>/plugins/cache。
+ */
+function getVersionFromPath() {
+  return join(getClaudeConfigDir(), "plugins", "cache");
+}
+//@ chunk-f3qhjfah.js:4167-4415 placement
+/**
+ * 缓存目录路径转存储作用域（根、市场或插件级）。
+ */
+function pluginCacheStorageScope(path, versionRoot) {
+  if (path === versionRoot)
+    return versionRoot === getVersionFromPath()
+      ? {
+          namespace: "pluginCache",
+        }
+      : null;
+  let parts = splitPluginCachePath(path, versionRoot);
+  if (parts === null || parts.length > 2 || !areValidKeySegments(parts)) return null;
+  let [marketplace, plugin] = parts;
+  return plugin === undefined
+    ? {
+        namespace: "pluginCache",
+        marketplace,
+      }
+    : {
+        namespace: "pluginCache",
+        marketplace,
+        plugin,
+      };
+}
 //@ chunk-e6aww6q8.js:4320786-4320831 placement
 /**
  * enabledPluginSettings：设置里的启用插件表。
  */
-function enabledPluginSettings(e) {
-  return getSettingsForSourceWriteSeed(e)?.enabledPlugins;
+function enabledPluginSettings(source) {
+  return getSettingsForSourceWriteSeed(source)?.enabledPlugins;
 }
 //@ chunk-e6aww6q8.js:4320831-4320895 placement
 /**
  * hasInstalledOfficialEntry：官方市场里有安装记录。
  */
-function hasInstalledOfficialEntry(e) {
+function hasInstalledOfficialEntry(name) {
   return (
-    getInstalledPlugins().plugins[`${e}@${OFFICIAL_MARKETPLACE_NAME}`]?.some(
+    getInstalledPlugins().plugins[`${name}@${OFFICIAL_MARKETPLACE_NAME}`]?.some(
       isInstallationRelevantToCurrentProject,
     ) ?? false
   );
 }
 //@ chunk-e6aww6q8.js:4320895-4320914 placement
-var semverCompatPlugin = Re(require_semver_3(), 1);
+var semverCompatPlugin; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4320895", () => {
+  semverCompatPlugin = __toESM(require_semver_3(), 1);
+});
 //@ chunk-e6aww6q8.js:4321080-4321135 placement
 /**
  * shortLowerPrefix：小写后的前 12 个字符。
  */
-function shortLowerPrefix(e) {
-  return e.toLowerCase().substring(0, 12);
+function shortLowerPrefix(sha) {
+  return sha.toLowerCase().substring(0, 12);
 }
 //@ chunk-e6aww6q8.js:4321135-4321780 placement
 /**
@@ -74,21 +110,21 @@ function verifyReviewedCommit({ pluginId, pluginName, source, boundByRecord, fet
         ok: true,
         reviewedCommit: undefined,
       };
-    let S = printableName(pluginName, 120);
-    let w = pinnedSha(pluginId, source);
-    if (w === undefined)
+    let displayName = printableName(pluginName, 120);
+    let expected = pinnedSha(pluginId, source);
+    if (expected === undefined)
       return {
         ok: false,
-        message: `"${S}" was not ${action}: its ${OFFICIAL_MARKETPLACE_DISPLAY} listing has no listed commit.`,
+        message: `"${displayName}" was not ${action}: its ${OFFICIAL_MARKETPLACE_DISPLAY} listing has no listed commit.`,
       };
-    if (fetched !== undefined && fetched.gitCommitSha !== w)
+    if (fetched !== undefined && fetched.gitCommitSha !== expected)
       return {
         ok: false,
-        message: `"${S}" could not be verified at the commit the ${OFFICIAL_MARKETPLACE_DISPLAY} lists, so it was not ${action}.`,
+        message: `"${displayName}" could not be verified at the commit the ${OFFICIAL_MARKETPLACE_DISPLAY} lists, so it was not ${action}.`,
       };
     return {
       ok: true,
-      reviewedCommit: w,
+      reviewedCommit: expected,
     };
   }
   if (boundByRecord || isNpmPluginSource(pluginId))
@@ -105,42 +141,51 @@ function verifyReviewedCommit({ pluginId, pluginName, source, boundByRecord, fet
 /**
  * 计算插件版本（缓存目录名）：manifest.version > 条目 version > git commit sha（短）> archive sha256 > 内容哈希；command 来源按其输出目录内容哈希。
  */
-async function calculatePluginVersion(pluginId, source, r, installPath, h, y, S, w) {
+async function calculatePluginVersion(
+  pluginId,
+  source,
+  manifest,
+  installPath,
+  recorded,
+  sha,
+  contentSha,
+  containmentRoot,
+) {
   if (typeof source === "object" && source.source === "command") {
-    if (!S) {
-      if (h?.version) {
+    if (!contentSha) {
+      if (recorded?.version) {
         logForDebugging(
-          `Using recorded version for command-sourced ${pluginId} (pre-fetch probe): ${h.version}`,
+          `Using recorded version for command-sourced ${pluginId} (pre-fetch probe): ${recorded.version}`,
         );
-        return h.version;
+        return recorded.version;
       }
       logForDebugging(
         `No content hash yet for command-sourced ${pluginId}; version unknown until the command runs`,
       );
       return "unknown";
     }
-    let Z = shortLowerPrefix(S);
-    let Se = r?.version ? `${r.version}-${Z}` : Z;
-    logForDebugging(`Using content-hash version for command-sourced ${pluginId}: ${Se}`);
-    return Se;
+    let prefix = shortLowerPrefix(contentSha);
+    let version = manifest?.version ? `${manifest.version}-${prefix}` : prefix;
+    logForDebugging(`Using content-hash version for command-sourced ${pluginId}: ${version}`);
+    return version;
   }
   if (typeof source === "object" && source.source === "claudeai") {
-    let Z = h?.version || source.version || "unknown";
-    logForDebugging(`Using claude.ai catalog version for ${pluginId}: ${Z}`);
-    return Z;
+    let version = recorded?.version || source.version || "unknown";
+    logForDebugging(`Using claude.ai catalog version for ${pluginId}: ${version}`);
+    return version;
   }
-  let L = pinnedSha(pluginId, source);
-  let G = (version) => (L === undefined ? version : withShaSuffix(version, L));
-  if (r?.version) {
-    logForDebugging(`Using manifest version for ${pluginId}: ${r.version}`);
-    return G(r.version);
+  let pinned = pinnedSha(pluginId, source);
+  let withPin = (version) => (pinned === undefined ? version : withShaSuffix(version, pinned));
+  if (manifest?.version) {
+    logForDebugging(`Using manifest version for ${pluginId}: ${manifest.version}`);
+    return withPin(manifest.version);
   }
-  if (h?.version) {
-    logForDebugging(`Using ${h.kind} version for ${pluginId}: ${h.version}`);
-    return h.kind === "installed" ? h.version : G(h.version);
+  if (recorded?.version) {
+    logForDebugging(`Using ${recorded.kind} version for ${pluginId}: ${recorded.version}`);
+    return recorded.kind === "installed" ? recorded.version : withPin(recorded.version);
   }
-  if (y) {
-    let shortSha = y.substring(0, 12);
+  if (sha) {
+    let shortSha = sha.substring(0, 12);
     if (typeof source === "object" && source.source === "git-subdir") {
       let normPath = source.path.replaceAll("\\", "/").replace(/^\.\//, "").replace(/\/+$/, "");
       let pathHash = createHash("sha256").update(normPath).digest("hex").substring(0, 8);
@@ -152,22 +197,22 @@ async function calculatePluginVersion(pluginId, source, r, installPath, h, y, S,
     return shortSha;
   }
   if (typeof source === "object" && source.source === "archive") {
-    let sha256 = source.sha256 ?? S;
+    let sha256 = source.sha256 ?? contentSha;
     if (sha256) {
-      let Se = shortLowerPrefix(sha256);
+      let prefix = shortLowerPrefix(sha256);
       logForDebugging(
-        `Using archive sha256 version for ${pluginId}: ${Se}${source.sha256 ? " (pinned)" : " (downloaded)"}`,
+        `Using archive sha256 version for ${pluginId}: ${prefix}${source.sha256 ? " (pinned)" : " (downloaded)"}`,
       );
-      return Se;
+      return prefix;
     }
   }
-  let q = typeof source === "string" || getPluginCloneUrl(source) !== null;
-  if (installPath && q) {
-    let sha = await pluginGitHead(installPath, w);
+  let isGitBacked = typeof source === "string" || getPluginCloneUrl(source) !== null;
+  if (installPath && isGitBacked) {
+    let sha = await pluginGitHead(installPath, containmentRoot);
     if (sha) {
-      let ke = sha.substring(0, 12);
-      logForDebugging(`Using git SHA for ${pluginId}: ${ke}`);
-      return ke;
+      let shortSha = sha.substring(0, 12);
+      logForDebugging(`Using git SHA for ${pluginId}: ${shortSha}`);
+      return shortSha;
     }
     let sha_2 = await pluginVersionOrNull(installPath);
     if (sha_2) {
@@ -183,50 +228,50 @@ async function calculatePluginVersion(pluginId, source, r, installPath, h, y, S,
 /**
  * pluginGitHead：插件目录对应的 git HEAD。
  */
-async function pluginGitHead(e, n = e) {
-  let r = await probePluginGitHead(e, n);
-  return r.repo ? r.sha : null;
+async function pluginGitHead(installPath, containmentRoot = installPath) {
+  let head = await probePluginGitHead(installPath, containmentRoot);
+  return head.repo ? head.sha : null;
 }
 //@ chunk-e6aww6q8.js:4323551-4323770 placement
 /**
  * 探测插件目录的 git HEAD（位于插件目录仓库内时视为非仓库）。
  */
-async function probePluginGitHead(e, n = e) {
-  let r = resolve_2(e);
-  let s = await probeHeadForDirBounded(r, n);
-  if (!s.repo || s.sha === null) return s;
-  let gitRoot = findGitRoot(r);
+async function probePluginGitHead(installPath, containmentRoot = installPath) {
+  let resolved = resolve_2(installPath);
+  let head = await probeHeadForDirBounded(resolved, containmentRoot);
+  if (!head.repo || head.sha === null) return head;
+  let gitRoot = findGitRoot(resolved);
   if (gitRoot !== null) {
-    let y = relative(resolve_2(gitRoot), projectPluginsDir());
-    if (y === "" || (!isAbsolute(y) && y !== ".." && !y.startsWith(`..${sep}`)))
+    let rel = relative(resolve_2(gitRoot), projectPluginsDir());
+    if (rel === "" || (!isAbsolute(rel) && rel !== ".." && !rel.startsWith(`..${sep}`)))
       return {
         repo: false,
       };
   }
-  return s;
+  return head;
 }
 //@ chunk-e6aww6q8.js:4323770-4323817 placement
 /**
  * pluginVersionOrNull：取插件版本或 null。
  */
-async function pluginVersionOrNull(e) {
-  return (await marketplaceCommitSha(e)) ?? null;
+async function pluginVersionOrNull(path) {
+  return (await marketplaceCommitSha(path)) ?? null;
 }
 //@ chunk-e6aww6q8.js:4323817-4323864 placement
 /**
  * marketplaceCommitSha：市场仓库的提交 sha。
  */
-async function marketplaceCommitSha(e) {
-  return commitShaOf(await readMarketplaceCommit(e));
+async function marketplaceCommitSha(path) {
+  return commitShaOf(await readMarketplaceCommit(path));
 }
 //@ chunk-e6aww6q8.js:4323864-4323978 placement
 /**
  * 提交读取结果转 sha（absent/malformed 为 null）。
  */
-function commitShaOf(e) {
-  switch (e.kind) {
+function commitShaOf(commit) {
+  switch (commit.kind) {
     case "commit":
-      return e.sha;
+      return commit.sha;
     case "absent":
     case "malformed":
       return null;
@@ -238,16 +283,16 @@ function commitShaOf(e) {
 /**
  * 读市场检出中记录的提交 sha。
  */
-async function readMarketplaceCommit(e) {
-  let n = resolve_2(projectPluginsDir(), "marketplaces");
-  let r = relative(n, resolve_2(e));
-  if (r === "" || r === ".." || r.startsWith(`..${sep}`) || isAbsolute(r))
+async function readMarketplaceCommit(installPath) {
+  let marketplacesDir = resolve_2(projectPluginsDir(), "marketplaces");
+  let rel = relative(marketplacesDir, resolve_2(installPath));
+  if (rel === "" || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel))
     return {
       kind: "absent",
     };
-  let s = join(n, r.split(sep)[0]);
+  let marketplaceDir = join(marketplacesDir, rel.split(sep)[0]);
   try {
-    let mcpAuthCache = await getMcpAuthCache_2(join(s, GCS_SHA_MARKER_FILE));
+    let mcpAuthCache = await getMcpAuthCache_2(join(marketplaceDir, GCS_SHA_MARKER_FILE));
     if (mcpAuthCache.kind !== "ok")
       return {
         kind: mcpAuthCache.kind,
@@ -333,39 +378,41 @@ var VERSION_FLAG_PREFIX = "--v";
 /**
  * versionFlagSpec：版本范围标志串。
  */
-function versionFlagSpec(e, n) {
-  return `${e}${VERSION_FLAG_PREFIX}${n}`;
+function versionFlagSpec(name, version) {
+  return `${name}${VERSION_FLAG_PREFIX}${version}`;
 }
 //@ chunk-e6aww6q8.js:4325135-4326097 placement
 /**
  * 用 git ls-remote 解析插件版本范围对应的标签。
  */
-async function resolveVersionRange(e, name, range, s) {
-  let h = pluginGitUrlError(e);
-  if (h !== null) {
-    logForDebugging(`resolveVersionRange: ${h.message}`);
+async function resolveVersionRange(url, name, range, cache) {
+  let urlError = pluginGitUrlError(url);
+  if (urlError !== null) {
+    logForDebugging(`resolveVersionRange: ${urlError.message}`);
     return null;
   }
-  let y = s?.get(e);
-  if (y === undefined) {
-    y = lsRemoteMarketplace(e, {
+  let listing = cache?.get(url);
+  if (listing === undefined) {
+    listing = lsRemoteMarketplace(url, {
       flags: ["--tags"],
-    }).then((Z) => (Z.code !== 0 ? Promise.reject(Error(`ls-remote exit ${Z.code}`)) : Z.stdout));
-    s?.set(e, y);
+    }).then((result) =>
+      result.code !== 0 ? Promise.reject(Error(`ls-remote exit ${result.code}`)) : result.stdout,
+    );
+    cache?.set(url, listing);
   }
-  let S;
+  let stdout;
   try {
-    S = await y;
+    stdout = await listing;
   } catch (error) {
-    s?.delete(e);
+    cache?.delete(url);
     logForDebugging(
-      `resolveVersionRange: ls-remote failed for ${redactUrlQuery(e)}: ${error instanceof Error ? error.message : String(error)}`,
+      `resolveVersionRange: ls-remote failed for ${redactUrlQuery(url)}: ${error instanceof Error ? error.message : String(error)}`,
     );
     return null;
   }
-  let w = `${name}${VERSION_FLAG_PREFIX}`;
-  let L = new Map();
-  for (let line of S.split(`
+  let tagPrefix = `${name}${VERSION_FLAG_PREFIX}`;
+  let tags = new Map();
+  for (let line of stdout.split(`
 `)) {
     let index = line.indexOf("\t");
     if (index === -1) continue;
@@ -373,58 +420,26 @@ async function resolveVersionRange(e, name, range, s) {
     let sliced = line.slice(index + 1);
     if (!sliced.startsWith("refs/tags/")) continue;
     let sliced_2 = sliced.slice(10);
-    let Ae = sliced_2.endsWith("^{}");
-    if (Ae) sliced_2 = sliced_2.slice(0, -3);
-    if (!sliced_2.startsWith(w)) continue;
-    let Ie = semverCompatPlugin.clean(sliced_2.slice(w.length));
-    if (Ie === null) continue;
-    if (!Ae && L.has(sliced_2)) continue;
-    L.set(sliced_2, {
-      version: Ie,
+    let isPeeled = sliced_2.endsWith("^{}");
+    if (isPeeled) sliced_2 = sliced_2.slice(0, -3);
+    if (!sliced_2.startsWith(tagPrefix)) continue;
+    let version = semverCompatPlugin.clean(sliced_2.slice(tagPrefix.length));
+    if (version === null) continue;
+    if (!isPeeled && tags.has(sliced_2)) continue;
+    tags.set(sliced_2, {
+      version,
       ref: sliced_2,
       sha,
     });
   }
-  if (L.size === 0) return null;
-  let G = [...L.values()];
-  let q = semverCompatPlugin.maxSatisfying(
-    G.map((Z) => Z.version),
+  if (tags.size === 0) return null;
+  let candidates = [...tags.values()];
+  let best = semverCompatPlugin.maxSatisfying(
+    candidates.map((candidate) => candidate.version),
     range,
   );
-  if (q === null) return null;
-  return G.find((Z) => Z.version === q) ?? null;
-}
-//@ chunk-f3qhjfah.js:2695-2741 fingerprint = getVersionFromPath (0.904)
-/**
- * 旧版插件缓存根目录 <configHome>/plugins/cache。
- */
-function getVersionFromPath() {
-  return join(getClaudeConfigDir(), "plugins", "cache");
-}
-//@ chunk-f3qhjfah.js:4167-4415 placement
-/**
- * 缓存目录路径转存储作用域（根、市场或插件级）。
- */
-function pluginCacheStorageScope(e, n) {
-  if (e === n)
-    return n === getVersionFromPath()
-      ? {
-          namespace: "pluginCache",
-        }
-      : null;
-  let r = splitPluginCachePath(e, n);
-  if (r === null || r.length > 2 || !areValidKeySegments(r)) return null;
-  let [s, a] = r;
-  return a === undefined
-    ? {
-        namespace: "pluginCache",
-        marketplace: s,
-      }
-    : {
-        namespace: "pluginCache",
-        marketplace: s,
-        plugin: a,
-      };
+  if (best === null) return null;
+  return candidates.find((candidate) => candidate.version === best) ?? null;
 }
 export {
   calculatePluginVersion,

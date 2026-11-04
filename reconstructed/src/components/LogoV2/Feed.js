@@ -16,7 +16,7 @@ var FEED_ROW_HEIGHT = 8;
 function Feed(t0) {
   let sliced = Object.entries(t0)
     .filter(([, value]) => isValidStatusCacheLine(value))
-    .sort(([, o], [, f]) => f.timestamp - o.timestamp)
+    .sort(([, entryA], [, entryB]) => entryB.timestamp - entryA.timestamp)
     .slice(0, FEED_ROW_HEIGHT);
   return Object.fromEntries(sliced);
 }

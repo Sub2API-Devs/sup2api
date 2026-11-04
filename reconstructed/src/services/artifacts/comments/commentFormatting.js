@@ -28,7 +28,7 @@ import {
 import { normalizePresence, MAX_PRESENCE_BYTES } from "./presence.js";
 import { jsonStringify } from "../../../utils/slowOperations.js";
 import { extractPageText } from "../audience.js";
-import { xr } from "../../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_mapValues } from "../../../../vendor/lodash-es/_inlinedHelpers.js";
 import {
   INVISIBLE_BLANKS,
   characterReferencesAsBrackets,
@@ -39,45 +39,46 @@ import { foldLookalikeChars } from "../../../utils/confusables.js";
 import { ARTIFACT_SLUG_RE } from "../../../tools/ArtifactTool/constants.js";
 import { logFeatureSad, logFeatureOk } from "../../analytics/featureTelemetry.js";
 import { fromEnumArr } from "../../analytics/safeMetadata.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-b0a246e7.js:9212-10500 placement
-function commentsPayloadSchema(e) {
+function commentsPayloadSchema(counter) {
   let comment = create({
     id: create_2(),
     author: create({
       account: create_2().nullable().optional(),
-      role: nullableStringField(e, "role", "degraded"),
+      role: nullableStringField(counter, "role", "degraded"),
       access: create_12().optional(),
       outside: create_12().optional(),
     }),
     text: create_2(),
-    created_at: nullableStringField(e, "created_at", undefined),
-    to_claude_at: nullableStringField(e, "to_claude_at", "degraded"),
+    created_at: nullableStringField(counter, "created_at", undefined),
+    to_claude_at: nullableStringField(counter, "to_claude_at", "degraded"),
     source: create_12().optional(),
     presence: create_12().optional(),
     sent_by_viewer: create_6()
       .nullable()
       .optional()
-      .catch(gateFallback(e, "sent_by_viewer", undefined))
-      .transform((o) => o ?? undefined),
+      .catch(gateFallback(counter, "sent_by_viewer", undefined))
+      .transform((value) => value ?? undefined),
   });
   let thread = create({
     id: create_2(),
-    created_at: nullableStringField(e, "thread_created_at", undefined),
+    created_at: nullableStringField(counter, "thread_created_at", undefined),
     comments: create_15(create_12())
       .readonly()
       .nullable()
-      .catch(gateFallback(e, "comments_list", EMPTY_MENTION_LIST_B)),
-    resolved_at: nullableStringField(e, "resolved_at", "degraded"),
+      .catch(gateFallback(counter, "comments_list", EMPTY_MENTION_LIST_B)),
+    resolved_at: nullableStringField(counter, "resolved_at", "degraded"),
     resolved_by: create_12().optional(),
-    claude_activated_at: nullableStringField(e, "claude_activated_at", "degraded"),
-    claude_activated_by: nullableStringField(e, "claude_activated_by", undefined),
+    claude_activated_at: nullableStringField(counter, "claude_activated_at", "degraded"),
+    claude_activated_by: nullableStringField(counter, "claude_activated_by", undefined),
     claude_capability: create_12().optional(),
     carried: create_6()
       .nullable()
       .optional()
-      .catch(gateFallback(e, "carried", undefined))
-      .transform((o) => o ?? undefined),
+      .catch(gateFallback(counter, "carried", undefined))
+      .transform((value) => value ?? undefined),
     anchor: create({
       path: create_12().optional(),
       span: create_12().optional(),
@@ -93,17 +94,17 @@ function commentsPayloadSchema(e) {
       .nullable()
       .optional()
       .catch(
-        gateFallback(e, "anchor", {
+        gateFallback(counter, "anchor", {
           file: DEGRADED_ANCHOR_FILE,
         }),
       )
-      .transform((o) => o ?? undefined),
+      .transform((value) => value ?? undefined),
   });
   let payload = create({
     threads: create_15(create_12())
       .readonly()
       .nullable()
-      .catch(gateFallback(e, "threads_list", EMPTY_MENTION_LIST)),
+      .catch(gateFallback(counter, "threads_list", EMPTY_MENTION_LIST)),
   });
   return {
     comment,
@@ -118,55 +119,55 @@ function commentsPayloadSchema(e) {
 var COMMENT_ID_RE = /^[0-9a-fA-F-]{1,64}$/;
 var TIMESTAMP_TEXT_RE = /^[0-9T:.\-+Z ]{1,40}$/;
 //@ chunk-b0a246e7.js:10559-10607 placement
-function isCommentId(e) {
-  return COMMENT_ID_RE.test(e) || PRINCIPAL_TOKEN_RE.test(e);
+function isCommentId(value) {
+  return COMMENT_ID_RE.test(value) || PRINCIPAL_TOKEN_RE.test(value);
 }
 //@ chunk-b0a246e7.js:10607-10669 placement
-function boundedAccountId(e, t, n) {
-  if (isCommentId(n)) return n;
-  countGate(e, t);
+function boundedAccountId(counter, field, account) {
+  if (isCommentId(account)) return account;
+  countGate(counter, field);
   return "unknown";
 }
 //@ chunk-b0a246e7.js:10669-10751 placement
-function authorAccount(e, account) {
+function authorAccount(counter, account) {
   if (account === null || account === undefined) return "unknown";
-  return boundedAccountId(e, "account", account);
+  return boundedAccountId(counter, "account", account);
 }
 //@ chunk-b0a246e7.js:10751-10834 placement
-function boundedRole(e, role) {
+function boundedRole(counter, role) {
   if (role === undefined || ORIGINAL_ROLE_RE.test(role)) return role;
-  countGate(e, "role");
+  countGate(counter, "role");
   return "degraded";
 }
 //@ chunk-b0a246e7.js:10834-10943 placement
-function parseCommentCapability(e, claudeCapability) {
+function parseCommentCapability(counter, claudeCapability) {
   if (claudeCapability === "edit") return true;
   if (claudeCapability !== undefined && claudeCapability !== null && claudeCapability !== "reply")
-    countGate(e, "claude_capability");
+    countGate(counter, "claude_capability");
   return;
 }
 //@ chunk-b0a246e7.js:10943-11019 placement
-function hasAuthorAccountSource(e, source, n) {
-  if (!hasAuthorAccount(source, n)) return;
-  if (source !== "page") countGate(e, "source");
+function hasAuthorAccountSource(counter, account, account_2) {
+  if (!hasAuthorAccount(account, account_2)) return;
+  if (account !== "page") countGate(counter, "source");
   return true;
 }
 //@ chunk-b0a246e7.js:11019-11167 placement
-function parseResolvedAt(e, resolvedAt) {
+function parseResolvedAt(counter, resolvedAt) {
   if (resolvedAt === undefined || resolvedAt === "") return;
   if (parseTimestamp(resolvedAt) !== null)
     return {
       resolvedAt,
     };
-  if (resolvedAt !== "degraded") countGate(e, "resolved_at");
+  if (resolvedAt !== "degraded") countGate(counter, "resolved_at");
   return {
     resolvedDegraded: true,
   };
 }
 //@ chunk-b0a246e7.js:11167-11259 placement
-function resolvedByClaudeFlag(e, resolvedBy) {
+function resolvedByClaudeFlag(counter, resolvedBy) {
   if (resolvedBy === "claude") return true;
-  if (resolvedBy !== undefined && resolvedBy !== null) countGate(e, "resolved_by");
+  if (resolvedBy !== undefined && resolvedBy !== null) countGate(counter, "resolved_by");
   return;
 }
 //@ chunk-b0a246e7.js:11259-11667 placement
@@ -189,9 +190,9 @@ var ANCHOR_NTH_OF_TYPE_RE = /^[a-z][a-z0-9-]{0,23}:nth-of-type\([1-9][0-9]{0,3}\
 var MAX_ANCHOR_TEXT_BYTES = 128;
 var INVISIBLE_CHAR_RE = /^[\p{Cc}\p{Cf}\p{Variation_Selector}\u2028\u2029]$/u;
 //@ chunk-b0a246e7.js:11667-11905 placement
-function isUnsafeCodePoint(e, t) {
-  if (INVISIBLE_CHAR_RE.test(t)) return true;
-  switch (e) {
+function isUnsafeCodePoint(codePoint, char) {
+  if (INVISIBLE_CHAR_RE.test(char)) return true;
+  switch (codePoint) {
     case 847:
     case 4447:
     case 4448:
@@ -202,92 +203,103 @@ function isUnsafeCodePoint(e, t) {
     case 65440:
       return true;
   }
-  if ((e & 65534) === 65534 || (e >= 64976 && e <= 65007)) return true;
-  return (e >= 65520 && e <= 65528) || (e >= 917504 && e <= 921599);
+  if ((codePoint & 65534) === 65534 || (codePoint >= 64976 && codePoint <= 65007)) return true;
+  return (codePoint >= 65520 && codePoint <= 65528) || (codePoint >= 917504 && codePoint <= 921599);
 }
 //@ chunk-b0a246e7.js:11905-12065 placement
 /**
  * 判断文本可作为安全标识展示：不超长（字符与 UTF-8 字节）、是良构字符串、无控制字符和不可见/私用/非字符码点。
  */
-function isSafeIdentifierText(e) {
+function isSafeIdentifierText(text) {
   if (
-    e.length > MAX_ANCHOR_TEXT_BYTES ||
-    !isWellFormedString(e) ||
-    new TextEncoder().encode(e).length > MAX_ANCHOR_TEXT_BYTES
+    text.length > MAX_ANCHOR_TEXT_BYTES ||
+    !isWellFormedString(text) ||
+    new TextEncoder().encode(text).length > MAX_ANCHOR_TEXT_BYTES
   )
     return false;
-  for (let t of e) {
-    let codePoint = t.codePointAt(0);
-    if (codePoint < 32 || isUnsafeCodePoint(codePoint, t)) return false;
+  for (let char of text) {
+    let codePoint = char.codePointAt(0);
+    if (codePoint < 32 || isUnsafeCodePoint(codePoint, char)) return false;
   }
   return true;
 }
 //@ chunk-b0a246e7.js:12065-12350 placement
-function readAnchorPath(e, path) {
-  if (path === undefined || path === null || path === "") return;
-  if (typeof path !== "string") {
-    countGate(e, "anchor_path");
+function readAnchorPath(counter, text) {
+  if (text === undefined || text === null || text === "") return;
+  if (typeof text !== "string") {
+    countGate(counter, "anchor_path");
     return;
   }
-  let parts = path.split(" > ");
+  let parts = text.split(" > ");
   if (
-    path.length <= 1024 &&
+    text.length <= 1024 &&
     parts.length <= 10 &&
     parts.every(
-      (r, o) =>
-        ANCHOR_NTH_OF_TYPE_RE.test(r) ||
-        (o === 0 && (ANCHOR_ID_SELECTOR_RE.test(r) || ANCHOR_DATA_ID_SELECTOR_RE.test(r))),
+      (part, partIndex) =>
+        ANCHOR_NTH_OF_TYPE_RE.test(part) ||
+        (partIndex === 0 && (ANCHOR_ID_SELECTOR_RE.test(part) || ANCHOR_DATA_ID_SELECTOR_RE.test(part))),
     )
   )
-    return path;
-  countGate(e, isSafeIdentifierText(path) ? "anchor_path_opaque" : "anchor_path");
+    return text;
+  countGate(counter, isSafeIdentifierText(text) ? "anchor_path_opaque" : "anchor_path");
   return;
 }
 //@ chunk-b0a246e7.js:12350-12460 placement
 /**
  * 锚点上限：位置 2^24、标签 128、详情 512、子节点 8 个且索引 <4096、文件 sha256 正则与降级标记。
  */
-var ANCHOR_LIMITS = 512;
-var MAX_ANCHOR_POSITION = 16777216;
-var MAX_ANCHOR_LABEL_CHARS = 128;
-var MAX_ANCHOR_DETAIL_CHARS = 512;
-var MAX_ANCHOR_CHILDREN = 8;
-var MAX_ANCHOR_CHILD_INDEX = 4096;
-var ANCHOR_FILE_SHA_RE = /^[a-f0-9]{64}$/;
-var DEGRADED_ANCHOR_FILE = Symbol("degraded-wire-anchor-file");
+var MAX_ANCHOR_QUOTE_BYTES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_ANCHOR_POSITION;
+var MAX_ANCHOR_LABEL_CHARS;
+var MAX_ANCHOR_DETAIL_CHARS;
+var MAX_ANCHOR_CHILDREN;
+var MAX_ANCHOR_CHILD_INDEX;
+var ANCHOR_FILE_SHA_RE;
+var DEGRADED_ANCHOR_FILE;
+deferInit("chunk-b0a246e7.js:12350", () => {
+  MAX_ANCHOR_QUOTE_BYTES = 512;
+  MAX_ANCHOR_POSITION = 16777216;
+  MAX_ANCHOR_LABEL_CHARS = 128;
+  MAX_ANCHOR_DETAIL_CHARS = 512;
+  MAX_ANCHOR_CHILDREN = 8;
+  MAX_ANCHOR_CHILD_INDEX = 4096;
+  ANCHOR_FILE_SHA_RE = /^[a-f0-9]{64}$/;
+  DEGRADED_ANCHOR_FILE = Symbol("degraded-wire-anchor-file");
+});
 //@ chunk-b0a246e7.js:12460-13204 placement
-function readAnchorFile(e, anchor) {
+function readAnchorFile(counter, anchor) {
   let file = anchor?.file;
   if (file === undefined || file === null || file === "") return;
   if (file === DEGRADED_ANCHOR_FILE)
     return {
       anchorFileDegraded: true,
     };
-  let r = () => {
-    countGate(e, "anchor_file");
+  let degradedFile = () => {
+    countGate(counter, "anchor_file");
     return {
       anchorFileDegraded: true,
     };
   };
-  if (typeof file !== "string") return r();
-  if (!isWellFormedString(file)) return r();
-  if (new TextEncoder().encode(file).length > 512) return r();
-  for (let c of file) {
-    let codePoint = c.codePointAt(0);
-    if (codePoint < 32 || codePoint === 127 || c === "%" || c === ";" || c === "\\") return r();
+  if (typeof file !== "string") return degradedFile();
+  if (!isWellFormedString(file)) return degradedFile();
+  if (new TextEncoder().encode(file).length > 512) return degradedFile();
+  for (let char of file) {
+    let codePoint = char.codePointAt(0);
+    if (codePoint < 32 || codePoint === 127 || char === "%" || char === ";" || char === "\\")
+      return degradedFile();
   }
-  if (file.endsWith(".cmekshadow") || file.startsWith("/")) return r();
+  if (file.endsWith(".cmekshadow") || file.startsWith("/")) return degradedFile();
   let parts = file.split("/");
-  if (parts.some((c) => c === "" || c === "." || c === "..")) return r();
-  if (parts[0].startsWith("_")) return r();
-  if (containsBlockedChars(file)) return r();
+  if (parts.some((part) => part === "" || part === "." || part === "..")) return degradedFile();
+  if (parts[0].startsWith("_")) return degradedFile();
+  if (containsBlockedChars(file)) return degradedFile();
   let fileSha = anchor?.file_sha;
   if (fileSha === undefined || fileSha === null || fileSha === "")
     return {
       anchorFile: file,
     };
   if (typeof fileSha !== "string" || !ANCHOR_FILE_SHA_RE.test(fileSha)) {
-    countGate(e, "anchor_file_sha");
+    countGate(counter, "anchor_file_sha");
     return {
       anchorFile: file,
     };
@@ -298,124 +310,135 @@ function readAnchorFile(e, anchor) {
   };
 }
 //@ chunk-b0a246e7.js:13204-13335 placement
-function parseAnchorMovedAt(e, movedAt) {
+function parseAnchorMovedAt(counter, movedAt) {
   if (movedAt === undefined || movedAt === null || movedAt === "") return;
   if (typeof movedAt === "string" && TIMESTAMP_TEXT_RE.test(movedAt)) return movedAt;
-  countGate(e, "anchor_moved_at");
+  countGate(counter, "anchor_moved_at");
   return;
 }
 //@ chunk-b0a246e7.js:13335-13474 placement
-function parseAnchorMovedCommentId(e, movedCommentId) {
+function parseAnchorMovedCommentId(counter, movedCommentId) {
   if (movedCommentId === undefined || movedCommentId === null || movedCommentId === "") return;
   if (typeof movedCommentId === "string" && COMMENT_ID_RE.test(movedCommentId)) return movedCommentId;
-  countGate(e, "anchor_moved_comment_id");
+  countGate(counter, "anchor_moved_comment_id");
   return;
 }
 //@ chunk-b0a246e7.js:13474-13788 placement
-function readAnchorSpan(e, span) {
+function readAnchorSpan(counter, span) {
   if (span === undefined || span === null) return;
   if (typeof span !== "object") {
-    countGate(e, "anchor_span");
+    countGate(counter, "anchor_span");
     return;
   }
-  let n = span;
+  let value = span;
   if (
-    typeof n.start !== "number" ||
-    !Number.isInteger(n.start) ||
-    n.start < 0 ||
-    n.start > MAX_ANCHOR_POSITION ||
-    typeof n.quote !== "string" ||
-    n.quote === "" ||
-    new TextEncoder().encode(n.quote).length > ANCHOR_LIMITS
+    typeof value.start !== "number" ||
+    !Number.isInteger(value.start) ||
+    value.start < 0 ||
+    value.start > MAX_ANCHOR_POSITION ||
+    typeof value.quote !== "string" ||
+    value.quote === "" ||
+    new TextEncoder().encode(value.quote).length > MAX_ANCHOR_QUOTE_BYTES
   ) {
-    countGate(e, "anchor_span");
+    countGate(counter, "anchor_span");
     return;
   }
-  return n.quote;
+  return value.quote;
 }
 //@ chunk-b0a246e7.js:13788-14019 placement
 /**
  * 只对人类作者的评论规范化 presence 数据，把其中字符串转成页面纯文本后序列化；无效、未变化或超出字节上限时计入 gate 统计并丢弃。
  */
-function serializeCommentPresence(e, presence, role) {
+function serializeCommentPresence(counter, presence, role) {
   if (presence === undefined || presence === null) return;
-  let r =
+  let presenceValue =
     getCommentAuthorKind({
       role,
     }) === "human"
       ? normalizePresence(presence)
       : null;
-  if (r === null || r === "unchanged") {
-    countGate(e, "presence");
+  if (presenceValue === null || presenceValue === "unchanged") {
+    countGate(counter, "presence");
     return;
   }
-  let o = jsonStringify(toPlainTextDeep(r.data));
-  if (Buffer.byteLength(o, "utf8") > MAX_PRESENCE_BYTES) {
-    countGate(e, "presence");
+  let text = jsonStringify(toPlainTextDeep(presenceValue.data));
+  if (Buffer.byteLength(text, "utf8") > MAX_PRESENCE_BYTES) {
+    countGate(counter, "presence");
     return;
   }
-  return o;
+  return text;
 }
 //@ chunk-b0a246e7.js:14019-14162 placement
-function toPlainTextDeep(e) {
-  if (typeof e === "string") return extractPageText(e);
-  if (Array.isArray(e)) return e.map(toPlainTextDeep);
-  if (e !== null && typeof e === "object") return xr(e, toPlainTextDeep);
-  return e;
+function toPlainTextDeep(value) {
+  if (typeof value === "string") return extractPageText(value);
+  if (Array.isArray(value)) return value.map(toPlainTextDeep);
+  if (value !== null && typeof value === "object") return import_mapValues(value, toPlainTextDeep);
+  return value;
 }
 //@ chunk-b0a246e7.js:14162-14377 placement
-function cleanBoundedText(e, t, n, r) {
-  if (n === undefined || n === null || n === "") return;
-  if (typeof n !== "string" || new TextEncoder().encode(n).length > r) {
-    countGate(e, t);
+function cleanBoundedText(counter, field, value, maxBytes) {
+  if (value === undefined || value === null || value === "") return;
+  if (typeof value !== "string" || new TextEncoder().encode(value).length > maxBytes) {
+    countGate(counter, field);
     return;
   }
-  let trimmed = stripControlChars(n).replace(INVISIBLE_BLANKS, " ").replace(/\s+/g, " ").trim();
+  let trimmed = stripControlChars(value).replace(INVISIBLE_BLANKS, " ").replace(/\s+/g, " ").trim();
   return trimmed === "" ? undefined : trimmed;
 }
 //@ chunk-b0a246e7.js:14377-14387 placement
 var MAX_DEGRADED_TEXT_CHARS = 40;
 //@ chunk-b0a246e7.js:14387-14588 placement
-function cleanAnchorText(e) {
-  if (typeof e !== "string") return;
+function cleanAnchorText(text) {
+  if (typeof text !== "string") return;
   let trimmed = characterReferencesAsBrackets(
-    stripControlChars(foldLookalikeChars(normalizeFullWidthSpace(truncateCodePoints(e, 1024)))),
+    stripControlChars(foldLookalikeChars(normalizeFullWidthSpace(truncateCodePoints(text, 1024)))),
   )
     .replace(INVISIBLE_BLANKS, " ")
     .replace(ANGLE_BRACKET_RUN_RE, " ")
     .replace(DECISION_SURFACE_BRACKETS_RE, " ")
     .replace(/\s+/g, " ")
     .trim();
-  let n = truncateCodePoints(trimmed, MAX_DEGRADED_TEXT_CHARS).trimEnd();
-  return n === "" ? undefined : n;
+  let bounded = truncateCodePoints(trimmed, MAX_DEGRADED_TEXT_CHARS).trimEnd();
+  return bounded === "" ? undefined : bounded;
 }
 //@ chunk-b0a246e7.js:14588-15093 placement
-function readAnchorRegion(e, region) {
+function readAnchorRegion(counter, region) {
   if (region === undefined || region === null) return;
   if (typeof region !== "object") {
-    countGate(e, "anchor_region");
+    countGate(counter, "anchor_region");
     return;
   }
-  let n = region;
-  let r = (c) => typeof c === "number" && c >= 0 && c <= 1;
-  let o = (c) => Math.round(c * 1000) / 1000;
-  if (!r(n.x0) || !r(n.y0) || !r(n.x1) || !r(n.y1) || o(n.x0) >= o(n.x1) || o(n.y0) >= o(n.y1)) {
-    countGate(e, "anchor_region");
+  let value = region;
+  let isUnitFraction = (n) => typeof n === "number" && n >= 0 && n <= 1;
+  let round3 = (value) => Math.round(value * 1000) / 1000;
+  if (
+    !isUnitFraction(value.x0) ||
+    !isUnitFraction(value.y0) ||
+    !isUnitFraction(value.x1) ||
+    !isUnitFraction(value.y1) ||
+    round3(value.x0) >= round3(value.x1) ||
+    round3(value.y0) >= round3(value.y1)
+  ) {
+    countGate(counter, "anchor_region");
     return;
   }
-  if (n.kids === undefined || n.kids === null)
+  if (value.kids === undefined || value.kids === null)
     return {
       kids: [],
     };
-  let kids = n.kids;
+  let kids = value.kids;
   if (
     !Array.isArray(kids) ||
     kids.length > MAX_ANCHOR_CHILDREN ||
     !kids.every(
-      (c, a) => Number.isInteger(c) && c >= 0 && c < MAX_ANCHOR_CHILD_INDEX && (a === 0 || c > kids[a - 1]),
+      (kid, kidIndex) =>
+        Number.isInteger(kid) &&
+        kid >= 0 &&
+        kid < MAX_ANCHOR_CHILD_INDEX &&
+        (kidIndex === 0 || kid > kids[kidIndex - 1]),
     )
   ) {
-    countGate(e, "anchor_region");
+    countGate(counter, "anchor_region");
     return {
       kids: [],
     };
@@ -425,161 +448,175 @@ function readAnchorRegion(e, region) {
   };
 }
 //@ chunk-b0a246e7.js:15093-15176 placement
-function boundedTimestamp(e, t, createdAt) {
+function boundedTimestamp(counter, field, createdAt) {
   if (createdAt === undefined) return false;
   if (TIMESTAMP_TEXT_RE.test(createdAt)) return true;
-  countGate(e, t);
+  countGate(counter, field);
   return false;
 }
 //@ chunk-b0a246e7.js:15176-18315 placement
 /**
  * 解析 /api/frame/comments 返回的线程：作者/角色/锚点（路径、文件、文本区间、区域）等，降级字段计数。
  */
-function parseCommentThreads(e, t = "artifact_comments_read") {
-  let n = {
+function parseCommentThreads(payload, featureName = "artifact_comments_read") {
+  let gateState = {
     gates: new Map(),
   };
-  let r = commentsPayloadSchema(n);
-  let o = r.payload.safeParse(e);
-  if (!o.success) return null;
-  let u = o.data.threads === EMPTY_MENTION_LIST;
-  let c = [];
-  let a = new Set();
-  let d = 0;
-  let l = 0;
-  for (let A of o.data.threads ?? []) {
-    let h = r.thread.safeParse(A);
-    if (!h.success) {
-      d++;
+  let schemas = commentsPayloadSchema(gateState);
+  let parsedPayload = schemas.payload.safeParse(payload);
+  if (!parsedPayload.success) return null;
+  let threadsDegraded = parsedPayload.data.threads === EMPTY_MENTION_LIST;
+  let threads = [];
+  let seenThreadIds = new Set();
+  let threadsDropped = 0;
+  let commentCount = 0;
+  for (let rawThread of parsedPayload.data.threads ?? []) {
+    let parsedThread = schemas.thread.safeParse(rawThread);
+    if (!parsedThread.success) {
+      threadsDropped++;
       continue;
     }
-    let s = h.data;
-    if (a.has(s.id)) {
-      d++;
+    let thread = parsedThread.data;
+    if (seenThreadIds.has(thread.id)) {
+      threadsDropped++;
       continue;
     }
-    a.add(s.id);
-    if (!ARTIFACT_SLUG_RE.test(s.id)) {
-      d++;
+    seenThreadIds.add(thread.id);
+    if (!ARTIFACT_SLUG_RE.test(thread.id)) {
+      threadsDropped++;
       continue;
     }
-    let x = [];
-    let E = l;
-    let anchorPath = readAnchorPath(n, s.anchor?.path);
-    let anchorSpan = readAnchorSpan(n, s.anchor?.span);
-    let T = anchorSpan !== undefined ? stripControlChars(anchorSpan) : undefined;
-    let b = cleanBoundedText(n, "anchor_label", s.anchor?.label, MAX_ANCHOR_LABEL_CHARS);
-    let M = cleanBoundedText(n, "anchor_detail", s.anchor?.detail, MAX_ANCHOR_DETAIL_CHARS);
-    let pathUnreadable = s.anchor?.path_unreadable;
-    let R = anchorPath !== undefined && pathUnreadable === true && (b !== undefined || M !== undefined);
+    let comments = [];
+    let commentsStartCount = commentCount;
+    let anchorPath = readAnchorPath(gateState, thread.anchor?.path);
+    let anchorSpan = readAnchorSpan(gateState, thread.anchor?.span);
+    let spanQuote = anchorSpan !== undefined ? stripControlChars(anchorSpan) : undefined;
+    let anchorLabel = cleanBoundedText(
+      gateState,
+      "anchor_label",
+      thread.anchor?.label,
+      MAX_ANCHOR_LABEL_CHARS,
+    );
+    let anchorDetail = cleanBoundedText(
+      gateState,
+      "anchor_detail",
+      thread.anchor?.detail,
+      MAX_ANCHOR_DETAIL_CHARS,
+    );
+    let pathUnreadable = thread.anchor?.path_unreadable;
+    let anchorPathUnreadableFlag =
+      anchorPath !== undefined &&
+      pathUnreadable === true &&
+      (anchorLabel !== undefined || anchorDetail !== undefined);
     if (pathUnreadable !== undefined && pathUnreadable !== null && typeof pathUnreadable !== "boolean")
-      countGate(n, "anchor_path_unreadable");
-    let anchorMovedAt = parseAnchorMovedAt(n, s.anchor?.moved_at);
-    let anchorMovedCommentId = parseAnchorMovedCommentId(n, s.anchor?.moved_comment_id);
-    let N = s.anchor?.span !== undefined && s.anchor?.span !== null;
-    let F = anchorPath !== undefined && !N ? readAnchorRegion(n, s.anchor?.region) : undefined;
-    let Q = new Set();
-    for (let Te of s.comments ?? []) {
-      let te = r.comment.safeParse(Te);
-      if (!te.success) {
-        l++;
+      countGate(gateState, "anchor_path_unreadable");
+    let anchorMovedAt = parseAnchorMovedAt(gateState, thread.anchor?.moved_at);
+    let anchorMovedCommentId = parseAnchorMovedCommentId(gateState, thread.anchor?.moved_comment_id);
+    let hasSpan = thread.anchor?.span !== undefined && thread.anchor?.span !== null;
+    let region =
+      anchorPath !== undefined && !hasSpan ? readAnchorRegion(gateState, thread.anchor?.region) : undefined;
+    let seenCommentIds = new Set();
+    for (let rawComment of thread.comments ?? []) {
+      let parsedComment = schemas.comment.safeParse(rawComment);
+      if (!parsedComment.success) {
+        commentCount++;
         continue;
       }
-      let w = te.data;
-      if (!COMMENT_ID_RE.test(w.id)) {
-        l++;
+      let comment = parsedComment.data;
+      if (!COMMENT_ID_RE.test(comment.id)) {
+        commentCount++;
         continue;
       }
-      if (Q.has(w.id)) {
-        l++;
+      if (seenCommentIds.has(comment.id)) {
+        commentCount++;
         continue;
       }
-      Q.add(w.id);
-      let role = boundedRole(n, w.author.role);
-      let ne = serializeCommentPresence(n, w.presence, role);
-      let re = authorAccount(n, w.author.account);
-      let oe =
+      seenCommentIds.add(comment.id);
+      let authorRole = boundedRole(gateState, comment.author.role);
+      let presenceValue = serializeCommentPresence(gateState, comment.presence, authorRole);
+      let account = authorAccount(gateState, comment.author.account);
+      let isHumanAuthor =
         getCommentAuthorKind({
-          role,
-        }) === "human" && isCommentId(re);
-      let ae = oe ? normalizeCommentAccess(w.author.access) : undefined;
-      let De = oe && w.author.outside === true;
-      x.push({
-        id: w.id,
-        account: re,
-        ...(role !== undefined && {
-          role,
+          role: authorRole,
+        }) === "human" && isCommentId(account);
+      let access = isHumanAuthor ? normalizeCommentAccess(comment.author.access) : undefined;
+      let isOutside = isHumanAuthor && comment.author.outside === true;
+      comments.push({
+        id: comment.id,
+        account,
+        ...(authorRole !== undefined && {
+          role: authorRole,
         }),
-        text: stripControlChars(w.text),
-        ...(boundedTimestamp(n, "created_at", w.created_at) && {
-          createdAt: w.created_at,
+        text: stripControlChars(comment.text),
+        ...(boundedTimestamp(gateState, "created_at", comment.created_at) && {
+          createdAt: comment.created_at,
         }),
-        ...(w.to_claude_at !== undefined &&
-          w.to_claude_at !== "" &&
-          w.to_claude_at !== "degraded" && {
-            toClaudeAt: w.to_claude_at,
+        ...(comment.to_claude_at !== undefined &&
+          comment.to_claude_at !== "" &&
+          comment.to_claude_at !== "degraded" && {
+            toClaudeAt: comment.to_claude_at,
           }),
-        ...(w.to_claude_at === "degraded" && {
+        ...(comment.to_claude_at === "degraded" && {
           toClaudeAtDegraded: true,
         }),
-        ...(hasAuthorAccountSource(n, w.source, role) === true && {
+        ...(hasAuthorAccountSource(gateState, comment.source, authorRole) === true && {
           postedByArtifact: true,
         }),
-        ...(w.sent_by_viewer !== undefined && {
-          sentByViewer: w.sent_by_viewer,
+        ...(comment.sent_by_viewer !== undefined && {
+          sentByViewer: comment.sent_by_viewer,
         }),
-        ...(ne !== undefined && {
-          presence: ne,
+        ...(presenceValue !== undefined && {
+          presence: presenceValue,
         }),
-        ...(ae !== undefined && {
-          access: ae,
+        ...(access !== undefined && {
+          access,
         }),
-        ...(De && {
+        ...(isOutside && {
           outside: true,
         }),
       });
     }
-    let resolvedAt = parseResolvedAt(n, s.resolved_at);
-    c.push({
-      id: s.id,
-      ...(boundedTimestamp(n, "thread_created_at", s.created_at) && {
-        createdAt: s.created_at,
+    let resolvedAt = parseResolvedAt(gateState, thread.resolved_at);
+    threads.push({
+      id: thread.id,
+      ...(boundedTimestamp(gateState, "thread_created_at", thread.created_at) && {
+        createdAt: thread.created_at,
       }),
       resolved: resolvedAt !== undefined,
-      ...(resolvedByClaudeFlag(n, s.resolved_by) === true && {
+      ...(resolvedByClaudeFlag(gateState, thread.resolved_by) === true && {
         resolvedByClaude: true,
       }),
       ...resolvedAt,
       claudeActivated:
-        s.claude_activated_at !== undefined &&
-        s.claude_activated_at !== "" &&
-        s.claude_activated_at !== "degraded",
-      ...(s.claude_activated_at !== undefined &&
-        s.claude_activated_at !== "" &&
-        s.claude_activated_at !== "degraded" && {
-          activatedAt: s.claude_activated_at,
+        thread.claude_activated_at !== undefined &&
+        thread.claude_activated_at !== "" &&
+        thread.claude_activated_at !== "degraded",
+      ...(thread.claude_activated_at !== undefined &&
+        thread.claude_activated_at !== "" &&
+        thread.claude_activated_at !== "degraded" && {
+          activatedAt: thread.claude_activated_at,
         }),
-      ...(s.claude_activated_at === "degraded" && {
+      ...(thread.claude_activated_at === "degraded" && {
         activatedAtDegraded: true,
       }),
-      ...(s.claude_activated_by !== undefined &&
-        s.claude_activated_by !== "" &&
-        boundedAccountId(n, "claude_activated_by", s.claude_activated_by) !== "unknown" && {
-          activatedBy: s.claude_activated_by,
+      ...(thread.claude_activated_by !== undefined &&
+        thread.claude_activated_by !== "" &&
+        boundedAccountId(gateState, "claude_activated_by", thread.claude_activated_by) !== "unknown" && {
+          activatedBy: thread.claude_activated_by,
         }),
-      ...((s.comments === EMPTY_MENTION_LIST_B || l > E) && {
+      ...((thread.comments === EMPTY_MENTION_LIST_B || commentCount > commentsStartCount) && {
         commentsDegraded: true,
       }),
-      carried: s.carried === true,
+      carried: thread.carried === true,
       ...(anchorPath !== undefined && {
         anchorPath,
       }),
-      ...readAnchorFile(n, s.anchor),
-      ...(T !== undefined &&
-        T.trim() !== "" && {
-          spanQuote: T,
+      ...readAnchorFile(gateState, thread.anchor),
+      ...(spanQuote !== undefined &&
+        spanQuote.trim() !== "" && {
+          spanQuote,
         }),
-      ...(R && {
+      ...(anchorPathUnreadableFlag && {
         anchorPathUnreadable: true,
       }),
       ...(anchorMovedAt !== undefined && {
@@ -588,42 +625,42 @@ function parseCommentThreads(e, t = "artifact_comments_read") {
       ...(anchorMovedCommentId !== undefined && {
         anchorMovedCommentId,
       }),
-      ...(b !== undefined && {
-        anchorLabel: b,
+      ...(anchorLabel !== undefined && {
+        anchorLabel,
       }),
-      ...(M !== undefined && {
-        anchorDetail: M,
+      ...(anchorDetail !== undefined && {
+        anchorDetail,
       }),
-      ...(F !== undefined && {
+      ...(region !== undefined && {
         region: true,
-        ...(F.kids.length > 0 && {
-          regionKids: F.kids,
+        ...(region.kids.length > 0 && {
+          regionKids: region.kids,
         }),
       }),
-      ...(parseCommentCapability(n, s.claude_capability) === true && {
+      ...(parseCommentCapability(gateState, thread.claude_capability) === true && {
         editCapable: true,
       }),
-      comments: x,
+      comments,
     });
   }
-  if (d > 0 || l > 0 || n.gates.size > 0) {
-    let A = [...n.gates];
-    logFeatureSad(t, "rows_degraded", {
-      ...Object.fromEntries(A.map(([h, s]) => [`degraded_${h}`, s])),
-      dropped_threads: d,
-      dropped_comments: l,
-      degraded_fields: A.reduce((acc, [, s]) => acc + s, 0),
-      ...(A.length > 0 && {
-        degraded_gates: fromEnumArr(A.map(([h]) => h)),
+  if (threadsDropped > 0 || commentCount > 0 || gateState.gates.size > 0) {
+    let gates = [...gateState.gates];
+    logFeatureSad(featureName, "rows_degraded", {
+      ...Object.fromEntries(gates.map(([gateName, gateCount]) => [`degraded_${gateName}`, gateCount])),
+      dropped_threads: threadsDropped,
+      dropped_comments: commentCount,
+      degraded_fields: gates.reduce((acc, [, gateCount]) => acc + gateCount, 0),
+      ...(gates.length > 0 && {
+        degraded_gates: fromEnumArr(gates.map(([gateName]) => gateName)),
       }),
     });
-  } else logFeatureOk(t);
+  } else logFeatureOk(featureName);
   return {
-    threads: c,
-    ...(u && {
+    threads,
+    ...(threadsDegraded && {
       threadsDegraded: true,
     }),
-    ...(d > 0 && {
+    ...(threadsDropped > 0 && {
       threadsDropped: true,
     }),
   };

@@ -14,8 +14,9 @@ import { RemoteBackgroundCommands } from "./backgroundCommands.js";
 /**
  * 判断会话是否有已附加的电脑。
  */
-function hasAttachedComputers(o) {
-  let entries = o.get(RemoteBackgroundCommands).entries();
+function hasAttachedComputers(appState) {
+  let entries = appState.get(RemoteBackgroundCommands).entries();
   if (!Array.isArray(entries)) throw TypeError("the record of attached computers gave no list");
   return entries.length > 0;
 }
+export { hasAttachedComputers };

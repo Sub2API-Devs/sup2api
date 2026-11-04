@@ -22,32 +22,32 @@ import { sanitizeAndLogError } from "../../components/Feedback.js";
 /**
  * 把 VM 全局函数包成带拒绝告警的版本。
  */
-function wrapVmGlobal(e) {
-  let n = VM_HOST_FN_WRAPPER(e);
-  let vmRejectionWatcher = createVmRejectionWatcher(e, SWALLOWED_REJECTION_WARNING);
-  return (h) => vmRejectionWatcher(n(h));
+function wrapVmGlobal(context) {
+  let wrapper = VM_HOST_FN_WRAPPER(context);
+  let vmRejectionWatcher = createVmRejectionWatcher(context, SWALLOWED_REJECTION_WARNING);
+  return (fn) => vmRejectionWatcher(wrapper(fn));
 }
 //@ chunk-41w44bgm.js:22605-23538 placement
 /**
  * 把 VM 上下文中的同步全局（log/phase/setTimeout/clearTimeout、console 各方法、budget 的 spent/remaining）用封装函数 n 包一层并以 VM 内冻结对象替换；缺少任一项时抛错。
  */
 function sealSyncGlobalsInVM(context, wrapCallable) {
-  let r = context;
-  let requireGlobal = (he, ke) => {
-    let te = r[he];
-    if (typeof te !== ke || te === null)
+  let vmContext = context;
+  let requireGlobal = (name, expectedType) => {
+    let value = vmContext[name];
+    if (typeof value !== expectedType || value === null)
       throw TypeError(
         "sealSyncGlobalsInVM: the context lacks one of log, phase, setTimeout, clearTimeout, console, budget \u2014 call it only on a context built by createWorkflowContext or createChildRealm",
       );
-    return te;
+    return value;
   };
-  let replaceGlobal = (he, value) =>
-    Object.defineProperty(context, he, {
-      ...Object.getOwnPropertyDescriptor(context, he),
+  let replaceGlobal = (name, value) =>
+    Object.defineProperty(context, name, {
+      ...Object.getOwnPropertyDescriptor(context, name),
       value,
     });
-  for (let he of ["log", "phase", "setTimeout", "clearTimeout"])
-    replaceGlobal(he, wrapCallable(requireGlobal(he, "function")));
+  for (let name of ["log", "phase", "setTimeout", "clearTimeout"])
+    replaceGlobal(name, wrapCallable(requireGlobal(name, "function")));
   let { vmConsole, vmBudget } = vmModule_2.runInContext(
     `((freeze) => ({
       vmConsole: (log, info, debug, error, warn) => freeze({ __proto__: null, log, info, debug, error, warn }),
@@ -77,48 +77,51 @@ function sealSyncGlobalsInVM(context, wrapCallable) {
  * 为工作流 VM 创建 console 对象：把参数格式化成字符串（对象经 sanitize 后 JSON 化，超长数组给提示），error/warn 加前缀，经回调输出。
  */
 function createVmConsole(
-  e,
-  n = {
-    sanitize: (r) => (r === null || (typeof r !== "object" && typeof r !== "function") ? r : {}),
-    toStr: (r) => describeBoundaryValue(r),
+  emit,
+  bridges = {
+    sanitize: (value) =>
+      value === null || (typeof value !== "object" && typeof value !== "function") ? value : {},
+    toStr: (value) => describeBoundaryValue(value),
   },
 ) {
-  function r(T) {
-    return T.map((y) => {
-      if (typeof y === "string") return y;
-      if (y === null || (typeof y !== "object" && typeof y !== "function"))
+  function formatArgs(args) {
+    return args
+      .map((arg) => {
+        if (typeof arg === "string") return arg;
+        if (arg === null || (typeof arg !== "object" && typeof arg !== "function"))
+          try {
+            return jsonStringify(arg);
+          } catch {
+            return `[${typeof arg}]`;
+          }
+        let fallbackText;
         try {
-          return jsonStringify(y);
-        } catch {
-          return `[${typeof y}]`;
+          let json = jsonStringify(bridges.sanitize(arg));
+          if (json !== undefined && json !== "{}") return json;
+          fallbackText = json ?? `[${typeof arg}]`;
+        } catch (error) {
+          let isTooDeep = false;
+          try {
+            let message = error?.message;
+            isTooDeep = typeof message === "string" && message.includes("exceeds the maximum");
+          } catch {}
+          return isTooDeep
+            ? `[${typeof arg}: array exceeds the ${CLONE_DEPTH_THRESHOLD}-element logging cap]`
+            : `[${typeof arg}]`;
         }
-      let A;
-      try {
-        let j = jsonStringify(n.sanitize(y));
-        if (j !== undefined && j !== "{}") return j;
-        A = j ?? `[${typeof y}]`;
-      } catch (error) {
-        let he = false;
-        try {
-          let message = error?.message;
-          he = typeof message === "string" && message.includes("exceeds the maximum");
-        } catch {}
-        return he
-          ? `[${typeof y}: array exceeds the ${CLONE_DEPTH_THRESHOLD}-element logging cap]`
-          : `[${typeof y}]`;
-      }
-      let L = n.toStr(y);
-      return L === "[object Object]" || L === "<unprintable>" ? A : L;
-    }).join(" ");
+        let text = bridges.toStr(arg);
+        return text === "[object Object]" || text === "<unprintable>" ? fallbackText : text;
+      })
+      .join(" ");
   }
-  let h = (T) => sanitizeAndLogError((...y) => e(T + r(y)));
+  let makeLogger = (prefix) => sanitizeAndLogError((...args) => emit(prefix + formatArgs(args)));
   return {
     __proto__: null,
-    log: h(""),
-    info: h(""),
-    debug: h(""),
-    error: h("[error] "),
-    warn: h("[warn] "),
+    log: makeLogger(""),
+    info: makeLogger(""),
+    debug: makeLogger(""),
+    error: makeLogger("[error] "),
+    warn: makeLogger("[warn] "),
   };
 }
 export { createVmConsole, sealSyncGlobalsInVM, wrapVmGlobal };

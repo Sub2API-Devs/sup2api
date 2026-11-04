@@ -8,7 +8,35 @@
  * pieces: chunk-4121qate.js (1), chunk-hm0ce8vc.js (1), chunk-hwmsct5x.js (1), chunk-seqjkch8.js (13), chunk-xx1vmpsq.js (2)
  * attribution: fingerprint 8, placement 5, layout 3, sole-consumer 2
  */
-import { init_react_production, y, ce, fo, Qr } from "../../vendor/react/cjs/react.production.js";
+import { describeThrownValue, createSealedError } from "../plugins/functionHooks/vm/vmRealm.js";
+import { jsonStringify } from "../utils/slowOperations.js";
+import { isSessionsToken } from "../services/oauth/sessionsBearerHooks.js";
+import { isEssentialTrafficOnly } from "../utils/privacyLevel.js";
+import { isPolicyAllowed } from "../services/policyLimits/policyEvidence.js";
+import {
+  buildFeedbackPayload,
+  TRANSCRIPT_FIELDS,
+  SUBAGENT_TRANSCRIPT_FIELDS,
+  MAX_PAYLOAD_PART_COUNT,
+  redactError,
+  classifyFeedbackError,
+  orgRefusalError,
+  credentialRefusalMessage,
+  serverStatusSuffix,
+} from "../services/feedback/submitFeedback.js";
+import { withOAuth401Retry } from "../utils/http.js";
+import { apiClient } from "../services/routines/routinesApi.js";
+import { logForDebugging } from "../utils/debug.js";
+import { isCancel, isAxiosError } from "../../vendor/axios/dist/esm/axios.js";
+import { isExpectedApiError, errorMessage, isAbortError } from "../utils/errors.js";
+import { redactSecrets } from "../services/teamMemorySync/secretScanner.js";
+import {
+  init_react_production,
+  useState,
+  useCallback,
+  suspenseTypeExport,
+  use,
+} from "../../vendor/react/cjs/react.production.js";
 import { createStore } from "../state/store.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { useHost } from "../context/session.js";
@@ -22,17 +50,6 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growt
 import { checkProductFeedbackAllowed } from "../commands/feedback/feedbackPolicy.js";
 import { logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { saveFeedbackBundle, postFeedbackSubmission } from "../services/feedback/feedbackBundle.js";
-import {
-  orgRefusalError,
-  credentialRefusalMessage,
-  serverStatusSuffix,
-  buildFeedbackPayload,
-  TRANSCRIPT_FIELDS,
-  SUBAGENT_TRANSCRIPT_FIELDS,
-  MAX_PAYLOAD_PART_COUNT,
-  redactError,
-  classifyFeedbackError,
-} from "../services/feedback/submitFeedback.js";
 import { useKeybinding } from "../keybindings/useKeybinding.js";
 import { openValidatedUrlSucceeded } from "../utils/browser.js";
 import {
@@ -52,30 +69,184 @@ import { ModelSelector } from "./agents/ModelSelector.js";
 import { env } from "../utils/env.js";
 import { StatusIcon } from "./design-system/StatusIcon.js";
 import { truncateToLength, getFirstLine } from "../utils/stringUtils.js";
-import { redactSecrets } from "../services/teamMemorySync/secretScanner.js";
 import { queryHaikuWithFallback } from "../services/api/claude.js";
 import { asSystemPrompt } from "../utils/systemPromptType.js";
 import { mainAgentContext } from "../utils/agentContext.js";
 import { startsWithApiErrorPrefix } from "../services/api/errors.js";
-import { isAbortError, isExpectedApiError, errorMessage } from "../utils/errors.js";
-import { logForDebugging } from "../utils/debug.js";
 import { logError } from "../utils/log.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
-import { isSessionsToken } from "../services/oauth/sessionsBearerHooks.js";
-import { isEssentialTrafficOnly } from "../utils/privacyLevel.js";
-import { isPolicyAllowed } from "../services/policyLimits/policyEvidence.js";
-import { withOAuth401Retry } from "../utils/http.js";
-import { apiClient } from "../services/routines/routinesApi.js";
-import { isCancel, isAxiosError } from "../../vendor/axios/dist/esm/axios.js";
-import { describeThrownValue, createSealedError } from "../plugins/functionHooks/vm/vmRealm.js";
-import { jsonStringify } from "../utils/slowOperations.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-hwmsct5x.js:197534-197606 fingerprint = GITHUB_ISSUES_REPO_URL (0.432)
+function GITHUB_ISSUES_REPO_URL() {
+  return "https://github.com/anthropics/claude-code/issues";
+}
+//@ chunk-4121qate.js:62271-62421 fingerprint = sanitizeAndLogError (0.507)
+function sanitizeAndLogError(err) {
+  let wrapped = (...args) => {
+    try {
+      return err(...args);
+    } catch (error) {
+      let { msg, name, stack } = describeThrownValue(error);
+      throw createSealedError(msg, name, stack);
+    }
+  };
+  Object.setPrototypeOf(wrapped, null);
+  return wrapped;
+}
+//@ chunk-hm0ce8vc.js:67174-67301 fingerprint = loadRawTranscriptJsonl (0.519)
+function loadRawTranscriptJsonl(message) {
+  let json = jsonStringify(message) ?? String(message);
+  let byteLength = Buffer.byteLength(json, "utf8");
+  return byteLength <= 200 ? json : `${json.slice(0, 200)}\u2026 (+${byteLength - 200} bytes)`;
+}
+//@ chunk-xx1vmpsq.js:18905-18966 sole-consumer
+function requestIdHeader(headers) {
+  let requestId = headers?.["request-id"];
+  return isSessionsToken(requestId) ? requestId : undefined;
+}
+//@ chunk-xx1vmpsq.js:18966-20766 fingerprint = submitFeedback (0.33)
+/**
+ * 提交反馈到 /api/claude_cli_feedback（检查策略 allow_product_feedback 与大小），返回 feedback ID。
+ */
+async function submitFeedback(draft, signal, sessionIdForMessage, credentials) {
+  if (isEssentialTrafficOnly())
+    return {
+      success: false,
+    };
+  if (!isPolicyAllowed("allow_product_feedback"))
+    return {
+      success: false,
+      failureReason: "policy_blocked",
+    };
+  let attempts = 0;
+  try {
+    let feedbackPayload = buildFeedbackPayload(
+      draft,
+      TRANSCRIPT_FIELDS,
+      SUBAGENT_TRANSCRIPT_FIELDS,
+      sessionIdForMessage === undefined
+        ? undefined
+        : {
+            extraOuterFields: {
+              session_id: sessionIdForMessage,
+            },
+          },
+    );
+    attempts = feedbackPayload.length;
+    if (attempts > MAX_PAYLOAD_PART_COUNT)
+      return {
+        success: false,
+        payloadTooLarge: true,
+        failureReason: "payload_too_large_precheck",
+      };
+    let report = await withOAuth401Retry(
+      () =>
+        apiClient.post("/api/claude_cli_feedback", feedbackPayload, {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          timeout: 30000,
+          signal,
+          credentials,
+          validateStatus: (result) => result !== 401,
+        }),
+      {
+        gateToSessionOAuthCredential: true,
+        credentials,
+      },
+    );
+    if (!report.ok)
+      switch (report.reason) {
+        case "essential-traffic-only":
+          return {
+            success: false,
+          };
+        case "data-residency":
+          return {
+            success: false,
+            failureReason: "data_residency",
+          };
+        case "no-auth":
+          return {
+            success: false,
+            failureReason: "auth_error",
+          };
+      }
+    if (report.status === 200 && report.data?.feedback_id)
+      return {
+        success: true,
+        feedbackId: report.data.feedback_id,
+      };
+    let requestId = requestIdHeader(report.response.headers);
+    if (report.status === 200) {
+      redactError(Error("Failed to submit feedback: request did not return feedback_id"));
+      return {
+        success: false,
+        failureReason: "missing_feedback_id",
+        requestId,
+      };
+    }
+    if (report.status === 413)
+      return {
+        success: false,
+        payloadTooLarge: true,
+        failureReason: "payload_too_large_413",
+        statusCode: 413,
+        requestId,
+      };
+    let success = "Failed to submit feedback:" + report.status;
+    if (report.status === 401 || report.status === 403 || report.status === 429) logForDebugging(success);
+    else redactError(Error(success));
+    return {
+      ...classifyFeedbackError(report.status, report.data),
+      requestId,
+    };
+  } catch (err) {
+    if (isCancel(err))
+      return {
+        success: false,
+      };
+    if (err instanceof RangeError)
+      return {
+        success: false,
+        payloadTooLarge: true,
+        failureReason: "payload_too_large_range_error",
+      };
+    if (isAxiosError(err) && err.code === "ECONNABORTED" && attempts > MAX_PAYLOAD_PART_COUNT / 8)
+      return {
+        success: false,
+        payloadTooLarge: true,
+        failureReason: "payload_too_large_timeout",
+      };
+    if (isExpectedApiError(err)) logForDebugging(redactSecrets(errorMessage(err)));
+    else redactError(err);
+    if (isAxiosError(err) && err.response)
+      return {
+        ...classifyFeedbackError(err.response.status, err.response.data),
+        requestId: requestIdHeader(err.response.headers),
+      };
+    return {
+      success: false,
+      failureReason: isAxiosError(err) && err.code === "ECONNABORTED" ? "timeout" : "network_error",
+    };
+  }
+}
 //@ chunk-seqjkch8.js:1689-1693 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-seqjkch8.js:1689", () => {
+  init_react_production();
+});
 //@ chunk-seqjkch8.js:1693-1697 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-seqjkch8.js:1693", () => {
+  init_react_production();
+});
 //@ chunk-seqjkch8.js:1697-1701 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-seqjkch8.js:1697", () => {
+  init_react_production();
+});
 //@ chunk-seqjkch8.js:1701-3098 placement
 /**
  * /feedback 的文案常量：记录范围说明与选项、记录缺失/不完整/过大的提示、post/bundle/share 三种模式的同意与提交文案。
@@ -163,46 +334,46 @@ function createFeedbackStatusStore(mode) {
         referenceId,
       }));
     },
-    save(referenceId, bundlePath, c) {
+    save(referenceId, bundlePath, statusStore) {
       store.setState(() => ({
         status: "saved",
         referenceId,
         bundlePath,
-        ...(c !== undefined && {
-          transcriptProblem: c,
+        ...(statusStore !== undefined && {
+          transcriptProblem: statusStore,
         }),
       }));
     },
-    fail(reason, k) {
-      store.setState((c) =>
-        c.status === "delivered" || c.status === "saved"
-          ? c
+    fail(reason, isFinal) {
+      store.setState((previous) =>
+        previous.status === "delivered" || previous.status === "saved"
+          ? previous
           : {
               status: "failed",
               reason,
-              ...(k === true && {
-                final: k,
+              ...(isFinal === true && {
+                final: isFinal,
               }),
             },
       );
     },
     abandon() {
-      store.setState((h) =>
-        h.status === "sending"
+      store.setState((previous) =>
+        previous.status === "sending"
           ? {
               status: "none",
             }
-          : h,
+          : previous,
       );
     },
   };
 }
 //@ chunk-seqjkch8.js:3715-3773 layout
-async function runThenAbandon(handleCancel, o) {
+async function runThenAbandon(handleCancel, tracker) {
   try {
     await handleCancel();
   } finally {
-    o.abandon();
+    tracker.abandon();
   }
 }
 //@ chunk-seqjkch8.js:3773-12089 fingerprint = Feedback (0.317)
@@ -225,67 +396,77 @@ function Feedback({
 }) {
   let { storageV5, credentials } = useTheme_2();
   let sanitizedErrors = useHost();
-  let [Ce, z] = y("userInput");
-  let [cursorOffset, setCursorOffset] = y(0);
-  let [description, setDescription] = y(initialDescription ?? "");
-  let [Gt, Ue] = y(null);
-  let [Vt, qt] = y(null);
-  let [Xt, Jt] = y(null);
-  let [xe, re] = y(null);
-  let [Kt, ve] = y(false);
-  let [N] = y(() => send ?? createFeedbackStatusStore(mode));
-  let lastAssistantMessage = useStoreSelector(N);
-  let [Zt, ft] = y(false);
-  let [Qt, eo] = y(null);
-  let D = Qt ?? lastAssistantMessage;
-  let V = mode !== "share" && !Zt && D.status !== "none";
-  let to = V && D.status !== "failed";
-  let oo = D.status === "sending" ? "submitting" : "done";
-  let F = to ? oo : Ce;
-  let reason = V && D.status === "failed" ? D.reason : null;
-  let U = xe ?? reason;
-  let fe = xe !== null ? Kt : V && D.status === "failed" && D.final === true;
-  let le = V && (D.status === "delivered" || D.status === "saved") ? D.referenceId : Gt;
-  let ge = V && D.status === "saved" ? D.bundlePath : Vt;
-  let Fe = V && D.status === "saved" ? (D.transcriptProblem ?? null) : Xt;
-  let he = isRemoteSessionAvailable();
-  let ht = he ? (getRemoteCaps()?.sessionId ?? null) : null;
-  let [so] = y(() =>
-    he
+  let [phase, setPhase] = useState("userInput");
+  let [cursorOffset, setCursorOffset] = useState(0);
+  let [description, setDescription] = useState(initialDescription ?? "");
+  let [feedbackId, setFeedbackId] = useState(null);
+  let [bundlePath, setBundlePath] = useState(null);
+  let [transcriptProblem, setTranscriptProblem] = useState(null);
+  let [errorText, setErrorText] = useState(null);
+  let [isPolicyError, setIsPolicyError] = useState(false);
+  let [statusStore] = useState(() => send ?? createFeedbackStatusStore(mode));
+  let lastAssistantMessage = useStoreSelector(statusStore);
+  let [hasTyped, setHasTyped] = useState(false);
+  let [staleStatus, setStaleStatus] = useState(null);
+  let currentStatus = staleStatus ?? lastAssistantMessage;
+  let hasDeliveryStatus = mode !== "share" && !hasTyped && currentStatus.status !== "none";
+  let isDelivered = hasDeliveryStatus && currentStatus.status !== "failed";
+  let submitPhase = currentStatus.status === "sending" ? "submitting" : "done";
+  let activePhase = isDelivered ? submitPhase : phase;
+  let reason = hasDeliveryStatus && currentStatus.status === "failed" ? currentStatus.reason : null;
+  let displayError = errorText ?? reason;
+  let isErrorFinal =
+    errorText !== null
+      ? isPolicyError
+      : hasDeliveryStatus && currentStatus.status === "failed" && currentStatus.final === true;
+  let shownFeedbackId =
+    hasDeliveryStatus && (currentStatus.status === "delivered" || currentStatus.status === "saved")
+      ? currentStatus.referenceId
+      : feedbackId;
+  let shownBundlePath =
+    hasDeliveryStatus && currentStatus.status === "saved" ? currentStatus.bundlePath : bundlePath;
+  let shownTranscriptProblem =
+    hasDeliveryStatus && currentStatus.status === "saved"
+      ? (currentStatus.transcriptProblem ?? null)
+      : transcriptProblem;
+  let isRemoteSession = isRemoteSessionAvailable();
+  let remoteSessionId = isRemoteSession ? (getRemoteCaps()?.sessionId ?? null) : null;
+  let [gitStatePromise] = useState(() =>
+    isRemoteSession
       ? Promise.resolve(null)
       : getIsGit()
           .then((isGit) => (isGit ? getGitState() : null))
           .catch(() => null),
   );
-  let [bt, ro] = y(null);
-  let [be, ao] = y("session");
-  let teammateTranscripts = useAppState((f) => f.transcripts);
+  let [issueBody, setIssueBody] = useState(null);
+  let [transcriptScope, setTranscriptScope] = useState("session");
+  let teammateTranscripts = useAppState((appState) => appState.transcripts);
   let textInputColumns = useTerminalSize().columns - 4;
-  let Ho = nullStub();
+  let emptyStub = nullStub();
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_amber_lynx", false);
-  let handleCancel = ce(async () => {
-    z("submitting");
-    re(null);
-    Ue(null);
-    N.start();
-    let f = (input, I = false) => {
-      re(input);
-      ve(I);
-      z("userInput");
-      N.fail(input, I);
+  let handleCancel = useCallback(async () => {
+    setPhase("submitting");
+    setErrorText(null);
+    setFeedbackId(null);
+    statusStore.start();
+    let failWith = (input, isPolicyFailure = false) => {
+      setErrorText(input);
+      setIsPolicyError(isPolicyFailure);
+      setPhase("userInput");
+      statusStore.fail(input, isPolicyFailure);
     };
     if (mode === "bundle") {
-      let K = checkProductFeedbackAllowed(command);
-      if (K !== null) {
+      let policyBlock = checkProductFeedbackAllowed(command);
+      if (policyBlock !== null) {
         logFeatureBad("feedback_bundle", "disabled_at_save");
-        f(K);
+        failWith(policyBlock);
         return;
       }
-      let I = await saveFeedbackBundle({
+      let bundleResult = await saveFeedbackBundle({
         messages,
         description,
         surface: "cli",
-        scope: be,
+        scope: transcriptScope,
         backgroundTasks,
         transcripts: teammateTranscripts,
         signal: abortController.signal,
@@ -295,21 +476,21 @@ function Feedback({
         host: sanitizedErrors,
       });
       if (abortController.signal.aborted) return;
-      if (I.success) {
-        Ue(I.bundleId);
-        qt(I.zipPath);
-        Jt(I.transcriptProblem ?? null);
-        z("done");
-        N.save(I.bundleId, I.zipPath, I.transcriptProblem);
-      } else f(`Couldn't save the feedback bundle to disk: ${I.error}`);
+      if (bundleResult.success) {
+        setFeedbackId(bundleResult.bundleId);
+        setBundlePath(bundleResult.zipPath);
+        setTranscriptProblem(bundleResult.transcriptProblem ?? null);
+        setPhase("done");
+        statusStore.save(bundleResult.bundleId, bundleResult.zipPath, bundleResult.transcriptProblem);
+      } else failWith(`Couldn't save the feedback bundle to disk: ${bundleResult.error}`);
       return;
     }
-    let [A, po] = await Promise.all([
+    let [postResult, generatedTitle] = await Promise.all([
       postFeedbackSubmission({
         messages,
         description,
         surface: "cli",
-        scope: be,
+        scope: transcriptScope,
         backgroundTasks,
         transcripts: teammateTranscripts,
         signal: abortController.signal,
@@ -323,29 +504,32 @@ function Feedback({
         : generateTitle(description, abortController.signal, credentials),
     ]);
     if (abortController.signal.aborted) return;
-    ro(po);
-    if (A.success) {
-      Ue(A.feedbackId);
-      z("done");
-      N.deliver(A.feedbackId);
+    setIssueBody(generatedTitle);
+    if (postResult.success) {
+      setFeedbackId(postResult.feedbackId);
+      setPhase("done");
+      statusStore.deliver(postResult.feedbackId);
     } else {
-      let K = orgRefusalError(A);
-      let I = K ?? credentialRefusalMessage(A);
-      if (I !== undefined) f(I, K !== undefined && A.refusal?.reportContent !== true);
-      else if (A.failureReason === "auth_error")
-        f("Couldn't send feedback: not signed in. Run /login, then retry.");
-      else if (A.failureReason === "policy_blocked")
-        f(checkProductFeedbackAllowed(command) ?? "Feedback is disabled by your organization's policy.");
+      let orgRefusal = orgRefusalError(postResult);
+      let refusalMessage = orgRefusal ?? credentialRefusalMessage(postResult);
+      if (refusalMessage !== undefined)
+        failWith(refusalMessage, orgRefusal !== undefined && postResult.refusal?.reportContent !== true);
+      else if (postResult.failureReason === "auth_error")
+        failWith("Couldn't send feedback: not signed in. Run /login, then retry.");
+      else if (postResult.failureReason === "policy_blocked")
+        failWith(
+          checkProductFeedbackAllowed(command) ?? "Feedback is disabled by your organization's policy.",
+        );
       else {
-        let mo =
-          serverStatusSuffix(A) ??
-          (A.failureReason === "timeout"
+        let statusSuffix =
+          serverStatusSuffix(postResult) ??
+          (postResult.failureReason === "timeout"
             ? " (request timed out)"
-            : A.failureReason === "network_error"
+            : postResult.failureReason === "network_error"
               ? " (couldn't reach the service)"
               : "");
-        f(
-          `Couldn't send feedback${mo}. If it keeps failing, you can file at ${GITHUB_ISSUES_REPO_URL()} instead.`,
+        failWith(
+          `Couldn't send feedback${statusSuffix}. If it keeps failing, you can file at ${GITHUB_ISSUES_REPO_URL()} instead.`,
         );
       }
     }
@@ -357,56 +541,59 @@ function Feedback({
     teammateTranscripts,
     abortController,
     mode,
-    be,
+    transcriptScope,
     storageV5,
     credentials,
     command,
     wholeTranscript,
-    N,
+    statusStore,
     sanitizedErrors,
   ]);
-  let lo = ce(() => runThenAbandon(handleCancel, N), [handleCancel, N]);
-  let Le = ce(() => {
-    if (V) {
-      let snapshot = N.getSnapshot();
-      eo((A) => A ?? snapshot);
+  let submitConsent = useCallback(
+    () => runThenAbandon(handleCancel, statusStore),
+    [handleCancel, statusStore],
+  );
+  let handleCancelKey = useCallback(() => {
+    if (hasDeliveryStatus) {
+      let snapshot = statusStore.getSnapshot();
+      setStaleStatus((previous) => previous ?? snapshot);
     }
     abortController.abort();
     onDone("Feedback / bug report cancelled", {
       display: "system",
     });
-  }, [onDone, abortController, N, V]);
-  let jo = ce(() => {
-    z("done");
+  }, [onDone, abortController, statusStore, hasDeliveryStatus]);
+  let finishDone = useCallback(() => {
+    setPhase("done");
   }, []);
-  let Wo = ce((f) => {
-    re(f);
-    ve(false);
-    z("userInput");
+  let dismissError = useCallback((message) => {
+    setErrorText(message);
+    setIsPolicyError(false);
+    setPhase("userInput");
   }, []);
-  useKeybinding("confirm:no", Le, {
+  useKeybinding("confirm:no", handleCancelKey, {
     context: "Settings",
-    isActive: F === "userInput",
+    isActive: activePhase === "userInput",
   });
-  let co = F === "done" || (U && F !== "userInput");
-  function uo(event) {
+  let isDoneLocked = activePhase === "done" || (displayError && activePhase !== "userInput");
+  function handleKeyDown(event) {
     if (event.ctrl || event.meta) return;
-    if (F === "done") {
+    if (activePhase === "done") {
       event.preventDefault();
       if (mode === "share") return;
-      if (!featureValue_CACHED_MAY_BE_STALE && event.key === "return" && bt) {
-        let issueUrl = createGitHubIssueUrl(le ?? "", bt, description);
+      if (!featureValue_CACHED_MAY_BE_STALE && event.key === "return" && issueBody) {
+        let issueUrl = createGitHubIssueUrl(shownFeedbackId ?? "", issueBody, description);
         openValidatedUrlSucceeded(issueUrl);
       }
-      if (U)
+      if (displayError)
         onDone("Error submitting feedback / bug report", {
           display: "system",
         });
-      else if (mode === "bundle" && ge)
+      else if (mode === "bundle" && shownBundlePath)
         onDone(
-          Fe === null
-            ? `Feedback bundle saved to \`${ge}\``
-            : `Feedback bundle saved to \`${ge}\`. ${TRANSCRIPT_PROBLEM_NOTES[Fe]}`,
+          shownTranscriptProblem === null
+            ? `Feedback bundle saved to \`${shownBundlePath}\``
+            : `Feedback bundle saved to \`${shownBundlePath}\`. ${TRANSCRIPT_PROBLEM_NOTES[shownTranscriptProblem]}`,
           {
             display: "system",
           },
@@ -417,37 +604,37 @@ function Feedback({
         });
       return;
     }
-    if (U && F !== "userInput") {
+    if (displayError && activePhase !== "userInput") {
       event.preventDefault();
       onDone("Error submitting feedback / bug report", {
         display: "system",
       });
       return;
     }
-    if (F === "consent") {
+    if (activePhase === "consent") {
       if (event.key === "left") {
         event.preventDefault();
-        z(mode === "share" || he ? "userInput" : "scope");
+        setPhase(mode === "share" || isRemoteSession ? "userInput" : "scope");
         return;
       }
       if (event.key === "return" || event.key === " ") {
         event.preventDefault();
-        lo();
+        submitConsent();
       }
     }
   }
   return jsxProd_default(FocusColumn, {
-    onKeyDown: uo,
+    onKeyDown: handleKeyDown,
     children: jsxProd_default_2(Dialog, {
       title: "Submit feedback / bug report",
-      onCancel: Le,
-      isCancelActive: F !== "userInput" && !co,
-      hideInputGuide: F === "done",
+      onCancel: handleCancelKey,
+      isCancelActive: activePhase !== "userInput" && !isDoneLocked,
+      hideInputGuide: activePhase === "done",
       inputGuide:
-        F === "userInput"
+        activePhase === "userInput"
           ? jsxProd_default_2(Byline, {
               children: [
-                !fe &&
+                !isErrorFinal &&
                   jsxProd_default(KeyboardShortcutHint, {
                     chord: "enter",
                     action: "continue",
@@ -460,7 +647,7 @@ function Feedback({
                 }),
               ],
             })
-          : F === "scope"
+          : activePhase === "scope"
             ? jsxProd_default_2(Byline, {
                 children: [
                   jsxProd_default(KeyboardShortcutHint, {
@@ -475,7 +662,7 @@ function Feedback({
                   }),
                 ],
               })
-            : F === "consent"
+            : activePhase === "consent"
               ? jsxProd_default_2(Byline, {
                   children: [
                     jsxProd_default(KeyboardShortcutHint, {
@@ -496,7 +683,7 @@ function Feedback({
                 })
               : null,
       children: [
-        F === "userInput" &&
+        activePhase === "userInput" &&
           jsxProd_default_2(Box, {
             flexDirection: "column",
             gap: 1,
@@ -508,25 +695,25 @@ function Feedback({
                 value: description,
                 onChange: (value) => {
                   setDescription(value);
-                  if (fe && xe === null && U !== null) {
-                    re(U);
-                    ve(true);
+                  if (isErrorFinal && errorText === null && displayError !== null) {
+                    setErrorText(displayError);
+                    setIsPolicyError(true);
                   }
-                  ft(true);
-                  if (U && !fe) re(null);
+                  setHasTyped(true);
+                  if (displayError && !isErrorFinal) setErrorText(null);
                 },
                 columns: textInputColumns,
                 clearOnSubmit: false,
-                onSubmit: (f) => {
-                  if (fe) return;
-                  ft(true);
-                  if (mode !== "share" && f.trim() === "") {
-                    re("Please describe the issue before submitting.");
-                    ve(false);
+                onSubmit: (submittedText) => {
+                  if (isErrorFinal) return;
+                  setHasTyped(true);
+                  if (mode !== "share" && submittedText.trim() === "") {
+                    setErrorText("Please describe the issue before submitting.");
+                    setIsPolicyError(false);
                     return;
                   }
-                  re(null);
-                  z(mode === "share" || he ? "consent" : "scope");
+                  setErrorText(null);
+                  setPhase(mode === "share" || isRemoteSession ? "consent" : "scope");
                 },
                 onExitMessage: (exitState) => {
                   if (exitState) {
@@ -541,15 +728,15 @@ function Feedback({
                 showCursor: true,
                 focus: true,
               }),
-              U &&
+              displayError &&
                 jsxProd_default_2(Box, {
                   flexDirection: "column",
                   gap: 1,
                   children: [
                     jsxProd_default(ErrorText, {
-                      error: U,
+                      error: displayError,
                     }),
-                    !fe &&
+                    !isErrorFinal &&
                       jsxProd_default(Text, {
                         dimColor: true,
                         children: "Edit and press Enter to retry, or Esc to cancel",
@@ -558,7 +745,7 @@ function Feedback({
                 }),
             ],
           }),
-        F === "scope" &&
+        activePhase === "scope" &&
           jsxProd_default_2(Box, {
             flexDirection: "column",
             gap: 1,
@@ -568,16 +755,16 @@ function Feedback({
               }),
               jsxProd_default(ModelSelector, {
                 options: TRANSCRIPT_SCOPE_OPTIONS,
-                defaultFocusValue: be,
+                defaultFocusValue: transcriptScope,
                 onChange: (value) => {
-                  ao(value);
-                  z("consent");
+                  setTranscriptScope(value);
+                  setPhase("consent");
                 },
-                onCancel: Le,
+                onCancel: handleCancelKey,
               }),
             ],
           }),
-        F === "consent" &&
+        activePhase === "consent" &&
           jsxProd_default_2(Box, {
             flexDirection: "column",
             children: [
@@ -628,7 +815,7 @@ function Feedback({
                     ],
                   }),
                   mode !== "share" &&
-                    he &&
+                    isRemoteSession &&
                     jsxProd_default_2(Text, {
                       children: [
                         "- Remote workspace:",
@@ -636,17 +823,17 @@ function Feedback({
                         jsxProd_default_2(Text, {
                           dimColor: true,
                           children: [
-                            ht ? `session ${ht}; ` : "",
+                            remoteSessionId ? `session ${remoteSessionId}; ` : "",
                             "git metadata is not collected from this machine",
                           ],
                         }),
                       ],
                     }),
                   mode !== "share" &&
-                    jsxProd_default(fo, {
+                    jsxProd_default(suspenseTypeExport, {
                       fallback: null,
                       children: jsxProd_default(GitMetadataLine, {
-                        gitStatePromise: so,
+                        gitStatePromise,
                       }),
                     }),
                   jsxProd_default_2(Text, {
@@ -658,7 +845,7 @@ function Feedback({
                         children:
                           mode === "share"
                             ? TRANSCRIPT_SCOPE_DESCRIPTIONS.session
-                            : TRANSCRIPT_SCOPE_DESCRIPTIONS[be],
+                            : TRANSCRIPT_SCOPE_DESCRIPTIONS[transcriptScope],
                       }),
                     ],
                   }),
@@ -686,7 +873,7 @@ function Feedback({
               }),
             ],
           }),
-        F === "submitting" &&
+        activePhase === "submitting" &&
           mode !== "share" &&
           jsxProd_default(Box, {
             flexDirection: "row",
@@ -695,7 +882,7 @@ function Feedback({
               children: FEEDBACK_MODE_COPY[mode].submitting,
             }),
           }),
-        F === "done" &&
+        activePhase === "done" &&
           mode === "bundle" &&
           jsxProd_default_2(Box, {
             flexDirection: "column",
@@ -710,7 +897,7 @@ function Feedback({
                   "Feedback bundle saved",
                 ],
               }),
-              ge &&
+              shownBundlePath &&
                 jsxProd_default_2(Box, {
                   marginTop: 1,
                   flexDirection: "column",
@@ -720,7 +907,7 @@ function Feedback({
                         "Bundle: ",
                         jsxProd_default(Text, {
                           dimColor: true,
-                          children: ge,
+                          children: shownBundlePath,
                         }),
                       ],
                     }),
@@ -729,16 +916,16 @@ function Feedback({
                         "Reference ID: ",
                         jsxProd_default(Text, {
                           dimColor: true,
-                          children: le,
+                          children: shownFeedbackId,
                         }),
                       ],
                     }),
-                    Fe &&
+                    shownTranscriptProblem &&
                       jsxProd_default(Box, {
                         marginTop: 1,
                         children: jsxProd_default(Text, {
                           wrap: "wrap",
-                          children: TRANSCRIPT_PROBLEM_NOTES[Fe],
+                          children: TRANSCRIPT_PROBLEM_NOTES[shownTranscriptProblem],
                         }),
                       }),
                     jsxProd_default(Box, {
@@ -760,15 +947,15 @@ function Feedback({
               }),
             ],
           }),
-        F === "done" &&
+        activePhase === "done" &&
           mode === "post" &&
-          (featureValue_CACHED_MAY_BE_STALE || V
+          (featureValue_CACHED_MAY_BE_STALE || hasDeliveryStatus
             ? jsxProd_default_2(Box, {
                 flexDirection: "column",
                 children: [
-                  U
+                  displayError
                     ? jsxProd_default(ErrorText, {
-                        error: U,
+                        error: displayError,
                       })
                     : jsxProd_default_2(Text, {
                         color: "success",
@@ -780,7 +967,7 @@ function Feedback({
                           "Feedback sent",
                         ],
                       }),
-                  le &&
+                  shownFeedbackId &&
                     jsxProd_default_2(Fragment, {
                       children: [
                         jsxProd_default(Box, {
@@ -790,7 +977,7 @@ function Feedback({
                               "Reference ID: ",
                               jsxProd_default(Text, {
                                 dimColor: true,
-                                children: le,
+                                children: shownFeedbackId,
                               }),
                             ],
                           }),
@@ -818,18 +1005,18 @@ function Feedback({
             : jsxProd_default_2(Box, {
                 flexDirection: "column",
                 children: [
-                  U
+                  displayError
                     ? jsxProd_default(ErrorText, {
-                        error: U,
+                        error: displayError,
                       })
                     : jsxProd_default(Text, {
                         color: "success",
                         children: "Thank you for your report!",
                       }),
-                  le &&
+                  shownFeedbackId &&
                     jsxProd_default_2(Text, {
                       dimColor: true,
-                      children: ["Feedback ID: ", le],
+                      children: ["Feedback ID: ", shownFeedbackId],
                     }),
                   jsxProd_default(Box, {
                     marginTop: 1,
@@ -857,11 +1044,11 @@ function Feedback({
   });
 }
 //@ chunk-seqjkch8.js:12089-13311 fingerprint = createGitHubIssueUrl (0.585)
-function createGitHubIssueUrl(d, o, description) {
-  let p = truncateToLength(redactSecrets(o), MAX_ISSUE_TITLE_CHARS);
+function createGitHubIssueUrl(feedbackId, errorsText, description) {
+  let shortTitle = truncateToLength(redactSecrets(errorsText), MAX_ISSUE_TITLE_CHARS);
   let sanitizedTitle = redactSecrets(description);
-  let k = nullStub();
-  let errorSuffix = `${GITHUB_ISSUES_REPO_URL()}/new?title=${encodeURIComponent(p)}&labels=user-reported,bug&body=`;
+  let emptyStub = nullStub();
+  let errorSuffix = `${GITHUB_ISSUES_REPO_URL()}/new?title=${encodeURIComponent(shortTitle)}&labels=user-reported,bug&body=`;
   let errorsJson = encodeURIComponent(`**Bug Description**
 `);
   let encodedPrefix = encodeURIComponent(`
@@ -882,20 +1069,21 @@ function createGitHubIssueUrl(d, o, description) {
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION || "unknown"
   }
-- Feedback ID: ${d}
+- Feedback ID: ${feedbackId}
 `);
   let encodedSuffix = encodeURIComponent(sanitizedTitle);
-  let W = MAX_FEEDBACK_BODY_CHARS - errorSuffix.length - errorsJson.length - encodedPrefix.length;
-  if (encodedSuffix.length > W) {
+  let remainingChars =
+    MAX_FEEDBACK_BODY_CHARS - errorSuffix.length - errorsJson.length - encodedPrefix.length;
+  if (encodedSuffix.length > remainingChars) {
     let encodedNote = encodeURIComponent(`\u2026
 
 **Note:** The description was shortened to fit GitHub's link length limit. The full description was sent to Anthropic with the feedback report; its Feedback ID is below.`);
     let buffer = 50;
-    let pe = W - encodedNote.length - 50;
+    let titleBudget = remainingChars - encodedNote.length - 50;
     encodedSuffix = "";
-    for (let me of sanitizedTitle) {
-      let encodedFullBody = encodeURIComponent(me);
-      if (encodedSuffix.length + encodedFullBody.length > pe) break;
+    for (let char of sanitizedTitle) {
+      let encodedFullBody = encodeURIComponent(char);
+      if (encodedSuffix.length + encodedFullBody.length > titleBudget) break;
       encodedSuffix += encodedFullBody;
     }
     encodedSuffix += encodedNote;
@@ -976,9 +1164,9 @@ function createFallbackTitle(description) {
  * 反馈确认页中的一行 git 元数据：分支、短提交号、远程地址、是否未同步与有无本地改动。
  */
 function GitMetadataLine(props) {
-  let $ = w(8);
+  let $ = useMemoCache(8);
   let { gitStatePromise } = props;
-  let gitState = Qr(gitStatePromise);
+  let gitState = use(gitStatePromise);
   if (!gitState) {
     return null;
   }
@@ -1018,161 +1206,6 @@ function GitMetadataLine(props) {
     $[7] = content;
   } else content = $[7];
   return content;
-}
-//@ chunk-xx1vmpsq.js:18905-18966 sole-consumer
-function requestIdHeader(headers) {
-  let s = headers?.["request-id"];
-  return isSessionsToken(s) ? s : undefined;
-}
-//@ chunk-xx1vmpsq.js:18966-20766 fingerprint = submitFeedback (0.33)
-/**
- * 提交反馈到 /api/claude_cli_feedback（检查策略 allow_product_feedback 与大小），返回 feedback ID。
- */
-async function submitFeedback(e, signal, sessionIdForMessage, credentials) {
-  if (isEssentialTrafficOnly())
-    return {
-      success: false,
-    };
-  if (!isPolicyAllowed("allow_product_feedback"))
-    return {
-      success: false,
-      failureReason: "policy_blocked",
-    };
-  let r = 0;
-  try {
-    let feedbackPayload = buildFeedbackPayload(
-      e,
-      TRANSCRIPT_FIELDS,
-      SUBAGENT_TRANSCRIPT_FIELDS,
-      sessionIdForMessage === undefined
-        ? undefined
-        : {
-            extraOuterFields: {
-              session_id: sessionIdForMessage,
-            },
-          },
-    );
-    r = feedbackPayload.length;
-    if (r > MAX_PAYLOAD_PART_COUNT)
-      return {
-        success: false,
-        payloadTooLarge: true,
-        failureReason: "payload_too_large_precheck",
-      };
-    let T = await withOAuth401Retry(
-      () =>
-        apiClient.post("/api/claude_cli_feedback", feedbackPayload, {
-          headers: {
-            "Content-Type": "application/json",
-          },
-          timeout: 30000,
-          signal,
-          credentials,
-          validateStatus: (M) => M !== 401,
-        }),
-      {
-        gateToSessionOAuthCredential: true,
-        credentials,
-      },
-    );
-    if (!T.ok)
-      switch (T.reason) {
-        case "essential-traffic-only":
-          return {
-            success: false,
-          };
-        case "data-residency":
-          return {
-            success: false,
-            failureReason: "data_residency",
-          };
-        case "no-auth":
-          return {
-            success: false,
-            failureReason: "auth_error",
-          };
-      }
-    if (T.status === 200 && T.data?.feedback_id)
-      return {
-        success: true,
-        feedbackId: T.data.feedback_id,
-      };
-    let requestId = requestIdHeader(T.response.headers);
-    if (T.status === 200) {
-      redactError(Error("Failed to submit feedback: request did not return feedback_id"));
-      return {
-        success: false,
-        failureReason: "missing_feedback_id",
-        requestId,
-      };
-    }
-    if (T.status === 413)
-      return {
-        success: false,
-        payloadTooLarge: true,
-        failureReason: "payload_too_large_413",
-        statusCode: 413,
-        requestId,
-      };
-    let I = "Failed to submit feedback:" + T.status;
-    if (T.status === 401 || T.status === 403 || T.status === 429) logForDebugging(I);
-    else redactError(Error(I));
-    return {
-      ...classifyFeedbackError(T.status, T.data),
-      requestId,
-    };
-  } catch (err) {
-    if (isCancel(err))
-      return {
-        success: false,
-      };
-    if (err instanceof RangeError)
-      return {
-        success: false,
-        payloadTooLarge: true,
-        failureReason: "payload_too_large_range_error",
-      };
-    if (isAxiosError(err) && err.code === "ECONNABORTED" && r > MAX_PAYLOAD_PART_COUNT / 8)
-      return {
-        success: false,
-        payloadTooLarge: true,
-        failureReason: "payload_too_large_timeout",
-      };
-    if (isExpectedApiError(err)) logForDebugging(redactSecrets(errorMessage(err)));
-    else redactError(err);
-    if (isAxiosError(err) && err.response)
-      return {
-        ...classifyFeedbackError(err.response.status, err.response.data),
-        requestId: requestIdHeader(err.response.headers),
-      };
-    return {
-      success: false,
-      failureReason: isAxiosError(err) && err.code === "ECONNABORTED" ? "timeout" : "network_error",
-    };
-  }
-}
-//@ chunk-4121qate.js:62271-62421 fingerprint = sanitizeAndLogError (0.507)
-function sanitizeAndLogError(err) {
-  let o = (...r) => {
-    try {
-      return err(...r);
-    } catch (error) {
-      let { msg, name: i, stack } = describeThrownValue(error);
-      throw createSealedError(msg, i, stack);
-    }
-  };
-  Object.setPrototypeOf(o, null);
-  return o;
-}
-//@ chunk-hm0ce8vc.js:67174-67301 fingerprint = loadRawTranscriptJsonl (0.519)
-function loadRawTranscriptJsonl(e) {
-  let n = jsonStringify(e) ?? String(e);
-  let r = Buffer.byteLength(n, "utf8");
-  return r <= 200 ? n : `${n.slice(0, 200)}\u2026 (+${r - 200} bytes)`;
-}
-//@ chunk-hwmsct5x.js:197534-197606 fingerprint = GITHUB_ISSUES_REPO_URL (0.432)
-function GITHUB_ISSUES_REPO_URL() {
-  return "https://github.com/anthropics/claude-code/issues";
 }
 export {
   sanitizeAndLogError,

@@ -5,14 +5,14 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_any_pb } from "./google/protobuf/any_pb.js";
 import { require_create } from "../../cjs/create.js";
 import { require_to_binary } from "../../cjs/to-binary.js";
 import { require_from_binary } from "../from-binary.js";
 
 //@ chunk-fq0cr76a.js:419542-420360 cjs-fingerprint
-var require_any = x(function (cjsExports) {
+var require_any = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

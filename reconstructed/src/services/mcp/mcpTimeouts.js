@@ -15,9 +15,9 @@ import { maxDescriptionLength } from "./client.js";
 /**
  * 一方 http/sse MCP 服务器不设超时（Infinity），其他按默认规则。
  */
-function toolTimeoutForServer(config, t = false) {
+function toolTimeoutForServer(config, forLoadedDescription = false) {
   return (config.type === "http" || config.type === "sse") && isFirstPartyMcpUrl(config.url)
     ? 1 / 0
-    : maxDescriptionLength(t);
+    : maxDescriptionLength(forLoadedDescription);
 }
 export { toolTimeoutForServer };

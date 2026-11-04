@@ -22,7 +22,7 @@ var designConsentCommand = {
   policyGate: DESIGN_SYNC_POLICY,
   supportsNonInteractive: true,
   isHidden: true,
-  load: () => import("./chunk-c9mbsnrs.js"),
+  load: () => import("../consent/call.lazy.js"),
 };
 var designRevokeCommand = {
   type: "local",
@@ -32,7 +32,7 @@ var designRevokeCommand = {
   policyGate: DESIGN_SYNC_POLICY,
   supportsNonInteractive: true,
   isHidden: true,
-  load: () => import("./chunk-6qdkmygq.js"),
+  load: () => import("./call.lazy.js"),
 };
 //@ chunk-e6aww6q8.js:1723503-1723680 placement
 /**

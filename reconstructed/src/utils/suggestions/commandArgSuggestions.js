@@ -12,28 +12,28 @@
 //@ chunk-18hwfzwa.js:550092-550115 placement
 var COMMAND_ARG = "command-arg-";
 //@ chunk-18hwfzwa.js:550115-550716 placement
-async function commandArgSuggestions(h, getArgumentCompletions, storageV5) {
-  let index = h.indexOf(" ");
-  if (!h.startsWith("/") || index === -1) return [];
-  let sliced = h.slice(1, index);
-  let sliced_2 = h.slice(index + 1);
+async function commandArgSuggestions(input, getArgumentCompletions, storageV5) {
+  let index = input.indexOf(" ");
+  if (!input.startsWith("/") || index === -1) return [];
+  let sliced = input.slice(1, index);
+  let sliced_2 = input.slice(index + 1);
   let filtered = sliced_2.split(/\s+/).filter(Boolean);
-  let Be = sliced_2 === "" || /\s$/.test(sliced_2);
-  let He = Be ? "" : (filtered.at(-1) ?? "");
-  let We = Be ? filtered : filtered.slice(0, -1);
-  let ze = await getArgumentCompletions(We, He, storageV5);
-  let joined = [`/${sliced}`, ...We].join(" ");
-  return ze.slice(0, 12).map((rt) => {
-    let kt = rt.isFinal === true || rt.value.toLowerCase() === He.toLowerCase();
-    let At = !kt && (rt.appendSpace ?? true);
+  let endsWithSpace = sliced_2 === "" || /\s$/.test(sliced_2);
+  let query = endsWithSpace ? "" : (filtered.at(-1) ?? "");
+  let completedArgs = endsWithSpace ? filtered : filtered.slice(0, -1);
+  let suggestions = await getArgumentCompletions(completedArgs, query, storageV5);
+  let joined = [`/${sliced}`, ...completedArgs].join(" ");
+  return suggestions.slice(0, 12).map((suggestion) => {
+    let isExact = suggestion.isFinal === true || suggestion.value.toLowerCase() === query.toLowerCase();
+    let appendSpace = !isExact && (suggestion.appendSpace ?? true);
     return {
-      id: `command-arg-${rt.value}`,
-      displayText: rt.value,
-      description: rt.description,
-      query: He === "" ? undefined : He.toLowerCase(),
+      id: `command-arg-${suggestion.value}`,
+      displayText: suggestion.value,
+      description: suggestion.description,
+      query: query === "" ? undefined : query.toLowerCase(),
       metadata: {
-        replacement: `${joined} ${rt.value}${At ? " " : ""}`,
-        partial: !kt,
+        replacement: `${joined} ${suggestion.value}${appendSpace ? " " : ""}`,
+        partial: !isExact,
       },
     };
   });

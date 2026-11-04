@@ -16,6 +16,7 @@ import { colorize } from "../../vendor/es-toolkit/dist/server/colors/index.mjs";
 import { SETTING_FIELD_LABELS, CONFIG_SOURCE_LABELS } from "./config.js";
 import { env } from "./env.js";
 import { Chalk } from "../../vendor/chalk/source/index.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-g3xfp0ds.js:5481-5491 placement
 var MAX_THEME_COLOR_CACHE = 256;
@@ -27,53 +28,59 @@ class ThemeColorCache {
   generation = -1;
   level = -1;
   byColor = new Map();
-  has(r) {
-    let e = levelGeneration();
-    if (e !== this.generation || sequential.level !== this.level) {
-      this.generation = e;
+  has(color) {
+    let generation = levelGeneration();
+    if (generation !== this.generation || sequential.level !== this.level) {
+      this.generation = generation;
       this.level = sequential.level;
       this.byColor.clear();
     }
-    let n = this.byColor.get(r);
-    if (n === undefined) {
+    let cached = this.byColor.get(color);
+    if (cached === undefined) {
       if (this.byColor.size >= MAX_THEME_COLOR_CACHE) this.byColor.clear();
-      n = isDefaultFgColor(firstLineOf(colorize(" ", r, "foreground"), " "));
-      this.byColor.set(r, n);
+      cached = isDefaultFgColor(firstLineOf(colorize(" ", color, "foreground"), " "));
+      this.byColor.set(color, cached);
     }
-    return n;
+    return cached;
   }
 }
 //@ chunk-g3xfp0ds.js:5819-5831 placement
-var themeColorCache = new ThemeColorCache();
+var themeColorCache; // deferred: uses ThemeColorCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-g3xfp0ds.js:5819", () => {
+  themeColorCache = new ThemeColorCache();
+});
 //@ chunk-g3xfp0ds.js:5831-6027 placement
 class BackgroundSequenceCache {
   byColorAndLevel = new Map();
-  sequenceFor(r) {
-    let e = `${r}|${sequential.level}`;
-    let n = this.byColorAndLevel.get(e);
-    if (n === undefined) {
-      n = firstLineOf(colorize("\x00", r, "background"), "\x00");
-      this.byColorAndLevel.set(e, n);
+  sequenceFor(color) {
+    let key = `${color}|${sequential.level}`;
+    let sequence = this.byColorAndLevel.get(key);
+    if (sequence === undefined) {
+      sequence = firstLineOf(colorize("\x00", color, "background"), "\x00");
+      this.byColorAndLevel.set(key, sequence);
     }
-    return n;
+    return sequence;
   }
 }
 //@ chunk-g3xfp0ds.js:6027-6039 placement
-var backgroundSequenceCache = new BackgroundSequenceCache();
+var backgroundSequenceCache; // deferred: uses BackgroundSequenceCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-g3xfp0ds.js:6027", () => {
+  backgroundSequenceCache = new BackgroundSequenceCache();
+});
 //@ chunk-g3xfp0ds.js:6039-6195 placement
 function applyBackgroundColor(text, color) {
-  let n = backgroundSequenceCache.sequenceFor(color);
-  if (n === "") return text;
+  let sequence = backgroundSequenceCache.sequenceFor(color);
+  if (sequence === "") return text;
   return (
-    n +
+    sequence +
     text
-      .replaceAll("\x1B[0m", `\x1B[0m${n}`)
-      .replaceAll("\x1B[49m", n)
+      .replaceAll("\x1B[0m", `\x1B[0m${sequence}`)
+      .replaceAll("\x1B[49m", sequence)
       .replaceAll(
         `
 `,
         `
-${n}`,
+${sequence}`,
       )
   );
 }
@@ -81,15 +88,15 @@ ${n}`,
 /**
  * 是否为浅色主题。
  */
-function isLightTheme(r) {
-  return r.startsWith("light");
+function isLightTheme(themeName) {
+  return themeName.startsWith("light");
 }
 //@ chunk-g3xfp0ds.js:6240-6300 placement
 /**
  * 是否内置主题名。
  */
-function isBuiltinThemeName(r) {
-  return typeof r === "string" && SETTING_FIELD_LABELS.includes(r);
+function isBuiltinThemeName(name) {
+  return typeof name === "string" && SETTING_FIELD_LABELS.includes(name);
 }
 //@ chunk-g3xfp0ds.js:6300-6342 placement
 /**
@@ -102,8 +109,8 @@ function isBuiltinTheme(color) {
 /**
  * 是否可选主题（内置或 custom: 前缀）。
  */
-function isSelectableThemeName(r) {
-  return typeof r === "string" && (CONFIG_SOURCE_LABELS.includes(r) || r.startsWith("custom:"));
+function isSelectableThemeName(name) {
+  return typeof name === "string" && (CONFIG_SOURCE_LABELS.includes(name) || name.startsWith("custom:"));
 }
 //@ chunk-g3xfp0ds.js:6429-20980 fingerprint = lightDaltonizedTheme (0.647)
 /**
@@ -586,22 +593,25 @@ function isValidThemeColor(color) {
   return false;
 }
 //@ chunk-g3xfp0ds.js:21443-21567 layout
-function mergeThemeOverrides(theme, e) {
-  if (!e) return theme;
-  let n = {
+function mergeThemeOverrides(theme, overrides) {
+  if (!overrides) return theme;
+  let merged = {
     ...theme,
   };
-  for (let [key, value] of Object.entries(e))
-    if (Object.hasOwn(theme, key) && isValidThemeColor(value)) n[key] = value;
-  return n;
+  for (let [key, value] of Object.entries(overrides))
+    if (Object.hasOwn(theme, key) && isValidThemeColor(value)) merged[key] = value;
+  return merged;
 }
 //@ chunk-g3xfp0ds.js:21567-21625 layout = chalkForChart (1)
-var chalkForChart =
-  env.terminal === "Apple_Terminal"
-    ? new Chalk({
-        level: 2,
-      })
-    : sequential;
+var chalkForChart; // deferred: uses env (./env.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-g3xfp0ds.js:21567", () => {
+  chalkForChart =
+    env.terminal === "Apple_Terminal"
+      ? new Chalk({
+          level: 2,
+        })
+      : sequential;
+});
 //@ chunk-g3xfp0ds.js:21625-21925 fingerprint = themeColorToAnsi (0.797)
 /**
  * 把主题色值转为 ANSI 转义（rgb → 真彩、ansi: → 16 色）。
@@ -609,16 +619,16 @@ var chalkForChart =
 function themeColorToAnsi(themeColor) {
   let rgbMatch = themeColor.match(/rgb\(\s?(\d+),\s?(\d+),\s?(\d+)\s?\)/);
   if (rgbMatch) {
-    let g = parseInt(rgbMatch[1], 10);
-    let t = parseInt(rgbMatch[2], 10);
-    let s = parseInt(rgbMatch[3], 10);
-    let colored = chalkForChart.rgb(g, t, s)("X");
+    let red = parseInt(rgbMatch[1], 10);
+    let green = parseInt(rgbMatch[2], 10);
+    let blue = parseInt(rgbMatch[3], 10);
+    let colored = chalkForChart.rgb(red, green, blue)("X");
     return colored.slice(0, colored.indexOf("X"));
   }
   if (sequential.level === 0) return "";
-  let n = colorize("X", themeColor, "foreground");
-  let index = n.indexOf("X");
-  return index > 0 ? n.slice(0, index) : "\x1B[35m";
+  let probe = colorize("X", themeColor, "foreground");
+  let index = probe.indexOf("X");
+  return index > 0 ? probe.slice(0, index) : "\x1B[35m";
 }
 export {
   isValidThemeColor,
@@ -629,6 +639,6 @@ export {
   themeColorCache,
   isSelectableThemeName,
   isLightTheme,
-  isBuiltinTheme,
   applyBackgroundColor,
+  isBuiltinTheme,
 };

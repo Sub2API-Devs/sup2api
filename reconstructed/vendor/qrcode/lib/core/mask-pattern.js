@@ -5,10 +5,10 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:3101-5121 cjs-fingerprint
-var require_mask_pattern = x(function (cjsExports) {
+var require_mask_pattern = __commonJS(function (cjsExports) {
   cjsExports.Patterns = {
     PATTERN000: 0,
     PATTERN001: 1,
@@ -42,18 +42,18 @@ var require_mask_pattern = x(function (cjsExports) {
       sameCountCol = sameCountRow = 0;
       lastCol = lastRow = null;
       for (let col = 0; col < size; col++) {
-        let a = data.get(row, col);
-        if (a === lastCol) sameCountCol++;
+        let bit = data.get(row, col);
+        if (bit === lastCol) sameCountCol++;
         else {
           if (sameCountCol >= 5) points += PenaltyScores.N1 + (sameCountCol - 5);
-          lastCol = a;
+          lastCol = bit;
           sameCountCol = 1;
         }
-        a = data.get(col, row);
-        if (a === lastRow) sameCountRow++;
+        bit = data.get(col, row);
+        if (bit === lastRow) sameCountRow++;
         else {
           if (sameCountRow >= 5) points += PenaltyScores.N1 + (sameCountRow - 5);
-          lastRow = a;
+          lastRow = bit;
           sameCountRow = 1;
         }
       }

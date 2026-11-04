@@ -8,8 +8,8 @@
  * pieces: chunk-ey2qag4x.js (5)
  * attribution: placement 1, layout 2, fingerprint 1, affinity 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
-import { y, R, P } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { useState, useRef, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { useKeybinding } from "../../keybindings/useKeybinding.js";
 import { getImageFromClipboard } from "../../utils/imagePaste.js";
 import { imageLimitsForModel } from "../../utils/attachmentMedia.js";
@@ -41,13 +41,13 @@ function isImagePaste_6(c) {
   return c.type === "image";
 }
 //@ chunk-ey2qag4x.js:26433-26493 layout
-function inputOptionWidth(columns, maxIndexWidth, i, a) {
-  let l = 2 + maxIndexWidth + 2;
-  return Math.max(1, columns - l - i - a);
+function inputOptionWidth(columns, maxIndexWidth, extraWidth, rightWidth) {
+  let chromeWidth = 2 + maxIndexWidth + 2;
+  return Math.max(1, columns - chromeWidth - extraWidth - rightWidth);
 }
 //@ chunk-ey2qag4x.js:26493-33398 fingerprint = SelectInputOption (0.907)
 function SelectInputOption(props) {
-  let $ = w(107);
+  let $ = useMemoCache(107);
   let {
     option,
     isFocused,
@@ -78,11 +78,11 @@ function SelectInputOption(props) {
     onClick,
     hoverStyle,
   } = props;
-  let Y = hideIndex === undefined ? false : hideIndex;
+  let hideIndexFlag = hideIndex === undefined ? false : hideIndex;
   let showLabelProp = showLabel === undefined ? false : showLabel;
   let resetCursorOnUpdate_2 = resetCursorOnUpdate === undefined ? false : resetCursorOnUpdate;
   let selectedImageIndex_2 = selectedImageIndex === undefined ? 0 : selectedImageIndex;
-  let ee = extraChromeWidth === undefined ? 0 : extraChromeWidth;
+  let extraChrome = extraChromeWidth === undefined ? 0 : extraChromeWidth;
   let t4;
   if ($[0] !== pastedContents) {
     t4 = pastedContents ? Object.values(pastedContents).filter(isImagePaste_6) : [];
@@ -90,9 +90,9 @@ function SelectInputOption(props) {
     $[1] = t4;
   } else t4 = $[1];
   let imageAttachments = t4;
-  let me = showLabelProp || option.showLabelWithValue === true;
-  let [cursorOffset, setCursorOffset] = y(inputValue.length);
-  let isUserEditing = R(false);
+  let showsLabelAndValue = showLabelProp || option.showLabelWithValue === true;
+  let [cursorOffset, setCursorOffset] = useState(inputValue.length);
+  let isUserEditing = useRef(false);
   let t5;
   if ($[2] !== inputValue.length || $[3] !== isFocused || $[4] !== resetCursorOnUpdate_2) {
     t5 = () => {
@@ -114,7 +114,7 @@ function SelectInputOption(props) {
     $[8] = resetCursorOnUpdate_2;
     $[9] = t6;
   } else t6 = $[9];
-  P(t5, t6);
+  useEffect(t5, t6);
   let t7;
   if ($[10] !== inputValue || $[11] !== onInputChange || $[12] !== onOpenEditor) {
     t7 = () => {
@@ -190,7 +190,7 @@ function SelectInputOption(props) {
   } else t15 = $[25];
   useKeybinding("attachments:remove", t13, t15);
   let t16;
-  let yt;
+  let selectPreviousImage;
   if (
     $[26] !== imageAttachments.length ||
     $[27] !== onSelectedImageIndexChange ||
@@ -200,7 +200,7 @@ function SelectInputOption(props) {
       if (imageAttachments.length > 1)
         onSelectedImageIndexChange?.((selectedImageIndex_2 + 1) % imageAttachments.length);
     };
-    yt = () => {
+    selectPreviousImage = () => {
       if (imageAttachments.length > 1)
         onSelectedImageIndexChange?.(
           (selectedImageIndex_2 - 1 + imageAttachments.length) % imageAttachments.length,
@@ -210,10 +210,10 @@ function SelectInputOption(props) {
     $[27] = onSelectedImageIndexChange;
     $[28] = selectedImageIndex_2;
     $[29] = t16;
-    $[30] = yt;
+    $[30] = selectPreviousImage;
   } else {
     t16 = $[29];
-    yt = $[30];
+    selectPreviousImage = $[30];
   }
   let t18;
   if (
@@ -240,26 +240,26 @@ function SelectInputOption(props) {
     $[35] = selectedImageIndex_2;
     $[36] = t18;
   } else t18 = $[36];
-  let dt;
+  let exitImageSelection;
   if ($[37] !== onImagesSelectedChange) {
-    dt = () => {
+    exitImageSelection = () => {
       onImagesSelectedChange?.(false);
     };
     $[37] = onImagesSelectedChange;
-    $[38] = dt;
-  } else dt = $[38];
+    $[38] = exitImageSelection;
+  } else exitImageSelection = $[38];
   let t20;
-  if ($[39] !== t16 || $[40] !== yt || $[41] !== t18 || $[42] !== dt) {
+  if ($[39] !== t16 || $[40] !== selectPreviousImage || $[41] !== t18 || $[42] !== exitImageSelection) {
     t20 = {
       "attachments:next": t16,
-      "attachments:previous": yt,
+      "attachments:previous": selectPreviousImage,
       "attachments:remove": t18,
-      "attachments:exit": dt,
+      "attachments:exit": exitImageSelection,
     };
     $[39] = t16;
-    $[40] = yt;
+    $[40] = selectPreviousImage;
     $[41] = t18;
-    $[42] = dt;
+    $[42] = exitImageSelection;
     $[43] = t20;
   } else t20 = $[43];
   const isActive_4 = isFocused && !!imagesSelected;
@@ -274,47 +274,47 @@ function SelectInputOption(props) {
   } else t22 = $[45];
   MessageActionsKeybindings(t20, t22);
   let { vimEditing } = option;
-  let Ne = vimEditing ? VimTextInput : TextInput;
-  let p = R(null);
-  let Ft;
-  let St;
+  let InputComponent = vimEditing ? VimTextInput : TextInput;
+  let cancelRemapRef = useRef(null);
+  let deselectOnBlurEffect;
+  let deselectOnBlurDeps;
   if ($[46] !== imagesSelected || $[47] !== isFocused || $[48] !== onImagesSelectedChange) {
-    Ft = () => {
+    deselectOnBlurEffect = () => {
       if (!isFocused && imagesSelected) onImagesSelectedChange?.(false);
     };
-    St = [isFocused, imagesSelected, onImagesSelectedChange];
+    deselectOnBlurDeps = [isFocused, imagesSelected, onImagesSelectedChange];
     $[46] = imagesSelected;
     $[47] = isFocused;
     $[48] = onImagesSelectedChange;
-    $[49] = Ft;
-    $[50] = St;
+    $[49] = deselectOnBlurEffect;
+    $[50] = deselectOnBlurDeps;
   } else {
-    Ft = $[49];
-    St = $[50];
+    deselectOnBlurEffect = $[49];
+    deselectOnBlurDeps = $[50];
   }
-  P(Ft, St);
+  useEffect(deselectOnBlurEffect, deselectOnBlurDeps);
   let descriptionPaddingLeft = layout === "expanded" ? maxIndexWidth + 3 : maxIndexWidth + 4;
   let { columns } = useScrollViewportSize(useTerminalSize());
-  let kt =
-    me && typeof option.label === "string"
+  let labelWidth =
+    showsLabelAndValue && typeof option.label === "string"
       ? bunStringWidth(option.label) + bunStringWidth(option.labelValueSeparator ?? ", ")
       : 0;
-  let bt;
-  if ($[51] !== columns || $[52] !== ee || $[53] !== kt || $[54] !== maxIndexWidth) {
-    bt = inputOptionWidth(columns, maxIndexWidth, kt, ee);
+  let inputColumnsCached;
+  if ($[51] !== columns || $[52] !== extraChrome || $[53] !== labelWidth || $[54] !== maxIndexWidth) {
+    inputColumnsCached = inputOptionWidth(columns, maxIndexWidth, labelWidth, extraChrome);
     $[51] = columns;
-    $[52] = ee;
-    $[53] = kt;
+    $[52] = extraChrome;
+    $[53] = labelWidth;
     $[54] = maxIndexWidth;
-    $[55] = bt;
-  } else bt = $[55];
-  let columns_2 = bt;
+    $[55] = inputColumnsCached;
+  } else inputColumnsCached = $[55];
+  let columns_2 = inputColumnsCached;
   const onKeyDown = vimEditing?.takesEscape ? stopEscapePropagation : undefined;
   const flexShrink = layout === "compact" ? 0 : undefined;
-  let Ze;
-  if ($[56] !== Y || $[57] !== index || $[58] !== maxIndexWidth) {
-    Ze =
-      !Y &&
+  let indexElement;
+  if ($[56] !== hideIndexFlag || $[57] !== index || $[58] !== maxIndexWidth) {
+    indexElement =
+      !hideIndexFlag &&
       jsxProd_default(Box, {
         flexShrink: 0,
         children: jsxProd_default(Text, {
@@ -322,14 +322,14 @@ function SelectInputOption(props) {
           children: `${index}.`.padEnd(maxIndexWidth + 2),
         }),
       });
-    $[56] = Y;
+    $[56] = hideIndexFlag;
     $[57] = index;
     $[58] = maxIndexWidth;
-    $[59] = Ze;
-  } else Ze = $[59];
+    $[59] = indexElement;
+  } else indexElement = $[59];
   let t32;
   if (
-    $[60] !== Ne ||
+    $[60] !== InputComponent ||
     $[61] !== cursorOffset ||
     $[62] !== imagesSelected ||
     $[63] !== inputValue ||
@@ -339,11 +339,11 @@ function SelectInputOption(props) {
     $[67] !== onInputChange ||
     $[68] !== onSubmit ||
     $[69] !== option ||
-    $[70] !== me ||
+    $[70] !== showsLabelAndValue ||
     $[71] !== columns_2 ||
     $[72] !== vimEditing?.onStateChange
   ) {
-    t32 = me
+    t32 = showsLabelAndValue
       ? isFocused
         ? jsxProd_default_2(Fragment, {
             children: [
@@ -351,7 +351,7 @@ function SelectInputOption(props) {
                 color: "suggestion",
                 children: [option.label, option.labelValueSeparator ?? ", "],
               }),
-              jsxProd_default(Ne, {
+              jsxProd_default(InputComponent, {
                 value: inputValue,
                 onChange: (value) => {
                   if (option.onChange(value) === false) {
@@ -370,13 +370,13 @@ function SelectInputOption(props) {
                 onChangeCursorOffset: setCursorOffset,
                 columns: columns_2,
                 onEditingStateChange: vimEditing?.onStateChange,
-                cancelRemapRef: p,
+                cancelRemapRef,
                 onImagePaste,
                 onPaste: (pastedText) => {
                   if (!pastedText) {
                     return;
                   }
-                  p.current?.();
+                  cancelRemapRef.current?.();
                   let before = inputValue.slice(0, cursorOffset);
                   let after = inputValue.slice(cursorOffset);
                   let newValue = before + pastedText + after;
@@ -398,7 +398,7 @@ function SelectInputOption(props) {
             ],
           })
       : isFocused
-        ? jsxProd_default(Ne, {
+        ? jsxProd_default(InputComponent, {
             value: inputValue,
             onChange: (value) => {
               if (option.onChange(value) === false) {
@@ -417,13 +417,13 @@ function SelectInputOption(props) {
             onChangeCursorOffset: setCursorOffset,
             columns: columns_2,
             onEditingStateChange: vimEditing?.onStateChange,
-            cancelRemapRef: p,
+            cancelRemapRef,
             onImagePaste,
             onPaste: (pastedText) => {
               if (!pastedText) {
                 return;
               }
-              p.current?.();
+              cancelRemapRef.current?.();
               let before = inputValue.slice(0, cursorOffset);
               let after = inputValue.slice(cursorOffset);
               let newValue = before + pastedText + after;
@@ -439,7 +439,7 @@ function SelectInputOption(props) {
             color: inputValue ? undefined : "inactive",
             children: inputValue || option.placeholder || option.label,
           });
-    $[60] = Ne;
+    $[60] = InputComponent;
     $[61] = cursorOffset;
     $[62] = imagesSelected;
     $[63] = inputValue;
@@ -449,21 +449,21 @@ function SelectInputOption(props) {
     $[67] = onInputChange;
     $[68] = onSubmit;
     $[69] = option;
-    $[70] = me;
+    $[70] = showsLabelAndValue;
     $[71] = columns_2;
     $[72] = vimEditing?.onStateChange;
     $[73] = t32;
   } else t32 = $[73];
   let children_2;
-  if ($[74] !== children || $[75] !== flexShrink || $[76] !== Ze || $[77] !== t32) {
+  if ($[74] !== children || $[75] !== flexShrink || $[76] !== indexElement || $[77] !== t32) {
     children_2 = jsxProd_default_2(Box, {
       flexDirection: "row",
       flexShrink,
-      children: [Ze, children, t32],
+      children: [indexElement, children, t32],
     });
     $[74] = children;
     $[75] = flexShrink;
-    $[76] = Ze;
+    $[76] = indexElement;
     $[77] = t32;
     $[78] = children_2;
   } else children_2 = $[78];

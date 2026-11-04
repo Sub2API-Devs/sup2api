@@ -24,9 +24,13 @@ import {
   errorMessage,
 } from "../errors.js";
 import { telemetrySafeModelName } from "../model/telemetryModelName.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3098919-3098958 placement
-var PERSIST_RETRYABLE_ERRNOS = new Set(["ELOOP", SOURCENOTREGULAR, SOURCESHARED, SOURCEOUTSIDE]);
+var PERSIST_RETRYABLE_ERRNOS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3098919", () => {
+  PERSIST_RETRYABLE_ERRNOS = new Set(["ELOOP", SOURCENOTREGULAR, SOURCESHARED, SOURCEOUTSIDE]);
+});
 //@ chunk-e6aww6q8.js:3098958-3099043 placement
 function storageTelemetryCode(error) {
   return error.code === "Failed" && "telemetryCode" in error ? error.telemetryCode : undefined;
@@ -35,51 +39,49 @@ function storageTelemetryCode(error) {
 /**
  * 持久化后台 shell 输出文件。
  */
-async function persistShellOutput(e, n, outputFilePath, s, taskOutputRootDir) {
-  let { handle, size } = await openVerifiedTaskOutput(outputFilePath, s);
+async function persistShellOutput(taskId, requestId, path, maxBytes, taskOutputRootDir) {
+  let { handle, size } = await openVerifiedTaskOutput(path, maxBytes);
   await handle.close();
-  let w = await realpath(taskOutputRootDir).catch(() => {
+  let realRoot = await realpath(taskOutputRootDir).catch(() => {
     return;
   });
-  if (w === undefined) {
-    logForDebugging(
-      `Shell output ${outputFilePath}: its temp root could not be resolved; persisting it as today`,
-    );
+  if (realRoot === undefined) {
+    logForDebugging(`Shell output ${path}: its temp root could not be resolved; persisting it as today`);
     return "today";
   }
-  let L = await e.writeFromFile(n, outputFilePath, {
+  let result = await taskId.writeFromFile(requestId, path, {
     mode: 438 & ~process.umask(),
     copy: true,
     growth: "prefix",
     expect: {
-      within: w,
+      within: realRoot,
       singleName: true,
-      maxBytes: s,
+      maxBytes,
     },
   });
-  if (!L.ok) {
-    let Se = storageTelemetryCode(L.error);
-    if (Se !== undefined && PERSIST_RETRYABLE_ERRNOS.has(Se)) {
-      let ke = `shell output moved or replaced before it could be stored (${Se}): ${outputFilePath}`;
-      logForDebugging(ke, {
+  if (!result.ok) {
+    let error = storageTelemetryCode(result.error);
+    if (error !== undefined && PERSIST_RETRYABLE_ERRNOS.has(error)) {
+      let size = `shell output moved or replaced before it could be stored (${error}): ${path}`;
+      logForDebugging(size, {
         level: "error",
       });
       logError(
         new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          ke,
+          size,
           "shell output moved or replaced before it could be stored",
         ),
       );
       return;
     }
     logForDebugging(
-      `Shell output ${outputFilePath} not taken by the storage interface (${formatStorageError(L.error)}); persisting it as today`,
+      `Shell output ${path} not taken by the storage interface (${formatStorageError(result.error)}); persisting it as today`,
     );
     return "today";
   }
-  let { bytes, grew, capped } = L.value;
+  let { bytes, grew, capped } = result.value;
   logForDebugging(
-    `Stored shell output ${outputFilePath} through the storage interface (copied, ${bytes} bytes${capped ? ", capped" : ""}${grew ? ", grew while copied" : ""})`,
+    `Stored shell output ${path} through the storage interface (copied, ${bytes} bytes${capped ? ", capped" : ""}${grew ? ", grew while copied" : ""})`,
   );
   return size;
 }
@@ -92,23 +94,23 @@ var MAX_BLOCKED_SLEEP_LINES = 25;
 /**
  * 去掉文本首尾的空白行。
  */
-function trimBlankEdgeLines(e) {
-  let lines = e.split(`
+function trimBlankEdgeLines(text) {
+  let lines = text.split(`
 `);
-  let r = 0;
-  while (r < lines.length && lines[r]?.trim() === "") r++;
-  let s = lines.length - 1;
-  while (s >= 0 && lines[s]?.trim() === "") s--;
-  if (r > s) return "";
-  return lines.slice(r, s + 1).join(`
+  let first = 0;
+  while (first < lines.length && lines[first]?.trim() === "") first++;
+  let last = lines.length - 1;
+  while (last >= 0 && lines[last]?.trim() === "") last--;
+  if (first > last) return "";
+  return lines.slice(first, last + 1).join(`
 `);
 }
 //@ chunk-e6aww6q8.js:3100122-3100190 placement
 /**
  * 是否 base64 图片 data URI。
  */
-function isBase64DataUri(e) {
-  return /^data:image\/[a-z0-9.+_-]+;base64,/i.test(e);
+function isBase64DataUri(uri) {
+  return /^data:image\/[a-z0-9.+_-]+;base64,/i.test(uri);
 }
 //@ chunk-e6aww6q8.js:3100190-3100227 placement
 var DATA_URI_RE = /^data:([^;]+);base64,(.+)$/;
@@ -128,35 +130,37 @@ function parseDataUri(source) {
 /**
  * 取（已脱敏的）请求模型名。
  */
-function safeRequestedModelName(parentMessage, n) {
-  return telemetrySafeModelName(parentMessage?.requestedModel ?? n);
+function safeRequestedModelName(parentMessage, fallbackModel) {
+  return telemetrySafeModelName(parentMessage?.requestedModel ?? fallbackModel);
 }
 //@ chunk-e6aww6q8.js:3104641-3105251 placement
 function copyShellOutputFile(taskRegistry) {
-  let n;
+  let pendingCopy;
   return {
-    track(r) {
-      let outputTaskId = r.outputTaskId;
-      let h = outputTaskId !== undefined && taskRegistry.get(outputTaskId) !== undefined;
-      if (r.backgroundTaskId === undefined && (r.outputFileSize ?? 0) > 0 && !h) n = r.outputFilePath;
+    track(request) {
+      let outputTaskId = request.outputTaskId;
+      let taskExists = outputTaskId !== undefined && taskRegistry.get(outputTaskId) !== undefined;
+      if (request.backgroundTaskId === undefined && (request.outputFileSize ?? 0) > 0 && !taskExists)
+        pendingCopy = request.outputFilePath;
     },
-    copyFailed(r, s) {
-      let h = getErrnoCode(r) === "ENOENT" && s !== undefined ? s : r;
-      let errnoCode = getErrnoCode(h);
-      let S = errnoCode === "ENOSPC" || errnoCode === "EDQUOT";
-      if (h !== undefined && n !== undefined)
+    copyFailed(error, previousError) {
+      let effectiveError =
+        getErrnoCode(error) === "ENOENT" && previousError !== undefined ? previousError : error;
+      let errnoCode = getErrnoCode(effectiveError);
+      let diskFull = errnoCode === "ENOSPC" || errnoCode === "EDQUOT";
+      if (effectiveError !== undefined && pendingCopy !== undefined)
         logForDebugging(
-          `Could not copy ${n} to the session's tool-results folder (${errorMessage(h)}). ${S ? "Deleting it because the disk or quota is full." : "Keeping it."}`,
+          `Could not copy ${pendingCopy} to the session's tool-results folder (${errorMessage(effectiveError)}). ${diskFull ? "Deleting it because the disk or quota is full." : "Keeping it."}`,
         );
-      if (!S) n = undefined;
+      if (!diskFull) pendingCopy = undefined;
     },
     async [Symbol.asyncDispose]() {
-      if (n === undefined) return;
+      if (pendingCopy === undefined) return;
       try {
-        await unlinkTaskOutput(n);
+        await unlinkTaskOutput(pendingCopy);
       } catch (error) {
         if (getErrnoCode(error) !== "ENOENT")
-          logForDebugging(`Could not delete the output file ${n}: ${errorMessage(error)}`, {
+          logForDebugging(`Could not delete the output file ${pendingCopy}: ${errorMessage(error)}`, {
             level: "error",
           });
       }

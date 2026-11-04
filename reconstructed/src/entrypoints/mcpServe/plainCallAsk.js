@@ -11,14 +11,21 @@
 import { createHash } from "crypto";
 import { realpath, stat } from "fs/promises";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, literal, string, zodStrictObject, M, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  literal,
+  stringSchema,
+  zodStrictObject,
+  booleanSchema,
+  array,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { INVISIBLE_CHAR_CLASS_SOURCE, escapeAngleBrackets } from "../../utils/sanitization.js";
 import { isPlainObject } from "../../utils/objectUtils.js";
 import { safeParseJSON } from "../../utils/json.js";
 import { isHostPersonOnlyCircuitBreaker } from "../../types/permissions.js";
 import { formatPermissionRule } from "../../utils/permissions/disallowedToolsFlag.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
-import { Ji } from "../../../vendor/lodash-es/uniqBy.js";
+import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { getSessionProject } from "../../bootstrap/sessionSlices.js";
 import { logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 
@@ -36,9 +43,9 @@ function holdsSafetyAsksCapability() {
 }
 //@ chunk-3kqfccv7.js:701-837 placement
 var callerAsksCapabilitySchema = DoctorLazy(() =>
-  u({
-    experimental: u({
-      [CALLER_ASKS_KEY]: u({
+  objectSchema({
+    experimental: objectSchema({
+      [CALLER_ASKS_KEY]: objectSchema({
         v: literal(1),
       }),
     }),
@@ -50,20 +57,20 @@ var MAX_QUESTION_CHARS = 2000;
 var MAX_REASON_CHARS = 1024;
 var SEPARATOR_RUN_REGEX = new RegExp(`[${INVISIBLE_CHAR_CLASS_SOURCE}]+`, "gu");
 //@ chunk-3kqfccv7.js:837-886 placement
-function asShownOnACard(n) {
-  return escapeAngleBrackets(n.replace(SEPARATOR_RUN_REGEX, "\uFFFD"));
+function asShownOnACard(text) {
+  return escapeAngleBrackets(text.replace(SEPARATOR_RUN_REGEX, "\uFFFD"));
 }
 //@ chunk-3kqfccv7.js:886-1227 placement
 /**
  * permissionAsks 元数据 schema
  */
-var permissionAskSchemas = DoctorLazy(() => string().regex(/^[0-9a-f]{64}$/));
+var permissionAskSchemas = DoctorLazy(() => stringSchema().regex(/^[0-9a-f]{64}$/));
 var PlainCallAskApprovalSchema = DoctorLazy(() =>
   zodStrictObject({
     v: literal(1),
     approved: zodStrictObject({
       ask_digest: permissionAskSchemas(),
-      attested: M(),
+      attested: booleanSchema(),
     }).optional(),
   }),
 );
@@ -74,10 +81,10 @@ var PlainCallAskResultSchema = DoctorLazy(() =>
     ask_digest: permissionAskSchemas(),
     reasons: array(
       zodStrictObject({
-        reason: string().min(1).max(MAX_QUESTION_CHARS),
-        classifier_approvable: M(),
-        circuit_breaker: string().max(64).optional(),
-        also: array(string().max(64)).max(MAX_ASK_REASONS).optional(),
+        reason: stringSchema().min(1).max(MAX_QUESTION_CHARS),
+        classifier_approvable: booleanSchema(),
+        circuit_breaker: stringSchema().max(64).optional(),
+        also: array(stringSchema().max(64)).max(MAX_ASK_REASONS).optional(),
       }),
     )
       .min(1)
@@ -85,41 +92,42 @@ var PlainCallAskResultSchema = DoctorLazy(() =>
   }),
 );
 //@ chunk-3kqfccv7.js:1227-1564 placement
-function readCallerAsks(n) {
-  let e = isPlainObject(n) ? n[CALLER_ASKS_KEY] : undefined;
-  if (e === undefined)
+function readCallerAsks(args) {
+  let raw = isPlainObject(args) ? args[CALLER_ASKS_KEY] : undefined;
+  if (raw === undefined)
     return {
       kind: "absent",
     };
-  if (typeof e !== "string" || e.length > MAX_REASON_CHARS)
+  if (typeof raw !== "string" || raw.length > MAX_REASON_CHARS)
     return {
       kind: "unreadable",
     };
-  let r = PlainCallAskApprovalSchema().safeParse(safeParseJSON(e, false)).data;
-  if (r === undefined)
+  let parsed = PlainCallAskApprovalSchema().safeParse(safeParseJSON(raw, false)).data;
+  if (parsed === undefined)
     return {
       kind: "unreadable",
     };
-  return r.approved === undefined
+  return parsed.approved === undefined
     ? {
         kind: "can_ask",
       }
     : {
         kind: "approved",
-        askDigest: r.approved.ask_digest,
-        attested: r.approved.attested,
+        askDigest: parsed.approved.ask_digest,
+        attested: parsed.approved.attested,
       };
 }
 //@ chunk-3kqfccv7.js:1564-1757 placement
-function toPermissionQuestionReason(n, e, r = true) {
+function toPermissionQuestionReason(reason, classifierApprovable, isHostPersonOnly = true) {
   return {
-    reason: asShownOnACard(n.reason),
-    classifier_approvable: e && !(r && isHostPersonOnlyCircuitBreaker(n)),
-    ...(n.circuitBreaker !== undefined && {
-      circuit_breaker: n.circuitBreaker,
+    reason: asShownOnACard(reason.reason),
+    classifier_approvable:
+      classifierApprovable && !(isHostPersonOnly && isHostPersonOnlyCircuitBreaker(reason)),
+    ...(reason.circuitBreaker !== undefined && {
+      circuit_breaker: reason.circuitBreaker,
     }),
-    ...(n.also !== undefined && {
-      also: [...n.also],
+    ...(reason.also !== undefined && {
+      also: [...reason.also],
     }),
   };
 }
@@ -149,9 +157,9 @@ function collectAskReasons({ matchedAskRule, decisionReason }) {
   ];
 }
 //@ chunk-3kqfccv7.js:2206-2321 placement
-function permissionRuleAskReason(n) {
+function permissionRuleAskReason(rule) {
   return safetyCheckReason(
-    `A permission rule says to ask a person before a call like this one: '${formatPermissionRule(n.ruleValue)}'`,
+    `A permission rule says to ask a person before a call like this one: '${formatPermissionRule(rule.ruleValue)}'`,
   );
 }
 //@ chunk-3kqfccv7.js:2321-2395 placement
@@ -163,58 +171,60 @@ function safetyCheckReason(reason) {
   };
 }
 //@ chunk-3kqfccv7.js:2395-2495 placement
-function permissionQuestionDigest(name, e, { path, identity }, t) {
+function permissionQuestionDigest(name, args, { path, identity }, reasons) {
   return createHash("sha256")
-    .update(jsonStringify([name, e, path, identity ?? null, t]))
+    .update(jsonStringify([name, args, path, identity ?? null, reasons]))
     .digest("hex");
 }
 //@ chunk-3kqfccv7.js:2495-2915 placement
 /**
  * 生成需人工批准的问题与理由
  */
-function buildPermissionQuestion(n, e, r, c) {
-  let t = (a) => toPermissionQuestionReason(a, a.classifierApprovable);
-  let mapped = collectSafetyReasons(r.decisionReason).map(t);
-  let mapped_2 = collectAskReasons(r).map(t);
-  let m =
+function buildPermissionQuestion(tool, args, permissionResult, workspace) {
+  let toReason = (item) => toPermissionQuestionReason(item, item.classifierApprovable);
+  let mapped = collectSafetyReasons(permissionResult.decisionReason).map(toReason);
+  let mapped_2 = collectAskReasons(permissionResult).map(toReason);
+  let reasons =
     mapped_2.length === 0
       ? mapped
       : [
-          ...mapped.toSorted((a, y) => Number(a.classifier_approvable) - Number(y.classifier_approvable)),
+          ...mapped.toSorted(
+            (leftReason, b) => Number(leftReason.classifier_approvable) - Number(b.classifier_approvable),
+          ),
           ...mapped_2,
-        ].map((a) => ({
-          ...a,
+        ].map((reason) => ({
+          ...reason,
           classifier_approvable: false,
         }));
-  let i = Ji(m, jsonStringify);
-  if (i.length === 0 || i.length > MAX_ASK_REASONS) return;
-  if (i.some((a) => a.reason.length > MAX_QUESTION_CHARS)) return;
+  let deduped = uniqByExport(reasons, jsonStringify);
+  if (deduped.length === 0 || deduped.length > MAX_ASK_REASONS) return;
+  if (deduped.some((reason) => reason.reason.length > MAX_QUESTION_CHARS)) return;
   return {
     v: 1,
     outcome: "needs_approval",
-    ask_digest: permissionQuestionDigest(n.name, e, c, i),
-    reasons: i,
+    ask_digest: permissionQuestionDigest(tool.name, args, workspace, deduped),
+    reasons: deduped,
   };
 }
 //@ chunk-3kqfccv7.js:2915-4490 placement
 /**
  * mcp serve 普通调用的"需要人批准"处理：按 anthropic/permissionAsks 元数据核对问题摘要与批准记录，未经人批准则不执行。
  */
-async function settlePlainCallAsk(n, e, r, session, t) {
-  let callerAsks = readCallerAsks(n);
+async function settlePlainCallAsk(args, tool, permissionResult, session, denial) {
+  let callerAsks = readCallerAsks(args);
   if (callerAsks.kind === "absent") return "as_without_the_key";
-  if (t === undefined)
+  if (denial === undefined)
     return callerAsks.kind === "approved"
-      ? rejectionResult(e, "question_changed", ASK_CHANGED_TEXT)
+      ? rejectionResult(tool, "question_changed", ASK_CHANGED_TEXT)
       : "as_without_the_key";
   if (callerAsks.kind === "unreadable")
     return rejectionResult(
-      e,
+      tool,
       "asks_key_unreadable",
-      `${t.message} That needs a person's approval, and this server could not read its caller's offer to ask for one, so nobody was asked. Retrying won't help.`,
+      `${denial.message} That needs a person's approval, and this server could not read its caller's offer to ask for one, so nobody was asked. Retrying won't help.`,
     );
   let cwd = getSessionProject(session).cwd;
-  let m = {
+  let workspace = {
     path: cwd,
     identity: await Promise.all([
       realpath(cwd),
@@ -222,32 +232,32 @@ async function settlePlainCallAsk(n, e, r, session, t) {
         bigint: true,
       }),
     ]).then(
-      ([a, y]) => (a === cwd ? `${y.dev}:${y.ino}` : undefined),
+      ([realCwd, stats]) => (realCwd === cwd ? `${stats.dev}:${stats.ino}` : undefined),
       () => {
         return;
       },
     ),
   };
-  if (m.identity === undefined)
+  if (workspace.identity === undefined)
     return callerAsks.kind === "approved"
-      ? rejectionResult(e, "question_changed", ASK_CHANGED_TEXT)
+      ? rejectionResult(tool, "question_changed", ASK_CHANGED_TEXT)
       : rejectionResult(
-          e,
+          tool,
           "start_folder_unconfirmed",
-          `${t.message} That needs a person's approval, and nobody was asked, because the working directory was moved, is gone or cannot be read. Change directory first, then send the call again.`,
+          `${denial.message} That needs a person's approval, and nobody was asked, because the working directory was moved, is gone or cannot be read. Change directory first, then send the call again.`,
         );
-  let permissionQuestion = buildPermissionQuestion(e, r, t, m);
+  let permissionQuestion = buildPermissionQuestion(tool, permissionResult, denial, workspace);
   if (permissionQuestion === undefined)
     return rejectionResult(
-      e,
+      tool,
       "question_too_large",
-      `${t.message} The permission check's objections are too many, or one is too long, for this server to put to a person, so nobody was asked. Send smaller calls, or use shorter paths.`,
+      `${denial.message} The permission check's objections are too many, or one is too long, for this server to put to a person, so nobody was asked. Send smaller calls, or use shorter paths.`,
     );
   switch (callerAsks.kind) {
     case "can_ask":
       logFeatureSad("mcp_serve_plain_call", "asked");
       return {
-        rejection: `${e.name} was not run: ${t.message} A person has to approve this call, and none did. Tell the user what you wanted to run and why.`,
+        rejection: `${tool.name} was not run: ${denial.message} A person has to approve this call, and none did. Tell the user what you wanted to run and why.`,
         meta: {
           [ANTHROPIC_PERMISSIONQUESTION]: permissionQuestion,
         },
@@ -255,13 +265,13 @@ async function settlePlainCallAsk(n, e, r, session, t) {
     case "approved":
       if (!callerAsks.attested)
         return rejectionResult(
-          e,
+          tool,
           "approval_not_from_person",
           "the approval sent with this call did not come from a person, and only a person's counts. Tell the user what you wanted to run and why.",
         );
       return permissionQuestion.ask_digest === callerAsks.askDigest
         ? "run"
-        : rejectionResult(e, "question_changed", ASK_CHANGED_TEXT);
+        : rejectionResult(tool, "question_changed", ASK_CHANGED_TEXT);
   }
 }
 //@ chunk-3kqfccv7.js:4490-4820 placement
@@ -271,10 +281,10 @@ async function settlePlainCallAsk(n, e, r, session, t) {
 var ASK_CHANGED_TEXT =
   "what a person approved is no longer what this call would do: the working directory, or what the permission check found, has changed since, or the working directory was moved, is gone or cannot be read. If it was moved, is gone or cannot be read, change directory first. Then send the call again to have it checked afresh.";
 //@ chunk-3kqfccv7.js:4820-4915 placement
-function rejectionResult(n, e, r) {
-  logFeatureSad("mcp_serve_plain_call", e);
+function rejectionResult(tool, code, text) {
+  logFeatureSad("mcp_serve_plain_call", code);
   return {
-    rejection: `${n.name} was not run: ${r}`,
+    rejection: `${tool.name} was not run: ${text}`,
   };
 }
 export {
@@ -284,4 +294,5 @@ export {
   readCallerAsks,
   CALLER_ASKS_KEY,
   settlePlainCallAsk,
+  holdsSafetyAsksCapability,
 };

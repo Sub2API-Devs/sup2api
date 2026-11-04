@@ -7,11 +7,11 @@
  */
 
 //@ chunk-m4p5zn6n.js:16281-16290 esm-layout
-var signals = [];
+var signals_2 = [];
 //@ chunk-m4p5zn6n.js:16290-16326 esm-fingerprint
-signals.push("SIGHUP", "SIGINT", "SIGTERM");
+signals_2.push("SIGHUP", "SIGINT", "SIGTERM");
 //@ chunk-m4p5zn6n.js:16326-16434 esm-fingerprint
-signals.push(
+signals_2.push(
   "SIGALRM",
   "SIGABRT",
   "SIGVTALRM",
@@ -24,5 +24,5 @@ signals.push(
   "SIGIOT",
 );
 //@ chunk-m4p5zn6n.js:16434-16481 esm-fingerprint
-signals.push("SIGIO", "SIGPOLL", "SIGPWR", "SIGSTKFLT");
-export { signals };
+signals_2.push("SIGIO", "SIGPOLL", "SIGPWR", "SIGSTKFLT");
+export { signals_2 };

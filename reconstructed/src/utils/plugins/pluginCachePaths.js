@@ -40,28 +40,29 @@ import { getPathsForPermissionCheck } from "../fsOperations.js";
 import { devModsDir } from "../../plugins/functionHooks/devModsName.js";
 import { isNetworkOrSpecialPath, isWslUncPath, wslLocalhostParts } from "../networkPaths.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, array, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, array, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
 import { logError } from "../log.js";
 import { createLazySignal } from "../signal.js";
 import { wslProviderOfPath } from "./localMarketplacePaths.js";
 import { hasDotSegment_2 } from "../pathClassification.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-v80cqab4.js:778-851 placement
-function isFreshTimestamp(e, r, n = Date.now()) {
-  return Number.isFinite(e) && Math.abs(n - e) < r;
+function isFreshTimestamp(mtimeMs, windowMs, now = Date.now()) {
+  return Number.isFinite(mtimeMs) && Math.abs(now - mtimeMs) < windowMs;
 }
 //@ chunk-v80cqab4.js:893-904 placement
 var MAX_PLUGIN_CACHE_READ = 1024;
 //@ chunk-v80cqab4.js:904-1056 placement
-function foldPathSegments(e) {
+function foldPathSegments(path) {
   let foldedSegmentsBySpelling = getSessionPathsCache().foldedSegmentsBySpelling;
-  let n = foldedSegmentsBySpelling.get(e);
-  if (n === undefined) {
-    n = normalize(e).split(sep).map(foldName).join(sep);
+  let folded = foldedSegmentsBySpelling.get(path);
+  if (folded === undefined) {
+    folded = normalize(path).split(sep).map(foldName).join(sep);
     if (foldedSegmentsBySpelling.size >= MAX_PLUGIN_CACHE_READ) foldedSegmentsBySpelling.clear();
-    foldedSegmentsBySpelling.set(e, n);
+    foldedSegmentsBySpelling.set(path, folded);
   }
-  return n;
+  return folded;
 }
 //@ chunk-v80cqab4.js:1056-1072 placement
 var PLUGIN_CACHE_DIRNAME = "cache";
@@ -79,19 +80,21 @@ function pluginRootDirs() {
     resolve(getClaudeConfigDir(), "plugins"),
     resolve(getClaudeConfigDir(), "cowork_plugins"),
     projectPluginsDir(),
-    ...getPluginSeedDirs().map((e) => resolve(getOriginalCwd(), e)),
+    ...getPluginSeedDirs().map((seedDir) => resolve(getOriginalCwd(), seedDir)),
   ]);
 }
 //@ chunk-v80cqab4.js:1243-1306 placement
 function commandProducerDirs() {
-  return uniq([...getInlinePlugins(), ...getInlinePluginsNoMcp()].map((e) => resolve(getOriginalCwd(), e)));
+  return uniq(
+    [...getInlinePlugins(), ...getInlinePluginsNoMcp()].map((dir) => resolve(getOriginalCwd(), dir)),
+  );
 }
 //@ chunk-v80cqab4.js:1306-1711 placement
 function isInCommandProducerDir(absolutePath) {
-  let r = commandProducerDirs();
-  if (r.length === 0) return false;
+  let roots = commandProducerDirs();
+  if (roots.length === 0) return false;
   if (traversesOrResolvesUntrustedLink(absolutePath, PLUGIN_CACHE_RESOLVE_OPTIONS)) return true;
-  let joined = r.join("\x00");
+  let joined = roots.join("\x00");
   let pluginRegistry = getPluginRegistry();
   let inlinePluginRootsComparableMemo = pluginRegistry.inlinePluginRootsComparableMemo;
   if (
@@ -100,10 +103,10 @@ function isInCommandProducerDir(absolutePath) {
   ) {
     inlinePluginRootsComparableMemo = {
       roots: joined,
-      comparable: r.map((s) =>
-        toComparablePath(s, {
+      comparable: roots.map((root) =>
+        toComparablePath(root, {
           foldCase: true,
-          knownNotSuspect: !traversesOrResolvesUntrustedLink(s, PLUGIN_CACHE_RESOLVE_OPTIONS),
+          knownNotSuspect: !traversesOrResolvesUntrustedLink(root, PLUGIN_CACHE_RESOLVE_OPTIONS),
         }),
       ),
       at: Date.now(),
@@ -114,8 +117,8 @@ function isInCommandProducerDir(absolutePath) {
     foldCase: true,
     knownNotSuspect: true,
   });
-  return inlinePluginRootsComparableMemo.comparable.some((s) =>
-    isPathWithin(s, comparablePath, {
+  return inlinePluginRootsComparableMemo.comparable.some((root) =>
+    isPathWithin(root, comparablePath, {
       alreadyComparable: true,
     }),
   );
@@ -130,19 +133,25 @@ var PLUGIN_CACHE_RESOLVE_OPTIONS = {
 function isPluginDirReadable(absolutePath) {
   if (isDiskless()) return true;
   let pathsForPermissionCheck = getPathsForPermissionCheck(resolve(devModsDir()));
-  let n = foldPathSegments(resolve(absolutePath));
-  if (pathsForPermissionCheck.map(foldPathSegments).some((s) => n === s || n.startsWith(s + sep)))
+  let foldedPath = foldPathSegments(resolve(absolutePath));
+  if (
+    pathsForPermissionCheck
+      .map(foldPathSegments)
+      .some((allowed) => foldedPath === allowed || foldedPath.startsWith(allowed + sep))
+  )
     return true;
-  let i = isUncOrDeviceSpelling(absolutePath) || isUntrustedLinkPath(absolutePath);
-  let t = !isNetworkOrSpecialPath(absolutePath) && (!i || isWslUncPath(absolutePath));
-  if (t && traversesOrResolvesUntrustedLink(absolutePath, PLUGIN_CACHE_RESOLVE_OPTIONS)) return true;
+  let suspectSpelling = isUncOrDeviceSpelling(absolutePath) || isUntrustedLinkPath(absolutePath);
+  let knownNotSuspect =
+    !isNetworkOrSpecialPath(absolutePath) && (!suspectSpelling || isWslUncPath(absolutePath));
+  if (knownNotSuspect && traversesOrResolvesUntrustedLink(absolutePath, PLUGIN_CACHE_RESOLVE_OPTIONS))
+    return true;
   let comparablePath = toComparablePath(absolutePath, {
     foldCase: true,
-    knownNotSuspect: t,
+    knownNotSuspect,
   });
-  return pathsForPermissionCheck.some((s) =>
+  return pathsForPermissionCheck.some((allowed) =>
     isPathWithin(
-      toComparablePath(s, {
+      toComparablePath(allowed, {
         foldCase: true,
       }),
       comparablePath,
@@ -153,48 +162,56 @@ function isPluginDirReadable(absolutePath) {
   );
 }
 //@ chunk-v80cqab4.js:2165-2404 placement
-var MAX_SOURCE_RECORD_BYTES = 4194304;
-var CommandSourceRecordSchema = DoctorLazy(() =>
-  u({
-    sourceCommand: string().optional().catch(undefined),
-    sourceProducerPath: string().optional().catch(undefined),
-    previousProducerPaths: array(unknown())
-      .transform((e) => e.filter((r) => typeof r === "string"))
-      .optional()
-      .catch(undefined),
-  }).passthrough(),
-);
+var MAX_SOURCE_RECORD_BYTES; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var CommandSourceRecordSchema;
+deferInit("chunk-v80cqab4.js:2165", () => {
+  MAX_SOURCE_RECORD_BYTES = 4194304;
+  CommandSourceRecordSchema = DoctorLazy(() =>
+    objectSchema({
+      sourceCommand: stringSchema().optional().catch(undefined),
+      sourceProducerPath: stringSchema().optional().catch(undefined),
+      previousProducerPaths: array(unknown())
+        .transform((list) => list.filter((item) => typeof item === "string"))
+        .optional()
+        .catch(undefined),
+    }).passthrough(),
+  );
+});
 //@ chunk-v80cqab4.js:2404-3218 placement
-function updateDeniedProducerDirs(e) {
+function updateDeniedProducerDirs(dirs) {
   let pluginRegistry = getPluginRegistry();
   let commandProducerDirsDenied = pluginRegistry.commandProducerDirsDenied;
-  let i = wslProviderOfPluginsRoot();
-  pluginRegistry.commandProducerDirsWslProviderUndeterminable = i === "undeterminable";
-  let t = i === "undeterminable" ? undefined : i;
+  let wslProvider = wslProviderOfPluginsRoot();
+  pluginRegistry.commandProducerDirsWslProviderUndeterminable = wslProvider === "undeterminable";
+  let nativeProvider = wslProvider === "undeterminable" ? undefined : wslProvider;
   pluginRegistry.commandProducerDirsScannedAt = Date.now();
   pluginRegistry.commandProducerDirsComparable = null;
-  for (let g of new Set(e)) {
-    let s;
+  for (let dir of new Set(dirs)) {
+    let parsed;
     try {
-      let m = join(g, "installed_plugins.json");
-      let P = statSync(m);
-      if (!P.isFile() || P.size > MAX_SOURCE_RECORD_BYTES) continue;
-      let file = readFileSync(m, "utf8");
-      s = JSON.parse(file);
+      let filePath = join(dir, "installed_plugins.json");
+      let stat = statSync(filePath);
+      if (!stat.isFile() || stat.size > MAX_SOURCE_RECORD_BYTES) continue;
+      let file = readFileSync(filePath, "utf8");
+      parsed = JSON.parse(file);
     } catch {
       continue;
     }
-    let plugins = typeof s === "object" && s !== null && "plugins" in s ? s.plugins : undefined;
+    let plugins =
+      typeof parsed === "object" && parsed !== null && "plugins" in parsed ? parsed.plugins : undefined;
     if (typeof plugins !== "object" || plugins === null) continue;
-    for (let m of Object.values(plugins)) {
-      if (!Array.isArray(m)) continue;
-      for (let P of m) {
-        let c = CommandSourceRecordSchema().safeParse(P);
-        if (!c.success) continue;
-        for (let C of [c.data.sourceProducerPath, ...(c.data.previousProducerPaths ?? [])]) {
-          let d = C === undefined ? undefined : stripWin32DevicePrefix(C);
-          let D = d === undefined ? undefined : toNativePluginPath(d, t);
-          if (D !== undefined) commandProducerDirsDenied.add(D);
+    for (let installations of Object.values(plugins)) {
+      if (!Array.isArray(installations)) continue;
+      for (let installation of installations) {
+        let record = CommandSourceRecordSchema().safeParse(installation);
+        if (!record.success) continue;
+        for (let producerPath of [
+          record.data.sourceProducerPath,
+          ...(record.data.previousProducerPaths ?? []),
+        ]) {
+          let stripped = producerPath === undefined ? undefined : stripWin32DevicePrefix(producerPath);
+          let nativePath = stripped === undefined ? undefined : toNativePluginPath(stripped, nativeProvider);
+          if (nativePath !== undefined) commandProducerDirsDenied.add(nativePath);
         }
       }
     }
@@ -202,18 +219,18 @@ function updateDeniedProducerDirs(e) {
   return [...commandProducerDirsDenied];
 }
 //@ chunk-v80cqab4.js:3218-3438 placement
-function recordProducerDir(e, { emit: r = true } = {}) {
-  let n = wslProviderOfPluginsRoot();
+function recordProducerDir(dirPath, { emit = true } = {}) {
+  let wslProvider = wslProviderOfPluginsRoot();
   let nativePluginPath = toNativePluginPath(
-    stripWin32DevicePrefix(e),
-    n === "undeterminable" ? undefined : n,
+    stripWin32DevicePrefix(dirPath),
+    wslProvider === "undeterminable" ? undefined : wslProvider,
   );
   if (nativePluginPath === undefined) return;
   let commandProducerDirsDenied = getPluginRegistry().commandProducerDirsDenied;
   if (commandProducerDirsDenied.has(nativePluginPath)) return;
   commandProducerDirsDenied.add(nativePluginPath);
   getPluginRegistry().commandProducerDirsComparable = null;
-  if (r) emitProducerDirsChanged();
+  if (emit) emitProducerDirsChanged();
 }
 //@ chunk-v80cqab4.js:3438-3511 placement
 function emitProducerDirsChanged() {
@@ -224,37 +241,40 @@ function emitProducerDirsChanged() {
   }
 }
 //@ chunk-v80cqab4.js:3511-3559 placement
-var onProducerDirsChanged = createLazySignal(() => getPluginRegistry().commandProducerDirsChanged);
+var onProducerDirsChanged; // deferred: uses getPluginRegistry (./pluginLoadState.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-v80cqab4.js:3511", () => {
+  onProducerDirsChanged = createLazySignal(() => getPluginRegistry().commandProducerDirsChanged);
+});
 //@ chunk-v80cqab4.js:3559-4458 placement
 /**
  * 扫描会产生命令的插件目录，记录被拒绝或无法判断的目录（有最大缓存时间）。
  */
-function scanCommandProducerDirs(absolutePath, r, claudeConfigDir, { maxAgeMs: i = 0 } = {}) {
+function scanCommandProducerDirs(absolutePath, dirs, claudeConfigDir, { maxAgeMs = 0 } = {}) {
   let pluginRegistry = getPluginRegistry();
   if (
-    !(i > 0 && Date.now() - pluginRegistry.commandProducerDirsScannedAt < i) ||
+    !(maxAgeMs > 0 && Date.now() - pluginRegistry.commandProducerDirsScannedAt < maxAgeMs) ||
     pluginRegistry.commandProducerDirsComparable === null
   ) {
-    let a = {
+    let options = {
       foldCase: true,
     };
-    let comparablePath = toComparablePath(getOriginalCwd(), a);
-    let comparablePath_2 = toComparablePath(claudeConfigDir, a);
-    let filtered = r
-      .map((d) => toComparablePath(d, a))
+    let comparablePath = toComparablePath(getOriginalCwd(), options);
+    let comparablePath_2 = toComparablePath(claudeConfigDir, options);
+    let filtered = dirs
+      .map((dir) => toComparablePath(dir, options))
       .filter(
-        (d) =>
-          !isPathWithin(d, comparablePath, {
+        (comparable) =>
+          !isPathWithin(comparable, comparablePath, {
             alreadyComparable: true,
           }),
       );
-    let mapped = updateDeniedProducerDirs(r).map((d) => toComparablePath(d, a));
+    let mapped = updateDeniedProducerDirs(dirs).map((dir) => toComparablePath(dir, options));
     pluginRegistry.commandProducerDirsComparable = [...filtered, ...mapped];
     pluginRegistry.commandProducerDirsNeedCanonicalCandidate =
       mapped.length > 0 ||
       filtered.some(
-        (d) =>
-          !isPathWithin(comparablePath_2, d, {
+        (dir) =>
+          !isPathWithin(comparablePath_2, dir, {
             alreadyComparable: true,
           }),
       );
@@ -277,14 +297,14 @@ function scanCommandProducerDirs(absolutePath, r, claudeConfigDir, { maxAgeMs: i
     })
   )
     return true;
-  let s = pluginRegistry.commandProducerDirsNeedCanonicalCandidate
+  let comparablePath = pluginRegistry.commandProducerDirsNeedCanonicalCandidate
     ? toComparablePath(absolutePath, {
         foldCase: true,
         knownNotSuspect: true,
       })
     : resolve(absolutePath).normalize("NFC").toLowerCase();
-  return pluginRegistry.commandProducerDirsComparable.some((a) =>
-    isPathWithin(a, s, {
+  return pluginRegistry.commandProducerDirsComparable.some((root) =>
+    isPathWithin(root, comparablePath, {
       alreadyComparable: true,
     }),
   );
@@ -292,40 +312,42 @@ function scanCommandProducerDirs(absolutePath, r, claudeConfigDir, { maxAgeMs: i
 //@ chunk-v80cqab4.js:4458-4737 placement
 function wslProviderOfPluginsRoot() {
   let pluginRegistry = getPluginRegistry();
-  let r = projectPluginsDir();
+  let root = projectPluginsDir();
   let wslProviderOfPluginsRootMemo = pluginRegistry.wslProviderOfPluginsRootMemo;
   if (
-    wslProviderOfPluginsRootMemo?.root === r &&
+    wslProviderOfPluginsRootMemo?.root === root &&
     isFreshTimestamp(wslProviderOfPluginsRootMemo.at, COMMAND_SOURCE_DIR_TTL_MS)
   )
     return wslProviderOfPluginsRootMemo.value;
-  let i = wslProviderOfPath(r);
-  if (i === "undeterminable") return "undeterminable";
-  let t =
-    i === undefined
+  let provider = wslProviderOfPath(root);
+  if (provider === "undeterminable") return "undeterminable";
+  let prefixInfo =
+    provider === undefined
       ? undefined
       : {
-          prefix: i.prefix,
+          prefix: provider.prefix,
         };
   pluginRegistry.wslProviderOfPluginsRootMemo = {
-    root: r,
-    value: t,
+    root,
+    value: prefixInfo,
     at: Date.now(),
   };
-  return t;
+  return prefixInfo;
 }
 //@ chunk-v80cqab4.js:4737-4749 placement
 var COMMAND_SOURCE_DIR_TTL_MS = 30000;
 //@ chunk-v80cqab4.js:4749-4931 placement
-function toNativePluginPath(e, r) {
-  let n =
-    toWslPathNoop(e, {
+function toNativePluginPath(path, provider) {
+  let converted =
+    toWslPathNoop(path, {
       exactDots: true,
-    }) ?? (r === undefined ? undefined : toWindowsPathFromWsl(e, r.prefix));
-  if (n !== undefined) return n;
-  if (isAbsolute(e))
-    return !hasDotSegment_2(e) && (!isUntrustedLinkPath(e) || neverAllowsLocalWsl(e)) ? e : undefined;
-  return toWslPath(e, {
+    }) ?? (provider === undefined ? undefined : toWindowsPathFromWsl(path, provider.prefix));
+  if (converted !== undefined) return converted;
+  if (isAbsolute(path))
+    return !hasDotSegment_2(path) && (!isUntrustedLinkPath(path) || neverAllowsLocalWsl(path))
+      ? path
+      : undefined;
+  return toWslPath(path, {
     exactDots: true,
   });
 }

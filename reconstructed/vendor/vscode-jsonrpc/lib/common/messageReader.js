@@ -5,14 +5,14 @@
  * pieces: chunk-t4ksmxzx.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_ral } from "./ral.js";
 import { require_is } from "./is.js";
 import { require_events } from "./events.js";
 import { require_semaphore } from "./semaphore.js";
 
 //@ chunk-t4ksmxzx.js:18920-22660 cjs-fingerprint
-var require_messageReader = x(function (cjsExports) {
+var require_messageReader = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

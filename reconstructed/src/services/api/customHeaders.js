@@ -20,12 +20,12 @@ function hasCustomApiKeyHeader() {
 /**
  * ANTHROPIC_API_KEY 存在且自定义头/调用方都没给 x-api-key 时返回 {"X-Api-Key": key}。
  */
-function apiKeyHeaderFromEnv(e = {}) {
+function apiKeyHeaderFromEnv(headers = {}) {
   let ANTHROPIC_API_KEY = env.ANTHROPIC_API_KEY;
   if (
     ANTHROPIC_API_KEY === undefined ||
     hasCustomApiKeyHeader() ||
-    Object.entries(e).some(([key, value]) => key.toLowerCase() === "x-api-key" && value !== undefined)
+    Object.entries(headers).some(([key, value]) => key.toLowerCase() === "x-api-key" && value !== undefined)
   )
     return;
   return {
@@ -38,40 +38,41 @@ function hasCustomAuthorizationHeader() {
 }
 //@ chunk-bwbq4xvm.js:156857-156899 placement
 function customHeaderNames() {
-  return getCustomHeaders().map(([e]) => e);
+  return getCustomHeaders().map(([name]) => name);
 }
 //@ chunk-bwbq4xvm.js:156899-156958 placement
-function hasCustomHeader(e) {
-  return customHeaderNames().some((s) => s.toLowerCase() === e);
+function hasCustomHeader(name) {
+  return customHeaderNames().some((headerName) => headerName.toLowerCase() === name);
 }
 //@ chunk-bwbq4xvm.js:156958-157078 placement
 function clearAuthorizationHeaders() {
-  let e = {
+  let cleared = {
     Authorization: undefined,
   };
-  for (let [s] of getCustomHeaders()) if (s.toLowerCase() === "authorization") e[s] = undefined;
-  return e;
+  for (let [name] of getCustomHeaders())
+    if (name.toLowerCase() === "authorization") cleared[name] = undefined;
+  return cleared;
 }
 //@ chunk-bwbq4xvm.js:157078-157362 placement
 /**
  * 从 ANTHROPIC_CUSTOM_HEADERS 中挑出 anthropic-beta 头，去掉 afk-mode 项；在特定模式下整头置 undefined。
  */
 function filteredCustomBetaHeaders() {
-  let e = {};
-  let s = isHipaaOrg();
-  for (let [n, r] of getCustomHeaders()) {
-    if (n.toLowerCase() !== "anthropic-beta") continue;
-    let filtered = r
+  let out = {};
+  let hipaa = isHipaaOrg();
+  for (let [name, value] of getCustomHeaders()) {
+    if (name.toLowerCase() !== "anthropic-beta") continue;
+    let filtered = value
       .split(",")
-      .map((c) => c.trim())
+      .map((beta) => beta.trim())
       .filter(Boolean);
-    let filtered_2 = filtered.filter((c) => !isAfkModeBeta(c));
-    if (s) e[n] = undefined;
+    let filtered_2 = filtered.filter((beta) => !isAfkModeBeta(beta));
+    if (hipaa) out[name] = undefined;
     else if (filtered_2.length !== filtered.length)
-      e[n] = filtered_2.length > 0 ? filtered_2.join(",") : undefined;
-    else delete e[n];
+      out[name] = filtered_2.length > 0 ? filtered_2.join(",") : undefined;
+    else delete out[name];
   }
-  return e;
+  return out;
 }
 //@ chunk-bwbq4xvm.js:157416-157507 placement
 var CLOUD_AUTH_SLOT = {
@@ -90,10 +91,11 @@ var CLOUD_AUTH_SLOT = {
 function bearerFromEnvOrHeaders() {
   let ANTHROPIC_AUTH_TOKEN = env.ANTHROPIC_AUTH_TOKEN;
   if (ANTHROPIC_AUTH_TOKEN) return `Bearer ${ANTHROPIC_AUTH_TOKEN}`;
-  let s;
-  let n = Object.fromEntries(getCustomHeaders());
-  for (let [key, value] of Object.entries(n)) if (key.toLowerCase() === "authorization") s = value;
-  return s || undefined;
+  let authValue;
+  let headerMap = Object.fromEntries(getCustomHeaders());
+  for (let [key, value] of Object.entries(headerMap))
+    if (key.toLowerCase() === "authorization") authValue = value;
+  return authValue || undefined;
 }
 export {
   hasCustomApiKeyHeader,

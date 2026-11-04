@@ -10,9 +10,9 @@
  */
 import {
   init_react_production,
-  Kc,
+  fragmentTypeExport,
   isValidElement_default,
-  Fy,
+  childrenExport,
 } from "../../../vendor/react/cjs/react.production.js";
 import {
   jsxProd_default_2,
@@ -20,44 +20,51 @@ import {
   Fragment,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../ink/components/Text.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { EARLY_RETURN_SENTINEL } from "../../../runtime/bun-runtime.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-k1hxk1ex.js:380-384 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-k1hxk1ex.js:380", () => {
+  init_react_production();
+});
 //@ chunk-k1hxk1ex.js:384-388 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-k1hxk1ex.js:384", () => {
+  init_react_production();
+});
 //@ chunk-k1hxk1ex.js:388-416 sole-consumer
-function isNonEmptyString(s) {
-  return s !== "";
+function isNonEmptyString(text) {
+  return text !== "";
 }
 //@ chunk-k1hxk1ex.js:416-519 sole-consumer
-function renderBylineItem(o, a) {
+function renderBylineItem(item, index) {
   return jsxProd_default_2(
-    Kc,
+    fragmentTypeExport,
     {
       children: [
-        a > 0 &&
+        index > 0 &&
           jsxProd_default(Text, {
             dimColor: true,
             children: " \xB7 ",
           }),
-        o,
+        item,
       ],
     },
-    isValidElement_default(o) ? (o.key ?? a) : a,
+    isValidElement_default(item) ? (item.key ?? index) : index,
   );
 }
 //@ chunk-k1hxk1ex.js:519-790 callgraph-witnessed = Byline (0.375)
 function Byline(props) {
-  let $ = w(5);
+  let $ = useMemoCache(5);
   let { children } = props;
   let children_2;
   let t2;
   if ($[0] !== children) {
     t2 = EARLY_RETURN_SENTINEL;
     T: {
-      let validChildren = Fy.toArray(children).filter(isNonEmptyString);
+      let validChildren = childrenExport.toArray(children).filter(isNonEmptyString);
       if (validChildren.length === 0) {
         t2 = null;
         break T;

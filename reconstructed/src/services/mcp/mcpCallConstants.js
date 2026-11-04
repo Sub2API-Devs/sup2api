@@ -72,12 +72,14 @@ var INODE_DIRECTORY = "inode/directory";
 /**
  * 把调用标记清洗成可打印 ASCII 并截断 32 字符。
  */
-function sanitizeCallMark(e) {
-  return e.replace(/[^\x20-\x7e]/g, "").slice(0, 32);
+function sanitizeCallMark(mark) {
+  return mark.replace(/[^\x20-\x7e]/g, "").slice(0, 32);
 }
 export {
   MCP_PROTOCOL_LATEST,
   MCP_PROTOCOL_NEXT,
+  MAX_STRUCTURED_RESULT_CHARS,
+  MAX_CALL_MARK_CHARS,
   CLAUDECODE_CALLMARK,
   BEFORE_HANDLER,
   sanitizeCallMark,
@@ -90,8 +92,6 @@ export {
   QUESTION_UNANSWERED_TEXT,
   MCP_QUESTION_UNANSWERED,
   MCP_CALL_NOT_SENT_AGAIN,
-  MAX_STRUCTURED_RESULT_CHARS,
-  MAX_CALL_MARK_CHARS,
   REOPEN_REFETCH_BASE_MS,
   ANSWER_STREAM_GRACE_MS,
   retryDelayMs,

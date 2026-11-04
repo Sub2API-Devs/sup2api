@@ -23,32 +23,38 @@ var CCR_SESSION_ID_PREFIXES = ["cse_", "session_"];
 /**
  * 改写本会话 CCR MCP 地址的会话前缀。
  */
-function rewriteCcrSessionMcpUrl(e, r) {
-  let n = ccrSessionIdFromMcpUrl(r.url);
-  let found = CCR_SESSION_ID_PREFIXES.find((x) => n?.sessionSegment.startsWith(x));
-  if (!n || found === undefined) return;
-  let S = sessionIdBody(n.sessionSegment);
+function rewriteCcrSessionMcpUrl(serverName, serverConfig) {
+  let parsed = ccrSessionIdFromMcpUrl(serverConfig.url);
+  let found = CCR_SESSION_ID_PREFIXES.find((prefix) => parsed?.sessionSegment.startsWith(prefix));
+  if (!parsed || found === undefined) return;
+  let bareId = sessionIdBody(parsed.sessionSegment);
   if (
-    !startupCcrEnv.ownCcrSessionIds.some((ownCcrSessionId) => sessionIdBody(ownCcrSessionId) === S) ||
-    n.mcpServerId !== derivedServerId(n.sessionSegment, e)
+    !startupCcrEnv.ownCcrSessionIds.some((ownCcrSessionId) => sessionIdBody(ownCcrSessionId) === bareId) ||
+    parsed.mcpServerId !== derivedServerId(parsed.sessionSegment, serverName)
   )
     return;
-  let y = `${found === "cse_" ? "session_" : "cse_"}${S}`;
-  let P = derivedServerId(y, e);
-  let [E, A, ...M] = r.url.split("?");
-  let h = `/v2/ccr-sessions/${n.sessionSegment}/mcp`;
-  let k = A?.split("&") ?? [];
-  let L = `mcp_server_id=${n.mcpServerId}`;
-  if (E === undefined || M.length > 0 || !E.endsWith(h) || count(k, (x) => x === L) !== 1) return;
-  let U = `${E.slice(0, -h.length)}/v2/ccr-sessions/${y}/mcp?${k.map((x) => (x === L ? `mcp_server_id=${P}` : x)).join("&")}`;
-  let q = ccrSessionIdFromMcpUrl(U);
-  return q?.sessionSegment === y &&
-    q.mcpServerId === P &&
-    q.toolboxMcpServerId === n.toolboxMcpServerId &&
-    q.upstreamUrl === n.upstreamUrl
+  let flippedSegment = `${found === "cse_" ? "session_" : "cse_"}${bareId}`;
+  let flippedServerId = derivedServerId(flippedSegment, serverName);
+  let [baseUrl, query, ...extraParts] = serverConfig.url.split("?");
+  let expectedPath = `/v2/ccr-sessions/${parsed.sessionSegment}/mcp`;
+  let queryParts = query?.split("&") ?? [];
+  let serverIdParam = `mcp_server_id=${parsed.mcpServerId}`;
+  if (
+    baseUrl === undefined ||
+    extraParts.length > 0 ||
+    !baseUrl.endsWith(expectedPath) ||
+    count(queryParts, (part) => part === serverIdParam) !== 1
+  )
+    return;
+  let rewrittenUrl = `${baseUrl.slice(0, -expectedPath.length)}/v2/ccr-sessions/${flippedSegment}/mcp?${queryParts.map((part) => (part === serverIdParam ? `mcp_server_id=${flippedServerId}` : part)).join("&")}`;
+  let reparsed = ccrSessionIdFromMcpUrl(rewrittenUrl);
+  return reparsed?.sessionSegment === flippedSegment &&
+    reparsed.mcpServerId === flippedServerId &&
+    reparsed.toolboxMcpServerId === parsed.toolboxMcpServerId &&
+    reparsed.upstreamUrl === parsed.upstreamUrl
     ? {
-        ...r,
-        url: U,
+        ...serverConfig,
+        url: rewrittenUrl,
       }
     : undefined;
 }

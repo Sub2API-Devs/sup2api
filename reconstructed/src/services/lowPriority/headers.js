@@ -22,18 +22,18 @@ var SLOW_BUDGET_RESET_HEADER = "anthropic-ratelimit-unified-slow-budget-reset";
 /**
  * 读取慢速优惠实验组响应头（treatment/control）。
  */
-function getSlowOfferArm(e) {
-  let n = e?.get("anthropic-ratelimit-unified-slow-offer");
-  return n === "treatment" || n === "control" ? n : undefined;
+function getSlowOfferArm(headers) {
+  let value = headers?.get("anthropic-ratelimit-unified-slow-offer");
+  return value === "treatment" || value === "control" ? value : undefined;
 }
 //@ chunk-hwmsct5x.js:185228-185494 placement
 /**
  * 读取并校验慢速模式状态响应头（active、not_needed、slot_busy 等）。
  */
-function getSlowStatusHeader(e) {
-  let n = e?.get("anthropic-ratelimit-unified-slow-status");
-  if (n === null || n === undefined) return;
-  switch (n) {
+function getSlowStatusHeader(headers) {
+  let value = headers?.get("anthropic-ratelimit-unified-slow-status");
+  if (value === null || value === undefined) return;
+  switch (value) {
     case "active":
     case "not_needed":
     case "slot_busy":
@@ -41,38 +41,38 @@ function getSlowStatusHeader(e) {
     case "budget_exhausted":
     case "ineligible":
     case "off":
-      return n;
+      return value;
     default:
       return "unrecognized";
   }
 }
 //@ chunk-hwmsct5x.js:185494-185630 placement
-function readNumericHeader(e, n) {
-  let r = e?.get(n);
-  if (r === null || r === undefined || r.trim() === "") return;
-  let s = Number(r);
-  return Number.isFinite(s) && s >= 0 ? s : undefined;
+function readNumericHeader(headers, name) {
+  let raw = headers?.get(name);
+  if (raw === null || raw === undefined || raw.trim() === "") return;
+  let value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 //@ chunk-hwmsct5x.js:185630-185706 placement
 /**
  * 读慢速重试等待头（秒）。
  */
-function getSlowRetryAfter(e) {
-  return readNumericHeader(e, "anthropic-ratelimit-unified-slow-retry-after");
+function getSlowRetryAfter(headers) {
+  return readNumericHeader(headers, "anthropic-ratelimit-unified-slow-retry-after");
 }
 //@ chunk-hwmsct5x.js:185706-185779 placement
 /**
  * 读慢速最大等待头（秒）。
  */
-function getSlowMaxWait(e) {
-  return readNumericHeader(e, "anthropic-ratelimit-unified-slow-max-wait");
+function getSlowMaxWait(headers) {
+  return readNumericHeader(headers, "anthropic-ratelimit-unified-slow-max-wait");
 }
 //@ chunk-hwmsct5x.js:185779-185899 placement
 /**
  * 读取慢速预算使用率响应头（上限为 1）。
  */
-function getSlowBudgetUtilization(e) {
-  let numericHeader = readNumericHeader(e, "anthropic-ratelimit-unified-slow-budget-utilization");
+function getSlowBudgetUtilization(headers) {
+  let numericHeader = readNumericHeader(headers, "anthropic-ratelimit-unified-slow-budget-utilization");
   return numericHeader === undefined ? undefined : Math.min(1, numericHeader);
 }
 //@ chunk-hwmsct5x.js:185899-186162 placement
@@ -88,10 +88,10 @@ var OVERAGE_IN_USE_HEADER = "anthropic-ratelimit-unified-overage-in-use";
 /**
  * 判断响应是否带统一限流头（代表性额度或超额状态）。
  */
-function hasUnifiedRateLimitHeaders(e) {
+function hasUnifiedRateLimitHeaders(error) {
   return Boolean(
-    e.headers?.get?.("anthropic-ratelimit-unified-representative-claim") ||
-    e.headers?.get?.("anthropic-ratelimit-unified-overage-status"),
+    error.headers?.get?.("anthropic-ratelimit-unified-representative-claim") ||
+    error.headers?.get?.("anthropic-ratelimit-unified-overage-status"),
   );
 }
 //@ chunk-hwmsct5x.js:186327-186735 placement
@@ -143,11 +143,11 @@ function getLowPriorityConfigVersion() {
  */
 function getLowPriorityCooloffMs() {
   let cooloffMinutes = getToastyBreezeConfig().cooloffMinutes;
-  let n =
+  let minutes =
     typeof cooloffMinutes === "number" && Number.isFinite(cooloffMinutes)
       ? Math.min(MAX_COOLOFF_MINUTES, Math.max(0, cooloffMinutes))
       : MIN_COOLOFF_MINUTES;
-  return Math.round(n * 60000);
+  return Math.round(minutes * 60000);
 }
 //@ chunk-hwmsct5x.js:187459-187495 placement
 /**
@@ -175,9 +175,9 @@ export {
   SLOW,
   isLowPriorityEnabled,
   getLowPriorityConfigVersion,
-  hasUnifiedRateLimitHeaders,
   getLowPriorityCooloffMs,
   getSlowBudgetUtilization,
   getSlowStatusHeader,
+  hasUnifiedRateLimitHeaders,
   SLOW_BUDGET_RESET_HEADER,
 };

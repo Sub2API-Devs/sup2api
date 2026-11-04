@@ -5,7 +5,7 @@
  * pieces: chunk-6ja29j2n.js (4)
  * attribution: esm-fingerprint 4
  */
-import { O } from "../../lib/common/html.js";
+import { DOCUMENT_MODE } from "../../lib/common/html.js";
 
 //@ chunk-6ja29j2n.js:126135-128770 esm-fingerprint
 var VALID_DOCTYPE_NAME = "html";
@@ -101,22 +101,22 @@ function isConforming(token) {
 }
 //@ chunk-6ja29j2n.js:128914-129218 esm-fingerprint
 function getDocumentMode(token) {
-  if (token.name !== VALID_DOCTYPE_NAME) return O.QUIRKS;
+  if (token.name !== VALID_DOCTYPE_NAME) return DOCUMENT_MODE.QUIRKS;
   let { systemId } = token;
-  if (systemId && systemId.toLowerCase() === QUIRKS_MODE_SYSTEM_ID) return O.QUIRKS;
+  if (systemId && systemId.toLowerCase() === QUIRKS_MODE_SYSTEM_ID) return DOCUMENT_MODE.QUIRKS;
   let { publicId } = token;
   if (publicId !== null) {
     publicId = publicId.toLowerCase();
-    if (QUIRKS_MODE_PUBLIC_IDS.has(publicId)) return O.QUIRKS;
+    if (QUIRKS_MODE_PUBLIC_IDS.has(publicId)) return DOCUMENT_MODE.QUIRKS;
     let prefixes =
       systemId === null ? QUIRKS_MODE_NO_SYSTEM_ID_PUBLIC_ID_PREFIXES : QUIRKS_MODE_PUBLIC_ID_PREFIXES;
-    if (hasPrefix(publicId, prefixes)) return O.QUIRKS;
+    if (hasPrefix(publicId, prefixes)) return DOCUMENT_MODE.QUIRKS;
     prefixes =
       systemId === null
         ? LIMITED_QUIRKS_PUBLIC_ID_PREFIXES
         : LIMITED_QUIRKS_WITH_SYSTEM_ID_PUBLIC_ID_PREFIXES;
-    if (hasPrefix(publicId, prefixes)) return O.LIMITED_QUIRKS;
+    if (hasPrefix(publicId, prefixes)) return DOCUMENT_MODE.LIMITED_QUIRKS;
   }
-  return O.NO_QUIRKS;
+  return DOCUMENT_MODE.NO_QUIRKS;
 }
 export { getDocumentMode, isConforming };

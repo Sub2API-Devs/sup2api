@@ -101,7 +101,7 @@ class CloudSessionReads {
     if (Date.now() - this.proofRereadAt < PROOF_REREAD_INTERVAL_MS) return;
     this.proofRereadAt = Date.now();
     try {
-      let { clearTrustedDeviceTokenCache } = await import("./chunk-3kb57csj.js");
+      let { clearTrustedDeviceTokenCache } = await import("../../bridge/trustedDevice.js");
       clearTrustedDeviceTokenCache();
     } catch (error) {
       logForDebugging(
@@ -112,168 +112,183 @@ class CloudSessionReads {
       );
     }
   }
-  async answer(e, s) {
-    if (e.subtype === "get_cloud_session") requireCloudSessionId(e.subtype, e.session_id);
-    let r = await this.bounded(e.subtype, s, async (signal) => {
-      let u = e.subtype === "list_cloud_sessions" && e.user_initiated !== true;
-      let _ = await refusalBeforeAnyRequest(!u);
-      if (_ !== null) return _;
-      let d = isCcrV2SessionCrudEnabled();
-      if (e.subtype === "list_cloud_sessions") {
-        let S = await getFromSessionApi(
-          d ? `/v1/code/sessions?limit=${SESSIONS_PAGE_LIMIT}` : "/v1/sessions",
+  async answer(request, context) {
+    if (request.subtype === "get_cloud_session") requireCloudSessionId(request.subtype, request.session_id);
+    let result = await this.bounded(request.subtype, context, async (signal) => {
+      let isBackground = request.subtype === "list_cloud_sessions" && request.user_initiated !== true;
+      let refusal = await refusalBeforeAnyRequest(!isBackground);
+      if (refusal !== null) return refusal;
+      let useCcrV2 = isCcrV2SessionCrudEnabled();
+      if (request.subtype === "list_cloud_sessions") {
+        let listResult = await getFromSessionApi(
+          useCcrV2 ? `/v1/code/sessions?limit=${SESSIONS_PAGE_LIMIT}` : "/v1/sessions",
           {
             signal,
-            context: s,
+            context,
             maxResponseBytes: MAX_SESSIONS_RESPONSE_BYTES,
-            olderApi: !d,
-            isBackground: u,
+            olderApi: !useCcrV2,
+            isBackground,
           },
         );
-        let k = S.ok && S.status === 404 ? unavailable("failed") : unavailableForResult(S, u);
-        if (k !== null) return k;
-        let f = S.ok ? S.data : undefined;
-        if (!isPlainObject(f) || !Array.isArray(f.data)) return unavailable("failed");
+        let failure =
+          listResult.ok && listResult.status === 404
+            ? unavailable("failed")
+            : unavailableForResult(listResult, isBackground);
+        if (failure !== null) return failure;
+        let body = listResult.ok ? listResult.data : undefined;
+        if (!isPlainObject(body) || !Array.isArray(body.data)) return unavailable("failed");
         return {
           status: "ok",
-          sessions: f.data.flatMap((n) => {
-            if (!isPlainObject(n) || typeof n.id !== "string") return [];
-            let compatSessionId = toCompatSessionId_2(n.id);
-            let found = [n.updated_at, n.last_event_at, n.created_at].find((y) => typeof y === "string");
+          sessions: body.data.flatMap((rawSession) => {
+            if (!isPlainObject(rawSession) || typeof rawSession.id !== "string") return [];
+            let compatSessionId = toCompatSessionId_2(rawSession.id);
+            let found = [rawSession.updated_at, rawSession.last_event_at, rawSession.created_at].find(
+              (timestamp) => typeof timestamp === "string",
+            );
             if (
               compatSessionId.length > MAX_SESSION_ID_CHARS ||
               !CCR_SESSION_ID_RE.test(compatSessionId) ||
               typeof found !== "string"
             )
               return [];
-            let h;
-            switch (n.session_status) {
+            let status;
+            switch (rawSession.session_status) {
               case "running":
               case "idle":
               case "requires_action":
               case "archived":
               case "pending":
               case "failed":
-                h = n.session_status;
+                status = rawSession.session_status;
                 break;
               default:
-                h = toDisplaySessionStatus({
-                  status: typeof n.status === "string" ? n.status : undefined,
-                  worker_status: typeof n.worker_status === "string" ? n.worker_status : undefined,
+                status = toDisplaySessionStatus({
+                  status: typeof rawSession.status === "string" ? rawSession.status : undefined,
+                  worker_status:
+                    typeof rawSession.worker_status === "string" ? rawSession.worker_status : undefined,
                   connection_status:
-                    typeof n.connection_status === "string" ? n.connection_status : undefined,
+                    typeof rawSession.connection_status === "string"
+                      ? rawSession.connection_status
+                      : undefined,
                 });
             }
-            let found_2 = getSessionConfigArray(n, "sources").find(
-              (y) => isPlainObject(y) && y.type === "git_repository",
+            let found_2 = getSessionConfigArray(rawSession, "sources").find(
+              (source) => isPlainObject(source) && source.type === "git_repository",
             );
-            let [D, T] =
+            let [owner, name] =
               isPlainObject(found_2) && typeof found_2.url === "string"
                 ? (parseGitHubRepository(found_2.url)?.split("/") ?? [])
                 : [];
-            let O =
-              D && T
+            let repository =
+              owner && name
                 ? {
-                    owner: D,
-                    name: T,
+                    owner,
+                    name,
                   }
                 : undefined;
-            let N = firstOutcomeBranch(n);
+            let branch = firstOutcomeBranch(rawSession);
             return [
               {
                 id: compatSessionId,
-                title: typeof n.title === "string" ? n.title : "",
+                title: typeof rawSession.title === "string" ? rawSession.title : "",
                 updated_at: found,
-                status: h,
-                ...(isKnownWorkerState(n.environment_kind) && {
-                  environment_kind: n.environment_kind,
+                status,
+                ...(isKnownWorkerState(rawSession.environment_kind) && {
+                  environment_kind: rawSession.environment_kind,
                 }),
-                ...(O !== undefined && {
-                  repository: O,
+                ...(repository !== undefined && {
+                  repository,
                 }),
-                ...(N !== undefined && {
-                  branch: N,
+                ...(branch !== undefined && {
+                  branch,
                 }),
               },
             ];
           }),
-          truncated: d ? typeof f.next_cursor === "string" && f.next_cursor !== "" : f.has_more === true,
+          truncated: useCcrV2
+            ? typeof body.next_cursor === "string" && body.next_cursor !== ""
+            : body.has_more === true,
         };
       }
-      let p = await getFromSessionApi(
-        d ? `/v1/code/sessions/${e.session_id}` : `/v1/sessions/${e.session_id}`,
+      let sessionResult = await getFromSessionApi(
+        useCcrV2 ? `/v1/code/sessions/${request.session_id}` : `/v1/sessions/${request.session_id}`,
         {
           signal,
-          context: s,
+          context,
           maxResponseBytes: MAX_EVENTS_RESPONSE_BYTES,
-          olderApi: !d,
-          isBackground: u,
+          olderApi: !useCcrV2,
+          isBackground,
         },
       );
-      let v = unavailableForResult(p, u);
-      if (v !== null) return v;
-      let A = p.ok ? p.data : undefined;
-      let c = d ? extractSessionFromResponse(A) : A;
-      if (!isPlainObject(c)) return unavailable("not_found");
-      let w = firstOutcomeBranch(c);
+      let failure = unavailableForResult(sessionResult, isBackground);
+      if (failure !== null) return failure;
+      let body = sessionResult.ok ? sessionResult.data : undefined;
+      let session = useCcrV2 ? extractSessionFromResponse(body) : body;
+      if (!isPlainObject(session)) return unavailable("not_found");
+      let branch = firstOutcomeBranch(session);
       return {
         status: "ok",
-        ...(typeof c.title === "string" &&
-          c.title !== "" && {
-            title: c.title,
+        ...(typeof session.title === "string" &&
+          session.title !== "" && {
+            title: session.title,
           }),
-        ...(w !== undefined && {
-          branch: w,
+        ...(branch !== undefined && {
+          branch,
         }),
-        ...(isKnownWorkerState(c.environment_kind) && {
-          environment_kind: c.environment_kind,
+        ...(isKnownWorkerState(session.environment_kind) && {
+          environment_kind: session.environment_kind,
         }),
       };
     });
-    let o = r.status === "unavailable" ? (r.reason ?? "failed") : undefined;
-    switch (e.subtype) {
+    let failureReason = result.status === "unavailable" ? (result.reason ?? "failed") : undefined;
+    switch (request.subtype) {
       case "list_cloud_sessions":
-        if (o === undefined) logFeatureOk("sdk_list_cloud_sessions");
-        else logFeatureBad("sdk_list_cloud_sessions", o);
+        if (failureReason === undefined) logFeatureOk("sdk_list_cloud_sessions");
+        else logFeatureBad("sdk_list_cloud_sessions", failureReason);
         break;
       case "get_cloud_session":
-        if (o === undefined) logFeatureOk("sdk_get_cloud_session");
-        else logFeatureBad("sdk_get_cloud_session", o);
+        if (failureReason === undefined) logFeatureOk("sdk_get_cloud_session");
+        else logFeatureBad("sdk_get_cloud_session", failureReason);
         break;
     }
-    return r;
+    return result;
   }
-  async bounded(e, s, r) {
+  async bounded(subtype, context, readBody) {
     if (this.inFlight >= MAX_TRANSCRIPT_INFLIGHT) return unavailable("temporarily_unavailable");
     this.inFlight++;
-    let childAbortController = createChildAbortController(s.abortController);
+    let childAbortController = createChildAbortController(context.abortController);
     try {
-      let a = await withDeadline(r(childAbortController.signal), CLOUD_SESSION_READ_LIMITS);
-      if (a !== undefined) return a;
+      let deadlineResult = await withDeadline(
+        readBody(childAbortController.signal),
+        CLOUD_SESSION_READ_LIMITS,
+      );
+      if (deadlineResult !== undefined) return deadlineResult;
       childAbortController.abort();
       return unavailable("temporarily_unavailable");
     } catch (error) {
       let { kind, status } = classifyAxiosError(error);
-      let d = sanitizeErrorName(error) ?? "error";
-      logForDebugging(`[cloud-sessions] ${e} failed: ${d} ${kind} ${status ?? "no status"}`, {
+      let errorName = sanitizeErrorName(error) ?? "error";
+      logForDebugging(`[cloud-sessions] ${subtype} failed: ${errorName} ${kind} ${status ?? "no status"}`, {
         level: "error",
       });
       if (
         kind === "other" &&
         !childAbortController.signal.aborted &&
         !isMaxContentLengthError(error) &&
-        !this.reported.has(d)
+        !this.reported.has(errorName)
       ) {
-        this.reported.add(d);
+        this.reported.add(errorName);
         logError(
           new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `[cloud-sessions] ${e} failed: ${d}`,
+            `[cloud-sessions] ${subtype} failed: ${errorName}`,
             "a cloud-session read failed with an internal error",
           ),
         );
       }
-      let p = kind !== "other" && status === undefined && !isMaxContentLengthError(error);
-      return unavailable(childAbortController.signal.aborted || p ? "temporarily_unavailable" : "failed");
+      let timedOut = kind !== "other" && status === undefined && !isMaxContentLengthError(error);
+      return unavailable(
+        childAbortController.signal.aborted || timedOut ? "temporarily_unavailable" : "failed",
+      );
     } finally {
       this.inFlight--;
     }
@@ -289,7 +304,7 @@ function requireCloudSessionId(subtype, sessionId) {
     throw new WireSafeControlError(`${subtype}: session_id is not a cloud session id`);
 }
 //@ chunk-63n281q4.js:6439-7112 placement
-async function refusalBeforeAnyRequest(e) {
+async function refusalBeforeAnyRequest(fromSession) {
   if ((await refusedFromSession()) !== undefined) return unavailable("started_by_session");
   if (getAPIProvider() !== "firstParty") return unavailable("provider");
   if (env.CLAUDE_CODE_EVAL_CONFINED) return unavailable("evaluation_run");
@@ -298,7 +313,7 @@ async function refusalBeforeAnyRequest(e) {
   if (cloudSessionsUnavailableReason() !== null)
     switch (isPolicyRouteMissing() ? "route_missing" : policyDenyKind(CLOUD_SESSIONS_POLICY.policy)) {
       case "org_denied":
-        if (e) await logOrgPolicyDeniedAsync("allow_remote_sessions", "cloud_session");
+        if (fromSession) await logOrgPolicyDeniedAsync("allow_remote_sessions", "cloud_session");
         return unavailable("policy");
       case "latched":
         return unavailable("policy", UNVERIFIED_POLICY_TEXT);
@@ -309,44 +324,46 @@ async function refusalBeforeAnyRequest(e) {
     }
   if (isConsoleProfileSessionsCredential()) {
     if (!consoleProfileCredentialProviderLoaded()) return unavailable("failed", CONSOLE_PROFILE_TEXT);
-    let s = consoleProfileOrganizationLabel();
-    if (s === "unknown") return unavailable("policy_unverified");
-    return unavailable("not_signed_in", s === "not_ldr" ? NOT_SIGNED_IN_TEXT : NOT_LDR_TEXT);
+    let orgLabel = consoleProfileOrganizationLabel();
+    if (orgLabel === "unknown") return unavailable("policy_unverified");
+    return unavailable("not_signed_in", orgLabel === "not_ldr" ? NOT_SIGNED_IN_TEXT : NOT_LDR_TEXT);
   }
   return null;
 }
 //@ chunk-63n281q4.js:7112-7627 placement
-async function getFromSessionApi(e, s) {
-  s.signal.throwIfAborted();
-  let r = s.withDeviceProof ? (await trustedDeviceHeaders())["X-Trusted-Device-Token"] : undefined;
-  let o = {
-    ...(s.olderApi && {
+async function getFromSessionApi(path, opts) {
+  opts.signal.throwIfAborted();
+  let deviceToken = opts.withDeviceProof
+    ? (await trustedDeviceHeaders())["X-Trusted-Device-Token"]
+    : undefined;
+  let extraHeaders = {
+    ...(opts.olderApi && {
       "anthropic-beta": CCR_BYOC_BETA,
     }),
-    ...(r !== undefined && {
-      "X-Trusted-Device-Token": r,
+    ...(deviceToken !== undefined && {
+      "X-Trusted-Device-Token": deviceToken,
     }),
   };
-  s.signal.throwIfAborted();
-  return apiClient.get(e, {
+  opts.signal.throwIfAborted();
+  return apiClient.get(path, {
     auth: "teleport-org",
-    ...(Object.keys(o).length > 0 && {
-      headers: o,
+    ...(Object.keys(extraHeaders).length > 0 && {
+      headers: extraHeaders,
     }),
     maxRedirects: 0,
     validateStatus: () => true,
-    timeout: s.timeoutMs ?? DEFAULT_TRANSCRIPT_TIMEOUT_MS,
-    maxContentLength: s.maxResponseBytes,
-    signal: s.signal,
-    isBackground: s.isBackground,
-    credentials: s.context.credentials,
-    storageV5: s.context.storageV5,
+    timeout: opts.timeoutMs ?? DEFAULT_TRANSCRIPT_TIMEOUT_MS,
+    maxContentLength: opts.maxResponseBytes,
+    signal: opts.signal,
+    isBackground: opts.isBackground,
+    credentials: opts.context.credentials,
+    storageV5: opts.context.storageV5,
   });
 }
 //@ chunk-63n281q4.js:7627-8101 placement
-function unavailableForResult(e, s) {
-  if (!e.ok)
-    switch (e.reason) {
+function unavailableForResult(result, authFailed) {
+  if (!result.ok)
+    switch (result.reason) {
       case "data-residency":
         return unavailable("provider");
       case "essential-traffic-only":
@@ -354,11 +371,11 @@ function unavailableForResult(e, s) {
       case "no-auth":
         return unavailable("not_signed_in");
     }
-  switch (e.status) {
+  switch (result.status) {
     case 200:
       return null;
     case 401:
-      return unavailable(s ? "temporarily_unavailable" : "sign_in_expired");
+      return unavailable(authFailed ? "temporarily_unavailable" : "sign_in_expired");
     case 403:
       return unavailable("forbidden");
     case 404:
@@ -366,34 +383,34 @@ function unavailableForResult(e, s) {
     case 429:
       return unavailable("temporarily_unavailable");
     default:
-      return unavailable(e.status >= 500 ? "temporarily_unavailable" : "failed");
+      return unavailable(result.status >= 500 ? "temporarily_unavailable" : "failed");
   }
 }
 //@ chunk-63n281q4.js:8101-8171 placement
-function unavailable(e, message = UNAVAILABLE_TEXT[e]) {
+function unavailable(reason, message = UNAVAILABLE_TEXT[reason]) {
   return {
     status: "unavailable",
-    reason: e,
+    reason,
     message,
   };
 }
 //@ chunk-63n281q4.js:8171-8282 placement
-function getSessionConfigArray(e, s) {
-  let r = isPlainObject(e.config) ? e.config : e.session_context;
-  let o = isPlainObject(r) ? r[s] : undefined;
-  return Array.isArray(o) ? o : [];
+function getSessionConfigArray(session, key) {
+  let config = isPlainObject(session.config) ? session.config : session.session_context;
+  let value = isPlainObject(config) ? config[key] : undefined;
+  return Array.isArray(value) ? value : [];
 }
 //@ chunk-63n281q4.js:8282-8488 placement
 /**
  * 取会话结果中的首个 git 分支
  */
-function firstOutcomeBranch(e) {
-  let found = getSessionConfigArray(e, "outcomes").find(
-    (a) => isPlainObject(a) && a.type === "git_repository",
+function firstOutcomeBranch(session) {
+  let found = getSessionConfigArray(session, "outcomes").find(
+    (outcome) => isPlainObject(outcome) && outcome.type === "git_repository",
   );
   let gitInfo = isPlainObject(found) ? found.git_info : undefined;
-  let o = isPlainObject(gitInfo) && Array.isArray(gitInfo.branches) ? gitInfo.branches[0] : undefined;
-  return typeof o === "string" && o !== "" ? o : undefined;
+  let branch = isPlainObject(gitInfo) && Array.isArray(gitInfo.branches) ? gitInfo.branches[0] : undefined;
+  return typeof branch === "string" && branch !== "" ? branch : undefined;
 }
 export {
   requireCloudSessionId,
@@ -401,4 +418,5 @@ export {
   getFromSessionApi,
   unavailableForResult,
   unavailable,
+  CloudSessionReads,
 };

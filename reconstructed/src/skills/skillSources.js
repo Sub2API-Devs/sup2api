@@ -14,9 +14,9 @@ import { isRemoteCowork } from "../utils/entrypointKinds.js";
 import { escapeXmlKeepJoiners, normalizeKeepJoiners } from "../utils/permissions/checkRegistry.js";
 
 //@ chunk-g54kbxqw.js:34049-34302 placement
-function isSkillFromUserSource(e) {
-  if (e.loadedFrom === undefined) return Boolean(e.isMcp);
-  switch (e.loadedFrom) {
+function isSkillFromUserSource(command) {
+  if (command.loadedFrom === undefined) return Boolean(command.isMcp);
+  switch (command.loadedFrom) {
     case "skills":
     case "commands_DEPRECATED":
     case "plugin":
@@ -31,9 +31,9 @@ function isSkillFromUserSource(e) {
   }
 }
 //@ chunk-g54kbxqw.js:34302-34394 placement
-function isSkillShownToModel(e) {
-  if (e.loadedFrom === "syncedSkills") return !isRemoteOrCowork() || remoteToolsState().textAlone;
-  return isSkillFromUserSource(e);
+function isSkillShownToModel(command) {
+  if (command.loadedFrom === "syncedSkills") return !isRemoteOrCowork() || remoteToolsState().textAlone;
+  return isSkillFromUserSource(command);
 }
 //@ chunk-g54kbxqw.js:34394-34486 placement
 function isRemoteOrCowork() {
@@ -59,19 +59,19 @@ function emptySkillFrontmatter() {
   };
 }
 //@ chunk-g54kbxqw.js:34733-34942 placement
-function escapedSkillFields(e) {
+function escapedSkillFields(command) {
   return {
-    description: escapeXmlKeepJoiners(e.description),
-    argumentHint: e.argumentHint === undefined ? undefined : escapeXmlKeepJoiners(e.argumentHint),
-    whenToUse: e.whenToUse === undefined ? undefined : escapeXmlKeepJoiners(e.whenToUse),
-    argumentNames: e.argumentNames.map(escapeXmlKeepJoiners),
+    description: escapeXmlKeepJoiners(command.description),
+    argumentHint: command.argumentHint === undefined ? undefined : escapeXmlKeepJoiners(command.argumentHint),
+    whenToUse: command.whenToUse === undefined ? undefined : escapeXmlKeepJoiners(command.whenToUse),
+    argumentNames: command.argumentNames.map(escapeXmlKeepJoiners),
   };
 }
 //@ chunk-g54kbxqw.js:34942-35039 placement
-function displaySkillFields(e) {
+function displaySkillFields(command) {
   return {
-    ...escapedSkillFields(e),
-    argumentHint: e.argumentHint === undefined ? undefined : normalizeKeepJoiners(e.argumentHint),
+    ...escapedSkillFields(command),
+    argumentHint: command.argumentHint === undefined ? undefined : normalizeKeepJoiners(command.argumentHint),
   };
 }
 export {

@@ -19,65 +19,65 @@ import { logUserPromptEvent } from "./telemetry/userPromptEvent.js";
 function parseSlashCommand(input) {
   let trimmed = input.trim();
   if (!trimmed.startsWith("/")) return null;
-  let { name: e, args } = splitSlashCommandInput(trimmed);
-  if (!e) return null;
+  let { name: commandName, args } = splitSlashCommandInput(trimmed);
+  if (!commandName) return null;
   let MCP_SUFFIX = "(MCP)";
   if (args === MCP_SUFFIX)
     return {
-      commandName: `${e} ${MCP_SUFFIX}`,
+      commandName: `${commandName} ${MCP_SUFFIX}`,
       args: "",
       isMcp: true,
     };
   if (args.startsWith(MCP_SUFFIX) && /\s/.test(args.charAt(MCP_SUFFIX.length)))
     return {
-      commandName: `${e} ${MCP_SUFFIX}`,
+      commandName: `${commandName} ${MCP_SUFFIX}`,
       args: args.slice(MCP_SUFFIX.length).trimStart(),
       isMcp: true,
     };
   return {
-    commandName: e,
+    commandName,
     args,
     isMcp: false,
   };
 }
 //@ chunk-b5rfb1p7.js:745-1041 placement
-function matchSubcommand(command, r) {
+function matchSubcommand(command, rest) {
   if (!command.subcommands) return;
-  let e = r.trimStart();
-  let n = e.search(/\s/);
-  let o = n === -1 ? e : e.slice(0, n);
-  let s = o ? command.subcommands[o.toLowerCase()] : undefined;
-  if (s === undefined) return;
-  let m = n === -1 ? "" : e.slice(n + 1).trim();
-  if (command.subcommandsBareOnly && m !== "") return;
+  let trimmed = rest.trimStart();
+  let spaceIndex = trimmed.search(/\s/);
+  let token = spaceIndex === -1 ? trimmed : trimmed.slice(0, spaceIndex);
+  let subcommand = token ? command.subcommands[token.toLowerCase()] : undefined;
+  if (subcommand === undefined) return;
+  let remainingArgs = spaceIndex === -1 ? "" : trimmed.slice(spaceIndex + 1).trim();
+  if (command.subcommandsBareOnly && remainingArgs !== "") return;
   return {
-    targetName: s,
-    consumedToken: o,
-    remainingArgs: m,
+    targetName: subcommand,
+    consumedToken: token,
+    remainingArgs,
   };
 }
 //@ chunk-b5rfb1p7.js:1041-1174 placement
-function logSlashPromptEvent(t, userPromptHold) {
+function logSlashPromptEvent(event, userPromptHold) {
   let promptId = getPromptId();
   if (userPromptHold === undefined) {
-    logUserPromptEvent(t, t.text);
+    logUserPromptEvent(event, event.text);
     return;
   }
   userPromptHold({
-    text: t.text,
+    text: event.text,
     attributes: {
       ...(promptId && {
         "prompt.id": promptId,
       }),
-      ...t.attributes,
+      ...event.attributes,
     },
   });
 }
 //@ chunk-b5rfb1p7.js:1174-1230 placement
-var cloneContent = (t) =>
-  typeof t === "string"
-    ? t
-    : t.map((r) => ({
-        ...r,
+var cloneContent = (content) =>
+  typeof content === "string"
+    ? content
+    : content.map((block) => ({
+        ...block,
       }));
 export { parseSlashCommand, matchSubcommand, logSlashPromptEvent, cloneContent };

@@ -2,19 +2,19 @@
  * jose/dist/webapi/lib/content_encryption.js
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (14), chunk-5h78gfwc.js (16)
+ * pieces: chunk-2tyrgda4.js (15), chunk-5h78gfwc.js (16)
  * attribution: esm-layout 10, esm-fingerprint 20
  */
-import { JOSENotSupported, JWEInvalid, JWEDecryptionFailed } from "../../node/esm/util/errors.js";
+import { JOSENotSupported_2, JWEInvalid_2, JWEDecryptionFailed_2 } from "../../node/esm/util/errors.js";
 import { message_3 } from "../../node/esm/lib/invalid_key_input.js";
-import { concat, xe, init_buffer_utils, p } from "./buffer_utils.js";
+import { concat, uint64be, init_buffer_utils, cryptoModule } from "./buffer_utils.js";
 import { checkEncCryptoKey } from "./crypto_key.js";
 import { isCryptoKey } from "./key.js";
-import { Xa } from "../../../../../runtime/bun-runtime.js";
+import { __esm } from "../../../../../runtime/bun-runtime.js";
 import { init_base64url } from "../../browser/runtime/base64url.js";
 
 //@ chunk-5h78gfwc.js:7205-7443 esm-fingerprint
-function ye(alg) {
+function cekBitsForAlg(alg) {
   switch (alg) {
     case "A128GCM":
       return 128;
@@ -28,16 +28,16 @@ function ye(alg) {
     case "A256CBC-HS512":
       return 512;
     default:
-      throw new JOSENotSupported(`Unsupported JWE Algorithm: ${alg}`);
+      throw new JOSENotSupported_2(`Unsupported JWE Algorithm: ${alg}`);
   }
 }
 //@ chunk-5h78gfwc.js:7443-7503 esm-fingerprint
-var generateCek = (alg) => crypto.getRandomValues(new Uint8Array(ye(alg) >> 3));
+var generateCek_2 = (alg) => crypto.getRandomValues(new Uint8Array(cekBitsForAlg(alg) >> 3));
 //@ chunk-5h78gfwc.js:7503-7639 esm-fingerprint
-function checkCekLength(cek, expected) {
+function checkCekLength_2(cek, expected) {
   let actual = cek.byteLength << 3;
   if (actual !== expected)
-    throw new JWEInvalid(
+    throw new JWEInvalid_2(
       `Invalid Content Encryption Key length. Expected ${expected} bits, got ${actual} bits`,
     );
 }
@@ -56,14 +56,14 @@ function ivBitLength(alg) {
     case "A256CBC-HS512":
       return 128;
     default:
-      throw new JOSENotSupported(`Unsupported JWE Algorithm: ${alg}`);
+      throw new JOSENotSupported_2(`Unsupported JWE Algorithm: ${alg}`);
   }
 }
 //@ chunk-5h78gfwc.js:7891-7952 esm-fingerprint
-var generateIv = (alg) => crypto.getRandomValues(new Uint8Array(ivBitLength(alg) >> 3));
+var generateIv_2 = (alg) => crypto.getRandomValues(new Uint8Array(ivBitLength(alg) >> 3));
 //@ chunk-5h78gfwc.js:7952-8044 esm-fingerprint
-function checkIvLength(enc, iv) {
-  if (iv.length << 3 !== ivBitLength(enc)) throw new JWEInvalid("Invalid Initialization Vector length");
+function checkIvLength_2(enc, iv) {
+  if (iv.length << 3 !== ivBitLength(enc)) throw new JWEInvalid_2("Invalid Initialization Vector length");
 }
 //@ chunk-5h78gfwc.js:8044-8378 esm-fingerprint
 async function cbcKeySetup(enc, cek, usage) {
@@ -103,7 +103,7 @@ async function cbcEncrypt(enc, plaintext, cek, iv, aad) {
       plaintext,
     ),
   );
-  let macData = concat(aad, iv, ciphertext, xe(aad.length << 3));
+  let macData = concat(aad, iv, ciphertext, uint64be(aad.length << 3));
   let tag = await cbcHmacTag(macKey, macData, keySize);
   return {
     ciphertext,
@@ -130,13 +130,13 @@ async function timingSafeEqual(a_2, b) {
 //@ chunk-5h78gfwc.js:9133-9430 esm-fingerprint
 async function cbcDecrypt(enc, cek, ciphertext, iv, tag, aad) {
   let { encKey, macKey, keySize } = await cbcKeySetup(enc, cek, "decrypt");
-  let macData = concat(aad, iv, ciphertext, xe(aad.length << 3));
+  let macData = concat(aad, iv, ciphertext, uint64be(aad.length << 3));
   let expectedTag = await cbcHmacTag(macKey, macData, keySize);
   let macCheckPassed;
   try {
     macCheckPassed = await timingSafeEqual(tag, expectedTag);
   } catch {}
-  if (!macCheckPassed) throw new JWEDecryptionFailed();
+  if (!macCheckPassed) throw new JWEDecryptionFailed_2();
   let plaintext;
   try {
     plaintext = new Uint8Array(
@@ -150,7 +150,7 @@ async function cbcDecrypt(enc, cek, ciphertext, iv, tag, aad) {
       ),
     );
   } catch {}
-  if (!plaintext) throw new JWEDecryptionFailed();
+  if (!plaintext) throw new JWEDecryptionFailed_2();
   return plaintext;
 }
 //@ chunk-5h78gfwc.js:9430-9752 esm-fingerprint
@@ -204,7 +204,7 @@ async function gcmDecrypt(enc, cek, ciphertext, iv, tag, aad) {
       ),
     );
   } catch {
-    throw new JWEDecryptionFailed();
+    throw new JWEDecryptionFailed_2();
   }
 }
 //@ chunk-5h78gfwc.js:10045-10099 esm-fingerprint
@@ -213,73 +213,74 @@ var unsupportedEnc = "Unsupported JWE Content Encryption Algorithm";
 async function encrypt(enc, plaintext, cek, iv, aad) {
   if (!isCryptoKey(cek) && !(cek instanceof Uint8Array))
     throw TypeError(message_3(cek, "CryptoKey", "KeyObject", "Uint8Array", "JSON Web Key"));
-  if (iv) checkIvLength(enc, iv);
-  else iv = generateIv(enc);
+  if (iv) checkIvLength_2(enc, iv);
+  else iv = generateIv_2(enc);
   switch (enc) {
     case "A128CBC-HS256":
     case "A192CBC-HS384":
     case "A256CBC-HS512":
-      if (cek instanceof Uint8Array) checkCekLength(cek, parseInt(enc.slice(-3), 10));
+      if (cek instanceof Uint8Array) checkCekLength_2(cek, parseInt(enc.slice(-3), 10));
       return cbcEncrypt(enc, plaintext, cek, iv, aad);
     case "A128GCM":
     case "A192GCM":
     case "A256GCM":
-      if (cek instanceof Uint8Array) checkCekLength(cek, parseInt(enc.slice(1, 4), 10));
+      if (cek instanceof Uint8Array) checkCekLength_2(cek, parseInt(enc.slice(1, 4), 10));
       return gcmEncrypt(enc, plaintext, cek, iv, aad);
     default:
-      throw new JOSENotSupported(unsupportedEnc);
+      throw new JOSENotSupported_2(unsupportedEnc);
   }
 }
 //@ chunk-5h78gfwc.js:10561-11118 esm-fingerprint
 async function decrypt(enc, cek, ciphertext, iv, tag, aad) {
   if (!isCryptoKey(cek) && !(cek instanceof Uint8Array))
     throw TypeError(message_3(cek, "CryptoKey", "KeyObject", "Uint8Array", "JSON Web Key"));
-  if (!iv) throw new JWEInvalid("JWE Initialization Vector missing");
-  if (!tag) throw new JWEInvalid("JWE Authentication Tag missing");
-  switch ((checkIvLength(enc, iv), enc)) {
+  if (!iv) throw new JWEInvalid_2("JWE Initialization Vector missing");
+  if (!tag) throw new JWEInvalid_2("JWE Authentication Tag missing");
+  switch ((checkIvLength_2(enc, iv), enc)) {
     case "A128CBC-HS256":
     case "A192CBC-HS384":
     case "A256CBC-HS512":
-      if (cek instanceof Uint8Array) checkCekLength(cek, parseInt(enc.slice(-3), 10));
+      if (cek instanceof Uint8Array) checkCekLength_2(cek, parseInt(enc.slice(-3), 10));
       return cbcDecrypt(enc, cek, ciphertext, iv, tag, aad);
     case "A128GCM":
     case "A192GCM":
     case "A256GCM":
-      if (cek instanceof Uint8Array) checkCekLength(cek, parseInt(enc.slice(1, 4), 10));
+      if (cek instanceof Uint8Array) checkCekLength_2(cek, parseInt(enc.slice(1, 4), 10));
       return gcmDecrypt(enc, cek, ciphertext, iv, tag, aad);
     default:
-      throw new JOSENotSupported(unsupportedEnc);
+      throw new JOSENotSupported_2(unsupportedEnc);
   }
 }
 //@ chunk-2tyrgda4.js:1828-1848 esm-layout
-var init_content_encryption = Xa(() => {
+var init_content_encryption = __esm(() => {
   init_base64url();
 });
 //@ chunk-2tyrgda4.js:1848-1874 esm-layout
-var N;
-var Q;
-var f;
-var re;
-var s;
-var y;
-var Te;
-var Ue;
-var De;
+var JOSEError;
+var JOSEAlgNotAllowed;
+var JOSENotSupported;
+var JWEDecryptionFailed;
+var JWEInvalid;
+var JWSInvalid;
+var JWTInvalid;
+var JWKInvalid;
+var JWSSignatureVerificationFailed;
 //@ chunk-2tyrgda4.js:1874-3334 esm-layout
-var init_content_encryption_2 = Xa(() => {
-  N = class N extends Error {
+var init_content_encryption_2 = __esm(() => {
+  JOSEError = class JOSEError extends Error {
     static get code() {
       return "ERR_JOSE_GENERIC";
     }
     constructor(message) {
-      var t;
+      var ErrorCtor;
       super(message);
       this.code = "ERR_JOSE_GENERIC";
       this.name = this.constructor.name;
-      if (!((t = Error.captureStackTrace) === null || t === undefined)) t.call(Error, this, this.constructor);
+      if (!((ErrorCtor = Error.captureStackTrace) === null || ErrorCtor === undefined))
+        ErrorCtor.call(Error, this, this.constructor);
     }
   };
-  Q = class Q extends N {
+  JOSEAlgNotAllowed = class JOSEAlgNotAllowed extends JOSEError {
     constructor() {
       super(...arguments);
       this.code = "ERR_JOSE_ALG_NOT_ALLOWED";
@@ -288,7 +289,7 @@ var init_content_encryption_2 = Xa(() => {
       return "ERR_JOSE_ALG_NOT_ALLOWED";
     }
   };
-  f = class f extends N {
+  JOSENotSupported = class JOSENotSupported extends JOSEError {
     constructor() {
       super(...arguments);
       this.code = "ERR_JOSE_NOT_SUPPORTED";
@@ -297,7 +298,7 @@ var init_content_encryption_2 = Xa(() => {
       return "ERR_JOSE_NOT_SUPPORTED";
     }
   };
-  re = class re extends N {
+  JWEDecryptionFailed = class JWEDecryptionFailed extends JOSEError {
     constructor() {
       super(...arguments);
       this.code = "ERR_JWE_DECRYPTION_FAILED";
@@ -307,7 +308,7 @@ var init_content_encryption_2 = Xa(() => {
       return "ERR_JWE_DECRYPTION_FAILED";
     }
   };
-  s = class s extends N {
+  JWEInvalid = class JWEInvalid extends JOSEError {
     constructor() {
       super(...arguments);
       this.code = "ERR_JWE_INVALID";
@@ -316,7 +317,7 @@ var init_content_encryption_2 = Xa(() => {
       return "ERR_JWE_INVALID";
     }
   };
-  y = class y extends N {
+  JWSInvalid = class JWSInvalid extends JOSEError {
     constructor() {
       super(...arguments);
       this.code = "ERR_JWS_INVALID";
@@ -325,7 +326,7 @@ var init_content_encryption_2 = Xa(() => {
       return "ERR_JWS_INVALID";
     }
   };
-  Te = class Te extends N {
+  JWTInvalid = class JWTInvalid extends JOSEError {
     constructor() {
       super(...arguments);
       this.code = "ERR_JWT_INVALID";
@@ -334,7 +335,7 @@ var init_content_encryption_2 = Xa(() => {
       return "ERR_JWT_INVALID";
     }
   };
-  Ue = class Ue extends N {
+  JWKInvalid = class JWKInvalid extends JOSEError {
     constructor() {
       super(...arguments);
       this.code = "ERR_JWK_INVALID";
@@ -343,7 +344,7 @@ var init_content_encryption_2 = Xa(() => {
       return "ERR_JWK_INVALID";
     }
   };
-  De = class De extends N {
+  JWSSignatureVerificationFailed = class JWSSignatureVerificationFailed extends JOSEError {
     constructor() {
       super(...arguments);
       this.code = "ERR_JWS_SIGNATURE_VERIFICATION_FAILED";
@@ -355,15 +356,15 @@ var init_content_encryption_2 = Xa(() => {
   };
 });
 //@ chunk-2tyrgda4.js:3334-3340 esm-layout
-var k;
+var generateCek;
 //@ chunk-2tyrgda4.js:3340-3389 esm-layout
-var init_content_encryption_3 = Xa(() => {
+var init_content_encryption_3 = __esm(() => {
   init_buffer_utils();
-  k = p.getRandomValues.bind(p);
+  generateCek = cryptoModule.getRandomValues.bind(cryptoModule);
 });
 //@ chunk-2tyrgda4.js:3389-3641 esm-fingerprint
-function Oe(e) {
-  switch (e) {
+function cekBits(enc) {
+  switch (enc) {
     case "A128GCM":
     case "A128GCMKW":
     case "A192GCM":
@@ -376,42 +377,49 @@ function Oe(e) {
     case "A256CBC-HS512":
       return 128;
     default:
-      throw new f(`Unsupported JWE Algorithm: ${e}`);
+      throw new JOSENotSupported(`Unsupported JWE Algorithm: ${enc}`);
   }
 }
 //@ chunk-2tyrgda4.js:3641-3681 esm-layout
-var Se = (e) => k(new Uint8Array(Oe(e) >> 3));
+var generateIv = (enc) => generateCek(new Uint8Array(cekBits(enc) >> 3));
 //@ chunk-2tyrgda4.js:3681-3707 esm-layout
-var init_content_encryption_4 = Xa(() => {
+var init_content_encryption_4 = __esm(() => {
   init_content_encryption_2();
   init_content_encryption_3();
 });
 //@ chunk-2tyrgda4.js:3707-3801 esm-fingerprint
-var yr = (e, t) => {
-  if (t.length << 3 !== Oe(e)) throw new s("Invalid Initialization Vector length");
+var checkIvLength = (enc, iv) => {
+  if (iv.length << 3 !== cekBits(enc)) throw new JWEInvalid("Invalid Initialization Vector length");
 };
-var ge;
+var checkIvLengthInit;
 //@ chunk-2tyrgda4.js:3801-3833 esm-layout
-var init_content_encryption_5 = Xa(() => {
+var init_content_encryption_5 = __esm(() => {
   init_content_encryption_2();
   init_content_encryption_4();
-  ge = yr;
+  checkIvLengthInit = checkIvLength;
 });
 //@ chunk-2tyrgda4.js:3833-3970 esm-fingerprint
-var wr = (e, expected) => {
-  let actual = e.byteLength << 3;
+var checkCekLength = (cek, expected) => {
+  let actual = cek.byteLength << 3;
   if (actual !== expected)
-    throw new s(`Invalid Content Encryption Key length. Expected ${expected} bits, got ${actual} bits`);
+    throw new JWEInvalid(
+      `Invalid Content Encryption Key length. Expected ${expected} bits, got ${actual} bits`,
+    );
 };
-var j;
+var checkCekLengthInit;
+//@ chunk-2tyrgda4.js:3970-3996 esm-layout (moved: shares a binding it assigns)
+var init_timing_safe_equal = __esm(() => {
+  init_content_encryption_2();
+  checkCekLengthInit = checkCekLength;
+});
 //@ chunk-2tyrgda4.js:9860-9873 esm-layout
-var F = () => {};
+var noopClaims = () => {};
 //@ chunk-2tyrgda4.js:9873-9883 esm-layout
-var _r;
-var ee;
+var hmacAlgorithm;
+var hmacSubmitAlgorithm;
 //@ chunk-2tyrgda4.js:9883-9952 esm-fingerprint
-var init_content_encryption_6 = Xa(() => {
-  _r = [
+var init_content_encryption_6 = __esm(() => {
+  hmacAlgorithm = [
     {
       hash: "SHA-256",
       name: "HMAC",
@@ -419,32 +427,32 @@ var init_content_encryption_6 = Xa(() => {
     true,
     ["sign"],
   ];
-  ee = _r;
+  hmacSubmitAlgorithm = hmacAlgorithm;
 });
 export {
-  init_content_encryption_2,
-  j,
-  wr,
-  re,
-  ge,
-  f,
+  JWEDecryptionFailed,
+  checkIvLengthInit,
+  checkCekLengthInit,
+  JOSENotSupported,
   init_content_encryption_5,
-  ee,
+  init_timing_safe_equal,
+  init_content_encryption_2,
+  hmacSubmitAlgorithm,
   init_content_encryption_6,
-  s,
-  k,
-  decrypt,
-  ye,
+  JWEInvalid,
   generateCek,
+  decrypt,
+  cekBitsForAlg,
+  generateCek_2,
   init_content_encryption_3,
   init_content_encryption,
-  F,
-  Se,
+  noopClaims,
   encrypt,
+  generateIv,
   init_content_encryption_4,
-  Q,
-  y,
-  De,
-  Te,
-  Ue,
+  JOSEAlgNotAllowed,
+  JWSInvalid,
+  JWSSignatureVerificationFailed,
+  JWTInvalid,
+  JWKInvalid,
 };

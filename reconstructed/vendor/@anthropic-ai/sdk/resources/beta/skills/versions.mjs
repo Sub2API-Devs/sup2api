@@ -6,8 +6,8 @@
  * attribution: esm-fingerprint 1
  */
 import { APIResource } from "../../../core/resource.mjs";
-import { I } from "../../../internal/utils/path.mjs";
-import { ut } from "../../../internal/uploads.mjs";
+import { parseUrl_2 } from "../../../internal/utils/path.mjs";
+import { withUploadBody } from "../../../internal/uploads.mjs";
 import { buildHeaders } from "../../../internal/headers.mjs";
 import { TokenPage } from "../../../core/pagination.mjs";
 
@@ -16,8 +16,8 @@ class Versions_2 extends APIResource {
   create(skillID, params, options) {
     let { betas, workspace_id, ...body } = params;
     return this._client.post(
-      I`/v1/skills/${skillID}/versions?beta=true`,
-      ut(
+      parseUrl_2`/v1/skills/${skillID}/versions?beta=true`,
+      withUploadBody(
         {
           body,
           ...options,
@@ -44,7 +44,7 @@ class Versions_2 extends APIResource {
   }
   retrieve(version, params, options) {
     let { skill_id, betas, workspace_id } = params;
-    return this._client.get(I`/v1/skills/${skill_id}/versions/${version}?beta=true`, {
+    return this._client.get(parseUrl_2`/v1/skills/${skill_id}/versions/${version}?beta=true`, {
       ...options,
       headers: buildHeaders([
         {
@@ -65,7 +65,7 @@ class Versions_2 extends APIResource {
   }
   list(skillID, params = {}, options) {
     let { betas, workspace_id, ...query } = params ?? {};
-    return this._client.getAPIList(I`/v1/skills/${skillID}/versions?beta=true`, TokenPage, {
+    return this._client.getAPIList(parseUrl_2`/v1/skills/${skillID}/versions?beta=true`, TokenPage, {
       query,
       ...options,
       headers: buildHeaders([
@@ -87,7 +87,7 @@ class Versions_2 extends APIResource {
   }
   delete(version, params, options) {
     let { skill_id, betas, workspace_id } = params;
-    return this._client.delete(I`/v1/skills/${skill_id}/versions/${version}?beta=true`, {
+    return this._client.delete(parseUrl_2`/v1/skills/${skill_id}/versions/${version}?beta=true`, {
       ...options,
       headers: buildHeaders([
         {
@@ -108,7 +108,7 @@ class Versions_2 extends APIResource {
   }
   download(version, params, options) {
     let { skill_id, betas, workspace_id } = params;
-    return this._client.get(I`/v1/skills/${skill_id}/versions/${version}/content?beta=true`, {
+    return this._client.get(parseUrl_2`/v1/skills/${skill_id}/versions/${version}/content?beta=true`, {
       ...options,
       headers: buildHeaders([
         {

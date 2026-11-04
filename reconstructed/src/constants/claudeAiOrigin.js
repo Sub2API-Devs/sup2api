@@ -33,31 +33,37 @@ function getClaudeAiOriginOverride() {
 /**
  * 规范化 URL 的源（https/wss、本地 http）。
  */
-function normalizeOriginUrl(e) {
-  let n;
+function normalizeOriginUrl(rawUrl) {
+  let parsedUrl;
   try {
-    n = new URL(e);
+    parsedUrl = new URL(rawUrl);
   } catch {
     return;
   }
-  let r = isLoopbackHost(n.hostname);
-  let o;
-  switch (n.protocol) {
+  let isLoopback = isLoopbackHost(parsedUrl.hostname);
+  let normalizedProtocol;
+  switch (parsedUrl.protocol) {
     case "https:":
     case "wss:":
-      o = "https:";
+      normalizedProtocol = "https:";
       break;
     case "http:":
     case "ws:":
-      if (!r) return;
-      o = "http:";
+      if (!isLoopback) return;
+      normalizedProtocol = "http:";
       break;
     default:
       return;
   }
-  if (n.username !== "" || n.password !== "" || n.pathname !== "/" || n.search !== "" || n.hash !== "")
+  if (
+    parsedUrl.username !== "" ||
+    parsedUrl.password !== "" ||
+    parsedUrl.pathname !== "/" ||
+    parsedUrl.search !== "" ||
+    parsedUrl.hash !== ""
+  )
     return;
-  return `${o}//${n.host}`;
+  return `${normalizedProtocol}//${parsedUrl.host}`;
 }
 //@ chunk-yxnffbzs.js:2338-2362 placement
 /**

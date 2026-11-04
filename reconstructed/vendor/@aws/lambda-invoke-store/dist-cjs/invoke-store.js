@@ -5,10 +5,10 @@
  * pieces: chunk-edce4vxq.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-edce4vxq.js:2273-4337 cjs-fingerprint
-var require_invoke_store = x(function (cjsExports) {
+var require_invoke_store = __commonJS(function (cjsExports) {
   var PROTECTED_KEYS = {
     REQUEST_ID: Symbol.for("_AWS_LAMBDA_REQUEST_ID"),
     X_RAY_TRACE_ID: Symbol.for("_AWS_LAMBDA_X_RAY_TRACE_ID"),

@@ -5,11 +5,11 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_constants } from "./constants.js";
 
 //@ chunk-fq0cr76a.js:298160-299275 cjs-fingerprint
-var require_utils = x(function (cjsExports) {
+var require_utils = __commonJS(function (cjsExports) {
   var { REGEX_BACKSLASH, REGEX_REMOVE_BACKSLASH, REGEX_SPECIAL_CHARS, REGEX_SPECIAL_CHARS_GLOBAL } =
     require_constants();
   cjsExports.isObject = (val) => val !== null && typeof val === "object" && !Array.isArray(val);

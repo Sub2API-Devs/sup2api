@@ -8,23 +8,38 @@
  * pieces: chunk-e6aww6q8.js (51), chunk-w5ndchqs.js (2)
  * attribution: fingerprint 6, placement 27, callgraph-fingerprint 1, layout 16, file-local 3
  */
-import { isDeepStrictEqual } from "util";
 import { createHash } from "crypto";
+import { isDeepStrictEqual } from "util";
+import { logEvent } from "../services/analytics/index.js";
+import { sanitizeMarkName } from "./startupMarks.js";
+import { lit } from "../services/analytics/safeMetadata.js";
+import { logError } from "./log.js";
+import { withTelemetryMessage, toError, languageErrorNameOf } from "./errors.js";
+import {
+  shouldUseGlobalCacheScope,
+  areExperimentalBetasDisabled,
+  willSendStructuredOutputsBeta,
+} from "./betas.js";
+import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from "../entrypoints/sdk/coreSchemas.js";
+import {
+  X_ANTHROPIC_BILLING_HEADER,
+  REPORTING_OUTCOMES_SECTION,
+} from "../services/api/promptCacheBreakDetection.js";
+import { CLI_SYSPROMPT_PREFIX_SET } from "../constants/system.js";
+import { splitAtStaticBreakpoint } from "./systemPromptBoundary.js";
 import { EXITPLANMODE_2 } from "../tools/ExitPlanModeTool/constants.js";
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
 import { sleep } from "./sleep.js";
 import { getRootSession, getIsNonInteractiveSession } from "../bootstrap/state.js";
 import { isPlainObject as isPlainObject_5 } from "./isPlainObject.js";
-import { xr } from "../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_mapValues } from "../../vendor/lodash-es/_inlinedHelpers.js";
 import { count } from "./collections.js";
 import { planFiles, persistFileSnapshotIfRemote, getPlanWithPath } from "./plans.js";
 import { isUnparsedInputMarker } from "./json.js";
 import { stripHostOwnedInputKeys } from "./permissions/permissionAnswer.js";
 import { isAutoModeQuerySource } from "../services/api/requestHeaders.js";
-import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from "../entrypoints/sdk/coreSchemas.js";
 import { getSessionFeatureValues } from "../bootstrap/sessionFeatureValues.js";
 import { loadPromptRemovalConfig, logPromptStringsRemoval } from "./promptAblation.js";
-import { logError } from "./log.js";
 import { getCanonicalName } from "./model/canonicalModelName.js";
 import { env } from "./env.js";
 import {
@@ -33,11 +48,6 @@ import {
   isGenuineBedrockEndpoint,
   getAPIProvider,
 } from "./model/providers.js";
-import {
-  areExperimentalBetasDisabled,
-  willSendStructuredOutputsBeta,
-  shouldUseGlobalCacheScope,
-} from "./betas.js";
 import { toolInputJsonSchema } from "../plugins/functionHooks/types/builtinToolSchemas.js";
 import { isAgentSwarmsEnabled } from "./agentSwarmsEnabled.js";
 import { getToolRemoteExecution, findToolByName, toolMatchesName } from "../Tool.js";
@@ -113,9 +123,7 @@ import { countFilesRounded } from "./ripgrep.js";
 import { normalizePatternsToPath, getFileReadIgnorePatterns } from "./permissions/filesystem.js";
 import { roughTokenCountEstimation } from "../services/tokenEstimation.js";
 import { deferredToolCache } from "../services/api/deferredToolsState.js";
-import { logEvent } from "../services/analytics/index.js";
 import { coerceNumberString } from "../tools/ArtifactTool/publishEdits.js";
-import { languageErrorNameOf, toError, withTelemetryMessage } from "./errors.js";
 import { isRemoteOnlyCheck } from "./permissions/checkRegistry.js";
 import { stripCdPrefix, isTetherEnvOptIn } from "./wireToolInputEcho.js";
 import { getPlatform } from "./platform.js";
@@ -127,43 +135,211 @@ import {
   normalizeFileEditInput,
 } from "../tools/FileEditTool/utils.js";
 import { FileWriteTool } from "../tools/FileWriteTool/FileWriteTool.js";
-import { sanitizeMarkName } from "./startupMarks.js";
-import { lit } from "../services/analytics/safeMetadata.js";
-import {
-  X_ANTHROPIC_BILLING_HEADER,
-  REPORTING_OUTCOMES_SECTION,
-} from "../services/api/promptCacheBreakDetection.js";
-import { CLI_SYSPROMPT_PREFIX_SET } from "../constants/system.js";
-import { splitAtStaticBreakpoint } from "./systemPromptBoundary.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-w5ndchqs.js:3633-3859 fingerprint = logAPIPrefix (0.752)
+/**
+ * 记录 system 第一块（计费头）的长度与哈希（tengu_sysprompt_block）。
+ */
+function logAPIPrefix(systemPrompt) {
+  try {
+    let [firstSyspromptBlock] = splitSysPromptPrefix(systemPrompt, {
+      skipTelemetry: true,
+    });
+    let firstSystemPrompt = firstSyspromptBlock?.text;
+    logEvent("tengu_sysprompt_block", {
+      length: firstSystemPrompt?.length ?? 0,
+      hash: firstSystemPrompt
+        ? sanitizeMarkName(createHash("sha256").update(firstSystemPrompt).digest("hex"))
+        : lit(""),
+    });
+  } catch (error) {
+    logError(withTelemetryMessage(toError(error), "system prompt block telemetry failed"));
+  }
+}
+//@ chunk-w5ndchqs.js:3859-5496 fingerprint = splitSysPromptPrefix (0.969)
+/**
+ * system 提示词数组切块（buildSystemPromptBlocks 的基础）：计费头 x-anthropic-billing-header 一块（无缓存），身份行一块，"# Reporting outcomes" 段单独一块；有 __SYSTEM_PROMPT_DYNAMIC_BOUNDARY__ 且 scope 可用时边界前为静态块（scope global，可按 STATIC_BREAKPOINT 再切）、边界后为动态块；否则其余合成一块（org）。实测第三方 3 块、第一方 4 块。
+ */
+function splitSysPromptPrefix(systemPrompt, options) {
+  let useGlobalCacheFeature = shouldUseGlobalCacheScope();
+  let index = systemPrompt.findIndex((block) => block === SYSTEM_PROMPT_DYNAMIC_BOUNDARY);
+  if (useGlobalCacheFeature && options?.skipGlobalCacheForSystemPrompt && index === -1) {
+    if (!options?.skipTelemetry)
+      logEvent("tengu_sysprompt_using_tool_based_cache", {
+        promptBlockCount: systemPrompt.length,
+      });
+    let attributionHeader;
+    let cliPrefix;
+    let outcomesSection;
+    let rest = [];
+    for (let prompt of systemPrompt) {
+      if (!prompt) continue;
+      if (prompt === SYSTEM_PROMPT_DYNAMIC_BOUNDARY) continue;
+      if (prompt.startsWith(X_ANTHROPIC_BILLING_HEADER)) attributionHeader = prompt;
+      else if (CLI_SYSPROMPT_PREFIX_SET.has(prompt)) cliPrefix = prompt;
+      else if (prompt === REPORTING_OUTCOMES_SECTION) outcomesSection = prompt;
+      else rest.push(prompt);
+    }
+    let result = [];
+    if (attributionHeader)
+      result.push({
+        text: attributionHeader,
+        cacheScope: null,
+      });
+    if (cliPrefix)
+      result.push({
+        text: cliPrefix,
+        cacheScope: "org",
+      });
+    if (outcomesSection && attributionHeader && cliPrefix)
+      result.push({
+        text: outcomesSection,
+        cacheScope: null,
+      });
+    let restJoined = rest.join(`
+
+`);
+    if (restJoined)
+      result.push({
+        text: restJoined,
+        cacheScope: "org",
+      });
+    return result;
+  }
+  if (useGlobalCacheFeature) {
+    if (index !== -1) {
+      let attributionHeader;
+      let cliPrefix;
+      let outcomesSection;
+      let staticBlocks = [];
+      let dynamicBlocks = [];
+      for (let i = 0; i < systemPrompt.length; i++) {
+        let block = systemPrompt[i];
+        if (!block || block === SYSTEM_PROMPT_DYNAMIC_BOUNDARY) continue;
+        if (block.startsWith(X_ANTHROPIC_BILLING_HEADER)) attributionHeader = block;
+        else if (CLI_SYSPROMPT_PREFIX_SET.has(block)) cliPrefix = block;
+        else if (block === REPORTING_OUTCOMES_SECTION) outcomesSection = block;
+        else if (i < index) staticBlocks.push(block);
+        else dynamicBlocks.push(block);
+      }
+      let result = [];
+      if (attributionHeader)
+        result.push({
+          text: attributionHeader,
+          cacheScope: null,
+        });
+      if (cliPrefix)
+        result.push({
+          text: cliPrefix,
+          cacheScope: null,
+        });
+      if (outcomesSection && attributionHeader && cliPrefix)
+        result.push({
+          text: outcomesSection,
+          cacheScope: null,
+        });
+      let prompt = staticBlocks.join(`
+
+`);
+      let staticChunks = prompt ? splitAtStaticBreakpoint(prompt) : [];
+      for (let text of staticChunks)
+        result.push({
+          text,
+          cacheScope: "global",
+        });
+      let dynamicJoined = dynamicBlocks.join(`
+
+`);
+      if (dynamicJoined)
+        result.push({
+          text: dynamicJoined,
+          cacheScope: staticChunks.length > 1 ? null : "org",
+        });
+      if (!options?.skipTelemetry)
+        logEvent("tengu_sysprompt_boundary_found", {
+          blockCount: result.length,
+          staticBlockLength: prompt.length,
+          dynamicBlockLength: dynamicJoined.length,
+        });
+      return result;
+    } else if (!options?.skipTelemetry)
+      logEvent("tengu_sysprompt_missing_boundary_marker", {
+        promptBlockCount: systemPrompt.length,
+      });
+  }
+  let attributionHeader;
+  let cliPrefix;
+  let outcomesSection;
+  let rest = [];
+  for (let [blockIndex, block] of systemPrompt.entries()) {
+    if (!block || block === SYSTEM_PROMPT_DYNAMIC_BOUNDARY) continue;
+    if (block.startsWith(X_ANTHROPIC_BILLING_HEADER)) attributionHeader = block;
+    else if (CLI_SYSPROMPT_PREFIX_SET.has(block)) cliPrefix = block;
+    else if (block === REPORTING_OUTCOMES_SECTION) outcomesSection = block;
+    else rest.push(blockIndex < index ? splitAtStaticBreakpoint(block).join("") : block);
+  }
+  let result = [];
+  if (attributionHeader)
+    result.push({
+      text: attributionHeader,
+      cacheScope: null,
+    });
+  if (cliPrefix)
+    result.push({
+      text: cliPrefix,
+      cacheScope: "org",
+    });
+  if (outcomesSection && attributionHeader && cliPrefix)
+    result.push({
+      text: outcomesSection,
+      cacheScope: null,
+    });
+  let restJoined = rest.join(`
+
+`);
+  if (restJoined)
+    result.push({
+      text: restJoined,
+      cacheScope: "org",
+    });
+  return result;
+}
 //@ chunk-e6aww6q8.js:861006-861063 fingerprint = normalizeToolInputForAPI (0.524)
 /**
  * 发回 API 前要从工具输入里去掉的字段：ExitPlanMode 的 plan/planFilePath。旧版名 normalizeToolInputForAPI 不准确。
  */
-var API_STRIPPED_INPUT_FIELDS = new Map([[EXITPLANMODE_2, new Set(["plan", "planFilePath"])]]);
+var API_STRIPPED_INPUT_FIELDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:861006", () => {
+  API_STRIPPED_INPUT_FIELDS = new Map([[EXITPLANMODE_2, new Set(["plan", "planFilePath"])]]);
+});
 //@ chunk-e6aww6q8.js:1423789-1423895 placement
 /**
  * 按会话根保存“首个请求”的等待门（promise、resolve 与是否已提交）。
  */
-var SLEEP_GATE_TIMEOUT_MS = 1e4;
-var firstRequestGateByRoot = new SessionRootSlot(() => {
-  let resolve = () => {};
-  return {
-    promise: new Promise((resolve_2) => {
-      resolve = resolve_2;
-    }),
-    resolve,
-    committed: false,
-  };
+var SLEEP_GATE_TIMEOUT_MS; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+var firstRequestGateByRoot;
+deferInit("chunk-e6aww6q8.js:1423789", () => {
+  SLEEP_GATE_TIMEOUT_MS = 1e4;
+  firstRequestGateByRoot = new SessionRootSlot(() => {
+    let resolve = () => {};
+    return {
+      promise: new Promise((resolve_2) => {
+        resolve = resolve_2;
+      }),
+      resolve,
+      committed: false,
+    };
+  });
 });
 //@ chunk-e6aww6q8.js:1423895-1423936 placement
-function waitForGate(e) {
-  return firstRequestGateByRoot.of(e).promise;
+function waitForGate(sessionRoot) {
+  return firstRequestGateByRoot.of(sessionRoot).promise;
 }
 //@ chunk-e6aww6q8.js:1423936-1424007 placement = withTimeout (0.805)
-function withTimeout(e) {
+function withTimeout(sessionRoot) {
   return Promise.race([
-    waitForGate(e),
+    waitForGate(sessionRoot),
     sleep(SLEEP_GATE_TIMEOUT_MS, undefined, {
       unref: true,
     }),
@@ -171,44 +347,47 @@ function withTimeout(e) {
 }
 //@ chunk-e6aww6q8.js:1424007-1424066 placement
 function commitGate(session) {
-  let n = firstRequestGateByRoot.of(session);
-  n.committed = true;
-  n.resolve();
+  let gate = firstRequestGateByRoot.of(session);
+  gate.committed = true;
+  gate.resolve();
 }
 //@ chunk-e6aww6q8.js:1424066-1424237 placement
-var firstRequestGate = new SessionRootSlot(() => {
-  let resolve = (h) => {};
-  let promise = new Promise((resolve_2) => {
-    resolve = resolve_2;
+var firstRequestGate; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1424066", () => {
+  firstRequestGate = new SessionRootSlot(() => {
+    let resolve = (resolveGate) => {};
+    let promise = new Promise((resolve_2) => {
+      resolve = resolve_2;
+    });
+    let resolveRequestSent = () => {};
+    let requestSent = new Promise((resolve) => {
+      resolveRequestSent = resolve;
+    });
+    return {
+      promise,
+      resolve,
+      started: false,
+      requestSent,
+      resolveRequestSent,
+    };
   });
-  let resolveRequestSent = () => {};
-  let requestSent = new Promise((resolve) => {
-    resolveRequestSent = resolve;
-  });
-  return {
-    promise,
-    resolve,
-    started: false,
-    requestSent,
-    resolveRequestSent,
-  };
 });
 //@ chunk-e6aww6q8.js:1424237-1424278 placement
 /**
  * 等待首个请求开始（返回门上的 promise）。
  */
-function waitForFirstRequest(e) {
-  return firstRequestGate.of(e).promise;
+function waitForFirstRequest(sessionRoot) {
+  return firstRequestGate.of(sessionRoot).promise;
 }
 //@ chunk-e6aww6q8.js:1424278-1424366 placement
 /**
  * 标记首个请求已开始并放行工具列表。
  */
 function startFirstRequestGate(session, tools) {
-  let r = firstRequestGate.of(session);
-  if (r.started) return;
-  r.started = true;
-  r.resolve({
+  let gate = firstRequestGate.of(session);
+  if (gate.started) return;
+  gate.started = true;
+  gate.resolve({
     tools,
   });
 }
@@ -216,8 +395,8 @@ function startFirstRequestGate(session, tools) {
 /**
  * 请求是否已经发出。
  */
-function hasRequestBeenSent(e) {
-  return firstRequestGate.of(e).requestSent;
+function hasRequestBeenSent(sessionRoot) {
+  return firstRequestGate.of(sessionRoot).requestSent;
 }
 //@ chunk-e6aww6q8.js:1424411-1424458 placement
 /**
@@ -244,76 +423,78 @@ function querySourceHints(querySource) {
 /**
  * 比较工具 schema 时用到的键集合：纯说明类键（忽略）、子 schema 映射类键、需排序比较的数组类键。
  */
-var SCHEMA_TEXT_KEYS = new Set([
-  "description",
-  "title",
-  "examples",
-  "$comment",
-  "$schema",
-  "default",
-  "deprecated",
-  "readOnly",
-  "writeOnly",
-]);
-var SCHEMA_MAP_KEYS = new Set([
-  "properties",
-  "patternProperties",
-  "$defs",
-  "definitions",
-  "dependentSchemas",
-]);
-var SCHEMA_SET_KEYS = new Set(["enum", "const", "required", "dependentRequired"]);
+var SCHEMA_TEXT_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SCHEMA_MAP_KEYS;
+var SCHEMA_SET_KEYS;
+deferInit("chunk-e6aww6q8.js:1500608", () => {
+  SCHEMA_TEXT_KEYS = new Set([
+    "description",
+    "title",
+    "examples",
+    "$comment",
+    "$schema",
+    "default",
+    "deprecated",
+    "readOnly",
+    "writeOnly",
+  ]);
+  SCHEMA_MAP_KEYS = new Set(["properties", "patternProperties", "$defs", "definitions", "dependentSchemas"]);
+  SCHEMA_SET_KEYS = new Set(["enum", "const", "required", "dependentRequired"]);
+});
 //@ chunk-e6aww6q8.js:1500877-1501163 placement
 /**
  * 递归规范化 JSON schema 以便比较：去掉描述/标题/示例等说明性键，对 enum/required 等字符串数组排序。
  */
-function normalizeSchemaForCompare(e) {
-  if (Array.isArray(e)) return e.map(normalizeSchemaForCompare);
-  if (!isPlainObject_5(e)) return e;
-  let n = {};
-  for (let [key, value] of Object.entries(e)) {
+function normalizeSchemaForCompare(value) {
+  if (Array.isArray(value)) return value.map(normalizeSchemaForCompare);
+  if (!isPlainObject_5(value)) return value;
+  let normalized = {};
+  for (let [key, value_2] of Object.entries(value)) {
     if (SCHEMA_TEXT_KEYS.has(key)) continue;
     if (SCHEMA_SET_KEYS.has(key))
-      n[key] = Array.isArray(value) && value.every((h) => typeof h === "string") ? value.toSorted() : value;
-    else if (SCHEMA_MAP_KEYS.has(key) && isPlainObject_5(value))
-      n[key] = xr(value, normalizeSchemaForCompare);
-    else n[key] = normalizeSchemaForCompare(value);
+      normalized[key] =
+        Array.isArray(value_2) && value_2.every((item) => typeof item === "string")
+          ? value_2.toSorted()
+          : value_2;
+    else if (SCHEMA_MAP_KEYS.has(key) && isPlainObject_5(value_2))
+      normalized[key] = import_mapValues(value_2, normalizeSchemaForCompare);
+    else normalized[key] = normalizeSchemaForCompare(value_2);
   }
-  return n;
+  return normalized;
 }
 //@ chunk-e6aww6q8.js:1501163-1501252 placement
 /**
  * 把 schema 的 properties 转成 Map。
  */
-function schemaPropertiesMap(e) {
-  let properties = isPlainObject_5(e) ? e.properties : undefined;
+function schemaPropertiesMap(schema) {
+  let properties = isPlainObject_5(schema) ? schema.properties : undefined;
   return new Map(isPlainObject_5(properties) ? Object.entries(properties) : []);
 }
 //@ chunk-e6aww6q8.js:1501252-1501326 placement
 /**
  * 取出 schema 的 enum 数组。
  */
-function schemaEnumValues(e) {
-  let n = isPlainObject_5(e) ? e.enum : undefined;
-  return Array.isArray(n) ? n : undefined;
+function schemaEnumValues(schema) {
+  let enumValues = isPlainObject_5(schema) ? schema.enum : undefined;
+  return Array.isArray(enumValues) ? enumValues : undefined;
 }
 //@ chunk-e6aww6q8.js:1501326-1501518 placement
-function countMissingSchemaParts(e, n) {
-  let r = schemaPropertiesMap(n);
-  let s = 0;
-  for (let [h, y] of schemaPropertiesMap(e)) {
-    if (!r.has(h)) {
-      s += 1;
+function countMissingSchemaParts(currentSchema, previousSchema) {
+  let previousProperties = schemaPropertiesMap(previousSchema);
+  let missingCount = 0;
+  for (let [propertyName, propertySchema] of schemaPropertiesMap(currentSchema)) {
+    if (!previousProperties.has(propertyName)) {
+      missingCount += 1;
       continue;
     }
-    let S = schemaEnumValues(y);
-    let w = schemaEnumValues(r.get(h));
-    if (S !== undefined && w !== undefined) {
-      let L = new Set(w);
-      s += count(S, (G) => !L.has(G));
+    let enumValues = schemaEnumValues(propertySchema);
+    let previousEnumValues = schemaEnumValues(previousProperties.get(propertyName));
+    if (enumValues !== undefined && previousEnumValues !== undefined) {
+      let previousValues = new Set(previousEnumValues);
+      missingCount += count(enumValues, (value) => !previousValues.has(value));
     }
   }
-  return s;
+  return missingCount;
 }
 //@ chunk-e6aww6q8.js:1501518-1501687 placement
 /**
@@ -331,54 +512,54 @@ function compareToolSchemas(inputSchema, inputSchema_2) {
 /**
  * 把远程计划文件快照的保存串到快照链上依次执行。
  */
-function chainPlanSnapshot(e) {
-  let n = planFiles()
-    .snapshotChain.then(() => persistFileSnapshotIfRemote(e))
+function chainPlanSnapshot(message) {
+  let chained = planFiles()
+    .snapshotChain.then(() => persistFileSnapshotIfRemote(message))
     .catch(() => {});
-  planFiles().snapshotChain = n;
-  return n;
+  planFiles().snapshotChain = chained;
+  return chained;
 }
 //@ chunk-e6aww6q8.js:1502377-1502484 placement
 /**
  * ExitPlanMode 工具输入中补上计划内容与计划文件路径。
  */
-function withPlanPath(name, n, agentId) {
-  if (name !== EXITPLANMODE_2 || !isPlainObject_5(n) || isUnparsedInputMarker(n)) return n;
-  let s = stripHostOwnedInputKeys(name, n);
+function withPlanPath(name, input, agentId) {
+  if (name !== EXITPLANMODE_2 || !isPlainObject_5(input) || isUnparsedInputMarker(input)) return input;
+  let strippedInput = stripHostOwnedInputKeys(name, input);
   let planWithPath = getPlanWithPath(agentId);
   return planWithPath !== null
     ? {
-        ...s,
+        ...strippedInput,
         ...planWithPath,
       }
-    : s;
+    : strippedInput;
 }
 //@ chunk-e6aww6q8.js:1503098-1503390 placement
 /**
  * 对系统提示词片段做实验性"消融"：删除配置里列出的字符串（首次命中时记录）；自动模式查询与动态边界标记不处理；出错时记录并原样返回。
  */
-function applyPromptAblation(e, querySource) {
-  if (isAutoModeQuerySource(querySource) || e === SYSTEM_PROMPT_DYNAMIC_BOUNDARY) return e;
+function applyPromptAblation(text, querySource) {
+  if (isAutoModeQuerySource(querySource) || text === SYSTEM_PROMPT_DYNAMIC_BOUNDARY) return text;
   let sessionFeatureValues = getSessionFeatureValues();
   try {
-    let s = (sessionFeatureValues.promptAblation ??= loadPromptRemovalConfig());
-    let h = e;
-    for (let string of s.strings) {
-      if (!h.includes(string)) continue;
-      h = h.replaceAll(string, "");
-      if (!s.matched.has(string)) {
-        s.matched.add(string);
-        logPromptStringsRemoval(s);
+    let ablationConfig = (sessionFeatureValues.promptAblation ??= loadPromptRemovalConfig());
+    let result = text;
+    for (let string of ablationConfig.strings) {
+      if (!result.includes(string)) continue;
+      result = result.replaceAll(string, "");
+      if (!ablationConfig.matched.has(string)) {
+        ablationConfig.matched.add(string);
+        logPromptStringsRemoval(ablationConfig);
       }
     }
-    return h;
+    return result;
   } catch (error) {
     sessionFeatureValues.promptAblation ??= {
       strings: [],
       matched: new Set(),
     };
     logError(error);
-    return e;
+    return text;
   }
 }
 //@ chunk-e6aww6q8.js:1503390-1503451 placement
@@ -390,19 +571,19 @@ var LEGACY_CLAUDE3_MODELS = ["claude-3-opus", "claude-3-sonnet", "claude-3-haiku
 /**
  * 判断模型是否不是早期的 Claude 3 系列。
  */
-function isNotLegacyClaude3(e) {
-  return !LEGACY_CLAUDE3_MODELS.includes(getCanonicalName(e));
+function isNotLegacyClaude3(model) {
+  return !LEGACY_CLAUDE3_MODELS.includes(getCanonicalName(model));
 }
 //@ chunk-e6aww6q8.js:1503494-1503586 placement
 /**
  * 是否给 WebSearch 工具开启 citations（需环境变量、首方后端且非实验 beta）。
  */
-function shouldEnableWebSearchCitations(e) {
+function shouldEnableWebSearchCitations(model) {
   return (
     env.CLAUDE_CODE_WEBSEARCH_CITATIONS &&
     isFirstPartyApiBackend() &&
     !areExperimentalBetasDisabled() &&
-    (e === undefined || isNotLegacyClaude3(e))
+    (model === undefined || isNotLegacyClaude3(model))
   );
 }
 //@ chunk-e6aww6q8.js:1503586-1503822 callgraph-fingerprint = toolToAPISchema (0.215)
@@ -410,77 +591,82 @@ function shouldEnableWebSearchCitations(e) {
  * 工具输入 schema：inputJSONSchema 或 zod 转换；非 swarm 时去掉 swarm 字段；支持远程执行且未转发时去掉远程执行字段（含条目数组内）。
  */
 function toolToAPISchema(tool, { remoteToolForwarding }) {
-  let s =
+  let schema =
     "inputJSONSchema" in tool && tool.inputJSONSchema
       ? tool.inputJSONSchema
       : toolInputJsonSchema(tool.inputSchema);
-  if (!isAgentSwarmsEnabled()) s = omitSwarmFields(tool.name, s);
+  if (!isAgentSwarmsEnabled()) schema = omitSwarmFields(tool.name, schema);
   if (getToolRemoteExecution(tool).supported && !remoteToolForwarding) {
-    s = omitSchemaProperties(s, [HOST_TOOL_INPUT_FIELD]);
+    schema = omitSchemaProperties(schema, [HOST_TOOL_INPUT_FIELD]);
     if (isMultiEntryAliasTool(tool))
-      s = omitArrayItemProperties(s, tool.entryFieldName, [HOST_TOOL_INPUT_FIELD]);
+      schema = omitArrayItemProperties(schema, tool.entryFieldName, [HOST_TOOL_INPUT_FIELD]);
   }
-  return s;
+  return schema;
 }
 //@ chunk-e6aww6q8.js:1503822-1503892 layout
 /**
  * 有工具支持远程执行且远程工具服务可用。
  */
-async function shouldForwardRemoteTools(e) {
-  return e.some((n) => getToolRemoteExecution(n).supported) && (await isRemoteToolForwardingEnabled());
+async function shouldForwardRemoteTools(tools) {
+  return (
+    tools.some((tool) => getToolRemoteExecution(tool).supported) && (await isRemoteToolForwardingEnabled())
+  );
 }
 //@ chunk-e6aww6q8.js:1503892-1503981 fingerprint = SWARM_FIELDS_BY_TOOL (1)
 /**
  * 关闭 swarm 时从 schema 去掉的字段：ExitPlanMode 的 launchSwarm/teammateCount，Agent 的 name/team_name/mode。
  */
-var SWARM_FIELDS_BY_TOOL = new Map([
-  [EXITPLANMODE_2, ["launchSwarm", "teammateCount"]],
-  [AGENT, ["name", "team_name", "mode"]],
-]);
+var SWARM_FIELDS_BY_TOOL; // deferred: uses AGENT (../tools/AgentTool/constants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1503892", () => {
+  SWARM_FIELDS_BY_TOOL = new Map([
+    [EXITPLANMODE_2, ["launchSwarm", "teammateCount"]],
+    [AGENT, ["name", "team_name", "mode"]],
+  ]);
+});
 //@ chunk-e6aww6q8.js:1503981-1504145 layout
 /**
  * 从 schema.properties 删掉指定字段。
  */
-function omitSchemaProperties(e, n) {
-  if (n.length === 0) return e;
-  let properties = e.properties;
-  if (!properties || typeof properties !== "object") return e;
-  let s = {
+function omitSchemaProperties(schema, propertyNames) {
+  if (propertyNames.length === 0) return schema;
+  let properties = schema.properties;
+  if (!properties || typeof properties !== "object") return schema;
+  let remainingProperties = {
     ...properties,
   };
-  for (let h of n) delete s[h];
+  for (let propertyName of propertyNames) delete remainingProperties[propertyName];
   return {
-    ...e,
-    properties: s,
+    ...schema,
+    properties: remainingProperties,
   };
 }
 //@ chunk-e6aww6q8.js:1504145-1504497 layout
 /**
  * 从某个数组字段的 items.properties 删掉指定字段。
  */
-function omitArrayItemProperties(e, entryFieldName, r) {
-  let properties = e.properties;
-  if (!properties || typeof properties !== "object" || !(entryFieldName in properties)) return e;
-  let h = properties[entryFieldName];
-  if (!h || typeof h !== "object" || !("items" in h)) return e;
-  let items = h.items;
-  if (!items || typeof items !== "object" || !("properties" in items)) return e;
-  let S = omitSchemaProperties(
+function omitArrayItemProperties(schema, entryFieldName, propertyNames) {
+  let properties = schema.properties;
+  if (!properties || typeof properties !== "object" || !(entryFieldName in properties)) return schema;
+  let entrySchema = properties[entryFieldName];
+  if (!entrySchema || typeof entrySchema !== "object" || !("items" in entrySchema)) return schema;
+  let items = entrySchema.items;
+  if (!items || typeof items !== "object" || !("properties" in items)) return schema;
+  let itemSchema = omitSchemaProperties(
     {
       type: "object",
       properties: items.properties,
     },
-    r,
+    propertyNames,
   );
   return {
-    ...e,
+    ...schema,
     properties: {
       ...properties,
       [entryFieldName]: {
-        ...h,
+        ...entrySchema,
         items: {
           ...items,
-          properties: S.properties,
+          properties: itemSchema.properties,
         },
       },
     },
@@ -490,8 +676,8 @@ function omitArrayItemProperties(e, entryFieldName, r) {
 /**
  * 按工具名去掉 SWARM_FIELDS_BY_TOOL 中的字段。
  */
-function omitSwarmFields(name, n) {
-  return omitSchemaProperties(n, SWARM_FIELDS_BY_TOOL.get(name) ?? []);
+function omitSwarmFields(name, schema) {
+  return omitSchemaProperties(schema, SWARM_FIELDS_BY_TOOL.get(name) ?? []);
 }
 //@ chunk-e6aww6q8.js:1504544-1504557 layout
 /**
@@ -524,22 +710,22 @@ async function getToolListingHash(tools, getToolPermissionContext, agents) {
 /**
  * 用注册的构建器为一批工具生成 {name, listing, definition}。
  */
-async function buildToolListingEntries(e, getToolPermissionContext, model, agents, querySource) {
-  let y = toolDefinitionBuilder;
-  if (y === null) return;
+async function buildToolListingEntries(tools, getToolPermissionContext, model, agents, querySource) {
+  let buildDefinition = toolDefinitionBuilder;
+  if (buildDefinition === null) return;
   return Promise.all(
-    e.map(async (S) => {
-      let toolListingHash = await getToolListingHash(S, getToolPermissionContext, agents);
+    tools.map(async (tool) => {
+      let toolListingHash = await getToolListingHash(tool, getToolPermissionContext, agents);
       return {
-        name: S.name,
+        name: tool.name,
         listing: toolListingHash,
-        definition: await y(S, {
+        definition: await buildDefinition(tool, {
           getToolPermissionContext: agents.getToolPermissionContext,
           tools: getToolPermissionContext,
           agents: agents.agents,
           allowedAgentTypes: agents.allowedAgentTypes,
           model,
-          enginePlacement: agents.enginePlacementOf(S),
+          enginePlacement: agents.enginePlacementOf(tool),
           querySource,
           deferLoading: false,
           byValueListing: toolListingHash,
@@ -560,26 +746,29 @@ class ToolSchemaSerializer {
   schemasSentFromRecord = new Map();
   entriesBuilt = new Set();
   buildSkippedBatch = undefined;
-  noteBuildSkipped(e) {
+  noteBuildSkipped(isMcp) {
     if (this.buildSkippedBatch === undefined) {
-      let n = {
+      let batch = {
         skippedTools: 0,
         skippedMcpTools: 0,
       };
-      this.buildSkippedBatch = n;
+      this.buildSkippedBatch = batch;
       queueMicrotask(() => {
         this.buildSkippedBatch = undefined;
-        logFeatureOk("prompt_snapshot_tool_build_skipped", n);
+        logFeatureOk("prompt_snapshot_tool_build_skipped", batch);
       });
     }
     this.buildSkippedBatch.skippedTools += 1;
-    if (e) this.buildSkippedBatch.skippedMcpTools += 1;
+    if (isMcp) this.buildSkippedBatch.skippedMcpTools += 1;
   }
-  modelConfig(e) {
+  modelConfig(model) {
     this.canonicalToConfig ??= new Map(
-      Object.values(catalogEntriesByFirstPartyId).map((n) => [getCanonicalName(n.firstParty), n]),
+      Object.values(catalogEntriesByFirstPartyId).map((catalogEntry) => [
+        getCanonicalName(catalogEntry.firstParty),
+        catalogEntry,
+      ]),
     );
-    return this.canonicalToConfig.get(getCanonicalName(e));
+    return this.canonicalToConfig.get(getCanonicalName(model));
   }
   logStripOnce(stripped) {
     if (this.loggedStrip) return;
@@ -588,23 +777,26 @@ class ToolSchemaSerializer {
       `[betas] Stripped from tool schemas: [${stripped.join(", ")}] (experimental betas disabled)`,
     );
   }
-  schemaKey(e) {
-    let n = this.schemaKeys.get(e);
-    if (n === undefined) {
-      n = jsonStringify(e);
-      this.schemaKeys.set(e, n);
+  schemaKey(schema) {
+    let text = this.schemaKeys.get(schema);
+    if (text === undefined) {
+      text = jsonStringify(schema);
+      this.schemaKeys.set(schema, text);
     }
-    return n;
+    return text;
   }
-  schemaText(e) {
-    return this.schemaKeys.get(e) ?? jsonStringify(e);
+  schemaText(schema) {
+    return this.schemaKeys.get(schema) ?? jsonStringify(schema);
   }
 }
 //@ chunk-e6aww6q8.js:1506110-1506137 layout
 /**
  * 按 session.host 存放 ToolSchemaSerializer 的懒槽。
  */
-var toolSchemaSerializerSlot = new HostScoped(() => new ToolSchemaSerializer());
+var toolSchemaSerializerSlot; // deferred: uses ToolSchemaSerializer of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1506110", () => {
+  toolSchemaSerializerSlot = new HostScoped(() => new ToolSchemaSerializer());
+});
 //@ chunk-e6aww6q8.js:1506137-1506176 layout
 /**
  * 取当前会话的 ToolSchemaSerializer。
@@ -616,17 +808,17 @@ function getToolSchemaSerializer() {
 /**
  * 工具描述：CLAUDE_CODE_SIMPLE 时优先 searchHint 或首段，否则 tool.prompt()。
  */
-async function getToolDescriptionText(e, n) {
-  if (!simpleModeEnv()) return e.prompt(n);
-  if (e.searchHint) return e.searchHint;
-  let r = await e.prompt(n);
+async function getToolDescriptionText(tool, context) {
+  if (!simpleModeEnv()) return tool.prompt(context);
+  if (tool.searchHint) return tool.searchHint;
+  let descriptionText = await tool.prompt(context);
   return (
     firstLineOf(
-      r,
+      descriptionText,
       `
 
 `,
-    ).trim() || r
+    ).trim() || descriptionText
   );
 }
 //@ chunk-e6aww6q8.js:1506317-1506485 layout
@@ -643,27 +835,36 @@ var SCHEMA_DIFF_REASONS = {
 /**
  * 比较记录的工具定义与当前构建的 schema，记 prompt_snapshot_tool_replay 结果。
  */
-function compareRecordedToolSchema(toolSchemaSerializer, n, recordedEntry, s, { mcpTool, artifactFamily }) {
-  if (recordedEntry.input_schema === n.input_schema || toolSchemaSerializer.comparedRecordedSchemas.has(n))
+function compareRecordedToolSchema(
+  toolSchemaSerializer,
+  toolEntry,
+  recordedEntry,
+  strictMatches,
+  { mcpTool, artifactFamily },
+) {
+  if (
+    recordedEntry.input_schema === toolEntry.input_schema ||
+    toolSchemaSerializer.comparedRecordedSchemas.has(toolEntry)
+  )
     return;
-  toolSchemaSerializer.comparedRecordedSchemas.add(n);
-  let S = {
-    toolName: sanitizeToolNameForAnalytics(n.name),
+  toolSchemaSerializer.comparedRecordedSchemas.add(toolEntry);
+  let telemetryFields = {
+    toolName: sanitizeToolNameForAnalytics(toolEntry.name),
     isMcp: mcpTool,
     isArtifactFamily: artifactFamily,
   };
-  if (!s) {
-    logFeatureSad("prompt_snapshot_tool_replay", "strict_mismatch", S);
+  if (!strictMatches) {
+    logFeatureSad("prompt_snapshot_tool_replay", "strict_mismatch", telemetryFields);
     return;
   }
   try {
-    let w = compareToolSchemas(recordedEntry.input_schema, n.input_schema);
-    if (w === "equal") logFeatureOk("prompt_snapshot_tool_replay", S);
+    let diffReason = compareToolSchemas(recordedEntry.input_schema, toolEntry.input_schema);
+    if (diffReason === "equal") logFeatureOk("prompt_snapshot_tool_replay", telemetryFields);
     else
       logFeatureSad(
         "prompt_snapshot_tool_replay",
-        artifactFamily ? SCHEMA_DIFF_REASONS[w] : "schema_differs",
-        S,
+        artifactFamily ? SCHEMA_DIFF_REASONS[diffReason] : "schema_differs",
+        telemetryFields,
       );
   } catch (error) {
     logError(error);
@@ -673,55 +874,61 @@ function compareRecordedToolSchema(toolSchemaSerializer, n, recordedEntry, s, { 
 /**
  * 是否给工具加 eager_input_streaming：CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING；第一方官方 API 且 tengu_fgts；Vertex/Bedrock 视模型配置。
  */
-function isFineGrainedToolStreamingEnabled(e, n) {
-  let r = env.CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING;
+function isFineGrainedToolStreamingEnabled(provider, eagerInputStreaming) {
+  let envOverride = env.CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING;
   return Boolean(
-    r !== false &&
-    ((e === "firstParty" &&
+    envOverride !== false &&
+    ((provider === "firstParty" &&
       isFirstPartyAnthropicBaseUrl() &&
       getFeatureValue_CACHED_MAY_BE_STALE("tengu_fgts", false)) ||
-      (e === "vertex" && !env.ANTHROPIC_VERTEX_BASE_URL && n?.vertex) ||
-      (e === "bedrock" && isGenuineBedrockEndpoint() && n?.bedrock) ||
-      r === true),
+      (provider === "vertex" && !env.ANTHROPIC_VERTEX_BASE_URL && eagerInputStreaming?.vertex) ||
+      (provider === "bedrock" && isGenuineBedrockEndpoint() && eagerInputStreaming?.bedrock) ||
+      envOverride === true),
   );
 }
 //@ chunk-e6aww6q8.js:1507182-1508019 layout
 /**
  * 有可用的提示词快照记录时直接复用记录里的工具描述与 schema（保持缓存前缀不变）。
  */
-function tryReuseRecordedToolEntry(e, n, r) {
-  let recordedEntry = n.recordedEntry;
+function tryReuseRecordedToolEntry(tool, options, buildContext) {
+  let recordedEntry = options.recordedEntry;
   if (
     !isRemoteNonInteractiveSession() ||
     !isRemoteCowork() ||
     recordedEntry === undefined ||
-    n.byValueListing !== undefined
+    options.byValueListing !== undefined
   )
     return;
-  if (toolMatchesAnyName(e, [ARTIFACT_TOOL_NAME_2])) return;
-  if (!n.withoutToolDescribeHooks && (n.isRedescribed === true || isToolDescribeHookedForBuild(e.name)))
+  if (toolMatchesAnyName(tool, [ARTIFACT_TOOL_NAME_2])) return;
+  if (
+    !options.withoutToolDescribeHooks &&
+    (options.isRedescribed === true || isToolDescribeHookedForBuild(tool.name))
+  )
     return;
   if (
-    (r.structuredOutputs && (e.strict === true || Boolean(e.strictInputJSONSchema))) ||
+    (buildContext.structuredOutputs && (tool.strict === true || Boolean(tool.strictInputJSONSchema))) ||
     recordedEntry.strict === true
   )
     return;
-  let y = recordedEntry.description ?? n.recordedDescription;
-  if (typeof y !== "string") return;
-  let sentFromRecord = toolDescriptionCache_2.getSentFromRecord(r.cacheKey);
+  let description = recordedEntry.description ?? options.recordedDescription;
+  if (typeof description !== "string") return;
+  let sentFromRecord = toolDescriptionCache_2.getSentFromRecord(buildContext.cacheKey);
   if (sentFromRecord === undefined) {
-    if (toolDescriptionCache_2.get(r.cacheKey) !== undefined) return;
+    if (toolDescriptionCache_2.get(buildContext.cacheKey) !== undefined) return;
     sentFromRecord = {
-      eager_input_streaming: isFineGrainedToolStreamingEnabled(r.provider, r.eagerInputStreaming),
+      eager_input_streaming: isFineGrainedToolStreamingEnabled(
+        buildContext.provider,
+        buildContext.eagerInputStreaming,
+      ),
     };
-    toolDescriptionCache_2.setSentFromRecord(r.cacheKey, sentFromRecord);
-    if (!n.withoutToolDescribeHooks) recordDeferral(e.name, undefined);
-    r.serializer.schemasSentFromRecord.set(e.name, recordedEntry.input_schema);
-    r.serializer.noteBuildSkipped(e.isMcp === true);
+    toolDescriptionCache_2.setSentFromRecord(buildContext.cacheKey, sentFromRecord);
+    if (!options.withoutToolDescribeHooks) recordDeferral(tool.name, undefined);
+    buildContext.serializer.schemasSentFromRecord.set(tool.name, recordedEntry.input_schema);
+    buildContext.serializer.noteBuildSkipped(tool.isMcp === true);
   }
   return {
-    name: e.name,
-    description: y,
+    name: tool.name,
+    description,
     input_schema: recordedEntry.input_schema,
     ...(sentFromRecord.eager_input_streaming && {
       eager_input_streaming: true,
@@ -732,40 +939,56 @@ function tryReuseRecordedToolEntry(e, n, r) {
 /**
  * 工具 → API tools[] 元素：按大量特性位组成缓存键，生成 {name, description, input_schema, strict?, eager_input_streaming?}，再加 defer_loading/cache_control/citations；实验 beta 禁用时只留基础字段。
  */
-async function toolToApiDefinition(tool, n) {
-  let apiProvider = getAPIProvider();
+async function toolToApiDefinition(tool, options) {
+  let provider = getAPIProvider();
   let toolSchemaSerializer = getToolSchemaSerializer();
-  let S = (un) => (isAutoModeQuerySource(n.querySource) ? withCatalogSuppressed(un) : un());
-  let model = n.model;
-  let L = model !== undefined ? S(() => toolSchemaSerializer.modelConfig(model)) : undefined;
-  let G =
-    L?.eagerInputStreaming ??
-    (L === undefined && model !== undefined && (apiProvider === "bedrock" || apiProvider === "vertex")
-      ? S(() => statedEagerInputStreaming(model))
+  let runForQuerySource = (fn) =>
+    isAutoModeQuerySource(options.querySource) ? withCatalogSuppressed(fn) : fn();
+  let model = options.model;
+  let modelEntry =
+    model !== undefined ? runForQuerySource(() => toolSchemaSerializer.modelConfig(model)) : undefined;
+  let eagerInputStreaming =
+    modelEntry?.eagerInputStreaming ??
+    (modelEntry === undefined && model !== undefined && (provider === "bedrock" || provider === "vertex")
+      ? runForQuerySource(() => statedEagerInputStreaming(model))
       : undefined);
-  let q = S(() => getPromptModel(model));
-  let Z = S(() => leanPromptFor(q));
-  let Se = model !== undefined && S(() => willSendStructuredOutputsBeta(model));
+  let promptModel = runForQuerySource(() => getPromptModel(model));
+  let isLeanPrompt = runForQuerySource(() => leanPromptFor(promptModel));
+  let structuredOutputs =
+    model !== undefined && runForQuerySource(() => willSendStructuredOutputsBeta(model));
   let bashFirstTrimmed =
-    tool === BashTool && !simpleModeEnv() ? S(() => shouldTrimBashDescription()) : undefined;
-  let we = isAutoModeQuerySource(n.querySource) ? "K:" : "";
-  let Ee = Z ? "L:" : "";
-  let Ae = (apiProvider === "vertex" && G?.vertex) || (apiProvider === "bedrock" && G?.bedrock) ? "F:" : "";
-  let Ie = findToolByName(n.tools, SKILL) ? "S:" : "";
-  let Me = Se ? "X:" : "";
-  let We = toolMatchesName(tool, SENDMESSAGE)
+    tool === BashTool && !simpleModeEnv() ? runForQuerySource(() => shouldTrimBashDescription()) : undefined;
+  let autoModeKeyBit = isAutoModeQuerySource(options.querySource) ? "K:" : "";
+  let leanPromptKeyBit = isLeanPrompt ? "L:" : "";
+  let eagerKeyBit =
+    (provider === "vertex" && eagerInputStreaming?.vertex) ||
+    (provider === "bedrock" && eagerInputStreaming?.bedrock)
+      ? "F:"
+      : "";
+  let skillKeyBit = findToolByName(options.tools, SKILL) ? "S:" : "";
+  let structuredOutputsKeyBit = structuredOutputs ? "X:" : "";
+  let messagingKeyBit = toolMatchesName(tool, SENDMESSAGE)
     ? isCrossSessionMessagingEnabled()
       ? "C1:"
       : isMessagingLimitedToOwnAgents()
         ? "CL:"
         : "C0:"
     : "";
-  let ze = toolMatchesName(tool, LISTAGENTS) ? (hasSendMessageTool(n.tools) ? "A1:" : "A0:") : "";
-  let lt = toolMatchesName(tool, ASKUSERQUESTION) && isPlanModeToolUnavailable(n.tools) ? "DP:" : "";
-  let Je = toolMatchesName(tool, AGENT) ? (getSubscriptionType() === "pro" ? "P1:" : "P0:") : "";
-  let nt = toolMatchesName(tool, AGENT) ? hasSendMessageTool(n.tools) : undefined;
-  let pt = nt === undefined ? "" : nt ? "AC1:" : "AC0:";
-  let Et =
+  let listAgentsKeyBit = toolMatchesName(tool, LISTAGENTS)
+    ? hasSendMessageTool(options.tools)
+      ? "A1:"
+      : "A0:"
+    : "";
+  let planModeKeyBit =
+    toolMatchesName(tool, ASKUSERQUESTION) && isPlanModeToolUnavailable(options.tools) ? "DP:" : "";
+  let subscriptionKeyBit = toolMatchesName(tool, AGENT)
+    ? getSubscriptionType() === "pro"
+      ? "P1:"
+      : "P0:"
+    : "";
+  let hasSendMessageForAgent = toolMatchesName(tool, AGENT) ? hasSendMessageTool(options.tools) : undefined;
+  let agentSendKeyBit = hasSendMessageForAgent === undefined ? "" : hasSendMessageForAgent ? "AC1:" : "AC0:";
+  let leanRewrite =
     !simpleModeEnv() &&
     (toolMatchesName(tool, AGENT) ||
       toolMatchesName(tool, ASKUSERQUESTION) ||
@@ -775,77 +998,87 @@ async function toolToApiDefinition(tool, n) {
       toolMatchesName(tool, SKILL) ||
       toolMatchesName(tool, TOOL_SEARCH_TOOL_NAME) ||
       toolMatchesName(tool, WORKFLOW_TOOL_NAME))
-      ? S(() => leanRewriteFor(q))
+      ? runForQuerySource(() => leanRewriteFor(promptModel))
       : undefined;
-  let yt = Et === true ? "R:" : "";
-  let gt = toolMatchesName(tool, MONITOR) ? (isMonitorPersistentAllowed() ? "M1:" : "M0:") : "";
-  let At = toolMatchesName(tool, AGENT) ? (isRelativeEffortDisabled() ? "E1:" : "E0:") : "";
-  let whenToUse = toolMatchesName(tool, AGENT) ? querySourceHints(n.querySource)?.whenToUse : undefined;
-  let Yt = whenToUse === undefined ? "" : whenToUse === "" ? "X0:" : "X1:";
-  let qt = toolMatchesName(tool, SCHEDULE_WAKEUP_TOOL_NAME) ? (isClaudeAISubscriber() ? "W1:" : "W0:") : "";
-  let Zt = "";
-  let rn = toolMatchesName(tool, ARTIFACT_TOOL_NAME_2)
-    ? require("./chunk-wk7qym19.js").artifactCorePromptCacheKeyBit(n.tools)
+  let leanRewriteKeyBit = leanRewrite === true ? "R:" : "";
+  let monitorKeyBit = toolMatchesName(tool, MONITOR) ? (isMonitorPersistentAllowed() ? "M1:" : "M0:") : "";
+  let effortKeyBit = toolMatchesName(tool, AGENT) ? (isRelativeEffortDisabled() ? "E1:" : "E0:") : "";
+  let whenToUse = toolMatchesName(tool, AGENT) ? querySourceHints(options.querySource)?.whenToUse : undefined;
+  let whenToUseKeyBit = whenToUse === undefined ? "" : whenToUse === "" ? "X0:" : "X1:";
+  let wakeupKeyBit = toolMatchesName(tool, SCHEDULE_WAKEUP_TOOL_NAME)
+    ? isClaudeAISubscriber()
+      ? "W1:"
+      : "W0:"
     : "";
-  let pn = toolMatchesName(tool, WEBFETCH)
-    ? n.tools.some((tool) => toolMatchesName(tool, ARTIFACT_TOOL_NAME_2))
+  let unusedKeyBit = "";
+  let artifactKeyBit = toolMatchesName(tool, ARTIFACT_TOOL_NAME_2)
+    ? require("../tools/ArtifactTool/corePrompt.js").artifactCorePromptCacheKeyBit(options.tools)
+    : "";
+  let webFetchKeyBit = toolMatchesName(tool, WEBFETCH)
+    ? options.tools.some((tool) => toolMatchesName(tool, ARTIFACT_TOOL_NAME_2))
       ? "WA1:"
-      : require("./chunk-ph6mv7v4.js").artifactMcpToolsReplaceBuiltIn(n.tools)
+      : require("../services/artifacts/artifactsMcpTools.js").artifactMcpToolsReplaceBuiltIn(options.tools)
         ? "WA2:"
         : "WA0:"
     : "";
-  let no = toolMatchesName(tool, SEARCHPLUGINS)
-    ? n.tools.some((tool) => toolMatchesName(tool, SUGGESTPLUGININSTALL))
+  let pluginsKeyBit = toolMatchesName(tool, SEARCHPLUGINS)
+    ? options.tools.some((tool) => toolMatchesName(tool, SUGGESTPLUGININSTALL))
       ? "PS1:"
       : "PS0:"
     : "";
-  let hn = require("./chunk-psktkvhp.js").inboxSurfaceCacheKeyBit(tool, n.tools);
-  let ho =
-    tool.mcpInfo?.fileReference === true ? require("./chunk-bkeaw5fv.js").fileReferenceHintKeyBit(tool) : "";
-  let yn = n.withoutToolDescribeHooks ? "H:" : "";
-  let Kn = n.loadedThroughToolSearch === true && tool.isMcp === true ? "LT:" : "";
-  let fo =
-    (n.byValueListing !== undefined ? `V${n.byValueListing}:` : "") +
-    yn +
-    Kn +
-    we +
-    Ee +
-    Ae +
-    Ie +
-    Me +
-    We +
-    ze +
-    lt +
-    Je +
-    pt +
-    yt +
-    gt +
-    At +
-    Yt +
-    qt +
-    rn +
-    pn +
-    no +
-    hn +
-    ho +
+  let inboxKeyBit =
+    require("../tools/FetchInboxMessageTool/FetchInboxMessageTool.lazy.js").inboxSurfaceCacheKeyBit(
+      tool,
+      options.tools,
+    );
+  let fileReferenceKeyBit =
+    tool.mcpInfo?.fileReference === true
+      ? require("../services/mcp/fileReference/wrapFileReferenceTool.js").fileReferenceHintKeyBit(tool)
+      : "";
+  let describeHooksKeyBit = options.withoutToolDescribeHooks ? "H:" : "";
+  let toolSearchKeyBit = options.loadedThroughToolSearch === true && tool.isMcp === true ? "LT:" : "";
+  let cacheKey =
+    (options.byValueListing !== undefined ? `V${options.byValueListing}:` : "") +
+    describeHooksKeyBit +
+    toolSearchKeyBit +
+    autoModeKeyBit +
+    leanPromptKeyBit +
+    eagerKeyBit +
+    skillKeyBit +
+    structuredOutputsKeyBit +
+    messagingKeyBit +
+    listAgentsKeyBit +
+    planModeKeyBit +
+    subscriptionKeyBit +
+    agentSendKeyBit +
+    leanRewriteKeyBit +
+    monitorKeyBit +
+    effortKeyBit +
+    whenToUseKeyBit +
+    wakeupKeyBit +
+    artifactKeyBit +
+    webFetchKeyBit +
+    pluginsKeyBit +
+    inboxKeyBit +
+    fileReferenceKeyBit +
     ("inputJSONSchema" in tool && tool.inputJSONSchema
       ? `${tool.name}:${toolSchemaSerializer.schemaKey(tool.inputJSONSchema)}`
       : tool.name);
-  let To = tryReuseRecordedToolEntry(tool, n, {
-    cacheKey: fo,
-    structuredOutputs: Se,
-    provider: apiProvider,
-    eagerInputStreaming: G,
+  let recordedToolEntry = tryReuseRecordedToolEntry(tool, options, {
+    cacheKey,
+    structuredOutputs,
+    provider,
+    eagerInputStreaming,
     serializer: toolSchemaSerializer,
   });
-  let bo = To ?? toolDescriptionCache_2.get(fo);
-  if (!bo) {
-    let un = toolDescriptionCache_2.stamp();
-    let ao = toolToAPISchema(tool, {
+  let apiTool = recordedToolEntry ?? toolDescriptionCache_2.get(cacheKey);
+  if (!apiTool) {
+    let stamp = toolDescriptionCache_2.stamp();
+    let inputSchema = toolToAPISchema(tool, {
       remoteToolForwarding: await shouldForwardRemoteTools([tool]),
     });
-    if (nt === false && !("inputJSONSchema" in tool && tool.inputJSONSchema)) {
-      let properties = ao.properties;
+    if (hasSendMessageForAgent === false && !("inputJSONSchema" in tool && tool.inputJSONSchema)) {
+      let properties = inputSchema.properties;
       if (
         typeof properties === "object" &&
         properties !== null &&
@@ -853,8 +1086,8 @@ async function toolToApiDefinition(tool, n) {
         typeof properties.name === "object" &&
         properties.name !== null
       )
-        ao = {
-          ...ao,
+        inputSchema = {
+          ...inputSchema,
           properties: {
             ...properties,
             name: {
@@ -865,38 +1098,41 @@ async function toolToApiDefinition(tool, n) {
         };
     }
     let toolDescriptionText = await getToolDescriptionText(tool, {
-      ...n,
-      model: q,
-      leanPrompt: Z,
+      ...options,
+      model: promptModel,
+      leanPrompt: isLeanPrompt,
       bashFirstTrimmed,
-      leanRewrite: Et,
+      leanRewrite,
     });
-    let yo = tool.isMcp ? toolDescriptionText : applyPromptAblation(toolDescriptionText, n.querySource);
-    let Ho = n.enginePlacement === "deferred";
-    let rr = n.withoutToolDescribeHooks
+    let descriptionText = tool.isMcp
+      ? toolDescriptionText
+      : applyPromptAblation(toolDescriptionText, options.querySource);
+    let engineDeferred = options.enginePlacement === "deferred";
+    let resolvedDescription = options.withoutToolDescribeHooks
       ? {
-          description: yo,
-          isDeferred: Ho,
+          description: descriptionText,
+          isDeferred: engineDeferred,
         }
-      : await resolveToolDescription(tool, yo, Ho);
-    if (!n.withoutToolDescribeHooks && n.byValueListing === undefined) {
-      let isDeferred = rr.isDeferred !== Ho ? rr.isDeferred : undefined;
+      : await resolveToolDescription(tool, descriptionText, engineDeferred);
+    if (!options.withoutToolDescribeHooks && options.byValueListing === undefined) {
+      let isDeferred =
+        resolvedDescription.isDeferred !== engineDeferred ? resolvedDescription.isDeferred : undefined;
       recordDeferral(tool.name, isDeferred);
     }
-    bo = {
+    apiTool = {
       name: tool.name,
-      description: rr.description,
-      input_schema: ao,
+      description: resolvedDescription.description,
+      input_schema: inputSchema,
     };
-    if (Se) {
+    if (structuredOutputs) {
       if (tool.strict === true) {
-        let Hr = normalizeOutputSchema(ao);
-        if (Hr.ok) {
-          bo.strict = true;
-          bo.input_schema = Hr.schema;
+        let normalized = normalizeOutputSchema(inputSchema);
+        if (normalized.ok) {
+          apiTool.strict = true;
+          apiTool.input_schema = normalized.schema;
         } else
           logForDebugging(
-            `Tool ${tool.name} has strict: true but its schema is not strict-compatible (${Hr.reason}); sending non-strict`,
+            `Tool ${tool.name} has strict: true but its schema is not strict-compatible (${normalized.reason}); sending non-strict`,
             {
               level: "warn",
             },
@@ -905,74 +1141,75 @@ async function toolToApiDefinition(tool, n) {
         tool.strictInputJSONSchema &&
         getFeatureValue_CACHED_MAY_BE_STALE("tengu_structured_output_strict", false)
       ) {
-        bo.strict = true;
-        bo.input_schema = tool.strictInputJSONSchema;
+        apiTool.strict = true;
+        apiTool.input_schema = tool.strictInputJSONSchema;
       }
     }
-    let sentFromRecord = toolDescriptionCache_2.getSentFromRecord(fo);
+    let sentFromRecord = toolDescriptionCache_2.getSentFromRecord(cacheKey);
     if (
       sentFromRecord
         ? sentFromRecord.eager_input_streaming
-        : isFineGrainedToolStreamingEnabled(apiProvider, G)
+        : isFineGrainedToolStreamingEnabled(provider, eagerInputStreaming)
     )
-      bo.eager_input_streaming = true;
-    toolDescriptionCache_2.register(fo, bo, un);
+      apiTool.eager_input_streaming = true;
+    toolDescriptionCache_2.register(cacheKey, apiTool, stamp);
     if (!tool.isMcp) toolSchemaSerializer.entriesBuilt.add(tool.name);
   }
-  let recordedEntry = n.recordedEntry;
-  let co = recordedEntry !== undefined && (recordedEntry.strict === true) === (bo.strict === true);
-  if (recordedEntry !== undefined && To === undefined)
-    compareRecordedToolSchema(toolSchemaSerializer, bo, recordedEntry, co, {
+  let recordedEntry = options.recordedEntry;
+  let strictMatches =
+    recordedEntry !== undefined && (recordedEntry.strict === true) === (apiTool.strict === true);
+  if (recordedEntry !== undefined && recordedToolEntry === undefined)
+    compareRecordedToolSchema(toolSchemaSerializer, apiTool, recordedEntry, strictMatches, {
       mcpTool: tool.isMcp === true,
       artifactFamily: isArtifactFamilyTool(tool),
     });
-  let So = n.isRedescribed === true && isRewrittenByHook(tool.name);
-  let ko = {
-    name: bo.name,
-    description: So
-      ? bo.description
-      : (recordedEntry?.description ?? n.recordedDescription ?? bo.description),
-    input_schema: co ? recordedEntry.input_schema : bo.input_schema,
-    ...(bo.strict && {
+  let isRewrittenByHook_2 = options.isRedescribed === true && isRewrittenByHook(tool.name);
+  let definition = {
+    name: apiTool.name,
+    description: isRewrittenByHook_2
+      ? apiTool.description
+      : (recordedEntry?.description ?? options.recordedDescription ?? apiTool.description),
+    input_schema: strictMatches ? recordedEntry.input_schema : apiTool.input_schema,
+    ...(apiTool.strict && {
       strict: true,
     }),
-    ...(bo.eager_input_streaming && {
+    ...(apiTool.eager_input_streaming && {
       eager_input_streaming: true,
     }),
   };
-  if (n.deferLoading) ko.defer_loading = true;
-  if (n.cacheControl) ko.cache_control = n.cacheControl;
-  if (tool.name === WEBSEARCH && S(() => shouldEnableWebSearchCitations(model)))
-    ko.citations = {
+  if (options.deferLoading) definition.defer_loading = true;
+  if (options.cacheControl) definition.cache_control = options.cacheControl;
+  if (tool.name === WEBSEARCH && runForQuerySource(() => shouldEnableWebSearchCitations(model)))
+    definition.citations = {
       enabled: true,
     };
   if (areExperimentalBetasDisabled()) {
-    let un = !isToolSearchDisabledByBetas();
-    let ao = new Set([
+    let allowDeferLoading = !isToolSearchDisabledByBetas();
+    let keptKeys = new Set([
       "name",
       "description",
       "input_schema",
       "cache_control",
-      ...(un ? ["defer_loading"] : []),
+      ...(allowDeferLoading ? ["defer_loading"] : []),
     ]);
-    let filtered = Object.keys(ko).filter((key) => !ao.has(key));
+    let filtered = Object.keys(definition).filter((key) => !keptKeys.has(key));
     if (filtered.length > 0) {
       toolSchemaSerializer.logStripOnce(filtered);
       return {
-        name: ko.name,
-        description: ko.description,
-        input_schema: ko.input_schema,
-        ...(ko.cache_control && {
-          cache_control: ko.cache_control,
+        name: definition.name,
+        description: definition.description,
+        input_schema: definition.input_schema,
+        ...(definition.cache_control && {
+          cache_control: definition.cache_control,
         }),
-        ...(un &&
-          ko.defer_loading && {
+        ...(allowDeferLoading &&
+          definition.defer_loading && {
             defer_loading: true,
           }),
       };
     }
   }
-  return ko;
+  return definition;
 }
 //@ chunk-e6aww6q8.js:1512110-1512212 file-local
 /**
@@ -1013,25 +1250,33 @@ ${value}`,
 /**
  * 统计并上报上下文规模：MCP 工具数/服务器数/schema token、CLAUDE.md 大小、git 状态等（tengu_context_size 一类事件）。
  */
-async function logContextMetrics(rootSession, n, toolPermissionContext, getTools, h, y) {
+async function logContextMetrics(
+  sessionRoot,
+  mcpClients,
+  toolPermissionContext,
+  getTools,
+  toolPermissionContext_2,
+  agentDefinitions,
+) {
   if (isFirstPartyTelemetryBlocked()) return;
-  let S;
-  if (!getIsNonInteractiveSession()) await withTimeout(rootSession);
+  let firstRequestState;
+  if (!getIsNonInteractiveSession()) await withTimeout(sessionRoot);
   else if (env.CLAUDE_CODE_REMOTE) {
-    S = await waitForFirstRequest(rootSession);
-    await hasRequestBeenSent(rootSession);
+    firstRequestState = await waitForFirstRequest(sessionRoot);
+    await hasRequestBeenSent(sessionRoot);
     await sleep(0, undefined, {
       unref: true,
     });
   }
-  let w = () => {
-    if (Object.keys(n).length === 0)
+  let prefetchMcpTools = () => {
+    if (Object.keys(mcpClients).length === 0)
       return Promise.resolve({
         tools: [],
       });
     try {
-      let { prefetchAllMcpResources } = require("./chunk-asne9cp8.js").mcpClientModule();
-      return prefetchAllMcpResources(n, h, y);
+      let { prefetchAllMcpResources } =
+        require("../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
+      return prefetchAllMcpResources(mcpClients, toolPermissionContext_2, agentDefinitions);
     } catch (error) {
       logError(error);
       return Promise.resolve({
@@ -1040,14 +1285,14 @@ async function logContextMetrics(rootSession, n, toolPermissionContext, getTools
     }
   };
   let [{ tools: mcpTools }, tools, userContext, systemContext] = await Promise.all([
-    S
+    firstRequestState
       ? {
-          tools: S.tools.filter((tool) => tool.isMcp),
+          tools: firstRequestState.tools.filter((tool) => tool.isMcp),
         }
-      : w(),
-    S ? S.tools : getTools(toolPermissionContext),
-    getOrBuildUserContext(rootSession, h, y),
-    getGitStatusPrefetch(rootSession),
+      : prefetchMcpTools(),
+    firstRequestState ? firstRequestState.tools : getTools(toolPermissionContext),
+    getOrBuildUserContext(sessionRoot, toolPermissionContext_2, agentDefinitions),
+    getGitStatusPrefetch(sessionRoot),
   ]);
   let gitStatusSize = systemContext?.length ?? 0;
   let claudeMdSize = userContext.claudeMd?.length ?? 0;
@@ -1077,28 +1322,29 @@ async function logContextMetrics(rootSession, n, toolPermissionContext, getTools
   mcpServersCount = serverNames.size;
   let toolSchemaSerializer = getToolSchemaSerializer();
   for (let tool of mcpTools) {
-    let qt =
+    let schema =
       "inputJSONSchema" in tool && tool.inputJSONSchema
         ? tool.inputJSONSchema
         : toolInputJsonSchema(tool.inputSchema);
-    mcpToolsTokens += roughTokenCountEstimation(toolSchemaSerializer.schemaText(qt));
+    mcpToolsTokens += roughTokenCountEstimation(toolSchemaSerializer.schemaText(schema));
   }
-  let pt = nonMcpTools.some(isArtifactFamilyTool) && !(await isArtifactRosterSettled(30000));
+  let awaitingArtifactRoster =
+    nonMcpTools.some(isArtifactFamilyTool) && !(await isArtifactRosterSettled(30000));
   let { schemasSentFromRecord, entriesBuilt } = toolSchemaSerializer;
-  let gt = deferredToolCache();
-  let At = false;
+  let deferredToolState = deferredToolCache();
+  let excludedUnsentTools = false;
   for (let tool of nonMcpTools) {
-    if (pt && isArtifactFamilyTool(tool)) continue;
-    let Yt =
+    if (awaitingArtifactRoster && isArtifactFamilyTool(tool)) continue;
+    let schema =
       "inputJSONSchema" in tool && tool.inputJSONSchema
         ? tool.inputJSONSchema
-        : (schemasSentFromRecord.get(tool.name) ?? gt.splicedInputSchema(tool.name));
-    if (Yt === undefined && S !== undefined && !entriesBuilt.has(tool.name)) {
-      At = true;
+        : (schemasSentFromRecord.get(tool.name) ?? deferredToolState.splicedInputSchema(tool.name));
+    if (schema === undefined && firstRequestState !== undefined && !entriesBuilt.has(tool.name)) {
+      excludedUnsentTools = true;
       continue;
     }
     nonMcpToolsTokens += roughTokenCountEstimation(
-      toolSchemaSerializer.schemaText(Yt ?? toolInputJsonSchema(tool.inputSchema)),
+      toolSchemaSerializer.schemaText(schema ?? toolInputJsonSchema(tool.inputSchema)),
     );
   }
   logEvent("tengu_context_size", {
@@ -1112,10 +1358,10 @@ async function logContextMetrics(rootSession, n, toolPermissionContext, getTools
     mcp_tools_tokens: mcpToolsTokens,
     non_mcp_tools_count: nonMcpToolsCount,
     non_mcp_tools_tokens: nonMcpToolsTokens,
-    ...(pt && {
+    ...(awaitingArtifactRoster && {
       non_mcp_tools_tokens_excludes_artifact: true,
     }),
-    ...(At && {
+    ...(excludedUnsentTools && {
       non_mcp_tools_tokens_excludes_unsent: true,
     }),
   });
@@ -1124,16 +1370,16 @@ async function logContextMetrics(rootSession, n, toolPermissionContext, getTools
 /**
  * 工具输入规整：Read.offset 字符串转数字；ExitPlanMode 补计划文件路径；Bash 去掉 cwd 前缀、修正转义；其他工具按各自规则。
  */
-function normalizeToolInput_2(e, n, agentId, storageV5) {
-  switch (e.name) {
+function normalizeToolInput_2(tool, input, agentId, storageV5) {
+  switch (tool.name) {
     case FILE_READ_TOOL_NAME: {
       try {
-        if (n === null || typeof n !== "object") return n;
-        let h = n;
-        let plan = coerceNumberString(h.offset);
-        if (typeof h.offset === "string" && typeof plan === "number")
+        if (input === null || typeof input !== "object") return input;
+        let record = input;
+        let plan = coerceNumberString(record.offset);
+        if (typeof record.offset === "string" && typeof plan === "number")
           return {
-            ...h,
+            ...record,
             offset: plan,
           };
       } catch (error) {
@@ -1143,26 +1389,26 @@ function normalizeToolInput_2(e, n, agentId, storageV5) {
           ),
         );
       }
-      return n;
+      return input;
     }
     case EXITPLANMODE_2: {
       let planFilePath = getPlanWithPath(agentId);
       chainPlanSnapshot(storageV5);
       return planFilePath !== null
         ? {
-            ...n,
+            ...input,
             ...planFilePath,
           }
-        : n;
+        : input;
     }
     case BashTool.name: {
-      let parsed = BashTool.inputSchema.parse(n);
+      let parsed = BashTool.inputSchema.parse(input);
       let { command, timeout, description } = parsed;
-      let L = isRemoteOnlyCheck(e.name) ? null : getCwd();
+      let cwd = isRemoteOnlyCheck(tool.name) ? null : getCwd();
       let normalizedCommand =
-        L === null
+        cwd === null
           ? command
-          : stripCdPrefix(command, getPlatform() === "windows" ? [L, windowsPathToPosixPath(L)] : [L])
+          : stripCdPrefix(command, getPlatform() === "windows" ? [cwd, windowsPathToPosixPath(cwd)] : [cwd])
               .command;
       normalizedCommand = normalizedCommand.replaceAll("\\\\;", "\\;");
       if (/^echo\s+["']?[^|&;><]*["']?$/i.test(normalizedCommand.trim()))
@@ -1197,19 +1443,19 @@ function normalizeToolInput_2(e, n, agentId, storageV5) {
       };
     }
     case FileEditTool.name: {
-      let y = {
-        ...n,
+      let normalized = {
+        ...input,
       };
-      if ("old_str" in y) {
-        if (!("old_string" in y)) y.old_string = y.old_str;
-        delete y.old_str;
+      if ("old_str" in normalized) {
+        if (!("old_string" in normalized)) normalized.old_string = normalized.old_str;
+        delete normalized.old_str;
       }
-      if ("new_str" in y) {
-        if (!("new_string" in y)) y.new_string = y.new_str;
-        delete y.new_str;
+      if ("new_str" in normalized) {
+        if (!("new_string" in normalized)) normalized.new_string = normalized.new_str;
+        delete normalized.new_str;
       }
-      let parsedInput = FileEditTool.inputSchema.parse(y);
-      let w = {
+      let parsedInput = FileEditTool.inputSchema.parse(normalized);
+      let editInput = {
         file_path: parsedInput.file_path,
         edits: [
           {
@@ -1220,11 +1466,11 @@ function normalizeToolInput_2(e, n, agentId, storageV5) {
         ],
       };
       let { file_path: filePath, edits } =
-        isRemoteOnlyCheck(e.name) || (canRunToolsOnThisMachine() && hasHostField(parsedInput))
+        isRemoteOnlyCheck(tool.name) || (canRunToolsOnThisMachine() && hasHostField(parsedInput))
           ? {
-              ...w,
-              edits: w.edits.map((edit) =>
-                isMarkdownPath(w.file_path)
+              ...editInput,
+              edits: editInput.edits.map((edit) =>
+                isMarkdownPath(editInput.file_path)
                   ? edit
                   : {
                       ...edit,
@@ -1232,7 +1478,7 @@ function normalizeToolInput_2(e, n, agentId, storageV5) {
                     },
               ),
             }
-          : normalizeFileEditInput(w);
+          : normalizeFileEditInput(editInput);
       return {
         replace_all: edits[0].replace_all,
         file_path: filePath,
@@ -1246,61 +1492,65 @@ function normalizeToolInput_2(e, n, agentId, storageV5) {
       };
     }
     case FileWriteTool.name: {
-      let h = FileWriteTool.inputSchema.safeParse(n);
-      if (!h.success) return n;
-      let isMarkdown = isMarkdownPath(h.data.file_path);
+      let parseResult = FileWriteTool.inputSchema.safeParse(input);
+      if (!parseResult.success) return input;
+      let isMarkdown = isMarkdownPath(parseResult.data.file_path);
       return {
-        file_path: h.data.file_path,
-        content: isMarkdown ? h.data.content : stripTrailingWhitespace(h.data.content),
+        file_path: parseResult.data.file_path,
+        content: isMarkdown ? parseResult.data.content : stripTrailingWhitespace(parseResult.data.content),
         ...(canRunToolsOnThisMachine() &&
-          HOST_TOOL_INPUT_FIELD in h.data &&
-          h.data[HOST_TOOL_INPUT_FIELD] !== undefined && {
-            [HOST_TOOL_INPUT_FIELD]: h.data[HOST_TOOL_INPUT_FIELD],
+          HOST_TOOL_INPUT_FIELD in parseResult.data &&
+          parseResult.data[HOST_TOOL_INPUT_FIELD] !== undefined && {
+            [HOST_TOOL_INPUT_FIELD]: parseResult.data[HOST_TOOL_INPUT_FIELD],
           }),
       };
     }
     default:
-      return n;
+      return input;
   }
 }
 //@ chunk-e6aww6q8.js:1516097-1516362 placement
 /**
  * 规范化写入记录的工具输入：ExitPlanMode 附计划内容，多处编辑的 Edit 去掉单编辑字段，SendMessage 做专门转换。
  */
-function normalizeToolInputForRecord(e, n, r = true) {
-  switch (e) {
+function normalizeToolInputForRecord(toolName, input, stripHostKeys = true) {
+  switch (toolName) {
     case EXITPLANMODE_2: {
-      if (r && n && typeof n === "object") return stripHostOwnedInputKeys(e, n);
-      return n;
+      if (stripHostKeys && input && typeof input === "object")
+        return stripHostOwnedInputKeys(toolName, input);
+      return input;
     }
     case FileEditTool.name: {
-      if (r && n && typeof n === "object" && "edits" in n) {
-        let { old_string: oldString, new_string: newString, replace_all: replaceAll, ...S } = n;
-        return S;
+      if (stripHostKeys && input && typeof input === "object" && "edits" in input) {
+        let { old_string: oldString, new_string: newString, replace_all: replaceAll, ...rest } = input;
+        return rest;
       }
-      return n;
+      return input;
     }
     case SENDMESSAGE:
-      return stripObservableFields(n) ?? n;
+      return stripObservableFields(input) ?? input;
     default:
-      return n;
+      return input;
   }
 }
 //@ chunk-e6aww6q8.js:1516362-1516370 placement
-setToolDefinitionBuilder(toolToApiDefinition);
+// deferred: uses setToolDefinitionBuilder of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1516362", () => {
+  setToolDefinitionBuilder(toolToApiDefinition);
+});
 //@ chunk-e6aww6q8.js:1516370-1516544 placement
 /**
  * 预先为配置了工具描述钩子的工具各运行一次描述钩子，失败只记日志。
  */
-async function prefetchToolDescribeHooks(tools, n) {
+async function prefetchToolDescribeHooks(tools, buildDefinition) {
   try {
     if (!isToolDescribeHooked()) return;
     await Promise.all(
       tools
-        .filter((r) => isToolDescribeHookedForBuild(r.name))
-        .map((r) =>
-          describedOnce(r.name, () =>
-            n(r).then(
+        .filter((tool) => isToolDescribeHookedForBuild(tool.name))
+        .map((tool) =>
+          describedOnce(tool.name, () =>
+            buildDefinition(tool).then(
               () => {
                 return;
               },
@@ -1326,174 +1576,6 @@ function isStellarDriftEnabled() {
   if (!isFirstPartyApiBackend()) return false;
   return getFeatureValue_SESSION_PINNED("tengu_stellar_drift", false);
 }
-//@ chunk-w5ndchqs.js:3633-3859 fingerprint = logAPIPrefix (0.752)
-/**
- * 记录 system 第一块（计费头）的长度与哈希（tengu_sysprompt_block）。
- */
-function logAPIPrefix(systemPrompt) {
-  try {
-    let [firstSyspromptBlock] = splitSysPromptPrefix(systemPrompt, {
-      skipTelemetry: true,
-    });
-    let firstSystemPrompt = firstSyspromptBlock?.text;
-    logEvent("tengu_sysprompt_block", {
-      length: firstSystemPrompt?.length ?? 0,
-      hash: firstSystemPrompt
-        ? sanitizeMarkName(createHash("sha256").update(firstSystemPrompt).digest("hex"))
-        : lit(""),
-    });
-  } catch (error) {
-    logError(withTelemetryMessage(toError(error), "system prompt block telemetry failed"));
-  }
-}
-//@ chunk-w5ndchqs.js:3859-5496 fingerprint = splitSysPromptPrefix (0.969)
-/**
- * system 提示词数组切块（buildSystemPromptBlocks 的基础）：计费头 x-anthropic-billing-header 一块（无缓存），身份行一块，"# Reporting outcomes" 段单独一块；有 __SYSTEM_PROMPT_DYNAMIC_BOUNDARY__ 且 scope 可用时边界前为静态块（scope global，可按 STATIC_BREAKPOINT 再切）、边界后为动态块；否则其余合成一块（org）。实测第三方 3 块、第一方 4 块。
- */
-function splitSysPromptPrefix(systemPrompt, options) {
-  let useGlobalCacheFeature = shouldUseGlobalCacheScope();
-  let index = systemPrompt.findIndex((x) => x === SYSTEM_PROMPT_DYNAMIC_BOUNDARY);
-  if (useGlobalCacheFeature && options?.skipGlobalCacheForSystemPrompt && index === -1) {
-    if (!options?.skipTelemetry)
-      logEvent("tengu_sysprompt_using_tool_based_cache", {
-        promptBlockCount: systemPrompt.length,
-      });
-    let attributionHeader;
-    let R;
-    let U;
-    let rest = [];
-    for (let prompt of systemPrompt) {
-      if (!prompt) continue;
-      if (prompt === SYSTEM_PROMPT_DYNAMIC_BOUNDARY) continue;
-      if (prompt.startsWith(X_ANTHROPIC_BILLING_HEADER)) attributionHeader = prompt;
-      else if (CLI_SYSPROMPT_PREFIX_SET.has(prompt)) R = prompt;
-      else if (prompt === REPORTING_OUTCOMES_SECTION) U = prompt;
-      else rest.push(prompt);
-    }
-    let result = [];
-    if (attributionHeader)
-      result.push({
-        text: attributionHeader,
-        cacheScope: null,
-      });
-    if (R)
-      result.push({
-        text: R,
-        cacheScope: "org",
-      });
-    if (U && attributionHeader && R)
-      result.push({
-        text: U,
-        cacheScope: null,
-      });
-    let restJoined = rest.join(`
-
-`);
-    if (restJoined)
-      result.push({
-        text: restJoined,
-        cacheScope: "org",
-      });
-    return result;
-  }
-  if (useGlobalCacheFeature) {
-    if (index !== -1) {
-      let attributionHeader;
-      let R;
-      let U;
-      let staticBlocks = [];
-      let dynamicBlocks = [];
-      for (let i = 0; i < systemPrompt.length; i++) {
-        let block = systemPrompt[i];
-        if (!block || block === SYSTEM_PROMPT_DYNAMIC_BOUNDARY) continue;
-        if (block.startsWith(X_ANTHROPIC_BILLING_HEADER)) attributionHeader = block;
-        else if (CLI_SYSPROMPT_PREFIX_SET.has(block)) R = block;
-        else if (block === REPORTING_OUTCOMES_SECTION) U = block;
-        else if (i < index) staticBlocks.push(block);
-        else dynamicBlocks.push(block);
-      }
-      let result = [];
-      if (attributionHeader)
-        result.push({
-          text: attributionHeader,
-          cacheScope: null,
-        });
-      if (R)
-        result.push({
-          text: R,
-          cacheScope: null,
-        });
-      if (U && attributionHeader && R)
-        result.push({
-          text: U,
-          cacheScope: null,
-        });
-      let joined = staticBlocks.join(`
-
-`);
-      let O = joined ? splitAtStaticBreakpoint(joined) : [];
-      for (let text of O)
-        result.push({
-          text,
-          cacheScope: "global",
-        });
-      let dynamicJoined = dynamicBlocks.join(`
-
-`);
-      if (dynamicJoined)
-        result.push({
-          text: dynamicJoined,
-          cacheScope: O.length > 1 ? null : "org",
-        });
-      if (!options?.skipTelemetry)
-        logEvent("tengu_sysprompt_boundary_found", {
-          blockCount: result.length,
-          staticBlockLength: joined.length,
-          dynamicBlockLength: dynamicJoined.length,
-        });
-      return result;
-    } else if (!options?.skipTelemetry)
-      logEvent("tengu_sysprompt_missing_boundary_marker", {
-        promptBlockCount: systemPrompt.length,
-      });
-  }
-  let attributionHeader;
-  let m;
-  let h;
-  let rest = [];
-  for (let [x, R] of systemPrompt.entries()) {
-    if (!R || R === SYSTEM_PROMPT_DYNAMIC_BOUNDARY) continue;
-    if (R.startsWith(X_ANTHROPIC_BILLING_HEADER)) attributionHeader = R;
-    else if (CLI_SYSPROMPT_PREFIX_SET.has(R)) m = R;
-    else if (R === REPORTING_OUTCOMES_SECTION) h = R;
-    else rest.push(x < index ? splitAtStaticBreakpoint(R).join("") : R);
-  }
-  let result = [];
-  if (attributionHeader)
-    result.push({
-      text: attributionHeader,
-      cacheScope: null,
-    });
-  if (m)
-    result.push({
-      text: m,
-      cacheScope: "org",
-    });
-  if (h && attributionHeader && m)
-    result.push({
-      text: h,
-      cacheScope: null,
-    });
-  let restJoined = rest.join(`
-
-`);
-  if (restJoined)
-    result.push({
-      text: restJoined,
-      cacheScope: "org",
-    });
-  return result;
-}
 export {
   applyPromptAblation,
   normalizeToolInput_2,
@@ -1503,6 +1585,7 @@ export {
   commitGate,
   hasRequestBeenSent,
   startFirstRequestGate,
+  logAPIPrefix,
   isStellarDriftEnabled,
   prefetchToolDescribeHooks,
   toolToApiDefinition,
@@ -1510,7 +1593,6 @@ export {
   isNotLegacyClaude3,
   markRootRequestSent,
   splitSysPromptPrefix,
-  logAPIPrefix,
   logContextMetrics,
   withTimeout,
   appendSystemContextToPrompt,

@@ -10,6 +10,7 @@
  */
 import { createSignal } from "../../utils/signal.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-r533agbk.js:263-589 placement
 /**
@@ -21,7 +22,7 @@ class LoginEventCounter {
     loginCompleted: 0,
   };
   #t = createSignal();
-  subscribe = (t) => this.#t.subscribe(t);
+  subscribe = (listener) => this.#t.subscribe(listener);
   getSnapshot = () => this.#e;
   credentialsPersisted() {
     this.#e = {
@@ -42,5 +43,8 @@ class LoginEventCounter {
 /**
  * 按会话根保存的登录事件计数器。
  */
-var loginEventCounter = new SessionRootSlot(() => new LoginEventCounter());
+var loginEventCounter; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-r533agbk.js:589", () => {
+  loginEventCounter = new SessionRootSlot(() => new LoginEventCounter());
+});
 export { loginEventCounter };

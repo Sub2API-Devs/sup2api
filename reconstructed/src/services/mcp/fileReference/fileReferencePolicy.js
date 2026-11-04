@@ -36,43 +36,50 @@ import {
 } from "../../../utils/errors.js";
 import { getOauthAccountInfo } from "../../../utils/auth.js";
 import { isPlainObject } from "../../../utils/objectUtils.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-kc2qkj8w.js:1257-1393 placement
 /**
  * 按会话根记录的无盘宿主状态。
  */
-var ANTHROPIC_CHROMEUPLOADFILES = "anthropic/chromeUploadFiles";
-var ANTHROPIC_CHROMEUPLOADMAXBYTES = "anthropic/chromeUploadMaxBytes";
-var ANTHROPIC_CHROMEUPLOADAUTOMODEONLY = "anthropic/chromeUploadAutoModeOnly";
-var disklessHostState = new SessionRootSlot(() => ({}));
+var ANTHROPIC_CHROMEUPLOADFILES; // deferred: uses SessionRootSlot (../../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+var ANTHROPIC_CHROMEUPLOADMAXBYTES;
+var ANTHROPIC_CHROMEUPLOADAUTOMODEONLY;
+var disklessHostState;
+deferInit("chunk-kc2qkj8w.js:1257", () => {
+  ANTHROPIC_CHROMEUPLOADFILES = "anthropic/chromeUploadFiles";
+  ANTHROPIC_CHROMEUPLOADMAXBYTES = "anthropic/chromeUploadMaxBytes";
+  ANTHROPIC_CHROMEUPLOADAUTOMODEONLY = "anthropic/chromeUploadAutoModeOnly";
+  disklessHostState = new SessionRootSlot(() => ({}));
+});
 //@ chunk-kc2qkj8w.js:1393-1494 placement
 /**
  * 取服务器声明的 Chrome 上传大小上限（合法正整数时不超过默认上限）。
  */
-function chromeUploadMaxBytes(e, n) {
-  let r = e?.[ANTHROPIC_CHROMEUPLOADMAXBYTES];
-  return typeof r === "number" && Number.isInteger(r) && r > 0 ? Math.min(r, n) : n;
+function chromeUploadMaxBytes(meta, cap) {
+  let limit = meta?.[ANTHROPIC_CHROMEUPLOADMAXBYTES];
+  return typeof limit === "number" && Number.isInteger(limit) && limit > 0 ? Math.min(limit, cap) : cap;
 }
 //@ chunk-kc2qkj8w.js:1494-1586 placement
 /**
  * 判断服务器是否属于一方上传作用域（非 project、非 relayed、非插件）。
  */
-function isFirstPartyUploadScope(config) {
+function isFirstPartyUploadScope(serverConfig) {
   return (
-    config !== undefined &&
-    isIdeOrSdkType(config.type) &&
-    config.scope !== "project" &&
-    config.relayed !== true &&
-    !isPluginServerConfig(config)
+    serverConfig !== undefined &&
+    isIdeOrSdkType(serverConfig.type) &&
+    serverConfig.scope !== "project" &&
+    serverConfig.relayed !== true &&
+    !isPluginServerConfig(serverConfig)
   );
 }
 //@ chunk-kc2qkj8w.js:1586-1695 placement
 /**
  * 判断 MCP 服务器配置的来源：SDK、插件或其配置作用域。
  */
-function mcpServerSource(name, config) {
+function mcpServerSource(serverName, config) {
   if (config.type === "sdk" && isFirstPartyUploadScope(config)) return "sdk";
-  if (isPluginServerConfig(config) || isPluginOwnedDynamicServer(name, config.scope)) return "plugin";
+  if (isPluginServerConfig(config) || isPluginOwnedDynamicServer(serverName, config.scope)) return "plugin";
   return config.scope;
 }
 //@ chunk-kc2qkj8w.js:1695-1875 placement
@@ -96,8 +103,8 @@ function mcpServerIdentityForHooks(mcpInfo) {
 /**
  * 判断该动态服务器是否由插件提供。
  */
-function isPluginOwnedDynamicServer(e, n) {
-  return n === "dynamic" && moduleStore.ownerOfKey(e) !== undefined;
+function isPluginOwnedDynamicServer(serverName, scope) {
+  return scope === "dynamic" && moduleStore.ownerOfKey(serverName) !== undefined;
 }
 //@ chunk-kc2qkj8w.js:1940-2002 placement
 var X_MCP_SERVER_ORIGIN = "x-mcp-server-origin";
@@ -106,26 +113,29 @@ var X_CCR_OWNER_SLACK_USER_ID = "x-ccr-owner-slack-user-id";
 /**
  * 取请求头里某名字（忽略大小写）的所有值。
  */
-function headerValues(headers, n) {
+function headerValues(headers, headerName) {
   return Object.entries(headers ?? {})
-    .filter(([key]) => key.toLowerCase() === n)
+    .filter(([key]) => key.toLowerCase() === headerName)
     .map(([, value]) => value);
 }
 //@ chunk-kc2qkj8w.js:2098-2123 placement
 /**
  * 服务器能力缓存。
  */
-var serverCapabilityCache = new SessionRootSlot(() => ({}));
+var serverCapabilityCache; // deferred: uses SessionRootSlot (../../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-kc2qkj8w.js:2098", () => {
+  serverCapabilityCache = new SessionRootSlot(() => ({}));
+});
 //@ chunk-kc2qkj8w.js:2123-2160 placement
 var ANTHROPIC_CLAUDEAICONNECTOR = "anthropic/claudeAiConnector";
 //@ chunk-kc2qkj8w.js:2160-2268 placement
-function isFirstPartyPathUrl(e, path) {
+function isFirstPartyPathUrl(url, path) {
   return (
-    e.protocol === "https:" &&
-    e.username === "" &&
-    e.password === "" &&
-    isFirstPartyAnthropicHost(e.href) &&
-    e.pathname === path
+    url.protocol === "https:" &&
+    url.username === "" &&
+    url.password === "" &&
+    isFirstPartyAnthropicHost(url.href) &&
+    url.pathname === path
   );
 }
 //@ chunk-kc2qkj8w.js:2268-2864 placement
@@ -136,18 +146,18 @@ function isFirstPartyToolboxServer(connection, { path, serverId }) {
   try {
     if (env.CLAUDE_CODE_ENVIRONMENT_KIND === "byoc") return false;
     let config = connection.config;
-    let o = firstPartyServerIdFor(config);
-    if (o !== undefined) {
-      let y = o === ARTIFACTS_SERVER_ID && isRemoteManagedEnvironment();
+    let firstPartyId = firstPartyServerIdFor(config);
+    if (firstPartyId !== undefined) {
+      let isArtifactsRemote = firstPartyId === ARTIFACTS_SERVER_ID && isRemoteManagedEnvironment();
       if (
-        o !== serverId ||
+        firstPartyId !== serverId ||
         config.type !== "http" ||
         isDiskless() ||
-        (!y && (env.CLAUDE_CODE_REMOTE || env.CLAUDE_CODE_ENVIRONMENT_KIND))
+        (!isArtifactsRemote && (env.CLAUDE_CODE_REMOTE || env.CLAUDE_CODE_ENVIRONMENT_KIND))
       )
         return false;
-      let R = new URL(config.url);
-      return R.search === "" && isFirstPartyPathUrl(R, path);
+      let url = new URL(config.url);
+      return url.search === "" && isFirstPartyPathUrl(url, path);
     }
     if (config.type === "claudeai-proxy") {
       if (!isClaudeAiProxyServer(config)) return false;
@@ -168,10 +178,10 @@ function isFirstPartyToolboxServer(connection, { path, serverId }) {
   }
 }
 //@ chunk-kc2qkj8w.js:2864-3145 placement
-function claudeAiConnectorCapability(e) {
+function claudeAiConnectorCapability(connection) {
   try {
-    let config = e.config;
-    let r = e.capabilities?.experimental?.[ANTHROPIC_CLAUDEAICONNECTOR];
+    let config = connection.config;
+    let capability = connection.capabilities?.experimental?.[ANTHROPIC_CLAUDEAICONNECTOR];
     if (
       config.type !== "sdk" ||
       !isFirstPartyUploadScope(config) ||
@@ -179,13 +189,13 @@ function claudeAiConnectorCapability(e) {
       env.CLAUDE_CODE_REMOTE ||
       env.CLAUDE_CODE_ENVIRONMENT_KIND ||
       !isTopHostSession() ||
-      typeof r !== "object" ||
-      r === null ||
-      !("serverId" in r) ||
-      r.serverId !== (config.connectorId ?? e.name)
+      typeof capability !== "object" ||
+      capability === null ||
+      !("serverId" in capability) ||
+      capability.serverId !== (config.connectorId ?? connection.name)
     )
       return;
-    return r;
+    return capability;
   } catch {
     return;
   }
@@ -194,29 +204,29 @@ function claudeAiConnectorCapability(e) {
 /**
  * 判断文件引用功能为何不可用：无盘环境、Slack/Teams 中继，或策略原因。
  */
-function fileReferenceUnavailableReason(e) {
+function fileReferenceUnavailableReason(toolSpec) {
   if (isDiskless() && disklessHostState.peek(getRootSession())?.host === undefined) return "diskless";
   if (isChatOrTeams()) return "slack_or_teams_relay";
-  return fileReferencePolicyBlock(e);
+  return fileReferencePolicyBlock(toolSpec);
 }
 //@ chunk-kc2qkj8w.js:3266-3443 placement
-function fileReferencePolicyBlock(e) {
-  let n = policyLimitsUnavailableReason();
-  if (n !== undefined) return n;
+function fileReferencePolicyBlock(toolSpec) {
+  let limitsReason = policyLimitsUnavailableReason();
+  if (limitsReason !== undefined) return limitsReason;
   if (isPolicyVerdictAbsent()) return "policy_not_loaded";
   if (isSessionVerdictDisowned() && hasComplianceTaint("hipaa")) return "policy_not_loaded";
-  if (!isPolicyAllowed(e.policy)) return "policy_denied";
+  if (!isPolicyAllowed(toolSpec.policy)) return "policy_denied";
   return;
 }
 //@ chunk-kc2qkj8w.js:3443-3666 placement
 function policyLimitsUnavailableReason() {
-  let e;
+  let ineligibleReason;
   try {
-    e = getPolicyLimitsIneligibleReason();
+    ineligibleReason = getPolicyLimitsIneligibleReason();
   } catch {
     return "policy_not_asked";
   }
-  switch (e) {
+  switch (ineligibleReason) {
     case undefined:
     case "prosumer_oauth":
       return;
@@ -233,51 +243,58 @@ class FileReferenceOffer {
   #e = new Map();
   #n = "not_checked";
   #r = false;
-  mayLogTypedRow(e) {
+  mayLogTypedRow(row) {
     if (this.#r) return false;
-    let n = fileReferenceOfferState(e);
-    if (n === "no") this.#t();
-    return n === "yes";
+    let state = fileReferenceOfferState(row);
+    if (state === "no") this.#t();
+    return state === "yes";
   }
   undecidedReason() {
     return this.#n;
   }
-  holdUndecidedReason(e) {
-    this.#n = e;
+  holdUndecidedReason(reason) {
+    this.#n = reason;
   }
-  note(e, n) {
+  note(row, availability) {
     try {
-      let r = n.state === "offered" ? n.state : `${n.state}:${n.reason}`;
-      if (n.state === "offered" || n.state === "latched_off") {
+      let key =
+        availability.state === "offered"
+          ? availability.state
+          : `${availability.state}:${availability.reason}`;
+      if (availability.state === "offered" || availability.state === "latched_off") {
         this.#n = "not_checked";
-        for (let [t, { availability: o }] of this.#e) if (o.state === "latched_off") this.#e.delete(t);
+        for (let [key, { availability: entry }] of this.#e)
+          if (entry.state === "latched_off") this.#e.delete(key);
       }
-      if ((n.state === "latched_off" && n.reason === "policy_denied") || fileReferenceOfferState(e) === "no")
+      if (
+        (availability.state === "latched_off" && availability.reason === "policy_denied") ||
+        fileReferenceOfferState(row) === "no"
+      )
         this.#t();
-      if (!this.#r && !this.#o.has(r))
-        this.#e.set(r, {
-          row: e,
-          availability: n,
+      if (!this.#r && !this.#o.has(key))
+        this.#e.set(key, {
+          row,
+          availability,
         });
     } catch {}
     this.flush();
   }
   flush() {
     try {
-      for (let [e, { row: n, availability: r }] of this.#e) {
-        if (!getFeatureValue_CACHED_MAY_BE_STALE(n.flag, false)) continue;
-        let t = fileReferenceOfferState(n);
-        if (t === "no") {
+      for (let [key, { row, availability }] of this.#e) {
+        if (!getFeatureValue_CACHED_MAY_BE_STALE(row.flag, false)) continue;
+        let offerState = fileReferenceOfferState(row);
+        if (offerState === "no") {
           this.#t();
           return;
         }
-        if (t === "pending") continue;
-        this.#e.delete(e);
-        this.#o.add(e);
+        if (offerState === "pending") continue;
+        this.#e.delete(key);
+        this.#o.add(key);
         logEvent("tengu_mcp_drive_file_reference_availability", {
-          state: fromEnum(r.state),
-          ...(r.state !== "offered" && {
-            reason: fromEnum(r.reason),
+          state: fromEnum(availability.state),
+          ...(availability.state !== "offered" && {
+            reason: fromEnum(availability.reason),
           }),
         });
       }
@@ -289,17 +306,21 @@ class FileReferenceOffer {
   }
 }
 //@ chunk-kc2qkj8w.js:4607-4771 placement
-function fileReferenceOfferState(e) {
+function fileReferenceOfferState(toolSpec) {
   if (hasComplianceTaint("hipaa")) return "no";
-  let n = fileReferencePolicyBlock(e);
-  if (n === "policy_not_asked" || n === "policy_not_loaded" || isPolicyVerdictAbsent()) return "pending";
-  return n === "policy_denied" ? "no" : "yes";
+  let block = fileReferencePolicyBlock(toolSpec);
+  if (block === "policy_not_asked" || block === "policy_not_loaded" || isPolicyVerdictAbsent())
+    return "pending";
+  return block === "policy_denied" ? "no" : "yes";
 }
 //@ chunk-kc2qkj8w.js:4771-4797 placement
 /**
  * 按会话根保存的文件引用提供状态。
  */
-var fileReferenceOfferSlot = new SessionRootSlot(() => new FileReferenceOffer());
+var fileReferenceOfferSlot; // deferred: uses SessionRootSlot (../../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-kc2qkj8w.js:4771", () => {
+  fileReferenceOfferSlot = new SessionRootSlot(() => new FileReferenceOffer());
+});
 //@ chunk-kc2qkj8w.js:4797-4830 placement
 /**
  * 取当前会话的文件引用提供状态。
@@ -309,11 +330,12 @@ function getFileReferenceOffer() {
 }
 //@ chunk-kc2qkj8w.js:4830-4961 placement
 function isFirstReferenceApproved(session, permissionName) {
-  let r = approvalAccountUuid();
+  let accountUuid = approvalAccountUuid();
   return (
-    fileReferenceTrackerSlot.peek(session)?.isFirstReferenceApproved(`${r ?? ""}:${permissionName}`) ===
-      true ||
-    (r !== undefined && approvedUploadsFor(getGlobalConfig(), r).includes(permissionName))
+    fileReferenceTrackerSlot
+      .peek(session)
+      ?.isFirstReferenceApproved(`${accountUuid ?? ""}:${permissionName}`) === true ||
+    (accountUuid !== undefined && approvedUploadsFor(getGlobalConfig(), accountUuid).includes(permissionName))
   );
 }
 //@ chunk-kc2qkj8w.js:4961-5495 placement
@@ -322,18 +344,18 @@ function isFirstReferenceApproved(session, permissionName) {
  */
 function recordFirstReferenceApproved(session, permissionName, persist, storageV5) {
   try {
-    let o = approvalAccountUuid();
-    fileReferenceTrackerSlot.of(session).noteFirstReferenceApproved(`${o ?? ""}:${permissionName}`);
-    if (!persist || o === undefined) return;
+    let accountUuid = approvalAccountUuid();
+    fileReferenceTrackerSlot.of(session).noteFirstReferenceApproved(`${accountUuid ?? ""}:${permissionName}`);
+    if (!persist || accountUuid === undefined) return;
     saveGlobalConfigDurably(
-      (d) =>
-        approvedUploadsFor(d, o).includes(permissionName)
-          ? d
+      (config) =>
+        approvedUploadsFor(config, accountUuid).includes(permissionName)
+          ? config
           : {
-              ...d,
+              ...config,
               fileReferenceUploadsApproved: {
-                ...approvedUploadsMap(d),
-                [o]: [...approvedUploadsFor(d, o), permissionName],
+                ...approvedUploadsMap(config),
+                [accountUuid]: [...approvedUploadsFor(config, accountUuid), permissionName],
               },
             },
       storageV5,
@@ -360,18 +382,18 @@ function approvalAccountUuid() {
 /**
  * 取已批准的首次上传记录表。
  */
-function approvedUploadsMap(e) {
-  let fileReferenceUploadsApproved = e.fileReferenceUploadsApproved;
+function approvedUploadsMap(config) {
+  let fileReferenceUploadsApproved = config.fileReferenceUploadsApproved;
   return isPlainObject(fileReferenceUploadsApproved) ? fileReferenceUploadsApproved : {};
 }
 //@ chunk-kc2qkj8w.js:5676-5767 placement
 /**
  * 取某服务器已批准的调用记录。
  */
-function approvedUploadsFor(e, n) {
-  let r = approvedUploadsMap(e);
-  let t = Object.hasOwn(r, n) ? r[n] : undefined;
-  return Array.isArray(t) ? t : [];
+function approvedUploadsFor(config, accountUuid) {
+  let map = approvedUploadsMap(config);
+  let value = Object.hasOwn(map, accountUuid) ? map[accountUuid] : undefined;
+  return Array.isArray(value) ? value : [];
 }
 export {
   mcpServerSource,

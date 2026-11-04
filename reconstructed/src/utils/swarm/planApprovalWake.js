@@ -17,10 +17,10 @@ import { agentAddress } from "./teammateIds.js";
 
 //@ chunk-phrnybk8.js:874-1123 placement
 function exitTeammatePlanMode(taskId, taskRegistry) {
-  let s = taskRegistry.get(taskId);
-  if (!isInProcessTeammateTask(s) || !s.awaitingPlanApproval) return;
-  taskRegistry.update(taskId, (n) => ({
-    ...n,
+  let task = taskRegistry.get(taskId);
+  if (!isInProcessTeammateTask(task) || !task.awaitingPlanApproval) return;
+  taskRegistry.update(taskId, (task) => ({
+    ...task,
     awaitingPlanApproval: false,
     pendingPlanApproval: undefined,
   }));
@@ -37,8 +37,8 @@ function exitTeammatePlanMode(taskId, taskRegistry) {
 /**
  * 计划批准后唤醒仍在运行的队友任务。
  */
-function wakeTeammateOnPlanApproval(tasks, a, teamName) {
-  let teammateTaskByAgentId = findTeammateTaskByAgentId(agentAddress(a, teamName), tasks);
+function wakeTeammateOnPlanApproval(tasks, agentId, teamName) {
+  let teammateTaskByAgentId = findTeammateTaskByAgentId(agentAddress(agentId, teamName), tasks);
   if (teammateTaskByAgentId?.status === "running") teammateTaskByAgentId.retryWake?.emit();
 }
 export { exitTeammatePlanMode, wakeTeammateOnPlanApproval };

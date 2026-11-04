@@ -48,37 +48,37 @@ var PHONETIC_SCRIPT_RE =
 var HANGUL_RE = /\p{Script=Hangul}/u;
 var LETTER_OR_DIGIT_RE = /[\p{L}\p{N}]/u;
 //@ chunk-3sjj4q4c.js:1142-1205 placement
-function countCjkChars(suggestion) {
-  let { han, phonetic, hangul } = countScriptChars(suggestion);
+function countCjkChars(text) {
+  let { han, phonetic, hangul } = countScriptChars(text);
   return han + phonetic + hangul;
 }
 //@ chunk-3sjj4q4c.js:1205-1392 placement
 function countWordsMultilingual(suggestion) {
   let trimmed = suggestion.trim();
   if (trimmed === "") return 0;
-  let t = 0;
-  for (let o of trimmed.split(/\s+/)) {
-    let { han, phonetic, hangul, other } = countScriptChars(o);
-    t += han === 0 && phonetic === 0 ? 1 : (other + hangul > 0 ? 1 : 0) + han / 2 + phonetic / 4;
+  let wordCount = 0;
+  for (let word of trimmed.split(/\s+/)) {
+    let { han, phonetic, hangul, other } = countScriptChars(word);
+    wordCount += han === 0 && phonetic === 0 ? 1 : (other + hangul > 0 ? 1 : 0) + han / 2 + phonetic / 4;
   }
-  return Math.ceil(t);
+  return Math.ceil(wordCount);
 }
 //@ chunk-3sjj4q4c.js:1392-1566 placement
-function countScriptChars(e) {
-  let n = 0;
-  let t = 0;
-  let o = 0;
-  let s = 0;
-  for (let r of e)
-    if (HAN_RE.test(r)) n++;
-    else if (PHONETIC_SCRIPT_RE.test(r)) t++;
-    else if (HANGUL_RE.test(r)) o++;
-    else if (LETTER_OR_DIGIT_RE.test(r)) s++;
+function countScriptChars(text) {
+  let hanCount = 0;
+  let phoneticCount = 0;
+  let hangulCount = 0;
+  let otherCount = 0;
+  for (let char of text)
+    if (HAN_RE.test(char)) hanCount++;
+    else if (PHONETIC_SCRIPT_RE.test(char)) phoneticCount++;
+    else if (HANGUL_RE.test(char)) hangulCount++;
+    else if (LETTER_OR_DIGIT_RE.test(char)) otherCount++;
   return {
-    han: n,
-    phonetic: t,
-    hangul: o,
-    other: s,
+    han: hanCount,
+    phonetic: phoneticCount,
+    hangul: hangulCount,
+    other: otherCount,
   };
 }
 //@ chunk-3sjj4q4c.js:1566-1631 placement
@@ -92,8 +92,8 @@ function isShownOrAcceptedSuggestion(promptSuggestion) {
 /**
  * 提示建议的展示文本：状态为 empty 时返回 null，否则返回 text。
  */
-function suggestionTextOrNull(e) {
-  return e.status === "empty" ? null : e.text;
+function suggestionTextOrNull(suggestion) {
+  return suggestion.status === "empty" ? null : suggestion.text;
 }
 //@ chunk-3sjj4q4c.js:1685-2333 fingerprint = shouldEnablePromptSuggestion (1)
 /**
@@ -168,8 +168,8 @@ function getSuggestionSuppressReason(appState, billedToUsageCredits) {
   if (appState.toolPermissionContext.mode === "plan") return "plan_mode";
   {
     let { status, overageInUse } = getCurrentLimits();
-    let s = status === "allowed_warning" && env.CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION === true;
-    if (status !== "allowed" && !s) return "rate_limit";
+    let warnAllowed = status === "allowed_warning" && env.CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION === true;
+    if (status !== "allowed" && !warnAllowed) return "rate_limit";
     if ((billedToUsageCredits ?? overageInUse === true) && hasKnownPlanTier()) return "usage_credits";
   }
   return null;
@@ -178,7 +178,14 @@ function getSuggestionSuppressReason(appState, billedToUsageCredits) {
 /**
  * 生成前的各项检查（中止、对话太短、上次回答出错、抑制原因、缓存冷、未采用连击节流），通过后生成并过滤建议。
  */
-async function tryGenerateSuggestion(abortController, messages, getAppState, o, promptId, r) {
+async function tryGenerateSuggestion(
+  abortController,
+  messages,
+  getAppState,
+  cacheSafeParams,
+  promptId,
+  promptSuggestion,
+) {
   if (abortController.signal.aborted) {
     logSuggestionSuppressed("aborted", promptId);
     return null;
@@ -195,7 +202,7 @@ async function tryGenerateSuggestion(abortController, messages, getAppState, o, 
   let appState = getAppState();
   let suggestionSuppressReason = getSuggestionSuppressReason(
     appState,
-    o.toolUseContext.queryTracking?.billedToUsageCredits,
+    cacheSafeParams.toolUseContext.queryTracking?.billedToUsageCredits,
   );
   if (suggestionSuppressReason) {
     logSuggestionSuppressed(suggestionSuppressReason, promptId);
@@ -208,15 +215,18 @@ async function tryGenerateSuggestion(abortController, messages, getAppState, o, 
     });
     return null;
   }
-  if (r && isSuggestionBackOffActive()) {
-    let suppressReason = r.eligibleTurns % BACK_OFF_TURN_INTERVAL === 0;
-    r.eligibleTurns++;
+  if (promptSuggestion && isSuggestionBackOffActive()) {
+    let suppressReason = promptSuggestion.eligibleTurns % BACK_OFF_TURN_INTERVAL === 0;
+    promptSuggestion.eligibleTurns++;
     if (!suppressReason) {
       logSuggestionSuppressed("unused_streak", promptId);
       return null;
     }
   }
-  let { suggestion, generationRequestId } = await generatePipelinedSuggestion(abortController, o);
+  let { suggestion, generationRequestId } = await generatePipelinedSuggestion(
+    abortController,
+    cacheSafeParams,
+  );
   if (abortController.signal.aborted) {
     logSuggestionSuppressed("aborted", promptId);
     return null;
@@ -238,10 +248,10 @@ async function tryGenerateSuggestion(abortController, messages, getAppState, o, 
 async function executePromptSuggestion(context, lastResult) {
   if (!context.querySource?.startsWith("repl_main_thread")) return;
   let terminalFocus = getTerminalFocus();
-  let o = isBgSession();
-  let s = o && lastResult?.tempo === "blocked" && !lastResult.block;
-  if (o ? terminalFocus !== "focused" && !s : terminalFocus === "blurred") {
-    logSuggestionSuppressed(o ? "bg_unattached" : "unfocused", "cli");
+  let isBackground = isBgSession();
+  let isUnblockedTick = isBackground && lastResult?.tempo === "blocked" && !lastResult.block;
+  if (isBackground ? terminalFocus !== "focused" && !isUnblockedTick : terminalFocus === "blurred") {
+    logSuggestionSuppressed(isBackground ? "bg_unattached" : "unfocused", "cli");
     return;
   }
   let promptSuggestion = context.toolUseContext.session.promptSuggestion;
@@ -249,22 +259,22 @@ async function executePromptSuggestion(context, lastResult) {
   promptSuggestion.abortController = abortController;
   let cacheSafeParams = createCacheSafeParams(context);
   try {
-    let p = await tryGenerateSuggestion(
+    let generated = await tryGenerateSuggestion(
       abortController,
       context.messages,
       context.toolUseContext.getAppState,
       cacheSafeParams,
       "cli",
-      s ? undefined : promptSuggestion,
+      isUnblockedTick ? undefined : promptSuggestion,
     );
-    if (!p) return;
+    if (!generated) return;
     if (isSuggestionOwnedByPlugin() && isMainAgent(context.toolUseContext.agentContext)) {
       logSuggestionSuppressed("plugin_owns", "cli");
       return;
     }
-    let f = false;
+    let placed = false;
     let { isShown } = await promptSuggestOp({
-      text: p.suggestion,
+      text: generated.suggestion,
       origin: {
         kind: "suggestion",
       },
@@ -274,19 +284,19 @@ async function executePromptSuggestion(context, lastResult) {
           return {
             isShown: false,
           };
-        f = true;
-        if (s)
+        placed = true;
+        if (isUnblockedTick)
           persistSuggestedReply(prev, lastResult?.needs, context.toolUseContext.storageV5).catch(
             logJobWriteError,
           );
-        return proposeSuggestion(prev, p.generationRequestId);
+        return proposeSuggestion(prev, generated.generationRequestId);
       },
     });
     if (abortController.signal.aborted) {
       logSuggestionSuppressed("aborted", "cli");
       return;
     }
-    if (!isShown && f) logSuggestionSuppressed("timing", "cli");
+    if (!isShown && placed) logSuggestionSuppressed("timing", "cli");
   } catch (error) {
     if (error instanceof Error && (error.name === "AbortError" || error.name === "APIUserAbortError")) {
       logSuggestionSuppressed("aborted", "cli");
@@ -403,14 +413,14 @@ async function generateSuggestion(abortController, promptId, cacheSafeParams) {
   let firstAssistantMsg = result.messages.find((m) => m.type === "assistant");
   let generationRequestId =
     firstAssistantMsg?.type === "assistant" ? (firstAssistantMsg.requestId ?? null) : null;
-  let d = [];
+  let texts = [];
   for (let msg of result.messages) {
     if (msg.type !== "assistant" || msg.isApiErrorMessage) continue;
-    let textBlock = msg.message.content.find((_) => _.type === "text");
-    if (textBlock?.type === "text") d.push(textBlock.text);
+    let textBlock = msg.message.content.find((block) => block.type === "text");
+    if (textBlock?.type === "text") texts.push(textBlock.text);
   }
   return {
-    candidates: d,
+    candidates: texts,
     generationRequestId,
   };
 }
@@ -466,8 +476,8 @@ function shouldFilterSuggestion(suggestion, promptId) {
       () => {
         if (wordCount >= 2) return false;
         if (suggestion.startsWith("/")) return false;
-        let r = countCjkChars(suggestion);
-        if (r > 0) return r < 2;
+        let cjkCount = countCjkChars(suggestion);
+        if (cjkCount > 0) return cjkCount < 2;
         return !new Set([
           "yes",
           "yeah",
@@ -549,22 +559,22 @@ function logSuggestionOutcome(suggestion, userInput, emittedAt, generationReques
 /**
  * 记录建议被抑制及原因。
  */
-function logSuggestionSuppressed(reason, n, t) {
+function logSuggestionSuppressed(reason, source, details) {
   logEvent("tengu_prompt_suggestion", {
-    ...(n && {
-      source: fromEnum(n),
+    ...(source && {
+      source: fromEnum(source),
     }),
     outcome: lit("suppressed"),
     reason: fromEnum(reason),
-    ...(t?.cacheColdBy && {
-      cacheColdBy: fromEnum(t.cacheColdBy),
+    ...(details?.cacheColdBy && {
+      cacheColdBy: fromEnum(details.cacheColdBy),
     }),
     prompt_id: lit("user_intent"),
   });
 }
 export {
-  shouldEnablePromptSuggestion,
   isPromptSuggestionSettingEnabled,
+  shouldEnablePromptSuggestion,
   suggestionTextOrNull,
   isShownOrAcceptedSuggestion,
   logSuggestionSuppressed,

@@ -19,15 +19,16 @@ import { jsonStringify } from "../slowOperations.js";
 import { isDiskless } from "../../bootstrap/state.js";
 import { MAX_CREDENTIAL_READ_BYTES } from "../authFileDescriptor.js";
 import { isStorageV5Enabled } from "../hoverRest.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-6tm3rt42.js:604-698 placement
 function credentialsStorePaths() {
-  let e = keychainProjectDirs();
-  return e === null
+  let dir = keychainProjectDirs();
+  return dir === null
     ? null
     : {
-        storeDir: e,
-        storePath: join(e, ".credentials.json"),
+        storeDir: dir,
+        storePath: join(dir, ".credentials.json"),
       };
 }
 //@ chunk-6tm3rt42.js:698-727 placement
@@ -37,11 +38,11 @@ var MAX_CREDENTIALS_FILE_BYTES = 1048576;
 /**
  * 只读、不跟随符号链接打开
  */
-async function openForReadNoFollow(e) {
+async function openForReadNoFollow(path) {
   try {
     return {
       kind: "open",
-      fileHandle: await open(e, constants.O_RDONLY | constants.O_NOFOLLOW | O_NONBLOCK),
+      fileHandle: await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | O_NONBLOCK),
     };
   } catch (error) {
     let errnoCode = getErrnoCode(error);
@@ -59,12 +60,12 @@ async function openForReadNoFollow(e) {
 /**
  * 写方式、不跟随符号链接打开
  */
-async function openForWriteNoFollow(e, t) {
-  let n = constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC;
+async function openForWriteNoFollow(path, mode) {
+  let flags = constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC;
   try {
     return {
       kind: "open",
-      fileHandle: await open(e, n | constants.O_NOFOLLOW, t),
+      fileHandle: await open(path, flags | constants.O_NOFOLLOW, mode),
     };
   } catch (error) {
     let errnoCode = getErrnoCode(error);
@@ -79,20 +80,23 @@ async function openForWriteNoFollow(e, t) {
   }
 }
 //@ chunk-6tm3rt42.js:1131-1190 placement
-function isUsableStoreDir(e) {
-  return e.length > 0 && !e.includes("\x00") && isAbsolute(e);
+function isUsableStoreDir(dir) {
+  return dir.length > 0 && !dir.includes("\x00") && isAbsolute(dir);
 }
 //@ chunk-6tm3rt42.js:1190-1258 placement
-var CREDENTIAL_FIELD_NAMES = new Set([".oauth_token", ".api_key", ".session_ingress_token"]);
+var CREDENTIAL_FIELD_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-6tm3rt42.js:1190", () => {
+  CREDENTIAL_FIELD_NAMES = new Set([".oauth_token", ".api_key", ".session_ingress_token"]);
+});
 //@ chunk-6tm3rt42.js:1258-1338 placement
-function classifyReadError(e) {
-  return e === "ENOENT"
+function classifyReadError(code) {
+  return code === "ENOENT"
     ? {
         state: "absent",
       }
     : {
         state: "read-failed",
-        code: e,
+        code,
       };
 }
 //@ chunk-6tm3rt42.js:1338-1395 placement
@@ -103,9 +107,9 @@ function readErrorState(errnoCode) {
 /**
  * 读取错误分类
  */
-function classifyReadErrno(e, t) {
-  if (e === "ENOENT" || e === "EISDIR" || e === "ENOTDIR") return "absent";
-  if ((e === "EACCES" || e === "EPERM") && t !== "win32") return "absent";
+function classifyReadErrno(code, platform) {
+  if (code === "ENOENT" || code === "EISDIR" || code === "ENOTDIR") return "absent";
+  if ((code === "EACCES" || code === "EPERM") && platform !== "win32") return "absent";
   return "read-failed";
 }
 //@ chunk-6tm3rt42.js:1550-2570 placement
@@ -113,29 +117,29 @@ function classifyReadErrno(e, t) {
  * 读取凭据文件
  */
 async function readCredentialsFile(readErrorState) {
-  let t = credentialsStorePaths();
-  if (t === null)
+  let paths = credentialsStorePaths();
+  if (paths === null)
     return {
       state: "absent",
     };
-  let n = await openForReadNoFollow(t.storePath);
-  switch (n.kind) {
+  let opened = await openForReadNoFollow(paths.storePath);
+  switch (opened.kind) {
     case "refused-symlink":
       return {
         state: "refused-symlink",
       };
     case "error":
-      return readErrorState(n.code) === "absent"
+      return readErrorState(opened.code) === "absent"
         ? {
             state: "absent",
           }
         : {
             state: "read-failed",
-            code: n.code,
+            code: opened.code,
           };
     case "open": {
-      let { fileHandle } = n;
-      let a;
+      let { fileHandle } = opened;
+      let text;
       let uid;
       let mode;
       try {
@@ -160,23 +164,23 @@ async function readCredentialsFile(readErrorState) {
           };
         uid = stats.uid;
         mode = stats.mode;
-        let i = Buffer.alloc(Math.min(stats.size, MAX_CREDENTIALS_FILE_BYTES) + 1);
-        let d = 0;
+        let buffer = Buffer.alloc(Math.min(stats.size, MAX_CREDENTIALS_FILE_BYTES) + 1);
+        let total = 0;
         for (;;) {
-          let { bytesRead } = await fileHandle.read(i, d, i.length - d, d);
+          let { bytesRead } = await fileHandle.read(buffer, total, buffer.length - total, total);
           if (bytesRead === 0) break;
-          d += bytesRead;
-          if (d === i.length) {
-            if (i.length > MAX_CREDENTIALS_FILE_BYTES)
+          total += bytesRead;
+          if (total === buffer.length) {
+            if (buffer.length > MAX_CREDENTIALS_FILE_BYTES)
               return {
                 state: "corrupt",
               };
-            let C = Buffer.alloc(MAX_CREDENTIALS_FILE_BYTES + 1);
-            i.copy(C, 0, 0, d);
-            i = C;
+            let larger = Buffer.alloc(MAX_CREDENTIALS_FILE_BYTES + 1);
+            buffer.copy(larger, 0, 0, total);
+            buffer = larger;
           }
         }
-        a = i.toString("utf8", 0, d);
+        text = buffer.toString("utf8", 0, total);
       } catch (error) {
         let errnoCode = getErrnoCode(error);
         return readErrorState(errnoCode) === "absent"
@@ -190,21 +194,21 @@ async function readCredentialsFile(readErrorState) {
       } finally {
         await fileHandle.close().catch(() => {});
       }
-      let u;
+      let parsed;
       try {
-        u = JSON.parse(a);
+        parsed = JSON.parse(text);
       } catch {
         return {
           state: "corrupt",
         };
       }
-      if (u === null)
+      if (parsed === null)
         return {
           state: "absent",
         };
       return {
         state: "present",
-        data: u,
+        data: parsed,
         uid,
         mode,
       };
@@ -220,19 +224,19 @@ var CREDENTIALS_FILE_STORE = {
     return readCredentialsFile(readErrorState);
   },
   readCredentialsStrict() {
-    return readCredentialsFile((e) => classifyReadErrno(e, "linux"));
+    return readCredentialsFile((code) => classifyReadErrno(code, "linux"));
   },
-  async writeCredentials(e) {
-    let t = credentialsStorePaths();
-    if (t === null)
+  async writeCredentials(data) {
+    let paths = credentialsStorePaths();
+    if (paths === null)
       return {
         state: "write-failed",
         code: "ENOTSUP",
       };
-    let { storeDir, storePath } = t;
+    let { storeDir, storePath } = paths;
     try {
       await getFsImplementation().mkdir(storeDir);
-      await publishWriteAtomic(storePath, jsonStringify(e), {
+      await publishWriteAtomic(storePath, jsonStringify(data), {
         mode: 384,
         exactMode: 384,
       });
@@ -247,67 +251,67 @@ var CREDENTIALS_FILE_STORE = {
     };
   },
   async deleteCredentials() {
-    let e = credentialsStorePaths();
-    return e === null
+    let paths = credentialsStorePaths();
+    return paths === null
       ? {
           state: "delete-failed",
           code: "ENOTSUP",
         }
-      : deleteCredentialsFile(e.storePath);
+      : deleteCredentialsFile(paths.storePath);
   },
-  async discardSpentCredentialFile(e) {
+  async discardSpentCredentialFile(path) {
     if (isDiskless())
       return {
         state: "delete-failed",
         code: "ENOTSUP",
       };
-    return deleteCredentialsFile(e);
+    return deleteCredentialsFile(path);
   },
-  async readHandoffCredential(e, { symlinkAtPath }) {
+  async readHandoffCredential(path, { symlinkAtPath }) {
     if (isDiskless())
       return {
         state: "read-failed",
         code: "ENOTSUP",
       };
-    if (!isUsableStoreDir(e))
+    if (!isUsableStoreDir(path))
       return {
         state: "read-failed",
         code: "EINVAL",
       };
-    let n;
+    let handle;
     if (symlinkAtPath === "follow")
       try {
-        n = await open(e, constants.O_RDONLY | O_NONBLOCK);
+        handle = await open(path, constants.O_RDONLY | O_NONBLOCK);
       } catch (error) {
         return classifyReadError(getErrnoCode(error));
       }
     else {
-      let r = await openForReadNoFollow(e);
-      switch (r.kind) {
+      let opened = await openForReadNoFollow(path);
+      switch (opened.kind) {
         case "refused-symlink":
           return {
             state: "read-failed",
             code: "ELOOP",
           };
         case "error":
-          return classifyReadError(r.code);
+          return classifyReadError(opened.code);
         case "open":
-          n = r.fileHandle;
+          handle = opened.fileHandle;
       }
     }
     try {
-      if (!(await n.stat()).isFile())
+      if (!(await handle.stat()).isFile())
         return {
           state: "read-failed",
           code: "EINVAL",
         };
-      let r = Buffer.alloc(MAX_CREDENTIAL_READ_BYTES + 1);
-      let a = 0;
+      let buffer = Buffer.alloc(MAX_CREDENTIAL_READ_BYTES + 1);
+      let total = 0;
       for (;;) {
-        let { bytesRead } = await n.read(r, a, r.length - a, a);
+        let { bytesRead } = await handle.read(buffer, total, buffer.length - total, total);
         if (bytesRead === 0) break;
-        a += bytesRead;
-        if (a > MAX_CREDENTIAL_READ_BYTES)
+        total += bytesRead;
+        if (total > MAX_CREDENTIAL_READ_BYTES)
           return {
             state: "read-failed",
             code: "EFBIG",
@@ -315,32 +319,32 @@ var CREDENTIALS_FILE_STORE = {
       }
       return {
         state: "present",
-        contents: r.toString("utf8", 0, a),
+        contents: buffer.toString("utf8", 0, total),
       };
     } catch (error) {
       return classifyReadError(getErrnoCode(error));
     } finally {
-      await n.close().catch(() => {});
+      await handle.close().catch(() => {});
     }
   },
-  async writeHandoffCredential(e, t) {
+  async writeHandoffCredential(path, contents) {
     if (isDiskless())
       return {
         state: "write-failed",
         code: "ENOTSUP",
       };
-    if (!isUsableStoreDir(e))
+    if (!isUsableStoreDir(path))
       return {
         state: "write-failed",
         code: "EINVAL",
       };
-    if (!CREDENTIAL_FIELD_NAMES.has(basename(e)))
+    if (!CREDENTIAL_FIELD_NAMES.has(basename(path)))
       return {
         state: "write-failed",
         code: "EINVAL",
       };
     try {
-      await mkdir(dirname(e), {
+      await mkdir(dirname(path), {
         recursive: true,
         mode: 448,
       });
@@ -350,8 +354,8 @@ var CREDENTIALS_FILE_STORE = {
         code: getErrnoCode(error),
       };
     }
-    let n = await openForWriteNoFollow(e, 384);
-    switch (n.kind) {
+    let opened = await openForWriteNoFollow(path, 384);
+    switch (opened.kind) {
       case "refused-symlink":
         return {
           state: "write-failed",
@@ -360,11 +364,11 @@ var CREDENTIALS_FILE_STORE = {
       case "error":
         return {
           state: "write-failed",
-          code: n.code,
+          code: opened.code,
         };
       case "open":
         try {
-          await n.fileHandle.writeFile(t, {
+          await opened.fileHandle.writeFile(contents, {
             encoding: "utf8",
           });
           return {
@@ -376,19 +380,19 @@ var CREDENTIALS_FILE_STORE = {
             code: getErrnoCode(error),
           };
         } finally {
-          await n.fileHandle.close().catch(() => {});
+          await opened.fileHandle.close().catch(() => {});
         }
     }
   },
   async probeCredentials() {
-    let e = credentialsStorePaths();
-    if (e === null)
+    let paths = credentialsStorePaths();
+    if (paths === null)
       return {
         state: "absent",
       };
-    let t;
+    let stats;
     try {
-      t = await lstat(e.storePath, {
+      stats = await lstat(paths.storePath, {
         bigint: true,
       });
     } catch (error) {
@@ -402,14 +406,14 @@ var CREDENTIALS_FILE_STORE = {
             code: errnoCode,
           };
     }
-    if (t.isSymbolicLink())
+    if (stats.isSymbolicLink())
       return {
         state: "read-failed",
         code: "ELOOP",
       };
     return {
       state: "present",
-      version: `${t.dev}:${t.ino}:${t.size}:${t.mtimeNs}`,
+      version: `${stats.dev}:${stats.ino}:${stats.size}:${stats.mtimeNs}`,
     };
   },
 };
@@ -417,9 +421,9 @@ var CREDENTIALS_FILE_STORE = {
 /**
  * 删除凭据文件
  */
-async function deleteCredentialsFile(e) {
+async function deleteCredentialsFile(path) {
   try {
-    await getFsImplementation().unlink(e);
+    await getFsImplementation().unlink(path);
     return {
       state: "deleted",
     };
@@ -436,13 +440,16 @@ async function deleteCredentialsFile(e) {
   }
 }
 //@ chunk-6tm3rt42.js:5006-5059 placement
-var CredentialsStoreHandleSymbol = Symbol("secureStorage.CredentialsStoreHandle");
+var CredentialsStoreHandleSymbol; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-6tm3rt42.js:5006", () => {
+  CredentialsStoreHandleSymbol = Symbol("secureStorage.CredentialsStoreHandle");
+});
 //@ chunk-6tm3rt42.js:5059-5113 placement
 /**
  * 按配置目录取凭据文件存储（.credentials.json 等），拒绝符号链接。
  */
-function credentialsStoreFor(e, t = CREDENTIALS_FILE_STORE) {
-  return isStorageV5Enabled() && e !== undefined ? withStoreHandle(t) : undefined;
+function credentialsStoreFor(handle, store = CREDENTIALS_FILE_STORE) {
+  return isStorageV5Enabled() && handle !== undefined ? withStoreHandle(store) : undefined;
 }
 //@ chunk-6tm3rt42.js:5113-5167 placement
 function sessionServicesFor(storageV5) {
@@ -452,9 +459,9 @@ function sessionServicesFor(storageV5) {
   };
 }
 //@ chunk-6tm3rt42.js:5167-5225 placement
-function withStoreHandle(e = CREDENTIALS_FILE_STORE) {
+function withStoreHandle(store = CREDENTIALS_FILE_STORE) {
   return {
-    ...e,
+    ...store,
     [CredentialsStoreHandleSymbol]: "CredentialsStoreHandle",
   };
 }

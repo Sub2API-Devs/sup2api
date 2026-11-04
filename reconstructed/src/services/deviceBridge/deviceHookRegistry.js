@@ -18,38 +18,38 @@ import { MAX_TIMER_DELAY_MS } from "../../utils/timerDelayClamp.js";
  */
 var MAX_NAME_SAMPLES = 2;
 //@ chunk-phgcpy6c.js:669-1818 placement
-function createDeviceHookRegistry(i) {
-  let e = null;
-  let l = null;
-  let a = 0;
-  let r = false;
-  let s = null;
-  let d = 0;
-  let p = [];
-  let m = () => {
-    l?.clear();
-    l = null;
+function createDeviceHookRegistry(options) {
+  let owner = null;
+  let leaseTimer = null;
+  let missCount = 0;
+  let away = false;
+  let awaySinceMs = null;
+  let generation = 0;
+  let leaseListeners = [];
+  let clearLeaseTimer = () => {
+    leaseTimer?.clear();
+    leaseTimer = null;
   };
-  let v = () => {
-    m();
-    if (e === null) return;
-    let n = e;
-    l = i.setTimer(
+  let armLeaseTimer = () => {
+    clearLeaseTimer();
+    if (owner === null) return;
+    let ownerAtArm = owner;
+    leaseTimer = options.setTimer(
       () => {
-        l = null;
-        if (e !== n) return;
-        if (i.now() < n.leaseExpiresAt) {
-          v();
+        leaseTimer = null;
+        if (owner !== ownerAtArm) return;
+        if (options.now() < ownerAtArm.leaseExpiresAt) {
+          armLeaseTimer();
           return;
         }
-        let o = {
-          ...n,
+        let expiredOwner = {
+          ...ownerAtArm,
           entries: [],
         };
-        e = o.templates.length === 0 ? null : o;
-        for (let u of [...(i.onLeaseExpired ? [i.onLeaseExpired] : []), ...p])
+        owner = expiredOwner.templates.length === 0 ? null : expiredOwner;
+        for (let listener of [...(options.onLeaseExpired ? [options.onLeaseExpired] : []), ...leaseListeners])
           try {
-            u(o);
+            listener(expiredOwner);
           } catch (error) {
             logForDebugging(
               `[deviceHooks] lease-expiry listener threw: ${toError(error).stack ?? String(error)}`,
@@ -59,73 +59,76 @@ function createDeviceHookRegistry(i) {
             );
           }
       },
-      Math.min(MAX_TIMER_DELAY_MS, Math.max(0, n.leaseExpiresAt - i.now())),
+      Math.min(MAX_TIMER_DELAY_MS, Math.max(0, ownerAtArm.leaseExpiresAt - options.now())),
     );
   };
   return {
-    current: () => e,
-    generation: () => d,
-    recordMiss(n, o) {
-      if (e === null || e.instanceId !== n || o !== d) return false;
-      a += 1;
-      if (!r && a >= MAX_NAME_SAMPLES) {
-        r = true;
-        s = i.now();
+    current: () => owner,
+    generation: () => generation,
+    recordMiss(instanceId, generationAtCall) {
+      if (owner === null || owner.instanceId !== instanceId || generationAtCall !== generation) return false;
+      missCount += 1;
+      if (!away && missCount >= MAX_NAME_SAMPLES) {
+        away = true;
+        awaySinceMs = options.now();
       }
-      return r;
+      return away;
     },
-    recordHit(n) {
-      if (e !== null && e.instanceId === n) a = 0;
+    recordHit(instanceId) {
+      if (owner !== null && owner.instanceId === instanceId) missCount = 0;
     },
-    isAway: (n) => e !== null && e.instanceId === n && r,
-    awaySince: (n) => (e !== null && e.instanceId === n && r ? s : null),
-    replaceOwner(n) {
-      let instanceId = e !== null && e.instanceId !== n.instanceId ? e.instanceId : undefined;
-      let u = e !== null && instanceId === undefined;
-      let c = u && r ? s : null;
-      e = n;
-      if (!u || c !== null) {
-        a = 0;
-        r = false;
-        s = null;
+    isAway: (instanceId) => owner !== null && owner.instanceId === instanceId && away,
+    awaySince: (instanceId) =>
+      owner !== null && owner.instanceId === instanceId && away ? awaySinceMs : null,
+    replaceOwner(nextOwner) {
+      let instanceId =
+        owner !== null && owner.instanceId !== nextOwner.instanceId ? owner.instanceId : undefined;
+      let keptOwner = owner !== null && instanceId === undefined;
+      let previousAwaySince = keptOwner && away ? awaySinceMs : null;
+      owner = nextOwner;
+      if (!keptOwner || previousAwaySince !== null) {
+        missCount = 0;
+        away = false;
+        awaySinceMs = null;
       }
-      d += 1;
-      v();
+      generation += 1;
+      armLeaseTimer();
       return {
         ...(instanceId !== undefined && {
           replaced: instanceId,
         }),
-        ...(c !== null && {
-          awaySince: c,
+        ...(previousAwaySince !== null && {
+          awaySince: previousAwaySince,
         }),
       };
     },
-    removeOwner(n) {
-      if (e === null || e.instanceId !== n) return false;
-      e = null;
-      a = 0;
-      r = false;
-      s = null;
-      m();
+    removeOwner(instanceId) {
+      if (owner === null || owner.instanceId !== instanceId) return false;
+      owner = null;
+      missCount = 0;
+      away = false;
+      awaySinceMs = null;
+      clearLeaseTimer();
       return true;
     },
     clear() {
-      e = null;
-      a = 0;
-      r = false;
-      s = null;
-      m();
+      owner = null;
+      missCount = 0;
+      away = false;
+      awaySinceMs = null;
+      clearLeaseTimer();
     },
-    onLeaseExpired(n) {
-      p.push(n);
+    onLeaseExpired(listener) {
+      leaseListeners.push(listener);
     },
   };
 }
 //@ chunk-phgcpy6c.js:1818-1901 placement
-function productionRegistryTimer(i, e) {
-  let timer = setTimeout(i, e);
+function productionRegistryTimer(fn, delayMs) {
+  let timer = setTimeout(fn, delayMs);
   timer.unref();
   return {
     clear: () => clearTimeout(timer),
   };
 }
+export { createDeviceHookRegistry, productionRegistryTimer };

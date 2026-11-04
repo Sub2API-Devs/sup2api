@@ -5,11 +5,11 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_utils_2 } from "./utils.js";
 
 //@ chunk-spjgqa4y.js:55012-55959 cjs-fingerprint
-var require_svg_tag = x(function (cjsExports) {
+var require_svg_tag = __commonJS(function (cjsExports) {
   var Utils = require_utils_2();
   function getColorAttrib(color, attrib) {
     let alpha = color.a / 255;

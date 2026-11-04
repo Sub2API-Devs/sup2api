@@ -14,6 +14,7 @@ import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../
 import { isOverBlankCell, acceptsHover } from "./dom.js";
 import { SoftWrapKind } from "./screen.js";
 import { dropSubtreeCache } from "./render-node-to-output.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-bzr73sfg.js:253776-253787 placement
 var MAX_TREE_DEPTH = 256;
@@ -45,36 +46,36 @@ function hitTest(node, col, row, depth = 0) {
     row < cachedLayout.y + cachedLayout.height;
   if (!inside && !node.hasAbsoluteDescendant) return null;
   if (!inside) {
-    let A = node.style.overflowX ?? node.style.overflow;
-    let D = node.style.overflowY ?? node.style.overflow;
-    let O =
-      (A === "hidden" || A === "scroll") &&
+    let overflowX = node.style.overflowX ?? node.style.overflow;
+    let overflowY = node.style.overflowY ?? node.style.overflow;
+    let clippedX =
+      (overflowX === "hidden" || overflowX === "scroll") &&
       (col < cachedLayout.x || col >= cachedLayout.x + cachedLayout.width);
-    let _ =
-      (D === "hidden" || D === "scroll") &&
+    let clippedY =
+      (overflowY === "hidden" || overflowY === "scroll") &&
       (row < cachedLayout.y || row >= cachedLayout.y + cachedLayout.height);
-    if (O || _) return null;
+    if (clippedX || clippedY) return null;
   }
   let best = null;
   let bestIsEscaping = false;
   for (let idx = node.childNodes.length - 1; idx >= 0; idx--) {
-    let D = node.childNodes[idx];
-    if (D.nodeName === "#text") continue;
-    let cachedLayout = D.cachedLayout;
+    let child = node.childNodes[idx];
+    if (child.nodeName === "#text") continue;
+    let cachedLayout = child.cachedLayout;
     if (!cachedLayout) continue;
-    let _ =
+    let childInside =
       col >= cachedLayout.x &&
       col < cachedLayout.x + cachedLayout.width &&
       row >= cachedLayout.y &&
       row < cachedLayout.y + cachedLayout.height;
-    if (!_ && !D.hasAbsoluteDescendant) continue;
-    if (best !== null && _) continue;
-    let U = hitTest(D, col, row, depth + 1);
-    if (!U) continue;
-    let L = !_;
-    if (best === null || (L && !bestIsEscaping)) {
-      best = U;
-      bestIsEscaping = L;
+    if (!childInside && !child.hasAbsoluteDescendant) continue;
+    if (best !== null && childInside) continue;
+    let hit = hitTest(child, col, row, depth + 1);
+    if (!hit) continue;
+    let isEscaping = !childInside;
+    if (best === null || (isEscaping && !bestIsEscaping)) {
+      best = hit;
+      bestIsEscaping = isEscaping;
     }
     if (bestIsEscaping) break;
   }
@@ -95,17 +96,17 @@ function findSelectionScope(root, col, row) {
       if (!scope) {
         if (node.style.selectionScope) {
           let yogaNode = node.yogaNode;
-          let D = yogaNode ? yogaNode.getComputedBorder(0) + yogaNode.getComputedPadding(0) : 0;
-          let O = yogaNode ? yogaNode.getComputedBorder(2) + yogaNode.getComputedPadding(2) : 0;
+          let leftInset = yogaNode ? yogaNode.getComputedBorder(0) + yogaNode.getComputedPadding(0) : 0;
+          let rightInset = yogaNode ? yogaNode.getComputedBorder(2) + yogaNode.getComputedPadding(2) : 0;
           scope = {
-            x1: floored + D,
-            x2: floored_2 - O,
+            x1: floored + leftInset,
+            x2: floored_2 - rightInset,
             node,
           };
         }
       } else {
-        let A = node.style.overflowX ?? node.style.overflow;
-        if (A === "hidden" || A === "scroll") {
+        let overflowX = node.style.overflowX ?? node.style.overflow;
+        if (overflowX === "hidden" || overflowX === "scroll") {
           scope.x1 = Math.max(scope.x1, floored);
           scope.x2 = Math.min(scope.x2, floored_2);
         }
@@ -186,14 +187,14 @@ function dispatchHoverFollowsPaint(root, col, row, hovered, pointerMode = false)
     typeof pointerMode === "boolean"
       ? pointerMode
       : isOverBlankCell(root, pointerMode, node ?? null, col, row);
-  let T = false;
+  let changed = false;
   for (let old of hovered) {
     if (!old.attributes.hoverFollowsPaint) continue;
-    let O = acceptsHover(old, overBlank) ? node : undefined;
-    while (O && O !== old) O = O.parentNode;
-    if (!O) {
+    let ancestor = acceptsHover(old, overBlank) ? node : undefined;
+    while (ancestor && ancestor !== old) ancestor = ancestor.parentNode;
+    if (!ancestor) {
       hovered.delete(old);
-      T = true;
+      changed = true;
       if (old.parentNode) old._eventHandlers?.onMouseLeave?.();
     }
   }
@@ -201,12 +202,12 @@ function dispatchHoverFollowsPaint(root, col, row, hovered, pointerMode = false)
   while (node_2) {
     if (node_2.attributes.hoverFollowsPaint && acceptsHover(node_2, overBlank) && !hovered.has(node_2)) {
       hovered.add(node_2);
-      T = true;
+      changed = true;
       node_2._eventHandlers?.onMouseEnter?.();
     }
     node_2 = node_2.parentNode;
   }
-  return T;
+  return changed;
 }
 //@ chunk-bzr73sfg.js:258061-258255 placement
 /**
@@ -223,12 +224,15 @@ function findPointerTarget(root, col, row) {
   return null;
 }
 //@ chunk-bzr73sfg.js:314361-314383 placement
-var HARD_BREAK_ONLY = [SoftWrapKind.HardBreak];
+var HARD_BREAK_ONLY; // deferred: uses SoftWrapKind (./screen.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-bzr73sfg.js:314361", () => {
+  HARD_BREAK_ONLY = [SoftWrapKind.HardBreak];
+});
 //@ chunk-bzr73sfg.js:314383-314443 placement
-function pushOrCreate(n, u) {
-  if (n === undefined) return [u];
-  n.push(u);
-  return n;
+function pushOrCreate(list, item) {
+  if (list === undefined) return [item];
+  list.push(item);
+  return list;
 }
 //@ chunk-bzr73sfg.js:314443-314486 placement
 function clearShiftedFlags(nodes) {
@@ -239,13 +243,13 @@ function clearShiftedFlags(nodes) {
  * 把子树的缓存布局整体平移若干行。
  */
 function shiftCachedLayouts(node, dy) {
-  let f = [node];
-  for (let m = f.pop(); m !== undefined; m = f.pop()) {
-    let cachedLayout = m.cachedLayout;
+  let stack = [node];
+  for (let node = stack.pop(); node !== undefined; node = stack.pop()) {
+    let cachedLayout = node.cachedLayout;
     if (cachedLayout === undefined) continue;
     cachedLayout.y += dy;
     cachedLayout.shifted = true;
-    if (m.scrollViewportTop !== undefined) m.scrollViewportTop += dy;
+    if (node.scrollViewportTop !== undefined) node.scrollViewportTop += dy;
     let clip = cachedLayout.clip;
     if (clip)
       cachedLayout.clip = {
@@ -254,10 +258,10 @@ function shiftCachedLayouts(node, dy) {
         y1: clip.y1 === undefined ? undefined : clip.y1 + dy,
         y2: clip.y2 === undefined ? undefined : clip.y2 + dy,
       };
-    let childNodes = m.childNodes;
+    let childNodes = node.childNodes;
     for (let idx = childNodes.length - 1; idx >= 0; idx--) {
-      let A = childNodes[idx];
-      if (A.nodeName !== "#text") f.push(A);
+      let child = childNodes[idx];
+      if (child.nodeName !== "#text") stack.push(child);
     }
   }
 }
@@ -266,36 +270,36 @@ function shiftCachedLayouts(node, dy) {
  * 零高度节点的子树不绘制，但仍按 yoga 布局写入 cachedLayout（标 unpainted），使点击命中测试与焦点几何可用。
  */
 function setUnpaintedLayout(node, offsetX, offsetY) {
-  let m = [
+  let stack = [
     {
       node,
       offsetX,
       offsetY,
     },
   ];
-  for (let p = m.pop(); p !== undefined; p = m.pop()) {
-    let yogaNode = p.node.yogaNode;
+  for (let entry = stack.pop(); entry !== undefined; entry = stack.pop()) {
+    let yogaNode = entry.node.yogaNode;
     if (!yogaNode || yogaNode.getDisplay() === 1) {
-      dropSubtreeCache(p.node);
+      dropSubtreeCache(entry.node);
       continue;
     }
-    let E = p.offsetX + yogaNode.getComputedLeft();
-    let T = p.offsetY + yogaNode.getComputedTop();
-    p.node.cachedLayout = {
-      x: E,
-      y: T,
+    let x = entry.offsetX + yogaNode.getComputedLeft();
+    let y = entry.offsetY + yogaNode.getComputedTop();
+    entry.node.cachedLayout = {
+      x,
+      y,
       width: yogaNode.getComputedWidth(),
       height: yogaNode.getComputedHeight(),
       unpainted: true,
     };
-    let childNodes = p.node.childNodes;
+    let childNodes = entry.node.childNodes;
     for (let idx = childNodes.length - 1; idx >= 0; idx--) {
       let child = childNodes[idx];
       if (child.nodeName !== "#text")
-        m.push({
+        stack.push({
           node: child,
-          offsetX: E,
-          offsetY: T,
+          offsetX: x,
+          offsetY: y,
         });
     }
   }

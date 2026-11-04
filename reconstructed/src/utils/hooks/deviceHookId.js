@@ -21,34 +21,34 @@ var MAX_HOSTNAME_CHARS = 64;
 var MAX_HOOK_INDEX = 9999;
 var defaultDeviceIdDeps = {
   hostname,
-  randomHex: (n) => randomBytes(n).toString("hex"),
+  randomHex: (randomHex) => randomBytes(randomHex).toString("hex"),
 };
 //@ chunk-3jcjkxmq.js:494-542 placement
 /**
  * 生成新的设备实例 id（dev-<随机十六进制>）。
  */
-function newDeviceInstanceId(n = defaultDeviceIdDeps) {
-  return `dev-${n.randomHex(DEVICE_INSTANCE_RANDOM_BYTES)}`;
+function newDeviceInstanceId(deps = defaultDeviceIdDeps) {
+  return `dev-${deps.randomHex(DEVICE_INSTANCE_RANDOM_BYTES)}`;
 }
 //@ chunk-3jcjkxmq.js:542-610 placement
 /**
  * 取主机名首段（截断）。
  */
-function shortHostname(n = defaultDeviceIdDeps) {
-  let [t = ""] = n.hostname().split(".");
-  return deviceSlugOrFallback(t, MAX_HOSTNAME_CHARS);
+function shortHostname(deps = defaultDeviceIdDeps) {
+  let [firstLabel = ""] = deps.hostname().split(".");
+  return deviceSlugOrFallback(firstLabel, MAX_HOSTNAME_CHARS);
 }
 //@ chunk-3jcjkxmq.js:610-773 placement
-function formatDeviceHookId(instanceId, event, e) {
+function formatDeviceHookId(instanceId, event, index) {
   if (
     !DEVICE_INSTANCE_RE.test(instanceId) ||
     !HOOK_EVENT_RE.test(event) ||
-    !Number.isInteger(e) ||
-    e < 0 ||
-    e > MAX_HOOK_INDEX
+    !Number.isInteger(index) ||
+    index < 0 ||
+    index > MAX_HOOK_INDEX
   )
     throw Error("cannot form a device hook id from these inputs");
-  return `${instanceId}/${event}/${e}`;
+  return `${instanceId}/${event}/${index}`;
 }
 //@ chunk-3jcjkxmq.js:773-867 placement
 /**

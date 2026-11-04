@@ -79,8 +79,8 @@ function formatUri(uri) {
  * hooks-<uuid前段>
  */
 function newWorkerName() {
-  let [e] = randomUUID().split("-");
-  return `hooks-${e}`;
+  let [head] = randomUUID().split("-");
+  return `hooks-${head}`;
 }
 //@ chunk-e6aww6q8.js:3707249-3708325 placement
 /**
@@ -121,18 +121,20 @@ var MAX_PROC_STATUS_BYTES = 1e6;
 /**
  * 读 /proc/self/task 文件
  */
-function readProcThreadFile(e, n) {
+function readProcThreadFile(threadId, file) {
   try {
-    return readFileSync(`/proc/self/task/${e}/${n}`, "utf8");
+    return readFileSync(`/proc/self/task/${threadId}/${file}`, "utf8");
   } catch {
     return;
   }
 }
 //@ chunk-e6aww6q8.js:3708491-3708628 placement
-function findThreadTask(e) {
+function findThreadTask(comm) {
   try {
-    let [n, ...r] = readdirSync("/proc/self/task").filter((s) => readProcThreadFile(s, "comm")?.trim() === e);
-    return r.length === 0 ? n : undefined;
+    let [first, ...rest] = readdirSync("/proc/self/task").filter(
+      (dir) => readProcThreadFile(dir, "comm")?.trim() === comm,
+    );
+    return rest.length === 0 ? first : undefined;
   } catch {
     return;
   }
@@ -153,13 +155,13 @@ var MAX_RTT_SAMPLES = 10;
  */
 var PROC_STAT_RE = /^\d+ \((?<comm>.*)\) (?<state>\S)(?: \S+){10} (?<utime>\d+) (?<stime>\d+) /s;
 //@ chunk-e6aww6q8.js:3708739-3708969 placement
-function readThreadCpu(e, n) {
-  let groups = PROC_STAT_RE.exec(readProcThreadFile(e, "stat") ?? "")?.groups;
-  let s = Number(readProcThreadFile(e, "schedstat")?.split(" ").at(0));
-  let h = Number(groups?.utime) + Number(groups?.stime);
-  return groups?.comm === n
+function readThreadCpu(threadId, fallback) {
+  let groups = PROC_STAT_RE.exec(readProcThreadFile(threadId, "stat") ?? "")?.groups;
+  let schedstat = Number(readProcThreadFile(threadId, "schedstat")?.split(" ").at(0));
+  let cpuMs = Number(groups?.utime) + Number(groups?.stime);
+  return groups?.comm === fallback
     ? {
-        usedMs: s > 0 ? s / MAX_PROC_STATUS_BYTES : h * MAX_RTT_SAMPLES,
+        usedMs: schedstat > 0 ? schedstat / MAX_PROC_STATUS_BYTES : cpuMs * MAX_RTT_SAMPLES,
         isAsleep: !RTT_LABEL.includes(groups.state ?? ""),
       }
     : undefined;
@@ -168,34 +170,34 @@ function readThreadCpu(e, n) {
 /**
  * Linux/WSL 下按线程名找到 worker 线程（/proc/self/task），返回读取其 CPU 用量与睡眠状态的函数。
  */
-function createThreadCpuProbe(e) {
+function createThreadCpuProbe(label) {
   let platform = getPlatform();
-  let r = platform === "linux" || platform === "wsl";
-  let s = {
+  let isLinux = platform === "linux" || platform === "wsl";
+  let cache = {
     task: undefined,
   };
   return () => {
-    if (!r) return;
-    let h = s.task === undefined ? undefined : readThreadCpu(s.task, e);
-    let y = h === undefined ? findThreadTask(e) : s.task;
-    let S = h === undefined && y !== undefined;
-    s.task = y;
-    return S ? readThreadCpu(y, e) : h;
+    if (!isLinux) return;
+    let task = cache.task === undefined ? undefined : readThreadCpu(cache.task, label);
+    let cpu = task === undefined ? findThreadTask(label) : cache.task;
+    let stat = task === undefined && cpu !== undefined;
+    cache.task = cpu;
+    return stat ? readThreadCpu(cpu, label) : task;
   };
 }
 //@ chunk-e6aww6q8.js:3709185-3709437 placement
 /**
  * 启动 hooks worker 线程：创建共享的心跳戳与标记缓冲区，返回 worker、两个 Int32Array 视图与线程 CPU 探针。
  */
-function spawnHooksWorkerThread(e = hooksWorkerUrl()) {
+function spawnHooksWorkerThread(url = hooksWorkerUrl()) {
   let sharedArrayBuffer = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * STAMP_SLOT_COUNT);
   let sharedArrayBuffer_2 = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * MARKS_SLOT_COUNT);
-  let name = newWorkerName();
+  let workerName = newWorkerName();
   return {
-    worker: new Worker(e, workerThreadOptions(name, sharedArrayBuffer, sharedArrayBuffer_2)),
+    worker: new Worker(url, workerThreadOptions(workerName, sharedArrayBuffer, sharedArrayBuffer_2)),
     stamp: new Int32Array(sharedArrayBuffer),
     marks: new Int32Array(sharedArrayBuffer_2),
-    thread: createThreadCpuProbe(name),
+    thread: createThreadCpuProbe(workerName),
   };
 }
 //@ chunk-e6aww6q8.js:3709437-3709715 placement
@@ -212,10 +214,10 @@ function createWorkerSlots() {
       return (valueSlot.get() ?? spawnHooksWorkerThread)();
     },
     setReloader: valueSlot_2.set,
-    reloadModule: (s) =>
-      valueSlot_2.get()?.(s) ?? Promise.reject(Error("hooks host not loaded yet; nothing to reload")),
+    reloadModule: (reloader) =>
+      valueSlot_2.get()?.(reloader) ?? Promise.reject(Error("hooks host not loaded yet; nothing to reload")),
     setLoadedNotifier: valueSlot_3.set,
-    notifyLoaded: (s) => valueSlot_3.get()?.(s),
+    notifyLoaded: (slot) => valueSlot_3.get()?.(slot),
   };
 }
 export { createWorkerSlots, hostVersionInfo };

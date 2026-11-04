@@ -105,6 +105,7 @@ import { isArtifactMountMode } from "../artifacts/artifactMount.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { settingsPresenceSignal } from "./seating.js";
 import { registerCleanup } from "../../utils/cleanupRegistry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-4pc1m5n9.js:4155-4191 placement
 /**
@@ -137,10 +138,10 @@ class RemoteManagedSettingsState {
       running: 0,
     },
   };
-  createBarrier(e) {
+  createBarrier(onCreate) {
     this.fetchSettledPromise = new Promise((resolve) => {
       this.fetchSettledResolve = resolve;
-      e?.(resolve);
+      onCreate?.(resolve);
     });
     this.loadingCompletePromise = new Promise((resolve) => {
       this.loadingCompleteResolve = resolve;
@@ -180,7 +181,10 @@ class RemoteManagedSettingsState {
 /**
  * 按 host 隔离的远程托管设置状态容器。
  */
-var remoteSettingsStateSlots = new HostScoped(() => new RemoteManagedSettingsState());
+var remoteSettingsStateSlots; // deferred: uses RemoteManagedSettingsState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4pc1m5n9.js:5287", () => {
+  remoteSettingsStateSlots = new HostScoped(() => new RemoteManagedSettingsState());
+});
 //@ chunk-4pc1m5n9.js:5312-5348 placement
 /**
  * 取当前 host 的远程托管设置状态（缓存、加载/拉取屏障、签名缓存影子等）。
@@ -191,13 +195,13 @@ function currentRemoteSettingsState() {
 //@ chunk-4pc1m5n9.js:5348-5745 placement
 function initializeRemoteManagedSettingsLoadingPromise() {
   registerRemoteSettingsStartupWait();
-  let e = currentRemoteSettingsState();
-  if (e.loadingCompletePromise) return;
+  let state = currentRemoteSettingsState();
+  if (state.loadingCompletePromise) return;
   if (computeRemoteSettingsEligibility())
-    e.createBarrier((n) => {
+    state.createBarrier((resolveFetch) => {
       setTimeout(
-        (s, r) => {
-          if (r.fetchSettledResolve === s) {
+        (resolve, state) => {
+          if (state.fetchSettledResolve === resolve) {
             if (isSecuritySettingsDialogPending()) {
               logForDebugging(
                 "Remote settings: Loading promise timeout deferred \u2014 consent dialog pending",
@@ -207,21 +211,21 @@ function initializeRemoteManagedSettingsLoadingPromise() {
             logForDebugging(
               "Remote settings: Loading promise timed out, resolving anyway (load and fetch barriers)",
             );
-            r.backstopReleased = true;
+            state.backstopReleased = true;
             markLoadBackstopReleased();
-            r.releaseBarrier();
+            state.releaseBarrier();
           }
         },
         LOADING_BACKSTOP_MS,
-        n,
-        e,
+        resolveFetch,
+        state,
       );
     });
 }
 //@ chunk-4pc1m5n9.js:5745-5761 placement
 function declareNoHybridTokenRefresh() {}
 //@ chunk-4pc1m5n9.js:5761-6088 placement
-function prefetchRemoteManagedSettings(e) {
+function prefetchRemoteManagedSettings(credentials) {
   if (
     getGatewayAuth() ||
     !computeRemoteSettingsEligibility() ||
@@ -233,34 +237,37 @@ function prefetchRemoteManagedSettings(e) {
     return;
   if (getClaudeAIOAuthTokens()?.refreshToken && getStoredOauthAccountInfo() === undefined) return;
   let remoteManagedSettingsRawCache = getRemoteManagedSettingsRawCache();
-  let s = remoteManagedSettingsRawCache ? computeChecksum(remoteManagedSettingsRawCache) : undefined;
-  let r = currentRemoteSettingsState();
-  let { oauthRefreshLatch } = r;
-  r.prefetch.set(
+  let checksum = remoteManagedSettingsRawCache ? computeChecksum(remoteManagedSettingsRawCache) : undefined;
+  let state = currentRemoteSettingsState();
+  let { oauthRefreshLatch } = state;
+  state.prefetch.set(
     {
-      checksum: s,
+      checksum,
       epoch: getSyncCacheResetEpoch(),
       endpoint: getRemoteManagedSettingsEndpoint(),
       principal: remoteSettingsCredentialKey(),
     },
-    async (S) =>
+    async (signal) =>
       fetchRemoteManagedSettings(
         isPolicyGraceEnabled()
-          ? keepIfFresh(s, await settingsAgeMs(remoteManagedSettingsRawCache !== null, await readSyncAge()))
-          : s,
+          ? keepIfFresh(
+              checksum,
+              await settingsAgeMs(remoteManagedSettingsRawCache !== null, await readSyncAge()),
+            )
+          : checksum,
         false,
-        e,
-        S,
+        credentials,
+        signal,
         oauthRefreshLatch,
       ),
-    (S) => S.success,
+    (result) => result.success,
   );
 }
 //@ chunk-4pc1m5n9.js:6088-6198 placement
 function clearRemoteManagedSettingsPrefetch() {
-  let e = currentRemoteSettingsState();
-  e.prefetch.clear();
-  e.oauthRefreshLatch = {
+  let state = currentRemoteSettingsState();
+  state.prefetch.clear();
+  state.oauthRefreshLatch = {
     attempted: false,
     recoveries: {
       begun: 0,
@@ -278,38 +285,50 @@ function isEligibleForRemoteManagedSettings() {
  */
 async function waitForRemoteManagedSettingsToLoad() {
   if (hasManagedOrCoworkSurface()) return;
-  let e = currentRemoteSettingsState();
-  if (e.loadingCompletePromise) await e.loadingCompletePromise;
+  let state = currentRemoteSettingsState();
+  if (state.loadingCompletePromise) await state.loadingCompletePromise;
 }
 //@ chunk-4pc1m5n9.js:8820-9025 placement
 function getRemoteManagedSettingsSignatureFacts() {
-  let e = currentRemoteSettingsState();
-  let storedCopyAtStart = e.storedCopyAtStart;
+  let state = currentRemoteSettingsState();
+  let storedCopyAtStart = state.storedCopyAtStart;
   return {
     storedCopy:
       storedCopyAtStart === undefined || storedCopyAtStart === "not_read"
         ? "not_read"
-        : cacheTrustAnswer(storedCopyAtStart, e.storedCopyShadow),
+        : cacheTrustAnswer(storedCopyAtStart, state.storedCopyShadow),
     liveSigned: verifyLiveAnswerSignature({
       kind: "managed-settings",
-      answer: e.liveAnswer,
+      answer: state.liveAnswer,
       account: getStoredOauthAccountInfo(),
     }),
   };
 }
 //@ chunk-4pc1m5n9.js:9025-9108 placement
 async function waitForRemoteManagedSettingsFetchToSettle() {
-  let e = currentRemoteSettingsState();
-  if (e.fetchSettledPromise) await e.fetchSettledPromise;
+  let state = currentRemoteSettingsState();
+  if (state.fetchSettledPromise) await state.fetchSettledPromise;
 }
 //@ chunk-4pc1m5n9.js:9108-9120 placement
-setRemotePolicySettler(waitForRemoteManagedSettingsFetchToSettle, noteStoredLoginSurface);
+// deferred: uses setRemotePolicySettler (../../utils/model/allowedProviders.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4pc1m5n9.js:9108", () => {
+  setRemotePolicySettler(waitForRemoteManagedSettingsFetchToSettle, noteStoredLoginSurface);
+});
 //@ chunk-4pc1m5n9.js:9120-9131 placement
-organizationAnswerState.wait = waitForRemoteManagedSettingsFetchToSettle;
+// deferred: uses organizationAnswerState (../../utils/plugins/commandSource.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4pc1m5n9.js:9120", () => {
+  organizationAnswerState.wait = waitForRemoteManagedSettingsFetchToSettle;
+});
 //@ chunk-4pc1m5n9.js:9131-9147 placement
-organizationAnswerState.ask = () => pollRemoteSettings();
+// deferred: uses organizationAnswerState (../../utils/plugins/commandSource.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4pc1m5n9.js:9131", () => {
+  organizationAnswerState.ask = () => pollRemoteSettings();
+});
 //@ chunk-4pc1m5n9.js:9147-9161 placement
-organizationAnswerState.fetches = computeRemoteSettingsEligibility;
+// deferred: uses organizationAnswerState (../../utils/plugins/commandSource.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4pc1m5n9.js:9147", () => {
+  organizationAnswerState.fetches = computeRemoteSettingsEligibility;
+});
 //@ chunk-4pc1m5n9.js:9161-9204 placement
 function didRemoteManagedSettingsBackstopRelease() {
   return currentRemoteSettingsState().backstopReleased;
@@ -332,26 +351,26 @@ function registerRemoteSettingsStartupWait() {
   });
 }
 //@ chunk-4pc1m5n9.js:22630-23210 placement
-async function clearRemoteManagedSettingsCache(e) {
+async function clearRemoteManagedSettingsCache(storageV5) {
   stopBackgroundPolling();
   resetRemoteSettingsSyncCache();
   invalidateCommandNames();
   clearRemoteManagedSettingsPrefetch();
   currentRemoteSettingsState().detachBarrier()?.();
-  if (isDisklessWithoutState(e)) return;
+  if (isDisklessWithoutState(storageV5)) return;
   if (hasManagedSettings()) return;
-  let n =
-    isStorageV5Enabled() && e !== undefined
-      ? await e
+  let helperError =
+    isStorageV5Enabled() && storageV5 !== undefined
+      ? await storageV5
           .delete(STORAGE_SPACES.state(HELPER_CONSENT_STATE_ID))
-          .then((s) => (s.ok ? undefined : formatStorageError(s.error)))
+          .then((deleteResult) => (deleteResult.ok ? undefined : formatStorageError(deleteResult.error)))
       : await rm(getHelperConsentPath(), {
           force: true,
         }).then(() => {
           return;
         }, errorMessage);
-  if (n !== undefined) {
-    logForDebugging(`Remote settings: Failed to remove helper consent - ${n}`);
+  if (helperError !== undefined) {
+    logForDebugging(`Remote settings: Failed to remove helper consent - ${helperError}`);
     return;
   }
   if (isStorageV5Enabled() && !getRemoteSettingsPathOverride())
@@ -359,8 +378,8 @@ async function clearRemoteManagedSettingsCache(e) {
   if (getRemoteSettingsPathOverride()) return;
   await removeSignatureFiles(getSettingsPath());
   await removeSyncStamp();
-  if (isStorageV5Enabled() && e !== undefined) {
-    if ((await e.delete(STORAGE_SPACES.state("remote-settings"))).ok)
+  if (isStorageV5Enabled() && storageV5 !== undefined) {
+    if ((await storageV5.delete(STORAGE_SPACES.state("remote-settings"))).ok)
       remoteSettingsFileWritten("cache", null);
     return;
   }
@@ -375,17 +394,17 @@ async function clearRemoteManagedSettingsCache(e) {
 //@ chunk-4pc1m5n9.js:23210-23217 placement
 var lastOutcomeReason;
 //@ chunk-4pc1m5n9.js:23217-23311 placement
-async function fetchAndLoadRemoteManagedSettingsAndNotify(e = {}) {
+async function fetchAndLoadRemoteManagedSettingsAndNotify(options = {}) {
   try {
-    return await fetchAndLoadRemoteManagedSettings(e);
+    return await fetchAndLoadRemoteManagedSettings(options);
   } finally {
-    let n = () => parseRemoteManagedSettings().settings;
-    reserveRemoteStaticPayload(n);
-    applyRemotePolicyMidSession(n);
+    let currentSettings = () => parseRemoteManagedSettings().settings;
+    reserveRemoteStaticPayload(currentSettings);
+    applyRemotePolicyMidSession(currentSettings);
   }
 }
 //@ chunk-4pc1m5n9.js:33728-34222 placement
-function recordRemoteSettingsStatus(e) {
+function recordRemoteSettingsStatus(result) {
   if (!computeRemoteSettingsEligibility()) {
     let ineligibleReason = getIneligibleReason();
     if (ineligibleReason)
@@ -395,34 +414,34 @@ function recordRemoteSettingsStatus(e) {
       });
     return;
   }
-  let n = lastFailureRulings() !== undefined;
-  if (e.fetchSucceeded) {
+  let hadRulings = lastFailureRulings() !== undefined;
+  if (result.fetchSucceeded) {
     setLastLoadStatus({
       state: "ok",
-      hasSettings: e.settings !== null && Object.keys(e.settings).length > 0,
+      hasSettings: result.settings !== null && Object.keys(result.settings).length > 0,
     });
-    if (n) invalidateCommandNames();
+    if (hadRulings) invalidateCommandNames();
     return;
   }
-  if (e.failure) {
-    let r = e.settings !== null && Object.keys(e.settings).length > 0;
+  if (result.failure) {
+    let hasSettings = result.settings !== null && Object.keys(result.settings).length > 0;
     setLastLoadStatus(
-      r
+      hasSettings
         ? {
             state: "stale_cache",
-            failure: e.failure,
+            failure: result.failure,
             transportEnvWithheld: !isRemoteManagedSettingsVerified(),
           }
         : {
             state: "failed",
-            failure: e.failure,
-            ...(r &&
+            failure: result.failure,
+            ...(hasSettings &&
               getRemotePolicyTierWithKind().settings !== null && {
                 restrictionsOnly: true,
               }),
           },
     );
-    if (n || e.failure.rulings !== undefined) invalidateCommandNames();
+    if (hadRulings || result.failure.rulings !== undefined) invalidateCommandNames();
   }
 }
 //@ chunk-4pc1m5n9.js:34222-34325 placement
@@ -433,11 +452,11 @@ function lastFailureRulings() {
     : undefined;
 }
 //@ chunk-4pc1m5n9.js:34325-35257 placement
-async function loadRemoteManagedSettings(e, n, s) {
+async function loadRemoteManagedSettings(showSecurityDialog, storageV5, options) {
   markLoadCycleBegun();
   registerRemoteSettingsStartupWait();
   setSettingsReader(settingsOutcomeFields);
-  let r = currentRemoteSettingsState();
+  let state = currentRemoteSettingsState();
   let remoteSettingsEligibility = computeRemoteSettingsEligibility();
   if (hasManagedSettings())
     try {
@@ -452,61 +471,61 @@ async function loadRemoteManagedSettings(e, n, s) {
     } catch (error) {
       logError(error);
     }
-  if (remoteSettingsEligibility && !r.loadingCompletePromise) r.createBarrier();
-  let fetchSettledResolve = r.fetchSettledResolve;
+  if (remoteSettingsEligibility && !state.loadingCompletePromise) state.createBarrier();
+  let fetchSettledResolve = state.fetchSettledResolve;
   let syncCacheResetEpoch = getSyncCacheResetEpoch();
-  let R = getRemoteManagedSettingsSyncFromCache() !== null;
-  if (R && r.loadingCompleteResolve) r.releaseLoadBarrier();
-  let C = s?.startupAwaited === true;
-  if (R && !C)
+  let hadCache = getRemoteManagedSettingsSyncFromCache() !== null;
+  if (hadCache && state.loadingCompleteResolve) state.releaseLoadBarrier();
+  let awaited = options?.startupAwaited === true;
+  if (hadCache && !awaited)
     recordManagedConfigResult("settings", {
       source: "cache",
-      hadCache: R,
-      awaited: C,
+      hadCache,
+      awaited,
     });
-  let T = {};
+  let cycleFacts = {};
   let source = "error";
-  let E = C ? beginStartupBlock("settings") : null;
+  let startupBlock = awaited ? beginStartupBlock("settings") : null;
   try {
-    let A = await fetchAndLoadRemoteManagedSettingsAndNotify({
-      ...s,
-      showSecurityDialog: e,
-      storageV5: n,
-      cycleFacts: T,
+    let result = await fetchAndLoadRemoteManagedSettingsAndNotify({
+      ...options,
+      showSecurityDialog,
+      storageV5,
+      cycleFacts,
     });
-    let { settings, fetchSucceeded } = A;
-    source = getRemoteSettingsSourceLabel(A);
-    if (getSyncCacheResetEpoch() === syncCacheResetEpoch) recordRemoteSettingsStatus(A);
+    let { settings, fetchSucceeded } = result;
+    source = getRemoteSettingsSourceLabel(result);
+    if (getSyncCacheResetEpoch() === syncCacheResetEpoch) recordRemoteSettingsStatus(result);
     if (
       getSyncCacheResetEpoch() === syncCacheResetEpoch &&
       computeRemoteSettingsEligibility() &&
       !getRemoteSettingsPathOverride() &&
       !isEvalPolicySnapshotOnly()
     )
-      startRemoteSettingsPoller(e, n, s?.credentials);
-    if (settings !== null && A.changesNothing !== true) loadRemoteManagedSettings_2();
+      startRemoteSettingsPoller(showSecurityDialog, storageV5, options?.credentials);
+    if (settings !== null && result.changesNothing !== true) loadRemoteManagedSettings_2();
     return fetchSucceeded;
   } finally {
     releaseBarrierIfSame(fetchSettledResolve);
     if (getSyncCacheResetEpoch() === syncCacheResetEpoch) markLoadCycleEnded();
-    if (T.outcomeReason !== undefined) lastOutcomeReason = T.outcomeReason;
+    if (cycleFacts.outcomeReason !== undefined) lastOutcomeReason = cycleFacts.outcomeReason;
     recordManagedConfigResult("settings", {
       source,
-      hadCache: R,
-      awaited: C,
-      fetchMs: T.fetchMs,
+      hadCache,
+      awaited,
+      fetchMs: cycleFacts.fetchMs,
     });
-    E?.("completed");
+    startupBlock?.("completed");
   }
 }
 //@ chunk-4pc1m5n9.js:35257-35375 placement
 function settingsOutcomeFields() {
   let ineligibleReason = getIneligibleReason();
-  let n = computeRemoteSettingsEligibility()
+  let outcomeReason = computeRemoteSettingsEligibility()
     ? lastOutcomeReason
     : notAttemptedReason(managedConfigNotAttemptedInput(ineligibleReason));
   return {
-    settings_outcome_reason: fromEnumOpt(n),
+    settings_outcome_reason: fromEnumOpt(outcomeReason),
     settings_ineligible_reason: fromEnumOpt(ineligibleReason),
   };
 }
@@ -539,28 +558,29 @@ function getRemoteSettingsSourceLabel({ resolution, settings }) {
  * 如果传入的结算回调仍是当前加载的回调，就释放加载/拉取屏障。
  */
 function releaseBarrierIfSame(fetchSettledResolve) {
-  let n = currentRemoteSettingsState();
-  if (n.fetchSettledResolve && n.fetchSettledResolve === fetchSettledResolve) n.releaseBarrier();
+  let state = currentRemoteSettingsState();
+  if (state.fetchSettledResolve && state.fetchSettledResolve === fetchSettledResolve) state.releaseBarrier();
 }
 //@ chunk-4pc1m5n9.js:35867-35936 placement
 /**
  * 后台刷新远程托管设置，成功后让设置缓存失效并通知变更。
  */
-async function refreshRemoteManagedSettings(e, storageV5, credentials, r) {
-  return (await refreshRemoteManagedSettingsWithOutcome(e, storageV5, credentials, r)).fetchSucceeded;
+async function refreshRemoteManagedSettings(showSecurityDialog, storageV5, credentials, options) {
+  return (await refreshRemoteManagedSettingsWithOutcome(showSecurityDialog, storageV5, credentials, options))
+    .fetchSucceeded;
 }
 //@ chunk-4pc1m5n9.js:35936-35948 placement
 var STARTUP_AWAIT_DEADLINE_MS = 5000;
 //@ chunk-4pc1m5n9.js:35948-36411 placement
-async function refreshRemoteManagedSettingsForStartup(standaloneSecurityDialog, storageV5, credentials) {
-  let r;
+async function refreshRemoteManagedSettingsForStartup(showSecurityDialog, storageV5, credentials) {
+  let releaseConsent;
   let promise = new Promise((resolve) => {
-    r = armStartupConsentRelease(() => resolve("consent_pending"));
+    releaseConsent = armStartupConsentRelease(() => resolve("consent_pending"));
   });
-  let S = beginStartupBlock("settings", {
+  let startupBlock = beginStartupBlock("settings", {
     supersede: true,
   });
-  let k = refreshRemoteManagedSettingsWithOutcome(standaloneSecurityDialog, storageV5, credentials, {
+  let refreshOutcome = refreshRemoteManagedSettingsWithOutcome(showSecurityDialog, storageV5, credentials, {
     startupAwaited: true,
     callerRecordsBarrier: true,
   }).then(
@@ -571,54 +591,54 @@ async function refreshRemoteManagedSettingsForStartup(standaloneSecurityDialog, 
     },
   );
   try {
-    let R = await withDeadline(Promise.race([k, promise]), STARTUP_AWAIT_DEADLINE_MS);
-    S(R === undefined ? "timed_out" : "completed");
-    if (R === undefined) {
+    let outcome = await withDeadline(Promise.race([refreshOutcome, promise]), STARTUP_AWAIT_DEADLINE_MS);
+    startupBlock(outcome === undefined ? "timed_out" : "completed");
+    if (outcome === undefined) {
       logFeatureSad("remote_managed_settings_startup_await", "deadline_expired");
       return "timed_out";
     }
-    return R;
+    return outcome;
   } finally {
-    r?.();
-    S("completed");
+    releaseConsent?.();
+    startupBlock("completed");
   }
 }
 //@ chunk-4pc1m5n9.js:36411-36890 placement
-async function probeManagedSettingsForBearer(e, { timeoutMs: n = PROBE_TIMEOUT_MS } = {}) {
-  let s = await axios_default.get(`${getOauthConfig().BASE_API_URL}/api/claude_code/settings`, {
+async function probeManagedSettingsForBearer(bearer, { timeoutMs = PROBE_TIMEOUT_MS } = {}) {
+  let response = await axios_default.get(`${getOauthConfig().BASE_API_URL}/api/claude_code/settings`, {
     headers: {
       "User-Agent": claudeCodeUserAgent(),
       "Cache-Control": "no-cache",
       Pragma: "no-cache",
-      Authorization: `Bearer ${e}`,
+      Authorization: `Bearer ${bearer}`,
       "anthropic-beta": OAUTH_BETA_HEADER,
     },
-    timeout: n,
-    signal: AbortSignal.timeout(n),
+    timeout: timeoutMs,
+    signal: AbortSignal.timeout(timeoutMs),
     maxRedirects: 0,
     adapter: "http",
-    validateStatus: (S) => S === 200 || S === 204 || S === 304 || S === 404,
+    validateStatus: (status) => status === 200 || status === 204 || status === 304 || status === 404,
   });
-  let headers = s.headers ?? {};
-  let y = headers["content-type"];
+  let headers = response.headers ?? {};
+  let contentType = headers["content-type"];
   return {
-    status: s.status,
-    contentType: typeof y === "string" ? y : "",
+    status: response.status,
+    contentType: typeof contentType === "string" ? contentType : "",
     requestIdPresent: hasSessionsTokenRequestId(headers),
   };
 }
 //@ chunk-4pc1m5n9.js:36890-37968 placement
-async function refreshRemoteManagedSettingsWithOutcome(e, n, s, r) {
-  let y = r?.startupAwaited === true;
+async function refreshRemoteManagedSettingsWithOutcome(showSecurityDialog, storageV5, credentials, options) {
+  let awaited = options?.startupAwaited === true;
   stopBackgroundPolling();
   resetRemoteSettingsSyncCache();
   markLoadCycleBegun();
   let syncCacheResetEpoch = getSyncCacheResetEpoch();
-  let k = currentRemoteSettingsState();
-  let R = k.detachBarrier();
+  let state = currentRemoteSettingsState();
+  let releaseOldBarrier = state.detachBarrier();
   if (!computeRemoteSettingsEligibility()) {
-    k.prefetch.clear();
-    R?.();
+    state.prefetch.clear();
+    releaseOldBarrier?.();
     recordRemoteSettingsStatus({
       settings: null,
       fetchSucceeded: true,
@@ -627,7 +647,7 @@ async function refreshRemoteManagedSettingsWithOutcome(e, n, s, r) {
     recordManagedConfigResult("settings", {
       source: "ineligible",
       hadCache: false,
-      awaited: y,
+      awaited,
     });
     loadRemoteManagedSettings_2();
     applyRemotePolicyMidSession(() => parseRemoteManagedSettings().settings);
@@ -636,67 +656,67 @@ async function refreshRemoteManagedSettingsWithOutcome(e, n, s, r) {
     };
   }
   initializeRemoteManagedSettingsLoadingPromise();
-  let fetchSettledResolve = k.fetchSettledResolve;
-  if (R)
-    if (k.fetchSettledPromise) k.fetchSettledPromise.then(R);
-    else R();
-  let T;
-  let O;
-  let E = {};
+  let fetchSettledResolve = state.fetchSettledResolve;
+  if (releaseOldBarrier)
+    if (state.fetchSettledPromise) state.fetchSettledPromise.then(releaseOldBarrier);
+    else releaseOldBarrier();
+  let outcome;
+  let result;
+  let cycleFacts = {};
   let source = "error";
-  let P =
-    y && !r?.callerRecordsBarrier
+  let startupBlock =
+    awaited && !options?.callerRecordsBarrier
       ? beginStartupBlock("settings", {
           supersede: true,
         })
       : null;
   try {
-    O = await fetchAndLoadRemoteManagedSettingsAndNotify({
-      showSecurityDialog: e,
-      storageV5: n,
-      credentials: s,
-      startupAwaited: y,
-      maxRetries: r?.maxRetries,
-      cycleFacts: E,
+    result = await fetchAndLoadRemoteManagedSettingsAndNotify({
+      showSecurityDialog,
+      storageV5,
+      credentials,
+      startupAwaited: awaited,
+      maxRetries: options?.maxRetries,
+      cycleFacts,
     });
-    source = getRemoteSettingsSourceLabel(O);
-    T = {
-      fetchSucceeded: O.fetchSucceeded,
-      ...(O.failure && {
-        failure: O.failure,
+    source = getRemoteSettingsSourceLabel(result);
+    outcome = {
+      fetchSucceeded: result.fetchSucceeded,
+      ...(result.failure && {
+        failure: result.failure,
       }),
     };
   } finally {
     releaseBarrierIfSame(fetchSettledResolve);
     if (getSyncCacheResetEpoch() === syncCacheResetEpoch) markLoadCycleEnded();
-    if (E.outcomeReason !== undefined) lastOutcomeReason = E.outcomeReason;
+    if (cycleFacts.outcomeReason !== undefined) lastOutcomeReason = cycleFacts.outcomeReason;
     recordManagedConfigResult("settings", {
       source,
-      hadCache: E.hadCache === true,
-      awaited: y,
-      fetchMs: E.fetchMs,
+      hadCache: cycleFacts.hadCache === true,
+      awaited,
+      fetchMs: cycleFacts.fetchMs,
     });
-    P?.("completed");
+    startupBlock?.("completed");
   }
   logForDebugging("Remote settings: Refreshed after auth change");
   if (getSyncCacheResetEpoch() !== syncCacheResetEpoch) {
     logForDebugging("Remote settings: Refresh superseded by a login/logout reset; not notifying");
-    return T;
+    return outcome;
   }
-  recordRemoteSettingsStatus(O);
-  if (!getRemoteSettingsPathOverride()) startRemoteSettingsPoller(e, n, s);
+  recordRemoteSettingsStatus(result);
+  if (!getRemoteSettingsPathOverride()) startRemoteSettingsPoller(showSecurityDialog, storageV5, credentials);
   loadRemoteManagedSettings_2();
-  return T;
+  return outcome;
 }
 //@ chunk-4pc1m5n9.js:38764-38908 placement = formatDirectoryList (1)
 /**
  * （切分错误）格式化首个目录问题："(<路径>: <消息>, and N more)"。
  */
 function firstRulingClause(directories) {
-  let [n] = serializeSettingsErrors(directories?.slice(0, 1) ?? []);
-  if (!n || !directories) return "";
-  let s = directories.length - 1;
-  return ` (${n.path}: ${n.message}${s > 0 ? `, and ${s} more` : ""})`;
+  let [first] = serializeSettingsErrors(directories?.slice(0, 1) ?? []);
+  if (!first || !directories) return "";
+  let moreCount = directories.length - 1;
+  return ` (${first.path}: ${first.message}${moreCount > 0 ? `, and ${moreCount} more` : ""})`;
 }
 //@ chunk-4pc1m5n9.js:38908-38994 placement
 /**
@@ -740,19 +760,19 @@ function hostLaunchedGatewayRefusal(initialMainLoopModel) {
 function hostLaunchedGatewayLoadRefusal(remoteManagedSettings) {
   let gatewayAuth = getGatewayAuth();
   if (!gatewayAuth || !isHostVerifiedGatewayAuth(gatewayAuth)) return;
-  let s = gatewayPolicyPrefix(gatewayAuth.url);
+  let prefix = gatewayPolicyPrefix(gatewayAuth.url);
   let lastLoadStatus = getLastLoadStatus();
   let failure =
     lastLoadStatus?.state === "failed" || lastLoadStatus?.state === "stale_cache"
       ? lastLoadStatus.failure
       : undefined;
   if (failure?.errorKind === "gateway_public_address")
-    return `${s} this machine is no longer reaching it from inside your organization's network (it may have left that network or VPN, or the gateway's name now resolves elsewhere), so the policy was not fetched. Reconnect to that network and start again, or contact your administrator.`;
+    return `${prefix} this machine is no longer reaching it from inside your organization's network (it may have left that network or VPN, or the gateway's name now resolves elsewhere), so the policy was not fetched. Reconnect to that network and start again, or contact your administrator.`;
   if (failure?.errorKind === "ruled_empty")
-    return `${s} none of the settings it served could be applied as written${firstRulingClause(failure.rulings)}. Ask your administrator to fix them.`;
+    return `${prefix} none of the settings it served could be applied as written${firstRulingClause(failure.rulings)}. Ask your administrator to fix them.`;
   if (!remoteManagedSettings || failure) {
-    let S = failure ? `: ${describeFetchFailure(failure.errorKind, failure.httpStatus)}` : "";
-    return `${s} the policy could not be loaded from it${S}. Check your network connection, or contact your administrator.`;
+    let detail = failure ? `: ${describeFetchFailure(failure.errorKind, failure.httpStatus)}` : "";
+    return `${prefix} the policy could not be loaded from it${detail}. Check your network connection, or contact your administrator.`;
   }
   noteHostLaunchedGatewayWithoutPolicy();
   return;
@@ -768,12 +788,12 @@ function noteHostLaunchedGatewayWithoutPolicy() {
     );
 }
 //@ chunk-4pc1m5n9.js:41387-41525 placement
-function warnStartingWithoutSettings(e) {
-  let n = `Starting without your organization's managed settings: ${e}.`;
-  logForDebugging(`Remote settings: ${n}`, {
+function warnStartingWithoutSettings(reason) {
+  let message = `Starting without your organization's managed settings: ${reason}.`;
+  logForDebugging(`Remote settings: ${message}`, {
     level: "warn",
   });
-  writeToStderr(`${n}
+  writeToStderr(`${message}
 `);
 }
 //@ chunk-4pc1m5n9.js:41525-41624 placement
@@ -783,17 +803,17 @@ function warnStartingWithoutSettings(e) {
 var REQUIRED_SETTINGS_LOAD_FAILED_MESSAGE =
   "Your organization requires remote managed settings to load, but they could not be loaded.";
 //@ chunk-4pc1m5n9.js:41624-42156 placement
-async function validateForceRemoteSettingsRefresh(e, machineForcedRefresh) {
+async function validateForceRemoteSettingsRefresh(isSettingsLoaded, machineForcedRefresh) {
   try {
-    if (await e()) {
-      let S = machineForcedRefresh();
-      return S === undefined
+    if (await isSettingsLoaded()) {
+      let forcedMessage = machineForcedRefresh();
+      return forcedMessage === undefined
         ? {
             valid: true,
           }
         : {
             valid: false,
-            message: `${REQUIRED_SETTINGS_LOAD_FAILED_MESSAGE} ${S}`,
+            message: `${REQUIRED_SETTINGS_LOAD_FAILED_MESSAGE} ${forcedMessage}`,
           };
     }
   } catch (error) {
@@ -805,13 +825,13 @@ async function validateForceRemoteSettingsRefresh(e, machineForcedRefresh) {
       valid: false,
       message: `${REQUIRED_SETTINGS_LOAD_FAILED_MESSAGE} None of the settings the server returned could be applied as written${firstRulingClause(directories)}; ask your administrator to fix them.`,
     };
-  let r = "claude auth login";
-  let y = isArtifactMountMode()
+  let loginCommand = "claude auth login";
+  let hint = isArtifactMountMode()
     ? "You can check your network connection or contact your admin."
-    : `Run \`${r}\` to re-authenticate, check your network connection, or contact your administrator.`;
+    : `Run \`${loginCommand}\` to re-authenticate, check your network connection, or contact your administrator.`;
   return {
     valid: false,
-    message: `${REQUIRED_SETTINGS_LOAD_FAILED_MESSAGE} ${y}`,
+    message: `${REQUIRED_SETTINGS_LOAD_FAILED_MESSAGE} ${hint}`,
   };
 }
 //@ chunk-4pc1m5n9.js:42156-42744 placement
@@ -822,12 +842,14 @@ async function pollRemoteSettings(showSecurityDialog, storageV5, credentials) {
   if (!computeRemoteSettingsEligibility()) return;
   currentRemoteSettingsState().refreshesHybridToken = true;
   let remoteManagedSettingsSyncFromCache = getRemoteManagedSettingsSyncFromCache();
-  let y = remoteManagedSettingsSyncFromCache ? jsonStringify(remoteManagedSettingsSyncFromCache) : null;
-  let S = isRemoteManagedSettingsVerified();
-  let k = settingsPresenceSignal.get() === "served";
+  let beforeSnapshot = remoteManagedSettingsSyncFromCache
+    ? jsonStringify(remoteManagedSettingsSyncFromCache)
+    : null;
+  let wasVerified = isRemoteManagedSettingsVerified();
+  let hadPresence = settingsPresenceSignal.get() === "served";
   let syncCacheResetEpoch = getSyncCacheResetEpoch();
   try {
-    let C = await fetchAndLoadRemoteManagedSettingsAndNotify({
+    let result = await fetchAndLoadRemoteManagedSettingsAndNotify({
       background: true,
       showSecurityDialog,
       storageV5,
@@ -837,15 +859,17 @@ async function pollRemoteSettings(showSecurityDialog, storageV5, credentials) {
       logForDebugging("Remote settings: Background poll superseded by a login/logout reset; not notifying");
       return;
     }
-    if (C.fetchSucceeded || C.failure?.errorKind === "ruled_empty") recordRemoteSettingsStatus(C);
+    if (result.fetchSucceeded || result.failure?.errorKind === "ruled_empty")
+      recordRemoteSettingsStatus(result);
     let remoteManagedSettingsSyncFromCache = getRemoteManagedSettingsSyncFromCache();
-    let E =
-      (remoteManagedSettingsSyncFromCache ? jsonStringify(remoteManagedSettingsSyncFromCache) : null) !== y;
-    let A = !S && isRemoteManagedSettingsVerified();
-    let P = hasManagedSettings() && !k && settingsPresenceSignal.get() === "served";
-    if (E || A || P) {
+    let changed =
+      (remoteManagedSettingsSyncFromCache ? jsonStringify(remoteManagedSettingsSyncFromCache) : null) !==
+      beforeSnapshot;
+    let becameVerified = !wasVerified && isRemoteManagedSettingsVerified();
+    let appearedNow = hasManagedSettings() && !hadPresence && settingsPresenceSignal.get() === "served";
+    if (changed || becameVerified || appearedNow) {
       logForDebugging(
-        E
+        changed
           ? "Remote settings: Changed during background poll"
           : "Remote settings: Confirmed by a background poll",
       );
@@ -855,8 +879,8 @@ async function pollRemoteSettings(showSecurityDialog, storageV5, credentials) {
 }
 //@ chunk-4pc1m5n9.js:42744-42882 placement
 function startRemoteSettingsPoller(showSecurityDialog, storageV5, credentials) {
-  let r = currentRemoteSettingsState();
-  if (r.poller !== null) return;
+  let state = currentRemoteSettingsState();
+  if (state.poller !== null) return;
   if (!computeRemoteSettingsEligibility()) return;
   let interactionAwarePoll = startInteractionAwarePoll(
     () => void pollRemoteSettings(showSecurityDialog, storageV5, credentials),
@@ -865,7 +889,7 @@ function startRemoteSettingsPoller(showSecurityDialog, storageV5, credentials) {
       unref: true,
     },
   );
-  r.startPoller(interactionAwarePoll);
+  state.startPoller(interactionAwarePoll);
   registerCleanup(interactionAwarePoll);
 }
 //@ chunk-4pc1m5n9.js:42882-42914 placement
@@ -873,16 +897,16 @@ function stopBackgroundPolling() {
   currentRemoteSettingsState().stopPoller();
 }
 export {
-  validateForceRemoteSettingsRefresh,
-  refreshRemoteManagedSettings,
-  refreshRemoteManagedSettingsForStartup,
   declareNoHybridTokenRefresh,
   waitForRemoteManagedSettingsFetchToSettle,
   getRemoteManagedSettingsSignatureFacts,
   hostLaunchedGatewayRefusal,
+  validateForceRemoteSettingsRefresh,
   loadRemoteManagedSettings,
   hostLaunchedGatewayLoadRefusal,
   noteHostLaunchedGatewayWithoutPolicy,
+  refreshRemoteManagedSettings,
+  refreshRemoteManagedSettingsForStartup,
   waitForRemoteManagedSettingsToLoad,
   MAX_BACKGROUND_FETCH_RETRIES,
   PROBE_TIMEOUT_MS,

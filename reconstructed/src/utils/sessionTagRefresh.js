@@ -21,7 +21,7 @@ import { getSessionId } from "../bootstrap/state.js";
 function persistBridgeArtifactFrames(frameUrls) {
   if (isPublishToolEnabled())
     reportBridgeArtifacts(
-      frameUrlRowsToPersist(frameUrls).map(([, e]) => frameUrlToRecord(e)),
+      frameUrlRowsToPersist(frameUrls).map(([, url]) => frameUrlToRecord(url)),
       () => isRemoteEgressSuppressedFor(pinSessionId(getSessionId())),
     );
 }

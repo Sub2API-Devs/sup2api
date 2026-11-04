@@ -8,6 +8,7 @@
  * pieces: chunk-4ymxyb4g.js (1), chunk-ag5x7vhf.js (1), chunk-bc20zedk.js (1), chunk-bzr73sfg.js (58)
  * attribution: fingerprint 25, placement 6, layout 26, callgraph-witnessed 2, file-local 2
  */
+import { colorSupport } from "./colorize.js";
 import {
   SGR_BOLD,
   SGR_DIM,
@@ -24,7 +25,7 @@ import {
 } from "./termio/sgr.js";
 import { isDefaultFgColor } from "./terminalColorSupport.js";
 import { logForDebugging } from "../utils/debug.js";
-import { VEt } from "../../vendor/@alcalzone/ansi-tokenize/build/ansiCodes.js";
+import { ansiCodesToString } from "../../vendor/@alcalzone/ansi-tokenize/build/ansiCodes.js";
 import { diffAnsiCodes } from "../../vendor/@alcalzone/ansi-tokenize/build/diff.js";
 import { assertCellSegmenter } from "./terminalImages.js";
 import { DEFAULT_TAB_WIDTH } from "./wrapAnsi.js";
@@ -35,13 +36,18 @@ import { ELLIPSIS } from "./styles.js";
 import { ESC, SEP, BEL as BEL_2 } from "./termio/ansi.js";
 import { getGraphemeSegmenter } from "../utils/intl.js";
 import { normalizeFullWidthSpace } from "../utils/stringUtils.js";
-import { colorSupport } from "./colorize.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
-import { Se, R } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
+import { useContext, useRef } from "../../vendor/react/cjs/react.production.js";
 import { ScrollAnchorContext } from "./outputReplay.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { BaseBox } from "./components/Box.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-4ymxyb4g.js:8187-8248 fingerprint = INVERSE_CODE (0.705)
+function inverseText(result) {
+  colorSupport.ensureInit();
+  return "\x1B[7m" + result + "\x1B[27m";
+}
 //@ chunk-bzr73sfg.js:199617-199701 placement
 /**
  * 把数值限制在 [min, max]。
@@ -67,13 +73,13 @@ class StylePoolMonitor {
   proactiveResetCount = 0;
   lastProactiveResetReason = "none";
   lastProactiveResetAt = 0;
-  record(n, u) {
-    if (n < 2) return;
+  record(fg, bg) {
+    if (fg < 2) return;
     if (this.keys.size >= this.maxKeys) {
       this.saturatedLatch = true;
       return;
     }
-    this.keys.add(n * 32768 + u);
+    this.keys.add(fg * 32768 + bg);
   }
   get size() {
     return this.keys.size;
@@ -85,8 +91,8 @@ class StylePoolMonitor {
     this.keys.clear();
     this.saturatedLatch = false;
   }
-  setMaxKeys(n) {
-    this.maxKeys = n ?? 131072;
+  setMaxKeys(maxKeys) {
+    this.maxKeys = maxKeys ?? 131072;
   }
   recordProactiveReset(lastProactiveResetReason) {
     this.proactiveResetCount++;
@@ -242,8 +248,8 @@ class StylePool {
   get isNearCapacity() {
     return this.overflowWarned || this.styles.length > STYLE_NEAR_CAPACITY;
   }
-  needsCompaction(n) {
-    return this.overflowWarned || this.styles.length > Math.max(STYLE_POOL_COMPACT_MIN, 2 * n);
+  needsCompaction(liveCount) {
+    return this.overflowWarned || this.styles.length > Math.max(STYLE_POOL_COMPACT_MIN, 2 * liveCount);
   }
   get generation() {
     return this.generationCount;
@@ -281,9 +287,9 @@ class StylePool {
     let str = this.transitionCache.get(key);
     if (str === undefined) {
       if (this.transitionCache.size >= TRANSITION_CACHE_MAX) this.transitionCache.clear();
-      let p = this.get(fromId);
+      let fromStyles = this.get(fromId);
       let toStyles = this.get(toId);
-      str = boldDimResetPrefix(p, toStyles) + VEt(diffAnsiCodes(p, toStyles));
+      str = boldDimResetPrefix(fromStyles, toStyles) + ansiCodesToString(diffAnsiCodes(fromStyles, toStyles));
       this.transitionCache.set(key, str);
     }
     return str;
@@ -331,9 +337,9 @@ class StylePool {
   }
   selectionBgCode = null;
   selectionBgCache = new Map();
-  setSelectionBg(n) {
-    if (this.selectionBgCode?.code === n?.code) return;
-    this.selectionBgCode = n;
+  setSelectionBg(code) {
+    if (this.selectionBgCode?.code === code?.code) return;
+    this.selectionBgCode = code;
     this.selectionBgCache.clear();
   }
   withSelectionBg(baseId) {
@@ -342,7 +348,7 @@ class StylePool {
     let id = this.selectionBgCache.get(baseId);
     if (id === undefined) {
       let kept = dropDimIfColored(this.get(baseId)).filter(
-        (p) => p.endCode !== SGR_DEFAULT_BG && p.endCode !== SGR_NO_INVERSE,
+        (code) => code.endCode !== SGR_DEFAULT_BG && code.endCode !== SGR_NO_INVERSE,
       );
       kept.push(selectionBgCode);
       id = this.intern(kept);
@@ -362,25 +368,28 @@ class StylePool {
     this.overflowWarned = false;
     this.generationCount++;
     this.intern([]);
-    let u = new Int32Array(styles.length).fill(-1);
-    return (f) => {
-      let m = f >>> 1;
-      let p = u[m];
-      if (p !== undefined && p !== -1) return p;
-      let g = this.intern(styles[m] ?? []);
-      if (m < u.length) u[m] = g;
-      return g;
+    let remapScratch = new Int32Array(styles.length).fill(-1);
+    return (oldId) => {
+      let styleIndex = oldId >>> 1;
+      let mapped = remapScratch[styleIndex];
+      if (mapped !== undefined && mapped !== -1) return mapped;
+      let newId = this.intern(styles[styleIndex] ?? []);
+      if (styleIndex < remapScratch.length) remapScratch[styleIndex] = newId;
+      return newId;
     };
   }
 }
 //@ chunk-bzr73sfg.js:204527-204565 layout
-var VISIBLE_ON_SPACE = new Set([
-  SGR_DEFAULT_BG,
-  SGR_NO_INVERSE,
-  SGR_NO_UNDERLINE,
-  SGR_NO_STRIKETHROUGH,
-  SGR_NO_OVERLINE,
-]);
+var VISIBLE_ON_SPACE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bzr73sfg.js:204527", () => {
+  VISIBLE_ON_SPACE = new Set([
+    SGR_DEFAULT_BG,
+    SGR_NO_INVERSE,
+    SGR_NO_UNDERLINE,
+    SGR_NO_STRIKETHROUGH,
+    SGR_NO_OVERLINE,
+  ]);
+});
 //@ chunk-bzr73sfg.js:204565-204634 fingerprint = hasVisibleSpaceEffect (1)
 /**
  * 样式里是否有在空格上也看得见的效果（反显、背景、下划线、上划线、删除线等关闭码判断）。
@@ -440,15 +449,15 @@ var EMPTY_CELL_VALUE = 0n;
  */
 function fillScreenWithSpacers(screen) {
   let cells = screen.cells;
-  for (let f = 0; f < cells.length; f += 2) cells[f] = SPACER_CHAR_INDEX;
+  for (let index = 0; index < cells.length; index += 2) cells[index] = SPACER_CHAR_INDEX;
 }
 //@ chunk-bzr73sfg.js:205056-205222 layout
 function screensEqual(a, b) {
   if (a.width !== b.width || a.height !== b.height) return false;
-  let f = a.width * a.height * 2;
+  let cellCount = a.width * a.height * 2;
   let cells = a.cells;
   let cells_2 = b.cells;
-  for (let idx = 0; idx < f; idx++) if (cells[idx] !== cells_2[idx]) return false;
+  for (let idx = 0; idx < cellCount; idx++) if (cells[idx] !== cells_2[idx]) return false;
   return true;
 }
 //@ chunk-bzr73sfg.js:205222-205409 layout
@@ -479,8 +488,8 @@ var SoftWrapKind = {
 };
 //@ chunk-bzr73sfg.js:205512-205576 layout
 function isEmptyCellByIndex(screen, index) {
-  let f = index << 1;
-  return (screen.cells[f] | screen.cells[f | 1]) === 0;
+  let cellIndex = index << 1;
+  return (screen.cells[cellIndex] | screen.cells[cellIndex | 1]) === 0;
 }
 //@ chunk-bzr73sfg.js:205576-205666 layout
 function isEmptyCellAt(screen, x, y) {
@@ -563,15 +572,15 @@ function migrateScreenPools(screen, newCharPool, newHyperlinkPool, remapStyle) {
     }
     let word1 = cells[ci + 1];
     let oldHyperlinkId = (word1 >>> HYPERLINK_SHIFT) & HYPERLINK_MASK;
-    let L = word1 >>> STYLE_SHIFT;
-    let P =
+    let oldStyleId = word1 >>> STYLE_SHIFT;
+    let newHyperlinkId =
       linkPoolChanged && oldHyperlinkId !== 0
         ? newHyperlinkPool.intern(hyperlinkPool.get(oldHyperlinkId))
         : oldHyperlinkId;
-    let z = remapStyle && L !== 0 ? remapStyle(L) : L;
-    if (P !== oldHyperlinkId || z !== L) {
+    let newStyleId = remapStyle && oldStyleId !== 0 ? remapStyle(oldStyleId) : oldStyleId;
+    if (newHyperlinkId !== oldHyperlinkId || newStyleId !== oldStyleId) {
       let width = word1 & WIDTH_MASK;
-      cells[ci + 1] = packWord1(z, P, width);
+      cells[ci + 1] = packWord1(newStyleId, newHyperlinkId, width);
     }
   }
   screen.charPool = newCharPool;
@@ -590,11 +599,11 @@ function cellAt(screen, x, y) {
  * 按线性下标读格。
  */
 function cellAtIndex(screen, index) {
-  let f = index << 1;
-  let word1 = screen.cells[f + 1];
+  let cellIndex = index << 1;
+  let word1 = screen.cells[cellIndex + 1];
   let hid = (word1 >>> HYPERLINK_SHIFT) & HYPERLINK_MASK;
   return {
-    char: screen.charPool.get(screen.cells[f]),
+    char: screen.charPool.get(screen.cells[cellIndex]),
     styleId: word1 >>> STYLE_SHIFT,
     width: word1 & WIDTH_MASK,
     hyperlink: hid === 0 ? undefined : screen.hyperlinkPool.get(hid),
@@ -605,10 +614,10 @@ function cellAtIndex(screen, index) {
  * diff 输出用：读格，但跳过宽字符占位格，以及与上次输出样式相同的空白格（无需重画）。
  */
 function visibleCellAtIndex(cells, charPool, hyperlinkPool, index, lastRenderedStyleId) {
-  let g = index << 1;
-  let charId = cells[g];
+  let cellIndex = index << 1;
+  let charId = cells[cellIndex];
   if (charId === 1) return;
-  let word1 = cells[g + 1];
+  let word1 = cells[cellIndex + 1];
   if (charId === 0 && (word1 & 262140) === 0) {
     let fgStyle = word1 >>> STYLE_SHIFT;
     if (fgStyle === 0 || fgStyle === lastRenderedStyleId) return;
@@ -626,8 +635,8 @@ function visibleCellAtIndex(cells, charPool, hyperlinkPool, index, lastRenderedS
  * 按 cells 数组下标（格下标×2）把格读进调用方提供的 out 对象，避免分配；diff 热路径用。
  */
 function cellAtCI(screen, ci, out) {
-  let m = ci | 1;
-  let word1 = screen.cells[m];
+  let wordIndex = ci | 1;
+  let word1 = screen.cells[wordIndex];
   out.char = screen.charPool.get(screen.cells[ci]);
   out.styleId = word1 >>> STYLE_SHIFT;
   out.width = word1 & WIDTH_MASK;
@@ -688,11 +697,15 @@ function paintSegments(screen, x, y, segmenter) {
   addDamageFromPacked(screen, y, packed);
   let atlasRecorder = screen.atlasRecorder;
   if (atlasRecorder.recording) {
-    let E = Math.floor(packed / 1048576) % 65536;
+    let firstCol = Math.floor(packed / 1048576) % 65536;
     let floored = Math.floor(packed / 68719476736);
     let cells = screen.cells;
-    for (let D = E, O = (y * screen.width + E) << 1; D < floored; D++, O += 2)
-      atlasRecorder.record(cells[O], cells[O + 1] >>> STYLE_SHIFT);
+    for (
+      let col = firstCol, cellIndex = (y * screen.width + firstCol) << 1;
+      col < floored;
+      col++, cellIndex += 2
+    )
+      atlasRecorder.record(cells[cellIndex], cells[cellIndex + 1] >>> STYLE_SHIFT);
   }
   return packed % 1048576;
 }
@@ -709,16 +722,16 @@ function clampWideGraphemesAtRightEdge(screen) {
   if (!damage) return;
   let lastCol = Math.min(screen.width - 2, damage.x + damage.width - 1);
   let endRow = Math.min(screen.height, damage.y + damage.height);
-  for (let p = damage.y; p < endRow; p++)
-    for (let g = damage.x; g <= lastCol; g++) {
-      if ((screen.cells[((p * screen.width + g) << 1) + 1] & WIDTH_MASK) !== 1) continue;
-      let cell = cellAt(screen, g, p);
+  for (let row = damage.y; row < endRow; row++)
+    for (let col = damage.x; col <= lastCol; col++) {
+      if ((screen.cells[((row * screen.width + col) << 1) + 1] & WIDTH_MASK) !== 1) continue;
+      let cell = cellAt(screen, col, row);
       if (!cell || !isMultiCodeUnitGrapheme(cell.char)) continue;
       let glyphWidth = Math.max(2, bunStringWidth(cell.char));
-      if (g + glyphWidth < screen.width) continue;
-      for (let D = g; D < screen.width; D++)
-        setCellAt(screen, D, p, {
-          char: D === g ? ELLIPSIS : " ",
+      if (col + glyphWidth < screen.width) continue;
+      for (let col_2 = col; col_2 < screen.width; col_2++)
+        setCellAt(screen, col_2, row, {
+          char: col_2 === col ? ELLIPSIS : " ",
           styleId: cell.styleId,
           width: 0,
           hyperlink: cell.hyperlink,
@@ -731,25 +744,25 @@ function clampWideGraphemesAtRightEdge(screen) {
  */
 function setCellStyleId(screen, x, y, styleId) {
   if (x < 0 || y < 0 || x >= screen.width || y >= screen.height) return;
-  let p = (y * screen.width + x) << 1;
+  let cellIndex = (y * screen.width + x) << 1;
   let cells = screen.cells;
-  let word1 = cells[p + 1];
+  let word1 = cells[cellIndex + 1];
   let width = word1 & WIDTH_MASK;
   if (width === 2 || width === 3) return;
   let hid = (word1 >>> HYPERLINK_SHIFT) & HYPERLINK_MASK;
-  cells[p + 1] = packWord1(styleId, hid, width);
+  cells[cellIndex + 1] = packWord1(styleId, hid, width);
   let damage = screen.damage;
   if (damage) {
-    let O = damage.x + damage.width;
-    let _ = damage.y + damage.height;
+    let damageRight = damage.x + damage.width;
+    let damageBottom = damage.y + damage.height;
     if (x < damage.x) {
       damage.width += damage.x - x;
       damage.x = x;
-    } else if (x >= O) damage.width = x - damage.x + 1;
+    } else if (x >= damageRight) damage.width = x - damage.x + 1;
     if (y < damage.y) {
       damage.height += damage.y - y;
       damage.y = y;
-    } else if (y >= _) damage.height = y - damage.y + 1;
+    } else if (y >= damageBottom) damage.height = y - damage.y + 1;
   } else
     screen.damage = {
       x,
@@ -808,55 +821,55 @@ function blitRegion(dst, src, regionX, regionY, maxX, maxY) {
   let widenedLeft = false;
   let widenedRight = 0;
   if (leftEdge || rightEdge) {
-    let J = (regionY * dst.width + regionX - 1) << 1;
-    let V = (regionY * dst.width + maxX - 1) << 1;
+    let leftCellIndex = (regionY * dst.width + regionX - 1) << 1;
+    let rightCellIndex = (regionY * dst.width + maxX - 1) << 1;
     for (let y = regionY; y < maxY; y++) {
       if (leftEdge) {
-        let ae = dstCells[J + 3] & WIDTH_MASK;
-        if ((dstCells[J + 1] & WIDTH_MASK) === 1) {
-          if (ae !== 2) {
-            dstCells[J] = EMPTY_CHAR_INDEX;
-            dstCells[J + 1] = packWord1(dst.emptyStyleId, 0, 0);
+        let nextWidth = dstCells[leftCellIndex + 3] & WIDTH_MASK;
+        if ((dstCells[leftCellIndex + 1] & WIDTH_MASK) === 1) {
+          if (nextWidth !== 2) {
+            dstCells[leftCellIndex] = EMPTY_CHAR_INDEX;
+            dstCells[leftCellIndex + 1] = packWord1(dst.emptyStyleId, 0, 0);
             widenedLeft = true;
           }
-        } else if (ae === 2) {
-          dstCells[J + 2] = EMPTY_CHAR_INDEX;
-          dstCells[J + 3] = packWord1(dst.emptyStyleId, 0, 0);
+        } else if (nextWidth === 2) {
+          dstCells[leftCellIndex + 2] = EMPTY_CHAR_INDEX;
+          dstCells[leftCellIndex + 3] = packWord1(dst.emptyStyleId, 0, 0);
         }
       }
       if (rightEdge) {
-        if ((dstCells[V + 1] & WIDTH_MASK) === 1) {
+        if ((dstCells[rightCellIndex + 1] & WIDTH_MASK) === 1) {
           if (
             maxX + 1 < dst.width &&
-            (dstCells[V + 3] & WIDTH_MASK) === 1 &&
-            (dstCells[V + 5] & WIDTH_MASK) === 2
+            (dstCells[rightCellIndex + 3] & WIDTH_MASK) === 1 &&
+            (dstCells[rightCellIndex + 5] & WIDTH_MASK) === 2
           ) {
-            dstCells[V + 4] = EMPTY_CHAR_INDEX;
-            dstCells[V + 5] = packWord1(dst.emptyStyleId, 0, 0);
+            dstCells[rightCellIndex + 4] = EMPTY_CHAR_INDEX;
+            dstCells[rightCellIndex + 5] = packWord1(dst.emptyStyleId, 0, 0);
             widenedRight = 2;
           } else if (widenedRight < 1) widenedRight = 1;
-          dstCells[V + 2] = SPACER_CHAR_INDEX;
-          dstCells[V + 3] = packWord1(dst.emptyStyleId, 0, 2);
-        } else if ((dstCells[V + 3] & WIDTH_MASK) === 2) {
-          dstCells[V + 2] = EMPTY_CHAR_INDEX;
-          dstCells[V + 3] = packWord1(dst.emptyStyleId, 0, 0);
+          dstCells[rightCellIndex + 2] = SPACER_CHAR_INDEX;
+          dstCells[rightCellIndex + 3] = packWord1(dst.emptyStyleId, 0, 2);
+        } else if ((dstCells[rightCellIndex + 3] & WIDTH_MASK) === 2) {
+          dstCells[rightCellIndex + 2] = EMPTY_CHAR_INDEX;
+          dstCells[rightCellIndex + 3] = packWord1(dst.emptyStyleId, 0, 0);
           if (widenedRight < 1) widenedRight = 1;
         }
       }
-      J += dstStride;
-      V += dstStride;
+      leftCellIndex += dstStride;
+      rightCellIndex += dstStride;
     }
   }
-  let K = widenedLeft ? regionX - 1 : regionX;
-  let q = maxX + widenedRight;
-  let Y = {
-    x: K,
+  let damageX = widenedLeft ? regionX - 1 : regionX;
+  let damageRight = maxX + widenedRight;
+  let damageRect = {
+    x: damageX,
     y: regionY,
-    width: q - K,
+    width: damageRight - damageX,
     height: maxY - regionY,
   };
-  if (dst.damage) dst.damage = unionRect(dst.damage, Y);
-  else dst.damage = Y;
+  if (dst.damage) dst.damage = unionRect(dst.damage, damageRect);
+  else dst.damage = damageRect;
 }
 //@ chunk-bzr73sfg.js:210531-211066 fingerprint = shiftRows (1)
 /**
@@ -888,8 +901,12 @@ function shiftRows(screen, top, bottom, n) {
   }
 }
 //@ chunk-bzr73sfg.js:211066-211147 fingerprint = OSC8_REGEX (1)
-var OSC8_REGEX = new RegExp(`^${ESC}\\]8${SEP}${SEP}([^${BEL_2}]*)${BEL_2}$`);
-var OSC8_PREFIX = `${ESC}]8${SEP}`;
+var OSC8_REGEX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var OSC8_PREFIX;
+deferInit("chunk-bzr73sfg.js:211066", () => {
+  OSC8_REGEX = new RegExp(`^${ESC}\\]8${SEP}${SEP}([^${BEL_2}]*)${BEL_2}$`);
+  OSC8_PREFIX = `${ESC}]8${SEP}`;
+});
 //@ chunk-bzr73sfg.js:211147-211623 layout = diffEach (1)
 /**
  * 逐格比较两帧，只在 damage 区域（两帧 damage 之并，加上尺寸缩小露出的区域）内调用 cb(x, y, prevCell, nextCell)；cb 返回真则提前结束。宽度相同走 diffSameWidth，否则 diffDifferentWidth。
@@ -942,8 +959,8 @@ function diffEach(prev, next, cb) {
 //@ chunk-bzr73sfg.js:211623-211726 layout
 function findNextDiff(prevCells, nextCells, ci, count) {
   for (let i = 0; i < count; i++, ci += 2) {
-    let g = ci | 1;
-    if (prevCells[ci] !== nextCells[ci] || prevCells[g] !== nextCells[g]) return i;
+    let wordIndex = ci | 1;
+    if (prevCells[ci] !== nextCells[ci] || prevCells[wordIndex] !== nextCells[wordIndex]) return i;
   }
   return count;
 }
@@ -1109,13 +1126,13 @@ function copyNoSelectRegion(dst, src, x1, y1, x2, y2) {
   if (max >= min || max_2 >= maxY) return;
   let noSelect = src.noSelect;
   let noSelect_2 = dst.noSelect;
-  let U = min - max;
-  let L = max_2 * src.width + max;
-  let P = max_2 * dst.width + max;
+  let width = min - max;
+  let srcIndex = max_2 * src.width + max;
+  let dstIndex = max_2 * dst.width + max;
   for (let row = max_2; row < maxY; row++) {
-    noSelect_2.set(noSelect.subarray(L, L + U), P);
-    L += src.width;
-    P += dst.width;
+    noSelect_2.set(noSelect.subarray(srcIndex, srcIndex + width), dstIndex);
+    srcIndex += src.width;
+    dstIndex += dst.width;
   }
 }
 //@ chunk-bzr73sfg.js:213577-213752 fingerprint = markNoSelectRegion (1)
@@ -1144,98 +1161,96 @@ var UNASSIGNED_OR_EMOJI_RE = /[\p{Cn}\p{Emoji}]/u;
  * 保守估计显示宽度：未分配码点与 emoji 按 2、东亚歧义宽度按宽，取逐字素累加与整串宽度的较大者。
  */
 function conservativeWidth(text) {
-  let u = 0;
-  for (let f of text) {
-    let m = f.codePointAt(0) ?? 0;
-    u +=
-      m > 127 && UNASSIGNED_OR_EMOJI_RE.test(f)
+  let width = 0;
+  for (let char of text) {
+    let codePoint = char.codePointAt(0) ?? 0;
+    width +=
+      codePoint > 127 && UNASSIGNED_OR_EMOJI_RE.test(char)
         ? 2
-        : Math.max(1, Bun.stringWidth(m >= 55296 && m <= 57343 ? "\uFFFD" : f, WIDE_AMBIGUOUS_OPTS));
+        : Math.max(
+            1,
+            Bun.stringWidth(codePoint >= 55296 && codePoint <= 57343 ? "\uFFFD" : char, WIDE_AMBIGUOUS_OPTS),
+          );
   }
-  return Math.max(u, Bun.stringWidth(text, WIDE_AMBIGUOUS_OPTS));
+  return Math.max(width, Bun.stringWidth(text, WIDE_AMBIGUOUS_OPTS));
 }
 //@ chunk-bzr73sfg.js:285537-286172 fingerprint = isEmptyCellByIndex (0.534)
 /**
  * 按保守宽度把文本折成多行（不超过 maxWidth）：单个字素都放不下时用 "[unreadable text]" 等占位替代，优先在空格处断行。
  */
 function wrapTextConservatively(screen, maxWidth) {
-  let f = UNREADABLE_FALLBACKS.find((T) => conservativeWidth(T) <= maxWidth) ?? "?";
-  let m = {
-    text: f,
-    cells: conservativeWidth(f),
+  let fallback = UNREADABLE_FALLBACKS.find((candidate) => conservativeWidth(candidate) <= maxWidth) ?? "?";
+  let fallbackCell = {
+    text: fallback,
+    cells: conservativeWidth(fallback),
   };
-  let p = [];
+  let cells = [];
   for (let { segment } of getGraphemeSegmenter().segment(normalizeFullWidthSpace(screen))) {
-    let A = conservativeWidth(segment);
-    if (A <= maxWidth) {
-      p.push({
+    let width = conservativeWidth(segment);
+    if (width <= maxWidth) {
+      cells.push({
         text: segment,
-        cells: A,
+        cells: width,
       });
       continue;
     }
     let list = Array.from(segment);
-    let index = list.findIndex((P) => Array.from(getGraphemeSegmenter().segment(`${P}a`)).length > 1);
-    let _ = list[index] ?? "";
-    let U = conservativeWidth(_);
-    let L = !MARK_OR_CONTROL_RE.test(_) && U <= maxWidth;
-    if ((!L || index > 0) && p.at(-1) !== m) p.push(m);
-    if (L) {
-      p.push({
-        text: _,
-        cells: U,
+    let index = list.findIndex((char) => Array.from(getGraphemeSegmenter().segment(`${char}a`)).length > 1);
+    let char = list[index] ?? "";
+    let width_2 = conservativeWidth(char);
+    let isRenderable = !MARK_OR_CONTROL_RE.test(char) && width_2 <= maxWidth;
+    if ((!isRenderable || index > 0) && cells.at(-1) !== fallbackCell) cells.push(fallbackCell);
+    if (isRenderable) {
+      cells.push({
+        text: char,
+        cells: width_2,
       });
-      if (index < list.length - 1) p.push(m);
+      if (index < list.length - 1) cells.push(fallbackCell);
     }
   }
-  let g = [];
-  let E = 0;
-  while (E < p.length) {
-    let T = E;
-    let A = 0;
-    let D = E;
-    while (T < p.length && A + p[T].cells <= maxWidth) {
-      A += p[T].cells;
-      T++;
-      if (p[T - 1].text === " ") D = T;
+  let lines = [];
+  let start = 0;
+  while (start < cells.length) {
+    let end = start;
+    let lineWidth = 0;
+    let lastSpaceBreak = start;
+    while (end < cells.length && lineWidth + cells[end].cells <= maxWidth) {
+      lineWidth += cells[end].cells;
+      end++;
+      if (cells[end - 1].text === " ") lastSpaceBreak = end;
     }
-    if (T === E) T++;
-    else if (T < p.length && p[T].text !== " " && D > E) T = D;
-    g.push(
-      p
-        .slice(E, T)
-        .map((O) => O.text)
+    if (end === start) end++;
+    else if (end < cells.length && cells[end].text !== " " && lastSpaceBreak > start) end = lastSpaceBreak;
+    lines.push(
+      cells
+        .slice(start, end)
+        .map((cell) => cell.text)
         .join(""),
     );
-    E = T;
+    start = end;
   }
-  return g;
-}
-//@ chunk-4ymxyb4g.js:8187-8248 fingerprint = INVERSE_CODE (0.705)
-function inverseText(result) {
-  colorSupport.ensureInit();
-  return "\x1B[7m" + result + "\x1B[27m";
-}
-//@ chunk-ag5x7vhf.js:18368-18504 fingerprint = isEmptyCellAt (0.664)
-function ScrollAnchor() {
-  let T = w(2);
-  let m = Se(ScrollAnchorContext);
-  let h = R(null);
-  const ref = m ?? h;
-  let k;
-  if (T[0] !== ref) {
-    k = jsxProd_default(BaseBox, {
-      ref,
-      height: 0,
-    });
-    T[0] = ref;
-    T[1] = k;
-  } else k = T[1];
-  return k;
+  return lines;
 }
 //@ chunk-bc20zedk.js:11835-11866 fingerprint = BOLD_CODE (0.759)
 var BOLD_OPEN = "\x1B[1m";
 var BOLD_CLOSE = "\x1B[22m";
+//@ chunk-ag5x7vhf.js:18368-18504 fingerprint = isEmptyCellAt (0.664)
+function ScrollAnchor() {
+  let $ = useMemoCache(2);
+  let contextRef = useContext(ScrollAnchorContext);
+  let fallbackRef = useRef(null);
+  const ref = contextRef ?? fallbackRef;
+  let element;
+  if ($[0] !== ref) {
+    element = jsxProd_default(BaseBox, {
+      ref,
+      height: 0,
+    });
+    $[0] = ref;
+    $[1] = element;
+  } else element = $[1];
+  return element;
+}
 export {
   clamp,
   ScrollAnchor,

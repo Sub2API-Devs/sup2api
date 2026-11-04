@@ -19,8 +19,8 @@ import { UnauthorizedError } from "../../../vendor/@modelcontextprotocol/sdk/dis
 import { McpError } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/types.js";
 
 //@ chunk-s7nhrpfy.js:239-330 placement
-function isClaudeAiBearerRejectedError(r) {
-  return r instanceof Error && "code" in r && r.code === "CLAUDEAI_BEARER_REJECTED";
+function isClaudeAiBearerRejectedError(error) {
+  return error instanceof Error && "code" in error && error.code === "CLAUDEAI_BEARER_REJECTED";
 }
 //@ chunk-s7nhrpfy.js:330-645 placement
 /**

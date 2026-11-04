@@ -13,231 +13,248 @@ import { count } from "./collections.js";
 import { addToTotalLinesChanged, getLocCounter } from "../bootstrap/state.js";
 import { maskModelIdIfRelayed } from "./telemetry/otlpRelay.js";
 import { logEvent } from "../services/analytics/index.js";
-import { P3 } from "../../vendor/diff/libesm/patch/create.js";
+import { structuredPatch } from "../../vendor/diff/libesm/patch/create.js";
 import { convertLeadingTabsToSpaces } from "./file.js";
 
 //@ chunk-6zvepy0r.js:1397-1522 placement
-function splitLinesKeepEol(e) {
-  let n = [];
-  let r = 0;
-  while (r < e.length) {
-    let index = e.indexOf(
+function splitLinesKeepEol(text) {
+  let lines = [];
+  let lineStart = 0;
+  while (lineStart < text.length) {
+    let index = text.indexOf(
       `
 `,
-      r,
+      lineStart,
     );
-    let s = index === -1 ? e.length : index + 1;
-    n.push(e.slice(r, s));
-    r = s;
+    let nextLineStart = index === -1 ? text.length : index + 1;
+    lines.push(text.slice(lineStart, nextLineStart));
+    lineStart = nextLineStart;
   }
-  return n;
+  return lines;
 }
 //@ chunk-6zvepy0r.js:1522-1641 placement
-function pushDiffRun(e, n, r) {
-  let i = e.kinds.length - 1;
-  if (n !== 0 && e.kinds[i] === n) e.counts[i] += r;
+function pushDiffRun(result, kind, count) {
+  let lastIndex = result.kinds.length - 1;
+  if (kind !== 0 && result.kinds[lastIndex] === kind) result.counts[lastIndex] += count;
   else {
-    e.kinds.push(n);
-    e.counts.push(r);
+    result.kinds.push(kind);
+    result.counts.push(count);
   }
 }
 //@ chunk-6zvepy0r.js:1641-2464 placement
-function myersDiff(oldIds, newIds, r, maxSearchSteps) {
-  let s = oldIds.length;
-  let f = newIds.length;
-  let h = s + f;
-  let S = h + 1;
-  let w = new Int32Array(2 * h + 3).fill(-2);
-  let y = -1;
-  while (y + 1 < s && y + 1 < f && oldIds[y + 1] === newIds[y + 1]) y++;
-  if (y + 1 >= s && y + 1 >= f) return new Uint8Array(0);
-  w[S] = y;
+function myersDiff(oldIds, newIds, deadlineMs, maxSearchSteps) {
+  let oldLength = oldIds.length;
+  let newLength = newIds.length;
+  let maxD = oldLength + newLength;
+  let offset = maxD + 1;
+  let frontier = new Int32Array(2 * maxD + 3).fill(-2);
+  let prefixLength = -1;
+  while (
+    prefixLength + 1 < oldLength &&
+    prefixLength + 1 < newLength &&
+    oldIds[prefixLength + 1] === newIds[prefixLength + 1]
+  )
+    prefixLength++;
+  if (prefixLength + 1 >= oldLength && prefixLength + 1 >= newLength) return new Uint8Array(0);
+  frontier[offset] = prefixLength;
   let uint8Array = new Uint8Array(4096);
-  let P = 0;
-  let x = [0];
-  let v = [0];
-  let E = -h;
-  let O = h;
-  for (let idx = 1; idx <= h; idx++) {
-    let max = Math.max(E, -idx);
-    let min = Math.min(O, idx);
-    let R = min >= max ? ((min - max) >> 1) + 1 : 0;
-    if (Date.now() > r || P + R > maxSearchSteps) return;
-    x.push(P);
-    v.push(max);
-    if (P + R > uint8Array.length * 8) {
-      let uint8Array_2 = new Uint8Array(Math.max(uint8Array.length * 2, ((P + R) >> 3) + 1));
+  let stepCount = 0;
+  let traceSteps = [0];
+  let traceBounds = [0];
+  let minDiagonal = -maxD;
+  let maxDiagonal = maxD;
+  for (let idx = 1; idx <= maxD; idx++) {
+    let max = Math.max(minDiagonal, -idx);
+    let min = Math.min(maxDiagonal, idx);
+    let diagonalSpan = min >= max ? ((min - max) >> 1) + 1 : 0;
+    if (Date.now() > deadlineMs || stepCount + diagonalSpan > maxSearchSteps) return;
+    traceSteps.push(stepCount);
+    traceBounds.push(max);
+    if (stepCount + diagonalSpan > uint8Array.length * 8) {
+      let uint8Array_2 = new Uint8Array(
+        Math.max(uint8Array.length * 2, ((stepCount + diagonalSpan) >> 3) + 1),
+      );
       uint8Array_2.set(uint8Array);
       uint8Array = uint8Array_2;
     }
-    for (let N = max; N <= min && N <= O; N += 2) {
-      let W = P++;
-      let G = N + S;
-      let H = w[G - 1];
-      let B = w[G + 1];
-      if (H !== -2) w[G - 1] = -2;
-      let q = B !== -2 && B - N >= 0 && B - N < f;
-      let he = H !== -2 && H + 1 < s;
-      if (!q && !he) {
-        w[G] = -2;
+    for (let diagonal = max; diagonal <= min && diagonal <= maxDiagonal; diagonal += 2) {
+      let stepIndex = stepCount++;
+      let frontierIndex = diagonal + offset;
+      let leftX = frontier[frontierIndex - 1];
+      let rightX = frontier[frontierIndex + 1];
+      if (leftX !== -2) frontier[frontierIndex - 1] = -2;
+      let rightIsValid = rightX !== -2 && rightX - diagonal >= 0 && rightX - diagonal < newLength;
+      let leftIsValid = leftX !== -2 && leftX + 1 < oldLength;
+      if (!rightIsValid && !leftIsValid) {
+        frontier[frontierIndex] = -2;
         continue;
       }
-      if (!he || (q && H < B)) {
-        y = B;
-        uint8Array[W >> 3] |= 1 << (W & 7);
-      } else y = H + 1;
-      let Z = y - N;
-      while (Z + 1 < f && y + 1 < s && oldIds[y + 1] === newIds[Z + 1]) {
-        Z++;
-        y++;
+      if (!leftIsValid || (rightIsValid && leftX < rightX)) {
+        prefixLength = rightX;
+        uint8Array[stepIndex >> 3] |= 1 << (stepIndex & 7);
+      } else prefixLength = leftX + 1;
+      let otherDiagonal = prefixLength - diagonal;
+      while (
+        otherDiagonal + 1 < newLength &&
+        prefixLength + 1 < oldLength &&
+        oldIds[prefixLength + 1] === newIds[otherDiagonal + 1]
+      ) {
+        otherDiagonal++;
+        prefixLength++;
       }
-      if (y + 1 >= s && Z + 1 >= f) return traceMyersPath(uint8Array, x, v, idx, N);
-      w[G] = y;
-      if (y + 1 >= s) O = Math.min(O, N - 1);
-      if (Z + 1 >= f) E = Math.max(E, N + 1);
+      if (prefixLength + 1 >= oldLength && otherDiagonal + 1 >= newLength)
+        return traceMyersPath(uint8Array, traceSteps, traceBounds, idx, diagonal);
+      frontier[frontierIndex] = prefixLength;
+      if (prefixLength + 1 >= oldLength) maxDiagonal = Math.min(maxDiagonal, diagonal - 1);
+      if (otherDiagonal + 1 >= newLength) minDiagonal = Math.max(minDiagonal, diagonal + 1);
     }
   }
   return;
 }
 //@ chunk-6zvepy0r.js:2464-2606 placement
-function traceMyersPath(uint8Array, n, r, i, s) {
-  let uint8Array_2 = new Uint8Array(i);
-  let h = s;
-  for (let S = i; S > 0; S--) {
-    let w = n[S] + ((h - r[S]) >> 1);
-    let y = (uint8Array[w >> 3] >> (w & 7)) & 1;
-    uint8Array_2[S - 1] = y;
-    h += y ? 1 : -1;
+function traceMyersPath(uint8Array, traceSteps, traceBounds, traceLength, endDiagonal) {
+  let uint8Array_2 = new Uint8Array(traceLength);
+  let diagonal = endDiagonal;
+  for (let stepIndex = traceLength; stepIndex > 0; stepIndex--) {
+    let stepIndexInTrace = traceSteps[stepIndex] + ((diagonal - traceBounds[stepIndex]) >> 1);
+    let moveBit = (uint8Array[stepIndexInTrace >> 3] >> (stepIndexInTrace & 7)) & 1;
+    uint8Array_2[stepIndex - 1] = moveBit;
+    diagonal += moveBit ? 1 : -1;
   }
   return uint8Array_2;
 }
 //@ chunk-6zvepy0r.js:2606-2815 placement
-function buildDiffRuns(oldIds, newIds, r) {
-  let i = {
+function buildDiffRuns(oldIds, newIds, moves) {
+  let runs = {
     kinds: [],
     counts: [],
   };
-  let s = 0;
-  let f = 0;
-  let h = () => {
-    let S = 0;
-    while (s < oldIds.length && f < newIds.length && oldIds[s] === newIds[f]) {
-      s++;
-      f++;
-      S++;
+  let oldIndex = 0;
+  let newIndex = 0;
+  let flushEqualRun = () => {
+    let equalCount = 0;
+    while (oldIndex < oldIds.length && newIndex < newIds.length && oldIds[oldIndex] === newIds[newIndex]) {
+      oldIndex++;
+      newIndex++;
+      equalCount++;
     }
-    if (S > 0) pushDiffRun(i, 0, S);
+    if (equalCount > 0) pushDiffRun(runs, 0, equalCount);
   };
-  h();
-  for (let S of r) {
-    if (S) {
-      f++;
-      pushDiffRun(i, 1, 1);
+  flushEqualRun();
+  for (let removed of moves) {
+    if (removed) {
+      newIndex++;
+      pushDiffRun(runs, 1, 1);
     } else {
-      s++;
-      pushDiffRun(i, 2, 1);
+      oldIndex++;
+      pushDiffRun(runs, 2, 1);
     }
-    h();
+    flushEqualRun();
   }
-  return i;
+  return runs;
 }
 //@ chunk-6zvepy0r.js:2815-3219 placement
 /**
  * 去掉公共后缀后，若两侧没有共同元素则直接生成"全删+全增"的差异（受步数上限限制）；有共同元素时返回 "search" 表示需要完整搜索。
  */
-function trySimpleDiff(oldIds, newIds, r, maxSearchSteps) {
+function trySimpleDiff(oldIds, newIds, alphabetSize, maxSearchSteps) {
   let min = Math.min(oldIds.length, newIds.length);
-  let f = 0;
-  while (f < min && oldIds[oldIds.length - 1 - f] === newIds[newIds.length - 1 - f]) f++;
-  let h = oldIds.length - f;
-  let S = newIds.length - f;
-  let uint8Array = new Uint8Array(r);
-  for (let b of newIds) uint8Array[b] = 1;
-  for (let idx = 0; idx < h; idx++) if (uint8Array[oldIds[idx]]) return "search";
+  let suffixLength = 0;
+  while (
+    suffixLength < min &&
+    oldIds[oldIds.length - 1 - suffixLength] === newIds[newIds.length - 1 - suffixLength]
+  )
+    suffixLength++;
+  let oldMidLength = oldIds.length - suffixLength;
+  let newMidLength = newIds.length - suffixLength;
+  let uint8Array = new Uint8Array(alphabetSize);
+  for (let lineId of newIds) uint8Array[lineId] = 1;
+  for (let idx = 0; idx < oldMidLength; idx++) if (uint8Array[oldIds[idx]]) return "search";
   uint8Array.fill(0);
-  for (let b of oldIds) uint8Array[b] = 1;
-  for (let idx = 0; idx < S; idx++) if (uint8Array[newIds[idx]]) return "search";
-  if (h * S > maxSearchSteps) return;
-  let y = {
+  for (let lineId of oldIds) uint8Array[lineId] = 1;
+  for (let idx = 0; idx < newMidLength; idx++) if (uint8Array[newIds[idx]]) return "search";
+  if (oldMidLength * newMidLength > maxSearchSteps) return;
+  let runs = {
     kinds: [],
     counts: [],
   };
-  if (h > 0) pushDiffRun(y, 2, h);
-  if (S > 0) pushDiffRun(y, 1, S);
-  if (f > 0) pushDiffRun(y, 0, f);
-  return y;
+  if (oldMidLength > 0) pushDiffRun(runs, 2, oldMidLength);
+  if (newMidLength > 0) pushDiffRun(runs, 1, newMidLength);
+  if (suffixLength > 0) pushDiffRun(runs, 0, suffixLength);
+  return runs;
 }
 //@ chunk-6zvepy0r.js:3219-3931 placement
 function formatUnifiedDiff(runs, oldLines, newLines, context) {
-  let s = [];
-  let f = 0;
-  let h = 0;
-  let S = [];
-  let w = 1;
-  let y = 1;
-  let b = runs.kinds.length + 1;
-  for (let idx = 0; idx < b; idx++) {
-    let x = runs.kinds[idx] ?? 0;
-    let v = runs.counts[idx] ?? 0;
-    if (x !== 0) {
-      if (!f) {
-        f = w;
-        h = y;
+  let hunks = [];
+  let hunkOldStart = 0;
+  let hunkNewStart = 0;
+  let hunkLines = [];
+  let oldLineNo = 1;
+  let newLineNo = 1;
+  let runCount = runs.kinds.length + 1;
+  for (let idx = 0; idx < runCount; idx++) {
+    let kind = runs.kinds[idx] ?? 0;
+    let count = runs.counts[idx] ?? 0;
+    if (kind !== 0) {
+      if (!hunkOldStart) {
+        hunkOldStart = oldLineNo;
+        hunkNewStart = newLineNo;
         if (idx > 0 && context > 0) {
           let min = Math.min(context, runs.counts[idx - 1]);
-          for (let idx = y - 1 - min; idx < y - 1; idx++) S.push(" " + newLines[idx]);
-          f -= min;
-          h -= min;
+          for (let idx = newLineNo - 1 - min; idx < newLineNo - 1; idx++) hunkLines.push(" " + newLines[idx]);
+          hunkOldStart -= min;
+          hunkNewStart -= min;
         }
       }
-      if (x === 1) {
-        for (let idx = y - 1; idx < y - 1 + v; idx++) S.push("+" + newLines[idx]);
-        y += v;
+      if (kind === 1) {
+        for (let idx = newLineNo - 1; idx < newLineNo - 1 + count; idx++) hunkLines.push("+" + newLines[idx]);
+        newLineNo += count;
       } else {
-        for (let idx = w - 1; idx < w - 1 + v; idx++) S.push("-" + oldLines[idx]);
-        w += v;
+        for (let idx = oldLineNo - 1; idx < oldLineNo - 1 + count; idx++) hunkLines.push("-" + oldLines[idx]);
+        oldLineNo += count;
       }
       continue;
     }
-    if (f) {
-      let E = v <= context * 2 && idx < b - 2;
-      let O = E ? v : Math.min(v, context);
-      for (let idx = y - 1; idx < y - 1 + O; idx++) S.push(" " + newLines[idx]);
-      if (!E) {
-        s.push({
-          oldStart: f,
-          oldLines: w - f + O,
-          newStart: h,
-          newLines: y - h + O,
-          lines: S,
+    if (hunkOldStart) {
+      let isLastRun = count <= context * 2 && idx < runCount - 2;
+      let trailingContext = isLastRun ? count : Math.min(count, context);
+      for (let idx = newLineNo - 1; idx < newLineNo - 1 + trailingContext; idx++)
+        hunkLines.push(" " + newLines[idx]);
+      if (!isLastRun) {
+        hunks.push({
+          oldStart: hunkOldStart,
+          oldLines: oldLineNo - hunkOldStart + trailingContext,
+          newStart: hunkNewStart,
+          newLines: newLineNo - hunkNewStart + trailingContext,
+          lines: hunkLines,
         });
-        f = 0;
-        h = 0;
-        S = [];
+        hunkOldStart = 0;
+        hunkNewStart = 0;
+        hunkLines = [];
       }
     }
-    w += v;
-    y += v;
+    oldLineNo += count;
+    newLineNo += count;
   }
-  for (let P of s) {
-    let x = [];
-    for (let line of P.lines)
+  for (let hunk of hunks) {
+    let annotatedLines = [];
+    for (let line of hunk.lines)
       if (
         line.endsWith(`
 `)
       )
-        x.push(line.slice(0, -1));
-      else x.push(line, "\\ No newline at end of file");
-    P.lines = x;
+        annotatedLines.push(line.slice(0, -1));
+      else annotatedLines.push(line, "\\ No newline at end of file");
+    hunk.lines = annotatedLines;
   }
-  return s;
+  return hunks;
 }
 //@ chunk-6zvepy0r.js:3931-4539 placement
 /**
  * 逐行计算两段文本的统一差异：剥离公共前后缀、把行映射为整数 id，先尝试简单情况，否则在时间与步数限制内运行 Myers 算法；超时或超限返回 undefined，否则按上下文行数格式化输出。
  */
 function computeUnifiedDiff(oldText, newText, { context, timeout, maxSearchSteps = 268435456 }) {
-  let f = Date.now() + timeout;
+  let deadlineMs = Date.now() + timeout;
   let oldLines = splitLinesKeepEol(oldText);
   let newLines = splitLinesKeepEol(newText);
   let min = Math.min(oldLines.length, newLines.length);
@@ -250,16 +267,16 @@ function computeUnifiedDiff(oldText, newText, { context, timeout, maxSearchSteps
   )
     suffixLen++;
   let lineIds = new Map();
-  let toIds = (D, M) => {
-    let int32Array = new Int32Array(D.length - prefixLen);
-    for (let R = prefixLen; R < M; R++) {
-      let N = D[R];
-      let W = lineIds.get(N);
-      if (W === undefined) {
-        W = lineIds.size;
-        lineIds.set(N, W);
+  let toIds = (text, endIndex) => {
+    let int32Array = new Int32Array(text.length - prefixLen);
+    for (let lineIndex = prefixLen; lineIndex < endIndex; lineIndex++) {
+      let line = text[lineIndex];
+      let lineId = lineIds.get(line);
+      if (lineId === undefined) {
+        lineId = lineIds.size;
+        lineIds.set(line, lineId);
       }
-      int32Array[R - prefixLen] = W;
+      int32Array[lineIndex - prefixLen] = lineId;
     }
     return int32Array;
   };
@@ -268,8 +285,8 @@ function computeUnifiedDiff(oldText, newText, { context, timeout, maxSearchSteps
   newIds.set(oldIds.subarray(oldIds.length - suffixLen), newIds.length - suffixLen);
   let runs = trySimpleDiff(oldIds, newIds, lineIds.size, maxSearchSteps);
   if (runs === "search") {
-    let D = myersDiff(oldIds, newIds, f, maxSearchSteps);
-    runs = D && buildDiffRuns(oldIds, newIds, D);
+    let traceBits = myersDiff(oldIds, newIds, deadlineMs, maxSearchSteps);
+    runs = traceBits && buildDiffRuns(oldIds, newIds, traceBits);
   }
   if (runs === undefined) return;
   if (prefixLen > 0) {
@@ -300,36 +317,36 @@ function adjustHunkLineNumbers(hunks, offset) {
 /**
  * 统计 patch 的增删行数（新建文件时按内容行数），用于 tengu_file_changed 等。
  */
-function countLinesChanged(patch, n, r, i) {
+function countLinesChanged(patch, modelId, fallbackAdditions, fallbackRemovals) {
   let numAdditions = 0;
   let numRemovals = 0;
-  if (patch.length === 0 && (r || i)) {
-    numAdditions = r
+  if (patch.length === 0 && (fallbackAdditions || fallbackRemovals)) {
+    numAdditions = fallbackAdditions
       ? countCharInString(
-          r,
+          fallbackAdditions,
           `
 `,
         ) + 1
       : 0;
-    numRemovals = i
+    numRemovals = fallbackRemovals
       ? countCharInString(
-          i,
+          fallbackRemovals,
           `
 `,
         ) + 1
       : 0;
   } else {
-    numAdditions = patch.reduce((acc, hunk) => acc + count(hunk.lines, (w) => w.startsWith("+")), 0);
-    numRemovals = patch.reduce((acc, hunk) => acc + count(hunk.lines, (w) => w.startsWith("-")), 0);
+    numAdditions = patch.reduce((acc, hunk) => acc + count(hunk.lines, (line) => line.startsWith("+")), 0);
+    numRemovals = patch.reduce((acc, hunk) => acc + count(hunk.lines, (line) => line.startsWith("-")), 0);
   }
   addToTotalLinesChanged(numAdditions, numRemovals);
   getLocCounter()?.add(numAdditions, {
     type: "added",
-    model: maskModelIdIfRelayed(n),
+    model: maskModelIdIfRelayed(modelId),
   });
   getLocCounter()?.add(numRemovals, {
     type: "removed",
-    model: maskModelIdIfRelayed(n),
+    model: maskModelIdIfRelayed(modelId),
   });
   return {
     lines_added: numAdditions,
@@ -340,8 +357,8 @@ function countLinesChanged(patch, n, r, i) {
 /**
  * 记 tengu_file_changed 事件（参数同 countLinesChanged）。
  */
-function logFileChanged(...e) {
-  logEvent("tengu_file_changed", countLinesChanged(...e));
+function logFileChanged(...args) {
+  logEvent("tengu_file_changed", countLinesChanged(...args));
 }
 //@ chunk-6zvepy0r.js:5066-5360 fingerprint = getPatchFromContents (0.8)
 /**
@@ -357,26 +374,26 @@ function getPatchFromContents({
   isForToolResult = false,
 }) {
   let context = singleHunk ? 1e5 : DIFF_CONTEXT_LINES;
-  let w =
+  let hunks =
     isForToolResult && !ignoreWhitespace
       ? computeUnifiedDiff(oldContent, newContent, {
           context,
           timeout: DIFF_TIMEOUT_MS,
         })
-      : P3(filePath, filePath, oldContent, newContent, undefined, undefined, {
+      : structuredPatch(filePath, filePath, oldContent, newContent, undefined, undefined, {
           ignoreWhitespace,
           context,
           timeout: DIFF_TIMEOUT_MS,
         })?.hunks;
-  if (!w) return [];
-  return convertTabs ? convertHunkLeadingTabs(w) : w;
+  if (!hunks) return [];
+  return convertTabs ? convertHunkLeadingTabs(hunks) : hunks;
 }
 //@ chunk-6zvepy0r.js:5360-5693 fingerprint = getPatchForDisplay (0.963)
 /**
  * 对原内容依次应用编辑后生成用于显示的 patch。
  */
 function getPatchForDisplay({ filePath, fileContents, edits, ignoreWhitespace = false }) {
-  let result = P3(
+  let result = structuredPatch(
     filePath,
     filePath,
     fileContents,
@@ -402,9 +419,9 @@ function getPatchForDisplay({ filePath, fileContents, edits, ignoreWhitespace = 
  * hunk 每行内容的行首制表符转为空格。
  */
 function convertHunkLeadingTabs(hunks) {
-  return hunks.map((n) => ({
-    ...n,
-    lines: n.lines.map((line) => line.slice(0, 1) + convertLeadingTabsToSpaces(line.slice(1))),
+  return hunks.map((hunk) => ({
+    ...hunk,
+    lines: hunk.lines.map((line) => line.slice(0, 1) + convertLeadingTabsToSpaces(line.slice(1))),
   }));
 }
 export {

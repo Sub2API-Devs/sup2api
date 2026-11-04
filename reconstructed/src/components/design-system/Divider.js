@@ -8,8 +8,8 @@
  * pieces: chunk-paas88x7.js (1)
  * attribution: callgraph-witnessed 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
-import { HORIZONTAL_LINE_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { HORIZONTAL_LINE_GLYPH } from "../../constants/figures.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import {
   jsxProd_default,
@@ -22,16 +22,16 @@ import { Decorative } from "../../ink/components/ErrorBoundary.js";
 
 //@ chunk-paas88x7.js:412-1609 callgraph-witnessed = Divider (0.56)
 function Divider(props) {
-  let $ = w(27);
+  let $ = useMemoCache(27);
   let { width, color, char, padding, title, titleAlign } = props;
   let char_2 = char === undefined ? HORIZONTAL_LINE_GLYPH : char;
   let padding_2 = padding === undefined ? 0 : padding;
-  let H = titleAlign === undefined ? "center" : titleAlign;
+  let resolvedAlign = titleAlign === undefined ? "center" : titleAlign;
   let { columns: terminalWidth } = useTerminalSize();
   let effectiveWidth = Math.max(0, (width ?? terminalWidth) - padding_2);
-  let D;
+  let titleFallbackCached;
   if ($[0] !== color || $[1] !== title) {
-    D = title
+    titleFallbackCached = title
       ? jsxProd_default(Text, {
           color,
           dimColor: !color,
@@ -42,13 +42,13 @@ function Divider(props) {
       : null;
     $[0] = color;
     $[1] = title;
-    $[2] = D;
-  } else D = $[2];
-  let fallback = D;
+    $[2] = titleFallbackCached;
+  } else titleFallbackCached = $[2];
+  let fallback = titleFallbackCached;
   if (title) {
-    let J = bunStringWidth(title) + 2;
-    let sideWidth = Math.max(0, effectiveWidth - J);
-    let leftWidth = H === "start" ? Math.min(4, sideWidth) : Math.floor(sideWidth / 2);
+    let titleWidth = bunStringWidth(title) + 2;
+    let sideWidth = Math.max(0, effectiveWidth - titleWidth);
+    let leftWidth = resolvedAlign === "start" ? Math.min(4, sideWidth) : Math.floor(sideWidth / 2);
     let rightWidth = sideWidth - leftWidth;
     const dimColor = !color;
     let t4;
@@ -90,17 +90,17 @@ function Divider(props) {
       $[15] = t6;
       $[16] = children;
     } else children = $[16];
-    let R;
+    let titledElement;
     if ($[17] !== fallback || $[18] !== children) {
-      R = jsxProd_default(Decorative, {
+      titledElement = jsxProd_default(Decorative, {
         fallback,
         children,
       });
       $[17] = fallback;
       $[18] = children;
-      $[19] = R;
-    } else R = $[19];
-    return R;
+      $[19] = titledElement;
+    } else titledElement = $[19];
+    return titledElement;
   }
   const dimColor = !color;
   let children;

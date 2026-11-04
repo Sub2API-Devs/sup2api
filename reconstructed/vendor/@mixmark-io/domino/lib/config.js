@@ -5,10 +5,10 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-vwj6ccer.js:5284-5355 cjs-fingerprint
-var require_config = x(function (cjsExports) {
+var require_config = __commonJS(function (cjsExports) {
   cjsExports.isApiWritable = !globalThis.__domino_frozen__;
 });
 export { require_config };

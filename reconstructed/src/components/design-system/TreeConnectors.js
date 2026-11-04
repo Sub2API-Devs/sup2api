@@ -10,9 +10,9 @@
  */
 import {
   init_react_production,
-  qt,
-  Fy,
-  Se,
+  createContext,
+  childrenExport,
+  useContext,
   isValidElement_default,
 } from "../../../vendor/react/cjs/react.production.js";
 import {
@@ -20,41 +20,48 @@ import {
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
-import { _S } from "../../../vendor/chart.js/dist/chart.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { TREE_GLYPHS } from "../../../vendor/chart.js/dist/chart.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { NoSelect } from "../../ink/components/Input.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-3n80spb1.js:421-425 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3n80spb1.js:421", () => {
+  init_react_production();
+});
 //@ chunk-3n80spb1.js:425-507 placement
-function _(p, d) {
+function _(connector, key) {
   return jsxProd_default(
     Box,
     {
       width: 2,
       children: jsxProd_default(Text, {
         dimColor: true,
-        children: TREE_CONNECTOR_GLYPHS[p],
+        children: TREE_CONNECTOR_GLYPHS[connector],
       }),
     },
-    d,
+    key,
   );
 }
 //@ chunk-3n80spb1.js:507-567 placement
-var TREE_CONNECTOR_GLYPHS = {
-  branch: _S.branch,
-  last: _S.last,
-  pipe: _S.pipe,
-  space: "",
-};
+var TREE_CONNECTOR_GLYPHS; // deferred: uses ROUNDED_BOX_CORNERS (../../../vendor/chart.js/dist/chart.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3n80spb1.js:507", () => {
+  TREE_CONNECTOR_GLYPHS = {
+    branch: TREE_GLYPHS.branch,
+    last: TREE_GLYPHS.last,
+    pipe: TREE_GLYPHS.pipe,
+    space: "",
+  };
+});
 //@ chunk-3n80spb1.js:567-970 placement
 function TreeConnectorsRow(props) {
-  let a = w(7);
+  let $ = useMemoCache(7);
   let { connectors, children } = props;
-  let o;
-  if (a[0] !== connectors) {
-    o =
+  let connectorCells;
+  if ($[0] !== connectors) {
+    connectorCells =
       connectors.length > 0 &&
       jsxProd_default(NoSelect, {
         "aria-hidden": true,
@@ -63,185 +70,198 @@ function TreeConnectorsRow(props) {
         flexDirection: "row",
         children: connectors.map(_),
       });
-    a[0] = connectors;
-    a[1] = o;
-  } else o = a[1];
-  let l;
-  if (a[2] !== children) {
-    l = jsxProd_default(Box, {
+    $[0] = connectors;
+    $[1] = connectorCells;
+  } else connectorCells = $[1];
+  let content;
+  if ($[2] !== children) {
+    content = jsxProd_default(Box, {
       flexGrow: 1,
       flexShrink: 1,
       children,
     });
-    a[2] = children;
-    a[3] = l;
-  } else l = a[3];
-  let i;
-  if (a[4] !== o || a[5] !== l) {
-    i = jsxProd_default_2(Box, {
+    $[2] = children;
+    $[3] = content;
+  } else content = $[3];
+  let row;
+  if ($[4] !== connectorCells || $[5] !== content) {
+    row = jsxProd_default_2(Box, {
       flexDirection: "row",
-      children: [o, l],
+      children: [connectorCells, content],
     });
-    a[4] = o;
-    a[5] = l;
-    a[6] = i;
-  } else i = a[6];
-  return i;
+    $[4] = connectorCells;
+    $[5] = content;
+    $[6] = row;
+  } else row = $[6];
+  return row;
 }
 //@ chunk-3n80spb1.js:970-1022 placement
-var LIST_CONTEXT = qt({
-  variant: "outline",
-  ancestors: [],
+var LIST_CONTEXT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var IS_LAST_ITEM_CONTEXT;
+deferInit("chunk-3n80spb1.js:970", () => {
+  LIST_CONTEXT = createContext({
+    variant: "outline",
+    ancestors: [],
+  });
+  IS_LAST_ITEM_CONTEXT = createContext(true);
 });
-var IS_LAST_ITEM_CONTEXT = qt(true);
 //@ chunk-3n80spb1.js:1022-1135 placement
-function wrapWithLastChildFlag(children, t = true) {
-  let c = Fy.toArray(children);
-  return c.map((children, o) =>
+function wrapWithLastChildFlag(children, isLastParent = true) {
+  let items = childrenExport.toArray(children);
+  return items.map((children, index) =>
     jsxProd_default(
       IS_LAST_ITEM_CONTEXT.Provider,
       {
-        value: t && o === c.length - 1,
+        value: isLastParent && index === items.length - 1,
         children,
       },
-      o,
+      index,
     ),
   );
 }
 //@ chunk-3n80spb1.js:1135-1564 placement
 function Tree(props) {
-  let o = w(10);
+  let $ = useMemoCache(10);
   let { children, variant } = props;
   let variant_2 = variant === undefined ? "outline" : variant;
   let ancestors;
-  if (o[0] === MEMO_CACHE_SENTINEL) {
+  if ($[0] === MEMO_CACHE_SENTINEL) {
     ancestors = [];
-    o[0] = ancestors;
-  } else ancestors = o[0];
+    $[0] = ancestors;
+  } else ancestors = $[0];
   let value;
-  if (o[1] !== variant_2) {
+  if ($[1] !== variant_2) {
     value = {
       variant: variant_2,
       ancestors,
     };
-    o[1] = variant_2;
-    o[2] = value;
-  } else value = o[2];
+    $[1] = variant_2;
+    $[2] = value;
+  } else value = $[2];
   let children_2;
-  if (o[3] !== children) {
+  if ($[3] !== children) {
     children_2 = wrapWithLastChildFlag(children);
-    o[3] = children;
-    o[4] = children_2;
-  } else children_2 = o[4];
+    $[3] = children;
+    $[4] = children_2;
+  } else children_2 = $[4];
   let children_3;
-  if (o[5] !== children_2) {
+  if ($[5] !== children_2) {
     children_3 = jsxProd_default(Box, {
       flexDirection: "column",
       children: children_2,
     });
-    o[5] = children_2;
-    o[6] = children_3;
-  } else children_3 = o[6];
-  let v;
-  if (o[7] !== value || o[8] !== children_3) {
-    v = jsxProd_default(LIST_CONTEXT.Provider, {
+    $[5] = children_2;
+    $[6] = children_3;
+  } else children_3 = $[6];
+  let tree;
+  if ($[7] !== value || $[8] !== children_3) {
+    tree = jsxProd_default(LIST_CONTEXT.Provider, {
       value,
       children: children_3,
     });
-    o[7] = value;
-    o[8] = children_3;
-    o[9] = v;
-  } else v = o[9];
-  return v;
+    $[7] = value;
+    $[8] = children_3;
+    $[9] = tree;
+  } else tree = $[9];
+  return tree;
 }
 //@ chunk-3n80spb1.js:1564-2386 placement
 function TreeNode(props) {
-  let N = w(19);
+  let $ = useMemoCache(19);
   let { label, children, dimColor, color } = props;
-  let { variant, ancestors } = Se(LIST_CONTEXT);
-  let p = Se(IS_LAST_ITEM_CONTEXT);
-  let d = variant === "outline" ? "last" : p ? "last" : "branch";
-  let v = variant === "outline" ? "space" : p ? "space" : "pipe";
-  let m = label != null && label !== false;
-  let C = m ? label : children;
+  let { variant, ancestors } = useContext(LIST_CONTEXT);
+  let isLast = useContext(IS_LAST_ITEM_CONTEXT);
+  let ownConnector = variant === "outline" ? "last" : isLast ? "last" : "branch";
+  let childConnector = variant === "outline" ? "space" : isLast ? "space" : "pipe";
+  let hasLabel = label != null && label !== false;
+  let nodeContent = hasLabel ? label : children;
   let connectors;
-  if (N[0] !== ancestors || N[1] !== d) {
-    connectors = [...ancestors, d];
-    N[0] = ancestors;
-    N[1] = d;
-    N[2] = connectors;
-  } else connectors = N[2];
+  if ($[0] !== ancestors || $[1] !== ownConnector) {
+    connectors = [...ancestors, ownConnector];
+    $[0] = ancestors;
+    $[1] = ownConnector;
+    $[2] = connectors;
+  } else connectors = $[2];
   let children_2;
-  if (N[3] !== color || N[4] !== dimColor || N[5] !== C) {
-    children_2 = isValidElement_default(C)
-      ? C
+  if ($[3] !== color || $[4] !== dimColor || $[5] !== nodeContent) {
+    children_2 = isValidElement_default(nodeContent)
+      ? nodeContent
       : jsxProd_default(Text, {
           dimColor,
           color,
-          children: C,
+          children: nodeContent,
         });
-    N[3] = color;
-    N[4] = dimColor;
-    N[5] = C;
-    N[6] = children_2;
-  } else children_2 = N[6];
-  let P;
-  if (N[7] !== connectors || N[8] !== children_2) {
-    P = jsxProd_default(TreeConnectorsRow, {
+    $[3] = color;
+    $[4] = dimColor;
+    $[5] = nodeContent;
+    $[6] = children_2;
+  } else children_2 = $[6];
+  let nodeRow;
+  if ($[7] !== connectors || $[8] !== children_2) {
+    nodeRow = jsxProd_default(TreeConnectorsRow, {
       connectors,
       children: children_2,
     });
-    N[7] = connectors;
-    N[8] = children_2;
-    N[9] = P;
-  } else P = N[9];
-  let T;
-  if (N[10] !== ancestors || N[11] !== children || N[12] !== v || N[13] !== m || N[14] !== variant) {
-    T =
-      m &&
+    $[7] = connectors;
+    $[8] = children_2;
+    $[9] = nodeRow;
+  } else nodeRow = $[9];
+  let childrenBlock;
+  if (
+    $[10] !== ancestors ||
+    $[11] !== children ||
+    $[12] !== childConnector ||
+    $[13] !== hasLabel ||
+    $[14] !== variant
+  ) {
+    childrenBlock =
+      hasLabel &&
       jsxProd_default(LIST_CONTEXT.Provider, {
         value: {
           variant,
-          ancestors: [...ancestors, v],
+          ancestors: [...ancestors, childConnector],
         },
         children: wrapWithLastChildFlag(children),
       });
-    N[10] = ancestors;
-    N[11] = children;
-    N[12] = v;
-    N[13] = m;
-    N[14] = variant;
-    N[15] = T;
-  } else T = N[15];
-  let z;
-  if (N[16] !== P || N[17] !== T) {
-    z = jsxProd_default_2(Box, {
+    $[10] = ancestors;
+    $[11] = children;
+    $[12] = childConnector;
+    $[13] = hasLabel;
+    $[14] = variant;
+    $[15] = childrenBlock;
+  } else childrenBlock = $[15];
+  let column;
+  if ($[16] !== nodeRow || $[17] !== childrenBlock) {
+    column = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [P, T],
+      children: [nodeRow, childrenBlock],
     });
-    N[16] = P;
-    N[17] = T;
-    N[18] = z;
-  } else z = N[18];
-  return z;
+    $[16] = nodeRow;
+    $[17] = childrenBlock;
+    $[18] = column;
+  } else column = $[18];
+  return column;
 }
 //@ chunk-3n80spb1.js:2386-2509 placement
 function TreeGroup(props) {
-  let a = w(3);
+  let $ = useMemoCache(3);
   let { children } = props;
-  let c = Se(IS_LAST_ITEM_CONTEXT);
-  let o;
-  if (a[0] !== children || a[1] !== c) {
-    o = wrapWithLastChildFlag(children, c);
-    a[0] = children;
-    a[1] = c;
-    a[2] = o;
-  } else o = a[2];
-  return o;
+  let isLast = useContext(IS_LAST_ITEM_CONTEXT);
+  let items;
+  if ($[0] !== children || $[1] !== isLast) {
+    items = wrapWithLastChildFlag(children, isLast);
+    $[0] = children;
+    $[1] = isLast;
+    $[2] = items;
+  } else items = $[2];
+  return items;
 }
 //@ chunk-3n80spb1.js:2509-2550 placement
-var TreeConnectors = Object.assign(Tree, {
-  Node: TreeNode,
-  Group: TreeGroup,
+var TreeConnectors; // deferred: uses Tree of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3n80spb1.js:2509", () => {
+  TreeConnectors = Object.assign(Tree, {
+    Node: TreeNode,
+    Group: TreeGroup,
+  });
 });
 export { TreeConnectors, TreeConnectorsRow };

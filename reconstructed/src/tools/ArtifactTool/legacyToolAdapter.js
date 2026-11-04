@@ -10,38 +10,50 @@
  */
 
 //@ chunk-8wvtd8sr.js:9348-9471 placement
-function requireRunEngine(e) {
-  if (!e.runEngine) throw Error("Artifact: this member needs the executor (call.runEngine)");
-  return e.runEngine;
+function requireRunEngine(options) {
+  if (!options.runEngine) throw Error("Artifact: this member needs the executor (call.runEngine)");
+  return options.runEngine;
 }
 //@ chunk-8wvtd8sr.js:9471-10125 placement
 /**
  * 把旧式工具定义（call/checkPermissions/validateInput 直接在对象上）适配成 create() 工厂形式：调用经执行器 runEngine 转发到原方法。
  */
-function adaptLegacyToolDefinition(e) {
-  let n = e;
-  let ownPropertyDescriptors = Object.getOwnPropertyDescriptors(e);
-  for (let h of ["call", "checkPermissions", "validateInput", "permissionCheckFailureDecision"])
-    delete ownPropertyDescriptors[h];
+function adaptLegacyToolDefinition(definition) {
+  let legacy = definition;
+  let ownPropertyDescriptors = Object.getOwnPropertyDescriptors(definition);
+  for (let memberName of ["call", "checkPermissions", "validateInput", "permissionCheckFailureDecision"])
+    delete ownPropertyDescriptors[memberName];
   return Object.defineProperties(
     {
       create: () => ({
-        call: (h, y) =>
-          requireRunEngine(y)(
+        call: (input, callContext) =>
+          requireRunEngine(callContext)(
             ({ toolUseContext, canUseTool }) =>
-              n.call(h, toolUseContext, canUseTool, y.parentMessage, y.onProgress),
+              legacy.call(
+                input,
+                toolUseContext,
+                canUseTool,
+                callContext.parentMessage,
+                callContext.onProgress,
+              ),
             {},
           ),
-        checkPermissions: (h, y) =>
-          requireRunEngine(y)(({ toolUseContext }) => n.checkPermissions(h, toolUseContext), {}),
-        ...(n.validateInput !== undefined && {
-          validateInput: (h, y) =>
-            requireRunEngine(y)(({ toolUseContext }) => n.validateInput(h, toolUseContext), {}),
+        checkPermissions: (input, callContext) =>
+          requireRunEngine(callContext)(
+            ({ toolUseContext }) => legacy.checkPermissions(input, toolUseContext),
+            {},
+          ),
+        ...(legacy.validateInput !== undefined && {
+          validateInput: (input, callContext) =>
+            requireRunEngine(callContext)(
+              ({ toolUseContext }) => legacy.validateInput(input, toolUseContext),
+              {},
+            ),
         }),
-        ...(n.permissionCheckFailureDecision !== undefined && {
-          permissionCheckFailureDecision: (h, y) =>
-            requireRunEngine(y)(
-              ({ toolUseContext }) => n.permissionCheckFailureDecision(h, toolUseContext),
+        ...(legacy.permissionCheckFailureDecision !== undefined && {
+          permissionCheckFailureDecision: (input, callContext) =>
+            requireRunEngine(callContext)(
+              ({ toolUseContext }) => legacy.permissionCheckFailureDecision(input, toolUseContext),
               {},
             ),
         }),

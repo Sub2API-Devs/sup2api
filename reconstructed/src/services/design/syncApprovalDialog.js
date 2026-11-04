@@ -10,7 +10,7 @@
  */
 import { isAbsolute } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, literal, string, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, literal, stringSchema, array } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   fitsLabelLimit,
   hasVisibleText,
@@ -39,69 +39,73 @@ var UNSHOWABLE_NAME = "(can't be shown here)";
 var UNLISTED_FILES_HINT = "To see the files not listed here, answer No and ask Claude.";
 var MAX_DIALOG_WIDTH = 720;
 var FINALIZE_PLAN_INPUT_SCHEMA = DoctorLazy(() =>
-  u({
+  objectSchema({
     method: literal("finalize_plan"),
-    projectId: string(),
-    localDir: string().default("."),
-    writes: array(string()).default([]),
-    deletes: array(string()).default([]),
+    projectId: stringSchema(),
+    localDir: stringSchema().default("."),
+    writes: array(stringSchema()).default([]),
+    deletes: array(stringSchema()).default([]),
   }),
 );
 var CREATE_PROJECT_INPUT_SCHEMA = DoctorLazy(() =>
-  u({
+  objectSchema({
     method: literal("create_project"),
-    name: string(),
+    name: stringSchema(),
   }),
 );
 //@ chunk-98n6ge4d.js:9550-9637 placement
 /**
  * 把文本整理成可展示的标签（长度、可见字符、可疑内容都过关才返回）。
  */
-function labelIfShowable(e, n) {
-  if (!fitsLabelLimit(e) || !hasVisibleText(e) || hasSuspiciousText(e)) return;
-  let s = listLabel(e);
-  return bunStringWidth(s) <= n ? s : undefined;
+function labelIfShowable(label, maxWidth) {
+  if (!fitsLabelLimit(label) || !hasVisibleText(label) || hasSuspiciousText(label)) return;
+  let display = listLabel(label);
+  return bunStringWidth(display) <= maxWidth ? display : undefined;
 }
 //@ chunk-98n6ge4d.js:9637-9791 placement
-function revealWhitespace(e) {
-  return e.replace(/[\s\u2423\u2039]/gu, (n) =>
-    n === " " ? "\u2423" : `\u2039U+${n.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}\u203A`,
+function revealWhitespace(text) {
+  return text.replace(/[\s\u2423\u2039]/gu, (char) =>
+    char === " "
+      ? "\u2423"
+      : `\u2039U+${char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}\u203A`,
   );
 }
 //@ chunk-98n6ge4d.js:9791-9844 placement
 /**
  * 先去长度上限再走 q 的版本。
  */
-function labelIfShowableLong(e, n) {
-  return e.length > MAX_RAW_DISPLAY_CHARS ? undefined : labelIfShowable(revealWhitespace(e), n);
+function labelIfShowableLong(label, maxWidth) {
+  return label.length > MAX_RAW_DISPLAY_CHARS
+    ? undefined
+    : labelIfShowable(revealWhitespace(label), maxWidth);
 }
 //@ chunk-98n6ge4d.js:9844-10130 placement
 function formatPathList(paths) {
   let joined = paths.join(", ");
   if (joined.length > MAX_DISPLAY_UNITS || bunStringWidth(joined) > MAX_DIALOG_WIDTH) return;
-  let filtered = paths.map(revealWhitespace).filter((i) => labelIfShowable(i, 1 / 0) !== undefined);
-  let r = paths.length - filtered.length;
-  if (r > 0 && filtered.length === 0) return;
+  let filtered = paths.map(revealWhitespace).filter((label) => labelIfShowable(label, 1 / 0) !== undefined);
+  let hiddenCount = paths.length - filtered.length;
+  if (hiddenCount > 0 && filtered.length === 0) return;
   return {
     text: [
       ...(filtered.length > 0 ? [uniqueLabels(filtered, listLabel).join(", ")] : []),
-      ...(r > 0 ? [`${r} that can't be shown here`] : []),
+      ...(hiddenCount > 0 ? [`${hiddenCount} that can't be shown here`] : []),
     ].join(" and "),
-    whole: r === 0,
+    whole: hiddenCount === 0,
   };
 }
 //@ chunk-98n6ge4d.js:10130-10422 placement
-function fitsDialog(lines, { minColumns: n = 60, maxRows: s = 12 } = {}) {
+function fitsDialog(lines, { minColumns = 60, maxRows = 12 } = {}) {
   let mapped = lines.map((line) => displayField(line).text);
   if (
     lines.some((line) => line.length > MAX_DISPLAY_UNITS) ||
     bunStringWidth(mapped.join("")) > MAX_DIALOG_WIDTH
   )
     return false;
-  let max = Math.max(...mapped.map((a) => bunStringWidth(a)));
-  for (let a = n; a <= Math.max(n, max); a++) {
-    let joined = mapped.map((l) =>
-      wrapAnsi(l, a, {
+  let max = Math.max(...mapped.map((text) => bunStringWidth(text)));
+  for (let columns = minColumns; columns <= Math.max(minColumns, max); columns++) {
+    let joined = mapped.map((text) =>
+      wrapAnsi(text, columns, {
         trim: true,
         hard: true,
       }),
@@ -112,7 +116,7 @@ function fitsDialog(lines, { minColumns: n = 60, maxRows: s = 12 } = {}) {
         joined,
         `
 `,
-      ) >= s
+      ) >= maxRows
     )
       return false;
   }
@@ -135,19 +139,19 @@ function fitsApprovalText(lines) {
   });
 }
 //@ chunk-98n6ge4d.js:10492-10639 placement
-function uploadPlanTitle(e) {
-  let n = (e.writes?.length ?? 0) > 0;
-  let s = (e.deletes?.length ?? 0) > 0;
-  return `${n && s ? "Upload and delete" : s ? "Delete" : "Upload"} design system files`;
+function uploadPlanTitle(plan) {
+  let hasWrites = (plan.writes?.length ?? 0) > 0;
+  let hasDeletes = (plan.deletes?.length ?? 0) > 0;
+  return `${hasWrites && hasDeletes ? "Upload and delete" : hasDeletes ? "Delete" : "Upload"} design system files`;
 }
 //@ chunk-98n6ge4d.js:10639-10738 placement
 /**
  * 生成 “From folder / To project” 两行。
  */
-function buildSyncTargetLines(e) {
+function buildSyncTargetLines(target) {
   return [
-    `From folder: ${labelIfShowableLong(e.localDir, 1 / 0) ?? UNSHOWABLE_NAME}`,
-    `To project: ${labelIfShowableLong(e.projectId, 48) ?? UNSHOWABLE_NAME}`,
+    `From folder: ${labelIfShowableLong(target.localDir, 1 / 0) ?? UNSHOWABLE_NAME}`,
+    `To project: ${labelIfShowableLong(target.projectId, 48) ?? UNSHOWABLE_NAME}`,
   ];
 }
 //@ chunk-98n6ge4d.js:10738-11336 placement
@@ -155,27 +159,27 @@ function buildSyncTargetLines(e) {
  * 为审批对话框生成文件变更描述的候选（按完整列表、匹配模式、仅计数逐级简化），每个候选标明是否列全。
  */
 function describeFileChanges(verb, paths) {
-  let filtered = uniq(paths.map(normalizePlanPath)).filter((f) => f !== "");
-  let paths_2 = filtered.filter((f) => !hasGlobChars(f));
+  let filtered = uniq(paths.map(normalizePlanPath)).filter((path) => path !== "");
+  let paths_2 = filtered.filter((path) => !hasGlobChars(path));
   let paths_3 = filtered.filter(hasGlobChars);
-  let a = formatPathList(paths_2);
-  let c = formatPathList(paths_3);
-  let l = verb === "Delete" ? "project file" : "file";
-  let h = paths_2.length > 0 ? [`${verb} ${paths_2.length} ${plural(paths_2.length, l)}`] : [];
-  let g = paths_3.length > 0 ? [`${verb} ${l}s matching: ${c?.text}`] : [];
+  let literalList = formatPathList(paths_2);
+  let globList = formatPathList(paths_3);
+  let noun = verb === "Delete" ? "project file" : "file";
+  let literalLines = paths_2.length > 0 ? [`${verb} ${paths_2.length} ${plural(paths_2.length, noun)}`] : [];
+  let globLines = paths_3.length > 0 ? [`${verb} ${noun}s matching: ${globList?.text}`] : [];
   return [
-    ...(c !== undefined && a !== undefined
+    ...(globList !== undefined && literalList !== undefined
       ? [
           {
-            lines: [...g, ...h.map((f) => `${f}: ${a.text}`)],
-            whole: c.whole && a.whole,
+            lines: [...globLines, ...literalLines.map((line) => `${line}: ${literalList.text}`)],
+            whole: globList.whole && literalList.whole,
           },
         ]
       : []),
-    ...(c !== undefined && paths_3.length > 0 && paths_2.length > 0
+    ...(globList !== undefined && paths_3.length > 0 && paths_2.length > 0
       ? [
           {
-            lines: [...g, ...h],
+            lines: [...globLines, ...literalLines],
             whole: false,
           },
         ]
@@ -185,10 +189,10 @@ function describeFileChanges(verb, paths) {
           {
             lines: [
               [
-                ...h,
+                ...literalLines,
                 ...(paths_3.length > 0
                   ? [
-                      `${paths_2.length > 0 ? "files" : `${verb} ${l}s`} matching ${paths_3.length} ${plural(paths_3.length, "pattern")}`,
+                      `${paths_2.length > 0 ? "files" : `${verb} ${noun}s`} matching ${paths_3.length} ${plural(paths_3.length, "pattern")}`,
                     ]
                   : []),
               ].join(" and "),
@@ -200,9 +204,9 @@ function describeFileChanges(verb, paths) {
   ];
 }
 //@ chunk-98n6ge4d.js:11336-11494 placement
-function createProjectLines(name, n) {
+function createProjectLines(projectSummary, maxWidth) {
   return [
-    `Name: ${labelIfShowable(name, n) ?? labelIfShowableLong(name, 1 / 0) ?? UNSHOWABLE_NAME}`,
+    `Name: ${labelIfShowable(projectSummary, maxWidth) ?? labelIfShowableLong(projectSummary, 1 / 0) ?? UNSHOWABLE_NAME}`,
     "Everyone in your organization can see the new project. You can change that from its Share menu.",
     STANDALONE_DESIGN_CLOSING_NOTICE,
   ];
@@ -224,36 +228,45 @@ function isShowableName(name) {
  * 为 Claude Design 同步构造审批问题：finalize_plan 列出上传/删除的文件（选能放进对话框的最详细版本），create_project 显示项目名与可见性说明；放不下时返回 undefined。
  */
 function buildSyncApprovalQuestion(input, notice) {
-  let s = notice === WRITE_GRANT_NOTE ? [notice] : [];
-  let r = FINALIZE_PLAN_INPUT_SCHEMA().safeParse(input).data;
-  if (r !== undefined && isAbsolute(r.localDir) && (s.length > 0 || notice === REVIEW_UPLOAD_NOTE)) {
-    let a = `${uploadPlanTitle(r)} ${r.deletes.length === 0 ? "to" : r.writes.length === 0 ? "from" : "on"} claude.ai/design?`;
-    let c = describeFileChanges("Upload", r.writes);
-    let flattened = describeFileChanges("Delete", r.deletes).flatMap((f) =>
-      c.map((m) => [...f.lines, ...m.lines, ...(f.whole && m.whole ? [] : [UNLISTED_FILES_HINT])]),
+  let noticeLines = notice === WRITE_GRANT_NOTE ? [notice] : [];
+  let plan = FINALIZE_PLAN_INPUT_SCHEMA().safeParse(input).data;
+  if (
+    plan !== undefined &&
+    isAbsolute(plan.localDir) &&
+    (noticeLines.length > 0 || notice === REVIEW_UPLOAD_NOTE)
+  ) {
+    let question = `${uploadPlanTitle(plan)} ${plan.deletes.length === 0 ? "to" : plan.writes.length === 0 ? "from" : "on"} claude.ai/design?`;
+    let uploadChanges = describeFileChanges("Upload", plan.writes);
+    let flattened = describeFileChanges("Delete", plan.deletes).flatMap((deleteChange) =>
+      uploadChanges.map((uploadChange) => [
+        ...deleteChange.lines,
+        ...uploadChange.lines,
+        ...(deleteChange.whole && uploadChange.whole ? [] : [UNLISTED_FILES_HINT]),
+      ]),
     );
-    let h = [...s, ...buildSyncTargetLines(r)];
-    let found = flattened.find((f) => fitsDialog([a, ...h, ...f]));
-    return found === undefined || !fitsApprovalText([a, ...h])
+    let targetLines = [...noticeLines, ...buildSyncTargetLines(plan)];
+    let found = flattened.find((changeLines) => fitsDialog([question, ...targetLines, ...changeLines]));
+    return found === undefined || !fitsApprovalText([question, ...targetLines])
       ? undefined
       : {
-          question: a,
-          lines: [...h, ...found],
+          question,
+          lines: [...targetLines, ...found],
           values: [],
         };
   }
-  let i = CREATE_PROJECT_INPUT_SCHEMA().safeParse(input).data;
-  if (i !== undefined && (s.length > 0 || notice === NEW_PROJECT_NOTE)) {
-    let a = [...s, ...createProjectLines(i.name, 28)];
-    return fitsDialog([CREATE_PROJECT_QUESTION, ...a]) &&
-      (bunStringWidth(labelIfShowable(i.name, 28) ?? labelIfShowableLong(i.name, 1 / 0) ?? "") <=
-        MAX_NAME_COLUMNS ||
-        fitsDialog([CREATE_PROJECT_QUESTION, ...a], {
+  let createInput = CREATE_PROJECT_INPUT_SCHEMA().safeParse(input).data;
+  if (createInput !== undefined && (noticeLines.length > 0 || notice === NEW_PROJECT_NOTE)) {
+    let lines = [...noticeLines, ...createProjectLines(createInput.name, 28)];
+    return fitsDialog([CREATE_PROJECT_QUESTION, ...lines]) &&
+      (bunStringWidth(
+        labelIfShowable(createInput.name, 28) ?? labelIfShowableLong(createInput.name, 1 / 0) ?? "",
+      ) <= MAX_NAME_COLUMNS ||
+        fitsDialog([CREATE_PROJECT_QUESTION, ...lines], {
           minColumns: MIN_DIALOG_COLUMNS,
         }))
       ? {
           question: CREATE_PROJECT_QUESTION,
-          lines: a,
+          lines,
           values: [],
         }
       : undefined;
@@ -261,36 +274,39 @@ function buildSyncApprovalQuestion(input, notice) {
   return;
 }
 //@ chunk-98n6ge4d.js:12288-12545 placement
-function syncApprovalSummary(e) {
-  let n = FINALIZE_PLAN_INPUT_SCHEMA().safeParse(e).data;
-  if (n !== undefined)
+function syncApprovalSummary(input) {
+  let plan = FINALIZE_PLAN_INPUT_SCHEMA().safeParse(input).data;
+  if (plan !== undefined)
     return [
-      ...buildSyncTargetLines(n),
+      ...buildSyncTargetLines(plan),
       "Files aren't listed here. To see them, answer No and ask Claude.",
     ].join("; ");
-  let s = CREATE_PROJECT_INPUT_SCHEMA().safeParse(e).data;
-  if (s !== undefined) {
-    let [r, ...i] = createProjectLines(s.name, 0);
-    return `${r}; ${i.join(" ")}`;
+  let createInput = CREATE_PROJECT_INPUT_SCHEMA().safeParse(input).data;
+  if (createInput !== undefined) {
+    let [firstLine, ...restLines] = createProjectLines(createInput.name, 0);
+    return `${firstLine}; ${restLines.join(" ")}`;
   }
   return;
 }
 //@ chunk-98n6ge4d.js:12545-12710 placement
-function syncApprovalLines(e) {
-  let [n, s] = [describeFileChanges("Delete", e.deletes)[0], describeFileChanges("Upload", e.writes)[0]];
+function syncApprovalLines(plan) {
+  let [deleteChanges, uploadChanges] = [
+    describeFileChanges("Delete", plan.deletes)[0],
+    describeFileChanges("Upload", plan.writes)[0],
+  ];
   return [
-    ...buildSyncTargetLines(e),
-    ...(n?.lines ?? []),
-    ...(s?.lines ?? []),
-    ...((n?.whole ?? true) && (s?.whole ?? true) ? [] : [UNLISTED_FILES_HINT]),
+    ...buildSyncTargetLines(plan),
+    ...(deleteChanges?.lines ?? []),
+    ...(uploadChanges?.lines ?? []),
+    ...((deleteChanges?.whole ?? true) && (uploadChanges?.whole ?? true) ? [] : [UNLISTED_FILES_HINT]),
   ];
 }
 //@ chunk-98n6ge4d.js:12710-12747 placement
 /**
  * 创建项目问题的完整正文（问题 + 项目信息行）。
  */
-function buildCreateProjectQuestionLines(e) {
-  return [CREATE_PROJECT_QUESTION, ...createProjectLines(e, 28)];
+function buildCreateProjectQuestionLines(projectName) {
+  return [CREATE_PROJECT_QUESTION, ...createProjectLines(projectName, 28)];
 }
 export {
   uploadPlanTitle,

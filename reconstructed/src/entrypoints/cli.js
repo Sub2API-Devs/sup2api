@@ -58,19 +58,19 @@ if (process.env.CLAUDE_CODE_REMOTE === "true") {
 /**
  * 参数里是否只有调试类标志（--debug[=…]/-d/--debug-to-stderr/-d2e/--debug-file <path>）；用于判断“claude agents”或裸 claude 是否可以直接进入 agents 视图。
  */
-function hasOnlyDebugFlags(a) {
-  for (let i = 0; i < a.length; i++) {
-    let D = a[i];
+function hasOnlyDebugFlags(args) {
+  for (let i = 0; i < args.length; i++) {
+    let arg = args[i];
     if (
-      D === "--debug" ||
-      D === "-d" ||
-      D === "--debug-to-stderr" ||
-      D === "-d2e" ||
-      D.startsWith("--debug=") ||
-      D.startsWith("--debug-file=")
+      arg === "--debug" ||
+      arg === "-d" ||
+      arg === "--debug-to-stderr" ||
+      arg === "-d2e" ||
+      arg.startsWith("--debug=") ||
+      arg.startsWith("--debug-file=")
     )
       continue;
-    if (D === "--debug-file" && i + 1 < a.length) {
+    if (arg === "--debug-file" && i + 1 < args.length) {
       i++;
       continue;
     }
@@ -82,53 +82,54 @@ function hasOnlyDebugFlags(a) {
 /**
  * -- 之前是否出现 --desktop；后台/worktree 快速路径据此拒绝与 --desktop 组合。
  */
-function hasDesktopFlag(a) {
-  let index = a.indexOf("--");
-  return (index === -1 ? a : a.slice(0, index)).includes("--desktop");
+function hasDesktopFlag(args) {
+  let index = args.indexOf("--");
+  return (index === -1 ? args : args.slice(0, index)).includes("--desktop");
 }
 //@ cli.js:1425-2101 placement
 /**
  * 从 agents 视图的剩余参数中拆出派发默认值：--permission-mode/--inherit-permission-mode/--dangerously-skip-permissions/--allow-dangerously-skip-permissions/--model/--effort/--agent，其余参数原样返回。
  */
-function extractDispatchDefaults(a) {
-  let m;
-  let D;
-  let W;
-  let K;
-  let J;
-  let t;
-  let V = [];
-  for (let i = 0; i < a.length; i++) {
-    let o = a[i];
-    let index = o.indexOf("=");
-    let [L, d] = index > 0 ? [o.slice(0, index), o.slice(index + 1)] : [o, undefined];
-    let G = d !== undefined || i + 1 < a.length;
-    if (L === "--dangerously-skip-permissions") m = "bypassPermissions";
-    else if (L === "--allow-dangerously-skip-permissions") t = true;
-    else if (L === "--permission-mode" && G) m = d ?? a[++i];
-    else if (L === "--inherit-permission-mode" && G) D = d ?? a[++i];
-    else if (L === "--model" && G) W = d ?? a[++i];
-    else if (L === "--effort" && G) K = d ?? a[++i];
-    else if (L === "--agent" && G) J = d ?? a[++i];
-    else V.push(o);
+function extractDispatchDefaults(args) {
+  let permissionModeFlag;
+  let inheritPermissionModeFlag;
+  let modelFlag;
+  let effortFlag;
+  let agentFlag;
+  let allowBypassFlag;
+  let rest = [];
+  for (let i = 0; i < args.length; i++) {
+    let arg = args[i];
+    let index = arg.indexOf("=");
+    let [flagName, inlineValue] = index > 0 ? [arg.slice(0, index), arg.slice(index + 1)] : [arg, undefined];
+    let hasValue = inlineValue !== undefined || i + 1 < args.length;
+    if (flagName === "--dangerously-skip-permissions") permissionModeFlag = "bypassPermissions";
+    else if (flagName === "--allow-dangerously-skip-permissions") allowBypassFlag = true;
+    else if (flagName === "--permission-mode" && hasValue) permissionModeFlag = inlineValue ?? args[++i];
+    else if (flagName === "--inherit-permission-mode" && hasValue)
+      inheritPermissionModeFlag = inlineValue ?? args[++i];
+    else if (flagName === "--model" && hasValue) modelFlag = inlineValue ?? args[++i];
+    else if (flagName === "--effort" && hasValue) effortFlag = inlineValue ?? args[++i];
+    else if (flagName === "--agent" && hasValue) agentFlag = inlineValue ?? args[++i];
+    else rest.push(arg);
   }
-  let R = m ?? D;
+  let effectivePermissionMode = permissionModeFlag ?? inheritPermissionModeFlag;
   return {
     dispatchDefaults:
-      R || W || K || J || t
+      effectivePermissionMode || modelFlag || effortFlag || agentFlag || allowBypassFlag
         ? {
-            permissionMode: R,
-            ...(!m &&
-              D && {
+            permissionMode: effectivePermissionMode,
+            ...(!permissionModeFlag &&
+              inheritPermissionModeFlag && {
                 permissionModeInherited: true,
               }),
-            model: W,
-            effort: K,
-            agent: J,
-            allowBypass: t,
+            model: modelFlag,
+            effort: effortFlag,
+            agent: agentFlag,
+            allowBypass: allowBypassFlag,
           }
         : undefined,
-    rest: V,
+    rest,
   };
 }
 //@ cli.js:2101-24195 placement
@@ -140,7 +141,7 @@ async function cliMain() {
     process.env.CCR_AGENT_PROXY_TOKEN_FILE_DESCRIPTOR !== undefined ||
     process.argv.includes("--session-tunnel")
   ) {
-    let { guardRelayTokenDescriptor } = require("./chunk-hqm2hdtg.js");
+    let { guardRelayTokenDescriptor } = require("../bridge/guardRelayTokenDescriptor.lazy.js");
     guardRelayTokenDescriptor();
   }
   let ghStandinRequest = parseGhStandinArgs();
@@ -154,15 +155,15 @@ async function cliMain() {
     process.exit(1);
   }
   if (process.env.CLAUDE_CODE_REMOTE_SESSION_ORIGIN === "review") {
-    let { guardRunnerReviewTokens } = require("./chunk-dbe4a9af.js");
+    let { guardRunnerReviewTokens } = require("../services/selfHostedRunner/guardRunnerReviewTokens.lazy.js");
     guardRunnerReviewTokens();
   }
-  let { noteProcessStartTuning } = require("./chunk-fgxyt5p6.js");
+  let { noteProcessStartTuning } = require("../utils/processStartTuning.js");
   noteProcessStartTuning();
-  let { startGarbageCollectionCount } = require("./chunk-x4edef5z.js");
+  let { startGarbageCollectionCount } = require("../utils/gcCount.js");
   startGarbageCollectionCount();
-  let { installCliArgvReader } = require("./chunk-cx9cmbqj.js");
-  installCliArgvReader((e) => require("./chunk-xcbfjzhp.js").cliFlagWords(e));
+  let { installCliArgvReader } = require("../utils/cliArgvReader.js");
+  installCliArgvReader((arg) => require("../utils/cliArgs.js").cliFlagWords(arg));
   let args = process.argv.slice(2);
   if (
     (args.length === 1 || (args.length === 2 && args[1] === "--verbose")) &&
@@ -217,7 +218,7 @@ async function cliMain() {
   let cwdError = checkCwdReadable();
   if (cwdError) {
     console.error(cwdError);
-    let { writeStartupFailureResult } = await import("./chunk-yarkzabk.js");
+    let { writeStartupFailureResult } = await import("../cli/startupFailureResult.js");
     let { randomUUID } = await import("crypto");
     await writeStartupFailureResult({
       sessionId: randomUUID(),
@@ -227,30 +228,30 @@ async function cliMain() {
     process.exit(1);
   }
   if (runnerDeclaresArg !== undefined) {
-    let { adoptRunnerDeclaration } = await import("./chunk-z8rex94w.js");
+    let { adoptRunnerDeclaration } = await import("../services/selfHostedRunner/runnerDeclaration.js");
     await adoptRunnerDeclaration(runnerDeclaresArg);
   }
-  let { profileCheckpoint } = await import("./chunk-09hyhg65.js");
+  let { profileCheckpoint } = await import("../utils/startupProfiler.js");
   profileCheckpoint("cli_entry");
   let isWarmSpareLaunch = args[0] === "--preload" || args[0] === "--bg-spare";
   let storageV5EnvPin =
     !isWarmSpareLaunch && process.env.CLAUDE_CODE_HOVER_REST
-      ? (await import("./chunk-x1qd834k.js")).pinStorageV5FromEnv()
+      ? (await import("../utils/storage/storageV5EnvPin.js")).pinStorageV5FromEnv()
       : undefined;
   if (!isWarmSpareLaunch)
     setTimeout(() => {
       if (process.env.CLAUDE_CODE_JIT_POLICY_AFTER_STARTUP)
-        import("./chunk-r4g0p8r6.js").then((e) => e.setJitPolicyAfterStartup());
+        import("../utils/jitPolicy.js").then((jitModule) => jitModule.setJitPolicyAfterStartup());
       else if (typeof Bun !== "undefined") Bun.unsafe.setJITPolicy?.(1);
     }, 1e4).unref();
   if (ghStandinRequest !== undefined) {
-    let { loadFastPathPolicy } = await import("./chunk-hhv17y7d.js");
+    let { loadFastPathPolicy } = await import("../cli/fastPathSettings.js");
     let fastPathPolicy = await loadFastPathPolicy(storageV5EnvPin);
     if (fastPathPolicy) {
-      let { exitWithError } = await import("./chunk-a3ex6w41.js");
+      let { exitWithError } = await import("../utils/process.js");
       exitWithError(fastPathPolicy);
     }
-    let { ghStandinMain } = await import("./chunk-fy5kn7m3.js");
+    let { ghStandinMain } = await import("../utils/github/ghStandinMain.lazy.js");
     await ghStandinMain(ghStandinRequest);
     return;
   }
@@ -260,40 +261,40 @@ async function cliMain() {
       { pluginTestFormOf, pluginTestGatesOf, pluginTestRefusal },
       { endPluginTest },
     ] = await Promise.all([
-      import("./chunk-hhv17y7d.js"),
-      import("./chunk-s4dkjzr0.js"),
-      import("./chunk-31xvcsqk.js"),
+      import("../cli/fastPathSettings.js"),
+      import("../cli/handlers/pluginTest/IS_WORKTREE_LAUNCH.lazy.js"),
+      import("../cli/handlers/pluginTest/default.lazy.js"),
     ]);
-    let _ = pluginTestRefusal(
+    let pluginTestRefusalText = pluginTestRefusal(
       await pluginTestGatesOf({
         helperError: await loadFastPathPolicy(storageV5EnvPin),
         form: pluginTestFormOf(args.slice(2)),
         envPin: storageV5EnvPin,
       }),
     );
-    if (args[2] === "--file" && _ !== undefined) {
-      let { REPORT_MARK } = await import("./chunk-557ssxgp.js");
+    if (args[2] === "--file" && pluginTestRefusalText !== undefined) {
+      let { REPORT_MARK } = await import("../cli/handlers/pluginTest/REPORT_MARK.lazy.js");
       process.stdout.write(`${REPORT_MARK}${JSON.stringify({
         file: args[3],
         results: [],
-        error: _,
+        error: pluginTestRefusalText,
       })}
 `);
       return;
     }
-    if (_ !== undefined) {
-      process.stderr.write(`claude plugin test: ${_}
+    if (pluginTestRefusalText !== undefined) {
+      process.stderr.write(`claude plugin test: ${pluginTestRefusalText}
 `);
       process.exitCode = 1;
       return endPluginTest(process.exitCode);
     }
-    let { pluginTestMain } = await import("./chunk-1tz177x8.js");
+    let { pluginTestMain } = await import("../cli/handlers/pluginTest/CHILD_ARGV_LENGTH.lazy.js");
     process.exitCode = await pluginTestMain(args.slice(2));
     return endPluginTest(process.exitCode);
   }
   if (process.argv[2] === "--eval-mock-server") {
     profileCheckpoint("cli_eval_mock_server_path");
-    let { runEvalMockServer } = await import("./chunk-ftcmf7dj.js");
+    let { runEvalMockServer } = await import("../cli/handlers/pluginEval/mockServer.js");
     try {
       await runEvalMockServer(process.argv[3], process.argv[4]);
     } catch (error) {
@@ -304,35 +305,35 @@ async function cliMain() {
   }
   if (process.argv[2] === "--claude-in-chrome-mcp") {
     profileCheckpoint("cli_claude_in_chrome_mcp_path");
-    let { runClaudeInChromeMcpServer } = await import("./chunk-ztt2k9pv.js");
+    let { runClaudeInChromeMcpServer } = await import("../utils/claudeInChrome/mcpServer.js");
     await runClaudeInChromeMcpServer(storageV5EnvPin);
     return;
   } else if (process.argv[2] === "--chrome-native-host") {
     profileCheckpoint("cli_chrome_native_host_path");
-    let { runChromeNativeHost } = await import("./chunk-ncz9bgnh.js");
+    let { runChromeNativeHost } = await import("../utils/claudeInChrome/chromeNativeHost.js");
     await runChromeNativeHost();
     return;
   }
   if (args[0] === "--daemon-worker") {
-    let { loadFastPathPolicy } = await import("./chunk-hhv17y7d.js");
+    let { loadFastPathPolicy } = await import("../cli/fastPathSettings.js");
     let fastPathPolicy = await loadFastPathPolicy(storageV5EnvPin);
     if (fastPathPolicy)
       process.stderr.write(`${fastPathPolicy}
 `);
-    let { sessionFactsRestored } = await import("./chunk-tsme6a4v.js");
-    let E = await sessionFactsRestored(storageV5EnvPin);
-    if (E !== null) {
-      let { endsInARowOf, workerEndingOf } = await import("./chunk-drppgasb.js");
-      let n = workerEndingOf(E, endsInARowOf(args[2]));
-      process.stderr.write(n.said);
-      process.exit(n.code);
+    let { sessionFactsRestored } = await import("../utils/auth/default.lazy.js");
+    let sessionFacts = await sessionFactsRestored(storageV5EnvPin);
+    if (sessionFacts !== null) {
+      let { endsInARowOf, workerEndingOf } = await import("../daemon/default.lazy.js");
+      let workerEnding = workerEndingOf(sessionFacts, endsInARowOf(args[2]));
+      process.stderr.write(workerEnding.said);
+      process.exit(workerEnding.code);
     }
-    let { runDaemonWorker } = await import("./chunk-3mxgmav6.js");
+    let { runDaemonWorker } = await import("../daemon/runDaemonWorker.js");
     await runDaemonWorker(args[1], storageV5EnvPin);
     return;
   }
   if (args[0] === "--bg-pty-host") {
-    let { ensureFastPathSettingsLoaded } = await import("./chunk-hhv17y7d.js");
+    let { ensureFastPathSettingsLoaded } = await import("../cli/fastPathSettings.js");
     try {
       await ensureFastPathSettingsLoaded(storageV5EnvPin);
     } catch (error) {
@@ -340,21 +341,21 @@ async function cliMain() {
         .write(`ptyHost: settings bootstrap threw (continuing; supervisor already gated): ${error?.stack ?? String(error)}
 `);
     }
-    let { runPtyHost } = await import("./chunk-jx4rgw65.js");
+    let { runPtyHost } = await import("../cli/bg/runPtyHost.lazy.js");
     await runPtyHost(args.slice(1));
     return;
   }
   if (args[0] === "--bg-spare") {
-    let { ensureFastPathSettingsLoaded } = await import("./chunk-hhv17y7d.js");
+    let { ensureFastPathSettingsLoaded } = await import("../cli/fastPathSettings.js");
     await ensureFastPathSettingsLoaded(undefined);
-    let { runBgSpare } = await import("./chunk-40y1xma6.js");
+    let { runBgSpare } = await import("../services/daemon/spare.js");
     await runBgSpare(args.slice(1));
     return;
   }
   if (args[0] === "--preload") {
-    let { ensureFastPathSettingsLoaded } = await import("./chunk-hhv17y7d.js");
+    let { ensureFastPathSettingsLoaded } = await import("../cli/fastPathSettings.js");
     await ensureFastPathSettingsLoaded(undefined);
-    let { runPreload } = await import("./chunk-9e524z2b.js");
+    let { runPreload } = await import("../services/daemon/runPreload.lazy.js");
     await runPreload(args.slice(1));
     return;
   }
@@ -367,58 +368,58 @@ async function cliMain() {
   ) {
     profileCheckpoint("cli_bridge_path");
     let [{ loadFastPathPolicy }, { markNoDialogLaunch }] = await Promise.all([
-      import("./chunk-hhv17y7d.js"),
-      import("./chunk-nj7t53r7.js"),
+      import("../cli/fastPathSettings.js"),
+      import("../bootstrap/state.js"),
     ]);
     markNoDialogLaunch();
     {
       let fastPathPolicy = await loadFastPathPolicy(storageV5EnvPin);
       if (fastPathPolicy) {
-        let { exitWithError } = await import("./chunk-a3ex6w41.js");
+        let { exitWithError } = await import("../utils/process.js");
         exitWithError(fastPathPolicy);
       }
     }
     if (args.slice(1).some((arg) => arg === "--help" || arg === "-h")) {
-      let { printRemoteControlHelp } = await import("./chunk-nqcgwaap.js");
+      let { printRemoteControlHelp } = await import("../bridge/remoteControlHelp.js");
       await printRemoteControlHelp();
       return;
     }
-    let { sessionFactsRestored } = await import("./chunk-tsme6a4v.js");
-    let E = await sessionFactsRestored(storageV5EnvPin);
-    if (E !== null) {
-      let { exitWithError } = await import("./chunk-a3ex6w41.js");
-      exitWithError(E.reason);
+    let { sessionFactsRestored } = await import("../utils/auth/default.lazy.js");
+    let sessionFacts = await sessionFactsRestored(storageV5EnvPin);
+    if (sessionFacts !== null) {
+      let { exitWithError } = await import("../utils/process.js");
+      exitWithError(sessionFacts.reason);
     }
     let { refuseRemoteControlLocally, refuseRemoteControlIneligible, startRemoteControl } =
-      await import("./chunk-4wmk8g5n.js");
+      await import("../bridge/enterRemoteControl.lazy.js");
     let disabledReason = await refuseRemoteControlLocally();
     let [{ pinStorageV5 }, { seedInstallIDs }] = await Promise.all([
-      import("./chunk-beegrzb2.js"),
-      import("./chunk-eesswvbz.js"),
+      import("../utils/storage/pinStorageV5.js"),
+      import("../utils/config.js"),
     ]);
-    let c = pinStorageV5(storageV5EnvPin);
-    if (isStorageV5Enabled() && c !== undefined) {
+    let storageV5 = pinStorageV5(storageV5EnvPin);
+    if (isStorageV5Enabled() && storageV5 !== undefined) {
       let [
         { credentialsStoreFor },
         { setGrowthBookCredentials, setGrowthBookStorageBackend },
         { composePolicyLimitsClient, primePolicyLimitsCache },
         { primeFastPathCredentials },
       ] = await Promise.all([
-        import("./chunk-y36z1q7c.js"),
-        import("./chunk-6df1d6re.js"),
-        import("./chunk-qchbrsbw.js"),
-        import("./chunk-ts9rfgqd.js"),
+        import("../utils/secureStorage/credentialsFileStore.js"),
+        import("../services/analytics/ATIS_REQUEST_HEADER.lazy.js"),
+        import("../services/policyLimits/DefaultPolicyLimitsClientSlot.lazy.js"),
+        import("../utils/primeFastPathCredentials.lazy.js"),
       ]);
-      let U = credentialsStoreFor(c);
-      setGrowthBookCredentials(U);
-      setGrowthBookStorageBackend(c);
+      let credentials = credentialsStoreFor(storageV5);
+      setGrowthBookCredentials(credentials);
+      setGrowthBookStorageBackend(storageV5);
       composePolicyLimitsClient({
-        storageV5: c,
-        credentials: U,
+        storageV5,
+        credentials,
       });
-      await primeFastPathCredentials(U);
-      await primePolicyLimitsCache(c);
-      await seedInstallIDs(c);
+      await primeFastPathCredentials(credentials);
+      await primePolicyLimitsCache(storageV5);
+      await seedInstallIDs(storageV5);
     }
     let [
       { initSinks },
@@ -427,34 +428,34 @@ async function cliMain() {
       { initDefaultDebugLog },
       { watchGlobalConfigThroughStorage },
     ] = await Promise.all([
-      import("./chunk-19b0wnnf.js"),
-      import("./chunk-3x77zjqp.js"),
-      import("./chunk-y36z1q7c.js"),
-      import("./chunk-cgjee2k6.js"),
-      import("./chunk-eesswvbz.js"),
+      import("../utils/sinks.js"),
+      import("../services/analytics/firstPartyEventLogger.js"),
+      import("../utils/secureStorage/credentialsFileStore.js"),
+      import("../utils/debug.js"),
+      import("../utils/config.js"),
     ]);
     initSinks();
-    let w = credentialsStoreFor(c);
-    initialize1PEventLogging(c);
-    let C = await refuseRemoteControlIneligible(disabledReason);
-    if (isStorageV5Enabled() && c !== undefined) {
+    let credentials = credentialsStoreFor(storageV5);
+    initialize1PEventLogging(storageV5);
+    let disabledReason_2 = await refuseRemoteControlIneligible(disabledReason);
+    if (isStorageV5Enabled() && storageV5 !== undefined) {
       initDefaultDebugLog({
-        storageV5: c,
+        storageV5,
       });
-      watchGlobalConfigThroughStorage(c);
+      watchGlobalConfigThroughStorage(storageV5);
     }
-    await startRemoteControl(C, args.slice(1), c, w);
+    await startRemoteControl(disabledReason_2, args.slice(1), storageV5, credentials);
     return;
   }
   {
     let daemonArgs = getDaemonArgs(args);
     if (daemonArgs !== null) {
       profileCheckpoint("cli_daemon_path");
-      let { ensureFastPathSettingsLoaded } = await import("./chunk-hhv17y7d.js");
+      let { ensureFastPathSettingsLoaded } = await import("../cli/fastPathSettings.js");
       await ensureFastPathSettingsLoaded(storageV5EnvPin);
-      let { initializeErrorLogSink } = await import("./chunk-nynswhsz.js");
+      let { initializeErrorLogSink } = await import("../utils/errorLogSink.js");
       initializeErrorLogSink();
-      let { daemonMain } = await import("./chunk-ss669z1x.js");
+      let { daemonMain } = await import("../cli/handlers/daemon.js");
       await daemonMain(daemonArgs, storageV5EnvPin);
       return;
     }
@@ -469,14 +470,14 @@ async function cliMain() {
       arg === "respawn" ||
       arg === "rm",
   )
-    ? require("./chunk-xcbfjzhp.js").backgroundSessionVerbIndex(args, {
+    ? require("../utils/cliArgs.js").backgroundSessionVerbIndex(args, {
         behindRootOptions: !isBgSessionProcess,
       })
     : -1;
   let bgVerbArgs = bgVerbIndex === -1 ? [] : args.slice(bgVerbIndex);
   let hasBgFlag =
     args.includes("--bg") || args.includes("--background")
-      ? require("./chunk-xcbfjzhp.js").hasBackgroundFlag(args)
+      ? require("../utils/cliArgs.js").hasBackgroundFlag(args)
       : false;
   let desktopForced = false;
   if (!desktopForced && (bgVerbArgs.length > 0 || hasBgFlag || false)) {
@@ -491,14 +492,14 @@ async function cliMain() {
     }
     if (bgVerbIndex > 0) {
       let [{ eagerParseCliFlag }, { loadSettingsFromFlag, loadManagedSettingsFromFlag }] = await Promise.all([
-        import("./chunk-xcbfjzhp.js"),
-        import("./chunk-dcwp8rdv.js"),
+        import("../utils/cliArgs.js"),
+        import("../main.js"),
       ]);
       let sliced = args.slice(0, bgVerbIndex);
-      let P = eagerParseCliFlag("--settings", sliced);
-      if (P) loadSettingsFromFlag(P);
-      let y = eagerParseCliFlag("--managed-settings", sliced);
-      if (y) loadManagedSettingsFromFlag(y);
+      let settingsFlag = eagerParseCliFlag("--settings", sliced);
+      if (settingsFlag) loadSettingsFromFlag(settingsFlag);
+      let managedSettingsFlag = eagerParseCliFlag("--managed-settings", sliced);
+      if (managedSettingsFlag) loadManagedSettingsFromFlag(managedSettingsFlag);
     }
     let [
       { loadFastPathPolicy },
@@ -506,13 +507,13 @@ async function cliMain() {
       { allowFlagFetchOnOwnCredential, getFeatureValue_CACHED_MAY_BE_STALE, hasWorkspaceTrust },
       { checkHasTrustDialogAccepted },
     ] = await Promise.all([
-      import("./chunk-hhv17y7d.js"),
-      import("./chunk-nj7t53r7.js"),
-      import("./chunk-6df1d6re.js"),
-      import("./chunk-eesswvbz.js"),
+      import("../cli/fastPathSettings.js"),
+      import("../bootstrap/state.js"),
+      import("../services/analytics/ATIS_REQUEST_HEADER.lazy.js"),
+      import("../utils/config.js"),
     ]);
-    let { sessionFactsRestored } = await import("./chunk-tsme6a4v.js");
-    let n = null;
+    let { sessionFactsRestored } = await import("../utils/auth/default.lazy.js");
+    let sessionFacts = null;
     let included = ["logs", "stop", "kill", "rm"].includes(bgVerbArgs[0] ?? "");
     {
       let fastPathPolicy = await loadFastPathPolicy(storageV5EnvPin);
@@ -521,7 +522,7 @@ async function cliMain() {
           process.stderr.write(`${fastPathPolicy}
 `);
         else {
-          let { exitWithError } = await import("./chunk-a3ex6w41.js");
+          let { exitWithError } = await import("../utils/process.js");
           exitWithError(fastPathPolicy);
         }
       if (
@@ -530,64 +531,68 @@ async function cliMain() {
         getFeatureValue_CACHED_MAY_BE_STALE("tengu_sable_orrery", true)
       )
         setIsInteractive(true);
-      n = await sessionFactsRestored(storageV5EnvPin);
-      if (n !== null && !included) {
-        let { exitWithError } = await import("./chunk-a3ex6w41.js");
-        exitWithError(n.reason);
+      sessionFacts = await sessionFactsRestored(storageV5EnvPin);
+      if (sessionFacts !== null && !included) {
+        let { exitWithError } = await import("../utils/process.js");
+        exitWithError(sessionFacts.reason);
       }
     }
-    let N = n === null;
-    if (n !== null)
-      process.stderr.write(`${n.reason}
+    let isFirstRun = sessionFacts === null;
+    if (sessionFacts !== null)
+      process.stderr.write(`${sessionFacts.reason}
 `);
-    let c = await import("./chunk-v2n15p0s.js");
-    await c.ensureFleetGateHydrated({
-      kickGrowthBook: N && !included && (hasWorkspaceTrust() || allowFlagFetchOnOwnCredential()),
+    let fleetModule = await import("../utils/fleetGates.js");
+    await fleetModule.ensureFleetGateHydrated({
+      kickGrowthBook: isFirstRun && !included && (hasWorkspaceTrust() || allowFlagFetchOnOwnCredential()),
     });
-    if (!c.isAgentsFleetEnabled()) {
-      let C =
+    if (!fleetModule.isAgentsFleetEnabled()) {
+      let rejectedVerb =
         bgVerbArgs[0] ??
         args.find(
           (arg) =>
             arg === "--bg" || arg === "--background" || arg === "--routine" || arg.startsWith("--routine="),
         ) ??
         "--bg";
-      return c.fleetGateRejected(C);
+      return fleetModule.fleetGateRejected(rejectedVerb);
     }
-    let [h, { pinStorageV5 }, { initDefaultDebugLog }, { seedInstallIDs, watchGlobalConfigThroughStorage }] =
-      await Promise.all([
-        import("./chunk-e06sy9za.js"),
-        import("./chunk-beegrzb2.js"),
-        import("./chunk-cgjee2k6.js"),
-        import("./chunk-eesswvbz.js"),
-      ]);
-    let w = pinStorageV5(storageV5EnvPin);
-    if (isStorageV5Enabled() && w !== undefined) {
+    let [
+      bgHandlers,
+      { pinStorageV5 },
+      { initDefaultDebugLog },
+      { seedInstallIDs, watchGlobalConfigThroughStorage },
+    ] = await Promise.all([
+      import("../cli/bg/bgCommands.js"),
+      import("../utils/storage/pinStorageV5.js"),
+      import("../utils/debug.js"),
+      import("../utils/config.js"),
+    ]);
+    let storageV5 = pinStorageV5(storageV5EnvPin);
+    if (isStorageV5Enabled() && storageV5 !== undefined) {
       initDefaultDebugLog({
-        storageV5: w,
+        storageV5,
       });
-      watchGlobalConfigThroughStorage(w);
+      watchGlobalConfigThroughStorage(storageV5);
       let [
         { credentialsStoreFor },
         { setGrowthBookCredentials, setGrowthBookStorageBackend },
         { composePolicyLimitsClient, primePolicyLimitsCache },
         { primeFastPathCredentials },
       ] = await Promise.all([
-        import("./chunk-y36z1q7c.js"),
-        import("./chunk-6df1d6re.js"),
-        import("./chunk-qchbrsbw.js"),
-        import("./chunk-ts9rfgqd.js"),
+        import("../utils/secureStorage/credentialsFileStore.js"),
+        import("../services/analytics/ATIS_REQUEST_HEADER.lazy.js"),
+        import("../services/policyLimits/DefaultPolicyLimitsClientSlot.lazy.js"),
+        import("../utils/primeFastPathCredentials.lazy.js"),
       ]);
-      let M = credentialsStoreFor(w);
-      setGrowthBookCredentials(M);
-      setGrowthBookStorageBackend(w);
+      let credentials = credentialsStoreFor(storageV5);
+      setGrowthBookCredentials(credentials);
+      setGrowthBookStorageBackend(storageV5);
       composePolicyLimitsClient({
-        storageV5: w,
-        credentials: M,
+        storageV5,
+        credentials,
       });
-      await primeFastPathCredentials(M);
-      await primePolicyLimitsCache(w);
-      await seedInstallIDs(w);
+      await primeFastPathCredentials(credentials);
+      await primePolicyLimitsCache(storageV5);
+      await seedInstallIDs(storageV5);
     }
     switch (bgVerbArgs[0]) {
       case "logs":
@@ -603,21 +608,22 @@ async function cliMain() {
           { sleep },
           { waitForOAuthRefreshBeforeExit },
         ] = await Promise.all([
-          import("./chunk-dn8vrmng.js"),
-          import("./chunk-3x77zjqp.js"),
-          import("./chunk-195bxx7h.js"),
-          import("./chunk-c1wxfrj3.js"),
-          import("./chunk-jn1dpf1r.js"),
+          import("../services/analytics/sink.js"),
+          import("../services/analytics/firstPartyEventLogger.js"),
+          import("../services/analytics/datadog.js"),
+          import("../utils/sleep.js"),
+          import("../utils/auth/oauthRefreshExitWait.js"),
         ]);
-        if (N) {
+        if (isFirstRun) {
           initializeAnalyticsSink();
-          initialize1PEventLogging(w);
+          initialize1PEventLogging(storageV5);
         }
-        if (bgVerbArgs[0] === "logs") await h.logsHandler(bgVerbArgs[1], w);
-        else if (bgVerbArgs[0] === "attach") await h.attachHandler(bgVerbArgs[1], w);
-        else if (bgVerbArgs[0] === "respawn") await h.respawnHandler(bgVerbArgs[1], w);
-        else if (bgVerbArgs[0] === "rm") await h.rmHandler(bgVerbArgs[1], w, undefined, N);
-        else await h.stopHandler(bgVerbArgs[1], w, N);
+        if (bgVerbArgs[0] === "logs") await bgHandlers.logsHandler(bgVerbArgs[1], storageV5);
+        else if (bgVerbArgs[0] === "attach") await bgHandlers.attachHandler(bgVerbArgs[1], storageV5);
+        else if (bgVerbArgs[0] === "respawn") await bgHandlers.respawnHandler(bgVerbArgs[1], storageV5);
+        else if (bgVerbArgs[0] === "rm")
+          await bgHandlers.rmHandler(bgVerbArgs[1], storageV5, undefined, isFirstRun);
+        else await bgHandlers.stopHandler(bgVerbArgs[1], storageV5, isFirstRun);
         await Promise.race([
           Promise.all([shutdown1PEventLogging(), shutdownDatadog()]),
           sleep(500, undefined, {
@@ -636,20 +642,20 @@ async function cliMain() {
           { sleep },
           { waitForOAuthRefreshBeforeExit },
         ] = await Promise.all([
-          import("./chunk-dn8vrmng.js"),
-          import("./chunk-3x77zjqp.js"),
-          import("./chunk-195bxx7h.js"),
-          import("./chunk-ezz35vxh.js"),
-          import("./chunk-c1wxfrj3.js"),
-          import("./chunk-jn1dpf1r.js"),
+          import("../services/analytics/sink.js"),
+          import("../services/analytics/firstPartyEventLogger.js"),
+          import("../services/analytics/datadog.js"),
+          import("../services/analytics/index.js"),
+          import("../utils/sleep.js"),
+          import("../utils/auth/oauthRefreshExitWait.js"),
         ]);
         initializeAnalyticsSink();
-        initialize1PEventLogging(w);
+        initialize1PEventLogging(storageV5);
         logEvent("tengu_background", {
           via_flag: true,
           via: lit("flag"),
         });
-        await h.handleBgFlag(args, w);
+        await bgHandlers.handleBgFlag(args, storageV5);
         await Promise.race([
           Promise.all([shutdown1PEventLogging(), shutdownDatadog()]),
           sleep(500, undefined, {
@@ -674,45 +680,45 @@ async function cliMain() {
       ((hasOnlyDebugFlags(args) || agentsViewOverride !== undefined) && process.stdin.isTTY)) &&
     process.stdout.isTTY
   ) {
-    let { startCapturingEarlyInput, consumeEarlyInput } = await import("./chunk-h4wwf2p6.js");
+    let { startCapturingEarlyInput, consumeEarlyInput } = await import("../utils/earlyInput.js");
     startCapturingEarlyInput();
     let [{ startMdmRawRead }, { startKeychainPrefetch }] = await Promise.all([
-      import("./chunk-6195yta3.js"),
-      import("./chunk-bgfff79h.js"),
+      import("../utils/settings/mdm/rawRead.js"),
+      import("../utils/secureStorage/keychainPrefetch.js"),
     ]);
     startMdmRawRead();
     startKeychainPrefetch();
-    let { enableConfigs, getGlobalConfig, seedInstallIDs } = await import("./chunk-eesswvbz.js");
-    let n = false;
-    let T = false;
-    let N = false;
+    let { enableConfigs, getGlobalConfig, seedInstallIDs } = await import("../utils/config.js");
+    let shouldRunAgentsView = false;
+    let defaultToAgentsView = false;
+    let agentsViewUnavailable = false;
     try {
       await enableConfigs(isStorageV5Enabled() ? storageV5EnvPin?.backend : undefined);
-      T = getGlobalConfig().defaultToAgentsView === true;
-      n = isAgentsCommand || (T && agentsViewOverride === undefined);
+      defaultToAgentsView = getGlobalConfig().defaultToAgentsView === true;
+      shouldRunAgentsView = isAgentsCommand || (defaultToAgentsView && agentsViewOverride === undefined);
     } catch {}
-    if (n) {
+    if (shouldRunAgentsView) {
       if (agentsArgs.config.settings || agentsArgs.config.managedSettings) {
-        let { loadSettingsFromFlag, loadManagedSettingsFromFlag } = await import("./chunk-dcwp8rdv.js");
+        let { loadSettingsFromFlag, loadManagedSettingsFromFlag } = await import("../main.js");
         if (agentsArgs.config.settings) loadSettingsFromFlag(agentsArgs.config.settings);
         if (agentsArgs.config.managedSettings) loadManagedSettingsFromFlag(agentsArgs.config.managedSettings);
       }
       if (agentsArgs.config.pluginDir.length > 0 || agentsArgs.config.pluginDirNoMcp.length > 0) {
         let [{ setInlinePlugins, setInlinePluginsNoMcp }, { clearPluginCache }] = await Promise.all([
-          import("./chunk-nj7t53r7.js"),
-          import("./chunk-w27ej3rn.js"),
+          import("../bootstrap/state.js"),
+          import("../utils/plugins/pluginLoader.js"),
         ]);
         setInlinePlugins(agentsArgs.config.pluginDir);
         setInlinePluginsNoMcp(agentsArgs.config.pluginDirNoMcp);
         clearPluginCache("claude agents --plugin-dir");
       }
-      let { loadFastPathPolicy } = await import("./chunk-hhv17y7d.js");
+      let { loadFastPathPolicy } = await import("../cli/fastPathSettings.js");
       let fastPathPolicy = await loadFastPathPolicy(storageV5EnvPin);
       if (fastPathPolicy) {
-        let { exitWithError } = await import("./chunk-a3ex6w41.js");
+        let { exitWithError } = await import("../utils/process.js");
         exitWithError(fastPathPolicy);
       }
-      let I;
+      let pluginDirsEnvNotice;
       if (process.env.CLAUDE_CODE_PLUGIN_DIRS?.trim()) {
         let [
           {
@@ -725,31 +731,35 @@ async function cliMain() {
           { setInlinePlugins },
           { clearPluginCache },
         ] = await Promise.all([
-          import("./chunk-zf6821pj.js"),
-          import("./chunk-nj7t53r7.js"),
-          import("./chunk-w27ej3rn.js"),
+          import("../utils/plugins/pluginDirsEnv.js"),
+          import("../bootstrap/state.js"),
+          import("../utils/plugins/pluginLoader.js"),
         ]);
-        let Q = withoutPluginDirs(settlePluginDirsEnv(), agentsArgs.config.pluginDirNoMcp);
-        if (Q.length > 0) {
-          I = {
+        let envPluginDirs = withoutPluginDirs(settlePluginDirsEnv(), agentsArgs.config.pluginDirNoMcp);
+        if (envPluginDirs.length > 0) {
+          pluginDirsEnvNotice = {
             name: PLUGIN_DIRS_ENV_VAR,
             hint: PLUGIN_DIRS_ENV_RECOVERY_HINT,
           };
-          setInlinePlugins(mergePluginDirs(agentsArgs.config.pluginDir, Q));
+          setInlinePlugins(mergePluginDirs(agentsArgs.config.pluginDir, envPluginDirs));
           clearPluginCache("claude agents CLAUDE_CODE_PLUGIN_DIRS");
         }
       }
       {
         let { areSideloadFlagsDisabledByPolicy, sideloadFlagsBlockedMessage } =
-          await import("./chunk-b7gb93w6.js");
+          await import("../utils/plugins/marketplacePolicy.js");
         if (areSideloadFlagsDisabledByPolicy()) {
-          let p = [];
-          if (agentsArgs.config.pluginDir.length > 0) p.push("--plugin-dir");
-          if (agentsArgs.config.pluginDirNoMcp.length > 0) p.push("--plugin-dir-no-mcp");
-          if (I) p.push(I.name);
-          if (p.length > 0) {
-            let { exitWithError } = await import("./chunk-a3ex6w41.js");
-            exitWithError(I ? `${sideloadFlagsBlockedMessage(p)} ${I.hint}` : sideloadFlagsBlockedMessage(p));
+          let blockedFlags = [];
+          if (agentsArgs.config.pluginDir.length > 0) blockedFlags.push("--plugin-dir");
+          if (agentsArgs.config.pluginDirNoMcp.length > 0) blockedFlags.push("--plugin-dir-no-mcp");
+          if (pluginDirsEnvNotice) blockedFlags.push(pluginDirsEnvNotice.name);
+          if (blockedFlags.length > 0) {
+            let { exitWithError } = await import("../utils/process.js");
+            exitWithError(
+              pluginDirsEnvNotice
+                ? `${sideloadFlagsBlockedMessage(blockedFlags)} ${pluginDirsEnvNotice.hint}`
+                : sideloadFlagsBlockedMessage(blockedFlags),
+            );
           }
         }
       }
@@ -758,17 +768,17 @@ async function cliMain() {
         ensureFleetGateHydrated,
         fleetGateRejected,
         consumeAgentViewRelaunchMarker,
-      } = await import("./chunk-v2n15p0s.js");
+      } = await import("../utils/fleetGates.js");
       await ensureFleetGateHydrated({
         kickGrowthBook: false,
       });
-      let C = false;
-      if (n && isAgentsFleetEnabled() && !C) {
-        let { sessionFactsRestored } = await import("./chunk-tsme6a4v.js");
-        let l = await sessionFactsRestored(storageV5EnvPin);
-        if (l !== null) {
-          let { exitWithError } = await import("./chunk-a3ex6w41.js");
-          exitWithError(l.reason);
+      let agentsViewSkipped = false;
+      if (shouldRunAgentsView && isAgentsFleetEnabled() && !agentsViewSkipped) {
+        let { sessionFactsRestored } = await import("../utils/auth/default.lazy.js");
+        let sessionFacts = await sessionFactsRestored(storageV5EnvPin);
+        if (sessionFacts !== null) {
+          let { exitWithError } = await import("../utils/process.js");
+          exitWithError(sessionFacts.reason);
         }
         let [
           { applyFleetViewHostWindowsEnv },
@@ -786,70 +796,74 @@ async function cliMain() {
           { pinStorageV5 },
           { appliedSettingSourcesFlagValue },
         ] = await Promise.all([
-          import("./chunk-7gry1hef.js"),
-          import("./chunk-1m6xc21j.js"),
-          import("./chunk-92g44ry1.js"),
+          import("../screens/FleetView/FleetViewScreen.js"),
+          import("../ink/components/Ansi.lazy.js"),
+          import("../utils/renderOptions.js"),
           import("path"),
-          import("./chunk-nj7t53r7.js"),
-          import("./chunk-77vrjvn1.js"),
-          import("./chunk-beegrzb2.js"),
-          import("./chunk-w0py1apz.js"),
+          import("../bootstrap/state.js"),
+          import("../utils/sessionConfigFlags.js"),
+          import("../utils/storage/pinStorageV5.js"),
+          import("../utils/settings/constants.js"),
         ]);
-        let se = {
+        let sessionConfig = {
           ...agentsArgs.config,
           settingSources: appliedSettingSourcesFlagValue(),
         };
-        let S = pinStorageV5(storageV5EnvPin);
-        let z;
-        if (isStorageV5Enabled() && S !== undefined) {
+        let storageV5 = pinStorageV5(storageV5EnvPin);
+        let credentials;
+        if (isStorageV5Enabled() && storageV5 !== undefined) {
           let [
             { credentialsStoreFor },
             { setGrowthBookCredentials, setGrowthBookStorageBackend },
             { primeFastPathCredentials },
           ] = await Promise.all([
-            import("./chunk-y36z1q7c.js"),
-            import("./chunk-6df1d6re.js"),
-            import("./chunk-ts9rfgqd.js"),
+            import("../utils/secureStorage/credentialsFileStore.js"),
+            import("../services/analytics/ATIS_REQUEST_HEADER.lazy.js"),
+            import("../utils/primeFastPathCredentials.lazy.js"),
           ]);
-          z = credentialsStoreFor(S);
-          setGrowthBookCredentials(z);
-          setGrowthBookStorageBackend(S);
-          await primeFastPathCredentials(z);
-          await seedInstallIDs(S);
+          credentials = credentialsStoreFor(storageV5);
+          setGrowthBookCredentials(credentials);
+          setGrowthBookStorageBackend(storageV5);
+          await primeFastPathCredentials(credentials);
+          await seedInstallIDs(storageV5);
         }
-        import("./chunk-tscd0vez.js").then(({ resolveSetting }) => {
+        import("../utils/settings/userIntentSettings.js").then(({ resolveSetting }) => {
           let { value } = resolveSetting("theme", "dark");
-          if (value.startsWith("custom:")) import("./chunk-d0cyb829.js").then((F) => F.loadCustomThemes(S));
+          if (value.startsWith("custom:"))
+            import("../utils/customThemes.js").then((themeModule) => themeModule.loadCustomThemes(storageV5));
         });
         let relaunch = consumeAgentViewRelaunchMarker();
         setIsInteractive(true);
         setCliSessionConfigCarried(
           cliCarriesSessionConfig({
-            ...se,
+            ...sessionConfig,
             ...dispatchDefaults,
           }),
         );
         setRestrictedSession(agentsArgs.config.restricted);
         setSessionStartType("agents_view");
-        let ae = () => {};
-        process.on("unhandledRejection", ae);
+        let onUnhandledRejection = () => {};
+        process.on("unhandledRejection", onUnhandledRejection);
         let resolved = Promise.resolve();
-        let ce = () => {};
+        let releaseReady = () => {};
         let promise = new Promise((resolve) => {
-          ce = resolve;
+          releaseReady = resolve;
         });
         setImmediate(async () => {
-          if (isStorageV5Enabled() && S !== undefined)
+          if (isStorageV5Enabled() && storageV5 !== undefined)
             try {
               let [{ credentialsStoreFor }, { composePolicyLimitsClient, primePolicyLimitsCache }] =
-                await Promise.all([import("./chunk-y36z1q7c.js"), import("./chunk-qchbrsbw.js")]);
+                await Promise.all([
+                  import("../utils/secureStorage/credentialsFileStore.js"),
+                  import("../services/policyLimits/DefaultPolicyLimitsClientSlot.lazy.js"),
+                ]);
               composePolicyLimitsClient({
-                storageV5: S,
-                credentials: credentialsStoreFor(S),
+                storageV5,
+                credentials: credentialsStoreFor(storageV5),
               });
-              await primePolicyLimitsCache(S);
+              await primePolicyLimitsCache(storageV5);
             } catch (error) {
-              import("./chunk-cgjee2k6.js").then(({ logForDebugging }) =>
+              import("../utils/debug.js").then(({ logForDebugging }) =>
                 logForDebugging(
                   `Policy limits: start-up composition on the agents path failed: ${error instanceof Error ? error.message : String(error)}`,
                   {
@@ -859,18 +873,18 @@ async function cliMain() {
               );
             }
           resolved = Promise.all([
-            import("./chunk-r3wdn2dp.js"),
-            import("./chunk-nynswhsz.js"),
-            import("./chunk-dn8vrmng.js"),
-            import("./chunk-3x77zjqp.js"),
-            import("./chunk-ezz35vxh.js"),
-            import("./chunk-564n8sr7.js"),
-            import("./chunk-6df1d6re.js"),
-            import("./chunk-4a9xkd77.js"),
-            import("./chunk-eesswvbz.js"),
-            import("./chunk-q6kb333n.js"),
-            import("./chunk-zqrznfbt.js"),
-            import("./chunk-cgjee2k6.js"),
+            import("../utils/gracefulShutdown.js"),
+            import("../utils/errorLogSink.js"),
+            import("../services/analytics/sink.js"),
+            import("../services/analytics/firstPartyEventLogger.js"),
+            import("../services/analytics/index.js"),
+            import("../utils/agentSwarmsEnabled.js"),
+            import("../services/analytics/ATIS_REQUEST_HEADER.lazy.js"),
+            import("./init.js"),
+            import("../utils/config.js"),
+            import("../utils/managedEnvApply.js"),
+            import("../utils/detectRepository.js"),
+            import("../utils/debug.js"),
           ])
             .then(
               ([
@@ -888,8 +902,8 @@ async function cliMain() {
                 { initDefaultDebugLog },
               ]) => {
                 setupGracefulShutdown({
-                  storageV5: S,
-                  credentials: z,
+                  storageV5,
+                  credentials,
                 });
                 setRepoDetectionGuards({
                   trustProbe: checkHasTrustDialogAccepted,
@@ -897,133 +911,142 @@ async function cliMain() {
                 initializeGrowthBook().catch(() => {});
                 initializeErrorLogSink();
                 initializeAnalyticsSink();
-                initialize1PEventLogging(S);
-                if (isStorageV5Enabled() && S !== undefined) {
+                initialize1PEventLogging(storageV5);
+                if (isStorageV5Enabled() && storageV5 !== undefined) {
                   initDefaultDebugLog({
-                    storageV5: S,
+                    storageV5,
                   });
-                  watchGlobalConfigThroughStorage(S);
+                  watchGlobalConfigThroughStorage(storageV5);
                 }
                 promise.then(() => {
                   if (checkHasTrustDialogAccepted()) {
                     applyConfigEnvironmentVariables();
-                    initializeTelemetryAfterTrust(S);
+                    initializeTelemetryAfterTrust(storageV5);
                   }
                 });
                 logEvent("tengu_fleetview", {
-                  defaultToAgentsView: T,
+                  defaultToAgentsView,
                   relaunch,
                 });
                 return captureTeammateModeSnapshotIfEnabled();
               },
             )
-            .finally(() => process.off("unhandledRejection", ae));
-          let A = () =>
-            void import("./chunk-5kp2513a.js").then((g) =>
-              g.startBackgroundHousekeeping(getRootSession().host, S),
+            .finally(() => process.off("unhandledRejection", onUnhandledRejection));
+          let startHousekeeping = () =>
+            void import("../utils/backgroundHousekeeping.js").then((housekeepingModule) =>
+              housekeepingModule.startBackgroundHousekeeping(getRootSession().host, storageV5),
             );
-          Promise.all([import("./chunk-6df1d6re.js"), import("./chunk-eesswvbz.js")]).then(
-            ([{ getFeatureValue_CACHED_MAY_BE_STALE }, { checkHasTrustDialogAccepted }]) => {
-              if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_noble_wozniak", true))
-                promise.then(() => {
-                  if (checkHasTrustDialogAccepted()) A();
-                });
-              else A();
-            },
-          );
+          Promise.all([
+            import("../services/analytics/ATIS_REQUEST_HEADER.lazy.js"),
+            import("../utils/config.js"),
+          ]).then(([{ getFeatureValue_CACHED_MAY_BE_STALE }, { checkHasTrustDialogAccepted }]) => {
+            if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_noble_wozniak", true))
+              promise.then(() => {
+                if (checkHasTrustDialogAccepted()) startHousekeeping();
+              });
+            else startHousekeeping();
+          });
         });
         consumeEarlyInput();
         applyFleetViewHostWindowsEnv();
-        let ee =
+        let bypassModule =
           dispatchDefaults?.permissionMode === "bypassPermissions" || dispatchDefaults?.allowBypass
-            ? await import("./chunk-k88gsmtn.js")
+            ? await import("../utils/permissions/applyBypassPolicyGate.lazy.js")
             : undefined;
-        ee?.refuseBypassUnderRoot(dispatchDefaults);
-        let pe = ee?.applyBypassPolicyGate(dispatchDefaults) ?? dispatchDefaults;
+        bypassModule?.refuseBypassUnderRoot(dispatchDefaults);
+        let effectiveDefaults = bypassModule?.applyBypassPolicyGate(dispatchDefaults) ?? dispatchDefaults;
         let root = await createRoot(getBaseRenderOptions(false));
-        let { ensureAgentsWorkspaceTrust, agentsTrustDecision } = await import("./chunk-pn8x1715.js");
-        await ensureAgentsWorkspaceTrust(root, agentsTrustDecision(), S);
-        ce();
-        if (ee) await ee.ensureAgentsBypassConsent(root, pe, S);
-        let de = true;
+        let { ensureAgentsWorkspaceTrust, agentsTrustDecision } =
+          await import("../utils/agentsWorkspaceTrust.js");
+        await ensureAgentsWorkspaceTrust(root, agentsTrustDecision(), storageV5);
+        releaseReady();
+        if (bypassModule) await bypassModule.ensureAgentsBypassConsent(root, effectiveDefaults, storageV5);
+        let orgGateFlagOn = true;
         try {
-          de = require("./chunk-2wc2xwxh.js").orgConfigGateFlagOnHand(
-            getGlobalConfig(),
-            process.env.CLAUDE_INTERNAL_FC_OVERRIDES,
-          );
+          orgGateFlagOn =
+            require("../services/remoteManagedSettings/orgConfigGate.js").orgConfigGateFlagOnHand(
+              getGlobalConfig(),
+              process.env.CLAUDE_INTERNAL_FC_OVERRIDES,
+            );
         } catch {}
-        if (de && (await import("./chunk-bbtp62nj.js")).orgConfigGateFlagCouldArm()) {
-          let { enforceOrgConfigGateOnLaunchLane } = await import("./chunk-np0e9bed.js");
+        if (
+          orgGateFlagOn &&
+          (await import("../services/policyLimits/orgConfigGateFlag.js")).orgConfigGateFlagCouldArm()
+        ) {
+          let { enforceOrgConfigGateOnLaunchLane } =
+            await import("../services/policyLimits/orgConfigStartup.js");
           await enforceOrgConfigGateOnLaunchLane({
             showBlockedScreen: () =>
-              import("./chunk-6bvzpeaf.js").then(
-                (g) => g.showOrgConfigBlockedScreen,
+              import("../components/OrgConfigBlockedScreen.js").then(
+                (orgConfigModule) => orgConfigModule.showOrgConfigBlockedScreen,
                 () => {
                   return;
                 },
               ),
-            printMessage: async (g) => {
-              let { endInkWithError } = await import("./chunk-pz8vz2wa.js");
-              await endInkWithError(root, g);
+            printMessage: async (message) => {
+              let { endInkWithError } = await import("../interactiveHelpers.js");
+              await endInkWithError(root, message);
             },
           });
         }
-        let bg = await import("./chunk-v2n15p0s.js");
-        let He = {
+        let bg = await import("../utils/fleetGates.js");
+        let mountOptions = {
           cwdFilter: agentsArgs.cwdFilter,
-          dispatchExtraArgs: earlyArgsToArgv(resolveEarlyArgPaths(se, resolve)),
-          dispatchDefaults: pe,
+          dispatchExtraArgs: earlyArgsToArgv(resolveEarlyArgPaths(sessionConfig, resolve)),
+          dispatchDefaults: effectiveDefaults,
           entryChannel: bg.isListReturnRelaunch()
             ? "list_return"
             : isAgentsCommand
               ? "cli_agents"
               : "default_home",
-          storageV5: S,
-          credentials: z,
+          storageV5,
+          credentials,
         };
         {
-          let { mountFleetViewWithComposerBack } = await import("./chunk-ygxzcsa5.js");
-          await mountFleetViewWithComposerBack(root, He);
+          let { mountFleetViewWithComposerBack } = await import("../components/fleet/mountFleetView.js");
+          await mountFleetViewWithComposerBack(root, mountOptions);
         }
         await resolved.catch(() => {});
-        let { gracefulShutdown } = await import("./chunk-r3wdn2dp.js");
+        let { gracefulShutdown } = await import("../utils/gracefulShutdown.js");
         await gracefulShutdown(0, "other", {
           suppressResumeHint: true,
         });
         return;
       }
-      if (isAgentsCommand && !C) return fleetGateRejected("claude agents");
+      if (isAgentsCommand && !agentsViewSkipped) return fleetGateRejected("claude agents");
     }
   }
   if (args[0] === "self-hosted-runner") {
     profileCheckpoint("cli_self_hosted_runner_path");
-    let e = args[1];
-    if (e === "orchestrator") {
-      let { selfHostedRunnerOrchestratorMain } = await import("./chunk-2cbdmxy9.js");
+    let runnerVerb = args[1];
+    if (runnerVerb === "orchestrator") {
+      let { selfHostedRunnerOrchestratorMain } =
+        await import("./selfHostedRunner/selfHostedRunnerOrchestratorMain.lazy.js");
       await selfHostedRunnerOrchestratorMain(args.slice(2));
       return;
     }
-    if (e === "setup") {
-      let { selfHostedRunnerSetupMain } = await import("./chunk-w14wefpp.js");
+    if (runnerVerb === "setup") {
+      let { selfHostedRunnerSetupMain } = await import("../cli/handlers/selfHostedRunnerSetupMain.lazy.js");
       await selfHostedRunnerSetupMain(args.slice(2), storageV5EnvPin);
       return;
     }
-    if (e === "doctor") {
-      let { selfHostedRunnerDoctorMain } = await import("./chunk-aqpr1420.js");
+    if (runnerVerb === "doctor") {
+      let { selfHostedRunnerDoctorMain } = await import("../cli/handlers/selfHostedRunnerDoctor.js");
       await selfHostedRunnerDoctorMain(args.slice(2), storageV5EnvPin);
       return;
     }
-    if (e === "code-sign") {
-      let { selfHostedRunnerCodeSignMain } = await import("./chunk-nxsqxhv4.js");
+    if (runnerVerb === "code-sign") {
+      let { selfHostedRunnerCodeSignMain } = await import("../services/selfHostedRunner/configureGit.js");
       await selfHostedRunnerCodeSignMain(args.slice(2));
       return;
     }
-    if (e === "decode-token") {
-      let { selfHostedRunnerDecodeTokenMain } = await import("./chunk-xwsbadxw.js");
+    if (runnerVerb === "decode-token") {
+      let { selfHostedRunnerDecodeTokenMain } =
+        await import("../selfHostedRunner/selfHostedRunnerDecodeTokenMain.lazy.js");
       await selfHostedRunnerDecodeTokenMain(args.slice(2));
       return;
     }
-    let { selfHostedRunnerMain } = await import("./chunk-hm0ce8vc.js");
+    let { selfHostedRunnerMain } = await import("../services/selfHostedRunner/selfHostedRunner.js");
     await selfHostedRunnerMain(args.slice(1));
     return;
   }
@@ -1040,51 +1063,51 @@ async function cliMain() {
       );
       process.exit(1);
     }
-    let { eagerLoadSettings } = await import("./chunk-dcwp8rdv.js");
+    let { eagerLoadSettings } = await import("../main.js");
     eagerLoadSettings();
-    let { loadFastPathPolicy } = await import("./chunk-hhv17y7d.js");
+    let { loadFastPathPolicy } = await import("../cli/fastPathSettings.js");
     {
       let fastPathPolicy = await loadFastPathPolicy(storageV5EnvPin);
       if (fastPathPolicy) {
-        let { exitWithError } = await import("./chunk-a3ex6w41.js");
+        let { exitWithError } = await import("../utils/process.js");
         exitWithError(fastPathPolicy);
       }
     }
-    let { configureFastPathGlobalAgents } = await import("./chunk-hr00hxnh.js");
+    let { configureFastPathGlobalAgents } = await import("../cli/configureFastPathGlobalAgents.lazy.js");
     configureFastPathGlobalAgents();
-    let { isWorktreeModeEnabled } = await import("./chunk-jkvek32c.js");
+    let { isWorktreeModeEnabled } = await import("../utils/worktreeModeEnabled.js");
     if (isWorktreeModeEnabled()) {
       let [{ execIntoTmuxWorktree }, { pinStorageV5 }, { initDefaultDebugLog }] = await Promise.all([
-        import("./chunk-maxteas5.js"),
-        import("./chunk-beegrzb2.js"),
-        import("./chunk-cgjee2k6.js"),
+        import("../utils/worktree.lazy.js"),
+        import("../utils/storage/pinStorageV5.js"),
+        import("../utils/debug.js"),
       ]);
-      let n = pinStorageV5(storageV5EnvPin);
-      let T;
-      if (isStorageV5Enabled() && n !== undefined) {
+      let storageV5 = pinStorageV5(storageV5EnvPin);
+      let credentials;
+      if (isStorageV5Enabled() && storageV5 !== undefined) {
         initDefaultDebugLog({
-          storageV5: n,
+          storageV5,
         });
         let [
           { credentialsStoreFor },
           { setGrowthBookCredentials, setGrowthBookStorageBackend },
           { primeFastPathCredentials },
         ] = await Promise.all([
-          import("./chunk-y36z1q7c.js"),
-          import("./chunk-6df1d6re.js"),
-          import("./chunk-ts9rfgqd.js"),
+          import("../utils/secureStorage/credentialsFileStore.js"),
+          import("../services/analytics/ATIS_REQUEST_HEADER.lazy.js"),
+          import("../utils/primeFastPathCredentials.lazy.js"),
         ]);
-        T = credentialsStoreFor(n);
-        setGrowthBookCredentials(T);
-        setGrowthBookStorageBackend(n);
-        await primeFastPathCredentials(T);
-        let { seedInstallIDs } = await import("./chunk-eesswvbz.js");
-        await seedInstallIDs(n);
+        credentials = credentialsStoreFor(storageV5);
+        setGrowthBookCredentials(credentials);
+        setGrowthBookStorageBackend(storageV5);
+        await primeFastPathCredentials(credentials);
+        let { seedInstallIDs } = await import("../utils/config.js");
+        await seedInstallIDs(storageV5);
       }
-      let N = await execIntoTmuxWorktree(args, n, T);
-      if (N.handled) return;
-      let { exitWithError } = await import("./chunk-a3ex6w41.js");
-      exitWithError(N.error);
+      let worktreeResult = await execIntoTmuxWorktree(args, storageV5, credentials);
+      if (worktreeResult.handled) return;
+      let { exitWithError } = await import("../utils/process.js");
+      exitWithError(worktreeResult.error);
     }
   }
   if (args.length === 1 && (args[0] === "--update" || args[0] === "--upgrade"))
@@ -1099,7 +1122,7 @@ async function cliMain() {
     isRemoteControlInvocation,
     isAgentsJsonInvocation,
     isProjectVerbInvocation,
-  } = await import("./chunk-y7y3wdde.js");
+  } = await import("../main/NON_REPL_SUBCOMMANDS.lazy.js");
   if (
     !desktopForced &&
     !NON_REPL_SUBCOMMANDS.has(process.argv[2] ?? "") &&
@@ -1109,18 +1132,18 @@ async function cliMain() {
     !isAgentsJsonInvocation(process.argv.slice(2)) &&
     !isProjectVerbInvocation(process.argv.slice(2))
   ) {
-    let { startCapturingEarlyInput } = await import("./chunk-h4wwf2p6.js");
+    let { startCapturingEarlyInput } = await import("../utils/earlyInput.js");
     startCapturingEarlyInput();
   }
   let [{ startMdmRawRead }, { startKeychainPrefetch }] = await Promise.all([
-    import("./chunk-6195yta3.js"),
-    import("./chunk-bgfff79h.js"),
+    import("../utils/settings/mdm/rawRead.js"),
+    import("../utils/secureStorage/keychainPrefetch.js"),
   ]);
   startMdmRawRead();
   startKeychainPrefetch();
   profileCheckpoint("cli_before_main_import");
-  (await import("./chunk-q8xhzy3r.js")).configureZodForStartup();
-  let { main } = await import("./chunk-shkzs7rp.js");
+  (await import("../utils/zodStartup.js")).configureZodForStartup();
+  let { main } = await import("../main.js");
   profileCheckpoint("cli_after_main_import");
   await main(storageV5EnvPin);
   profileCheckpoint("cli_after_main_complete");

@@ -5,13 +5,13 @@
  * pieces: chunk-zykv69v4.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_formats_2 } from "./formats.js";
 import { require_limit } from "./limit.js";
 import { require_codegen_2 as require_codegen } from "../../ajv/dist/compile/codegen/index.js";
 
 //@ chunk-zykv69v4.js:9708-10458 cjs-fingerprint
-var require_ajv_formats = x(function (cjsExports, cjsModule) {
+var require_ajv_formats = __commonJS(function (cjsExports, cjsModule) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

@@ -55,7 +55,7 @@ async function performLogout({
   incomingIdentity,
   credentials,
 }) {
-  let { flushTelemetry } = await import("./chunk-9vvvg0d3.js");
+  let { flushTelemetry } = await import("../../utils/telemetry/bigQueryExportIntervalMs.lazy.js");
   await flushTelemetry();
   await flushReplicasBeforeLogout(artifactAccount);
   if (isBgSession()) {
@@ -80,15 +80,15 @@ async function performLogout({
       await revokeOAuthToken(cloudSessionsOauth.refreshToken, cloudSessionsOauth.clientId);
   }
   if (getAPIProvider() === "gateway") {
-    let r = Date.now() + 5000;
+    let deadline = Date.now() + 5000;
     for (
       let gatewayRefreshInFlight = getGatewayRefreshInFlight();
-      gatewayRefreshInFlight && Date.now() < r;
+      gatewayRefreshInFlight && Date.now() < deadline;
       gatewayRefreshInFlight = getGatewayRefreshInFlight()
     )
       await withDeadline(
         gatewayRefreshInFlight.catch(() => {}),
-        r - Date.now(),
+        deadline - Date.now(),
       );
     let secureStorage = getSecureStorage();
     secureStorage.invalidateCache?.();
@@ -108,7 +108,7 @@ async function performLogout({
   });
   forgetConsoleProfileCloudSessionsBearer();
   let secureStorage = getSecureStorage();
-  let O;
+  let result;
   if (preserveNonAnthropicAuth) {
     if (getAPIProvider() === "firstParty") {
       secureStorage.invalidateCache?.();
@@ -143,19 +143,19 @@ async function performLogout({
         logError(error);
       });
   } else {
-    let r = false;
-    let e = async () => {
-      r = true;
+    let failed = false;
+    let clearAuth = async () => {
+      failed = true;
       let coworkRemoteDevice = (await readSecureStorageWithRetry(secureStorage, credentials))
         ?.coworkRemoteDevice;
       await secureStorage.delete(credentials);
       if (coworkRemoteDevice && Object.keys(coworkRemoteDevice).length > 0)
         await restoreDeviceIdentity(secureStorage, coworkRemoteDevice, credentials);
     };
-    await withStorageWriteLock(e).catch((error) => {
-      if (r) throw error;
+    await withStorageWriteLock(clearAuth).catch((error) => {
+      if (failed) throw error;
       logError(error);
-      return runInsideWriteLock(e);
+      return runInsideWriteLock(clearAuth);
     });
   }
   setGatewayAuth(null);
@@ -168,26 +168,26 @@ async function performLogout({
     credentials,
   });
   await saveGlobalConfig((current) => {
-    let e = {
+    let config = {
       ...current,
     };
     if (clearOnboarding) {
-      e.hasCompletedOnboarding = false;
-      e.subscriptionNoticeCount = 0;
-      e.hasAvailableSubscription = false;
-      if (e.customApiKeyResponses !== undefined)
-        e.customApiKeyResponses = {
+      config.hasCompletedOnboarding = false;
+      config.subscriptionNoticeCount = 0;
+      config.hasAvailableSubscription = false;
+      if (config.customApiKeyResponses !== undefined)
+        config.customApiKeyResponses = {
           approved: [],
-          rejected: customApiKeyResponsesOf(e).rejected,
+          rejected: customApiKeyResponsesOf(config).rejected,
         };
-      let c = SUBSCRIPTION_SWITCH;
-      if (e.seenNotifications?.[c] !== undefined) {
-        let { [c]: m, ...S } = e.seenNotifications;
-        e.seenNotifications = S;
+      let key = SUBSCRIPTION_SWITCH;
+      if (config.seenNotifications?.[key] !== undefined) {
+        let { [key]: dropped, ...rest } = config.seenNotifications;
+        config.seenNotifications = rest;
       }
     }
-    clearOAuthAccountFields(e);
-    return e;
+    clearOAuthAccountFields(config);
+    return config;
   }, storageV5);
   await noopAsync();
   setResolvedOrgDefault(undefined);
@@ -220,28 +220,28 @@ async function fleetHostLogout({ exit, setError, setInfo, storageV5, credentials
 }
 //@ chunk-th8w37yz.js:5650-5908 sole-consumer
 async function restoreDeviceIdentity(secureStorage, coworkRemoteDevice, credentials) {
-  let a;
+  let attempt;
   for (let j = 0; j < 2; j++)
     try {
-      let n = await secureStorage.mutate(
+      let mutated = await secureStorage.mutate(
         () => ({
           coworkRemoteDevice,
         }),
         credentials,
       );
-      if (n.success) return;
-      a = Error("logout: the device identity could not be written back after the credential wipe");
-      if (!n.transient) break;
+      if (mutated.success) return;
+      attempt = Error("logout: the device identity could not be written back after the credential wipe");
+      if (!mutated.transient) break;
     } catch (error) {
-      a = error;
+      attempt = error;
     }
-  logError(a);
+  logError(attempt);
 }
 //@ chunk-th8w37yz.js:5908-6137 sole-consumer
 async function readSecureStorageWithRetry(secureStorage, credentials) {
   for (let j = 0; j < 2; j++) {
-    let a = await (secureStorage.readAsyncStrict?.(credentials) ?? secureStorage.readAsync(credentials));
-    if (a !== READ_FAILED) return a;
+    let read = await (secureStorage.readAsyncStrict?.(credentials) ?? secureStorage.readAsync(credentials));
+    if (read !== READ_FAILED) return read;
   }
   logError(
     Error("logout: secure storage could not be read, so the device identity is not carried across the wipe"),
@@ -249,14 +249,14 @@ async function readSecureStorageWithRetry(secureStorage, credentials) {
   return;
 }
 //@ chunk-emh405f3.js:228-1000 placement
-function signOutFailureMessage(o, reason, e) {
+function signOutFailureMessage(error, reason, detail) {
   switch (reason) {
     case "credential_store_failed":
       return primarySecureStoreKind() === "keychain"
-        ? `Couldn't remove the saved sign-in for "${o}", so Claude Code may still use it. Claude Code could not read or update its credential store. If the macOS keychain is locked, unlock it, for example with \`security unlock-keychain\`, then ${e}.`
-        : `Couldn't remove the saved sign-in for "${o}", so Claude Code may still use it. Claude Code could not read or update its credential store. ${e.charAt(0).toUpperCase()}${e.slice(1)}.`;
+        ? `Couldn't remove the saved sign-in for "${error}", so Claude Code may still use it. Claude Code could not read or update its credential store. If the macOS keychain is locked, unlock it, for example with \`security unlock-keychain\`, then ${detail}.`
+        : `Couldn't remove the saved sign-in for "${error}", so Claude Code may still use it. Claude Code could not read or update its credential store. ${detail.charAt(0).toUpperCase()}${detail.slice(1)}.`;
     case "keychain_unreadable":
-      return `Couldn't confirm the sign-out from "${o}": Claude Code could not read the macOS keychain, so a saved sign-in may still be there. The keychain may be locked. Unlock it, for example with \`security unlock-keychain\`, then ${e}.`;
+      return `Couldn't confirm the sign-out from "${error}": Claude Code could not read the macOS keychain, so a saved sign-in may still be there. The keychain may be locked. Unlock it, for example with \`security unlock-keychain\`, then ${detail}.`;
   }
 }
 //@ chunk-tndsj50r.js:12979-13456 fingerprint = call (0.431)
@@ -264,8 +264,8 @@ function signOutFailureMessage(o, reason, e) {
  * /logout 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
 async function call(onDone, context) {
-  let t = isBgSession();
-  if (!t)
+  let isBackground = isBgSession();
+  if (!isBackground)
     logAuthEvent({
       action: "logout",
       success: true,
@@ -276,7 +276,7 @@ async function call(onDone, context) {
     storageV5: context.storageV5,
     credentials: context.credentials,
   });
-  if (t) {
+  if (isBackground) {
     onDone(
       "This background session shares credentials with other sessions; /logout here has no effect. Run /logout from your main terminal to sign out.",
       {
@@ -293,4 +293,4 @@ async function call(onDone, context) {
   }, 200);
   return message;
 }
-export { signOutFailureMessage, performLogout };
+export { signOutFailureMessage, performLogout, call, fleetHostLogout };

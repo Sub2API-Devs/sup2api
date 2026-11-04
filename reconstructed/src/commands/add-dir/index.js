@@ -26,7 +26,7 @@ var addDirNonInteractiveCommand = {
   get isHidden() {
     return !getIsNonInteractiveSession();
   },
-  load: () => import("./chunk-efagea6a.js"),
+  load: () => import("./call.lazy.js"),
 };
 var addDirCommandDefinition = {
   type: "local-jsx",

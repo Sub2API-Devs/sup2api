@@ -13,11 +13,11 @@ import { join } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   zodStrictObject,
-  E,
-  string,
+  numberSchema,
+  stringSchema,
   array,
   unknown,
-  u,
+  objectSchema,
   literal,
   discriminatedUnion,
   _enum,
@@ -62,7 +62,11 @@ import { sessionTempDirRealpath } from "../../utils/tempDirRealpaths.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { createCombinedAbortSignal } from "../../utils/combinedAbortSignal.js";
 import { count } from "../../utils/collections.js";
+import { deferInit, beginDeferredInits, runDeferredInits } from "../../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 3 modules closed by ./callClaims.js;
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("src/services/mcpServe/callClaims.js");
 //@ chunk-m8aeec95.js:1563-1838 placement
 /**
  * ReadCalls 的上限与输入结构（seen、life、hold_ms、told、tool_use_ids、接口版本）。
@@ -72,11 +76,11 @@ var MAX_TOLD_ENTRIES = 32;
 var MAX_TOOL_USE_IDS = 32;
 var readCallsInputSchema = DoctorLazy(() =>
   zodStrictObject({
-    seen: E().int().min(0).optional(),
-    life: string().max(64).optional(),
-    hold_ms: E().int().min(0).max(MAX_READ_CALLS_HOLD_MS).optional(),
-    told: array(string().max(64)).max(MAX_TOLD_ENTRIES).optional(),
-    tool_use_ids: array(string().min(1).max(256)).max(MAX_TOOL_USE_IDS).optional(),
+    seen: numberSchema().int().min(0).optional(),
+    life: stringSchema().max(64).optional(),
+    hold_ms: numberSchema().int().min(0).max(MAX_READ_CALLS_HOLD_MS).optional(),
+    told: array(stringSchema().max(64)).max(MAX_TOLD_ENTRIES).optional(),
+    tool_use_ids: array(stringSchema().min(1).max(256)).max(MAX_TOOL_USE_IDS).optional(),
     tool_host_interface: unknown().optional(),
   }),
 );
@@ -84,25 +88,25 @@ var readCallsInputSchema = DoctorLazy(() =>
 /**
  * 校验 ReadCalls 输入：told 与 tool_use_ids 列表不能超过上限（超出抛出遥测安全错误），再按 schema 解析。
  */
-function parseReadCallsInput(e) {
-  let n = {
+function parseReadCallsInput(input) {
+  let limits = {
     told: MAX_TOLD_ENTRIES,
     tool_use_ids: MAX_TOOL_USE_IDS,
   };
-  let r = isPlainObject_2(e)
-    ? Object.entries(n).find(([key, value]) => {
-        let h = getOwn(e, key);
-        return Array.isArray(h) && h.length > value;
+  let overflow = isPlainObject_2(input)
+    ? Object.entries(limits).find(([key, value]) => {
+        let entryValue = getOwn(input, key);
+        return Array.isArray(entryValue) && entryValue.length > value;
       })
     : undefined;
-  if (r !== undefined) {
-    let [s, y] = r;
+  if (overflow !== undefined) {
+    let [field, limit] = overflow;
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `ReadCalls: ${s} has more than ${y} entries`,
+      `ReadCalls: ${field} has more than ${limit} entries`,
       "ReadCalls: a list has more entries than are taken",
     );
   }
-  return readCallsInputSchema().parse(e);
+  return readCallsInputSchema().parse(input);
 }
 //@ chunk-m8aeec95.js:2338-3042 placement
 /**
@@ -116,65 +120,65 @@ var MAX_CALL_RECORD_BATCH = 16;
 var MAX_CALL_RECORD_BYTES = 32768;
 var CALL_RECORD_EXT = ".json";
 var callRecordSchema = DoctorLazy(() => {
-  let e = E().int().min(0).max(Number.MAX_SAFE_INTEGER);
-  return u({
+  let timestamp = numberSchema().int().min(0).max(Number.MAX_SAFE_INTEGER);
+  return objectSchema({
     v: literal(1),
-    container_start: string().min(1).max(64),
-    listed: u({
-      taskId: string().refine((n) => isTaskIdOfType("local_bash", n)),
-      output_path: string().max(4096),
-      limit_ms: E().min(0).max(Number.MAX_SAFE_INTEGER),
-    }).transform((n) =>
-      isTaskOutputPathFor(n.taskId, n.output_path)
-        ? n
+    container_start: stringSchema().min(1).max(64),
+    listed: objectSchema({
+      taskId: stringSchema().refine((taskId) => isTaskIdOfType("local_bash", taskId)),
+      output_path: stringSchema().max(4096),
+      limit_ms: numberSchema().min(0).max(Number.MAX_SAFE_INTEGER),
+    }).transform((record) =>
+      isTaskOutputPathFor(record.taskId, record.output_path)
+        ? record
         : {
-            ...n,
+            ...record,
             output_path: "",
           },
     ),
-    started_at: e,
-    written_at: e,
-    ended: u({
+    started_at: timestamp,
+    written_at: timestamp,
+    ended: objectSchema({
       how: discriminatedUnion("state", [
-        u({
+        objectSchema({
           state: literal("exited"),
-          exit_code: E().int(),
+          exit_code: numberSchema().int(),
         }),
-        u({
+        objectSchema({
           state: literal("time_limit"),
         }),
-        u({
+        objectSchema({
           state: literal("stopped"),
           stopped_by: literal("session"),
         }),
-        u({
+        objectSchema({
           state: literal("killed"),
           reason: _enum(["daemon_exit", "output_limit", "container_stopped"]).optional().catch(undefined),
         }),
       ]).catch({
         state: "killed",
       }),
-      at: e,
+      at: timestamp,
     }).optional(),
   });
 });
 //@ chunk-m8aeec95.js:8490-8788 placement
-function describeRunState(session, n) {
-  let r = mcpServeCallState.of(session);
-  let s = r.runningRuns.get(n);
-  if (s !== undefined)
+function describeRunState(session, toolUseId) {
+  let callState = mcpServeCallState.of(session);
+  let startedAt = callState.runningRuns.get(toolUseId);
+  if (startedAt !== undefined)
     return {
       state: "running",
-      since_ms: Math.round(r.now() - s),
+      since_ms: Math.round(callState.now() - startedAt),
     };
-  if (r.finishedRuns.has(n))
+  if (callState.finishedRuns.has(toolUseId))
     return {
       state: "finished",
     };
-  if (!r.barredRuns.has(n))
-    r.newestDropped = maxDefined(
-      r.newestDropped,
-      setWithEviction(r.barredRuns, n, MAX_PENDING_STARTS, r.now()),
+  if (!callState.barredRuns.has(toolUseId))
+    callState.newestDropped = maxDefined(
+      callState.newestDropped,
+      setWithEviction(callState.barredRuns, toolUseId, MAX_PENDING_STARTS, callState.now()),
     );
   return {
     state: "unknown",
@@ -189,9 +193,9 @@ function isCallRunBarred(session, toolUseId) {
 /**
  * 判断该 run 是否存在（运行中或已结束）。
  */
-function isKnownRun(session, n) {
+function isKnownRun(session, toolUseId) {
   let { runningRuns, finishedRuns } = mcpServeCallState.of(session);
-  return runningRuns.has(n) || finishedRuns.has(n);
+  return runningRuns.has(toolUseId) || finishedRuns.has(toolUseId);
 }
 //@ chunk-m8aeec95.js:8927-8979 placement
 /**
@@ -204,8 +208,8 @@ function isRunningRun(session, toolUseId) {
 /**
  * 订阅 run 结束事件。
  */
-function onRunEnded(session, n) {
-  return mcpServeCallState.of(session).runEnded.subscribe(n);
+function onRunEnded(session, listener) {
+  return mcpServeCallState.of(session).runEnded.subscribe(listener);
 }
 //@ chunk-m8aeec95.js:9034-9088 placement
 /**
@@ -248,40 +252,50 @@ function keepsBackgroundCommandsCapability(life) {
 /**
  * 后台命令能力声明的 schema。
  */
-var backgroundCommandsCapabilitySchema = DoctorLazy(() =>
-  u({
-    experimental: u({
-      [ANTHROPIC_BACKGROUNDCOMMANDS]: u({
-        v: literal(1),
+var backgroundCommandsCapabilitySchema; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-m8aeec95.js:13778", () => {
+  backgroundCommandsCapabilitySchema = DoctorLazy(() =>
+    objectSchema({
+      experimental: objectSchema({
+        [ANTHROPIC_BACKGROUNDCOMMANDS]: objectSchema({
+          v: literal(1),
+        }),
       }),
     }),
-  }),
-);
+  );
+});
 //@ chunk-m8aeec95.js:13832-13890 placement
 /**
  * 后台命令移动能力声明的 schema。
  */
-var backgroundCommandMovesSchema = DoctorLazy(() =>
-  u({
-    experimental: u({
-      [ANTHROPIC_BACKGROUNDCOMMANDS]: u({
-        moves: literal(1),
+var backgroundCommandMovesSchema; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-m8aeec95.js:13832", () => {
+  backgroundCommandMovesSchema = DoctorLazy(() =>
+    objectSchema({
+      experimental: objectSchema({
+        [ANTHROPIC_BACKGROUNDCOMMANDS]: objectSchema({
+          moves: literal(1),
+        }),
       }),
     }),
-  }),
-);
+  );
+});
 //@ chunk-m8aeec95.js:13890-14000 placement
-var stopBackgroundCommandSchema = DoctorLazy(() =>
-  zodStrictObject({
-    taskId: string().min(1).max(64),
-  }),
-);
-var moveRunningCommandSchema = DoctorLazy(() =>
-  zodStrictObject({
-    tool_use_id: toolUseIdSchema(),
-    because: _enum(["message", "person"]),
-  }),
-);
+var stopBackgroundCommandSchema; // deferred: uses CLAIM_FIELD_TRUST (./callClaims.js) of its import cycle while loading; runs once the cycle is complete
+var moveRunningCommandSchema;
+deferInit("chunk-m8aeec95.js:13890", () => {
+  stopBackgroundCommandSchema = DoctorLazy(() =>
+    zodStrictObject({
+      taskId: stringSchema().min(1).max(64),
+    }),
+  );
+  moveRunningCommandSchema = DoctorLazy(() =>
+    zodStrictObject({
+      tool_use_id: toolUseIdSchema(),
+      because: _enum(["message", "person"]),
+    }),
+  );
+});
 //@ chunk-m8aeec95.js:14000-14147 placement
 function toEndedHow({ interrupted, code, outputFileSize }) {
   return !interrupted
@@ -311,17 +325,17 @@ class ReadCallsLog {
   #i = Promise.resolve();
   #a;
   #d;
-  constructor(e = () => performance.now()) {
-    this.#t = e;
+  constructor(clock = () => performance.now()) {
+    this.#t = clock;
   }
-  keepRecordsIn(e, n = Date.now) {
+  keepRecordsIn(store, wallNow = Date.now) {
     if (this.#n !== undefined) return;
     this.#n = {
-      store: e,
-      wallNow: n,
+      store,
+      wallNow,
     };
-    this.#i = this.#p(e, n);
-    registerCleanup(() => e.settledAll());
+    this.#i = this.#p(store, wallNow);
+    registerCleanup(() => store.settledAll());
   }
   get restored() {
     return this.#i;
@@ -329,35 +343,35 @@ class ReadCallsLog {
   get version() {
     return this.#o;
   }
-  starterFor(e) {
+  starterFor(call) {
     return {
       reserve: () => {
         return;
       },
-      listMove: (n) => this.#c(e.toolUseId, n),
-      adopt: (n, r, s, y) => {
+      listMove: (because) => this.#c(call.toolUseId, because),
+      adopt: (task, requestedTimeoutMs, command, trigger) => {
         try {
-          let h = this.#m(n, r, s, e, y);
-          this.#r.delete(e.toolUseId ?? "");
+          let taskId = this.#m(task, requestedTimeoutMs, command, call, trigger);
+          this.#r.delete(call.toolUseId ?? "");
           logFeatureOk("mcp_serve_background_command");
-          return h;
+          return taskId;
         } catch (error) {
           logFeatureBad("mcp_serve_background_command", "not_kept");
-          n.kill();
-          n.cleanup();
+          task.kill();
+          task.cleanup();
           throw error;
         }
       },
     };
   }
-  taskIdOf(e) {
-    return [...this.#e.values()].find(({ listed }) => listed.tool_use_id === e)?.listed.taskId;
+  taskIdOf(toolUseId) {
+    return [...this.#e.values()].find(({ listed }) => listed.tool_use_id === toolUseId)?.listed.taskId;
   }
   msSinceNewestDropped() {
     return this.#a === undefined ? undefined : Math.round(this.#t() - this.#a);
   }
   list() {
-    let e = this.#t();
+    let now = this.#t();
     return {
       life: this.life,
       commands_version: this.#o,
@@ -366,7 +380,7 @@ class ReadCallsLog {
         ...(ended
           ? {
               ...ended.how,
-              ended_ms_ago: Math.round(e - ended.at),
+              ended_ms_ago: Math.round(now - ended.at),
             }
           : {
               state: "running",
@@ -378,12 +392,12 @@ class ReadCallsLog {
                 output_tail: stallTail,
               }),
             }),
-        ran_ms: Math.round((ended?.at ?? e) - startedAt),
+        ran_ms: Math.round((ended?.at ?? now) - startedAt),
       })),
     };
   }
-  forget(e) {
-    let flattened = e.flatMap((r) => this.#e.get(r) ?? []);
+  forget(toolUseIds) {
+    let flattened = toolUseIds.flatMap((taskId) => this.#e.get(taskId) ?? []);
     flattened
       .filter(({ ended }) => ended)
       .forEach(({ listed }) => {
@@ -392,104 +406,110 @@ class ReadCallsLog {
       });
     flattened
       .filter(({ ended }) => !ended)
-      .forEach((r) => {
-        r.unwanted = true;
-        this.#n?.store.remove(r.listed.taskId);
+      .forEach((record) => {
+        record.unwanted = true;
+        this.#n?.store.remove(record.listed.taskId);
       });
   }
-  stop(e) {
+  stop(toolUseId) {
     return (
-      this.#e.get(e)?.cut({
+      this.#e.get(toolUseId)?.cut({
         state: "stopped",
         stopped_by: "session",
       }) ?? false
     );
   }
-  moveRunning(e, n) {
-    return this.#r.get(e)?.(n) ?? this.taskIdOf(e) !== undefined;
+  moveRunning(toolUseId, because) {
+    return this.#r.get(toolUseId)?.(because) ?? this.taskIdOf(toolUseId) !== undefined;
   }
-  #c(e, n) {
-    if (e === undefined) return () => {};
-    this.#r.set(e, n);
+  #c(toolUseId, shouldStop) {
+    if (toolUseId === undefined) return () => {};
+    this.#r.set(toolUseId, shouldStop);
     return () => {
-      if (this.#r.get(e) === n) this.#r.delete(e);
+      if (this.#r.get(toolUseId) === shouldStop) this.#r.delete(toolUseId);
     };
   }
-  async changedSince(e, n) {
+  async changedSince(seenVersion, signal) {
     let { promise, resolve } = Promise.withResolvers();
-    let y = () => resolve();
-    let h = this.#s.subscribe(y);
-    n.addEventListener("abort", y, {
+    let wake = () => resolve();
+    let unsubscribe = this.#s.subscribe(wake);
+    signal.addEventListener("abort", wake, {
       once: true,
     });
-    if (e !== this.#o || n.aborted) y();
+    if (seenVersion !== this.#o || signal.aborted) wake();
     await promise;
-    h();
-    n.removeEventListener("abort", y);
+    unsubscribe();
+    signal.removeEventListener("abort", wake);
   }
-  #m(e, n, r, s, y) {
-    let taskId = e.taskOutput.taskId;
+  #m(task, requestedTimeoutMs, command, call, trigger) {
+    let taskId = task.taskOutput.taskId;
     let outputPath = getTaskOutputPath(taskId);
     if (
-      !e.background(taskId, {
+      !task.background(taskId, {
         atExit: "kill",
       })
     )
       throw Error(
         "The command had already ended when it was to be moved to the background, and its output was not kept. Run it again without run_in_background.",
       );
-    let backgroundTimeoutForDisplay = getBackgroundTimeoutForDisplay(n);
-    let S = {
+    let backgroundTimeoutForDisplay = getBackgroundTimeoutForDisplay(requestedTimeoutMs);
+    let record = {
       listed: {
         taskId,
-        ...(s.toolUseId !== undefined && {
-          tool_use_id: s.toolUseId,
+        ...(call.toolUseId !== undefined && {
+          tool_use_id: call.toolUseId,
         }),
-        ...(s.agentId !== undefined && {
-          agent_id: s.agentId,
+        ...(call.agentId !== undefined && {
+          agent_id: call.agentId,
         }),
-        command: truncateToLength(r, MAX_COMMAND_CHARS),
-        ...(s.description && {
-          description: truncateToLength(s.description, MAX_COMMAND_CHARS),
+        command: truncateToLength(command, MAX_COMMAND_CHARS),
+        ...(call.description && {
+          description: truncateToLength(call.description, MAX_COMMAND_CHARS),
         }),
         output_path: outputPath,
         limit_ms: backgroundTimeoutForDisplay,
       },
       startedAt: this.#t(),
-      cut: (R) => {
-        if (S.ended || e.status !== "backgrounded") return false;
-        x(R);
+      cut: (how) => {
+        if (record.ended || task.status !== "backgrounded") return false;
+        settle(how);
         return true;
       },
     };
-    let x = (R, v) => {
-      if (S.ended) return;
-      let I = classifyBackgroundCommand(r, e.taskOutput, v, R.state !== "exited", undefined);
-      clearTimeout(B);
-      z();
-      K();
-      S.ended = {
-        how: R,
+    let settle = (how, result) => {
+      if (record.ended) return;
+      let classified = classifyBackgroundCommand(
+        command,
+        task.taskOutput,
+        result,
+        how.state !== "exited",
+        undefined,
+      );
+      clearTimeout(deadlineTimer);
+      stopWatchingStall();
+      unregisterCleanup();
+      record.ended = {
+        how,
         at: this.#t(),
       };
       this.#e.delete(taskId);
-      if (S.unwanted) this.#n?.store.remove(taskId);
+      if (record.unwanted) this.#n?.store.remove(taskId);
       else {
-        this.#e.set(taskId, S);
-        this.#u(S);
+        this.#e.set(taskId, record);
+        this.#u(record);
       }
       this.#l().forEach(() => logFeatureSad("mcp_serve_background_command", "ending_dropped"));
       deferred.resolve();
       this.#o++;
       this.#s.emit();
       try {
-        if (e.status === "backgrounded") e.kill();
-        e.cleanup();
+        if (task.status === "backgrounded") task.kill();
+        task.cleanup();
         appendTaskOutput(
           taskId,
-          R.state === "exited"
+          how.state === "exited"
             ? `
-[exited with code ${R.exit_code}]
+[exited with code ${how.exit_code}]
 `
             : `
 [killed]
@@ -497,39 +517,39 @@ class ReadCallsLog {
         );
         evictTaskOutput(taskId);
         logForDebugging(
-          `mcp serve: background command ${taskId} ended: ${R.state}${R.state === "killed" && R.reason ? ` (${R.reason})` : ""}`,
+          `mcp serve: background command ${taskId} ended: ${how.state}${how.state === "killed" && how.reason ? ` (${how.reason})` : ""}`,
         );
-        let H = {
-          elapsed_ms: Math.round(S.ended.at - S.startedAt),
-          requested_timeout_ms: n ?? 0,
+        let event = {
+          elapsed_ms: Math.round(record.ended.at - record.startedAt),
+          requested_timeout_ms: requestedTimeoutMs ?? 0,
           deadline_ms: backgroundTimeoutForDisplay,
-          outcome: fromEnum(R.state !== "exited" ? "killed" : R.exit_code === 0 ? "completed" : "failed"),
+          outcome: fromEnum(how.state !== "exited" ? "killed" : how.exit_code === 0 ? "completed" : "failed"),
           stop_cause:
-            R.state === "time_limit"
+            how.state === "time_limit"
               ? lit("deadline")
-              : R.state === "killed"
-                ? fromEnumOpt(R.reason)
+              : how.state === "killed"
+                ? fromEnumOpt(how.reason)
                 : undefined,
-          stopped_by: fromEnumOpt(R.state === "stopped" ? R.stopped_by : undefined),
-          subagent_owned: s.agentId !== undefined,
-          unwanted: S.unwanted === true,
+          stopped_by: fromEnumOpt(how.state === "stopped" ? how.stopped_by : undefined),
+          subagent_owned: call.agentId !== undefined,
+          unwanted: record.unwanted === true,
           trigger:
-            y === "person"
+            trigger === "person"
               ? lit("user")
-              : y === "message"
+              : trigger === "message"
                 ? lit("deliver_message")
-                : s.movedAtTimeout
+                : call.movedAtTimeout
                   ? lit("timeout")
                   : lit("explicit"),
-          ...buildCommandTimingFields(v?.shellUsage),
-          tool_use_id: parentTaskId(s.toolUseId),
-          bash_command_kinds: I.commandClass?.bash_command_kinds,
-          bash_programs: I.commandClass?.bash_programs,
-          bash_test_scope: I.commandClass?.bash_test_scope,
+          ...buildCommandTimingFields(result?.shellUsage),
+          tool_use_id: parentTaskId(call.toolUseId),
+          bash_command_kinds: classified.commandClass?.bash_command_kinds,
+          bash_programs: classified.commandClass?.bash_programs,
+          bash_test_scope: classified.commandClass?.bash_test_scope,
         };
-        thenIfPromise(I.testOutcome, (bashTestOutcome) =>
+        thenIfPromise(classified.testOutcome, (bashTestOutcome) =>
           logEvent("tengu_background_shell_settled", {
-            ...H,
+            ...event,
             bash_test_outcome: bashTestOutcome,
           }),
         );
@@ -537,36 +557,36 @@ class ReadCallsLog {
         logError(toError(error));
       }
     };
-    let B = setTimeout(S.cut, backgroundTimeoutForDisplay, {
+    let deadlineTimer = setTimeout(record.cut, backgroundTimeoutForDisplay, {
       state: "time_limit",
     }).unref();
-    let P = (stallTail) => {
-      S.stallTail = stallTail;
+    let setStallTail = (stallTail) => {
+      record.stallTail = stallTail;
       this.#o++;
       this.#s.emit();
     };
-    let z = DEFAULT_INSTRUCTIONS(
+    let stopWatchingStall = DEFAULT_INSTRUCTIONS(
       taskId,
       (stallTail) => {
-        P(stallTail);
+        setStallTail(stallTail);
         logFeatureOk("task_local_shell_stall_detected");
       },
-      () => P(undefined),
+      () => setStallTail(undefined),
     );
     let deferred = Promise.withResolvers();
-    let K = registerCleanup(async () => {
-      S.cut({
+    let unregisterCleanup = registerCleanup(async () => {
+      record.cut({
         state: "killed",
         reason: "daemon_exit",
       });
-      let R = this.#n;
-      if (R !== undefined) {
+      let store = this.#n;
+      if (store !== undefined) {
         await deferred.promise;
-        await R.store.settled(taskId);
+        await store.store.settled(taskId);
       }
     });
-    this.#e.set(taskId, S);
-    this.#u(S);
+    this.#e.set(taskId, record);
+    this.#u(record);
     if (this.#n !== undefined)
       this.#d ??= setInterval(() => {
         let filtered = [...this.#e.values()].filter(({ ended, unwanted }) => !ended && !unwanted);
@@ -574,16 +594,16 @@ class ReadCallsLog {
           clearInterval(this.#d);
           this.#d = undefined;
         }
-        filtered.forEach((v) => this.#u(v));
+        filtered.forEach((record) => this.#u(record));
       }, CALL_RECORD_TICK_MS).unref();
-    e.result
-      .then(async (R) => {
-        await e.taskOutput.flush().catch((error) => logError(toError(error)));
-        x(toEndedHow(R), R);
+    task.result
+      .then(async (result) => {
+        await task.taskOutput.flush().catch((error) => logError(toError(error)));
+        settle(toEndedHow(result), result);
       })
       .catch((error) => {
         logError(toError(error));
-        x({
+        settle({
           state: "killed",
         });
       });
@@ -594,8 +614,8 @@ class ReadCallsLog {
   #u({ listed, startedAt, ended }) {
     if (this.#n === undefined) return;
     let { store, wallNow } = this.#n;
-    let h = this.#t();
-    let w = wallNow();
+    let monotonicNow = this.#t();
+    let wallNowMs = wallNow();
     let { taskId, output_path: outputPath, limit_ms: limitMs } = listed;
     store.write({
       listed: {
@@ -603,50 +623,50 @@ class ReadCallsLog {
         output_path: outputPath,
         limit_ms: limitMs,
       },
-      started_at: Math.round(w - (h - startedAt)),
-      written_at: Math.round(w),
+      started_at: Math.round(wallNowMs - (monotonicNow - startedAt)),
+      written_at: Math.round(wallNowMs),
       ...(ended && {
         ended: {
           how: ended.how,
-          at: Math.round(w - (h - ended.at)),
+          at: Math.round(wallNowMs - (monotonicNow - ended.at)),
         },
       }),
     });
   }
   #l() {
-    let sliced = [...this.#e.values()].filter((n) => n.ended).slice(0, -MAX_FINISHED_RECORDS_KEPT);
-    sliced.forEach((n) => {
-      this.#e.delete(n.listed.taskId);
-      this.#n?.store.remove(n.listed.taskId);
-      this.#a = n.ended?.at;
+    let sliced = [...this.#e.values()].filter((record) => record.ended).slice(0, -MAX_FINISHED_RECORDS_KEPT);
+    sliced.forEach((record) => {
+      this.#e.delete(record.listed.taskId);
+      this.#n?.store.remove(record.listed.taskId);
+      this.#a = record.ended?.at;
     });
     return sliced;
   }
-  async #p(e, n) {
+  async #p(store, wallNow) {
     try {
-      let { commands, counted } = await e.readEarlier();
-      let y = this.#t();
-      let h = n();
+      let { commands, counted } = await store.readEarlier();
+      let monotonicNow = this.#t();
+      let wallNowMs = wallNow();
       let mapped = commands.map(({ listed, started_at: startedAt, ended }) => {
-        let z = y - Math.max(0, h - ended.at);
+        let endedAt = monotonicNow - Math.max(0, wallNowMs - ended.at);
         return {
           listed,
-          startedAt: Math.min(z, y - Math.max(0, h - startedAt)),
+          startedAt: Math.min(endedAt, monotonicNow - Math.max(0, wallNowMs - startedAt)),
           cut: () => false,
           ended: {
             how: ended.how,
-            at: z,
+            at: endedAt,
           },
         };
       });
-      let O = [...this.#e.values()];
+      let existingRecords = [...this.#e.values()];
       this.#e.clear();
-      [...mapped, ...O].forEach((x) => this.#e.set(x.listed.taskId, x));
-      let S = this.#l();
-      if (Object.values(counted).some((x) => x > 0))
+      [...mapped, ...existingRecords].forEach((record) => this.#e.set(record.listed.taskId, record));
+      let dropped = this.#l();
+      if (Object.values(counted).some((countedValue) => countedValue > 0))
         logEvent("tengu_mcp_serve_background_records_read", {
           ...counted,
-          dropped_for_room: S.length,
+          dropped_for_room: dropped.length,
         });
       if (mapped.length > 0) {
         this.#o++;
@@ -658,7 +678,10 @@ class ReadCallsLog {
   }
 }
 //@ chunk-m8aeec95.js:19670-19696 placement
-var backgroundCommands = new HostScoped(() => new ReadCallsLog());
+var backgroundCommands; // deferred: uses ReadCallsLog of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-m8aeec95.js:19670", () => {
+  backgroundCommands = new HostScoped(() => new ReadCallsLog());
+});
 //@ chunk-m8aeec95.js:19696-20200 placement
 function keepBackgroundCommandRecords(host, kind) {
   if (
@@ -668,21 +691,21 @@ function keepBackgroundCommandRecords(host, kind) {
     isBackgroundTasksDisabled()
   )
     return;
-  let r = {
+  let alreadyLogged = {
     said: false,
   };
   backgroundCommands.of(host).keepRecordsIn(
     new ContainerStartRecord({
       folder: () => join(sessionTempDirRealpath(), "background-commands"),
-      failed: (s) => {
+      failed: (error) => {
         logForDebugging(
-          `mcp serve: could not save or delete a background command's record on disk, so after a restart that command may be missing, out of date, or listed again after it was acknowledged: ${errorMessage(s)}`,
+          `mcp serve: could not save or delete a background command's record on disk, so after a restart that command may be missing, out of date, or listed again after it was acknowledged: ${errorMessage(error)}`,
           {
             level: "error",
           },
         );
-        if (!r.said) {
-          r.said = true;
+        if (!alreadyLogged.said) {
+          alreadyLogged.said = true;
           logFeatureSad("mcp_serve_background_command", "record_failed");
         }
       },
@@ -690,91 +713,102 @@ function keepBackgroundCommandRecords(host, kind) {
   );
 }
 //@ chunk-m8aeec95.js:20200-21455 placement
-async function readCalls(e, n, { session, callerGone }) {
-  let { seen, life, hold_ms: holdMs, told, tool_use_ids: toolUseIds } = parseReadCallsInput(e ?? {});
-  let [x, ...B] = (toolUseIds ?? []).filter((v) => !toolUseIdSchema().safeParse(v).success);
-  if (x !== undefined)
+async function readCalls(input, signal, { session, callerGone }) {
+  let { seen, life, hold_ms: holdMs, told, tool_use_ids: toolUseIds } = parseReadCallsInput(input ?? {});
+  let [invalidId, ...otherInvalidIds] = (toolUseIds ?? []).filter(
+    (toolUseId) => !toolUseIdSchema().safeParse(toolUseId).success,
+  );
+  if (invalidId !== undefined)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `ReadCalls: ${jsonStringify(x)} is not a valid tool_use_id${B.length > 0 ? ` (and ${B.length} more)` : ""}. An id is 1 to 128 letters, digits or _ . : @ -, and not only dots.`,
+      `ReadCalls: ${jsonStringify(invalidId)} is not a valid tool_use_id${otherInvalidIds.length > 0 ? ` (and ${otherInvalidIds.length} more)` : ""}. An id is 1 to 128 letters, digits or _ . : @ -, and not only dots.`,
       "ReadCalls: a tool_use_id is not valid",
     );
-  let P = backgroundCommands.of(session.host);
-  await P.restored;
-  P.forget(told ?? []);
-  let z = () => toolUseIds?.some((toolUseId) => !isRunningRun(session, toolUseId)) ?? false;
-  if (seen !== undefined && life === P.life && holdMs !== undefined && !z()) {
+  let commandLog = backgroundCommands.of(session.host);
+  await commandLog.restored;
+  commandLog.forget(told ?? []);
+  let hasCallFinished = () => toolUseIds?.some((toolUseId) => !isRunningRun(session, toolUseId)) ?? false;
+  if (seen !== undefined && life === commandLog.life && holdMs !== undefined && !hasCallFinished()) {
     let abortController = new AbortController();
-    let I = onRunEnded(session, () => {
-      if (z()) abortController.abort();
+    let unsubscribe = onRunEnded(session, () => {
+      if (hasCallFinished()) abortController.abort();
     });
-    let combinedAbortSignal = createCombinedAbortSignal(n, {
+    let combinedAbortSignal = createCombinedAbortSignal(signal, {
       signalB: callerGone,
       timeoutMs: holdMs,
       refTimer: true,
     });
     try {
-      await P.changedSince(seen, AbortSignal.any([combinedAbortSignal.signal, abortController.signal]));
+      await commandLog.changedSince(
+        seen,
+        AbortSignal.any([combinedAbortSignal.signal, abortController.signal]),
+      );
     } finally {
       combinedAbortSignal.cleanup();
-      I();
+      unsubscribe();
     }
   }
-  let mapped = (toolUseIds ?? runningRunIds(session)).map((v) => {
-    let I = P.taskIdOf(v);
+  let mapped = (toolUseIds ?? runningRunIds(session)).map((toolUseId) => {
+    let taskId = commandLog.taskIdOf(toolUseId);
     return {
-      tool_use_id: v,
-      ...(I === undefined
-        ? describeRunState(session, v)
+      tool_use_id: toolUseId,
+      ...(taskId === undefined
+        ? describeRunState(session, toolUseId)
         : {
             state: "background",
-            taskId: I,
+            taskId,
           }),
     };
   });
   if (toolUseIds !== undefined && toolUseIds.length > 0) {
-    let v = (I) => count(mapped, (H) => H.state === I);
+    let countOfState = (state) => count(mapped, (call) => call.state === state);
     logEvent("tengu_mcp_serve_calls_read_by_id", {
-      background: v("background"),
-      running: v("running"),
-      finished: v("finished"),
-      unknown: v("unknown"),
+      background: countOfState("background"),
+      running: countOfState("running"),
+      finished: countOfState("finished"),
+      unknown: countOfState("unknown"),
     });
   }
-  let filtered = [P.msSinceNewestDropped(), msSinceNewestDropped(session)].filter((v) => v !== undefined);
-  let R = {
-    ...P.list(),
+  let filtered = [commandLog.msSinceNewestDropped(), msSinceNewestDropped(session)].filter(
+    (droppedMs) => droppedMs !== undefined,
+  );
+  let output = {
+    ...commandLog.list(),
     calls: mapped,
     ...(filtered.length > 0 && {
       dropped_ended_ms_ago: Math.min(...filtered),
     }),
   };
   return {
-    summary: `${R.commands.length} commands, ${R.calls.length} calls`,
-    output: R,
+    summary: `${output.commands.length} commands, ${output.calls.length} calls`,
+    output,
   };
 }
 //@ chunk-m8aeec95.js:21455-21615 placement
-async function moveRunningCommand(e, n, { session }) {
-  let { tool_use_id: toolUseId, because } = moveRunningCommandSchema().parse(e);
-  let h = backgroundCommands.of(session.host).moveRunning(toolUseId, because);
+async function moveRunningCommand(input, signal, { session }) {
+  let { tool_use_id: toolUseId, because } = moveRunningCommandSchema().parse(input);
+  let moved = backgroundCommands.of(session.host).moveRunning(toolUseId, because);
   return {
-    summary: `moved: ${h}`,
+    summary: `moved: ${moved}`,
     output: {
-      moved: h,
+      moved,
     },
   };
 }
 //@ chunk-m8aeec95.js:21615-21755 placement
-async function stopBackgroundCommand(e, n, { session }) {
-  let { taskId } = stopBackgroundCommandSchema().parse(e);
-  let y = backgroundCommands.of(session.host).stop(taskId);
+async function stopBackgroundCommand(input, signal, { session }) {
+  let { taskId } = stopBackgroundCommandSchema().parse(input);
+  let stopped = backgroundCommands.of(session.host).stop(taskId);
   return {
-    summary: `stopped: ${y}`,
+    summary: `stopped: ${stopped}`,
     output: {
-      stopped: y,
+      stopped,
     },
   };
 }
+
+// The import cycle this module closes (3 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("src/services/mcpServe/readCalls.js");
 export {
   isKnownRun,
   isCallRunBarred,
@@ -793,4 +827,5 @@ export {
   stopBackgroundCommand,
   MOVE_RUNNING_COMMAND_CALL,
   moveRunningCommand,
+  keepsBackgroundCommandsCapability,
 };

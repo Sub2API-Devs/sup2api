@@ -20,17 +20,20 @@ var permissionWorkflowDialog = withHideWhile({
   kind: "permission_workflow",
   payload: DoctorLazy(() =>
     deepFreezeToolName(
-      (o) =>
-        typeof o === "object" &&
-        o !== null &&
-        "requestId" in o &&
-        "toolName" in o &&
-        "permissionResult" in o &&
-        "script" in o,
+      (payload) =>
+        typeof payload === "object" &&
+        payload !== null &&
+        "requestId" in payload &&
+        "toolName" in payload &&
+        "permissionResult" in payload &&
+        "script" in payload,
     ),
   ),
-  result: DoctorLazy(() => deepFreezeToolName((o) => typeof o === "object" && o !== null && "behavior" in o)),
+  result: DoctorLazy(() =>
+    deepFreezeToolName((result) => typeof result === "object" && result !== null && "behavior" in result),
+  ),
   default: {
     behavior: "cancelled",
   },
 });
+export { permissionWorkflowDialog };

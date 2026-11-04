@@ -15,16 +15,16 @@ import {
 } from "../../utils/plugins/pluginDisplayMetadata.js";
 import { getOwn } from "../../utils/objectSafety.js";
 import { truthyOrFalsyEnv, emptyConfig } from "../../utils/plugins/pluginConfigEnv.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
-import { y } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { useState } from "../../../vendor/react/cjs/react.production.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { AgentsList } from "../../components/agents/AgentsList.js";
 
 //@ chunk-ca06bv0t.js:3186-3228 affinity
-function valueOption(Be) {
+function valueOption(value) {
   return {
-    label: Be,
-    value: Be,
+    label: value,
+    value,
   };
 }
 //@ chunk-ca06bv0t.js:3228-3596 fingerprint = buildFinalValues (0.825)
@@ -50,95 +50,96 @@ function buildFinalValues(fields, collected, configSchema, initialValues) {
 }
 //@ chunk-ca06bv0t.js:3596-4870 callgraph-fingerprint = PluginOptionsDialog (0.261)
 function PluginOptionsDialog(props) {
-  let m = w(22);
+  let $ = useMemoCache(22);
   let { title, subtitle, configSchema, initialValues, onSave, onCancel } = props;
   let keys = Object.keys(configSchema);
-  let h;
-  if (m[0] !== configSchema || m[1] !== initialValues) {
-    h = () => pluginUserConfigValues(configSchema, initialValues);
-    m[0] = configSchema;
-    m[1] = initialValues;
-    m[2] = h;
-  } else h = m[2];
-  let [collected, b] = y(h);
-  let x;
-  if (m[3] !== configSchema || m[4] !== initialValues) {
-    x = (key) => {
-      let k = configSchema[key];
-      let S = userConfigFieldParser(k);
-      if (S !== undefined) {
+  let initialConfig;
+  if ($[0] !== configSchema || $[1] !== initialValues) {
+    initialConfig = () => pluginUserConfigValues(configSchema, initialValues);
+    $[0] = configSchema;
+    $[1] = initialValues;
+    $[2] = initialConfig;
+  } else initialConfig = $[2];
+  let [collected, setCollected] = useState(initialConfig);
+  let toField;
+  if ($[3] !== configSchema || $[4] !== initialValues) {
+    toField = (key) => {
+      let fieldSchema = configSchema[key];
+      let choices = userConfigFieldParser(fieldSchema);
+      if (choices !== undefined) {
         return {
           type: "select",
           key,
-          label: k?.title || key,
-          options: S.map(valueOption),
-          hint: () => k?.description,
+          label: fieldSchema?.title || key,
+          options: choices.map(valueOption),
+          hint: () => fieldSchema?.description,
         };
       }
-      let A = k?.sensitive === true;
-      let v = A && getOwn(initialValues ?? {}, key) !== undefined;
+      let isSensitive = fieldSchema?.sensitive === true;
+      let hasValue = isSensitive && getOwn(initialValues ?? {}, key) !== undefined;
       return {
         type: "text",
         key,
-        label: k?.title || key,
-        required: k?.required === true && !v,
-        mask: A ? "*" : undefined,
-        placeholder: v ? "(unchanged)" : undefined,
+        label: fieldSchema?.title || key,
+        required: fieldSchema?.required === true && !hasValue,
+        mask: isSensitive ? "*" : undefined,
+        placeholder: hasValue ? "(unchanged)" : undefined,
         validate:
-          k?.type === "number"
+          fieldSchema?.type === "number"
             ? (prev) =>
-                firstLine(prev) === "" || emptyConfig.numberOfInput(firstLine(prev), k) !== undefined
+                firstLine(prev) === "" ||
+                emptyConfig.numberOfInput(firstLine(prev), fieldSchema) !== undefined
                   ? null
-                  : emptyConfig.numberInputHint(k)
+                  : emptyConfig.numberInputHint(fieldSchema)
             : undefined,
-        hint: () => k?.description,
+        hint: () => fieldSchema?.description,
       };
     };
-    m[3] = configSchema;
-    m[4] = initialValues;
-    m[5] = x;
-  } else x = m[5];
-  let fields = keys.map(x);
+    $[3] = configSchema;
+    $[4] = initialValues;
+    $[5] = toField;
+  } else toField = $[5];
+  let fields = keys.map(toField);
   if (keys.length === 0) {
     return null;
   }
   let onChange;
-  if (m[6] !== b) {
+  if ($[6] !== setCollected) {
     onChange = (char, key_0) =>
-      b((prev_3) => ({
+      setCollected((prev_3) => ({
         ...prev_3,
         [char]: key_0,
       }));
-    m[6] = b;
-    m[7] = onChange;
-  } else onChange = m[7];
+    $[6] = setCollected;
+    $[7] = onChange;
+  } else onChange = $[7];
   let onSubmit;
   if (
-    m[8] !== configSchema ||
-    m[9] !== keys ||
-    m[10] !== initialValues ||
-    m[11] !== onSave ||
-    m[12] !== collected
+    $[8] !== configSchema ||
+    $[9] !== keys ||
+    $[10] !== initialValues ||
+    $[11] !== onSave ||
+    $[12] !== collected
   ) {
     onSubmit = () => onSave(buildFinalValues(keys, collected, configSchema, initialValues));
-    m[8] = configSchema;
-    m[9] = keys;
-    m[10] = initialValues;
-    m[11] = onSave;
-    m[12] = collected;
-    m[13] = onSubmit;
-  } else onSubmit = m[13];
-  let Ke;
+    $[8] = configSchema;
+    $[9] = keys;
+    $[10] = initialValues;
+    $[11] = onSave;
+    $[12] = collected;
+    $[13] = onSubmit;
+  } else onSubmit = $[13];
+  let content;
   if (
-    m[14] !== fields ||
-    m[15] !== onCancel ||
-    m[16] !== subtitle ||
-    m[17] !== onChange ||
-    m[18] !== onSubmit ||
-    m[19] !== title ||
-    m[20] !== collected
+    $[14] !== fields ||
+    $[15] !== onCancel ||
+    $[16] !== subtitle ||
+    $[17] !== onChange ||
+    $[18] !== onSubmit ||
+    $[19] !== title ||
+    $[20] !== collected
   ) {
-    Ke = jsxProd_default(AgentsList, {
+    content = jsxProd_default(AgentsList, {
       title,
       subtitle,
       fields,
@@ -148,15 +149,15 @@ function PluginOptionsDialog(props) {
       onCancel,
       submitLabel: "Save configuration",
     });
-    m[14] = fields;
-    m[15] = onCancel;
-    m[16] = subtitle;
-    m[17] = onChange;
-    m[18] = onSubmit;
-    m[19] = title;
-    m[20] = collected;
-    m[21] = Ke;
-  } else Ke = m[21];
-  return Ke;
+    $[14] = fields;
+    $[15] = onCancel;
+    $[16] = subtitle;
+    $[17] = onChange;
+    $[18] = onSubmit;
+    $[19] = title;
+    $[20] = collected;
+    $[21] = content;
+  } else content = $[21];
+  return content;
 }
 export { PluginOptionsDialog, buildFinalValues };

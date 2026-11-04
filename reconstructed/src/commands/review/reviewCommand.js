@@ -62,13 +62,13 @@ import { isCoordinatorMode_2 } from "../../coordinator/coordinatorMode.js";
 
 //@ chunk-hantmvxa.js:85992-87082 placement
 function getReviewCommandDescription() {
-  let e = isUltrareviewAvailable()
+  let ultraSuffix = isUltrareviewAvailable()
     ? `; ultra: deep multi-agent review in the cloud${isUltrareviewWithBridge() ? "" : " (requires claude.ai account access)"}`
     : "";
-  let n = isUltrareviewAvailable()
+  let postSuffix = isUltrareviewAvailable()
     ? " For ultra on a GitHub.com PR target, --post asks to post the finished review\u2019s findings to the PR as a single comment from the user\u2019s GitHub account (not a review; the launch dialog still confirms in interactive sessions, while non-interactive mode posts on the flag alone) and --no-post hides that option."
     : "";
-  return `Review the current diff, or a PR number/branch/path target, for correctness bugs (plus reuse/simplification/efficiency cleanups where the model's recipe covers them) at the effort level given first, before any target (${REVIEW_LEVELS.join("|")}: from few high-confidence findings to many, some uncertain${e}); with no level given, it reuses the level you typed last. Pass --comment to post findings as inline PR comments, or --fix to apply them to the working tree after the review. Pass --max-findings <n> to report up to n findings, or --max-findings all for every finding. The choice stays until you pass --max-findings default.${n}`;
+  return `Review the current diff, or a PR number/branch/path target, for correctness bugs (plus reuse/simplification/efficiency cleanups where the model's recipe covers them) at the effort level given first, before any target (${REVIEW_LEVELS.join("|")}: from few high-confidence findings to many, some uncertain${ultraSuffix}); with no level given, it reuses the level you typed last. Pass --comment to post findings as inline PR comments, or --fix to apply them to the working tree after the review. Pass --max-findings <n> to report up to n findings, or --max-findings all for every finding. The choice stays until you pass --max-findings default.${postSuffix}`;
 }
 //@ chunk-hantmvxa.js:87082-87521 placement
 function getReviewWhenToUse() {
@@ -84,144 +84,161 @@ function reviewArgumentHint() {
 /**
  * /code-review 主体：解析参数、选择等级与模型、拼装分阶段多代理审查提示词（含发帖/修复/上限说明）。
  */
-async function buildReviewPrompt(e, n) {
-  let reviewArgs = parseReviewArgs(e);
+async function buildReviewPrompt(args, context) {
+  let reviewArgs = parseReviewArgs(args);
   let { explicit, target, comment, fix, post, unrecognizedLevel, ultraFallback } = reviewArgs;
-  let S = defaultReviewLevel(reviewArgs, n);
-  let reviewEffort = resolveReviewEffort(reviewArgs, n);
-  let R = n.options ? getMainLoopModel(n) : undefined;
-  let L = normalizeReviewModelKey(R);
-  let x = n.options?.isSkillPreload && MODELS_WITH_MAX_CELL.has(L) ? "default" : L;
-  let D = REVIEW_LEVEL_TABLE_BY_MODEL[x][reviewEffort];
-  let reportFindingsMode = getReportFindingsMode(n);
-  let j = reportFindingsMode !== undefined;
-  let W = !j;
-  let P = j ? buildReportFindingsOutputSection : buildReviewOutputSection;
-  let maxFindings = resolveMaxFindings(reviewArgs, D.cell, j, n);
-  let q = D.cell === "o5-bmin";
-  let Re = reportFindingsMode === "spawn" && !D.measuredExternal ? await afterReviewSection(n) : "";
-  let se = firstLineOf(target, " ");
-  let we = isGitLabMrTarget(se);
+  let lastUsedLevel = defaultReviewLevel(reviewArgs, context);
+  let reviewEffort = resolveReviewEffort(reviewArgs, context);
+  let mainLoopModel = context.options ? getMainLoopModel(context) : undefined;
+  let modelKey = normalizeReviewModelKey(mainLoopModel);
+  let effectiveModelKey =
+    context.options?.isSkillPreload && MODELS_WITH_MAX_CELL.has(modelKey) ? "default" : modelKey;
+  let levelConfig = REVIEW_LEVEL_TABLE_BY_MODEL[effectiveModelKey][reviewEffort];
+  let reportFindingsMode = getReportFindingsMode(context);
+  let hasReportTool = reportFindingsMode !== undefined;
+  let willRunAsFork = !hasReportTool;
+  let outputSectionBuilder = hasReportTool ? buildReportFindingsOutputSection : buildReviewOutputSection;
+  let maxFindings = resolveMaxFindings(reviewArgs, levelConfig.cell, hasReportTool, context);
+  let isMinimalCell = levelConfig.cell === "o5-bmin";
+  let afterReviewNote =
+    reportFindingsMode === "spawn" && !levelConfig.measuredExternal ? await afterReviewSection(context) : "";
+  let targetFirstLine = firstLineOf(target, " ");
+  let isGitLabTarget = isGitLabMrTarget(targetFirstLine);
   let reviewPreamble = buildReviewPreamble({
     ultraFallback,
     fix,
     post,
     comment,
-    gitlabTarget: we,
+    gitlabTarget: isGitLabTarget,
     unrecognizedLevel,
-    lastUsed: S,
+    lastUsed: lastUsedLevel,
     level: reviewEffort,
-    willRunAsFork: W,
-    context: n,
+    willRunAsFork,
+    context,
   });
-  let re = describeMaxFindings(
+  let maxFindingsNote = describeMaxFindings(
     {
       ...maxFindings,
       ignored: reviewArgs.maxFindingsIgnored,
     },
     "the user",
   );
-  let H = maxFindings.reused ? "passing `--max-findings default` goes back to the usual limit" : undefined;
-  let be = !re
+  let resetHint = maxFindings.reused
+    ? "passing `--max-findings default` goes back to the usual limit"
+    : undefined;
+  let maxFindingsSection = !maxFindingsNote
     ? ""
-    : W
-      ? `(${re} Open your report with one short line telling the user this${H ? `, and that ${H}` : ""}; that opening line reaches them with the findings.)
+    : willRunAsFork
+      ? `(${maxFindingsNote} Open your report with one short line telling the user this${resetHint ? `, and that ${resetHint}` : ""}; that opening line reaches them with the findings.)
 
 `
-      : `(${re} Tell the user this in one short line as you begin${H ? `, including that ${H}` : ""}.)
+      : `(${maxFindingsNote} Tell the user this in one short line as you begin${resetHint ? `, including that ${resetHint}` : ""}.)
 
 `;
-  let pe = canSpawnReviewAgents(n);
-  let ct = null;
-  let Oe = {
+  let canSpawnFinders = canSpawnReviewAgents(context);
+  let promptState = null;
+  let finderBudget = {
     text: "",
   };
-  if (!n.options?.isSkillPreload) {
-    if (pe) Oe = await estimateFinderBudgetHint(R, reviewEffort, target, ct);
-    let De = explicit ?? S;
+  if (!context.options?.isSkillPreload) {
+    if (canSpawnFinders)
+      finderBudget = await estimateFinderBudgetHint(mainLoopModel, reviewEffort, target, promptState);
+    let threadedLevel = explicit ?? lastUsedLevel;
     logEvent("tengu_code_review_routed", {
       effort_level: fromEnum(reviewEffort),
       effort_source: fromEnum(
         explicit !== undefined
           ? "explicit"
-          : S !== undefined
+          : lastUsedLevel !== undefined
             ? "last_used"
             : ultraFallback
               ? "ultra_fallback"
               : "session",
       ),
       routed_to_workflow: false,
-      uses_report_findings_tool: j,
+      uses_report_findings_tool: hasReportTool,
       has_fix: fix,
       has_comment: comment,
       has_target: target.length > 0,
       is_ultra_fallback: ultraFallback,
-      low_variant: reviewEffort === "low" ? fromEnum(REVIEW_CELL_OVERRIDES[x] ?? "default") : undefined,
-      model_family: fromEnum(x),
-      finder_budget: Oe.budget,
-      agent_tool_available: pe,
-      threaded_effort: De !== undefined ? fromEnum(resolveLevelEffort(x, De)) : undefined,
+      low_variant:
+        reviewEffort === "low" ? fromEnum(REVIEW_CELL_OVERRIDES[effectiveModelKey] ?? "default") : undefined,
+      model_family: fromEnum(effectiveModelKey),
+      finder_budget: finderBudget.budget,
+      agent_tool_available: canSpawnFinders,
+      threaded_effort:
+        threadedLevel !== undefined
+          ? fromEnum(resolveLevelEffort(effectiveModelKey, threadedLevel))
+          : undefined,
       findings_limit: fromEnum(
         maxFindings.stated === undefined ? "default" : maxFindings.stated === "all" ? "all" : "number",
       ),
       findings_limit_value: typeof maxFindings.stated === "number" ? maxFindings.stated : undefined,
     });
   }
-  let ht =
-    n.options?.isSkillPreload || n.agentId !== undefined || ultraFallback || W || D.measuredExternal
+  let ultraTip =
+    context.options?.isSkillPreload ||
+    context.agentId !== undefined ||
+    ultraFallback ||
+    willRunAsFork ||
+    levelConfig.measuredExternal
       ? null
-      : ultrareviewProseTip(n.storageV5, n.credentials);
-  let fn =
-    ht !== null
+      : ultrareviewProseTip(context.storageV5, context.credentials);
+  let ultraTipSection =
+    ultraTip !== null
       ? `
 
 After you finish the review, end your response with this exact line on its own:
-${ht}`
+${ultraTip}`
       : "";
-  let gn = target
+  let targetSection = target
     ? `Review target: \`${target}\`
 
 `
     : "";
-  let preamble = ct?.preamble ?? "";
+  let preamble = promptState?.preamble ?? "";
   return [
     {
       type: "text",
-      text: `${reviewPreamble}${be}${gn}${preamble}${Oe.text}${buildReviewPromptForLevel(D.cell, P, pe, j, maxFindings.stated)}${comment ? (we ? buildGitLabCommentSection(se) : GITHUB_COMMENT_SECTION) : ""}${fix ? buildFixSection(j) : ""}${j && !q ? REPORT_OUTCOMES_LATER_SECTION : ""}${reportFindingsMode === "message" && !q ? REPORT_OUTCOMES_LINE_TEXT : ""}${Re}${fn}`,
+      text: `${reviewPreamble}${maxFindingsSection}${targetSection}${preamble}${finderBudget.text}${buildReviewPromptForLevel(levelConfig.cell, outputSectionBuilder, canSpawnFinders, hasReportTool, maxFindings.stated)}${comment ? (isGitLabTarget ? buildGitLabCommentSection(targetFirstLine) : GITHUB_COMMENT_SECTION) : ""}${fix ? buildFixSection(hasReportTool) : ""}${hasReportTool && !isMinimalCell ? REPORT_OUTCOMES_LATER_SECTION : ""}${reportFindingsMode === "message" && !isMinimalCell ? REPORT_OUTCOMES_LINE_TEXT : ""}${afterReviewNote}${ultraTipSection}`,
     },
   ];
 }
 //@ chunk-hantmvxa.js:89673-90366 placement
-async function estimateFinderBudgetHint(e, reviewEffort, target, r) {
-  if (!REVIEW_LEVEL_TABLE_BY_MODEL[normalizeReviewModelKey(e)][reviewEffort].finderBudgetHint)
+async function estimateFinderBudgetHint(model, reviewEffort, target, countDiffLinesFn) {
+  if (!REVIEW_LEVEL_TABLE_BY_MODEL[normalizeReviewModelKey(model)][reviewEffort].finderBudgetHint)
     return {
       text: "",
     };
-  let h = r ? (target ? undefined : await r.countDiffLines()) : await countDiffLines(target);
-  if (h === undefined)
+  let diffLineCount = countDiffLinesFn
+    ? target
+      ? undefined
+      : await countDiffLinesFn.countDiffLines()
+    : await countDiffLines(target);
+  if (diffLineCount === undefined)
     return {
       text: "",
     };
-  let max = Math.max(2, Math.min(8, Math.ceil(h / 150)));
-  if (!target && !r)
+  let max = Math.max(2, Math.min(8, Math.ceil(diffLineCount / 150)));
+  if (!target && !countDiffLinesFn)
     return {
-      text: `The committed diff (@{upstream}...HEAD) is about ${h} lines. Uncommitted changes aren't counted here, so treat this as a floor \u2014 start with about ${max} finder subagents (min 2, max 8) and scale up if Phase 0 finds additional working-tree scope.
+      text: `The committed diff (@{upstream}...HEAD) is about ${diffLineCount} lines. Uncommitted changes aren't counted here, so treat this as a floor \u2014 start with about ${max} finder subagents (min 2, max 8) and scale up if Phase 0 finds additional working-tree scope.
 
 `,
       budget: max,
     };
   return {
-    text: `This diff is about ${h} lines. Spawn about ${max} finder subagents (min 2, max 8) \u2014 scale your investigation depth to the diff size rather than using a fixed large fleet.
+    text: `This diff is about ${diffLineCount} lines. Spawn about ${max} finder subagents (min 2, max 8) \u2014 scale your investigation depth to the diff size rather than using a fixed large fleet.
 
 `,
     budget: max,
   };
 }
 //@ chunk-hantmvxa.js:90366-91018 placement
-async function countDiffLines(e) {
-  let n;
-  if (!e) n = "@{upstream}...HEAD";
-  else if (e.length <= 256 && /^[@\w][@\w./~^-]*\.\.\.?[@\w][@\w./~^-]*$/.test(e)) n = e;
+async function countDiffLines(target) {
+  let range;
+  if (!target) range = "@{upstream}...HEAD";
+  else if (target.length <= 256 && /^[@\w][@\w./~^-]*\.\.\.?[@\w][@\w./~^-]*$/.test(target)) range = target;
   else return;
   try {
     let { stdout, code } = await execFileNoThrow(
@@ -238,7 +255,7 @@ async function countDiffLines(e) {
         "--no-textconv",
         "--numstat",
         "--end-of-options",
-        n,
+        range,
         "--",
       ],
       {
@@ -252,28 +269,28 @@ async function countDiffLines(e) {
       },
     );
     if (code !== 0) return;
-    let h = 0;
+    let totalLines = 0;
     for (let line of stdout.split(`
 `)) {
       let match = line.match(/^(\d+)\t(\d+)\t/);
-      if (match) h += Number(match[1]) + Number(match[2]);
+      if (match) totalLines += Number(match[1]) + Number(match[2]);
     }
-    return h > 0 ? h : undefined;
+    return totalLines > 0 ? totalLines : undefined;
   } catch {
     return;
   }
 }
 //@ chunk-hantmvxa.js:91018-91215 placement
-function resolveReviewEffort(reviewArgs, n) {
+function resolveReviewEffort(reviewArgs, context) {
   let { explicit, ultraFallback } = reviewArgs;
-  let h = ultraFallback ? "max" : (explicit ?? defaultReviewLevel(reviewArgs, n));
-  let y = n.options ? getMainLoopModel(n) : undefined;
-  let w = y
-    ? (resolveEffortValue(y, getEffortValue(n), {
-        turnEffort: h ?? getEffortLayerOverride(n.permissionLayers),
-      }) ?? h)
-    : (h ?? getEffortValue(n));
-  return w === undefined ? "medium" : normalizeEffortLevel(w);
+  let levelGuess = ultraFallback ? "max" : (explicit ?? defaultReviewLevel(reviewArgs, context));
+  let mainLoopModel = context.options ? getMainLoopModel(context) : undefined;
+  let resolvedEffort = mainLoopModel
+    ? (resolveEffortValue(mainLoopModel, getEffortValue(context), {
+        turnEffort: levelGuess ?? getEffortLayerOverride(context.permissionLayers),
+      }) ?? levelGuess)
+    : (levelGuess ?? getEffortValue(context));
+  return resolvedEffort === undefined ? "medium" : normalizeEffortLevel(resolvedEffort);
 }
 //@ chunk-hantmvxa.js:91215-93966 placement
 function buildReviewPreamble({
@@ -288,48 +305,48 @@ function buildReviewPreamble({
   willRunAsFork,
   context,
 }) {
-  let S = comment
+  let commentNote = comment
     ? gitlabTarget
       ? "when the target is a GitLab merge request, your `--comment` is what posts the findings as one general MR note via glab"
       : "when the target is a GitHub PR, your `--comment` is what posts the findings as inline PR comments"
     : gitlabTarget
       ? "this local review will not post to GitLab; `--comment` is the flag that posts local findings as a general MR note"
       : "this local review will not post to GitHub; `--comment` is the flag that posts local findings as inline PR comments";
-  let T = (x) =>
+  let withPostNote = (preamble) =>
     post
-      ? `${x}(The typed \`--post\` applies only to the \`/code-review ultra\` cloud review and was ignored \u2014 ${S}. Tell the user this in one short line.)
+      ? `${preamble}(The typed \`--post\` applies only to the \`/code-review ultra\` cloud review and was ignored \u2014 ${commentNote}. Tell the user this in one short line.)
 
 `
-      : x;
+      : preamble;
   if (ultraFallback) {
     if (!isUltrareviewWithBridge()) {
       if (fix)
-        return T(`(Running a local ${level}-effort review and applying its findings.)
+        return withPostNote(`(Running a local ${level}-effort review and applying its findings.)
 
 `);
       if (isUltrareviewAvailable()) {
         if (context.options?.isNonInteractiveSession) {
-          let D = ultrareviewAuthPrecondition();
-          if (D)
-            return T(`(${D} Falling back to a local ${level}-effort review.)
+          let authProblem = ultrareviewAuthPrecondition();
+          if (authProblem)
+            return withPostNote(`(${authProblem} Falling back to a local ${level}-effort review.)
 
 `);
         }
-        return T(`(ultra (cloud review) requires claude.ai account access this session doesn't have \u2014 see https://code.claude.com/docs/en/ultrareview. Falling back to a local ${level}-effort review.)
+        return withPostNote(`(ultra (cloud review) requires claude.ai account access this session doesn't have \u2014 see https://code.claude.com/docs/en/ultrareview. Falling back to a local ${level}-effort review.)
 
 `);
       }
-      return T(`(ultra (cloud review) isn't available in this environment \u2014 see https://code.claude.com/docs/en/ultrareview. Falling back to a local ${level}-effort review.)
+      return withPostNote(`(ultra (cloud review) isn't available in this environment \u2014 see https://code.claude.com/docs/en/ultrareview. Falling back to a local ${level}-effort review.)
 
 `);
     }
-    let x =
+    let hasUltrareviewCommand =
       context.options?.commands?.some(
         (command) => command.name === "ultrareview" && isCommandEnabled(command),
       ) ?? false;
     if (fix)
-      return T(
-        x
+      return withPostNote(
+        hasUltrareviewCommand
           ? `(Claude can't launch the cloud review directly \u2014 type \`/code-review ultra --fix\` to review in the cloud and apply the findings locally when it completes. Running a local ${level}-effort review and applying its findings for now.)
 
 `
@@ -337,8 +354,8 @@ function buildReviewPreamble({
 
 `,
       );
-    return T(
-      x
+    return withPostNote(
+      hasUltrareviewCommand
         ? `(Claude can't launch the cloud review directly \u2014 type \`/code-review ultra\` to run it. Falling back to a local ${level}-effort review for now.)
 
 `
@@ -347,30 +364,30 @@ function buildReviewPreamble({
 `,
     );
   }
-  let R = "typing a level (for example `/code-review high`) changes it";
-  let L = (x) =>
+  let levelHint = "typing a level (for example `/code-review high`) changes it";
+  let withLevelHint = (notice) =>
     willRunAsFork
-      ? `(${x} Open your report with one short line telling the user this, and that ${R}; that opening line reaches them with the findings.)
+      ? `(${notice} Open your report with one short line telling the user this, and that ${levelHint}; that opening line reaches them with the findings.)
 
 `
-      : `(${x} Tell the user this in one short line as you begin, including that ${R}.)
+      : `(${notice} Tell the user this in one short line as you begin, including that ${levelHint}.)
 
 `;
   if (unrecognizedLevel !== undefined) {
-    let x = `Ignoring unrecognized effort "${unrecognizedLevel}"; valid: ${REVIEW_LEVELS.join(", ")}. Using ${level}${lastUsed === level ? ", the level the user typed last time" : ""}.`;
-    return T(
+    let ignoredLevelNote = `Ignoring unrecognized effort "${unrecognizedLevel}"; valid: ${REVIEW_LEVELS.join(", ")}. Using ${level}${lastUsed === level ? ", the level the user typed last time" : ""}.`;
+    return withPostNote(
       lastUsed !== undefined
-        ? L(x)
-        : `(${x})
+        ? withLevelHint(ignoredLevelNote)
+        : `(${ignoredLevelNote})
 
 `,
     );
   }
   if (lastUsed !== undefined) {
-    let x = `reusing ${lastUsed}, the level the user typed last time${level !== lastUsed ? `; running at ${level} here` : ""}`;
-    return T(L(`No effort level given \u2014 ${x}.`));
+    let reuseNote = `reusing ${lastUsed}, the level the user typed last time${level !== lastUsed ? `; running at ${level} here` : ""}`;
+    return withPostNote(withLevelHint(`No effort level given \u2014 ${reuseNote}.`));
   }
-  return T("");
+  return withPostNote("");
 }
 //@ chunk-hantmvxa.js:93966-95240 placement
 /**
@@ -388,27 +405,27 @@ function registerCodeReviewSkill() {
     whenToUse: getReviewWhenToUse,
     argumentHint: reviewArgumentHint,
     userInvocable: true,
-    getEffort(e, n) {
-      let { explicit } = parseReviewArgs(e);
+    getEffort(args, context) {
+      let { explicit } = parseReviewArgs(args);
       if (explicit === undefined) return;
       return resolveLevelEffort(
-        normalizeReviewModelKey(n?.options ? getMainLoopModel(n) : undefined),
+        normalizeReviewModelKey(context?.options ? getMainLoopModel(context) : undefined),
         explicit,
       );
     },
-    getDefaultEffort(e, n) {
-      let reviewArgs = parseReviewArgs(e);
-      let r = defaultReviewLevel(reviewArgs, n);
-      if (r === undefined) return;
-      let h = n ? resolveReviewEffort(reviewArgs, n) : r;
-      let y = normalizeReviewModelKey(n?.options ? getMainLoopModel(n) : undefined);
+    getDefaultEffort(args, context) {
+      let reviewArgs = parseReviewArgs(args);
+      let lastUsedLevel = defaultReviewLevel(reviewArgs, context);
+      if (lastUsedLevel === undefined) return;
+      let level = context ? resolveReviewEffort(reviewArgs, context) : lastUsedLevel;
+      let modelKey = normalizeReviewModelKey(context?.options ? getMainLoopModel(context) : undefined);
       let maxFindings = resolveMaxFindings(
         reviewArgs,
-        REVIEW_LEVEL_TABLE_BY_MODEL[y][h].cell,
-        n !== undefined && getReportFindingsMode(n) !== undefined,
-        n,
+        REVIEW_LEVEL_TABLE_BY_MODEL[modelKey][level].cell,
+        context !== undefined && getReportFindingsMode(context) !== undefined,
+        context,
       );
-      let b = describeMaxFindings(
+      let maxFindingsNote = describeMaxFindings(
         {
           ...maxFindings,
           ignored: reviewArgs.maxFindingsIgnored,
@@ -416,30 +433,30 @@ function registerCodeReviewSkill() {
         "you",
       );
       return {
-        value: resolveLevelEffort(y, r),
-        notice: `${reviewArgs.unrecognizedLevel !== undefined ? `Ignoring unrecognized effort "${reviewArgs.unrecognizedLevel}"; valid: ${REVIEW_LEVELS.join(", ")}. ` : ""}Reusing ${r} effort, the level you typed last time${h !== r ? `; running at ${h} here` : ""}. Type a level like \`/code-review high\` to change it.${b ? ` ${b}${maxFindings.reused ? " Pass `--max-findings default` to go back to the usual limit." : ""}` : ""}`,
+        value: resolveLevelEffort(modelKey, lastUsedLevel),
+        notice: `${reviewArgs.unrecognizedLevel !== undefined ? `Ignoring unrecognized effort "${reviewArgs.unrecognizedLevel}"; valid: ${REVIEW_LEVELS.join(", ")}. ` : ""}Reusing ${lastUsedLevel} effort, the level you typed last time${level !== lastUsedLevel ? `; running at ${level} here` : ""}. Type a level like \`/code-review high\` to change it.${maxFindingsNote ? ` ${maxFindingsNote}${maxFindings.reused ? " Pass `--max-findings default` to go back to the usual limit." : ""}` : ""}`,
       };
     },
-    onUserTypedArgs(e, n) {
-      let { explicit, maxFindings } = parseReviewArgs(e);
-      if (explicit !== undefined) saveReviewEffort(explicit, n.storageV5);
+    onUserTypedArgs(args, context) {
+      let { explicit, maxFindings } = parseReviewArgs(args);
+      if (explicit !== undefined) saveReviewEffort(explicit, context.storageV5);
       if (maxFindings !== undefined) {
-        let h = maxFindings === "default" ? undefined : maxFindings;
+        let storedLimit = maxFindings === "default" ? undefined : maxFindings;
         saveGlobalConfig(
-          (y) =>
-            y.codeReviewLastMaxFindings === h
-              ? y
+          (config) =>
+            config.codeReviewLastMaxFindings === storedLimit
+              ? config
               : {
-                  ...y,
-                  codeReviewLastMaxFindings: h,
+                  ...config,
+                  codeReviewLastMaxFindings: storedLimit,
                 },
-          n.storageV5,
+          context.storageV5,
         );
       }
     },
-    getContext(e, n) {
+    getContext(args, context) {
       if (isCoordinatorMode_2()) return "inline";
-      if (getReportFindingsMode(n) !== undefined) return "inline";
+      if (getReportFindingsMode(context) !== undefined) return "inline";
       return "fork";
     },
     formatForegroundForkResult: formatReviewOutput,

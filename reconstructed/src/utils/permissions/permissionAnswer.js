@@ -10,9 +10,9 @@
  */
 import { isDeepStrictEqual } from "util";
 import { hostOwnedInputFieldSet } from "../plans.js";
-import { wi } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_reject } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { preprocess, array } from "../../../vendor/zod/v4/classic/schemas.js";
-import { bY } from "../../../vendor/zod/v4/core/core.js";
+import { INVALID } from "../../../vendor/zod/v4/core/core.js";
 import { logForDebugging } from "../debug.js";
 import { permissionUpdateSchema } from "../hooks/hookSpecificOutput.js";
 import { jsonParse, jsonStringify } from "../slowOperations.js";
@@ -25,19 +25,20 @@ import { syncRemoteBrowserCardAnswers } from "./toolPermissionContext.js";
 import { PATH_RULE_CARVE_OUT_RE } from "../settings/permissionRuleCarveOut.js";
 import { quotedPrintable } from "../printableName.js";
 import { count } from "../collections.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:861172-861345 placement
 /**
  * 从对象型工具输入中去掉宿主专属的键（CHt 给出的集合）；不是对象或无此类键时原样返回。
  */
-function stripHostOwnedInputKeys(e, n) {
-  if (typeof n !== "object" || n === null || Array.isArray(n)) return n;
-  let r = hostOwnedInputFieldSet(e, n);
-  if (!r || !Object.keys(n).some((key) => r.has(key))) return n;
-  return wi(n, (s, h) => r.has(h));
+function stripHostOwnedInputKeys(toolName, input) {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) return input;
+  let ownedFields = hostOwnedInputFieldSet(toolName, input);
+  if (!ownedFields || !Object.keys(input).some((key) => ownedFields.has(key))) return input;
+  return import_reject(input, (value, key) => ownedFields.has(key));
 }
 //@ chunk-e6aww6q8.js:861345-861608 placement
-function stripUnchangedHostOwnedKeys(name, updatedInput, observableInput) {
+function stripUnchangedHostOwnedKeys(toolName, updatedInput, observableInput) {
   if (
     typeof updatedInput !== "object" ||
     updatedInput === null ||
@@ -47,11 +48,12 @@ function stripUnchangedHostOwnedKeys(name, updatedInput, observableInput) {
     Array.isArray(observableInput)
   )
     return updatedInput;
-  let s = hostOwnedInputFieldSet(name, observableInput);
-  if (!s) return updatedInput;
-  let h = (y) => s.has(y) && y in updatedInput && updatedInput[y] === observableInput[y];
-  if (!Object.keys(updatedInput).some(h)) return updatedInput;
-  return wi(updatedInput, (y, S) => h(S));
+  let ownedFields = hostOwnedInputFieldSet(toolName, observableInput);
+  if (!ownedFields) return updatedInput;
+  let isUnchangedOwned = (key) =>
+    ownedFields.has(key) && key in updatedInput && updatedInput[key] === observableInput[key];
+  if (!Object.keys(updatedInput).some(isUnchangedOwned)) return updatedInput;
+  return import_reject(updatedInput, (value, key) => isUnchangedOwned(key));
 }
 //@ chunk-e6aww6q8.js:861608-861802 placement
 /**
@@ -126,43 +128,45 @@ function capPermissionUpdates(updates, overflowMode) {
 /**
  * 权限更新里是否含收紧项：非法条目、deny/ask 规则的 add/replace、或 deny/ask 的目录更新；removeRules 与空规则不算。
  */
-function hasTighteningUpdate(e) {
-  return e.some((n) => {
-    if (typeof n !== "object" || n === null) return typeof n === "string" && n !== "";
-    let r = Reflect.get(n, "type");
-    if (typeof r !== "string") return true;
-    let s = Reflect.get(n, "behavior");
-    let h = Reflect.get(n, "rules");
-    if (r === "removeRules" || (Array.isArray(h) && h.length === 0)) return false;
-    return r === "addRules" || r === "replaceRules" ? s !== "allow" : s === "deny" || s === "ask";
+function hasTighteningUpdate(updates) {
+  return updates.some((update) => {
+    if (typeof update !== "object" || update === null) return typeof update === "string" && update !== "";
+    let type = Reflect.get(update, "type");
+    if (typeof type !== "string") return true;
+    let behavior = Reflect.get(update, "behavior");
+    let rules = Reflect.get(update, "rules");
+    if (type === "removeRules" || (Array.isArray(rules) && rules.length === 0)) return false;
+    return type === "addRules" || type === "replaceRules"
+      ? behavior !== "allow"
+      : behavior === "deny" || behavior === "ask";
   });
 }
 //@ chunk-e6aww6q8.js:862818-863355 placement
-function capPermissionUpdates_2(overflowMode, n) {
+function capPermissionUpdates_2(overflowMode, sourceLabel) {
   return preprocess(
-    (updates, s) => {
+    (updates, ctx) => {
       if (!Array.isArray(updates)) return updates;
-      let h = capPermissionUpdates(updates, overflowMode);
-      if (h === updates) return updates;
-      let y = `updatedPermissions holds over ${MAX_PERMISSION_ANSWER_UPDATES} updates, rules and directories in all`;
-      if (h === undefined) {
-        s.issues.push({
+      let capped = capPermissionUpdates(updates, overflowMode);
+      if (capped === updates) return updates;
+      let overflowMessage = `updatedPermissions holds over ${MAX_PERMISSION_ANSWER_UPDATES} updates, rules and directories in all`;
+      if (capped === undefined) {
+        ctx.issues.push({
           code: "custom",
-          message: y,
+          message: overflowMessage,
           input: undefined,
         });
-        return bY;
+        return INVALID;
       }
-      logForDebugging(`${y}: the rest is not read`, {
+      logForDebugging(`${overflowMessage}: the rest is not read`, {
         level: "warn",
       });
-      return [...h, UNREAD_RULES_DENY_UPDATE];
+      return [...capped, UNREAD_RULES_DENY_UPDATE];
     },
     array(permissionUpdateSchema())
       .optional()
       .catch((error) => {
         logForDebugging(
-          `Malformed updatedPermissions from ${n} ignored: ${error.error.issues[0]?.message ?? "unknown"}`,
+          `Malformed updatedPermissions from ${sourceLabel} ignored: ${error.error.issues[0]?.message ?? "unknown"}`,
           {
             level: "warn",
           },
@@ -185,106 +189,123 @@ var MAX_ANSWER_CHARS = 1048576;
 /**
  * 比较权限回答的输入与原输入是否深度相等（经 JSON 往返）；输入超出回答大小限制时记警告并返回 false。
  */
-function isSameAnswerInput(e, n) {
-  let r = measureAnswerBounds(e);
-  if (!r.within) {
+function isSameAnswerInput(left, right) {
+  let bounds = measureAnswerBounds(left);
+  if (!bounds.within) {
     logForDebugging(
-      `a permission answer's input is past the answer bounds (${r.values} values, depth ${r.depth}, ${r.chars} string characters when the walk stopped)`,
+      `a permission answer's input is past the answer bounds (${bounds.values} values, depth ${bounds.depth}, ${bounds.chars} string characters when the walk stopped)`,
       {
         level: "warn",
       },
     );
     return false;
   }
-  return isDeepStrictEqual(jsonParse(jsonStringify(e)), jsonParse(jsonStringify(n)));
+  return isDeepStrictEqual(jsonParse(jsonStringify(left)), jsonParse(jsonStringify(right)));
 }
 //@ chunk-e6aww6q8.js:863679-863988 placement
 /**
  * 迭代遍历值，统计值数、深度与字符数，判断是否在权限回答的大小限制内。
  */
-function measureAnswerBounds(e) {
-  let n = {
+function measureAnswerBounds(value) {
+  let totals = {
     values: 0,
     depth: 0,
     chars: 0,
   };
-  let r = [];
-  let s = countAnswerValue(e, 0, 1, n, r);
-  while (s && r.length > 0) {
-    let { container, level } = r.pop();
+  let stack = [];
+  let within = countAnswerValue(value, 0, 1, totals, stack);
+  while (within && stack.length > 0) {
+    let { container, level } = stack.pop();
     if (Array.isArray(container)) {
-      for (let idx = 0; s && idx < container.length; idx++)
-        s = countAnswerValue(container[idx], 0, level + 1, n, r);
+      for (let idx = 0; within && idx < container.length; idx++)
+        within = countAnswerValue(container[idx], 0, level + 1, totals, stack);
       continue;
     }
     for (let key in container) {
-      if (!s) break;
-      if (Object.hasOwn(container, key)) s = countAnswerValue(container[key], key.length, level + 1, n, r);
+      if (!within) break;
+      if (Object.hasOwn(container, key))
+        within = countAnswerValue(container[key], key.length, level + 1, totals, stack);
     }
   }
   return {
-    within: s,
-    ...n,
+    within,
+    ...totals,
   };
 }
 //@ chunk-e6aww6q8.js:863988-864184 placement
-function countAnswerValue(e, n, r, s, h) {
-  s.values++;
-  s.chars += n + (typeof e === "string" ? e.length : 0);
-  if (isObjectLike_5(e)) {
-    s.depth = Math.max(s.depth, r);
-    h.push({
-      container: e,
-      level: r,
+function countAnswerValue(value, keyLength, level, totals, stack) {
+  totals.values++;
+  totals.chars += keyLength + (typeof value === "string" ? value.length : 0);
+  if (isObjectLike_5(value)) {
+    totals.depth = Math.max(totals.depth, level);
+    stack.push({
+      container: value,
+      level,
     });
   }
-  return s.values <= MAX_ANSWER_VALUES && s.depth <= MAX_ANSWER_DEPTH && s.chars <= MAX_ANSWER_CHARS;
+  return (
+    totals.values <= MAX_ANSWER_VALUES && totals.depth <= MAX_ANSWER_DEPTH && totals.chars <= MAX_ANSWER_CHARS
+  );
 }
 //@ chunk-e6aww6q8.js:864184-864816 placement
 /**
  * ANSWER_CHANGED_INPUT_MESSAGE：回答改写了调用时的说明；ANSWER_RULES_UNAPPLIED_MESSAGE：规则未能全部应用时的说明；RULE_TABLE_NAMES：四个规则表名（同一声明共 4 个绑定）。
  */
-var applyPermissionAnswerChanges = Object.freeze({
-  kind: "launcher",
+var applyPermissionAnswerChanges; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ANSWER_CHANGED_INPUT_MESSAGE;
+var ANSWER_RULES_UNAPPLIED_MESSAGE;
+var RULE_TABLE_NAMES;
+var RULE_TABLE_KEYS;
+deferInit("chunk-e6aww6q8.js:864184", () => {
+  applyPermissionAnswerChanges = Object.freeze({
+    kind: "launcher",
+  });
+  ANSWER_CHANGED_INPUT_MESSAGE =
+    "The permission answer changed the tool call, and this session runs a call only as it was asked. Nothing ran.";
+  ANSWER_RULES_UNAPPLIED_MESSAGE =
+    "The call was not run. The permission answer allowed it and also asked for changes to the permission rules. This session could not apply them all, so a deny or ask rule among them may not be in force. Nothing that the answer allowed is in force either. Tell the person so. A new call can be allowed by an answer that changes fewer rules, or none.";
+  RULE_TABLE_NAMES = ["session", "localSettings", "projectSettings", "userSettings"];
+  RULE_TABLE_KEYS = ["alwaysDenyRules", "alwaysAskRules", "alwaysAllowRules"];
 });
-var ANSWER_CHANGED_INPUT_MESSAGE =
-  "The permission answer changed the tool call, and this session runs a call only as it was asked. Nothing ran.";
-var ANSWER_RULES_UNAPPLIED_MESSAGE =
-  "The call was not run. The permission answer allowed it and also asked for changes to the permission rules. This session could not apply them all, so a deny or ask rule among them may not be in force. Nothing that the answer allowed is in force either. Tell the person so. A new call can be allowed by an answer that changes fewer rules, or none.";
-var RULE_TABLE_NAMES = ["session", "localSettings", "projectSettings", "userSettings"];
-var RULE_TABLE_KEYS = ["alwaysDenyRules", "alwaysAskRules", "alwaysAllowRules"];
 //@ chunk-e6aww6q8.js:864816-864869 placement
 /**
  * isUnchangedAnswerInput：输入为空或与原输入相同。
  */
-function isUnchangedAnswerInput(updatedInput, n) {
+function isUnchangedAnswerInput(updatedInput, observableInput) {
   return (
-    isAbsentOrEmptyObject(updatedInput) || (updatedInput !== undefined && isSameAnswerInput(updatedInput, n))
+    isAbsentOrEmptyObject(updatedInput) ||
+    (updatedInput !== undefined && isSameAnswerInput(updatedInput, observableInput))
   );
 }
 //@ chunk-e6aww6q8.js:864869-865459 placement
-function admitCardAnswer(updatedInput, n, tool) {
-  if (isUnchangedAnswerInput(updatedInput, n))
-    return isAbsentOrEmptyObject(updatedInput) ? stripHostOwnedInputKeys(tool.name, n) : n;
+function admitCardAnswer(updatedInput, observableInput, tool) {
+  if (isUnchangedAnswerInput(updatedInput, observableInput))
+    return isAbsentOrEmptyObject(updatedInput)
+      ? stripHostOwnedInputKeys(tool.name, observableInput)
+      : observableInput;
   if (updatedInput === undefined || tool.admitCardAnswer === undefined) return;
-  let s;
+  let verdict;
   try {
-    s = tool.admitCardAnswer(n, updatedInput);
+    verdict = tool.admitCardAnswer(observableInput, updatedInput);
   } catch {
     logForDebugging(`${tool.name}'s card-answer admitter threw: the answer is refused`, {
       level: "warn",
     });
     return;
   }
-  switch (s.kind) {
+  switch (verdict.kind) {
     case "refused":
-      logForDebugging(`a permission answer for ${tool.name} broke its card-answer rules: ${s.rule}`, {
+      logForDebugging(`a permission answer for ${tool.name} broke its card-answer rules: ${verdict.rule}`, {
         level: "warn",
       });
       return;
     case "admitted": {
-      let { input } = s;
-      if (!Object.keys(n).every((key) => Object.hasOwn(input, key) && input[key] === n[key])) {
+      let { input } = verdict;
+      if (
+        !Object.keys(observableInput).every(
+          (key) => Object.hasOwn(input, key) && input[key] === observableInput[key],
+        )
+      ) {
         logForDebugging(
           `${tool.name}'s card-answer admitter changed a field the card showed: the answer is refused`,
           {
@@ -317,11 +338,11 @@ function matchCardFormAnswer(host, answerInput, context, tool) {
   }
   if (cardForms === undefined) return;
   let { forms, onRefused } = cardForms;
-  let reportRefused = (q) => {
+  let reportRefused = (reason) => {
     try {
-      onRefused(q);
+      onRefused(reason);
     } catch {
-      logForDebugging(`the host's count of refused card answers threw for ${tool.name} (${q})`, {
+      logForDebugging(`the host's count of refused card answers threw for ${tool.name} (${reason})`, {
         level: "error",
       });
     }
@@ -348,15 +369,15 @@ function matchCardFormAnswer(host, answerInput, context, tool) {
 /**
  * 权限回答改动了调用输入时生成拒绝决定并记警告。
  */
-function denyChangedAnswerInput(name, n) {
+function denyChangedAnswerInput(name, toolUseId) {
   logForDebugging(`refused a permission answer for ${name}: it changed the call's input`, {
     level: "warn",
   });
   return {
     behavior: "deny",
     message: ANSWER_CHANGED_INPUT_MESSAGE,
-    ...(n !== undefined && {
-      toolUseID: n,
+    ...(toolUseId !== undefined && {
+      toolUseID: toolUseId,
     }),
     decisionReason: {
       type: "other",
@@ -369,7 +390,7 @@ function denyChangedAnswerInput(name, n) {
 /**
  * 权限回答加入（或可能加入）的 deny/ask 规则没能进入会话规则时生成拒绝决定并记警告。
  */
-function denyLostTightening(name, n) {
+function denyLostTightening(name, toolUseId) {
   logForDebugging(
     `refused a permission answer for ${name}: a deny or ask rule that the answer added, or may have added, is not among the session's rules`,
     {
@@ -379,8 +400,8 @@ function denyLostTightening(name, n) {
   return {
     behavior: "deny",
     message: ANSWER_RULES_UNAPPLIED_MESSAGE,
-    ...(n !== undefined && {
-      toolUseID: n,
+    ...(toolUseId !== undefined && {
+      toolUseID: toolUseId,
     }),
     decisionReason: {
       type: "other",
@@ -393,8 +414,8 @@ function denyLostTightening(name, n) {
 /**
  * 按权限请求方式格式化请求失败信息：launcher 模式带上原因，strict 模式记录日志后只返回固定文字。
  */
-function formatPermissionRequestFailure(e, error, name) {
-  switch (e.kind) {
+function formatPermissionRequestFailure(mode, error, name) {
+  switch (mode.kind) {
     case "launcher":
       return `${TOOL_PERMISSION_REQUEST_FAILED}: ${error}`;
     case "strict":
@@ -408,48 +429,49 @@ function formatPermissionRequestFailure(e, error, name) {
 /**
  * 应用权限回答中的规则更新（添加、替换），处理收紧与放宽。
  */
-function applyPermissionAnswer(e, limits) {
-  let r = e ?? [];
+function applyPermissionAnswer(updates, limits) {
+  let list = updates ?? [];
   let perAnswer = limits.perAnswer;
-  let h = {
+  let declared = {
     tightening: 0,
     allow: 0,
   };
-  let y = {
+  let kept = {
     tightening: 0,
     allow: 0,
   };
-  let S = [];
-  for (let G of ["tightening", "allow"])
-    for (let [q, Z] of r.entries()) {
-      if (Z.type !== "addRules" && Z.type !== "replaceRules") continue;
-      let Se = Z.behavior === "deny" || Z.behavior === "ask";
-      if (Se !== (G === "tightening") || (Z.type === "replaceRules" && !Se)) continue;
-      h[G] += Z.rules.length;
-      let sliced = Z.rules
+  let keptRulesByIndex = [];
+  for (let bucket of ["tightening", "allow"])
+    for (let [index, update] of list.entries()) {
+      if (update.type !== "addRules" && update.type !== "replaceRules") continue;
+      let isTightening = update.behavior === "deny" || update.behavior === "ask";
+      if (isTightening !== (bucket === "tightening") || (update.type === "replaceRules" && !isTightening))
+        continue;
+      declared[bucket] += update.rules.length;
+      let sliced = update.rules
         .filter((rule) => formatPermissionRule(rule).length <= limits.ruleLength)
         .slice(0, perAnswer);
       perAnswer -= sliced.length;
-      y[G] += sliced.length;
-      S[q] = sliced;
+      kept[bucket] += sliced.length;
+      keptRulesByIndex[index] = sliced;
     }
-  let w = 0;
-  let flattened = r.flatMap((G, q) => {
-    switch (G.type) {
+  let droppedCount = 0;
+  let flattened = list.flatMap((update, index) => {
+    switch (update.type) {
       case "addRules":
       case "replaceRules": {
-        let Z = S[q];
-        if (Z === undefined) {
-          w++;
+        let keptRules = keptRulesByIndex[index];
+        if (keptRules === undefined) {
+          droppedCount++;
           return [];
         }
-        return Z.length === 0
+        return keptRules.length === 0
           ? []
           : [
               {
-                ...G,
+                ...update,
                 type: "addRules",
-                rules: Z,
+                rules: keptRules,
                 destination: "session",
               },
             ];
@@ -457,28 +479,31 @@ function applyPermissionAnswer(e, limits) {
       case "setMode":
         return [
           {
-            ...G,
+            ...update,
             destination: "session",
           },
         ];
       case "removeRules":
       case "addDirectories":
       case "removeDirectories":
-        w++;
+        droppedCount++;
         return [];
       default: {
-        let Z = G;
-        w++;
-        logForDebugging(`a permission answer carried an update of unknown type ${String(Z.type)}: dropped`, {
-          level: "warn",
-        });
+        let unknownUpdate = update;
+        droppedCount++;
+        logForDebugging(
+          `a permission answer carried an update of unknown type ${String(unknownUpdate.type)}: dropped`,
+          {
+            level: "warn",
+          },
+        );
         return [];
       }
     }
   });
-  if (y.tightening < h.tightening || y.allow < h.allow || w > 0)
+  if (kept.tightening < declared.tightening || kept.allow < declared.allow || droppedCount > 0)
     logForDebugging(
-      `a permission answer was capped: ${h.tightening - y.tightening} of ${h.tightening} added deny and ask rules and ${h.allow - y.allow} of ${h.allow} added allow rules dropped, ${w} other updates dropped`,
+      `a permission answer was capped: ${declared.tightening - kept.tightening} of ${declared.tightening} added deny and ask rules and ${declared.allow - kept.allow} of ${declared.allow} added allow rules dropped, ${droppedCount} other updates dropped`,
     );
   return flattened;
 }
@@ -486,46 +511,46 @@ function applyPermissionAnswer(e, limits) {
 /**
  * 应用权限回答里的更新：被否决时不做；先按限制裁剪、再经 strip 过滤，然后写入会话上下文并统计丢失的收紧规则数。
  */
-function applyAnswerPermissionUpdates(e, n, r) {
-  if (r.vetoed())
+function applyAnswerPermissionUpdates(answerPolicy, updates, options) {
+  if (options.vetoed())
     return {
       applied: [],
       lostTightenings: 0,
     };
-  let s = r.strip(applyPermissionAnswer(n, e.limits));
-  let h = {
-    toolName: r.toolName,
-    input: r.input,
+  let applied = options.strip(applyPermissionAnswer(updates, answerPolicy.limits));
+  let toolInfo = {
+    toolName: options.toolName,
+    input: options.input,
   };
   let lostTightenings = applyUpdatesToSessionContext(
     {
-      ...e,
-      mayAddAllowRule: (S) => e.mayAddAllowRule(S, h),
+      ...answerPolicy,
+      mayAddAllowRule: (ruleValue) => answerPolicy.mayAddAllowRule(ruleValue, toolInfo),
     },
-    s,
-    r.toolName,
-    r.setContext,
-    listAnswerTighteningRules(n, e.limits.ruleLength),
-    r.suggested,
+    applied,
+    options.toolName,
+    options.setContext,
+    listAnswerTighteningRules(updates, answerPolicy.limits.ruleLength),
+    options.suggested,
   );
   return {
-    applied: s,
+    applied,
     lostTightenings,
   };
 }
 //@ chunk-e6aww6q8.js:868287-868378 placement
-function tightensRules(e) {
-  return (e.type === "addRules" || e.type === "replaceRules") && e.behavior !== "allow";
+function tightensRules(update) {
+  return (update.type === "addRules" || update.type === "replaceRules") && update.behavior !== "allow";
 }
 //@ chunk-e6aww6q8.js:868378-868591 placement
 /**
  * 列出权限回答里 deny/ask 规则对应的 [规则表名, 规则串]，过长规则用 unread-rules 占位。
  */
-function listAnswerTighteningRules(updatedPermissions, ruleLength) {
-  return (updatedPermissions ?? []).flatMap((r) =>
-    tightensRules(r)
-      ? r.rules.map((rule) => [
-          r.behavior === "deny" ? "alwaysDenyRules" : "alwaysAskRules",
+function listAnswerTighteningRules(updates, ruleLength) {
+  return (updates ?? []).flatMap((update) =>
+    tightensRules(update)
+      ? update.rules.map((rule) => [
+          update.behavior === "deny" ? "alwaysDenyRules" : "alwaysAskRules",
           rule.toolName.length + (rule.ruleContent?.length ?? 0) > ruleLength
             ? UNREAD_RULES_DENY_UPDATE.rules[0].toolName
             : formatPermissionRule(permissionRuleValueFromString(formatPermissionRule(rule))),
@@ -537,162 +562,200 @@ function listAnswerTighteningRules(updatedPermissions, ruleLength) {
 /**
  * 把权限更新应用到会话上下文：经托管规则过滤（记录被收窄的部分），模式变化且无丢失时另外切换模式；返回丢失的收紧规则数。
  */
-function applyUpdatesToSessionContext(e, n, r, s, h, suggested) {
-  if (n.length === 0 && h.length === 0) return 0;
-  let S;
-  let w = h.length;
-  s((L) => {
-    let G = applyPermissionUpdates(L, n);
-    let { context, offered, kept, lost } = filterManagedPermissionRules(L, G, r, e, h, suggested);
-    w = lost;
-    S = lost === 0 && G.mode !== L.mode ? G.mode : undefined;
-    let we = listChangedRuleTables(context, G);
-    if (we.length > 0)
+function applyUpdatesToSessionContext(
+  answerPolicy,
+  updates,
+  toolName,
+  setContext,
+  tighteningRules,
+  isAllowedTool,
+) {
+  if (updates.length === 0 && tighteningRules.length === 0) return 0;
+  let modeToSet;
+  let lost = tighteningRules.length;
+  setContext((context) => {
+    let nextContext = applyPermissionUpdates(context, updates);
+    let {
+      context: context_2,
+      offered,
+      kept,
+      lost: lost_2,
+    } = filterManagedPermissionRules(
+      context,
+      nextContext,
+      toolName,
+      answerPolicy,
+      tighteningRules,
+      isAllowedTool,
+    );
+    lost = lost_2;
+    modeToSet = lost_2 === 0 && nextContext.mode !== context.mode ? nextContext.mode : undefined;
+    let changedTables = listChangedRuleTables(context_2, nextContext);
+    if (changedTables.length > 0)
       logForDebugging(
-        `a permission answer's changes were narrowed to this session's own rules (${we.join(", ")}): kept ${kept} of ${offered} added rules`,
+        `a permission answer's changes were narrowed to this session's own rules (${changedTables.join(", ")}): kept ${kept} of ${offered} added rules`,
       );
-    return syncRemoteBrowserCardAnswers(L, context);
+    return syncRemoteBrowserCardAnswers(context, context_2);
   });
-  if (S !== undefined) e.setMode(S);
-  return w;
+  if (modeToSet !== undefined) answerPolicy.setMode(modeToSet);
+  return lost;
 }
 //@ chunk-e6aww6q8.js:869008-870865 placement
 /**
  * 过滤托管设置中的 always deny/ask 规则，忽略无效规则。
  */
-function filterManagedPermissionRules(e, n, r, s, h, y) {
-  let { limits } = s;
-  let w =
-    h.length === 0
+function filterManagedPermissionRules(
+  context,
+  previousContext,
+  toolName,
+  answerPolicy,
+  newRules,
+  isAllowedTool,
+) {
+  let { limits } = answerPolicy;
+  let ruleTables =
+    newRules.length === 0
       ? undefined
       : {
-          alwaysDenyRules: collectRuleTables(e.alwaysDenyRules),
-          alwaysAskRules: collectRuleTables(e.alwaysAskRules),
+          alwaysDenyRules: collectRuleTables(context.alwaysDenyRules),
+          alwaysAskRules: collectRuleTables(context.alwaysAskRules),
         };
-  let mapped = RULE_TABLE_KEYS.map((Ie) => findRulesMissingFromContext(e[Ie], n[Ie]));
-  let mapped_2 = mapped.map((Ie, Me) => {
-    let We = RULE_TABLE_KEYS[Me];
-    return Ie.filter((ze) => {
-      if (ze.length > limits.ruleLength || ze === UNREAD_RULES_DENY_UPDATE.rules[0].toolName) return false;
-      if (We === "alwaysDenyRules" || We === "alwaysAskRules") {
-        if (!PATH_RULE_CARVE_OUT_RE.test(ze)) return true;
+  let mapped = RULE_TABLE_KEYS.map((field) =>
+    findRulesMissingFromContext(context[field], previousContext[field]),
+  );
+  let mapped_2 = mapped.map((rules, index) => {
+    let field = RULE_TABLE_KEYS[index];
+    return rules.filter((ruleString) => {
+      if (ruleString.length > limits.ruleLength || ruleString === UNREAD_RULES_DENY_UPDATE.rules[0].toolName)
+        return false;
+      if (field === "alwaysDenyRules" || field === "alwaysAskRules") {
+        if (!PATH_RULE_CARVE_OUT_RE.test(ruleString)) return true;
         logForDebugging(
-          `Ignoring ${We === "alwaysDenyRules" ? "deny" : "ask"} rule "${quotedPrintable(ze)}" from a permission answer: a path that starts with "!" takes paths out of earlier rules, and an answer may only add restrictions. Send the rule without the exception.`,
+          `Ignoring ${field === "alwaysDenyRules" ? "deny" : "ask"} rule "${quotedPrintable(ruleString)}" from a permission answer: a path that starts with "!" takes paths out of earlier rules, and an answer may only add restrictions. Send the rule without the exception.`,
           {
             level: "warn",
           },
         );
         return false;
       }
-      let lt = permissionRuleValueFromString(ze);
-      return (lt.toolName === r || y?.(lt) === true) && s.mayAddAllowRule(lt);
+      let ruleValue = permissionRuleValueFromString(ruleString);
+      return (
+        (ruleValue.toolName === toolName || isAllowedTool?.(ruleValue) === true) &&
+        answerPolicy.mayAddAllowRule(ruleValue)
+      );
     });
   });
-  let reduced = RULE_TABLE_KEYS.reduce((acc, Me) => acc + (e[Me].session?.length ?? 0), 0);
+  let reduced = RULE_TABLE_KEYS.reduce((acc, field) => acc + (context[field].session?.length ?? 0), 0);
   let max = Math.max(0, Math.min(limits.perAnswer, limits.perSession - reduced));
-  let Se = s.denyRuleToAdd(e.alwaysDenyRules.session ?? [], r);
-  let ke = 0;
-  let mapped_3 = mapped_2.map((Ie, Me) => {
-    let We = RULE_TABLE_KEYS[Me];
-    let ze = [];
-    let lt = false;
-    if (We === "alwaysAllowRules") {
-      ke =
-        w === undefined
+  let dedupeDenyRule = answerPolicy.denyRuleToAdd(context.alwaysDenyRules.session ?? [], toolName);
+  let lostCount = 0;
+  let mapped_3 = mapped_2.map((rules, index) => {
+    let field = RULE_TABLE_KEYS[index];
+    let kept = [];
+    let overBudget = false;
+    if (field === "alwaysAllowRules") {
+      lostCount =
+        ruleTables === undefined
           ? 0
           : count(
-              h,
-              ([Je, nt]) =>
-                nt === UNREAD_RULES_DENY_UPDATE.rules[0].toolName ||
-                (!w[Je].has(nt) && !PATH_RULE_CARVE_OUT_RE.test(nt)),
+              newRules,
+              ([ruleField, ruleString]) =>
+                ruleString === UNREAD_RULES_DENY_UPDATE.rules[0].toolName ||
+                (!ruleTables[ruleField].has(ruleString) && !PATH_RULE_CARVE_OUT_RE.test(ruleString)),
             );
-      if (ke > 0) return ze;
+      if (lostCount > 0) return kept;
     }
-    for (let Je of Ie) {
+    for (let ruleString of rules) {
       let {
-        add: nt,
+        add: ruleToAdd,
         why,
         covered,
-      } = We === "alwaysDenyRules"
-        ? Se(Je)
+      } = field === "alwaysDenyRules"
+        ? dedupeDenyRule(ruleString)
         : {
-            add: Je,
+            add: ruleString,
           };
-      if (nt !== undefined && ze.length === max) {
-        lt = true;
+      if (ruleToAdd !== undefined && kept.length === max) {
+        overBudget = true;
         continue;
       }
-      if (nt !== undefined) ze.push(nt);
-      if (nt !== Je && (nt !== undefined || (covered === true && !lt))) w?.alwaysDenyRules.add(Je);
-      if (nt !== Je)
+      if (ruleToAdd !== undefined) kept.push(ruleToAdd);
+      if (ruleToAdd !== ruleString && (ruleToAdd !== undefined || (covered === true && !overBudget)))
+        ruleTables?.alwaysDenyRules.add(ruleString);
+      if (ruleToAdd !== ruleString)
         logForDebugging(
-          `${nt === undefined ? "Ignoring" : `Adding "${quotedPrintable(nt)}" in place of`} deny rule "${quotedPrintable(Je)}" from a permission answer: ${why}`,
+          `${ruleToAdd === undefined ? "Ignoring" : `Adding "${quotedPrintable(ruleToAdd)}" in place of`} deny rule "${quotedPrintable(ruleString)}" from a permission answer: ${why}`,
           {
             level: "warn",
           },
         );
     }
-    max -= ze.length;
-    if (We === "alwaysDenyRules" || We === "alwaysAskRules") for (let Je of ze) w?.[We].add(Je);
-    return ze;
+    max -= kept.length;
+    if (field === "alwaysDenyRules" || field === "alwaysAskRules")
+      for (let keptRule of kept) ruleTables?.[field].add(keptRule);
+    return kept;
   });
-  let offered = mapped.reduce((acc, Me) => acc + Me.length, 0);
-  let reduced_2 = mapped_3.reduce((acc, Me) => acc + Me.length, 0);
+  let offered = mapped.reduce((acc, rules) => acc + rules.length, 0);
+  let reduced_2 = mapped_3.reduce((acc, rules) => acc + rules.length, 0);
   if (reduced_2 === 0)
     return {
-      context: e,
+      context,
       offered,
       kept: 0,
-      lost: ke,
+      lost: lostCount,
     };
   return {
     context: {
-      ...e,
-      alwaysAllowRules: appendSessionRules(e.alwaysAllowRules, mapped_3[2] ?? []),
-      alwaysDenyRules: appendSessionRules(e.alwaysDenyRules, mapped_3[0] ?? []),
-      alwaysAskRules: appendSessionRules(e.alwaysAskRules, mapped_3[1] ?? []),
+      ...context,
+      alwaysAllowRules: appendSessionRules(context.alwaysAllowRules, mapped_3[2] ?? []),
+      alwaysDenyRules: appendSessionRules(context.alwaysDenyRules, mapped_3[0] ?? []),
+      alwaysAskRules: appendSessionRules(context.alwaysAskRules, mapped_3[1] ?? []),
     },
     offered,
     kept: reduced_2,
-    lost: ke,
+    lost: lostCount,
   };
 }
 //@ chunk-e6aww6q8.js:870865-870924 placement
-function collectRuleTables(e) {
-  return new Set(RULE_TABLE_NAMES.flatMap((n) => e[n] ?? []));
+function collectRuleTables(permissionTable) {
+  return new Set(RULE_TABLE_NAMES.flatMap((tableName) => permissionTable[tableName] ?? []));
 }
 //@ chunk-e6aww6q8.js:870924-871039 placement
-function findRulesMissingFromContext(e, n) {
-  let ruleTables = collectRuleTables(e);
-  let s = new Set();
-  for (let h of RULE_TABLE_NAMES) for (let y of n[h] ?? []) if (!ruleTables.has(y)) s.add(y);
-  return [...s];
+function findRulesMissingFromContext(context, previousContext) {
+  let ruleTables = collectRuleTables(context);
+  let missing = new Set();
+  for (let field of RULE_TABLE_NAMES)
+    for (let ruleString of previousContext[field] ?? [])
+      if (!ruleTables.has(ruleString)) missing.add(ruleString);
+  return [...missing];
 }
 //@ chunk-e6aww6q8.js:871039-871118 placement
-function appendSessionRules(e, n) {
-  return n.length === 0
-    ? e
+function appendSessionRules(rulesBySource, rules) {
+  return rules.length === 0
+    ? rulesBySource
     : {
-        ...e,
-        session: [...(e.session ?? []), ...n],
+        ...rulesBySource,
+        session: [...(rulesBySource.session ?? []), ...rules],
       };
 }
 //@ chunk-e6aww6q8.js:871118-871179 placement
-function isAbsentOrEmptyObject(e) {
-  return e === undefined || Object.keys(e).length === 0;
+function isAbsentOrEmptyObject(input) {
+  return input === undefined || Object.keys(input).length === 0;
 }
 //@ chunk-e6aww6q8.js:871179-871497 placement
 /**
  * 比较两份权限上下文，列出发生变化的规则表（allow/deny/ask 规则、附加目录）。
  */
-function listChangedRuleTables(context, n) {
-  let r = {
-    "allow rules": [context.alwaysAllowRules, n.alwaysAllowRules],
-    "deny rules": [context.alwaysDenyRules, n.alwaysDenyRules],
-    "ask rules": [context.alwaysAskRules, n.alwaysAskRules],
-    directories: [context.additionalWorkingDirectories, n.additionalWorkingDirectories],
+function listChangedRuleTables(context, nextContext) {
+  let tables = {
+    "allow rules": [context.alwaysAllowRules, nextContext.alwaysAllowRules],
+    "deny rules": [context.alwaysDenyRules, nextContext.alwaysDenyRules],
+    "ask rules": [context.alwaysAskRules, nextContext.alwaysAskRules],
+    directories: [context.additionalWorkingDirectories, nextContext.additionalWorkingDirectories],
   };
-  return Object.entries(r).flatMap(([key, [h, y]]) => (isDeepStrictEqual(h, y) ? [] : [key]));
+  return Object.entries(tables).flatMap(([key, [before, after]]) =>
+    isDeepStrictEqual(before, after) ? [] : [key],
+  );
 }
 export {
   isSameAnswerInput,

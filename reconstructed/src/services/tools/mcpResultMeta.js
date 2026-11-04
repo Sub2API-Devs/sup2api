@@ -15,24 +15,25 @@ import { logMCPDebug } from "../../utils/log.js";
 import { hasMcpInboundDoor } from "../mcp/mcpInboundDoor.js";
 import { countJsonMembers } from "../../utils/jsonScan.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1805174-1805233 placement
 var CLAUDE_ENDTURN = "claude/endTurn";
 var CLAUDE_ENDTURNHONORSSTOPHOOKS = "claude/endTurnHonorsStopHooks";
 //@ chunk-e6aww6q8.js:1805233-1805337 placement
-function getEndTurnMetaKind(e) {
-  if (e?._meta?.[CLAUDE_ENDTURN] !== true) return false;
-  return e._meta[CLAUDE_ENDTURNHONORSSTOPHOOKS] === true ? "mcp_meta_blockable" : "mcp_meta";
+function getEndTurnMetaKind(toolResult) {
+  if (toolResult?._meta?.[CLAUDE_ENDTURN] !== true) return false;
+  return toolResult._meta[CLAUDE_ENDTURNHONORSSTOPHOOKS] === true ? "mcp_meta_blockable" : "mcp_meta";
 }
 //@ chunk-e6aww6q8.js:1805337-1805456 placement
 /**
  * 判断用户消息是否结束本轮：工具声明或 MCP 元数据给出结束原因，且结果不是错误时返回该原因。
  */
-function getToolEndsTurnKind(e) {
-  if (e.type !== "user") return false;
-  let n = e.toolEndsTurn ? "tool" : getEndTurnMetaKind(e.mcpMeta);
-  if (!n || hasToolResultError(e)) return false;
-  return n;
+function getToolEndsTurnKind(message) {
+  if (message.type !== "user") return false;
+  let kind = message.toolEndsTurn ? "tool" : getEndTurnMetaKind(message.mcpMeta);
+  if (!kind || hasToolResultError(message)) return false;
+  return kind;
 }
 //@ chunk-e6aww6q8.js:1805456-1805508 placement
 var MCP_META_SOURCE_RANK = [false, "mcp_meta_blockable", "mcp_meta", "tool"];
@@ -49,34 +50,40 @@ function higherSourceRank(toolRequestedEndTurn, toolEndsTurnKind) {
 /**
  * 用户消息中是否含 is_error 的工具结果。
  */
-function hasToolResultError(e) {
+function hasToolResultError(message) {
   return (
-    e.type === "user" &&
-    Array.isArray(e.message.content) &&
-    e.message.content.some((n) => n.type === "tool_result" && n.is_error === true)
+    message.type === "user" &&
+    Array.isArray(message.message.content) &&
+    message.message.content.some((block) => block.type === "tool_result" && block.is_error === true)
   );
 }
 //@ chunk-e6aww6q8.js:1805710-1805843 placement
-var MAX_STRUCTURED_CONTENT_DEPTH = 8192;
-var MAX_META_KEYS = 128;
-var Y7o = Object.freeze({
-  _meta: Object.freeze({
-    [CLAUDE_ENDTURN]: true,
-  }),
-});
-var X7o = Object.freeze({
-  _meta: Object.freeze({
-    [CLAUDE_ENDTURN]: true,
-    [CLAUDE_ENDTURNHONORSSTOPHOOKS]: true,
-  }),
+var MAX_STRUCTURED_CONTENT_DEPTH; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_META_KEYS;
+var MCP_RESULT_META;
+var MCP_RESULT_META_BLOCKABLE;
+deferInit("chunk-e6aww6q8.js:1805710", () => {
+  MAX_STRUCTURED_CONTENT_DEPTH = 8192;
+  MAX_META_KEYS = 128;
+  MCP_RESULT_META = Object.freeze({
+    _meta: Object.freeze({
+      [CLAUDE_ENDTURN]: true,
+    }),
+  });
+  MCP_RESULT_META_BLOCKABLE = Object.freeze({
+    _meta: Object.freeze({
+      [CLAUDE_ENDTURN]: true,
+      [CLAUDE_ENDTURNHONORSSTOPHOOKS]: true,
+    }),
+  });
 });
 //@ chunk-e6aww6q8.js:1805843-1805951 placement
-function getEndTurnMeta(e) {
-  switch (getEndTurnMetaKind(e)) {
+function getEndTurnMeta(toolResult) {
+  switch (getEndTurnMetaKind(toolResult)) {
     case "mcp_meta":
-      return Y7o;
+      return MCP_RESULT_META;
     case "mcp_meta_blockable":
-      return X7o;
+      return MCP_RESULT_META_BLOCKABLE;
     case false:
       return;
   }
@@ -90,48 +97,48 @@ var UI_RESOURCE_LIMIT_NOTE = `The limit is ${UI_RESOURCE_STRUCTURED_CONTENT_LIMI
 /**
  * 处理 MCP 工具返回的 structuredContent：过大或不可序列化时省略并说明。
  */
-function formatMcpStructuredContent(agentId, mcpMeta, tool, s = false) {
+function formatMcpStructuredContent(agentId, mcpMeta, tool, isAppTool = false) {
   if (!agentId) {
     if (tool.mcpInfo?.serverType === "sdk") return mcpMeta;
-    let S = hasUiResource(tool.mcpInfo?.uiMeta);
-    if (!s) mcpMeta = checkMcpResultMetaSize(mcpMeta, tool.mcpInfo, S);
+    let hasUiResourceFlag = hasUiResource(tool.mcpInfo?.uiMeta);
+    if (!isAppTool) mcpMeta = checkMcpResultMetaSize(mcpMeta, tool.mcpInfo, hasUiResourceFlag);
     if (mcpMeta?.structuredContent === undefined) return mcpMeta;
-    let { structuredContent, ...L } = mcpMeta;
+    let { structuredContent, ...rest } = mcpMeta;
     if (isStructuredContentBase64Envelope(mcpMeta.structuredContent)) {
       logEvent("tengu_mcp_structured_content_omitted", {
-        isAppTool: S,
+        isAppTool: hasUiResourceFlag,
         asText: true,
       });
       return {
-        ...L,
+        ...rest,
         structuredContentOmitted: true,
       };
     }
-    let G = S ? UI_RESOURCE_STRUCTURED_CONTENT_LIMIT : MAX_STRUCTURED_CONTENT_BYTES;
-    let q = safeJsonStringify(mcpMeta.structuredContent)?.length ?? 1 / 0;
-    if (q <= G) return mcpMeta;
+    let limit = hasUiResourceFlag ? UI_RESOURCE_STRUCTURED_CONTENT_LIMIT : MAX_STRUCTURED_CONTENT_BYTES;
+    let jsonLength = safeJsonStringify(mcpMeta.structuredContent)?.length ?? 1 / 0;
+    if (jsonLength <= limit) return mcpMeta;
     logMCPDebug(
       tool.mcpInfo?.serverName ?? "unknown",
-      `Tool '${tool.mcpInfo?.toolName ?? "unknown"}': structuredContent (${Number.isFinite(q) ? `${q} characters of JSON` : "not serializable"}, limit ${G}) left off the result message; tool_use_result.structuredContentOmitted is set, and content and resourceLinks are kept. ${S ? "" : UI_RESOURCE_LIMIT_NOTE}Exempt: in-process SDK servers`,
+      `Tool '${tool.mcpInfo?.toolName ?? "unknown"}': structuredContent (${Number.isFinite(jsonLength) ? `${jsonLength} characters of JSON` : "not serializable"}, limit ${limit}) left off the result message; tool_use_result.structuredContentOmitted is set, and content and resourceLinks are kept. ${hasUiResourceFlag ? "" : UI_RESOURCE_LIMIT_NOTE}Exempt: in-process SDK servers`,
     );
     logEvent("tengu_mcp_structured_content_omitted", {
-      ...(Number.isFinite(q) && {
-        jsonChars: q,
+      ...(Number.isFinite(jsonLength) && {
+        jsonChars: jsonLength,
       }),
-      isAppTool: S,
+      isAppTool: hasUiResourceFlag,
     });
     return {
-      ...L,
+      ...rest,
       structuredContentOmitted: true,
     };
   }
   let _meta = mcpMeta?._meta;
   if (!_meta || Object.keys(_meta).length === 0) return;
-  let y = safeJsonStringify(_meta);
+  let metaJson = safeJsonStringify(_meta);
   if (
-    y !== undefined &&
-    y.length <= MAX_STRUCTURED_CONTENT_DEPTH &&
-    (!hasMcpInboundDoor() || countJsonMembers(y, MAX_META_KEYS) !== undefined)
+    metaJson !== undefined &&
+    metaJson.length <= MAX_STRUCTURED_CONTENT_DEPTH &&
+    (!hasMcpInboundDoor() || countJsonMembers(metaJson, MAX_META_KEYS) !== undefined)
   )
     return {
       _meta,
@@ -142,37 +149,37 @@ function formatMcpStructuredContent(agentId, mcpMeta, tool, s = false) {
 /**
  * 检查 MCP 工具结果 _meta 的大小与可序列化性。
  */
-function checkMcpResultMetaSize(e, mcpInfo, r) {
-  if (e?._meta === undefined) return e;
-  let s = r ? UI_RESOURCE_STRUCTURED_CONTENT_LIMIT : DEFAULT_STRUCTURED_CONTENT_LIMIT;
-  let h = safeJsonStringify(e._meta)?.length ?? 1 / 0;
-  if (h <= s) return e;
+function checkMcpResultMetaSize(mcpMeta, mcpInfo, isAppTool) {
+  if (mcpMeta?._meta === undefined) return mcpMeta;
+  let limit = isAppTool ? UI_RESOURCE_STRUCTURED_CONTENT_LIMIT : DEFAULT_STRUCTURED_CONTENT_LIMIT;
+  let metaJsonLength = safeJsonStringify(mcpMeta._meta)?.length ?? 1 / 0;
+  if (metaJsonLength <= limit) return mcpMeta;
   logMCPDebug(
     mcpInfo?.serverName ?? "unknown",
-    `Tool '${mcpInfo?.toolName ?? "unknown"}': result _meta (${Number.isFinite(h) ? `${h} characters of JSON` : "not serializable"}, limit ${s}) left off the result message; only its ${CLAUDE_ENDTURN} marker, if set, is kept, with ${CLAUDE_ENDTURNHONORSSTOPHOOKS} beside it. ${r ? "" : UI_RESOURCE_LIMIT_NOTE}Exempt: in-process SDK servers, and a successful result of an account memory tool or, in a Projects session, a Projects read tool`,
+    `Tool '${mcpInfo?.toolName ?? "unknown"}': result _meta (${Number.isFinite(metaJsonLength) ? `${metaJsonLength} characters of JSON` : "not serializable"}, limit ${limit}) left off the result message; only its ${CLAUDE_ENDTURN} marker, if set, is kept, with ${CLAUDE_ENDTURNHONORSSTOPHOOKS} beside it. ${isAppTool ? "" : UI_RESOURCE_LIMIT_NOTE}Exempt: in-process SDK servers, and a successful result of an account memory tool or, in a Projects session, a Projects read tool`,
   );
   logEvent("tengu_mcp_result_meta_omitted", {
-    ...(Number.isFinite(h) && {
-      jsonChars: h,
+    ...(Number.isFinite(metaJsonLength) && {
+      jsonChars: metaJsonLength,
     }),
-    isAppTool: r,
+    isAppTool,
   });
-  let { _meta, ...S } = e;
-  let endTurnMeta = getEndTurnMeta(e);
+  let { _meta, ...rest } = mcpMeta;
+  let endTurnMeta = getEndTurnMeta(mcpMeta);
   if (endTurnMeta)
     return {
-      ...S,
+      ...rest,
       ...endTurnMeta,
     };
-  return Object.keys(S).length > 0 ? S : undefined;
+  return Object.keys(rest).length > 0 ? rest : undefined;
 }
 //@ chunk-e6aww6q8.js:1807850-1807896 placement
 /**
  * 把值序列化成 JSON，循环等异常时返回 undefined。
  */
-function safeJsonStringify(e) {
+function safeJsonStringify(value) {
   try {
-    return jsonStringify(e);
+    return jsonStringify(value);
   } catch {
     return;
   }

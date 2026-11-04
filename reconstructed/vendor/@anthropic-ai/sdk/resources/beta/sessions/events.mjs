@@ -6,7 +6,7 @@
  * attribution: esm-fingerprint 1
  */
 import { APIResource } from "../../../core/resource.mjs";
-import { I } from "../../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../../internal/utils/path.mjs";
 import { TokenPage } from "../../../core/pagination.mjs";
 import { buildHeaders } from "../../../internal/headers.mjs";
 import { SessionToolRunner } from "../../../lib/tools/SessionToolRunner.mjs";
@@ -16,7 +16,7 @@ var Events = (() => {
   class Events extends APIResource {
     list(sessionID, params = {}, options) {
       let { betas, workspace_id, ...query } = params ?? {};
-      return this._client.getAPIList(I`/v1/sessions/${sessionID}/events?beta=true`, TokenPage, {
+      return this._client.getAPIList(parseUrl_2`/v1/sessions/${sessionID}/events?beta=true`, TokenPage, {
         query,
         ...options,
         headers: buildHeaders([
@@ -34,7 +34,7 @@ var Events = (() => {
     }
     send(sessionID, params, options) {
       let { betas, workspace_id, ...body } = params;
-      return this._client.post(I`/v1/sessions/${sessionID}/events?beta=true`, {
+      return this._client.post(parseUrl_2`/v1/sessions/${sessionID}/events?beta=true`, {
         body,
         ...options,
         headers: buildHeaders([
@@ -52,7 +52,7 @@ var Events = (() => {
     }
     stream(sessionID, params = {}, options) {
       let { betas, workspace_id, ...query } = params ?? {};
-      return this._client.get(I`/v1/sessions/${sessionID}/events/stream?beta=true`, {
+      return this._client.get(parseUrl_2`/v1/sessions/${sessionID}/events/stream?beta=true`, {
         query,
         ...options,
         headers: buildHeaders([

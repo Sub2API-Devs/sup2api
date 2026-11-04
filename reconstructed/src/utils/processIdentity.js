@@ -23,6 +23,7 @@ import { withDeadline, sleep } from "./sleep.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { sanitizePathEnv, whichOnPath } from "./which.js";
 import { getEnvCaseInsensitive } from "./plugins/securityDefaultPlugin.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-qg0af0yq.js:12016-12101 placement
 class ProcessIdentityOverride {
@@ -30,12 +31,15 @@ class ProcessIdentityOverride {
   get forcedUnavailable() {
     return this.#e;
   }
-  forceUnavailable(e) {
-    this.#e = e;
+  forceUnavailable(reason) {
+    this.#e = reason;
   }
 }
 //@ chunk-qg0af0yq.js:12101-12115 placement
-var processIdentityOverride = new ProcessIdentityOverride();
+var processIdentityOverride; // deferred: uses ProcessIdentityOverride of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-qg0af0yq.js:12101", () => {
+  processIdentityOverride = new ProcessIdentityOverride();
+});
 //@ chunk-qg0af0yq.js:12115-12137 placement
 function procStartFromBun() {
   return false;
@@ -44,20 +48,20 @@ function procStartFromBun() {
 /**
  * 获取 Windows 进程的创建时间（Bun 扩展），失败返回 undefined。
  */
-function getWindowsProcessCreationTime(e) {
-  if (!Number.isInteger(e) || e <= 0) return;
+function getWindowsProcessCreationTime(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return;
   try {
-    return Bun.ant.windowsProcessCreationTime(e) ?? undefined;
+    return Bun.ant.windowsProcessCreationTime(pid) ?? undefined;
   } catch {
     return;
   }
 }
 //@ chunk-qg0af0yq.js:12261-12433 placement
-async function readLinuxProcState(e) {
+async function readLinuxProcState(pid) {
   if (getPlatform() !== "linux" && getPlatform() !== "wsl") return;
-  if (!isProbeablePid(e)) return;
+  if (!isProbeablePid(pid)) return;
   try {
-    let content = await getFsImplementation().readFile(`/proc/${e}/stat`, {
+    let content = await getFsImplementation().readFile(`/proc/${pid}/stat`, {
       encoding: "utf8",
     });
     return statState(content);
@@ -80,8 +84,8 @@ async function hasExitedUnreaped(pid) {
 //@ chunk-qg0af0yq.js:12652-12670 placement
 var MAX_PROC_START_SECONDS = 2147483647;
 //@ chunk-qg0af0yq.js:12670-12725 placement
-function isProbeablePid(e) {
-  return Number.isInteger(e) && e > 1 && e <= MAX_PROC_START_SECONDS;
+function isProbeablePid(pid) {
+  return Number.isInteger(pid) && pid > 1 && pid <= MAX_PROC_START_SECONDS;
 }
 //@ chunk-qg0af0yq.js:12725-12824 placement
 function isProcessProvablyGone(pid) {
@@ -100,53 +104,53 @@ async function looksLikeFullHostProcessTable() {
   let platform = getPlatform();
   if (platform !== "linux" && platform !== "wsl") return true;
   let fsImplementation = getFsImplementation();
-  let t = await fsImplementation.readlink("/proc/self").catch(() => null);
-  if (t === null || t !== String(process.pid)) return false;
-  let r = await fsImplementation.readdir("/proc").catch(() => null);
-  if (!r) return false;
-  return r.filter((s) => /^\d+$/.test(s.name)).length >= PROC_START_TOKEN_LENGTH;
+  let selfTarget = await fsImplementation.readlink("/proc/self").catch(() => null);
+  if (selfTarget === null || selfTarget !== String(process.pid)) return false;
+  let procEntries = await fsImplementation.readdir("/proc").catch(() => null);
+  if (!procEntries) return false;
+  return procEntries.filter((entry) => /^\d+$/.test(entry.name)).length >= PROC_START_TOKEN_LENGTH;
 }
 //@ chunk-qg0af0yq.js:13122-13368 placement
-function sigtermThenKill(e, n) {
-  let filtered = e.filter((r) => Math.abs(r) > 1);
-  for (let r of filtered) {
+function sigtermThenKill(pids, procStart) {
+  let filtered = pids.filter((pid) => Math.abs(pid) > 1);
+  for (let pid of filtered) {
     try {
-      process.kill(r, "SIGTERM");
+      process.kill(pid, "SIGTERM");
     } catch {
       continue;
     }
     setTimeout(
-      (i, s, o) => {
-        if (!isSameProcess(s, o)) return;
+      (pid, procStart, otherStart) => {
+        if (!isSameProcess(procStart, otherStart)) return;
         try {
-          process.kill(i, "SIGKILL");
+          process.kill(pid, "SIGKILL");
         } catch {}
       },
       5000,
-      r,
+      pid,
       Math.abs(filtered[0]),
-      n,
+      procStart,
     ).unref();
     return true;
   }
   return false;
 }
 //@ chunk-qg0af0yq.js:13368-13657 placement
-async function reapDetachedRepl(replPid, replProcStart, t = "SIGTERM") {
+async function reapDetachedRepl(replPid, replProcStart, signal = "SIGTERM") {
   if (!replPid || replPid <= 1 || replProcStart === undefined) return false;
   if ((await compareProcessIdentity(replPid, replProcStart)) === "other") return false;
   try {
-    process.kill(-replPid, t);
+    process.kill(-replPid, signal);
   } catch {
     return false;
   }
-  if (t !== "SIGKILL")
+  if (signal !== "SIGKILL")
     setTimeout(
-      (r, i) => {
-        compareProcessIdentity(r, i).then((s) => {
-          if (s === "other") return;
+      (pid, procStart) => {
+        compareProcessIdentity(pid, procStart).then((verdict) => {
+          if (verdict === "other") return;
           try {
-            process.kill(-r, "SIGKILL");
+            process.kill(-pid, "SIGKILL");
           } catch {}
         });
       },
@@ -157,50 +161,51 @@ async function reapDetachedRepl(replPid, replProcStart, t = "SIGTERM") {
   return true;
 }
 //@ chunk-qg0af0yq.js:13657-13828 placement
-async function compareProcessIdentity(e, n) {
-  let t = await captureProcessStartTimeAsync(e);
-  if (t !== undefined) return startTokensEqualOrCrossFormat(n, t) ? "same" : "other";
+async function compareProcessIdentity(pid, expectedStart) {
+  let actualStart = await captureProcessStartTimeAsync(pid);
+  if (actualStart !== undefined)
+    return startTokensEqualOrCrossFormat(expectedStart, actualStart) ? "same" : "other";
   try {
-    process.kill(e, 0);
+    process.kill(pid, 0);
     return "other";
   } catch (error) {
     return getErrnoCode(error) === "ESRCH" ? "gone" : "other";
   }
 }
 //@ chunk-qg0af0yq.js:13828-13961 placement
-function getProcessStartTokenLinuxSync(e) {
+function getProcessStartTokenLinuxSync(pid) {
   try {
-    let content = getFsImplementation().readFileSync(`/proc/${e}/stat`, {
+    let content = getFsImplementation().readFileSync(`/proc/${pid}/stat`, {
       encoding: "utf8",
     });
-    let t = procStatField(content);
-    return t && t.length > 0 ? t : undefined;
+    let startToken = procStatField(content);
+    return startToken && startToken.length > 0 ? startToken : undefined;
   } catch {
     return;
   }
 }
 //@ chunk-qg0af0yq.js:13961-14236 placement
-function getAncestorPidsLinuxSync(e, n = 12) {
-  let t = [];
-  let r = e;
-  for (let i = 0; i < n; i++) {
-    let s = 0;
+function getAncestorPidsLinuxSync(pid, maxDepth = 12) {
+  let ancestors = [];
+  let currentPid = pid;
+  for (let index = 0; index < maxDepth; index++) {
+    let parentPid = 0;
     try {
-      let content = getFsImplementation().readFileSync(`/proc/${r}/stat`, {
+      let content = getFsImplementation().readFileSync(`/proc/${currentPid}/stat`, {
         encoding: "utf8",
       });
       let index = content.lastIndexOf(")");
       let parts = content.slice(index + 2).split(" ");
-      s = Number(parts[1]);
+      parentPid = Number(parts[1]);
     } catch {
       break;
     }
-    if (!Number.isInteger(s) || s < 1) break;
-    t.push(s);
-    if (s === 1) break;
-    r = s;
+    if (!Number.isInteger(parentPid) || parentPid < 1) break;
+    ancestors.push(parentPid);
+    if (parentPid === 1) break;
+    currentPid = parentPid;
   }
-  return t;
+  return ancestors;
 }
 //@ chunk-qg0af0yq.js:14236-14296 placement
 async function getAncestorPidsAsync(pid, maxDepth = 10) {
@@ -221,9 +226,9 @@ async function getAncestorPidsCheckedAsync(pid, maxDepth = 10) {
     .filter(Boolean);
   return {
     ancestors: filtered
-      .filter((s) => s !== "END" && s !== "FAIL")
-      .map((s) => parseInt(s, 10))
-      .filter((s) => !isNaN(s)),
+      .filter((token) => token !== "END" && token !== "FAIL")
+      .map((token) => parseInt(token, 10))
+      .filter((pid) => !isNaN(pid)),
     readFailed: result.code !== 0 || filtered.at(-1) === "FAIL",
     truncated: result.code === 0 && filtered.at(-1) !== "END" && filtered.at(-1) !== "FAIL",
   };
@@ -244,61 +249,68 @@ function getProcessCommand(pid) {
   }
 }
 //@ chunk-qg0af0yq.js:14993-15193 placement
-function getProcessStartTime(e) {
+function getProcessStartTime(pid) {
   try {
     {
-      let content = getFsImplementation().readFileSync(`/proc/${e}/stat`, {
+      let content = getFsImplementation().readFileSync(`/proc/${pid}/stat`, {
         encoding: "utf8",
       });
       return procStatField(content);
     }
-    let n = execSyncWithDefaults_BLOCKS_EVENT_LOOP_WILL_FREEZE_UI_MAKE_SURE_YOU_KNOW_WHAT_YOU_ARE_DOING(
-      `LC_ALL=C TZ=UTC ps -o lstart= -p ${e}`,
-      {
-        timeout: 1000,
-      },
-    );
-    return n ? n.trim() : undefined;
+    let psOutput =
+      execSyncWithDefaults_BLOCKS_EVENT_LOOP_WILL_FREEZE_UI_MAKE_SURE_YOU_KNOW_WHAT_YOU_ARE_DOING(
+        `LC_ALL=C TZ=UTC ps -o lstart= -p ${pid}`,
+        {
+          timeout: 1000,
+        },
+      );
+    return psOutput ? psOutput.trim() : undefined;
   } catch {
     return;
   }
 }
 //@ chunk-qg0af0yq.js:15193-15254 placement
-function isSameProcess(e, n) {
-  if (n === undefined) return true;
-  return isSameProcStart(n, getProcessStartTime(e));
+function isSameProcess(pid, expected) {
+  if (expected === undefined) return true;
+  return isSameProcStart(expected, getProcessStartTime(pid));
 }
 //@ chunk-qg0af0yq.js:15254-15299 placement
-function startTokensEqualOrCrossFormat(e, processStartTime) {
-  if (processStartTime === e) return true;
+function startTokensEqualOrCrossFormat(expected, actual) {
+  if (actual === expected) return true;
   return false;
 }
 //@ chunk-qg0af0yq.js:15299-15350 placement
-function isSameProcStart(e, processStartTime) {
+function isSameProcStart(expected, processStartTime) {
   return (
-    processStartTime === undefined || processStartTime === e || isCrossFormatStartToken(e, processStartTime)
+    processStartTime === undefined ||
+    processStartTime === expected ||
+    isCrossFormatStartToken(expected, processStartTime)
   );
 }
 //@ chunk-qg0af0yq.js:15350-15503 placement
-function isCrossFormatStartToken(e, n) {
+function isCrossFormatStartToken(left, right) {
   if (!procStartFromBun()) return false;
-  let t = Number(e);
-  let r = Number(n);
-  return Number.isFinite(t) && Number.isFinite(r) && t > 300000000000000000 !== r > 300000000000000000;
+  let leftNumber = Number(left);
+  let rightNumber = Number(right);
+  return (
+    Number.isFinite(leftNumber) &&
+    Number.isFinite(rightNumber) &&
+    leftNumber > 300000000000000000 !== rightNumber > 300000000000000000
+  );
 }
 //@ chunk-qg0af0yq.js:15503-15574 placement
-async function isSameProcessAsync(e, n) {
-  if (n === undefined) return true;
-  return isSameProcStart(n, await getProcessStartTimeAsync(e));
+async function isSameProcessAsync(pid, expected) {
+  if (expected === undefined) return true;
+  return isSameProcStart(expected, await getProcessStartTimeAsync(pid));
 }
 //@ chunk-qg0af0yq.js:15574-15664 placement
-async function provenSameProcessAsync(pid, procStart) {
+async function provenSameProcessAsync(pid, expectedStart) {
   let processStartTime = await getProcessStartTimeAsync(pid, {
     skipCache: true,
   });
   return processStartTime === undefined
     ? undefined
-    : startTokensEqualOrCrossFormat(procStart, processStartTime);
+    : startTokensEqualOrCrossFormat(expectedStart, processStartTime);
 }
 //@ chunk-qg0af0yq.js:15664-15760 placement
 class ProcStartTokenCell {
@@ -306,28 +318,34 @@ class ProcStartTokenCell {
   get token() {
     return this.#e;
   }
-  set(e) {
-    this.#e = e;
-    return e;
+  set(token) {
+    this.#e = token;
+    return token;
   }
   reset() {
     this.#e = undefined;
   }
 }
 //@ chunk-qg0af0yq.js:15760-15775 placement
-var ownProcStartMemo = new ProcStartTokenCell();
+var ownProcStartMemo; // deferred: uses ProcStartTokenCell of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-qg0af0yq.js:15760", () => {
+  ownProcStartMemo = new ProcStartTokenCell();
+});
 //@ chunk-qg0af0yq.js:15775-15851 placement
 class ProcStartTokenCache {
   #e = new Map();
-  get(e) {
-    return this.#e.get(e);
+  get(pid) {
+    return this.#e.get(pid);
   }
-  set(e, n) {
-    this.#e.set(e, n);
+  set(pid, token) {
+    this.#e.set(pid, token);
   }
 }
 //@ chunk-qg0af0yq.js:15851-15876 placement
-var procStartTokenCache = new HostScoped(() => new ProcStartTokenCache());
+var procStartTokenCache; // deferred: uses ProcStartTokenCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-qg0af0yq.js:15851", () => {
+  procStartTokenCache = new HostScoped(() => new ProcStartTokenCache());
+});
 //@ chunk-qg0af0yq.js:15876-15935 placement = getClaudeSocketName (0.649)
 /**
  * 本进程的 Claude tmux socket 名（按 pid 生成一次后缓存）。
@@ -350,19 +368,22 @@ async function ownProcStartAsync() {
   );
 }
 //@ chunk-qg0af0yq.js:16047-16137 placement
-function procIdentityOf(e) {
-  if (procStartFromBun()) return e.procStart !== undefined ? undefined : e.procStartFt;
-  return e.procStart;
+/**
+ * 官方行为，保留：procIdentityOf 在 Bun 下 e.procStart !== void 0 时反而返回 undefined，而 procIdentityFields 恒把 procStart 置空、写 procStartFt；两函数约定不一致。
+ */
+function procIdentityOf(identity) {
+  if (procStartFromBun()) return identity.procStart !== undefined ? undefined : identity.procStartFt;
+  return identity.procStart;
 }
 //@ chunk-qg0af0yq.js:16137-16230 placement
-function procIdentityFields(e) {
+function procIdentityFields(token) {
   return procStartFromBun()
     ? {
         procStart: undefined,
-        procStartFt: e,
+        procStartFt: token,
       }
     : {
-        procStart: e,
+        procStart: token,
         procStartFt: undefined,
       };
 }
@@ -370,66 +391,66 @@ function procIdentityFields(e) {
 var PROC_START_LOCK_WAIT_MS = 60000;
 var PROC_START_LOCK_TIMEOUT_MS = 5000;
 //@ chunk-qg0af0yq.js:16251-16535 placement
-async function getProcessStartTimeAsync(pid, n) {
+async function getProcessStartTimeAsync(pid, options) {
   let now = Date.now();
-  let r = procStartTokenCache.of(getRootSession().host);
-  if (n?.env !== undefined) return readProcessStartTime(pid, n.env);
-  if (!n?.skipCache) {
-    let a = r.get(pid);
-    let l = a?.miss ? PROC_START_LOCK_TIMEOUT_MS : PROC_START_LOCK_WAIT_MS;
-    if (a && now - a.at < l) return a.p;
+  let cache = procStartTokenCache.of(getRootSession().host);
+  if (options?.env !== undefined) return readProcessStartTime(pid, options.env);
+  if (!options?.skipCache) {
+    let cached = cache.get(pid);
+    let maxAgeMs = cached?.miss ? PROC_START_LOCK_TIMEOUT_MS : PROC_START_LOCK_WAIT_MS;
+    if (cached && now - cached.at < maxAgeMs) return cached.p;
   }
   let processStartTime = readProcessStartTime(pid);
-  let s = {
+  let entry = {
     at: now,
     p: processStartTime,
   };
-  r.set(pid, s);
-  let o = await processStartTime;
-  if (o === undefined && r.get(pid) === s) {
-    s.miss = true;
-    s.at = Date.now();
+  cache.set(pid, entry);
+  let resolved = await processStartTime;
+  if (resolved === undefined && cache.get(pid) === entry) {
+    entry.miss = true;
+    entry.at = Date.now();
   }
-  return o;
+  return resolved;
 }
 //@ chunk-qg0af0yq.js:16535-16554 placement
 var PROC_IDENTITY_RETRY_DELAY_MS = 250;
 var PROC_IDENTITY_RETRY_TOTAL_MS = 2500;
 //@ chunk-qg0af0yq.js:16554-16799 placement
-async function captureProcessStartTimeAsync(e) {
-  let n = Date.now() + PROC_IDENTITY_RETRY_TOTAL_MS;
-  let t = false;
-  let r = await withDeadline(
-    getProcessStartTimeAsync(e, {
+async function captureProcessStartTimeAsync(pid) {
+  let deadline = Date.now() + PROC_IDENTITY_RETRY_TOTAL_MS;
+  let settled = false;
+  let first = await withDeadline(
+    getProcessStartTimeAsync(pid, {
       skipCache: true,
     }).finally(() => {
-      t = true;
+      settled = true;
     }),
     PROC_IDENTITY_RETRY_TOTAL_MS,
   );
-  if (r !== undefined || !t) return r;
-  let i = PROC_IDENTITY_RETRY_DELAY_MS + Math.floor(Math.random() * PROC_IDENTITY_RETRY_DELAY_MS);
-  let s = n - Date.now() - i;
-  if (s <= 0) return;
-  await sleep(i);
+  if (first !== undefined || !settled) return first;
+  let retryDelayMs = PROC_IDENTITY_RETRY_DELAY_MS + Math.floor(Math.random() * PROC_IDENTITY_RETRY_DELAY_MS);
+  let remainingMs = deadline - Date.now() - retryDelayMs;
+  if (remainingMs <= 0) return;
+  await sleep(retryDelayMs);
   return withDeadline(
-    getProcessStartTimeAsync(e, {
+    getProcessStartTimeAsync(pid, {
       skipCache: true,
     }),
-    s,
+    remainingMs,
   );
 }
 //@ chunk-qg0af0yq.js:16799-16902 placement
-function getBinOnlyPath(e) {
-  let parts = sanitizePathEnv(getEnvCaseInsensitive(e, "PATH") ?? "").split(delimiter);
-  return parts.filter((r) => /^\/bin\/*$/.test(r)).join(delimiter);
+function getBinOnlyPath(env) {
+  let parts = sanitizePathEnv(getEnvCaseInsensitive(env, "PATH") ?? "").split(delimiter);
+  return parts.filter((pathEntry) => /^\/bin\/*$/.test(pathEntry)).join(delimiter);
 }
 //@ chunk-qg0af0yq.js:16902-17282 placement
 /**
  * 读取进程启动时间：优先解析 /proc/<pid>/stat，否则用 ps -o lstart（可在指定环境中只从 /bin 查找 ps，UTC、C 语言环境、1 秒超时）。
  */
-async function readProcessStartTime(e, env) {
-  let t =
+async function readProcessStartTime(pid, env) {
+  let execOptions =
     env === undefined
       ? {}
       : {
@@ -438,23 +459,23 @@ async function readProcessStartTime(e, env) {
         };
   try {
     {
-      let content = await getFsImplementation().readFile(`/proc/${e}/stat`, {
+      let content = await getFsImplementation().readFile(`/proc/${pid}/stat`, {
         encoding: "utf8",
       });
       return procStatField(content);
     }
-    let r = env === undefined ? "ps" : whichOnPath("ps", getBinOnlyPath(env));
-    if (r === null) return;
-    let i = await execFileNoThrowWithCwd(r, ["-o", "lstart=", "-p", String(e)], {
+    let psPath = env === undefined ? "ps" : whichOnPath("ps", getBinOnlyPath(env));
+    if (psPath === null) return;
+    let psResult = await execFileNoThrowWithCwd(psPath, ["-o", "lstart=", "-p", String(pid)], {
       timeout: 1000,
-      ...t,
+      ...execOptions,
       env: {
         ...(env ?? process.env),
         LC_ALL: "C",
         TZ: "UTC",
       },
     });
-    return i.code === 0 && i.stdout ? i.stdout.trim() : undefined;
+    return psResult.code === 0 && psResult.stdout ? psResult.stdout.trim() : undefined;
   } catch {
     return;
   }
@@ -466,15 +487,15 @@ async function getProcessCreationTimeMsAsync(pid) {
       let content = await getFsImplementation().readFile(`/proc/${pid}/stat`, {
         encoding: "utf8",
       });
-      let i = Number(procStatField(content));
+      let startTicks = Number(procStatField(content));
       let content_2 = await getFsImplementation().readFile("/proc/stat", {
         encoding: "utf8",
       });
-      let o = Number(/^btime (\d+)/m.exec(content_2)?.[1]);
-      if (!Number.isFinite(i) || !Number.isFinite(o)) return null;
-      return o * 1000 + (i / 100) * 1000;
+      let bootTimeSeconds = Number(/^btime (\d+)/m.exec(content_2)?.[1]);
+      if (!Number.isFinite(startTicks) || !Number.isFinite(bootTimeSeconds)) return null;
+      return bootTimeSeconds * 1000 + (startTicks / 100) * 1000;
     }
-    let n = await execFileNoThrowWithCwd("ps", ["-o", "lstart=", "-p", String(pid)], {
+    let psResult = await execFileNoThrowWithCwd("ps", ["-o", "lstart=", "-p", String(pid)], {
       timeout: 1000,
       env: {
         ...process.env,
@@ -482,8 +503,8 @@ async function getProcessCreationTimeMsAsync(pid) {
         TZ: "UTC",
       },
     });
-    if (n.code !== 0 || !n.stdout?.trim()) return null;
-    let timestamp = Date.parse(`${n.stdout.trim()} UTC`);
+    if (psResult.code !== 0 || !psResult.stdout?.trim()) return null;
+    let timestamp = Date.parse(`${psResult.stdout.trim()} UTC`);
     return Number.isFinite(timestamp) ? timestamp : null;
   } catch {
     return null;
@@ -493,15 +514,15 @@ async function getProcessCreationTimeMsAsync(pid) {
 /**
  * 读取一组 pid 在 Linux 上的进程启动令牌（无效 pid 跳过）。
  */
-async function processStartTokens(e) {
-  let filtered = [...e].filter((s) => Number.isInteger(s) && s > 1);
-  let r = new Map();
-  if (filtered.length === 0) return r;
-  for (let s of filtered) {
-    let processStartTokenLinux = getProcessStartTokenLinuxSync(s);
-    if (processStartTokenLinux !== undefined) r.set(s, processStartTokenLinux);
+async function processStartTokens(pids) {
+  let filtered = [...pids].filter((pid) => Number.isInteger(pid) && pid > 1);
+  let tokens = new Map();
+  if (filtered.length === 0) return tokens;
+  for (let pid of filtered) {
+    let processStartTokenLinux = getProcessStartTokenLinuxSync(pid);
+    if (processStartTokenLinux !== undefined) tokens.set(pid, processStartTokenLinux);
   }
-  return r;
+  return tokens;
 }
 export {
   getAncestorPidsCheckedAsync,

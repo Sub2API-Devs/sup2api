@@ -11,50 +11,61 @@
 import { MAX_SCRIPT_FILE_BYTES } from "../workflow/scriptFile.js";
 import { require_acorn } from "../../../vendor/acorn/dist/acorn.js";
 import { repeatString } from "../../utils/stringUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-fx1j35nr.js:300-715 placement
 /**
  * 解析脚本 meta 用的正则与禁止键。
  */
-var META_PARSE_PATTERNS = new Set(["__proto__", "constructor", "prototype"]);
-var SKIP_WHITESPACE_AND_COMMENTS =
-  /(?:\s|\/\/[^\n\r\u2028\u2029]*(?:[\n\r\u2028\u2029]|$)|\/\*[^*]*\*+(?:[^/*][^*]*\*+)*\/)*/y;
-var LINE_BREAK_REGEX = /[\n\r\u2028\u2029]/;
-var IDENTIFIER_REGEX = /[A-Za-z_$][\w$]*/y;
-var IDENTIFIER_CONTINUATION_REGEX = /[\w$\\]/;
-var NUMBER_LITERAL_REGEX = /(?:(?:0|[1-9][0-9]*)(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?/y;
-var ESCAPE_SEQUENCE_REGEX = /x([0-9a-fA-F]{2})|u([0-9a-fA-F]{4})|u\{([0-9a-fA-F]+)\}/y;
-var SIMPLE_ESCAPE_MAP = new Map([
-  [
-    "n",
-    `
+var META_PARSE_PATTERNS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SKIP_WHITESPACE_AND_COMMENTS;
+var LINE_BREAK_REGEX;
+var IDENTIFIER_REGEX;
+var IDENTIFIER_CONTINUATION_REGEX;
+var NUMBER_LITERAL_REGEX;
+var ESCAPE_SEQUENCE_REGEX;
+var SIMPLE_ESCAPE_MAP;
+deferInit("chunk-fx1j35nr.js:300", () => {
+  META_PARSE_PATTERNS = new Set(["__proto__", "constructor", "prototype"]);
+  SKIP_WHITESPACE_AND_COMMENTS =
+    /(?:\s|\/\/[^\n\r\u2028\u2029]*(?:[\n\r\u2028\u2029]|$)|\/\*[^*]*\*+(?:[^/*][^*]*\*+)*\/)*/y;
+  LINE_BREAK_REGEX = /[\n\r\u2028\u2029]/;
+  IDENTIFIER_REGEX = /[A-Za-z_$][\w$]*/y;
+  IDENTIFIER_CONTINUATION_REGEX = /[\w$\\]/;
+  NUMBER_LITERAL_REGEX = /(?:(?:0|[1-9][0-9]*)(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?/y;
+  ESCAPE_SEQUENCE_REGEX = /x([0-9a-fA-F]{2})|u([0-9a-fA-F]{4})|u\{([0-9a-fA-F]+)\}/y;
+  SIMPLE_ESCAPE_MAP = new Map([
+    [
+      "n",
+      `
 `,
-  ],
-  ["r", "\r"],
-  ["t", "\t"],
-  ["b", "\b"],
-  ["f", "\f"],
-  ["v", "\v"],
-]);
+    ],
+    ["r", "\r"],
+    ["t", "\t"],
+    ["b", "\b"],
+    ["f", "\f"],
+    ["v", "\v"],
+  ]);
+});
 //@ chunk-fx1j35nr.js:715-784 placement
 /**
  * 尝试解析当前位置的对象字面量，失败返回 undefined。
  */
-function tryParseObjectLiteral(e, n) {
-  if (e[n] !== "{") return;
+function tryParseObjectLiteral(text, start) {
+  if (text[start] !== "{") return;
   try {
-    return parseObjectLiteral(e, n);
+    return parseObjectLiteral(text, start);
   } catch {
     return;
   }
 }
 //@ chunk-fx1j35nr.js:784-965 placement
-function metaStatementEnd(e, end) {
-  let t = skipTrivia(e, end);
-  if (e[t] === ";") return t + 1;
-  if (t >= e.length) return end;
-  if (!LINE_BREAK_REGEX.test(e.slice(end, t))) return;
-  let identifier = readIdentifier(e, t);
+function metaStatementEnd(text, end) {
+  let next = skipTrivia(text, end);
+  if (text[next] === ";") return next + 1;
+  if (next >= text.length) return end;
+  if (!LINE_BREAK_REGEX.test(text.slice(end, next))) return;
+  let identifier = readIdentifier(text, next);
   if (identifier === undefined || identifier === "in" || identifier === "instanceof") return;
   return end;
 }
@@ -62,44 +73,44 @@ function metaStatementEnd(e, end) {
 /**
  * 跳过空白与注释，返回新的位置。
  */
-function skipTrivia(e, n) {
-  SKIP_WHITESPACE_AND_COMMENTS.lastIndex = n;
-  return SKIP_WHITESPACE_AND_COMMENTS.exec(e) ? SKIP_WHITESPACE_AND_COMMENTS.lastIndex : n;
+function skipTrivia(text, position) {
+  SKIP_WHITESPACE_AND_COMMENTS.lastIndex = position;
+  return SKIP_WHITESPACE_AND_COMMENTS.exec(text) ? SKIP_WHITESPACE_AND_COMMENTS.lastIndex : position;
 }
 //@ chunk-fx1j35nr.js:1026-1117 placement
 /**
  * 读取一个标识符；后面紧跟标识符字符时视为失败。
  */
-function readIdentifier(e, n) {
-  IDENTIFIER_REGEX.lastIndex = n;
-  let match = IDENTIFIER_REGEX.exec(e);
-  if (!match || isIdentifierContinuation(e, n + match[0].length)) return;
+function readIdentifier(text, start) {
+  IDENTIFIER_REGEX.lastIndex = start;
+  let match = IDENTIFIER_REGEX.exec(text);
+  if (!match || isIdentifierContinuation(text, start + match[0].length)) return;
   return match[0];
 }
 //@ chunk-fx1j35nr.js:1117-1196 placement
 /**
  * 判断该位置字符是否属于标识符（含非 ASCII）。
  */
-function isIdentifierContinuation(e, n) {
-  let t = e[n];
-  return t !== undefined && (IDENTIFIER_CONTINUATION_REGEX.test(t) || t.charCodeAt(0) > 127);
+function isIdentifierContinuation(text, index) {
+  let char = text[index];
+  return char !== undefined && (IDENTIFIER_CONTINUATION_REGEX.test(char) || char.charCodeAt(0) > 127);
 }
 //@ chunk-fx1j35nr.js:1196-1562 placement
 /**
  * 解析 meta 中的 JSON 风格值。
  */
-function parseMetaValue(e, n) {
-  switch (e[n]) {
+function parseMetaValue(text, start) {
+  switch (text[start]) {
     case "{":
-      return parseObjectLiteral(e, n);
+      return parseObjectLiteral(text, start);
     case "[":
-      return parseDelimitedList(e, n, "]", parseMetaValue);
+      return parseDelimitedList(text, start, "]", parseMetaValue);
     case "'":
     case '"':
     case "`":
-      return parseStringLiteral(e, n);
+      return parseStringLiteral(text, start);
     case "-": {
-      let numberLiteral = parseNumberLiteral(e, skipTrivia(e, n + 1));
+      let numberLiteral = parseNumberLiteral(text, skipTrivia(text, start + 1));
       return (
         numberLiteral && {
           value: -numberLiteral.value,
@@ -110,144 +121,144 @@ function parseMetaValue(e, n) {
     default:
       break;
   }
-  let numberLiteral = parseNumberLiteral(e, n);
+  let numberLiteral = parseNumberLiteral(text, start);
   if (numberLiteral) return numberLiteral;
-  switch (readIdentifier(e, n)) {
+  switch (readIdentifier(text, start)) {
     case "true":
       return {
         value: true,
-        end: n + 4,
+        end: start + 4,
       };
     case "false":
       return {
         value: false,
-        end: n + 5,
+        end: start + 5,
       };
     case "null":
       return {
         value: null,
-        end: n + 4,
+        end: start + 4,
       };
     default:
       return;
   }
 }
 //@ chunk-fx1j35nr.js:1562-1692 placement
-function parseObjectLiteral(e, n) {
-  let delimitedList = parseDelimitedList(e, n, "}", parseObjectEntry);
+function parseObjectLiteral(text, start) {
+  let delimitedList = parseDelimitedList(text, start, "}", parseObjectEntry);
   if (!delimitedList) return;
-  let r = Object.create(null);
-  for (let [o, i] of delimitedList.value) r[o] = i;
+  let obj = Object.create(null);
+  for (let [key, value] of delimitedList.value) obj[key] = value;
   return {
-    value: r,
+    value: obj,
     end: delimitedList.end,
   };
 }
 //@ chunk-fx1j35nr.js:1692-1946 placement
-function parseObjectEntry(e, n) {
-  let t = e[n];
-  let r;
-  if (t === "'" || t === '"') r = parseStringLiteral(e, n);
+function parseObjectEntry(text, start) {
+  let firstChar = text[start];
+  let keyLiteral;
+  if (firstChar === "'" || firstChar === '"') keyLiteral = parseStringLiteral(text, start);
   else {
-    let identifier = readIdentifier(e, n);
-    r =
+    let identifier = readIdentifier(text, start);
+    keyLiteral =
       identifier === undefined
         ? undefined
         : {
             value: identifier,
-            end: n + identifier.length,
+            end: start + identifier.length,
           };
   }
-  if (!r || META_PARSE_PATTERNS.has(r.value)) return;
-  let o = skipTrivia(e, r.end);
-  if (e[o] !== ":") return;
-  let metaValue = parseMetaValue(e, skipTrivia(e, o + 1));
+  if (!keyLiteral || META_PARSE_PATTERNS.has(keyLiteral.value)) return;
+  let colonIndex = skipTrivia(text, keyLiteral.end);
+  if (text[colonIndex] !== ":") return;
+  let metaValue = parseMetaValue(text, skipTrivia(text, colonIndex + 1));
   return (
     metaValue && {
-      value: [r.value, metaValue.value],
+      value: [keyLiteral.value, metaValue.value],
       end: metaValue.end,
     }
   );
 }
 //@ chunk-fx1j35nr.js:1946-2170 placement
-function parseDelimitedList(e, n, t, r) {
-  let o = [];
-  let i = n + 1;
+function parseDelimitedList(text, start, closeChar, parseItem) {
+  let items = [];
+  let position = start + 1;
   while (true) {
-    i = skipTrivia(e, i);
-    if (e[i] === t)
+    position = skipTrivia(text, position);
+    if (text[position] === closeChar)
       return {
-        value: o,
-        end: i + 1,
+        value: items,
+        end: position + 1,
       };
-    if (o.length > 0) {
-      if (e[i] !== ",") return;
-      i = skipTrivia(e, i + 1);
-      if (e[i] === t)
+    if (items.length > 0) {
+      if (text[position] !== ",") return;
+      position = skipTrivia(text, position + 1);
+      if (text[position] === closeChar)
         return {
-          value: o,
-          end: i + 1,
+          value: items,
+          end: position + 1,
         };
     }
-    let a = r(e, i);
-    if (!a) return;
-    o.push(a.value);
-    i = a.end;
+    let item = parseItem(text, position);
+    if (!item) return;
+    items.push(item.value);
+    position = item.end;
   }
 }
 //@ chunk-fx1j35nr.js:2170-2311 placement
-function parseNumberLiteral(e, n) {
-  NUMBER_LITERAL_REGEX.lastIndex = n;
-  let match = NUMBER_LITERAL_REGEX.exec(e);
+function parseNumberLiteral(text, start) {
+  NUMBER_LITERAL_REGEX.lastIndex = start;
+  let match = NUMBER_LITERAL_REGEX.exec(text);
   if (!match) return;
-  let r = n + match[0].length;
-  if (isIdentifierContinuation(e, r) || e[r] === ".") return;
+  let end = start + match[0].length;
+  if (isIdentifierContinuation(text, end) || text[end] === ".") return;
   return {
     value: Number(match[0]),
-    end: r,
+    end,
   };
 }
 //@ chunk-fx1j35nr.js:2311-2651 placement
 /**
  * 解析字符串字面量（含转义）。
  */
-function parseStringLiteral(e, n) {
-  let t = e[n];
-  let r = t === "`";
-  let o = "";
-  let i = n + 1;
-  let a = i;
-  while (a < e.length) {
-    let s = e[a];
-    if (s === t)
+function parseStringLiteral(text, start) {
+  let quote = text[start];
+  let isTemplate = quote === "`";
+  let out = "";
+  let segmentStart = start + 1;
+  let cursor = segmentStart;
+  while (cursor < text.length) {
+    let char = text[cursor];
+    if (char === quote)
       return {
-        value: o + e.slice(i, a),
-        end: a + 1,
+        value: out + text.slice(segmentStart, cursor),
+        end: cursor + 1,
       };
-    if (s === "\\") {
-      let l = parseEscape(e, a);
-      if (!l) return;
-      o += e.slice(i, a) + l.value;
-      a = i = l.end;
+    if (char === "\\") {
+      let escaped = parseEscape(text, cursor);
+      if (!escaped) return;
+      out += text.slice(segmentStart, cursor) + escaped.value;
+      cursor = segmentStart = escaped.end;
     } else if (
-      r
-        ? s === "$" && e[a + 1] === "{"
-        : s ===
+      isTemplate
+        ? char === "$" && text[cursor + 1] === "{"
+        : char ===
             `
-` || s === "\r"
+` || char === "\r"
     )
       return;
-    else if (r && s === "\r") {
-      o += `${e.slice(i, a)}
+    else if (isTemplate && char === "\r") {
+      out += `${text.slice(segmentStart, cursor)}
 `;
-      a = i =
-        a +
-        (e[a + 1] ===
+      cursor = segmentStart =
+        cursor +
+        (text[cursor + 1] ===
         `
 `
           ? 2
           : 1);
-    } else a++;
+    } else cursor++;
   }
   return;
 }
@@ -255,79 +266,82 @@ function parseStringLiteral(e, n) {
 /**
  * 解析转义序列。
  */
-function parseEscape(e, n) {
-  let t = e[n + 1];
-  if (t === undefined) return;
-  let r = SIMPLE_ESCAPE_MAP.get(t);
-  if (r !== undefined)
+function parseEscape(text, start) {
+  let char = text[start + 1];
+  if (char === undefined) return;
+  let mapped = SIMPLE_ESCAPE_MAP.get(char);
+  if (mapped !== undefined)
     return {
-      value: r,
-      end: n + 2,
+      value: mapped,
+      end: start + 2,
     };
-  if (t === "0") {
-    let o = e[n + 2];
-    if (o !== undefined && o >= "0" && o <= "9") return;
+  if (char === "0") {
+    let nextChar = text[start + 2];
+    if (nextChar !== undefined && nextChar >= "0" && nextChar <= "9") return;
     return {
       value: "\x00",
-      end: n + 2,
+      end: start + 2,
     };
   }
-  if (t >= "1" && t <= "9") return;
-  if (t === "x" || t === "u") {
-    ESCAPE_SEQUENCE_REGEX.lastIndex = n + 1;
-    let match = ESCAPE_SEQUENCE_REGEX.exec(e);
+  if (char >= "1" && char <= "9") return;
+  if (char === "x" || char === "u") {
+    ESCAPE_SEQUENCE_REGEX.lastIndex = start + 1;
+    let match = ESCAPE_SEQUENCE_REGEX.exec(text);
     if (!match) return;
-    let i = parseInt(match[1] ?? match[2] ?? match[3] ?? "", 16);
-    if (i > 1114111) return;
+    let codePoint = parseInt(match[1] ?? match[2] ?? match[3] ?? "", 16);
+    if (codePoint > 1114111) return;
     return {
-      value: String.fromCodePoint(i),
+      value: String.fromCodePoint(codePoint),
       end: ESCAPE_SEQUENCE_REGEX.lastIndex,
     };
   }
-  if (t === "\r")
+  if (char === "\r")
     return {
       value: "",
       end:
-        n +
-        (e[n + 2] ===
+        start +
+        (text[start + 2] ===
         `
 `
           ? 3
           : 2),
     };
   return {
-    value: LINE_BREAK_REGEX.test(t) ? "" : t,
-    end: n + 2,
+    value: LINE_BREAK_REGEX.test(char) ? "" : char,
+    end: start + 2,
   };
 }
 //@ chunk-fx1j35nr.js:3141-3213 placement
-var regExp = new RegExp(`^${SKIP_WHITESPACE_AND_COMMENTS.source}export\\s+const\\s+meta\\s*=\\s*(?=\\{)`);
+var regExp; // deferred: uses META_PARSE_PATTERNS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-fx1j35nr.js:3141", () => {
+  regExp = new RegExp(`^${SKIP_WHITESPACE_AND_COMMENTS.source}export\\s+const\\s+meta\\s*=\\s*(?=\\{)`);
+});
 //@ chunk-fx1j35nr.js:3213-4046 placement
 /**
  * 解析工作流脚本：提取 export const meta 并校验，限制大小。
  */
-function parseWorkflowScript(script, { validateBody: n = true, maxBytes: t = MAX_SCRIPT_FILE_BYTES } = {}) {
-  if (script.length > t)
+function parseWorkflowScript(script, { validateBody = true, maxBytes = MAX_SCRIPT_FILE_BYTES } = {}) {
+  if (script.length > maxBytes)
     return {
-      error: `Script exceeds ${t} bytes`,
+      error: `Script exceeds ${maxBytes} bytes`,
     };
-  let r = n ? null : regExp.exec(script);
-  if (r) {
-    let u = tryParseObjectLiteral(script, r[0].length);
-    let E = u && metaStatementEnd(script, u.end);
-    if (u && E !== undefined) {
-      let w = validateWorkflowMeta(u.value);
-      if (!("error" in w))
+  let fastMatch = validateBody ? null : regExp.exec(script);
+  if (fastMatch) {
+    let fastMeta = tryParseObjectLiteral(script, fastMatch[0].length);
+    let bodyStart = fastMeta && metaStatementEnd(script, fastMeta.end);
+    if (fastMeta && bodyStart !== undefined) {
+      let fastValidated = validateWorkflowMeta(fastMeta.value);
+      if (!("error" in fastValidated))
         return {
-          meta: w.meta,
-          scriptBody: trimScriptBody(script, E),
+          meta: fastValidated.meta,
+          scriptBody: trimScriptBody(script, bodyStart),
         };
     }
   }
   let { parse } = require_acorn();
-  let i;
+  let ast;
   try {
-    i = parse(script, {
+    ast = parse(script, {
       ecmaVersion: "latest",
       sourceType: "module",
       allowAwaitOutsideFunction: true,
@@ -338,34 +352,38 @@ function parseWorkflowScript(script, { validateBody: n = true, maxBytes: t = MAX
       error: describeScriptSyntaxError(error, script),
     };
   }
-  let a = i.body[0];
-  if (!a || a.type !== "ExportNamedDeclaration" || !isExportConstMeta(a))
+  let firstStatement = ast.body[0];
+  if (
+    !firstStatement ||
+    firstStatement.type !== "ExportNamedDeclaration" ||
+    !isExportConstMeta(firstStatement)
+  )
     return {
       error: "`export const meta = { name, description, phases }` must be the FIRST statement in the script",
     };
-  let init = a.declaration.declarations[0].init;
-  let f;
+  let init = firstStatement.declaration.declarations[0].init;
+  let metaValue;
   try {
-    f = evaluateMetaObject(init);
+    metaValue = evaluateMetaObject(init);
   } catch (error) {
     return {
       error: `meta must be a pure literal: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
-  let p = validateWorkflowMeta(f);
-  if ("error" in p) return p;
+  let validated = validateWorkflowMeta(metaValue);
+  if ("error" in validated) return validated;
   return {
-    meta: p.meta,
-    scriptBody: trimScriptBody(script, a.end),
+    meta: validated.meta,
+    scriptBody: trimScriptBody(script, firstStatement.end),
   };
 }
 //@ chunk-fx1j35nr.js:4046-4116 placement
 /**
  * 去掉脚本正文开头的分号与空行。
  */
-function trimScriptBody(e, n) {
-  return e
-    .slice(n)
+function trimScriptBody(script, bodyStart) {
+  return script
+    .slice(bodyStart)
     .replace(/^[;\s]*\n/, "")
     .trimStart();
 }
@@ -382,35 +400,35 @@ var SNIPPET_CONTEXT_CHARS = 80;
 /**
  * 工作流脚本语法错误说明。
  */
-function describeScriptSyntaxError(error, n) {
-  let t = error instanceof Error ? error.message : String(error);
-  let r =
+function describeScriptSyntaxError(error, script) {
+  let message = error instanceof Error ? error.message : String(error);
+  let hint =
     "Workflow scripts must be plain JavaScript \u2014 common causes are TypeScript syntax (type annotations, interfaces, generics) and broken string quoting or escaping.";
   let loc = hasSyntaxLocation(error) ? error.loc : undefined;
-  let i = loc
-    ? n.split(`
+  let lineText = loc
+    ? script.split(`
 `)[loc.line - 1]
     : undefined;
-  if (!loc || i === undefined)
-    return `Script parse error: ${t}. ${"Workflow scripts must be plain JavaScript \u2014 common causes are TypeScript syntax (type annotations, interfaces, generics) and broken string quoting or escaping."}`;
-  let max = Math.max(0, Math.min(loc.column, i.length));
+  if (!loc || lineText === undefined)
+    return `Script parse error: ${message}. ${"Workflow scripts must be plain JavaScript \u2014 common causes are TypeScript syntax (type annotations, interfaces, generics) and broken string quoting or escaping."}`;
+  let max = Math.max(0, Math.min(loc.column, lineText.length));
   let max_2 = Math.max(
     0,
-    Math.min(max - Math.floor(SNIPPET_CONTEXT_CHARS / 2), i.length - SNIPPET_CONTEXT_CHARS),
+    Math.min(max - Math.floor(SNIPPET_CONTEXT_CHARS / 2), lineText.length - SNIPPET_CONTEXT_CHARS),
   );
-  let sliced = i.slice(max_2, max_2 + SNIPPET_CONTEXT_CHARS);
-  let f = `${repeatString(" ", max - max_2)}^`;
-  return `Script parse error: ${t}
+  let sliced = lineText.slice(max_2, max_2 + SNIPPET_CONTEXT_CHARS);
+  let caretLine = `${repeatString(" ", max - max_2)}^`;
+  return `Script parse error: ${message}
 
 ${sliced}
-${f}
+${caretLine}
 
 ${"Workflow scripts must be plain JavaScript \u2014 common causes are TypeScript syntax (type annotations, interfaces, generics) and broken string quoting or escaping."}`;
 }
 //@ chunk-fx1j35nr.js:5023-5222 placement
-function hasSyntaxLocation(e) {
-  if (typeof e !== "object" || e === null || !("loc" in e)) return false;
-  let loc = e.loc;
+function hasSyntaxLocation(error) {
+  if (typeof error !== "object" || error === null || !("loc" in error)) return false;
+  let loc = error.loc;
   return (
     typeof loc === "object" &&
     loc !== null &&
@@ -421,89 +439,97 @@ function hasSyntaxLocation(e) {
   );
 }
 //@ chunk-fx1j35nr.js:5222-5470 placement
-function isExportConstMeta(e) {
-  let declaration = e.declaration;
+function isExportConstMeta(statement) {
+  let declaration = statement.declaration;
   if (!declaration || declaration.type !== "VariableDeclaration") return false;
   if (declaration.kind !== "const" || declaration.declarations.length !== 1) return false;
-  let t = declaration.declarations[0];
-  return t.id.type === "Identifier" && t.id.name === "meta" && t.init?.type === "ObjectExpression";
+  let declarator = declaration.declarations[0];
+  return (
+    declarator.id.type === "Identifier" &&
+    declarator.id.name === "meta" &&
+    declarator.init?.type === "ObjectExpression"
+  );
 }
 //@ chunk-fx1j35nr.js:5470-6182 placement
 /**
  * 静态求值 meta AST 节点。
  */
-function evaluateMetaNode(e) {
-  switch (e.type) {
+function evaluateMetaNode(node) {
+  switch (node.type) {
     case "Literal":
-      return e.value;
+      return node.value;
     case "ArrayExpression":
-      return e.elements.map((element) => {
+      return node.elements.map((element) => {
         if (element === null) throw Error("sparse arrays not allowed");
         if (element.type === "SpreadElement") throw Error("spread not allowed in meta");
         return evaluateMetaNode(element);
       });
     case "ObjectExpression":
-      return evaluateMetaObject(e);
+      return evaluateMetaObject(node);
     case "TemplateLiteral": {
-      let n = e;
-      if (n.expressions.length > 0) throw Error("template interpolation not allowed in meta");
-      return n.quasis.map((t) => t.value.cooked ?? "").join("");
+      let templateNode = node;
+      if (templateNode.expressions.length > 0) throw Error("template interpolation not allowed in meta");
+      return templateNode.quasis.map((quasi) => quasi.value.cooked ?? "").join("");
     }
     case "UnaryExpression": {
-      let n = e;
-      if (n.operator === "-" && n.argument.type === "Literal" && typeof n.argument.value === "number")
-        return -n.argument.value;
+      let unaryNode = node;
+      if (
+        unaryNode.operator === "-" &&
+        unaryNode.argument.type === "Literal" &&
+        typeof unaryNode.argument.value === "number"
+      )
+        return -unaryNode.argument.value;
       throw Error("only negative-number unary allowed in meta");
     }
     default:
-      throw Error(`non-literal node type in meta: ${e.type}`);
+      throw Error(`non-literal node type in meta: ${node.type}`);
   }
 }
 //@ chunk-fx1j35nr.js:6182-6506 placement
 /**
  * 静态求值 meta 对象。
  */
-function evaluateMetaObject(e) {
-  let n = Object.create(null);
-  for (let property of e.properties) {
+function evaluateMetaObject(node) {
+  let obj = Object.create(null);
+  for (let property of node.properties) {
     if (property.type !== "Property") throw Error("only plain properties allowed in meta");
-    let r = property;
-    if (r.computed) throw Error("computed keys not allowed in meta");
-    if (r.method || r.kind !== "init") throw Error("methods/accessors not allowed in meta");
-    n[metaPropertyKey(r)] = evaluateMetaNode(r.value);
+    let memberProp = property;
+    if (memberProp.computed) throw Error("computed keys not allowed in meta");
+    if (memberProp.method || memberProp.kind !== "init") throw Error("methods/accessors not allowed in meta");
+    obj[metaPropertyKey(memberProp)] = evaluateMetaNode(memberProp.value);
   }
-  return n;
+  return obj;
 }
 //@ chunk-fx1j35nr.js:6506-6765 placement
-function metaPropertyKey(e) {
-  let n;
-  if (e.key.type === "Identifier") n = e.key.name;
-  else if (e.key.type === "Literal") n = String(e.key.value);
-  else throw Error(`unsupported key type in meta: ${e.key.type}`);
-  if (META_PARSE_PATTERNS.has(n)) throw Error(`reserved key name not allowed in meta: ${n}`);
-  return n;
+function metaPropertyKey(propNode) {
+  let keyName;
+  if (propNode.key.type === "Identifier") keyName = propNode.key.name;
+  else if (propNode.key.type === "Literal") keyName = String(propNode.key.value);
+  else throw Error(`unsupported key type in meta: ${propNode.key.type}`);
+  if (META_PARSE_PATTERNS.has(keyName)) throw Error(`reserved key name not allowed in meta: ${keyName}`);
+  return keyName;
 }
 //@ chunk-fx1j35nr.js:6765-7194 placement
 /**
  * 校验 meta 字段（name、description 等）。
  */
-function validateWorkflowMeta(e) {
-  let n = e.name;
-  if (typeof n !== "string" || n.length === 0)
+function validateWorkflowMeta(meta) {
+  let metaName = meta.name;
+  if (typeof metaName !== "string" || metaName.length === 0)
     return {
       error: "meta.name must be a non-empty string",
     };
-  let description = e.description;
+  let description = meta.description;
   if (typeof description !== "string" || description.length === 0)
     return {
       error: "meta.description must be a non-empty string",
     };
-  let title = typeof e.title === "string" && e.title.length > 0 ? e.title : undefined;
-  let whenToUse = typeof e.whenToUse === "string" ? e.whenToUse : undefined;
-  let phases = parseMetaPhases(e.phases);
+  let title = typeof meta.title === "string" && meta.title.length > 0 ? meta.title : undefined;
+  let whenToUse = typeof meta.whenToUse === "string" ? meta.whenToUse : undefined;
+  let phases = parseMetaPhases(meta.phases);
   return {
     meta: {
-      name: n,
+      name: metaName,
       description,
       title,
       whenToUse,
@@ -514,17 +540,17 @@ function validateWorkflowMeta(e) {
 //@ chunk-fx1j35nr.js:7194-7471 placement
 function parseMetaPhases(phases) {
   if (!Array.isArray(phases)) return;
-  let n = [];
-  for (let t of phases)
-    if (t && typeof t === "object" && "title" in t) {
-      let { title, detail, model } = t;
+  let phaseItems = [];
+  for (let phase of phases)
+    if (phase && typeof phase === "object" && "title" in phase) {
+      let { title, detail, model } = phase;
       if (typeof title === "string")
-        n.push({
+        phaseItems.push({
           title,
           detail: typeof detail === "string" ? detail : undefined,
           model: typeof model === "string" ? model : undefined,
         });
     }
-  return n.length > 0 ? n : undefined;
+  return phaseItems.length > 0 ? phaseItems : undefined;
 }
 export { parseWorkflowScript, isValidWorkflowScript };

@@ -7,9 +7,9 @@
  */
 
 //@ chunk-3cddmtk7.js:863-1049 esm-fingerprint
-function resolveEventStreamConfig(e) {
-  let { signer, signer: signer_2 } = e;
-  let newInput = Object.assign(e, {
+function resolveEventStreamConfig(input) {
+  let { signer, signer: signer_2 } = input;
+  let newInput = Object.assign(input, {
     eventSigner: signer,
     messageSigner: signer_2,
   });

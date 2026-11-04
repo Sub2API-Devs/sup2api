@@ -42,9 +42,10 @@ function getAddDirEnabledPlugins() {
 function getAddDirExtraMarketplaces() {
   if (isAttachServeMode()) return {};
   let additionalDirectoriesForClaudeMd = getAdditionalDirectoriesForClaudeMd();
-  let n = `${commandSyncNameState().epoch}\x00${additionalDirectoriesForClaudeMd.join("\x00")}`;
+  let memoKey = `${commandSyncNameState().epoch}\x00${additionalDirectoriesForClaudeMd.join("\x00")}`;
   let pluginRegistry = getPluginRegistry();
-  if (pluginRegistry.addDirMarketplacesMemo?.key === n) return pluginRegistry.addDirMarketplacesMemo.value;
+  if (pluginRegistry.addDirMarketplacesMemo?.key === memoKey)
+    return pluginRegistry.addDirMarketplacesMemo.value;
   let result = {};
   for (let dir of additionalDirectoriesForClaudeMd)
     for (let file of SETTINGS_FILES) {
@@ -54,7 +55,7 @@ function getAddDirExtraMarketplaces() {
         result[key] = sanitizeAddDirMarketplaceDeclaration(key, value);
     }
   pluginRegistry.addDirMarketplacesMemo = {
-    key: n,
+    key: memoKey,
     value: result,
   };
   return result;
@@ -94,30 +95,30 @@ function sanitizeAddDirMarketplaceDeclaration(marketplaceName, declaration) {
         ...source,
         plugins: source.plugins
           .filter((plugin) => {
-            let i = typeof plugin.source === "object" && plugin.source.source === "command";
-            if (i)
+            let isCommandSourced = typeof plugin.source === "object" && plugin.source.source === "command";
+            if (isCommandSourced)
               logForDebugging(
                 `--add-dir marketplace ${printablePluginName(marketplaceName)}: dropping command-sourced entry ${printablePluginName(plugin.name)}`,
                 {
                   level: "warn",
                 },
               );
-            return !i;
+            return !isCommandSourced;
           })
-          .map(({ headersHelper, headers, ...d }) => {
+          .map(({ headersHelper, headers, ...pluginEntry }) => {
             if (headersHelper !== undefined)
               logForDebugging(
-                `--add-dir marketplace ${printablePluginName(marketplaceName)}: dropping entry ${printablePluginName(d.name)}'s headersHelper (an --add-dir declaration may not run commands)`,
+                `--add-dir marketplace ${printablePluginName(marketplaceName)}: dropping entry ${printablePluginName(pluginEntry.name)}'s headersHelper (an --add-dir declaration may not run commands)`,
                 {
                   level: "warn",
                 },
               );
             return {
-              ...d,
+              ...pluginEntry,
               ...(headers && {
                 headers: dropMalformedHeader(
                   headers,
-                  `--add-dir marketplace ${printablePluginName(marketplaceName)} entry ${printablePluginName(d.name)}`,
+                  `--add-dir marketplace ${printablePluginName(marketplaceName)} entry ${printablePluginName(pluginEntry.name)}`,
                 ),
               }),
             };

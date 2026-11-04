@@ -18,9 +18,15 @@ import {
 } from "./AnimatedClawd.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { chalkForChart } from "./Clawd.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
-import { y, P, init_react_production, qt, Se } from "../../../vendor/react/cjs/react.production.js";
+import {
+  useState,
+  useEffect,
+  init_react_production,
+  createContext,
+  useContext,
+} from "../../../vendor/react/cjs/react.production.js";
 import { announcementState } from "../../services/announcements/announcementState.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
@@ -53,6 +59,7 @@ import { bunStringWidth } from "../../ink/stringWidth.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { rcPillLabel, logRcPillClicked, RemoteControlStatus } from "../PromptInput/RemoteControlPill.js";
 import { FreezeWhenOffscreen } from "../FreezeWhenOffscreen.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ag5x7vhf.js:56868-57055 sole-consumer
 function pickClawdEntranceAnimation() {
@@ -60,87 +67,96 @@ function pickClawdEntranceAnimation() {
   if (!getForcedFirstLaunch() && !isNewerClawdEntranceVersion(getGlobalConfig().lastClawdEntranceVersion))
     return;
   uiSignals.clawdEntranceTaken = true;
-  let m = filterEntranceAnimations(CLAWD_ANIMATION_NAMES, chalkForChart());
-  return m[Math.floor(Math.random() * m.length)];
+  let candidates = filterEntranceAnimations(CLAWD_ANIMATION_NAMES, chalkForChart());
+  return candidates[Math.floor(Math.random() * candidates.length)];
 }
 //@ chunk-ag5x7vhf.js:57055-57344 placement
-function useClawdEntranceAnimation(m) {
-  let $ = w(6);
+function useClawdEntranceAnimation(enabled) {
+  let $ = useMemoCache(6);
   let { storageV5 } = useTheme_2();
-  let T;
-  if ($[0] !== m) {
-    T = () => (m ? pickClawdEntranceAnimation() : undefined);
-    $[0] = m;
-    $[1] = T;
-  } else T = $[1];
-  let [k] = y(T);
-  let _;
-  let I;
-  if ($[2] !== k || $[3] !== storageV5) {
-    _ = () => {
-      if (k === undefined || !isNewerClawdEntranceVersion(getGlobalConfig().lastClawdEntranceVersion)) {
+  let pick;
+  if ($[0] !== enabled) {
+    pick = () => (enabled ? pickClawdEntranceAnimation() : undefined);
+    $[0] = enabled;
+    $[1] = pick;
+  } else pick = $[1];
+  let [animation] = useState(pick);
+  let markSeen;
+  let markDeps;
+  if ($[2] !== animation || $[3] !== storageV5) {
+    markSeen = () => {
+      if (
+        animation === undefined ||
+        !isNewerClawdEntranceVersion(getGlobalConfig().lastClawdEntranceVersion)
+      ) {
         return;
       }
       saveGlobalConfig(markClawdEntranceSeen, storageV5);
     };
-    I = [k, storageV5];
-    $[2] = k;
+    markDeps = [animation, storageV5];
+    $[2] = animation;
     $[3] = storageV5;
-    $[4] = _;
-    $[5] = I;
+    $[4] = markSeen;
+    $[5] = markDeps;
   } else {
-    _ = $[4];
-    I = $[5];
+    markSeen = $[4];
+    markDeps = $[5];
   }
-  P(_, I);
-  return k;
+  useEffect(markSeen, markDeps);
+  return animation;
 }
 //@ chunk-ag5x7vhf.js:57344-57348 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:57344", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:61638-61729 placement
-function claimNoticeImpression(m) {
+function claimNoticeImpression(noticeKey) {
   let countedNoticeImpressions = announcementState().countedNoticeImpressions;
-  if (countedNoticeImpressions.has(m)) return false;
-  countedNoticeImpressions.add(m);
+  if (countedNoticeImpressions.has(noticeKey)) return false;
+  countedNoticeImpressions.add(noticeKey);
   return true;
 }
 //@ chunk-ag5x7vhf.js:61729-61789 placement
-function hasNoticeImpression(m) {
-  return announcementState().countedNoticeImpressions.has(m);
+function hasNoticeImpression(noticeKey) {
+  return announcementState().countedNoticeImpressions.has(noticeKey);
 }
 //@ chunk-ag5x7vhf.js:61789-61803 placement
-var noticeImpressionEnabled = qt(true);
+var noticeImpressionEnabled; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:61789", () => {
+  noticeImpressionEnabled = createContext(true);
+});
 //@ chunk-ag5x7vhf.js:61803-61831 placement
 function useNoticeImpressionEnabled() {
-  return Se(noticeImpressionEnabled);
+  return useContext(noticeImpressionEnabled);
 }
 //@ chunk-ag5x7vhf.js:61831-61926 placement
-function useNoticeImpression(m, h, { enabled: x = true } = {}) {
+function useNoticeImpression(noticeKey, onShown, { enabled = true } = {}) {
   let noticeImpressionEnabled = useNoticeImpressionEnabled();
-  P(() => {
-    if (!x || !noticeImpressionEnabled) return;
-    if (claimNoticeImpression(m)) h();
-  }, [x, noticeImpressionEnabled, m, h]);
+  useEffect(() => {
+    if (!enabled || !noticeImpressionEnabled) return;
+    if (claimNoticeImpression(noticeKey)) onShown();
+  }, [enabled, noticeImpressionEnabled, noticeKey, onShown]);
 }
 //@ chunk-ag5x7vhf.js:61926-61958 layout
-function selectAgent(oo) {
-  return oo.agent;
+function selectAgent(state) {
+  return state.agent;
 }
 //@ chunk-ag5x7vhf.js:61958-61994 layout
-function selectUltracode(mo) {
-  return mo.ultracode;
+function selectUltracode(state) {
+  return state.ultracode;
 }
 //@ chunk-ag5x7vhf.js:61994-64759 fingerprint = CondensedLogo (0.508)
-function CondensedLogo(m) {
-  let $ = w(34);
-  let x;
-  if ($[0] !== m) {
-    x = m === undefined ? {} : m;
-    $[0] = m;
-    $[1] = x;
-  } else x = $[1];
-  let { oneShotsAllowed } = x;
-  let k = oneShotsAllowed === undefined ? true : oneShotsAllowed;
+function CondensedLogo(props) {
+  let $ = useMemoCache(34);
+  let options;
+  if ($[0] !== props) {
+    options = props === undefined ? {} : props;
+    $[0] = props;
+    $[1] = options;
+  } else options = $[1];
+  let { oneShotsAllowed } = options;
+  let oneShots = oneShotsAllowed === undefined ? true : oneShotsAllowed;
   let { columns } = useTerminalSize();
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let agent = useAppState(selectAgent);
@@ -149,92 +165,93 @@ function CondensedLogo(m) {
   let effortValue_2 = parseUserSpecifiedModel(mainLoopModel);
   let modelDisplayName = renderModelSetting(mainLoopModel);
   let { version, cwd, billingType, agentName: agentNameFromSettings } = getLogoDisplayData();
-  let pe = agent ?? agentNameFromSettings;
-  let xe;
+  let agentLabel = agent ?? agentNameFromSettings;
+  let justSwitched;
   if ($[2] === MEMO_CACHE_SENTINEL) {
-    xe = justSwitchedRenderer();
-    $[2] = xe;
-  } else xe = $[2];
-  let ge = xe !== undefined;
+    justSwitched = justSwitchedRenderer();
+    $[2] = justSwitched;
+  } else justSwitched = $[2];
+  let showSwitchNotice = justSwitched !== undefined;
   let showGuestPassesUpsell = useIsFullscreen();
-  let entrance = useClawdEntranceAnimation(k && showGuestPassesUpsell);
+  let entrance = useClawdEntranceAnimation(oneShots && showGuestPassesUpsell);
   let ultracode = useAppState(selectUltracode);
-  let Fe = jsxProd_default(AnimatedClawdLogo, {
+  let clawdLogo = jsxProd_default(AnimatedClawdLogo, {
     fullscreen: showGuestPassesUpsell,
     entrance,
     ultra: isUltracodeActive(ultracode, effortValue_2),
   });
   let showOverageCreditUpsell = useNoticeImpressionEnabled();
-  let me = showSwarmFooterGate();
-  let se = BridgeStatusIndicator(showGuestPassesUpsell && showOverageCreditUpsell && !me);
-  let _e = showGuestPassesUpsell && showOverageCreditUpsell;
-  let oe;
-  if ($[3] !== _e) {
-    oe = (ve) => (_e ? viewedAgentTask(ve)?.model : undefined);
-    $[3] = _e;
-    $[4] = oe;
-  } else oe = $[4];
-  let appState = useAppState(oe);
-  let He = appState ? displayModelName(appState) : undefined;
-  let Ue;
-  if ($[5] !== _e) {
-    Ue = (lt) => (_e ? viewedAgentTask(lt)?.effort : undefined);
-    $[5] = _e;
-    $[6] = Ue;
-  } else Ue = $[6];
-  let appState_2 = useAppState(Ue);
-  let ae;
-  if ($[7] !== _e) {
-    ae = (tt) => _e && viewedTaskParts(tt.viewingAgentTaskId, tt.tasks).teammate !== undefined;
-    $[7] = _e;
-    $[8] = ae;
-  } else ae = $[8];
-  let appState_3 = useAppState(ae);
+  let swarmFooter = showSwarmFooterGate();
+  let bridgeStatus = BridgeStatusIndicator(showGuestPassesUpsell && showOverageCreditUpsell && !swarmFooter);
+  let showAgentTask = showGuestPassesUpsell && showOverageCreditUpsell;
+  let selectTaskModel;
+  if ($[3] !== showAgentTask) {
+    selectTaskModel = (state) => (showAgentTask ? viewedAgentTask(state)?.model : undefined);
+    $[3] = showAgentTask;
+    $[4] = selectTaskModel;
+  } else selectTaskModel = $[4];
+  let appState = useAppState(selectTaskModel);
+  let taskModel = appState ? displayModelName(appState) : undefined;
+  let selectTaskEffort;
+  if ($[5] !== showAgentTask) {
+    selectTaskEffort = (state) => (showAgentTask ? viewedAgentTask(state)?.effort : undefined);
+    $[5] = showAgentTask;
+    $[6] = selectTaskEffort;
+  } else selectTaskEffort = $[6];
+  let effort = useAppState(selectTaskEffort);
+  let selectHasTeammate;
+  if ($[7] !== showAgentTask) {
+    selectHasTeammate = (state) =>
+      showAgentTask && viewedTaskParts(state.viewingAgentTaskId, state.tasks).teammate !== undefined;
+    $[7] = showAgentTask;
+    $[8] = selectHasTeammate;
+  } else selectHasTeammate = $[8];
+  let appState_2 = useAppState(selectHasTeammate);
   let textWidth = Math.max(columns - 15, 20);
   let truncatedVersion = isScreenReaderEnabled ? version : truncate(version, Math.max(textWidth - 13, 6));
-  let Qe = modelDisplayName + getEffortSuffix(effortValue_2, effortValue);
-  let modelName = He
-    ? renderModelSetting(He) +
+  let modelLabel = modelDisplayName + getEffortSuffix(effortValue_2, effortValue);
+  let modelName = taskModel
+    ? renderModelSetting(taskModel) +
       getEffortSuffix(
-        parseUserSpecifiedModel(He),
-        appState_3 ? undefined : effortValue,
-        effortLevelOf(appState_2),
+        parseUserSpecifiedModel(taskModel),
+        appState_2 ? undefined : effortValue,
+        effortLevelOf(effort),
       )
-    : Qe;
-  let Ze = null;
-  let pt = 0;
-  let Xt;
-  let rt;
+    : modelLabel;
+  let trialBadge = null;
+  let trialBadgeWidth = 0;
+  let trialText;
+  let trialStatus;
   if ($[9] === MEMO_CACHE_SENTINEL) {
-    rt = getProTrialStatus();
-    Xt = proTrialBadgeText(rt);
-    $[9] = Xt;
-    $[10] = rt;
+    trialStatus = getProTrialStatus();
+    trialText = proTrialBadgeText(trialStatus);
+    $[9] = trialText;
+    $[10] = trialStatus;
   } else {
-    Xt = $[9];
-    rt = $[10];
+    trialText = $[9];
+    trialStatus = $[10];
   }
-  let qe = Xt;
-  if (qe) {
+  let trialText_2 = trialText;
+  if (trialText_2) {
     if ($[11] === MEMO_CACHE_SENTINEL) {
-      pt = bunStringWidth(` \xB7 ${qe}`);
-      Ze = jsxProd_default_2(Text, {
+      trialBadgeWidth = bunStringWidth(` \xB7 ${trialText_2}`);
+      trialBadge = jsxProd_default_2(Text, {
         children: [
           jsxProd_default(Text, {
             dimColor: true,
             children: " \xB7 ",
           }),
           jsxProd_default(Text, {
-            color: rt.status === "expired" ? "suggestion" : "warning",
-            children: qe,
+            color: trialStatus.status === "expired" ? "suggestion" : "warning",
+            children: trialText_2,
           }),
         ],
       });
-      $[11] = pt;
-      $[12] = Ze;
+      $[11] = trialBadgeWidth;
+      $[12] = trialBadge;
     } else {
-      pt = $[11];
-      Ze = $[12];
+      trialBadgeWidth = $[11];
+      trialBadge = $[12];
     }
   }
   let { shouldSplit, truncatedModel, truncatedBilling } = isScreenReaderEnabled
@@ -243,38 +260,38 @@ function CondensedLogo(m) {
         truncatedModel: modelName,
         truncatedBilling: billingType,
       }
-    : formatModelAndBilling(modelName, billingType, textWidth - pt, Qe);
-  let Ot;
-  if ($[13] !== se) {
-    Ot = se ? 3 + bunStringWidth(rcPillLabel(se.label)) : 0;
-    $[13] = se;
-    $[14] = Ot;
-  } else Ot = $[14];
-  let It = Ot;
-  let kt = (pe ? textWidth - 1 - bunStringWidth(pe) - 3 : textWidth) - It;
-  let to = isScreenReaderEnabled ? cwd : truncatePathForDisplay(cwd, Math.max(kt, 10));
-  const de = pe && `@${pe}`;
-  let le;
-  if ($[15] !== de || $[16] !== to) {
-    le = [de, to].filter(Boolean);
-    $[15] = de;
-    $[16] = to;
-    $[17] = le;
-  } else le = $[17];
-  let joined = le.join(" \xB7 ");
-  let st;
+    : formatModelAndBilling(modelName, billingType, textWidth - trialBadgeWidth, modelLabel);
+  let pillWidth;
+  if ($[13] !== bridgeStatus) {
+    pillWidth = bridgeStatus ? 3 + bunStringWidth(rcPillLabel(bridgeStatus.label)) : 0;
+    $[13] = bridgeStatus;
+    $[14] = pillWidth;
+  } else pillWidth = $[14];
+  let pillWidth_2 = pillWidth;
+  let pathWidth = (agentLabel ? textWidth - 1 - bunStringWidth(agentLabel) - 3 : textWidth) - pillWidth_2;
+  let shownCwd = isScreenReaderEnabled ? cwd : truncatePathForDisplay(cwd, Math.max(pathWidth, 10));
+  const agentTag = agentLabel && `@${agentLabel}`;
+  let secondaryParts;
+  if ($[15] !== agentTag || $[16] !== shownCwd) {
+    secondaryParts = [agentTag, shownCwd].filter(Boolean);
+    $[15] = agentTag;
+    $[16] = shownCwd;
+    $[17] = secondaryParts;
+  } else secondaryParts = $[17];
+  let joined = secondaryParts.join(" \xB7 ");
+  let titleText;
   if ($[18] === MEMO_CACHE_SENTINEL) {
-    st = jsxProd_default(Text, {
+    titleText = jsxProd_default(Text, {
       bold: true,
       children: "Claude Code",
     });
-    $[18] = st;
-  } else st = $[18];
-  let Ge;
+    $[18] = titleText;
+  } else titleText = $[18];
+  let versionText;
   if ($[19] !== truncatedVersion) {
-    Ge = jsxProd_default_2(Text, {
+    versionText = jsxProd_default_2(Text, {
       children: [
-        st,
+        titleText,
         " ",
         jsxProd_default_2(Text, {
           dimColor: true,
@@ -283,11 +300,16 @@ function CondensedLogo(m) {
       ],
     });
     $[19] = truncatedVersion;
-    $[20] = Ge;
-  } else Ge = $[20];
-  let Ve;
-  if ($[21] !== shouldSplit || $[22] !== Ze || $[23] !== truncatedBilling || $[24] !== truncatedModel) {
-    Ve = shouldSplit
+    $[20] = versionText;
+  } else versionText = $[20];
+  let modelText;
+  if (
+    $[21] !== shouldSplit ||
+    $[22] !== trialBadge ||
+    $[23] !== truncatedBilling ||
+    $[24] !== truncatedModel
+  ) {
+    modelText = shouldSplit
       ? jsxProd_default_2(Fragment, {
           children: [
             jsxProd_default(Text, {
@@ -300,7 +322,7 @@ function CondensedLogo(m) {
                   dimColor: true,
                   children: truncatedBilling,
                 }),
-                Ze,
+                trialBadge,
               ],
             }),
           ],
@@ -311,18 +333,18 @@ function CondensedLogo(m) {
               dimColor: true,
               children: [truncatedModel, " \xB7 ", truncatedBilling],
             }),
-            Ze,
+            trialBadge,
           ],
         });
     $[21] = shouldSplit;
-    $[22] = Ze;
+    $[22] = trialBadge;
     $[23] = truncatedBilling;
     $[24] = truncatedModel;
-    $[25] = Ve;
-  } else Ve = $[25];
-  let ze;
-  if ($[26] !== joined || $[27] !== se) {
-    ze = se
+    $[25] = modelText;
+  } else modelText = $[25];
+  let secondaryText;
+  if ($[26] !== joined || $[27] !== bridgeStatus) {
+    secondaryText = bridgeStatus
       ? jsxProd_default_2(Box, {
           flexDirection: "row",
           children: [
@@ -332,7 +354,7 @@ function CondensedLogo(m) {
               children: [joined, " \xB7 "],
             }),
             jsxProd_default(RemoteControlPill_2, {
-              status: se,
+              status: bridgeStatus,
             }),
           ],
         })
@@ -342,48 +364,48 @@ function CondensedLogo(m) {
           children: joined,
         });
     $[26] = joined;
-    $[27] = se;
-    $[28] = ze;
-  } else ze = $[28];
-  let At;
-  if ($[29] !== Ge || $[30] !== Ve || $[31] !== ze) {
-    At = jsxProd_default_2(Box, {
+    $[27] = bridgeStatus;
+    $[28] = secondaryText;
+  } else secondaryText = $[28];
+  let infoBox;
+  if ($[29] !== versionText || $[30] !== modelText || $[31] !== secondaryText) {
+    infoBox = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [Ge, Ve, ze],
+      children: [versionText, modelText, secondaryText],
     });
-    $[29] = Ge;
-    $[30] = Ve;
-    $[31] = ze;
-    $[32] = At;
-  } else At = $[32];
-  let ut;
+    $[29] = versionText;
+    $[30] = modelText;
+    $[31] = secondaryText;
+    $[32] = infoBox;
+  } else infoBox = $[32];
+  let switchNotice;
   if ($[33] === MEMO_CACHE_SENTINEL) {
-    ut =
-      ge &&
+    switchNotice =
+      showSwitchNotice &&
       jsxProd_default(Box, {
         paddingLeft: 2,
         flexDirection: "column",
         marginTop: 1,
         children: jsxProd_default(RendererSwitchNotice, {}),
       });
-    $[33] = ut;
-  } else ut = $[33];
-  let jt = jsxProd_default_2(Box, {
+    $[33] = switchNotice;
+  } else switchNotice = $[33];
+  let logo = jsxProd_default_2(Box, {
     flexDirection: "column",
     children: [
       jsxProd_default_2(Box, {
         flexDirection: "row",
         gap: 2,
         alignItems: "center",
-        children: [Fe, At],
+        children: [clawdLogo, infoBox],
       }),
-      ut,
+      switchNotice,
     ],
   });
   return showGuestPassesUpsell
-    ? jt
+    ? logo
     : jsxProd_default(FreezeWhenOffscreen, {
-        children: jt,
+        children: logo,
       });
 }
 //@ chunk-ag5x7vhf.js:64759-65228 placement
@@ -391,57 +413,57 @@ function CondensedLogo(m) {
  * 精简 Logo 里可点击的 Remote Control 状态胶囊：悬停高亮，点击时打点并放行默认行为。
  */
 function RemoteControlPill_2(props) {
-  let k = w(10);
+  let $ = useMemoCache(10);
   let { status } = props;
-  let [x, T] = y(false);
+  let [hovered, setHovered] = useState(false);
   let onClick;
-  if (k[0] !== status.label) {
-    onClick = (I) => {
+  if ($[0] !== status.label) {
+    onClick = (event) => {
       logRcPillClicked("click", rcPillLabel(status.label));
-      I.allowDefault();
+      event.allowDefault();
     };
-    k[0] = status.label;
-    k[1] = onClick;
-  } else onClick = k[1];
+    $[0] = status.label;
+    $[1] = onClick;
+  } else onClick = $[1];
   let onMouseEnter;
   let onMouseLeave;
-  if (k[2] === MEMO_CACHE_SENTINEL) {
-    onMouseEnter = () => T(true);
-    onMouseLeave = () => T(false);
-    k[2] = onMouseEnter;
-    k[3] = onMouseLeave;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    onMouseEnter = () => setHovered(true);
+    onMouseLeave = () => setHovered(false);
+    $[2] = onMouseEnter;
+    $[3] = onMouseLeave;
   } else {
-    onMouseEnter = k[2];
-    onMouseLeave = k[3];
+    onMouseEnter = $[2];
+    onMouseLeave = $[3];
   }
   let children;
-  if (k[4] !== x || k[5] !== status) {
+  if ($[4] !== hovered || $[5] !== status) {
     children = jsxProd_default(RemoteControlStatus, {
       status,
-      highlighted: x,
+      highlighted: hovered,
     });
-    k[4] = x;
-    k[5] = status;
-    k[6] = children;
-  } else children = k[6];
-  let V;
-  if (k[7] !== onClick || k[8] !== children) {
-    V = jsxProd_default(Box, {
+    $[4] = hovered;
+    $[5] = status;
+    $[6] = children;
+  } else children = $[6];
+  let pill;
+  if ($[7] !== onClick || $[8] !== children) {
+    pill = jsxProd_default(Box, {
       flexShrink: 0,
       onClick,
       onMouseEnter,
       onMouseLeave,
       children,
     });
-    k[7] = onClick;
-    k[8] = children;
-    k[9] = V;
-  } else V = k[9];
-  return V;
+    $[7] = onClick;
+    $[8] = children;
+    $[9] = pill;
+  } else pill = $[9];
+  return pill;
 }
 //@ chunk-ag5x7vhf.js:65228-65318 placement
-function viewedAgentTask(m) {
-  let { teammate, localAgent } = viewedTaskParts(m.viewingAgentTaskId, m.tasks);
+function viewedAgentTask(state) {
+  let { teammate, localAgent } = viewedTaskParts(state.viewingAgentTaskId, state.tasks);
   return teammate ?? localAgent;
 }
 export {

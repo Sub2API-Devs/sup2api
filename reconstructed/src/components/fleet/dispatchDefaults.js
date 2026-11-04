@@ -46,13 +46,13 @@ import {
 /**
  * 取出并删除某会话的通知记录，返回距通知的毫秒数与通知类型（用于遥测）。
  */
-function takeNotificationLatency(h, sessionId, k) {
-  let C = h.notified.get(sessionId);
-  if (!C) return;
-  h.notified.delete(sessionId);
+function takeNotificationLatency(tracker, sessionId, now) {
+  let notified = tracker.notified.get(sessionId);
+  if (!notified) return;
+  tracker.notified.delete(sessionId);
   return {
-    ms_since_notification: Math.max(0, k - C.at),
-    notified_kind: fromEnum(C.kind),
+    ms_since_notification: Math.max(0, now - notified.at),
+    notified_kind: fromEnum(notified.kind),
   };
 }
 //@ chunk-93kwxas0.js:6294-6388 placement
@@ -67,18 +67,19 @@ function dispatchDefaultsFromJob(snapshot) {
 /**
  * 用派发时指定的 model/effort/fastMode 覆盖默认值。
  */
-function applyDispatchOverrides(dispatchDefaults, E) {
-  if (E.model === undefined && E.effort === undefined && E.fastMode === undefined) return dispatchDefaults;
+function applyDispatchOverrides(dispatchDefaults, overrides) {
+  if (overrides.model === undefined && overrides.effort === undefined && overrides.fastMode === undefined)
+    return dispatchDefaults;
   return {
     ...dispatchDefaults,
-    ...(E.model !== undefined && {
-      model: E.model,
+    ...(overrides.model !== undefined && {
+      model: overrides.model,
     }),
-    ...(E.effort !== undefined && {
-      effort: E.effort,
+    ...(overrides.effort !== undefined && {
+      effort: overrides.effort,
     }),
-    ...(E.fastMode !== undefined && {
-      fastMode: E.fastMode,
+    ...(overrides.fastMode !== undefined && {
+      fastMode: overrides.fastMode,
     }),
   };
 }
@@ -86,41 +87,43 @@ function applyDispatchOverrides(dispatchDefaults, E) {
 /**
  * 计算新会话的模型、effort、快速模式默认值。
  */
-function resolveDispatchDefaults({ launch, window: E }) {
-  let C =
+function resolveDispatchDefaults({ launch, window: windowOptions }) {
+  let modelChoice =
     resolveFastFlagPlaceholder(
-      E.model ?? launch?.model ?? (env.ANTHROPIC_MODEL || getInitialSettings_2().model || undefined),
+      windowOptions.model ??
+        launch?.model ??
+        (env.ANTHROPIC_MODEL || getInitialSettings_2().model || undefined),
     ) ??
-    E.model ??
+    windowOptions.model ??
     (launch?.model === undefined
       ? resolveDefaultDispatchModel()
       : (resolveAllowedModel(launch.model, "explicit") ?? getDefaultMainLoopModel()));
-  let userSpecifiedModel = parseUserSpecifiedModel(C);
-  let effort = E.effort ?? launch?.effort;
-  let A =
+  let fallback = parseUserSpecifiedModel(modelChoice);
+  let effort = windowOptions.effort ?? launch?.effort;
+  let effortValue =
     effort === undefined
-      ? lookupEffortSetting(buildEffortSettingsTable(), userSpecifiedModel)
+      ? lookupEffortSetting(buildEffortSettingsTable(), fallback)
       : (resolveEffortKeyword(effort) ?? parseEffortLevel(effort));
-  let effort_2 = modelSupportsEffort(userSpecifiedModel)
+  let effort_2 = modelSupportsEffort(fallback)
     ? normalizeEffortLevel(
-        resolveEffortValue(userSpecifiedModel, A, {
+        resolveEffortValue(fallback, effortValue, {
           carriedEffort: null,
         }) ?? "high",
       )
     : undefined;
   return {
-    model: renderModelSetting(C),
+    model: renderModelSetting(modelChoice),
     effort: effort_2,
     effortOverridden: getEffortEnvOverride() !== undefined,
-    ultracode: isUltracodeActive(isUltracodeEnabled(effort), userSpecifiedModel),
-    ...resolveFastModeForSession(userSpecifiedModel, E.fastMode),
+    ultracode: isUltracodeActive(isUltracodeEnabled(effort), fallback),
+    ...resolveFastModeForSession(fallback, windowOptions.fastMode),
   };
 }
 //@ chunk-93kwxas0.js:7005-7272 placement
 /**
  * 计算派发默认值的指纹，和上次不同时触发备用会话刷新；出错时保留旧值。
  */
-function checkDispatchDefaultsChanged(h, launch, storageV5) {
+function checkDispatchDefaultsChanged(previousKey, launch, storage) {
   try {
     let { model, effort, fast } = resolveDispatchDefaults({
       launch,
@@ -130,18 +133,18 @@ function checkDispatchDefaultsChanged(h, launch, storageV5) {
         fastMode: undefined,
       },
     });
-    let A = jsonStringify({
+    let key = jsonStringify({
       model,
       effort,
       fast,
     });
-    if (h !== undefined && h !== A) retireSpare(storageV5);
-    return A;
+    if (previousKey !== undefined && previousKey !== key) retireSpare(storage);
+    return key;
   } catch (error) {
     logForDebugging(`Agent view spare check skipped: ${errorMessage(error)}`, {
       level: "error",
     });
-    return h;
+    return previousKey;
   }
 }
 //@ chunk-93kwxas0.js:7272-7448 placement
@@ -150,28 +153,28 @@ function checkDispatchDefaultsChanged(h, launch, storageV5) {
  */
 function resolveDefaultDispatchModel() {
   let effectiveSettingSource = getEffectiveSettingSource_2("model");
-  let E =
+  let settingModel =
     effectiveSettingSource === "policySettings" || effectiveSettingSource === "flagSettings"
       ? getInitialSettings_2().model
       : (getOrgLockedDefaultModel()?.model ?? getInitialSettings_2().model);
-  let k = env.ANTHROPIC_MODEL || E || undefined;
-  return (k && resolveAllowedModel(k, "persisted")) || getDefaultMainLoopModel();
+  let candidate = env.ANTHROPIC_MODEL || settingModel || undefined;
+  return (candidate && resolveAllowedModel(candidate, "persisted")) || getDefaultMainLoopModel();
 }
 //@ chunk-93kwxas0.js:7448-7521 placement
-function resolveAllowedModel(h, E) {
-  if (!isModelAllowed(h)) return stepDownRestrictedFamilyAliasPick(h) ?? undefined;
-  return isUnservedModelSpelling(h, E) ? undefined : h;
+function resolveAllowedModel(model, source) {
+  if (!isModelAllowed(model)) return stepDownRestrictedFamilyAliasPick(model) ?? undefined;
+  return isUnservedModelSpelling(model, source) ? undefined : model;
 }
 //@ chunk-93kwxas0.js:7521-7543 placement
-function resolveFastFlagPlaceholder(h) {
+function resolveFastFlagPlaceholder(model) {
   return;
 }
 //@ chunk-93kwxas0.js:7543-7781 sole-consumer
 /**
  * 给定模型与会话选择（--fast 等标志）返回 {fast:"on"|"off", fastBlockedReason}，被托管设置或模型不支持挡住时给出原因。
  */
-function resolveFastModeForSession(userSpecifiedModel, fastMode) {
-  let initialFastModeSetting = getInitialFastModeSetting(userSpecifiedModel, fastMode);
+function resolveFastModeForSession(model, fastMode) {
+  let initialFastModeSetting = getInitialFastModeSetting(model, fastMode);
   return {
     fast: initialFastModeSetting,
     fastBlockedReason:
@@ -180,10 +183,9 @@ function resolveFastModeForSession(userSpecifiedModel, fastMode) {
       initialFastModeSetting === undefined
         ? undefined
         : fastMode
-          ? supportsFastMode(userSpecifiedModel)
-            ? (getFastModeUnavailableMessage(userSpecifiedModel, buildFastModeCheckOptions(fastMode)) ??
-              undefined)
-            : `${renderModelSetting(userSpecifiedModel)} doesn't have fast mode`
+          ? supportsFastMode(model)
+            ? (getFastModeUnavailableMessage(model, buildFastModeCheckOptions(fastMode)) ?? undefined)
+            : `${renderModelSetting(model)} doesn't have fast mode`
           : "Your organization's managed settings turn it on",
   };
 }

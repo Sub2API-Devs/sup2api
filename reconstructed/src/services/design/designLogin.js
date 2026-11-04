@@ -28,15 +28,15 @@ async function designLoginStatus(credentials) {
   await awaitPolicyLimitsColdStart();
   let available = isDesignSyncAllowed();
   let signedIn = (await readDesignOAuth(credentials)) !== null;
-  let i = isDesignOAuthConfigured()
+  let notice = isDesignOAuthConfigured()
     ? undefined
     : "The Claude Design sign-in is not configured in this build.";
   return {
     available,
     signed_in: signedIn,
-    can_sign_in_here: i === undefined,
-    ...(i !== undefined && {
-      reason: i,
+    can_sign_in_here: notice === undefined,
+    ...(notice !== undefined && {
+      reason: notice,
     }),
   };
 }
@@ -48,13 +48,13 @@ async function runDesignLoginHost({ stdin, write, signal }) {
   await awaitPolicyLimitsColdStart();
   if (!isDesignSyncAllowed()) {
     await logFeatureBadAsync("design_login_host", "not_enabled");
-    let e = {
+    let notEnabledEvent = {
       event: "done",
       ok: false,
       message: "Claude Design sync is not available in this session.",
     };
-    await write(jsonStringify(e));
-    return e;
+    await write(jsonStringify(notEnabledEvent));
+    return notEnabledEvent;
   }
   let submitCode;
   let abortController = new AbortController();
@@ -64,15 +64,15 @@ async function runDesignLoginHost({ stdin, write, signal }) {
       once: true,
     });
   (async () => {
-    let e = "";
-    for await (let a of stdin) {
-      e += typeof a === "string" ? a : new TextDecoder().decode(a);
-      let index = e.indexOf(`
+    let buffer = "";
+    for await (let chunk of stdin) {
+      buffer += typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk);
+      let index = buffer.indexOf(`
 `);
       while (index >= 0) {
-        let trimmed = e.slice(0, index).trim();
-        e = e.slice(index + 1);
-        index = e.indexOf(`
+        let trimmed = buffer.slice(0, index).trim();
+        buffer = buffer.slice(index + 1);
+        index = buffer.indexOf(`
 `);
         if (trimmed === "") continue;
         let parsed = safeParseJSON(trimmed, false);
@@ -90,16 +90,16 @@ async function runDesignLoginHost({ stdin, write, signal }) {
   })().catch(() => abortController.abort());
   let result = await runDesignLogin(abortController.signal, {
     onAuthUrl: (url, manualUrl) => {
-      let o = {
+      let pagesEvent = {
         event: "pages",
         url,
         manual_url: manualUrl,
         manual_first: isRemoteEnvironment(),
       };
-      write(jsonStringify(o));
+      write(jsonStringify(pagesEvent));
     },
-    onManualCode: (e) => {
-      submitCode = e;
+    onManualCode: (handler) => {
+      submitCode = handler;
     },
   });
   let doneEvent = result.ok
@@ -141,3 +141,4 @@ function designLoginFailureText(result) {
       return "The credential could not be saved to secure storage. Try again.";
   }
 }
+export { designLoginStatus, runDesignLoginHost };

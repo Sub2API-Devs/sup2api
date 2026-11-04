@@ -10,10 +10,10 @@
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
-  u,
-  string,
+  objectSchema,
+  stringSchema,
   array,
-  M,
+  booleanSchema,
   record,
   union,
   unknown,
@@ -24,57 +24,67 @@ import { frameApi } from "./frameRelay.js";
 import { buildFrameHeaders } from "./frameApi.js";
 import { errorMessage } from "../../utils/errors.js";
 import { logProxyDenial } from "../../utils/sandbox/proxyDenial.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-06y4szbn.js:42449-42833 placement
 /**
  * artifact 页面契约 schema（版本、能力列表、claude/core 能力与 features 映射）与读取参数。
  */
-var contractSchema = DoctorLazy(() =>
-  u({
-    version: string().regex(CONTRACT_VERSION_REGEX),
-    capabilities: array(string().regex(CAPABILITY_NAME_REGEX)).max(256),
-    claude: M().optional().catch(undefined),
-    core: array(string().regex(CAPABILITY_NAME_REGEX)).max(256).optional().catch(undefined),
-    features: record(
-      string().regex(CAPABILITY_NAME_REGEX),
-      record(
-        string().regex(CAPABILITY_NAME_REGEX),
-        union([record(string(), unknown()), literal(true).transform(() => ({}))]),
-      ),
-    )
-      .optional()
-      .catch(undefined),
-  }),
-);
-var LATEST_CONTRACT_PATH_CONTRACT = "/api/frame/contract/latest";
-var MAX_CONTRACT_DEFS_BYTES = 262144;
-var MAX_CONTRACT_PROMPT_BYTES = 65536;
-var CONTRACT_FETCH_TIMEOUT_MS = 5000;
-var X_CONTRACT_MISSING_CAPS = "x-contract-missing-caps";
-var MAX_CONTRACT_VERSION_BYTES = 16384;
+var contractSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var LATEST_CONTRACT_PATH_CONTRACT;
+var MAX_CONTRACT_DEFS_BYTES;
+var MAX_CONTRACT_PROMPT_BYTES;
+var CONTRACT_FETCH_TIMEOUT_MS;
+var X_CONTRACT_MISSING_CAPS;
+var MAX_CONTRACT_VERSION_BYTES;
+deferInit("chunk-06y4szbn.js:42449", () => {
+  contractSchema = DoctorLazy(() =>
+    objectSchema({
+      version: stringSchema().regex(CONTRACT_VERSION_REGEX),
+      capabilities: array(stringSchema().regex(CAPABILITY_NAME_REGEX)).max(256),
+      claude: booleanSchema().optional().catch(undefined),
+      core: array(stringSchema().regex(CAPABILITY_NAME_REGEX)).max(256).optional().catch(undefined),
+      features: record(
+        stringSchema().regex(CAPABILITY_NAME_REGEX),
+        record(
+          stringSchema().regex(CAPABILITY_NAME_REGEX),
+          union([record(stringSchema(), unknown()), literal(true).transform(() => ({}))]),
+        ),
+      )
+        .optional()
+        .catch(undefined),
+    }),
+  );
+  LATEST_CONTRACT_PATH_CONTRACT = "/api/frame/contract/latest";
+  MAX_CONTRACT_DEFS_BYTES = 262144;
+  MAX_CONTRACT_PROMPT_BYTES = 65536;
+  CONTRACT_FETCH_TIMEOUT_MS = 5000;
+  X_CONTRACT_MISSING_CAPS = "x-contract-missing-caps";
+  MAX_CONTRACT_VERSION_BYTES = 16384;
+});
 //@ chunk-06y4szbn.js:42833-43730 placement
 /**
  * 读取 /api/frame/contract/latest 或指定版本的 artifact 页面契约（版本与能力名），区分传输/认证/客户端策略错误。
  */
-async function getFrameContract(e, n, r) {
-  let s;
+async function getFrameContract(path, options, overrides) {
+  let result;
   try {
-    s = await frameApi.get(e, {
+    result = await frameApi.get(path, {
       refreshOAuth: true,
-      ...(n.recoverOAuth401 && {
+      ...(options.recoverOAuth401 && {
         recoverOAuth401: true,
-        storageV5: n.storageV5,
+        storageV5: options.storageV5,
       }),
       headers: buildFrameHeaders(),
       maxContentLength: MAX_CONTRACT_VERSION_BYTES,
-      ...r,
-      ...(n.timeoutMs !== undefined && {
-        timeout: n.timeoutMs,
+      ...overrides,
+      ...(options.timeoutMs !== undefined && {
+        timeout: options.timeoutMs,
       }),
-      ...(n.signal && {
-        signal: n.signal,
+      ...(options.signal && {
+        signal: options.signal,
       }),
-      credentials: n.credentials,
+      credentials: options.credentials,
     });
   } catch (error) {
     return {
@@ -82,70 +92,70 @@ async function getFrameContract(e, n, r) {
       cause: "transport",
     };
   }
-  if (!s.ok)
+  if (!result.ok)
     return {
-      err: `unavailable: ${s.reason}`,
-      cause: s.reason === "no-auth" ? "no_auth" : "client_policy",
+      err: `unavailable: ${result.reason}`,
+      cause: result.reason === "no-auth" ? "no_auth" : "client_policy",
     };
-  if (!s.fromFrame)
+  if (!result.fromFrame)
     return {
-      err: `relay HTTP ${s.status}`,
+      err: `relay HTTP ${result.status}`,
       cause: "relay",
-      status: s.status,
+      status: result.status,
     };
-  if (s.status < 200 || s.status >= 300) {
-    let b = logProxyDenial({
-      status: s.status,
-      headers: s.response?.headers,
-      data: s.data,
-      redact: (y) => y,
+  if (result.status < 200 || result.status >= 300) {
+    let proxyDeny = logProxyDenial({
+      status: result.status,
+      headers: result.response?.headers,
+      data: result.data,
+      redact: (text) => text,
       label: "[artifact] contract fetch",
     });
     return {
-      err: `HTTP ${s.status}`,
-      cause: s.status === 404 ? "http_404" : s.status >= 500 ? "http_5xx" : "http_4xx",
-      status: s.status,
-      ...(b !== undefined && {
-        proxyDeny: b,
+      err: `HTTP ${result.status}`,
+      cause: result.status === 404 ? "http_404" : result.status >= 500 ? "http_5xx" : "http_4xx",
+      status: result.status,
+      ...(proxyDeny !== undefined && {
+        proxyDeny,
       }),
     };
   }
-  let h = s.response?.headers?.[X_CONTRACT_MISSING_CAPS];
+  let missingCaps = result.response?.headers?.[X_CONTRACT_MISSING_CAPS];
   return {
-    body: s.data,
-    ...(typeof h === "string" && {
-      missingCapsHeader: h,
+    body: result.data,
+    ...(typeof missingCaps === "string" && {
+      missingCapsHeader: missingCaps,
     }),
   };
 }
 //@ chunk-06y4szbn.js:43730-44066 placement
-async function resolveContract(e) {
-  if (e.version !== undefined && !CONTRACT_VERSION_REGEX.test(e.version))
+async function resolveContract(request) {
+  if (request.version !== undefined && !CONTRACT_VERSION_REGEX.test(request.version))
     return {
       err: "invalid contract version",
       cause: "malformed",
     };
   let frameContract = await getFrameContract(
-    e.version !== undefined ? `/api/frame/contract/${e.version}` : LATEST_CONTRACT_PATH_CONTRACT,
-    e,
+    request.version !== undefined ? `/api/frame/contract/${request.version}` : LATEST_CONTRACT_PATH_CONTRACT,
+    request,
   );
   if ("err" in frameContract) return frameContract;
-  let r = contractSchema().safeParse(frameContract.body);
-  if (!r.success)
+  let parsed = contractSchema().safeParse(frameContract.body);
+  if (!parsed.success)
     return {
       err: "malformed contract response",
       cause: "malformed",
     };
-  return r.data;
+  return parsed.data;
 }
 //@ chunk-06y4szbn.js:44066-44442 placement
-async function fetchContractDefs(e, n, r) {
-  if (!CONTRACT_VERSION_REGEX.test(e) || !CAPABILITY_NAME_REGEX.test(n))
+async function fetchContractDefs(request, options, overrides) {
+  if (!CONTRACT_VERSION_REGEX.test(request) || !CAPABILITY_NAME_REGEX.test(options))
     return {
       err: "invalid contract version or capability name",
       cause: "malformed",
     };
-  let frameContract = await getFrameContract(`/api/frame/contract/${e}/${n}.d.ts`, r, {
+  let frameContract = await getFrameContract(`/api/frame/contract/${request}/${options}.d.ts`, overrides, {
     responseType: "text",
     maxContentLength: MAX_CONTRACT_DEFS_BYTES,
   });
@@ -160,13 +170,13 @@ async function fetchContractDefs(e, n, r) {
   };
 }
 //@ chunk-06y4szbn.js:44442-44928 placement
-async function fetchContractPrompt(version, n) {
+async function fetchContractPrompt(version, options) {
   if (!CONTRACT_VERSION_REGEX.test(version))
     return {
       err: "invalid contract version",
       cause: "malformed",
     };
-  let frameContract = await getFrameContract(`/api/frame/contract/${version}/prompt`, n, {
+  let frameContract = await getFrameContract(`/api/frame/contract/${version}/prompt`, options, {
     responseType: "text",
     maxContentLength: MAX_CONTRACT_PROMPT_BYTES,
   });
@@ -182,8 +192,8 @@ async function fetchContractPrompt(version, n) {
       : frameContract.missingCapsHeader
           .slice(0, 4096)
           .split(",")
-          .map((h) => h.trim())
-          .filter((h) => CAPABILITY_NAME_REGEX.test(h));
+          .map((line) => line.trim())
+          .filter((line) => CAPABILITY_NAME_REGEX.test(line));
   return {
     promptMd: frameContract.body,
     missingCaps,

@@ -18,7 +18,7 @@ var installSlackAppCommandDefinition = {
   description: "Install the Claude Slack app",
   availability: ["claude-ai"],
   supportsNonInteractive: false,
-  load: () => import("./chunk-xarcg2hx.js"),
+  load: () => import("./install-slack-app.js"),
 };
 var installSlackAppCommand = installSlackAppCommandDefinition;
 export { installSlackAppCommand };

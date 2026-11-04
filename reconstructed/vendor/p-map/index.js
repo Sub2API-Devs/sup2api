@@ -11,110 +11,116 @@
  * p-map 默认导出（第三方）：限制并发的异步 map
  */
 async function pMap(
-  e,
-  t,
-  { concurrency: n = Number.POSITIVE_INFINITY, stopOnError: r = true, signal: s } = {},
+  iterable,
+  mapper,
+  { concurrency = Number.POSITIVE_INFINITY, stopOnError = true, signal } = {},
 ) {
   return new Promise((resolve, reject) => {
-    if (e[Symbol.iterator] === undefined && e[Symbol.asyncIterator] === undefined)
+    if (iterable[Symbol.iterator] === undefined && iterable[Symbol.asyncIterator] === undefined)
       throw TypeError(
-        `Expected \`input\` to be either an \`Iterable\` or \`AsyncIterable\`, got (${typeof e})`,
+        `Expected \`input\` to be either an \`Iterable\` or \`AsyncIterable\`, got (${typeof iterable})`,
       );
-    if (typeof t !== "function") throw TypeError("Mapper function is required");
-    if (!((Number.isSafeInteger(n) && n >= 1) || n === Number.POSITIVE_INFINITY))
+    if (typeof mapper !== "function") throw TypeError("Mapper function is required");
+    if (!(
+      (Number.isSafeInteger(concurrency) && concurrency >= 1) ||
+      concurrency === Number.POSITIVE_INFINITY
+    ))
       throw TypeError(
-        `Expected \`concurrency\` to be an integer from 1 and up or \`Infinity\`, got \`${n}\` (${typeof n})`,
+        `Expected \`concurrency\` to be an integer from 1 and up or \`Infinity\`, got \`${concurrency}\` (${typeof concurrency})`,
       );
-    let a = [];
-    let d = [];
-    let c = new Map();
-    let u = false;
-    let y = false;
-    let S = false;
-    let g = 0;
-    let l = 0;
-    let R = e[Symbol.iterator] === undefined ? e[Symbol.asyncIterator]() : e[Symbol.iterator]();
-    let h = () => {
-      f(s.reason);
+    let result = [];
+    let errors = [];
+    let skippedIndexesMap = new Map();
+    let isRejected = false;
+    let isStopped = false;
+    let isIterableDone = false;
+    let resolvingCount = 0;
+    let currentIndex = 0;
+    let iterator =
+      iterable[Symbol.iterator] === undefined
+        ? iterable[Symbol.asyncIterator]()
+        : iterable[Symbol.iterator]();
+    let onAbort = () => {
+      rejectOne(signal.reason);
     };
-    let p = () => {
-      s?.removeEventListener("abort", h);
+    let removeAbortListener = () => {
+      signal?.removeEventListener("abort", onAbort);
     };
-    let _ = (m) => {
-      resolve(m);
-      p();
+    let resolveOne = (value) => {
+      resolve(value);
+      removeAbortListener();
     };
-    let f = (m) => {
-      u = true;
-      y = true;
-      reject(m);
-      p();
+    let rejectOne = (error) => {
+      isRejected = true;
+      isStopped = true;
+      reject(error);
+      removeAbortListener();
     };
-    if (s) {
-      if (s.aborted) f(s.reason);
-      s.addEventListener("abort", h, {
+    if (signal) {
+      if (signal.aborted) rejectOne(signal.reason);
+      signal.addEventListener("abort", onAbort, {
         once: true,
       });
     }
-    let w = async () => {
-      if (y) return;
-      let m = await R.next();
-      let b = l;
-      l++;
-      if (m.done) {
-        S = true;
-        if (g === 0 && !y) {
-          if (!r && d.length > 0) {
-            f(AggregateError(d));
+    let next = async () => {
+      if (isStopped) return;
+      let step = await iterator.next();
+      let index = currentIndex;
+      currentIndex++;
+      if (step.done) {
+        isIterableDone = true;
+        if (resolvingCount === 0 && !isStopped) {
+          if (!stopOnError && errors.length > 0) {
+            rejectOne(AggregateError(errors));
             return;
           }
-          y = true;
-          if (c.size === 0) {
-            _(a);
+          isStopped = true;
+          if (skippedIndexesMap.size === 0) {
+            resolveOne(result);
             return;
           }
-          let C = [];
-          for (let [E, U] of a.entries()) {
-            if (c.get(E) === call) continue;
-            C.push(U);
+          let resultWithSkippedIndexes = [];
+          for (let [index, mappedValue] of result.entries()) {
+            if (skippedIndexesMap.get(index) === call) continue;
+            resultWithSkippedIndexes.push(mappedValue);
           }
-          _(C);
+          resolveOne(resultWithSkippedIndexes);
         }
         return;
       }
-      g++;
+      resolvingCount++;
       (async () => {
         try {
-          let C = await m.value;
-          if (y) return;
-          let E = await t(C, b);
-          if (E === call) c.set(b, E);
-          a[b] = E;
-          g--;
-          await w();
+          let value = await step.value;
+          if (isStopped) return;
+          let mappedValue = await mapper(value, index);
+          if (mappedValue === call) skippedIndexesMap.set(index, mappedValue);
+          result[index] = mappedValue;
+          resolvingCount--;
+          await next();
         } catch (error) {
-          if (r) f(error);
+          if (stopOnError) rejectOne(error);
           else {
-            d.push(error);
-            g--;
+            errors.push(error);
+            resolvingCount--;
             try {
-              await w();
+              await next();
             } catch (error) {
-              f(error);
+              rejectOne(error);
             }
           }
         }
       })();
     };
     (async () => {
-      for (let idx = 0; idx < n; idx++) {
+      for (let idx = 0; idx < concurrency; idx++) {
         try {
-          await w();
+          await next();
         } catch (error) {
-          f(error);
+          rejectOne(error);
           break;
         }
-        if (S || u) break;
+        if (isIterableDone || isRejected) break;
       }
     })();
   });

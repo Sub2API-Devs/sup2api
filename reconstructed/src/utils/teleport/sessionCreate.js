@@ -21,6 +21,7 @@ import { uniq } from "../collections.js";
 import { REMOTE_DEVICE_TOOLS } from "../../services/mcp/firstPartyServerIds.js";
 import { err, ok } from "../resultError.js";
 import { sanitizeSessionTitle } from "../stringUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-f25sswmp.js:19944-20228 placement
 var PENDING_PROMPT_DESCRIPTIONS = {
@@ -32,48 +33,50 @@ var PENDING_PROMPT_DESCRIPTIONS = {
 /**
  * 取对话框事件里的来源字段。
  */
-function dialogSourceOf(e, n) {
-  return e === ENUM_PROMPT && typeof n.source === "string" ? n.source : undefined;
+function dialogSourceOf(kind, options) {
+  return kind === ENUM_PROMPT && typeof options.source === "string" ? options.source : undefined;
 }
 //@ chunk-f25sswmp.js:20305-20338 placement
 var MCP_ELICITATION_DIALOG_TOOL = "dialog:mcp_elicitation";
 //@ chunk-f25sswmp.js:20338-20630 placement
-function dialogPermissionRequest(e, n, requestId, toolUseId) {
+function dialogPermissionRequest(kind, options, requestId, toolUseId) {
   return {
-    tool_name: `dialog:${e}`,
+    tool_name: `dialog:${kind}`,
     display_tool_name: "Claude needs your input",
     action_description:
-      PENDING_PROMPT_DESCRIPTIONS[e] ??
-      (e === ENUM_PROMPT && typeof n.title === "string" ? n.title : `Respond to the ${e} dialog to continue`),
+      PENDING_PROMPT_DESCRIPTIONS[kind] ??
+      (kind === ENUM_PROMPT && typeof options.title === "string"
+        ? options.title
+        : `Respond to the ${kind} dialog to continue`),
     raw_command: undefined,
     tool_use_id: toolUseId ?? "",
     request_id: requestId,
     input: {
-      dialog_kind: e,
-      payload: n,
+      dialog_kind: kind,
+      payload: options,
     },
   };
 }
 //@ chunk-f25sswmp.js:20667-20973 placement
-function sessionEventsUrl(e, compatSessionId, r, s, deviceAttestation) {
+function sessionEventsUrl(sessionId, compatSessionId, opts, extra, deviceAttestation) {
   validateBridgeId(compatSessionId, "sessionId");
-  if (!s)
+  if (!extra)
     return {
-      url: `${e}/v1/sessions/${compatSessionId}/events`,
+      url: `${sessionId}/v1/sessions/${compatSessionId}/events`,
       body: {
-        events: r,
+        events: opts,
       },
     };
   let infraSessionId = toInfraSessionId(compatSessionId);
   return {
-    url: `${e}/v1/code/sessions/${encodeURIComponent(infraSessionId)}/events`,
+    url: `${sessionId}/v1/code/sessions/${encodeURIComponent(infraSessionId)}/events`,
     body: {
-      events: r.map((h) => ({
+      events: opts.map((event) => ({
         payload:
-          typeof h.uuid === "string" && h.uuid
-            ? h
+          typeof event.uuid === "string" && event.uuid
+            ? event
             : {
-                ...h,
+                ...event,
                 uuid: randomUUID(),
               },
         ...(deviceAttestation && {
@@ -94,7 +97,7 @@ var TENGU_BUZZING_RIVER = "tengu_buzzing_river";
 //@ chunk-f25sswmp.js:21102-21112 placement
 var MAX_INITIAL_EVENTS = 16;
 //@ chunk-f25sswmp.js:21112-21330 placement
-function setModeControlEvent(mode, { ultraplan: n, isFromSettings: r = false } = {}) {
+function setModeControlEvent(mode, { ultraplan: options, isFromSettings: fromSettings = false } = {}) {
   return {
     type: "event",
     data: {
@@ -103,8 +106,8 @@ function setModeControlEvent(mode, { ultraplan: n, isFromSettings: r = false } =
       request: {
         subtype: "set_permission_mode",
         mode,
-        ultraplan: n,
-        ...(r && {
+        ultraplan: options,
+        ...(fromSettings && {
           from_settings: true,
         }),
       },
@@ -112,21 +115,21 @@ function setModeControlEvent(mode, { ultraplan: n, isFromSettings: r = false } =
   };
 }
 //@ chunk-f25sswmp.js:21330-21455 placement
-function summarizeSessionCreateBody(e) {
+function summarizeSessionCreateBody(body) {
   return {
-    envVars: Object.keys(e.environmentVariables ?? {}).length > 0,
-    events: e.events.filter((event) => !isPromptOrPermissionEvent(event)).map(eventKindOf),
+    envVars: Object.keys(body.environmentVariables ?? {}).length > 0,
+    events: body.events.filter((event) => !isPromptOrPermissionEvent(event)).map(eventKindOf),
   };
 }
 //@ chunk-f25sswmp.js:21455-21474 placement
 var REDACTED_PLACEHOLDER = "<redacted>";
 //@ chunk-f25sswmp.js:21474-21742 placement
-function redactSeedFields(e) {
-  if (!isPlainObject(e)) return;
-  let { seed_bundle_file_id: seedBundleFileId, environment_variables: environmentVariables } = e;
+function redactSeedFields(body) {
+  if (!isPlainObject(body)) return;
+  let { seed_bundle_file_id: seedBundleFileId, environment_variables: environmentVariables } = body;
   if (seedBundleFileId === undefined && environmentVariables === undefined) return;
   return {
-    ...e,
+    ...body,
     ...(seedBundleFileId !== undefined && {
       seed_bundle_file_id: REDACTED_PLACEHOLDER,
     }),
@@ -138,19 +141,19 @@ function redactSeedFields(e) {
   };
 }
 //@ chunk-f25sswmp.js:21742-21985 placement
-function redactSessionCreateBody(e) {
-  let bindAttestation = e.bind_attestation;
-  let r = redactSeedFields(e);
-  let s = redactSeedFields(e.session_context);
-  let i = redactSeedFields(e.config);
-  if (!r && !s && !i && bindAttestation === undefined) return e;
+function redactSessionCreateBody(body) {
+  let bindAttestation = body.bind_attestation;
+  let seedFields = redactSeedFields(body);
+  let environmentVariables = redactSeedFields(body.session_context);
+  let configRedacted = redactSeedFields(body.config);
+  if (!seedFields && !environmentVariables && !configRedacted && bindAttestation === undefined) return body;
   return {
-    ...(r ?? e),
-    ...(s && {
-      session_context: s,
+    ...(seedFields ?? body),
+    ...(environmentVariables && {
+      session_context: environmentVariables,
     }),
-    ...(i && {
-      config: i,
+    ...(configRedacted && {
+      config: configRedacted,
     }),
     ...(bindAttestation !== undefined && {
       bind_attestation: isPlainObject(bindAttestation)
@@ -163,69 +166,76 @@ function redactSessionCreateBody(e) {
   };
 }
 //@ chunk-f25sswmp.js:21985-22099 placement
-var PERMISSION_CONTROL_SUBTYPES = new Set([
-  "set_permission_mode",
-  "set_mcp_permission_mode_override",
-  "set_max_thinking_tokens",
-  "mcp_toggle",
-]);
+var PERMISSION_CONTROL_SUBTYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-f25sswmp.js:21985", () => {
+  PERMISSION_CONTROL_SUBTYPES = new Set([
+    "set_permission_mode",
+    "set_mcp_permission_mode_override",
+    "set_max_thinking_tokens",
+    "mcp_toggle",
+  ]);
+});
 //@ chunk-f25sswmp.js:22099-22221 placement
-function controlRequestSubtype(e) {
-  let request = e.data.request;
-  return e.data.type === "control_request" && typeof request?.subtype === "string"
+function controlRequestSubtype(event) {
+  let request = event.data.request;
+  return event.data.type === "control_request" && typeof request?.subtype === "string"
     ? request.subtype
     : undefined;
 }
 //@ chunk-f25sswmp.js:22221-22310 placement
 function isPromptOrPermissionEvent(event) {
   if (event.data.type === "user") return true;
-  let n = controlRequestSubtype(event);
-  return n !== undefined && PERMISSION_CONTROL_SUBTYPES.has(n);
+  let subtype = controlRequestSubtype(event);
+  return subtype !== undefined && PERMISSION_CONTROL_SUBTYPES.has(subtype);
 }
 //@ chunk-f25sswmp.js:22310-22359 placement
-function eventKindOf(e) {
-  return controlRequestSubtype(e) ?? String(e.data.type);
+function eventKindOf(event) {
+  return controlRequestSubtype(event) ?? String(event.data.type);
 }
 //@ chunk-f25sswmp.js:22359-24252 placement
 /**
  * 构造 teleport/桥接云会话的创建请求体：初始事件（≤上限）、设备绑定、权限模式事件、来源与标签。
  */
-function buildSessionCreateBody(e) {
-  let deviceBinding = e.deviceBinding;
-  let r = deviceBinding
-    ? e.events.filter(
-        (event) => isPromptOrPermissionEvent(event) && !(e.deferFirstPrompt && event.data.type === "user"),
+function buildSessionCreateBody(options) {
+  let deviceBinding = options.deviceBinding;
+  let events = deviceBinding
+    ? options.events.filter(
+        (event) =>
+          isPromptOrPermissionEvent(event) && !(options.deferFirstPrompt && event.data.type === "user"),
       )
-    : e.events;
-  if (deviceBinding && r.length > MAX_INITIAL_EVENTS)
+    : options.events;
+  if (deviceBinding && events.length > MAX_INITIAL_EVENTS)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `session create allows at most ${MAX_INITIAL_EVENTS} initial events, got ${r.length}`,
+      `session create allows at most ${MAX_INITIAL_EVENTS} initial events, got ${events.length}`,
       "session create: too many initial events",
     );
-  let s = deviceBinding ? {} : (e.environmentVariables ?? {});
-  let i = uniq([...(e.disallowedTools ?? []), ...(deviceBinding ? REMOTE_DEVICE_TOOLS : [])]);
+  let environmentVariables = deviceBinding ? {} : (options.environmentVariables ?? {});
+  let disallowedTools = uniq([
+    ...(options.disallowedTools ?? []),
+    ...(deviceBinding ? REMOTE_DEVICE_TOOLS : []),
+  ]);
   return {
-    ...(e.title && {
-      title: e.title,
+    ...(options.title && {
+      title: options.title,
     }),
-    ...e.worker,
-    ...noopSessionTag(e.persistentVolume, e.persistentVolumeFromSessionId),
-    events: r.map((y) => ({
-      payload: y.data,
+    ...options.worker,
+    ...noopSessionTag(options.persistentVolume, options.persistentVolumeFromSessionId),
+    events: events.map((event) => ({
+      payload: event.data,
     })),
-    ...(e.tags && {
-      tags: e.tags,
+    ...(options.tags && {
+      tags: options.tags,
     }),
     ...(!deviceBinding &&
-      e.sessionGroupingId && {
-        session_grouping_id: e.sessionGroupingId,
+      options.sessionGroupingId && {
+        session_grouping_id: options.sessionGroupingId,
       }),
     ...(!deviceBinding &&
-      e.agentId && {
-        agent_id: e.agentId,
+      options.agentId && {
+        agent_id: options.agentId,
       }),
-    ...(Object.keys(s).length > 0 && {
-      environment_variables: s,
+    ...(Object.keys(environmentVariables).length > 0 && {
+      environment_variables: environmentVariables,
     }),
     ...(deviceBinding && {
       target_device_id: deviceBinding.deviceUUID,
@@ -234,67 +244,67 @@ function buildSessionCreateBody(e) {
         signature: deviceBinding.signature,
       },
       bind_attestation_issued_at: deviceBinding.issuedAt,
-      ...(e.requestElevatedTier && {
+      ...(options.requestElevatedTier && {
         security_tier: "elevated",
       }),
-      ...(e.repositoriesTrusted && {
+      ...(options.repositoriesTrusted && {
         repositories_trusted: true,
       }),
     }),
     config: {
-      sources: e.sources.map(stripUnrestrictedGitPush),
-      outcomes: e.outcomes,
-      ...(e.model && {
-        model: e.model,
+      sources: options.sources.map(stripUnrestrictedGitPush),
+      outcomes: options.outcomes,
+      ...(options.model && {
+        model: options.model,
       }),
-      ...(e.cwd && {
-        cwd: e.cwd,
+      ...(options.cwd && {
+        cwd: options.cwd,
       }),
-      ...(e.effortLevel && {
-        effort_level: e.effortLevel,
+      ...(options.effortLevel && {
+        effort_level: options.effortLevel,
       }),
-      ...(e.seedBundleFileId && {
-        seed_bundle_file_id: e.seedBundleFileId,
+      ...(options.seedBundleFileId && {
+        seed_bundle_file_id: options.seedBundleFileId,
       }),
-      ...(e.reuseOutcomeBranches && {
+      ...(options.reuseOutcomeBranches && {
         reuse_outcome_branches: true,
       }),
-      ...(e.appendSystemPrompt && {
-        append_system_prompt: e.appendSystemPrompt,
+      ...(options.appendSystemPrompt && {
+        append_system_prompt: options.appendSystemPrompt,
       }),
-      ...(e.customSystemPrompt && {
-        custom_system_prompt: e.customSystemPrompt,
+      ...(options.customSystemPrompt && {
+        custom_system_prompt: options.customSystemPrompt,
       }),
-      ...(e.appendSubagentSystemPrompt && {
-        append_subagent_system_prompt: e.appendSubagentSystemPrompt,
+      ...(options.appendSubagentSystemPrompt && {
+        append_subagent_system_prompt: options.appendSubagentSystemPrompt,
       }),
-      ...(e.fallbackModel && {
-        fallback_model: e.fallbackModel,
+      ...(options.fallbackModel && {
+        fallback_model: options.fallbackModel,
       }),
-      ...(e.maxTurns !== undefined && {
-        max_turns: e.maxTurns,
+      ...(options.maxTurns !== undefined && {
+        max_turns: options.maxTurns,
       }),
-      ...(e.maxBudgetUsd !== undefined &&
-        e.maxBudgetUsd > 0 && {
-          max_budget_usd: e.maxBudgetUsd,
+      ...(options.maxBudgetUsd !== undefined &&
+        options.maxBudgetUsd > 0 && {
+          max_budget_usd: options.maxBudgetUsd,
         }),
-      ...(e.allowedTools &&
-        e.allowedTools.length > 0 && {
-          allowed_tools: e.allowedTools,
+      ...(options.allowedTools &&
+        options.allowedTools.length > 0 && {
+          allowed_tools: options.allowedTools,
         }),
-      ...(e.outputSchema && {
-        output_schema: e.outputSchema,
+      ...(options.outputSchema && {
+        output_schema: options.outputSchema,
       }),
       ...(!deviceBinding &&
-        e.correlationId && {
-          correlation_id: e.correlationId,
+        options.correlationId && {
+          correlation_id: options.correlationId,
         }),
-      ...(i.length > 0 && {
-        disallowed_tools: i,
+      ...(disallowedTools.length > 0 && {
+        disallowed_tools: disallowedTools,
       }),
-      ...(e.builtinTools &&
-        e.builtinTools.length > 0 && {
-          builtin_tools: [...e.builtinTools],
+      ...(options.builtinTools &&
+        options.builtinTools.length > 0 && {
+          builtin_tools: [...options.builtinTools],
         }),
     },
   };
@@ -307,23 +317,23 @@ function noopSessionTag(persistentVolume, persistentVolumeFromSessionId) {
   return;
 }
 //@ chunk-f25sswmp.js:24277-24508 placement
-function sessionIdFromCreateResponse(e, n) {
-  let r = e === "v1alpha2" ? n?.session : n;
-  if (typeof r?.id !== "string" || r.id === "") return err("no_session_id");
-  if (!isUsableCreatedSessionId(r.id)) return err("unusable_session_id");
+function sessionIdFromCreateResponse(apiVersion, body) {
+  let session = apiVersion === "v1alpha2" ? body?.session : body;
+  if (typeof session?.id !== "string" || session.id === "") return err("no_session_id");
+  if (!isUsableCreatedSessionId(session.id)) return err("unusable_session_id");
   return ok({
-    ...r,
-    title: typeof r.title === "string" ? sanitizeSessionTitle(r.title) : null,
+    ...session,
+    title: typeof session.title === "string" ? sanitizeSessionTitle(session.title) : null,
   });
 }
 //@ chunk-f25sswmp.js:24508-24548 placement
-function sessionTitleOf(e, n) {
-  return e.title || sanitizeSessionTitle(n);
+function sessionTitleOf(body, fallbackTitle) {
+  return body.title || sanitizeSessionTitle(fallbackTitle);
 }
 //@ chunk-f25sswmp.js:24548-24614 placement
-function stripUnrestrictedGitPush(e) {
-  let { allow_unrestricted_git_push: allowUnrestrictedGitPush, ...r } = e;
-  return r;
+function stripUnrestrictedGitPush(body) {
+  let { allow_unrestricted_git_push: allowUnrestrictedGitPush, ...rest } = body;
+  return rest;
 }
 //@ chunk-f25sswmp.js:24614-24724 placement
 function loginRejectedMessage(status, message) {

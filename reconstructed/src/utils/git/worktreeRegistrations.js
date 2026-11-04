@@ -36,122 +36,132 @@ import { isSentinelInode } from "../slowOperations.js";
 import { O_NOFOLLOW_FLAG, READ_LIMITS } from "../fsBoundRead.js";
 
 //@ chunk-2xm1rxms.js:15174-15279 placement
-function openFailureText(e) {
-  return e === "ELOOP" ? "is a link" : e === "EISDIR" ? "is not a regular file" : "could not be opened";
+function openFailureText(errnoCode) {
+  return errnoCode === "ELOOP"
+    ? "is a link"
+    : errnoCode === "EISDIR"
+      ? "is not a regular file"
+      : "could not be opened";
 }
 //@ chunk-2xm1rxms.js:15279-15331 placement
-function isOnlyLineEndings(e) {
-  return e.replace(/[\r\n]+$/, "") === "";
+function isOnlyLineEndings(text) {
+  return text.replace(/[\r\n]+$/, "") === "";
 }
 //@ chunk-2xm1rxms.js:15331-16168 placement
-function summarizeUncheckedRegistrations(e, worktreePaths, worktreeRegistrations) {
-  let r = join(e, "worktrees");
-  let { unchecked, kinds } = worktreeRegistrations;
-  let l = [
-    ...(worktreePaths === null || worktreePaths.unresolved.length === 0
+function summarizeUncheckedRegistrations(repoRoot, ancestorResolution, progress) {
+  let worktreesDir = join(repoRoot, "worktrees");
+  let { unchecked, kinds } = progress;
+  let reasons = [
+    ...(ancestorResolution === null || ancestorResolution.unresolved.length === 0
       ? []
       : [
-          `a folder on the way to the worktree could not be resolved safely (${worktreePaths.unresolved.join("; ")}), so a registration recorded under its resolved path could not be matched`,
+          `a folder on the way to the worktree could not be resolved safely (${ancestorResolution.unresolved.join("; ")}), so a registration recorded under its resolved path could not be matched`,
         ]),
-    ...(worktreeRegistrations.guessed
+    ...(progress.guessed
       ? [
-          `${r} cannot be listed here without following links, so only the names git would have given this worktree were checked, and a registration under another name may remain`,
+          `${worktreesDir} cannot be listed here without following links, so only the names git would have given this worktree were checked, and a registration under another name may remain`,
         ]
       : []),
     ...(unchecked === 0
       ? []
       : [
-          worktreeRegistrations.guessed
-            ? `some of the names tried in ${r} could not be checked (${[...kinds].join(", ")}), so one of them may still register this worktree`
-            : `${unchecked === 1 ? "one entry" : `${unchecked} entries`} in ${r} could not be checked (${[...kinds].join(", ")}), so ${unchecked === 1 ? "it" : "one of them"} may still register this worktree`,
+          progress.guessed
+            ? `some of the names tried in ${worktreesDir} could not be checked (${[...kinds].join(", ")}), so one of them may still register this worktree`
+            : `${unchecked === 1 ? "one entry" : `${unchecked} entries`} in ${worktreesDir} could not be checked (${[...kinds].join(", ")}), so ${unchecked === 1 ? "it" : "one of them"} may still register this worktree`,
         ]),
   ];
-  return l.length === 0
+  return reasons.length === 0
     ? {
         outcome: "none",
       }
     : {
-        unmatched: l.join("; "),
+        unmatched: reasons.join("; "),
       };
 }
 //@ chunk-2xm1rxms.js:16168-16236 placement
-function isContainedInGitdirs(e, n) {
-  return n === null || containsSamePath(normalizeDriveCase(e), [...n.gitdirs].map(normalizeDriveCase));
+function isContainedInGitdirs(registeredGitdir, worktreePaths) {
+  return (
+    worktreePaths === null ||
+    containsSamePath(normalizeDriveCase(registeredGitdir), [...worktreePaths.gitdirs].map(normalizeDriveCase))
+  );
 }
 //@ chunk-2xm1rxms.js:16236-16322 placement
-function normalizeDriveCase(e) {
-  return getPlatform() === "windows" ? e.replace(/^[a-z](?=:)/, (n) => n.toUpperCase()) : e;
+function normalizeDriveCase(path) {
+  return getPlatform() === "windows"
+    ? path.replace(/^[a-z](?=:)/, (driveLetter) => driveLetter.toUpperCase())
+    : path;
 }
 //@ chunk-2xm1rxms.js:16322-17385 placement
-async function findWorktreeRegistrations(repoLayout, n, o, worktreePaths) {
-  let s = {
+async function findWorktreeRegistrations(fsOps, repoRoot, options, worktreePaths) {
+  let progress = {
     guessed: false,
     unchecked: 0,
     kinds: new Set(),
   };
-  let a =
-    "entryId" in o
-      ? [o.entryId]
-      : await repoLayout.list("worktrees").catch((error) => {
+  let entryNames =
+    "entryId" in options
+      ? [options.entryId]
+      : await fsOps.list("worktrees").catch((error) => {
           if (isENOENT(error)) return [];
           if (getErrnoCode(error) === "WORKING_LIST_UNSUPPORTED") {
-            s.guessed = true;
-            return pathVariants(normalizeWorktreePaths(o));
+            progress.guessed = true;
+            return pathVariants(normalizeWorktreePaths(options));
           }
           throw error;
         });
-  for (let l of a) {
-    if (!isSafePathSegment(l)) {
-      if (!s.guessed) noteUnchecked(s, "an entry name this check cannot read exactly");
+  for (let entryName of entryNames) {
+    if (!isSafePathSegment(entryName)) {
+      if (!progress.guessed) noteUnchecked(progress, "an entry name this check cannot read exactly");
       continue;
     }
-    let u = `worktrees/${l}`;
-    let c = await repoLayout.lstat(u).catch((error) => (isENOENT(error) ? null : undefined));
-    if (c === undefined) {
-      noteUnchecked(s, "an entry that could not be inspected");
+    let entryRel = `worktrees/${entryName}`;
+    let entryStats = await fsOps.lstat(entryRel).catch((error) => (isENOENT(error) ? null : undefined));
+    if (entryStats === undefined) {
+      noteUnchecked(progress, "an entry that could not be inspected");
       continue;
     }
-    if (c === null || !c.isDirectory()) {
-      if (c?.isSymbolicLink()) noteUnchecked(s, "an entry that is a link");
-      else if (c !== null && getPlatform() === "windows") noteUnchecked(s, "an entry that is not a folder");
+    if (entryStats === null || !entryStats.isDirectory()) {
+      if (entryStats?.isSymbolicLink()) noteUnchecked(progress, "an entry that is a link");
+      else if (entryStats !== null && getPlatform() === "windows")
+        noteUnchecked(progress, "an entry that is not a folder");
       continue;
     }
-    let nonBlocking = await openNonBlocking(repoLayout, `${u}/gitdir`, WORKTREE_READ_LIMITS_2);
+    let nonBlocking = await openNonBlocking(fsOps, `${entryRel}/gitdir`, WORKTREE_READ_LIMITS_2);
     if (nonBlocking === "absent") continue;
     if ("unread" in nonBlocking) {
-      noteUnchecked(s, `a gitdir file that ${nonBlocking.unread}`);
+      noteUnchecked(progress, `a gitdir file that ${nonBlocking.unread}`);
       continue;
     }
-    let gitdirLine = parseGitdirLine(nonBlocking.text, join(n, "worktrees", l));
-    if (gitdirLine === null && !isOnlyLineEndings(nonBlocking.text))
-      noteUnchecked(s, "a gitdir file whose path could not be checked safely");
-    if (gitdirLine === null || !isContainedInGitdirs(gitdirLine, worktreePaths)) continue;
-    let locked = await repoLayout.lstat(`${u}/locked`).then(
+    let registeredGitdir = parseGitdirLine(nonBlocking.text, join(repoRoot, "worktrees", entryName));
+    if (registeredGitdir === null && !isOnlyLineEndings(nonBlocking.text))
+      noteUnchecked(progress, "a gitdir file whose path could not be checked safely");
+    if (registeredGitdir === null || !isContainedInGitdirs(registeredGitdir, worktreePaths)) continue;
+    let locked = await fsOps.lstat(`${entryRel}/locked`).then(
       () => true,
       (error) => !isENOENT(error),
     );
     return {
-      entryId: l,
+      entryId: entryName,
       locked,
-      recordedGitdir: gitdirLine,
-      rel: u,
+      recordedGitdir: registeredGitdir,
+      rel: entryRel,
       identity: {
-        dev: c.dev,
-        ino: c.ino,
+        dev: entryStats.dev,
+        ino: entryStats.ino,
       },
     };
   }
-  return s;
+  return progress;
 }
 //@ chunk-2xm1rxms.js:17385-17456 placement
-async function safeListRegistrations(dir, n) {
-  return listRegistrations(dir, n).catch((error) => ({
+async function safeListRegistrations(repoRoot, dir) {
+  return listRegistrations(repoRoot, dir).catch((error) => ({
     unavailable: errorMessage(error),
   }));
 }
 //@ chunk-2xm1rxms.js:17456-17857 placement
-async function listRegistrations(e, n) {
-  let repoLayout = await loadRepoLayout(e, n.repoSpelled);
+async function listRegistrations(repoRoot, options) {
+  let repoLayout = await loadRepoLayout(repoRoot, options.repoSpelled);
   if ("refused" in repoLayout)
     return {
       unavailable: repoLayout.refused,
@@ -161,145 +171,148 @@ async function listRegistrations(e, n) {
       unavailable: repoLayout.unavailable,
     };
   try {
-    let worktreePaths = await resolveWorktreePaths(n);
-    let worktreeRegistrations = await findWorktreeRegistrations(repoLayout, e, n, worktreePaths);
-    if ("unchecked" in worktreeRegistrations) {
-      let a = summarizeUncheckedRegistrations(e, worktreePaths, worktreeRegistrations);
-      return "unmatched" in a
+    let ancestorResolution = await resolveWorktreePaths(options);
+    let progress = await findWorktreeRegistrations(repoLayout, repoRoot, options, ancestorResolution);
+    if ("unchecked" in progress) {
+      let summary = summarizeUncheckedRegistrations(repoRoot, ancestorResolution, progress);
+      return "unmatched" in summary
         ? {
-            unavailable: a.unmatched,
+            unavailable: summary.unmatched,
           }
         : null;
     }
     return {
-      entryId: worktreeRegistrations.entryId,
-      locked: worktreeRegistrations.locked,
-      recordedGitdir: worktreeRegistrations.recordedGitdir,
+      entryId: progress.entryId,
+      locked: progress.locked,
+      recordedGitdir: progress.recordedGitdir,
     };
   } finally {
     await repoLayout.close().catch(() => {});
   }
 }
 //@ chunk-2xm1rxms.js:17857-17922 placement
-async function deregisterWorktree(e, n, o) {
-  return deregisterWorktreeUnsafe(e, n, o).catch((error) => keepRegistration(e, errorMessage(error)));
+async function deregisterWorktree(repoRoot, options, lockOptions) {
+  return deregisterWorktreeUnsafe(repoRoot, options, lockOptions).catch((error) =>
+    keepRegistration(repoRoot, errorMessage(error)),
+  );
 }
 //@ chunk-2xm1rxms.js:17922-19771 placement
 /**
  * 从仓库 .git/worktrees 中注销 worktree 记录，逐项校验文件类型与路径安全。
  */
-async function deregisterWorktreeUnsafe(e, n, o) {
-  let repoLayout = await loadRepoLayout(e, n.repoSpelled);
-  if ("refused" in repoLayout) return keepRegistration(e, repoLayout.refused);
+async function deregisterWorktreeUnsafe(repoRoot, options, lockOptions) {
+  let repoLayout = await loadRepoLayout(repoRoot, options.repoSpelled);
+  if ("refused" in repoLayout) return keepRegistration(repoRoot, repoLayout.refused);
   if ("unavailable" in repoLayout) {
     let { modules } = repoLayout;
     return repoLayout.unavailable === "no_ffi" && modules !== null && modules.host.platform() === "macos"
-      ? removeAdminDirNoFollow(e, n, o, await modules.darwinNoFollowAnyEnforced(modules.host))
+      ? removeAdminDirNoFollow(
+          repoRoot,
+          options,
+          lockOptions,
+          await modules.darwinNoFollowAnyEnforced(modules.host),
+        )
       : keepRegistration(
-          e,
+          repoRoot,
           `this build cannot open files here without following links (${repoLayout.unavailable})`,
         );
   }
   try {
-    let worktreePaths = await resolveWorktreePaths(n);
-    let worktreeRegistrations = await findWorktreeRegistrations(repoLayout, e, n, worktreePaths);
-    if ("unchecked" in worktreeRegistrations) {
-      let c = summarizeUncheckedRegistrations(e, worktreePaths, worktreeRegistrations);
-      return "unmatched" in c ? keepRegistration(e, c.unmatched) : c;
+    let worktreePaths = await resolveWorktreePaths(options);
+    let progress = await findWorktreeRegistrations(repoLayout, repoRoot, options, worktreePaths);
+    if ("unchecked" in progress) {
+      let summary = summarizeUncheckedRegistrations(repoRoot, worktreePaths, progress);
+      return "unmatched" in summary ? keepRegistration(repoRoot, summary.unmatched) : summary;
     }
-    if (!(await verifyAdminEntry(worktreeRegistrations.recordedGitdir, n, worktreePaths)))
+    if (!(await verifyAdminEntry(progress.recordedGitdir, options, worktreePaths)))
       return keepRegistration(
-        e,
-        `could not confirm the worktree is gone: ${worktreeRegistrations.recordedGitdir} exists, or a link or unreadable folder is on the way to it`,
+        repoRoot,
+        `could not confirm the worktree is gone: ${progress.recordedGitdir} exists, or a link or unreadable folder is on the way to it`,
       );
-    await worktreeHookState.afterMatch?.(worktreeRegistrations.entryId);
-    let l = async () => {
-      let c = await repoLayout.lstat(worktreeRegistrations.rel).catch(() => null);
-      return c !== null && getFileIdentity(c, worktreeRegistrations.identity);
+    await worktreeHookState.afterMatch?.(progress.entryId);
+    let isEntryUnchanged = async () => {
+      let entryStats = await repoLayout.lstat(progress.rel).catch(() => null);
+      return entryStats !== null && getFileIdentity(entryStats, progress.identity);
     };
-    if (!(await l()))
+    if (!(await isEntryUnchanged()))
       return keepRegistration(
-        e,
-        `worktrees/${worktreeRegistrations.entryId} changed since it was read, or this volume cannot show it is the same folder`,
+        repoRoot,
+        `worktrees/${progress.entryId} changed since it was read, or this volume cannot show it is the same folder`,
       );
-    if (await looksLikeGitDirIn(repoLayout, worktreeRegistrations.rel))
+    if (await looksLikeGitDirIn(repoLayout, progress.rel))
       return keepRegistration(
-        e,
-        `${adminDirHasGitFilesMessage(worktreeRegistrations.entryId)}, so nothing in it was removed`,
+        repoRoot,
+        `${adminDirHasGitFilesMessage(progress.entryId)}, so nothing in it was removed`,
       );
-    if (worktreeRegistrations.locked) {
-      if (!(await maybeUnlockRegistration(repoLayout, worktreeRegistrations.rel, o.locked)))
-        return keepRegistration(e, `worktrees/${worktreeRegistrations.entryId} is locked`);
+    if (progress.locked) {
+      if (!(await maybeUnlockRegistration(repoLayout, progress.rel, lockOptions.locked)))
+        return keepRegistration(repoRoot, `worktrees/${progress.entryId} is locked`);
     }
-    await worktreeHookState.beforeMutation?.(worktreeRegistrations.entryId);
-    await repoLayout.unlink(`${worktreeRegistrations.rel}/gitdir`);
-    if (!(await l()))
+    await worktreeHookState.beforeMutation?.(progress.entryId);
+    await repoLayout.unlink(`${progress.rel}/gitdir`);
+    if (!(await isEntryUnchanged()))
       return {
         outcome: "dropped",
-        entryId: worktreeRegistrations.entryId,
+        entryId: progress.entryId,
         adminRemoved: false,
       };
-    if (await looksLikeGitDirIn(repoLayout, worktreeRegistrations.rel)) {
+    if (await looksLikeGitDirIn(repoLayout, progress.rel)) {
       logForDebugging(
-        `Dropped the registration worktrees/${worktreeRegistrations.entryId} in ${e} (git no longer lists it) but left its folder, which now has a git directory's own files (objects, config, packed-refs, hooks or worktrees) in it, or could not be checked for them. git's next \`git worktree prune\` or \`git gc\` deletes that folder whole; move out anything you need first.`,
+        `Dropped the registration worktrees/${progress.entryId} in ${repoRoot} (git no longer lists it) but left its folder, which now has a git directory's own files (objects, config, packed-refs, hooks or worktrees) in it, or could not be checked for them. git's next \`git worktree prune\` or \`git gc\` deletes that folder whole; move out anything you need first.`,
         {
           level: "warn",
         },
       );
       return {
         outcome: "dropped",
-        entryId: worktreeRegistrations.entryId,
+        entryId: progress.entryId,
         adminRemoved: false,
       };
     }
-    let adminRemoved = await dropRegistrationDir(
-      repoLayout,
-      worktreeRegistrations.rel,
-      worktreeRegistrations.identity,
-    );
+    let adminRemoved = await dropRegistrationDir(repoLayout, progress.rel, progress.identity);
     await repoLayout.rmdir("worktrees").catch(() => {});
     return {
       outcome: "dropped",
-      entryId: worktreeRegistrations.entryId,
+      entryId: progress.entryId,
       adminRemoved,
     };
   } catch (error) {
-    return keepRegistration(e, errorMessage(error));
+    return keepRegistration(repoRoot, errorMessage(error));
   } finally {
     await repoLayout.close().catch(() => {});
   }
 }
 //@ chunk-2xm1rxms.js:19771-19994 placement
 async function pruneWorktreeRegistration(
-  e,
+  repoRoot,
   worktreePath,
-  o = {
+  lockOptions = {
     locked: "keep",
   },
 ) {
-  let r = await vetRepoForWorktrees(e);
-  return r === null
+  let gitDir = await vetRepoForWorktrees(repoRoot);
+  return gitDir === null
     ? keepRegistration(
-        e,
+        repoRoot,
         'the repository could not be vetted (see the "Could not vet the worktree registrations" line above)',
       )
     : deregisterWorktree(
-        r,
+        gitDir,
         {
           worktreePath,
-          repoSpelled: e,
+          repoSpelled: repoRoot,
         },
-        o,
+        lockOptions,
       );
 }
 //@ chunk-2xm1rxms.js:19994-20119 placement
-function keepRegistration(e, n) {
-  logForDebugging(`Left a git worktree registration in ${e} in place: ${n}`, {
+function keepRegistration(repoRoot, reason) {
+  logForDebugging(`Left a git worktree registration in ${repoRoot} in place: ${reason}`, {
     level: "warn",
   });
   return {
     outcome: "kept",
-    reason: n,
+    reason,
   };
 }
 //@ chunk-2xm1rxms.js:20119-20650 placement
@@ -341,25 +354,25 @@ var WORKTREE_ADMIN_FILES_2 = [
 ];
 var WORKTREE_ADMIN_FILES = ["refs/bisect", "refs/worktree", "refs/rewritten", "refs", "logs", "info"];
 //@ chunk-2xm1rxms.js:20650-20746 placement
-function looksLikeGitDirIn(repoLayout, n) {
-  return looksLikeGitDir((o) =>
-    repoLayout.lstat(`${n}/${o}`).catch((error) => {
+function looksLikeGitDirIn(repoLayout, relDir) {
+  return looksLikeGitDir((entryName) =>
+    repoLayout.lstat(`${relDir}/${entryName}`).catch((error) => {
       if (isENOENT(error)) return null;
       throw error;
     }),
   );
 }
 //@ chunk-2xm1rxms.js:20746-20907 placement
-function adminDirHasGitFilesMessage(e) {
-  return `worktrees/${e} has a git directory's own files (objects, config, packed-refs, hooks or worktrees) in it, or could not be checked for them`;
+function adminDirHasGitFilesMessage(entryId) {
+  return `worktrees/${entryId} has a git directory's own files (objects, config, packed-refs, hooks or worktrees) in it, or could not be checked for them`;
 }
 //@ chunk-2xm1rxms.js:20907-21068 placement
-async function dropRegistrationDir(repoLayout, n, identity) {
-  await removeAdminFiles(repoLayout, n, identity);
-  return repoLayout.rmdir(n).then(
+async function dropRegistrationDir(repoLayout, relDir, identity) {
+  await removeAdminFiles(repoLayout, relDir, identity);
+  return repoLayout.rmdir(relDir).then(
     () => true,
     (error) => {
-      logForDebugging(`Dropped the registration ${n} but left its folder: ${errorMessage(error)}`, {
+      logForDebugging(`Dropped the registration ${relDir} but left its folder: ${errorMessage(error)}`, {
         level: "warn",
       });
       return false;
@@ -367,14 +380,21 @@ async function dropRegistrationDir(repoLayout, n, identity) {
   );
 }
 //@ chunk-2xm1rxms.js:21068-21162 placement = getFileIdentity (0.794)
-function getFileIdentity(e, n) {
-  return e.isDirectory() && e.dev !== 0n && !isSentinelInode(e.ino) && e.dev === n.dev && e.ino === n.ino;
+function getFileIdentity(stats, identity) {
+  return (
+    stats.isDirectory() &&
+    stats.dev !== 0n &&
+    !isSentinelInode(stats.ino) &&
+    stats.dev === identity.dev &&
+    stats.ino === identity.ino
+  );
 }
 //@ chunk-2xm1rxms.js:21162-21318 placement
-async function removeAdminFiles(e, n, o) {
-  for (let r of WORKTREE_ADMIN_FILES_2) await e.unlink(`${n}/${r}`).catch(() => {});
-  await removeAdminDir(e, n, o);
-  for (let r of WORKTREE_ADMIN_FILES) await e.rmdir(`${n}/${r}`).catch(() => {});
+async function removeAdminFiles(repoLayout, relDir, identity) {
+  for (let fileName of WORKTREE_ADMIN_FILES_2)
+    await repoLayout.unlink(`${relDir}/${fileName}`).catch(() => {});
+  await removeAdminDir(repoLayout, relDir, identity);
+  for (let dirName of WORKTREE_ADMIN_FILES) await repoLayout.rmdir(`${relDir}/${dirName}`).catch(() => {});
 }
 //@ chunk-2xm1rxms.js:21318-21492 placement
 var REFTABLE_FILE_RE =
@@ -383,95 +403,101 @@ var MAX_ADMIN_ENTRIES = 1024;
 var REFS_HEADS = "refs/heads";
 var REFTABLE = "reftable";
 //@ chunk-2xm1rxms.js:21492-22262 placement
-async function removeAdminDir(e, n, o) {
-  let r = await Promise.resolve()
-    .then(() => e.anchorBeneath(n))
+async function removeAdminDir(repoLayout, relDir, identity) {
+  let adminAnchor = await Promise.resolve()
+    .then(() => repoLayout.anchorBeneath(relDir))
     .catch(() => null);
-  if (r === null) return;
+  if (adminAnchor === null) return;
   try {
-    let s = await r.lstat("").catch(() => null);
-    if (s === null || !getFileIdentity(s, o)) return;
-    let a = await r.anchorBeneath(REFTABLE).catch(() => null);
-    if (a === null) return;
+    let dirStats = await adminAnchor.lstat("").catch(() => null);
+    if (dirStats === null || !getFileIdentity(dirStats, identity)) return;
+    let reftableAnchor = await adminAnchor.anchorBeneath(REFTABLE).catch(() => null);
+    if (reftableAnchor === null) return;
     try {
-      let [l, u] = await Promise.all([a.lstat("").catch(() => null), e.lstat(REFTABLE).catch(() => null)]);
+      let [reftableAnchorStats, reftableStats] = await Promise.all([
+        reftableAnchor.lstat("").catch(() => null),
+        repoLayout.lstat(REFTABLE).catch(() => null),
+      ]);
       if (
-        l === null ||
-        u === null ||
-        !l.isDirectory() ||
-        !u.isDirectory() ||
-        (l.dev === u.dev && l.ino === u.ino)
+        reftableAnchorStats === null ||
+        reftableStats === null ||
+        !reftableAnchorStats.isDirectory() ||
+        !reftableStats.isDirectory() ||
+        (reftableAnchorStats.dev === reftableStats.dev && reftableAnchorStats.ino === reftableStats.ino)
       )
         return;
-      let c = await a
+      let reftableNames = await reftableAnchor
         .list("", MAX_ADMIN_ENTRIES)
         .catch((error) =>
-          getErrnoCode(error) === "WORKING_LIST_UNSUPPORTED" ? a.list("").catch(() => null) : null,
+          getErrnoCode(error) === "WORKING_LIST_UNSUPPORTED"
+            ? reftableAnchor.list("").catch(() => null)
+            : null,
         );
-      if (c === null) return;
-      for (let w of c) if (REFTABLE_FILE_RE.test(w)) await a.unlink(w).catch(() => {});
+      if (reftableNames === null) return;
+      for (let reftableFile of reftableNames)
+        if (REFTABLE_FILE_RE.test(reftableFile)) await reftableAnchor.unlink(reftableFile).catch(() => {});
     } finally {
-      await a.close().catch(() => {});
+      await reftableAnchor.close().catch(() => {});
     }
-    await r.unlink(REFS_HEADS).catch(() => {});
-    await r.rmdir(REFTABLE).catch(() => {});
+    await adminAnchor.unlink(REFS_HEADS).catch(() => {});
+    await adminAnchor.rmdir(REFTABLE).catch(() => {});
   } finally {
-    await r.close().catch(() => {});
+    await adminAnchor.close().catch(() => {});
   }
 }
 //@ chunk-2xm1rxms.js:22262-22491 placement
-async function maybeUnlockRegistration(repoLayout, n, locked) {
+async function maybeUnlockRegistration(fsOps, relDir, locked) {
   if (locked === "drop") return true;
   if (locked === "keep") return false;
-  let nonBlocking = await openNonBlocking(repoLayout, `${n}/locked`, WORKTREE_READ_LIMITS);
+  let nonBlocking = await openNonBlocking(fsOps, `${relDir}/locked`, WORKTREE_READ_LIMITS);
   if (
     nonBlocking === "absent" ||
     "unread" in nonBlocking ||
     !locked.unlockIf(nonBlocking.text.replace(/[\r\n]+$/, ""))
   )
     return false;
-  await repoLayout.unlink(`${n}/locked`);
+  await fsOps.unlink(`${relDir}/locked`);
   return true;
 }
 //@ chunk-2xm1rxms.js:22491-24522 placement
-async function removeAdminDirNoFollow(e, n, o, r) {
-  if (!r)
+async function removeAdminDirNoFollow(repoRoot, options, lockOptions, noFollowAnyEnforced) {
+  if (!noFollowAnyEnforced)
     return keepRegistration(
-      e,
+      repoRoot,
       "this macOS version does not enforce O_NOFOLLOW_ANY, so links cannot be refused",
     );
-  let worktreePaths = await resolveWorktreePaths(n);
-  let a = "entryId" in n ? [n.entryId] : pathVariants(normalizeWorktreePaths(n));
-  let l = {
-    guessed: !("entryId" in n),
+  let worktreePaths = await resolveWorktreePaths(options);
+  let entryNames = "entryId" in options ? [options.entryId] : pathVariants(normalizeWorktreePaths(options));
+  let progress = {
+    guessed: !("entryId" in options),
     unchecked: 0,
     kinds: new Set(),
   };
-  let u = constants.O_NONBLOCK | O_NOFOLLOW_FLAG | READ_LIMITS;
-  for (let w of a) {
-    if (!isSafePathSegment(w)) {
-      if (!l.guessed) noteUnchecked(l, "an entry name this check cannot read exactly");
+  let openFlags = constants.O_NONBLOCK | O_NOFOLLOW_FLAG | READ_LIMITS;
+  for (let entryName of entryNames) {
+    if (!isSafePathSegment(entryName)) {
+      if (!progress.guessed) noteUnchecked(progress, "an entry name this check cannot read exactly");
       continue;
     }
-    let h = join(e, "worktrees", w);
-    let g = await open(join(h, "gitdir"), constants.O_RDWR | u).catch(
+    let entryDir = join(repoRoot, "worktrees", entryName);
+    let gitdirHandle = await open(join(entryDir, "gitdir"), constants.O_RDWR | openFlags).catch(
       (error) => getErrnoCode(error) ?? "EIO",
     );
-    if (typeof g === "string") {
-      if (g !== "ENOENT" && g !== "ENOTDIR")
+    if (typeof gitdirHandle === "string") {
+      if (gitdirHandle !== "ENOENT" && gitdirHandle !== "ENOTDIR")
         noteUnchecked(
-          l,
-          g === "ELOOP"
+          progress,
+          gitdirHandle === "ELOOP"
             ? "a gitdir file that is a link, or a link on the way to it"
-            : `a gitdir file that ${openFailureText(g)}`,
+            : `a gitdir file that ${openFailureText(gitdirHandle)}`,
         );
       continue;
     }
     try {
-      let stats = await g.stat();
+      let stats = await gitdirHandle.stat();
       if (!stats.isFile() || stats.nlink !== 1) {
         noteUnchecked(
-          l,
+          progress,
           !stats.isFile()
             ? "a gitdir file that is not a regular file"
             : stats.nlink > 1
@@ -480,64 +506,69 @@ async function removeAdminDirNoFollow(e, n, o, r) {
         );
         continue;
       }
-      let upToBytes = await readUpToBytes(g, WORKTREE_READ_LIMITS_2);
-      let m = upToBytes === null ? null : parseGitdirLine(upToBytes, h);
-      if (upToBytes === null) noteUnchecked(l, "a gitdir file that is larger than git writes");
-      else if (m === null && !isOnlyLineEndings(upToBytes))
-        noteUnchecked(l, "a gitdir file whose path could not be checked safely");
-      if (m === null || !isContainedInGitdirs(m, worktreePaths)) continue;
-      let f = await open(join(h, "locked"), constants.O_RDONLY | u).catch((error) =>
-        isENOENT(error) ? null : undefined,
+      let upToBytes = await readUpToBytes(gitdirHandle, WORKTREE_READ_LIMITS_2);
+      let gitdirLine = upToBytes === null ? null : parseGitdirLine(upToBytes, entryDir);
+      if (upToBytes === null) noteUnchecked(progress, "a gitdir file that is larger than git writes");
+      else if (gitdirLine === null && !isOnlyLineEndings(upToBytes))
+        noteUnchecked(progress, "a gitdir file whose path could not be checked safely");
+      if (gitdirLine === null || !isContainedInGitdirs(gitdirLine, worktreePaths)) continue;
+      let lockedHandle = await open(join(entryDir, "locked"), constants.O_RDONLY | openFlags).catch(
+        (error) => (isENOENT(error) ? null : undefined),
       );
-      if (f !== null) {
-        let p = await f?.stat().catch(() => null);
-        let E =
-          f !== undefined && p?.isFile() === true
-            ? await readUpToBytes(f, WORKTREE_READ_LIMITS).catch(() => null)
+      if (lockedHandle !== null) {
+        let lockedStats = await lockedHandle?.stat().catch(() => null);
+        let lockedText =
+          lockedHandle !== undefined && lockedStats?.isFile() === true
+            ? await readUpToBytes(lockedHandle, WORKTREE_READ_LIMITS).catch(() => null)
             : null;
-        await f?.close().catch(() => {});
+        await lockedHandle?.close().catch(() => {});
         if (
-          E === null ||
-          o.locked === "keep" ||
-          (o.locked !== "drop" && !o.locked.unlockIf(E.replace(/[\r\n]+$/, "")))
+          lockedText === null ||
+          lockOptions.locked === "keep" ||
+          (lockOptions.locked !== "drop" && !lockOptions.locked.unlockIf(lockedText.replace(/[\r\n]+$/, "")))
         )
-          return keepRegistration(e, `worktrees/${w} is locked`);
+          return keepRegistration(repoRoot, `worktrees/${entryName} is locked`);
       }
-      if (!(await verifyAdminEntry(m, n, worktreePaths)))
+      if (!(await verifyAdminEntry(gitdirLine, options, worktreePaths)))
         return keepRegistration(
-          e,
-          `could not confirm the worktree is gone: ${m} exists, or a link or unreadable folder is on the way to it`,
+          repoRoot,
+          `could not confirm the worktree is gone: ${gitdirLine} exists, or a link or unreadable folder is on the way to it`,
         );
       if (
-        await looksLikeGitDir(async (p) => {
-          let E = await open(join(h, p), constants.O_RDONLY | u).catch((error) => {
-            if (isENOENT(error)) return null;
-            throw error;
-          });
-          if (E === null) return null;
+        await looksLikeGitDir(async (entryName) => {
+          let entryHandle = await open(join(entryDir, entryName), constants.O_RDONLY | openFlags).catch(
+            (error) => {
+              if (isENOENT(error)) return null;
+              throw error;
+            },
+          );
+          if (entryHandle === null) return null;
           try {
-            return await E.stat();
+            return await entryHandle.stat();
           } finally {
-            await E.close().catch(() => {});
+            await entryHandle.close().catch(() => {});
           }
         })
       )
-        return keepRegistration(e, `${adminDirHasGitFilesMessage(w)}, so nothing in it was changed`);
-      await worktreeHookState.beforeMutation?.(w);
-      await g.truncate(0);
+        return keepRegistration(
+          repoRoot,
+          `${adminDirHasGitFilesMessage(entryName)}, so nothing in it was changed`,
+        );
+      await worktreeHookState.beforeMutation?.(entryName);
+      await gitdirHandle.truncate(0);
       return {
         outcome: "dropped",
-        entryId: w,
+        entryId: entryName,
         adminRemoved: false,
       };
     } catch (error) {
-      return keepRegistration(e, errorMessage(error));
+      return keepRegistration(repoRoot, errorMessage(error));
     } finally {
-      await g.close().catch(() => {});
+      await gitdirHandle.close().catch(() => {});
     }
   }
-  let c = summarizeUncheckedRegistrations(e, worktreePaths, l);
-  return "unmatched" in c ? keepRegistration(e, c.unmatched) : c;
+  let summary = summarizeUncheckedRegistrations(repoRoot, worktreePaths, progress);
+  return "unmatched" in summary ? keepRegistration(repoRoot, summary.unmatched) : summary;
 }
 //@ chunk-2xm1rxms.js:24800-24826 placement
 /**
@@ -549,12 +580,12 @@ var nativeFsHelpersPromise = null;
 //@ chunk-2xm1rxms.js:24826-25013 placement
 function loadNativeFsHelpers() {
   return (nativeFsHelpersPromise ??= Promise.all([
-    import("./chunk-ejkghqj9.js"),
-    import("./chunk-78kn47sp.js"),
+    import("../fsAnchor/treeAnchor.js"),
+    import("../fsAnchor/deviceTreeHost.js"),
   ])
-    .then(([e, n]) => ({
-      tree: e,
-      host: n.createDeviceTreeHost(),
+    .then(([moduleNamespace, hostModule]) => ({
+      tree: moduleNamespace,
+      host: hostModule.createDeviceTreeHost(),
     }))
     .catch((error) => {
       nativeFsHelpersPromise = null;

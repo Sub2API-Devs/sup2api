@@ -8,69 +8,79 @@
  * pieces: chunk-81qqq1aq.js (7)
  * attribution: placement 7
  */
-import { init_react_production, y, R, P } from "../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useEffect,
+} from "../../vendor/react/cjs/react.production.js";
 import { clipboardImageHintNoticeSpec } from "./useClipboardImageHint.js";
 import { useNotifications } from "../context/notifications.js";
 import { useClock } from "../ink/components/ClockContext.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-81qqq1aq.js:1467-1471 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-81qqq1aq.js:1467", () => {
+  init_react_production();
+});
 //@ chunk-81qqq1aq.js:1471-2038 placement
 /**
  * 依次运行一组 effect 槽（依赖变化时重跑）。
  */
-function useEffectSlots(t, h) {
-  let [i] = y(() =>
-    t.map((d) => {
-      let m = d.setup();
+function useEffectSlots(specs, props) {
+  let [slots] = useState(() =>
+    specs.map((spec) => {
+      let setupResult = spec.setup();
       return {
-        effect: typeof m === "function" ? m : m.effect,
-        dispose: typeof m === "function" ? undefined : m.dispose,
+        effect: typeof setupResult === "function" ? setupResult : setupResult.effect,
+        dispose: typeof setupResult === "function" ? undefined : setupResult.dispose,
         deps: null,
         cleanup: undefined,
       };
     }),
   );
-  let p = R(h);
-  P(() => {
-    p.current = h;
-    let d = () => p.current;
-    let m = [];
-    t.forEach((c, o) => {
-      let g = i[o];
-      if (!g) return;
-      let u = c.deps ? c.deps(h) : [];
-      if (g.deps !== null && shallowArrayEqual(g.deps, u)) return;
-      m.push({
-        slot: g,
-        deps: u,
+  let propsRef = useRef(props);
+  useEffect(() => {
+    propsRef.current = props;
+    let getProps = () => propsRef.current;
+    let dirtySlots = [];
+    specs.forEach((spec, index) => {
+      let slot = slots[index];
+      if (!slot) return;
+      let deps = spec.deps ? spec.deps(props) : [];
+      if (slot.deps !== null && shallowArrayEqual(slot.deps, deps)) return;
+      dirtySlots.push({
+        slot,
+        deps,
       });
     });
-    for (let { slot } of m) {
+    for (let { slot } of dirtySlots) {
       slot.cleanup?.();
       slot.cleanup = undefined;
     }
-    for (let { slot, deps } of m) {
+    for (let { slot, deps } of dirtySlots) {
       slot.deps = deps;
-      slot.cleanup = slot.effect(h, d);
+      slot.cleanup = slot.effect(props, getProps);
     }
   });
-  P(
+  useEffect(
     () => () => {
-      for (let d of i) {
-        d.cleanup?.();
-        d.cleanup = undefined;
-        d.deps = null;
-        d.dispose?.();
+      for (let slot of slots) {
+        slot.cleanup?.();
+        slot.cleanup = undefined;
+        slot.deps = null;
+        slot.dispose?.();
       }
     },
-    [i],
+    [slots],
   );
 }
 //@ chunk-81qqq1aq.js:2038-2157 placement
-function shallowArrayEqual(deps, h) {
-  if (deps.length !== h.length) return false;
-  for (let i = 0; i < deps.length; i++) if (!Object.is(deps[i], h[i])) return false;
+function shallowArrayEqual(deps, previousDeps) {
+  if (deps.length !== previousDeps.length) return false;
+  for (let index = 0; index < deps.length; index++)
+    if (!Object.is(deps[index], previousDeps[index])) return false;
   return true;
 }
 //@ chunk-81qqq1aq.js:2157-2169 placement
@@ -90,7 +100,13 @@ function useTextInputEffects({ isTerminalFocused, canPasteImages }) {
   });
 }
 //@ chunk-81qqq1aq.js:2330-2334 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-81qqq1aq.js:2330", () => {
+  init_react_production();
+});
 //@ chunk-81qqq1aq.js:2334-2338 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-81qqq1aq.js:2334", () => {
+  init_react_production();
+});
 export { useEffectSlots, useTextInputEffects };

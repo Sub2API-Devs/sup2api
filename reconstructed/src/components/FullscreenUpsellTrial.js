@@ -8,7 +8,7 @@
  * pieces: chunk-47mye09a.js (7)
  * attribution: placement 7
  */
-import { init_react_production, P } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { useAppStoreDirect } from "../state/AppState.js";
 import { useCommandQueueOrDefault } from "../context/QueuedMessageContext.js";
 import { saveGlobalConfig, getGlobalConfig } from "../utils/config.js";
@@ -23,9 +23,13 @@ import { logForDebugging } from "../utils/debug.js";
 import { logError } from "../utils/log.js";
 import { logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { logEvent } from "../services/analytics/index.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-47mye09a.js:1004-1008 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-47mye09a.js:1004", () => {
+  init_react_production();
+});
 //@ chunk-47mye09a.js:1008-1063 placement
 /**
  * 函数 noopTrialEffect（空 effect）。
@@ -33,7 +37,7 @@ init_react_production();
 function noopTrialEffect() {
   let appStoreDirect = useAppStoreDirect();
   let commandQueueOrDefault = useCommandQueueOrDefault();
-  P(() => {
+  useEffect(() => {
     return;
   }, [appStoreDirect, commandQueueOrDefault]);
 }
@@ -45,16 +49,16 @@ var TRIAL_ENV = {
   CLAUDE_CODE_TUI_TRIAL: "fullscreen",
 };
 //@ chunk-47mye09a.js:1108-1208 placement
-function recordUpsellSeenCount(e, r) {
+function recordUpsellSeenCount(count, storageV5) {
   saveGlobalConfig(
-    (n) =>
-      (n.fullscreenUpsellSeenCount ?? 0) >= e
-        ? n
+    (config) =>
+      (config.fullscreenUpsellSeenCount ?? 0) >= count
+        ? config
         : {
-            ...n,
-            fullscreenUpsellSeenCount: e,
+            ...config,
+            fullscreenUpsellSeenCount: count,
           },
-    r,
+    storageV5,
   );
 }
 //@ chunk-47mye09a.js:1208-1233 placement
@@ -69,10 +73,10 @@ function setTrialFlag(storageV5) {
  * 取本会话的全屏推荐展示序号（全局计数加一，受上限），首次计算时写回全局配置。
  */
 function getFullscreenUpsellImpression(storageV5) {
-  let r = currentFullscreenTrialState();
-  if (r.upsellImpression !== undefined) return r.upsellImpression;
+  let trialState = currentFullscreenTrialState();
+  if (trialState.upsellImpression !== undefined) return trialState.upsellImpression;
   let min = Math.min((getGlobalConfig().fullscreenUpsellSeenCount ?? 0) + 1, MAX_FULLSCREEN_UPSELL_SHOWS);
-  r.upsellImpression = min;
+  trialState.upsellImpression = min;
   recordUpsellSeenCount(min, storageV5);
   return min;
 }
@@ -98,8 +102,8 @@ async function persistFullscreenTrial(storageV5) {
   let tuiAlreadySet = false;
   let { error } = await updateSettingsForSourceWithTransform(
     "userSettings",
-    (i) => {
-      tuiAlreadySet = i?.tui !== undefined;
+    (previous) => {
+      tuiAlreadySet = previous?.tui !== undefined;
       return tuiAlreadySet
         ? null
         : {

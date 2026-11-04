@@ -15,27 +15,27 @@ import { createValueSlot } from "../utils/valueSlot.js";
 /**
  * 按宿主保存技能变更监视状态的容器；清理时关闭正在进行的监视。
  */
-var skillWatchStateByHost = identity_2(createValueSlot(), (e) => {
-  let n = e.get();
-  if (n?.stage === "watching") n.watch.dispose().catch(() => {});
-  e.set(undefined);
+var skillWatchStateByHost = identity_2(createValueSlot(), (slot) => {
+  let state = slot.get();
+  if (state?.stage === "watching") state.watch.dispose().catch(() => {});
+  slot.set(undefined);
 });
 //@ chunk-e6aww6q8.js:1663312-1663348 placement
 /**
  * 按 host 保存的技能监视状态（重置时置空）。
  */
-var skillWatchStateSlot = identity_2(createValueSlot(), (e) => e.set(undefined));
+var skillWatchStateSlot = identity_2(createValueSlot(), (slot) => slot.set(undefined));
 //@ chunk-e6aww6q8.js:1663348-1663398 placement
 /**
  * 技能监视状态的重置插槽（先清理当前值再置空）。
  */
-var skillWatchStateResetSlot = identity_2(createValueSlot(), (e) => {
-  e.get()?.();
-  e.set(undefined);
+var skillWatchStateResetSlot = identity_2(createValueSlot(), (slot) => {
+  slot.get()?.();
+  slot.set(undefined);
 });
 //@ chunk-e6aww6q8.js:1663398-1663434 placement
 /**
  * 技能监视状态的清空插槽。
  */
-var skillWatchStateClearSlot = identity_2(createValueSlot(), (e) => e.set(undefined));
+var skillWatchStateClearSlot = identity_2(createValueSlot(), (slot) => slot.set(undefined));
 export { skillWatchStateByHost, skillWatchStateSlot, skillWatchStateResetSlot, skillWatchStateClearSlot };

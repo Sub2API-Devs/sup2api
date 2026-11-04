@@ -13,6 +13,7 @@ import { getRootSession, getSessionId } from "../../bootstrap/state.js";
 import { env } from "../env.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:71810-71839 placement
 var TENGU_THISTLE_GREBE = "tengu_thistle_grebe";
@@ -32,7 +33,10 @@ class SteerSourceRegistry {
   }
 }
 //@ chunk-aepeg2w5.js:72011-72025 placement
-var steerSourceRegistry = new SteerSourceRegistry();
+var steerSourceRegistry; // deferred: uses SteerSourceRegistry of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:72011", () => {
+  steerSourceRegistry = new SteerSourceRegistry();
+});
 //@ chunk-aepeg2w5.js:72025-72374 placement
 /**
  * 子代理调度引导状态（模型下限、提示模型、锁存值）。
@@ -59,7 +63,10 @@ class SubagentSteerState {
   }
 }
 //@ chunk-aepeg2w5.js:72374-72400 placement
-var subagentSteerSlot = new SessionRootSlot(() => new SubagentSteerState());
+var subagentSteerSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:72374", () => {
+  subagentSteerSlot = new SessionRootSlot(() => new SubagentSteerState());
+});
 //@ chunk-aepeg2w5.js:72400-72432 placement
 function currentSubagentSteer() {
   return subagentSteerSlot.of(getRootSession());
@@ -68,8 +75,8 @@ function currentSubagentSteer() {
 /**
  * 为子代理引导登记客户端数据读取器。
  */
-function registerSteerClientData(e) {
-  return steerSourceRegistry.registerClientData(e);
+function registerSteerClientData(fn) {
+  return steerSourceRegistry.registerClientData(fn);
 }
 //@ chunk-aepeg2w5.js:72479-72523 placement
 /**
@@ -82,52 +89,52 @@ function registerSteerFeature(getFeatureValue_CACHED_MAY_BE_STALE) {
 /**
  * 登记子代理引导的模型下限。
  */
-function registerSteerModelFloor(e) {
-  return currentSubagentSteer().registerModelFloor(e);
+function registerSteerModelFloor(fn) {
+  return currentSubagentSteer().registerModelFloor(fn);
 }
 //@ chunk-aepeg2w5.js:72573-72615 placement
 /**
  * 记录子代理引导时的提示模型。
  */
-function recordSteerPromptModel(e) {
-  currentSubagentSteer().recordPromptModel(e);
+function recordSteerPromptModel(model) {
+  currentSubagentSteer().recordPromptModel(model);
 }
 //@ chunk-aepeg2w5.js:72615-72698 placement
-function normalizeSteerMode(e) {
-  return e === "default" || e === "no_nudges" || e === "counter_steer" ? e : undefined;
+function normalizeSteerMode(mode) {
+  return mode === "default" || mode === "no_nudges" || mode === "counter_steer" ? mode : undefined;
 }
 //@ chunk-aepeg2w5.js:72698-73092 placement
 /**
  * 读取子代理引导设置（环境变量 CLAUDE_CODE_THISTLE_GREBE、客户端数据、tengu_thistle_grebe）。
  */
-function readSubagentSteer(e) {
-  let n = normalizeSteerMode(env.CLAUDE_CODE_THISTLE_GREBE);
-  if (n)
+function readSubagentSteer(state) {
+  let envMode = normalizeSteerMode(env.CLAUDE_CODE_THISTLE_GREBE);
+  if (envMode)
     return {
-      steer: n,
+      steer: envMode,
       source: "env",
     };
-  let r;
+  let clientMode;
   try {
-    r = normalizeSteerMode(steerSourceRegistry.clientData?.()?.[TENGU_THISTLE_GREBE]);
+    clientMode = normalizeSteerMode(steerSourceRegistry.clientData?.()?.[TENGU_THISTLE_GREBE]);
   } catch {}
-  if (r)
+  if (clientMode)
     return {
-      steer: r,
+      steer: clientMode,
       source: "clientData",
     };
-  let s = normalizeSteerMode(steerSourceRegistry.feature?.(TENGU_THISTLE_GREBE, null));
-  if (s)
+  let featureMode = normalizeSteerMode(steerSourceRegistry.feature?.(TENGU_THISTLE_GREBE, null));
+  if (featureMode)
     return {
-      steer: s,
+      steer: featureMode,
       source: "growthbook",
     };
-  let { promptModel } = e;
+  let { promptModel } = state;
   if (promptModel !== undefined) {
-    let y = normalizeSteerMode(e.modelSteerFloor?.(promptModel));
-    if (y)
+    let floorMode = normalizeSteerMode(state.modelSteerFloor?.(promptModel));
+    if (floorMode)
       return {
-        steer: y,
+        steer: floorMode,
         source: "model",
       };
   }
@@ -141,10 +148,10 @@ function readSubagentSteer(e) {
  * 取锁存的子代理引导值并上报一次。
  */
 function getSubagentSteer() {
-  let e = currentSubagentSteer();
-  if (e.latched !== undefined) return e.latched;
-  let { steer, source } = readSubagentSteer(e);
-  e.latch(steer);
+  let state = currentSubagentSteer();
+  if (state.latched !== undefined) return state.latched;
+  let { steer, source } = readSubagentSteer(state);
+  state.latch(steer);
   if (steer !== "default")
     logEvent("tengu_subagent_steer_applied", {
       steer: fromEnum(steer),
@@ -157,10 +164,10 @@ function getSubagentSteer() {
  * 每个会话上报一次宿主成本引导已应用（tengu_witty_dewdrop_applied）。
  */
 function logHostCostSteerApplied() {
-  let e = currentSubagentSteer();
+  let state = currentSubagentSteer();
   let sessionId = getSessionId();
-  if (e.hostCostSteerLoggedFor !== sessionId) {
-    e.hostCostSteerLoggedFor = sessionId;
+  if (state.hostCostSteerLoggedFor !== sessionId) {
+    state.hostCostSteerLoggedFor = sessionId;
     logEvent("tengu_witty_dewdrop_applied", {});
   }
 }

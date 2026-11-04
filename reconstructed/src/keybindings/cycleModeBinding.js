@@ -20,12 +20,12 @@ function noop() {
 /**
  * 带参数的空实现桩。
  */
-function noopWithArgs(e, i) {}
+function noopWithArgs(action, context) {}
 //@ chunk-krdjvqaq.js:232-271 placement
 /**
  * 返回模式切换快捷键的动作名 chat:cycleMode。
  */
-function cycleModeBindingName(e) {
+function cycleModeBindingName(options) {
   return "chat:cycleMode";
 }
 export { noop, cycleModeBindingName, noopWithArgs };

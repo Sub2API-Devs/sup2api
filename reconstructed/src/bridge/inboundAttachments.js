@@ -11,6 +11,14 @@
 import { extname, join, basename, dirname } from "path";
 import { lstat, lutimes, utimes, readdir, rmdir, link, unlink, rm, realpath } from "fs/promises";
 import { randomUUID } from "crypto";
+import { DoctorLazy } from "../cli/handlers/util.js";
+import {
+  objectSchema,
+  stringSchema,
+  booleanSchema,
+  numberSchema,
+} from "../../vendor/zod/v4/classic/schemas.js";
+import { cleanupOldFilesInDirectory } from "../utils/cleanup.js";
 import { isImageOrPdfExtension, IMAGE_EXTENSIONS } from "../tools/FileReadTool/constants.js";
 import { hasBinaryExtension } from "../constants/files.js";
 import { isNotebookPath } from "../utils/path.js";
@@ -47,7 +55,7 @@ import { count } from "../utils/collections.js";
 import { createOwnedSubdir, ensureAttachmentsDir } from "../utils/safeMkdir.js";
 import { retryFsOp, writeIfMissing, retryTransient, writeFileAtomic } from "../utils/atomicPublishWrite.js";
 import { isRemoteManagedEnvironment } from "../utils/remoteEnvironment.js";
-import { IMAGE_LIMITS, MODEL_COPY_IMAGE_BYTES, MAX_IMAGE_SIDE_PX } from "../utils/truncateGraphemes.js";
+import { IMAGE_LIMITS, MODEL_COPY_IMAGE_BYTES, MAX_IMAGE_SIDE_PX } from "../utils/mediaLimits.js";
 import {
   getFeatureValue_CACHED_MAY_BE_STALE,
   getFeatureValueWithSource_CACHED_MAY_BE_STALE,
@@ -85,7 +93,7 @@ import {
   getClaudeAIOAuthTokensAsync,
   readFreshOAuthAccessToken,
 } from "../utils/auth.js";
-import { Ph } from "../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
+import { sniffImageMediaType } from "../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { convertImagesToBlocks } from "../components/permissions/AskUserQuestionPermissionRequest/AskUserQuestionPermissionRequest.js";
 import { isValidKeySegment, STORAGE_SPACES } from "../utils/storage/storageSpaces.js";
 import { storageErrorCode, formatStorageError } from "../utils/storage/storageErrors.js";
@@ -98,66 +106,110 @@ import { isTaggedPeerText } from "../utils/crossSessionMessages.js";
 import { normalizeUuidOrNull } from "../utils/agentId.js";
 import { fullJitterBackoffMs, sleep } from "../utils/sleep.js";
 import { getProxyFetchOptions } from "../utils/proxy.js";
-import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, string, M, E } from "../../vendor/zod/v4/classic/schemas.js";
-import { cleanupOldFilesInDirectory } from "../utils/cleanup.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-cxyewwc3.js:267-413 sole-consumer
+var fileAttachmentSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_FILE_ATTACHMENTS;
+deferInit("chunk-cxyewwc3.js:267", () => {
+  fileAttachmentSchema = DoctorLazy(() =>
+    objectSchema({
+      file_uuid: stringSchema(),
+      file_name: stringSchema(),
+      is_image: booleanSchema().nullish(),
+      sha256: stringSchema().nullish().catch(null),
+      file_size: numberSchema().nullish().catch(undefined),
+    }),
+  );
+  MAX_FILE_ATTACHMENTS = 256;
+});
+//@ chunk-cxyewwc3.js:413-648 fingerprint = extractInboundAttachments (1)
+/**
+ * 从入站帧的 file_attachments 字段取出并校验附件列表（截断到上限）。
+ */
+function extractInboundAttachments(msg) {
+  if (typeof msg !== "object" || msg === null || !("file_attachments" in msg)) return [];
+  let fileAttachments = msg.file_attachments;
+  if (!Array.isArray(fileAttachments)) return [];
+  let schema = fileAttachmentSchema();
+  return fileAttachments.slice(0, MAX_FILE_ATTACHMENTS).flatMap((fileAttachment) => {
+    let parsed = schema.safeParse(fileAttachment);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
+//@ chunk-cxyewwc3.js:648-693 placement
+var inboundAttachmentQuerySchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-cxyewwc3.js:648", () => {
+  inboundAttachmentQuerySchema = DoctorLazy(() =>
+    objectSchema({
+      shouldQuery: booleanSchema().optional(),
+    }),
+  );
+});
+//@ chunk-cxyewwc3.js:693-751 placement
+function shouldQueryInboundAttachment(input) {
+  return inboundAttachmentQuerySchema().safeParse(input).data?.shouldQuery;
+}
+//@ chunk-23fm9f0d.js:23001-23035 fingerprint = uploadsDir (1)
+function uploadsDir() {
+  return cleanupOldFilesInDirectory("uploads");
+}
 //@ chunk-n4bsg1hp.js:2043-2126 placement
 /**
  * 判断附件文件是否可被查询读取：有扩展名、不是二进制/notebook、不是特例扩展。
  */
-function isQueryableAttachmentFile(e) {
+function isQueryableAttachmentFile(filePath) {
   return (
-    extname(e).toLowerCase().slice(1) !== "" &&
-    !isImageOrPdfExtension(e) &&
-    !hasBinaryExtension(e) &&
-    !isNotebookPath(e)
+    extname(filePath).toLowerCase().slice(1) !== "" &&
+    !isImageOrPdfExtension(filePath) &&
+    !hasBinaryExtension(filePath) &&
+    !isNotebookPath(filePath)
   );
 }
 //@ chunk-n4bsg1hp.js:2126-2174 placement
 /**
  * 用空目录 + 净化后的原始文件名生成入站附件的内部名字。
  */
-function sanitizedAttachmentInnerName(e) {
-  return hashPrefixedFileName("", sanitizePeerFileName(e.file_name));
+function sanitizedAttachmentInnerName(attachment) {
+  return hashPrefixedFileName("", sanitizePeerFileName(attachment.file_name));
 }
 //@ chunk-n4bsg1hp.js:2174-2632 placement
 function describeAttachmentFailures(attachments) {
-  let i = 0;
-  let o = 0;
-  let n = 0;
-  let r = 0;
-  let a = 0;
-  let d = 0;
-  for (let u of attachments) {
-    if (u.is_image === true) continue;
-    let _ = sanitizedAttachmentInnerName(u);
-    let h = u.sha256 === undefined;
-    if (IMAGE_EXTENSIONS.has(extname(_).toLowerCase().slice(1))) i++;
-    else if (isImageOrPdfExtension(_)) {
-      o++;
-      if (h) d++;
-    } else if (hasBinaryExtension(_)) {
-      n++;
-      if (h) {
-        a++;
-        d++;
+  let imageExtCount = 0;
+  let pdfCount = 0;
+  let binaryExtCount = 0;
+  let textLikeCount = 0;
+  let binaryNoShaCount = 0;
+  let binaryOrPdfNoShaCount = 0;
+  for (let attachment of attachments) {
+    if (attachment.is_image === true) continue;
+    let innerName = sanitizedAttachmentInnerName(attachment);
+    let noSha = attachment.sha256 === undefined;
+    if (IMAGE_EXTENSIONS.has(extname(innerName).toLowerCase().slice(1))) imageExtCount++;
+    else if (isImageOrPdfExtension(innerName)) {
+      pdfCount++;
+      if (noSha) binaryOrPdfNoShaCount++;
+    } else if (hasBinaryExtension(innerName)) {
+      binaryExtCount++;
+      if (noSha) {
+        binaryNoShaCount++;
+        binaryOrPdfNoShaCount++;
       }
-    } else r++;
+    } else textLikeCount++;
   }
-  let s = attachments.length > 0;
+  let hasAny = attachments.length > 0;
   return {
-    binary_ext_file_count: n,
-    pdf_file_count: o,
-    text_like_file_count: r,
-    image_ext_file_count: i,
-    all_files_binary_ext_no_sha256: s && a === attachments.length ? 1 : 0,
-    all_files_binary_ext_or_pdf_no_sha256: s && d === attachments.length ? 1 : 0,
+    binary_ext_file_count: binaryExtCount,
+    pdf_file_count: pdfCount,
+    text_like_file_count: textLikeCount,
+    image_ext_file_count: imageExtCount,
+    all_files_binary_ext_no_sha256: hasAny && binaryNoShaCount === attachments.length ? 1 : 0,
+    all_files_binary_ext_or_pdf_no_sha256: hasAny && binaryOrPdfNoShaCount === attachments.length ? 1 : 0,
   };
 }
 //@ chunk-n4bsg1hp.js:2632-2684 placement
-function hasFetchUpload(e) {
-  return e !== undefined && "fetchUpload" in e;
+function hasFetchUpload(options) {
+  return options !== undefined && "fetchUpload" in options;
 }
 //@ chunk-n4bsg1hp.js:2684-2792 placement
 var DOWNLOAD_QUIET_LIMIT_MS = 30000;
@@ -244,13 +296,13 @@ function debug(msg) {
  */
 async function compareExistingFile(path, content, verifyHash = false) {
   try {
-    let n = await lstat(path);
-    if (n.isDirectory()) return "directory";
-    if (!n.isFile()) return "other";
+    let stat = await lstat(path);
+    if (stat.isDirectory()) return "directory";
+    if (!stat.isFile()) return "other";
     if (!Buffer.isBuffer(content)) {
-      if (n.size !== content.size) return "changed";
+      if (stat.size !== content.size) return "changed";
       if (!verifyHash) return "same";
-    } else if (n.size !== content.length) return "changed";
+    } else if (stat.size !== content.length) return "changed";
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR") return "absent";
@@ -269,28 +321,28 @@ var MAX_KEPT_FOLDERS = 64;
  * 发布文件到 uploads：路径被占且内容不同则把原文件移到 .kept-<时间>-<id> 目录再重试（最多 3 次、kept 目录上限 64），相同则只更新 mtime。
  */
 async function publishWithMoveAside(attemptPublish, uploadsDir, fileName, content, totals, keptFolders) {
-  let d = join(uploadsDir, fileName);
-  let s;
-  let u = 0;
-  let _ = "; an entry moved from this path earlier is in a .kept- folder beside it";
+  let targetPath = join(uploadsDir, fileName);
+  let movedAside;
+  let movedCount = 0;
+  let movedHint = "; an entry moved from this path earlier is in a .kept- folder beside it";
   try {
     for (let j = 1; ; j++) {
-      let p;
+      let outcome;
       try {
-        p = await attemptPublish();
+        outcome = await attemptPublish();
       } catch (error) {
-        await restoreMovedAside(s, uploadsDir, fileName, totals, keptFolders);
+        await restoreMovedAside(movedAside, uploadsDir, fileName, totals, keptFolders);
         throw error;
       }
-      if (p === "published") return p;
-      if (p === "failed") {
-        await restoreMovedAside(s, uploadsDir, fileName, totals, keptFolders);
-        return p;
+      if (outcome === "published") return outcome;
+      if (outcome === "failed") {
+        await restoreMovedAside(movedAside, uploadsDir, fileName, totals, keptFolders);
+        return outcome;
       }
-      let M = p === "taken" ? await compareExistingFile(d, content, true) : p;
-      if (M === "same") {
+      let compare = outcome === "taken" ? await compareExistingFile(targetPath, content, true) : outcome;
+      if (compare === "same") {
         let date = new Date();
-        await lutimes(d, date, date).catch((error) =>
+        await lutimes(targetPath, date, date).catch((error) =>
           debug(`could not update the modification time of ${fileName}: ${error}`),
         );
         await utimes(uploadsDir, date, date).catch((error) =>
@@ -298,59 +350,64 @@ async function publishWithMoveAside(attemptPublish, uploadsDir, fileName, conten
         );
         return "same";
       }
-      if (M === "directory")
+      if (compare === "directory")
         return {
           code: lit("EISDIR"),
-          why: `not saved: a folder is at this path, and it was left there${u === 0 ? "" : _}`,
+          why: `not saved: a folder is at this path, and it was left there${movedCount === 0 ? "" : movedHint}`,
         };
-      if (M === "unknown") {
-        u -= (await restoreMovedAside(s, uploadsDir, fileName, totals, keptFolders)) ? 1 : 0;
+      if (compare === "unknown") {
+        movedCount -= (await restoreMovedAside(movedAside, uploadsDir, fileName, totals, keptFolders))
+          ? 1
+          : 0;
         return {
           code: lit("look_failed"),
-          why: `not saved: what is at this path could not be looked at, so it was left there${u === 0 ? "" : _}`,
+          why: `not saved: what is at this path could not be looked at, so it was left there${movedCount === 0 ? "" : movedHint}`,
         };
       }
       if (j === MAX_PUBLISH_TRIES) {
-        u -= (await restoreMovedAside(s, uploadsDir, fileName, totals, keptFolders)) ? 1 : 0;
+        movedCount -= (await restoreMovedAside(movedAside, uploadsDir, fileName, totals, keptFolders))
+          ? 1
+          : 0;
         return {
           code: lit("EEXIST"),
-          why: `not saved: the path was taken on each of ${MAX_PUBLISH_TRIES} tries; anything there now was left there${u === 0 ? "" : _}`,
+          why: `not saved: the path was taken on each of ${MAX_PUBLISH_TRIES} tries; anything there now was left there${movedCount === 0 ? "" : movedHint}`,
         };
       }
-      if (M === "absent") continue;
-      let E = `.kept-${new Date().toISOString().replace(/[-:.]/g, "")}-${randomUUID().slice(0, 8)}`;
-      let O;
+      if (compare === "absent") continue;
+      let keptName = `.kept-${new Date().toISOString().replace(/[-:.]/g, "")}-${randomUUID().slice(0, 8)}`;
+      let created;
       try {
-        let C = await readdir(uploadsDir);
-        if (count(C, (I) => I.startsWith(".kept-")) >= MAX_KEPT_FOLDERS) {
+        let entries = await readdir(uploadsDir);
+        if (count(entries, (entry) => entry.startsWith(".kept-")) >= MAX_KEPT_FOLDERS) {
           totals.moveAsideFailedCount++;
           return {
             code: lit("kept_cap"),
-            why: `not saved: the uploads folder holds at least ${MAX_KEPT_FOLDERS} folders of kept copies (named .kept-...), so what was at this path was left there; removing old ones makes room${u === 0 ? "" : _}`,
+            why: `not saved: the uploads folder holds at least ${MAX_KEPT_FOLDERS} folders of kept copies (named .kept-...), so what was at this path was left there; removing old ones makes room${movedCount === 0 ? "" : movedHint}`,
             leavesADifferentFile: true,
           };
         }
-        O = await createOwnedSubdir(uploadsDir, E);
-        await retryFsOp(d, join(O.at, fileName));
-        await s?.held.release().catch(() => {});
-        s = {
-          held: O,
-          name: E,
+        created = await createOwnedSubdir(uploadsDir, keptName);
+        await retryFsOp(targetPath, join(created.at, fileName));
+        await movedAside?.held.release().catch(() => {});
+        movedAside = {
+          held: created,
+          name: keptName,
         };
-        O = undefined;
-        u++;
-        keptFolders.push(E);
+        created = undefined;
+        movedCount++;
+        keptFolders.push(keptName);
         totals.movedAsideFileCount++;
       } catch (error) {
-        await O?.release().catch(() => {});
-        await rmdir(join(uploadsDir, E)).catch(() => {});
-        let I = getErrnoCode(error) === "ENOENT" ? await compareExistingFile(d, content, true) : undefined;
-        if (I !== "absent" && I !== "same") {
+        await created?.release().catch(() => {});
+        await rmdir(join(uploadsDir, keptName)).catch(() => {});
+        let compare =
+          getErrnoCode(error) === "ENOENT" ? await compareExistingFile(targetPath, content, true) : undefined;
+        if (compare !== "absent" && compare !== "same") {
           totals.moveAsideFailedCount++;
           return {
             code: sanitizeErrnoForTelemetry(error) ?? lit("unknown"),
-            why: `not saved: what was at this path could not be moved into a folder of kept copies (${error}), and was left there${u === 0 ? "" : _}`,
-            ...((I === undefined || I === "changed" || I === "other") && {
+            why: `not saved: what was at this path could not be moved into a folder of kept copies (${error}), and was left there${movedCount === 0 ? "" : movedHint}`,
+            ...((compare === undefined || compare === "changed" || compare === "other") && {
               leavesADifferentFile: true,
             }),
           };
@@ -358,76 +415,78 @@ async function publishWithMoveAside(attemptPublish, uploadsDir, fileName, conten
       }
     }
   } finally {
-    await s?.held.release().catch(() => {});
+    await movedAside?.held.release().catch(() => {});
   }
 }
 //@ chunk-n4bsg1hp.js:6123-6746 layout
-async function restoreMovedAside(e, uploadsDir, fileName, totals, keptFolders) {
-  if (e === undefined) return false;
-  let a = join(uploadsDir, fileName);
-  let d = join(e.held.at, fileName);
+async function restoreMovedAside(moved, uploadsDir, fileName, totals, keptFolders) {
+  if (moved === undefined) return false;
+  let targetPath = join(uploadsDir, fileName);
+  let movedPath = join(moved.held.at, fileName);
   try {
-    let u = false;
+    let linked = false;
     try {
-      await link(d, a);
-      u = true;
+      await link(movedPath, targetPath);
+      linked = true;
     } catch (error) {
       if (getErrnoCode(error) === "EEXIST") throw error;
     }
-    if (u)
-      await unlink(d).catch((error) =>
+    if (linked)
+      await unlink(movedPath).catch((error) =>
         debug(
           `${fileName} is back at its path, but a second name for it stays in its .kept- folder: ${error}`,
         ),
       );
     else {
       if (
-        !(await lstat(a).then(
+        !(await lstat(targetPath).then(
           () => false,
           (error) => getErrnoCode(error) === "ENOENT",
         ))
       )
         throw Error("the path is taken again, or could not be checked");
-      await retryFsOp(d, a);
+      await retryFsOp(movedPath, targetPath);
     }
   } catch (error) {
     debug(`could not move ${fileName} back out of its .kept- folder, where it stays: ${error}`);
     return false;
   }
   totals.movedAsideFileCount--;
-  let index = keptFolders.indexOf(e.name);
+  let index = keptFolders.indexOf(moved.name);
   if (index !== -1) keptFolders.splice(index, 1);
-  await rmdir(join(uploadsDir, e.name)).catch(() => {});
+  await rmdir(join(uploadsDir, moved.name)).catch(() => {});
   return true;
 }
 //@ chunk-n4bsg1hp.js:6746-7132 layout
 /**
  * 用 link(2) 原子放置文件（失败时改为看名字空闲后 rename）。
  */
-async function linkIntoPlace(e, i, o, n, r, a) {
-  if (!a.renamesAfterALook)
+async function linkIntoPlace(stagedPath, targetPath, fileName, content, totals, publishState) {
+  if (!publishState.renamesAfterALook)
     try {
-      await link(e, i);
-      r.linkedFileCount++;
+      await link(stagedPath, targetPath);
+      totals.linkedFileCount++;
       return "published";
     } catch (error) {
       if (getErrnoCode(error) === "EEXIST") return "taken";
-      debug(`link(2) failed for ${o} (${error}); looking at the name, to rename into it only if it is free`);
-      a.renamesAfterALook = true;
+      debug(
+        `link(2) failed for ${fileName} (${error}); looking at the name, to rename into it only if it is free`,
+      );
+      publishState.renamesAfterALook = true;
     }
-  let d = await compareExistingFile(i, n, true);
-  if (d !== "absent") return d;
-  await retryFsOp(e, i);
-  r.renamedAfterLinkRefusedCount++;
+  let compare = await compareExistingFile(targetPath, content, true);
+  if (compare !== "absent") return compare;
+  await retryFsOp(stagedPath, targetPath);
+  totals.renamedAfterLinkRefusedCount++;
   return "published";
 }
 //@ chunk-n4bsg1hp.js:7132-7385 layout
-async function countWouldMoveAside(e, i, o) {
+async function countWouldMoveAside(targetPath, content, totals) {
   let startTime = performance.now();
-  let r = await compareExistingFile(e, i, true);
-  o.slowestWouldMoveLookMs = Math.max(o.slowestWouldMoveLookMs, performance.now() - startTime);
-  if (r === "changed" || r === "other") o.wouldMoveAsideFileCount++;
-  else if (r === "same") o.wouldLeaveSameFileCount++;
+  let compare = await compareExistingFile(targetPath, content, true);
+  totals.slowestWouldMoveLookMs = Math.max(totals.slowestWouldMoveLookMs, performance.now() - startTime);
+  if (compare === "changed" || compare === "other") totals.wouldMoveAsideFileCount++;
+  else if (compare === "same") totals.wouldLeaveSameFileCount++;
 }
 //@ chunk-n4bsg1hp.js:7385-7430 layout
 function canSpillToUploads() {
@@ -436,39 +495,43 @@ function canSpillToUploads() {
 //@ chunk-n4bsg1hp.js:7430-7509 layout
 var UUID_V7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 //@ chunk-n4bsg1hp.js:7509-7611 layout
-function recordSavedName(e, i, o) {
-  e.idsBySavedName.set(i, [...(e.idsBySavedName.get(i) ?? []), o.file_uuid.toLowerCase()]);
+function recordSavedName(totals, savedName, attachment) {
+  totals.idsBySavedName.set(savedName, [
+    ...(totals.idsBySavedName.get(savedName) ?? []),
+    attachment.file_uuid.toLowerCase(),
+  ]);
 }
 //@ chunk-n4bsg1hp.js:7611-7749 fingerprint = attachmentSchema (0.694)
 /**
  * 附件保存文件名：file_uuid 前缀（或稳定形式）+ 清洗后的原文件名。
  */
-function savedFileNameFor(e, i) {
+function savedFileNameFor(attachment, namedByIdHash) {
   return hashPrefixedFileName(
-    i
-      ? shortContentHash(e.file_uuid)
-      : (e.file_uuid.slice(0, 8) || randomUUID().slice(0, 8)).replace(/[^a-zA-Z0-9_-]/g, "_"),
-    sanitizePeerFileName(e.file_name),
+    namedByIdHash
+      ? shortContentHash(attachment.file_uuid)
+      : (attachment.file_uuid.slice(0, 8) || randomUUID().slice(0, 8)).replace(/[^a-zA-Z0-9_-]/g, "_"),
+    sanitizePeerFileName(attachment.file_name),
   );
 }
 //@ chunk-n4bsg1hp.js:7749-7905 placement
-function isRetryableDownloadFailure(e) {
-  let httpStatus = e.httpStatus ?? 0;
+function isRetryableDownloadFailure(result) {
+  let httpStatus = result.httpStatus ?? 0;
   return (
-    e.failure === "stalled" ||
-    (e.failure === "error" && e.final !== true) ||
-    (e.failure === "http_status" && (httpStatus >= 500 || httpStatus === 408 || httpStatus === 429))
+    result.failure === "stalled" ||
+    (result.failure === "error" && result.final !== true) ||
+    (result.failure === "http_status" && (httpStatus >= 500 || httpStatus === 408 || httpStatus === 429))
   );
 }
 //@ chunk-n4bsg1hp.js:7905-7985 placement
-function wantsModelCopy(e) {
+function wantsModelCopy(fileSize) {
   return (
-    e > IMAGE_LIMITS.targetRawSize ||
-    (e > MODEL_COPY_IMAGE_BYTES && getFeatureValue_CACHED_MAY_BE_STALE("tengu_lucky_widget", false) === true)
+    fileSize > IMAGE_LIMITS.targetRawSize ||
+    (fileSize > MODEL_COPY_IMAGE_BYTES &&
+      getFeatureValue_CACHED_MAY_BE_STALE("tengu_lucky_widget", false) === true)
   );
 }
 //@ chunk-n4bsg1hp.js:7985-8174 placement
-function fetchModelCopy(fileUuid, baseUrl, o, abort, totals) {
+function fetchModelCopy(fileUuid, baseUrl, token, abort, totals) {
   return resolveOne({
     fileUuid,
     baseUrl,
@@ -476,7 +539,7 @@ function fetchModelCopy(fileUuid, baseUrl, o, abort, totals) {
     forPrefetch: false,
     maxBytes: IMAGE_LIMITS.targetRawSize,
     spillTo: undefined,
-    token: () => o,
+    token: () => token,
     abort,
     quietLimitMs: PREFLIGHT_QUIET_LIMIT_MS,
     totals,
@@ -488,202 +551,233 @@ function fetchModelCopy(fileUuid, baseUrl, o, abort, totals) {
  * 下载一个入站附件：取 OAuth 令牌、图像/PDF 处理、大小上限、停滞检测、重试与写入 uploads 目录（约 11 KB）。
  */
 async function resolveInboundAttachment(
-  e,
-  i,
-  o,
+  attachment,
+  registerDigest,
+  forPrefetch,
   totals,
-  r,
-  a,
-  d,
-  s,
-  u,
-  _,
-  h = false,
-  p,
-  M = false,
-  E = "off",
+  tries,
+  credentials,
+  fetchUpload,
+  authOptions,
+  downloadContext,
+  uploadsDirOverride,
+  noTurn = false,
+  signal,
+  namedByIdHash = false,
+  moveAsideMode = "off",
 ) {
-  let O = oauthRefreshLatchStamp(signInRefreshState().recoveries);
+  let refreshStamp = oauthRefreshLatchStamp(signInRefreshState().recoveries);
   if (isBridgeFileLoginRefused()) await settleStoredLoginRefusal();
-  let C =
-    u?.accessToken ??
-    (isStorageV5Enabled() && s !== undefined ? await getBridgeAccessTokenAsync(s) : getBridgeAccessToken());
-  if (!C) {
+  let token =
+    downloadContext?.accessToken ??
+    (isStorageV5Enabled() && authOptions !== undefined
+      ? await getBridgeAccessTokenAsync(authOptions)
+      : getBridgeAccessToken());
+  if (!token) {
     debug("skip: no oauth token");
     return recordDownloadFailure(totals, "no_token", 0);
   }
-  let staleToken = C;
-  let R = o && e.is_image === true && e.sha256 === undefined;
-  let D;
+  let bearerToken = token;
+  let wantInlineImage = forPrefetch && attachment.is_image === true && attachment.sha256 === undefined;
+  let modelCopyPromise;
   let abortController = new AbortController();
-  using Q = {
+  using abortScope = {
     [Symbol.dispose]: () => abortController.abort(),
   };
   let keptFolders = [];
-  let content;
+  let fileBytes;
   let servedPageCount;
-  let j;
-  let H;
-  let Fe = false;
-  let we = 0;
-  let Oe = r;
+  let sha256;
+  let savedPath;
+  let reusedServedPageCount = false;
+  let elapsedMs = 0;
+  let remainingTries = tries;
   try {
-    let B = e.sha256 === undefined ? MAX_ATTACHMENT_BYTES : MAX_PEER_FILE_BYTES;
-    let T =
-      e.sha256 === undefined && canSpillToUploads()
-        ? join(_ ?? sessionUploadsDir(), savedFileNameFor(e, M))
+    let maxBytes = attachment.sha256 === undefined ? MAX_ATTACHMENT_BYTES : MAX_PEER_FILE_BYTES;
+    let spillPath =
+      attachment.sha256 === undefined && canSpillToUploads()
+        ? join(uploadsDirOverride ?? sessionUploadsDir(), savedFileNameFor(attachment, namedByIdHash))
         : undefined;
-    let L = e.sha256 === undefined && hasFetchUpload(d) ? d : undefined;
+    let uploadFallback =
+      attachment.sha256 === undefined && hasFetchUpload(fetchUpload) ? fetchUpload : undefined;
     if (
-      typeof e.file_size === "number" &&
-      e.file_size > (T === undefined && L === undefined ? B : MAX_PEER_SPOOL_BYTES)
+      typeof attachment.file_size === "number" &&
+      attachment.file_size >
+        (spillPath === undefined && uploadFallback === undefined ? maxBytes : MAX_PEER_SPOOL_BYTES)
     )
       return recordDownloadFailure(totals, "too_large", 0);
     if (
-      R &&
+      wantInlineImage &&
       !isImageDecodingDisabled() &&
-      typeof e.file_size === "number" &&
-      wantsModelCopy(e.file_size) &&
+      typeof attachment.file_size === "number" &&
+      wantsModelCopy(attachment.file_size) &&
       isFirstPartyProvider() &&
       !isEssentialTrafficOnly()
     )
-      D = fetchModelCopy(e.file_uuid, u?.baseUrl, C, abortController, totals);
-    let te = autoInboundFileRegistry(u);
-    let x = writtenInUploadsDir(e.file_uuid, u);
+      modelCopyPromise = fetchModelCopy(
+        attachment.file_uuid,
+        downloadContext?.baseUrl,
+        token,
+        abortController,
+        totals,
+      );
+    let fileRegistry = autoInboundFileRegistry(downloadContext);
+    let known = writtenInUploadsDir(attachment.file_uuid, downloadContext);
     if (
-      te !== undefined &&
-      x !== undefined &&
-      x.bearer === computeContentHash(C) &&
-      (x.size <= B || x.path === T) &&
-      (e.sha256 === undefined || e.sha256 === x.sha256)
+      fileRegistry !== undefined &&
+      known !== undefined &&
+      known.bearer === computeContentHash(token) &&
+      (known.size <= maxBytes || known.path === spillPath) &&
+      (attachment.sha256 === undefined || attachment.sha256 === known.sha256)
     ) {
-      let ne = x.size > B;
-      if (ne && (await sha256OfFile(x.path, x.size)) === x.sha256) {
-        recordSavedName(totals, basename(x.path), e);
+      let overLimit = known.size > maxBytes;
+      if (overLimit && (await sha256OfFile(known.path, known.size)) === known.sha256) {
+        recordSavedName(totals, basename(known.path), attachment);
         totals.reusedFileCount++;
         return {
-          path: x.path,
+          path: known.path,
         };
       }
-      let ye = ne ? null : await readPeerFileBounded(x.path, x.size);
-      if (ye !== null && computeContentHash(ye) === x.sha256) {
-        content = ye;
-        j = x.sha256;
-        H = x.path;
+      let readBack = overLimit ? null : await readPeerFileBounded(known.path, known.size);
+      if (readBack !== null && computeContentHash(readBack) === known.sha256) {
+        fileBytes = readBack;
+        sha256 = known.sha256;
+        savedPath = known.path;
         totals.reusedFileCount++;
-      } else if (te.get(foldFileUuid(e.file_uuid)) === x) te.delete(foldFileUuid(e.file_uuid));
+      } else if (fileRegistry.get(foldFileUuid(attachment.file_uuid)) === known)
+        fileRegistry.delete(foldFileUuid(attachment.file_uuid));
     }
-    if (h && T !== undefined) {
-      let ne = await lstat(T).catch(() => {
+    if (noTurn && spillPath !== undefined) {
+      let stat = await lstat(spillPath).catch(() => {
         return;
       });
-      if (ne?.isFile() && ne.size > B) {
-        recordSavedName(totals, basename(T), e);
+      if (stat?.isFile() && stat.size > maxBytes) {
+        recordSavedName(totals, basename(spillPath), attachment);
         totals.reusedFileCount++;
         return {
-          path: T,
+          path: spillPath,
         };
       }
     }
-    let se = inboundAttachmentDownloadRegistry();
-    let de = foldFileUuid(e.file_uuid);
-    se.refusedEarly?.delete(de);
-    let prefetch =
-      content === undefined && u === undefined && p === undefined ? se.byFileUuid.get(de) : undefined;
-    while (prefetch !== undefined) {
+    let registry = inboundAttachmentDownloadRegistry();
+    let foldedUuid = foldFileUuid(attachment.file_uuid);
+    registry.refusedEarly?.delete(foldedUuid);
+    let inFlightEntry =
+      fileBytes === undefined && downloadContext === undefined && signal === undefined
+        ? registry.byFileUuid.get(foldedUuid)
+        : undefined;
+    while (inFlightEntry !== undefined) {
       let startTime = performance.now();
-      let ye = takeInFlightDownload(prefetch, startTime, computeContentHash(C));
-      let he = prefetch.settledAt === undefined;
-      let We = prefetch.startedBy === "prefetch";
-      let bytes = await prefetch.bytes;
-      let Re = performance.now() - startTime;
-      we += Re;
-      if (We && he) {
+      let counted = takeInFlightDownload(inFlightEntry, startTime, computeContentHash(token));
+      let settled = inFlightEntry.settledAt === undefined;
+      let byPrefetch = inFlightEntry.startedBy === "prefetch";
+      let bytes = await inFlightEntry.bytes;
+      let waitedMs = performance.now() - startTime;
+      elapsedMs += waitedMs;
+      if (byPrefetch && settled) {
         totals.joinedInFlightCount++;
-        totals.slowestJoinWaitMs = Math.max(totals.slowestJoinWaitMs, Re);
-        if (prefetch.headersTimedOut) Oe = Math.max(1, r - 1);
+        totals.slowestJoinWaitMs = Math.max(totals.slowestJoinWaitMs, waitedMs);
+        if (inFlightEntry.headersTimedOut) remainingTries = Math.max(1, tries - 1);
       }
-      let ie = prefetch.bearer === computeContentHash(C);
-      let A =
+      let sameBearer = inFlightEntry.bearer === computeContentHash(token);
+      let usable =
         bytes !== null &&
-        ie &&
-        bytes.length <= B &&
-        (typeof e.sha256 !== "string" ||
+        sameBearer &&
+        bytes.length <= maxBytes &&
+        (typeof attachment.sha256 !== "string" ||
           verifyPeerFileIntegrity(bytes, {
-            sha256: e.sha256,
-            file_size: e.file_size,
+            sha256: attachment.sha256,
+            file_size: attachment.file_size,
           }));
-      if (A) {
-        if (u === undefined) restoreOAuthRefreshLatch(signInRefreshState(), O);
-        content = bytes;
-        servedPageCount = prefetch.servedPageCount;
-        Fe = true;
+      if (usable) {
+        if (downloadContext === undefined) restoreOAuthRefreshLatch(signInRefreshState(), refreshStamp);
+        fileBytes = bytes;
+        servedPageCount = inFlightEntry.servedPageCount;
+        reusedServedPageCount = true;
       } else if (
         bytes === null &&
-        he &&
-        ie &&
-        shouldRedownload(prefetch, startTime) &&
-        !(prefetch.failure === "too_large" && L !== undefined)
+        settled &&
+        sameBearer &&
+        shouldRedownload(inFlightEntry, startTime) &&
+        !(inFlightEntry.failure === "too_large" && uploadFallback !== undefined)
       )
-        return "writeFailed" in prefetch
-          ? recordWriteFailure(totals, prefetch.writeFailed)
-          : recordDownloadFailure(totals, prefetch.failure ?? "error", prefetch.receivedBytes);
-      if (We && bytes !== null) {
-        if (A) totals.prefetchedFileCount++;
-        if (ye)
-          logPrefetchUse(prefetch, bytes, {
-            inFlight: he,
-            passes: A,
-            sameBearer: ie,
-            waitedMs: Re,
+        return "writeFailed" in inFlightEntry
+          ? recordWriteFailure(totals, inFlightEntry.writeFailed)
+          : recordDownloadFailure(totals, inFlightEntry.failure ?? "error", inFlightEntry.receivedBytes);
+      if (byPrefetch && bytes !== null) {
+        if (usable) totals.prefetchedFileCount++;
+        if (counted)
+          logPrefetchUse(inFlightEntry, bytes, {
+            inFlight: settled,
+            passes: usable,
+            sameBearer,
+            waitedMs,
           });
       }
-      let Z = content === undefined ? se.byFileUuid.get(de) : undefined;
-      prefetch =
-        Z !== prefetch && Z?.startedBy === "message" && Z.bearer === computeContentHash(C) ? Z : undefined;
+      let nextEntry = fileBytes === undefined ? registry.byFileUuid.get(foldedUuid) : undefined;
+      inFlightEntry =
+        nextEntry !== inFlightEntry &&
+        nextEntry?.startedBy === "message" &&
+        nextEntry.bearer === computeContentHash(token)
+          ? nextEntry
+          : undefined;
     }
-    if (content === undefined) {
+    if (fileBytes === undefined) {
       let abortController = new AbortController();
-      let ye = () => abortController.abort();
-      p?.addEventListener("abort", ye, {
+      let onAbort = () => abortController.abort();
+      signal?.addEventListener("abort", onAbort, {
         once: true,
       });
-      if (p?.aborted) ye();
-      let he;
-      let We = 0;
-      let _e = {
-        fileUuid: e.file_uuid,
-        baseUrl: u?.baseUrl,
+      if (signal?.aborted) onAbort();
+      let entry;
+      let receivedBytes = 0;
+      let downloadOptions = {
+        fileUuid: attachment.file_uuid,
+        baseUrl: downloadContext?.baseUrl,
         modelCopy: false,
         forPrefetch: false,
-        maxBytes: L !== undefined && typeof e.file_size === "number" && e.file_size > B ? 0 : B,
+        maxBytes:
+          uploadFallback !== undefined &&
+          typeof attachment.file_size === "number" &&
+          attachment.file_size > maxBytes
+            ? 0
+            : maxBytes,
         spillTo:
-          T === undefined ? undefined : async () => openSpill(await ensureAttachmentsDir(dirname(T)), T),
-        token: () => staleToken,
-        admitBytes: (A) => {
-          We = A;
-          if (he !== undefined) he.receivedBytes = A;
+          spillPath === undefined
+            ? undefined
+            : async () => openSpill(await ensureAttachmentsDir(dirname(spillPath)), spillPath),
+        token: () => bearerToken,
+        admitBytes: (bytes) => {
+          receivedBytes = bytes;
+          if (entry !== undefined) entry.receivedBytes = bytes;
           return true;
         },
       };
-      let download = downloadWithRetries(Oe, we, abortController, totals, _e)
-        .then(async (A) => {
+      let download = downloadWithRetries(remainingTries, elapsedMs, abortController, totals, downloadOptions)
+        .then(async (result) => {
           if (
-            u !== undefined ||
-            !("failure" in A) ||
-            A.httpStatus !== 401 ||
+            downloadContext !== undefined ||
+            !("failure" in result) ||
+            result.httpStatus !== 401 ||
             getBridgeTokenOverride() !== undefined
           )
-            return A;
-          let Z = await refreshTokenForDownload(staleToken, s, d, abortController.signal, a, totals);
-          if (Z === undefined) return A;
-          staleToken = Z.bearer;
-          O = Z.stamp;
-          if (he !== undefined) he.bearer = computeContentHash(Z.bearer);
+            return result;
+          let refreshed = await refreshTokenForDownload(
+            bearerToken,
+            authOptions,
+            fetchUpload,
+            abortController.signal,
+            credentials,
+            totals,
+          );
+          if (refreshed === undefined) return result;
+          bearerToken = refreshed.bearer;
+          refreshStamp = refreshed.stamp;
+          if (entry !== undefined) entry.bearer = computeContentHash(refreshed.bearer);
           totals.retriedAfter401Count++;
-          let pe = await downloadWithRetries(1, 0, abortController, totals, _e);
-          if (!("failure" in pe) && !("writeFailed" in pe)) totals.recoveredFileCount++;
-          return pe;
+          let retried = await downloadWithRetries(1, 0, abortController, totals, downloadOptions);
+          if (!("failure" in retried) && !("writeFailed" in retried)) totals.recoveredFileCount++;
+          return retried;
         })
         .catch((error) => {
           logError(error);
@@ -691,24 +785,31 @@ async function resolveInboundAttachment(
             failure: "error",
           };
         });
-      if (u === undefined && p === undefined && bridgeAttachmentEarlyReadsGate().value) {
-        he = newDownloadEntry("message", abortController, download, computeContentHash(C));
-        se.byFileUuid.set(de, he);
+      if (downloadContext === undefined && signal === undefined && bridgeAttachmentEarlyReadsGate().value) {
+        entry = newDownloadEntry("message", abortController, download, computeContentHash(token));
+        registry.byFileUuid.set(foldedUuid, entry);
       }
-      let ie = await download;
-      p?.removeEventListener("abort", ye);
-      if ("failure" in ie && ie.failure === "too_large" && L !== undefined && !p?.aborted) {
-        let A = savedFileNameFor(e, M);
-        let Z = await L.fetchUpload(A, e.file_uuid);
-        if (Z.ok) {
-          recordSavedName(totals, A, e);
+      let result = await download;
+      signal?.removeEventListener("abort", onAbort);
+      if (
+        "failure" in result &&
+        result.failure === "too_large" &&
+        uploadFallback !== undefined &&
+        !signal?.aborted
+      ) {
+        let uploadName = savedFileNameFor(attachment, namedByIdHash);
+        let upload = await uploadFallback.fetchUpload(uploadName, attachment.file_uuid);
+        if (upload.ok) {
+          recordSavedName(totals, uploadName, attachment);
           totals.overMemoryLimitFileCount++;
           return {
-            path: join(_ ?? sessionUploadsDir(), A),
+            path: join(uploadsDirOverride ?? sessionUploadsDir(), uploadName),
           };
         }
-        if (!Z.tooLarge) {
-          debug(`the machine with the uploads folder could not download ${e.file_uuid}: ${Z.error}`);
+        if (!upload.tooLarge) {
+          debug(
+            `the machine with the uploads folder could not download ${attachment.file_uuid}: ${upload.error}`,
+          );
           totals.failedWriteCount++;
           totals.lastFailedWrite = {
             code: lit("unknown"),
@@ -719,39 +820,40 @@ async function resolveInboundAttachment(
           };
         }
       }
-      if ("failure" in ie) return recordDownloadFailure(totals, ie.failure, We, ie.httpStatus);
-      if (u === undefined) {
-        restoreOAuthRefreshLatch(signInRefreshState(), O);
+      if ("failure" in result)
+        return recordDownloadFailure(totals, result.failure, receivedBytes, result.httpStatus);
+      if (downloadContext === undefined) {
+        restoreOAuthRefreshLatch(signInRefreshState(), refreshStamp);
         resetAuthFailureTracking();
       }
-      if ("writeFailed" in ie) return recordWriteFailure(totals, ie.writeFailed);
-      if ("file" in ie) {
-        let { file } = ie;
-        let Z = lit("link");
-        let pe = !h ? E : "off";
-        let Ne;
+      if ("writeFailed" in result) return recordWriteFailure(totals, result.writeFailed);
+      if ("file" in result) {
+        let { file } = result;
+        let writeStep = lit("link");
+        let moveMode = !noTurn ? moveAsideMode : "off";
+        let publishFailure;
         try {
-          if (p?.aborted) return recordDownloadFailure(totals, "stopped", 0);
-          recordSavedName(totals, basename(file.placeAt), e);
-          if (pe === "count") {
+          if (signal?.aborted) return recordDownloadFailure(totals, "stopped", 0);
+          recordSavedName(totals, basename(file.placeAt), attachment);
+          if (moveMode === "count") {
             await countWouldMoveAside(file.placeAt, file, totals);
-            if (p?.aborted) return recordDownloadFailure(totals, "stopped", 0);
+            if (signal?.aborted) return recordDownloadFailure(totals, "stopped", 0);
           }
-          let Ee = !h && !isMoveAsideModeOn(pe);
-          if (isMoveAsideModeOn(pe)) {
-            Z = lit("write");
-            let Ue = false;
-            let Ge = {
+          let renameAfterLook = !noTurn && !isMoveAsideModeOn(moveMode);
+          if (isMoveAsideModeOn(moveMode)) {
+            writeStep = lit("write");
+            let aborted = false;
+            let publishState = {
               renamesAfterALook: false,
             };
             let fileName = basename(file.placeAt);
-            let tt = await publishWithMoveAside(
+            let publishOutcome = await publishWithMoveAside(
               async () => {
-                if (p?.aborted) {
-                  Ue = true;
+                if (signal?.aborted) {
+                  aborted = true;
                   return "failed";
                 }
-                return linkIntoPlace(file.path, file.placeAt, fileName, file, totals, Ge);
+                return linkIntoPlace(file.path, file.placeAt, fileName, file, totals, publishState);
               },
               dirname(file.placeAt),
               fileName,
@@ -759,36 +861,37 @@ async function resolveInboundAttachment(
               totals,
               keptFolders,
             );
-            if (Ue) return recordDownloadFailure(totals, "stopped", 0);
-            if (tt === "same") totals.unchangedOnDiskCount++;
-            else if (typeof tt === "object") Ne = tt;
-          } else if (h)
+            if (aborted) return recordDownloadFailure(totals, "stopped", 0);
+            if (publishOutcome === "same") totals.unchangedOnDiskCount++;
+            else if (typeof publishOutcome === "object") publishFailure = publishOutcome;
+          } else if (noTurn)
             try {
               await link(file.path, file.placeAt);
               totals.linkedFileCount++;
             } catch (error) {
-              let Ge = getErrnoCode(error) === "EEXIST";
-              let Te = await compareExistingFile(file.placeAt, file);
-              if (Te === "same") totals.unchangedOnDiskCount++;
-              else if (Te === "changed" || (Te === "unknown" && Ge)) totals.keptChangedFileCount++;
-              else if (Te === "absent" && !Ge) Ee = true;
+              let existsError = getErrnoCode(error) === "EEXIST";
+              let compare = await compareExistingFile(file.placeAt, file);
+              if (compare === "same") totals.unchangedOnDiskCount++;
+              else if (compare === "changed" || (compare === "unknown" && existsError))
+                totals.keptChangedFileCount++;
+              else if (compare === "absent" && !existsError) renameAfterLook = true;
               else throw error;
             }
-          if (Ee) {
-            Z = lit("rename");
+          if (renameAfterLook) {
+            writeStep = lit("rename");
             await retryFsOp(file.path, file.placeAt);
-            if (h) totals.renamedAfterLinkRefusedCount++;
+            if (noTurn) totals.renamedAfterLinkRefusedCount++;
           }
         } catch (error) {
           debug(`write ${file.target} failed: ${error}`);
           totals.failedWriteCount++;
           totals.lastFailedWrite = {
             code: sanitizeErrnoForTelemetry(error) ?? lit("unknown"),
-            step: Z,
+            step: writeStep,
           };
           return {
             failure: "write",
-            ...keptAsideResult(pe, keptFolders, file.target, false),
+            ...keptAsideResult(moveMode, keptFolders, file.target, false),
           };
         } finally {
           await rm(file.path, {
@@ -799,195 +902,221 @@ async function resolveInboundAttachment(
           });
           await file.release();
         }
-        if (Ne !== undefined) {
-          debug(`write ${file.target} failed: ${Ne.why}`);
+        if (publishFailure !== undefined) {
+          debug(`write ${file.target} failed: ${publishFailure.why}`);
           totals.failedWriteCount++;
           totals.lastFailedWrite = {
-            code: Ne.code,
+            code: publishFailure.code,
             step: lit("move_aside"),
           };
           return {
             failure: "write",
-            ...keptAsideResult(pe, keptFolders, file.target, false, Ne),
+            ...keptAsideResult(moveMode, keptFolders, file.target, false, publishFailure),
           };
         }
         totals.overMemoryLimitFileCount++;
         rememberResolvedFile(
-          e,
+          attachment,
           {
             path: file.target,
             size: file.size,
             sha256: file.sha256,
-            bearer: computeContentHash(staleToken),
+            bearer: computeContentHash(bearerToken),
           },
-          u,
+          downloadContext,
         );
         return {
           path: file.target,
-          ...keptAsideResult(pe, keptFolders, file.target, true),
+          ...keptAsideResult(moveMode, keptFolders, file.target, true),
         };
       }
-      content = ie.data;
-      servedPageCount = ie.servedPageCount;
+      fileBytes = result.data;
+      servedPageCount = result.servedPageCount;
     }
   } catch (error) {
-    debug(`fetch ${e.file_uuid} threw: ${error}`);
+    debug(`fetch ${attachment.file_uuid} threw: ${error}`);
     return recordDownloadFailure(totals, "error", 0);
   }
   if (
-    typeof e.sha256 === "string" &&
-    !Fe &&
-    !verifyPeerFileIntegrity(content, {
-      sha256: e.sha256,
-      file_size: e.file_size,
+    typeof attachment.sha256 === "string" &&
+    !reusedServedPageCount &&
+    !verifyPeerFileIntegrity(fileBytes, {
+      sha256: attachment.sha256,
+      file_size: attachment.file_size,
     })
   ) {
-    debug(`fetch ${e.file_uuid} failed integrity verification`);
+    debug(`fetch ${attachment.file_uuid} failed integrity verification`);
     return {
       failure: "digest_mismatch",
     };
   }
-  let Ae = {
+  let imageTimings = {
     resizeMs: 0,
     pngPaletteMs: 0,
     byteBudgetMs: 0,
   };
-  let Me = content.length > IMAGE_LIMITS.targetRawSize;
-  let xe =
-    R &&
+  let contentOverTarget = fileBytes.length > IMAGE_LIMITS.targetRawSize;
+  let modelCopyNeeded =
+    wantInlineImage &&
     !isImageDecodingDisabled() &&
-    Ph(content) !== null &&
-    (imageExceedsDimension(content, MAX_IMAGE_SIDE_PX) || wantsModelCopy(content.length)) &&
+    sniffImageMediaType(fileBytes) !== null &&
+    (imageExceedsDimension(fileBytes, MAX_IMAGE_SIDE_PX) || wantsModelCopy(fileBytes.length)) &&
     isFirstPartyProvider() &&
     !isEssentialTrafficOnly();
-  let Se;
-  if (xe) {
-    let B = staleToken === C ? await D : undefined;
-    if (B === undefined || ("failure" in B && isRetryableDownloadFailure(B)))
-      B = await fetchModelCopy(e.file_uuid, u?.baseUrl, staleToken, new AbortController(), totals);
-    if ("data" in B) {
-      let webpHeader = parseWebpHeader(content);
-      let webpHeader_2 = parseWebpHeader(B.data);
-      let te =
+  let modelCopyBytes;
+  if (modelCopyNeeded) {
+    let modelCopyResult = bearerToken === token ? await modelCopyPromise : undefined;
+    if (
+      modelCopyResult === undefined ||
+      ("failure" in modelCopyResult && isRetryableDownloadFailure(modelCopyResult))
+    )
+      modelCopyResult = await fetchModelCopy(
+        attachment.file_uuid,
+        downloadContext?.baseUrl,
+        bearerToken,
+        new AbortController(),
+        totals,
+      );
+    if ("data" in modelCopyResult) {
+      let webpHeader = parseWebpHeader(fileBytes);
+      let webpHeader_2 = parseWebpHeader(modelCopyResult.data);
+      let modelCopyIsWorseWebp =
         webpHeader !== undefined &&
         webpHeader_2 !== undefined &&
         Math.max(webpHeader_2.width, webpHeader_2.height) <= MAX_INLINE_IMAGE_DIMENSION &&
         (Math.max(webpHeader_2.width, webpHeader_2.height) < Math.max(webpHeader.width, webpHeader.height) ||
           Math.min(webpHeader_2.width, webpHeader_2.height) < Math.min(webpHeader.width, webpHeader.height));
       if (
-        Me ||
-        (!imageExceedsDimension(B.data, MAX_IMAGE_SIDE_PX) &&
-          (imageExceedsDimension(content, MAX_IMAGE_SIDE_PX) || (B.data.length < content.length && !te)))
+        contentOverTarget ||
+        (!imageExceedsDimension(modelCopyResult.data, MAX_IMAGE_SIDE_PX) &&
+          (imageExceedsDimension(fileBytes, MAX_IMAGE_SIDE_PX) ||
+            (modelCopyResult.data.length < fileBytes.length && !modelCopyIsWorseWebp)))
       )
-        Se = B.data;
+        modelCopyBytes = modelCopyResult.data;
     }
   }
   let startTime = performance.now();
-  let ve = (B) =>
-    convertImagesToBlocks(B, IMAGE_LIMITS, {
-      timings: Ae,
+  let toImageBlock = (bytes) =>
+    convertImagesToBlocks(bytes, IMAGE_LIMITS, {
+      timings: imageTimings,
     }).catch((error) => {
-      debug(`inline ${e.file_uuid} threw: ${error}`);
+      debug(`inline ${attachment.file_uuid} threw: ${error}`);
       return null;
     });
-  let Le = Se ? await ve(Se) : null;
-  let re = Le ?? (R ? await ve(content) : null);
+  let modelCopyBlock = modelCopyBytes ? await toImageBlock(modelCopyBytes) : null;
+  let imageBlock = modelCopyBlock ?? (wantInlineImage ? await toImageBlock(fileBytes) : null);
   totals.slowestInlineImageBuildMs = Math.max(
     totals.slowestInlineImageBuildMs,
     performance.now() - startTime,
   );
-  totals.slowestInlineImageResizeMs = Math.max(totals.slowestInlineImageResizeMs, Ae.resizeMs);
-  totals.slowestInlineImagePngPaletteMs = Math.max(totals.slowestInlineImagePngPaletteMs, Ae.pngPaletteMs);
-  totals.slowestInlineImageByteBudgetMs = Math.max(totals.slowestInlineImageByteBudgetMs, Ae.byteBudgetMs);
-  if (Le) totals.modelCopyCount++;
-  else if (xe) {
+  totals.slowestInlineImageResizeMs = Math.max(totals.slowestInlineImageResizeMs, imageTimings.resizeMs);
+  totals.slowestInlineImagePngPaletteMs = Math.max(
+    totals.slowestInlineImagePngPaletteMs,
+    imageTimings.pngPaletteMs,
+  );
+  totals.slowestInlineImageByteBudgetMs = Math.max(
+    totals.slowestInlineImageByteBudgetMs,
+    imageTimings.byteBudgetMs,
+  );
+  if (modelCopyBlock) totals.modelCopyCount++;
+  else if (modelCopyNeeded) {
     totals.modelCopyMissedCount++;
-    if (re) totals.modelCopyMissedSentAsIsCount++;
+    if (imageBlock) totals.modelCopyMissedSentAsIsCount++;
   }
-  if (re && detectImageFormatFromBuffer(content) === "image/png") {
+  if (imageBlock && detectImageFormatFromBuffer(fileBytes) === "image/png") {
     totals.inlinedPngSourceCount++;
-    if (pngMayHaveTransparency(content)) totals.inlinedPngSourceMaybeTransparentCount++;
-    if (re.source.type === "base64" && re.source.media_type === "image/jpeg")
+    if (pngMayHaveTransparency(fileBytes)) totals.inlinedPngSourceMaybeTransparentCount++;
+    if (imageBlock.source.type === "base64" && imageBlock.source.media_type === "image/jpeg")
       totals.inlinedPngSourceSentAsJpegCount++;
   }
-  let fileName = re
+  let savedFileName = imageBlock
     ? hashPrefixedFileName(
-        M ? shortContentHash(e.file_uuid) : randomUUID().slice(0, 8),
-        `image.${MIME_TO_EXTENSION[detectImageFormatFromBuffer(content)]}`,
+        namedByIdHash ? shortContentHash(attachment.file_uuid) : randomUUID().slice(0, 8),
+        `image.${MIME_TO_EXTENSION[detectImageFormatFromBuffer(fileBytes)]}`,
       )
-    : savedFileNameFor(e, M);
-  recordSavedName(totals, fileName, e);
-  let $e = _ ?? sessionUploadsDir();
-  let W = join($e, fileName);
+    : savedFileNameFor(attachment, namedByIdHash);
+  recordSavedName(totals, savedFileName, attachment);
+  let uploadsDir = uploadsDirOverride ?? sessionUploadsDir();
+  let targetPath = join(uploadsDir, savedFileName);
   let sessionId = getSessionId();
-  let Ie = getSessionUploadsDirOverride() === null && !isDiskless();
-  let ce = h && e.sha256 === undefined && Ie;
-  let ae = !h && Ie ? E : "off";
-  if (ae === "count") await countWouldMoveAside(W, content, totals);
-  let me =
-    !h || e.sha256 !== undefined
+  let usesLocalUploads = getSessionUploadsDirOverride() === null && !isDiskless();
+  let exclusiveWrite = noTurn && attachment.sha256 === undefined && usesLocalUploads;
+  let moveMode = !noTurn && usesLocalUploads ? moveAsideMode : "off";
+  if (moveMode === "count") await countWouldMoveAside(targetPath, fileBytes, totals);
+  let existing =
+    !noTurn || attachment.sha256 !== undefined
       ? "absent"
-      : H === W
+      : savedPath === targetPath
         ? "same"
-        : ce
-          ? await compareExistingFile(W, content)
+        : exclusiveWrite
+          ? await compareExistingFile(targetPath, fileBytes)
           : "absent";
-  if (p?.aborted) return recordDownloadFailure(totals, "stopped", 0);
+  if (signal?.aborted) return recordDownloadFailure(totals, "stopped", 0);
   let startTime_2 = performance.now();
-  let fe;
-  let Ce;
-  let y;
-  let G;
-  let ee = false;
-  let be = false;
-  if (me === "same") totals.unchangedOnDiskCount++;
-  else if (me === "changed" || me === "unknown") totals.keptChangedFileCount++;
+  let writeError;
+  let takenStep;
+  let compare;
+  let publishFailure;
+  let aborted = false;
+  let movedAside = false;
+  if (existing === "same") totals.unchangedOnDiskCount++;
+  else if (existing === "changed" || existing === "unknown") totals.keptChangedFileCount++;
   else if (
     isStorageV5Enabled() &&
-    d !== undefined &&
+    fetchUpload !== undefined &&
     isValidKeySegment(sessionId) &&
-    isValidKeySegment(fileName) &&
-    (_ === undefined || _ === sessionUploadsDir()) &&
+    isValidKeySegment(savedFileName) &&
+    (uploadsDirOverride === undefined || uploadsDirOverride === sessionUploadsDir()) &&
     (getSessionUploadsDirOverride() !== null || getLocalUploadsRoot() === null)
   ) {
-    let B = STORAGE_SPACES.userConfigDir("uploads", [sessionId, fileName]);
-    let T;
-    let L = isMoveAsideModeOn(ae)
+    let storeTarget = STORAGE_SPACES.userConfigDir("uploads", [sessionId, savedFileName]);
+    let firstWrite;
+    let publishOutcome = isMoveAsideModeOn(moveMode)
       ? await publishWithMoveAside(
           async () => {
-            if (p?.aborted) {
-              ee = true;
+            if (signal?.aborted) {
+              aborted = true;
               return "failed";
             }
-            T = await writeWithPageCount(d, fileName, servedPageCount, B, content, {
-              mode: 384,
-              precondition: {
-                type: "ifAbsent",
+            firstWrite = await writeWithPageCount(
+              fetchUpload,
+              savedFileName,
+              servedPageCount,
+              storeTarget,
+              fileBytes,
+              {
+                mode: 384,
+                precondition: {
+                  type: "ifAbsent",
+                },
               },
-            });
-            if (T.ok) return "published";
-            let x = storageErrorCode(T.error);
-            return T.error.code === "AlreadyExists" || x === "ELOOP" || x === "ENXIO" || x === "EISDIR"
+            );
+            if (firstWrite.ok) return "published";
+            let storageCode = storageErrorCode(firstWrite.error);
+            return firstWrite.error.code === "AlreadyExists" ||
+              storageCode === "ELOOP" ||
+              storageCode === "ENXIO" ||
+              storageCode === "EISDIR"
               ? "taken"
               : "failed";
           },
-          dirname(W),
-          fileName,
-          content,
+          dirname(targetPath),
+          savedFileName,
+          fileBytes,
           totals,
           keptFolders,
         )
       : undefined;
-    if (ee) return recordDownloadFailure(totals, "stopped", 0);
-    let te =
-      T ??
+    if (aborted) return recordDownloadFailure(totals, "stopped", 0);
+    let writeResult =
+      firstWrite ??
       (await writeWithPageCount(
-        d,
-        fileName,
+        fetchUpload,
+        savedFileName,
         servedPageCount,
-        B,
-        content,
-        ce
+        storeTarget,
+        fileBytes,
+        exclusiveWrite
           ? {
               mode: 384,
               precondition: {
@@ -998,190 +1127,193 @@ async function resolveInboundAttachment(
               mode: 384,
             },
       ));
-    if (L === "same") totals.unchangedOnDiskCount++;
-    else if (typeof L === "object") G = L;
-    else if (ce && !te.ok && te.error.code === "AlreadyExists") Ce = lit("storage_backend");
-    else if (!te.ok) {
-      fe = formatStorageError(te.error);
+    if (publishOutcome === "same") totals.unchangedOnDiskCount++;
+    else if (typeof publishOutcome === "object") publishFailure = publishOutcome;
+    else if (exclusiveWrite && !writeResult.ok && writeResult.error.code === "AlreadyExists")
+      takenStep = lit("storage_backend");
+    else if (!writeResult.ok) {
+      writeError = formatStorageError(writeResult.error);
       totals.lastFailedWrite = {
-        code: sanitizeErrnoTokenForTelemetry(storageErrorCode(te.error)) ?? fromEnum(te.error.code),
+        code:
+          sanitizeErrnoTokenForTelemetry(storageErrorCode(writeResult.error)) ??
+          fromEnum(writeResult.error.code),
         step: lit("storage_backend"),
       };
     }
   } else if (isDiskless()) {
-    warnDisklessSettingsWrite("inbound_attachment", W);
-    fe = "refused: this session is diskless and writes no files to this machine's disk";
+    warnDisklessSettingsWrite("inbound_attachment", targetPath);
+    writeError = "refused: this session is diskless and writes no files to this machine's disk";
     totals.lastFailedWrite = {
       code: lit("diskless"),
       step: lit("refused"),
     };
   } else {
-    let B = lit("mkdir");
+    let writeStep = lit("mkdir");
     try {
-      let attachmentsDir = await ensureAttachmentsDir($e);
+      let attachmentsDir = await ensureAttachmentsDir(uploadsDir);
       try {
-        if (p?.aborted) return recordDownloadFailure(totals, "stopped", 0);
-        B = lit("write");
-        let L = join(attachmentsDir.at, fileName);
-        let te = !ce && !isMoveAsideModeOn(ae);
-        if (isMoveAsideModeOn(ae)) {
-          let x = await writeIfMissing(L, content, 384);
-          let se = {
+        if (signal?.aborted) return recordDownloadFailure(totals, "stopped", 0);
+        writeStep = lit("write");
+        let targetPath = join(attachmentsDir.at, savedFileName);
+        let renameAfterLook = !exclusiveWrite && !isMoveAsideModeOn(moveMode);
+        if (isMoveAsideModeOn(moveMode)) {
+          let stagedPath = await writeIfMissing(targetPath, fileBytes, 384);
+          let publishState = {
             renamesAfterALook: false,
           };
           try {
-            let de = await publishWithMoveAside(
+            let publishOutcome = await publishWithMoveAside(
               async () => {
-                if (p?.aborted) {
-                  ee = true;
+                if (signal?.aborted) {
+                  aborted = true;
                   return "failed";
                 }
-                return linkIntoPlace(x, L, fileName, content, totals, se);
+                return linkIntoPlace(stagedPath, targetPath, savedFileName, fileBytes, totals, publishState);
               },
               attachmentsDir.at,
-              fileName,
-              content,
+              savedFileName,
+              fileBytes,
               totals,
               keptFolders,
             );
-            if (ee) return recordDownloadFailure(totals, "stopped", 0);
-            be = de === "published";
-            if (de === "same") totals.unchangedOnDiskCount++;
-            else if (typeof de === "object") G = de;
+            if (aborted) return recordDownloadFailure(totals, "stopped", 0);
+            movedAside = publishOutcome === "published";
+            if (publishOutcome === "same") totals.unchangedOnDiskCount++;
+            else if (typeof publishOutcome === "object") publishFailure = publishOutcome;
           } finally {
-            await retryTransient(() => unlink(x)).catch((error) => {
+            await retryTransient(() => unlink(stagedPath)).catch((error) => {
               if (getErrnoCode(error) !== "ENOENT") {
-                debug(`the staged name of ${fileName} could not be removed: ${error}`);
+                debug(`the staged name of ${savedFileName} could not be removed: ${error}`);
                 totals.stagedNameLeftCount++;
               }
             });
           }
-        } else if (ce) {
-          let x = await writeIfMissing(L, content, 384);
+        } else if (exclusiveWrite) {
+          let stagedPath = await writeIfMissing(targetPath, fileBytes, 384);
           try {
-            await link(x, L);
+            await link(stagedPath, targetPath);
             totals.linkedFileCount++;
           } catch (error) {
-            if (getErrnoCode(error) === "EEXIST") Ce = lit("link");
+            if (getErrnoCode(error) === "EEXIST") takenStep = lit("link");
             else {
               debug(
-                `link(2) failed for ${fileName} (${error}); looking at the name again, to rename into it only if it is free`,
+                `link(2) failed for ${savedFileName} (${error}); looking at the name again, to rename into it only if it is free`,
               );
-              y = await compareExistingFile(L, content);
-              if (y === "unknown") {
-                B = lit("look_after_link");
+              compare = await compareExistingFile(targetPath, fileBytes);
+              if (compare === "unknown") {
+                writeStep = lit("look_after_link");
                 throw error;
               }
-              te = y === "absent";
-              Ce = te ? undefined : lit("link");
+              renameAfterLook = compare === "absent";
+              takenStep = renameAfterLook ? undefined : lit("link");
             }
           } finally {
-            await retryTransient(() => unlink(x)).catch((error) => {
-              debug(`the staged name of ${fileName} could not be removed: ${error}`);
+            await retryTransient(() => unlink(stagedPath)).catch((error) => {
+              debug(`the staged name of ${savedFileName} could not be removed: ${error}`);
               totals.stagedNameLeftCount++;
             });
           }
         }
-        if (te) {
-          await writeFileAtomic(L, content, 384);
-          if (ce) totals.renamedAfterLinkRefusedCount++;
+        if (renameAfterLook) {
+          await writeFileAtomic(targetPath, fileBytes, 384);
+          if (exclusiveWrite) totals.renamedAfterLinkRefusedCount++;
         }
       } finally {
         await attachmentsDir.release();
       }
     } catch (error) {
-      fe = `${error}`;
+      writeError = `${error}`;
       totals.lastFailedWrite = {
         code: sanitizeErrnoForTelemetry(error) ?? lit("unknown"),
-        step: B,
+        step: writeStep,
       };
     }
   }
-  if (G !== undefined && fe === undefined) {
-    fe = G.why;
+  if (publishFailure !== undefined && writeError === undefined) {
+    writeError = publishFailure.why;
     totals.lastFailedWrite = {
-      code: G.code,
+      code: publishFailure.code,
       step: lit("move_aside"),
     };
   }
-  if (Ce !== undefined && fe === undefined) {
-    y ??= await compareExistingFile(W, content);
-    if (y === "same") totals.unchangedOnDiskCount++;
-    else if (y === "changed" || y === "unknown") totals.keptChangedFileCount++;
+  if (takenStep !== undefined && writeError === undefined) {
+    compare ??= await compareExistingFile(targetPath, fileBytes);
+    if (compare === "same") totals.unchangedOnDiskCount++;
+    else if (compare === "changed" || compare === "unknown") totals.keptChangedFileCount++;
     else {
-      fe =
+      writeError =
         "not saved: something that is not a regular file (a link, a pipe or a folder) has this name and was left as it is, or what had the name was gone when checked again";
       totals.lastFailedWrite = {
         code: lit("EEXIST"),
-        step: Ce,
+        step: takenStep,
       };
     }
   }
   totals.slowestWriteMs = Math.max(totals.slowestWriteMs, performance.now() - startTime_2);
-  if (fe !== undefined) {
-    debug(`write ${W} failed: ${fe}`);
+  if (writeError !== undefined) {
+    debug(`write ${targetPath} failed: ${writeError}`);
     totals.failedWriteCount++;
-    if (re) {
+    if (imageBlock) {
       totals.inlinedImageNotSavedCount++;
       return {
-        imageBlock: re,
+        imageBlock,
       };
     }
     return {
       failure: "write",
-      ...(be ? undefined : keptAsideResult(ae, keptFolders, W, false, G)),
+      ...(movedAside ? undefined : keptAsideResult(moveMode, keptFolders, targetPath, false, publishFailure)),
     };
   }
   let startTime_3 = performance.now();
-  j ??= computeContentHash(content);
+  sha256 ??= computeContentHash(fileBytes);
   totals.slowestHashAfterWriteMs = Math.max(totals.slowestHashAfterWriteMs, performance.now() - startTime_3);
-  if (i && e.sha256 === undefined && getSessionUploadsDirOverride() === null)
+  if (registerDigest && attachment.sha256 === undefined && getSessionUploadsDirOverride() === null)
     try {
-      rememberAttachmentDigest(await realpath(W), j);
+      rememberAttachmentDigest(await realpath(targetPath), sha256);
     } catch {
-      debug(`registration skipped for ${W}`);
+      debug(`registration skipped for ${targetPath}`);
     }
   rememberResolvedFile(
-    e,
+    attachment,
     {
-      path: W,
-      size: content.length,
-      sha256: j,
-      bearer: computeContentHash(staleToken),
+      path: targetPath,
+      size: fileBytes.length,
+      sha256,
+      bearer: computeContentHash(bearerToken),
     },
-    u,
+    downloadContext,
   );
-  debug(`resolved ${e.file_uuid} \u2192 ${W} (${content.length} bytes)`);
-  if (re) {
-    debug(`inlined ${e.file_uuid} (${content.length} bytes)`);
+  debug(`resolved ${attachment.file_uuid} \u2192 ${targetPath} (${fileBytes.length} bytes)`);
+  if (imageBlock) {
+    debug(`inlined ${attachment.file_uuid} (${fileBytes.length} bytes)`);
     return {
-      imageBlock: re,
-      path: W,
+      imageBlock,
+      path: targetPath,
     };
   }
-  if (R) {
-    debug(`inline ${e.file_uuid} fell back to @path ref`);
+  if (wantInlineImage) {
+    debug(`inline ${attachment.file_uuid} fell back to @path ref`);
     return {
-      path: W,
+      path: targetPath,
       inlineFellBack: true,
-      ...keptAsideResult(ae, keptFolders, W, true),
+      ...keptAsideResult(moveMode, keptFolders, targetPath, true),
     };
   }
   return {
-    path: W,
-    ...keptAsideResult(ae, keptFolders, W, true),
+    path: targetPath,
+    ...keptAsideResult(moveMode, keptFolders, targetPath, true),
   };
 }
 //@ chunk-n4bsg1hp.js:19102-19269 placement
-function rememberResolvedFile(e, i, o) {
-  let n = autoInboundFileRegistry(o);
-  if (n !== undefined) {
-    n.delete(foldFileUuid(e.file_uuid));
-    if (n.size >= MAX_REMEMBERED_FILES) {
-      let r = n.keys().next().value;
-      if (r !== undefined) n.delete(r);
+function rememberResolvedFile(attachment, resolved, context) {
+  let registry = autoInboundFileRegistry(context);
+  if (registry !== undefined) {
+    registry.delete(foldFileUuid(attachment.file_uuid));
+    if (registry.size >= MAX_REMEMBERED_FILES) {
+      let oldestKey = registry.keys().next().value;
+      if (oldestKey !== undefined) registry.delete(oldestKey);
     }
-    n.set(foldFileUuid(e.file_uuid), i);
+    registry.set(foldFileUuid(attachment.file_uuid), resolved);
   }
 }
 //@ chunk-n4bsg1hp.js:19269-19424 placement
@@ -1194,7 +1326,20 @@ var FAILURE_REASON_TEXT = {
 /**
  * 解析一条入站消息的全部附件（并发、数量上限）：成功的生成 `@"path"` 前缀或内联图片块，失败的生成 [SendFile: …] 说明；汇总遥测（bridge_attachment_resolve、下载耗时）并返回 {prefix, imageBlocks, deliveredCount, missingFiles, timing…}。
  */
-async function resolveInboundAttachments(attachments, i, o, n, r, a, d, s, u, _, h = true, p = false) {
+async function resolveInboundAttachments(
+  attachments,
+  registerDigest,
+  shouldQuery,
+  fetchUpload,
+  authOptions,
+  downloadContext,
+  startsTurn,
+  uploadsDirOverride,
+  aheadOfFiles,
+  signal,
+  inlineImages = true,
+  namedByIdHash = false,
+) {
   if (attachments.length === 0)
     return {
       prefix: "",
@@ -1207,16 +1352,19 @@ async function resolveInboundAttachments(attachments, i, o, n, r, a, d, s, u, _,
   if (refusedEarly !== undefined && refusedEarly.size > 0)
     for (let attachment of attachments) refusedEarly.delete(foldFileUuid(attachment.file_uuid));
   let startTime = performance.now();
-  let O = d !== false && getSessionUploadsDirOverride() === null && !isDiskless() && true;
-  let C = O ? getFeatureValue_CACHED_MAY_BE_STALE("tengu_tidy_shelf", "off") : undefined;
-  let I = !O
+  let moveAsidesEligible =
+    startsTurn !== false && getSessionUploadsDirOverride() === null && !isDiskless() && true;
+  let moveAsideFlag = moveAsidesEligible
+    ? getFeatureValue_CACHED_MAY_BE_STALE("tengu_tidy_shelf", "off")
+    : undefined;
+  let moveAsideMode = !moveAsidesEligible
     ? undefined
-    : C === "tell"
-      ? a === undefined
+    : moveAsideFlag === "tell"
+      ? downloadContext === undefined
         ? "tell"
         : "on"
-      : C === "on" || C === "count"
-        ? C
+      : moveAsideFlag === "on" || moveAsideFlag === "count"
+        ? moveAsideFlag
         : "off";
   let stats = {
     slowestTimeToHeadersMs: 0,
@@ -1247,11 +1395,11 @@ async function resolveInboundAttachments(attachments, i, o, n, r, a, d, s, u, _,
     wouldLeaveSameFileCount: 0,
     slowestWouldMoveLookMs: 0,
     moveAsideFailedCount: 0,
-    whatStandsAside: I,
+    whatStandsAside: moveAsideMode,
     uploadsRootCode:
       getSessionUploadsDirOverride() !== null
         ? 2
-        : dirname(s ?? sessionUploadsDir()) === getLocalUploadsRoot()
+        : dirname(uploadsDirOverride ?? sessionUploadsDir()) === getLocalUploadsRoot()
           ? 1
           : 0,
     reusedFileCount: 0,
@@ -1266,188 +1414,196 @@ async function resolveInboundAttachments(attachments, i, o, n, r, a, d, s, u, _,
     failedDownloads: {},
   };
   let filtered = attachments.filter((attachment) => typeof attachment.sha256 === "string");
-  let N = maxAttachmentsPerMessage(attachments);
+  let attachmentCap = maxAttachmentsPerMessage(attachments);
   if (isBridgeFileLoginRefused()) await settleStoredLoginRefusal();
   if (!(
-    a?.accessToken ??
-    (isStorageV5Enabled() && r !== undefined ? await getBridgeAccessTokenAsync(r) : getBridgeAccessToken())
+    downloadContext?.accessToken ??
+    (isStorageV5Enabled() && authOptions !== undefined
+      ? await getBridgeAccessTokenAsync(authOptions)
+      : getBridgeAccessToken())
   )) {
     debug("skip: no oauth token");
-    let y = {
-      ...summarizeAttachmentResolution(attachments.slice(0, N), 0, 0, stats, startTime),
-      ...aheadOfFilesTelemetry(u, s),
+    let attributes = {
+      ...summarizeAttachmentResolution(attachments.slice(0, attachmentCap), 0, 0, stats, startTime),
+      ...aheadOfFilesTelemetry(aheadOfFiles, uploadsDirOverride),
     };
-    logFeatureSad("bridge_attachment_resolve", "no_token", y);
+    logFeatureSad("bridge_attachment_resolve", "no_token", attributes);
     logForDiagnosticsNoPII("warn", "bridge_attachment_download_timing", {
       outcome: "no_token",
-      should_query: d,
-      ...y,
+      should_query: startsTurn,
+      ...attributes,
     });
-    let G = allMissing(
+    let missing = allMissing(
       attachments.filter((attachment) => typeof attachment.sha256 !== "string"),
       "no_token",
     );
     if (filtered.length > 0) {
       let count = filtered.length - MAX_PEER_ATTACHMENTS;
-      let be = count > 0 ? filtered.slice(0, MAX_PEER_ATTACHMENTS) : filtered;
-      emitPeerFileReceiveTelemetry("bridge", be.length, 0);
-      let et = count > 0 ? " " + peerFileCountCapNote(count) : "";
+      let kept = count > 0 ? filtered.slice(0, MAX_PEER_ATTACHMENTS) : filtered;
+      emitPeerFileReceiveTelemetry("bridge", kept.length, 0);
+      let capNote = count > 0 ? " " + peerFileCountCapNote(count) : "";
       return {
         prefix:
-          be
-            .map((T) => peerFileFailureNote(T.file_name, "it could not be downloaded (not signed in)"))
+          kept
+            .map((attachment) =>
+              peerFileFailureNote(attachment.file_name, "it could not be downloaded (not signed in)"),
+            )
             .join(" ") +
-          et +
-          (G.length > 0 ? " " + missingAttachmentsNote(G.length, G.length) : "") +
+          capNote +
+          (missing.length > 0 ? " " + missingAttachmentsNote(missing.length, missing.length) : "") +
           " ",
         imageBlocks: [],
         inlinedImagePaths: [],
         deliveredCount: 0,
-        ...(G.length > 0 && {
-          missingFiles: G,
+        ...(missing.length > 0 && {
+          missingFiles: missing,
         }),
       };
     }
     return {
-      prefix: missingAttachmentsNote(G.length, G.length) + " ",
+      prefix: missingAttachmentsNote(missing.length, missing.length) + " ",
       imageBlocks: [],
       inlinedImagePaths: [],
       deliveredCount: 0,
-      missingFiles: G,
+      missingFiles: missing,
     };
   }
-  let S = [];
+  let notes = [];
   let attachments_2 = attachments;
-  let z = attachments_2.length > N;
-  if (z) {
-    debug(`dropping ${attachments_2.length - N} attachment(s) over the ${N} cap`);
-    if (filtered.length > 0) S.push(peerFileCountCapNote(attachments_2.length - N));
-    attachments_2 = attachments_2.slice(0, N);
+  let overCap = attachments_2.length > attachmentCap;
+  if (overCap) {
+    debug(`dropping ${attachments_2.length - attachmentCap} attachment(s) over the ${attachmentCap} cap`);
+    if (filtered.length > 0) notes.push(peerFileCountCapNote(attachments_2.length - attachmentCap));
+    attachments_2 = attachments_2.slice(0, attachmentCap);
   }
-  let j = i && o;
-  let H = a === undefined && _ === undefined;
-  let Fe = H && attachments_2.length > MAX_LISTED_ATTACHMENTS;
-  let we = limitConcurrency(MAX_LISTED_ATTACHMENTS, (y) =>
+  let queryFiles = registerDigest && shouldQuery;
+  let mayPrefetch = downloadContext === undefined && signal === undefined;
+  let shouldDropSettled = mayPrefetch && attachments_2.length > MAX_LISTED_ATTACHMENTS;
+  let resolveLimited = limitConcurrency(MAX_LISTED_ATTACHMENTS, (attachment) =>
     resolveInboundAttachment(
-      y,
-      i,
-      j,
+      attachment,
+      registerDigest,
+      queryFiles,
       stats,
-      d === false ? DOWNLOAD_TRIES.noTurn : DOWNLOAD_TRIES.startsTurn,
-      h,
-      n,
-      r,
-      a,
-      s,
-      d === false,
-      _,
-      p,
-      I,
+      startsTurn === false ? DOWNLOAD_TRIES.noTurn : DOWNLOAD_TRIES.startsTurn,
+      inlineImages,
+      fetchUpload,
+      authOptions,
+      downloadContext,
+      uploadsDirOverride,
+      startsTurn === false,
+      signal,
+      namedByIdHash,
+      moveAsideMode,
     ).finally(() => {
-      if (Fe) dropSettledTakenDownload(y);
+      if (shouldDropSettled) dropSettledTakenDownload(attachment);
     }),
   );
-  let Oe;
+  let results;
   try {
-    Oe = await Promise.all(attachments_2.map((y) => we(y)));
+    results = await Promise.all(attachments_2.map((attachment) => resolveLimited(attachment)));
   } finally {
-    for (let y of H ? attachments_2 : []) dropSettledTakenDownload(y);
+    for (let attachment of mayPrefetch ? attachments_2 : []) dropSettledTakenDownload(attachment);
   }
-  let Ae = [];
-  let Me = [];
-  let xe = [];
-  let Se = [];
-  let Ye = 0;
-  let ve = 0;
-  let Le = 0;
-  let re = false;
-  let U = [];
-  let $e = 0;
-  let W = [];
-  let Pe = [];
-  Oe.forEach((y, G) => {
-    let ee = attachments_2[G];
-    let be = typeof ee.sha256 === "string";
-    if (be) ve++;
-    if ("path" in y)
-      Pe.push({
-        file_uuid: ee.file_uuid,
-        path: y.path,
-        inlined: "imageBlock" in y,
+  let pathRefs = [];
+  let imageBlocks = [];
+  let inlinedPaths = [];
+  let imageFileUuids = [];
+  let inlineFellBackCount = 0;
+  let shaCount = 0;
+  let peerSavedCount = 0;
+  let digestMismatch = false;
+  let missingFiles = [];
+  let missingWithAside = 0;
+  let asides = [];
+  let writtenFiles = [];
+  results.forEach((result, index) => {
+    let attachment = attachments_2[index];
+    let hasSha = typeof attachment.sha256 === "string";
+    if (hasSha) shaCount++;
+    if ("path" in result)
+      writtenFiles.push({
+        file_uuid: attachment.file_uuid,
+        path: result.path,
+        inlined: "imageBlock" in result,
       });
-    if ("imageBlock" in y) {
-      Me.push(y.imageBlock);
-      Se.push(ee.file_uuid);
-      if ("path" in y) xe.push(y.path);
-    } else if ("path" in y) {
-      Ae.push(`@"${y.path}"`);
-      if (y.inlineFellBack) Ye++;
-      if (be) Le++;
-      if (y.aside !== undefined) {
-        W.push(y.aside);
-        S.push(asideSentence(y.aside));
+    if ("imageBlock" in result) {
+      imageBlocks.push(result.imageBlock);
+      imageFileUuids.push(attachment.file_uuid);
+      if ("path" in result) inlinedPaths.push(result.path);
+    } else if ("path" in result) {
+      pathRefs.push(`@"${result.path}"`);
+      if (result.inlineFellBack) inlineFellBackCount++;
+      if (hasSha) peerSavedCount++;
+      if (result.aside !== undefined) {
+        asides.push(result.aside);
+        notes.push(asideSentence(result.aside));
       }
     } else {
-      if (y.failure === "digest_mismatch") re = true;
-      if (be) {
-        S.push(peerFileFailureNote(ee.file_name, FAILURE_REASON_TEXT[y.failure]));
-        if (y.aside !== undefined) {
-          W.push(y.aside);
-          S.push(asideSentence(y.aside));
+      if (result.failure === "digest_mismatch") digestMismatch = true;
+      if (hasSha) {
+        notes.push(peerFileFailureNote(attachment.file_name, FAILURE_REASON_TEXT[result.failure]));
+        if (result.aside !== undefined) {
+          asides.push(result.aside);
+          notes.push(asideSentence(result.aside));
         }
       } else {
-        U.push({
-          file_uuid: ee.file_uuid,
-          reason: y.failure === "write" ? "write" : (y.cause ?? "download"),
+        missingFiles.push({
+          file_uuid: attachment.file_uuid,
+          reason: result.failure === "write" ? "write" : (result.cause ?? "download"),
         });
-        if (y.aside !== undefined) {
-          $e++;
-          W.push(y.aside);
-          S.push(asideSentence(y.aside));
+        if (result.aside !== undefined) {
+          missingWithAside++;
+          asides.push(result.aside);
+          notes.push(asideSentence(result.aside));
         }
       }
     }
   });
-  let Ie = filtered.length === 0 ? attachments.slice(N) : [];
-  if (U.length > 0 || Ie.length > 0) {
-    U.push(...allMissing(Ie, "count_cap"));
-    let y = U.length - $e;
-    if (y > 0) S.push(missingAttachmentsNote(y, attachments_2.length - ve + Ie.length));
+  let overCapTail = filtered.length === 0 ? attachments.slice(attachmentCap) : [];
+  if (missingFiles.length > 0 || overCapTail.length > 0) {
+    missingFiles.push(...allMissing(overCapTail, "count_cap"));
+    let reportableMissing = missingFiles.length - missingWithAside;
+    if (reportableMissing > 0)
+      notes.push(
+        missingAttachmentsNote(reportableMissing, attachments_2.length - shaCount + overCapTail.length),
+      );
   }
-  if (Ie.length > 0) S.push(`[a message takes at most ${N} attachments]`);
-  let ce = stats.lastFailedWrite?.code === "ENOSPC" && U.some((y) => y.reason === "write");
-  if (ce) S.push(`[${NO_SPACE_FOR_A_FILE}]`);
-  if (ve > 0) emitPeerFileReceiveTelemetry("bridge", ve, Le);
-  let resolvedCount = Ae.length + Me.length;
-  let me = {
-    ...summarizeAttachmentResolution(attachments_2, resolvedCount, Me.length, stats, startTime),
-    ...aheadOfFilesTelemetry(u, s),
+  if (overCapTail.length > 0) notes.push(`[a message takes at most ${attachmentCap} attachments]`);
+  let diskFull =
+    stats.lastFailedWrite?.code === "ENOSPC" && missingFiles.some((missing) => missing.reason === "write");
+  if (diskFull) notes.push(`[${NO_SPACE_FOR_A_FILE}]`);
+  if (shaCount > 0) emitPeerFileReceiveTelemetry("bridge", shaCount, peerSavedCount);
+  let resolvedCount = pathRefs.length + imageBlocks.length;
+  let attributes = {
+    ...summarizeAttachmentResolution(attachments_2, resolvedCount, imageBlocks.length, stats, startTime),
+    ...aheadOfFilesTelemetry(aheadOfFiles, uploadsDirOverride),
   };
-  let oe;
+  let outcome;
   if (resolvedCount === 0) {
-    oe = re ? "digest_mismatch" : "all_failed";
-    logFeatureBad("bridge_attachment_resolve", oe, me);
+    outcome = digestMismatch ? "digest_mismatch" : "all_failed";
+    logFeatureBad("bridge_attachment_resolve", outcome, attributes);
   } else if (resolvedCount < attachments_2.length) {
-    oe = re ? "digest_mismatch" : "partial_failed";
-    logFeatureSad("bridge_attachment_resolve", oe, me);
-  } else if (z) {
-    oe = "over_count_cap";
-    logFeatureSad("bridge_attachment_resolve", oe, me);
+    outcome = digestMismatch ? "digest_mismatch" : "partial_failed";
+    logFeatureSad("bridge_attachment_resolve", outcome, attributes);
+  } else if (overCap) {
+    outcome = "over_count_cap";
+    logFeatureSad("bridge_attachment_resolve", outcome, attributes);
   } else if (stats.inlinedImageNotSavedCount > 0) {
-    oe = "inlined_image_not_saved";
-    logFeatureSad("bridge_attachment_resolve", oe, me);
+    outcome = "inlined_image_not_saved";
+    logFeatureSad("bridge_attachment_resolve", outcome, attributes);
   } else {
-    oe = "ok";
-    logFeatureOk("bridge_attachment_resolve", me);
+    outcome = "ok";
+    logFeatureOk("bridge_attachment_resolve", attributes);
   }
-  let fe = (oe !== "ok" && oe !== "over_count_cap") || stats.failedWriteCount > 0;
-  logForDiagnosticsNoPII(fe ? "warn" : "info", "bridge_attachment_download_timing", {
-    outcome: oe,
-    should_query: d,
-    ...me,
+  let degraded = (outcome !== "ok" && outcome !== "over_count_cap") || stats.failedWriteCount > 0;
+  logForDiagnosticsNoPII(degraded ? "warn" : "info", "bridge_attachment_download_timing", {
+    outcome,
+    should_query: startsTurn,
+    ...attributes,
   });
-  if (Ye > 0) logFeatureSad("bridge_attachment_inline_image", "fallback_path_ref");
-  else if (Me.length > 0) logFeatureOk("bridge_attachment_inline_image");
+  if (inlineFellBackCount > 0) logFeatureSad("bridge_attachment_inline_image", "fallback_path_ref");
+  else if (imageBlocks.length > 0) logFeatureOk("bridge_attachment_inline_image");
   if (stats.modelCopyMissedCount > 0)
     logFeatureSad(
       "bridge_attachment_model_copy",
@@ -1456,26 +1612,26 @@ async function resolveInboundAttachments(attachments, i, o, n, r, a, d, s, u, _,
         : "fallback_original",
     );
   else if (stats.modelCopyCount > 0) logFeatureOk("bridge_attachment_model_copy");
-  let Ce = [...Ae, ...S];
+  let prefixParts = [...pathRefs, ...notes];
   return {
-    prefix: Ce.length > 0 ? Ce.join(" ") + " " : "",
-    imageBlocks: Me,
-    inlinedImagePaths: stats.inlinedImageNotSavedCount > 0 ? [] : xe,
-    ...(Se.length > 0 && {
-      imageFileUuids: Se,
+    prefix: prefixParts.length > 0 ? prefixParts.join(" ") + " " : "",
+    imageBlocks,
+    inlinedImagePaths: stats.inlinedImageNotSavedCount > 0 ? [] : inlinedPaths,
+    ...(imageFileUuids.length > 0 && {
+      imageFileUuids,
     }),
     deliveredCount: resolvedCount,
-    ...(U.length > 0 && {
-      missingFiles: U,
+    ...(missingFiles.length > 0 && {
+      missingFiles,
     }),
-    ...(W.length > 0 && {
-      asideOutcomes: W,
+    ...(asides.length > 0 && {
+      asideOutcomes: asides,
     }),
-    ...(ce && {
-      noSpace: ce,
+    ...(diskFull && {
+      noSpace: diskFull,
     }),
-    ...(Pe.length > 0 && {
-      writtenFiles: Pe,
+    ...(writtenFiles.length > 0 && {
+      writtenFiles,
     }),
     timing: {
       timeToHeadersMs: Math.round(stats.slowestTimeToHeadersMs),
@@ -1491,15 +1647,15 @@ async function resolveInboundAttachments(attachments, i, o, n, r, a, d, s, u, _,
 function prependPathRefs(content, prefix) {
   if (!prefix) return content;
   if (typeof content === "string") return injectPeerFilePrefix(content, prefix);
-  let i = content.findLastIndex((n) => n.type === "text");
+  let i = content.findLastIndex((block) => block.type === "text");
   if (i !== -1) {
-    let n = content[i];
-    if (n.type === "text")
+    let lastText = content[i];
+    if (lastText.type === "text")
       return [
         ...content.slice(0, i),
         {
-          ...n,
-          text: injectPeerFilePrefix(n.text, prefix),
+          ...lastText,
+          text: injectPeerFilePrefix(lastText.text, prefix),
         },
         ...content.slice(i + 1),
       ];
@@ -1515,7 +1671,7 @@ function prependPathRefs(content, prefix) {
 //@ chunk-n4bsg1hp.js:25067-25200 placement
 function resolveAndPrepend_2(msg, content) {
   if (content.length === 0) return msg;
-  let o =
+  let contentBlocks =
     typeof msg === "string"
       ? msg.trim() === ""
         ? []
@@ -1526,83 +1682,91 @@ function resolveAndPrepend_2(msg, content) {
             },
           ]
       : dropEmptyTextBlocks(msg);
-  return [...content, ...o];
+  return [...content, ...contentBlocks];
 }
 //@ chunk-n4bsg1hp.js:25200-25272 placement
-function allMissing(e, reason) {
-  return e.map((o) => ({
-    file_uuid: o.file_uuid,
+function allMissing(attachments, reason) {
+  return attachments.map((attachment) => ({
+    file_uuid: attachment.file_uuid,
     reason,
   }));
 }
 //@ chunk-n4bsg1hp.js:25272-25600 placement
-function contentWithPlannedPathRefs(e, i, o, namedByIdHash = false) {
-  let inboundAttachments = extractInboundAttachments(e);
-  if (
-    inboundAttachments.length === 0 ||
-    inboundAttachments.length > maxAttachmentsPerMessage(inboundAttachments)
-  )
-    return;
-  let a = [];
-  for (let inboundAttachment of inboundAttachments) {
-    let u = namedByIdHash
-      ? shortContentHash(inboundAttachment.file_uuid)
-      : inboundAttachment.file_uuid.slice(0, 8).replace(/[^a-zA-Z0-9_-]/g, "_");
-    if (u === "") return;
-    let _ = hashPrefixedFileName(u, sanitizePeerFileName(inboundAttachment.file_name));
-    a.push(join(o, _));
+function contentWithPlannedPathRefs(message, content, uploadsDir, namedByIdHash = false) {
+  let attachments = extractInboundAttachments(message);
+  if (attachments.length === 0 || attachments.length > maxAttachmentsPerMessage(attachments)) return;
+  let paths = [];
+  for (let attachment of attachments) {
+    let prefix = namedByIdHash
+      ? shortContentHash(attachment.file_uuid)
+      : attachment.file_uuid.slice(0, 8).replace(/[^a-zA-Z0-9_-]/g, "_");
+    if (prefix === "") return;
+    let fileName = hashPrefixedFileName(prefix, sanitizePeerFileName(attachment.file_name));
+    paths.push(join(uploadsDir, fileName));
   }
-  let mapped = a.map((s) => `@"${s}"`);
+  let mapped = paths.map((path) => `@"${path}"`);
   return {
-    content: prependPathRefs(i ?? "", mapped.join(" ") + " "),
+    content: prependPathRefs(content ?? "", mapped.join(" ") + " "),
     refs: mapped,
-    paths: a,
+    paths,
   };
 }
 //@ chunk-n4bsg1hp.js:25600-25969 placement
-async function resolveAndPrepend(e, i, o, n, r, a, d, s = true, u = false) {
-  let content = i ?? "";
-  let attachments = extractInboundAttachments(e);
+async function resolveAndPrepend(
+  message,
+  content,
+  startsTurn,
+  fetchUpload,
+  authOptions,
+  uploadsDirOverride,
+  aheadOfFiles,
+  inlineImages = true,
+  namedByIdHash = false,
+) {
+  let content_2 = content ?? "";
+  let attachments = extractInboundAttachments(message);
   if (attachments.length === 0)
     return {
-      content,
+      content: content_2,
       inlinedImagePaths: [],
     };
-  let p = o && !(typeof content === "string" && isTaggedPeerText(content));
-  let { prefix, imageBlocks, deliveredCount, ...C } = await resolveInboundAttachments(
+  let queryFiles = startsTurn && !(typeof content_2 === "string" && isTaggedPeerText(content_2));
+  let { prefix, imageBlocks, deliveredCount, ...rest } = await resolveInboundAttachments(
     attachments,
-    o,
-    p,
-    n,
-    r,
+    startsTurn,
+    queryFiles,
+    fetchUpload,
+    authOptions,
     undefined,
-    shouldQueryInboundAttachment(e),
-    a,
-    d,
+    shouldQueryInboundAttachment(message),
+    uploadsDirOverride,
+    aheadOfFiles,
     undefined,
-    s,
-    u,
+    inlineImages,
+    namedByIdHash,
   );
-  if (deliveredCount === 0 && typeof content === "string" && content.trim() === "")
+  if (deliveredCount === 0 && typeof content_2 === "string" && content_2.trim() === "")
     return {
       content: prefix.trimEnd(),
-      ...C,
+      ...rest,
     };
   return {
-    content: resolveAndPrepend_2(prependPathRefs(content, prefix), imageBlocks),
-    ...C,
+    content: resolveAndPrepend_2(prependPathRefs(content_2, prefix), imageBlocks),
+    ...rest,
   };
 }
 //@ chunk-n4bsg1hp.js:25969-26102 placement
-function dropSettledTakenDownload(e) {
-  let i = inboundAttachmentDownloadRegistry();
-  let o = foldFileUuid(e.file_uuid);
-  let n = i.byFileUuid.get(o);
-  if (n?.taken !== undefined && n.settledAt !== undefined) i.byFileUuid.delete(o);
+function dropSettledTakenDownload(attachment) {
+  let registry = inboundAttachmentDownloadRegistry();
+  let foldedUuid = foldFileUuid(attachment.file_uuid);
+  let entry = registry.byFileUuid.get(foldedUuid);
+  if (entry?.taken !== undefined && entry.settledAt !== undefined) registry.byFileUuid.delete(foldedUuid);
 }
 //@ chunk-n4bsg1hp.js:26102-26163 placement
-function maxAttachmentsPerMessage(e) {
-  return e.every((i) => i.sha256 === undefined) ? MAX_ATTACHMENTS_WITHOUT_SHA : MAX_PEER_ATTACHMENTS;
+function maxAttachmentsPerMessage(attachments) {
+  return attachments.every((attachment) => attachment.sha256 === undefined)
+    ? MAX_ATTACHMENTS_WITHOUT_SHA
+    : MAX_PEER_ATTACHMENTS;
 }
 //@ chunk-n4bsg1hp.js:26163-26198 placement
 var MOVE_ASIDE_MODE_CODES = {
@@ -1612,25 +1776,27 @@ var MOVE_ASIDE_MODE_CODES = {
   tell: 3,
 };
 //@ chunk-n4bsg1hp.js:26198-26241 placement
-function isMoveAsideModeOn(e) {
-  return e === "on" || e === "tell";
+function isMoveAsideModeOn(mode) {
+  return mode === "on" || mode === "tell";
 }
 //@ chunk-n4bsg1hp.js:26241-26471 placement
-function keptAsideResult(e, i, target, n, r) {
-  if (e !== "tell") return;
-  let [a, ...d] = i.map((s) => join(dirname(target), s, basename(target)));
-  if (a !== undefined)
+function keptAsideResult(mode, keptFolders, originalPath, saved, failure) {
+  if (mode !== "tell") return;
+  let [firstKept, ...restKept] = keptFolders.map((folder) =>
+    join(dirname(originalPath), folder, basename(originalPath)),
+  );
+  if (firstKept !== undefined)
     return {
       aside: {
-        path: target,
-        saved: n,
-        keptAt: [a, ...d],
+        path: originalPath,
+        saved,
+        keptAt: [firstKept, ...restKept],
       },
     };
-  return r?.leavesADifferentFile === true && !n
+  return failure?.leavesADifferentFile === true && !saved
     ? {
         aside: {
-          path: target,
+          path: originalPath,
           saved: false,
           keptAt: [],
         },
@@ -1638,32 +1804,38 @@ function keptAsideResult(e, i, target, n, r) {
     : undefined;
 }
 //@ chunk-n4bsg1hp.js:26471-27199 placement
-function asideSentence({ path, saved, keptAt: [o, n] }, r = false) {
-  if (o === undefined) {
-    let u = `: "${path}" holds something else (possibly a copy changed during this session), which was left in place`;
-    return r ? `A file attached to a user message was not saved${u}` : `[attachment not saved${u}]`;
+function asideSentence({ path, saved, keptAt: [firstKept, secondKept] }, spoken = false) {
+  if (firstKept === undefined) {
+    let leftInPlace = `: "${path}" holds something else (possibly a copy changed during this session), which was left in place`;
+    return spoken
+      ? `A file attached to a user message was not saved${leftInPlace}`
+      : `[attachment not saved${leftInPlace}]`;
   }
-  let d = `(possibly a copy changed during this session) was moved to "${o}"${n === undefined ? "" : `, and what then stood there was moved to "${n}"`}`;
+  let movedClause = `(possibly a copy changed during this session) was moved to "${firstKept}"${secondKept === undefined ? "" : `, and what then stood there was moved to "${secondKept}"`}`;
   if (saved) {
-    let u = ` "${path}"; what was at that path ${d}`;
-    return r ? `A file attached to a user message was saved to${u}` : `[saved the attached file to${u}]`;
+    let savedTo = ` "${path}"; what was at that path ${movedClause}`;
+    return spoken
+      ? `A file attached to a user message was saved to${savedTo}`
+      : `[saved the attached file to${savedTo}]`;
   }
-  let s = `, so what was just sent is not available; what was at "${path}" until now ${d}`;
-  return r ? `A file attached to a user message was not saved${s}` : `[attachment not saved${s}]`;
+  let notAvailable = `, so what was just sent is not available; what was at "${path}" until now ${movedClause}`;
+  return spoken
+    ? `A file attached to a user message was not saved${notAvailable}`
+    : `[attachment not saved${notAvailable}]`;
 }
 //@ chunk-n4bsg1hp.js:27199-27324 placement
-function readAheadOfFiles(e) {
-  if (!e || getFeatureValue_CACHED_MAY_BE_STALE("tengu_amber_ferry", false) !== true) return "off";
+function readAheadOfFiles(signal) {
+  if (!signal || getFeatureValue_CACHED_MAY_BE_STALE("tengu_amber_ferry", false) !== true) return "off";
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_slate_marten", false) === true ? "on_with_pdfs" : "on";
 }
 //@ chunk-n4bsg1hp.js:27324-27489 placement
-function aheadOfFilesTelemetry(e, i) {
-  return e === undefined
+function aheadOfFilesTelemetry(aheadOfFiles, uploadsDirOverride) {
+  return aheadOfFiles === undefined
     ? {}
     : {
-        ahead_of_files_flag_on: e === "off" ? 0 : 1,
-        ahead_of_files_on_with_pdfs: e === "on_with_pdfs" ? 1 : 0,
-        queued_ahead_of_files: i === undefined ? 0 : 1,
+        ahead_of_files_flag_on: aheadOfFiles === "off" ? 0 : 1,
+        ahead_of_files_on_with_pdfs: aheadOfFiles === "on_with_pdfs" ? 1 : 0,
+        queued_ahead_of_files: uploadsDirOverride === undefined ? 0 : 1,
       };
 }
 //@ chunk-n4bsg1hp.js:27489-30455 placement
@@ -1671,14 +1843,14 @@ function aheadOfFilesTelemetry(e, i) {
  * 汇总入站附件处理统计用于遥测：文件数、已解析、下载次数、恢复/复用/预取/并入进行中数、内联图片与 PNG 转码、下载字节、失败分类、重名文件等。
  */
 function summarizeAttachmentResolution(attachments, resolvedCount, inlinedImageCount, stats, startTime) {
-  let a = 0;
+  let sharedNameCount = 0;
   let sharedSavedNameSameIdFileCount = 0;
-  let s = 0;
-  for (let u of stats.idsBySavedName.values()) {
-    s += count(u, (_) => UUID_V7_PATTERN.test(_));
-    if (u.length > 1) {
-      a += u.length;
-      sharedSavedNameSameIdFileCount += count(u, (_) => count(u, (h) => h === _) > 1);
+  let uuidV7Count = 0;
+  for (let ids of stats.idsBySavedName.values()) {
+    uuidV7Count += count(ids, (id) => UUID_V7_PATTERN.test(id));
+    if (ids.length > 1) {
+      sharedNameCount += ids.length;
+      sharedSavedNameSameIdFileCount += count(ids, (id) => count(ids, (otherId) => otherId === id) > 1);
     }
   }
   return {
@@ -1755,12 +1927,12 @@ function summarizeAttachmentResolution(attachments, resolvedCount, inlinedImageC
     ...(stats.moveAsideFailedCount > 0 && {
       move_aside_failed_count: stats.moveAsideFailedCount,
     }),
-    ...(a > 0 && {
-      shared_saved_name_file_count: a,
+    ...(sharedNameCount > 0 && {
+      shared_saved_name_file_count: sharedNameCount,
       shared_saved_name_same_id_file_count: sharedSavedNameSameIdFileCount,
     }),
-    ...(s > 0 && {
-      time_ordered_id_file_count: s,
+    ...(uuidV7Count > 0 && {
+      time_ordered_id_file_count: uuidV7Count,
     }),
     uploads_root_code: stats.uploadsRootCode,
     ...(stats.whatStandsAside !== undefined && {
@@ -1769,9 +1941,9 @@ function summarizeAttachmentResolution(attachments, resolvedCount, inlinedImageC
   };
 }
 //@ chunk-n4bsg1hp.js:30455-30595 placement
-function recordWriteFailure(e, writeFailed) {
-  e.failedWriteCount++;
-  e.lastFailedWrite = {
+function recordWriteFailure(stats, writeFailed) {
+  stats.failedWriteCount++;
+  stats.lastFailedWrite = {
     code: sanitizeErrnoForTelemetry(writeFailed) ?? lit("unknown"),
     step: lit("write_during_download"),
   };
@@ -1780,15 +1952,18 @@ function recordWriteFailure(e, writeFailed) {
   };
 }
 //@ chunk-n4bsg1hp.js:30595-30621 placement
-var NOT_FOUND_HTTP_STATUSES = new Set([404, 410]);
+var NOT_FOUND_HTTP_STATUSES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-n4bsg1hp.js:30595", () => {
+  NOT_FOUND_HTTP_STATUSES = new Set([404, 410]);
+});
 //@ chunk-n4bsg1hp.js:30621-30943 placement
 /**
  * 按失败类型累计 failedDownloads 计数（部分下载另计，记最后的 HTTP 状态），返回 {failure:"download", cause?}；404 类记为 not_found。
  */
 function recordDownloadFailure(stats, failure, receivedBytes, httpStatus) {
   let failedDownloads = stats.failedDownloads;
-  let a = FAILURE_COUNTER_KEYS[failure];
-  failedDownloads[a] = (failedDownloads[a] ?? 0) + 1;
+  let counterKey = FAILURE_COUNTER_KEYS[failure];
+  failedDownloads[counterKey] = (failedDownloads[counterKey] ?? 0) + 1;
   if (receivedBytes > 0)
     failedDownloads.partway_failed_count = (failedDownloads.partway_failed_count ?? 0) + 1;
   if (httpStatus !== undefined) failedDownloads.last_failed_http_status = httpStatus;
@@ -1806,15 +1981,15 @@ function recordDownloadFailure(stats, failure, receivedBytes, httpStatus) {
   };
 }
 //@ chunk-n4bsg1hp.js:30943-31002 placement
-function autoInboundFileRegistry(e) {
-  return e === undefined && getSessionUploadsDirOverride() === null
+function autoInboundFileRegistry(sessionUploadsOverride) {
+  return sessionUploadsOverride === undefined && getSessionUploadsDirOverride() === null
     ? inboundAttachmentFileRegistry()
     : undefined;
 }
 //@ chunk-n4bsg1hp.js:31002-31090 placement
-function writtenInUploadsDir(fileUuid, i) {
-  let o = autoInboundFileRegistry(i)?.get(foldFileUuid(fileUuid));
-  return o !== undefined && dirname(o.path) === sessionUploadsDir() ? o : undefined;
+function writtenInUploadsDir(fileUuid, sessionUploadsOverride) {
+  let entry = autoInboundFileRegistry(sessionUploadsOverride)?.get(foldFileUuid(fileUuid));
+  return entry !== undefined && dirname(entry.path) === sessionUploadsDir() ? entry : undefined;
 }
 //@ chunk-n4bsg1hp.js:31090-31143 placement
 function foldFileUuid(fileUuid) {
@@ -1831,151 +2006,171 @@ function bridgeAttachmentEarlyReadsStopped() {
 //@ chunk-n4bsg1hp.js:31249-31452 placement
 function prefetchHoldWindow() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_hazel_lantern", 0);
-  let i = isCcsTenant();
-  let o = i ? CCS_PREFETCH_HOLD_MS : PREFETCH_HOLD_RANGE_MS.max;
+  let isCcs = isCcsTenant();
+  let maxHoldMs = isCcs ? CCS_PREFETCH_HOLD_MS : PREFETCH_HOLD_RANGE_MS.max;
   if (typeof featureValue_CACHED_MAY_BE_STALE !== "number" || !(featureValue_CACHED_MAY_BE_STALE > 0))
     return {
-      ms: o,
+      ms: maxHoldMs,
       repeatRenews: false,
     };
   return {
     ms: Math.min(
-      o,
+      maxHoldMs,
       Math.max(PREFETCH_HOLD_RANGE_MS.min, Math.round(featureValue_CACHED_MAY_BE_STALE * 1000)),
     ),
-    repeatRenews: !i,
+    repeatRenews: !isCcs,
   };
 }
 //@ chunk-n4bsg1hp.js:31452-33852 placement
-function prefetchInboundAttachments(e, { issuedAt, credentials, onlyThese = false }) {
+function prefetchInboundAttachments(attachments, { issuedAt, credentials, onlyThese = false }) {
   if (isEssentialTrafficOnly()) return 0;
-  let r = bridgeAttachmentEarlyReadsGate();
-  if (!r.value) {
+  let gate = bridgeAttachmentEarlyReadsGate();
+  if (!gate.value) {
     logPrefetchOutcome("bridge_attachment_prefetch_flag_off", {
-      file_count: e.length,
-      flag_served: FLAG_SERVED_BY_SOURCE[r.source],
+      file_count: attachments.length,
+      flag_served: FLAG_SERVED_BY_SOURCE[gate.source],
     });
     return 0;
   }
   let registry = inboundAttachmentDownloadRegistry();
-  let d = prefetchHoldWindow();
-  let s = {
-    file_count: e.length,
+  let holdWindow = prefetchHoldWindow();
+  let fields = {
+    file_count: attachments.length,
     started_count: 0,
     already_present_count: 0,
     held_limit_count: 0,
     start_budget_count: 0,
     skipped_count: 0,
   };
-  let u = 0;
-  let _ = 0;
-  let h = 0;
-  let p = 0;
+  let renewedCount = 0;
+  let droppedCount = 0;
+  let refusedCount = 0;
+  let stoppedCount = 0;
   if (registry.earlyReadsStopped === true && !bridgeAttachmentEarlyReadsStopped()) {
     registry.earlyReadsStopped = undefined;
     registry.earlyReadsStopReported = undefined;
   }
-  let M = registry.earlyReadsStopped === true;
-  let E = new Set();
-  let O = Date.now() - issuedAt;
-  let C = O > Math.max(PREFETCH_AGE_HOLD_MULTIPLE * d.ms, PREFETCH_MAX_AGE_MS);
-  let I = C ? [] : e.slice(0, MAX_PEER_ATTACHMENTS);
-  s.skipped_count = e.length - I.length;
-  if (onlyThese && !C) {
-    let Q = new Set(e.map((S) => foldFileUuid(S.file_uuid)));
-    for (let [S, w] of registry.byFileUuid)
-      if (!Q.has(S) && w.release !== undefined && !w.taken) {
-        w.release("dropped_unused");
-        _++;
+  let areEarlyReadsStopped = registry.earlyReadsStopped === true;
+  let renewedUuids = new Set();
+  let ageMs = Date.now() - issuedAt;
+  let isStale = ageMs > Math.max(PREFETCH_AGE_HOLD_MULTIPLE * holdWindow.ms, PREFETCH_MAX_AGE_MS);
+  let candidates = isStale ? [] : attachments.slice(0, MAX_PEER_ATTACHMENTS);
+  fields.skipped_count = attachments.length - candidates.length;
+  if (onlyThese && !isStale) {
+    let wantedUuids = new Set(attachments.map((attachment) => foldFileUuid(attachment.file_uuid)));
+    for (let [fileUuid, entry] of registry.byFileUuid)
+      if (!wantedUuids.has(fileUuid) && entry.release !== undefined && !entry.taken) {
+        entry.release("dropped_unused");
+        droppedCount++;
       }
   }
-  for (let Q of I) {
-    let S = foldFileUuid(Q.file_uuid);
+  for (let attachment of candidates) {
+    let fileUuid = foldFileUuid(attachment.file_uuid);
     if (
-      normalizeUuidOrNull(Q.file_uuid) === null ||
-      (Q.file_size !== undefined && Q.file_size > MAX_ATTACHMENT_BYTES)
+      normalizeUuidOrNull(attachment.file_uuid) === null ||
+      (attachment.file_size !== undefined && attachment.file_size > MAX_ATTACHMENT_BYTES)
     ) {
-      s.skipped_count++;
+      fields.skipped_count++;
       continue;
     }
-    let w = registry.refusedEarly?.get(S);
-    if (w !== undefined) {
-      if (performance.now() - w < REFUSED_EARLY_COOLDOWN_MS) {
-        h++;
+    let refusedAt = registry.refusedEarly?.get(fileUuid);
+    if (refusedAt !== undefined) {
+      if (performance.now() - refusedAt < REFUSED_EARLY_COOLDOWN_MS) {
+        refusedCount++;
         continue;
       }
-      registry.refusedEarly?.delete(S);
+      registry.refusedEarly?.delete(fileUuid);
     }
-    let z = registry.byFileUuid.get(S);
-    if (z !== undefined || writtenInUploadsDir(Q.file_uuid, undefined) !== undefined) {
-      s.already_present_count++;
-      if (d.repeatRenews && z?.release !== undefined && !z.taken && !E.has(S)) {
-        schedulePrefetchExpiry(z, d.ms);
-        E.add(S);
-        u++;
+    let entry = registry.byFileUuid.get(fileUuid);
+    if (entry !== undefined || writtenInUploadsDir(attachment.file_uuid, undefined) !== undefined) {
+      fields.already_present_count++;
+      if (
+        holdWindow.repeatRenews &&
+        entry?.release !== undefined &&
+        !entry.taken &&
+        !renewedUuids.has(fileUuid)
+      ) {
+        schedulePrefetchExpiry(entry, holdWindow.ms);
+        renewedUuids.add(fileUuid);
+        renewedCount++;
       }
       continue;
     }
-    if (M) {
-      p++;
+    if (areEarlyReadsStopped) {
+      stoppedCount++;
       continue;
     }
-    let statedBytes = nonNegativeSize(Q.file_size);
-    let H = prefetchAdmission(registry, statedBytes);
-    if (H === "held_limit") s.held_limit_count++;
-    else if (H === "start_budget") s.start_budget_count++;
+    let statedBytes = nonNegativeSize(attachment.file_size);
+    let admission = prefetchAdmission(registry, statedBytes);
+    if (admission === "held_limit") fields.held_limit_count++;
+    else if (admission === "start_budget") fields.start_budget_count++;
     else {
-      startAttachmentPrefetch(registry, S, Q.file_uuid, statedBytes, credentials, d.ms, d.repeatRenews);
-      E.add(S);
-      s.started_count++;
+      startAttachmentPrefetch(
+        registry,
+        fileUuid,
+        attachment.file_uuid,
+        statedBytes,
+        credentials,
+        holdWindow.ms,
+        holdWindow.repeatRenews,
+      );
+      renewedUuids.add(fileUuid);
+      fields.started_count++;
     }
   }
-  let R = heldPrefetchTotals(registry);
-  let D = {
-    ...s,
-    age_ms: Math.round(O),
-    held_file_count: R.count,
-    approx_held_bytes: Number(R.bytes.toPrecision(2)),
-    ...(d.repeatRenews && {
-      hold_ms: d.ms,
-      refreshed_count: u,
+  let heldTotals = heldPrefetchTotals(registry);
+  let report = {
+    ...fields,
+    age_ms: Math.round(ageMs),
+    held_file_count: heldTotals.count,
+    approx_held_bytes: Number(heldTotals.bytes.toPrecision(2)),
+    ...(holdWindow.repeatRenews && {
+      hold_ms: holdWindow.ms,
+      refreshed_count: renewedCount,
       renewed_since_last_report: registry.renewalsNotYetReported ?? 0,
     }),
     ...(onlyThese && {
       only_these: true,
-      dropped_count: _,
+      dropped_count: droppedCount,
     }),
-    ...(h > 0 && {
-      refused_before_count: h,
+    ...(refusedCount > 0 && {
+      refused_before_count: refusedCount,
     }),
-    ...(p > 0 && {
-      early_reads_stopped_count: p,
+    ...(stoppedCount > 0 && {
+      early_reads_stopped_count: stoppedCount,
     }),
   };
-  let N = registry.earlyReadsStopReported === true ? p : 0;
-  if (u + h + N > 0 && u === s.already_present_count && s.file_count === u + h + N && _ === 0) {
-    registry.renewalsNotYetReported = (registry.renewalsNotYetReported ?? 0) + u;
+  let stopCount = registry.earlyReadsStopReported === true ? stoppedCount : 0;
+  if (
+    renewedCount + refusedCount + stopCount > 0 &&
+    renewedCount === fields.already_present_count &&
+    fields.file_count === renewedCount + refusedCount + stopCount &&
+    droppedCount === 0
+  ) {
+    registry.renewalsNotYetReported = (registry.renewalsNotYetReported ?? 0) + renewedCount;
     return 0;
   }
   registry.renewalsNotYetReported = 0;
-  if (p > 0) registry.earlyReadsStopReported = true;
-  if (C) logFeatureSad("bridge_attachment_prefetch", "stale", D);
-  else if (p > 0) logFeatureSad("bridge_attachment_prefetch", "mark_unseen_stop", D);
-  else if (s.held_limit_count > 0) logFeatureSad("bridge_attachment_prefetch", "held_limit", D);
-  else if (s.start_budget_count > 0) logFeatureSad("bridge_attachment_prefetch", "start_budget", D);
-  else logFeatureOk("bridge_attachment_prefetch", D);
+  if (stoppedCount > 0) registry.earlyReadsStopReported = true;
+  if (isStale) logFeatureSad("bridge_attachment_prefetch", "stale", report);
+  else if (stoppedCount > 0) logFeatureSad("bridge_attachment_prefetch", "mark_unseen_stop", report);
+  else if (fields.held_limit_count > 0) logFeatureSad("bridge_attachment_prefetch", "held_limit", report);
+  else if (fields.start_budget_count > 0) logFeatureSad("bridge_attachment_prefetch", "start_budget", report);
+  else logFeatureOk("bridge_attachment_prefetch", report);
   logPrefetchOutcome(
-    s.started_count > 0 ? "bridge_attachment_prefetch_started" : "bridge_attachment_prefetch_not_started",
+    fields.started_count > 0
+      ? "bridge_attachment_prefetch_started"
+      : "bridge_attachment_prefetch_not_started",
     {
-      ...D,
-      stale: C,
+      ...report,
+      stale: isStale,
     },
   );
-  return s.started_count;
+  return fields.started_count;
 }
 //@ chunk-n4bsg1hp.js:33852-33884 placement = tryReadFileForSync (1)
-function logPrefetchOutcome(e, fields) {
-  logForDiagnosticsNoPII("info", e, fields);
+function logPrefetchOutcome(eventName, fields) {
+  logForDiagnosticsNoPII("info", eventName, fields);
 }
 //@ chunk-n4bsg1hp.js:33884-33926 placement
 function nonNegativeSize(fileSize) {
@@ -1985,49 +2180,61 @@ function nonNegativeSize(fileSize) {
 /**
  * 判断能否再开始一个附件预取：清理窗口外的开始记录；持有中的预取数/字节超限返回 held_limit，近期开始数超预算返回 start_budget，否则 ok。
  */
-function prefetchAdmission(e, i) {
+function prefetchAdmission(registry, statedBytes) {
   let startTime = performance.now();
-  let recentPrefetchStarts = e.recentPrefetchStarts;
+  let recentPrefetchStarts = registry.recentPrefetchStarts;
   while (recentPrefetchStarts.length > 0 && startTime - recentPrefetchStarts[0] >= PREFETCH_START_WINDOW_MS)
     recentPrefetchStarts.shift();
-  let r = heldPrefetchTotals(e);
-  if (r.count >= MAX_HELD_PREFETCHES || r.bytes + i > maxAttachmentBytes()) return "held_limit";
+  let totals = heldPrefetchTotals(registry);
+  if (totals.count >= MAX_HELD_PREFETCHES || totals.bytes + statedBytes > maxAttachmentBytes())
+    return "held_limit";
   return recentPrefetchStarts.length < PREFETCH_START_BUDGET ? "ok" : "start_budget";
 }
 //@ chunk-n4bsg1hp.js:34132-34340 placement
-function heldPrefetchTotals(e) {
-  let i = 0;
+function heldPrefetchTotals(registry) {
+  let count = 0;
   let bytes = 0;
-  for (let n of e.byFileUuid.values())
-    if (n.startedBy === "prefetch" && !n.taken) {
-      i++;
-      bytes += n.settledAt === undefined ? Math.max(n.receivedBytes, n.statedBytes) : n.receivedBytes;
+  for (let entry of registry.byFileUuid.values())
+    if (entry.startedBy === "prefetch" && !entry.taken) {
+      count++;
+      bytes +=
+        entry.settledAt === undefined
+          ? Math.max(entry.receivedBytes, entry.statedBytes)
+          : entry.receivedBytes;
     }
   return {
-    count: i,
+    count,
     bytes,
   };
 }
 //@ chunk-n4bsg1hp.js:34340-34385 placement
-function releasePrefetchExpired(e) {
-  e.release?.("expired_unused");
+function releasePrefetchExpired(entry) {
+  entry.release?.("expired_unused");
 }
 //@ chunk-n4bsg1hp.js:34385-34483 placement
-function schedulePrefetchExpiry(downloadEntry, i) {
-  clearTimeout(downloadEntry.expiry);
-  downloadEntry.expiry = setTimeout(releasePrefetchExpired.bind(undefined, downloadEntry), i);
-  downloadEntry.expiry.unref();
+function schedulePrefetchExpiry(prefetchEntry, ms) {
+  clearTimeout(prefetchEntry.expiry);
+  prefetchEntry.expiry = setTimeout(releasePrefetchExpired.bind(undefined, prefetchEntry), ms);
+  prefetchEntry.expiry.unref();
 }
 //@ chunk-n4bsg1hp.js:34483-36521 placement
 /**
  * 在消息到达前为一个 file_uuid 启动后台预取：带独立 AbortController 调用 resolveOne（快速静默超时、字节准入回调、served 标记埋点），
  * 把下载登记进 byFileUuid，结束后按结果记 bridge_attachment_prefetch_* 埋点、更新提前拒绝表。
  */
-function startAttachmentPrefetch(registry, i, fileUuid, statedBytes, bridgeContext, ms, repeatRenews) {
+function startAttachmentPrefetch(
+  registry,
+  fileUuid,
+  fileUuid_2,
+  statedBytes,
+  bridgeContext,
+  ms,
+  repeatRenews,
+) {
   let abortController = new AbortController();
-  let u = false;
+  let isReleased = false;
   let download = resolveOne({
-    fileUuid,
+    fileUuid: fileUuid_2,
     baseUrl: undefined,
     modelCopy: false,
     forPrefetch: true,
@@ -2036,101 +2243,102 @@ function startAttachmentPrefetch(registry, i, fileUuid, statedBytes, bridgeConte
     quietLimitMs: FAST_QUIET_LIMIT_MS,
     token: async () => {
       let bridgeAccessToken = await getBridgeAccessTokenAsync(bridgeContext);
-      if (bridgeAccessToken) downloadEntry.bearer = computeContentHash(bridgeAccessToken);
+      if (bridgeAccessToken) entry.bearer = computeContentHash(bridgeAccessToken);
       return bridgeAccessToken;
     },
     abort: abortController,
     totals: undefined,
-    onServed: (p) => {
-      let M = !p && bridgeAttachmentEarlyReadsStopped();
-      if (M) registry.earlyReadsStopped = true;
+    onServed: (markSeen) => {
+      let stopsEarlyReads = !markSeen && bridgeAttachmentEarlyReadsStopped();
+      if (stopsEarlyReads) registry.earlyReadsStopped = true;
       logPrefetchOutcome("bridge_attachment_prefetch_served", {
-        mark_seen: p,
-        ...(!p && {
-          stops_early_reads: M,
+        mark_seen: markSeen,
+        ...(!markSeen && {
+          stops_early_reads: stopsEarlyReads,
         }),
       });
     },
     admitBytes: (receivedBytes) => {
-      downloadEntry.receivedBytes = receivedBytes;
-      if (downloadEntry.taken || heldPrefetchTotals(registry).bytes <= maxAttachmentBytes()) return true;
-      downloadEntry.receivedBytes = 0;
-      downloadEntry.statedBytes = 0;
+      entry.receivedBytes = receivedBytes;
+      if (entry.taken || heldPrefetchTotals(registry).bytes <= maxAttachmentBytes()) return true;
+      entry.receivedBytes = 0;
+      entry.statedBytes = 0;
       return false;
     },
   });
-  let downloadEntry = newDownloadEntry("prefetch", abortController, download, undefined);
-  downloadEntry.statedBytes = statedBytes;
-  downloadEntry.release = (p) => {
-    if (registry.byFileUuid.get(i) !== downloadEntry || downloadEntry.taken) return;
-    if (p === "expired_unused" && repeatRenews && downloadEntry.settledAt === undefined) {
-      schedulePrefetchExpiry(downloadEntry, ms);
+  let entry = newDownloadEntry("prefetch", abortController, download, undefined);
+  entry.statedBytes = statedBytes;
+  entry.release = (reason) => {
+    if (registry.byFileUuid.get(fileUuid) !== entry || entry.taken) return;
+    if (reason === "expired_unused" && repeatRenews && entry.settledAt === undefined) {
+      schedulePrefetchExpiry(entry, ms);
       return;
     }
-    u = true;
-    clearTimeout(downloadEntry.expiry);
-    registry.byFileUuid.delete(i);
+    isReleased = true;
+    clearTimeout(entry.expiry);
+    registry.byFileUuid.delete(fileUuid);
     abortController.abort();
-    let M = {
-      download_finished: downloadEntry.settledAt !== undefined,
-      approx_bytes: Number(downloadEntry.receivedBytes.toPrecision(2)),
-      ...(p === "dropped_unused" && {
-        held_for_ms: Math.round(performance.now() - downloadEntry.startedAt),
+    let fields = {
+      download_finished: entry.settledAt !== undefined,
+      approx_bytes: Number(entry.receivedBytes.toPrecision(2)),
+      ...(reason === "dropped_unused" && {
+        held_for_ms: Math.round(performance.now() - entry.startedAt),
       }),
     };
-    logFeatureSad("bridge_attachment_prefetch_download", p, M);
-    logPrefetchOutcome(`bridge_attachment_prefetch_${p}`, M);
+    logFeatureSad("bridge_attachment_prefetch_download", reason, fields);
+    logPrefetchOutcome(`bridge_attachment_prefetch_${reason}`, fields);
   };
-  schedulePrefetchExpiry(downloadEntry, ms);
-  registry.recentPrefetchStarts.push(downloadEntry.startedAt);
-  registry.byFileUuid.set(i, downloadEntry);
+  schedulePrefetchExpiry(entry, ms);
+  registry.recentPrefetchStarts.push(entry.startedAt);
+  registry.byFileUuid.set(fileUuid, entry);
   download
-    .then((p) => {
-      if (!("failure" in p)) {
-        if (repeatRenews && registry.byFileUuid.get(i) === downloadEntry && !downloadEntry.taken)
-          schedulePrefetchExpiry(downloadEntry, ms);
+    .then((result) => {
+      if (!("failure" in result)) {
+        if (repeatRenews && registry.byFileUuid.get(fileUuid) === entry && !entry.taken)
+          schedulePrefetchExpiry(entry, ms);
         return;
       }
-      if (registry.byFileUuid.get(i) === downloadEntry && !downloadEntry.taken) {
-        registry.byFileUuid.delete(i);
-        clearTimeout(downloadEntry.expiry);
+      if (registry.byFileUuid.get(fileUuid) === entry && !entry.taken) {
+        registry.byFileUuid.delete(fileUuid);
+        clearTimeout(entry.expiry);
       }
-      let M = p.failure === "http_status" && p.httpStatus === HTTP_CONFLICT_STATUS;
-      if (M && !downloadEntry.taken) {
-        let D = (registry.refusedEarly ??= new Map());
-        D.delete(i);
-        if (D.size >= MAX_REFUSED_EARLY) D.delete(D.keys().next().value ?? i);
-        D.set(i, performance.now());
+      let isRefusedEarly = result.failure === "http_status" && result.httpStatus === HTTP_CONFLICT_STATUS;
+      if (isRefusedEarly && !entry.taken) {
+        let refusedEarly = (registry.refusedEarly ??= new Map());
+        refusedEarly.delete(fileUuid);
+        if (refusedEarly.size >= MAX_REFUSED_EARLY)
+          refusedEarly.delete(refusedEarly.keys().next().value ?? fileUuid);
+        refusedEarly.set(fileUuid, performance.now());
       }
-      if (u) return;
-      let E = {
-        duration_ms: Math.round(performance.now() - downloadEntry.startedAt),
-        ...(p.httpStatus !== undefined && {
-          http_status: p.httpStatus,
+      if (isReleased) return;
+      let fields = {
+        duration_ms: Math.round(performance.now() - entry.startedAt),
+        ...(result.httpStatus !== undefined && {
+          http_status: result.httpStatus,
         }),
       };
-      let O = isStalledBeforeHeaders(p);
-      let failure = O ? "no_answer" : p.failure;
-      if (M) {
-        logFeatureSad("bridge_attachment_prefetch_download", "refused_early", E);
+      let didStallBeforeHeaders = isStalledBeforeHeaders(result);
+      let failure = didStallBeforeHeaders ? "no_answer" : result.failure;
+      if (isRefusedEarly) {
+        logFeatureSad("bridge_attachment_prefetch_download", "refused_early", fields);
         logPrefetchOutcome("bridge_attachment_prefetch_failed", {
-          ...E,
+          ...fields,
           failure_code: PREFETCH_FAILURE_CODE_BEARER,
         });
         return;
       }
-      let taken = downloadEntry.taken;
-      let R =
-        taken?.by === "joiner" &&
-        taken.bearer === downloadEntry.bearer &&
-        shouldRedownload(downloadEntry, taken.at);
-      if (R) logFeatureBad("bridge_attachment_prefetch_download", failure, E);
-      else logFeatureSad("bridge_attachment_prefetch_download", failure, E);
+      let taken = entry.taken;
+      let wasFileLost =
+        taken?.by === "joiner" && taken.bearer === entry.bearer && shouldRedownload(entry, taken.at);
+      if (wasFileLost) logFeatureBad("bridge_attachment_prefetch_download", failure, fields);
+      else logFeatureSad("bridge_attachment_prefetch_download", failure, fields);
       logPrefetchOutcome(
-        R ? "bridge_attachment_prefetch_failed_file_lost" : "bridge_attachment_prefetch_failed",
+        wasFileLost ? "bridge_attachment_prefetch_failed_file_lost" : "bridge_attachment_prefetch_failed",
         {
-          ...E,
-          failure_code: O ? PREFETCH_FAILURE_CODE_HEADERS_TIMEOUT : FAILURE_CODES[p.failure],
+          ...fields,
+          failure_code: didStallBeforeHeaders
+            ? PREFETCH_FAILURE_CODE_HEADERS_TIMEOUT
+            : FAILURE_CODES[result.failure],
         },
       );
     })
@@ -2143,21 +2351,21 @@ function startAttachmentPrefetch(registry, i, fileUuid, statedBytes, bridgeConte
 function newDownloadEntry(startedBy, abortController, download, bearer) {
   let entry = {
     startedBy,
-    bytes: download.then((a) => {
+    bytes: download.then((result) => {
       entry.settledAt = performance.now();
-      if ("failure" in a) {
-        entry.failure = a.failure;
-        entry.headersTimedOut = isStalledBeforeHeaders(a);
+      if ("failure" in result) {
+        entry.failure = result.failure;
+        entry.headersTimedOut = isStalledBeforeHeaders(result);
         return null;
       }
-      if ("writeFailed" in a) {
+      if ("writeFailed" in result) {
         entry.failure = "error";
-        entry.writeFailed = a.writeFailed;
+        entry.writeFailed = result.writeFailed;
         return null;
       }
-      if (!("data" in a)) return null;
-      entry.servedPageCount = a.servedPageCount;
-      return a.data;
+      if (!("data" in result)) return null;
+      entry.servedPageCount = result.servedPageCount;
+      return result.data;
     }),
     startedAt: performance.now(),
     settledAt: undefined,
@@ -2179,24 +2387,24 @@ function newDownloadEntry(startedBy, abortController, download, bearer) {
   return entry;
 }
 //@ chunk-n4bsg1hp.js:37058-37292 placement
-function shouldRedownload(e, i) {
-  let o = (e.settledAt ?? performance.now()) - i;
-  if (e.failure === undefined) return false;
-  if (e.startedBy === "prefetch" && e.failure === "too_large") return !canSpillToUploads();
+function shouldRedownload(entry, takenAt) {
+  let settledAgeMs = (entry.settledAt ?? performance.now()) - takenAt;
+  if (entry.failure === undefined) return false;
+  if (entry.startedBy === "prefetch" && entry.failure === "too_large") return !canSpillToUploads();
   return (
-    e.startedBy !== "prefetch" ||
-    (e.receivedBytes > 0 && e.failure !== "stalled" && o > DOWNLOAD_DEADLINE_SLACK_MS)
+    entry.startedBy !== "prefetch" ||
+    (entry.receivedBytes > 0 && entry.failure !== "stalled" && settledAgeMs > DOWNLOAD_DEADLINE_SLACK_MS)
   );
 }
 //@ chunk-n4bsg1hp.js:37292-37400 placement
-function takeInFlightDownload(e, at, bearer) {
-  if (e.taken) return false;
-  e.taken = {
+function takeInFlightDownload(entry, at, bearer) {
+  if (entry.taken) return false;
+  entry.taken = {
     by: "joiner",
     at,
     bearer,
   };
-  clearTimeout(e.expiry);
+  clearTimeout(entry.expiry);
   return true;
 }
 //@ chunk-n4bsg1hp.js:37400-37952 placement
@@ -2231,110 +2439,115 @@ function logPrefetchUse(prefetch, bytes, { inFlight, passes, sameBearer, waitedM
   }
 }
 //@ chunk-n4bsg1hp.js:37952-38644 placement
-async function downloadWithRetries(e, i, abortController, n, r) {
-  let a = performance.now() - i + DOWNLOAD_DEADLINE_SLACK_MS;
+async function downloadWithRetries(maxAttempts, startedAt, abortController, totals, options) {
+  let entry = performance.now() - startedAt + DOWNLOAD_DEADLINE_SLACK_MS;
   for (let j = 0; ; j++) {
     let abortController_2 = new AbortController();
-    let u = () => abortController_2.abort();
-    abortController.signal.addEventListener("abort", u, {
+    let abortListener = () => abortController_2.abort();
+    abortController.signal.addEventListener("abort", abortListener, {
       once: true,
     });
     if (abortController.signal.aborted) abortController_2.abort();
-    if (n !== undefined) n.downloadTryCount++;
-    r.admitBytes(0);
-    let _ = j + 1 < e && performance.now() + FAST_QUIET_LIMIT_MS + MIN_RETRY_DELAY_MS <= a;
-    let h = await resolveOne({
-      ...r,
-      totals: n,
+    if (totals !== undefined) totals.downloadTryCount++;
+    options.admitBytes(0);
+    let hasTimeForRetry =
+      j + 1 < maxAttempts && performance.now() + FAST_QUIET_LIMIT_MS + MIN_RETRY_DELAY_MS <= entry;
+    let result = await resolveOne({
+      ...options,
+      totals,
       abort: abortController_2,
-      quietLimitMs: _ ? FAST_QUIET_LIMIT_MS : DOWNLOAD_QUIET_LIMIT_MS,
+      quietLimitMs: hasTimeForRetry ? FAST_QUIET_LIMIT_MS : DOWNLOAD_QUIET_LIMIT_MS,
     });
-    abortController.signal.removeEventListener("abort", u);
-    if (!("failure" in h)) {
-      if (n !== undefined && j > 0 && !("writeFailed" in h)) n.recoveredFileCount++;
-      return h;
+    abortController.signal.removeEventListener("abort", abortListener);
+    if (!("failure" in result)) {
+      if (totals !== undefined && j > 0 && !("writeFailed" in result)) totals.recoveredFileCount++;
+      return result;
     }
-    let p = isRetryableDownloadFailure(h);
+    let isRetryable = isRetryableDownloadFailure(result);
     let startTime = performance.now();
-    let E = a - startTime;
+    let remainingMs = entry - startTime;
     let min = Math.min(
       fullJitterBackoffMs({
         baseMs: RETRY_BASE_DELAY_MS,
         attempt: j,
         floorMs: MIN_RETRY_DELAY_MS,
       }),
-      Math.max(MIN_RETRY_DELAY_MS, E),
+      Math.max(MIN_RETRY_DELAY_MS, remainingMs),
     );
-    let C = _ && h.failure === "stalled";
-    if (p && j + 1 < e && (C || E >= MIN_RETRY_DELAY_MS)) {
+    let isFastStall = hasTimeForRetry && result.failure === "stalled";
+    if (isRetryable && j + 1 < maxAttempts && (isFastStall || remainingMs >= MIN_RETRY_DELAY_MS)) {
       await sleep(min, abortController.signal);
       if (!abortController.signal.aborted) continue;
     }
-    return h;
+    return result;
   }
 }
 //@ chunk-n4bsg1hp.js:38644-38757 placement
 function signInRefreshState() {
-  let e = inboundAttachmentDownloadRegistry();
-  e.signInRefresh ??= {
+  let registry = inboundAttachmentDownloadRegistry();
+  registry.signInRefresh ??= {
     attempted: false,
     recoveries: {
       begun: 0,
       running: 0,
     },
   };
-  return e.signInRefresh;
+  return registry.signInRefresh;
 }
 //@ chunk-n4bsg1hp.js:38757-39585 placement
 /**
  * 下载附件遇到 401 时刷新 bridge 令牌：同一会话只尝试一次 handleOAuth401Error（带超时与中断），返回刷新后的新令牌或 undefined。
  */
-async function refreshTokenForDownload(staleToken, i, o, signal, r, a) {
+async function refreshTokenForDownload(staleToken, sessionId, credentials, signal, isForcedRefresh, stats) {
   let state = signInRefreshState();
   let abortController = new AbortController();
-  let u = sleep(FAST_QUIET_LIMIT_MS, AbortSignal.any([signal, abortController.signal])).then(() => {
+  let timeout = sleep(FAST_QUIET_LIMIT_MS, AbortSignal.any([signal, abortController.signal])).then(() => {
     return;
   });
   try {
     let winner = await Promise.race([
-      getBridgeAccessTokenAsync(i).catch(() => {
+      getBridgeAccessTokenAsync(sessionId).catch(() => {
         return;
       }),
-      u,
+      timeout,
     ]);
     if (winner === staleToken) {
-      let h = state.attempted && state.recoveries.running === 0;
+      let shouldReadFresh = state.attempted && state.recoveries.running === 0;
       if (!state.attempted) {
         state.attempted = true;
-        let M = false;
+        let didForceRefresh = false;
         state.run = countOAuth401Recovery(state, () =>
-          handleOAuth401Error(staleToken, i, o, {
-            onForcedRefreshOutcome: (E) => {
-              if (TOKEN_REFRESH_OUTCOMES_BEFORE_POST.has(E)) state.attempted = false;
-              else M = true;
+          handleOAuth401Error(staleToken, sessionId, credentials, {
+            onForcedRefreshOutcome: (outcome) => {
+              if (TOKEN_REFRESH_OUTCOMES_BEFORE_POST.has(outcome)) state.attempted = false;
+              else didForceRefresh = true;
             },
           }),
         )
           .then(async () => {
-            if (!M && (await getBridgeAccessTokenAsync(i)) !== staleToken) state.attempted = false;
+            if (!didForceRefresh && (await getBridgeAccessTokenAsync(sessionId)) !== staleToken)
+              state.attempted = false;
           })
           .catch(logError);
       }
-      if (!r) {
-        if (!(await Promise.race([getClaudeAIOAuthTokensAsync(i).catch(() => null), u]))?.refreshToken)
+      if (!isForcedRefresh) {
+        if (
+          !(await Promise.race([getClaudeAIOAuthTokensAsync(sessionId).catch(() => null), timeout]))
+            ?.refreshToken
+        )
           return;
       }
       let startTime = performance.now();
       winner = await Promise.race([
         (state.run ?? Promise.resolve())
-          .then(() => (h ? readFreshOAuthAccessToken(i) : undefined))
-          .then(() => getBridgeAccessTokenAsync(i))
+          .then(() => (shouldReadFresh ? readFreshOAuthAccessToken(sessionId) : undefined))
+          .then(() => getBridgeAccessTokenAsync(sessionId))
           .catch(() => {
             return;
           }),
-        u,
+        timeout,
       ]);
-      a.slowest401RefreshWaitMs = Math.max(a.slowest401RefreshWaitMs, performance.now() - startTime);
+      stats.slowest401RefreshWaitMs = Math.max(stats.slowest401RefreshWaitMs, performance.now() - startTime);
     }
     return winner && winner !== staleToken && !signal.aborted
       ? {
@@ -2364,23 +2577,23 @@ async function resolveOne({
   onServed,
   admitBytes,
 }) {
-  let M = forPrefetch ? "of a prefetched file" : fileUuid;
-  let E = false;
-  let O = false;
-  let C = () => {
-    E = true;
+  let label = forPrefetch ? "of a prefetched file" : fileUuid;
+  let isQuietTimedOut = false;
+  let hasHeaders = false;
+  let onQuietTimeout = () => {
+    isQuietTimedOut = true;
     abort.abort();
   };
-  let timer = setTimeout(C, quietLimitMs);
+  let timer = setTimeout(onQuietTimeout, quietLimitMs);
   let startTime = performance.now();
-  let D;
+  let spill;
   try {
     if (isBridgeFileLoginRefused())
       await Promise.race([settleStoredLoginRefusal(), createChildAbortController(abort.signal)]);
     let winner = await Promise.race([token(), createChildAbortController(abort.signal)]);
     if (abort.signal.aborted)
-      return E
-        ? stalledFailure(O)
+      return isQuietTimedOut
+        ? stalledFailure(hasHeaders)
         : {
             failure: "stopped",
           };
@@ -2388,26 +2601,26 @@ async function resolveOne({
       return {
         failure: "no_token",
       };
-    let Q;
+    let url;
     try {
-      Q = `${baseUrl ?? getBridgeBaseUrl()}/api/oauth/files/${encodeURIComponent(fileUuid)}/content${modelCopy ? "?model_copy=inference_highres" : ""}`;
+      url = `${baseUrl ?? getBridgeBaseUrl()}/api/oauth/files/${encodeURIComponent(fileUuid)}/content${modelCopy ? "?model_copy=inference_highres" : ""}`;
     } catch (error) {
       debug(
-        `fetch ${M} has no URL: ${forPrefetch ? (error instanceof Error ? error.name : "a non-Error") : error}`,
+        `fetch ${label} has no URL: ${forPrefetch ? (error instanceof Error ? error.name : "a non-Error") : error}`,
       );
       return {
         failure: "error",
         final: true,
       };
     }
-    if (isBridgeFileLoginRefused(Q, winner)) {
-      debug(`fetch ${M} refused: the stored login may not go there`);
+    if (isBridgeFileLoginRefused(url, winner)) {
+      debug(`fetch ${label} refused: the stored login may not go there`);
       return {
         failure: "error",
         final: true,
       };
     }
-    let response = await fetch(Q, {
+    let response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${winner}`,
         "User-Agent": claudeCodeUserAgent(),
@@ -2420,19 +2633,19 @@ async function resolveOne({
       }),
       signal: abort.signal,
       ...getProxyFetchOptions({
-        url: Q,
+        url,
       }),
     });
-    O = true;
+    hasHeaders = true;
     clearTimeout(timer);
-    timer = setTimeout(C, quietLimitMs);
+    timer = setTimeout(onQuietTimeout, quietLimitMs);
     if (totals !== undefined)
       totals.slowestTimeToHeadersMs = Math.max(totals.slowestTimeToHeadersMs, performance.now() - startTime);
     if (response.status !== 200) {
-      debug(`fetch ${M} failed: status=${response.status}`);
+      debug(`fetch ${label} failed: status=${response.status}`);
       await drainResponseBody(response);
-      return E
-        ? stalledFailure(O)
+      return isQuietTimedOut
+        ? stalledFailure(hasHeaders)
         : {
             failure: "http_status",
             httpStatus: response.status,
@@ -2440,47 +2653,47 @@ async function resolveOne({
     }
     onServed?.(response.headers.get(PREFETCH_SEEN_HEADER.name)?.trim() === PREFETCH_SEEN_HEADER.value);
     let reader = response.body?.getReader();
-    let z = [];
-    let j = 0;
+    let chunks = [];
+    let receivedBytes = 0;
     while (reader !== undefined) {
-      let { done: H, value: Fe } = await reader.read();
-      if (H) break;
+      let { done, value: chunk } = await reader.read();
+      if (done) break;
       timer.refresh();
-      j += Fe.byteLength;
-      if (j > (spillTo === undefined ? maxBytes : MAX_PEER_SPOOL_BYTES)) {
-        debug(`fetch ${M} over size cap (${j} bytes so far)`);
+      receivedBytes += chunk.byteLength;
+      if (receivedBytes > (spillTo === undefined ? maxBytes : MAX_PEER_SPOOL_BYTES)) {
+        debug(`fetch ${label} over size cap (${receivedBytes} bytes so far)`);
         abort.abort();
         return {
           failure: "too_large",
         };
       }
-      if (!admitBytes(j)) {
-        debug(`fetch ${M} stopped: unused prefetched files would exceed their limit in memory`);
+      if (!admitBytes(receivedBytes)) {
+        debug(`fetch ${label} stopped: unused prefetched files would exceed their limit in memory`);
         abort.abort();
         return {
           failure: "held_limit",
         };
       }
-      z.push(Fe);
-      if (spillTo !== undefined && j > maxBytes) {
+      chunks.push(chunk);
+      if (spillTo !== undefined && receivedBytes > maxBytes) {
         clearTimeout(timer);
         try {
-          D ??= await spillTo();
-          for (let we of z) await D.write(we);
+          spill ??= await spillTo();
+          for (let chunk of chunks) await spill.write(chunk);
         } catch (error) {
-          debug(`download of ${M} stopped, no retry: write to disk failed: ${error}`);
+          debug(`download of ${label} stopped, no retry: write to disk failed: ${error}`);
           abort.abort();
           return {
             writeFailed: error,
           };
         }
-        timer = setTimeout(C, DOWNLOAD_QUIET_LIMIT_MS);
-        z = [];
+        timer = setTimeout(onQuietTimeout, DOWNLOAD_QUIET_LIMIT_MS);
+        chunks = [];
       }
     }
-    if (totals !== undefined) totals.downloadedBytes += j;
-    if (D !== undefined)
-      return await D.finish().then(
+    if (totals !== undefined) totals.downloadedBytes += receivedBytes;
+    if (spill !== undefined)
+      return await spill.finish().then(
         (file) => ({
           file,
         }),
@@ -2489,19 +2702,21 @@ async function resolveOne({
         }),
       );
     return {
-      data: Buffer.concat(z, j),
+      data: Buffer.concat(chunks, receivedBytes),
       servedPageCount: parseServedPageCount(response.headers.get(X_SERVED_FILE_PAGE_COUNT)),
     };
   } catch (error) {
-    debug(`fetch ${M} threw: ${forPrefetch ? (error instanceof Error ? error.name : "a non-Error") : error}`);
-    return E
-      ? stalledFailure(O)
+    debug(
+      `fetch ${label} threw: ${forPrefetch ? (error instanceof Error ? error.name : "a non-Error") : error}`,
+    );
+    return isQuietTimedOut
+      ? stalledFailure(hasHeaders)
       : {
           failure: abort.signal.aborted ? "stopped" : "error",
         };
   } finally {
     clearTimeout(timer);
-    await D?.discard();
+    await spill?.discard();
     if (totals !== undefined)
       totals.slowestDownloadMs = Math.max(totals.slowestDownloadMs, performance.now() - startTime);
   }
@@ -2511,27 +2726,27 @@ function parseServedPageCount(header) {
   return header !== null && /^[1-9][0-9]{0,2}$/.test(header) ? Number(header) : undefined;
 }
 //@ chunk-n4bsg1hp.js:41974-42146 placement
-async function writeWithPageCount(e, i, servedPageCount, ...n) {
-  let r = (inboundAttachmentDownloadRegistry().pageCountsOfWrites ??= new Map());
-  let a = {
+async function writeWithPageCount(spill, fileUuid, servedPageCount, ...chunks) {
+  let pageCounts = (inboundAttachmentDownloadRegistry().pageCountsOfWrites ??= new Map());
+  let record = {
     servedPageCount,
   };
-  r.set(i, a);
+  pageCounts.set(fileUuid, record);
   try {
-    return await e.write(...n);
+    return await spill.write(...chunks);
   } finally {
-    if (r.get(i) === a) r.delete(i);
+    if (pageCounts.get(fileUuid) === record) pageCounts.delete(fileUuid);
   }
 }
 //@ chunk-n4bsg1hp.js:42146-42221 placement
-function isStalledBeforeHeaders(e) {
-  return "failure" in e && e.failure === "stalled" && e.beforeHeaders;
+function isStalledBeforeHeaders(result) {
+  return "failure" in result && result.failure === "stalled" && result.beforeHeaders;
 }
 //@ chunk-n4bsg1hp.js:42221-42279 placement
-function stalledFailure(e) {
+function stalledFailure(hasHeaders) {
   return {
     failure: "stalled",
-    beforeHeaders: !e,
+    beforeHeaders: !hasHeaders,
   };
 }
 //@ chunk-n4bsg1hp.js:42279-42404 placement = createChildAbortController (0.879)
@@ -2549,51 +2764,12 @@ function createChildAbortController(signal) {
 //@ chunk-n4bsg1hp.js:42404-42465 placement
 var NO_SPACE_FOR_A_FILE = "A file could not be saved: no space left on device";
 //@ chunk-n4bsg1hp.js:42465-42611 placement
-function missingAttachmentsNote(e, i) {
-  return i === 1
+function missingAttachmentsNote(arrivedCount, missingCount) {
+  return missingCount === 1
     ? "[attachment did not arrive]"
-    : e === i
-      ? `[${i} attachments did not arrive]`
-      : `[${e} of ${i} attachments did not arrive]`;
-}
-//@ chunk-cxyewwc3.js:267-413 sole-consumer
-var fileAttachmentSchema = DoctorLazy(() =>
-  u({
-    file_uuid: string(),
-    file_name: string(),
-    is_image: M().nullish(),
-    sha256: string().nullish().catch(null),
-    file_size: E().nullish().catch(undefined),
-  }),
-);
-var MAX_FILE_ATTACHMENTS = 256;
-//@ chunk-cxyewwc3.js:413-648 fingerprint = extractInboundAttachments (1)
-/**
- * 从入站帧的 file_attachments 字段取出并校验附件列表（截断到上限）。
- */
-function extractInboundAttachments(msg) {
-  if (typeof msg !== "object" || msg === null || !("file_attachments" in msg)) return [];
-  let fileAttachments = msg.file_attachments;
-  if (!Array.isArray(fileAttachments)) return [];
-  let a = fileAttachmentSchema();
-  return fileAttachments.slice(0, MAX_FILE_ATTACHMENTS).flatMap((fileAttachment) => {
-    let parsed = a.safeParse(fileAttachment);
-    return parsed.success ? [parsed.data] : [];
-  });
-}
-//@ chunk-cxyewwc3.js:648-693 placement
-var inboundAttachmentQuerySchema = DoctorLazy(() =>
-  u({
-    shouldQuery: M().optional(),
-  }),
-);
-//@ chunk-cxyewwc3.js:693-751 placement
-function shouldQueryInboundAttachment(t) {
-  return inboundAttachmentQuerySchema().safeParse(t).data?.shouldQuery;
-}
-//@ chunk-23fm9f0d.js:23001-23035 fingerprint = uploadsDir (1)
-function uploadsDir() {
-  return cleanupOldFilesInDirectory("uploads");
+    : arrivedCount === missingCount
+      ? `[${missingCount} attachments did not arrive]`
+      : `[${arrivedCount} of ${missingCount} attachments did not arrive]`;
 }
 export {
   extractInboundAttachments,
@@ -2612,4 +2788,6 @@ export {
   NO_SPACE_FOR_A_FILE,
   shouldQueryInboundAttachment,
   resolveInboundAttachments,
+  DOWNLOAD_TRIES,
+  downloadWithRetries,
 };

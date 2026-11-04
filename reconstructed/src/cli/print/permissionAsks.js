@@ -21,48 +21,54 @@ import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { safeCallback } from "./proactivityControl.js";
 
 //@ chunk-tyg7f3ek.js:83041-84169 placement
-function describeUnsentServedCalls({ supersededToolNames, servedCallsNeverSent }, r, s = false) {
-  let h = servedCallsNeverSent ?? [];
-  let y = new Set(h.map((q) => q.toolUseID));
-  let S = new Set(
-    h
+function describeUnsentServedCalls(
+  { supersededToolNames, servedCallsNeverSent },
+  isKnown,
+  restarted = false,
+) {
+  let neverSent = servedCallsNeverSent ?? [];
+  let neverSentIds = new Set(neverSent.map((call) => call.toolUseID));
+  let fullyUnanswered = new Set(
+    neverSent
       .filter(
         ({ assistantMessage }) =>
           !Array.isArray(assistantMessage.message.content) ||
-          assistantMessage.message.content.every((x) => x.type !== "tool_use" || y.has(x.id)),
+          assistantMessage.message.content.every(
+            (block) => block.type !== "tool_use" || neverSentIds.has(block.id),
+          ),
       )
-      .map((q) => q.toolUseID),
+      .map((call) => call.toolUseID),
   );
   let reduced = [...(supersededToolNames ?? new Map())]
-    .filter(([q]) => r(q) && !S.has(q))
-    .reduce((acc, [, x]) => {
-      let G = s && !isUnicodeIdentifier(x) ? "another tool" : x;
-      return acc.set(G, (acc.get(G) ?? 0) + 1);
+    .filter(([toolName]) => isKnown(toolName) && !fullyUnanswered.has(toolName))
+    .reduce((acc, [, name]) => {
+      let label = restarted && !isUnicodeIdentifier(name) ? "another tool" : name;
+      return acc.set(label, (acc.get(label) ?? 0) + 1);
     }, new Map());
-  let mapped = [...reduced].map(([q, x]) => (x === 1 ? q : `${q} \xD7${x}`));
-  let reduced_2 = [...reduced.values()].reduce((acc, x) => acc + x, 0);
+  let mapped = [...reduced].map(([name, count]) => (count === 1 ? name : `${name} \xD7${count}`));
+  let reduced_2 = [...reduced.values()].reduce((acc, count) => acc + count, 0);
   if (reduced_2 === 0) return;
-  return `${s ? `Besides the tool calls answered above, your previous turn had also issued ${reduced_2 === 1 ? "a call that is no longer shown above and that has" : "calls that are no longer shown above and that have"} no result` : `This session restarted during your previous turn. Besides the tool calls answered above, that turn had also issued ${reduced_2 === 1 ? "a call whose result was" : "calls whose results were"} lost to the restart`}: ${mapped.join(", ")} \u2014 ${reduced_2 === 1 ? "it" : "they"} may not have run, or not completely. Check before issuing ${reduced_2 === 1 ? "it" : "them"} again, and decide whether ${reduced_2 === 1 ? "it is" : "they are"} still needed.`;
+  return `${restarted ? `Besides the tool calls answered above, your previous turn had also issued ${reduced_2 === 1 ? "a call that is no longer shown above and that has" : "calls that are no longer shown above and that have"} no result` : `This session restarted during your previous turn. Besides the tool calls answered above, that turn had also issued ${reduced_2 === 1 ? "a call whose result was" : "calls whose results were"} lost to the restart`}: ${mapped.join(", ")} \u2014 ${reduced_2 === 1 ? "it" : "they"} may not have run, or not completely. Check before issuing ${reduced_2 === 1 ? "it" : "them"} again, and decide whether ${reduced_2 === 1 ? "it is" : "they are"} still needed.`;
 }
 //@ chunk-tyg7f3ek.js:84169-84520 placement
-function ccrLostCallsNote(e, n, r) {
-  let s = new Set(
-    n
-      .map((y) =>
-        Array.isArray(y.message.content)
-          ? y.message.content.flatMap((S) => (S.type === "tool_use" ? [S.id] : []))
+function ccrLostCallsNote(names, holders, handled) {
+  let unhandledCallIds = new Set(
+    holders
+      .map((holder) =>
+        Array.isArray(holder.message.content)
+          ? holder.message.content.flatMap((block) => (block.type === "tool_use" ? [block.id] : []))
           : [],
       )
-      .filter((y) => !y.some((S) => r.has(S)))
+      .filter((ids) => !ids.some((id) => handled.has(id)))
       .flat(),
   );
-  let h = describeUnsentServedCalls(e, (y) => s.has(y), true);
-  return h !== undefined && getFeatureValue_CACHED_MAY_BE_STALE("tengu_iterative_lightning", false)
+  let note = describeUnsentServedCalls(names, (id) => unhandledCallIds.has(id), true);
+  return note !== undefined && getFeatureValue_CACHED_MAY_BE_STALE("tengu_iterative_lightning", false)
     ? () => {
         logFeatureOk("ccr_lost_calls_note");
         return createAttachmentMessage({
           type: "critical_system_reminder",
-          content: h,
+          content: note,
         });
       }
     : undefined;
@@ -71,18 +77,18 @@ function ccrLostCallsNote(e, n, r) {
 var UNANSWERED_PERMISSION_DENIAL =
   "Nobody answered this permission request; the person may be away, so other requests for approval are likely to go unanswered too. Until the person writes again, do not retry the call and do not make other calls that may need approval. Finish what needs no approval, then say what you needed approval for.";
 //@ chunk-tyg7f3ek.js:84833-85119 placement
-function staleCanUseToolRequests(e, mainTranscript, r = () => false) {
+function staleCanUseToolRequests(io, mainTranscript, isKnownPending = () => false) {
   try {
-    let pendingPermissionRequests = e.getPendingPermissionRequests();
-    let h = ({ request }) => (request.subtype === "can_use_tool" ? [request.tool_use_id] : []);
+    let pendingPermissionRequests = io.getPendingPermissionRequests();
+    let toolUseIds = ({ request }) => (request.subtype === "can_use_tool" ? [request.tool_use_id] : []);
     let unresolvedToolUsesInTranscript = findUnresolvedToolUsesInTranscript(
       mainTranscript(),
-      pendingPermissionRequests.flatMap(h),
+      pendingPermissionRequests.flatMap(toolUseIds),
     );
     return pendingPermissionRequests.filter(
-      (S) =>
-        !h(S).some((R) => unresolvedToolUsesInTranscript.has(R)) ||
-        (S.request.subtype === "can_use_tool" && r(S.request.tool_name)),
+      (request) =>
+        !toolUseIds(request).some((id) => unresolvedToolUsesInTranscript.has(id)) ||
+        (request.request.subtype === "can_use_tool" && isKnownPending(request.request.tool_name)),
     );
   } catch (error) {
     logError(error);
@@ -90,9 +96,9 @@ function staleCanUseToolRequests(e, mainTranscript, r = () => false) {
   }
 }
 //@ chunk-tyg7f3ek.js:85119-85301 placement
-function denyPermissionRequests(e, n, message = UNANSWERED_PERMISSION_DENIAL) {
-  return count(n, ({ request_id: requestId }) =>
-    e.injectControlResponse({
+function denyPermissionRequests(io, requests, message = UNANSWERED_PERMISSION_DENIAL) {
+  return count(requests, ({ request_id: requestId }) =>
+    io.injectControlResponse({
       type: "control_response",
       response: {
         subtype: "success",
@@ -118,35 +124,37 @@ var PENDING_PERMISSION_ANSWER_GRACE_MS = 5000;
  * 轮次结束时等待未答复的 can_use_tool 请求（宽限期），超时则代为拒绝。
  */
 async function awaitPendingPermissionAnswers(
-  e,
+  readInput,
   { loopInput, io, urgencyOf, onLate, graceMs = PENDING_PERMISSION_ANSWER_GRACE_MS },
 ) {
-  let S = new Set(io.getPendingPermissionRequests().map((ie) => ie.request_id));
-  let R = () =>
+  let seenRequestIds = new Set(io.getPendingPermissionRequests().map((request) => request.request_id));
+  let newRequests = () =>
     io
       .getPendingPermissionRequests()
       .filter(
         ({ request_id: requestId, request }) =>
-          !S.has(requestId) && request.subtype === "can_use_tool" && TOOLU_PLUGIN(request.tool_use_id),
+          !seenRequestIds.has(requestId) &&
+          request.subtype === "can_use_tool" &&
+          TOOLU_PLUGIN(request.tool_use_id),
       );
-  let w = false;
-  let P = () => {
-    if (!w || isTerminalShutdown()) return;
-    let ie = denyPermissionRequests(io, R(), PERMISSION_WITHDRAWN_MESSAGE);
-    if (ie > 0)
+  let sawEnd = false;
+  let declineNew = () => {
+    if (!sawEnd || isTerminalShutdown()) return;
+    let declinedCount = denyPermissionRequests(io, newRequests(), PERMISSION_WITHDRAWN_MESSAGE);
+    if (declinedCount > 0)
       logForDiagnosticsNoPII("info", "cli_receive_hook_cards_declined", {
-        declined: ie,
+        declined: declinedCount,
       });
   };
-  let L;
+  let retryTimer;
   let first = PERMISSION_ANSWER_BACKOFF.first;
-  let x = io.onRequestPending(
+  let unsubscribe = io.onRequestPending(
     safeCallback(() => {
-      if (w && L === undefined && R().length > 0) {
-        L = setTimeout(
+      if (sawEnd && retryTimer === undefined && newRequests().length > 0) {
+        retryTimer = setTimeout(
           safeCallback(() => {
-            L = undefined;
-            P();
+            retryTimer = undefined;
+            declineNew();
           }),
           first,
         );
@@ -154,54 +162,54 @@ async function awaitPendingPermissionAnswers(
       }
     }),
   );
-  let G = () => {};
+  let giveUp = () => {};
   let promise = new Promise((resolve) => {
-    G = () => resolve("given-up");
+    giveUp = () => resolve("given-up");
   });
-  let re;
-  let Ae = (ie) => {
+  let endTimer;
+  let observeUrgency = (urgency) => {
     if (isTerminalShutdown()) return;
-    if (ie === "end")
-      re ??= setTimeout(() => {
-        if (!isTerminalShutdown()) G();
+    if (urgency === "end")
+      endTimer ??= setTimeout(() => {
+        if (!isTerminalShutdown()) giveUp();
       }, graceMs);
-    w = true;
-    P();
+    sawEnd = true;
+    declineNew();
   };
-  let Ue = () => {
-    x();
-    clearTimeout(L);
+  let stopWatching = () => {
+    unsubscribe();
+    clearTimeout(retryTimer);
   };
-  let ce = false;
-  let nt;
+  let givenUp = false;
+  let readPromise;
   try {
-    let ie = await loopInput.readWhile(
+    let result = await loopInput.readWhile(
       () => {
-        nt = e();
+        readPromise = readInput();
         return Promise.race([
-          nt.then((received) => ({
+          readPromise.then((received) => ({
             received,
           })),
           promise,
         ]);
       },
       {
-        onSetAside: safeCallback((Se) => {
-          let me = urgencyOf(Se);
-          if (me !== undefined) Ae(me);
+        onSetAside: safeCallback((item) => {
+          let urgency = urgencyOf(item);
+          if (urgency !== undefined) observeUrgency(urgency);
         }),
-        onEnded: safeCallback(() => Ae("end")),
+        onEnded: safeCallback(() => observeUrgency("end")),
       },
     );
-    if (ie === "given-up") {
+    if (result === "given-up") {
       logForDiagnosticsNoPII("warn", "cli_receive_hooks_given_up");
-      ce = true;
-      nt?.then(safeCallback(onLate), () => {}).finally(Ue);
+      givenUp = true;
+      readPromise?.then(safeCallback(onLate), () => {}).finally(stopWatching);
     }
-    return ie;
+    return result;
   } finally {
-    clearTimeout(re);
-    if (!ce) Ue();
+    clearTimeout(endTimer);
+    if (!givenUp) stopWatching();
   }
 }
 export {

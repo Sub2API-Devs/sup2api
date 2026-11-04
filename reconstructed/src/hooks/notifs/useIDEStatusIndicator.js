@@ -36,18 +36,24 @@ function ideStatusFromState(current) {
  */
 var IDE_DISCONNECTED_NOTICE_SPEC = {
   id: "ide-status-disconnected",
-  deps: (h) => {
-    let { ideStatus, ideName, showIDEInstallError } = ideStatusFromState(h);
-    return [h.addNotification, h.removeNotification, ideStatus, ideName, showIDEInstallError];
+  deps: (noticeState) => {
+    let { ideStatus, ideName, showIDEInstallError } = ideStatusFromState(noticeState);
+    return [
+      noticeState.addNotification,
+      noticeState.removeNotification,
+      ideStatus,
+      ideName,
+      showIDEInstallError,
+    ];
   },
-  setup: () => (h) => {
+  setup: () => (noticeState) => {
     if (isRemoteSessionAvailable()) return;
-    let { ideStatus, ideName, showIDEInstallError } = ideStatusFromState(h);
+    let { ideStatus, ideName, showIDEInstallError } = ideStatusFromState(noticeState);
     if (showIDEInstallError || ideStatus !== "disconnected" || !ideName) {
-      h.removeNotification("ide-status-disconnected");
+      noticeState.removeNotification("ide-status-disconnected");
       return;
     }
-    h.addNotification({
+    noticeState.addNotification({
       key: "ide-status-disconnected",
       kind: "warning",
       text: `${ideName} disconnected`,
@@ -58,14 +64,18 @@ var IDE_DISCONNECTED_NOTICE_SPEC = {
 };
 var IDE_INSTALL_ERROR_NOTICE_SPEC = {
   id: "ide-status-install-error",
-  deps: (h) => [h.addNotification, h.removeNotification, ideStatusFromState(h).showIDEInstallError],
-  setup: () => (h) => {
+  deps: (noticeState) => [
+    noticeState.addNotification,
+    noticeState.removeNotification,
+    ideStatusFromState(noticeState).showIDEInstallError,
+  ],
+  setup: () => (noticeState) => {
     if (isRemoteSessionAvailable()) return;
-    if (!ideStatusFromState(h).showIDEInstallError) {
-      h.removeNotification("ide-status-install-error");
+    if (!ideStatusFromState(noticeState).showIDEInstallError) {
+      noticeState.removeNotification("ide-status-install-error");
       return;
     }
-    h.addNotification({
+    noticeState.addNotification({
       key: "ide-status-install-error",
       kind: "warning",
       text: "IDE extension install failed (see /status for info)",

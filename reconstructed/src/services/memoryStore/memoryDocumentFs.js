@@ -47,20 +47,25 @@ import { validateMemoryPath } from "../../tools/MemoryTool/memoryWrite.js";
 /**
  * 独占创建记忆文件并写入。
  */
-async function createMemoryFileExclusive(e, n) {
-  await assertPathSafeAsync(e);
-  let r = await open(e, "wx");
-  let s = await r.stat().catch(() => null);
+async function createMemoryFileExclusive(filePath, content) {
+  await assertPathSafeAsync(filePath);
+  let handle = await open(filePath, "wx");
+  let createdStats = await handle.stat().catch(() => null);
   try {
-    await r.writeFile(n, {
+    await handle.writeFile(content, {
       encoding: "utf8",
     });
-    await r.close();
+    await handle.close();
   } catch (error) {
-    await r.close().catch(() => {});
-    let d = await lstat(e).catch(() => null);
-    if (s !== null && d !== null && d.ino === s.ino && d.dev === s.dev)
-      await unlinkQuietly(e).catch(() => {});
+    await handle.close().catch(() => {});
+    let stats = await lstat(filePath).catch(() => null);
+    if (
+      createdStats !== null &&
+      stats !== null &&
+      stats.ino === createdStats.ino &&
+      stats.dev === createdStats.dev
+    )
+      await unlinkQuietly(filePath).catch(() => {});
     throw error;
   }
 }
@@ -68,76 +73,87 @@ async function createMemoryFileExclusive(e, n) {
 /**
  * 读取已有记忆文档的文件权限模式；路径被非文档占用时抛出永久错误。
  */
-async function readExistingMemoryMode(e, n, r = false) {
-  let s = await readMemoryFileSafely(e).catch((error) => {
-    throw memoryFsErrorToResult(error, n);
+async function readExistingMemoryMode(filePath, displayPath, retried = false) {
+  let file = await readMemoryFileSafely(filePath).catch((error) => {
+    throw memoryFsErrorToResult(error, displayPath);
   });
-  if (s !== null) return s.mode;
-  let i = await lstat(e).catch(() => null);
-  if (i === null || i.isDirectory()) return;
-  if (i.isFile() && !r) return readExistingMemoryMode(e, n, true);
-  throw new MemoryPermanentError("not_a_document", `something that is not a memory document occupies ${n}`);
+  if (file !== null) return file.mode;
+  let stats = await lstat(filePath).catch(() => null);
+  if (stats === null || stats.isDirectory()) return;
+  if (stats.isFile() && !retried) return readExistingMemoryMode(filePath, displayPath, true);
+  throw new MemoryPermanentError(
+    "not_a_document",
+    `something that is not a memory document occupies ${displayPath}`,
+  );
 }
 //@ chunk-a477qqne.js:23208-23244 placement
 /**
  * 删除文件并重试瞬时错误。
  */
-function unlinkQuietly(e) {
-  return retryTransient(() => unlink(e));
+function unlinkQuietly(filePath) {
+  return retryTransient(() => unlink(filePath));
 }
 //@ chunk-a477qqne.js:23244-23549 placement
 /**
  * 判断路径被非文档占用的冲突。
  */
-async function classifyMemoryPathConflict(e, n, r) {
-  if (r && (await readMemoryFileSafely(e).catch(() => null)) !== null)
-    return new MemoryConflictError(n, null, undefined, encodeHexName(n.slice(1)), n);
-  let s = await lstat(e).catch(() => null);
-  if (s !== null && (r || !s.isFile())) return new MemoryConflictError(n, null);
-  let i = await realpathDeepestExisting(dirname(e))
-    .then((d) => lstat(d))
+async function classifyMemoryPathConflict(filePath, displayPath, mustNotExist) {
+  if (mustNotExist && (await readMemoryFileSafely(filePath).catch(() => null)) !== null)
+    return new MemoryConflictError(
+      displayPath,
+      null,
+      undefined,
+      encodeHexName(displayPath.slice(1)),
+      displayPath,
+    );
+  let stats = await lstat(filePath).catch(() => null);
+  if (stats !== null && (mustNotExist || !stats.isFile())) return new MemoryConflictError(displayPath, null);
+  let ancestorStats = await realpathDeepestExisting(dirname(filePath))
+    .then((ancestorPath) => lstat(ancestorPath))
     .catch(() => null);
-  return i !== null && !i.isDirectory() ? new MemoryConflictError(n, null) : null;
+  return ancestorStats !== null && !ancestorStats.isDirectory()
+    ? new MemoryConflictError(displayPath, null)
+    : null;
 }
 //@ chunk-a477qqne.js:23549-23875 placement
 /**
  * 把文件系统错误转为记忆存储结果。
  */
-function memoryFsErrorToResult(error, n) {
+function memoryFsErrorToResult(error, displayPath) {
   let errnoCode = getErrnoCode(error);
   if (errnoCode === "EEXIST" || errnoCode === "ENOTDIR" || errnoCode === "EISDIR")
-    return new MemoryConflictError(n, null);
-  if (errnoCode === "EBUSY") return new MemoryUnavailableError(`${errnoCode}: ${n}`, error);
+    return new MemoryConflictError(displayPath, null);
+  if (errnoCode === "EBUSY") return new MemoryUnavailableError(`${errnoCode}: ${displayPath}`, error);
   if (errnoCode === "ENAMETOOLONG" || errnoCode === "EINVAL" || errnoCode === "ELOOP")
-    return new MemoryPermanentError("invalid_path", `${errnoCode}: ${n}`);
+    return new MemoryPermanentError("invalid_path", `${errnoCode}: ${displayPath}`);
   if (errnoCode === "EACCES" || errnoCode === "EPERM" || errnoCode === "EROFS")
-    return new MemoryPermanentError("access_denied", `${errnoCode}: ${n}`);
+    return new MemoryPermanentError("access_denied", `${errnoCode}: ${displayPath}`);
   return error;
 }
 //@ chunk-a477qqne.js:23875-23930 placement
 /**
  * 路径不存在时返回 null，其他错误抛出。
  */
-function ignoreMissingOrThrow(e) {
-  if (MISSING_PATH_ERRORS.has(getErrnoCode(e) ?? "")) return null;
-  throw e;
+function ignoreMissingOrThrow(error) {
+  if (MISSING_PATH_ERRORS.has(getErrnoCode(error) ?? "")) return null;
+  throw error;
 }
 //@ chunk-a477qqne.js:23930-23980 placement
 /**
  * 路径不存在或无权限时返回 null，其他错误抛出。
  */
-function missingOrPermissionAsNull(e) {
-  return PERMISSION_ERRORS.has(getErrnoCode(e) ?? "") ? null : ignoreMissingOrThrow(e);
+function missingOrPermissionAsNull(error) {
+  return PERMISSION_ERRORS.has(getErrnoCode(error) ?? "") ? null : ignoreMissingOrThrow(error);
 }
 //@ chunk-a477qqne.js:23980-24059 placement
 /**
  * 取记忆条目的对外字段（内容、哈希、更新时间）。
  */
-function publicMemoryEntry(e) {
+function publicMemoryEntry(file) {
   return {
-    content: e.content,
-    sha256: e.sha256,
-    updatedAt: e.updatedAt,
+    content: file.content,
+    sha256: file.sha256,
+    updatedAt: file.updatedAt,
   };
 }
 //@ chunk-a477qqne.js:24059-24078 placement
@@ -146,8 +162,8 @@ var PERSONAL = "personal";
 /**
  * 自动记忆目录下的完整路径。
  */
-function autoMemFilePath(e) {
-  return join(getAutoMemPath(), ...e.split("/"));
+function autoMemFilePath(key) {
+  return join(getAutoMemPath(), ...key.split("/"));
 }
 //@ chunk-a477qqne.js:24126-24328 placement
 function createPersonalStoreEntry() {
@@ -170,22 +186,22 @@ function createPersonalStoreEntry() {
 /**
  * 给项目作用域加 project- 前缀。
  */
-function projectScopeLabel(e) {
-  let storeScopeLabel = getStoreScopeLabel(e);
+function projectScopeLabel(scope) {
+  let storeScopeLabel = getStoreScopeLabel(scope);
   return storeScopeLabel === PERSONAL ? `project-${storeScopeLabel}` : storeScopeLabel;
 }
 //@ chunk-a477qqne.js:24388-24540 placement
-function createProjectStoreEntry(e) {
-  let mount = projectScopeLabel(e);
-  let r = isStoreWritable(e);
+function createProjectStoreEntry(scope) {
+  let mount = projectScopeLabel(scope);
+  let writable = isStoreWritable(scope);
   return {
     id: mount,
     kind: "project",
-    description: describeStoreScope(e),
-    writable: r,
-    promptIndex: e.promptIndex,
-    config: e,
-    backend: () => makeStoreClient(e, r, mount),
+    description: describeStoreScope(scope),
+    writable,
+    promptIndex: scope.promptIndex,
+    config: scope,
+    backend: () => makeStoreClient(scope, writable, mount),
   };
 }
 //@ chunk-a477qqne.js:24540-24600 placement
@@ -206,8 +222,8 @@ var PROJECT_STORE_CONNECTING_TEXT = "The project memory store is still connectin
 /**
  * 判断是否仍在连接且尚无项目存储。
  */
-function isProjectStoreConnecting(e) {
-  return memorySyncAvailability_2() === "connecting" && !e.some((n) => n.kind === "project");
+function isProjectStoreConnecting(stores) {
+  return memorySyncAvailability_2() === "connecting" && !stores.some((store) => store.kind === "project");
 }
 //@ chunk-a477qqne.js:24757-24835 placement
 /**
@@ -247,23 +263,23 @@ function checkMemoryToolsAllowed() {
  * 按 id 选择本会话可用的记忆存储（写入时检查权限）。
  */
 function resolveMemoryStore({ storeId, write = false }) {
-  let r = checkMemoryToolsAllowed();
-  if (r) return r;
-  let s = listMemoryStoreEntries();
-  if (s.length === 0)
+  let refusal = checkMemoryToolsAllowed();
+  if (refusal) return refusal;
+  let stores = listMemoryStoreEntries();
+  if (stores.length === 0)
     return {
       outcome: "refused",
       reason: "unbound",
       message: "No memory store is available in this session.",
     };
-  let found = s.find((d) => d.id === storeId);
+  let found = stores.find((store) => store.id === storeId);
   if (!found) {
-    let joined = s.map((h) => h.id).join(", ");
-    let l = isProjectStoreConnecting(s) ? ` ${PROJECT_STORE_CONNECTING_TEXT}` : "";
+    let joined = stores.map((store) => store.id).join(", ");
+    let connectingNote = isProjectStoreConnecting(stores) ? ` ${PROJECT_STORE_CONNECTING_TEXT}` : "";
     return {
       outcome: "refused",
       reason: "unknown_store",
-      message: `No memory store with id ${quoteMemoryPath(storeId)} is available in this session. Available stores: ${joined}. Call ${MEMORY_LIST_TOOL_NAME} with no arguments to list them.${l}`,
+      message: `No memory store with id ${quoteMemoryPath(storeId)} is available in this session. Available stores: ${joined}. Call ${MEMORY_LIST_TOOL_NAME} with no arguments to list them.${connectingNote}`,
     };
   }
   if ((found.kind === "personal") !== (storeId === PERSONAL))
@@ -273,12 +289,12 @@ function resolveMemoryStore({ storeId, write = false }) {
       message: `No memory store with id ${quoteMemoryPath(storeId)} is available in this session.`,
     };
   if (write && !found.writable) {
-    let mapped = s.filter((h) => h.writable).map((h) => h.id);
-    let l = mapped.length === 0 ? "" : ` Writable stores: ${mapped.join(", ")}.`;
+    let mapped = stores.filter((store) => store.writable).map((store) => store.id);
+    let writableNote = mapped.length === 0 ? "" : ` Writable stores: ${mapped.join(", ")}.`;
     return {
       outcome: "refused",
       reason: "read_only",
-      message: `The memory store ${quoteMemoryPath(storeId)} is read-only in this session; changes will not persist.${l}`,
+      message: `The memory store ${quoteMemoryPath(storeId)} is read-only in this session; changes will not persist.${writableNote}`,
     };
   }
   return {
@@ -291,12 +307,12 @@ function resolveMemoryStore({ storeId, write = false }) {
 /**
  * 个人记忆路径必须以 .md 结尾，否则返回拒绝结果。
  */
-function checkPersonalMemoryPath(e, n) {
-  return e === "personal" && !n.toLowerCase().endsWith(".md")
+function checkPersonalMemoryPath(storeId, path) {
+  return storeId === "personal" && !path.toLowerCase().endsWith(".md")
     ? {
         outcome: "refused",
         reason: "invalid_path",
-        message: `Personal memories are Markdown documents \u2014 use a path ending in ".md" instead of ${quoteMemoryPath(n)}.`,
+        message: `Personal memories are Markdown documents \u2014 use a path ending in ".md" instead of ${quoteMemoryPath(path)}.`,
       }
     : null;
 }
@@ -309,36 +325,38 @@ var MAX_MEMORY_PATH_CHARS = 1024;
 /**
  * 为提示信息引用记忆路径（替换控制字符，过长时截断并注明总字节数）。
  */
-function quoteMemoryPath(storeId) {
-  let n = replaceControlChars(storeId);
-  let r = truncateToLength(n, MAX_MEMORY_PATH_CHARS);
-  return r.length < n.length ? `"${r}\u2026" (${Buffer.byteLength(storeId, "utf8")} bytes in all)` : `"${n}"`;
+function quoteMemoryPath(filePath) {
+  let safeText = replaceControlChars(filePath);
+  let shortened = truncateToLength(safeText, MAX_MEMORY_PATH_CHARS);
+  return shortened.length < safeText.length
+    ? `"${shortened}\u2026" (${Buffer.byteLength(filePath, "utf8")} bytes in all)`
+    : `"${safeText}"`;
 }
 //@ chunk-a477qqne.js:26432-26721 placement
 /**
  * 记忆路径必须是以 / 开头的绝对路径，否则拒绝并给出建议路径。
  */
-function checkAbsoluteMemoryPath(e, promptIndex) {
-  if (e.startsWith("/")) return null;
-  let r = memoryIndexDirPrefix(promptIndex);
-  let s = `${e}/`.startsWith(r) ? `/${e}` : `/${r}${e}`;
-  let i = r === "" ? "" : ` This store's memories live under /${r}.`;
+function checkAbsoluteMemoryPath(path, promptIndex) {
+  if (path.startsWith("/")) return null;
+  let dirPrefix = memoryIndexDirPrefix(promptIndex);
+  let suggestion = `${path}/`.startsWith(dirPrefix) ? `/${path}` : `/${dirPrefix}${path}`;
+  let dirNote = dirPrefix === "" ? "" : ` This store's memories live under /${dirPrefix}.`;
   return {
     outcome: "refused",
     reason: "invalid_path",
-    message: `Memory paths are absolute and start with "/" \u2014 use ${quoteMemoryPath(s)}.${i}`,
+    message: `Memory paths are absolute and start with "/" \u2014 use ${quoteMemoryPath(suggestion)}.${dirNote}`,
   };
 }
 //@ chunk-a477qqne.js:26721-26849 placement
 /**
  * 列出记忆存储的描述信息（id、说明、是否可写、索引）。
  */
-function describeMemoryStores(e) {
-  return e.map((n) => ({
-    id: n.id,
-    description: n.description,
-    writable: n.writable,
-    index: resolveIndexPath(n.promptIndex, n.writable),
+function describeMemoryStores(stores) {
+  return stores.map((store) => ({
+    id: store.id,
+    description: store.description,
+    writable: store.writable,
+    index: resolveIndexPath(store.promptIndex, store.writable),
   }));
 }
 //@ chunk-a477qqne.js:26849-26963 placement
@@ -348,8 +366,8 @@ function resolveIndexPath(promptIndex, rejectUnsafeSegments) {
       `/${promptIndex ?? MEMORY_INDEX_FILENAME}`,
       `/${memoryIndexDirPrefix(promptIndex)}${MEMORY_INDEX_FILENAME}`,
     ].find(
-      (s) =>
-        validateMemoryPath(s, {
+      (candidatePath) =>
+        validateMemoryPath(candidatePath, {
           rejectUnsafeSegments,
         }) === null,
     ) ?? `/${MEMORY_INDEX_FILENAME}`

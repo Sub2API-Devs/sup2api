@@ -9,7 +9,7 @@
  * attribution: placement 3, callgraph-fingerprint 1, sole-consumer 2, fingerprint 1
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppState, useSetAppState } from "../../state/AppState.js";
 import { useNotifications } from "../../context/notifications.js";
 import { canCycleToAuto } from "../../utils/permissions/getNextPermissionMode.js";
@@ -22,12 +22,16 @@ import { formatInvalidSettingNotice } from "../../utils/settings/settingsNotices
 import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
 import { logSetupIssues } from "../../utils/notifications/setupIssues.js";
 import { settingsChangeDetector } from "../../utils/settings/changeDetector.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-0e8j1zzj.js:24742-24746 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0e8j1zzj.js:24742", () => {
+  init_react_production();
+});
 //@ chunk-0e8j1zzj.js:24746-24792 placement
-function selectToolPermissionContext(T) {
-  return T.toolPermissionContext;
+function selectToolPermissionContext(appState) {
+  return appState.toolPermissionContext;
 }
 //@ chunk-0e8j1zzj.js:24792-24837 placement
 /**
@@ -36,40 +40,40 @@ function selectToolPermissionContext(T) {
 var WORKFLOW_HINT_TEXT = "\xB7 workflows run best with it on";
 //@ chunk-0e8j1zzj.js:24837-25579 callgraph-fingerprint = useSettingsErrors (0.187)
 function useSettingsErrors(requestSource) {
-  let $ = w(10);
+  let $ = useMemoCache(10);
   let toolPermissionContext = useAppState(selectToolPermissionContext);
   let setAppState = useSetAppState();
   let { addNotification } = useNotifications();
-  let u;
+  let canOfferAutoMode;
   if ($[0] !== toolPermissionContext) {
-    u =
+    canOfferAutoMode =
       (toolPermissionContext.mode === "default" || toolPermissionContext.mode === "acceptEdits") &&
       canCycleToAuto(toolPermissionContext);
     $[0] = toolPermissionContext;
-    $[1] = u;
-  } else u = $[1];
-  let i = u;
-  let offered = requestSource?.type === "workflow-agent" && i;
-  let k;
+    $[1] = canOfferAutoMode;
+  } else canOfferAutoMode = $[1];
+  let canOfferAutoModeFlag = canOfferAutoMode;
+  let offered = requestSource?.type === "workflow-agent" && canOfferAutoModeFlag;
+  let enableAutoMode;
   if ($[2] !== addNotification || $[3] !== setAppState || $[4] !== toolPermissionContext) {
-    k = (f) => {
-      let g = f === undefined ? "workflow_permission_prompt" : f;
+    enableAutoMode = (source) => {
+      let promptSource = source === undefined ? "workflow_permission_prompt" : source;
       if (
         !setPermissionModeWithGuards(
           "auto",
           toolPermissionContext,
-          (M) =>
-            setAppState((N) => {
-              let x = M(N.toolPermissionContext);
-              if (x === N.toolPermissionContext) {
-                return N;
+          (update) =>
+            setAppState((prev) => {
+              let nextContext = update(prev.toolPermissionContext);
+              if (nextContext === prev.toolPermissionContext) {
+                return prev;
               }
               return {
-                ...N,
-                toolPermissionContext: x,
+                ...prev,
+                toolPermissionContext: nextContext,
               };
             }),
-          g,
+          promptSource,
         ).ok
       ) {
         addNotification({
@@ -86,22 +90,22 @@ function useSettingsErrors(requestSource) {
     $[2] = addNotification;
     $[3] = setAppState;
     $[4] = toolPermissionContext;
-    $[5] = k;
-  } else k = $[5];
-  let enableAutoMode = k;
-  let f;
-  if ($[6] !== i || $[7] !== enableAutoMode || $[8] !== offered) {
-    f = {
+    $[5] = enableAutoMode;
+  } else enableAutoMode = $[5];
+  let enableAutoMode_2 = enableAutoMode;
+  let result;
+  if ($[6] !== canOfferAutoModeFlag || $[7] !== enableAutoMode_2 || $[8] !== offered) {
+    result = {
       offered,
-      canOfferAutoMode: i,
-      enableAutoMode,
+      canOfferAutoMode: canOfferAutoModeFlag,
+      enableAutoMode: enableAutoMode_2,
     };
-    $[6] = i;
-    $[7] = enableAutoMode;
+    $[6] = canOfferAutoModeFlag;
+    $[7] = enableAutoMode_2;
     $[8] = offered;
-    $[9] = f;
-  } else f = $[9];
-  return f;
+    $[9] = result;
+  } else result = $[9];
+  return result;
 }
 //@ chunk-18hwfzwa.js:1787159-1787214 sole-consumer
 function invalidSettingsEntries() {
@@ -110,26 +114,26 @@ function invalidSettingsEntries() {
 //@ chunk-18hwfzwa.js:1787214-1787279 fingerprint = SETTINGS_ERRORS_NOTIFICATION_KEY (0.672)
 var SETTINGS_ERRORS_NOTIFICATION_KEY = {
   id: "settings-errors",
-  deps: (h) => [h.store],
+  deps: (noticeState) => [noticeState.store],
   setup: () => watchSettingsErrorCount,
 };
 //@ chunk-18hwfzwa.js:1787279-1787546 sole-consumer
 function watchSettingsErrorCount({ store }) {
-  function x(D) {
+  function applySettingsErrors(errors) {
     if (isRemoteSessionAvailable()) return;
-    logSetupIssues("settings", D.length);
-    store.setState((L) => {
-      if (L.setupIssues.settingsErrorCount === D.length) return L;
+    logSetupIssues("settings", errors.length);
+    store.setState((state) => {
+      if (state.setupIssues.settingsErrorCount === errors.length) return state;
       return {
-        ...L,
+        ...state,
         setupIssues: {
-          ...L.setupIssues,
-          settingsErrorCount: D.length,
+          ...state.setupIssues,
+          settingsErrorCount: errors.length,
         },
       };
     });
   }
-  x(invalidSettingsEntries());
-  return settingsChangeDetector.subscribe(() => x(invalidSettingsEntries()));
+  applySettingsErrors(invalidSettingsEntries());
+  return settingsChangeDetector.subscribe(() => applySettingsErrors(invalidSettingsEntries()));
 }
 export { useSettingsErrors, WORKFLOW_HINT_TEXT, SETTINGS_ERRORS_NOTIFICATION_KEY };

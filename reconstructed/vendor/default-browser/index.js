@@ -13,7 +13,7 @@ import { bundleName } from "../bundle-name/index.js";
 import { getWindowsDefaultBrowser } from "./windows.js";
 
 //@ chunk-20ppca50.js:4089-4176 esm-layout
-var execFileAsync_3 = promisify(execFile);
+var execFileAsync_4 = promisify(execFile);
 var titleize = (string) => string.toLowerCase().replaceAll(/(?:^|\s|-)\S/g, (x) => x.toUpperCase());
 //@ chunk-20ppca50.js:4176-4541 esm-fingerprint
 async function defaultBrowser() {
@@ -25,7 +25,7 @@ async function defaultBrowser() {
     };
   }
   if (E.platform === "linux") {
-    let { stdout } = await execFileAsync_3("xdg-mime", ["query", "default", "x-scheme-handler/http"]);
+    let { stdout } = await execFileAsync_4("xdg-mime", ["query", "default", "x-scheme-handler/http"]);
     let id = stdout.trim();
     return {
       name: titleize(id.replace(/.desktop$/, "").replace("-", " ")),

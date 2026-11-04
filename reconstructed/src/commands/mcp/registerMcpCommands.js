@@ -18,23 +18,24 @@ import { registerMcpXaaIdpCommand } from "./xaaIdpCommand.js";
 import { cliOkAfterAnalyticsFlush } from "../../cli/exit.js";
 
 //@ chunk-4vq0yytw.js:20902-25179 placement
-function registerMcpCommands(v, p) {
-  let a = v
+function registerMcpCommands(program, register) {
+  let mcpCommand = program
     .command("mcp")
     .description("Configure and manage MCP servers")
     .configureHelp(createHelpConfig())
     .enablePositionalOptions();
-  let s = a
+  let serveCommand = mcpCommand
     .command("serve")
     .description("Start the Claude Code MCP server")
     .option("-d, --debug", "Enable debug mode", () => true)
     .option("--verbose", "Override verbose mode setting from config", () => true);
   if (isRemoteMcpServeHost())
-    s.addOption(
-      new Option("--transport <transport>", "Transport for MCP JSON-RPC")
-        .choices(["stdio", "http"])
-        .default("stdio"),
-    )
+    serveCommand
+      .addOption(
+        new Option("--transport <transport>", "Transport for MCP JSON-RPC")
+          .choices(["stdio", "http"])
+          .default("stdio"),
+      )
       .option(
         "--port <port>",
         "Port to listen on with --transport http (default 0 = kernel-assigned; bound to 127.0.0.1 only)",
@@ -51,120 +52,126 @@ function registerMcpCommands(v, p) {
         "--session-tunnel",
         "With --transport http --port 28471: dial the session tunnel that relays tool calls; reads one line of JSON (session id, token, API address) from standard input",
       );
-  s.action(
-    p(async (e, t) => {
-      setStrictMcpConfig(v.getOptionValue("strictMcpConfig") === true);
-      let { mcpServeHandler } = await import("./chunk-4x781459.js");
-      await mcpServeHandler(t, e);
+  serveCommand.action(
+    register(async (opts, command) => {
+      setStrictMcpConfig(program.getOptionValue("strictMcpConfig") === true);
+      let { mcpServeHandler } = await import("../../cli/handlers/mcpServe.js");
+      await mcpServeHandler(command, opts);
     }),
   );
-  registerMcpAddCommand(a, p);
-  if (isXaaEnabled()) registerMcpXaaIdpCommand(a, p);
-  a.command("remove <name>")
+  registerMcpAddCommand(mcpCommand, register);
+  if (isXaaEnabled()) registerMcpXaaIdpCommand(mcpCommand, register);
+  mcpCommand
+    .command("remove <name>")
     .description("Remove an MCP server")
     .option(
       "-s, --scope <scope>",
       "Configuration scope (local, user, or project) - if not specified, removes from whichever scope it exists in",
     )
     .action(
-      p(async (e, t, o) => {
-        let [{ mcpRemoveHandler: r }, { createSubcommandRoot: n }] = await Promise.all([
-          import("./chunk-h2rjy0z4.js"),
-          import("./chunk-tt9rxcw9.js"),
+      register(async (name, opts, command) => {
+        let [{ mcpRemoveHandler: removeHandler }, { createSubcommandRoot: createRoot }] = await Promise.all([
+          import("../../cli/handlers/mcp.js"),
+          import("../../cli/handlers/util.js"),
         ]);
-        await r(await n(), t, o, e);
+        await removeHandler(await createRoot(), opts, command, name);
         return cliOkAfterAnalyticsFlush();
       }),
     );
-  a.command("list")
+  mcpCommand
+    .command("list")
     .description(
       "List configured MCP servers. Unapproved .mcp.json servers are shown as \u23F8 Pending approval and not connected to; approved servers are health-checked unless disabled for this project.",
     )
     .action(
-      p(async (e) => {
-        let [{ mcpListHandler: t }, { createSubcommandRoot: o }, { credentialsStoreFor: r }] =
+      register(async (opts) => {
+        let [{ mcpListHandler: listHandler }, { createSubcommandRoot: createRoot }, { credentialsStoreFor }] =
           await Promise.all([
-            import("./chunk-h2rjy0z4.js"),
-            import("./chunk-tt9rxcw9.js"),
-            import("./chunk-y36z1q7c.js"),
+            import("../../cli/handlers/mcp.js"),
+            import("../../cli/handlers/util.js"),
+            import("../../utils/secureStorage/credentialsFileStore.js"),
           ]);
-        await t(await o(), e, r(e));
+        await listHandler(await createRoot(), opts, credentialsStoreFor(opts));
       }),
     );
-  a.command("get <name>")
+  mcpCommand
+    .command("get <name>")
     .description(
       "Get details about an MCP server. Unapproved .mcp.json servers are shown as \u23F8 Pending approval and not connected to; approved servers are health-checked unless disabled for this project.",
     )
     .action(
-      p(async (e, t) => {
-        let [{ mcpGetHandler: o }, { createSubcommandRoot: r }, { credentialsStoreFor: n }] =
+      register(async (name, opts) => {
+        let [{ mcpGetHandler: getHandler }, { createSubcommandRoot: createRoot }, { credentialsStoreFor }] =
           await Promise.all([
-            import("./chunk-h2rjy0z4.js"),
-            import("./chunk-tt9rxcw9.js"),
-            import("./chunk-y36z1q7c.js"),
+            import("../../cli/handlers/mcp.js"),
+            import("../../cli/handlers/util.js"),
+            import("../../utils/secureStorage/credentialsFileStore.js"),
           ]);
-        await o(await r(), t, e, n(e));
+        await getHandler(await createRoot(), opts, name, credentialsStoreFor(name));
       }),
     );
-  a.command("login <name>")
+  mcpCommand
+    .command("login <name>")
     .description("Authenticate with an MCP server (HTTP, SSE, or claude.ai connector)")
     .option(
       "--no-browser",
       "Print the authorization URL instead of opening a browser (for SSH/headless sessions \u2014 paste the redirect URL back when prompted)",
     )
     .action(
-      p(async (e, t, o) => {
-        let [{ mcpLoginHandler: r }, { credentialsStoreFor: n }] = await Promise.all([
-          import("./chunk-8vfr3s4c.js"),
-          import("./chunk-y36z1q7c.js"),
+      register(async (name, opts, command) => {
+        let [{ mcpLoginHandler: loginHandler }, { credentialsStoreFor }] = await Promise.all([
+          import("./mcpLoginHandler.lazy.js"),
+          import("../../utils/secureStorage/credentialsFileStore.js"),
         ]);
-        await r(t, o, e, n(e));
+        await loginHandler(opts, command, name, credentialsStoreFor(name));
       }),
     );
-  a.command("logout <name>")
+  mcpCommand
+    .command("logout <name>")
     .description("Clear stored OAuth credentials for an MCP server")
     .action(
-      p(async (e, t) => {
-        let [{ mcpLogoutHandler: o }, { credentialsStoreFor: r }] = await Promise.all([
-          import("./chunk-8vfr3s4c.js"),
-          import("./chunk-y36z1q7c.js"),
+      register(async (name, opts) => {
+        let [{ mcpLogoutHandler: logoutHandler }, { credentialsStoreFor }] = await Promise.all([
+          import("./mcpLoginHandler.lazy.js"),
+          import("../../utils/secureStorage/credentialsFileStore.js"),
         ]);
-        await o(t, e, r(e));
+        await logoutHandler(opts, name, credentialsStoreFor(name));
       }),
     );
-  a.command("add-json <name> <json>")
+  mcpCommand
+    .command("add-json <name> <json>")
     .description("Add an MCP server (stdio, SSE, HTTP, or WebSocket) with a JSON string")
     .option("-s, --scope <scope>", "Configuration scope (local, user, or project)", "local")
     .option("--client-secret", "Prompt for OAuth client secret (or set MCP_CLIENT_SECRET env var)")
     .action(
-      p(async (e, t, o, r) => {
-        let [{ mcpAddJsonHandler: n }, { createSubcommandRoot: u }] = await Promise.all([
-          import("./chunk-h2rjy0z4.js"),
-          import("./chunk-tt9rxcw9.js"),
-        ]);
-        await n(await u(), t, o, r, e);
+      register(async (name, json, opts, command) => {
+        let [{ mcpAddJsonHandler: addJsonHandler }, { createSubcommandRoot: createRoot }] = await Promise.all(
+          [import("../../cli/handlers/mcp.js"), import("../../cli/handlers/util.js")],
+        );
+        await addJsonHandler(await createRoot(), json, opts, command, name);
         return cliOkAfterAnalyticsFlush();
       }),
     );
-  a.command("add-from-claude-desktop")
+  mcpCommand
+    .command("add-from-claude-desktop")
     .description("Import MCP servers from Claude Desktop (Mac and WSL only)")
     .option("-s, --scope <scope>", "Configuration scope (local, user, or project)", "local")
     .action(
-      p(async (e, t) => {
-        let { mcpAddFromDesktopHandler } = await import("./chunk-h2rjy0z4.js");
-        await mcpAddFromDesktopHandler(t, e);
+      register(async (opts, command) => {
+        let { mcpAddFromDesktopHandler } = await import("../../cli/handlers/mcp.js");
+        await mcpAddFromDesktopHandler(command, opts);
       }),
     );
-  a.command("reset-project-choices")
+  mcpCommand
+    .command("reset-project-choices")
     .description("Reset all approved and rejected project-scoped (.mcp.json) servers within this project")
     .action(
-      p(async (e) => {
-        let [{ mcpResetChoicesHandler: t }, { createSubcommandRoot: o }] = await Promise.all([
-          import("./chunk-h2rjy0z4.js"),
-          import("./chunk-tt9rxcw9.js"),
-        ]);
-        await t(await o(), e);
+      register(async (opts) => {
+        let [{ mcpResetChoicesHandler: resetChoicesHandler }, { createSubcommandRoot: createRoot }] =
+          await Promise.all([import("../../cli/handlers/mcp.js"), import("../../cli/handlers/util.js")]);
+        await resetChoicesHandler(await createRoot(), opts);
         return cliOkAfterAnalyticsFlush();
       }),
     );
 }
+export { registerMcpCommands };

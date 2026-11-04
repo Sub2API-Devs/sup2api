@@ -76,18 +76,21 @@ function isSettingsToCloudEnabledCached() {
   return isViolinWoodEnabledCached() && isViolinStradEnabledCached();
 }
 //@ chunk-g8d4yw80.js:765-806 placement
-function getHomeSettingsForwardingBlocker(e) {
-  return e ? null : "flag_off";
+function getHomeSettingsForwardingBlocker(reason) {
+  return reason ? null : "flag_off";
 }
 //@ chunk-g8d4yw80.js:806-842 placement
-function canForwardHomeSettings(e) {
-  return getHomeSettingsForwardingBlocker(e) === null;
+function canForwardHomeSettings(reason) {
+  return getHomeSettingsForwardingBlocker(reason) === null;
 }
 //@ chunk-g8d4yw80.js:842-947 placement
 function isViolinWoodServedOff() {
   try {
-    let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_violin_wood", false);
-    return e === false && isServedFeatureSource(source);
+    let { value: flagValue, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
+      "tengu_violin_wood",
+      false,
+    );
+    return flagValue === false && isServedFeatureSource(source);
   } catch {
     return false;
   }
@@ -110,18 +113,18 @@ async function waitForOwnFlagFetch() {
   return Math.round(performance.now() - startTime);
 }
 //@ chunk-g8d4yw80.js:1145-1231 placement
-function isServedFlagOff(e) {
+function isServedFlagOff(key) {
   try {
-    let { value: o, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(e, false);
-    return o === false && isServedFeatureSource(source);
+    let { value, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(key, false);
+    return value === false && isServedFeatureSource(source);
   } catch {
     return false;
   }
 }
 //@ chunk-g8d4yw80.js:1231-1294 placement
-function isAccountGateServed(e) {
+function isAccountGateServed(gate) {
   try {
-    return isServedFeatureSource(getFeatureValueWithSource_CACHED_MAY_BE_STALE(e, false).source);
+    return isServedFeatureSource(getFeatureValueWithSource_CACHED_MAY_BE_STALE(gate, false).source);
   } catch {
     return false;
   }
@@ -148,8 +151,8 @@ function isCloudPluginForwardingEnabledCached() {
 }
 //@ chunk-g8d4yw80.js:1476-1550 placement
 async function isCloudPluginForwardingFlagOn() {
-  let [e, o] = await Promise.all([isViolinWoodEnabled(), isViolinAmatiEnabled()]);
-  return e && o;
+  let [wood, amati] = await Promise.all([isViolinWoodEnabled(), isViolinAmatiEnabled()]);
+  return wood && amati;
 }
 export {
   isViolinWoodEnabledCached,
@@ -167,4 +170,6 @@ export {
   isViolinWoodServedOff,
   isDeviceIdentityServedOff,
   isViolinAmatiEnabledCached,
+  isAccountGateServed,
+  isViolinAmatiEnabled,
 };

@@ -8,40 +8,22 @@
  * pieces: chunk-4pc1m5n9.js (1), chunk-aepeg2w5.js (1), chunk-e6aww6q8.js (1)
  * attribution: callgraph-fingerprint 1, fingerprint 2
  */
-import { getWIFAccountInfo } from "./wifProfile.js";
+import { memoizeAlias } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { getOrCreateUserID, getGlobalConfig } from "./config.js";
 import {
-  getStoredOauthAccountInfo,
   getSubscriptionType,
   getRateLimitTier,
   getAuthenticatedAccountInfo,
   getOauthAccountInfo,
+  getStoredOauthAccountInfo,
 } from "./auth.js";
-import { io } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
-import { getOrCreateUserID, getGlobalConfig } from "./config.js";
 import { isDiskless, getSessionId, getAuthenticatedAccountEpoch } from "../bootstrap/state.js";
 import { env, getHostPlatformForAnalytics } from "./env.js";
 import { nonEmptyName } from "../services/analytics/growthbook.js";
 import { isEnvTruthy } from "./envUtils.js";
 import { readGitConfigValue } from "./git.js";
+import { getWIFAccountInfo } from "./wifProfile.js";
 
-//@ chunk-4pc1m5n9.js:12383-12619 callgraph-fingerprint = getEmail (0.255)
-/**
- * 当前用户邮箱：oauthAccount.emailAddress，或 env 提供的值。
- */
-function getEmail() {
-  let oauthAccount = getWIFAccountInfo();
-  let storedOauthAccountInfo = getStoredOauthAccountInfo();
-  return oauthAccount?.organizationUuid &&
-    oauthAccount.accountEmail &&
-    storedOauthAccountInfo?.organizationUuid === oauthAccount.organizationUuid &&
-    storedOauthAccountInfo.emailAddress === oauthAccount.accountEmail &&
-    storedOauthAccountInfo.accountUuid
-    ? {
-        organizationUuid: oauthAccount.organizationUuid,
-        accountUuid: storedOauthAccountInfo.accountUuid,
-      }
-    : undefined;
-}
 //@ chunk-aepeg2w5.js:627885-629737 fingerprint = getCoreUserData (0.614)
 /**
  * 组装遥测/GrowthBook 用的核心用户数据：deviceId、sessionId、email、appVersion、platform、组织/账户 UUID、订阅类型、GitHub Actions 元数据等。
@@ -49,7 +31,7 @@ function getEmail() {
 class getCoreUserData {
   cachedEmail = null;
   emailFetchPromise = null;
-  coreUserData = io(
+  coreUserData = memoizeAlias(
     (includeAnalyticsMetadata) => {
       let deviceId = getOrCreateUserID();
       let config = getGlobalConfig();
@@ -65,7 +47,7 @@ class getCoreUserData {
         }
       }
       let authenticatedAccountInfo = getAuthenticatedAccountInfo();
-      let R =
+      let accountInfo =
         authenticatedAccountInfo ??
         getOauthAccountInfo() ??
         (isDiskless()
@@ -74,8 +56,8 @@ class getCoreUserData {
               accountUuid: env.CLAUDE_CODE_ACCOUNT_UUID,
             }
           : undefined);
-      let organizationUuid = nonEmptyName(R?.organizationUuid);
-      let accountUuid = nonEmptyName(R?.accountUuid);
+      let organizationUuid = nonEmptyName(accountInfo?.organizationUuid);
+      let accountUuid = nonEmptyName(accountInfo?.accountUuid);
       return {
         deviceId,
         sessionId: getSessionId(),
@@ -110,10 +92,10 @@ class getCoreUserData {
         }),
       };
     },
-    (e) => `${e}|${getAuthenticatedAccountEpoch()}`,
+    (includeAnalyticsMetadata) => `${includeAnalyticsMetadata}|${getAuthenticatedAccountEpoch()}`,
   );
-  gitEmail = io(async () => (await readGitConfigValue("user.email")) ?? undefined);
-  gitUserName = io(async () => (await readGitConfigValue("user.name")) ?? undefined);
+  gitEmail = memoizeAlias(async () => (await readGitConfigValue("user.email")) ?? undefined);
+  gitUserName = memoizeAlias(async () => (await readGitConfigValue("user.name")) ?? undefined);
   async init() {
     if (this.cachedEmail === null && !this.emailFetchPromise) {
       this.emailFetchPromise = this.emailAsync();
@@ -139,7 +121,25 @@ class getCoreUserData {
 /**
  * git config user.email。
  */
-function getGitEmail(e) {
-  return e.shell === undefined && e.osVersion === undefined;
+function getGitEmail(args) {
+  return args.shell === undefined && args.osVersion === undefined;
+}
+//@ chunk-4pc1m5n9.js:12383-12619 callgraph-fingerprint = getEmail (0.255)
+/**
+ * 当前用户邮箱：oauthAccount.emailAddress，或 env 提供的值。
+ */
+function getEmail() {
+  let oauthAccount = getWIFAccountInfo();
+  let storedOauthAccountInfo = getStoredOauthAccountInfo();
+  return oauthAccount?.organizationUuid &&
+    oauthAccount.accountEmail &&
+    storedOauthAccountInfo?.organizationUuid === oauthAccount.organizationUuid &&
+    storedOauthAccountInfo.emailAddress === oauthAccount.accountEmail &&
+    storedOauthAccountInfo.accountUuid
+    ? {
+        organizationUuid: oauthAccount.organizationUuid,
+        accountUuid: storedOauthAccountInfo.accountUuid,
+      }
+    : undefined;
 }
 export { getGitEmail, getEmail, getCoreUserData };

@@ -27,7 +27,7 @@ var McpbManifestAuthorSchema = strictCreate({
   email: create_2().email().optional(),
   url: create_2().url().optional(),
 });
-var y = strictCreate({
+var McpbManifestRepositorySchema = strictCreate({
   type: create_2(),
   url: create_2().url(),
 });
@@ -69,8 +69,11 @@ var McpbUserConfigurationOptionSchema = strictCreate({
   min: create_3().optional(),
   max: create_3().optional(),
 });
-var A = create_20(create_2(), create_16([create_2(), create_3(), create_6(), create_15(create_2())]));
-var k = strictCreate({
+var McpbUserConfigValuesSchema = create_20(
+  create_2(),
+  create_16([create_2(), create_3(), create_6(), create_15(create_2())]),
+);
+var McpbManifestSchema = strictCreate({
   $schema: create_2().optional(),
   dxt_version: create_2().optional().describe("@deprecated Use manifest_version instead"),
   manifest_version: create_2().optional(),
@@ -80,7 +83,7 @@ var k = strictCreate({
   description: create_2(),
   long_description: create_2().optional(),
   author: McpbManifestAuthorSchema,
-  repository: y.optional(),
+  repository: McpbManifestRepositorySchema.optional(),
   homepage: create_2().url().optional(),
   documentation: create_2().url().optional(),
   support: create_2().url().optional(),
@@ -99,7 +102,7 @@ var k = strictCreate({
 }).refine((data) => !!(data.dxt_version || data.manifest_version), {
   message: "Either 'dxt_version' (deprecated) or 'manifest_version' must be provided",
 });
-var w = strictCreate({
+var McpbSignatureInfoSchema = strictCreate({
   status: create_26(["signed", "unsigned", "self-signed"]),
   publisher: create_2().optional(),
   issuer: create_2().optional(),
@@ -107,3 +110,4 @@ var w = strictCreate({
   valid_to: create_2().optional(),
   fingerprint: create_2().optional(),
 });
+export { McpbManifestSchema };

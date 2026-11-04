@@ -10,7 +10,13 @@
  */
 import { resolve } from "path";
 import { DoctorLazy } from "../handlers/util.js";
-import { u, literal, looseObject, unknown, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  literal,
+  looseObject,
+  unknown,
+  array,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { logFeatureSad, logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { SDKLocalMessageSchema } from "../../entrypoints/sdk/coreSchemas.js";
 import { getCurrentWorktreeSession } from "../../utils/worktree.js";
@@ -23,22 +29,29 @@ import { iterateStreamUntilClose, isStdinUnusableError } from "../../utils/proce
 import { errorMessage, getErrnoCode } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";
 import { cliErrorAfterAnalyticsFlush } from "../exit.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-151tygw9.js:1207-1369 placement
-var MAX_INITIALIZE_LINE_BYTES = 268435456;
-var FIRST_LINE_TOO_LONG = Symbol("first line too long");
-var STDIN_STASH_CHUNK = 65536;
+var MAX_INITIALIZE_LINE_BYTES; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var FIRST_LINE_TOO_LONG;
+var STDIN_STASH_CHUNK;
 var initializeWait;
 var stdinPump;
-var INITIALIZE_REQUEST_SCHEMA = DoctorLazy(() =>
-  u({
-    type: literal("control_request"),
-    request: looseObject({
-      subtype: literal("initialize"),
-      plugins: unknown().optional(),
+var INITIALIZE_REQUEST_SCHEMA;
+deferInit("chunk-151tygw9.js:1207", () => {
+  MAX_INITIALIZE_LINE_BYTES = 268435456;
+  FIRST_LINE_TOO_LONG = Symbol("first line too long");
+  STDIN_STASH_CHUNK = 65536;
+  INITIALIZE_REQUEST_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      type: literal("control_request"),
+      request: looseObject({
+        subtype: literal("initialize"),
+        plugins: unknown().optional(),
+      }),
     }),
-  }),
-);
+  );
+});
 //@ chunk-151tygw9.js:1369-1585 placement
 /**
  * --await-initialize：在 stdin 上等待第一个 initialize 控制请求后再继续启动。
@@ -69,19 +82,19 @@ function startStdinPump(createGenerator) {
   pumpStdin(stdinPump_2);
 }
 //@ chunk-151tygw9.js:1629-1861 placement
-function watchStdinLines(e) {
-  let n = stdinPump;
-  if (!n || !n.pumping || n.capped || n.adopted || n.watch) return;
-  let r = {
-    watcher: e,
+function watchStdinLines(watcher) {
+  let pump = stdinPump;
+  if (!pump || !pump.pumping || pump.capped || pump.adopted || pump.watch) return;
+  let watch = {
+    watcher,
     held: [],
     heldChars: 0,
     passing: false,
   };
-  n.watch = r;
-  for (let s of n.stash.splice(0)) routeStdinChunk(n, s);
-  if (n.ended || n.error !== undefined) e.ended();
-  return () => endWatch(n, r);
+  pump.watch = watch;
+  for (let chunk of pump.stash.splice(0)) routeStdinChunk(pump, chunk);
+  if (pump.ended || pump.error !== undefined) watcher.ended();
+  return () => endWatch(pump, watch);
 }
 //@ chunk-151tygw9.js:1861-1910 placement
 function awaitInitializeResult() {
@@ -89,28 +102,32 @@ function awaitInitializeResult() {
 }
 //@ chunk-151tygw9.js:1910-2007 placement
 function adoptStdinStream() {
-  let e = stdinPump;
-  if (!e || e.adopted) return;
-  if (e.watch) endWatch(e, e.watch);
-  e.adopted = true;
-  return replayStdinStash(e);
+  let pump = stdinPump;
+  if (!pump || pump.adopted) return;
+  if (pump.watch) endWatch(pump, pump.watch);
+  pump.adopted = true;
+  return replayStdinStash(pump);
 }
 //@ chunk-151tygw9.js:2007-2335 placement
 function applyInitializePlugins(plugins) {
-  let n = array(SDKLocalMessageSchema()).optional().safeParse(plugins);
-  if (!n.success) return false;
-  let r = n.data;
-  if (r === undefined || r.length === 0) return;
+  let parsed = array(SDKLocalMessageSchema()).optional().safeParse(plugins);
+  if (!parsed.success) return false;
+  let entries = parsed.data;
+  if (entries === undefined || entries.length === 0) return;
   let currentWorktreeSession = getCurrentWorktreeSession();
-  let a =
+  let baseDir =
     currentWorktreeSession?.preEnterOriginalCwd ?? currentWorktreeSession?.originalCwd ?? getOriginalCwd();
-  let o = new Set(getInlinePlugins().map((h) => resolve(a, h)));
-  let c = new Set(getInlinePluginsNoMcp().map((h) => resolve(a, h)));
-  return r.every((h) => (h.skipMcpDiscovery ? c.has(resolve(a, h.path)) : o.has(resolve(a, h.path))));
+  let dirs = new Set(getInlinePlugins().map((dir) => resolve(baseDir, dir)));
+  let noMcpDirs = new Set(getInlinePluginsNoMcp().map((dir) => resolve(baseDir, dir)));
+  return entries.every((plugin) =>
+    plugin.skipMcpDiscovery
+      ? noMcpDirs.has(resolve(baseDir, plugin.path))
+      : dirs.has(resolve(baseDir, plugin.path)),
+  );
 }
 //@ chunk-151tygw9.js:2335-2476 placement
 function createStdinPump(createGenerator) {
-  let n = {
+  let pump = {
     generator: createGenerator(),
     stash: [],
     inflight: undefined,
@@ -121,22 +138,22 @@ function createStdinPump(createGenerator) {
     pumping: false,
     watch: undefined,
   };
-  stdinPump = n;
-  return n;
+  stdinPump = pump;
+  return pump;
 }
 //@ chunk-151tygw9.js:2476-2787 placement
 async function readFirstStdinLine(stdinPump) {
-  let n = "";
+  let buffer = "";
   for (;;) {
-    let index = n.indexOf(`
+    let index = buffer.indexOf(`
 `);
     if (index !== -1) {
-      let sliced = n.slice(0, index);
+      let sliced = buffer.slice(0, index);
       if (sliced.trim() !== "") return sliced;
-      n = n.slice(index + 1);
+      buffer = buffer.slice(index + 1);
       continue;
     }
-    if (n.length > MAX_INITIALIZE_LINE_BYTES) {
+    if (buffer.length > MAX_INITIALIZE_LINE_BYTES) {
       stdinPump.capped = true;
       return FIRST_LINE_TOO_LONG;
     }
@@ -148,102 +165,102 @@ async function readFirstStdinLine(stdinPump) {
       return null;
     }
     stdinPump.stash.push(inflight.value);
-    n += inflight.value;
+    buffer += inflight.value;
   }
 }
 //@ chunk-151tygw9.js:2787-3083 placement
-async function pumpStdin(stdinPump) {
-  stdinPump.pumping = true;
+async function pumpStdin(pump) {
+  pump.pumping = true;
   try {
-    while (!stdinPump.adopted && !stdinPump.ended && !stdinPump.capped && stdinPump.error === undefined) {
-      stdinPump.inflight = stdinPump.generator.next();
-      let inflight = await stdinPump.inflight;
-      stdinPump.inflight = undefined;
-      if (inflight.done) stdinPump.ended = true;
-      else routeStdinChunk(stdinPump, inflight.value);
+    while (!pump.adopted && !pump.ended && !pump.capped && pump.error === undefined) {
+      pump.inflight = pump.generator.next();
+      let inflight = await pump.inflight;
+      pump.inflight = undefined;
+      if (inflight.done) pump.ended = true;
+      else routeStdinChunk(pump, inflight.value);
     }
   } catch (error) {
-    stdinPump.inflight = undefined;
-    stdinPump.error = error;
+    pump.inflight = undefined;
+    pump.error = error;
   }
-  if (stdinPump.ended || stdinPump.error !== undefined) stdinPump.watch?.watcher.ended();
+  if (pump.ended || pump.error !== undefined) pump.watch?.watcher.ended();
 }
 //@ chunk-151tygw9.js:3083-3539 placement
-function routeStdinChunk(e, n) {
-  let watch = e.watch;
+function routeStdinChunk(pump, chunk) {
+  let watch = pump.watch;
   if (!watch) {
-    e.stash.push(n);
+    pump.stash.push(chunk);
     return;
   }
-  let s = 0;
+  let from = 0;
   for (;;) {
-    let index = n.indexOf(
+    let index = chunk.indexOf(
       `
 `,
-      s,
+      from,
     );
     if (index === -1) break;
-    let sliced = n.slice(s, index);
-    s = index + 1;
-    let h = !watch.passing && watch.heldChars + sliced.length <= STDIN_STASH_CHUNK;
+    let sliced = chunk.slice(from, index);
+    from = index + 1;
+    let fits = !watch.passing && watch.heldChars + sliced.length <= STDIN_STASH_CHUNK;
     watch.passing = false;
-    if (h && watch.watcher.takes(watch.held.join("") + sliced)) {
+    if (fits && watch.watcher.takes(watch.held.join("") + sliced)) {
       watch.held = [];
       watch.heldChars = 0;
       continue;
     }
-    flushHeldWatchItems(e, watch);
-    e.stash.push(
+    flushHeldWatchItems(pump, watch);
+    pump.stash.push(
       sliced +
         `
 `,
     );
   }
-  if (s === n.length) return;
-  let a = s === 0 ? n : n.slice(s);
+  if (from === chunk.length) return;
+  let rest = from === 0 ? chunk : chunk.slice(from);
   if (watch.passing) {
-    e.stash.push(a);
+    pump.stash.push(rest);
     return;
   }
-  watch.held.push(a);
-  watch.heldChars += a.length;
+  watch.held.push(rest);
+  watch.heldChars += rest.length;
   if (watch.heldChars > STDIN_STASH_CHUNK) {
-    flushHeldWatchItems(e, watch);
+    flushHeldWatchItems(pump, watch);
     watch.passing = true;
   }
 }
 //@ chunk-151tygw9.js:3539-3615 placement
-function flushHeldWatchItems(e, watch) {
-  for (let r of watch.held) e.stash.push(r);
+function flushHeldWatchItems(pump, watch) {
+  for (let item of watch.held) pump.stash.push(item);
   watch.held = [];
   watch.heldChars = 0;
 }
 //@ chunk-151tygw9.js:3615-3675 placement
-function endWatch(e, n) {
-  if (e.watch !== n) return;
-  flushHeldWatchItems(e, n);
-  e.watch = undefined;
+function endWatch(pump, watch) {
+  if (pump.watch !== watch) return;
+  flushHeldWatchItems(pump, watch);
+  pump.watch = undefined;
 }
 //@ chunk-151tygw9.js:3675-3986 placement
-async function* replayStdinStash(e) {
-  let n = false;
+async function* replayStdinStash(pump) {
+  let pumped = false;
   try {
-    while (e.stash.length > 0) yield e.stash.shift();
-    if (e.inflight) {
-      await e.inflight.catch(() => {});
-      while (e.stash.length > 0) yield e.stash.shift();
+    while (pump.stash.length > 0) yield pump.stash.shift();
+    if (pump.inflight) {
+      await pump.inflight.catch(() => {});
+      while (pump.stash.length > 0) yield pump.stash.shift();
     }
-    if (e.error !== undefined) throw e.error;
-    if (e.ended) return;
-    n = true;
-    yield* e.generator;
+    if (pump.error !== undefined) throw pump.error;
+    if (pump.ended) return;
+    pumped = true;
+    yield* pump.generator;
   } finally {
-    if (!n && !e.ended) e.generator.return(undefined).catch(() => {});
+    if (!pumped && !pump.ended) pump.generator.return(undefined).catch(() => {});
   }
 }
 //@ chunk-151tygw9.js:3986-5326 placement
-function parseInitializeLine(e) {
-  if (e === null) {
+function parseInitializeLine(line) {
+  if (line === null) {
     logForDebugging("--await-initialize: stdin ended before an initialize request arrived", {
       level: "warn",
     });
@@ -252,7 +269,7 @@ function parseInitializeLine(e) {
       kind: "absent",
     };
   }
-  if (e === FIRST_LINE_TOO_LONG) {
+  if (line === FIRST_LINE_TOO_LONG) {
     logForDebugging("--await-initialize: first stdin line exceeds the line-size ceiling; not parsed", {
       level: "error",
     });
@@ -261,9 +278,9 @@ function parseInitializeLine(e) {
       kind: "absent",
     };
   }
-  let n;
+  let message;
   try {
-    n = normalizeControlMessage(jsonParse(stripBom(e)));
+    message = normalizeControlMessage(jsonParse(stripBom(line)));
   } catch {
     logFeatureBad("sdk_launch_initialize", "first_line_not_json");
     return {
@@ -272,8 +289,8 @@ function parseInitializeLine(e) {
         "Error: --await-initialize requires the initialize control request as the first stdin line, and the first line is not valid JSON.",
     };
   }
-  let r = INITIALIZE_REQUEST_SCHEMA().safeParse(n);
-  if (!r.success) {
+  let parsed = INITIALIZE_REQUEST_SCHEMA().safeParse(message);
+  if (!parsed.success) {
     logFeatureBad("sdk_launch_initialize", "first_line_not_initialize");
     return {
       kind: "violation",
@@ -281,8 +298,8 @@ function parseInitializeLine(e) {
         "Error: --await-initialize requires the initialize control request as the first stdin line, and the first line is a different message.",
     };
   }
-  let s = array(SDKLocalMessageSchema()).optional().safeParse(r.data.request.plugins);
-  if (!s.success) {
+  let plugins = array(SDKLocalMessageSchema()).optional().safeParse(parsed.data.request.plugins);
+  if (!plugins.success) {
     logFeatureBad("sdk_launch_initialize", "plugins_malformed");
     return {
       kind: "violation",
@@ -290,20 +307,24 @@ function parseInitializeLine(e) {
         "Error: initialize.plugins must be an array of { type: 'local', path: string, skipMcpDiscovery?: boolean } entries.",
     };
   }
-  let a = s.data ?? [];
+  let entries = plugins.data ?? [];
   logFeatureOk("sdk_launch_initialize");
   return {
     kind: "applied",
-    pluginDirs: a.filter((o) => !o.skipMcpDiscovery).map((o) => o.path),
-    pluginDirsNoMcp: a.filter((o) => o.skipMcpDiscovery).map((o) => o.path),
+    pluginDirs: entries.filter((plugin) => !plugin.skipMcpDiscovery).map((plugin) => plugin.path),
+    pluginDirsNoMcp: entries.filter((plugin) => plugin.skipMcpDiscovery).map((plugin) => plugin.path),
   };
 }
 //@ chunk-151tygw9.js:5326-5398 placement
-var STDIN_LIMITS = 10485760;
-var STDIN_MESSAGES_MARKER = Symbol("stream-json messages of this process's stdin");
+var STDIN_LIMITS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var STDIN_MESSAGES_MARKER;
+deferInit("chunk-151tygw9.js:5326", () => {
+  STDIN_LIMITS = 10485760;
+  STDIN_MESSAGES_MARKER = Symbol("stream-json messages of this process's stdin");
+});
 //@ chunk-151tygw9.js:5398-5449 placement
-function isStreamJsonStdin(e) {
-  return typeof e !== "string" && STDIN_MESSAGES_MARKER in e;
+function isStreamJsonStdin(stream) {
+  return typeof stream !== "string" && STDIN_MESSAGES_MARKER in stream;
 }
 //@ chunk-151tygw9.js:5449-5908 placement
 async function* readStreamJsonStdin() {
@@ -326,12 +347,12 @@ async function* readStreamJsonStdin() {
   }
 }
 export {
-  startAwaitInitialize,
-  readStreamJsonStdin,
-  awaitInitializeResult,
   adoptStdinStream,
+  readStreamJsonStdin,
   STDIN_MESSAGES_MARKER,
   STDIN_LIMITS,
+  startAwaitInitialize,
+  awaitInitializeResult,
   isStreamJsonStdin,
   applyInitializePlugins,
   startStdinPump,

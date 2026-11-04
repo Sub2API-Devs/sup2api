@@ -16,15 +16,15 @@ var weakSet = new WeakSet();
  * 创建一个冻结的空标记对象并登记，供"已冻结标记"判定使用。
  */
 function createFrozenMarker() {
-  let e = Object.freeze({});
-  weakSet.add(e);
-  return e;
+  let marker = Object.freeze({});
+  weakSet.add(marker);
+  return marker;
 }
 //@ chunk-75swpmx0.js:266-328 placement
 /**
  * 是否为冻结标记对象。
  */
-function isFrozenMarker(e) {
-  return typeof e === "object" && e !== null && weakSet.has(e);
+function isFrozenMarker(value) {
+  return typeof value === "object" && value !== null && weakSet.has(value);
 }
 export { createFrozenMarker, isFrozenMarker };

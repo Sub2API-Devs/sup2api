@@ -16,17 +16,17 @@ import { TOOL_RESULTS_SUBDIR } from "../../utils/toolResultStorage.js";
  * 生成 artifact 落盘文件的 id：`artifact-<前 8 位清洗后的 id>-<清洗后的名字>`。
  */
 function makeArtifactPersistId(slug, ver) {
-  let n = (i) => i.replace(/[^\w-]/g, "");
-  return `artifact-${n(slug).slice(0, 8)}-${n(ver)}`;
+  let sanitize = (value) => value.replace(/[^\w-]/g, "");
+  return `artifact-${sanitize(slug).slice(0, 8)}-${sanitize(ver)}`;
 }
 //@ chunk-bhxaz9j0.js:4355-4450 placement
 /**
  * 判断路径是否是落盘的 artifact 文件（文件名以 artifact- 开头且父目录为指定目录）。
  */
-function isPersistedArtifactPath(e) {
+function isPersistedArtifactPath(path) {
   return (
-    basename(e).toLowerCase().startsWith("artifact-") &&
-    basename(dirname(e)).toLowerCase() === TOOL_RESULTS_SUBDIR
+    basename(path).toLowerCase().startsWith("artifact-") &&
+    basename(dirname(path)).toLowerCase() === TOOL_RESULTS_SUBDIR
   );
 }
 export { makeArtifactPersistId, isPersistedArtifactPath };

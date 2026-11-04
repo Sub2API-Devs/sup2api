@@ -16,9 +16,9 @@ import { getSessionIngressAuthToken } from "../sessionIngressAuth.js";
 import { getSettingsForSource } from "../settings/settings.js";
 
 //@ chunk-e6aww6q8.js:824401-824577 placement
-function sessionAccessTokenEnvForHooks(e) {
+function sessionAccessTokenEnvForHooks(hookEnv) {
   if (
-    !e ||
+    !hookEnv ||
     !usesSessionAccessToken() ||
     env.CLAUDE_CODE_WORKER_EPOCH !== 1 ||
     isSettingSourceEnabled("projectSettings") ||
@@ -38,8 +38,8 @@ function isFlagSettingsSyncHook(hook, hookEvent) {
     hook.type === "command" &&
     hook.async !== true &&
     hook.asyncRewake !== true &&
-    (getSettingsForSource("flagSettings")?.hooks?.[hookEvent] ?? []).some((r) =>
-      r.hooks.some((hook_2) => isDeepStrictEqual(hook_2, hook)),
+    (getSettingsForSource("flagSettings")?.hooks?.[hookEvent] ?? []).some((matcher) =>
+      matcher.hooks.some((hook_2) => isDeepStrictEqual(hook_2, hook)),
     )
   );
 }

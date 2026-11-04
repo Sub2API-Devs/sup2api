@@ -8,8 +8,8 @@
  * pieces: chunk-5bdzenzx.js (24), chunk-e6aww6q8.js (1), chunk-fq0cr76a.js (1)
  * attribution: sole-consumer 5, file-local 1, fingerprint 11, placement 4, affinity 1, layout 4
  */
-import * as pathModule from "path";
 import { isIP } from "net";
+import * as pathModule from "path";
 import { getGlobalConfig } from "../../utils/config.js";
 import {
   isSupportedTerminal,
@@ -32,8 +32,8 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { OrderedListWithItem } from "../../components/CustomSelect/selectTable.js";
 import { isIdeClient } from "../mcp/mcp.js";
 import { isIncludedMcpTool } from "../../services/mcp/client.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
-import { y, P, R } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { useState, useEffect, useRef } from "../../../vendor/react/cjs/react.production.js";
 import {
   shouldShowAutoConnectDialog,
   IdeAutoConnectDialog,
@@ -56,6 +56,42 @@ import { useAppState, useSetAppState } from "../../state/AppState.js";
 import { useTimeout } from "../../ink/hooks/useTerminalHooks.js";
 import { setMcpOnClose } from "../../services/mcp/mcpWireUtils.js";
 
+//@ chunk-fq0cr76a.js:916465-916672 fingerprint = _temp4 (0.691)
+/**
+ * 解析 "host:port"：端口 1–65535，host 非空；以冒号结尾的 host 必须是 IPv6。失败返回 undefined。
+ */
+function parseHostPort(ide_0) {
+  let index = ide_0.lastIndexOf(":");
+  let sliced = ide_0.slice(index + 1);
+  let sliced_2 = ide_0.slice(0, index);
+  if (!/^\d{1,5}$/.test(sliced)) return;
+  let port = Number(sliced);
+  if (port < 1 || port > 65535 || sliced_2 === "") return;
+  if (sliced_2.endsWith(":") && isIP(sliced_2) !== 6) return;
+  return {
+    host: sliced_2,
+    port,
+  };
+}
+//@ chunk-e6aww6q8.js:3244299-3244625 placement
+/**
+ * 按 IDE 名判断属于哪个 VS Code 系：windsurf/devin→windsurf，cursor→cursor，VS Code/VSCodium/Code-OSS（非 Insiders）→vscode，否则 null。
+ */
+function detectVSCodeFamily(name) {
+  let lower = name.toLowerCase();
+  if (lower.includes("windsurf") || lower.includes("devin")) return "windsurf";
+  if (lower.includes("cursor")) return "cursor";
+  if (
+    !lower.includes("insiders") &&
+    (lower.includes("vscode") ||
+      lower.includes("vs code") ||
+      lower.includes("visual studio code") ||
+      lower.includes("vscodium") ||
+      lower.includes("code - oss"))
+  )
+    return "vscode";
+  return null;
+}
 //@ chunk-5bdzenzx.js:16087-16147 sole-consumer = _temp (1)
 function shouldAutoConnectIdeAnyway() {
   let config = getGlobalConfig();
@@ -84,23 +120,23 @@ function renderIdeWorkspaceRow(ide, index) {
   );
 }
 //@ chunk-5bdzenzx.js:16395-16450 sole-consumer
-function renderAvailableIde(C) {
+function renderAvailableIde(available) {
   return jsxProd_default(
     OrderedListWithItem.Item,
     {
-      label: C.name,
+      label: available.name,
     },
-    C.port,
+    available.port,
   );
 }
 //@ chunk-5bdzenzx.js:16450-16499 sole-consumer
-function renderRunningIde(E) {
+function renderRunningIde(running) {
   return jsxProd_default(
     OrderedListWithItem.Item,
     {
-      label: toIDEDisplayName(E),
+      label: toIDEDisplayName(running),
     },
-    E,
+    running,
   );
 }
 //@ chunk-5bdzenzx.js:16538-16585 placement = _temp (1)
@@ -130,76 +166,76 @@ function withoutIdeMcpEntries(s) {
   };
 }
 //@ chunk-5bdzenzx.js:16891-16940 affinity
-function withoutIdeEntry(Cn) {
-  let { ide, ...N } = Cn ?? {};
-  return N;
+function withoutIdeEntry(value) {
+  let { ide, ...rest } = value ?? {};
+  return rest;
 }
 //@ chunk-5bdzenzx.js:16940-20006 fingerprint = IDEScreen (0.611)
 function IDEScreen(props) {
-  let t = w(45);
+  let $ = useMemoCache(45);
   let { availableIDEs, unavailableIDEs, selectedIDE, onClose, onSelect } = props;
   let t1;
-  if (t[0] !== selectedIDE?.port) {
+  if ($[0] !== selectedIDE?.port) {
     t1 = selectedIDE?.port?.toString() ?? "None";
-    t[0] = selectedIDE?.port;
-    t[1] = t1;
-  } else t1 = t[1];
-  let [selectedValue, setSelectedValue] = y(t1);
-  let [showAutoConnectDialog, setShowAutoConnectDialog] = y(false);
-  let [showDisableAutoConnectDialog, setShowDisableAutoConnectDialog] = y(false);
+    $[0] = selectedIDE?.port;
+    $[1] = t1;
+  } else t1 = $[1];
+  let [selectedValue, setSelectedValue] = useState(t1);
+  let [showAutoConnectDialog, setShowAutoConnectDialog] = useState(false);
+  let [showDisableAutoConnectDialog, setShowDisableAutoConnectDialog] = useState(false);
   let t2;
-  if (t[2] !== availableIDEs || t[3] !== onSelect) {
+  if ($[2] !== availableIDEs || $[3] !== onSelect) {
     t2 = (value) => {
       if (value !== "None" && shouldShowAutoConnectDialog()) setShowAutoConnectDialog(true);
       else if (value === "None" && shouldAutoConnectIdeAnyway()) setShowDisableAutoConnectDialog(true);
       else onSelect(availableIDEs.find((ide) => ide.port === parseInt(value)));
     };
-    t[2] = availableIDEs;
-    t[3] = onSelect;
-    t[4] = t2;
-  } else t2 = t[4];
+    $[2] = availableIDEs;
+    $[3] = onSelect;
+    $[4] = t2;
+  } else t2 = $[4];
   let handleSelectIDE = t2;
   let t3;
-  if (t[5] !== availableIDEs) {
+  if ($[5] !== availableIDEs) {
     t3 = availableIDEs.reduce(countByName, {});
-    t[5] = availableIDEs;
-    t[6] = t3;
-  } else t3 = t[6];
+    $[5] = availableIDEs;
+    $[6] = t3;
+  } else t3 = $[6];
   let ideCounts = t3;
-  let H;
-  let A;
-  let F;
+  let titleLine;
+  let urlLine;
+  let body;
   let flexDirection;
-  let J;
+  let footer;
   let title;
   let subtitle;
   let onCancel;
   let color;
   if (
-    t[7] !== availableIDEs ||
-    t[8] !== handleSelectIDE ||
-    t[9] !== ideCounts ||
-    t[10] !== onClose ||
-    t[11] !== onSelect ||
-    t[12] !== selectedValue ||
-    t[13] !== showAutoConnectDialog ||
-    t[14] !== showDisableAutoConnectDialog
+    $[7] !== availableIDEs ||
+    $[8] !== handleSelectIDE ||
+    $[9] !== ideCounts ||
+    $[10] !== onClose ||
+    $[11] !== onSelect ||
+    $[12] !== selectedValue ||
+    $[13] !== showAutoConnectDialog ||
+    $[14] !== showDisableAutoConnectDialog
   ) {
-    F = EARLY_RETURN_SENTINEL;
+    body = EARLY_RETURN_SENTINEL;
     Ht: {
       let t5;
-      if (t[24] !== ideCounts) {
+      if ($[24] !== ideCounts) {
         t5 = (ide) => {
-          let Cn = (ideCounts[ide.name] || 0) > 1 && ide.workspaceFolders.length > 0;
+          let showWorkspaceHint = (ideCounts[ide.name] || 0) > 1 && ide.workspaceFolders.length > 0;
           return {
             label: ide.name,
             value: ide.port.toString(),
-            description: Cn ? formatWorkspaceFolders(ide.workspaceFolders) : undefined,
+            description: showWorkspaceHint ? formatWorkspaceFolders(ide.workspaceFolders) : undefined,
           };
         };
-        t[24] = ideCounts;
-        t[25] = t5;
-      } else t5 = t[25];
+        $[24] = ideCounts;
+        $[25] = t5;
+      } else t5 = $[25];
       let combined = availableIDEs.map(t5).concat([
         {
           label: "None",
@@ -209,39 +245,39 @@ function IDEScreen(props) {
       ]);
       if (showAutoConnectDialog) {
         let t5;
-        if (t[26] !== handleSelectIDE || t[27] !== selectedValue) {
+        if ($[26] !== handleSelectIDE || $[27] !== selectedValue) {
           t5 = jsxProd_default(IdeAutoConnectDialog, {
             onComplete: () => handleSelectIDE(selectedValue),
           });
-          t[26] = handleSelectIDE;
-          t[27] = selectedValue;
-          t[28] = t5;
-        } else t5 = t[28];
-        F = t5;
+          $[26] = handleSelectIDE;
+          $[27] = selectedValue;
+          $[28] = t5;
+        } else t5 = $[28];
+        body = t5;
         break Ht;
       }
       if (showDisableAutoConnectDialog) {
         let t5;
-        if (t[29] !== onSelect) {
+        if ($[29] !== onSelect) {
           t5 = jsxProd_default(IdeDisableAutoConnectDialog, {
             onComplete: () => {
               onSelect(undefined);
             },
           });
-          t[29] = onSelect;
-          t[30] = t5;
-        } else t5 = t[30];
-        F = t5;
+          $[29] = onSelect;
+          $[30] = t5;
+        } else t5 = $[30];
+        body = t5;
         break Ht;
       }
-      A = Dialog;
+      urlLine = Dialog;
       title = "Select IDE";
       subtitle = "Connect to an IDE for integrated development features.";
       onCancel = onClose;
       color = "ide";
-      H = Box;
+      titleLine = Box;
       flexDirection = "column";
-      J =
+      footer =
         availableIDEs.length === 0
           ? jsxProd_default(HintText, {
               children: isJetBrainsTerminal()
@@ -252,30 +288,30 @@ https://code.claude.com/docs/en/jetbrains`
           : jsxProd_default_2(Fragment, {
               children: [
                 jsxProd_default(OrderedListWithItem, {
-                  defaultFocusIndex: combined.findIndex((Ho) => Ho.value === selectedValue),
-                  onSelect: (Jo) => {
-                    let Le = combined[Jo];
-                    if (!Le) {
+                  defaultFocusIndex: combined.findIndex((item) => item.value === selectedValue),
+                  onSelect: (index) => {
+                    let ide = combined[index];
+                    if (!ide) {
                       return;
                     }
-                    setSelectedValue(Le.value);
-                    handleSelectIDE(Le.value);
+                    setSelectedValue(ide.value);
+                    handleSelectIDE(ide.value);
                   },
-                  children: combined.map((ge) =>
+                  children: combined.map((item) =>
                     jsxProd_default(
                       OrderedListWithItem.Item,
                       {
-                        label: ge.label,
+                        label: item.label,
                         icon:
-                          ge.value === selectedValue
+                          item.value === selectedValue
                             ? jsxProd_default(StatusIcon, {
                                 status: "success",
                                 "aria-label": "current:",
                               })
                             : undefined,
-                        description: ge.description,
+                        description: item.description,
                       },
-                      ge.value,
+                      item.value,
                     ),
                   ),
                 }),
@@ -298,38 +334,38 @@ https://code.claude.com/docs/en/jetbrains`
               ],
             });
     }
-    t[7] = availableIDEs;
-    t[8] = handleSelectIDE;
-    t[9] = ideCounts;
-    t[10] = onClose;
-    t[11] = onSelect;
-    t[12] = selectedValue;
-    t[13] = showAutoConnectDialog;
-    t[14] = showDisableAutoConnectDialog;
-    t[15] = H;
-    t[16] = A;
-    t[17] = F;
-    t[18] = flexDirection;
-    t[19] = J;
-    t[20] = title;
-    t[21] = subtitle;
-    t[22] = onCancel;
-    t[23] = color;
+    $[7] = availableIDEs;
+    $[8] = handleSelectIDE;
+    $[9] = ideCounts;
+    $[10] = onClose;
+    $[11] = onSelect;
+    $[12] = selectedValue;
+    $[13] = showAutoConnectDialog;
+    $[14] = showDisableAutoConnectDialog;
+    $[15] = titleLine;
+    $[16] = urlLine;
+    $[17] = body;
+    $[18] = flexDirection;
+    $[19] = footer;
+    $[20] = title;
+    $[21] = subtitle;
+    $[22] = onCancel;
+    $[23] = color;
   } else {
-    H = t[15];
-    A = t[16];
-    F = t[17];
-    flexDirection = t[18];
-    J = t[19];
-    title = t[20];
-    subtitle = t[21];
-    onCancel = t[22];
-    color = t[23];
+    titleLine = $[15];
+    urlLine = $[16];
+    body = $[17];
+    flexDirection = $[18];
+    footer = $[19];
+    title = $[20];
+    subtitle = $[21];
+    onCancel = $[22];
+    color = $[23];
   }
-  if (F !== EARLY_RETURN_SENTINEL) return F;
-  let L;
-  if (t[31] !== unavailableIDEs) {
-    L =
+  if (body !== EARLY_RETURN_SENTINEL) return body;
+  let content;
+  if ($[31] !== unavailableIDEs) {
+    content =
       unavailableIDEs.length > 0 &&
       jsxProd_default_2(Box, {
         marginTop: 1,
@@ -358,46 +394,46 @@ https://code.claude.com/docs/en/jetbrains`
           }),
         ],
       });
-    t[31] = unavailableIDEs;
-    t[32] = L;
-  } else L = t[32];
+    $[31] = unavailableIDEs;
+    $[32] = content;
+  } else content = $[32];
   let children;
-  if (t[33] !== H || t[34] !== L || t[35] !== flexDirection || t[36] !== J) {
-    children = jsxProd_default_2(H, {
+  if ($[33] !== titleLine || $[34] !== content || $[35] !== flexDirection || $[36] !== footer) {
+    children = jsxProd_default_2(titleLine, {
       flexDirection,
-      children: [J, L],
+      children: [footer, content],
     });
-    t[33] = H;
-    t[34] = L;
-    t[35] = flexDirection;
-    t[36] = J;
-    t[37] = children;
-  } else children = t[37];
-  let En;
+    $[33] = titleLine;
+    $[34] = content;
+    $[35] = flexDirection;
+    $[36] = footer;
+    $[37] = children;
+  } else children = $[37];
+  let hint;
   if (
-    t[38] !== A ||
-    t[39] !== children ||
-    t[40] !== title ||
-    t[41] !== subtitle ||
-    t[42] !== onCancel ||
-    t[43] !== color
+    $[38] !== urlLine ||
+    $[39] !== children ||
+    $[40] !== title ||
+    $[41] !== subtitle ||
+    $[42] !== onCancel ||
+    $[43] !== color
   ) {
-    En = jsxProd_default(A, {
+    hint = jsxProd_default(urlLine, {
       title,
       subtitle,
       onCancel,
       color,
       children,
     });
-    t[38] = A;
-    t[39] = children;
-    t[40] = title;
-    t[41] = subtitle;
-    t[42] = onCancel;
-    t[43] = color;
-    t[44] = En;
-  } else En = t[44];
-  return En;
+    $[38] = urlLine;
+    $[39] = children;
+    $[40] = title;
+    $[41] = subtitle;
+    $[42] = onCancel;
+    $[43] = color;
+    $[44] = hint;
+  } else hint = $[44];
+  return hint;
 }
 //@ chunk-5bdzenzx.js:20006-20152 fingerprint = findCurrentIDE (1)
 async function findCurrentIDE(availableIDEs, dynamicMcpConfig) {
@@ -408,11 +444,11 @@ async function findCurrentIDE(availableIDEs, dynamicMcpConfig) {
 }
 //@ chunk-5bdzenzx.js:20152-20717 fingerprint = IDEOpenSelection (0.843)
 function IDEOpenSelection(props) {
-  let $ = w(13);
+  let $ = useMemoCache(13);
   let { availableIDEs, onSelectIDE, onDone } = props;
   let t1;
   if ($[0] !== onDone) {
-    t1 = function t() {
+    t1 = function handleCancel() {
       onDone("IDE selection cancelled", {
         display: "system",
       });
@@ -444,9 +480,9 @@ function IDEOpenSelection(props) {
     $[8] = children;
     $[9] = children_2;
   } else children_2 = $[9];
-  let d;
+  let body;
   if ($[10] !== onCancel || $[11] !== children_2) {
-    d = jsxProd_default(Dialog, {
+    body = jsxProd_default(Dialog, {
       title: "Select an IDE to open the project",
       onCancel,
       color: "ide",
@@ -454,30 +490,30 @@ function IDEOpenSelection(props) {
     });
     $[10] = onCancel;
     $[11] = children_2;
-    $[12] = d;
-  } else d = $[12];
-  return d;
+    $[12] = body;
+  } else body = $[12];
+  return body;
 }
 //@ chunk-5bdzenzx.js:20717-21294 fingerprint = RunningIDESelector (0.772)
 function RunningIDESelector(props) {
-  let $ = w(13);
+  let $ = useMemoCache(13);
   let { runningIDEs, onSelectIDE, onDone } = props;
-  let l;
+  let footer;
   if ($[0] !== onDone) {
-    l = function value() {
+    footer = function value() {
       onDone("IDE selection cancelled", {
         display: "system",
       });
     };
     $[0] = onDone;
-    $[1] = l;
-  } else l = $[1];
-  let onCancel = l;
+    $[1] = footer;
+  } else footer = $[1];
+  let onCancel = footer;
   let onSelect;
   if ($[2] !== onSelectIDE || $[3] !== runningIDEs) {
-    onSelect = (p) => {
-      let h = runningIDEs[p];
-      if (h) onSelectIDE(h);
+    onSelect = (index) => {
+      let ide = runningIDEs[index];
+      if (ide) onSelectIDE(ide);
     };
     $[2] = onSelectIDE;
     $[3] = runningIDEs;
@@ -515,7 +551,7 @@ function RunningIDESelector(props) {
 }
 //@ chunk-5bdzenzx.js:21294-21455 fingerprint = InstallOnMount (1)
 function InstallOnMount(props) {
-  let $ = w(4);
+  let $ = useMemoCache(4);
   let { ide, onInstall } = props;
   let t1;
   let t2;
@@ -532,7 +568,7 @@ function InstallOnMount(props) {
     t1 = $[2];
     t2 = $[3];
   }
-  P(t1, t2);
+  useEffect(t1, t2);
   return null;
 }
 //@ chunk-5bdzenzx.js:21455-22661 layout
@@ -540,164 +576,164 @@ function InstallOnMount(props) {
  * /ide 安装扩展步骤组件：挂载时调用 installExtension，按结果回报已安装/需重载/失败/跳过原因；Esc 停止等待并提示稍后用 /status 查看。
  */
 function InstallExtensionStep(props) {
-  let u = w(14);
+  let $ = useMemoCache(14);
   let { ide, installExtension, onDone } = props;
-  let l;
-  if (u[0] !== ide) {
-    l = toIDEDisplayName(ide);
-    u[0] = ide;
-    u[1] = l;
-  } else l = u[1];
-  let t = l;
-  let I;
-  let p;
-  if (u[2] !== ide || u[3] !== t || u[4] !== installExtension || u[5] !== onDone) {
-    I = () => {
-      let h = true;
-      installExtension(ide).then((D) => {
-        if (!h) {
+  let label;
+  if ($[0] !== ide) {
+    label = toIDEDisplayName(ide);
+    $[0] = ide;
+    $[1] = label;
+  } else label = $[1];
+  let ideName = label;
+  let content;
+  let footer;
+  if ($[2] !== ide || $[3] !== ideName || $[4] !== installExtension || $[5] !== onDone) {
+    content = () => {
+      let done = true;
+      installExtension(ide).then((result) => {
+        if (!done) {
           return;
         }
-        let d = sequential.bold(t);
-        let C = `To install it yourself, see ${VSCODE_EXTENSION_DOCS_URL}`;
-        if (D?.installed)
+        let boldName = sequential.bold(ideName);
+        let manualNote = `To install it yourself, see ${VSCODE_EXTENSION_DOCS_URL}`;
+        if (result?.installed)
           onDone(
-            D.previouslyInstalled
-              ? `The Claude Code extension is installed in ${d}. Reload the ${t} window (Developer: Reload Window), then run /ide again.`
-              : `Installed the Claude Code extension in ${d}.`,
+            result.previouslyInstalled
+              ? `The Claude Code extension is installed in ${boldName}. Reload the ${ideName} window (Developer: Reload Window), then run /ide again.`
+              : `Installed the Claude Code extension in ${boldName}.`,
           );
-        else if (D?.error)
-          onDone(`Couldn't install the Claude Code extension in ${d}:
-${D.error}
-${C}`);
+        else if (result?.error)
+          onDone(`Couldn't install the Claude Code extension in ${boldName}:
+${result.error}
+${manualNote}`);
         else {
-          let E =
+          let skipReason =
             getIdeAutoInstallSkipReason() ??
             (isRemoteSessionAvailable() ? "this session's workspace is remote" : null);
-          onDone(`Didn't install the Claude Code extension in ${d}${E ? ` because ${E}` : ""}.
-${C}`);
+          onDone(`Didn't install the Claude Code extension in ${boldName}${skipReason ? ` because ${skipReason}` : ""}.
+${manualNote}`);
         }
       });
       return () => {
-        h = false;
+        done = false;
       };
     };
-    p = [ide, t, installExtension, onDone];
-    u[2] = ide;
-    u[3] = t;
-    u[4] = installExtension;
-    u[5] = onDone;
-    u[6] = I;
-    u[7] = p;
+    footer = [ide, ideName, installExtension, onDone];
+    $[2] = ide;
+    $[3] = ideName;
+    $[4] = installExtension;
+    $[5] = onDone;
+    $[6] = content;
+    $[7] = footer;
   } else {
-    I = u[6];
-    p = u[7];
+    content = $[6];
+    footer = $[7];
   }
-  P(I, p);
-  const message = `Installing the Claude Code extension in ${t}\u2026`;
+  useEffect(content, footer);
+  const message = `Installing the Claude Code extension in ${ideName}\u2026`;
   let onCancel;
-  if (u[8] !== t || u[9] !== onDone) {
+  if ($[8] !== ideName || $[9] !== onDone) {
     onCancel = () =>
       onDone(
-        `Still installing the Claude Code extension in ${t}. /status shows the result when it finishes.`,
+        `Still installing the Claude Code extension in ${ideName}. /status shows the result when it finishes.`,
         {
           display: "system",
         },
       );
-    u[8] = t;
-    u[9] = onDone;
-    u[10] = onCancel;
-  } else onCancel = u[10];
-  let O;
-  if (u[11] !== message || u[12] !== onCancel) {
-    O = jsxProd_default(PromptDialog, {
+    $[8] = ideName;
+    $[9] = onDone;
+    $[10] = onCancel;
+  } else onCancel = $[10];
+  let statusLine;
+  if ($[11] !== message || $[12] !== onCancel) {
+    statusLine = jsxProd_default(PromptDialog, {
       message,
       escAction: "stop waiting",
       onCancel,
     });
-    u[11] = message;
-    u[12] = onCancel;
-    u[13] = O;
-  } else O = u[13];
-  return O;
+    $[11] = message;
+    $[12] = onCancel;
+    $[13] = statusLine;
+  } else statusLine = $[13];
+  return statusLine;
 }
 //@ chunk-5bdzenzx.js:22661-23489 layout
 /**
  * /ide 安装扩展流程：JetBrains 直接安装并提示重启；只有一个运行中 IDE 时自动安装，否则先让用户选择。
  */
 function InstallExtensionFlow(props) {
-  let t = w(16);
+  let $ = useMemoCache(16);
   let { runningIDEs, installExtension, onDone } = props;
-  let [u, l] = y(null);
-  let I;
-  if (t[0] !== installExtension || t[1] !== onDone) {
-    I = (p) => {
-      if (isJetBrainsIde(p)) {
-        installExtension(p);
-        let ideDisplayName = toIDEDisplayName(p);
+  let [selected, setSelected] = useState(null);
+  let handleSelect;
+  if ($[0] !== installExtension || $[1] !== onDone) {
+    handleSelect = (index) => {
+      if (isJetBrainsIde(index)) {
+        installExtension(index);
+        let ideDisplayName = toIDEDisplayName(index);
         onDone(`Couldn't find the Claude Code plugin running in ${sequential.bold(ideDisplayName)}.
 ${sequential.bold(`restart ${ideDisplayName}`)} completely and run /ide again.
 `);
         return;
       }
-      l(p);
+      setSelected(index);
     };
-    t[0] = installExtension;
-    t[1] = onDone;
-    t[2] = I;
-  } else I = t[2];
-  let D = I;
-  if (u) {
-    let d;
-    if (t[3] !== installExtension || t[4] !== u || t[5] !== onDone) {
-      d = jsxProd_default(InstallExtensionStep, {
-        ide: u,
+    $[0] = installExtension;
+    $[1] = onDone;
+    $[2] = handleSelect;
+  } else handleSelect = $[2];
+  let onSelect = handleSelect;
+  if (selected) {
+    let content;
+    if ($[3] !== installExtension || $[4] !== selected || $[5] !== onDone) {
+      content = jsxProd_default(InstallExtensionStep, {
+        ide: selected,
         installExtension,
         onDone,
       });
-      t[3] = installExtension;
-      t[4] = u;
-      t[5] = onDone;
-      t[6] = d;
-    } else d = t[6];
-    return d;
+      $[3] = installExtension;
+      $[4] = selected;
+      $[5] = onDone;
+      $[6] = content;
+    } else content = $[6];
+    return content;
   }
   if (runningIDEs.length === 1) {
-    let d;
-    if (t[7] !== D || t[8] !== runningIDEs[0]) {
-      d = jsxProd_default(InstallOnMount, {
+    let footer;
+    if ($[7] !== onSelect || $[8] !== runningIDEs[0]) {
+      footer = jsxProd_default(InstallOnMount, {
         ide: runningIDEs[0],
-        onInstall: D,
+        onInstall: onSelect,
       });
-      t[7] = D;
-      t[8] = runningIDEs[0];
-      t[9] = d;
-    } else d = t[9];
-    return d;
+      $[7] = onSelect;
+      $[8] = runningIDEs[0];
+      $[9] = footer;
+    } else footer = $[9];
+    return footer;
   }
   let onDone_2;
-  if (t[10] !== onDone) {
+  if ($[10] !== onDone) {
     onDone_2 = () => {
       onDone("No IDE selected.", {
         display: "system",
       });
     };
-    t[10] = onDone;
-    t[11] = onDone_2;
-  } else onDone_2 = t[11];
-  let C;
-  if (t[12] !== D || t[13] !== runningIDEs || t[14] !== onDone_2) {
-    C = jsxProd_default(RunningIDESelector, {
+    $[10] = onDone;
+    $[11] = onDone_2;
+  } else onDone_2 = $[11];
+  let status;
+  if ($[12] !== onSelect || $[13] !== runningIDEs || $[14] !== onDone_2) {
+    status = jsxProd_default(RunningIDESelector, {
       runningIDEs,
-      onSelectIDE: D,
+      onSelectIDE: onSelect,
       onDone: onDone_2,
     });
-    t[12] = D;
-    t[13] = runningIDEs;
-    t[14] = onDone_2;
-    t[15] = C;
-  } else C = t[15];
-  return C;
+    $[12] = onSelect;
+    $[13] = runningIDEs;
+    $[14] = onDone_2;
+    $[15] = status;
+  } else status = $[15];
+  return status;
 }
 //@ chunk-5bdzenzx.js:23489-24052 layout
 /**
@@ -709,20 +745,20 @@ async function openProjectInIde(ide, targetPath, isWorktree, report) {
     return;
   }
   let vsCodeFamily = detectVSCodeFamily(ide.name);
-  let l = vsCodeFamily ? await getVSCodeIDECommand(vsCodeFamily, ide.name) : null;
-  if (!l) {
+  let command = vsCodeFamily ? await getVSCodeIDECommand(vsCodeFamily, ide.name) : null;
+  if (!command) {
     report(
       `Please open the ${isWorktree ? "worktree" : "project"} manually in ${sequential.bold(ide.name)}: ${targetPath}`,
     );
     return;
   }
-  let t = {
+  let options = {
     useCwd: true,
     useToolMemoryCgroup: false,
   };
-  let { code } = await execFileNoThrow(l, [targetPath], t);
-  if (code !== 0 && !pathModule.basename(l).startsWith("code"))
-    ({ code } = await execFileNoThrow("code", [targetPath], t));
+  let { code } = await execFileNoThrow(command, [targetPath], options);
+  if (code !== 0 && !pathModule.basename(command).startsWith("code"))
+    ({ code } = await execFileNoThrow("code", [targetPath], options));
   if (code === 0) {
     logFeatureOk("ide_open_project");
     report(`Opened ${isWorktree ? "worktree" : "project"} in ${sequential.bold(ide.name)}`);
@@ -785,16 +821,16 @@ async function call(onDone, context, args) {
 var IDE_CONNECT_TIMEOUT_MS = 35000;
 //@ chunk-5bdzenzx.js:24821-26672 fingerprint = IDECommandFlow (0.79)
 function IDECommandFlow(props) {
-  let $ = w(27);
+  let $ = useMemoCache(27);
   let { availableIDEs, unavailableIDEs, currentIDE, onChangeDynamicMcpConfig, onDone } = props;
-  let [connectingIDE, setConnectingIDE] = y(null);
+  let [connectingIDE, setConnectingIDE] = useState(null);
   let appState = useAppState(findIdeClient);
   let setAppState = useSetAppState();
-  let isFirstCheckRef = R(true);
-  let C;
-  let E;
+  let isFirstCheckRef = useRef(true);
+  let body;
+  let footer;
   if ($[0] !== connectingIDE || $[1] !== appState || $[2] !== onDone) {
-    C = () => {
+    body = () => {
       if (!connectingIDE) {
         return;
       }
@@ -813,20 +849,20 @@ function IDECommandFlow(props) {
         onDone(`Failed to connect to ${connectingIDE.name}.`);
       }
     };
-    E = [appState, connectingIDE, onDone];
+    footer = [appState, connectingIDE, onDone];
     $[0] = connectingIDE;
     $[1] = appState;
     $[2] = onDone;
-    $[3] = C;
-    $[4] = E;
+    $[3] = body;
+    $[4] = footer;
   } else {
-    C = $[3];
-    E = $[4];
+    body = $[3];
+    footer = $[4];
   }
-  P(C, E);
-  let x;
+  useEffect(body, footer);
+  let statusLine;
   if ($[5] !== connectingIDE || $[6] !== onDone) {
-    x = () => {
+    statusLine = () => {
       if (!connectingIDE) {
         return;
       }
@@ -835,17 +871,17 @@ function IDECommandFlow(props) {
     };
     $[5] = connectingIDE;
     $[6] = onDone;
-    $[7] = x;
-  } else x = $[7];
-  let k;
+    $[7] = statusLine;
+  } else statusLine = $[7];
+  let deps;
   if ($[8] !== connectingIDE || $[9] !== onDone) {
-    k = [connectingIDE, onDone];
+    deps = [connectingIDE, onDone];
     $[8] = connectingIDE;
     $[9] = onDone;
-    $[10] = k;
-  } else k = $[10];
-  useTimeout(x, connectingIDE ? IDE_CONNECT_TIMEOUT_MS : null, k);
-  let O;
+    $[10] = deps;
+  } else deps = $[10];
+  useTimeout(statusLine, connectingIDE ? IDE_CONNECT_TIMEOUT_MS : null, deps);
+  let errorLine;
   if (
     $[11] !== currentIDE ||
     $[12] !== appState ||
@@ -853,7 +889,7 @@ function IDECommandFlow(props) {
     $[14] !== onDone ||
     $[15] !== setAppState
   ) {
-    O = (selectedIDE) => {
+    errorLine = (selectedIDE) => {
       if (!onChangeDynamicMcpConfig) {
         onDone("Error connecting to IDE.");
         return;
@@ -861,7 +897,8 @@ function IDECommandFlow(props) {
       if (!selectedIDE) {
         if (appState && appState.type === "connected" && currentIDE) {
           setMcpOnClose(appState, noop);
-          let { clearServerCache } = require("./chunk-asne9cp8.js").mcpClientModule();
+          let { clearServerCache } =
+            require("../../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
           clearServerCache("ide", appState.config);
           setAppState(withoutIdeMcpEntries);
         }
@@ -891,20 +928,20 @@ function IDECommandFlow(props) {
     $[13] = onChangeDynamicMcpConfig;
     $[14] = onDone;
     $[15] = setAppState;
-    $[16] = O;
-  } else O = $[16];
-  let onSelect = O;
+    $[16] = errorLine;
+  } else errorLine = $[16];
+  let onSelect = errorLine;
   if (connectingIDE) {
-    let b;
+    let actionLine;
     if ($[17] !== connectingIDE.name) {
-      b = jsxProd_default_2(Text, {
+      actionLine = jsxProd_default_2(Text, {
         dimColor: true,
         children: ["Connecting to ", connectingIDE.name, "\u2026"],
       });
       $[17] = connectingIDE.name;
-      $[18] = b;
-    } else b = $[18];
-    return b;
+      $[18] = actionLine;
+    } else actionLine = $[18];
+    return actionLine;
   }
   let onClose;
   if ($[19] !== onDone) {
@@ -915,7 +952,7 @@ function IDECommandFlow(props) {
     $[19] = onDone;
     $[20] = onClose;
   } else onClose = $[20];
-  let J;
+  let helpText;
   if (
     $[21] !== availableIDEs ||
     $[22] !== currentIDE ||
@@ -923,7 +960,7 @@ function IDECommandFlow(props) {
     $[24] !== onClose ||
     $[25] !== unavailableIDEs
   ) {
-    J = jsxProd_default(IDEScreen, {
+    helpText = jsxProd_default(IDEScreen, {
       availableIDEs,
       unavailableIDEs,
       selectedIDE: currentIDE,
@@ -935,9 +972,9 @@ function IDECommandFlow(props) {
     $[23] = onSelect;
     $[24] = onClose;
     $[25] = unavailableIDEs;
-    $[26] = J;
-  } else J = $[26];
-  return J;
+    $[26] = helpText;
+  } else helpText = $[26];
+  return helpText;
 }
 //@ chunk-5bdzenzx.js:26672-27019 fingerprint = formatWorkspaceFolders (1)
 function formatWorkspaceFolders(folders, maxLength = 100) {
@@ -961,40 +998,11 @@ function formatWorkspaceFolders(folders, maxLength = 100) {
   if (hasMore) joined += ", \u2026";
   return joined;
 }
-//@ chunk-e6aww6q8.js:3244299-3244625 placement
-/**
- * 按 IDE 名判断属于哪个 VS Code 系：windsurf/devin→windsurf，cursor→cursor，VS Code/VSCodium/Code-OSS（非 Insiders）→vscode，否则 null。
- */
-function detectVSCodeFamily(name) {
-  let lower = name.toLowerCase();
-  if (lower.includes("windsurf") || lower.includes("devin")) return "windsurf";
-  if (lower.includes("cursor")) return "cursor";
-  if (
-    !lower.includes("insiders") &&
-    (lower.includes("vscode") ||
-      lower.includes("vs code") ||
-      lower.includes("visual studio code") ||
-      lower.includes("vscodium") ||
-      lower.includes("code - oss"))
-  )
-    return "vscode";
-  return null;
-}
-//@ chunk-fq0cr76a.js:916465-916672 fingerprint = _temp4 (0.691)
-/**
- * 解析 "host:port"：端口 1–65535，host 非空；以冒号结尾的 host 必须是 IPv6。失败返回 undefined。
- */
-function parseHostPort(ide_0) {
-  let index = ide_0.lastIndexOf(":");
-  let sliced = ide_0.slice(index + 1);
-  let sliced_2 = ide_0.slice(0, index);
-  if (!/^\d{1,5}$/.test(sliced)) return;
-  let h = Number(sliced);
-  if (h < 1 || h > 65535 || sliced_2 === "") return;
-  if (sliced_2.endsWith(":") && isIP(sliced_2) !== 6) return;
-  return {
-    host: sliced_2,
-    port: h,
-  };
-}
-export { parseHostPort };
+export {
+  parseHostPort,
+  IDECommandFlow,
+  IDE_CONNECT_TIMEOUT_MS,
+  call,
+  formatWorkspaceFolders,
+  openProjectInIde,
+};

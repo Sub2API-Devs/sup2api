@@ -24,15 +24,15 @@ function isPosixPlatform() {
   }
 }
 //@ chunk-e2fknt7w.js:20091-20376 file-local
-function getWslWindowsUserDirs(e) {
+function getWslWindowsUserDirs(dirs) {
   if (getPlatform() !== "wsl") return [];
   return uniq(
-    e.flatMap((n) =>
-      driveMountsForPath(posix.normalize(n)).flatMap((o) => {
-        let filtered = o.beneath.split("/").filter(Boolean);
-        let s = count(o.within.split("/"), Boolean);
-        return filtered.length >= 2 && s <= 2 && WINDOWS_PROFILE_FOLDER_NAMES(foldCaseSimple(filtered[0]))
-          ? [[o.mountPoint, ...filtered.slice(s, 2)].join("/").replace(/^\/\//, "/")]
+    dirs.flatMap((dir) =>
+      driveMountsForPath(posix.normalize(dir)).flatMap((mount) => {
+        let filtered = mount.beneath.split("/").filter(Boolean);
+        let path = count(mount.within.split("/"), Boolean);
+        return filtered.length >= 2 && path <= 2 && WINDOWS_PROFILE_FOLDER_NAMES(foldCaseSimple(filtered[0]))
+          ? [[mount.mountPoint, ...filtered.slice(path, 2)].join("/").replace(/^\/\//, "/")]
           : [];
       }),
     ),

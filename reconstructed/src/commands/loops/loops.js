@@ -8,13 +8,13 @@
  * pieces: chunk-wtfk012h.js (7)
  * attribution: placement 7
  */
-import { init_react_production, y } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { OrderedListWithItem } from "../../components/CustomSelect/selectTable.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { KeyboardShortcutHint } from "../../components/design-system/KeyboardShortcutHint.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
@@ -35,34 +35,34 @@ import { runWithWorkload } from "../../utils/workloadContext.js";
 //@ chunk-wtfk012h.js:13782-13786 placement
 init_react_production();
 //@ chunk-wtfk012h.js:13786-13843 placement
-function toggleLoopMode(Uo) {
-  return Uo === "interval" ? "text" : "interval";
+function toggleLoopMode(loopId) {
+  return loopId === "interval" ? "text" : "interval";
 }
 //@ chunk-wtfk012h.js:13843-14043 placement
-function renderLoopItem(D) {
-  switch (D.kind) {
+function renderLoopItem(loop) {
+  switch (loop.kind) {
     case "cron": {
       return jsxProd_default(
         OrderedListWithItem.Item,
         {
-          label: D.prompt,
-          meta: [D.human, D.id],
+          label: loop.prompt,
+          meta: [loop.human, loop.id],
         },
-        D.id,
+        loop.id,
       );
     }
     case "stophook": {
       return jsxProd_default(
         OrderedListWithItem.Item,
         {
-          label: D.condition,
+          label: loop.condition,
           meta: ["stop-hook"],
         },
-        D.id,
+        loop.id,
       );
     }
     default: {
-      return D;
+      return loop;
     }
   }
 }
@@ -71,29 +71,29 @@ function renderLoopItem(D) {
  * /loops 界面：列出会话的定时 cron 与 Stop 钩子循环，支持新建（every 间隔/until 条件）和删除。
  */
 function LoopsManager(props) {
-  let t = w(88);
+  let $ = useMemoCache(88);
   let { loops, onDelete, onCreate, onCancel } = props;
-  let [c, M] = y("list");
-  let [i, T] = y(0);
-  let [h, de] = y();
-  let [o, Oo] = y("every");
-  let [C, Po] = y("10m");
-  let [E, Go] = y(3);
-  let [g, Vo] = y("");
-  let [F, Ao] = y(0);
-  let [u, A] = y(o === "every" ? "interval" : "text");
+  let [viewMode, setViewMode] = useState("list");
+  let [cursor, setCursor] = useState(0);
+  let [selectedLoopId, setSelectedLoopId] = useState();
+  let [endMode, setEndMode] = useState("every");
+  let [interval, setIntervalValue] = useState("10m");
+  let [countField, setCountField] = useState(3);
+  let [prompt, setPrompt] = useState("");
+  let [untilCount, setUntilCount] = useState(0);
+  let [unit, setUnit] = useState(endMode === "every" ? "interval" : "text");
   let { columns } = useTerminalSize();
-  let Ne;
-  if (t[0] !== h) {
-    Ne = (No) => No.id === h;
-    t[0] = h;
-    t[1] = Ne;
-  } else Ne = t[1];
-  let index = loops.findIndex(Ne);
-  let _e;
-  if (t[2] !== o || t[3] !== onCancel || t[4] !== c) {
-    _e = (event) => {
-      if (c !== "list") {
+  let isSelected;
+  if ($[0] !== selectedLoopId) {
+    isSelected = (loop) => loop.id === selectedLoopId;
+    $[0] = selectedLoopId;
+    $[1] = isSelected;
+  } else isSelected = $[1];
+  let index = loops.findIndex(isSelected);
+  let body;
+  if ($[2] !== endMode || $[3] !== onCancel || $[4] !== viewMode) {
+    body = (event) => {
+      if (viewMode !== "list") {
         return;
       }
       if (event.key === "escape") {
@@ -103,86 +103,86 @@ function LoopsManager(props) {
       }
       if (event.key === "n") {
         event.preventDefault();
-        M("create");
-        A(o === "every" ? "interval" : "text");
+        setViewMode("create");
+        setUnit(endMode === "every" ? "interval" : "text");
       }
     };
-    t[2] = o;
-    t[3] = onCancel;
-    t[4] = c;
-    t[5] = _e;
-  } else _e = t[5];
-  let _o = _e;
-  let Ke;
-  if (t[6] !== o) {
-    Ke = () => {
-      let Je = o === "every" ? "until" : "every";
-      Oo(Je);
-      A(Je === "every" ? "interval" : "text");
+    $[2] = endMode;
+    $[3] = onCancel;
+    $[4] = viewMode;
+    $[5] = body;
+  } else body = $[5];
+  let bodyRows = body;
+  let footer;
+  if ($[6] !== endMode) {
+    footer = () => {
+      let otherEndMode = endMode === "every" ? "until" : "every";
+      setEndMode(otherEndMode);
+      setUnit(otherEndMode === "every" ? "interval" : "text");
     };
-    t[6] = o;
-    t[7] = Ke;
-  } else Ke = t[7];
-  let _ = Ke;
-  let We;
+    $[6] = endMode;
+    $[7] = footer;
+  } else footer = $[7];
+  let footerRows = footer;
+  let header;
   if (
-    t[8] !== u ||
-    t[9] !== C ||
-    t[10] !== E ||
-    t[11] !== o ||
-    t[12] !== g.length ||
-    t[13] !== F ||
-    t[14] !== _ ||
-    t[15] !== c
+    $[8] !== unit ||
+    $[9] !== interval ||
+    $[10] !== countField ||
+    $[11] !== endMode ||
+    $[12] !== prompt.length ||
+    $[13] !== untilCount ||
+    $[14] !== footerRows ||
+    $[15] !== viewMode
   ) {
-    We = (event) => {
-      if (c !== "create") {
+    header = (event) => {
+      if (viewMode !== "create") {
         return;
       }
       if (event.key === "escape") {
         event.preventDefault();
-        M("list");
+        setViewMode("list");
         return;
       }
       if (event.key === "tab") {
         event.preventDefault();
-        _();
+        footerRows();
         return;
       }
-      let Xe = u === "interval" ? E : F;
-      let Ko = u === "interval" ? C.length : g.length;
-      if ((event.key === "left" && Xe === 0) || (event.key === "right" && Xe >= Ko)) {
+      let unitValue = unit === "interval" ? countField : untilCount;
+      let fieldLength = unit === "interval" ? interval.length : prompt.length;
+      if ((event.key === "left" && unitValue === 0) || (event.key === "right" && unitValue >= fieldLength)) {
         event.preventDefault();
-        _();
+        footerRows();
         return;
       }
-      if (o === "every" && (event.key === "down" || event.key === "up")) {
+      if (endMode === "every" && (event.key === "down" || event.key === "up")) {
         event.preventDefault();
-        A(toggleLoopMode);
+        setUnit(toggleLoopMode);
       }
     };
-    t[8] = u;
-    t[9] = C;
-    t[10] = E;
-    t[11] = o;
-    t[12] = g.length;
-    t[13] = F;
-    t[14] = _;
-    t[15] = c;
-    t[16] = We;
-  } else We = t[16];
-  let Jo = We;
-  let je;
-  if (t[17] !== C || t[18] !== o || t[19] !== onCreate || t[20] !== g) {
-    je = function W() {
-      let trimmed = g.trim();
-      if (o === "every") {
-        if (!C.trim() || !trimmed) {
+    $[8] = unit;
+    $[9] = interval;
+    $[10] = countField;
+    $[11] = endMode;
+    $[12] = prompt.length;
+    $[13] = untilCount;
+    $[14] = footerRows;
+    $[15] = viewMode;
+    $[16] = header;
+  } else header = $[16];
+  let headerRows = header;
+  let handleKeyDown;
+  if ($[17] !== interval || $[18] !== endMode || $[19] !== onCreate || $[20] !== prompt) {
+    handleKeyDown = function handleKeyDown() {
+      let trimmed = prompt.trim();
+      if (endMode === "every") {
+        if (!interval.trim() || !trimmed) {
           return;
         }
         onCreate({
           kind: "cron",
-          interval: C.trim(),
+          interval: interval.trim(),
           prompt: trimmed,
         });
       } else {
@@ -195,257 +195,257 @@ function LoopsManager(props) {
         });
       }
     };
-    t[17] = C;
-    t[18] = o;
-    t[19] = onCreate;
-    t[20] = g;
-    t[21] = je;
-  } else je = t[21];
-  let onSubmit = je;
-  let X;
-  if (t[22] !== loops.length) {
-    X =
+    $[17] = interval;
+    $[18] = endMode;
+    $[19] = onCreate;
+    $[20] = prompt;
+    $[21] = handleKeyDown;
+  } else handleKeyDown = $[21];
+  let onSubmit = handleKeyDown;
+  let listHint;
+  if ($[22] !== loops.length) {
+    listHint =
       loops.length > 0 &&
       jsxProd_default(KeyboardShortcutHint, {
         chord: ["up", "down"],
         action: "select",
       });
-    t[22] = loops.length;
-    t[23] = X;
-  } else X = t[23];
-  let z;
-  if (t[24] !== loops.length) {
-    z =
+    $[22] = loops.length;
+    $[23] = listHint;
+  } else listHint = $[23];
+  let event;
+  if ($[24] !== loops.length) {
+    event =
       loops.length > 0 &&
       jsxProd_default(KeyboardShortcutHint, {
         chord: "d",
         action: "delete",
       });
-    t[24] = loops.length;
-    t[25] = z;
-  } else z = t[25];
-  let qe;
-  let ze;
-  if (t[26] === MEMO_CACHE_SENTINEL) {
-    qe = jsxProd_default(KeyboardShortcutHint, {
+    $[24] = loops.length;
+    $[25] = event;
+  } else event = $[25];
+  let key;
+  let char;
+  if ($[26] === MEMO_CACHE_SENTINEL) {
+    key = jsxProd_default(KeyboardShortcutHint, {
       chord: "n",
       action: "add",
     });
-    ze = jsxProd_default(KeyboardShortcutHint, {
+    char = jsxProd_default(KeyboardShortcutHint, {
       chord: "escape",
       action: "close",
     });
-    t[26] = qe;
-    t[27] = ze;
+    $[26] = key;
+    $[27] = char;
   } else {
-    qe = t[26];
-    ze = t[27];
+    key = $[26];
+    char = $[27];
   }
-  let Qe;
-  if (t[28] !== X || t[29] !== z) {
-    Qe = jsxProd_default_2(Byline, {
-      children: [X, z, qe, ze],
+  let promptInput;
+  if ($[28] !== listHint || $[29] !== event) {
+    promptInput = jsxProd_default_2(Byline, {
+      children: [listHint, event, key, char],
     });
-    t[28] = X;
-    t[29] = z;
-    t[30] = Qe;
-  } else Qe = t[30];
-  let Wo = Qe;
-  let Ue;
-  if (t[31] === MEMO_CACHE_SENTINEL) {
-    Ue = jsxProd_default(KeyboardShortcutHint, {
+    $[28] = listHint;
+    $[29] = event;
+    $[30] = promptInput;
+  } else promptInput = $[30];
+  let promptRows = promptInput;
+  let tabHint;
+  if ($[31] === MEMO_CACHE_SENTINEL) {
+    tabHint = jsxProd_default(KeyboardShortcutHint, {
       chord: "tab",
       action: "switch mode",
     });
-    t[31] = Ue;
-  } else Ue = t[31];
-  let Q;
-  if (t[32] !== o) {
-    Q =
-      o === "every" &&
+    $[31] = tabHint;
+  } else tabHint = $[31];
+  let intervalRow;
+  if ($[32] !== endMode) {
+    intervalRow =
+      endMode === "every" &&
       jsxProd_default(KeyboardShortcutHint, {
         chord: ["up", "down"],
         action: "next field",
       });
-    t[32] = o;
-    t[33] = Q;
-  } else Q = t[33];
-  let Ye;
-  let Ze;
-  if (t[34] === MEMO_CACHE_SENTINEL) {
-    Ye = jsxProd_default(KeyboardShortcutHint, {
+    $[32] = endMode;
+    $[33] = intervalRow;
+  } else intervalRow = $[33];
+  let left;
+  let right;
+  if ($[34] === MEMO_CACHE_SENTINEL) {
+    left = jsxProd_default(KeyboardShortcutHint, {
       chord: "enter",
       action: "create",
     });
-    Ze = jsxProd_default(KeyboardShortcutHint, {
+    right = jsxProd_default(KeyboardShortcutHint, {
       chord: "escape",
       action: "back",
     });
-    t[34] = Ye;
-    t[35] = Ze;
+    $[34] = left;
+    $[35] = right;
   } else {
-    Ye = t[34];
-    Ze = t[35];
+    left = $[34];
+    right = $[35];
   }
-  let He;
-  if (t[36] !== Q) {
-    He = jsxProd_default_2(Byline, {
-      children: [Ue, Q, Ye, Ze],
+  let countRow;
+  if ($[36] !== intervalRow) {
+    countRow = jsxProd_default_2(Byline, {
+      children: [tabHint, intervalRow, left, right],
     });
-    t[36] = Q;
-    t[37] = He;
-  } else He = t[37];
-  let Xo = He;
-  const dimColor = o !== "every";
-  const pe = o === "every" ? figures_default.radioOn : figures_default.radioOff;
-  let U;
-  if (t[38] !== dimColor || t[39] !== pe) {
-    U = jsxProd_default_2(Text, {
+    $[36] = intervalRow;
+    $[37] = countRow;
+  } else countRow = $[37];
+  let countRows = countRow;
+  const dimColor = endMode !== "every";
+  const endRadio = endMode === "every" ? figures_default.radioOn : figures_default.radioOff;
+  let untilRow;
+  if ($[38] !== dimColor || $[39] !== endRadio) {
+    untilRow = jsxProd_default_2(Text, {
       dimColor,
-      children: [pe, " every"],
+      children: [endRadio, " every"],
     });
-    t[38] = dimColor;
-    t[39] = pe;
-    t[40] = U;
-  } else U = t[40];
-  let Se;
-  if (t[41] === MEMO_CACHE_SENTINEL) {
-    Se = jsxProd_default(Text, {
+    $[38] = dimColor;
+    $[39] = endRadio;
+    $[40] = untilRow;
+  } else untilRow = $[40];
+  let untilValue;
+  if ($[41] === MEMO_CACHE_SENTINEL) {
+    untilValue = jsxProd_default(Text, {
       dimColor: true,
       children: "  ",
     });
-    t[41] = Se;
-  } else Se = t[41];
-  const dimColor_2 = o !== "until";
-  const ue = o === "until" ? figures_default.radioOn : figures_default.radioOff;
-  let Y;
-  if (t[42] !== dimColor_2 || t[43] !== ue) {
-    Y = jsxProd_default_2(Text, {
+    $[41] = untilValue;
+  } else untilValue = $[41];
+  const dimColor_2 = endMode !== "until";
+  const radioGlyph = endMode === "until" ? figures_default.radioOn : figures_default.radioOff;
+  let promptLabel;
+  if ($[42] !== dimColor_2 || $[43] !== radioGlyph) {
+    promptLabel = jsxProd_default_2(Text, {
       dimColor: dimColor_2,
-      children: [ue, " until"],
+      children: [radioGlyph, " until"],
     });
-    t[42] = dimColor_2;
-    t[43] = ue;
-    t[44] = Y;
-  } else Y = t[44];
-  let Z;
-  if (t[45] !== U || t[46] !== Y) {
-    Z = jsxProd_default_2(Text, {
-      children: [U, Se, Y],
+    $[42] = dimColor_2;
+    $[43] = radioGlyph;
+    $[44] = promptLabel;
+  } else promptLabel = $[44];
+  let submitHint;
+  if ($[45] !== untilRow || $[46] !== promptLabel) {
+    submitHint = jsxProd_default_2(Text, {
+      children: [untilRow, untilValue, promptLabel],
     });
-    t[45] = U;
-    t[46] = Y;
-    t[47] = Z;
-  } else Z = t[47];
-  let H;
-  if (t[48] !== u || t[49] !== C || t[50] !== E || t[51] !== o) {
-    H =
-      o === "every" &&
+    $[45] = untilRow;
+    $[46] = promptLabel;
+    $[47] = submitHint;
+  } else submitHint = $[47];
+  let errorLine;
+  if ($[48] !== unit || $[49] !== interval || $[50] !== countField || $[51] !== endMode) {
+    errorLine =
+      endMode === "every" &&
       jsxProd_default_2(Box, {
         flexDirection: "row",
         gap: 1,
         marginTop: 1,
         children: [
           jsxProd_default(Text, {
-            dimColor: u !== "interval",
+            dimColor: unit !== "interval",
             children: "Interval >",
           }),
           jsxProd_default(TextInput, {
-            value: C,
-            onChange: Po,
-            onSubmit: () => A("text"),
-            focus: u === "interval",
-            showCursor: u === "interval",
+            value: interval,
+            onChange: setIntervalValue,
+            onSubmit: () => setUnit("text"),
+            focus: unit === "interval",
+            showCursor: unit === "interval",
             multiline: false,
             columns: 12,
-            cursorOffset: E,
-            onChangeCursorOffset: Go,
+            cursorOffset: countField,
+            onChangeCursorOffset: setCountField,
             placeholder: "10m",
             disableEscapeDoublePress: true,
           }),
         ],
       });
-    t[48] = u;
-    t[49] = C;
-    t[50] = E;
-    t[51] = o;
-    t[52] = H;
-  } else H = t[52];
-  const dimColor_3 = o === "every" && u !== "text";
-  const children = o === "every" ? "Prompt   >" : "Condition>";
-  let ee;
-  if (t[53] !== dimColor_3 || t[54] !== children) {
-    ee = jsxProd_default(Text, {
+    $[48] = unit;
+    $[49] = interval;
+    $[50] = countField;
+    $[51] = endMode;
+    $[52] = errorLine;
+  } else errorLine = $[52];
+  const dimColor_3 = endMode === "every" && unit !== "text";
+  const children = endMode === "every" ? "Prompt   >" : "Condition>";
+  let hint;
+  if ($[53] !== dimColor_3 || $[54] !== children) {
+    hint = jsxProd_default(Text, {
       dimColor: dimColor_3,
       children,
     });
-    t[53] = dimColor_3;
-    t[54] = children;
-    t[55] = ee;
-  } else ee = t[55];
-  const focus = o === "until" || u === "text";
-  const showCursor = o === "until" || u === "text";
+    $[53] = dimColor_3;
+    $[54] = children;
+    $[55] = hint;
+  } else hint = $[55];
+  const focus = endMode === "until" || unit === "text";
+  const showCursor = endMode === "until" || unit === "text";
   const columns_2 = columns - 16;
-  const placeholder = o === "every" ? "e.g. /babysit-prs" : "e.g. tests pass and PR is merged";
-  let oe;
+  const placeholder = endMode === "every" ? "e.g. /babysit-prs" : "e.g. tests pass and PR is merged";
+  let listRows;
   if (
-    t[56] !== onSubmit ||
-    t[57] !== focus ||
-    t[58] !== showCursor ||
-    t[59] !== columns_2 ||
-    t[60] !== placeholder ||
-    t[61] !== g ||
-    t[62] !== F
+    $[56] !== onSubmit ||
+    $[57] !== focus ||
+    $[58] !== showCursor ||
+    $[59] !== columns_2 ||
+    $[60] !== placeholder ||
+    $[61] !== prompt ||
+    $[62] !== untilCount
   ) {
-    oe = jsxProd_default(TextInput, {
-      value: g,
-      onChange: Vo,
+    listRows = jsxProd_default(TextInput, {
+      value: prompt,
+      onChange: setPrompt,
       onSubmit,
       focus,
       showCursor,
       multiline: false,
       columns: columns_2,
-      cursorOffset: F,
-      onChangeCursorOffset: Ao,
+      cursorOffset: untilCount,
+      onChangeCursorOffset: setUntilCount,
       placeholder,
       disableEscapeDoublePress: true,
     });
-    t[56] = onSubmit;
-    t[57] = focus;
-    t[58] = showCursor;
-    t[59] = columns_2;
-    t[60] = placeholder;
-    t[61] = g;
-    t[62] = F;
-    t[63] = oe;
-  } else oe = t[63];
-  let te;
-  if (t[64] !== ee || t[65] !== oe) {
-    te = jsxProd_default_2(Box, {
+    $[56] = onSubmit;
+    $[57] = focus;
+    $[58] = showCursor;
+    $[59] = columns_2;
+    $[60] = placeholder;
+    $[61] = prompt;
+    $[62] = untilCount;
+    $[63] = listRows;
+  } else listRows = $[63];
+  let listHeader;
+  if ($[64] !== hint || $[65] !== listRows) {
+    listHeader = jsxProd_default_2(Box, {
       flexDirection: "row",
       gap: 1,
       marginTop: 1,
-      children: [ee, oe],
+      children: [hint, listRows],
     });
-    t[64] = ee;
-    t[65] = oe;
-    t[66] = te;
-  } else te = t[66];
-  let eo;
-  if (t[67] !== Z || t[68] !== H || t[69] !== te) {
-    eo = jsxProd_default_2(Box, {
+    $[64] = hint;
+    $[65] = listRows;
+    $[66] = listHeader;
+  } else listHeader = $[66];
+  let listBody;
+  if ($[67] !== submitHint || $[68] !== errorLine || $[69] !== listHeader) {
+    listBody = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [Z, H, te],
+      children: [submitHint, errorLine, listHeader],
     });
-    t[67] = Z;
-    t[68] = H;
-    t[69] = te;
-    t[70] = eo;
-  } else eo = t[70];
-  let qo = eo;
-  let oo;
-  if (t[71] !== i || t[72] !== index || t[73] !== loops || t[74] !== onDelete) {
-    oo = jsxProd_default(Box, {
+    $[67] = submitHint;
+    $[68] = errorLine;
+    $[69] = listHeader;
+    $[70] = listBody;
+  } else listBody = $[70];
+  let listBodyRows = listBody;
+  let listFooter;
+  if ($[71] !== cursor || $[72] !== index || $[73] !== loops || $[74] !== onDelete) {
+    listFooter = jsxProd_default(Box, {
       flexDirection: "column",
       children:
         loops.length === 0
@@ -453,47 +453,47 @@ function LoopsManager(props) {
               children: "No active loops",
             })
           : jsxProd_default(OrderedListWithItem, {
-              defaultFocusIndex: index < 0 ? i : index,
-              onFocus: (to) => {
-                T(to);
-                de(loops[to]?.id);
+              defaultFocusIndex: index < 0 ? cursor : index,
+              onFocus: (value) => {
+                setCursor(value);
+                setSelectedLoopId(loops[value]?.id);
               },
-              onRowKeyDown: (event, zo) => {
-                let no = loops[zo];
-                if (event.key === "d" && no) {
+              onRowKeyDown: (event, index) => {
+                let loop = loops[index];
+                if (event.key === "d" && loop) {
                   event.preventDefault();
-                  onDelete(no);
+                  onDelete(loop);
                 }
               },
               children: loops.map(renderLoopItem),
             }),
     });
-    t[71] = i;
-    t[72] = index;
-    t[73] = loops;
-    t[74] = onDelete;
-    t[75] = oo;
-  } else oo = t[75];
-  let Qo = oo;
-  const onKeyDown = c === "list" ? _o : Jo;
-  const title = c === "list" ? "Loops" : "New loop";
-  const subtitle = c === "list" ? "Recurring crons and stop-hooks active for this session" : undefined;
+    $[71] = cursor;
+    $[72] = index;
+    $[73] = loops;
+    $[74] = onDelete;
+    $[75] = listFooter;
+  } else listFooter = $[75];
+  let listFooterRows = listFooter;
+  const onKeyDown = viewMode === "list" ? bodyRows : headerRows;
+  const title = viewMode === "list" ? "Loops" : "New loop";
+  const subtitle = viewMode === "list" ? "Recurring crons and stop-hooks active for this session" : undefined;
   let onCancel_2;
-  if (t[76] !== onCancel || t[77] !== c) {
-    onCancel_2 = c === "list" ? onCancel : () => M("list");
-    t[76] = onCancel;
-    t[77] = c;
-    t[78] = onCancel_2;
-  } else onCancel_2 = t[78];
-  const inputGuide = c === "list" ? Wo : Xo;
-  const children_2 = c === "list" ? Qo : qo;
+  if ($[76] !== onCancel || $[77] !== viewMode) {
+    onCancel_2 = viewMode === "list" ? onCancel : () => setViewMode("list");
+    $[76] = onCancel;
+    $[77] = viewMode;
+    $[78] = onCancel_2;
+  } else onCancel_2 = $[78];
+  const inputGuide = viewMode === "list" ? promptRows : countRows;
+  const children_2 = viewMode === "list" ? listFooterRows : listBodyRows;
   let children_3;
   if (
-    t[79] !== title ||
-    t[80] !== subtitle ||
-    t[81] !== onCancel_2 ||
-    t[82] !== inputGuide ||
-    t[83] !== children_2
+    $[79] !== title ||
+    $[80] !== subtitle ||
+    $[81] !== onCancel_2 ||
+    $[82] !== inputGuide ||
+    $[83] !== children_2
   ) {
     children_3 = jsxProd_default(Dialog, {
       title,
@@ -504,27 +504,27 @@ function LoopsManager(props) {
       inputGuide,
       children: children_2,
     });
-    t[79] = title;
-    t[80] = subtitle;
-    t[81] = onCancel_2;
-    t[82] = inputGuide;
-    t[83] = children_2;
-    t[84] = children_3;
-  } else children_3 = t[84];
-  let io;
-  if (t[85] !== onKeyDown || t[86] !== children_3) {
-    io = jsxProd_default(Box, {
+    $[79] = title;
+    $[80] = subtitle;
+    $[81] = onCancel_2;
+    $[82] = inputGuide;
+    $[83] = children_2;
+    $[84] = children_3;
+  } else children_3 = $[84];
+  let panelFooter;
+  if ($[85] !== onKeyDown || $[86] !== children_3) {
+    panelFooter = jsxProd_default(Box, {
       flexDirection: "column",
       tabIndex: 0,
       autoFocus: true,
       onKeyDown,
       children: children_3,
     });
-    t[85] = onKeyDown;
-    t[86] = children_3;
-    t[87] = io;
-  } else io = t[87];
-  return io;
+    $[85] = onKeyDown;
+    $[86] = children_3;
+    $[87] = panelFooter;
+  } else panelFooter = $[87];
+  return panelFooter;
 }
 //@ chunk-wtfk012h.js:19477-19503 placement
 var LOOP_INTERVAL_PATTERN = /^(\d+)([smhd])$/i;
@@ -532,28 +532,28 @@ var LOOP_INTERVAL_PATTERN = /^(\d+)([smhd])$/i;
 function intervalToCron(interval) {
   let match = interval.match(LOOP_INTERVAL_PATTERN);
   if (!match) return null;
-  let p = parseInt(match[1], 10);
-  if (p < 1) return null;
-  let m;
+  let count = parseInt(match[1], 10);
+  if (count < 1) return null;
+  let unit;
   switch (match[2].toLowerCase()) {
     case "s":
-      m = `*/${Math.max(1, Math.ceil(p / 60))} * * * *`;
+      unit = `*/${Math.max(1, Math.ceil(count / 60))} * * * *`;
       break;
     case "m":
-      m = p <= 59 ? `*/${p} * * * *` : `0 */${Math.round(p / 60)} * * *`;
+      unit = count <= 59 ? `*/${count} * * * *` : `0 */${Math.round(count / 60)} * * *`;
       break;
     case "h":
-      if (p > 23) return null;
-      m = `0 */${p} * * *`;
+      if (count > 23) return null;
+      unit = `0 */${count} * * *`;
       break;
     case "d":
-      if (p > 31) return null;
-      m = `0 0 */${p} * *`;
+      if (count > 31) return null;
+      unit = `0 0 */${count} * *`;
       break;
     default:
       return null;
   }
-  return parseCronExpression(m) ? m : null;
+  return parseCronExpression(unit) ? unit : null;
 }
 //@ chunk-wtfk012h.js:19906-20969 placement
 /**
@@ -561,77 +561,78 @@ function intervalToCron(interval) {
  */
 var runLoopsCommand = async (onDone, context) => {
   logEvent("tengu_loops_command", {});
-  let p = await listAllCronTasks();
+  let cronTasks = await listAllCronTasks();
   let sessionStopPromptHooks = getSessionStopPromptHooks(context.sessionHooksRegistry, getSessionId());
   let loops = [
-    ...p.map((i) => ({
+    ...cronTasks.map((task) => ({
       kind: "cron",
-      id: i.id,
-      cron: i.cron,
-      human: cronToHuman(i.cron),
-      prompt: i.prompt,
+      id: task.id,
+      cron: task.cron,
+      human: cronToHuman(task.cron),
+      prompt: task.prompt,
     })),
-    ...sessionStopPromptHooks.map((sessionStopPromptHook, T) => ({
+    ...sessionStopPromptHooks.map((sessionStopPromptHook, hook) => ({
       kind: "stophook",
-      id: `stophook-${T}`,
+      id: `stophook-${hook}`,
       condition: sessionStopPromptHook.prompt,
     })),
   ];
-  async function c(i) {
-    if (i.kind === "cron") {
+  async function deleteLoop(loop) {
+    if (loop.kind === "cron") {
       try {
-        await removeCronTasks([i.id]);
+        await removeCronTasks([loop.id]);
         context.applyMessageOp({
           type: "update",
           updater: withCronCarryAttachment,
         });
-        onDone(`Loop ${i.id} deleted`, {
+        onDone(`Loop ${loop.id} deleted`, {
           display: "system",
         });
       } catch (error) {
-        onDone(`Failed to delete loop ${i.id}: ${error}`, {
+        onDone(`Failed to delete loop ${loop.id}: ${error}`, {
           display: "system",
         });
       }
       return;
     }
-    let T = clearSessionGoal(context);
-    onDone(T === null ? "Stop hook not found" : "Stop hook cleared", {
+    let cleared = clearSessionGoal(context);
+    onDone(cleared === null ? "Stop hook not found" : "Stop hook cleared", {
       display: "system",
     });
   }
-  async function M(i) {
-    if (i.kind === "cron") {
-      let cron = intervalToCron(i.interval);
+  async function createLoop(loop) {
+    if (loop.kind === "cron") {
+      let cron = intervalToCron(loop.interval);
       if (!cron) {
-        onDone(`Invalid interval: ${i.interval}`, {
+        onDone(`Invalid interval: ${loop.interval}`, {
           display: "system",
         });
         return;
       }
-      let de = await runWithWorkload(undefined, () => addCronTask(cron, i.prompt, true, false));
+      let taskId = await runWithWorkload(undefined, () => addCronTask(cron, loop.prompt, true, false));
       setScheduledTasksEnabled(true);
       context.applyMessageOp({
         type: "update",
         updater: withCronCarryAttachment,
       });
-      onDone(`Loop ${de} created (${cronToHuman(cron)})`, {
+      onDone(`Loop ${taskId} created (${cronToHuman(cron)})`, {
         display: "system",
       });
       return;
     }
-    let T = setSessionGoal(i.condition, context, "loops_dialog");
-    onDone(T ?? "Stop hook set", {
+    let goal = setSessionGoal(loop.condition, context, "loops_dialog");
+    onDone(goal ?? "Stop hook set", {
       display: "system",
     });
   }
   return jsxProd_default(LoopsManager, {
     loops,
-    onDelete: (i) => void c(i),
-    onCreate: (i) => void M(i),
+    onDelete: (loop) => void deleteLoop(loop),
+    onCreate: (loop) => void createLoop(loop),
     onCancel: () =>
       onDone("", {
         display: "skip",
       }),
   });
 };
+export { runLoopsCommand };

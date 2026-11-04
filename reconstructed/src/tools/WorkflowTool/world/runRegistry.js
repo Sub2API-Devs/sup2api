@@ -13,60 +13,61 @@ import { logFeatureOk } from "../../../services/analytics/featureTelemetry.js";
 import { fromEnum } from "../../../services/analytics/safeMetadata.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
 import {
-  u,
+  objectSchema,
   _enum,
-  E,
-  M,
+  numberSchema,
+  booleanSchema,
   array,
   unknown,
-  string,
+  stringSchema,
   int,
   discriminatedUnion,
   literal,
 } from "../../../../vendor/zod/v4/classic/schemas.js";
 import { factSchema, HOST_SCOPE, ROW_STATUSES } from "./worldStore.js";
+import { deferInit, runDeferredInits } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-y1shfdfm.js:48333-48395 placement
-function isAgentEvalRow(e) {
-  return e.kind === "eval" && e.fact.topic === "agent";
+function isAgentEvalRow(row) {
+  return row.kind === "eval" && row.fact.topic === "agent";
 }
 //@ chunk-y1shfdfm.js:48395-48484 placement
-function hasErrorField(e) {
-  return e !== null && typeof e === "object" && !Array.isArray(e) && e.error !== undefined;
+function hasErrorField(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) && value.error !== undefined;
 }
 //@ chunk-y1shfdfm.js:48484-48550 placement
-function finiteOrZero(e) {
-  return typeof e === "number" && Number.isFinite(e) ? e : 0;
+function finiteOrZero(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 //@ chunk-y1shfdfm.js:48550-48572 placement
 class RunIndex {
   byId = new Map();
 }
 //@ chunk-y1shfdfm.js:48572-48912 placement
-function collectRunStatuses(e, r) {
-  let n = new Map();
-  for (let i of e.rows) {
-    if (!isFoundingScriptRow(i) || i.status === "pending" || typeof i.fact.runId !== "string") continue;
-    let w = n.get(i.fact.runId);
-    if (w) w.push(i);
-    else n.set(i.fact.runId, [i]);
+function collectRunStatuses(world, runIndex) {
+  let rowsByRun = new Map();
+  for (let row of world.rows) {
+    if (!isFoundingScriptRow(row) || row.status === "pending" || typeof row.fact.runId !== "string") continue;
+    let runRows = rowsByRun.get(row.fact.runId);
+    if (runRows) runRows.push(row);
+    else rowsByRun.set(row.fact.runId, [row]);
   }
-  let s = 0;
-  for (let [i, w] of n) {
-    if (r.byId.has(i)) continue;
-    let last = w.at(-1);
-    r.byId.set(
-      i,
+  let lostCount = 0;
+  for (let [runId, rows] of rowsByRun) {
+    if (runIndex.byId.has(runId)) continue;
+    let last = rows.at(-1);
+    runIndex.byId.set(
+      runId,
       WorkflowScriptRun.lost(
-        i,
-        e,
+        runId,
+        world,
         last.addr,
-        w.slice(0, -1).map((k) => k.addr),
+        rows.slice(0, -1).map((row) => row.addr),
       ),
     );
-    s++;
+    lostCount++;
   }
-  return s;
+  return lostCount;
 }
 //@ chunk-y1shfdfm.js:48912-48926 placement
 /**
@@ -81,28 +82,28 @@ class RunIndex_2 {
   byName = new Map();
 }
 //@ chunk-y1shfdfm.js:48950-49321 placement
-function resolveWorkflowRun({ toolState, taskRegistry, name: n, runId, now = Date.now() }) {
-  if (n === undefined) return;
+function resolveWorkflowRun({ toolState, taskRegistry, name, runId, now = Date.now() }) {
+  if (name === undefined) return;
   let byName = toolState.get(RunIndex_2).byName;
-  let h = byName.get(n);
-  byName.set(n, {
+  let previous = byName.get(name);
+  byName.set(name, {
     runId,
     at: now,
   });
-  if (!h || now - h.at > RUN_INDEX_TTL_MS) return;
-  let k = toolState.get(RunIndex).byId.get(h.runId);
+  if (!previous || now - previous.at > RUN_INDEX_TTL_MS) return;
+  let run = toolState.get(RunIndex).byId.get(previous.runId);
   logFeatureOk("workflow_relaunch_soon", {
-    name: fromEnum(n),
-    seconds_since_prev: Math.round((now - h.at) / 1000),
-    prev_state: fromEnum(k ? k.state() : workflowTaskStatus(taskRegistry, h.runId)),
-    prev_was_steered: k?.wasSteered ?? false,
+    name: fromEnum(name),
+    seconds_since_prev: Math.round((now - previous.at) / 1000),
+    prev_state: fromEnum(run ? run.state() : workflowTaskStatus(taskRegistry, previous.runId)),
+    prev_was_steered: run?.wasSteered ?? false,
   });
 }
 //@ chunk-y1shfdfm.js:49321-49595 placement
 function workflowTaskStatus(taskRegistry, runId) {
-  for (let n of Object.values(taskRegistry.all())) {
-    if (n.type !== "local_workflow" || n.workflowRunId !== runId) continue;
-    switch (n.status) {
+  for (let task of Object.values(taskRegistry.all())) {
+    if (task.type !== "local_workflow" || task.workflowRunId !== runId) continue;
+    switch (task.status) {
       case "pending":
       case "running":
         return "open";
@@ -117,94 +118,106 @@ function workflowTaskStatus(taskRegistry, runId) {
   return "unknown";
 }
 //@ chunk-y1shfdfm.js:49595-49920 placement
-function describeWorldOp(e) {
-  if (typeof e.runId !== "string") return;
-  let r = e.put !== undefined || typeof e.retract === "number" || e.read !== undefined;
+function describeWorldOp(input) {
+  if (typeof input.runId !== "string") return;
+  let hasOp = input.put !== undefined || typeof input.retract === "number" || input.read !== undefined;
   return {
-    runId: e.runId,
-    ...(e.put !== undefined && {
-      put: e.put,
+    runId: input.runId,
+    ...(input.put !== undefined && {
+      put: input.put,
     }),
-    ...(typeof e.retract === "number" && {
-      retract: e.retract,
+    ...(typeof input.retract === "number" && {
+      retract: input.retract,
     }),
-    ...(e.read !== undefined && {
-      read: e.read,
+    ...(input.read !== undefined && {
+      read: input.read,
     }),
-    ...(!r &&
-      typeof e.script === "string" &&
-      e.script !== "" && {
-        script: e.script,
+    ...(!hasOp &&
+      typeof input.script === "string" &&
+      input.script !== "" && {
+        script: input.script,
       }),
   };
 }
 //@ chunk-y1shfdfm.js:49920-50288 placement
-var worldOpSchema = DoctorLazy(() =>
-  u({
-    verb: _enum(["put", "retract", "read", "script"]),
-    addr: E().optional(),
-    retracted: M().optional(),
-    rows: array(unknown()).optional(),
-    rowsTotal: E().optional(),
-    foreignArtifactContent: M().optional(),
-    error: string().optional(),
-    reopened: M(),
-    status: u({
-      pending: E(),
+var worldOpSchema; // deferred: uses STOP_REASONS (./scriptRunner.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-y1shfdfm.js:49920", () => {
+  worldOpSchema = DoctorLazy(() =>
+    objectSchema({
+      verb: _enum(["put", "retract", "read", "script"]),
+      addr: numberSchema().optional(),
+      retracted: booleanSchema().optional(),
+      rows: array(unknown()).optional(),
+      rowsTotal: numberSchema().optional(),
+      foreignArtifactContent: booleanSchema().optional(),
+      error: stringSchema().optional(),
+      reopened: booleanSchema(),
+      status: objectSchema({
+        pending: numberSchema(),
+      }),
+      killed: objectSchema({
+        at: numberSchema(),
+        reason: _enum([...STOP_REASONS, "unknown"]).catch("unknown"),
+        rows: numberSchema(),
+        pending: numberSchema(),
+        rules: numberSchema(),
+        agents: numberSchema(),
+      }).optional(),
     }),
-    killed: u({
-      at: E(),
-      reason: _enum([...STOP_REASONS, "unknown"]).catch("unknown"),
-      rows: E(),
-      pending: E(),
-      rules: E(),
-      agents: E(),
-    }).optional(),
-  }),
-);
+  );
+});
 //@ chunk-y1shfdfm.js:50288-50488 placement
-function worldOpVerbs(e) {
-  let r = [];
-  if (e.put !== undefined) r.push("put");
-  if (e.retract !== undefined) r.push("retract");
-  if (e.read !== undefined) r.push("read");
-  if (e.script !== undefined) r.push("script");
-  return r.length === 1 ? r[0] : undefined;
+function worldOpVerbs(worldOp) {
+  let verbs = [];
+  if (worldOp.put !== undefined) verbs.push("put");
+  if (worldOp.retract !== undefined) verbs.push("retract");
+  if (worldOp.read !== undefined) verbs.push("read");
+  if (worldOp.script !== undefined) verbs.push("script");
+  return verbs.length === 1 ? verbs[0] : undefined;
 }
 //@ chunk-y1shfdfm.js:50615-51018 placement
 /**
  * world 日志行的 schema（地址、类型、事实、时间等）。
  */
-var worldJournalLineSchema = DoctorLazy(() => {
-  let addr = int().nonnegative();
-  return discriminatedUnion("k", [
-    u({
-      k: literal("put"),
-      addr,
-      kind: _enum(["put", "eval", "sub"]),
-      fact: factSchema(),
-      by: string(),
-      in: int().min(HOST_SCOPE),
-      at: E().finite(),
-      status: _enum(ROW_STATUSES),
-    }).refine((r) => r.in < r.addr, {
-      message: "`in` must be ROOT or an earlier address",
-    }),
-    u({
-      k: literal("settled"),
-      addr,
-      status: _enum(["done", "failed"]),
-      value: unknown().optional(),
-      error: string().optional(),
-    }),
-    u({
-      k: literal("retracted"),
-      addr,
-    }),
-  ]);
+var worldJournalLineSchema; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var WORLD_JSONL;
+var MAX_WORLD_JOURNAL_READ_BYTES;
+deferInit("chunk-y1shfdfm.js:50615", () => {
+  worldJournalLineSchema = DoctorLazy(() => {
+    let addr = int().nonnegative();
+    return discriminatedUnion("k", [
+      objectSchema({
+        k: literal("put"),
+        addr,
+        kind: _enum(["put", "eval", "sub"]),
+        fact: factSchema(),
+        by: stringSchema(),
+        in: int().min(HOST_SCOPE),
+        at: numberSchema().finite(),
+        status: _enum(ROW_STATUSES),
+      }).refine((row) => row.in < row.addr, {
+        message: "`in` must be ROOT or an earlier address",
+      }),
+      objectSchema({
+        k: literal("settled"),
+        addr,
+        status: _enum(["done", "failed"]),
+        value: unknown().optional(),
+        error: stringSchema().optional(),
+      }),
+      objectSchema({
+        k: literal("retracted"),
+        addr,
+      }),
+    ]);
+  });
+  WORLD_JSONL = "world.jsonl";
+  MAX_WORLD_JOURNAL_READ_BYTES = 4194304;
 });
-var WORLD_JSONL = "world.jsonl";
-var MAX_WORLD_JOURNAL_READ_BYTES = 4194304;
+
+// The import cycle this module closes (2 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("src/tools/WorkflowTool/world/runRegistry.js");
 export {
   finiteOrZero,
   hasErrorField,

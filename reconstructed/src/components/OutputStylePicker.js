@@ -8,9 +8,14 @@
  * pieces: chunk-9h8dr0qb.js (7)
  * attribution: placement 1, layout 1, fingerprint 2, file-local 1, sole-consumer 2
  */
-import { init_react_production, y, fo, Qr } from "../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  suspenseTypeExport,
+  use,
+} from "../../vendor/react/cjs/react.production.js";
 import { OUTPUT_STYLE_CONFIG, getAllOutputStylesCached } from "../constants/outputStyles.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useProject } from "../context/session.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
@@ -49,34 +54,34 @@ function mapConfigsToOptions(styles) {
 }
 //@ chunk-9h8dr0qb.js:7869-8816 fingerprint = OutputStylePicker (0.601)
 function OutputStylePicker(props) {
-  let $ = w(15);
+  let $ = useMemoCache(15);
   let { initialStyle, onComplete, onCancel, isStandaloneCommand, visibleCount } = props;
   let project = useProject();
   let { storageV5 } = useTheme_2();
-  let F;
+  let loadOptions;
   if ($[0] !== project.cwd || $[1] !== storageV5) {
-    F = () =>
+    loadOptions = () =>
       getAllOutputStylesCached(project.cwd, storageV5)
         .then(mapConfigsToOptions)
         .catch(getConcreteOutputStyle);
     $[0] = project.cwd;
     $[1] = storageV5;
-    $[2] = F;
-  } else F = $[2];
-  let [U] = y(F);
+    $[2] = loadOptions;
+  } else loadOptions = $[2];
+  let [optionsPromise] = useState(loadOptions);
   const hideInputGuide = !isStandaloneCommand;
   const hideBorder = !isStandaloneCommand;
-  let B;
+  let boxElement;
   if ($[3] === MEMO_CACHE_SENTINEL) {
-    B = jsxProd_default(Box, {
+    boxElement = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(Text, {
         dimColor: true,
         children: OUTPUT_STYLE_EFFECT_NOTE,
       }),
     });
-    $[3] = B;
-  } else B = $[3];
+    $[3] = boxElement;
+  } else boxElement = $[3];
   let fallback;
   if ($[4] === MEMO_CACHE_SENTINEL) {
     fallback = jsxProd_default(Text, {
@@ -86,16 +91,16 @@ function OutputStylePicker(props) {
     $[4] = fallback;
   } else fallback = $[4];
   let children;
-  if ($[5] !== initialStyle || $[6] !== onComplete || $[7] !== U || $[8] !== visibleCount) {
+  if ($[5] !== initialStyle || $[6] !== onComplete || $[7] !== optionsPromise || $[8] !== visibleCount) {
     children = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
       children: [
-        B,
-        jsxProd_default(fo, {
+        boxElement,
+        jsxProd_default(suspenseTypeExport, {
           fallback,
           children: jsxProd_default(OutputStyleList, {
-            styleOptionsPromise: U,
+            styleOptionsPromise: optionsPromise,
             initialStyle,
             onComplete,
             visibleCount,
@@ -106,13 +111,13 @@ function OutputStylePicker(props) {
     });
     $[5] = initialStyle;
     $[6] = onComplete;
-    $[7] = U;
+    $[7] = optionsPromise;
     $[8] = visibleCount;
     $[9] = children;
   } else children = $[9];
-  let ee;
+  let dialogElement;
   if ($[10] !== onCancel || $[11] !== hideInputGuide || $[12] !== hideBorder || $[13] !== children) {
-    ee = jsxProd_default(Dialog, {
+    dialogElement = jsxProd_default(Dialog, {
       title: "Preferred output style",
       subtitle: undefined,
       onCancel,
@@ -124,101 +129,108 @@ function OutputStylePicker(props) {
     $[11] = hideInputGuide;
     $[12] = hideBorder;
     $[13] = children;
-    $[14] = ee;
-  } else ee = $[14];
-  return ee;
+    $[14] = dialogElement;
+  } else dialogElement = $[14];
+  return dialogElement;
 }
 //@ chunk-9h8dr0qb.js:8816-10273 sole-consumer
 /**
  * /output-style 选项列表：等待样式选项加载，标出当前样式；安全模式下已保存的自定义样式被禁用时给出提示；宽屏 redesign 模式下描述放在 meta 列。
  */
 function OutputStyleList(props) {
-  let $ = w(31);
+  let $ = useMemoCache(31);
   let { styleOptionsPromise, initialStyle, onComplete, visibleCount, isRedesign } = props;
-  let T = Qr(styleOptionsPromise);
+  let optionsResult = use(styleOptionsPromise);
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let F;
-  if ($[0] !== initialStyle || $[1] !== T) {
-    F = isCustomizationDisabled("outputStyles") && !T.some((U) => U.value === initialStyle);
+  let memoCache;
+  if ($[0] !== initialStyle || $[1] !== optionsResult) {
+    memoCache =
+      isCustomizationDisabled("outputStyles") && !optionsResult.some((state) => state.value === initialStyle);
     $[0] = initialStyle;
-    $[1] = T;
-    $[2] = F;
-  } else F = $[2];
-  let W = F;
-  let M;
-  if ($[3] !== initialStyle || $[4] !== W) {
-    M =
-      W &&
+    $[1] = optionsResult;
+    $[2] = memoCache;
+  } else memoCache = $[2];
+  let memoCacheAlias = memoCache;
+  let initialHint;
+  if ($[3] !== initialStyle || $[4] !== memoCacheAlias) {
+    initialHint =
+      memoCacheAlias &&
       jsxProd_default(Text, {
         dimColor: true,
         children: `Your saved output style "${initialStyle}" is a custom style disabled in safe mode \u2014 ${getSafeModeExitHint()} to use it; selecting a style here replaces it`,
       });
     $[3] = initialStyle;
-    $[4] = W;
-    $[5] = M;
-  } else M = $[5];
-  let B;
-  if ($[6] !== initialStyle || $[7] !== T) {
-    let H;
+    $[4] = memoCacheAlias;
+    $[5] = initialHint;
+  } else initialHint = $[5];
+  let initialIndex;
+  if ($[6] !== initialStyle || $[7] !== optionsResult) {
+    let matchValue;
     if ($[9] !== initialStyle) {
-      H = (K) => K.value === initialStyle;
+      matchValue = (state) => state.value === initialStyle;
       $[9] = initialStyle;
-      $[10] = H;
-    } else H = $[10];
-    B = T.findIndex(H);
+      $[10] = matchValue;
+    } else matchValue = $[10];
+    initialIndex = optionsResult.findIndex(matchValue);
     $[6] = initialStyle;
-    $[7] = T;
-    $[8] = B;
-  } else B = $[8];
-  const defaultFocusIndex = Math.max(0, B);
+    $[7] = optionsResult;
+    $[8] = initialIndex;
+  } else initialIndex = $[8];
+  const defaultFocusIndex = Math.max(0, initialIndex);
   let onSelect;
-  if ($[11] !== onComplete || $[12] !== T) {
-    onSelect = (ne) => {
-      let V = T[ne]?.value;
-      if (V !== undefined) onComplete(V);
+  if ($[11] !== onComplete || $[12] !== optionsResult) {
+    onSelect = (selectedIndex) => {
+      let selectedValue = optionsResult[selectedIndex]?.value;
+      if (selectedValue !== undefined) onComplete(selectedValue);
     };
     $[11] = onComplete;
-    $[12] = T;
+    $[12] = optionsResult;
     $[13] = onSelect;
   } else onSelect = $[13];
   let children;
-  if ($[14] !== initialStyle || $[15] !== isRedesign || $[16] !== isScreenReaderEnabled || $[17] !== T) {
-    let J;
+  if (
+    $[14] !== initialStyle ||
+    $[15] !== isRedesign ||
+    $[16] !== isScreenReaderEnabled ||
+    $[17] !== optionsResult
+  ) {
+    let renderOption;
     if ($[19] !== initialStyle || $[20] !== isRedesign || $[21] !== isScreenReaderEnabled) {
-      J = (ae) => {
-        let me = isRedesign && !isScreenReaderEnabled && bunStringWidth(ae.label) <= STYLE_ROW_HEIGHT;
+      renderOption = (option) => {
+        let isCompactRow =
+          isRedesign && !isScreenReaderEnabled && bunStringWidth(option.label) <= STYLE_ROW_HEIGHT;
         return jsxProd_default(
           OrderedListWithItem.Item,
           {
-            label: ae.label,
+            label: option.label,
             icon:
-              ae.value === initialStyle
+              option.value === initialStyle
                 ? jsxProd_default(StatusIcon, {
                     status: "success",
                     "aria-label": "current:",
                   })
                 : undefined,
-            meta: me ? [ae.description] : undefined,
-            description: me ? undefined : ae.description,
+            meta: isCompactRow ? [option.description] : undefined,
+            description: isCompactRow ? undefined : option.description,
           },
-          ae.value,
+          option.value,
         );
       };
       $[19] = initialStyle;
       $[20] = isRedesign;
       $[21] = isScreenReaderEnabled;
-      $[22] = J;
-    } else J = $[22];
-    children = T.map(J);
+      $[22] = renderOption;
+    } else renderOption = $[22];
+    children = optionsResult.map(renderOption);
     $[14] = initialStyle;
     $[15] = isRedesign;
     $[16] = isScreenReaderEnabled;
-    $[17] = T;
+    $[17] = optionsResult;
     $[18] = children;
   } else children = $[18];
-  let J;
+  let orderedListWithItemElement;
   if ($[23] !== defaultFocusIndex || $[24] !== onSelect || $[25] !== children || $[26] !== visibleCount) {
-    J = jsxProd_default(OrderedListWithItem, {
+    orderedListWithItemElement = jsxProd_default(OrderedListWithItem, {
       visibleCount,
       defaultFocusIndex,
       onSelect,
@@ -228,18 +240,18 @@ function OutputStyleList(props) {
     $[24] = onSelect;
     $[25] = children;
     $[26] = visibleCount;
-    $[27] = J;
-  } else J = $[27];
-  let fe;
-  if ($[28] !== M || $[29] !== J) {
-    fe = jsxProd_default_2(Fragment, {
-      children: [M, J],
+    $[27] = orderedListWithItemElement;
+  } else orderedListWithItemElement = $[27];
+  let fragmentElement;
+  if ($[28] !== initialHint || $[29] !== orderedListWithItemElement) {
+    fragmentElement = jsxProd_default_2(Fragment, {
+      children: [initialHint, orderedListWithItemElement],
     });
-    $[28] = M;
-    $[29] = J;
-    $[30] = fe;
-  } else fe = $[30];
-  return fe;
+    $[28] = initialHint;
+    $[29] = orderedListWithItemElement;
+    $[30] = fragmentElement;
+  } else fragmentElement = $[30];
+  return fragmentElement;
 }
 //@ chunk-9h8dr0qb.js:10273-10277 sole-consumer
 init_react_production();

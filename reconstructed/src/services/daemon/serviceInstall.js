@@ -11,7 +11,7 @@
 import { stat, mkdir, writeFile, unlink, readFile, access } from "fs/promises";
 import { join } from "path";
 import { homedir } from "os";
-import { Re } from "../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_semver_3 } from "../../../vendor/semver/index.js";
 import { env } from "../../utils/env.js";
 import { isStandaloneExecutable } from "../../utils/slowOperations.js";
@@ -20,12 +20,16 @@ import { processWrapperProblem, processWrapperArgv, absoluteLauncher } from "../
 import { errorMessage, isENOENT } from "../../utils/errors.js";
 import { execFileNoThrow } from "../../utils/execFileNoThrow.js";
 import { isPossibleClaudeBinary } from "../../utils/nativeInstaller/installer.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ksvdmrg0.js:2754-2772 placement
 /**
  * 懒加载的 semver 模块。
  */
-var semverModule = Re(require_semver_3(), 1);
+var semverModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ksvdmrg0.js:2754", () => {
+  semverModule = __toESM(require_semver_3(), 1);
+});
 //@ chunk-ksvdmrg0.js:3090-3165 placement
 /**
  * 调用 systemctl 时的固定选项。
@@ -40,9 +44,9 @@ var SYSTEMCTL_OPTIONS = {
  * 判断当前用户是否有 systemd 用户会话（XDG_RUNTIME_DIR 下存在 systemd 目录）。
  */
 async function hasSystemdUserSession() {
-  let r = env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}`;
+  let runtimeDir = env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}`;
   try {
-    return (await stat(join(r, "systemd"))).isDirectory();
+    return (await stat(join(runtimeDir, "systemd"))).isDirectory();
   } catch {
     return false;
   }
@@ -66,14 +70,14 @@ function escapeSystemdValue(logPath) {
 /**
  * 需要时给 systemd 参数加引号。
  */
-function quoteSystemdArg(r) {
-  let e = escapeSystemdValue(r);
-  return e.includes(" ") ? `"${e}"` : e;
+function quoteSystemdArg(value) {
+  let escaped = escapeSystemdValue(value);
+  return escaped.includes(" ") ? `"${escaped}"` : escaped;
 }
 //@ chunk-ksvdmrg0.js:3512-3616 placement
 function getSystemdUnitPath() {
-  let r = env.XDG_CONFIG_HOME || join(homedir(), ".config");
-  return join(r, "systemd", "user", `${COM_ANTHROPIC_CLAUDE_DAEMON}.service`);
+  let configHome = env.XDG_CONFIG_HOME || join(homedir(), ".config");
+  return join(configHome, "systemd", "user", `${COM_ANTHROPIC_CLAUDE_DAEMON}.service`);
 }
 //@ chunk-ksvdmrg0.js:3616-3672 placement
 /**
@@ -89,24 +93,24 @@ async function isDaemonServiceInstalled() {
 /**
  * 安装 systemd 用户服务（拒绝安装未包装运行的服务）
  */
-async function installDaemonService(r) {
-  let { jsonPath, logPath } = r;
-  let s = await processWrapperProblem();
-  if (s)
+async function installDaemonService(options) {
+  let { jsonPath, logPath } = options;
+  let problem = await processWrapperProblem();
+  if (problem)
     return {
       ok: false,
-      error: `${s} \u2014 refusing to install a service that would run unwrapped`,
+      error: `${problem} \u2014 refusing to install a service that would run unwrapped`,
       serviceId: COM_ANTHROPIC_CLAUDE_DAEMON,
       servicePath: "",
     };
-  let h = [...processWrapperArgv(), daemonExecutablePath()];
+  let argv = [...processWrapperArgv(), daemonExecutablePath()];
   let PATH = env.PATH || "/usr/local/bin:/usr/bin:/bin";
   {
     let systemdUnitPath = getSystemdUnitPath();
-    let E = `${COM_ANTHROPIC_CLAUDE_DAEMON}.service`;
+    let unit = `${COM_ANTHROPIC_CLAUDE_DAEMON}.service`;
     try {
-      let x = env.XDG_CONFIG_HOME || join(homedir(), ".config");
-      await mkdir(join(x, "systemd", "user"), {
+      let result = env.XDG_CONFIG_HOME || join(homedir(), ".config");
+      await mkdir(join(result, "systemd", "user"), {
         recursive: true,
       });
       await writeFile(
@@ -120,7 +124,7 @@ StartLimitBurst=10
 [Service]
 Type=simple
 Environment="PATH=${escapeSystemdValue(PATH)}"
-ExecStart=${h.map(quoteSystemdArg).join(" ")} daemon --json-path ${quoteSystemdArg(jsonPath)} --log-file ${quoteSystemdArg(logPath)} --origin service
+ExecStart=${argv.map(quoteSystemdArg).join(" ")} daemon --json-path ${quoteSystemdArg(jsonPath)} --log-file ${quoteSystemdArg(logPath)} --origin service
 Restart=always
 RestartSec=1
 StandardOutput=append:${escapeSystemdValue(logPath)}
@@ -142,7 +146,7 @@ WantedBy=default.target
     await execFileNoThrow("systemctl", ["--user", "daemon-reload"], SYSTEMCTL_OPTIONS);
     let { code, stderr, error } = await execFileNoThrow(
       "systemctl",
-      ["--user", "enable", "--now", E],
+      ["--user", "enable", "--now", unit],
       SYSTEMCTL_OPTIONS,
     );
     if (code !== 0)
@@ -152,7 +156,7 @@ WantedBy=default.target
         serviceId: COM_ANTHROPIC_CLAUDE_DAEMON,
         servicePath: systemdUnitPath,
       };
-    await execFileNoThrow("systemctl", ["--user", "restart", E], SYSTEMCTL_OPTIONS);
+    await execFileNoThrow("systemctl", ["--user", "restart", unit], SYSTEMCTL_OPTIONS);
     return {
       ok: true,
       serviceId: COM_ANTHROPIC_CLAUDE_DAEMON,
@@ -170,8 +174,8 @@ WantedBy=default.target
 async function uninstallDaemonService() {
   {
     let systemdUnitPath = getSystemdUnitPath();
-    let e = `${COM_ANTHROPIC_CLAUDE_DAEMON}.service`;
-    await execFileNoThrow("systemctl", ["--user", "disable", "--now", e], SYSTEMCTL_OPTIONS);
+    let unitName = `${COM_ANTHROPIC_CLAUDE_DAEMON}.service`;
+    await execFileNoThrow("systemctl", ["--user", "disable", "--now", unitName], SYSTEMCTL_OPTIONS);
     try {
       await unlink(systemdUnitPath);
     } catch (error) {
@@ -216,9 +220,9 @@ async function restartDaemonService() {
 /**
  * 通过 systemctl --user 启停/重启 daemon 服务，失败时返回错误文字。
  */
-async function runSystemctl(r) {
+async function runSystemctl(action) {
   if (false)
-    switch (r) {
+    switch (action) {
       case "start":
       case "stop":
       case "restart":
@@ -226,13 +230,13 @@ async function runSystemctl(r) {
   {
     let { code, stderr, error } = await execFileNoThrow(
       "systemctl",
-      ["--user", r, `${COM_ANTHROPIC_CLAUDE_DAEMON}.service`],
+      ["--user", action, `${COM_ANTHROPIC_CLAUDE_DAEMON}.service`],
       SYSTEMCTL_OPTIONS,
     );
     if (code !== 0)
       return {
         ok: false,
-        error: stderr || error || `systemctl ${r} failed`,
+        error: stderr || error || `systemctl ${action} failed`,
       };
     return {
       ok: true,
@@ -240,58 +244,58 @@ async function runSystemctl(r) {
   }
   return {
     ok: false,
-    error: `service ${r} not available on ${"linux"} \u2014 the daemon runs on demand instead`,
+    error: `service ${action} not available on ${"linux"} \u2014 the daemon runs on demand instead`,
   };
 }
 //@ chunk-ksvdmrg0.js:5710-5969 placement
 async function readServiceExecStart() {
   let systemdUnitPath = getSystemdUnitPath();
   if (!systemdUnitPath) return null;
-  let e;
+  let text;
   try {
-    let n = await stat(systemdUnitPath);
-    if (!n.isFile() || n.size > 1048576) return null;
-    e = await readFile(systemdUnitPath, "utf8");
+    let stats = await stat(systemdUnitPath);
+    if (!stats.isFile() || stats.size > 1048576) return null;
+    text = await readFile(systemdUnitPath, "utf8");
   } catch {
     return null;
   }
-  return [...(e.match(/^ExecStart=(.*)$/m)?.[1]?.matchAll(/"([^"]+)"|(\S+)/g) ?? [])].map(
-    (n) => n[1] ?? n[2],
+  return [...(text.match(/^ExecStart=(.*)$/m)?.[1]?.matchAll(/"([^"]+)"|(\S+)/g) ?? [])].map(
+    (match) => match[1] ?? match[2],
   );
 }
 //@ chunk-ksvdmrg0.js:5969-6014 placement
 /**
  * 反转义 systemd 值（%% 变回 %）。
  */
-function unescapeSystemdValue(r) {
-  return r.replaceAll("%%", "%");
+function unescapeSystemdValue(value) {
+  return value.replaceAll("%%", "%");
 }
 //@ chunk-ksvdmrg0.js:6014-6326 placement
 /**
  * 检查 systemd 服务的 ExecStart：daemon 前的可执行路径是否已不存在、启动前缀中的二进制是否失效。
  */
 async function checkServiceExecStart() {
-  let r = {
+  let state = {
     execPathStale: false,
     launcherPrefixDead: false,
   };
   let serviceExecStart = await readServiceExecStart();
-  if (!serviceExecStart) return r;
+  if (!serviceExecStart) return state;
   let index = serviceExecStart.lastIndexOf("daemon");
-  let s = index > 0 ? serviceExecStart[index - 1] : undefined;
-  if (!s) return r;
+  let execPath = index > 0 ? serviceExecStart[index - 1] : undefined;
+  if (!execPath) return state;
   try {
-    await access(unescapeSystemdValue(s));
+    await access(unescapeSystemdValue(execPath));
   } catch {
-    r.execPathStale = true;
+    state.execPathStale = true;
   }
-  let mapped = serviceExecStart.slice(0, index - 1).map(unescapeSystemdValue);
-  for (let w of absoluteLauncher(mapped))
-    if (!(await isPossibleClaudeBinary(w))) {
-      r.launcherPrefixDead = true;
+  let argv = serviceExecStart.slice(0, index - 1).map(unescapeSystemdValue);
+  for (let candidate of absoluteLauncher(argv))
+    if (!(await isPossibleClaudeBinary(candidate))) {
+      state.launcherPrefixDead = true;
       break;
     }
-  return r;
+  return state;
 }
 //@ chunk-ksvdmrg0.js:6326-6521 placement
 async function daemonServiceStatus() {

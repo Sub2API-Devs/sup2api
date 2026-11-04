@@ -46,6 +46,7 @@ import { SYSTEM_PROMPT_FILE_ARGS as SYSTEM_PROMPT_FILE_ARGS_2 } from "./childArg
 import { RUNNER_DECLARES_ARG_KEY } from "./runnerDeclaration.js";
 import { getHttpStatus } from "../../selfHostedRunner/runnerApiErrors.js";
 import { RepoSettingsRejectedError } from "./repoSettingsConfinement.js";
+import { runDeferredInits } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hm0ce8vc.js:67301-68065 placement
 /**
@@ -53,31 +54,31 @@ import { RepoSettingsRejectedError } from "./repoSettingsConfinement.js";
  */
 function validateLauncherHooks(hooks) {
   if (!Array.isArray(hooks)) return `launcher_hooks: not an array (got ${loadRawTranscriptJsonl(hooks)})`;
-  let n = new Set();
-  for (let [r, s] of hooks.entries()) {
-    if (s === null || typeof s !== "object")
-      return `launcher_hooks[${r}]: not an object (got ${loadRawTranscriptJsonl(s)})`;
-    if (typeof s.event !== "string" || !LAUNCHER_HOOK_EVENTS.has(s.event))
-      return `launcher_hooks[${r}]: unknown event ${loadRawTranscriptJsonl(s.event)}`;
-    if (typeof s.filename !== "string" || !LAUNCHER_HOOK_FILENAME_PATTERN.test(s.filename))
-      return `launcher_hooks[${r}]: invalid filename ${loadRawTranscriptJsonl(s.filename)}`;
-    let lower = s.filename.toLowerCase();
-    if (n.has(lower))
-      return `launcher_hooks[${r}]: duplicate filename ${jsonStringify(s.filename)} (case-insensitive)`;
-    n.add(lower);
-    let o = typeof s.script === "string" ? Buffer.byteLength(s.script, "utf8") : 0;
-    if (o === 0 || o > MAX_REPO_NOT_FOUND_OUTPUT_BYTES)
-      return `launcher_hooks[${r}] ${jsonStringify(s.filename)}: script size ${o} out of range (1..${MAX_REPO_NOT_FOUND_OUTPUT_BYTES})`;
+  let seenFilenames = new Set();
+  for (let [index, hook] of hooks.entries()) {
+    if (hook === null || typeof hook !== "object")
+      return `launcher_hooks[${index}]: not an object (got ${loadRawTranscriptJsonl(hook)})`;
+    if (typeof hook.event !== "string" || !LAUNCHER_HOOK_EVENTS.has(hook.event))
+      return `launcher_hooks[${index}]: unknown event ${loadRawTranscriptJsonl(hook.event)}`;
+    if (typeof hook.filename !== "string" || !LAUNCHER_HOOK_FILENAME_PATTERN.test(hook.filename))
+      return `launcher_hooks[${index}]: invalid filename ${loadRawTranscriptJsonl(hook.filename)}`;
+    let lower = hook.filename.toLowerCase();
+    if (seenFilenames.has(lower))
+      return `launcher_hooks[${index}]: duplicate filename ${jsonStringify(hook.filename)} (case-insensitive)`;
+    seenFilenames.add(lower);
+    let scriptBytes = typeof hook.script === "string" ? Buffer.byteLength(hook.script, "utf8") : 0;
+    if (scriptBytes === 0 || scriptBytes > MAX_REPO_NOT_FOUND_OUTPUT_BYTES)
+      return `launcher_hooks[${index}] ${jsonStringify(hook.filename)}: script size ${scriptBytes} out of range (1..${MAX_REPO_NOT_FOUND_OUTPUT_BYTES})`;
   }
   return;
 }
 //@ chunk-hm0ce8vc.js:68065-68216 placement
-function envPositiveMs(e) {
-  let n = process.env[e];
-  if (n === undefined || n === "") return 0;
-  let r = Number(n);
-  if (!Number.isFinite(r) || r <= 0) return 0;
-  return Math.min(r, 2147483647);
+function envPositiveMs(envName) {
+  let rawValue = process.env[envName];
+  if (rawValue === undefined || rawValue === "") return 0;
+  let value = Number(rawValue);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.min(value, 2147483647);
 }
 //@ chunk-hm0ce8vc.js:68216-68230 placement
 var DEFAULT_STARTUP_TIMEOUT_MS = 900000;
@@ -126,8 +127,8 @@ var MIN_GIT_VERSION_FOR_MOUNT = [2, 26];
 /**
  * 会话 JWT 是否仍在有效期内。
  */
-function isSessionJwtFresh(e, n = Date.now() / 1000) {
-  return (decodeSessionJwt(e) ?? 0) > n;
+function isSessionJwtFresh(token, nowSeconds = Date.now() / 1000) {
+  return (decodeSessionJwt(token) ?? 0) > nowSeconds;
 }
 //@ chunk-hm0ce8vc.js:69101-69124 placement
 /**
@@ -148,79 +149,85 @@ function customOauthUrlSuffix(apiBaseUrl) {
 /**
  * 读取操作员 ~/.gitconfig 与 XDG git 配置，供会话 git 使用。
  */
-async function snapshotOperatorGitConfig(e) {
+async function snapshotOperatorGitConfig(onStatus) {
   let envGitConfigGlobal = process.env.GIT_CONFIG_GLOBAL;
-  let r = process.env.HOME || homedir();
-  let s = process.env.XDG_CONFIG_HOME || join(r, ".config");
-  let a = envGitConfigGlobal ? [envGitConfigGlobal] : [join(s, "git", "config"), join(r, ".gitconfig")];
-  let o = [];
-  for (let h of a) {
+  let homeDir = process.env.HOME || homedir();
+  let configHome = process.env.XDG_CONFIG_HOME || join(homeDir, ".config");
+  let candidatePaths = envGitConfigGlobal
+    ? [envGitConfigGlobal]
+    : [join(configHome, "git", "config"), join(homeDir, ".gitconfig")];
+  let entries = [];
+  for (let configPath of candidatePaths) {
     try {
-      await withFsOpTimeout(stat(h), `stat ${h}`);
+      await withFsOpTimeout(stat(configPath), `stat ${configPath}`);
     } catch (error) {
       if (!isENOENT(error))
-        e(`[runner] governed git: could not read ${h} for gitconfig seed (${error}); skipping it`);
+        onStatus(
+          `[runner] governed git: could not read ${configPath} for gitconfig seed (${error}); skipping it`,
+        );
       continue;
     }
     try {
-      let p = await runGit(["config", "--file", h, "--list", "-z"]);
-      for (let S of p.split("\x00")) {
-        if (!S) continue;
-        let index = S.indexOf(`
+      let listed = await runGit(["config", "--file", configPath, "--list", "-z"]);
+      for (let record of listed.split("\x00")) {
+        if (!record) continue;
+        let index = record.indexOf(`
 `);
-        let y = index === -1 ? S : S.slice(0, index);
-        let v = index === -1 ? "true" : S.slice(index + 1);
-        o.push([y, v]);
+        let key = index === -1 ? record : record.slice(0, index);
+        let value = index === -1 ? "true" : record.slice(index + 1);
+        entries.push([key, value]);
       }
-      e(`[runner] governed git: captured gitconfig seed from ${h} (startup snapshot)`);
+      onStatus(`[runner] governed git: captured gitconfig seed from ${configPath} (startup snapshot)`);
     } catch (error) {
-      e(`[runner] governed git: could not parse ${h} for gitconfig seed (${error}); skipping it`);
+      onStatus(
+        `[runner] governed git: could not parse ${configPath} for gitconfig seed (${error}); skipping it`,
+      );
     }
   }
-  let filtered = o.filter(([h, p]) => SAFE_GIT_CONFIG_KEYS(h, p));
-  if (filtered.length < o.length) {
-    let h = (T) => {
-      let index = T.indexOf(".");
-      let index_2 = T.lastIndexOf(".");
-      return index === index_2 ? T : `${T.slice(0, index)}.*${T.slice(index_2)}`;
+  let filtered = entries.filter(([key, value]) => SAFE_GIT_CONFIG_KEYS(key, value));
+  if (filtered.length < entries.length) {
+    let gitConfigKeyFamily = (fullKey) => {
+      let index = fullKey.indexOf(".");
+      let index_2 = fullKey.lastIndexOf(".");
+      return index === index_2 ? fullKey : `${fullKey.slice(0, index)}.*${fullKey.slice(index_2)}`;
     };
-    let filtered = o.filter(([T, y]) => !SAFE_GIT_CONFIG_KEYS(T, y));
-    let sorted = uniq(filtered.map(([T]) => h(T))).sort();
-    e(
+    let filtered = entries.filter(([key, value]) => !SAFE_GIT_CONFIG_KEYS(key, value));
+    let sorted = uniq(filtered.map(([key]) => gitConfigKeyFamily(key))).sort();
+    onStatus(
       `[runner] governed git: seed filter dropped ${filtered.length} non-allowlisted gitconfig entries (families: ${sorted.join(", ")})`,
     );
   }
   if (filtered.length === 0) return "";
-  let u;
+  let seedDir;
   try {
-    u = await mkdtemp(join(tmpdir(), "ccr-govseed-"));
-    let h = join(u, "seed.gitconfig");
-    for (let [p, S] of filtered) await runGit(["config", "--file", h, "--add", p, S]);
-    return await withFsOpTimeout(readFile(h, "utf8"), `read ${h}`);
+    seedDir = await mkdtemp(join(tmpdir(), "ccr-govseed-"));
+    let seedPath = join(seedDir, "seed.gitconfig");
+    for (let [key, value] of filtered) await runGit(["config", "--file", seedPath, "--add", key, value]);
+    return await withFsOpTimeout(readFile(seedPath, "utf8"), `read ${seedPath}`);
   } catch (error) {
-    e(
+    onStatus(
       `[runner] governed git: seed serialization failed (${error}); governed sessions seed an empty gitconfig`,
     );
     return "";
   } finally {
-    if (u)
-      await rm(u, {
+    if (seedDir)
+      await rm(seedDir, {
         recursive: true,
         force: true,
       }).catch(() => {});
   }
 }
 //@ chunk-hm0ce8vc.js:70649-71092 placement
-function SAFE_GIT_CONFIG_KEYS(e, n) {
-  let lower = e.toLowerCase();
+function SAFE_GIT_CONFIG_KEYS(key, value) {
+  let lower = key.toLowerCase();
   if (lower.startsWith("user.")) return true;
   if (lower === "core.autocrlf" || lower === "core.safecrlf" || lower === "core.eol") return true;
   if (lower === "push.negotiate") return true;
   if (lower.startsWith("url.") && lower.endsWith(".insteadof")) {
-    let sliced = e.slice(4, e.length - 10);
+    let sliced = key.slice(4, key.length - 10);
     return !/\/\/[^/]*@/.test(sliced);
   }
-  if (lower.startsWith("alias.")) return !n.trimStart().startsWith("!");
+  if (lower.startsWith("alias.")) return !value.trimStart().startsWith("!");
   if (lower.startsWith("http.")) {
     let sliced = lower.slice(5);
     if (sliced.includes(".")) return false;
@@ -231,9 +238,9 @@ function SAFE_GIT_CONFIG_KEYS(e, n) {
 //@ chunk-hm0ce8vc.js:71092-71164 placement
 var NON_PORTABLE_GIT_KEYS = new Set(["postbuffer", "lowspeedlimit", "lowspeedtime", "version"]);
 //@ chunk-hm0ce8vc.js:71164-71750 placement
-async function runGit(e) {
+async function runGit(args) {
   return await new Promise((resolve, reject) => {
-    let s = spawn("git", e, {
+    let child = spawn("git", args, {
       cwd: undefined,
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
@@ -244,25 +251,25 @@ async function runGit(e) {
         GIT_CONFIG_SYSTEM: "/dev/null",
       },
     });
-    let a = "";
-    let o = "";
-    s.stdout?.on("data", (u) => (a += String(u)));
-    s.stderr?.on("data", (u) => (o += String(u)));
-    let timer = setTimeout((u) => u.kill("SIGKILL"), SIGKILL_DELAY_MS, s);
-    s.on("close", (u) => {
+    let stdout = "";
+    let stderr = "";
+    child.stdout?.on("data", (data) => (stdout += String(data)));
+    child.stderr?.on("data", (data) => (stderr += String(data)));
+    let timer = setTimeout((proc) => proc.kill("SIGKILL"), SIGKILL_DELAY_MS, child);
+    child.on("close", (exitCode) => {
       clearTimeout(timer);
-      if (u === 0) resolve(a);
+      if (exitCode === 0) resolve(stdout);
       else
         reject(
           new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `git ${e[0]} ${e[1] ?? ""} exited ${u}: ${o.trim()}`,
+            `git ${args[0]} ${args[1] ?? ""} exited ${exitCode}: ${stderr.trim()}`,
             "git invocation for the governed per-session gitconfig failed",
           ),
         );
     });
-    s.on("error", (u) => {
+    child.on("error", (error) => {
       clearTimeout(timer);
-      reject(u);
+      reject(error);
     });
   });
 }
@@ -270,8 +277,8 @@ async function runGit(e) {
 /**
  * 以 0600 权限原子地写入文件。
  */
-async function writeFileAtomicDefaultMode(e, n) {
-  await writeFileAtomic(e, n, 384);
+async function writeFileAtomicDefaultMode(path, contents) {
+  await writeFileAtomic(path, contents, 384);
 }
 //@ chunk-hm0ce8vc.js:71791-71830 placement
 /**
@@ -284,90 +291,96 @@ function hooksDirPath(configDir) {
 /**
  * --configure-git：在会话目录生成受控 gitconfig、钩子桩与签名工件。
  */
-async function materializeSessionGitConfig(e) {
-  let { configDir, baseDir, hookStubs, signingArtifacts, onDebug, onStatus } = e;
-  let u = hooksDirPath(configDir);
+async function materializeSessionGitConfig(options) {
+  let { configDir, baseDir, hookStubs, signingArtifacts, onDebug, onStatus } = options;
+  let hooksGitDir = hooksDirPath(configDir);
   if (signingArtifacts.length === 0)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `--configure-git: code-sign artifacts must be present to materialize ${u} (got ${hookStubs.length} stubs, ${signingArtifacts.length} signing artifacts)`,
+      `--configure-git: code-sign artifacts must be present to materialize ${hooksGitDir} (got ${hookStubs.length} stubs, ${signingArtifacts.length} signing artifacts)`,
       "--configure-git: incomplete startup artifacts for the session-scoped git dir",
     );
-  let h = join(configDir, "hooks");
-  let p = () =>
+  let hooksDir = join(configDir, "hooks");
+  let checkHooksDirPlain = () =>
     isHooksDirSafe(configDir, onStatus).catch((error) => {
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `--configure-git: could not inspect ${h} \u2014 ${error instanceof Error ? error.message : String(error)}`,
+        `--configure-git: could not inspect ${hooksDir} \u2014 ${error instanceof Error ? error.message : String(error)}`,
         "--configure-git: could not inspect configDir/hooks",
       );
     });
-  let S = false;
+  let didCreateHooksGitDir = false;
   try {
-    if (!(await p())) {
+    if (!(await checkHooksDirPlain())) {
       onStatus(
-        `[runner:session] ${h} was not a plain directory \u2014 replaced it before materializing session-scoped git artifacts`,
+        `[runner:session] ${hooksDir} was not a plain directory \u2014 replaced it before materializing session-scoped git artifacts`,
       );
       await withFsOpTimeout(
-        rm(h, {
+        rm(hooksDir, {
           force: true,
         }),
-        `rm ${h}`,
+        `rm ${hooksDir}`,
       );
     }
     await withFsOpTimeout(
-      mkdir(h, {
+      mkdir(hooksDir, {
         recursive: true,
         mode: 448,
       }),
-      `mkdir ${h}`,
+      `mkdir ${hooksDir}`,
     );
-    if (!(await p()))
+    if (!(await checkHooksDirPlain()))
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `--configure-git: ${h} is still not a plain directory after repair \u2014 refusing to materialize session-scoped git artifacts`,
+        `--configure-git: ${hooksDir} is still not a plain directory after repair \u2014 refusing to materialize session-scoped git artifacts`,
         "--configure-git: configDir/hooks is not a plain directory",
       );
     await withFsOpTimeout(
-      rm(u, {
+      rm(hooksGitDir, {
         recursive: true,
         force: true,
       }),
-      `rm ${u}`,
+      `rm ${hooksGitDir}`,
     );
     await withFsOpTimeout(
-      mkdir(u, {
+      mkdir(hooksGitDir, {
         mode: 448,
       }),
-      `mkdir ${u}`,
+      `mkdir ${hooksGitDir}`,
     );
-    S = true;
+    didCreateHooksGitDir = true;
     if (hookStubs.length > 0)
       await withFsOpTimeout(
-        mkdir(join(u, "git-hooks"), {
+        mkdir(join(hooksGitDir, "git-hooks"), {
           mode: 448,
         }),
-        `mkdir ${join(u, "git-hooks")}`,
+        `mkdir ${join(hooksGitDir, "git-hooks")}`,
       );
-    let T = [
-      ...relocateConfigureGitArtifacts(signingArtifacts, baseDir, u),
-      ...relocateConfigureGitArtifacts(hookStubs, baseDir, u).map((y) => ({
-        ...y,
+    let artifacts = [
+      ...relocateConfigureGitArtifacts(signingArtifacts, baseDir, hooksGitDir),
+      ...relocateConfigureGitArtifacts(hookStubs, baseDir, hooksGitDir).map((artifact) => ({
+        ...artifact,
         mode: 493,
       })),
     ];
-    for (let y of T) await withFsOpTimeout(writeNewFile(y.path, y.content, y.mode), `write ${y.path}`);
-    onDebug(`[runner:session] materialized ${T.length} session-scoped --configure-git artifacts under ${u}`);
-    return u;
-  } catch (error) {
-    if (S && (await isHooksDirSafe(configDir, onStatus).catch(() => false)))
+    for (let artifact of artifacts)
       await withFsOpTimeout(
-        rm(u, {
+        writeNewFile(artifact.path, artifact.content, artifact.mode),
+        `write ${artifact.path}`,
+      );
+    onDebug(
+      `[runner:session] materialized ${artifacts.length} session-scoped --configure-git artifacts under ${hooksGitDir}`,
+    );
+    return hooksGitDir;
+  } catch (error) {
+    if (didCreateHooksGitDir && (await isHooksDirSafe(configDir, onStatus).catch(() => false)))
+      await withFsOpTimeout(
+        rm(hooksGitDir, {
           recursive: true,
           force: true,
         }),
-        `rm ${u}`,
+        `rm ${hooksGitDir}`,
       ).catch(() => {});
     if (error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS) throw error;
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `--configure-git: could not materialize session-scoped git artifacts under ${u} \u2014 ${error instanceof Error ? error.message : String(error)}`,
+      `--configure-git: could not materialize session-scoped git artifacts under ${hooksGitDir} \u2014 ${error instanceof Error ? error.message : String(error)}`,
       "--configure-git: could not materialize session-scoped git artifacts",
     );
   }
@@ -376,26 +389,26 @@ async function materializeSessionGitConfig(e) {
 /**
  * 生成 core.hooksPath 条目（默认 /dev/null）。
  */
-function hooksPathEntry(e) {
-  return ["core.hooksPath", e?.hooksPath ?? "/dev/null"];
+function hooksPathEntry(snapshot) {
+  return ["core.hooksPath", snapshot?.hooksPath ?? "/dev/null"];
 }
 //@ chunk-hm0ce8vc.js:73670-73777 placement
-function sessionGitConfig(e, operatorGitSnapshot, hookGitPrograms = ALLOWED_SIGNING_PROGRAMS) {
+function sessionGitConfig(configDir, snapshot, paths = ALLOWED_SIGNING_PROGRAMS) {
   return [
-    ...configureGitOverlayEntries(e).map(([s, a]) =>
-      s === "core.hooksPath" ? hooksPathEntry(operatorGitSnapshot) : [s, a],
+    ...configureGitOverlayEntries(configDir).map(([key, value]) =>
+      key === "core.hooksPath" ? hooksPathEntry(snapshot) : [key, value],
     ),
     ...LIFECYCLE_HOOK_GIT_NEUTRAL_PINS,
-    ...lifecycleHookGpgProgramPins(hookGitPrograms, false),
+    ...lifecycleHookGpgProgramPins(paths, false),
   ];
 }
 //@ chunk-hm0ce8vc.js:73777-73856 placement
 /**
  * 取 git 覆盖条目，可选择去掉 core.hooksPath。
  */
-function overlayEntriesWithoutHooks(e, n) {
-  let r = configureGitOverlayEntries(e);
-  return n ? r.filter(([s]) => s !== "core.hooksPath") : r;
+function overlayEntriesWithoutHooks(configDir, dropHooksPath) {
+  let entries = configureGitOverlayEntries(configDir);
+  return dropHooksPath ? entries.filter(([key]) => key !== "core.hooksPath") : entries;
 }
 //@ chunk-hm0ce8vc.js:73856-73939 placement
 var ALLOWED_SIGNING_PROGRAMS = {
@@ -404,11 +417,11 @@ var ALLOWED_SIGNING_PROGRAMS = {
   sshKeygen: "/usr/bin/ssh-keygen",
 };
 //@ chunk-hm0ce8vc.js:73939-74044 placement
-function lifecycleHookGitConfig(operatorGitSnapshot, hookGitPrograms = ALLOWED_SIGNING_PROGRAMS) {
+function lifecycleHookGitConfig(snapshot, paths = ALLOWED_SIGNING_PROGRAMS) {
   return [
-    hooksPathEntry(operatorGitSnapshot),
+    hooksPathEntry(snapshot),
     ...LIFECYCLE_HOOK_GIT_NEUTRAL_PINS,
-    ...lifecycleHookGpgProgramPins(hookGitPrograms, true),
+    ...lifecycleHookGpgProgramPins(paths, true),
     ["commit.gpgsign", "false"],
     ["tag.gpgsign", "false"],
   ];
@@ -417,176 +430,176 @@ function lifecycleHookGitConfig(operatorGitSnapshot, hookGitPrograms = ALLOWED_S
 /**
  * 校验并写入 launcher_hooks 脚本；失败时整组丢弃。
  */
-async function installLauncherHooks(e, hooks, r, s) {
-  let a = validateLauncherHooks(hooks);
-  if (a !== undefined) {
-    s(
-      `[runner:session] launcher_hooks validation failed \u2014 dropping (CCR deploy regression, session continues without CCR-supplied hooks): ${a}`,
+async function installLauncherHooks(configDir, hooks, writtenPaths, onStatus) {
+  let validationError = validateLauncherHooks(hooks);
+  if (validationError !== undefined) {
+    onStatus(
+      `[runner:session] launcher_hooks validation failed \u2014 dropping (CCR deploy regression, session continues without CCR-supplied hooks): ${validationError}`,
     );
     logFeatureBad("self_hosted_launcher_hooks", "self_hosted_launcher_hooks_validation_failed");
     return;
   }
-  let o = {};
-  if (!(await isHooksDirSafe(e, s))) {
+  let hooksByEvent = {};
+  if (!(await isHooksDirSafe(configDir, onStatus))) {
     logFeatureBad("self_hosted_launcher_hooks", "self_hosted_launcher_hooks_hooksdir_not_plain_dir");
     return;
   }
-  let l = join(e, "hooks", ".ccr-launcher");
+  let launcherHooksDir = join(configDir, "hooks", ".ccr-launcher");
   await withFsOpTimeout(
-    rm(l, {
+    rm(launcherHooksDir, {
       recursive: true,
       force: true,
     }),
-    `rm ${l}`,
+    `rm ${launcherHooksDir}`,
   );
   await withFsOpTimeout(
-    mkdir(l, {
+    mkdir(launcherHooksDir, {
       recursive: true,
       mode: 448,
     }),
-    `mkdir ${l}`,
+    `mkdir ${launcherHooksDir}`,
   );
-  for (let u of hooks) {
-    let h = join(l, u.filename);
-    r.push(h);
-    await withFsOpTimeout(unlink(h), `unlink ${h}`).catch(() => {});
+  for (let hook of hooks) {
+    let hookPath = join(launcherHooksDir, hook.filename);
+    writtenPaths.push(hookPath);
+    await withFsOpTimeout(unlink(hookPath), `unlink ${hookPath}`).catch(() => {});
     await withFsOpTimeout(
-      writeFile(h, u.script, {
+      writeFile(hookPath, hook.script, {
         flag: "wx",
         mode: 448,
       }),
-      `writeFile ${h}`,
+      `writeFile ${hookPath}`,
     );
-    (o[u.event] ??= []).push({
+    (hooksByEvent[hook.event] ??= []).push({
       matcher: "",
       hooks: [
         {
           type: "command",
-          command: h,
+          command: hookPath,
           args: [],
         },
       ],
     });
   }
-  return o;
+  return hooksByEvent;
 }
 //@ chunk-hm0ce8vc.js:74834-75731 placement
 /**
  * 把服务器的 auto mode 列表写成 launcher-settings.json（超过 --settings 文件大小上限则不应用）。
  */
-async function writeLauncherSettings(sessionClaudeConfigDir, n, r, onDebug, onStatus) {
-  let o =
-    !Array.isArray(n.hooks) || n.hooks.length > 0
-      ? await installLauncherHooks(sessionClaudeConfigDir, n.hooks, r, onStatus)
+async function writeLauncherSettings(configDir, launcherConfig, writtenPaths, onDebug, onStatus) {
+  let hooksByEvent =
+    !Array.isArray(launcherConfig.hooks) || launcherConfig.hooks.length > 0
+      ? await installLauncherHooks(configDir, launcherConfig.hooks, writtenPaths, onStatus)
       : undefined;
-  let autoMode = n.autoMode;
-  let u = jsonStringify(
+  let autoMode = launcherConfig.autoMode;
+  let settingsJson = jsonStringify(
     {
-      hooks: o,
+      hooks: hooksByEvent,
       autoMode,
     },
     null,
     2,
   );
-  if (autoMode !== undefined && Buffer.byteLength(u, "utf8") > MAX_SETTINGS_JSON_BYTES) {
+  if (autoMode !== undefined && Buffer.byteLength(settingsJson, "utf8") > MAX_SETTINGS_JSON_BYTES) {
     onStatus(
       `[runner:warn] the server's auto mode lists would take launcher-settings.json past the ${MAX_SETTINGS_JSON_BYTES}-byte limit on a --settings file, so none of them apply in this session. Launcher hooks are unaffected (a server-side fault: nothing on this runner needs changing)`,
     );
     autoMode = undefined;
-    u = jsonStringify(
+    settingsJson = jsonStringify(
       {
-        hooks: o,
+        hooks: hooksByEvent,
       },
       null,
       2,
     );
   }
-  if (o === undefined && autoMode === undefined) return;
-  let h = join(sessionClaudeConfigDir, "launcher-settings.json");
-  r.push(h);
-  await withFsOpTimeout(unlink(h), `unlink ${h}`).catch(() => {});
+  if (hooksByEvent === undefined && autoMode === undefined) return;
+  let settingsPath = join(configDir, "launcher-settings.json");
+  writtenPaths.push(settingsPath);
+  await withFsOpTimeout(unlink(settingsPath), `unlink ${settingsPath}`).catch(() => {});
   await withFsOpTimeout(
-    writeFile(h, u, {
+    writeFile(settingsPath, settingsJson, {
       flag: "wx",
       mode: 384,
     }),
-    `writeFile ${h}`,
+    `writeFile ${settingsPath}`,
   );
   onDebug(
-    `[runner:session] Wrote ${h} (${o === undefined ? "no" : Object.keys(o).length} launcher hook event(s), autoMode block ${autoMode === undefined ? "absent" : "present"})`,
+    `[runner:session] Wrote ${settingsPath} (${hooksByEvent === undefined ? "no" : Object.keys(hooksByEvent).length} launcher hook event(s), autoMode block ${autoMode === undefined ? "absent" : "present"})`,
   );
   return {
-    settingsPath: h,
-    hooksRegistered: o !== undefined,
+    settingsPath,
+    hooksRegistered: hooksByEvent !== undefined,
     autoModeWritten: autoMode !== undefined,
   };
 }
 //@ chunk-hm0ce8vc.js:75731-75912 placement
-async function writeBestEffort(debugTokenDir, n, r, onStatus) {
+async function writeBestEffort(debugTokenDir, fileName, contents, onStatus) {
   try {
     await mkdir(debugTokenDir, {
       recursive: true,
       mode: 448,
     });
-    await writeFile(`${debugTokenDir}/${n}`, r, {
+    await writeFile(`${debugTokenDir}/${fileName}`, contents, {
       mode: 384,
     });
   } catch (error) {
-    onStatus(`[runner:debug] failed to write ${n} to ${debugTokenDir} (best-effort): ${error}`);
+    onStatus(`[runner:debug] failed to write ${fileName} to ${debugTokenDir} (best-effort): ${error}`);
   }
 }
 //@ chunk-hm0ce8vc.js:75912-75980 placement
-function getToolServerConfigDir(baseDir, n) {
-  return join(baseDir, "_sessions", `${n}.tool-server-config`);
+function getToolServerConfigDir(baseDir, sessionId) {
+  return join(baseDir, "_sessions", `${sessionId}.tool-server-config`);
 }
 //@ chunk-hm0ce8vc.js:75980-76043 placement
-function getSessionClaudeConfigDir(baseDir, n) {
-  return join(baseDir, "_sessions", `${n}.claude-config`);
+function getSessionClaudeConfigDir(baseDir, sessionId) {
+  return join(baseDir, "_sessions", `${sessionId}.claude-config`);
 }
 //@ chunk-hm0ce8vc.js:76043-76104 placement
-function getIngressTokenTempPrefix(e, n) {
-  return join(e, `.session_ingress_token.e${n}`);
+function getIngressTokenTempPrefix(baseDir, epoch) {
+  return join(baseDir, `.session_ingress_token.e${epoch}`);
 }
 //@ chunk-hm0ce8vc.js:76104-76164 placement
 /**
  * 是否为不小于 1 的整数。
  */
-function isPositiveInteger(e) {
-  return e !== undefined && Number.isInteger(e) && e >= 1;
+function isPositiveInteger(value) {
+  return value !== undefined && Number.isInteger(value) && value >= 1;
 }
 //@ chunk-hm0ce8vc.js:76164-76197 placement
 /**
  * 是否为大于 1 的正整数。
  */
-function isGreaterThanOne(e) {
-  return isPositiveInteger(e) && e > 1;
+function isGreaterThanOne(value) {
+  return isPositiveInteger(value) && value > 1;
 }
 //@ chunk-hm0ce8vc.js:76197-76544 placement
 /**
  * 写会话 ingress 令牌文件（staged-file 方式）。
  */
 async function writeSessionIngressTokenFile(
-  e,
-  n,
+  tokenPath,
+  token,
   onStatus,
-  s,
+  onStuck,
   tokenFileOpTimeoutMs = INGRESS_TOKEN_FILE_TIMEOUT_MS,
 ) {
   try {
     await withStuckTimeout(
-      mkdir(dirname(e), {
+      mkdir(dirname(tokenPath), {
         recursive: true,
         mode: 448,
       }),
       tokenFileOpTimeoutMs,
       "[runner:session] mkdir for session-ingress token file",
-      s,
+      onStuck,
     );
     await withStuckTimeout(
-      writeFileAtomic(e, n, 384),
+      writeFileAtomic(tokenPath, token, 384),
       tokenFileOpTimeoutMs,
       "[runner:session] write session-ingress token file",
-      s,
+      onStuck,
     );
     return true;
   } catch (error) {
@@ -597,22 +610,22 @@ async function writeSessionIngressTokenFile(
   }
 }
 //@ chunk-hm0ce8vc.js:76544-76688 placement
-async function withStuckTimeout(e, n, r, s) {
-  let a = false;
-  e.then(
+async function withStuckTimeout(promise, timeoutMs, label, onStuck) {
+  let isSettled = false;
+  promise.then(
     () => {
-      a = true;
+      isSettled = true;
     },
     () => {
-      a = true;
+      isSettled = true;
     },
   );
   try {
-    return await withBoundedTimeout(e, n, r);
+    return await withBoundedTimeout(promise, timeoutMs, label);
   } catch (error) {
-    if (!a)
-      s?.(
-        e.then(
+    if (!isSettled)
+      onStuck?.(
+        promise.then(
           () => {},
           () => {},
         ),
@@ -625,49 +638,50 @@ async function withStuckTimeout(e, n, r, s) {
  * 删除会话 ingress 令牌文件并清扫残留临时文件。
  */
 async function cleanupSessionIngressTokenFiles(
-  e,
+  tokenPath,
   onStatus,
-  r,
+  onStuck,
   tokenFileOpTimeoutMs = INGRESS_TOKEN_FILE_TIMEOUT_MS,
 ) {
   try {
     await withStuckTimeout(
-      unlink(e),
+      unlink(tokenPath),
       tokenFileOpTimeoutMs,
       "[runner:session] unlink session-ingress token file",
-      r,
+      onStuck,
     );
   } catch (error) {
     if (!isENOENT(error)) onStatus(`[runner:session] session-ingress token file cleanup failed: ${error}`);
   }
-  let match = /\.session_ingress_token\.e(\d+)$/.exec(e);
+  let match = /\.session_ingress_token\.e(\d+)$/.exec(tokenPath);
   if (!match) {
     onStatus("[runner:session] token temp sweep skipped: target path has no parseable epoch");
     return;
   }
-  let o = Number(match[1]);
-  let l = dirname(e);
+  let targetEpoch = Number(match[1]);
+  let dir = dirname(tokenPath);
   try {
-    let u = await withStuckTimeout(
-      readdir(l),
+    let entries = await withStuckTimeout(
+      readdir(dir),
       tokenFileOpTimeoutMs,
       "[runner:session] readdir for token temp sweep",
-      r,
+      onStuck,
     );
-    for (let h of u) {
-      if (!h.startsWith(".session_ingress_token.")) continue;
-      let match = /^\.session_ingress_token\.e(\d+)\.tmp\./.exec(h);
+    for (let entry of entries) {
+      if (!entry.startsWith(".session_ingress_token.")) continue;
+      let match = /^\.session_ingress_token\.e(\d+)\.tmp\./.exec(entry);
       if (!match) {
-        if (h.includes(".tmp.")) onStatus("[runner:session] token temp sweep skipped an unparseable sibling");
+        if (entry.includes(".tmp."))
+          onStatus("[runner:session] token temp sweep skipped an unparseable sibling");
         continue;
       }
-      if (Number(match[1]) > o) continue;
+      if (Number(match[1]) > targetEpoch) continue;
       try {
         await withStuckTimeout(
-          unlink(join(l, h)),
+          unlink(join(dir, entry)),
           tokenFileOpTimeoutMs,
           "[runner:session] unlink token temp file",
-          r,
+          onStuck,
         );
       } catch (error) {
         if (!isENOENT(error)) onStatus(`[runner:session] token temp sweep failed for a sibling: ${error}`);
@@ -701,19 +715,19 @@ var LAUNCHER_ONLY_FLAGS = new Set([
   "tmux",
 ]);
 //@ chunk-hm0ce8vc.js:77907-78089 placement
-async function serializeByKey(canonicalLocks, n, r) {
-  let s = canonicalLocks.get(n) ?? Promise.resolve();
-  let a;
+async function serializeByKey(canonicalLocks, key, fn) {
+  let previous = canonicalLocks.get(key) ?? Promise.resolve();
+  let release;
   let promise = new Promise((resolve) => {
-    a = resolve;
+    release = resolve;
   });
-  canonicalLocks.set(n, promise);
-  await s.catch(() => {});
+  canonicalLocks.set(key, promise);
+  await previous.catch(() => {});
   try {
-    return await r();
+    return await fn();
   } finally {
-    a();
-    if (canonicalLocks.get(n) === promise) canonicalLocks.delete(n);
+    release();
+    if (canonicalLocks.get(key) === promise) canonicalLocks.delete(key);
   }
 }
 //@ chunk-hm0ce8vc.js:78089-78103 placement
@@ -737,78 +751,84 @@ var NO_SLOTS_AVAILABLE = {
  * 按种类（hook/git）并发上限执行一组任务：git 任务等待前面的 hook 任务完成，一个失败后让排队任务放弃，最终抛出优先错误或返回全部结果。
  */
 async function runWithSlots(kinds, limits, run, isPreferred = () => false) {
-  let a = {
+  let runningCounts = {
     hook: 0,
     git: 0,
   };
-  let o = {
+  let waiters = {
     hook: [],
     git: [],
   };
-  let l = [];
-  let u = [];
-  let h = [];
-  let p = [];
-  let S = async (v) => {
-    let w = kinds[v];
-    let E = false;
-    let A = () => {
-      if (!E) return;
-      E = false;
-      let K = o[w].shift();
-      if (K) K(true);
-      else a[w]--;
+  let errors = [];
+  let promises = [];
+  let finishedFlags = [];
+  let results = [];
+  let runOneSlot = async (index) => {
+    let kind = kinds[index];
+    let holdsSlot = false;
+    let leave = () => {
+      if (!holdsSlot) return;
+      holdsSlot = false;
+      let wake = waiters[kind].shift();
+      if (wake) wake(true);
+      else runningCounts[kind]--;
     };
     let take = async () => {
-      let K = false;
-      let L = w === "git" ? u.filter((oe, ge) => ge < v && kinds[ge] === "hook" && !h[ge]) : [];
-      if (L.length > 0) {
-        K = true;
-        await Promise.all(L);
+      let waitedForHook = false;
+      let pendingHooks =
+        kind === "git"
+          ? promises.filter(
+              (hookPromise, otherIndex) =>
+                otherIndex < index && kinds[otherIndex] === "hook" && !finishedFlags[otherIndex],
+            )
+          : [];
+      if (pendingHooks.length > 0) {
+        waitedForHook = true;
+        await Promise.all(pendingHooks);
       }
-      let D = l.length === 0;
-      if (D && a[w] < limits[w]) a[w]++;
-      else if (D) {
-        K = true;
-        D = await new Promise((resolve) => o[w].push(resolve));
-        if (D && l.length > 0) {
-          E = true;
-          A();
-          D = false;
+      let hasSlot = errors.length === 0;
+      if (hasSlot && runningCounts[kind] < limits[kind]) runningCounts[kind]++;
+      else if (hasSlot) {
+        waitedForHook = true;
+        hasSlot = await new Promise((resolve) => waiters[kind].push(resolve));
+        if (hasSlot && errors.length > 0) {
+          holdsSlot = true;
+          leave();
+          hasSlot = false;
         }
       }
-      if (!D) throw new SlotCancelledError();
-      E = true;
-      return K;
+      if (!hasSlot) throw new SlotCancelledError();
+      holdsSlot = true;
+      return waitedForHook;
     };
     try {
-      p[v] = await run(v, {
+      results[index] = await run(index, {
         take,
-        leave: A,
+        leave,
       });
     } catch (error) {
       if (!(error instanceof SlotCancelledError)) {
-        l.push({
-          index: v,
+        errors.push({
+          index,
           error,
         });
-        for (let L of [...o.hook, ...o.git]) L(false);
-        o.hook.length = 0;
-        o.git.length = 0;
+        for (let waiter of [...waiters.hook, ...waiters.git]) waiter(false);
+        waiters.hook.length = 0;
+        waiters.git.length = 0;
       }
     } finally {
-      A();
-      h[v] = true;
+      leave();
+      finishedFlags[index] = true;
     }
   };
-  kinds.forEach((kind, w) => {
-    u.push(S(w));
+  kinds.forEach((kind, index) => {
+    promises.push(runOneSlot(index));
   });
-  await Promise.all(u);
-  let sorted = l.sort((v, w) => v.index - w.index);
-  let y = sorted.find((v) => isPreferred(v.error)) ?? sorted[0];
-  if (y) throw y.error;
-  return p;
+  await Promise.all(promises);
+  let sorted = errors.sort((left, right) => left.index - right.index);
+  let chosen = sorted.find((failure) => isPreferred(failure.error)) ?? sorted[0];
+  if (chosen) throw chosen.error;
+  return results;
 }
 //@ chunk-hm0ce8vc.js:78996-79487 placement
 /**
@@ -818,9 +838,9 @@ class SourceRefNotFoundError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_C
   repo;
   ref;
   constructor(repo, ref) {
-    let r = ref ? `The branch '${ref}'` : "The session's branch";
+    let subject = ref ? `The branch '${ref}'` : "The session's branch";
     super(
-      `${r} couldn't be found in the remote repository ${repo}. If it was never pushed, push it. If it was deleted after a merge, restore it from its pull request. Then send a new message, or start a new session from a branch that has been pushed. (couldn't find remote ref)`,
+      `${subject} couldn't be found in the remote repository ${repo}. If it was never pushed, push it. If it was deleted after a merge, restore it from its pull request. Then send a new message, or start a new session from a branch that has been pushed. (couldn't find remote ref)`,
       "source ref not found on remote (branch deleted after merge)",
     );
     this.name = "SourceRefNotFoundError";
@@ -831,15 +851,20 @@ class SourceRefNotFoundError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_C
 //@ chunk-hm0ce8vc.js:79487-79521 placement
 var setupFailureKindSymbol = Symbol("setupFailureKind");
 //@ chunk-hm0ce8vc.js:79521-79679 placement
-function tagFailureStage(e, value) {
+function tagFailureStage(error, value) {
   try {
-    if (e !== null && typeof e === "object" && !(setupFailureKindSymbol in e) && Object.isExtensible(e))
-      Object.defineProperty(e, setupFailureKindSymbol, {
+    if (
+      error !== null &&
+      typeof error === "object" &&
+      !(setupFailureKindSymbol in error) &&
+      Object.isExtensible(error)
+    )
+      Object.defineProperty(error, setupFailureKindSymbol, {
         value,
         enumerable: false,
       });
   } catch {}
-  return e;
+  return error;
 }
 //@ chunk-hm0ce8vc.js:79679-80799 placement
 /**
@@ -901,11 +926,11 @@ var REPO_SETTINGS_REJECTION_LABELS = {
 /**
  * 把准备阶段错误归类为 SETUP_FAILURE_KIND_*（文件系统、API、网络等）。
  */
-function classifySetupFailure(e) {
-  if (e instanceof BoundedTimeoutError || isHostConfigSnapshotError(e))
+function classifySetupFailure(error) {
+  if (error instanceof BoundedTimeoutError || isHostConfigSnapshotError(error))
     return "SETUP_FAILURE_KIND_FILESYSTEM_ERROR";
-  if (getHttpStatus(e) !== undefined) return "SETUP_FAILURE_KIND_ANTHROPIC_API_ERROR";
-  let errnoCode = getErrnoCode(e);
+  if (getHttpStatus(error) !== undefined) return "SETUP_FAILURE_KIND_ANTHROPIC_API_ERROR";
+  let errnoCode = getErrnoCode(error);
   if (errnoCode !== undefined) {
     if (FILESYSTEM_ERROR_CODES.has(errnoCode)) return "SETUP_FAILURE_KIND_FILESYSTEM_ERROR";
     if (NETWORK_ERROR_CODES.has(errnoCode)) return "SETUP_FAILURE_KIND_NETWORK_ERROR";
@@ -914,22 +939,22 @@ function classifySetupFailure(e) {
 }
 //@ chunk-hm0ce8vc.js:81095-81302 placement
 function classifySourcePrepFailure(error) {
-  let n = "SETUP_FAILURE_KIND_SOURCE_PREP_FAILED";
+  let kind = "SETUP_FAILURE_KIND_SOURCE_PREP_FAILED";
   try {
     if (
       error !== null &&
       typeof error === "object" &&
       classifySetupFailure(error) === "SETUP_FAILURE_KIND_FILESYSTEM_ERROR"
     )
-      n = "SETUP_FAILURE_KIND_FILESYSTEM_ERROR";
+      kind = "SETUP_FAILURE_KIND_FILESYSTEM_ERROR";
   } catch {}
-  return tagFailureStage(error, n);
+  return tagFailureStage(error, kind);
 }
 //@ chunk-hm0ce8vc.js:81302-81635 placement
 function setupFailureKindOf(error) {
   if (error === null || typeof error !== "object") return "SETUP_FAILURE_KIND_OTHER";
-  let n = error[setupFailureKindSymbol];
-  if (n !== undefined) return n;
+  let taggedKind = error[setupFailureKindSymbol];
+  if (taggedKind !== undefined) return taggedKind;
   if (error instanceof RepoSettingsRejectedError) return REPO_SETTINGS_REJECTION_LABELS[error.entry.kind];
   if (error instanceof SourceRefNotFoundError) return "SETUP_FAILURE_KIND_SOURCE_REF_NOT_FOUND";
   if (error instanceof CheckoutHookFailedError) return "SETUP_FAILURE_KIND_SOURCE_PREP_FAILED";
@@ -939,7 +964,7 @@ function setupFailureKindOf(error) {
 /**
  * --remove-session-state：把会话目录改名为 .removing- 后删除。
  */
-async function removeSessionState(e) {
+async function removeSessionState(options) {
   let {
     sessionId,
     targets,
@@ -947,54 +972,60 @@ async function removeSessionState(e) {
     timeoutMs = LAUNCHER_HOOK_DEFAULT_TIMEOUT_MS,
     label = "--remove-session-state",
     noDeleteInPlace = false,
-  } = e;
-  let u = [];
+  } = options;
+  let removed = [];
   await Promise.allSettled(
     targets.map(async (target) => {
-      let p = join(dirname(target.path), `.removing-${basename(target.path)}-${randomUUID()}`);
-      let S = p;
-      let T = noDeleteInPlace ? retryFsOpLong(target.path, p, rename) : rename(target.path, p);
-      let y = false;
-      T.then(
-        () => (y = true),
-        () => (y = true),
+      let asidePath = join(dirname(target.path), `.removing-${basename(target.path)}-${randomUUID()}`);
+      let currentPath = asidePath;
+      let renamePromise = noDeleteInPlace
+        ? retryFsOpLong(target.path, asidePath, rename)
+        : rename(target.path, asidePath);
+      let isSettled = false;
+      renamePromise.then(
+        () => (isSettled = true),
+        () => (isSettled = true),
       );
       try {
-        await withBoundedTimeout(T, timeoutMs, `rename ${target.path}`);
+        await withBoundedTimeout(renamePromise, timeoutMs, `rename ${target.path}`);
       } catch (error) {
         if (isENOENT(error)) {
-          u.push(target.path);
+          removed.push(target.path);
           return;
         }
-        if (!y || noDeleteInPlace) {
+        if (!isSettled || noDeleteInPlace) {
           onStatus(
-            `[runner:session] ${sessionId}: ${label} could not set ${target.path} aside (${error}) \u2014 left for disk recycle${y ? "" : ` (it may appear as ${p})`}`,
+            `[runner:session] ${sessionId}: ${label} could not set ${target.path} aside (${error}) \u2014 left for disk recycle${isSettled ? "" : ` (it may appear as ${asidePath})`}`,
           );
           return;
         }
-        S = target.path;
+        currentPath = target.path;
       }
       try {
         await withBoundedTimeout(
-          rm(S, {
+          rm(currentPath, {
             recursive: target.recursive,
             force: true,
             maxRetries: 3,
             retryDelay: 100,
           }),
           timeoutMs,
-          `rm ${S}`,
+          `rm ${currentPath}`,
         );
-        u.push(target.path);
+        removed.push(target.path);
       } catch (error) {
         onStatus(
-          `[runner:session] ${sessionId}: ${label} could not remove ${target.path}${S === p ? ` (set aside as ${p})` : ""} \u2014 left for disk recycle: ${error}`,
+          `[runner:session] ${sessionId}: ${label} could not remove ${target.path}${currentPath === asidePath ? ` (set aside as ${asidePath})` : ""} \u2014 left for disk recycle: ${error}`,
         );
       }
     }),
   );
-  return u;
+  return removed;
 }
+
+// The import cycle this module closes (5 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("src/services/selfHostedRunner/launcherHooks.js");
 export {
   ALLOWED_SIGNING_PROGRAMS,
   isSessionJwtFresh,

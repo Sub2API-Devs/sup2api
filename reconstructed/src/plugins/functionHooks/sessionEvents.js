@@ -39,47 +39,48 @@ import { isNonResetExitReason } from "../../entrypoints/sdk/coreSchemas.js";
 import { resetPluginState } from "./api/state.js";
 import { setSessionEndRaiser } from "../../utils/hooks.js";
 import { pluginsMatchingEvent } from "./hookDispatch.js";
-import { yvo, setSessionSendRunner } from "../../tools/SendMessageTool/deliveryResults.js";
+import { DELIVERED_RESULT, setSessionSendRunner } from "../../tools/SendMessageTool/deliveryResults.js";
 import { createCoreHandoff, awaitArrivalOrAnswer, performCoreStep } from "./sessionReceive.js";
 import { SESSION_LIVENESS_TIMEOUT_MS } from "../../services/remoteTools/awayTimings.js";
 import { SSE_CONNECT_TIMEOUT_MS } from "../../cli/transports/SSETransport.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-0sfjpx19.js:118583-118974 placement
-function collectSurfaceHandles(e) {
-  if (e === undefined || typeof e === "string" || e.type === "engine") return [];
-  if (e.type === "Button" || e.type === "Input" || e.type === "Select") {
-    let { plugin, handle } = e.press;
+function collectSurfaceHandles(node) {
+  if (node === undefined || typeof node === "string" || node.type === "engine") return [];
+  if (node.type === "Button" || node.type === "Input" || node.type === "Select") {
+    let { plugin, handle } = node.press;
     return [
       {
-        tag: e.type,
+        tag: node.type,
         plugin,
         handle,
-        element: e.props.key,
-        isAutoFocus: e.props.autoFocus === true,
-        ...(e.type !== "Button" && {
-          value: e.props.value,
+        element: node.props.key,
+        isAutoFocus: node.props.autoFocus === true,
+        ...(node.type !== "Button" && {
+          value: node.props.value,
         }),
-        ...(e.type === "Select" && {
-          options: e.props.options,
+        ...(node.type === "Select" && {
+          options: node.props.options,
         }),
       },
     ];
   }
-  return (e.children ?? []).flatMap(collectSurfaceHandles);
+  return (node.children ?? []).flatMap(collectSurfaceHandles);
 }
 //@ chunk-0sfjpx19.js:118974-119190 placement
 /**
  * 清洗 prompt.autocomplete 建议：文本去控制字符（空则丢弃），标签压成单行。
  */
 function normalizeAutocompleteSuggestions(suggestions) {
-  let n = sanitizePromptText();
+  let sanitize = sanitizePromptText();
   return suggestions.flatMap(({ text, label, description }) => {
-    let y = n(text);
+    let cleanText = sanitize(text);
     let trimmed = label?.replace(/\s+/gu, " ").trim();
-    return y === ""
+    return cleanText === ""
       ? []
       : {
-          text: y,
+          text: cleanText,
           ...(trimmed !== undefined &&
             trimmed !== "" && {
               label: trimmed,
@@ -94,88 +95,95 @@ function normalizeAutocompleteSuggestions(suggestions) {
 /**
  * 无核心时的自动补全
  */
-var autocompleteWithNoCore = (e, signal) =>
+var autocompleteWithNoCore = (request, signal) =>
   NO_CORE_AT_CHAIN_BOTTOM("prompt.autocomplete", {
     signal,
-  })(e);
+  })(request);
 //@ chunk-0sfjpx19.js:119245-119438 placement
 /**
  * 取光标前连续的非空白片段作为当前词（光标夹到文本内），无则 undefined。
  */
-function currentToken(e) {
-  let min = Math.min(Math.max(e.cursor, 0), e.text.length);
-  let r = min;
-  while (r > 0 && e.text.charAt(r - 1).trim() !== "") r -= 1;
-  return r === min
+function currentToken(draft) {
+  let min = Math.min(Math.max(draft.cursor, 0), draft.text.length);
+  let tokenStart = min;
+  while (tokenStart > 0 && draft.text.charAt(tokenStart - 1).trim() !== "") tokenStart -= 1;
+  return tokenStart === min
     ? undefined
     : {
-        text: e.text,
+        text: draft.text,
         cursor: min,
-        token: e.text.slice(r, min),
-        start: r,
+        token: draft.text.slice(tokenStart, min),
+        start: tokenStart,
       };
 }
 //@ chunk-0sfjpx19.js:119438-119479 placement
-var cXe = Object.freeze({
-  kind: "composer",
+var COMPOSER_EDIT_ORIGIN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0sfjpx19.js:119438", () => {
+  COMPOSER_EDIT_ORIGIN = Object.freeze({
+    kind: "composer",
+  });
 });
 //@ chunk-0sfjpx19.js:119479-119745 placement
-function applyEditKeepingCursor(e, n) {
+function applyEditKeepingCursor(draft, edit) {
   let { text } = applyTextInsertion({
-    origin: cXe,
-    text: e.text,
-    cursor: e.cursor,
-    ...n,
+    origin: COMPOSER_EDIT_ORIGIN,
+    text: draft.text,
+    cursor: draft.cursor,
+    ...edit,
   });
-  let s = n.inputText.length - (n.end - n.start);
-  let h = e.cursor >= n.end;
-  let y = !h && e.cursor > n.start;
-  let _ = h ? e.cursor + s : y ? n.start + n.inputText.length : e.cursor;
+  let deltaChars = edit.inputText.length - (edit.end - edit.start);
+  let cursorAfterEdit = draft.cursor >= edit.end;
+  let cursorInsideEdit = !cursorAfterEdit && draft.cursor > edit.start;
+  let nextCursor = cursorAfterEdit
+    ? draft.cursor + deltaChars
+    : cursorInsideEdit
+      ? edit.start + edit.inputText.length
+      : draft.cursor;
   return {
     text,
-    cursor: Math.max(0, Math.min(_, text.length)),
+    cursor: Math.max(0, Math.min(nextCursor, text.length)),
   };
 }
 //@ chunk-0sfjpx19.js:119745-119826 placement
 /**
  * 把光标夹到文本内
  */
-var clampCursor = (e) => ({
-  text: e.text,
-  cursor: Math.max(0, Math.min(e.cursor, e.text.length)),
+var clampCursor = (draft) => ({
+  text: draft.text,
+  cursor: Math.max(0, Math.min(draft.cursor, draft.text.length)),
 });
 //@ chunk-0sfjpx19.js:119826-119868 placement
 /**
  * 光标移到末尾
  */
-var cursorAtEnd = (e) => ({
-  ...e,
-  cursor: e.text.length,
+var cursorAtEnd = (draft) => ({
+  ...draft,
+  cursor: draft.text.length,
 });
 //@ chunk-0sfjpx19.js:119868-120020 placement
-function summarizeEditBatch(e) {
-  let [n] = e;
-  let r = n?.before ?? {
+function summarizeEditBatch(batch) {
+  let [firstEdit] = batch;
+  let before = firstEdit?.before ?? {
     text: "",
     cursor: 0,
   };
-  let after = e.at(-1)?.after ?? r;
-  let h = e.length === 1 && n?.key !== undefined;
+  let after = batch.at(-1)?.after ?? before;
+  let isSingleKeyed = batch.length === 1 && firstEdit?.key !== undefined;
   return {
-    before: r,
+    before,
     after,
-    ...(h && {
-      key: n.key,
+    ...(isSingleKeyed && {
+      key: firstEdit.key,
     }),
   };
 }
 //@ chunk-0sfjpx19.js:120020-120132 placement
-var sameEdit = (e, n) =>
-  e.text === n.text &&
-  e.cursor === n.cursor &&
-  e.start === n.start &&
-  e.end === n.end &&
-  e.inputText === n.inputText;
+var sameEdit = (a, b) =>
+  a.text === b.text &&
+  a.cursor === b.cursor &&
+  a.start === b.start &&
+  a.end === b.end &&
+  a.inputText === b.inputText;
 //@ chunk-0sfjpx19.js:120132-120214 placement
 /**
  * prompt.edit 核心步骤
@@ -184,15 +192,15 @@ var editCoreStep = (promptEditEvent, after) => ({
   name: "core",
   isCore: true,
   budgetMs: 0,
-  run: async (r) => (sameEdit(r, promptEditEvent) ? after : applyTextInsertion(r)),
+  run: async (request) => (sameEdit(request, promptEditEvent) ? after : applyTextInsertion(request)),
 });
 //@ chunk-0sfjpx19.js:120214-120432 placement
 function describeEditKey(key) {
-  let n = [...key.key].length === 1;
-  let r = key.name !== "" && !n;
-  if (!n && !r) return;
-  let s = key.key === " ";
-  let key_2 = r ? key.name : s ? "space" : key.key;
+  let isSingleChar = [...key.key].length === 1;
+  let isNamedKey = key.name !== "" && !isSingleChar;
+  if (!isSingleChar && !isNamedKey) return;
+  let isSpace = key.key === " ";
+  let key_2 = isNamedKey ? key.name : isSpace ? "space" : key.key;
   return Object.freeze({
     key: key_2,
     ...(key.ctrl && {
@@ -210,178 +218,183 @@ function describeEditKey(key) {
 /**
  * 编辑键参数
  */
-function editKeyArgs(e) {
-  let n = e.key === undefined ? undefined : describeEditKey(e.key);
-  return n === undefined
+function editKeyArgs(options) {
+  let keyInfo = options.key === undefined ? undefined : describeEditKey(options.key);
+  return keyInfo === undefined
     ? {}
     : {
-        key: n,
+        key: keyInfo,
       };
 }
 //@ chunk-0sfjpx19.js:120514-120577 placement
 /**
  * 连续满足的次数
  */
-function countUntilFalse(e, n) {
-  let r = 0;
-  for (; r < e; r += 1) if (!n(r)) break;
-  return r;
+function countUntilFalse(limit, isSame) {
+  let count = 0;
+  for (; count < limit; count += 1) if (!isSame(count)) break;
+  return count;
 }
 //@ chunk-0sfjpx19.js:120577-120983 placement
 /**
  * 比较两段文本（以光标限定公共前缀），求出最小替换区间 {start, end, inputText}。
  */
-function diffTextEdit(e, n) {
-  if (e.text === n.text)
+function diffTextEdit(before, after) {
+  if (before.text === after.text)
     return {
-      start: n.cursor,
-      end: n.cursor,
+      start: after.cursor,
+      end: after.cursor,
       inputText: "",
     };
-  let r = countUntilFalse(
-    Math.min(e.cursor, n.cursor, e.text.length, n.text.length),
-    (h) => e.text.charCodeAt(h) === n.text.charCodeAt(h),
+  let prefixLen = countUntilFalse(
+    Math.min(before.cursor, after.cursor, before.text.length, after.text.length),
+    (offset) => before.text.charCodeAt(offset) === after.text.charCodeAt(offset),
   );
-  let s = countUntilFalse(
-    Math.min(e.text.length, n.text.length) - r,
-    (h) => e.text.charCodeAt(e.text.length - 1 - h) === n.text.charCodeAt(n.text.length - 1 - h),
+  let suffixLen = countUntilFalse(
+    Math.min(before.text.length, after.text.length) - prefixLen,
+    (offset) =>
+      before.text.charCodeAt(before.text.length - 1 - offset) ===
+      after.text.charCodeAt(after.text.length - 1 - offset),
   );
   return {
-    start: r,
-    end: e.text.length - s,
-    inputText: n.text.slice(r, n.text.length - s),
+    start: prefixLen,
+    end: before.text.length - suffixLen,
+    inputText: after.text.slice(prefixLen, after.text.length - suffixLen),
   };
 }
 //@ chunk-0sfjpx19.js:120983-121086 placement
-var toPromptEditEvent = (e) => ({
-  origin: cXe,
-  ...editKeyArgs(e),
-  text: e.before.text,
-  cursor: e.before.cursor,
-  ...diffTextEdit(e.before, e.after),
+var toPromptEditEvent = (batch) => ({
+  origin: COMPOSER_EDIT_ORIGIN,
+  ...editKeyArgs(batch),
+  text: batch.before.text,
+  cursor: batch.before.cursor,
+  ...diffTextEdit(batch.before, batch.after),
 });
 //@ chunk-0sfjpx19.js:121086-121190 placement
 /**
  * 对一批输入编辑触发 prompt.edit 钩子链，核心处理器在未改写时保持原结果。
  */
-function dispatchPromptEdit(e, signal) {
-  let promptEditEvent = toPromptEditEvent(e);
+function dispatchPromptEdit(batch, signal) {
+  let promptEditEvent = toPromptEditEvent(batch);
   return NO_CORE_AT_CHAIN_BOTTOM("prompt.edit", {
     signal,
     core: {
-      "prompt.edit": editCoreStep(promptEditEvent, e.after),
+      "prompt.edit": editCoreStep(promptEditEvent, batch.after),
     },
   })(promptEditEvent);
 }
 //@ chunk-0sfjpx19.js:121190-121396 placement
-function rebaseEdit(e, n) {
-  if ((n.start === n.end && n.inputText === "") || e.end <= n.start) return e;
-  let s = n.inputText.length - (n.end - n.start);
-  if (!(n.end <= e.start)) return;
+function rebaseEdit(edit, applied) {
+  if ((applied.start === applied.end && applied.inputText === "") || edit.end <= applied.start) return edit;
+  let deltaChars = applied.inputText.length - (applied.end - applied.start);
+  if (!(applied.end <= edit.start)) return;
   return {
-    start: e.start + s,
-    end: e.end + s,
-    inputText: e.inputText,
+    start: edit.start + deltaChars,
+    end: edit.end + deltaChars,
+    inputText: edit.inputText,
   };
 }
 //@ chunk-0sfjpx19.js:121396-121699 placement
 /**
  * 根据钩子改写结果与当前草稿计算新的输入框状态；草稿已移动无法套用时给出原因。
  */
-function resolveEditedBox(after, n, r) {
-  if (n.text === after.text && n.cursor === after.cursor) return {};
-  if (r.text === after.text && r.cursor === after.cursor)
+function resolveEditedBox(after, hookedBox, liveBox) {
+  if (hookedBox.text === after.text && hookedBox.cursor === after.cursor) return {};
+  if (liveBox.text === after.text && liveBox.cursor === after.cursor)
     return {
-      box: clampCursor(n),
+      box: clampCursor(hookedBox),
     };
-  let y = diffTextEdit(after, r);
-  let b = y.end - y.start === after.text.length ? undefined : rebaseEdit(diffTextEdit(after, n), y);
-  if (b === undefined)
+  let liveEdit = diffTextEdit(after, liveBox);
+  let rebased =
+    liveEdit.end - liveEdit.start === after.text.length
+      ? undefined
+      : rebaseEdit(diffTextEdit(after, hookedBox), liveEdit);
+  if (rebased === undefined)
     return {
       reason: "a rewrite no longer fits the draft (it moved meanwhile)",
     };
   return {
-    box: applyEditKeepingCursor(r, b),
+    box: applyEditKeepingCursor(liveBox, rebased),
   };
 }
 //@ chunk-0sfjpx19.js:121699-122470 placement
 /**
  * 应用 prompt.edit 钩子对草稿的改写（草稿已变或用户正在输入时放弃）。
  */
-function applyPromptEdit(e) {
-  let raise = e.raise ?? dispatchPromptEdit;
-  let later = e.later ?? queueMicrotask;
-  let s = e.report ?? ((T) => logForDebugging(T));
+function applyPromptEdit(options) {
+  let raise = options.raise ?? dispatchPromptEdit;
+  let later = options.later ?? queueMicrotask;
+  let report = options.report ?? ((message) => logForDebugging(message));
   let abortController = new AbortController();
-  let y = false;
-  let _ = [];
-  let b;
-  let k = false;
-  function w() {
-    k = false;
-    if (_.length === 0 || b !== undefined) return;
-    let T = summarizeEditBatch(_);
-    _ = [];
-    b = T;
-    raise(T, abortController.signal).then(
-      (D) => S(T, D),
+  let isHookRecording = false;
+  let pendingEdits = [];
+  let inFlight;
+  let isFlushScheduled = false;
+  function flush() {
+    isFlushScheduled = false;
+    if (pendingEdits.length === 0 || inFlight !== undefined) return;
+    let batch = summarizeEditBatch(pendingEdits);
+    pendingEdits = [];
+    inFlight = batch;
+    raise(batch, abortController.signal).then(
+      (answer) => applyAnswer(batch, answer),
       (error) => {
-        s(`prompt.edit: ${errorMessage(error)}; the editor's edit stands`);
-        S(T, T.after);
+        report(`prompt.edit: ${errorMessage(error)}; the editor's edit stands`);
+        applyAnswer(batch, batch.after);
       },
     );
   }
-  function S(T, D) {
-    b = undefined;
+  function applyAnswer(batch, box) {
+    inFlight = undefined;
     if (abortController.signal.aborted) return;
-    let editedBox = resolveEditedBox(T.after, D, e.read());
+    let editedBox = resolveEditedBox(batch.after, box, options.read());
     if (editedBox.box !== undefined) {
-      let before = cursorAtEnd(e.read());
-      e.commit(editedBox.box);
-      e.carryLayers?.({
+      let before = cursorAtEnd(options.read());
+      options.commit(editedBox.box);
+      options.carryLayers?.({
         before,
-        after: cursorAtEnd(e.read()),
+        after: cursorAtEnd(options.read()),
       });
     } else if (editedBox.reason !== undefined)
-      s(`prompt.edit: ${editedBox.reason}; the person's typing stands`);
-    if (e.read().text === D.text) e.paint?.(D.decorations, D.text);
-    w();
+      report(`prompt.edit: ${editedBox.reason}; the person's typing stands`);
+    if (options.read().text === box.text) options.paint?.(box.decorations, box.text);
+    flush();
   }
   return {
-    isRecording: () => y,
-    record: (T) => {
-      e.carry?.(T);
-      _.push(T);
-      if (!k && b === undefined) {
-        k = true;
-        later(w);
+    isRecording: () => isHookRecording,
+    record: (edit) => {
+      options.carry?.(edit);
+      pendingEdits.push(edit);
+      if (!isFlushScheduled && inFlight === undefined) {
+        isFlushScheduled = true;
+        later(flush);
       }
     },
-    setHooked: (T) => {
-      y = T;
+    setHooked: (isHooked) => {
+      isHookRecording = isHooked;
     },
     dispose: () => {
-      _ = [];
+      pendingEdits = [];
       abortController.abort();
     },
   };
 }
 //@ chunk-0sfjpx19.js:122470-122745 placement
-async function raiseSessionAttach(e, n) {
+async function raiseSessionAttach(client, answers) {
   if (
     !clientRegistry.attach({
-      ...e,
+      ...client,
       attachedAt: Date.now(),
-      ...(n !== undefined && {
-        answers: n,
+      ...(answers !== undefined && {
+        answers,
       }),
     })
   )
     return false;
-  logForDebugging(`session.attach: ${e.clientId} on ${e.surface}`);
+  logForDebugging(`session.attach: ${client.clientId} on ${client.surface}`);
   try {
     await commandSetSignalA.get();
-    await eventCallersWrapper().session.attach(e);
+    await eventCallersWrapper().session.attach(client);
   } catch (error) {
     logForDebugging(`session.attach: failed: ${errorMessage(error)}`, {
       level: "error",
@@ -397,23 +410,23 @@ var defaultScopeKey = (surface) => `${surface}:default`;
 //@ chunk-0sfjpx19.js:122773-122789 placement
 var DETACH = "detach";
 //@ chunk-0sfjpx19.js:122789-123047 placement
-async function raiseSessionDetach(clientId, n, r) {
-  let s = clientRegistry.detach(clientId);
-  if (s === undefined) return;
-  logForDebugging(`session.detach: ${clientId} (${n})`);
+async function raiseSessionDetach(clientId, reason, rootEvent) {
+  let detached = clientRegistry.detach(clientId);
+  if (detached === undefined) return;
+  logForDebugging(`session.detach: ${clientId} (${reason})`);
   try {
     await commandSetSignalA.get();
-    await eventCallersWrapper(r).session.detach({
-      surface: s.surface,
+    await eventCallersWrapper(rootEvent).session.detach({
+      surface: detached.surface,
       clientId,
-      reason: n,
+      reason,
     });
   } catch (error) {
     logForDebugging(`session.detach: failed: ${errorMessage(error)}`, {
       level: "error",
     });
   }
-  return s;
+  return detached;
 }
 //@ chunk-0sfjpx19.js:123047-123275 placement
 /**
@@ -421,10 +434,12 @@ async function raiseSessionDetach(clientId, n, r) {
  */
 async function detachAllClients_2() {
   let flattened = (
-    await Promise.allSettled(clientRegistry.list().map((n) => raiseSessionDetach(n.clientId, DETACH)))
-  ).flatMap((n) => (n.status === "rejected" ? [n.reason] : []));
-  for (let n of flattened)
-    logForDebugging(`session.detach: failed: ${errorMessage(n)}`, {
+    await Promise.allSettled(
+      clientRegistry.list().map((client) => raiseSessionDetach(client.clientId, DETACH)),
+    )
+  ).flatMap((result) => (result.status === "rejected" ? [result.reason] : []));
+  for (let reason of flattened)
+    logForDebugging(`session.detach: failed: ${errorMessage(reason)}`, {
       level: "error",
     });
   return flattened.length;
@@ -433,52 +448,52 @@ async function detachAllClients_2() {
 /**
  * 结束所有客户端会话
  */
-async function detachAllClients(e) {
-  for (let n of clientRegistry.list()) await raiseSessionDetach(n.clientId, "end", e);
+async function detachAllClients(rootEvent) {
+  for (let client of clientRegistry.list()) await raiseSessionDetach(client.clientId, "end", rootEvent);
 }
 //@ chunk-0sfjpx19.js:123350-123705 placement
 /**
  * 为加载的插件触发 session.start（同一加载只触发一次）。
  */
-function raiseSessionStart(e, weakSet, r) {
-  for (let s of e) {
-    if (weakSet.has(s)) continue;
-    weakSet.add(s);
-    if (!s.hooks("session.start")) continue;
+function raiseSessionStart(modules, weakSet, facts) {
+  for (let mod of modules) {
+    if (weakSet.has(mod)) continue;
+    weakSet.add(mod);
+    if (!mod.hooks("session.start")) continue;
     logForDebugging(
-      `session.start: raised for ${s.name} ` +
-        (recordSessionStartLoad(s) ? "(again, the same load)" : "(loaded later)"),
+      `session.start: raised for ${mod.name} ` +
+        (recordSessionStartLoad(mod) ? "(again, the same load)" : "(loaded later)"),
     );
     Promise.resolve()
       .then(() =>
         eventCallersWrapper({
-          only: s.name,
+          only: mod.name,
         }).session.start({
           cwd: getCwd(),
-          ...r,
+          ...facts,
         }),
       )
       .catch((error) => {
-        logForDebugging(`session.start: failed for ${s.name}: ${errorMessage(error)}`, {
+        logForDebugging(`session.start: failed for ${mod.name}: ${errorMessage(error)}`, {
           level: "error",
         });
       });
   }
 }
 //@ chunk-0sfjpx19.js:123705-124155 placement
-async function describeInteractivity({ loaded, surface, isInteractive }, s) {
+async function describeInteractivity({ loaded, surface, isInteractive }, isStillCurrent) {
   await Promise.resolve(loaded).catch(() => {
     return;
   });
-  if (!s()) return;
+  if (!isStillCurrent()) return;
   logForDebugging(
     `session.start: raised (surface ${surface ?? "none"}, ${isInteractive ? "interactive" : "not interactive"})`,
   );
   let loadedModules = getPluginRegistry().loadedModules;
   let weakSet = new WeakSet(loadedModules);
   for (let loadedModule of loadedModules) recordSessionStartLoad(loadedModule);
-  workersLoadedReporter.set((_) =>
-    raiseSessionStart(_, weakSet, {
+  workersLoadedReporter.set((raisedModules) =>
+    raiseSessionStart(raisedModules, weakSet, {
       surface,
       isInteractive,
     }),
@@ -499,41 +514,42 @@ async function describeInteractivity({ loaded, surface, isInteractive }, s) {
 /**
  * 运行提及链
  */
-var runMentionChain = async (e) => (await import("./chunk-a53esm6j.js")).runPromptMentionChain(e);
+var runMentionChain = async (request) =>
+  (await import("../../engine/CONTEXT_DROPPED_NOTE.lazy.js")).runPromptMentionChain(request);
 //@ chunk-0sfjpx19.js:124235-124532 placement
-function raiseSessionAppend(e, n) {
+function raiseSessionAppend(text, hookOrigin) {
   if (
     !hasModuleHookingSite("session.append", {
       door: "queue",
     })
   )
     return;
-  let s = orderedRowSource({
+  let source = orderedRowSource({
     keep: () => {},
     rows: () => [],
     isHookable: true,
   });
   return Promise.resolve(
     appendRowsWithHooks(
-      s,
+      source,
       [
         createUserMessage({
-          content: e,
+          content: text,
         }),
       ],
       {
         door: "queue",
-        ...(n && {
-          hookOrigin: n,
+        ...(hookOrigin && {
+          hookOrigin,
         }),
       },
     ),
   ).then(
-    ([h]) => {
-      let y = h?.type === "user" ? getContentText(h.message.content) : e;
-      return y === NO_CONTENT_MESSAGE && e !== y ? "" : (y ?? "");
+    ([row]) => {
+      let nextText = row?.type === "user" ? getContentText(row.message.content) : text;
+      return nextText === NO_CONTENT_MESSAGE && text !== nextText ? "" : (nextText ?? "");
     },
-    () => e,
+    () => text,
   );
 }
 //@ chunk-0sfjpx19.js:124532-124614 placement
@@ -549,7 +565,8 @@ var usageWindowChanged = (context, context_2) =>
 /**
  * 成本是否变化
  */
-var costChanged = (e, cost) => (e ? e.usage.cost?.usd !== cost?.usd : cost !== undefined);
+var costChanged = (previous, cost) =>
+  previous ? previous.usage.cost?.usd !== cost?.usd : cost !== undefined;
 //@ chunk-0sfjpx19.js:124668-124687 placement
 /**
  * 1e-9
@@ -561,16 +578,21 @@ var NEGLIGIBLE_COST = 0.000000001;
  */
 var MIN_COST_DELTA = 1;
 //@ chunk-0sfjpx19.js:124696-124973 placement
-function rateLimitsChanged(e, n) {
-  let rateLimits = n.usage.rateLimits;
-  if (!e) return rateLimits.length > 0;
-  let s = new Map(e.usage.rateLimits.map((rateLimit) => [rateLimit.kind, rateLimit.percentUsed]));
+function rateLimitsChanged(previous, next) {
+  let rateLimits = next.usage.rateLimits;
+  if (!previous) return rateLimits.length > 0;
+  let previousPercents = new Map(
+    previous.usage.rateLimits.map((rateLimit) => [rateLimit.kind, rateLimit.percentUsed]),
+  );
   return (
-    e.limitStatus !== n.limitStatus ||
-    s.size !== rateLimits.length ||
+    previous.limitStatus !== next.limitStatus ||
+    previousPercents.size !== rateLimits.length ||
     rateLimits.some((rateLimit) => {
-      let y = s.get(rateLimit.kind);
-      return y === undefined || Math.abs(rateLimit.percentUsed - y) >= MIN_COST_DELTA - NEGLIGIBLE_COST;
+      let previousPercent = previousPercents.get(rateLimit.kind);
+      return (
+        previousPercent === undefined ||
+        Math.abs(rateLimit.percentUsed - previousPercent) >= MIN_COST_DELTA - NEGLIGIBLE_COST
+      );
     })
   );
 }
@@ -578,18 +600,21 @@ function rateLimitsChanged(e, n) {
 /**
  * 比较两次会话度量，列出变化的类别（context、rateLimits、cost）。
  */
-function changedMeasures(e, n) {
-  let r = [];
-  if (usageWindowChanged(e?.usage.context, n.usage.context)) r.push("context");
-  if (rateLimitsChanged(e, n)) r.push("rateLimits");
-  if (costChanged(e, n.usage.cost)) r.push("cost");
-  return r;
+function changedMeasures(previous, next) {
+  let changed = [];
+  if (usageWindowChanged(previous?.usage.context, next.usage.context)) changed.push("context");
+  if (rateLimitsChanged(previous, next)) changed.push("rateLimits");
+  if (costChanged(previous, next.usage.cost)) changed.push("cost");
+  return changed;
 }
 //@ chunk-0sfjpx19.js:125135-125170 placement
 /**
  * 会话度量槽
  */
-var sessionMeasureSlot = identity(createValueSlot(), (e) => e.set(undefined));
+var sessionMeasureSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0sfjpx19.js:125135", () => {
+  sessionMeasureSlot = identity(createValueSlot(), (slot) => slot.set(undefined));
+});
 //@ chunk-0sfjpx19.js:125170-125238 placement
 /**
  * 默认度量结果
@@ -602,39 +627,39 @@ var measureDefault = async () => ({
 /**
  * 并入限流信息
  */
-var withRateLimits = (e, n) => ({
+var withRateLimits = (previous, next) => ({
   usage: {
-    ...n.usage,
-    rateLimits: e.usage.rateLimits,
+    ...next.usage,
+    rateLimits: previous.usage.rateLimits,
   },
-  limitStatus: e.limitStatus,
+  limitStatus: previous.limitStatus,
 });
 //@ chunk-0sfjpx19.js:125331-125395 placement
 /**
  * 按需保留限流
  */
-function keepRateLimits(e, n, r) {
-  return !e || r.includes("rateLimits") ? n : withRateLimits(e, n);
+function keepRateLimits(previous, next, changed) {
+  return !previous || changed.includes("rateLimits") ? next : withRateLimits(previous, next);
 }
 //@ chunk-0sfjpx19.js:125395-125737 placement
-async function raiseSessionMeasure(e) {
+async function raiseSessionMeasure(trigger) {
   try {
-    let n = await measureDefault();
-    let r = sessionMeasureSlot.get();
-    let s = changedMeasures(r, n);
-    if (!(e === "turn" ? s.length > 0 : s.includes("rateLimits"))) return;
-    sessionMeasureSlot.set(keepRateLimits(r, n, s));
-    let { context, rateLimits, cost } = n.usage;
+    let measures = await measureDefault();
+    let previous = sessionMeasureSlot.get();
+    let changed = changedMeasures(previous, measures);
+    if (!(trigger === "turn" ? changed.length > 0 : changed.includes("rateLimits"))) return;
+    sessionMeasureSlot.set(keepRateLimits(previous, measures, changed));
+    let { context, rateLimits, cost } = measures.usage;
     await eventCallersWrapper().session.measure({
       context,
       rateLimits,
       ...(cost !== undefined && {
         cost,
       }),
-      changed: s,
+      changed,
     });
   } catch (error) {
-    logForDebugging(`session.measure (${e}): failed: ${errorMessage(error)}`, {
+    logForDebugging(`session.measure (${trigger}): failed: ${errorMessage(error)}`, {
       level: "warn",
     });
   }
@@ -643,25 +668,31 @@ async function raiseSessionMeasure(e) {
 /**
  * 会话结束槽
  */
-var sessionEndSlot = identity(createValueSlot(), (e) => e.set(undefined));
+var sessionEndSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0sfjpx19.js:125737", () => {
+  sessionEndSlot = identity(createValueSlot(), (slot) => slot.set(undefined));
+});
 //@ chunk-0sfjpx19.js:125772-125890 placement
-async function runMeasureLoop(e, n) {
-  let r = n;
+async function runMeasureLoop(loop, trigger) {
+  let current = trigger;
   try {
-    while (r) {
-      await raiseSessionMeasure(r);
-      r = e.next;
-      e.next = undefined;
+    while (current) {
+      await raiseSessionMeasure(current);
+      current = loop.next;
+      loop.next = undefined;
     }
   } finally {
-    if (sessionEndSlot.get() === e) sessionEndSlot.set(undefined);
+    if (sessionEndSlot.get() === loop) sessionEndSlot.set(undefined);
   }
 }
 //@ chunk-0sfjpx19.js:125890-125903 placement
 /**
  * 宿主状态槽
  */
-var hostStateSlot = createHostStateSlot();
+var hostStateSlot; // deferred: uses createHostStateSlot (./devModsStatus.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0sfjpx19.js:125890", () => {
+  hostStateSlot = createHostStateSlot();
+});
 //@ chunk-0sfjpx19.js:125903-125966 placement
 /**
  * session.measure 是否有钩子
@@ -677,30 +708,33 @@ function isSessionMeasureHooked() {
 /**
  * 合并触发 session.measure：已在度量中则排队下一次（turn 优先），否则启动循环。
  */
-var scheduleSessionMeasure = (e) => {
+var scheduleSessionMeasure = (trigger) => {
   if (!isSessionMeasureHooked()) return Promise.resolve();
-  let n = sessionEndSlot.get();
-  if (n) {
-    n.next = n.next === "turn" ? "turn" : e;
-    return n.running;
+  let loop = sessionEndSlot.get();
+  if (loop) {
+    loop.next = loop.next === "turn" ? "turn" : trigger;
+    return loop.running;
   }
-  let r = {
+  let newLoop = {
     running: Promise.resolve(),
     next: undefined,
   };
-  sessionEndSlot.set(r);
-  r.running = runMeasureLoop(r, e);
-  return r.running;
+  sessionEndSlot.set(newLoop);
+  newLoop.running = runMeasureLoop(newLoop, trigger);
+  return newLoop.running;
 };
 //@ chunk-0sfjpx19.js:126174-126182 placement
-setSessionMeasurer(scheduleSessionMeasure);
+// deferred: uses setSessionMeasurer (../../query/turnHooks.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0sfjpx19.js:126174", () => {
+  setSessionMeasurer(scheduleSessionMeasure);
+});
 //@ chunk-0sfjpx19.js:126182-126330 placement
 /**
  * 订阅限额状态变化以触发 session.measure（只订阅一次）。
  */
 function watchLimitsForMeasure() {
   if (hostStateSlot.get()) return;
-  let e = onLimitsStatusChanged(() => {
+  let release = onLimitsStatusChanged(() => {
     try {
       measureSession("limits");
     } catch (error) {
@@ -709,26 +743,26 @@ function watchLimitsForMeasure() {
       });
     }
   });
-  hostStateSlot.set(e);
-  registerCleanup(e);
+  hostStateSlot.set(release);
+  registerCleanup(release);
 }
 //@ chunk-0sfjpx19.js:126330-126600 placement
 /**
  * 会话就绪时启动函数钩子：订阅限额、设置提及运行器与追加触发器，描述交互能力（触发 session.start），只执行一次。
  */
-function startSessionHooks(e) {
-  let n = commandSetSignalA.get();
-  if (n) return n;
+function startSessionHooks(options) {
+  let existing = commandSetSignalA.get();
+  if (existing) return existing;
   watchLimitsForMeasure();
   setPromptMentionRunner(runMentionChain);
   queueRecordTextBuilder.set(raiseSessionAppend);
-  let r = new Set();
-  submitMarksSlot.set(r);
-  let s = describeInteractivity(e, () => commandSetSignalA.get() === s).finally(() => {
-    if (submitMarksSlot.get() === r) submitMarksSlot.set(undefined);
+  let marks = new Set();
+  submitMarksSlot.set(marks);
+  let started = describeInteractivity(options, () => commandSetSignalA.get() === started).finally(() => {
+    if (submitMarksSlot.get() === marks) submitMarksSlot.set(undefined);
   });
-  commandSetSignalA.set(s);
-  let h = Promise.resolve(e.loaded).then(
+  commandSetSignalA.set(started);
+  let loaded = Promise.resolve(options.loaded).then(
     () => {
       return;
     },
@@ -736,30 +770,30 @@ function startSessionHooks(e) {
       return;
     },
   );
-  commandSetSignalB.set(h);
-  trackQueueRecordChain(h);
-  return s;
+  commandSetSignalB.set(loaded);
+  trackQueueRecordChain(loaded);
+  return started;
 }
 //@ chunk-0sfjpx19.js:126600-126653 placement
 /**
  * 中止时静默
  */
-var raceWithAbortSilently = (e, n) =>
-  raceWithAbortSignal(e, n, () => new AbortError()).catch(() => {
+var raceWithAbortSilently = (promise, signal) =>
+  raceWithAbortSignal(promise, signal, () => new AbortError()).catch(() => {
     return;
   });
 //@ chunk-0sfjpx19.js:126653-126752 placement
 /**
  * session.end 核心步骤
  */
-var sessionEndCoreStep = (e) => ({
+var sessionEndCoreStep = (endSession) => ({
   name: "core",
   isCore: true,
   budgetMs: 0,
-  run: async (n) => {
-    await e();
+  run: async (request) => {
+    await endSession();
     return {
-      sessionId: n.sessionId,
+      sessionId: request.sessionId,
     };
   },
 });
@@ -783,27 +817,27 @@ function isSessionEndHooked(reason) {
 var raiseSessionEnd = async ({ reason, sessionId, boundMs, end }) => {
   await end();
   let cutAt = Date.now() + boundMs;
-  let y = AbortSignal.timeout(boundMs);
-  let _;
-  let b = () =>
-    (_ ??= isNonResetExitReason(reason)
+  let deadlineSignal = AbortSignal.timeout(boundMs);
+  let detachPromise;
+  let detachClients = () =>
+    (detachPromise ??= isNonResetExitReason(reason)
       ? detachAllClients({
-          signal: y,
+          signal: deadlineSignal,
           cutAt,
         })
       : Promise.resolve());
   try {
     if (!isSessionEndHooked(reason)) {
-      await raceWithAbortSilently(b(), y);
+      await raceWithAbortSilently(detachClients(), deadlineSignal);
       return;
     }
     try {
       await raceWithAbortSignal(
         eventCallersWrapper({
-          signal: y,
+          signal: deadlineSignal,
           cutAt,
           core: {
-            "session.end": sessionEndCoreStep(b),
+            "session.end": sessionEndCoreStep(detachClients),
           },
         }).session.end({
           reason,
@@ -812,24 +846,27 @@ var raiseSessionEnd = async ({ reason, sessionId, boundMs, end }) => {
             id: sessionId,
           },
         }),
-        y,
+        deadlineSignal,
         () => new AbortError(),
       );
     } catch (error) {
-      let w = y.aborted
+      let failureText = deadlineSignal.aborted
         ? "cut at the SessionEnd bound, the session ends regardless"
         : `failed: ${errorMessage(error)}`;
-      logForDebugging(`session.end (${reason}): ${w}`, {
+      logForDebugging(`session.end (${reason}): ${failureText}`, {
         level: "warn",
       });
     }
-    await raceWithAbortSilently(b(), y);
+    await raceWithAbortSilently(detachClients(), deadlineSignal);
   } finally {
     resetPluginState();
   }
 };
 //@ chunk-0sfjpx19.js:127375-127383 placement
-setSessionEndRaiser(raiseSessionEnd);
+// deferred: uses setSessionEndRaiser (../../utils/hooks.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0sfjpx19.js:127375", () => {
+  setSessionEndRaiser(raiseSessionEnd);
+});
 //@ chunk-0sfjpx19.js:127383-127520 placement
 var createSendOutcome = (coreHandoff) => ({
   delivered: () =>
@@ -850,17 +887,17 @@ var SEND_NOT_DELIVERED_MESSAGE =
 /**
  * 触发 session.send：钩子可改写、拒绝或自行投递消息。
  */
-async function raiseSessionSend(e) {
-  let { raised, signalOf, skipping } = e;
-  let { text, ...y } = raised;
-  let _ = pluginsMatchingEvent("session.send", y, skipping);
-  if (_.length === 0)
+async function raiseSessionSend(request) {
+  let { raised, signalOf, skipping } = request;
+  let { text, ...rest } = raised;
+  let matchers = pluginsMatchingEvent("session.send", rest, skipping);
+  if (matchers.length === 0)
     return {
       send: raised,
-      delivering: yvo,
+      delivering: DELIVERED_RESULT,
     };
   let coreHandoff = createCoreHandoff(SEND_NOT_DELIVERED_MESSAGE);
-  let k = await awaitArrivalOrAnswer(
+  let outcome = await awaitArrivalOrAnswer(
     coreHandoff,
     eventCallersWrapper({
       signal: signalOf(),
@@ -870,17 +907,19 @@ async function raiseSessionSend(e) {
       },
     }).session.send(raised),
   );
-  if (!k.arrived) {
-    let { answered } = k;
-    let D = answered.isDelivered ? "a hook delivered it itself" : `refused by a hook (${answered.reason})`;
+  if (!outcome.arrived) {
+    let { answered } = outcome;
+    let whyNotSent = answered.isDelivered
+      ? "a hook delivered it itself"
+      : `refused by a hook (${answered.reason})`;
     logForDebugging(
-      `session.send to ${raised.to} (${raised.origin.kind}): ${D}; hooked by ${_.join("+")}; nothing sent`,
+      `session.send to ${raised.to} (${raised.origin.kind}): ${whyNotSent}; hooked by ${matchers.join("+")}; nothing sent`,
     );
     return {
       answered,
     };
   }
-  let arrived = k.arrived;
+  let arrived = outcome.arrived;
   if (arrived.to !== raised.to || arrived.text !== raised.text)
     logForDebugging(
       `session.send to ${raised.to} (${raised.origin.kind}): rewritten by a hook (to ${arrived.to}, ${arrived.text.length} chars)`,
@@ -891,7 +930,10 @@ async function raiseSessionSend(e) {
   };
 }
 //@ chunk-0sfjpx19.js:128279-128287 placement
-setSessionSendRunner(raiseSessionSend);
+// deferred: uses setSessionSendRunner (../../tools/SendMessageTool/deliveryResults.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0sfjpx19.js:128279", () => {
+  setSessionSendRunner(raiseSessionSend);
+});
 //@ chunk-0sfjpx19.js:128287-128300 placement
 /**
  * 15000
@@ -908,59 +950,60 @@ var SESSION_END_WAIT_MS = SESSION_LIVENESS_TIMEOUT_MS + SSE_CONNECT_TIMEOUT_MS +
  */
 var SESSION_END_HARD_CAP_MS = 300000;
 //@ chunk-0sfjpx19.js:128332-128792 placement
-function raiseViewerAbsence(e, n, r) {
-  let s;
-  let h;
-  let y = false;
-  let _ = false;
-  function b() {
-    s = undefined;
-    h = undefined;
+function raiseViewerAbsence(setHandler, isViewerPresent, onAbsent) {
+  let absenceStart;
+  let lastSeen;
+  let isRunning = false;
+  let isStopped = false;
+  function reset() {
+    absenceStart = undefined;
+    lastSeen = undefined;
   }
-  function k() {
-    y = false;
-    b();
-    e(undefined);
+  function stop() {
+    isRunning = false;
+    reset();
+    setHandler(undefined);
   }
-  function w(R) {
-    logForDebugging(`viewer absence: no viewer for ${R} ms`);
-    k();
+  function reportAbsent(absentMs) {
+    logForDebugging(`viewer absence: no viewer for ${absentMs} ms`);
+    stop();
     try {
-      r();
+      onAbsent();
     } catch (error) {
       logForDebugging(`viewer absence: failed: ${errorMessage(error)}`, {
         level: "error",
       });
     }
   }
-  function S(R) {
-    let U = h !== undefined && R - h <= SESSION_END_HARD_CAP_MS ? (s ?? R) : R;
-    s = U;
-    h = R;
-    if (R - U >= SESSION_END_WAIT_MS) w(R - U);
+  function noteBeat(now) {
+    let start =
+      lastSeen !== undefined && now - lastSeen <= SESSION_END_HARD_CAP_MS ? (absenceStart ?? now) : now;
+    absenceStart = start;
+    lastSeen = now;
+    if (now - start >= SESSION_END_WAIT_MS) reportAbsent(now - start);
   }
-  let T = (R) => (R ? b() : S(Date.now()));
-  let D = (R) => (n() ? T(R) : k());
-  let E = (R) => (y ? D(R) : undefined);
-  function N() {
-    b();
-    if (!y && !_) {
-      y = true;
-      e(E);
+  let onBeat = (isVisible) => (isVisible ? reset() : noteBeat(Date.now()));
+  let onBeatChecked = (now) => (isViewerPresent() ? onBeat(now) : stop());
+  let onBeatWhileRunning = (now) => (isRunning ? onBeatChecked(now) : undefined);
+  function heard() {
+    reset();
+    if (!isRunning && !isStopped) {
+      isRunning = true;
+      setHandler(onBeatWhileRunning);
     }
   }
-  function G() {
-    _ = true;
-    k();
+  function stopWatching() {
+    isStopped = true;
+    stop();
   }
   return {
-    heard: N,
-    stop: G,
+    heard,
+    stop: stopWatching,
   };
 }
 export {
   collectSurfaceHandles,
-  cXe,
+  COMPOSER_EDIT_ORIGIN,
   startSessionHooks,
   diffTextEdit,
   autocompleteWithNoCore,

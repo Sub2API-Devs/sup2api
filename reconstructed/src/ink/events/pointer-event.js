@@ -22,18 +22,18 @@ class PointerEvent {
   ctrl;
   fine;
   isUnreported;
-  constructor(n) {
-    this.type = n.kind;
-    this.col = n.col;
-    this.row = n.row;
-    this.localCol = n.localCol;
-    this.localRow = n.localRow;
-    this.button = n.button;
-    this.shift = n.mods.shift;
-    this.alt = n.mods.alt;
-    this.ctrl = n.mods.ctrl;
-    this.fine = n.fine;
-    this.isUnreported = n.unreported ?? false;
+  constructor(init) {
+    this.type = init.kind;
+    this.col = init.col;
+    this.row = init.row;
+    this.localCol = init.localCol;
+    this.localRow = init.localRow;
+    this.button = init.button;
+    this.shift = init.mods.shift;
+    this.alt = init.mods.alt;
+    this.ctrl = init.mods.ctrl;
+    this.fine = init.fine;
+    this.isUnreported = init.unreported ?? false;
   }
 }
 export { PointerEvent };

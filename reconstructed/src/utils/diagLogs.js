@@ -16,38 +16,43 @@ import { registerCleanup } from "./cleanupRegistry.js";
 import { getFsImplementation } from "./fsOperations.js";
 import { jsonStringify } from "./slowOperations.js";
 import { env } from "./env.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-nsfjm4vg.js:422-572 placement = propagateAbort (1)
-function propagateAbort(e, weakChild) {
-  let n = false;
-  for (let o of e) {
-    let parent = o.deref();
-    if (parent === undefined) e.delete(o);
-    else if (parent === weakChild) n = true;
+function propagateAbort(parents, weakChild) {
+  let aborted = false;
+  for (let parent of parents) {
+    let parent_2 = parent.deref();
+    if (parent_2 === undefined) parents.delete(parent);
+    else if (parent_2 === weakChild) aborted = true;
   }
-  if (n) return false;
-  e.add(new WeakRef(weakChild));
+  if (aborted) return false;
+  parents.add(new WeakRef(weakChild));
   return true;
 }
 //@ chunk-nsfjm4vg.js:572-679 placement = propagateAbort (1)
 /**
  * 取出仍存活的弱引用并清理已回收的。
  */
-function liveWeakRefs(e) {
-  let t = [];
-  for (let n of e) {
-    let parent = n.deref();
-    if (parent === undefined) e.delete(n);
-    else t.push(parent);
+function liveWeakRefs(refs) {
+  let live = [];
+  for (let ref of refs) {
+    let parent = ref.deref();
+    if (parent === undefined) refs.delete(ref);
+    else live.push(parent);
   }
-  return t;
+  return live;
 }
 //@ chunk-nsfjm4vg.js:679-696 placement
 /**
  * 标记“处于诊断作用域”的 AsyncLocalStorage。
  */
-var diagScopeStorage = new AsyncLocalStorage();
-var diagLoggingStarted = false;
+var diagScopeStorage; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var diagLoggingStarted;
+deferInit("chunk-nsfjm4vg.js:679", () => {
+  diagScopeStorage = new AsyncLocalStorage();
+  diagLoggingStarted = false;
+});
 //@ chunk-nsfjm4vg.js:696-720 placement
 /**
  * 是否开启诊断日志。
@@ -66,7 +71,10 @@ function isInDiagScope() {
 /**
  * 按进程根登记的诊断日志活引用集合。
  */
-var diagLogLiveRefs = new HostScoped(() => new Set());
+var diagLogLiveRefs; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-nsfjm4vg.js:764", () => {
+  diagLogLiveRefs = new HostScoped(() => new Set());
+});
 //@ chunk-nsfjm4vg.js:789-815 placement
 /**
  * 取出诊断日志的活引用集合。
@@ -88,15 +96,15 @@ class DiagLogWriter {
   cleanupRegistered = false;
   notStarted = [];
   appendOldest = this.appendOldestNotStarted.bind(this);
-  append(e, t) {
+  append(path, content) {
     let last = this.notStarted.at(-1);
-    if (last?.logFile === e) {
-      last.lines += t;
+    if (last?.logFile === path) {
+      last.lines += content;
       return;
     }
     this.notStarted.push({
-      logFile: e,
-      lines: t,
+      logFile: path,
+      lines: content,
     });
     this.pendingWrite = this.pendingWrite.then(this.appendOldest).catch(noopErrback);
     if (!this.cleanupRegistered) {
@@ -105,14 +113,14 @@ class DiagLogWriter {
     }
   }
   async appendOldestNotStarted() {
-    let e = this.notStarted.shift();
-    if (e === undefined) return;
+    let first = this.notStarted.shift();
+    if (first === undefined) return;
     let fsImplementation = getFsImplementation();
     try {
-      await fsImplementation.appendFile(e.logFile, e.lines);
+      await fsImplementation.appendFile(first.logFile, first.lines);
     } catch {
-      await fsImplementation.mkdir(dirname(e.logFile)).catch(noopErrback);
-      await fsImplementation.appendFile(e.logFile, e.lines);
+      await fsImplementation.mkdir(dirname(first.logFile)).catch(noopErrback);
+      await fsImplementation.appendFile(first.logFile, first.lines);
     }
   }
   flush() {
@@ -120,7 +128,10 @@ class DiagLogWriter {
   }
 }
 //@ chunk-nsfjm4vg.js:1660-1683 layout
-var diagnosticWriterByHost = new HostScoped(() => new DiagLogWriter());
+var diagnosticWriterByHost; // deferred: uses DiagLogWriter of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-nsfjm4vg.js:1660", () => {
+  diagnosticWriterByHost = new HostScoped(() => new DiagLogWriter());
+});
 //@ chunk-nsfjm4vg.js:1683-1709 layout
 function getDiagnosticWriter() {
   return onProcessRootHost(diagnosticWriterByHost);
@@ -129,27 +140,27 @@ function getDiagnosticWriter() {
 /**
  * 无 PII 的诊断日志：设置 CLAUDE_CODE_DIAGNOSTICS_FILE 时向该文件追加 JSON 行（timestamp/level/event/data），默认排队写。
  */
-function logForDiagnosticsNoPII(level, event, n, lastLineWhen = "queued") {
+function logForDiagnosticsNoPII(level, event, data, lastLineWhen = "queued") {
   let logFile = getDiagnosticLogFile_2();
   if (!logFile) return;
-  let r;
+  let line;
   try {
-    r = formatDiagnosticLine(level, event, sanitizeDiagnosticData(n));
+    line = formatDiagnosticLine(level, event, sanitizeDiagnosticData(data));
   } catch {
-    r = formatDiagnosticLine(level, event, {
+    line = formatDiagnosticLine(level, event, {
       diagnostics_payload_failed: true,
     });
   }
   if (lastLineWhen === "now")
     try {
-      getFsImplementation().appendFileSync(logFile, r);
+      getFsImplementation().appendFileSync(logFile, line);
     } catch {}
-  else getDiagnosticWriter().append(logFile, r);
+  else getDiagnosticWriter().append(logFile, line);
 }
 //@ chunk-nsfjm4vg.js:1902-2005 layout
-function sanitizeDiagnosticData(e) {
+function sanitizeDiagnosticData(data) {
   try {
-    return (typeof e === "function" ? e() : e) ?? {};
+    return (typeof data === "function" ? data() : data) ?? {};
   } catch {
     return {
       diagnostics_payload_failed: true,
@@ -161,7 +172,7 @@ function sanitizeDiagnosticData(e) {
  * 格式化诊断日志行 {timestamp, level, event, data, version…}。
  */
 function formatDiagnosticLine(level, event, data) {
-  let o = {
+  let record = {
     timestamp: new Date().toISOString(),
     level,
     event,
@@ -192,7 +203,7 @@ function formatDiagnosticLine(level, event, data) {
         : "unknown",
   };
   return (
-    jsonStringify(o) +
+    jsonStringify(record) +
     `
 `
   );

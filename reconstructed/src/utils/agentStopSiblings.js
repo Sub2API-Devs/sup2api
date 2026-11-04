@@ -28,6 +28,7 @@ import { logError } from "./log.js";
 import { logForDebugging } from "./debug.js";
 import { describeStorageError } from "./agentMetadata.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../services/analytics/featureTelemetry.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:217569-217677 placement
 var STOP_SIBLING_SUFFIXES = {
@@ -39,19 +40,19 @@ var FOLD_BACK_DELAYS_MS = [50, 50, 50, 250, 1000, 4000];
 /**
  * 构造停止标记的遥测字段（是否 observer、errno 码）。
  */
-function stopObserverTelemetryFields(e, error) {
-  let r = sanitizeErrnoTokenForTelemetry(getErrnoCode(error) ?? storageCauseErrnoCode(error));
+function stopObserverTelemetryFields(observerStatus, error) {
+  let errnoToken = sanitizeErrnoTokenForTelemetry(getErrnoCode(error) ?? storageCauseErrnoCode(error));
   return {
-    observer: e === "observerStopped",
-    ...(r && {
-      errno: r,
+    observer: observerStatus === "observerStopped",
+    ...(errnoToken && {
+      errno: errnoToken,
     }),
   };
 }
 //@ chunk-e6aww6q8.js:217772-217979 placement
 function isUnexpectedStopError(error) {
-  let n = getErrnoCode(error) ?? storageCauseErrnoCode(error);
-  if (n !== undefined) return n.startsWith("ERR_");
+  let errnoCode = getErrnoCode(error) ?? storageCauseErrnoCode(error);
+  if (errnoCode !== undefined) return errnoCode.startsWith("ERR_");
   let cause = error instanceof Error ? error.cause : undefined;
   return !(
     isStoreError(cause) &&
@@ -62,63 +63,68 @@ function isUnexpectedStopError(error) {
 /**
  * 停止标记相关的缓存表（重置时清空）。
  */
-var sleepUnref = (e) =>
-  sleep(e, undefined, {
-    unref: true,
-  });
-var stopSiblingCache = identity_2(new Map(), (e) => e.clear());
-var foldBackGeneration = identity_2(
-  {
-    passed: 0,
-  },
-  (e) => {
-    e.passed += 1;
-  },
-);
+var sleepUnref; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var stopSiblingCache;
+var foldBackGeneration;
+deferInit("chunk-e6aww6q8.js:217979", () => {
+  sleepUnref = (ms) =>
+    sleep(ms, undefined, {
+      unref: true,
+    });
+  stopSiblingCache = identity_2(new Map(), (map) => map.clear());
+  foldBackGeneration = identity_2(
+    {
+      passed: 0,
+    },
+    (foldBackState) => {
+      foldBackState.passed += 1;
+    },
+  );
+});
 //@ chunk-e6aww6q8.js:218084-218120 placement
 /**
  * 读取某停止标记已写入的次数。
  */
-function readStopSiblingCount(e) {
-  return stopSiblingCache.get(e) ?? 0;
+function readStopSiblingCount(sessionId) {
+  return stopSiblingCache.get(sessionId) ?? 0;
 }
 //@ chunk-e6aww6q8.js:218120-218178 placement
 /**
  * 由元数据文件路径推出对应的停止标记路径。
  */
-function stopSiblingPath(e, n) {
-  return e.replace(/\.meta\.json$/, STOP_SIBLING_SUFFIXES[n]);
+function stopSiblingPath(path, index) {
+  return path.replace(/\.meta\.json$/, STOP_SIBLING_SUFFIXES[index]);
 }
 //@ chunk-e6aww6q8.js:218178-218232 placement
 /**
  * 计算停止标记的存储键（启用 v5 存储时才有）。
  */
-function stopSiblingStorageKey(e, n) {
-  return isStorageV5Enabled() && n !== undefined ? pathToSessionSideKey(e) : undefined;
+function stopSiblingStorageKey(path, storage) {
+  return isStorageV5Enabled() && storage !== undefined ? pathToSessionSideKey(path) : undefined;
 }
 //@ chunk-e6aww6q8.js:218232-218638 placement
 /**
  * 写入子代理停止标记：有存储键时用存储 ifAbsent 写空内容；无盘模式报错；否则创建目录并新建空文件（已存在视为成功）。
  */
-async function writeStopSibling(e, n) {
-  let r = stopSiblingStorageKey(e, n);
-  if (n !== undefined && r !== undefined) {
-    let s = await n.write(r, "", {
+async function writeStopSibling(path, storage) {
+  let storageKey = stopSiblingStorageKey(path, storage);
+  if (storage !== undefined && storageKey !== undefined) {
+    let writeResult = await storage.write(storageKey, "", {
       precondition: {
         type: "ifAbsent",
       },
     });
-    if (!s.ok && s.error.code !== "AlreadyExists")
+    if (!writeResult.ok && writeResult.error.code !== "AlreadyExists")
       throw Error("agent stop sibling: storage write failed", {
-        cause: s.error,
+        cause: writeResult.error,
       });
     return;
   }
   if (isDiskless()) throw Error("agent stop sibling: no storage key while diskless");
-  await mkdir(dirname(e), {
+  await mkdir(dirname(path), {
     recursive: true,
   });
-  await writeNewFile(e, "").catch((error) => {
+  await writeNewFile(path, "").catch((error) => {
     if (getErrnoCode(error) !== "EEXIST") throw error;
   });
 }
@@ -126,22 +132,22 @@ async function writeStopSibling(e, n) {
 /**
  * 判断子代理停止标记是否存在：优先查存储元数据，无盘时返回 false（存储 v5 下缺键报错），否则查本地文件。
  */
-async function stopSiblingExists(e, n) {
-  let r = stopSiblingStorageKey(e, n);
-  if (n !== undefined && r !== undefined) {
-    let s = await n.statMeta(r);
-    if (!s.ok && s.error.code !== "NotFound")
+async function stopSiblingExists(path, storage) {
+  let storageKey = stopSiblingStorageKey(path, storage);
+  if (storage !== undefined && storageKey !== undefined) {
+    let statResult = await storage.statMeta(storageKey);
+    if (!statResult.ok && statResult.error.code !== "NotFound")
       throw Error("agent stop sibling: storage stat failed", {
-        cause: s.error,
+        cause: statResult.error,
       });
-    return s.ok;
+    return statResult.ok;
   }
   if (isDiskless()) {
-    if (n !== undefined && isStorageV5Enabled())
+    if (storage !== undefined && isStorageV5Enabled())
       throw Error("agent stop sibling: no storage key for this path");
     return false;
   }
-  return lstat(e).then(
+  return lstat(path).then(
     () => true,
     (error) => {
       if (isPathAbsent(error)) return false;
@@ -153,27 +159,31 @@ async function stopSiblingExists(e, n) {
 /**
  * 删除子代理停止标记（存储或本地文件，不存在视为成功）。
  */
-async function removeStopSibling(e, n) {
-  let r = stopSiblingStorageKey(e, n);
-  if (n !== undefined && r !== undefined) {
-    let s = await n.delete(r);
-    if (!s.ok)
+async function removeStopSibling(path, storage) {
+  let storageKey = stopSiblingStorageKey(path, storage);
+  if (storage !== undefined && storageKey !== undefined) {
+    let deleteResult = await storage.delete(storageKey);
+    if (!deleteResult.ok)
       throw Error("agent stop sibling: storage delete failed", {
-        cause: s.error,
+        cause: deleteResult.error,
       });
     return;
   }
   if (isDiskless()) return;
-  await retryTransient(() => unlink(e)).catch((error) => {
+  await retryTransient(() => unlink(path)).catch((error) => {
     if (!isPathAbsent(error)) throw error;
   });
 }
 //@ chunk-e6aww6q8.js:219255-219431 placement
-async function tryFoldBack(e, n, r, s, h) {
-  let y = stopSiblingPath(e, n);
-  return runWithFileWriteContext(e, async () => {
-    if (readStopSiblingCount(y) !== h || !(await stopSiblingExists(y, r))) return "gone";
-    return (await s())
+async function tryFoldBack(agentMetadataPath, stopSiblingSuffix, storage, mergeFn, expectedCount) {
+  let stopSiblingPath_2 = stopSiblingPath(agentMetadataPath, stopSiblingSuffix);
+  return runWithFileWriteContext(agentMetadataPath, async () => {
+    if (
+      readStopSiblingCount(stopSiblingPath_2) !== expectedCount ||
+      !(await stopSiblingExists(stopSiblingPath_2, storage))
+    )
+      return "gone";
+    return (await mergeFn())
       ? "merged"
       : {
           again: undefined,
@@ -187,43 +197,61 @@ async function tryFoldBack(e, n, r, s, h) {
  * 按延迟表多次尝试把子代理的停止结果并回父记录；每次等待后若世代变化则放弃，用尽后记日志与遥测。
  */
 async function scheduleFoldBack(
-  e,
-  n,
-  r,
-  s,
-  h,
-  y = readStopSiblingCount(stopSiblingPath(e, n)),
-  [S, ...w] = FOLD_BACK_DELAYS_MS,
+  agentMetadataPath,
+  stopSiblingSuffix,
+  storage,
+  mergeFn,
+  sleepFn,
+  expectedCount = readStopSiblingCount(stopSiblingPath(agentMetadataPath, stopSiblingSuffix)),
+  [firstDelayMs, ...remainingDelaysMs] = FOLD_BACK_DELAYS_MS,
   again,
-  G = foldBackGeneration.passed,
+  generation = foldBackGeneration.passed,
 ) {
-  if (S === undefined) {
-    let Z = stopObserverTelemetryFields(n, again);
+  if (firstDelayMs === undefined) {
+    let telemetryFields = stopObserverTelemetryFields(stopSiblingSuffix, again);
     if (again !== undefined && isUnexpectedStopError(again)) logError(again);
     else if (again !== undefined)
       logForDebugging(
-        `[agent stop] the fold-back of ${n} into ${e} gave up: ${describeStorageError(again)}`,
+        `[agent stop] the fold-back of ${stopSiblingSuffix} into ${agentMetadataPath} gave up: ${describeStorageError(again)}`,
         {
           level: "warn",
         },
       );
-    logFeatureSad("subagent_stop_fold_back", "schedule_spent", Z);
+    logFeatureSad("subagent_stop_fold_back", "schedule_spent", telemetryFields);
     return;
   }
-  await h(S);
-  if (foldBackGeneration.passed !== G) return;
-  let q = await tryFoldBack(e, n, r, s, y);
-  if (typeof q === "object") await scheduleFoldBack(e, n, r, s, h, y, w, q.again, G);
-  else if (q === "merged") logFeatureOk("subagent_stop_fold_back");
+  await sleepFn(firstDelayMs);
+  if (foldBackGeneration.passed !== generation) return;
+  let outcome = await tryFoldBack(agentMetadataPath, stopSiblingSuffix, storage, mergeFn, expectedCount);
+  if (typeof outcome === "object")
+    await scheduleFoldBack(
+      agentMetadataPath,
+      stopSiblingSuffix,
+      storage,
+      mergeFn,
+      sleepFn,
+      expectedCount,
+      remainingDelaysMs,
+      outcome.again,
+      generation,
+    );
+  else if (outcome === "merged") logFeatureOk("subagent_stop_fold_back");
 }
 //@ chunk-e6aww6q8.js:219888-220628 placement
 /**
  * 持久化子代理停止状态。
  */
-async function persistSubagentStop(agentMetadataPath, n, r, s, h, y = sleepUnref) {
-  let S = stopSiblingPath(agentMetadataPath, n);
-  let stopSiblingCount = readStopSiblingCount(S);
-  let L = await (async () => r())().then(
+async function persistSubagentStop(
+  agentMetadataPath,
+  stopSiblingSuffix,
+  writeCallback,
+  mergeFn,
+  storage,
+  sleepFn = sleepUnref,
+) {
+  let stopSiblingPath_2 = stopSiblingPath(agentMetadataPath, stopSiblingSuffix);
+  let expectedCount = readStopSiblingCount(stopSiblingPath_2);
+  let writeOutcome = await (async () => writeCallback())().then(
     () => {
       return;
     },
@@ -231,40 +259,43 @@ async function persistSubagentStop(agentMetadataPath, n, r, s, h, y = sleepUnref
       error,
     }),
   );
-  if (L === undefined) {
+  if (writeOutcome === undefined) {
     logFeatureOk("subagent_stop_persist");
     return;
   }
-  let G = stopObserverTelemetryFields(n, L.error);
-  if (isUnexpectedStopError(L.error)) logError(L.error);
-  logForDebugging(`[agent stop] ${agentMetadataPath} did not take ${n}: ${describeStorageError(L.error)}`, {
-    level: "warn",
-  });
-  let q = await runWithFileWriteContext(agentMetadataPath, async () => {
-    if (readStopSiblingCount(S) !== stopSiblingCount) return "revived";
-    await writeStopSibling(S, h);
+  let telemetryFields = stopObserverTelemetryFields(stopSiblingSuffix, writeOutcome.error);
+  if (isUnexpectedStopError(writeOutcome.error)) logError(writeOutcome.error);
+  logForDebugging(
+    `[agent stop] ${agentMetadataPath} did not take ${stopSiblingSuffix}: ${describeStorageError(writeOutcome.error)}`,
+    {
+      level: "warn",
+    },
+  );
+  let persistResult = await runWithFileWriteContext(agentMetadataPath, async () => {
+    if (readStopSiblingCount(stopSiblingPath_2) !== expectedCount) return "revived";
+    await writeStopSibling(stopSiblingPath_2, storage);
     return "created";
   }).catch((error) => ({
     error,
   }));
-  if (q === "revived") {
-    logFeatureSad("subagent_stop_persist", "overtaken_by_revival", G);
+  if (persistResult === "revived") {
+    logFeatureSad("subagent_stop_persist", "overtaken_by_revival", telemetryFields);
     return;
   }
-  if (q !== "created") {
-    let Z = stopObserverTelemetryFields(n, q.error);
-    logFeatureBad("subagent_stop_persist", "not_persisted", Z);
-    if (isUnexpectedStopError(q.error)) logError(q.error);
+  if (persistResult !== "created") {
+    let telemetryFields = stopObserverTelemetryFields(stopSiblingSuffix, persistResult.error);
+    logFeatureBad("subagent_stop_persist", "not_persisted", telemetryFields);
+    if (isUnexpectedStopError(persistResult.error)) logError(persistResult.error);
     logForDebugging(
-      `[agent stop] nor did a file beside ${agentMetadataPath}: ${describeStorageError(q.error)}`,
+      `[agent stop] nor did a file beside ${agentMetadataPath}: ${describeStorageError(persistResult.error)}`,
       {
         level: "warn",
       },
     );
     return;
   }
-  logFeatureSad("subagent_stop_persist", "kept_beside_sidecar", G);
-  scheduleFoldBack(agentMetadataPath, n, h, s, y, stopSiblingCount);
+  logFeatureSad("subagent_stop_persist", "kept_beside_sidecar", telemetryFields);
+  scheduleFoldBack(agentMetadataPath, stopSiblingSuffix, storage, mergeFn, sleepFn, expectedCount);
 }
 export {
   stopSiblingExists,

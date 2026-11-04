@@ -31,7 +31,7 @@ import { redactSecrets } from "../services/teamMemorySync/secretScanner.js";
  * 为派生的会话生成 --settings JSON：按需带 permissions.defaultMode=auto、autoCompactEnabled 和 autoMode.environment；都没有时返回 undefined。
  */
 function buildSpawnSettingsJson(options) {
-  let e = {
+  let settings = {
     ...(options.autoOverSettings && {
       permissions: {
         defaultMode: "auto",
@@ -46,7 +46,7 @@ function buildSpawnSettingsJson(options) {
       },
     }),
   };
-  return Object.keys(e).length > 0 ? jsonStringify(e) : undefined;
+  return Object.keys(settings).length > 0 ? jsonStringify(settings) : undefined;
 }
 //@ chunk-pjm08t7p.js:1763-1790 placement
 var MAX_RECENT_WORKER_STATUSES = 10;
@@ -78,7 +78,7 @@ var TOOL_VERBS = {
   LSP: "LSP",
 };
 //@ chunk-pjm08t7p.js:2209-2360 fingerprint = toolSummary (1)
-function toolSummary(toolName, input, i, activities, o) {
+function toolSummary(toolName, input, unused, activities, unusedOther) {
   let verb = TOOL_VERBS[toolName] ?? toolName;
   let target =
     input.file_path ??
@@ -95,7 +95,7 @@ function toolSummary(toolName, input, i, activities, o) {
 /**
  * 解析子进程一行 stream-json：assistant 中的 tool_use/text 生成活动，result 生成完成或错误活动。
  */
-function extractActivities(line, sessionId, debug, activities, o) {
+function extractActivities(line, sessionId, debug, unused, unused_2) {
   let parsed;
   try {
     parsed = jsonParse(line);
@@ -104,7 +104,7 @@ function extractActivities(line, sessionId, debug, activities, o) {
   }
   if (!parsed || typeof parsed !== "object") return [];
   let msg = parsed;
-  let activities_2 = [];
+  let activities = [];
   let now = Date.now();
   switch (msg.type) {
     case "assistant": {
@@ -114,22 +114,22 @@ function extractActivities(line, sessionId, debug, activities, o) {
       if (!Array.isArray(content)) break;
       for (let block of content) {
         if (!block || typeof block !== "object") continue;
-        let h = block;
-        if (h.type === "tool_use") {
-          let name = h.name ?? "Tool";
-          let input = h.input ?? {};
-          let summary = toolSummary(name, input, activities, activities_2, o);
+        let contentBlock = block;
+        if (contentBlock.type === "tool_use") {
+          let name = contentBlock.name ?? "Tool";
+          let input = contentBlock.input ?? {};
+          let summary = toolSummary(name, input, unused, activities, unused_2);
           if (summary !== undefined)
-            activities_2.push({
+            activities.push({
               type: "tool_start",
               summary,
               timestamp: now,
             });
           debug(`[bridge:activity] sessionId=${sessionId} tool_use name=${name} ${inputPreview(input)}`);
-        } else if (h.type === "text") {
-          let text = h.text ?? "";
+        } else if (contentBlock.type === "text") {
+          let text = contentBlock.text ?? "";
           if (text.length > 0) {
-            activities_2.push({
+            activities.push({
               type: "text",
               summary: text.slice(0, 80),
               timestamp: now,
@@ -143,27 +143,27 @@ function extractActivities(line, sessionId, debug, activities, o) {
     case "result": {
       let subtype = msg.subtype;
       if (subtype === "success") {
-        activities_2.push({
+        activities.push({
           type: "result",
           summary: "Session completed",
           timestamp: now,
         });
         debug(`[bridge:activity] sessionId=${sessionId} result subtype=success`);
       } else if (subtype) {
-        let w = msg.errors?.[0] ?? `Error: ${subtype}`;
-        activities_2.push({
+        let errorText = msg.errors?.[0] ?? `Error: ${subtype}`;
+        activities.push({
           type: "error",
-          summary: w,
+          summary: errorText,
           timestamp: now,
         });
-        debug(`[bridge:activity] sessionId=${sessionId} result subtype=${subtype} error="${w}"`);
+        debug(`[bridge:activity] sessionId=${sessionId} result subtype=${subtype} error="${errorText}"`);
       } else debug(`[bridge:activity] sessionId=${sessionId} result subtype=undefined`);
       break;
     }
     default:
       break;
   }
-  return activities_2;
+  return activities;
 }
 //@ chunk-pjm08t7p.js:3459-3723 fingerprint = extractUserMessageText (1)
 function extractUserMessageText(msg) {
@@ -228,7 +228,7 @@ function createSessionSpawner(deps) {
         });
         deps.onDebug(`[bridge:session] Transcript log: ${transcriptPath}`);
       }
-      let h = [
+      let childArgs = [
         ...deps.scriptArgs,
         "--print",
         "--sdk-url",
@@ -246,7 +246,7 @@ function createSessionSpawner(deps) {
         ...(deps.permissionMode ? ["--permission-mode", deps.permissionMode] : []),
         ...(deps.chrome === undefined ? [] : [deps.chrome ? "--chrome" : "--no-chrome"]),
       ];
-      let T = h.length;
+      let baseArgCount = childArgs.length;
       let serverConfig = opts.serverConfig;
       let autoModeEnvironment = serverConfig?.autoModeEnvironment ?? [];
       let spawnSettingsJson = buildSpawnSettingsJson({
@@ -254,28 +254,28 @@ function createSessionSpawner(deps) {
         autoCompact: bridgeChildFeatures.autoCompact,
         autoModeEnvironment,
       });
-      if (spawnSettingsJson !== undefined) h.push(`--settings=${spawnSettingsJson}`);
-      let ge = h.length;
+      if (spawnSettingsJson !== undefined) childArgs.push(`--settings=${spawnSettingsJson}`);
+      let serverConfigStart = childArgs.length;
       let mcpConfig = serverConfig?.mcpConfig;
-      if (mcpConfig) h.push(`--mcp-config=${mcpConfig.path}`);
+      if (mcpConfig) childArgs.push(`--mcp-config=${mcpConfig.path}`);
       if (serverConfig?.appendSystemPrompt)
-        h.push(`--append-system-prompt-file=${serverConfig.appendSystemPrompt.path}`);
-      if (serverConfig) h.push(...serverConfig.extraArgs);
-      let W = h.length - ge;
-      h.push(...opts.modelArgs);
+        childArgs.push(`--append-system-prompt-file=${serverConfig.appendSystemPrompt.path}`);
+      if (serverConfig) childArgs.push(...serverConfig.extraArgs);
+      let serverConfigArgCount = childArgs.length - serverConfigStart;
+      childArgs.push(...opts.modelArgs);
       let dir_2 = serverConfig?.dir;
-      let B = () => {
-        let u = dir_2;
+      let cleanupDir = () => {
+        let pendingDir = dir_2;
         dir_2 = undefined;
-        return u
-          ? rm(u, {
+        return pendingDir
+          ? rm(pendingDir, {
               recursive: true,
               force: true,
             }).catch(() => {})
           : Promise.resolve();
       };
       let ownerIdentity = deps.ownerIdentity;
-      let V = {
+      let childEnvOverrides = {
         CLAUDE_CODE_OAUTH_TOKEN: undefined,
         CLAUDE_CODE_ENVIRONMENT_KIND: "bridge",
         CLAUDE_CODE_BRIDGE_CHILD_AUTO_DEFAULT: undefined,
@@ -308,47 +308,48 @@ function createSessionSpawner(deps) {
         CLAUDE_CODE_EXIT_AFTER_STOP_DELAY:
           opts.idleExitAfterMs > 0 ? String(opts.idleExitAfterMs) : undefined,
       };
-      let R = {
+      let childEnv = {
         ...withLaunchValuesOfHybridConnection(deps.env),
-        ...Object.fromEntries(KNOWN_HOST_ENV_VARS.map((u) => [u, undefined])),
-        ...Object.fromEntries(KNOWN_ENV_VARS.map((u) => [u, deps.env[u]])),
-        ...V,
+        ...Object.fromEntries(KNOWN_HOST_ENV_VARS.map((key) => [key, undefined])),
+        ...Object.fromEntries(KNOWN_ENV_VARS.map((key) => [key, deps.env[key]])),
+        ...childEnvOverrides,
       };
-      let J = new Set([...KNOWN_HOST_ENV_VARS, ...Object.keys(V)]);
-      for (let key of Object.keys(R)) if (!J.has(key) && J.has(key.toUpperCase())) delete R[key];
-      stripCoworkHostEnvKeys(R);
-      stripInternalEntrypoint(R);
-      if (autoDefault) R.CLAUDE_CODE_BRIDGE_CHILD_AUTO_DEFAULT = "1";
-      if (artifact) R.CLAUDE_CODE_BRIDGE_CHILD_ARTIFACT = "1";
-      if (machineSettings) R.CLAUDE_CODE_BRIDGE_CHILD_MACHINE_SETTINGS = "1";
-      if (bridgeChildFeatures.projectsEntrypoint) R.CLAUDE_CODE_BRIDGE_CHILD_PROJECTS_ENTRYPOINT = "1";
-      if (bridgeChildFeatures.cliEntrypoint) R.CLAUDE_CODE_BRIDGE_CHILD_CLI_ENTRYPOINT = "1";
+      let managedKeys = new Set([...KNOWN_HOST_ENV_VARS, ...Object.keys(childEnvOverrides)]);
+      for (let key of Object.keys(childEnv))
+        if (!managedKeys.has(key) && managedKeys.has(key.toUpperCase())) delete childEnv[key];
+      stripCoworkHostEnvKeys(childEnv);
+      stripInternalEntrypoint(childEnv);
+      if (autoDefault) childEnv.CLAUDE_CODE_BRIDGE_CHILD_AUTO_DEFAULT = "1";
+      if (artifact) childEnv.CLAUDE_CODE_BRIDGE_CHILD_ARTIFACT = "1";
+      if (machineSettings) childEnv.CLAUDE_CODE_BRIDGE_CHILD_MACHINE_SETTINGS = "1";
+      if (bridgeChildFeatures.projectsEntrypoint) childEnv.CLAUDE_CODE_BRIDGE_CHILD_PROJECTS_ENTRYPOINT = "1";
+      if (bridgeChildFeatures.cliEntrypoint) childEnv.CLAUDE_CODE_BRIDGE_CHILD_CLI_ENTRYPOINT = "1";
       deps.onDebug(
         `[bridge:session] Spawning sessionId=${opts.sessionId} sdkUrl=${opts.sdkUrl} accessToken=${opts.accessToken ? "present" : "MISSING"}`,
       );
       deps.onDebug(
-        `[bridge:session] Child args: ${h.slice(0, T).join(" ")}${spawnSettingsJson !== undefined ? ` (+settings: auto=${autoOverSettings}, facts=${autoModeEnvironment.length})` : ""}${W > 0 ? ` (+${W} server-config args, mcpConfig=${mcpConfig ? "present" : "unset"}, appendPrompt=${serverConfig?.appendSystemPrompt ? "present" : "unset"})` : ""}${opts.modelArgs.length > 0 ? ` (+${opts.modelArgs.length} model args)` : ""}`,
+        `[bridge:session] Child args: ${childArgs.slice(0, baseArgCount).join(" ")}${spawnSettingsJson !== undefined ? ` (+settings: auto=${autoOverSettings}, facts=${autoModeEnvironment.length})` : ""}${serverConfigArgCount > 0 ? ` (+${serverConfigArgCount} server-config args, mcpConfig=${mcpConfig ? "present" : "unset"}, appendPrompt=${serverConfig?.appendSystemPrompt ? "present" : "unset"})` : ""}${opts.modelArgs.length > 0 ? ` (+${opts.modelArgs.length} model args)` : ""}`,
       );
       if (debugFile) deps.onDebug(`[bridge:session] Debug log: ${debugFile}`);
       let child;
       try {
-        child = spawn(deps.execPath, h, {
+        child = spawn(deps.execPath, childArgs, {
           cwd: dir,
           stdio: ["pipe", "pipe", "pipe"],
-          env: R,
+          env: childEnv,
           windowsHide: true,
         });
       } catch (error) {
-        B();
+        cleanupDir();
         throw error;
       }
       deps.onDebug(`[bridge:session] sessionId=${opts.sessionId} pid=${child.pid}`);
       let activities = [];
-      let ue = undefined;
+      let unused = undefined;
       let currentActivity = null;
       let lastStderr = [];
-      let q = false;
-      let z = false;
+      let isForceKilled = false;
+      let isTerminating = false;
       let firstUserMessageSeen = false;
       if (child.stderr)
         createInterface({
@@ -392,7 +393,7 @@ function createSessionSpawner(deps) {
                 `
 `,
             );
-          let extracted = extractActivities(line, opts.sessionId, deps.onDebug, activities, ue);
+          let extracted = extractActivities(line, opts.sessionId, deps.onDebug, activities, unused);
           for (let activity of extracted) {
             if (activities.length >= MAX_RECENT_WORKER_STATUSES) activities.shift();
             activities.push(activity);
@@ -423,27 +424,29 @@ function createSessionSpawner(deps) {
             transcriptStream.end();
             transcriptStream = null;
           }
-          let A;
-          if (signal === "SIGTERM" || signal === "SIGINT" || (z && code !== 0)) {
+          let outcome;
+          if (signal === "SIGTERM" || signal === "SIGINT" || (isTerminating && code !== 0)) {
             deps.onDebug(
               `[bridge:session] sessionId=${opts.sessionId} interrupted signal=${signal} exit_code=${code} pid=${child.pid}`,
             );
-            A = "interrupted";
+            outcome = "interrupted";
           } else if (code === 0) {
-            A = opts.idleExitAfterMs > 0 ? "idle" : "completed";
-            deps.onDebug(`[bridge:session] sessionId=${opts.sessionId} ${A} exit_code=0 pid=${child.pid}`);
+            outcome = opts.idleExitAfterMs > 0 ? "idle" : "completed";
+            deps.onDebug(
+              `[bridge:session] sessionId=${opts.sessionId} ${outcome} exit_code=0 pid=${child.pid}`,
+            );
           } else {
             deps.onDebug(
               `[bridge:session] sessionId=${opts.sessionId} failed exit_code=${code} pid=${child.pid}`,
             );
-            A = "failed";
+            outcome = "failed";
           }
-          B().then(() => resolve(A));
+          cleanupDir().then(() => resolve(outcome));
         });
         child.on("error", (err) => {
           deps.onDebug(`[bridge:session] sessionId=${opts.sessionId} spawn error: ${err.message}`);
           lastStderr.push(`spawn error: ${err.message}`);
-          B().then(() => resolve("failed"));
+          cleanupDir().then(() => resolve("failed"));
         });
       });
       let handle = {
@@ -457,14 +460,14 @@ function createSessionSpawner(deps) {
         },
         kill() {
           if (!child.killed) {
-            z = true;
+            isTerminating = true;
             deps.onDebug(`[bridge:session] Sending SIGTERM to sessionId=${opts.sessionId} pid=${child.pid}`);
             child.kill("SIGTERM");
           }
         },
         forceKill() {
-          if (!q && child.pid) {
-            q = true;
+          if (!isForceKilled && child.pid) {
+            isForceKilled = true;
             deps.onDebug(`[bridge:session] Sending SIGKILL to sessionId=${opts.sessionId} pid=${child.pid}`);
             child.kill("SIGKILL");
           }

@@ -5,14 +5,17 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-9cjx5pnm.js (81)
- * attribution: placement 81
+ * pieces: chunk-9cjx5pnm.js (84)
+ * attribution: placement 84
  */
-import { join, dirname, basename, resolve } from "path";
+import { relative, basename, join, dirname, resolve } from "path";
 import { readdir, lstat, realpath, open, mkdir, writeFile, mkdtemp } from "fs/promises";
+import { identityPath_2 } from "../../../skills/loadSkillsDir.js";
+import { firstTruthy } from "../../../utils/auth/authUnavailableReason.js";
 import {
-  exclusionEntriesFor,
-  relativePosixPathOf,
+  isNeverBundledPath,
+  isSecretPath,
+  isIgnoredEntry,
   listingEntry,
   MAX_COPY_DEPTH,
   statEntry,
@@ -28,6 +31,7 @@ import {
   FILE_MODE_RW,
   draftManifestOf,
 } from "./validationCopy.js";
+import { isInsideTypesDir } from "../../../plugins/functionHooks/devModsWatch.js";
 import { limitConcurrency } from "../../../utils/concurrencyLimit.js";
 import {
   MAX_PUBLISH_FILES,
@@ -52,10 +56,9 @@ import { printableName } from "../../../utils/printableName.js";
 import { jsonStringify } from "../../../utils/slowOperations.js";
 import { redactSecrets } from "../../teamMemorySync/secretScanner.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
-import { u, string, array } from "../../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, array } from "../../../../vendor/zod/v4/classic/schemas.js";
 import { PLUGIN_MANIFEST_PATH, pluginRootHasMarker } from "../../../utils/plugins/commandSource.js";
 import { safeParseJSON } from "../../../utils/json.js";
-import { identityPath_2 } from "../../../skills/loadSkillsDir.js";
 import {
   sanitizeForDisplay,
   resolveValidateTarget,
@@ -65,31 +68,63 @@ import { getCwd } from "../../../utils/cwd.js";
 import { PluginManifestSchema } from "../../../utils/plugins/schemas.js";
 import { truncateToLength } from "../../../utils/stringUtils.js";
 
+//@ chunk-9cjx5pnm.js:3485-3515 placement
+/**
+ * 计算条目相对搜索根的路径（归属疑似错误，属插件/文件打包扫描）。
+ */
+var relativePosixPathOf = (root, entry) => identityPath_2(relative(root, entry.path));
+//@ chunk-9cjx5pnm.js:4321-4563 placement
+var getExclusionReason = (root, folder, entry) =>
+  firstTruthy([
+    entry.kind === "link" && "link",
+    entry.kind === "special" && "special",
+    entry.kind === "file" && entry.links > 1 && "hard-link",
+    basename(entry.path).includes("\\") && "backslash",
+    isNeverBundledPath(entry) && "never",
+    isInsideTypesDir(root, entry.path) && "generated",
+    isSecretPath(root, relativePosixPathOf(root, entry)) && "secret",
+    isIgnoredEntry(root, folder, entry) && "ignored",
+  ]);
+//@ chunk-9cjx5pnm.js:4563-4641 placement
+/**
+ * 给出某条目被排除的原因（link/special/hard-link/backslash/never/generated/secret/ignored），用于打包/上传扫描；归属疑似错误。
+ */
+function exclusionEntriesFor(root, folder, entry) {
+  let exclusionReason = getExclusionReason(root, folder, entry);
+  return exclusionReason === undefined
+    ? []
+    : [
+        {
+          path: relativePosixPathOf(root, entry),
+          why: exclusionReason,
+        },
+      ];
+}
 //@ chunk-9cjx5pnm.js:4777-5044 placement
-function excludeListedFiles(e, r, s) {
-  let flattened = s.flatMap((f) => exclusionEntriesFor(e, r, f));
-  let a = new Set(flattened.map((f) => f.path));
-  let filtered = s.filter((f) => !a.has(relativePosixPathOf(e, f)));
+function excludeListedFiles(root, scanRoot, entries) {
+  let flattened = entries.flatMap((entry) => exclusionEntriesFor(root, scanRoot, entry));
+  let excludedPaths = new Set(flattened.map((excluded) => excluded.path));
+  let filtered = entries.filter((entry) => !excludedPaths.has(relativePosixPathOf(root, entry)));
   return {
-    files: filtered.filter((f) => f.kind === "file").map((f) => listingEntry(e, f)),
+    files: filtered.filter((entry) => entry.kind === "file").map((entry) => listingEntry(root, entry)),
     leftOut: flattened,
     folders: filtered
-      .filter((f) => f.kind === "folder")
-      .map((f) => ({
-        path: f.path,
-        scope: r.scope,
+      .filter((entry) => entry.kind === "folder")
+      .map((entry) => ({
+        path: entry.path,
+        scope: scanRoot.scope,
       })),
   };
 }
 //@ chunk-9cjx5pnm.js:5044-5229 placement
-async function scanPublishDir(e, r) {
-  let s = limitConcurrency(MAX_COPY_DEPTH, (a) => statEntry(join(r.path, a)));
-  let results = await Promise.all((await readdir(r.path)).toSorted().map(s));
+async function scanPublishDir(root, folder) {
+  let statOne = limitConcurrency(MAX_COPY_DEPTH, (name) => statEntry(join(folder.path, name)));
+  let results = await Promise.all((await readdir(folder.path)).toSorted().map(statOne));
   return excludeListedFiles(
-    e,
+    root,
     {
-      path: r.path,
-      scope: r.scope.concat(await assertGitignoreNotHardlinked(r.path, results)),
+      path: folder.path,
+      scope: folder.scope.concat(await assertGitignoreNotHardlinked(folder.path, results)),
     },
     results,
   );
@@ -98,51 +133,52 @@ async function scanPublishDir(e, r) {
 /**
  * 列出自身及所有祖先目录。
  */
-function ancestorDirs(e) {
-  let r = dirname(e);
-  return r === e ? [e] : [e, ...ancestorDirs(r)];
+function ancestorDirs(path) {
+  let parent = dirname(path);
+  return parent === path ? [path] : [path, ...ancestorDirs(parent)];
 }
 //@ chunk-9cjx5pnm.js:5384-5458 placement
 /**
  * 判断目录下是否有 .git。
  */
-var hasGitDir = (e) =>
-  lstat(join(e, ".git")).then(
+var hasGitDir = (dir) =>
+  lstat(join(dir, ".git")).then(
     () => true,
     (error) => (isIgnorableErrno(error) ? false : Promise.reject(error)),
   );
 //@ chunk-9cjx5pnm.js:5458-5577 placement
-async function ancestorGitignoreDirs(e) {
-  let r = ancestorDirs(e);
-  for (let [s, n] of r.entries()) if (await hasGitDir(n)) return r.slice(1, s + 1).toReversed();
+async function ancestorGitignoreDirs(path) {
+  let dirs = ancestorDirs(path);
+  for (let [index, dir] of dirs.entries())
+    if (await hasGitDir(dir)) return dirs.slice(1, index + 1).toReversed();
   return [];
 }
 //@ chunk-9cjx5pnm.js:5577-5644 placement
 /**
  * 读取祖先目录的 .gitignore 规则。
  */
-var ancestorGitignoreRules = async (e) =>
-  (await Promise.all((await ancestorGitignoreDirs(e)).map(readGitignoreSafely))).flat();
+var ancestorGitignoreRules = async (path) =>
+  (await Promise.all((await ancestorGitignoreDirs(path)).map(readGitignoreSafely))).flat();
 //@ chunk-9cjx5pnm.js:5644-5879 placement
-async function scanPublishFolder(e) {
-  let r = [];
-  let s = [];
-  let n = [
+async function scanPublishFolder(root) {
+  let files = [];
+  let leftOut = [];
+  let pending = [
     {
-      path: e,
-      scope: await ancestorGitignoreRules(e),
+      path: root,
+      scope: await ancestorGitignoreRules(root),
     },
   ];
-  for (let a of n) {
-    if (r.length > MAX_PUBLISH_FILES) break;
-    let f = await scanPublishDir(e, a);
-    r.push(...f.files);
-    s.push(...f.leftOut);
-    n.push(...f.folders);
+  for (let folder of pending) {
+    if (files.length > MAX_PUBLISH_FILES) break;
+    let scan = await scanPublishDir(root, folder);
+    files.push(...scan.files);
+    leftOut.push(...scan.leftOut);
+    pending.push(...scan.folders);
   }
   return {
-    files: r.toSorted(byPath),
-    leftOut: s.toSorted(byPath),
+    files: files.toSorted(byPath),
+    leftOut: leftOut.toSorted(byPath),
   };
 }
 //@ chunk-9cjx5pnm.js:6070-6081 placement
@@ -166,68 +202,68 @@ var READ_GITIGNORE_OPTIONS = false;
  */
 var SINGLE_LINK_NLINK = 1n;
 //@ chunk-9cjx5pnm.js:6193-6227 placement
-var Or = Object.freeze({
+var BIGINT_STAT_OPTIONS = Object.freeze({
   bigint: true,
 });
 //@ chunk-9cjx5pnm.js:6227-6389 placement
-async function isSamePublishFile(e, r, s) {
-  let n = await realpath(r).catch(() => e);
-  let m = isSubpathOf(e, n, READ_GITIGNORE_OPTIONS)
-    ? await lstat(n, Or).catch(() => {
+async function isSamePublishFile(root, filePath, expected) {
+  let real = await realpath(filePath).catch(() => root);
+  let stats = isSubpathOf(root, real, READ_GITIGNORE_OPTIONS)
+    ? await lstat(real, BIGINT_STAT_OPTIONS).catch(() => {
         return;
       })
     : undefined;
-  return m?.ino === s.ino && m.dev === s.dev && m.nlink === SINGLE_LINK_NLINK;
+  return stats?.ino === expected.ino && stats.dev === expected.dev && stats.nlink === SINGLE_LINK_NLINK;
 }
 //@ chunk-9cjx5pnm.js:6425-6485 placement
-var li = Object.freeze(["ENOENT", "ENOTDIR", "ELOOP", "EISDIR"]);
+var IGNORED_STAT_ERROR_CODES = Object.freeze(["ENOENT", "ENOTDIR", "ELOOP", "EISDIR"]);
 //@ chunk-9cjx5pnm.js:6485-6567 placement
 /**
  * 打开文件，忽略指定错误码。
  */
-var openOrIgnore = (e) =>
-  open(e, readOnlyNoFollowFlags()).catch((error) =>
-    li.includes(getErrnoCode(error) ?? "") ? undefined : Promise.reject(error),
+var openOrIgnore = (filePath) =>
+  open(filePath, readOnlyNoFollowFlags()).catch((error) =>
+    IGNORED_STAT_ERROR_CODES.includes(getErrnoCode(error) ?? "") ? undefined : Promise.reject(error),
   );
 //@ chunk-9cjx5pnm.js:6636-6730 placement
 /**
  * 判断文件可安全读取且是普通文件。
  */
-var isOpenableFile = async (e, r) =>
-  (await readPluginFileSafe(e, dirname(r))) === "ok" &&
+var isOpenableFile = async (root, filePath) =>
+  (await readPluginFileSafe(root, dirname(filePath))) === "ok" &&
   (
-    await lstat(r).catch(() => {
+    await lstat(filePath).catch(() => {
       return;
     })
   )?.isFile() === true;
 //@ chunk-9cjx5pnm.js:6730-7001 placement
-async function openPublishFile(e, r) {
-  let s = join(e, r.path);
-  let a = (await isOpenableFile(e, s)) ? await openOrIgnore(s) : undefined;
+async function openPublishFile(root, entry) {
+  let absPath = join(root, entry.path);
+  let handle = (await isOpenableFile(root, absPath)) ? await openOrIgnore(absPath) : undefined;
   try {
-    let stats = await a?.stat(Or);
-    let c =
-      stats?.isFile() === true &&
-      stats.size === BigInt(r.bytes) &&
-      stats.nlink === SINGLE_LINK_NLINK &&
-      (await isSamePublishFile(e, s, stats))
-        ? await a?.readFile()
+    let expected = await handle?.stat(BIGINT_STAT_OPTIONS);
+    let content =
+      expected?.isFile() === true &&
+      expected.size === BigInt(entry.bytes) &&
+      expected.nlink === SINGLE_LINK_NLINK &&
+      (await isSamePublishFile(root, absPath, expected))
+        ? await handle?.readFile()
         : undefined;
-    return c?.length === r.bytes ? c : undefined;
+    return content?.length === entry.bytes ? content : undefined;
   } finally {
-    await a?.close();
+    await handle?.close();
   }
 }
 //@ chunk-9cjx5pnm.js:7001-7299 placement
-async function copyPublishFile(e, r, s) {
-  let publishFile = await openPublishFile(e, s);
+async function copyPublishFile(root, destDir, entry) {
+  let publishFile = await openPublishFile(root, entry);
   if (publishFile === undefined) return;
-  await mkdir(dirname(join(r, s.path)), {
+  await mkdir(dirname(join(destDir, entry.path)), {
     recursive: true,
     mode: DIR_MODE,
   })
     .then(() =>
-      writeFile(join(r, s.path), publishFile, {
+      writeFile(join(destDir, entry.path), publishFile, {
         flag: "wx",
         mode: FILE_MODE,
       }),
@@ -235,7 +271,7 @@ async function copyPublishFile(e, r, s) {
     .catch((error) =>
       Promise.reject(
         Error("A file could not be copied to be validated", {
-          cause: `${getErrnoCode(error) ?? ""} ${s.path}`.trim(),
+          cause: `${getErrnoCode(error) ?? ""} ${entry.path}`.trim(),
         }),
       ),
     );
@@ -245,16 +281,17 @@ async function copyPublishFile(e, r, s) {
 /**
  * 中止请求并等待清理。
  */
-async function abortAndWait(abortController, r, s) {
+async function abortAndWait(abortController, pending, dispose) {
   abortController.abort();
-  await r;
-  await s();
+  await pending;
+  await dispose();
 }
 //@ chunk-9cjx5pnm.js:7352-7418 placement
 /**
  * 按路径映射哈希。
  */
-var hashByPath = (e, r) => Object.fromEntries(e.map((s, n) => [s.path, r[n] ?? ""]));
+var hashByPath = (files, contents) =>
+  Object.fromEntries(files.map((file, index) => [file.path, contents[index] ?? ""]));
 //@ chunk-9cjx5pnm.js:7418-7460 placement
 /**
  * 组装快照句柄（home、dir、hashes）。
@@ -268,25 +305,25 @@ var snapshotHandle = (home, dir, hashes) => ({
 /**
  * 把要发布的插件目录复制到临时快照目录（claude-publish-*），供校验和打包。
  */
-async function snapshotPublishFolder(e, files) {
+async function snapshotPublishFolder(root, files) {
   if (isCleanupStarted()) return Promise.reject(processEndingError());
-  let home = await mkdtemp(join(tmpdir(), "claude-publish-")).catch((error) =>
+  let tempRoot = await mkdtemp(join(tmpdir(), "claude-publish-")).catch((error) =>
     Promise.reject(
       Error("A folder to validate a copy in could not be made", {
         cause: getErrnoCode(error) ?? "",
       }),
     ),
   );
-  let n = onceExport(() => removeValidationCopy(home));
+  let removeCopy = onceExport(() => removeValidationCopy(tempRoot));
   if (isCleanupStarted()) {
-    await n();
+    await removeCopy();
     return Promise.reject(processEndingError());
   }
-  let dir = join(home, "copy", basename(e));
+  let copyRoot = join(tempRoot, "copy", basename(root));
   let abortController = new AbortController();
-  let f = Promise.resolve()
+  let copying = Promise.resolve()
     .then(() =>
-      mkdir(dir, {
+      mkdir(copyRoot, {
         recursive: true,
         mode: DIR_MODE,
       }),
@@ -297,10 +334,10 @@ async function snapshotPublishFolder(e, files) {
     .then(() =>
       Promise.allSettled(
         files.map(
-          limitConcurrency(MAX_COPY_DEPTH, (h) =>
+          limitConcurrency(MAX_COPY_DEPTH, (file) =>
             abortController.signal.aborted
               ? Promise.resolve(undefined)
-              : copyPublishFile(e, dir, h).catch((error) => {
+              : copyPublishFile(root, copyRoot, file).catch((error) => {
                   abortController.abort();
                   return Promise.reject(error);
                 }),
@@ -308,14 +345,16 @@ async function snapshotPublishFolder(e, files) {
         ),
       ),
     );
-  using c = registerCleanup(() => abortAndWait(abortController, f, n));
-  let g = await f;
-  let found = g.find((h) => h.status === "rejected");
-  let found_2 = files.find((h, w) => g[w]?.status === "fulfilled" && !g[w].value);
-  await (found === undefined && found_2 === undefined && !abortController.signal.aborted ? undefined : n());
+  using cleanup = registerCleanup(() => abortAndWait(abortController, copying, removeCopy));
+  let results = await copying;
+  let found = results.find((result) => result.status === "rejected");
+  let found_2 = files.find((file, index) => results[index]?.status === "fulfilled" && !results[index].value);
+  await (found === undefined && found_2 === undefined && !abortController.signal.aborted
+    ? undefined
+    : removeCopy());
   if (found?.status === "rejected") return Promise.reject(found.reason);
   if (abortController.signal.aborted) {
-    await n();
+    await removeCopy();
     return Promise.reject(processEndingError());
   }
   if (found_2 !== undefined)
@@ -323,37 +362,43 @@ async function snapshotPublishFolder(e, files) {
       missed: found_2.path,
     };
   return snapshotHandle(
-    home,
-    dir,
+    tempRoot,
+    copyRoot,
     hashByPath(
       files,
-      g.map((h) => (h.status === "fulfilled" ? h.value : undefined)),
+      results.map((result) => (result.status === "fulfilled" ? result.value : undefined)),
     ),
   );
 }
 //@ chunk-9cjx5pnm.js:8407-8482 placement
-var fileChangedOutcome = (e) => refusalResult("changed", [`${e.missed} is not the file that was listed`]);
+var fileChangedOutcome = (outcome) =>
+  refusalResult("changed", [`${outcome.missed} is not the file that was listed`]);
 //@ chunk-9cjx5pnm.js:8482-8984 placement
-function diffListing(e, r) {
-  let s = new Set(e.listing.files.map((file) => file.path));
+function diffListing(snapshot, current) {
+  let listedPaths = new Set(snapshot.listing.files.map((file) => file.path));
   return [
-    ...e.listing.files
-      .filter((file) => !Object.hasOwn(r.hashes, file.path))
+    ...snapshot.listing.files
+      .filter((file) => !Object.hasOwn(current.hashes, file.path))
       .map((file) => "Among the files to send only since the folder was read: " + file.path),
-    ...Object.keys(r.hashes)
-      .filter((key) => !s.has(key))
+    ...Object.keys(current.hashes)
+      .filter((key) => !listedPaths.has(key))
       .map((key) => "No longer among the files to send since the folder was read: " + key),
-    ...e.listing.files
-      .filter((file) => Object.hasOwn(r.hashes, file.path) && e.hashes[file.path] !== r.hashes[file.path])
+    ...snapshot.listing.files
+      .filter(
+        (file) =>
+          Object.hasOwn(current.hashes, file.path) &&
+          snapshot.hashes[file.path] !== current.hashes[file.path],
+      )
       .map((file) => `${file.path} is not the file that was listed`),
   ].slice(0, 1);
 }
 //@ chunk-9cjx5pnm.js:8984-9148 placement
-function checkSnapshotUnchanged(e, r) {
-  let s = e.kind === "ready" ? diffListing(e, r) : [];
-  return s.length === 0 && (e.kind !== "ready" || e.listing.files.length === Object.keys(r.hashes).length)
-    ? e
-    : refusalResult("changed", s);
+function checkSnapshotUnchanged(snapshot, current) {
+  let changes = snapshot.kind === "ready" ? diffListing(snapshot, current) : [];
+  return changes.length === 0 &&
+    (snapshot.kind !== "ready" || snapshot.listing.files.length === Object.keys(current.hashes).length)
+    ? snapshot
+    : refusalResult("changed", changes);
 }
 //@ chunk-9cjx5pnm.js:9181-9272 placement = _temp0 (1)
 var slugifyPluginName = (a_5) =>
@@ -362,15 +407,17 @@ var slugifyPluginName = (a_5) =>
     .replaceAll(/[^a-z0-9]+/g, "-")
     .replaceAll(/^-|-$/g, "") || "plugin";
 //@ chunk-9cjx5pnm.js:9272-9399 placement
-function folderNameFindings(e) {
-  let r = checkReservedPluginName(slugifyPluginName(basename(e)));
-  return r?.severity === "error" ? [`${r.message} The name comes from the folder: rename it.`] : [];
+function folderNameFindings(root) {
+  let finding = checkReservedPluginName(slugifyPluginName(basename(root)));
+  return finding?.severity === "error"
+    ? [`${finding.message} The name comes from the folder: rename it.`]
+    : [];
 }
 //@ chunk-9cjx5pnm.js:9432-9457 placement
 /**
  * 清洗插件描述。
  */
-var sanitizeDescription = (e) => e && printableName(e, MAX_PUBLISH_STEPS);
+var sanitizeDescription = (description) => description && printableName(description, MAX_PUBLISH_STEPS);
 //@ chunk-9cjx5pnm.js:9457-9472 placement
 /**
  * 补全 manifest 时使用的默认版本（0.1.0）。
@@ -380,11 +427,11 @@ var DEFAULT_PLUGIN_VERSION = "0.1.0";
 /**
  * 生成草稿 manifest 文本。
  */
-var draftManifestText = (e, r) => `${jsonStringify(
+var draftManifestText = (root, description) => `${jsonStringify(
   {
-    name: slugifyPluginName(basename(e)),
+    name: slugifyPluginName(basename(root)),
     version: DEFAULT_PLUGIN_VERSION,
-    description: sanitizeDescription(r),
+    description: sanitizeDescription(description),
   },
   null,
   2,
@@ -394,66 +441,68 @@ var draftManifestText = (e, r) => `${jsonStringify(
 /**
  * 生成 “需要补 manifest” 的结果。
  */
-var needsManifestResult = (e, r) => ({
+var needsManifestResult = (root, description) => ({
   kind: "needs-manifest",
-  root: e,
-  draft: draftManifestText(e, r),
+  root,
+  draft: draftManifestText(root, description),
 });
 //@ chunk-9cjx5pnm.js:9608-9700 placement
 /**
  * 汇总各文件的校验错误。
  */
-var combinedIssues = (e) =>
-  e.flatMap((r) => r.errors.map((error) => `${r.filePath}: ${error.path}: ${redactSecrets(error.message)}`));
+var combinedIssues = (results) =>
+  results.flatMap((result) =>
+    result.errors.map((error) => `${result.filePath}: ${error.path}: ${redactSecrets(error.message)}`),
+  );
 //@ chunk-9cjx5pnm.js:9729-9801 placement
 /**
  * 提取 manifest 的摘要字段。
  */
-var pickManifestSummary = (e) => ({
-  name: e.name,
-  version: e.version,
-  description: e.description,
+var pickManifestSummary = (manifest) => ({
+  name: manifest.name,
+  version: manifest.version,
+  description: manifest.description,
 });
 //@ chunk-9cjx5pnm.js:9801-9879 placement
 /**
  * 插件 manifest 摘要 schema。
  */
 var pluginManifestSummarySchema = DoctorLazy(() =>
-  u({
-    name: string(),
-    version: string().optional(),
-    description: string().optional(),
+  objectSchema({
+    name: stringSchema(),
+    version: stringSchema().optional(),
+    description: stringSchema().optional(),
   }),
 );
 //@ chunk-9cjx5pnm.js:9879-10051 placement
 async function readDraftManifestState(dir) {
   let mcpAuthCache = await getMcpAuthCache(join(dir, PLUGIN_MANIFEST_PATH));
-  let s = pluginManifestSummarySchema().safeParse(
+  let parsed = pluginManifestSummarySchema().safeParse(
     safeParseJSON(mcpAuthCache.kind === "ok" ? mcpAuthCache.content : ""),
   );
   if (mcpAuthCache.kind === "absent") return "absent";
-  return s.success ? pickManifestSummary(s.data) : "unreadable";
+  return parsed.success ? pickManifestSummary(parsed.data) : "unreadable";
 }
 //@ chunk-9cjx5pnm.js:10051-10118 placement
 /**
  * 生成单个文件的哈希对。
  */
-function hashPair(e, r) {
-  return e !== undefined && r !== undefined ? [[e.path, computeContentHash(r)]] : [];
+function hashPair(entry, content) {
+  return entry !== undefined && content !== undefined ? [[entry.path, computeContentHash(content)]] : [];
 }
 //@ chunk-9cjx5pnm.js:10118-10277 placement
-async function readAllListed(e, r, s) {
-  let results = await Promise.all(e.map(limitConcurrency(MAX_COPY_DEPTH, r)));
-  let found = e.find((f, c) => results[c] === undefined);
+async function readAllListed(files, read, pair) {
+  let results = await Promise.all(files.map(limitConcurrency(MAX_COPY_DEPTH, read)));
+  let found = files.find((file, index) => results[index] === undefined);
   return found === undefined
-    ? results.flatMap((f, c) => s(e[c], f))
+    ? results.flatMap((value, index) => pair(files[index], value))
     : {
         missed: found.path,
       };
 }
 //@ chunk-9cjx5pnm.js:10277-10388 placement
-async function hashListedFiles(e, files) {
-  let allListed = await readAllListed(files, (n) => openPublishFile(e, n), hashPair);
+async function hashListedFiles(root, files) {
+  let allListed = await readAllListed(files, (file) => openPublishFile(root, file), hashPair);
   return "missed" in allListed
     ? allListed
     : {
@@ -464,33 +513,34 @@ async function hashListedFiles(e, files) {
 /**
  * 找出 manifest 文件路径。
  */
-var manifestPaths = (e) =>
-  e.files
+var manifestPaths = (snapshot) =>
+  snapshot.files
     .map((file) => file.path)
-    .filter((r) => `/${r}`.endsWith(`/${identityPath_2(PLUGIN_MANIFEST_PATH)}`));
+    .filter((path) => `/${path}`.endsWith(`/${identityPath_2(PLUGIN_MANIFEST_PATH)}`));
 //@ chunk-9cjx5pnm.js:10469-10664 placement
-function publishSizeRefusal(e, r) {
-  let s = manifestPaths(e);
-  if (s.length > 1) return refusalResult("findings", [`More than one manifest: ${s.join(", ")}`]);
-  if (e.files.length > MAX_PUBLISH_FILES) return refusalResult("too-many-files");
-  return r > MAX_PUBLISH_BYTES ? refusalResult("too-large") : undefined;
+function publishSizeRefusal(snapshot, totalBytes) {
+  let manifestPathsList = manifestPaths(snapshot);
+  if (manifestPathsList.length > 1)
+    return refusalResult("findings", [`More than one manifest: ${manifestPathsList.join(", ")}`]);
+  if (snapshot.files.length > MAX_PUBLISH_FILES) return refusalResult("too-many-files");
+  return totalBytes > MAX_PUBLISH_BYTES ? refusalResult("too-large") : undefined;
 }
 //@ chunk-9cjx5pnm.js:10664-10894 placement
-async function buildPublishSnapshot(e, manifest) {
-  let s = await scanPublishFolder(e);
-  let reduced = s.files.reduce((acc, file) => acc + file.bytes, 0);
-  let a = publishSizeRefusal(s, reduced);
-  if (a !== undefined) return a;
-  let m = await hashListedFiles(e, s.files);
-  return "missed" in m
-    ? fileChangedOutcome(m)
+async function buildPublishSnapshot(root, manifest) {
+  let listing = await scanPublishFolder(root);
+  let totalBytes = listing.files.reduce((acc, file) => acc + file.bytes, 0);
+  let refusal = publishSizeRefusal(listing, totalBytes);
+  if (refusal !== undefined) return refusal;
+  let hashed = await hashListedFiles(root, listing.files);
+  return "missed" in hashed
+    ? fileChangedOutcome(hashed)
     : {
         kind: "ready",
-        root: e,
+        root,
         manifest,
-        listing: s,
-        bytes: reduced,
-        hashes: m.hashes,
+        listing,
+        bytes: totalBytes,
+        hashes: hashed.hashes,
       };
 }
 //@ chunk-9cjx5pnm.js:10941-10975 placement
@@ -510,33 +560,36 @@ var QUOTE_CHARS = [
 /**
  * 取到最后一个引号为止的前缀。
  */
-var prefixThroughLastQuote = (e) => e.slice(0, 1 + Math.max(...QUOTE_CHARS.map((r) => e.lastIndexOf(r))));
+var prefixThroughLastQuote = (text) =>
+  text.slice(0, 1 + Math.max(...QUOTE_CHARS.map((quoteChar) => text.lastIndexOf(quoteChar))));
 //@ chunk-9cjx5pnm.js:11043-11148 placement
-function replaceSegmentsWith(e, r, s) {
-  let parts = e.split(r);
+function replaceSegmentsWith(text, marker, replacement) {
+  let parts = text.split(marker);
   return parts
     .slice(0, -1)
-    .map((a) => prefixThroughLastQuote(a) + s)
+    .map((part) => prefixThroughLastQuote(part) + replacement)
     .concat(parts.at(-1) ?? "")
     .join("");
 }
 //@ chunk-9cjx5pnm.js:11148-11343 placement
-function mapCopyPathToOriginal(e, r, s) {
-  let n = dirname(r.dir);
-  let replaced = dirname(s).replace(/[\\/]$/, "");
-  return [`${basename(r.home)}/copy`, `${basename(r.home)}\\copy`].reduce(
-    (acc, f) => replaceSegmentsWith(acc, f, replaced),
-    e.replaceAll(n, () => replaced).replaceAll(sanitizeForDisplay(n, n.length), () => replaced),
+function mapCopyPathToOriginal(text, copy, originalDir) {
+  let copyDir = dirname(copy.dir);
+  let replacement = dirname(originalDir).replace(/[\\/]$/, "");
+  return [`${basename(copy.home)}/copy`, `${basename(copy.home)}\\copy`].reduce(
+    (acc, marker) => replaceSegmentsWith(acc, marker, replacement),
+    text
+      .replaceAll(copyDir, () => replacement)
+      .replaceAll(sanitizeForDisplay(copyDir, copyDir.length), () => replacement),
   );
 }
 //@ chunk-9cjx5pnm.js:11343-11469 placement
-var mapCopyPathsInResults = (e, r, s) =>
-  e.map((n) => ({
-    ...n,
-    filePath: mapCopyPathToOriginal(n.filePath, r, s),
-    errors: n.errors.map((error) => ({
+var mapCopyPathsInResults = (results, copy, originalDir) =>
+  results.map((result) => ({
+    ...result,
+    filePath: mapCopyPathToOriginal(result.filePath, copy, originalDir),
+    errors: result.errors.map((error) => ({
       ...error,
-      message: mapCopyPathToOriginal(error.message, r, s),
+      message: mapCopyPathToOriginal(error.message, copy, originalDir),
     })),
   }));
 //@ chunk-9cjx5pnm.js:11469-11562 placement
@@ -549,92 +602,95 @@ function requireManifestPath(publishSnapshot) {
     : publishSnapshot;
 }
 //@ chunk-9cjx5pnm.js:11562-11962 placement
-async function validateSnapshot(e, r, s) {
-  let { manifest, contents } = await resolveValidateTarget(r.dir);
-  let m = manifest?.errors.some((error) => error.code === NO_MANIFEST) ?? true;
+async function validateSnapshot(root, copy, description) {
+  let { manifest, contents } = await resolveValidateTarget(copy.dir);
+  let noManifest = manifest?.errors.some((error) => error.code === NO_MANIFEST) ?? true;
   let combined = combinedIssues(
-    mapCopyPathsInResults(m ? contents : [manifest ?? [], contents].flat(), r, e),
-  ).concat(m ? folderNameFindings(e) : []);
-  let c = m ? await pluginRootHasMarker(r.dir) : manifest?.fileType === "plugin";
-  let manifest_2 = await readDraftManifestState(r.dir);
-  if (!c) return refusalResult("not-a-plugin");
+    mapCopyPathsInResults(noManifest ? contents : [manifest ?? [], contents].flat(), copy, root),
+  ).concat(noManifest ? folderNameFindings(root) : []);
+  let isPlugin = noManifest ? await pluginRootHasMarker(copy.dir) : manifest?.fileType === "plugin";
+  let manifest_2 = await readDraftManifestState(copy.dir);
+  if (!isPlugin) return refusalResult("not-a-plugin");
   if (combined.length > 0) return refusalResult("findings", combined);
   if (manifest_2 === "unreadable") return refusalResult("unreadable", [identityPath_2(PLUGIN_MANIFEST_PATH)]);
   return manifest_2 === "absent"
-    ? needsManifestResult(e, s)
-    : checkSnapshotUnchanged(requireManifestPath(await buildPublishSnapshot(e, manifest_2)), r);
+    ? needsManifestResult(root, description)
+    : checkSnapshotUnchanged(requireManifestPath(await buildPublishSnapshot(root, manifest_2)), copy);
 }
 //@ chunk-9cjx5pnm.js:11962-12057 placement
 /**
  * 检查 manifest 是否被排除在外。
  */
-function leftOutManifestProblem(e) {
-  let r = identityPath_2(PLUGIN_MANIFEST_PATH);
-  return e.leftOut.some((n) => n.path === r) ? refusalResult("unreadable", [r]) : undefined;
+function leftOutManifestProblem(snapshot) {
+  let manifestPath = identityPath_2(PLUGIN_MANIFEST_PATH);
+  return snapshot.leftOut.some((leftOut) => leftOut.path === manifestPath)
+    ? refusalResult("unreadable", [manifestPath])
+    : undefined;
 }
 //@ chunk-9cjx5pnm.js:12057-12411 placement
-async function checkPublishFolderSize(e, r) {
-  let s = await scanPublishFolder(e);
-  let n =
-    leftOutManifestProblem(s) ??
+async function checkPublishFolderSize(root, description) {
+  let snapshot = await scanPublishFolder(root);
+  let refusal =
+    leftOutManifestProblem(snapshot) ??
     publishSizeRefusal(
-      s,
-      s.files.reduce((acc, file) => acc + file.bytes, 0),
+      snapshot,
+      snapshot.files.reduce((acc, file) => acc + file.bytes, 0),
     );
-  if (n !== undefined) return n;
-  let a = await snapshotPublishFolder(e, s.files);
-  if ("missed" in a) return fileChangedOutcome(a);
-  let m = onceExport(() => removeValidationCopy(a.home));
-  using f = registerCleanup(m);
+  if (refusal !== undefined) return refusal;
+  let copy = await snapshotPublishFolder(root, snapshot.files);
+  if ("missed" in copy) return fileChangedOutcome(copy);
+  let removeCopy = onceExport(() => removeValidationCopy(copy.home));
+  using cleanup = registerCleanup(removeCopy);
   if (isCleanupStarted()) {
-    await m();
+    await removeCopy();
     return Promise.reject(processEndingError());
   }
   try {
-    return await validateSnapshot(e, a, r).catch((error) =>
+    return await validateSnapshot(root, copy, description).catch((error) =>
       refusalResult(
         "unreadable",
-        errorDetails(error).map((g) => mapCopyPathToOriginal(g, a, e)),
+        errorDetails(error).map((detail) => mapCopyPathToOriginal(detail, copy, root)),
       ),
     );
   } finally {
-    await m();
+    await removeCopy();
   }
 }
 //@ chunk-9cjx5pnm.js:12411-12614 placement
 async function resolvePublishFolder(folder, description) {
-  let s = await realpath(resolve(getCwd(), folder)).catch(() => {
+  let resolved = await realpath(resolve(getCwd(), folder)).catch(() => {
     return;
   });
-  if (!(s !== undefined && (await isDirectoryOrFalse(s)))) return refusalResult("no-folder", [folder]);
-  return (await readPluginFileSafe(s, join(s, MANIFEST_DIR_NAME))) === "refused"
+  if (!(resolved !== undefined && (await isDirectoryOrFalse(resolved))))
+    return refusalResult("no-folder", [folder]);
+  return (await readPluginFileSafe(resolved, join(resolved, MANIFEST_DIR_NAME))) === "refused"
     ? refusalResult("unreadable", [MANIFEST_DIR_NAME])
-    : unreadableOnError(checkPublishFolderSize(s, description));
+    : unreadableOnError(checkPublishFolderSize(resolved, description));
 }
 //@ chunk-9cjx5pnm.js:12614-12683 placement
 /**
  * 构造草稿 manifest 的条目。
  */
-var draftManifestEntry = (e) => ({
+var draftManifestEntry = (publishFolder) => ({
   path: identityPath_2(PLUGIN_MANIFEST_PATH),
-  bytes: Buffer.byteLength(e.draft),
+  bytes: Buffer.byteLength(publishFolder.draft),
   mode: FILE_MODE_RW,
 });
 //@ chunk-9cjx5pnm.js:12716-12860 placement
-function draftManifestSummary(e) {
-  let r = PluginManifestSchema().safeParse(safeParseJSON(e.draft));
+function draftManifestSummary(publishFolder) {
+  let parsed = PluginManifestSchema().safeParse(safeParseJSON(publishFolder.draft));
   return {
-    name: r.data?.name ?? basename(e.root),
-    version: r.data?.version,
-    description: r.data?.description,
+    name: parsed.data?.name ?? basename(publishFolder.root),
+    version: parsed.data?.version,
+    description: parsed.data?.description,
   };
 }
 //@ chunk-9cjx5pnm.js:12860-12932 placement
 /**
  * 把草稿条目并入文件列表。
  */
-var appendFiles = (listing, r) => ({
-  files: listing.files.concat(r).toSorted(byPath),
+var appendFiles = (listing, extraFiles) => ({
+  files: listing.files.concat(extraFiles).toSorted(byPath),
   leftOut: listing.leftOut,
 });
 //@ chunk-9cjx5pnm.js:12932-12967 placement
@@ -646,20 +702,22 @@ var withHash = (hashes, path, draft) => ({
   [path]: computeContentHash(draft),
 });
 //@ chunk-9cjx5pnm.js:12967-13073 placement
-var withDraftManifest = (publishSnapshot, r, s) => ({
+var withDraftManifest = (publishSnapshot, entry, publishFolder) => ({
   ...publishSnapshot,
-  bytes: publishSnapshot.bytes + r.bytes,
-  listing: appendFiles(publishSnapshot.listing, r),
-  hashes: withHash(publishSnapshot.hashes, r.path, s.draft),
+  bytes: publishSnapshot.bytes + entry.bytes,
+  listing: appendFiles(publishSnapshot.listing, entry),
+  hashes: withHash(publishSnapshot.hashes, entry.path, publishFolder.draft),
 });
 //@ chunk-9cjx5pnm.js:13073-13167 placement
 /**
  * 为 “需要补 manifest” 的情况补上草稿。
  */
-async function buildWithDraftManifest(e) {
-  let r = draftManifestEntry(e);
-  let publishSnapshot = await buildPublishSnapshot(e.root, draftManifestSummary(e));
-  return publishSnapshot.kind === "ready" ? withDraftManifest(publishSnapshot, r, e) : publishSnapshot;
+async function buildWithDraftManifest(publishFolder) {
+  let entry = draftManifestEntry(publishFolder);
+  let publishSnapshot = await buildPublishSnapshot(publishFolder.root, draftManifestSummary(publishFolder));
+  return publishSnapshot.kind === "ready"
+    ? withDraftManifest(publishSnapshot, entry, publishFolder)
+    : publishSnapshot;
 }
 //@ chunk-9cjx5pnm.js:13167-13234 placement
 /**
@@ -671,13 +729,13 @@ async function ensureManifest(publishFolder) {
     : publishFolder;
 }
 //@ chunk-9cjx5pnm.js:13234-13441 placement
-async function preparePublishFolder(e, organization) {
-  let publishFolder = await resolvePublishFolder(e.folder, e.description);
+async function preparePublishFolder(input, organization) {
+  let publishFolder = await resolvePublishFolder(input.folder, input.description);
   let manifest = await ensureManifest(publishFolder);
   if (manifest.kind === "refused") return manifest;
   return manifest.kind === "ready"
     ? {
-        wanted: e,
+        wanted: input,
         plan: manifest,
         organization,
         draft: draftManifestOf(publishFolder),
@@ -695,8 +753,8 @@ var PUBLISH_STOPPED_TEXT = Object.freeze({
     "The upload had arrived, and its submission was on its way: it may have reached your organization.",
 });
 //@ chunk-9cjx5pnm.js:13826-13895 placement
-function stoppedOrResult(e, r, s) {
-  return e.signal.aborted ? refusalResult("stopped", [PUBLISH_STOPPED_TEXT[s]]) : r;
+function stoppedOrResult(request, result, stage) {
+  return request.signal.aborted ? refusalResult("stopped", [PUBLISH_STOPPED_TEXT[stage]]) : result;
 }
 //@ chunk-9cjx5pnm.js:14213-14224 placement
 /**
@@ -709,7 +767,8 @@ var CLIENT_ERROR_MIN = 200;
  */
 var CLIENT_ERROR_MAX = 300;
 //@ chunk-9cjx5pnm.js:14235-14274 placement
-var isClientErrorStatus = (e) => e.status >= CLIENT_ERROR_MIN && e.status < CLIENT_ERROR_MAX;
+var isClientErrorStatus = (response) =>
+  response.status >= CLIENT_ERROR_MIN && response.status < CLIENT_ERROR_MAX;
 //@ chunk-9cjx5pnm.js:14274-14285 placement
 /**
  * 状态码 400。
@@ -736,7 +795,7 @@ var STATUS_NOT_IMPLEMENTED = 501;
  */
 var STATUS_UNPROCESSABLE = 422;
 //@ chunk-9cjx5pnm.js:14329-14368 placement
-var Rn = Object.freeze([
+var NOT_SERVED_STATUSES = Object.freeze([
   STATUS_BAD_REQUEST,
   STATUS_NOT_FOUND,
   STATUS_METHOD_NOT_ALLOWED,
@@ -754,25 +813,30 @@ var MAX_LISTED_ERRORS = 20;
  */
 var MAX_ERROR_CHARS = 300;
 //@ chunk-9cjx5pnm.js:14389-14428 placement
-var _n = Object.freeze(["scan", "other"]);
+var SUBMISSION_STATE_REASONS = Object.freeze(["scan", "other"]);
 //@ chunk-9cjx5pnm.js:14428-14544 placement
-var publishFindingsList = (e, publishApiError) =>
-  [...publishApiError.findings, ...[publishApiError.message ?? ""].filter((s) => s !== "" && _n.includes(e))]
+var publishFindingsList = (code, publishApiError) =>
+  [
+    ...publishApiError.findings,
+    ...[publishApiError.message ?? ""].filter(
+      (message) => message !== "" && SUBMISSION_STATE_REASONS.includes(code),
+    ),
+  ]
     .slice(0, MAX_LISTED_ERRORS)
-    .map((s) => truncateToLength(s, MAX_ERROR_CHARS));
+    .map((finding) => truncateToLength(finding, MAX_ERROR_CHARS));
 //@ chunk-9cjx5pnm.js:14544-14783 placement
 var publishApiErrorSchema = DoctorLazy(() =>
-  u({
-    error: u({
-      message: string().optional(),
-      details: u({
-        error_code: string().optional(),
-        validation_errors: u({
-          message: string().optional(),
+  objectSchema({
+    error: objectSchema({
+      message: stringSchema().optional(),
+      details: objectSchema({
+        error_code: stringSchema().optional(),
+        validation_errors: objectSchema({
+          message: stringSchema().optional(),
           plugins: array(
-            u({
-              name: string().optional(),
-              error: string().optional(),
+            objectSchema({
+              name: stringSchema().optional(),
+              error: stringSchema().optional(),
             }),
           ).optional(),
         }).optional(),
@@ -781,26 +845,29 @@ var publishApiErrorSchema = DoctorLazy(() =>
   }),
 );
 //@ chunk-9cjx5pnm.js:14783-15042 placement
-function parsePublishApiError(e) {
-  let error = publishApiErrorSchema().safeParse(e.data).data?.error;
+function parsePublishApiError(response) {
+  let error = publishApiErrorSchema().safeParse(response.data).data?.error;
   let validationErrors = error?.details?.validation_errors;
   return {
     code: error?.details?.error_code,
     message: error?.message,
     findings: [
       validationErrors?.message ?? "",
-      ...(validationErrors?.plugins ?? []).map((n) => [n.name, n.error].filter(Boolean).join(": ")),
+      ...(validationErrors?.plugins ?? []).map((pluginError) =>
+        [pluginError.name, pluginError.error].filter(Boolean).join(": "),
+      ),
     ].filter(Boolean),
   };
 }
 //@ chunk-9cjx5pnm.js:15042-15144 placement
-function publishApiOutcome(e, r) {
-  let publishApiError = parsePublishApiError(e);
-  let n = r.codes[publishApiError.code ?? ""] ?? r.statuses[e.status] ?? "other";
-  return refusalResult(n, publishFindingsList(n, publishApiError));
+function publishApiOutcome(response, outcomeMaps) {
+  let publishApiError = parsePublishApiError(response);
+  let kind =
+    outcomeMaps.codes[publishApiError.code ?? ""] ?? outcomeMaps.statuses[response.status] ?? "other";
+  return refusalResult(kind, publishFindingsList(kind, publishApiError));
 }
 //@ chunk-9cjx5pnm.js:15144-15169 placement
-var An = Object.freeze({});
+var EMPTY_OUTCOME = Object.freeze({});
 //@ chunk-9cjx5pnm.js:15169-15183 placement
 /**
  * 发布 POST 请求的超时（120000 毫秒）。
@@ -817,10 +884,11 @@ var PUBLISH_HTTP = Object.freeze({
   post: PUBLISH_POST_TIMEOUT_MS,
 });
 export {
-  An,
+  relativePosixPathOf,
+  EMPTY_OUTCOME,
   PUBLISH_HTTP,
   parsePublishApiError,
-  Rn,
+  NOT_SERVED_STATUSES,
   isClientErrorStatus,
   publishApiOutcome,
   slugifyPluginName,

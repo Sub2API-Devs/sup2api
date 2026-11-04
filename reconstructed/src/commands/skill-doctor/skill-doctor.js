@@ -32,16 +32,16 @@ import { errorMessage } from "../../utils/errors.js";
 function formatSkillUsageTable(rows) {
   if (rows.length === 0) return sequential.dim("  (no skills loaded)");
   let { cells, widths } = formatSkillUsageTable_2(rows);
-  let o = sequential.dim(
+  let header = sequential.dim(
     `  ${padEndToWidth("skill", widths.name)}  ${padEndToWidth("source", widths.source)}  ${padStartToWidth("context", widths.context)}  ${padStartToWidth("7d tokens", widths.week)}  ${padStartToWidth("uses", widths.uses + 1)}  last used`,
   );
-  let joined = rows.map((i, h) => {
-    let u = cells[h];
-    let c = `  ${padEndToWidth(i.name, widths.name)}  ${sequential.dim(padEndToWidth(i.source, widths.source))}  ${padStartToWidth(u.context, widths.context)}  ${padStartToWidth(u.week, widths.week)}  ${padStartToWidth(String(i.usageCount), widths.uses)}\xD7  ${u.lastUsed}`;
-    return i.usageCount === 0 ? sequential.yellow(c) : c;
+  let joined = rows.map((row, rowIndex) => {
+    let cell = cells[rowIndex];
+    let line = `  ${padEndToWidth(row.name, widths.name)}  ${sequential.dim(padEndToWidth(row.source, widths.source))}  ${padStartToWidth(cell.context, widths.context)}  ${padStartToWidth(cell.week, widths.week)}  ${padStartToWidth(String(row.usageCount), widths.uses)}\xD7  ${cell.lastUsed}`;
+    return row.usageCount === 0 ? sequential.yellow(line) : line;
   }).join(`
 `);
-  return `${o}
+  return `${header}
 ${joined}`;
 }
 //@ chunk-kxw5j15d.js:1049-3408 placement
@@ -59,21 +59,21 @@ async function buildSkillDoctorReport(context) {
     disusedPlugins,
     weekTokensNote,
   } = await runSkillDoctor(buildSkillDoctorContext(context));
-  let s = [];
-  s.push(sequential.bold("Skills loaded this session"));
-  s.push("");
-  s.push(formatSkillUsageTable(rows));
+  let lines = [];
+  lines.push(sequential.bold("Skills loaded this session"));
+  lines.push("");
+  lines.push(formatSkillUsageTable(rows));
   if (rows.length > 0) {
-    s.push("");
-    s.push(
+    lines.push("");
+    lines.push(
       sequential.dim("  context = this skill's one-line listing in the system prompt, included every turn"),
     );
-    s.push(
+    lines.push(
       sequential.dim(
         "  (dash = not in the current listing, costs nothing; full SKILL.md loads only when it runs)",
       ),
     );
-    s.push(
+    lines.push(
       sequential.dim(
         weekTokensNote === null
           ? "  7d tokens = tokens attributed to the skill over the last 7 days of sessions on this machine"
@@ -81,59 +81,59 @@ async function buildSkillDoctorReport(context) {
       ),
     );
   }
-  s.push("");
+  lines.push("");
   if (unusedOwned.length > 0)
-    s.push(
+    lines.push(
       sequential.yellow(
         `${unusedOwned.length} ${plural(unusedOwned.length, "skill")} loaded but never invoked. Each one adds to the system prompt every turn. Disable in /skills, or remove from .claude/skills.`,
       ),
     );
   if (unusedSynced.length > 0)
-    s.push(
+    lines.push(
       sequential.yellow(
         `${unusedSynced.length} ${plural(unusedSynced.length, "skill")} synced from claude.ai loaded but never invoked. Each one adds to the system prompt every turn. Disable in /skills, or turn ${unusedSynced.length === 1 ? "it" : "them"} off on claude.ai \u2014 a deleted synced copy is re-downloaded on the next sync.`,
       ),
     );
   if (unusedFromPlugins.length > 0) {
-    let n = uniq(
+    let sources = uniq(
       unusedFromPlugins.map((unusedFromPlugin) =>
         unusedFromPlugin.pluginKey === undefined
           ? unusedFromPlugin.source
           : printablePluginName(unusedFromPlugin.pluginKey),
       ),
     );
-    s.push(
+    lines.push(
       sequential.yellow(
-        `${unusedFromPlugins.length} plugin ${plural(unusedFromPlugins.length, "skill")} loaded but never invoked, from ${n.join(", ")}. Each one adds to the system prompt every turn. Plugin skills can't be turned off individually \u2014 disable ${n.length === 1 ? "the plugin" : "those plugins"} in /plugin.`,
+        `${unusedFromPlugins.length} plugin ${plural(unusedFromPlugins.length, "skill")} loaded but never invoked, from ${sources.join(", ")}. Each one adds to the system prompt every turn. Plugin skills can't be turned off individually \u2014 disable ${sources.length === 1 ? "the plugin" : "those plugins"} in /plugin.`,
       ),
     );
   }
   if (unusedFromMcp.length > 0) {
-    let n = unusedMcpServers.length > 0 ? `, from ${unusedMcpServers.join(", ")}` : "";
-    let p = unusedMcpServers.length <= 1;
-    s.push(
+    let serverSuffix = unusedMcpServers.length > 0 ? `, from ${unusedMcpServers.join(", ")}` : "";
+    let isSingleServer = unusedMcpServers.length <= 1;
+    lines.push(
       sequential.yellow(
-        `${unusedFromMcp.length} MCP ${plural(unusedFromMcp.length, "skill")} loaded but never invoked${n}. Each one adds to the system prompt every turn. MCP skills live on the server, not on disk \u2014 turning ${p ? "that server" : "those servers"} off in /mcp also removes ${p ? "its" : "their"} tools.`,
+        `${unusedFromMcp.length} MCP ${plural(unusedFromMcp.length, "skill")} loaded but never invoked${serverSuffix}. Each one adds to the system prompt every turn. MCP skills live on the server, not on disk \u2014 turning ${isSingleServer ? "that server" : "those servers"} off in /mcp also removes ${isSingleServer ? "its" : "their"} tools.`,
       ),
     );
   }
-  if (rows.length > 0 && rows.every((n) => n.usageCount > 0))
-    s.push(sequential.green("All loaded skills have been used at least once."));
+  if (rows.length > 0 && rows.every((row) => row.usageCount > 0))
+    lines.push(sequential.green("All loaded skills have been used at least once."));
   if (disusedPlugins.length > 0) {
-    s.push("");
-    s.push(sequential.bold("Plugins not used recently"));
-    s.push("");
+    lines.push("");
+    lines.push(sequential.bold("Plugins not used recently"));
+    lines.push("");
     for (let disusedPlugin of disusedPlugins)
-      s.push(
+      lines.push(
         `  ${sequential.yellow(printablePluginName(disusedPlugin.name))}  ${sequential.dim(`last used ${disusedPlugin.daysSinceLastUse} days ago`)}`,
       );
-    s.push("");
-    s.push(sequential.dim("  Manage these in /plugin"));
+    lines.push("");
+    lines.push(sequential.dim("  Manage these in /plugin"));
   }
   if (rows.length === 0) logFeatureSad("cli_skill_doctor", "no_user_skills");
   else if (weekTokensNote !== null) logFeatureSad("cli_skill_doctor", "scan_policy_denied");
   else logFeatureOk("cli_skill_doctor");
-  return s.join(`
+  return lines.join(`
 `);
 }
 //@ chunk-kxw5j15d.js:3408-4028 placement
@@ -155,8 +155,8 @@ var call = async (args, context) => {
       value,
     };
   } catch (error) {
-    let o = error instanceof SkillDoctorStageError ? error.cause : error;
-    logError(o);
+    let cause = error instanceof SkillDoctorStageError ? error.cause : error;
+    logError(cause);
     logFeatureBad(
       "cli_skill_doctor",
       error instanceof SkillDoctorStageError ? error.featureErrorCode : "render_failed",
@@ -171,7 +171,7 @@ var call = async (args, context) => {
       };
     return {
       type: "text",
-      value: `Couldn't compute skill usage. Run with --debug for details. (${errorMessage(o)})`,
+      value: `Couldn't compute skill usage. Run with --debug for details. (${errorMessage(cause)})`,
       outcome: {
         kind: "failed",
       },

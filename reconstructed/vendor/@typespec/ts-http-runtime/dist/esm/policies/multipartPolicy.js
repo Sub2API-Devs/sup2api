@@ -5,12 +5,12 @@
  * pieces: chunk-mrx6y2r5.js (8)
  * attribution: esm-fingerprint 6, esm-layout 2
  */
-import { Bn } from "../pipelineRequest.js";
-import { hasStreamMethod, rt, concat } from "../util/concat.js";
+import { getRequestUuid } from "../pipelineRequest.js";
+import { hasStreamMethod, stringToUint8Array, concat } from "../util/concat.js";
 
 //@ chunk-mrx6y2r5.js:50855-50906 esm-fingerprint
 function generateBoundary() {
-  return `----AzSDKFormBoundary${Bn()}`;
+  return `----AzSDKFormBoundary${getRequestUuid()}`;
 }
 //@ chunk-mrx6y2r5.js:50906-50975 esm-layout
 function encodeHeaders(headers) {
@@ -39,27 +39,27 @@ function getTotalLength(sources) {
 //@ chunk-mrx6y2r5.js:51187-51444 esm-fingerprint
 async function buildRequestBody(request, parts, boundary) {
   let sources = [
-    rt(`--${boundary}`, "utf-8"),
+    stringToUint8Array(`--${boundary}`, "utf-8"),
     ...parts.flatMap((part) => [
-      rt(
+      stringToUint8Array(
         `\r
 `,
         "utf-8",
       ),
-      rt(encodeHeaders(part.headers), "utf-8"),
-      rt(
+      stringToUint8Array(encodeHeaders(part.headers), "utf-8"),
+      stringToUint8Array(
         `\r
 `,
         "utf-8",
       ),
       part.body,
-      rt(
+      stringToUint8Array(
         `\r
 --${boundary}`,
         "utf-8",
       ),
     ]),
-    rt(
+    stringToUint8Array(
       `--\r
 \r
 `,
@@ -84,7 +84,7 @@ function assertValidBoundary(boundary) {
     throw Error(`Multipart boundary "${boundary}" contains invalid characters`);
 }
 //@ chunk-mrx6y2r5.js:51782-52525 esm-fingerprint
-function multipartPolicy() {
+function multipartPolicy_2() {
   return {
     name: multipartPolicyName,
     async sendRequest(request, next) {
@@ -114,4 +114,4 @@ function multipartPolicy() {
     },
   };
 }
-export { multipartPolicyName, multipartPolicy };
+export { multipartPolicyName, multipartPolicy_2 };

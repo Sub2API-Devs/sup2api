@@ -36,7 +36,7 @@ import { buildRunningTurnRecord } from "./runningTurnRecord.js";
 import { isRemoteToolForwardingEnabledCached } from "../../services/remoteTools/servingGates.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { string, u } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema, objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { env } from "../../utils/env.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
@@ -62,41 +62,46 @@ import { MAX_MERGED_PROMPTS } from "./inboundMessages.js";
 import { mergeQueuedPrompts } from "./userFrameIntake.js";
 import { discardPollEvent, isPollEventMode, settleDeliveredEvents } from "../../utils/pollEvents.js";
 import { matchRequestId } from "../structuredIOProtocol.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-tyg7f3ek.js:127752-127990 placement
-function classifyTurnAbort(e, signal, turnEnd) {
+function classifyTurnAbort(drain, signal, turnEnd) {
   if (!(turnEnd.abortedAtResult ?? signal.aborted)) return;
-  let s = e.stopReachedTurn || (isCancelAbortReason(signal.reason) && !e.sendNowCutTurn);
-  let h = e.sendNowCutTurn || unwrapAbortReason(signal.reason) === "interrupt";
+  let byStop = drain.stopReachedTurn || (isCancelAbortReason(signal.reason) && !drain.sendNowCutTurn);
+  let bySendNow = drain.sendNowCutTurn || unwrapAbortReason(signal.reason) === "interrupt";
   return {
-    by: s ? "stop" : h ? "send-now" : "other",
+    by: byStop ? "stop" : bySendNow ? "send-now" : "other",
     sendRunsAgain: turnEnd.putBack.size > 0,
   };
 }
 //@ chunk-tyg7f3ek.js:127990-128041 placement
-var COST_STATE_UNREAD = identity(
-  {
-    unread: false,
-  },
-  (e) => {
-    e.unread = false;
-  },
-);
-var MAX_COST_STATE_BYTES = 16384;
+var COST_STATE_UNREAD; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_COST_STATE_BYTES;
+deferInit("chunk-tyg7f3ek.js:127990", () => {
+  COST_STATE_UNREAD = identity(
+    {
+      unread: false,
+    },
+    (state) => {
+      state.unread = false;
+    },
+  );
+  MAX_COST_STATE_BYTES = 16384;
+});
 //@ chunk-tyg7f3ek.js:128041-128088 placement
-function isCostStateWithinLimit(e) {
-  return Buffer.byteLength(e) <= MAX_COST_STATE_BYTES;
+function isCostStateWithinLimit(text) {
+  return Buffer.byteLength(text) <= MAX_COST_STATE_BYTES;
 }
 //@ chunk-tyg7f3ek.js:128088-128315 placement
 function restoreCostState(restoredWorkerState) {
   COST_STATE_UNREAD.unread = restoredWorkerState?.readFailed === true;
   let costState = restoredWorkerState?.internal?.cost_state;
   if (typeof costState !== "string" || !isCostStateWithinLimit(costState)) return;
-  let r = CostStateEntrySchema().safeParse(safeParseJSON(costState, false));
-  if (r.success && r.data.totalCostUSD >= getTotalCostUSD())
+  let parsed = CostStateEntrySchema().safeParse(safeParseJSON(costState, false));
+  if (parsed.success && parsed.data.totalCostUSD >= getTotalCostUSD())
     setCostStateForRestore({
       costState: {
-        ...r.data,
+        ...parsed.data,
         sessionId: getSessionId(),
       },
     });
@@ -109,30 +114,30 @@ class CostStatePusher {
   constructor(io) {
     this.io = io;
   }
-  pushIfChanged(e) {
-    let n = getSessionCostUSD() + getSideQueryCostUSD();
+  pushIfChanged(extra) {
+    let sessionCost = getSessionCostUSD() + getSideQueryCostUSD();
     let sessionUsageExcludingRestored = getSessionUsageExcludingRestored();
-    let s = n !== this.lastPushedCostUsd;
+    let sessionChanged = sessionCost !== this.lastPushedCostUsd;
     let totalCostUSD = getTotalCostUSD();
-    if (!s && totalCostUSD === this.lastSavedTotalCostUsd) {
-      if (e !== undefined) this.io.sessionState.notifyInternalMetadataChanged(e);
+    if (!sessionChanged && totalCostUSD === this.lastSavedTotalCostUsd) {
+      if (extra !== undefined) this.io.sessionState.notifyInternalMetadataChanged(extra);
       return;
     }
-    let y = COST_STATE_UNREAD.unread ? undefined : resetCostState();
-    let S = y && jsonStringify(y);
+    let costState = COST_STATE_UNREAD.unread ? undefined : resetCostState();
+    let costStateJson = costState && jsonStringify(costState);
     this.io.sessionState.notifyInternalMetadataChanged({
-      ...e,
-      ...(s && {
-        cumulative_cost_usd: n,
+      ...extra,
+      ...(sessionChanged && {
+        cumulative_cost_usd: sessionCost,
         cumulative_input_tokens: sessionUsageExcludingRestored.inputTokens,
         cumulative_output_tokens: sessionUsageExcludingRestored.outputTokens,
         cumulative_cache_read_tokens: sessionUsageExcludingRestored.cacheReadInputTokens,
         cumulative_cache_write_tokens: sessionUsageExcludingRestored.cacheCreationInputTokens,
       }),
-      cost_state: S && isCostStateWithinLimit(S) ? S : undefined,
+      cost_state: costStateJson && isCostStateWithinLimit(costStateJson) ? costStateJson : undefined,
     });
     this.lastSavedTotalCostUsd = totalCostUSD;
-    this.lastPushedCostUsd = n;
+    this.lastPushedCostUsd = sessionCost;
   }
 }
 //@ chunk-tyg7f3ek.js:128991-129003 placement
@@ -228,8 +233,8 @@ class TurnGate {
     }
     return;
   }
-  closeWhatNoRowVouchesFor(e) {
-    if (e) return;
+  closeWhatNoRowVouchesFor(crashed) {
+    if (crashed) return;
     try {
       this.declinedRedeliveries.closeWhatNoRowVouchesFor();
     } catch (error) {
@@ -248,12 +253,13 @@ class TurnGate {
           unref: true,
         }),
       ]);
-      let r = crashed || this.stopping() ? undefined : this.io.sessionState.waitForTurnEndSummary();
-      if (r !== undefined) {
+      let summaryPromise =
+        crashed || this.stopping() ? undefined : this.io.sessionState.waitForTurnEndSummary();
+      if (summaryPromise !== undefined) {
         this.drain.turnStartClock.enter("earlier_turn");
         this.drain.awaitingTurnEndSummary = true;
         try {
-          await raceTeardown(r);
+          await raceTeardown(summaryPromise);
         } finally {
           this.drain.awaitingTurnEndSummary = false;
         }
@@ -267,11 +273,11 @@ class TurnGate {
         logError(error);
       }
     if (!this.stopping()) {
-      let r = this.decideIdleReport() === "idle";
-      if (r) this.io.sessionState.notifyStateChanged("idle");
+      let idle = this.decideIdleReport() === "idle";
+      if (idle) this.io.sessionState.notifyStateChanged("idle");
       this.pushCost();
-      for (let s of this.drainSdkEvents()) this.emit(s);
-      if (r) this.startRecap();
+      for (let event of this.drainSdkEvents()) this.emit(event);
+      if (idle) this.startRecap();
     }
     this.closeWhatNoRowVouchesFor(crashed);
     this.drain.running = false;
@@ -296,15 +302,18 @@ class TurnGate {
   }
 }
 //@ chunk-tyg7f3ek.js:131852-132099 placement
-function heldUuidsAnsweredByTurn(e, n) {
-  let r = trimTrailingAfterTurn(e, n);
-  let s = new Set(r);
-  let filtered = mergedMessageUuids(r, n).filter((S) => {
-    let R = normalizeUuidOrNull(S);
-    let w = R === null ? undefined : e[findMessageIndex(e, R)];
-    return S === n || (R !== null && w !== undefined && s.has(w) && isTurnOpen(e, R) === false);
+function heldUuidsAnsweredByTurn(entries, uuid) {
+  let trimmed = trimTrailingAfterTurn(entries, uuid);
+  let kept = new Set(trimmed);
+  let extraUuids = mergedMessageUuids(trimmed, uuid).filter((mergedUuid) => {
+    let normalized = normalizeUuidOrNull(mergedUuid);
+    let row = normalized === null ? undefined : entries[findMessageIndex(entries, normalized)];
+    return (
+      mergedUuid === uuid ||
+      (normalized !== null && row !== undefined && kept.has(row) && isTurnOpen(entries, normalized) === false)
+    );
   });
-  let userMessageUuids = buildRunningTurnRecord(n, filtered).fields()?.user_message_uuids;
+  let userMessageUuids = buildRunningTurnRecord(uuid, extraUuids).fields()?.user_message_uuids;
   return userMessageUuids !== undefined && userMessageUuids.length > 1 ? userMessageUuids : undefined;
 }
 //@ chunk-tyg7f3ek.js:132099-132181 placement
@@ -356,53 +365,53 @@ class HostReturnWakeTracker {
     turnsStarted: 0,
   };
   #a = new AbortController();
-  start(e) {
+  start(host) {
     if (this.#t !== undefined) return;
-    this.#t = e;
-    e.registry.onHostStatusChange((n) => {
+    this.#t = host;
+    host.registry.onHostStatusChange((change) => {
       try {
-        if (n.change !== "back" || !e.isEnabled()) return;
-        if (!n.toldModel) {
+        if (change.change !== "back" || !host.isEnabled()) return;
+        if (!change.toldModel) {
           logFeatureSad("rtc_self_wake", "not_told");
           return;
         }
-        let r = {
+        let state = {
           answered: false,
-          turnsStarted: e.turnsStarted(),
-          at: e.now(),
+          turnsStarted: host.turnsStarted(),
+          at: host.now(),
           holding: false,
         };
-        this.#e.set(n.name, r);
-        e.schedule(() => {
-          this.#s(e, n.name, r);
+        this.#e.set(change.name, state);
+        host.schedule(() => {
+          this.#s(host, change.name, state);
         }, HOST_RETURN_WAKE_RETENTION_MS);
       } catch (error) {
         logError(toError(error));
       }
     });
-    e.lateOutcomes.onLastWordQueued((n) => {
-      if (n !== undefined || !e.isEnabled()) return;
+    host.lateOutcomes.onLastWordQueued((x) => {
+      if (x !== undefined || !host.isEnabled()) return;
       this.#r = {
-        turnsStarted: e.turnsStarted(),
+        turnsStarted: host.turnsStarted(),
       };
-      for (let [r, s] of this.#e) if (s.holding) this.#s(e, r, s);
-      this.#p(e);
+      for (let [name, state] of this.#e) if (state.holding) this.#s(host, name, state);
+      this.#p(host);
     });
-    e.messageQueue.subscribe(() => {
+    host.messageQueue.subscribe(() => {
       try {
-        for (let n of e.messageQueue.getCommandQueueSnapshot()) {
-          if (this.#m.has(n)) continue;
-          this.#m.add(n);
-          if (!isHumanOrHandedOffTurn(n) || n.resumeReason !== undefined) continue;
+        for (let command of host.messageQueue.getCommandQueueSnapshot()) {
+          if (this.#m.has(command)) continue;
+          this.#m.add(command);
+          if (!isHumanOrHandedOffTurn(command) || command.resumeReason !== undefined) continue;
           this.#o = 0;
-          this.#u = e.now();
-          let r =
-            n.handedOffTurn === undefined
-              ? n.receivedAtMs
-              : n.handedOffTurn.requestedAtMs === undefined
+          this.#u = host.now();
+          let receivedAt =
+            command.handedOffTurn === undefined
+              ? command.receivedAtMs
+              : command.handedOffTurn.requestedAtMs === undefined
                 ? undefined
-                : e.monotonicNow() - (e.now() - n.handedOffTurn.requestedAtMs);
-          if (r !== undefined && r > this.#c) this.#i = false;
+                : host.monotonicNow() - (host.now() - command.handedOffTurn.requestedAtMs);
+          if (receivedAt !== undefined && receivedAt > this.#c) this.#i = false;
         }
       } catch (error) {
         logError(toError(error));
@@ -410,103 +419,103 @@ class HostReturnWakeTracker {
     });
   }
   stopped() {
-    let e = this.#t;
-    if (e === undefined) return;
+    let host = this.#t;
+    if (host === undefined) return;
     try {
       this.#i = true;
-      this.#c = e.monotonicNow();
+      this.#c = host.monotonicNow();
       this.#a.abort();
       this.#a = new AbortController();
-      let n = this.#e.size > 0 || this.#r !== undefined;
+      let hadState = this.#e.size > 0 || this.#r !== undefined;
       this.#e.clear();
       this.#r = undefined;
-      let r = e.messageQueue.removeByFilter(isHostReturnWake);
-      if (n || r.length > 0) logFeatureSad("rtc_self_wake", "stopped");
+      let removed = host.messageQueue.removeByFilter(isHostReturnWake);
+      if (hadState || removed.length > 0) logFeatureSad("rtc_self_wake", "stopped");
     } catch (error) {
       logFeatureBad("rtc_self_wake", "threw");
       logError(toError(error));
     }
   }
-  async #s(e, n, r) {
+  async #s(host, name, state) {
     try {
-      if (this.#h(e, n, r)) return;
-      let s = e.messageQueue.peek(isHostReturnWake) !== undefined;
-      let h = HOST_RETURN_MIN_QUIET_MS - (e.now() - (this.#n.at(-1) ?? -1 / 0));
-      if (!s && h > 0) {
-        e.schedule(() => {
-          this.#s(e, n, r);
-        }, h);
+      if (this.#h(host, name, state)) return;
+      let hasWake = host.messageQueue.peek(isHostReturnWake) !== undefined;
+      let quietMs = HOST_RETURN_MIN_QUIET_MS - (host.now() - (this.#n.at(-1) ?? -1 / 0));
+      if (!hasWake && quietMs > 0) {
+        host.schedule(() => {
+          this.#s(host, name, state);
+        }, quietMs);
         return;
       }
-      if (!r.answered) {
-        let S = await e.registry
+      if (!state.answered) {
+        let probe = await host.registry
           .entries()
-          .find((R) => R.name === n)
+          .find((entry) => entry.name === name)
           ?.transport.probeLive?.({
             signal: this.#a.signal,
           });
-        if (this.#e.get(n) !== r) return;
-        if (S !== true) {
-          this.#e.delete(n);
-          logFeatureSad("rtc_self_wake", S === false ? "host_away" : "probe_inconclusive");
+        if (this.#e.get(name) !== state) return;
+        if (probe !== true) {
+          this.#e.delete(name);
+          logFeatureSad("rtc_self_wake", probe === false ? "host_away" : "probe_inconclusive");
           return;
         }
-        r.answered = true;
-        if (this.#h(e, n, r)) return;
-        if (e.lateOutcomes.mainCallOpenOn(n)) e.askAboutGivenUpCalls(n);
+        state.answered = true;
+        if (this.#h(host, name, state)) return;
+        if (host.lateOutcomes.mainCallOpenOn(name)) host.askAboutGivenUpCalls(name);
       }
-      if (e.messageQueue.peek(isHostReturnWake) !== undefined) return;
-      let y = HOST_RETURN_LINGER_MS - (e.now() - r.at);
-      if (y > 0 && this.#r === undefined && e.lateOutcomes.mainCallOpenOn(n)) {
-        if (!r.holding) {
-          r.holding = true;
-          e.schedule(() => {
-            r.holding = false;
-            this.#s(e, n, r);
-          }, y);
+      if (host.messageQueue.peek(isHostReturnWake) !== undefined) return;
+      let lingerMs = HOST_RETURN_LINGER_MS - (host.now() - state.at);
+      if (lingerMs > 0 && this.#r === undefined && host.lateOutcomes.mainCallOpenOn(name)) {
+        if (!state.holding) {
+          state.holding = true;
+          host.schedule(() => {
+            state.holding = false;
+            this.#s(host, name, state);
+          }, lingerMs);
         }
         return;
       }
-      r.holding = false;
-      this.#g(e, MACHINE_REACHABLE_AGAIN_NOTE);
+      state.holding = false;
+      this.#g(host, MACHINE_REACHABLE_AGAIN_NOTE);
     } catch (error) {
-      if (this.#e.get(n) === r) this.#e.delete(n);
+      if (this.#e.get(name) === state) this.#e.delete(name);
       logFeatureBad("rtc_self_wake", "threw");
       logError(toError(error));
     }
   }
-  #p(e) {
+  #p(host) {
     try {
-      let n = this.#r;
-      if (n === undefined || e.messageQueue.peek(isHostReturnWake) !== undefined) return;
-      let r = !e.isEnabled()
+      let state = this.#r;
+      if (state === undefined || host.messageQueue.peek(isHostReturnWake) !== undefined) return;
+      let reason = !host.isEnabled()
         ? "flag_off"
-        : !e.lateOutcomes.lastWordWaitsForMain()
+        : !host.lateOutcomes.lastWordWaitsForMain()
           ? "already_told"
-          : (this.#l(e, n.turnsStarted) ?? (this.#d(e) ? "rate_limited" : undefined));
-      if (r !== undefined) {
+          : (this.#l(host, state.turnsStarted) ?? (this.#d(host) ? "rate_limited" : undefined));
+      if (reason !== undefined) {
         this.#r = undefined;
-        logFeatureSad("rtc_self_wake", r);
+        logFeatureSad("rtc_self_wake", reason);
         return;
       }
-      let s = HOST_RETURN_MIN_QUIET_MS - (e.now() - (this.#n.at(-1) ?? -1 / 0));
-      if (s > 0) {
-        e.schedule(() => this.#p(e), s);
+      let quietMs = HOST_RETURN_MIN_QUIET_MS - (host.now() - (this.#n.at(-1) ?? -1 / 0));
+      if (quietMs > 0) {
+        host.schedule(() => this.#p(host), quietMs);
         return;
       }
-      this.#g(e, HOST_RETURN_CORRECTION_NOTE);
+      this.#g(host, HOST_RETURN_CORRECTION_NOTE);
     } catch (error) {
       this.#r = undefined;
       logFeatureBad("rtc_self_wake", "threw");
       logError(toError(error));
     }
   }
-  #g(e, summary) {
+  #g(host, summary) {
     this.#f = {
-      at: e.now(),
-      turnsStarted: e.turnsStarted(),
+      at: host.now(),
+      turnsStarted: host.turnsStarted(),
     };
-    e.messageQueue.enqueuePendingNotification({
+    host.messageQueue.enqueuePendingNotification({
       mode: "task-notification",
       priority: "later",
       agentId: mainAgentId(),
@@ -518,54 +527,56 @@ class HostReturnWakeTracker {
       }),
     });
   }
-  #h(e, n, r) {
-    if (this.#e.get(n) !== r) return true;
-    if (!e.isEnabled()) {
-      this.#e.delete(n);
+  #h(host, name, state) {
+    if (this.#e.get(name) !== state) return true;
+    if (!host.isEnabled()) {
+      this.#e.delete(name);
       return true;
     }
-    let h = !e.registry.entries().some((y) => y.name === n && y.status === "online")
+    let reason = !host.registry.entries().some((entry) => entry.name === name && entry.status === "online")
       ? "host_away"
-      : e.messageQueue.peek(isHostReturnWake) !== undefined
+      : host.messageQueue.peek(isHostReturnWake) !== undefined
         ? undefined
-        : !e.registry.backNotePending(n)
+        : !host.registry.backNotePending(name)
           ? "already_told"
-          : (this.#l(e, r.turnsStarted) ?? (this.#d(e) ? "rate_limited" : undefined));
-    if (h === undefined) return false;
-    this.#e.delete(n);
-    logFeatureSad("rtc_self_wake", h);
+          : (this.#l(host, state.turnsStarted) ?? (this.#d(host) ? "rate_limited" : undefined));
+    if (reason === undefined) return false;
+    this.#e.delete(name);
+    logFeatureSad("rtc_self_wake", reason);
     return true;
   }
-  lapsedAtTurnStart(e) {
-    if (!isHostReturnWake(e)) return false;
-    let n = this.#t;
-    if (n === undefined) return true;
+  lapsedAtTurnStart(command) {
+    if (!isHostReturnWake(command)) return false;
+    let host = this.#t;
+    if (host === undefined) return true;
     try {
       let { at, turnsStarted } = this.#f;
-      let h = this.#_(n);
-      let y = h.some((P) => n.registry.backNotePending(P)) || n.lateOutcomes.lastWordWaitsForMain();
-      let S = !n.isEnabled()
+      let waiting = this.#_(host);
+      let pending =
+        waiting.some((name) => host.registry.backNotePending(name)) ||
+        host.lateOutcomes.lastWordWaitsForMain();
+      let reason = !host.isEnabled()
         ? "flag_off"
         : this.#u >= at
           ? "person_wrote"
-          : n.now() - at > HOST_WAKE_STALE_MS
+          : host.now() - at > HOST_WAKE_STALE_MS
             ? "stale"
-            : !y
-              ? h.length === 0 && this.#r === undefined
+            : !pending
+              ? waiting.length === 0 && this.#r === undefined
                 ? "host_away"
                 : "already_told"
-              : (this.#l(n, turnsStarted + 1) ?? (this.#d(n) ? "rate_limited" : undefined));
+              : (this.#l(host, turnsStarted + 1) ?? (this.#d(host) ? "rate_limited" : undefined));
       this.#r = undefined;
-      for (let [P, L] of this.#e)
-        if (L.answered) this.#e.delete(P);
-        else if (S !== undefined) L.turnsStarted++;
-      if (S !== undefined) {
-        logFeatureSad("rtc_self_wake", S);
+      for (let [name, state] of this.#e)
+        if (state.answered) this.#e.delete(name);
+        else if (reason !== undefined) state.turnsStarted++;
+      if (reason !== undefined) {
+        logFeatureSad("rtc_self_wake", reason);
         return true;
       }
-      let R = n.now();
-      let filtered = this.#n.filter((P) => R - P < HOST_SELF_WAKE_WINDOW_MS);
-      filtered.push(R);
+      let now = host.now();
+      let filtered = this.#n.filter((at) => now - at < HOST_SELF_WAKE_WINDOW_MS);
+      filtered.push(now);
       this.#n = filtered;
       this.#o++;
       logFeatureOk("rtc_self_wake");
@@ -576,39 +587,39 @@ class HostReturnWakeTracker {
       return true;
     }
   }
-  #_(e) {
-    let n = new Set(
-      e.registry
+  #_(host) {
+    let online = new Set(
+      host.registry
         .entries()
-        .filter((r) => r.status === "online")
-        .map((r) => r.name),
+        .filter((entry) => entry.status === "online")
+        .map((entry) => entry.name),
     );
-    return [...this.#e].filter(([r, s]) => s.answered && n.has(r)).map(([r]) => r);
+    return [...this.#e].filter(([name, state]) => state.answered && online.has(name)).map(([name]) => name);
   }
-  #d(e) {
-    let n = e.now();
+  #d(host) {
+    let now = host.now();
     return (
-      count(this.#n, (r) => n - r < HOST_SELF_WAKE_WINDOW_MS) >= HOST_SELF_WAKE_PER_DAY_CAP ||
+      count(this.#n, (at) => now - at < HOST_SELF_WAKE_WINDOW_MS) >= HOST_SELF_WAKE_PER_DAY_CAP ||
       this.#o >= HOST_SELF_WAKE_TOTAL_CAP
     );
   }
-  #l(e, n) {
+  #l(host, turns) {
     if (this.#i) return "stopped";
-    if (e.turnsStarted() !== n) return "head_taken";
-    if (e.permissionMode() !== "default") return "mode_blocked";
-    return e.attestationKnownOff() ? undefined : "attestation_on_or_unknown";
+    if (host.turnsStarted() !== turns) return "head_taken";
+    if (host.permissionMode() !== "default") return "mode_blocked";
+    return host.attestationKnownOff() ? undefined : "attestation_on_or_unknown";
   }
 }
 //@ chunk-tyg7f3ek.js:137586-137683 placement
-function isHostReturnWake(e) {
-  return e.origin?.kind === "task-notification" && e.origin.source === "host-return-wake";
+function isHostReturnWake(command) {
+  return command.origin?.kind === "task-notification" && command.origin.source === "host-return-wake";
 }
 //@ chunk-tyg7f3ek.js:137683-138038 placement
 function startHostReturnWakes({ toolState, messageQueue, drain, permissionMode }) {
   toolState.get(HostReturnWakeTracker).start({
     registry: toolState.get(RemoteBackgroundCommands),
     lateOutcomes: toolState.get(RemoteCallLedger),
-    askAboutGivenUpCalls: (h) => queryCallsGivenUpOnHost(toolState, h),
+    askAboutGivenUpCalls: (calls) => queryCallsGivenUpOnHost(toolState, calls),
     messageQueue,
     isEnabled: isHandleReattachWakeEnabled,
     permissionMode,
@@ -616,23 +627,26 @@ function startHostReturnWakes({ toolState, messageQueue, drain, permissionMode }
     turnsStarted: () => drain.dequeueCount,
     now: Date.now,
     monotonicNow: () => performance.now(),
-    schedule: (h, y) => {
-      setTimeout(h, y).unref();
+    schedule: (fn, delay) => {
+      setTimeout(fn, delay).unref();
     },
   });
 }
 //@ chunk-tyg7f3ek.js:138038-138080 placement
-function isHumanOrHandedOffTurn(e) {
-  return isHumanOrigin(e.origin) || isHandedOffPersonTurn(e);
+function isHumanOrHandedOffTurn(command) {
+  return isHumanOrigin(command.origin) || isHandedOffPersonTurn(command);
 }
 //@ chunk-tyg7f3ek.js:138080-138204 placement
-function isHandedOffPersonTurn(e) {
-  let n = e.handedOffTurn?.kind === "run" ? e.handedOffTurn.messages[0] : undefined;
-  return n?.type === "user" && isHumanOrigin(n.origin);
+function isHandedOffPersonTurn(command) {
+  let first = command.handedOffTurn?.kind === "run" ? command.handedOffTurn.messages[0] : undefined;
+  return first?.type === "user" && isHumanOrigin(first.origin);
 }
 //@ chunk-tyg7f3ek.js:138204-138241 placement
-var TURN_GATE_READY = Object.freeze({
-  kind: "ready",
+var TURN_GATE_READY; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-tyg7f3ek.js:138204", () => {
+  TURN_GATE_READY = Object.freeze({
+    kind: "ready",
+  });
 });
 //@ chunk-tyg7f3ek.js:138241-138288 placement
 class TurnRefusedError extends Error {
@@ -641,15 +655,15 @@ class TurnRefusedError extends Error {
 //@ chunk-tyg7f3ek.js:138288-138377 placement
 var TURN_REFUSED_TEXT = "This session cannot continue: a required step before the turn did not complete.";
 //@ chunk-tyg7f3ek.js:138377-138697 placement
-function parseTurnGateAnswer(e) {
-  if (typeof e !== "object" || e === null || !("kind" in e)) return;
-  if (e.kind === "ready")
+function parseTurnGateAnswer(answer) {
+  if (typeof answer !== "object" || answer === null || !("kind" in answer)) return;
+  if (answer.kind === "ready")
     return {
       answer: TURN_GATE_READY,
       malformed: false,
     };
-  if (e.kind === "fail") {
-    let message = "message" in e ? e.message : undefined;
+  if (answer.kind === "fail") {
+    let message = "message" in answer ? answer.message : undefined;
     return typeof message === "string" && message.trim() !== ""
       ? {
           answer: {
@@ -673,92 +687,94 @@ function parseTurnGateAnswer(e) {
  * 轮次开始前的参与者闸门：依次询问注册的 beforeTurn 参与者，任何一方失败则拒绝本轮（TurnRefusedError）。
  */
 function createTurnGateParticipants() {
-  let e = [];
-  let n = 0;
-  async function r(s, h) {
-    let y = (answer) => ({
-      participant: s.name,
+  let participants = [];
+  let turn = 0;
+  async function joinTurnGate(participant, options) {
+    let wrap = (answer) => ({
+      participant: participant.name,
       answer,
-      settledAfterAbort: h.signal.aborted,
+      settledAfterAbort: options.signal.aborted,
     });
     try {
-      let turnGateAnswer = parseTurnGateAnswer(await s.beforeTurn(h));
+      let turnGateAnswer = parseTurnGateAnswer(await participant.beforeTurn(options));
       if (turnGateAnswer === undefined || turnGateAnswer.malformed) {
         logError(
           new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `turn gate participant ${s.name} broke the answer contract`,
+            `turn gate participant ${participant.name} broke the answer contract`,
             "turn gate participant broke the answer contract",
           ),
         );
         logForDiagnosticsNoPII("error", "turn_gate_participant_broke_contract", {
-          participant: s.name,
-          turn: h.turn,
+          participant: participant.name,
+          turn: options.turn,
           reason: turnGateAnswer === undefined ? "malformed_answer" : "unworded_fail",
         });
       }
-      return y(turnGateAnswer === undefined ? TURN_GATE_READY : turnGateAnswer.answer);
+      return wrap(turnGateAnswer === undefined ? TURN_GATE_READY : turnGateAnswer.answer);
     } catch (error) {
-      if (h.signal.aborted && isAbortError(error)) {
+      if (options.signal.aborted && isAbortError(error)) {
         logForDiagnosticsNoPII("debug", "turn_gate_participant_aborted", {
-          participant: s.name,
-          turn: h.turn,
+          participant: participant.name,
+          turn: options.turn,
         });
-        return y(TURN_GATE_READY);
+        return wrap(TURN_GATE_READY);
       }
       logError(error);
       logForDiagnosticsNoPII("error", "turn_gate_participant_rejected", {
-        participant: s.name,
-        turn: h.turn,
+        participant: participant.name,
+        turn: options.turn,
       });
-      return y(TURN_GATE_READY);
+      return wrap(TURN_GATE_READY);
     }
   }
   return {
-    register(s) {
-      e.push(s);
-      if (n > 0)
+    register(participant) {
+      participants.push(participant);
+      if (turn > 0)
         logForDiagnosticsNoPII("info", "turn_gate_late_registration", {
-          participant: s.name,
-          turn: n,
+          participant: participant.name,
+          turn,
         });
     },
     beforeTurn(signal) {
-      n += 1;
-      if (e.length === 0) return null;
-      let h = Object.freeze({
+      turn += 1;
+      if (participants.length === 0) return null;
+      let context = Object.freeze({
         signal,
-        turn: n,
+        turn,
       });
-      return Promise.all(e.map((y) => r(y, h))).then((y) => {
-        let flattened = y.flatMap(({ participant, answer, settledAfterAbort }) =>
-          answer.kind === "fail"
-            ? [
-                {
-                  participant,
-                  message: answer.message,
-                  settledAfterAbort,
-                },
-              ]
-            : [],
-        );
-        let filtered = flattened.filter((L) => L.settledAfterAbort);
-        if (filtered.length > 0)
-          logForDiagnosticsNoPII("info", "turn_gate_refusal_after_abort", {
-            participants: filtered.map((L) => L.participant),
-            turn: h.turn,
+      return Promise.all(participants.map((participant) => joinTurnGate(participant, context))).then(
+        (answers) => {
+          let flattened = answers.flatMap(({ participant, answer, settledAfterAbort }) =>
+            answer.kind === "fail"
+              ? [
+                  {
+                    participant,
+                    message: answer.message,
+                    settledAfterAbort,
+                  },
+                ]
+              : [],
+          );
+          let filtered = flattened.filter((refusal) => refusal.settledAfterAbort);
+          if (filtered.length > 0)
+            logForDiagnosticsNoPII("info", "turn_gate_refusal_after_abort", {
+              participants: filtered.map((refusal) => refusal.participant),
+              turn: context.turn,
+            });
+          let filtered_2 = flattened.filter((refusal) => !refusal.settledAfterAbort);
+          let first = filtered_2[0];
+          if (first === undefined) return TURN_GATE_READY;
+          logForDiagnosticsNoPII("warn", "turn_gate_refused", {
+            participants: filtered_2.map((refusal) => refusal.participant),
+            turn: context.turn,
           });
-        let filtered_2 = flattened.filter((L) => !L.settledAfterAbort);
-        let P = filtered_2[0];
-        if (P === undefined) return TURN_GATE_READY;
-        logForDiagnosticsNoPII("warn", "turn_gate_refused", {
-          participants: filtered_2.map((L) => L.participant),
-          turn: h.turn,
-        });
-        return {
-          kind: "fail",
-          message: P.message,
-        };
-      });
+          return {
+            kind: "fail",
+            message: first.message,
+          };
+        },
+      );
     },
   };
 }
@@ -836,13 +852,13 @@ class TurnStartCoordinator {
   }
   take() {
     while (!this.stopping()) {
-      let e = this.drain.endSessionRequested
+      let head = this.drain.endSessionRequested
         ? this.startGate.takeHead(this.endSessionHead, () => this.messageQueue.dequeue(this.endSessionHead))
         : this.startGate.takeHead(
-            (s) => isActiveMainAgentCommand(s) && !this.selector.holdsBack(s),
+            (command) => isActiveMainAgentCommand(command) && !this.selector.holdsBack(command),
             () => this.selector.takeHead(),
           );
-      if (e === undefined) {
+      if (head === undefined) {
         if (
           this.heldCompletionChars === 0 ||
           this.drain.endSessionRequested ||
@@ -855,7 +871,7 @@ class TurnStartCoordinator {
           return;
         }
         logFeatureSad("print_task_notification_coalesce", "owed_call_dispatched");
-        e = {
+        head = {
           value: [],
           mode: "prompt",
           agentId: mainAgentId(),
@@ -869,135 +885,145 @@ class TurnStartCoordinator {
       }
       this.heads++;
       this.drain.dequeueCount++;
-      if (this.repeatsUsageLimitAlert(e)) {
+      if (this.repeatsUsageLimitAlert(head)) {
         logFeatureOk("usage_limit_denied_notice");
-        e = usageLimitStandInMessage(e);
+        head = usageLimitStandInMessage(head);
       }
       if (
-        e.mode === "task-notification" &&
-        typeof e.value === "string" &&
+        head.mode === "task-notification" &&
+        typeof head.value === "string" &&
         !this.drain.endSessionRequested &&
-        this.heldCompletionChars + e.value.length <= MAX_MERGED_PROMPTS &&
+        this.heldCompletionChars + head.value.length <= MAX_MERGED_PROMPTS &&
         this.coalesceTaskNotifications() &&
-        this.selector.holdsQueryForFollower(e, (s) => this.startGate.admits(s), this.repeatsUsageLimitAlert)
+        this.selector.holdsQueryForFollower(
+          head,
+          (queued) => this.startGate.admits(queued),
+          this.repeatsUsageLimitAlert,
+        )
       )
-        e = {
-          ...e,
+        head = {
+          ...head,
           shouldQuery: false,
           queryHeldForNextTurn: true,
           stampThreadState: undefined,
         };
-      this.drain.intentBatchInFlight = !this.commandLacksUserIntent(e);
-      this.io.sessionState.notifyTurnStarting(e.mode, e.taskId);
-      this.onHead?.(e);
-      if (!isPromptCapableMode(e.mode, e.clientBashCommand))
+      this.drain.intentBatchInFlight = !this.commandLacksUserIntent(head);
+      this.io.sessionState.notifyTurnStarting(head.mode, head.taskId);
+      this.onHead?.(head);
+      if (!isPromptCapableMode(head.mode, head.clientBashCommand))
         throw Error("only prompt commands are supported in streaming mode");
-      let n = [e];
-      if (e.mode === "prompt" && !this.drain.endSessionRequested) {
-        n.push(...this.selector.takeFollowers(e, (h) => this.startGate.admits(h)));
-        let filtered = n.filter(
-          (h) => h.uuid !== undefined && this.messageQueue.consumeCancelPending(h.uuid),
+      let members = [head];
+      if (head.mode === "prompt" && !this.drain.endSessionRequested) {
+        members.push(...this.selector.takeFollowers(head, (queued) => this.startGate.admits(queued)));
+        let filtered = members.filter(
+          (member) => member.uuid !== undefined && this.messageQueue.consumeCancelPending(member.uuid),
         );
         if (filtered.length > 0) {
           this.revokeCodeliveredFollowups(filtered);
-          for (let y of filtered) this.io.onCommandLifecycle?.(y.uuid, "cancelled");
-          this.deliveryLedger.dropTaken(filtered.map((y) => y.uuid));
-          let filtered_2 = n.filter((y) => !filtered.includes(y));
+          for (let member of filtered) this.io.onCommandLifecycle?.(member.uuid, "cancelled");
+          this.deliveryLedger.dropTaken(filtered.map((member) => member.uuid));
+          let filtered_2 = members.filter((member) => !filtered.includes(member));
           if (filtered_2.length === 0) {
             this.prewaitLatch.reset();
             continue;
           }
-          n.length = 0;
-          n.push(...filtered_2);
-          e = filtered_2[0];
+          members.length = 0;
+          members.push(...filtered_2);
+          head = filtered_2[0];
         }
-        if (this.headYields?.(e, "at_dequeue")) {
-          n.shift();
-          if (n.length === 0) continue;
-          e = n[0];
+        if (this.headYields?.(head, "at_dequeue")) {
+          members.shift();
+          if (members.length === 0) continue;
+          head = members[0];
         }
-        if (n.length > 1) e = mergeQueuedPrompts(n);
+        if (members.length > 1) head = mergeQueuedPrompts(members);
       }
-      let filtered = n.map((s) => s.uuid).filter((s) => s !== undefined);
+      let filtered = members.map((member) => member.uuid).filter((uuid) => uuid !== undefined);
       this.drain.pendingDispatchUuids = filtered;
-      this.drain.pendingDispatchKeys = n.flatMap((s) => s.stopKey ?? []);
-      this.drain.drainingHandoff = e.handedOffTurn && {
-        command: e,
+      this.drain.pendingDispatchKeys = members.flatMap((member) => member.stopKey ?? []);
+      this.drain.drainingHandoff = head.handedOffTurn && {
+        command: head,
         running: false,
       };
-      this.prewaitLatch.parkBatch(this.drain.intentBatchInFlight, n);
-      if (n.length > 1) this.replayMerged?.(n, e);
+      this.prewaitLatch.parkBatch(this.drain.intentBatchInFlight, members);
+      if (members.length > 1) this.replayMerged?.(members, head);
       return {
-        command: e,
-        members: n,
+        command: head,
+        members,
         uuids: filtered,
       };
     }
     return;
   }
-  commit(e) {
-    let filtered = e.members.filter(
+  commit(batch) {
+    let filtered = batch.members.filter(
       (member) => member.uuid !== undefined && this.messageQueue.consumeCancelPending(member.uuid),
     );
     if (filtered.length > 0) {
       discardPollEvent(filtered.filter(isPollEventMode), "cancelled by the host");
       this.revokeCodeliveredFollowups(filtered);
-      for (let h of filtered)
-        if (!this.messageQueue.consumeCancelPendingAcked(h.uuid))
-          this.io.onCommandLifecycle?.(h.uuid, "cancelled");
-      this.deliveryLedger.dropTaken(filtered.map((h) => h.uuid));
-      let filtered_2 = e.members.filter((member) => !filtered.includes(member));
+      for (let member of filtered)
+        if (!this.messageQueue.consumeCancelPendingAcked(member.uuid))
+          this.io.onCommandLifecycle?.(member.uuid, "cancelled");
+      this.deliveryLedger.dropTaken(filtered.map((member) => member.uuid));
+      let filtered_2 = batch.members.filter((member) => !filtered.includes(member));
       if (filtered_2.length === 0) {
         this.prewaitLatch.dropParkedBatch();
         return;
       }
-      e.members.length = 0;
-      e.members.push(...filtered_2);
-      e.command = mergeQueuedPrompts(e.members);
-      e.uuids.length = 0;
-      e.uuids.push(...e.members.map((member) => member.uuid).filter((h) => h !== undefined));
+      batch.members.length = 0;
+      batch.members.push(...filtered_2);
+      batch.command = mergeQueuedPrompts(batch.members);
+      batch.uuids.length = 0;
+      batch.uuids.push(...batch.members.map((member) => member.uuid).filter((uuid) => uuid !== undefined));
     }
-    let r = e.members[0];
+    let firstMember = batch.members[0];
     if (
-      r !== undefined &&
-      (this.drain.endSessionRequested ? isHostReturnWake(r) : this.headYields?.(r, "before_start") === true)
+      firstMember !== undefined &&
+      (this.drain.endSessionRequested
+        ? isHostReturnWake(firstMember)
+        : this.headYields?.(firstMember, "before_start") === true)
     ) {
-      e.members.shift();
-      e.uuids.length = 0;
-      if (e.members.length === 0) {
+      batch.members.shift();
+      batch.uuids.length = 0;
+      if (batch.members.length === 0) {
         this.prewaitLatch.dropParkedBatch();
         return;
       }
-      e.command = mergeQueuedPrompts(e.members);
-      e.uuids.push(...e.members.map((member) => member.uuid).filter((s) => s !== undefined));
+      batch.command = mergeQueuedPrompts(batch.members);
+      batch.uuids.push(...batch.members.map((member) => member.uuid).filter((uuid) => uuid !== undefined));
     }
-    return e;
+    return batch;
   }
-  start(e) {
-    this.deliveryLedger.startBatch(e.members);
-    let { frameTiming, mode } = e.command;
+  start(batch) {
+    this.deliveryLedger.startBatch(batch.members);
+    let { frameTiming, mode } = batch.command;
     logForDiagnosticsNoPII("info", "cli_turn_started", () => ({
-      uuid: matchRequestId(e.command.uuid),
+      uuid: matchRequestId(batch.command.uuid),
       mode,
-      batch_size: e.members.length,
+      batch_size: batch.members.length,
       enqueue_to_start_ms: frameTiming && Date.now() - frameTiming.enqueuedWallMs,
     }));
-    let s = e.command.mode === "poll-event" ? [...e.uuids] : [];
-    if (e.command.mode === "poll-event") {
-      settleDeliveredEvents(e.members);
+    let deliveredUuids = batch.command.mode === "poll-event" ? [...batch.uuids] : [];
+    if (batch.command.mode === "poll-event") {
+      settleDeliveredEvents(batch.members);
       logFeatureOk("poll_event_delivery");
     }
-    return s;
+    return deliveredUuids;
   }
-  noteTurnEnded(e, n, r) {
-    this.selector.noteTurnEnded(e);
-    if (e || r.num_turns > 0) {
-      if (!e && this.heldCompletionChars > 0) logFeatureOk("print_task_notification_coalesce");
+  noteTurnEnded(aborted, command, result) {
+    this.selector.noteTurnEnded(aborted);
+    if (aborted || result.num_turns > 0) {
+      if (!aborted && this.heldCompletionChars > 0) logFeatureOk("print_task_notification_coalesce");
       this.heldCompletionChars = 0;
       this.heldCompletionWorkload = undefined;
-    } else if (n.queryHeldForNextTurn === true && typeof n.value === "string" && r.result === "") {
-      this.heldCompletionChars += n.value.length;
-      this.heldCompletionWorkload = n.workload;
+    } else if (
+      command.queryHeldForNextTurn === true &&
+      typeof command.value === "string" &&
+      result.result === ""
+    ) {
+      this.heldCompletionChars += command.value.length;
+      this.heldCompletionWorkload = command.workload;
     }
   }
   exit() {

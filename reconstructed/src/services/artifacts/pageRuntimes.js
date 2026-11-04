@@ -20,6 +20,7 @@ import {
   QUOTE_HOMOGLYPHS,
   SINGLE_QUOTE_RUNS,
 } from "../../tools/ArtifactTool/artifactUrls.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-06y4szbn.js:4627-4838 placement
 /**
@@ -52,186 +53,203 @@ function hasRuntimeSentinels(body) {
   );
 }
 //@ chunk-06y4szbn.js:5283-6203 placement
-function unsafeBundleReason(e) {
-  if (/<\/script/i.test(e)) return "bundle contains </script";
-  if (hasCommentAndScript(e)) return "bundle contains <!-- together with <script (double-escaped state)";
-  if (/<base\s+href="\/_f\//i.test(e)) return "bundle matches the stale /_f/ base-tag strip regex";
-  if (/\sdata-frame-runtime="/i.test(e)) return "bundle matches the stale data-frame-runtime strip regex";
-  if (e.includes("<!--claude-mermaid-runtime-begin:") || e.includes("<!--claude-mermaid-runtime-end-->"))
+function unsafeBundleReason(bundle) {
+  if (/<\/script/i.test(bundle)) return "bundle contains </script";
+  if (hasCommentAndScript(bundle)) return "bundle contains <!-- together with <script (double-escaped state)";
+  if (/<base\s+href="\/_f\//i.test(bundle)) return "bundle matches the stale /_f/ base-tag strip regex";
+  if (/\sdata-frame-runtime="/i.test(bundle))
+    return "bundle matches the stale data-frame-runtime strip regex";
+  if (
+    bundle.includes("<!--claude-mermaid-runtime-begin:") ||
+    bundle.includes("<!--claude-mermaid-runtime-end-->")
+  )
     return "bundle contains a mermaid runtime sentinel";
-  if (e.includes("<!--claude-hljs-runtime-begin:") || e.includes("<!--claude-hljs-runtime-end-->"))
+  if (bundle.includes("<!--claude-hljs-runtime-begin:") || bundle.includes("<!--claude-hljs-runtime-end-->"))
     return "bundle contains an hljs runtime sentinel";
-  if (e.includes("<!-- chart-runtime -->") || e.includes("<!-- /chart-runtime -->"))
+  if (bundle.includes("<!-- chart-runtime -->") || bundle.includes("<!-- /chart-runtime -->"))
     return "bundle contains the chart-runtime sentinel";
-  if (e.includes("<!-- frame-runtime -->") || e.includes("<!-- /frame-runtime -->"))
+  if (bundle.includes("<!-- frame-runtime -->") || bundle.includes("<!-- /frame-runtime -->"))
     return "bundle contains a frame-runtime serve sentinel";
   return null;
 }
 //@ chunk-06y4szbn.js:6203-6252 placement
-var TAG_BOUNDARY_CHARS = new Set([
-  " ",
-  "\t",
-  `
+var TAG_BOUNDARY_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-06y4szbn.js:6203", () => {
+  TAG_BOUNDARY_CHARS = new Set([
+    " ",
+    "\t",
+    `
 `,
-  "\f",
-  "\r",
-  "/",
-  ">",
-]);
+    "\f",
+    "\r",
+    "/",
+    ">",
+  ]);
+});
 //@ chunk-06y4szbn.js:6252-6400 placement
-function trimHtmlWhitespace(e) {
-  let n = 0;
-  let r = e.length;
-  while (n < r && isAsciiWhitespaceCode(e.charCodeAt(n))) n++;
-  while (r > n && isAsciiWhitespaceCode(e.charCodeAt(r - 1))) r--;
-  return n === 0 && r === e.length ? e : e.slice(n, r);
+function trimHtmlWhitespace(text) {
+  let start = 0;
+  let end = text.length;
+  while (start < end && isAsciiWhitespaceCode(text.charCodeAt(start))) start++;
+  while (end > start && isAsciiWhitespaceCode(text.charCodeAt(end - 1))) end--;
+  return start === 0 && end === text.length ? text : text.slice(start, end);
 }
 //@ chunk-06y4szbn.js:6400-6460 placement
-function isAsciiWhitespaceCode(e) {
-  return e === 32 || e === 9 || e === 10 || e === 12 || e === 13;
+function isAsciiWhitespaceCode(code) {
+  return code === 32 || code === 9 || code === 10 || code === 12 || code === 13;
 }
 //@ chunk-06y4szbn.js:6460-6569 placement
-function removeRanges(e, n) {
-  if (!n.length) return e;
-  let r = "";
-  let s = 0;
-  for (let [h, b] of n) {
-    r += e.slice(s, h);
-    s = b;
+function removeRanges(text, ranges) {
+  if (!ranges.length) return text;
+  let out = "";
+  let cursor = 0;
+  for (let [start, end] of ranges) {
+    out += text.slice(cursor, start);
+    cursor = end;
   }
-  return r + e.slice(s);
+  return out + text.slice(cursor);
 }
 //@ chunk-06y4szbn.js:6569-6630 placement
-function hasCommentAndScript(e) {
-  return e.includes("<!--") && /<script/i.test(e);
+function hasCommentAndScript(html) {
+  return html.includes("<!--") && /<script/i.test(html);
 }
 //@ chunk-06y4szbn.js:6630-6699 placement
 var SCRIPT_CLOSE_TAG_RE = /<\/script(?=[\t\n\f\r />])/i;
 var STYLE_CLOSE_TAG_RE = /<\/style(?=[\t\n\f\r />])/i;
 //@ chunk-06y4szbn.js:6699-6877 placement
-function findMarkerTag(e, n) {
-  let match = e.match(n);
+function findMarkerTag(html, tag) {
+  let match = html.match(tag);
   if (!match) return null;
   let index = match.index ?? 0;
-  let h = index + match[0].length;
-  let index_2 = e.indexOf(">", h);
-  if (index_2 === -1 || /['"]/.test(e.slice(h, index_2))) return null;
+  let afterTag = index + match[0].length;
+  let index_2 = html.indexOf(">", afterTag);
+  if (index_2 === -1 || /['"]/.test(html.slice(afterTag, index_2))) return null;
   return {
     data: index,
     after: index_2 + 1,
   };
 }
 //@ chunk-06y4szbn.js:6877-6960 placement
-function scriptBlockEnd(e) {
-  let markerTag = findMarkerTag(e, SCRIPT_CLOSE_TAG_RE);
-  if (!markerTag || hasCommentAndScript(e.slice(0, markerTag.data))) return -1;
+function scriptBlockEnd(text) {
+  let markerTag = findMarkerTag(text, SCRIPT_CLOSE_TAG_RE);
+  if (!markerTag || hasCommentAndScript(text.slice(0, markerTag.data))) return -1;
   return markerTag.after;
 }
 //@ chunk-06y4szbn.js:6960-6991 placement
-function styleMarkerTag(e) {
-  return findMarkerTag(e, STYLE_CLOSE_TAG_RE);
+function styleMarkerTag(tag) {
+  return findMarkerTag(tag, STYLE_CLOSE_TAG_RE);
 }
 //@ chunk-06y4szbn.js:6991-7115 placement
 /**
  * 页面 data-id 属性的长度 16 与对应正则（chart/mermaid 运行时标记识别用）。
  */
-var DATA_ID_PATTERN = 16;
-var DATA_ID_ATTR_PREFIX = ' data-id="';
-var DATA_ID_ATTR_LENGTH = DATA_ID_ATTR_PREFIX.length + DATA_ID_PATTERN + 1;
-var DATA_ID_VALUE_PATTERN = "(?!-)(?:(?!--)[A-Za-z0-9_-]){16}";
-var regExp = new RegExp(`^${DATA_ID_VALUE_PATTERN}$`);
-var DATA_ID_ATTR_PATTERN = `${DATA_ID_ATTR_PREFIX}${DATA_ID_VALUE_PATTERN}"`;
+var DATA_ID_LENGTH; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DATA_ID_ATTR_PREFIX;
+var DATA_ID_ATTR_LENGTH;
+var DATA_ID_VALUE_PATTERN;
+var DATA_ID_VALUE_RE;
+var DATA_ID_ATTR_PATTERN;
+deferInit("chunk-06y4szbn.js:6991", () => {
+  DATA_ID_LENGTH = 16;
+  DATA_ID_ATTR_PREFIX = ' data-id="';
+  DATA_ID_ATTR_LENGTH = DATA_ID_ATTR_PREFIX.length + DATA_ID_LENGTH + 1;
+  DATA_ID_VALUE_PATTERN = "(?!-)(?:(?!--)[A-Za-z0-9_-]){16}";
+  DATA_ID_VALUE_RE = new RegExp(`^${DATA_ID_VALUE_PATTERN}$`);
+  DATA_ID_ATTR_PATTERN = `${DATA_ID_ATTR_PREFIX}${DATA_ID_VALUE_PATTERN}"`;
+});
 //@ chunk-06y4szbn.js:7115-7246 placement
-function dataIdAttributeLength(e, n) {
-  if (!e.startsWith(DATA_ID_ATTR_PREFIX, n)) return 0;
-  let r = n + DATA_ID_ATTR_PREFIX.length;
-  let s = r + DATA_ID_PATTERN;
-  return e.charCodeAt(s) === 34 && regExp.test(e.slice(r, s)) ? DATA_ID_ATTR_LENGTH : 0;
+function dataIdAttributeLength(html, tagStart) {
+  if (!html.startsWith(DATA_ID_ATTR_PREFIX, tagStart)) return 0;
+  let prefixEnd = tagStart + DATA_ID_ATTR_PREFIX.length;
+  let idEnd = prefixEnd + DATA_ID_LENGTH;
+  return html.charCodeAt(idEnd) === 34 && DATA_ID_VALUE_RE.test(html.slice(prefixEnd, idEnd))
+    ? DATA_ID_ATTR_LENGTH
+    : 0;
 }
 //@ chunk-06y4szbn.js:7246-7421 placement
-function matchClosingTag(e, n, r) {
-  if (e.startsWith(r, n)) return r.length;
-  let s = r.length - 1;
-  if (!e.startsWith(r.slice(0, s), n)) return 0;
-  let h = dataIdAttributeLength(e, n + s);
-  return h && e.charCodeAt(n + s + h) === 62 ? s + h + 1 : 0;
+function matchClosingTag(html, tagStart, tagName) {
+  if (html.startsWith(tagName, tagStart)) return tagName.length;
+  let nameEnd = tagName.length - 1;
+  if (!html.startsWith(tagName.slice(0, nameEnd), tagStart)) return 0;
+  let attrLength = dataIdAttributeLength(html, tagStart + nameEnd);
+  return attrLength && html.charCodeAt(tagStart + nameEnd + attrLength) === 62 ? nameEnd + attrLength + 1 : 0;
 }
 //@ chunk-06y4szbn.js:7421-7464 placement
-function findScriptOpen(e, n) {
-  return matchClosingTag(e, n, "<script>");
+function findScriptOpen(html, from) {
+  return matchClosingTag(html, from, "<script>");
 }
 //@ chunk-06y4szbn.js:7464-7506 placement
-function styleClosingTag(e, n) {
-  return matchClosingTag(e, n, "<style>");
+function styleClosingTag(html, tagStart) {
+  return matchClosingTag(html, tagStart, "<style>");
 }
 //@ chunk-06y4szbn.js:7506-7611 placement
-var regExp_2 = new RegExp(
-  '<script src="/_runtime/mermaid-[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.min\\.js"',
-  "y",
-);
+var regExp; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-06y4szbn.js:7506", () => {
+  regExp = new RegExp('<script src="/_runtime/mermaid-[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.min\\.js"', "y");
+});
 //@ chunk-06y4szbn.js:7611-7839 placement
-function matchScriptOpenTag(e, n) {
-  regExp_2.lastIndex = n;
-  let match = regExp_2.exec(e);
+function matchScriptOpenTag(html, from) {
+  regExp.lastIndex = from;
+  let match = regExp.exec(html);
   if (match === null) return null;
-  let s = n + match[0].length;
-  if (e.charCodeAt(s) === 62)
+  let afterOpen = from + match[0].length;
+  if (html.charCodeAt(afterOpen) === 62)
     return {
-      len: s + 1 - n,
+      len: afterOpen + 1 - from,
       annotated: false,
     };
-  let h = dataIdAttributeLength(e, s);
-  return h && e.charCodeAt(s + h) === 62
+  let attrLength = dataIdAttributeLength(html, afterOpen);
+  return attrLength && html.charCodeAt(afterOpen + attrLength) === 62
     ? {
-        len: s + h + 1 - n,
+        len: afterOpen + attrLength + 1 - from,
         annotated: true,
       }
     : null;
 }
 //@ chunk-06y4szbn.js:7839-8017 placement
-function countExternalScripts(e) {
-  let n = trimHtmlWhitespace(e);
-  if (!n.length) return -1;
-  let r = 0;
-  while (n.length) {
-    let scriptOpen = findScriptOpen(n, 0);
+function countExternalScripts(html) {
+  let trimmed = trimHtmlWhitespace(html);
+  if (!trimmed.length) return -1;
+  let count = 0;
+  while (trimmed.length) {
+    let scriptOpen = findScriptOpen(trimmed, 0);
     if (!scriptOpen) return -1;
-    if (scriptOpen > 8) r++;
-    let h = scriptBlockEnd(n.slice(scriptOpen));
-    if (h < 0) return -1;
-    n = trimHtmlWhitespace(n.slice(scriptOpen + h));
+    if (scriptOpen > 8) count++;
+    let blockEnd = scriptBlockEnd(trimmed.slice(scriptOpen));
+    if (blockEnd < 0) return -1;
+    trimmed = trimHtmlWhitespace(trimmed.slice(scriptOpen + blockEnd));
   }
-  return r;
+  return count;
 }
 //@ chunk-06y4szbn.js:8017-8387 placement
-function skipQuotedAttribute(e, n) {
-  let r = 0;
-  let s = n;
-  while (s < e.length) {
-    let code = e.charCodeAt(s);
-    if (r === 3) {
+function skipQuotedAttribute(text, from) {
+  let extra = 0;
+  let index = from;
+  while (index < text.length) {
+    let code = text.charCodeAt(index);
+    if (extra === 3) {
       if (code === 34 || code === 39) {
-        let index = e.indexOf(code === 34 ? '"' : "'", s + 1);
-        if (index < 0) return -1;
-        s = index + 1;
-        r = 5;
+        let index_2 = text.indexOf(code === 34 ? '"' : "'", index + 1);
+        if (index_2 < 0) return -1;
+        index = index_2 + 1;
+        extra = 5;
         continue;
       }
       if (isAsciiWhitespaceCode(code)) {
-        s++;
+        index++;
         continue;
       }
-      if (code === 62) return s + 1;
-      r = 4;
-      s++;
+      if (code === 62) return index + 1;
+      extra = 4;
+      index++;
       continue;
     }
-    if (code === 62) return s + 1;
-    if (isAsciiWhitespaceCode(code)) r = r === 1 || r === 2 ? 2 : 0;
-    else if (code === 47 && r !== 4) r = 0;
-    else if (code === 61 && (r === 1 || r === 2)) r = 3;
-    else r = r === 4 ? 4 : 1;
-    s++;
+    if (code === 62) return index + 1;
+    if (isAsciiWhitespaceCode(code)) extra = extra === 1 || extra === 2 ? 2 : 0;
+    else if (code === 47 && extra !== 4) extra = 0;
+    else if (code === 61 && (extra === 1 || extra === 2)) extra = 3;
+    else extra = extra === 4 ? 4 : 1;
+    index++;
   }
   return -1;
 }
@@ -242,34 +260,34 @@ function isChartRuntimeEnabled() {
 //@ chunk-06y4szbn.js:8437-8465 placement
 var DATA_CHART_RUNTIME = "data-chart-runtime";
 //@ chunk-06y4szbn.js:8465-8502 placement
-function hasChartRuntime(e) {
-  return e.includes(DATA_CHART_RUNTIME);
+function hasChartRuntime(html) {
+  return html.includes(DATA_CHART_RUNTIME);
 }
 //@ chunk-06y4szbn.js:8502-8530 placement
-function unsafeBundleReasonOf(e) {
-  return unsafeBundleReason(e);
+function unsafeBundleReasonOf(bundle) {
+  return unsafeBundleReason(bundle);
 }
 //@ chunk-06y4szbn.js:8530-8561 placement
-function hasExternalScripts(e) {
-  return countExternalScripts(e) >= 0;
+function hasExternalScripts(html) {
+  return countExternalScripts(html) >= 0;
 }
 //@ chunk-06y4szbn.js:8561-8772 placement
-function stripMermaidRuntime(runtimeBlocks) {
-  let n = [];
-  let index = runtimeBlocks.indexOf(CHART_RUNTIME_BEGIN);
-  let s = -1;
+function stripMermaidRuntime(text) {
+  let ranges = [];
+  let index = text.indexOf(CHART_RUNTIME_BEGIN);
+  let listIndex = -1;
   while (index >= 0) {
-    let h = index + CHART_RUNTIME_BEGIN.length;
-    if (s < h) {
-      s = runtimeBlocks.indexOf(CHART_RUNTIME_END, h);
-      if (s < 0) break;
+    let bodyStart = index + CHART_RUNTIME_BEGIN.length;
+    if (listIndex < bodyStart) {
+      listIndex = text.indexOf(CHART_RUNTIME_END, bodyStart);
+      if (listIndex < 0) break;
     }
-    let index_2 = runtimeBlocks.indexOf(CHART_RUNTIME_BEGIN, h);
-    if ((index_2 < 0 || index_2 > s) && hasExternalScripts(runtimeBlocks.slice(h, s)))
-      n.push([index, s + CHART_RUNTIME_END.length]);
+    let index_2 = text.indexOf(CHART_RUNTIME_BEGIN, bodyStart);
+    if ((index_2 < 0 || index_2 > listIndex) && hasExternalScripts(text.slice(bodyStart, listIndex)))
+      ranges.push([index, listIndex + CHART_RUNTIME_END.length]);
     index = index_2;
   }
-  return removeRanges(runtimeBlocks, n);
+  return removeRanges(text, ranges);
 }
 //@ chunk-06y4szbn.js:8772-14299 placement
 var CHART_INIT_SCRIPT = `(function () {
@@ -400,15 +418,15 @@ var CHART_INIT_SCRIPT = `(function () {
  * 加载 Chart.js 运行时（内置资源）用于 artifact 页面注入，校验 bundle 安全性。
  */
 async function loadChartRuntime() {
-  let e;
+  let bundle;
   try {
-    let { loadChartBundleJs } = await import("./chunk-te2wpq39.js");
-    e = await loadChartBundleJs();
+    let { loadChartBundleJs } = await import("../../plugins/bundled/chart/loadChartBundleJs.lazy.js");
+    bundle = await loadChartBundleJs();
   } catch {
     logFeatureSad("artifact_publish", "chart_bundle_unreadable");
     return null;
   }
-  if (unsafeBundleReasonOf(e) !== null) {
+  if (unsafeBundleReasonOf(bundle) !== null) {
     logFeatureSad("artifact_publish", "chart_bundle_unsafe");
     return null;
   }
@@ -416,44 +434,44 @@ async function loadChartRuntime() {
     logFeatureSad("artifact_publish", "chart_init_unsafe");
     return null;
   }
-  let n =
+  let result =
     `
 <script>` +
-    e +
+    bundle +
     `</script>
 <script>` +
     CHART_INIT_SCRIPT +
     `</script>
 `;
-  if (!hasExternalScripts(n)) {
+  if (!hasExternalScripts(result)) {
     logFeatureSad("artifact_publish", "chart_block_unstrippable");
     return null;
   }
-  return CHART_RUNTIME_BEGIN + n + CHART_RUNTIME_END;
+  return CHART_RUNTIME_BEGIN + result + CHART_RUNTIME_END;
 }
 //@ chunk-06y4szbn.js:14754-14782 placement
-function unsafeScriptBundleReason(e) {
-  return unsafeBundleReason(e);
+function unsafeScriptBundleReason(bundle) {
+  return unsafeBundleReason(bundle);
 }
 //@ chunk-06y4szbn.js:14782-14791 placement
 var MAX_LENGTH_DIGITS = 8;
 //@ chunk-06y4szbn.js:14791-14827 placement
-function chartRuntimeFooter(e) {
-  return `${HLJS_RUNTIME_BEGIN}${e}-->`;
+function chartRuntimeFooter(html) {
+  return `${HLJS_RUNTIME_BEGIN}${html}-->`;
 }
 //@ chunk-06y4szbn.js:14827-14842 placement
 var MAX_CHART_RUNTIME_SPAN = 4194304;
 //@ chunk-06y4szbn.js:14842-14944 placement
-function isPureScriptBlock(e, n = 0) {
+function isPureScriptBlock(text, from = 0) {
   return (
-    e[0] ===
+    text[0] ===
       `
 ` &&
-    findScriptOpen(e, 1) > 0 &&
-    e.endsWith(`</script>
+    findScriptOpen(text, 1) > 0 &&
+    text.endsWith(`</script>
 `) &&
-    !e.includes(HLJS_RUNTIME_BEGIN) &&
-    countExternalScripts(e) === n
+    !text.includes(HLJS_RUNTIME_BEGIN) &&
+    countExternalScripts(text) === from
   );
 }
 //@ chunk-06y4szbn.js:14944-15058 placement
@@ -473,35 +491,35 @@ var MAX_INLINE_SCRIPT_CHARS = 50000;
 var MAX_SCRIPT_BUDGET = 250000;
 var MAX_SCRIPT_ATTR_CHARS = 4096;
 //@ chunk-06y4szbn.js:15058-15480 placement
-function hasHighlightableCode(e) {
-  let lower = e.toLowerCase();
-  let r = 0;
+function hasHighlightableCode(html) {
+  let lower = html.toLowerCase();
+  let index = 0;
   for (;;) {
-    r = lower.indexOf("<code", r);
-    if (r < 0) return false;
-    let s = lower[r + 5];
-    if (s === undefined) return false;
-    if (!TAG_BOUNDARY_CHARS.has(s)) {
-      r += 5;
+    index = lower.indexOf("<code", index);
+    if (index < 0) return false;
+    let nextChar = lower[index + 5];
+    if (nextChar === undefined) return false;
+    if (!TAG_BOUNDARY_CHARS.has(nextChar)) {
+      index += 5;
       continue;
     }
-    let min = Math.min(r + MAX_SCRIPT_ATTR_CHARS, lower.length);
-    let b = min;
-    for (let j = r + 5; j < min; j++)
+    let min = Math.min(index + MAX_SCRIPT_ATTR_CHARS, lower.length);
+    let limit = min;
+    for (let j = index + 5; j < min; j++)
       if (lower[j] === ">") {
-        b = j;
+        limit = j;
         break;
       }
-    let sliced = lower.slice(r + 5, b);
-    for (let x of sliced.matchAll(/language-([\w.+#-]+)/g)) {
-      let w = x[1];
+    let sliced = lower.slice(index + 5, limit);
+    for (let match of sliced.matchAll(/language-([\w.+#-]+)/g)) {
+      let lang = match[1];
       if (
-        Object.prototype.hasOwnProperty.call(LANGUAGE_NAMES, w) ||
-        Object.prototype.hasOwnProperty.call(HIGHLIGHT_LANGUAGE_NAME_MAP, w)
+        Object.prototype.hasOwnProperty.call(LANGUAGE_NAMES, lang) ||
+        Object.prototype.hasOwnProperty.call(HIGHLIGHT_LANGUAGE_NAME_MAP, lang)
       )
         return true;
     }
-    r = b;
+    index = limit;
   }
 }
 //@ chunk-06y4szbn.js:15480-16191 placement
@@ -530,41 +548,41 @@ el.classList.add('hljs');
 }
 //@ chunk-06y4szbn.js:16191-16875 placement
 async function loadHighlightRuntime() {
-  let e;
+  let script;
   try {
-    let { loadHljsBundleJs } = await import("./chunk-q86arebq.js");
-    e = await loadHljsBundleJs();
+    let { loadHljsBundleJs } = await import("../../utils/highlightBundle.js");
+    script = await loadHljsBundleJs();
   } catch (error) {
     logError(error);
     logFeatureSad("artifact_publish", "hljs_bundle_unreadable");
     return null;
   }
   let bundleEmbedVerdicts = getLiveState().bundleEmbedVerdicts;
-  if (bundleEmbedVerdicts.hljs === undefined) bundleEmbedVerdicts.hljs = unsafeScriptBundleReason(e);
+  if (bundleEmbedVerdicts.hljs === undefined) bundleEmbedVerdicts.hljs = unsafeScriptBundleReason(script);
   if (bundleEmbedVerdicts.hljs !== null) {
     logFeatureSad("artifact_publish", "hljs_bundle_unsafe");
     return null;
   }
-  let r = highlightInitScript();
-  if (unsafeBundleReason(r) !== null) {
+  let initScript = highlightInitScript();
+  if (unsafeBundleReason(initScript) !== null) {
     logFeatureSad("artifact_publish", "hljs_init_unsafe");
     return null;
   }
-  let s =
+  let footer =
     `
 <script>` +
-    e +
+    script +
     `</script>
 <script>` +
-    r +
+    initScript +
     `</script>
 `;
-  if (s.length >= MAX_CHART_RUNTIME_SPAN) {
+  if (footer.length >= MAX_CHART_RUNTIME_SPAN) {
     logFeatureSad("artifact_publish", "hljs_bundle_overspan");
     return null;
   }
   let blockStripVerdicts = getLiveState().blockStripVerdicts;
-  if (blockStripVerdicts.hljs === undefined) blockStripVerdicts.hljs = isPureScriptBlock(s);
+  if (blockStripVerdicts.hljs === undefined) blockStripVerdicts.hljs = isPureScriptBlock(footer);
   if (!blockStripVerdicts.hljs) {
     logFeatureSad("artifact_publish", "hljs_block_unstrippable");
     return null;
@@ -572,8 +590,8 @@ async function loadHighlightRuntime() {
   return (
     `
 ` +
-    chartRuntimeFooter(s.length) +
-    s +
+    chartRuntimeFooter(footer.length) +
+    footer +
     HLJS_RUNTIME_END +
     `
 `
@@ -685,39 +703,39 @@ if(typeof MutationObserver!=='undefined')new MutationObserver(render).observe(ro
 //@ chunk-06y4szbn.js:20295-20304 placement
 var MAX_MERMAID_LENGTH_DIGITS = 8;
 //@ chunk-06y4szbn.js:20304-20340 placement
-function mermaidRuntimeFooter(e) {
-  return `${MERMAID_RUNTIME_BEGIN}${e}-->`;
+function mermaidRuntimeFooter(html) {
+  return `${MERMAID_RUNTIME_BEGIN}${html}-->`;
 }
 //@ chunk-06y4szbn.js:20340-20355 placement
 var MAX_MERMAID_RUNTIME_SPAN = 8388608;
 //@ chunk-06y4szbn.js:20355-20714 placement
-function isMermaidRuntimeBlock(e, n = 0) {
-  let r =
-    e[0] ===
+function isMermaidRuntimeBlock(html, from = 0) {
+  let markerOffset =
+    html[0] ===
     `
 `
-      ? styleClosingTag(e, 1)
+      ? styleClosingTag(html, 1)
       : 0;
   if (
-    !r ||
-    !e.endsWith(`</script>
+    !markerOffset ||
+    !html.endsWith(`</script>
 `) ||
-    e.includes(MERMAID_RUNTIME_BEGIN)
+    html.includes(MERMAID_RUNTIME_BEGIN)
   )
     return false;
-  let s = 1 + r;
-  let h = styleMarkerTag(e.slice(s));
-  if (h === null || e.indexOf("<", s) !== s + h.data) return false;
-  let b = r > 7 ? 1 : 0;
-  let y = trimHtmlWhitespace(e.slice(s + h.after));
-  let x = matchScriptOpenTag(y, 0);
-  if (x !== null) {
-    if (!y.startsWith("</script>", x.len)) return false;
-    b += x.annotated ? 1 : 0;
-    y = y.slice(x.len + 9);
+  let afterMarker = 1 + markerOffset;
+  let styleTag = styleMarkerTag(html.slice(afterMarker));
+  if (styleTag === null || html.indexOf("<", afterMarker) !== afterMarker + styleTag.data) return false;
+  let moduleOffsetFlag = markerOffset > 7 ? 1 : 0;
+  let rest = trimHtmlWhitespace(html.slice(afterMarker + styleTag.after));
+  let scriptOpen = matchScriptOpenTag(rest, 0);
+  if (scriptOpen !== null) {
+    if (!rest.startsWith("</script>", scriptOpen.len)) return false;
+    moduleOffsetFlag += scriptOpen.annotated ? 1 : 0;
+    rest = rest.slice(scriptOpen.len + 9);
   }
-  let w = countExternalScripts(y);
-  return w >= 0 && w + b === n;
+  let externalCount = countExternalScripts(rest);
+  return externalCount >= 0 && externalCount + moduleOffsetFlag === from;
 }
 //@ chunk-06y4szbn.js:20714-20809 placement
 /**
@@ -734,83 +752,83 @@ var MERMAID_SENTINEL_LIMITS = {
 };
 var MAX_MERMAID_ATTR_CHARS = 4096;
 //@ chunk-06y4szbn.js:20809-21094 placement
-function hasMermaidBlocks(e) {
-  let lower = e.toLowerCase();
-  let r = 0;
+function hasMermaidBlocks(html) {
+  let lower = html.toLowerCase();
+  let index = 0;
   for (;;) {
-    r = lower.indexOf("<pre", r);
-    if (r < 0) return false;
-    let s = lower[r + 4];
-    if (s === undefined) return false;
-    if (!TAG_BOUNDARY_CHARS.has(s)) {
-      r += 4;
+    index = lower.indexOf("<pre", index);
+    if (index < 0) return false;
+    let char = lower[index + 4];
+    if (char === undefined) return false;
+    if (!TAG_BOUNDARY_CHARS.has(char)) {
+      index += 4;
       continue;
     }
-    let min = Math.min(r + MAX_MERMAID_ATTR_CHARS, lower.length);
-    let b = min;
-    let y = false;
-    for (let j = r + 4; j < min; j++)
+    let min = Math.min(index + MAX_MERMAID_ATTR_CHARS, lower.length);
+    let limit = min;
+    let found = false;
+    for (let j = index + 4; j < min; j++)
       if (lower[j] === ">") {
-        b = j;
-        y = true;
+        limit = j;
+        found = true;
         break;
       }
-    if (hasChartClass(lower.slice(r + 4, b))) return true;
-    r = y ? b + 1 : b;
+    if (hasChartClass(lower.slice(index + 4, limit))) return true;
+    index = found ? limit + 1 : limit;
   }
 }
 //@ chunk-06y4szbn.js:21094-21592 placement
-function hasChartClass(e) {
-  let n = e.length;
-  let r = 0;
-  while (r < n) {
-    let index = e.indexOf("class", r);
-    if (index < 0) return false;
-    let h = e[index - 1];
+function hasChartClass(html) {
+  let length = html.length;
+  let index = 0;
+  while (index < length) {
+    let index_2 = html.indexOf("class", index);
+    if (index_2 < 0) return false;
+    let prevChar = html[index_2 - 1];
     if (!(
-      h === " " ||
-      h === "\t" ||
-      h ===
+      prevChar === " " ||
+      prevChar === "\t" ||
+      prevChar ===
         `
 ` ||
-      h === "\f" ||
-      h === "\r"
+      prevChar === "\f" ||
+      prevChar === "\r"
     )) {
-      r = index + 5;
+      index = index_2 + 5;
       continue;
     }
-    let b = index + 5;
-    while (b < n && /\s/.test(e[b])) b++;
-    if (e[b] !== "=") {
-      r = index + 5;
+    let classStart = index_2 + 5;
+    while (classStart < length && /\s/.test(html[classStart])) classStart++;
+    if (html[classStart] !== "=") {
+      index = index_2 + 5;
       continue;
     }
-    b++;
-    while (b < n && /\s/.test(e[b])) b++;
-    let y = e[b];
-    let x;
-    if (y === '"' || y === "'") {
-      let index = e.indexOf(y, b + 1);
+    classStart++;
+    while (classStart < length && /\s/.test(html[classStart])) classStart++;
+    let quote = html[classStart];
+    let classValue;
+    if (quote === '"' || quote === "'") {
+      let index = html.indexOf(quote, classStart + 1);
       if (index < 0) return false;
-      x = e.slice(b + 1, index);
+      classValue = html.slice(classStart + 1, index);
     } else {
-      let w = b;
-      while (w < n && !/[\s>]/.test(e[w])) w++;
-      x = e.slice(b, w);
+      let valueStart = classStart;
+      while (valueStart < length && !/[\s>]/.test(html[valueStart])) valueStart++;
+      classValue = html.slice(classStart, valueStart);
     }
-    for (let w of x.split(/\s+/)) if (w === "mermaid") return true;
-    r = index + 5;
+    for (let className of classValue.split(/\s+/)) if (className === "mermaid") return true;
+    index = index_2 + 5;
   }
   return false;
 }
 //@ chunk-06y4szbn.js:21592-21918 placement
 function mermaidRuntimeBlock() {
-  let e = mermaidInitScript();
-  if (unsafeBundleReason(e) !== null) {
+  let initScript = mermaidInitScript();
+  if (unsafeBundleReason(initScript) !== null) {
     logFeatureSad("artifact_publish", "mermaid_init_unsafe");
     return null;
   }
-  let n =
+  let script =
     `
 ` +
     MERMAID_DIAGRAM_STYLE +
@@ -819,11 +837,11 @@ function mermaidRuntimeBlock() {
     MERMAID_RUNTIME_SCRIPT_TAG +
     `</script>
 <script>` +
-    e +
+    initScript +
     `</script>
 `;
   let blockStripVerdicts = getLiveState().blockStripVerdicts;
-  if (blockStripVerdicts.mermaid === undefined) blockStripVerdicts.mermaid = isMermaidRuntimeBlock(n);
+  if (blockStripVerdicts.mermaid === undefined) blockStripVerdicts.mermaid = isMermaidRuntimeBlock(script);
   if (!blockStripVerdicts.mermaid) {
     logFeatureSad("artifact_publish", "mermaid_block_unstrippable");
     return null;
@@ -831,27 +849,27 @@ function mermaidRuntimeBlock() {
   return (
     `
 ` +
-    mermaidRuntimeFooter(n.length) +
-    n +
+    mermaidRuntimeFooter(script.length) +
+    script +
     MERMAID_RUNTIME_END +
     `
 `
   );
 }
 //@ chunk-06y4szbn.js:21918-21983 placement
-function detectPageRuntimes(body) {
+function detectPageRuntimes(html) {
   return {
-    chart: hasChartRuntime(body),
-    mermaid: hasMermaidBlocks(body),
-    highlight: hasHighlightableCode(body),
+    chart: hasChartRuntime(html),
+    mermaid: hasMermaidBlocks(html),
+    highlight: hasHighlightableCode(html),
   };
 }
 //@ chunk-06y4szbn.js:21983-22216 placement
-function escapeForJsString(e, n) {
-  let r = e.length > n ? truncateToLength(e, n) : e;
+function escapeForJsString(text, maxChars) {
+  let bounded = text.length > maxChars ? truncateToLength(text, maxChars) : text;
   return {
-    escaped: normalizeQuotes(r).replace(/[\\"\n\t]/g, (b) => {
-      switch (b) {
+    escaped: normalizeQuotes(bounded).replace(/[\\"\n\t]/g, (char) => {
+      switch (char) {
         case "\\":
           return "\\\\";
         case '"':
@@ -862,21 +880,21 @@ function escapeForJsString(e, n) {
         case "\t":
           return "\\t";
         default:
-          return b;
+          return char;
       }
     }),
-    elided: e.length - r.length,
+    elided: text.length - bounded.length,
   };
 }
 //@ chunk-06y4szbn.js:22216-22335 placement
-function quotedExcerpt(e, n) {
-  let { escaped, elided } = escapeForJsString(e, n);
-  let h = `"${normalizeQuotes(sweepResultLineText(escaped, escaped.length))}"`;
-  return elided > 0 ? `${h} \u2026(+${elided} chars)` : h;
+function quotedExcerpt(text, maxChars) {
+  let { escaped, elided } = escapeForJsString(text, maxChars);
+  let quoted = `"${normalizeQuotes(sweepResultLineText(escaped, escaped.length))}"`;
+  return elided > 0 ? `${quoted} \u2026(+${elided} chars)` : quoted;
 }
 //@ chunk-06y4szbn.js:22335-22392 placement
-function normalizeQuotes(e) {
-  return e.replace(QUOTE_HOMOGLYPHS, "'").replace(SINGLE_QUOTE_RUNS, "'");
+function normalizeQuotes(text) {
+  return text.replace(QUOTE_HOMOGLYPHS, "'").replace(SINGLE_QUOTE_RUNS, "'");
 }
 export {
   trimHtmlWhitespace,

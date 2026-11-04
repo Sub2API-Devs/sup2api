@@ -75,6 +75,7 @@ import { withDeadline } from "../../utils/sleep.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnumOpt, fromEnum, lit } from "../../services/analytics/safeMetadata.js";
 import { streamMessageDelta, usageForStream, streamMessageStop } from "./sdkMessageStream.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-tyg7f3ek.js:230577-232009 placement
 /**
@@ -88,14 +89,14 @@ function fetchUserPromptFiles({
   namedByIdHash = false,
   tellModel = filesNotSavedNote,
 }) {
-  let [S, R, w, P, L] = resolveArguments;
-  let q = w.isRemoteIO ? aheadOfFiles : undefined;
-  let x = {
-    isRemoteIO: w.isRemoteIO,
-    uuid: S.uuid,
+  let [first, second, third, fourth, fifth] = resolveArguments;
+  let aheadArg = third.isRemoteIO ? aheadOfFiles : undefined;
+  let frameInfo = {
+    isRemoteIO: third.isRemoteIO,
+    uuid: first.uuid,
     attachments,
   };
-  let G = isHumanIngressFrame(S, w)
+  let unhinted = isHumanIngressFrame(first, third)
     ? attachments.flatMap(({ file_uuid: fileUuid, file_name: fileName, sha256 }) =>
         sha256 === undefined
           ? [
@@ -107,67 +108,77 @@ function fetchUserPromptFiles({
           : [],
       )
     : [];
-  let Z = [S, R, w, P, L, undefined, q, namedByIdHash];
-  let re =
+  let ingressArgs = [first, second, third, fourth, fifth, undefined, aheadArg, namedByIdHash];
+  let reason =
     aheadOfFiles === "off" || attachments.length === 0
       ? "not_asked"
-      : w.peerFrom !== undefined
+      : third.peerFrom !== undefined
         ? "peer"
         : !allFilesUnfetchable(attachments, aheadOfFiles)
           ? "file_kinds"
-          : isTextNotTyped(S) && describeAttachmentFailures(attachments).all_files_binary_ext_no_sha256 !== 1
+          : isTextNotTyped(first) &&
+              describeAttachmentFailures(attachments).all_files_binary_ext_no_sha256 !== 1
             ? "text_not_typed"
             : hasPromptSubmitHooks(sessionHooks)
               ? "prompt_hook"
               : undefined;
-  let Ae = re === undefined ? sessionUploadsDir() : "";
-  let Ue = re === undefined ? contentWithPlannedPathRefs(S, R, Ae, namedByIdHash) : undefined;
-  if (Ue === undefined) {
-    if (re !== "not_asked") {
-      let Me = re ?? "unplannable";
+  let dir = reason === undefined ? sessionUploadsDir() : "";
+  let planned =
+    reason === undefined ? contentWithPlannedPathRefs(first, second, dir, namedByIdHash) : undefined;
+  if (planned === undefined) {
+    if (reason !== "not_asked") {
+      let reasonCode = reason ?? "unplannable";
       logForDiagnosticsNoPII("info", "user_message_waits_for_files", {
-        reason: Me,
-        reason_code: UNPLANNABLE_REASONS[Me],
+        reason: reasonCode,
+        reason_code: UNPLANNABLE_REASONS[reasonCode],
         file_count: attachments.length,
       });
     }
-    let ie = attachments.length > 0 ? lastInlineArrivingMessageId() : undefined;
-    let Se = ie === undefined ? prependIngressFiles(...Z) : ie.then(() => prependIngressFiles(...Z));
-    let me =
-      G.length > 0 && isFilePersistenceEnabled()
-        ? Se.then(async (Me) => {
-            if (AGENT_VERB(G)) await enqueueArrivingFileMessage(() => refreshFilesPlacedByName(G));
-            return Me;
+    let arrivalId = attachments.length > 0 ? lastInlineArrivingMessageId() : undefined;
+    let resolved =
+      arrivalId === undefined
+        ? prependIngressFiles(...ingressArgs)
+        : arrivalId.then(() => prependIngressFiles(...ingressArgs));
+    let resolving =
+      unhinted.length > 0 && isFilePersistenceEnabled()
+        ? resolved.then(async (res) => {
+            if (AGENT_VERB(unhinted))
+              await enqueueArrivingFileMessage(() => refreshFilesPlacedByName(unhinted));
+            return res;
           })
-        : Se;
+        : resolved;
     return {
-      resolving: me,
+      resolving,
       queuedAheadOfFiles: false,
-      frameAdmission: (Me) => {
-        if (Me) me.then((Ee) => reportMissingBridgeAttachments(x, Ee.missingFiles)).catch(logError);
+      frameAdmission: (frame) => {
+        if (frame)
+          resolving
+            .then((result) => reportMissingBridgeAttachments(frameInfo, result.missingFiles))
+            .catch(logError);
       },
     };
   }
   let startTime = performance.now();
   let deferred = Promise.withResolvers();
   enqueueArrivingFileMessage(async () => {
-    let ie = await prependIngressFiles(S, R, w, P, L, Ae, q, namedByIdHash);
-    if (AGENT_VERB(G)) await refreshFilesPlacedByName(G);
-    return ie;
-  }, Ue.paths)
+    let result = await prependIngressFiles(first, second, third, fourth, fifth, dir, aheadArg, namedByIdHash);
+    if (AGENT_VERB(unhinted)) await refreshFilesPlacedByName(unhinted);
+    return result;
+  }, planned.paths)
     .then(
-      (ie) => describeMissingFiles(Ue.refs, ie, startTime, deferred.promise, x, tellModel),
+      (resolved) =>
+        describeMissingFiles(planned.refs, resolved, startTime, deferred.promise, frameInfo, tellModel),
       (error) => {
         logError(error);
         describeMissingFiles(
-          Ue.refs,
+          planned.refs,
           {
             content: "",
             missingFiles: allMissing(attachments, "not_finished"),
           },
           startTime,
           deferred.promise,
-          x,
+          frameInfo,
           tellModel,
         );
       },
@@ -175,7 +186,7 @@ function fetchUserPromptFiles({
     .catch(logError);
   return {
     resolving: Promise.resolve({
-      content: Ue.content,
+      content: planned.content,
       inlinedImagePaths: [],
     }),
     queuedAheadOfFiles: true,
@@ -186,10 +197,10 @@ function fetchUserPromptFiles({
 function allFilesUnfetchable(attachments, aheadOfFiles) {
   if (getDisableFileMentions())
     return attachments.every(
-      (r) =>
-        r.is_image !== true &&
-        r.sha256 === undefined &&
-        !isQueryableAttachmentFile(sanitizedAttachmentInnerName(r)),
+      (attachment) =>
+        attachment.is_image !== true &&
+        attachment.sha256 === undefined &&
+        !isQueryableAttachmentFile(sanitizedAttachmentInnerName(attachment)),
     );
   return (
     describeAttachmentFailures(attachments)[
@@ -215,16 +226,16 @@ function hasPromptSubmitHooks(sessionHooks) {
   }
 }
 //@ chunk-tyg7f3ek.js:232425-232499 placement
-function reportMissingBridgeAttachments({ isRemoteIO, uuid, attachments }, s) {
-  if (isRemoteIO) logBridgeAttachmentsMissing(uuid, attachments.length, s);
+function reportMissingBridgeAttachments({ isRemoteIO, uuid, attachments }, missingFiles) {
+  if (isRemoteIO) logBridgeAttachmentsMissing(uuid, attachments.length, missingFiles);
 }
 //@ chunk-tyg7f3ek.js:232499-232650 placement
-function missingFileRefs(e, n, r, s) {
-  return r.flatMap((h, y) =>
-    e.includes(n[y])
+function missingFileRefs(missing, refs, attachments, missingFiles) {
+  return attachments.flatMap((attachment, index) =>
+    missing.includes(refs[index])
       ? [
-          s?.find((S) => S.file_uuid === h.file_uuid) ?? {
-            file_uuid: h.file_uuid,
+          missingFiles?.find((file) => file.file_uuid === attachment.file_uuid) ?? {
+            file_uuid: attachment.file_uuid,
             reason: "download",
           },
         ]
@@ -235,47 +246,54 @@ function missingFileRefs(e, n, r, s) {
 function describeMissingFiles(
   refs,
   { content, missingFiles, asideOutcomes = [], noSpace },
-  y,
+  startedAt,
   promise,
-  R,
+  frameInfo,
   tellModel,
 ) {
-  let P =
+  let text =
     typeof content === "string"
       ? content
-      : content.map((Ue) => (Ue.type === "text" ? Ue.text : "")).join(`
+      : content.map((block) => (block.type === "text" ? block.text : "")).join(`
 `);
-  let filtered = refs.filter((Ue) => !P.includes(Ue));
-  let filtered_2 = asideOutcomes.filter((asideOutcome) => !asideOutcome.saved);
-  let x = new Set(filtered_2.map((Ue) => `@"${Ue.path}"`));
-  let filtered_3 = filtered.filter((Ue) => !x.has(Ue));
-  let Z = {
-    notSaved: filtered_2.map((Ue) => asideSentence(Ue, true)),
+  let missing = refs.filter((ref) => !text.includes(ref));
+  let filtered = asideOutcomes.filter((asideOutcome) => !asideOutcome.saved);
+  let lostPaths = new Set(filtered.map((outcome) => `@"${outcome.path}"`));
+  let filtered_2 = missing.filter((ref) => !lostPaths.has(ref));
+  let notes = {
+    notSaved: filtered.map((outcome) => asideSentence(outcome, true)),
     moved: asideOutcomes
       .filter((asideOutcome) => asideOutcome.saved)
       .map((asideOutcome) => asideSentence(asideOutcome, true)),
   };
-  let re = Z.notSaved.length + Z.moved.length;
-  let Ae = {
+  let noteCount = notes.notSaved.length + notes.moved.length;
+  let fields = {
     file_count: refs.length,
-    missing_file_count: filtered.length,
-    ended_after_queue_ms: Math.round(performance.now() - y),
-    ...(re > 0 && {
-      late_aside_line_count: re,
+    missing_file_count: missing.length,
+    ended_after_queue_ms: Math.round(performance.now() - startedAt),
+    ...(noteCount > 0 && {
+      late_aside_line_count: noteCount,
     }),
   };
-  if (filtered.length === 0) logFeatureOk("bridge_attachment_turn_before_files", Ae);
-  else if (filtered.length < refs.length)
-    logFeatureSad("bridge_attachment_turn_before_files", "some_missing", Ae);
-  else logFeatureBad("bridge_attachment_turn_before_files", "all_missing", Ae);
-  logForDiagnosticsNoPII(filtered.length === 0 ? "info" : "warn", "user_message_files_ended_after_queue", Ae);
-  if (filtered.length === 0 && re === 0) return;
+  if (missing.length === 0) logFeatureOk("bridge_attachment_turn_before_files", fields);
+  else if (missing.length < refs.length)
+    logFeatureSad("bridge_attachment_turn_before_files", "some_missing", fields);
+  else logFeatureBad("bridge_attachment_turn_before_files", "all_missing", fields);
+  logForDiagnosticsNoPII(
+    missing.length === 0 ? "info" : "warn",
+    "user_message_files_ended_after_queue",
+    fields,
+  );
+  if (missing.length === 0 && noteCount === 0) return;
   promise
-    .then((Ue) => {
-      if (Ue) {
-        tellModel(refs.length, filtered_3, false, 0, noSpace, Z);
-        if (filtered.length > 0)
-          reportMissingBridgeAttachments(R, missingFileRefs(filtered, refs, R.attachments, missingFiles));
+    .then((ok) => {
+      if (ok) {
+        tellModel(refs.length, filtered_2, false, 0, noSpace, notes);
+        if (missing.length > 0)
+          reportMissingBridgeAttachments(
+            frameInfo,
+            missingFileRefs(missing, refs, frameInfo.attachments, missingFiles),
+          );
       }
     })
     .catch(logError);
@@ -284,37 +302,37 @@ function describeMissingFiles(
 function filesNotSavedNote(
   sentCount,
   lost,
-  r = false,
-  s = 0,
-  h = false,
-  y = {
+  again = false,
+  unknown = 0,
+  noSpace = false,
+  notes = {
     notSaved: [],
     moved: [],
   },
 ) {
-  let S = [
+  let lines = [
     ...(lost.length > 0
       ? [
-          `${lost.length} of the ${sentCount} file(s) attached to a user message could not be fetched or saved${r ? " again, so these paths, which the message names, may be missing" : ", so these paths, which the message names, were not written"}: ${lost.map((w) => escapeXml(w.slice(1))).join(", ")}`,
+          `${lost.length} of the ${sentCount} file(s) attached to a user message could not be fetched or saved${again ? " again, so these paths, which the message names, may be missing" : ", so these paths, which the message names, were not written"}: ${lost.map((ref) => escapeXml(ref.slice(1))).join(", ")}`,
         ]
       : []),
-    ...(s > 0
+    ...(unknown > 0
       ? [
-          `${lost.length > 0 ? `${s} more of them may be missing too` : `${s} of the ${sentCount} file(s) attached to an earlier user message may be missing from the uploads folder`}, and it is not known which. If a file that the conversation names in the uploads folder is not found, ask the user to attach it again.`,
+          `${lost.length > 0 ? `${unknown} more of them may be missing too` : `${unknown} of the ${sentCount} file(s) attached to an earlier user message may be missing from the uploads folder`}, and it is not known which. If a file that the conversation names in the uploads folder is not found, ask the user to attach it again.`,
         ]
       : []),
-    ...y.notSaved.map((w) => escapeXml(w)),
-    ...(h ? [NO_SPACE_FOR_A_FILE] : []),
+    ...notes.notSaved.map((line) => escapeXml(line)),
+    ...(noSpace ? [NO_SPACE_FOR_A_FILE] : []),
   ];
-  let mapped = y.moved.map((w) => escapeXml(w));
-  if (S.length === 0 && mapped.length === 0) return;
+  let mapped = notes.moved.map((line) => escapeXml(line));
+  if (lines.length === 0 && mapped.length === 0) return;
   enqueuePendingNotification({
     value: formatTaskNotification({
       body: `${
-        S.length > 0
+        lines.length > 0
           ? `
 <${MESSAGE_FILES_MISSING}>
-${S.join(`
+${lines.join(`
 `)}
 </${MESSAGE_FILES_MISSING}>`
           : ""
@@ -338,55 +356,55 @@ ${mapped.join(`
 }
 //@ chunk-tyg7f3ek.js:234608-235279 placement
 function createFetchHoldRegistry({ stopping }) {
-  let n = new Map();
-  let r;
+  let bySession = new Map();
+  let dropTimer;
   return {
-    hold: (s) => {
-      let h = n.get(s) ?? {
+    hold: (uuid) => {
+      let hold = bySession.get(uuid) ?? {
         holds: 0,
         started: false,
         keptBack: undefined,
       };
-      h.holds++;
-      n.set(s, h);
-      let y = false;
+      hold.holds++;
+      bySession.set(uuid, hold);
+      let released = false;
       return () => {
-        if (y) return;
-        y = true;
-        h.holds--;
-        if (h.holds > 0) return;
-        n.delete(s);
-        let { keptBack } = h;
+        if (released) return;
+        released = true;
+        hold.holds--;
+        if (hold.holds > 0) return;
+        bySession.delete(uuid);
+        let { keptBack } = hold;
         if (keptBack === undefined) return;
         try {
-          let R = stopping();
+          let isStopping = stopping();
           logForDiagnosticsNoPII("info", "user_message_processed_after_files", {
             kept_back_ms: Math.round(performance.now() - keptBack.at),
-            left_open: R ? 1 : 0,
+            left_open: isStopping ? 1 : 0,
           });
-          if (!R) r?.(s, keptBack.state);
+          if (!isStopping) dropTimer?.(uuid, keptBack.state);
         } catch (error) {
           logError(error);
         }
       };
     },
-    through: (s) => {
-      r = s;
-      return (h, y, S) => {
-        let R = n.get(h);
+    through: (forward) => {
+      dropTimer = forward;
+      return (uuid, state, opts) => {
+        let hold = bySession.get(uuid);
         if (
-          R !== undefined &&
-          (y === "completed" || (y === "cancelled" && (R.started || R.keptBack !== undefined)))
+          hold !== undefined &&
+          (state === "completed" || (state === "cancelled" && (hold.started || hold.keptBack !== undefined)))
         ) {
-          if (R.keptBack === undefined)
-            R.keptBack = {
-              state: y,
+          if (hold.keptBack === undefined)
+            hold.keptBack = {
+              state,
               at: performance.now(),
             };
           return;
         }
-        if (R !== undefined && y === "started") R.started = true;
-        s(h, y, S);
+        if (hold !== undefined && state === "started") hold.started = true;
+        forward(uuid, state, opts);
       };
     },
   };
@@ -416,9 +434,9 @@ function filesRefetchMode() {
   return isGrowthBookEnabled() && !hasFreshGrowthBookFeatures() ? "cold" : "off";
 }
 //@ chunk-tyg7f3ek.js:235668-235815 placement
-function unfetchableFilesPlan(e, n) {
-  if (!n || shouldQueryInboundAttachment(e) === false) return;
-  let inboundAttachments = extractInboundAttachments(e);
+function unfetchableFilesPlan(message, shouldQuery) {
+  if (!shouldQuery || shouldQueryInboundAttachment(message) === false) return;
+  let inboundAttachments = extractInboundAttachments(message);
   return describeAttachmentFailures(inboundAttachments).all_files_binary_ext_or_pdf_no_sha256 === 1
     ? {
         files: inboundAttachments,
@@ -427,57 +445,57 @@ function unfetchableFilesPlan(e, n) {
     : undefined;
 }
 //@ chunk-tyg7f3ek.js:235815-236235 placement
-function plannedFilePrompt(e, n, r, s) {
-  let h;
-  if (s === "cut_off_prompt") h = unfetchableFilesPlan(e, n);
+function plannedFilePrompt(message, shouldQuery, origin, chosenAs) {
+  let plan;
+  if (chosenAs === "cut_off_prompt") plan = unfetchableFilesPlan(message, shouldQuery);
   else {
-    let inboundAttachments = extractInboundAttachments(e);
+    let inboundAttachments = extractInboundAttachments(message);
     let filtered = inboundAttachments.filter(
       (inboundAttachment) => inboundAttachment.is_image !== true && inboundAttachment.sha256 === undefined,
     );
-    h =
-      n &&
-      shouldQueryInboundAttachment(e) !== false &&
+    plan =
+      shouldQuery &&
+      shouldQueryInboundAttachment(message) !== false &&
       filtered.length > 0 &&
-      contentWithPlannedPathRefs(e, "", "") !== undefined
+      contentWithPlannedPathRefs(message, "", "") !== undefined
         ? {
             files: filtered,
             sentCount: inboundAttachments.length,
           }
         : undefined;
   }
-  if (h === undefined) return;
-  let y = ingressPromptContent(e, n, r);
-  let ingressOrigins = resolveIngressOrigins(e, y, n, r, undefined);
+  if (plan === undefined) return;
+  let content = ingressPromptContent(message, shouldQuery, origin);
+  let ingressOrigins = resolveIngressOrigins(message, content, shouldQuery, origin, undefined);
   return ingressOrigins.peerFrom === undefined &&
     !isGatedInbound({
       ingressOrigin: ingressOrigins.ingressOrigin,
-      inboundOrigin: e.inbound_origin,
-      envelopePeer: hasTeammateMessageEnvelope(y),
+      inboundOrigin: message.inbound_origin,
+      envelopePeer: hasTeammateMessageEnvelope(content),
     })
     ? {
-        ...h,
-        chosenAs: s,
+        ...plan,
+        chosenAs,
       }
     : undefined;
 }
 //@ chunk-tyg7f3ek.js:236235-236248 placement
 var FETCH_USER_FILES_MAX_MS = 60000;
 //@ chunk-tyg7f3ek.js:236248-236489 placement
-function holdForFilesRefetch(e) {
+function holdForFilesRefetch(chosenAs) {
   let { promise, resolve } = Promise.withResolvers();
   runBesideArrivingFiles(() => promise);
   let timer = setTimeout(
-    (h, chosenAsCode) => {
+    (resolve, chosenAsCode) => {
       logForDiagnosticsNoPII("warn", "user_message_files_refetch_hold_expired", {
         max_ms: FETCH_USER_FILES_MAX_MS,
         chosen_as_code: chosenAsCode,
       });
-      h();
+      resolve();
     },
     FETCH_USER_FILES_MAX_MS,
     resolve,
-    PARTIAL_STREAM_RETRACT_CODES[e],
+    PARTIAL_STREAM_RETRACT_CODES[chosenAs],
   );
   timer.unref();
   return () => {
@@ -493,11 +511,11 @@ var USER_FILE_FAILURE_CODES = {
   threw: 4,
 };
 //@ chunk-tyg7f3ek.js:236547-236662 placement
-function logNoFileMark(e) {
+function logNoFileMark(cause) {
   try {
     logForDiagnosticsNoPII("warn", "user_message_files_no_mark", {
-      cause: e,
-      cause_code: USER_FILE_FAILURE_CODES[e],
+      cause,
+      cause_code: USER_FILE_FAILURE_CODES[cause],
     });
   } catch (error) {
     logError(error);
@@ -510,22 +528,22 @@ var FILES_FETCHED_AGAIN_HOLD = "files-fetched-again-hold";
 var FILES_REFETCH_MAX_ATTEMPTS = 2;
 //@ chunk-tyg7f3ek.js:236710-237348 placement
 async function refetchSessionUploads(uuid, storageV5) {
-  let r = false;
+  let refused = false;
   try {
     let sessionId = getSessionId();
     if (getSessionUploadsDirOverride() !== null) return logNoFileMark("uploads_elsewhere");
     if (!isValidKeySegment(uuid) || uuid.length > 100 || !isValidKeySegment(sessionId))
       return logNoFileMark("unfit_id");
-    let h = isStorageV5Enabled() ? storageV5 : undefined;
-    let y = join(getUploadsDir(), sessionId, ".fetched-again");
-    if (h === undefined)
-      await mkdir(y, {
+    let store = isStorageV5Enabled() ? storageV5 : undefined;
+    let dir = join(getUploadsDir(), sessionId, ".fetched-again");
+    if (store === undefined)
+      await mkdir(dir, {
         recursive: true,
         mode: 448,
       });
     for (let j = 1; j <= FILES_REFETCH_MAX_ATTEMPTS; j++) {
-      if (h !== undefined) {
-        let R = await h.write(
+      if (store !== undefined) {
+        let result = await store.write(
           STORAGE_SPACES.userConfigDir("uploads", [sessionId, ".fetched-again", `${uuid}.${j}`]),
           "",
           {
@@ -535,66 +553,66 @@ async function refetchSessionUploads(uuid, storageV5) {
             },
           },
         );
-        if (R.ok) return j;
-        r ||= R.error.code !== "AlreadyExists";
+        if (result.ok) return j;
+        refused ||= result.error.code !== "AlreadyExists";
         continue;
       }
       try {
-        await writeFile(join(y, `${uuid}.${j}`), "", {
+        await writeFile(join(dir, `${uuid}.${j}`), "", {
           flag: "wx",
           mode: 384,
         });
         return j;
       } catch (error) {
-        r ||= getErrnoCode(error) !== "EEXIST";
+        refused ||= getErrnoCode(error) !== "EEXIST";
       }
     }
   } catch (error) {
     logError(error);
     return logNoFileMark("threw");
   }
-  return r ? logNoFileMark("refused") : "tries_spent";
+  return refused ? logNoFileMark("refused") : "tries_spent";
 }
 //@ chunk-tyg7f3ek.js:237348-238288 placement
 function reportFilesRefetch(
   { sentCount, fileCount, startedAt, coldRead, chosenAs },
-  y,
-  { absent: S = 0, lost: R = 0, ...w } = {},
+  outcome,
+  { absent = 0, lost = 0, ...rest } = {},
 ) {
   try {
     logForDiagnosticsNoPII(
-      y === "all_there" || y === "fetched" || y === "flags_off" ? "info" : "warn",
+      outcome === "all_there" || outcome === "fetched" || outcome === "flags_off" ? "info" : "warn",
       "user_message_files_fetched_again",
       {
-        outcome: y,
-        outcome_code: FILE_FETCH_OUTCOME_CODES[y],
+        outcome,
+        outcome_code: FILE_FETCH_OUTCOME_CODES[outcome],
         sent_file_count: sentCount,
         file_count: fileCount,
-        absent_file_count: S,
-        lost_file_count: R,
+        absent_file_count: absent,
+        lost_file_count: lost,
         ended_after_ms: Math.round(performance.now() - startedAt),
         cold_read: coldRead ? 1 : 0,
         chosen_as: chosenAs,
         chosen_as_code: PARTIAL_STREAM_RETRACT_CODES[chosenAs],
-        ...w,
+        ...rest,
       },
     );
-    if (y === "flags_off") return;
+    if (outcome === "flags_off") return;
     if (
-      y === "lost" ||
-      y === "threw" ||
-      y === "tries_spent" ||
-      y === "no_mark" ||
-      y === "too_slow" ||
-      y === "kept_elsewhere"
+      outcome === "lost" ||
+      outcome === "threw" ||
+      outcome === "tries_spent" ||
+      outcome === "no_mark" ||
+      outcome === "too_slow" ||
+      outcome === "kept_elsewhere"
     )
       logFeatureBad(
         chosenAs === "cut_off_prompt"
           ? "bridge_attachment_files_fetched_again"
           : "bridge_attachment_follow_up_files_fetched_again",
-        y,
+        outcome,
       );
-    else if (y === "all_there" || y === "fetched")
+    else if (outcome === "all_there" || outcome === "fetched")
       logFeatureOk(
         chosenAs === "cut_off_prompt"
           ? "bridge_attachment_files_fetched_again"
@@ -605,7 +623,7 @@ function reportFilesRefetch(
         chosenAs === "cut_off_prompt"
           ? "bridge_attachment_files_fetched_again"
           : "bridge_attachment_follow_up_files_fetched_again",
-        y,
+        outcome,
       );
   } catch (error) {
     logError(error);
@@ -649,91 +667,91 @@ async function refetchUserMessageFiles({
   storageV5,
   credentials,
 }) {
-  let q = {
+  let stats = {
     sentCount,
     fileCount: files.length,
     startedAt: performance.now(),
     coldRead: settleColdFlags !== undefined,
     chosenAs,
   };
-  let x;
-  let G;
+  let planned;
+  let told;
   try {
     if (settleColdFlags !== undefined) {
       await settleColdFlags().catch(logError);
-      let ie = filesRefetchMode();
-      if (ie !== "on") {
-        reportFilesRefetch(q, ie === "cold" ? "flags_not_fetched" : "flags_off");
+      let refetchMode = filesRefetchMode();
+      if (refetchMode !== "on") {
+        reportFilesRefetch(stats, refetchMode === "cold" ? "flags_not_fetched" : "flags_off");
         return true;
       }
     }
-    let Z = sessionUploadsDir();
-    let re =
+    let dir = sessionUploadsDir();
+    let stored =
       chosenAs === "cut_off_prompt"
         ? storedPrompt
         : (conversation[findMessageIndex(conversation, uuid)] ?? storedPrompt);
-    let Ae =
-      re === undefined
+    let text =
+      stored === undefined
         ? null
-        : re.type === "attachment" && re.attachment.type === "queued_command"
-          ? getContentText(re.attachment.prompt)
-          : getUserMessageText(re);
-    let Ue =
-      (Ae === null
+        : stored.type === "attachment" && stored.attachment.type === "queued_command"
+          ? getContentText(stored.attachment.prompt)
+          : getUserMessageText(stored);
+    let chosenDir =
+      (text === null
         ? undefined
-        : [Z, ...uploadsRootCandidates().map((ie) => join(ie, getSessionId()))].find((ie) =>
+        : [dir, ...uploadsRootCandidates().map((root) => join(root, getSessionId()))].find((dir) =>
             contentWithPlannedPathRefs(
               {
                 file_attachments: files,
               },
               "",
-              ie,
-            )?.refs.some((ref) => Ae.includes(ref)),
-          )) ?? Z;
-    x = contentWithPlannedPathRefs(
+              dir,
+            )?.refs.some((ref) => text.includes(ref)),
+          )) ?? dir;
+    planned = contentWithPlannedPathRefs(
       {
         file_attachments: files,
       },
       "",
-      Ue,
+      chosenDir,
     );
-    if (x === undefined) {
-      reportFilesRefetch(q, "unplannable");
+    if (planned === undefined) {
+      reportFilesRefetch(stats, "unplannable");
       return true;
     }
-    let { paths, refs } = x;
+    let { paths, refs } = planned;
     startSessionActivity("files_arriving", FILES_FETCHED_AGAIN_HOLD);
     try {
-      let ie = runBesideArrivingFiles(async (Se) => {
+      let run = runBesideArrivingFiles(async (placeParents) => {
         let results = await Promise.all(paths.map(isRegularFileOrUnknown));
-        let attachments = files.filter((file, _n) => !results[_n]);
+        let attachments = files.filter((file, index) => !results[index]);
         if (attachments.length === 0) {
-          reportFilesRefetch(q, "all_there");
+          reportFilesRefetch(stats, "all_there");
           return true;
         }
-        Se(paths.filter((path, _n) => !results[_n]));
+        placeParents(paths.filter((path, index) => !results[index]));
         if (stopping()) {
-          reportFilesRefetch(q, "aborted", {
+          reportFilesRefetch(stats, "aborted", {
             absent: attachments.length,
             lost: attachments.length,
           });
           return false;
         }
-        let Ee =
-          Ue === Z || Ue === join(getUploadsDir(), getSessionId())
+        let tryNumber =
+          chosenDir === dir || chosenDir === join(getUploadsDir(), getSessionId())
             ? await refetchSessionUploads(uuid, storageV5)
             : "kept_elsewhere";
-        if (typeof Ee !== "number") {
-          let filtered = refs.filter((ref, jn) => !results[jn]);
-          let _n = {
+        if (typeof tryNumber !== "number") {
+          let filtered = refs.filter((ref, index) => !results[index]);
+          let fields = {
             absent: attachments.length,
             lost: filtered.length,
           };
           if (stopping()) {
-            reportFilesRefetch(q, "aborted", _n);
+            reportFilesRefetch(stats, "aborted", fields);
             return false;
           }
-          G = reportMissingFiles({
+          told = reportMissingFiles({
             uuid,
             sentCount,
             files,
@@ -741,14 +759,14 @@ async function refetchUserMessageFiles({
             lost: filtered,
             listed: allMissing(attachments, "not_finished"),
           });
-          reportFilesRefetch(q, Ee, {
-            ..._n,
-            told: G,
+          reportFilesRefetch(stats, tryNumber, {
+            ...fields,
+            told,
           });
           return true;
         }
         let abortController = createAbortController();
-        let Xe = await withDeadline(
+        let resolved = await withDeadline(
           resolveInboundAttachments(
             attachments,
             false,
@@ -757,7 +775,7 @@ async function refetchUserMessageFiles({
             credentials,
             undefined,
             false,
-            Ue,
+            chosenDir,
             undefined,
             abortController.signal,
             true,
@@ -770,30 +788,30 @@ async function refetchUserMessageFiles({
           }),
           FILES_REFETCH_HOLD_MS,
         );
-        if (Xe === undefined) abortController.abort();
-        let We =
-          Xe === undefined
+        if (resolved === undefined) abortController.abort();
+        let kept =
+          resolved === undefined
             ? await Promise.all(paths.map(isRegularFileOrUnknown))
-            : refs.map((ref, _n) => results[_n] === true || Xe.prefix.includes(ref));
-        let filtered = refs.filter((ref, _n) => !We[_n]);
+            : refs.map((ref, index) => results[index] === true || resolved.prefix.includes(ref));
+        let filtered = refs.filter((ref, index) => !kept[index]);
         let listed =
-          Xe === undefined
+          resolved === undefined
             ? allMissing(
-                files.filter((file, _n) => !We[_n]),
+                files.filter((file, index) => !kept[index]),
                 "not_finished",
               )
-            : Xe.missingFiles;
-        let Lt = {
+            : resolved.missingFiles;
+        let fields = {
           absent: attachments.length,
           lost: filtered.length,
-          try_number: Ee,
+          try_number: tryNumber,
         };
-        if (filtered.length === 0) reportFilesRefetch(q, "fetched", Lt);
+        if (filtered.length === 0) reportFilesRefetch(stats, "fetched", fields);
         else if (stopping()) {
-          reportFilesRefetch(q, "aborted", Lt);
+          reportFilesRefetch(stats, "aborted", fields);
           return false;
         } else {
-          G = reportMissingFiles({
+          told = reportMissingFiles({
             uuid,
             sentCount,
             files,
@@ -801,41 +819,41 @@ async function refetchUserMessageFiles({
             lost: filtered,
             listed,
           });
-          reportFilesRefetch(q, Xe === undefined ? "too_slow" : "lost", {
-            ...Lt,
-            told: G,
+          reportFilesRefetch(stats, resolved === undefined ? "too_slow" : "lost", {
+            ...fields,
+            told,
           });
         }
         return true;
       });
       releasePlaceInLine?.();
-      return await ie;
+      return await run;
     } finally {
       endActivity("files_arriving", FILES_FETCHED_AGAIN_HOLD);
     }
   } catch (error) {
     logError(error);
-    let re = true;
+    let isStopping = true;
     try {
-      re = stopping();
+      isStopping = stopping();
     } catch (error) {
       logError(error);
     }
-    if (re) {
-      reportFilesRefetch(q, "threw");
+    if (isStopping) {
+      reportFilesRefetch(stats, "threw");
       return false;
     }
-    reportFilesRefetch(q, "threw", {
+    reportFilesRefetch(stats, "threw", {
       told:
-        G ??
-        (x === undefined
+        told ??
+        (planned === undefined
           ? 0
           : reportMissingFiles({
               uuid,
               sentCount,
               files,
-              refs: x.refs,
-              lost: x.refs,
+              refs: planned.refs,
+              lost: planned.refs,
               listed: allMissing(files, "not_finished"),
             })),
     });
@@ -845,116 +863,121 @@ async function refetchUserMessageFiles({
   }
 }
 //@ chunk-tyg7f3ek.js:240890-241076 placement
-var TOOL_USE_BLOCK_TYPES = new Set(["tool_use", "server_tool_use", "mcp_tool_use"]);
-var NOOP_STREAM_HANDLERS = {
-  onStreamEvent: () => [],
-  onAssistantMessage: () => {},
-  onTombstone: () => [],
-  onRefusalFallbackBanner: () => [],
-  closeAtTurnEnd: () => [],
-};
+var TOOL_USE_BLOCK_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var NOOP_STREAM_HANDLERS;
+deferInit("chunk-tyg7f3ek.js:240890", () => {
+  TOOL_USE_BLOCK_TYPES = new Set(["tool_use", "server_tool_use", "mcp_tool_use"]);
+  NOOP_STREAM_HANDLERS = {
+    onStreamEvent: () => [],
+    onAssistantMessage: () => {},
+    onTombstone: () => [],
+    onRefusalFallbackBanner: () => [],
+    closeAtTurnEnd: () => [],
+  };
+});
 //@ chunk-tyg7f3ek.js:241076-243554 placement
 function createPartialStreamRetraction(includePartialMessages) {
   if (!includePartialMessages) return NOOP_STREAM_HANDLERS;
   let apiMessageId = null;
   let index = null;
-  let s = false;
-  let h = false;
-  let y = false;
-  let S = new Map();
-  let R = null;
-  function w() {
-    if (R === null) return [];
-    let L = R;
-    R = null;
+  let blockClosed = false;
+  let stopSent = false;
+  let toolUseBlock = false;
+  let blockCounts = new Map();
+  let retracted = null;
+  function closeRetracted() {
+    if (retracted === null) return [];
+    let pending = retracted;
+    retracted = null;
     logEvent("tengu_partial_stream_retraction_closed", {
-      stop_reason: L.source === "tombstone" ? fromEnumOpt(L.retracted.stop_reason) : fromEnum("refusal"),
+      stop_reason:
+        pending.source === "tombstone" ? fromEnumOpt(pending.retracted.stop_reason) : fromEnum("refusal"),
       had_open_block: false,
-      ...(L.source === "refusal_banner" && {
+      ...(pending.source === "refusal_banner" && {
         source: lit("refusal_banner"),
       }),
     });
-    return L.source === "tombstone"
+    return pending.source === "tombstone"
       ? streamMessageDelta(
-          L.messageId,
-          L.retracted.stop_reason,
-          L.retracted.stop_sequence,
-          usageForStream(L.retracted.usage),
+          pending.messageId,
+          pending.retracted.stop_reason,
+          pending.retracted.stop_sequence,
+          usageForStream(pending.retracted.usage),
         )
-      : streamMessageDelta(L.messageId, "refusal", null, usageForStream(L.usage));
+      : streamMessageDelta(pending.messageId, "refusal", null, usageForStream(pending.usage));
   }
-  function P(L, q, x) {
+  function close(usage, source, sameMessage) {
     if (apiMessageId === null) return [];
-    let G = [];
+    let writes = [];
     let hadOpenBlock = index !== null;
-    if (index !== null && !y) G.push(createContentBlockStopEvent(apiMessageId, index));
-    if (h) G.push(streamMessageStop(apiMessageId));
+    if (index !== null && !toolUseBlock) writes.push(createContentBlockStopEvent(apiMessageId, index));
+    if (stopSent) writes.push(streamMessageStop(apiMessageId));
     else
-      G.push(
+      writes.push(
         ...streamMessageDelta(
           apiMessageId,
           null,
           null,
-          usageForStream(L),
-          x ? undefined : (S.get(apiMessageId) ?? 0),
+          usageForStream(usage),
+          sameMessage ? undefined : (blockCounts.get(apiMessageId) ?? 0),
         ),
       );
     logEvent("tengu_partial_stream_retraction_closed", {
       stop_reason: undefined,
       had_open_block: hadOpenBlock,
-      stop_reason_already_sent: h,
-      source: fromEnum(q),
+      stop_reason_already_sent: stopSent,
+      source: fromEnum(source),
     });
     apiMessageId = null;
     index = null;
-    y = false;
-    h = false;
-    return G;
+    toolUseBlock = false;
+    stopSent = false;
+    return writes;
   }
   return {
-    onStreamEvent(L, q) {
+    onStreamEvent(event, usage) {
       return safeCallOrEmptyArray(() => {
-        let x = [];
-        if (R !== null)
-          if (isPingStreamEvent(L));
-          else if (L.type === "message_start") x.push(...w());
+        let out = [];
+        if (retracted !== null)
+          if (isPingStreamEvent(event));
+          else if (event.type === "message_start") out.push(...closeRetracted());
           else {
-            apiMessageId = R.messageId;
-            R = null;
+            apiMessageId = retracted.messageId;
+            retracted = null;
           }
-        if (L.type === "message_start") {
-          x.push(...P(q, "stale_message_start", L.message.id === apiMessageId));
-          apiMessageId = L.message.id;
+        if (event.type === "message_start") {
+          out.push(...close(usage, "stale_message_start", event.message.id === apiMessageId));
+          apiMessageId = event.message.id;
           index = null;
-          y = false;
-          s = false;
-          h = false;
-        } else if (L.type === "content_block_start") {
-          index = L.index;
-          y = TOOL_USE_BLOCK_TYPES.has(L.content_block.type);
-          h = false;
-        } else if (L.type === "content_block_stop") {
+          toolUseBlock = false;
+          blockClosed = false;
+          stopSent = false;
+        } else if (event.type === "content_block_start") {
+          index = event.index;
+          toolUseBlock = TOOL_USE_BLOCK_TYPES.has(event.content_block.type);
+          stopSent = false;
+        } else if (event.type === "content_block_stop") {
           index = null;
-          y = false;
-          s = true;
-        } else if (L.type === "message_delta") {
-          if (L.delta.stop_reason != null && index === null) h = true;
-        } else if (L.type === "message_stop") {
+          toolUseBlock = false;
+          blockClosed = true;
+        } else if (event.type === "message_delta") {
+          if (event.delta.stop_reason != null && index === null) stopSent = true;
+        } else if (event.type === "message_stop") {
           apiMessageId = null;
           index = null;
-          y = false;
-          h = false;
+          toolUseBlock = false;
+          stopSent = false;
         }
-        return x;
+        return out;
       });
     },
-    onAssistantMessage(L) {
+    onAssistantMessage(message) {
       safeCallOrEmptyArray(() => {
-        let apiBlockIndex = L.apiBlockIndex;
-        S.set(
-          L.message.id,
+        let apiBlockIndex = message.apiBlockIndex;
+        blockCounts.set(
+          message.message.id,
           Math.max(
-            S.get(L.message.id) ?? 0,
+            blockCounts.get(message.message.id) ?? 0,
             apiBlockIndex !== undefined && Number.isSafeInteger(apiBlockIndex) && apiBlockIndex >= 0
               ? apiBlockIndex + 1
               : Number.NaN,
@@ -963,19 +986,23 @@ function createPartialStreamRetraction(includePartialMessages) {
         return [];
       });
     },
-    onTombstone(L) {
+    onTombstone(tombstone) {
       return safeCallOrEmptyArray(() => {
-        if (apiMessageId === null || L.message.type !== "assistant" || L.message.message.id !== apiMessageId)
+        if (
+          apiMessageId === null ||
+          tombstone.message.type !== "assistant" ||
+          tombstone.message.message.id !== apiMessageId
+        )
           return [];
-        if (L.displayOnly === true) {
+        if (tombstone.displayOnly === true) {
           logEvent("tengu_partial_stream_retraction_display_only", {
             had_open_block: index !== null,
           });
           return [];
         }
-        let message = L.message.message;
+        let message = tombstone.message.message;
         if (index === null) {
-          R = {
+          retracted = {
             source: "tombstone",
             messageId: apiMessageId,
             retracted: message,
@@ -983,8 +1010,8 @@ function createPartialStreamRetraction(includePartialMessages) {
           apiMessageId = null;
           return [];
         }
-        let x = [
-          ...(y ? [] : [createContentBlockStopEvent(apiMessageId, index)]),
+        let stopEvents = [
+          ...(toolUseBlock ? [] : [createContentBlockStopEvent(apiMessageId, index)]),
           ...streamMessageDelta(
             apiMessageId,
             message.stop_reason,
@@ -998,16 +1025,16 @@ function createPartialStreamRetraction(includePartialMessages) {
         });
         apiMessageId = null;
         index = null;
-        return x;
+        return stopEvents;
       });
     },
-    onRefusalFallbackBanner(L, q) {
+    onRefusalFallbackBanner(mode, usage) {
       return safeCallOrEmptyArray(() => {
-        if (apiMessageId === null || s || L !== "retry") return [];
+        if (apiMessageId === null || blockClosed || mode !== "retry") return [];
         if (index !== null) {
-          let x = [
-            ...(y ? [] : [createContentBlockStopEvent(apiMessageId, index)]),
-            ...streamMessageDelta(apiMessageId, "refusal", null, usageForStream(q)),
+          let stopEvents = [
+            ...(toolUseBlock ? [] : [createContentBlockStopEvent(apiMessageId, index)]),
+            ...streamMessageDelta(apiMessageId, "refusal", null, usageForStream(usage)),
           ];
           logEvent("tengu_partial_stream_retraction_closed", {
             stop_reason: fromEnum("refusal"),
@@ -1016,55 +1043,55 @@ function createPartialStreamRetraction(includePartialMessages) {
           });
           apiMessageId = null;
           index = null;
-          return x;
+          return stopEvents;
         }
-        R = {
+        retracted = {
           source: "refusal_banner",
           messageId: apiMessageId,
-          usage: q,
+          usage,
         };
         apiMessageId = null;
         return [];
       });
     },
-    closeAtTurnEnd(L) {
-      return safeCallOrEmptyArray(() => [...w(), ...P(L, "turn_end", false)]);
+    closeAtTurnEnd(usage) {
+      return safeCallOrEmptyArray(() => [...closeRetracted(), ...close(usage, "turn_end", false)]);
     },
   };
 }
 //@ chunk-tyg7f3ek.js:243554-243609 placement
-function safeCallOrEmptyArray(e) {
+function safeCallOrEmptyArray(fn) {
   try {
-    return e();
+    return fn();
   } catch (error) {
     logError(error);
     return [];
   }
 }
 //@ chunk-tyg7f3ek.js:243609-244088 placement
-function toStreamEventMessage(e, n) {
+function toStreamEventMessage(frame, message) {
   return {
     type: "stream_event",
-    event: e.event,
-    session_id: n.session_id,
+    event: frame.event,
+    session_id: message.session_id,
     parent_tool_use_id: null,
-    uuid: n.uuid,
-    ...(e.ttftMs !== undefined && {
-      ttft_ms: e.ttftMs,
+    uuid: message.uuid,
+    ...(frame.ttftMs !== undefined && {
+      ttft_ms: frame.ttftMs,
     }),
-    ...(e.thinkingDisplay !== undefined && {
-      thinking_display: e.thinkingDisplay,
+    ...(frame.thinkingDisplay !== undefined && {
+      thinking_display: frame.thinkingDisplay,
     }),
-    ...(e.apiMessageId !== undefined && {
-      api_message_id: e.apiMessageId,
+    ...(frame.apiMessageId !== undefined && {
+      api_message_id: frame.apiMessageId,
     }),
-    ...(e.abandonedBlocks !== undefined && {
+    ...(frame.abandonedBlocks !== undefined && {
       abandoned_blocks: {
-        api_message_id: e.abandonedBlocks.apiMessageId,
-        from_block_index: e.abandonedBlocks.fromBlockIndex,
+        api_message_id: frame.abandonedBlocks.apiMessageId,
+        from_block_index: frame.abandonedBlocks.fromBlockIndex,
       },
     }),
-    ...(e.textRunsJoined && {
+    ...(frame.textRunsJoined && {
       text_runs_joined: true,
     }),
   };

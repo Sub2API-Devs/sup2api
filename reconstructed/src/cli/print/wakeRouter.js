@@ -94,56 +94,58 @@ import { findToolByName } from "../../Tool.js";
 import { isSubagentToolRequest } from "../../remote/wireFrameShape.js";
 import { isPlainObject } from "../../utils/objectUtils.js";
 import { measureAnswerBounds } from "../../utils/permissions/permissionAnswer.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-tyg7f3ek.js:309636-309766 placement
 function installWakeRouterKick({ messageQueue, drain, routeWakes, kick }) {
-  let h = messageQueue.subscribe(() => {
+  let unsubscribe = messageQueue.subscribe(() => {
     routeWakes();
     if (shouldKickForQueuedWake(messageQueue, drain)) kick();
   });
   routeWakes();
   if (shouldKickForQueuedWake(messageQueue, drain)) kick();
-  return h;
+  return unsubscribe;
 }
 //@ chunk-tyg7f3ek.js:309766-309776 placement
 var MAX_PUBLISHED_QUEUE_WAKES = 32;
 //@ chunk-tyg7f3ek.js:309776-310442 placement
 function publishQueuedWakeStatus({ messageQueue, getTasks, publish }) {
-  let s = new Map();
+  let published = new Map();
   return messageQueue.subscribe(() => {
     try {
       let tasks = getTasks();
-      let y = new Set();
-      let S = false;
-      for (let R of messageQueue.getCommandQueueSnapshot()) {
-        if (!processQueuedCommands(R) || R.taskId === undefined || R.userResumeNotice === true) continue;
-        y.add(R.taskId);
-        let w = tasks[R.taskId];
+      let live = new Set();
+      let changed = false;
+      for (let queued of messageQueue.getCommandQueueSnapshot()) {
+        if (!processQueuedCommands(queued) || queued.taskId === undefined || queued.userResumeNotice === true)
+          continue;
+        live.add(queued.taskId);
+        let task = tasks[queued.taskId];
         if (
-          s.has(R.taskId) ||
-          w === undefined ||
-          !isWaitableAgentOrWorkflow(w) ||
-          !isTerminalTaskStatus(w.status)
+          published.has(queued.taskId) ||
+          task === undefined ||
+          !isWaitableAgentOrWorkflow(task) ||
+          !isTerminalTaskStatus(task.status)
         )
           continue;
-        let P = typeof R.value === "string" ? extractTag(R.value, OUTPUT_FILE) : null;
-        s.set(R.taskId, {
-          task_id: w.id,
-          task_type: w.type,
-          description: truncate(w.description, MAX_DESCRIPTION_CHARS),
-          status: w.status,
-          ...(P && {
-            output_file: P,
+        let outputFile = typeof queued.value === "string" ? extractTag(queued.value, OUTPUT_FILE) : null;
+        published.set(queued.taskId, {
+          task_id: task.id,
+          task_type: task.type,
+          description: truncate(task.description, MAX_DESCRIPTION_CHARS),
+          status: task.status,
+          ...(outputFile && {
+            output_file: outputFile,
           }),
         });
-        S = true;
+        changed = true;
       }
-      for (let key of s.keys())
-        if (!y.has(key)) {
-          s.delete(key);
-          S = true;
+      for (let key of published.keys())
+        if (!live.has(key)) {
+          published.delete(key);
+          changed = true;
         }
-      if (S) publish([...s.values()].slice(0, MAX_PUBLISHED_QUEUE_WAKES));
+      if (changed) publish([...published.values()].slice(0, MAX_PUBLISHED_QUEUE_WAKES));
     } catch (error) {
       if (isAbortError(error)) logForDebugging(`undelivered-completion mirror aborted: ${error}`);
       else logError(error);
@@ -184,16 +186,17 @@ class WakeRouter {
     this.taskRegistry = taskRegistry;
     this.stopTask = stopTask;
     let { turn } = this;
-    let P = () => turn.isRunning && drain.turnUnderWay && !drain.endSessionRequested && !isTerminalShutdown();
+    let isActive = () =>
+      turn.isRunning && drain.turnUnderWay && !drain.endSessionRequested && !isTerminalShutdown();
     this.delivery = new LowLatencySubmitQueue({
       turn: {
         agentId: undefined,
         guard: {
           get isActive() {
-            return P();
+            return isActive();
           },
           get isRunning() {
-            return P();
+            return isActive();
           },
           isDispatchingForModel: false,
           subscribe: this.turnChanged.subscribe,
@@ -218,33 +221,33 @@ class WakeRouter {
       featureName: "print_send_now",
     });
   }
-  takeBeforeEnqueue(e) {
+  takeBeforeEnqueue(command) {
     runSafely(() => {
-      if (e.priority !== "now") return;
-      for (let n of this.pressed.splice(0)) this.giveBackStop(n);
+      if (command.priority !== "now") return;
+      for (let uuid of this.pressed.splice(0)) this.giveBackStop(uuid);
       if (
-        e.uuid === undefined ||
+        command.uuid === undefined ||
         !this.turn.isRunning ||
         this.drain.endSessionRequested ||
         isTerminalShutdown() ||
-        !isPlainHumanInput(e) ||
+        !isPlainHumanInput(command) ||
         !this.canDeliverOverTurn() ||
         !this.enabled()
       )
         return;
       if (this.messageQueue.getCommandQueueSnapshot().some(isActiveMainAgentCommand)) {
         this.delivery.moveHolders();
-        this.movedFor.add(e.uuid);
+        this.movedFor.add(command.uuid);
         return;
       }
-      e.priority = "next";
-      e.sentNow = true;
-      this.taken.add(e.uuid);
+      command.priority = "next";
+      command.sentNow = true;
+      this.taken.add(command.uuid);
     });
   }
-  press(e) {
+  press(command) {
     runSafely(() => {
-      let { uuid } = e;
+      let { uuid } = command;
       if (uuid === undefined || !this.taken.delete(uuid)) return;
       if (!this.delivery.sendQueuedNow()) {
         logFeatureSad("print_send_now", "declined");
@@ -258,15 +261,15 @@ class WakeRouter {
   canDeliverOverTurn() {
     return this.turn.isCompacting || dropTextInBriefTurns(this.transcript.getSnapshot()).size > 0;
   }
-  giveBackStop(e) {
-    if (this.messageQueue.getCommandQueueSnapshot().some((n) => n.uuid === e)) {
+  giveBackStop(uuid) {
+    if (this.messageQueue.getCommandQueueSnapshot().some((queued) => queued.uuid === uuid)) {
       this.delivery.moveHolders();
-      this.movedFor.add(e);
-      this.messageQueue.promoteToNow(e);
+      this.movedFor.add(uuid);
+      this.messageQueue.promoteToNow(uuid);
     }
   }
   pressWaiting() {
-    let e = false;
+    let sent = false;
     runSafely(() => {
       let filtered = this.messageQueue.getCommandQueueSnapshot().filter(isActiveMainAgentCommand);
       if (
@@ -274,13 +277,13 @@ class WakeRouter {
         !this.turn.isRunning ||
         this.drain.endSessionRequested ||
         isTerminalShutdown() ||
-        !filtered.every((s) => s.priority !== "now" && isPlainHumanInput(s)) ||
+        !filtered.every((queued) => queued.priority !== "now" && isPlainHumanInput(queued)) ||
         !this.canDeliverOverTurn() ||
         !this.enabled()
       )
         return;
-      e = this.delivery.sendQueuedNow();
-      if (!e) {
+      sent = this.delivery.sendQueuedNow();
+      if (!sent) {
         logFeatureSad("print_send_now", "declined");
         return;
       }
@@ -288,7 +291,7 @@ class WakeRouter {
       if (uuid !== undefined) this.pressed.splice(0, this.pressed.length, uuid);
       for (let { uuid } of filtered) if (uuid !== undefined) this.movedFor.add(uuid);
     });
-    return e;
+    return sent;
   }
   notePersonsStop() {
     this.turn.wasStoppedByPerson = this.turn.isRunning;
@@ -296,37 +299,37 @@ class WakeRouter {
   }
   stopMovedTasks() {
     runSafely(() => {
-      for (let e of this.movedTasks()) this.stopTask(e);
+      for (let id of this.movedTasks()) this.stopTask(id);
     });
   }
   movedTasks() {
     if (!isClaudeAiChatRemote()) return [];
     return Object.values(this.taskRegistry.all())
       .filter(
-        (e) =>
-          ((isUnownedRunningShell(e) && isLocalShellTask(e)) ||
-            (e.type === "mcp_task" && e.status === "running")) &&
-          e.backgroundedToDeliverMessage === true &&
-          !this.spared.has(e.id),
+        (task) =>
+          ((isUnownedRunningShell(task) && isLocalShellTask(task)) ||
+            (task.type === "mcp_task" && task.status === "running")) &&
+          task.backgroundedToDeliverMessage === true &&
+          !this.spared.has(task.id),
       )
-      .map((e) => e.id);
+      .map((task) => task.id);
   }
-  isTaking(e) {
-    return e.uuid !== undefined && this.taken.has(e.uuid);
+  isTaking(command) {
+    return command.uuid !== undefined && this.taken.has(command.uuid);
   }
-  noteTurnStart(e) {
+  noteTurnStart(members) {
     this.turn.isRunning = true;
     this.turn.isCompacting = false;
     runSafely(() => {
-      if (e.some(({ uuid }) => uuid !== undefined && this.movedFor.has(uuid))) return;
-      for (let n of this.movedTasks()) this.spared.add(n);
+      if (members.some(({ uuid }) => uuid !== undefined && this.movedFor.has(uuid))) return;
+      for (let id of this.movedTasks()) this.spared.add(id);
       this.movedFor.clear();
     });
     this.turnChanged.emit();
   }
-  noteFrame(e) {
-    if (e.type === "system" && e.subtype === "status" && e.status !== "requesting")
-      this.turn.isCompacting = e.status === "compacting";
+  noteFrame(frame) {
+    if (frame.type === "system" && frame.subtype === "status" && frame.status !== "requesting")
+      this.turn.isCompacting = frame.status === "compacting";
   }
   noteTurnEnd() {
     if (this.turn.wasStoppedByPerson) this.stopMovedTasks();
@@ -343,18 +346,18 @@ class WakeRouter {
   }
 }
 //@ chunk-tyg7f3ek.js:314001-314105 placement
-function isPlainHumanInput(e) {
+function isPlainHumanInput(command) {
   return (
-    canBatchWith(e) &&
-    isHumanOrigin(e.origin) &&
-    isRefillableInput(e) &&
-    e.verifiedSlackHumanTurn !== true &&
-    !e.wait &&
-    !looksLikeSlashInput(e.value)
+    canBatchWith(command) &&
+    isHumanOrigin(command.origin) &&
+    isRefillableInput(command) &&
+    command.verifiedSlackHumanTurn !== true &&
+    !command.wait &&
+    !looksLikeSlashInput(command.value)
   );
 }
 //@ chunk-tyg7f3ek.js:314105-314133 placement
-function noop(e) {
+function noop(x) {
   return () => {};
 }
 //@ chunk-tyg7f3ek.js:314133-317934 placement
@@ -381,182 +384,184 @@ class ResultWakeRouter {
   }
   route() {
     if (this.resumesNothing()) return;
-    let commandQueueSnapshot = this.messageQueue.getCommandQueueSnapshot();
+    let allMessages = this.messageQueue.getCommandQueueSnapshot();
     clearTimeout(this.wakeRepoll);
     if (
-      commandQueueSnapshot.some(
-        (s) =>
-          s.agentId &&
-          !isMainAgentCommand(s) &&
-          (s.mode === "task-notification" || isResultOnlyTaskNotification(s)),
+      allMessages.some(
+        (queued) =>
+          queued.agentId &&
+          !isMainAgentCommand(queued) &&
+          (queued.mode === "task-notification" || isResultOnlyTaskNotification(queued)),
       )
     ) {
-      this.wakeRepoll = setTimeout((s) => s.recheckCommandQueue(), 60000, this.messageQueue);
+      this.wakeRepoll = setTimeout((queue) => queue.recheckCommandQueue(), 60000, this.messageQueue);
       this.wakeRepoll.unref?.();
     }
     let lastCacheSafeParams = getLastCacheSafeParams();
-    let r = undefined;
-    if (!lastCacheSafeParams && !r?.size) return;
+    let queued = undefined;
+    if (!lastCacheSafeParams && !queued?.size) return;
     if (lastCacheSafeParams) this.flushStranded();
-    for (let s of buildTaskNotificationText(commandQueueSnapshot, this.getTasks())) {
-      let h = lastCacheSafeParams?.toolUseContext ?? r?.get(s.agentId);
+    for (let line of buildTaskNotificationText(allMessages, this.getTasks())) {
+      let context = lastCacheSafeParams?.toolUseContext ?? queued?.get(line.agentId);
       if (
-        h === undefined ||
-        this.wakeInFlight.has(s.agentId) ||
-        this.deniedWakes.holds(commandQueueSnapshot, s)
+        context === undefined ||
+        this.wakeInFlight.has(line.agentId) ||
+        this.deniedWakes.holds(allMessages, line)
       )
         continue;
-      this.wakeInFlight.add(s.agentId);
-      let y = false;
+      this.wakeInFlight.add(line.agentId);
+      let handled = false;
       let backgroundLaunchRule = getBackgroundLaunchRule();
-      let R = backgroundLaunchRule !== undefined && admitsWakeSafe(backgroundLaunchRule, s.agentId);
+      let wakeAdmitted =
+        backgroundLaunchRule !== undefined && admitsWakeSafe(backgroundLaunchRule, line.agentId);
       resumeAgentBackground({
-        agentId: s.agentId,
-        prompt: s.prompt,
-        resultsOnly: s.resultsOnly,
-        promptOrigin: s.origin,
-        promptToolsUsed: s.toolsUsed,
-        promptNoticeLengths: s.noticeLengths,
-        promptNoticeOwn: s.noticeOwn,
-        promptNoticeRunIds: s.noticeRunIds,
+        agentId: line.agentId,
+        prompt: line.prompt,
+        resultsOnly: line.resultsOnly,
+        promptOrigin: line.origin,
+        promptToolsUsed: line.toolsUsed,
+        promptNoticeLengths: line.noticeLengths,
+        promptNoticeOwn: line.noticeOwn,
+        promptNoticeRunIds: line.noticeRunIds,
         promptIsMeta: true,
         onDeliveryCommitted: () =>
-          this.messageQueue.consume(s.consumedCommands, {
+          this.messageQueue.consume(line.consumedCommands, {
             reason: "delivered_to_agent",
           }),
-        toolUseContext: contextAfterTurn(h),
+        toolUseContext: contextAfterTurn(context),
         canUseTool: this.canUseTool,
       })
-        .then((w) => {
-          if (!isResumeDenied(w)) return;
-          y = true;
+        .then((outcome) => {
+          if (!isResumeDenied(outcome)) return;
+          handled = true;
           try {
-            this.messageQueue.remove(s.consumedCommands, {
+            this.messageQueue.remove(line.consumedCommands, {
               reason: "dropped_by_hook",
             });
-            this.deniedWakes.note(commandQueueSnapshot, s.agentId);
+            this.deniedWakes.note(allMessages, line.agentId);
             logForDebugging(
-              `[wakeRouter] dropping ${s.consumedCommands.length} event(s) for ${s.agentId}: ${w.deniedByPlugin}`,
+              `[wakeRouter] dropping ${line.consumedCommands.length} event(s) for ${line.agentId}: ${outcome.deniedByPlugin}`,
             );
           } catch (error) {
             logError(error);
           }
         })
         .catch((error) => {
-          y = true;
-          let P = this.getTasks()[s.agentId];
-          let L =
-            R &&
+          handled = true;
+          let task = this.getTasks()[line.agentId];
+          let handToMain =
+            wakeAdmitted &&
             error instanceof ResumeAgentStateError &&
             !(error instanceof AgentStoppedByUserError) &&
-            isLocalAgent(P) &&
-            P.stoppedByUser !== true &&
-            P.status !== "killed";
+            isLocalAgent(task) &&
+            task.stoppedByUser !== true &&
+            task.status !== "killed";
           if (
-            L ||
+            handToMain ||
             error instanceof AgentStoppedByUserError ||
             error instanceof AgentResumePermanentlyRefusedError
           ) {
-            this.messageQueue.remove(s.consumedCommands, {
+            this.messageQueue.remove(line.consumedCommands, {
               reason: "agent_stopped",
             });
-            if (L) {
+            if (handToMain) {
               logFeatureSad("subagent_launch", "subagent_wake_handed_to_main");
-              s.consumedCommands
+              line.consumedCommands
                 .filter(({ mode }) => mode === "task-notification")
-                .forEach(({ uuid, ...x }) =>
+                .forEach(({ uuid, ...rest }) =>
                   this.messageQueue.enqueuePendingNotification({
-                    ...x,
+                    ...rest,
                     agentId: mainAgentId(),
                   }),
                 );
             }
-            pruneSettledChildWork(s.agentId, h.taskRegistry);
-            if (!L || !hasAnyKeepaliveReason(s.agentId, h.taskRegistry)) releaseMainThreadContext(s.agentId);
+            pruneSettledChildWork(line.agentId, context.taskRegistry);
+            if (!handToMain || !hasAnyKeepaliveReason(line.agentId, context.taskRegistry))
+              releaseMainThreadContext(line.agentId);
             logForDebugging(
-              `[wakeRouter] dropping ${s.consumedCommands.length} event(s) for ${s.agentId}: ${errorMessage(error)}`,
+              `[wakeRouter] dropping ${line.consumedCommands.length} event(s) for ${line.agentId}: ${errorMessage(error)}`,
             );
           } else if (error instanceof ResumeAgentStateError) {
-            logForDebugging(`[wakeRouter] resume state error for ${s.agentId}: ${errorMessage(error)}`);
-            if (s.resultsOnly && !isRetryableAgentError(error)) {
-              let q = (this.failedResultWakes.get(s.agentId) ?? 0) + 1;
-              this.failedResultWakes.set(s.agentId, q);
-              if (q >= MAX_TRANSIENT_RESUME_RETRIES) {
-                this.failedResultWakes.delete(s.agentId);
-                releaseMainThreadContext(s.agentId);
+            logForDebugging(`[wakeRouter] resume state error for ${line.agentId}: ${errorMessage(error)}`);
+            if (line.resultsOnly && !isRetryableAgentError(error)) {
+              let failures = (this.failedResultWakes.get(line.agentId) ?? 0) + 1;
+              this.failedResultWakes.set(line.agentId, failures);
+              if (failures >= MAX_TRANSIENT_RESUME_RETRIES) {
+                this.failedResultWakes.delete(line.agentId);
+                releaseMainThreadContext(line.agentId);
               }
             }
           } else logError(error);
         })
         .finally(() => {
-          this.wakeInFlight.delete(s.agentId);
-          if (!y) {
-            this.failedResultWakes.delete(s.agentId);
+          this.wakeInFlight.delete(line.agentId);
+          if (!handled) {
+            this.failedResultWakes.delete(line.agentId);
             this.messageQueue.recheckCommandQueue();
           }
         });
     }
   }
-  startStrandedResume(e) {
+  startStrandedResume(runtime) {
     let strandedResumeRetrier = createStrandedResumeRetrier({
-      taskRegistry: e,
-      resume: async (agentId, R, userInitiated) => {
-        let P = this.resumesNothing() ? null : getLastCacheSafeParams();
-        if (!P)
+      taskRegistry: runtime,
+      resume: async (agentId, options, userInitiated) => {
+        let cacheSafeParams = this.resumesNothing() ? null : getLastCacheSafeParams();
+        if (!cacheSafeParams)
           throw new AgentResumeTransientError("the session is ending, or no main-loop context is saved");
         return resumeAgentBackground({
           agentId,
-          prompt: R.text,
-          promptOrigin: R.origin,
-          promptToolsUsed: R.toolsUsed,
-          promptIsMeta: R.isMeta,
-          toolUseContext: contextAfterTurn(P.toolUseContext),
+          prompt: options.text,
+          promptOrigin: options.origin,
+          promptToolsUsed: options.toolsUsed,
+          promptIsMeta: options.isMeta,
+          toolUseContext: contextAfterTurn(cacheSafeParams.toolUseContext),
           canUseTool: this.canUseTool,
           userInitiated,
         });
       },
-      onFailed: (S, R) => {
-        if (R instanceof ResumeAgentStateError)
-          logForDebugging(`[wakeRouter] stranded resume of ${S}: ${errorMessage(R)}`);
-        else logError(R);
+      onFailed: (agentId, error) => {
+        if (error instanceof ResumeAgentStateError)
+          logForDebugging(`[wakeRouter] stranded resume of ${agentId}: ${errorMessage(error)}`);
+        else logError(error);
       },
     });
-    let r = new Set();
-    let s = (S) => {
-      let R = e.get(S);
-      if (!getLastCacheSafeParams() || (isLocalAgent(R) && R.finalizing)) {
-        r.add(S);
+    let stranded = new Set();
+    let runResume = (agentId) => {
+      let agent = runtime.get(agentId);
+      if (!getLastCacheSafeParams() || (isLocalAgent(agent) && agent.finalizing)) {
+        stranded.add(agentId);
         return;
       }
-      r.delete(S);
-      strandedResumeRetrier.dispatch(S);
+      stranded.delete(agentId);
+      strandedResumeRetrier.dispatch(agentId);
     };
     this.flushStranded = () => {
-      for (let S of [...r]) {
-        let R = e.get(S);
+      for (let agentId of [...stranded]) {
+        let agent = runtime.get(agentId);
         if (
-          canReceiveNotification(R, {
-            userInitiated: hasUserInitiatedPending(R),
+          canReceiveNotification(agent, {
+            userInitiated: hasUserInitiatedPending(agent),
           })
         ) {
-          s(S);
+          runResume(agentId);
           continue;
         }
-        r.delete(S);
-        getTaskRunState().agentResumeFailed.emit(S, {
-          error: new ResumeAgentStateError(`Agent ${S} can no longer take its queued messages.`),
-          undeliverable: drainPendingMessages(S, e),
+        stranded.delete(agentId);
+        getTaskRunState().agentResumeFailed.emit(agentId, {
+          error: new ResumeAgentStateError(`Agent ${agentId} can no longer take its queued messages.`),
+          undeliverable: drainPendingMessages(agentId, runtime),
           terminal: true,
         });
       }
     };
-    let h = getTaskRunState().agentStrandedMessages.subscribe((S) => {
-      queueMicrotask(() => s(S));
+    let unsubscribe = getTaskRunState().agentStrandedMessages.subscribe((agentId) => {
+      queueMicrotask(() => runResume(agentId));
     });
-    let y = noop(e);
+    let noopFn = noop(runtime);
     return () => {
-      h();
-      y();
+      unsubscribe();
+      noopFn();
       this.flushStranded = () => {};
       strandedResumeRetrier.dispose();
     };
@@ -577,20 +582,21 @@ class ResultWakeRouter {
   }
 }
 //@ chunk-tyg7f3ek.js:317934-318053 placement
-function isPassiveCommand(e) {
+function isPassiveCommand(command) {
   return (
-    (e.shouldQuery === false && e.queryHeldForNextTurn !== true) ||
-    isPollEventMode(e) ||
-    e.pollEmptyDispatch === true ||
-    e.passive === true
+    (command.shouldQuery === false && command.queryHeldForNextTurn !== true) ||
+    isPollEventMode(command) ||
+    command.pollEmptyDispatch === true ||
+    command.passive === true
   );
 }
 //@ chunk-tyg7f3ek.js:318053-318259 placement
 function sweepQueueAtTeardown({ messageQueue, io }) {
-  let r = messageQueue.dequeueAllMatching(isMainAgentCommand);
-  discardPollEvent(r.filter(isPollEventMode), "session teardown");
-  logDeliveryFailureForEndings(r, "swept_at_teardown");
-  for (let s of r) if (s.uuid !== undefined) io.onCommandLifecycle?.(s.uuid, "discarded");
+  let removed = messageQueue.dequeueAllMatching(isMainAgentCommand);
+  discardPollEvent(removed.filter(isPollEventMode), "session teardown");
+  logDeliveryFailureForEndings(removed, "swept_at_teardown");
+  for (let command of removed)
+    if (command.uuid !== undefined) io.onCommandLifecycle?.(command.uuid, "discarded");
 }
 //@ chunk-tyg7f3ek.js:318259-318875 placement
 function createTeardownStatusReporter({
@@ -604,21 +610,27 @@ function createTeardownStatusReporter({
   onUnconfirmed,
   onError,
 }) {
-  return async ({ afterAnswerQueued: P = false } = {}) => {
-    let L;
+  return async ({ afterAnswerQueued = false } = {}) => {
+    let outcome;
     try {
       io.sessionState.notifyStateChanged("running");
-      let q = await withDeadline(
+      let flushed = await withDeadline(
         Promise.race([io.flushSessionState(), whenTornDown().then(() => false)]),
         boundMs,
       );
-      L = tornDown() ? "torn_down" : q === undefined ? "timed_out" : q ? "cleared" : "unconfirmed";
+      outcome = tornDown()
+        ? "torn_down"
+        : flushed === undefined
+          ? "timed_out"
+          : flushed
+            ? "cleared"
+            : "unconfirmed";
     } catch (error) {
       onError("clear", error);
-      L = "failed";
+      outcome = "failed";
     }
-    if (L === "cleared") return true;
-    if (P) return false;
+    if (outcome === "cleared") return true;
+    if (afterAnswerQueued) return false;
     try {
       if (statusTaken()) return false;
       if (holding() && details !== undefined) io.sessionState.notifyStateChanged("requires_action", details);
@@ -626,7 +638,7 @@ function createTeardownStatusReporter({
     } catch (error) {
       onError("restore", error);
     } finally {
-      onUnconfirmed(L);
+      onUnconfirmed(outcome);
     }
     return false;
   };
@@ -657,26 +669,26 @@ class PermissionCardAsk {
   constructor(host) {
     this.host = host;
   }
-  take(e, n) {
+  take(message, toolUseId) {
     let card = this.host.card;
     if (
       this.state.state !== "open" ||
-      n !== card.tool_use_id ||
-      e.response.request_id !== card.request_id ||
-      e.response.subtype !== "success"
+      toolUseId !== card.tool_use_id ||
+      message.response.request_id !== card.request_id ||
+      message.response.subtype !== "success"
     )
       return false;
-    let response = e.response.response;
-    let h = MARKETPLACE_ONLY_MANIFEST_FIELDS(this.host.answerKind).safeParse(response);
+    let response = message.response.response;
+    let parsed = MARKETPLACE_ONLY_MANIFEST_FIELDS(this.host.answerKind).safeParse(response);
     let toolName = card.details?.tool_name;
-    if (!h.success)
+    if (!parsed.success)
       this.endCard({
         state: "closed",
         why: "answer_not_parsed",
       });
     else if (
       typeof toolName !== "string"
-        ? [response?.toolName, response?.tool_name].some((S) => typeof S === "string")
+        ? [response?.toolName, response?.tool_name].some((name) => typeof name === "string")
         : isValidBridgeToolName(response?.toolName, toolName, card.request_id) ||
           isDifferentString(response?.tool_name, toolName)
     )
@@ -685,9 +697,9 @@ class PermissionCardAsk {
         why: "answer_other_tool",
       });
     else if (
-      h.data.behavior === "allow" &&
-      !(this.host.allowWithoutInputIsEcho && Object.keys(h.data.updatedInput ?? {}).length === 0) &&
-      !deepEqualIgnoringUndefined(h.data.updatedInput, card.details?.input)
+      parsed.data.behavior === "allow" &&
+      !(this.host.allowWithoutInputIsEcho && Object.keys(parsed.data.updatedInput ?? {}).length === 0) &&
+      !deepEqualIgnoringUndefined(parsed.data.updatedInput, card.details?.input)
     )
       this.endCard({
         state: "closed",
@@ -696,7 +708,7 @@ class PermissionCardAsk {
     else
       this.endCard({
         state: "answered",
-        result: h.data,
+        result: parsed.data,
         readAtMs: Date.now(),
       });
     return true;
@@ -720,18 +732,18 @@ class PermissionCardAsk {
         why,
       };
   }
-  stop(e) {
+  stop(reason) {
     this.stops = {
       count: this.stops.count + 1,
-      last: e,
+      last: reason,
     };
-    this.close(e);
+    this.close(reason);
   }
   startTimer() {
     if (this.state.state === "open" && this.timer === undefined) {
       this.timer = setTimeout(async () => {
-        let e = this.host.unreadAnswersRead();
-        if (e !== undefined) await e;
+        let pending = this.host.unreadAnswersRead();
+        if (pending !== undefined) await pending;
         this.endCard({
           state: "closed",
           why: "wait_lapsed",
@@ -740,7 +752,7 @@ class PermissionCardAsk {
       this.timer.unref?.();
     }
   }
-  async answerFor(e) {
+  async answerFor(ask) {
     if (this.state.state === "open" && (await this.host.answerOff()) === "on") this.close("switched_off");
     let state = this.state;
     if (state.state === "open") {
@@ -750,7 +762,7 @@ class PermissionCardAsk {
     let state_2 = this.state;
     this.close("settled");
     let count = this.stops.count;
-    let h = state_2.state === "answered" ? await this.host.answerOff() : "off";
+    let answerState = state_2.state === "answered" ? await this.host.answerOff() : "off";
     let last = this.stops.count === count ? undefined : this.stops.last;
     return {
       answer: state_2.state === "answered" ? state_2.result : undefined,
@@ -761,17 +773,17 @@ class PermissionCardAsk {
             : "wait_lapsed"
           : last !== undefined
             ? last
-            : h === "on"
+            : answerState === "on"
               ? "switched_off"
-              : h === "cold"
+              : answerState === "cold"
                 ? "flags_cold"
-                : h === "absent"
+                : answerState === "absent"
                   ? "switch_absent"
                   : Date.now() - state_2.readAtMs > this.host.maxAnswerAgeMs
                     ? "answer_too_old"
-                    : !deepEqualIgnoringUndefined(e.input, this.host.card.details?.input)
+                    : !deepEqualIgnoringUndefined(ask.input, this.host.card.details?.input)
                       ? "input_differs"
-                      : e.planMode() && state_2.result.behavior === "allow"
+                      : ask.planMode() && state_2.result.behavior === "allow"
                         ? "plan_mode"
                         : undefined,
     };
@@ -781,52 +793,59 @@ class PermissionCardAsk {
 /**
  * 把 worker 记录中的 pending_action(s) 与本进程待答的权限/对话请求对齐。
  */
-function reconcilePendingActions(e, n, r) {
-  let s = [n?.external?.pending_action, ...(n?.external?.pending_actions ?? [])];
-  let h = new Set(
-    [...e.getPendingPermissionRequests(), ...e.getPendingUserDialogRequests()].map((L) => L.request_id),
+function reconcilePendingActions(io, restored, options) {
+  let pendingActions = [restored?.external?.pending_action, ...(restored?.external?.pending_actions ?? [])];
+  let liveIds = new Set(
+    [...io.getPendingPermissionRequests(), ...io.getPendingUserDialogRequests()].map(
+      (request) => request.request_id,
+    ),
   );
-  let y = new Set();
-  let S = new Set();
-  let interruptedTurn = r?.interruptedTurn;
-  let runningBackgroundTasks = n?.internal?.running_background_tasks;
-  let P = requestIdOf(n?.external?.pending_action);
-  for (let L of s) {
-    let q = requestIdOf(L);
-    if (!L || !q || y.has(q)) continue;
-    if (q === r?.exceptRequestId) {
+  let cancelled = new Set();
+  let toolUseIds = new Set();
+  let interruptedTurn = options?.interruptedTurn;
+  let runningBackgroundTasks = restored?.internal?.running_background_tasks;
+  let newestId = requestIdOf(restored?.external?.pending_action);
+  for (let action of pendingActions) {
+    let requestId = requestIdOf(action);
+    if (!action || !requestId || cancelled.has(requestId)) continue;
+    if (requestId === options?.exceptRequestId) {
       logForDebugging(
-        `[resumeStalePromptCancel] pending_action ${q} is owned by the deferred rescue \u2014 skipping cancel`,
+        `[resumeStalePromptCancel] pending_action ${requestId} is owned by the deferred rescue \u2014 skipping cancel`,
       );
       continue;
     }
-    if (r?.keepRequestIds?.has(q)) {
+    if (options?.keepRequestIds?.has(requestId)) {
       logForDebugging(
-        `[resumeStalePromptCancel] pending_action ${q} is a live prompt nothing will re-ask \u2014 keeping it answerable`,
+        `[resumeStalePromptCancel] pending_action ${requestId} is a live prompt nothing will re-ask \u2014 keeping it answerable`,
       );
       continue;
     }
-    if (h.has(q)) {
+    if (liveIds.has(requestId)) {
       logForDebugging(
-        `[resumeStalePromptCancel] pending_action ${q} is owned by this worker \u2014 redelivery handles it, skipping cancel`,
+        `[resumeStalePromptCancel] pending_action ${requestId} is owned by this worker \u2014 redelivery handles it, skipping cancel`,
       );
       continue;
     }
-    y.add(q);
-    if (typeof L.tool_use_id === "string" && L.tool_use_id !== "") S.add(L.tool_use_id);
-    logForDebugging(`[resumeStalePromptCancel] cancelling stale parked prompt ${q} from a prior worker`);
-    e.write({
+    cancelled.add(requestId);
+    if (typeof action.tool_use_id === "string" && action.tool_use_id !== "")
+      toolUseIds.add(action.tool_use_id);
+    logForDebugging(
+      `[resumeStalePromptCancel] cancelling stale parked prompt ${requestId} from a prior worker`,
+    );
+    io.write({
       type: "control_cancel_request",
-      request_id: q,
+      request_id: requestId,
     });
     logEvent("tengu_resume_stale_prompt_cancel", {
       kind: fromEnum(
-        typeof L.tool_name === "string" && L.tool_name.startsWith("dialog:") ? "dialog" : "permission",
+        typeof action.tool_name === "string" && action.tool_name.startsWith("dialog:")
+          ? "dialog"
+          : "permission",
       ),
       withdrawn_at: lit("worker_start"),
       ...(interruptedTurn && {
         prompt_call: fromEnum(
-          interruptedTurn.unresolvedToolUseIds?.has(L.tool_use_id)
+          interruptedTurn.unresolvedToolUseIds?.has(action.tool_use_id)
             ? "in_interrupted_turn"
             : !interruptedTurn.wasInterrupted
               ? "no_interrupted_turn"
@@ -844,48 +863,58 @@ function reconcilePendingActions(e, n, r) {
               ? "local_agent"
               : "no_local_agent_recorded",
         ),
-        request_id_blanked: L.request_id !== q,
-        newest_prompt: q === P,
-        tool_is_web_fetch: L.tool_name === WEBFETCH,
+        request_id_blanked: action.request_id !== requestId,
+        newest_prompt: requestId === newestId,
+        tool_is_web_fetch: action.tool_name === WEBFETCH,
       }),
     });
   }
-  return S;
+  return toolUseIds;
 }
 //@ chunk-tyg7f3ek.js:322989-323023 placement
-var DIALOG_TOOL_NAMES = new Set([AGENT, TASK, SKILL, REPL_TOOL_NAME, REPL_TOOL_NAME_ALIAS]);
+var DIALOG_TOOL_NAMES; // deferred: uses AGENT (../../tools/AgentTool/constants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-tyg7f3ek.js:322989", () => {
+  DIALOG_TOOL_NAMES = new Set([AGENT, TASK, SKILL, REPL_TOOL_NAME, REPL_TOOL_NAME_ALIAS]);
+});
 //@ chunk-tyg7f3ek.js:323023-323096 placement
-function isDialogToolName(e) {
-  return typeof e === "string" && (DIALOG_TOOL_NAMES.has(e) || e.startsWith(SKILL_2));
+function isDialogToolName(name) {
+  return typeof name === "string" && (DIALOG_TOOL_NAMES.has(name) || name.startsWith(SKILL_2));
 }
 //@ chunk-tyg7f3ek.js:323096-323801 placement
-function classifyPendingAction(restored, n, supersededToolNames, s) {
+function classifyPendingAction(restored, supersededIds, supersededToolNames, keepRequestIds) {
   let pendingAction = restored?.external?.pending_action;
-  let y = requestIdOf(pendingAction);
-  if (!pendingAction || !y || typeof pendingAction.tool_use_id !== "string" || !pendingAction.tool_use_id)
+  let requestId = requestIdOf(pendingAction);
+  if (
+    !pendingAction ||
+    !requestId ||
+    typeof pendingAction.tool_use_id !== "string" ||
+    !pendingAction.tool_use_id
+  )
     return "none";
   if (typeof pendingAction.tool_name === "string" && pendingAction.tool_name.startsWith("dialog:"))
     return "dialog";
   if (pendingAction.tool_use_id.startsWith(CONFIRM)) return "underivable_excluded";
-  if (n?.has(pendingAction.tool_use_id)) return "derivable";
-  if (!n || n.size === 0) return "underivable_no_superseded";
-  if (![...n].some((w) => isDialogToolName(supersededToolNames?.get(w)))) return "underivable_leaf_only";
+  if (supersededIds?.has(pendingAction.tool_use_id)) return "derivable";
+  if (!supersededIds || supersededIds.size === 0) return "underivable_no_superseded";
+  if (![...supersededIds].some((id) => isDialogToolName(supersededToolNames?.get(id))))
+    return "underivable_leaf_only";
   let runningBackgroundTasks = restored?.internal?.running_background_tasks;
   let pendingActions = restored?.external?.pending_actions;
   if (
     (Array.isArray(runningBackgroundTasks) && runningBackgroundTasks.length > 0) ||
     (Array.isArray(pendingActions) &&
       pendingActions.some(
-        (pendingAction) => typeof pendingAction?.tool_use_id === "string" && n.has(pendingAction.tool_use_id),
+        (pendingAction) =>
+          typeof pendingAction?.tool_use_id === "string" && supersededIds.has(pendingAction.tool_use_id),
       )) ||
-    s?.has(y)
+    keepRequestIds?.has(requestId)
   )
     return "underivable_excluded";
   return "underivable_adoptable";
 }
 //@ chunk-tyg7f3ek.js:323801-324443 placement
 async function reattachInterruptedPrompt(
-  restored,
+  state,
   turnInterruptionState,
   chain,
   supersededToolUseIds,
@@ -893,12 +922,12 @@ async function reattachInterruptedPrompt(
   findUnresolved,
   lane,
 ) {
-  let R = {
+  let result = {
     supersededToolUseIds,
     supersededToolNames,
     reattached: false,
   };
-  let w = singlePendingAction(restored);
+  let pendingToolUseId = singlePendingAction(state);
   if (
     !lane.toleratesContextAppends ||
     !lane.resumeInterruptedTurn ||
@@ -906,76 +935,85 @@ async function reattachInterruptedPrompt(
     turnInterruptionState.kind === "none" ||
     supersededToolUseIds === undefined ||
     supersededToolUseIds.size > 0 ||
-    w === undefined
+    pendingToolUseId === undefined
   )
-    return R;
-  let P = await findUnresolved(w);
-  let L = Array.isArray(P?.message.content)
-    ? P.message.content.find((x) => x.type === "tool_use" && x.id === w)
+    return result;
+  let message = await findUnresolved(pendingToolUseId);
+  let block = Array.isArray(message?.message.content)
+    ? message.message.content.find((block) => block.type === "tool_use" && block.id === pendingToolUseId)
     : undefined;
-  if (!P || L?.type !== "tool_use") return R;
-  if (!isPendingActionForTool(restored, L.name)) return R;
-  let timestamp = Date.parse(P.timestamp);
-  if (!Number.isFinite(timestamp)) return R;
+  if (!message || block?.type !== "tool_use") return result;
+  if (!isPendingActionForTool(state, block.name)) return result;
+  let timestamp = Date.parse(message.timestamp);
+  if (!Number.isFinite(timestamp)) return result;
   if (
     hasRowsAfterTime(
       chain,
       timestamp,
-      (x) => turnInterruptionState.message.isMeta === true && x.uuid === turnInterruptionState.message.uuid,
+      (row) =>
+        turnInterruptionState.message.isMeta === true && row.uuid === turnInterruptionState.message.uuid,
     )
   )
-    return R;
+    return result;
   return {
-    supersededToolUseIds: new Set([w]),
-    supersededToolNames: new Map([[w, L.name]]),
+    supersededToolUseIds: new Set([pendingToolUseId]),
+    supersededToolNames: new Map([[pendingToolUseId, block.name]]),
     reattached: true,
   };
 }
 //@ chunk-tyg7f3ek.js:324443-324681 placement
-function hasRowsAfterTime(chain, n, r) {
-  return chain.some((s) => {
-    if (s.type !== "user" && s.type !== "assistant") return false;
-    let timestamp = Date.parse(s.timestamp);
-    if (Number.isFinite(timestamp) && timestamp <= n) return false;
-    if (s.type === "assistant") return s.message.model !== SYNTHETIC_MODEL;
-    return !r(s) && !isToolUseResultMessage(s) && !isContextAppendMessage(s);
+function hasRowsAfterTime(chain, time, exclude) {
+  return chain.some((row) => {
+    if (row.type !== "user" && row.type !== "assistant") return false;
+    let timestamp = Date.parse(row.timestamp);
+    if (Number.isFinite(timestamp) && timestamp <= time) return false;
+    if (row.type === "assistant") return row.message.model !== SYNTHETIC_MODEL;
+    return !exclude(row) && !isToolUseResultMessage(row) && !isContextAppendMessage(row);
   });
 }
 //@ chunk-tyg7f3ek.js:324681-325269 placement
-function listPendingActions(e, n, r) {
-  let s = [];
-  let pendingActions = e?.external?.pending_actions;
-  let y = [e?.external?.pending_action, ...(Array.isArray(pendingActions) ? pendingActions : [])];
-  for (let S of y) {
-    let R = requestIdOf(S);
-    if (!S || !R || typeof S.tool_name !== "string") continue;
-    if (n?.has(S.tool_use_id)) continue;
-    if (typeof S.tool_use_id === "string" && S.tool_use_id.startsWith(CONFIRM)) continue;
-    if (typeof S.agent_id === "string" && S.agent_id !== "") continue;
-    let toolByName = findToolByName(r, S.tool_name);
-    let P = S.request_id === "" && !!S.suppressed_request_id && S.blanked_for_size !== true;
-    if (toolByName ? toolByName.requiresUserInteraction?.() : P)
-      s.push({
-        requestId: R,
-        toolUseId: typeof S.tool_use_id === "string" ? S.tool_use_id : undefined,
+function listPendingActions(restored, superseded, tools) {
+  let actions = [];
+  let pendingActions = restored?.external?.pending_actions;
+  let allActions = [
+    restored?.external?.pending_action,
+    ...(Array.isArray(pendingActions) ? pendingActions : []),
+  ];
+  for (let action of allActions) {
+    let requestId = requestIdOf(action);
+    if (!action || !requestId || typeof action.tool_name !== "string") continue;
+    if (superseded?.has(action.tool_use_id)) continue;
+    if (typeof action.tool_use_id === "string" && action.tool_use_id.startsWith(CONFIRM)) continue;
+    if (typeof action.agent_id === "string" && action.agent_id !== "") continue;
+    let toolByName = findToolByName(tools, action.tool_name);
+    let blanked =
+      action.request_id === "" && !!action.suppressed_request_id && action.blanked_for_size !== true;
+    if (toolByName ? toolByName.requiresUserInteraction?.() : blanked)
+      actions.push({
+        requestId,
+        toolUseId: typeof action.tool_use_id === "string" ? action.tool_use_id : undefined,
       });
   }
-  return s;
+  return actions;
 }
 //@ chunk-tyg7f3ek.js:325269-325336 placement
-function pendingActionRequestIds(restored, n, tools) {
-  return new Set(listPendingActions(restored, n, tools).map((s) => s.requestId));
+function pendingActionRequestIds(restored, superseded, tools) {
+  return new Set(listPendingActions(restored, superseded, tools).map((action) => action.requestId));
 }
 //@ chunk-tyg7f3ek.js:325336-325427 placement
-function pendingActionToolUseIds(e, n) {
-  return new Set(listPendingActions(e, undefined, n).flatMap((r) => (r.toolUseId ? [r.toolUseId] : [])));
+function pendingActionToolUseIds(restored, tools) {
+  return new Set(
+    listPendingActions(restored, undefined, tools).flatMap((action) =>
+      action.toolUseId ? [action.toolUseId] : [],
+    ),
+  );
 }
 //@ chunk-tyg7f3ek.js:325427-325595 placement
-function hasPendingActions(e) {
-  if (e?.readFailed === true) return true;
-  let pendingActions = e?.external?.pending_actions;
-  return [e?.external?.pending_action, ...(Array.isArray(pendingActions) ? pendingActions : [])].some(
-    (r) => requestIdOf(r) !== undefined,
+function hasPendingActions(state) {
+  if (state?.readFailed === true) return true;
+  let pendingActions = state?.external?.pending_actions;
+  return [state?.external?.pending_action, ...(Array.isArray(pendingActions) ? pendingActions : [])].some(
+    (action) => requestIdOf(action) !== undefined,
   );
 }
 //@ chunk-tyg7f3ek.js:325595-325821 placement
@@ -983,13 +1021,13 @@ function pendingActionsAmbiguous(restoredWorkerState) {
   if (restoredWorkerState?.readFailed === true) return true;
   let pendingAction = restoredWorkerState?.external?.pending_action;
   let pendingActions = restoredWorkerState?.external?.pending_actions;
-  let s = Array.isArray(pendingActions) ? pendingActions : [];
-  if ((pendingAction != null && s.length === 0) || s.length >= MAX_PENDING_ACTION_ARGS) return true;
-  return [pendingAction, ...s].some((h) => h != null && !isSubagentToolRequest(h));
+  let list = Array.isArray(pendingActions) ? pendingActions : [];
+  if ((pendingAction != null && list.length === 0) || list.length >= MAX_PENDING_ACTION_ARGS) return true;
+  return [pendingAction, ...list].some((action) => action != null && !isSubagentToolRequest(action));
 }
 //@ chunk-tyg7f3ek.js:325821-326027 placement
-function singlePendingAction(e) {
-  let pendingAction = e?.external?.pending_action;
+function singlePendingAction(state) {
+  let pendingAction = state?.external?.pending_action;
   if (
     !pendingAction ||
     !requestIdOf(pendingAction) ||
@@ -1001,16 +1039,16 @@ function singlePendingAction(e) {
   return pendingAction.tool_use_id;
 }
 //@ chunk-tyg7f3ek.js:326027-326414 placement
-function pendingActionResumeHint(restored, n, r, lane) {
+function pendingActionResumeHint(restored, interruption, ids, lane) {
   if (!lane.resumeInterruptedTurn) return;
-  if (!n || n.kind === "none") return;
+  if (!interruption || interruption.kind === "none") return;
   let pendingAction = restored?.external?.pending_action;
-  let y = requestIdOf(pendingAction);
-  if (!pendingAction || !y || !pendingAction.tool_use_id) return;
+  let requestId = requestIdOf(pendingAction);
+  if (!pendingAction || !requestId || !pendingAction.tool_use_id) return;
   if (typeof pendingAction.tool_name === "string" && pendingAction.tool_name.startsWith("dialog:")) return;
-  if (!r?.has(pendingAction.tool_use_id)) return;
+  if (!ids?.has(pendingAction.tool_use_id)) return;
   return {
-    request_id: y,
+    request_id: requestId,
     tool_use_id: pendingAction.tool_use_id,
     details: pendingAction,
     ...(isPlainObject(pendingAction.input) &&
@@ -1020,9 +1058,9 @@ function pendingActionResumeHint(restored, n, r, lane) {
   };
 }
 //@ chunk-tyg7f3ek.js:326414-326552 placement
-function interruptedPromptUuid(e) {
-  if (e?.kind !== "interrupted_prompt") return;
-  return e.interruptedTurnUserMessageUuid ?? (e.message.isMeta ? undefined : e.message.uuid);
+function interruptedPromptUuid(state) {
+  if (state?.kind !== "interrupted_prompt") return;
+  return state.interruptedTurnUserMessageUuid ?? (state.message.isMeta ? undefined : state.message.uuid);
 }
 //@ chunk-tyg7f3ek.js:326552-326687 placement = countUserPromptsFromEntries (1)
 function countUserPromptsFromEntries_5(entries) {

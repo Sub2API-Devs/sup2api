@@ -10,24 +10,24 @@
  */
 import { findStaleReads } from "../services/accountMemory/memoryUpdates.js";
 
-//@ chunk-18hwfzwa.js:1041736-1041965 fingerprint = isInBundledMode (0.828)
-function isInBundledMode(h) {
-  if (Array.isArray(h)) return `[${h.map(isInBundledMode).join(",")}]`;
-  if (typeof h === "object" && h !== null)
-    return `{${Object.keys(h)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${isInBundledMode(h[key])}`)
-      .join(",")}}`;
-  return JSON.stringify(h) ?? "undefined";
-}
 //@ chunk-s61vbvea.js:79753-79892 fingerprint = isRunningWithBun (0.611)
-function isRunningWithBun(held, lastMemoryContextAttachment, r) {
+function isRunningWithBun(held, lastMemoryContextAttachment, root) {
   if (!held?.versions || held.content === null || lastMemoryContextAttachment?.version === held.version)
     return false;
   try {
-    return findStaleReads(held.versions, r).length > 0;
+    return findStaleReads(held.versions, root).length > 0;
   } catch {
     return false;
   }
+}
+//@ chunk-18hwfzwa.js:1041736-1041965 fingerprint = isInBundledMode (0.828)
+function isInBundledMode(value) {
+  if (Array.isArray(value)) return `[${value.map(isInBundledMode).join(",")}]`;
+  if (typeof value === "object" && value !== null)
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${isInBundledMode(value[key])}`)
+      .join(",")}}`;
+  return JSON.stringify(value) ?? "undefined";
 }
 export { isInBundledMode, isRunningWithBun };

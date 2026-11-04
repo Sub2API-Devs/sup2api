@@ -48,25 +48,25 @@ function readKernelMemoryPressure() {
       scarce: true,
       detail: `${platform}: kernel verdict taken as is`,
     };
-  let n;
+  let meminfo;
   try {
-    n = readFileSync("/proc/meminfo", "utf8");
+    meminfo = readFileSync("/proc/meminfo", "utf8");
   } catch (error) {
     return {
       scarce: false,
       detail: `/proc/meminfo unreadable (${getErrnoCode(error) ?? "unknown error"})`,
     };
   }
-  let r = Number(/^MemTotal:\s+(\d+) kB$/m.exec(n)?.[1]);
-  let s = Number(/^MemAvailable:\s+(\d+) kB$/m.exec(n)?.[1]);
-  if (!(r > 0) || Number.isNaN(s))
+  let totalKb = Number(/^MemTotal:\s+(\d+) kB$/m.exec(meminfo)?.[1]);
+  let availableKb = Number(/^MemAvailable:\s+(\d+) kB$/m.exec(meminfo)?.[1]);
+  if (!(totalKb > 0) || Number.isNaN(availableKb))
     return {
       scarce: false,
       detail: "/proc/meminfo unparseable",
     };
   return {
-    scarce: s / r < MEMORY_SCARCE_RATIO && s < MEMORY_SCARCE_GB * 1024 * 1024,
-    detail: `MemAvailable ${s} kB of ${r} kB; scarce is under ${Math.round(MEMORY_SCARCE_RATIO * 100)}% and under ${MEMORY_SCARCE_GB} GiB`,
+    scarce: availableKb / totalKb < MEMORY_SCARCE_RATIO && availableKb < MEMORY_SCARCE_GB * 1024 * 1024,
+    detail: `MemAvailable ${availableKb} kB of ${totalKb} kB; scarce is under ${Math.round(MEMORY_SCARCE_RATIO * 100)}% and under ${MEMORY_SCARCE_GB} GiB`,
   };
 }
 //@ chunk-e6aww6q8.js:4741799-4741827 placement
@@ -87,110 +87,128 @@ var MEMORY_PRESSURE_KILL_MAX_AGE_MS = 1800000;
 /**
  * 判断内存压力下是否终止某个后台 shell（压力等级、最近是否活跃、是否有代理在跑）。
  */
-function shouldKillShellForMemoryPressure(taskId, description, taskRegistry, toolUseId, kind, agentId, S, w) {
-  addAgentKeepaliveReason(agentId, `bash:${taskId}`, taskRegistry);
-  let L = {
+function shouldKillShellForMemoryPressure(
+  taskId,
+  description,
+  taskRegistry,
+  toolUseId,
+  kind,
+  ownerAgentId,
+  requestedTimeoutMs,
+  backgroundTrigger,
+) {
+  addAgentKeepaliveReason(ownerAgentId, `bash:${taskId}`, taskRegistry);
+  let request = {
     taskId,
     description,
     taskRegistry,
     toolUseId,
     kind,
-    agentId,
+    agentId: ownerAgentId,
   };
   let now = Date.now();
-  let q = {};
-  let backgroundTimeoutNote = getBackgroundTimeoutNote(S);
-  let Se =
+  let stopState = {};
+  let backgroundTimeoutNote = getBackgroundTimeoutNote(requestedTimeoutMs);
+  let deadlineTimer =
     backgroundTimeoutNote === undefined
       ? undefined
-      : setTimeout(stopAtBackgroundDeadline, backgroundTimeoutNote, L, backgroundTimeoutNote, q);
-  Se?.unref();
+      : setTimeout(
+          stopAtBackgroundDeadline,
+          backgroundTimeoutNote,
+          request,
+          backgroundTimeoutNote,
+          stopState,
+        );
+  deadlineTimer?.unref();
   if (backgroundTimeoutNote !== undefined) {
     let deadlineAt = now + backgroundTimeoutNote;
-    taskRegistry.update(taskId, (Ae) => ({
-      ...Ae,
+    taskRegistry.update(taskId, (task) => ({
+      ...task,
       deadlineAt,
     }));
   }
-  let ke = getIsNonInteractiveSession() ? undefined : watchQuietShell(L, commandQueueManager());
-  let we;
+  let unwatchQuiet = getIsNonInteractiveSession()
+    ? undefined
+    : watchQuietShell(request, commandQueueManager());
+  let detachPressureListener;
   if (!getIsNonInteractiveSession() && !env.CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP) {
-    let Ee = new Map();
-    let Ae = (Ie) => {
+    let lastSkipLogAt = new Map();
+    let onMemoryPressure = (level) => {
       try {
-        let Me = taskRegistry.get(taskId);
-        if (Me?.status !== "running" || Me.notified) return;
+        let task = taskRegistry.get(taskId);
+        if (task?.status !== "running" || task.notified) return;
         let now = Date.now();
         let lastInteractionTime = getLastInteractionTime();
-        let lt = now - lastInteractionTime;
+        let idleMs = now - lastInteractionTime;
         let lastPressureReapAt = getTaskRunState().lastPressureReapAt;
-        let nt;
-        let pt;
-        if (Ie !== "critical") pt = `pressure level ${String(Ie)} is not critical`;
-        else if (lt < AGENT_IDLE_KILL_MS) pt = `session active in the last ${AGENT_IDLE_KILL_MS / 60000}m`;
-        else if (getMainLoopBusy()) pt = "a turn is running";
-        else if (hasActiveAgentTasks(taskRegistry.all())) pt = "delegated agents are running";
+        let pressure;
+        let skipReason;
+        if (level !== "critical") skipReason = `pressure level ${String(level)} is not critical`;
+        else if (idleMs < AGENT_IDLE_KILL_MS)
+          skipReason = `session active in the last ${AGENT_IDLE_KILL_MS / 60000}m`;
+        else if (getMainLoopBusy()) skipReason = "a turn is running";
+        else if (hasActiveAgentTasks(taskRegistry.all())) skipReason = "delegated agents are running";
         else if (
           lastPressureReapAt > lastInteractionTime &&
-          Me.startTime > lastPressureReapAt &&
-          Me.startTime - lastPressureReapAt < MEMORY_PRESSURE_KILL_MAX_AGE_MS
+          task.startTime > lastPressureReapAt &&
+          task.startTime - lastPressureReapAt < MEMORY_PRESSURE_KILL_MAX_AGE_MS
         )
-          pt = "started soon after an earlier pressure reap, no input at the terminal since";
+          skipReason = "started soon after an earlier pressure reap, no input at the terminal since";
         else {
-          nt = readKernelMemoryPressure();
-          if (!nt.scarce) pt = "host memory is not scarce";
+          pressure = readKernelMemoryPressure();
+          if (!pressure.scarce) skipReason = "host memory is not scarce";
         }
-        if (pt !== undefined) {
-          let Et = Ee.get(pt);
-          if (Et === undefined || now - Et >= AGENT_ACTIVE_WINDOW_MS) {
-            Ee.set(pt, now);
+        if (skipReason !== undefined) {
+          let lastLoggedAt = lastSkipLogAt.get(skipReason);
+          if (lastLoggedAt === undefined || now - lastLoggedAt >= AGENT_ACTIVE_WINDOW_MS) {
+            lastSkipLogAt.set(skipReason, now);
             logForDebugging(
-              `LocalShellTask ${taskId}: memory-pressure reap skipped: ${pt}${nt ? ` (${nt.detail})` : ""}`,
+              `LocalShellTask ${taskId}: memory-pressure reap skipped: ${skipReason}${pressure ? ` (${pressure.detail})` : ""}`,
             );
           }
           return;
         }
         logForDebugging(
-          `LocalShellTask ${taskId}: reaped under critical memory pressure after ${Math.floor(lt / 60000)}m idle (${nt?.detail})`,
+          `LocalShellTask ${taskId}: reaped under critical memory pressure after ${Math.floor(idleMs / 60000)}m idle (${pressure?.detail})`,
         );
         logFeatureOk("task_local_shell_pressure_reap");
         getTaskRunState().lastPressureReapAt = now;
-        q.cause = "memory_pressure";
-        stopShellTaskWithNotice(L, "memory_pressure");
+        stopState.cause = "memory_pressure";
+        stopShellTaskWithNotice(request, "memory_pressure");
       } catch (error) {
         logFeatureBad("task_local_shell_pressure_reap", "threw");
         logError(error);
       }
     };
-    process.on("memoryPressure", Ae);
-    we = () => process.off("memoryPressure", Ae);
+    process.on("memoryPressure", onMemoryPressure);
+    detachPressureListener = () => process.off("memoryPressure", onMemoryPressure);
   }
-  return (Ee, { shellUsage, stopLabel }, Me) => {
-    we?.();
-    ke?.();
-    clearTimeout(Se);
-    let We = {
+  return (outcome, { shellUsage, stopLabel }, diagnostics) => {
+    detachPressureListener?.();
+    unwatchQuiet?.();
+    clearTimeout(deadlineTimer);
+    let fields = {
       elapsed_ms: Date.now() - now,
-      requested_timeout_ms: S ?? 0,
+      requested_timeout_ms: requestedTimeoutMs ?? 0,
       deadline_ms: backgroundTimeoutNote ?? 0,
-      outcome: fromEnumOpt(q.cause ? "killed" : Ee),
-      stop_cause: fromEnumOpt(q.cause ?? stopLabel?.cause),
+      outcome: fromEnumOpt(stopState.cause ? "killed" : outcome),
+      stop_cause: fromEnumOpt(stopState.cause ?? stopLabel?.cause),
       stopped_by: fromEnumOpt(stopLabel?.by),
-      subagent_owned: agentId !== undefined,
-      trigger: fromEnumOpt(w),
+      subagent_owned: ownerAgentId !== undefined,
+      trigger: fromEnumOpt(backgroundTrigger),
       ...buildCommandTimingFields(shellUsage),
       tool_use_id: parentTaskId(toolUseId),
-      bash_command_kinds: Me?.commandClass?.bash_command_kinds,
-      bash_programs: Me?.commandClass?.bash_programs,
-      bash_test_scope: Me?.commandClass?.bash_test_scope,
+      bash_command_kinds: diagnostics?.commandClass?.bash_command_kinds,
+      bash_programs: diagnostics?.commandClass?.bash_programs,
+      bash_test_scope: diagnostics?.commandClass?.bash_test_scope,
     };
-    thenIfPromise(Me?.testOutcome, (bashTestOutcome) =>
+    thenIfPromise(diagnostics?.testOutcome, (bashTestOutcome) =>
       logEvent("tengu_background_shell_settled", {
-        ...We,
+        ...fields,
         bash_test_outcome: bashTestOutcome,
       }),
     );
-    releaseShellKeepalive(taskId, agentId, taskRegistry);
+    releaseShellKeepalive(taskId, ownerAgentId, taskRegistry);
   };
 }
 export {

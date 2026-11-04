@@ -39,12 +39,13 @@ import { toError } from "../../utils/errors.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { APIError } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
-import { string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { findToolByName } from "../../Tool.js";
 import { isMcpTool } from "../mcp/utils.js";
 import { logFeatureSad, logFeatureBad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { agentTypeForTelemetry } from "../analytics/metadata.js";
 import { isFoamySpringEnabled } from "../analytics/growthbookGates.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1521691-1521994 placement
 /**
@@ -55,12 +56,12 @@ function noteToolRedescribed(conversation, toolSchemas, { redescribed, recorded,
     if (redescribed === undefined || recorded === undefined) return;
     if (
       !toolSchemas.some(
-        (S) =>
-          "description" in S &&
-          !("defer_loading" in S && S.defer_loading === true) &&
-          redescribed.has(S.name) &&
-          recorded.has(S.name) &&
-          S.description !== recorded.get(S.name),
+        (schema) =>
+          "description" in schema &&
+          !("defer_loading" in schema && schema.defer_loading === true) &&
+          redescribed.has(schema.name) &&
+          recorded.has(schema.name) &&
+          schema.description !== recorded.get(schema.name),
       )
     )
       return;
@@ -75,9 +76,9 @@ function emptyObject(conversation) {
   return {};
 }
 //@ chunk-e6aww6q8.js:1522019-1522092 placement
-function promptPrefixLedgerFor(e) {
-  e.sentPrefix.ledger ??= new PromptPrefixLedger();
-  return e.sentPrefix.ledger;
+function promptPrefixLedgerFor(conversation) {
+  conversation.sentPrefix.ledger ??= new PromptPrefixLedger();
+  return conversation.sentPrefix.ledger;
 }
 //@ chunk-e6aww6q8.js:1522092-1522288 placement
 function querySourceBucket(querySource) {
@@ -91,35 +92,39 @@ function querySourceBucket(querySource) {
 /**
  * 遥测用的工具名到站点标签映射，以及缓存失效涉及部位（messages/system/tools 组合）的编码表。
  */
-var TOOL_SITE_LABELS = new Map([
-  [BASH_TOOL_NAME, lit_2("tools:Bash")],
-  [SCHEDULE_WAKEUP_TOOL_NAME, lit_2("tools:ScheduleWakeup")],
-  [AGENT, lit_2("tools:Agent")],
-  [SKILL, lit_2("tools:Skill")],
-  [TOOL_SEARCH_TOOL_NAME, lit_2("tools:ToolSearch")],
-  [ARTIFACT_TOOL_NAME_2, lit_2("tools:Artifact")],
-  [ARTIFACT_COMMENTS_TOOL_NAME, lit_2("tools:ArtifactComments")],
-  [ARTIFACT_DATA_TOOL_NAME, lit_2("tools:ArtifactData")],
-  [ARTIFACT_CHECK_TOOL_NAME, lit_2("tools:ArtifactCheck")],
-  [SENDMESSAGE, lit_2("tools:SendMessage")],
-  [SEND_USER_FILE_TOOL_NAME, lit_2("tools:SendUserFile")],
-  [FILE_READ_TOOL_NAME, lit_2("tools:Read")],
-  [FILE_EDIT_TOOL_NAME, lit_2("tools:Edit")],
-  [FILE_WRITE_TOOL_NAME, lit_2("tools:Write")],
-  [POWERSHELL_TOOL_NAME, lit_2("tools:PowerShell")],
-  [MONITOR, lit_2("tools:Monitor")],
-  [WAITFORMCPSERVERS, lit_2("tools:WaitForMcpServers")],
-  [END_CONVERSATION_TOOL_NAME_2, lit_2("tools:EndConversation")],
-]);
-var PREFIX_SEGMENT_LABELS = new Map([
-  [1, lit_2("messages")],
-  [2, lit_2("system")],
-  [3, lit_2("system+messages")],
-  [4, lit_2("tools")],
-  [5, lit_2("tools+messages")],
-  [6, lit_2("tools+system")],
-  [7, lit_2("tools+system+messages")],
-]);
+var TOOL_SITE_LABELS; // deferred: uses AGENT (../../tools/AgentTool/constants.js) of its import cycle while loading; runs once the cycle is complete
+var PREFIX_SEGMENT_LABELS;
+deferInit("chunk-e6aww6q8.js:1522288", () => {
+  TOOL_SITE_LABELS = new Map([
+    [BASH_TOOL_NAME, lit_2("tools:Bash")],
+    [SCHEDULE_WAKEUP_TOOL_NAME, lit_2("tools:ScheduleWakeup")],
+    [AGENT, lit_2("tools:Agent")],
+    [SKILL, lit_2("tools:Skill")],
+    [TOOL_SEARCH_TOOL_NAME, lit_2("tools:ToolSearch")],
+    [ARTIFACT_TOOL_NAME_2, lit_2("tools:Artifact")],
+    [ARTIFACT_COMMENTS_TOOL_NAME, lit_2("tools:ArtifactComments")],
+    [ARTIFACT_DATA_TOOL_NAME, lit_2("tools:ArtifactData")],
+    [ARTIFACT_CHECK_TOOL_NAME, lit_2("tools:ArtifactCheck")],
+    [SENDMESSAGE, lit_2("tools:SendMessage")],
+    [SEND_USER_FILE_TOOL_NAME, lit_2("tools:SendUserFile")],
+    [FILE_READ_TOOL_NAME, lit_2("tools:Read")],
+    [FILE_EDIT_TOOL_NAME, lit_2("tools:Edit")],
+    [FILE_WRITE_TOOL_NAME, lit_2("tools:Write")],
+    [POWERSHELL_TOOL_NAME, lit_2("tools:PowerShell")],
+    [MONITOR, lit_2("tools:Monitor")],
+    [WAITFORMCPSERVERS, lit_2("tools:WaitForMcpServers")],
+    [END_CONVERSATION_TOOL_NAME_2, lit_2("tools:EndConversation")],
+  ]);
+  PREFIX_SEGMENT_LABELS = new Map([
+    [1, lit_2("messages")],
+    [2, lit_2("system")],
+    [3, lit_2("system+messages")],
+    [4, lit_2("tools")],
+    [5, lit_2("tools+messages")],
+    [6, lit_2("tools+system")],
+    [7, lit_2("tools+system+messages")],
+  ]);
+});
 //@ chunk-e6aww6q8.js:1522994-1523024 placement
 var MAX_SCHEMA_SUBSTITUTIONS = 8;
 var EMPTY_OBJECT_SCHEMA = {
@@ -134,16 +139,16 @@ function applyRefusedToolSchemas(toolsForRequest, conversation) {
   let refusedToolSchemas = conversation.refusedToolSchemas;
   if (refusedToolSchemas.size === 0) return toolsForRequest;
   try {
-    return toolsForRequest.map((s) => {
+    return toolsForRequest.map((schema) => {
       if (
-        !("input_schema" in s) ||
-        !refusedToolSchemas.has(s.name) ||
-        refusedToolSchemas.get(s.name) !== schemaHash(s.input_schema)
+        !("input_schema" in schema) ||
+        !refusedToolSchemas.has(schema.name) ||
+        refusedToolSchemas.get(schema.name) !== schemaHash(schema.input_schema)
       )
-        return s;
-      let { eager_input_streaming: eagerInputStreaming, ...y } = s;
+        return schema;
+      let { eager_input_streaming: eagerInputStreaming, ...rest } = schema;
       return {
-        ...y,
+        ...rest,
         input_schema: {
           ...EMPTY_OBJECT_SCHEMA,
         },
@@ -164,41 +169,44 @@ class ToolSchemaWireCache {
   constructor(conversation) {
     this.#e = conversation;
   }
-  resolve(e, n, r, s) {
-    if (!(e instanceof APIError) || e.status !== 400) return;
-    let h = /\btools\.(\d+)\.(?:custom\.)?input_schema\b/.exec(e.message)?.[1];
-    if (h === undefined) return;
-    if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_calm_crescent", true)) return this.#o("switched_off", s);
-    let y = n?.[Number(h)];
-    if (y === undefined || !("input_schema" in y)) return this.#o("no_mcp_tool_at_index", s);
-    let toolByName = findToolByName(r, y.name);
+  resolve(error, toolSchemas, tools, querySource) {
+    if (!(error instanceof APIError) || error.status !== 400) return;
+    let matchIndex = /\btools\.(\d+)\.(?:custom\.)?input_schema\b/.exec(error.message)?.[1];
+    if (matchIndex === undefined) return;
+    if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_calm_crescent", true))
+      return this.#o("switched_off", querySource);
+    let schema = toolSchemas?.[Number(matchIndex)];
+    if (schema === undefined || !("input_schema" in schema))
+      return this.#o("no_mcp_tool_at_index", querySource);
+    let toolByName = findToolByName(tools, schema.name);
     if (
       !isMcpTool({
-        name: y.name,
+        name: schema.name,
         isMcp: toolByName?.isMcp,
       })
     )
-      return this.#o("no_mcp_tool_at_index", s);
-    if (isDeepStrictEqual(y.input_schema, EMPTY_OBJECT_SCHEMA)) return this.#o("already_replaced", s);
-    if (this.#t >= MAX_SCHEMA_SUBSTITUTIONS) return this.#o("bound_reached", s);
-    this.#e.refusedToolSchemas.set(y.name, schemaHash(y.input_schema));
+      return this.#o("no_mcp_tool_at_index", querySource);
+    if (isDeepStrictEqual(schema.input_schema, EMPTY_OBJECT_SCHEMA))
+      return this.#o("already_replaced", querySource);
+    if (this.#t >= MAX_SCHEMA_SUBSTITUTIONS) return this.#o("bound_reached", querySource);
+    this.#e.refusedToolSchemas.set(schema.name, schemaHash(schema.input_schema));
     this.#t++;
-    logFeatureSad("api_tool_schema_replacement", "replaced", this.#n(s));
+    logFeatureSad("api_tool_schema_replacement", "replaced", this.#n(querySource));
     if (toolByName?.mcpInfo)
       logMCPError(
         toolByName.mcpInfo.serverName,
-        `Tool "${toolByName.mcpInfo.toolName}": the API refused this tool's input schema. Claude can still call the tool in this conversation, but does not see its parameters. Fix the schema on the MCP server, then start a new conversation. The API said: ${e.message}`,
+        `Tool "${toolByName.mcpInfo.toolName}": the API refused this tool's input schema. Claude can still call the tool in this conversation, but does not see its parameters. Fix the schema on the MCP server, then start a new conversation. The API said: ${error.message}`,
       );
     return `retry:tool-schema-refused-${this.#t}`;
   }
-  #n(e) {
+  #n(querySource) {
     return {
       replacements: this.#t,
-      query_source: agentTypeForTelemetry(e),
+      query_source: agentTypeForTelemetry(querySource),
     };
   }
-  #o(e, n) {
-    logFeatureBad("api_tool_schema_replacement", e, this.#n(n));
+  #o(reason, querySource) {
+    logFeatureBad("api_tool_schema_replacement", reason, this.#n(querySource));
   }
   served() {
     try {

@@ -22,43 +22,44 @@ import { estimateSkillListingTokens } from "../../skills/loadSkillsDir.js";
 //@ chunk-a1q31s85.js:11861-12533 placement
 function estimateCommandTokens({ commands, bytesPerToken }) {
   invalidateCommandNames();
-  let n = sortSkillsForListing(commands);
-  let skillOverrideContext = buildSkillOverrideContext(n);
-  let effectiveSkillStates = getEffectiveSkillStates(n, skillOverrideContext);
-  let t = new Map();
-  for (let e of n) {
-    let o = skillOverrideContext.locked.get(e);
-    if (o && !t.has(e.name)) t.set(e.name, o);
+  let sorted = sortSkillsForListing(commands);
+  let context = buildSkillOverrideContext(sorted);
+  let effectiveSkillStates = getEffectiveSkillStates(sorted, context);
+  let overrides = new Map();
+  for (let command of sorted) {
+    let locked = context.locked.get(command);
+    if (locked && !overrides.has(command.name)) overrides.set(command.name, locked);
   }
-  let a = new Map();
-  for (let command of commands) if (!a.has(command.name)) a.set(command.name, command);
+  let rows = new Map();
+  for (let command of commands) if (!rows.has(command.name)) rows.set(command.name, command);
   return {
-    skills: n.map((e) => {
-      let o = t.get(e.name);
-      let advertised = isUserInvocableSkill(e) && a.get(e.name) === e;
+    skills: sorted.map((command) => {
+      let row = overrides.get(command.name);
+      let advertised = isUserInvocableSkill(command) && rows.get(command.name) === command;
       return {
-        name: e.name,
-        display_name: getCommandName(e),
-        description: e.description ?? "",
-        source: getSkillSourceLabel(e),
-        tokens: estimateSkillListingTokens(e, bytesPerToken),
-        state: o?.value ?? effectiveSkillStates[e.name] ?? "on",
-        ...(o && {
-          locked_by: o.source,
+        name: command.name,
+        display_name: getCommandName(command),
+        description: command.description ?? "",
+        source: getSkillSourceLabel(command),
+        tokens: estimateSkillListingTokens(command, bytesPerToken),
+        state: row?.value ?? effectiveSkillStates[command.name] ?? "on",
+        ...(row && {
+          locked_by: row.source,
         }),
         advertised,
         handles: {
-          ...(e.unqualifiedName !== undefined && {
-            unqualified_name: e.unqualifiedName,
+          ...(command.unqualifiedName !== undefined && {
+            unqualified_name: command.unqualifiedName,
           }),
-          ...(e.aliases?.length && {
-            aliases: [...e.aliases],
+          ...(command.aliases?.length && {
+            aliases: [...command.aliases],
           }),
-          ...(e.bareNameReserved !== undefined && {
-            bare_name_reserved: e.bareNameReserved,
+          ...(command.bareNameReserved !== undefined && {
+            bare_name_reserved: command.bareNameReserved,
           }),
         },
       };
     }),
   };
 }
+export { estimateCommandTokens };

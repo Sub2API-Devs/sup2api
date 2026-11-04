@@ -5,12 +5,12 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_chunkstream } from "./chunkstream.js";
 import { require_filter_parse } from "./filter-parse.js";
 
 //@ chunk-spjgqa4y.js:25954-26249 cjs-fingerprint
-var require_filter_parse_async = x(function (cjsExports, cjsModule) {
+var require_filter_parse_async = __commonJS(function (cjsExports, cjsModule) {
   var util = importMetaRequire("util");
   var ChunkStream = require_chunkstream();
   var Filter = require_filter_parse();

@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:183653-185869 cjs-fingerprint
-var require_handlebars = x(function (cjsExports, cjsModule) {
+var require_handlebars = __commonJS(function (cjsExports, cjsModule) {
   function handlebars(hljs) {
     let regex = hljs.regex;
     let BUILT_INS = {

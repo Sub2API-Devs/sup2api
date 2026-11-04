@@ -50,81 +50,91 @@ import { isCommitSkillRolloutOn } from "../../services/projectsRelay/relayGates.
 import { getSessionSkillCommands } from "../../services/mcp/mcpAccountKey.js";
 import { getProjectRoot } from "../../bootstrap/state.js";
 import { buildPRAttributionTrailer } from "../../utils/attribution.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hantmvxa.js:183579-183843 placement
 /**
  * 创建 PR skill 的工具清单：基础工具名 PR_SKILL_BASE_TOOLS、只读 git/gh 命令模式 PR_SKILL_BASH_PATTERNS；toBashPermissionRules 把命令包成 Bash(...) 规则，合成 PR_SKILL_ALLOWED_TOOLS。
  */
-var PR_SKILL_BASE_TOOLS = [
-  CERTIFIED_GIT_STATUS,
-  CERTIFIED_GIT_LOG,
-  CERTIFIED_GIT_DIFF,
-  CERTIFIED_GIT_BRANCH_SHOW_CURRENT,
-  CERTIFIED_GIT_CHECKOUT_B,
-  CERTIFIED_GH_PR_CREATE,
-  CERTIFIED_GH_PR_VIEW,
-];
-var PR_SKILL_BASH_PATTERNS = [
-  "git status *",
-  "git log --oneline *",
-  "git diff origin/*",
-  "git branch --show-current",
-  "git checkout -b *",
-  "gh pr create --title * --body *",
-  "gh pr view *",
-];
-var toBashPermissionRules = (e) => e.map((n) => `Bash(${n})`);
-var PR_SKILL_ALLOWED_TOOLS = [
-  ...toBashPermissionRules([...PR_SKILL_BASE_TOOLS, CERTIFIED_GIT_PUSH_ORIGIN]),
-  ...toPowerShellRules(PR_SKILL_BASH_PATTERNS),
-];
+var PR_SKILL_BASE_TOOLS; // deferred: uses CERTIFIED_GIT_STATUS (../../tools/BashTool/certifiedCommands.js) of its import cycle while loading; runs once the cycle is complete
+var PR_SKILL_BASH_PATTERNS;
+var toBashPermissionRules;
+var PR_SKILL_ALLOWED_TOOLS;
+deferInit("chunk-hantmvxa.js:183579", () => {
+  PR_SKILL_BASE_TOOLS = [
+    CERTIFIED_GIT_STATUS,
+    CERTIFIED_GIT_LOG,
+    CERTIFIED_GIT_DIFF,
+    CERTIFIED_GIT_BRANCH_SHOW_CURRENT,
+    CERTIFIED_GIT_CHECKOUT_B,
+    CERTIFIED_GH_PR_CREATE,
+    CERTIFIED_GH_PR_VIEW,
+  ];
+  PR_SKILL_BASH_PATTERNS = [
+    "git status *",
+    "git log --oneline *",
+    "git diff origin/*",
+    "git branch --show-current",
+    "git checkout -b *",
+    "gh pr create --title * --body *",
+    "gh pr view *",
+  ];
+  toBashPermissionRules = (rule) => rule.map((ruleBody) => `Bash(${ruleBody})`);
+  PR_SKILL_ALLOWED_TOOLS = [
+    ...toBashPermissionRules([...PR_SKILL_BASE_TOOLS, CERTIFIED_GIT_PUSH_ORIGIN]),
+    ...toPowerShellRules(PR_SKILL_BASH_PATTERNS),
+  ];
+});
 //@ chunk-hantmvxa.js:183843-183970 placement
 /**
  * 异步计算创建 PR skill 的允许工具：固定工具 + 运行时探测到的额外 Bash 规则。
  */
 async function getPrSkillAllowedTools() {
   let gitPushRemotes = await getGitPushRemotes();
-  let filtered = gitPushRemotes.map(buildCertifiedPushRule).filter((s) => s !== null);
+  let filtered = gitPushRemotes.map(buildCertifiedPushRule).filter((rule) => rule !== null);
   return [
     ...toBashPermissionRules([...PR_SKILL_BASE_TOOLS, ...filtered]),
     ...toPowerShellRules([...PR_SKILL_BASH_PATTERNS, ...gitPushShellPatternsForRemotes(gitPushRemotes)]),
   ];
 }
 //@ chunk-hantmvxa.js:183970-184037 placement
-var PR_SKILL_DISALLOWED_TOOLS = [
-  ...bashAndPowerShellRules([
-    ...GIT_OUTPUT_RESTRICTED_RULES,
-    ...GIT_CHECKOUT_FORCE_RULES,
-    ...GIT_PUSH_RESTRICTED_RULES,
-    ...GH_PR_CREATE_RESTRICTED_RULES,
-  ]),
-  ...toPowerShellRules(GH_PR_CREATE_BASE_RULES),
-  ...emptyList(),
-];
+var PR_SKILL_DISALLOWED_TOOLS; // deferred: uses toPowerShellRules (../../utils/git.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hantmvxa.js:183970", () => {
+  PR_SKILL_DISALLOWED_TOOLS = [
+    ...bashAndPowerShellRules([
+      ...GIT_OUTPUT_RESTRICTED_RULES,
+      ...GIT_CHECKOUT_FORCE_RULES,
+      ...GIT_PUSH_RESTRICTED_RULES,
+      ...GH_PR_CREATE_RESTRICTED_RULES,
+    ]),
+    ...toPowerShellRules(GH_PR_CREATE_BASE_RULES),
+    ...emptyList(),
+  ];
+});
 //@ chunk-hantmvxa.js:184037-186209 placement
 /**
  * 生成创建 PR skill 的提示词：用 !`git …` 注入当前状态、分支、提交与 diff，附用户指导、Git 安全协议和 gh pr create HEREDOC 模板。
  */
-function buildCreatePrPrompt(e, n, sessionSkillCommands, prAttributionTrailer) {
-  let h = escapeShellBangs(prAttributionTrailer);
-  let y = escapeShellBangs(e.trim());
-  let w = null;
-  let b = untrustedPrTemplateBlock();
-  let k =
-    b && isBashAvailable()
+function buildCreatePrPrompt(userGuidance, baseBranch, sessionSkillCommands, prAttributionTrailer) {
+  let escapedTrailer = escapeShellBangs(prAttributionTrailer);
+  let escapedGuidance = escapeShellBangs(userGuidance.trim());
+  let extraSection = null;
+  let untrustedTemplate = untrustedPrTemplateBlock();
+  let templateSection =
+    untrustedTemplate && isBashAvailable()
       ? `
-${b}`
+${untrustedTemplate}`
       : "";
   return `## Context
 
 - Current git status: !\`git status\`
 - Current branch: !\`git branch --show-current\`
-- Commits since origin/${n}: !\`git log --oneline origin/${n}..HEAD\`
-- Full diff vs origin/${n}: !\`git diff origin/${n}...HEAD\`${k}
+- Commits since origin/${baseBranch}: !\`git log --oneline origin/${baseBranch}..HEAD\`
+- Full diff vs origin/${baseBranch}: !\`git diff origin/${baseBranch}...HEAD\`${templateSection}
 ${
-  y
+  escapedGuidance
     ? `
-User guidance for this PR: ${y}
+User guidance for this PR: ${escapedGuidance}
 `
     : ""
 }
@@ -136,9 +146,9 @@ User guidance for this PR: ${y}
 - Never use git commands with the -i flag (like git rebase -i or git add -i) since they require interactive input which is not supported
 - Use the gh command for ALL GitHub-related tasks including issues, pull requests, checks, and releases. If given a GitHub URL, use gh to fetch it
 ${
-  w
+  extraSection
     ? `
-${w}
+${extraSection}
 `
     : ""
 }
@@ -146,11 +156,11 @@ ${w}
 
 Based on the changes above, open a single pull request:
 
-1. Analyze ALL changes that will be included in the PR (every commit since ${n}, not just the latest), then draft a title and body:
+1. Analyze ALL changes that will be included in the PR (every commit since ${baseBranch}, not just the latest), then draft a title and body:
    - Keep the title short (under 70 characters); put detail in the body
-   - ${AT_MENTION_GUIDANCE}${prBodyGuidanceBullets(k ? "embedded_context" : null)}
+   - ${AT_MENTION_GUIDANCE}${prBodyGuidanceBullets(templateSection ? "embedded_context" : null)}
 
-2. Create a new branch if currently on ${n}, push to remote with -u if needed, then create the PR. To ensure good formatting, ALWAYS pass the body inline via a ${isBashAvailable() ? "HEREDOC" : "here-string"}, never from a file or stdin (\`--body-file\`/\`-F\`, even \`--body-file -\`, is refused while this skill runs):
+2. Create a new branch if currently on ${baseBranch}, push to remote with -u if needed, then create the PR. To ensure good formatting, ALWAYS pass the body inline via a ${isBashAvailable() ? "HEREDOC" : "here-string"}, never from a file or stdin (\`--body-file\`/\`-F\`, even \`--body-file -\`, is refused while this skill runs):
 ${
   isBashAvailable()
     ? `\`\`\`
@@ -160,10 +170,10 @@ ${prSummaryPlaceholder()}
 
 ## Test plan
 ${prTestPlanPlaceholder()}${
-        h
+        escapedTrailer
           ? `
 
-${h}`
+${escapedTrailer}`
           : ""
       }
 EOF
@@ -176,10 +186,10 @@ ${prSummaryPlaceholder()}
 
 ## Test plan
 ${prTestPlanPlaceholder()}${
-        h
+        escapedTrailer
           ? `
 
-${h}`
+${escapedTrailer}`
           : ""
       }
 '@
@@ -208,24 +218,31 @@ function registerCreatePrSkill() {
     userInvocable: true,
     isEnabled: () => isCommitSkillRolloutOn(),
     progressMessage: "creating pull request",
-    async getPromptForCommand(e, n) {
+    async getPromptForCommand(args, context) {
       logPrGuidanceRendered("pr_skill");
       let [sessionSkillCommands, prAttributionTrailer] = await Promise.all([
-        getSessionSkillCommands(getProjectRoot(), n.storageV5),
-        buildPRAttributionTrailer(n.getAppState, n.storageV5),
+        getSessionSkillCommands(getProjectRoot(), context.storageV5),
+        buildPRAttributionTrailer(context.getAppState, context.storageV5),
       ]);
       let defaultBranch = await getDefaultBranch();
-      let y = /^[A-Za-z0-9._/+][A-Za-z0-9._/+-]*$/.test(defaultBranch) ? defaultBranch : "main";
-      let createPrPrompt = buildCreatePrPrompt(e, y, sessionSkillCommands, prAttributionTrailer);
+      let resolvedBaseBranch = /^[A-Za-z0-9._/+][A-Za-z0-9._/+-]*$/.test(defaultBranch)
+        ? defaultBranch
+        : "main";
+      let createPrPrompt = buildCreatePrPrompt(
+        args,
+        resolvedBaseBranch,
+        sessionSkillCommands,
+        prAttributionTrailer,
+      );
       return [
         {
           type: "text",
           text: await executeShellCommandsInPrompt(
             createPrPrompt,
             {
-              ...n,
+              ...context,
               permissionLayers: [
-                ...(n.permissionLayers ?? []),
+                ...(context.permissionLayers ?? []),
                 {
                   kind: "allowed_tools",
                   allowedTools: PR_SKILL_ALLOWED_TOOLS,

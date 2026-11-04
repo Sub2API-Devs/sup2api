@@ -27,7 +27,7 @@ function setPageContractHeaderProvider(getDatavizDesignAddendum) {
 }
 //@ chunk-1wz354he.js:328-462 placement
 async function loadDatavizSkillContent() {
-  let { SKILL_MD } = await import("./chunk-9kwj0cf7.js");
+  let { SKILL_MD } = await import("./SKILL_MD.lazy.js");
   datavizSkillCache = withPageContractHeader(
     parseFrontmatter(SKILL_MD)
       .content.trimStart()

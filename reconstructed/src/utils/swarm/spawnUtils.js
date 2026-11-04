@@ -39,21 +39,6 @@ import { filterPluginDirs } from "../../plugins/functionHooks/hooksWorkerClient.
 import { getProviderState } from "../model/providerCaches.js";
 import { isRestrictedLaunch } from "../../services/daemon/relaunchArgs.js";
 
-//@ chunk-ae5g0zb5.js:30138-30268 fingerprint = TEAMMATE_ENV_VARS (0.444)
-/**
- * 需要透传给 pane 型 teammate 的环境变量（代理设置、CLAUDE_TEST_HEADED）。
- */
-var TEAMMATE_ENV_VARS = [
-  "CLAUDE_TEST_HEADED",
-  "HTTP_PROXY",
-  "http_proxy",
-  "HTTPS_PROXY",
-  "https_proxy",
-  "ALL_PROXY",
-  "all_proxy",
-  "NO_PROXY",
-  "no_proxy",
-];
 //@ chunk-cne5hsvz.js:19463-21257 callgraph-witnessed = buildInheritedCliFlags (0.297)
 /**
  * 拼出 pane 型 teammate 继承的 CLI 参数：权限模式/计划模式、--proactivity、--disallowed-tools（无法原样重放的 deny 规则直接中止派生）、--tools、--model、--effort、--settings、--managed-settings、插件目录/URL、--mcp-config、--strict-mcp-config、--chrome 等。
@@ -75,21 +60,21 @@ function buildInheritedCliFlags(options) {
     autoPickedByLevel,
   });
   {
-    let s = proactivityLevel && proactivityLevelIfActive(proactivityLevel);
-    if (s) inheritedCliFlags.push(`--proactivity ${s}`);
+    let activeProactivityLevel = proactivityLevel && proactivityLevelIfActive(proactivityLevel);
+    if (activeProactivityLevel) inheritedCliFlags.push(`--proactivity ${activeProactivityLevel}`);
   }
-  let T = new Set(antBuiltinDenyRules());
-  for (let s of permissionRules.alwaysDenyRules.cliArg ?? [])
-    if (!T.has(s)) {
-      let S = splitRuleList([s]);
-      if (S.length !== 1 || S[0] !== s) {
+  let builtinDenyRules = new Set(antBuiltinDenyRules());
+  for (let rule of permissionRules.alwaysDenyRules.cliArg ?? [])
+    if (!builtinDenyRules.has(rule)) {
+      let splitRules = splitRuleList([rule]);
+      if (splitRules.length !== 1 || splitRules[0] !== rule) {
         logFeatureBad("subagent_launch", "subagent_teammate_deny_unreplayable");
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
           "A command-line deny rule cannot be handed to a teammate intact, so the teammate would not enforce it \u2014 spawn aborted",
           "spawnMultiAgent: cliArg deny rule would not survive argv replay \u2014 spawn aborted",
         );
       }
-      inheritedCliFlags.push(envAssignment("--disallowed-tools", s));
+      inheritedCliFlags.push(envAssignment("--disallowed-tools", rule));
     }
   for (let tool of getLaunchPermissions().typedToolFlags.tools)
     inheritedCliFlags.push(
@@ -99,29 +84,31 @@ function buildInheritedCliFlags(options) {
     let modelOverride = getMainLoopModelOverride();
     if (modelOverride) inheritedCliFlags.push(envAssignment("--model", modelOverride));
   }
-  let _ = sessionEffort && effortLevelValue(sessionEffort);
-  if (_ !== undefined) inheritedCliFlags.push(`--effort ${_}`);
-  let u = getFlagSettingsExpectedContent() ?? getFlagSettingsPath();
-  if (u) inheritedCliFlags.push(`--settings ${shellQuoteArgs([u])}`);
+  let effortValue = sessionEffort && effortLevelValue(sessionEffort);
+  if (effortValue !== undefined) inheritedCliFlags.push(`--effort ${effortValue}`);
+  let flagSettingsPath = getFlagSettingsExpectedContent() ?? getFlagSettingsPath();
+  if (flagSettingsPath) inheritedCliFlags.push(`--settings ${shellQuoteArgs([flagSettingsPath])}`);
   let settingsPath = appliedSettingSourcesArgv();
   if (settingsPath.length > 0) inheritedCliFlags.push(shellQuoteArgs(settingsPath));
-  let A = eagerParseCliFlag("--managed-settings");
-  if (A) {
-    let s = safeParseJSON(A.trim(), false);
+  let managedSettingsArg = eagerParseCliFlag("--managed-settings");
+  if (managedSettingsArg) {
+    let parsedManaged = safeParseJSON(managedSettingsArg.trim(), false);
     inheritedCliFlags.push(
-      `--managed-settings ${shellQuoteArgs([s && typeof s === "object" && !Array.isArray(s) ? compactJsonForTypedTransport(s) : "invalid"])}`,
+      `--managed-settings ${shellQuoteArgs([parsedManaged && typeof parsedManaged === "object" && !Array.isArray(parsedManaged) ? compactJsonForTypedTransport(parsedManaged) : "invalid"])}`,
     );
   }
-  let O = filterPluginDirs(getInlinePlugins());
-  for (let pluginDir of O) inheritedCliFlags.push(`--plugin-dir ${shellQuoteArgs([pluginDir])}`);
-  for (let s of getInlinePluginsNoMcp()) inheritedCliFlags.push(`--plugin-dir-no-mcp ${shellQuoteArgs([s])}`);
-  for (let s of getInlinePluginUrls()) inheritedCliFlags.push(`--plugin-url ${shellQuoteArgs([s])}`);
+  let pluginDirs = filterPluginDirs(getInlinePlugins());
+  for (let pluginDir of pluginDirs) inheritedCliFlags.push(`--plugin-dir ${shellQuoteArgs([pluginDir])}`);
+  for (let pluginDir of getInlinePluginsNoMcp())
+    inheritedCliFlags.push(`--plugin-dir-no-mcp ${shellQuoteArgs([pluginDir])}`);
+  for (let pluginUrl of getInlinePluginUrls())
+    inheritedCliFlags.push(`--plugin-url ${shellQuoteArgs([pluginUrl])}`);
   let sessionMode = getProjectConfigRoot();
   if (sessionMode !== null) inheritedCliFlags.push(`--project-config-root ${shellQuoteArgs([sessionMode])}`);
-  for (let s of eagerParseCliFlagAll("--mcp-config", getReplConfigArgv())) {
-    let S = s.trim().startsWith("{") ? safeParseJSON(s.trim(), false) : null;
+  for (let mcpConfigArg of eagerParseCliFlagAll("--mcp-config", getReplConfigArgv())) {
+    let parsedMcp = mcpConfigArg.trim().startsWith("{") ? safeParseJSON(mcpConfigArg.trim(), false) : null;
     inheritedCliFlags.push(
-      `--mcp-config ${shellQuoteArgs([S && typeof S === "object" && !Array.isArray(S) ? compactJsonForTypedTransport(S) : s])}`,
+      `--mcp-config ${shellQuoteArgs([parsedMcp && typeof parsedMcp === "object" && !Array.isArray(parsedMcp) ? compactJsonForTypedTransport(parsedMcp) : mcpConfigArg])}`,
     );
   }
   if (getStrictMcpConfig()) inheritedCliFlags.push("--strict-mcp-config");
@@ -132,4 +119,19 @@ function buildInheritedCliFlags(options) {
   if (isRestrictedLaunch()) inheritedCliFlags.push("--restricted");
   return inheritedCliFlags.join(" ");
 }
+//@ chunk-ae5g0zb5.js:30138-30268 fingerprint = TEAMMATE_ENV_VARS (0.444)
+/**
+ * 需要透传给 pane 型 teammate 的环境变量（代理设置、CLAUDE_TEST_HEADED）。
+ */
+var TEAMMATE_ENV_VARS = [
+  "CLAUDE_TEST_HEADED",
+  "HTTP_PROXY",
+  "http_proxy",
+  "HTTPS_PROXY",
+  "https_proxy",
+  "ALL_PROXY",
+  "all_proxy",
+  "NO_PROXY",
+  "no_proxy",
+];
 export { TEAMMATE_ENV_VARS, buildInheritedCliFlags };

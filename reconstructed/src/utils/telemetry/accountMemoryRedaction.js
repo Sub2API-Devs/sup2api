@@ -14,47 +14,56 @@ import { jsonStringify } from "../slowOperations.js";
 import { escapeXml_2 as escapeXml } from "../confusables.js";
 import { MAX_EVENT_RECORD_POOL, recordStateOf } from "./thirdPartyEventRecords.js";
 import { urlPatternToRegex } from "../stringUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-p52gp8zk.js:9407-9461 placement
-function touchSetEntry(e, n) {
-  let o = e.delete(n);
-  e.add(n);
-  return !o;
+function touchSetEntry(set, item) {
+  let existed = set.delete(item);
+  set.add(item);
+  return !existed;
 }
 //@ chunk-p52gp8zk.js:9461-9607 placement
-var EMPTY_REDACTION_INDEX = Object.freeze({
-  blocks: Object.freeze([]),
-  lines: Object.freeze([]),
-  unsearchable: false,
-  toolNames: new Set(),
+var EMPTY_REDACTION_INDEX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var NOT_RECORDED_PLACEHOLDER;
+deferInit("chunk-p52gp8zk.js:9461", () => {
+  EMPTY_REDACTION_INDEX = Object.freeze({
+    blocks: Object.freeze([]),
+    lines: Object.freeze([]),
+    unsearchable: false,
+    toolNames: new Set(),
+  });
+  NOT_RECORDED_PLACEHOLDER = "[account memory text not recorded]";
 });
-var NOT_RECORDED_PLACEHOLDER = "[account memory text not recorded]";
 //@ chunk-p52gp8zk.js:9607-9664 placement
-function notRecordedLength(e) {
-  return `<${e.length} chars; not recorded>`;
+function notRecordedLength(value) {
+  return `<${value.length} chars; not recorded>`;
 }
 //@ chunk-p52gp8zk.js:9664-9709 placement
 function notRecordedReason(withheld) {
   return `<not recorded: ${withheld}>`;
 }
 //@ chunk-p52gp8zk.js:9709-9799 placement
-function isMemoryOperationQuerySource(e) {
-  return e === "extract_memories" || e === "local_memory_import" || e === "auto_dream";
+function isMemoryOperationQuerySource(querySource) {
+  return (
+    querySource === "extract_memories" ||
+    querySource === "local_memory_import" ||
+    querySource === "auto_dream"
+  );
 }
 //@ chunk-p52gp8zk.js:9799-10027 placement
-function redactWithIndex(e, querySource, o) {
+function redactWithIndex(keySource, querySource, transform) {
   if (isMemoryOperationQuerySource(querySource))
     return {
       withheld: "memory_operation",
     };
   try {
-    let r = e();
-    if (r.unsearchable)
+    let index = keySource();
+    if (index.unsearchable)
       return {
         withheld: "account_memory_text_not_identified",
       };
     return {
-      value: o(r),
+      value: transform(index),
     };
   } catch {
     return {
@@ -66,14 +75,14 @@ function redactWithIndex(e, querySource, o) {
 /**
  * 在遥测记录中隐去账户记忆内容（未识别时整段不记录）。
  */
-function redactAccountMemoryText(e, querySource, o) {
-  let r =
-    e === undefined
+function redactAccountMemoryText(keySource, querySource, apply) {
+  let redacted =
+    keySource === undefined
       ? {
           withheld: "account_memory_text_not_identified",
         }
-      : redactWithIndex(e, querySource, (s) => applyRedactions(o, s));
-  return "withheld" in r ? notRecordedReason(r.withheld) : r.value;
+      : redactWithIndex(keySource, querySource, (index) => applyRedactions(apply, index));
+  return "withheld" in redacted ? notRecordedReason(redacted.withheld) : redacted.value;
 }
 //@ chunk-p52gp8zk.js:10180-10219 placement
 var MARKDOWN_PREFIX_RE = /^(?:[-*+>]|\d+[.)]|#{1,6})\s+/;
@@ -84,30 +93,42 @@ function buildRedactionIndex({
   toolNames = EMPTY_REDACTION_INDEX.toolNames,
   unsearchable = false,
 }) {
-  let s = (g) => g.trim() !== "";
-  let c = uniq(rendered.map((g) => g.trim()).filter(s));
-  let u = uniq(verbatim.map((g) => g.trim()).filter(s));
-  if (c.length === 0 && u.length === 0 && toolNames.size === 0 && !unsearchable) return EMPTY_REDACTION_INDEX;
-  let f = (g, T) => T.length - g.length;
-  let a = (g) => (jsonStringify(g) ?? `"${g}"`).slice(1, -1);
-  let y = (g) =>
+  let rendered_2 = (text) => text.trim() !== "";
+  let renderedLines = uniq(rendered.map((line) => line.trim()).filter(rendered_2));
+  let verbatimLines = uniq(verbatim.map((line) => line.trim()).filter(rendered_2));
+  if (renderedLines.length === 0 && verbatimLines.length === 0 && toolNames.size === 0 && !unsearchable)
+    return EMPTY_REDACTION_INDEX;
+  let byLengthDesc = (left, right) => right.length - left.length;
+  let stripJsonQuotes = (text) => (jsonStringify(text) ?? `"${text}"`).slice(1, -1);
+  let expandVariants = (text) =>
     uniq(
-      g.flatMap((T) => {
-        let h = escapeXml(T);
-        return [T, h, a(T), a(h), escapeXml(a(T)), escapeXml(h), a(a(T))];
+      text.flatMap((text) => {
+        let escaped = escapeXml(text);
+        return [
+          text,
+          escaped,
+          stripJsonQuotes(text),
+          stripJsonQuotes(escaped),
+          escapeXml(stripJsonQuotes(text)),
+          escapeXml(escaped),
+          stripJsonQuotes(stripJsonQuotes(text)),
+        ];
       }),
-    ).sort(f);
-  let blocks = y([...c, ...u.filter((g) => g.length >= MAX_EVENT_RECORD_POOL)]);
-  let lines = y(
-    [...c, ...u]
-      .flatMap((g) =>
-        g.split(`
+    ).sort(byLengthDesc);
+  let blocks = expandVariants([
+    ...renderedLines,
+    ...verbatimLines.filter((line) => line.length >= MAX_EVENT_RECORD_POOL),
+  ]);
+  let lines = expandVariants(
+    [...renderedLines, ...verbatimLines]
+      .flatMap((line) =>
+        line.split(`
 `),
       )
-      .flatMap((g) => {
-        let trimmed = g.trim();
+      .flatMap((part) => {
+        let trimmed = part.trim();
         let replaced = trimmed.replace(MARKDOWN_PREFIX_RE, "");
-        return [trimmed, replaced].filter((x) => x.length >= MAX_EVENT_RECORD_POOL);
+        return [trimmed, replaced].filter((candidate) => candidate.length >= MAX_EVENT_RECORD_POOL);
       }),
   );
   return {
@@ -119,88 +140,97 @@ function buildRedactionIndex({
 }
 //@ chunk-p52gp8zk.js:10838-11061 placement
 function accountMemoryRedactionKeys(host) {
-  let n = recordStateOf(host);
-  let o = weakMap.get(host);
-  if (o !== undefined && o.version === n.version) return o.keys;
+  let state = recordStateOf(host);
+  let cached = weakMap.get(host);
+  if (cached !== undefined && cached.version === state.version) return cached.keys;
   let redactionIndex = buildRedactionIndex({
     rendered: [],
-    verbatim: [...n.shown, ...n.toolTexts],
-    unsearchable: n.dropped,
+    verbatim: [...state.shown, ...state.toolTexts],
+    unsearchable: state.dropped,
   });
   weakMap.set(host, {
-    version: n.version,
+    version: state.version,
     keys: redactionIndex,
   });
   return redactionIndex;
 }
 //@ chunk-p52gp8zk.js:11061-11080 placement
-var weakMap = new WeakMap();
+var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-p52gp8zk.js:11061", () => {
+  weakMap = new WeakMap();
+});
 //@ chunk-p52gp8zk.js:11080-11199 placement
-function applyRedactions(e, n) {
-  if (n.blocks.length === 0 && n.lines.length === 0) return e;
-  let { blocks, lines } = compiledRedactions(n);
-  return replaceAllPatterns(replaceAllPatterns(e, blocks), lines);
+function applyRedactions(text, index) {
+  if (index.blocks.length === 0 && index.lines.length === 0) return text;
+  let { blocks, lines } = compiledRedactions(index);
+  return replaceAllPatterns(replaceAllPatterns(text, blocks), lines);
 }
 //@ chunk-p52gp8zk.js:11199-11243 placement
-var MAX_PATTERN_CHARS = 131072;
-var MAX_COMPILED_REDACTIONS = 8;
-var compiledRedactionCache = new Map();
-var weakMap_2 = new WeakMap();
+var MAX_PATTERN_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_COMPILED_REDACTIONS;
+var compiledRedactionCache;
+var weakMap_2;
+deferInit("chunk-p52gp8zk.js:11199", () => {
+  MAX_PATTERN_CHARS = 131072;
+  MAX_COMPILED_REDACTIONS = 8;
+  compiledRedactionCache = new Map();
+  weakMap_2 = new WeakMap();
+});
 //@ chunk-p52gp8zk.js:11243-11506 placement
-function compiledRedactions(e) {
-  let n = weakMap_2.get(e);
-  if (n !== undefined) return n;
-  let o = createHash("sha256")
-    .update(jsonStringify([e.blocks, e.lines]))
+function compiledRedactions(index) {
+  let cached = weakMap_2.get(index);
+  if (cached !== undefined) return cached;
+  let key = createHash("sha256")
+    .update(jsonStringify([index.blocks, index.lines]))
     .digest("hex");
-  let r = compiledRedactionCache.get(o);
-  if (r === undefined) {
-    r = {
-      blocks: buildRedactionPatterns(e.blocks),
-      lines: buildRedactionPatterns(e.lines),
+  let compiled = compiledRedactionCache.get(key);
+  if (compiled === undefined) {
+    compiled = {
+      blocks: buildRedactionPatterns(index.blocks),
+      lines: buildRedactionPatterns(index.lines),
     };
     if (compiledRedactionCache.size >= MAX_COMPILED_REDACTIONS)
       compiledRedactionCache.delete(compiledRedactionCache.keys().next().value);
-    compiledRedactionCache.set(o, r);
+    compiledRedactionCache.set(key, compiled);
   }
-  weakMap_2.set(e, r);
-  return r;
+  weakMap_2.set(index, compiled);
+  return compiled;
 }
 //@ chunk-p52gp8zk.js:11506-11795 placement
-function buildRedactionPatterns(e) {
-  let mapped = e
-    .filter((c) => c !== "" && !NOT_RECORDED_PLACEHOLDER.includes(c))
-    .toSorted((c, u) => u.length - c.length)
+function buildRedactionPatterns(source) {
+  let mapped = source
+    .filter((item) => item !== "" && !NOT_RECORDED_PLACEHOLDER.includes(item))
+    .toSorted((item_2, item_3) => item_3.length - item_2.length)
     .map(urlPatternToRegex);
-  let o = [];
-  let r = [];
-  let s = 0;
-  for (let c of mapped) {
-    if (r.length > 0 && s + c.length > MAX_PATTERN_CHARS) {
-      o.push(new RegExp(r.join("|"), "g"));
-      r = [];
-      s = 0;
+  let blocks = [];
+  let lines = [];
+  let batchChars = 0;
+  for (let pattern of mapped) {
+    if (lines.length > 0 && batchChars + pattern.length > MAX_PATTERN_CHARS) {
+      blocks.push(new RegExp(lines.join("|"), "g"));
+      lines = [];
+      batchChars = 0;
     }
-    r.push(c);
-    s += c.length + 1;
+    lines.push(pattern);
+    batchChars += pattern.length + 1;
   }
-  if (r.length > 0) o.push(new RegExp(r.join("|"), "g"));
-  return o;
+  if (lines.length > 0) blocks.push(new RegExp(lines.join("|"), "g"));
+  return blocks;
 }
 //@ chunk-p52gp8zk.js:11795-12057 placement
-function replaceAllPatterns(e, n) {
-  let o = e;
-  for (let r of n) o = o.replace(r, NOT_RECORDED_PLACEHOLDER);
-  if (o === e) return e;
-  for (let idx = 0; n.some((s) => o.search(s) !== -1); idx++) {
+function replaceAllPatterns(text, patterns) {
+  let result = text;
+  for (let pattern of patterns) result = result.replace(pattern, NOT_RECORDED_PLACEHOLDER);
+  if (result === text) return text;
+  for (let idx = 0; patterns.some((pattern) => result.search(pattern) !== -1); idx++) {
     if (idx >= 16) throw Error("account-memory text still matched a search key after 16 replacement rounds");
-    for (let s of n) o = o.replace(s, NOT_RECORDED_PLACEHOLDER);
+    for (let pattern of patterns) result = result.replace(pattern, NOT_RECORDED_PLACEHOLDER);
   }
-  return o;
+  return result;
 }
 //@ chunk-p52gp8zk.js:12057-12080 placement
-function identityRedaction(e) {
-  return e;
+function identityRedaction(value) {
+  return value;
 }
 export {
   buildRedactionIndex,

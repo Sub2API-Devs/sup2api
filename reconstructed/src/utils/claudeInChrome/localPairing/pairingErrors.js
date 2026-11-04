@@ -34,20 +34,20 @@ var PAIRING_ERROR_CODES = [
   "unsupported_peer",
   "unknown_pairing",
 ];
-var normalizePairingErrorCode = new Set(PAIRING_ERROR_CODES);
+var PAIRING_ERROR_CODE_SET = new Set(PAIRING_ERROR_CODES);
 //@ chunk-p7xf186d.js:5251-5566 placement
 class PairingError extends Error {
   code;
   httpStatus;
   peerOrg;
-  constructor(e, t, n = {}) {
-    super(t ? `${e}: ${t}` : e, {
-      cause: n.cause,
+  constructor(code, message, extra = {}) {
+    super(message ? `${code}: ${message}` : code, {
+      cause: extra.cause,
     });
     this.name = "PairingError";
-    this.code = e;
-    this.httpStatus = n.httpStatus;
-    this.peerOrg = n.peerOrg;
+    this.code = code;
+    this.httpStatus = extra.httpStatus;
+    this.peerOrg = extra.peerOrg;
   }
   wireCode() {
     return this.code === "attest_failed" && this.httpStatus !== undefined
@@ -56,22 +56,22 @@ class PairingError extends Error {
   }
 }
 //@ chunk-p7xf186d.js:5566-5708 placement
-function normalizePairingErrorCode_2(code) {
+function normalizePairingErrorCode(code) {
   if (typeof code !== "string") return "malformed";
-  let t = code.startsWith("attest_failed:") ? "attest_failed" : code;
-  return normalizePairingErrorCode.has(t) ? t : "malformed";
+  let code_2 = code.startsWith("attest_failed:") ? "attest_failed" : code;
+  return PAIRING_ERROR_CODE_SET.has(code_2) ? code_2 : "malformed";
 }
 //@ chunk-p7xf186d.js:5708-5750 placement
-function malformedError(e) {
-  return new PairingError("malformed", e);
+function malformedError(message) {
+  return new PairingError("malformed", message);
 }
 //@ chunk-p7xf186d.js:5750-6008 placement
 class PairingClock {
   wall;
   mono;
-  constructor(e = {}) {
-    this.wall = e.now ?? (() => Date.now() / 1000);
-    this.mono = e.monotonicNow ?? (() => globalThis.performance.now() / 1000);
+  constructor(options = {}) {
+    this.wall = options.now ?? (() => Date.now() / 1000);
+    this.mono = options.monotonicNow ?? (() => globalThis.performance.now() / 1000);
   }
   stamp() {
     return {
@@ -79,10 +79,10 @@ class PairingClock {
       mono: this.mono(),
     };
   }
-  since(e) {
-    return Math.max(0, this.wall() - e.wall, this.mono() - e.mono);
+  since(stamp) {
+    return Math.max(0, this.wall() - stamp.wall, this.mono() - stamp.mono);
   }
 }
 //@ chunk-p7xf186d.js:6008-6058 placement
 var LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
-export { LOOPBACK_HOSTS, malformedError, PairingError, PairingClock, normalizePairingErrorCode_2 };
+export { LOOPBACK_HOSTS, malformedError, PairingError, PairingClock, normalizePairingErrorCode };

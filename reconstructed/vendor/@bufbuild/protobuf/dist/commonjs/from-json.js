@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_descriptors } from "../cjs/descriptors.js";
 import { require_proto_int64 } from "./proto-int64.js";
 import { require_create } from "../cjs/create.js";
@@ -18,7 +18,7 @@ import { require_error_4 } from "../../../../@anthropic-ai/bedrock-sdk/core/erro
 import { require_extensions } from "./extensions.js";
 
 //@ chunk-fq0cr76a.js:456071-465470 cjs-require-graph
-var require_from_json = x(function (cjsExports) {
+var require_from_json = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -38,11 +38,11 @@ var require_from_json = x(function (cjsExports) {
   var base64_encoding_js_1 = require_base64_encoding();
   var index_js_1 = require_error_4();
   var extensions_js_1 = require_extensions();
-  var FP = {
+  var readOptions = {
     ignoreUnknownFields: false,
   };
   function makeReadContext(options) {
-    return options ? Object.assign(Object.assign({}, FP), options) : FP;
+    return options ? Object.assign(Object.assign({}, readOptions), options) : readOptions;
   }
   function fromJsonString(schema, json, options) {
     return fromJson(schema, parseJsonString(json, schema.typeName), options);
@@ -506,10 +506,10 @@ var require_from_json = x(function (cjsExports) {
       throw Error(
         `cannot decode message ${listValue.$typeName} from JSON ${reflect_check_js_1.formatVal(json)}`,
       );
-    for (let r of json) {
-      let value = create_js_1.create(index_js_1.ValueSchema);
-      valueFromJson(value, r);
-      listValue.values.push(value);
+    for (let value of json) {
+      let value_2 = create_js_1.create(index_js_1.ValueSchema);
+      valueFromJson(value_2, value);
+      listValue.values.push(value_2);
     }
   }
 });

@@ -8,15 +8,19 @@
  * pieces: chunk-b79vwm1h.js (4)
  * attribution: placement 1, file-last-pair 1, fingerprint 2
  */
-import { init_react_production, y, R } from "../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { init_react_production, useState, useRef } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
 import { Box } from "../../ink/components/Text.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-b79vwm1h.js:4216-4220 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-b79vwm1h.js:4216", () => {
+  init_react_production();
+});
 //@ chunk-b79vwm1h.js:4220-4266 file-last-pair
 function treeExpandGlyph(isExpanded) {
   return isExpanded ? "\u25BC " : "\u25B6 ";
@@ -27,7 +31,7 @@ function treeChildGlyph(_depth) {
 }
 //@ chunk-b79vwm1h.js:4299-7428 fingerprint = TreeSelect (0.902)
 function TreeSelect(props) {
-  let $ = w(49);
+  let $ = useMemoCache(49);
   let {
     nodes,
     onSelect,
@@ -47,16 +51,16 @@ function TreeSelect(props) {
     onUpFromFirstItem,
   } = props;
   let layout_2 = layout === undefined ? "expanded" : layout;
-  let ee = isDisabled === undefined ? false : isDisabled;
+  let isDisabled_ = isDisabled === undefined ? false : isDisabled;
   let hideIndexes_2 = hideIndexes === undefined ? false : hideIndexes;
   let t4;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     t4 = new Set();
     $[0] = t4;
   } else t4 = $[0];
-  let [internalExpandedIds, setInternalExpandedIds] = y(t4);
-  let isProgrammaticFocusRef = R(false);
-  let lastFocusedIdRef = R(null);
+  let [internalExpandedIds, setInternalExpandedIds] = useState(t4);
+  let isProgrammaticFocusRef = useRef(false);
+  let lastFocusedIdRef = useRef(null);
   let t5;
   if ($[1] !== internalExpandedIds || $[2] !== isNodeExpanded) {
     t5 = (nodeId) => {
@@ -125,8 +129,8 @@ function TreeSelect(props) {
   let options = t7;
   let map;
   if ($[13] !== flattenedNodes) {
-    let nt = new Map();
-    map = (flattenedNodes.forEach((fn) => nt.set(fn.node.id, fn.node)), nt);
+    let nodeById = new Map();
+    map = (flattenedNodes.forEach((fn) => nodeById.set(fn.node.id, fn.node)), nodeById);
     $[13] = flattenedNodes;
     $[14] = map;
   } else map = $[14];
@@ -166,13 +170,13 @@ function TreeSelect(props) {
   if (
     $[21] !== findFlattenedNode ||
     $[22] !== focusNodeId ||
-    $[23] !== ee ||
+    $[23] !== isDisabled_ ||
     $[24] !== nodeMap ||
     $[25] !== onFocus ||
     $[26] !== toggleExpand
   ) {
     t10 = (e) => {
-      if (!focusNodeId || ee) {
+      if (!focusNodeId || isDisabled_) {
         return;
       }
       let flatNode = findFlattenedNode(focusNodeId);
@@ -199,7 +203,7 @@ function TreeSelect(props) {
     };
     $[21] = findFlattenedNode;
     $[22] = focusNodeId;
-    $[23] = ee;
+    $[23] = isDisabled_;
     $[24] = nodeMap;
     $[25] = onFocus;
     $[26] = toggleExpand;
@@ -248,7 +252,7 @@ function TreeSelect(props) {
     $[36] !== handleFocus ||
     $[37] !== hideIndexes_2 ||
     $[38] !== hidePromptWhileDisabled ||
-    $[39] !== ee ||
+    $[39] !== isDisabled_ ||
     $[40] !== layout_2 ||
     $[41] !== onCancel ||
     $[42] !== onUpFromFirstItem ||
@@ -263,7 +267,7 @@ function TreeSelect(props) {
       defaultFocusValue: focusNodeId,
       visibleOptionCount,
       layout: layout_2,
-      isDisabled: ee,
+      isDisabled: isDisabled_,
       hidePromptWhileDisabled,
       hideIndexes: hideIndexes_2,
       onUpFromFirstItem,
@@ -273,7 +277,7 @@ function TreeSelect(props) {
     $[36] = handleFocus;
     $[37] = hideIndexes_2;
     $[38] = hidePromptWhileDisabled;
-    $[39] = ee;
+    $[39] = isDisabled_;
     $[40] = layout_2;
     $[41] = onCancel;
     $[42] = onUpFromFirstItem;

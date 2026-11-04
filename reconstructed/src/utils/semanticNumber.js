@@ -13,13 +13,13 @@ import { PROPOSED_OUTCOMES } from "../plugins/bundled/youShouldKnow/NoteCard.js"
 //@ chunk-bss4k1z9.js:20132-20331 fingerprint = semanticNumber (0.481)
 function semanticNumber(inner) {
   if (typeof inner !== "object" || !inner) return false;
-  let t = inner;
+  let value = inner;
   return (
-    Number.isFinite(t.number) &&
-    Number.isFinite(t.step) &&
-    Number.isFinite(t.latencyMs) &&
-    Number.isFinite(t.at) &&
-    PROPOSED_OUTCOMES.some((o) => o === t.outcome)
+    Number.isFinite(value.number) &&
+    Number.isFinite(value.step) &&
+    Number.isFinite(value.latencyMs) &&
+    Number.isFinite(value.at) &&
+    PROPOSED_OUTCOMES.some((outcome) => outcome === value.outcome)
   );
 }
 export { semanticNumber };

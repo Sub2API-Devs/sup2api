@@ -6,7 +6,7 @@
  * attribution: esm-fingerprint 5, esm-layout 1
  */
 import { isArray } from "../utils/values.mjs";
-import { encode, zi, isBufferLike, has } from "./utils.mjs";
+import { encode, maybe_map, isBufferLike, has } from "./utils.mjs";
 import { default_format, default_formatter, formatters } from "./formats.mjs";
 
 //@ chunk-hwmsct5x.js:20512-21053 esm-fingerprint
@@ -95,7 +95,7 @@ function inner_stringify(
   if (typeof filter === "function") obj = filter(prefix, obj);
   else if (obj instanceof Date) obj = serializeDate?.(obj);
   else if (generateArrayPrefix === "comma" && isArray(obj))
-    obj = zi(obj, function (value) {
+    obj = maybe_map(obj, function (value) {
       if (value instanceof Date) return serializeDate?.(value);
       return value;
     });
@@ -119,7 +119,7 @@ function inner_stringify(
   if (typeof obj === "undefined") return values;
   let obj_keys;
   if (generateArrayPrefix === "comma" && isArray(obj)) {
-    if (encodeValuesOnly && encoder) obj = zi(obj, encoder);
+    if (encodeValuesOnly && encoder) obj = maybe_map(obj, encoder);
     obj_keys = [
       {
         value: obj.length > 0 ? obj.join(",") || null : undefined,

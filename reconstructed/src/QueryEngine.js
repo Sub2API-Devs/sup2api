@@ -89,7 +89,11 @@ import { logForDebugging } from "./utils/debug.js";
 import { isHumanOrUnset } from "./utils/messageProvenance.js";
 import { lastTextBlockText } from "./utils/historyFile.js";
 import { getMcpPrefix, buildMcpToolName, mcpInfoFromString } from "./services/mcp/mcpStringUtils.js";
-import { mRe, addUsage_2, $jo } from "../vendor/@anthropic-ai/sdk/lib/internal/tracing/response.mjs";
+import {
+  mergeUsageFromDelta,
+  addUsage_2,
+  addResponseUsageAttributes,
+} from "../vendor/@anthropic-ai/sdk/lib/internal/tracing/response.mjs";
 import { EMPTY_USAGE } from "./services/api/emptyUsage.js";
 import {
   toolNameForInit,
@@ -245,13 +249,14 @@ import { sessionNoticesCapability, SESSION_NOTICES } from "./cli/print/sessionNo
 import { sdkMcpCapabilities, uiSurfaceCapabilities, uiHookedCapabilities } from "./cli/sdkMcpManifests.js";
 import { isReadFileAsWrittenServed } from "./cli/print/authAndPolicyRefresh.js";
 import { reduceFileHistoryState, fileHistoryMakeSnapshot, fileHistoryEnabled } from "./utils/fileHistory.js";
-import { Jce, createColorAssigner } from "./services/artifacts/artifactReadConsent.js";
+import { NO_BRIDGE_CONSENT } from "./screens/repl/bridgeChannelSlot.js";
 import { mainAgentContext } from "./utils/agentContext.js";
 import { query } from "./query.js";
 import { resolveThemeSetting } from "./utils/systemTheme.js";
 import { resolveSetting } from "./utils/settings/userIntentSettings.js";
 import { createAppStateAccessors, createPermissionContextSetters } from "./state/appStateSetters.js";
 import { createTaskFramework } from "./utils/task/framework.js";
+import { createColorAssigner } from "./tools/AgentTool/agentColorManager.js";
 import { fieldAccessor } from "./state/sliceHelpers.js";
 import { restoreAttributionStateFromSnapshots } from "./utils/commitAttribution.js";
 import { applySessionSettingsPatch } from "./state/applySessionSettingsPatch.js";
@@ -371,42 +376,43 @@ import { raiseTurnComplete } from "./query/turnHooks.js";
 import { sanitizeMarkName } from "./utils/startupMarks.js";
 import { resolveEffortLevel } from "./utils/effort.js";
 import { createRemoteFileState, READ_FILE_STATE_CACHE_SIZE } from "./utils/remoteFileState.js";
+import { deferInit } from "../runtime/deferred-init.js";
 
 //@ chunk-tyg7f3ek.js:416207-418123 placement
 function reconcileSavedFilesForTurn(initialMessages, withdrawnFileUuids) {
   try {
-    let r = new Set(withdrawnFileUuids.map((R) => R.toLowerCase()));
-    let s = new Set(
-      initialMessages.flatMap((R) =>
-        R.type === "user" && Array.isArray(R.savedFiles)
-          ? R.savedFiles.flatMap((savedFile) =>
+    let withdrawnNames = new Set(withdrawnFileUuids.map((name) => name.toLowerCase()));
+    let withdrawnPaths = new Set(
+      initialMessages.flatMap((message) =>
+        message.type === "user" && Array.isArray(message.savedFiles)
+          ? message.savedFiles.flatMap((savedFile) =>
               typeof savedFile?.file_uuid === "string" &&
               typeof savedFile.path === "string" &&
-              r.has(savedFile.file_uuid.toLowerCase())
+              withdrawnNames.has(savedFile.file_uuid.toLowerCase())
                 ? [savedFile.path]
                 : [],
             )
           : [],
       ),
     );
-    let h = 0;
-    let y = [];
-    for (let [R, w] of initialMessages.entries())
-      if (w.type === "user") {
-        let P = maskDisallowedNames(w.imageFileUuids, r);
-        if (P === undefined || !Array.isArray(w.message?.content)) continue;
-        let L = filterImageBlocksByMask(w.message.content, P);
-        let q = w.message.content.length - L.length;
-        h += q;
-        y.push([
-          R,
+    let withdrawnCount = 0;
+    let replacements = [];
+    for (let [index, message] of initialMessages.entries())
+      if (message.type === "user") {
+        let keepMask = maskDisallowedNames(message.imageFileUuids, withdrawnNames);
+        if (keepMask === undefined || !Array.isArray(message.message?.content)) continue;
+        let keptBlocks = filterImageBlocksByMask(message.message.content, keepMask);
+        let removedCount = message.message.content.length - keptBlocks.length;
+        withdrawnCount += removedCount;
+        replacements.push([
+          index,
           {
-            ...w,
+            ...message,
             message: {
-              ...w.message,
+              ...message.message,
               content:
-                L.length > 0
-                  ? L
+                keptBlocks.length > 0
+                  ? keptBlocks
                   : [
                       {
                         type: "text",
@@ -414,76 +420,77 @@ function reconcileSavedFilesForTurn(initialMessages, withdrawnFileUuids) {
                       },
                     ],
             },
-            withdrawnImages: (w.withdrawnImages ?? 0) + q,
-            imageFileUuids: filterArrayByMask(w.imageFileUuids, P),
-            imagePasteIds: filterArrayByMask(w.imagePasteIds, P),
-            [storedFormSymbol]: resolveMessageAlias(w),
+            withdrawnImages: (message.withdrawnImages ?? 0) + removedCount,
+            imageFileUuids: filterArrayByMask(message.imageFileUuids, keepMask),
+            imagePasteIds: filterArrayByMask(message.imagePasteIds, keepMask),
+            [storedFormSymbol]: resolveMessageAlias(message),
           },
         ]);
-      } else if (w.type !== "attachment") continue;
-      else if (w.attachment?.type === "inlined_image_paths") {
-        let { attachment } = w;
-        let L = maskDisallowedNames(attachment.fileUuids, r);
-        if (L === undefined) continue;
-        y.push([
-          R,
+      } else if (message.type !== "attachment") continue;
+      else if (message.attachment?.type === "inlined_image_paths") {
+        let { attachment } = message;
+        let keepMask = maskDisallowedNames(attachment.fileUuids, withdrawnNames);
+        if (keepMask === undefined) continue;
+        replacements.push([
+          index,
           {
-            ...withRenderedAttachment(w, {
+            ...withRenderedAttachment(message, {
               ...attachment,
-              paths: filterArrayByMask(attachment.paths, L) ?? [],
-              fileUuids: filterArrayByMask(attachment.fileUuids, L),
+              paths: filterArrayByMask(attachment.paths, keepMask) ?? [],
+              fileUuids: filterArrayByMask(attachment.fileUuids, keepMask),
             }),
-            [storedFormSymbol]: resolveMessageAlias(w),
+            [storedFormSymbol]: resolveMessageAlias(message),
           },
         ]);
-      } else if (w.attachment?.type === "file") {
-        if (w.attachment.content?.type !== "image" || !s.has(w.attachment.filename)) continue;
-        h++;
-        y.push([
-          R,
+      } else if (message.attachment?.type === "file") {
+        if (message.attachment.content?.type !== "image" || !withdrawnPaths.has(message.attachment.filename))
+          continue;
+        withdrawnCount++;
+        replacements.push([
+          index,
           {
-            ...withRenderedAttachment(w, {
+            ...withRenderedAttachment(message, {
               type: "critical_system_reminder",
               content: DELETED_IMAGE_NOTICE,
             }),
-            [storedFormSymbol]: resolveMessageAlias(w),
+            [storedFormSymbol]: resolveMessageAlias(message),
           },
         ]);
-      } else if (w.attachment?.type === "queued_command") {
-        let { attachment } = w;
-        let L = maskDisallowedNames(attachment.imageFileUuids, r);
-        if (L === undefined || !Array.isArray(attachment.prompt)) continue;
-        let q = filterImageBlocksByMask(attachment.prompt, L);
-        let x = attachment.prompt.length - q.length;
-        h += x;
-        y.push([
-          R,
+      } else if (message.attachment?.type === "queued_command") {
+        let { attachment } = message;
+        let keepMask = maskDisallowedNames(attachment.imageFileUuids, withdrawnNames);
+        if (keepMask === undefined || !Array.isArray(attachment.prompt)) continue;
+        let keptBlocks = filterImageBlocksByMask(attachment.prompt, keepMask);
+        let removedCount = attachment.prompt.length - keptBlocks.length;
+        withdrawnCount += removedCount;
+        replacements.push([
+          index,
           {
-            ...withRenderedAttachment(w, {
+            ...withRenderedAttachment(message, {
               ...attachment,
-              prompt: q.length > 0 ? q : NO_CONTENT_MESSAGE,
-              withdrawnImages: (attachment.withdrawnImages ?? 0) + x,
-              imageFileUuids: filterArrayByMask(attachment.imageFileUuids, L),
-              inlinedImagePaths: filterArrayByMask(attachment.inlinedImagePaths, L),
+              prompt: keptBlocks.length > 0 ? keptBlocks : NO_CONTENT_MESSAGE,
+              withdrawnImages: (attachment.withdrawnImages ?? 0) + removedCount,
+              imageFileUuids: filterArrayByMask(attachment.imageFileUuids, keepMask),
+              inlinedImagePaths: filterArrayByMask(attachment.inlinedImagePaths, keepMask),
             }),
-            [storedFormSymbol]: resolveMessageAlias(w),
+            [storedFormSymbol]: resolveMessageAlias(message),
           },
         ]);
       }
-    for (let [R, w] of y) initialMessages[R] = w;
+    for (let [index, message] of replacements) initialMessages[index] = message;
     let teleportCacheState = chromeSetupModule?.getTeleportCacheState();
     if (
       teleportCacheState?.status === "active" &&
-      y.some(([, { uuid: R }]) => teleportCacheState.preAnchorLineUuids.includes(R))
+      replacements.some(([, { uuid }]) => teleportCacheState.preAnchorLineUuids.includes(uuid))
     )
       chromeSetupModule?.revertTeleportCache("context_reduced", "main");
-    if (y.length > 0) {
+    if (replacements.length > 0) {
       noopLedger(getStickyBetas(), "pictures_withdrawn");
       notifyCacheDeletion("sdk");
     }
     logFeatureOk("bridge_attachment_withdraw", {
-      listed_count: r.size,
-      cut_picture_count: h,
+      listed_count: withdrawnNames.size,
+      cut_picture_count: withdrawnCount,
     });
   } catch (error) {
     logError(error);
@@ -491,25 +498,25 @@ function reconcileSavedFilesForTurn(initialMessages, withdrawnFileUuids) {
   }
 }
 //@ chunk-tyg7f3ek.js:418123-418262 placement
-function maskDisallowedNames(e, n) {
-  if (!Array.isArray(e)) return;
-  let mapped = e.map((s) => typeof s !== "string" || !n.has(s.toLowerCase()));
+function maskDisallowedNames(names, withdrawn) {
+  if (!Array.isArray(names)) return;
+  let mapped = names.map((name) => typeof name !== "string" || !withdrawn.has(name.toLowerCase()));
   return mapped.includes(false) ? mapped : undefined;
 }
 //@ chunk-tyg7f3ek.js:418262-418336 placement
 /**
  * 数组按布尔掩码过滤（掩码缺省为保留）
  */
-function filterArrayByMask(e, n) {
-  return Array.isArray(e) ? e.filter((r, s) => n[s] ?? true) : undefined;
+function filterArrayByMask(values, mask) {
+  return Array.isArray(values) ? values.filter((value, index) => mask[index] ?? true) : undefined;
 }
 //@ chunk-tyg7f3ek.js:418336-418415 placement = _temp (1)
 /**
  * 只按 image 块的顺序套用掩码过滤
  */
-function filterImageBlocksByMask(e, n) {
-  let r = 0;
-  return e.filter((s) => s?.type !== "image" || (n[r++] ?? true));
+function filterImageBlocksByMask(blocks, mask) {
+  let imageIndex = 0;
+  return blocks.filter((block) => block?.type !== "image" || (mask[imageIndex++] ?? true));
 }
 //@ chunk-tyg7f3ek.js:418415-418429 placement
 /**
@@ -517,24 +524,25 @@ function filterImageBlocksByMask(e, n) {
  */
 var MAX_DEFERRED_RESULT_BYTES = 262144;
 //@ chunk-tyg7f3ek.js:418429-419533 placement
-async function mirrorTaskListSnapshot(e, session, store) {
+async function mirrorTaskListSnapshot(compactResult, session, store) {
   try {
     let taskListId = getTaskListId();
     if (!hasRemoteWorkerEventLog() || taskListId !== session.id) return;
-    let h = await snapshotTaskList(taskListId, store);
-    if (h === null || h.tasks === null) h = (await snapshotTaskList(taskListId, store)) ?? h;
-    if (h === null) {
+    let snapshot = await snapshotTaskList(taskListId, store);
+    if (snapshot === null || snapshot.tasks === null)
+      snapshot = (await snapshotTaskList(taskListId, store)) ?? snapshot;
+    if (snapshot === null) {
       logFeatureBad("task_list_carry", "list_unreadable");
       return;
     }
-    let { tasks, highestId } = h;
+    let { tasks, highestId } = snapshot;
     if (highestId === 0) return;
     if (highestId > MAX_TASK_NUMBER) {
       logFeatureBad("task_list_carry", "highest_id_over_limit");
       return;
     }
     if (tasks === null) {
-      e.compactMetadata.preCompactTaskList = {
+      compactResult.compactMetadata.preCompactTaskList = {
         highestId,
       };
       logFeatureSad("task_list_carry", "task_unreadable", {
@@ -543,47 +551,47 @@ async function mirrorTaskListSnapshot(e, session, store) {
       return;
     }
     let filtered = tasks.filter((task) => !task.metadata?._internal);
-    let w = {
+    let logFields = {
       task_count: filtered.length,
       highest_id: highestId,
     };
-    let P = taskListSnapshotPayload({
+    let fullPayload = taskListSnapshotPayload({
       shown: filtered,
       highestId,
       descriptions: true,
       metadata: true,
     });
-    if (fitsResultBudget(P)) {
-      e.compactMetadata.preCompactTaskList = P;
-      logFeatureOk("task_list_carry", w);
+    if (fitsResultBudget(fullPayload)) {
+      compactResult.compactMetadata.preCompactTaskList = fullPayload;
+      logFeatureOk("task_list_carry", logFields);
       return;
     }
-    let L = taskListSnapshotPayload({
+    let noMetadataPayload = taskListSnapshotPayload({
       shown: filtered,
       highestId,
       descriptions: true,
       metadata: false,
     });
-    if (fitsResultBudget(L)) {
-      e.compactMetadata.preCompactTaskList = L;
-      logFeatureSad("task_list_carry", "metadata_left_out", w);
+    if (fitsResultBudget(noMetadataPayload)) {
+      compactResult.compactMetadata.preCompactTaskList = noMetadataPayload;
+      logFeatureSad("task_list_carry", "metadata_left_out", logFields);
       return;
     }
-    let q = taskListSnapshotPayload({
+    let minimalPayload = taskListSnapshotPayload({
       shown: filtered,
       highestId,
       descriptions: false,
       metadata: false,
     });
-    if (fitsResultBudget(q)) {
-      e.compactMetadata.preCompactTaskList = q;
-      logFeatureSad("task_list_carry", "descriptions_left_out", w);
+    if (fitsResultBudget(minimalPayload)) {
+      compactResult.compactMetadata.preCompactTaskList = minimalPayload;
+      logFeatureSad("task_list_carry", "descriptions_left_out", logFields);
       return;
     }
-    e.compactMetadata.preCompactTaskList = {
+    compactResult.compactMetadata.preCompactTaskList = {
       highestId,
     };
-    logFeatureSad("task_list_carry", "tasks_left_out", w);
+    logFeatureSad("task_list_carry", "tasks_left_out", logFields);
   } catch (error) {
     logFeatureBad("task_list_carry", "carry_failed");
     logError(error);
@@ -592,29 +600,29 @@ async function mirrorTaskListSnapshot(e, session, store) {
 //@ chunk-tyg7f3ek.js:419533-419959 placement
 function taskListSnapshotPayload({ shown, highestId, descriptions, metadata }) {
   return {
-    tasks: shown.map((h) => ({
-      id: h.id,
-      subject: h.subject,
+    tasks: shown.map((task) => ({
+      id: task.id,
+      subject: task.subject,
       ...(descriptions &&
-        h.description !== "" && {
-          description: h.description,
+        task.description !== "" && {
+          description: task.description,
         }),
-      ...(h.activeForm !== undefined && {
-        activeForm: h.activeForm,
+      ...(task.activeForm !== undefined && {
+        activeForm: task.activeForm,
       }),
-      status: h.status,
-      ...(h.owner !== undefined && {
-        owner: h.owner,
+      status: task.status,
+      ...(task.owner !== undefined && {
+        owner: task.owner,
       }),
-      ...(h.blocks.length > 0 && {
-        blocks: h.blocks,
+      ...(task.blocks.length > 0 && {
+        blocks: task.blocks,
       }),
-      ...(h.blockedBy.length > 0 && {
-        blockedBy: h.blockedBy,
+      ...(task.blockedBy.length > 0 && {
+        blockedBy: task.blockedBy,
       }),
       ...(metadata &&
-        h.metadata !== undefined && {
-          metadata: h.metadata,
+        task.metadata !== undefined && {
+          metadata: task.metadata,
         }),
     })),
     highestId,
@@ -624,67 +632,67 @@ function taskListSnapshotPayload({ shown, highestId, descriptions, metadata }) {
 /**
  * 判断一个值序列化后的字节数是否在上限内（用于延迟结果）。
  */
-function fitsResultBudget(e) {
-  return Buffer.byteLength(jsonStringify(e), "utf8") <= MAX_DEFERRED_RESULT_BYTES;
+function fitsResultBudget(payload) {
+  return Buffer.byteLength(jsonStringify(payload), "utf8") <= MAX_DEFERRED_RESULT_BYTES;
 }
 //@ chunk-tyg7f3ek.js:420016-420648 placement
 function createRetractionFilter() {
-  let e;
-  let n = new Set();
-  let r = 0;
-  function s(S) {
-    let retractedMessageUuids = S.retractedMessageUuids;
-    if (retractedMessageUuids === undefined || n.size === 0) return S;
+  let heldBanner;
+  let retractedUuids = new Set();
+  let suppressedCount = 0;
+  function stripRetracted(banner) {
+    let retractedMessageUuids = banner.retractedMessageUuids;
+    if (retractedMessageUuids === undefined || retractedUuids.size === 0) return banner;
     return {
-      ...S,
+      ...banner,
       retractedMessageUuids: retractedMessageUuids.filter(
-        (retractedMessageUuid) => !n.has(retractedMessageUuid),
+        (retractedMessageUuid) => !retractedUuids.has(retractedMessageUuid),
       ),
     };
   }
-  function h(S, emittedVia) {
-    let w = {
-      banner: s(S),
-      suppressedCount: r,
+  function takeEntry(banner, emittedVia) {
+    let entry = {
+      banner: stripRetracted(banner),
+      suppressedCount,
       emittedVia,
     };
-    r = 0;
-    return w;
+    suppressedCount = 0;
+    return entry;
   }
-  function y(emittedVia) {
-    if (e === undefined) return [];
-    let R = h(e, emittedVia);
-    e = undefined;
-    return [R];
+  function takeHeld(emittedVia) {
+    if (heldBanner === undefined) return [];
+    let entry = takeEntry(heldBanner, emittedVia);
+    heldBanner = undefined;
+    return [entry];
   }
   return {
-    accept(S) {
-      let R = [];
-      if (e !== undefined)
-        if (S.retractedMessageUuids?.includes(e.uuid)) {
-          n.add(e.uuid);
-          r += 1;
-          e = undefined;
-        } else R.push(...y("episode_boundary"));
-      if (S.provisional) e = S;
-      else R.push(h(S, r > 0 ? "supersedes" : "immediate"));
-      return R;
+    accept(banner) {
+      let entries = [];
+      if (heldBanner !== undefined)
+        if (banner.retractedMessageUuids?.includes(heldBanner.uuid)) {
+          retractedUuids.add(heldBanner.uuid);
+          suppressedCount += 1;
+          heldBanner = undefined;
+        } else entries.push(...takeHeld("episode_boundary"));
+      if (banner.provisional) heldBanner = banner;
+      else entries.push(takeEntry(banner, suppressedCount > 0 ? "supersedes" : "immediate"));
+      return entries;
     },
-    dropHeld(S) {
-      if (e?.uuid === S) {
-        n.add(e.uuid);
-        r += 1;
-        e = undefined;
+    dropHeld(uuid) {
+      if (heldBanner?.uuid === uuid) {
+        retractedUuids.add(heldBanner.uuid);
+        suppressedCount += 1;
+        heldBanner = undefined;
       }
     },
-    settle(S) {
-      return y(S);
+    settle(emittedVia) {
+      return takeHeld(emittedVia);
     },
   };
 }
 //@ chunk-tyg7f3ek.js:420648-421367 placement
-function collapseRefusalFallbackNotices(e, sessionId) {
-  return e.map(({ banner, suppressedCount, emittedVia }) => {
+function collapseRefusalFallbackNotices(entries, sessionId) {
+  return entries.map(({ banner, suppressedCount, emittedVia }) => {
     if (suppressedCount > 0)
       logEvent("tengu_refusal_fallback_notice_collapsed", {
         suppressed_count: suppressedCount,
@@ -720,19 +728,23 @@ function collapseRefusalFallbackNotices(e, sessionId) {
 /**
  * 等待内置插件就绪的时限（15 秒）与已就绪宿主集合。
  */
-var BUILTIN_PLUGIN_READY_TIMEOUT_MS = 15000;
-var builtinPluginReadyHosts = new HostScoped(() => new Set());
+var BUILTIN_PLUGIN_READY_TIMEOUT_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var builtinPluginReadyHosts;
+deferInit("chunk-tyg7f3ek.js:421367", () => {
+  BUILTIN_PLUGIN_READY_TIMEOUT_MS = 15000;
+  builtinPluginReadyHosts = new HostScoped(() => new Set());
+});
 //@ chunk-tyg7f3ek.js:421402-422100 placement
-function runBuiltinTurnObservers(e, n, r, s) {
-  if (r.aborted) return;
-  let h = [];
-  for (let y of builtinPluginReadyHosts.of(e))
+function runBuiltinTurnObservers(host, promptText, signal, timeoutMs) {
+  if (signal.aborted) return;
+  let pendingWaits = [];
+  for (let readyHook of builtinPluginReadyHosts.of(host))
     try {
-      let S = y(n, r);
-      if (S !== undefined)
-        h.push(
-          S.catch((error) => {
-            if (r.aborted && isAbortError(error)) return;
+      let wait = readyHook(promptText, signal);
+      if (wait !== undefined)
+        pendingWaits.push(
+          wait.catch((error) => {
+            if (signal.aborted && isAbortError(error)) return;
             logError(
               Error(
                 "A built-in plugin failed while getting ready for this prompt; the prompt runs without waiting for it",
@@ -753,14 +765,14 @@ function runBuiltinTurnObservers(e, n, r, s) {
         ),
       );
     }
-  if (h.length === 0) return;
+  if (pendingWaits.length === 0) return;
   return raceWithAbortSignal(
-    withDeadline(Promise.all(h), BUILTIN_PLUGIN_READY_TIMEOUT_MS, s),
-    r,
+    withDeadline(Promise.all(pendingWaits), BUILTIN_PLUGIN_READY_TIMEOUT_MS, timeoutMs),
+    signal,
     () => new AbortError(),
   ).then(
-    (y) => {
-      if (y === undefined)
+    (settled) => {
+      if (settled === undefined)
         logForDebugging(
           `Built-in plugins still getting ready after ${BUILTIN_PLUGIN_READY_TIMEOUT_MS} ms; the prompt runs now`,
         );
@@ -776,16 +788,18 @@ function runBuiltinTurnObservers(e, n, r, s) {
   );
 }
 //@ chunk-tyg7f3ek.js:422100-422429 placement
-function isTypedPersonPrompt(host, n, r, signal) {
+function isTypedPersonPrompt(host, messages, options, signal) {
   try {
-    let y =
-      r?.inputMode !== "bash" &&
-      r?.textNotTyped !== true &&
-      (r?.skipSlashCommands !== true || r?.bridgeOrigin === true || r?.modelScheduledOrigin === true) &&
-      isHumanOrUnset(r?.origin)
-        ? lastTextBlockText(n)
+    let typedText =
+      options?.inputMode !== "bash" &&
+      options?.textNotTyped !== true &&
+      (options?.skipSlashCommands !== true ||
+        options?.bridgeOrigin === true ||
+        options?.modelScheduledOrigin === true) &&
+      isHumanOrUnset(options?.origin)
+        ? lastTextBlockText(messages)
         : null;
-    return y === null ? undefined : runBuiltinTurnObservers(host, y, signal);
+    return typedText === null ? undefined : runBuiltinTurnObservers(host, typedText, signal);
   } catch (error) {
     logError(
       Error("Waiting for built-in plugins before the prompt failed; the prompt runs now", {
@@ -796,12 +810,12 @@ function isTypedPersonPrompt(host, n, r, signal) {
   }
 }
 //@ chunk-tyg7f3ek.js:422429-422737 placement
-function markDroppedPrompts(e, turnId, r) {
+function markDroppedPrompts(messages, turnId, droppedUuids) {
   try {
-    let s = new Set(r);
-    if (turnId !== undefined) s.add(turnId);
-    let last = e.findLast(isInterruptionOnlyMessage);
-    if (s.size > 0 && last?.type === "user") last.droppedPromptUuids = [...s];
+    let allDropped = new Set(droppedUuids);
+    if (turnId !== undefined) allDropped.add(turnId);
+    let last = messages.findLast(isInterruptionOnlyMessage);
+    if (allDropped.size > 0 && last?.type === "user") last.droppedPromptUuids = [...allDropped];
   } catch (error) {
     logError(
       Error(
@@ -814,17 +828,19 @@ function markDroppedPrompts(e, turnId, r) {
   }
 }
 //@ chunk-tyg7f3ek.js:422737-422882 placement
-function filterMcpToolsBySelectedServers(e, n, r) {
-  if (n.length > 0) return e;
-  let mapped = r.map((h) => getMcpPrefix(h.name));
-  return e.filter((h) => mapped.includes(`${h}__`) || !mapped.some((y) => h.startsWith(y)));
+function filterMcpToolsBySelectedServers(tools, selectedServerNames, selectedServers) {
+  if (selectedServerNames.length > 0) return tools;
+  let mapped = selectedServers.map((server) => getMcpPrefix(server.name));
+  return tools.filter(
+    (toolName) => mapped.includes(`${toolName}__`) || !mapped.some((prefix) => toolName.startsWith(prefix)),
+  );
 }
 //@ chunk-tyg7f3ek.js:422882-423099 placement
-function assistantUsageDelta(e, n, r) {
+function assistantUsageDelta(message, lastId, previousId) {
   try {
-    let { id, model, usage } = e.message;
-    if (e.isApiErrorMessage || model === SYNTHETIC_MODEL || id === n || id === r) return;
-    return mRe(EMPTY_USAGE, usage);
+    let { id, model, usage } = message.message;
+    if (message.isApiErrorMessage || model === SYNTHETIC_MODEL || id === lastId || id === previousId) return;
+    return mergeUsageFromDelta(EMPTY_USAGE, usage);
   } catch (error) {
     logError(
       withTelemetryMessage(toError(error), "usage of an unstreamed answer not added to the turn total"),
@@ -834,128 +850,135 @@ function assistantUsageDelta(e, n, r) {
 }
 //@ chunk-tyg7f3ek.js:423099-423374 placement
 function createPermissionDenialTracker(canUseTool) {
-  let n = [];
-  function r(s, h, toolInput) {
-    if (n.some((S) => S.tool_use_id === h)) return;
-    n.push({
-      tool_name: toolNameForInit(s.name),
-      tool_use_id: h,
+  let denials = [];
+  function recordDenial(tool, toolUseId, toolInput) {
+    if (denials.some((denial) => denial.tool_use_id === toolUseId)) return;
+    denials.push({
+      tool_name: toolNameForInit(tool.name),
+      tool_use_id: toolUseId,
       tool_input: toolInput,
     });
   }
   return {
-    permissionDenials: n,
-    recordDenial: r,
-    canUseTool: async (s, toolInput, y, S, R, w) => {
-      let P = await canUseTool(s, toolInput, y, S, R, w);
-      if (isRecordableDenial(P, w)) r(s, R, toolInput);
-      return P;
+    permissionDenials: denials,
+    recordDenial,
+    canUseTool: async (tool, toolInput, toolUseContext, assistantMessage, toolUseId, requestContext) => {
+      let result = await canUseTool(
+        tool,
+        toolInput,
+        toolUseContext,
+        assistantMessage,
+        toolUseId,
+        requestContext,
+      );
+      if (isRecordableDenial(result, requestContext)) recordDenial(tool, toolUseId, toolInput);
+      return result;
     },
   };
 }
 //@ chunk-tyg7f3ek.js:423374-423535 placement
-function userRowsToReplay(e, n) {
-  return e.filter(
-    (r) =>
-      (r.type === "user" &&
-        !r.toolUseResult &&
-        ((!r.isMeta && isOwnPromptRow(r, n)) || isExternalOrigin(r.origin))) ||
-      (r.type === "system" && r.subtype === "compact_boundary"),
+function userRowsToReplay(messages, options) {
+  return messages.filter(
+    (message) =>
+      (message.type === "user" &&
+        !message.toolUseResult &&
+        ((!message.isMeta && isOwnPromptRow(message, options)) || isExternalOrigin(message.origin))) ||
+      (message.type === "system" && message.subtype === "compact_boundary"),
   );
 }
 //@ chunk-tyg7f3ek.js:423535-423637 placement
-function isOwnPromptRow(e, n) {
-  return e.type === "user" && n?.localStdinOrigin === true && isSameUuidMessage(e, n)
-    ? isUserPromptOfKind(e, "own-prompt")
-    : isUserStampPrompt(e);
+function isOwnPromptRow(message, options) {
+  return message.type === "user" && options?.localStdinOrigin === true && isSameUuidMessage(message, options)
+    ? isUserPromptOfKind(message, "own-prompt")
+    : isUserStampPrompt(message);
 }
 //@ chunk-tyg7f3ek.js:423637-423859 placement
-function* replayUserRows(e, n) {
-  for (let r of e) {
-    if (r.type !== "user") continue;
-    yield n?.inputMode === "bash"
+function* replayUserRows(messages, options) {
+  for (let message of messages) {
+    if (message.type !== "user") continue;
+    yield options?.inputMode === "bash"
       ? {
           type: "user",
-          message: r.message,
+          message: message.message,
           session_id: getSessionId(),
           parent_tool_use_id: null,
-          uuid: r.uuid,
-          timestamp: r.timestamp,
-          isSynthetic: selectableUserMessagesFilter(r),
+          uuid: message.uuid,
+          timestamp: message.timestamp,
+          isSynthetic: selectableUserMessagesFilter(message),
         }
-      : toSdkUserMessage(r, n);
+      : toSdkUserMessage(message, options);
   }
 }
 //@ chunk-tyg7f3ek.js:423859-423977 placement
-function* userRowsForSdk(e, n) {
-  let r = n?.shouldQuery === false;
-  for (let s of e)
-    if (s.type === "user") {
-      if (!r && !isSameUuidMessage(s, n)) continue;
-      yield toSdkUserMessage(s, n);
+function* userRowsForSdk(messages, options) {
+  let replayAll = options?.shouldQuery === false;
+  for (let message of messages)
+    if (message.type === "user") {
+      if (!replayAll && !isSameUuidMessage(message, options)) continue;
+      yield toSdkUserMessage(message, options);
     }
 }
 //@ chunk-tyg7f3ek.js:423977-424032 placement
 /**
  * 两条消息 uuid 相同
  */
-function isSameUuidMessage(e, n) {
-  return n?.uuid != null && e.uuid === n.uuid;
+function isSameUuidMessage(message, options) {
+  return options?.uuid != null && message.uuid === options.uuid;
 }
 //@ chunk-tyg7f3ek.js:424032-424301 placement
-function toSdkUserMessage(e, n) {
-  let fileAttachments = isSameUuidMessage(e, n) ? n?.fileAttachments : undefined;
+function toSdkUserMessage(message, options) {
+  let fileAttachments = isSameUuidMessage(message, options) ? options?.fileAttachments : undefined;
   return {
     type: "user",
-    message: e.message,
+    message: message.message,
     session_id: getSessionId(),
     parent_tool_use_id: null,
-    uuid: e.uuid,
-    timestamp: e.timestamp,
+    uuid: message.uuid,
+    timestamp: message.timestamp,
     isReplay: true,
-    isSynthetic: selectableUserMessagesFilter(e),
+    isSynthetic: selectableUserMessagesFilter(message),
     ...(fileAttachments &&
       fileAttachments.length > 0 && {
         file_attachments: fileAttachments,
       }),
-    ...(e.origin && {
-      origin: e.origin,
+    ...(message.origin && {
+      origin: message.origin,
     }),
   };
 }
 //@ chunk-tyg7f3ek.js:424301-424555 placement = _temp7 (0.809)
 function userRowsWithoutInput(opt) {
-  let n = [];
-  for (let r of opt) {
-    if (r.type !== "user" || r.isMeta || bashCommandTagKindOf(r) === "input") continue;
-    let content = r.message.content;
-    n.push({
-      ...r,
+  let rows = [];
+  for (let message of opt) {
+    if (message.type !== "user" || message.isMeta || bashCommandTagKindOf(message) === "input") continue;
+    let content = message.message.content;
+    rows.push({
+      ...message,
       message: {
-        ...r.message,
+        ...message.message,
         content:
           typeof content === "string"
             ? cleanShellOutput(content)
-            : content.map((h) =>
-                h.type === "text"
+            : content.map((block) =>
+                block.type === "text"
                   ? {
-                      ...h,
-                      text: cleanShellOutput(h.text),
+                      ...block,
+                      text: cleanShellOutput(block.text),
                     }
-                  : h,
+                  : block,
               ),
       },
     });
   }
-  return n;
+  return rows;
 }
 //@ chunk-tyg7f3ek.js:424555-424629 placement
 /**
  * 清理 shell 输出用于显示（保留颜色）
  */
-function cleanShellOutput(e) {
+function cleanShellOutput(text) {
   try {
-    return cleanShellOutputForViewers(e, {
+    return cleanShellOutputForViewers(text, {
       keepColors: true,
     });
   } catch (error) {
@@ -964,11 +987,12 @@ function cleanShellOutput(e) {
   }
 }
 //@ chunk-tyg7f3ek.js:424629-424760 placement
-function answeredMergedUuids(initialMessages, userMessageUuids, alsoLeftToThisReRun = []) {
+function answeredMergedUuids(entries, userMessageUuids, alsoLeftToThisReRun = []) {
   try {
-    return userMessageUuids?.flatMap((s) =>
-      mergedMessageUuids(trimTrailingAfterTurn(initialMessages, s), s).filter(
-        (h) => h === s || alsoLeftToThisReRun.includes(h) || isTurnAnswered(initialMessages, h),
+    return userMessageUuids?.flatMap((uuid) =>
+      mergedMessageUuids(trimTrailingAfterTurn(entries, uuid), uuid).filter(
+        (candidate) =>
+          candidate === uuid || alsoLeftToThisReRun.includes(candidate) || isTurnAnswered(entries, candidate),
       ),
     );
   } catch (error) {
@@ -977,10 +1001,10 @@ function answeredMergedUuids(initialMessages, userMessageUuids, alsoLeftToThisRe
   }
 }
 //@ chunk-tyg7f3ek.js:424760-425012 placement
-function stampMergedSends(e, turnId, mergedSendUuids, clientPlatform, contextKey) {
+function stampMergedSends(messages, turnId, mergedSendUuids, clientPlatform, contextKey) {
   if (!mergedSendUuids?.length && clientPlatform === undefined && contextKey === undefined) return;
   try {
-    let found = e.find((S) => S.uuid === turnId);
+    let found = messages.find((message) => message.uuid === turnId);
     if (found?.type !== "user") return;
     if (mergedSendUuids?.length) found.mergedSendUuids = [...mergedSendUuids];
     if (clientPlatform !== undefined) found.clientPlatform = clientPlatform;
@@ -1002,168 +1026,175 @@ function persistTurnRows({
   foldCopies,
   neverParentUuid,
 }) {
-  let R = 0;
-  let w;
-  let P = messages.length;
-  let L = null;
+  let cursor = 0;
+  let parentUuid;
+  let initialLength = messages.length;
+  let preservedTail = null;
   let sinceUuid = new Set();
-  let x = 0;
+  let scannedLength = 0;
   let weakSet = new WeakSet();
-  let Z = [];
-  let re;
-  let Ae;
-  let Ue;
-  function ce() {
-    return Ee("all");
+  let heldCopies = [];
+  let foldTimer;
+  let pendingWrite;
+  let exitDrain;
+  function drainAll() {
+    return settleFoldCopies("all");
   }
-  function nt() {
-    if (Z.length === 0 && Ae === undefined) {
-      let ut = Ue;
-      Ue = undefined;
-      ie(() => ut?.());
+  function releaseDrain() {
+    if (heldCopies.length === 0 && pendingWrite === undefined) {
+      let drain = exitDrain;
+      exitDrain = undefined;
+      safely(() => drain?.());
     }
   }
-  function ie(ut) {
+  function safely(fn) {
     try {
-      return ut();
+      return fn();
     } catch (error) {
       logError(error);
       return;
     }
   }
-  function Se(row, Yt) {
-    ie(() => {
-      if (foldCopies.foldCopyFate(Yt) === "wait") {
-        Z.push({
+  function holdFoldCopy(row, sourceUuid) {
+    safely(() => {
+      if (foldCopies.foldCopyFate(sourceUuid) === "wait") {
+        heldCopies.push({
           row,
-          sourceUuid: Yt,
+          sourceUuid,
         });
-        if (persistSession) Ue ??= registerTranscriptExitDrain(ce);
+        if (persistSession) exitDrain ??= registerTranscriptExitDrain(drainAll);
       }
     });
   }
-  function me(ut) {
-    if (Z.length === 0) return false;
-    let Yt = Z;
-    Z = [];
-    clearTimeout(re);
-    re = undefined;
-    let nn = ie(() => foldCopies.requeueWindowLeftMs());
-    for (let kn of Yt)
+  function settleHeld(mode) {
+    if (heldCopies.length === 0) return false;
+    let batch = heldCopies;
+    heldCopies = [];
+    clearTimeout(foldTimer);
+    foldTimer = undefined;
+    let windowMs = safely(() => foldCopies.requeueWindowLeftMs());
+    for (let held of batch)
       if (
-        ie(() => {
-          if (ut === "compaction") return true;
-          let Mr = foldCopies.foldCopyFate(kn.sourceUuid);
-          if (Mr === "wait" && ut === "decidable") Z.push(kn);
-          else if (Mr === "drop") pn(kn.row.uuid);
-          else foldCopies.foldCopyWritten(kn.sourceUuid);
+        safely(() => {
+          if (mode === "compaction") return true;
+          let fate = foldCopies.foldCopyFate(held.sourceUuid);
+          if (fate === "wait" && mode === "decidable") heldCopies.push(held);
+          else if (fate === "drop") evict(held.row.uuid);
+          else foldCopies.foldCopyWritten(held.sourceUuid);
           return true;
         }) === undefined
       )
-        ie(() => foldCopies.foldCopyWritten(kn.sourceUuid));
-    if (Z.length > 0 && nn !== undefined) {
-      re = setTimeout(Ee, nn + 10);
-      re.unref();
+        safely(() => foldCopies.foldCopyWritten(held.sourceUuid));
+    if (heldCopies.length > 0 && windowMs !== undefined) {
+      foldTimer = setTimeout(settleFoldCopies, windowMs + 10);
+      foldTimer.unref();
     }
-    return Z.length < Yt.length;
+    return heldCopies.length < batch.length;
   }
-  function Me(ut) {
-    let Yt = Ae === undefined ? We(ut) : Ae.then(() => We(ut));
-    let nn = Yt.then(
-      () => {},
-      () => {},
-    ).finally(() => {
-      if (Ae === nn) {
-        Ae = undefined;
-        nt();
-      }
+  function queueWrite(includeAll) {
+    let write =
+      pendingWrite === undefined ? flushNow(includeAll) : pendingWrite.then(() => flushNow(includeAll));
+    let tail = write
+      .then(
+        () => {},
+        () => {},
+      )
+      .finally(() => {
+        if (pendingWrite === tail) {
+          pendingWrite = undefined;
+          releaseDrain();
+        }
+      });
+    pendingWrite = tail;
+    return write;
+  }
+  function settleFoldCopies(mode = "decidable") {
+    safely(() => {
+      if (settleHeld(mode) && persistSession) queueWrite(false).catch(logError);
     });
-    Ae = nn;
-    return Yt;
+    releaseDrain();
+    return pendingWrite ?? Promise.resolve();
   }
-  function Ee(ut = "decidable") {
-    ie(() => {
-      if (me(ut) && persistSession) Me(false).catch(logError);
-    });
-    nt();
-    return Ae ?? Promise.resolve();
-  }
-  async function He(ut, Yt, nn) {
-    let atTranscriptEntry = readAtTranscriptEntry(ut, nn);
+  async function writeRows(rows, parentUuid, cursorProvider) {
+    let atTranscriptEntry = readAtTranscriptEntry(rows, cursorProvider);
     return await inTranscriptCallOrder(() =>
-      recordTranscript(ut, undefined, Yt, nn, storageV5, atTranscriptEntry),
+      recordTranscript(rows, undefined, parentUuid, cursorProvider, storageV5, atTranscriptEntry),
     );
   }
-  function Xe(ut = false) {
-    return Ae === undefined && Z.length === 0 ? We(ut) : Me(ut);
+  function record(includeAll = false) {
+    return pendingWrite === undefined && heldCopies.length === 0
+      ? flushNow(includeAll)
+      : queueWrite(includeAll);
   }
-  function We(ut) {
-    me(ut ? "all" : "decidable");
-    let Yt = R;
-    let nn = transcriptCursorEnd(messages, Math.max(Yt, P), !ut);
-    for (let { row } of Z) {
+  function flushNow(includeAll) {
+    settleHeld(includeAll ? "all" : "decidable");
+    let from = cursor;
+    let to = transcriptCursorEnd(messages, Math.max(from, initialLength), !includeAll);
+    for (let { row } of heldCopies) {
       let index = messages.lastIndexOf(row);
       if (index !== -1) {
-        nn = Math.min(nn, index);
+        to = Math.min(to, index);
         break;
       }
     }
-    let kn = $r(Yt, Dr(Yt, nn));
-    if (!ut) nn = kn;
-    if (Yt >= nn) {
-      lookMcpTaskEndings(messages, nn)?.(true);
+    let heldLimit = keepLoaderRows(from, keepToolPairsTogether(from, to));
+    if (!includeAll) to = heldLimit;
+    if (from >= to) {
+      lookMcpTaskEndings(messages, to)?.(true);
       return Promise.resolve(null);
     }
-    let En = Yt === 0 && nn === messages.length ? messages : messages.slice(Yt, nn);
-    let Mr = neverParentUuid === undefined ? En : En.filter((Fr) => Fr.uuid !== neverParentUuid);
-    R = nn;
-    let Pn = w;
-    w = Lt(Mr) ?? w;
-    let oo = lookMcpTaskEndings(messages, nn);
-    let No = He(Mr, Pn, St);
-    return oo === undefined
-      ? No
-      : No.then(
-          (Fr) => {
-            oo(true);
-            return Fr;
+    let slice = from === 0 && to === messages.length ? messages : messages.slice(from, to);
+    let filtered =
+      neverParentUuid === undefined ? slice : slice.filter((row) => row.uuid !== neverParentUuid);
+    cursor = to;
+    let previousParent = parentUuid;
+    parentUuid = lastChainUuid(filtered) ?? parentUuid;
+    let finishTaskEndings = lookMcpTaskEndings(messages, to);
+    let writePromise = writeRows(filtered, previousParent, cursorProvider);
+    return finishTaskEndings === undefined
+      ? writePromise
+      : writePromise.then(
+          (result) => {
+            finishTaskEndings(true);
+            return result;
           },
           (error) => {
-            oo(false);
+            finishTaskEndings(false);
             throw error;
           },
         );
   }
-  function St() {
-    collectReplIds(messages.slice(x), sinceUuid);
-    x = messages.length;
+  function cursorProvider() {
+    collectReplIds(messages.slice(scannedLength), sinceUuid);
+    scannedLength = messages.length;
     return sinceUuid;
   }
-  function wt() {
+  function resetScan() {
     sinceUuid = new Set();
-    x = 0;
+    scannedLength = 0;
   }
-  function Lt(ut) {
-    return ut.findLast(
-      (Yt) =>
-        isLoggableMessage(Yt) &&
-        isChainParticipant(Yt) &&
-        !isReorderedRow(Yt.uuid) &&
-        Yt.uuid !== neverParentUuid,
+  function lastChainUuid(rows) {
+    return rows.findLast(
+      (row) =>
+        isLoggableMessage(row) &&
+        isChainParticipant(row) &&
+        !isReorderedRow(row.uuid) &&
+        row.uuid !== neverParentUuid,
     )?.uuid;
   }
-  function pn(uuid) {
+  function evict(uuid) {
     let lastIndex = messages.findLastIndex((message) => message.uuid === uuid);
     if (lastIndex !== -1) {
-      let kn = messages[lastIndex];
+      let removed = messages[lastIndex];
       messages.splice(lastIndex, 1);
-      wt();
-      if (R > lastIndex) {
-        R--;
-        if (w === uuid && !hasSessionMirror()) w = Lt(messages.slice(0, lastIndex)) ?? w;
+      resetScan();
+      if (cursor > lastIndex) {
+        cursor--;
+        if (parentUuid === uuid && !hasSessionMirror())
+          parentUuid = lastChainUuid(messages.slice(0, lastIndex)) ?? parentUuid;
         if (persistSession) {
           logEvent("tengu_tombstone_persisted_removal", {
-            message_type: fromEnum(kn.type),
+            message_type: fromEnum(removed.type),
           });
           let sessionId = getSessionId();
           inTranscriptCallOrder(async () => {
@@ -1171,24 +1202,24 @@ function persistTurnRows({
           });
         }
       }
-      if (P > lastIndex) P--;
+      if (initialLength > lastIndex) initialLength--;
     }
-    let lastIndex_2 = conversation.findLastIndex((kn) => kn.uuid === uuid);
+    let lastIndex_2 = conversation.findLastIndex((row) => row.uuid === uuid);
     if (lastIndex_2 !== -1) conversation.splice(lastIndex_2, 1);
   }
-  function _n(ut) {
-    let Yt = ut;
+  function dropPreservedRowsNotInConversation(boundary) {
+    let next = boundary;
     try {
-      let preservedMessages = ut.compactMetadata.preservedMessages;
-      if (!preservedMessages) return ut;
-      let kn = new Map(conversation.map((Fr) => [Fr.uuid, Fr]));
-      let filtered = preservedMessages.uuids.filter((uuid) => kn.has(uuid));
-      if (filtered.length === preservedMessages.uuids.length) return ut;
-      let { preservedSegment, ...Pn } = ut.compactMetadata;
-      Yt = {
-        ...ut,
+      let preservedMessages = boundary.compactMetadata.preservedMessages;
+      if (!preservedMessages) return boundary;
+      let byUuid = new Map(conversation.map((row) => [row.uuid, row]));
+      let filtered = preservedMessages.uuids.filter((uuid) => byUuid.has(uuid));
+      if (filtered.length === preservedMessages.uuids.length) return boundary;
+      let { preservedSegment, ...rest } = boundary.compactMetadata;
+      next = {
+        ...boundary,
         compactMetadata: {
-          ...Pn,
+          ...rest,
           ...(preservedSegment &&
             filtered.length > 0 && {
               preservedSegment: {
@@ -1203,145 +1234,147 @@ function persistTurnRows({
           },
         },
       };
-      let oo = new Set();
-      let No = new Set();
-      for (let Fr of filtered) {
-        let Xo = kn.get(Fr);
-        if (Xo?.type !== "assistant" && Xo?.type !== "user") continue;
-        let content = Xo.message?.content;
-        for (let _i of Array.isArray(content) ? content : [])
-          if (_i?.type === "tool_use") oo.add(_i.id);
-          else if (_i?.type === "tool_result") No.add(_i.tool_use_id);
+      let toolUseIds = new Set();
+      let toolResultIds = new Set();
+      for (let uuid of filtered) {
+        let row = byUuid.get(uuid);
+        if (row?.type !== "assistant" && row?.type !== "user") continue;
+        let content = row.message?.content;
+        for (let block of Array.isArray(content) ? content : [])
+          if (block?.type === "tool_use") toolUseIds.add(block.id);
+          else if (block?.type === "tool_result") toolResultIds.add(block.tool_use_id);
       }
       logEvent("tengu_compact_preserved_not_in_conversation", {
         listed: preservedMessages.uuids.length,
         dropped: preservedMessages.uuids.length - filtered.length,
-        tailDropped: !kn.has(preservedMessages.uuids.at(-1)),
+        tailDropped: !byUuid.has(preservedMessages.uuids.at(-1)),
         unpairedToolBlocksRemaining:
-          count([...oo], (Fr) => !No.has(Fr)) + count([...No], (Fr) => !oo.has(Fr)),
+          count([...toolUseIds], (id) => !toolResultIds.has(id)) +
+          count([...toolResultIds], (id) => !toolUseIds.has(id)),
       });
     } catch (error) {
       logError(error);
     }
-    return Yt;
+    return next;
   }
-  async function Mn(ut) {
-    me("compaction");
-    await Ae;
-    let Yt =
-      ut.compactMetadata.preservedMessages?.uuids.at(-1) ?? ut.compactMetadata.preservedSegment?.tailUuid;
-    if (!Yt) return;
-    let lastIndex = conversation.findLastIndex((kn) => kn.uuid === Yt);
+  async function flushBeforeCompactBoundary(boundary) {
+    settleHeld("compaction");
+    await pendingWrite;
+    let tailUuid =
+      boundary.compactMetadata.preservedMessages?.uuids.at(-1) ??
+      boundary.compactMetadata.preservedSegment?.tailUuid;
+    if (!tailUuid) return;
+    let lastIndex = conversation.findLastIndex((row) => row.uuid === tailUuid);
     if (lastIndex === -1) return;
-    await He(conversation.slice(0, lastIndex + 1), undefined, undefined);
-    R = 0;
-    w = undefined;
+    await writeRows(conversation.slice(0, lastIndex + 1), undefined, undefined);
+    cursor = 0;
+    parentUuid = undefined;
   }
-  function jn(ut) {
-    let preservedMessages = ut.compactMetadata.preservedMessages;
+  function applyCompactBoundary(boundary) {
+    let preservedMessages = boundary.compactMetadata.preservedMessages;
     let mapped = (preservedMessages?.allUuids ?? preservedMessages?.uuids ?? [])
-      .map((Mr) => conversation.find((Pn) => Pn.uuid === Mr))
-      .filter((Mr) => Mr !== undefined)
+      .map((uuid) => conversation.find((row) => row.uuid === uuid))
+      .filter((row) => row !== undefined)
       .map(getTokenCountFromUsage_4);
-    L =
+    preservedTail =
       preservedMessages && mapped.length > 0
         ? {
             preserved: mapped,
             anchorUuid: preservedMessages.anchorUuid,
           }
         : null;
-    let kn = conversation.length - 1;
-    if (kn > 0) conversation.splice(0, kn);
-    Jn(ut.uuid);
-    let En = messages.length - 1;
-    if (En > 0) {
-      messages.splice(0, En);
-      wt();
-      R = messages.length;
-      P = messages.length;
+    let conversationLast = conversation.length - 1;
+    if (conversationLast > 0) conversation.splice(0, conversationLast);
+    settlePreservedTail(boundary.uuid);
+    let messagesLast = messages.length - 1;
+    if (messagesLast > 0) {
+      messages.splice(0, messagesLast);
+      resetScan();
+      cursor = messages.length;
+      initialLength = messages.length;
     }
   }
-  function Jn(uuid) {
-    if (L !== null && L.anchorUuid === uuid) {
-      conversation.push(...L.preserved);
-      L = null;
+  function settlePreservedTail(uuid) {
+    if (preservedTail !== null && preservedTail.anchorUuid === uuid) {
+      conversation.push(...preservedTail.preserved);
+      preservedTail = null;
     }
   }
-  function ze() {
-    if (L === null) return;
+  function flushUnanchoredTail() {
+    if (preservedTail === null) return;
     logEvent("tengu_compact_preserved_unanchored", {
-      preservedCount: L.preserved.length,
+      preservedCount: preservedTail.preserved.length,
     });
-    conversation.push(...L.preserved);
-    L = null;
+    conversation.push(...preservedTail.preserved);
+    preservedTail = null;
   }
-  function Dr(ut, Yt) {
-    let nn = -1;
-    for (let kn = ut; kn < Yt; kn++) {
-      let En = messages[kn];
-      if (weakSet.has(En)) {
-        if (nn === -1) nn = kn;
-      } else if (isCompactBoundaryMessage(En)) nn = -1;
-      else if (En.type === "assistant" || En.type === "user")
-        if (nn === -1 || !isToolResultMessage(En)) nn = -1;
+  function keepToolPairsTogether(from, to) {
+    let pendingResultAt = -1;
+    for (let index = from; index < to; index++) {
+      let row = messages[index];
+      if (weakSet.has(row)) {
+        if (pendingResultAt === -1) pendingResultAt = index;
+      } else if (isCompactBoundaryMessage(row)) pendingResultAt = -1;
+      else if (row.type === "assistant" || row.type === "user")
+        if (pendingResultAt === -1 || !isToolResultMessage(row)) pendingResultAt = -1;
         else {
-          messages.splice(kn, 1);
-          messages.splice(nn, 0, En);
-          wt();
-          nn++;
+          messages.splice(index, 1);
+          messages.splice(pendingResultAt, 0, row);
+          resetScan();
+          pendingResultAt++;
         }
     }
-    return nn === -1 ? Yt : nn;
+    return pendingResultAt === -1 ? to : pendingResultAt;
   }
-  function $r(ut, Yt) {
-    if (!holdsLoadersRows) return Yt;
-    let nn = Yt;
-    let kn = false;
-    let En = false;
-    for (let j = Yt - 1; j >= ut; j--) {
-      let Pn = messages[j];
-      let oo = isStopInterruptionRow(Pn);
+  function keepLoaderRows(from, to) {
+    if (!holdsLoadersRows) return to;
+    let limit = to;
+    let sawInterruption = false;
+    let sawMarker = false;
+    for (let j = to - 1; j >= from; j--) {
+      let row = messages[j];
+      let isStopRow = isStopInterruptionRow(row);
       if (
-        (Pn.type === "assistant" && (Pn.isApiErrorMessage !== true || j < P)) ||
-        isCompactBoundaryMessage(Pn) ||
-        (Pn.type === "user" &&
-          (Pn.isMeta !== true || (Pn.promptSource !== undefined && !isInterruptMarkerRow(Pn))) &&
-          !oo &&
-          !weakSet.has(Pn) &&
-          !isTurnCompanion(Pn) &&
-          !isQueueTranscriptOnlyUserMessage(Pn) &&
-          (Pn.promptSource !== undefined || localCommandTagKindOf(Pn) === undefined))
+        (row.type === "assistant" && (row.isApiErrorMessage !== true || j < initialLength)) ||
+        isCompactBoundaryMessage(row) ||
+        (row.type === "user" &&
+          (row.isMeta !== true || (row.promptSource !== undefined && !isInterruptMarkerRow(row))) &&
+          !isStopRow &&
+          !weakSet.has(row) &&
+          !isTurnCompanion(row) &&
+          !isQueueTranscriptOnlyUserMessage(row) &&
+          (row.promptSource !== undefined || localCommandTagKindOf(row) === undefined))
       )
         break;
-      kn ||= oo;
-      En ||= isInterruptMarkerRow(Pn);
-      nn = j;
+      sawInterruption ||= isStopRow;
+      sawMarker ||= isInterruptMarkerRow(row);
+      limit = j;
     }
-    return kn || En ? nn : Yt;
+    return sawInterruption || sawMarker ? limit : to;
   }
-  function $n(ut) {
-    for (let Yt of ut) weakSet.add(Yt);
-    messages.push(...ut);
+  function appendHostRows(rows) {
+    for (let row of rows) weakSet.add(row);
+    messages.push(...rows);
   }
   return {
-    record: Xe,
-    appendHostRows: $n,
-    isHostRow: (ut) => weakSet.has(ut),
-    evict: pn,
-    holdFoldCopy: Se,
-    settleFoldCopies: Ee,
-    dropPreservedRowsNotInConversation: _n,
-    flushBeforeCompactBoundary: Mn,
-    applyCompactBoundary: jn,
-    settlePreservedTail: Jn,
-    flushUnanchoredPreservedTail: ze,
+    record,
+    appendHostRows,
+    isHostRow: (row) => weakSet.has(row),
+    evict,
+    holdFoldCopy,
+    settleFoldCopies,
+    dropPreservedRowsNotInConversation,
+    flushBeforeCompactBoundary,
+    applyCompactBoundary,
+    settlePreservedTail,
+    flushUnanchoredPreservedTail: flushUnanchoredTail,
   };
 }
 //@ chunk-tyg7f3ek.js:430132-430390 placement
-function takeShownAsStoredMark(e, n) {
+function takeShownAsStoredMark(message, askMark) {
   try {
-    delete e.shownAsStoredIn;
-    return e.isVirtual === true || e.handedOff === true ? undefined : n?.();
+    delete message.shownAsStoredIn;
+    return message.isVirtual === true || message.handedOff === true ? undefined : askMark?.();
   } catch (error) {
     logError(
       Error(
@@ -1355,9 +1388,9 @@ function takeShownAsStoredMark(e, n) {
   }
 }
 //@ chunk-tyg7f3ek.js:430390-430560 placement
-function markShownAsStored(e, shownAsStoredIn, hookOutputApplied) {
+function markShownAsStored(message, shownAsStoredIn, hookOutputApplied) {
   try {
-    if (!hookOutputApplied) e.shownAsStoredIn = shownAsStoredIn;
+    if (!hookOutputApplied) message.shownAsStoredIn = shownAsStoredIn;
   } catch (error) {
     logError(
       Error("could not mark a reply as shown as stored: a later worker will not send this reply again", {
@@ -1372,19 +1405,19 @@ function markShownAsStored(e, shownAsStoredIn, hookOutputApplied) {
  */
 var TIMING_SAMPLE_RATE = 0.03125;
 //@ chunk-tyg7f3ek.js:430575-430877 placement
-function sampleQueueLatency(e) {
+function sampleQueueLatency(timing) {
   try {
     if (
       !isVsCodeTopSession() ||
       Math.random() >= TIMING_SAMPLE_RATE ||
-      e.enqueuedWallMs === undefined ||
-      e.previousTurnEndedWallMs === undefined ||
-      e.enqueuedWallMs < e.previousTurnEndedWallMs
+      timing.enqueuedWallMs === undefined ||
+      timing.previousTurnEndedWallMs === undefined ||
+      timing.enqueuedWallMs < timing.previousTurnEndedWallMs
     )
       return;
     logEvent("tengu_sdk_time_to_init", {
-      waited_ms: Math.max(0, e.startWallMs - e.enqueuedWallMs),
-      duration_ms: e.startToInitMs,
+      waited_ms: Math.max(0, timing.startWallMs - timing.enqueuedWallMs),
+      duration_ms: timing.startToInitMs,
       sample_rate: TIMING_SAMPLE_RATE,
     });
   } catch (error) {
@@ -1398,25 +1431,25 @@ function sampleQueueLatency(e) {
 var DEFAULT_POLL_INTERVAL_MS = 7000;
 var DEFAULT_LOOKAHEAD_MS = 3000;
 //@ chunk-tyg7f3ek.js:430897-431139 placement
-async function runWithDeadline(e, lookMs, signal) {
-  let s = Error("aborted");
+async function runWithDeadline(run, lookMs, signal) {
+  let abortMarker = Error("aborted");
   try {
-    let h = await withDeadline(
-      raceWithAbortSignal(Promise.resolve().then(e), signal, () => s).then((value) => ({
+    let outcome = await withDeadline(
+      raceWithAbortSignal(Promise.resolve().then(run), signal, () => abortMarker).then((value) => ({
         value,
       })),
       lookMs,
     );
-    return h
+    return outcome
       ? {
           how: "done",
-          value: h.value,
+          value: outcome.value,
         }
       : {
           how: "late",
         };
   } catch (error) {
-    return error === s
+    return error === abortMarker
       ? {
           how: "aborted",
         }
@@ -1430,112 +1463,125 @@ async function runWithDeadline(e, lookMs, signal) {
 /**
  * 等待设备桥（device bridge）上的指定工具出现：轮询 tools/list，可在池中替换为新的工具定义。
  */
-async function waitForDeviceBridgeTool(e, n, r, s, h = {}) {
-  let connectedGraceMs = h.pollMs ?? DEFAULT_POLL_INTERVAL_MS;
-  let lookMs = h.lookMs ?? DEFAULT_LOOKAHEAD_MS;
-  let { signal } = r.abortController;
+async function waitForDeviceBridgeTool(toolName, tools, toolUseContext, owner, settings = {}) {
+  let connectedGraceMs = settings.pollMs ?? DEFAULT_POLL_INTERVAL_MS;
+  let lookMs = settings.lookMs ?? DEFAULT_LOOKAHEAD_MS;
+  let { signal } = toolUseContext.abortController;
   let now = Date.now();
-  let P = await waitForMcpToolServer(e, n, r, {
+  let serverWait = await waitForMcpToolServer(toolName, tools, toolUseContext, {
     connectedGraceMs,
   });
-  function L(x, G = {}) {
-    let Z = Date.now() - now;
-    logForDebugging(`waitForDeviceBridgeTool: the wait for "${e}" ended as ${x} after ${Z}ms`);
+  function report(outcome, extra = {}) {
+    let waitedMs = Date.now() - now;
+    logForDebugging(
+      `waitForDeviceBridgeTool: the wait for "${toolName}" ended as ${outcome} after ${waitedMs}ms`,
+    );
     return {
-      ...P,
-      ...G,
-      waitedMs: Z,
+      ...serverWait,
+      ...extra,
+      waitedMs,
       aborted: signal.aborted,
-      bridgeEnd: x,
+      bridgeEnd: outcome,
     };
   }
-  let q = () =>
-    L("aborted", {
+  let abortedResult = () =>
+    report("aborted", {
       tool: undefined,
-      tools: n,
+      tools,
     });
-  if (P.aborted || signal.aborted) return q();
-  if (P.tool) return L("in_pool");
-  if (P.serverState !== "connected") return L(P.serverState === "unknown" ? "threw" : "not_connected");
+  if (serverWait.aborted || signal.aborted) return abortedResult();
+  if (serverWait.tool) return report("in_pool");
+  if (serverWait.serverState !== "connected")
+    return report(serverWait.serverState === "unknown" ? "threw" : "not_connected");
   try {
-    let x = aliasOrSelf(e, r.options.toolAliases);
-    let G = () => findLongestPrefixClients(x, currentMcpClients(r));
-    let Z = (Xe) =>
-      L(Xe, {
-        serverState: getMcpServerBaseUrlFromToolName(G()),
+    let resolvedName = aliasOrSelf(toolName, toolUseContext.options.toolAliases);
+    let clients = () => findLongestPrefixClients(resolvedName, currentMcpClients(toolUseContext));
+    let reportState = (outcome) =>
+      report(outcome, {
+        serverState: getMcpServerBaseUrlFromToolName(clients()),
       });
-    let found = G().find((Xe) => Xe.type === "connected");
-    if (!found) return Z("not_connected");
-    let Ae = await runWithDeadline(
+    let connection = clients().find((client) => client.type === "connected");
+    if (!connection) return reportState("not_connected");
+    let listOutcome = await runWithDeadline(
       () =>
-        listMcpTools(found, {
+        listMcpTools(connection, {
           signal,
           timeout: lookMs,
         }),
       lookMs,
       signal,
     );
-    if (Ae.how === "aborted" || signal.aborted) return q();
-    if (Ae.how === "late") return Z("look_timed_out");
-    if (Ae.how === "failed") {
+    if (listOutcome.how === "aborted" || signal.aborted) return abortedResult();
+    if (listOutcome.how === "late") return reportState("look_timed_out");
+    if (listOutcome.how === "failed") {
       logForDebugging(
-        `waitForDeviceBridgeTool: tools/list on the device bridge failed: ${describeConnectError(Ae.error, found.config)}`,
+        `waitForDeviceBridgeTool: tools/list on the device bridge failed: ${describeConnectError(listOutcome.error, connection.config)}`,
         {
           level: "warn",
         },
       );
-      return Z("look_failed");
+      return reportState("look_failed");
     }
-    let tools = Ae.value.tools;
-    let ce =
-      Array.isArray(tools) &&
-      tools.some(
+    let tools_2 = listOutcome.value.tools;
+    let hasTool =
+      Array.isArray(tools_2) &&
+      tools_2.some(
         (tool) =>
           typeof tool === "object" &&
           tool !== null &&
           "name" in tool &&
           typeof tool.name === "string" &&
-          buildMcpToolName(found.name, tool.name) === x,
+          buildMcpToolName(connection.name, tool.name) === resolvedName,
       );
-    let nt = officeBridgeListingState(Ae.value);
-    let ie = nt === "stub" ? "stub" : nt === "live" ? "live_without_tool" : "unmarked_without_tool";
-    if (!ce && (nt === "stub" || !Ae.value.nextCursor)) return Z(ie);
-    let Se;
-    let me = await runWithDeadline(
+    let listingState = officeBridgeListingState(listOutcome.value);
+    let missingToolOutcome =
+      listingState === "stub"
+        ? "stub"
+        : listingState === "live"
+          ? "live_without_tool"
+          : "unmarked_without_tool";
+    if (!hasTool && (listingState === "stub" || !listOutcome.value.nextCursor))
+      return reportState(missingToolOutcome);
+    let swapResult;
+    let refreshOutcome = await runWithDeadline(
       () =>
         refreshMcpServerTools(
-          found,
-          (Xe, We) => {
-            Se = swapMcpServerTools(Xe, We, found.config);
+          connection,
+          (previousTools, nextTools) => {
+            swapResult = swapMcpServerTools(previousTools, nextTools, connection.config);
           },
-          s,
+          owner,
         ),
       lookMs,
       signal,
     );
-    if (me.how === "aborted" || signal.aborted) return q();
-    let Me = r.options.refreshTools?.() ?? n;
-    let toolByName = findToolByName(Me, e, r.options.toolAliases);
+    if (refreshOutcome.how === "aborted" || signal.aborted) return abortedResult();
+    let refreshedTools = toolUseContext.options.refreshTools?.() ?? tools;
+    let toolByName = findToolByName(refreshedTools, toolName, toolUseContext.options.toolAliases);
     if (toolByName)
-      return L("after_look", {
+      return report("after_look", {
         tool: toolByName,
-        tools: Me,
+        tools: refreshedTools,
       });
     logForDebugging(
-      `waitForDeviceBridgeTool: refreshing the device bridge's tools did not bring "${e}" (${me.how === "failed" ? describeConnectError(me.error, found.config) : me.how === "done" ? `${me.value.status}, ${Se === undefined ? "nothing swapped" : Se ? "swapped in" : "the swap was refused"}` : "not in time"})`,
+      `waitForDeviceBridgeTool: refreshing the device bridge's tools did not bring "${toolName}" (${refreshOutcome.how === "failed" ? describeConnectError(refreshOutcome.error, connection.config) : refreshOutcome.how === "done" ? `${refreshOutcome.value.status}, ${swapResult === undefined ? "nothing swapped" : swapResult ? "swapped in" : "the swap was refused"}` : "not in time"})`,
       {
         level: "warn",
       },
     );
-    let newTools = me.how === "done" && me.value.status === "refreshed" ? me.value.newTools : undefined;
-    if (ce || (newTools && findToolByName(newTools, e, r.options.toolAliases))) return Z("listed_not_pooled");
-    if (newTools) return Z(ie);
-    return Z(me.how === "late" ? "look_timed_out" : "look_failed");
+    let newTools =
+      refreshOutcome.how === "done" && refreshOutcome.value.status === "refreshed"
+        ? refreshOutcome.value.newTools
+        : undefined;
+    if (hasTool || (newTools && findToolByName(newTools, toolName, toolUseContext.options.toolAliases)))
+      return reportState("listed_not_pooled");
+    if (newTools) return reportState(missingToolOutcome);
+    return reportState(refreshOutcome.how === "late" ? "look_timed_out" : "look_failed");
   } catch (error) {
     logError(error);
-    return L("threw", {
+    return report("threw", {
       tool: undefined,
-      tools: n,
+      tools,
       serverState: "unknown",
     });
   }
@@ -1550,34 +1596,38 @@ function resolveDeferredToolUse({
   turnStartTools,
   toolAliases,
 }) {
-  let R = (G) =>
-    toolUseID !== undefined && G.type === "user" && Array.isArray(G.message?.content)
-      ? G.message.content.find((Z) => Z?.type === "tool_result" && Z.tool_use_id === toolUseID)
+  let findToolResult = (message) =>
+    toolUseID !== undefined && message.type === "user" && Array.isArray(message.message?.content)
+      ? message.message.content.find(
+          (block) => block?.type === "tool_result" && block.tool_use_id === toolUseID,
+        )
       : undefined;
-  let last = messages.findLast((message) => R(message) !== undefined);
-  let P = last && R(last);
-  let found = NON_EXECUTION_KINDS.find((G) => last?.type === "user" && G === last.toolDenialKind);
-  let q =
+  let message = messages.findLast((message) => findToolResult(message) !== undefined);
+  let lastToolResult = message && findToolResult(message);
+  let found = NON_EXECUTION_KINDS.find((kind) => message?.type === "user" && kind === message.toolDenialKind);
+  let toolUseBlock =
     toolUseID !== undefined && Array.isArray(assistantMessage?.message?.content)
-      ? assistantMessage.message.content.find((G) => G?.type === "tool_use" && G.id === toolUseID)
+      ? assistantMessage.message.content.find((block) => block?.type === "tool_use" && block.id === toolUseID)
       : undefined;
-  let x = q && findTool(outcome.toolWait?.tools ?? turnStartTools, q.name, toolAliases);
+  let tool =
+    toolUseBlock && findTool(outcome.toolWait?.tools ?? turnStartTools, toolUseBlock.name, toolAliases);
   return {
     answer_behavior_kind: behavior === "allow" || behavior === "deny" ? behavior : "other",
     answer_outcome_kind: outcome.reExecuted ? "applied" : outcome.reason,
     call_result_kind:
-      P?.type !== "tool_result"
+      lastToolResult?.type !== "tool_result"
         ? "none"
-        : (found ?? (!P.is_error ? "ok" : outcome.callStarted ? "error" : "error-not-started-here")),
+        : (found ??
+          (!lastToolResult.is_error ? "ok" : outcome.callStarted ? "error" : "error-not-started-here")),
     call_concurrency_kind:
-      q === undefined
+      toolUseBlock === undefined
         ? "no_call"
-        : x === undefined
+        : tool === undefined
           ? "tool_not_loaded"
           : (() => {
                 try {
-                  let G = x.inputSchema.safeParse(q.input);
-                  return G.success && x.isConcurrencySafe(G.data);
+                  let parsedInput = tool.inputSchema.safeParse(toolUseBlock.input);
+                  return parsedInput.success && tool.isConcurrencySafe(parsedInput.data);
                 } catch {
                   return false;
                 }
@@ -1585,7 +1635,8 @@ function resolveDeferredToolUse({
             ? "safe"
             : "unsafe",
     call_is_for_device_bridge:
-      typeof q?.name === "string" && mcpInfoFromString(q.name)?.serverName === REMOTE_DEVICES,
+      typeof toolUseBlock?.name === "string" &&
+      mcpInfoFromString(toolUseBlock.name)?.serverName === REMOTE_DEVICES,
     waited_for_tool_ms: outcome.toolWait?.waitedMs ?? 0,
     device_bridge_wait_end_kind: outcome.toolWait?.bridgeEnd ?? "did_not_wait_for_computer",
     note_stored: outcome.noteStored === true,
@@ -1598,14 +1649,14 @@ function countAttachmentRowsAtTail(mutableMessages) {
     return count(
       mutableMessages.slice(
         mutableMessages.findLastIndex(
-          (n) =>
-            n.type === "assistant" ||
-            (n.type === "user" &&
-              Array.isArray(n.message.content) &&
-              n.message.content[0]?.type === "tool_result"),
+          (message) =>
+            message.type === "assistant" ||
+            (message.type === "user" &&
+              Array.isArray(message.message.content) &&
+              message.message.content[0]?.type === "tool_result"),
         ) + 1,
       ),
-      (n) => n.type === "attachment" && attachmentToMessages(n).messages.length > 0,
+      (message) => message.type === "attachment" && attachmentToMessages(message).messages.length > 0,
     );
   } catch (error) {
     logError(
@@ -1647,12 +1698,12 @@ async function* runHeadlessTurn({
   onHandedOffCallsRan,
   onOrphanedAnswerSettled,
 }) {
-  let ce = mutableMessages.length;
-  let nt = () =>
+  let turnStartIndex = mutableMessages.length;
+  let hasDeferredResult = () =>
     deferredToolUse !== undefined &&
     (orphanedPermission?.denyIsRefusal === true || isPermissionCardHoldEnabled()) &&
-    hasToolResultAfter(mutableMessages, ce, deferredToolUse.toolUseID);
-  let ie = () =>
+    hasToolResultAfter(mutableMessages, turnStartIndex, deferredToolUse.toolUseID);
+  let buildOkResult = () =>
     buildResultMessage({
       startedAt: earlyResult.startedAt,
       common: {
@@ -1681,7 +1732,7 @@ async function* runHeadlessTurn({
         ...earlyResult.resumeReasonStamp,
       },
     });
-  let Se = () =>
+  let buildStoppedResult = () =>
     buildResultMessage({
       startedAt: earlyResult.startedAt,
       common: {
@@ -1716,8 +1767,8 @@ async function* runHeadlessTurn({
   if (orphanedPermission) {
     checkTurnIdsConsistent([orphanedPermission]);
     clearTurnTraceContexts();
-    let Ee = lastUserAfterAssistant(mutableMessages);
-    let He = yield* handleOrphanedPermission(
+    let lastUserMessage = lastUserAfterAssistant(mutableMessages);
+    let permissionOutcome = yield* handleOrphanedPermission(
       orphanedPermission,
       tools,
       canUseTool,
@@ -1726,11 +1777,11 @@ async function* runHeadlessTurn({
       waitForDeviceBridgeTool,
       answers,
     );
-    if (!He.reExecuted) dropCcrTurnId();
+    if (!permissionOutcome.reExecuted) dropCcrTurnId();
     try {
       let deferredToolUse = resolveDeferredToolUse({
         behavior: orphanedPermission.permissionResult?.behavior,
-        outcome: He,
+        outcome: permissionOutcome,
         toolUseID: orphanedPermission.permissionResult?.toolUseID,
         assistantMessage: orphanedPermission.assistantMessage,
         messages: mutableMessages,
@@ -1742,16 +1793,16 @@ async function* runHeadlessTurn({
     } catch (error) {
       logError(error);
     }
-    let Xe = {
-      waited_ms: He.toolWait?.waitedMs ?? 0,
-      server_state: fromEnumOpt(He.toolWait?.serverState),
-      server_state_at_start: fromEnumOpt(He.toolWait?.initialServerState),
-      device_bridge_wait_end: fromEnumOpt(He.toolWait?.bridgeEnd),
+    let waitFields = {
+      waited_ms: permissionOutcome.toolWait?.waitedMs ?? 0,
+      server_state: fromEnumOpt(permissionOutcome.toolWait?.serverState),
+      server_state_at_start: fromEnumOpt(permissionOutcome.toolWait?.initialServerState),
+      device_bridge_wait_end: fromEnumOpt(permissionOutcome.toolWait?.bridgeEnd),
       resumes_interrupted_turn: orphanedPermission.resumesInterruptedTurn === true,
     };
     let behavior = orphanedPermission.permissionResult?.behavior;
-    let missingTool = He.reExecuted ? undefined : He.missingTool;
-    let wt = {
+    let missingTool = permissionOutcome.reExecuted ? undefined : permissionOutcome.missingTool;
+    let departureFields = {
       answer_behavior: fromEnum(behavior === "allow" || behavior === "deny" ? behavior : "other"),
       tool_departure_cause: fromEnumOpt(missingTool?.departureCause),
       server_transport: fromEnumOpt(missingTool?.serverTransport),
@@ -1759,35 +1810,44 @@ async function* runHeadlessTurn({
       server_tools_list_failed: missingTool?.serverToolsListFailed,
       server_tools_in_pool: fromEnumOpt(missingTool?.serverToolsInPool),
     };
-    if (He.reExecuted)
+    if (permissionOutcome.reExecuted)
       logEvent("tengu_orphaned_permission_applied", {
-        found_on_reread: He.toolWait !== undefined,
-        ...Xe,
+        found_on_reread: permissionOutcome.toolWait !== undefined,
+        ...waitFields,
       });
-    if (!He.reExecuted && He.reason === "closed_unrun")
+    if (!permissionOutcome.reExecuted && permissionOutcome.reason === "closed_unrun")
       logEvent("tengu_orphaned_permission_closed_unrun", {
-        ...Xe,
-        ...wt,
+        ...waitFields,
+        ...departureFields,
       });
-    if (!He.reExecuted && He.reason !== "closed_unrun" && !hasPrompt && (!deferredToolUse || nt())) {
-      if (He.reason === "aborted") return false;
-      let Lt = {
-        reason: fromEnum(He.reason),
-        ...Xe,
-        ...wt,
+    if (
+      !permissionOutcome.reExecuted &&
+      permissionOutcome.reason !== "closed_unrun" &&
+      !hasPrompt &&
+      (!deferredToolUse || hasDeferredResult())
+    ) {
+      if (permissionOutcome.reason === "aborted") return false;
+      let unappliedFields = {
+        reason: fromEnum(permissionOutcome.reason),
+        ...waitFields,
+        ...departureFields,
       };
-      if (orphanedPermission.resumesInterruptedTurn && !orphanedPermission.siblings?.length && Ee) {
+      if (
+        orphanedPermission.resumesInterruptedTurn &&
+        !orphanedPermission.siblings?.length &&
+        lastUserMessage
+      ) {
         logForDebugging(
           "Orphaned permission could not be applied; it stood in for the interrupted turn it was parked on, so the turn proceeds to the model on the interrupted prompt",
         );
-        logEvent("tengu_orphaned_permission_unapplied_turn_resumed", Lt);
+        logEvent("tengu_orphaned_permission_unapplied_turn_resumed", unappliedFields);
         return false;
       }
       logForDebugging(
         "Orphaned permission could not be applied, or left a served call unsettled, and the turn has no prompt: ending the turn without a model call",
       );
-      logEvent("tengu_orphaned_permission_unapplied_turn_end", Lt);
-      yield ie();
+      logEvent("tengu_orphaned_permission_unapplied_turn_end", unappliedFields);
+      yield buildOkResult();
       return true;
     }
   }
@@ -1801,9 +1861,9 @@ async function* runHeadlessTurn({
       processUserInputContext.storageV5,
     );
     let attachmentRowsAhead = countAttachmentRowsAtTail(mutableMessages);
-    let Xe;
+    let handoffOutcome;
     try {
-      Xe = yield* handleHandedOffTurn(
+      handoffOutcome = yield* handleHandedOffTurn(
         handedOffTurn,
         tools,
         mutableMessages,
@@ -1811,13 +1871,15 @@ async function* runHeadlessTurn({
         canUseTool,
         beginTranscriptFlush,
         handoffRelay,
-        async (We) => {
+        async (stagedFiles) => {
           try {
             await taskListCatchUp.beforeRun();
           } finally {
             if (awaitStagedFiles)
-              await measurePhase("resume_other", "resume_staged_files_wait", () => awaitStagedFiles(We));
-            await placeFilesByName?.(handedOffTurn, We);
+              await measurePhase("resume_other", "resume_staged_files_wait", () =>
+                awaitStagedFiles(stagedFiles),
+              );
+            await placeFilesByName?.(handedOffTurn, stagedFiles);
           }
         },
         placeCarriedWrites,
@@ -1827,17 +1889,17 @@ async function* runHeadlessTurn({
         try {
           handoffRelay.noteHandoffMarkerFate(
             handedOffTurn.kind,
-            Xe === undefined ? "unfinished" : Xe.ran ? "ran" : Xe.reason,
+            handoffOutcome === undefined ? "unfinished" : handoffOutcome.ran ? "ran" : handoffOutcome.reason,
           );
         } catch (error) {
           logError(error);
         }
     }
-    await taskListCatchUp.catchUp(isHandoffTurnSettled(Xe));
-    if (Xe.ran) onHandedOffCallsRan(Xe.contextLayers);
+    await taskListCatchUp.catchUp(isHandoffTurnSettled(handoffOutcome));
+    if (handoffOutcome.ran) onHandedOffCallsRan(handoffOutcome.contextLayers);
     logEvent("tengu_turn_handoff_run", {
-      ran: Xe.ran,
-      reason: fromEnumOpt(Xe.ran ? undefined : Xe.reason),
+      ran: handoffOutcome.ran,
+      reason: fromEnumOpt(handoffOutcome.ran ? undefined : handoffOutcome.reason),
       kind: fromEnum(handedOffTurn.kind),
       tool_uses: handedOffTurn.toolUseIDs.length,
       carried_messages: handedOffTurn.messages.length,
@@ -1846,20 +1908,20 @@ async function* runHeadlessTurn({
       attachment_rows_ahead: attachmentRowsAhead,
     });
     if (
-      !Xe.ran &&
+      !handoffOutcome.ran &&
       (handedOffTurn.kind === "stopped" ||
-        Xe.reason === "stopped_closed" ||
-        Xe.reason === "stopped_unconfirmed")
+        handoffOutcome.reason === "stopped_closed" ||
+        handoffOutcome.reason === "stopped_unconfirmed")
     ) {
-      yield Se();
+      yield buildStoppedResult();
       return true;
     }
-    if (!Xe.ran && Xe.reason === "history_appended") {
-      yield ie();
+    if (!handoffOutcome.ran && handoffOutcome.reason === "history_appended") {
+      yield buildOkResult();
       return true;
     }
-    if (!Xe.ran && !hasPrompt && !deferredToolUse) {
-      yield ie();
+    if (!handoffOutcome.ran && !hasPrompt && !deferredToolUse) {
+      yield buildOkResult();
       return true;
     }
   }
@@ -1867,20 +1929,20 @@ async function* runHeadlessTurn({
   dropCcrTurnId();
   clearContextKey();
   clearTurnTraceContexts();
-  let me = (Ee, He) =>
+  let deferredResult = (call, isError) =>
     buildResultMessage({
       startedAt: earlyResult.startedAt,
       common: {
-        is_error: He,
+        is_error: isError,
         duration_api_ms: 0,
         num_turns: mutableMessages.length,
-        stop_reason: He ? "tool_deferred_unavailable" : "tool_deferred",
+        stop_reason: isError ? "tool_deferred_unavailable" : "tool_deferred",
         session_id: getSessionId(),
         total_cost_usd: getTotalCostUSD(),
         usage: earlyResult.usage,
         modelUsage: getModelUsage(),
         permission_denials: earlyResult.permissionDenials,
-        ...(He && {
+        ...(isError && {
           terminal_reason: "tool_deferred_unavailable",
         }),
         fast_mode_state: getFastModeState(earlyResult.mainLoopModel, earlyResult.fastMode),
@@ -1895,16 +1957,16 @@ async function* runHeadlessTurn({
       variant: {
         subtype: "success",
         result: "",
-        ...((He || !hasPrompt) && earlyResult.sendEcho),
-        ...((He || !hasPrompt) && earlyResult.resumeReasonStamp),
+        ...((isError || !hasPrompt) && earlyResult.sendEcho),
+        ...((isError || !hasPrompt) && earlyResult.resumeReasonStamp),
         deferred_tool_use: {
-          id: Ee.toolUseID,
-          name: Ee.toolName,
-          input: Ee.toolInput,
+          id: call.toolUseID,
+          name: call.toolName,
+          input: call.toolInput,
         },
       },
     });
-  if (nt()) {
+  if (hasDeferredResult()) {
     logForDebugging(
       `Deferred tool resume: ${deferredToolUse.toolUseID} already has this turn's result; not run again`,
     );
@@ -1917,16 +1979,16 @@ async function* runHeadlessTurn({
         level: "warn",
       },
     );
-    yield me(deferredToolUse, true);
+    yield deferredResult(deferredToolUse, true);
     return true;
   }
-  let Me = yield* resumeDeferredToolUse(
+  let resumedCall = yield* resumeDeferredToolUse(
     deferredToolUse,
     canUseTool,
     mutableMessages,
     processUserInputContext,
   );
-  if (!Me) return false;
+  if (!resumedCall) return false;
   if (persistSession)
     await recordTranscript(
       mutableMessages,
@@ -1935,7 +1997,7 @@ async function* runHeadlessTurn({
       undefined,
       processUserInputContext.storageV5,
     );
-  yield me(Me, false);
+  yield deferredResult(resumedCall, false);
   return true;
 }
 //@ chunk-tyg7f3ek.js:440425-440628 placement
@@ -1960,7 +2022,10 @@ function logShouldQueryResolved({ shouldQuery, fromUserInput, fromOptions }) {
   });
 }
 //@ chunk-tyg7f3ek.js:440808-440872 placement
-var getCoordinatorUserContext_2 = require("./chunk-yxywkh50.js").getCoordinatorUserContext;
+var getCoordinatorUserContext_2; // deferred: loads other modules while loading; runs once its import cycle is complete
+deferInit("chunk-tyg7f3ek.js:440808", () => {
+  getCoordinatorUserContext_2 = require("./coordinator/coordinatorMode.js").getCoordinatorUserContext;
+});
 //@ chunk-tyg7f3ek.js:440872-441122 placement
 function resolveTurnModelAndThinking({ userSpecifiedModel, permissionMode, thinkingConfig }) {
   let mainLoopModel =
@@ -2030,17 +2095,25 @@ async function buildHeadlessSystemPrompt({
     customSystemPrompt !== undefined && hasAutoMemPathOverride()
       ? await loadMemoryPrompt(getPromptModel(runtimeModel))
       : null;
-  let Ue = withCliSections(baseSystemPromptOf(customSystemPrompt, defaultSystemPrompt), {
+  let renderedBasePrompt = withCliSections(baseSystemPromptOf(customSystemPrompt, defaultSystemPrompt), {
     tools,
     memoryMechanicsPrompt,
     appendSystemPrompt: undefined,
   });
-  let ce = appendSystemPromptHead
-    ? renderAppendPromptHead(Ue, appendSystemPrompt, appendSystemPromptHead, shouldUseGlobalCacheScope())
+  let appendHeadResult = appendSystemPromptHead
+    ? renderAppendPromptHead(
+        renderedBasePrompt,
+        appendSystemPrompt,
+        appendSystemPromptHead,
+        shouldUseGlobalCacheScope(),
+      )
     : undefined;
-  let nt = ce ? ce.append : appendSystemPrompt;
+  let appendPromptText = appendHeadResult ? appendHeadResult.append : appendSystemPrompt;
   return {
-    systemPrompt: asSystemPrompt([...(ce ? ce.base : Ue), ...(nt ? [nt] : [])]),
+    systemPrompt: asSystemPrompt([
+      ...(appendHeadResult ? appendHeadResult.base : renderedBasePrompt),
+      ...(appendPromptText ? [appendPromptText] : []),
+    ]),
     userContext: userContext_2,
     systemContext,
   };
@@ -2080,14 +2153,14 @@ async function buildSdkInitMessage({
   await getAutoMemPathState().warmCanonicalWcRoot();
   if (getPlatform() === "windows") await getCachedPowerShellPath();
   let startTime = performance.now();
-  let re = isTransportBacked(session);
-  let Ae = () => ({
-    redactsWhatItPersists: re,
+  let transportBacked = isTransportBacked(session);
+  let uiSurfaceCapabilitySource = () => ({
+    redactsWhatItPersists: transportBacked,
     isRemoteTransport: transportStateByHost.of(session).active?.isRemoteTransport() === true,
     sessionWriters: transportStateByHost.of(session).active?.sessionWriters(),
   });
-  let systemInitMessage = buildSystemInitMessage({
-    ...(re ? buildRemoteSystemInitFields() : buildSystemInitFields()),
+  let message = buildSystemInitMessage({
+    ...(transportBacked ? buildRemoteSystemInitFields() : buildSystemInitFields()),
     tools,
     mcpClients: mcpClients
       .filter((mcpClient) => !isArtifacts404Failure(mcpClient))
@@ -2103,25 +2176,27 @@ async function buildSdkInitMessage({
     commands: mergeClients_2(commands),
     agents,
     skills,
-    plugins: re ? [] : plugins.enabled,
-    additionalDirectories: re
+    plugins: transportBacked ? [] : plugins.enabled,
+    additionalDirectories: transportBacked
       ? undefined
       : additionalDirectoriesForInit(proactivityState.toolPermissionContext),
-    pluginErrors: re
+    pluginErrors: transportBacked
       ? []
-      : [...plugins.errors, ...pluginsSyncErrors(session)].filter(isMarketplacePluginError).map((ce) => {
-          let nt = pluginNameOfError(ce);
-          return {
-            plugin: ce.source,
-            type: ce.type,
-            message: pluginErrorText(ce),
-            ...(nt !== undefined && {
-              path: nt,
-            }),
-          };
-        }),
-    mcpServerErrors: re ? [] : getSkippedDynamicServers(),
-    pluginWarnings: re
+      : [...plugins.errors, ...pluginsSyncErrors(session)]
+          .filter(isMarketplacePluginError)
+          .map((pluginError) => {
+            let pluginPath = pluginNameOfError(pluginError);
+            return {
+              plugin: pluginError.source,
+              type: pluginError.type,
+              message: pluginErrorText(pluginError),
+              ...(pluginPath !== undefined && {
+                path: pluginPath,
+              }),
+            };
+          }),
+    mcpServerErrors: transportBacked ? [] : getSkippedDynamicServers(),
+    pluginWarnings: transportBacked
       ? []
       : plugins.warnings
           .filter((warning) => hasMarketplaceAlias(warning.source))
@@ -2148,178 +2223,178 @@ async function buildSdkInitMessage({
       ...queuedNotificationCapabilities(tools, session, messagesInView),
       ...(sessionNoticesCapability(session, permissionMode) ? [SESSION_NOTICES] : []),
       ...sdkMcpCapabilities(transportStateByHost.of(session).active),
-      ...(re ? [] : [MCP_READ_RESOURCE_V1]),
-      ...(re ? [] : [MCP_TOOL_UI_META_V1]),
-      ...uiSurfaceCapabilities(Ae),
-      ...uiHookedCapabilities(Ae),
-      ...(persistsWithoutRedaction(Ae()) ? [MCP_CALL_RESULT_NOT_FOR_MODEL_V1] : []),
+      ...(transportBacked ? [] : [MCP_READ_RESOURCE_V1]),
+      ...(transportBacked ? [] : [MCP_TOOL_UI_META_V1]),
+      ...uiSurfaceCapabilities(uiSurfaceCapabilitySource),
+      ...uiHookedCapabilities(uiSurfaceCapabilitySource),
+      ...(persistsWithoutRedaction(uiSurfaceCapabilitySource()) ? [MCP_CALL_RESULT_NOT_FOR_MODEL_V1] : []),
       ...(isReadFileAsWrittenServed(session) ? [READ_FILE_AS_WRITTEN_V1] : []),
       ...emptyMarkerList(),
       ...(shouldOfferLinuxSandboxHint(tools) ? [START_SHELL_TASK_V1] : []),
       ...[],
     ],
   });
-  recordInitTiming(systemInitMessage, startTime);
-  return systemInitMessage;
+  recordInitTiming(message, startTime);
+  return message;
 }
 //@ chunk-tyg7f3ek.js:443633-446804 placement
 /**
  * 构造 headless 模式的 ToolUseContext（文件历史、AppState 读写、SDK 状态回调等）。
  */
-function createHeadlessToolUseContext(e, n) {
-  let { getAppState, setAppState, setSDKStatus, tools } = e;
-  let S = () => getAppState().fileHistory;
-  let R = (w) => {
-    setAppState((P) => {
-      let L = reduceFileHistoryState(P.fileHistory, w, e.storageV5);
-      if (L === P.fileHistory) return P;
+function createHeadlessToolUseContext(sessionDeps, phaseConfig) {
+  let { getAppState, setAppState, setSDKStatus, tools } = sessionDeps;
+  let getFileHistory = () => getAppState().fileHistory;
+  let applyFileHistoryOp = (op) => {
+    setAppState((appState) => {
+      let nextFileHistory = reduceFileHistoryState(appState.fileHistory, op, sessionDeps.storageV5);
+      if (nextFileHistory === appState.fileHistory) return appState;
       return {
-        ...P,
-        fileHistory: L,
+        ...appState,
+        fileHistory: nextFileHistory,
       };
     });
   };
   return {
-    renderedSystemPrompt: e.renderedSystemPrompt,
-    messages: n.messages,
-    messageQueue: e.messageQueue,
-    session: e.session,
+    renderedSystemPrompt: sessionDeps.renderedSystemPrompt,
+    messages: phaseConfig.messages,
+    messageQueue: sessionDeps.messageQueue,
+    session: sessionDeps.session,
     turnStartIndex: 0,
-    primitiveToolGrant: e.primitiveToolGrant,
-    ...(n.phase === "query" && {
-      permissionLayers: n.permissionLayers,
+    primitiveToolGrant: sessionDeps.primitiveToolGrant,
+    ...(phaseConfig.phase === "query" && {
+      permissionLayers: phaseConfig.permissionLayers,
     }),
-    setMessages: n.phase === "input" ? n.setMessages : () => {},
-    applyMessageOp: n.phase === "input" ? n.applyMessageOp : () => {},
+    setMessages: phaseConfig.phase === "input" ? phaseConfig.setMessages : () => {},
+    applyMessageOp: phaseConfig.phase === "input" ? phaseConfig.applyMessageOp : () => {},
     onChangeAPIKey: () => {},
-    onPermissionDenial: e.onPermissionDenial,
-    requestDialog: e.requestDialog,
-    permissionRelays: Jce,
-    sessionState: e.sessionState,
+    onPermissionDenial: sessionDeps.onPermissionDenial,
+    requestDialog: sessionDeps.requestDialog,
+    permissionRelays: NO_BRIDGE_CONSENT,
+    sessionState: sessionDeps.sessionState,
     agentContext: mainAgentContext(),
     options: {
-      commands: e.commands,
+      commands: sessionDeps.commands,
       debug: false,
       tools,
-      toolCatalog: e.toolCatalog ?? TOOL_CATALOG,
-      refreshTools: e.refreshTools,
-      refreshMcpClients: e.refreshMcpClients,
-      verbose: e.verbose,
-      mainLoopModel: n.mainLoopModel,
-      fallbackModel: e.fallbackModel,
-      thinkingConfig: e.thinkingConfig,
-      mcpClients: e.mcpClients,
+      toolCatalog: sessionDeps.toolCatalog ?? TOOL_CATALOG,
+      refreshTools: sessionDeps.refreshTools,
+      refreshMcpClients: sessionDeps.refreshMcpClients,
+      verbose: sessionDeps.verbose,
+      mainLoopModel: phaseConfig.mainLoopModel,
+      fallbackModel: sessionDeps.fallbackModel,
+      thinkingConfig: sessionDeps.thinkingConfig,
+      mcpClients: sessionDeps.mcpClients,
       mcpResources: {},
       ideInstallationStatus: null,
       isNonInteractiveSession: true,
       runQuery: query,
-      customSystemPrompt: e.customSystemPrompt,
-      ...(e.customSystemPrompt !== undefined && {
+      customSystemPrompt: sessionDeps.customSystemPrompt,
+      ...(sessionDeps.customSystemPrompt !== undefined && {
         omitGitStatus: true,
       }),
-      appendSystemPrompt: e.appendSystemPrompt,
-      planModeInstructions: e.planModeInstructions,
-      systemPromptSnapshot: e.systemPromptSnapshot,
-      appendSubagentSystemPrompt: e.appendSubagentSystemPrompt,
-      toolAliases: e.toolAliases,
-      excludeDynamicSections: e.excludeDynamicSections,
+      appendSystemPrompt: sessionDeps.appendSystemPrompt,
+      planModeInstructions: sessionDeps.planModeInstructions,
+      systemPromptSnapshot: sessionDeps.systemPromptSnapshot,
+      appendSubagentSystemPrompt: sessionDeps.appendSubagentSystemPrompt,
+      toolAliases: sessionDeps.toolAliases,
+      excludeDynamicSections: sessionDeps.excludeDynamicSections,
       agentDefinitions: {
-        activeAgents: e.agents,
+        activeAgents: sessionDeps.agents,
         allAgents: [],
-        allowedAgentTypes: e.allowedAgentTypes,
+        allowedAgentTypes: sessionDeps.allowedAgentTypes,
       },
       theme: resolveThemeSetting(resolveSetting("theme", "dark").value),
-      maxBudgetUsd: e.maxBudgetUsd,
-      messageClientPlatform: e.messageClientPlatform,
-      messageInboundOrigin: e.messageInboundOrigin,
-      forwardSubagentText: e.forwardSubagentText,
-      ...(n.phase === "query" && {
-        activeSkill: n.activeSkill,
+      maxBudgetUsd: sessionDeps.maxBudgetUsd,
+      messageClientPlatform: sessionDeps.messageClientPlatform,
+      messageInboundOrigin: sessionDeps.messageInboundOrigin,
+      forwardSubagentText: sessionDeps.forwardSubagentText,
+      ...(phaseConfig.phase === "query" && {
+        activeSkill: phaseConfig.activeSkill,
       }),
-      requiresStructuredOutput: e.requiresStructuredOutput,
-      autoCompactWindow: n.appState.autoCompactWindow,
-      fastMode: n.appState.fastMode,
-      cacheBreakerPhrase: n.appState.cacheBreakerPhrase,
-      activeGoal: n.appState.activeGoal,
-      ultraplanSessionUrl: n.appState.ultraplanSessionUrl,
+      requiresStructuredOutput: sessionDeps.requiresStructuredOutput,
+      autoCompactWindow: phaseConfig.appState.autoCompactWindow,
+      fastMode: phaseConfig.appState.fastMode,
+      cacheBreakerPhrase: phaseConfig.appState.cacheBreakerPhrase,
+      activeGoal: phaseConfig.appState.activeGoal,
+      ultraplanSessionUrl: phaseConfig.appState.ultraplanSessionUrl,
     },
     getAppState,
     setAppState,
     ...createAppStateAccessors(getAppState, setAppState),
-    queuedNotificationsRegistry: createNotificationDrain(getAppState, setAppState, e.session),
+    queuedNotificationsRegistry: createNotificationDrain(getAppState, setAppState, sessionDeps.session),
     taskRegistry: createTaskFramework(getAppState, setAppState),
-    sessionHooksRegistry: e.sessionHooks,
+    sessionHooksRegistry: sessionDeps.sessionHooks,
     teammateColors: createColorAssigner(fieldAccessor(getAppState, setAppState, "teammateColors")),
     rootToolSurface: {
       tools,
-      mainLoopModel: n.mainLoopModel,
+      mainLoopModel: phaseConfig.mainLoopModel,
     },
-    abortController: n.abortController,
-    readFileState: e.readFileState,
+    abortController: phaseConfig.abortController,
+    readFileState: sessionDeps.readFileState,
     nestedMemoryAttachmentTriggers: [],
-    pendingNestedMemoryTriggers: e.pendingNestedMemoryTriggers,
-    sessionEnvVars: e.sessionEnvVars,
-    toolState: e.toolState,
+    pendingNestedMemoryTriggers: sessionDeps.pendingNestedMemoryTriggers,
+    sessionEnvVars: sessionDeps.sessionEnvVars,
+    toolState: sessionDeps.toolState,
     toolDecisions: new Map(),
     dynamicSkillDirTriggers: [],
-    memorySelector: e.memorySelector,
-    isolationLatch: e.isolationLatch,
-    storageV5: e.storageV5,
-    credentials: e.credentials,
-    getFileHistoryState: S,
-    applyFileHistoryOp: R,
-    ...(n.phase === "input" && {
-      makeFileHistorySnapshot: async (w) => {
-        if (!n.persistSession) return;
-        await fileHistoryMakeSnapshot(S, R, w, {
+    memorySelector: sessionDeps.memorySelector,
+    isolationLatch: sessionDeps.isolationLatch,
+    storageV5: sessionDeps.storageV5,
+    credentials: sessionDeps.credentials,
+    getFileHistoryState: getFileHistory,
+    applyFileHistoryOp,
+    ...(phaseConfig.phase === "input" && {
+      makeFileHistorySnapshot: async (snapshotArgs) => {
+        if (!phaseConfig.persistSession) return;
+        await fileHistoryMakeSnapshot(getFileHistory, applyFileHistoryOp, snapshotArgs, {
           preCheckpoint: true,
         });
       },
     }),
-    applyAttributionOp: (w) => {
-      setAppState((P) => {
-        let L = restoreAttributionStateFromSnapshots(P.attribution, w);
-        if (L === P.attribution) return P;
+    applyAttributionOp: (op) => {
+      setAppState((appState) => {
+        let nextAttribution = restoreAttributionStateFromSnapshots(appState.attribution, op);
+        if (nextAttribution === appState.attribution) return appState;
         return {
-          ...P,
-          attribution: L,
+          ...appState,
+          attribution: nextAttribution,
         };
       });
     },
-    onCompactEvent: (w) => {
-      if (w.type === "sdk_status") setSDKStatus?.(w.status, w.metadata);
+    onCompactEvent: (event) => {
+      if (event.type === "sdk_status") setSDKStatus?.(event.status, event.metadata);
     },
-    onQueryEvent: (w) => {
-      if (w.type === "apply_flag_settings") applySessionSettingsPatch(w.settings, setAppState);
-      else if (w.type === "conversation_reset") {
-        e.sessionState?.notifyConversationReset();
-        notifyToolsKept(e.sessionState);
+    onQueryEvent: (event) => {
+      if (event.type === "apply_flag_settings") applySessionSettingsPatch(event.settings, setAppState);
+      else if (event.type === "conversation_reset") {
+        sessionDeps.sessionState?.notifyConversationReset();
+        notifyToolsKept(sessionDeps.sessionState);
       }
     },
   };
 }
 //@ chunk-tyg7f3ek.js:446804-446865 placement
-function setCwdOrPin(e, session) {
+function setCwdOrPin(cwd, toolUseContext) {
   try {
-    setCwd(e, session);
+    setCwd(cwd, toolUseContext);
     return;
   } catch (error) {
-    return pinMissingWorkingDirectory(error, session);
+    return pinMissingWorkingDirectory(error, toolUseContext);
   }
 }
 //@ chunk-tyg7f3ek.js:446865-446943 placement
-async function setCwdV5OrPin(e, session, storageV5) {
+async function setCwdV5OrPin(cwd, session, context) {
   try {
-    await setCwdV5(e, session, storageV5);
+    await setCwdV5(cwd, session, context);
     return;
   } catch (error) {
     return pinMissingWorkingDirectory(error, session);
   }
 }
 //@ chunk-tyg7f3ek.js:446943-447452 placement
-function pinMissingWorkingDirectory(error, n) {
+function pinMissingWorkingDirectory(error, toolUseContext) {
   if (!(error instanceof MissingWorkingDirectoryError)) throw error;
-  n.setCwd(error.path);
+  toolUseContext.setCwd(error.path);
   setCwdForCallChain(error.path);
   logForDebugging(
     `[headless] working directory ${error.path} no longer exists; the turn starts pinned to it`,
@@ -2327,72 +2402,73 @@ function pinMissingWorkingDirectory(error, n) {
       level: "warn",
     },
   );
-  let r = missingWorkingDirectoryPins.of(n);
-  if (r.pinned) return;
-  r.pinned = true;
+  let pinState = missingWorkingDirectoryPins.of(toolUseContext);
+  if (pinState.pinned) return;
+  pinState.pinned = true;
   try {
     logEvent("tengu_shell_set_cwd", {
       success: false,
       missing_at_turn: true,
     });
   } catch {}
-  let s = isTransportBacked(n) ? "" : ` ${error.path}`;
+  let pathSuffix = isTransportBacked(toolUseContext) ? "" : ` ${error.path}`;
   return informationalSystemMessage(
     createSystemMessage(
-      `The session's working directory${s} no longer exists; shell commands cannot start there and relative file paths that use it will fail until it is restored.`,
+      `The session's working directory${pathSuffix} no longer exists; shell commands cannot start there and relative file paths that use it will fail until it is restored.`,
       "warning",
     ),
   );
 }
 //@ chunk-tyg7f3ek.js:447452-447567 placement
-function declaredToolSetFor(e, n, r) {
+function declaredToolSetFor(tools, predicate, turnState) {
   return new DeclaredToolSet(
-    e.filter((s) => n(s) && isToolDeclaredForTurn(s, e, r)),
+    tools.filter((tool) => predicate(tool) && isToolDeclaredForTurn(tool, tools, turnState)),
     {
       only: new Map(),
       order: [],
-      names: e.map((s) => s.name),
+      names: tools.map((tool) => tool.name),
     },
   );
 }
 //@ chunk-tyg7f3ek.js:447567-447963 placement
-function resolveToolSearchForTurn(e, tools, r) {
-  r.requestsHaveToolSearch ??=
+function resolveToolSearchForTurn(tool, tools, turnState) {
+  turnState.requestsHaveToolSearch ??=
     isToolSearchEnabledOptimistic() &&
-    !isToolSearchPrecluded(r.model(), tools) &&
-    !toolSearchRejectedOn(getStickyBetas(), r.model());
-  if (!r.requestsHaveToolSearch) return "harmful";
-  if (isToolDeclaredForTurn(e, tools, r))
-    return r.isNewConversation && isFoamySpringEnabled_2() ? "free" : "harmful";
-  r.loaded ??= extractDiscoveredToolNames(r.messages, {
+    !isToolSearchPrecluded(turnState.model(), tools) &&
+    !toolSearchRejectedOn(getStickyBetas(), turnState.model());
+  if (!turnState.requestsHaveToolSearch) return "harmful";
+  if (isToolDeclaredForTurn(tool, tools, turnState))
+    return turnState.isNewConversation && isFoamySpringEnabled_2() ? "free" : "harmful";
+  turnState.loaded ??= extractDiscoveredToolNames(turnState.messages, {
     surfaced: {
       exceptAnnouncements: new Set(),
     },
   });
-  if (!isDeferredTool(e, r.nonDeferrableBuiltins) || r.loaded.has(e.name))
+  if (!isDeferredTool(tool, turnState.nonDeferrableBuiltins) || turnState.loaded.has(tool.name))
     return deferredToolsKeptCached() ? "costly" : "harmful";
-  return r.held === undefined ? "costly" : "free";
+  return turnState.held === undefined ? "costly" : "free";
 }
 //@ chunk-tyg7f3ek.js:447963-448257 placement
-function isToolDeclaredForTurn(e, tools, r) {
-  let s = (r.nonDeferrableBuiltins ??= getNonDeferrableBuiltins());
-  if (r.held === undefined && r.aboutToHold === undefined)
-    r.aboutToHold =
+function isToolDeclaredForTurn(tool, tools, turnState) {
+  let nonDeferrableBuiltins = (turnState.nonDeferrableBuiltins ??= getNonDeferrableBuiltins());
+  if (turnState.held === undefined && turnState.aboutToHold === undefined)
+    turnState.aboutToHold =
       computeDeclaredToolSet(
         getStickyBetas(),
         tools,
-        (h) => isDeferredTool(h, s),
-        r.model(),
-        r.isNewConversation && !messagesSinceCompactBoundary(r.messages).some((h) => h.type === "assistant"),
+        (tool) => isDeferredTool(tool, nonDeferrableBuiltins),
+        turnState.model(),
+        turnState.isNewConversation &&
+          !messagesSinceCompactBoundary(turnState.messages).some((message) => message.type === "assistant"),
       ) ?? null;
-  return !isDeferredToolInConversation(e, r.held ?? r.aboutToHold ?? undefined, tools, {
-    nonDeferrableBuiltins: s,
+  return !isDeferredToolInConversation(tool, turnState.held ?? turnState.aboutToHold ?? undefined, tools, {
+    nonDeferrableBuiltins,
   });
 }
 //@ chunk-tyg7f3ek.js:448257-448270 placement
 var DEVICE_BRIDGE_TOOL_WAIT_MS = 60000;
 //@ chunk-tyg7f3ek.js:448342-448521 sole-consumer
-function readTurnSignals(turnStartClock, frameTiming, r, s) {
+function readTurnSignals(turnStartClock, frameTiming, nowPerfMs, nowWallMs) {
   if (
     turnStartClock === undefined ||
     frameTiming?.turnStartMark === undefined ||
@@ -2400,151 +2476,163 @@ function readTurnSignals(turnStartClock, frameTiming, r, s) {
   )
     return;
   try {
-    return turnStartClock.readSince(frameTiming.turnStartMark, r, s - frameTiming.enqueuedWallMs);
+    return turnStartClock.readSince(
+      frameTiming.turnStartMark,
+      nowPerfMs,
+      nowWallMs - frameTiming.enqueuedWallMs,
+    );
   } catch (error) {
     logError(error);
     return;
   }
 }
 //@ chunk-tyg7f3ek.js:448521-483526 placement
-function QueryEngine(e) {
+function QueryEngine(sessionConfig) {
   clearClassifierContext();
-  let { getAppState, setAppState } = e;
-  let initialMessages = e.initialMessages ?? [];
-  let h =
-    e.conversation ??
+  let { getAppState, setAppState } = sessionConfig;
+  let initialMessages = sessionConfig.initialMessages ?? [];
+  let conversation =
+    sessionConfig.conversation ??
     orderedRowSource({
-      keep: (It) => {
-        initialMessages.push(...It);
+      keep: (rows) => {
+        initialMessages.push(...rows);
       },
       rows: () => initialMessages,
       list: initialMessages,
       isHookable: true,
     });
-  let y = Boolean(env.CLAUDE_CODE_SESSION_START_ANNOUNCEMENTS_BEFORE_PROMPT);
-  let S = androidEvidenceByHost.of(e.session.host);
-  S.absorb(initialMessages);
-  let readFileCache = e.readFileCache;
-  let sessionEnvVars = e.sessionEnvVars ?? new Map();
-  let isolationLatch = e.isolationLatch ?? createIsolationLatch();
-  let L = e.toolState ?? new InstanceRegistry();
-  let q = e.sessionHooks ?? createSessionHooksRegistry();
+  let announceBeforePrompt = Boolean(env.CLAUDE_CODE_SESSION_START_ANNOUNCEMENTS_BEFORE_PROMPT);
+  let androidEvidence = androidEvidenceByHost.of(sessionConfig.session.host);
+  androidEvidence.absorb(initialMessages);
+  let readFileCache = sessionConfig.readFileCache;
+  let sessionEnvVars = sessionConfig.sessionEnvVars ?? new Map();
+  let isolationLatch = sessionConfig.isolationLatch ?? createIsolationLatch();
+  let toolState = sessionConfig.toolState ?? new InstanceRegistry();
+  let sessionHooks = sessionConfig.sessionHooks ?? createSessionHooksRegistry();
   let any = initialMessages.some(
     (initialMessage) =>
       initialMessage.type === "assistant" || (initialMessage.type === "user" && !initialMessage.isMeta),
   );
-  let G = false;
-  let memorySelector = e.memorySelector ?? emptyPickerState();
-  let userSpecifiedModel = e.userSpecifiedModel;
-  let Ae;
+  let gatewayNoticeShown = false;
+  let memorySelector = sessionConfig.memorySelector ?? emptyPickerState();
+  let userSpecifiedModel = sessionConfig.userSpecifiedModel;
+  let activeFastMode;
   let abortController = createAbortController();
-  function ce() {
-    let signal = e.abortController?.signal;
+  function abortIfParentAborted() {
+    let signal = sessionConfig.abortController?.signal;
     if (signal?.aborted) abortController.abort(signal.reason);
   }
-  function nt() {
-    abortController.abort(e.abortController?.signal.reason);
+  function onParentAbort() {
+    abortController.abort(sessionConfig.abortController?.signal.reason);
   }
-  e.abortController?.signal.addEventListener("abort", nt, {
+  sessionConfig.abortController?.signal.addEventListener("abort", onParentAbort, {
     once: true,
   });
-  ce();
-  function ie(It = "remote-cancel") {
-    abortController.abort(userAbortReason(It));
+  abortIfParentAborted();
+  function abortTurn(reason = "remote-cancel") {
+    abortController.abort(userAbortReason(reason));
     abortController = createAbortController();
-    ce();
+    abortIfParentAborted();
   }
-  let Se = null;
-  let me;
-  function Me() {
-    let It = me;
-    me = undefined;
-    return It;
+  let pendingParams = null;
+  let pendingTurnError;
+  function takeTurnError() {
+    let turnError = pendingTurnError;
+    pendingTurnError = undefined;
+    return turnError;
   }
-  let Ee = new Stream();
+  let inputStream = new Stream();
   let queryEngine = createQueryEngine({
     run: query,
     queryParams: async () => {
-      if (Se === null) throw Error("headless session: turn picked up without prepared params");
-      let It = Se;
-      Se = null;
-      return It;
+      if (pendingParams === null) throw Error("headless session: turn picked up without prepared params");
+      let params = pendingParams;
+      pendingParams = null;
+      return params;
     },
     hostOwnsPermissionMode: true,
     sdkResultVerdict: true,
-    fastModeState: () => (Ae === undefined ? undefined : getFastModeState(Ae.model, Ae.enabled)),
+    fastModeState: () =>
+      activeFastMode === undefined
+        ? undefined
+        : getFastModeState(activeFastMode.model, activeFastMode.enabled),
     fastModeDisabledReason: () =>
-      getFastModeUnavailableReasonCode() ?? (Ae && getFastRejectedReason(Ae.model, Ae.enabled)) ?? undefined,
-    onCommandLifecycle: e.onCommandLifecycle,
-    onTurnThrow: (It) => {
-      me = It;
+      getFastModeUnavailableReasonCode() ??
+      (activeFastMode && getFastRejectedReason(activeFastMode.model, activeFastMode.enabled)) ??
+      undefined,
+    onCommandLifecycle: sessionConfig.onCommandLifecycle,
+    onTurnThrow: (error) => {
+      pendingTurnError = error;
     },
   });
-  queryEngine.streamInput(Ee).catch(logError);
-  let Xe = [];
-  let We = [];
-  let turnStreamBridge = createTurnStreamBridge((It) => {
-    Xe.push(...It);
+  queryEngine.streamInput(inputStream).catch(logError);
+  let turnEventRows = [];
+  let settledNoteRows = [];
+  let turnStreamBridge = createTurnStreamBridge((rows) => {
+    turnEventRows.push(...rows);
   });
-  let wt = new Set();
-  let turnEventsSettleMs = e.turnEventsSettleMs ?? DEVICE_BRIDGE_TOOL_WAIT_MS;
-  let pn = false;
-  function _n(It, logModsFirstTurn, on) {
+  let openTurnSpans = new Set();
+  let turnEventsSettleMs = sessionConfig.turnEventsSettleMs ?? DEVICE_BRIDGE_TOOL_WAIT_MS;
+  let eventsYieldedInput = false;
+  function runSafely(label, logModsFirstTurn, fallbackValue) {
     try {
       return logModsFirstTurn();
     } catch (error) {
-      logForDebugging(`headless session: ${It} failed, the turn goes on without it: ` + errorMessage(error), {
-        level: "error",
-      });
-      return on;
+      logForDebugging(
+        `headless session: ${label} failed, the turn goes on without it: ` + errorMessage(error),
+        {
+          level: "error",
+        },
+      );
+      return fallbackValue;
     }
   }
-  async function Mn() {
+  async function settleTurnEvents() {
     let abortController = new AbortController();
     try {
-      let Ie = await withDeadline(
+      let outcome = await withDeadline(
         Promise.race([
           turnStreamBridge
             .settled()
             .then(() => opsDelivered())
             .then(() => "settled"),
-          abortTurnSignal(e.messageQueue, abortController.signal).then(() => "yielded"),
+          abortTurnSignal(sessionConfig.messageQueue, abortController.signal).then(() => "yielded"),
         ]),
         turnEventsSettleMs,
       );
-      pn = Ie === "yielded";
-      if (Ie === undefined) {
+      eventsYieldedInput = outcome === "yielded";
+      if (outcome === undefined) {
         turnStreamBridge.sever();
-        _n("the mods' first-turn row at the cut", logModsFirstTurn, undefined);
+        runSafely("the mods' first-turn row at the cut", logModsFirstTurn, undefined);
         logForDebugging(
           `headless session: turn events still running after ${turnEventsSettleMs}ms; the turn ends without them and their late notes are dropped`,
           {
             level: "warn",
           },
         );
-      } else if (Ie === "yielded")
+      } else if (outcome === "yielded")
         logForDebugging(
           "headless session: a turn event hook queued input; the turn ends so it can run, and the events settle with the turn that runs it",
         );
     } catch (error) {
-      pn = false;
+      eventsYieldedInput = false;
       logForDebugging(`headless session: settling the turn events failed: ${errorMessage(error)}`, {
         level: "warn",
       });
     } finally {
       abortController.abort();
     }
-    return Xe.splice(0);
+    return turnEventRows.splice(0);
   }
-  async function jn(It, Ie, on, Zn) {
-    We = await Mn();
-    if (We.length === 0) return;
+  async function recordTurnNotes(turnRecord, transcript, shouldPersist, shouldFlush) {
+    settledNoteRows = await settleTurnEvents();
+    if (settledNoteRows.length === 0) return;
     try {
-      We = [...(await appendRowsWithHooks(h, We))];
-      Ie.push(...We);
-      if (on) {
-        await It.record(true);
-        if (Zn) await flushSessionStorage();
+      settledNoteRows = [...(await appendRowsWithHooks(conversation, settledNoteRows))];
+      transcript.push(...settledNoteRows);
+      if (shouldPersist) {
+        await turnRecord.record(true);
+        if (shouldFlush) await flushSessionStorage();
       }
     } catch (error) {
       logForDebugging("headless session: recording the turn's notes failed: " + errorMessage(error), {
@@ -2552,116 +2640,122 @@ function QueryEngine(e) {
       });
     }
   }
-  let Jn = new Set(snapshotUuids(initialMessages));
-  function ze(It, Ie, systemPromptSnapshot) {
-    let Zn = false;
+  let seenUuids = new Set(snapshotUuids(initialMessages));
+  function handlePromptSnapshot(customSystemPrompt, appendSystemPrompt, systemPromptSnapshot) {
+    let takeDelivered = false;
     try {
-      Zn = It !== undefined && It !== "" && e.takeSystemPromptDelivered?.() === true;
-      let Nn =
-        Zn &&
+      takeDelivered =
+        customSystemPrompt !== undefined &&
+        customSystemPrompt !== "" &&
+        sessionConfig.takeSystemPromptDelivered?.() === true;
+      let promptNeedsSnapshot =
+        takeDelivered &&
         shouldSnapshotSystemPrompt({
           systemPromptSnapshot,
         }) &&
-        !snapshotContainsPrompt(messagesSinceCompactBoundary(initialMessages), It);
-      let Cr = messagesSinceCompactBoundary(initialMessages);
-      let last = snapshotUuids(Cr).at(-1);
-      let io =
-        e.liveAppendSections !== undefined &&
-        (Ie || (last !== undefined && Jn.has(last))) &&
+        !snapshotContainsPrompt(messagesSinceCompactBoundary(initialMessages), customSystemPrompt);
+      let recentMessages = messagesSinceCompactBoundary(initialMessages);
+      let last = snapshotUuids(recentMessages).at(-1);
+      let liveAppendTag =
+        sessionConfig.liveAppendSections !== undefined &&
+        (appendSystemPrompt || (last !== undefined && seenUuids.has(last))) &&
         shouldSnapshotSystemPrompt({
           systemPromptSnapshot,
         })
-          ? tagBlockChange(Cr, Ie, e.liveAppendSections)
+          ? tagBlockChange(recentMessages, appendSystemPrompt, sessionConfig.liveAppendSections)
           : undefined;
-      if (Nn || io !== undefined) {
-        let Hr = appendRowsWithHooks(h, [lazyToolAttachment()]);
-        if (Hr instanceof Promise) Hr.catch(logError);
-        noteSystemPromptSectionInvalidation(Nn ? "sdk_system_prompt" : "host_append_section");
+      if (promptNeedsSnapshot || liveAppendTag !== undefined) {
+        let appendedRows = appendRowsWithHooks(conversation, [lazyToolAttachment()]);
+        if (appendedRows instanceof Promise) appendedRows.catch(logError);
+        noteSystemPromptSectionInvalidation(
+          promptNeedsSnapshot ? "sdk_system_prompt" : "host_append_section",
+        );
       }
-      if (io !== undefined) e.onLiveAppendSectionChange?.(io);
-      if (Zn) {
-        Zn = false;
+      if (liveAppendTag !== undefined) sessionConfig.onLiveAppendSectionChange?.(liveAppendTag);
+      if (takeDelivered) {
+        takeDelivered = false;
         logFeatureOk("prompt_snapshot_host_supersede", {
-          prompt_rerendered: Nn,
+          prompt_rerendered: promptNeedsSnapshot,
         });
       }
-      if (Nn) e.onHostPromptSupersedesRecord?.();
+      if (promptNeedsSnapshot) sessionConfig.onHostPromptSupersedesRecord?.();
     } catch (error) {
       logError(error);
-      if (Zn) logFeatureBad("prompt_snapshot_host_supersede", "threw");
+      if (takeDelivered) logFeatureBad("prompt_snapshot_host_supersede", "threw");
     }
   }
-  let Dr = false;
-  let $r = false;
-  let $n;
-  let ut;
-  let Yt;
-  let nn;
-  function kn(rows) {
-    if (nn !== undefined) {
-      nn.push({
+  let turnInFlight = false;
+  let initSent = false;
+  let lastTurnEndWallMs;
+  let neverParentUuid;
+  let turnRecorder;
+  let deferredRows;
+  function keepRows(rows) {
+    if (deferredRows !== undefined) {
+      deferredRows.push({
         rows,
         isAnswered: true,
       });
       return;
     }
-    h.keep(rows);
-    Yt?.appendHostRows(rows);
+    conversation.keep(rows);
+    turnRecorder?.appendHostRows(rows);
   }
-  function En(It) {
-    let Ie = appendRowsWithHooks(h, It, {
-      keep: kn,
+  function appendRows(rows) {
+    let appended = appendRowsWithHooks(conversation, rows, {
+      keep: keepRows,
     });
-    if (Ie instanceof Promise) Ie.catch(logError);
+    if (appended instanceof Promise) appended.catch(logError);
   }
-  function Mr() {
-    let It = nn;
-    nn = undefined;
-    for (let { rows, isAnswered } of It ?? [])
-      if (isAnswered) kn(rows);
-      else En(rows);
+  function flushDeferredRows() {
+    let queued = deferredRows;
+    deferredRows = undefined;
+    for (let { rows, isAnswered } of queued ?? [])
+      if (isAnswered) keepRows(rows);
+      else appendRows(rows);
   }
-  let Pn;
-  function oo(It) {
-    let Ie = Pn;
-    if (Ie === undefined || Ie.length === 0) return;
+  let heldSnapshotRows;
+  function releaseHeldRows(shouldKeep) {
+    let held = heldSnapshotRows;
+    if (held === undefined || held.length === 0) return;
     try {
-      if (It) {
+      if (shouldKeep) {
         let last = initialMessages.findLast(
           (initialMessage) => initialMessage.type === "assistant" || initialMessage.type === "user",
         );
         if (!(
           last?.type === "assistant" &&
           !last.isApiErrorMessage &&
-          last.message.content.every((Nn) => Nn.type !== "tool_use") &&
+          last.message.content.every((block) => block.type !== "tool_use") &&
           last.message.content.some(
-            (Nn) => Nn.type === "text" && Nn.text.trim() !== "" && Nn.text.trim() !== NO_CONTENT_MESSAGE,
+            (block) =>
+              block.type === "text" && block.text.trim() !== "" && block.text.trim() !== NO_CONTENT_MESSAGE,
           )
         ))
           return;
       }
-      Pn = [];
-      En(Ie);
+      heldSnapshotRows = [];
+      appendRows(held);
     } catch (error) {
       logError(error);
     }
   }
-  async function* No(It, Ie) {
-    if (Dr) throw Error("headless session: a turn is already in flight");
-    Dr = true;
+  async function* submitMessage(input, turnOptions) {
+    if (turnInFlight) throw Error("headless session: a turn is already in flight");
+    turnInFlight = true;
     if (abortController.signal.aborted) {
       abortController = createAbortController();
-      ce();
+      abortIfParentAborted();
     }
-    let on = abortController;
-    let Zn = $n;
-    let signal = Ie?.abortController?.signal;
-    function Cr() {
-      on.abort(signal?.reason);
+    let turnAbortController = abortController;
+    let turnStartWallMs = lastTurnEndWallMs;
+    let signal = turnOptions?.abortController?.signal;
+    function abortFromCaller() {
+      turnAbortController.abort(signal?.reason);
     }
-    if (signal?.aborted) Cr();
+    if (signal?.aborted) abortFromCaller();
     else
-      signal?.addEventListener("abort", Cr, {
+      signal?.addEventListener("abort", abortFromCaller, {
         once: true,
       });
     try {
@@ -2670,87 +2764,93 @@ function QueryEngine(e) {
       } catch (error) {
         logError(error);
       }
-      We = [];
-      if (!pn) Xe.length = 0;
-      if (Ie?.withdrawnFileUuids?.length) reconcileSavedFilesForTurn(initialMessages, Ie.withdrawnFileUuids);
-      yield* _i(It, Ie, on);
-      for (let mr of We)
-        if (mr.type === "system" && mr.subtype === "informational") yield informationalSystemMessage(mr);
+      settledNoteRows = [];
+      if (!eventsYieldedInput) turnEventRows.length = 0;
+      if (turnOptions?.withdrawnFileUuids?.length)
+        reconcileSavedFilesForTurn(initialMessages, turnOptions.withdrawnFileUuids);
+      yield* runTurn(input, turnOptions, turnAbortController);
+      for (let noteRow of settledNoteRows)
+        if (noteRow.type === "system" && noteRow.subtype === "informational")
+          yield informationalSystemMessage(noteRow);
     } finally {
-      signal?.removeEventListener("abort", Cr);
-      Mr();
-      Yt = undefined;
-      oo(false);
-      Pn = undefined;
-      Dr = false;
+      signal?.removeEventListener("abort", abortFromCaller);
+      flushDeferredRows();
+      turnRecorder = undefined;
+      releaseHeldRows(false);
+      heldSnapshotRows = undefined;
+      turnInFlight = false;
       endProfile();
-      if ($n === Zn) $n = Date.now();
+      if (lastTurnEndWallMs === turnStartWallMs) lastTurnEndWallMs = Date.now();
     }
   }
-  let Fr = [];
-  function Xo(names, Ie = []) {
+  let clientDisallowedTools = [];
+  function applyTurnDenials(names, extraDisallowed = []) {
     let { setToolPermissionContext } = createPermissionContextSetters(setAppState);
-    let Zn;
-    let Nn;
+    let heldToolSet;
+    let promptSnapshot;
     let turnDisallowed;
     getStickyBetas().turnDeniedTools = undefined;
     try {
-      Zn = asDeclaredToolSet(getStickyBetas());
-      Nn = names.length === 0 || Zn !== undefined ? undefined : latestPromptSnapshot(initialMessages);
+      heldToolSet = asDeclaredToolSet(getStickyBetas());
+      promptSnapshot =
+        names.length === 0 || heldToolSet !== undefined ? undefined : latestPromptSnapshot(initialMessages);
       turnDisallowed = getAppState().toolPermissionContext.alwaysDenyRules.command ?? [];
-      if (names.length > 0 && Zn === undefined) {
+      if (names.length > 0 && heldToolSet === undefined) {
         applyTurnDisallowedTools(setToolPermissionContext, []);
-        if (Nn === undefined)
+        if (promptSnapshot === undefined)
           turnDisallowed = getAppState().toolPermissionContext.alwaysDenyRules.command ?? [];
       }
-      if (Nn !== undefined) {
-        fi(Nn);
-        Zn = asDeclaredToolSet(getStickyBetas());
+      if (promptSnapshot !== undefined) {
+        adoptSnapshotTools(promptSnapshot);
+        heldToolSet = asDeclaredToolSet(getStickyBetas());
       }
-      let mr;
-      let io = {
-        held: Zn,
+      let toolsCache;
+      let turnState = {
+        held: heldToolSet,
         messages: initialMessages,
-        isNewConversation: Zn === undefined && Nn === undefined && !getStickyBetas().declaredToolsDecided,
+        isNewConversation:
+          heldToolSet === undefined && promptSnapshot === undefined && !getStickyBetas().declaredToolsDecided,
         model: () =>
           resolveTurnModelAndThinking({
             userSpecifiedModel,
             permissionMode: getAppState().toolPermissionContext.mode,
-            thinkingConfig: resolveLazy(e.thinkingConfig),
+            thinkingConfig: resolveLazy(sessionConfig.thinkingConfig),
           }).mainLoopModel,
       };
-      let Hr = filterTurnDisallowedTools(
+      let deniedTools = filterTurnDisallowedTools(
         names,
         turnDisallowed,
-        () => (mr ??= e.refreshTools?.() ?? resolveLazy(e.tools)),
-        (es) => Zn?.has(es) ?? Nn?.toolDescriptions.has(es) ?? false,
-        (es, Ys) => resolveToolSearchForTurn(es, Ys, io),
+        () => (toolsCache ??= sessionConfig.refreshTools?.() ?? resolveLazy(sessionConfig.tools)),
+        (toolName) => heldToolSet?.has(toolName) ?? promptSnapshot?.toolDescriptions.has(toolName) ?? false,
+        (tool, toolList) => resolveToolSearchForTurn(tool, toolList, turnState),
       );
-      if (Zn === undefined && Hr.length > 0) {
-        mr ??= e.refreshTools?.() ?? resolveLazy(e.tools);
+      if (heldToolSet === undefined && deniedTools.length > 0) {
+        toolsCache ??= sessionConfig.refreshTools?.() ?? resolveLazy(sessionConfig.tools);
         getStickyBetas().turnDeniedTools = declaredToolSetFor(
-          mr,
-          (es) =>
+          toolsCache,
+          (tool) =>
             isToolDisallowedThisTurn(
               {
-                turnDisallowedTools: Hr,
+                turnDisallowedTools: deniedTools,
               },
-              es,
+              tool,
             ),
-          io,
+          turnState,
         );
       }
-      applyTurnDisallowedTools(setToolPermissionContext, uniq([...Ie, ...Hr]));
+      applyTurnDisallowedTools(setToolPermissionContext, uniq([...extraDisallowed, ...deniedTools]));
     } catch (error) {
       logError(error);
       try {
-        let io = turnDisallowed ?? getAppState().toolPermissionContext.alwaysDenyRules.command ?? [];
+        let deniedNames = turnDisallowed ?? getAppState().toolPermissionContext.alwaysDenyRules.command ?? [];
         applyTurnDisallowedTools(
           setToolPermissionContext,
           uniq([
-            ...Ie,
+            ...extraDisallowed,
             ...names.filter(
-              (Hr) => io.includes(Hr) || (Zn?.has(Hr) ?? Nn?.toolDescriptions.has(Hr) ?? false),
+              (toolName) =>
+                deniedNames.includes(toolName) ||
+                (heldToolSet?.has(toolName) ?? promptSnapshot?.toolDescriptions.has(toolName) ?? false),
             ),
           ]),
         );
@@ -2760,25 +2860,25 @@ function QueryEngine(e) {
       }
     }
   }
-  function fi(It) {
+  function adoptSnapshotTools(snapshot) {
     try {
-      let stickyBetas = getStickyBetas();
+      let conversation = getStickyBetas();
       if (
-        stickyBetas.declaredToolsDecided ||
-        e.refreshTools === undefined ||
+        conversation.declaredToolsDecided ||
+        sessionConfig.refreshTools === undefined ||
         !shouldSnapshotSystemPrompt({
-          systemPromptSnapshot: resolveLazy(e.systemPromptSnapshot),
+          systemPromptSnapshot: resolveLazy(sessionConfig.systemPromptSnapshot),
         })
       )
         return;
       let declaredToolSet = resolveDeclaredToolSet(
-        stickyBetas,
+        conversation,
         () => ({
-          names: It.toolDescriptions.keys(),
-          servers: It.toolServers,
-          entries: It.toolEntries,
+          names: snapshot.toolDescriptions.keys(),
+          servers: snapshot.toolServers,
+          entries: snapshot.toolEntries,
         }),
-        e.refreshTools(),
+        sessionConfig.refreshTools(),
         {
           latch: false,
           permissionContext: getAppState().toolPermissionContext,
@@ -2786,65 +2886,75 @@ function QueryEngine(e) {
       );
       if (
         declaredToolSet !== undefined &&
-        [...It.toolDescriptions.keys()].every((key) => declaredToolSet.has(key))
+        [...snapshot.toolDescriptions.keys()].every((key) => declaredToolSet.has(key))
       )
-        stickyBetas.declaredTools ??= declaredToolSet;
+        conversation.declaredTools ??= declaredToolSet;
     } catch (error) {
       logError(error);
     }
   }
-  async function* _i(It, Ie, on) {
-    let Zn = isTypedPersonPrompt(e.session.host, It, Ie, on.signal);
-    if (Zn !== undefined) await Zn;
-    let turnStartClock = Ie?.turnStartClock;
+  async function* runTurn(input, turnOptions, turnAbortController) {
+    let typedPersonPromise = isTypedPersonPrompt(
+      sessionConfig.session.host,
+      input,
+      turnOptions,
+      turnAbortController.signal,
+    );
+    if (typedPersonPromise !== undefined) await typedPersonPromise;
+    let turnStartClock = turnOptions?.turnStartClock;
     useMessageActions(turnStartClock, "tool_reread");
     try {
-      markOwnClientPrompt(L, Ie?.clientPlatform);
-      noteTurnClientPlatform(e.session, Ie?.clientPlatform);
+      markOwnClientPrompt(toolState, turnOptions?.clientPlatform);
+      noteTurnClientPlatform(sessionConfig.session, turnOptions?.clientPlatform);
     } catch (error) {
       logError(error);
     }
-    Fr = Ie?.clientDisallowedTools ?? Fr;
-    if (Ie?.shouldQuery !== false && Ie?.skipSkillPermissionReset !== true)
-      Xo(Ie?.keepsDisallowedTools === true ? Fr : (Ie?.disallowedTools ?? []));
-    let Cr = EMPTY_USAGE;
-    let tools = e.refreshTools?.() ?? resolveLazy(e.tools);
-    let commands = resolveLazy(e.commands);
-    let Hr = e.refreshMcpClients?.() ?? resolveLazy(e.mcpClients);
-    let agents = resolveLazy(e.agents);
-    let allowedAgentTypes = resolveLazy(e.allowedAgentTypes);
-    let primitiveToolGrant = resolveLazy(e.primitiveToolGrant);
-    let ga = resolveLazy(e.jsonSchema);
-    let Ni = resolveLazy(e.customSystemPrompt);
-    let Rd = resolveLazy(e.appendSystemPrompt);
-    let planModeInstructions = resolveLazy(e.planModeInstructions);
-    let systemPromptSnapshot = resolveLazy(e.systemPromptSnapshot);
-    ze(Ni, Rd, systemPromptSnapshot);
-    let appendSubagentSystemPrompt = resolveLazy(e.appendSubagentSystemPrompt);
-    let toolAliases = resolveLazy(e.toolAliases);
-    let excludeDynamicSections = resolveLazy(e.excludeDynamicSections);
-    let forwardSubagentText = resolveLazy(e.forwardSubagentText) ?? false;
-    let { storageV5 } = e;
-    let _a;
+    clientDisallowedTools = turnOptions?.clientDisallowedTools ?? clientDisallowedTools;
+    if (turnOptions?.shouldQuery !== false && turnOptions?.skipSkillPermissionReset !== true)
+      applyTurnDenials(
+        turnOptions?.keepsDisallowedTools === true
+          ? clientDisallowedTools
+          : (turnOptions?.disallowedTools ?? []),
+      );
+    let totalUsage = EMPTY_USAGE;
+    let toolList = sessionConfig.refreshTools?.() ?? resolveLazy(sessionConfig.tools);
+    let commands = resolveLazy(sessionConfig.commands);
+    let mcpClientsSource = sessionConfig.refreshMcpClients?.() ?? resolveLazy(sessionConfig.mcpClients);
+    let agents = resolveLazy(sessionConfig.agents);
+    let allowedAgentTypes = resolveLazy(sessionConfig.allowedAgentTypes);
+    let primitiveToolGrant = resolveLazy(sessionConfig.primitiveToolGrant);
+    let jsonSchema = resolveLazy(sessionConfig.jsonSchema);
+    let customSystemPrompt = resolveLazy(sessionConfig.customSystemPrompt);
+    let appendSystemPrompt = resolveLazy(sessionConfig.appendSystemPrompt);
+    let planModeInstructions = resolveLazy(sessionConfig.planModeInstructions);
+    let systemPromptSnapshot = resolveLazy(sessionConfig.systemPromptSnapshot);
+    handlePromptSnapshot(customSystemPrompt, appendSystemPrompt, systemPromptSnapshot);
+    let appendSubagentSystemPrompt = resolveLazy(sessionConfig.appendSubagentSystemPrompt);
+    let toolAliases = resolveLazy(sessionConfig.toolAliases);
+    let excludeDynamicSections = resolveLazy(sessionConfig.excludeDynamicSections);
+    let forwardSubagentText = resolveLazy(sessionConfig.forwardSubagentText) ?? false;
+    let { storageV5 } = sessionConfig;
+    let cwdNotice;
     useMessageActions(turnStartClock, "cwd");
-    if (e.cwd !== null) {
-      let Ve = resolveLazy(e.cwd);
-      if (isStorageV5Enabled() && storageV5 !== undefined) _a = await setCwdV5OrPin(Ve, e.session, storageV5);
-      else _a = setCwdOrPin(Ve, e.session);
+    if (sessionConfig.cwd !== null) {
+      let cwd = resolveLazy(sessionConfig.cwd);
+      if (isStorageV5Enabled() && storageV5 !== undefined)
+        cwdNotice = await setCwdV5OrPin(cwd, sessionConfig.session, storageV5);
+      else cwdNotice = setCwdOrPin(cwd, sessionConfig.session);
     }
-    if (_a !== undefined) yield _a;
+    if (cwdNotice !== undefined) yield cwdNotice;
     rearmCreditsExhaustedNotice();
-    let to = !isSessionPersistenceDisabled();
+    let persistSession = !isSessionPersistenceDisabled();
     let startTime = performance.now();
     let now = Date.now();
     beginProfile();
-    let turnSignals = readTurnSignals(turnStartClock, Ie?.frameTiming, startTime, now);
+    let turnSignals = readTurnSignals(turnStartClock, turnOptions?.frameTiming, startTime, now);
     useMessageActions(turnStartClock, "earlier_turn", startTime);
-    if (Ie?.shouldQuery !== false) {
-      startFirstRequestGate(e.session, tools);
+    if (turnOptions?.shouldQuery !== false) {
+      startFirstRequestGate(sessionConfig.session, toolList);
       try {
-        kickTurnEndCheckMemCtx(e.session, {
-          credentials: e.credentials,
+        kickTurnEndCheckMemCtx(sessionConfig.session, {
+          credentials: sessionConfig.credentials,
           storageV5,
         });
       } catch (error) {
@@ -2853,77 +2963,83 @@ function QueryEngine(e) {
         );
       }
     }
-    let uuid = Ie?.uuid && (Ie.uuidIsClientEventUuid || !Ie.isMeta) ? Ie.uuid : undefined;
-    let runningTurnRecord = buildRunningTurnRecord(
+    let uuid =
+      turnOptions?.uuid && (turnOptions.uuidIsClientEventUuid || !turnOptions.isMeta)
+        ? turnOptions.uuid
+        : undefined;
+    let record = buildRunningTurnRecord(
       uuid,
-      Ie?.resumeReason === undefined
-        ? Ie?.userMessageUuids
-        : answeredMergedUuids(initialMessages, Ie.userMessageUuids, Ie.alsoLeftToThisReRun),
+      turnOptions?.resumeReason === undefined
+        ? turnOptions?.userMessageUuids
+        : answeredMergedUuids(initialMessages, turnOptions.userMessageUuids, turnOptions.alsoLeftToThisReRun),
       {
-        primaryIsMeta: Ie?.isMeta === true,
-        resultsAlsoList: Ie?.handedOffTurnUserMessageUuids,
-        standIn: Ie?.userMessageUuids?.at(-1),
-        wasPutBack: (Ve) => wasPutBackSafe(e.messageQueue, Ve),
+        primaryIsMeta: turnOptions?.isMeta === true,
+        resultsAlsoList: turnOptions?.handedOffTurnUserMessageUuids,
+        standIn: turnOptions?.userMessageUuids?.at(-1),
+        wasPutBack: (messageUuid) => wasPutBackSafe(sessionConfig.messageQueue, messageUuid),
       },
     );
-    let ts =
-      Ie?.resumeReason !== undefined
+    let resumeReasonStamp =
+      turnOptions?.resumeReason !== undefined
         ? {
-            resume_reason: Ie.resumeReason,
+            resume_reason: turnOptions.resumeReason,
           }
         : undefined;
-    let Ka = {};
-    let { permissionDenials, recordDenial, canUseTool } = createPermissionDenialTracker(e.canUseTool);
+    let lastUserUuidByKind = {};
+    let { permissionDenials, recordDenial, canUseTool } = createPermissionDenialTracker(
+      sessionConfig.canUseTool,
+    );
     let appState = getAppState();
     let { mainLoopModel, runtimeModel, thinkingConfig } = resolveTurnModelAndThinking({
       userSpecifiedModel,
       permissionMode: appState.toolPermissionContext.mode,
-      thinkingConfig: resolveLazy(e.thinkingConfig),
+      thinkingConfig: resolveLazy(sessionConfig.thinkingConfig),
     });
     startProfilePhase("model_config_wait");
     let modelFacts =
-      Ie?.shouldQuery === false
+      turnOptions?.shouldQuery === false
         ? undefined
         : await awaitMcpSettle(runtimeModel, {
-            storageV5: e.storageV5,
-            credentials: e.credentials,
-            abortController: on,
+            storageV5: sessionConfig.storageV5,
+            credentials: sessionConfig.credentials,
+            abortController: turnAbortController,
           });
     endProfilePhase("model_config_wait");
-    if (e.storageV5 !== undefined) loadAllPluginsCacheOnly(e.storageV5, e.credentials).catch(() => {});
-    let Jr = {
-      session: e.session,
-      tools,
+    if (sessionConfig.storageV5 !== undefined)
+      loadAllPluginsCacheOnly(sessionConfig.storageV5, sessionConfig.credentials).catch(() => {});
+    let promptConfig = {
+      session: sessionConfig.session,
+      tools: toolList,
       runtimeModel,
-      customSystemPrompt: Ni,
-      appendSystemPrompt: Rd,
-      appendSystemPromptHead: e.appendSystemPromptHead,
+      customSystemPrompt,
+      appendSystemPrompt,
+      appendSystemPromptHead: sessionConfig.appendSystemPromptHead,
       excludeDynamicSections,
       cacheBreakerPhrase: appState.cacheBreakerPhrase,
-      mcpClients: Hr,
-      storageV5: e.storageV5,
-      credentials: e.credentials,
+      mcpClients: mcpClientsSource,
+      storageV5: sessionConfig.storageV5,
+      credentials: sessionConfig.credentials,
     };
     applyPendingInvalidations();
     let promptRenderEpoch = getSystemPromptSectionEpoch();
     startProfilePhase("system_prompt");
-    let { systemPrompt, userContext, systemContext } = await buildHeadlessSystemPrompt(Jr);
+    let { systemPrompt, userContext, systemContext } = await buildHeadlessSystemPrompt(promptConfig);
     endProfilePhase("system_prompt");
-    let ka = any ? undefined : getUserContextMemoryFiles(e.session);
-    let Oo = {
-      session: e.session,
-      messageQueue: e.messageQueue,
+    let memoryFiles = any ? undefined : getUserContextMemoryFiles(sessionConfig.session);
+    let hostConfig = {
+      session: sessionConfig.session,
+      messageQueue: sessionConfig.messageQueue,
       commands,
-      tools,
-      refreshTools: e.refreshTools,
-      toolCatalog: e.toolCatalog,
-      refreshMcpClients: e.refreshMcpClients,
-      verbose: e.verbose ?? false,
-      fallbackModel: e.fallbackModel,
+      tools: toolList,
+      refreshTools: sessionConfig.refreshTools,
+      toolCatalog: sessionConfig.toolCatalog,
+      refreshMcpClients: sessionConfig.refreshMcpClients,
+      verbose: sessionConfig.verbose ?? false,
+      fallbackModel: sessionConfig.fallbackModel,
       thinkingConfig,
-      mcpClients: Hr,
-      customSystemPrompt: Ni,
-      appendSystemPrompt: Rd,
+      mcpClients: mcpClientsSource,
+      customSystemPrompt,
+      appendSystemPrompt,
       planModeInstructions,
       systemPromptSnapshot,
       appendSubagentSystemPrompt,
@@ -2932,80 +3048,82 @@ function QueryEngine(e) {
       agents,
       allowedAgentTypes,
       primitiveToolGrant,
-      maxBudgetUsd: e.maxBudgetUsd,
-      messageClientPlatform: Ie?.clientPlatform,
-      messageInboundOrigin: Ie?.inboundOrigin,
+      maxBudgetUsd: sessionConfig.maxBudgetUsd,
+      messageClientPlatform: turnOptions?.clientPlatform,
+      messageInboundOrigin: turnOptions?.inboundOrigin,
       forwardSubagentText,
-      requiresStructuredOutput: ga !== undefined && tools.some((Ve) => toolMatchesName(Ve, STRUCTUREDOUTPUT)),
+      requiresStructuredOutput:
+        jsonSchema !== undefined && toolList.some((tool) => toolMatchesName(tool, STRUCTUREDOUTPUT)),
       renderedSystemPrompt: systemPrompt,
       onPermissionDenial: recordDenial,
-      requestDialog: e.requestDialog,
-      sessionState: e.sessionState,
+      requestDialog: sessionConfig.requestDialog,
+      sessionState: sessionConfig.sessionState,
       getAppState,
       setAppState,
-      setSDKStatus: e.setSDKStatus,
+      setSDKStatus: sessionConfig.setSDKStatus,
       readFileState: readFileCache,
-      pendingNestedMemoryTriggers: e.pendingNestedMemoryTriggers,
+      pendingNestedMemoryTriggers: sessionConfig.pendingNestedMemoryTriggers,
       sessionEnvVars,
       memorySelector,
       isolationLatch,
-      toolState: L,
-      sessionHooks: q,
-      storageV5: e.storageV5,
-      credentials: e.credentials,
+      toolState,
+      sessionHooks,
+      storageV5: sessionConfig.storageV5,
+      credentials: sessionConfig.credentials,
     };
-    let headlessToolUseContext = createHeadlessToolUseContext(Oo, {
+    let headlessToolUseContext = createHeadlessToolUseContext(hostConfig, {
       phase: "input",
       messages: initialMessages,
       mainLoopModel,
       appState,
-      abortController: on,
-      setMessages: (Ve) => {
-        let ho = Ve(initialMessages);
-        if (ho !== initialMessages) {
-          if (ho.length === 0) {
-            h.cut();
-            ut = undefined;
+      abortController: turnAbortController,
+      setMessages: (updater) => {
+        let nextMessages = updater(initialMessages);
+        if (nextMessages !== initialMessages) {
+          if (nextMessages.length === 0) {
+            conversation.cut();
+            neverParentUuid = undefined;
           }
           initialMessages.length = 0;
-          initialMessages.push(...ho);
+          initialMessages.push(...nextMessages);
         }
       },
-      applyMessageOp: (Ve) => {
-        let ho = (rd) => {
-          let Ti = applyMessageListEdit(initialMessages, rd);
-          if (Ti !== initialMessages) {
+      applyMessageOp: (op) => {
+        let applyEdit = (edit) => {
+          let editedMessages = applyMessageListEdit(initialMessages, edit);
+          if (editedMessages !== initialMessages) {
             initialMessages.length = 0;
-            initialMessages.push(...Ti);
+            initialMessages.push(...editedMessages);
           }
         };
-        let $o = applyMessageListAppend(Ve, ho);
-        let Is =
-          $o === undefined
-            ? h.behindAppends(() => ho(Ve))
-            : appendRowsWithHooks(h, $o.rows, {
-                keep: $o.keep,
+        let appendBatch = applyMessageListAppend(op, applyEdit);
+        let appendResult =
+          appendBatch === undefined
+            ? conversation.behindAppends(() => applyEdit(op))
+            : appendRowsWithHooks(conversation, appendBatch.rows, {
+                keep: appendBatch.keep,
               });
-        if (Is instanceof Promise) Is.catch(logError);
+        if (appendResult instanceof Promise) appendResult.catch(logError);
       },
-      persistSession: to,
+      persistSession,
     });
-    let Id = Ie?.orphanedPermission?.initFirst === true || Ie?.handedOffTurn !== undefined;
-    if (Id) {
+    let needsInit =
+      turnOptions?.orphanedPermission?.initFirst === true || turnOptions?.handedOffTurn !== undefined;
+    if (needsInit) {
       startProfilePhase("init_message");
-      let Ve = await Qa(Oo, mainLoopModel, appState.fastMode);
+      let initMessage = await buildInitMessage(hostConfig, mainLoopModel, appState.fastMode);
       endProfilePhase("init_message");
       startProfilePhase("init_frame_send");
-      $r = true;
-      yield initWithUserMessageUuids(Ve, runningTurnRecord);
+      initSent = true;
+      yield initWithUserMessageUuids(initMessage, record);
       endProfilePhase("init_frame_send");
     }
-    let Ps = !(Array.isArray(It) && It.length === 0);
-    let zi = false;
+    let hasPrompt = !(Array.isArray(input) && input.length === 0);
+    let handoffRan = false;
     let permissionLayers = headlessToolUseContext.permissionLayers;
-    if (!$r)
+    if (!initSent)
       try {
-        e.onTurnBeganBeforeInit?.();
+        sessionConfig.onTurnBeganBeforeInit?.();
       } catch (error) {
         logError(
           new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -3015,50 +3133,50 @@ function QueryEngine(e) {
         );
       }
     startProfilePhase("resume_other");
-    let Hs = Ie?.inPlaceOfFirstRequest !== undefined;
-    let Si = Hs ? undefined : Ie;
-    let Ms = yield* runHeadlessTurn({
-      orphanedPermission: Si?.orphanedPermission,
-      handedOffTurn: Si?.handedOffTurn,
-      beginTranscriptFlush: e.beginTranscriptFlush,
-      awaitStagedFiles: e.awaitStagedFiles,
-      placeFilesByName: e.placeFilesByName,
-      placeCarriedWrites: e.placeCarriedWrites,
-      handoffRelay: e.handoffRelay,
-      deferredToolUse: Si?.deferredToolUse,
-      hasPrompt: Ps,
-      tools,
+    let inPlaceOfFirstRequest = turnOptions?.inPlaceOfFirstRequest !== undefined;
+    let turnOverrides = inPlaceOfFirstRequest ? undefined : turnOptions;
+    let earlyReturned = yield* runHeadlessTurn({
+      orphanedPermission: turnOverrides?.orphanedPermission,
+      handedOffTurn: turnOverrides?.handedOffTurn,
+      beginTranscriptFlush: sessionConfig.beginTranscriptFlush,
+      awaitStagedFiles: sessionConfig.awaitStagedFiles,
+      placeFilesByName: sessionConfig.placeFilesByName,
+      placeCarriedWrites: sessionConfig.placeCarriedWrites,
+      handoffRelay: sessionConfig.handoffRelay,
+      deferredToolUse: turnOverrides?.deferredToolUse,
+      hasPrompt,
+      tools: toolList,
       mutableMessages: initialMessages,
       processUserInputContext: headlessToolUseContext,
       canUseTool,
-      answers: e.answers,
-      persistSession: to,
+      answers: sessionConfig.answers,
+      persistSession,
       earlyResult: {
         startedAt: startTime,
-        usage: Cr,
+        usage: totalUsage,
         permissionDenials,
         mainLoopModel,
         fastMode: appState.fastMode,
-        origin: Ie?.origin,
-        sendEcho: runningTurnRecord.fields(),
-        resumeReasonStamp: ts,
+        origin: turnOptions?.origin,
+        sendEcho: record.fields(),
+        resumeReasonStamp,
       },
-      onHandedOffCallsRan: (Ve) => {
-        zi = true;
-        permissionLayers = Ve;
+      onHandedOffCallsRan: (nextLayers) => {
+        handoffRan = true;
+        permissionLayers = nextLayers;
       },
-      onOrphanedAnswerSettled: e.onOrphanedAnswerSettled,
+      onOrphanedAnswerSettled: sessionConfig.onOrphanedAnswerSettled,
     });
     endProfilePhase("resume_other");
-    if (Ms) return;
-    let Od = profileCheckpoint("before_processUserInput", {
+    if (earlyReturned) return;
+    let processInputCheckpoint = profileCheckpoint("before_processUserInput", {
       once: true,
     });
-    let Dd =
-      Ie?.hearthRelayMessageIds !== undefined ||
-      Ie?.hearthRelayRows !== undefined ||
-      Ie?.hearthRelayThreadTs !== undefined;
-    let turnId = ensureTurnId(Ie?.uuid, Ie?.verifiedSlackHumanTurn || Dd);
+    let hasHearthRelay =
+      turnOptions?.hearthRelayMessageIds !== undefined ||
+      turnOptions?.hearthRelayRows !== undefined ||
+      turnOptions?.hearthRelayThreadTs !== undefined;
+    let turnId = ensureTurnId(turnOptions?.uuid, turnOptions?.verifiedSlackHumanTurn || hasHearthRelay);
     using promptEntryTracker = createPromptEntryTracker();
     startProfilePhase("process_user_input");
     let {
@@ -3072,107 +3190,128 @@ function QueryEngine(e) {
       commandExitCode,
       interrupted,
     } = await processUserInput({
-      input: It,
-      mode: Ie?.inputMode ?? "prompt",
-      clientBashCommand: Ie?.inputMode === "bash",
-      clientBashCommandCwd: Ie?.inputMode === "bash" ? Ie.clientBashCommandCwd : undefined,
+      input,
+      mode: turnOptions?.inputMode ?? "prompt",
+      clientBashCommand: turnOptions?.inputMode === "bash",
+      clientBashCommandCwd: turnOptions?.inputMode === "bash" ? turnOptions.clientBashCommandCwd : undefined,
       interactionPrompt: currentPromptHandle(),
       context: {
         ...headlessToolUseContext,
         messages: initialMessages,
-        askPerson: (Ve) =>
+        askPerson: (askRequest) =>
           confirmWithUser({
-            ...Ve,
+            ...askRequest,
             canUseTool,
             toolUseContext: headlessToolUseContext,
           }),
       },
       messages: initialMessages,
       uuid: turnId,
-      isMeta: Ie?.isMeta,
-      shouldQuery: Ie?.shouldQuery,
-      queryHeldForNextTurn: Ie?.queryHeldForNextTurn,
+      isMeta: turnOptions?.isMeta,
+      shouldQuery: turnOptions?.shouldQuery,
+      queryHeldForNextTurn: turnOptions?.queryHeldForNextTurn,
       querySource: "sdk",
-      origin: Ie?.origin,
-      skipSlashCommands: Hs || Ie?.skipSlashCommands,
-      skipAttachments: Hs
+      origin: turnOptions?.origin,
+      skipSlashCommands: inPlaceOfFirstRequest || turnOptions?.skipSlashCommands,
+      skipAttachments: inPlaceOfFirstRequest
         ? "all"
-        : Ie?.skipAttachments
-          ? Ie.shouldQuery === false
+        : turnOptions?.skipAttachments
+          ? turnOptions.shouldQuery === false
             ? "all"
             : "mentions"
           : undefined,
-      skipSubmissionHooks: Hs || Ie?.skipSubmissionHooks,
-      aheadOfSessionStart: Ie?.orphanedPermission !== undefined,
-      bridgeOrigin: Si?.bridgeOrigin,
-      localStdinOrigin: Ie?.localStdinOrigin,
-      sessionChannelPersonTyped: Ie?.sessionChannelPersonTyped,
-      ownWordUuids: Ie?.ownWordUuids,
-      hostInitiator: Ie?.hostInitiator,
-      inboundOrigin: Ie?.inboundOrigin,
-      toolsUsed: Ie?.toolsUsed,
-      modelScheduledOrigin: Si?.modelScheduledOrigin,
-      wakeupSource: Ie?.wakeupSource,
-      artifactCommentTurn: Ie?.artifactCommentTurn,
-      pollEventDelivery: Ie?.pollEventDelivery,
-      pollEventProvenance: Ie?.pollEventProvenance,
-      pollEventDeclared: Ie?.pollEventDeclared,
-      skipSkillPermissionReset: Ie?.skipSkillPermissionReset === true || zi,
-      verifiedSlackHumanTurn: Ie?.verifiedSlackHumanTurn,
-      textNotTyped: Ie?.textNotTyped,
-      ownFilePaths: Ie?.ownFilePaths,
-      noPersonArrived: Ie?.noPersonArrived,
-      inlinedImagePaths: Ie?.inlinedImagePaths,
-      stampThreadState: Ie?.stampThreadState,
+      skipSubmissionHooks: inPlaceOfFirstRequest || turnOptions?.skipSubmissionHooks,
+      aheadOfSessionStart: turnOptions?.orphanedPermission !== undefined,
+      bridgeOrigin: turnOverrides?.bridgeOrigin,
+      localStdinOrigin: turnOptions?.localStdinOrigin,
+      sessionChannelPersonTyped: turnOptions?.sessionChannelPersonTyped,
+      ownWordUuids: turnOptions?.ownWordUuids,
+      hostInitiator: turnOptions?.hostInitiator,
+      inboundOrigin: turnOptions?.inboundOrigin,
+      toolsUsed: turnOptions?.toolsUsed,
+      modelScheduledOrigin: turnOverrides?.modelScheduledOrigin,
+      wakeupSource: turnOptions?.wakeupSource,
+      artifactCommentTurn: turnOptions?.artifactCommentTurn,
+      pollEventDelivery: turnOptions?.pollEventDelivery,
+      pollEventProvenance: turnOptions?.pollEventProvenance,
+      pollEventDeclared: turnOptions?.pollEventDeclared,
+      skipSkillPermissionReset: turnOptions?.skipSkillPermissionReset === true || handoffRan,
+      verifiedSlackHumanTurn: turnOptions?.verifiedSlackHumanTurn,
+      textNotTyped: turnOptions?.textNotTyped,
+      ownFilePaths: turnOptions?.ownFilePaths,
+      noPersonArrived: turnOptions?.noPersonArrived,
+      inlinedImagePaths: turnOptions?.inlinedImagePaths,
+      stampThreadState: turnOptions?.stampThreadState,
       entries: promptEntryTracker,
     });
     endProfilePhase("process_user_input");
     startProfilePhase("conversation_append");
-    if (Od) profileCheckpoint("after_processUserInput");
-    let opt =
-      (Ie?.orphanedPermission !== undefined || Ie?.handedOffTurn !== undefined) && !Ps
+    if (processInputCheckpoint) profileCheckpoint("after_processUserInput");
+    let messages_2 =
+      (turnOptions?.orphanedPermission !== undefined || turnOptions?.handedOffTurn !== undefined) &&
+      !hasPrompt
         ? messages.filter((message) => !isEmptyUserMessage(message))
-        : Hs
+        : inPlaceOfFirstRequest
           ? messages.filter(
               (message) =>
-                Ie?.refusedPromptIsStoredAlready === true &&
+                turnOptions?.refusedPromptIsStoredAlready === true &&
                 message.type === "user" &&
                 message.isMeta !== true,
             )
           : messages;
-    let Do = Ie?.inPlaceOfFirstRequest !== "nothing" && (Hs || (shouldQuery && Ie?.shouldQuery !== false));
-    if (Ie?.origin?.kind !== "plugin") setLocalCommandExitCode(Do ? undefined : commandExitCode);
-    if (Ie?.origin) stampMissingOrigin(opt, Ie.origin);
-    if (Ie?.skipAttachments === true) markSkipAttachments(opt);
-    if (Ie?.textNotTyped === true) markTextNotTyped(opt);
-    if (Ie?.shouldQuery === false && Ie.queryHeldForNextTurn !== true) markTranscriptOnly(opt);
+    let shouldRunModel =
+      turnOptions?.inPlaceOfFirstRequest !== "nothing" &&
+      (inPlaceOfFirstRequest || (shouldQuery && turnOptions?.shouldQuery !== false));
+    if (turnOptions?.origin?.kind !== "plugin")
+      setLocalCommandExitCode(shouldRunModel ? undefined : commandExitCode);
+    if (turnOptions?.origin) stampMissingOrigin(messages_2, turnOptions.origin);
+    if (turnOptions?.skipAttachments === true) markSkipAttachments(messages_2);
+    if (turnOptions?.textNotTyped === true) markTextNotTyped(messages_2);
+    if (turnOptions?.shouldQuery === false && turnOptions.queryHeldForNextTurn !== true)
+      markTranscriptOnly(messages_2);
     if (interrupted)
-      markDroppedPrompts(opt, turnId, Ie?.resumeReason === undefined ? Ie?.userMessageUuids : undefined);
-    if (Ie?.taskDelivery) attachTaskDelivery(opt, Ie.taskDelivery, turnId);
-    stampMergedSends(opt, turnId, Ie?.mergedSendUuids, Ie?.clientPlatform, getContextKey());
-    withdrawBridgeAttachments(opt, turnId, It, Ie?.imageFileUuids, Ie?.savedFiles);
-    if (Ie?.verifiedSlackHumanTurn && turnId)
-      markVerifiedHumanTurn(opt, turnId, {
-        projectsUserTurn: Ie.projectsUserTurn === true,
-        emailSenderTurn: Ie.emailSenderTurn,
+      markDroppedPrompts(
+        messages_2,
+        turnId,
+        turnOptions?.resumeReason === undefined ? turnOptions?.userMessageUuids : undefined,
+      );
+    if (turnOptions?.taskDelivery) attachTaskDelivery(messages_2, turnOptions.taskDelivery, turnId);
+    stampMergedSends(
+      messages_2,
+      turnId,
+      turnOptions?.mergedSendUuids,
+      turnOptions?.clientPlatform,
+      getContextKey(),
+    );
+    withdrawBridgeAttachments(
+      messages_2,
+      turnId,
+      input,
+      turnOptions?.imageFileUuids,
+      turnOptions?.savedFiles,
+    );
+    if (turnOptions?.verifiedSlackHumanTurn && turnId)
+      markVerifiedHumanTurn(messages_2, turnId, {
+        projectsUserTurn: turnOptions.projectsUserTurn === true,
+        emailSenderTurn: turnOptions.emailSenderTurn,
       });
-    if (Dd && turnId)
-      setHearthRelayMetadata(opt, turnId, {
-        messageIds: Ie?.hearthRelayMessageIds,
-        rows: Ie?.hearthRelayRows,
-        threadTs: Ie?.hearthRelayThreadTs,
+    if (hasHearthRelay && turnId)
+      setHearthRelayMetadata(messages_2, turnId, {
+        messageIds: turnOptions?.hearthRelayMessageIds,
+        rows: turnOptions?.hearthRelayRows,
+        threadTs: turnOptions?.hearthRelayThreadTs,
       });
-    if (y)
-      y =
+    if (announceBeforePrompt)
+      announceBeforePrompt =
         !checkSessionStartPlacement({
           conversation: initialMessages,
-          turnMessages: opt,
+          turnMessages: messages_2,
           model: runtimeModel,
-          startsModelTurn: Do,
-        }) && !Do;
-    if (Do)
+          startsModelTurn: shouldRunModel,
+        }) && !shouldRunModel;
+    if (shouldRunModel)
       try {
-        e.beforeTurnInput?.();
+        sessionConfig.beforeTurnInput?.();
       } catch (error) {
         logError(
           new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -3181,73 +3320,82 @@ function QueryEngine(e) {
           ),
         );
       }
-    let found = opt.find(isCompactBoundaryMessage);
-    if (found !== undefined) await mirrorTaskListSnapshot(found, e.session, e.storageV5);
-    if (appendHookableFastPath()) await h.settled();
-    let ni = {
+    let compactResult = messages_2.find(isCompactBoundaryMessage);
+    if (compactResult !== undefined)
+      await mirrorTaskListSnapshot(compactResult, sessionConfig.session, sessionConfig.storageV5);
+    if (appendHookableFastPath()) await conversation.settled();
+    let turnSpan = {
       before: initialMessages.at(-1)?.uuid,
       next: undefined,
     };
-    let lt = await appendRowsWithHooks(h, opt);
-    if (lt !== opt) opt.splice(0, opt.length, ...lt);
-    let errorRowBehindRefusedPrompt = Hs ? Ie?.errorRowBehindRefusedPrompt : undefined;
+    let appendedOpt = await appendRowsWithHooks(conversation, messages_2);
+    if (appendedOpt !== messages_2) messages_2.splice(0, messages_2.length, ...appendedOpt);
+    let errorRowBehindRefusedPrompt = inPlaceOfFirstRequest
+      ? turnOptions?.errorRowBehindRefusedPrompt
+      : undefined;
     if (
       errorRowBehindRefusedPrompt !== undefined &&
       initialMessages.findLastIndex(
         (initialMessage) => initialMessage.uuid === errorRowBehindRefusedPrompt.uuid,
       ) === -1
     )
-      h.keep([errorRowBehindRefusedPrompt]);
-    if (errorRowBehindRefusedPrompt !== undefined) ut = Ie?.uuid;
+      conversation.keep([errorRowBehindRefusedPrompt]);
+    if (errorRowBehindRefusedPrompt !== undefined) neverParentUuid = turnOptions?.uuid;
     promptEntryTracker.handedOff();
-    let ar = [...initialMessages];
-    if (isFoamySpringEnabled()) Pn = [];
-    let pr = persistTurnRows({
+    let turnMessages = [...initialMessages];
+    if (isFoamySpringEnabled()) heldSnapshotRows = [];
+    let persistWriter = persistTurnRows({
       conversation: initialMessages,
-      messages: ar,
-      persistSession: to,
-      storageV5: e.storageV5,
-      holdsLoadersRows: e.loadShowsCutOffCalls === true,
-      foldCopies: e.messageQueue,
-      neverParentUuid: ut,
+      messages: turnMessages,
+      persistSession,
+      storageV5: sessionConfig.storageV5,
+      holdsLoadersRows: sessionConfig.loadShowsCutOffCalls === true,
+      foldCopies: sessionConfig.messageQueue,
+      neverParentUuid,
     });
-    Yt = to ? pr : undefined;
-    if (Do && !Hs && !interrupted && Ie?.origin?.kind === "human" && isSunnyGardenSenderAddress())
-      await prefetchSenderAddressFor(promptIdForRequest(ar, mainAgentContext()));
-    let qo = Boolean(env.CLAUDE_CODE_EAGER_FLUSH) || Boolean(env.CLAUDE_CODE_IS_COWORK);
-    if (to && opt.length > 0) {
-      let Ve = pr.record();
+    turnRecorder = persistSession ? persistWriter : undefined;
+    if (
+      shouldRunModel &&
+      !inPlaceOfFirstRequest &&
+      !interrupted &&
+      turnOptions?.origin?.kind === "human" &&
+      isSunnyGardenSenderAddress()
+    )
+      await prefetchSenderAddressFor(promptIdForRequest(turnMessages, mainAgentContext()));
+    let eagerFlush = Boolean(env.CLAUDE_CODE_EAGER_FLUSH) || Boolean(env.CLAUDE_CODE_IS_COWORK);
+    if (persistSession && messages_2.length > 0) {
+      let recordPromise = persistWriter.record();
       if (isBareMode());
       else {
         endProfilePhase("conversation_append");
         startProfilePhase("transcript_persist");
-        await Ve;
-        if (qo) await flushSessionStorage();
+        await recordPromise;
+        if (eagerFlush) await flushSessionStorage();
         endProfilePhase("transcript_persist");
         startProfilePhase("conversation_append");
       }
     }
-    let oi =
-      Ie?.inputMode === "bash"
-        ? userRowsWithoutInput(opt)
-        : e.replayUserMessages
-          ? userRowsToReplay(opt, Ie)
+    let replayRows =
+      turnOptions?.inputMode === "bash"
+        ? userRowsWithoutInput(messages_2)
+        : sessionConfig.replayUserMessages
+          ? userRowsToReplay(messages_2, turnOptions)
           : [];
-    let includePartialMessages = e.includePartialMessages ?? false;
-    let Ct = includePartialMessages && (e.replayAcksAtRequestDispatch ?? false);
+    let includePartialMessages = sessionConfig.includePartialMessages ?? false;
+    let replayAcks = includePartialMessages && (sessionConfig.replayAcksAtRequestDispatch ?? false);
     endProfilePhase("conversation_append");
     startProfilePhase("tool_pool_refresh");
-    applyPollEventToolPermissions(createPermissionContextSetters(setAppState), allowedTools, Ie);
-    let cs = model != null && (isExemptDefaultResolvingPick(model) || isModelAllowed(model));
-    if (model && !cs)
+    applyPollEventToolPermissions(createPermissionContextSetters(setAppState), allowedTools, turnOptions);
+    let skillModelAllowed = model != null && (isExemptDefaultResolvingPick(model) || isModelAllowed(model));
+    if (model && !skillModelAllowed)
       logForDebugging(
         `Skill/command model "${model}" is not in the availableModels allowlist; keeping the session model`,
         {
           level: "warn",
         },
       );
-    let model_2 =
-      cs &&
+    let selectedModel =
+      skillModelAllowed &&
       isSkillModelOverrideAllowedInMode({
         skillModel: model,
         mode: getAppState().toolPermissionContext.mode,
@@ -3255,30 +3403,34 @@ function QueryEngine(e) {
       })
         ? model
         : mainLoopModel;
-    Ae = {
-      model: model_2,
+    activeFastMode = {
+      model: selectedModel,
       enabled: appState.fastMode,
     };
-    let Zi = tools;
-    let mcpClients = Hr;
-    let si;
+    let effectiveTools = toolList;
+    let mcpClients = mcpClientsSource;
+    let toolPoolReused;
     try {
-      let Ve = e.refreshTools?.() ?? tools;
-      if (e.refreshTools !== undefined) si = Ve === tools;
-      Zi = Ve.length === tools.length && Ve.every((ho, $o) => ho.name === tools[$o]?.name) ? tools : Ve;
-      mcpClients = e.refreshMcpClients?.() ?? Hr;
+      let refreshedTools = sessionConfig.refreshTools?.() ?? toolList;
+      if (sessionConfig.refreshTools !== undefined) toolPoolReused = refreshedTools === toolList;
+      effectiveTools =
+        refreshedTools.length === toolList.length &&
+        refreshedTools.every((tool, index) => tool.name === toolList[index]?.name)
+          ? toolList
+          : refreshedTools;
+      mcpClients = sessionConfig.refreshMcpClients?.() ?? mcpClientsSource;
     } catch (error) {
       logError(error);
     }
     endProfilePhase("tool_pool_refresh");
-    if (Zi !== tools)
+    if (effectiveTools !== toolList)
       try {
         let systemPromptSectionEpoch = getSystemPromptSectionEpoch();
         startProfilePhase("system_prompt_rebuild");
         try {
           ({ systemPrompt, userContext, systemContext } = await buildHeadlessSystemPrompt({
-            ...Jr,
-            tools: Zi,
+            ...promptConfig,
+            tools: effectiveTools,
           }));
         } finally {
           endProfilePhase("system_prompt_rebuild");
@@ -3287,18 +3439,18 @@ function QueryEngine(e) {
       } catch (error) {
         if (!isAbortError(error)) logError(error);
       }
-    let xd = {
-      ...Oo,
-      tools: Zi,
+    let queryHostConfig = {
+      ...hostConfig,
+      tools: effectiveTools,
       mcpClients,
       renderedSystemPrompt: systemPrompt,
     };
-    let headlessToolUseContext_2 = createHeadlessToolUseContext(xd, {
+    let headlessToolUseContext_2 = createHeadlessToolUseContext(queryHostConfig, {
       phase: "query",
-      messages: ar,
-      mainLoopModel: model_2,
+      messages: turnMessages,
+      mainLoopModel: selectedModel,
       appState: getAppState(),
-      abortController: on,
+      abortController: turnAbortController,
       permissionLayers:
         effort !== undefined
           ? [
@@ -3311,49 +3463,55 @@ function QueryEngine(e) {
           : permissionLayers,
       activeSkill: headlessToolUseContext.options.activeSkill,
     });
-    if (!Id) {
+    if (!needsInit) {
       startProfilePhase("init_message");
-      let Ve = await Qa(xd, model_2, appState.fastMode);
+      let initPayload = await buildInitMessage(queryHostConfig, selectedModel, appState.fastMode);
       endProfilePhase("init_message");
       startProfilePhase("init_frame_send");
-      $r = true;
+      initSent = true;
       let startToInitMs = elapsedMs(startTime, performance.now());
-      yield initWithUserMessageUuids(Ve, runningTurnRecord);
-      if (Do)
+      yield initWithUserMessageUuids(initPayload, record);
+      if (shouldRunModel)
         sampleQueueLatency({
-          enqueuedWallMs: Ie?.frameTiming?.enqueuedWallMs,
-          previousTurnEndedWallMs: $n,
+          enqueuedWallMs: turnOptions?.frameTiming?.enqueuedWallMs,
+          previousTurnEndedWallMs: lastTurnEndWallMs,
           startWallMs: now,
           startToInitMs,
         });
     } else startProfilePhase("init_frame_send");
     logShouldQueryResolved({
-      shouldQuery: Do,
+      shouldQuery: shouldRunModel,
       fromUserInput: shouldQuery,
-      fromOptions: Ie?.shouldQuery,
+      fromOptions: turnOptions?.shouldQuery,
     });
-    yield* preservedAttachmentRows(opt, getSessionId());
+    yield* preservedAttachmentRows(messages_2, getSessionId());
     if (!any) {
       any = true;
-      let Ve = await checkContextInstructionsSize(ka, getSessionId(), model_2);
-      if (Ve !== null) yield Ve;
+      let sizeWarning = await checkContextInstructionsSize(memoryFiles, getSessionId(), selectedModel);
+      if (sizeWarning !== null) yield sizeWarning;
     }
-    if (!G) {
-      G = true;
-      let Ve = gatewayCodeTabRulesNotice(e.session);
-      if (Ve !== null) yield Ve;
+    if (!gatewayNoticeShown) {
+      gatewayNoticeShown = true;
+      let gatewayNotice = gatewayCodeTabRulesNotice(sessionConfig.session);
+      if (gatewayNotice !== null) yield gatewayNotice;
     }
-    if (!Do) {
+    if (!shouldRunModel) {
       endProfilePhase("init_frame_send");
-      if (Ie?.inputMode !== "bash") yield* replayMessagesToSdk(opt);
-      if (to) {
-        await pr.record(e.loadShowsCutOffCalls === true && Ie?.resumeReason !== undefined && !interrupted);
-        if (qo) await flushSessionStorage();
+      if (turnOptions?.inputMode !== "bash") yield* replayMessagesToSdk(messages_2);
+      if (persistSession) {
+        await persistWriter.record(
+          sessionConfig.loadShowsCutOffCalls === true &&
+            turnOptions?.resumeReason !== undefined &&
+            !interrupted,
+        );
+        if (eagerFlush) await flushSessionStorage();
       }
-      yield* Ie?.inputMode === "bash" ? replayUserRows(oi, Ie) : userRowsForSdk(oi, Ie);
+      yield* turnOptions?.inputMode === "bash"
+        ? replayUserRows(replayRows, turnOptions)
+        : userRowsForSdk(replayRows, turnOptions);
       if (interrupted)
         try {
-          Ie?.onPromptCheckInterrupted?.();
+          turnOptions?.onPromptCheckInterrupted?.();
         } catch (error) {
           if (isAbortError(error)) logForDebugging(`onPromptCheckInterrupted aborted: ${error}`);
           else logError(error);
@@ -3367,632 +3525,690 @@ function QueryEngine(e) {
           stop_reason: null,
           session_id: getSessionId(),
           total_cost_usd: getTotalCostUSD(),
-          usage: Cr,
+          usage: totalUsage,
           modelUsage: getModelUsage(),
           permission_denials: permissionDenials,
           terminal_reason: interrupted ? "aborted_streaming" : undefined,
-          fast_mode_state: getFastModeState(model_2, getAppState().fastMode),
+          fast_mode_state: getFastModeState(selectedModel, getAppState().fastMode),
           fast_mode_disabled_reason:
             getFastModeUnavailableReasonCode() ??
-            getFastRejectedReason(model_2, getAppState().fastMode) ??
+            getFastRejectedReason(selectedModel, getAppState().fastMode) ??
             undefined,
-          origin: Ie?.origin,
-          subagent_stats: buildFileHistorySnapshotChain(e.session),
+          origin: turnOptions?.origin,
+          subagent_stats: buildFileHistorySnapshotChain(sessionConfig.session),
           safety_stops: getSafetyStops(),
         },
         variant: interrupted
           ? {
               subtype: "error_during_execution",
               errors: ["prompt_check: the turn was stopped before its prompt was checked"],
-              ...runningTurnRecord.errorVariantFields(),
-              ...ts,
+              ...record.errorVariantFields(),
+              ...resumeReasonStamp,
             }
           : {
               subtype: "success",
               result: resultText ?? "",
-              ...runningTurnRecord.fields(),
-              ...ts,
+              ...record.fields(),
+              ...resumeReasonStamp,
               ...(localCommand !== undefined && {
                 local_command: normalizeCustomSubtype(localCommand),
               }),
             },
       });
-      if (pn) await jn(pr, ar, to, qo);
+      if (eventsYieldedInput) await recordTurnNotes(persistWriter, turnMessages, persistSession, eagerFlush);
       return;
     }
-    yield* systemMessagesToSdk(opt);
-    if (fileHistoryEnabled() && to)
-      opt
-        .filter((Ve) => isOwnPromptRow(Ve, Ie))
-        .forEach((Ve) => {
+    yield* systemMessagesToSdk(messages_2);
+    if (fileHistoryEnabled() && persistSession)
+      messages_2
+        .filter((row) => isOwnPromptRow(row, turnOptions))
+        .forEach((ownRow) => {
           fileHistoryMakeSnapshot(
             headlessToolUseContext_2.getFileHistoryState,
             headlessToolUseContext_2.applyFileHistoryOp,
-            Ve.uuid,
+            ownRow.uuid,
           );
         });
     let turnTiming = startTurnTiming({
       toolUseContext: headlessToolUseContext_2,
-      sessionState: e.sessionState,
+      sessionState: sessionConfig.sessionState,
     });
-    let Ja = false;
-    let El = false;
-    let hr = 0;
-    let emitPlainDelta = includePartialMessages ? Ie?.emitPlainDelta : undefined;
+    let plainDeltaActive = false;
+    let sawTextDelta = false;
+    let plainDeltaCount = 0;
+    let emitPlainDelta = includePartialMessages ? turnOptions?.emitPlainDelta : undefined;
     let takePlainDelta =
       emitPlainDelta === undefined
         ? undefined
-        : (Ve) => {
+        : (streamEventMessage) => {
             if (
               emitPlainDelta === undefined ||
-              !Ja ||
-              (!El && Ve.event.type === "content_block_delta" && Ve.event.delta.type === "text_delta")
+              !plainDeltaActive ||
+              (!sawTextDelta &&
+                streamEventMessage.event.type === "content_block_delta" &&
+                streamEventMessage.event.delta.type === "text_delta")
             )
               return false;
             try {
-              let ho = emitPlainDelta(
-                toStreamEventMessage(Ve, {
+              let emitted = emitPlainDelta(
+                toStreamEventMessage(streamEventMessage, {
                   uuid: randomUUID(),
                   session_id: getSessionId(),
                 }),
               );
-              if (ho) hr++;
-              return ho;
+              if (emitted) plainDeltaCount++;
+              return emitted;
             } catch (error) {
               emitPlainDelta = undefined;
               logPlainDeltaFailure("host_threw", error);
               return false;
             }
           };
-    Se = {
-      messages: ar,
+    pendingParams = {
+      messages: turnMessages,
       systemPrompt,
       promptRenderEpoch,
       modelFacts,
       userContext,
       systemContext,
-      canUseTool: e.canUseTool,
+      canUseTool: sessionConfig.canUseTool,
       toolUseContext: headlessToolUseContext_2,
-      fallbackModel: e.fallbackModel,
+      fallbackModel: sessionConfig.fallbackModel,
       querySource: "sdk",
-      maxTurns: e.maxTurns,
-      taskBudget: e.taskBudget,
+      maxTurns: sessionConfig.maxTurns,
+      taskBudget: sessionConfig.taskBudget,
       takePlainDelta,
-      stopHookActive: Ie?.stopHookActive,
-      joinedDisallowedTools: (Ve) => {
-        let ho = Ve.length > 0 ? [] : (e.refreshMcpClients?.() ?? resolveLazy(e.mcpClients));
-        Xo(
-          Ve,
+      stopHookActive: turnOptions?.stopHookActive,
+      joinedDisallowedTools: (toolNames) => {
+        let cleanMcpClients =
+          toolNames.length > 0
+            ? []
+            : (sessionConfig.refreshMcpClients?.() ?? resolveLazy(sessionConfig.mcpClients));
+        applyTurnDenials(
+          toolNames,
           filterMcpToolsBySelectedServers(
             getAppState().toolPermissionContext.turnDisallowedTools ?? [],
-            Ve,
-            ho,
+            toolNames,
+            cleanMcpClients,
           ),
         );
-        Fr = uniq([...filterMcpToolsBySelectedServers(Fr, Ve, ho), ...Ve]);
+        clientDisallowedTools = uniq([
+          ...filterMcpToolsBySelectedServers(clientDisallowedTools, toolNames, cleanMcpClients),
+          ...toolNames,
+        ]);
       },
-      inPlaceOfFirstRequest: Ie?.inPlaceOfFirstRequest === "nothing" ? undefined : Ie?.inPlaceOfFirstRequest,
+      inPlaceOfFirstRequest:
+        turnOptions?.inPlaceOfFirstRequest === "nothing" ? undefined : turnOptions?.inPlaceOfFirstRequest,
     };
-    Me();
-    let last = getInMemoryErrors().at(-1);
-    for (let Ve of wt) Ve.next = ni;
-    wt.clear();
-    wt.add(ni);
-    let ba = _n(
+    takeTurnError();
+    let sinceError = getInMemoryErrors().at(-1);
+    for (let span of openTurnSpans) span.next = turnSpan;
+    openTurnSpans.clear();
+    openTurnSpans.add(turnSpan);
+    let turnStartEventId = runSafely(
       "turn.start",
       () =>
         buildTurnStartEvent({
           turnEvents: turnStreamBridge,
-          newMessages: opt,
-          input: typeof It === "string" ? It : undefined,
-          signal: on.signal,
-          abort: () => on.abort(userAbortReason("turn-abort")),
+          newMessages: messages_2,
+          input: typeof input === "string" ? input : undefined,
+          signal: turnAbortController.signal,
+          abort: () => turnAbortController.abort(userAbortReason("turn-abort")),
         }),
       undefined,
     );
     endProfilePhase("init_frame_send");
     startProfilePhase("engine_pickup");
-    Ee.enqueue({
+    inputStream.enqueue({
       type: "user",
       message: {
         role: "user",
-        content: It,
+        content: input,
       },
       parent_tool_use_id: null,
-      origin: Ie?.origin,
+      origin: turnOptions?.origin,
     });
     let turnId_2 = randomUUID();
-    let Gs = new Map();
-    let ig = () => e.refreshTools?.() ?? Zi;
+    let displayOverrides = new Map();
+    let currentTools = () => sessionConfig.refreshTools?.() ?? effectiveTools;
     let replayOwnTaskNotifications = false;
     try {
-      replayOwnTaskNotifications = resolveLazy(e.replayOwnTaskNotifications) ?? false;
+      replayOwnTaskNotifications = resolveLazy(sessionConfig.replayOwnTaskNotifications) ?? false;
     } catch (error) {
       logError(error);
     }
-    let Im = {
-      replayUserMessages: e.replayUserMessages ?? false,
+    let sdkOptions = {
+      replayUserMessages: sessionConfig.replayUserMessages ?? false,
       replayOwnTaskNotifications,
       includePartialMessages,
       ...false,
     };
     let retractionFilter = createRetractionFilter();
-    let Ao = (Ve) => collapseRefusalFallbackNotices(retractionFilter.settle(Ve), getSessionId());
+    let collapseNotices = (reason) =>
+      collapseRefusalFallbackNotices(retractionFilter.settle(reason), getSessionId());
     let partialStreamRetraction = createPartialStreamRetraction(includePartialMessages);
-    let Il = ga ? countNamedToolUses(initialMessages, STRUCTUREDOUTPUT) : 0;
-    let last_2 = initialMessages.at(-1);
-    let vi = [];
-    let Za = 0;
-    let Bd = new Set();
-    let Es = EMPTY_USAGE;
-    let uc;
-    let ed;
-    let Nd = null;
-    let Wd = 0;
-    let qd = 0;
-    let td = 0;
-    let nd;
-    let Ta;
-    let jd = 0;
-    let uu = 0;
-    let mu = 0;
-    let mc = 1;
-    let fu = oi.length === 0;
-    function* pu() {
-      if (!fu) {
-        fu = true;
-        yield* replayUserRows(oi, Ie);
+    let initialStructuredCount = jsonSchema ? countNamedToolUses(initialMessages, STRUCTUREDOUTPUT) : 0;
+    let marker = initialMessages.at(-1);
+    let pendingStructured = [];
+    let retractedCalls = 0;
+    let retractedToolUseIds = new Set();
+    let streamUsage = EMPTY_USAGE;
+    let countedMessageId;
+    let lastCountedMessageId;
+    let stopReason = null;
+    let firstAssistantAt = 0;
+    let messageStartAt = 0;
+    let firstContentAt = 0;
+    let firstFrameUpload;
+    let firstTextUpload;
+    let requestSentAtMs = 0;
+    let requestSentWallMs = 0;
+    let requestInputTokens = 0;
+    let numTurns = 1;
+    let replayDone = replayRows.length === 0;
+    function* replayRowsOnce() {
+      if (!replayDone) {
+        replayDone = true;
+        yield* replayUserRows(replayRows, turnOptions);
       }
     }
-    let _u = false;
-    let Cn = false;
-    let runningTurnTracker = createRunningTurnTracker(
-      () => runningTurnRecord.fields()?.user_message_uuids ?? [],
-    );
-    if (Ie?.inputMode === "bash") yield* pu();
+    let turnFinished = false;
+    let cleanupDone = false;
+    let runningTurnTracker = createRunningTurnTracker(() => record.fields()?.user_message_uuids ?? []);
+    if (turnOptions?.inputMode === "bash") yield* replayRowsOnce();
     try {
       while (true) {
-        let { value: msg, done: ho } = await queryEngine.next();
-        Ja = false;
-        if (ho) throw Error("headless session: the engine loop ended before the turn result");
-        let $o = msg;
-        let Is = true;
-        let rd =
-          (msg.type === "assistant" && !("parent_tool_use_id" in msg)) ||
-          msg.type === "user" ||
-          (msg.type === "system" && msg.subtype === "compact_boundary");
-        let Ti = [];
-        let Su = false;
-        switch (msg.type) {
+        let { value: turnMessage, done } = await queryEngine.next();
+        plainDeltaActive = false;
+        if (done) throw Error("headless session: the engine loop ended before the turn result");
+        let outMsg = turnMessage;
+        let forwardToSdk = true;
+        let needsReplayCheck =
+          (turnMessage.type === "assistant" && !("parent_tool_use_id" in turnMessage)) ||
+          turnMessage.type === "user" ||
+          (turnMessage.type === "system" && turnMessage.subtype === "compact_boundary");
+        let pendingNotices = [];
+        let refusalServed = false;
+        switch (turnMessage.type) {
           case "assistant": {
-            if ("parent_tool_use_id" in msg) break;
-            let Mt = withoutSessionId(msg);
-            settleTakenSafe(e.messageQueue);
-            let shownAsStoredIn = takeShownAsStoredMark(Mt, to ? e.markOfRepliesShownAsStored : undefined);
-            runningTurnTracker.onAssistantRow(Mt);
-            turnTiming.onAssistantMessage(Mt);
-            if (!Wd) Wd = performance.now();
-            if (Mt.message.stop_reason != null) Nd = Mt.message.stop_reason;
-            if (Mt.isApiErrorMessage) Ti.push(...Ao("stream_error"));
-            let rr = assistantUsageDelta(Mt, uc, ed);
-            if (rr) {
-              ed = Mt.message.id;
-              Cr = addUsage_2(Cr, rr);
+            if ("parent_tool_use_id" in turnMessage) break;
+            let row = withoutSessionId(turnMessage);
+            settleTakenSafe(sessionConfig.messageQueue);
+            let shownAsStoredIn = takeShownAsStoredMark(
+              row,
+              persistSession ? sessionConfig.markOfRepliesShownAsStored : undefined,
+            );
+            runningTurnTracker.onAssistantRow(row);
+            turnTiming.onAssistantMessage(row);
+            if (!firstAssistantAt) firstAssistantAt = performance.now();
+            if (row.message.stop_reason != null) stopReason = row.message.stop_reason;
+            if (row.isApiErrorMessage) pendingNotices.push(...collapseNotices("stream_error"));
+            let usageDelta = assistantUsageDelta(row, countedMessageId, lastCountedMessageId);
+            if (usageDelta) {
+              lastCountedMessageId = row.message.id;
+              totalUsage = addUsage_2(totalUsage, usageDelta);
             }
-            Su = Mt.message.stop_reason != null && Mt.message.stop_reason !== "refusal";
-            ar.push(Mt);
-            if (to && shownAsStoredIn === undefined) pr.record();
-            h.keep([Mt]);
+            refusalServed = row.message.stop_reason != null && row.message.stop_reason !== "refusal";
+            turnMessages.push(row);
+            if (persistSession && shownAsStoredIn === undefined) persistWriter.record();
+            conversation.keep([row]);
             if (shownAsStoredIn === undefined) {
-              yield* pu();
-              S.absorb([Mt]);
+              yield* replayRowsOnce();
+              androidEvidence.absorb([row]);
             }
-            let Uo;
+            let displayedMessage;
             try {
-              let Bo = await runMessageDisplayHook(
-                e.session,
-                Mt,
+              let hookResult = await runMessageDisplayHook(
+                sessionConfig.session,
+                row,
                 turnId_2,
-                q,
-                on.signal,
-                e.storageV5,
-                e.credentials,
+                sessionHooks,
+                turnAbortController.signal,
+                sessionConfig.storageV5,
+                sessionConfig.credentials,
               );
-              Uo = Bo.message;
-              if (shownAsStoredIn !== undefined) markShownAsStored(Mt, shownAsStoredIn, Bo.hookOutputApplied);
+              displayedMessage = hookResult.message;
+              if (shownAsStoredIn !== undefined)
+                markShownAsStored(row, shownAsStoredIn, hookResult.hookOutputApplied);
             } finally {
-              if (shownAsStoredIn !== undefined) pr.record();
+              if (shownAsStoredIn !== undefined) persistWriter.record();
             }
             if (shownAsStoredIn !== undefined) {
-              yield* pu();
-              S.absorb([Mt]);
+              yield* replayRowsOnce();
+              androidEvidence.absorb([row]);
             }
-            if (Uo !== Mt) Gs.set(Mt, Uo);
-            $o = {
-              ...Uo,
-              session_id: msg.session_id,
-              uuid: msg.uuid,
+            if (displayedMessage !== row) displayOverrides.set(row, displayedMessage);
+            outMsg = {
+              ...displayedMessage,
+              session_id: turnMessage.session_id,
+              uuid: turnMessage.uuid,
             };
             break;
           }
           case "user": {
-            let Mt = withoutSessionId(msg);
-            if (isInterruptionOnlyMessage(Mt)) Ti.push(...Ao("interrupted"));
-            nn = [];
+            let row = withoutSessionId(turnMessage);
+            if (isInterruptionOnlyMessage(row)) pendingNotices.push(...collapseNotices("interrupted"));
+            deferredRows = [];
             try {
-              ar.push(Mt);
-              if (to) await pr.record();
-              h.keep([Mt]);
-              S.absorb([Mt]);
-              pr.settlePreservedTail(Mt.uuid);
+              turnMessages.push(row);
+              if (persistSession) await persistWriter.record();
+              conversation.keep([row]);
+              androidEvidence.absorb([row]);
+              persistWriter.settlePreservedTail(row.uuid);
             } finally {
-              Mr();
+              flushDeferredRows();
             }
-            mc++;
+            numTurns++;
             break;
           }
           case "progress":
           case "attachment": {
-            let Mt = markMaxTurnsExit(withoutSessionId(msg));
-            let Ur = stripAgentToolResultForStorage(Mt);
-            h.keep([Ur]);
-            S.absorb([Mt]);
-            let sourceUuid = getSourceUuid(Mt);
-            if (sourceUuid !== undefined) pr.holdFoldCopy(Ur, sourceUuid);
-            if (to) {
-              ar.push(Ur);
-              pr.record();
+            let row = markMaxTurnsExit(withoutSessionId(turnMessage));
+            let storedRow = stripAgentToolResultForStorage(row);
+            conversation.keep([storedRow]);
+            androidEvidence.absorb([row]);
+            let sourceUuid = getSourceUuid(row);
+            if (sourceUuid !== undefined) persistWriter.holdFoldCopy(storedRow, sourceUuid);
+            if (persistSession) {
+              turnMessages.push(storedRow);
+              persistWriter.record();
             }
-            if (Mt.type === "attachment") runningTurnRecord.noteAttachment(Mt.attachment);
-            if (Mt.type === "attachment" && Mt.attachment.type === "structured_output")
-              if (Mt.attachment.toolUseID !== undefined ? Bd.has(Mt.attachment.toolUseID) : Bd.size > 0) {
-                pr.evict(Mt.uuid);
+            if (row.type === "attachment") record.noteAttachment(row.attachment);
+            if (row.type === "attachment" && row.attachment.type === "structured_output")
+              if (
+                row.attachment.toolUseID !== undefined
+                  ? retractedToolUseIds.has(row.attachment.toolUseID)
+                  : retractedToolUseIds.size > 0
+              ) {
+                persistWriter.evict(row.uuid);
                 logEvent("tengu_structured_output_late_retraction_drop", {});
               } else
-                vi.push({
-                  toolUseID: Mt.attachment.toolUseID,
-                  attachmentUuid: Mt.uuid,
+                pendingStructured.push({
+                  toolUseID: row.attachment.toolUseID,
+                  attachmentUuid: row.uuid,
                 });
             break;
           }
           case "tombstone": {
-            runningTurnTracker.onRetraction(msg.message.uuid);
-            yield* partialStreamRetraction.onTombstone(msg);
-            pr.evict(msg.message.uuid);
-            retractionFilter.dropHeld(msg.message.uuid);
-            let content = msg.message.type === "assistant" ? msg.message.message.content : undefined;
-            let Ur = Array.isArray(content)
-              ? content.flatMap((rr) =>
-                  rr.type === "tool_use" && rr.name === STRUCTUREDOUTPUT ? [rr.id] : [],
+            runningTurnTracker.onRetraction(turnMessage.message.uuid);
+            yield* partialStreamRetraction.onTombstone(turnMessage);
+            persistWriter.evict(turnMessage.message.uuid);
+            retractionFilter.dropHeld(turnMessage.message.uuid);
+            let content =
+              turnMessage.message.type === "assistant" ? turnMessage.message.message.content : undefined;
+            let toolUseIds = Array.isArray(content)
+              ? content.flatMap((block) =>
+                  block.type === "tool_use" && block.name === STRUCTUREDOUTPUT ? [block.id] : [],
                 )
               : [];
-            if (Ur.length > 0) {
-              Za++;
-              Ur.forEach((Bo) => Bd.add(Bo));
-              let rr = (Bo) => Bo.toolUseID === undefined || Ur.includes(Bo.toolUseID);
-              let filtered = vi.filter(rr);
-              filtered.forEach((Bo) => pr.evict(Bo.attachmentUuid));
-              vi = vi.filter((Bo) => !rr(Bo));
+            if (toolUseIds.length > 0) {
+              retractedCalls++;
+              toolUseIds.forEach((toolUseId) => retractedToolUseIds.add(toolUseId));
+              let matchesRetraction = (pending) =>
+                pending.toolUseID === undefined || toolUseIds.includes(pending.toolUseID);
+              let filtered = pendingStructured.filter(matchesRetraction);
+              filtered.forEach((pending) => persistWriter.evict(pending.attachmentUuid));
+              pendingStructured = pendingStructured.filter((pending) => !matchesRetraction(pending));
               logEvent("tengu_structured_output_retracted", {
                 retracted_results: filtered.length,
-                surviving_results: vi.length,
-                tombstoned_calls: Za,
+                surviving_results: pendingStructured.length,
+                tombstoned_calls: retractedCalls,
               });
             }
             break;
           }
           case "stream_event":
-            if (!("parent_tool_use_id" in msg && msg.parent_tool_use_id) && !isPingStreamEvent(msg.event)) {
-              settleTakenSafe(e.messageQueue);
-              pr.settleFoldCopies();
+            if (
+              !("parent_tool_use_id" in turnMessage && turnMessage.parent_tool_use_id) &&
+              !isPingStreamEvent(turnMessage.event)
+            ) {
+              settleTakenSafe(sessionConfig.messageQueue);
+              persistWriter.settleFoldCopies();
             }
-            turnTiming.onStreamEvent(msg);
-            Ti.push(...partialStreamRetraction.onStreamEvent(msg.event, Es));
-            if (!td && (msg.event.type === "content_block_start" || msg.event.type === "content_block_delta"))
-              td = performance.now();
-            if (msg.event.type === "message_start") {
-              if (!qd) qd = performance.now();
-              Es = mRe(EMPTY_USAGE, msg.event.message.usage);
-              if (!jd && "requestSentAtMs" in msg && msg.requestSentAtMs) jd = msg.requestSentAtMs;
-              if (!uu && "requestSentWallMs" in msg && msg.requestSentWallMs) {
-                uu = msg.requestSentWallMs;
-                mu = Es.input_tokens + Es.cache_read_input_tokens + Es.cache_creation_input_tokens;
+            turnTiming.onStreamEvent(turnMessage);
+            pendingNotices.push(...partialStreamRetraction.onStreamEvent(turnMessage.event, streamUsage));
+            if (
+              !firstContentAt &&
+              (turnMessage.event.type === "content_block_start" ||
+                turnMessage.event.type === "content_block_delta")
+            )
+              firstContentAt = performance.now();
+            if (turnMessage.event.type === "message_start") {
+              if (!messageStartAt) messageStartAt = performance.now();
+              streamUsage = mergeUsageFromDelta(EMPTY_USAGE, turnMessage.event.message.usage);
+              if (!requestSentAtMs && "requestSentAtMs" in turnMessage && turnMessage.requestSentAtMs)
+                requestSentAtMs = turnMessage.requestSentAtMs;
+              if (!requestSentWallMs && "requestSentWallMs" in turnMessage && turnMessage.requestSentWallMs) {
+                requestSentWallMs = turnMessage.requestSentWallMs;
+                requestInputTokens =
+                  streamUsage.input_tokens +
+                  streamUsage.cache_read_input_tokens +
+                  streamUsage.cache_creation_input_tokens;
               }
-              uc = msg.event.message.id;
-            } else if (msg.event.type === "message_delta") {
-              if (msg.event.delta.stop_reason != null) {
-                Nd = msg.event.delta.stop_reason;
-                if (msg.event.delta.stop_reason !== "refusal") Ti.push(...Ao("served"));
+              countedMessageId = turnMessage.event.message.id;
+            } else if (turnMessage.event.type === "message_delta") {
+              if (turnMessage.event.delta.stop_reason != null) {
+                stopReason = turnMessage.event.delta.stop_reason;
+                if (turnMessage.event.delta.stop_reason !== "refusal")
+                  pendingNotices.push(...collapseNotices("served"));
               }
-              Es = parseUsageIterations(msg.event.usage)?.servedFallbackModel
-                ? $jo(Es, msg.event.usage)
-                : mRe(Es, msg.event.usage);
-              if (to) pr.record();
-            } else if (msg.event.type === "message_stop") Cr = addUsage_2(Cr, Es);
+              streamUsage = parseUsageIterations(turnMessage.event.usage)?.servedFallbackModel
+                ? addResponseUsageAttributes(streamUsage, turnMessage.event.usage)
+                : mergeUsageFromDelta(streamUsage, turnMessage.event.usage);
+              if (persistSession) persistWriter.record();
+            } else if (turnMessage.event.type === "message_stop")
+              totalUsage = addUsage_2(totalUsage, streamUsage);
             break;
           case "system":
-            if (msg.subtype === "status" && msg.status === "compacting") pr.settleFoldCopies("compaction");
-            else if (msg.subtype === "status") pr.settleFoldCopies();
-            if (msg.subtype === "status" && msg.status === "requesting") runningTurnTracker.onRoundStart();
-            if (msg.subtype === "model_refusal_fallback") {
-              Is = false;
-              let refusalFallbackMessage = createRefusalFallbackMessage(msg);
-              ja(refusalFallbackMessage, ar, to);
-              yield* partialStreamRetraction.onRefusalFallbackBanner(refusalFallbackMessage.direction, Es);
+            if (turnMessage.subtype === "status" && turnMessage.status === "compacting")
+              persistWriter.settleFoldCopies("compaction");
+            else if (turnMessage.subtype === "status") persistWriter.settleFoldCopies();
+            if (turnMessage.subtype === "status" && turnMessage.status === "requesting")
+              runningTurnTracker.onRoundStart();
+            if (turnMessage.subtype === "model_refusal_fallback") {
+              forwardToSdk = false;
+              let refusalFallbackMessage = createRefusalFallbackMessage(turnMessage);
+              recordRefusalEntry(refusalFallbackMessage, turnMessages, persistSession);
+              yield* partialStreamRetraction.onRefusalFallbackBanner(
+                refusalFallbackMessage.direction,
+                streamUsage,
+              );
               if (isRefusalFallbackEnabled())
                 yield* collapseRefusalFallbackNotices(
                   retractionFilter.accept(refusalFallbackMessage),
                   getSessionId(),
                 );
             } else {
-              Hi(msg, ar, pr, to);
-              if (msg.subtype === "model_refusal_no_fallback") yield* Ao("exhausted");
-              else if (msg.subtype === "model_fallback") yield* Ao("availability_switch");
-              else if (msg.subtype === "informational")
+              appendSystemRow(turnMessage, turnMessages, persistWriter, persistSession);
+              if (turnMessage.subtype === "model_refusal_no_fallback") yield* collapseNotices("exhausted");
+              else if (turnMessage.subtype === "model_fallback")
+                yield* collapseNotices("availability_switch");
+              else if (turnMessage.subtype === "informational")
                 try {
-                  Is = !isTransportBacked(e.session);
+                  forwardToSdk = !isTransportBacked(sessionConfig.session);
                 } catch {
-                  Is = false;
+                  forwardToSdk = false;
                 }
             }
-            if (msg.subtype === "compact_boundary") {
-              let Mt = pr.dropPreservedRowsNotInConversation(convertCompactBoundaryMessage(msg));
-              let Ur = Ie?.resumeReason !== undefined;
-              runningTurnTracker.onBoundary(Mt, {
-                openerUuid: Ur && Ie.isMeta ? Ie.resumedTurnOpenerUuid : (Ie?.resumedTurnOpenerUuid ?? uuid),
+            if (turnMessage.subtype === "compact_boundary") {
+              let boundary = persistWriter.dropPreservedRowsNotInConversation(
+                convertCompactBoundaryMessage(turnMessage),
+              );
+              let continuesTurns = turnOptions?.resumeReason !== undefined;
+              runningTurnTracker.onBoundary(boundary, {
+                openerUuid:
+                  continuesTurns && turnOptions.isMeta
+                    ? turnOptions.resumedTurnOpenerUuid
+                    : (turnOptions?.resumedTurnOpenerUuid ?? uuid),
                 conversation: initialMessages,
-                continuedTurnsRows: Ur ? initialMessages : undefined,
+                continuedTurnsRows: continuesTurns ? initialMessages : undefined,
               });
-              nn = [];
+              deferredRows = [];
               try {
-                await mirrorTaskListSnapshot(Mt, e.session, e.storageV5);
-                if (to) await pr.flushBeforeCompactBoundary(Mt);
-                ar.push(Mt);
-                if (to) await pr.record(true);
-                h.keep([Mt]);
-                pr.applyCompactBoundary(Mt);
+                await mirrorTaskListSnapshot(boundary, sessionConfig.session, sessionConfig.storageV5);
+                if (persistSession) await persistWriter.flushBeforeCompactBoundary(boundary);
+                turnMessages.push(boundary);
+                if (persistSession) await persistWriter.record(true);
+                conversation.keep([boundary]);
+                persistWriter.applyCompactBoundary(boundary);
               } finally {
-                Mr();
+                flushDeferredRows();
               }
             }
             break;
           case "post_turn_summary":
-            setAppState((Mt) =>
-              Mt.postTurnSummary === msg.value
-                ? Mt
+            setAppState((prevState) =>
+              prevState.postTurnSummary === turnMessage.value
+                ? prevState
                 : {
-                    ...Mt,
-                    postTurnSummary: msg.value,
+                    ...prevState,
+                    postTurnSummary: turnMessage.value,
                   },
             );
             break;
           case "active_goal":
-            setAppState((Mt) =>
-              Mt.activeGoal === msg.value
-                ? Mt
+            setAppState((prevState) =>
+              prevState.activeGoal === turnMessage.value
+                ? prevState
                 : {
-                    ...Mt,
-                    activeGoal: msg.value,
+                    ...prevState,
+                    activeGoal: turnMessage.value,
                   },
             );
             break;
           case "command_lifecycle":
-            if (msg.state === "started") {
-              let Mt = runningTurnRecord.noteCommandStarted(msg.command_uuid);
+            if (turnMessage.state === "started") {
+              let commandFingerprint = record.noteCommandStarted(turnMessage.command_uuid);
               try {
-                Ie?.onCommandTakenIn?.(msg.command_uuid, Mt);
+                turnOptions?.onCommandTakenIn?.(turnMessage.command_uuid, commandFingerprint);
               } catch (error) {
                 logError(error);
               }
-              pr.settleFoldCopies();
+              persistWriter.settleFoldCopies();
             }
             break;
           case "result": {
-            _u = true;
-            Cn = true;
-            turnTiming.end(msg.terminal_reason);
-            Bi(pr, tools);
-            let Mt = Me();
-            if (Mt !== undefined) {
-              yield* partialStreamRetraction.closeAtTurnEnd(Es);
-              throw Mt.error;
+            turnFinished = true;
+            cleanupDone = true;
+            turnTiming.end(turnMessage.terminal_reason);
+            finalizeTurn(persistWriter, toolList);
+            let turnError = takeTurnError();
+            if (turnError !== undefined) {
+              yield* partialStreamRetraction.closeAtTurnEnd(streamUsage);
+              throw turnError.error;
             }
-            msg.permission_denials.unshift(...permissionDenials);
-            yield* partialStreamRetraction.closeAtTurnEnd(Es);
-            yield* Ao("turn_end");
-            let autoModeUnavailableStopNotice = getAutoModeUnavailableStopNotice();
-            if (autoModeUnavailableStopNotice !== undefined) {
-              let ea = autoModeUnavailableStopNotice;
+            turnMessage.permission_denials.unshift(...permissionDenials);
+            yield* partialStreamRetraction.closeAtTurnEnd(streamUsage);
+            yield* collapseNotices("turn_end");
+            let notice = getAutoModeUnavailableStopNotice();
+            if (notice !== undefined) {
+              let noticeText = notice;
               try {
-                if (isTransportBacked(e.session))
-                  ea = minimalUnavailableNotice(autoModeUnavailableStopNotice);
+                if (isTransportBacked(sessionConfig.session)) noticeText = minimalUnavailableNotice(notice);
               } catch {
-                ea = minimalUnavailableNotice(autoModeUnavailableStopNotice);
+                noticeText = minimalUnavailableNotice(notice);
               }
-              yield informationalSystemMessage(createSystemMessage(ea, "warning"));
+              yield informationalSystemMessage(createSystemMessage(noticeText, "warning"));
             }
-            if (to) {
-              await pr.record(true);
-              if (qo) await flushSessionStorage();
+            if (persistSession) {
+              await persistWriter.record(true);
+              if (eagerFlush) await flushSessionStorage();
             }
-            let rr = msg.subtype === "success" && !msg.is_error && msg.deferred_tool_use === undefined;
-            if (ga !== undefined && rr && vi.length === 0 && Za > 0) {
+            let isSuccessResult =
+              turnMessage.subtype === "success" &&
+              !turnMessage.is_error &&
+              turnMessage.deferred_tool_use === undefined;
+            if (
+              jsonSchema !== undefined &&
+              isSuccessResult &&
+              pendingStructured.length === 0 &&
+              retractedCalls > 0
+            ) {
               logEvent("tengu_structured_output_retraction_exhausted", {
-                tombstoned_calls: Za,
-                num_turns: msg.num_turns,
+                tombstoned_calls: retractedCalls,
+                num_turns: turnMessage.num_turns,
               });
               yield buildResultMessage({
                 startedAt: startTime,
                 common: {
                   is_error: true,
-                  duration_api_ms: msg.duration_api_ms,
-                  num_turns: msg.num_turns,
-                  stop_reason: Nd,
+                  duration_api_ms: turnMessage.duration_api_ms,
+                  num_turns: turnMessage.num_turns,
+                  stop_reason: stopReason,
                   session_id: getSessionId(),
-                  total_cost_usd: msg.total_cost_usd,
-                  usage: Cr,
-                  modelUsage: msg.modelUsage,
-                  permission_denials: msg.permission_denials,
-                  terminal_reason: isAbortedTerminalReason(msg.terminal_reason)
-                    ? msg.terminal_reason
+                  total_cost_usd: turnMessage.total_cost_usd,
+                  usage: totalUsage,
+                  modelUsage: turnMessage.modelUsage,
+                  permission_denials: turnMessage.permission_denials,
+                  terminal_reason: isAbortedTerminalReason(turnMessage.terminal_reason)
+                    ? turnMessage.terminal_reason
                     : "structured_output_retry_exhausted",
-                  fast_mode_state: msg.fast_mode_state,
-                  fast_mode_disabled_reason: msg.fast_mode_disabled_reason,
-                  origin: Ie?.origin,
-                  subagent_stats: buildFileHistorySnapshotChain(e.session),
+                  fast_mode_state: turnMessage.fast_mode_state,
+                  fast_mode_disabled_reason: turnMessage.fast_mode_disabled_reason,
+                  origin: turnOptions?.origin,
+                  subagent_stats: buildFileHistorySnapshotChain(sessionConfig.session),
                   safety_stops: getSafetyStops(),
                 },
                 variant: {
                   subtype: "error_max_structured_output_retries",
                   errors: [STRUCTURED_OUTPUT_RETRACTED_MESSAGE],
-                  ...runningTurnRecord.errorVariantFields(),
-                  ...ts,
+                  ...record.errorVariantFields(),
+                  ...resumeReasonStamp,
                 },
               });
               return;
             }
-            if (rr && Wd)
+            if (isSuccessResult && firstAssistantAt)
               logEvent("tengu_sdk_ttft", {
-                ttft_ms: elapsedMs(startTime, Wd),
-                model: telemetrySafeModelName(model_2),
-                ...(si !== undefined && {
-                  tool_pool_reused: si,
+                ttft_ms: elapsedMs(startTime, firstAssistantAt),
+                model: telemetrySafeModelName(selectedModel),
+                ...(toolPoolReused !== undefined && {
+                  tool_pool_reused: toolPoolReused,
                 }),
               });
-            let Uo = rr ? consumeApiRequestSentFromSpawn() : undefined;
-            let Bo = rr && jd ? elapsedMs(startTime, jd) : undefined;
-            let _r = Bo !== undefined ? consumeProfile(Bo, jd) : undefined;
-            let Ol =
-              msg.subtype === "success" && msg.is_error && msg.deferred_tool_use === undefined
+            let spawnInfo = isSuccessResult ? consumeApiRequestSentFromSpawn() : undefined;
+            let timeToRequestMs =
+              isSuccessResult && requestSentAtMs ? elapsedMs(startTime, requestSentAtMs) : undefined;
+            let profile =
+              timeToRequestMs !== undefined ? consumeProfile(timeToRequestMs, requestSentAtMs) : undefined;
+            let processTurnIndex =
+              turnMessage.subtype === "success" &&
+              turnMessage.is_error &&
+              turnMessage.deferred_tool_use === undefined
                 ? currentTurnIndex()
                 : undefined;
-            let last_2 = ar.findLast(
-              (ea) => (ea.type === "assistant" || ea.type === "user") && !pr.isHostRow(ea),
+            let result = turnMessages.findLast(
+              (row) => (row.type === "assistant" || row.type === "user") && !persistWriter.isHostRow(row),
             );
-            let Pa =
-              last_2?.type === "assistant" && !(last_2.isApiErrorMessage && !msg.is_error)
-                ? getSalvageableResultText(last_2, Gs.get(last_2))
+            let salvagedText =
+              result?.type === "assistant" && !(result.isApiErrorMessage && !turnMessage.is_error)
+                ? getSalvageableResultText(result, displayOverrides.get(result))
                 : undefined;
-            let Qd = runningTurnRecord.resultFields();
-            let Kd = postTimingFields(rr, startTime, nd);
-            let Vd = postTimingFields(rr, startTime, Ta);
-            $o = {
-              ...msg,
-              usage: Cr,
+            let resultFields = record.resultFields();
+            let firstFrameTiming = postTimingFields(isSuccessResult, startTime, firstFrameUpload);
+            let firstTextTiming = postTimingFields(isSuccessResult, startTime, firstTextUpload);
+            outMsg = {
+              ...turnMessage,
+              usage: totalUsage,
               duration_ms: elapsedMs(startTime, performance.now()),
-              ...(msg.subtype === "error_during_execution" && {
+              ...(turnMessage.subtype === "error_during_execution" && {
                 errors: orderForTransport(
-                  e.session,
-                  msg.errors[0] ?? "",
-                  appendUnique(msg.errors.slice(1), getRecentErrorLog(last)),
+                  sessionConfig.session,
+                  turnMessage.errors[0] ?? "",
+                  appendUnique(turnMessage.errors.slice(1), getRecentErrorLog(sinceError)),
                   "first",
                 ),
               }),
-              ...(msg.subtype !== "success" && runningTurnRecord.errorVariantFields()),
-              ...(msg.subtype !== "success" && ts),
-              ...(msg.subtype === "success" && {
-                ...(Pa !== undefined && {
-                  result: Pa,
+              ...(turnMessage.subtype !== "success" && record.errorVariantFields()),
+              ...(turnMessage.subtype !== "success" && resumeReasonStamp),
+              ...(turnMessage.subtype === "success" && {
+                ...(salvagedText !== undefined && {
+                  result: salvagedText,
                 }),
-                ttft_ms: rr && Wd ? elapsedMs(startTime, Wd) : undefined,
-                ttft_stream_ms: rr && qd ? elapsedMs(startTime, qd) : undefined,
-                time_to_request_ms: Bo,
-                ...(_r && {
-                  time_to_request_phases_ms: _r.phases,
+                ttft_ms:
+                  isSuccessResult && firstAssistantAt ? elapsedMs(startTime, firstAssistantAt) : undefined,
+                ttft_stream_ms:
+                  isSuccessResult && messageStartAt ? elapsedMs(startTime, messageStartAt) : undefined,
+                time_to_request_ms: timeToRequestMs,
+                ...(profile && {
+                  time_to_request_phases_ms: profile.phases,
                   turn_start_resume_kind: turnContinuationKind({
-                    orphanedPermission: Ie?.orphanedPermission,
-                    handedOffTurn: Ie?.handedOffTurn,
-                    deferredToolUse: Ie?.deferredToolUse,
+                    orphanedPermission: turnOptions?.orphanedPermission,
+                    handedOffTurn: turnOptions?.handedOffTurn,
+                    deferredToolUse: turnOptions?.deferredToolUse,
                   }),
-                  ...(Ie?.handedOffTurn?.intakePhasesMs !== undefined && {
-                    handoff_intake_phases_ms: Ie.handedOffTurn.intakePhasesMs,
-                  }),
-                }),
-                ...(Ol !== undefined && {
-                  process_turn_index: Ol,
-                }),
-                ...(_r?.window && {
-                  process_turn_index: _r.window.processTurnIndex,
-                  time_to_request_loop_lag_ms: _r.window.loopLagMs,
-                }),
-                ...(_r?.window?.resources && {
-                  time_to_request_cpu_ms: _r.window.resources.cpuMs,
-                  time_to_request_major_faults: _r.window.resources.majorFaults,
-                }),
-                ...(_r?.memory && {
-                  process_rss_mib_turn_start: _r.memory.atBegin.rssMib,
-                  process_anon_mib_turn_start: _r.memory.atBegin.anonMib,
-                  process_rss_mib_result: _r.memory.atConsume.rssMib,
-                  process_anon_mib_result: _r.memory.atConsume.anonMib,
-                  process_peak_rss_mib: _r.memory.atConsume.peakRssMib,
-                }),
-                ...(_r?.betweenTurns && {
-                  process_cpu_ms_between_turns: _r.betweenTurns.cpuMs,
-                  process_wall_ms_between_turns: _r.betweenTurns.wallMs,
-                }),
-                ...(_r?.turn && {
-                  process_cpu_ms_turn: _r.turn.cpuMs,
-                  process_wall_ms_turn: _r.turn.wallMs,
-                }),
-                ...(_r?.shellCpu && {
-                  shell_cpu_ms_turn: _r.shellCpu.turnMs,
-                  ...(_r.shellCpu.sinceLastResult && {
-                    shell_cpu_ms_since_last_result: _r.shellCpu.sinceLastResult.cpuMs,
-                    shell_wall_ms_since_last_result: _r.shellCpu.sinceLastResult.wallMs,
+                  ...(turnOptions?.handedOffTurn?.intakePhasesMs !== undefined && {
+                    handoff_intake_phases_ms: turnOptions.handedOffTurn.intakePhasesMs,
                   }),
                 }),
-                ...(_r?.streaming && {
-                  process_cpu_ms_streaming: _r.streaming.cpuMs,
-                  process_wall_ms_streaming: _r.streaming.wallMs,
-                  main_stream_count: _r.streaming.streams,
-                  main_stream_event_count: _r.streaming.events,
-                  ...(_r.streaming.chunks !== undefined && {
-                    main_stream_chunk_count: _r.streaming.chunks,
+                ...(processTurnIndex !== undefined && {
+                  process_turn_index: processTurnIndex,
+                }),
+                ...(profile?.window && {
+                  process_turn_index: profile.window.processTurnIndex,
+                  time_to_request_loop_lag_ms: profile.window.loopLagMs,
+                }),
+                ...(profile?.window?.resources && {
+                  time_to_request_cpu_ms: profile.window.resources.cpuMs,
+                  time_to_request_major_faults: profile.window.resources.majorFaults,
+                }),
+                ...(profile?.memory && {
+                  process_rss_mib_turn_start: profile.memory.atBegin.rssMib,
+                  process_anon_mib_turn_start: profile.memory.atBegin.anonMib,
+                  process_rss_mib_result: profile.memory.atConsume.rssMib,
+                  process_anon_mib_result: profile.memory.atConsume.anonMib,
+                  process_peak_rss_mib: profile.memory.atConsume.peakRssMib,
+                }),
+                ...(profile?.betweenTurns && {
+                  process_cpu_ms_between_turns: profile.betweenTurns.cpuMs,
+                  process_wall_ms_between_turns: profile.betweenTurns.wallMs,
+                }),
+                ...(profile?.turn && {
+                  process_cpu_ms_turn: profile.turn.cpuMs,
+                  process_wall_ms_turn: profile.turn.wallMs,
+                }),
+                ...(profile?.shellCpu && {
+                  shell_cpu_ms_turn: profile.shellCpu.turnMs,
+                  ...(profile.shellCpu.sinceLastResult && {
+                    shell_cpu_ms_since_last_result: profile.shellCpu.sinceLastResult.cpuMs,
+                    shell_wall_ms_since_last_result: profile.shellCpu.sinceLastResult.wallMs,
                   }),
                 }),
-                ...(_r?.inputAttachments && {
-                  input_attachments_detail: _r.inputAttachments,
+                ...(profile?.streaming && {
+                  process_cpu_ms_streaming: profile.streaming.cpuMs,
+                  process_wall_ms_streaming: profile.streaming.wallMs,
+                  main_stream_count: profile.streaming.streams,
+                  main_stream_event_count: profile.streaming.events,
+                  ...(profile.streaming.chunks !== undefined && {
+                    main_stream_chunk_count: profile.streaming.chunks,
+                  }),
                 }),
-                ...(_r?.storeConfirm && {
-                  resume_store_confirm_detail: _r.storeConfirm,
+                ...(profile?.inputAttachments && {
+                  input_attachments_detail: profile.inputAttachments,
                 }),
-                first_content_frame_ms: rr && td ? elapsedMs(startTime, td) : undefined,
-                first_stream_post_ms: Kd.postMs,
+                ...(profile?.storeConfirm && {
+                  resume_store_confirm_detail: profile.storeConfirm,
+                }),
+                first_content_frame_ms:
+                  isSuccessResult && firstContentAt ? elapsedMs(startTime, firstContentAt) : undefined,
+                first_stream_post_ms: firstFrameTiming.postMs,
                 first_stream_post_ack_ms:
-                  rr && nd?.ackedAtMs ? elapsedMs(startTime, nd.ackedAtMs) : undefined,
-                first_stream_post_queue_wait_ms: Kd.queueWaitMs,
-                first_stream_post_queued_behind: Kd.queuedBehind,
-                first_text_post_ms: Vd.postMs,
-                first_text_post_queue_wait_ms: Vd.queueWaitMs,
-                first_text_post_queued_behind: Vd.queuedBehind,
-                text_post_count: Vd.textPosts,
-                text_post_gap_over_500ms_count: Vd.textPostGapsOver500Ms,
-                text_post_flush_timer_max_late_ms: Vd.flushTimerMaxLateMs,
-                ...Qd,
-                ...ts,
-                ...(rr &&
-                  uu &&
-                  Qd !== undefined &&
-                  Qd.user_message_uuid === uuid && {
-                    request_sent_wall_ms: uu,
-                    ...(mu > 0 && {
-                      first_request_input_tokens: mu,
+                  isSuccessResult && firstFrameUpload?.ackedAtMs
+                    ? elapsedMs(startTime, firstFrameUpload.ackedAtMs)
+                    : undefined,
+                first_stream_post_queue_wait_ms: firstFrameTiming.queueWaitMs,
+                first_stream_post_queued_behind: firstFrameTiming.queuedBehind,
+                first_text_post_ms: firstTextTiming.postMs,
+                first_text_post_queue_wait_ms: firstTextTiming.queueWaitMs,
+                first_text_post_queued_behind: firstTextTiming.queuedBehind,
+                text_post_count: firstTextTiming.textPosts,
+                text_post_gap_over_500ms_count: firstTextTiming.textPostGapsOver500Ms,
+                text_post_flush_timer_max_late_ms: firstTextTiming.flushTimerMaxLateMs,
+                ...resultFields,
+                ...resumeReasonStamp,
+                ...(isSuccessResult &&
+                  requestSentWallMs &&
+                  resultFields !== undefined &&
+                  resultFields.user_message_uuid === uuid && {
+                    request_sent_wall_ms: requestSentWallMs,
+                    ...(requestInputTokens > 0 && {
+                      first_request_input_tokens: requestInputTokens,
                     }),
-                    ...(Ie?.frameTiming?.serverReceivedWallMs !== undefined && {
-                      user_message_server_received_wall_ms: Ie.frameTiming.serverReceivedWallMs,
+                    ...(turnOptions?.frameTiming?.serverReceivedWallMs !== undefined && {
+                      user_message_server_received_wall_ms: turnOptions.frameTiming.serverReceivedWallMs,
                     }),
-                    ...(nd?.postedWallMs !== undefined && {
-                      first_stream_post_wall_ms: nd.postedWallMs,
+                    ...(firstFrameUpload?.postedWallMs !== undefined && {
+                      first_stream_post_wall_ms: firstFrameUpload.postedWallMs,
                     }),
-                    ...(Ta?.postedWallMs !== undefined && {
-                      first_text_post_wall_ms: Ta.postedWallMs,
+                    ...(firstTextUpload?.postedWallMs !== undefined && {
+                      first_text_post_wall_ms: firstTextUpload.postedWallMs,
                     }),
-                    ...(Ie?.frameTiming?.receivedWallMs !== undefined && {
-                      frame_received_wall_ms: Ie.frameTiming.receivedWallMs,
-                      frame_enqueued_wall_ms: Ie.frameTiming.enqueuedWallMs,
+                    ...(turnOptions?.frameTiming?.receivedWallMs !== undefined && {
+                      frame_received_wall_ms: turnOptions.frameTiming.receivedWallMs,
+                      frame_enqueued_wall_ms: turnOptions.frameTiming.enqueuedWallMs,
                       turn_started_wall_ms: now,
-                      ...(Ie.frameTiming.intakePhasesMs !== undefined && {
-                        frame_intake_phases_ms: Ie.frameTiming.intakePhasesMs,
+                      ...(turnOptions.frameTiming.intakePhasesMs !== undefined && {
+                        frame_intake_phases_ms: turnOptions.frameTiming.intakePhasesMs,
                       }),
                       ...(turnSignals !== undefined && {
                         turn_start_phases_ms: turnSignals.phases,
@@ -4002,11 +4218,11 @@ function QueryEngine(e) {
                       }),
                     }),
                   }),
-                ...(Uo && {
-                  time_to_request_from_spawn_ms: Uo.ms,
-                  warm_spare_claimed: Uo.warmSpareClaimed,
-                  flag_fetch_kick: Uo.flagFetchKick,
-                  time_origin_ms: Uo.timeOriginMs,
+                ...(spawnInfo && {
+                  time_to_request_from_spawn_ms: spawnInfo.ms,
+                  warm_spare_claimed: spawnInfo.warmSpareClaimed,
+                  flag_fetch_kick: spawnInfo.flagFetchKick,
+                  time_origin_ms: spawnInfo.timeOriginMs,
                 }),
               }),
             };
@@ -4016,116 +4232,143 @@ function QueryEngine(e) {
             break;
         }
         if (
-          rd ||
-          (includePartialMessages && msg.type === "stream_event" && !isPingStreamEvent(msg.event)) ||
-          (Ct && msg.type === "system" && msg.subtype === "status" && msg.status === "requesting")
+          needsReplayCheck ||
+          (includePartialMessages &&
+            turnMessage.type === "stream_event" &&
+            !isPingStreamEvent(turnMessage.event)) ||
+          (replayAcks &&
+            turnMessage.type === "system" &&
+            turnMessage.subtype === "status" &&
+            turnMessage.status === "requesting")
         ) {
-          if (!fu) yield* pu();
+          if (!replayDone) yield* replayRowsOnce();
         }
-        if (Ti.length > 0) yield* Ti;
+        if (pendingNotices.length > 0) yield* pendingNotices;
         let sessionId = getSessionId();
-        if (Is)
-          for (let Mt of toSdkMessages(
-            $o.session_id === sessionId
-              ? $o
+        if (forwardToSdk)
+          for (let sdkMessage of toSdkMessages(
+            outMsg.session_id === sessionId
+              ? outMsg
               : {
-                  ...$o,
+                  ...outMsg,
                   session_id: sessionId,
                 },
-            ig,
-            Im,
+            currentTools,
+            sdkOptions,
           )) {
-            if (Mt.type === "assistant" && msg.type === "assistant" && !("parent_tool_use_id" in msg))
-              partialStreamRetraction.onAssistantMessage(msg);
-            if (Mt.type === "stream_event" && Mt.parent_tool_use_id == null && isMarkerTextDelta(Mt.event)) {
-              turnTiming.markFirstTextPainted("stream_event");
-              El = true;
-              if (Ta === undefined && e.trackFirstTextFrameUpload !== undefined)
-                Ta = e.trackFirstTextFrameUpload(Mt.uuid);
-            } else if (
-              Mt.type === "assistant" &&
-              Mt.parent_tool_use_id == null &&
-              collectReadNotificationsToolUseIds(Mt, BRIEF_TOOL_NAME_SET)
-            )
-              turnTiming.markFirstTextPainted("message", Mt.message.id);
             if (
-              nd === undefined &&
-              e.trackFirstFrameUpload !== undefined &&
-              Mt.type === "stream_event" &&
-              Mt.parent_tool_use_id == null &&
-              !isPingStreamEvent(Mt.event)
+              sdkMessage.type === "assistant" &&
+              turnMessage.type === "assistant" &&
+              !("parent_tool_use_id" in turnMessage)
             )
-              nd = e.trackFirstFrameUpload(Mt.uuid);
-            let Ur =
-              Mt.type === "assistant" && Mt.parent_tool_use_id == null
+              partialStreamRetraction.onAssistantMessage(turnMessage);
+            if (
+              sdkMessage.type === "stream_event" &&
+              sdkMessage.parent_tool_use_id == null &&
+              isMarkerTextDelta(sdkMessage.event)
+            ) {
+              turnTiming.markFirstTextPainted("stream_event");
+              sawTextDelta = true;
+              if (firstTextUpload === undefined && sessionConfig.trackFirstTextFrameUpload !== undefined)
+                firstTextUpload = sessionConfig.trackFirstTextFrameUpload(sdkMessage.uuid);
+            } else if (
+              sdkMessage.type === "assistant" &&
+              sdkMessage.parent_tool_use_id == null &&
+              collectReadNotificationsToolUseIds(sdkMessage, BRIEF_TOOL_NAME_SET)
+            )
+              turnTiming.markFirstTextPainted("message", sdkMessage.message.id);
+            if (
+              firstFrameUpload === undefined &&
+              sessionConfig.trackFirstFrameUpload !== undefined &&
+              sdkMessage.type === "stream_event" &&
+              sdkMessage.parent_tool_use_id == null &&
+              !isPingStreamEvent(sdkMessage.event)
+            )
+              firstFrameUpload = sessionConfig.trackFirstFrameUpload(sdkMessage.uuid);
+            let messageKind =
+              sdkMessage.type === "assistant" && sdkMessage.parent_tool_use_id == null
                 ? "assistant"
-                : Mt.type === "stream_event" && Mt.parent_tool_use_id == null && !isPingStreamEvent(Mt.event)
+                : sdkMessage.type === "stream_event" &&
+                    sdkMessage.parent_tool_use_id == null &&
+                    !isPingStreamEvent(sdkMessage.event)
                   ? "stream_event"
                   : undefined;
-            let rr = Ur === undefined ? undefined : runningTurnRecord.fields();
-            if (Ur !== undefined && rr !== undefined && rr.user_message_uuid !== Ka[Ur]) {
-              Ka[Ur] = rr.user_message_uuid;
+            let turnFields = messageKind === undefined ? undefined : record.fields();
+            if (
+              messageKind !== undefined &&
+              turnFields !== undefined &&
+              turnFields.user_message_uuid !== lastUserUuidByKind[messageKind]
+            ) {
+              lastUserUuidByKind[messageKind] = turnFields.user_message_uuid;
               yield {
-                ...Mt,
-                ...rr,
-                ...ts,
+                ...sdkMessage,
+                ...turnFields,
+                ...resumeReasonStamp,
               };
-            } else if (Mt.type === "system" && Mt.subtype === "thinking_tokens") {
-              let Uo = runningTurnRecord.fields();
-              yield Uo === undefined
-                ? Mt
+            } else if (sdkMessage.type === "system" && sdkMessage.subtype === "thinking_tokens") {
+              let fields = record.fields();
+              yield fields === undefined
+                ? sdkMessage
                 : {
-                    ...Mt,
-                    user_message_uuid: Uo.user_message_uuid,
+                    ...sdkMessage,
+                    user_message_uuid: fields.user_message_uuid,
                   };
-            } else if (Mt.type === "system" && Mt.subtype === "status" && Mt.status === "requesting")
-              yield withUserMessageUuids(Mt, runningTurnRecord);
+            } else if (
+              sdkMessage.type === "system" &&
+              sdkMessage.subtype === "status" &&
+              sdkMessage.status === "requesting"
+            )
+              yield withUserMessageUuids(sdkMessage, record);
             else {
-              Ja = Ur === "stream_event" && isTextOrJsonDeltaEvent(msg);
-              yield Mt;
+              plainDeltaActive = messageKind === "stream_event" && isTextOrJsonDeltaEvent(turnMessage);
+              yield sdkMessage;
             }
           }
-        if (Su) yield* Ao("served");
-        if (_u) return;
-        if (msg.type === "user" && ga !== undefined && !hasReachedBudget(e.maxBudgetUsd)) {
+        if (refusalServed) yield* collapseNotices("served");
+        if (turnFinished) return;
+        if (
+          turnMessage.type === "user" &&
+          jsonSchema !== undefined &&
+          !hasReachedBudget(sessionConfig.maxBudgetUsd)
+        ) {
           let MAX_STRUCTURED_OUTPUT_RETRIES_2 =
             env.MAX_STRUCTURED_OUTPUT_RETRIES ?? MAX_STRUCTURED_OUTPUT_RETRIES;
           if (
-            countNamedToolUses(initialMessages, STRUCTUREDOUTPUT) + Za - Il >=
+            countNamedToolUses(initialMessages, STRUCTUREDOUTPUT) + retractedCalls - initialStructuredCount >=
               MAX_STRUCTURED_OUTPUT_RETRIES_2 &&
-            vi.length === 0
+            pendingStructured.length === 0
           ) {
-            Cn = true;
-            await Gr(on, permissionDenials);
-            _u = true;
-            Bi(pr, tools);
-            if (to) {
-              await pr.record(true);
-              if (qo) await flushSessionStorage();
+            cleanupDone = true;
+            await drainAbandonedTurn(turnAbortController, permissionDenials);
+            turnFinished = true;
+            finalizeTurn(persistWriter, toolList);
+            if (persistSession) {
+              await persistWriter.record(true);
+              if (eagerFlush) await flushSessionStorage();
             }
             turnTiming.end("structured_output_retry_exhausted");
-            yield* partialStreamRetraction.closeAtTurnEnd(Es);
-            yield* Ao("turn_end");
+            yield* partialStreamRetraction.closeAtTurnEnd(streamUsage);
+            yield* collapseNotices("turn_end");
             yield buildResultMessage({
               startedAt: startTime,
               common: {
                 is_error: true,
                 duration_api_ms: getTotalAPIDuration(),
-                num_turns: mc,
-                stop_reason: Nd,
+                num_turns: numTurns,
+                stop_reason: stopReason,
                 session_id: getSessionId(),
                 total_cost_usd: getTotalCostUSD(),
-                usage: Cr,
+                usage: totalUsage,
                 modelUsage: getModelUsage(),
                 permission_denials: permissionDenials,
                 terminal_reason: "structured_output_retry_exhausted",
-                fast_mode_state: getFastModeState(model_2, appState.fastMode),
+                fast_mode_state: getFastModeState(selectedModel, appState.fastMode),
                 fast_mode_disabled_reason:
                   getFastModeUnavailableReasonCode() ??
-                  getFastRejectedReason(model_2, appState.fastMode) ??
+                  getFastRejectedReason(selectedModel, appState.fastMode) ??
                   undefined,
-                origin: Ie?.origin,
-                subagent_stats: buildFileHistorySnapshotChain(e.session),
+                origin: turnOptions?.origin,
+                subagent_stats: buildFileHistorySnapshotChain(sessionConfig.session),
                 safety_stops: getSafetyStops(),
               },
               variant: {
@@ -4133,12 +4376,12 @@ function QueryEngine(e) {
                 errors: [
                   formatStructuredOutputFailure(
                     MAX_STRUCTURED_OUTPUT_RETRIES_2,
-                    Za,
-                    hasSuccessfulToolCallSince(initialMessages, last_2),
+                    retractedCalls,
+                    hasSuccessfulToolCallSince(initialMessages, marker),
                   ),
                 ],
-                ...runningTurnRecord.errorVariantFields(),
-                ...ts,
+                ...record.errorVariantFields(),
+                ...resumeReasonStamp,
               },
             });
             return;
@@ -4146,48 +4389,48 @@ function QueryEngine(e) {
         }
       }
     } finally {
-      $n = Date.now();
+      lastTurnEndWallMs = Date.now();
       emitPlainDelta = undefined;
-      if (hr > 0)
+      if (plainDeltaCount > 0)
         logForDebugging(
-          `[headless] ${hr} streamed deltas went straight to output this turn (CLAUDE_CODE_PLAIN_DELTA_FAST_PATH)`,
+          `[headless] ${plainDeltaCount} streamed deltas went straight to output this turn (CLAUDE_CODE_PLAIN_DELTA_FAST_PATH)`,
           {
             level: "info",
           },
         );
-      turnTiming.end(undefined, on.signal.aborted);
+      turnTiming.end(undefined, turnAbortController.signal.aborted);
       turnTiming.dispose();
-      if (!_u) await Gr(on);
-      if (!Cn) Bi(pr, tools);
-      await pr.settleFoldCopies("all");
-      wt.delete(ni);
-      if (ba !== undefined)
-        _n(
+      if (!turnFinished) await drainAbandonedTurn(turnAbortController);
+      if (!cleanupDone) finalizeTurn(persistWriter, toolList);
+      await persistWriter.settleFoldCopies("all");
+      openTurnSpans.delete(turnSpan);
+      if (turnStartEventId !== undefined)
+        runSafely(
           "turn.complete",
           () =>
             raiseTurnComplete({
               turnEvents: turnStreamBridge,
-              turnId: ba,
+              turnId: turnStartEventId,
               transcript: {
                 getSnapshot: () => initialMessages,
               },
-              span: ni,
+              span: turnSpan,
               durationMs: elapsedMs(startTime, performance.now()),
-              isAborted: on.signal.aborted,
+              isAborted: turnAbortController.signal.aborted,
             }),
           undefined,
         );
-      await jn(pr, ar, to, qo);
+      await recordTurnNotes(persistWriter, turnMessages, persistSession, eagerFlush);
     }
   }
-  async function Gr(It, permissionDenials) {
-    if (It === abortController) ie();
+  async function drainAbandonedTurn(controller, permissionDenials) {
+    if (controller === abortController) abortTurn();
     try {
       while (true) {
-        let { value: on, done: Zn } = await queryEngine.next();
-        if (Zn) return;
-        if (on.type === "result") {
-          permissionDenials?.push(...on.permission_denials);
+        let { value: message, done } = await queryEngine.next();
+        if (done) return;
+        if (message.type === "result") {
+          permissionDenials?.push(...message.permission_denials);
           return;
         }
       }
@@ -4200,121 +4443,122 @@ function QueryEngine(e) {
       );
     }
   }
-  function Bi(It, Ie) {
-    It.flushUnanchoredPreservedTail();
+  function finalizeTurn(writer, toolList) {
+    writer.flushUnanchoredPreservedTail();
     try {
       clearCutResults();
     } catch (error) {
       logError(error);
     }
     try {
-      let on = stripToolResultsForStorage(initialMessages, Ie, 0, true);
-      if (on !== initialMessages) for (let j = 0; j < on.length; j++) initialMessages[j] = on[j];
+      let stripped = stripToolResultsForStorage(initialMessages, toolList, 0, true);
+      if (stripped !== initialMessages)
+        for (let j = 0; j < stripped.length; j++) initialMessages[j] = stripped[j];
     } catch (error) {
       logError(error);
     }
-    oo(true);
+    releaseHeldRows(true);
   }
-  function Hi(It, Ie, on, Zn) {
-    if ("timestamp" in It && "level" in It) {
-      let Cr = withoutSessionId(It);
-      h.keep([Cr]);
-      if (Zn) {
-        Ie.push(Cr);
-        on.record();
+  function appendSystemRow(systemMessage, transcript, writer, shouldPersist) {
+    if ("timestamp" in systemMessage && "level" in systemMessage) {
+      let row = withoutSessionId(systemMessage);
+      conversation.keep([row]);
+      if (shouldPersist) {
+        transcript.push(row);
+        writer.record();
       }
       return;
     }
-    let Nn;
-    switch (It.subtype) {
+    let replacement;
+    switch (systemMessage.subtype) {
       case "model_fallback":
-        Nn = createModelFallbackSystemMessage(It);
+        replacement = createModelFallbackSystemMessage(systemMessage);
         break;
       case "model_consent_fallback":
-        Nn = createConsentFallbackMessage(It);
+        replacement = createConsentFallbackMessage(systemMessage);
         break;
       case "model_refusal_no_fallback":
-        Nn = createRefusalNoFallbackMessage(It);
+        replacement = createRefusalNoFallbackMessage(systemMessage);
         break;
       default:
         return;
     }
-    h.keep([Nn]);
-    if (Zn) Ie.push(Nn);
+    conversation.keep([replacement]);
+    if (shouldPersist) transcript.push(replacement);
   }
-  function ja(refusalFallbackMessage, Ie, on) {
-    h.keep([refusalFallbackMessage]);
-    if (on) {
-      Ie.push(refusalFallbackMessage);
+  function recordRefusalEntry(refusalFallbackMessage, transcript, shouldPersist) {
+    conversation.keep([refusalFallbackMessage]);
+    if (shouldPersist) {
+      transcript.push(refusalFallbackMessage);
       logEvent("tengu_refusal_fallback_entry_recorded", {
         request_id: sanitizeMarkName(refusalFallbackMessage.requestId),
       });
     }
   }
-  async function Qa(It, model, fastMode) {
-    let [Zn, Nn] = await loadSkillsAndPlugins(It.storageV5);
+  async function buildInitMessage(hostConfig, model, fastMode) {
+    let [skills, plugins] = await loadSkillsAndPlugins(hostConfig.storageV5);
     let appState = getAppState();
-    let mr;
+    let resolvedSkills;
     try {
-      mr = dropSyncedClashes(Zn, appState.mcp.commands);
+      resolvedSkills = dropSyncedClashes(skills, appState.mcp.commands);
     } catch (error) {
       logError(error);
-      mr = Zn.filter((es) => es.loadedFrom !== "syncedSkills");
+      resolvedSkills = skills.filter((skill) => skill.loadedFrom !== "syncedSkills");
     }
-    let io;
+    let capabilities;
     try {
-      io = resolveLazy(e.capabilities);
+      capabilities = resolveLazy(sessionConfig.capabilities);
     } catch (error) {
       logError(error);
-      io = [];
+      capabilities = [];
     }
     return await buildSdkInitMessage({
-      session: It.session,
-      tools: It.tools,
-      mcpClients: It.mcpClients,
+      session: hostConfig.session,
+      tools: hostConfig.tools,
+      mcpClients: hostConfig.mcpClients,
       model,
       readSessionEffort: () => resolveEffortLevel(appState),
       permissionMode: appState.toolPermissionContext.mode,
-      commands: It.commands,
-      agents: It.agents,
-      skills: mr,
-      plugins: Nn,
+      commands: hostConfig.commands,
+      agents: hostConfig.agents,
+      skills: resolvedSkills,
+      plugins,
       fastMode,
       proactivityState: appState,
-      capabilities: io,
+      capabilities,
       messagesInView: () => messagesSinceCompactBoundary(initialMessages),
     });
   }
   return {
-    submitMessage: No,
-    interrupt: ie,
-    setModel: (It) => {
-      userSpecifiedModel = It;
+    submitMessage,
+    interrupt: abortTurn,
+    setModel: (model) => {
+      userSpecifiedModel = model;
     },
     getMessages: () => initialMessages,
-    keepArrivedRows: kn,
-    appendMessages: (It) => {
-      if (Pn !== undefined) Pn.push(...It);
-      else if (nn !== undefined)
-        nn.push({
-          rows: It,
+    keepArrivedRows: keepRows,
+    appendMessages: (rows) => {
+      if (heldSnapshotRows !== undefined) heldSnapshotRows.push(...rows);
+      else if (deferredRows !== undefined)
+        deferredRows.push({
+          rows,
           isAnswered: false,
         });
-      else En(It);
+      else appendRows(rows);
     },
-    appendsSettled: () => h.settled(),
+    appendsSettled: () => conversation.settled(),
     getReadFileState: () => readFileCache,
     dispose: () => {
       clearClassifierContext();
-      e.abortController?.signal.removeEventListener("abort", nt);
+      sessionConfig.abortController?.signal.removeEventListener("abort", onParentAbort);
       abortController.abort(userAbortReason("remote-cancel"));
-      Ee.done();
+      inputStream.done();
       queryEngine.return(undefined).catch(logError);
       initialMessages = [];
       readFileCache = createRemoteFileState(READ_FILE_STATE_CACHE_SIZE);
       sessionEnvVars = new Map();
-      L = new InstanceRegistry();
-      q = createSessionHooksRegistry();
+      toolState = new InstanceRegistry();
+      sessionHooks = createSessionHooksRegistry();
       memorySelector = emptyPickerState();
     },
   };
@@ -4323,25 +4567,25 @@ function QueryEngine(e) {
 /**
  * 非负取整的时间差
  */
-function elapsedMs(e, n) {
-  return Math.max(0, Math.round(n - e));
+function elapsedMs(startMs, endMs) {
+  return Math.max(0, Math.round(endMs - startMs));
 }
 //@ chunk-tyg7f3ek.js:483578-483926 layout
 /**
  * 发送时间相关遥测字段。
  */
-function postTimingFields(e, n, r) {
+function postTimingFields(enabled, startMs, timing) {
   try {
-    let postedAtMs = r?.postedAtMs;
-    let enqueuedAtMs = r?.enqueuedAtMs;
-    if (!e || !postedAtMs) return {};
-    let textRhythm = r?.textRhythm;
+    let postedAtMs = timing?.postedAtMs;
+    let enqueuedAtMs = timing?.enqueuedAtMs;
+    if (!enabled || !postedAtMs) return {};
+    let textRhythm = timing?.textRhythm;
     return {
-      postMs: elapsedMs(n, postedAtMs),
+      postMs: elapsedMs(startMs, postedAtMs),
       ...(enqueuedAtMs !== undefined &&
         enqueuedAtMs !== 0 && {
           queueWaitMs: elapsedMs(enqueuedAtMs, postedAtMs),
-          queuedBehind: r?.queuedBehind,
+          queuedBehind: timing?.queuedBehind,
         }),
       ...(textRhythm !== undefined &&
         textRhythm.posts > 0 &&
@@ -4431,20 +4675,24 @@ function ask(sessionConfig, { abortController, userSpecifiedModel }) {
 /**
  * 值是函数则调用取值，否则原样（配置项可惰性提供）。
  */
-function resolveLazy(e) {
-  return isFunction(e) ? e() : e;
+function resolveLazy(value) {
+  return isFunction(value) ? value() : value;
 }
 //@ chunk-tyg7f3ek.js:485787-485831 affinity
 /**
  * typeof 为 function。
  */
-function isFunction(e) {
-  return typeof e === "function";
+function isFunction(value) {
+  return typeof value === "function";
 }
 //@ chunk-18hwfzwa.js:1510660-1510734 fingerprint = getCoordinatorUserContext (0.572)
 /**
  * coordinator 用户上下文缓存（初始 null）。
  */
-var getCoordinatorUserContext = require("./chunk-yxywkh50.js").getCoordinatorUserContext;
-var coordinatorContextCache = null;
+var getCoordinatorUserContext; // deferred: loads other modules while loading; runs once its import cycle is complete
+var coordinatorContextCache;
+deferInit("chunk-18hwfzwa.js:1510660", () => {
+  getCoordinatorUserContext = require("./coordinator/coordinatorMode.js").getCoordinatorUserContext;
+  coordinatorContextCache = null;
+});
 export { ask, QueryEngine, coordinatorContextCache, getCoordinatorUserContext };

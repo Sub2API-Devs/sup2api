@@ -34,13 +34,17 @@ function attestationMode() {
   }
 }
 //@ chunk-0ajrnwwf.js:625-815 placement
-function attestationVerdict(e) {
+function attestationVerdict(status) {
   let attestationFilterPolicy = getAttestationFilterPolicy();
-  let { status, meetsLevel, configException } = resolveEffectiveAttestation(e, attestationFilterPolicy, {
+  let {
+    status: status_2,
+    meetsLevel,
+    configException,
+  } = resolveEffectiveAttestation(status, attestationFilterPolicy, {
     isCloudWorker: false,
   });
   return {
-    status,
+    status: status_2,
     verdict: !attestationFilterPolicy.enforce
       ? "not_policed"
       : meetsLevel
@@ -55,11 +59,11 @@ function attestationVerdict(e) {
  * 由宿主状态生成证明结论；证明模式为关闭时返回 undefined。
  */
 function attestationFor(attestationStatus) {
-  let o = attestationMode();
-  return o === "off"
+  let mode = attestationMode();
+  return mode === "off"
     ? undefined
     : {
-        mode: o,
+        mode,
         ...attestationVerdict(normalizeAttestationStatus(attestationStatus)),
       };
 }
@@ -67,18 +71,18 @@ function attestationFor(attestationStatus) {
 /**
  * 是否处于强制模式且证明等级低于下限（需要暂扣调用）。
  */
-function isBelowFloorEnforced(e) {
-  return e?.mode === "enforce" && e.verdict === "below_floor";
+function isBelowFloorEnforced(attestation) {
+  return attestation?.mode === "enforce" && attestation.verdict === "below_floor";
 }
 //@ chunk-0ajrnwwf.js:959-1037 placement
 /**
  * 以未知状态得出证明结果与是否需要暂扣。
  */
 function unknownAttestationResult() {
-  let e = attestationFor("UNSPECIFIED");
+  let attestation = attestationFor("UNSPECIFIED");
   return {
-    attestation: e,
-    heldBack: isBelowFloorEnforced(e),
+    attestation,
+    heldBack: isBelowFloorEnforced(attestation),
   };
 }
 //@ chunk-0ajrnwwf.js:1037-1200 placement

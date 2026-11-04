@@ -5,13 +5,13 @@
  * pieces: chunk-zykv69v4.js (2)
  * attribution: esm-fingerprint 2
  */
-import { J$t, H, objectFromShape } from "./zod-compat.js";
+import { getShape, getLiteralValue, objectFromShape } from "./zod-compat.js";
 
 //@ chunk-zykv69v4.js:11237-11425 esm-fingerprint
-function R(schema) {
-  let methodSchema = J$t(schema)?.method;
+function getMethodFromSchema(schema) {
+  let methodSchema = getShape(schema)?.method;
   if (!methodSchema) throw Error("Schema is missing a method literal");
-  let value = H(methodSchema);
+  let value = getLiteralValue(methodSchema);
   if (typeof value !== "string") throw Error("Schema method literal must be a string");
   return value;
 }
@@ -21,4 +21,4 @@ function parseWithCompat(schema, data) {
   if (!result.success) throw result.error;
   return result.data;
 }
-export { R, parseWithCompat };
+export { getMethodFromSchema, parseWithCompat };

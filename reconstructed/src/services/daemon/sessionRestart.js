@@ -26,8 +26,8 @@ var SESSION_ID_TAKEN_NOTICE =
 /**
  * 工作目录不存在或不可访问时的原因文案。
  */
-function cwdGoneReason(e) {
-  return `working directory no longer exists or is not accessible: ${e}`;
+function cwdGoneReason(cwd) {
+  return `working directory no longer exists or is not accessible: ${cwd}`;
 }
 //@ chunk-89ebz077.js:11562-11865 placement
 /**

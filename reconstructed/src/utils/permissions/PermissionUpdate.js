@@ -32,7 +32,7 @@ import {
   isMdmLoadInFlight,
   mdmResult,
   isPolicyReadAnswered,
-} from "../settings/managedPluginTiers.js";
+} from "../settings/mdm/mdmLoader.js";
 import { policySettingsUnreadable } from "../hooks/hooksConfigSnapshot.js";
 import { getSessionFeatureValues } from "../../bootstrap/sessionFeatureValues.js";
 import { logError } from "../log.js";
@@ -64,13 +64,16 @@ import { addPermissionRulesToSettings } from "./permissionsLoader.js";
 import { toPosixPath } from "./filesystem.js";
 import { getAdditionalDirectoriesForClaudeMd } from "../../bootstrap/state.js";
 import { PATH_RULE_CARVE_OUT_RE } from "../settings/permissionRuleCarveOut.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-82kqcve8.js:219856-219950 placement
 /**
  * blocksReadsOutsideWorkingDirs：策略设置是否要求阻断工作目录外的读取。
  */
 function blocksReadsOutsideWorkingDirs() {
-  return getAllPolicyTierSettings().some((e) => e.permissions?.blockReadsOutsideWorkingDirectories === true);
+  return getAllPolicyTierSettings().some(
+    (settings) => settings.permissions?.blockReadsOutsideWorkingDirectories === true,
+  );
 }
 //@ chunk-82kqcve8.js:219980-220047 placement
 function isRemotePolicyEligible() {
@@ -125,7 +128,7 @@ var POLICY_SOURCE_PROBES = {
 //@ chunk-82kqcve8.js:220500-220669 placement
 function areManagedSourcesClear() {
   try {
-    return Object.values(POLICY_SOURCE_PROBES).every((e) => e());
+    return Object.values(POLICY_SOURCE_PROBES).every((probe) => probe());
   } catch (error) {
     let sessionFeatureValues = getSessionFeatureValues();
     if (sessionFeatureValues.managedSourcesReadErrorLogged !== true) {
@@ -139,27 +142,27 @@ function areManagedSourcesClear() {
 /**
  * 在 CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS 下记录规则集是否不含路径范围规则（豁免移除的前提）。
  */
-function noteRemovalWaiverRules(toolPermissionContext) {
+function noteRemovalWaiverRules(context) {
   if (!env.CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS) return;
   let sessionFeatureValues = getSessionFeatureValues();
   sessionFeatureValues.removalWaiverRulesClear =
-    sessionFeatureValues.removalWaiverRulesClear !== false && !hasPathScopedRules(toolPermissionContext);
+    sessionFeatureValues.removalWaiverRulesClear !== false && !hasPathScopedRules(context);
 }
 //@ chunk-82kqcve8.js:220825-220936 placement
 /**
  * 规则集含路径范围规则时撤销移除豁免。
  */
-function clearRemovalWaiverIfPathScoped(e) {
-  if (env.CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS && hasPathScopedRules(e))
+function clearRemovalWaiverIfPathScoped(context) {
+  if (env.CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS && hasPathScopedRules(context))
     getSessionFeatureValues().removalWaiverRulesClear = false;
 }
 //@ chunk-82kqcve8.js:220936-221147 placement
 /**
  * 非子会话且启用 EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS 时，规则集无路径范围规则、无未完成的设置改动、托管来源都正常才返回 true。
  */
-function isRemovalWaiverActive(e) {
+function isRemovalWaiverActive(context) {
   if (!env.CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS || env.CLAUDE_CODE_CHILD_SESSION) return false;
-  clearRemovalWaiverIfPathScoped(e);
+  clearRemovalWaiverIfPathScoped(context);
   let sessionFeatureValues = getSessionFeatureValues();
   return (
     sessionFeatureValues.removalWaiverRulesClear === true &&
@@ -184,15 +187,15 @@ function checkBypassPermissionsEnv(toolPermissionContext) {
     : "CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS is set, so dangerous rm commands can run without a prompt in bypass permissions mode once managed settings and plugin hooks have loaded. If you didn't set it, check your shell profile.";
 }
 //@ chunk-82kqcve8.js:222106-222303 placement = getDenyRuleForAgent (0.771)
-function hasPathScopedRules(e) {
+function hasPathScopedRules(context) {
   return (
-    e.blockReadsOutsideWorkingDirectories === true ||
-    [...getDenyRules(e), ...getAskRules(e)].some(
+    context.blockReadsOutsideWorkingDirectories === true ||
+    [...getDenyRules(context), ...getAskRules(context)].some(
       (rule) =>
         !(NARROWING_RULE_SOURCES_2.includes(rule.source) && rule.ruleValue.ruleContent === undefined) &&
         [BASH_TOOL_NAME, FILE_EDIT_TOOL_NAME, FILE_READ_TOOL_NAME].some((name) =>
           toolMatchesRule(
-            e,
+            context,
             {
               name,
             },
@@ -206,46 +209,51 @@ function hasPathScopedRules(e) {
 /**
  * isRuleRoundTripStable：规则经格式化再解析后与原值一致。
  */
-function isRuleRoundTripStable(e) {
-  let n = permissionRuleValueFromString(formatPermissionRule(e));
-  return n.toolName === e.toolName && n.ruleContent === e.ruleContent;
+function isRuleRoundTripStable(ruleValue) {
+  let roundTripped = permissionRuleValueFromString(formatPermissionRule(ruleValue));
+  return roundTripped.toolName === ruleValue.toolName && roundTripped.ruleContent === ruleValue.ruleContent;
 }
 //@ chunk-82kqcve8.js:222397-222545 placement
-function canonicalizeAliasedRule(e) {
-  let n = permissionRuleValueFromString(formatPermissionRule(e));
+function canonicalizeAliasedRule(ruleValue) {
+  let roundTripped = permissionRuleValueFromString(formatPermissionRule(ruleValue));
   if (
-    n.ruleContent !== e.ruleContent ||
-    n.toolName === e.toolName ||
-    canonicalToolName(e.toolName) !== n.toolName ||
-    !isRuleRoundTripStable(n)
+    roundTripped.ruleContent !== ruleValue.ruleContent ||
+    roundTripped.toolName === ruleValue.toolName ||
+    canonicalToolName(ruleValue.toolName) !== roundTripped.toolName ||
+    !isRuleRoundTripStable(roundTripped)
   )
     return null;
-  return n;
+  return roundTripped;
 }
 //@ chunk-82kqcve8.js:222545-222841 layout
 /**
  * 合法的更新目的地（settings 五层 + cliArg/command/toolsNarrowing/mcpServerPolicy/hostCredential/session/mcpMount）与 allow/deny/ask → alwaysAllowRules/alwaysDenyRules/alwaysAskRules 的映射。
  */
-var PERMISSION_UPDATE_DESTINATION_SET = {
-  userSettings: true,
-  projectSettings: true,
-  localSettings: true,
-  flagSettings: true,
-  policySettings: true,
-  cliArg: true,
-  command: true,
-  toolsNarrowing: true,
-  mcpServerPolicy: true,
-  hostCredential: true,
-  session: true,
-  mcpMount: true,
-};
-var VALID_PERMISSION_UPDATE_DESTINATIONS = new Set(Object.keys(PERMISSION_UPDATE_DESTINATION_SET));
-var RULE_BEHAVIOR_CONTEXT_KEYS = {
-  allow: "alwaysAllowRules",
-  deny: "alwaysDenyRules",
-  ask: "alwaysAskRules",
-};
+var PERMISSION_UPDATE_DESTINATION_SET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var VALID_PERMISSION_UPDATE_DESTINATIONS;
+var RULE_BEHAVIOR_CONTEXT_KEYS;
+deferInit("chunk-82kqcve8.js:222545", () => {
+  PERMISSION_UPDATE_DESTINATION_SET = {
+    userSettings: true,
+    projectSettings: true,
+    localSettings: true,
+    flagSettings: true,
+    policySettings: true,
+    cliArg: true,
+    command: true,
+    toolsNarrowing: true,
+    mcpServerPolicy: true,
+    hostCredential: true,
+    session: true,
+    mcpMount: true,
+  };
+  VALID_PERMISSION_UPDATE_DESTINATIONS = new Set(Object.keys(PERMISSION_UPDATE_DESTINATION_SET));
+  RULE_BEHAVIOR_CONTEXT_KEYS = {
+    allow: "alwaysAllowRules",
+    deny: "alwaysDenyRules",
+    ask: "alwaysAskRules",
+  };
+});
 //@ chunk-82kqcve8.js:222841-222960 fingerprint = extractRules (1)
 /**
  * 从更新列表中取出所有 addRules 的规则值。
@@ -262,20 +270,25 @@ function extractRules(updates) {
   });
 }
 //@ chunk-82kqcve8.js:222960-223120 layout
-function isPermissionRuleValueShape(e) {
-  if (e === null || typeof e !== "object") return false;
-  let n = e;
-  return typeof n.toolName === "string" && (n.ruleContent === undefined || typeof n.ruleContent === "string");
+function isPermissionRuleValueShape(value) {
+  if (value === null || typeof value !== "object") return false;
+  let candidate = value;
+  return (
+    typeof candidate.toolName === "string" &&
+    (candidate.ruleContent === undefined || typeof candidate.ruleContent === "string")
+  );
 }
 //@ chunk-82kqcve8.js:223120-223245 layout
-function describeValueForLog(e) {
-  let n;
+function describeValueForLog(value) {
+  let described;
   try {
-    n = isPermissionRuleValueShape(e) ? formatPermissionRule(e) : String(jsonStringify(e));
+    described = isPermissionRuleValueShape(value)
+      ? formatPermissionRule(value)
+      : String(jsonStringify(value));
   } catch {
-    n = "(unprintable value)";
+    described = "(unprintable value)";
   }
-  return n.length > 200 ? `${truncateToLength(n, 200)}\u2026` : n;
+  return described.length > 200 ? `${truncateToLength(described, 200)}\u2026` : described;
 }
 //@ chunk-82kqcve8.js:223245-225938 layout
 /**
@@ -312,9 +325,9 @@ function validatePermissionUpdate(update) {
           reason: `${type} (${behaviorChecked}) whose rules field is not an array`,
         };
       let rulesCopy = [...rules];
-      let mapped = rulesCopy.map((L) => {
-        if (L === null || typeof L !== "object") return L;
-        let { toolName, ruleContent } = L;
+      let mapped = rulesCopy.map((rule) => {
+        if (rule === null || typeof rule !== "object") return rule;
+        let { toolName, ruleContent } = rule;
         return ruleContent === undefined
           ? {
               toolName,
@@ -329,25 +342,25 @@ function validatePermissionUpdate(update) {
           ? behaviorChecked === "allow"
           : behaviorChecked === "deny" || behaviorChecked === "ask")
       ) {
-        let L = [];
-        for (let j of mapped) {
-          if (!isPermissionRuleValueShape(j))
+        let normalized = [];
+        for (let candidate of mapped) {
+          if (!isPermissionRuleValueShape(candidate))
             return {
               action: "drop",
-              reason: `widening ${type} (${behaviorChecked}) carries a shape-invalid rule: ${describeValueForLog(j)}`,
+              reason: `widening ${type} (${behaviorChecked}) carries a shape-invalid rule: ${describeValueForLog(candidate)}`,
             };
-          if (!isRuleRoundTripStable(j)) {
-            let G = type === "removeRules" ? null : canonicalizeAliasedRule(j);
-            if (G !== null) {
-              L.push(G);
+          if (!isRuleRoundTripStable(candidate)) {
+            let canonical = type === "removeRules" ? null : canonicalizeAliasedRule(candidate);
+            if (canonical !== null) {
+              normalized.push(canonical);
               continue;
             }
             return {
               action: "drop",
-              reason: `widening ${type} (${behaviorChecked}) carries a rule that does not survive the store round-trip: ${describeValueForLog(j)}`,
+              reason: `widening ${type} (${behaviorChecked}) carries a rule that does not survive the store round-trip: ${describeValueForLog(candidate)}`,
             };
           }
-          L.push(j);
+          normalized.push(candidate);
         }
         return {
           action: "apply",
@@ -355,16 +368,20 @@ function validatePermissionUpdate(update) {
             type,
             behavior: behaviorChecked,
             destination: destinationChecked,
-            rules: L,
+            rules: normalized,
           },
         };
       }
       let normalizedRules = [];
-      for (let L of mapped) {
-        if (!isPermissionRuleValueShape(L)) continue;
-        let j = permissionRuleValueFromString(formatPermissionRule(L));
-        if (j.toolName !== L.toolName || j.ruleContent !== L.ruleContent) normalizedRules.push(j);
-        else normalizedRules.push(L);
+      for (let candidate of mapped) {
+        if (!isPermissionRuleValueShape(candidate)) continue;
+        let normalizedRule = permissionRuleValueFromString(formatPermissionRule(candidate));
+        if (
+          normalizedRule.toolName !== candidate.toolName ||
+          normalizedRule.ruleContent !== candidate.ruleContent
+        )
+          normalizedRules.push(normalizedRule);
+        else normalizedRules.push(candidate);
       }
       if (normalizedRules.length === 0 && rulesCopy.length > 0)
         return {
@@ -388,22 +405,22 @@ function validatePermissionUpdate(update) {
           action: "drop",
           reason: "addDirectories whose directories field is not an array",
         };
-      let y = [...directories];
-      for (let w of y) {
-        if (typeof w !== "string")
+      let directoryList = [...directories];
+      for (let directory of directoryList) {
+        if (typeof directory !== "string")
           return {
             action: "drop",
-            reason: `addDirectories carries a non-string directory: ${describeValueForLog(w)}`,
+            reason: `addDirectories carries a non-string directory: ${describeValueForLog(directory)}`,
           };
-        if (w.trim() === "")
+        if (directory.trim() === "")
           return {
             action: "drop",
-            reason: `addDirectories carries a trim-empty directory: ${describeValueForLog(w)}`,
+            reason: `addDirectories carries a trim-empty directory: ${describeValueForLog(directory)}`,
           };
-        if (w.includes("\x00"))
+        if (directory.includes("\x00"))
           return {
             action: "drop",
-            reason: `addDirectories carries a directory containing a null byte: ${describeValueForLog(w)}`,
+            reason: `addDirectories carries a directory containing a null byte: ${describeValueForLog(directory)}`,
           };
       }
       return {
@@ -411,7 +428,7 @@ function validatePermissionUpdate(update) {
         update: {
           type,
           destination: destinationChecked,
-          directories: y,
+          directories: directoryList,
         },
       };
     }
@@ -475,12 +492,12 @@ function sanitizePermissionUpdates(updates) {
   }
   let valid = [];
   for (let update of updates) {
-    let s = validatePermissionUpdate(update);
-    if (s.action === "drop") {
-      logRefusedPermissionUpdate("resolution-boundary", s.reason);
+    let validated = validatePermissionUpdate(update);
+    if (validated.action === "drop") {
+      logRefusedPermissionUpdate("resolution-boundary", validated.reason);
       continue;
     }
-    valid.push(s.update);
+    valid.push(validated.update);
   }
   return valid;
 }
@@ -520,8 +537,8 @@ function applyValidatedPermissionUpdate(context, update, { announce = true } = {
     : syncRemoteBrowserCardAnswers(context, applyPermissionUpdate(context, filtered, announce));
 }
 //@ chunk-82kqcve8.js:226823-226850 layout
-function logIfAnnounced(announce, n) {
-  if (announce) logForDebugging(n);
+function logIfAnnounced(announce, message) {
+  if (announce) logForDebugging(message);
 }
 //@ chunk-82kqcve8.js:226850-228601 fingerprint = applyPermissionUpdate (0.884)
 /**
@@ -616,35 +633,38 @@ function applyPermissionUpdate(context, update, announce) {
  * 从 allow 的 add/replace 更新中去掉针对指定工具的“整工具”（无内容）规则，豁免条件由回调决定。
  */
 function dropBareAllowRulesForTools(updates, toolNames, isExempt, isTargeted) {
-  let h = (rule, destination) => {
-    let R = permissionRuleValueFromString(formatPermissionRule(rule));
-    if (R.ruleContent !== undefined) return false;
-    if (!(toolNames.has(R.toolName) || isTargeted(R))) return false;
-    return !isExempt(R, destination);
+  let shouldDrop = (rule, destination) => {
+    let ruleValue = permissionRuleValueFromString(formatPermissionRule(rule));
+    if (ruleValue.ruleContent !== undefined) return false;
+    if (!(toolNames.has(ruleValue.toolName) || isTargeted(ruleValue))) return false;
+    return !isExempt(ruleValue, destination);
   };
-  let y = [];
+  let result = [];
   for (let update of updates) {
     if (!((update.type === "addRules" || update.type === "replaceRules") && update.behavior === "allow")) {
-      y.push(update);
+      result.push(update);
       continue;
     }
-    let filtered = update.rules.filter((rule) => !h(rule, update.destination));
-    if (filtered.length === update.rules.length) y.push(update);
+    let filtered = update.rules.filter((rule) => !shouldDrop(rule, update.destination));
+    if (filtered.length === update.rules.length) result.push(update);
     else if (filtered.length > 0)
-      y.push({
+      result.push({
         ...update,
         rules: filtered,
       });
   }
-  return y;
+  return result;
 }
 //@ chunk-82kqcve8.js:228995-229068 layout
 /**
  * 工具名及其全部别名组成的集合。
  */
-function getToolNameWithAliases(e, n) {
-  let toolNameForPermissionCheck = getToolNameForPermissionCheck(e);
-  return new Set([toolNameForPermissionCheck, ...aliasesFor(toolNameForPermissionCheck, n.toolAliases)]);
+function getToolNameWithAliases(tool, toolPermissionContext) {
+  let toolNameForPermissionCheck = getToolNameForPermissionCheck(tool);
+  return new Set([
+    toolNameForPermissionCheck,
+    ...aliasesFor(toolNameForPermissionCheck, toolPermissionContext.toolAliases),
+  ]);
 }
 //@ chunk-82kqcve8.js:229068-229269 layout
 /**
@@ -675,13 +695,13 @@ function supportsPersistence(destination) {
 /**
  * 先校验 PermissionUpdate（validatePermissionUpdate），被丢弃时记录原因，通过后持久化。
  */
-async function persistValidatedPermissionUpdate(update, storageV5) {
-  let r = validatePermissionUpdate(update);
-  if (r.action === "drop") {
-    logRefusedPermissionUpdate("disk", r.reason);
+async function persistValidatedPermissionUpdate(update, storage) {
+  let validated = validatePermissionUpdate(update);
+  if (validated.action === "drop") {
+    logRefusedPermissionUpdate("disk", validated.reason);
     return;
   }
-  return persistPermissionUpdate(r.update, storageV5);
+  return persistPermissionUpdate(validated.update, storage);
 }
 //@ chunk-82kqcve8.js:229462-231258 fingerprint = persistPermissionUpdate (0.963)
 /**
@@ -717,12 +737,12 @@ async function persistPermissionUpdate(update, storage) {
       logForDebugging(
         `Persisting ${update.directories.length} director${update.directories.length === 1 ? "y" : "ies"} to ${update.destination}`,
       );
-      let r = [...update.directories];
+      let directories = [...update.directories];
       await updateSettingsForSourceWithTransform(
         update.destination,
-        (s) => {
-          let existingDirs = s?.permissions?.additionalDirectories || [];
-          let dirsToAdd = r.filter((dir) => !existingDirs.includes(dir));
+        (current) => {
+          let existingDirs = current?.permissions?.additionalDirectories || [];
+          let dirsToAdd = directories.filter((dir) => !existingDirs.includes(dir));
           if (dirsToAdd.length === 0) return null;
           return {
             permissions: {
@@ -743,8 +763,8 @@ async function persistPermissionUpdate(update, storage) {
       let behavior = update.behavior;
       await updateSettingsForSourceWithTransform(
         update.destination,
-        (h) => {
-          let filteredRules = (h?.permissions?.[behavior] || []).filter((rule) => {
+        (currentSettings) => {
+          let filteredRules = (currentSettings?.permissions?.[behavior] || []).filter((rule) => {
             let normalized = formatPermissionRule(permissionRuleValueFromString(rule));
             return !rulesToRemove.has(normalized);
           });
@@ -766,9 +786,9 @@ async function persistPermissionUpdate(update, storage) {
       let dirsToRemove = new Set(update.directories);
       await updateSettingsForSourceWithTransform(
         update.destination,
-        (s) => ({
+        (currentSettings) => ({
           permissions: {
-            additionalDirectories: (s?.permissions?.additionalDirectories || []).filter(
+            additionalDirectories: (currentSettings?.permissions?.additionalDirectories || []).filter(
               (dir) => !dirsToRemove.has(dir),
             ),
           },
@@ -813,8 +833,8 @@ async function persistPermissionUpdate(update, storage) {
   }
 }
 //@ chunk-82kqcve8.js:231258-231311 layout
-async function persistPermissionUpdates(e, storageV5) {
-  for (let r of e) await persistValidatedPermissionUpdate(r, storageV5);
+async function persistPermissionUpdates(updates, storageV5) {
+  for (let update of updates) await persistValidatedPermissionUpdate(update, storageV5);
 }
 //@ chunk-82kqcve8.js:231311-231561 fingerprint = createReadRuleSuggestion (0.838)
 /**
@@ -823,14 +843,14 @@ async function persistPermissionUpdates(e, storageV5) {
 function createReadRuleSuggestion(dirPath, destination = "session") {
   let pathForPattern = toPosixPath(dirPath);
   if (pathForPattern === "/") return;
-  let s = escapeRuleContent(pathForPattern, {
+  let escapedPath = escapeRuleContent(pathForPattern, {
     escapeGlobs: true,
   });
   let ruleContent = posix.isAbsolute(pathForPattern)
-    ? `/${s}/**`
-    : s.startsWith("\\")
-      ? `./${s}/**`
-      : `${s}/**`;
+    ? `/${escapedPath}/**`
+    : escapedPath.startsWith("\\")
+      ? `./${escapedPath}/**`
+      : `${escapedPath}/**`;
   return {
     type: "addRules",
     rules: [
@@ -858,13 +878,16 @@ function addSessionWorkingDirectories(toolPermissionContext) {
 /**
  * 与磁盘已存规则合并：目的地为 user/project/local 设置时，把已存规则放前、再加上新规则中非特殊形式的项。
  */
-function mergeWithStoredRules(s, e, n, mergeOptions) {
+function mergeWithStoredRules(rules, destination, behavior, mergeOptions) {
   if (
     mergeOptions === undefined ||
-    (e !== "userSettings" && e !== "projectSettings" && e !== "localSettings")
+    (destination !== "userSettings" && destination !== "projectSettings" && destination !== "localSettings")
   )
-    return s;
-  return [...mergeOptions[e][n], ...s.filter((r) => !PATH_RULE_CARVE_OUT_RE.test(r))];
+    return rules;
+  return [
+    ...mergeOptions[destination][behavior],
+    ...rules.filter((ruleString) => !PATH_RULE_CARVE_OUT_RE.test(ruleString)),
+  ];
 }
 export {
   isRuleRoundTripStable,

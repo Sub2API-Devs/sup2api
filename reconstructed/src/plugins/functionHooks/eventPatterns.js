@@ -15,48 +15,52 @@ import { uniq } from "../../utils/collections.js";
 import { CLAUDE_CODE } from "./moduleLoader.js";
 import { declaredNames, exportNameText } from "./moduleScan.js";
 import { readStaticString, describeArgument } from "./clientSurfaceScan.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-bfnfj4kx.js:39545-39578 placement
-var regExp_2 = new RegExp(`^${IDENTIFIER_PATTERN_SOURCE}$`, "u");
+var regExp_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bfnfj4kx.js:39545", () => {
+  regExp_2 = new RegExp(`^${IDENTIFIER_PATTERN_SOURCE}$`, "u");
+});
 //@ chunk-bfnfj4kx.js:39578-39636 placement
 /**
  * 字符串是否为事件模式（*、前缀.*、!）。
  */
-var isEventPattern = (e) => e === "*" || e.endsWith(".*") || e.startsWith("!");
+var isEventPattern = (pattern) => pattern === "*" || pattern.endsWith(".*") || pattern.startsWith("!");
 //@ chunk-bfnfj4kx.js:39636-39675 placement
 /**
  * telemetry.* 事件
  */
-var isTelemetryEvent = (e) => e.startsWith("telemetry.");
+var isTelemetryEvent = (event) => event.startsWith("telemetry.");
 //@ chunk-bfnfj4kx.js:39675-40256 placement
 /**
  * 校验事件名或模式，返回错误说明。
  */
-function validateEventPattern(e) {
-  if (typeof e !== "string") return `${typeof e} is not an event name or a pattern (a string)`;
-  let o = e.startsWith("!");
-  let t = o ? e.slice(1) : e;
-  if (o && t === "*") return `"${e}" is not a pattern: it selects no event`;
-  if (o && t.startsWith("!")) return `"${e}" is not a pattern: "!" negates once`;
-  let r = t === "*";
-  let n = t.endsWith(".*");
-  let parts = (n ? t.slice(0, -2) : t).split(".");
-  if (!(r || parts.every((i) => regExp_2.test(i))))
-    return `"${e}" is not an event name or a pattern ("*", "<prefix>.*", or "!" before either)`;
+function validateEventPattern(pattern) {
+  if (typeof pattern !== "string") return `${typeof pattern} is not an event name or a pattern (a string)`;
+  let isNegated = pattern.startsWith("!");
+  let body = isNegated ? pattern.slice(1) : pattern;
+  if (isNegated && body === "*") return `"${pattern}" is not a pattern: it selects no event`;
+  if (isNegated && body.startsWith("!")) return `"${pattern}" is not a pattern: "!" negates once`;
+  let isEvery = body === "*";
+  let isPrefix = body.endsWith(".*");
+  let parts = (isPrefix ? body.slice(0, -2) : body).split(".");
+  if (!(isEvery || parts.every((problem) => regExp_2.test(problem))))
+    return `"${pattern}" is not an event name or a pattern ("*", "<prefix>.*", or "!" before either)`;
   return {
-    isNegated: o,
-    selection: r
+    isNegated,
+    selection: isEvery
       ? {
           kind: "every",
         }
-      : n
+      : isPrefix
         ? {
             kind: "prefix",
             prefix: parts.join("."),
           }
         : {
             kind: "name",
-            name: t,
+            name: body,
           },
   };
 }
@@ -64,89 +68,93 @@ function validateEventPattern(e) {
 /**
  * 校验并返回模式
  */
-function requireEventPattern(e) {
-  let o = validateEventPattern(e);
-  if (typeof o === "string") throw new HooksError(o);
-  return o;
+function requireEventPattern(pattern) {
+  let problem = validateEventPattern(pattern);
+  if (typeof problem === "string") throw new HooksError(problem);
+  return problem;
 }
 //@ chunk-bfnfj4kx.js:40331-40407 placement
 /**
  * 精确名前缀
  */
-function nameOfEventPattern(e) {
-  let { selection } = requireEventPattern(e);
+function nameOfEventPattern(pattern) {
+  let { selection } = requireEventPattern(pattern);
   return selection.kind === "name" ? selection.name : undefined;
 }
 //@ chunk-bfnfj4kx.js:40407-40471 placement
 /**
  * 校验失败文本
  */
-function eventPatternError(e) {
-  let o = validateEventPattern(e);
-  return typeof o === "string" ? o : undefined;
+function eventPatternError(pattern) {
+  let problem = validateEventPattern(pattern);
+  return typeof problem === "string" ? problem : undefined;
 }
 //@ chunk-bfnfj4kx.js:40471-40657 placement
 /**
  * 事件名是否匹配模式（支持取反、前缀、精确）。
  */
-function matchesEventPattern(e, o) {
-  let { isNegated, selection } = requireEventPattern(e);
-  let n;
+function matchesEventPattern(pattern, event) {
+  let { isNegated, selection } = requireEventPattern(pattern);
+  let matched;
   switch (selection.kind) {
     case "every":
-      n = true;
+      matched = true;
       break;
     case "prefix":
-      n = o.startsWith(`${selection.prefix}.`);
+      matched = event.startsWith(`${selection.prefix}.`);
       break;
     case "name":
-      n = o === selection.name;
+      matched = event === selection.name;
       break;
   }
-  return isNegated ? !n : n;
+  return isNegated ? !matched : matched;
 }
 //@ chunk-bfnfj4kx.js:40657-40717 placement
 /**
  * 是否路由给用户
  */
-function routesToUser(scan, o) {
-  return (scan.toUserOn ?? []).some((t) => matchesEventPattern(t, o));
+function routesToUser(scan, event) {
+  return (scan.toUserOn ?? []).some((pattern) => matchesEventPattern(pattern, event));
 }
 //@ chunk-bfnfj4kx.js:40717-40772 placement
 /**
  * 按插件是否内置判断是否可监听 telemetry.* 事件。
  */
-var matchesEventForPlugin = (pattern, o, t) =>
-  matchesEventPattern(pattern, o) && (t.isBuiltin || !isTelemetryEvent(o) || isTelemetryEvent(pattern));
+var matchesEventForPlugin = (event, event_2, plugin) =>
+  matchesEventPattern(event, event_2) &&
+  (plugin.isBuiltin || !isTelemetryEvent(event_2) || isTelemetryEvent(event));
 //@ chunk-bfnfj4kx.js:40772-40838 placement
 /**
  * Spread/computed/非 init
  */
-var isUnsupportedExportShape = (e) => e.type === "SpreadElement" || e.computed || e.kind !== "init";
+var isUnsupportedExportShape = (property) =>
+  property.type === "SpreadElement" || property.computed || property.kind !== "init";
 //@ chunk-bfnfj4kx.js:40838-40958 placement
 /**
  * AST 节点是否为名为 o 的对象属性（标识符或字面量键）。
  */
-var isNamedProperty = (property, o) =>
+var isNamedProperty = (property, name) =>
   property.type === "Property" &&
-  ((property.key.type === "Identifier" && property.key.name === o) ||
-    (property.key.type === "Literal" && property.key.value === o));
+  ((property.key.type === "Identifier" && property.key.name === name) ||
+    (property.key.type === "Literal" && property.key.value === name));
 //@ chunk-bfnfj4kx.js:40958-41265 placement
 /**
  * 从字面量/数组字面量取字符串列表。
  */
-function literalStrings(e) {
-  switch (e.type) {
+function literalStrings(node) {
+  switch (node.type) {
     case "Literal": {
-      let o = e.value;
-      return typeof o === "string" ? [o] : undefined;
+      let value = node.value;
+      return typeof value === "string" ? [value] : undefined;
     }
     case "ArrayExpression": {
-      let mapped = e.elements.map((element) => {
-        let n = element?.type === "Literal" ? element.value : undefined;
-        return typeof n === "string" ? n : undefined;
+      let mapped = node.elements.map((element) => {
+        let secondElement = element?.type === "Literal" ? element.value : undefined;
+        return typeof secondElement === "string" ? secondElement : undefined;
       });
-      return mapped.every((r) => r !== undefined) ? mapped.filter((r) => r !== undefined) : undefined;
+      return mapped.every((element) => element !== undefined)
+        ? mapped.filter((result) => result !== undefined)
+        : undefined;
     }
     default:
       return;
@@ -161,14 +169,18 @@ function readCommandList(matcher) {
     case "ObjectExpression": {
       let filtered = matcher.properties.filter((property) => isNamedProperty(property, "command"));
       let any = matcher.properties.some(isUnsupportedExportShape);
-      let [r] = filtered;
-      return !any && filtered.length === 1 && r?.type === "Property" ? literalStrings(r.value) : undefined;
+      let [commandProperty] = filtered;
+      return !any && filtered.length === 1 && commandProperty?.type === "Property"
+        ? literalStrings(commandProperty.value)
+        : undefined;
     }
     case "ArrayExpression": {
       let mapped = matcher.elements.map((element) =>
         element === null || element.type === "SpreadElement" ? undefined : readCommandList(element),
       );
-      return mapped.every((r) => r !== undefined) ? mapped.flatMap((r) => r ?? []) : undefined;
+      return mapped.every((commandProperty) => commandProperty !== undefined)
+        ? mapped.flatMap((commands) => commands ?? [])
+        : undefined;
     }
     default:
       return;
@@ -178,13 +190,13 @@ function readCommandList(matcher) {
 /**
  * 扫描中所有 command.run 注册的 matcher 都能静态读出命令名时，返回排序去重的命令列表，否则 undefined。
  */
-function collectRunCommands(e) {
-  let filtered = [...e.registrations.values()].filter((registration) =>
+function collectRunCommands(graph) {
+  let filtered = [...graph.registrations.values()].filter((registration) =>
     matchesEventPattern(registration.event, "command.run"),
   );
-  let mapped = filtered.map((n) => readCommandList(n.matcher));
-  return filtered.length > 0 && mapped.every((n) => n !== undefined)
-    ? uniq(mapped.flatMap((n) => n ?? [])).toSorted()
+  let mapped = filtered.map((registration) => readCommandList(registration.matcher));
+  return filtered.length > 0 && mapped.every((rows) => rows !== undefined)
+    ? uniq(mapped.flatMap((row) => row ?? [])).toSorted()
     : undefined;
 }
 //@ chunk-bfnfj4kx.js:41845-41897 placement
@@ -206,12 +218,14 @@ var STATE_RESOURCE = stateLibrarySourceText;
 /**
  * 若调用的是从 claude-code 导入且未被遮蔽的状态库函数（atom/derive/memberOf/read/update），返回其名。
  */
-function stateLibraryCallKind(scanned, o) {
-  let { callee } = o;
-  if (callee.type !== "Identifier" || o.optional) return;
-  let r = scanned.imports.get(callee.name);
-  let found = STATE_LIB_EXPORTS.find((p) => p === r?.imported);
-  return r?.specifier === CLAUDE_CODE && found !== undefined && scanned.names.shadowOf(callee) === undefined
+function stateLibraryCallKind(scanned, call) {
+  let { callee } = call;
+  if (callee.type !== "Identifier" || call.optional) return;
+  let imported = scanned.imports.get(callee.name);
+  let found = STATE_LIB_EXPORTS.find((name) => name === imported?.imported);
+  return imported?.specifier === CLAUDE_CODE &&
+    found !== undefined &&
+    scanned.names.shadowOf(callee) === undefined
     ? found
     : undefined;
 }
@@ -219,76 +233,76 @@ function stateLibraryCallKind(scanned, o) {
 /**
  * envReads / envWrites
  */
-var envScannerField = (e, o) => (o === "env.get" ? e.envReads : e.envWrites);
+var envScannerField = (scan, op) => (op === "env.get" ? scan.envReads : scan.envWrites);
 //@ chunk-bfnfj4kx.js:42196-42319 placement
 /**
  * 取扫描图中已链接的文件，不在图中时抛错。
  */
-function requireLinkedFile({ graph, pluginName }, t) {
-  let r = graph.files.get(t);
-  if (r === undefined) throw new HooksError(`${pluginName}: ${t} was not linked`);
-  return r;
+function requireLinkedFile({ graph, pluginName }, file) {
+  let entry = graph.files.get(file);
+  if (entry === undefined) throw new HooksError(`${pluginName}: ${file} was not linked`);
+  return entry;
 }
 //@ chunk-bfnfj4kx.js:42319-42580 placement
-function followReExportLink(e, o, t) {
-  let { scan, linked } = e;
-  let s = linked.links.get(o);
-  if (s === undefined)
+function followReExportLink(graph, from, name) {
+  let { scan, linked } = graph;
+  let link = linked.links.get(from);
+  if (link === undefined)
     throw linked.scanned.refuse(
       undefined,
-      `"${t}" is looked for through a re-export from "${o}", which is not a file of the module's own: nothing is followed through it`,
+      `"${name}" is looked for through a re-export from "${from}", which is not a file of the module's own: nothing is followed through it`,
     );
   return {
     scan,
-    linked: requireLinkedFile(scan, s),
+    linked: requireLinkedFile(scan, link),
   };
 }
 //@ chunk-bfnfj4kx.js:42580-43254 placement
 /**
  * 收集模块自身的导出表（命名、命名空间、星号）。
  */
-function collectOwnExports(e) {
-  let { scan, linked } = e;
-  let r = scan.ownExports.get(linked);
-  if (r !== undefined) return r;
-  let n = new Map();
-  let s = new Map();
-  let p = new Map();
-  let i = [];
-  let a = [];
-  for (let u of linked.scanned.program.body) {
-    if (u.type === "ExportDefaultDeclaration") n.set("default", u);
-    if (u.type === "ExportNamedDeclaration") {
-      for (let g of declaredNames(u.declaration)) n.set(g, u);
-      for (let specifier of u.specifiers) {
-        n.set(exportNameText(specifier.exported), u);
-        s.set(exportNameText(specifier.exported), specifier);
+function collectOwnExports(graph) {
+  let { scan, linked } = graph;
+  let cached = scan.ownExports.get(linked);
+  if (cached !== undefined) return cached;
+  let named = new Map();
+  let specifiers = new Map();
+  let namespaces = new Map();
+  let stars = [];
+  let foreign = [];
+  for (let statement of linked.scanned.program.body) {
+    if (statement.type === "ExportDefaultDeclaration") named.set("default", statement);
+    if (statement.type === "ExportNamedDeclaration") {
+      for (let name of declaredNames(statement.declaration)) named.set(name, statement);
+      for (let specifier of statement.specifiers) {
+        named.set(exportNameText(specifier.exported), statement);
+        specifiers.set(exportNameText(specifier.exported), specifier);
       }
     }
-    if (u.type !== "ExportAllDeclaration") continue;
-    let { exported } = u;
-    let y = linked.links.get(String(u.source.value));
+    if (statement.type !== "ExportAllDeclaration") continue;
+    let { exported } = statement;
+    let target = linked.links.get(String(statement.source.value));
     if (exported !== null && exported !== undefined) {
-      p.set(exportNameText(exported), u);
+      namespaces.set(exportNameText(exported), statement);
       continue;
     }
-    if (y === undefined) a.push(u);
+    if (target === undefined) foreign.push(statement);
     else
-      i.push({
+      stars.push({
         from: linked,
-        statement: u,
-        to: requireLinkedFile(scan, y),
+        statement,
+        to: requireLinkedFile(scan, target),
       });
   }
-  let f = {
-    named: n,
-    listed: s,
-    namespaces: p,
-    stars: i,
-    foreign: a,
+  let importFacts = {
+    named,
+    listed: specifiers,
+    namespaces,
+    stars,
+    foreign,
   };
-  scan.ownExports.set(linked, f);
-  return f;
+  scan.ownExports.set(linked, importFacts);
+  return importFacts;
 }
 //@ chunk-bfnfj4kx.js:43254-43268 placement
 /**
@@ -299,9 +313,9 @@ var MAX_EXPORT_RESOLVE_STEPS = 500000;
 /**
  * 记录导出解析步数，超过上限时拒绝。
  */
-function chargeExportSteps(e, o) {
-  let { scan, linked } = e;
-  scan.exportSteps.taken += o;
+function chargeExportSteps(graph, steps) {
+  let { scan, linked } = graph;
+  scan.exportSteps.taken += steps;
   if (scan.exportSteps.taken > MAX_EXPORT_RESOLVE_STEPS)
     throw linked.scanned.refuse(
       undefined,
@@ -312,95 +326,111 @@ function chargeExportSteps(e, o) {
 /**
  * 把导出名解析为顶层函数声明。
  */
-function resolveExportedFunction(e, o, t) {
-  let { names, refuse } = e.scanned;
-  let s = t === "default" ? "the default export" : t;
-  let p = exportNameText(o.local);
-  let i = names.functions.get(p);
-  if (i === undefined)
-    throw refuse(o, `${s} is exported as "${p}", which is not a function declared at the top of this file`);
-  if (names.assigned.has(p)) throw refuse(o, `${s} ("${p}") is assigned to elsewhere`);
-  return i;
+function resolveExportedFunction(graph, exported, name) {
+  let { names, refuse } = graph.scanned;
+  let label = name === "default" ? "the default export" : name;
+  let localName = exportNameText(exported.local);
+  let declaration = names.functions.get(localName);
+  if (declaration === undefined)
+    throw refuse(
+      exported,
+      `${label} is exported as "${localName}", which is not a function declared at the top of this file`,
+    );
+  if (names.assigned.has(localName))
+    throw refuse(exported, `${label} ("${localName}") is assigned to elsewhere`);
+  return declaration;
 }
 //@ chunk-bfnfj4kx.js:43902-45166 placement
 /**
  * 校验导出声明（不能被重新赋值等）。
  */
-function checkExportDeclaration(e, o, t) {
-  let { names, refuse } = e.scanned;
+function checkExportDeclaration(graph, declaration, name) {
+  let { names, refuse } = graph.scanned;
   let { functions, assigned } = names;
-  let i = t === "default" ? "the default export" : t;
-  function a(name, declaration) {
-    if (assigned.has(name)) throw refuse(declaration, `${i} ("${name}") is assigned to elsewhere`);
+  let label = name === "default" ? "the default export" : name;
+  function declareOne(name, declaration) {
+    if (assigned.has(name)) throw refuse(declaration, `${label} ("${name}") is assigned to elsewhere`);
   }
-  if (o.type === "ExportDefaultDeclaration" && t === "default") {
-    let { declaration } = o;
-    if (declaration.type === "FunctionDeclaration") {
-      if (declaration.id !== null) a(declaration.id.name, declaration);
-      return declaration;
+  if (declaration.type === "ExportDefaultDeclaration" && name === "default") {
+    let { declaration: declaration_2 } = declaration;
+    if (declaration_2.type === "FunctionDeclaration") {
+      if (declaration_2.id !== null) declareOne(declaration_2.id.name, declaration_2);
+      return declaration_2;
     }
-    if (declaration.type === "FunctionExpression" || declaration.type === "ArrowFunctionExpression")
-      return declaration;
-    let k = declaration.type === "Identifier" ? functions.get(declaration.name) : undefined;
-    if (k === undefined || declaration.type !== "Identifier")
-      throw refuse(declaration, `${i} is something other than a function declared at the top of this file`);
-    a(declaration.name, declaration);
-    return k;
+    if (declaration_2.type === "FunctionExpression" || declaration_2.type === "ArrowFunctionExpression")
+      return declaration_2;
+    let secondDeclaration =
+      declaration_2.type === "Identifier" ? functions.get(declaration_2.name) : undefined;
+    if (secondDeclaration === undefined || declaration_2.type !== "Identifier")
+      throw refuse(
+        declaration_2,
+        `${label} is something other than a function declared at the top of this file`,
+      );
+    declareOne(declaration_2.name, declaration_2);
+    return secondDeclaration;
   }
-  if (o.type !== "ExportNamedDeclaration") return;
-  let { declaration } = o;
-  if (declaration?.type === "FunctionDeclaration" && declaration.id.name === t) {
-    a(t, declaration);
-    return declaration;
+  if (declaration.type !== "ExportNamedDeclaration") return;
+  let { declaration: declaration_2 } = declaration;
+  if (declaration_2?.type === "FunctionDeclaration" && declaration_2.id.name === name) {
+    declareOne(name, declaration_2);
+    return declaration_2;
   }
-  if (declaration?.type === "VariableDeclaration") {
-    for (let declaration_2 of declaration.declarations)
-      if (declaration_2.id.type === "Identifier" && declaration_2.id.name === t) {
-        let { init } = declaration_2;
+  if (declaration_2?.type === "VariableDeclaration") {
+    for (let declaration of declaration_2.declarations)
+      if (declaration.id.type === "Identifier" && declaration.id.name === name) {
+        let { init } = declaration;
         if (
-          declaration.kind === "const" &&
+          declaration_2.kind === "const" &&
           (init?.type === "FunctionExpression" || init?.type === "ArrowFunctionExpression")
         )
           return init;
-        throw refuse(declaration_2, `${i} is exported as something other than a const function`);
+        throw refuse(declaration, `${label} is exported as something other than a const function`);
       }
   }
-  if (declaredNames(declaration).includes(t))
-    throw refuse(o, `${i} is exported as something other than a function declared at the top of this file`);
-  let found = o.specifiers.find((specifier) => exportNameText(specifier.exported) === t);
-  return found !== undefined && o.source === null ? resolveExportedFunction(e, found, t) : undefined;
+  if (declaredNames(declaration_2).includes(name))
+    throw refuse(
+      declaration,
+      `${label} is exported as something other than a function declared at the top of this file`,
+    );
+  let exported = declaration.specifiers.find((specifier) => exportNameText(specifier.exported) === name);
+  return exported !== undefined && declaration.source === null
+    ? resolveExportedFunction(graph, exported, name)
+    : undefined;
 }
 //@ chunk-bfnfj4kx.js:45166-45809 placement
 /**
  * 解析命名导出（拒绝命名空间导出）。
  */
-function resolveNamedExport(e, o, t) {
-  let { linked } = e;
-  let ownExports = collectOwnExports(e);
-  let s = ownExports.named.get(o);
-  let p = ownExports.namespaces.get(o);
-  if (p !== undefined)
+function resolveNamedExport(graph, name, readExport) {
+  let { linked } = graph;
+  let ownExports = collectOwnExports(graph);
+  let specifier = ownExports.named.get(name);
+  let namespace = ownExports.namespaces.get(name);
+  if (namespace !== undefined)
     throw linked.scanned.refuse(
-      p,
-      `${o === "default" ? "the default export" : o} is the namespace of "${String(p.source.value)}" (export * as), not a function`,
+      namespace,
+      `${name === "default" ? "the default export" : name} is the namespace of "${String(namespace.source.value)}" (export * as), not a function`,
     );
-  let i = ownExports.listed.get(o);
-  let source = s?.type === "ExportNamedDeclaration" ? s.source : null;
-  if (i !== undefined && source !== null && source !== undefined)
-    return t(followReExportLink(e, String(source.value), o), exportNameText(i.local));
-  if (i !== undefined)
+  let secondNamespace = ownExports.listed.get(name);
+  let source = specifier?.type === "ExportNamedDeclaration" ? specifier.source : null;
+  if (secondNamespace !== undefined && source !== null && source !== undefined)
+    return readExport(
+      followReExportLink(graph, String(source.value), name),
+      exportNameText(secondNamespace.local),
+    );
+  if (secondNamespace !== undefined)
     return {
-      fn: resolveExportedFunction(linked, i, o),
+      fn: resolveExportedFunction(linked, secondNamespace, name),
       linked,
     };
-  let declaration = s?.type === "ExportNamedDeclaration" ? s.declaration : undefined;
-  let y = declaration?.type === "VariableDeclaration";
-  chargeExportSteps(e, y ? declaration.declarations.length : 0);
-  let c = s === undefined ? undefined : checkExportDeclaration(linked, s, o);
-  return c === undefined
+  let declaration = specifier?.type === "ExportNamedDeclaration" ? specifier.declaration : undefined;
+  let value = declaration?.type === "VariableDeclaration";
+  chargeExportSteps(graph, value ? declaration.declarations.length : 0);
+  let secondValue = specifier === undefined ? undefined : checkExportDeclaration(linked, specifier, name);
+  return secondValue === undefined
     ? undefined
     : {
-        fn: c,
+        fn: secondValue,
         linked,
       };
 }
@@ -408,165 +438,168 @@ function resolveNamedExport(e, o, t) {
 /**
  * Map<k, Set> 追加
  */
-var addToSetInMap = (e, o, t) => {
-  e.set(o, (e.get(o) ?? new Set()).add(t));
+var addToSetInMap = (map, key, value) => {
+  map.set(key, (map.get(key) ?? new Set()).add(value));
 };
 //@ chunk-bfnfj4kx.js:45863-46392 placement
 /**
  * 沿 export * 链构建完整导出表。
  */
-function buildExportTable(e) {
-  let { scan, linked } = e;
-  let r = scan.exportTables.get(linked);
-  if (r !== undefined) return r;
-  let n = new Map();
-  let s = new Map();
-  let p = [];
-  let i = new Set([linked]);
-  let a = [linked];
-  for (let u = a.pop(); u !== undefined; u = a.pop()) {
+function buildExportTable(graph) {
+  let { scan, linked } = graph;
+  let cached = scan.exportTables.get(linked);
+  if (cached !== undefined) return cached;
+  let givers = new Map();
+  let parents = new Map();
+  let wild = [];
+  let seen = new Set([linked]);
+  let queue = [linked];
+  for (let file = queue.pop(); file !== undefined; file = queue.pop()) {
     let ownExports = collectOwnExports({
       scan,
-      linked: u,
+      linked: file,
     });
-    let y = u === linked ? [] : [...ownExports.named.keys(), ...ownExports.namespaces.keys()];
-    chargeExportSteps(e, ownExports.stars.length + y.length + 1);
-    if (ownExports.foreign.length > 0) p.push(u);
-    for (let c of y) if (c !== "default") n.set(c, (n.get(c) ?? new Set()).add(u));
+    let keys = file === linked ? [] : [...ownExports.named.keys(), ...ownExports.namespaces.keys()];
+    chargeExportSteps(graph, ownExports.stars.length + keys.length + 1);
+    if (ownExports.foreign.length > 0) wild.push(file);
+    for (let name of keys)
+      if (name !== "default") givers.set(name, (givers.get(name) ?? new Set()).add(file));
     for (let star of ownExports.stars) {
-      addToSetInMap(s, star.to, star);
-      if (!i.has(star.to)) {
-        i.add(star.to);
-        a.push(star.to);
+      addToSetInMap(parents, star.to, star);
+      if (!seen.has(star.to)) {
+        seen.add(star.to);
+        queue.push(star.to);
       }
     }
   }
-  let f = {
-    givers: n,
-    parents: s,
-    wild: p,
+  let table = {
+    givers,
+    parents,
+    wild,
   };
-  scan.exportTables.set(linked, f);
-  return f;
+  scan.exportTables.set(linked, table);
+  return table;
 }
 //@ chunk-bfnfj4kx.js:46392-46641 placement
-function collectReExportGivers(e, o) {
-  let exportTable = buildExportTable(e);
-  let r = new Map();
-  let n = new Set();
-  let s = [...(exportTable.givers.get(o) ?? []), ...exportTable.wild];
-  for (let p = s.pop(); p !== undefined; p = s.pop()) {
-    let a = n.has(p) ? [] : [...(exportTable.parents.get(p) ?? [])];
-    n.add(p);
-    chargeExportSteps(e, a.length + 1);
-    for (let f of a) {
-      addToSetInMap(r, f.from, f);
-      s.push(f.from);
+function collectReExportGivers(graph, name) {
+  let exportTable = buildExportTable(graph);
+  let givers = new Map();
+  let seen = new Set();
+  let queue = [...(exportTable.givers.get(name) ?? []), ...exportTable.wild];
+  for (let link = queue.pop(); link !== undefined; link = queue.pop()) {
+    let table = seen.has(link) ? [] : [...(exportTable.parents.get(link) ?? [])];
+    seen.add(link);
+    chargeExportSteps(graph, table.length + 1);
+    for (let link of table) {
+      addToSetInMap(givers, link.from, link);
+      queue.push(link.from);
     }
   }
-  return r;
+  return givers;
 }
 //@ chunk-bfnfj4kx.js:46641-47353 placement
 /**
  * 沿重新导出链查找名字。
  */
-function followReExport(e, o, t) {
-  let { scan } = e;
-  let reExportGivers = collectReExportGivers(e, o);
-  let s = new Set();
-  function p(linked) {
-    let a = {
+function followReExport(graph, name, readExport) {
+  let { scan } = graph;
+  let reExportGivers = collectReExportGivers(graph, name);
+  let visited = new Set();
+  function visit(linked) {
+    let subGraph = {
       scan,
       linked,
     };
-    let ownExports = collectOwnExports(a);
-    let u = s.has(linked);
-    s.add(linked);
-    chargeExportSteps(e, 1);
-    if (u) return;
-    if (ownExports.named.has(o)) return resolveNamedExport(a, o, t);
-    let x = ownExports.namespaces.get(o);
-    let c = [
-      ...[...(x === undefined ? [] : [x]), ...ownExports.foreign].map((statement) => ({
+    let ownExports = collectOwnExports(subGraph);
+    let wasVisited = visited.has(linked);
+    visited.add(linked);
+    chargeExportSteps(graph, 1);
+    if (wasVisited) return;
+    if (ownExports.named.has(name)) return resolveNamedExport(subGraph, name, readExport);
+    let namespace = ownExports.namespaces.get(name);
+    let candidates = [
+      ...[...(namespace === undefined ? [] : [namespace]), ...ownExports.foreign].map((statement) => ({
         statement,
         to: undefined,
       })),
       ...(reExportGivers.get(linked) ?? []),
-    ].toSorted((h, k) => h.statement.start - k.statement.start);
-    let g;
-    chargeExportSteps(e, c.length);
-    for (let { statement, to } of c) {
-      let j =
+    ].toSorted((a, b) => a.statement.start - b.statement.start);
+    let found;
+    chargeExportSteps(graph, candidates.length);
+    for (let { statement, to } of candidates) {
+      let candidate =
         statement.exported !== null && statement.exported !== undefined
-          ? resolveNamedExport(a, o, t)
-          : p(to ?? followReExportLink(a, String(statement.source.value), o).linked);
-      if (j !== undefined && g !== undefined && j.fn !== g.fn)
+          ? resolveNamedExport(subGraph, name, readExport)
+          : visit(to ?? followReExportLink(subGraph, String(statement.source.value), name).linked);
+      if (candidate !== undefined && found !== undefined && candidate.fn !== found.fn)
         throw linked.scanned.refuse(
           statement,
-          `${o} is given by more than one \`export *\` of this file, each from a different declaration: the engine binds neither`,
+          `${name} is given by more than one \`export *\` of this file, each from a different declaration: the engine binds neither`,
         );
-      g = j ?? g;
+      found = candidate ?? found;
     }
-    return g;
+    return found;
   }
-  return p(e.linked);
+  return visit(graph.linked);
 }
 //@ chunk-bfnfj4kx.js:47353-47642 placement
-function resolveExport(e, o, readExportCached) {
-  let ownExports = collectOwnExports(e);
-  let n = ownExports.namespaces.has(o);
-  if (ownExports.named.has(o) || (o === "default" && n)) return resolveNamedExport(e, o, readExportCached);
-  if (o === "default") return;
-  let exportTable = buildExportTable(e);
-  let i = exportTable.givers.get(o) ?? new Set();
-  let [a] = i;
-  if (!(!n && exportTable.wild.length === 0 && i.size <= 1)) return followReExport(e, o, readExportCached);
-  if (a === undefined) return;
+function resolveExport(graph, name, readExport) {
+  let ownExports = collectOwnExports(graph);
+  let hasNamespace = ownExports.namespaces.has(name);
+  if (ownExports.named.has(name) || (name === "default" && hasNamespace))
+    return resolveNamedExport(graph, name, readExport);
+  if (name === "default") return;
+  let exportTable = buildExportTable(graph);
+  let resolved = exportTable.givers.get(name) ?? new Set();
+  let [secondResolved] = resolved;
+  if (!(!hasNamespace && exportTable.wild.length === 0 && resolved.size <= 1))
+    return followReExport(graph, name, readExport);
+  if (secondResolved === undefined) return;
   return resolveNamedExport(
     {
-      scan: e.scan,
-      linked: a,
+      scan: graph.scan,
+      linked: secondResolved,
     },
-    o,
-    readExportCached,
+    name,
+    readExport,
   );
 }
 //@ chunk-bfnfj4kx.js:47642-48200 placement
 /**
  * 带缓存地解析导出（处理循环）。
  */
-function readExportCached(e, imported) {
-  let { scan, linked } = e;
+function readExportCached(graph, name) {
+  let { scan, linked } = graph;
   let { exportsOpen, exportsUnderWay, exportsHeld } = scan;
-  let i = scan.exportsRead.get(linked) ?? new Map();
-  let a = exportsHeld.get(linked) ?? new Map();
-  let f = exportsOpen.get(linked) ?? new Map();
-  let u = f.get(imported);
-  let x = a.get(imported);
-  if (i.has(imported)) return i.get(imported);
-  if (x !== undefined || u !== undefined) {
-    exportsUnderWay.lowest = Math.min(exportsUnderWay.lowest, u ?? 0);
-    return x?.found;
+  let readBefore = scan.exportsRead.get(linked) ?? new Map();
+  let heldBefore = exportsHeld.get(linked) ?? new Map();
+  let entry = exportsOpen.get(linked) ?? new Map();
+  let deps = entry.get(name);
+  let heldResult = heldBefore.get(name);
+  if (readBefore.has(name)) return readBefore.get(name);
+  if (heldResult !== undefined || deps !== undefined) {
+    exportsUnderWay.lowest = Math.min(exportsUnderWay.lowest, deps ?? 0);
+    return heldResult?.found;
   }
   let { depth, lowest } = exportsUnderWay;
-  chargeExportSteps(e, 1);
+  chargeExportSteps(graph, 1);
   exportsUnderWay.depth = depth + 1;
   exportsUnderWay.lowest = depth;
-  exportsOpen.set(linked, f.set(imported, depth));
-  exportsHeld.set(linked, a);
-  scan.exportsRead.set(linked, i);
+  exportsOpen.set(linked, entry.set(name, depth));
+  exportsHeld.set(linked, heldBefore);
+  scan.exportsRead.set(linked, readBefore);
   try {
-    let g = resolveExport(e, imported, readExportCached);
-    if (exportsUnderWay.lowest === depth) i.set(imported, g);
+    let value = resolveExport(graph, name, readExportCached);
+    if (exportsUnderWay.lowest === depth) readBefore.set(name, value);
     else
-      a.set(imported, {
-        found: g,
+      heldBefore.set(name, {
+        found: value,
       });
-    return g;
+    return value;
   } finally {
     exportsUnderWay.lowest = Math.min(lowest, exportsUnderWay.lowest);
     exportsUnderWay.depth = depth;
-    f.delete(imported);
+    entry.delete(name);
     if (depth === 0) {
       exportsOpen.clear();
       exportsHeld.clear();
@@ -577,95 +610,100 @@ function readExportCached(e, imported) {
 /**
  * 把标识符解析为本地顶层函数（禁止重新赋值与遮蔽）。
  */
-function resolveLocalFunction(e, { names, refuse, what }) {
-  let n = names.functions.get(e.name);
-  if (n === undefined) return;
-  if (names.assigned.has(e.name)) throw refuse(e, `${what} "${e.name}" is assigned to elsewhere`);
-  let s = names.shadowOf(e);
-  if (s !== undefined)
+function resolveLocalFunction(reference, { names, refuse, what }) {
+  let declaration = names.functions.get(reference.name);
+  if (declaration === undefined) return;
+  if (names.assigned.has(reference.name))
+    throw refuse(reference, `${what} "${reference.name}" is assigned to elsewhere`);
+  let problem = names.shadowOf(reference);
+  if (problem !== undefined)
     throw refuse(
-      s,
-      `${what} "${e.name}" is declared more than once in this file: this declaration hides the top-level function where it is used`,
+      problem,
+      `${what} "${reference.name}" is declared more than once in this file: this declaration hides the top-level function where it is used`,
     );
-  return n;
+  return declaration;
 }
 //@ chunk-bfnfj4kx.js:48550-49649 placement
 /**
  * 把标识符解析为本地或导入的函数。
  */
-function resolveFunctionReference({ scan, linked }, t, r) {
+function resolveFunctionReference({ scan, linked }, reference, scope) {
   let { scanned } = linked;
-  let localFunction = resolveLocalFunction(t, {
+  let localFunction = resolveLocalFunction(reference, {
     names: scanned.names,
     refuse: scanned.refuse,
-    what: r,
+    what: scope,
   });
   if (localFunction !== undefined)
     return {
       fn: localFunction,
       linked,
     };
-  let p = scanned.imports.get(t.name);
-  if (p === undefined)
+  let local = scanned.imports.get(reference.name);
+  if (local === undefined)
     throw scanned.refuse(
-      t,
-      `${r} "${t.name}" is not a function declared at the top of this file (a function declaration, or a const bound to a function), nor imported from one of the module's own files`,
+      reference,
+      `${scope} "${reference.name}" is not a function declared at the top of this file (a function declaration, or a const bound to a function), nor imported from one of the module's own files`,
     );
-  if (p.imported === undefined)
-    throw scanned.refuse(t, `${r} "${t.name}" is a namespace import, not a function`);
-  if (scanned.names.assigned.has(t.name))
-    throw scanned.refuse(t, `${r} "${t.name}" is assigned to elsewhere`);
-  let i = scanned.names.shadowOf(t);
-  if (i !== undefined)
-    throw scanned.refuse(i, `${r} "${t.name}" is declared again in this file, shadowing the import`);
-  let a = linked.links.get(p.specifier);
-  if (a === undefined)
+  if (local.imported === undefined)
+    throw scanned.refuse(reference, `${scope} "${reference.name}" is a namespace import, not a function`);
+  if (scanned.names.assigned.has(reference.name))
+    throw scanned.refuse(reference, `${scope} "${reference.name}" is assigned to elsewhere`);
+  let target = scanned.names.shadowOf(reference);
+  if (target !== undefined)
     throw scanned.refuse(
-      t,
-      `${r} "${t.name}" is imported from "${p.specifier}", which is not a file of the module's own`,
+      target,
+      `${scope} "${reference.name}" is declared again in this file, shadowing the import`,
     );
-  let f = readExportCached(
+  let name = linked.links.get(local.specifier);
+  if (name === undefined)
+    throw scanned.refuse(
+      reference,
+      `${scope} "${reference.name}" is imported from "${local.specifier}", which is not a file of the module's own`,
+    );
+  let value = readExportCached(
     {
       scan,
-      linked: requireLinkedFile(scan, a),
+      linked: requireLinkedFile(scan, name),
     },
-    p.imported,
+    local.imported,
   );
-  if (f === undefined)
+  if (value === undefined)
     throw scanned.refuse(
-      t,
-      `${r} "${t.name}" is imported from "${p.specifier}", which exports no function of that name: neither its own nor one it re-exports from a file of the module's own`,
+      reference,
+      `${scope} "${reference.name}" is imported from "${local.specifier}", which exports no function of that name: neither its own nor one it re-exports from a file of the module's own`,
     );
-  return f;
+  return value;
 }
 //@ chunk-bfnfj4kx.js:49649-49904 placement
-function readNamedLiteralArg(e) {
-  let [o] = e.arguments;
-  let properties = o?.type === "ObjectExpression" ? o.properties : [];
+function readNamedLiteralArg(call) {
+  let [arg] = call.arguments;
+  let properties = arg?.type === "ObjectExpression" ? arg.properties : [];
   let any = properties.some(isUnsupportedExportShape);
-  let [n, s] = properties.filter((property) => isNamedProperty(property, "name"));
-  let i = !any && s === undefined && n?.type === "Property" ? n.value : undefined;
-  let a = i?.type === "Literal" ? i.value : undefined;
-  return typeof a === "string" ? a : undefined;
+  let [nameProperty, secondName] = properties.filter((property) => isNamedProperty(property, "name"));
+  let value =
+    !any && secondName === undefined && nameProperty?.type === "Property" ? nameProperty.value : undefined;
+  let other = value?.type === "Literal" ? value.value : undefined;
+  return typeof other === "string" ? other : undefined;
 }
 //@ chunk-bfnfj4kx.js:49904-49975 placement
 /**
  * 记录具名命令
  */
-function recordNamedCommand(e, o) {
-  let namedLiteralArg = readNamedLiteralArg(o);
-  if (namedLiteralArg !== undefined) e.registeredCommands.add(namedLiteralArg);
+function recordNamedCommand(state, call) {
+  let namedLiteralArg = readNamedLiteralArg(call);
+  if (namedLiteralArg !== undefined) state.registeredCommands.add(namedLiteralArg);
 }
 //@ chunk-bfnfj4kx.js:49975-50203 placement
 /**
  * 记录扫描到的 $.state.get/set 调用及其引用常量。
  */
-function recordStateCall(e, { call: o, spelling, named, consts }, scanned) {
-  let p = `${named.plugin}\x00${named.key}`;
-  (spelling === "state.get" ? e.stateReads : e.stateWrites).set(p, named);
-  e.stateCalls.add(o);
+function recordStateCall(state, { call, spelling, named, consts }, scanned) {
+  let secondScanned = `${named.plugin}\x00${named.key}`;
+  (spelling === "state.get" ? state.stateReads : state.stateWrites).set(secondScanned, named);
+  state.stateCalls.add(call);
   for (let followed of consts)
-    e.stateConsts.add({
+    state.stateConsts.add({
       followed,
       spelling,
       scanned,
@@ -689,10 +727,10 @@ var DOLLAR_USE_DESCRIPTIONS = {
 /**
  * 描述 $ 在 AST 中的用法（被调用、作为参数、赋值、展开等），用于扫描报错。
  */
-function describeDollarUse(e, o) {
-  if (!(e.type === "CallExpression" || e.type === "NewExpression"))
-    return DOLLAR_USE_DESCRIPTIONS[e.type] ?? `used in a ${e.type}`;
-  return e.callee === o ? "called" : "passed as an argument";
+function describeDollarUse(use, callee) {
+  if (!(use.type === "CallExpression" || use.type === "NewExpression"))
+    return DOLLAR_USE_DESCRIPTIONS[use.type] ?? `used in a ${use.type}`;
+  return use.callee === callee ? "called" : "passed as an argument";
 }
 //@ chunk-bfnfj4kx.js:50696-50712 placement
 var PLUGIN = "plugin";
@@ -705,7 +743,7 @@ var ENV_API_CALLS = ["env.get", "env.set"];
 /**
  * 是否 env 调用
  */
-var isEnvApiCall = (e) => ENV_API_CALLS.includes(e);
+var isEnvApiCall = (op) => ENV_API_CALLS.includes(op);
 //@ chunk-bfnfj4kx.js:50769-50802 placement
 /**
  * state.get/state.set
@@ -715,26 +753,26 @@ var STATE_API_CALLS = ["state.get", "state.set"];
 /**
  * 是否为保留名。
  */
-var isReservedHookName = (e) => STATE_API_CALLS.includes(e);
+var isReservedHookName = (op) => STATE_API_CALLS.includes(op);
 //@ chunk-bfnfj4kx.js:50830-50883 placement
 /**
  * 标识符或 JSON 引号
  */
-var quoteIfNeeded = (e) => (/^[\w$@-]+$/.test(e) ? e : JSON.stringify(e));
+var quoteIfNeeded = (text) => (/^[\w$@-]+$/.test(text) ? text : JSON.stringify(text));
 //@ chunk-bfnfj4kx.js:50883-50927 placement
 /**
  * 状态原子键字符串（plugin.key）。
  */
-var stateAtomKey = (e) => `${quoteIfNeeded(e.plugin)}.${quoteIfNeeded(e.key)}`;
+var stateAtomKey = (key) => `${quoteIfNeeded(key.plugin)}.${quoteIfNeeded(key.key)}`;
 //@ chunk-bfnfj4kx.js:50927-50970 placement
 /**
  * 用空实现探测钩子回调。
  */
-var probeHookCallback = (e) =>
-  e(
+var probeHookCallback = (probe) =>
+  probe(
     () => false,
-    (o, t) => t(),
-    (o) => o(),
+    (onValue, value) => value(),
+    (onStale) => onStale(),
   );
 //@ chunk-bfnfj4kx.js:50970-51047 placement
 /**
@@ -755,7 +793,7 @@ var CORE_SOURCES = ["anthropic", "collector"];
 /**
  * 是否核心来源
  */
-var isCoreSource = (e) => CORE_SOURCES.includes(e);
+var isCoreSource = (source) => CORE_SOURCES.includes(source);
 //@ chunk-bfnfj4kx.js:51127-51142 placement
 /**
  * 核心来源标识 "core"。
@@ -765,37 +803,37 @@ var CORE_ORIGIN = "core";
 /**
  * 最后一个扣留者
  */
-var topWithholder = (e) => e.withheldBy?.at(-1);
+var topWithholder = (entry) => entry.withheldBy?.at(-1);
 //@ chunk-bfnfj4kx.js:51176-51228 placement
 /**
  * 被插件移除的说明
  */
-var removedByPluginText = (e, o) => `$.${e}: removed by plugin \`${o}\``;
+var removedByPluginText = (spelling, plugin) => `$.${spelling}: removed by plugin \`${plugin}\``;
 //@ chunk-bfnfj4kx.js:51228-51333 placement
 /**
  * 列出 hooks 模块及其界面模块的全部文件（入口与链接文件，含源码）。
  */
-var hooksModuleFiles = (e) =>
-  [e, ...(e.surfaceModules ?? [])].flatMap((o) => [
+var hooksModuleFiles = (hooksModule) =>
+  [hooksModule, ...(hooksModule.surfaceModules ?? [])].flatMap((surfaceModule) => [
     {
-      file: o.modulePath,
-      source: o.source,
+      file: surfaceModule.modulePath,
+      source: surfaceModule.source,
     },
-    ...o.linked,
+    ...surfaceModule.linked,
   ]);
 //@ chunk-bfnfj4kx.js:51333-51583 placement
 /**
  * $.env.get/set 的第一个参数必须是字面量字符串，返回之，否则抛扫描错误。
  */
-function readLiteralEnvName(e, o, refuse) {
-  let [r] = e.arguments;
-  let s = r !== undefined && r.type !== "SpreadElement" ? readStaticString(r) : undefined;
-  if (s === undefined)
+function readLiteralEnvName(call, name, refuse) {
+  let [arg] = call.arguments;
+  let secondName = arg !== undefined && arg.type !== "SpreadElement" ? readStaticString(arg) : undefined;
+  if (secondName === undefined)
     throw refuse(
-      r ?? e,
-      `$.${o} takes a literal name as its first argument, so the variables a module reads and writes can be listed (got ${describeArgument(r)})`,
+      arg ?? call,
+      `$.${name} takes a literal name as its first argument, so the variables a module reads and writes can be listed (got ${describeArgument(arg)})`,
     );
-  return s;
+  return secondName;
 }
 export {
   isReservedHookName,

@@ -20,9 +20,9 @@ import { errorMessage } from "../errors.js";
  */
 function shouldPrefetchArtifactOpening_2() {
   {
-    let { isAppifactReplToolEnabled } = require("./chunk-7sdmvp2h.js");
+    let { isAppifactReplToolEnabled } = require("../../tools/AppifactReplTool/isEnabled.js");
     if (isAppifactReplToolEnabled()) return true;
-    let { quickstartOnForSession } = require("./chunk-9c77ygzk.js");
+    let { quickstartOnForSession } = require("../../services/artifacts/artifactTypes.js");
     return quickstartOnForSession();
   }
   return false;
@@ -31,65 +31,69 @@ function shouldPrefetchArtifactOpening_2() {
 /**
  * 打开 Artifact 时预取设计系统等内容，受钩子影响时跳过。
  */
-async function prefetchArtifactOpening(toolUseContext, messages, r = null, s = false) {
+async function prefetchArtifactOpening(toolUseContext, messages, promptInput = null, heldAppend = false) {
   {
     if (
       !shouldPrefetchArtifactOpening() ||
       messages === undefined ||
       toolUseContext.agentId !== undefined ||
-      messages.some((Se) => Se.type === "assistant")
+      messages.some((message) => message.type === "assistant")
     )
       return [];
-    let { preToolUseHookMayCoverArtifact } = require("./chunk-a2c19btq.js");
+    let { preToolUseHookMayCoverArtifact } = require("../../services/artifacts/hookCoverage.js");
     if (preToolUseHookMayCoverArtifact(toolUseContext)) {
       logForDebugging("[artifactOpeningPrefetch] skipped: hooked");
       return [];
     }
-    let flattened = messages.flatMap((Se) =>
-      Se.type === "attachment" && Se.attachment.type === "artifact_opening_prefetch" ? [Se.attachment] : [],
+    let flattened = messages.flatMap((message) =>
+      message.type === "attachment" && message.attachment.type === "artifact_opening_prefetch"
+        ? [message.attachment]
+        : [],
     );
-    let found = flattened.find((Se) => Se.kind === undefined);
-    let any = flattened.some((Se) => Se.kind === "design_system");
+    let found = flattened.find((entry) => entry.kind === undefined);
+    let any = flattened.some((entry) => entry.kind === "design_system");
     if (found !== undefined && (any || found.slug === undefined)) return [];
-    let { artifactOpeningPrefetchContent } = await import("./chunk-kmq5scq7.js");
-    let G =
+    let { artifactOpeningPrefetchContent } =
+      await import("../../services/artifacts/artifactOpeningPrefetchContent.js");
+    let prefetchContent =
       found === undefined
-        ? await artifactOpeningPrefetchContent(toolUseContext, messages, s ? r : null, {
+        ? await artifactOpeningPrefetchContent(toolUseContext, messages, heldAppend ? promptInput : null, {
             isSystemReminderOnlyText: isOnlySystemReminders,
             isDeferredTool: isDeferredTool_2,
           })
         : null;
-    let q =
-      G === null
+    let attachments =
+      prefetchContent === null
         ? []
         : [
             {
               type: "artifact_opening_prefetch",
-              ...G,
+              ...prefetchContent,
             },
           ];
-    let slug = G?.slug ?? found?.slug;
-    if (slug === undefined || any) return q;
+    let slug = prefetchContent?.slug ?? found?.slug;
+    if (slug === undefined || any) return attachments;
     try {
-      let { artifactOpeningDesignSystemNote } = await import("./chunk-87yw66gx.js");
-      let ke = await artifactOpeningDesignSystemNote(
+      let { artifactOpeningDesignSystemNote } =
+        await import("../../services/artifacts/artifactOpeningDesignSystemNote.lazy.js");
+      let designSystemNote = await artifactOpeningDesignSystemNote(
         toolUseContext,
         messages,
         slug,
-        G?.typeFiles ?? found?.typeFiles ?? null,
-        s ? r : null,
+        prefetchContent?.typeFiles ?? found?.typeFiles ?? null,
+        heldAppend ? promptInput : null,
         isOnlySystemReminders,
       );
-      return ke === null
-        ? q
-        : q.concat({
+      return designSystemNote === null
+        ? attachments
+        : attachments.concat({
             type: "artifact_opening_prefetch",
-            content: ke,
+            content: designSystemNote,
             kind: "design_system",
           });
     } catch (error) {
       logForDebugging(`[artifactOpeningPrefetch] design-system entry failed: ${errorMessage(error)}`);
-      return q;
+      return attachments;
     }
   }
   return [];

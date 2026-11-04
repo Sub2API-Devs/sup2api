@@ -54,8 +54,8 @@ import { errorMessage } from "../../utils/errors.js";
 import { webfetchReadFile, getFetchErrorText } from "./webfetchRead.js";
 
 //@ chunk-2r828m87.js:952-986 placement
-function jsonSweepLine(n, e) {
-  return jsonStringify(sweepResultLineField(n, e));
+function jsonSweepLine(threadList, maxChars) {
+  return jsonStringify(sweepResultLineField(threadList, maxChars));
 }
 //@ chunk-2r828m87.js:986-997 placement
 var PREFETCH_CONTENT_TIMEOUT_MS = 3000;
@@ -64,8 +64,8 @@ function promptlessWithholdReason(toolByName, toolPermissionContext) {
   let effectiveMaxPermission = toolByName.mcpInfo?.effectiveMaxPermission;
   if (effectiveMaxPermission !== undefined && effectiveMaxPermission !== "allow") return "permission_ceiling";
   if (toolByName.requiresUserInteraction?.()) return "requires_interaction";
-  return [...getDenyRules(toolPermissionContext), ...getAskRules(toolPermissionContext)].some((r) =>
-    toolMatchesRule(toolPermissionContext, toolByName, r),
+  return [...getDenyRules(toolPermissionContext), ...getAskRules(toolPermissionContext)].some((rule) =>
+    toolMatchesRule(toolPermissionContext, toolByName, rule),
   )
     ? "rule"
     : undefined;
@@ -79,24 +79,26 @@ var ARTIFACT_OPENING_RE =
 var ARTIFACT_OPENING_URL_RE = /artifact at (https?:\/\/\S+) and has it open beside this conversation/g;
 var SYSTEM_REMINDER_BLOCK_RE = /<system-reminder>([\s\S]*?)<\/system-reminder>/g;
 //@ chunk-2r828m87.js:1492-1858 placement
-function openingReminderTexts(n, e) {
-  let i = [];
-  for (let r of n) {
-    if (r.type === "assistant") break;
-    if (r.type !== "user") continue;
+function openingReminderTexts(messages, regex) {
+  let out = [];
+  for (let message of messages) {
+    if (message.type === "assistant") break;
+    if (message.type !== "user") continue;
     if (
-      (r.origin !== undefined && r.origin.kind !== "human") ||
-      r.verifiedSlackHumanTurn === true ||
-      r.projectsUserTurn === true ||
-      r.isMeta === true
+      (message.origin !== undefined && message.origin.kind !== "human") ||
+      message.verifiedSlackHumanTurn === true ||
+      message.projectsUserTurn === true ||
+      message.isMeta === true
     )
       continue;
-    let { content } = r.message;
-    let a =
-      typeof content === "string" ? [content] : content.flatMap((o) => (o.type === "text" ? [o.text] : []));
-    for (let o of a) i.push(...reminderTextsIn(o, e));
+    let { content } = message.message;
+    let contents =
+      typeof content === "string"
+        ? [content]
+        : content.flatMap((block) => (block.type === "text" ? [block.text] : []));
+    for (let content of contents) out.push(...reminderTextsIn(content, regex));
   }
-  return i;
+  return out;
 }
 //@ chunk-2r828m87.js:1858-1902 placement
 var ARTIFACT_CREATED_PREFIX = "The user just created a new, empty ";
@@ -104,43 +106,48 @@ var ARTIFACT_CREATED_PREFIX = "The user just created a new, empty ";
 /**
  * 开场提示中是否有多个或可疑的 artifact 地址
  */
-function hasAmbiguousArtifactOpening(n) {
+function hasAmbiguousArtifactOpening(text) {
   let regExp = new RegExp(ARTIFACT_OPENING_URL_RE);
-  let index = n.indexOf(ARTIFACT_CREATED_PREFIX);
+  let index = text.indexOf(ARTIFACT_CREATED_PREFIX);
   while (index !== -1) {
-    let r = index + ARTIFACT_CREATED_PREFIX.length;
-    regExp.lastIndex = r;
-    let match = regExp.exec(n);
-    if (n.slice(r, match?.index).includes("<")) return true;
-    index = match === null ? -1 : n.indexOf(ARTIFACT_CREATED_PREFIX, match.index + match[0].length);
+    let prefixLength = index + ARTIFACT_CREATED_PREFIX.length;
+    regExp.lastIndex = prefixLength;
+    let match = regExp.exec(text);
+    if (text.slice(prefixLength, match?.index).includes("<")) return true;
+    index = match === null ? -1 : text.indexOf(ARTIFACT_CREATED_PREFIX, match.index + match[0].length);
   }
-  return new Set([...n.matchAll(ARTIFACT_OPENING_URL_RE)].map((r) => r[1])).size > 1;
+  return new Set([...text.matchAll(ARTIFACT_OPENING_URL_RE)].map((match) => match[1])).size > 1;
 }
 //@ chunk-2r828m87.js:2162-2277 placement
-function reminderTextsIn(n, e) {
-  if (!e(n) || hasAmbiguousArtifactOpening(n)) return [];
-  return [...n.matchAll(SYSTEM_REMINDER_BLOCK_RE)].map((i) => (i[1] ?? "").trim()).filter((i) => i !== "");
+function reminderTextsIn(text, regex) {
+  if (!regex(text) || hasAmbiguousArtifactOpening(text)) return [];
+  return [...text.matchAll(SYSTEM_REMINDER_BLOCK_RE)]
+    .map((match) => (match[1] ?? "").trim())
+    .filter((text) => text !== "");
 }
 //@ chunk-2r828m87.js:2277-2592 placement
-function recognizeArtifactOpening(n) {
-  if (new Set(n.flatMap((r) => [...r.matchAll(ARTIFACT_OPENING_URL_RE)].map((s) => s[1]))).size > 1)
+function recognizeArtifactOpening(texts) {
+  if (
+    new Set(texts.flatMap((text) => [...text.matchAll(ARTIFACT_OPENING_URL_RE)].map((match) => match[1])))
+      .size > 1
+  )
     return null;
-  let i;
-  for (let r of n) {
-    let s = ARTIFACT_OPENING_RE.exec(r)?.[1];
-    let a = s === undefined ? null : parseArtifactUrl(s);
-    if (s === undefined || a === null) continue;
-    if (i !== undefined && i.slug !== a.slug) return null;
-    i ??= {
-      slug: a.slug,
-      env: a.env,
-      url: s,
+  let found;
+  for (let text of texts) {
+    let url = ARTIFACT_OPENING_RE.exec(text)?.[1];
+    let parsed = url === undefined ? null : parseArtifactUrl(url);
+    if (url === undefined || parsed === null) continue;
+    if (found !== undefined && found.slug !== parsed.slug) return null;
+    found ??= {
+      slug: parsed.slug,
+      env: parsed.env,
+      url,
     };
   }
-  return i === undefined
+  return found === undefined
     ? null
     : {
-        blankArtifact: i,
+        blankArtifact: found,
       };
 }
 //@ chunk-2r828m87.js:2592-2845 placement
@@ -150,12 +157,12 @@ function recognizeArtifactOpening(n) {
 var OPENING_INSTRUCTIONS_PREAMBLE =
   "The artifact named in this session's opening context carries an instructions file; it is below, read ahead for you. The artifact's own content was not read: read it as the opening context asks; that read's result will repeat these instructions.";
 //@ chunk-2r828m87.js:2845-2906 placement
-function openingFilesConsented(n, e) {
-  return !hasAutoReactNoticePending(e.slug) && copySourceConsented(n, e, "files", "land");
+function openingFilesConsented(context, files) {
+  return !hasAutoReactNoticePending(files.slug) && copySourceConsented(context, files, "files", "land");
 }
 //@ chunk-2r828m87.js:2906-2947 placement
-function openingAttestedReadConsented(n, e) {
-  return !hasAutoReactNoticePending(e) && attestedReadConsented(n, e);
+function openingAttestedReadConsented(context, read) {
+  return !hasAutoReactNoticePending(read) && attestedReadConsented(context, read);
 }
 //@ chunk-2r828m87.js:2947-2980 placement
 var ARTIFACT_TYPE_REFERENCE = "artifact-type/reference/";
@@ -164,10 +171,10 @@ var ARTIFACT_TYPE_REFERENCE = "artifact-type/reference/";
  * 预取开场 artifact 的说明文件与参考页
  */
 async function prefetchArtifactOpening(
-  n,
-  e,
+  request,
+  context,
   signal,
-  r = {
+  deps = {
     warmShareEntry,
     readTypeInstructions: readTypeInstructions_2,
     isArtifactReadEnabled,
@@ -177,14 +184,14 @@ async function prefetchArtifactOpening(
   },
   isDeferredTool,
 ) {
-  let blankArtifact = n.blankArtifact;
+  let blankArtifact = request.blankArtifact;
   let startTime = performance.now();
   let combinedAbortSignal = createCombinedAbortSignal(signal, {
     timeoutMs: PREFETCH_CONTENT_TIMEOUT_MS,
     refTimer: true,
   });
   try {
-    if (!r.isArtifactReadEnabled())
+    if (!deps.isArtifactReadEnabled())
       return {
         kind: "skipped",
         reason: "artifact_off",
@@ -194,41 +201,41 @@ async function prefetchArtifactOpening(
         kind: "skipped",
         reason: "catalog_off",
       };
-    let toolPermissionContext = getToolPermissionContext(e);
-    let toolByName = findToolByName(e.options.tools ?? [], ARTIFACT_TOOL_NAME);
-    let w =
+    let toolPermissionContext = getToolPermissionContext(context);
+    let toolByName = findToolByName(context.options.tools ?? [], ARTIFACT_TOOL_NAME);
+    let withholdReason =
       toolByName === undefined ? "not_in_pool" : promptlessWithholdReason(toolByName, toolPermissionContext);
-    if (w !== undefined)
+    if (withholdReason !== undefined)
       return {
         kind: "skipped",
         reason: "tool_unavailable",
-        detail: w,
+        detail: withholdReason,
       };
     let url = blankArtifact.url;
-    for (let l of ["deny", "ask"])
-      if (artifactReadRule(toolPermissionContext, blankArtifact, url, l) !== null)
+    for (let behavior of ["deny", "ask"])
+      if (artifactReadRule(toolPermissionContext, blankArtifact, url, behavior) !== null)
         return {
           kind: "skipped",
           reason: "rule",
-          detail: l,
+          detail: behavior,
         };
-    await r.warmShareEntry(
+    await deps.warmShareEntry(
       blankArtifact,
       {
         abortController: {
           signal: combinedAbortSignal.signal,
         },
-        credentials: e.credentials,
+        credentials: context.credentials,
       },
       "opening_prefetch",
     );
-    let toolPermissionContext_2 = getToolPermissionContext(e);
-    for (let l of ["deny", "ask"])
-      if (artifactReadRule(toolPermissionContext_2, blankArtifact, url, l) !== null)
+    let toolPermissionContext_2 = getToolPermissionContext(context);
+    for (let behavior of ["deny", "ask"])
+      if (artifactReadRule(toolPermissionContext_2, blankArtifact, url, behavior) !== null)
         return {
           kind: "skipped",
           reason: "rule",
-          detail: l,
+          detail: behavior,
         };
     let shareEntry = getShareEntry(blankArtifact.slug);
     if (!ownedByUser(shareEntry)) {
@@ -248,10 +255,10 @@ async function prefetchArtifactOpening(
         kind: "skipped",
         reason: "not_typed",
       };
-    let typeInstructions = await r.readTypeInstructions(
+    let typeInstructions = await deps.readTypeInstructions(
       blankArtifact,
       combinedAbortSignal.signal,
-      e.credentials,
+      context.credentials,
     );
     if (typeInstructions.kind !== "read")
       return {
@@ -259,103 +266,111 @@ async function prefetchArtifactOpening(
         reason: "instructions_unavailable",
         detail: typeInstructions.kind === "unavailable" ? typeInstructions.why : "none",
       };
-    let D = renderTypeInstructions(typeInstructions);
+    let instructionsText = renderTypeInstructions(typeInstructions);
     try {
-      await r.listArtifactTypes({
+      await deps.listArtifactTypes({
         firstParty: true,
         signal: combinedAbortSignal.signal,
-        credentials: e.credentials,
+        credentials: context.credentials,
         httpOnly: true,
       });
     } catch {}
-    let m = await listTypeReferencePages(blankArtifact, combinedAbortSignal.signal, e, r);
-    let C = artifactViewerUrlFor(blankArtifact);
-    let x = artifactCallSpelling(isArtifactToolsetSplit());
-    if (m.why === "listing failed") logFeatureSad("artifact_opening_prefetch", "listing_failed");
-    if (!m.listed)
+    let pages = await listTypeReferencePages(blankArtifact, combinedAbortSignal.signal, context, deps);
+    let viewerUrl = artifactViewerUrlFor(blankArtifact);
+    let spelling = artifactCallSpelling(isArtifactToolsetSplit());
+    if (pages.why === "listing failed") logFeatureSad("artifact_opening_prefetch", "listing_failed");
+    if (!pages.listed)
       logForDebugging(
         `[artifactOpeningPrefetch] type files of ${blankArtifact.slug} not saved: not attempted, the type's reference pages were not listed (the files consent does not stand for this artifact, or its listing failed)`,
       );
-    let P = !m.listed
+    let wholeInstructions = !pages.listed
       ? null
       : typeInstructions.clipped
-        ? await (r.readWholeInstructions ?? readTypeInstructions)(
+        ? await (deps.readWholeInstructions ?? readTypeInstructions)(
             blankArtifact,
             combinedAbortSignal.signal,
-            e.credentials,
+            context.credentials,
           )
         : typeInstructions.text;
-    let I =
-      P === null
+    let typePrefetch =
+      wholeInstructions === null
         ? null
         : (
             await prefetchArtifactTypeAndSystem(
               {
                 type: {
                   artifact: blankArtifact,
-                  instructions: P,
-                  pages: m.pages.map((page) => ARTIFACT_TYPE_REFERENCE + page),
-                  stillConsented: () => r.filesConsented(e, blankArtifact),
+                  instructions: wholeInstructions,
+                  pages: pages.pages.map((page) => ARTIFACT_TYPE_REFERENCE + page),
+                  stillConsented: () => deps.filesConsented(context, blankArtifact),
                 },
                 system: null,
               },
-              e,
+              context,
               combinedAbortSignal.signal,
-              r.readFrameFile,
+              deps.readFrameFile,
             )
           ).type;
-    let T =
-      m.listed && artifactReplToolInPool(e.options.tools ?? [])
+    let replRoute =
+      pages.listed && artifactReplToolInPool(context.options.tools ?? [])
         ? replRouteTwoSteps(typeInstructions.text)
         : null;
-    let v = T ?? "";
-    let h =
-      I === null
+    let replRouteText = replRoute ?? "";
+    let skillInput =
+      typePrefetch === null
         ? null
         : {
-            ...I,
-            urlReadAsked: v !== "",
+            ...typePrefetch,
+            urlReadAsked: replRouteText !== "",
             skillByRead: !typeInstructions.clipped,
           };
-    let b =
-      h === null
+    let skillText =
+      skillInput === null
         ? null
         : typeSkillPrintInstructions(
-            h,
-            [v, buildSpellingNoteForText(typeInstructions.text), replRouteSection(typeInstructions.text)]
-              .map((l) => l.trim())
-              .filter((l) => l !== "")
+            skillInput,
+            [
+              replRouteText,
+              buildSpellingNoteForText(typeInstructions.text),
+              replRouteSection(typeInstructions.text),
+            ]
+              .map((line) => line.trim())
+              .filter((line) => line !== "")
               .map(
-                (l) => `
+                (line) => `
 
-${l}`,
+${line}`,
               )
               .join(""),
           );
-    if (h !== null && b === null)
+    if (skillInput !== null && skillText === null)
       logForDebugging(
         `[artifactOpeningPrefetch] type files of ${blankArtifact.slug} saved but not used: SKILL.md does not fit one Bash output, the text stays inline`,
       );
-    if (h !== null && b !== null)
+    if (skillInput !== null && skillText !== null)
       return {
         kind: "attached",
-        content: b,
+        content: skillText,
         manifest: parallelReadInstruction(
-          C,
-          x,
-          T === null && isDeferredTool !== undefined && hasUnloadedArtifactData(e, isDeferredTool),
+          viewerUrl,
+          spelling,
+          replRoute === null &&
+            isDeferredTool !== undefined &&
+            hasUnloadedArtifactData(context, isDeferredTool),
         ),
-        typeFiles: h,
+        typeFiles: skillInput,
         durationMs: performance.now() - startTime,
       };
     return {
       kind: "attached",
-      content: OPENING_INSTRUCTIONS_PREAMBLE + D,
+      content: OPENING_INSTRUCTIONS_PREAMBLE + instructionsText,
       manifest: openingPrefetchSummary(
-        C,
-        m,
-        x,
-        T === null && isDeferredTool !== undefined && hasUnloadedArtifactData(e, isDeferredTool),
+        viewerUrl,
+        pages,
+        spelling,
+        replRoute === null &&
+          isDeferredTool !== undefined &&
+          hasUnloadedArtifactData(context, isDeferredTool),
       ),
       typeFiles: null,
       durationMs: performance.now() - startTime,
@@ -377,74 +392,83 @@ ${l}`,
 /**
  * 读取 artifact 类型的 SKILL.md 说明
  */
-async function readTypeInstructions(n, e, i) {
-  let r = await webfetchReadFile(
+async function readTypeInstructions(artifact, signal, credentials) {
+  let file = await webfetchReadFile(
     {
-      ...n,
+      ...artifact,
       file: TYPE_INSTRUCTIONS_FILE,
     },
-    e,
-    i,
+    signal,
+    credentials,
     "artifact_type_instructions_read",
   );
-  if (r.err !== null) {
+  if (file.err !== null) {
     logForDebugging(
-      `[artifactOpeningPrefetch] type files of ${n.slug} not saved: the whole SKILL.md was not read (${getFetchErrorText(r)})`,
+      `[artifactOpeningPrefetch] type files of ${artifact.slug} not saved: the whole SKILL.md was not read (${getFetchErrorText(file)})`,
     );
     return null;
   }
-  return scrubArtifactEnvelopeTags(r.html);
+  return scrubArtifactEnvelopeTags(file.html);
 }
 //@ chunk-2r828m87.js:6094-6898 placement
 /**
  * 识别会话开场新建的空 artifact，并预取其类型的 SKILL.md 与参考页，内联到首轮提示里。
  */
-async function artifactOpeningPrefetchContent(n, e, i, r, s) {
-  let a = recognizeArtifactOpening([
-    ...openingReminderTexts(e, r.isSystemReminderOnlyText),
-    ...(i === null ? [] : reminderTextsIn(i, r.isSystemReminderOnlyText)),
+async function artifactOpeningPrefetchContent(context, messages, signal, credentials, options) {
+  let openings = recognizeArtifactOpening([
+    ...openingReminderTexts(messages, credentials.isSystemReminderOnlyText),
+    ...(signal === null ? [] : reminderTextsIn(signal, credentials.isSystemReminderOnlyText)),
   ]);
-  if (a === null) return null;
-  let o = await prefetchArtifactOpening(a, n, n.abortController.signal, s, r.isDeferredTool);
-  logForDebugging(
-    o.kind === "attached"
-      ? `[artifactOpeningPrefetch] attached: ${o.content.length} chars + index ${o.manifest.length} chars in ${Math.round(o.durationMs)}ms`
-      : `[artifactOpeningPrefetch] skipped: ${o.reason}${o.detail === undefined ? "" : ` (${o.detail})`}`,
+  if (openings === null) return null;
+  let result = await prefetchArtifactOpening(
+    openings,
+    context,
+    context.abortController.signal,
+    options,
+    credentials.isDeferredTool,
   );
-  if (o.kind === "attached") {
+  logForDebugging(
+    result.kind === "attached"
+      ? `[artifactOpeningPrefetch] attached: ${result.content.length} chars + index ${result.manifest.length} chars in ${Math.round(result.durationMs)}ms`
+      : `[artifactOpeningPrefetch] skipped: ${result.reason}${result.detail === undefined ? "" : ` (${result.detail})`}`,
+  );
+  if (result.kind === "attached") {
     logFeatureOk("artifact_opening_prefetch", {
-      duration_ms: Math.round(o.durationMs),
+      duration_ms: Math.round(result.durationMs),
     });
     return {
-      content: `${o.content}
+      content: `${result.content}
 
-${o.manifest}`,
-      slug: a.blankArtifact.slug,
-      typeFiles: o.typeFiles,
+${result.manifest}`,
+      slug: openings.blankArtifact.slug,
+      typeFiles: result.typeFiles,
     };
   }
-  if (o.reason === "read_failed" || o.detail === "listing failed")
-    logFeatureSad("artifact_opening_prefetch", o.reason === "read_failed" ? "read_failed" : "listing_failed");
+  if (result.reason === "read_failed" || result.detail === "listing failed")
+    logFeatureSad(
+      "artifact_opening_prefetch",
+      result.reason === "read_failed" ? "read_failed" : "listing_failed",
+    );
   return null;
 }
 //@ chunk-2r828m87.js:6898-7295 placement
 /**
  * 列出类型参考页（需文件同意）
  */
-async function listTypeReferencePages(blankArtifact, signal, i, r) {
-  if (!r.filesConsented(i, blankArtifact))
+async function listTypeReferencePages(blankArtifact, signal, listSignal, credentials) {
+  if (!credentials.filesConsented(listSignal, blankArtifact))
     return {
       listed: false,
       pages: [],
       why: "no files consent",
     };
-  let s;
+  let listing;
   try {
-    s = await r.listFrameFiles(blankArtifact, signal, i.credentials);
+    listing = await credentials.listFrameFiles(blankArtifact, signal, listSignal.credentials);
   } catch {
-    s = null;
+    listing = null;
   }
-  if (s?.kind !== "ok")
+  if (listing?.kind !== "ok")
     return {
       listed: false,
       pages: [],
@@ -452,25 +476,26 @@ async function listTypeReferencePages(blankArtifact, signal, i, r) {
     };
   return {
     listed: true,
-    pages: s.files
+    pages: listing.files
       .map((file) => file.path)
-      .filter((a) => a.startsWith(ARTIFACT_TYPE_REFERENCE) && a.endsWith(".md"))
-      .map((a) => a.slice(ARTIFACT_TYPE_REFERENCE.length))
-      .filter((a) => !a.includes("/"))
+      .filter((path) => path.startsWith(ARTIFACT_TYPE_REFERENCE) && path.endsWith(".md"))
+      .map((httpStatus) => httpStatus.slice(ARTIFACT_TYPE_REFERENCE.length))
+      .filter((path) => !path.includes("/"))
       .sort(),
   };
 }
 //@ chunk-2r828m87.js:7295-7627 placement
-function artifactCallSpelling(n) {
+function artifactCallSpelling(spelling) {
   return {
-    readFile: n
-      ? (e, i) => `Artifact action "read", url "${e}", path ${jsonSweepLine(i, MAX_OPENING_BLOCK_CHARS)}`
-      : (e, i) =>
-          `Artifact action "read_file", url "${e}", path ${jsonSweepLine(i, MAX_OPENING_BLOCK_CHARS)}`,
-    listFiles: n
-      ? (e) => `Artifact action "list", url "${e}", scope "files"`
-      : (e) => `Artifact action "list_files", url "${e}"`,
-    readArtifact: (e) => `Artifact action "read", url "${e}"`,
+    readFile: spelling
+      ? (slug, scope) =>
+          `Artifact action "read", url "${slug}", path ${jsonSweepLine(scope, MAX_OPENING_BLOCK_CHARS)}`
+      : (slug, scope) =>
+          `Artifact action "read_file", url "${slug}", path ${jsonSweepLine(scope, MAX_OPENING_BLOCK_CHARS)}`,
+    listFiles: spelling
+      ? (slug) => `Artifact action "list", url "${slug}", scope "files"`
+      : (slug) => `Artifact action "list_files", url "${slug}"`,
+    readArtifact: (slug) => `Artifact action "read", url "${slug}"`,
   };
 }
 //@ chunk-2r828m87.js:7627-7637 placement
@@ -479,27 +504,27 @@ var MAX_PAGE_LIST_CHARS = MAX_REFERENCE_PAGES;
 /**
  * 参考页清单文字
  */
-function referencePagesNote(n, pages, i) {
+function referencePagesNote(artifact, pages, pageList) {
   let sliced = pages.slice(0, MAX_PAGE_LIST_CHARS);
   let mapped = sliced.map(
-    (a) =>
-      `- ${jsonSweepLine(ARTIFACT_TYPE_REFERENCE + a, MAX_OPENING_BLOCK_CHARS)}: ${i.readFile(n, ARTIFACT_TYPE_REFERENCE + a)}`,
+    (page) =>
+      `- ${jsonSweepLine(ARTIFACT_TYPE_REFERENCE + page, MAX_OPENING_BLOCK_CHARS)}: ${pageList.readFile(artifact, ARTIFACT_TYPE_REFERENCE + page)}`,
   );
   if (pages.length > sliced.length)
     mapped.push(
-      `- and ${pages.length - sliced.length} more under ${ARTIFACT_TYPE_REFERENCE} (${i.listFiles(n)} names them)`,
+      `- and ${pages.length - sliced.length} more under ${ARTIFACT_TYPE_REFERENCE} (${pageList.listFiles(artifact)} names them)`,
     );
   return [
-    `Reference pages of the type of the artifact at ${n}, on the artifact and not loaded (the names are the type's own files, listed as data):`,
+    `Reference pages of the type of the artifact at ${artifact}, on the artifact and not loaded (the names are the type's own files, listed as data):`,
     ...mapped,
-    `Issue every file read you need, and the artifact read itself (${i.readArtifact(n)}), in ONE message (parallel tool calls); then Read any file a result says was saved; then write. Use exactly the call shapes given here; no other fields.`,
+    `Issue every file read you need, and the artifact read itself (${pageList.readArtifact(artifact)}), in ONE message (parallel tool calls); then Read any file a result says was saved; then write. Use exactly the call shapes given here; no other fields.`,
   ].join(`
 `);
 }
 //@ chunk-2r828m87.js:8232-8306 placement
-function hasUnloadedArtifactData(n, e) {
-  let toolByName = findToolByName(n.options.tools ?? [], ARTIFACT_DATA_TOOL_NAME);
-  return toolByName !== undefined && !e(toolByName);
+function hasUnloadedArtifactData(context, data) {
+  let toolByName = findToolByName(context.options.tools ?? [], ARTIFACT_DATA_TOOL_NAME);
+  return toolByName !== undefined && !data(toolByName);
 }
 //@ chunk-2r828m87.js:8306-8477 placement
 /**
@@ -511,26 +536,26 @@ var ARTIFACT_DATA_LOADED_HINT =
 /**
  * 预取结果说明文字
  */
-function openingPrefetchSummary(n, e, i, r) {
-  let s = referencePagesNote(n, e.pages, i);
+function openingPrefetchSummary(artifact, typed, signal, credentials) {
+  let note = referencePagesNote(artifact, typed.pages, signal);
   return [
-    `Loaded ahead of this turn for the artifact at ${n}: the instructions file found on it (SKILL.md) \u2014 inlined above; do not read it again.`,
-    ...(e.pages.length > 0
-      ? [s]
+    `Loaded ahead of this turn for the artifact at ${artifact}: the instructions file found on it (SKILL.md) \u2014 inlined above; do not read it again.`,
+    ...(typed.pages.length > 0
+      ? [note]
       : [
-          ...(e.listed
+          ...(typed.listed
             ? []
             : [
-                `Its type's reference pages are on the artifact under ${ARTIFACT_TYPE_REFERENCE} (${i.listFiles(n)} names them).`,
+                `Its type's reference pages are on the artifact under ${ARTIFACT_TYPE_REFERENCE} (${signal.listFiles(artifact)} names them).`,
               ]),
-          ...s
+          ...note
             .split(
               `
 `,
             )
             .slice(1),
         ]),
-    ...(r ? [ARTIFACT_DATA_LOADED_HINT] : []),
+    ...(credentials ? [ARTIFACT_DATA_LOADED_HINT] : []),
   ].join(`
 `);
 }
@@ -538,10 +563,10 @@ function openingPrefetchSummary(n, e, i, r) {
 /**
  * 提示把 Bash 与 artifact 读取并行发出
  */
-function parallelReadInstruction(n, e, i) {
+function parallelReadInstruction(artifact, signal, credentials) {
   return [
-    `Make that Bash call and the artifact read itself, ${e.readArtifact(n)}, in ONE message (parallel tool calls); then write.`,
-    ...(i ? [ARTIFACT_DATA_LOADED_HINT] : []),
+    `Make that Bash call and the artifact read itself, ${signal.readArtifact(artifact)}, in ONE message (parallel tool calls); then write.`,
+    ...(credentials ? [ARTIFACT_DATA_LOADED_HINT] : []),
   ].join(`
 `);
 }
@@ -555,4 +580,5 @@ export {
   recognizeArtifactOpening,
   artifactCallSpelling,
   promptlessWithholdReason,
+  artifactOpeningPrefetchContent,
 };

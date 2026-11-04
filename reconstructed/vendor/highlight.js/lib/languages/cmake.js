@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint+context 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:69747-72201 cjs-fingerprint+context
-var require_cmake = x(function (cjsExports, cjsModule) {
+var require_cmake = __commonJS(function (cjsExports, cjsModule) {
   function cmake(hljs) {
     return {
       name: "CMake",

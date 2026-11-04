@@ -144,7 +144,7 @@ async function animatedMove(input, targetX, targetY, mouseAnimationEnabled) {
 /**
  * linux 构建里 CLI 的 computer-use 执行器只抛错：电脑控制仅限 macOS。
  */
-function createCliExecutor(o) {
+function createCliExecutor(options) {
   throw Error("createCliExecutor called on linux. Computer control is macOS-only.");
 }
 //@ chunk-hrs3dad1.js:8585-8661 fingerprint = unhideComputerUseApps (1)
@@ -155,3 +155,4 @@ async function unhideComputerUseApps(bundleIds) {
   if (bundleIds.length === 0) return;
   await requireComputerUseSwift().apps.unhide([...bundleIds]);
 }
+export { createCliExecutor, unhideComputerUseApps };

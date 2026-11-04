@@ -11,6 +11,7 @@
 import { csi } from "./termio/csi.js";
 import { osc, OSC } from "./termio/osc.js";
 import { transmitKittyImage } from "./termio/kittyGraphics.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-m1vyn8g1.js:5517-5604 fingerprint = decrqm (1)
 /**
@@ -19,7 +20,7 @@ import { transmitKittyImage } from "./termio/kittyGraphics.js";
 function decrqm(mode) {
   return {
     request: csi(`?${mode}$p`),
-    match: (n) => n.type === "decrpm" && n.mode === mode,
+    match: (response) => response.type === "decrpm" && response.mode === mode,
   };
 }
 //@ chunk-m1vyn8g1.js:5604-5680 fingerprint = kittyKeyboard (1)
@@ -29,7 +30,7 @@ function decrqm(mode) {
 function kittyKeyboard() {
   return {
     request: csi("?u"),
-    match: (e) => e.type === "kittyKeyboard",
+    match: (response) => response.type === "kittyKeyboard",
   };
 }
 //@ chunk-m1vyn8g1.js:5680-5758 fingerprint = cursorPosition (1)
@@ -39,7 +40,7 @@ function kittyKeyboard() {
 function cursorPosition() {
   return {
     request: csi("?6n"),
-    match: (e) => e.type === "cursorPosition",
+    match: (response) => response.type === "cursorPosition",
   };
 }
 //@ chunk-m1vyn8g1.js:5758-5838 fingerprint = oscColor (1)
@@ -49,14 +50,15 @@ function cursorPosition() {
 function oscColor(code) {
   return {
     request: osc(code, "?"),
-    match: (n) => n.type === "osc" && n.code === code,
+    match: (response) => response.type === "osc" && response.code === code,
   };
 }
 //@ chunk-m1vyn8g1.js:5838-5973 layout = oscColor (0.824)
 function programStatusQuery() {
   return {
     request: osc(OSC.PROGRAM_STATUS, "?"),
-    match: (e) => e.type === "osc" && e.code === OSC.PROGRAM_STATUS && e.data.startsWith("?"),
+    match: (response) =>
+      response.type === "osc" && response.code === OSC.PROGRAM_STATUS && response.data.startsWith("?"),
   };
 }
 //@ chunk-m1vyn8g1.js:5973-6046 fingerprint = xtversion (1)
@@ -66,14 +68,14 @@ function programStatusQuery() {
 function xtversion() {
   return {
     request: csi(">0q"),
-    match: (e) => e.type === "xtversion",
+    match: (response) => response.type === "xtversion",
   };
 }
 //@ chunk-m1vyn8g1.js:6046-6118 file-local
 function cellSizeQuery() {
   return {
     request: csi("16t"),
-    match: (e) => e.type === "cellSize",
+    match: (response) => response.type === "cellSize",
   };
 }
 //@ chunk-m1vyn8g1.js:6118-6127 layout
@@ -82,14 +84,17 @@ var GRAPHICS_PROBE_IMAGE_ID = 31;
 function kittyGraphicsQuery() {
   return {
     request: transmitKittyImage(GRAPHICS_PROBE_IMAGE_ID),
-    match: (e) => e.type === "kittyGraphics" && e.id === GRAPHICS_PROBE_IMAGE_ID,
+    match: (response) => response.type === "kittyGraphics" && response.id === GRAPHICS_PROBE_IMAGE_ID,
   };
 }
 //@ chunk-m1vyn8g1.js:6209-6223 layout
 /**
  * DA1 查询 CSI c，作为查询队列的哨兵：几乎所有终端都会应答，按顺序收到它说明之前的查询已无应答。
  */
-var DA1_SENTINEL = csi("c");
+var DA1_SENTINEL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-m1vyn8g1.js:6209", () => {
+  DA1_SENTINEL = csi("c");
+});
 //@ chunk-m1vyn8g1.js:6223-7949 fingerprint = TerminalQuerier (0.583)
 /**
  * 终端查询器：查询排队写到 stdout（输入未接管时先缓存），应答由 App 的输入解析交给 onResponse 按 match 匹配并 resolve；flush() 发 DA1 哨兵，哨兵应答到达时把前面未应答的查询都 resolve 为 undefined；owed() 统计还欠的应答数（退出前要读干净）；resync 丢弃排队并可插入 barrier；主题变化通知（CSI ? 997）分发给订阅者。
@@ -102,20 +107,21 @@ class TerminalQuerier {
   constructor(stdout) {
     this.stdout = stdout;
   }
-  setInputAttached(e) {
-    this.isInputAttached = e;
-    if (!e) return;
-    for (let n of this.queue) if (n.kind !== "barrier" && !n.written) this.write(n);
+  setInputAttached(attached) {
+    this.isInputAttached = attached;
+    if (!attached) return;
+    for (let entry of this.queue) if (entry.kind !== "barrier" && !entry.written) this.write(entry);
   }
   owed() {
-    let e = 0;
-    for (let n of this.queue) if (n.kind === "barrier" || (n.kind === "sentinel" && n.written)) e++;
-    return e;
+    let count = 0;
+    for (let entry of this.queue)
+      if (entry.kind === "barrier" || (entry.kind === "sentinel" && entry.written)) count++;
+    return count;
   }
-  subscribeThemeChange(e) {
-    this.themeChangeSubscribers.add(e);
+  subscribeThemeChange(listener) {
+    this.themeChangeSubscribers.add(listener);
     return () => {
-      this.themeChangeSubscribers.delete(e);
+      this.themeChangeSubscribers.delete(listener);
     };
   }
   send(query) {
@@ -125,7 +131,7 @@ class TerminalQuerier {
         request: query.request,
         written: false,
         match: query.match,
-        resolve: (o) => resolve(o),
+        resolve: (reply) => resolve(reply),
       });
     });
   }
@@ -139,16 +145,16 @@ class TerminalQuerier {
       });
     });
   }
-  cancel(e) {
-    let index = this.queue.findIndex((t) => t.kind === "query" && t.match === e.match);
+  cancel(query) {
+    let index = this.queue.findIndex((entry) => entry.kind === "query" && entry.match === query.match);
     if (index === -1) return;
-    let [o] = this.queue.splice(index, 1);
-    if (o?.kind === "query") o.resolve(undefined);
+    let [removed] = this.queue.splice(index, 1);
+    if (removed?.kind === "query") removed.resolve(undefined);
   }
   resync({ probe }) {
-    for (let n of this.queue.splice(0))
-      if (n.kind === "query") n.resolve(undefined);
-      else if (n.kind === "sentinel") n.resolve(false);
+    for (let pending of this.queue.splice(0))
+      if (pending.kind === "query") pending.resolve(undefined);
+      else if (pending.kind === "sentinel") pending.resolve(false);
     if (probe && this.isInputAttached) {
       this.queue.push({
         kind: "barrier",
@@ -156,36 +162,36 @@ class TerminalQuerier {
       this.stdout.write(DA1_SENTINEL);
     }
   }
-  onResponse(e) {
-    if (e.type === "themeNotify") {
-      for (let themeChangeSubscriber of this.themeChangeSubscribers) themeChangeSubscriber(e.dark);
+  onResponse(response) {
+    if (response.type === "themeNotify") {
+      for (let themeChangeSubscriber of this.themeChangeSubscribers) themeChangeSubscriber(response.dark);
       return true;
     }
     if (this.queue[0]?.kind === "barrier") {
-      if (e.type === "da1") this.queue.shift();
+      if (response.type === "da1") this.queue.shift();
       return true;
     }
-    let index = this.queue.findIndex((t) => t.kind === "query" && t.match(e));
+    let index = this.queue.findIndex((entry) => entry.kind === "query" && entry.match(response));
     if (index !== -1) {
-      let [t] = this.queue.splice(index, 1);
-      if (t?.kind === "query") t.resolve(e);
+      let [matched] = this.queue.splice(index, 1);
+      if (matched?.kind === "query") matched.resolve(response);
       return true;
     }
-    if (e.type !== "da1") return false;
-    let index_2 = this.queue.findIndex((t) => t.kind === "sentinel");
+    if (response.type !== "da1") return false;
+    let index_2 = this.queue.findIndex((entry) => entry.kind === "sentinel");
     if (index_2 === -1) return false;
-    for (let t of this.queue.splice(0, index_2 + 1))
-      if (t.kind === "query") t.resolve(undefined);
-      else if (t.kind === "sentinel") t.resolve(true);
+    for (let entry of this.queue.splice(0, index_2 + 1))
+      if (entry.kind === "query") entry.resolve(undefined);
+      else if (entry.kind === "sentinel") entry.resolve(true);
     return true;
   }
-  enqueue(e) {
-    this.queue.push(e);
-    if (this.isInputAttached) this.write(e);
+  enqueue(entry) {
+    this.queue.push(entry);
+    if (this.isInputAttached) this.write(entry);
   }
-  write(e) {
-    e.written = true;
-    this.stdout.write(e.request);
+  write(entry) {
+    entry.written = true;
+    this.stdout.write(entry.request);
   }
 }
 export {

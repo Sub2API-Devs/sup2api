@@ -8,7 +8,7 @@
  * pieces: chunk-9c09fw6j.js (7)
  * attribution: placement 7
  */
-import { init_react_production, y, R } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState, useRef } from "../../vendor/react/cjs/react.production.js";
 import { getAPIProvider } from "../utils/model/providers.js";
 import { getAwsRegionSync } from "../utils/awsRegion.js";
 import { getDefaultVertexRegion } from "../utils/envUtils.js";
@@ -35,7 +35,7 @@ import { getScreenReaderEnv } from "../utils/accessibility/screenReader.js";
 import { logError } from "../utils/log.js";
 import { toError, errorMessage } from "../utils/errors.js";
 import { hasRunningBackgroundTask } from "../tasks/backgroundTaskLabels.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useKeybinding } from "../keybindings/useKeybinding.js";
 import {
   jsxProd_default,
@@ -60,25 +60,25 @@ function currentProviderSnapshot() {
         env.AWS_BEARER_TOKEN_BEDROCK,
         env.AWS_ACCESS_KEY_ID,
         env.GOOGLE_APPLICATION_CREDENTIALS,
-      ].map((o) => o ?? "").join(`
+      ].map((digestKeys) => digestKeys ?? "").join(`
 `),
     ),
   };
 }
 //@ chunk-9c09fw6j.js:1325-1866 placement
-function isProviderUnchanged(o, p) {
-  let g = currentProviderSnapshot();
-  let c =
-    o.provider === p &&
-    g.provider === o.provider &&
-    g.awsRegion === o.awsRegion &&
-    g.vertexRegion === o.vertexRegion &&
-    g.vertexProjectId === o.vertexProjectId &&
-    g.accountDigest === o.accountDigest;
+function isProviderUnchanged(before, after) {
+  let current = currentProviderSnapshot();
+  let isSame =
+    before.provider === after &&
+    current.provider === before.provider &&
+    current.awsRegion === before.awsRegion &&
+    current.vertexRegion === before.vertexRegion &&
+    current.vertexProjectId === before.vertexProjectId &&
+    current.accountDigest === before.accountDigest;
   logForDebugging(
-    `Provider-setup restart: ${c ? "carrying" : "dropping"} the model pick (launched on ${o.provider} ${o.awsRegion}/${o.vertexRegion}/${o.vertexProjectId || "no-project"}, now ${g.provider} ${g.awsRegion}/${g.vertexRegion}/${g.vertexProjectId || "no-project"}${g.accountDigest === o.accountDigest ? "" : ", credentials changed"}, target ${p})`,
+    `Provider-setup restart: ${isSame ? "carrying" : "dropping"} the model pick (launched on ${before.provider} ${before.awsRegion}/${before.vertexRegion}/${before.vertexProjectId || "no-project"}, now ${current.provider} ${current.awsRegion}/${current.vertexRegion}/${current.vertexProjectId || "no-project"}${current.accountDigest === before.accountDigest ? "" : ", credentials changed"}, target ${after})`,
   );
-  return c;
+  return isSame;
 }
 //@ chunk-9c09fw6j.js:1866-1941 placement
 var SETTINGS_SAVED_RESTART_TEXT = "Your settings were saved \u2014 restart Claude Code to apply them.";
@@ -86,21 +86,21 @@ var SETTINGS_SAVED_RESTART_TEXT = "Your settings were saved \u2014 restart Claud
 /**
  * 切换 API 提供方后尝试重启会话：后台会话或受限启动时拒绝并给出原因。
  */
-async function restartWithProvider(context, targetProvider, g) {
+async function restartWithProvider(context, after, nextProvider) {
   try {
     if (isBgSession()) return `A background session can't restart itself. ${SETTINGS_SAVED_RESTART_TEXT}`;
     if (getBgTakeover() !== null)
       return `Claude can't restart itself from inside the agents view. ${SETTINGS_SAVED_RESTART_TEXT}`;
-    let c = restrictedLaunchReason(context);
-    if (c !== undefined) return c;
+    let restriction = restrictedLaunchReason(context);
+    if (restriction !== undefined) return restriction;
     if (isTerminalShutdown()) return;
     await ensureLauncherRunnable();
     await saveResumePoint(submittedMessages(context), context.storageV5);
     if (isTerminalShutdown()) return;
-    let m = restrictedLaunchReason(context);
-    if (m !== undefined) return m;
+    let blockedReason = restrictedLaunchReason(context);
+    if (blockedReason !== undefined) return blockedReason;
     let toolPermissionContext = getToolPermissionContext(context);
-    let C = await confirmRelaunch(
+    let confirmed = await confirmRelaunch(
       submittedMessages(context),
       "relaunch",
       {
@@ -109,12 +109,12 @@ async function restartWithProvider(context, targetProvider, g) {
       context.storageV5,
     );
     await relaunchOrExplain(
-      C,
+      confirmed,
       {
         freshIfNoTranscript: true,
         extraArgs: [
           ...buildRelaunchArgs(toolPermissionContext, getSessionEffort(context), {
-            carryModel: isProviderUnchanged(g, targetProvider),
+            carryModel: isProviderUnchanged(nextProvider, after),
           }),
           ...buildPermissionAndAgentArgs(toolPermissionContext, getForkReplayLaunchConfig()),
         ],
@@ -133,70 +133,73 @@ async function restartWithProvider(context, targetProvider, g) {
   }
 }
 //@ chunk-9c09fw6j.js:2619-2921 placement
-function restrictedLaunchReason(o) {
-  let p = listUncarriedLaunchSettings(getToolPermissionContext(o), getForkRestrictedLaunchConfig());
-  if (p.length > 0)
-    return `This session has restrictions a restart can't carry over (${p.join("; ")}). ${SETTINGS_SAVED_RESTART_TEXT}`;
-  if (hasRunningBackgroundTask(o.taskRegistry.all()))
+function restrictedLaunchReason(context) {
+  let reasons = listUncarriedLaunchSettings(
+    getToolPermissionContext(context),
+    getForkRestrictedLaunchConfig(),
+  );
+  if (reasons.length > 0)
+    return `This session has restrictions a restart can't carry over (${reasons.join("; ")}). ${SETTINGS_SAVED_RESTART_TEXT}`;
+  if (hasRunningBackgroundTask(context.taskRegistry.all()))
     return `Work is running in the background, and restarting would orphan it (wait for it to finish, or stop it via /tasks). ${SETTINGS_SAVED_RESTART_TEXT}`;
   return;
 }
 //@ chunk-9c09fw6j.js:2921-4088 placement
 function ProviderSetupWizard(props) {
-  let u = w(21);
+  let $ = useMemoCache(21);
   let { Wizard, cancelledEvent, targetProvider, onDone, context } = props;
-  let [C, Z] = y(null);
-  let [I] = y(currentProviderSnapshot);
-  let T = R(false);
-  let [_, F] = y(false);
-  let V;
-  if (u[0] !== context || u[1] !== I || u[2] !== onDone || u[3] !== targetProvider) {
-    V = () => {
-      if (T.current) {
+  let [provider, setProvider] = useState(null);
+  let [initialSnapshot] = useState(currentProviderSnapshot);
+  let didSubmitRef = useRef(false);
+  let [isCancelled, setIsCancelled] = useState(false);
+  let submit;
+  if ($[0] !== context || $[1] !== initialSnapshot || $[2] !== onDone || $[3] !== targetProvider) {
+    submit = () => {
+      if (didSubmitRef.current) {
         return;
       }
-      T.current = true;
-      F(true);
-      restartWithProvider(context, targetProvider, I).then((z) => {
-        if (z !== undefined) {
-          T.current = false;
-          F(false);
-          onDone(z, {
+      didSubmitRef.current = true;
+      setIsCancelled(true);
+      restartWithProvider(context, targetProvider, initialSnapshot).then((result) => {
+        if (result !== undefined) {
+          didSubmitRef.current = false;
+          setIsCancelled(false);
+          onDone(result, {
             display: "system",
           });
         }
       });
     };
-    u[0] = context;
-    u[1] = I;
-    u[2] = onDone;
-    u[3] = targetProvider;
-    u[4] = V;
-  } else V = u[4];
-  const isActive = C !== null;
-  let G;
-  if (u[5] !== isActive) {
-    G = {
+    $[0] = context;
+    $[1] = initialSnapshot;
+    $[2] = onDone;
+    $[3] = targetProvider;
+    $[4] = submit;
+  } else submit = $[4];
+  const isActive = provider !== null;
+  let error;
+  if ($[5] !== isActive) {
+    error = {
       context: "Confirmation",
       isActive,
     };
-    u[5] = isActive;
-    u[6] = G;
-  } else G = u[6];
-  useKeybinding("confirm:yes", V, G);
-  if (C !== null) {
-    let P;
-    if (u[7] !== C) {
-      P = jsxProd_default(Text, {
+    $[5] = isActive;
+    $[6] = error;
+  } else error = $[6];
+  useKeybinding("confirm:yes", submit, error);
+  if (provider !== null) {
+    let textElement;
+    if ($[7] !== provider) {
+      textElement = jsxProd_default(Text, {
         color: "success",
-        children: C,
+        children: provider,
       });
-      u[7] = C;
-      u[8] = P;
-    } else P = u[8];
-    let f;
-    if (u[9] !== _) {
-      f = _
+      $[7] = provider;
+      $[8] = textElement;
+    } else textElement = $[8];
+    let restartTextElement;
+    if ($[9] !== isCancelled) {
+      restartTextElement = isCancelled
         ? jsxProd_default(Text, {
             dimColor: true,
             children: "Restarting Claude Code\u2026",
@@ -212,48 +215,48 @@ function ProviderSetupWizard(props) {
               " to restart Claude Code.",
             ],
           });
-      u[9] = _;
-      u[10] = f;
-    } else f = u[10];
-    let k;
-    if (u[11] !== P || u[12] !== f) {
-      k = jsxProd_default_2(Box, {
+      $[9] = isCancelled;
+      $[10] = restartTextElement;
+    } else restartTextElement = $[10];
+    let boxElement;
+    if ($[11] !== textElement || $[12] !== restartTextElement) {
+      boxElement = jsxProd_default_2(Box, {
         flexDirection: "column",
         gap: 1,
         marginTop: 1,
-        children: [P, f],
+        children: [textElement, restartTextElement],
       });
-      u[11] = P;
-      u[12] = f;
-      u[13] = k;
-    } else k = u[13];
-    return k;
+      $[11] = textElement;
+      $[12] = restartTextElement;
+      $[13] = boxElement;
+    } else boxElement = $[13];
+    return boxElement;
   }
   let onComplete;
-  if (u[14] === MEMO_CACHE_SENTINEL) {
-    onComplete = (ee) => Z(ee);
-    u[14] = onComplete;
-  } else onComplete = u[14];
+  if ($[14] === MEMO_CACHE_SENTINEL) {
+    onComplete = (nextProvider) => setProvider(nextProvider);
+    $[14] = onComplete;
+  } else onComplete = $[14];
   let onCancel;
-  if (u[15] !== cancelledEvent || u[16] !== onDone) {
+  if ($[15] !== cancelledEvent || $[16] !== onDone) {
     onCancel = () => {
       logEvent(cancelledEvent, {});
       onDone();
     };
-    u[15] = cancelledEvent;
-    u[16] = onDone;
-    u[17] = onCancel;
-  } else onCancel = u[17];
-  let k;
-  if (u[18] !== Wizard || u[19] !== onCancel) {
-    k = jsxProd_default(Wizard, {
+    $[15] = cancelledEvent;
+    $[16] = onDone;
+    $[17] = onCancel;
+  } else onCancel = $[17];
+  let wizardElement;
+  if ($[18] !== Wizard || $[19] !== onCancel) {
+    wizardElement = jsxProd_default(Wizard, {
       onComplete,
       onCancel,
     });
-    u[18] = Wizard;
-    u[19] = onCancel;
-    u[20] = k;
-  } else k = u[20];
-  return k;
+    $[18] = Wizard;
+    $[19] = onCancel;
+    $[20] = wizardElement;
+  } else wizardElement = $[20];
+  return wizardElement;
 }
 export { ProviderSetupWizard };

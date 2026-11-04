@@ -16,7 +16,12 @@ import { setImmediate as $i, setTimeout as Jn } from "timers/promises";
 import { ROLLOUT_ENV_PASSTHROUGH_VARS } from "../../../utils/plugins/hooksModulesRollout.js";
 import { getGatewayAuth } from "../../../bootstrap/state.js";
 import { DoctorLazy } from "../util.js";
-import { u, string, array, E } from "../../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  stringSchema,
+  array,
+  numberSchema,
+} from "../../../../vendor/zod/v4/classic/schemas.js";
 import { describeThrownValue } from "../../../plugins/functionHooks/vm/vmRealm.js";
 import { readEmbeddedTextSync } from "../../../utils/embeddedAssets.js";
 import { HooksError } from "../../../plugins/functionHooks/hooksErrors.js";
@@ -44,65 +49,72 @@ import {
   RENDER_ACTION_SCHEMA,
   UI_DRIVER_ACTIONS_SCHEMA,
 } from "./uiDriver.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-1tz177x8.js:40878-41037 placement
-var CHILD_ENV_ALLOWLIST = [
-  "PATH",
-  "HOME",
-  "USERPROFILE",
-  "SystemRoot",
-  "TMPDIR",
-  "TEMP",
-  "TMP",
-  "LANG",
-  "LC_ALL",
-  "TERM",
-  "NO_COLOR",
-  "FORCE_COLOR",
-  "USER_TYPE",
-  "CLAUDE_CONFIG_DIR",
-  ...ROLLOUT_ENV_PASSTHROUGH_VARS,
-];
+var CHILD_ENV_ALLOWLIST; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-1tz177x8.js:40878", () => {
+  CHILD_ENV_ALLOWLIST = [
+    "PATH",
+    "HOME",
+    "USERPROFILE",
+    "SystemRoot",
+    "TMPDIR",
+    "TEMP",
+    "TMP",
+    "LANG",
+    "LC_ALL",
+    "TERM",
+    "NO_COLOR",
+    "FORCE_COLOR",
+    "USER_TYPE",
+    "CLAUDE_CONFIG_DIR",
+    ...ROLLOUT_ENV_PASSTHROUGH_VARS,
+  ];
+});
 //@ chunk-1tz177x8.js:41037-41119 placement
-function pickChildEnvAllowlist(e) {
-  let r = {};
-  for (let n of CHILD_ENV_ALLOWLIST) {
-    let s = e[n];
-    if (s !== undefined) r[n] = s;
+function pickChildEnvAllowlist(env) {
+  let picked = {};
+  for (let name of CHILD_ENV_ALLOWLIST) {
+    let value = env[name];
+    if (value !== undefined) picked[name] = value;
   }
-  return r;
+  return picked;
 }
 //@ chunk-1tz177x8.js:41119-41185 placement
-function envWithoutGrowthBook(e) {
+function envWithoutGrowthBook(env) {
   return getGatewayAuth() === null
-    ? e
+    ? env
     : {
-        ...e,
+        ...env,
         DISABLE_GROWTHBOOK: "1",
       };
 }
 //@ chunk-1tz177x8.js:41185-41199 placement
 var PLUGIN_TEST_FILE_TIMEOUT_MS = 600000;
 //@ chunk-1tz177x8.js:41199-41315 placement
-var TEST_REPORT_SCHEMA = DoctorLazy(() =>
-  u({
-    file: string(),
-    results: array(
-      u({
-        title: string(),
-        ms: E(),
-        failure: string().nullable(),
-      }),
-    ).readonly(),
-    error: string().optional(),
-  }),
-);
+var TEST_REPORT_SCHEMA; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-1tz177x8.js:41199", () => {
+  TEST_REPORT_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      file: stringSchema(),
+      results: array(
+        objectSchema({
+          title: stringSchema(),
+          ms: numberSchema(),
+          failure: stringSchema().nullable(),
+        }),
+      ).readonly(),
+      error: stringSchema().optional(),
+    }),
+  );
+});
 //@ chunk-1tz177x8.js:41315-41324 placement
 var KIT_SETTLE_TICKS = 3;
 //@ chunk-1tz177x8.js:41324-41382 placement
-function errorTextOf(e) {
-  let { msg, name: n } = describeThrownValue(e);
-  return msg === "" ? n : msg;
+function errorTextOf(error) {
+  let { msg, name } = describeThrownValue(error);
+  return msg === "" ? name : msg;
 }
 //@ chunk-1tz177x8.js:41382-41426 placement
 var fileErrorReport = (file, error) => ({
@@ -121,9 +133,15 @@ var INDEX_JS = "index.js";
 //@ chunk-1tz177x8.js:41602-41625 placement
 var kitBundleResourceFile = __cc_resource_0;
 //@ chunk-1tz177x8.js:41625-41659 placement
-var kitBundleText = readEmbeddedTextSync(kitBundleResourceFile, import.meta.dirname);
+var kitBundleText; // deferred: uses kitBundleResourceFile of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-1tz177x8.js:41625", () => {
+  kitBundleText = readEmbeddedTextSync(kitBundleResourceFile, import.meta.dirname);
+});
 //@ chunk-1tz177x8.js:41659-41669 placement
-var kitBundleSource = kitBundleText;
+var kitBundleSource; // deferred: uses kitBundleText of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-1tz177x8.js:41659", () => {
+  kitBundleSource = kitBundleText;
+});
 //@ chunk-1tz177x8.js:41669-41684 placement
 var KIT_FILE_SEPARATOR = "//// ";
 //@ chunk-1tz177x8.js:41684-41829 placement
@@ -134,11 +152,11 @@ var readKitSources = () =>
         `
 ${KIT_FILE_SEPARATOR}`,
       )
-      .map((e, r) => (r === 0 ? e.slice(KIT_FILE_SEPARATOR.length) : e))
-      .map((e) => {
-        let index = e.indexOf(`
+      .map((part, index) => (index === 0 ? part.slice(KIT_FILE_SEPARATOR.length) : part))
+      .map((part) => {
+        let index = part.indexOf(`
 `);
-        return [e.slice(0, index), e.slice(index + 1)];
+        return [part.slice(0, index), part.slice(index + 1)];
       }),
   );
 //@ chunk-1tz177x8.js:41859-41916 placement
@@ -148,13 +166,15 @@ var KIT_INTERNAL_IMPORT_PREFIX = "@/src/plugins/functionHooks/plugin-test/testin
  * 解析测试工具包内的导入路径，只允许包内模块。
  */
 function resolveKitImport(specifier, fromFile, exists) {
-  let s = specifier === KIT_INTERNAL_IMPORT_PREFIX || specifier.startsWith(`${KIT_INTERNAL_IMPORT_PREFIX}/`);
-  let m = specifier === "." || specifier.startsWith("./");
-  if (!s && !m) throw new HooksError(`the kit's ${fromFile} imports ${specifier}, which is outside the kit`);
-  let f = s
+  let isKitImport =
+    specifier === KIT_INTERNAL_IMPORT_PREFIX || specifier.startsWith(`${KIT_INTERNAL_IMPORT_PREFIX}/`);
+  let isRelative = specifier === "." || specifier.startsWith("./");
+  if (!isKitImport && !isRelative)
+    throw new HooksError(`the kit's ${fromFile} imports ${specifier}, which is outside the kit`);
+  let resolved = isKitImport
     ? specifier.slice(KIT_INTERNAL_IMPORT_PREFIX.length + 1)
     : posix.join(posix.dirname(fromFile), specifier);
-  let normalized = posix.normalize(f === "" ? "." : f);
+  let normalized = posix.normalize(resolved === "" ? "." : resolved);
   let found = [normalized, `${normalized}.js`, posix.join(normalized, "index.js")].find(exists);
   if (found === undefined)
     throw new HooksError(`the kit's ${fromFile} imports ${specifier}, which is no module of it`);
@@ -170,35 +190,35 @@ var stripTestingPrefix = (identifier) => identifier.slice(CLAUDE_CODE_TESTING.le
  */
 async function loadKitModule(context) {
   let kitSources = readKitSources();
-  let n = new Map();
-  let s = new Map();
+  let moduleCache = new Map();
+  let linkCache = new Map();
   let importModuleDynamically = runImportRefusal(context);
-  function f(k) {
-    let y =
-      n.get(k) ??
-      new vmModule_2.SourceTextModule(kitSources.get(k) ?? "", {
+  function getModule(file) {
+    let sourceTextModule =
+      moduleCache.get(file) ??
+      new vmModule_2.SourceTextModule(kitSources.get(file) ?? "", {
         context,
-        identifier: `${CLAUDE_CODE_TESTING}/${k}`,
+        identifier: `${CLAUDE_CODE_TESTING}/${file}`,
         importModuleDynamically,
       });
-    n.set(k, y);
-    return y;
+    moduleCache.set(file, sourceTextModule);
+    return sourceTextModule;
   }
-  async function a(specifier, y) {
-    let fromFile = stripTestingPrefix(y.identifier);
-    let kitImport = resolveKitImport(specifier, fromFile, (I) => kitSources.has(I));
-    if (kitImport !== fromFile) await c(kitImport);
-    return f(kitImport);
+  async function linkImport(specifier, referrer) {
+    let fromFile = stripTestingPrefix(referrer.identifier);
+    let file = resolveKitImport(specifier, fromFile, (name) => kitSources.has(name));
+    if (file !== fromFile) await linkFile(file);
+    return getModule(file);
   }
-  function c(k) {
-    let y = s.get(k) ?? f(k).link(a);
-    s.set(k, y);
-    return y;
+  function linkFile(file) {
+    let linkPromise = linkCache.get(file) ?? getModule(file).link(linkImport);
+    linkCache.set(file, linkPromise);
+    return linkPromise;
   }
-  await c(INDEX_JS);
-  let h = f(INDEX_JS);
-  await h.evaluate();
-  return h.namespace;
+  await linkFile(INDEX_JS);
+  let entryModule = getModule(INDEX_JS);
+  await entryModule.evaluate();
+  return entryModule.namespace;
 }
 //@ chunk-1tz177x8.js:42825-42834 placement
 var KIT_POLL_INTERVAL_MS = 2;
@@ -209,17 +229,17 @@ var KIT_POLL_INTERVAL_MS = 2;
 function formatZodIssue(issue) {
   let mapped = issue.path.map(String);
   let joined = (mapped[0] === "seeds" ? mapped.slice(1) : mapped).join(".");
-  let s = joined === "" ? "" : `${joined}: `;
+  let pathPrefix = joined === "" ? "" : `${joined}: `;
   switch (issue.code) {
     case "unrecognized_keys":
-      return `${s}unknown key ` + issue.keys.map((key) => `"${key}"`).join(", ");
+      return `${pathPrefix}unknown key ` + issue.keys.map((key) => `"${key}"`).join(", ");
     case "invalid_type":
-      return `${s}expected ${issue.expected}`;
+      return `${pathPrefix}expected ${issue.expected}`;
     case "invalid_value":
-      return `${s}expected one of ${issue.values.map(String).join(", ")}`;
+      return `${pathPrefix}expected one of ${issue.values.map(String).join(", ")}`;
     case "invalid_key":
       return (
-        s +
+        pathPrefix +
         issue.issues
           .map((issue) =>
             formatZodIssue({
@@ -230,176 +250,191 @@ function formatZodIssue(issue) {
           .join(", ")
       );
     case "invalid_union":
-      return s + issue.errors.map((error) => error.map(formatZodIssue).join(", ")).join("; or ");
+      return pathPrefix + issue.errors.map((error) => error.map(formatZodIssue).join(", ")).join("; or ");
     case "custom":
     case "too_big":
     case "too_small":
     case "invalid_format":
     case "not_multiple_of":
     case "invalid_element":
-      return `${s}${issue.message}`;
+      return `${pathPrefix}${issue.message}`;
   }
 }
 //@ chunk-1tz177x8.js:43533-43576 placement
-var parseStringJsonOrNull = (e) => (typeof e === "string" ? jsonParse(e) : null);
+var parseStringJsonOrNull = (value) => (typeof value === "string" ? jsonParse(value) : null);
 //@ chunk-1tz177x8.js:43576-43706 placement
-function parseOrThrow(e, r, n) {
-  let s = e.safeParse(parseStringJsonOrNull(r));
-  if (!s.success) throw new HooksError(`${n}: ${s.error.issues.map(formatZodIssue).join("; ")}`);
-  return s.data;
+function parseOrThrow(schema, jsonText, label) {
+  let parsed = schema.safeParse(parseStringJsonOrNull(jsonText));
+  if (!parsed.success)
+    throw new HooksError(`${label}: ${parsed.error.issues.map(formatZodIssue).join("; ")}`);
+  return parsed.data;
 }
 //@ chunk-1tz177x8.js:43706-43727 placement
-var testFileSchema = DoctorLazy(() => array(string()));
+var testFileSchema; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-1tz177x8.js:43706", () => {
+  testFileSchema = DoctorLazy(() => array(stringSchema()));
+});
 //@ chunk-1tz177x8.js:43727-43769 placement
-var wrapMethodForEnvironment = (environment) => (r) => nullPrototypeFunction(environment.bare.wrapMethod(r));
+var wrapMethodForEnvironment = (environment) => (target) =>
+  nullPrototypeFunction(environment.bare.wrapMethod(target));
 //@ chunk-1tz177x8.js:43769-43878 placement
-function wrapForCopy(e, r, n) {
-  let { bare } = e.environment;
-  let f = isFreshHeronEnabled()
-    ? checkLeavingValue(bare, bare.leavingCopy(r), (a) => notPlainDataText(n, a))
-    : r;
-  return cloneOrThrow(f, n);
+function wrapForCopy(context, value, label) {
+  let { bare } = context.environment;
+  let copyValue = isFreshHeronEnabled()
+    ? checkLeavingValue(bare, bare.leavingCopy(value), (copied) => notPlainDataText(label, copied))
+    : value;
+  return cloneOrThrow(copyValue, label);
 }
 //@ chunk-1tz177x8.js:43878-44093 placement
-function readSeat(e) {
-  let { register, holding } = isPlainObject(e) ? e : {};
+function readSeat(seat) {
+  let { register, holding } = isPlainObject(seat) ? seat : {};
   if (typeof holding !== "function") throw new HooksError("load: { register, holding } from the seat");
   return {
     register,
     holding: () => {
-      let s = Number(holding());
-      return Number.isFinite(s) ? s : 0;
+      let count = Number(holding());
+      return Number.isFinite(count) ? count : 0;
     },
   };
 }
 //@ chunk-1tz177x8.js:44093-44104 placement
 var ACTING_STALL_MS = 500;
 //@ chunk-1tz177x8.js:44104-46059 placement
-function runPluginTestFile(e) {
-  let { environment, root } = e;
+function runPluginTestFile(options) {
+  let { environment, root } = options;
   let { bare } = environment;
-  let m = wrapMethodForEnvironment(environment);
+  let wrapHost = wrapMethodForEnvironment(environment);
   let vmStreamBridge = createVmStreamBridge(bare);
-  let a = new Map();
-  let c = new Map();
-  let h = new Set();
-  let k = 0;
-  function y(w) {
-    let P = typeof w === "number" ? a.get(w) : undefined;
-    if (!P) throw new HooksError("this test has ended");
-    return P;
+  let engines = new Map();
+  let holdings = new Map();
+  let endedIds = new Set();
+  let nextId = 0;
+  function engineOf(id) {
+    let engine = typeof id === "number" ? engines.get(id) : undefined;
+    if (!engine) throw new HooksError("this test has ended");
+    return engine;
   }
-  let b = (w) => Promise.all([...a.values()].map(w));
-  async function z() {
-    await b((w) => w.ready());
+  let forEachEngine = (fn) => Promise.all([...engines.values()].map(fn));
+  async function awaitReady() {
+    await forEachEngine((engine) => engine.ready());
     await $i();
   }
-  async function I() {
-    await z();
-    await b((w) => w.mounts.refresh());
-    await z();
+  async function refreshAllMounts() {
+    await awaitReady();
+    await forEachEngine((engine) => engine.mounts.refresh());
+    await awaitReady();
   }
-  let j = (w) => !h.has(w);
-  let L = () => [...c.values()].some((w) => w() > 0);
-  async function W() {
-    await z();
-    let w;
+  let isLive = (id) => !endedIds.has(id);
+  let anyHolding = () => [...holdings.values()].some((holding) => holding() > 0);
+  async function settleAll() {
+    await awaitReady();
+    let lastEpoch;
     let startTime = performance.now();
-    let C = workInFlight(j);
-    while (C.acting > 0) {
-      let F = C.epoch !== w;
-      if (!F && (L() || performance.now() - startTime >= ACTING_STALL_MS)) break;
-      if (F) {
-        w = C.epoch;
+    let work = workInFlight(isLive);
+    while (work.acting > 0) {
+      let isNewEpoch = work.epoch !== lastEpoch;
+      if (!isNewEpoch && (anyHolding() || performance.now() - startTime >= ACTING_STALL_MS)) break;
+      if (isNewEpoch) {
+        lastEpoch = work.epoch;
         startTime = performance.now();
       }
       await Jn(KIT_POLL_INTERVAL_MS);
-      C = workInFlight(j);
+      work = workInFlight(isLive);
     }
-    await I();
+    await refreshAllMounts();
   }
-  async function V(w) {
-    let P = await w;
-    await W();
-    return bare.vmClone(P);
+  async function actAndSettle(promise) {
+    let value = await promise;
+    await settleAll();
+    return bare.vmClone(value);
   }
-  async function X(w) {
-    let P = y(w);
-    a.delete(w);
-    c.delete(w);
-    for (let C of P.environmentIds()) h.add(C);
-    return bare.vmClone(await P.close());
+  async function closeEngine(id) {
+    let engine = engineOf(id);
+    engines.delete(id);
+    holdings.delete(id);
+    for (let environmentId of engine.environmentIds()) endedIds.add(environmentId);
+    return bare.vmClone(await engine.close());
   }
   return {
     host: freezeApiObject({
-      open: m((w) => {
-        let P = parseOrThrow(TEST_PLUGINS_SCHEMA(), w, "test()");
-        validateTestPlugins(P.plugins);
-        k += 1;
-        a.set(
-          k,
+      open: wrapHost((spec) => {
+        let parsed = parseOrThrow(TEST_PLUGINS_SCHEMA(), spec, "test()");
+        validateTestPlugins(parsed.plugins);
+        nextId += 1;
+        engines.set(
+          nextId,
           createPluginTestEngine({
             root,
             bare,
-            spec: P,
-            isEnded: (C) => h.has(C),
+            spec: parsed,
+            isEnded: (id) => endedIds.has(id),
           }),
         );
-        return k;
+        return nextId;
       }),
-      load: m((w, P, C) => {
-        let F = y(w);
-        let { register, holding } = readSeat(C);
-        c.set(w, holding);
-        return F.load(parseOrThrow(testFileSchema(), P, "on()"), register);
+      load: wrapHost((id, fileSpec, seat) => {
+        let engine = engineOf(id);
+        let { register, holding } = readSeat(seat);
+        holdings.set(id, holding);
+        return engine.load(parseOrThrow(testFileSchema(), fileSpec, "on()"), register);
       }),
-      call: m(async (w, P, C) =>
-        bare.vmClone(await y(w).call(String(P), wrapForCopy(e, C, `$.${String(P)} argument`))),
+      call: wrapHost(async (id, path, arg) =>
+        bare.vmClone(
+          await engineOf(id).call(String(path), wrapForCopy(options, arg, `$.${String(path)} argument`)),
+        ),
       ),
-      stream: m((w, P, C) =>
-        vmStreamBridge(y(w).stream(String(P), wrapForCopy(e, C, `$.${String(P)} argument`))),
+      stream: wrapHost((id, path, arg) =>
+        vmStreamBridge(
+          engineOf(id).stream(String(path), wrapForCopy(options, arg, `$.${String(path)} argument`)),
+        ),
       ),
-      press: m((w, P) => V(y(w).press(parseOrThrow(PRESS_ACTION_SCHEMA(), P, "$.ui.press()")))),
-      input: m((w, P) => V(y(w).input(parseOrThrow(INPUT_ACTION_SCHEMA(), P, "$.ui.input()")))),
-      select: m((w, P) => V(y(w).select(parseOrThrow(SELECT_ACTION_SCHEMA(), P, "$.ui.select()")))),
-      mount: m(async (w, P) => {
-        let C = parseOrThrow(RENDER_ACTION_SCHEMA(), P, "$.ui.mount()");
-        let F = y(w);
-        await F.ready();
-        let q = await F.mounts.mount(C);
-        await W();
-        return q;
+      press: wrapHost((id, action) =>
+        actAndSettle(engineOf(id).press(parseOrThrow(PRESS_ACTION_SCHEMA(), action, "$.ui.press()"))),
+      ),
+      input: wrapHost((id, action) =>
+        actAndSettle(engineOf(id).input(parseOrThrow(INPUT_ACTION_SCHEMA(), action, "$.ui.input()"))),
+      ),
+      select: wrapHost((id, action) =>
+        actAndSettle(engineOf(id).select(parseOrThrow(SELECT_ACTION_SCHEMA(), action, "$.ui.select()"))),
+      ),
+      mount: wrapHost(async (id, action) => {
+        let parsed = parseOrThrow(RENDER_ACTION_SCHEMA(), action, "$.ui.mount()");
+        let engine = engineOf(id);
+        await engine.ready();
+        let drawing = await engine.mounts.mount(parsed);
+        await settleAll();
+        return drawing;
       }),
-      mounted: m(async (w, P, C) => {
-        let F = parseOrThrow(UI_DRIVER_ACTIONS_SCHEMA(), C, "a mounted drawing");
-        let q = y(w);
-        if (typeof P !== "number") throw new HooksError("this drawing was unmounted");
-        if (F.act === "drawn" || F.act === "find" || F.act === "findAll") {
-          await W();
-          return bare.vmClone(await q.mounts.act(P, F));
+      mounted: wrapHost(async (id, drawingId, action) => {
+        let parsed = parseOrThrow(UI_DRIVER_ACTIONS_SCHEMA(), action, "a mounted drawing");
+        let engine = engineOf(id);
+        if (typeof drawingId !== "number") throw new HooksError("this drawing was unmounted");
+        if (parsed.act === "drawn" || parsed.act === "find" || parsed.act === "findAll") {
+          await settleAll();
+          return bare.vmClone(await engine.mounts.act(drawingId, parsed));
         }
-        return V(q.mounts.act(P, F));
+        return actAndSettle(engine.mounts.act(drawingId, parsed));
       }),
-      close: m(X),
-      settle: m(() => W()),
-      now: m(() => performance.now()),
+      close: wrapHost(closeEngine),
+      settle: wrapHost(() => settleAll()),
+      now: wrapHost(() => performance.now()),
     }),
     dispose: async () => {
-      for (let key of [...a.keys()]) await X(key);
+      for (let key of [...engines.keys()]) await closeEngine(key);
     },
   };
 }
 //@ chunk-1tz177x8.js:46059-46298 placement
-function checkKitResults(e) {
-  let stringJsonOrNull = parseStringJsonOrNull(e);
+function checkKitResults(value) {
+  let stringJsonOrNull = parseStringJsonOrNull(value);
   if (!(
     Array.isArray(stringJsonOrNull) &&
     stringJsonOrNull.every(
-      (s) =>
-        isPlainObject(s) &&
-        typeof s.title === "string" &&
-        typeof s.ms === "number" &&
-        (s.failure === null || typeof s.failure === "string"),
+      (result) =>
+        isPlainObject(result) &&
+        typeof result.title === "string" &&
+        typeof result.ms === "number" &&
+        (result.failure === null || typeof result.failure === "string"),
     )
   ))
     throw new HooksError("the kit answered results of the wrong shape");
@@ -412,25 +447,25 @@ var KIT_EXPORT_NAMES = ["describe", "expect", "mock", "test", "tier"];
  * 在测试环境中安装 kit 并返回一个合成模块（导出 test/on 等）、run（运行并校验结果形状）和 dispose。
  */
 async function createTestKitModule(environment, root) {
-  let { call: n, bare } = environment;
+  let { call, bare } = environment;
   let { host, dispose } = runPluginTestFile({
     environment,
     root,
   });
   let kitModule = await loadKitModule(bare.context);
-  await n(kitModule.install, host, jsonStringify(describeEngineCalls()));
+  await call(kitModule.install, host, jsonStringify(describeEngineCalls()));
   return {
     module: new vmModule_2.SyntheticModule(
       [...KIT_EXPORT_NAMES],
       function () {
-        for (let h of KIT_EXPORT_NAMES) this.setExport(h, kitModule[h]);
+        for (let name of KIT_EXPORT_NAMES) this.setExport(name, kitModule[name]);
       },
       {
         context: bare.context,
         identifier: CLAUDE_CODE_TESTING,
       },
     ),
-    run: async () => checkKitResults(await n(kitModule.run)),
+    run: async () => checkKitResults(await call(kitModule.run)),
     dispose,
   };
 }

@@ -8,9 +8,9 @@
  * pieces: chunk-0eepcc6r.js (6)
  * attribution: placement 6
  */
-import { init_react_production, y, R } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState, useRef } from "../../../vendor/react/cjs/react.production.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useRegisterOverlay } from "../../context/overlayContext.js";
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
@@ -28,19 +28,23 @@ import { CCR_TERMS_URL_ULTRAPLAN } from "../ultraplan.js";
 import { ShimmerLoadingText } from "../../components/permissions/PermissionExplanation.js";
 import { ModelSelector } from "../../components/agents/ModelSelector.js";
 import { NO_COMMITTED_ROW } from "../../components/CustomSelect/select.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-0eepcc6r.js:14131-14135 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0eepcc6r.js:14131", () => {
+  init_react_production();
+});
 //@ chunk-0eepcc6r.js:14135-14185 placement
 function hasNotSeenUltrareviewTerms() {
   return !getGlobalConfig().hasSeenUltrareviewTerms;
 }
 //@ chunk-0eepcc6r.js:14185-14269 placement
-function markUltrareviewTermsSeen(x) {
-  return x.hasSeenUltrareviewTerms
-    ? x
+function markUltrareviewTermsSeen(config) {
+  return config.hasSeenUltrareviewTerms
+    ? config
     : {
-        ...x,
+        ...config,
         hasSeenUltrareviewTerms: true,
       };
 }
@@ -52,152 +56,152 @@ var UPLOAD_NOTICE =
  * ultrareview 启动确认对话框（含费用估算、可选把结果发到 PR）
  */
 function UltrareviewLaunchDialog(props) {
-  let L = w(23);
+  let $ = useMemoCache(23);
   let { subtitle, body, scope, postOption, onProceed, onCancel } = props;
   useRegisterOverlay("ultrareview-launch");
   let { storageV5 } = useTheme_2();
-  let [t] = y(hasNotSeenUltrareviewTerms);
-  let [u, k] = y(false);
-  let [g, F] = y(null);
-  let p;
-  if (L[0] === MEMO_CACHE_SENTINEL) {
-    p = new AbortController();
-    L[0] = p;
-  } else p = L[0];
-  let f = R(p);
-  let T = R(false);
-  let M;
-  if (L[1] !== onCancel || L[2] !== onProceed || L[3] !== t || L[4] !== storageV5) {
-    M = (D) => {
-      if (T.current) {
+  let [showTerms] = useState(hasNotSeenUltrareviewTerms);
+  let [isLaunching, setIsLaunching] = useState(false);
+  let [retryFocus, setRetryFocus] = useState(null);
+  let abortController;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    abortController = new AbortController();
+    $[0] = abortController;
+  } else abortController = $[0];
+  let abortControllerRef = useRef(abortController);
+  let selectedRef = useRef(false);
+  let handleSelect;
+  if ($[1] !== onCancel || $[2] !== onProceed || $[3] !== showTerms || $[4] !== storageV5) {
+    handleSelect = (value) => {
+      if (selectedRef.current) {
         return;
       }
-      T.current = true;
-      if (D === "proceed" || D === "proceed-post") {
-        if (t) saveGlobalConfig(markUltrareviewTermsSeen, storageV5);
-        F(D);
-        k(true);
-        onProceed(f.current.signal, {
-          postToPR: D === "proceed-post",
+      selectedRef.current = true;
+      if (value === "proceed" || value === "proceed-post") {
+        if (showTerms) saveGlobalConfig(markUltrareviewTermsSeen, storageV5);
+        setRetryFocus(value);
+        setIsLaunching(true);
+        onProceed(abortControllerRef.current.signal, {
+          postToPR: value === "proceed-post",
         }).catch(() => {
-          T.current = false;
-          k(false);
+          selectedRef.current = false;
+          setIsLaunching(false);
         });
       } else {
-        f.current.abort();
+        abortControllerRef.current.abort();
         onCancel();
       }
     };
-    L[1] = onCancel;
-    L[2] = onProceed;
-    L[3] = t;
-    L[4] = storageV5;
-    L[5] = M;
-  } else M = L[5];
-  let onSelect = M;
-  let B;
-  if (L[6] !== onCancel) {
-    B = () => {
-      T.current = true;
-      f.current.abort();
+    $[1] = onCancel;
+    $[2] = onProceed;
+    $[3] = showTerms;
+    $[4] = storageV5;
+    $[5] = handleSelect;
+  } else handleSelect = $[5];
+  let onSelect = handleSelect;
+  let handleCancel;
+  if ($[6] !== onCancel) {
+    handleCancel = () => {
+      selectedRef.current = true;
+      abortControllerRef.current.abort();
       onCancel();
     };
-    L[6] = onCancel;
-    L[7] = B;
-  } else B = L[7];
-  let onCancel_2 = B;
+    $[6] = onCancel;
+    $[7] = handleCancel;
+  } else handleCancel = $[7];
+  let onCancel_2 = handleCancel;
   let subtitle_2;
-  if (L[8] !== subtitle) {
+  if ($[8] !== subtitle) {
     subtitle_2 = subtitle ?? `${getReviewDurationNote()} \xB7 Est. cost ${getReviewCostNote()} USD`;
-    L[8] = subtitle;
-    L[9] = subtitle_2;
-  } else subtitle_2 = L[9];
+    $[8] = subtitle;
+    $[9] = subtitle_2;
+  } else subtitle_2 = $[9];
   let children;
   if (
-    L[10] !== body ||
-    L[11] !== onCancel_2 ||
-    L[12] !== onSelect ||
-    L[13] !== u ||
-    L[14] !== g ||
-    L[15] !== postOption ||
-    L[16] !== scope ||
-    L[17] !== t
+    $[10] !== body ||
+    $[11] !== onCancel_2 ||
+    $[12] !== onSelect ||
+    $[13] !== isLaunching ||
+    $[14] !== retryFocus ||
+    $[15] !== postOption ||
+    $[16] !== scope ||
+    $[17] !== showTerms
   ) {
     children = jsxProd_default(UltrareviewLaunchDetails, {
-      showTerms: t,
+      showTerms,
       body,
       scope,
       postOption,
-      retryFocus: g,
-      isLaunching: u,
+      retryFocus,
+      isLaunching,
       onSelect,
       onCancel: onCancel_2,
     });
-    L[10] = body;
-    L[11] = onCancel_2;
-    L[12] = onSelect;
-    L[13] = u;
-    L[14] = g;
-    L[15] = postOption;
-    L[16] = scope;
-    L[17] = t;
-    L[18] = children;
-  } else children = L[18];
-  let G;
-  if (L[19] !== onCancel_2 || L[20] !== subtitle_2 || L[21] !== children) {
-    G = jsxProd_default(Dialog, {
+    $[10] = body;
+    $[11] = onCancel_2;
+    $[12] = onSelect;
+    $[13] = isLaunching;
+    $[14] = retryFocus;
+    $[15] = postOption;
+    $[16] = scope;
+    $[17] = showTerms;
+    $[18] = children;
+  } else children = $[18];
+  let dialog;
+  if ($[19] !== onCancel_2 || $[20] !== subtitle_2 || $[21] !== children) {
+    dialog = jsxProd_default(Dialog, {
       title: "Run ultrareview in the cloud?",
       subtitle: subtitle_2,
       onCancel: onCancel_2,
       children,
     });
-    L[19] = onCancel_2;
-    L[20] = subtitle_2;
-    L[21] = children;
-    L[22] = G;
-  } else G = L[22];
-  return G;
+    $[19] = onCancel_2;
+    $[20] = subtitle_2;
+    $[21] = children;
+    $[22] = dialog;
+  } else dialog = $[22];
+  return dialog;
 }
 //@ chunk-0eepcc6r.js:15639-19212 placement
 /**
  * ultrareview 启动对话框正文：说明审查流程、是否把结果作为普通评论发到 PR
  */
 function UltrareviewLaunchDetails(props) {
-  let L = w(30);
+  let $ = useMemoCache(30);
   let { showTerms, body, scope, postOption, retryFocus, isLaunching, onSelect, onCancel } = props;
-  let u = postOption
+  let postNote = postOption
     ? `When it finishes, Claude can post the findings to the PR as a single comment from your GitHub account${postOption.githubLogin ? ` (@${postOption.githubLogin})` : ""} \u2014 one plain comment, not a review or an approval, and it carries a "Generated by Claude Code" note.`
     : null;
   let inputRefusalWindow = useInputRefusalWindow();
   let { refusedWithin, noteRefused } = useRefusalTracker();
-  let p;
-  if (L[0] !== inputRefusalWindow || L[1] !== noteRefused || L[2] !== refusedWithin) {
-    p = function f() {
+  let refuseInput;
+  if ($[0] !== inputRefusalWindow || $[1] !== noteRefused || $[2] !== refusedWithin) {
+    refuseInput = function refuseInputFn() {
       if (inputRefusalWindow() || refusedWithin()) {
         noteRefused();
         return true;
       }
       return false;
     };
-    L[0] = inputRefusalWindow;
-    L[1] = noteRefused;
-    L[2] = refusedWithin;
-    L[3] = p;
-  } else p = L[3];
-  let f = p;
-  let T;
-  if (L[4] !== onSelect || L[5] !== f) {
-    T = (M) => {
-      if (f()) {
+    $[0] = inputRefusalWindow;
+    $[1] = noteRefused;
+    $[2] = refusedWithin;
+    $[3] = refuseInput;
+  } else refuseInput = $[3];
+  let refuseInput_2 = refuseInput;
+  let handleChange;
+  if ($[4] !== onSelect || $[5] !== refuseInput_2) {
+    handleChange = (value) => {
+      if (refuseInput_2()) {
         return;
       }
-      onSelect(M);
+      onSelect(value);
     };
-    L[4] = onSelect;
-    L[5] = f;
-    L[6] = T;
-  } else T = L[6];
-  let onChange = T;
+    $[4] = onSelect;
+    $[5] = refuseInput_2;
+    $[6] = handleChange;
+  } else handleChange = $[6];
+  let onChange = handleChange;
   let children =
     scope.mode === "pr"
       ? `Reviewing ${scope.repo}#${scope.prNumber} fetched from GitHub.`
@@ -211,34 +215,34 @@ function UltrareviewLaunchDetails(props) {
               ? `Reviewing local changes on ${scope.baseBranch}.`
               : `Reviewing ${scope.headBranch} against ${scope.baseBranch}.`;
   let diffStat = scope.mode === "branch" && scope.diffStat ? scope.diffStat : null;
-  let N = scope.mode === "branch" ? UPLOAD_NOTICE : null;
-  let I;
-  if (L[7] !== scope.instructions || L[8] !== scope.mode) {
-    I =
+  let uploadNotice = scope.mode === "branch" ? UPLOAD_NOTICE : null;
+  let instructionsNote;
+  if ($[7] !== scope.instructions || $[8] !== scope.mode) {
+    instructionsNote =
       scope.mode === "branch" && scope.instructions
         ? `Note for findings (not a base branch): "${previewInstructions(scope.instructions)}"`
         : null;
-    L[7] = scope.instructions;
-    L[8] = scope.mode;
-    L[9] = I;
-  } else I = L[9];
-  let A = I;
+    $[7] = scope.instructions;
+    $[8] = scope.mode;
+    $[9] = instructionsNote;
+  } else instructionsNote = $[9];
+  let noteLine = instructionsNote;
   let children_2 =
     scope.mode === "pr"
       ? "Tip: run /code-review ultra (no number) to review your current branch instead."
       : "Tip: run /code-review ultra <PR number> to fetch and review a specific GitHub PR instead.";
-  let x;
+  let details;
   if (
-    L[10] !== body ||
-    L[11] !== diffStat ||
-    L[12] !== A ||
-    L[13] !== u ||
-    L[14] !== children ||
-    L[15] !== showTerms ||
-    L[16] !== N ||
-    L[17] !== children_2
+    $[10] !== body ||
+    $[11] !== diffStat ||
+    $[12] !== noteLine ||
+    $[13] !== postNote ||
+    $[14] !== children ||
+    $[15] !== showTerms ||
+    $[16] !== uploadNotice ||
+    $[17] !== children_2
   ) {
-    x = showTerms
+    details = showTerms
       ? jsxProd_default_2(Fragment, {
           children: [
             jsxProd_default_2(Box, {
@@ -253,15 +257,15 @@ function UltrareviewLaunchDetails(props) {
                     dimColor: true,
                     children: ["Scope: ", diffStat],
                   }),
-                N &&
+                uploadNotice &&
                   jsxProd_default(Text, {
                     dimColor: true,
-                    children: N,
+                    children: uploadNotice,
                   }),
-                A &&
+                noteLine &&
                   jsxProd_default(Text, {
                     dimColor: true,
-                    children: A,
+                    children: noteLine,
                   }),
                 jsxProd_default(Text, {
                   dimColor: true,
@@ -276,10 +280,10 @@ function UltrareviewLaunchDetails(props) {
                     dimColor: true,
                     children: body,
                   }),
-                u &&
+                postNote &&
                   jsxProd_default(Text, {
                     dimColor: true,
-                    children: u,
+                    children: postNote,
                   }),
                 jsxProd_default_2(Text, {
                   dimColor: true,
@@ -310,15 +314,15 @@ function UltrareviewLaunchDetails(props) {
                 dimColor: true,
                 children: ["Scope: ", diffStat],
               }),
-            N &&
+            uploadNotice &&
               jsxProd_default(Text, {
                 dimColor: true,
-                children: N,
+                children: uploadNotice,
               }),
-            A &&
+            noteLine &&
               jsxProd_default(Text, {
                 dimColor: true,
-                children: A,
+                children: noteLine,
               }),
             jsxProd_default(Text, {
               dimColor: true,
@@ -333,34 +337,34 @@ function UltrareviewLaunchDetails(props) {
                 dimColor: true,
                 children: body,
               }),
-            u &&
+            postNote &&
               jsxProd_default(Text, {
                 dimColor: true,
-                children: u,
+                children: postNote,
               }),
           ],
         });
-    L[10] = body;
-    L[11] = diffStat;
-    L[12] = A;
-    L[13] = u;
-    L[14] = children;
-    L[15] = showTerms;
-    L[16] = N;
-    L[17] = children_2;
-    L[18] = x;
-  } else x = L[18];
-  let Q;
+    $[10] = body;
+    $[11] = diffStat;
+    $[12] = noteLine;
+    $[13] = postNote;
+    $[14] = children;
+    $[15] = showTerms;
+    $[16] = uploadNotice;
+    $[17] = children_2;
+    $[18] = details;
+  } else details = $[18];
+  let selector;
   if (
-    L[19] !== onChange ||
-    L[20] !== isLaunching ||
-    L[21] !== onCancel ||
-    L[22] !== postOption ||
-    L[23] !== f ||
-    L[24] !== retryFocus ||
-    L[25] !== showTerms
+    $[19] !== onChange ||
+    $[20] !== isLaunching ||
+    $[21] !== onCancel ||
+    $[22] !== postOption ||
+    $[23] !== refuseInput_2 ||
+    $[24] !== retryFocus ||
+    $[25] !== showTerms
   ) {
-    Q = isLaunching
+    selector = isLaunching
       ? jsxProd_default(ShimmerLoadingText, {})
       : postOption
         ? jsxProd_default(ModelSelector, {
@@ -381,7 +385,7 @@ function UltrareviewLaunchDetails(props) {
               },
             ],
             defaultFocusValue: retryFocus ?? (postOption.preferPost ? "proceed-post" : "proceed"),
-            refuseInput: f,
+            refuseInput: refuseInput_2,
             selectedValue: NO_COMMITTED_ROW,
             onChange,
             onCancel,
@@ -398,31 +402,31 @@ function UltrareviewLaunchDetails(props) {
                 value: "cancel",
               },
             ],
-            refuseInput: f,
+            refuseInput: refuseInput_2,
             selectedValue: NO_COMMITTED_ROW,
             onChange,
             onCancel,
           });
-    L[19] = onChange;
-    L[20] = isLaunching;
-    L[21] = onCancel;
-    L[22] = postOption;
-    L[23] = f;
-    L[24] = retryFocus;
-    L[25] = showTerms;
-    L[26] = Q;
-  } else Q = L[26];
-  let be;
-  if (L[27] !== x || L[28] !== Q) {
-    be = jsxProd_default_2(Box, {
+    $[19] = onChange;
+    $[20] = isLaunching;
+    $[21] = onCancel;
+    $[22] = postOption;
+    $[23] = refuseInput_2;
+    $[24] = retryFocus;
+    $[25] = showTerms;
+    $[26] = selector;
+  } else selector = $[26];
+  let body_2;
+  if ($[27] !== details || $[28] !== selector) {
+    body_2 = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [x, Q],
+      children: [details, selector],
     });
-    L[27] = x;
-    L[28] = Q;
-    L[29] = be;
-  } else be = L[29];
-  return be;
+    $[27] = details;
+    $[28] = selector;
+    $[29] = body_2;
+  } else body_2 = $[29];
+  return body_2;
 }
 export { UltrareviewLaunchDialog };

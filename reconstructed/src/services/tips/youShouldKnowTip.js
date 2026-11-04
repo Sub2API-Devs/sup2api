@@ -22,8 +22,8 @@ var YOU_SHOULD_KNOW_PLUGIN_TIP = {
   advertisedCommand: "plugin",
   cooldownSessions: 10,
   maxLifetimeShows: 3,
-  content: async (o) => `Want a side agent watching your back while Claude works? Turn on You should know:
-${color("suggestion", o.theme)(`/plugin enable ${CC_PLUGIN_YOU_SHOULD_KNOW}@${BUILTIN}`)}`,
+  content: async (ctx) => `Want a side agent watching your back while Claude works? Turn on You should know:
+${color("suggestion", ctx.theme)(`/plugin enable ${CC_PLUGIN_YOU_SHOULD_KNOW}@${BUILTIN}`)}`,
   isRelevant: async () =>
     isBuiltinPluginAvailable(CC_PLUGIN_YOU_SHOULD_KNOW) &&
     getBuiltinPlugin(CC_PLUGIN_YOU_SHOULD_KNOW)?.defaultEnabled === false &&

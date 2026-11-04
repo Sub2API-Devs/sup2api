@@ -56,32 +56,34 @@ async function spawnForkFromDirective(directive, toolUseContext, canUseTool, opt
       return null;
     }
   }
-  let r = toolUseContext.agentLifecycle.allocateName(slugifyForkName(options.nameHint ?? directive));
+  let agentName = toolUseContext.agentLifecycle.allocateName(slugifyForkName(options.nameHint ?? directive));
   let trimmed = (
-    typeof options.description === "function" ? options.description(r) : (options.description ?? directive)
+    typeof options.description === "function"
+      ? options.description(agentName)
+      : (options.description ?? directive)
   )
     .replace(/\s+/g, " ")
     .trim();
-  let p = trimmed.length > 50 ? truncateToLength(trimmed, 49) + "\u2026" : trimmed;
-  let launchedAgentId = makeSaltedName(r);
+  let shortDescription = trimmed.length > 50 ? truncateToLength(trimmed, 49) + "\u2026" : trimmed;
+  let launchedAgentId = makeSaltedName(agentName);
   let { taskRegistry } = toolUseContext;
   let startTime = Date.now();
-  let f = getAgentDepth(toolUseContext.agentContext) + 1;
+  let agentDepth = getAgentDepth(toolUseContext.agentContext) + 1;
   let agentModel = getAgentModel(
     FORK_AGENT.model,
     toolUseContext.options.mainLoopModel,
     "inherit",
     getToolPermissionContext(toolUseContext).mode,
   );
-  let S = mainAgentId();
-  let ownToolSurface = getOwnToolSurface(toolUseContext, S);
+  let ownerAgentId = mainAgentId();
+  let ownToolSurface = getOwnToolSurface(toolUseContext, ownerAgentId);
   let resumedMessages = registerAsyncAgent({
     outputFileReadable: willToolsLoseSessionState(toolUseContext.options.tools),
     ownerCanContinueAgents: ownToolSurface,
     agentId: launchedAgentId,
-    ownerAgentId: S,
-    spawnDepth: f,
-    description: p,
+    ownerAgentId,
+    spawnDepth: agentDepth,
+    description: shortDescription,
     prompt: directive,
     model: agentModel,
     selectedAgent: FORK_AGENT,
@@ -90,8 +92,8 @@ async function spawnForkFromDirective(directive, toolUseContext, canUseTool, opt
     sessionScratch: toolUseContext.session.sessionScratch,
   });
   let abortController = resumedMessages.abortController;
-  toolUseContext.appendSystemMessage?.(createBackgroundLaunchNotice(launchedAgentId, p));
-  toolUseContext.agentLifecycle.registerName(r, identityAgentId2(launchedAgentId));
+  toolUseContext.appendSystemMessage?.(createBackgroundLaunchNotice(launchedAgentId, shortDescription));
+  toolUseContext.agentLifecycle.registerName(agentName, identityAgentId2(launchedAgentId));
   if (narrowCanUseTool) getTaskRunState().canUseToolNarrowings.set(launchedAgentId, narrowCanUseTool);
   getTaskRunState().agentSpawned.emit({
     agentId: launchedAgentId,
@@ -99,28 +101,28 @@ async function spawnForkFromDirective(directive, toolUseContext, canUseTool, opt
     parentAgentId: toolUseContext.agentId,
     taskRegistry,
   });
-  let b = {
+  let metadata = {
     prompt: directive,
     resolvedAgentModel: agentModel,
     isBuiltInAgent: true,
     startTime,
     agentType: FORK_AGENT.agentType,
     isAsync: true,
-    agentDepth: f,
+    agentDepth,
     callerCanContinueAgents: ownToolSurface,
     source: FORK_AGENT.source,
   };
-  let c = {
+  let agentContext = {
     agentId: launchedAgentId,
     parentAgentId: toolUseContext.agentId,
-    depth: f,
+    depth: agentDepth,
     ...(alwaysFalse(toolUseContext) && {
       spawnedByMainThread: true,
     }),
     parentSessionId: getParentSessionId(),
     agentType: "subagent",
     subagentName: FORK_AGENT.agentType,
-    displayName: r,
+    displayName: agentName,
     isAsync: true,
     isBackgroundAgent: true,
     isBuiltIn: true,
@@ -133,7 +135,7 @@ async function spawnForkFromDirective(directive, toolUseContext, canUseTool, opt
   };
   let onRunSettled = taskRegistry.takeConcurrencySlot();
   let { onToolPool, reviewTools } = createDeferredReviewTools(toolUseContext.options.tools);
-  runWithCwdOverride(c, () =>
+  runWithCwdOverride(agentContext, () =>
     runAsyncAgentLifecycle({
       taskId: resumedMessages.agentId,
       abortController,
@@ -170,7 +172,7 @@ async function spawnForkFromDirective(directive, toolUseContext, canUseTool, opt
             systemPrompt: renderedSystemPrompt,
             parentSystemPrompt: true,
             agentId: identityAgentId2(resumedMessages.agentId),
-            agentContext: c,
+            agentContext,
             abortController,
             requireCanUseTool: narrowCanUseTool ? true : undefined,
           },
@@ -179,14 +181,14 @@ async function spawnForkFromDirective(directive, toolUseContext, canUseTool, opt
           useExactTools: true,
           onCacheSafeParams,
           onToolPool,
-          description: p,
-          name: r,
+          description: shortDescription,
+          name: agentName,
         }),
       metadata: {
-        ...b,
-        agentContext: c,
+        ...metadata,
+        agentContext,
       },
-      description: p,
+      description: shortDescription,
       toolUseContext,
       reviewTools,
       taskRegistry,
@@ -199,7 +201,7 @@ async function spawnForkFromDirective(directive, toolUseContext, canUseTool, opt
   logFeatureOk("subagent_launch");
   return {
     agentId: launchedAgentId,
-    name: r,
+    name: agentName,
   };
 }
 export { spawnForkFromDirective };

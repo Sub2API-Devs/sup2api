@@ -25,6 +25,7 @@ import { fromEnum } from "../analytics/safeMetadata.js";
 import { CODE_REVIEW } from "../../skills/bundled/bundledSkillNames.js";
 import { tipLifetimeShownCount, recordTipShown } from "../tips/tipIds.js";
 import { getSessionsSinceTipShown } from "../tips/tipHistory.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-twvgrhqz.js:809-1486 fingerprint = fetchUltrareviewQuota (0.33)
 /**
@@ -34,30 +35,30 @@ async function fetchUltrareviewQuota(credentials) {
   let CLAUDE_CODE_ULTRAREVIEW_QUOTA_FIXTURE = env.CLAUDE_CODE_ULTRAREVIEW_QUOTA_FIXTURE;
   if (CLAUDE_CODE_ULTRAREVIEW_QUOTA_FIXTURE)
     try {
-      let n = checkOverageGate_2().safeParse(jsonParse(CLAUDE_CODE_ULTRAREVIEW_QUOTA_FIXTURE));
-      return n.success ? n.data : null;
+      let parsed = checkOverageGate_2().safeParse(jsonParse(CLAUDE_CODE_ULTRAREVIEW_QUOTA_FIXTURE));
+      return parsed.success ? parsed.data : null;
     } catch (error) {
       logForDebugging(`fetchUltrareviewQuota fixture parse failed: ${error}`);
       return null;
     }
   try {
-    let n = await apiClient.get("/v1/ultrareview/quota", {
+    let response = await apiClient.get("/v1/ultrareview/quota", {
       auth: "teleport-org",
       timeout: 3000,
       credentials,
     });
-    if (!n.ok) {
+    if (!response.ok) {
       logFeatureSad("api_ultrareview_quota", "request_failed");
       return null;
     }
-    let o = checkOverageGate_2().safeParse(n.data);
-    if (!o.success) {
-      logForDebugging(`fetchUltrareviewQuota schema mismatch: ${o.error.message}`);
+    let parsed = checkOverageGate_2().safeParse(response.data);
+    if (!parsed.success) {
+      logForDebugging(`fetchUltrareviewQuota schema mismatch: ${parsed.error.message}`);
       logFeatureSad("api_ultrareview_quota", "schema_mismatch");
       return null;
     }
     logFeatureOk("api_ultrareview_quota");
-    return o.data;
+    return parsed.data;
   } catch (error) {
     logForDebugging(`fetchUltrareviewQuota failed: ${error}`);
     logFeatureSad("api_ultrareview_quota", "request_failed");
@@ -70,7 +71,10 @@ class UltrareviewQuotaState {
   fetch = undefined;
 }
 //@ chunk-twvgrhqz.js:1520-1543 placement
-var ultrareviewQuotaSlot = new HostScoped(() => new UltrareviewQuotaState());
+var ultrareviewQuotaSlot; // deferred: uses UltrareviewQuotaState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-twvgrhqz.js:1520", () => {
+  ultrareviewQuotaSlot = new HostScoped(() => new UltrareviewQuotaState());
+});
 //@ chunk-twvgrhqz.js:1543-1578 placement
 function ultrareviewQuotaState() {
   return ultrareviewQuotaSlot.of(getRootSession().host);
@@ -80,21 +84,21 @@ function ultrareviewQuotaState() {
  * 导出函数 `refreshUltrareviewQuota`：参数 e。
  */
 async function refreshUltrareviewQuota(credentials) {
-  let r = ultrareviewQuotaState();
-  r.fetch ??= fetchUltrareviewQuota(credentials);
-  r.quota = await r.fetch;
+  let state = ultrareviewQuotaState();
+  state.fetch ??= fetchUltrareviewQuota(credentials);
+  state.quota = await state.fetch;
 }
 //@ chunk-twvgrhqz.js:1647-1727 placement
 /**
  * 导出函数 `ultrareviewQuota`：参数 e，返回 (uPo(e), null); return r.quota。
  */
 function ultrareviewQuota(credentials) {
-  let r = ultrareviewQuotaState();
-  if (r.quota === undefined) {
+  let state = ultrareviewQuotaState();
+  if (state.quota === undefined) {
     refreshUltrareviewQuota(credentials);
     return null;
   }
-  return r.quota;
+  return state.quota;
 }
 //@ chunk-twvgrhqz.js:1727-1763 placement
 var TENGU_ULTRAREVIEW_AWARENESS = "tengu_ultrareview_awareness";
@@ -124,11 +128,11 @@ function hasRunUltrareview() {
  */
 function markUltrareviewRun(storageV5) {
   saveGlobalConfig(
-    (r) =>
-      r.hasRunUltrareview
-        ? r
+    (config) =>
+      config.hasRunUltrareview
+        ? config
         : {
-            ...r,
+            ...config,
             hasRunUltrareview: true,
           },
     storageV5,
@@ -154,9 +158,9 @@ function freeReviewsBadge(reviewsRemaining) {
 function ultrareviewMenuBadge(commandName) {
   if (commandName !== "ultrareview" && commandName !== CODE_REVIEW) return "";
   if (!isUltrareviewSurfaceOn("slash_menu")) return "";
-  let r = ultrareviewQuota();
-  if (r === null || r.reviews_remaining <= 0) return "";
-  let reviewsRemaining = r.reviews_remaining;
+  let quota = ultrareviewQuota();
+  if (quota === null || quota.reviews_remaining <= 0) return "";
+  let reviewsRemaining = quota.reviews_remaining;
   return commandName === "ultrareview"
     ? `${reviewsRemaining} free left \xB7 `
     : `${reviewsRemaining} free /ultrareview \xB7 `;
@@ -176,9 +180,12 @@ function ultrareviewTip(surface, tipKey, format, storage, credentials) {
   if (getSessionsSinceTipShown(tipKey) === 0) return null;
   recordTipShown(tipKey, storage);
   logAwarenessShown(surface);
-  let u = ultrareviewQuota(credentials);
-  let _ = u !== null && u.reviews_remaining > 0 ? ` \u2014 ${freeReviewsBadge(u.reviews_remaining)}` : "";
-  return format(_);
+  let quota = ultrareviewQuota(credentials);
+  let suffix =
+    quota !== null && quota.reviews_remaining > 0
+      ? ` \u2014 ${freeReviewsBadge(quota.reviews_remaining)}`
+      : "";
+  return format(suffix);
 }
 //@ chunk-twvgrhqz.js:2696-2823 placement
 /**
@@ -188,7 +195,7 @@ function ultrareviewProseTip(storage, credentials) {
   return ultrareviewTip(
     "prose_pointer",
     ULTRAREVIEW_PROSE_POINTER,
-    (n) => `Tip: For a deeper cloud-based review, try /ultrareview next time${n}.`,
+    (suffix) => `Tip: For a deeper cloud-based review, try /ultrareview next time${suffix}.`,
     storage,
     credentials,
   );
@@ -201,7 +208,8 @@ function ultrareviewPostCommitTip(storage) {
   return ultrareviewTip(
     "post_commit",
     ULTRAREVIEW_POST_COMMIT,
-    (r) => `Tip: Run /ultrareview before you push to catch bugs with a cloud-based multi-agent review${r}.`,
+    (suffix) =>
+      `Tip: Run /ultrareview before you push to catch bugs with a cloud-based multi-agent review${suffix}.`,
     storage,
     undefined,
   );

@@ -22,14 +22,14 @@ import { apiClient } from "../routines/routinesApi.js";
 //@ chunk-dz3q485w.js:34702-34739 placement
 var CHANNEL_MESSAGE_ID_REGEX = /^cmsg_[A-Za-z0-9_-]{1,160}$/;
 //@ chunk-dz3q485w.js:34739-34790 placement
-function setupProposalsPath(channelId, n) {
-  return channelPath(channelId, "/setup-proposals", n);
+function setupProposalsPath(channelId, action) {
+  return channelPath(channelId, "/setup-proposals", action);
 }
 //@ chunk-dz3q485w.js:34790-34877 placement
-function apiErrorReasonCode(e) {
-  let n = apiErrorBody(e);
-  let s = n?.reason ?? n?.code;
-  return typeof s === "string" ? printableName(s, 64) : "";
+function apiErrorReasonCode(error) {
+  let body = apiErrorBody(error);
+  let rawCode = body?.reason ?? body?.code;
+  return typeof rawCode === "string" ? printableName(rawCode, 64) : "";
 }
 //@ chunk-dz3q485w.js:34877-35080 placement
 var TRANSIENT_SUBMIT_ERRORS = new Set(["channel_session_unavailable"]);
@@ -88,19 +88,19 @@ async function submitSetupProposal(
   if (response.ok && response.status >= 300) {
     if (response.status === 401 || response.status === 403)
       checkChannelResponse(response, "submit the setup proposal");
-    let L = apiErrorReasonCode(response.data);
-    let R = response.status === 404 || response.status === 501;
-    let B = response.status >= 500 && response.status !== 501;
+    let reasonCode = apiErrorReasonCode(response.data);
+    let notDeployed = response.status === 404 || response.status === 501;
+    let serverError = response.status >= 500 && response.status !== 501;
     return {
       kind: "unavailable",
-      reason: R ? "not_deployed" : L !== "" ? L : `status_${response.status}`,
-      transient: response.status === 429 || B || TRANSIENT_SUBMIT_ERRORS.has(L),
-      mayHaveStored: B,
-      detail: `the server answered ${response.status}${L !== "" ? ` (${L})` : ""}`,
+      reason: notDeployed ? "not_deployed" : reasonCode !== "" ? reasonCode : `status_${response.status}`,
+      transient: response.status === 429 || serverError || TRANSIENT_SUBMIT_ERRORS.has(reasonCode),
+      mayHaveStored: serverError,
+      detail: `the server answered ${response.status}${reasonCode !== "" ? ` (${reasonCode})` : ""}`,
     };
   }
-  let { data: j } = checkChannelResponse(response, "submit the setup proposal");
-  let body = j;
+  let { data: payload } = checkChannelResponse(response, "submit the setup proposal");
+  let body = payload;
   let messageId = body?.message?.id;
   if (typeof messageId !== "string" || !CHANNEL_MESSAGE_ID_REGEX.test(messageId))
     throw new ChannelApiError(
@@ -111,21 +111,21 @@ async function submitSetupProposal(
     );
   return {
     kind: "submitted",
-    dropped: Array.isArray(body?.dropped) ? body.dropped.filter((L) => typeof L === "string") : [],
+    dropped: Array.isArray(body?.dropped) ? body.dropped.filter((part) => typeof part === "string") : [],
     alreadySubmitted: body?.already_submitted === true,
     sourceSessionSent: withSource,
   };
 }
 //@ chunk-dz3q485w.js:36213-36337 placement
 function droppedSourceSession(dropped) {
-  return dropped.some((n) =>
-    /^(?:CHANNEL_SETUP_PROPOSAL_DROPPED_PART_)?SOURCE_SESSION$/.test(n.trim().toUpperCase()),
+  return dropped.some((part) =>
+    /^(?:CHANNEL_SETUP_PROPOSAL_DROPPED_PART_)?SOURCE_SESSION$/.test(part.trim().toUpperCase()),
   );
 }
 //@ chunk-dz3q485w.js:36337-36455 placement
 function droppedSessions(dropped) {
-  return dropped.some((n) =>
-    /^(?:CHANNEL_SETUP_PROPOSAL_DROPPED_PART_)?SESSIONS$/.test(n.trim().toUpperCase()),
+  return dropped.some((part) =>
+    /^(?:CHANNEL_SETUP_PROPOSAL_DROPPED_PART_)?SESSIONS$/.test(part.trim().toUpperCase()),
   );
 }
 export { submitSetupProposal, droppedSourceSession, droppedSessions };

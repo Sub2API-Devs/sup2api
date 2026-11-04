@@ -66,8 +66,8 @@ import {
   complianceTaintLabel,
   POLICY_LIMITED_NOTICE,
 } from "../../services/policyLimits/complianceTaints.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
-import { y, P, fo, Qr } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { useState, useEffect, suspenseTypeExport, use } from "../../../vendor/react/cjs/react.production.js";
 import { useHasScrollViewport } from "../ScrollViewportContext.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { ConfigurableShortcutHint } from "../ConfigurableShortcutHint.js";
@@ -79,9 +79,9 @@ import { useSession } from "../../context/session.js";
 import { useCwdDerived } from "../../utils/cwd.js";
 
 //@ chunk-6p6y0k3t.js:2135-2384 placement = isRow (0.477)
-function renderPropertyRows(tt, Y) {
+function renderPropertyRows(rows, gap) {
   return [
-    Y > 0 &&
+    gap > 0 &&
       jsxProd_default_2(
         FlexDirectionRow.Row,
         {
@@ -94,10 +94,10 @@ function renderPropertyRows(tt, Y) {
             }),
           ],
         },
-        `gap-${Y}`,
+        `gap-${gap}`,
       ),
-    ...tt.map((o, ot) => {
-      let { label, value: nt } = o;
+    ...rows.map((row, index) => {
+      let { label, value: rowElement } = row;
       return jsxProd_default_2(
         FlexDirectionRow.Row,
         {
@@ -106,11 +106,11 @@ function renderPropertyRows(tt, Y) {
               children: label !== undefined ? `${label}:` : "",
             }),
             jsxProd_default(PropertyValue, {
-              value: nt,
+              value: rowElement,
             }),
           ],
         },
-        `${Y}-${ot}`,
+        `${gap}-${index}`,
       );
     }),
   ];
@@ -154,7 +154,7 @@ function buildPrimarySection({
 }) {
   let CLAUDE_CODE_TMUX_SESSION = env.CLAUDE_CODE_TMUX_SESSION;
   let sessionId_2 = nullStub();
-  let C = nullStub2();
+  let stub = nullStub2();
   let sessionId_3 = getRemoteCaps()?.sessionId;
   let nameValue =
     remoteSessionName ??
@@ -164,7 +164,7 @@ function buildPrimarySection({
       children: "/rename to add a name",
     });
   let allowedChannels = getAllowedChannels();
-  let f = "";
+  let value = "";
   if (allowedChannels.length > 0) {
     let joined = allowedChannels
       .map((allowedChannel) =>
@@ -173,7 +173,7 @@ function buildPrimarySection({
           : `server:${allowedChannel.name}`,
       )
       .join(", ");
-    let g =
+    let result =
       getAPIProvider() !== "firstParty"
         ? "not available on third-party providers"
         : !isChannelsEnabled()
@@ -181,7 +181,9 @@ function buildPrimarySection({
           : isChannelsPolicyBlocked(getSettingsForSource("policySettings"))
             ? "blocked by org policy"
             : undefined;
-    f = g ? `Configured but not active (${g}): ${joined}` : `Listening for messages from ${joined}`;
+    value = result
+      ? `Configured but not active (${result}): ${joined}`
+      : `Listening for messages from ${joined}`;
   }
   return [
     {
@@ -233,11 +235,11 @@ function buildPrimarySection({
           },
         ]
       : []),
-    ...(f
+    ...(value
       ? [
           {
             label: "Channels",
-            value: f,
+            value,
           },
         ]
       : []),
@@ -287,8 +289,8 @@ function getComplianceRows() {
   return [
     {
       label: "Organization configuration",
-      value: normalizeComplianceTaints(complianceTaints).map((t) =>
-        isKnownComplianceTaint(t) ? complianceTaintLabel(t) : t,
+      value: normalizeComplianceTaints(complianceTaints).map((taint) =>
+        isKnownComplianceTaint(taint) ? complianceTaintLabel(taint) : taint,
       ),
     },
     ...(complianceTaints.includes("hipaa")
@@ -328,19 +330,19 @@ function buildSecondarySection({ mainLoopModel, mcp, theme, ideInstallationStatu
 /**
  * 并行收集 /status 页的诊断：安装诊断、设置状态提示、进程包装器提示，以及（非远程视图时）记忆文件诊断，合并成一个列表。
  */
-async function collectStatusDiagnostics(session, storageV5, credentials) {
+async function collectStatusDiagnostics(mcpClients, storageV5, context) {
   return (
     await Promise.all([
       buildInstallationDiagnostics(),
       getSettingsStatusNotices(storageV5),
       getProcessWrapperStatusNotices(storageV5),
-      isRemoteSessionAvailable() ? [] : buildMemoryDiagnostics(session, storageV5, credentials),
+      isRemoteSessionAvailable() ? [] : buildMemoryDiagnostics(mcpClients, storageV5, context),
     ])
   ).flat();
 }
 //@ chunk-6p6y0k3t.js:5048-5492 fingerprint = PropertyValue (1)
 function PropertyValue(props) {
-  let $ = w(8);
+  let $ = useMemoCache(8);
   let { value } = props;
   if (Array.isArray(value)) {
     let children;
@@ -393,79 +395,84 @@ function PropertyValue(props) {
  * /status：构造主区（版本、会话名、cwd、账号、认证、API 提供商）与次区（模型、MCP、插件、IDE、内存文件、设置来源），以属性列表显示。
  */
 function Status(props) {
-  let $ = w(26);
+  let $ = useMemoCache(26);
   let { credentials, ideInstallationStatus, diagnosticsPromise, getWebSetupRead, getMachineStatusRead } =
     props;
-  let v;
+  let probeDeadToken;
   if ($[0] !== credentials) {
-    v = () => probeRefreshTokenDead(credentials);
+    probeDeadToken = () => probeRefreshTokenDead(credentials);
     $[0] = credentials;
-    $[1] = v;
-  } else v = $[1];
-  let [C] = y(v);
-  let p;
+    $[1] = probeDeadToken;
+  } else probeDeadToken = $[1];
+  let [deadTokenProbe] = useState(probeDeadToken);
+  let readMachineStatus;
   if ($[2] !== getMachineStatusRead) {
-    p = () => getMachineStatusRead();
+    readMachineStatus = () => getMachineStatusRead();
     $[2] = getMachineStatusRead;
-    $[3] = p;
-  } else p = $[3];
-  let [E] = y(p);
-  let I;
+    $[3] = readMachineStatus;
+  } else readMachineStatus = $[3];
+  let [machineStatus] = useState(readMachineStatus);
+  let readWebSetup;
   if ($[4] !== getWebSetupRead) {
-    I = () => getWebSetupRead();
+    readWebSetup = () => getWebSetupRead();
     $[4] = getWebSetupRead;
-    $[5] = I;
-  } else I = $[5];
-  let [m] = y(I);
-  let f;
-  if ($[6] !== m) {
-    f = () => m?.current();
-    $[6] = m;
-    $[7] = f;
-  } else f = $[7];
-  let [b, g] = y(f);
-  let h;
-  let O;
-  if ($[8] !== m) {
-    h = () => {
-      let N = true;
-      m?.settled.then(() => {
-        if (N) g(m.current());
+    $[5] = readWebSetup;
+  } else readWebSetup = $[5];
+  let [webSetupHandle] = useState(readWebSetup);
+  let readWebSetupStatus;
+  if ($[6] !== webSetupHandle) {
+    readWebSetupStatus = () => webSetupHandle?.current();
+    $[6] = webSetupHandle;
+    $[7] = readWebSetupStatus;
+  } else readWebSetupStatus = $[7];
+  let [webSetupStatus, setWebSetupStatus] = useState(readWebSetupStatus);
+  let subscribeWebSetup;
+  let subscribeWebSetupDeps;
+  if ($[8] !== webSetupHandle) {
+    subscribeWebSetup = () => {
+      let isMounted = true;
+      webSetupHandle?.settled.then(() => {
+        if (isMounted) setWebSetupStatus(webSetupHandle.current());
       });
       return () => {
-        N = false;
+        isMounted = false;
       };
     };
-    O = [m];
-    $[8] = m;
-    $[9] = h;
-    $[10] = O;
+    subscribeWebSetupDeps = [webSetupHandle];
+    $[8] = webSetupHandle;
+    $[9] = subscribeWebSetup;
+    $[10] = subscribeWebSetupDeps;
   } else {
-    h = $[9];
-    O = $[10];
+    subscribeWebSetup = $[9];
+    subscribeWebSetupDeps = $[10];
   }
-  P(h, O);
+  useEffect(subscribeWebSetup, subscribeWebSetupDeps);
   let grow = useHasScrollViewport() ? 1 : undefined;
-  let M;
-  if ($[11] !== C || $[12] !== ideInstallationStatus || $[13] !== E || $[14] !== b) {
-    M = jsxProd_default(fo, {
+  let foElement;
+  if (
+    $[11] !== deadTokenProbe ||
+    $[12] !== ideInstallationStatus ||
+    $[13] !== machineStatus ||
+    $[14] !== webSetupStatus
+  ) {
+    foElement = jsxProd_default(suspenseTypeExport, {
       fallback: null,
       children: jsxProd_default(StatusProperties, {
         ideInstallationStatus,
-        accountStatusRead: C,
-        machineStatusRead: E,
-        webSetupStatus: b,
+        accountStatusRead: deadTokenProbe,
+        machineStatusRead: machineStatus,
+        webSetupStatus,
       }),
     });
-    $[11] = C;
+    $[11] = deadTokenProbe;
     $[12] = ideInstallationStatus;
-    $[13] = E;
-    $[14] = b;
-    $[15] = M;
-  } else M = $[15];
+    $[13] = machineStatus;
+    $[14] = webSetupStatus;
+    $[15] = foElement;
+  } else foElement = $[15];
   let t5;
   if ($[16] !== diagnosticsPromise) {
-    t5 = jsxProd_default(fo, {
+    t5 = jsxProd_default(suspenseTypeExport, {
       fallback: null,
       children: jsxProd_default(Diagnostics, {
         promise: diagnosticsPromise,
@@ -475,15 +482,15 @@ function Status(props) {
     $[17] = t5;
   } else t5 = $[17];
   let t6;
-  if ($[18] !== grow || $[19] !== M || $[20] !== t5) {
+  if ($[18] !== grow || $[19] !== foElement || $[20] !== t5) {
     t6 = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
       flexGrow: grow,
-      children: [M, t5],
+      children: [foElement, t5],
     });
     $[18] = grow;
-    $[19] = M;
+    $[19] = foElement;
     $[20] = t5;
     $[21] = t6;
   } else t6 = $[21];
@@ -521,19 +528,19 @@ function Status(props) {
  * /status 页的属性表：会话 id/名字、cwd、账号与机器状态、云会话设置、模型、MCP、主题、IDE、权限模式；远程/云会话下注明哪些行来自远端。
  */
 function StatusProperties(props) {
-  let $ = w(18);
+  let $ = useMemoCache(18);
   let { ideInstallationStatus, accountStatusRead, machineStatusRead, webSetupStatus } = props;
-  let accountStatus = accountStatusRead === undefined ? undefined : Qr(accountStatusRead);
-  let machineStatus = machineStatusRead === undefined ? undefined : Qr(machineStatusRead);
+  let accountStatus = accountStatusRead === undefined ? undefined : use(accountStatusRead);
+  let machineStatus = machineStatusRead === undefined ? undefined : use(machineStatusRead);
   let mainLoopModel = useAppState(selectMainLoopModel);
   let mainLoopModel_2 = useMainLoopModelSetting() ?? mainLoopModel;
   let mcp = useAppState(selectMcp);
   let mode = useAppState(selectPermissionMode);
   let remoteSessionName = useAppState(selectRemoteSessionName);
-  let [m] = useTheme();
+  let [theme] = useTheme();
   let id = useSession(selectSessionId);
   let cwd = useCwdDerived(useSession(selectCwd));
-  let h;
+  let value;
   if (
     $[0] !== accountStatus ||
     $[1] !== cwd ||
@@ -544,10 +551,10 @@ function StatusProperties(props) {
     $[6] !== mode ||
     $[7] !== remoteSessionName ||
     $[8] !== id ||
-    $[9] !== m ||
+    $[9] !== theme ||
     $[10] !== webSetupStatus
   ) {
-    h = moveAntOnlyToEnd([
+    value = moveAntOnlyToEnd([
       buildPrimarySection({
         sessionId: id,
         remoteSessionName,
@@ -559,7 +566,7 @@ function StatusProperties(props) {
       buildSecondarySection({
         mainLoopModel: mainLoopModel_2,
         mcp,
-        theme: m,
+        theme,
         ideInstallationStatus,
         permissionMode: mode,
       }),
@@ -573,14 +580,14 @@ function StatusProperties(props) {
     $[6] = mode;
     $[7] = remoteSessionName;
     $[8] = id;
-    $[9] = m;
+    $[9] = theme;
     $[10] = webSetupStatus;
-    $[11] = h;
-  } else h = $[11];
-  let O = h;
-  let N;
+    $[11] = value;
+  } else value = $[11];
+  let body = value;
+  let sectionElement;
   if ($[12] === MEMO_CACHE_SENTINEL) {
-    N =
+    sectionElement =
       isRemoteSessionAvailable() &&
       jsxProd_default_2(Text, {
         dimColor: true,
@@ -591,8 +598,8 @@ function StatusProperties(props) {
           " session's; the other rows describe this terminal. /mcp asks the session too.",
         ],
       });
-    $[12] = N;
-  } else N = $[12];
+    $[12] = sectionElement;
+  } else sectionElement = $[12];
   let columns;
   if ($[13] === MEMO_CACHE_SENTINEL) {
     columns = [
@@ -606,18 +613,18 @@ function StatusProperties(props) {
     $[13] = columns;
   } else columns = $[13];
   let children;
-  if ($[14] !== O) {
-    children = O.filter(hasItems).flatMap(renderPropertyRows);
-    $[14] = O;
+  if ($[14] !== body) {
+    children = body.filter(hasItems).flatMap(renderPropertyRows);
+    $[14] = body;
     $[15] = children;
   } else children = $[15];
-  let A;
+  let boxElement;
   if ($[16] !== children) {
-    A = jsxProd_default_2(Box, {
+    boxElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
       children: [
-        N,
+        sectionElement,
         jsxProd_default(FlexDirectionRow, {
           columns,
           children,
@@ -625,15 +632,15 @@ function StatusProperties(props) {
       ],
     });
     $[16] = children;
-    $[17] = A;
-  } else A = $[17];
-  return A;
+    $[17] = boxElement;
+  } else boxElement = $[17];
+  return boxElement;
 }
 //@ chunk-6p6y0k3t.js:7975-8307 fingerprint = Diagnostics (0.464)
 function Diagnostics(props) {
-  let $ = w(5);
+  let $ = useMemoCache(5);
   let { promise } = props;
-  let diagnostics = Qr(promise);
+  let diagnostics = use(promise);
   if (diagnostics.length === 0) {
     return null;
   }
@@ -663,18 +670,14 @@ function Diagnostics(props) {
   } else t3 = $[4];
   return t3;
 }
-//@ chunk-9h8dr0qb.js:42639-42676 fingerprint = _temp2 (0.693)
-function selectMcpCommands(s_0) {
-  return s_0.mcp.commands;
-}
 //@ chunk-ja34p3ys.js:340-785 fingerprint = _temp3 (0.656)
 function StatusRow(props) {
-  let $ = w(9);
+  let $ = useMemoCache(9);
   let { status, children } = props;
   let { color } = STATUS_CONFIG[status];
-  let c;
+  let iconBox;
   if ($[0] !== status) {
-    c = jsxProd_default(Box, {
+    iconBox = jsxProd_default(Box, {
       width: 2,
       flexShrink: 0,
       children: jsxProd_default(StatusIcon, {
@@ -682,12 +685,12 @@ function StatusRow(props) {
       }),
     });
     $[0] = status;
-    $[1] = c;
-  } else c = $[1];
+    $[1] = iconBox;
+  } else iconBox = $[1];
   const dimColor = !color;
-  let a;
+  let rowElement;
   if ($[2] !== children || $[3] !== color || $[4] !== dimColor) {
-    a = jsxProd_default(Box, {
+    rowElement = jsxProd_default(Box, {
       flexGrow: 1,
       flexShrink: 1,
       children: jsxProd_default(Text, {
@@ -699,19 +702,23 @@ function StatusRow(props) {
     $[2] = children;
     $[3] = color;
     $[4] = dimColor;
-    $[5] = a;
-  } else a = $[5];
-  let d;
-  if ($[6] !== c || $[7] !== a) {
-    d = jsxProd_default_2(Box, {
+    $[5] = rowElement;
+  } else rowElement = $[5];
+  let rowBox;
+  if ($[6] !== iconBox || $[7] !== rowElement) {
+    rowBox = jsxProd_default_2(Box, {
       flexDirection: "row",
-      children: [c, a],
+      children: [iconBox, rowElement],
     });
-    $[6] = c;
-    $[7] = a;
-    $[8] = d;
-  } else d = $[8];
-  return d;
+    $[6] = iconBox;
+    $[7] = rowElement;
+    $[8] = rowBox;
+  } else rowBox = $[8];
+  return rowBox;
+}
+//@ chunk-9h8dr0qb.js:42639-42676 fingerprint = _temp2 (0.693)
+function selectMcpCommands(s_0) {
+  return s_0.mcp.commands;
 }
 export {
   buildPrimarySection,

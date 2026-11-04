@@ -17,6 +17,7 @@ import { logEvent } from "../services/analytics/index.js";
 import { errorTelemetryFields, isScreenReaderMode } from "./accessibility/screenReader.js";
 import { logForDebugging } from "./debug.js";
 import { applyRelaunchTerminalSize } from "./relaunchTerminalSize.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-rr03x1jm.js:510-1001 fingerprint = getStdinOverride (0.316)
 function getStdinOverride() {
@@ -38,9 +39,9 @@ function getStdinOverride() {
     let ttyFd = openSync("/dev/tty", "r");
     let ttyStream = new ReadStream(ttyFd);
     handleStreamGoneErrors(ttyStream);
-    ttyStream.on("error", (r) => {
-      logEvent("tengu_tty_stream_error", errorTelemetryFields(r));
-      logForDebugging(`/dev/tty stream error: ${r}`, {
+    ttyStream.on("error", (error) => {
+      logEvent("tengu_tty_stream_error", errorTelemetryFields(error));
+      logForDebugging(`/dev/tty stream error: ${error}`, {
         level: "debug",
       });
     });
@@ -70,7 +71,10 @@ class stdinOverrideCell {
   }
 }
 //@ chunk-rr03x1jm.js:1075-1089 facade-exports
-var stdinOverrideCache = new stdinOverrideCell();
+var stdinOverrideCache; // deferred: uses stdinOverrideCell of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-rr03x1jm.js:1075", () => {
+  stdinOverrideCache = new stdinOverrideCell();
+});
 //@ chunk-rr03x1jm.js:1089-1225 facade-exports = getBaseRenderOptions (0.509)
 function getBaseRenderOptions(exitOnCtrlC = false) {
   applyRelaunchTerminalSize();

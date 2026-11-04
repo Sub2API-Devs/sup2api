@@ -13,6 +13,7 @@ import { env } from "../../utils/env.js";
 import { remoteSessionUrlId } from "../../utils/sessionUrl.js";
 import { GENERAL_PURPOSE_AGENT } from "../../tools/AgentTool/built-in/generalPurposeAgent.js";
 import { COORDINATOR_WORKER_AGENT_TYPE } from "../../coordinator/workerAgent.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-z4g2ta8k.js:4350-4413 placement
 function isCcrSubagentSkipOnDeltaGateOn() {
@@ -39,22 +40,25 @@ function isWondrousIslandGateOn() {
 /**
  * 按 task_id 去重任务列表，同一 id 保留第一条，但后来者有描述而前者没有时用后来者。
  */
-function dedupeTasksById(e) {
-  let n = new Map();
-  for (let r of e) {
-    if (typeof r?.task_id !== "string" || !r.task_id) continue;
-    let description = typeof r.description === "string" ? r.description : "";
-    let h = n.get(r.task_id);
-    if (!h || (!h.description && description))
-      n.set(r.task_id, {
-        ...r,
+function dedupeTasksById(tasks) {
+  let byId = new Map();
+  for (let task of tasks) {
+    if (typeof task?.task_id !== "string" || !task.task_id) continue;
+    let description = typeof task.description === "string" ? task.description : "";
+    let existing = byId.get(task.task_id);
+    if (!existing || (!existing.description && description))
+      byId.set(task.task_id, {
+        ...task,
         description,
       });
   }
-  return Array.from(n.values());
+  return Array.from(byId.values());
 }
 //@ chunk-z4g2ta8k.js:4836-4871 placement
-var BROADCAST_AGENT_TYPES = new Set([GENERAL_PURPOSE_AGENT.agentType, COORDINATOR_WORKER_AGENT_TYPE]);
+var BROADCAST_AGENT_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-z4g2ta8k.js:4836", () => {
+  BROADCAST_AGENT_TYPES = new Set([GENERAL_PURPOSE_AGENT.agentType, COORDINATOR_WORKER_AGENT_TYPE]);
+});
 export {
   BROADCAST_AGENT_TYPES,
   dedupeTasksById,

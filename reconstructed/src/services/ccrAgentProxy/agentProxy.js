@@ -61,8 +61,8 @@ function hasUsableRemoteSdkUrl() {
 function getIngressTokenClaims() {
   let sessionIngressAuthToken = getSessionIngressAuthToken();
   if (sessionIngressAuthToken === null) return null;
-  let n = decodeJwtPayload(sessionIngressAuthToken);
-  return n !== null && typeof n === "object" && !Array.isArray(n) ? n : null;
+  let claims = decodeJwtPayload(sessionIngressAuthToken);
+  return claims !== null && typeof claims === "object" && !Array.isArray(claims) ? claims : null;
 }
 //@ chunk-aepeg2w5.js:343518-343567 placement
 /**
@@ -84,8 +84,8 @@ function isActAsBotClaim(ingressTokenClaims) {
 /**
  * 判断值是否为非空字符串。
  */
-function isNonEmptyString(e) {
-  return typeof e === "string" && e !== "";
+function isNonEmptyString(value) {
+  return typeof value === "string" && value !== "";
 }
 //@ chunk-aepeg2w5.js:343701-343881 placement
 /**
@@ -110,11 +110,11 @@ function isAgentSessionWorker() {
   if (!isByocEnvironment()) return false;
   let ingressTokenClaims = getIngressTokenClaims();
   if (ingressTokenClaims === null) return false;
-  let n = "ccr:role" in ingressTokenClaims ? ingressTokenClaims["ccr:role"] : undefined;
-  let r = "account_uuid" in ingressTokenClaims || "ccr:account_id" in ingressTokenClaims;
+  let role = "ccr:role" in ingressTokenClaims ? ingressTokenClaims["ccr:role"] : undefined;
+  let hasAccountId = "account_uuid" in ingressTokenClaims || "ccr:account_id" in ingressTokenClaims;
   return (
-    n === "session_worker" &&
-    !r &&
+    role === "session_worker" &&
+    !hasAccountId &&
     "code_agent_id" in ingressTokenClaims &&
     isNonEmptyString(ingressTokenClaims.code_agent_id)
   );
@@ -127,11 +127,11 @@ function isUserSessionWorker() {
   if (!isByocEnvironment()) return false;
   let ingressTokenClaims = getIngressTokenClaims();
   if (ingressTokenClaims === null) return false;
-  let n = "ccr:role" in ingressTokenClaims ? ingressTokenClaims["ccr:role"] : undefined;
-  let r =
+  let role = "ccr:role" in ingressTokenClaims ? ingressTokenClaims["ccr:role"] : undefined;
+  let hasAccountId =
     ("account_uuid" in ingressTokenClaims && isNonEmptyString(ingressTokenClaims.account_uuid)) ||
     ("ccr:account_id" in ingressTokenClaims && isNonEmptyString(ingressTokenClaims["ccr:account_id"]));
-  return n === "session_worker" && r && !("code_agent_id" in ingressTokenClaims);
+  return role === "session_worker" && hasAccountId && !("code_agent_id" in ingressTokenClaims);
 }
 //@ chunk-aepeg2w5.js:344355-344491 placement
 /**
@@ -175,8 +175,8 @@ function getAgentProxyPath() {
   if (isByocEnvironment()) {
     let remoteSdkUrl = resolveRemoteSdkUrl();
     if (remoteSdkUrl.status === "ok") {
-      let n = CODE_SESSIONS_PATH_RE.exec(new URL(remoteSdkUrl.url).pathname)?.[1];
-      if (n !== undefined) return `/v1/code/sessions/${n}/agent-proxy`;
+      let sessionId = CODE_SESSIONS_PATH_RE.exec(new URL(remoteSdkUrl.url).pathname)?.[1];
+      if (sessionId !== undefined) return `/v1/code/sessions/${sessionId}/agent-proxy`;
     }
   }
   return AGENT_PROXY_PATH;
@@ -185,9 +185,9 @@ function getAgentProxyPath() {
 /**
  * 把 /api/frame/... 之类的地址改写成走代理的 /frame... 地址。
  */
-function getAgentProxyFramePath(e) {
-  let n = e.startsWith("/api/frame/") ? e.slice(10) : e;
-  return `${getAgentProxyPath()}/frame${n}`;
+function getAgentProxyFramePath(framePath) {
+  let pathSuffix = framePath.startsWith("/api/frame/") ? framePath.slice(10) : framePath;
+  return `${getAgentProxyPath()}/frame${pathSuffix}`;
 }
 export {
   isAccountIngressToken,

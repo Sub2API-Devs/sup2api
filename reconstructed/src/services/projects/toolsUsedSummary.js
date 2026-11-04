@@ -62,19 +62,25 @@ function emptyCallCounts() {
 /**
  * 统计消息中按 MCP 服务器分组的工具调用次数（按 tool_use id 去重）。
  */
-function countMcpCallsByServer(e, n = emptyCallCounts()) {
-  let { counts, seen } = n;
-  for (let a of e) {
-    if (a === null || typeof a !== "object" || a.type !== "assistant" || a.message == null) continue;
-    for (let l of toContentBlocks(a.message.content)) {
-      if (l.type !== "tool_use" || typeof l.name !== "string") continue;
-      let c = mcpInfoFromString(l.name);
-      if (c === null || (c.toolName ?? "") === "") continue;
-      if (typeof l.id === "string" && l.id !== "") {
-        if (seen.has(l.id)) continue;
-        seen.add(l.id);
+function countMcpCallsByServer(messages, acc = emptyCallCounts()) {
+  let { counts, seen } = acc;
+  for (let message of messages) {
+    if (
+      message === null ||
+      typeof message !== "object" ||
+      message.type !== "assistant" ||
+      message.message == null
+    )
+      continue;
+    for (let block of toContentBlocks(message.message.content)) {
+      if (block.type !== "tool_use" || typeof block.name !== "string") continue;
+      let mcpInfo = mcpInfoFromString(block.name);
+      if (mcpInfo === null || (mcpInfo.toolName ?? "") === "") continue;
+      if (typeof block.id === "string" && block.id !== "") {
+        if (seen.has(block.id)) continue;
+        seen.add(block.id);
       }
-      counts.set(c.serverName, (counts.get(c.serverName) ?? 0) + 1);
+      counts.set(mcpInfo.serverName, (counts.get(mcpInfo.serverName) ?? 0) + 1);
     }
   }
   return counts;
@@ -84,8 +90,8 @@ function isClaudeAiConnectorClient(client) {
   return isClaudeAiProxyServer(client.config);
 }
 //@ chunk-dz3q485w.js:20654-20716 placement
-function isConnectedOrCachedClient(e) {
-  return e.type === "connected" || e.type === "cached";
+function isConnectedOrCachedClient(client) {
+  return client.type === "connected" || client.type === "cached";
 }
 //@ chunk-dz3q485w.js:20716-20766 placement = findCurrentIDE (0.867)
 function findCurrentIDE(type) {
@@ -108,50 +114,51 @@ function summarizeToolsUsed(input) {
   let clientsByKey = new Map();
   for (let client of input.clients) {
     let prefixServerKey = getPrefixServerKey(client.name);
-    let h = clientsByKey.get(prefixServerKey);
-    let b =
+    let existing = clientsByKey.get(prefixServerKey);
+    let isCloudConnector =
       !isClaudeAiConnectorClient(client) &&
       (isClaudeAiServerName(client.name) || client.config.type === "claudeai-proxy");
     clientsByKey.set(
       prefixServerKey,
-      !b && (h === undefined || (h !== AMBIGUOUS_CLIENT && h.name === client.name))
+      !isCloudConnector &&
+        (existing === undefined || (existing !== AMBIGUOUS_CLIENT && existing.name === client.name))
         ? client
         : AMBIGUOUS_CLIENT,
     );
   }
   let servers = [];
   let matchedKeys = new Set();
-  for (let [l, c] of input.counts) {
-    let h = clientsByKey.get(l);
-    let b = h === AMBIGUOUS_CLIENT ? undefined : h;
-    if (b !== undefined ? findCurrentIDE(b.config.type) : l === "ide") continue;
-    matchedKeys.add(l);
-    if (b !== undefined && isClaudeAiConnectorClient(b))
+  for (let [serverKey, calls] of input.counts) {
+    let client = clientsByKey.get(serverKey);
+    let knownClient = client === AMBIGUOUS_CLIENT ? undefined : client;
+    if (knownClient !== undefined ? findCurrentIDE(knownClient.config.type) : serverKey === "ide") continue;
+    matchedKeys.add(serverKey);
+    if (knownClient !== undefined && isClaudeAiConnectorClient(knownClient))
       servers.push({
-        name: connectorLabel(b.name),
-        calls: c,
+        name: connectorLabel(knownClient.name),
+        calls,
         where: "claudeai",
         transport: null,
-        connectedNow: isConnectedOrCachedClient(b),
+        connectedNow: isConnectedOrCachedClient(knownClient),
       });
-    else if (b !== undefined)
+    else if (knownClient !== undefined)
       servers.push({
-        name: factLabel(l, MAX_SERVER_NAME_CHARS),
-        calls: c,
+        name: factLabel(serverKey, MAX_SERVER_NAME_CHARS),
+        calls,
         where: "local",
-        transport: factLabel(b.config.type ?? "stdio", 16),
+        transport: factLabel(knownClient.config.type ?? "stdio", 16),
         connectedNow: null,
       });
     else
       servers.push({
-        name: factLabel(l, MAX_SERVER_NAME_CHARS),
-        calls: c,
+        name: factLabel(serverKey, MAX_SERVER_NAME_CHARS),
+        calls,
         where: "unknown",
         transport: null,
         connectedNow: null,
       });
   }
-  servers.sort((l, c) => c.calls - l.calls || l.name.localeCompare(c.name));
+  servers.sort((a, b) => b.calls - a.calls || a.name.localeCompare(b.name));
   let otherConnectors = input.clients
     .filter(
       (client) =>
@@ -160,7 +167,7 @@ function summarizeToolsUsed(input) {
         !matchedKeys.has(getPrefixServerKey(client.name)),
     )
     .map((client) => connectorLabel(client.name))
-    .sort((l, c) => l.localeCompare(c));
+    .sort((a, b) => a.localeCompare(b));
   if (
     servers.length === 0 &&
     (otherConnectors.length === 0 || (input.sessionsScanned === 0 && !input.includesCurrentConversation))
@@ -178,12 +185,12 @@ function summarizeToolsUsed(input) {
 /**
  * 只保留已匹配到配置的服务器，去掉未知服务器与其他连接器信息。
  */
-function knownServersOnly(e) {
-  let filtered = e.servers.filter((server) => server.where !== "unknown");
+function knownServersOnly(summary) {
+  let filtered = summary.servers.filter((server) => server.where !== "unknown");
   return filtered.length === 0
     ? null
     : {
-        ...e,
+        ...summary,
         servers: filtered,
         otherConnectors: [],
         moreConnectors: 0,
@@ -193,7 +200,7 @@ function knownServersOnly(e) {
 /**
  * 描述一个 MCP 服务器的位置：claude.ai 连接器（是否连接）、本机服务器或未匹配。
  */
-function serverWhereText(config, n) {
+function serverWhereText(config, machineLabel) {
   switch (config.where) {
     case "claudeai":
       return config.connectedNow === false
@@ -201,8 +208,8 @@ function serverWhereText(config, n) {
         : "claude.ai connector";
     case "local":
       return isLocalMcpServer(config)
-        ? `local ${config.transport ?? "stdio"} server, stays on ${n}`
-        : `${config.transport} server configured on ${n}, not a claude.ai connector`;
+        ? `local ${config.transport ?? "stdio"} server, stays on ${machineLabel}`
+        : `${config.transport} server configured on ${machineLabel}, not a claude.ai connector`;
     case "unknown":
       return "not matched to one server configured in this session";
   }
@@ -215,17 +222,18 @@ function isLocalMcpServer(config) {
 /**
  * 取前 MAX_SERVERS_SHOWN 个服务器并给出剩余数，用于列表与短语两种输出。
  */
-function limitServersShown(e) {
+function limitServersShown(summary) {
   return {
-    shown: e.servers.slice(0, MAX_SERVERS_SHOWN),
-    more: Math.max(0, e.servers.length - MAX_SERVERS_SHOWN),
+    shown: summary.servers.slice(0, MAX_SERVERS_SHOWN),
+    more: Math.max(0, summary.servers.length - MAX_SERVERS_SHOWN),
   };
 }
 //@ chunk-dz3q485w.js:22629-22802 placement
-function toolsUsedLines(e, n) {
-  let { shown, more } = limitServersShown(e);
+function toolsUsedLines(summary, machineLabel) {
+  let { shown, more } = limitServersShown(summary);
   let mapped = shown.map(
-    (l) => `- ${l.name}: ${l.calls} ${plural(l.calls, "call")} (${serverWhereText(l, n)})`,
+    (server) =>
+      `- ${server.name}: ${server.calls} ${plural(server.calls, "call")} (${serverWhereText(server, machineLabel)})`,
   );
   if (more > 0) mapped.push(`- +${more} more ${plural(more, "server")}`);
   return mapped;
@@ -234,16 +242,18 @@ function toolsUsedLines(e, n) {
 /**
  * 生成工具使用情况的简短短语：claude.ai 连接器与本机服务器名称及数量。
  */
-function toolsUsedPhrase(e, n) {
-  let { shown, more } = limitServersShown(e);
-  let a = (c, h) => {
-    let mapped = shown.filter((w) => w.where === c).map((w) => `\u201C${w.name}\u201D`);
-    return mapped.length > 0 ? `${mapped.join(", ")} (${h(mapped.length)})` : "";
+function toolsUsedPhrase(summary, machineLabel) {
+  let { shown, more } = limitServersShown(summary);
+  let describeWhere = (where, countLabel) => {
+    let mapped = shown
+      .filter((server) => server.where === where)
+      .map((server) => `\u201C${server.name}\u201D`);
+    return mapped.length > 0 ? `${mapped.join(", ")} (${countLabel(mapped.length)})` : "";
   };
   let filtered = [
-    a("claudeai", (c) => plural(c, "claude.ai connector")),
-    a("local", () => `configured on ${n}`),
-  ].filter((c) => c !== "");
+    describeWhere("claudeai", (count) => plural(count, "claude.ai connector")),
+    describeWhere("local", () => `configured on ${machineLabel}`),
+  ].filter((part) => part !== "");
   if (filtered.length === 0) return null;
   return [...filtered, ...(more > 0 ? [`+${more} more`] : [])].join("; ");
 }
@@ -254,8 +264,8 @@ function unusedConnectorsLine(tools) {
     : null;
 }
 //@ chunk-dz3q485w.js:23361-23450 placement
-function joinWithAnd(e) {
-  return e.length <= 1 ? (e[0] ?? "") : `${e.slice(0, -1).join(", ")} and ${e.at(-1)}`;
+function joinWithAnd(parts) {
+  return parts.length <= 1 ? (parts[0] ?? "") : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
 }
 //@ chunk-dz3q485w.js:23450-24185 placement
 /**
@@ -264,16 +274,16 @@ function joinWithAnd(e) {
 function toolsUsedDialogLine(summary, machine) {
   let first = true;
   let label = (onlyLocal) => {
-    let S = first ? ` ${plural(onlyLocal.calls, "call")}` : "";
+    let callsSuffix = first ? ` ${plural(onlyLocal.calls, "call")}` : "";
     first = false;
-    return `\u201C${onlyLocal.name}\u201D (${onlyLocal.calls}${S})`;
+    return `\u201C${onlyLocal.name}\u201D (${onlyLocal.calls}${callsSuffix})`;
   };
   let { shown, more } = limitServersShown(summary);
   let connectors = shown
-    .filter((j) => j.where === "claudeai")
+    .filter((server) => server.where === "claudeai")
     .map(label)
     .join(", ");
-  let localServers = shown.filter((j) => j.where === "local");
+  let localServers = shown.filter((server) => server.where === "local");
   let [onlyLocal] = localServers;
   let localText =
     onlyLocal !== undefined && localServers.length === 1
@@ -287,7 +297,7 @@ function toolsUsedDialogLine(summary, machine) {
         : "";
   if (connectors === "" && localText === "") return null;
   let moreText = more > 0 ? `${more} more not listed` : "";
-  return `${[connectors, localText, moreText].filter((j) => j !== "").join("; ")}.`;
+  return `${[connectors, localText, moreText].filter((part) => part !== "").join("; ")}.`;
 }
 //@ chunk-dz3q485w.js:24185-24276 placement
 var MAX_SESSIONS_SCANNED = 3;
@@ -306,8 +316,8 @@ var MAX_DOC_FILE_BYTES = 1048576;
 /**
  * 统一换行符，并把每一行按网络路径规范化（去掉行尾空白）。
  */
-function normalizeNewlinesAndPaths(e) {
-  return e
+function normalizeNewlinesAndPaths(text) {
+  return text
     .replace(
       /\r\n?/g,
       `
@@ -321,15 +331,15 @@ function normalizeNewlinesAndPaths(e) {
 `);
 }
 //@ chunk-dz3q485w.js:24809-24934 placement
-function makeQuoteFence(e, n = randomBytes(4).toString("hex")) {
+function makeQuoteFence(label, nonce = randomBytes(4).toString("hex")) {
   return {
-    begin: `-----BEGIN ${e} ${n} (quoted data)-----`,
-    end: `-----END ${e} ${n}-----`,
+    begin: `-----BEGIN ${label} ${nonce} (quoted data)-----`,
+    end: `-----END ${label} ${nonce}-----`,
   };
 }
 //@ chunk-dz3q485w.js:24934-25044 placement
-function fenceQuotedText(quoteFence, n) {
-  let joined = n
+function fenceQuotedText(quoteFence, text) {
+  let joined = text
     .trim()
     .split(
       `
@@ -348,8 +358,8 @@ var regExp = new RegExp(`(^|${WORD_BOUNDARY_PATTERN})@`, "gu");
 /**
  * 把 @ 提及标记替换成全角＠（复制进引用块前的中和）。
  */
-function neutralizeAtMentions(e) {
-  return e.replace(regExp, "$1\uFF20");
+function neutralizeAtMentions(text) {
+  return text.replace(regExp, "$1\uFF20");
 }
 //@ chunk-dz3q485w.js:25148-25229 placement
 /**
@@ -364,7 +374,9 @@ function quoteLocalHistory(text) {
 }
 //@ chunk-dz3q485w.js:25229-25336 placement
 function defangMarkerLine(line) {
-  return Array.from(line, (n) => (/[A-Za-z]/.test(n) ? n.toLowerCase() : /[0-9]/.test(n) ? n : "~")).join("");
+  return Array.from(line, (char) =>
+    /[A-Za-z]/.test(char) ? char.toLowerCase() : /[0-9]/.test(char) ? char : "~",
+  ).join("");
 }
 //@ chunk-dz3q485w.js:25336-25346 placement
 var MAX_SUMMARY_LINE_CHARS = 46;

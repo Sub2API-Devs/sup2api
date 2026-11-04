@@ -12,24 +12,24 @@ import { toJSONSchema } from "../../../vendor/zod/v4/core/json-schema-processors
 import { identity } from "../../services/daemon/sessionCron.js";
 
 //@ chunk-y162pn60.js:11062-11350 placement = generateSettingsJSONSchema (0.88)
-function generateSettingsJSONSchema(e) {
-  let n = new Set();
-  let r = (jsonSchema) => {
-    if (Array.isArray(jsonSchema)) jsonSchema.forEach(r);
+function generateSettingsJSONSchema(schema) {
+  let propertyNames = new Set();
+  let collectProperties = (jsonSchema) => {
+    if (Array.isArray(jsonSchema)) jsonSchema.forEach(collectProperties);
     else if (typeof jsonSchema === "object" && jsonSchema !== null) {
       let { properties } = jsonSchema;
       if (typeof properties === "object" && properties !== null)
-        for (let key of Object.keys(properties)) n.add(key);
-      Object.values(jsonSchema).forEach(r);
+        for (let key of Object.keys(properties)) propertyNames.add(key);
+      Object.values(jsonSchema).forEach(collectProperties);
     }
   };
   try {
-    r(
-      toJSONSchema(e, {
+    collectProperties(
+      toJSONSchema(schema, {
         unrepresentable: "any",
       }),
     );
   } catch {}
-  return identity(n);
+  return identity(propertyNames);
 }
 export { generateSettingsJSONSchema };

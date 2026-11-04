@@ -147,14 +147,15 @@ import {
 import { marketplaceDisplayName } from "../../utils/plugins/officialMarketplaceNames.js";
 import { sanitizeVersion } from "../analytics/metadata.js";
 import { gracefulShutdown } from "../../utils/gracefulShutdown.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-12wyw8h8.js:1926-2128 placement
 function mcpbSourcesOf(marketplace) {
   let mcpServers = marketplace.manifest.mcpServers;
   let filtered = (
     typeof mcpServers === "string" ? [mcpServers] : Array.isArray(mcpServers) ? mcpServers : []
-  ).filter((f) => typeof f === "string" && isMcpbSource(f));
-  let filtered_2 = filtered.filter((f) => isLocalMcpbSource(f));
+  ).filter((source) => typeof source === "string" && isMcpbSource(source));
+  let filtered_2 = filtered.filter((localSource) => isLocalMcpbSource(localSource));
   return {
     local: filtered_2,
     remoteCount: filtered.length - filtered_2.length,
@@ -164,109 +165,109 @@ function mcpbSourcesOf(marketplace) {
 /**
  * 安装插件后读取其捆绑的 MCPB 服务器：并行加载每个本地包，收集需要配置的服务器（名称、配置 schema、已有配置），读不出的包单独列出。
  */
-async function readBundledServerConfigs(marketplace, local, r) {
+async function readBundledServerConfigs(marketplace, local, storageV5) {
   let results = await Promise.all(
-    local.map(async (m) => {
+    local.map(async (spec) => {
       try {
         let result = await loadMcpbFile(
-          m,
+          spec,
           marketplace.path,
           marketplace.repository,
           undefined,
           undefined,
           true,
-          r,
+          storageV5,
         );
         return {
-          spec: m,
+          spec,
           result,
         };
       } catch (error) {
-        logForDebugging(`post-install bundle read failed for ${m}: ${errorMessage(error)}`, {
+        logForDebugging(`post-install bundle read failed for ${spec}: ${errorMessage(error)}`, {
           level: "warn",
         });
         return {
-          spec: m,
+          spec,
           result: undefined,
         };
       }
     }),
   );
-  let f = new Map();
-  let o = [];
-  for (let { spec, result: u } of results)
-    if (!u) o.push(spec);
-    else if ("status" in u)
-      f.set(u.manifest.name, {
-        serverName: u.manifest.name,
-        schema: u.configSchema,
-        existingConfig: u.existingConfig,
+  let bundlesByName = new Map();
+  let unreadable = [];
+  for (let { spec, result: loaded } of results)
+    if (!loaded) unreadable.push(spec);
+    else if ("status" in loaded)
+      bundlesByName.set(loaded.manifest.name, {
+        serverName: loaded.manifest.name,
+        schema: loaded.configSchema,
+        existingConfig: loaded.existingConfig,
       });
   return {
-    bundles: [...f.values()],
-    unreadable: o,
+    bundles: [...bundlesByName.values()],
+    unreadable,
   };
 }
 //@ chunk-12wyw8h8.js:2624-2828 placement
-function parseConfigPair(e) {
-  let index = e.indexOf("=");
+function parseConfigPair(pair) {
+  let index = pair.indexOf("=");
   if (index <= 0)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `--config expects KEY=VALUE, got "${e}". Use --config key=value (repeatable).`,
+      `--config expects KEY=VALUE, got "${pair}". Use --config key=value (repeatable).`,
       "--config pair has no key",
     );
   return {
-    key: e.slice(0, index),
-    raw: e.slice(index + 1),
+    key: pair.slice(0, index),
+    raw: pair.slice(index + 1),
   };
 }
 //@ chunk-12wyw8h8.js:2828-4153 placement
-function splitPluginConfigArgs(e, n, bundles, p) {
-  let f = [];
-  let o = new Map();
-  for (let m of e) {
-    let { key, raw } = parseConfigPair(m);
-    if (n && Object.hasOwn(n, key)) {
-      f.push(m);
+function splitPluginConfigArgs(configArgs, userConfig, bundles, bundleInfo) {
+  let pluginPairs = [];
+  let bundlePairs = new Map();
+  for (let configArg of configArgs) {
+    let { key, raw } = parseConfigPair(configArg);
+    if (userConfig && Object.hasOwn(userConfig, key)) {
+      pluginPairs.push(configArg);
       continue;
     }
     let flattened = bundles.flatMap(({ serverName, schema }) => {
-      let S = [];
-      let P = `${serverName}.`;
-      if (key.startsWith(P) && Object.hasOwn(schema, key.slice(P.length)))
-        S.push({
+      let matches = [];
+      let prefix = `${serverName}.`;
+      if (key.startsWith(prefix) && Object.hasOwn(schema, key.slice(prefix.length)))
+        matches.push({
           serverName,
-          field: key.slice(P.length),
+          field: key.slice(prefix.length),
           bare: false,
         });
       if (Object.hasOwn(schema, key))
-        S.push({
+        matches.push({
           serverName,
           field: key,
           bare: true,
         });
-      return S;
+      return matches;
     });
-    let [h, ...v] = flattened;
-    if (h && v.length === 0) {
-      if (h.bare && p.unreadable.length + p.remoteCount > 0)
+    let [firstMatch, ...otherMatches] = flattened;
+    if (firstMatch && otherMatches.length === 0) {
+      if (firstMatch.bare && bundleInfo.unreadable.length + bundleInfo.remoteCount > 0)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `--config key "${key}" must name its server, because a bundled MCP server whose keys are unknown may declare it too; use ${printableName(`${h.serverName}.${h.field}`)}.` +
-            unconfigurableBundlesNote(p),
+          `--config key "${key}" must name its server, because a bundled MCP server whose keys are unknown may declare it too; use ${printableName(`${firstMatch.serverName}.${firstMatch.field}`)}.` +
+            unconfigurableBundlesNote(bundleInfo),
           "--config bare key with an unread bundled server",
         );
-      let y = o.get(h.serverName) ?? [];
-      y.push(`${h.field}=${raw}`);
-      o.set(h.serverName, y);
+      let values = bundlePairs.get(firstMatch.serverName) ?? [];
+      values.push(`${firstMatch.field}=${raw}`);
+      bundlePairs.set(firstMatch.serverName, values);
       continue;
     }
-    if (h)
+    if (firstMatch)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `--config key "${key}" is declared by more than one bundled MCP server; use ${flattened.map((y) => printableName(`${y.serverName}.${y.field}`)).join(" or ")}.`,
+        `--config key "${key}" is declared by more than one bundled MCP server; use ${flattened.map((match) => printableName(`${match.serverName}.${match.field}`)).join(" or ")}.`,
         "--config key is ambiguous between bundled servers",
       );
-    let w = [
-      ...Object.keys(n ?? {}),
+    let knownKeys = [
+      ...Object.keys(userConfig ?? {}),
       ...bundles.flatMap(({ serverName, schema }) =>
         Object.keys(schema).map((key) => printableName(`${serverName}.${key}`)),
       ),
@@ -274,14 +275,14 @@ function splitPluginConfigArgs(e, n, bundles, p) {
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `--config key "${key}" isn't declared in this plugin's userConfig` +
         (bundles.length > 0 ? " or by its bundled MCP servers." : ".") +
-        (w.length > 0 ? ` Known keys: ${w.join(", ")}.` : "") +
-        unconfigurableBundlesNote(p),
+        (knownKeys.length > 0 ? ` Known keys: ${knownKeys.join(", ")}.` : "") +
+        unconfigurableBundlesNote(bundleInfo),
       "--config key is not declared",
     );
   }
   return {
-    pluginPairs: f,
-    bundlePairs: o,
+    pluginPairs,
+    bundlePairs,
   };
 }
 //@ chunk-12wyw8h8.js:4153-4622 placement
@@ -289,16 +290,16 @@ function splitPluginConfigArgs(e, n, bundles, p) {
  * 生成"部分捆绑服务器无法用 --config 配置"的括注：读不出的本地包，以及启动时从 URL 拉取、只能在 Claude Code 里配置的远程包。
  */
 function unconfigurableBundlesNote({ unreadable, remoteCount }) {
-  let r = [];
+  let notes = [];
   if (unreadable.length > 0)
-    r.push(
-      `the bundled ${unreadable.map((f) => quotedPrintable(f)).join(", ")} could not be read, so its keys are unknown \u2014 re-run with --debug-file <path> to log why`,
+    notes.push(
+      `the bundled ${unreadable.map((spec) => quotedPrintable(spec)).join(", ")} could not be read, so its keys are unknown \u2014 re-run with --debug-file <path> to log why`,
     );
   if (remoteCount > 0)
-    r.push(
+    notes.push(
       `${remoteCount} bundled ${plural(remoteCount, "server is", "servers are")} fetched from a URL at session start and can only be configured in Claude Code (/plugin \u2192 Installed \u2192 Configure)`,
     );
-  let joined = r.join("; ");
+  let joined = notes.join("; ");
   return joined ? ` (${joined[0].toUpperCase()}${joined.slice(1)}.)` : "";
 }
 //@ chunk-12wyw8h8.js:4622-5188 placement
@@ -311,8 +312,8 @@ function missingConfigMessage(bundle, pluginId) {
   let serverLabel = printableName(bundle.serverName);
   let mapped = Object.entries(bundle.schema)
     .filter(([key, value]) => {
-      let g = getOwn(bundle.existingConfig, key);
-      return value.required === true && (g === undefined || g === "");
+      let existingValue = getOwn(bundle.existingConfig, key);
+      return value.required === true && (existingValue === undefined || existingValue === "");
     })
     .map(([key]) => printableName(`${serverLabel}.${key}`));
   let fixHint =
@@ -322,39 +323,39 @@ function missingConfigMessage(bundle, pluginId) {
   return `MCP server "${quotedPrintable(bundle.serverName)}" needs configuration before it can start: ${fixHint}, or in Claude Code run /plugin, select "${quotedPrintable(pluginId)}" in the Installed tab, and choose Configure.`;
 }
 //@ chunk-12wyw8h8.js:5221-5296 placement
-function withSettingsWarning(message, n) {
-  let r = settingsFileWarning(n);
-  return r === null
+function withSettingsWarning(message, scope) {
+  let warning = settingsFileWarning(scope);
+  return warning === null
     ? message
     : `${message}
-${figures_default.warning} ${r}`;
+${figures_default.warning} ${warning}`;
 }
 //@ chunk-12wyw8h8.js:5296-6136 placement
-function settingsFileWarning(e) {
+function settingsFileWarning(scope) {
   try {
-    if (e === undefined || e === "managed") return null;
-    let n = scopeToSettingSource(e);
-    let settingsFilePathForSource = getSettingsFilePathForSource(n);
+    if (scope === undefined || scope === "managed") return null;
+    let source = scopeToSettingSource(scope);
+    let filePath = getSettingsFilePathForSource(source);
     if (
-      settingsFilePathForSource === undefined ||
-      (n === "userSettings" && basename(settingsFilePathForSource) === USER_SETTINGS_FILE_NAMES.cowork)
+      filePath === undefined ||
+      (source === "userSettings" && basename(filePath) === USER_SETTINGS_FILE_NAMES.cowork)
     )
       return null;
-    if (isWorkspaceRestrictedSource(n) || (n !== "userSettings" && isSuspectLink(settingsFilePathForSource)))
+    if (isWorkspaceRestrictedSource(source) || (source !== "userSettings" && isSuspectLink(filePath)))
       return null;
-    let filtered = getSettingsParseErrorsForSource(n).filter(
-      (u) => u.file === settingsFilePathForSource && u.severity !== "warning",
+    let filtered = getSettingsParseErrorsForSource(source).filter(
+      (parseError) => parseError.file === filePath && parseError.severity !== "warning",
     );
-    let [f] = filtered;
-    if (f === undefined) return null;
-    let o = filtered.length - 1;
-    let m =
-      f.path !== ""
-        ? `its "${quotedPrintable(f.path, 80)}" ${o > 0 ? `and ${o} other ${plural(o, "value")} are` : "is"} not valid`
-        : f.errorClass === "unreadable"
+    let [firstError] = filtered;
+    if (firstError === undefined) return null;
+    let otherErrorCount = filtered.length - 1;
+    let problem =
+      firstError.path !== ""
+        ? `its "${quotedPrintable(firstError.path, 80)}" ${otherErrorCount > 0 ? `and ${otherErrorCount} other ${plural(otherErrorCount, "value")} are` : "is"} not valid`
+        : firstError.errorClass === "unreadable"
           ? "it could not be read"
           : "it is not a JSON object";
-    return `${printableOrEmpty(settingsFilePathForSource)} does not load (${m}), so Claude Code ignores the whole file, including anything this command wrote there. Fix the file, then run this command again if its change is missing. If a newer Claude Code wrote the file, update Claude Code instead.`;
+    return `${printableOrEmpty(filePath)} does not load (${problem}), so Claude Code ignores the whole file, including anything this command wrote there. Fix the file, then run this command again if its change is missing. If a newer Claude Code wrote the file, update Claude Code instead.`;
   } catch (error) {
     logForDebugging(`settings file check after a plugin command skipped: ${errorMessage(error)}`, {
       level: "warn",
@@ -363,61 +364,66 @@ function settingsFileWarning(e) {
   }
 }
 //@ chunk-12wyw8h8.js:6136-6616 placement
-class PluginOperationFailedError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  result;
-  pluginCommandErrorCategory;
-  constructor(message, n = {}) {
-    super(message, "plugin operation returned a failure result");
-    this.name = "PluginOperationFailedError";
-    this.result = n;
-    if (
-      n.failureCode === "invalid_plugin_id" ||
-      n.failureCode === "plugin_folder_held" ||
-      n.failureCode === "install_records_unreadable" ||
-      n.failureCode === "directory_identity_changed" ||
-      n.failureCode === "directory_binding_unreadable" ||
-      n.failureCode === "directory_loaded"
-    )
-      this.pluginCommandErrorCategory = "validation";
-  }
-}
+let PluginOperationFailedError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-12wyw8h8.js:6136", () => {
+  PluginOperationFailedError = class PluginOperationFailedError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    result;
+    pluginCommandErrorCategory;
+    constructor(message, result = {}) {
+      super(message, "plugin operation returned a failure result");
+      this.name = "PluginOperationFailedError";
+      this.result = result;
+      if (
+        result.failureCode === "invalid_plugin_id" ||
+        result.failureCode === "plugin_folder_held" ||
+        result.failureCode === "install_records_unreadable" ||
+        result.failureCode === "directory_identity_changed" ||
+        result.failureCode === "directory_binding_unreadable" ||
+        result.failureCode === "directory_loaded"
+      )
+        this.pluginCommandErrorCategory = "validation";
+    }
+  };
+});
 //@ chunk-12wyw8h8.js:6616-6832 placement
-function installConfirmationDigest(e) {
-  let n =
-    e.kind === "command_source"
-      ? [e.kind, e.pluginId, e.command, e.mode, e.catalogRevision]
-      : [e.kind, e.pluginId, e.command, e.archiveUrl, e.catalogRevision];
-  return createHash("sha256").update(jsonStringify(n), "utf8").digest("hex");
+function installConfirmationDigest(shown) {
+  let digestParts =
+    shown.kind === "command_source"
+      ? [shown.kind, shown.pluginId, shown.command, shown.mode, shown.catalogRevision]
+      : [shown.kind, shown.pluginId, shown.command, shown.archiveUrl, shown.catalogRevision];
+  return createHash("sha256").update(jsonStringify(digestParts), "utf8").digest("hex");
 }
 //@ chunk-12wyw8h8.js:6832-6874 placement
 /**
  * 给安装确认对象补上 sha256 摘要。
  */
-function withConfirmationDigest(e) {
+function withConfirmationDigest(shown) {
   return {
-    ...e,
-    sha256: installConfirmationDigest(e),
+    ...shown,
+    sha256: installConfirmationDigest(shown),
   };
 }
 //@ chunk-12wyw8h8.js:6874-6945 placement
 /**
  * 补上 “确认命令是否匹配” 的标记。
  */
-function withAcceptMatch(e, n) {
-  return n === undefined
-    ? e
+function withAcceptMatch(shown, acceptCommand) {
+  return acceptCommand === undefined
+    ? shown
     : {
-        ...e,
-        acceptCommandMatched: matchesAcceptCommand(n, e),
+        ...shown,
+        acceptCommandMatched: matchesAcceptCommand(acceptCommand, shown),
       };
 }
 //@ chunk-12wyw8h8.js:6945-7087 placement
-async function entryHelperTarget(e, pluginId, storageV5) {
+async function entryHelperTarget(helper, pluginId, storageV5) {
   return {
     kind: "entry_helper",
     pluginId,
-    command: e.command,
-    archiveUrl: describeArchiveFetchCommand(e).destination,
+    command: helper.command,
+    archiveUrl: describeArchiveFetchCommand(helper).destination,
     catalogRevision: await marketplaceRevision(pluginId, storageV5),
   };
 }
@@ -444,13 +450,17 @@ async function marketplaceRevision(pluginId, storageV5) {
           () => false,
         )
       ) {
-        let u = runGitWithCeilingDirs(installLocation, {});
-        let g = await execFileNoThrowWithCwd(gitExe(), [...u.inCheckoutArgs, "rev-parse", "HEAD"], {
-          cwd: installLocation,
-          env: u.env,
-          stdin: "ignore",
-        });
-        return g.code === 0 ? `git:${g.stdout.trim()}` : unreadable;
+        let gitSetup = runGitWithCeilingDirs(installLocation, {});
+        let revParse = await execFileNoThrowWithCwd(
+          gitExe(),
+          [...gitSetup.inCheckoutArgs, "rev-parse", "HEAD"],
+          {
+            cwd: installLocation,
+            env: gitSetup.env,
+            stdin: "ignore",
+          },
+        );
+        return revParse.code === 0 ? `git:${revParse.stdout.trim()}` : unreadable;
       }
       if (seedDirFor(installLocation) === undefined) {
         let trimmed = (await readFile(join(installLocation, GCS_SHA_MARKER_FILE), "utf8")).trim();
@@ -469,43 +479,43 @@ async function marketplaceRevision(pluginId, storageV5) {
  * 计算插件市场清单的规范化哈希：读取 .claude-plugin/marketplace.json（或文件本身）与 package.json，键排序后取 sha256。
  */
 async function marketplaceManifestHash(installLocation) {
-  let n = (error) => ["ENOENT", "ENOTDIR"].includes(getErrnoCode(error) ?? "");
-  let r;
-  let p = true;
+  let isMissingErrno = (error) => ["ENOENT", "ENOTDIR"].includes(getErrnoCode(error) ?? "");
+  let manifestText;
+  let isDirectoryInstall = true;
   try {
-    r = await readFile(join(installLocation, ".claude-plugin", "marketplace.json"), "utf8");
+    manifestText = await readFile(join(installLocation, ".claude-plugin", "marketplace.json"), "utf8");
   } catch (error) {
-    if (!n(error)) throw error;
-    r = await readFile(installLocation, "utf8");
-    p = false;
+    if (!isMissingErrno(error)) throw error;
+    manifestText = await readFile(installLocation, "utf8");
+    isDirectoryInstall = false;
   }
-  let f = p
+  let packageText = isDirectoryInstall
     ? await readFile(join(installLocation, "package.json"), "utf8").catch((error) => {
-        if (n(error)) return null;
+        if (isMissingErrno(error)) return null;
         throw error;
       })
     : null;
   return createHash("sha256")
     .update(
       jsonStringify([
-        canonicalForm(jsonParse(stripBom(r))),
-        f === null ? null : canonicalForm(jsonParse(stripBom(f))),
+        canonicalForm(jsonParse(stripBom(manifestText))),
+        packageText === null ? null : canonicalForm(jsonParse(stripBom(packageText))),
       ]),
       "utf8",
     )
     .digest("hex");
 }
 //@ chunk-12wyw8h8.js:8261-8420 placement
-function canonicalForm(e) {
-  if (Array.isArray(e)) return ["[", ...e.map(canonicalForm)];
-  if (e !== null && typeof e === "object")
+function canonicalForm(value) {
+  if (Array.isArray(value)) return ["[", ...value.map(canonicalForm)];
+  if (value !== null && typeof value === "object")
     return [
       "{",
-      ...Object.keys(e)
+      ...Object.keys(value)
         .sort()
-        .map((key) => [key, canonicalForm(e[key])]),
+        .map((key) => [key, canonicalForm(value[key])]),
     ];
-  return e;
+  return value;
 }
 //@ chunk-12wyw8h8.js:8420-8486 placement
 /**
@@ -517,18 +527,18 @@ function matchesAcceptCommand(acceptCommand, shown) {
   );
 }
 //@ chunk-12wyw8h8.js:8486-8631 placement
-async function writePluginResult(e) {
-  let n =
-    e.failureCode !== undefined && UNCONFIRMED_INSTALL_CODES.has(e.failureCode)
-      ? e
+async function writePluginResult(result) {
+  let output =
+    result.failureCode !== undefined && UNCONFIRMED_INSTALL_CODES.has(result.failureCode)
+      ? result
       : {
-          ...e,
+          ...result,
           shownCommand: undefined,
         };
   await writeStdoutAndDrain(
     escapeControlChars(
       jsonStringify({
-        ...n,
+        ...output,
         nonce: resultNonce.value,
       }),
     ) +
@@ -540,14 +550,17 @@ async function writePluginResult(e) {
 /**
  * 保存结果 nonce 的槽位。
  */
-var resultNonce = identity(
-  {
-    value: undefined,
-  },
-  (e) => {
-    e.value = undefined;
-  },
-);
+var resultNonce; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-12wyw8h8.js:8631", () => {
+  resultNonce = identity(
+    {
+      value: undefined,
+    },
+    (slot) => {
+      slot.value = undefined;
+    },
+  );
+});
 //@ chunk-12wyw8h8.js:8678-8708 placement
 /**
  * 读取结果 nonce。
@@ -561,34 +574,37 @@ function readResultNonce_2() {
   env.unset("CLAUDE_CODE_RESULT_NONCE");
 }
 //@ chunk-12wyw8h8.js:8802-8922 placement
-var UNCONFIRMED_INSTALL_CODES = new Set([
-  "command_source_refused",
-  "command_source_declined",
-  "entry_helper_unconfirmed",
-  "entry_helper_declined",
-]);
+var UNCONFIRMED_INSTALL_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-12wyw8h8.js:8802", () => {
+  UNCONFIRMED_INSTALL_CODES = new Set([
+    "command_source_refused",
+    "command_source_declined",
+    "entry_helper_unconfirmed",
+    "entry_helper_declined",
+  ]);
+});
 //@ chunk-12wyw8h8.js:8922-9121 layout
-function getPluginCommandFailureCode(e, n) {
-  if (e instanceof PluginOperationFailedError) return e.result.failureCode ?? "op_failed";
-  if (e instanceof CommandSourceError && n === "update") {
-    let telemetryMessage = e.telemetryMessage;
+function getPluginCommandFailureCode(error, command) {
+  if (error instanceof PluginOperationFailedError) return error.result.failureCode ?? "op_failed";
+  if (error instanceof CommandSourceError && command === "update") {
+    let telemetryMessage = error.telemetryMessage;
     if (telemetryMessage.startsWith(COMMAND_SOURCE_NETWORK_ERRORS))
       return telemetryMessage.slice(COMMAND_SOURCE_NETWORK_ERRORS.length);
   }
-  return classifyPluginCommandError(e);
+  return classifyPluginCommandError(error);
 }
 //@ chunk-12wyw8h8.js:9121-9248 layout
 /**
  * 把插件命令错误归类为遥测 failureCode（插件操作错误码、claudeai_*、error_*）。
  */
-function classifyPluginCommandError(e) {
-  if (e instanceof CommandSourceError) return classifyCommandSourceError(e).code;
-  if (e instanceof ClaudeAiMarketplaceError) return `claudeai_${e.code}`;
-  return `error_${snakeCaseDashes(classifyPluginCommandError_2(e))}`;
+function classifyPluginCommandError(error) {
+  if (error instanceof CommandSourceError) return classifyCommandSourceError(error).code;
+  if (error instanceof ClaudeAiMarketplaceError) return `claudeai_${error.code}`;
+  return `error_${snakeCaseDashes(classifyPluginCommandError_2(error))}`;
 }
 //@ chunk-12wyw8h8.js:9248-9292 layout
-function snakeCaseDashes(e) {
-  return e.replaceAll("-", "_");
+function snakeCaseDashes(text) {
+  return text.replaceAll("-", "_");
 }
 //@ chunk-12wyw8h8.js:9292-10539 layout
 var FAILURE_CODE_CATEGORY = {
@@ -624,83 +640,98 @@ var UNCLASSIFIED_COMMAND_FAILURE = {
   prune: "claude plugin prune failed with an unclassified error",
 };
 //@ chunk-12wyw8h8.js:10539-10606 layout
-function appendLines(e, n) {
-  return n.length === 0
-    ? e
-    : [e.trimEnd(), ...n].join(`
+function appendLines(message, extraLines) {
+  return extraLines.length === 0
+    ? message
+    : [message.trimEnd(), ...extraLines].join(`
 `);
 }
 //@ chunk-12wyw8h8.js:10606-12383 fingerprint = handlePluginCommandError (0.387)
 /**
  * CLI 插件子命令的统一错误处理：打 tengu_plugin_command_failed 遥测（命令、作用域、failureCode 分类），JSON 模式输出结构化结果，否则打印错误并以非零退出。
  */
-async function handlePluginCommandError(error, n, r, p, f, o, m = []) {
+async function handlePluginCommandError(
+  error,
+  command,
+  pluginArg,
+  storageV5,
+  shownContext,
+  aliasedId,
+  extraLines = [],
+) {
   let failureCode = error instanceof PluginOperationFailedError ? error.result.failureCode : undefined;
-  let g = classifyPluginCommandError_2(error);
-  let s = g === "unknown" && failureCode !== undefined ? (FAILURE_CODE_CATEGORY[failureCode] ?? g) : g;
-  let h = n === "disable-all" ? "disable" : n === "prune" ? undefined : n;
-  if (f && h) {
-    let S = error instanceof PluginOperationFailedError ? error.result : {};
+  let errorKind = classifyPluginCommandError_2(error);
+  let category =
+    errorKind === "unknown" && failureCode !== undefined
+      ? (FAILURE_CODE_CATEGORY[failureCode] ?? errorKind)
+      : errorKind;
+  let resultCommand = command === "disable-all" ? "disable" : command === "prune" ? undefined : command;
+  if (shownContext && resultCommand) {
+    let failureResult = error instanceof PluginOperationFailedError ? error.result : {};
     await writePluginResult({
-      command: h,
+      command: resultCommand,
       outcome: "failed",
-      ...(n === "disable-all"
+      ...(command === "disable-all"
         ? {
             all: true,
           }
         : {
-            plugin: r,
+            plugin: pluginArg,
           }),
-      pluginId: S.pluginId ?? f.pluginId ?? o,
-      scope: f.scope,
-      message: stripInvisibleKeepNewlines(appendLines(errorMessage(error), m)),
-      failureCode: getPluginCommandFailureCode(error, n),
-      alreadyInGoalState: S.alreadyInGoalState,
-      installedScope: S.installedScope,
-      reverseDependents: S.reverseDependents,
-      dependencies: S.dependencies,
-      disableFirst: S.disableFirst,
-      governingScope: S.governingScope,
-      shownCommand: f.shownCommand && withConfirmationDigest(f.shownCommand),
+      pluginId: failureResult.pluginId ?? shownContext.pluginId ?? aliasedId,
+      scope: shownContext.scope,
+      message: stripInvisibleKeepNewlines(appendLines(errorMessage(error), extraLines)),
+      failureCode: getPluginCommandFailureCode(error, command),
+      alreadyInGoalState: failureResult.alreadyInGoalState,
+      installedScope: failureResult.installedScope,
+      reverseDependents: failureResult.reverseDependents,
+      dependencies: failureResult.dependencies,
+      disableFirst: failureResult.disableFirst,
+      governingScope: failureResult.governingScope,
+      shownCommand: shownContext.shownCommand && withConfirmationDigest(shownContext.shownCommand),
     });
   }
-  if (error instanceof CommandSourceError && (n === "install" || n === "update")) {
-    console.error(stripInvisibleKeepNewlines(appendLines(errorMessage(error), m)));
-    if (n === "install") {
+  if (error instanceof CommandSourceError && (command === "install" || command === "update")) {
+    console.error(stripInvisibleKeepNewlines(appendLines(errorMessage(error), extraLines)));
+    if (command === "install") {
       let { code, kind } = classifyCommandSourceError(error);
       if (kind === "bad") await logFeatureBadAsync("cli_plugin_install", code);
       else await logFeatureSadAsync("cli_plugin_install", code);
-    } else if (n === "update")
+    } else if (command === "update")
       await logFeatureSadAsync("cli_plugin_update", getPluginCommandFailureCode(error, "update"));
     return exitAfterAnalyticsFlush(1);
   }
-  let v = error instanceof ClaudeAiMarketplaceError ? `claudeai_${error.code}` : undefined;
-  if (s === "unknown" && !(error instanceof PluginOperationFailedError) && v === undefined)
-    logError(withTelemetryMessage(toError(error), UNCLASSIFIED_COMMAND_FAILURE[n]));
+  let claudeAiCode = error instanceof ClaudeAiMarketplaceError ? `claudeai_${error.code}` : undefined;
+  if (category === "unknown" && !(error instanceof PluginOperationFailedError) && claudeAiCode === undefined)
+    logError(withTelemetryMessage(toError(error), UNCLASSIFIED_COMMAND_FAILURE[command]));
   else
-    logForDebugging(`Plugin command "${n}" failed: ${errorMessage(error)}`, {
+    logForDebugging(`Plugin command "${command}" failed: ${errorMessage(error)}`, {
       level: "error",
     });
-  let w = r ? `${n} plugin "${r}"` : n === "disable-all" ? "disable all plugins" : `${n} plugins`;
+  let actionLabel = pluginArg
+    ? `${command} plugin "${pluginArg}"`
+    : command === "disable-all"
+      ? "disable all plugins"
+      : `${command} plugins`;
   console.error(
     stripInvisibleKeepNewlines(
-      appendLines(`${figures_default.cross} Failed to ${w}: ${errorMessage(error)}`, m),
+      appendLines(`${figures_default.cross} Failed to ${actionLabel}: ${errorMessage(error)}`, extraLines),
     ),
   );
-  let y =
-    v ??
-    (failureCode !== undefined && (g === "unknown" || failureCode === "not_installed")
+  let resultCode =
+    claudeAiCode ??
+    (failureCode !== undefined && (errorKind === "unknown" || failureCode === "not_installed")
       ? failureCode
-      : snakeCaseDashes(s));
-  switch (n) {
+      : snakeCaseDashes(category));
+  switch (command) {
     case "install":
-      await logFeatureBadAsync("cli_plugin_install", y);
+      await logFeatureBadAsync("cli_plugin_install", resultCode);
       break;
     case "uninstall":
-      await logFeatureBadAsync("cli_plugin_uninstall", y);
+      await logFeatureBadAsync("cli_plugin_uninstall", resultCode);
       break;
     case "update":
-      await logFeatureBadAsync("cli_plugin_update", y);
+      await logFeatureBadAsync("cli_plugin_update", resultCode);
       break;
     case "enable":
       await logFeatureBadAsync("cli_plugin_enable", "cli_plugin_enable_failed");
@@ -708,15 +739,17 @@ async function handlePluginCommandError(error, n, r, p, f, o, m = []) {
     default:
       break;
   }
-  let R = r ? await pluginTelemetryFields(o ?? r, policyEnabledPluginNameSet(), p) : {};
+  let telemetryFields = pluginArg
+    ? await pluginTelemetryFields(aliasedId ?? pluginArg, policyEnabledPluginNameSet(), storageV5)
+    : {};
   await logEventAsync("tengu_plugin_command_failed", {
-    command: fromEnum(n),
-    error_category: fromEnum(s),
+    command: fromEnum(command),
+    error_category: fromEnum(category),
     ...{
       failure_code: fromEnumOpt(failureCode),
     },
-    ...R,
-    ...(o !== undefined
+    ...telemetryFields,
+    ...(aliasedId !== undefined
       ? {
           aliased_id: true,
         }
@@ -725,115 +758,137 @@ async function handlePluginCommandError(error, n, r, p, f, o, m = []) {
   return exitAfterAnalyticsFlush(1);
 }
 //@ chunk-12wyw8h8.js:12383-13252 layout
-function applyConfigFlags(e, n, r = "") {
-  let p = {};
-  for (let m of e) {
-    let { key, raw } = parseConfigPair(m);
-    let s = printableName(`${r}${key}`);
+function applyConfigFlags(pairs, configFields, prefix = "") {
+  let values = {};
+  for (let pair of pairs) {
+    let { key, raw } = parseConfigPair(pair);
+    let keyName = printableName(`${prefix}${key}`);
     let trimmed = (raw.split(/\r\n|\r|\n/, 1)[0] ?? "").trim();
-    let v = Object.hasOwn(n, key) ? n[key] : undefined;
-    if (!v) {
-      let mapped = Object.keys(n).map((key) => printableName(`${r}${key}`));
+    let field = Object.hasOwn(configFields, key) ? configFields[key] : undefined;
+    if (!field) {
+      let mapped = Object.keys(configFields).map((key) => printableName(`${prefix}${key}`));
       throw Error(
-        `--config key "${s}" isn't declared in this plugin's userConfig.` +
+        `--config key "${keyName}" isn't declared in this plugin's userConfig.` +
           (mapped.length > 0 ? ` Known keys: ${mapped.join(", ")}.` : ""),
       );
     }
-    if (trimmed === "") throw Error(`--config ${s}: value is empty. Omit the flag to leave "${s}" unset.`);
-    if (v.type === "number") {
-      let w = Number(trimmed);
-      if (Number.isNaN(w)) throw Error(`--config ${s}: "${trimmed}" is not a number`);
-      p[key] = w;
-    } else if (v.type === "boolean") {
-      let w = truthyOrFalsyEnv(trimmed);
-      if (w === undefined)
-        throw Error(`--config ${s}: "${trimmed}" is not a boolean (use true/false, 1/0, yes/no, on/off)`);
-      p[key] = w;
-    } else p[key] = trimmed;
+    if (trimmed === "")
+      throw Error(`--config ${keyName}: value is empty. Omit the flag to leave "${keyName}" unset.`);
+    if (field.type === "number") {
+      let parsedNumber = Number(trimmed);
+      if (Number.isNaN(parsedNumber)) throw Error(`--config ${keyName}: "${trimmed}" is not a number`);
+      values[key] = parsedNumber;
+    } else if (field.type === "boolean") {
+      let parsedBool = truthyOrFalsyEnv(trimmed);
+      if (parsedBool === undefined)
+        throw Error(
+          `--config ${keyName}: "${trimmed}" is not a boolean (use true/false, 1/0, yes/no, on/off)`,
+        );
+      values[key] = parsedBool;
+    } else values[key] = trimmed;
   }
-  let f = filterEntriesToNullProto(n, (m, u) => Object.hasOwn(p, u));
-  let o = validateUserConfig(p, f);
-  if (!o.valid)
-    throw Error(`--config validation failed: ${o.errors.map((error) => printableName(error)).join("; ")}`);
-  return p;
+  let declaredSubset = filterEntriesToNullProto(configFields, (fieldDef, fieldKey) =>
+    Object.hasOwn(values, fieldKey),
+  );
+  let validation = validateUserConfig(values, declaredSubset);
+  if (!validation.valid)
+    throw Error(
+      `--config validation failed: ${validation.errors.map((error) => printableName(error)).join("; ")}`,
+    );
+  return values;
 }
 //@ chunk-12wyw8h8.js:13252-14713 layout
 /**
  * claude plugin install --config key=value：安装后重新加载插件，按 manifest.userConfig 校验并保存这些选项。
  */
-async function configurePluginFromFlags(e, n, r) {
-  refreshPluginCaches(r);
-  let { enabled, disabled } = await loadAllPlugins(r);
-  let marketplace = findMarketplace([...enabled, ...disabled], e);
-  let m = n ?? [];
-  let u = m.length > 0;
+async function configurePluginFromFlags(pluginArg, configArgs, storageV5) {
+  refreshPluginCaches(storageV5);
+  let { enabled, disabled } = await loadAllPlugins(storageV5);
+  let marketplace = findMarketplace([...enabled, ...disabled], pluginArg);
+  let flagConfigArgs = configArgs ?? [];
+  let hasConfig = flagConfigArgs.length > 0;
   if (!marketplace) {
-    if (u)
+    if (hasConfig)
       throw Error(
-        `--config was given but plugin "${e}" failed to load after install \u2014 run \`claude plugin list\` to see why.`,
+        `--config was given but plugin "${pluginArg}" failed to load after install \u2014 run \`claude plugin list\` to see why.`,
       );
     return "";
   }
   let userConfig = marketplace.manifest.userConfig;
-  let s = userConfig && Object.keys(userConfig).length > 0 ? userConfig : undefined;
-  let any = m.map(parseConfigPair).some(({ key }) => !(s && Object.hasOwn(s, key)));
+  let declaredConfig = userConfig && Object.keys(userConfig).length > 0 ? userConfig : undefined;
+  let any = flagConfigArgs
+    .map(parseConfigPair)
+    .some(({ key }) => !(declaredConfig && Object.hasOwn(declaredConfig, key)));
   let { local, remoteCount } = mcpbSourcesOf(marketplace);
   let { bundles, unreadable } =
     local.length > 0 && (marketplace.enabled || any)
-      ? await readBundledServerConfigs(marketplace, local, r)
+      ? await readBundledServerConfigs(marketplace, local, storageV5)
       : {
           bundles: [],
           unreadable: [],
         };
-  let S = {
+  let bundleInfo = {
     unreadable,
     remoteCount,
   };
-  if (u) {
-    if (!s && bundles.length === 0)
+  if (hasConfig) {
+    if (!declaredConfig && bundles.length === 0)
       throw Error(
-        `--config was given but plugin "${e}" declares no userConfig options` +
+        `--config was given but plugin "${pluginArg}" declares no userConfig options` +
           (local.length > unreadable.length ? " and its bundled MCP servers declare no user_config." : ".") +
-          unconfigurableBundlesNote(S),
+          unconfigurableBundlesNote(bundleInfo),
       );
-    let { pluginPairs, bundlePairs } = splitPluginConfigArgs(m, s, bundles, S);
-    let U = s && pluginPairs.length > 0 ? applyConfigFlags(pluginPairs, s) : undefined;
+    let { pluginPairs, bundlePairs } = splitPluginConfigArgs(
+      flagConfigArgs,
+      declaredConfig,
+      bundles,
+      bundleInfo,
+    );
+    let pluginValues =
+      declaredConfig && pluginPairs.length > 0 ? applyConfigFlags(pluginPairs, declaredConfig) : undefined;
     let flattened = bundles.flatMap((bundle) => {
-      let L = bundlePairs.get(bundle.serverName);
-      return L
+      let bundlePairsForServer = bundlePairs.get(bundle.serverName);
+      return bundlePairsForServer
         ? [
             {
               bundle,
-              values: applyConfigFlags(L, bundle.schema, `${bundle.serverName}.`),
+              values: applyConfigFlags(bundlePairsForServer, bundle.schema, `${bundle.serverName}.`),
             },
           ]
         : [];
     });
-    if (s && U) await savePluginOptions(marketplaceSource(marketplace), U, s, r);
+    if (declaredConfig && pluginValues)
+      await savePluginOptions(marketplaceSource(marketplace), pluginValues, declaredConfig, storageV5);
     for (let { bundle, values } of flattened) {
-      await saveMcpServerUserConfig(marketplace.repository, bundle.serverName, values, bundle.schema, r);
+      await saveMcpServerUserConfig(
+        marketplace.repository,
+        bundle.serverName,
+        values,
+        bundle.schema,
+        storageV5,
+      );
       bundle.existingConfig =
         (await loadMcpServerUserConfig(marketplace.repository, bundle.serverName)) ?? {};
     }
   }
-  let P = [];
-  if (s) {
+  let notes = [];
+  if (declaredConfig) {
     let keys = Object.keys(await getUnconfiguredOptions(marketplace));
     if (keys.length > 0) {
-      let filtered = keys.filter((U) => s[U]?.required === true);
-      P.push(
+      let filtered = keys.filter((key) => declaredConfig[key]?.required === true);
+      notes.push(
         `${keys.length} userConfig ${plural(keys.length, "option")} not yet set` +
           (filtered.length > 0 ? ` (${filtered.length} required)` : "") +
-          ` \u2014 run /plugin configure ${e} in Claude Code, or pass --config KEY=VALUE.`,
+          ` \u2014 run /plugin configure ${pluginArg} in Claude Code, or pass --config KEY=VALUE.`,
       );
     }
   }
   if (marketplace.enabled)
     for (let bundle of bundles) {
-      let A = missingConfigMessage(bundle, marketplace.name);
-      if (A) P.push(A);
+      let message = missingConfigMessage(bundle, marketplace.name);
+      if (message) notes.push(message);
     }
-  return P.join(`
+  return notes.join(`
 `);
 }
 //@ chunk-12wyw8h8.js:14713-15879 layout
@@ -842,63 +897,63 @@ async function configurePluginFromFlags(e, n, r) {
  */
 async function confirmCommandSourceInstall(
   pluginId,
-  n,
-  { yes: r = false, acceptedCommand: p, acceptCommand: f, onShown: o, storageV5 } = {},
+  pluginEntry,
+  { yes = false, acceptedCommand, acceptCommand, onShown, storageV5 } = {},
 ) {
-  if (typeof n.source !== "object" || n.source.source !== "command") return;
+  if (typeof pluginEntry.source !== "object" || pluginEntry.source.source !== "command") return;
   if (areCommandPluginSourcesDisabledByPolicy()) {
     writeToStdout(`${commandPluginSourcesDisabledMessage()}
 `);
     return;
   }
-  if (n.source.mode === "link" && getPlatform() === "windows") {
+  if (pluginEntry.source.mode === "link" && getPlatform() === "windows") {
     writeToStdout(`${LINK_MODE_UNSUPPORTED_ON_WINDOWS_MESSAGE}
 `);
     return;
   }
-  let command = n.source.command;
-  let g = describeCommandOutputMode(n.source);
-  if (p === g && !isPluginsDirOnLocalDisk()) return;
-  let s = {
+  let command = pluginEntry.source.command;
+  let grantKey = describeCommandOutputMode(pluginEntry.source);
+  if (acceptedCommand === grantKey && !isPluginsDirOnLocalDisk()) return;
+  let shown = {
     kind: "command_source",
     pluginId,
     command,
-    mode: n.source.mode === "link" ? "link" : "copy",
+    mode: pluginEntry.source.mode === "link" ? "link" : "copy",
     catalogRevision: await marketplaceRevision(pluginId, storageV5),
   };
-  o?.({
-    ...withAcceptMatch(s, f),
-    ...(p !== undefined && {
-      previousAcceptance: p !== g ? "changed" : "unreliable",
+  onShown?.({
+    ...withAcceptMatch(shown, acceptCommand),
+    ...(acceptedCommand !== undefined && {
+      previousAcceptance: acceptedCommand !== grantKey ? "changed" : "unreliable",
     }),
   });
-  let { name: h, marketplace } = parsePluginIdentifier(pluginId);
-  let w = printableName(h ?? "", 200);
-  let y = printableName(marketplace ?? "", 200);
-  let R =
-    `"${w}" is installed by running a command from marketplace "${y}" on this machine` +
-    (p === undefined
+  let { name: pluginName, marketplace } = parsePluginIdentifier(pluginId);
+  let printablePluginName = printableName(pluginName ?? "", 200);
+  let printableMarketplace = printableName(marketplace ?? "", 200);
+  let disclosure =
+    `"${printablePluginName}" is installed by running a command from marketplace "${printableMarketplace}" on this machine` +
+    (acceptedCommand === undefined
       ? ""
-      : p !== g
+      : acceptedCommand !== grantKey
         ? " \u2014 and that command (or how its output is used) CHANGED since you accepted it"
         : " \u2014 your earlier acceptance is recorded where it cannot be relied on (a plugins root inside a workspace, on a network location, or one that could not be resolved), so please confirm it again") +
     `:
   ${command}
-  (${describeCommandSourceMode(n.source)})
+  (${describeCommandSourceMode(pluginEntry.source)})
 `;
-  writeToStdout(R);
-  let S = await promptAcceptCommand({
-    yes: r,
-    acceptCommand: f,
-    shown: s,
-    disclosure: R,
+  writeToStdout(disclosure);
+  let answer = await promptAcceptCommand({
+    yes,
+    acceptCommand,
+    shown,
+    disclosure,
   });
-  return S === "accepted"
+  return answer === "accepted"
     ? {
         kind: "accepted",
-        grantKey: g,
+        grantKey,
       }
-    : S === "declined"
+    : answer === "declined"
       ? {
           kind: "declined",
         }
@@ -946,97 +1001,100 @@ async function promptAcceptCommand({ yes = false, acceptCommand, shown, disclosu
 /**
  * 解析 install 目标：补全市场名并取 marketplace 条目，供展示 command/headersHelper 披露。
  */
-async function resolveInstallTarget(e, n = {}, r) {
-  if (parseNpmPluginId(e) !== null) return null;
-  let { name: p, marketplace } = parsePluginIdentifier(e);
-  if (!p) return null;
-  let o = marketplace ?? n.resolvedMarketplace;
-  if (!o)
+async function resolveInstallTarget(pluginArg, options = {}, storageV5) {
+  if (parseNpmPluginId(pluginArg) !== null) return null;
+  let { name: pluginName, marketplace } = parsePluginIdentifier(pluginArg);
+  if (!pluginName) return null;
+  let resolvedMarketplace = marketplace ?? options.resolvedMarketplace;
+  if (!resolvedMarketplace)
     try {
-      o = (await findPluginInMarketplaces(p, r))?.marketplace;
+      resolvedMarketplace = (await findPluginInMarketplaces(pluginName, storageV5))?.marketplace;
     } catch (error) {
       if (error instanceof CommandSourceError) return null;
       throw error;
     }
-  if (!o) return null;
-  let m = `${p}@${o}`;
-  if (await hasOnlyMissingDependencyIssues(m, n.scope ?? "user", r)) return null;
-  let u = await archiveFetchWarning(m, undefined, r);
-  if (u === null) return null;
-  let g = `${archiveHelperDisclosure(u)}
+  if (!resolvedMarketplace) return null;
+  let pluginId = `${pluginName}@${resolvedMarketplace}`;
+  if (await hasOnlyMissingDependencyIssues(pluginId, options.scope ?? "user", storageV5)) return null;
+  let helperSpec = await archiveFetchWarning(pluginId, undefined, storageV5);
+  if (helperSpec === null) return null;
+  let disclosure = `${archiveHelperDisclosure(helperSpec)}
 `;
-  writeToStdout(g);
-  let s = await entryHelperTarget(u, m, r);
-  n.onShown?.(withAcceptMatch(s, n.acceptCommand));
-  let h = await promptAcceptCommand({
-    yes: n.yes,
-    acceptCommand: n.acceptCommand,
-    shown: s,
-    disclosure: g,
+  writeToStdout(disclosure);
+  let shown = await entryHelperTarget(helperSpec, pluginId, storageV5);
+  options.onShown?.(withAcceptMatch(shown, options.acceptCommand));
+  let answer = await promptAcceptCommand({
+    yes: options.yes,
+    acceptCommand: options.acceptCommand,
+    shown,
+    disclosure,
   });
-  return h === "accepted" ? u : h;
+  return answer === "accepted" ? helperSpec : answer;
 }
 //@ chunk-12wyw8h8.js:17513-18894 layout
 /**
  * 已安装插件的市场条目改成 command 来源时，检查并提示需要显式同意后再更新。
  */
-async function checkCommandSourceSwitch(e, n = {}, r) {
-  if (parseNpmPluginId(e) !== null) return;
-  let { name: p, marketplace } = parsePluginIdentifier(e);
-  if (!p) return;
-  let knownMarketplaces = await loadKnownMarketplacesSafe(r);
-  let m = marketplace;
-  let u;
-  if (!m) {
-    let P;
+async function checkCommandSourceSwitch(pluginArg, options = {}, storageV5) {
+  if (parseNpmPluginId(pluginArg) !== null) return;
+  let { name: pluginName, marketplace } = parsePluginIdentifier(pluginArg);
+  if (!pluginName) return;
+  let knownMarketplaces = await loadKnownMarketplacesSafe(storageV5);
+  let resolvedMarketplace = marketplace;
+  let foundEntry;
+  if (!resolvedMarketplace) {
+    let found;
     try {
-      P = await findPluginInMarketplaces(p, r);
+      found = await findPluginInMarketplaces(pluginName, storageV5);
     } catch (error) {
       if (error instanceof CommandSourceError) return;
       throw error;
     }
-    if (!P) return;
-    m = P.marketplace;
-    u = P.entry;
-    n.onResolvedMarketplace?.(m);
+    if (!found) return;
+    resolvedMarketplace = found.marketplace;
+    foundEntry = found.entry;
+    options.onResolvedMarketplace?.(resolvedMarketplace);
   }
-  let g = ownPropertyOrUndefined(knownMarketplaces, m);
-  if (isSourceDisallowedOrUnverifiable(g?.source)) return;
-  let s = `${p}@${m}`;
-  let h =
-    u && n.acceptCommand === undefined
+  let marketplaceConfig = ownPropertyOrUndefined(knownMarketplaces, resolvedMarketplace);
+  if (isSourceDisallowedOrUnverifiable(marketplaceConfig?.source)) return;
+  let pluginId = `${pluginName}@${resolvedMarketplace}`;
+  let plugin =
+    foundEntry && options.acceptCommand === undefined
       ? {
-          entry: u,
+          entry: foundEntry,
         }
       : undefined;
-  if (!h) {
-    let P = await refreshBeforeScopedInstall(m, g, r);
-    n.onMarketplaceRefreshResult?.(P);
+  if (!plugin) {
+    let refreshResult = await refreshBeforeScopedInstall(resolvedMarketplace, marketplaceConfig, storageV5);
+    options.onMarketplaceRefreshResult?.(refreshResult);
     try {
-      h = await getPluginById(s, r);
+      plugin = await getPluginById(pluginId, storageV5);
     } catch (error) {
       if (error instanceof CommandSourceError) return;
       throw error;
     }
   }
-  let v = h ? commandSourceSpecOf(h.entry.source) : undefined;
-  if (!h || !v) return;
-  let w =
-    (isStorageV5Enabled() && r !== undefined ? await loadInstalledPlugins(r) : loadInstalledPluginsSync())
-      .plugins[s] ?? [];
-  let y = describeCommandOutputMode(v);
-  let R = !isPluginsDirOnLocalDisk();
-  let S = R && w.some((P) => P.sourceCommand === y);
-  if (await isPluginEnabledAndCachedAtScope(s, n.scope ?? "user", r)) {
-    if (!S) {
-      let all = w.every((E) => E.sourceCommand === undefined);
+  let sourceSpec = plugin ? commandSourceSpecOf(plugin.entry.source) : undefined;
+  if (!plugin || !sourceSpec) return;
+  let installations =
+    (isStorageV5Enabled() && storageV5 !== undefined
+      ? await loadInstalledPlugins(storageV5)
+      : loadInstalledPluginsSync()
+    ).plugins[pluginId] ?? [];
+  let outputMode = describeCommandOutputMode(sourceSpec);
+  let onNetworkRoot = !isPluginsDirOnLocalDisk();
+  let alreadyAccepted =
+    onNetworkRoot && installations.some((installation) => installation.sourceCommand === outputMode);
+  if (await isPluginEnabledAndCachedAtScope(pluginId, options.scope ?? "user", storageV5)) {
+    if (!alreadyAccepted) {
+      let all = installations.every((installation) => installation.sourceCommand === undefined);
       writeToStdout(
-        `"${printableName(parsePluginIdentifier(s).name ?? "", 200)}" is already installed, and its marketplace ` +
+        `"${printableName(parsePluginIdentifier(pluginId).name ?? "", 200)}" is already installed, and its marketplace ` +
           (all
             ? "entry now installs it by running a command on this machine that has not been reviewed yet."
             : "has since changed the command that installs it (or how its output is used).") +
-          ` Review and accept it: ${runCommandHint("plugin update", s, {
-            extra: (n.scope ?? "user") === "user" ? undefined : `--scope ${n.scope}`,
+          ` Review and accept it: ${runCommandHint("plugin update", pluginId, {
+            extra: (options.scope ?? "user") === "user" ? undefined : `--scope ${options.scope}`,
             fallback: "an explicit plugin update reviews it",
           })}.
 `,
@@ -1044,17 +1102,19 @@ async function checkCommandSourceSwitch(e, n = {}, r) {
     }
     return;
   }
-  if (S)
+  if (alreadyAccepted)
     return {
       kind: "accepted",
-      grantKey: y,
+      grantKey: outputMode,
     };
-  return confirmCommandSourceInstall(s, h.entry, {
-    yes: n.yes,
-    acceptedCommand: R ? w.find((P) => P.sourceCommand !== undefined)?.sourceCommand : undefined,
-    acceptCommand: n.acceptCommand,
-    onShown: n.onShown,
-    storageV5: r,
+  return confirmCommandSourceInstall(pluginId, plugin.entry, {
+    yes: options.yes,
+    acceptedCommand: onNetworkRoot
+      ? installations.find((installation) => installation.sourceCommand !== undefined)?.sourceCommand
+      : undefined,
+    acceptCommand: options.acceptCommand,
+    onShown: options.onShown,
+    storageV5,
   });
 }
 //@ chunk-12wyw8h8.js:18894-20371 callgraph-fingerprint = installPlugin (0.272)
@@ -1062,125 +1122,127 @@ async function checkCommandSourceSwitch(e, n = {}, r) {
  * claude plugin install：调用 installPluginOp，打印结果与依赖/警告，记 tengu_plugin_installed_cli。
  */
 async function installPlugin(
-  e,
-  n = "user",
-  config,
+  pluginArg,
+  scope = "user",
+  configArgs,
   shownSourceCommand,
   shownEntryHelper,
-  o,
+  storageV5,
   announceRefreshResult,
-  u = {},
+  options = {},
 ) {
-  let g = [];
+  let gitFallbackNotes = [];
   try {
-    let s = await installPluginOp(
-      u.resolvedPlugin ?? e,
-      n,
+    let result = await installPluginOp(
+      options.resolvedPlugin ?? pluginArg,
+      scope,
       {
         shownSourceCommand,
         shownEntryHelper,
         announceRefreshResult,
-        replaceInstalledCopy: u.replaceInstalledCopy,
-        npmRegistry: u.npmRegistry,
-        gitHubHttpsFallback: sshCloneFallback((S) => {
-          g.push(S);
+        replaceInstalledCopy: options.replaceInstalledCopy,
+        npmRegistry: options.npmRegistry,
+        gitHubHttpsFallback: sshCloneFallback((note) => {
+          gitFallbackNotes.push(note);
         }),
       },
-      o,
+      storageV5,
     );
-    if (!s.success) throw new PluginOperationFailedError(s.message, s);
-    let pluginId = s.pluginId || e;
-    let scope = s.scope || n;
+    if (!result.success) throw new PluginOperationFailedError(result.message, result);
+    let pluginId = result.pluginId || pluginArg;
+    let scope_2 = result.scope || scope;
     logEvent("tengu_plugin_installed_cli", {
-      ...(await pluginTelemetryFields(pluginId, policyEnabledPluginNameSet(), o)),
+      ...(await pluginTelemetryFields(pluginId, policyEnabledPluginNameSet(), storageV5)),
       plugin_id: pluginIdForTelemetry(pluginId),
-      scope: fromEnum(scope),
+      scope: fromEnum(scope_2),
       install_source: lit("cli-explicit"),
       ...buildPluginVersionShaField(
         pluginId,
         getInstalledGitCommitSha(pluginId, {
-          scope,
+          scope: scope_2,
         }),
       ),
       ...directoryInstallFields({
         pluginId,
         surface: "cli",
-        replaced: s.switched !== undefined,
+        replaced: result.switched !== undefined,
       }),
-      ...(s.aliasedId
+      ...(result.aliasedId
         ? {
             aliased_id: true,
-            ...(s.reenabled && {
+            ...(result.reenabled && {
               reenabled: true,
             }),
           }
         : {}),
     });
-    let w = "";
-    let y = config && config.length > 0 ? true : undefined;
+    let configNote = "";
+    let configApplied = configArgs && configArgs.length > 0 ? true : undefined;
     try {
-      if (s.nothingWritten) {
-        if (y) {
-          w = `${figures_default.warning} --config values were not saved, because this command changed nothing. To set them, run /plugin configure ${s.pluginId || e} in Claude Code.`;
-          y = false;
+      if (result.nothingWritten) {
+        if (configApplied) {
+          configNote = `${figures_default.warning} --config values were not saved, because this command changed nothing. To set them, run /plugin configure ${result.pluginId || pluginArg} in Claude Code.`;
+          configApplied = false;
         }
-      } else w = await configurePluginFromFlags(s.pluginId || e, config, o);
+      } else configNote = await configurePluginFromFlags(result.pluginId || pluginArg, configArgs, storageV5);
     } catch (error) {
-      let P = errorMessage(error);
-      logForDebugging(`post-install userConfig step failed: ${P}`, {
+      let errorText = errorMessage(error);
+      logForDebugging(`post-install userConfig step failed: ${errorText}`, {
         level: "warn",
       });
-      if (config && config.length > 0) {
-        w = `${figures_default.warning} Installed, but --config not applied: ${P}`;
-        y = false;
+      if (configArgs && configArgs.length > 0) {
+        configNote = `${figures_default.warning} Installed, but --config not applied: ${errorText}`;
+        configApplied = false;
       }
     }
-    let R = withSettingsWarning(
-      [s.message, ...g, ...(w ? [w] : [])].join(`
+    let message = withSettingsWarning(
+      [result.message, ...gitFallbackNotes, ...(configNote ? [configNote] : [])].join(`
 `),
-      s.scope ?? n,
+      result.scope ?? scope,
     );
-    if (u.json)
+    if (options.json)
       await writePluginResult({
         command: "install",
         outcome: "ok",
-        plugin: e,
-        pluginId: s.pluginId,
-        scope: s.scope || n,
-        message: stripInvisibleKeepNewlines(R),
-        configApplied: y,
-        installedVersion: s.installedVersion,
-        availableVersion: s.availableVersion,
+        plugin: pluginArg,
+        pluginId: result.pluginId,
+        scope: result.scope || scope,
+        message: stripInvisibleKeepNewlines(message),
+        configApplied,
+        installedVersion: result.installedVersion,
+        availableVersion: result.availableVersion,
       });
-    return R;
+    return message;
   } catch (error) {
     return handlePluginCommandError(
       error,
       "install",
-      e,
-      o,
-      u.json
+      pluginArg,
+      storageV5,
+      options.json
         ? {
-            scope: n,
-            shownCommand: u.shownCommand,
+            scope,
+            shownCommand: options.shownCommand,
           }
         : undefined,
       error instanceof PluginOperationFailedError && error.result.aliasedId
         ? error.result.pluginId
         : undefined,
-      g,
+      gitFallbackNotes,
     );
   }
 }
 //@ chunk-12wyw8h8.js:20371-20524 layout
-async function findOrphanedAutoInstalls(e, n) {
-  let projectPathForScope = getProjectPathForScope(e);
-  let { enabled, disabled } = await loadAllPluginsCacheOnly(isStorageV5Enabled() ? n : undefined);
+async function findOrphanedAutoInstalls(scope, storageV5) {
+  let projectPathForScope = getProjectPathForScope(scope);
+  let { enabled, disabled } = await loadAllPluginsCacheOnly(isStorageV5Enabled() ? storageV5 : undefined);
   return findOrphanedAutoDependencies(
-    (isStorageV5Enabled() && n !== undefined ? await loadInstalledPlugins(n) : loadInstalledPluginsSync())
-      .plugins,
+    (isStorageV5Enabled() && storageV5 !== undefined
+      ? await loadInstalledPlugins(storageV5)
+      : loadInstalledPluginsSync()
+    ).plugins,
     [...enabled, ...disabled],
-    e,
+    scope,
     projectPathForScope,
   );
 }
@@ -1189,27 +1251,31 @@ async function findOrphanedAutoInstalls(e, n) {
  * 把 CLI 参数里的插件名解析成实际插件 ID（别名、已安装副本），返回 {plugin, aliased}。
  */
 async function resolvePluginArgument(
-  e,
+  pluginArg,
   json,
-  r,
-  { unlessNamedInSettings: p = false, unlessDirectoryNameHeld: f = false } = {},
+  storageV5,
+  { unlessNamedInSettings = false, unlessDirectoryNameHeld = false } = {},
 ) {
   {
-    let o = await installSelectedPlugins(e, r);
-    if (o && !(p && isPluginInSettings(e))) {
-      if (f && isOfficialPluginDirectoryId(e)) {
-        let u = await bindingsWithReadFailure().catch(() => {
+    let installed = await installSelectedPlugins(pluginArg, storageV5);
+    if (installed && !(unlessNamedInSettings && isPluginInSettings(pluginArg))) {
+      if (unlessDirectoryNameHeld && isOfficialPluginDirectoryId(pluginArg)) {
+        let bindings = await bindingsWithReadFailure().catch(() => {
           return;
         });
-        if (u === undefined || isUnreadableBindings(u) || findBindingKeysFor(u.keys(), e).length > 0)
+        if (
+          bindings === undefined ||
+          isUnreadableBindings(bindings) ||
+          findBindingKeysFor(bindings.keys(), pluginArg).length > 0
+        )
           return {
-            plugin: e,
+            plugin: pluginArg,
             aliased: false,
           };
       }
-      let pluginId = o.installed.pluginId;
+      let pluginId = installed.installed.pluginId;
       if (!json)
-        writeToStdout(`${stripInvisibleKeepEmoji(`"${quotedPrintable(e, 120)}" is installed as ${pluginId} (the same plugin from ${marketplaceDisplayName(parsePluginIdentifier(pluginId).marketplace ?? "")}).`)}
+        writeToStdout(`${stripInvisibleKeepEmoji(`"${quotedPrintable(pluginArg, 120)}" is installed as ${pluginId} (the same plugin from ${marketplaceDisplayName(parsePluginIdentifier(pluginId).marketplace ?? "")}).`)}
 `);
       return {
         plugin: pluginId,
@@ -1218,7 +1284,7 @@ async function resolvePluginArgument(
     }
   }
   return {
-    plugin: e,
+    plugin: pluginArg,
     aliased: false,
   };
 }
@@ -1226,64 +1292,78 @@ async function resolvePluginArgument(
 /**
  * claude plugin uninstall：解析插件名，调用 uninstallPluginOp，记 tengu_plugin_uninstalled_cli。
  */
-async function uninstallPlugin(e, n = "user", keepData = false, prune = false, yes = false, o, m = {}) {
-  let u = {
-    plugin: e,
+async function uninstallPlugin(
+  pluginArg,
+  scope = "user",
+  keepData = false,
+  prune = false,
+  yes = false,
+  storageV5,
+  options = {},
+) {
+  let argument = {
+    plugin: pluginArg,
     aliased: false,
   };
   try {
-    u = await resolvePluginArgument(e, m.json, o, {
+    argument = await resolvePluginArgument(pluginArg, options.json, storageV5, {
       unlessDirectoryNameHeld: true,
     });
-    let g = await uninstallPluginOp(u.plugin, n, !keepData, o);
-    if (!g.success) throw new PluginOperationFailedError(g.message, g);
+    let result = await uninstallPluginOp(argument.plugin, scope, !keepData, storageV5);
+    if (!result.success) throw new PluginOperationFailedError(result.message, result);
     await logEventAsync("tengu_plugin_uninstalled_cli", {
-      ...(await pluginTelemetryFields(g.pluginId || u.plugin, policyEnabledPluginNameSet(), o)),
-      scope: fromEnum(g.scope || n),
-      ...(u.aliased
+      ...(await pluginTelemetryFields(
+        result.pluginId || argument.plugin,
+        policyEnabledPluginNameSet(),
+        storageV5,
+      )),
+      scope: fromEnum(result.scope || scope),
+      ...(argument.aliased
         ? {
             aliased_id: true,
           }
         : {}),
-      ...(g.savedKept !== undefined && {
+      ...(result.savedKept !== undefined && {
         saved_kept: true,
       }),
     });
-    let s = false;
-    let h = async (v) => {
-      if (m.json)
+    let pruned = false;
+    let writeResult = async (message) => {
+      if (options.json)
         await writePluginResult({
           command: "uninstall",
           outcome: "ok",
-          plugin: e,
-          pluginId: g.pluginId,
-          scope: g.scope || n,
-          keptData: g.dataDirKept ?? keepData,
-          ...(g.savedKept !== undefined && {
-            savedKept: g.savedKept.reason,
+          plugin: pluginArg,
+          pluginId: result.pluginId,
+          scope: result.scope || scope,
+          keptData: result.dataDirKept ?? keepData,
+          ...(result.savedKept !== undefined && {
+            savedKept: result.savedKept.reason,
           }),
-          message: stripInvisibleKeepNewlines(v),
+          message: stripInvisibleKeepNewlines(message),
         });
-      return v;
+      return message;
     };
     try {
-      let orphanedAutoInstalls = await findOrphanedAutoInstalls(n, o);
+      let orphanedAutoInstalls = await findOrphanedAutoInstalls(scope, storageV5);
       if (prune) {
-        writeToStdout(`${figures_default.tick} ${stripInvisibleKeepEmoji(g.message)}
+        writeToStdout(`${figures_default.tick} ${stripInvisibleKeepEmoji(result.message)}
 `);
-        s = true;
+        pruned = true;
         return await pruneOrphanedPlugins(
           orphanedAutoInstalls,
-          n,
+          scope,
           {
             dryRun: false,
             yes,
             deleteDataDir: !keepData,
           },
-          o,
+          storageV5,
         );
       }
-      return h(g.message + formatOrphanedDependenciesNotice(orphanedAutoInstalls.orphans, n));
+      return writeResult(
+        result.message + formatOrphanedDependenciesNotice(orphanedAutoInstalls.orphans, scope),
+      );
     } catch (error) {
       logError(
         withTelemetryMessage(
@@ -1291,24 +1371,24 @@ async function uninstallPlugin(e, n = "user", keepData = false, prune = false, y
           "claude plugin uninstall: post-uninstall orphan scan or prune failed",
         ),
       );
-      let y = `(${prune ? "prune" : "orphan scan"} failed: ${errorMessage(error)})`;
-      if (s) return y;
-      let R = prune ? `${figures_default.tick} ${g.message}` : g.message;
-      return h(`${R}
-${y}`);
+      let pruneNote = `(${prune ? "prune" : "orphan scan"} failed: ${errorMessage(error)})`;
+      if (pruned) return pruneNote;
+      let message = prune ? `${figures_default.tick} ${result.message}` : result.message;
+      return writeResult(`${message}
+${pruneNote}`);
     }
   } catch (error) {
     return handlePluginCommandError(
       error,
       "uninstall",
-      e,
-      o,
-      m.json
+      pluginArg,
+      storageV5,
+      options.json
         ? {
-            scope: n,
+            scope,
           }
         : undefined,
-      u.aliased ? u.plugin : undefined,
+      argument.aliased ? argument.plugin : undefined,
     );
   }
 }
@@ -1316,117 +1396,123 @@ ${y}`);
 /**
  * claude plugin prune：找出作用域内不再被任何插件依赖的自动安装（auto）插件并卸载（可 --dry-run）。
  */
-async function prunePluginsCli(e = "user", { dryRun: n = false, yes: r = false } = {}, p) {
+async function prunePluginsCli(scope = "user", { dryRun = false, yes = false } = {}, storageV5) {
   try {
-    let orphanedAutoInstalls = await findOrphanedAutoInstalls(e, p);
+    let orphanedAutoInstalls = await findOrphanedAutoInstalls(scope, storageV5);
     return await pruneOrphanedPlugins(
       orphanedAutoInstalls,
-      e,
+      scope,
       {
-        dryRun: n,
-        yes: r,
+        dryRun,
+        yes,
         deleteDataDir: true,
       },
-      p,
+      storageV5,
     );
   } catch (error) {
     return handlePluginCommandError(error, "prune");
   }
 }
 //@ chunk-12wyw8h8.js:22244-23480 layout
-async function pruneOrphanedPlugins(orphanedAutoInstalls, n, r, p) {
+async function pruneOrphanedPlugins(orphanedAutoInstalls, scope, options, storageV5) {
   if (orphanedAutoInstalls.unloadable.length > 0)
     return `Skipped \u2014 cannot determine orphans: ${orphanedAutoInstalls.unloadable.map(stripInvisibleKeepEmoji).join(", ")} failed to load. Fix or uninstall, then retry.`;
   if (orphanedAutoInstalls.orphans.size === 0)
     return orphanedAutoInstalls.autoCount === 0
-      ? `Nothing to prune (no auto-installed plugins at ${n} scope).`
-      : `Nothing to prune (${orphanedAutoInstalls.autoCount} auto-installed ${plural(orphanedAutoInstalls.autoCount, "plugin", "plugins")} at ${n} scope, all still needed).`;
+      ? `Nothing to prune (no auto-installed plugins at ${scope} scope).`
+      : `Nothing to prune (${orphanedAutoInstalls.autoCount} auto-installed ${plural(orphanedAutoInstalls.autoCount, "plugin", "plugins")} at ${scope} scope, all still needed).`;
   let plugins = (
-    isStorageV5Enabled() && p !== undefined ? await loadInstalledPlugins(p) : loadInstalledPluginsSync()
+    isStorageV5Enabled() && storageV5 !== undefined
+      ? await loadInstalledPlugins(storageV5)
+      : loadInstalledPluginsSync()
   ).plugins;
-  let projectPathForScope = getProjectPathForScope(n);
+  let projectPathForScope = getProjectPathForScope(scope);
   let mapped = [...orphanedAutoInstalls.orphans].map((orphan) => {
-    let h = installationAtTarget(plugins[orphan], n, projectPathForScope);
-    return `  ${stripInvisibleKeepEmoji(orphan)}${h?.version ? ` (${stripInvisibleKeepEmoji(h.version)})` : ""}`;
+    let installation = installationAtTarget(plugins[orphan], scope, projectPathForScope);
+    return `  ${stripInvisibleKeepEmoji(orphan)}${installation?.version ? ` (${stripInvisibleKeepEmoji(installation.version)})` : ""}`;
   });
-  let u = `${orphanedAutoInstalls.orphans.size} auto-installed ${plural(orphanedAutoInstalls.orphans.size, "plugin", "plugins")} no longer needed at ${n} scope:
+  let summary = `${orphanedAutoInstalls.orphans.size} auto-installed ${plural(orphanedAutoInstalls.orphans.size, "plugin", "plugins")} no longer needed at ${scope} scope:
 ${mapped.join(`
 `)}`;
-  if (r.dryRun)
-    return `${u}
+  if (options.dryRun)
+    return `${summary}
 (dry run \u2014 nothing removed)`;
-  if (!r.yes) {
+  if (!options.yes) {
     if (!process.stdin.isTTY || !process.stdout.isTTY) {
-      let h = n === "user" ? "" : ` --scope ${n}`;
-      return `${u}
-Not a TTY \u2014 run \`claude plugin prune${h} -y\` to remove.`;
+      let scopeFlag = scope === "user" ? "" : ` --scope ${scope}`;
+      return `${summary}
+Not a TTY \u2014 run \`claude plugin prune${scopeFlag} -y\` to remove.`;
     }
-    writeToStdout(`${u}
+    writeToStdout(`${summary}
 `);
     if (!(await confirmPrompt("Remove?"))) return "Aborted.";
   }
-  let g = await pruneOrphanedAutoDeps(
+  let removed = await pruneOrphanedAutoDeps(
     orphanedAutoInstalls.orphans,
-    n,
+    scope,
     projectPathForScope,
     {
-      deleteDataDir: r.deleteDataDir,
+      deleteDataDir: options.deleteDataDir,
     },
-    p,
+    storageV5,
   );
   await logEventAsync("tengu_plugin_prune_cli", {
-    scope: fromEnum(n),
-    removed_count: g.length,
+    scope: fromEnum(scope),
+    removed_count: removed.length,
   });
-  return `Removed ${g.length} auto-installed ${plural(g.length, "plugin", "plugins")}: ${g.map((s) => stripInvisibleKeepEmoji(parsePluginIdentifier(s).name)).join(", ")}`;
+  return `Removed ${removed.length} auto-installed ${plural(removed.length, "plugin", "plugins")}: ${removed.map((pluginId) => stripInvisibleKeepEmoji(parsePluginIdentifier(pluginId).name)).join(", ")}`;
 }
 //@ chunk-12wyw8h8.js:23480-24055 fingerprint = disablePlugin (0.565)
 /**
  * claude plugin disable：调用 disablePluginOp 并输出结果。
  */
-async function disablePlugin(e, n, r, p = {}) {
-  let f = {
-    plugin: e,
+async function disablePlugin(pluginArg, scope, storageV5, options = {}) {
+  let argument = {
+    plugin: pluginArg,
     aliased: false,
   };
   try {
-    f = await resolvePluginArgument(e, p.json, r, {
+    argument = await resolvePluginArgument(pluginArg, options.json, storageV5, {
       unlessNamedInSettings: true,
     });
-    let o = await disablePluginOp(f.plugin, n, r);
-    if (!o.success) throw new PluginOperationFailedError(o.message, o);
+    let result = await disablePluginOp(argument.plugin, scope, storageV5);
+    if (!result.success) throw new PluginOperationFailedError(result.message, result);
     await logEventAsync("tengu_plugin_disabled_cli", {
-      ...(await pluginTelemetryFields(o.pluginId || f.plugin, policyEnabledPluginNameSet(), r)),
-      scope: fromEnumOpt(o.scope),
-      ...(f.aliased
+      ...(await pluginTelemetryFields(
+        result.pluginId || argument.plugin,
+        policyEnabledPluginNameSet(),
+        storageV5,
+      )),
+      scope: fromEnumOpt(result.scope),
+      ...(argument.aliased
         ? {
             aliased_id: true,
           }
         : {}),
     });
-    let m = withSettingsWarning(o.message, o.scope ?? n);
-    if (p.json)
+    let message = withSettingsWarning(result.message, result.scope ?? scope);
+    if (options.json)
       await writePluginResult({
         command: "disable",
         outcome: "ok",
-        plugin: e,
-        pluginId: o.pluginId,
-        scope: o.scope ?? n,
-        message: stripInvisibleKeepNewlines(m),
+        plugin: pluginArg,
+        pluginId: result.pluginId,
+        scope: result.scope ?? scope,
+        message: stripInvisibleKeepNewlines(message),
       });
-    return `${figures_default.tick} ${m}`;
+    return `${figures_default.tick} ${message}`;
   } catch (error) {
     return handlePluginCommandError(
       error,
       "disable",
-      e,
-      r,
-      p.json
+      pluginArg,
+      storageV5,
+      options.json
         ? {
-            scope: n,
+            scope,
           }
         : undefined,
-      f.aliased ? f.plugin : undefined,
+      argument.aliased ? argument.plugin : undefined,
     );
   }
 }
@@ -1434,128 +1520,139 @@ async function disablePlugin(e, n, r, p = {}) {
 /**
  * claude plugin disable --all：禁用全部可禁用插件（组织要求的插件除外）。
  */
-async function disableAllPlugins(e, n = {}) {
+async function disableAllPlugins(storageV5, options = {}) {
   try {
-    let r = await listRequiredPlugins(e);
-    if (!r.success) throw new PluginOperationFailedError(r.message, r);
+    let result = await listRequiredPlugins(storageV5);
+    if (!result.success) throw new PluginOperationFailedError(result.message, result);
     await logEventAsync("tengu_plugin_disabled_all_cli", {});
-    if (n.json)
+    if (options.json)
       await writePluginResult({
         command: "disable",
         outcome: "ok",
         all: true,
-        message: stripInvisibleKeepNewlines(r.message),
+        message: stripInvisibleKeepNewlines(result.message),
       });
-    return `${figures_default.tick} ${r.message}`;
+    return `${figures_default.tick} ${result.message}`;
   } catch (error) {
-    return handlePluginCommandError(error, "disable-all", undefined, undefined, n.json ? {} : undefined);
+    return handlePluginCommandError(
+      error,
+      "disable-all",
+      undefined,
+      undefined,
+      options.json ? {} : undefined,
+    );
   }
 }
 //@ chunk-12wyw8h8.js:24375-26148 fingerprint = updatePluginCli (0.378)
 /**
  * claude plugin update：检查并更新插件（显式模式，处理 headersHelper/command 来源确认），输出版本变化。
  */
-async function updatePluginCli(e, n, { yes: r = false, json: p = false, acceptCommand: f } = {}, o) {
+async function updatePluginCli(
+  pluginArg,
+  scope,
+  { yes = false, json = false, acceptCommand } = {},
+  storageV5,
+) {
   let pluginId;
-  let u;
-  let g = {
-    plugin: e,
+  let pendingShown;
+  let argument = {
+    plugin: pluginArg,
     aliased: false,
   };
   try {
-    g = await resolvePluginArgument(e, p, o);
-    if (!p)
-      writeToStdout(`${stripInvisibleKeepEmoji(`Checking for updates for plugin "${g.plugin}"${n ? ` at ${n} scope` : ""}\u2026`)}
+    argument = await resolvePluginArgument(pluginArg, json, storageV5);
+    if (!json)
+      writeToStdout(`${stripInvisibleKeepEmoji(`Checking for updates for plugin "${argument.plugin}"${scope ? ` at ${scope} scope` : ""}\u2026`)}
 `);
-    let s = await updatePluginOp(
-      g.plugin,
-      n,
+    let result = await updatePluginOp(
+      argument.plugin,
+      scope,
       {
         explicit: true,
-        onEntryHelperDisclosure: async (w, y, R) => {
-          writeToStdout(`${w}
+        onEntryHelperDisclosure: async (disclosure, helper, pluginId) => {
+          writeToStdout(`${disclosure}
 `);
-          let S = await entryHelperTarget(y, R, o);
-          let P = await promptAcceptCommand({
-            yes: r,
-            acceptCommand: f,
-            shown: S,
-            disclosure: `${w}
+          let shown = await entryHelperTarget(helper, pluginId, storageV5);
+          let answer = await promptAcceptCommand({
+            yes,
+            acceptCommand,
+            shown,
+            disclosure: `${disclosure}
 `,
           });
-          u = P === "accepted" ? undefined : withAcceptMatch(S, f);
-          return P;
+          pendingShown = answer === "accepted" ? undefined : withAcceptMatch(shown, acceptCommand);
+          return answer;
         },
-        announceCommandSource: async (w, y, acceptedCommand) => {
-          let S = await confirmCommandSourceInstall(w, y, {
-            yes: r,
+        announceCommandSource: async (pluginId, pluginEntry, acceptedCommand) => {
+          let confirmation = await confirmCommandSourceInstall(pluginId, pluginEntry, {
+            yes,
             acceptedCommand,
-            acceptCommand: f,
-            onShown: (P) => {
-              u = P;
+            acceptCommand,
+            onShown: (shown) => {
+              pendingShown = shown;
             },
-            storageV5: o,
+            storageV5,
           });
-          if (S?.kind === "accepted") u = undefined;
-          if (S?.kind === "declined")
+          if (confirmation?.kind === "accepted") pendingShown = undefined;
+          if (confirmation?.kind === "declined")
             throw new CommandSourceError(
               "Aborted \u2014 the command was not run.",
               "plugin command source declined at the prompt",
             );
-          return S?.grantKey;
+          return confirmation?.grantKey;
         },
       },
-      o,
+      storageV5,
     );
-    let h = stripInvisibleKeepEmoji(s.message);
-    pluginId = s.pluginId;
-    let { outcome } = s;
+    let message = stripInvisibleKeepEmoji(result.message);
+    pluginId = result.pluginId;
+    let { outcome } = result;
     if (outcome === "failed") {
-      if (s.failureCode !== undefined && isSadFailureCode(s.failureCode))
-        throw new CommandSourceError(h, `${COMMAND_SOURCE_NETWORK_ERRORS}${s.failureCode}`);
-      throw new PluginOperationFailedError(h, {
-        failureCode: s.failureCode,
-        pluginId: s.pluginId,
+      if (result.failureCode !== undefined && isSadFailureCode(result.failureCode))
+        throw new CommandSourceError(message, `${COMMAND_SOURCE_NETWORK_ERRORS}${result.failureCode}`);
+      throw new PluginOperationFailedError(message, {
+        failureCode: result.failureCode,
+        pluginId: result.pluginId,
       });
     }
-    if (p)
+    if (json)
       await writePluginResult({
         command: "update",
         outcome: "ok",
-        plugin: e,
-        pluginId: s.pluginId,
-        scope: s.scope ?? n,
-        message: h,
+        plugin: pluginArg,
+        pluginId: result.pluginId,
+        scope: result.scope ?? scope,
+        message,
         updateOutcome: outcome,
-        oldVersion: s.oldVersion,
-        newVersion: s.newVersion,
-        skipReason: s.skipReason,
-        blockedBy: s.blockedBy,
-        refreshFailed: s.refreshFailed,
-        refreshRefusedByPolicy: s.refreshRefusedByPolicy,
+        oldVersion: result.oldVersion,
+        newVersion: result.newVersion,
+        skipReason: result.skipReason,
+        blockedBy: result.blockedBy,
+        refreshFailed: result.refreshFailed,
+        refreshRefusedByPolicy: result.refreshRefusedByPolicy,
       });
     else {
-      if (s.folderNote !== undefined)
-        writeToStdout(`${stripInvisibleKeepEmoji(s.folderNote)}
+      if (result.folderNote !== undefined)
+        writeToStdout(`${stripInvisibleKeepEmoji(result.folderNote)}
 `);
-      writeToStdout(`${figures_default.tick} ${h}
+      writeToStdout(`${figures_default.tick} ${message}
 `);
     }
-    if (s.outcome === "updated") {
-      let w = s.pluginId || g.plugin;
+    if (result.outcome === "updated") {
+      let resolvedId = result.pluginId || argument.plugin;
       logEvent("tengu_plugin_updated_cli", {
-        ...(await pluginTelemetryFields(w, policyEnabledPluginNameSet(), o)),
-        old_version: sanitizeVersion(s.oldVersion),
-        new_version: sanitizeVersion(s.newVersion),
-        ...buildPluginVersionShaField(w, s.gitCommitSha),
-        ...(g.aliased
+        ...(await pluginTelemetryFields(resolvedId, policyEnabledPluginNameSet(), storageV5)),
+        old_version: sanitizeVersion(result.oldVersion),
+        new_version: sanitizeVersion(result.newVersion),
+        ...buildPluginVersionShaField(resolvedId, result.gitCommitSha),
+        ...(argument.aliased
           ? {
               aliased_id: true,
             }
           : {}),
       });
     }
-    if (g.aliased)
+    if (argument.aliased)
       await logFeatureOkAsync("cli_plugin_update", {
         aliased_id: true,
       });
@@ -1565,16 +1662,16 @@ async function updatePluginCli(e, n, { yes: r = false, json: p = false, acceptCo
     return handlePluginCommandError(
       error,
       "update",
-      e,
-      o,
-      p
+      pluginArg,
+      storageV5,
+      json
         ? {
-            scope: n,
+            scope,
             pluginId,
-            shownCommand: u,
+            shownCommand: pendingShown,
           }
         : undefined,
-      g.aliased ? g.plugin : undefined,
+      argument.aliased ? argument.plugin : undefined,
     );
   }
 }

@@ -49,70 +49,77 @@ import { writeFileAndFlush } from "../../components/agents/agentFileUtils.js";
 import { atomicMoveToInstallPath_2 } from "../nativeInstaller/installer.js";
 import { safeParseJSON } from "../json.js";
 import { isProcessRunning as isProcessRunning_2 } from "../genericProcessUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:616264-616382 placement
-var IN_USE_LINKS_DIR = ".in_use-links";
-var IN_USE_LINK_DEPTH = 3;
-var MAX_IN_USE_MARKER_BYTES = 4096;
-var InUseMarkerSchema = DoctorLazy(() =>
-  create({
-    pid: create_3(),
-    procStart: create_2().optional(),
-    procStartFt: create_2().optional(),
-  }),
-);
+var IN_USE_LINKS_DIR; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var IN_USE_LINK_DEPTH;
+var MAX_IN_USE_MARKER_BYTES;
+var InUseMarkerSchema;
+deferInit("chunk-e6aww6q8.js:616264", () => {
+  IN_USE_LINKS_DIR = ".in_use-links";
+  IN_USE_LINK_DEPTH = 3;
+  MAX_IN_USE_MARKER_BYTES = 4096;
+  InUseMarkerSchema = DoctorLazy(() =>
+    create({
+      pid: create_3(),
+      procStart: create_2().optional(),
+      procStartFt: create_2().optional(),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:616382-616791 placement
 /**
  * 退出清理：删除本进程写的 in_use 标记（含 v5 存储项）。
  */
-async function removeOwnInUseMarkersAsync(e) {
+async function removeOwnInUseMarkersAsync(state) {
   await Promise.all(
-    Array.from(e.ownInUseMarkerPaths).map(async (ownInUseMarkerPath) => {
+    Array.from(state.ownInUseMarkerPaths).map(async (ownInUseMarkerPath) => {
       if (!(await isMarkerDirOurs(dirname(ownInUseMarkerPath)))) return;
-      let r = e.ownInUseMarkerHandles.get(ownInUseMarkerPath);
-      if (isStorageV5Enabled() && r !== undefined) {
-        let h = await r.storageV5.delete(r.key);
-        if (!h.ok)
+      let handleEntry = state.ownInUseMarkerHandles.get(ownInUseMarkerPath);
+      if (isStorageV5Enabled() && handleEntry !== undefined) {
+        let deleteResult = await handleEntry.storageV5.delete(handleEntry.key);
+        if (!deleteResult.ok)
           logForDebugging(
-            `Failed to remove ${IN_USE_MARKER_FILE} marker at exit: ${ownInUseMarkerPath}: ${formatStorageError(h.error)}`,
+            `Failed to remove ${IN_USE_MARKER_FILE} marker at exit: ${ownInUseMarkerPath}: ${formatStorageError(deleteResult.error)}`,
           );
       }
-      let s = [];
+      let dirEntries = [];
       try {
-        s = await readdir(dirname(ownInUseMarkerPath));
+        dirEntries = await readdir(dirname(ownInUseMarkerPath));
       } catch {}
-      for (let h of [...ownTempMarkersOf(s, ownInUseMarkerPath), basename(ownInUseMarkerPath)])
-        await rm_2(join(dirname(ownInUseMarkerPath), h), {
+      for (let name of [...ownTempMarkersOf(dirEntries, ownInUseMarkerPath), basename(ownInUseMarkerPath)])
+        await rm_2(join(dirname(ownInUseMarkerPath), name), {
           force: true,
         }).catch(() => {});
     }),
   );
 }
 //@ chunk-e6aww6q8.js:616791-617024 placement
-function removeOwnInUseMarkersSync(e) {
-  for (let ownInUseMarkerPath of e.ownInUseMarkerPaths) {
+function removeOwnInUseMarkersSync(state) {
+  for (let ownInUseMarkerPath of state.ownInUseMarkerPaths) {
     if (!scanDirectory(dirname(ownInUseMarkerPath))) continue;
-    let r = [];
+    let dirEntries = [];
     try {
-      r = readdirSync(dirname(ownInUseMarkerPath));
+      dirEntries = readdirSync(dirname(ownInUseMarkerPath));
     } catch {}
-    for (let s of [...ownTempMarkersOf(r, ownInUseMarkerPath), basename(ownInUseMarkerPath)])
+    for (let name of [...ownTempMarkersOf(dirEntries, ownInUseMarkerPath), basename(ownInUseMarkerPath)])
       try {
-        unlinkSync(join(dirname(ownInUseMarkerPath), s));
+        unlinkSync(join(dirname(ownInUseMarkerPath), name));
       } catch {}
   }
-  e.ownInUseMarkerPaths.clear();
-  e.ownInUseMarkerHandles.clear();
+  state.ownInUseMarkerPaths.clear();
+  state.ownInUseMarkerHandles.clear();
 }
 //@ chunk-e6aww6q8.js:617024-617077 placement
-function ownTempMarkersOf(e, ownInUseMarkerPath) {
-  return e.filter((r) => isOwnTempName(r, basename(ownInUseMarkerPath)));
+function ownTempMarkersOf(names, ownInUseMarkerPath) {
+  return names.filter((name) => isOwnTempName(name, basename(ownInUseMarkerPath)));
 }
 //@ chunk-e6aww6q8.js:617077-617191 placement
-async function isMarkerDirOurs(e) {
-  if (isInUseMarkerPath(e)) return (await classifyLinkDir(e)) === "ours";
+async function isMarkerDirOurs(dirPath) {
+  if (isInUseMarkerPath(dirPath)) return (await classifyLinkDir(dirPath)) === "ours";
   try {
-    return (await classifyMarkerPath(e)) === "directory";
+    return (await classifyMarkerPath(dirPath)) === "directory";
   } catch {
     return false;
   }
@@ -135,17 +142,17 @@ function scanDirectory(dirPath) {
 /**
  * lstat 判断路径 absent/directory/junk/refused（Windows 拒绝 junction）。
  */
-async function classifyMarkerPath(e) {
-  let n;
+async function classifyMarkerPath(markerPath) {
+  let stat;
   try {
-    n = await lstat(e);
+    stat = await lstat(markerPath);
   } catch (error) {
     if (isENOENT(error)) return "absent";
     throw error;
   }
-  if (!n.isDirectory()) return n.isFile() ? "junk" : "refused";
+  if (!stat.isDirectory()) return stat.isFile() ? "junk" : "refused";
   if (getPlatform() === "windows") {
-    let junction = await readJunction(e);
+    let junction = await readJunction(markerPath);
     switch (junction.kind) {
       case "junction":
         return "refused";
@@ -160,21 +167,21 @@ async function classifyMarkerPath(e) {
   return "directory";
 }
 //@ chunk-e6aww6q8.js:617740-617784 placement
-function isInUseMarkerPath(e) {
-  return isSubpathOf(join(projectPluginsDir(), IN_USE_LINKS_DIR), e, false);
+function isInUseMarkerPath(markerPath) {
+  return isSubpathOf(join(projectPluginsDir(), IN_USE_LINKS_DIR), markerPath, false);
 }
 //@ chunk-e6aww6q8.js:617784-618049 placement
-function registerOwnInUseMarker(pluginRegistry, n, r) {
-  pluginRegistry.ownInUseMarkerPaths.add(n);
-  if (r) pluginRegistry.ownInUseMarkerHandles.set(n, r);
-  else pluginRegistry.ownInUseMarkerHandles.delete(n);
-  if (pluginRegistry.inUseMarkerCleanup) return;
-  let s = registerCleanup(() => removeOwnInUseMarkersAsync(pluginRegistry));
-  let h = () => removeOwnInUseMarkersSync(pluginRegistry);
-  process.on("exit", h);
-  pluginRegistry.inUseMarkerCleanup = () => {
-    s();
-    process.off("exit", h);
+function registerOwnInUseMarker(state, markerPath, handle) {
+  state.ownInUseMarkerPaths.add(markerPath);
+  if (handle) state.ownInUseMarkerHandles.set(markerPath, handle);
+  else state.ownInUseMarkerHandles.delete(markerPath);
+  if (state.inUseMarkerCleanup) return;
+  let unregisterCleanup = registerCleanup(() => removeOwnInUseMarkersAsync(state));
+  let onExit = () => removeOwnInUseMarkersSync(state);
+  process.on("exit", onExit);
+  state.inUseMarkerCleanup = () => {
+    unregisterCleanup();
+    process.off("exit", onExit);
   };
 }
 //@ chunk-e6aww6q8.js:618049-618133 placement
@@ -186,76 +193,77 @@ function forgetOwnInUseMarker(pluginRegistry, markerPath) {
 /**
  * isSymlinkOrFalse：是否为符号链接。
  */
-async function isSymlinkOrFalse(e) {
+async function isSymlinkOrFalse(path) {
   try {
-    return (await lstat(e)).isSymbolicLink();
+    return (await lstat(path)).isSymbolicLink();
   } catch {
     return false;
   }
 }
 //@ chunk-e6aww6q8.js:618211-618359 placement
 async function pruneEmptyLinkDirs(inUseLinkPath) {
-  let n = join(projectPluginsDir(), IN_USE_LINKS_DIR);
-  let r = inUseLinkPath;
+  let linksRoot = join(projectPluginsDir(), IN_USE_LINKS_DIR);
+  let dir = inUseLinkPath;
   for (let idx = 0; idx < 3; idx++) {
-    if (!isSubpathOf(n, r, false)) return;
+    if (!isSubpathOf(linksRoot, dir, false)) return;
     try {
-      await rmdir(r);
+      await rmdir(dir);
     } catch (error) {
       if (getErrnoCode(error) !== "ENOENT") return;
     }
-    r = dirname(r);
+    dir = dirname(dir);
   }
 }
 //@ chunk-e6aww6q8.js:618359-618499 placement
-function toInUseLinkPath(e) {
-  let n = projectPluginsDir();
-  let parts = relative(join(n, PLUGIN_CACHE_DIRNAME), e).split(sep);
-  if (parts.length !== 3 || parts.some((s) => s === "" || s === "." || s === "..")) return;
-  return join(n, IN_USE_LINKS_DIR, ...parts);
+function toInUseLinkPath(versionDir) {
+  let pluginsDir = projectPluginsDir();
+  let parts = relative(join(pluginsDir, PLUGIN_CACHE_DIRNAME), versionDir).split(sep);
+  if (parts.length !== 3 || parts.some((part) => part === "" || part === "." || part === "..")) return;
+  return join(pluginsDir, IN_USE_LINKS_DIR, ...parts);
 }
 //@ chunk-e6aww6q8.js:618499-618829 placement
 /**
  * 逐级创建链接目录并检测是否被重定向。
  */
-async function ensureLinkDirChain(inUseLinkPath) {
-  let n = projectPluginsDir();
+async function ensureLinkDirChain(linkPath) {
+  let pluginsDir = projectPluginsDir();
   try {
-    let r = await realpath(n);
-    let s = n;
-    for (let h of relative(n, inUseLinkPath).split(sep)) {
-      s = join(s, h);
-      r = join(r, h);
-      await mkdir(s).catch((error) => {
+    let realPluginsDir = await realpath(pluginsDir);
+    let currentPath = pluginsDir;
+    for (let part of relative(pluginsDir, linkPath).split(sep)) {
+      currentPath = join(currentPath, part);
+      realPluginsDir = join(realPluginsDir, part);
+      await mkdir(currentPath).catch((error) => {
         let errnoCode = getErrnoCode(error);
         if (errnoCode !== "EEXIST" && errnoCode !== "ENOENT") throw error;
       });
-      if ((await realpath(s)) !== r) return "redirected";
+      if ((await realpath(currentPath)) !== realPluginsDir) return "redirected";
     }
     return "ours";
   } catch (error) {
     let errnoCode = getErrnoCode(error);
-    if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR") return pruneOrReportPlantedEntry(n, inUseLinkPath);
+    if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR")
+      return pruneOrReportPlantedEntry(pluginsDir, linkPath);
     return "undeterminable";
   }
 }
 //@ chunk-e6aww6q8.js:618829-619096 placement
-async function findPlantedEntry(e, n) {
-  let r = join(e, IN_USE_LINKS_DIR);
-  let s = e;
-  for (let h of relative(e, n).split(sep)) {
-    s = join(s, h);
-    if (!(s === r || s.startsWith(r + sep))) continue;
+async function findPlantedEntry(pluginsDir, linkPath) {
+  let linksRoot = join(pluginsDir, IN_USE_LINKS_DIR);
+  let currentPath = pluginsDir;
+  for (let part of relative(pluginsDir, linkPath).split(sep)) {
+    currentPath = join(currentPath, part);
+    if (!(currentPath === linksRoot || currentPath.startsWith(linksRoot + sep))) continue;
     try {
-      let y = await lstat(s);
-      if (y.isSymbolicLink())
+      let stat = await lstat(currentPath);
+      if (stat.isSymbolicLink())
         return {
-          path: s,
+          path: currentPath,
           kind: "link",
         };
-      if (!y.isDirectory())
+      if (!stat.isDirectory())
         return {
-          path: s,
+          path: currentPath,
           kind: "junk",
         };
     } catch {
@@ -265,8 +273,8 @@ async function findPlantedEntry(e, n) {
   return;
 }
 //@ chunk-e6aww6q8.js:619096-619360 placement
-async function pruneOrReportPlantedEntry(e, n) {
-  let plantedEntry = await findPlantedEntry(e, n);
+async function pruneOrReportPlantedEntry(pluginsDir, linkPath) {
+  let plantedEntry = await findPlantedEntry(pluginsDir, linkPath);
   if (plantedEntry === undefined) return "pruned";
   if (plantedEntry.kind === "link") return "redirected";
   try {
@@ -280,15 +288,15 @@ async function pruneOrReportPlantedEntry(e, n) {
   return "pruned";
 }
 //@ chunk-e6aww6q8.js:619360-619644 placement
-async function classifyLinkDir(e) {
+async function classifyLinkDir(linkDir) {
   try {
-    let n = await realpath(e);
-    let r = join(await realpath(projectPluginsDir()), relative(projectPluginsDir(), e));
-    return n === r ? "ours" : "redirected";
+    let realLinkDir = await realpath(linkDir);
+    let expectedReal = join(await realpath(projectPluginsDir()), relative(projectPluginsDir(), linkDir));
+    return realLinkDir === expectedReal ? "ours" : "redirected";
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR") {
-      let plantedEntry = await findPlantedEntry(projectPluginsDir(), e);
+      let plantedEntry = await findPlantedEntry(projectPluginsDir(), linkDir);
       return plantedEntry === undefined
         ? "absent"
         : plantedEntry.kind === "link"
@@ -309,126 +317,134 @@ async function inUseMarkerPayload() {
 /**
  * 写入插件使用中标记，并发清理导致反复失败时放弃。
  */
-async function writeInUseMarker(e, n) {
+async function writeInUseMarker(versionDir, storageV5) {
   let pluginRegistry = getPluginRegistry();
-  let s = isStorageV5Enabled() && n !== undefined;
-  if (await isSymlinkOrFalse(e)) {
-    let inUseLinkPath = toInUseLinkPath(e);
-    if (inUseLinkPath === undefined) return false;
-    let G = join(inUseLinkPath, String(process.pid));
+  let useStorage = isStorageV5Enabled() && storageV5 !== undefined;
+  if (await isSymlinkOrFalse(versionDir)) {
+    let linkPath = toInUseLinkPath(versionDir);
+    if (linkPath === undefined) return false;
+    let markerPath = join(linkPath, String(process.pid));
     for (let idx = 1; ; idx++)
       try {
-        let linkDirChain = await ensureLinkDirChain(inUseLinkPath);
+        let linkDirChain = await ensureLinkDirChain(linkPath);
         if (linkDirChain === "pruned" && idx < IN_USE_LINK_DEPTH) continue;
         if (linkDirChain !== "ours") {
           logForDebugging(
             linkDirChain === "pruned"
-              ? `Not writing an ${IN_USE_LINKS_DIR} marker: ${inUseLinkPath} kept being pruned while it was being created (gave up after ${IN_USE_LINK_DEPTH} attempts)`
+              ? `Not writing an ${IN_USE_LINKS_DIR} marker: ${linkPath} kept being pruned while it was being created (gave up after ${IN_USE_LINK_DEPTH} attempts)`
               : linkDirChain === "undeterminable"
-                ? `Not writing an ${IN_USE_LINKS_DIR} marker: ${inUseLinkPath} could not be examined`
-                : `Not writing an ${IN_USE_LINKS_DIR} marker: ${inUseLinkPath} does not resolve inside the plugins directory`,
+                ? `Not writing an ${IN_USE_LINKS_DIR} marker: ${linkPath} could not be examined`
+                : `Not writing an ${IN_USE_LINKS_DIR} marker: ${linkPath} does not resolve inside the plugins directory`,
           );
           return false;
         }
-        registerOwnInUseMarker(pluginRegistry, G, undefined);
-        await removeLinkOrDir(G);
-        await writeFileAtomic_2(G, await inUseMarkerPayload());
+        registerOwnInUseMarker(pluginRegistry, markerPath, undefined);
+        await removeLinkOrDir(markerPath);
+        await writeFileAtomic_2(markerPath, await inUseMarkerPayload());
         return true;
       } catch (error) {
         let errnoCode = getErrnoCode(error);
         if (
           (errnoCode === "ENOENT" || errnoCode === "ENOTDIR") &&
           idx < IN_USE_LINK_DEPTH &&
-          (await pruneOrReportPlantedEntry(projectPluginsDir(), inUseLinkPath)) === "pruned"
+          (await pruneOrReportPlantedEntry(projectPluginsDir(), linkPath)) === "pruned"
         )
           continue;
-        logForDebugging(`Failed to write ${IN_USE_LINKS_DIR} marker: ${e}: ${error}`);
+        logForDebugging(`Failed to write ${IN_USE_LINKS_DIR} marker: ${versionDir}: ${error}`);
         return false;
       }
   }
-  let h = join(e, IN_USE_MARKER_FILE);
-  let y = join(h, String(process.pid));
-  let S = s ? parseVersionCachePath(e, projectPluginCacheDir()) : null;
-  if (s && S) {
-    let L;
+  let markerDir = join(versionDir, IN_USE_MARKER_FILE);
+  let markerPath = join(markerDir, String(process.pid));
+  let cacheCoords = useStorage ? parseVersionCachePath(versionDir, projectPluginCacheDir()) : null;
+  if (useStorage && cacheCoords) {
+    let markerKind;
     try {
-      L = await classifyMarkerPath(h);
+      markerKind = await classifyMarkerPath(markerDir);
     } catch (error) {
-      logForDebugging(`Not writing an ${IN_USE_MARKER_FILE} marker: ${h} cannot be examined: ${error}`);
+      logForDebugging(
+        `Not writing an ${IN_USE_MARKER_FILE} marker: ${markerDir} cannot be examined: ${error}`,
+      );
       return false;
     }
-    if (L === "refused" || L === "junk") {
-      if (!(await removeNonDirectoryMarker(h))) {
-        logForDebugging(`Not writing an ${IN_USE_MARKER_FILE} marker: ${h} is not a directory of markers`);
+    if (markerKind === "refused" || markerKind === "junk") {
+      if (!(await removeNonDirectoryMarker(markerDir))) {
+        logForDebugging(
+          `Not writing an ${IN_USE_MARKER_FILE} marker: ${markerDir} is not a directory of markers`,
+        );
         return false;
       }
     }
   }
-  let w =
-    s && S
-      ? STORAGE_SPACES.pluginCache(S.marketplace, S.plugin, S.version, [
+  let storageKey =
+    useStorage && cacheCoords
+      ? STORAGE_SPACES.pluginCache(cacheCoords.marketplace, cacheCoords.plugin, cacheCoords.version, [
           IN_USE_MARKER_FILE,
           String(process.pid),
         ])
       : undefined;
   registerOwnInUseMarker(
     pluginRegistry,
-    y,
-    s && w
+    markerPath,
+    useStorage && storageKey
       ? {
-          storageV5: n,
-          key: w,
+          storageV5,
+          key: storageKey,
         }
       : undefined,
   );
   try {
-    if (s && w) {
-      let L = await inUseMarkerPayload();
-      let G = {
+    if (useStorage && storageKey) {
+      let payload = await inUseMarkerPayload();
+      let writeOptions = {
         mode: 438 & ~process.umask(),
       };
-      let q = await n.write(w, L, G);
-      if (!q.ok) {
-        await removeLinkOrDir(y);
-        q = await n.write(w, L, G);
+      let writeResult = await storageV5.write(storageKey, payload, writeOptions);
+      if (!writeResult.ok) {
+        await removeLinkOrDir(markerPath);
+        writeResult = await storageV5.write(storageKey, payload, writeOptions);
       }
-      if (!q.ok) {
-        logForDebugging(`Failed to write ${IN_USE_MARKER_FILE} marker: ${e}: ${formatStorageError(q.error)}`);
+      if (!writeResult.ok) {
+        logForDebugging(
+          `Failed to write ${IN_USE_MARKER_FILE} marker: ${versionDir}: ${formatStorageError(writeResult.error)}`,
+        );
         return false;
       }
       return true;
     }
     try {
-      await mkdir(h);
+      await mkdir(markerDir);
     } catch (error) {
       let errnoCode = getErrnoCode(error);
       if (errnoCode === "ENOENT")
-        await mkdir(h, {
+        await mkdir(markerDir, {
           recursive: true,
         });
       else if (errnoCode !== "EEXIST") throw error;
       else {
-        let q = await classifyMarkerPath(h);
-        if (q === "absent")
-          await mkdir(h, {
+        let recheck = await classifyMarkerPath(markerDir);
+        if (recheck === "absent")
+          await mkdir(markerDir, {
             recursive: true,
           });
-        else if (q !== "directory") {
-          if (!(await removeNonDirectoryMarker(h))) {
-            logForDebugging(`Not writing ${IN_USE_MARKER_FILE} marker through a non-directory: ${e}`);
+        else if (recheck !== "directory") {
+          if (!(await removeNonDirectoryMarker(markerDir))) {
+            logForDebugging(
+              `Not writing ${IN_USE_MARKER_FILE} marker through a non-directory: ${versionDir}`,
+            );
             return false;
           }
-          await mkdir(h, {
+          await mkdir(markerDir, {
             recursive: true,
           });
         }
       }
     }
-    await removeLinkOrDir(y);
-    await writeFileAtomic_2(y, await inUseMarkerPayload());
+    await removeLinkOrDir(markerPath);
+    await writeFileAtomic_2(markerPath, await inUseMarkerPayload());
     return true;
   } catch (error) {
-    logForDebugging(`Failed to write ${IN_USE_MARKER_FILE} marker: ${e}: ${error}`);
+    logForDebugging(`Failed to write ${IN_USE_MARKER_FILE} marker: ${versionDir}: ${error}`);
     return false;
   }
 }
@@ -440,25 +456,25 @@ async function removeInUseMarker(versionDir, storage) {
   if (await isSymlinkOrFalse(versionDir)) return true;
   let markerDir = join(versionDir, IN_USE_MARKER_FILE);
   let markerPath = join(markerDir, String(process.pid));
-  let h = isStorageV5Enabled() && storage !== undefined;
-  let y = h ? parseVersionCachePath(versionDir, projectPluginCacheDir()) : null;
+  let useStorage = isStorageV5Enabled() && storage !== undefined;
+  let cacheCoords = useStorage ? parseVersionCachePath(versionDir, projectPluginCacheDir()) : null;
   try {
-    let S = await classifyMarkerPath(markerDir);
-    if (S === "absent" || (h && S === "junk")) {
+    let markerKind = await classifyMarkerPath(markerDir);
+    if (markerKind === "absent" || (useStorage && markerKind === "junk")) {
       forgetOwnInUseMarker(getPluginRegistry(), markerPath);
       return true;
     }
-    if (S === "refused" || S === "junk") return false;
-    if (h && y) {
-      let w = await storage.delete(
-        STORAGE_SPACES.pluginCache(y.marketplace, y.plugin, y.version, [
+    if (markerKind === "refused" || markerKind === "junk") return false;
+    if (useStorage && cacheCoords) {
+      let deleteResult = await storage.delete(
+        STORAGE_SPACES.pluginCache(cacheCoords.marketplace, cacheCoords.plugin, cacheCoords.version, [
           IN_USE_MARKER_FILE,
           String(process.pid),
         ]),
       );
-      if (!w.ok) {
+      if (!deleteResult.ok) {
         logForDebugging(
-          `Failed to remove ${IN_USE_MARKER_FILE} marker: ${versionDir}: ${formatStorageError(w.error)}`,
+          `Failed to remove ${IN_USE_MARKER_FILE} marker: ${versionDir}: ${formatStorageError(deleteResult.error)}`,
         );
         return false;
       }
@@ -485,37 +501,40 @@ function isSweepRecent(mtimeMs) {
 /**
  * 清扫插件使用中标记。
  */
-async function sweepInUseMarkers(e, version) {
-  if (e.length === 0) return;
+async function sweepInUseMarkers(versionDirs, version) {
+  if (versionDirs.length === 0) return;
   let filePath = join(projectPluginsDir(), LAST_INUSE_SWEEP_FILE);
-  let s = isStorageV5Enabled() && version !== undefined;
-  let h = s ? registryStorageSpace("inUseSweep", projectPluginsDir()) : null;
-  if (s && h) {
-    let S = await version.statMeta(h);
-    if (S.ok && isSweepRecent(S.value.mtimeMs)) return;
+  let useStorage = isStorageV5Enabled() && version !== undefined;
+  let sweepSpace = useStorage ? registryStorageSpace("inUseSweep", projectPluginsDir()) : null;
+  if (useStorage && sweepSpace) {
+    let stampStat = await version.statMeta(sweepSpace);
+    if (stampStat.ok && isSweepRecent(stampStat.value.mtimeMs)) return;
   } else
     try {
-      let S = await lstat(filePath);
-      if (S.isFile() && isSweepRecent(S.mtimeMs)) return;
+      let stampStat = await lstat(filePath);
+      if (stampStat.isFile() && isSweepRecent(stampStat.mtimeMs)) return;
     } catch {}
-  let settled = await Promise.allSettled(e.map((S) => isPluginVersionInUse(S, undefined, version)));
-  for (let [S, w] of settled.entries())
-    if (w.status === "rejected")
-      logForDebugging(`Failed to sweep ${IN_USE_MARKER_FILE}: ${e[S]}: ${w.reason}`);
-  if (s && h) {
-    let S = await version.write(h, new Date().toISOString(), {
+  let settled = await Promise.allSettled(
+    versionDirs.map((versionDir) => isPluginVersionInUse(versionDir, undefined, version)),
+  );
+  for (let [index, resultEntry] of settled.entries())
+    if (resultEntry.status === "rejected")
+      logForDebugging(`Failed to sweep ${IN_USE_MARKER_FILE}: ${versionDirs[index]}: ${resultEntry.reason}`);
+  if (useStorage && sweepSpace) {
+    let writeResult = await version.write(sweepSpace, new Date().toISOString(), {
       publishDiscipline: "inPlace",
     });
-    if (!S.ok)
+    if (!writeResult.ok)
       try {
         await removeLinkOrDir(filePath);
-        S = await version.write(h, new Date().toISOString(), {
+        writeResult = await version.write(sweepSpace, new Date().toISOString(), {
           publishDiscipline: "inPlace",
         });
       } catch (error) {
         logForDebugging(`Failed to clear a non-regular ${LAST_INUSE_SWEEP_FILE}: ${error}`);
       }
-    if (!S.ok) logForDebugging(`Failed to stamp ${LAST_INUSE_SWEEP_FILE}: ${formatStorageError(S.error)}`);
+    if (!writeResult.ok)
+      logForDebugging(`Failed to stamp ${LAST_INUSE_SWEEP_FILE}: ${formatStorageError(writeResult.error)}`);
     return;
   }
   try {
@@ -550,36 +569,36 @@ async function isPluginVersionInUse(versionDir, options, storage) {
         return options?.refusedCountsAsLive ?? true;
     }
   }
-  let s = join(versionDir, IN_USE_MARKER_FILE);
-  let h = isStorageV5Enabled() ? storage : undefined;
-  let y = h !== undefined ? parseVersionCachePath(versionDir, projectPluginCacheDir()) : null;
-  if (h === undefined || y === null) return readInUseMarker(s, options);
-  let S;
+  let markerDir = join(versionDir, IN_USE_MARKER_FILE);
+  let store = isStorageV5Enabled() ? storage : undefined;
+  let cacheCoords = store !== undefined ? parseVersionCachePath(versionDir, projectPluginCacheDir()) : null;
+  if (store === undefined || cacheCoords === null) return readInUseMarker(markerDir, options);
+  let markerKind;
   try {
-    S = await classifyMarkerPath(s);
+    markerKind = await classifyMarkerPath(markerDir);
   } catch (error) {
     if (isFsInaccessible(error)) return options?.refusedCountsAsLive ?? true;
     throw error;
   }
-  if (S === "junk") {
-    await removeNonDirectoryMarker(s);
+  if (markerKind === "junk") {
+    await removeNonDirectoryMarker(markerDir);
     return false;
   }
-  if (S === "refused") {
-    await removeNonDirectoryMarker(s);
+  if (markerKind === "refused") {
+    await removeNonDirectoryMarker(markerDir);
     return options?.refusedCountsAsLive ?? true;
   }
-  return listInUseMarkers(h, y, options);
+  return listInUseMarkers(store, cacheCoords, options);
 }
 //@ chunk-e6aww6q8.js:623640-623959 placement
 /**
  * 删除非目录形式的 in_use 标记，失败时视为仍在使用。
  */
-async function removeNonDirectoryMarker(e) {
+async function removeNonDirectoryMarker(path) {
   try {
-    if ((await removePathEntry(e)) === "directory") return true;
+    if ((await removePathEntry(path)) === "directory") return true;
     logForDebugging(
-      `Removed a non-directory ${IN_USE_MARKER_FILE} at ${e}; the version reads unpinned until a session marks it again`,
+      `Removed a non-directory ${IN_USE_MARKER_FILE} at ${path}; the version reads unpinned until a session marks it again`,
       {
         level: "warn",
       },
@@ -587,7 +606,7 @@ async function removeNonDirectoryMarker(e) {
     return true;
   } catch (error) {
     logForDebugging(
-      `Could not remove a non-directory ${IN_USE_MARKER_FILE} at ${e} (${errorMessage(error)}); treating the version as in use`,
+      `Could not remove a non-directory ${IN_USE_MARKER_FILE} at ${path} (${errorMessage(error)}); treating the version as in use`,
       {
         level: "warn",
       },
@@ -598,104 +617,111 @@ async function removeNonDirectoryMarker(e) {
 //@ chunk-e6aww6q8.js:623959-623974 placement
 var STALE_INUSE_MARKER_MS = 600000;
 //@ chunk-e6aww6q8.js:623974-624060 placement
-function isStaleInUseMarker(e) {
-  if (typeof e !== "number" || !Number.isFinite(e)) return false;
-  return !isFreshTimestamp_2(e, STALE_INUSE_MARKER_MS);
+function isStaleInUseMarker(mtimeMs) {
+  if (typeof mtimeMs !== "number" || !Number.isFinite(mtimeMs)) return false;
+  return !isFreshTimestamp_2(mtimeMs, STALE_INUSE_MARKER_MS);
 }
 //@ chunk-e6aww6q8.js:624060-624205 placement
-async function removeStaleEntry(e, n) {
+async function removeStaleEntry(path, mtimeMs) {
   try {
-    let r = n ?? (await lstat(e)).mtimeMs;
-    if (!isStaleInUseMarker(r)) return false;
-    if ((await removePathEntry(e)) === "directory") await removeDirectoryTreeNoFollow_2(e);
+    let mtime = mtimeMs ?? (await lstat(path)).mtimeMs;
+    if (!isStaleInUseMarker(mtime)) return false;
+    if ((await removePathEntry(path)) === "directory") await removeDirectoryTreeNoFollow_2(path);
     return true;
   } catch {
     return false;
   }
 }
 //@ chunk-e6aww6q8.js:624205-625019 placement
-async function readInUseMarker(e, options) {
-  let r;
+async function readInUseMarker(markerDir, options) {
+  let names;
   try {
-    let h = await classifyMarkerPath(e);
-    if (h === "refused") {
-      await removeNonDirectoryMarker(e);
+    let markerKind = await classifyMarkerPath(markerDir);
+    if (markerKind === "refused") {
+      await removeNonDirectoryMarker(markerDir);
       return options?.refusedCountsAsLive ?? true;
     }
-    if (h === "junk") {
-      await removeNonDirectoryMarker(e);
+    if (markerKind === "junk") {
+      await removeNonDirectoryMarker(markerDir);
       return false;
     }
-    if (h !== "directory") return false;
-    r = await readdir(e);
+    if (markerKind !== "directory") return false;
+    names = await readdir(markerDir);
   } catch (error) {
     if (isENOENT(error)) return false;
     if (isFsInaccessible(error)) return options?.refusedCountsAsLive ?? true;
     throw error;
   }
-  let s = false;
-  for (let h of r) {
-    let y = join(e, h);
-    if (atomicMoveToInstallPath_2(h)) {
-      if (await removeStaleEntry(y)) continue;
-      s = true;
+  let anyLive = false;
+  for (let name of names) {
+    let markerPath = join(markerDir, name);
+    if (atomicMoveToInstallPath_2(name)) {
+      if (await removeStaleEntry(markerPath)) continue;
+      anyLive = true;
       continue;
     }
-    let S;
-    let w;
+    let raw;
+    let mtimeMs;
     try {
-      let G = await lstat(y);
-      w = G.mtimeMs;
-      if (G.isFile() && G.size <= MAX_IN_USE_MARKER_BYTES) S = await readFile(y, "utf-8");
+      let stat = await lstat(markerPath);
+      mtimeMs = stat.mtimeMs;
+      if (stat.isFile() && stat.size <= MAX_IN_USE_MARKER_BYTES) raw = await readFile(markerPath, "utf-8");
     } catch (error) {
       if (isENOENT(error)) continue;
-      logForDebugging(`In-use marker ${y} could not be read (${errorMessage(error)}); treating it as live`, {
-        level: "warn",
-      });
-      s = true;
+      logForDebugging(
+        `In-use marker ${markerPath} could not be read (${errorMessage(error)}); treating it as live`,
+        {
+          level: "warn",
+        },
+      );
+      anyLive = true;
       continue;
     }
-    if (S === "") {
-      if (await removeStaleEntry(y, w)) continue;
-      s = true;
+    if (raw === "") {
+      if (await removeStaleEntry(markerPath, mtimeMs)) continue;
+      anyLive = true;
       continue;
     }
-    let L = InUseMarkerSchema().safeParse(safeParseJSON(S, false));
-    if (options?.excludeSelf && L.success && L.data.pid === process.pid) continue;
-    if (L.success && (await isMarkerOwnerAlive(L.data, options?.requireIdentity))) {
-      s = true;
+    let parseResult = InUseMarkerSchema().safeParse(safeParseJSON(raw, false));
+    if (options?.excludeSelf && parseResult.success && parseResult.data.pid === process.pid) continue;
+    if (parseResult.success && (await isMarkerOwnerAlive(parseResult.data, options?.requireIdentity))) {
+      anyLive = true;
       continue;
     }
-    await removeDirectoryTreeNoFollow_2(y);
+    await removeDirectoryTreeNoFollow_2(markerPath);
   }
-  return s;
+  return anyLive;
 }
 //@ chunk-e6aww6q8.js:625019-626391 placement
 /**
  * 列出插件缓存中的使用中标记。
  */
-async function listInUseMarkers(e, n, options) {
-  let s = (G) => STORAGE_SPACES.pluginCache(n.marketplace, n.plugin, n.version, [IN_USE_MARKER_FILE, G]);
-  let h = [];
-  let y = new Map();
-  let S;
+async function listInUseMarkers(storageV5, coords, options) {
+  let keyFor = (markerName) =>
+    STORAGE_SPACES.pluginCache(coords.marketplace, coords.plugin, coords.version, [
+      IN_USE_MARKER_FILE,
+      markerName,
+    ]);
+  let names = [];
+  let mtimes = new Map();
+  let cursor;
   do {
-    let G = await e.listEntries(
+    let page = await storageV5.listEntries(
       {
         namespace: "pluginCache",
-        marketplace: n.marketplace,
-        plugin: n.plugin,
-        version: n.version,
+        marketplace: coords.marketplace,
+        plugin: coords.plugin,
+        version: coords.version,
         relPath: [IN_USE_MARKER_FILE],
       },
       {
-        cursor: S,
+        cursor,
         skipKeyStats: true,
         skipScopeStats: true,
       },
     );
-    if (!G.ok) {
-      let telemetryCode = "telemetryCode" in G.error ? G.error.telemetryCode : undefined;
+    if (!page.ok) {
+      let telemetryCode = "telemetryCode" in page.error ? page.error.telemetryCode : undefined;
       let merged = Object.assign(Error("in-use listing failed"), {
         ...(telemetryCode !== undefined && {
           code: telemetryCode,
@@ -705,51 +731,53 @@ async function listInUseMarkers(e, n, options) {
       if (isFsInaccessible(merged)) return options?.refusedCountsAsLive ?? true;
       throw merged;
     }
-    for (let item of G.value.items) {
+    for (let item of page.value.items) {
       if (item.kind !== "key" || item.key.namespace !== "pluginCache") continue;
       let last = item.key.relPath.at(-1);
       if (last !== undefined) {
-        h.push(last);
-        y.set(last, item.mtimeMs);
+        names.push(last);
+        mtimes.set(last, item.mtimeMs);
       }
     }
-    S = G.value.cursor;
-  } while (S);
-  let any = h.some((G) => atomicMoveToInstallPath_2(G) && !isStaleInUseMarker(y.get(G)));
-  let filtered = h.filter((G) => !atomicMoveToInstallPath_2(G));
-  for (let G = 0; G < filtered.length; G += MAX_INUSE_READ_BATCH) {
-    let sliced = filtered.slice(G, G + MAX_INUSE_READ_BATCH);
-    let markerItems = await readMarkerItems(e, sliced.map(s));
-    for (let [Se, ke] of sliced.entries()) {
-      let we = markerItems[Se] ?? "unreadable";
-      if (we === "unreadable") {
+    cursor = page.value.cursor;
+  } while (cursor);
+  let any = names.some((name) => atomicMoveToInstallPath_2(name) && !isStaleInUseMarker(mtimes.get(name)));
+  let filtered = names.filter((name) => !atomicMoveToInstallPath_2(name));
+  for (let offset = 0; offset < filtered.length; offset += MAX_INUSE_READ_BATCH) {
+    let sliced = filtered.slice(offset, offset + MAX_INUSE_READ_BATCH);
+    let markerItems = await readMarkerItems(storageV5, sliced.map(keyFor));
+    for (let [index, name] of sliced.entries()) {
+      let item = markerItems[index] ?? "unreadable";
+      if (item === "unreadable") {
         any = true;
         continue;
       }
-      let Ee = we === "absent" ? undefined : we;
+      let entry = item === "absent" ? undefined : item;
       let raw =
-        Ee !== undefined && Buffer.byteLength(Ee.raw, "utf8") > MAX_IN_USE_MARKER_BYTES ? undefined : Ee?.raw;
+        entry !== undefined && Buffer.byteLength(entry.raw, "utf8") > MAX_IN_USE_MARKER_BYTES
+          ? undefined
+          : entry?.raw;
       if (raw === "") {
-        if (!isStaleInUseMarker(Ee?.mtimeMs)) {
+        if (!isStaleInUseMarker(entry?.mtimeMs)) {
           any = true;
           continue;
         }
         if (
-          !(await e.delete(s(ke)).then(
-            (We) => We.ok,
+          !(await storageV5.delete(keyFor(name)).then(
+            (result) => result.ok,
             () => false,
           ))
         )
           any = true;
         continue;
       }
-      let Ie = InUseMarkerSchema().safeParse(safeParseJSON(raw, false));
-      if (options?.excludeSelf && Ie.success && Ie.data.pid === process.pid) continue;
-      if (Ie.success && (await isMarkerOwnerAlive(Ie.data, options?.requireIdentity))) {
+      let parseResult = InUseMarkerSchema().safeParse(safeParseJSON(raw, false));
+      if (options?.excludeSelf && parseResult.success && parseResult.data.pid === process.pid) continue;
+      if (parseResult.success && (await isMarkerOwnerAlive(parseResult.data, options?.requireIdentity))) {
         any = true;
         continue;
       }
-      await e.delete(s(ke)).then(
+      await storageV5.delete(keyFor(name)).then(
         () => {},
         () => {},
       );
@@ -763,49 +791,50 @@ var MAX_INUSE_READ_BATCH = 64;
 /**
  * 批量读存储项，失败退回逐项读。
  */
-async function readMarkerItems(e, n) {
-  let r = (y) => Buffer.from(y).toString("utf8");
-  let s = await e.read(n);
-  if (s.ok)
-    return s.value.items.map((item) =>
+async function readMarkerItems(storageV5, keys) {
+  let decode = (bytes) => Buffer.from(bytes).toString("utf8");
+  let readResult = await storageV5.read(keys);
+  if (readResult.ok)
+    return readResult.value.items.map((item) =>
       item.found
         ? {
-            raw: r(item.value),
+            raw: decode(item.value),
             mtimeMs: item.mtimeMs,
           }
         : "absent",
     );
-  let h = [];
-  for (let y of n) {
-    let S = await e.read([y]);
-    h.push(
-      !S.ok
+  let items = [];
+  for (let key of keys) {
+    let readResult = await storageV5.read([key]);
+    items.push(
+      !readResult.ok
         ? "unreadable"
-        : S.value.items[0]?.found
+        : readResult.value.items[0]?.found
           ? {
-              raw: r(S.value.items[0].value),
-              mtimeMs: S.value.items[0].mtimeMs,
+              raw: decode(readResult.value.items[0].value),
+              mtimeMs: readResult.value.items[0].mtimeMs,
             }
           : "absent",
     );
   }
-  return h;
+  return items;
 }
 //@ chunk-e6aww6q8.js:626761-626936 placement
-async function releaseMarkersOutside(e, n, r) {
-  let s = new Set();
+async function releaseMarkersOutside(cacheRoot, keep, storageV5) {
+  let staleDirs = new Set();
   for (let ownInUseMarkerPath of getPluginRegistry().ownInUseMarkerPaths) {
-    let y = dirname(dirname(ownInUseMarkerPath));
-    if (isSubpathOf(e, y, false) && !n.has(y)) s.add(y);
+    let versionDir = dirname(dirname(ownInUseMarkerPath));
+    if (isSubpathOf(cacheRoot, versionDir, false) && !keep.has(versionDir)) staleDirs.add(versionDir);
   }
-  await Promise.all(Array.from(s, (h) => removeInUseMarker(h, r)));
+  await Promise.all(Array.from(staleDirs, (versionDir) => removeInUseMarker(versionDir, storageV5)));
 }
 //@ chunk-e6aww6q8.js:626936-627074 placement
-async function isMarkerOwnerAlive(e, requireIdentity) {
-  if (!(e.pid === 1 || isProcessRunning_2(e.pid))) return false;
-  let r = procIdentityOf(e);
-  if (requireIdentity) return r !== undefined && (await provenSameProcessAsync(e.pid, r)) === true;
-  return isSameProcessAsync(e.pid, r);
+async function isMarkerOwnerAlive(marker, requireIdentity) {
+  if (!(marker.pid === 1 || isProcessRunning_2(marker.pid))) return false;
+  let identity = procIdentityOf(marker);
+  if (requireIdentity)
+    return identity !== undefined && (await provenSameProcessAsync(marker.pid, identity)) === true;
+  return isSameProcessAsync(marker.pid, identity);
 }
 export {
   writeInUseMarker,

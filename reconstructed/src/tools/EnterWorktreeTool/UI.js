@@ -19,7 +19,7 @@ import { Box, Text } from "../../ink/components/Text.js";
 /**
  * “Switched to worktree（on branch …）” 结果消息。
  */
-function WorktreeSwitchedMessage(m, d, c) {
+function WorktreeSwitchedMessage(result, unused, unusedOther) {
   return jsxProd_default(MessageResponse, {
     children: jsxProd_default_2(Box, {
       flexDirection: "column",
@@ -27,14 +27,14 @@ function WorktreeSwitchedMessage(m, d, c) {
         jsxProd_default_2(Text, {
           children: [
             "Switched to worktree",
-            m.worktreeBranch
+            result.worktreeBranch
               ? jsxProd_default_2(Text, {
                   children: [
                     " ",
                     "on branch ",
                     jsxProd_default(Text, {
                       bold: true,
-                      children: m.worktreeBranch,
+                      children: result.worktreeBranch,
                     }),
                   ],
                 })
@@ -43,7 +43,7 @@ function WorktreeSwitchedMessage(m, d, c) {
         }),
         jsxProd_default(Text, {
           dimColor: true,
-          children: m.worktreePath,
+          children: result.worktreePath,
         }),
       ],
     }),

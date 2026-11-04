@@ -10,16 +10,17 @@
  */
 import { getModelCatalog_2 } from "./model/modelCatalog.js";
 import { parseModelId, isStandardVersion, isSameModelVersion } from "./model/modelIds.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:458156-458281 file-last-pair
 /**
  * 在已知模型中查找满足某能力的模型 id（误配名 isPDFExtension）。
  */
 function isPDFExtension(ext) {
-  let n = [...getModelCatalog_2().models.map((model) => model.id), ...isPDFSupported()];
-  for (let r of n) {
-    let modelId = parseModelId(r);
-    if (isStandardVersion(modelId) && isSameModelVersion(modelId, ext)) return r;
+  let candidates = [...getModelCatalog_2().models.map((model) => model.id), ...isPDFSupported()];
+  for (let candidate of candidates) {
+    let modelId = parseModelId(candidate);
+    if (isStandardVersion(modelId) && isSameModelVersion(modelId, ext)) return candidate;
   }
   return;
 }
@@ -31,7 +32,10 @@ function isPDFSupported() {
 /**
  * 文档扩展名集合（pdf）。
  */
-var DOCUMENT_EXTENSIONS = new Set(["pdf"]);
+var DOCUMENT_EXTENSIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-g54kbxqw.js:132012", () => {
+  DOCUMENT_EXTENSIONS = new Set(["pdf"]);
+});
 //@ chunk-g54kbxqw.js:132036-132232 fingerprint = parsePDFPageRange (1)
 /**
  * 解析 pages 参数："N"、"N-M" 或 "N-"，1 基，非法返回 null。
@@ -39,13 +43,13 @@ var DOCUMENT_EXTENSIONS = new Set(["pdf"]);
 function parsePDFPageRange(pages) {
   let match = /^(\d{1,9})(?:\s*(-)\s*(\d{1,9})?)?$/.exec(pages.trim());
   if (!match) return null;
-  let [, s, r, h] = match;
-  let y = Number(s);
-  let k = h ? Number(h) : r ? 1 / 0 : y;
-  if (y < 1 || k < y) return null;
+  let [, firstPageText, dash, lastPageText] = match;
+  let firstPage = Number(firstPageText);
+  let lastPage = lastPageText ? Number(lastPageText) : dash ? 1 / 0 : firstPage;
+  if (firstPage < 1 || lastPage < firstPage) return null;
   return {
-    firstPage: y,
-    lastPage: k,
+    firstPage,
+    lastPage,
   };
 }
 export { parsePDFPageRange, isPDFExtension, isPDFSupported, DOCUMENT_EXTENSIONS };

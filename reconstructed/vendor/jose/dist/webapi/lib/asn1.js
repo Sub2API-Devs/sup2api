@@ -5,7 +5,7 @@
  * pieces: chunk-5h78gfwc.js (4)
  * attribution: esm-fingerprint 4
  */
-import { JOSENotSupported } from "../../node/esm/util/errors.js";
+import { JOSENotSupported_2 } from "../../node/esm/util/errors.js";
 import { decodeBase64 } from "./base64.js";
 
 //@ chunk-5h78gfwc.js:20113-20373 esm-fingerprint
@@ -23,14 +23,15 @@ var parseLength = (state) => {
   if (first & 128) {
     let lengthOfLen = first & 127;
     let length = 0;
-    for (let i = 0; i < lengthOfLen; i++) length = (length << 8) | state.data[state.pos++];
+    for (let byteIndex = 0; byteIndex < lengthOfLen; byteIndex++)
+      length = (length << 8) | state.data[state.pos++];
     return length;
   }
   return first;
 };
 //@ chunk-5h78gfwc.js:20373-20566 esm-fingerprint
-var expectTag = (state, t, errorMessage) => {
-  if (state.data[state.pos++] !== t) throw Error(errorMessage);
+var expectTag = (state, expectedTag, errorMessage) => {
+  if (state.data[state.pos++] !== expectedTag) throw Error(errorMessage);
 };
 var getSubarray = (state, length) => {
   let result = state.data.subarray(state.pos, state.pos + length);
@@ -146,7 +147,7 @@ var genericImport = async (keyFormat, keyData, alg, options) => {
                 namedCurve,
               };
       } catch (cause) {
-        throw new JOSENotSupported("Invalid or unsupported key format");
+        throw new JOSENotSupported_2("Invalid or unsupported key format");
       }
       keyUsages = isPublic ? [] : ["deriveBits"];
       break;
@@ -167,7 +168,7 @@ var genericImport = async (keyFormat, keyData, alg, options) => {
       keyUsages = getSigUsages();
       break;
     default:
-      throw new JOSENotSupported('Invalid or unsupported "alg" (Algorithm) value');
+      throw new JOSENotSupported_2('Invalid or unsupported "alg" (Algorithm) value');
   }
   return crypto.subtle.importKey(
     keyFormat,

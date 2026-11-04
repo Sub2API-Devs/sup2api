@@ -8,13 +8,13 @@
  * pieces: chunk-cpqpnzp4.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { sanitizeTelemetryString } from "../../utils/sanitization.js";
 import { useTheme, useTheme_2 } from "../design-system/ThemeProvider.js";
 import { useAppStoreDirect, useAppStateSession } from "../../state/AppState.js";
 import { useMcpReconnect } from "../../services/mcp/MCPConnectionManager.js";
 import { useHost } from "../../context/session.js";
-import { y, P } from "../../../vendor/react/cjs/react.production.js";
+import { useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import {
   normalizeServerNameShort,
   sanitizeErrorDetail,
@@ -40,66 +40,66 @@ import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/inde
 
 //@ chunk-cpqpnzp4.js:37997-40831 fingerprint = MCPReconnect (0.613)
 function MCPReconnect(props) {
-  let $ = w(30);
+  let $ = useMemoCache(30);
   let { serverName, onComplete } = props;
-  let v;
+  let complete;
   if ($[0] !== onComplete) {
-    v = (m, ...k) => {
-      let f = k;
-      return onComplete(typeof m === "string" ? sanitizeTelemetryString(m) : m, ...f);
+    complete = (message, ...rest) => {
+      let rest_2 = rest;
+      return onComplete(typeof message === "string" ? sanitizeTelemetryString(message) : message, ...rest_2);
     };
     $[0] = onComplete;
-    $[1] = v;
-  } else v = $[1];
-  let b = v;
+    $[1] = complete;
+  } else complete = $[1];
+  let report = complete;
   let [theme] = useTheme();
   let store = useAppStoreDirect();
   let reconnectMcpServer = useMcpReconnect();
   let { storageV5 } = useTheme_2();
   let host = useHost();
   let appStateSession = useAppStateSession();
-  let [isReconnecting, setIsReconnecting] = y(true);
-  let [error, setError] = y(null);
-  let k;
+  let [isReconnecting, setIsReconnecting] = useState(true);
+  let [error, setError] = useState(null);
+  let reconnectEffect;
   let t2;
   if (
     $[2] !== appStateSession ||
     $[3] !== host ||
-    $[4] !== b ||
+    $[4] !== report ||
     $[5] !== reconnectMcpServer ||
     $[6] !== serverName ||
     $[7] !== storageV5 ||
     $[8] !== store
   ) {
-    k = () => {
+    reconnectEffect = () => {
       let attemptReconnect = async function attemptReconnect() {
         try {
           let server = store.getState().mcp.clients.find((client) => client.name === serverName);
           if (!server) {
             setError(`MCP server "${normalizeServerNameShort(serverName)}" not found`);
             setIsReconnecting(false);
-            b(`MCP server "${normalizeServerNameShort(serverName)}" not found`);
+            report(`MCP server "${normalizeServerNameShort(serverName)}" not found`);
             return;
           }
           if (toggleStateOf(server) === "disabled") {
-            let ke = disabledEnableInMcpText(serverName);
-            setError(ke);
+            let disabledText = disabledEnableInMcpText(serverName);
+            setError(disabledText);
             setIsReconnecting(false);
-            b(ke);
+            report(disabledText);
             return;
           }
           let result = await reconnectMcpServer(serverName);
           Pe: switch (result.client.type) {
             case "connected": {
               setIsReconnecting(false);
-              b(`Successfully reconnected to ${normalizeServerNameShort(serverName)}`);
+              report(`Successfully reconnected to ${normalizeServerNameShort(serverName)}`);
               break Pe;
             }
             case "needs-auth": {
               setError(`${normalizeServerNameShort(serverName)} requires authentication`);
               setIsReconnecting(false);
               if (isUnattendedBgSession()) {
-                let xe = await parkCommandForAttacher(
+                let parked = await parkCommandForAttacher(
                   host,
                   truncateAttentionText(
                     `authenticate ${normalizeServerNameShort(serverName)} \u2014 open this session and run /mcp`,
@@ -107,12 +107,12 @@ function MCPReconnect(props) {
                   "MCP authentication needed",
                   storageV5,
                 );
-                b(
+                report(
                   `${normalizeServerNameShort(serverName)} requires authentication. Open this session and run /mcp to authenticate.` +
-                    (xe ? ' It now shows "needs input" in agent view.' : ""),
+                    (parked ? ' It now shows "needs input" in agent view.' : ""),
                 );
               } else
-                b(
+                report(
                   `${normalizeServerNameShort(serverName)} requires authentication. Use /mcp to authenticate.`,
                 );
               break Pe;
@@ -123,7 +123,7 @@ function MCPReconnect(props) {
             case "disabled": {
               setError(`Failed to reconnect to ${normalizeServerNameShort(serverName)}`);
               setIsReconnecting(false);
-              b(`Failed to reconnect to ${normalizeServerNameShort(serverName)}`);
+              report(`Failed to reconnect to ${normalizeServerNameShort(serverName)}`);
               break Pe;
             }
             default: {
@@ -132,44 +132,47 @@ function MCPReconnect(props) {
           }
         } catch (error) {
           let err = error;
-          let Ie = err instanceof Error ? err.message : String(err);
+          let rawMessage = err instanceof Error ? err.message : String(err);
           let config = store.getState().mcp.clients.find((client) => client.name === serverName)?.config;
-          let x =
+          let detail =
             err instanceof WireSafeControlError
-              ? Ie
+              ? rawMessage
               : config
-                ? redactMcpErrorDetail(serverName, config, Ie)
+                ? redactMcpErrorDetail(serverName, config, rawMessage)
                 : "[error detail unavailable: server configuration could not be located]";
-          setError(sanitizeErrorDetail(x));
+          setError(sanitizeErrorDetail(detail));
           setIsReconnecting(false);
-          if (err instanceof WireSafeControlError) b(normalizeMcpServerName(x));
+          if (err instanceof WireSafeControlError) report(normalizeMcpServerName(detail));
           else if (isBridgeOrTransport(appStateSession)) {
-            logForDebugging(`mcp reconnect (typed) error for ${sanitizeTelemetryString(serverName)}: ${x}`, {
-              level: "error",
-            });
-            b(
+            logForDebugging(
+              `mcp reconnect (typed) error for ${sanitizeTelemetryString(serverName)}: ${detail}`,
+              {
+                level: "error",
+              },
+            );
+            report(
               `Error reconnecting to ${normalizeServerNameShort(serverName)} (detail withheld on this connection).`,
             );
-          } else b(`Error: ${normalizeMcpServerName(x)}`);
+          } else report(`Error: ${normalizeMcpServerName(detail)}`);
         }
       };
       attemptReconnect();
     };
-    t2 = [serverName, reconnectMcpServer, store, b, storageV5, host, appStateSession];
+    t2 = [serverName, reconnectMcpServer, store, report, storageV5, host, appStateSession];
     $[2] = appStateSession;
     $[3] = host;
-    $[4] = b;
+    $[4] = report;
     $[5] = reconnectMcpServer;
     $[6] = serverName;
     $[7] = storageV5;
     $[8] = store;
-    $[9] = k;
+    $[9] = reconnectEffect;
     $[10] = t2;
   } else {
-    k = $[9];
+    reconnectEffect = $[9];
     t2 = $[10];
   }
-  P(k, t2);
+  useEffect(reconnectEffect, t2);
   if (isReconnecting) {
     let t3;
     if ($[11] !== serverName) {

@@ -64,12 +64,13 @@ async function recoverUntrustedDevice(
   let justEnrolled = false;
   if (shouldRemoteControlEnroll(untrustedDeviceRefusal)) {
     debug(`[bridge:api] ${context}: 403 untrusted_device, enrolling this computer and retrying`);
-    let k = await untrustedDevice.recover(deviceToken);
-    if (k) {
-      let S = await sendRequest(getAccessToken(), k);
-      let r = S.status === 403 ? readUntrustedDeviceRefusal(S.data) : undefined;
-      if (r === undefined) return S;
-      untrustedDeviceRefusal = r;
+    let recoveredToken = await untrustedDevice.recover(deviceToken);
+    if (recoveredToken) {
+      let retryResponse = await sendRequest(getAccessToken(), recoveredToken);
+      let refusalAfterEnroll =
+        retryResponse.status === 403 ? readUntrustedDeviceRefusal(retryResponse.data) : undefined;
+      if (refusalAfterEnroll === undefined) return retryResponse;
+      untrustedDeviceRefusal = refusalAfterEnroll;
       justEnrolled = true;
       debug(`[bridge:api] ${context}: retry after enrollment also got untrusted_device`);
     }
@@ -111,8 +112,8 @@ function createBridgeApiClient(deps) {
     if (!accessToken) throw Error(BRIDGE_LOGIN_INSTRUCTION);
     return accessToken;
   }
-  async function withAuthRecovery(fn, context, o) {
-    let untrustedDevice = o === "enroll_and_retry" ? deps.untrustedDevice : undefined;
+  async function withAuthRecovery(fn, context, deviceRecoveryMode) {
+    let untrustedDevice = deviceRecoveryMode === "enroll_and_retry" ? deps.untrustedDevice : undefined;
     let deviceToken = untrustedDevice ? await deps.getTrustedDeviceToken?.() : undefined;
     let accessToken = requireAccessToken();
     let response = await fn(accessToken, deviceToken);
@@ -152,26 +153,26 @@ function createBridgeApiClient(deps) {
     return response;
   }
   let client = {
-    async registerBridgeEnvironment(r, signal) {
+    async registerBridgeEnvironment(params, signal) {
       return withFeatureTelemetry(
         "bridge_environment_register",
         async () => {
-          debug(`[bridge:api] POST /v1/environments/bridge bridgeId=${r.bridgeId}`);
-          let o;
-          let s = r.getToolHostAdvert?.() ?? {
+          debug(`[bridge:api] POST /v1/environments/bridge bridgeId=${params.bridgeId}`);
+          let toolHostFields;
+          let toolHostAdvert = params.getToolHostAdvert?.() ?? {
             kind: "withdraw",
           };
-          switch (s.kind) {
+          switch (toolHostAdvert.kind) {
             case "advertise":
-              o = {
+              toolHostFields = {
                 tool_host: "2",
-                tool_host_cc_version: s.advert.cliVersion,
-                tool_host_platform: s.advert.platform,
+                tool_host_cc_version: toolHostAdvert.advert.cliVersion,
+                tool_host_platform: toolHostAdvert.advert.platform,
               };
               break;
             case "withdraw":
-              if (r.reuseEnvironmentId)
-                o = {
+              if (params.reuseEnvironmentId)
+                toolHostFields = {
                   tool_host: "",
                   tool_host_cc_version: "",
                   tool_host_platform: "",
@@ -181,33 +182,33 @@ function createBridgeApiClient(deps) {
             case "unknown":
               break;
           }
-          let g = {
-            machine_name: r.machineName,
-            ...(r.machineId != null && {
-              machine_id: r.machineId,
+          let body = {
+            machine_name: params.machineName,
+            ...(params.machineId != null && {
+              machine_id: params.machineId,
             }),
-            directory: r.dir,
-            branch: r.branch,
-            git_repo_url: redactGitRemoteCredentials(r.gitRepoUrl),
-            max_sessions: r.maxSessions,
+            directory: params.dir,
+            branch: params.branch,
+            git_repo_url: redactGitRemoteCredentials(params.gitRepoUrl),
+            max_sessions: params.maxSessions,
             metadata: {
-              worker_type: r.workerType,
-              ...(r.machineId != null && {
-                machine_id: r.machineId,
+              worker_type: params.workerType,
+              ...(params.machineId != null && {
+                machine_id: params.machineId,
               }),
-              ...o,
+              ...toolHostFields,
             },
-            ...(r.hostProfile && {
-              host: r.hostProfile,
+            ...(params.hostProfile && {
+              host: params.hostProfile,
             }),
-            ...(r.reuseEnvironmentId && {
-              environment_id: r.reuseEnvironmentId,
+            ...(params.reuseEnvironmentId && {
+              environment_id: params.reuseEnvironmentId,
             }),
           };
-          let _ = await withAuthRecovery(
-            async (E, w) =>
-              axios_default.post(`${deps.baseUrl}/v1/environments/bridge`, g, {
-                headers: await getHeaders(E, w),
+          let response = await withAuthRecovery(
+            async (token, deviceToken) =>
+              axios_default.post(`${deps.baseUrl}/v1/environments/bridge`, body, {
+                headers: await getHeaders(token, deviceToken),
                 timeout: 15000,
                 signal,
                 validateStatus: (status) => status < 500,
@@ -215,44 +216,44 @@ function createBridgeApiClient(deps) {
             "Registration",
             "enroll_and_retry",
           );
-          if (_.status === 409 && extractErrorCode(_.data) === FOLDER_ALREADY_SERVED_ERROR_TYPE)
+          if (response.status === 409 && extractErrorCode(response.data) === FOLDER_ALREADY_SERVED_ERROR_TYPE)
             throw new BridgeFatalError(
-              extractPlainErrorDetail(_.data) ??
+              extractPlainErrorDetail(response.data) ??
                 "This folder is already served by another Claude Code on this device. Stop it first.",
               409,
               FOLDER_ALREADY_SERVED_ERROR_TYPE,
             );
-          handleErrorStatus(_.status, _.data, "Registration", _.headers);
+          handleErrorStatus(response.status, response.data, "Registration", response.headers);
           debug(
-            `[bridge:api] POST /v1/environments/bridge -> ${_.status} environment_id=${_.data.environment_id}`,
+            `[bridge:api] POST /v1/environments/bridge -> ${response.status} environment_id=${response.data.environment_id}`,
           );
           debug(
             `[bridge:api] >>> ${debugBody({
-              ...g,
-              ...(g.host && {
+              ...body,
+              ...(body.host && {
                 host: {
-                  tools: g.host.tools.length,
-                  mcp: g.host.mcp_servers?.length ?? 0,
+                  tools: body.host.tools.length,
+                  mcp: body.host.mcp_servers?.length ?? 0,
                 },
               }),
             })}`,
           );
-          debug(`[bridge:api] <<< ${debugBody(_.data)}`);
-          return _.data;
+          debug(`[bridge:api] <<< ${debugBody(response.data)}`);
+          return response.data;
         },
         classifyApiError,
       );
     },
-    async pollForWork(environmentId, environmentSecret, signal, s, g) {
+    async pollForWork(environmentId, environmentSecret, signal, reclaimOlderThanMs, pollIntervalMs) {
       validateBridgeId(environmentId, "environmentId");
       let prevEmptyPolls = consecutiveEmptyPolls;
       consecutiveEmptyPolls = 0;
-      let E = {};
-      if (s !== undefined) E.reclaim_older_than_ms = s;
-      if (g !== undefined) E.poll_interval_ms = g;
+      let params = {};
+      if (reclaimOlderThanMs !== undefined) params.reclaim_older_than_ms = reclaimOlderThanMs;
+      if (pollIntervalMs !== undefined) params.poll_interval_ms = pollIntervalMs;
       let response = await axios_default.get(`${deps.baseUrl}/v1/environments/${environmentId}/work/poll`, {
         headers: await getHeaders(environmentSecret),
-        params: Object.keys(E).length > 0 ? E : undefined,
+        params: Object.keys(params).length > 0 ? params : undefined,
         timeout: 1e4,
         signal,
         validateStatus: (status) => status < 500,
@@ -268,9 +269,9 @@ function createBridgeApiClient(deps) {
       }
       let mode = response.data.data?.mode;
       if (mode != null) {
-        let { id, data: O } = response.data;
+        let { id, data: work } = response.data;
         debug(
-          `[bridge:api] GET .../work/poll -> ${response.status} workId=${hashIdForLog(id)} type=${safeLogToken(O.type)} mode=${safeLogToken(mode)} sessionId=${hashIdForLog(O.id)}`,
+          `[bridge:api] GET .../work/poll -> ${response.status} workId=${hashIdForLog(id)} type=${safeLogToken(work.type)} mode=${safeLogToken(mode)} sessionId=${hashIdForLog(work.id)}`,
         );
         return response.data;
       }
@@ -280,49 +281,49 @@ function createBridgeApiClient(deps) {
       debug(`[bridge:api] <<< ${debugBody(response.data)}`);
       return response.data;
     },
-    async acknowledgeWork(environmentId, workId, sessionToken, s = workId) {
+    async acknowledgeWork(environmentId, workId, sessionToken, loggedWorkId = workId) {
       validateBridgeId(environmentId, "environmentId");
       validateBridgeId(workId, "workId");
-      debug(`[bridge:api] POST .../work/${s}/ack`);
+      debug(`[bridge:api] POST .../work/${loggedWorkId}/ack`);
       let response = await axios_default.post(
         `${deps.baseUrl}/v1/environments/${environmentId}/work/${workId}/ack`,
         {},
         {
           headers: await getHeaders(sessionToken),
           timeout: 1e4,
-          validateStatus: (_) => _ < 500,
+          validateStatus: (status) => status < 500,
         },
       );
       handleErrorStatus(response.status, response.data, "Acknowledge", response.headers);
-      debug(`[bridge:api] POST .../work/${s}/ack -> ${response.status}`);
+      debug(`[bridge:api] POST .../work/${loggedWorkId}/ack -> ${response.status}`);
     },
-    async stopWork(environmentId, workId, o, s, g = workId) {
+    async stopWork(environmentId, workId, sessionToken, force, loggedWorkId = workId) {
       validateBridgeId(environmentId, "environmentId");
       validateBridgeId(workId, "workId");
-      debug(`[bridge:api] POST .../work/${g}/stop force=${s}`);
+      debug(`[bridge:api] POST .../work/${loggedWorkId}/stop force=${force}`);
       let response = await axios_default.post(
         `${deps.baseUrl}/v1/environments/${environmentId}/work/${workId}/stop`,
         {
-          force: s,
+          force,
         },
         {
-          headers: await getHeaders(o),
+          headers: await getHeaders(sessionToken),
           timeout: 1e4,
           validateStatus: (token) => token < 500,
         },
       );
       handleErrorStatus(response.status, response.data, "StopWork");
-      debug(`[bridge:api] POST .../work/${g}/stop -> ${response.status}`);
+      debug(`[bridge:api] POST .../work/${loggedWorkId}/stop -> ${response.status}`);
     },
     async deregisterEnvironment(environmentId) {
       validateBridgeId(environmentId, "environmentId");
       debug(`[bridge:api] DELETE /v1/environments/bridge/${environmentId}`);
       let response = await withAuthRecovery(
-        async (token, s) =>
+        async (token, deviceToken) =>
           axios_default.delete(`${deps.baseUrl}/v1/environments/bridge/${environmentId}`, {
-            headers: await getHeaders(token, s),
+            headers: await getHeaders(token, deviceToken),
             timeout: 1e4,
-            validateStatus: (g) => g < 500,
+            validateStatus: (status) => status < 500,
           }),
         "Deregister",
         "pass_through",
@@ -330,44 +331,44 @@ function createBridgeApiClient(deps) {
       handleErrorStatus(response.status, response.data, "Deregister");
       debug(`[bridge:api] DELETE /v1/environments/bridge/${environmentId} -> ${response.status}`);
     },
-    async markEnvironmentOffline(r, i) {
-      validateBridgeId(r, "environmentId");
-      let o = `/v1/environments/bridge/${r}/offline`;
-      debug(`[bridge:api] POST ${o}`);
-      let s = await axios_default.post(`${deps.baseUrl}${o}`, undefined, {
-        headers: await getHeaders(i),
+    async markEnvironmentOffline(environmentId, sessionToken) {
+      validateBridgeId(environmentId, "environmentId");
+      let path = `/v1/environments/bridge/${environmentId}/offline`;
+      debug(`[bridge:api] POST ${path}`);
+      let response = await axios_default.post(`${deps.baseUrl}${path}`, undefined, {
+        headers: await getHeaders(sessionToken),
         timeout: 5000,
         validateStatus: (token) => token < 500,
       });
-      handleErrorStatus(s.status, s.data, "MarkOffline");
-      debug(`[bridge:api] POST ${o} -> ${s.status}`);
+      handleErrorStatus(response.status, response.data, "MarkOffline");
+      debug(`[bridge:api] POST ${path} -> ${response.status}`);
     },
     async archiveSession(sessionId) {
       validateBridgeId(sessionId, "sessionId");
-      let i = deps.useCcrV2SessionCrud?.()
+      let path = deps.useCcrV2SessionCrud?.()
         ? `/v1/code/sessions/${toInfraSessionId(sessionId)}/archive`
         : `/v1/sessions/${toCompatSessionId(sessionId)}/archive`;
-      debug(`[bridge:api] POST ${i}`);
+      debug(`[bridge:api] POST ${path}`);
       let response = await withAuthRecovery(
-        async (token, g) =>
+        async (token, deviceToken) =>
           axios_default.post(
-            `${deps.baseUrl}${i}`,
+            `${deps.baseUrl}${path}`,
             {},
             {
-              headers: await getHeaders(token, g),
+              headers: await getHeaders(token, deviceToken),
               timeout: 1e4,
-              validateStatus: (_) => _ < 500,
+              validateStatus: (status) => status < 500,
             },
           ),
         "ArchiveSession",
         "pass_through",
       );
       if (response.status === 409) {
-        debug(`[bridge:api] POST ${i} -> 409 (already archived)`);
+        debug(`[bridge:api] POST ${path} -> 409 (already archived)`);
         return;
       }
       handleErrorStatus(response.status, response.data, "ArchiveSession");
-      debug(`[bridge:api] POST ${i} -> ${response.status}`);
+      debug(`[bridge:api] POST ${path} -> ${response.status}`);
     },
     async reconnectSession(environmentId, sessionId, signal) {
       return withFeatureTelemetry(
@@ -379,14 +380,14 @@ function createBridgeApiClient(deps) {
             `[bridge:api] POST /v1/environments/${environmentId}/bridge/reconnect session_id=${sessionId}`,
           );
           let response = await withAuthRecovery(
-            async (token, _) =>
+            async (token, deviceToken) =>
               axios_default.post(
                 `${deps.baseUrl}/v1/environments/${environmentId}/bridge/reconnect`,
                 {
                   session_id: sessionId,
                 },
                 {
-                  headers: await getHeaders(token, _),
+                  headers: await getHeaders(token, deviceToken),
                   timeout: 1e4,
                   signal,
                   validateStatus: (token) => token < 500,
@@ -411,7 +412,7 @@ function createBridgeApiClient(deps) {
         {
           headers: await getHeaders(sessionToken),
           timeout: 1e4,
-          validateStatus: (g) => g < 500,
+          validateStatus: (status) => status < 500,
         },
       );
       handleErrorStatus(response.status, response.data, "Heartbeat");
@@ -426,8 +427,8 @@ function createBridgeApiClient(deps) {
       ? `http_${token.status}`
       : classifyApiError(token);
   }
-  client.refuseToolHost = async (r, i, o, signal) => {
-    let msg = `[bridge:api] POST /v1/code/sessions/${hashIdForLog(r)}/tool_hosts/refuse workId=${hashIdForLog(i)} code=${o}`;
+  client.refuseToolHost = async (sessionId, workId, code, signal) => {
+    let msg = `[bridge:api] POST /v1/code/sessions/${hashIdForLog(sessionId)}/tool_hosts/refuse workId=${hashIdForLog(workId)} code=${code}`;
     try {
       if (
         getAPIProvider() !== "firstParty" ||
@@ -440,13 +441,13 @@ function createBridgeApiClient(deps) {
       await withFeatureTelemetry(
         "bridge_tool_host_refuse",
         async () => {
-          validateBridgeId(r, "sessionId");
+          validateBridgeId(sessionId, "sessionId");
           debug(msg);
           let response = await axios_default.post(
-            `${deps.baseUrl}/v1/code/sessions/${toInfraSessionId(r)}/tool_hosts/refuse`,
+            `${deps.baseUrl}/v1/code/sessions/${toInfraSessionId(sessionId)}/tool_hosts/refuse`,
             {
-              work_id: i,
-              code: o,
+              work_id: workId,
+              code,
             },
             {
               headers: {
@@ -457,7 +458,7 @@ function createBridgeApiClient(deps) {
               timeout: 5000,
               signal,
               maxRedirects: 0,
-              validateStatus: (E) => E < 500,
+              validateStatus: (status) => status < 500,
             },
           );
           handleErrorStatus(response.status, response.data, "RefuseToolHost");
@@ -469,26 +470,22 @@ function createBridgeApiClient(deps) {
       debug(`${msg} failed (${classifyRefuseError(error)}); not retried`);
     }
   };
-  async function watchHeaders(r) {
-    let { "anthropic-beta": i, ...o } = await getHeaders(r);
+  async function watchHeaders(sessionToken) {
+    let { "anthropic-beta": betaHeader, ...rest } = await getHeaders(sessionToken);
     return {
-      ...o,
+      ...rest,
       "anthropic-client-platform": getClientPlatform(),
       "anthropic-client-version": deps.runnerVersion,
     };
   }
   function parseRetryAfter(headers) {
-    let i = headers["retry-after"];
-    return typeof i === "string" ? parseRetryAfterMs(i) : undefined;
+    let retryAfterHeader = headers["retry-after"];
+    return typeof retryAfterHeader === "string" ? parseRetryAfterMs(retryAfterHeader) : undefined;
   }
   client.sessionsWatch = {
-    async mintResumeToken(r, signal) {
-      let {
-        status,
-        data: s,
-        headers,
-      } = await axios_default.get(`${deps.baseUrl}/v1/code/sessions?limit=1`, {
-        headers: await watchHeaders(r),
+    async mintResumeToken(sessionToken, signal) {
+      let { status, data, headers } = await axios_default.get(`${deps.baseUrl}/v1/code/sessions?limit=1`, {
+        headers: await watchHeaders(sessionToken),
         timeout: 1e4,
         signal,
         maxRedirects: 0,
@@ -496,7 +493,7 @@ function createBridgeApiClient(deps) {
       });
       debug(`[bridge:api] GET /v1/code/sessions?limit=1 -> ${status}`);
       let resumeToken =
-        s !== null && typeof s === "object" && "resume_token" in s ? s.resume_token : undefined;
+        data !== null && typeof data === "object" && "resume_token" in data ? data.resume_token : undefined;
       return {
         status,
         retryAfterMs: parseRetryAfter(headers),
@@ -505,18 +502,18 @@ function createBridgeApiClient(deps) {
         }),
       };
     },
-    async open(r, i, signal) {
+    async open(sessionToken, lastEventId, signal) {
       let {
         status,
-        data: g,
+        data: stream,
         headers,
       } = await axios_default.get(
         `${deps.baseUrl}/v1/code/sessions/watch?include_trigger_sessions=true&exclude_tags=-`,
         {
           headers: {
-            ...(await watchHeaders(r)),
+            ...(await watchHeaders(sessionToken)),
             Accept: "text/event-stream",
-            "Last-Event-ID": i,
+            "Last-Event-ID": lastEventId,
           },
           responseType: "stream",
           timeout: 0,
@@ -526,13 +523,13 @@ function createBridgeApiClient(deps) {
         },
       );
       debug(`[bridge:api] GET /v1/code/sessions/watch -> ${status}`);
-      let E = headers["content-type"];
-      if (status === 200 && typeof E === "string" && E.includes("text/event-stream"))
+      let contentType = headers["content-type"];
+      if (status === 200 && typeof contentType === "string" && contentType.includes("text/event-stream"))
         return {
           status,
-          body: g,
+          body: stream,
         };
-      g.destroy();
+      stream.destroy();
       return {
         status,
         retryAfterMs: parseRetryAfter(headers),

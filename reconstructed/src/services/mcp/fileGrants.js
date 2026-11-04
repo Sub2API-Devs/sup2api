@@ -26,12 +26,12 @@ function keepFileGrants(session, toolUseId, fileInputUpload) {
   });
 }
 //@ chunk-cp2ytehj.js:375-424 placement
-function dropFileGrants(n, e) {
-  fileGrantsByToolUse.peek(n)?.byToolUse.delete(e);
+function dropFileGrants(session, toolUseId) {
+  fileGrantsByToolUse.peek(session)?.byToolUse.delete(toolUseId);
 }
 //@ chunk-cp2ytehj.js:424-494 placement
-function hasFileGrants(n, e) {
-  return e !== undefined && fileGrantsByToolUse.peek(n)?.byToolUse.has(e) === true;
+function hasFileGrants(session, toolUseId) {
+  return toolUseId !== undefined && fileGrantsByToolUse.peek(session)?.byToolUse.has(toolUseId) === true;
 }
 //@ chunk-cp2ytehj.js:494-585 placement
 /**
@@ -39,8 +39,8 @@ function hasFileGrants(n, e) {
  */
 function takeFileGrants(session, toolUseId) {
   if (toolUseId === undefined) return;
-  let i = fileGrantsByToolUse.peek(session)?.byToolUse.get(toolUseId);
+  let grants = fileGrantsByToolUse.peek(session)?.byToolUse.get(toolUseId);
   dropFileGrants(session, toolUseId);
-  return i;
+  return grants;
 }
-export { takeFileGrants, keepFileGrants, dropFileGrants };
+export { takeFileGrants, keepFileGrants, dropFileGrants, hasFileGrants };

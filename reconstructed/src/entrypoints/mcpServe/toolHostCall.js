@@ -95,80 +95,83 @@ import { GLOB_TOOL_NAME } from "../../tools/GlobTool/prompt.js";
 
 //@ chunk-dz36xfxg.js:23436-23757 placement
 function trackReadFileStateChanges(readFileState) {
-  let n = new Map();
-  let t = new Set();
+  let entriesSetByCall = new Map();
+  let keysSetWithNoEntryBefore = new Set();
   return {
-    entriesSetByCall: n,
-    keysSetWithNoEntryBefore: t,
+    entriesSetByCall,
+    keysSetWithNoEntryBefore,
     readFileState: new Proxy(readFileState, {
-      get: (r, i, s) => {
-        if (i === "set")
-          return (d, k) => {
-            if (!r.has(d)) t.add(normalize(d));
-            r.set(d, k);
-            let l = r.get(d);
-            if (l !== undefined) n.set(normalize(d), l);
-            return s;
+      get: (target, prop, receiver) => {
+        if (prop === "set")
+          return (key, entry) => {
+            if (!target.has(key)) keysSetWithNoEntryBefore.add(normalize(key));
+            target.set(key, entry);
+            let stored = target.get(key);
+            if (stored !== undefined) entriesSetByCall.set(normalize(key), stored);
+            return receiver;
           };
-        let a = Reflect.get(r, i, r);
-        return typeof a === "function" ? a.bind(r) : a;
+        let value = Reflect.get(target, prop, target);
+        return typeof value === "function" ? value.bind(target) : value;
       },
     }),
   };
 }
 //@ chunk-dz36xfxg.js:23757-23954 placement
-function readStateMetaFor(e) {
-  if (e.isPartialView)
+function readStateMetaFor(entry) {
+  if (entry.isPartialView)
     return {
       is_partial_view: true,
     };
-  return e.readBaseline === undefined || (e.offset ?? 1) > 1
+  return entry.readBaseline === undefined || (entry.offset ?? 1) > 1
     ? {}
     : {
-        ...e.readBaseline,
-        ...(e.contentNotInModelContext && {
+        ...entry.readBaseline,
+        ...(entry.contentNotInModelContext && {
           content_not_in_model_context: true,
         }),
       };
 }
 //@ chunk-dz36xfxg.js:23954-24329 placement
-function readFileStateTelemetry(e, readFileStateNotSentCount) {
+function readFileStateTelemetry(changes, readFileStateNotSentCount) {
   return {
-    read_file_state_whole_file_count: count(e, (t) => t.sha256 !== undefined),
+    read_file_state_whole_file_count: count(changes, (change) => change.sha256 !== undefined),
     read_file_state_not_in_model_context_count: count(
-      e,
-      (t) => t.sha256 !== undefined && t.content_not_in_model_context === true,
+      changes,
+      (change) => change.sha256 !== undefined && change.content_not_in_model_context === true,
     ),
-    read_file_state_partial_view_count: count(e, (t) => t.is_partial_view === true),
-    read_file_state_path_only_count: count(e, (t) => t.sha256 === undefined && !t.is_partial_view),
+    read_file_state_partial_view_count: count(changes, (change) => change.is_partial_view === true),
+    read_file_state_path_only_count: count(
+      changes,
+      (change) => change.sha256 === undefined && !change.is_partial_view,
+    ),
     read_file_state_not_sent_count: readFileStateNotSentCount,
   };
 }
 //@ chunk-dz36xfxg.js:24329-24508 placement
-function readFileStateChangesMeta(entriesSetByCall, n) {
+function readFileStateChangesMeta(entriesSetByCall, isBash) {
   let sliced = [...entriesSetByCall]
-    .filter(([i]) => i.length <= MAX_DIRECTORY_PATH_LENGTH)
+    .filter(([path]) => path.length <= MAX_DIRECTORY_PATH_LENGTH)
     .slice(0, MAX_REFS);
-  let mapped = sliced.map(([i, s]) => ({
-    path: i,
-    ...(n ? {} : readStateMetaFor(s)),
+  let changes = sliced.map(([path, entry]) => ({
+    path,
+    ...(isBash ? {} : readStateMetaFor(entry)),
   }));
   return {
-    changes: mapped,
+    changes,
     counts:
       entriesSetByCall.size === 0
         ? undefined
-        : readFileStateTelemetry(mapped, entriesSetByCall.size - sliced.length),
+        : readFileStateTelemetry(changes, entriesSetByCall.size - sliced.length),
   };
 }
 //@ chunk-dz36xfxg.js:24508-24580 placement
-function withReadFileStateChanges(e, changes) {
+function withReadFileStateChanges(result, changes) {
   return changes.length === 0
-    ? e
+    ? result
     : {
-        ...e,
+        ...result,
         _meta: {
-          ...e._meta,
+          ...result._meta,
           [READ_FILE_STATE_META]: changes,
         },
       };
@@ -187,33 +190,33 @@ var TOOL_HOST_REFUSAL_CODES = new Set([
 ]);
 var HOST_CALL_RESULT_KINDS = new Set(["invalid", "allow", "deny", "ask", "output", "tool_failed"]);
 //@ chunk-dz36xfxg.js:24837-25929 placement
-function toolHostRefusalResult(e, n, t) {
-  switch (n.kind) {
+function toolHostRefusalResult(toolName, refusal, range) {
+  switch (refusal.kind) {
     case "too_large":
       return {
         code: "invalid_request",
-        message: `${e} was not run: the permission context sent with it is larger than this server takes. Retrying won't help.`,
+        message: `${toolName} was not run: the permission context sent with it is larger than this server takes. Retrying won't help.`,
       };
     case "unlisted_restriction_on":
     case "malformed":
       return {
         code: "invalid_request",
-        message: `${e} was not run: this server could not read the permission request sent with it. Retrying won't help.`,
+        message: `${toolName} was not run: this server could not read the permission request sent with it. Retrying won't help.`,
       };
     case "not_honoured":
       return {
         code: "invalid_request",
-        message: `${e} was not run: the permission request sent with it contains ${n.part}, which this server does not accept. Retrying won't help.`,
+        message: `${toolName} was not run: the permission request sent with it contains ${refusal.part}, which this server does not accept. Retrying won't help.`,
       };
     case "session_too_old":
       return {
         code: "unsupported_protocol",
-        message: `${e} was not run: this session speaks version ${n.session.version} of the interface to this server, which works with version ${t.min_version} or later. Retrying won't help: tell the user.`,
+        message: `${toolName} was not run: this session speaks version ${refusal.session.version} of the interface to this server, which works with version ${range.min_version} or later. Retrying won't help: tell the user.`,
       };
     case "daemon_too_old":
       return {
         code: "unsupported_protocol",
-        message: `${e} was not run: this session works with version ${n.session.min_version} or later of the interface to this server, which speaks version ${t.version}. Retrying won't help: tell the user.`,
+        message: `${toolName} was not run: this session works with version ${refusal.session.min_version} or later of the interface to this server, which speaks version ${range.version}. Retrying won't help: tell the user.`,
       };
   }
 }
@@ -229,56 +232,58 @@ function duplicateCallError(name) {
 /**
  * mcp serve 的 ToolHost 调用入口：带权限上下文的请求先做权限判定，否则直接执行。
  */
-async function handleToolHostCall(e) {
-  let n = bringsToolHostPermissionRequest(e.meta) ? runStepToolUseId(e.meta) : undefined;
-  if (n === undefined) return runToolHostCall(e);
-  let t = e.newCall();
-  let { abortController, session } = t.toolUseContext;
-  let s = stableHashWithSalt(e.name, e.args ?? {});
-  let keptCallAnswer = findKeptCallAnswer(session, n, s);
-  let d = {
-    tool: toolNameForAnalytics(e.name),
+async function handleToolHostCall(request) {
+  let runStepToolUseId_2 = bringsToolHostPermissionRequest(request.meta)
+    ? runStepToolUseId(request.meta)
+    : undefined;
+  if (runStepToolUseId_2 === undefined) return runToolHostCall(request);
+  let callHandle = request.newCall();
+  let { abortController, session } = callHandle.toolUseContext;
+  let callHash = stableHashWithSalt(request.name, request.args ?? {});
+  let keptCallAnswer = findKeptCallAnswer(session, runStepToolUseId_2, callHash);
+  let logAttrs = {
+    tool: toolNameForAnalytics(request.name),
     step: lit("run"),
   };
-  if (keptCallAnswer === undefined && isKnownRun(session, n)) {
-    t.release();
-    logFeatureSad("mcp_serve_tool_host_permission", "already_started", d);
-    return duplicateCallError(e.name);
+  if (keptCallAnswer === undefined && isKnownRun(session, runStepToolUseId_2)) {
+    callHandle.release();
+    logFeatureSad("mcp_serve_tool_host_permission", "already_started", logAttrs);
+    return duplicateCallError(request.name);
   }
   if (
     keptCallAnswer === undefined ||
-    parseToolContainerStep(e.meta, rangeRaisedAtLaunch()).kind !== "requested"
+    parseToolContainerStep(request.meta, rangeRaisedAtLaunch()).kind !== "requested"
   )
     return keepCallAnswer(
       session,
-      n,
+      runStepToolUseId_2,
       {
-        call: s,
+        call: callHash,
         stop: () => abortController.abort(),
       },
       () =>
         runToolHostCall({
-          ...e,
+          ...request,
           newCall: () => ({
-            ...t,
+            ...callHandle,
             release: () => {},
           }),
-        }).finally(t.release),
+        }).finally(callHandle.release),
     );
   logFeatureOk("mcp_serve_tool_host_permission", {
-    ...d,
+    ...logAttrs,
     outcome: lit("joined"),
   });
   abortController.signal.addEventListener("abort", keptCallAnswer.stop, {
     once: true,
   });
   if (abortController.signal.aborted) keptCallAnswer.stop();
-  using k = e.startHeartbeat();
+  using heartbeatScope = request.startHeartbeat();
   try {
     return await keptCallAnswer.answer;
   } finally {
     abortController.signal.removeEventListener("abort", keptCallAnswer.stop);
-    t.release();
+    callHandle.release();
   }
 }
 //@ chunk-dz36xfxg.js:26901-29780 placement
@@ -286,7 +291,7 @@ async function handleToolHostCall(e) {
  * 执行一次 ToolHost 工具调用：校验输入、按客户端权限上下文判定、运行工具并整理结果（含 readFileState 变化）。
  */
 async function runToolHostCall({
-  name: e,
+  name,
   args,
   meta,
   servedTools,
@@ -296,52 +301,52 @@ async function runToolHostCall({
   callerLogsSharedEvents,
 }) {
   if (!bringsToolHostPermissionRequest(meta)) return;
-  let k = rangeRaisedAtLaunch();
-  let toolContainerStep = parseToolContainerStep(meta, k);
-  if (toolContainerStep.kind === "absent" || toolContainerStep.kind === "other_request") return;
-  let tool = toolNameForAnalytics(e);
-  if (toolContainerStep.kind === "declined") {
+  let range = rangeRaisedAtLaunch();
+  let refusal = parseToolContainerStep(meta, range);
+  if (refusal.kind === "absent" || refusal.kind === "other_request") return;
+  let tool = toolNameForAnalytics(name);
+  if (refusal.kind === "declined") {
     logFeatureOk("mcp_serve_tool_host_permission", {
       tool,
-      step: fromEnum(toolContainerStep.request.step),
+      step: fromEnum(refusal.request.step),
       outcome: lit("acknowledged"),
     });
-    return acknowledgedResult(toolContainerStep.request.ask_digest);
+    return acknowledgedResult(refusal.request.ask_digest);
   }
-  let w = servedTools();
+  let servedTools_2 = servedTools();
   if (
     launchPermissionContext === undefined ||
-    buildAnnouncedCapability(() => w, launchPermissionContext) === undefined
+    buildAnnouncedCapability(() => servedTools_2, launchPermissionContext) === undefined
   ) {
     logFeatureSad("mcp_serve_tool_host_permission", "announces_nothing", {
       tool,
     });
     return refusedResult({
       code: "unsupported_protocol",
-      message: `${e} was not run: this server was launched so that it decides no permissions. Retrying won't help.`,
+      message: `${name} was not run: this server was launched so that it decides no permissions. Retrying won't help.`,
     });
   }
-  if (toolContainerStep.kind !== "requested") {
-    logFeatureSad("mcp_serve_tool_host_permission", toolContainerStep.kind, {
+  if (refusal.kind !== "requested") {
+    logFeatureSad("mcp_serve_tool_host_permission", refusal.kind, {
       tool,
-      daemon_interface_min_version: k.min_version,
-      ...(toolContainerStep.kind === "not_honoured" && {
-        part: fromEnum(toolContainerStep.part),
+      daemon_interface_min_version: range.min_version,
+      ...(refusal.kind === "not_honoured" && {
+        part: fromEnum(refusal.part),
       }),
     });
-    return refusedResult(toolHostRefusalResult(e, toolContainerStep, k));
+    return refusedResult(toolHostRefusalResult(name, refusal, range));
   }
-  let { request } = toolContainerStep;
-  let C = {
+  let { request } = refusal;
+  let logAttrs = {
     tool,
     step: fromEnum(request.step),
     ...(hasRunApproval(request) && {
       approved: true,
     }),
   };
-  let O =
-    SERVE_MODE_KEYS.has(e) ||
-    (e === MONITOR &&
+  let tool_2 =
+    SERVE_MODE_KEYS.has(name) ||
+    (name === MONITOR &&
       request.step === "check" &&
       !(
         "ws" in
@@ -349,58 +354,61 @@ async function runToolHostCall({
           ...args,
         }
       ))
-      ? findToolByName(getAllBaseTools(), e)
-      : isAnsweredWithOutput(e)
-        ? findToolByName(w, e)
+      ? findToolByName(getAllBaseTools(), name)
+      : isAnsweredWithOutput(name)
+        ? findToolByName(servedTools_2, name)
         : undefined;
-  if (O === undefined) {
-    logFeatureSad("mcp_serve_tool_host_permission", "not_served", C);
+  if (tool_2 === undefined) {
+    logFeatureSad("mcp_serve_tool_host_permission", "not_served", logAttrs);
     return refusedResult({
       code: "not_served",
-      message: `${e} was not run: this server does not decide permissions for a tool of that name.`,
+      message: `${name} was not run: this server does not decide permissions for a tool of that name.`,
     });
   }
   let { toolUseContext, release } = newCall();
   try {
     let session = toolUseContext.session;
     let { signal } = toolUseContext.abortController;
-    let v = isMainAgentRun(request);
-    let repoRulesForRequest = await readRepoRulesForRequest(e, meta);
+    let isMainAgent = isMainAgentRun(request);
+    let repoRulesForRequest = await readRepoRulesForRequest(name, meta);
     if (repoRulesForRequest.refused !== undefined) {
       (repoRulesForRequest.refused.cause === "repo_rules_read_failed" ? logFeatureBad : logFeatureSad)(
         "mcp_serve_tool_host_permission",
         repoRulesForRequest.refused.cause,
-        C,
+        logAttrs,
       );
       return notServedResult(repoRulesForRequest.refused.message);
     }
     let { repoRules } = repoRulesForRequest;
     let { daemonCwd, intactDirectory, launchDirectory } = await resolveServeDirectories(session);
-    let H = intactDirectory ?? launchDirectory;
-    if (H === undefined) {
-      logFeatureSad("mcp_serve_tool_host_permission", "launch_directory_gone", C);
-      return notServedResult(launchDirGoneMessage(e));
+    let workingDir = intactDirectory ?? launchDirectory;
+    if (workingDir === undefined) {
+      logFeatureSad("mcp_serve_tool_host_permission", "launch_directory_gone", logAttrs);
+      return notServedResult(launchDirGoneMessage(name));
     }
-    if (intactDirectory === undefined && v) {
+    if (intactDirectory === undefined && isMainAgent) {
       if (!signal.aborted) {
-        logFeatureSad("mcp_serve_tool_host_permission", "start_directory_gone", C);
-        session.setCwd(H);
+        logFeatureSad("mcp_serve_tool_host_permission", "start_directory_gone", logAttrs);
+        session.setCwd(workingDir);
       }
-      return withShellDirectoryMeta(notServedResult(startDirGoneMessage(e, H, daemonCwd)), H);
+      return withShellDirectoryMeta(
+        notServedResult(startDirGoneMessage(name, workingDir, daemonCwd)),
+        workingDir,
+      );
     }
-    let B = session.withProject({
-      cwd: H,
+    let projectSession = session.withProject({
+      cwd: workingDir,
     });
-    permissionCheckedCwds.of(B).set(B, getSessionProject(B).cwd);
-    let z = await runInRemoteCallFrameMain(H, async () =>
+    permissionCheckedCwds.of(projectSession).set(projectSession, getSessionProject(projectSession).cwd);
+    let outcome = await runInRemoteCallFrameMain(workingDir, async () =>
       runPermissionedToolHostCall(
-        O,
+        tool_2,
         args,
         request,
         callServedTool(
           {
             ...toolUseContext,
-            session: B,
+            session: projectSession,
           },
           request,
           launchPermissionContext,
@@ -410,72 +418,74 @@ async function runToolHostCall({
         repoRules,
         startHeartbeat,
         callerLogsSharedEvents,
-        asksForEditResult(e, meta),
+        asksForEditResult(name, meta),
         isValidSettingsFileIdentity(meta),
       ),
     ).catch((error) => {
       if (signal.aborted) throw error;
-      logUnexpectedThrow(O, error);
+      logUnexpectedThrow(tool_2, error);
       return {
         result: failedResult(
-          `${e}: this server failed while it handled the call (internal error). Check what it changed before running it again.`,
+          `${name}: this server failed while it handled the call (internal error). Check what it changed before running it again.`,
           [],
         ),
         outcome: "crashed_request",
       };
     });
     if (!signal.aborted) {
-      let { cwd } = getSessionProject(B);
-      let fe = v && cwd !== H;
-      if (fe) session.setCwd(cwd);
-      let ne = {
-        ...C,
-        ...z.readFileStateChangeCounts,
-        ...(z.originalFileLeftOutReason && {
-          original_file_left_out: fromEnum(z.originalFileLeftOutReason),
+      let { cwd } = getSessionProject(projectSession);
+      let cwdMoved = isMainAgent && cwd !== workingDir;
+      if (cwdMoved) session.setCwd(cwd);
+      let attrs = {
+        ...logAttrs,
+        ...outcome.readFileStateChangeCounts,
+        ...(outcome.originalFileLeftOutReason && {
+          original_file_left_out: fromEnum(outcome.originalFileLeftOutReason),
         }),
-        ...(z.diffLeftOut && {
-          diff_left_out: fromEnum(z.diffLeftOut),
+        ...(outcome.diffLeftOut && {
+          diff_left_out: fromEnum(outcome.diffLeftOut),
         }),
-        ...(z.settingsWriteSuspicion && {
-          settings_write_reason: fromEnum(z.settingsWriteSuspicion.reason),
+        ...(outcome.settingsWriteSuspicion && {
+          settings_write_reason: fromEnum(outcome.settingsWriteSuspicion.reason),
         }),
-        ...(z.settingsWriteSuspicion?.isHoldLifted && {
+        ...(outcome.settingsWriteSuspicion?.isHoldLifted && {
           settings_write_hold_lifted: true,
         }),
-        ...(fe && {
+        ...(cwdMoved && {
           directory: fromEnum("moved"),
         }),
         ...(intactDirectory === undefined && {
           directory: fromEnum("launch_while_gone"),
         }),
       };
-      if (HOST_CALL_RESULT_KINDS.has(z.outcome))
+      if (HOST_CALL_RESULT_KINDS.has(outcome.outcome))
         logFeatureOk("mcp_serve_tool_host_permission", {
-          ...ne,
-          outcome: fromEnum(z.outcome),
+          ...attrs,
+          outcome: fromEnum(outcome.outcome),
         });
-      else if (TOOL_HOST_REFUSAL_CODES.has(z.outcome))
-        logFeatureSad("mcp_serve_tool_host_permission", z.outcome, ne);
-      else logFeatureBad("mcp_serve_tool_host_permission", z.outcome, ne);
+      else if (TOOL_HOST_REFUSAL_CODES.has(outcome.outcome))
+        logFeatureSad("mcp_serve_tool_host_permission", outcome.outcome, attrs);
+      else logFeatureBad("mcp_serve_tool_host_permission", outcome.outcome, attrs);
     }
-    return v ? withShellDirectoryMeta(z.result, getSessionProject(session).cwd) : z.result;
+    return isMainAgent
+      ? withShellDirectoryMeta(outcome.result, getSessionProject(session).cwd)
+      : outcome.result;
   } finally {
     release();
   }
 }
 //@ chunk-dz36xfxg.js:29780-29949 placement
-function launchDirGoneMessage(e) {
-  return `${e} was not run: the directory that this server was started in is gone (deleted, moved, replaced by a link, or unreadable). Retrying won't help.`;
+function launchDirGoneMessage(toolName) {
+  return `${toolName} was not run: the directory that this server was started in is gone (deleted, moved, replaced by a link, or unreadable). Retrying won't help.`;
 }
 //@ chunk-dz36xfxg.js:29949-30210 placement
-function startDirGoneMessage(e, n, daemonCwd) {
-  return `${e} was not run: the directory it was to start in is gone (deleted, moved, replaced by a link, or unreadable). The next call starts in ${n}. Check that this call still does what you mean there, then send it again. What is gone: ${daemonCwd}`;
+function startDirGoneMessage(toolName, nextDir, daemonCwd) {
+  return `${toolName} was not run: the directory it was to start in is gone (deleted, moved, replaced by a link, or unreadable). The next call starts in ${nextDir}. Check that this call still does what you mean there, then send it again. What is gone: ${daemonCwd}`;
 }
 //@ chunk-dz36xfxg.js:30210-30291 placement
-async function canonicalDir(e) {
+async function canonicalDir(dir) {
   try {
-    return identity(await realpath(`${e}/`)) === e ? e : undefined;
+    return identity(await realpath(`${dir}/`)) === dir ? dir : undefined;
   } catch {
     return;
   }
@@ -483,24 +493,24 @@ async function canonicalDir(e) {
 //@ chunk-dz36xfxg.js:30291-30431 placement
 async function resolveServeDirectories(session) {
   let { cwd, originalCwd } = getSessionProject(session);
-  let r = await canonicalDir(originalCwd);
+  let launchDirectory = await canonicalDir(originalCwd);
   return {
     daemonCwd: cwd,
-    launchDirectory: r,
-    intactDirectory: cwd === originalCwd ? r : await canonicalDir(cwd),
+    launchDirectory,
+    intactDirectory: cwd === originalCwd ? launchDirectory : await canonicalDir(cwd),
   };
 }
 //@ chunk-dz36xfxg.js:30431-30944 placement
-function callServedTool(e, request, launchPermissionContext, repoRules) {
+function callServedTool(toolUseContext, request, launchPermissionContext, repoRules) {
   return call(
     {
-      ...e,
+      ...toolUseContext,
       inputFromAnotherMachine: true,
       toolUseId: request.tool_use_id,
-      readFileState: readFileStateFor(e.session, request.agent_id),
+      readFileState: readFileStateFor(toolUseContext.session, request.agent_id),
       agentId: request.agent_id === undefined ? undefined : identityAgentId2(request.agent_id),
       permissionLayers: [
-        ...(e.permissionLayers ?? []),
+        ...(toolUseContext.permissionLayers ?? []),
         ...(request.agent_effort_level === undefined
           ? []
           : [
@@ -511,12 +521,12 @@ function callServedTool(e, request, launchPermissionContext, repoRules) {
             ]),
       ],
       options: {
-        ...e.options,
+        ...toolUseContext.options,
         mainLoopModel: request.main_loop_model,
         tools:
           request.agent_has_read_tool === true
-            ? e.options.tools
-            : e.options.tools.filter(
+            ? toolUseContext.options.tools
+            : toolUseContext.options.tools.filter(
                 (tool) =>
                   !poolCanRead({
                     tools: [tool],
@@ -527,95 +537,110 @@ function callServedTool(e, request, launchPermissionContext, repoRules) {
     buildNativeDoctorDiagnostics(
       request.permission_context,
       launchPermissionContext,
-      getSessionProject(e.session).originalCwd,
+      getSessionProject(toolUseContext.session).originalCwd,
       repoRules,
     ),
   );
 }
 //@ chunk-dz36xfxg.js:30944-31033 placement = call (0.777)
 function call(onDone, context) {
-  let t = {
+  let appState = {
     ...serveModeDefaultAppState(),
     toolPermissionContext: context,
   };
   return {
     ...onDone,
-    getAppState: () => t,
+    getAppState: () => appState,
   };
 }
 //@ chunk-dz36xfxg.js:31033-31215 placement
-function approvalForStep(e) {
-  switch (e.step) {
+function approvalForStep(request) {
+  switch (request.step) {
     case "check":
       return;
     case "run":
-      return e.approval;
+      return request.approval;
     default:
       throw Error("A ToolHost permission request with an unknown step reached the permission check.");
   }
 }
 //@ chunk-dz36xfxg.js:31215-33128 placement
 async function runPermissionedToolHostCall(
-  e,
-  n,
+  tool,
+  validated,
   request,
-  r,
+  toolUseContext,
   launchPermissionContext,
   repoRules,
-  startHeartbeat,
-  callerLogsSharedEvents,
-  k,
-  l,
+  context,
+  wantsEditResult,
+  wantsEditResult_2,
+  settingsFileValid,
 ) {
-  let y = await precheckToolHostCall(e, n, r);
-  if ("refusal" in y) return notServedOutcome(y.refusal, y.message);
-  if ("kind" in y) return permissionOnlyResult(e, y);
-  let w = classifyBashBackgrounding(e, n, request.tool_host_interface.version, r, l);
-  if (w === "under_a_rule")
+  let precheck = await precheckToolHostCall(tool, validated, toolUseContext);
+  if ("refusal" in precheck) return notServedOutcome(precheck.refusal, precheck.message);
+  if ("kind" in precheck) return permissionOnlyResult(tool, precheck);
+  let backgrounding = classifyBashBackgrounding(
+    tool,
+    validated,
+    request.tool_host_interface.version,
+    toolUseContext,
+    settingsFileValid,
+  );
+  if (backgrounding === "under_a_rule")
     return notServedOutcome(
       "background_under_a_rule",
-      `${e.name} was not run: a deny or ask permission rule names run_in_background. Send the call again without it. If you did not set it, a hook of this session did: tell the user.`,
+      `${tool.name} was not run: a deny or ask permission rule names run_in_background. Send the call again without it. If you did not set it, a hook of this session did: tell the user.`,
     );
-  if (isCallRunBarred(r.session, request.tool_use_id)) return barredCallOutcome(e);
-  let { cwd } = getSessionProject(r.session);
-  let C = approvalForStep(request);
+  if (isCallRunBarred(toolUseContext.session, request.tool_use_id)) return barredCallOutcome(tool);
+  let { cwd } = getSessionProject(toolUseContext.session);
+  let approval = approvalForStep(request);
   let classifierMayApprove = request.classifier_may_approve ?? [];
-  let R =
-    C === undefined
-      ? await checkToolHostPermission(e, y, r, cwd, classifierMayApprove)
-      : await runWithNativeDoctor(e, y, r, cwd, classifierMayApprove, C, launchPermissionContext, repoRules);
-  if (R.kind !== "allow")
-    switch (R.kind) {
+  let permission =
+    approval === undefined
+      ? await checkToolHostPermission(tool, precheck, toolUseContext, cwd, classifierMayApprove)
+      : await runWithNativeDoctor(
+          tool,
+          precheck,
+          toolUseContext,
+          cwd,
+          classifierMayApprove,
+          approval,
+          launchPermissionContext,
+          repoRules,
+        );
+  if (permission.kind !== "allow")
+    switch (permission.kind) {
       case "crashed":
         return notServedOutcome(
           "crashed_check",
-          `${e.name} was not run: the permission rules could not be evaluated for this call (internal error).`,
+          `${tool.name} was not run: the permission rules could not be evaluated for this call (internal error).`,
         );
       case "refused":
-        return notServedOutcome(R.refusal, R.message);
+        return notServedOutcome(permission.refusal, permission.message);
       case "denied_by_policy":
         return {
-          ...permissionOnlyResult(e, {
+          ...permissionOnlyResult(tool, {
             kind: "deny",
-            message: R.message,
-            reason: R.reason,
+            message: permission.message,
+            reason: permission.reason,
           }),
-          outcome: R.policy,
+          outcome: permission.policy,
         };
       case "ask":
         return {
-          ...permissionOnlyResult(e, R.verdict),
-          settingsWriteSuspicion: R.settingsWriteSuspicion,
+          ...permissionOnlyResult(tool, permission.verdict),
+          settingsWriteSuspicion: permission.settingsWriteSuspicion,
         };
       case "deny":
-        return permissionOnlyResult(e, R);
+        return permissionOnlyResult(tool, permission);
     }
   switch (request.step) {
     case "check":
-      return permissionOnlyResult(e, {
+      return permissionOnlyResult(tool, {
         kind: "allow",
-        ...(R.shellAllowSource !== undefined && {
-          shell_allow_source: R.shellAllowSource === "readOnly" ? "read_only" : "sandbox",
+        ...(permission.shellAllowSource !== undefined && {
+          shell_allow_source: permission.shellAllowSource === "readOnly" ? "read_only" : "sandbox",
         }),
       });
     case "run":
@@ -625,47 +650,47 @@ async function runPermissionedToolHostCall(
   }
   if ((await canonicalDir(cwd)) === undefined)
     return notServedOutcome(
-      C === undefined ? "start_directory_changed" : "ask_changed",
-      `${e.name} was not run: the directory it was to start in was deleted, moved, replaced by a link, or made unreadable while its permission was checked. Send the call again.`,
+      approval === undefined ? "start_directory_changed" : "ask_changed",
+      `${tool.name} was not run: the directory it was to start in was deleted, moved, replaced by a link, or made unreadable while its permission was checked. Send the call again.`,
     );
-  let S = claimCallRun(r.session, request.tool_use_id);
-  if (S === "barred") return barredCallOutcome(e);
-  if (S === "started_before")
+  let claim = claimCallRun(toolUseContext.session, request.tool_use_id);
+  if (claim === "barred") return barredCallOutcome(tool);
+  if (claim === "started_before")
     return {
-      result: duplicateCallError(e.name),
+      result: duplicateCallError(tool.name),
       outcome: "already_started",
     };
   try {
     return {
       ...(await runServedBashCall(
-        e,
-        n,
-        R.callInput,
-        r,
-        startHeartbeat,
+        tool,
+        validated,
+        permission.callInput,
+        toolUseContext,
+        context,
         {
           sessionVersion: request.tool_host_interface.version,
           isSubagent: request.agent_id !== undefined,
         },
-        callerLogsSharedEvents,
-        k,
-        w,
+        wantsEditResult,
+        wantsEditResult_2,
+        backgrounding,
       )),
-      settingsWriteSuspicion: R.settingsWriteSuspicion,
+      settingsWriteSuspicion: permission.settingsWriteSuspicion,
     };
   } finally {
-    releaseCallRun(r.session, request.tool_use_id);
+    releaseCallRun(toolUseContext.session, request.tool_use_id);
   }
 }
 //@ chunk-dz36xfxg.js:33128-34929 placement
 /**
  * 对 ToolHost 调用做声明式权限检查（规则、模式、分类器），把结果映射为允许/拒绝/询问。
  */
-async function checkToolHostPermission(tool, n, t, r, classifierMayApprove) {
-  let result = await checkDeclarativePermission(tool, n.observableInput, t, {
+async function checkToolHostPermission(tool, validated, toolUseContext, cwd, classifierMayApprove) {
+  let result = await checkDeclarativePermission(tool, validated.observableInput, toolUseContext, {
     crashIsObjection: true,
   }).catch((error) => {
-    if (t.abortController.signal.aborted) throw error;
+    if (toolUseContext.abortController.signal.aborted) throw error;
     logUnexpectedThrow(tool, error);
     return;
   });
@@ -698,51 +723,60 @@ async function checkToolHostPermission(tool, n, t, r, classifierMayApprove) {
         reason: result.decisionReason.reason,
       }),
     };
-  let a =
+  let effectiveInput =
     result.updatedInput === undefined || isEmptyObject(result.updatedInput)
-      ? n.observableInput
+      ? validated.observableInput
       : result.updatedInput;
-  let callInput = restoreCallInput(n, a);
-  let k =
-    result.behavior === "allow" ? planModeWriteAsk(tool, a, getToolPermissionContext(t).mode, t) : result;
-  if (k === undefined)
+  let callInput = restoreCallInput(validated, effectiveInput);
+  let decision =
+    result.behavior === "allow"
+      ? planModeWriteAsk(tool, effectiveInput, getToolPermissionContext(toolUseContext).mode, toolUseContext)
+      : result;
+  if (decision === undefined)
     return {
       kind: "allow",
       callInput,
       shellAllowSource: serverHeldShellAllowSource(tool, result),
     };
-  let l = tool.name === MONITOR ? findToolByName(getAllBaseTools(), BASH_TOOL_NAME) : tool;
-  if (l === undefined)
+  let toolForAsk = tool.name === MONITOR ? findToolByName(getAllBaseTools(), BASH_TOOL_NAME) : tool;
+  if (toolForAsk === undefined)
     return {
       kind: "crashed",
     };
-  let y = {
-    mode: getToolPermissionContext(t).mode,
+  let askContext = {
+    mode: getToolPermissionContext(toolUseContext).mode,
     classifierMayApprove,
   };
-  let w = await resolveToolHostAsk(l, a, k, r, y, t).catch((error) => {
-    if (t.abortController.signal.aborted) throw error;
+  let askResult = await resolveToolHostAsk(
+    toolForAsk,
+    effectiveInput,
+    decision,
+    cwd,
+    askContext,
+    toolUseContext,
+  ).catch((error) => {
+    if (toolUseContext.abortController.signal.aborted) throw error;
     logUnexpectedThrow(tool, error);
     return;
   });
-  if (w === undefined)
+  if (askResult === undefined)
     return {
       kind: "crashed",
     };
-  let { ask, suspicion } = w;
-  let O = describeToolHostAsk(tool, a, ask, y, t);
-  if (O === undefined)
+  let { ask, suspicion } = askResult;
+  let reasons = describeToolHostAsk(tool, effectiveInput, ask, askContext, toolUseContext);
+  if (reasons === undefined)
     return {
       kind: "refused",
       refusal: "ask_too_large",
       message: `${tool.name} was not run: the permission check's objections are too many, or one is too long, to put to the user, so nobody was asked. Send smaller calls, or use shorter paths. The check said: ${ask.message}`,
     };
-  let { toolUseId } = t;
+  let { toolUseId } = toolUseContext;
   if (toolUseId === undefined)
     return {
       kind: "crashed",
     };
-  let S = askRuleFromRule(ask.matchedAskRule);
+  let matchedAskRule = askRuleFromRule(ask.matchedAskRule);
   return {
     kind: "ask",
     verdict: {
@@ -750,16 +784,16 @@ async function checkToolHostPermission(tool, n, t, r, classifierMayApprove) {
       message: ask.message,
       ask_digest: settingsFileContentHash({
         tool_name: tool.name,
-        input: a,
-        cwd: r,
-        reasons: O,
+        input: effectiveInput,
+        cwd,
+        reasons,
         tool_use_id: toolUseId,
-        agent_id: t.agentId ?? null,
-        tool_host_life_id: mcpServeSessionId(t.session),
+        agent_id: toolUseContext.agentId ?? null,
+        tool_host_life_id: mcpServeSessionId(toolUseContext.session),
       }),
-      reasons: O,
-      ...(S !== undefined && {
-        matched_ask_rule: S,
+      reasons,
+      ...(matchedAskRule !== undefined && {
+        matched_ask_rule: matchedAskRule,
       }),
       ...(ask.blockedPath && {
         blocked_path: ask.blockedPath,
@@ -772,55 +806,73 @@ async function checkToolHostPermission(tool, n, t, r, classifierMayApprove) {
   };
 }
 //@ chunk-dz36xfxg.js:34929-35066 placement
-function planModeWriteAsk(e, n, mode, r) {
-  if (!isPlanModeWrite(e, n, mode, r)) return;
-  let i = {
+function planModeWriteAsk(tool, input, mode, toolUseContext) {
+  if (!isPlanModeWrite(tool, input, mode, toolUseContext)) return;
+  let reason = {
     type: "mode",
     mode: "plan",
   };
   return {
     behavior: "ask",
-    message: createPermissionRequestMessage(e.name, i),
-    decisionReason: i,
+    message: createPermissionRequestMessage(tool.name, reason),
+    decisionReason: reason,
   };
 }
 //@ chunk-dz36xfxg.js:35066-36259 placement
-async function runWithNativeDoctor(e, n, onDone, r, classifierMayApprove, s, a, d) {
+async function runWithNativeDoctor(
+  tool,
+  validated,
+  onDone,
+  toolUseContext,
+  classifierMayApprove,
+  request,
+  launchPermissionContext,
+  repoRules,
+) {
   let context = buildNativeDoctorDiagnostics(
-    s.permission_context,
-    a,
+    request.permission_context,
+    launchPermissionContext,
     getSessionProject(onDone.session).originalCwd,
-    d,
+    repoRules,
   );
-  let l = await checkToolHostPermission(e, n, call(onDone, context), r, classifierMayApprove);
-  let y = await checkToolHostPermission(e, n, onDone, r, classifierMayApprove);
-  if (y.kind !== "allow" && y.kind !== "ask") return y;
-  if (l.kind === "crashed") return l;
-  if (l.kind !== "ask" || l.verdict.ask_digest !== s.ask_digest)
+  let recheckWithNativeContext = await checkToolHostPermission(
+    tool,
+    validated,
+    call(onDone, context),
+    toolUseContext,
+    classifierMayApprove,
+  );
+  let recheck = await checkToolHostPermission(tool, validated, onDone, toolUseContext, classifierMayApprove);
+  if (recheck.kind !== "allow" && recheck.kind !== "ask") return recheck;
+  if (recheckWithNativeContext.kind === "crashed") return recheckWithNativeContext;
+  if (
+    recheckWithNativeContext.kind !== "ask" ||
+    recheckWithNativeContext.verdict.ask_digest !== request.ask_digest
+  )
     return {
       kind: "refused",
       refusal: "ask_changed",
-      message: `${e.name} was not run: the approval given for it no longer counts. The start directory or what the permission check found has changed since, or the cloud environment has restarted. Send the call again.`,
+      message: `${tool.name} was not run: the approval given for it no longer counts. The start directory or what the permission check found has changed since, or the cloud environment has restarted. Send the call again.`,
     };
   if (
-    y.kind === "ask" &&
-    y.verdict.ask_digest !== s.ask_digest &&
-    !(s.approver === "user" && y.verdict.reasons[0].type === "raisedAllow")
+    recheck.kind === "ask" &&
+    recheck.verdict.ask_digest !== request.ask_digest &&
+    !(request.approver === "user" && recheck.verdict.reasons[0].type === "raisedAllow")
   )
-    return y;
+    return recheck;
   let mode = getToolPermissionContext(onDone).mode;
   if (
-    (s.approver !== "user" &&
-      s.approver !== "hook" &&
-      y.kind === "ask" &&
+    (request.approver !== "user" &&
+      request.approver !== "hook" &&
+      recheck.kind === "ask" &&
       mode !== "auto" &&
       mode !== "plan") ||
-    (s.approver !== "user" && !l.verdict.reasons.every(isRaisedAllowReason))
+    (request.approver !== "user" && !recheckWithNativeContext.verdict.reasons.every(isRaisedAllowReason))
   )
     return {
       kind: "denied_by_policy",
       policy: "approver_not_user",
-      message: `${e.name} was not run: only the user may approve this call, and its approval did not come from the user. Tell the user what you wanted to run and why.`,
+      message: `${tool.name} was not run: only the user may approve this call, and its approval did not come from the user. Tell the user what you wanted to run and why.`,
       reason: {
         type: "other",
         name: "other",
@@ -829,15 +881,15 @@ async function runWithNativeDoctor(e, n, onDone, r, classifierMayApprove, s, a, 
     };
   return {
     kind: "allow",
-    callInput: l.callInput,
-    settingsWriteSuspicion: l.settingsWriteSuspicion,
+    callInput: recheckWithNativeContext.callInput,
+    settingsWriteSuspicion: recheckWithNativeContext.settingsWriteSuspicion,
   };
 }
 //@ chunk-dz36xfxg.js:36259-36524 placement
-async function denyNestedPermissionAsk(e) {
+async function denyNestedPermissionAsk(tool) {
   return {
     behavior: "deny",
-    message: `${e.name} was not run: a tool that runs in the cloud environment cannot ask for another permission while it runs. Send it as a call of its own.`,
+    message: `${tool.name} was not run: a tool that runs in the cloud environment cannot ask for another permission while it runs. Send it as a call of its own.`,
     decisionReason: {
       type: "other",
       reason: "asked inside a served call",
@@ -845,14 +897,14 @@ async function denyNestedPermissionAsk(e) {
   };
 }
 //@ chunk-dz36xfxg.js:36524-36803 placement
-function resultTooLargeHint(e) {
-  let n =
-    e.name === FILE_READ_TOOL_NAME
+function resultTooLargeHint(tool) {
+  let hint =
+    tool.name === FILE_READ_TOOL_NAME
       ? "Ask for less of it: for a PDF, fewer pages at a time with the pages parameter."
-      : e.name === GREP_TOOL_NAME || e.name === GLOB_TOOL_NAME
+      : tool.name === GREP_TOOL_NAME || tool.name === GLOB_TOOL_NAME
         ? "Narrow the search."
         : "Check what it changed before running it again.";
-  return `${e.name} ran, but its result is too large to send back. ${n}`;
+  return `${tool.name} ran, but its result is too large to send back. ${hint}`;
 }
 export {
   trackReadFileStateChanges,
@@ -867,4 +919,5 @@ export {
   callServedTool,
   checkToolHostPermission,
   runWithNativeDoctor,
+  handleToolHostCall,
 };

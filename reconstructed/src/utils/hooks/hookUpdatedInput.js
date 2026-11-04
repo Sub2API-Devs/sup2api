@@ -29,27 +29,27 @@ import { ZodError } from "../../../vendor/zod/v4/classic/errors.js";
 import { uniq } from "../collections.js";
 
 //@ chunk-e6aww6q8.js:997050-997563 placement
-function guardAccountMemoryHookRewrite(tool, n, r) {
-  let s = `A ${n} hook rewrote the ${tool.name} call to the account memory server; a hook may allow or deny such a call but not change it. The call is denied.`;
-  logForDebugging(s, {
+function guardAccountMemoryHookRewrite(tool, hookEvent, hookSource) {
+  let message = `A ${hookEvent} hook rewrote the ${tool.name} call to the account memory server; a hook may allow or deny such a call but not change it. The call is denied.`;
+  logForDebugging(message, {
     level: "warn",
   });
   logEvent("tengu_account_memory_hook_rewrite_denied", {
-    hook_event: fromEnum(n),
+    hook_event: fromEnum(hookEvent),
     tool_name: sanitizeToolNameForAnalytics(tool.name),
   });
   return {
     behavior: "deny",
-    message: s,
+    message,
     decisionReason: {
       type: "hook",
-      hookName: n === "PermissionRequest" ? "PermissionRequest" : `PreToolUse:${tool.name}`,
-      ...(r !== undefined && {
-        hookSource: r,
+      hookName: hookEvent === "PermissionRequest" ? "PermissionRequest" : `PreToolUse:${tool.name}`,
+      ...(hookSource !== undefined && {
+        hookSource,
       }),
-      reason: s,
+      reason: message,
     },
-    ...(n === "PermissionRequest" && {
+    ...(hookEvent === "PermissionRequest" && {
       decideLocation: "ask-path",
     }),
   };
@@ -57,37 +57,37 @@ function guardAccountMemoryHookRewrite(tool, n, r) {
 //@ chunk-e6aww6q8.js:1000528-1000663 placement = isUnrecognizedKeysIssue (1)
 function isUnrecognizedKeysIssue(issue) {
   return (Array.isArray(issue) ? issue : []).filter(
-    (n) => n?.code === "unrecognized_keys" && Array.isArray(n.keys) && Array.isArray(n.path),
+    (issue) => issue?.code === "unrecognized_keys" && Array.isArray(issue.keys) && Array.isArray(issue.path),
   );
 }
 //@ chunk-e6aww6q8.js:1000663-1000943 placement
-function deleteKeysAtPaths(e, n) {
-  let r = {
-    ...e,
+function deleteKeysAtPaths(input, issues) {
+  let result = {
+    ...input,
   };
-  let s = new Set([r]);
-  for (let h of n) {
-    let y = r;
-    for (let S of h.path) {
-      let w = y[S];
-      if (typeof w !== "object" || w === null) {
-        y = undefined;
+  let cloned = new Set([result]);
+  for (let issue of issues) {
+    let node = result;
+    for (let segment of issue.path) {
+      let value = node[segment];
+      if (typeof value !== "object" || value === null) {
+        node = undefined;
         break;
       }
-      if (!s.has(w)) {
-        let L = Array.isArray(w)
-          ? [...w]
+      if (!cloned.has(value)) {
+        let copied = Array.isArray(value)
+          ? [...value]
           : {
-              ...w,
+              ...value,
             };
-        s.add(L);
-        y[S] = L;
+        cloned.add(copied);
+        node[segment] = copied;
       }
-      y = y[S];
+      node = node[segment];
     }
-    if (y !== undefined) for (let key of h.keys) delete y[key];
+    if (node !== undefined) for (let key of issue.keys) delete node[key];
   }
-  return r;
+  return result;
 }
 //@ chunk-e6aww6q8.js:1000943-1001028 placement
 var HOOK_REWRITE_INVALID_TEXT = "The tool input from the model was valid; the hook's rewrite of it was not.";
@@ -95,96 +95,101 @@ var HOOK_REWRITE_INVALID_TEXT = "The tool input from the model was valid; the ho
 /**
  * 校验钩子返回的 updatedInput：未知键、保留键、类型不符时拒绝并记录。
  */
-async function validateHookUpdatedInput(e, n, r) {
-  let s = e.inputSchema.safeParse(n);
-  if (!s.success) {
-    let filtered = s.error.issues.filter((issue) => issue.code !== "unrecognized_keys");
-    if (filtered.length > 0) return schemaInvalidUpdatedInput(e, r, filtered);
+async function validateHookUpdatedInput(tool, input, context) {
+  let parsed = tool.inputSchema.safeParse(input);
+  if (!parsed.success) {
+    let issues = parsed.error.issues.filter((issue) => issue.code !== "unrecognized_keys");
+    if (issues.length > 0) return schemaInvalidUpdatedInput(tool, context, issues);
   }
-  if (!r.applies)
+  if (!context.applies)
     return {
       ok: true,
-      input: n,
+      input,
     };
-  let h =
+  let enforced =
     isDiskless() ||
     readFlagWithOverride("tengu_glimmering_newt", {
       safe: true,
     });
-  let y = (Z) =>
+  let report = (details) =>
     logEvent("tengu_hook_rewrite_checked", {
-      hook_event: fromEnum(r.event),
-      hook_source: fromEnumOpt(hookSourceKind(r.source)),
-      tool_name: sanitizeToolNameForAnalytics(e.name),
-      keys_dropped: Z.keysDropped,
-      refused_by: fromEnumOpt(Z.refusedBy),
-      refused_error_code: Z.errorCode,
-      enforced: h,
+      hook_event: fromEnum(context.event),
+      hook_source: fromEnumOpt(hookSourceKind(context.source)),
+      tool_name: sanitizeToolNameForAnalytics(tool.name),
+      keys_dropped: details.keysDropped,
+      refused_by: fromEnumOpt(details.refusedBy),
+      refused_error_code: details.errorCode,
+      enforced,
     });
-  let S =
-    h && Object.keys(n).some((key) => isReservedArtifactKeyName(key) && !isUnchangedShownKey(key, n, r.shown))
-      ? reservedKeyDenialIfPresent(n)
+  let reservedDeny =
+    enforced &&
+    Object.keys(input).some(
+      (key) => isReservedArtifactKeyName(key) && !isUnchangedShownKey(key, input, context.shown),
+    )
+      ? reservedKeyDenialIfPresent(input)
       : null;
-  if (S?.behavior === "deny") {
-    y({
+  if (reservedDeny?.behavior === "deny") {
+    report({
       refusedBy: "reserved_key",
     });
     logForDebugging(
-      `${r.event} hook's updatedInput for ${toolCategoryForTelemetry(e)} was refused for a reserved key`,
+      `${context.event} hook's updatedInput for ${toolCategoryForTelemetry(tool)} was refused for a reserved key`,
       {
         level: "warn",
       },
     );
-    let Z = `${formatHookSourceLabel(e, r)} returned updatedInput with a key starting with "${RESERVED_ARTIFACT_KEY_PREFIX}" (in any letter case)`;
+    let keyText = `${formatHookSourceLabel(tool, context)} returned updatedInput with a key starting with "${RESERVED_ARTIFACT_KEY_PREFIX}" (in any letter case)`;
     return {
       ok: false,
       deny:
-        r.event === "PermissionRequest"
+        context.event === "PermissionRequest"
           ? hookDenyDecision(
-              e,
-              r,
-              `${Z} that Claude Code did not set, or did not set to that value. Only Claude Code sets such keys: send one back unchanged, and add none. The tool was not run.
+              tool,
+              context,
+              `${keyText} that Claude Code did not set, or did not set to that value. Only Claude Code sets such keys: send one back unchanged, and add none. The tool was not run.
 ${HOOK_REWRITE_INVALID_TEXT}`,
             )
           : {
-              ...S,
-              message: `${Z}. Only Claude Code sets such keys. Remove the key from updatedInput. The tool was not run.`,
+              ...reservedDeny,
+              message: `${keyText}. Only Claude Code sets such keys. Remove the key from updatedInput. The tool was not run.`,
             },
     };
   }
-  if (!s.success) {
-    s = e.inputSchema.safeParse(deleteKeysAtPaths(n, isUnrecognizedKeysIssue(s.error.issues)));
-    if (!s.success) {
-      y({
+  if (!parsed.success) {
+    parsed = tool.inputSchema.safeParse(
+      deleteKeysAtPaths(input, isUnrecognizedKeysIssue(parsed.error.issues)),
+    );
+    if (!parsed.success) {
+      report({
         refusedBy: "schema",
       });
-      return h
-        ? schemaInvalidUpdatedInput(e, r, s.error.issues)
+      return enforced
+        ? schemaInvalidUpdatedInput(tool, context, parsed.error.issues)
         : {
             ok: true,
-            input: n,
+            input,
           };
     }
   }
-  let w;
-  let L = restoreShownKeys(s.data, n, r.shown);
-  let G;
+  let check;
+  let restored = restoreShownKeys(parsed.data, input, context.shown);
+  let errorText;
   try {
-    w = h ? await r.validate(s.data) : undefined;
-    L = backfillObservableInput(e, L);
+    check = enforced ? await context.validate(parsed.data) : undefined;
+    restored = backfillObservableInput(tool, restored);
   } catch (error) {
     if (isAbortError(error)) throw error;
-    G = describeValidateError(e, r, error);
+    errorText = describeValidateError(tool, context, error);
   }
-  let q = countChangedKeys(n, L);
-  if (w?.result === false) {
-    y({
-      keysDropped: q,
+  let changedKeys = countChangedKeys(input, restored);
+  if (check?.result === false) {
+    report({
+      keysDropped: changedKeys,
       refusedBy: "tool",
-      errorCode: w.errorCode,
+      errorCode: check.errorCode,
     });
     logForDebugging(
-      `${r.event} hook's updatedInput for ${toolCategoryForTelemetry(e)} was refused by the tool (code=${w.errorCode})`,
+      `${context.event} hook's updatedInput for ${toolCategoryForTelemetry(tool)} was refused by the tool (code=${check.errorCode})`,
       {
         level: "warn",
       },
@@ -192,34 +197,34 @@ ${HOOK_REWRITE_INVALID_TEXT}`,
     return {
       ok: false,
       deny: hookDenyDecision(
-        e,
-        r,
-        `${formatHookSourceLabel(e, r)} returned updatedInput that the tool refused: ${w.message}
+        tool,
+        context,
+        `${formatHookSourceLabel(tool, context)} returned updatedInput that the tool refused: ${check.message}
 ${HOOK_REWRITE_INVALID_TEXT}`,
       ),
     };
   }
-  if (h && G !== undefined) {
-    y({
-      keysDropped: q,
+  if (enforced && errorText !== undefined) {
+    report({
+      keysDropped: changedKeys,
       refusedBy: "check_threw",
     });
     return {
       ok: false,
       deny: hookDenyDecision(
-        e,
-        r,
-        `${formatHookSourceLabel(e, r)} returned updatedInput that the tool could not check: ${G}
+        tool,
+        context,
+        `${formatHookSourceLabel(tool, context)} returned updatedInput that the tool could not check: ${errorText}
 The tool input from the model was valid.`,
       ),
     };
   }
-  if (q > 0) {
-    y({
-      keysDropped: q,
+  if (changedKeys > 0) {
+    report({
+      keysDropped: changedKeys,
     });
     logForDebugging(
-      `${r.event} hook's updatedInput for ${toolCategoryForTelemetry(e)}: ${h ? "dropped" : "kept"} ${q} key(s) that the tool's schema does not know`,
+      `${context.event} hook's updatedInput for ${toolCategoryForTelemetry(tool)}: ${enforced ? "dropped" : "kept"} ${changedKeys} key(s) that the tool's schema does not know`,
       {
         level: "warn",
       },
@@ -227,97 +232,100 @@ The tool input from the model was valid.`,
   }
   return {
     ok: true,
-    input: h ? L : n,
+    input: enforced ? restored : input,
   };
 }
 //@ chunk-e6aww6q8.js:1003124-1003251 placement = getKnownModelOption (0.315)
 /**
  * "<event> hook (source) for <工具名>"。旧版名 getKnownModelOption 为错配，与模型无关（钩子模块）。
  */
-function formatHookSourceLabel(e, n) {
-  let r = n.source === undefined || n.source === "settings" ? "" : ` (${n.source})`;
-  return `${n.event} hook${r} for ${e.name}`;
+function formatHookSourceLabel(tool, context) {
+  let sourceSuffix =
+    context.source === undefined || context.source === "settings" ? "" : ` (${context.source})`;
+  return `${context.event} hook${sourceSuffix} for ${tool.name}`;
 }
 //@ chunk-e6aww6q8.js:1003251-1003389 placement
-function restoreShownKeys(e, n, shown) {
-  if (shown === undefined) return e;
-  let s = {
-    ...e,
+function restoreShownKeys(input, original, shown) {
+  if (shown === undefined) return input;
+  let restored = {
+    ...input,
   };
   for (let key of Object.keys(shown))
-    if (!Object.hasOwn(s, key) && isUnchangedShownKey(key, n, shown)) s[key] = shown[key];
-  return s;
+    if (!Object.hasOwn(restored, key) && isUnchangedShownKey(key, original, shown))
+      restored[key] = shown[key];
+  return restored;
 }
 //@ chunk-e6aww6q8.js:1003389-1003499 placement
-function isUnchangedShownKey(e, n, r) {
+function isUnchangedShownKey(key, input, shown) {
   return (
-    r !== undefined &&
-    e !== "__proto__" &&
-    Object.hasOwn(r, e) &&
-    Object.hasOwn(n, e) &&
-    deepEqualIgnoringUndefined(n[e], r[e])
+    shown !== undefined &&
+    key !== "__proto__" &&
+    Object.hasOwn(shown, key) &&
+    Object.hasOwn(input, key) &&
+    deepEqualIgnoringUndefined(input[key], shown[key])
   );
 }
 //@ chunk-e6aww6q8.js:1003499-1003669 placement
-function hookSourceKind(e) {
-  if (e === undefined || e === "settings") return e;
-  if (e === "plugin" || e.startsWith("plugin:")) return "plugin";
-  return e === "skill" || e.startsWith("skill:") ? "skill" : "other";
+function hookSourceKind(source) {
+  if (source === undefined || source === "settings") return source;
+  if (source === "plugin" || source.startsWith("plugin:")) return "plugin";
+  return source === "skill" || source.startsWith("skill:") ? "skill" : "other";
 }
 //@ chunk-e6aww6q8.js:1003669-1003777 placement
-function backfillObservableInput(e, n) {
-  if (!e.backfillObservableInput) return n;
-  let r = {
-    ...n,
+function backfillObservableInput(tool, input) {
+  if (!tool.backfillObservableInput) return input;
+  let copied = {
+    ...input,
   };
-  e.backfillObservableInput(r);
-  return r;
+  tool.backfillObservableInput(copied);
+  return copied;
 }
 //@ chunk-e6aww6q8.js:1003777-1003915 placement
-function countChangedKeys(e, n) {
-  if (e === n || !isObjectLike_2(e) || !isObjectLike_2(n)) return 0;
-  let r = 0;
-  for (let key of Object.keys(e)) r += Object.hasOwn(n, key) ? countChangedKeys(e[key], n[key]) : 1;
-  return r;
+function countChangedKeys(before, after) {
+  if (before === after || !isObjectLike_2(before) || !isObjectLike_2(after)) return 0;
+  let changed = 0;
+  for (let key of Object.keys(before))
+    changed += Object.hasOwn(after, key) ? countChangedKeys(before[key], after[key]) : 1;
+  return changed;
 }
 //@ chunk-e6aww6q8.js:1003915-1003968 placement
-function isObjectLike_2(e) {
-  return typeof e === "object" && e !== null;
+function isObjectLike_2(value) {
+  return typeof value === "object" && value !== null;
 }
 //@ chunk-e6aww6q8.js:1003968-1004201 placement
-async function validatePermissionRequestUpdatedInput(tool, updatedInput, r, validate) {
+async function validatePermissionRequestUpdatedInput(tool, updatedInput, original, validate) {
   if (updatedInput === undefined || Object.keys(updatedInput).length === 0)
     return {
       input: updatedInput,
     };
-  if (deepEqualIgnoringUndefined(updatedInput, r))
+  if (deepEqualIgnoringUndefined(updatedInput, original))
     return {
-      input: r,
+      input: original,
     };
-  let h = await validateHookUpdatedInput(tool, updatedInput, {
+  let checked = await validateHookUpdatedInput(tool, updatedInput, {
     event: "PermissionRequest",
     applies: true,
     validate,
-    shown: r,
+    shown: original,
   });
-  return h.ok
+  return checked.ok
     ? {
-        input: h.input,
+        input: checked.input,
       }
     : {
-        deny: h.deny,
+        deny: checked.deny,
       };
 }
 //@ chunk-e6aww6q8.js:1004201-1004469 placement
-function describeValidateError(e, n, error) {
-  let s =
+function describeValidateError(tool, context, error) {
+  let code =
     getErrnoCode(error) ??
     (error instanceof NullBytePathError || error instanceof UnstablePathError ? error.name : undefined);
-  if (s === undefined)
+  if (code === undefined)
     logError(withTelemetryMessage(toError(error), "the tool's check of a hook's updatedInput threw"));
   else
     logForDebugging(
-      `${n.event} hook's updatedInput for ${toolCategoryForTelemetry(e)}: the tool's check threw ${s}`,
+      `${context.event} hook's updatedInput for ${toolCategoryForTelemetry(tool)}: the tool's check threw ${code}`,
       {
         level: "warn",
       },
@@ -325,37 +333,37 @@ function describeValidateError(e, n, error) {
   return errorMessage(error);
 }
 //@ chunk-e6aww6q8.js:1004469-1004750 placement
-function schemaInvalidUpdatedInput(e, n, r) {
-  let s = `${formatHookSourceLabel(e, n)} returned updatedInput that failed schema validation: ${formatZodValidationError(e.name, new ZodError(r))}
+function schemaInvalidUpdatedInput(tool, context, issues) {
+  let message = `${formatHookSourceLabel(tool, context)} returned updatedInput that failed schema validation: ${formatZodValidationError(tool.name, new ZodError(issues))}
 ${HOOK_REWRITE_INVALID_TEXT}`;
   logForDebugging(
-    `${n.event} hook's updatedInput for ${toolCategoryForTelemetry(e)} failed schema validation (${uniq(r.map((h) => h.code)).join(",")})`,
+    `${context.event} hook's updatedInput for ${toolCategoryForTelemetry(tool)} failed schema validation (${uniq(issues.map((issue) => issue.code)).join(",")})`,
     {
       level: "warn",
     },
   );
   return {
     ok: false,
-    deny: hookDenyDecision(e, n, s),
+    deny: hookDenyDecision(tool, context, message),
   };
 }
 //@ chunk-e6aww6q8.js:1004750-1004954 placement
-function hookDenyDecision(e, n, r) {
+function hookDenyDecision(tool, context, message) {
   return {
     behavior: "deny",
-    message: r,
+    message,
     decisionReason: {
       type: "hook",
-      hookName: n.event === "PermissionRequest" ? "PermissionRequest" : `PreToolUse:${e.name}`,
-      hookSource: n.source,
-      reason: r,
+      hookName: context.event === "PermissionRequest" ? "PermissionRequest" : `PreToolUse:${tool.name}`,
+      hookSource: context.source,
+      reason: message,
     },
-    ...permissionRequestHookExtras(n),
+    ...permissionRequestHookExtras(context),
   };
 }
 //@ chunk-e6aww6q8.js:1004954-1005038 placement
-function permissionRequestHookExtras(e) {
-  return e.event === "PermissionRequest"
+function permissionRequestHookExtras(context) {
+  return context.event === "PermissionRequest"
     ? {
         decideLocation: "ask-path",
       }

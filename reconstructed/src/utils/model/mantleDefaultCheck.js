@@ -51,24 +51,28 @@ var filtered = Object.keys(catalogEntriesByFirstPartyId).filter(
 /**
  * 检查 Mantle 提供商下默认模型是否可访问（生成警告）。
  */
-async function checkMantleDefaults(e = DEFAULT_MANTLE_OPUS_KEY, n) {
+async function checkMantleDefaults(defaultKey = DEFAULT_MANTLE_OPUS_KEY, options) {
   if (getAPIProvider() !== "mantle") return [];
   if (env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST) return [];
   let modelOverrides = getInitialSettings_2().modelOverrides;
-  if (modelOverrides?.[catalogEntriesByFirstPartyId[e].firstParty]) return [];
-  let u = n?.userPinned ?? getUserSpecifiedModelSetting() != null;
+  if (modelOverrides?.[catalogEntriesByFirstPartyId[defaultKey].firstParty]) return [];
+  let userPinned = options?.userPinned ?? getUserSpecifiedModelSetting() != null;
   let ANTHROPIC_DEFAULT_OPUS_MODEL = env.ANTHROPIC_DEFAULT_OPUS_MODEL;
-  let s;
+  let refutedPin;
   if (ANTHROPIC_DEFAULT_OPUS_MODEL !== undefined && !userConfiguredDefault("opus")) {
-    if (u) return [];
-    let r = await mantleCheckCacheKey(toProviderWireModelId(ANTHROPIC_DEFAULT_OPUS_MODEL));
+    if (userPinned) return [];
+    let access = await mantleCheckCacheKey(toProviderWireModelId(ANTHROPIC_DEFAULT_OPUS_MODEL));
     logEvent("tengu_mantle_probe_result", {
       model_key: lit("admin_pin"),
       accessible: lit(
-        r === "refuted" ? "false" : r === "accessible" || r === "outdated" ? "true" : "unknown",
+        access === "refuted"
+          ? "false"
+          : access === "accessible" || access === "outdated"
+            ? "true"
+            : "unknown",
       ),
     });
-    if (r !== "refuted")
+    if (access !== "refuted")
       return [
         {
           kind: "adminPin",
@@ -76,67 +80,70 @@ async function checkMantleDefaults(e = DEFAULT_MANTLE_OPUS_KEY, n) {
           adminMantleId: ANTHROPIC_DEFAULT_OPUS_MODEL,
         },
       ];
-    s = ANTHROPIC_DEFAULT_OPUS_MODEL;
+    refutedPin = ANTHROPIC_DEFAULT_OPUS_MODEL;
   }
-  let mantle = catalogEntriesByFirstPartyId[e].mantle;
+  let mantle = catalogEntriesByFirstPartyId[defaultKey].mantle;
   if (!mantle) return [];
   logEvent("tengu_mantle_default_check", {});
-  let p = await isMantleModelAccessible(mantle);
+  let accessible = await isMantleModelAccessible(mantle);
   logEvent("tengu_mantle_probe_result", {
-    model_key: fromEnum(e),
-    accessible: lit(p ? "true" : "false"),
+    model_key: fromEnum(defaultKey),
+    accessible: lit(accessible ? "true" : "false"),
   });
-  if (p) {
-    if (s !== undefined)
+  if (accessible) {
+    if (refutedPin !== undefined)
       return [
         {
           kind: "pinRefuted",
           tier: "opus",
-          refutedValue: s,
-          workingKey: e,
-          workingName: getMarketingNameForModel(catalogEntriesByFirstPartyId[e].firstParty) ?? mantle,
+          refutedValue: refutedPin,
+          workingKey: defaultKey,
+          workingName:
+            getMarketingNameForModel(catalogEntriesByFirstPartyId[defaultKey].firstParty) ?? mantle,
           workingMantleId: mantle,
-          defaultKey: e,
+          defaultKey,
         },
       ];
     return [];
   }
-  let l = getMarketingNameForModel(catalogEntriesByFirstPartyId[e].firstParty) ?? mantle;
-  let index = filtered.indexOf(e);
+  let defaultName = getMarketingNameForModel(catalogEntriesByFirstPartyId[defaultKey].firstParty) ?? mantle;
+  let index = filtered.indexOf(defaultKey);
   let filtered_2 = filtered
     .slice(0, index)
     .reverse()
-    .filter((r) => r.startsWith("opus") && !modelOverrides?.[catalogEntriesByFirstPartyId[r].firstParty]);
+    .filter(
+      (key) => key.startsWith("opus") && !modelOverrides?.[catalogEntriesByFirstPartyId[key].firstParty],
+    );
   let results = await Promise.all(
-    filtered_2.map(async (r) => {
-      let mantle = catalogEntriesByFirstPartyId[r].mantle;
-      let M = await isMantleModelAccessible(mantle);
+    filtered_2.map(async (key) => {
+      let mantle = catalogEntriesByFirstPartyId[key].mantle;
+      let accessible = await isMantleModelAccessible(mantle);
       logEvent("tengu_mantle_probe_result", {
-        model_key: fromEnum(r),
-        accessible: lit(M ? "true" : "false"),
+        model_key: fromEnum(key),
+        accessible: lit(accessible ? "true" : "false"),
       });
-      let name = getMarketingNameForModel(catalogEntriesByFirstPartyId[r].firstParty) ?? mantle;
+      let name = getMarketingNameForModel(catalogEntriesByFirstPartyId[key].firstParty) ?? mantle;
       return {
-        key: r,
+        key,
         mantleId: mantle,
         name,
-        ok: M,
+        ok: accessible,
       };
     }),
   );
-  for (let r of results)
-    if (r.ok) {
-      logForDebugging(`[mantle-fallback] default=${e} fallback=${r.key}`);
-      if (s !== undefined)
+  for (let result of results)
+    if (result.ok) {
+      logForDebugging(`[mantle-fallback] default=${defaultKey} fallback=${result.key}`);
+      if (refutedPin !== undefined)
         return [
           {
             kind: "pinRefuted",
             tier: "opus",
-            refutedValue: s,
-            workingKey: r.key,
-            workingName: r.name,
-            workingMantleId: r.mantleId,
-            defaultKey: e,
+            refutedValue: refutedPin,
+            workingKey: result.key,
+            workingName: result.name,
+            workingMantleId: result.mantleId,
+            defaultKey,
           },
         ];
       return [
@@ -144,25 +151,25 @@ async function checkMantleDefaults(e = DEFAULT_MANTLE_OPUS_KEY, n) {
           kind: "fallback",
           tier: "opus",
           envVar: "ANTHROPIC_DEFAULT_OPUS_MODEL",
-          defaultKey: e,
-          defaultName: l,
-          fallbackKey: r.key,
-          fallbackName: r.name,
-          fallbackMantleId: r.mantleId,
+          defaultKey,
+          defaultName,
+          fallbackKey: result.key,
+          fallbackName: result.name,
+          fallbackMantleId: result.mantleId,
         },
       ];
     }
   let triedNames = [
-    ...(s !== undefined ? [`the admin-configured model (${s})`] : []),
-    l,
-    ...results.map((r) => r.name),
+    ...(refutedPin !== undefined ? [`the admin-configured model (${refutedPin})`] : []),
+    defaultName,
+    ...results.map((result) => result.name),
   ];
-  logForDebugging(`[mantle-fallback] default=${e} exhausted \u2014 no working Opus`);
+  logForDebugging(`[mantle-fallback] default=${defaultKey} exhausted \u2014 no working Opus`);
   return [
     {
       kind: "exhausted",
       tier: "opus",
-      defaultName: l,
+      defaultName,
       triedNames,
     },
   ];
@@ -171,37 +178,37 @@ async function checkMantleDefaults(e = DEFAULT_MANTLE_OPUS_KEY, n) {
 /**
  * 带缓存地探测 Mantle 模型访问。
  */
-async function mantleCheckCacheKey(e) {
-  let n = await PACKAGE_INFO("mantle", async () => [
+async function mantleCheckCacheKey(modelId) {
+  let cacheKey = await PACKAGE_INFO("mantle", async () => [
     await resolveAwsRegion(),
     env.ANTHROPIC_BEDROCK_MANTLE_BASE_URL,
     env.CLAUDE_CODE_SKIP_MANTLE_AUTH ? "skip-auth" : undefined,
     ...awsCredentialSelectors(),
     getCustomHeaders(),
   ]);
-  if (n !== undefined && (await rememberedAccess(n, e))?.state === "ok") {
-    logForDebugging(`[mantle-probe] ${e}: accessible (remembered)`);
+  if (cacheKey !== undefined && (await rememberedAccess(cacheKey, modelId))?.state === "ok") {
+    logForDebugging(`[mantle-probe] ${modelId}: accessible (remembered)`);
     return "accessible";
   }
-  let o = await probeMantleModel(e);
-  if (o === "accessible" && n !== undefined) recordAccessVerdict(n, e, "ok");
-  return o;
+  let verdict = await probeMantleModel(modelId);
+  if (verdict === "accessible" && cacheKey !== undefined) recordAccessVerdict(cacheKey, modelId, "ok");
+  return verdict;
 }
 //@ chunk-paetrb4a.js:5871-6735 placement
 /**
  * 探测 Mantle 模型可访问性（429 视为可访问）。
  */
-async function probeMantleModel(e) {
+async function probeMantleModel(modelId) {
   try {
-    await sendMantleProbe(e);
+    await sendMantleProbe(modelId);
     return "accessible";
   } catch (error) {
     let status = error?.status;
     if (status === 429) return "accessible";
-    let u = classifyProviderModelError("mantle", error);
-    if (u === "outdated") {
+    let errorKind = classifyProviderModelError("mantle", error);
+    if (errorKind === "outdated") {
       logForDebugging(
-        `[mantle-probe] ${e}: needs a newer Claude Code than ${
+        `[mantle-probe] ${modelId}: needs a newer Claude Code than ${
           {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -217,39 +224,40 @@ async function probeMantleModel(e) {
       );
       return "outdated";
     }
-    if (status === 400 || status === 403 || status === 404) return u === "credential" ? "unknown" : "refuted";
+    if (status === 400 || status === 403 || status === 404)
+      return errorKind === "credential" ? "unknown" : "refuted";
     return "unknown";
   }
 }
 //@ chunk-paetrb4a.js:6735-6812 placement
-async function isMantleModelAccessible(mantle) {
-  let n = await mantleCheckCacheKey(mantle);
-  return n === "accessible" || n === "outdated";
+async function isMantleModelAccessible(modelId) {
+  let verdict = await mantleCheckCacheKey(modelId);
+  return verdict === "accessible" || verdict === "outdated";
 }
 //@ chunk-paetrb4a.js:6812-7944 placement
 /**
  * 用 AnthropicBedrockMantle 客户端发送探测请求。
  */
-async function sendMantleProbe(e) {
-  let [{ AnthropicBedrockMantle: n }, { getProxyFetchOptions: o }] = await Promise.all([
-    import("./chunk-h87x8cg3.js"),
-    import("./chunk-amdegp7s.js"),
+async function sendMantleProbe(modelId) {
+  let [{ AnthropicBedrockMantle }, { getProxyFetchOptions }] = await Promise.all([
+    import("../../../vendor/@anthropic-ai/bedrock-sdk/AnthropicBedrock.lazy.js"),
+    import("../proxy.js"),
   ]);
   let awsRegion = await resolveAwsRegion();
-  let m = {
+  let clientOptions = {
     awsRegion,
     maxRetries: 0,
     timeout: 8000,
-    fetchOptions: o({
+    fetchOptions: getProxyFetchOptions({
       url: env.ANTHROPIC_BEDROCK_MANTLE_BASE_URL || `https://bedrock-mantle.${awsRegion}.api.aws`,
     }),
   };
-  let s;
+  let client;
   let forwardableEnvHeaders = getForwardableEnvHeaders();
   let AWS_BEARER_TOKEN_BEDROCK = env.AWS_BEARER_TOKEN_BEDROCK;
   if (AWS_BEARER_TOKEN_BEDROCK)
-    s = new n({
-      ...m,
+    client = new AnthropicBedrockMantle({
+      ...clientOptions,
       apiKey: AWS_BEARER_TOKEN_BEDROCK,
       defaultHeaders: {
         ...forwardableEnvHeaders,
@@ -263,8 +271,8 @@ async function sendMantleProbe(e) {
     });
   else {
     let CLAUDE_CODE_SKIP_MANTLE_AUTH = env.CLAUDE_CODE_SKIP_MANTLE_AUTH;
-    let A = isHostManagedProviderAuth();
-    let g = {
+    let hostManaged = isHostManagedProviderAuth();
+    let baseHeaders = {
       authToken: null,
       defaultHeaders: {
         ...forwardableEnvHeaders,
@@ -277,20 +285,21 @@ async function sendMantleProbe(e) {
       },
       ...CLOUD_AUTH_SLOT,
     };
-    let f = CLAUDE_CODE_SKIP_MANTLE_AUTH ? bearerFromEnvOrHeaders() : undefined;
-    let k = CLAUDE_CODE_SKIP_MANTLE_AUTH || A ? null : await refreshAndGetAwsCredentials();
-    s = k
-      ? new n({
-          ...m,
-          ...g,
-          awsAccessKey: k.accessKeyId,
-          awsSecretAccessKey: k.secretAccessKey,
-          awsSessionToken: k.sessionToken,
+    let bearerToken = CLAUDE_CODE_SKIP_MANTLE_AUTH ? bearerFromEnvOrHeaders() : undefined;
+    let credentials =
+      CLAUDE_CODE_SKIP_MANTLE_AUTH || hostManaged ? null : await refreshAndGetAwsCredentials();
+    client = credentials
+      ? new AnthropicBedrockMantle({
+          ...clientOptions,
+          ...baseHeaders,
+          awsAccessKey: credentials.accessKeyId,
+          awsSecretAccessKey: credentials.secretAccessKey,
+          awsSessionToken: credentials.sessionToken,
         })
-      : new n({
-          ...m,
+      : new AnthropicBedrockMantle({
+          ...clientOptions,
           ...(CLAUDE_CODE_SKIP_MANTLE_AUTH &&
-            !f && {
+            !bearerToken && {
               skipAuth: true,
               authToken: null,
               defaultHeaders: {
@@ -300,24 +309,25 @@ async function sendMantleProbe(e) {
               ...CLOUD_AUTH_SLOT,
             }),
           ...(CLAUDE_CODE_SKIP_MANTLE_AUTH &&
-            f && {
-              apiKey: f.match(/^Bearer (.+)$/i)?.[1] ?? f,
+            bearerToken && {
+              apiKey: bearerToken.match(/^Bearer (.+)$/i)?.[1] ?? bearerToken,
               defaultHeaders: {
                 ...forwardableEnvHeaders,
                 ...filteredCustomBetaHeaders(),
-                Authorization: f,
+                Authorization: bearerToken,
               },
             }),
-          ...(!CLAUDE_CODE_SKIP_MANTLE_AUTH && g),
+          ...(!CLAUDE_CODE_SKIP_MANTLE_AUTH && baseHeaders),
           ...(!CLAUDE_CODE_SKIP_MANTLE_AUTH &&
-            A && {
+            hostManaged && {
               providerChainResolver: hostManagedAwsSdkCredentials("Mantle").providerChainResolver,
             }),
           ...(!CLAUDE_CODE_SKIP_MANTLE_AUTH &&
-            !A && {
+            !hostManaged && {
               providerChainResolver: defaultAwsProviderChainResolver(awsRegion),
             }),
         });
   }
-  await s.messages.create(sendStartupModelCheck(e));
+  await client.messages.create(sendStartupModelCheck(modelId));
 }
+export { checkMantleDefaults };

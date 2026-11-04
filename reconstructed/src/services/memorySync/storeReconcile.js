@@ -31,7 +31,7 @@ import {
   canDeleteRemotely,
   EMPTY_CONTENT_SHA256,
   LOCAL_IO_CONCURRENCY,
-  Qr,
+  EMPTY_CONTENT_HASH,
   SYNC_INTERVAL_MS,
   MAX_MEMORY_BYTES,
 } from "./syncConfig.js";
@@ -88,6 +88,7 @@ import { isMountEscaped, NOOP_RESULT, SKIPPED_RESULT, noteServerBackoff } from "
 import { isMemoryDocumentKey_2 } from "../memoryStore/memoryKeys.js";
 import { PathTraversalError } from "../../memdir/teamMemPaths.js";
 import { count } from "../../utils/collections.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:119754-119832 placement
 /**
@@ -99,54 +100,55 @@ function errorSummary(error) {
   );
 }
 //@ chunk-s61vbvea.js:119832-119984 placement
-async function runWithConcurrency(e, n, r) {
-  let s = 0;
+async function runWithConcurrency(items, limit, worker) {
+  let nextIndex = 0;
   let list = Array.from(
     {
-      length: Math.min(n, e.length),
+      length: Math.min(limit, items.length),
     },
     async () => {
-      while (s < e.length) {
-        let y = s++;
-        await r(e[y]);
+      while (nextIndex < items.length) {
+        let index = nextIndex++;
+        await worker(items[index]);
       }
     },
   );
   await Promise.all(list);
 }
 //@ chunk-s61vbvea.js:119984-120874 placement
-async function checkPushManifestGate(e, n) {
-  let syncManifest = await readSyncManifest(e.mountDir, n, e.v5MemoryBase);
-  let s = syncManifest.state === "present" && syncManifest.manifest.partition === e.backend.partitionId;
-  let h = syncManifest.state === "torn" && isTypedKoalaEnabled();
-  if (s || h) e.manifestSeenThisSession = true;
-  if (!e.pulled) return s ? "matched" : h ? "torn" : "other";
-  if (s) return "matched";
-  if (syncManifest.state === "present" && e.scope !== "user") {
-    checkForeignPartition(e, "midSession");
+async function checkPushManifestGate(store, storage) {
+  let syncManifest = await readSyncManifest(store.mountDir, storage, store.v5MemoryBase);
+  let matched =
+    syncManifest.state === "present" && syncManifest.manifest.partition === store.backend.partitionId;
+  let torn = syncManifest.state === "torn" && isTypedKoalaEnabled();
+  if (matched || torn) store.manifestSeenThisSession = true;
+  if (!store.pulled) return matched ? "matched" : torn ? "torn" : "other";
+  if (matched) return "matched";
+  if (syncManifest.state === "present" && store.scope !== "user") {
+    checkForeignPartition(store, "midSession");
     return "other";
   }
-  if (e.remoteHashes.size === 0) return "other";
+  if (store.remoteHashes.size === 0) return "other";
   logForDebugging(
-    `multi-store-sync[${e.mountName}]: .memory-sync manifest ${syncManifest.state === "present" ? "partition mismatch" : syncManifest.state} \u2014 invalidating basis`,
+    `multi-store-sync[${store.mountName}]: .memory-sync manifest ${syncManifest.state === "present" ? "partition mismatch" : syncManifest.state} \u2014 invalidating basis`,
     {
       level: "warn",
     },
   );
-  if (isNonAccountStore(e))
+  if (isNonAccountStore(store))
     logFeatureSad(
       "team_memory_multistore_conflict",
       syncManifest.state !== "present" ? "manifest_absent" : "manifest_mismatch",
     );
   logEvent("tengu_team_mem_push_manifest_gate", {
     absent: syncManifest.state !== "present",
-    remote_entries: e.remoteHashes.size,
+    remote_entries: store.remoteHashes.size,
   });
-  e.invalidatedBasis = e.remoteHashes;
-  e.remoteHashes = new Map();
-  e.pulled = false;
-  e.pendingDeletes?.clear();
-  if (syncManifest.state !== "present") await clearBasis(e, n);
+  store.invalidatedBasis = store.remoteHashes;
+  store.remoteHashes = new Map();
+  store.pulled = false;
+  store.pendingDeletes?.clear();
+  if (syncManifest.state !== "present") await clearBasis(store, storage);
   return "other";
 }
 //@ chunk-s61vbvea.js:120874-121353 placement
@@ -173,7 +175,7 @@ async function getMountDirOccupancy(mountDir) {
       await readdir(mountDir, {
         withFileTypes: true,
       })
-    ).some((r) => r.name !== SYNC_MANIFEST_FILE && !(r.name.startsWith(".") && r.isFile()))
+    ).some((entry) => entry.name !== SYNC_MANIFEST_FILE && !(entry.name.startsWith(".") && entry.isFile()))
       ? "occupied"
       : "empty";
   } catch (error) {
@@ -181,42 +183,45 @@ async function getMountDirOccupancy(mountDir) {
   }
 }
 //@ chunk-s61vbvea.js:121552-121751 placement
-async function isMountDirEffectivelyEmpty(e, n) {
-  if (!n.rootMissing) return false;
+async function isMountDirEffectivelyEmpty(store, localEntries) {
+  if (!localEntries.rootMissing) return false;
   try {
     return (
-      await readdir(e.mountDir, {
+      await readdir(store.mountDir, {
         withFileTypes: true,
       })
-    ).every((s) => s.name.startsWith(".") || (s.isDirectory() && e.excludeKey?.(s.name) === true));
+    ).every(
+      (entry) =>
+        entry.name.startsWith(".") || (entry.isDirectory() && store.excludeKey?.(entry.name) === true),
+    );
   } catch {
     return false;
   }
 }
 //@ chunk-s61vbvea.js:121751-122002 placement
-async function containsOnlyRegularFiles(e) {
-  let n = await readdir(e, {
+async function containsOnlyRegularFiles(dir) {
+  let entries = await readdir(dir, {
     withFileTypes: true,
   });
-  for (let r of n) {
-    if (r.name === SYNC_MANIFEST_FILE) continue;
-    if (r.name.startsWith(".")) {
-      if (r.isFile()) continue;
+  for (let entry of entries) {
+    if (entry.name === SYNC_MANIFEST_FILE) continue;
+    if (entry.name.startsWith(".")) {
+      if (entry.isFile()) continue;
       return false;
     }
-    if (r.isDirectory()) {
-      if (!(await containsOnlyRegularFiles(join(e, r.name)))) return false;
-    } else if (!r.isFile()) return false;
+    if (entry.isDirectory()) {
+      if (!(await containsOnlyRegularFiles(join(dir, entry.name)))) return false;
+    } else if (!entry.isFile()) return false;
   }
   return true;
 }
 //@ chunk-s61vbvea.js:122002-123201 placement
-async function enumerateMountDir(store, n) {
-  let r = isStorageV5Enabled();
-  let v5MemoryContext = getV5MemoryContext(store, n);
-  let h;
+async function enumerateMountDir(store, storage) {
+  let storageV5Enabled = isStorageV5Enabled();
+  let v5MemoryContext = getV5MemoryContext(store, storage);
+  let remoteEntries;
   try {
-    h = await store.backend.list();
+    remoteEntries = await store.backend.list();
   } catch (error) {
     return {
       outcome: "failed",
@@ -226,13 +231,13 @@ async function enumerateMountDir(store, n) {
       }),
     };
   }
-  let y = new Map(h.map((R) => [R.path, R.sha256]));
-  let S;
+  let remoteHashes = new Map(remoteEntries.map((entry) => [entry.path, entry.sha256]));
+  let localEntries;
   try {
-    S = await collectLocalMemoryEntries(
+    localEntries = await collectLocalMemoryEntries(
       store.mountDir,
       store.excludeKey,
-      n,
+      storage,
       store.v5MemoryBase,
       store.manifestSeenThisSession,
       store.walkHashes,
@@ -244,65 +249,65 @@ async function enumerateMountDir(store, n) {
       error: errorMessage(error),
     };
   }
-  if (!S.diskTrusted)
+  if (!localEntries.diskTrusted)
     return {
       outcome: "failed",
       error: "mount dir enumeration untrusted (permission failure)",
     };
-  let w;
+  let regularOnly;
   try {
-    w = await containsOnlyRegularFiles(store.mountDir);
+    regularOnly = await containsOnlyRegularFiles(store.mountDir);
   } catch (error) {
     return {
       outcome: "failed",
       error: errorMessage(error),
     };
   }
-  if (!w)
+  if (!regularOnly)
     return {
       outcome: "mismatch",
     };
-  for (let diskPath of S.diskPaths) {
-    let x = y.get(diskPath);
-    if (x === undefined)
+  for (let diskPath of localEntries.diskPaths) {
+    let remoteSha256 = remoteHashes.get(diskPath);
+    if (remoteSha256 === undefined)
       return {
         outcome: "mismatch",
       };
-    let sha256 = S.entries.get(diskPath)?.sha256;
+    let sha256 = localEntries.entries.get(diskPath)?.sha256;
     if (sha256 === undefined) {
-      let j = join(store.mountDir, diskPath.replace(/^\/+/, ""));
-      let G =
+      let filePath = join(store.mountDir, diskPath.replace(/^\/+/, ""));
+      let storageKey =
         v5MemoryContext !== undefined
-          ? storageKeyForMountPath(v5MemoryContext.base, store.mountDir, j)
+          ? storageKeyForMountPath(v5MemoryContext.base, store.mountDir, filePath)
           : undefined;
-      if (r && v5MemoryContext !== undefined && G !== undefined) {
-        let L = await v5MemoryContext.storageV5.read([
+      if (storageV5Enabled && v5MemoryContext !== undefined && storageKey !== undefined) {
+        let readResult = await v5MemoryContext.storageV5.read([
           {
-            key: G,
+            key: storageKey,
             offset: 0,
             length: MAX_BATCH_BYTES + 1,
           },
         ]);
-        let q = L.ok ? L.value.items[0] : undefined;
-        if (q === undefined || !q.found || q.totalBytes > MAX_BATCH_BYTES)
+        let item = readResult.ok ? readResult.value.items[0] : undefined;
+        if (item === undefined || !item.found || item.totalBytes > MAX_BATCH_BYTES)
           return {
             outcome: "mismatch",
           };
-        sha256 = computeContentHash(Buffer.from(q.value).toString("utf8"));
+        sha256 = computeContentHash(Buffer.from(item.value).toString("utf8"));
       } else
         try {
-          if ((await stat(j)).size > MAX_BATCH_BYTES)
+          if ((await stat(filePath)).size > MAX_BATCH_BYTES)
             return {
               outcome: "mismatch",
             };
-          sha256 = computeContentHash(await readFile(j, "utf8"));
+          sha256 = computeContentHash(await readFile(filePath, "utf8"));
         } catch {
           return {
             outcome: "mismatch",
           };
         }
     }
-    if (x !== sha256)
+    if (remoteSha256 !== sha256)
       return {
         outcome: "mismatch",
       };
@@ -312,28 +317,31 @@ async function enumerateMountDir(store, n) {
   };
 }
 //@ chunk-s61vbvea.js:123201-123647 placement
-function checkForeignPartition(e, n) {
-  e.suppressedReason = "mount_dir_foreign_partition";
-  e.suppressedUntilMs = null;
-  e.remoteHashes = new Map();
-  e.pulled = false;
-  e.pendingDeletes?.clear();
+function checkForeignPartition(store, trigger) {
+  store.suppressedReason = "mount_dir_foreign_partition";
+  store.suppressedUntilMs = null;
+  store.remoteHashes = new Map();
+  store.pulled = false;
+  store.pendingDeletes?.clear();
   logForDebugging(
-    `multi-store-sync[${e.mountName}]: mount dir holds a different partition's .memory-sync \u2014 suppressing sync (remove the dir to re-mount)`,
+    `multi-store-sync[${store.mountName}]: mount dir holds a different partition's .memory-sync \u2014 suppressing sync (remove the dir to re-mount)`,
     {
       level: "warn",
     },
   );
-  if (isNonAccountStore(e)) logFeatureSad("team_memory_multistore_conflict", "foreign_partition_dir");
+  if (isNonAccountStore(store)) logFeatureSad("team_memory_multistore_conflict", "foreign_partition_dir");
   logEvent("tengu_team_mem_foreign_partition_suppressed", {
-    trigger: fromEnum(n),
+    trigger: fromEnum(trigger),
   });
 }
 //@ chunk-s61vbvea.js:123647-123729 placement
 /**
  * 表示“挂载目录属于外来分区/未登记非空”的原因码。
  */
-var FOREIGN_PARTITION_REASONS = new Set(["mount_dir_foreign_partition", "mount_dir_unmanifested_nonempty"]);
+var FOREIGN_PARTITION_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:123647", () => {
+  FOREIGN_PARTITION_REASONS = new Set(["mount_dir_foreign_partition", "mount_dir_unmanifested_nonempty"]);
+});
 //@ chunk-s61vbvea.js:123729-123771 placement
 /**
  * 判断原因是否属于外来分区类。
@@ -349,12 +357,13 @@ function isStoreForeignPartition(store) {
   return isForeignPartitionReason(store.suppressedReason);
 }
 //@ chunk-s61vbvea.js:123816-124514 placement
-async function readoptMountDir(store, syncManifest, r) {
+async function readoptMountDir(store, syncManifest, storage) {
   let suppressedReason = store.suppressedReason;
   if (!isForeignPartitionReason(suppressedReason)) return false;
-  let h = syncManifest.state === "present" && syncManifest.manifest.partition === store.backend.partitionId;
-  let y = syncManifest.state !== "present" && (await getMountDirOccupancy(store.mountDir)) === "empty";
-  if (!h && !y) {
+  let manifestMatches =
+    syncManifest.state === "present" && syncManifest.manifest.partition === store.backend.partitionId;
+  let dirEmpty = syncManifest.state !== "present" && (await getMountDirOccupancy(store.mountDir)) === "empty";
+  if (!manifestMatches && !dirEmpty) {
     if (suppressedReason === "mount_dir_unmanifested_nonempty" && syncManifest.state === "present")
       checkForeignPartition(store, "firstPull");
     return false;
@@ -365,7 +374,7 @@ async function readoptMountDir(store, syncManifest, r) {
   store.consecutivePermanentFailures = 0;
   store.refusedWrites?.clear();
   store.invalidatedBasis = null;
-  await clearBasis(store, r);
+  await clearBasis(store, storage);
   logForDebugging(
     `multi-store-sync[${store.mountName}]: ${suppressedReason} condition cleared \u2014 re-adopting the mount dir`,
     {
@@ -379,115 +388,118 @@ async function readoptMountDir(store, syncManifest, r) {
   return true;
 }
 //@ chunk-s61vbvea.js:124514-124694 placement
-function noteStreamListFailure(e) {
-  e.streamListSuccessStreak = 0;
-  let n = (e.streamListFailureStreak ?? 0) + 1;
-  e.streamListFailureStreak = Math.min(n, MAX_RETRIES);
-  if (n >= MAX_RETRIES) e.streamListRetryAfterMs = Date.now() + SUPPRESS_MS_2;
-  return n;
+function noteStreamListFailure(store) {
+  store.streamListSuccessStreak = 0;
+  let streak = (store.streamListFailureStreak ?? 0) + 1;
+  store.streamListFailureStreak = Math.min(streak, MAX_RETRIES);
+  if (streak >= MAX_RETRIES) store.streamListRetryAfterMs = Date.now() + SUPPRESS_MS_2;
+  return streak;
 }
 //@ chunk-s61vbvea.js:124694-124736 placement
 /**
  * 判断存储作用域是否不是 account。
  */
-function isNonAccountStore(e) {
-  return e.scope !== "account";
+function isNonAccountStore(store) {
+  return store.scope !== "account";
 }
 //@ chunk-s61vbvea.js:124736-126054 placement
-async function listStoreStream(e) {
-  let backend = e.backend;
+async function listStoreStream(store) {
+  let backend = store.backend;
   if (
     backend.exportMetadata &&
-    !e.streamListUnsupported &&
-    Date.now() >= (e.streamListRetryAfterMs ?? 0) &&
+    !store.streamListUnsupported &&
+    Date.now() >= (store.streamListRetryAfterMs ?? 0) &&
     !env.CLAUDE_CODE_DISABLE_MEMORY_STREAM_LIST &&
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_memory_stream_list", true)
   ) {
-    let r = `multi-store-sync[${e.mountName}]`;
+    let label = `multi-store-sync[${store.mountName}]`;
     try {
       let source = await backend.exportMetadata();
-      let h = await pullStoreView({
+      let view = await pullStoreView({
         source,
         maxLineLength: MAX_BATCH_BYTES,
         maxEntries: MAX_STORE_ENTRIES,
       });
-      if (h.ok) {
-        let y = (e.streamListSuccessStreak ?? 0) + 1;
-        if (y >= MAX_PULL_RETRIES) {
-          e.streamListSuccessStreak = 0;
-          e.streamListFailureStreak = Math.max(0, (e.streamListFailureStreak ?? 0) - 1);
-        } else e.streamListSuccessStreak = y;
-        if (isNonAccountStore(e)) logFeatureOk("team_memory_multistore_stream_list");
-        return h.entries.map((entry) => ({
+      if (view.ok) {
+        let streak = (store.streamListSuccessStreak ?? 0) + 1;
+        if (streak >= MAX_PULL_RETRIES) {
+          store.streamListSuccessStreak = 0;
+          store.streamListFailureStreak = Math.max(0, (store.streamListFailureStreak ?? 0) - 1);
+        } else store.streamListSuccessStreak = streak;
+        if (isNonAccountStore(store)) logFeatureOk("team_memory_multistore_stream_list");
+        return view.entries.map((entry) => ({
           ...entry,
           path: normalizePathPrefix(entry.path),
         }));
       }
-      if (isNonAccountStore(e)) logFeatureSad("team_memory_multistore_stream_list", h.reason);
-      noteStreamListFailure(e);
-      if (h.reason === "view_not_honored") e.streamListUnsupported = true;
-      logForDebugging(`${r}: metadata stream incomplete (${h.reason}) \u2014 using paged list`, {
+      if (isNonAccountStore(store)) logFeatureSad("team_memory_multistore_stream_list", view.reason);
+      noteStreamListFailure(store);
+      if (view.reason === "view_not_honored") store.streamListUnsupported = true;
+      logForDebugging(`${label}: metadata stream incomplete (${view.reason}) \u2014 using paged list`, {
         level: "debug",
       });
     } catch (error) {
-      let h = noteStreamListFailure(e);
+      let failureStreak = noteStreamListFailure(store);
       if (error instanceof MemoryUnavailableError) {
-        if (isNonAccountStore(e))
+        if (isNonAccountStore(store))
           logFeatureSad(
             "team_memory_multistore_stream_list",
             error.retryAfterMs !== undefined ? "backed_off" : "unavailable",
           );
-        let y = error.retryAfterMs !== undefined;
-        if (h < MAX_RETRIES && (e.pulled || y)) throw error;
+        let askedToWait = error.retryAfterMs !== undefined;
+        if (failureStreak < MAX_RETRIES && (store.pulled || askedToWait)) throw error;
       } else {
-        let y =
+        let reason =
           error instanceof MemoryNotFoundError
             ? "not_found"
             : error instanceof MemoryPermanentError
               ? error.reason
               : "error";
-        if (error instanceof MemoryNotFoundError) e.streamListUnsupported = true;
-        if (isNonAccountStore(e)) logFeatureSad("team_memory_multistore_stream_list", y);
+        if (error instanceof MemoryNotFoundError) store.streamListUnsupported = true;
+        if (isNonAccountStore(store)) logFeatureSad("team_memory_multistore_stream_list", reason);
       }
-      logForDebugging(`${r}: metadata stream unavailable (${errorMessage(error)}) \u2014 using paged list`, {
-        level: "debug",
-      });
+      logForDebugging(
+        `${label}: metadata stream unavailable (${errorMessage(error)}) \u2014 using paged list`,
+        {
+          level: "debug",
+        },
+      );
     }
   }
   return backend.list();
 }
 //@ chunk-s61vbvea.js:126054-126169 placement
-function isOrgMemoryDecisionClosed(e) {
-  if ((e.source ?? "env") !== "discovery") return false;
+function isOrgMemoryDecisionClosed(store) {
+  if ((store.source ?? "env") !== "discovery") return false;
   let orgMemoryDecision = getOrgMemoryDecision();
   return orgMemoryDecision.state === "parked" || orgMemoryDecision.state === "ended";
 }
 //@ chunk-s61vbvea.js:126169-126456 placement
-function shouldMirrorAllUncovered(e) {
-  if ((e.source ?? "env") !== "discovery" || !hasMirror()) return false;
-  if (grantedModeFor(e.backend.partitionId) !== undefined) {
-    e.notices.rearmMirrorAllUncovered();
+function shouldMirrorAllUncovered(store) {
+  if ((store.source ?? "env") !== "discovery" || !hasMirror()) return false;
+  if (grantedModeFor(store.backend.partitionId) !== undefined) {
+    store.notices.rearmMirrorAllUncovered();
     return false;
   }
-  if (!getDecisionStores().some((r) => grantedModeFor(r.path) !== undefined)) {
-    e.notices.emitMirrorAllUncoveredOnce();
+  if (!getDecisionStores().some((store) => grantedModeFor(store.path) !== undefined)) {
+    store.notices.emitMirrorAllUncoveredOnce();
     return false;
   }
-  e.notices.rearmMirrorAllUncovered();
+  store.notices.rearmMirrorAllUncovered();
   return true;
 }
 //@ chunk-s61vbvea.js:126456-127011 placement
-async function rejoinTeamMemory(store, n) {
-  let r = await pullStore(store, n);
+async function rejoinTeamMemory(store, storage) {
+  let pullResult = await pullStore(store, storage);
   if (!store.pulled) store.lastPersistedBasisBody = undefined;
   if (
-    !r.success &&
+    !pullResult.success &&
     isUsableSuppressedReason(store.basisUnusable) &&
     !store.notices.rejoinOffNoticed.has(store.mountDir)
   ) {
     store.notices.rejoinOffNoticed.add(store.mountDir);
     noticeStoreSyncOff(store);
-  } else if (r.success && store.pulled && store.notices.rejoinOffNoticed.delete(store.mountDir))
+  } else if (pullResult.success && store.pulled && store.notices.rejoinOffNoticed.delete(store.mountDir))
     formatStoreBackOnNotice(store, heldLocalOnlyPaths(store), true);
   let rejoinOff = store.rejoinOff ?? null;
   if (rejoinOff !== null && store.pulled && !isUsableSuppressedReason(store.basisUnusable)) {
@@ -500,14 +512,14 @@ async function rejoinTeamMemory(store, n) {
       held_count: store.heldLocal?.size ?? 0,
     });
   }
-  return r;
+  return pullResult;
 }
 //@ chunk-s61vbvea.js:127011-135467 placement
 /**
  * 拉取一个记忆库：检查挂载目录、处理 404、按基线合并本地文件
  */
-async function pullStore(e, n) {
-  if (await isMountEscaped(e))
+async function pullStore(store, storage) {
+  if (await isMountEscaped(store))
     return {
       success: false,
       entriesListed: 0,
@@ -515,61 +527,66 @@ async function pullStore(e, n) {
       filesDeleted: 0,
       error: "mount dir canonicity check failed (fail closed)",
     };
-  if (isOrgMemoryDecisionClosed(e)) return NOOP_RESULT;
-  if (shouldMirrorAllUncovered(e)) return NOOP_RESULT;
-  let r = await checkPushManifestGate(e, n);
-  let expectPresent = r === "matched";
-  if (e.suppressedReason !== null) return SKIPPED_RESULT;
-  let h =
-    (expectPresent || r === "torn") &&
-    !e.pulled &&
-    e.remoteHashes.size === 0 &&
-    (e.invalidatedBasis ?? null) === null
-      ? await loadPersistedBasis(e, n)
+  if (isOrgMemoryDecisionClosed(store)) return NOOP_RESULT;
+  if (shouldMirrorAllUncovered(store)) return NOOP_RESULT;
+  let gate = await checkPushManifestGate(store, storage);
+  let expectPresent = gate === "matched";
+  if (store.suppressedReason !== null) return SKIPPED_RESULT;
+  let persistedBasis =
+    (expectPresent || gate === "torn") &&
+    !store.pulled &&
+    store.remoteHashes.size === 0 &&
+    (store.invalidatedBasis ?? null) === null
+      ? await loadPersistedBasis(store, storage)
       : null;
-  let reason = h?.ok === false ? h.reason : null;
-  if (h !== null && e.basisUnusable !== null && !(e.removedEmptyReceipt === true && reason === "absent"))
-    e.basisUnusable = reason ?? undefined;
-  if (reason === "empty_store") e.emptyReceiptOnDisk = true;
-  else if (h !== null && reason !== "read_error") e.emptyReceiptOnDisk = false;
-  let basis = h?.ok === true ? h.basis : null;
-  let basisUnusable = e.basisUnusable;
-  let R = isUsableSuppressedReason(basisUnusable);
-  if (R && basisUnusable) {
-    if (!e.rejoinOff)
-      e.rejoinOff = {
+  let reason = persistedBasis?.ok === false ? persistedBasis.reason : null;
+  if (
+    persistedBasis !== null &&
+    store.basisUnusable !== null &&
+    !(store.removedEmptyReceipt === true && reason === "absent")
+  )
+    store.basisUnusable = reason ?? undefined;
+  if (reason === "empty_store") store.emptyReceiptOnDisk = true;
+  else if (persistedBasis !== null && reason !== "read_error") store.emptyReceiptOnDisk = false;
+  let basis = persistedBasis?.ok === true ? persistedBasis.basis : null;
+  let basisUnusable = store.basisUnusable;
+  let rejoinOffActive = isUsableSuppressedReason(basisUnusable);
+  if (rejoinOffActive && basisUnusable) {
+    if (!store.rejoinOff)
+      store.rejoinOff = {
         sinceMs: Date.now(),
         reason: basisUnusable,
         pullAttempts: 0,
       };
-    e.rejoinOff.reason = basisUnusable;
-    e.rejoinOff.pullAttempts++;
+    store.rejoinOff.reason = basisUnusable;
+    store.rejoinOff.pullAttempts++;
   }
-  let x = basis === null ? await pushStore(e, expectPresent, n) : "not-attempted";
-  if (x !== "not-attempted" && x !== "fell-back") {
-    e.downloadsDeferred = 0;
-    return x;
+  let pushOutcome = basis === null ? await pushStore(store, expectPresent, storage) : "not-attempted";
+  if (pushOutcome !== "not-attempted" && pushOutcome !== "fell-back") {
+    store.downloadsDeferred = 0;
+    return pushOutcome;
   }
-  let P = x === "fell-back";
-  let j;
-  let G = null;
+  let fellBack = pushOutcome === "fell-back";
+  let remoteEntries;
+  let rejoinError = null;
   try {
-    j = await listStoreStream(e);
+    remoteEntries = await listStoreStream(store);
   } catch (error) {
-    let ze = noteServerBackoff(e, error);
-    let gt = (e.invalidatedBasis ?? basis?.entries ?? e.remoteHashes).size === 0;
-    if (error instanceof MemoryNotFoundError && gt && e.scope !== "account") {
-      j = [];
-      if (R) G = error;
+    let backedOff = noteServerBackoff(store, error);
+    let noEntries = (store.invalidatedBasis ?? basis?.entries ?? store.remoteHashes).size === 0;
+    if (error instanceof MemoryNotFoundError && noEntries && store.scope !== "account") {
+      remoteEntries = [];
+      if (rejoinOffActive) rejoinError = error;
     } else {
       if (error instanceof MemoryNotFoundError)
         logForDebugging(
-          `multi-store-sync[${e.mountName}]: list 404 on a previously-synced store or the account mirror \u2014 skipping pull (no reap)`,
+          `multi-store-sync[${store.mountName}]: list 404 on a previously-synced store or the account mirror \u2014 skipping pull (no reap)`,
           {
             level: "warn",
           },
         );
-      if (P && isNonAccountStore(e)) logFeatureBad("team_memory_multistore_bulk_inflate", "fallback_failed");
+      if (fellBack && isNonAccountStore(store))
+        logFeatureBad("team_memory_multistore_bulk_inflate", "fallback_failed");
       return {
         success: false,
         entriesListed: 0,
@@ -583,574 +600,610 @@ async function pullStore(e, n) {
         ...(error instanceof MemoryNotFoundError && {
           notFound: true,
         }),
-        ...(ze && {
+        ...(backedOff && {
           backedOff: true,
           cause: "backed_off",
         }),
       };
     }
   }
-  let L = new Map();
-  for (let Ae of j) L.set(Ae.id, Ae.path);
-  let q = new Map();
-  for (let Ae of j) if (L.get(Ae.id) === Ae.path) q.set(Ae.path, Ae);
-  j = [...q.values()];
-  j = j.filter(
-    (Ae) => isMemoryDocumentKey_2(Ae.path) && !(e.excludeKey && e.excludeKey(Ae.path.replace(/^\/+/, ""))),
+  let pathById = new Map();
+  for (let entry of remoteEntries) pathById.set(entry.id, entry.path);
+  let idByPath = new Map();
+  for (let entry of remoteEntries) if (pathById.get(entry.id) === entry.path) idByPath.set(entry.path, entry);
+  remoteEntries = [...idByPath.values()];
+  remoteEntries = remoteEntries.filter(
+    (entry) =>
+      isMemoryDocumentKey_2(entry.path) &&
+      !(store.excludeKey && store.excludeKey(entry.path.replace(/^\/+/, ""))),
   );
-  let Q = new Map();
-  for (let Ae of j)
-    Q.set(Ae.path, {
-      id: Ae.id,
-      sha256: Ae.sha256,
+  let remoteByPath = new Map();
+  for (let entry of remoteEntries)
+    remoteByPath.set(entry.path, {
+      id: entry.id,
+      sha256: entry.sha256,
     });
-  let localMemoryEntries = await collectLocalMemoryEntries(
-    e.mountDir,
-    e.excludeKey,
-    n,
-    e.v5MemoryBase,
-    e.manifestSeenThisSession,
-    e.walkHashes,
+  let localEntries = await collectLocalMemoryEntries(
+    store.mountDir,
+    store.excludeKey,
+    storage,
+    store.v5MemoryBase,
+    store.manifestSeenThisSession,
+    store.walkHashes,
     undefined,
   );
-  let invalidatedBasis = e.invalidatedBasis ?? null;
-  let ae = invalidatedBasis ?? basis?.entries ?? e.remoteHashes;
+  let invalidatedBasis = store.invalidatedBasis ?? null;
+  let basisEntries = invalidatedBasis ?? basis?.entries ?? store.remoteHashes;
   if (
-    !localMemoryEntries.diskTrusted &&
-    (R
-      ? !(await isMountDirEffectivelyEmpty(e, localMemoryEntries))
-      : ae.size > 0 && !localMemoryEntries.rootMissing)
+    !localEntries.diskTrusted &&
+    (rejoinOffActive
+      ? !(await isMountDirEffectivelyEmpty(store, localEntries))
+      : basisEntries.size > 0 && !localEntries.rootMissing)
   ) {
     logForDebugging(
-      `multi-store-sync[${e.mountName}]: mount dir walk untrusted with a non-empty basis or a pending rejoin \u2014 soft-failing pull`,
+      `multi-store-sync[${store.mountName}]: mount dir walk untrusted with a non-empty basis or a pending rejoin \u2014 soft-failing pull`,
       {
         level: "warn",
       },
     );
     return {
       success: false,
-      entriesListed: j.length,
+      entriesListed: remoteEntries.length,
       filesWritten: 0,
       filesDeleted: 0,
       cause: "walk_untrusted",
       error: "mount dir walk untrusted with a non-empty basis or a pending rejoin (soft fail)",
-      ...(!e.pulled && {
+      ...(!store.pulled && {
         permanent: "mount_dir_unreadable",
       }),
     };
   }
-  if (G !== null && (await hasUnpulledLocalEdits(e, localMemoryEntries.entries, Q, n))) {
+  if (
+    rejoinError !== null &&
+    (await hasUnpulledLocalEdits(store, localEntries.entries, remoteByPath, storage))
+  ) {
     logForDebugging(
-      `multi-store-sync[${e.mountName}]: list 404 while sync is off with local files to hold, staying off`,
+      `multi-store-sync[${store.mountName}]: list 404 while sync is off with local files to hold, staying off`,
       {
         level: "warn",
       },
     );
-    if (P) logFeatureBad("team_memory_multistore_bulk_inflate", "fallback_failed");
+    if (fellBack) logFeatureBad("team_memory_multistore_bulk_inflate", "fallback_failed");
     return {
       success: false,
       entriesListed: 0,
       filesWritten: 0,
       filesDeleted: 0,
       cause: "not_found",
-      error: errorMessage(G),
+      error: errorMessage(rejoinError),
     };
   }
-  let se = canDeleteRemotely(e);
-  let re = new Set(
-    j
+  let canDelete = canDeleteRemotely(store);
+  let refetchPaths = new Set(
+    remoteEntries
       .filter(
-        (Ae) =>
-          Ae.sha256 !== EMPTY_CONTENT_SHA256 &&
-          localMemoryEntries.entries.get(Ae.path)?.sha256 === EMPTY_CONTENT_SHA256 &&
-          ae.get(Ae.path)?.sha256 === Ae.sha256,
+        (entry) =>
+          entry.sha256 !== EMPTY_CONTENT_SHA256 &&
+          localEntries.entries.get(entry.path)?.sha256 === EMPTY_CONTENT_SHA256 &&
+          basisEntries.get(entry.path)?.sha256 === entry.sha256,
       )
-      .map((Ae) => Ae.path),
+      .map((entry) => entry.path),
   );
-  let he = 0;
-  let filtered = j.filter((Ae) => {
-    if (localMemoryEntries.entries.get(Ae.path)?.sha256 === Ae.sha256) return false;
-    if (e.scope === "account") return true;
-    if (re.has(Ae.path)) return true;
-    if (
-      (invalidatedBasis !== null || localMemoryEntries.rootMissing) &&
-      !localMemoryEntries.diskPaths.has(Ae.path)
-    )
+  let unchangedCount = 0;
+  let filtered = remoteEntries.filter((entry) => {
+    if (localEntries.entries.get(entry.path)?.sha256 === entry.sha256) return false;
+    if (store.scope === "account") return true;
+    if (refetchPaths.has(entry.path)) return true;
+    if ((invalidatedBasis !== null || localEntries.rootMissing) && !localEntries.diskPaths.has(entry.path))
       return true;
-    if (!se && localMemoryEntries.diskTrusted && !localMemoryEntries.diskPaths.has(Ae.path)) return true;
+    if (!canDelete && localEntries.diskTrusted && !localEntries.diskPaths.has(entry.path)) return true;
     if (
       basis?.entriesWereOnDisk === false &&
-      localMemoryEntries.diskTrusted &&
-      !localMemoryEntries.diskPaths.has(Ae.path)
+      localEntries.diskTrusted &&
+      !localEntries.diskPaths.has(entry.path)
     ) {
-      if (ae.get(Ae.path)?.sha256 === Ae.sha256) he++;
+      if (basisEntries.get(entry.path)?.sha256 === entry.sha256) unchangedCount++;
       return true;
     }
-    return ae.get(Ae.path)?.sha256 !== Ae.sha256;
+    return basisEntries.get(entry.path)?.sha256 !== entry.sha256;
   });
-  let ce = localMemoryEntries.diskTrusted
-    ? [...localMemoryEntries.diskPaths].filter(
-        (diskPath) => !Q.has(diskPath) && (ae.has(diskPath) || e.scope === "account"),
+  let deletions = localEntries.diskTrusted
+    ? [...localEntries.diskPaths].filter(
+        (diskPath) =>
+          !remoteByPath.has(diskPath) && (basisEntries.has(diskPath) || store.scope === "account"),
       )
     : [];
-  for (let Ae of filtered) Q.delete(Ae.path);
-  let we = 0;
-  let ie = 0;
-  let Ee = 0;
-  let Ie = 0;
-  let ke = 0;
-  let Me = false;
-  let We = 0;
-  let nt = 0;
-  let Be;
+  for (let entry of filtered) remoteByPath.delete(entry.path);
+  let writeSkipped = 0;
+  let shaMismatches = 0;
+  let emptyRestored = 0;
+  let fetchesFailed = 0;
+  let deletesFailed = 0;
+  let backedOff = false;
+  let notStarted = 0;
+  let notStartedFailures = 0;
+  let firstError;
   let permanent;
-  let Ne = new Map();
-  let Je = [];
+  let entriesWithoutRef = new Map();
+  let deletedPaths = [];
   if (filtered.length > 0)
     try {
-      await removeEmptyStoreReceipt(e, n);
+      await removeEmptyStoreReceipt(store, storage);
     } catch (error) {
       return {
         success: false,
-        entriesListed: j.length,
+        entriesListed: remoteEntries.length,
         filesWritten: 0,
         filesDeleted: 0,
         error: errorMessage(error),
       };
     }
-  let lt = isTypedKoalaEnabled()
-    ? new Set(
-        localMemoryEntries.skippedOversizedPaths.map((skippedOversizedPath) => skippedOversizedPath.path),
-      )
+  let heldSet = isTypedKoalaEnabled()
+    ? new Set(localEntries.skippedOversizedPaths.map((skippedOversizedPath) => skippedOversizedPath.path))
     : new Set();
-  await runWithConcurrency(filtered, LOCAL_IO_CONCURRENCY, async (Ae) => {
-    if (Me) {
-      We++;
+  await runWithConcurrency(filtered, LOCAL_IO_CONCURRENCY, async (entry) => {
+    if (backedOff) {
+      notStarted++;
       return;
     }
     try {
-      let ze = await e.backend.read(Ae.id);
-      let contentHash = computeContentHash(ze.content);
-      if (contentHash !== ze.sha256) ie++;
+      let body = await store.backend.read(entry.id);
+      let contentHash = computeContentHash(body.content);
+      if (contentHash !== body.sha256) shaMismatches++;
       if (
-        !(invalidatedBasis !== null && localMemoryEntries.diskPaths.has(Ae.path)) &&
-        (await isLocallyEdited(e, Ae.path, n))
+        !(invalidatedBasis !== null && localEntries.diskPaths.has(entry.path)) &&
+        (await isLocallyEdited(store, entry.path, storage))
       ) {
-        we++;
-        Q.set(Ae.path, getEntryBaseline(e, ae, localMemoryEntries.diskPaths, Ae));
+        writeSkipped++;
+        remoteByPath.set(entry.path, getEntryBaseline(store, basisEntries, localEntries.diskPaths, entry));
         return;
       }
-      if (re.has(Ae.path) && !(await isLocallyEditedFile(e, Ae.path, n))) {
-        we++;
-        Q.set(Ae.path, {
-          id: Ae.id,
-          sha256: Ae.sha256,
+      if (refetchPaths.has(entry.path) && !(await isLocallyEditedFile(store, entry.path, storage))) {
+        writeSkipped++;
+        remoteByPath.set(entry.path, {
+          id: entry.id,
+          sha256: entry.sha256,
         });
         return;
       }
-      let sha256 = localMemoryEntries.entries.get(Ae.path)?.sha256;
+      let sha256 = localEntries.entries.get(entry.path)?.sha256;
       if (
         sha256 !== contentHash &&
-        (await writeLocalEntry(e, Ae.path, ze.content, ze.updatedAt, n)) === "dropped"
+        (await writeLocalEntry(store, entry.path, body.content, body.updatedAt, storage)) === "dropped"
       )
         return;
-      let sha256_2 = e.pullWritten.get(Ae.path)?.sha256;
-      await recordPullWrite(e, Ae.path, contentHash, n);
-      let ln = {
-        id: Ae.id,
+      let sha256_2 = store.pullWritten.get(entry.path)?.sha256;
+      await recordPullWrite(store, entry.path, contentHash, storage);
+      let ref = {
+        id: entry.id,
         sha256: contentHash,
       };
-      Q.set(Ae.path, ln);
-      Ne.set(Ae.path, ln);
-      let sha256_3 = ae.get(Ae.path)?.sha256;
-      let At = lt.has(Ae.path);
-      let un = At || (sha256 !== sha256_3 && (sha256_2 === undefined || sha256 !== sha256_2));
-      let rr = isTypedKoalaEnabled() ? (e.heldLocal?.get(Ae.path) ?? basis?.held.get(Ae.path)) : undefined;
-      let br = rr !== undefined && (sha256 !== undefined || At) && sha256 !== contentHash && un;
+      remoteByPath.set(entry.path, ref);
+      entriesWithoutRef.set(entry.path, ref);
+      let sha256_3 = basisEntries.get(entry.path)?.sha256;
+      let held = heldSet.has(entry.path);
+      let locallyChanged = held || (sha256 !== sha256_3 && (sha256_2 === undefined || sha256 !== sha256_2));
+      let heldSha = isTypedKoalaEnabled()
+        ? (store.heldLocal?.get(entry.path) ?? basis?.held.get(entry.path))
+        : undefined;
+      let heldConflict =
+        heldSha !== undefined && (sha256 !== undefined || held) && sha256 !== contentHash && locallyChanged;
       if (sha256 === EMPTY_CONTENT_SHA256) {
-        if (sha256_3 !== EMPTY_CONTENT_SHA256 && contentHash !== EMPTY_CONTENT_SHA256) Ee++;
+        if (sha256_3 !== EMPTY_CONTENT_SHA256 && contentHash !== EMPTY_CONTENT_SHA256) emptyRestored++;
       } else if (
-        e.scope !== "account" &&
-        (br ||
-          ((sha256_3 !== undefined || isPublished(e)) && localMemoryEntries.diskPaths.has(Ae.path) && un))
+        store.scope !== "account" &&
+        (heldConflict ||
+          ((sha256_3 !== undefined || isPublished(store)) &&
+            localEntries.diskPaths.has(entry.path) &&
+            locallyChanged))
       ) {
-        let pn = br && sha256 === rr;
+        let replaceLocal = heldConflict && sha256 === heldSha;
         await queueConflictNotice(
-          e,
-          Ae.path,
-          pn ? buildLocalCopyReplacedNotice(Ae.path) : buildWriteConflictNotice(Ae.path, sha256_3 === Qr),
+          store,
+          entry.path,
+          replaceLocal
+            ? buildLocalCopyReplacedNotice(entry.path)
+            : buildWriteConflictNotice(entry.path, sha256_3 === EMPTY_CONTENT_HASH),
         );
         logEvent("tengu_team_mem_conflict_recovered", {
-          scope: fromEnum(e.scope),
+          scope: fromEnum(store.scope),
           op: fromEnum("pull"),
-          held: pn,
+          held: replaceLocal,
         });
       }
     } catch (error) {
       if (error instanceof MemoryNotFoundError) {
-        let gt = e.heldLocal?.get(Ae.path) ?? basis?.held.get(Ae.path);
-        let Nt =
-          (R && !e.pullWritten.has(Ae.path)) ||
-          (gt !== undefined && gt === localMemoryEntries.entries.get(Ae.path)?.sha256);
-        if (localMemoryEntries.diskPaths.has(Ae.path) && !Nt)
-          Q.set(Ae.path, getEntryBaseline(e, ae, localMemoryEntries.diskPaths, Ae));
+        let heldSha = store.heldLocal?.get(entry.path) ?? basis?.held.get(entry.path);
+        let skipRebaseline =
+          (rejoinOffActive && !store.pullWritten.has(entry.path)) ||
+          (heldSha !== undefined && heldSha === localEntries.entries.get(entry.path)?.sha256);
+        if (localEntries.diskPaths.has(entry.path) && !skipRebaseline)
+          remoteByPath.set(entry.path, getEntryBaseline(store, basisEntries, localEntries.diskPaths, entry));
         return;
       }
       if (error instanceof PathTraversalError) {
-        logForDebugging(`multi-store-sync[${e.mountName}]: refusing to write escaping path ${Ae.path}`, {
-          level: "warn",
-        });
+        logForDebugging(
+          `multi-store-sync[${store.mountName}]: refusing to write escaping path ${entry.path}`,
+          {
+            level: "warn",
+          },
+        );
         return;
       }
       if (error instanceof MemoryPermanentError) permanent ??= error.reason;
-      if (noteServerBackoff(e, error)) {
-        Me = true;
-        nt++;
+      if (noteServerBackoff(store, error)) {
+        backedOff = true;
+        notStartedFailures++;
       }
-      Ie++;
-      Be ??= errorSummary(error);
+      fetchesFailed++;
+      firstError ??= errorSummary(error);
     }
   });
-  for (let Ae of ce)
+  for (let path of deletions)
     try {
-      let sha256 = localMemoryEntries.entries.get(Ae)?.sha256;
+      let sha256 = localEntries.entries.get(path)?.sha256;
       if (
-        e.scope !== "account" &&
+        store.scope !== "account" &&
         (sha256 === undefined ||
-          (sha256 !== ae.get(Ae)?.sha256 &&
-            !(sha256 === EMPTY_CONTENT_SHA256 && (await isLocallyEditedFile(e, Ae, n)))))
+          (sha256 !== basisEntries.get(path)?.sha256 &&
+            !(sha256 === EMPTY_CONTENT_SHA256 && (await isLocallyEditedFile(store, path, storage)))))
       ) {
-        let Nt = sha256 !== undefined && e.backend.mode !== "ro";
-        e.refusedWrites?.delete(Ae);
+        let canResave = sha256 !== undefined && store.backend.mode !== "ro";
+        store.refusedWrites?.delete(path);
         await queueConflictNotice(
-          e,
-          Ae,
-          `The memory file ${quoteStoreName(Ae)} was deleted from shared memory by another session, but your local copy has changes that were never saved there. ` +
-            (Nt
+          store,
+          path,
+          `The memory file ${quoteStoreName(path)} was deleted from shared memory by another session, but your local copy has changes that were never saved there. ` +
+            (canResave
               ? "Your local copy was kept and will be re-saved to shared memory on the next sync unless it contains a detected secret. "
               : "Your local copy was kept, but it cannot be re-saved to shared memory automatically (over the sync size limit or the store is read-only) \u2014 save its contents elsewhere or trim it if you want it persisted. ") +
             "If the deletion was intended, delete the file.",
         );
         logForDebugging(
-          `multi-store-sync[${e.mountName}]: preserving locally-modified ${Ae} despite remote delete`,
+          `multi-store-sync[${store.mountName}]: preserving locally-modified ${path} despite remote delete`,
           {
             level: "info",
           },
         );
         continue;
       }
-      if (await isLocallyEdited(e, Ae, n)) {
-        we++;
+      if (await isLocallyEdited(store, path, storage)) {
+        writeSkipped++;
         continue;
       }
-      await deleteLocalEntry(e, Ae, n);
-      Je.push(Ae);
+      await deleteLocalEntry(store, path, storage);
+      deletedPaths.push(path);
     } catch (error) {
-      ke++;
-      Be ??= errorSummary(error);
+      deletesFailed++;
+      firstError ??= errorSummary(error);
     }
-  if (Ee > 0) noticeEmptyFilesRestored(e, Ee);
-  if (ie > 0)
+  if (emptyRestored > 0) noticeEmptyFilesRestored(store, emptyRestored);
+  if (shaMismatches > 0)
     logForDebugging(
-      `multi-store-sync[${e.mountName}]: ${ie} read body/bodies did not match their declared sha256; recorded under the computed sha`,
+      `multi-store-sync[${store.mountName}]: ${shaMismatches} read body/bodies did not match their declared sha256; recorded under the computed sha`,
       {
         level: "warn",
       },
     );
-  if (Ie + ke + We > 0) {
+  if (fetchesFailed + deletesFailed + notStarted > 0) {
     logForDebugging(
-      `multi-store-sync[${e.mountName}]: pull failed: ${Ie} of ${filtered.length} download(s) and ${ke} of ${ce.length} local removal(s) failed${We > 0 ? `, ${We} download(s) not started after the server asked sync to wait (waiting at least ${Math.max(0, Math.ceil(((e.serverBackoffUntilMs ?? 0) - Date.now()) / 1000))}s)` : ""}, first error: ${Be}; the sync record is unchanged for those files and a later sync retries them${e.pulled ? "" : "; nothing is uploaded from this store until a pull succeeds"}`,
+      `multi-store-sync[${store.mountName}]: pull failed: ${fetchesFailed} of ${filtered.length} download(s) and ${deletesFailed} of ${deletions.length} local removal(s) failed${notStarted > 0 ? `, ${notStarted} download(s) not started after the server asked sync to wait (waiting at least ${Math.max(0, Math.ceil(((store.serverBackoffUntilMs ?? 0) - Date.now()) / 1000))}s)` : ""}, first error: ${firstError}; the sync record is unchanged for those files and a later sync retries them${store.pulled ? "" : "; nothing is uploaded from this store until a pull succeeds"}`,
       {
         level: "warn",
       },
     );
-    if (P && isNonAccountStore(e)) logFeatureBad("team_memory_multistore_bulk_inflate", "fallback_failed");
-    if (e.pulled && (Ne.size > 0 || Je.length > 0)) {
-      for (let [Ae, ze] of Ne) e.remoteHashes.set(Ae, ze);
-      for (let Ae of Je) e.remoteHashes.delete(Ae);
-      await writeSyncBasis(e, n);
+    if (fellBack && isNonAccountStore(store))
+      logFeatureBad("team_memory_multistore_bulk_inflate", "fallback_failed");
+    if (store.pulled && (entriesWithoutRef.size > 0 || deletedPaths.length > 0)) {
+      for (let [path, error] of entriesWithoutRef) store.remoteHashes.set(path, error);
+      for (let path of deletedPaths) store.remoteHashes.delete(path);
+      await writeSyncBasis(store, storage);
     }
-    e.downloadsDeferred = We + nt;
+    store.downloadsDeferred = notStarted + notStartedFailures;
     return {
       success: false,
-      entriesListed: j.length,
-      shaMismatches: ie,
-      emptyRestored: Ee,
-      filesWritten: Ne.size,
-      filesDeleted: Je.length,
-      fetchesFailed: Ie,
+      entriesListed: remoteEntries.length,
+      shaMismatches,
+      emptyRestored,
+      filesWritten: entriesWithoutRef.size,
+      filesDeleted: deletedPaths.length,
+      fetchesFailed,
       permanent,
-      error: Be,
-      backedOff: Me || undefined,
+      error: firstError,
+      backedOff: backedOff || undefined,
     };
   }
-  e.downloadsDeferred = 0;
-  await handleUnusableBasis(e, localMemoryEntries.entries, Q, n, {
-    walkTrusted: localMemoryEntries.diskTrusted,
-    hold: R,
+  store.downloadsDeferred = 0;
+  await handleUnusableBasis(store, localEntries.entries, remoteByPath, storage, {
+    walkTrusted: localEntries.diskTrusted,
+    hold: rejoinOffActive,
   });
-  if (e.notices.rejoinOffNoticed.has(e.mountDir)) {
-    let Ae = basis?.held ?? new Map();
-    await runWithConcurrency([...Ae.keys()], LOCAL_IO_CONCURRENCY, async (ze) => {
-      if (await isLocallyEdited(e, ze, n)) Ae.delete(ze);
+  if (store.notices.rejoinOffNoticed.has(store.mountDir)) {
+    let path = basis?.held ?? new Map();
+    await runWithConcurrency([...path.keys()], LOCAL_IO_CONCURRENCY, async (error) => {
+      if (await isLocallyEdited(store, error, storage)) path.delete(error);
     });
   }
-  e.remoteHashes = Q;
-  e.pulled = true;
-  e.invalidatedBasis = null;
-  e.basisLoaded = true;
+  store.remoteHashes = remoteByPath;
+  store.pulled = true;
+  store.invalidatedBasis = null;
+  store.basisLoaded = true;
   if (basis !== null && basis.held.size > 0) {
-    e.heldLocal = basis.held;
-    if (!e.notices.rejoinOffNoticed.has(e.mountDir)) noticeHeldLocalFiles(e);
+    store.heldLocal = basis.held;
+    if (!store.notices.rejoinOffNoticed.has(store.mountDir)) noticeHeldLocalFiles(store);
   }
   if (basis !== null && basis.deletes.size > 0) {
-    let Ae = (e.pendingDeletes ??= new Map());
-    for (let [ze, gt] of basis.deletes) if (Q.has(ze)) Ae.set(ze, gt);
+    let path = (store.pendingDeletes ??= new Map());
+    for (let [error, statsError] of basis.deletes) if (remoteByPath.has(error)) path.set(error, statsError);
   }
   await writeSyncManifest(
-    e,
+    store,
     {
       expectPresent,
     },
-    n,
+    storage,
   ).catch((error) =>
-    logForDebugging(`multi-store-sync[${e.mountName}]: manifest write failed: ${errorMessage(error)}`, {
+    logForDebugging(`multi-store-sync[${store.mountName}]: manifest write failed: ${errorMessage(error)}`, {
       level: "warn",
     }),
   );
-  await writeSyncBasis(e, n);
-  if (we > 0) {
-    if (isNonAccountStore(e)) logFeatureOk("team_memory_multistore_concurrent_write_preserved");
-    logForDebugging(`multi-store-sync[${e.mountName}]: preserved ${we} concurrent local write(s)`, {
-      level: "info",
-    });
+  await writeSyncBasis(store, storage);
+  if (writeSkipped > 0) {
+    if (isNonAccountStore(store)) logFeatureOk("team_memory_multistore_concurrent_write_preserved");
+    logForDebugging(
+      `multi-store-sync[${store.mountName}]: preserved ${writeSkipped} concurrent local write(s)`,
+      {
+        level: "info",
+      },
+    );
   }
   return {
     success: true,
-    entriesListed: j.length,
-    shaMismatches: ie,
-    emptyRestored: Ee,
-    filesWritten: Ne.size,
-    filesDeleted: Je.length,
-    filesSkippedConcurrent: we,
-    entriesWithoutRef: count(j, (Ae) => !Q.has(Ae.path)),
-    unmarkedReceiptRefetched: he,
+    entriesListed: remoteEntries.length,
+    shaMismatches,
+    emptyRestored,
+    filesWritten: entriesWithoutRef.size,
+    filesDeleted: deletedPaths.length,
+    filesSkippedConcurrent: writeSkipped,
+    entriesWithoutRef: count(remoteEntries, (entry) => !remoteByPath.has(entry.path)),
+    unmarkedReceiptRefetched: unchangedCount,
   };
 }
 //@ chunk-s61vbvea.js:135467-139307 placement
 /**
  * 推送本地记忆变更到记忆库（并发写保留、批量膨胀保护）
  */
-async function pushStore(e, expectPresent, r) {
-  if (e.pulled || e.remoteHashes.size > 0 || (e.invalidatedBasis ?? null) !== null) return "not-attempted";
-  let backend = e.backend;
+async function pushStore(store, expectPresent, storage) {
+  if (store.pulled || store.remoteHashes.size > 0 || (store.invalidatedBasis ?? null) !== null)
+    return "not-attempted";
+  let backend = store.backend;
   if (!backend.exportAll) return "not-attempted";
   if (env.CLAUDE_CODE_DISABLE_MEMORY_BULK_INFLATE) return "not-attempted";
   if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_memory_bulk_inflate", true)) return "not-attempted";
-  if (e.rejoinWalkUntrusted === true && isUsableSuppressedReason(e.basisUnusable)) return "not-attempted";
-  let h = `multi-store-sync[${e.mountName}]`;
+  if (store.rejoinWalkUntrusted === true && isUsableSuppressedReason(store.basisUnusable))
+    return "not-attempted";
+  let logPrefix = `multi-store-sync[${store.mountName}]`;
   let source;
   try {
     source = await backend.exportAll();
   } catch (error) {
-    let we = error instanceof MemoryNotFoundError ? "not_found" : "http_error";
-    if (error instanceof MemoryNotFoundError) e.streamListUnsupported = true;
-    if (isNonAccountStore(e)) logFeatureSad("team_memory_multistore_bulk_inflate", we);
-    logForDebugging(`${h}: bulk inflate unavailable (${errorMessage(error)}) \u2014 using per-file pull`, {
-      level: "debug",
-    });
+    let failureKind = error instanceof MemoryNotFoundError ? "not_found" : "http_error";
+    if (error instanceof MemoryNotFoundError) store.streamListUnsupported = true;
+    if (isNonAccountStore(store)) logFeatureSad("team_memory_multistore_bulk_inflate", failureKind);
+    logForDebugging(
+      `${logPrefix}: bulk inflate unavailable (${errorMessage(error)}) \u2014 using per-file pull`,
+      {
+        level: "debug",
+      },
+    );
     return "fell-back";
   }
-  let S = new Map();
-  let w = new Map();
-  let R = new Map();
-  let x = new Set();
-  let P = new Set();
-  let j = new Set();
-  let G = new Set();
-  let L = 0;
-  let q = 0;
-  let Q = new Map();
-  let Z = new Map();
-  let ee = 0;
-  let ae = await pullStoreExport({
+  let remoteHashes = new Map();
+  let pathByMemoryId = new Map();
+  let entryByPath = new Map();
+  let conflictingPaths = new Set();
+  let writtenPaths = new Set();
+  let locallyEditedPaths = new Set();
+  let removedPaths = new Set();
+  let shaMismatchCount = 0;
+  let emptyRestoredCount = 0;
+  let idsByPath = new Map();
+  let shasByPath = new Map();
+  let locallyEditedCount = 0;
+  let exportResult = await pullStoreExport({
     source,
     maxConcurrentWrites: LOCAL_IO_CONCURRENCY,
     maxLineLength: MAX_BATCH_BYTES,
     maxLines: MAX_STORE_ENTRIES * 2 + 2,
     deadlineMs: SYNC_INTERVAL_MS,
-    handleMemory: async (ce) => {
-      let we = normalizePathPrefix(ce.path);
-      let ie = isMemoryDocumentKey_2(we) && !(e.excludeKey && e.excludeKey(we.replace(/^\/+/, "")));
-      w.set(ce.memoryId, ie ? we : null);
-      if (!ie) return;
-      let contentHash = computeContentHash(ce.content);
-      if (contentHash !== ce.contentSha256) L++;
-      let Ie = R.get(we);
-      if (Ie !== undefined) {
-        if (Ie.id !== ce.memoryId || Ie.sha256 !== contentHash) x.add(we);
-        let Me = Z.get(we);
-        if (Me === undefined) {
-          Me = new Set([Ie.sha256]);
-          Z.set(we, Me);
+    handleMemory: async (memory) => {
+      let memoryPath = normalizePathPrefix(memory.path);
+      let isDocKey =
+        isMemoryDocumentKey_2(memoryPath) &&
+        !(store.excludeKey && store.excludeKey(memoryPath.replace(/^\/+/, "")));
+      pathByMemoryId.set(memory.memoryId, isDocKey ? memoryPath : null);
+      if (!isDocKey) return;
+      let contentHash = computeContentHash(memory.content);
+      if (contentHash !== memory.contentSha256) shaMismatchCount++;
+      let previousEntry = entryByPath.get(memoryPath);
+      if (previousEntry !== undefined) {
+        if (previousEntry.id !== memory.memoryId || previousEntry.sha256 !== contentHash)
+          conflictingPaths.add(memoryPath);
+        let seenShas = shasByPath.get(memoryPath);
+        if (seenShas === undefined) {
+          seenShas = new Set([previousEntry.sha256]);
+          shasByPath.set(memoryPath, seenShas);
         }
-        Me.add(contentHash);
-        let We = Q.get(we);
-        if (We === undefined) {
-          We = new Set([Ie.id]);
-          Q.set(we, We);
+        seenShas.add(contentHash);
+        let seenIds = idsByPath.get(memoryPath);
+        if (seenIds === undefined) {
+          seenIds = new Set([previousEntry.id]);
+          idsByPath.set(memoryPath, seenIds);
         }
-        We.delete(ce.memoryId);
-        We.add(ce.memoryId);
+        seenIds.delete(memory.memoryId);
+        seenIds.add(memory.memoryId);
       }
-      R.set(we, {
-        id: ce.memoryId,
+      entryByPath.set(memoryPath, {
+        id: memory.memoryId,
         sha256: contentHash,
       });
       let sha256 = contentHash;
       try {
-        if (await isLocallyEdited(e, we, r)) {
-          ee++;
-          j.add(we);
-          sha256 = e.pullWritten.get(we)?.sha256 ?? Qr;
-        } else if (!(await isLocalContentEqual(e, we, ce.content, r))) {
-          if (contentHash !== EMPTY_CONTENT_SHA256 && (await isLocallyEditedFile(e, we, r))) q++;
-          if ((await writeLocalEntry(e, we, ce.content, ce.updatedAt, r)) === "dropped") return;
-          await recordPullWrite(e, we, contentHash, r);
-          P.add(we);
+        if (await isLocallyEdited(store, memoryPath, storage)) {
+          locallyEditedCount++;
+          locallyEditedPaths.add(memoryPath);
+          sha256 = store.pullWritten.get(memoryPath)?.sha256 ?? EMPTY_CONTENT_HASH;
+        } else if (!(await isLocalContentEqual(store, memoryPath, memory.content, storage))) {
+          if (contentHash !== EMPTY_CONTENT_SHA256 && (await isLocallyEditedFile(store, memoryPath, storage)))
+            emptyRestoredCount++;
+          if (
+            (await writeLocalEntry(store, memoryPath, memory.content, memory.updatedAt, storage)) ===
+            "dropped"
+          )
+            return;
+          await recordPullWrite(store, memoryPath, contentHash, storage);
+          writtenPaths.add(memoryPath);
         }
       } catch (error) {
         if (error instanceof PathTraversalError) {
-          logForDebugging(`${h}: refusing to write escaping path ${we}`, {
+          logForDebugging(`${logPrefix}: refusing to write escaping path ${memoryPath}`, {
             level: "warn",
           });
           return;
         }
         throw error;
       }
-      S.set(we, {
-        id: ce.memoryId,
+      remoteHashes.set(memoryPath, {
+        id: memory.memoryId,
         sha256,
       });
     },
   });
-  let se = async (ce) => {
+  let localDiffersFromRemote = async (remotePath) => {
     try {
-      let mountPath = await resolveMountPath(e, ce);
-      if ((await statLocalEntry(r, e, mountPath)).size > MAX_MEMORY_BYTES) return true;
-      let contentHash = computeContentHash(await readLocalEntry(r, e, mountPath));
-      let Ie = Z.get(ce);
-      if (Ie !== undefined) return !Ie.has(contentHash);
-      return R.get(ce)?.sha256 !== contentHash;
+      let mountPath = await resolveMountPath(store, remotePath);
+      if ((await statLocalEntry(storage, store, mountPath)).size > MAX_MEMORY_BYTES) return true;
+      let contentHash = computeContentHash(await readLocalEntry(storage, store, mountPath));
+      let remoteShas = shasByPath.get(remotePath);
+      if (remoteShas !== undefined) return !remoteShas.has(contentHash);
+      return entryByPath.get(remotePath)?.sha256 !== contentHash;
     } catch (error) {
       return getErrnoCode(error) !== "ENOENT";
     }
   };
-  let re = false;
-  for (let [ce, we] of S)
-    if (w.get(we.id) !== ce || x.has(ce)) {
-      P.delete(ce);
-      if (await se(ce)) {
-        let ie = Q.get(ce);
-        let Ee = ie && [...ie].findLast((Ie) => w.get(Ie) === ce);
-        if (Ee !== undefined)
-          S.set(ce, {
-            id: Ee,
-            sha256: Qr,
+  let unlinkFailed = false;
+  for (let [oldPath, oldEntry] of remoteHashes)
+    if (pathByMemoryId.get(oldEntry.id) !== oldPath || conflictingPaths.has(oldPath)) {
+      writtenPaths.delete(oldPath);
+      if (await localDiffersFromRemote(oldPath)) {
+        let idSet = idsByPath.get(oldPath);
+        let survivorId =
+          idSet && [...idSet].findLast((candidateId) => pathByMemoryId.get(candidateId) === oldPath);
+        if (survivorId !== undefined)
+          remoteHashes.set(oldPath, {
+            id: survivorId,
+            sha256: EMPTY_CONTENT_HASH,
           });
         else {
-          S.delete(ce);
-          G.add(ce);
+          remoteHashes.delete(oldPath);
+          removedPaths.add(oldPath);
         }
         continue;
       }
-      S.delete(ce);
+      remoteHashes.delete(oldPath);
       try {
-        await deleteLocalEntry(e, ce, r);
+        await deleteLocalEntry(store, oldPath, storage);
       } catch (error) {
-        logForDebugging(`${h}: failed to remove superseded ${ce} (${errorMessage(error)})`, {
+        logForDebugging(`${logPrefix}: failed to remove superseded ${oldPath} (${errorMessage(error)})`, {
           level: "warn",
         });
-        re = true;
+        unlinkFailed = true;
       }
     }
-  let size = P.size;
-  if (q > 0) noticeEmptyFilesRestored(e, q);
-  if (!ae.ok || re) {
-    let reason = ae.ok ? "dedupe_unlink_failed" : ae.reason;
-    if (isNonAccountStore(e)) logFeatureSad("team_memory_multistore_bulk_inflate", reason);
+  let size = writtenPaths.size;
+  if (emptyRestoredCount > 0) noticeEmptyFilesRestored(store, emptyRestoredCount);
+  if (!exportResult.ok || unlinkFailed) {
+    let reason = exportResult.ok ? "dedupe_unlink_failed" : exportResult.reason;
+    if (isNonAccountStore(store)) logFeatureSad("team_memory_multistore_bulk_inflate", reason);
     logForDebugging(
-      `${h}: bulk inflate incomplete (${reason}) after ${size} file(s) \u2014 using per-file pull`,
+      `${logPrefix}: bulk inflate incomplete (${reason}) after ${size} file(s) \u2014 using per-file pull`,
       {
         level: "warn",
       },
     );
     return "fell-back";
   }
-  let Se = count([...w.values()], (ce) => ce !== null);
-  if (e.basisUnusable !== undefined && e.basisUnusable !== null) {
-    let ce = null;
+  let entriesListed = count([...pathByMemoryId.values()], (mappedPath) => mappedPath !== null);
+  if (store.basisUnusable !== undefined && store.basisUnusable !== null) {
+    let localSnapshot = null;
     try {
-      ce = await collectLocalMemoryEntries(
-        e.mountDir,
-        e.excludeKey,
-        r,
-        e.v5MemoryBase,
-        e.manifestSeenThisSession,
-        e.walkHashes,
+      localSnapshot = await collectLocalMemoryEntries(
+        store.mountDir,
+        store.excludeKey,
+        storage,
+        store.v5MemoryBase,
+        store.manifestSeenThisSession,
+        store.walkHashes,
         undefined,
       );
     } catch (error) {
-      logForDebugging(`${h}: basis_unusable walk failed: ${errorMessage(error)}`, {
+      logForDebugging(`${logPrefix}: basis_unusable walk failed: ${errorMessage(error)}`, {
         level: "warn",
       });
     }
-    let we = isUsableSuppressedReason(e.basisUnusable);
-    if (we && (ce === null || (!ce.diskTrusted && !(await isMountDirEffectivelyEmpty(e, ce))))) {
+    let holdForWalk = isUsableSuppressedReason(store.basisUnusable);
+    if (
+      holdForWalk &&
+      (localSnapshot === null ||
+        (!localSnapshot.diskTrusted && !(await isMountDirEffectivelyEmpty(store, localSnapshot))))
+    ) {
       logFeatureSad("team_memory_multistore_bulk_inflate", "walk_untrusted");
-      e.rejoinWalkUntrusted = true;
+      store.rejoinWalkUntrusted = true;
       return "fell-back";
     }
-    if (ce === null) e.basisUnusable = null;
+    if (localSnapshot === null) store.basisUnusable = null;
     else
-      await handleUnusableBasis(e, ce.entries, S, r, {
-        walkTrusted: ce.diskTrusted,
-        hold: we,
+      await handleUnusableBasis(store, localSnapshot.entries, remoteHashes, storage, {
+        walkTrusted: localSnapshot.diskTrusted,
+        hold: holdForWalk,
       });
   }
-  e.remoteHashes = S;
-  e.pulled = true;
+  store.remoteHashes = remoteHashes;
+  store.pulled = true;
   await writeSyncManifest(
-    e,
+    store,
     {
       expectPresent,
     },
-    r,
+    storage,
   ).catch((error) =>
-    logForDebugging(`${h}: manifest write failed: ${errorMessage(error)}`, {
+    logForDebugging(`${logPrefix}: manifest write failed: ${errorMessage(error)}`, {
       level: "warn",
     }),
   );
-  await writeSyncBasis(e, r);
-  if (isNonAccountStore(e)) logFeatureOk("team_memory_multistore_bulk_inflate");
-  if (isNonAccountStore(e) && [...j].some((ce) => S.has(ce) || G.has(ce)))
+  await writeSyncBasis(store, storage);
+  if (isNonAccountStore(store)) logFeatureOk("team_memory_multistore_bulk_inflate");
+  if (
+    isNonAccountStore(store) &&
+    [...locallyEditedPaths].some((editedPath) => remoteHashes.has(editedPath) || removedPaths.has(editedPath))
+  )
     logFeatureOk("team_memory_multistore_concurrent_write_preserved");
   logForDebugging(
-    `${h}: bulk inflated ${size} file(s) from ${ae.memoryLines} exported memory line(s)` +
-      (L ? `, ${L} declared-sha mismatch(es)` : ""),
+    `${logPrefix}: bulk inflated ${size} file(s) from ${exportResult.memoryLines} exported memory line(s)` +
+      (shaMismatchCount ? `, ${shaMismatchCount} declared-sha mismatch(es)` : ""),
     {
       level: "info",
     },
   );
   return {
     success: true,
-    entriesListed: Se,
-    shaMismatches: L,
-    emptyRestored: q,
+    entriesListed,
+    shaMismatches: shaMismatchCount,
+    emptyRestored: emptyRestoredCount,
     filesWritten: size,
     filesDeleted: 0,
-    filesSkippedConcurrent: ee,
-    entriesWithoutRef: Math.max(0, Se - S.size),
+    filesSkippedConcurrent: locallyEditedCount,
+    entriesWithoutRef: Math.max(0, entriesListed - remoteHashes.size),
   };
 }
 //@ chunk-s61vbvea.js:139307-139326 placement
@@ -1160,19 +1213,19 @@ async function pushStore(e, expectPresent, r) {
 var MAX_UNAVAILABLE_RETRIES = 3;
 var UNAVAILABLE_WINDOW_MS = 300000;
 //@ chunk-s61vbvea.js:139326-139521 placement
-function allowConflictRefetch(e, path) {
+function allowConflictRefetch(store, path) {
   let now = Date.now();
-  let s = (e.conflictRefetches ??= new Map());
-  let h = s.get(path);
-  if (!h || now - h.windowStartMs >= UNAVAILABLE_WINDOW_MS) {
-    s.set(path, {
+  let refetches = (store.conflictRefetches ??= new Map());
+  let entry = refetches.get(path);
+  if (!entry || now - entry.windowStartMs >= UNAVAILABLE_WINDOW_MS) {
+    refetches.set(path, {
       count: 1,
       windowStartMs: now,
     });
     return true;
   }
-  if (h.count >= MAX_UNAVAILABLE_RETRIES) return false;
-  h.count++;
+  if (entry.count >= MAX_UNAVAILABLE_RETRIES) return false;
+  entry.count++;
   return true;
 }
 export {

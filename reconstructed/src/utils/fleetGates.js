@@ -44,12 +44,12 @@ function isAgentsSimpleViewEnabled() {
   );
 }
 //@ chunk-rm2h7nfx.js:737-891 placement
-async function ensureFleetGateHydrated(e = {}) {
+async function ensureFleetGateHydrated(options = {}) {
   if (mergedCommandNames() === null) {
-    let { getSettingsWithErrors } = await import("./chunk-0crvnfjy.js");
+    let { getSettingsWithErrors } = await import("./settings/settings.lazy.js");
     getSettingsWithErrors();
   }
-  if (e.kickGrowthBook !== false) initializeGrowthBook().catch(() => {});
+  if (options.kickGrowthBook !== false) initializeGrowthBook().catch(() => {});
 }
 //@ chunk-rm2h7nfx.js:891-988 placement
 function isPastSessionsExperimentEnabled() {
@@ -96,21 +96,21 @@ function bgSupervisorNounCap() {
   return capitalize(bgSupervisorNoun());
 }
 //@ chunk-rm2h7nfx.js:1465-1532 placement
-function daemonHint(e) {
-  return isDaemonCliEnabled() ? ` \u2014 run 'claude daemon ${e}'` : "";
+function daemonHint(subcommand) {
+  return isDaemonCliEnabled() ? ` \u2014 run 'claude daemon ${subcommand}'` : "";
 }
 //@ chunk-rm2h7nfx.js:1532-1714 placement
 function bgSupervisorStalledMessage() {
-  let e = `${bgSupervisorNoun()} did not respond \u2014 it may be stalled`;
-  if (!isDaemonCliEnabled()) return e;
+  let baseMessage = `${bgSupervisorNoun()} did not respond \u2014 it may be stalled`;
+  if (!isDaemonCliEnabled()) return baseMessage;
   return isDaemonServiceInstallEnabled()
-    ? `${e}${daemonHint("restart")}`
-    : `${e}${daemonHint("stop --any")} (ends background sessions)`;
+    ? `${baseMessage}${daemonHint("restart")}`
+    : `${baseMessage}${daemonHint("stop --any")} (ends background sessions)`;
 }
 //@ chunk-rm2h7nfx.js:1714-1839 placement
-function fleetGateRejected(e, t) {
-  let o = t ?? agentViewDisabledReason() ?? "is not available in this environment";
-  process.stderr.write(`'${e}' ${o}.
+function fleetGateRejected(featureName, reason) {
+  let rejectionReason = reason ?? agentViewDisabledReason() ?? "is not available in this environment";
+  process.stderr.write(`'${featureName}' ${rejectionReason}.
 `);
   process.exit(1);
 }
@@ -126,9 +126,9 @@ function isListReturnRelaunch() {
 }
 //@ chunk-rm2h7nfx.js:1951-2026 placement
 function consumeAgentViewRelaunchMarker() {
-  let e = isEnvTruthy(process.env[AGENT_VIEW_RELAUNCH_ENV_KEY]);
+  let wasSet = isEnvTruthy(process.env[AGENT_VIEW_RELAUNCH_ENV_KEY]);
   delete process.env[AGENT_VIEW_RELAUNCH_ENV_KEY];
-  return e;
+  return wasSet;
 }
 export {
   isAgentViewDisabled,

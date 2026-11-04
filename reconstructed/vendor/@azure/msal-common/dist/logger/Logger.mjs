@@ -6,17 +6,21 @@
  * attribution: esm-layout 1, esm-fingerprint 2
  */
 import { Constants } from "../../lib/index-node-DhUjlPuB.js";
+import { deferInit, runDeferredInits } from "../../../../../runtime/deferred-init.js";
 
 //@ chunk-mrx6y2r5.js:102514-102520 esm-layout
 var LogLevel;
 //@ chunk-mrx6y2r5.js:102520-102657 esm-fingerprint
-(function (LogLevel) {
-  LogLevel[(LogLevel.Error = 0)] = "Error";
-  LogLevel[(LogLevel.Warning = 1)] = "Warning";
-  LogLevel[(LogLevel.Info = 2)] = "Info";
-  LogLevel[(LogLevel.Verbose = 3)] = "Verbose";
-  LogLevel[(LogLevel.Trace = 4)] = "Trace";
-})(LogLevel || (LogLevel = {}));
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-mrx6y2r5.js:102520", () => {
+  (function (LogLevel) {
+    LogLevel[(LogLevel.Error = 0)] = "Error";
+    LogLevel[(LogLevel.Warning = 1)] = "Warning";
+    LogLevel[(LogLevel.Info = 2)] = "Info";
+    LogLevel[(LogLevel.Verbose = 3)] = "Verbose";
+    LogLevel[(LogLevel.Trace = 4)] = "Trace";
+  })(LogLevel || (LogLevel = {}));
+});
 //@ chunk-mrx6y2r5.js:102657-104712 esm-fingerprint
 class Logger {
   constructor(loggerOptions, packageName, packageVersion) {
@@ -53,8 +57,8 @@ class Logger {
   }
   logMessage(logMessage, options) {
     if (options.logLevel > this.level || (!this.piiLoggingEnabled && options.containsPii)) return;
-    let o = `${`[${new Date().toUTCString()}] : [${options.correlationId || this.correlationId || ""}]`} : ${this.packageName}@${this.packageVersion} : ${LogLevel[options.logLevel]} - ${logMessage}`;
-    this.executeCallback(options.logLevel, o, options.containsPii || false);
+    let line = `${`[${new Date().toUTCString()}] : [${options.correlationId || this.correlationId || ""}]`} : ${this.packageName}@${this.packageVersion} : ${LogLevel[options.logLevel]} - ${logMessage}`;
+    this.executeCallback(options.logLevel, line, options.containsPii || false);
   }
   executeCallback(level, message, containsPii) {
     if (this.localCallback) this.localCallback(level, message, containsPii);
@@ -133,4 +137,8 @@ class Logger {
     return this.piiLoggingEnabled || false;
   }
 }
+
+// The import cycle this module closes (2 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("vendor/@azure/msal-common/dist/logger/Logger.mjs");
 export { LogLevel, Logger };

@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:8101-10611 cjs-fingerprint
-var require_applescript = x(function (cjsExports, cjsModule) {
+var require_applescript = __commonJS(function (cjsExports, cjsModule) {
   function applescript(hljs) {
     let regex = hljs.regex;
     let STRING = hljs.inherit(hljs.QUOTE_STRING_MODE, {

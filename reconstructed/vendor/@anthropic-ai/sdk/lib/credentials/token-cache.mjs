@@ -5,10 +5,14 @@
  * pieces: chunk-3wydcdvj.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
-import { ADVISORY_REFRESH_THRESHOLD_IN_SECONDS, hMt, uIi } from "./types.mjs";
+import {
+  ADVISORY_REFRESH_THRESHOLD_IN_SECONDS,
+  MAX_FEDERATION_TOKEN_TTL_SECONDS,
+  MIN_REFRESH_MARGIN_SECONDS,
+} from "./types.mjs";
 
 //@ chunk-3wydcdvj.js:3513-3561 esm-layout
-function y() {
+function nowSeconds() {
   return Math.floor(Date.now() / 1000);
 }
 //@ chunk-3wydcdvj.js:3561-4532 esm-fingerprint
@@ -27,9 +31,9 @@ class TokenCache {
     let cached = this.cached;
     if (force || cached == null) return (await this.refresh(force)).token;
     if (cached.expiresAt == null) return cached.token;
-    let remaining = cached.expiresAt - y();
+    let remaining = cached.expiresAt - nowSeconds();
     if (remaining > ADVISORY_REFRESH_THRESHOLD_IN_SECONDS) return cached.token;
-    if (remaining > hMt) {
+    if (remaining > MAX_FEDERATION_TOKEN_TTL_SECONDS) {
       this.backgroundRefresh();
       return cached.token;
     }
@@ -45,9 +49,9 @@ class TokenCache {
   }
   backgroundRefresh() {
     if (this.pendingRefresh) return;
-    if (y() - this.lastAdvisoryError < uIi) return;
+    if (nowSeconds() - this.lastAdvisoryError < MIN_REFRESH_MARGIN_SECONDS) return;
     this.doRefresh().catch((err) => {
-      this.lastAdvisoryError = y();
+      this.lastAdvisoryError = nowSeconds();
       this.onAdvisoryRefreshError?.(err);
     });
   }
@@ -72,4 +76,4 @@ class TokenCache {
     return this.pendingRefresh;
   }
 }
-export { y, TokenCache };
+export { nowSeconds, TokenCache };

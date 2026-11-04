@@ -28,8 +28,8 @@ var WORKFLOW_SCRIPT_REF_REGEX = /^v\d+:[0-9a-f]{64}$/;
 /**
  * 判断文件名是否是给定工作流的脚本文件。
  */
-function isWorkflowScriptFileFor(e, n) {
-  return WORKFLOW_SCRIPT_FILE_REGEX.test(e) && e.endsWith(`-${n}.js`);
+function isWorkflowScriptFileFor(fileName, runId) {
+  return WORKFLOW_SCRIPT_FILE_REGEX.test(fileName) && fileName.endsWith(`-${runId}.js`);
 }
 //@ chunk-41w44bgm.js:96377-97169 placement
 /**
@@ -38,23 +38,23 @@ function isWorkflowScriptFileFor(e, n) {
 function parseJournalEntry(entry) {
   if (!isPlainObject(entry)) return;
   if (entry.type === "launched") {
-    let T = textOrUnreadable(entry.hiddenScriptSha256);
-    return T === undefined
+    let sha = textOrUnreadable(entry.hiddenScriptSha256);
+    return sha === undefined
       ? {
           type: "launched",
         }
       : {
           type: "launched",
-          hiddenScriptSha256: T,
+          hiddenScriptSha256: sha,
         };
   }
   let { key, agentId } = entry;
-  let h = entry.type === "failed" || entry.type === "result";
+  let isTerminalType = entry.type === "failed" || entry.type === "result";
   if (
     typeof key !== "string" ||
     !WORKFLOW_SCRIPT_REF_REGEX.test(key) ||
     typeof agentId !== "string" ||
-    !(isSafeIdSegment(agentId) || (h && agentId === ""))
+    !(isSafeIdSegment(agentId) || (isTerminalType && agentId === ""))
   )
     return;
   switch (entry.type) {
@@ -85,7 +85,7 @@ function parseJournalEntry(entry) {
           foreignArtifactContent: true,
         }),
         ...(Array.isArray(entry.toolsUsed) && {
-          toolsUsed: entry.toolsUsed.filter((T) => typeof T === "string"),
+          toolsUsed: entry.toolsUsed.filter((toolName) => typeof toolName === "string"),
         }),
       };
     case "failed":
@@ -112,17 +112,17 @@ function logJournalMirrorFailure(error) {
  * 创建本地文件日志，并在每次追加时把条目镜像到远程存储（失败只记录）。
  */
 function createMirroredJournal(workflowRunId, storageV5) {
-  let r = new LocalFileJournal(workflowRunId, storageV5);
+  let journal = new LocalFileJournal(workflowRunId, storageV5);
   let sessionId = getSessionId();
   return {
-    load: () => r.load(),
-    async append(T) {
-      await r.append(T);
+    load: () => journal.load(),
+    async append(entry) {
+      await journal.append(entry);
       storagePort()
         ?.mirror(
           WORKFLOW_JOURNAL,
           {
-            entry: T,
+            entry,
           },
           {
             sessionId,
@@ -139,56 +139,56 @@ function createMirroredJournal(workflowRunId, storageV5) {
  */
 var LAUNCH_MARK_APPEND_ATTEMPTS = 2;
 //@ chunk-41w44bgm.js:97420-97648 placement
-async function appendLaunchMarkOnResume(e, n) {
+async function appendLaunchMarkOnResume(journal, markEntry) {
   for (let j = 0; j < LAUNCH_MARK_APPEND_ATTEMPTS; j++) {
-    if ((await e.load()).hiddenScriptSha256 !== undefined) return;
-    await e.append(n);
+    if ((await journal.load()).hiddenScriptSha256 !== undefined) return;
+    await journal.append(markEntry);
   }
-  if ((await e.load()).hiddenScriptSha256 === undefined)
+  if ((await journal.load()).hiddenScriptSha256 === undefined)
     throw Error("the journal holds no mark after it was written");
 }
 //@ chunk-41w44bgm.js:97648-98035 placement
 /**
  * 打开带隐藏脚本哈希标记的 journal：写入 launched 标记（恢复时确保只写一次），首个标记镜像成功后，后续追加也镜像到会话存储。
  */
-async function openHiddenScriptJournal(e) {
-  let { runId } = e;
-  let r = {
+async function openHiddenScriptJournal(options) {
+  let { runId } = options;
+  let markEntry = {
     type: "launched",
-    hiddenScriptSha256: e.hiddenScriptSha256,
+    hiddenScriptSha256: options.hiddenScriptSha256,
   };
-  let h = new LocalFileJournal(runId, e.storageV5);
-  let T = {
+  let journal = new LocalFileJournal(runId, options.storageV5);
+  let mirrorScope = {
     sessionId: getSessionId(),
     agentId: runId,
   };
-  await (e.isResume ? appendLaunchMarkOnResume(h, r) : h.append(r));
-  let y =
+  await (options.isResume ? appendLaunchMarkOnResume(journal, markEntry) : journal.append(markEntry));
+  let firstMirror =
     storagePort()
       ?.mirror(
         WORKFLOW_JOURNAL,
         {
-          entry: r,
+          entry: markEntry,
         },
-        T,
+        mirrorScope,
       )
       .catch((error) => {
         logJournalMirrorFailure(error);
         return false;
       }) ?? Promise.resolve(false);
   return {
-    load: () => h.load(),
-    async append(A) {
-      await h.append(A);
-      y.then((L) => {
-        if (L)
+    load: () => journal.load(),
+    async append(entry) {
+      await journal.append(entry);
+      firstMirror.then((mirrored) => {
+        if (mirrored)
           storagePort()
             ?.mirror(
               WORKFLOW_JOURNAL,
               {
-                entry: A,
+                entry,
               },
-              T,
+              mirrorScope,
             )
             .catch(logJournalMirrorFailure);
       });

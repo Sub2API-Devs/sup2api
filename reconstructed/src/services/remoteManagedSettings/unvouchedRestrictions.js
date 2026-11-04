@@ -18,11 +18,11 @@ import {
   SEC_DEFAULT_PLUGIN_ID,
   policyModOptions,
 } from "../../utils/settings/managedRestrictionKeys.js";
-import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { isPlainObject as isPlainObject_2 } from "../../utils/isPlainObject.js";
 import { PATH_RULE_CARVE_OUT_RE } from "../../utils/settings/permissionRuleCarveOut.js";
 import { coerceBooleanString } from "../../utils/spellcheck.js";
-import { skillOverridesSchema } from "../../utils/settings/types.js";
+import { SKILL_OVERRIDE_COMPONENTS } from "../../utils/settings/types.js";
 import {
   collectManagedRestrictions,
   summarizePermissionRules,
@@ -36,8 +36,12 @@ import { isDiskless } from "../../bootstrap/state.js";
 /**
  * 判断文档是否含需收窄的限制设置（有托管设置、非空且收窄后与原文不同）。
  */
-function isRestrictedUnvouchedDocument(e) {
-  return hasManagedSettings() && Object.keys(e).length > 0 && En(extractRestrictionSettings(e), e);
+function isRestrictedUnvouchedDocument(settings) {
+  return (
+    hasManagedSettings() &&
+    Object.keys(settings).length > 0 &&
+    import_sortedIndex_2(extractRestrictionSettings(settings), settings)
+  );
 }
 //@ chunk-dcmhvw5a.js:400199-400399 placement
 var LOOSENING_SETTING_PATHS = [
@@ -59,66 +63,66 @@ var CREDENTIAL_LIST_PATHS = [
 /**
  * 对未担保的设置文档只保留限制性设置（deny 化、清除放宽项）。
  */
-function stripUnvouchedRestrictions(e) {
-  for (let r of LOOSENING_SETTING_PATHS) setAtPath(e, r, undefined);
+function stripUnvouchedRestrictions(settings) {
+  for (let path of LOOSENING_SETTING_PATHS) setAtPath(settings, path, undefined);
   for (let { path, names } of CREDENTIAL_LIST_PATHS) {
-    let atPath = getAtPath(e, path);
-    let flattened = (Array.isArray(atPath) ? atPath : [atPath]).flatMap((g) =>
-      isPlainObject_2(g) && typeof g[names] === "string"
+    let atPath = getAtPath(settings, path);
+    let flattened = (Array.isArray(atPath) ? atPath : [atPath]).flatMap((entry) =>
+      isPlainObject_2(entry) && typeof entry[names] === "string"
         ? [
             {
-              [names]: g[names],
+              [names]: entry[names],
               mode: "deny",
             },
           ]
         : [],
     );
-    setAtPath(e, path, flattened.length > 0 ? flattened : undefined);
+    setAtPath(settings, path, flattened.length > 0 ? flattened : undefined);
   }
-  for (let r of [
+  for (let path of [
     ["permissions", "deny"],
     ["permissions", "ask"],
   ]) {
-    let atPath = getAtPath(e, r);
+    let atPath = getAtPath(settings, path);
     if (Array.isArray(atPath)) {
-      let filtered = atPath.filter((c) => typeof c !== "string" || !PATH_RULE_CARVE_OUT_RE.test(c));
-      setAtPath(e, r, filtered);
+      let filtered = atPath.filter((rule) => typeof rule !== "string" || !PATH_RULE_CARVE_OUT_RE.test(rule));
+      setAtPath(settings, path, filtered);
     }
   }
   for (let { path, restrictive } of MANAGED_RESTRICTION_KEYS()) {
-    let atPath = getAtPath(e, path);
-    let c = path[0] === "strictPluginOnlyCustomization" ? atPath : coerceBooleanString(atPath);
-    if (restrictive === true && c === false) setAtPath(e, path, undefined);
+    let atPath = getAtPath(settings, path);
+    let value = path[0] === "strictPluginOnlyCustomization" ? atPath : coerceBooleanString(atPath);
+    if (restrictive === true && value === false) setAtPath(settings, path, undefined);
   }
-  let strictPluginOnlyCustomization = e.strictPluginOnlyCustomization;
+  let strictPluginOnlyCustomization = settings.strictPluginOnlyCustomization;
   if (
     Array.isArray(strictPluginOnlyCustomization) &&
-    !strictPluginOnlyCustomization.some((r) => skillOverridesSchema.includes(r))
+    !strictPluginOnlyCustomization.some((component) => SKILL_OVERRIDE_COMPONENTS.includes(component))
   )
-    delete e.strictPluginOnlyCustomization;
-  if (e.availableModelsMatch === "prefix") delete e.availableModelsMatch;
+    delete settings.strictPluginOnlyCustomization;
+  if (settings.availableModelsMatch === "prefix") delete settings.availableModelsMatch;
 }
 //@ chunk-dcmhvw5a.js:401104-401583 placement
-function restrictionsOfUnvouchedDocument(e) {
-  let n = {
-    ...collectManagedRestrictions(e),
+function restrictionsOfUnvouchedDocument(settings) {
+  let restricted = {
+    ...collectManagedRestrictions(settings),
   };
-  stripUnvouchedRestrictions(n);
-  if (e.parentSettingsBehavior === "merge") n.parentSettingsBehavior = "merge";
+  stripUnvouchedRestrictions(restricted);
+  if (settings.parentSettingsBehavior === "merge") restricted.parentSettingsBehavior = "merge";
   let options = Object.fromEntries(
-    [...SEC_DEFAULT_PLUGIN_IDS, SEC_DEFAULT_PLUGIN_ID].flatMap((c) =>
-      Object.entries(e.pluginConfigs?.[c]?.options ?? {}),
+    [...SEC_DEFAULT_PLUGIN_IDS, SEC_DEFAULT_PLUGIN_ID].flatMap((pluginId) =>
+      Object.entries(settings.pluginConfigs?.[pluginId]?.options ?? {}),
     ),
   );
-  let s = policyModOptions({
+  let pluginConfigs = policyModOptions({
     pluginConfigs: {
       [SEC_DEFAULT_PLUGIN_ID]: {
         options,
       },
     },
   });
-  if (s !== undefined) n.pluginConfigs = s;
-  let filtered = Object.entries(e.enabledPlugins ?? {}).filter(
+  if (pluginConfigs !== undefined) restricted.pluginConfigs = pluginConfigs;
+  let filtered = Object.entries(settings.enabledPlugins ?? {}).filter(
     ([key, value]) =>
       value === false &&
       !(
@@ -126,9 +130,9 @@ function restrictionsOfUnvouchedDocument(e) {
       ),
   );
   return filtered.length === 0
-    ? n
+    ? restricted
     : {
-        ...n,
+        ...restricted,
         enabledPlugins: Object.fromEntries(filtered),
       };
 }
@@ -136,27 +140,28 @@ function restrictionsOfUnvouchedDocument(e) {
 /**
  * 计算未担保设置文档中可采用的限制部分。
  */
-function restrictionsOfUnvouchedDocumentUnsafe(e) {
-  if (!e || !isSnapshotOnlySession()) return e;
-  let n = {
-    ...collectManagedRestrictions(e),
+function restrictionsOfUnvouchedDocumentUnsafe(settings) {
+  if (!settings || !isSnapshotOnlySession()) return settings;
+  let restricted = {
+    ...collectManagedRestrictions(settings),
   };
   if (isDiskless()) {
-    stripUnvouchedRestrictions(n);
-    if (e.fastMode === false) n.fastMode = false;
-    if (e.fastModePerSessionOptIn === true) n.fastModePerSessionOptIn = true;
-    let flattened = Object.entries(isPlainObject_2(e.skillOverrides) ? e.skillOverrides : {}).flatMap(
-      ([key, value]) => (value === "off" ? [[key, "off"]] : []),
-    );
-    if (flattened.length > 0) n.skillOverrides = Object.fromEntries(flattened);
-    if (e === currentRemoteSettingsState_2().verifiedPayload) {
-      if (typeof e.claudeMd === "string" && e.claudeMd !== "") n.claudeMd = e.claudeMd;
-      for (let [key, value] of Object.entries(summarizePermissionRules(e.autoMode).lists))
-        setAtPath(n, ["autoMode", key], value);
+    stripUnvouchedRestrictions(restricted);
+    if (settings.fastMode === false) restricted.fastMode = false;
+    if (settings.fastModePerSessionOptIn === true) restricted.fastModePerSessionOptIn = true;
+    let flattened = Object.entries(
+      isPlainObject_2(settings.skillOverrides) ? settings.skillOverrides : {},
+    ).flatMap(([key, value]) => (value === "off" ? [[key, "off"]] : []));
+    if (flattened.length > 0) restricted.skillOverrides = Object.fromEntries(flattened);
+    if (settings === currentRemoteSettingsState_2().verifiedPayload) {
+      if (typeof settings.claudeMd === "string" && settings.claudeMd !== "")
+        restricted.claudeMd = settings.claudeMd;
+      for (let [key, value] of Object.entries(summarizePermissionRules(settings.autoMode).lists))
+        setAtPath(restricted, ["autoMode", key], value);
     }
   }
   return {
-    ...n,
+    ...restricted,
     managedSourcesBehavior: "merge",
   };
 }

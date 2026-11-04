@@ -5,12 +5,12 @@
  * pieces: chunk-82d8c88w.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_sign_stream } from "./lib/sign-stream.js";
 import { require_verify_stream } from "./lib/verify-stream.js";
 
 //@ chunk-82d8c88w.js:10995-11321 cjs-fingerprint
-var require_jws = x(function (cjsExports) {
+var require_jws = __commonJS(function (cjsExports) {
   var SignStream = require_sign_stream();
   var VerifyStream = require_verify_stream();
   var ALGORITHMS = [

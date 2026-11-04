@@ -24,75 +24,111 @@ import { decodeBase58Uuid } from "../../utils/messages.js";
 import { OUTPUT_SIZE_LIMITS } from "../../constants/outputLimits.js";
 import { antEnv } from "../../utils/env.js";
 import { getArtifactHostOverride, claudeAiEnvironment } from "../../constants/claudeAiOrigin.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-yxnffbzs.js:16505-16680 placement
 /**
  * base58 UUID 编码常量与正则。
  */
-var BASE58_RADIX = 58n;
-var UUID_MAX = (1n << 128n) - 1n;
-var BASE58_UUID_LENGTH = 22;
-var BASE58_UUID_PATTERN = "[1-9A-HJ-NP-Za-km-z]{22}";
-var regExp_3_2 = new RegExp("^[1-9A-HJ-NP-Za-km-z]{22}$");
-var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+var BASE58_RADIX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var UUID_MAX;
+var BASE58_UUID_LENGTH;
+var BASE58_UUID_PATTERN;
+var regExp_3_2;
+var UUID_RE;
+deferInit("chunk-yxnffbzs.js:16505", () => {
+  BASE58_RADIX = 58n;
+  UUID_MAX = (1n << 128n) - 1n;
+  BASE58_UUID_LENGTH = 22;
+  BASE58_UUID_PATTERN = "[1-9A-HJ-NP-Za-km-z]{22}";
+  regExp_3_2 = new RegExp("^[1-9A-HJ-NP-Za-km-z]{22}$");
+  UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+});
 //@ chunk-yxnffbzs.js:16680-16881 placement
 /**
  * 把 UUID 编码为 22 位 base58。
  */
 function encodeUuidBase58(slug) {
   if (!UUID_RE.test(slug)) return null;
-  let n = BigInt(`0x${slug.replaceAll("-", "")}`);
-  let r = "";
+  let value = BigInt(`0x${slug.replaceAll("-", "")}`);
+  let out = "";
   for (let idx = 0; idx < 22; idx++) {
-    r = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"[Number(n % BASE58_RADIX)] + r;
-    n /= BASE58_RADIX;
+    out = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"[Number(value % BASE58_RADIX)] + out;
+    value /= BASE58_RADIX;
   }
-  return r;
+  return out;
 }
 //@ chunk-yxnffbzs.js:17183-18578 placement
 /**
  * Artifact 工具名与各类拒绝/提示文案前缀（必须给 file_path、冲突拒绝、策略来源等）。
  */
-var ARTIFACT_TOOL_NAME = "Artifact";
-var QUICKSTART_INTENTS = ["document", "slides", "design", "other"];
-var ARTIFACT_COMMENTS_TOOL_NAME = "ArtifactComments";
-var ARTIFACT_DATA_TOOL_NAME = "ArtifactData";
-var ARTIFACT_CHECK_TOOL_NAME = "ArtifactCheck";
-var ARTIFACT_FAMILY_TOOL_NAMES = [
-  ARTIFACT_TOOL_NAME,
-  ARTIFACT_COMMENTS_TOOL_NAME,
-  ARTIFACT_DATA_TOOL_NAME,
-  ARTIFACT_CHECK_TOOL_NAME,
-];
-var ASSET_ID_RE = /^[0-9a-f]{32}$/;
-var ARTIFACT_RULE_CONTENT_FIELD = "file_path";
-var ARTIFACT_READ_INPUT_FIELDS = ["action", "url", "prompt"];
-var ARTIFACT_READ_GATED_INPUT_FIELDS = ["page", "version"];
-var DEFAULT_ARTIFACT_READ_PROMPT =
-  "Describe what this page contains and reproduce its substantive text content, structure, and any data it presents.";
-var STALE_GUARD_CONTENT_HEADER_SUFFIX = " \u2014 live version; raw HTML follows]";
-var STALE_GUARD_REJECTION_PREFIX =
-  "You hadn't viewed the live version of this artifact, so the publish was refused.";
-var STALE_GUARD_REJECTION_PREFIX_LEGACY =
-  "This session hadn't viewed the live version of this artifact, so the publish was refused.";
-var STALE_GUARD_CONTENT_HEADER = (e) => `[Artifact ${e}${STALE_GUARD_CONTENT_HEADER_SUFFIX}`;
-var STALE_GUARD_DIFF_HEADER_SUFFIX =
-  " \u2014 live version; a line diff against the content you sent follows]";
-var STALE_GUARD_DIFF_HEADER = (e) => `[Artifact ${e}${STALE_GUARD_DIFF_HEADER_SUFFIX}`;
-var STALE_GUARD_CONTENT_HEADER_LINE_RE = new RegExp(
-  `\\n\\[Artifact [\\w-]{1,64}(?:${urlPatternToRegex(STALE_GUARD_CONTENT_HEADER_SUFFIX)}|${urlPatternToRegex(STALE_GUARD_DIFF_HEADER_SUFFIX)})\\n`,
-);
-var HANDOVER_SAVED_SOURCE_LEAD = "Its full source (";
-var HANDOVER_INLINE_REMEDY_LEAD = "Merge your edits onto it";
-var HANDOVER_DETAILS_START_RE = new RegExp(
-  `\\n(?=\\[Artifact [\\w-]{1,64}(?:${urlPatternToRegex(STALE_GUARD_CONTENT_HEADER_SUFFIX)}|${urlPatternToRegex(STALE_GUARD_DIFF_HEADER_SUFFIX)})\\n|${urlPatternToRegex(HANDOVER_SAVED_SOURCE_LEAD)}|${urlPatternToRegex(HANDOVER_INLINE_REMEDY_LEAD)})`,
-);
-var CONFLICT_REJECTION_PREFIX = "Publish refused \u2014 nothing was merged or published:";
-var NO_PAGE_SHORT_REJECTION =
-  "file_path required to publish. Write the page to an .html file, then call again with its path as `file_path`";
-var NO_PAGE_REJECTION_TYPES_ON = `${NO_PAGE_SHORT_REJECTION}, or pass \`type_url\` to start a new Artifact from a type. There is no inline content parameter.`;
-var NO_PAGE_REJECTION_TYPES_OFF = `${NO_PAGE_SHORT_REJECTION}. There is no inline content parameter, and creating an Artifact from a type is not available in this session, so build the page yourself.`;
-var NO_PAGE_REJECTIONS = [NO_PAGE_REJECTION_TYPES_ON, NO_PAGE_REJECTION_TYPES_OFF];
+var ARTIFACT_TOOL_NAME; // deferred: uses urlPatternToRegex (../../utils/stringUtils.js) of its import cycle while loading; runs once the cycle is complete
+var QUICKSTART_INTENTS;
+var ARTIFACT_COMMENTS_TOOL_NAME;
+var ARTIFACT_DATA_TOOL_NAME;
+var ARTIFACT_CHECK_TOOL_NAME;
+var ARTIFACT_FAMILY_TOOL_NAMES;
+var ASSET_ID_RE;
+var ARTIFACT_RULE_CONTENT_FIELD;
+var ARTIFACT_READ_INPUT_FIELDS;
+var ARTIFACT_READ_GATED_INPUT_FIELDS;
+var DEFAULT_ARTIFACT_READ_PROMPT;
+var STALE_GUARD_CONTENT_HEADER_SUFFIX;
+var STALE_GUARD_REJECTION_PREFIX;
+var STALE_GUARD_REJECTION_PREFIX_LEGACY;
+var STALE_GUARD_CONTENT_HEADER;
+var STALE_GUARD_DIFF_HEADER_SUFFIX;
+var STALE_GUARD_DIFF_HEADER;
+var STALE_GUARD_CONTENT_HEADER_LINE_RE;
+var HANDOVER_SAVED_SOURCE_LEAD;
+var HANDOVER_INLINE_REMEDY_LEAD;
+var HANDOVER_DETAILS_START_RE;
+var CONFLICT_REJECTION_PREFIX;
+var NO_PAGE_SHORT_REJECTION;
+var NO_PAGE_REJECTION_TYPES_ON;
+var NO_PAGE_REJECTION_TYPES_OFF;
+var NO_PAGE_REJECTIONS;
+deferInit("chunk-yxnffbzs.js:17183", () => {
+  ARTIFACT_TOOL_NAME = "Artifact";
+  QUICKSTART_INTENTS = ["document", "slides", "design", "other"];
+  ARTIFACT_COMMENTS_TOOL_NAME = "ArtifactComments";
+  ARTIFACT_DATA_TOOL_NAME = "ArtifactData";
+  ARTIFACT_CHECK_TOOL_NAME = "ArtifactCheck";
+  ARTIFACT_FAMILY_TOOL_NAMES = [
+    ARTIFACT_TOOL_NAME,
+    ARTIFACT_COMMENTS_TOOL_NAME,
+    ARTIFACT_DATA_TOOL_NAME,
+    ARTIFACT_CHECK_TOOL_NAME,
+  ];
+  ASSET_ID_RE = /^[0-9a-f]{32}$/;
+  ARTIFACT_RULE_CONTENT_FIELD = "file_path";
+  ARTIFACT_READ_INPUT_FIELDS = ["action", "url", "prompt"];
+  ARTIFACT_READ_GATED_INPUT_FIELDS = ["page", "version"];
+  DEFAULT_ARTIFACT_READ_PROMPT =
+    "Describe what this page contains and reproduce its substantive text content, structure, and any data it presents.";
+  STALE_GUARD_CONTENT_HEADER_SUFFIX = " \u2014 live version; raw HTML follows]";
+  STALE_GUARD_REJECTION_PREFIX =
+    "You hadn't viewed the live version of this artifact, so the publish was refused.";
+  STALE_GUARD_REJECTION_PREFIX_LEGACY =
+    "This session hadn't viewed the live version of this artifact, so the publish was refused.";
+  STALE_GUARD_CONTENT_HEADER = (slug) => `[Artifact ${slug}${STALE_GUARD_CONTENT_HEADER_SUFFIX}`;
+  STALE_GUARD_DIFF_HEADER_SUFFIX = " \u2014 live version; a line diff against the content you sent follows]";
+  STALE_GUARD_DIFF_HEADER = (slug) => `[Artifact ${slug}${STALE_GUARD_DIFF_HEADER_SUFFIX}`;
+  STALE_GUARD_CONTENT_HEADER_LINE_RE = new RegExp(
+    `\\n\\[Artifact [\\w-]{1,64}(?:${urlPatternToRegex(STALE_GUARD_CONTENT_HEADER_SUFFIX)}|${urlPatternToRegex(STALE_GUARD_DIFF_HEADER_SUFFIX)})\\n`,
+  );
+  HANDOVER_SAVED_SOURCE_LEAD = "Its full source (";
+  HANDOVER_INLINE_REMEDY_LEAD = "Merge your edits onto it";
+  HANDOVER_DETAILS_START_RE = new RegExp(
+    `\\n(?=\\[Artifact [\\w-]{1,64}(?:${urlPatternToRegex(STALE_GUARD_CONTENT_HEADER_SUFFIX)}|${urlPatternToRegex(STALE_GUARD_DIFF_HEADER_SUFFIX)})\\n|${urlPatternToRegex(HANDOVER_SAVED_SOURCE_LEAD)}|${urlPatternToRegex(HANDOVER_INLINE_REMEDY_LEAD)})`,
+  );
+  CONFLICT_REJECTION_PREFIX = "Publish refused \u2014 nothing was merged or published:";
+  NO_PAGE_SHORT_REJECTION =
+    "file_path required to publish. Write the page to an .html file, then call again with its path as `file_path`";
+  NO_PAGE_REJECTION_TYPES_ON = `${NO_PAGE_SHORT_REJECTION}, or pass \`type_url\` to start a new Artifact from a type. There is no inline content parameter.`;
+  NO_PAGE_REJECTION_TYPES_OFF = `${NO_PAGE_SHORT_REJECTION}. There is no inline content parameter, and creating an Artifact from a type is not available in this session, so build the page yourself.`;
+  NO_PAGE_REJECTIONS = [NO_PAGE_REJECTION_TYPES_ON, NO_PAGE_REJECTION_TYPES_OFF];
+});
 //@ chunk-yxnffbzs.js:18578-18659 placement
 function artifactLinkShapeHint() {
   return isCobaltGateOn() ? "\u2026/artifact/<id>" : "\u2026/code/artifact/<uuid>";
@@ -116,12 +152,12 @@ var ARTIFACT_LOGIN_BEFORE_SHAPE_NOTE =
 var ARTIFACT_LOGIN_PROXIED_MESSAGE = `${ARTIFACT_LOGIN_MESSAGE_LEAD}, and this remote session authenticates through the machine that launched it, which is not signed in to claude.ai. Sign in to claude.ai on that machine (/login, "Claude account with subscription"), then reconnect this session.`;
 var ARTIFACT_LOGIN_HOST_MANAGED_MESSAGE = `${ARTIFACT_LOGIN_MESSAGE_LEAD}, but this session authenticates with a credential injected by its host environment, which takes precedence and cannot be changed here. Start a session that is signed in to claude.ai to publish or read artifacts.`;
 //@ chunk-yxnffbzs.js:19926-20283 placement
-function artifactLoginEnvQuadMessage(e) {
-  return `${ARTIFACT_LOGIN_MESSAGE_LEAD}. This session's API access is set up by ${e ? "your organization's managed settings" : "the ANTHROPIC_FEDERATION_RULE_ID / ANTHROPIC_ORGANIZATION_ID environment variables"}, which stays active for everything else \u2014 artifacts also use a claude.ai account. Run /login and select "Claude account with subscription", then retry.`;
+function artifactLoginEnvQuadMessage(managed) {
+  return `${ARTIFACT_LOGIN_MESSAGE_LEAD}. This session's API access is set up by ${managed ? "your organization's managed settings" : "the ANTHROPIC_FEDERATION_RULE_ID / ANTHROPIC_ORGANIZATION_ID environment variables"}, which stays active for everything else \u2014 artifacts also use a claude.ai account. Run /login and select "Claude account with subscription", then retry.`;
 }
 //@ chunk-yxnffbzs.js:20283-21379 placement
-function artifactPolicyBlockedMessage(e) {
-  switch (e) {
+function artifactPolicyBlockedMessage(cause) {
+  switch (cause) {
     case "org_policy_unverifiable":
       return "Artifacts can't check the signed-in Claude account's organization settings from this session: the account belongs to a Claude organization (Team or Enterprise), and this session's API access uses a different credential that can't read those settings. Run /login with a personal Claude account (Pro or Max), then retry.";
     case "plan_unreadable":
@@ -144,8 +180,8 @@ function artifactPolicyBlockedMessage(e) {
   }
 }
 //@ chunk-yxnffbzs.js:21379-21641 placement
-function artifactPolicyBlockedRemedy(e) {
-  switch (e) {
+function artifactPolicyBlockedRemedy(cause) {
+  switch (cause) {
     case "plan_unreadable":
       return authExpiredBlock();
     case "org_denied":
@@ -153,7 +189,7 @@ function artifactPolicyBlockedRemedy(e) {
       return {
         kind: "policy_denied",
         feature: "artifacts",
-        policy_kind: e,
+        policy_kind: cause,
       };
     case "org_policy_unverifiable":
     case "cache_miss":
@@ -163,10 +199,10 @@ function artifactPolicyBlockedRemedy(e) {
   }
 }
 //@ chunk-yxnffbzs.js:21641-21873 placement
-function artifactPolicyUnobtainedMessage(e) {
-  if (isCoworkOauthNotAllowed(e))
+function artifactPolicyUnobtainedMessage(unobtained) {
+  if (isCoworkOauthNotAllowed(unobtained))
     return "Artifacts aren't available: Anthropic couldn't confirm your organization's settings for this cloud session (HTTP 403). This isn't a problem with your network.";
-  return policyUnavailableMessage("Artifacts", "are", e.outcome);
+  return policyUnavailableMessage("Artifacts", "are", unobtained.outcome);
 }
 //@ chunk-yxnffbzs.js:21873-22023 placement
 function isCoworkOauthNotAllowed({ cause, outcome }) {
@@ -201,73 +237,94 @@ var ARTIFACT_POLICY_LOADING_NOTE =
 var POLICY_ROUTE_NOT_FORWARDED_NOTE =
   ", and a proxy or gateway that does not forward that path will keep answering 404, so nothing in this session can load it. Do not retry this call. Tell the user that their IT admin needs to let that address through to the API.";
 //@ chunk-yxnffbzs.js:22684-23173 placement
-function artifactPolicyUnobtainedNote(e) {
-  let n = policySourceAddress(e.outcome.host);
-  if (isCoworkOauthNotAllowed(e))
-    return `Claude Code reads the organization's policy from ${n}. In this cloud session, Anthropic's API refused the request for the user's organization (HTTP 403). Do not retry this call now. Tell the user that artifacts are unavailable because Anthropic couldn't confirm their organization's settings for this cloud session, and that it isn't a problem with their network.`;
-  let r = e.cause === "policy_route_missing" ? POLICY_ROUTE_NOT_FORWARDED_NOTE : ARTIFACT_POLICY_LOADING_NOTE;
-  return `${POLICY_READ_FROM_PREFIX}${n}${r}`;
+function artifactPolicyUnobtainedNote(unobtained) {
+  let address = policySourceAddress(unobtained.outcome.host);
+  if (isCoworkOauthNotAllowed(unobtained))
+    return `Claude Code reads the organization's policy from ${address}. In this cloud session, Anthropic's API refused the request for the user's organization (HTTP 403). Do not retry this call now. Tell the user that artifacts are unavailable because Anthropic couldn't confirm their organization's settings for this cloud session, and that it isn't a problem with their network.`;
+  let note =
+    unobtained.cause === "policy_route_missing"
+      ? POLICY_ROUTE_NOT_FORWARDED_NOTE
+      : ARTIFACT_POLICY_LOADING_NOTE;
+  return `${POLICY_READ_FROM_PREFIX}${address}${note}`;
 }
 //@ chunk-yxnffbzs.js:23173-23218 placement
-function artifactPolicyUnobtainedRefusal(e) {
-  return `${artifactPolicyUnobtainedMessage(e)}
+function artifactPolicyUnobtainedRefusal(unobtained) {
+  return `${artifactPolicyUnobtainedMessage(unobtained)}
 
-${artifactPolicyUnobtainedNote(e)}`;
+${artifactPolicyUnobtainedNote(unobtained)}`;
 }
 //@ chunk-yxnffbzs.js:23218-23415 placement
-function artifactLoginBlockedByCredentialMessage(source, n) {
-  return `${ARTIFACT_LOGIN_MESSAGE_LEAD}, and this session is authenticating with ${source}, which takes precedence over a claude.ai account. ${n} Then run /login and select "Claude account with subscription".`;
+function artifactLoginBlockedByCredentialMessage(source, remedy) {
+  return `${ARTIFACT_LOGIN_MESSAGE_LEAD}, and this session is authenticating with ${source}, which takes precedence over a claude.ai account. ${remedy} Then run /login and select "Claude account with subscription".`;
 }
 //@ chunk-yxnffbzs.js:23415-23577 placement
 class ArtifactInputError extends Error {
   reasonCode;
   maxErrorChars;
-  constructor(message, reasonCode, r) {
+  constructor(message, reasonCode, options) {
     super(message);
     this.name = "ArtifactInputError";
     this.reasonCode = reasonCode;
-    this.maxErrorChars = r?.maxErrorChars;
+    this.maxErrorChars = options?.maxErrorChars;
   }
 }
 //@ chunk-yxnffbzs.js:23577-23845 placement
 /**
  * Artifact 地址正则片段：UUID、claude.ai 来源、查看器路径前缀、Artifact id，以及查看器 URL 与其子路径的匹配模式。
  */
-var UUID_PATTERN = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
-var CLAUDE_AI_ORIGIN_PATTERN = "https://(?:[a-z0-9-]+\\.)?claude\\.ai";
-var VIEWER_PREFIX_RE = "/(?:artifact|code/(?:artifact|frame))/";
-var ARTIFACT_ID_PATTERN = `${UUID_PATTERN}|${BASE58_UUID_PATTERN}`;
-var VIEWER_URL_PATTERN = `${VIEWER_PREFIX_RE}(?:([A-Za-z0-9_-]*)-)?(${ARTIFACT_ID_PATTERN})(?:[/?#]|$)`;
-var VIEWER_SUBPATH_PATTERN = `${VIEWER_PREFIX_RE}(?:[A-Za-z0-9_-]*-)?(?:${ARTIFACT_ID_PATTERN})/([^?#]+)`;
+var UUID_PATTERN; // deferred: uses BASE58_RADIX of its import cycle while loading; runs once the cycle is complete
+var CLAUDE_AI_ORIGIN_PATTERN;
+var VIEWER_PREFIX_RE;
+var ARTIFACT_ID_PATTERN;
+var VIEWER_URL_PATTERN;
+var VIEWER_SUBPATH_PATTERN;
+deferInit("chunk-yxnffbzs.js:23577", () => {
+  UUID_PATTERN = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+  CLAUDE_AI_ORIGIN_PATTERN = "https://(?:[a-z0-9-]+\\.)?claude\\.ai";
+  VIEWER_PREFIX_RE = "/(?:artifact|code/(?:artifact|frame))/";
+  ARTIFACT_ID_PATTERN = `${UUID_PATTERN}|${BASE58_UUID_PATTERN}`;
+  VIEWER_URL_PATTERN = `${VIEWER_PREFIX_RE}(?:([A-Za-z0-9_-]*)-)?(${ARTIFACT_ID_PATTERN})(?:[/?#]|$)`;
+  VIEWER_SUBPATH_PATTERN = `${VIEWER_PREFIX_RE}(?:[A-Za-z0-9_-]*-)?(?:${ARTIFACT_ID_PATTERN})/([^?#]+)`;
+});
 //@ chunk-yxnffbzs.js:23845-23937 placement
 /**
  * base58 长度的 artifact id 需要解码，其余原样返回。
  */
-function decodeShortArtifactId(e, n = false) {
-  if (e === undefined) return null;
-  if (e.length !== BASE58_UUID_LENGTH) return e;
-  return n ? null : decodeBase58Uuid(e);
+function decodeShortArtifactId(id, keepShort = false) {
+  if (id === undefined) return null;
+  if (id.length !== BASE58_UUID_LENGTH) return id;
+  return keepShort ? null : decodeBase58Uuid(id);
 }
 //@ chunk-yxnffbzs.js:23937-23990 placement
 /**
  * 短 id 时返回 {shortId: true} 标记。
  */
-function shortIdFlag(e) {
-  return e?.length === BASE58_UUID_LENGTH
+function shortIdFlag(id) {
+  return id?.length === BASE58_UUID_LENGTH
     ? {
         shortId: true,
       }
     : {};
 }
 //@ chunk-yxnffbzs.js:23990-24110 placement
-var ARTIFACT_SLUG_RE = new RegExp(`^${UUID_PATTERN}$`);
-var ARTIFACT_VERSION_SAFE_RE = /^[\w-]{1,64}$/;
-var MAX_LISTED_FILES_SHOWN = 1024;
-var ARTIFACT_MAX_RESULT_SIZE_CHARS = 16000;
-var ARTIFACT_PAGE_INLINE_RESULT_CAP = OUTPUT_SIZE_LIMITS;
-var ARTIFACT_FILE_INLINE_RESULT_CAP = 20000;
-var ARTIFACT_DB_READ_MAX_RESULT_SIZE_CHARS = 300000;
-var ARTIFACT_STUB_URL_PREFIX = "eval-stub://artifact/";
+var ARTIFACT_SLUG_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ARTIFACT_VERSION_SAFE_RE;
+var MAX_LISTED_FILES_SHOWN;
+var ARTIFACT_MAX_RESULT_SIZE_CHARS;
+var ARTIFACT_PAGE_INLINE_RESULT_CAP;
+var ARTIFACT_FILE_INLINE_RESULT_CAP;
+var ARTIFACT_DB_READ_MAX_RESULT_SIZE_CHARS;
+var ARTIFACT_STUB_URL_PREFIX;
+deferInit("chunk-yxnffbzs.js:23990", () => {
+  ARTIFACT_SLUG_RE = new RegExp(`^${UUID_PATTERN}$`);
+  ARTIFACT_VERSION_SAFE_RE = /^[\w-]{1,64}$/;
+  MAX_LISTED_FILES_SHOWN = 1024;
+  ARTIFACT_MAX_RESULT_SIZE_CHARS = 16000;
+  ARTIFACT_PAGE_INLINE_RESULT_CAP = OUTPUT_SIZE_LIMITS;
+  ARTIFACT_FILE_INLINE_RESULT_CAP = 20000;
+  ARTIFACT_DB_READ_MAX_RESULT_SIZE_CHARS = 300000;
+  ARTIFACT_STUB_URL_PREFIX = "eval-stub://artifact/";
+});
 //@ chunk-yxnffbzs.js:24110-24214 placement
 function getArtifactPublishStubDir() {
   let CLAUDE_CODE_EVAL_ARTIFACT_STUB_DIR = antEnv.CLAUDE_CODE_EVAL_ARTIFACT_STUB_DIR;
@@ -281,10 +338,10 @@ function stagingOriginOrNull() {
   return null;
 }
 //@ chunk-yxnffbzs.js:24239-24400 placement
-function claudeAiWebEnvOf(e) {
-  if (new RegExp(`^${CLAUDE_AI_ORIGIN_PATTERN}(?:[/?#]|$)`).test(e)) return "prod";
-  let n = stagingOriginOrNull();
-  if (n !== null && new RegExp(`^${n}(?:[/?#]|$)`).test(e)) return "staging";
+function claudeAiWebEnvOf(value) {
+  if (new RegExp(`^${CLAUDE_AI_ORIGIN_PATTERN}(?:[/?#]|$)`).test(value)) return "prod";
+  let stagingOrigin = stagingOriginOrNull();
+  if (stagingOrigin !== null && new RegExp(`^${stagingOrigin}(?:[/?#]|$)`).test(value)) return "staging";
   return null;
 }
 //@ chunk-yxnffbzs.js:24400-24431 placement
@@ -295,51 +352,51 @@ function parseArtifactUrl(url) {
 /**
  * 解析 artifact URL（prod/staging、slug）。
  */
-function parseArtifactUrl_2(e, n) {
-  let match = e.match(new RegExp(`^${CLAUDE_AI_ORIGIN_PATTERN}${VIEWER_URL_PATTERN}`));
-  let o = decodeShortArtifactId(match?.[2], n);
-  if (o !== null)
+function parseArtifactUrl_2(value, keepShort) {
+  let match = value.match(new RegExp(`^${CLAUDE_AI_ORIGIN_PATTERN}${VIEWER_URL_PATTERN}`));
+  let slug = decodeShortArtifactId(match?.[2], keepShort);
+  if (slug !== null)
     return withUrlExtras(
-      e,
+      value,
       {
-        slug: o,
+        slug,
         env: "prod",
         ...shortIdFlag(match?.[2]),
       },
       match?.[1],
     );
-  let s = stagingOriginOrNull();
-  if (s !== null) {
-    let match = e.match(new RegExp(`^${s}${VIEWER_URL_PATTERN}`));
-    let l = decodeShortArtifactId(match?.[2], n);
-    if (l !== null)
+  let query = stagingOriginOrNull();
+  if (query !== null) {
+    let match = value.match(new RegExp(`^${query}${VIEWER_URL_PATTERN}`));
+    let host = decodeShortArtifactId(match?.[2], keepShort);
+    if (host !== null)
       return withUrlExtras(
-        e,
+        value,
         {
-          slug: l,
+          slug: host,
           env: "staging",
           ...shortIdFlag(match?.[2]),
         },
         match?.[1],
       );
   }
-  let match_2 = e.match(
+  let match_2 = value.match(
     new RegExp(`^https://(${UUID_PATTERN})\\.frame\\.(staging\\.)?claudeusercontent\\.com(?:[/?#]|$)`),
   );
   if (match_2?.[1])
-    return withUrlExtras(e, {
+    return withUrlExtras(value, {
       slug: match_2[1],
       env: match_2[2] ? "staging" : "prod",
     });
   let artifactHostOverride = getArtifactHostOverride();
   if (artifactHostOverride) {
-    let match = e.match(new RegExp(`^https?://([^/?#]+)${VIEWER_URL_PATTERN}`));
-    let l = decodeShortArtifactId(match?.[3], n);
-    if (match !== null && l !== null && match[1] === new URL(artifactHostOverride).host)
+    let match = value.match(new RegExp(`^https?://([^/?#]+)${VIEWER_URL_PATTERN}`));
+    let vanity = decodeShortArtifactId(match?.[3], keepShort);
+    if (match !== null && vanity !== null && match[1] === new URL(artifactHostOverride).host)
       return withUrlExtras(
-        e,
+        value,
         {
-          slug: l,
+          slug: vanity,
           env: claudeAiEnvironment(),
           ...shortIdFlag(match[3]),
         },
@@ -355,55 +412,57 @@ function parseArtifactUrl_2(e, n) {
 var APP_ID_REGEX = /^[A-Za-z0-9_-]{1,64}$/;
 var VANITY_SLUG_REGEX = /^[a-z0-9][a-z0-9-]{0,59}$/;
 //@ chunk-yxnffbzs.js:25122-25379 placement
-function withUrlExtras(e, n, r) {
-  let o =
-    r !== undefined && VANITY_SLUG_REGEX.test(r)
+function withUrlExtras(url, result, vanitySlug) {
+  let withVanity =
+    vanitySlug !== undefined && VANITY_SLUG_REGEX.test(vanitySlug)
       ? {
-          ...n,
-          vanity: r,
+          ...result,
+          vanity: vanitySlug,
         }
-      : n;
-  let index = e.indexOf("#");
-  let a = index === -1 ? e : e.slice(0, index);
-  let index_2 = a.indexOf("?");
-  if (index_2 === -1) return o;
-  let sliced = a
+      : result;
+  let index = url.indexOf("#");
+  let hashIndex = index === -1 ? url : url.slice(0, index);
+  let index_2 = hashIndex.indexOf("?");
+  if (index_2 === -1) return withVanity;
+  let sliced = hashIndex
     .slice(index_2 + 1)
     .split("&")
-    .find((d) => d.startsWith("sk="))
+    .find((pathPart) => pathPart.startsWith("sk="))
     ?.slice(3);
   return sliced !== undefined && APP_ID_REGEX.test(sliced)
     ? {
-        ...o,
+        ...withVanity,
         sk: sliced,
       }
-    : o;
+    : withVanity;
 }
 //@ chunk-yxnffbzs.js:25379-25622 placement
-function artifactUrlSubPath(e) {
+function artifactUrlSubPath(url) {
   let artifactHostOverride = getArtifactHostOverride();
-  let r = stagingOriginOrNull();
-  let o =
-    e.match(new RegExp(`^${CLAUDE_AI_ORIGIN_PATTERN}${VIEWER_SUBPATH_PATTERN}`))?.[1] ??
-    (r !== null ? e.match(new RegExp(`^${r}${VIEWER_SUBPATH_PATTERN}`))?.[1] : undefined) ??
+  let stagingOrigin = stagingOriginOrNull();
+  let match =
+    url.match(new RegExp(`^${CLAUDE_AI_ORIGIN_PATTERN}${VIEWER_SUBPATH_PATTERN}`))?.[1] ??
+    (stagingOrigin !== null
+      ? url.match(new RegExp(`^${stagingOrigin}${VIEWER_SUBPATH_PATTERN}`))?.[1]
+      : undefined) ??
     (artifactHostOverride
-      ? e.match(
+      ? url.match(
           new RegExp(
             `^https?://${urlPatternToRegex(new URL(artifactHostOverride).host)}${VIEWER_SUBPATH_PATTERN}`,
           ),
         )?.[1]
       : undefined);
-  return o === undefined || o === "" ? undefined : o;
+  return match === undefined || match === "" ? undefined : match;
 }
 //@ chunk-yxnffbzs.js:25622-25794 placement
-function canonicalizeArtifactUrlInput(e) {
+function canonicalizeArtifactUrlInput(value) {
   try {
-    let n = new URL(e);
-    if (n.protocol === "http:") n.protocol = "https:";
-    if (n.hostname.endsWith(".")) n.hostname = n.hostname.slice(0, -1);
-    return n.href;
+    let parsed = new URL(value);
+    if (parsed.protocol === "http:") parsed.protocol = "https:";
+    if (parsed.hostname.endsWith(".")) parsed.hostname = parsed.hostname.slice(0, -1);
+    return parsed.href;
   } catch {
-    return e;
+    return value;
   }
 }
 //@ chunk-yxnffbzs.js:25794-25851 placement
@@ -411,12 +470,15 @@ function parseArtifactUrlInput(url) {
   return typeof url === "string" ? parseArtifactUrl(canonicalizeArtifactUrlInput(url)) : null;
 }
 //@ chunk-yxnffbzs.js:25851-25916 placement
-function parseArtifactUrlAnyCase(e) {
-  let n = canonicalizeArtifactUrlInput(e);
-  return parseArtifactUrl(n) ?? parseArtifactUrl_2(n.toLowerCase(), true);
+function parseArtifactUrlAnyCase(value) {
+  let canonical = canonicalizeArtifactUrlInput(value);
+  return parseArtifactUrl(canonical) ?? parseArtifactUrl_2(canonical.toLowerCase(), true);
 }
 //@ chunk-yxnffbzs.js:25916-25966 placement
-var regExp_4 = new RegExp(`^${urlPatternToRegex(ARTIFACT_STUB_URL_PREFIX)}(${UUID_PATTERN})(?:[/?#]|$)`);
+var regExp_4; // deferred: uses urlPatternToRegex (../../utils/stringUtils.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-yxnffbzs.js:25916", () => {
+  regExp_4 = new RegExp(`^${urlPatternToRegex(ARTIFACT_STUB_URL_PREFIX)}(${UUID_PATTERN})(?:[/?#]|$)`);
+});
 //@ chunk-yxnffbzs.js:25966-26031 placement
 function parseStubArtifactUrl(url) {
   let match = url.match(regExp_4);
@@ -427,12 +489,18 @@ function parseStubArtifactUrl(url) {
     : null;
 }
 //@ chunk-yxnffbzs.js:26031-26196 placement
-var ARTIFACT_DELETED_NOTE_TAG = "artifact-deleted";
-var ARTIFACT_DELETED_NOTE_RE = new RegExp(`^<${ARTIFACT_DELETED_NOTE_TAG} url="([^"]+)"/>`);
-var ARTIFACT_ATTACHED_NOTE_TAG = "artifact-attached";
-var ARTIFACT_ATTACHED_NOTE_RE = new RegExp(
-  `^<${ARTIFACT_ATTACHED_NOTE_TAG} url="([^"]+)"(?: title="([^"]*)")?( own)?/>`,
-);
+var ARTIFACT_DELETED_NOTE_TAG; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ARTIFACT_DELETED_NOTE_RE;
+var ARTIFACT_ATTACHED_NOTE_TAG;
+var ARTIFACT_ATTACHED_NOTE_RE;
+deferInit("chunk-yxnffbzs.js:26031", () => {
+  ARTIFACT_DELETED_NOTE_TAG = "artifact-deleted";
+  ARTIFACT_DELETED_NOTE_RE = new RegExp(`^<${ARTIFACT_DELETED_NOTE_TAG} url="([^"]+)"/>`);
+  ARTIFACT_ATTACHED_NOTE_TAG = "artifact-attached";
+  ARTIFACT_ATTACHED_NOTE_RE = new RegExp(
+    `^<${ARTIFACT_ATTACHED_NOTE_TAG} url="([^"]+)"(?: title="([^"]*)")?( own)?/>`,
+  );
+});
 //@ chunk-yxnffbzs.js:26196-26295 placement
 function uuidSlugFromUrl(url) {
   let slug = parseArtifactUrl(url)?.slug;
@@ -440,12 +508,12 @@ function uuidSlugFromUrl(url) {
   return getArtifactPublishStubDir() !== null ? (parseStubArtifactUrl(url)?.slug ?? null) : null;
 }
 //@ chunk-yxnffbzs.js:26295-26395 placement
-function artifactViewerPath(e) {
+function artifactViewerPath(slug) {
   if (isCobaltGateOn()) {
-    let n = encodeUuidBase58(e);
-    if (n !== null) return `/artifact/${n}`;
+    let shortId = encodeUuidBase58(slug);
+    if (shortId !== null) return `/artifact/${shortId}`;
   }
-  return `/code/artifact/${e}`;
+  return `/code/artifact/${slug}`;
 }
 //@ chunk-e6aww6q8.js:822970-823360 placement
 /**
@@ -510,6 +578,10 @@ export {
   canonicalizeArtifactUrlInput,
   QUICKSTART_INTENTS,
   VIEWER_PREFIX_RE,
+  encodeUuidBase58,
+  ARTIFACT_ID_PATTERN,
+  decodeShortArtifactId,
+  ARTIFACT_RULE_CONTENT_FIELD,
   ARTIFACT_LOGIN_RETRY_NOTE,
   artifactPolicyBlockedMessage,
   ARTIFACT_POLICY_ERROR_CODE,
@@ -529,7 +601,6 @@ export {
   DEFAULT_ARTIFACT_READ_PROMPT,
   TRANSIENT_PUBLISH_REASON,
   ARTIFACT_DELETED_NOTE_TAG,
-  ARTIFACT_RULE_CONTENT_FIELD,
   SPLIT_TOOL_PARENT,
   SPLIT_TOOL_BY_ACTION,
   ARTIFACT_DELETED_NOTE_RE,
@@ -543,7 +614,8 @@ export {
   ARTIFACT_LOGIN_MESSAGE_LEAD,
   STALE_GUARD_REJECTION_PREFIX_LEGACY,
   HANDOVER_DETAILS_START_RE,
-  encodeUuidBase58,
-  ARTIFACT_ID_PATTERN,
-  decodeShortArtifactId,
+  ARTIFACT_POLICY_REASON_CODES,
+  STALE_GUARD_CONTENT_HEADER_SUFFIX,
+  STALE_GUARD_DIFF_HEADER_SUFFIX,
+  artifactPolicyUnobtainedNote,
 };

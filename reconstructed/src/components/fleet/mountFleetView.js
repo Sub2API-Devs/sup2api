@@ -12,10 +12,11 @@ import { createFleetViewHost } from "./useAttachFleetOwners.js";
 import { mountFleetView } from "./FleetView.js";
 
 //@ chunk-ygxzcsa5.js:17373-17443 placement
-async function mountFleetViewWithComposerBack(e, o) {
-  let t = {
-    ...o,
-    host: o?.host ?? createFleetViewHost(),
+async function mountFleetViewWithComposerBack(renderer, options) {
+  let mergedOptions = {
+    ...options,
+    host: options?.host ?? createFleetViewHost(),
   };
-  await mountFleetView(e, t);
+  await mountFleetView(renderer, mergedOptions);
 }
+export { mountFleetViewWithComposerBack };

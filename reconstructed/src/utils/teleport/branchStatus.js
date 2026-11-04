@@ -38,13 +38,14 @@ import { getCurrentWorktreeSession } from "../worktree.js";
 import { isWorktreeCloudClaimEnabled } from "../shutdown/pendingWrites.js";
 import { isSafeRefName as isSafeRefName_2 } from "../git/safeRefName.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, array, string, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, array, stringSchema, booleanSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { apiClient } from "../../services/routines/routinesApi.js";
 import { getErrnoCode, errorMessage } from "../errors.js";
 import { logForDebugging } from "../debug.js";
 import { withTimeout as withTimeout_2 } from "../sleep.js";
 import { deleteFile } from "../../services/api/filesApi.js";
 import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1923205-1926733 placement
 /**
@@ -68,11 +69,11 @@ async function checkBranchPushed({
   onCreation,
 }) {
   try {
-    let Ee =
+    let reachRead =
       sessionRoot === undefined
         ? undefined
         : (sessionReach ?? (await readLaunchGitLayout(sessionRoot, signal, startsInProject)));
-    if (Ee === IN_TREE_SETTINGS_UNREADABLE || Ee === REACH_UNPLACED)
+    if (reachRead === IN_TREE_SETTINGS_UNREADABLE || reachRead === REACH_UNPLACED)
       return {
         kind: "unknown",
         cause: "nothing_vouched",
@@ -82,44 +83,44 @@ async function checkBranchPushed({
         kind: "unknown",
         cause: "not_a_commit_id",
       };
-    let Ae = headCommit ?? "HEAD";
+    let headRef = headCommit ?? "HEAD";
     let env = buildScreenedGitEnv_2(
       {
         GIT_GRAFT_FILE: "/dev/null",
         GIT_NO_REPLACE_OBJECTS: "1",
       },
-      Ee,
+      reachRead,
     );
-    let Me =
-      Ee === undefined
+    let screen =
+      reachRead === undefined
         ? describeGitBinaryFile(undefined)
-        : await checkGitVersionForScreening(Ee, {
+        : await checkGitVersionForScreening(reachRead, {
             dir: gitRoot,
             env,
             signal,
             startsInProject,
           });
-    let We = async (qt, Zt) => {
-      let max = Math.max(1, Math.floor(deadlineMs ?? qt));
+    let runGitBound = async (timeoutHint, script) => {
+      let max = Math.max(1, Math.floor(deadlineMs ?? timeoutHint));
       let combinedAbortSignal = createCombinedAbortSignal(signal, {
         timeoutMs: max,
         refTimer: true,
       });
       try {
-        return await Zt((no, hn) =>
-          runGitWithEnv(Me, [...GIT_SAFE_GLOBAL_ARGS, ...GIT_REPLACE_REFS_CONFIG_ARGS, ...no], {
+        return await script((args, input) =>
+          runGitWithEnv(screen, [...GIT_SAFE_GLOBAL_ARGS, ...GIT_REPLACE_REFS_CONFIG_ARGS, ...args], {
             dir: gitRoot,
             env,
             abortSignal: combinedAbortSignal.signal,
             timeout: max,
             maxBuffer: GIT_REF_MAX_BUFFER,
             preserveOutputOnError: false,
-            ...(hn === undefined
+            ...(input === undefined
               ? {
                   stdin: "ignore",
                 }
               : {
-                  input: hn,
+                  input,
                 }),
           }),
         );
@@ -127,125 +128,139 @@ async function checkBranchPushed({
         combinedAbortSignal.cleanup();
       }
     };
-    let ze = `refs/remotes/${remoteName}/`;
-    let lt = staleBranch === undefined ? null : `${ze}${staleBranch}`;
-    let Je = staleBranch !== undefined && staleBranch === branch;
-    let nt = (qt, pushed) =>
-      findRemoteBranches(qt, {
+    let remotePrefix = `refs/remotes/${remoteName}/`;
+    let staleRef = staleBranch === undefined ? null : `${remotePrefix}${staleBranch}`;
+    let isStaleBranch = staleBranch !== undefined && staleBranch === branch;
+    let findBranches = (git, pushed) =>
+      findRemoteBranches(git, {
         remoteName,
         pushed,
-        staleRef: lt,
-        head: Ae,
+        staleRef,
+        head: headRef,
         headCommit,
         nameContaining,
       });
-    let pt = await We(GIT_REF_LIST_TIMEOUT_MS, async (qt) => {
-      if (branch !== "HEAD" && !Je) {
-        let vn = await qt(["show-ref", "--verify", "--quiet", `${ze}${branch}`]);
-        if (vn.exitCode === 0) {
+    let firstResult = await runGitBound(GIT_REF_LIST_TIMEOUT_MS, async (git_2) => {
+      if (branch !== "HEAD" && !isStaleBranch) {
+        let verify = await git_2(["show-ref", "--verify", "--quiet", `${remotePrefix}${branch}`]);
+        if (verify.exitCode === 0) {
           if (!countAhead)
             return {
               kind: "on_remote",
             };
-          let co = await countCommitsBetween(qt, `${ze}${branch}`, Ae);
+          let aheadCount = await countCommitsBetween(git_2, `${remotePrefix}${branch}`, headRef);
           if (
-            co === null ||
-            (co > 0 && (await qt(["rev-parse", "--is-shallow-repository"])).stdout.trim() !== "false")
+            aheadCount === null ||
+            (aheadCount > 0 &&
+              (await git_2(["rev-parse", "--is-shallow-repository"])).stdout.trim() !== "false")
           )
             return {
               kind: "on_remote",
             };
           return {
             kind: "on_remote",
-            aheadCount: co,
+            aheadCount,
           };
         }
-        if (vn.exitCode !== 1)
+        if (verify.exitCode !== 1)
           return {
             kind: "unknown",
             cause: "git_failed",
           };
       }
-      let Zt = Je ? true : await hasStandardFetchRefspec(qt, remoteName);
-      if (Zt !== true)
+      let hasRefspec = isStaleBranch ? true : await hasStandardFetchRefspec(git_2, remoteName);
+      if (hasRefspec !== true)
         return {
           kind: "unknown",
-          cause: Zt === null ? "git_failed" : "refspec_not_covering",
+          cause: hasRefspec === null ? "git_failed" : "refspec_not_covering",
         };
       if (branch === "HEAD")
         return {
           kind: "search_all_refs",
           defaultBranch: null,
         };
-      let [rn, pn, { creationRead: no, creation: hn, refsAt: ho }] = await Promise.all([
-        findDefaultBranchRefs(qt, ze).catch(() => null),
-        listUpstreamRefs(qt, ze).catch(() => []),
-        readBranchCreationPoint(qt, branch)
-          .catch(() => "read_failed")
-          .then(async (vn) => ({
-            creationRead: vn,
-            creation: typeof vn === "object" ? vn : null,
-            refsAt: withRefsAtHead
-              ? await findRefsPointingAt(qt, ze, Ae, typeof vn === "object" ? vn.commit : null).catch(() => ({
-                  atHead: [],
-                  atCreation: [],
-                }))
-              : {
-                  atHead: [],
-                  atCreation: [],
-                },
-          })),
-      ]);
-      let defaultBranch = rn?.name === staleBranch ? null : (rn?.name ?? null);
-      let Kn = hn === null ? null : toRemoteTrackingRef(hn.from, remoteName);
-      let Xn = await listLocalRefs(
-        qt,
+      let [defaultBranchRefs, upstreamRefs, { creationRead, creation, refsAt: refsAtHead }] =
+        await Promise.all([
+          findDefaultBranchRefs(git_2, remotePrefix).catch(() => null),
+          listUpstreamRefs(git_2, remotePrefix).catch(() => []),
+          readBranchCreationPoint(git_2, branch)
+            .catch(() => "read_failed")
+            .then(async (creationResult) => ({
+              creationRead: creationResult,
+              creation: typeof creationResult === "object" ? creationResult : null,
+              refsAt: withRefsAtHead
+                ? await findRefsPointingAt(
+                    git_2,
+                    remotePrefix,
+                    headRef,
+                    typeof creationResult === "object" ? creationResult.commit : null,
+                  ).catch(() => ({
+                    atHead: [],
+                    atCreation: [],
+                  }))
+                : {
+                    atHead: [],
+                    atCreation: [],
+                  },
+            })),
+        ]);
+      let defaultBranch = defaultBranchRefs?.name === staleBranch ? null : (defaultBranchRefs?.name ?? null);
+      let creationRemoteRef = creation === null ? null : toRemoteTrackingRef(creation.from, remoteName);
+      let localRefs = await listLocalRefs(
+        git_2,
         uniq([
-          ...(rn?.refs ?? []),
-          ...pn,
-          ...ho.atHead.filter((vn) => vn !== lt).slice(0, 1),
-          ...ho.atCreation.filter((vn) => vn !== lt).slice(0, 1),
-          ...(Kn === null ? [] : [Kn]),
-        ]).filter((vn) => vn !== lt),
+          ...(defaultBranchRefs?.refs ?? []),
+          ...upstreamRefs,
+          ...refsAtHead.atHead.filter((atHeadRef) => atHeadRef !== staleRef).slice(0, 1),
+          ...refsAtHead.atCreation.filter((atCreationRef) => atCreationRef !== staleRef).slice(0, 1),
+          ...(creationRemoteRef === null ? [] : [creationRemoteRef]),
+        ]).filter((candidateRef) => candidateRef !== staleRef),
       ).catch(() => []);
-      let fo =
-        Xn.length === 0
+      let ownResult =
+        localRefs.length === 0
           ? null
-          : await nt(qt, {
+          : await findBranches(git_2, {
               kind: "own",
-              present: Xn,
+              present: localRefs,
             });
-      if (fo?.kind !== "pushed_ancestor") {
-        reportCreation(onCreation, hn === null ? creationAbsenceReason(no) : "no_first_answer");
+      if (ownResult?.kind !== "pushed_ancestor") {
+        reportCreation(
+          onCreation,
+          creation === null ? creationAbsenceReason(creationRead) : "no_first_answer",
+        );
         return {
           kind: "search_all_refs",
           defaultBranch,
         };
       }
-      let To = {
-        ...fo,
+      let ownStart = {
+        ...ownResult,
         fromOwnRefs: true,
       };
-      let bo =
-        hn !== null &&
-        (hn.commit === To.commit ||
-          (await qt(["merge-base", "--is-ancestor", hn.commit, To.commit])).exitCode === 0);
+      let isBelowStart =
+        creation !== null &&
+        (creation.commit === ownStart.commit ||
+          (await git_2(["merge-base", "--is-ancestor", creation.commit, ownStart.commit])).exitCode === 0);
       reportCreation(
         onCreation,
-        hn === null ? creationAbsenceReason(no) : bo ? "below_start" : "not_below_start",
+        creation === null
+          ? creationAbsenceReason(creationRead)
+          : isBelowStart
+            ? "below_start"
+            : "not_below_start",
       );
-      return bo
-        ? To
+      return isBelowStart
+        ? ownStart
         : {
             kind: "search_all_refs",
             defaultBranch,
-            orElse: To,
+            orElse: ownStart,
           };
     });
-    if (pt.kind !== "search_all_refs") return pt;
-    let Et = () => signal?.aborted === true;
-    if (Et()) {
-      if (pt.orElse !== undefined) return pt.orElse;
+    if (firstResult.kind !== "search_all_refs") return firstResult;
+    let isAborted = () => signal?.aborted === true;
+    if (isAborted()) {
+      if (firstResult.orElse !== undefined) return firstResult.orElse;
       return branch === "HEAD"
         ? {
             kind: "unknown",
@@ -254,36 +269,36 @@ async function checkBranchPushed({
         : {
             kind: "not_on_remote",
             searchFailure: "git_failed",
-            defaultBranch: pt.defaultBranch,
+            defaultBranch: firstResult.defaultBranch,
           };
     }
-    let yt = () =>
-      We(GIT_REF_READ_TIMEOUT_MS, (qt) =>
-        nt(qt, {
+    let searchAllRefs = () =>
+      runGitBound(GIT_REF_READ_TIMEOUT_MS, (git_3) =>
+        findBranches(git_3, {
           kind: "all",
         }),
       );
-    let gt = await yt();
-    let At = gt.kind === "unknown" && gt.cause === "git_failed" && !Et();
-    let It = At ? await yt() : gt;
+    let allRefsResult = await searchAllRefs();
+    let needsRetry = allRefsResult.kind === "unknown" && allRefsResult.cause === "git_failed" && !isAborted();
+    let finalResult = needsRetry ? await searchAllRefs() : allRefsResult;
     try {
-      onSearchAmongAllRefs?.(At ? 2 : 1);
+      onSearchAmongAllRefs?.(needsRetry ? 2 : 1);
     } catch {}
-    let orElse = pt.orElse;
-    if (orElse !== undefined) return It.kind === "pushed_ancestor" ? It : orElse;
-    if (Je && It.kind === "none")
+    let orElse = firstResult.orElse;
+    if (orElse !== undefined) return finalResult.kind === "pushed_ancestor" ? finalResult : orElse;
+    if (isStaleBranch && finalResult.kind === "none")
       return {
         kind: "not_on_remote",
         searchFailure: "nothing_beneath",
-        defaultBranch: pt.defaultBranch,
+        defaultBranch: firstResult.defaultBranch,
       };
-    return It.kind === "unknown" && branch !== "HEAD"
+    return finalResult.kind === "unknown" && branch !== "HEAD"
       ? {
           kind: "not_on_remote",
-          searchFailure: It.cause,
-          defaultBranch: pt.defaultBranch,
+          searchFailure: finalResult.cause,
+          defaultBranch: firstResult.defaultBranch,
         }
-      : It;
+      : finalResult;
   } catch {
     return {
       kind: "unknown",
@@ -292,17 +307,17 @@ async function checkBranchPushed({
   }
 }
 //@ chunk-e6aww6q8.js:1926733-1926770 placement
-function reportCreation(onCreation, n) {
+function reportCreation(onCreation, result) {
   try {
-    onCreation?.(n);
+    onCreation?.(result);
   } catch {}
 }
 //@ chunk-e6aww6q8.js:1926770-1927139 placement
 /**
  * 从分支 reflog 中找出分支的创建点（创建时的提交与来源）。
  */
-async function readBranchCreationPoint(e, branch) {
-  let r = await e([
+async function readBranchCreationPoint(runGit, branch) {
+  let result = await runGit([
     "-c",
     "log.showSignature=false",
     "log",
@@ -311,125 +326,141 @@ async function readBranchCreationPoint(e, branch) {
     `refs/heads/${branch}`,
     "--",
   ]);
-  if (r.exitCode !== 0) return "read_failed";
-  let last = r.stdout
+  if (result.exitCode !== 0) return "read_failed";
+  let last = result.stdout
     .split(
       `
 `,
     )
     .filter((line) => line.trim() !== "")
     .at(-1);
-  let [h = "", y = ""] = (last ?? "").split("\x00");
-  let S = "branch: Created from ";
-  return GIT_SHA_RE.test(h) && y.startsWith(S)
+  let [commitHash = "", reflogSubject = ""] = (last ?? "").split("\x00");
+  let creationKey = "branch: Created from ";
+  return GIT_SHA_RE.test(commitHash) && reflogSubject.startsWith(creationKey)
     ? {
-        commit: h,
-        from: y.slice(S.length).trim(),
+        commit: commitHash,
+        from: reflogSubject.slice(creationKey.length).trim(),
       }
     : "none";
 }
 //@ chunk-e6aww6q8.js:1927139-1927214 placement
-function creationAbsenceReason(e) {
-  return e === "read_failed" ? "read_failed" : "no_creation_entry";
+function creationAbsenceReason(reason) {
+  return reason === "read_failed" ? "read_failed" : "no_creation_entry";
 }
 //@ chunk-e6aww6q8.js:1927214-1927429 placement
 function toRemoteTrackingRef(from, remoteName) {
-  let r = `refs/remotes/${remoteName}/`;
-  let s = `${remoteName}/`;
-  let h = from.startsWith(r) ? from.slice(r.length) : from.startsWith(s) ? from.slice(s.length) : null;
-  return h === null || h === "" || h === "HEAD" || /[\s~^:?*[\\]|\.\.|@\{/.test(h) ? null : `${r}${h}`;
+  let refPrefix = `refs/remotes/${remoteName}/`;
+  let shortPrefix = `${remoteName}/`;
+  let branchName = from.startsWith(refPrefix)
+    ? from.slice(refPrefix.length)
+    : from.startsWith(shortPrefix)
+      ? from.slice(shortPrefix.length)
+      : null;
+  return branchName === null ||
+    branchName === "" ||
+    branchName === "HEAD" ||
+    /[\s~^:?*[\\]|\.\.|@\{/.test(branchName)
+    ? null
+    : `${refPrefix}${branchName}`;
 }
 //@ chunk-e6aww6q8.js:1927429-1927747 placement
 /**
  * 列出本地分支及其上游引用。
  */
-async function listUpstreamRefs(e, n) {
-  let r = await e(["for-each-ref", "--format=%(refname)%00%(upstream)", "refs/heads/"]);
-  if (r.exitCode !== 0) return [];
-  return r.stdout
+async function listUpstreamRefs(runGit, remotePrefix) {
+  let result = await runGit(["for-each-ref", "--format=%(refname)%00%(upstream)", "refs/heads/"]);
+  if (result.exitCode !== 0) return [];
+  return result.stdout
     .split(
       `
 `,
     )
     .filter(Boolean)
     .flatMap((line) => {
-      let [h = "", y = ""] = line.split("\x00");
-      return [`${n}${h.slice(11)}`, y];
+      let [refname = "", upstream = ""] = line.split("\x00");
+      return [`${remotePrefix}${refname.slice(11)}`, upstream];
     })
-    .filter((s) => s.startsWith(n) && s.length > n.length && s !== `${n}HEAD`);
+    .filter(
+      (line) =>
+        line.startsWith(remotePrefix) && line.length > remotePrefix.length && line !== `${remotePrefix}HEAD`,
+    );
 }
 //@ chunk-e6aww6q8.js:1927747-1928202 placement
 /**
  * 列出指向给定提交的引用（可同时匹配两个提交）。
  */
-async function findRefsPointingAt(e, n, r, s) {
-  let h = await e([
+async function findRefsPointingAt(runGit, refPattern, atHead, atCreation) {
+  let result = await runGit([
     "for-each-ref",
-    `--points-at=${r}`,
-    ...(s === null ? [] : [`--points-at=${s}`]),
+    `--points-at=${atHead}`,
+    ...(atCreation === null ? [] : [`--points-at=${atCreation}`]),
     "--format=%(objectname) %(refname)",
-    n,
+    refPattern,
   ]);
-  if (h.exitCode !== 0)
+  if (result.exitCode !== 0)
     return {
       atHead: [],
       atCreation: [],
     };
-  let flattened = h.stdout
+  let flattened = result.stdout
     .split(
       `
 `,
     )
     .flatMap((line) => {
-      let [w = "", L = ""] = line.trim().split(" ");
-      return L.startsWith(n) && L !== `${n}HEAD`
+      let [commit = "", ref = ""] = line.trim().split(" ");
+      return ref.startsWith(refPattern) && ref !== `${refPattern}HEAD`
         ? [
             {
-              commit: w,
-              ref: L,
+              commit,
+              ref,
             },
           ]
         : [];
     });
   return {
-    atHead: flattened.filter((S) => S.commit !== s).map((S) => S.ref),
-    atCreation: flattened.filter((S) => S.commit === s).map((S) => S.ref),
+    atHead: flattened
+      .filter((atHeadEntry) => atHeadEntry.commit !== atCreation)
+      .map((atHeadEntry_2) => atHeadEntry_2.ref),
+    atCreation: flattened
+      .filter((atCreationEntry) => atCreationEntry.commit === atCreation)
+      .map((atCreationEntry_2) => atCreationEntry_2.ref),
   };
 }
 //@ chunk-e6aww6q8.js:1928202-1928710 placement
-async function listLocalRefs(e, n) {
-  let reduced = await chunkArray(n, REF_BATCH_SIZE).reduce(async (acc, y) => {
-    let S = await acc;
-    let w = await e(["for-each-ref", "--format=%(objectname) %(refname)", ...y]);
-    if (w.exitCode !== 0) throw Error("for-each-ref failed");
-    let flattened = w.stdout
+async function listLocalRefs(runGit, refs) {
+  let reduced = await chunkArray(refs, REF_BATCH_SIZE).reduce(async (acc, batch) => {
+    let previous = await acc;
+    let result = await runGit(["for-each-ref", "--format=%(objectname) %(refname)", ...batch]);
+    if (result.exitCode !== 0) throw Error("for-each-ref failed");
+    let flattened = result.stdout
       .split(
         `
 `,
       )
       .flatMap((line) => {
-        let [q = "", Z = ""] = line.trim().split(" ");
-        return GIT_SHA_RE.test(q) && y.includes(Z)
+        let [line_2 = "", refname = ""] = line.trim().split(" ");
+        return GIT_SHA_RE.test(line_2) && batch.includes(refname)
           ? [
               {
-                ref: Z,
-                commit: q,
+                ref: refname,
+                commit: line_2,
               },
             ]
           : [];
       });
-    S.push(flattened);
-    return S;
+    previous.push(flattened);
+    return previous;
   }, Promise.resolve([]));
-  let s = new Map(reduced.flat().map(({ ref, commit }) => [ref, commit]));
-  return n.flatMap((h) => {
-    let y = s.get(h);
-    return y === undefined
+  let objectName = new Map(reduced.flat().map(({ ref, commit }) => [ref, commit]));
+  return refs.flatMap((others) => {
+    let merged = objectName.get(others);
+    return merged === undefined
       ? []
       : [
           {
-            ref: h,
-            commit: y,
+            ref: others,
+            commit: merged,
           },
         ];
   });
@@ -437,30 +468,33 @@ async function listLocalRefs(e, n) {
 //@ chunk-e6aww6q8.js:1928710-1928721 placement
 var REF_BATCH_SIZE = 64;
 //@ chunk-e6aww6q8.js:1928721-1928817 placement
-function chunkArray(e, n) {
+function chunkArray(array, size) {
   return Array.from(
     {
-      length: Math.ceil(e.length / n),
+      length: Math.ceil(array.length / size),
     },
-    (r, s) => e.slice(s * n, (s + 1) * n),
+    (unused, index) => array.slice(index * size, (index + 1) * size),
   );
 }
 //@ chunk-e6aww6q8.js:1928817-1931288 placement
 /**
  * 查找对应的远端分支（for-each-ref，取最近几个）。
  */
-async function findRemoteBranches(e, { remoteName, pushed, staleRef, head, headCommit, nameContaining }) {
-  let w = `refs/remotes/${remoteName}/`;
+async function findRemoteBranches(
+  runGit,
+  { remoteName, pushed, staleRef, head, headCommit, nameContaining },
+) {
+  let remotePrefix = `refs/remotes/${remoteName}/`;
   try {
     if (pushed.kind === "all") {
-      let Ee = await e(["for-each-ref", "--count=3", "--format=%(refname)", w]);
-      if (Ee.exitCode !== 0)
+      let probe = await runGit(["for-each-ref", "--count=3", "--format=%(refname)", remotePrefix]);
+      if (probe.exitCode !== 0)
         return {
           kind: "unknown",
           cause: "git_failed",
         };
       if (
-        Ee.stdout
+        probe.stdout
           .split(
             `
 `,
@@ -468,7 +502,7 @@ async function findRemoteBranches(e, { remoteName, pushed, staleRef, head, headC
           .every(
             (line) =>
               line.trim() === "" ||
-              (staleRef !== null && (line.trim() === staleRef || line.trim() === `${w}HEAD`)),
+              (staleRef !== null && (line.trim() === staleRef || line.trim() === `${remotePrefix}HEAD`)),
           )
       )
         return {
@@ -476,7 +510,7 @@ async function findRemoteBranches(e, { remoteName, pushed, staleRef, head, headC
           defaultBranch: null,
         };
     }
-    let L = await e(
+    let revList = await runGit(
       [
         "--no-replace-objects",
         "rev-list",
@@ -499,30 +533,30 @@ async function findRemoteBranches(e, { remoteName, pushed, staleRef, head, headC
         : pushed.present.map(({ commit }) => `^${commit}`).join(`
 `),
     );
-    if (L.exitCode !== 0)
+    if (revList.exitCode !== 0)
       return {
         kind: "unknown",
         cause: "git_failed",
       };
-    let filtered = L.stdout
+    let filtered = revList.stdout
       .split(
         `
 `,
       )
       .map((line) => line.trim().split(" ").filter(Boolean))
-      .filter((Ee) => Ee.length > 0);
+      .filter((line) => line.length > 0);
     if (filtered.length > GIT_REF_PROBE_TIMEOUT_MS)
       return {
         kind: "none",
-        defaultBranch: await getRemoteDefaultBranch(e, w),
+        defaultBranch: await getRemoteDefaultBranch(runGit, remotePrefix),
       };
-    if (filtered.some((Ee) => Ee.some((Ae) => !GIT_SHA_RE.test(Ae))))
+    if (filtered.some((rev) => rev.some((sha) => !GIT_SHA_RE.test(sha))))
       return {
         kind: "unknown",
         cause: "git_failed",
       };
     if (filtered.length > 0) {
-      let Ee = await e(
+      let walkCheck = await runGit(
         [
           ...GIT_READ_CONFIG_ARGS,
           "--no-replace-objects",
@@ -531,100 +565,106 @@ async function findRemoteBranches(e, { remoteName, pushed, staleRef, head, headC
           "--parents",
           "--stdin",
         ],
-        filtered.map(([Ae]) => Ae).join(`
+        filtered.map(([sha_2]) => sha_2).join(`
 `),
       );
-      if (Ee.exitCode !== 0)
+      if (walkCheck.exitCode !== 0)
         return {
           kind: "unknown",
           cause: "git_failed",
         };
-      if (Ee.stdout.trim() !== L.stdout.trim())
+      if (walkCheck.stdout.trim() !== revList.stdout.trim())
         return {
           kind: "unknown",
           cause: "parents_misstated",
         };
     }
-    let q;
-    let Z;
+    let candidateCommit;
+    let aheadCount;
     if (filtered.length === 0 && headCommit !== undefined) {
-      q = headCommit;
-      Z = 0;
+      candidateCommit = headCommit;
+      aheadCount = 0;
     } else if (filtered.length === 0) {
-      let Ee = await e(["rev-parse", "-q", "--verify", "HEAD^{commit}"]);
-      let trimmed = Ee.stdout.trim();
-      if (Ee.exitCode !== 0 || !GIT_SHA_RE.test(trimmed))
+      let headProbe = await runGit(["rev-parse", "-q", "--verify", "HEAD^{commit}"]);
+      let trimmed = headProbe.stdout.trim();
+      if (headProbe.exitCode !== 0 || !GIT_SHA_RE.test(trimmed))
         return {
           kind: "unknown",
           cause: "git_failed",
         };
-      q = trimmed;
-      Z = 0;
+      candidateCommit = trimmed;
+      aheadCount = 0;
     } else {
-      let Ee = new Set(filtered.map(([We]) => We));
-      let sliced = uniq(filtered.flatMap(([, ...We]) => We.filter((ze) => !Ee.has(ze)))).slice(
-        0,
-        MAX_REMOTE_BRANCH_CANDIDATES,
-      );
-      let [Ie, ...Me] = sliced;
-      if (Ie === undefined)
+      let reachedSet = new Set(filtered.map(([firstParent]) => firstParent));
+      let candidates = uniq(
+        filtered.flatMap(([, ...parent]) => parent.filter((parent_2) => !reachedSet.has(parent_2))),
+      ).slice(0, MAX_REMOTE_BRANCH_CANDIDATES);
+      let [nearest, ...others] = candidates;
+      if (nearest === undefined)
         return {
           kind: "none",
-          defaultBranch: await getRemoteDefaultBranch(e, w),
+          defaultBranch: await getRemoteDefaultBranch(runGit, remotePrefix),
         };
-      if (Me.length === 0) {
-        q = Ie;
-        Z = filtered.length;
+      if (others.length === 0) {
+        candidateCommit = nearest;
+        aheadCount = filtered.length;
       } else {
-        let closestCandidate = await findClosestCandidate(e, sliced, head);
+        let closestCandidate = await findClosestCandidate(runGit, candidates, head);
         if (closestCandidate === null)
           return {
             kind: "unknown",
             cause: "git_failed",
           };
-        q = closestCandidate.candidate;
-        Z = Math.max(closestCandidate.beyond, filtered.length);
+        candidateCommit = closestCandidate.candidate;
+        aheadCount = Math.max(closestCandidate.beyond, filtered.length);
       }
     }
     if (pushed.kind === "all") {
-      let remoteBranchPointingAt = await findRemoteBranchPointingAt(e, w, [w], q, staleRef);
-      let Ae =
+      let remoteBranchPointingAt = await findRemoteBranchPointingAt(
+        runGit,
+        remotePrefix,
+        [remotePrefix],
+        candidateCommit,
+        staleRef,
+      );
+      let containedBranch =
         nameContaining && remoteBranchPointingAt === null
-          ? await findRemoteBranchContaining(e, w, [w], q, staleRef)
+          ? await findRemoteBranchContaining(runGit, remotePrefix, [remotePrefix], candidateCommit, staleRef)
           : null;
       return {
         kind: "pushed_ancestor",
-        commit: q,
-        aheadCount: Z,
+        commit: candidateCommit,
+        aheadCount,
         branch: remoteBranchPointingAt,
-        ...(Ae !== null && {
-          containedIn: Ae,
+        ...(containedBranch !== null && {
+          containedIn: containedBranch,
         }),
       };
     }
-    let found = pushed.present.find(({ commit }) => commit === q);
-    let ke = found === undefined ? null : found.ref.slice(w.length);
-    let we =
-      ke ??
+    let found = pushed.present.find(({ commit }) => commit === candidateCommit);
+    let foundBranch = found === undefined ? null : found.ref.slice(remotePrefix.length);
+    let containingBranch =
+      foundBranch ??
       (await chunkArray(
         pushed.present.map(({ ref }) => ref),
         REF_BATCH_SIZE,
       ).reduce(
-        async (acc, Ae) => (await acc) ?? findRemoteBranchContaining(e, w, Ae, q, staleRef),
+        async (acc, batch) =>
+          (await acc) ?? findRemoteBranchContaining(runGit, remotePrefix, batch, candidateCommit, staleRef),
         Promise.resolve(null),
       ));
     return {
       kind: "pushed_ancestor",
-      commit: q,
-      aheadCount: Z,
-      branch: ke,
+      commit: candidateCommit,
+      aheadCount,
+      branch: foundBranch,
       ...(nameContaining &&
-        ke === null &&
-        we !== null && {
-          containedIn: we,
+        foundBranch === null &&
+        containingBranch !== null && {
+          containedIn: containingBranch,
         }),
-      ...(we !== null && {
-        foundOn: we,
+      ...(containingBranch !== null && {
+        foundOn: containingBranch,
       }),
     };
   } catch {
@@ -635,18 +675,18 @@ async function findRemoteBranches(e, { remoteName, pushed, staleRef, head, headC
   }
 }
 //@ chunk-e6aww6q8.js:1931288-1931468 placement
-async function countCommitsBetween(e, n, r) {
-  let s = await e(["rev-list", "--count", `${n}..${r}`, "--"]);
-  let h = Number.parseInt(s.stdout.trim(), 10);
-  return s.exitCode === 0 && Number.isSafeInteger(h) && h >= 0 ? h : null;
+async function countCommitsBetween(runGit, fromRef, toRef) {
+  let result = await runGit(["rev-list", "--count", `${fromRef}..${toRef}`, "--"]);
+  let count = Number.parseInt(result.stdout.trim(), 10);
+  return result.exitCode === 0 && Number.isSafeInteger(count) && count >= 0 ? count : null;
 }
 //@ chunk-e6aww6q8.js:1931468-1931676 placement
-async function hasStandardFetchRefspec(e, remoteName) {
-  let r = await e(["config", "--get-all", `remote.${remoteName}.fetch`]);
-  if (r.exitCode === 1) return false;
-  if (r.exitCode !== 0) return null;
+async function hasStandardFetchRefspec(runGit, remoteName) {
+  let result = await runGit(["config", "--get-all", `remote.${remoteName}.fetch`]);
+  if (result.exitCode === 1) return false;
+  if (result.exitCode !== 0) return null;
   return isStandardFetchRefspec(
-    r.stdout
+    result.stdout
       .split(
         `
 `,
@@ -657,59 +697,66 @@ async function hasStandardFetchRefspec(e, remoteName) {
   );
 }
 //@ chunk-e6aww6q8.js:1931676-1931852 placement
-function isStandardFetchRefspec(e, n) {
-  if (e.some((r) => r.startsWith("^"))) return false;
-  return e.some((r) => {
-    let [s, h] = r.replace(/^\+/, "").split(":");
-    return s === "refs/heads/*" && h === `refs/remotes/${n}/*`;
+function isStandardFetchRefspec(refspecs, remoteName) {
+  if (refspecs.some((line) => line.startsWith("^"))) return false;
+  return refspecs.some((spec) => {
+    let [src, dst] = spec.replace(/^\+/, "").split(":");
+    return src === "refs/heads/*" && dst === `refs/remotes/${remoteName}/*`;
   });
 }
 //@ chunk-e6aww6q8.js:1931852-1932084 placement
-async function findClosestCandidate(e, n, head) {
+async function findClosestCandidate(runGit, candidates, toRef) {
   let results = await Promise.all(
-    n.map(async (y) => ({
-      candidate: y,
-      beyond: await countCommitsBetween(e, y, head),
+    candidates.map(async (candidate) => ({
+      candidate,
+      beyond: await countCommitsBetween(runGit, candidate, toRef),
     })),
   );
-  let h = null;
+  let best = null;
   for (let { candidate, beyond } of results) {
     if (beyond === null) return null;
-    if (h === null || beyond < h.beyond)
-      h = {
+    if (best === null || beyond < best.beyond)
+      best = {
         candidate,
         beyond,
       };
   }
-  return h;
+  return best;
 }
 //@ chunk-e6aww6q8.js:1932084-1932152 placement
-async function findRemoteBranchPointingAt(e, n, r, s, staleRef) {
-  return findRemoteBranchFor(e, n, r, ["--points-at", s], staleRef);
+async function findRemoteBranchPointingAt(runGit, remoteName, pattern, headCommit, staleRef) {
+  return findRemoteBranchFor(runGit, remoteName, pattern, ["--points-at", headCommit], staleRef);
 }
 //@ chunk-e6aww6q8.js:1932152-1932219 placement
-async function findRemoteBranchContaining(e, n, r, s, staleRef) {
-  return findRemoteBranchFor(e, n, r, ["--contains", s], staleRef);
+async function findRemoteBranchContaining(runGit, remoteName, pattern, headCommit, staleRef) {
+  return findRemoteBranchFor(runGit, remoteName, pattern, ["--contains", headCommit], staleRef);
 }
 //@ chunk-e6aww6q8.js:1932219-1932599 placement
 /**
  * 查找本地分支在远端对应的分支引用。
  */
-async function findRemoteBranchFor(e, n, r, s, h) {
-  let [y, remoteDefaultBranch] = await Promise.all([
-    e(["for-each-ref", ...s, "--format=%(refname)", ...r]),
-    getRemoteDefaultBranch(e, n),
+async function findRemoteBranchFor(runGit, remoteName, patterns, refArgs, staleRef) {
+  let [result, remoteDefaultBranch] = await Promise.all([
+    runGit(["for-each-ref", ...refArgs, "--format=%(refname)", ...patterns]),
+    getRemoteDefaultBranch(runGit, remoteName),
   ]);
-  if (y.exitCode !== 0) return null;
-  let w = (G) => (r.length === 1 && r[0] === n ? true : r.includes(G));
-  let mapped = y.stdout
+  if (result.exitCode !== 0) return null;
+  let isWantedRef = (refName) =>
+    patterns.length === 1 && patterns[0] === remoteName ? true : patterns.includes(refName);
+  let mapped = result.stdout
     .split(
       `
 `,
     )
     .map((line) => line.trim())
-    .filter((G) => G.startsWith(n) && G !== `${n}HEAD` && G !== h && w(G))
-    .map((G) => G.slice(n.length));
+    .filter(
+      (refName_2) =>
+        refName_2.startsWith(remoteName) &&
+        refName_2 !== `${remoteName}HEAD` &&
+        refName_2 !== staleRef &&
+        isWantedRef(refName_2),
+    )
+    .map((refName_3) => refName_3.slice(remoteName.length));
   return (
     (remoteDefaultBranch !== null && mapped.includes(remoteDefaultBranch) ? remoteDefaultBranch : null) ??
     mapped[0] ??
@@ -717,71 +764,76 @@ async function findRemoteBranchFor(e, n, r, s, h) {
   );
 }
 //@ chunk-e6aww6q8.js:1932599-1932846 placement
-async function getRemoteDefaultBranch(e, n) {
-  let r = await e(["symbolic-ref", "-q", `${n}HEAD`]);
-  let trimmed = r.stdout.trim();
-  if (r.exitCode !== 0 || !trimmed.startsWith(n) || trimmed.length <= n.length) return null;
-  return (await e(["show-ref", "--verify", "--quiet", trimmed])).exitCode === 0
-    ? trimmed.slice(n.length)
+async function getRemoteDefaultBranch(runGit, remoteName) {
+  let result = await runGit(["symbolic-ref", "-q", `${remoteName}HEAD`]);
+  let trimmed = result.stdout.trim();
+  if (result.exitCode !== 0 || !trimmed.startsWith(remoteName) || trimmed.length <= remoteName.length)
+    return null;
+  return (await runGit(["show-ref", "--verify", "--quiet", trimmed])).exitCode === 0
+    ? trimmed.slice(remoteName.length)
     : null;
 }
 //@ chunk-e6aww6q8.js:1932846-1933181 placement
 /**
  * 查找远端的默认分支引用（远端 HEAD 及常见默认分支名）。
  */
-async function findDefaultBranchRefs(e, n) {
-  let remoteDefaultBranch = await getRemoteDefaultBranch(e, n);
-  let s = uniq([
+async function findDefaultBranchRefs(runGit, remoteName) {
+  let remoteDefaultBranch = await getRemoteDefaultBranch(runGit, remoteName);
+  let branchNames = uniq([
     ...(remoteDefaultBranch === null ? [] : [remoteDefaultBranch]),
     ...CONVENTIONAL_DEFAULT_BRANCH_NAMES,
   ]);
-  let h = await e(["for-each-ref", "--format=%(refname)", ...s.map((L) => `${n}${L}`)]);
-  if (h.exitCode !== 0) return null;
-  let mapped = h.stdout
+  let result = await runGit([
+    "for-each-ref",
+    "--format=%(refname)",
+    ...branchNames.map((branchName) => `${remoteName}${branchName}`),
+  ]);
+  if (result.exitCode !== 0) return null;
+  let mapped = result.stdout
     .split(
       `
 `,
     )
     .map((line) => line.trim());
-  let filtered = s.filter((L) => mapped.includes(`${n}${L}`));
-  let [w] = filtered;
-  return w === undefined
+  let filtered = branchNames.filter((branchName_2) => mapped.includes(`${remoteName}${branchName_2}`));
+  let [matchedRef] = filtered;
+  return matchedRef === undefined
     ? null
     : {
-        name: w,
-        refs: filtered.map((L) => `${n}${L}`),
+        name: matchedRef,
+        refs: filtered.map((branchName_3) => `${remoteName}${branchName_3}`),
       };
 }
 //@ chunk-e6aww6q8.js:1933181-1933561 placement
 /**
  * 生成找不到 GitHub 仓库时的原因说明（非 git 仓库、信任未确认等）。
  */
-function describeNoRepositoryReason(e) {
-  let r = `${
+function describeNoRepositoryReason(reason) {
+  let message = `${
     {
       no_git: "This folder is not a git repository, so",
       trust_unconfirmed: "This folder's trust has not been confirmed, so its git remote was not read and",
       no_github_repository: "No GitHub repository was found for this folder, so",
-    }[e]
+    }[reason]
   } the cloud session starts empty: nothing from this folder is copied into it.`;
-  return e === "no_github_repository" ? `${r} ${GITHUB_SETUP_HINT}` : r;
+  return reason === "no_github_repository" ? `${message} ${GITHUB_SETUP_HINT}` : message;
 }
 //@ chunk-e6aww6q8.js:1933561-1933950 placement
 /**
  * 生成分支不在远端时的提示，按需建议推送。
  */
 function branchNotOnRemoteMessage({ branch, host, revision, advisesPush = true, goneFromGithub = false }) {
-  let y = printableText(revision);
-  return `Branch ${printableText(branch)} ${goneFromGithub ? "is not on GitHub" : `is not on ${isGithubDotCom(host) ? "GitHub" : host} as of the last fetch`}, so the cloud session starts from the default branch, ${y}, instead, without the commits that ${y} lacks or any uncommitted changes.${advisesPush ? " Push the branch, then start a new session to use it." : ""}`;
+  let revisionText = printableText(revision);
+  return `Branch ${printableText(branch)} ${goneFromGithub ? "is not on GitHub" : `is not on ${isGithubDotCom(host) ? "GitHub" : host} as of the last fetch`}, so the cloud session starts from the default branch, ${revisionText}, instead, without the commits that ${revisionText} lacks or any uncommitted changes.${advisesPush ? " Push the branch, then start a new session to use it." : ""}`;
 }
 //@ chunk-e6aww6q8.js:1933950-1934335 placement
 /**
  * 生成本地分支领先远端若干提交时的提示，按需建议推送。
  */
 function branchAheadOfRemoteMessage({ branch, aheadCount, remoteName, advisesPush }) {
-  let h = printableText(branch);
-  let y = aheadCount === 1;
-  return `Branch ${h} is ${y ? "1 commit" : `${aheadCount.toLocaleString("en-US")} commits`} ahead of ${remoteName}/${h} (as last fetched), so the cloud session starts without ${y ? "it" : "them"} and without any uncommitted changes.${advisesPush ? ` Push the branch and start a new session to have ${y ? "that commit" : "those commits"}.` : ""}`;
+  let branchText = printableText(branch);
+  let isSingleCommit = aheadCount === 1;
+  return `Branch ${branchText} is ${isSingleCommit ? "1 commit" : `${aheadCount.toLocaleString("en-US")} commits`} ahead of ${remoteName}/${branchText} (as last fetched), so the cloud session starts without ${isSingleCommit ? "it" : "them"} and without any uncommitted changes.${advisesPush ? ` Push the branch and start a new session to have ${isSingleCommit ? "that commit" : "those commits"}.` : ""}`;
 }
 //@ chunk-e6aww6q8.js:1934335-1935874 placement
 /**
@@ -797,45 +849,46 @@ function describeBranchStartability({
   isAheadOfRemote = false,
   advisesPush = true,
 }) {
-  let L = printableText(branch);
-  let G = start.branch === null ? null : printableText(start.branch);
-  let q = byName === null ? null : printableText(byName);
-  let Z =
+  let branchText = printableText(branch);
+  let startBranchText = start.branch === null ? null : printableText(start.branch);
+  let byNameText = byName === null ? null : printableText(byName);
+  let startText =
     branch === "HEAD"
       ? "This checkout is on a detached HEAD"
       : isAheadOfRemote
-        ? `Branch ${L} is too far ahead of ${remoteName}/${L} to start from there`
-        : `Branch ${L} is not on ${isGithubDotCom(host) ? "GitHub" : host}`;
+        ? `Branch ${branchText} is too far ahead of ${remoteName}/${branchText} to start from there`
+        : `Branch ${branchText} is not on ${isGithubDotCom(host) ? "GitHub" : host}`;
   let sliced = start.commit.slice(0, 12);
-  let ke = G === null ? `commit ${sliced}` : `${remoteName}/${G} (${sliced})`;
-  let we = start.aheadCount === 1 ? "1 commit" : `${start.aheadCount} commits`;
-  let Ee =
+  let carriedText =
+    startBranchText === null ? `commit ${sliced}` : `${remoteName}/${startBranchText} (${sliced})`;
+  let hostText = start.aheadCount === 1 ? "1 commit" : `${start.aheadCount} commits`;
+  let remoteText =
     start.fromOwnRefs === true && start.foundOn !== undefined && start.aheadCount > 0
       ? `${remoteName}/${printableText(start.foundOn)}`
       : null;
-  let Ae = start.fromOwnRefs === true && Ee === null && start.aheadCount > 0;
-  let Ie =
+  let pushedText = start.fromOwnRefs === true && remoteText === null && start.aheadCount > 0;
+  let detailText =
     start.aheadCount === 0
-      ? `its own commit, which ${G === null ? "the remote has" : `${remoteName}/${G} has`} (${sliced})`
-      : Ee !== null
-        ? `the newest commit beneath it that ${Ee} has (${sliced}), ${we} back`
-        : Ae
-          ? `a pushed commit beneath it, ${ke}, ${we} back`
-          : `the newest pushed commit beneath it, ${ke}, ${we} back`;
-  let Me =
-    q === null
-      ? `the cloud session starts from ${Ie}`
-      : `the cloud session starts from the tip of ${q} on ${host} instead (a host other than github.com is not asked for a commit by id)`;
-  let We =
+      ? `its own commit, which ${startBranchText === null ? "the remote has" : `${remoteName}/${startBranchText} has`} (${sliced})`
+      : remoteText !== null
+        ? `the newest commit beneath it that ${remoteText} has (${sliced}), ${hostText} back`
+        : pushedText
+          ? `a pushed commit beneath it, ${carriedText}, ${hostText} back`
+          : `the newest pushed commit beneath it, ${carriedText}, ${hostText} back`;
+  let message =
+    byNameText === null
+      ? `the cloud session starts from ${detailText}`
+      : `the cloud session starts from the tip of ${byNameText} on ${host} instead (a host other than github.com is not asked for a commit by id)`;
+  let hint =
     carried || (start.aheadCount === 0 && byName === null)
       ? ""
-      : `${Ee !== null ? ` Commits that ${Ee} lacks, and any uncommitted changes, stay on this machine` : Ae ? " Later commits and any uncommitted changes stay on this machine" : ` ${start.aheadCount === 0 ? "Uncommitted changes" : start.aheadCount === 1 ? "That commit and any uncommitted changes" : `Those ${start.aheadCount} commits and any uncommitted changes`} stay on this machine`}${advisesPush || start.aheadCount === 0 ? "; push the branch to start from it" : ""}.`;
-  return `${Z}, so ${Me}.${We}`;
+      : `${remoteText !== null ? ` Commits that ${remoteText} lacks, and any uncommitted changes, stay on this machine` : pushedText ? " Later commits and any uncommitted changes stay on this machine" : ` ${start.aheadCount === 0 ? "Uncommitted changes" : start.aheadCount === 1 ? "That commit and any uncommitted changes" : `Those ${start.aheadCount} commits and any uncommitted changes`} stay on this machine`}${advisesPush || start.aheadCount === 0 ? "; push the branch to start from it" : ""}.`;
+  return `${startText}, so ${message}.${hint}`;
 }
 //@ chunk-e6aww6q8.js:1935874-1935944 placement
-async function branchForTeleport(e, branchName) {
+async function branchForTeleport(dir, branchName) {
   if (getCurrentWorktreeSession() === null || !isWorktreeCloudClaimEnabled()) return branchName;
-  return getBranchForDir(e);
+  return getBranchForDir(dir);
 }
 //@ chunk-e6aww6q8.js:1935944-1936032 placement
 function recordedOriginalBranch(branchName) {
@@ -847,39 +900,45 @@ function recordedOriginalBranch(branchName) {
     : branchName;
 }
 //@ chunk-e6aww6q8.js:1936032-1936160 placement
-var BATCH_BRANCH_STATUS_PATH = "/v1/code/github/get-batch-branch-status";
-var batchBranchStatusSchema = DoctorLazy(() =>
-  u({
-    branch_statuses: array(
-      u({
-        repo: string(),
-        branch: string(),
-        branch_exists: M(),
-      }),
-    ),
-  }),
-);
+var BATCH_BRANCH_STATUS_PATH; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var batchBranchStatusSchema;
+deferInit("chunk-e6aww6q8.js:1936032", () => {
+  BATCH_BRANCH_STATUS_PATH = "/v1/code/github/get-batch-branch-status";
+  batchBranchStatusSchema = DoctorLazy(() =>
+    objectSchema({
+      branch_statuses: array(
+        objectSchema({
+          repo: stringSchema(),
+          branch: stringSchema(),
+          branch_exists: booleanSchema(),
+        }),
+      ),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:1936160-1936397 placement
-function createBranchExistsLookup(body, n) {
-  let r = batchBranchStatusSchema().safeParse(body);
-  let s = r.success
-    ? r.data.branch_statuses.filter((branchStatus) => branchStatus.repo.toLowerCase() === n.toLowerCase())
+function createBranchExistsLookup(body, repo) {
+  let parsed = batchBranchStatusSchema().safeParse(body);
+  let statuses = parsed.success
+    ? parsed.data.branch_statuses.filter(
+        (branchStatus) => branchStatus.repo.toLowerCase() === repo.toLowerCase(),
+      )
     : [];
-  return (h) => {
-    let found = s.find((S) => S.branch === h);
+  return (lookup) => {
+    let found = statuses.find((branchStatus) => branchStatus.branch === lookup);
     return found === undefined ? "cannot_tell" : found.branch_exists ? "yes" : "no";
   };
 }
 //@ chunk-e6aww6q8.js:1936397-1937059 placement
-async function askGithubBranchExists({ owner, name: n, branches, timeoutMs, signal, credentials }) {
-  let S = `${owner}/${n}`;
+async function askGithubBranchExists({ owner, name: repoName, branches, timeoutMs, signal, credentials }) {
+  let repoFullName = `${owner}/${repoName}`;
   let now = Date.now();
-  let L = await apiClient
+  let response = await apiClient
     .post(
       BATCH_BRANCH_STATUS_PATH,
       {
         repo_branches: branches.map((branch) => ({
-          repo: S,
+          repo: repoFullName,
           branch,
         })),
         include_compare: false,
@@ -895,24 +954,24 @@ async function askGithubBranchExists({ owner, name: n, branches, timeoutMs, sign
       },
     )
     .then(
-      (q) =>
-        q.ok
+      (requestInit) =>
+        requestInit.ok
           ? {
-              body: q.status === 200 ? q.data : undefined,
-              how: `HTTP ${q.status}`,
+              body: requestInit.status === 200 ? requestInit.data : undefined,
+              how: `HTTP ${requestInit.status}`,
             }
           : {
               body: undefined,
-              how: `not sent: ${q.reason}`,
+              how: `not sent: ${requestInit.reason}`,
             },
       (error) => ({
         body: undefined,
         how: `request failed: ${getErrnoCode(error) ?? "no code"}`,
       }),
     );
-  let branchExistsLookup = createBranchExistsLookup(L.body, S);
+  let branchExistsLookup = createBranchExistsLookup(response.body, repoFullName);
   logForDebugging(
-    `[githubBranchStatus] ${S}: ${branches.map((branch) => `does GitHub have branch ${branch}? ${branchExistsLookup(branch)}`).join("; ")} (${L.how}, ${Date.now() - now} ms)`,
+    `[githubBranchStatus] ${repoFullName}: ${branches.map((branch) => `does GitHub have branch ${branch}? ${branchExistsLookup(branch)}`).join("; ")} (${response.how}, ${Date.now() - now} ms)`,
   );
   return branchExistsLookup;
 }
@@ -958,18 +1017,18 @@ async function resolveStartWithGithub({ lookUp, ask }) {
       start,
       github,
     };
-  let h = await lookUp({
+  let github_2 = await lookUp({
     remoteLacksBranch: true,
   });
   return {
     start:
-      h.kind === "unknown"
+      github_2.kind === "unknown"
         ? {
             kind: "not_on_remote",
-            searchFailure: h.cause,
+            searchFailure: github_2.cause,
             defaultBranch: null,
           }
-        : h,
+        : github_2,
     github,
   };
 }
@@ -980,31 +1039,35 @@ var SEED_DELETE_TIMEOUT_TEXT = "seed bundle delete timed out";
 /**
  * 删除已上传的种子 bundle 文件（限时），返回失败原因。
  */
-async function discardUploadedSeedBundle(e) {
-  let n;
+async function discardUploadedSeedBundle(options) {
+  let errorReason;
   try {
-    let r = await withTimeout_2(
-      deleteFile(e.fileId, e.config, {
+    let result = await withTimeout_2(
+      deleteFile(options.fileId, options.config, {
         timeoutMs: SEED_DELETE_TIMEOUT_MS,
       }),
       SEED_DELETE_TIMEOUT_MS,
       SEED_DELETE_TIMEOUT_TEXT,
     );
-    n = r.success ? undefined : r.reason;
+    errorReason = result.success ? undefined : result.reason;
   } catch (error) {
-    n = error instanceof Error && error.message === SEED_DELETE_TIMEOUT_TEXT ? "timeout" : "unexpected";
+    errorReason =
+      error instanceof Error && error.message === SEED_DELETE_TIMEOUT_TEXT ? "timeout" : "unexpected";
     logForDebugging(`[teleportToRemote] Deleting the uploaded bundle failed: ${errorMessage(error)}`, {
       level: "warn",
     });
   }
-  if (n === undefined) {
+  if (errorReason === undefined) {
     logFeatureOk("teleport_seed_bundle_discard");
     return;
   }
-  logForDebugging(`[teleportToRemote] Could not delete the uploaded bundle (${n}); its expiry removes it`, {
-    level: "warn",
-  });
-  logFeatureSad("teleport_seed_bundle_discard", n);
+  logForDebugging(
+    `[teleportToRemote] Could not delete the uploaded bundle (${errorReason}); its expiry removes it`,
+    {
+      level: "warn",
+    },
+  );
+  logFeatureSad("teleport_seed_bundle_discard", errorReason);
 }
 export {
   askGithubBranchExists,

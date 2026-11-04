@@ -23,31 +23,31 @@ import { createAgentNameRegistry } from "../utils/agentNameRegistry.js";
  * 创建设置工具权限上下文的函数（值未变时不更新状态）。
  */
 function createPermissionContextSetters(setAppState) {
-  let e = (o) =>
-    setAppState((r) => {
-      let i = typeof o === "function" ? o(r.toolPermissionContext) : o;
-      return r.toolPermissionContext === i
-        ? r
+  let setContext = (next) =>
+    setAppState((state) => {
+      let nextContext = typeof next === "function" ? next(state.toolPermissionContext) : next;
+      return state.toolPermissionContext === nextContext
+        ? state
         : {
-            ...r,
-            toolPermissionContext: i,
+            ...state,
+            toolPermissionContext: nextContext,
           };
     });
   return {
-    setToolPermissionContext: e,
-    setSessionToolPermissionContext: e,
+    setToolPermissionContext: setContext,
+    setSessionToolPermissionContext: setContext,
   };
 }
 //@ chunk-mww7agq2.js:582-676 placement
 /**
  * 把 ultrareview 超额确认标记写入应用状态。
  */
-function confirmUltrareviewOverage(t) {
-  t((e) =>
-    e.ultrareviewOverageConfirmed
-      ? e
+function confirmUltrareviewOverage(setAppState) {
+  setAppState((state) =>
+    state.ultrareviewOverageConfirmed
+      ? state
       : {
-          ...e,
+          ...state,
           ultrareviewOverageConfirmed: true,
         },
   );
@@ -57,10 +57,10 @@ function confirmUltrareviewOverage(t) {
  * 生成一个把记忆更新追加到待处理列表的设置函数。
  */
 function appendPendingMemoryUpdate(setAppState) {
-  return (e) =>
-    setAppState((o) => ({
-      ...o,
-      pendingMemoryUpdates: [...o.pendingMemoryUpdates, e],
+  return (update) =>
+    setAppState((state) => ({
+      ...state,
+      pendingMemoryUpdates: [...state.pendingMemoryUpdates, update],
     }));
 }
 //@ chunk-mww7agq2.js:769-849 placement
@@ -68,11 +68,11 @@ function appendPendingMemoryUpdate(setAppState) {
  * 生成一个把「本会话已处理 PR」标记写入应用状态的设置函数。
  */
 function markPrResolvedThisSession(setAppState) {
-  setAppState((e) =>
-    e.prResolvedThisSession
-      ? e
+  setAppState((state) =>
+    state.prResolvedThisSession
+      ? state
       : {
-          ...e,
+          ...state,
           prResolvedThisSession: true,
         },
   );

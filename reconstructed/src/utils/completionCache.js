@@ -8,13 +8,10 @@
  * pieces: chunk-7p2hc4jn.js (1), chunk-d0x4qj4e.js (3)
  * attribution: callgraph-witnessed 1, fingerprint 2, layout 1
  */
-import { homedir } from "os";
 import { join } from "path";
 import { readFile, copyFile, writeFile } from "fs/promises";
 import { randomBytes } from "crypto";
-import { env } from "./env.js";
-import { getLaunchCommand } from "./deepLink/registerProtocol.js";
-import { execFileNoThrow } from "./execFileNoThrow.js";
+import { homedir } from "os";
 import { sequential } from "./sequential.js";
 import {
   VSCODE_SCROLL_SENSITIVITY_KEY,
@@ -24,11 +21,66 @@ import {
   vscodeUserDirectories,
 } from "../commands/terminalSetup/terminalSetup.js";
 import { isFsInaccessible } from "./errors.js";
-import { parseJsonc, setJsoncProperty } from "./json.js";
+import { parseJsonc_2, setJsoncProperty } from "./json.js";
 import { isPlainObject } from "./isPlainObject.js";
 import { color } from "../components/design-system/color.js";
 import { logForDebugging } from "./debug.js";
+import { env } from "./env.js";
+import { getLaunchCommand } from "./deepLink/registerProtocol.js";
+import { execFileNoThrow } from "./execFileNoThrow.js";
 
+//@ chunk-7p2hc4jn.js:7657-8767 callgraph-witnessed = setupShellCompletion (0.201)
+async function setupShellCompletion(editor, productName, label) {
+  let scrollHint = sequential.dim(
+    `For smoother scrolling, set "${VSCODE_SCROLL_SENSITIVITY_KEY}": ${VSCODE_RECOMMENDED_SCROLL_SENSITIVITY} in ${productName} settings.`,
+  );
+  if (isVSCodeRemoteSSH()) return `${scrollHint}${NEWLINE}`;
+  let settingsPath = join(await vscodeUserDirectories.of(editor).pathFor(productName), "settings.json");
+  try {
+    let content = "{}";
+    let settingsExisted = false;
+    try {
+      content = await readFile(settingsPath, {
+        encoding: "utf-8",
+      });
+      settingsExisted = true;
+    } catch (error) {
+      if (!isFsInaccessible(error)) throw error;
+    }
+    let configDir = parseJsonc_2(content);
+    if (!isPlainObject(configDir))
+      return `${color("warning", label)(`${productName} settings.json isn't a JSON object; not modifying it.`)}${NEWLINE}${scrollHint}${NEWLINE}`;
+    if (VSCODE_SCROLL_SENSITIVITY_KEY in configDir)
+      return `${color("success", label)(`${productName} ${VSCODE_SCROLL_SENSITIVITY_KEY} already set; leaving as-is`)}${NEWLINE}${sequential.dim(`See ${settingsPath}`)}${NEWLINE}`;
+    let updatedSettings = setJsoncProperty(
+      content,
+      VSCODE_SCROLL_SENSITIVITY_KEY,
+      VSCODE_RECOMMENDED_SCROLL_SENSITIVITY,
+    );
+    if (updatedSettings === content)
+      return `${color("warning", label)(`Couldn't update ${productName} settings.json.`)}${NEWLINE}${scrollHint}${NEWLINE}`;
+    if (settingsExisted) {
+      let content = `${settingsPath}.${randomBytes(4).toString("hex")}.bak`;
+      try {
+        await copyFile(settingsPath, content);
+      } catch {
+        return `${color("warning", label)(`Couldn't back up ${productName} settings.json; not modifying it.`)}${NEWLINE}${scrollHint}${NEWLINE}`;
+      }
+    }
+    await writeFile(settingsPath, updatedSettings, {
+      encoding: "utf-8",
+    });
+    return `${color("success", label)(`Set ${productName} terminal scroll sensitivity to ${VSCODE_RECOMMENDED_SCROLL_SENSITIVITY}`)}${NEWLINE}${sequential.dim(`See ${settingsPath}`)}${NEWLINE}`;
+  } catch (error) {
+    logForDebugging(
+      `Couldn't update ${productName} settings.json at ${settingsPath}: ${error instanceof Error ? error.message : String(error)}`,
+      {
+        level: "error",
+      },
+    );
+    return `${color("warning", label)(`Couldn't update ${productName} settings.json.`)}${NEWLINE}${scrollHint}${NEWLINE}`;
+  }
+}
 //@ chunk-d0x4qj4e.js:416-1116 fingerprint = detectShell (1)
 /**
  * 检测用户 shell（zsh/bash/fish/PowerShell）及对应补全脚本的缓存路径。
@@ -81,56 +133,14 @@ async function regenerateCompletionCache() {
 /**
  * 后台运行 claude completion --output 重新生成 shell 补全缓存。
  */
-function regenerateCompletionCache_2(e) {
+function regenerateCompletionCache_2(options) {
   let { cmd, prefixArgs } = getLaunchCommand();
-  return execFileNoThrow(cmd, [...prefixArgs, "completion", e.shellFlag, "--output", e.cacheFile]);
-}
-//@ chunk-7p2hc4jn.js:7657-8767 callgraph-witnessed = setupShellCompletion (0.201)
-async function setupShellCompletion(e, r, n) {
-  let s = sequential.dim(
-    `For smoother scrolling, set "${VSCODE_SCROLL_SENSITIVITY_KEY}": ${VSCODE_RECOMMENDED_SCROLL_SENSITIVITY} in ${r} settings.`,
-  );
-  if (isVSCodeRemoteSSH()) return `${s}${NEWLINE}`;
-  let o = join(await vscodeUserDirectories.of(e).pathFor(r), "settings.json");
-  try {
-    let content = "{}";
-    let d = false;
-    try {
-      content = await readFile(o, {
-        encoding: "utf-8",
-      });
-      d = true;
-    } catch (error) {
-      if (!isFsInaccessible(error)) throw error;
-    }
-    let configDir = parseJsonc(content);
-    if (!isPlainObject(configDir))
-      return `${color("warning", n)(`${r} settings.json isn't a JSON object; not modifying it.`)}${NEWLINE}${s}${NEWLINE}`;
-    if (VSCODE_SCROLL_SENSITIVITY_KEY in configDir)
-      return `${color("success", n)(`${r} ${VSCODE_SCROLL_SENSITIVITY_KEY} already set; leaving as-is`)}${NEWLINE}${sequential.dim(`See ${o}`)}${NEWLINE}`;
-    let x = setJsoncProperty(content, VSCODE_SCROLL_SENSITIVITY_KEY, VSCODE_RECOMMENDED_SCROLL_SENSITIVITY);
-    if (x === content)
-      return `${color("warning", n)(`Couldn't update ${r} settings.json.`)}${NEWLINE}${s}${NEWLINE}`;
-    if (d) {
-      let content = `${o}.${randomBytes(4).toString("hex")}.bak`;
-      try {
-        await copyFile(o, content);
-      } catch {
-        return `${color("warning", n)(`Couldn't back up ${r} settings.json; not modifying it.`)}${NEWLINE}${s}${NEWLINE}`;
-      }
-    }
-    await writeFile(o, x, {
-      encoding: "utf-8",
-    });
-    return `${color("success", n)(`Set ${r} terminal scroll sensitivity to ${VSCODE_RECOMMENDED_SCROLL_SENSITIVITY}`)}${NEWLINE}${sequential.dim(`See ${o}`)}${NEWLINE}`;
-  } catch (error) {
-    logForDebugging(
-      `Couldn't update ${r} settings.json at ${o}: ${error instanceof Error ? error.message : String(error)}`,
-      {
-        level: "error",
-      },
-    );
-    return `${color("warning", n)(`Couldn't update ${r} settings.json.`)}${NEWLINE}${s}${NEWLINE}`;
-  }
+  return execFileNoThrow(cmd, [
+    ...prefixArgs,
+    "completion",
+    options.shellFlag,
+    "--output",
+    options.cacheFile,
+  ]);
 }
 export { setupShellCompletion, regenerateCompletionCache };

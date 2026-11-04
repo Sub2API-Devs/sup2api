@@ -18,6 +18,7 @@ import { jsonParse, jsonStringify } from "../../utils/slowOperations.js";
 import { printableName, stripAnsiAndControls } from "../../utils/printableName.js";
 import { apiClient } from "../routines/routinesApi.js";
 import { logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-dz3q485w.js:2341-2380 placement
 /**
@@ -44,20 +45,25 @@ function projectNotTargetReason(channel) {
     : "the server did not say whether that project is personal. Pick one of your personal projects, or create a new one";
 }
 //@ chunk-dz3q485w.js:2866-3124 placement
-class ChannelApiError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  status;
-  telemetryCode;
-  detail;
-  serverWord;
-  constructor(e, status, s, telemetryCode = "request_failed", serverWord) {
-    super(`Could not ${e}: ${s}`, "projects channel request failed");
-    this.name = "ChannelApiError";
-    this.status = status;
-    this.telemetryCode = telemetryCode;
-    this.detail = s;
-    this.serverWord = serverWord;
-  }
-}
+let ChannelApiError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dz3q485w.js:2866", () => {
+  ChannelApiError = class ChannelApiError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    status;
+    telemetryCode;
+    detail;
+    serverWord;
+    constructor(action, status, detail, telemetryCode = "request_failed", serverWord) {
+      super(`Could not ${action}: ${detail}`, "projects channel request failed");
+      this.name = "ChannelApiError";
+      this.status = status;
+      this.telemetryCode = telemetryCode;
+      this.detail = detail;
+      this.serverWord = serverWord;
+    }
+  };
+});
 //@ chunk-dz3q485w.js:3124-3266 placement
 /**
  * 判断 Projects 频道 API 错误是否可重试：非 ChannelApiError，或请求失败且状态为空、5xx、408、429。
@@ -70,18 +76,21 @@ function isRetryableChannelError(error) {
   );
 }
 //@ chunk-dz3q485w.js:3266-3387 placement
-var NETWORK_UNREACHABLE_CODES = new Set([
-  "ECONNREFUSED",
-  "ENOTFOUND",
-  "EAI_AGAIN",
-  "EHOSTUNREACH",
-  "ENETUNREACH",
-  "EADDRNOTAVAIL",
-  "ERR_PROXY_TUNNEL",
-]);
+var NETWORK_UNREACHABLE_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-dz3q485w.js:3266", () => {
+  NETWORK_UNREACHABLE_CODES = new Set([
+    "ECONNREFUSED",
+    "ENOTFOUND",
+    "EAI_AGAIN",
+    "EHOSTUNREACH",
+    "ENETUNREACH",
+    "EADDRNOTAVAIL",
+    "ERR_PROXY_TUNNEL",
+  ]);
+});
 //@ chunk-dz3q485w.js:3387-3443 placement
-function isNetworkOrAccessError(e) {
-  return e instanceof CloudSessionAccessError || NETWORK_UNREACHABLE_CODES.has(getErrnoCode(e) ?? "");
+function isNetworkOrAccessError(error) {
+  return error instanceof CloudSessionAccessError || NETWORK_UNREACHABLE_CODES.has(getErrnoCode(error) ?? "");
 }
 //@ chunk-dz3q485w.js:3443-3790 placement
 /**
@@ -108,14 +117,14 @@ function isDefinitelyNotSent(error) {
 /**
  * Projects 不可用时的原因文案：数据驻留（非一方提供方）、仅必要流量、未登录 claude.ai。
  */
-function policyRefusalText(e) {
-  switch (e.reason) {
+function policyRefusalText(refusal) {
+  switch (refusal.reason) {
     case "data-residency":
       return "Projects are only available on the first-party Anthropic API provider.";
     case "essential-traffic-only":
       return "Projects are disabled when only essential traffic is allowed (CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC).";
     case "no-auth":
-      return `${e.detail}. Projects require a Claude.ai login (/login).`;
+      return `${refusal.detail}. Projects require a Claude.ai login (/login).`;
   }
 }
 //@ chunk-dz3q485w.js:4145-4222 placement
@@ -125,82 +134,82 @@ function policyRefusalText(e) {
 var CHANNEL_ID_REGEX = /^chan_[A-Za-z0-9_-]{1,120}$/;
 var SESSION_ID_REGEX = /^[a-z]{2,12}_[A-Za-z0-9_-]{1,120}$/;
 //@ chunk-dz3q485w.js:4222-4389 placement
-function channelPath(e, n, s) {
-  if (!CHANNEL_ID_REGEX.test(e))
-    throw new ChannelApiError(s, null, "the project id has an unexpected shape", "invalid_input");
-  return `/v1/code/channels/${encodeURIComponent(e)}${n}`;
+function channelPath(channelId, suffix, action) {
+  if (!CHANNEL_ID_REGEX.test(channelId))
+    throw new ChannelApiError(action, null, "the project id has an unexpected shape", "invalid_input");
+  return `/v1/code/channels/${encodeURIComponent(channelId)}${suffix}`;
 }
 //@ chunk-dz3q485w.js:4389-4519 placement
-function apiErrorBody(e) {
-  let n = e;
-  if (typeof n === "string")
+function apiErrorBody(body) {
+  let parsed = body;
+  if (typeof parsed === "string")
     try {
-      n = jsonParse(n);
+      parsed = jsonParse(parsed);
     } catch {
-      n = null;
+      parsed = null;
     }
-  let error = n?.error;
+  let error = parsed?.error;
   return typeof error === "object" && error !== null ? error : null;
 }
 //@ chunk-dz3q485w.js:4519-4604 placement
-function normalizeApiCode(e) {
-  return typeof e === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(e) ? e : undefined;
+function normalizeApiCode(code) {
+  return typeof code === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(code) ? code : undefined;
 }
 //@ chunk-dz3q485w.js:4604-4669 placement
-function apiErrorResourceOrReason(e) {
-  let n = apiErrorBody(e);
-  return normalizeApiCode(n?.resource) ?? normalizeApiCode(n?.reason);
+function apiErrorResourceOrReason(body) {
+  let error = apiErrorBody(body);
+  return normalizeApiCode(error?.resource) ?? normalizeApiCode(error?.reason);
 }
 //@ chunk-dz3q485w.js:4669-4741 placement
-async function withTrustedDeviceHeaders(e) {
+async function withTrustedDeviceHeaders(headers) {
   return {
     headers: {
-      ...e,
+      ...headers,
       ...(await trustedDeviceHeaders()),
     },
     maxRedirects: 0,
   };
 }
 //@ chunk-dz3q485w.js:4741-4937 placement
-function clearStaleTrustedDevice(status, n) {
-  let s = status === 403 ? apiErrorResourceOrReason(n) : undefined;
-  if (s !== "untrusted_device" && s !== "session_stale_relogin") return;
-  import("./chunk-3kb57csj.js")
+function clearStaleTrustedDevice(status, body) {
+  let code = status === 403 ? apiErrorResourceOrReason(body) : undefined;
+  if (code !== "untrusted_device" && code !== "session_stale_relogin") return;
+  import("../../bridge/trustedDevice.js")
     .then(({ clearTrustedDeviceTokenCache }) => clearTrustedDeviceTokenCache())
     .catch(() => {});
 }
 //@ chunk-dz3q485w.js:4937-5060 placement
-function channelErrorMessage(status, n, s) {
-  let message = apiErrorBody(n)?.message;
+function channelErrorMessage(status, body, maxChars) {
+  let message = apiErrorBody(body)?.message;
   return typeof message === "string" && message !== ""
-    ? printableName(message, s)
+    ? printableName(message, maxChars)
     : `the server responded with status ${status}`;
 }
 //@ chunk-dz3q485w.js:5060-5362 placement
 /**
  * 校验 Projects 频道 API 响应：未发出请求抛策略/认证错误，3xx 以上抛带状态码与服务端消息的 ChannelApiError（403 时清理受信设备令牌），否则返回状态与数据。
  */
-function checkChannelResponse(e, n) {
-  if (!e.ok)
+function checkChannelResponse(response, action) {
+  if (!response.ok)
     throw new ChannelApiError(
-      n,
+      action,
       null,
-      policyRefusalText(e),
-      e.reason === "no-auth" ? "auth_or_access" : "policy_disabled",
+      policyRefusalText(response),
+      response.reason === "no-auth" ? "auth_or_access" : "policy_disabled",
     );
-  if (e.status >= 300) {
-    clearStaleTrustedDevice(e.status, e.data);
+  if (response.status >= 300) {
+    clearStaleTrustedDevice(response.status, response.data);
     throw new ChannelApiError(
-      n,
-      e.status,
-      channelErrorMessage(e.status, e.data),
-      e.status === 401 || e.status === 403 ? "auth_or_access" : "request_failed",
-      apiErrorResourceOrReason(e.data),
+      action,
+      response.status,
+      channelErrorMessage(response.status, response.data),
+      response.status === 401 || response.status === 403 ? "auth_or_access" : "request_failed",
+      apiErrorResourceOrReason(response.data),
     );
   }
   return {
-    status: e.status,
-    data: e.data,
+    status: response.status,
+    data: response.data,
   };
 }
 //@ chunk-dz3q485w.js:5362-5462 placement
@@ -213,42 +222,45 @@ function parseTimestampMs(lastMessageAt) {
 /**
  * 解析频道列表响应：保留有 id 与名称的频道（最后消息时间、协调会话 id、可见性、是否关闭）与下一页游标。
  */
-function parseChannelList(e) {
-  let n = e;
+function parseChannelList(payload) {
+  let rawPayload = payload;
   return {
-    channels: (Array.isArray(n?.data) ? n.data : []).flatMap((a) => {
-      let l = a;
-      return typeof l?.id === "string" && typeof l.name === "string"
+    channels: (Array.isArray(rawPayload?.data) ? rawPayload.data : []).flatMap((rawChannel) => {
+      let channel = rawChannel;
+      return typeof channel?.id === "string" && typeof channel.name === "string"
         ? [
             {
-              id: l.id,
-              name: l.name,
-              lastMessageAtMs: parseTimestampMs(l.last_message_at),
-              coordinatorSessionId: coordinatorSessionIdOf(l),
-              visibility: parseVisibility(l.visibility),
-              ...((l.archived_at != null || l.disabled_at != null) && {
+              id: channel.id,
+              name: channel.name,
+              lastMessageAtMs: parseTimestampMs(channel.last_message_at),
+              coordinatorSessionId: coordinatorSessionIdOf(channel),
+              visibility: parseVisibility(channel.visibility),
+              ...((channel.archived_at != null || channel.disabled_at != null) && {
                 closed: true,
               }),
             },
           ]
         : [];
     }),
-    nextCursor: typeof n?.next_cursor === "string" && n.next_cursor !== "" ? n.next_cursor : null,
+    nextCursor:
+      typeof rawPayload?.next_cursor === "string" && rawPayload.next_cursor !== ""
+        ? rawPayload.next_cursor
+        : null,
   };
 }
 //@ chunk-dz3q485w.js:5880-6166 placement
 /**
  * 获取已加入的 Projects 频道列表的一页（GET /v1/code/channels?scope=joined）。
  */
-async function listChannelsPage(e, signal, credentials) {
+async function listChannelsPage(cursor, signal, credentials) {
   let uRLSearchParams = new URLSearchParams({
     scope: "joined",
     limit: String(CHANNEL_LIST_PAGE_SIZE),
-    ...(e !== null && {
-      cursor: e,
+    ...(cursor !== null && {
+      cursor,
     }),
   });
-  let a = await apiClient.get(`/v1/code/channels?${uRLSearchParams}`, {
+  let response = await apiClient.get(`/v1/code/channels?${uRLSearchParams}`, {
     auth: "teleport-org",
     ...(await withTrustedDeviceHeaders()),
     validateStatus: () => true,
@@ -256,14 +268,14 @@ async function listChannelsPage(e, signal, credentials) {
     signal,
     credentials,
   });
-  return parseChannelList(checkChannelResponse(a, "list your Projects").data);
+  return parseChannelList(checkChannelResponse(response, "list your Projects").data);
 }
 //@ chunk-dz3q485w.js:6166-6305 placement
 /**
  * 规范化项目名用于匹配：去除默认忽略字符与控制字符、NFKC、压缩空格并转小写。
  */
-function normalizeProjectName(e) {
-  return stripAnsiAndControls(e.replace(/\p{Default_Ignorable_Code_Point}/gu, "").normalize("NFKC"))
+function normalizeProjectName(name) {
+  return stripAnsiAndControls(name.replace(/\p{Default_Ignorable_Code_Point}/gu, "").normalize("NFKC"))
     .replace(/ {2,}/g, " ")
     .trim()
     .toLowerCase();
@@ -274,7 +286,7 @@ function normalizeProjectName(e) {
  */
 async function postChannelMessage(channelId, message, signal, credentials) {
   try {
-    let a = await apiClient.post(
+    let response = await apiClient.post(
       `/v1/code/channels/${encodeURIComponent(channelId)}/messages`,
       {
         body: message.body,
@@ -293,9 +305,9 @@ async function postChannelMessage(channelId, message, signal, credentials) {
         credentials,
       },
     );
-    let { data: l } = checkChannelResponse(a, "send the message");
-    let c = l;
-    if (typeof c?.message_id !== "string" || typeof c.thread_root_id !== "string")
+    let { data: payload } = checkChannelResponse(response, "send the message");
+    let result = payload;
+    if (typeof result?.message_id !== "string" || typeof result.thread_root_id !== "string")
       throw new ChannelApiError(
         "send the message",
         null,
@@ -304,9 +316,9 @@ async function postChannelMessage(channelId, message, signal, credentials) {
       );
     logFeatureOk("projects_send");
     return {
-      messageId: c.message_id,
-      threadRootId: c.thread_root_id,
-      deduplicated: c.deduplicated === true,
+      messageId: result.message_id,
+      threadRootId: result.thread_root_id,
+      deduplicated: result.deduplicated === true,
     };
   } catch (error) {
     if (signal?.aborted !== true)
@@ -318,9 +330,9 @@ async function postChannelMessage(channelId, message, signal, credentials) {
   }
 }
 //@ chunk-dz3q485w.js:7069-7253 placement
-function parseChannelSummary(e) {
-  let n = e;
-  let channel = n?.channel ?? n;
+function parseChannelSummary(payload) {
+  let rawChannel = payload;
+  let channel = rawChannel?.channel ?? rawChannel;
   if (typeof channel?.id !== "string" || !CHANNEL_ID_REGEX.test(channel.id)) return null;
   return {
     id: channel.id,
@@ -329,9 +341,10 @@ function parseChannelSummary(e) {
   };
 }
 //@ chunk-dz3q485w.js:7253-7375 placement
-function coordinatorSessionIdOf(e) {
-  let n = (s) => (typeof s === "string" && SESSION_ID_REGEX.test(s) ? s : null);
-  return n(e.channel_session_id) ?? n(e.overview_session_id);
+function coordinatorSessionIdOf(channel) {
+  let validSessionId = (candidate) =>
+    typeof candidate === "string" && SESSION_ID_REGEX.test(candidate) ? candidate : null;
+  return validSessionId(channel.channel_session_id) ?? validSessionId(channel.overview_session_id);
 }
 //@ chunk-dz3q485w.js:7375-8251 placement
 /**
@@ -339,7 +352,7 @@ function coordinatorSessionIdOf(e) {
  */
 async function createProjectChannel(spec, signal, credentials) {
   try {
-    let r = await apiClient.post(
+    let response = await apiClient.post(
       "/v1/code/channels",
       {
         visibility: "private",
@@ -374,8 +387,8 @@ async function createProjectChannel(spec, signal, credentials) {
         credentials,
       },
     );
-    let { data: a } = checkChannelResponse(r, "create the project");
-    let channelSummary = parseChannelSummary(a);
+    let { data: payload } = checkChannelResponse(response, "create the project");
+    let channelSummary = parseChannelSummary(payload);
     if (channelSummary === null)
       throw new ChannelApiError(
         "create the project",
@@ -411,7 +424,7 @@ var PROJECT_NOT_FOUND_MESSAGE =
 async function getProjectChannel(channelId, requiredRole, signal, credentials, includeMembers = false) {
   let path = channelPath(channelId, includeMembers ? "?include_members=true" : "", "look up the project");
   try {
-    let h = await apiClient.get(path, {
+    let response = await apiClient.get(path, {
       auth: "teleport-org",
       ...(await withTrustedDeviceHeaders()),
       validateStatus: () => true,
@@ -419,10 +432,10 @@ async function getProjectChannel(channelId, requiredRole, signal, credentials, i
       signal,
       credentials,
     });
-    if (requiredRole === "member" && h.ok && h.status === 404)
+    if (requiredRole === "member" && response.ok && response.status === 404)
       throw new ChannelApiError("look up the project", 404, PROJECT_NOT_FOUND_MESSAGE, "auth_or_access");
-    let b = checkChannelResponse(h, "look up the project").data;
-    let channelSummary = parseChannelSummary(b);
+    let payload = checkChannelResponse(response, "look up the project").data;
+    let channelSummary = parseChannelSummary(payload);
     if (channelSummary === null)
       throw new ChannelApiError(
         "look up the project",
@@ -430,13 +443,13 @@ async function getProjectChannel(channelId, requiredRole, signal, credentials, i
         "the server returned an unexpected shape",
         "bad_response",
       );
-    let channel = b?.channel ?? b;
-    let j = (R) => (typeof R === "string" ? R.toLowerCase() : "");
+    let channel = payload?.channel ?? payload;
+    let normalizeRole = (rawRole) => (typeof rawRole === "string" ? rawRole.toLowerCase() : "");
     let callerRelations = Array.isArray(channel?.caller_relations) ? channel.caller_relations : [];
-    let P =
-      callerRelations.some((callerRelation) => j(callerRelation) === "owner") ||
-      j(channel?.membership?.role) === "owner";
-    if (requiredRole === "owner" && !P)
+    let isOwner =
+      callerRelations.some((callerRelation) => normalizeRole(callerRelation) === "owner") ||
+      normalizeRole(channel?.membership?.role) === "owner";
+    if (requiredRole === "owner" && !isOwner)
       throw new ChannelApiError(
         "look up the project",
         null,
@@ -445,17 +458,18 @@ async function getProjectChannel(channelId, requiredRole, signal, credentials, i
       );
     if (
       requiredRole === "member" &&
-      !callerRelations.some((callerRelation) => j(callerRelation) === "member")
+      !callerRelations.some((callerRelation) => normalizeRole(callerRelation) === "member")
     )
       throw new ChannelApiError("look up the project", null, PROJECT_NOT_FOUND_MESSAGE, "auth_or_access");
-    let L =
+    let notTargetReason =
       requiredRole === "owner"
         ? projectNotTargetReason({
             visibility: channel?.visibility,
             closed: channel?.archived_at != null || channel?.disabled_at != null,
           })
         : null;
-    if (L !== null) throw new ChannelApiError("look up the project", null, L, "not_a_target");
+    if (notTargetReason !== null)
+      throw new ChannelApiError("look up the project", null, notTargetReason, "not_a_target");
     if (requiredRole === "member" && channel?.archived_at != null)
       throw new ChannelApiError(
         "look up the project",
@@ -491,9 +505,9 @@ async function getProjectChannel(channelId, requiredRole, signal, credentials, i
   }
 }
 //@ chunk-dz3q485w.js:10120-10410 placement
-function parseChannelConfig(e) {
-  let n = e;
-  let config = n?.config ?? n;
+function parseChannelConfig(payload) {
+  let rawConfig = payload;
+  let config = rawConfig?.config ?? rawConfig;
   return {
     defaultModel:
       typeof config?.default_model === "string" && config.default_model !== ""
@@ -511,14 +525,14 @@ function parseChannelConfig(e) {
 /**
  * 更新项目频道配置（默认来源 URL 列表），返回解析后的默认模型与来源 URL。
  */
-async function updateChannelConfig(id, n, signal, credentials) {
-  let a = channelPath(id, "/config", "update the project settings");
+async function updateChannelConfig(channelId, update, signal, credentials) {
+  let path = channelPath(channelId, "/config", "update the project settings");
   try {
-    let l = await apiClient.patch(
-      a,
+    let response = await apiClient.patch(
+      path,
       {
-        ...(n.defaultSourceUrls !== undefined && {
-          default_source_urls: n.defaultSourceUrls,
+        ...(update.defaultSourceUrls !== undefined && {
+          default_source_urls: update.defaultSourceUrls,
         }),
       },
       {
@@ -530,9 +544,9 @@ async function updateChannelConfig(id, n, signal, credentials) {
         credentials,
       },
     );
-    let { data: c } = checkChannelResponse(l, "update the project settings");
+    let { data: payload } = checkChannelResponse(response, "update the project settings");
     logFeatureOk("projects_config_update");
-    return parseChannelConfig(c);
+    return parseChannelConfig(payload);
   } catch (error) {
     if (signal?.aborted !== true)
       logFeatureBad(
@@ -563,27 +577,27 @@ function parseRpcToolText(body, action) {
               .map((line) => line.slice(5).replace(/^ /, "")).join(`
 `),
           )
-          .filter((w) => w.trim() !== "");
+          .filter((dataLine) => dataLine.trim() !== "");
   let sawNonJson = false;
   let response = null;
   for (let payload of payloads) {
-    let y;
+    let parsedPayload;
     try {
-      y = jsonParse(payload);
+      parsedPayload = jsonParse(payload);
     } catch {
       sawNonJson = true;
       continue;
     }
-    let j = Array.isArray(y) ? y : [y];
-    for (let S of j) {
-      let P = S;
+    let messages = Array.isArray(parsedPayload) ? parsedPayload : [parsedPayload];
+    for (let message of messages) {
+      let jsonRpcMessage = message;
       if (
-        P !== null &&
-        typeof P === "object" &&
-        P.id === JSON_RPC_REQUEST_ID &&
-        (P.result !== undefined || P.error !== undefined)
+        jsonRpcMessage !== null &&
+        typeof jsonRpcMessage === "object" &&
+        jsonRpcMessage.id === JSON_RPC_REQUEST_ID &&
+        (jsonRpcMessage.result !== undefined || jsonRpcMessage.error !== undefined)
       )
-        response = P;
+        response = jsonRpcMessage;
     }
   }
   if (response === null)
@@ -605,9 +619,9 @@ function parseRpcToolText(body, action) {
     );
   }
   let text = (Array.isArray(response.result?.content) ? response.result.content : [])
-    .map((w) => {
-      let y = w;
-      return y?.type === "text" && typeof y.text === "string" ? y.text : "";
+    .map((contentItem) => {
+      let item = contentItem;
+      return item?.type === "text" && typeof item.text === "string" ? item.text : "";
     })
     .join(
       `
@@ -629,7 +643,7 @@ function parseRpcToolText(body, action) {
  */
 async function handOffToCoordinator(sessionId, message, signal, credentials) {
   try {
-    let l = await apiClient.post(
+    let response = await apiClient.post(
       "/v1/code/mcp/meta",
       {
         jsonrpc: "2.0",
@@ -656,7 +670,7 @@ async function handOffToCoordinator(sessionId, message, signal, credentials) {
         responseType: "text",
       },
     );
-    let { data: body } = checkChannelResponse(l, "hand the summary to the project");
+    let { data: body } = checkChannelResponse(response, "hand the summary to the project");
     parseRpcToolText(body, "hand the summary to the project");
     logFeatureOk("projects_handoff");
   } catch (error) {

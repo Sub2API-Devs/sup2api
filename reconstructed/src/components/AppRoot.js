@@ -8,7 +8,7 @@
  * pieces: chunk-xe7zq1p4.js (1)
  * attribution: placement 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { sessionServicesFor } from "../utils/secureStorage/credentialsFileStore.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { KeybindingRoot } from "../keybindings/KeybindingProviderSetup.js";
@@ -24,7 +24,7 @@ import { StorageCredentialsProvider } from "./design-system/ThemeProvider.js";
 
 //@ chunk-xe7zq1p4.js:16717-18127 placement = App (0.592)
 function AppRoot(props) {
-  let $ = w(32);
+  let $ = useMemoCache(32);
   let {
     session,
     host,
@@ -42,23 +42,23 @@ function AppRoot(props) {
     keybindings,
     children,
   } = props;
-  let _ = keybindings === undefined ? true : keybindings;
-  let x;
+  let showKeybindings = keybindings === undefined ? true : keybindings;
+  let sessionServices;
   if ($[0] !== storageV5) {
-    x = sessionServicesFor(storageV5);
+    sessionServices = sessionServicesFor(storageV5);
     $[0] = storageV5;
-    $[1] = x;
-  } else x = $[1];
-  let s = x;
+    $[1] = sessionServices;
+  } else sessionServices = $[1];
+  let services = sessionServices;
   let children_2;
-  if ($[2] !== children || $[3] !== _) {
-    children_2 = _
+  if ($[2] !== children || $[3] !== showKeybindings) {
+    children_2 = showKeybindings
       ? jsxProd_default(KeybindingRoot, {
           children,
         })
       : children;
     $[2] = children;
-    $[3] = _;
+    $[3] = showKeybindings;
     $[4] = children_2;
   } else children_2 = $[4];
   let children_3;
@@ -73,7 +73,7 @@ function AppRoot(props) {
     $[5] = children_2;
     $[6] = children_3;
   } else children_3 = $[6];
-  let C;
+  let stateProvider;
   if (
     $[7] !== fleetNudgeStore ||
     $[8] !== initialState ||
@@ -83,7 +83,7 @@ function AppRoot(props) {
     $[12] !== children_3 ||
     $[13] !== writesExitHandoff
   ) {
-    C = jsxProd_default(AppStateProvider, {
+    stateProvider = jsxProd_default(AppStateProvider, {
       store,
       initialState,
       onChangeAppState,
@@ -99,25 +99,25 @@ function AppRoot(props) {
     $[11] = store;
     $[12] = children_3;
     $[13] = writesExitHandoff;
-    $[14] = C;
-  } else C = $[14];
-  let g = C;
+    $[14] = stateProvider;
+  } else stateProvider = $[14];
+  let stateTree = stateProvider;
   let children_4;
-  if ($[15] !== g || $[16] !== host || $[17] !== project || $[18] !== session) {
+  if ($[15] !== stateTree || $[16] !== host || $[17] !== project || $[18] !== session) {
     children_4 =
       session !== undefined
         ? jsxProd_default(SessionProvider, {
             session,
-            children: g,
+            children: stateTree,
           })
         : host !== undefined
           ? jsxProd_default(ProjectProvider, {
               host,
               project,
-              children: g,
+              children: stateTree,
             })
-          : g;
-    $[15] = g;
+          : stateTree;
+    $[15] = stateTree;
     $[16] = host;
     $[17] = project;
     $[18] = session;
@@ -133,44 +133,44 @@ function AppRoot(props) {
     $[21] = children_4;
     $[22] = children_5;
   } else children_5 = $[22];
-  let m;
+  let fpsTree;
   if ($[23] !== getFpsMetrics || $[24] !== children_5) {
-    m = jsxProd_default(FpsMetricsProvider, {
+    fpsTree = jsxProd_default(FpsMetricsProvider, {
       getFpsMetrics,
       children: children_5,
     });
     $[23] = getFpsMetrics;
     $[24] = children_5;
-    $[25] = m;
-  } else m = $[25];
-  let H = m;
-  let V;
-  if ($[26] !== messageQueue || $[27] !== H) {
-    V =
+    $[25] = fpsTree;
+  } else fpsTree = $[25];
+  let fpsTree_ = fpsTree;
+  let queueTree;
+  if ($[26] !== messageQueue || $[27] !== fpsTree_) {
+    queueTree =
       messageQueue === undefined
-        ? H
+        ? fpsTree_
         : jsxProd_default(QueueProvider, {
             queue: messageQueue,
-            children: H,
+            children: fpsTree_,
           });
     $[26] = messageQueue;
-    $[27] = H;
-    $[28] = V;
-  } else V = $[28];
-  let k = V;
+    $[27] = fpsTree_;
+    $[28] = queueTree;
+  } else queueTree = $[28];
+  let inner = queueTree;
   if (storageV5 === undefined) {
-    return k;
+    return inner;
   }
-  let v;
-  if ($[29] !== k || $[30] !== s) {
-    v = jsxProd_default(StorageCredentialsProvider, {
-      ...s,
-      children: k,
+  let storageTree;
+  if ($[29] !== inner || $[30] !== services) {
+    storageTree = jsxProd_default(StorageCredentialsProvider, {
+      ...services,
+      children: inner,
     });
-    $[29] = k;
-    $[30] = s;
-    $[31] = v;
-  } else v = $[31];
-  return v;
+    $[29] = inner;
+    $[30] = services;
+    $[31] = storageTree;
+  } else storageTree = $[31];
+  return storageTree;
 }
 export { AppRoot };

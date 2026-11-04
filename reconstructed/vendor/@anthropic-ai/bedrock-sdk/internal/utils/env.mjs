@@ -6,12 +6,6 @@
  * attribution: esm-fingerprint 4
  */
 
-//@ chunk-e7naa6k8.js:1533-1720 esm-fingerprint
-var readEnv = (env) => {
-  if (typeof globalThis.process !== "undefined") return globalThis.process.env?.[env]?.trim() || undefined;
-  if (typeof globalThis.Deno !== "undefined") return globalThis.Deno.env?.get?.(env)?.trim() || undefined;
-  return;
-};
 //@ chunk-h87x8cg3.js:8101-8288 esm-fingerprint
 var readEnv_2 = (env) => {
   if (typeof globalThis.process !== "undefined") return globalThis.process.env?.[env]?.trim() || undefined;
@@ -20,6 +14,12 @@ var readEnv_2 = (env) => {
 };
 //@ chunk-qhhcfyds.js:1788-1975 esm-fingerprint
 var readEnv_3 = (env) => {
+  if (typeof globalThis.process !== "undefined") return globalThis.process.env?.[env]?.trim() || undefined;
+  if (typeof globalThis.Deno !== "undefined") return globalThis.Deno.env?.get?.(env)?.trim() || undefined;
+  return;
+};
+//@ chunk-e7naa6k8.js:1533-1720 esm-fingerprint
+var readEnv = (env) => {
   if (typeof globalThis.process !== "undefined") return globalThis.process.env?.[env]?.trim() || undefined;
   if (typeof globalThis.Deno !== "undefined") return globalThis.Deno.env?.get?.(env)?.trim() || undefined;
   return;

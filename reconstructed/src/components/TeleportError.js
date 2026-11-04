@@ -8,9 +8,11 @@
  * pieces: chunk-qh0448cn.js (7), chunk-s61vbvea.js (1)
  * attribution: sole-consumer 1, affinity 1, facade-majority 4, layout 1, fingerprint 1
  */
+import { hasFreshSubscriberToken } from "../commands/review/ultrareviewPreconditions.js";
+import { checkIsGitClean } from "../utils/background/remote/preconditions.js";
 import { gracefulShutdownSync } from "../utils/gracefulShutdown.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
-import { y, P } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
+import { useState, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { useHasScrollViewport } from "./ScrollViewportContext.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { MANAGED_RELOAD_NOTICES } from "./GatewayLogin.js";
@@ -35,32 +37,45 @@ import { enforceOrgConfigGateAtStartup } from "../services/policyLimits/orgConfi
 import { runSteps } from "../utils/runSteps.js";
 import { OrgConfigConsentHost } from "./OrgConfigConsentHost.js";
 import { getRootSession } from "../bootstrap/state.js";
-import { hasFreshSubscriberToken } from "../commands/review/ultrareviewPreconditions.js";
-import { checkIsGitClean } from "../utils/background/remote/preconditions.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-s61vbvea.js:471582-471772 fingerprint = getTeleportErrors (1)
+async function getTeleportErrors(credentials, errorsToIgnore) {
+  let errors = new Set();
+  let [needsLogin, isGitClean] = await Promise.all([
+    !errorsToIgnore.has("needsLogin") && hasFreshSubscriberToken(credentials),
+    errorsToIgnore.has("needsGitStash") || false || checkIsGitClean(),
+  ]);
+  if (needsLogin) errors.add("needsLogin");
+  if (!isGitClean) errors.add("needsGitStash");
+  return errors;
+}
 //@ chunk-qh0448cn.js:3209-3236 sole-consumer
 function initialTeleportError() {
   return gracefulShutdownSync(0);
 }
 //@ chunk-qh0448cn.js:3236-3251 affinity
-var dismissedErrors = new Set();
+var dismissedErrors; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-qh0448cn.js:3236", () => {
+  dismissedErrors = new Set();
+});
 //@ chunk-qh0448cn.js:3251-5645 facade-majority = TeleportError (0.538)
 /**
  * teleport 前置错误：需要登录时进入登录，需要 stash 时进入 TeleportStash，完成后继续。
  */
 function TeleportError(props) {
-  let $ = w(38);
+  let $ = useMemoCache(38);
   let { onComplete, onCancel, errorsToIgnore, isStandalone, onSettingsReload } = props;
-  let E = errorsToIgnore === undefined ? dismissedErrors : errorsToIgnore;
-  let D = isStandalone === undefined ? false : isStandalone;
-  let [currentError, setCurrentError] = y(null);
-  let [C, L] = y(false);
+  let ignoredErrors = errorsToIgnore === undefined ? dismissedErrors : errorsToIgnore;
+  let standalone = isStandalone === undefined ? false : isStandalone;
+  let [currentError, setCurrentError] = useState(null);
+  let [isLoggingIn, setIsLoggingIn] = useState(false);
   let hasScrollViewport = useHasScrollViewport();
   let { storageV5, credentials } = useTheme_2();
-  let l;
-  if ($[0] !== credentials || $[1] !== E || $[2] !== onComplete) {
-    l = async () => {
-      let teleportErrors = await getTeleportErrors(credentials, E);
+  let checkErrors;
+  if ($[0] !== credentials || $[1] !== ignoredErrors || $[2] !== onComplete) {
+    checkErrors = async () => {
+      let teleportErrors = await getTeleportErrors(credentials, ignoredErrors);
       if (teleportErrors.size === 0) {
         onComplete();
         return;
@@ -69,130 +84,140 @@ function TeleportError(props) {
       else if (teleportErrors.has("needsGitStash")) setCurrentError("needsGitStash");
     };
     $[0] = credentials;
-    $[1] = E;
+    $[1] = ignoredErrors;
     $[2] = onComplete;
-    $[3] = l;
-  } else l = $[3];
-  let checkErrors = l;
-  let fe;
-  let he;
-  if ($[4] !== checkErrors) {
-    fe = () => {
-      checkErrors();
+    $[3] = checkErrors;
+  } else checkErrors = $[3];
+  let checkErrors_2 = checkErrors;
+  let checkErrorsEffect;
+  let checkErrorsDeps;
+  if ($[4] !== checkErrors_2) {
+    checkErrorsEffect = () => {
+      checkErrors_2();
     };
-    he = [checkErrors];
-    $[4] = checkErrors;
-    $[5] = fe;
-    $[6] = he;
+    checkErrorsDeps = [checkErrors_2];
+    $[4] = checkErrors_2;
+    $[5] = checkErrorsEffect;
+    $[6] = checkErrorsDeps;
   } else {
-    fe = $[5];
-    he = $[6];
+    checkErrorsEffect = $[5];
+    checkErrorsDeps = $[6];
   }
-  P(fe, he);
-  let c = onCancel === undefined;
-  let T = onCancel ?? initialTeleportError;
-  let Ce;
-  if ($[7] !== checkErrors) {
-    Ce = () => {
-      L(false);
-      checkErrors();
+  useEffect(checkErrorsEffect, checkErrorsDeps);
+  let cancelQuits = onCancel === undefined;
+  let handleCancel = onCancel ?? initialTeleportError;
+  let handleLoginDone;
+  if ($[7] !== checkErrors_2) {
+    handleLoginDone = () => {
+      setIsLoggingIn(false);
+      checkErrors_2();
     };
-    $[7] = checkErrors;
-    $[8] = Ce;
-  } else Ce = $[8];
-  let G = Ce;
-  let Se;
-  if ($[9] !== c || $[10] !== credentials || $[11] !== onSettingsReload || $[12] !== storageV5) {
-    Se = () => {
-      let He = MANAGED_RELOAD_NOTICES({
-        showSecurityDialog: c ? undefined : showStandaloneSecurityDialog,
+    $[7] = checkErrors_2;
+    $[8] = handleLoginDone;
+  } else handleLoginDone = $[8];
+  let handleLoginDone_ = handleLoginDone;
+  let handleOrgDocumentsReload;
+  if ($[9] !== cancelQuits || $[10] !== credentials || $[11] !== onSettingsReload || $[12] !== storageV5) {
+    handleOrgDocumentsReload = () => {
+      let reloadNotices = MANAGED_RELOAD_NOTICES({
+        showSecurityDialog: cancelQuits ? undefined : showStandaloneSecurityDialog,
         storageV5,
         credentials,
       });
-      onSettingsReload?.(He);
+      onSettingsReload?.(reloadNotices);
     };
-    $[9] = c;
+    $[9] = cancelQuits;
     $[10] = credentials;
     $[11] = onSettingsReload;
     $[12] = storageV5;
-    $[13] = Se;
-  } else Se = $[13];
-  let onOrgDocumentsReload = Se;
-  let Te;
+    $[13] = handleOrgDocumentsReload;
+  } else handleOrgDocumentsReload = $[13];
+  let onOrgDocumentsReload = handleOrgDocumentsReload;
+  let handleConfirmLogin;
   if ($[14] === MEMO_CACHE_SENTINEL) {
-    Te = () => {
-      L(true);
+    handleConfirmLogin = () => {
+      setIsLoggingIn(true);
     };
-    $[14] = Te;
-  } else Te = $[14];
-  let onConfirm = Te;
-  let ye;
-  if ($[15] !== checkErrors) {
-    ye = () => checkErrors();
-    $[15] = checkErrors;
-    $[16] = ye;
-  } else ye = $[16];
-  let onStashAndContinue = ye;
-  let { entries, exitState } = useExitKeybindingEntries(onCancel, undefined, onCancel !== undefined && C);
-  const isActive = D && currentError === "needsGitStash";
-  let xe;
+    $[14] = handleConfirmLogin;
+  } else handleConfirmLogin = $[14];
+  let onConfirm = handleConfirmLogin;
+  let handleStashAndContinue;
+  if ($[15] !== checkErrors_2) {
+    handleStashAndContinue = () => checkErrors_2();
+    $[15] = checkErrors_2;
+    $[16] = handleStashAndContinue;
+  } else handleStashAndContinue = $[16];
+  let onStashAndContinue = handleStashAndContinue;
+  let { entries, exitState } = useExitKeybindingEntries(
+    onCancel,
+    undefined,
+    onCancel !== undefined && isLoggingIn,
+  );
+  const isActive = standalone && currentError === "needsGitStash";
+  let cancelKeybindingOptions;
   if ($[17] !== isActive) {
-    xe = {
+    cancelKeybindingOptions = {
       context: "Confirmation",
       isActive,
     };
     $[17] = isActive;
-    $[18] = xe;
-  } else xe = $[18];
-  useKeybinding("confirm:no", T, xe);
+    $[18] = cancelKeybindingOptions;
+  } else cancelKeybindingOptions = $[18];
+  useKeybinding("confirm:no", handleCancel, cancelKeybindingOptions);
   if (!currentError) {
     return null;
   }
   switch (currentError) {
     case "needsGitStash": {
-      let I;
-      if ($[19] !== c || $[20] !== onStashAndContinue || $[21] !== T) {
-        I = jsxProd_default(TeleportStash, {
+      let stashElement;
+      if ($[19] !== cancelQuits || $[20] !== onStashAndContinue || $[21] !== handleCancel) {
+        stashElement = jsxProd_default(TeleportStash, {
           onStashAndContinue,
-          onCancel: T,
-          cancelQuits: c,
+          onCancel: handleCancel,
+          cancelQuits,
         });
-        $[19] = c;
+        $[19] = cancelQuits;
         $[20] = onStashAndContinue;
-        $[21] = T;
-        $[22] = I;
-      } else I = $[22];
-      return I;
+        $[21] = handleCancel;
+        $[22] = stashElement;
+      } else stashElement = $[22];
+      return stashElement;
     }
     case "needsLogin": {
       const urlOutdent = hasScrollViewport ? PANE_PADDING_X : PANE_PADDING;
-      let ve;
-      if ($[23] !== G || $[24] !== onOrgDocumentsReload || $[25] !== urlOutdent) {
-        ve = jsxProd_default(ConsoleOAuthFlow, {
-          onDone: G,
+      let loginFlowElement;
+      if ($[23] !== handleLoginDone_ || $[24] !== onOrgDocumentsReload || $[25] !== urlOutdent) {
+        loginFlowElement = jsxProd_default(ConsoleOAuthFlow, {
+          onDone: handleLoginDone_,
           onOrgDocumentsReload,
           mode: "login",
           forceLoginMethod: "claudeai",
           urlOutdent,
         });
-        $[23] = G;
+        $[23] = handleLoginDone_;
         $[24] = onOrgDocumentsReload;
         $[25] = urlOutdent;
-        $[26] = ve;
-      } else ve = $[26];
-      let A = ve;
-      const onCancel = C ? G : T;
+        $[26] = loginFlowElement;
+      } else loginFlowElement = $[26];
+      let loginFlowElement_ = loginFlowElement;
+      const onCancel = isLoggingIn ? handleLoginDone_ : handleCancel;
       const inputGuide = exitState.pending ? `Press ${exitState.keyName} again to cancel` : undefined;
       let children;
-      if ($[27] !== c || $[28] !== C || $[29] !== entries || $[30] !== T || $[31] !== A) {
-        children = C
-          ? c
-            ? A
+      if (
+        $[27] !== cancelQuits ||
+        $[28] !== isLoggingIn ||
+        $[29] !== entries ||
+        $[30] !== handleCancel ||
+        $[31] !== loginFlowElement_
+      ) {
+        children = isLoggingIn
+          ? cancelQuits
+            ? loginFlowElement_
             : jsxProd_default(useDialogKeybindings, {
                 claimFocus: true,
                 flexDirection: "column",
                 bindings: entries,
-                children: A,
+                children: loginFlowElement_,
               })
           : jsxProd_default_2(Fragment, {
               children: [
@@ -211,35 +236,35 @@ function TeleportError(props) {
                 }),
                 jsxProd_default(ConfirmSelect, {
                   confirmLabel: "Login with Claude account",
-                  cancelLabel: c ? "Exit" : "Cancel",
+                  cancelLabel: cancelQuits ? "Exit" : "Cancel",
                   onConfirm,
-                  onCancel: T,
+                  onCancel: handleCancel,
                 }),
               ],
             });
-        $[27] = c;
-        $[28] = C;
+        $[27] = cancelQuits;
+        $[28] = isLoggingIn;
         $[29] = entries;
-        $[30] = T;
-        $[31] = A;
+        $[30] = handleCancel;
+        $[31] = loginFlowElement_;
         $[32] = children;
       } else children = $[32];
-      let Le;
-      if ($[33] !== c || $[34] !== onCancel || $[35] !== inputGuide || $[36] !== children) {
-        Le = jsxProd_default(Dialog, {
+      let loginDialogElement;
+      if ($[33] !== cancelQuits || $[34] !== onCancel || $[35] !== inputGuide || $[36] !== children) {
+        loginDialogElement = jsxProd_default(Dialog, {
           title: "Log in to Claude",
           onCancel,
-          exitOnCtrlCD: c,
+          exitOnCtrlCD: cancelQuits,
           inputGuide,
           children,
         });
-        $[33] = c;
+        $[33] = cancelQuits;
         $[34] = onCancel;
         $[35] = inputGuide;
         $[36] = children;
-        $[37] = Le;
-      } else Le = $[37];
-      return Le;
+        $[37] = loginDialogElement;
+      } else loginDialogElement = $[37];
+      return loginDialogElement;
     }
   }
 }
@@ -247,87 +272,87 @@ function TeleportError(props) {
 var TELEPORT_ERROR_TIMEOUT_MS = 5000;
 //@ chunk-qh0448cn.js:5657-6031 facade-majority
 function HoldForSettingsReload(props) {
-  let d = w(5);
+  let $ = useMemoCache(5);
   let { reload, onDone } = props;
   useTimeout(onDone, TELEPORT_ERROR_TIMEOUT_MS);
-  let f;
-  let u;
-  if (d[0] !== onDone || d[1] !== reload) {
-    f = () => {
-      let E = true;
-      let D = () => {
-        if (E) onDone();
+  let reloadEffect;
+  let reloadDeps;
+  if ($[0] !== onDone || $[1] !== reload) {
+    reloadEffect = () => {
+      let isMounted = true;
+      let finish = () => {
+        if (isMounted) onDone();
       };
-      reload.then(D, D);
+      reload.then(finish, finish);
       return () => {
-        E = false;
+        isMounted = false;
       };
     };
-    u = [reload, onDone];
-    d[0] = onDone;
-    d[1] = reload;
-    d[2] = f;
-    d[3] = u;
+    reloadDeps = [reload, onDone];
+    $[0] = onDone;
+    $[1] = reload;
+    $[2] = reloadEffect;
+    $[3] = reloadDeps;
   } else {
-    f = d[2];
-    u = d[3];
+    reloadEffect = $[2];
+    reloadDeps = $[3];
   }
-  P(f, u);
-  let h;
-  if (d[4] === MEMO_CACHE_SENTINEL) {
-    h = jsxProd_default(Box, {
+  useEffect(reloadEffect, reloadDeps);
+  let loadingElement;
+  if ($[4] === MEMO_CACHE_SENTINEL) {
+    loadingElement = jsxProd_default(Box, {
       paddingX: 1,
       children: jsxProd_default(Text, {
         dimColor: true,
         children: "Loading your organization's managed settings\u2026",
       }),
     });
-    d[4] = h;
-  } else h = d[4];
-  return h;
+    $[4] = loadingElement;
+  } else loadingElement = $[4];
+  return loadingElement;
 }
 //@ chunk-qh0448cn.js:6031-6293 facade-majority
-function enforceOrgConfigGateAfterStepSignIn(p) {
+function enforceOrgConfigGateAfterStepSignIn(toolUseContext) {
   return enforceOrgConfigGateAtStartup({
     interactive: true,
     afterSignIn: true,
     showBlockedScreen: () =>
-      import("./chunk-6bvzpeaf.js").then(
-        (a) => a.showOrgConfigBlockedScreen,
+      import("./OrgConfigBlockedScreen.js").then(
+        (mod) => mod.showOrgConfigBlockedScreen,
         () => {
           return;
         },
       ),
-    printMessage: async (a) => {
-      let { endInkWithError } = await import("./chunk-pz8vz2wa.js");
-      await endInkWithError(p, a);
+    printMessage: async (message) => {
+      let { endInkWithError } = await import("../interactiveHelpers.js");
+      await endInkWithError(toolUseContext, message);
     },
   });
 }
 //@ chunk-qh0448cn.js:6293-6563 facade-majority
-async function showTeleportErrorsImpl(p, errorsToIgnore) {
-  let i;
+async function showTeleportErrorsImpl(toolUseContext, errorsToIgnore) {
+  let reloadPromise;
   await runSteps(
-    p,
+    toolUseContext,
     [
-      (d) =>
+      (done) =>
         jsxProd_default(OrgConfigConsentHost, {
           children: jsxProd_default(TeleportError, {
             errorsToIgnore,
-            onComplete: () => d(),
-            onSettingsReload: (f) => {
-              i = f;
+            onComplete: () => done(),
+            onSettingsReload: (promise) => {
+              reloadPromise = promise;
             },
             isStandalone: true,
           }),
         }),
-      (d) =>
-        i === undefined
+      (done_) =>
+        reloadPromise === undefined
           ? null
           : jsxProd_default(OrgConfigConsentHost, {
               children: jsxProd_default(HoldForSettingsReload, {
-                reload: i,
-                onDone: () => d(),
+                reload: reloadPromise,
+                onDone: () => done_(),
               }),
             }),
     ],
@@ -335,17 +360,12 @@ async function showTeleportErrorsImpl(p, errorsToIgnore) {
       session: getRootSession(),
     },
   );
-  if (i !== undefined) await enforceOrgConfigGateAfterStepSignIn(p);
+  if (reloadPromise !== undefined) await enforceOrgConfigGateAfterStepSignIn(toolUseContext);
 }
-//@ chunk-s61vbvea.js:471582-471772 fingerprint = getTeleportErrors (1)
-async function getTeleportErrors(e, n) {
-  let errors = new Set();
-  let [needsLogin, isGitClean] = await Promise.all([
-    !n.has("needsLogin") && hasFreshSubscriberToken(e),
-    n.has("needsGitStash") || false || checkIsGitClean(),
-  ]);
-  if (needsLogin) errors.add("needsLogin");
-  if (!isGitClean) errors.add("needsGitStash");
-  return errors;
-}
-export { TeleportError, getTeleportErrors };
+export {
+  TeleportError,
+  getTeleportErrors,
+  HoldForSettingsReload,
+  enforceOrgConfigGateAfterStepSignIn,
+  showTeleportErrorsImpl,
+};

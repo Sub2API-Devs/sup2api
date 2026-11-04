@@ -5,12 +5,12 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_picomatch } from "./lib/picomatch.js";
 import { require_utils } from "./lib/utils.js";
 
 //@ chunk-fq0cr76a.js:320219-320419 cjs-fingerprint
-var require_picomatch_2 = x(function (cjsExports, cjsModule) {
+var require_picomatch_2 = __commonJS(function (cjsExports, cjsModule) {
   var pico = require_picomatch();
   var utils = require_utils();
   function picomatch(glob, options, returnState = false) {

@@ -18,8 +18,8 @@ import { createUserInterruptionMessage } from "../messages.js";
 import { unwrapAbortReason } from "../abortController.js";
 
 //@ chunk-xx1vmpsq.js:60683-60725 placement
-function keepUnlessDropped(screened, s) {
-  return screened.dropped !== true && s;
+function keepUnlessDropped(screened, needsRescreenNow) {
+  return screened.dropped !== true && needsRescreenNow;
 }
 //@ chunk-xx1vmpsq.js:60725-60799 placement
 /**
@@ -38,11 +38,11 @@ function needsRescreen({ since, isRunReached }) {
  * 筛查结果仍有效时结算记录并回调，返回是否结算。
  */
 function settleScreening({ recording, onScreened, screened, isRunReached, since }) {
-  let w = needsRescreen({
+  let needsRescreenNow = needsRescreen({
     since,
     isRunReached,
   });
-  if (keepUnlessDropped(screened, w)) return false;
+  if (keepUnlessDropped(screened, needsRescreenNow)) return false;
   recording?.settled(screened);
   onScreened?.(screened);
   return true;
@@ -51,20 +51,20 @@ function settleScreening({ recording, onScreened, screened, isRunReached, since 
 /**
  * withRewriteState：附加改写状态。
  */
-function withRewriteState(e, s) {
-  return e.dropped === true || e.rewritten !== undefined || s === undefined
-    ? e
+function withRewriteState(screened, rewritten) {
+  return screened.dropped === true || screened.rewritten !== undefined || rewritten === undefined
+    ? screened
     : {
-        rewritten: s,
+        rewritten,
       };
 }
 //@ chunk-xx1vmpsq.js:61048-61175 placement
 /**
  * 结算筛查结果：结果未知时标为 noVerdict，否则结算记录并回调。
  */
-function settleScreeningResult({ result: e, screened, isUnknown, recording, onScreened }) {
+function settleScreeningResult({ result, screened, isUnknown, recording, onScreened }) {
   if (keepUnlessDropped(screened, isUnknown)) {
-    e.noVerdict = true;
+    result.noVerdict = true;
     return;
   }
   recording?.settled(screened);
@@ -74,10 +74,10 @@ function settleScreeningResult({ result: e, screened, isUnknown, recording, onSc
 /**
  * 输入处理被中断时的结果：附加中断标记消息（关闭时不保留消息）。
  */
-function interruptedInputResult(e, context, isQueuedByPlugin) {
+function interruptedInputResult(result, context, isQueuedByPlugin) {
   let { signal } = context.abortController;
-  let r = isNullRenderingAttachment_2(e.messages, context);
-  let w = interruptedCommandResult({
+  let keptMessages = isNullRenderingAttachment_2(result.messages, context);
+  let interruption = interruptedCommandResult({
     signal,
     typed: [],
     marker: createUserInterruptionMessage({
@@ -85,10 +85,10 @@ function interruptedInputResult(e, context, isQueuedByPlugin) {
     }),
     isQueuedByPlugin,
   });
-  let T = unwrapAbortReason(signal.reason) === "shutdown";
+  let byShutdown = unwrapAbortReason(signal.reason) === "shutdown";
   return {
-    ...w,
-    messages: T ? [] : [...r, ...w.messages],
+    ...interruption,
+    messages: byShutdown ? [] : [...keptMessages, ...interruption.messages],
     interrupted: true,
   };
 }

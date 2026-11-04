@@ -8,30 +8,34 @@
  * pieces: chunk-xvcy52fk.js (43)
  * attribution: placement 43
  */
-import { init_react_production, Kc, y } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  fragmentTypeExport,
+  useState,
+} from "../../../vendor/react/cjs/react.production.js";
 import { getMarketingNameForModel } from "../../utils/model/model.js";
 import { displayModelName } from "../../utils/model/validateModel.js";
 import {
   RIGHT_ARROW,
+  BRAILLE_FULL_BLOCK,
   BLACK_CIRCLE,
   HORIZONTAL_LINE_GLYPH,
-} from "../../utils/permissions/autoModeRulesPrompt.js";
+} from "../../constants/figures.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { formatTokens, formatDuration, truncateToWidth, formatBarElapsed } from "../../utils/format.js";
 import { plural, collapseWhitespace } from "../../utils/stringUtils.js";
 import { StatusIcon } from "../design-system/StatusIcon.js";
 import { count } from "../../utils/collections.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { pps } from "../../../vendor/chart.js/dist/chart.js";
+import { getBrailleSpinnerFrames } from "../../../vendor/chart.js/dist/chart.js";
 import { usePrefersReducedMotion } from "../Spinner/spinnerFlags.js";
 import { useInterval } from "../../ink/components/Input.js";
-import { BRAILLE_FULL_BLOCK } from "../../constants/figures.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { useScrollViewportSize, useHasScrollViewport } from "../ScrollViewportContext.js";
 import { isFullscreenActive } from "../../utils/fullscreen.js";
@@ -39,333 +43,343 @@ import { bunStringWidth } from "../../ink/stringWidth.js";
 import { parseWorkflowScript } from "../../services/workflows/workflowScriptMeta.js";
 import { isTerminalTaskStatus } from "../../tasks/taskStatus.js";
 import { pausedUsageLine } from "../../utils/usageLimitText.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-xvcy52fk.js:918-922 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-xvcy52fk.js:918", () => {
+  init_react_production();
+});
 //@ chunk-xvcy52fk.js:922-1045 placement
-function modelTransitionText(model, fallbackModel) {
-  let a = (i) => getMarketingNameForModel(i) ?? displayModelName(i);
-  if (fallbackModel != null)
-    return `${model == null ? "" : `${a(model)} `}${RIGHT_ARROW} ${a(fallbackModel)}`;
-  return model != null ? a(model) : "";
+function modelTransitionText(id, id_2) {
+  let formatModel = (id) => getMarketingNameForModel(id) ?? displayModelName(id);
+  if (id_2 != null) return `${id == null ? "" : `${formatModel(id)} `}${RIGHT_ARROW} ${formatModel(id_2)}`;
+  return id != null ? formatModel(id) : "";
 }
 //@ chunk-xvcy52fk.js:1045-1086 placement
-function isDoneState(ge) {
-  return ge.state === "done";
+function isDoneState(agent) {
+  return agent.state === "done";
 }
 //@ chunk-xvcy52fk.js:1086-1128 placement
-function isErrorState(pe) {
-  return pe.state === "error";
+function isErrorState(agent) {
+  return agent.state === "error";
 }
 //@ chunk-xvcy52fk.js:1128-1193 placement
-function isRunningStep(ee) {
-  return ee.state === "start" || ee.state === "progress";
+function isRunningStep(member) {
+  return member.state === "start" || member.state === "progress";
 }
 //@ chunk-xvcy52fk.js:1193-1232 placement
-function isDoneStep(v) {
-  return v.state === "done";
+function isDoneStep(member) {
+  return member.state === "done";
 }
 //@ chunk-xvcy52fk.js:1232-1272 placement
-function isErrorStep(T) {
-  return T.state === "error";
+function isErrorStep(member) {
+  return member.state === "error";
 }
 //@ chunk-xvcy52fk.js:1272-1328 placement
-function renderDimText(children, T) {
+function renderDimText(children, key) {
   return jsxProd_default(
     Text,
     {
       dimColor: true,
       children,
     },
-    T,
+    key,
   );
 }
 //@ chunk-xvcy52fk.js:1328-1642 placement
-function collectWorkflowProgress(l) {
-  let t = new Map();
-  let a = [];
-  let i = new Map();
-  for (let o of l)
-    if (o.type === "workflow_agent") t.set(o.index, o);
-    else if (o.type === "workflow_log") a.push(o.message);
-    else if (o.type === "workflow_phase")
-      i.set(o.index, {
-        title: o.title,
-        kind: o.kind,
+function collectWorkflowProgress(events) {
+  let agentByIndex = new Map();
+  let logs = [];
+  let phaseTitleByIndex = new Map();
+  for (let event of events)
+    if (event.type === "workflow_agent") agentByIndex.set(event.index, event);
+    else if (event.type === "workflow_log") logs.push(event.message);
+    else if (event.type === "workflow_phase")
+      phaseTitleByIndex.set(event.index, {
+        title: event.title,
+        kind: event.kind,
       });
   return {
-    agents: [...t.values()].sort((o, d) => o.index - d.index),
-    logs: a,
-    phaseTitles: i,
+    agents: [...agentByIndex.values()].sort((agentA, agentB) => agentA.index - agentB.index),
+    logs,
+    phaseTitles: phaseTitleByIndex,
   };
 }
 //@ chunk-xvcy52fk.js:1642-1950 placement
 function groupAgentsByPhase(agents, phaseTitles) {
-  if (!agents.some((i) => i.phaseIndex != null)) return null;
-  let a = new Map();
-  for (let i of agents) {
-    let phaseIndex = i.phaseIndex ?? 0;
-    let d = a.get(phaseIndex);
-    if (!d) {
-      let c = phaseTitles.get(phaseIndex);
-      d = {
+  if (!agents.some((agent) => agent.phaseIndex != null)) return null;
+  let groupByPhase = new Map();
+  for (let agent of agents) {
+    let phaseIndex = agent.phaseIndex ?? 0;
+    let group = groupByPhase.get(phaseIndex);
+    if (!group) {
+      let phaseTitle = phaseTitles.get(phaseIndex);
+      group = {
         phaseIndex,
-        title: c?.title ?? `Phase ${phaseIndex}`,
-        kind: c?.kind,
+        title: phaseTitle?.title ?? `Phase ${phaseIndex}`,
+        kind: phaseTitle?.kind,
         agents: [],
       };
-      a.set(phaseIndex, d);
+      groupByPhase.set(phaseIndex, group);
     }
-    d.agents.push(i);
+    group.agents.push(agent);
   }
-  return [...a.values()].sort((i, o) => i.phaseIndex - o.phaseIndex);
+  return [...groupByPhase.values()].sort((groupA, groupB) => groupA.phaseIndex - groupB.phaseIndex);
 }
 //@ chunk-xvcy52fk.js:1950-3756 placement
 function WorkflowAgentRow(props) {
-  let g = w(31);
+  let $ = useMemoCache(31);
   let { row, isLast } = props;
-  let i = isLast ? "\u2514\u2500" : "\u251C\u2500";
-  let o = row.state === "start" || row.state === "progress";
-  let d;
+  let connector = isLast ? "\u2514\u2500" : "\u251C\u2500";
+  let isRunning = row.state === "start" || row.state === "progress";
+  let status;
   c: switch (row.state) {
     case "done": {
-      d = "success";
+      status = "success";
       break c;
     }
     case "error": {
-      d = "error";
+      status = "error";
       break c;
     }
     case "start":
     case "progress": {
-      d = "running";
+      status = "running";
     }
   }
-  let m;
+  let metaParts;
   if (
-    g[0] !== o ||
-    g[1] !== row.agentType ||
-    g[2] !== row.durationMs ||
-    g[3] !== row.fallbackModel ||
-    g[4] !== row.model ||
-    g[5] !== row.tokens ||
-    g[6] !== row.toolCalls
+    $[0] !== isRunning ||
+    $[1] !== row.agentType ||
+    $[2] !== row.durationMs ||
+    $[3] !== row.fallbackModel ||
+    $[4] !== row.model ||
+    $[5] !== row.tokens ||
+    $[6] !== row.toolCalls
   ) {
-    m = [];
-    if (row.agentType != null) m.push(row.agentType);
+    metaParts = [];
+    if (row.agentType != null) metaParts.push(row.agentType);
     if (row.model != null || row.fallbackModel != null) {
-      let u;
-      if (g[8] !== row.fallbackModel || g[9] !== row.model) {
-        u = modelTransitionText(row.model, row.fallbackModel);
-        g[8] = row.fallbackModel;
-        g[9] = row.model;
-        g[10] = u;
-      } else u = g[10];
-      m.push(u);
+      let modelText;
+      if ($[8] !== row.fallbackModel || $[9] !== row.model) {
+        modelText = modelTransitionText(row.model, row.fallbackModel);
+        $[8] = row.fallbackModel;
+        $[9] = row.model;
+        $[10] = modelText;
+      } else modelText = $[10];
+      metaParts.push(modelText);
     }
     if (row.tokens != null) {
-      let u;
-      if (g[11] !== row.tokens) {
-        u = formatTokens(row.tokens);
-        g[11] = row.tokens;
-        g[12] = u;
-      } else u = g[12];
-      m.push(`${u} tok`);
+      let tokenText;
+      if ($[11] !== row.tokens) {
+        tokenText = formatTokens(row.tokens);
+        $[11] = row.tokens;
+        $[12] = tokenText;
+      } else tokenText = $[12];
+      metaParts.push(`${tokenText} tok`);
     }
     if (row.toolCalls != null && row.toolCalls > 0) {
       const toolCalls = row.toolCalls;
-      let f;
-      if (g[13] !== row.toolCalls) {
-        f = plural(row.toolCalls, "tool");
-        g[13] = row.toolCalls;
-        g[14] = f;
-      } else f = g[14];
-      m.push(`${toolCalls} ${f}`);
+      let toolLabel;
+      if ($[13] !== row.toolCalls) {
+        toolLabel = plural(row.toolCalls, "tool");
+        $[13] = row.toolCalls;
+        $[14] = toolLabel;
+      } else toolLabel = $[14];
+      metaParts.push(`${toolCalls} ${toolLabel}`);
     }
     if (row.durationMs != null) {
-      let u;
-      if (g[15] !== row.durationMs) {
-        u = formatDuration(row.durationMs);
-        g[15] = row.durationMs;
-        g[16] = u;
-      } else u = g[16];
-      m.push(u);
+      let durationText;
+      if ($[15] !== row.durationMs) {
+        durationText = formatDuration(row.durationMs);
+        $[15] = row.durationMs;
+        $[16] = durationText;
+      } else durationText = $[16];
+      metaParts.push(durationText);
     }
-    if (o && m.length === 0) m.push("\u2026running");
-    g[0] = o;
-    g[1] = row.agentType;
-    g[2] = row.durationMs;
-    g[3] = row.fallbackModel;
-    g[4] = row.model;
-    g[5] = row.tokens;
-    g[6] = row.toolCalls;
-    g[7] = m;
-  } else m = g[7];
-  let u;
-  if (g[17] !== d) {
-    u = jsxProd_default(StatusIcon, {
-      status: d,
+    if (isRunning && metaParts.length === 0) metaParts.push("\u2026running");
+    $[0] = isRunning;
+    $[1] = row.agentType;
+    $[2] = row.durationMs;
+    $[3] = row.fallbackModel;
+    $[4] = row.model;
+    $[5] = row.tokens;
+    $[6] = row.toolCalls;
+    $[7] = metaParts;
+  } else metaParts = $[7];
+  let statusIcon;
+  if ($[17] !== status) {
+    statusIcon = jsxProd_default(StatusIcon, {
+      status,
     });
-    g[17] = d;
-    g[18] = u;
-  } else u = g[18];
+    $[17] = status;
+    $[18] = statusIcon;
+  } else statusIcon = $[18];
   const label = row.label;
-  let p;
-  if (g[19] !== m) {
-    p =
-      m.length > 0 &&
+  let metaElement;
+  if ($[19] !== metaParts) {
+    metaElement =
+      metaParts.length > 0 &&
       jsxProd_default_2(Text, {
         dimColor: true,
-        children: ["  ", m.join(" \xB7 ")],
+        children: ["  ", metaParts.join(" \xB7 ")],
       });
-    g[19] = m;
-    g[20] = p;
-  } else p = g[20];
-  let h;
-  if (g[21] !== row.error || g[22] !== row.state) {
-    h =
+    $[19] = metaParts;
+    $[20] = metaElement;
+  } else metaElement = $[20];
+  let errorElement;
+  if ($[21] !== row.error || $[22] !== row.state) {
+    errorElement =
       row.state === "error" &&
       row.error &&
       jsxProd_default_2(Text, {
         color: "error",
         children: [" ", "\u2014", " ", row.error],
       });
-    g[21] = row.error;
-    g[22] = row.state;
-    g[23] = h;
-  } else h = g[23];
-  let C;
-  if (g[24] !== o || g[25] !== row.label || g[26] !== u || g[27] !== p || g[28] !== h || g[29] !== i) {
-    C = jsxProd_default(Box, {
+    $[21] = row.error;
+    $[22] = row.state;
+    $[23] = errorElement;
+  } else errorElement = $[23];
+  let rowElement;
+  if (
+    $[24] !== isRunning ||
+    $[25] !== row.label ||
+    $[26] !== statusIcon ||
+    $[27] !== metaElement ||
+    $[28] !== errorElement ||
+    $[29] !== connector
+  ) {
+    rowElement = jsxProd_default(Box, {
       paddingLeft: 1,
       children: jsxProd_default_2(Text, {
-        dimColor: o,
-        children: [i, " ", u, " ", label, p, h],
+        dimColor: isRunning,
+        children: [connector, " ", statusIcon, " ", label, metaElement, errorElement],
       }),
     });
-    g[24] = o;
-    g[25] = row.label;
-    g[26] = u;
-    g[27] = p;
-    g[28] = h;
-    g[29] = i;
-    g[30] = C;
-  } else C = g[30];
-  return C;
+    $[24] = isRunning;
+    $[25] = row.label;
+    $[26] = statusIcon;
+    $[27] = metaElement;
+    $[28] = errorElement;
+    $[29] = connector;
+    $[30] = rowElement;
+  } else rowElement = $[30];
+  return rowElement;
 }
 //@ chunk-xvcy52fk.js:3756-5648 placement
 function WorkflowPhaseGroup(props) {
-  let o = w(41);
+  let $ = useMemoCache(41);
   let { group, verbose, width } = props;
-  let d;
-  if (o[0] !== group.agents) {
-    d = group.agents.filter(isDoneState);
-    o[0] = group.agents;
-    o[1] = d;
-  } else d = o[1];
-  let c = d;
-  let g;
-  let m;
-  let u;
-  let f;
-  let p;
-  if (o[2] !== c.length || o[3] !== group.agents || o[4] !== verbose) {
+  let doneAgents;
+  if ($[0] !== group.agents) {
+    doneAgents = group.agents.filter(isDoneState);
+    $[0] = group.agents;
+    $[1] = doneAgents;
+  } else doneAgents = $[1];
+  let doneAgents_ = doneAgents;
+  let isAllSettled;
+  let doneCount;
+  let errorCount;
+  let shownAgents;
+  let totalCount;
+  if ($[2] !== doneAgents_.length || $[3] !== group.agents || $[4] !== verbose) {
     let filtered = group.agents.filter(isErrorState);
     let filtered_2 = group.agents.filter(isRunningStep);
-    p = group.agents.length;
-    m = c.length;
-    u = filtered.length;
-    g = m + u === p && p > 0;
-    f = verbose ? group.agents : [...filtered, ...filtered_2];
-    o[2] = c.length;
-    o[3] = group.agents;
-    o[4] = verbose;
-    o[5] = g;
-    o[6] = m;
-    o[7] = u;
-    o[8] = f;
-    o[9] = p;
+    totalCount = group.agents.length;
+    doneCount = doneAgents_.length;
+    errorCount = filtered.length;
+    isAllSettled = doneCount + errorCount === totalCount && totalCount > 0;
+    shownAgents = verbose ? group.agents : [...filtered, ...filtered_2];
+    $[2] = doneAgents_.length;
+    $[3] = group.agents;
+    $[4] = verbose;
+    $[5] = isAllSettled;
+    $[6] = doneCount;
+    $[7] = errorCount;
+    $[8] = shownAgents;
+    $[9] = totalCount;
   } else {
-    g = o[5];
-    m = o[6];
-    u = o[7];
-    f = o[8];
-    p = o[9];
+    isAllSettled = $[5];
+    doneCount = $[6];
+    errorCount = $[7];
+    shownAgents = $[8];
+    totalCount = $[9];
   }
-  let b = f;
+  let shownAgents_ = shownAgents;
   let model = group.agents[0]?.model;
-  let M;
-  if (o[10] !== model || o[11] !== group.agents) {
-    M =
+  let sharedModelText;
+  if ($[10] !== model || $[11] !== group.agents) {
+    sharedModelText =
       model && group.agents.every((agent) => agent.model === model)
         ? modelTransitionText(model, undefined)
         : undefined;
-    o[10] = model;
-    o[11] = group.agents;
-    o[12] = M;
-  } else M = o[12];
-  let P = M;
-  let status = !g ? "running" : u > 0 ? "error" : "success";
+    $[10] = model;
+    $[11] = group.agents;
+    $[12] = sharedModelText;
+  } else sharedModelText = $[12];
+  let sharedModelText_ = sharedModelText;
+  let status = !isAllSettled ? "running" : errorCount > 0 ? "error" : "success";
   const borderColor = group.kind === "child" ? "permission" : "subtle";
-  let G;
-  if (o[13] !== group.title) {
-    G = jsxProd_default(Text, {
+  let titleElement;
+  if ($[13] !== group.title) {
+    titleElement = jsxProd_default(Text, {
       bold: true,
       children: group.title,
     });
-    o[13] = group.title;
-    o[14] = G;
-  } else G = o[14];
-  let W;
-  if (o[15] !== status) {
-    W = jsxProd_default(StatusIcon, {
+    $[13] = group.title;
+    $[14] = titleElement;
+  } else titleElement = $[14];
+  let statusIcon;
+  if ($[15] !== status) {
+    statusIcon = jsxProd_default(StatusIcon, {
       status,
     });
-    o[15] = status;
-    o[16] = W;
-  } else W = o[16];
-  const D = P && ` \xB7 ${P}`;
-  let E;
-  if (o[17] !== u) {
-    E =
-      u > 0 &&
+    $[15] = status;
+    $[16] = statusIcon;
+  } else statusIcon = $[16];
+  const modelSuffix = sharedModelText_ && ` \xB7 ${sharedModelText_}`;
+  let failedElement;
+  if ($[17] !== errorCount) {
+    failedElement =
+      errorCount > 0 &&
       jsxProd_default_2(Text, {
         color: "error",
-        children: [" ", "\xB7", " ", u, " failed"],
+        children: [" ", "\xB7", " ", errorCount, " failed"],
       });
-    o[17] = u;
-    o[18] = E;
-  } else E = o[18];
-  let _;
-  if (o[19] !== m || o[20] !== D || o[21] !== E || o[22] !== p) {
-    _ = jsxProd_default_2(Text, {
+    $[17] = errorCount;
+    $[18] = failedElement;
+  } else failedElement = $[18];
+  let progressElement;
+  if ($[19] !== doneCount || $[20] !== modelSuffix || $[21] !== failedElement || $[22] !== totalCount) {
+    progressElement = jsxProd_default_2(Text, {
       dimColor: true,
-      children: [m, "/", p, D, E],
+      children: [doneCount, "/", totalCount, modelSuffix, failedElement],
     });
-    o[19] = m;
-    o[20] = D;
-    o[21] = E;
-    o[22] = p;
-    o[23] = _;
-  } else _ = o[23];
-  let z;
-  if (o[24] !== G || o[25] !== W || o[26] !== _) {
-    z = jsxProd_default(Box, {
+    $[19] = doneCount;
+    $[20] = modelSuffix;
+    $[21] = failedElement;
+    $[22] = totalCount;
+    $[23] = progressElement;
+  } else progressElement = $[23];
+  let headerElement;
+  if ($[24] !== titleElement || $[25] !== statusIcon || $[26] !== progressElement) {
+    headerElement = jsxProd_default(Box, {
       paddingX: 1,
       children: jsxProd_default_2(Text, {
-        children: [G, "  ", W, " ", _],
+        children: [titleElement, "  ", statusIcon, " ", progressElement],
       }),
     });
-    o[24] = G;
-    o[25] = W;
-    o[26] = _;
-    o[27] = z;
-  } else z = o[27];
-  let U;
-  if (o[28] !== m || o[29] !== verbose) {
-    U =
+    $[24] = titleElement;
+    $[25] = statusIcon;
+    $[26] = progressElement;
+    $[27] = headerElement;
+  } else headerElement = $[27];
+  let collapsedDoneElement;
+  if ($[28] !== doneCount || $[29] !== verbose) {
+    collapsedDoneElement =
       !verbose &&
-      m > 0 &&
+      doneCount > 0 &&
       jsxProd_default(Box, {
         paddingLeft: 1,
         children: jsxProd_default_2(Text, {
@@ -375,205 +389,211 @@ function WorkflowPhaseGroup(props) {
               status: "success",
             }),
             " ",
-            m,
+            doneCount,
             " done",
           ],
         }),
       });
-    o[28] = m;
-    o[29] = verbose;
-    o[30] = U;
-  } else U = o[30];
-  let X;
-  if (o[31] !== b) {
-    let N;
-    if (o[33] !== b.length) {
-      N = (Z, Y) =>
+    $[28] = doneCount;
+    $[29] = verbose;
+    $[30] = collapsedDoneElement;
+  } else collapsedDoneElement = $[30];
+  let agentRows;
+  if ($[31] !== shownAgents_) {
+    let renderRow;
+    if ($[33] !== shownAgents_.length) {
+      renderRow = (agentRow, rowIndex) =>
         jsxProd_default(
           WorkflowAgentRow,
           {
-            row: Z,
-            isLast: Y === b.length - 1,
+            row: agentRow,
+            isLast: rowIndex === shownAgents_.length - 1,
           },
-          Z.index,
+          agentRow.index,
         );
-      o[33] = b.length;
-      o[34] = N;
-    } else N = o[34];
-    X = b.map(N);
-    o[31] = b;
-    o[32] = X;
-  } else X = o[32];
-  let N;
-  if (o[35] !== z || o[36] !== U || o[37] !== X || o[38] !== borderColor || o[39] !== width) {
-    N = jsxProd_default_2(Box, {
+      $[33] = shownAgents_.length;
+      $[34] = renderRow;
+    } else renderRow = $[34];
+    agentRows = shownAgents_.map(renderRow);
+    $[31] = shownAgents_;
+    $[32] = agentRows;
+  } else agentRows = $[32];
+  let groupElement;
+  if (
+    $[35] !== headerElement ||
+    $[36] !== collapsedDoneElement ||
+    $[37] !== agentRows ||
+    $[38] !== borderColor ||
+    $[39] !== width
+  ) {
+    groupElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       borderStyle: "single",
       borderColor,
       alignSelf: "flex-start",
       width,
-      children: [z, U, X],
+      children: [headerElement, collapsedDoneElement, agentRows],
     });
-    o[35] = z;
-    o[36] = U;
-    o[37] = X;
-    o[38] = borderColor;
-    o[39] = width;
-    o[40] = N;
-  } else N = o[40];
-  return N;
+    $[35] = headerElement;
+    $[36] = collapsedDoneElement;
+    $[37] = agentRows;
+    $[38] = borderColor;
+    $[39] = width;
+    $[40] = groupElement;
+  } else groupElement = $[40];
+  return groupElement;
 }
 //@ chunk-xvcy52fk.js:5648-5657 placement
 var WORKFLOW_ROW_HEIGHT = 8;
 //@ chunk-xvcy52fk.js:5657-6778 placement
 function WorkflowAgentList(props) {
-  let i = w(26);
+  let $ = useMemoCache(26);
   let { agents, verbose } = props;
-  let o;
-  if (i[0] !== agents || i[1] !== verbose) {
-    o = verbose ? agents : agents.slice(-WORKFLOW_ROW_HEIGHT);
-    i[0] = agents;
-    i[1] = verbose;
-    i[2] = o;
-  } else o = i[2];
-  let d = o;
-  let c = agents.length - d.length;
-  let g;
-  if (i[3] !== agents) {
-    g = count(agents, isDoneStep);
-    i[3] = agents;
-    i[4] = g;
-  } else g = i[4];
-  let m = g;
-  let u = count(agents, isErrorStep);
-  const f = agents.length;
-  let p;
-  if (i[5] !== agents.length) {
-    p = plural(agents.length, "agent");
-    i[5] = agents.length;
-    i[6] = p;
-  } else p = i[6];
-  let h;
-  if (i[7] !== u) {
-    h =
-      u > 0 &&
+  let visibleAgents;
+  if ($[0] !== agents || $[1] !== verbose) {
+    visibleAgents = verbose ? agents : agents.slice(-WORKFLOW_ROW_HEIGHT);
+    $[0] = agents;
+    $[1] = verbose;
+    $[2] = visibleAgents;
+  } else visibleAgents = $[2];
+  let visibleAgents_ = visibleAgents;
+  let hiddenCount = agents.length - visibleAgents_.length;
+  let doneCount;
+  if ($[3] !== agents) {
+    doneCount = count(agents, isDoneStep);
+    $[3] = agents;
+    $[4] = doneCount;
+  } else doneCount = $[4];
+  let doneCount_ = doneCount;
+  let errorCount = count(agents, isErrorStep);
+  const totalCount = agents.length;
+  let agentLabel;
+  if ($[5] !== agents.length) {
+    agentLabel = plural(agents.length, "agent");
+    $[5] = agents.length;
+    $[6] = agentLabel;
+  } else agentLabel = $[6];
+  let failedElement;
+  if ($[7] !== errorCount) {
+    failedElement =
+      errorCount > 0 &&
       jsxProd_default_2(Text, {
         color: "error",
-        children: [" ", "\xB7", " ", u, " failed"],
+        children: [" ", "\xB7", " ", errorCount, " failed"],
       });
-    i[7] = u;
-    i[8] = h;
-  } else h = i[8];
-  let C;
-  if (i[9] !== agents.length || i[10] !== m || i[11] !== p || i[12] !== h) {
-    C = jsxProd_default_2(Text, {
-      children: [f, " ", p, " ", "\xB7", " ", m, " done", h],
+    $[7] = errorCount;
+    $[8] = failedElement;
+  } else failedElement = $[8];
+  let summaryElement;
+  if ($[9] !== agents.length || $[10] !== doneCount_ || $[11] !== agentLabel || $[12] !== failedElement) {
+    summaryElement = jsxProd_default_2(Text, {
+      children: [totalCount, " ", agentLabel, " ", "\xB7", " ", doneCount_, " done", failedElement],
     });
-    i[9] = agents.length;
-    i[10] = m;
-    i[11] = p;
-    i[12] = h;
-    i[13] = C;
-  } else C = i[13];
-  let b;
-  if (i[14] !== c || i[15] !== d) {
-    let x;
-    if (i[17] !== c || i[18] !== d.length) {
-      x = (M, A) =>
+    $[9] = agents.length;
+    $[10] = doneCount_;
+    $[11] = agentLabel;
+    $[12] = failedElement;
+    $[13] = summaryElement;
+  } else summaryElement = $[13];
+  let rowElements;
+  if ($[14] !== hiddenCount || $[15] !== visibleAgents_) {
+    let renderRow;
+    if ($[17] !== hiddenCount || $[18] !== visibleAgents_.length) {
+      renderRow = (agentRow, rowIndex) =>
         jsxProd_default(
           WorkflowAgentRow,
           {
-            row: M,
-            isLast: A === d.length - 1 && c === 0,
+            row: agentRow,
+            isLast: rowIndex === visibleAgents_.length - 1 && hiddenCount === 0,
           },
-          M.index,
+          agentRow.index,
         );
-      i[17] = c;
-      i[18] = d.length;
-      i[19] = x;
-    } else x = i[19];
-    b = d.map(x);
-    i[14] = c;
-    i[15] = d;
-    i[16] = b;
-  } else b = i[16];
-  let x;
-  if (i[20] !== c) {
-    x =
-      c > 0 &&
+      $[17] = hiddenCount;
+      $[18] = visibleAgents_.length;
+      $[19] = renderRow;
+    } else renderRow = $[19];
+    rowElements = visibleAgents_.map(renderRow);
+    $[14] = hiddenCount;
+    $[15] = visibleAgents_;
+    $[16] = rowElements;
+  } else rowElements = $[16];
+  let moreElement;
+  if ($[20] !== hiddenCount) {
+    moreElement =
+      hiddenCount > 0 &&
       jsxProd_default(Box, {
         paddingLeft: 1,
         children: jsxProd_default_2(Text, {
           dimColor: true,
-          children: ["\u2514\u2500 \xB7 \xB7 \xB7 +", c, " more"],
+          children: ["\u2514\u2500 \xB7 \xB7 \xB7 +", hiddenCount, " more"],
         }),
       });
-    i[20] = c;
-    i[21] = x;
-  } else x = i[21];
-  let P;
-  if (i[22] !== C || i[23] !== b || i[24] !== x) {
-    P = jsxProd_default_2(Box, {
+    $[20] = hiddenCount;
+    $[21] = moreElement;
+  } else moreElement = $[21];
+  let listElement;
+  if ($[22] !== summaryElement || $[23] !== rowElements || $[24] !== moreElement) {
+    listElement = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [C, b, x],
+      children: [summaryElement, rowElements, moreElement],
     });
-    i[22] = C;
-    i[23] = b;
-    i[24] = x;
-    i[25] = P;
-  } else P = i[25];
-  return P;
+    $[22] = summaryElement;
+    $[23] = rowElements;
+    $[24] = moreElement;
+    $[25] = listElement;
+  } else listElement = $[25];
+  return listElement;
 }
 //@ chunk-xvcy52fk.js:6778-7809 placement
 /**
  * 工作流进度主体：按阶段分组显示子代理状态与日志。
  */
 function WorkflowProgressBody(props) {
-  let g = w(18);
+  let $ = useMemoCache(18);
   let { collected, verbose, width } = props;
   let { agents, logs, phaseTitles } = collected;
   if (agents.length === 0 && logs.length === 0) {
     return null;
   }
-  let m;
+  let BoxComponent;
   let flexDirection;
-  let f;
-  let p;
-  let h;
-  if (g[0] !== agents || g[1] !== logs || g[2] !== phaseTitles || g[3] !== verbose || g[4] !== width) {
-    let C = groupAgentsByPhase(agents, phaseTitles);
-    let b;
-    if (g[10] !== logs) {
-      b = logs.at(-1);
-      g[10] = logs;
-      g[11] = b;
-    } else b = g[11];
-    let x = b;
+  let latestLogElement;
+  let bodyElement;
+  let earlierLogsElement;
+  if ($[0] !== agents || $[1] !== logs || $[2] !== phaseTitles || $[3] !== verbose || $[4] !== width) {
+    let phaseGroups = groupAgentsByPhase(agents, phaseTitles);
+    let latestLog;
+    if ($[10] !== logs) {
+      latestLog = logs.at(-1);
+      $[10] = logs;
+      $[11] = latestLog;
+    } else latestLog = $[11];
+    let latestLog_ = latestLog;
     let sliced = logs.slice(-3, -1);
-    m = Box;
+    BoxComponent = Box;
     flexDirection = "column";
-    f =
-      x &&
+    latestLogElement =
+      latestLog_ &&
       jsxProd_default(Box, {
-        marginBottom: C || agents.length > 0 ? 1 : 0,
+        marginBottom: phaseGroups || agents.length > 0 ? 1 : 0,
         children: jsxProd_default_2(Text, {
-          children: [figures_default.pointer, " ", x],
+          children: [figures_default.pointer, " ", latestLog_],
         }),
       });
-    p = C
+    bodyElement = phaseGroups
       ? jsxProd_default(Box, {
           flexDirection: "column",
-          children: C.map((A, P) =>
+          children: phaseGroups.map((phaseGroup, groupIndex) =>
             jsxProd_default_2(
-              Kc,
+              fragmentTypeExport,
               {
                 children: [
                   jsxProd_default(WorkflowPhaseGroup, {
-                    group: A,
+                    group: phaseGroup,
                     verbose,
                     width,
                   }),
-                  P < C.length - 1 &&
+                  groupIndex < phaseGroups.length - 1 &&
                     jsxProd_default(Box, {
                       paddingLeft: 3,
                       children: jsxProd_default(Text, {
@@ -583,7 +603,7 @@ function WorkflowProgressBody(props) {
                     }),
                 ],
               },
-              A.phaseIndex,
+              phaseGroup.phaseIndex,
             ),
           ),
         })
@@ -593,7 +613,7 @@ function WorkflowProgressBody(props) {
             verbose,
           })
         : null;
-    h =
+    earlierLogsElement =
       sliced.length > 0 &&
       jsxProd_default(Box, {
         flexDirection: "column",
@@ -601,40 +621,49 @@ function WorkflowProgressBody(props) {
         marginTop: 1,
         children: sliced.map(renderDimText),
       });
-    g[0] = agents;
-    g[1] = logs;
-    g[2] = phaseTitles;
-    g[3] = verbose;
-    g[4] = width;
-    g[5] = m;
-    g[6] = flexDirection;
-    g[7] = f;
-    g[8] = p;
-    g[9] = h;
+    $[0] = agents;
+    $[1] = logs;
+    $[2] = phaseTitles;
+    $[3] = verbose;
+    $[4] = width;
+    $[5] = BoxComponent;
+    $[6] = flexDirection;
+    $[7] = latestLogElement;
+    $[8] = bodyElement;
+    $[9] = earlierLogsElement;
   } else {
-    m = g[5];
-    flexDirection = g[6];
-    f = g[7];
-    p = g[8];
-    h = g[9];
+    BoxComponent = $[5];
+    flexDirection = $[6];
+    latestLogElement = $[7];
+    bodyElement = $[8];
+    earlierLogsElement = $[9];
   }
-  let b;
-  if (g[12] !== m || g[13] !== flexDirection || g[14] !== f || g[15] !== p || g[16] !== h) {
-    b = jsxProd_default_2(m, {
+  let rootElement;
+  if (
+    $[12] !== BoxComponent ||
+    $[13] !== flexDirection ||
+    $[14] !== latestLogElement ||
+    $[15] !== bodyElement ||
+    $[16] !== earlierLogsElement
+  ) {
+    rootElement = jsxProd_default_2(BoxComponent, {
       flexDirection,
-      children: [f, p, h],
+      children: [latestLogElement, bodyElement, earlierLogsElement],
     });
-    g[12] = m;
-    g[13] = flexDirection;
-    g[14] = f;
-    g[15] = p;
-    g[16] = h;
-    g[17] = b;
-  } else b = g[17];
-  return b;
+    $[12] = BoxComponent;
+    $[13] = flexDirection;
+    $[14] = latestLogElement;
+    $[15] = bodyElement;
+    $[16] = earlierLogsElement;
+    $[17] = rootElement;
+  } else rootElement = $[17];
+  return rootElement;
 }
 //@ chunk-xvcy52fk.js:7809-7813 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-xvcy52fk.js:7809", () => {
+  init_react_production();
+});
 //@ chunk-xvcy52fk.js:7813-7845 placement
 function nowMs() {
   return Date.now();
@@ -643,86 +672,86 @@ function nowMs() {
 var WORKFLOW_INDENT = 4;
 var WORKFLOW_LABEL_WIDTH = 80;
 //@ chunk-xvcy52fk.js:7859-8055 placement
-function useSpinnerGlyph(l) {
-  let t = w(2);
-  let a;
-  if (t[0] === MEMO_CACHE_SENTINEL) {
-    a = pps();
-    t[0] = a;
-  } else a = t[0];
-  let i = a;
-  let [o, d] = y(0);
+function useSpinnerGlyph(active) {
+  let $ = useMemoCache(2);
+  let frames;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    frames = getBrailleSpinnerFrames();
+    $[0] = frames;
+  } else frames = $[0];
+  let frames_ = frames;
+  let [frameIndex, setFrameIndex] = useState(0);
   let prefersReducedMotion = usePrefersReducedMotion();
-  let g;
-  if (t[1] === MEMO_CACHE_SENTINEL) {
-    g = () => d((m) => (m + 1) % i.length);
-    t[1] = g;
-  } else g = t[1];
-  useInterval(g, l && !prefersReducedMotion ? WORKFLOW_LABEL_WIDTH : null);
-  return i[o % i.length];
+  let advanceFrame;
+  if ($[1] === MEMO_CACHE_SENTINEL) {
+    advanceFrame = () => setFrameIndex((previous) => (previous + 1) % frames_.length);
+    $[1] = advanceFrame;
+  } else advanceFrame = $[1];
+  useInterval(advanceFrame, active && !prefersReducedMotion ? WORKFLOW_LABEL_WIDTH : null);
+  return frames_[frameIndex % frames_.length];
 }
 //@ chunk-xvcy52fk.js:8055-8700 placement
 function ProgressBar(props) {
-  let o = w(14);
-  let { done: t, total, running } = props;
-  let d;
-  if (o[0] !== t || o[1] !== total) {
-    d = total > 0 ? Math.round((t / total) * WORKFLOW_INDENT) : 0;
-    o[0] = t;
-    o[1] = total;
-    o[2] = d;
-  } else d = o[2];
-  let c = d;
-  let min = Math.min(running ? WORKFLOW_INDENT - 1 : WORKFLOW_INDENT, Math.max(0, c));
-  let m = running ? Math.min(WORKFLOW_INDENT - min, 1) : 0;
-  let u = WORKFLOW_INDENT - min - m;
-  let children = useSpinnerGlyph(m > 0);
-  let p;
-  if (o[3] !== min) {
-    p =
+  let $ = useMemoCache(14);
+  let { done, total, running } = props;
+  let filledCells;
+  if ($[0] !== done || $[1] !== total) {
+    filledCells = total > 0 ? Math.round((done / total) * WORKFLOW_INDENT) : 0;
+    $[0] = done;
+    $[1] = total;
+    $[2] = filledCells;
+  } else filledCells = $[2];
+  let filledCells_ = filledCells;
+  let min = Math.min(running ? WORKFLOW_INDENT - 1 : WORKFLOW_INDENT, Math.max(0, filledCells_));
+  let spinnerCells = running ? Math.min(WORKFLOW_INDENT - min, 1) : 0;
+  let emptyCells = WORKFLOW_INDENT - min - spinnerCells;
+  let children = useSpinnerGlyph(spinnerCells > 0);
+  let filledElement;
+  if ($[3] !== min) {
+    filledElement =
       min > 0 &&
       jsxProd_default(Text, {
         color: "success",
         children: BRAILLE_FULL_BLOCK.repeat(min),
       });
-    o[3] = min;
-    o[4] = p;
-  } else p = o[4];
-  let h;
-  if (o[5] !== children || o[6] !== m) {
-    h =
-      m > 0 &&
+    $[3] = min;
+    $[4] = filledElement;
+  } else filledElement = $[4];
+  let spinnerElement;
+  if ($[5] !== children || $[6] !== spinnerCells) {
+    spinnerElement =
+      spinnerCells > 0 &&
       jsxProd_default(Text, {
         color: "success",
         children,
       });
-    o[5] = children;
-    o[6] = m;
-    o[7] = h;
-  } else h = o[7];
-  let C;
-  if (o[8] !== u) {
-    C =
-      u > 0 &&
+    $[5] = children;
+    $[6] = spinnerCells;
+    $[7] = spinnerElement;
+  } else spinnerElement = $[7];
+  let emptyElement;
+  if ($[8] !== emptyCells) {
+    emptyElement =
+      emptyCells > 0 &&
       jsxProd_default(Text, {
         color: "subtle",
         dimColor: true,
-        children: BRAILLE_FULL_BLOCK.repeat(u),
+        children: BRAILLE_FULL_BLOCK.repeat(emptyCells),
       });
-    o[8] = u;
-    o[9] = C;
-  } else C = o[9];
-  let b;
-  if (o[10] !== p || o[11] !== h || o[12] !== C) {
-    b = jsxProd_default_2(Text, {
-      children: [p, h, C],
+    $[8] = emptyCells;
+    $[9] = emptyElement;
+  } else emptyElement = $[9];
+  let barElement;
+  if ($[10] !== filledElement || $[11] !== spinnerElement || $[12] !== emptyElement) {
+    barElement = jsxProd_default_2(Text, {
+      children: [filledElement, spinnerElement, emptyElement],
     });
-    o[10] = p;
-    o[11] = h;
-    o[12] = C;
-    o[13] = b;
-  } else b = o[13];
-  return b;
+    $[10] = filledElement;
+    $[11] = spinnerElement;
+    $[12] = emptyElement;
+    $[13] = barElement;
+  } else barElement = $[13];
+  return barElement;
 }
 //@ chunk-xvcy52fk.js:8700-8716 placement
 /**
@@ -732,277 +761,289 @@ var WORKFLOW_PROGRESS_LIMITS = 9;
 var WORKFLOW_MAX_ROWS = 12;
 //@ chunk-xvcy52fk.js:8716-9082 placement
 function useWorkflowProgressRows(promptVisibleBelow) {
-  let o = w(9);
+  let $ = useMemoCache(9);
   let terminalSize = useTerminalSize();
   let { rows } = useScrollViewportSize(terminalSize);
   let hasScrollViewport = useHasScrollViewport();
-  let d;
-  if (o[0] !== hasScrollViewport || o[1] !== promptVisibleBelow || o[2] !== rows) {
-    d = hasScrollViewport
+  let availableRows;
+  if ($[0] !== hasScrollViewport || $[1] !== promptVisibleBelow || $[2] !== rows) {
+    availableRows = hasScrollViewport
       ? rows
       : isFullscreenActive()
         ? Math.floor(rows / 2)
         : promptVisibleBelow
           ? Math.max(WORKFLOW_MAX_ROWS, rows - WORKFLOW_PROGRESS_LIMITS)
           : rows;
-    o[0] = hasScrollViewport;
-    o[1] = promptVisibleBelow;
-    o[2] = rows;
-    o[3] = d;
-  } else d = o[3];
-  let availableRows = d;
+    $[0] = hasScrollViewport;
+    $[1] = promptVisibleBelow;
+    $[2] = rows;
+    $[3] = availableRows;
+  } else availableRows = $[3];
+  let availableRows_2 = availableRows;
   let { columns } = terminalSize;
   let width = Math.max(24, columns - 6);
-  let u;
-  if (o[4] !== availableRows || o[5] !== columns || o[6] !== rows || o[7] !== width) {
-    u = {
-      availableRows,
+  let layout;
+  if ($[4] !== availableRows_2 || $[5] !== columns || $[6] !== rows || $[7] !== width) {
+    layout = {
+      availableRows: availableRows_2,
       width,
       rows,
       columns,
     };
-    o[4] = availableRows;
-    o[5] = columns;
-    o[6] = rows;
-    o[7] = width;
-    o[8] = u;
-  } else u = o[8];
-  return u;
+    $[4] = availableRows_2;
+    $[5] = columns;
+    $[6] = rows;
+    $[7] = width;
+    $[8] = layout;
+  } else layout = $[8];
+  return layout;
 }
 //@ chunk-xvcy52fk.js:9082-9282 placement
-function ElapsedClock(l) {
-  let o = w(1);
-  let t = l.status === "running";
-  let [a, i] = y(nowMs);
-  let d;
-  if (o[0] === MEMO_CACHE_SENTINEL) {
-    d = () => i(Date.now());
-    o[0] = d;
-  } else d = o[0];
-  useInterval(d, t ? 1000 : null);
-  return Math.max(0, (l.endTime ?? a) - l.startTime - (l.totalPausedMs ?? 0));
+function ElapsedClock(task) {
+  let $ = useMemoCache(1);
+  let isRunning = task.status === "running";
+  let [now, setNow] = useState(nowMs);
+  let tick;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    tick = () => setNow(Date.now());
+    $[0] = tick;
+  } else tick = $[0];
+  useInterval(tick, isRunning ? 1000 : null);
+  return Math.max(0, (task.endTime ?? now) - task.startTime - (task.totalPausedMs ?? 0));
 }
 //@ chunk-xvcy52fk.js:9282-9292 placement
 var WORKFLOW_PROGRESS_WIDTH = 17;
 //@ chunk-xvcy52fk.js:9292-10718 placement
 function WorkflowPhaseRow(props) {
-  let P = w(28);
-  let { index, title, done: i, total, status, selected, trailing } = props;
-  let m = selected === undefined ? false : selected;
-  let u = trailing === undefined ? "" : trailing;
-  let f = status === "done";
-  let p = status === "failed";
-  let h = f || p;
-  let color = m ? "permission" : f ? "success" : p ? "error" : "subtle";
-  let pointer = m ? figures_default.pointer : " ";
-  let x = f ? figures_default.tick : p ? figures_default.cross : String(index);
-  let M = bunStringWidth(pointer) + 1 + bunStringWidth(x) + 1;
-  let max = Math.max(1, WORKFLOW_PROGRESS_WIDTH - M);
-  let v;
-  if (P[0] !== title || P[1] !== max) {
-    v = truncateToWidth(title, max);
-    P[0] = title;
-    P[1] = max;
-    P[2] = v;
-  } else v = P[2];
-  let T = v;
-  let G = `${pointer} ${x} ${T}`;
-  let max_2 = Math.max(0, WORKFLOW_PROGRESS_WIDTH - bunStringWidth(G));
-  let D = total > 0 ? `${i}/${total}` : "";
-  const color_2 = m ? "permission" : undefined;
-  let _;
-  if (P[3] !== pointer || P[4] !== color_2) {
-    _ = jsxProd_default(Text, {
+  let $ = useMemoCache(28);
+  let { index, title, done: doneCount, total, status, selected, trailing } = props;
+  let isSelected = selected === undefined ? false : selected;
+  let trailingText = trailing === undefined ? "" : trailing;
+  let isDone = status === "done";
+  let isFailed = status === "failed";
+  let isSettled = isDone || isFailed;
+  let color = isSelected ? "permission" : isDone ? "success" : isFailed ? "error" : "subtle";
+  let pointer = isSelected ? figures_default.pointer : " ";
+  let marker = isDone ? figures_default.tick : isFailed ? figures_default.cross : String(index);
+  let prefixWidth = bunStringWidth(pointer) + 1 + bunStringWidth(marker) + 1;
+  let max = Math.max(1, WORKFLOW_PROGRESS_WIDTH - prefixWidth);
+  let titleText;
+  if ($[0] !== title || $[1] !== max) {
+    titleText = truncateToWidth(title, max);
+    $[0] = title;
+    $[1] = max;
+    $[2] = titleText;
+  } else titleText = $[2];
+  let titleText_ = titleText;
+  let headText = `${pointer} ${marker} ${titleText_}`;
+  let max_2 = Math.max(0, WORKFLOW_PROGRESS_WIDTH - bunStringWidth(headText));
+  let countText = total > 0 ? `${doneCount}/${total}` : "";
+  const color_2 = isSelected ? "permission" : undefined;
+  let pointerElement;
+  if ($[3] !== pointer || $[4] !== color_2) {
+    pointerElement = jsxProd_default(Text, {
       color: color_2,
       children: pointer,
     });
-    P[3] = pointer;
-    P[4] = color_2;
-    P[5] = _;
-  } else _ = P[5];
-  let z;
-  if (P[6] !== color || P[7] !== x) {
-    z = jsxProd_default(Text, {
+    $[3] = pointer;
+    $[4] = color_2;
+    $[5] = pointerElement;
+  } else pointerElement = $[5];
+  let markerElement;
+  if ($[6] !== color || $[7] !== marker) {
+    markerElement = jsxProd_default(Text, {
       color,
-      children: x,
+      children: marker,
     });
-    P[6] = color;
-    P[7] = x;
-    P[8] = z;
-  } else z = P[8];
-  const color_3 = m ? "permission" : f ? "success" : p ? "error" : undefined;
-  const dimColor = !m && !h;
-  let N;
-  if (P[9] !== T || P[10] !== color_3 || P[11] !== dimColor) {
-    N = jsxProd_default(Text, {
+    $[6] = color;
+    $[7] = marker;
+    $[8] = markerElement;
+  } else markerElement = $[8];
+  const color_3 = isSelected ? "permission" : isDone ? "success" : isFailed ? "error" : undefined;
+  const dimColor = !isSelected && !isSettled;
+  let titleElement;
+  if ($[9] !== titleText_ || $[10] !== color_3 || $[11] !== dimColor) {
+    titleElement = jsxProd_default(Text, {
       color: color_3,
       dimColor,
-      children: T,
+      children: titleText_,
     });
-    P[9] = T;
-    P[10] = color_3;
-    P[11] = dimColor;
-    P[12] = N;
-  } else N = P[12];
-  let Z;
-  if (P[13] !== max_2) {
-    Z = " ".repeat(max_2);
-    P[13] = max_2;
-    P[14] = Z;
-  } else Z = P[14];
-  let Y;
-  if (P[15] !== Z || P[16] !== _ || P[17] !== z || P[18] !== N) {
-    Y = jsxProd_default_2(Text, {
+    $[9] = titleText_;
+    $[10] = color_3;
+    $[11] = dimColor;
+    $[12] = titleElement;
+  } else titleElement = $[12];
+  let padding;
+  if ($[13] !== max_2) {
+    padding = " ".repeat(max_2);
+    $[13] = max_2;
+    $[14] = padding;
+  } else padding = $[14];
+  let headElement;
+  if ($[15] !== padding || $[16] !== pointerElement || $[17] !== markerElement || $[18] !== titleElement) {
+    headElement = jsxProd_default_2(Text, {
       wrap: "truncate-end",
-      children: [_, " ", z, " ", N, Z],
+      children: [pointerElement, " ", markerElement, " ", titleElement, padding],
     });
-    P[15] = Z;
-    P[16] = _;
-    P[17] = z;
-    P[18] = N;
-    P[19] = Y;
-  } else Y = P[19];
-  const color_4 = m ? "permission" : f ? "success" : p ? "error" : undefined;
-  const dimColor_2 = !m && !h;
-  const ee = u ? `  ${u}` : "";
-  let fe;
-  if (P[20] !== D || P[21] !== color_4 || P[22] !== dimColor_2 || P[23] !== ee) {
-    fe = jsxProd_default_2(Text, {
+    $[15] = padding;
+    $[16] = pointerElement;
+    $[17] = markerElement;
+    $[18] = titleElement;
+    $[19] = headElement;
+  } else headElement = $[19];
+  const color_4 = isSelected ? "permission" : isDone ? "success" : isFailed ? "error" : undefined;
+  const dimColor_2 = !isSelected && !isSettled;
+  const trailingSuffix = trailingText ? `  ${trailingText}` : "";
+  let trailingElement;
+  if ($[20] !== countText || $[21] !== color_4 || $[22] !== dimColor_2 || $[23] !== trailingSuffix) {
+    trailingElement = jsxProd_default_2(Text, {
       wrap: "truncate-end",
       color: color_4,
       dimColor: dimColor_2,
-      children: [D, ee],
+      children: [countText, trailingSuffix],
     });
-    P[20] = D;
-    P[21] = color_4;
-    P[22] = dimColor_2;
-    P[23] = ee;
-    P[24] = fe;
-  } else fe = P[24];
-  let wt;
-  if (P[25] !== Y || P[26] !== fe) {
-    wt = jsxProd_default_2(Box, {
-      children: [Y, fe],
+    $[20] = countText;
+    $[21] = color_4;
+    $[22] = dimColor_2;
+    $[23] = trailingSuffix;
+    $[24] = trailingElement;
+  } else trailingElement = $[24];
+  let rowElement;
+  if ($[25] !== headElement || $[26] !== trailingElement) {
+    rowElement = jsxProd_default_2(Box, {
+      children: [headElement, trailingElement],
     });
-    P[25] = Y;
-    P[26] = fe;
-    P[27] = wt;
-  } else wt = P[27];
-  return wt;
+    $[25] = headElement;
+    $[26] = trailingElement;
+    $[27] = rowElement;
+  } else rowElement = $[27];
+  return rowElement;
 }
 //@ chunk-xvcy52fk.js:10718-11745 placement
 function WorkflowSummaryRow(props) {
-  let p = w(23);
-  let { name: t, done: a, total, running, elapsedMs, complete, dotState, phaseText, selected } = props;
-  let f = selected === undefined ? false : selected;
-  let h;
-  if (p[0] !== elapsedMs) {
-    h = elapsedMs !== undefined ? formatBarElapsed(elapsedMs) : undefined;
-    p[0] = elapsedMs;
-    p[1] = h;
-  } else h = p[1];
-  let C = h;
-  let b = complete ? ` \xB7 ${figures_default.ellipsis} to view` : "";
+  let $ = useMemoCache(23);
+  let { name, done: doneCount, total, running, elapsedMs, complete, dotState, phaseText, selected } = props;
+  let isSelected = selected === undefined ? false : selected;
+  let elapsedText;
+  if ($[0] !== elapsedMs) {
+    elapsedText = elapsedMs !== undefined ? formatBarElapsed(elapsedMs) : undefined;
+    $[0] = elapsedMs;
+    $[1] = elapsedText;
+  } else elapsedText = $[1];
+  let elapsedLabel = elapsedText;
+  let viewHintSuffix = complete ? ` \xB7 ${figures_default.ellipsis} to view` : "";
   let color = dotState === "failed" ? "error" : "success";
-  let M;
-  if (p[2] !== color) {
-    M = jsxProd_default(Text, {
+  let dotElement;
+  if ($[2] !== color) {
+    dotElement = jsxProd_default(Text, {
       color,
       children: BLACK_CIRCLE,
     });
-    p[2] = color;
-    p[3] = M;
-  } else M = p[3];
-  let A;
-  if (p[4] !== t || p[5] !== f) {
-    A = t
+    $[2] = color;
+    $[3] = dotElement;
+  } else dotElement = $[3];
+  let nameElement;
+  if ($[4] !== name || $[5] !== isSelected) {
+    nameElement = name
       ? jsxProd_default_2(Text, {
-          color: f ? "claude" : undefined,
-          bold: f,
-          children: [t, " "],
+          color: isSelected ? "claude" : undefined,
+          bold: isSelected,
+          children: [name, " "],
         })
       : null;
-    p[4] = t;
-    p[5] = f;
-    p[6] = A;
-  } else A = p[6];
-  let P;
-  if (p[7] !== a || p[8] !== running || p[9] !== total) {
-    P = jsxProd_default(ProgressBar, {
-      done: a,
+    $[4] = name;
+    $[5] = isSelected;
+    $[6] = nameElement;
+  } else nameElement = $[6];
+  let progressBarElement;
+  if ($[7] !== doneCount || $[8] !== running || $[9] !== total) {
+    progressBarElement = jsxProd_default(ProgressBar, {
+      done: doneCount,
       total,
       running,
     });
-    p[7] = a;
-    p[8] = running;
-    p[9] = total;
-    p[10] = P;
-  } else P = p[10];
-  const dimColor = !f;
-  const T = phaseText ? ` \xB7 ${phaseText}` : "";
-  const G = ` \xB7 ${a}/${total} agents`;
-  const W = C ? ` \xB7 ${C}` : "";
-  let D;
-  if (p[11] !== b || p[12] !== f || p[13] !== dimColor || p[14] !== T || p[15] !== G || p[16] !== W) {
-    D = jsxProd_default_2(Text, {
+    $[7] = doneCount;
+    $[8] = running;
+    $[9] = total;
+    $[10] = progressBarElement;
+  } else progressBarElement = $[10];
+  const dimColor = !isSelected;
+  const phaseSuffix = phaseText ? ` \xB7 ${phaseText}` : "";
+  const agentCountSuffix = ` \xB7 ${doneCount}/${total} agents`;
+  const elapsedSuffix = elapsedLabel ? ` \xB7 ${elapsedLabel}` : "";
+  let statsTextElement;
+  if (
+    $[11] !== viewHintSuffix ||
+    $[12] !== isSelected ||
+    $[13] !== dimColor ||
+    $[14] !== phaseSuffix ||
+    $[15] !== agentCountSuffix ||
+    $[16] !== elapsedSuffix
+  ) {
+    statsTextElement = jsxProd_default_2(Text, {
       dimColor,
-      bold: f,
-      children: [T, G, W, b],
+      bold: isSelected,
+      children: [phaseSuffix, agentCountSuffix, elapsedSuffix, viewHintSuffix],
     });
-    p[11] = b;
-    p[12] = f;
-    p[13] = dimColor;
-    p[14] = T;
-    p[15] = G;
-    p[16] = W;
-    p[17] = D;
-  } else D = p[17];
-  let E;
-  if (p[18] !== D || p[19] !== M || p[20] !== A || p[21] !== P) {
-    E = jsxProd_default_2(Text, {
+    $[11] = viewHintSuffix;
+    $[12] = isSelected;
+    $[13] = dimColor;
+    $[14] = phaseSuffix;
+    $[15] = agentCountSuffix;
+    $[16] = elapsedSuffix;
+    $[17] = statsTextElement;
+  } else statsTextElement = $[17];
+  let rowElement;
+  if (
+    $[18] !== statsTextElement ||
+    $[19] !== dotElement ||
+    $[20] !== nameElement ||
+    $[21] !== progressBarElement
+  ) {
+    rowElement = jsxProd_default_2(Text, {
       wrap: "truncate-end",
-      children: [M, " ", A, P, D],
+      children: [dotElement, " ", nameElement, progressBarElement, statsTextElement],
     });
-    p[18] = D;
-    p[19] = M;
-    p[20] = A;
-    p[21] = P;
-    p[22] = E;
-  } else E = p[22];
-  return E;
+    $[18] = statsTextElement;
+    $[19] = dotElement;
+    $[20] = nameElement;
+    $[21] = progressBarElement;
+    $[22] = rowElement;
+  } else rowElement = $[22];
+  return rowElement;
 }
 //@ chunk-xvcy52fk.js:11745-12627 placement
 function WorkflowHeader(props) {
-  let c = w(17);
-  let { name: t, subtext, stats, width } = props;
+  let $ = useMemoCache(17);
+  let { name, subtext, stats, width } = props;
   let hasScrollViewport = useHasScrollViewport();
-  let g;
-  if (c[0] !== hasScrollViewport || c[1] !== width) {
-    g =
+  let dividerElement;
+  if ($[0] !== hasScrollViewport || $[1] !== width) {
+    dividerElement =
       !hasScrollViewport &&
       jsxProd_default(Text, {
         color: "text",
         wrap: "truncate-end",
         children: HORIZONTAL_LINE_GLYPH.repeat(Math.max(1, width)),
       });
-    c[0] = hasScrollViewport;
-    c[1] = width;
-    c[2] = g;
-  } else g = c[2];
-  let m;
-  if (c[3] !== t) {
-    m = jsxProd_default_2(Text, {
+    $[0] = hasScrollViewport;
+    $[1] = width;
+    $[2] = dividerElement;
+  } else dividerElement = $[2];
+  let nameElement;
+  if ($[3] !== name) {
+    nameElement = jsxProd_default_2(Text, {
       bold: true,
       color: "permission",
       wrap: "truncate-end",
-      children: [" ", t],
+      children: [" ", name],
     });
-    c[3] = t;
-    c[4] = m;
-  } else m = c[4];
-  let u;
-  if (c[5] !== subtext) {
-    u = jsxProd_default(Box, {
+    $[3] = name;
+    $[4] = nameElement;
+  } else nameElement = $[4];
+  let subtextBox;
+  if ($[5] !== subtext) {
+    subtextBox = jsxProd_default(Box, {
       flexGrow: 1,
       flexShrink: 1,
       overflow: "hidden",
@@ -1012,12 +1053,12 @@ function WorkflowHeader(props) {
         children: [" ", subtext],
       }),
     });
-    c[5] = subtext;
-    c[6] = u;
-  } else u = c[6];
-  let f;
-  if (c[7] !== stats) {
-    f = stats
+    $[5] = subtext;
+    $[6] = subtextBox;
+  } else subtextBox = $[6];
+  let statsBox;
+  if ($[7] !== stats) {
+    statsBox = stats
       ? jsxProd_default(Box, {
           flexShrink: 0,
           children: jsxProd_default_2(Text, {
@@ -1026,58 +1067,58 @@ function WorkflowHeader(props) {
           }),
         })
       : null;
-    c[7] = stats;
-    c[8] = f;
-  } else f = c[8];
-  let p;
-  if (c[9] !== u || c[10] !== f || c[11] !== width) {
-    p = jsxProd_default_2(Box, {
+    $[7] = stats;
+    $[8] = statsBox;
+  } else statsBox = $[8];
+  let subtextRowBox;
+  if ($[9] !== subtextBox || $[10] !== statsBox || $[11] !== width) {
+    subtextRowBox = jsxProd_default_2(Box, {
       width,
       overflow: "hidden",
-      children: [u, f],
+      children: [subtextBox, statsBox],
     });
-    c[9] = u;
-    c[10] = f;
-    c[11] = width;
-    c[12] = p;
-  } else p = c[12];
-  let h;
-  if (c[13] !== g || c[14] !== m || c[15] !== p) {
-    h = jsxProd_default_2(Box, {
+    $[9] = subtextBox;
+    $[10] = statsBox;
+    $[11] = width;
+    $[12] = subtextRowBox;
+  } else subtextRowBox = $[12];
+  let headerBox;
+  if ($[13] !== dividerElement || $[14] !== nameElement || $[15] !== subtextRowBox) {
+    headerBox = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [g, m, p],
+      children: [dividerElement, nameElement, subtextRowBox],
     });
-    c[13] = g;
-    c[14] = m;
-    c[15] = p;
-    c[16] = h;
-  } else h = c[16];
-  return h;
+    $[13] = dividerElement;
+    $[14] = nameElement;
+    $[15] = subtextRowBox;
+    $[16] = headerBox;
+  } else headerBox = $[16];
+  return headerBox;
 }
 //@ chunk-xvcy52fk.js:12627-13056 placement
-function agentStateCounts(l) {
-  let t = count(l.agents, (u) => u.state === "done");
-  let a = count(l.agents, (u) => u.state === "error");
-  let i = l.agents.length;
-  let o = t + a === i && i > 0;
+function agentStateCounts(workflowProgress) {
+  let doneCount = count(workflowProgress.agents, (agent) => agent.state === "done");
+  let errorCount = count(workflowProgress.agents, (otherAgent) => otherAgent.state === "error");
+  let totalCount = workflowProgress.agents.length;
+  let isAllSettled = doneCount + errorCount === totalCount && totalCount > 0;
   let tokens = 0;
-  let c = 1 / 0;
-  let g = 0;
-  for (let agent of l.agents) {
+  let earliestStart = 1 / 0;
+  let latestProgress = 0;
+  for (let agent of workflowProgress.agents) {
     if (agent.tokens) tokens += agent.tokens;
     if (agent.startedAt != null) {
-      if (agent.startedAt < c) c = agent.startedAt;
-      let f = agent.lastProgressAt ?? agent.startedAt;
-      if (f > g) g = f;
+      if (agent.startedAt < earliestStart) earliestStart = agent.startedAt;
+      let lastProgressAt = agent.lastProgressAt ?? agent.startedAt;
+      if (lastProgressAt > latestProgress) latestProgress = lastProgressAt;
     }
   }
-  let durationMs = c < 1 / 0 ? g - c : 0;
+  let durationMs = earliestStart < 1 / 0 ? latestProgress - earliestStart : 0;
   return {
-    title: l.title,
-    status: o ? (a > 0 ? "failed" : "done") : "running",
-    agents: l.agents,
-    doneCount: t,
-    totalCount: i,
+    title: workflowProgress.title,
+    status: isAllSettled ? (errorCount > 0 ? "failed" : "done") : "running",
+    agents: workflowProgress.agents,
+    doneCount,
+    totalCount,
     tokens,
     durationMs,
   };
@@ -1095,43 +1136,48 @@ function emptyPhaseRow(title) {
   };
 }
 //@ chunk-xvcy52fk.js:13165-13210 placement
-function normalizeLabel(l) {
-  return l.toLowerCase().trim();
+function normalizeLabel(label) {
+  return label.toLowerCase().trim();
 }
 //@ chunk-xvcy52fk.js:13210-13317 placement
-function phaseTitlesMatch(l, title) {
-  let a = normalizeLabel(l);
-  let i = normalizeLabel(title);
-  if (!a || !i) return a === i;
-  return a === i || a.startsWith(i) || i.startsWith(a);
+function phaseTitlesMatch(phaseTitle, label) {
+  let normalizedPhase = normalizeLabel(phaseTitle);
+  let normalizedTitle = normalizeLabel(label);
+  if (!normalizedPhase || !normalizedTitle) return normalizedPhase === normalizedTitle;
+  return (
+    normalizedPhase === normalizedTitle ||
+    normalizedPhase.startsWith(normalizedTitle) ||
+    normalizedTitle.startsWith(normalizedPhase)
+  );
 }
 //@ chunk-xvcy52fk.js:13317-13562 placement
-function alignPhaseRows(phases, t) {
-  let a = new Set();
-  let i = [];
-  function o(title) {
-    for (let c of t) {
-      if (a.has(c)) continue;
-      if (phaseTitlesMatch(title, c.title)) {
-        a.add(c);
-        return c;
+function alignPhaseRows(phases, agents) {
+  let usedAgents = new Set();
+  let rows = [];
+  function takeMatchingAgent(phaseTitle) {
+    for (let agentEntry of agents) {
+      if (usedAgents.has(agentEntry)) continue;
+      if (phaseTitlesMatch(phaseTitle, agentEntry.title)) {
+        usedAgents.add(agentEntry);
+        return agentEntry;
       }
     }
     return;
   }
-  for (let d of phases ?? []) {
-    let c = o(d.title);
-    i.push(c ? agentStateCounts(c) : emptyPhaseRow(d.title));
+  for (let phase of phases ?? []) {
+    let matchedAgent = takeMatchingAgent(phase.title);
+    rows.push(matchedAgent ? agentStateCounts(matchedAgent) : emptyPhaseRow(phase.title));
   }
-  for (let d of t) if (!a.has(d)) i.push(agentStateCounts(d));
-  return i;
+  for (let remainingAgent of agents)
+    if (!usedAgents.has(remainingAgent)) rows.push(agentStateCounts(remainingAgent));
+  return rows;
 }
 //@ chunk-xvcy52fk.js:13562-13760 placement
 function workflowPhaseRows(workflow) {
   let workflowProgress = collectWorkflowProgress(workflow.workflowProgress);
-  let a = groupAgentsByPhase(workflowProgress.agents, workflowProgress.phaseTitles) ?? [];
-  let i = alignPhaseRows(workflow.phases, a);
-  if (i.length === 0 && workflowProgress.agents.length > 0)
+  let groupedAgents = groupAgentsByPhase(workflowProgress.agents, workflowProgress.phaseTitles) ?? [];
+  let phaseRows = alignPhaseRows(workflow.phases, groupedAgents);
+  if (phaseRows.length === 0 && workflowProgress.agents.length > 0)
     return [
       agentStateCounts({
         phaseIndex: 0,
@@ -1139,37 +1185,44 @@ function workflowPhaseRows(workflow) {
         agents: workflowProgress.agents,
       }),
     ];
-  return i;
+  return phaseRows;
 }
 //@ chunk-xvcy52fk.js:13760-13770 placement
 var WORKFLOW_COLUMN_WIDTH = 16;
 //@ chunk-xvcy52fk.js:13770-13800 placement
-function noWorkflowFooter(collected, t) {
+function noWorkflowFooter(collected, unusedFooterProps) {
   return null;
 }
 //@ chunk-xvcy52fk.js:13800-14015 placement
-var PHASE_NAME_WIDTH = WORKFLOW_COLUMN_WIDTH + 8;
-var AEIOU = "aeiou";
-var GERUND_OVERRIDES = new Map([
-  ["commit", "committing"],
-  ["submit", "submitting"],
-  ["format", "formatting"],
-  ["edit", "editing"],
-  ["exit", "exiting"],
-  ["setup", null],
-  ["cleanup", null],
-  ["init", null],
-]);
-var SIMPLE_VERB_RE = /^[A-Za-z]{3,12}$/;
+var PHASE_NAME_WIDTH; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var AEIOU;
+var GERUND_OVERRIDES;
+var SIMPLE_VERB_RE;
+deferInit("chunk-xvcy52fk.js:13800", () => {
+  PHASE_NAME_WIDTH = WORKFLOW_COLUMN_WIDTH + 8;
+  AEIOU = "aeiou";
+  GERUND_OVERRIDES = new Map([
+    ["commit", "committing"],
+    ["submit", "submitting"],
+    ["format", "formatting"],
+    ["edit", "editing"],
+    ["exit", "exiting"],
+    ["setup", null],
+    ["cleanup", null],
+    ["init", null],
+  ]);
+  SIMPLE_VERB_RE = /^[A-Za-z]{3,12}$/;
+});
 //@ chunk-xvcy52fk.js:14015-14450 placement
-function normalizePhaseTitle(l) {
-  if (!SIMPLE_VERB_RE.test(l)) return l;
-  let lower = l.toLowerCase();
-  let a = GERUND_OVERRIDES.get(lower);
-  if (a !== undefined) return a === null ? l : l[0] + a.slice(1);
-  if (lower.endsWith("ing")) return l;
-  if (lower.endsWith("ie")) return `${l.slice(0, -2)}ying`;
-  if (lower.endsWith("e") && !lower.endsWith("ee") && !lower.endsWith("ye")) return `${l.slice(0, -1)}ing`;
+function normalizePhaseTitle(title) {
+  if (!SIMPLE_VERB_RE.test(title)) return title;
+  let lower = title.toLowerCase();
+  let override = GERUND_OVERRIDES.get(lower);
+  if (override !== undefined) return override === null ? title : title[0] + override.slice(1);
+  if (lower.endsWith("ing")) return title;
+  if (lower.endsWith("ie")) return `${title.slice(0, -2)}ying`;
+  if (lower.endsWith("e") && !lower.endsWith("ee") && !lower.endsWith("ye"))
+    return `${title.slice(0, -1)}ing`;
   let last = lower.at(-1);
   if (
     lower.length <= 4 &&
@@ -1178,38 +1231,43 @@ function normalizePhaseTitle(l) {
     !AEIOU.includes(last) &&
     !"wxy".includes(last)
   )
-    return `${l}${last}ing`;
-  return `${l}ing`;
+    return `${title}${last}ing`;
+  return `${title}ing`;
 }
 //@ chunk-xvcy52fk.js:14450-14463 placement
 var LABEL_JOINER = " & ";
 //@ chunk-xvcy52fk.js:14463-14791 placement
-function phaseTitleSummary(l) {
-  let { titles, positionStart, totalPhases } = l;
+function phaseTitleSummary(titleSummary) {
+  let { titles, positionStart, totalPhases } = titleSummary;
   let mapped = titles.map((title) => normalizePhaseTitle(collapseWhitespace(title)));
   if (mapped.length === 1)
     return `${truncateToWidth(mapped[0] ?? "", WORKFLOW_COLUMN_WIDTH)} (${positionStart}/${totalPhases})`;
   if (mapped.length === 2) {
-    let joined = mapped.map((m) => truncateToWidth(m, WORKFLOW_COLUMN_WIDTH)).join(LABEL_JOINER);
+    let joined = mapped
+      .map((shortTitle) => truncateToWidth(shortTitle, WORKFLOW_COLUMN_WIDTH))
+      .join(LABEL_JOINER);
     let floored = Math.floor((PHASE_NAME_WIDTH - LABEL_JOINER.length) / 2);
     return bunStringWidth(joined) <= PHASE_NAME_WIDTH
       ? joined
-      : mapped.map((m) => truncateToWidth(m, floored)).join(LABEL_JOINER);
+      : mapped.map((shrunkTitle) => truncateToWidth(shrunkTitle, floored)).join(LABEL_JOINER);
   }
-  let d = ` +${mapped.length - 1}`;
-  return truncateToWidth(mapped[0] ?? "", WORKFLOW_COLUMN_WIDTH - bunStringWidth(d)) + d;
+  let remainderSuffix = ` +${mapped.length - 1}`;
+  return (
+    truncateToWidth(mapped[0] ?? "", WORKFLOW_COLUMN_WIDTH - bunStringWidth(remainderSuffix)) +
+    remainderSuffix
+  );
 }
 //@ chunk-xvcy52fk.js:14791-14916 placement
-function sumPhaseCounts(l, agentCount) {
-  let a = 0;
-  let i = 0;
-  for (let o of l) {
-    a += o.doneCount;
-    i += o.totalCount;
+function sumPhaseCounts(phaseRows, agentCount) {
+  let doneAgentCount = 0;
+  let totalAgentCount = 0;
+  for (let row of phaseRows) {
+    doneAgentCount += row.doneCount;
+    totalAgentCount += row.totalCount;
   }
   return {
-    doneAgents: a,
-    totalAgents: Math.max(agentCount, i, a),
+    doneAgents: doneAgentCount,
+    totalAgents: Math.max(agentCount, totalAgentCount, doneAgentCount),
   };
 }
 //@ chunk-xvcy52fk.js:14916-15073 placement
@@ -1222,8 +1280,8 @@ function workflowDescription(workflow) {
   return workflow.description || workflow.summary || "";
 }
 //@ chunk-xvcy52fk.js:15073-15476 placement
-function workflowStatusLine(workflow, t, a, i) {
-  let o =
+function workflowStatusLine(workflow, defaultSubtext, agentCounts, elapsedMs) {
+  let statusSuffix =
     workflow.status === "completed"
       ? " \xB7 done"
       : workflow.status === "killed"
@@ -1236,8 +1294,8 @@ function workflowStatusLine(workflow, t, a, i) {
   let subtext =
     workflow.status === "running" && workflow.rateLimitWait !== undefined
       ? pausedUsageLine(workflow.rateLimitWait.resetsAt)
-      : t;
-  let stats = `${a.doneAgents}/${a.totalAgents} ${plural(a.totalAgents, "agent")} \xB7 ${formatBarElapsed(i)}${o}`;
+      : defaultSubtext;
+  let stats = `${agentCounts.doneAgents}/${agentCounts.totalAgents} ${plural(agentCounts.totalAgents, "agent")} \xB7 ${formatBarElapsed(elapsedMs)}${statusSuffix}`;
   return {
     name: workflow.workflowName ?? workflow.summary ?? workflow.description,
     subtext,
@@ -1245,34 +1303,35 @@ function workflowStatusLine(workflow, t, a, i) {
   };
 }
 //@ chunk-xvcy52fk.js:15476-15868 placement
-function countWorkflowAgents(l, agentCount = 0) {
-  let a = 0;
-  let i = 0;
-  let o = 0;
-  let d = 0;
-  let c = false;
-  for (let u of l) {
-    if (u.type !== "workflow_agent") continue;
-    a++;
-    if (u.state === "done") {
-      i++;
-      d++;
-    } else if (u.state === "error") {
-      o++;
-      d++;
-    } else if (u.state === "start" || u.state === "progress") {
-      c = true;
-      if (u.startedAt !== undefined || u.queuedAt === undefined || (u.tokens ?? 0) > 0) d++;
+function countWorkflowAgents(messages, agentCount = 0) {
+  let totalAgentCount = 0;
+  let doneCount = 0;
+  let errorCount = 0;
+  let startedCount = 0;
+  let isRunning = false;
+  for (let message of messages) {
+    if (message.type !== "workflow_agent") continue;
+    totalAgentCount++;
+    if (message.state === "done") {
+      doneCount++;
+      startedCount++;
+    } else if (message.state === "error") {
+      errorCount++;
+      startedCount++;
+    } else if (message.state === "start" || message.state === "progress") {
+      isRunning = true;
+      if (message.startedAt !== undefined || message.queuedAt === undefined || (message.tokens ?? 0) > 0)
+        startedCount++;
     }
   }
-  let max = Math.max(agentCount, a);
-  let complete = !c && a > 0 && i + o >= max;
+  let max = Math.max(agentCount, totalAgentCount);
+  let complete = !isRunning && totalAgentCount > 0 && doneCount + errorCount >= max;
   return {
-    done: i,
-    failedCount: o,
-    running: c,
+    done: doneCount,
+    failedCount: errorCount,
+    running: isRunning,
     total: max,
-    started: d,
+    started: startedCount,
     complete,
   };
 }

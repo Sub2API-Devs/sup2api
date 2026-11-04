@@ -45,10 +45,10 @@ var DEADLINE_REASON = "submodule inspection deadline";
 /**
  * 在截止时间内检查子模块是否有改动（超时/不可读视为无法验证）。
  */
-async function inspectSubmodules(e, t) {
-  let deadlineMs = t?.deadlineMs ?? SUBMODULE_DEADLINE_MS;
+async function inspectSubmodules(repoDir, options) {
+  let deadlineMs = options?.deadlineMs ?? SUBMODULE_DEADLINE_MS;
   try {
-    return await withTimeout(inspectSubmodulesUnsafe(e, deadlineMs), deadlineMs, DEADLINE_REASON);
+    return await withTimeout(inspectSubmodulesUnsafe(repoDir, deadlineMs), deadlineMs, DEADLINE_REASON);
   } catch (error) {
     return {
       kind: "unverifiable",
@@ -60,18 +60,18 @@ async function inspectSubmodules(e, t) {
 /**
  * 把检查结果转为改动列表。
  */
-function submoduleChanges(e) {
-  if (e.kind === "unverifiable")
+function submoduleChanges(result) {
+  if (result.kind === "unverifiable")
     return {
       kind: "unverifiable",
-      reason: e.reason,
-      path: e.path,
+      reason: result.reason,
+      path: result.path,
     };
-  let t = [...e.withTrackedChanges, ...e.withUntrackedFiles];
-  return t.length > 0
+  let changedPaths = [...result.withTrackedChanges, ...result.withUntrackedFiles];
+  return changedPaths.length > 0
     ? {
         kind: "changes",
-        paths: t,
+        paths: changedPaths,
       }
     : undefined;
 }
@@ -79,28 +79,28 @@ function submoduleChanges(e) {
 /**
  * 描述子模块改动或无法验证的原因。
  */
-function describeSubmoduleChanges(e) {
-  if (e.kind === "changes") {
-    let filtered = e.paths.slice(0, 3).map(printableShortLabel).filter(Boolean);
-    let i = e.paths.length - filtered.length;
-    return `changes inside ${e.paths.length === 1 ? "submodule" : "submodules"} ${filtered.join(", ")}${i > 0 ? ` and ${i} more` : ""}`;
+function describeSubmoduleChanges(result) {
+  if (result.kind === "changes") {
+    let filtered = result.paths.slice(0, 3).map(printableShortLabel).filter(Boolean);
+    let omittedCount = result.paths.length - filtered.length;
+    return `changes inside ${result.paths.length === 1 ? "submodule" : "submodules"} ${filtered.join(", ")}${omittedCount > 0 ? ` and ${omittedCount} more` : ""}`;
   }
-  let t = e.path === undefined ? undefined : printableShortLabel(e.path) || undefined;
-  switch (e.reason) {
+  let shownPath = result.path === undefined ? undefined : printableShortLabel(result.path) || undefined;
+  switch (result.reason) {
     case "nested_repository":
-      return `${t ?? "a directory"} is a separate git repository inside the worktree, not a submodule checkout`;
+      return `${shownPath ?? "a directory"} is a separate git repository inside the worktree, not a submodule checkout`;
     case "gitdir_outside_modules":
-      return `submodule ${t ?? "checkout"} points at a git directory outside this worktree's own, or its object alternates or config lead somewhere this worktree cannot vouch for`;
+      return `submodule ${shownPath ?? "checkout"} points at a git directory outside this worktree's own, or its object alternates or config lead somewhere this worktree cannot vouch for`;
     case "unconfigured_gitlink":
-      return `${t ?? "a directory"} is a nested repository recorded in the index but not a configured submodule`;
+      return `${shownPath ?? "a directory"} is a nested repository recorded in the index but not a configured submodule`;
     case "nested_submodules":
-      return `submodule ${t ?? "checkout"} holds submodules of its own, which can't be inspected`;
+      return `submodule ${shownPath ?? "checkout"} holds submodules of its own, which can't be inspected`;
     case "too_many":
       return `it records more than ${MAX_SUBMODULES} submodules, too many to inspect`;
     case "unreadable":
-      return t === undefined
+      return shownPath === undefined
         ? "its submodules' state could not be read"
-        : `the state of submodule ${t} could not be read`;
+        : `the state of submodule ${shownPath} could not be read`;
     case "timeout":
       return "inspecting its submodules took too long";
   }
@@ -118,31 +118,31 @@ function printableShortLabel(path) {
 /**
  * 子模块检查的实际逻辑（gitmodules、ls-files、各子模块状态）。
  */
-async function inspectSubmodulesUnsafe(e, deadlineMs) {
-  let n = {
+async function inspectSubmodulesUnsafe(repoDir, deadlineMs) {
+  let options = {
     repository: [],
-    env: buildGitEnvForRepo(e),
+    env: buildGitEnvForRepo(repoDir),
     deadlineMs,
   };
-  let i = await listGitlinkEntries(e, n);
-  if (typeof i === "string")
+  let gitlinks = await listGitlinkEntries(repoDir, options);
+  if (typeof gitlinks === "string")
     return {
       kind: "unverifiable",
-      reason: i,
+      reason: gitlinks,
     };
-  if (i.length === 0)
+  if (gitlinks.length === 0)
     return {
       kind: "verified",
       withTrackedChanges: [],
       withUntrackedFiles: [],
     };
-  let o = await listSubmodulePaths(e, n);
-  if (typeof o === "string")
+  let submodulePaths = await listSubmodulePaths(repoDir, options);
+  if (typeof submodulePaths === "string")
     return {
       kind: "unverifiable",
-      reason: o,
+      reason: submodulePaths,
     };
-  let gitDir = await resolveGitDir(e);
+  let gitDir = await resolveGitDir(repoDir);
   if (gitDir === null)
     return {
       kind: "unverifiable",
@@ -157,50 +157,52 @@ async function inspectSubmodulesUnsafe(e, deadlineMs) {
       reason: "unreadable",
     };
   }
-  let d = {
+  let modulesDirs = {
     lexical: join(gitDir, "modules"),
     real,
   };
-  let c = new Set(o);
-  let a = limitConcurrency(MAX_DEPTH, (g) =>
-    c.has(g) ? inspectSubmodule(e, g, d, n) : classifySubmoduleDir(e, g),
+  let configuredPaths = new Set(submodulePaths);
+  let inspect = limitConcurrency(MAX_DEPTH, (path) =>
+    configuredPaths.has(path)
+      ? inspectSubmodule(repoDir, path, modulesDirs, options)
+      : classifySubmoduleDir(repoDir, path),
   );
-  let results = await Promise.all(i.map((g) => a(g)));
-  let u = [];
-  let f = [];
-  for (let [g, p] of results.entries()) {
-    let w = i[g];
-    switch (p) {
+  let results = await Promise.all(gitlinks.map((path) => inspect(path)));
+  let withTrackedChanges = [];
+  let withUntrackedFiles = [];
+  for (let [index, result] of results.entries()) {
+    let path = gitlinks[index];
+    switch (result) {
       case "absent":
       case "clean":
         break;
       case "tracked":
-        u.push(w);
+        withTrackedChanges.push(path);
         break;
       case "untracked":
-        f.push(w);
+        withUntrackedFiles.push(path);
         break;
       default:
         return {
           kind: "unverifiable",
-          reason: p.unverifiable,
-          path: w,
+          reason: result.unverifiable,
+          path,
         };
     }
   }
   return {
     kind: "verified",
-    withTrackedChanges: u,
-    withUntrackedFiles: f,
+    withTrackedChanges,
+    withUntrackedFiles,
   };
 }
 //@ chunk-rvr0tzz9.js:3483-3746 placement
 /**
  * 读 .gitmodules 中的子模块路径。
  */
-async function listSubmodulePaths(cwd, t) {
-  let n = await statEntry(join(cwd, ".gitmodules"), MAX_GITMODULES_BYTES);
-  switch (n.kind) {
+async function listSubmodulePaths(cwd, options) {
+  let gitmodulesEntry = await statEntry(join(cwd, ".gitmodules"), MAX_GITMODULES_BYTES);
+  switch (gitmodulesEntry.kind) {
     case "absent":
       return [];
     case "directory":
@@ -209,15 +211,15 @@ async function listSubmodulePaths(cwd, t) {
     case "file":
       break;
   }
-  let i = await gitConfigFromStdin(n.text, "^submodule\\..*\\.path$", cwd, t);
-  return i === "unreadable" ? i : dedupeSubmodulePaths(i.map((o) => o.value));
+  let entries = await gitConfigFromStdin(gitmodulesEntry.text, "^submodule\\..*\\.path$", cwd, options);
+  return entries === "unreadable" ? entries : dedupeSubmodulePaths(entries.map((entry) => entry.value));
 }
 //@ chunk-rvr0tzz9.js:3746-4232 placement
 /**
  * 用 git config --file - 读取配置。
  */
-async function gitConfigFromStdin(input, t, cwd, { repository, env, deadlineMs }) {
-  let r = await execFileNoThrowWithCwd(
+async function gitConfigFromStdin(input, keyPattern, cwd, { repository, env, deadlineMs }) {
+  let result = await execFileNoThrowWithCwd(
     gitExe(),
     [
       ...repository,
@@ -228,7 +230,7 @@ async function gitConfigFromStdin(input, t, cwd, { repository, env, deadlineMs }
       "--no-includes",
       "-z",
       "--get-regexp",
-      t,
+      keyPattern,
     ],
     {
       cwd,
@@ -238,64 +240,65 @@ async function gitConfigFromStdin(input, t, cwd, { repository, env, deadlineMs }
       preserveOutputOnError: false,
     },
   );
-  let d = r.exitCode === 1 && r.error === undefined && !r.timedOut && !r.maxBufferExceeded;
-  if (r.code !== 0 && !d) return "unreadable";
-  let c = [];
-  for (let a of r.stdout.split("\x00")) {
-    if (a === "") continue;
-    let index = a.indexOf(`
+  let isNoMatch =
+    result.exitCode === 1 && result.error === undefined && !result.timedOut && !result.maxBufferExceeded;
+  if (result.code !== 0 && !isNoMatch) return "unreadable";
+  let entries = [];
+  for (let line of result.stdout.split("\x00")) {
+    if (line === "") continue;
+    let index = line.indexOf(`
 `);
     if (index === -1) return "unreadable";
-    c.push({
-      key: a.slice(0, index),
-      value: a.slice(index + 1),
+    entries.push({
+      key: line.slice(0, index),
+      value: line.slice(index + 1),
     });
   }
-  return c;
+  return entries;
 }
 //@ chunk-rvr0tzz9.js:4232-4279 placement
 /**
  * 列出索引中的 gitlink（子模块）条目。
  */
-async function listGitlinkEntries(e, t) {
-  return listGitlinks(e, t, "160000");
+async function listGitlinkEntries(cwd, options) {
+  return listGitlinks(cwd, options, "160000");
 }
 //@ chunk-rvr0tzz9.js:4279-4326 placement
 /**
  * 列出索引中的符号链接条目。
  */
-async function listSymlinkEntries(e, t) {
-  return listGitlinks(e, t, "120000");
+async function listSymlinkEntries(cwd, options) {
+  return listGitlinks(cwd, options, "120000");
 }
 //@ chunk-rvr0tzz9.js:4326-4654 placement
 /**
  * 列出索引中的 gitlink（子模块）条目。
  */
-async function listGitlinks(cwd, t, n) {
-  let i = [...t.repository, ...GIT_SAFE_GLOBAL_ARGS, "ls-files", "-s", "-z"];
-  let o = await execFileNoThrowWithCwd(gitExe(), i, {
+async function listGitlinks(cwd, options, mode) {
+  let args = [...options.repository, ...GIT_SAFE_GLOBAL_ARGS, "ls-files", "-s", "-z"];
+  let result = await execFileNoThrowWithCwd(gitExe(), args, {
     cwd,
-    env: t.env,
-    timeout: t.deadlineMs,
+    env: options.env,
+    timeout: options.deadlineMs,
     maxBuffer: MAX_OUTPUT_BYTES,
     preserveOutputOnError: false,
     stdin: "ignore",
   });
-  if (o.maxBufferExceeded) return streamGitlinks(cwd, i, t, n);
-  if (o.code !== 0) return "unreadable";
-  let s = new GitlinkCollector(n);
-  s.push(Buffer.from(o.stdout, "utf8"));
-  return s.end();
+  if (result.maxBufferExceeded) return streamGitlinks(cwd, args, options, mode);
+  if (result.code !== 0) return "unreadable";
+  let collector = new GitlinkCollector(mode);
+  collector.push(Buffer.from(result.stdout, "utf8"));
+  return collector.end();
 }
 //@ chunk-rvr0tzz9.js:4654-5202 placement
 /**
  * 输出过大时流式读取 gitlink。
  */
-async function streamGitlinks(cwd, t, { env, deadlineMs }, o) {
-  let safeGitInvocation = buildSafeGitInvocation(gitExe(), t, env);
-  let r = new GitlinkCollector(o);
+async function streamGitlinks(cwd, args, { env, deadlineMs }, mode) {
+  let safeGitInvocation = buildSafeGitInvocation(gitExe(), args, env);
+  let collector = new GitlinkCollector(mode);
   try {
-    let d = safeSpawn(gitExe(), safeGitInvocation?.args ?? t, {
+    let child = safeSpawn(gitExe(), safeGitInvocation?.args ?? args, {
       cwd,
       env: safeGitInvocation?.env ?? env,
       timeout: deadlineMs,
@@ -303,17 +306,19 @@ async function streamGitlinks(cwd, t, { env, deadlineMs }, o) {
       stdout: "pipe",
       stderr: "ignore",
     });
-    d.stdout?.on("data", (f) => {
-      if (r.push(Buffer.isBuffer(f) ? f : Buffer.from(f, "utf8")) !== undefined) d.kill();
+    child.stdout?.on("data", (chunk) => {
+      if (collector.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, "utf8")) !== undefined)
+        child.kill();
     });
-    let c = d.stdout ? finished(d.stdout).catch(() => {}) : Promise.resolve();
-    let a = await d;
-    let l = !a.timedOut && !a.isCanceled && a.signal === undefined && a.exitCode === 0;
-    if (!l) d.stdout?.destroy();
-    await c;
-    let u = r.end();
-    if (typeof u === "string") return u;
-    return l ? u : "unreadable";
+    let stdoutDone = child.stdout ? finished(child.stdout).catch(() => {}) : Promise.resolve();
+    let result = await child;
+    let succeeded =
+      !result.timedOut && !result.isCanceled && result.signal === undefined && result.exitCode === 0;
+    if (!succeeded) child.stdout?.destroy();
+    await stdoutDone;
+    let collected = collector.end();
+    if (typeof collected === "string") return collected;
+    return succeeded ? collected : "unreadable";
   } catch {
     return "unreadable";
   }
@@ -329,18 +334,18 @@ class GitlinkCollector {
   pending = [];
   pendingBytes = 0;
   verdict = undefined;
-  constructor(e) {
-    this.prefix = `${e} `;
+  constructor(modePrefix) {
+    this.prefix = `${modePrefix} `;
   }
-  push(e) {
-    let t = 0;
-    while (this.verdict === undefined && t < e.length) {
-      let index = e.indexOf(0, t);
-      let i = index === -1 ? e.length : index;
-      this.append(e.subarray(t, i));
+  push(chunk) {
+    let cursor = 0;
+    while (this.verdict === undefined && cursor < chunk.length) {
+      let index = chunk.indexOf(0, cursor);
+      let recordEnd = index === -1 ? chunk.length : index;
+      this.append(chunk.subarray(cursor, recordEnd));
       if (index === -1) break;
       this.completeRecord();
-      t = index + 1;
+      cursor = index + 1;
     }
     return this.verdict;
   }
@@ -349,16 +354,16 @@ class GitlinkCollector {
     if (this.record !== "none") return "unreadable";
     return dedupeSubmodulePaths([...this.paths]);
   }
-  append(e) {
-    if (e.length === 0 || this.record === "other") return;
-    this.pending.push(e);
-    this.pendingBytes += e.length;
+  append(chunk) {
+    if (chunk.length === 0 || this.record === "other") return;
+    this.pending.push(chunk);
+    this.pendingBytes += chunk.length;
     if (this.record === "none") this.record = "undecided";
     if (this.record === "undecided" && this.pendingBytes >= this.prefix.length) {
-      let t = this.pending.length === 1 ? e : Buffer.concat(this.pending);
-      if (t.toString("latin1", 0, this.prefix.length) === this.prefix) {
+      let combined = this.pending.length === 1 ? chunk : Buffer.concat(this.pending);
+      if (combined.toString("latin1", 0, this.prefix.length) === this.prefix) {
         this.record = "listed";
-        this.pending = [t];
+        this.pending = [combined];
       } else {
         this.record = "other";
         this.pending = [];
@@ -382,26 +387,28 @@ class GitlinkCollector {
   }
 }
 //@ chunk-rvr0tzz9.js:6433-6579 placement
-function dedupeSubmodulePaths(e) {
-  let t = new Set();
-  for (let n of e) {
-    if (n.includes("\uFFFD") || !isSafeSubmodulePath(n)) return "unreadable";
-    t.add(n);
-    if (t.size > MAX_SUBMODULES) return "too_many";
+function dedupeSubmodulePaths(paths) {
+  let unique = new Set();
+  for (let path of paths) {
+    if (path.includes("\uFFFD") || !isSafeSubmodulePath(path)) return "unreadable";
+    unique.add(path);
+    if (unique.size > MAX_SUBMODULES) return "too_many";
   }
-  return [...t];
+  return [...unique];
 }
 //@ chunk-rvr0tzz9.js:6579-6820 placement
-function isSafeSubmodulePath(e) {
-  if (e.length === 0 || e.length > MAX_PATH_LENGTH) return false;
-  return e.split("/").every((t) => {
-    let n = foldName(t);
+function isSafeSubmodulePath(path) {
+  if (path.length === 0 || path.length > MAX_PATH_LENGTH) return false;
+  return path.split("/").every((segment) => {
+    let folded = foldName(segment);
     return (
-      t.replace(/[. ]+$/, "") !== "" &&
-      n !== ".git" &&
-      n !== "git~1" &&
-      !INVISIBLE_FORMAT_CHAR_RE.test(t) &&
-      [...t].every((i) => i !== "\\" && i !== ":" && i !== ";" && i > "\x1F" && i !== "\x7F")
+      segment.replace(/[. ]+$/, "") !== "" &&
+      folded !== ".git" &&
+      folded !== "git~1" &&
+      !INVISIBLE_FORMAT_CHAR_RE.test(segment) &&
+      [...segment].every(
+        (char) => char !== "\\" && char !== ":" && char !== ";" && char > "\x1F" && char !== "\x7F",
+      )
     );
   });
 }
@@ -409,18 +416,18 @@ function isSafeSubmodulePath(e) {
 /**
  * 检查单个子模块目录（.git 文件、gitdir 位置、嵌套仓库）。
  */
-async function inspectSubmodule(e, t, n, i) {
-  let { deadlineMs } = i;
-  let s = await walkSubmodulePath(e, t);
-  if (s.kind !== "directory")
-    return s.kind === "absent"
+async function inspectSubmodule(repoDir, submodulePath, modulesDirs, options) {
+  let { deadlineMs } = options;
+  let walkResult = await walkSubmodulePath(repoDir, submodulePath);
+  if (walkResult.kind !== "directory")
+    return walkResult.kind === "absent"
       ? "absent"
       : {
           unverifiable: "unreadable",
         };
-  let path = s.path;
-  let d = await statEntry(join(path, ".git"), MAX_POINTER_BYTES);
-  switch (d.kind) {
+  let path = walkResult.path;
+  let dotGitEntry = await statEntry(join(path, ".git"), MAX_POINTER_BYTES);
+  switch (dotGitEntry.kind) {
     case "absent":
       return isDirEmpty(path);
     case "directory":
@@ -434,7 +441,7 @@ async function inspectSubmodule(e, t, n, i) {
     case "file":
       break;
   }
-  let trimmed = d.text.trim();
+  let trimmed = dotGitEntry.text.trim();
   if (!trimmed.startsWith("gitdir:"))
     return {
       unverifiable: "unreadable",
@@ -444,8 +451,8 @@ async function inspectSubmodule(e, t, n, i) {
     return {
       unverifiable: "gitdir_outside_modules",
     };
-  let l = resolve(path, trimmed_2);
-  if (!isPathUnder(l, n.lexical) && !isPathUnder(l, n.real))
+  let gitDirPath = resolve(path, trimmed_2);
+  if (!isPathUnder(gitDirPath, modulesDirs.lexical) && !isPathUnder(gitDirPath, modulesDirs.real))
     return {
       unverifiable: "gitdir_outside_modules",
     };
@@ -453,20 +460,20 @@ async function inspectSubmodule(e, t, n, i) {
     return {
       unverifiable: "gitdir_outside_modules",
     };
-  let u;
+  let realGitDir;
   try {
-    u = await realpath(l);
+    realGitDir = await realpath(gitDirPath);
   } catch {
     return {
       unverifiable: "unreadable",
     };
   }
-  if (!isPathUnder(u, n.real))
+  if (!isPathUnder(realGitDir, modulesDirs.real))
     return {
       unverifiable: "gitdir_outside_modules",
     };
   try {
-    await lstat(join(u, "commondir"));
+    await lstat(join(realGitDir, "commondir"));
     return {
       unverifiable: "gitdir_outside_modules",
     };
@@ -476,79 +483,84 @@ async function inspectSubmodule(e, t, n, i) {
         unverifiable: "unreadable",
       };
   }
-  let f = join(u, "objects");
-  let g = await checkModuleGitDir(f, 0, new Set([f]));
-  if (g !== undefined)
+  let objectsDir = join(realGitDir, "objects");
+  let objectsProblem = await checkModuleGitDir(objectsDir, 0, new Set([objectsDir]));
+  if (objectsProblem !== undefined)
     return {
-      unverifiable: g,
+      unverifiable: objectsProblem,
     };
-  let p = [join(u, "config"), join(u, "config.worktree")];
-  let w = new Set(p);
-  for (let m of p) {
-    let B = await checkModuleConfig(m, e, i, 0, w);
-    if (B !== undefined)
+  let configPaths = [join(realGitDir, "config"), join(realGitDir, "config.worktree")];
+  let seenConfigs = new Set(configPaths);
+  for (let configPath of configPaths) {
+    let configProblem = await checkModuleConfig(configPath, repoDir, options, 0, seenConfigs);
+    if (configProblem !== undefined)
       return {
-        unverifiable: B,
+        unverifiable: configProblem,
       };
   }
-  let G = rejectSeparatorPath(dirname(path));
-  if (G === null)
+  let ceilingDir = rejectSeparatorPath(dirname(path));
+  if (ceilingDir === null)
     return {
       unverifiable: "unreadable",
     };
-  let x = {
-    GIT_CEILING_DIRECTORIES: G,
-    GIT_COMMON_DIR: u,
+  let gitOptions = {
+    GIT_CEILING_DIRECTORIES: ceilingDir,
+    GIT_COMMON_DIR: realGitDir,
   };
-  let O = {
-    repository: [`--git-dir=${u}`, `--work-tree=${path}`],
-    env: getRemoteHostSessionCount(x),
+  let moduleContext = {
+    repository: [`--git-dir=${realGitDir}`, `--work-tree=${path}`],
+    env: getRemoteHostSessionCount(gitOptions),
     deadlineMs,
   };
-  if (await anySubmoduleCheckedOut(path, O))
+  if (await anySubmoduleCheckedOut(path, moduleContext))
     return {
       unverifiable: "nested_submodules",
     };
   let filterNeutralizingArgs = await buildFilterNeutralizingArgs(path, {
-    repository: O.repository,
-    envPins: x,
+    repository: moduleContext.repository,
+    envPins: gitOptions,
   });
   if (!filterNeutralizingArgs.ok)
     return {
       unverifiable: "unreadable",
     };
-  let C = await execFileNoThrowWithCwd(
+  let result = await execFileNoThrowWithCwd(
     gitExe(),
-    [...O.repository, ...filterNeutralizingArgs.args, ...GIT_SAFE_GLOBAL_ARGS, ...SAFE_GIT_ENV_CONSTANTS],
+    [
+      ...moduleContext.repository,
+      ...filterNeutralizingArgs.args,
+      ...GIT_SAFE_GLOBAL_ARGS,
+      ...SAFE_GIT_ENV_CONSTANTS,
+    ],
     {
       cwd: path,
-      env: getRemoteHostSessionCount(x, {
+      env: getRemoteHostSessionCount(gitOptions, {
         userLocale: true,
       }),
       timeout: deadlineMs,
       preserveOutputOnError: false,
     },
   );
-  if (C.code !== 0)
+  if (result.code !== 0)
     return {
       unverifiable: "unreadable",
     };
-  let filtered = C.stdout
+  let filtered = result.stdout
     .split(
       `
 `,
     )
     .filter((line) => line.length > 0);
-  if (filtered.some((m) => !m.startsWith("??"))) return "tracked";
+  if (filtered.some((line) => !line.startsWith("??"))) return "tracked";
   return filtered.length > 0 ? "untracked" : "clean";
 }
 //@ chunk-rvr0tzz9.js:8634-8837 placement
-async function classifySubmoduleDir(e, t) {
-  let n = await inspectSubmoduleDir(e, t);
-  switch (n) {
+async function classifySubmoduleDir(repoDir, submodulePath) {
+  let dirKind = await inspectSubmoduleDir(repoDir, submodulePath);
+  switch (dirKind) {
     case "absent":
     case "untracked":
-      return n;
+      return dirKind;
     case "repository":
       return {
         unverifiable: "unconfigured_gitlink",
@@ -560,8 +572,8 @@ async function classifySubmoduleDir(e, t) {
   }
 }
 //@ chunk-rvr0tzz9.js:8837-8879 placement
-function isPathUnder(e, t) {
-  return e.startsWith(t + sep);
+function isPathUnder(path, rootPath) {
+  return path.startsWith(rootPath + sep);
 }
 //@ chunk-rvr0tzz9.js:8879-8943 placement
 var MAX_GITDIR_POINTER_DEPTH = 5;
@@ -570,40 +582,41 @@ var MAX_GITDIR_POINTER_ENTRIES = 16;
 var DRIVE_PATH_WITHOUT_SEP_RE = /^[A-Za-z]:(?![\\/])/;
 var LEADING_PARENT_SEGMENTS_RE = /^(?:\.\.\/+)*/;
 //@ chunk-rvr0tzz9.js:8943-9046 placement
-function isUnsafeGitdirPointer(e, t) {
+function isUnsafeGitdirPointer(pointer, baseDir) {
   return (
-    e.includes("\uFFFD") ||
-    DRIVE_PATH_WITHOUT_SEP_RE.test(e) ||
-    hasDotSegment(isAbsolute(e) ? e : e.replace(LEADING_PARENT_SEGMENTS_RE, "")) ||
-    isOnForeignMount(e, t) ||
-    rawPointerPathIsUnsafe(e, t)
+    pointer.includes("\uFFFD") ||
+    DRIVE_PATH_WITHOUT_SEP_RE.test(pointer) ||
+    hasDotSegment(isAbsolute(pointer) ? pointer : pointer.replace(LEADING_PARENT_SEGMENTS_RE, "")) ||
+    isOnForeignMount(pointer, baseDir) ||
+    rawPointerPathIsUnsafe(pointer, baseDir)
   );
 }
 //@ chunk-rvr0tzz9.js:9046-9886 placement
 /**
  * 检查子模块 gitdir 必须在 .git/modules 内。
  */
-async function checkModuleGitDir(e, t, n) {
-  if (t > MAX_GITDIR_POINTER_DEPTH || n.size > MAX_GITDIR_POINTER_ENTRIES) return "gitdir_outside_modules";
+async function checkModuleGitDir(objectsDir, depth, seen) {
+  if (depth > MAX_GITDIR_POINTER_DEPTH || seen.size > MAX_GITDIR_POINTER_ENTRIES)
+    return "gitdir_outside_modules";
   try {
-    if (!(await lstat(e)).isDirectory()) return "gitdir_outside_modules";
+    if (!(await lstat(objectsDir)).isDirectory()) return "gitdir_outside_modules";
   } catch {
     return "unreadable";
   }
-  let i = join(e, "info");
+  let infoDir = join(objectsDir, "info");
   try {
-    if (!(await lstat(i)).isDirectory()) return "gitdir_outside_modules";
+    if (!(await lstat(infoDir)).isDirectory()) return "gitdir_outside_modules";
   } catch (error) {
     return isNotFoundCode(getErrnoCode(error)) ? undefined : "unreadable";
   }
   try {
-    await lstat(join(i, "http-alternates"));
+    await lstat(join(infoDir, "http-alternates"));
     return "gitdir_outside_modules";
   } catch (error) {
     if (!isNotFoundCode(getErrnoCode(error))) return "unreadable";
   }
-  let o = await statEntry(join(i, "alternates"), MAX_POINTER_BYTES);
-  switch (o.kind) {
+  let alternatesEntry = await statEntry(join(infoDir, "alternates"), MAX_POINTER_BYTES);
+  switch (alternatesEntry.kind) {
     case "absent":
       return;
     case "directory":
@@ -612,24 +625,28 @@ async function checkModuleGitDir(e, t, n) {
     case "file":
       break;
   }
-  let s = 0;
-  for (let line of o.text.split(`
+  let lineCount = 0;
+  for (let line of alternatesEntry.text.split(`
 `)) {
     if (line === "" || line.startsWith("#")) continue;
-    s++;
-    if (s > MAX_GITDIR_POINTER_ENTRIES || line.startsWith('"') || isUnsafeGitdirPointer(line, e))
+    lineCount++;
+    if (
+      lineCount > MAX_GITDIR_POINTER_ENTRIES ||
+      line.startsWith('"') ||
+      isUnsafeGitdirPointer(line, objectsDir)
+    )
       return "gitdir_outside_modules";
-    let d;
+    let alternatePath;
     try {
-      d = await realpath(resolve(e, line));
+      alternatePath = await realpath(resolve(objectsDir, line));
     } catch (error) {
       if (isNotFoundCode(getErrnoCode(error))) continue;
       return "unreadable";
     }
-    if (n.has(d)) continue;
-    n.add(d);
-    let c = await checkModuleGitDir(d, t + 1, n);
-    if (c !== undefined) return c;
+    if (seen.has(alternatePath)) continue;
+    seen.add(alternatePath);
+    let problem = await checkModuleGitDir(alternatePath, depth + 1, seen);
+    if (problem !== undefined) return problem;
   }
   return;
 }
@@ -640,10 +657,11 @@ var SUBMODULE_UNSAFE_CONFIG_RE =
 /**
  * 检查子模块配置是否含危险项。
  */
-async function checkModuleConfig(e, cwd, n, i, o) {
-  if (i > MAX_SUBMODULE_NESTING || o.size > MAX_GITDIR_POINTER_ENTRIES) return "gitdir_outside_modules";
-  let s = await statEntry(e, GIT_CONFIG_MAX_BYTES);
-  switch (s.kind) {
+async function checkModuleConfig(configPath, cwd, repoDir, depth, seen) {
+  if (depth > MAX_SUBMODULE_NESTING || seen.size > MAX_GITDIR_POINTER_ENTRIES)
+    return "gitdir_outside_modules";
+  let configEntry = await statEntry(configPath, GIT_CONFIG_MAX_BYTES);
+  switch (configEntry.kind) {
     case "absent":
       return;
     case "directory":
@@ -652,62 +670,64 @@ async function checkModuleConfig(e, cwd, n, i, o) {
     case "file":
       break;
   }
-  if (!/include|excludesfile|attributesfile/i.test(s.text)) return;
-  let r = await gitConfigFromStdin(s.text, SUBMODULE_UNSAFE_CONFIG_RE, cwd, n);
-  if (r === "unreadable") return "unreadable";
-  if (r.length > MAX_GITDIR_POINTER_ENTRIES) return "gitdir_outside_modules";
-  let d = dirname(e);
-  for (let { key, value: a } of r) {
-    let l = key.startsWith("include");
+  if (!/include|excludesfile|attributesfile/i.test(configEntry.text)) return;
+  let unsafeEntries = await gitConfigFromStdin(configEntry.text, SUBMODULE_UNSAFE_CONFIG_RE, cwd, repoDir);
+  if (unsafeEntries === "unreadable") return "unreadable";
+  if (unsafeEntries.length > MAX_GITDIR_POINTER_ENTRIES) return "gitdir_outside_modules";
+  let configDir = dirname(configPath);
+  for (let { key, value } of unsafeEntries) {
+    let isInclude = key.startsWith("include");
     if (
-      a === "" ||
-      a.startsWith("~") ||
-      a.startsWith("%(prefix)/") ||
-      (!l && !isAbsolute(a)) ||
-      isUnsafeGitdirPointer(a, d)
+      value === "" ||
+      value.startsWith("~") ||
+      value.startsWith("%(prefix)/") ||
+      (!isInclude && !isAbsolute(value)) ||
+      isUnsafeGitdirPointer(value, configDir)
     )
       return "gitdir_outside_modules";
-    if (!l) continue;
-    let u = resolve(d, a);
-    let f;
+    if (!isInclude) continue;
+    let includePath = resolve(configDir, value);
+    let realInclude;
     try {
-      f = await realpath(u);
+      realInclude = await realpath(includePath);
     } catch (error) {
       if (isNotFoundCode(getErrnoCode(error))) continue;
       return "unreadable";
     }
-    if (f !== u) return "gitdir_outside_modules";
-    if (o.has(f)) continue;
-    o.add(f);
-    let g = await checkModuleConfig(f, cwd, n, i + 1, o);
-    if (g !== undefined) return g;
+    if (realInclude !== includePath) return "gitdir_outside_modules";
+    if (seen.has(realInclude)) continue;
+    seen.add(realInclude);
+    let problem = await checkModuleConfig(realInclude, cwd, repoDir, depth + 1, seen);
+    if (problem !== undefined) return problem;
   }
   return;
 }
 //@ chunk-rvr0tzz9.js:10749-10895 placement
-async function anySubmoduleCheckedOut(path, t) {
-  let n = await listGitlinkEntries(path, t);
-  if (typeof n === "string") return true;
-  return (await Promise.all(n.map((o) => inspectSubmoduleDir(path, o)))).some((o) => o !== "absent");
+async function anySubmoduleCheckedOut(path, options) {
+  let gitlinks = await listGitlinkEntries(path, options);
+  if (typeof gitlinks === "string") return true;
+  return (await Promise.all(gitlinks.map((path_2) => inspectSubmoduleDir(path, path_2)))).some(
+    (state) => state !== "absent",
+  );
 }
 //@ chunk-rvr0tzz9.js:10895-11138 placement
-async function inspectSubmoduleDir(e, t) {
-  let n = await walkSubmodulePath(e, t);
-  if (n.kind !== "directory") return n.kind;
+async function inspectSubmoduleDir(repoDir, submodulePath) {
+  let walkResult = await walkSubmodulePath(repoDir, submodulePath);
+  if (walkResult.kind !== "directory") return walkResult.kind;
   try {
-    await lstat(join(n.path, ".git"));
+    await lstat(join(walkResult.path, ".git"));
     return "repository";
   } catch (error) {
     if (!isNotFoundCode(getErrnoCode(error))) return "unreadable";
   }
-  let i = await isDirEmpty(n.path);
-  return i === "absent" || i === "untracked" ? i : "unreadable";
+  let emptyKind = await isDirEmpty(walkResult.path);
+  return emptyKind === "absent" || emptyKind === "untracked" ? emptyKind : "unreadable";
 }
 //@ chunk-rvr0tzz9.js:11138-11374 placement
 async function isDirEmpty(path) {
-  let t;
+  let dirHandle;
   try {
-    t = await opendir(path);
+    dirHandle = await opendir(path);
   } catch (error) {
     return isNotFoundCode(getErrnoCode(error))
       ? "absent"
@@ -716,24 +736,24 @@ async function isDirEmpty(path) {
         };
   }
   try {
-    return (await t.read()) === null ? "absent" : "untracked";
+    return (await dirHandle.read()) === null ? "absent" : "untracked";
   } catch {
     return {
       unverifiable: "unreadable",
     };
   } finally {
     try {
-      await t.close();
+      await dirHandle.close();
     } catch {}
   }
 }
 //@ chunk-rvr0tzz9.js:11374-11590 placement
-async function walkSubmodulePath(e, t) {
-  let n = e;
-  for (let i of t.split("/")) {
-    n = join(n, i);
+async function walkSubmodulePath(repoDir, submodulePath) {
+  let currentDir = repoDir;
+  for (let segment of submodulePath.split("/")) {
+    currentDir = join(currentDir, segment);
     try {
-      if (!(await lstat(n)).isDirectory())
+      if (!(await lstat(currentDir)).isDirectory())
         return {
           kind: "absent",
         };
@@ -749,7 +769,7 @@ async function walkSubmodulePath(e, t) {
   }
   return {
     kind: "directory",
-    path: n,
+    path: currentDir,
   };
 }
 //@ chunk-rvr0tzz9.js:11590-11639 placement = isRealPathWithinTeamDir (1)
@@ -760,25 +780,25 @@ function isNotFoundCode(realCandidate) {
 /**
  * 判断路径类型（目录/文件/其他/不存在）。
  */
-async function statEntry(e, t) {
-  let n = getPlatform() === "windows";
-  let i;
-  if (n)
+async function statEntry(filePath, maxBytes) {
+  let isWindows = getPlatform() === "windows";
+  let beforeIdentity;
+  if (isWindows)
     try {
-      let s = await lstat(e, {
+      let stats = await lstat(filePath, {
         bigint: true,
       });
-      if (s.isDirectory())
+      if (stats.isDirectory())
         return {
           kind: "directory",
         };
-      if (!s.isFile())
+      if (!stats.isFile())
         return {
           kind: "other",
         };
-      i = {
-        dev: s.dev,
-        ino: s.ino,
+      beforeIdentity = {
+        dev: stats.dev,
+        ino: stats.ino,
       };
     } catch (error) {
       return isNotFoundCode(getErrnoCode(error))
@@ -789,11 +809,11 @@ async function statEntry(e, t) {
             kind: "other",
           };
     }
-  let o;
+  let handle;
   try {
-    o = await open(
-      e,
-      n ? constants.O_RDONLY : constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+    handle = await open(
+      filePath,
+      isWindows ? constants.O_RDONLY : constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
     );
   } catch (error) {
     let errnoCode = getErrnoCode(error);
@@ -810,10 +830,13 @@ async function statEntry(e, t) {
         };
   }
   try {
-    let stats = await o.stat({
+    let stats = await handle.stat({
       bigint: true,
     });
-    if (i !== undefined && (stats.dev !== i.dev || stats.ino !== i.ino))
+    if (
+      beforeIdentity !== undefined &&
+      (stats.dev !== beforeIdentity.dev || stats.ino !== beforeIdentity.ino)
+    )
       return {
         kind: "other",
       };
@@ -821,13 +844,13 @@ async function statEntry(e, t) {
       return {
         kind: "directory",
       };
-    if (!stats.isFile() || stats.size > BigInt(t))
+    if (!stats.isFile() || stats.size > BigInt(maxBytes))
       return {
         kind: "other",
       };
-    let r = Number(stats.size);
-    let { buffer, bytesRead } = await o.read(Buffer.alloc(r + 1), 0, r + 1, 0);
-    if (bytesRead > r)
+    let size = Number(stats.size);
+    let { buffer, bytesRead } = await handle.read(Buffer.alloc(size + 1), 0, size + 1, 0);
+    if (bytesRead > size)
       return {
         kind: "other",
       };
@@ -840,7 +863,7 @@ async function statEntry(e, t) {
       kind: "other",
     };
   } finally {
-    await o.close();
+    await handle.close();
   }
 }
 export {

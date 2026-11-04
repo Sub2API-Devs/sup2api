@@ -18,8 +18,8 @@ var escapeArg = (arg) => {
   if (typeof arg !== "string" || NO_ESCAPE_REGEXP.test(arg)) return arg;
   return `"${arg.replaceAll('"', '\\"')}"`;
 };
-var Ue = (file, args) => normalizeArgs(file, args).join(" ");
-var Ke = (file, args) =>
+var commandString = (file, args) => normalizeArgs(file, args).join(" ");
+var escapedCommand = (file, args) =>
   normalizeArgs(file, args)
     .map((arg) => escapeArg(arg))
     .join(" ");
@@ -69,4 +69,4 @@ var parseTemplates = (templates, expressions) => {
     });
   return tokens;
 };
-export { Ue, Ke, parseTemplates };
+export { commandString, escapedCommand, parseTemplates };

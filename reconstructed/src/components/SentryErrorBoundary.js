@@ -12,64 +12,68 @@ import { REACT_PROFILER_TYPE } from "../../vendor/react/cjs/react.production.js"
 import { logError } from "../utils/log.js";
 import { logForDebugging } from "../utils/debug.js";
 import { withTelemetryMessage, getTelemetryMessage } from "../utils/errors.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-bc20zedk.js:5225-5283 affinity
 var BOUNDARY_THROW_TEXT = "a boundary caught a throw (message not reported)";
 //@ chunk-bc20zedk.js:5283-6145 fingerprint = SentryErrorBoundary (0.319)
-class SentryErrorBoundary extends REACT_PROFILER_TYPE {
-  constructor(o) {
-    super(o);
-    this.state = {
-      hasError: false,
-      resetKey: o.resetKey,
-    };
-  }
-  static getDerivedStateFromError() {
-    return {
-      hasError: true,
-    };
-  }
-  static getDerivedStateFromProps(o, p) {
-    return Object.is(o.resetKey, p.resetKey)
-      ? null
-      : {
-          hasError: false,
-          resetKey: o.resetKey,
-        };
-  }
-  componentDidCatch(o, p) {
-    let a = this.reported(o);
-    if (a !== null) logError(a);
-    try {
-      this.props.onError?.(o, p);
-    } catch (error) {
-      logForDebugging(
-        `SentryErrorBoundary: onError threw: ${error instanceof Error ? error.message : "a value that is no error"}`,
-        {
-          level: "error",
-        },
-      );
+let SentryErrorBoundary; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bc20zedk.js:5283", () => {
+  SentryErrorBoundary = class SentryErrorBoundary extends REACT_PROFILER_TYPE {
+    constructor(props) {
+      super(props);
+      this.state = {
+        hasError: false,
+        resetKey: props.resetKey,
+      };
     }
-  }
-  reported(o) {
-    if (this.props.telemetryMessage === undefined) return o;
-    let p = this.messageAsked(this.props.telemetryMessage);
-    if (p === null) return null;
-    let a = withTelemetryMessage(o, p);
-    return getTelemetryMessage(a) === undefined
-      ? withTelemetryMessage(Error("a value that takes no telemetry message was thrown"), p)
-      : a;
-  }
-  messageAsked(o) {
-    try {
-      return o();
-    } catch {
-      return BOUNDARY_THROW_TEXT;
+    static getDerivedStateFromError() {
+      return {
+        hasError: true,
+      };
     }
-  }
-  render() {
-    if (this.state.hasError) return this.props.fallback ?? null;
-    return this.props.children;
-  }
-}
+    static getDerivedStateFromProps(nextProps, prevState) {
+      return Object.is(nextProps.resetKey, prevState.resetKey)
+        ? null
+        : {
+            hasError: false,
+            resetKey: nextProps.resetKey,
+          };
+    }
+    componentDidCatch(error, info) {
+      let reportedError = this.reported(error);
+      if (reportedError !== null) logError(reportedError);
+      try {
+        this.props.onError?.(error, info);
+      } catch (error) {
+        logForDebugging(
+          `SentryErrorBoundary: onError threw: ${error instanceof Error ? error.message : "a value that is no error"}`,
+          {
+            level: "error",
+          },
+        );
+      }
+    }
+    reported(error) {
+      if (this.props.telemetryMessage === undefined) return error;
+      let telemetryMessage = this.messageAsked(this.props.telemetryMessage);
+      if (telemetryMessage === null) return null;
+      let taggedError = withTelemetryMessage(error, telemetryMessage);
+      return getTelemetryMessage(taggedError) === undefined
+        ? withTelemetryMessage(Error("a value that takes no telemetry message was thrown"), telemetryMessage)
+        : taggedError;
+    }
+    messageAsked(getMessage) {
+      try {
+        return getMessage();
+      } catch {
+        return BOUNDARY_THROW_TEXT;
+      }
+    }
+    render() {
+      if (this.state.hasError) return this.props.fallback ?? null;
+      return this.props.children;
+    }
+  };
+});
 export { SentryErrorBoundary };

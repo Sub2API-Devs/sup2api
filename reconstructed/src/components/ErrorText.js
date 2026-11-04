@@ -8,7 +8,7 @@
  * pieces: chunk-d051nw0y.js (1)
  * attribution: placement 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { errorMessage } from "../utils/errors.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../ink/components/Text.js";
@@ -18,26 +18,26 @@ import { Text } from "../ink/components/Text.js";
  * 以错误颜色显示错误信息，无错误时不渲染。
  */
 function ErrorText(props) {
-  let p = w(4);
+  let $ = useMemoCache(4);
   let { error } = props;
   if (!error) {
     return null;
   }
   let children;
-  if (p[0] !== error) {
+  if ($[0] !== error) {
     children = errorMessage(error);
-    p[0] = error;
-    p[1] = children;
-  } else children = p[1];
-  let f;
-  if (p[2] !== children) {
-    f = jsxProd_default(Text, {
+    $[0] = error;
+    $[1] = children;
+  } else children = $[1];
+  let textNode;
+  if ($[2] !== children) {
+    textNode = jsxProd_default(Text, {
       color: "error",
       children,
     });
-    p[2] = children;
-    p[3] = f;
-  } else f = p[3];
-  return f;
+    $[2] = children;
+    $[3] = textNode;
+  } else textNode = $[3];
+  return textNode;
 }
 export { ErrorText };

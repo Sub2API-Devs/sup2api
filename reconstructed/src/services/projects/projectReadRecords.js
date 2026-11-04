@@ -14,15 +14,15 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 /**
  * 构造项目读取的输入记录。
  */
-function projectReadInput(path, e, r, n) {
+function projectReadInput(path, version, contentFields, extraFields) {
   return {
     method: "project_read",
     path,
-    ...(e !== undefined && {
-      version: e,
+    ...(version !== undefined && {
+      version,
     }),
-    ...r,
-    ...n,
+    ...contentFields,
+    ...extraFields,
   };
 }
 //@ chunk-6tqjcxkp.js:322-375 placement

@@ -30,3 +30,4 @@ var SKILL_FILES = {
   "examples/cli.md": examplesCli,
   "examples/server.md": examplesServer,
 };
+export { SKILL_FILES, SKILL_MD };

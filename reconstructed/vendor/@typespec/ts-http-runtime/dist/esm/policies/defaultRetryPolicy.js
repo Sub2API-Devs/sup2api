@@ -5,7 +5,7 @@
  * pieces: chunk-mrx6y2r5.js (2)
  * attribution: esm-fingerprint 2
  */
-import { retryPolicy_2, Vn } from "./retryPolicy.js";
+import { retryPolicy_2, DEFAULT_RETRY_POLICY_COUNT } from "./retryPolicy.js";
 import { throttlingRetryStrategy } from "../retryStrategies/throttlingRetryStrategy.js";
 import { exponentialRetryStrategy } from "../retryStrategies/exponentialRetryStrategy.js";
 
@@ -17,7 +17,7 @@ function defaultRetryPolicy(options = {}) {
   return {
     name: defaultRetryPolicyName,
     sendRequest: retryPolicy_2([throttlingRetryStrategy(), exponentialRetryStrategy(options)], {
-      maxRetries: (_a = options.maxRetries) !== null && _a !== undefined ? _a : Vn,
+      maxRetries: (_a = options.maxRetries) !== null && _a !== undefined ? _a : DEFAULT_RETRY_POLICY_COUNT,
     }).sendRequest,
   };
 }

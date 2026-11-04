@@ -5,8 +5,8 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/mcpOutputStorage.ts
- * pieces: chunk-bhxaz9j0.js (25), chunk-e6aww6q8.js (4)
- * attribution: placement 22, fingerprint 6, layout 1
+ * pieces: chunk-bhxaz9j0.js (20), chunk-e6aww6q8.js (4)
+ * attribution: placement 17, fingerprint 6, layout 1
  */
 import { dirname, join } from "path";
 import {
@@ -19,7 +19,7 @@ import {
 } from "./toolResultStorage.js";
 import { uniq, count } from "./collections.js";
 import { firstLineOf } from "./stringUtils.js";
-import { MAX_PERSIST_BYTES as MAX_PERSIST_BYTES_2, MAX_PDF_PAGES_PER_READ } from "./truncateGraphemes.js";
+import { MAX_PERSIST_BYTES as MAX_PERSIST_BYTES_2, MAX_PDF_PAGES_PER_READ } from "./mediaLimits.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { isStorageV5Enabled } from "./hoverRest.js";
@@ -27,13 +27,13 @@ import { toError } from "./errors.js";
 import { logForDebugging } from "./debug.js";
 import { formatStorageError } from "./storage/storageErrors.js";
 import { formatFileSize } from "./format.js";
-import { getLiveState } from "../services/liveReplica/liveReplica.js";
 import { getDefaultFileReadingLimits } from "../tools/FileReadTool/limits.js";
 import { shellQuoteArgs } from "./bash/bashPipeCommand.js";
 import { useSubagentTruncationPrompt } from "../services/mcp/client.js";
 import { FILE_READ_TOOL_NAME } from "../tools/FileReadTool/constants.js";
 import { getPlatform } from "./platform.js";
 import { AGENT } from "../tools/AgentTool/constants.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-bhxaz9j0.js:1161-1247 placement
 /**
@@ -54,65 +54,68 @@ function defaultToolResultsStorage() {
 /**
  * 把保存的文件路径及其目录记录到集合中（去重）。
  */
-function recordSavedFilePath(e, r) {
-  if (!e) return;
-  let n = dirname(r);
-  if (!e.dirs.includes(n)) e.dirs.push(n);
-  if (!e.paths.includes(r)) e.paths.push(r);
+function recordSavedFilePath(savedFiles, filePath) {
+  if (!savedFiles) return;
+  let dir = dirname(filePath);
+  if (!savedFiles.dirs.includes(dir)) savedFiles.dirs.push(dir);
+  if (!savedFiles.paths.includes(filePath)) savedFiles.paths.push(filePath);
 }
 //@ chunk-bhxaz9j0.js:1367-1433 placement
 /**
  * 从已保存文件集合中移除某路径。
  */
-function forgetSavedFilePath(e, r) {
-  if (!e) return;
-  e.paths = e.paths.filter((path) => path !== r);
+function forgetSavedFilePath(savedFiles, filePath) {
+  if (!savedFiles) return;
+  savedFiles.paths = savedFiles.paths.filter((path) => path !== filePath);
 }
 //@ chunk-bhxaz9j0.js:1433-1560 placement
 /**
  * 把新保存的文件并入状态的 webFetchSavedFiles；无变化时直接用原状态，否则按需经更新函数提交。
  */
-function withWebFetchSavedFiles(e, runGuard, n, i) {
-  let o = mergeSavedFiles(e.webFetchSavedFiles, runGuard);
-  let s =
-    o === e.webFetchSavedFiles
-      ? e
+function withWebFetchSavedFiles(context, runGuard, isAsync, continueWith) {
+  let merged = mergeSavedFiles(context.webFetchSavedFiles, runGuard);
+  let nextContext =
+    merged === context.webFetchSavedFiles
+      ? context
       : {
-          ...e,
-          webFetchSavedFiles: o,
+          ...context,
+          webFetchSavedFiles: merged,
         };
-  return n ? s : i(s);
+  return isAsync ? nextContext : continueWith(nextContext);
 }
 //@ chunk-bhxaz9j0.js:1560-1766 placement
-function mergeSavedFiles(webFetchSavedFiles, r) {
-  if (!r) return webFetchSavedFiles;
+function mergeSavedFiles(webFetchSavedFiles, added) {
+  if (!added) return webFetchSavedFiles;
   if (
     webFetchSavedFiles &&
-    r.dirs.every((dir) => webFetchSavedFiles.dirs.includes(dir)) &&
-    r.paths.every((path) => webFetchSavedFiles.paths.includes(path))
+    added.dirs.every((dir) => webFetchSavedFiles.dirs.includes(dir)) &&
+    added.paths.every((path) => webFetchSavedFiles.paths.includes(path))
   )
     return webFetchSavedFiles;
   return {
-    dirs: uniq([...(webFetchSavedFiles?.dirs ?? []), ...r.dirs]),
-    paths: uniq([...(webFetchSavedFiles?.paths ?? []), ...r.paths]),
+    dirs: uniq([...(webFetchSavedFiles?.dirs ?? []), ...added.dirs]),
+    paths: uniq([...(webFetchSavedFiles?.paths ?? []), ...added.paths]),
   };
 }
 //@ chunk-bhxaz9j0.js:1821-1848 placement
-var buffer = Buffer.from("%PDF-");
+var buffer; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bhxaz9j0.js:1821", () => {
+  buffer = Buffer.from("%PDF-");
+});
 //@ chunk-bhxaz9j0.js:1848-1904 placement
 /**
  * 判断缓冲区是否以给定魔数开头。
  */
-function hasBufferPrefix(e) {
-  return e.subarray(0, buffer.length).equals(buffer);
+function hasBufferPrefix(data) {
+  return data.subarray(0, buffer.length).equals(buffer);
 }
 //@ chunk-bhxaz9j0.js:1904-2035 placement
 /**
  * 取 MIME 类型的主体部分（去掉参数），格式合法且不超过 100 字符时返回，否则 undefined。
  */
-function normalizeMimeType(e) {
-  if (typeof e !== "string") return;
-  let trimmed = firstLineOf(e, ";").trim();
+function normalizeMimeType(rawMimeType) {
+  if (typeof rawMimeType !== "string") return;
+  let trimmed = firstLineOf(rawMimeType, ";").trim();
   return trimmed.length <= 100 && /^[\w.+-]+\/[\w.+-]+$/.test(trimmed) ? trimmed : undefined;
 }
 //@ chunk-bhxaz9j0.js:2035-3447 fingerprint = extensionForMimeType (0.77)
@@ -201,95 +204,102 @@ var MAX_PERSIST_BYTES = MAX_PERSIST_BYTES_2;
 /**
  * persistBinaryContent：把 MCP 返回的二进制内容按扩展名写入 tool-results 目录（或会话存储），超过持久化上限返回错误；记录 tengu_binary_content_persisted。
  */
-async function persistBinaryContent(bytes, mimeType, persistId, i, storage) {
+async function persistBinaryContent(bytes, mimeType, persistId, savedFiles, storage) {
   if (bytes.length > MAX_PERSIST_BYTES)
     return {
       error: `content is ${bytes.length} bytes, over the ${MAX_PERSIST_BYTES} byte persist limit`,
     };
-  let s = toolResultStoreOrNull();
-  if (s !== undefined) {
-    let l = extensionForMimeType(mimeType);
-    let f =
-      bytes.length > s.maxBytes
+  let resultStore = toolResultStoreOrNull();
+  if (resultStore !== undefined) {
+    let ext = extensionForMimeType(mimeType);
+    let saved =
+      bytes.length > resultStore.maxBytes
         ? null
-        : await saveResultSafely(s, {
-            leafName: `${persistId}.${l}`,
+        : await saveResultSafely(resultStore, {
+            leafName: `${persistId}.${ext}`,
             data: bytes,
           });
-    if (f === null)
+    if (saved === null)
       return {
         error: "binary content was not saved",
       };
-    recordSavedFilePath(i, f.path);
+    recordSavedFilePath(savedFiles, saved.path);
     logEvent("tengu_binary_content_persisted", {
       sizeBytes: bytes.length,
-      ext: fromEnum(l),
+      ext: fromEnum(ext),
     });
     return {
-      filepath: f.path,
+      filepath: saved.path,
       size: bytes.length,
-      ext: l,
+      ext,
     };
   }
-  let u = toolResultsDir();
+  let resultsDir = toolResultsDir();
   if (isStorageV5Enabled() && storage !== undefined) {
-    let l = await persistBinaryContentViaStorage(storage, u, bytes, mimeType, persistId, i);
-    if (l !== undefined) return l;
+    let storageResult = await persistBinaryContentViaStorage(
+      storage,
+      resultsDir,
+      bytes,
+      mimeType,
+      persistId,
+      savedFiles,
+    );
+    if (storageResult !== undefined) return storageResult;
   }
-  await ensureToolResultsDir(u, storage);
-  let d = extensionForMimeType(mimeType);
-  let p = join(u, `${persistId}.${d}`);
+  await ensureToolResultsDir(resultsDir, storage);
+  let ext = extensionForMimeType(mimeType);
+  let filePath = join(resultsDir, `${persistId}.${ext}`);
   try {
-    await writeToolResultFile(p, bytes);
+    await writeToolResultFile(filePath, bytes);
   } catch (error) {
     let error_2 = toError(error);
-    logForDebugging(`Failed to persist binary content to ${p}: ${error_2.message}`, {
+    logForDebugging(`Failed to persist binary content to ${filePath}: ${error_2.message}`, {
       level: "error",
     });
     return {
       error: error_2.message,
     };
   }
-  recordSavedFilePath(i, p);
+  recordSavedFilePath(savedFiles, filePath);
   logEvent("tengu_binary_content_persisted", {
     sizeBytes: bytes.length,
-    ext: fromEnum(d),
+    ext: fromEnum(ext),
   });
   return {
-    filepath: p,
+    filepath: filePath,
     size: bytes.length,
-    ext: d,
+    ext,
   };
 }
 //@ chunk-bhxaz9j0.js:4450-4856 fingerprint = persistBinaryContent (0.608)
 /**
  * persistBinaryContentViaStorage：经存储抽象（v5 storage）写二进制文件的分支。
  */
-async function persistBinaryContentViaStorage(storage, r, bytes, mimeType, persistId, s) {
+async function persistBinaryContentViaStorage(storage, resultsDir, bytes, mimeType, persistId, savedFiles) {
   let ext = extensionForMimeType(mimeType);
-  let d = `${persistId}.${ext}`;
-  let filepath = toolResultsKey(r, d);
+  let leafName = `${persistId}.${ext}`;
+  let filepath = toolResultsKey(resultsDir, leafName);
   if (filepath === undefined) return;
-  let l = join(r, d);
-  let f = await storage.write(filepath, bytes, {
+  let displayPath = join(resultsDir, leafName);
+  let writeResult = await storage.write(filepath, bytes, {
     mode: 438 & ~process.umask(),
   });
-  if (!f.ok) {
-    let err = formatStorageError(f.error);
-    logForDebugging(`Failed to persist binary content to ${l}: ${err}`, {
+  if (!writeResult.ok) {
+    let err = formatStorageError(writeResult.error);
+    logForDebugging(`Failed to persist binary content to ${displayPath}: ${err}`, {
       level: "error",
     });
     return {
       error: `storage write failed (${err})`,
     };
   }
-  recordSavedFilePath(s, l);
+  recordSavedFilePath(savedFiles, displayPath);
   logEvent("tengu_binary_content_persisted", {
     sizeBytes: bytes.length,
     ext: fromEnum(ext),
   });
   return {
-    filepath: l,
+    filepath: displayPath,
     size: bytes.length,
     ext,
   };
@@ -303,7 +313,7 @@ function getBinaryBlobSavedMessage(filepath, mimeType, size, sourceDescription) 
 }
 //@ chunk-bhxaz9j0.js:4952-5278 placement
 function toStoredMcpContent(imageBuffer, mimeType, serverName) {
-  let i = toolResultStoreOrNull();
+  let resultStore = toolResultStoreOrNull();
   if (
     firstLineOf(mimeType ?? "", ";")
       .trim()
@@ -311,8 +321,8 @@ function toStoredMcpContent(imageBuffer, mimeType, serverName) {
     !hasBufferPrefix(imageBuffer)
   )
     return;
-  if (imageBuffer.length > (i?.inlinePdfBytes?.(serverName) ?? 0))
-    return i?.servesTheModelsFiles?.(serverName) === true
+  if (imageBuffer.length > (resultStore?.inlinePdfBytes?.(serverName) ?? 0))
+    return resultStore?.servesTheModelsFiles?.(serverName) === true
       ? {
           type: "text",
           text: pdfTooLargeNotice(imageBuffer.length),
@@ -328,8 +338,8 @@ function toStoredMcpContent(imageBuffer, mimeType, serverName) {
   };
 }
 //@ chunk-bhxaz9j0.js:5278-5457 placement
-function pdfTooLargeNotice(e) {
-  return `[This PDF (${formatFileSize(e)}) cannot be shown whole in this session. Read it again with the pages parameter, for example pages: "1-5", at most ${MAX_PDF_PAGES_PER_READ} pages per call.]`;
+function pdfTooLargeNotice(byteLength) {
+  return `[This PDF (${formatFileSize(byteLength)}) cannot be shown whole in this session. Read it again with the pages parameter, for example pages: "1-5", at most ${MAX_PDF_PAGES_PER_READ} pages per call.]`;
 }
 //@ chunk-bhxaz9j0.js:5457-5533 placement
 var EXTRA_PDF_OMITTED_TEXT = "[Another PDF in this result was left out: only the first is shown.]";
@@ -338,12 +348,12 @@ var EXTRA_PDF_OMITTED_TEXT = "[Another PDF in this result was left out: only the
  * 内容中有多个 document 块时只保留第一个，其余替换为说明文字。
  */
 function dropExtraDocumentBlocks(content) {
-  if (!Array.isArray(content) || count(content, (n) => n.type === "document") < 2) return content;
-  let r = false;
-  return content.map((n) => {
-    if (n.type !== "document" || !r) {
-      r ||= n.type === "document";
-      return n;
+  if (!Array.isArray(content) || count(content, (block) => block.type === "document") < 2) return content;
+  let seenDocument = false;
+  return content.map((block) => {
+    if (block.type !== "document" || !seenDocument) {
+      seenDocument ||= block.type === "document";
+      return block;
     }
     return {
       type: "text",
@@ -355,8 +365,8 @@ function dropExtraDocumentBlocks(content) {
 /**
  * 二进制内容未能保存时的说明文字（类型与大小）。
  */
-function binaryNotSavedNotice(mimeType, r) {
-  return `[Binary content (${normalizeMimeType(mimeType) ?? "application/octet-stream"}, ${formatFileSize(r)}) was not kept: it could not be saved.]`;
+function binaryNotSavedNotice(mimeType, byteLength) {
+  return `[Binary content (${normalizeMimeType(mimeType) ?? "application/octet-stream"}, ${formatFileSize(byteLength)}) was not kept: it could not be saved.]`;
 }
 //@ chunk-bhxaz9j0.js:5859-5936 placement
 /**
@@ -368,44 +378,6 @@ var TRUNCATED_UNSAVED_TEXT = "[The portion truncated above was not kept: it coul
  * 行提示文本的最大字符数。
  */
 var MAX_LINE_HINT_CHARS = 64;
-//@ chunk-bhxaz9j0.js:6209-6292 placement
-/**
- * 判断某 id 是否在自动编辑归属的链发布集合中。
- */
-function hasChainPublishId(toolUseId) {
-  return toolUseId !== undefined && getLiveState().autoEditAttribution.chainPublishIds.has(toolUseId);
-}
-//@ chunk-bhxaz9j0.js:6292-6384 placement
-function chainPublishSlot(e) {
-  if (e === undefined) return;
-  return getLiveState().autoEditAttribution.chainPublishSlots.get(e);
-}
-//@ chunk-bhxaz9j0.js:6384-6421 placement
-/**
- * 判断某 id 是否有链发布槽。
- */
-function hasChainPublishSlot(toolUseId) {
-  return chainPublishSlot(toolUseId) !== undefined;
-}
-//@ chunk-bhxaz9j0.js:6421-6517 placement
-/**
- * 取走并清除某槽的往返标记。
- */
-function takeRoundTripMark(toolUseId) {
-  let r = chainPublishSlot(toolUseId);
-  let n = {
-    roundTrip: r?.roundTrip,
-  };
-  if (r !== undefined) r.roundTrip = undefined;
-  return n;
-}
-//@ chunk-bhxaz9j0.js:7667-7733 placement
-/**
- * 判断某 id 是否有 pipeline 回复来源。
- */
-function hasPipelineReplyOrigin(toolUseId) {
-  return toolUseId !== undefined && getLiveState().pipelineReplyOrigins.has(toolUseId);
-}
 //@ chunk-e6aww6q8.js:2145923-2146125 fingerprint = getFormatDescription (1)
 /**
  * getFormatDescription：toolResult → Plain text；structuredContent/contentArray → JSON（可带 schema 描述）。
@@ -432,82 +404,82 @@ function getLargeOutputInstructions(
   lineStats,
   truncatedAtBytes,
 ) {
-  let w = `Error: result (${lineStats !== undefined ? `${contentLength.toLocaleString()} characters across ${lineStats.count.toLocaleString()} ${lineStats.count === 1 ? "line" : "lines"}` : `${contentLength.toLocaleString()} characters`}) exceeds maximum allowed tokens. Output has been saved to ${rawOutputPath}.
+  let header = `Error: result (${lineStats !== undefined ? `${contentLength.toLocaleString()} characters across ${lineStats.count.toLocaleString()} ${lineStats.count === 1 ? "line" : "lines"}` : `${contentLength.toLocaleString()} characters`}) exceeds maximum allowed tokens. Output has been saved to ${rawOutputPath}.
 Format: ${formatDescription}
 `;
-  let L =
+  let truncationNote =
     truncatedAtBytes === undefined
       ? ""
       : `
 Note: the output exceeded the persist byte limit; the saved file contains only the first ${formatFileSize(truncatedAtBytes)} of it and may end mid-structure (a JSON parse of the whole file can fail). Any line/character counts or parsing recipes above describe the full output, not the truncated file.`;
   let floored = Math.floor(getDefaultFileReadingLimits().maxTokens * 4 * 0.8);
-  let q = 8;
-  let Z = lineStats !== undefined && lineStats.count > 1 && lineStats.maxLen <= floored;
-  let Se = Z ? Math.max(1, Math.floor(floored / (lineStats.maxLen + 8))) : undefined;
-  let ke = `first probe the structure (e.g., jq 'type, length, keys?' ${shellQuoteArgs([rawOutputPath])}), then extract slices with jq or python`;
+  let lineOverhead = 8;
+  let linesChunkable = lineStats !== undefined && lineStats.count > 1 && lineStats.maxLen <= floored;
+  let linesPerChunk = linesChunkable ? Math.max(1, Math.floor(floored / (lineStats.maxLen + 8))) : undefined;
+  let jqProbeHint = `first probe the structure (e.g., jq 'type, length, keys?' ${shellQuoteArgs([rawOutputPath])}), then extract slices with jq or python`;
   if (!useSubagentTruncationPrompt()) {
-    let Ie;
-    let Me;
+    let searchAdvice;
+    let chunkingNote;
     if (lineStats === undefined) {
-      Ie = `Use jq to make structured queries (find a value, filter by field).
+      searchAdvice = `Use jq to make structured queries (find a value, filter by field).
 `;
-      Me = `- Note: this file is JSON, so a long value (or the whole file) is a single line. ${FILE_READ_TOOL_NAME}'s offset/limit cannot split a line, so reading in chunks works only if every line is short. If a shell tool is available, ${ke}.
+      chunkingNote = `- Note: this file is JSON, so a long value (or the whole file) is a single line. ${FILE_READ_TOOL_NAME}'s offset/limit cannot split a line, so reading in chunks works only if every line is short. If a shell tool is available, ${jqProbeHint}.
 `;
-    } else if (!Z) {
-      Ie = `Search within the file for specific content, and use jq if the content is JSON.
+    } else if (!linesChunkable) {
+      searchAdvice = `Search within the file for specific content, and use jq if the content is JSON.
 `;
-      Me = `- Note: this file's lines are too long for ${FILE_READ_TOOL_NAME}'s offset/limit chunking. If a shell tool is available, slice by character range (e.g. python read()[A:B], dd, or cut -c) instead.
+      chunkingNote = `- Note: this file's lines are too long for ${FILE_READ_TOOL_NAME}'s offset/limit chunking. If a shell tool is available, slice by character range (e.g. python read()[A:B], dd, or cut -c) instead.
 `;
     } else {
-      Ie = `Use offset and limit parameters to read specific portions of the file, search within it for specific content, and jq to make structured queries.
+      searchAdvice = `Use offset and limit parameters to read specific portions of the file, search within it for specific content, and jq to make structured queries.
 `;
-      Me = "";
+      chunkingNote = "";
     }
     return (
-      w +
-      Ie +
+      header +
+      searchAdvice +
       `REQUIREMENTS FOR SUMMARIZATION/ANALYSIS/REVIEW:
 ` +
-      getReadEntireFileRequirements(rawOutputPath, maxBashOutputChars, Me) +
-      L
+      getReadEntireFileRequirements(rawOutputPath, maxBashOutputChars, chunkingNote) +
+      truncationNote
     );
   }
-  let we;
-  let Ee;
-  let Ae;
+  let searchAdviceAlternate;
+  let readAdvice;
+  let subagentInstruction;
   if (lineStats === undefined) {
-    we = `- For targeted queries (find a value, filter by field): use jq on the file directly.
+    searchAdviceAlternate = `- For targeted queries (find a value, filter by field): use jq on the file directly.
 `;
-    Ee = `${ke} \u2014 ${FILE_READ_TOOL_NAME}'s line-based offset/limit will not chunk this file.`;
-    Ae = `${rawOutputPath} is ${formatDescription}; probe the structure with jq (type/length/keys), then extract and read the content in full with jq or python, then summarize and quote any key findings verbatim.`;
-  } else if (!Z) {
-    let Ie = floored.toLocaleString();
-    we = `- For targeted searches (find a string): use grep on the file directly.
+    readAdvice = `${jqProbeHint} \u2014 ${FILE_READ_TOOL_NAME}'s line-based offset/limit will not chunk this file.`;
+    subagentInstruction = `${rawOutputPath} is ${formatDescription}; probe the structure with jq (type/length/keys), then extract and read the content in full with jq or python, then summarize and quote any key findings verbatim.`;
+  } else if (!linesChunkable) {
+    let spanChars = floored.toLocaleString();
+    searchAdviceAlternate = `- For targeted searches (find a string): use grep on the file directly.
 `;
-    let Me = getPlatform() === "windows" ? "python" : "python3";
+    let pythonCommand = getPlatform() === "windows" ? "python" : "python3";
     let replaced = rawOutputPath.replaceAll("\\", "/").replaceAll("'", "'\\''");
-    Ee = `the file's lines are too long for Read's offset/limit. Slice by character range via Bash instead \u2014 e.g. ${Me} -c 'print(open("${replaced}").read()[A:B])' in ~${Ie}-char spans until you have read 100% of it.`;
-    Ae = `Slice ${rawOutputPath} in ~${Ie}-char spans via python (read()[A:B]) until you have read all ${contentLength.toLocaleString()} characters, then summarize and quote any key findings verbatim.`;
+    readAdvice = `the file's lines are too long for Read's offset/limit. Slice by character range via Bash instead \u2014 e.g. ${pythonCommand} -c 'print(open("${replaced}").read()[A:B])' in ~${spanChars}-char spans until you have read 100% of it.`;
+    subagentInstruction = `Slice ${rawOutputPath} in ~${spanChars}-char spans via python (read()[A:B]) until you have read all ${contentLength.toLocaleString()} characters, then summarize and quote any key findings verbatim.`;
   } else {
-    we = `- For targeted searches (find a line, locate a string): use grep on the file directly.
+    searchAdviceAlternate = `- For targeted searches (find a line, locate a string): use grep on the file directly.
 `;
-    Ee = `read ${rawOutputPath} in chunks of ~${Se} lines using offset/limit until you have read 100% of it.`;
-    Ae = `Read ${rawOutputPath} in chunks of ~${Se} lines using offset/limit until you have read all ${lineStats.count.toLocaleString()} lines, then summarize and quote any key findings verbatim.`;
+    readAdvice = `read ${rawOutputPath} in chunks of ~${linesPerChunk} lines using offset/limit until you have read 100% of it.`;
+    subagentInstruction = `Read ${rawOutputPath} in chunks of ~${linesPerChunk} lines using offset/limit until you have read all ${lineStats.count.toLocaleString()} lines, then summarize and quote any key findings verbatim.`;
   }
   return (
-    w +
-    we +
-    `- For analysis or summarization that requires reading the full content: ${Ee}
-- If the ${AGENT} tool is available, do this inside a subagent so the full output stays out of your main context. Give it the instruction above verbatim, and be explicit about what it must return \u2014 e.g. "${Ae}" A vague "summarize this" may lose detail.
+    header +
+    searchAdviceAlternate +
+    `- For analysis or summarization that requires reading the full content: ${readAdvice}
+- If the ${AGENT} tool is available, do this inside a subagent so the full output stays out of your main context. Give it the instruction above verbatim, and be explicit about what it must return \u2014 e.g. "${subagentInstruction}" A vague "summarize this" may lose detail.
 ` +
-    L
+    truncationNote
   );
 }
 //@ chunk-e6aww6q8.js:2149462-2150478 fingerprint = getLargeOutputInstructions (0.787)
 /**
  * getReadEntireFileRequirements：要求模型分块读完整个文件、遇截断缩小块、说明读了多少、读不了就停止重试。
  */
-function getReadEntireFileRequirements(rawOutputPath, maxBashOutputChars, r) {
+function getReadEntireFileRequirements(rawOutputPath, maxBashOutputChars, noShellAccessNote) {
   let truncationWarning = maxBashOutputChars
     ? `- If you receive truncation warnings when reading the file ("[N lines truncated]"), reduce the chunk size until you have read 100% of the content without truncation ***DO NOT PROCEED UNTIL YOU HAVE DONE THIS***. Bash output is limited to ${maxBashOutputChars.toLocaleString()} chars.
 `
@@ -516,7 +488,7 @@ function getReadEntireFileRequirements(rawOutputPath, maxBashOutputChars, r) {
   return (
     `- You MUST read the content from the file at ${rawOutputPath} in sequential chunks until 100% of the content has been read.
 ` +
-    r +
+    noShellAccessNote +
     truncationWarning +
     `- Before producing ANY summary or analysis, you MUST explicitly describe what portion of the content you have read. ***If you did not read the entire content, you MUST explicitly state this.***
 - If after a few attempts you cannot read the file (file not found, lines too long for Read's offset/limit, no shell access), STOP retrying. Summarize what you were able to read, explicitly state which portion you could not read and why, and proceed.
@@ -551,11 +523,7 @@ export {
   recordSavedFilePath,
   isBinaryContentType,
   normalizeMimeType,
-  hasChainPublishId,
-  hasChainPublishSlot,
-  takeRoundTripMark,
   MAX_LINE_HINT_CHARS,
-  hasPipelineReplyOrigin,
   MAX_PERSIST_BYTES,
   TRUNCATED_UNSAVED_TEXT,
   forgetSavedFilePath,

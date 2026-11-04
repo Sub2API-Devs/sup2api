@@ -23,7 +23,7 @@ import { getRemoteFeatureGateState } from "../../utils/permissions/yoloClassifie
 import { TENGU_CHEEKY_TOUCAN, TENGU_TWINKLY_CLOVER } from "../../services/api/withRetry.js";
 import { isCompactBoundaryMessage } from "../../services/projects/threadRows.js";
 import { isNonPromptUserRow } from "../../utils/transcript/deserialize.js";
-import { Ji } from "../../../vendor/lodash-es/uniqBy.js";
+import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { env } from "../../utils/env.js";
 import { MAX_RESUME_TAIL_AGE_MS, isResumeTooOld } from "../../utils/conversationRecovery.js";
 import {
@@ -35,87 +35,88 @@ import {
 import { isFoamySpringEnabled } from "../../services/analytics/growthbookGates.js";
 import { localCommandTagKindOf } from "../../utils/messages/localCommandTags.js";
 import { isTurnUnanswered } from "../../utils/sessionStorage.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-tyg7f3ek.js:39294-40494 placement
 /**
  * 为正在运行的轮次构造压缩元数据中的 runningTurnSends（opener、已送达的消息 uuid 列表）。
  */
 function buildRunningTurnRecord(
-  e,
-  n,
-  { primaryIsMeta: r = false, resultsAlsoList: s = [], standIn: h, wasPutBack: y } = {},
+  primaryUuid,
+  extraUuids,
+  { primaryIsMeta = false, resultsAlsoList: resultsList = [], standIn, wasPutBack } = {},
 ) {
-  let S = [];
-  let R = [];
-  let w = (Z) => y !== undefined && R.includes(Z) && y(Z);
-  let P = new Set();
-  let L = e === undefined || r;
-  let q = (Z) => {
-    if (Z === "" || S.includes(Z)) return;
-    if (S.length < MAX_HELD_MESSAGES) S.push(Z);
-    else if (L) S[MAX_HELD_MESSAGES - 1] = Z;
+  let held = [];
+  let started = [];
+  let wasNoted = (uuid) => wasPutBack !== undefined && started.includes(uuid) && wasPutBack(uuid);
+  let noted = new Set();
+  let primaryIsMetaOrUndefined = primaryUuid === undefined || primaryIsMeta;
+  let remember = (uuid) => {
+    if (uuid === "" || held.includes(uuid)) return;
+    if (held.length < MAX_HELD_MESSAGES) held.push(uuid);
+    else if (primaryIsMetaOrUndefined) held[MAX_HELD_MESSAGES - 1] = uuid;
   };
-  for (let Z of n ?? []) q(Z);
-  if (e !== undefined) {
-    if (!S.includes(e))
-      if (S.length >= MAX_HELD_MESSAGES) S[MAX_HELD_MESSAGES - 1] = e;
-      else S.push(e);
+  for (let uuid of extraUuids ?? []) remember(uuid);
+  if (primaryUuid !== undefined) {
+    if (!held.includes(primaryUuid))
+      if (held.length >= MAX_HELD_MESSAGES) held[MAX_HELD_MESSAGES - 1] = primaryUuid;
+      else held.push(primaryUuid);
   }
-  let x = () => {
-    let filtered = S.filter((ce) => !w(ce));
+  let note = () => {
+    let filtered = held.filter((uuid) => !wasNoted(uuid));
     let last = filtered.at(-1);
     if (last === undefined) return;
-    let last_2 = R.findLast((ce) => filtered.includes(ce));
+    let last_2 = started.findLast((uuid) => filtered.includes(uuid));
     return {
       user_message_uuid:
-        e !== undefined && !(r && last_2 !== undefined)
-          ? e
-          : (last_2 ?? (h !== undefined && S.includes(h) ? h : last)),
+        primaryUuid !== undefined && !(primaryIsMeta && last_2 !== undefined)
+          ? primaryUuid
+          : (last_2 ?? (standIn !== undefined && held.includes(standIn) ? standIn : last)),
       user_message_uuids: filtered,
     };
   };
-  let G = () => {
-    let Z = x();
+  let noteOnce = () => {
+    let noteResult = note();
     try {
-      let filtered = s.filter((Ue) => !S.includes(Ue));
+      let filtered = resultsList.filter((uuid) => !held.includes(uuid));
       let last = filtered.at(-1);
-      if (last === undefined) return Z;
+      if (last === undefined) return noteResult;
       return {
-        user_message_uuid: Z?.user_message_uuid ?? last,
+        user_message_uuid: noteResult?.user_message_uuid ?? last,
         user_message_uuids: [
           ...filtered,
-          ...(Z?.user_message_uuids ?? []).slice(-(MAX_HELD_MESSAGES - filtered.length)),
+          ...(noteResult?.user_message_uuids ?? []).slice(-(MAX_HELD_MESSAGES - filtered.length)),
         ],
       };
     } catch (error) {
       logError(error);
-      return Z;
+      return noteResult;
     }
   };
   return {
-    fields: x,
-    resultFields: G,
+    fields: note,
+    resultFields: noteOnce,
     errorVariantFields: () =>
-      G() ?? {
+      noteOnce() ?? {
         user_message_uuid: undefined,
-        ...(R.some(w) && {
+        ...(started.some(wasNoted) && {
           user_message_uuids: [],
         }),
       },
-    noteAttachment: (Z) => {
+    noteAttachment: (attachment) => {
       if (
-        Z.type === "queued_command" &&
-        Z.commandMode === "prompt" &&
-        Z.isMeta !== true &&
-        Z.source_uuid !== undefined &&
-        P.size < MAX_HELD_MESSAGES
+        attachment.type === "queued_command" &&
+        attachment.commandMode === "prompt" &&
+        attachment.isMeta !== true &&
+        attachment.source_uuid !== undefined &&
+        noted.size < MAX_HELD_MESSAGES
       )
-        P.add(Z.source_uuid);
+        noted.add(attachment.source_uuid);
     },
-    noteCommandStarted: (Z) => {
-      if (P.delete(Z)) {
-        q(Z);
-        if (S.includes(Z)) R.push(Z);
+    noteCommandStarted: (uuid) => {
+      if (noted.delete(uuid)) {
+        remember(uuid);
+        if (held.includes(uuid)) started.push(uuid);
         return true;
       }
       return false;
@@ -125,18 +126,18 @@ function buildRunningTurnRecord(
 //@ chunk-tyg7f3ek.js:40494-40504 placement
 var MAX_RUNNING_ROW_ID_CHARS = 64;
 //@ chunk-tyg7f3ek.js:40504-40910 placement
-function createRunningTurnTracker(e) {
-  let n = [];
-  let r;
-  let s = [];
+function createRunningTurnTracker(readTakenIn) {
+  let takenIn = [];
+  let lastReplyUuid;
+  let previousTakenIn = [];
   let boundaryOfThisTurn;
-  let y = false;
-  let S = (R) => {
-    if (y) return;
+  let stopped = false;
+  let guard = (fn) => {
+    if (stopped) return;
     try {
-      y = R() === false;
+      stopped = fn() === false;
     } catch (error) {
-      y = true;
+      stopped = true;
       logError(error);
       try {
         logFeatureBad("compact_running_turn_record", "tracker_threw");
@@ -147,30 +148,30 @@ function createRunningTurnTracker(e) {
   };
   return {
     onAssistantRow: (entries) =>
-      S(() => {
+      guard(() => {
         if (countUserPromptsFromEntries_2(entries)) {
-          n = e();
-          r = entries.uuid;
+          takenIn = readTakenIn();
+          lastReplyUuid = entries.uuid;
         }
       }),
     onRoundStart: () =>
-      S(() => {
-        s = n;
+      guard(() => {
+        previousTakenIn = takenIn;
       }),
-    onRetraction: (R) =>
-      S(() => {
-        if (R === r) n = s;
+    onRetraction: (uuid) =>
+      guard(() => {
+        if (uuid === lastReplyUuid) takenIn = previousTakenIn;
       }),
-    onBoundary: (R, w) =>
-      S(() => {
-        let P = reconcileRunningTurnRecord(R, {
-          ...w,
-          takenIn: e(),
-          takenInAtLastReply: n,
+    onBoundary: (boundary, options) =>
+      guard(() => {
+        let ok = reconcileRunningTurnRecord(boundary, {
+          ...options,
+          takenIn: readTakenIn(),
+          takenInAtLastReply: takenIn,
           boundaryOfThisTurn,
         });
-        boundaryOfThisTurn = R;
-        return P;
+        boundaryOfThisTurn = boundary;
+        return ok;
       }),
   };
 }
@@ -185,55 +186,61 @@ function countUserPromptsFromEntries_2(entries) {
   );
 }
 //@ chunk-tyg7f3ek.js:41059-42197 placement
-function reconcileRunningTurnRecord(e, { boundaryOfThisTurn, continuedTurnsRows, conversation, ...h }) {
+function reconcileRunningTurnRecord(
+  boundary,
+  { boundaryOfThisTurn, continuedTurnsRows, conversation, ...options },
+) {
   try {
-    let lower = h.openerUuid?.toLowerCase();
-    let S =
+    let lower = options.openerUuid?.toLowerCase();
+    let openerIndex =
       continuedTurnsRows?.findLastIndex(
-        (Z) => typeof Z.uuid === "string" && Z.uuid.toLowerCase() === lower,
+        (row) => typeof row.uuid === "string" && row.uuid.toLowerCase() === lower,
       ) ?? -1;
-    let R = S === -1 ? [] : (continuedTurnsRows?.slice(S + 1) ?? []);
-    let w =
-      boundaryOfThisTurn ?? (continuedTurnsRows && findRunningTurnBoundary(h.openerUuid, continuedTurnsRows));
+    let rowsAfterOpener = openerIndex === -1 ? [] : (continuedTurnsRows?.slice(openerIndex + 1) ?? []);
+    let earlierBoundary =
+      boundaryOfThisTurn ??
+      (continuedTurnsRows && findRunningTurnBoundary(options.openerUuid, continuedTurnsRows));
     let uuids =
       getRemoteFeatureGateState(TENGU_CHEEKY_TOUCAN) === "on"
-        ? w?.compactMetadata?.preservedMessages?.uuids
+        ? earlierBoundary?.compactMetadata?.preservedMessages?.uuids
         : undefined;
-    let L = new Set(Array.isArray(uuids) ? uuids.map((uuid) => String(uuid).toLowerCase()) : []);
-    let lastIndex = conversation.findLastIndex((Z) => Z.uuid === w?.uuid);
-    let x =
-      L.size === 0 || lastIndex === -1
+    let preservedUuidSet = new Set(
+      Array.isArray(uuids) ? uuids.map((uuid) => String(uuid).toLowerCase()) : [],
+    );
+    let lastIndex = conversation.findLastIndex((row) => row.uuid === earlierBoundary?.uuid);
+    let noteValue =
+      preservedUuidSet.size === 0 || lastIndex === -1
         ? []
         : conversation.filter(
-            (Z, re) =>
-              re > lastIndex &&
-              typeof Z.uuid === "string" &&
-              L.has(Z.uuid.toLowerCase()) &&
+            (row, index) =>
+              index > lastIndex &&
+              typeof row.uuid === "string" &&
+              preservedUuidSet.has(row.uuid.toLowerCase()) &&
               !(
-                Z.type === "attachment" &&
-                Z.attachment?.type === "queued_command" &&
-                Z.attachment.renderedByBatchHead
+                row.type === "attachment" &&
+                row.attachment?.type === "queued_command" &&
+                row.attachment.renderedByBatchHead
               ),
           );
-    let G = mergeRunningTurnSends({
-      ...h,
-      keptAtTheLastBoundary: [...x.map((Z) => Z.uuid), ...heldUuidsIfEnabled(x)],
+    let merged = mergeRunningTurnSends({
+      ...options,
+      keptAtTheLastBoundary: [...noteValue.map((row) => row.uuid), ...heldUuidsIfEnabled(noteValue)],
       takenInAtLastReply:
-        h.openerUuid !== undefined &&
-        R.some(countUserPromptsFromEntries_2) &&
-        !R.some(isCompactBoundaryMessage)
-          ? [...h.takenInAtLastReply, h.openerUuid]
-          : h.takenInAtLastReply,
-      earlierBoundary: w,
+        options.openerUuid !== undefined &&
+        rowsAfterOpener.some(countUserPromptsFromEntries_2) &&
+        !rowsAfterOpener.some(isCompactBoundaryMessage)
+          ? [...options.takenInAtLastReply, options.openerUuid]
+          : options.takenInAtLastReply,
+      earlierBoundary,
     });
-    if (G === "too_many_unanswered") {
+    if (merged === "too_many_unanswered") {
       logFeatureSad("compact_running_turn_record", "too_many_unanswered");
       return false;
     }
     logFeatureOk("compact_running_turn_record", {
-      recorded: G !== undefined,
+      recorded: merged !== undefined,
     });
-    if (G !== undefined) e.compactMetadata.runningTurnSends = G;
+    if (merged !== undefined) boundary.compactMetadata.runningTurnSends = merged;
     return true;
   } catch (error) {
     logError(error);
@@ -246,17 +253,17 @@ function reconcileRunningTurnRecord(e, { boundaryOfThisTurn, continuedTurnsRows,
   }
 }
 //@ chunk-tyg7f3ek.js:42197-42463 placement
-function findRunningTurnBoundary(e, n) {
-  let lastIndex = n.findLastIndex(isCompactBoundaryMessage);
-  let s = n[lastIndex];
-  if (s === undefined || !isCompactBoundaryMessage(s)) return;
-  let openerUuid = s.compactMetadata?.runningTurnSends?.openerUuid;
+function findRunningTurnBoundary(openerUuid, rows) {
+  let lastIndex = rows.findLastIndex(isCompactBoundaryMessage);
+  let boundary = rows[lastIndex];
+  if (boundary === undefined || !isCompactBoundaryMessage(boundary)) return;
+  let openerUuid_2 = boundary.compactMetadata?.runningTurnSends?.openerUuid;
   return (
-    e !== undefined
-      ? typeof openerUuid === "string" && openerUuid.toLowerCase() === e.toLowerCase()
-      : !n.slice(lastIndex + 1).some((y) => y.type === "user" && !isNonPromptUserRow(y))
+    openerUuid !== undefined
+      ? typeof openerUuid_2 === "string" && openerUuid_2.toLowerCase() === openerUuid.toLowerCase()
+      : !rows.slice(lastIndex + 1).some((row) => row.type === "user" && !isNonPromptUserRow(row))
   )
-    ? s
+    ? boundary
     : undefined;
 }
 //@ chunk-tyg7f3ek.js:42463-43363 placement
@@ -268,42 +275,45 @@ function mergeRunningTurnSends({
   earlierBoundary,
 }) {
   let compactMetadata = earlierBoundary?.compactMetadata;
-  let S =
+  let metadata =
     typeof compactMetadata === "object" && compactMetadata !== null
       ? Reflect.get(compactMetadata, "runningTurnSends")
       : undefined;
-  let R = (ce) => (typeof S === "object" && S !== null ? Reflect.get(S, ce) : undefined);
-  let w = (ce) => {
-    let nt = R(ce);
-    return Array.isArray(nt) ? nt.slice(0, MAX_HELD_MESSAGES) : [];
+  let get = (key) =>
+    typeof metadata === "object" && metadata !== null ? Reflect.get(metadata, key) : undefined;
+  let list = (key) => {
+    let value = get(key);
+    return Array.isArray(value) ? value.slice(0, MAX_HELD_MESSAGES) : [];
   };
-  let P = (ce) => (typeof ce === "string" ? ce.toLowerCase() : ce);
-  let L = (ce, nt) => ce.some((ie) => P(ie) === P(nt));
-  let q = (ce) =>
-    Ji(
-      ce.filter((nt) => typeof nt === "string" && nt !== "" && nt.length <= MAX_RUNNING_ROW_ID_CHARS),
-      P,
+  let lower = (uuid) => (typeof uuid === "string" ? uuid.toLowerCase() : uuid);
+  let has = (uuids, uuid) => uuids.some((rowUuid) => lower(rowUuid) === lower(uuid));
+  let normalize = (uuids) =>
+    uniqByExport(
+      uuids.filter(
+        (uuid) => typeof uuid === "string" && uuid !== "" && uuid.length <= MAX_RUNNING_ROW_ID_CHARS,
+      ),
+      lower,
     );
-  let x = w("summarisedOnly");
-  let filtered = x.filter(
-    (ce) => !(L(keptAtTheLastBoundary, ce) && L(takenIn, ce) && L(takenInAtLastReply, ce)),
+  let summarisedOnly = list("summarisedOnly");
+  let filtered = summarisedOnly.filter(
+    (uuid) => !(has(keptAtTheLastBoundary, uuid) && has(takenIn, uuid) && has(takenInAtLastReply, uuid)),
   );
-  let Z = [
-    ...w("uuids").filter((ce) => !L(filtered, ce)),
-    ...takenIn.filter((ce) => L(takenInAtLastReply, ce) && !L(filtered, ce)),
+  let uuids = [
+    ...list("uuids").filter((uuid) => !has(filtered, uuid)),
+    ...takenIn.filter((uuid) => has(takenInAtLastReply, uuid) && !has(filtered, uuid)),
   ];
-  let sliced = q(Z).slice(0, MAX_HELD_MESSAGES);
-  let Ae = q([...x, ...takenIn].filter((ce) => !L(Z, ce)));
-  if (Ae.length > MAX_HELD_MESSAGES) return "too_many_unanswered";
-  if (sliced.length === 0 && Ae.length === 0) return;
-  let [Ue] = q([openerUuid, R("openerUuid")]);
+  let sliced = normalize(uuids).slice(0, MAX_HELD_MESSAGES);
+  let summarisedUuids = normalize([...summarisedOnly, ...takenIn].filter((uuid) => !has(uuids, uuid)));
+  if (summarisedUuids.length > MAX_HELD_MESSAGES) return "too_many_unanswered";
+  if (sliced.length === 0 && summarisedUuids.length === 0) return;
+  let [mergedOpenerUuid] = normalize([openerUuid, get("openerUuid")]);
   return {
     uuids: sliced,
-    ...(Ue !== undefined && {
-      openerUuid: Ue,
+    ...(mergedOpenerUuid !== undefined && {
+      openerUuid: mergedOpenerUuid,
     }),
-    ...(Ae.length > 0 && {
-      summarisedOnly: Ae,
+    ...(summarisedUuids.length > 0 && {
+      summarisedOnly: summarisedUuids,
     }),
   };
 }
@@ -311,34 +321,39 @@ function mergeRunningTurnSends({
 var COMPACTION_FRESHNESS_MS = 1e4;
 //@ chunk-tyg7f3ek.js:43374-43462 placement
 function lowercaseUuidSet(uuids) {
-  return new Set(uuids.flatMap((n) => (typeof n === "string" ? [n.toLowerCase()] : [])));
+  return new Set(uuids.flatMap((uuid) => (typeof uuid === "string" ? [uuid.toLowerCase()] : [])));
 }
 //@ chunk-tyg7f3ek.js:43462-44099 placement
-function compactionPreservedRows(e, turnInterruption, r = e) {
-  let s;
+function compactionPreservedRows(messages, turnInterruption, loadedRows = messages) {
+  let boundary;
   let ranInsideTheCutOffTurn = false;
   let keptRowsNotLoaded = false;
   try {
-    s = e.findLast(isCompactBoundaryMessage);
-    let uuids = Object(Object(s?.compactMetadata).preservedMessages).uuids;
-    let P = lowercaseUuidSet(Array.isArray(uuids) ? uuids : []);
-    if (P.size > 0) {
-      let L = lowercaseUuidSet(r.map((q) => q.uuid));
-      keptRowsNotLoaded = !(L.has(String(s?.uuid).toLowerCase()) && [...P].some((q) => L.has(q)));
+    boundary = messages.findLast(isCompactBoundaryMessage);
+    let uuids = Object(Object(boundary?.compactMetadata).preservedMessages).uuids;
+    let preservedUuids = lowercaseUuidSet(Array.isArray(uuids) ? uuids : []);
+    if (preservedUuids.size > 0) {
+      let loadedUuids = lowercaseUuidSet(loadedRows.map((row) => row.uuid));
+      keptRowsNotLoaded = !(
+        loadedUuids.has(String(boundary?.uuid).toLowerCase()) &&
+        [...preservedUuids].some((uuid) => loadedUuids.has(uuid))
+      );
     }
     ranInsideTheCutOffTurn =
-      findRunningTurnBoundary(undefined, e) !== undefined &&
-      findRunningTurnBoundary(turnInterruption, e) !== undefined;
+      findRunningTurnBoundary(undefined, messages) !== undefined &&
+      findRunningTurnBoundary(turnInterruption, messages) !== undefined;
   } catch (error) {
     logError(error);
     return;
   }
-  if (s === undefined) return;
-  let timestamp = Date.parse(String(s.timestamp));
-  let R = Object(Object(s.compactMetadata).runningTurnSends);
+  if (boundary === undefined) return;
+  let timestamp = Date.parse(String(boundary.timestamp));
+  let runningTurnSends = Object(Object(boundary.compactMetadata).runningTurnSends);
   return {
-    listed: Array.isArray(R.uuids) ? lowercaseUuidSet(R.uuids) : undefined,
-    takenInSince: lowercaseUuidSet(Array.isArray(R.summarisedOnly) ? R.summarisedOnly : []),
+    listed: Array.isArray(runningTurnSends.uuids) ? lowercaseUuidSet(runningTurnSends.uuids) : undefined,
+    takenInSince: lowercaseUuidSet(
+      Array.isArray(runningTurnSends.summarisedOnly) ? runningTurnSends.summarisedOnly : [],
+    ),
     atMs: timestamp <= Date.now() ? timestamp : undefined,
     ranInsideTheCutOffTurn,
     keptRowsNotLoaded,
@@ -352,14 +367,14 @@ function isRowFromLoadedCompaction({ uuid, conversation, loadedCompaction }) {
       loadedCompaction?.takenInSince.has(uuid.toLowerCase()) === true) &&
     loadedCompaction.atMs !== undefined &&
     Date.now() - loadedCompaction.atMs < MAX_RESUME_TAIL_AGE_MS &&
-    !isResumeTooOld(conversation.filter((s) => !isSyntheticApiErrorMessage(s))) &&
+    !isResumeTooOld(conversation.filter((row) => !isSyntheticApiErrorMessage(row))) &&
     isFoamySpringEnabled() &&
     conversation
       .slice(conversation.findLastIndex(isCompactBoundaryMessage) + 1)
-      .every((s) =>
-        s.type === "assistant"
-          ? isSyntheticApiErrorMessage(s)
-          : s.type !== "user" || s.isCompactSummary === true,
+      .every((row) =>
+        row.type === "assistant"
+          ? isSyntheticApiErrorMessage(row)
+          : row.type !== "user" || row.isCompactSummary === true,
       )
   );
 }
@@ -381,16 +396,19 @@ function turnStartedBeforeCompaction({ startedAtMs, loadedCompaction, carriesThe
   );
 }
 //@ chunk-tyg7f3ek.js:44736-44914 placement
-var TERMINAL_TURN_OUTCOMES = new Set([
-  "reply",
-  "reply_then_reminder",
-  "stop_marker",
-  "terminal_api_error",
-  "terminal_tool_result",
-  "silent_reply_after_terminal_tool",
-  "deliberate_stop_result",
-  "max_turns",
-]);
+var TERMINAL_TURN_OUTCOMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-tyg7f3ek.js:44736", () => {
+  TERMINAL_TURN_OUTCOMES = new Set([
+    "reply",
+    "reply_then_reminder",
+    "stop_marker",
+    "terminal_api_error",
+    "terminal_tool_result",
+    "silent_reply_after_terminal_tool",
+    "deliberate_stop_result",
+    "max_turns",
+  ]);
+});
 //@ chunk-tyg7f3ek.js:44914-45970 placement
 function compactionCopyTelemetry({
   uuid,
@@ -408,12 +426,12 @@ function compactionCopyTelemetry({
     return {
       ended_turn_copy_not_in_record: true,
     };
-  let y =
+  let turnEnded =
     finishedTail !== undefined &&
     (TERMINAL_TURN_OUTCOMES.has(finishedTail.because) ||
       (finishedTail.because === "not_continued_api_error_too_old" &&
         finishedTail.rateLimitRowSteppedOver === true));
-  let S = {
+  let skipFields = {
     ...(carriesTheCutOffTurnOn && {
       ended_turn_copy_turn_carried_on: true,
     }),
@@ -424,7 +442,7 @@ function compactionCopyTelemetry({
       !loadedCompaction.ranInsideTheCutOffTurn && {
         ended_turn_copy_user_row_after_boundary: true,
       }),
-    ...(!y && {
+    ...(!turnEnded && {
       ended_turn_copy_last_turn_not_ended: true,
     }),
     ...(finishedTail !== undefined &&
@@ -433,11 +451,11 @@ function compactionCopyTelemetry({
       }),
   };
   return {
-    ...(Object.keys(S).length === 0
+    ...(Object.keys(skipFields).length === 0
       ? {
           ended_turn_copy_would_skip: true,
         }
-      : S),
+      : skipFields),
     ...(growthBookCold && {
       ended_turn_copy_growthbook_cold: true,
     }),
@@ -452,97 +470,101 @@ function compactionCopyTelemetry({
   };
 }
 //@ chunk-tyg7f3ek.js:45970-46684 placement
-function classifyRedeliveredRow(e, n) {
-  let r = n.carriesTheCutOffTurnOn();
-  if (n.loadedCompaction?.ranInsideTheCutOffTurn === false) {
+function classifyRedeliveredRow(uuid, copy) {
+  let carriedOn = copy.carriesTheCutOffTurnOn();
+  if (copy.loadedCompaction?.ranInsideTheCutOffTurn === false) {
     if (
       cutOffTurnFlagFor({
-        uuid: e,
-        loadedCompaction: n.loadedCompaction,
-        carriesTheCutOffTurnOn: r,
+        uuid,
+        loadedCompaction: copy.loadedCompaction,
+        carriesTheCutOffTurnOn: carriedOn,
       }) !== "on" ||
-      !n.anInheritedPromptWaits()
+      !copy.anInheritedPromptWaits()
     )
       return;
-    n.noteCopyAwaitsTheCutOffTurn();
+    copy.noteCopyAwaitsTheCutOffTurn();
     return {
-      whileStillOwed: n.cutOffTurnIsStillOwed,
+      whileStillOwed: copy.cutOffTurnIsStillOwed,
     };
   }
-  let { loadedCompaction } = n;
-  let h = cutOffTurnFlagFor({
-    uuid: e,
+  let { loadedCompaction } = copy;
+  let flag = cutOffTurnFlagFor({
+    uuid,
     loadedCompaction,
-    carriesTheCutOffTurnOn: r,
+    carriesTheCutOffTurnOn: carriedOn,
   });
-  if (h === undefined) {
-    if (r && loadedCompaction?.takenInSince.has(e.toLowerCase())) return "taken_in_since";
+  if (flag === undefined) {
+    if (carriedOn && loadedCompaction?.takenInSince.has(uuid.toLowerCase())) return "taken_in_since";
     return turnStartedBeforeCompaction({
-      startedAtMs: n.startedAtMs(e),
+      startedAtMs: copy.startedAtMs(uuid),
       loadedCompaction,
-      carriesTheCutOffTurnOn: r,
+      carriesTheCutOffTurnOn: carriedOn,
     })
       ? "unlisted"
       : undefined;
   }
   if (loadedCompaction?.keptRowsNotLoaded === true) return "kept_rows_not_loaded";
-  if (h !== "on") return h;
-  n.noteCopyAwaitsTheCutOffTurn();
-  return n.cutOffTurnIsStillOwed;
+  if (flag !== "on") return flag;
+  copy.noteCopyAwaitsTheCutOffTurn();
+  return copy.cutOffTurnIsStillOwed;
 }
 //@ chunk-tyg7f3ek.js:46684-46774 placement
-function isNonUserRow(e) {
+function isNonUserRow(row) {
   return (
-    ("isCompactSummary" in e && e.isCompactSummary === true) ||
-    isInterruptionOnlyMessage(e) ||
-    isToolResultMessage(e) ||
-    isHarnessMetaMessage(e)
+    ("isCompactSummary" in row && row.isCompactSummary === true) ||
+    isInterruptionOnlyMessage(row) ||
+    isToolResultMessage(row) ||
+    isHarnessMetaMessage(row)
   );
 }
 //@ chunk-tyg7f3ek.js:46774-46879 placement
-function isSyntheticUserMessage(e) {
+function isSyntheticUserMessage(row) {
   return (
-    e.type === "user" &&
-    e.promptSource === undefined &&
-    !isNonUserRow(e) &&
-    (e.isMeta === true || localCommandTagKindOf(e) !== undefined)
+    row.type === "user" &&
+    row.promptSource === undefined &&
+    !isNonUserRow(row) &&
+    (row.isMeta === true || localCommandTagKindOf(row) !== undefined)
   );
 }
 //@ chunk-tyg7f3ek.js:46879-47303 placement
-function isOpenerUnanswered(e, n) {
-  let messageIndex = findMessageIndex(e, n);
-  let s = e[messageIndex];
-  if (s === undefined || s.uuid === n) return isTurnUnanswered(e, n);
-  let filtered = e.filter(
-    (S, R) =>
-      R > messageIndex &&
-      (S.type === "user" || S.type === "assistant") &&
-      !("isSidechain" in S && S.isSidechain === true) &&
-      !isSyntheticApiErrorMessage(S) &&
-      !isSyntheticUserMessage(S),
+function isOpenerUnanswered(messages, openerUuid) {
+  let messageIndex = findMessageIndex(messages, openerUuid);
+  let opener = messages[messageIndex];
+  if (opener === undefined || opener.uuid === openerUuid) return isTurnUnanswered(messages, openerUuid);
+  let filtered = messages.filter(
+    (message, index) =>
+      index > messageIndex &&
+      (message.type === "user" || message.type === "assistant") &&
+      !("isSidechain" in message && message.isSidechain === true) &&
+      !isSyntheticApiErrorMessage(message) &&
+      !isSyntheticUserMessage(message),
   );
-  let y = (S) => S.type === "user" && S.interruptedByShutdown !== true && isInterruptionOnlyMessage(S);
+  let isInterruptionRow = (row) =>
+    row.type === "user" && row.interruptedByShutdown !== true && isInterruptionOnlyMessage(row);
   if (
-    !filtered.some((S) => S.type === "assistant") &&
-    !(s.type === "attachment"
-      ? filtered.length > 0 && y(filtered.at(-1)) && filtered.some((S) => !isNonUserRow(S))
-      : filtered.some(y))
+    !filtered.some((row) => row.type === "assistant") &&
+    !(opener.type === "attachment"
+      ? filtered.length > 0 &&
+        isInterruptionRow(filtered.at(-1)) &&
+        filtered.some((row) => !isNonUserRow(row))
+      : filtered.some(isInterruptionRow))
   )
     return true;
-  return isTurnUnanswered([s, ...filtered], s.uuid);
+  return isTurnUnanswered([opener, ...filtered], opener.uuid);
 }
 //@ chunk-tyg7f3ek.js:47303-47443 placement
-function makeHeldMessageMatcher(e, n, getSessionId) {
-  let s = new Set();
+function makeHeldMessageMatcher(getTranscript, heldFrames, getSessionId) {
+  let seen = new Set();
   try {
-    s = heldMessageUuidSet(e);
+    seen = heldMessageUuidSet(getTranscript);
   } catch (error) {
     logError(error);
   }
-  let h = getSessionId();
-  return (y) =>
+  let sessionId = getSessionId();
+  return (uuid) =>
     isHeldMessageRecognitionOn() &&
-    ((getSessionId() === h && s.has(y)) || n().some((S) => heldMessageUuids(S).includes(y)));
+    ((getSessionId() === sessionId && seen.has(uuid)) ||
+      heldFrames().some((frame) => heldMessageUuids(frame).includes(uuid)));
 }
 export {
   makeHeldMessageMatcher,

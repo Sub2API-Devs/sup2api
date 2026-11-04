@@ -148,7 +148,7 @@ var PRESERVED_BASE_ENV_VARS = new Set([
   "GIT_SSL_CAPATH",
   "_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL",
   ...Object.keys(GIT_NO_PROMPT_ENV),
-  ...PROXY_ENV_VARS_2.map((e) => e.toUpperCase()),
+  ...PROXY_ENV_VARS_2.map((proxyVar) => proxyVar.toUpperCase()),
   ...caCertEnvVars,
   ...Object.keys(caCertEnvVarList),
   "GOOGLE_APPLICATION_CREDENTIALS",
@@ -254,14 +254,14 @@ var STRIP_ENV_PREFIXES = [
   "CLAUDE_CODE_RELAUNCH_",
 ];
 //@ chunk-qchp9vrd.js:184230-184364 placement
-function isStrippedClaudeCodeVar(e) {
-  if (isSecretEnvName(e)) return !isNonSecretClaudeCodeEnvName(e);
-  if (PATH_LIKE_ENV_RE.test(e)) return !PATH_ENV_EXCEPTIONS.has(e);
+function isStrippedClaudeCodeVar(envName) {
+  if (isSecretEnvName(envName)) return !isNonSecretClaudeCodeEnvName(envName);
+  if (PATH_LIKE_ENV_RE.test(envName)) return !PATH_ENV_EXCEPTIONS.has(envName);
   return (
-    EXPLICIT_STRIP_ENV.has(e) ||
-    STRIP_ENV_PREFIXES.some((n) => e.startsWith(n)) ||
-    isArtifactDevBaseUrlVar(e) ||
-    isHelperEnvVar(e)
+    EXPLICIT_STRIP_ENV.has(envName) ||
+    STRIP_ENV_PREFIXES.some((prefix) => envName.startsWith(prefix)) ||
+    isArtifactDevBaseUrlVar(envName) ||
+    isHelperEnvVar(envName)
   );
 }
 //@ chunk-qchp9vrd.js:184364-184432 placement
@@ -273,15 +273,15 @@ var PROXY_ENV_VARS = new Set(["http_proxy", "https_proxy", "no_proxy", "all_prox
 /**
  * 判断评测子会话是否应剔除某环境变量：显式名单、密钥类 CLAUDE_CODE_*、连接串保留，EVAL_* 与凭据/代理前缀剔除。
  */
-function shouldStripEnvVar(e) {
-  if (PROXY_ENV_VARS.has(e)) return true;
-  let upper = e.toUpperCase();
-  if (PRESERVED_BASE_ENV_VARS.has(upper)) return true;
-  if (upper.startsWith("CLAUDE_CODE_") && isStrippedClaudeCodeVar(upper)) return false;
-  if (upper.startsWith("EVAL_")) return true;
-  if (isPackageIndexEnv(e)) return true;
-  if (isConnectionStringName(e)) return false;
-  return STRIPPED_ENV_PREFIXES.some((r) => upper.startsWith(r));
+function shouldStripEnvVar(envName) {
+  if (PROXY_ENV_VARS.has(envName)) return true;
+  let envName_2 = envName.toUpperCase();
+  if (PRESERVED_BASE_ENV_VARS.has(envName_2)) return true;
+  if (envName_2.startsWith("CLAUDE_CODE_") && isStrippedClaudeCodeVar(envName_2)) return false;
+  if (envName_2.startsWith("EVAL_")) return true;
+  if (isPackageIndexEnv(envName)) return true;
+  if (isConnectionStringName(envName)) return false;
+  return STRIPPED_ENV_PREFIXES.some((prefix) => envName_2.startsWith(prefix));
 }
 //@ chunk-qchp9vrd.js:184670-184759 placement
 /**
@@ -296,46 +296,58 @@ var AWS_CACHE_DIRS = [
 /**
  * 求路径的真实路径（父目录 realpath 加文件名）。
  */
-async function realPathOf(e) {
-  return path.join(await realpath(path.dirname(e)).catch(() => path.dirname(e)), path.basename(e));
+async function realPathOf(filePath) {
+  return path.join(
+    await realpath(path.dirname(filePath)).catch(() => path.dirname(filePath)),
+    path.basename(filePath),
+  );
 }
 //@ chunk-qchp9vrd.js:184856-185059 placement
 /**
  * 求路径的真实路径，不存在时尝试按链接目标解析。
  */
-async function resolveLinkTarget(e) {
+async function resolveLinkTarget(linkPath) {
   try {
-    return await realpath(e);
+    return await realpath(linkPath);
   } catch (error) {
     if (isENOENT(error)) {
-      let missingPath = await resolveMissingPath(e);
+      let missingPath = await resolveMissingPath(linkPath);
       if (missingPath !== "unresolvable") return missingPath;
     }
   }
-  let n = await readlink(e).catch(() => null);
-  return n === null ? null : path.resolve(path.dirname(await realPathOf(e)), n);
+  let linkTarget = await readlink(linkPath).catch(() => null);
+  return linkTarget === null ? null : path.resolve(path.dirname(await realPathOf(linkPath)), linkTarget);
 }
 //@ chunk-qchp9vrd.js:185059-185483 placement
 /**
  * 解析不存在的路径：向上找到第一个存在的祖先，经 realpath/readlink 拼回剩余部分；指向 /dev/null 返回原路径，无法解析返回 unresolvable。
  */
-async function resolveMissingPath(e) {
-  for (let n = e, dir = path.dirname(n); n !== dir; n = dir, dir = path.dirname(n)) {
+async function resolveMissingPath(filePath) {
+  for (
+    let current = filePath, dir = path.dirname(current);
+    current !== dir;
+    current = dir, dir = path.dirname(current)
+  ) {
     try {
-      await lstat(n);
+      await lstat(current);
     } catch (error) {
       if (isENOENT(error) || getErrnoCode(error) === "ENOTDIR") continue;
       return "unresolvable";
     }
-    let a = await realpath(n).catch(() => null);
-    if (a === null) {
-      let s = await readlink(n).catch(() => null);
-      return s === null
+    let realCurrent = await realpath(current).catch(() => null);
+    if (realCurrent === null) {
+      let linkTarget = await readlink(current).catch(() => null);
+      return linkTarget === null
         ? "unresolvable"
-        : path.join(path.resolve(path.dirname(await realPathOf(n)), s), path.relative(n, e));
+        : path.join(
+            path.resolve(path.dirname(await realPathOf(current)), linkTarget),
+            path.relative(current, filePath),
+          );
     }
-    if (a === NULL_DEVICE) return realPathOf(e);
-    return a === path.resolve(n) ? "absent" : path.join(a, path.relative(n, e));
+    if (realCurrent === NULL_DEVICE) return realPathOf(filePath);
+    return realCurrent === path.resolve(current)
+      ? "absent"
+      : path.join(realCurrent, path.relative(current, filePath));
   }
   return "absent";
 }
@@ -343,8 +355,8 @@ async function resolveMissingPath(e) {
 /**
  * 判断路径能否被解析出来。
  */
-async function isResolvablePath(e) {
-  return (await resolveMissingPath(e)) !== "unresolvable";
+async function isResolvablePath(path) {
+  return (await resolveMissingPath(path)) !== "unresolvable";
 }
 //@ chunk-qchp9vrd.js:185540-186407 placement
 /**
@@ -422,69 +434,70 @@ var CLOUD_CLI_SAFE_ENTRIES = new Set([
   "bin",
 ]);
 //@ chunk-qchp9vrd.js:186407-187803 placement
-async function checkCredentialStoreLinks(e, n, r, a) {
-  let s = (y) =>
+async function checkCredentialStoreLinks(storePath, storeName, ignoredNames, ignoredRootNames) {
+  let storeError = (problem) =>
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `the ${n} credential store on this machine ${y}, so the Bash sandbox cannot reliably exclude it \u2014 a Bash-granting evaluation cannot run here; keep the store's contents in one plain directory (its root may be a link)`,
+      `the ${storeName} credential store on this machine ${problem}, so the Bash sandbox cannot reliably exclude it \u2014 a Bash-granting evaluation cannot run here; keep the store's contents in one plain directory (its root may be a link)`,
       "eval shell grant refused: credential store links elsewhere",
     );
-  let h;
+  let storeReal;
   try {
-    h = await realpath(e);
+    storeReal = await realpath(storePath);
   } catch (error) {
     if (isENOENT(error) || getErrnoCode(error) === "ENOTDIR") {
-      let missingPath = await resolveMissingPath(e);
+      let missingPath = await resolveMissingPath(storePath);
       if (missingPath === "absent") return null;
       if (missingPath !== "unresolvable") return missingPath;
-      throw s("is behind a link whose target is not there");
+      throw storeError("is behind a link whose target is not there");
     }
-    throw s(`could not be resolved (${getErrnoCode(error) ?? "unreadable"})`);
+    throw storeError(`could not be resolved (${getErrnoCode(error) ?? "unreadable"})`);
   }
-  if (h === NULL_DEVICE) return realPathOf(e);
-  let w = [h];
-  let b = 0;
-  for (let y = w.shift(); y !== undefined; y = w.shift()) {
-    let R;
+  if (storeReal === NULL_DEVICE) return realPathOf(storePath);
+  let pending = [storeReal];
+  let entryCount = 0;
+  for (let dir = pending.shift(); dir !== undefined; dir = pending.shift()) {
+    let entries;
     try {
-      R = await readdir(y, {
+      entries = await readdir(dir, {
         withFileTypes: true,
       });
     } catch (error) {
       let errnoCode = getErrnoCode(error);
-      if (errnoCode === "ENOTDIR" && y === h) break;
+      if (errnoCode === "ENOTDIR" && dir === storeReal) break;
       if (errnoCode === "ENOENT") continue;
-      throw s(`could not be read (${errnoCode ?? "unreadable"})`);
+      throw storeError(`could not be read (${errnoCode ?? "unreadable"})`);
     }
-    for (let S of R) {
-      if (++b > SANDBOX_PROBE_TIMEOUT_MS) throw s("is too large to check for symbolic links");
-      if (r.has(S.name) || (y === h && a.has(S.name))) continue;
-      let joined = path.join(y, S.name);
-      let fileKind = await getFileKind(S, joined, "unknown");
+    for (let entry of entries) {
+      if (++entryCount > SANDBOX_PROBE_TIMEOUT_MS)
+        throw storeError("is too large to check for symbolic links");
+      if (ignoredNames.has(entry.name) || (dir === storeReal && ignoredRootNames.has(entry.name))) continue;
+      let joined = path.join(dir, entry.name);
+      let fileKind = await getFileKind(entry, joined, "unknown");
       if (fileKind === "symlink") {
-        let x = path.relative(h, joined).split(path.sep)[0] ?? "";
-        throw s(
-          `holds a symbolic link inside it (at or under ${CREDENTIAL_ENTRIES.has(x) ? `its "${x}" entry` : "an entry this check has no name for"})`,
+        let topEntry = path.relative(storeReal, joined).split(path.sep)[0] ?? "";
+        throw storeError(
+          `holds a symbolic link inside it (at or under ${CREDENTIAL_ENTRIES.has(topEntry) ? `its "${topEntry}" entry` : "an entry this check has no name for"})`,
         );
       }
       if (fileKind === "unknown") {
-        let x = await lstat(joined).then(
+        let statError = await lstat(joined).then(
           () => {
             return;
           },
           (error) => getErrnoCode(error),
         );
-        if (x === "ENOENT" || x === "ENOTDIR") continue;
-        throw s("holds an entry that could not be examined");
+        if (statError === "ENOENT" || statError === "ENOTDIR") continue;
+        throw storeError("holds an entry that could not be examined");
       }
-      if (fileKind === "dir") w.push(joined);
+      if (fileKind === "dir") pending.push(joined);
     }
   }
-  return h === path.resolve(e) ? null : h;
+  return storeReal === path.resolve(storePath) ? null : storeReal;
 }
 //@ chunk-qchp9vrd.js:187803-188365 placement
-async function checkAwsCredentialPointers(sandbox, n) {
+async function checkAwsCredentialPointers(sandbox, envVars) {
   if (
-    !Object.entries(n).some(
+    !Object.entries(envVars).some(
       ([key, value]) =>
         (key.toUpperCase() === "AWS_CONFIG_FILE" || key.toUpperCase() === "AWS_SHARED_CREDENTIALS_FILE") &&
         (value ?? "").trim() !== "" &&
@@ -492,16 +505,16 @@ async function checkAwsCredentialPointers(sandbox, n) {
     )
   )
     return;
-  for (let a of AWS_CACHE_DIRS) {
-    let joined = path.join(os_2.homedir(), a);
+  for (let cacheDir of AWS_CACHE_DIRS) {
+    let joined = path.join(os_2.homedir(), cacheDir);
     if (
       !(await stat(joined).then(
-        (w) => w.isDirectory(),
+        (stats) => stats.isDirectory(),
         () => false,
       ))
     )
       continue;
-    let joined_2 = path.join(sandbox.home, a);
+    let joined_2 = path.join(sandbox.home, cacheDir);
     await mkdir(path.dirname(joined_2), {
       recursive: true,
     });
@@ -509,7 +522,7 @@ async function checkAwsCredentialPointers(sandbox, n) {
       await symlink(joined, joined_2, "junction");
     } catch (error) {
       logForDebugging(
-        `[eval] could not link ${a} into the sandbox home (${getErrnoCode(error) ?? "unknown"}); an SSO-cached login will not reach the child`,
+        `[eval] could not link ${cacheDir} into the sandbox home (${getErrnoCode(error) ?? "unknown"}); an SSO-cached login will not reach the child`,
         {
           level: getErrnoCode(error) === "EEXIST" ? "debug" : "warn",
         },
@@ -530,35 +543,33 @@ var EVAL_AUTH_DIR_TTL_MS = 7200000;
  */
 async function writeChildManagedPolicy(sandbox) {
   await waitForRemoteManagedSettingsToLoad();
-  let remoteManagedSettingsSyncFromCache = getRemoteManagedSettingsSyncFromCache();
-  if (!remoteManagedSettingsSyncFromCache && computeRemoteSettingsEligibility())
+  let doc = getRemoteManagedSettingsSyncFromCache();
+  if (!doc && computeRemoteSettingsEligibility())
     logForDebugging(
       "[eval] no cached organization policy to hand the child (the managed-settings fetch has not produced one); a child that cannot fetch runs without the remote-managed tier",
       {
         level: "warn",
       },
     );
-  let r =
-    (remoteManagedSettingsSyncFromCache && collectManagedRestrictions(remoteManagedSettingsSyncFromCache)) ??
-    {};
-  let a = {
-    ...expandMcpPolicyPredicates(r),
+  let remoteSettings = (doc && collectManagedRestrictions(doc)) ?? {};
+  let policy = {
+    ...expandMcpPolicyPredicates(remoteSettings),
     managedSourcesBehavior: "merge",
   };
   let joined = path.join(sandbox.configDir, SETTINGS_FILENAME_ALIAS);
-  let h = jsonStringify(a);
+  let policyJson = jsonStringify(policy);
   try {
-    await writeFile(joined, h, {
+    await writeFile(joined, policyJson, {
       mode: 384,
       flag: "wx",
     });
   } catch (error) {
-    let b = await lstat(joined).catch(() => null);
+    let stats = await lstat(joined).catch(() => null);
     if (
       getErrnoCode(error) !== "EEXIST" ||
-      !b?.isFile() ||
-      b.size !== Buffer.byteLength(h) ||
-      (await readFile(joined, "utf8").catch(() => null)) !== h
+      !stats?.isFile() ||
+      stats.size !== Buffer.byteLength(policyJson) ||
+      (await readFile(joined, "utf8").catch(() => null)) !== policyJson
     )
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         "the organization policy snapshot could not be placed in the evaluation sandbox (a different file is already there or it could not be written)",
@@ -589,7 +600,7 @@ async function passApiKeyToChild(credential) {
       cleanup: async () => {},
     };
   }
-  let n =
+  let authEnv =
     credential.kind === "gateway"
       ? {
           CLAUDE_CODE_USE_GATEWAY: "1",
@@ -610,14 +621,14 @@ async function passApiKeyToChild(credential) {
         [credential.kind === "gateway"
           ? "CLAUDE_CODE_GATEWAY_TOKEN_FILE_DESCRIPTOR"
           : "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR"]: String(CHILD_FD_NUMBER),
-        ...n,
+        ...authEnv,
       },
       viaFd: true,
       cleanup: async () => {},
     };
   await cleanupStaleEvalAuthDirs();
-  let r = await mkdtemp(path.join(os_2.tmpdir(), CLAUDE_EVAL_AUTH));
-  let joined = path.join(r, "snapshot.json");
+  let authDir = await mkdtemp(path.join(os_2.tmpdir(), CLAUDE_EVAL_AUTH));
+  let joined = path.join(authDir, "snapshot.json");
   try {
     await writeFile(
       joined,
@@ -639,7 +650,7 @@ async function passApiKeyToChild(credential) {
       },
     );
   } catch (error) {
-    await rm_2(r, {
+    await rm_2(authDir, {
       recursive: true,
       force: true,
     }).catch(() => {});
@@ -648,11 +659,11 @@ async function passApiKeyToChild(credential) {
   return {
     env: {
       CLAUDE_BG_AUTH_SNAPSHOT_PATH: joined,
-      ...(credential.kind === "gateway" && n),
+      ...(credential.kind === "gateway" && authEnv),
     },
     viaFd: false,
     cleanup: () =>
-      rm_2(r, {
+      rm_2(authDir, {
         recursive: true,
         force: true,
       }).catch(() => {}),
@@ -673,13 +684,19 @@ var ALLOWED_EVAL_ENV_KEYS = new Set([
 /**
  * 组装子会话环境：case.yaml 只能设 EVAL_* 键，移除宿主认证/代理/凭据指针。
  */
-function buildChildEnv(case_, sandbox, artifactPublishGranted, growthbookOverrides, s = false) {
+function buildChildEnv(
+  case_,
+  sandbox,
+  artifactPublishGranted,
+  growthbookOverrides,
+  mcpTimingCarried = false,
+) {
   for (let key of Object.keys(case_.execution.env))
     if (!EVAL_ENV_KEY_RE.test(key))
       throw Error(
         `case "${case_.name}" execution.env key "${key}" is not allowed \u2014 only EVAL_* keys can be set from case.yaml. Anything else must come from the operator's shell.`,
       );
-  let h = {
+  let overrides = {
     CLAUDE_CONFIG_DIR: sandbox.configDir,
     HOME: sandbox.home,
     USERPROFILE: sandbox.home,
@@ -698,92 +715,98 @@ function buildChildEnv(case_, sandbox, artifactPublishGranted, growthbookOverrid
     DISABLE_AUTOUPDATER: "1",
   };
   if (getPlatform() === "windows") {
-    let G = /^[A-Za-z]:/.test(sandbox.home) ? sandbox.home.slice(0, 2) : "";
-    h.HOMEDRIVE = G;
-    h.HOMEPATH = sandbox.home.slice(G.length);
-    h.APPDATA = path.join(sandbox.home, "AppData", "Roaming");
-    h.LOCALAPPDATA = path.join(sandbox.home, "AppData", "Local");
+    let homeDrive = /^[A-Za-z]:/.test(sandbox.home) ? sandbox.home.slice(0, 2) : "";
+    overrides.HOMEDRIVE = homeDrive;
+    overrides.HOMEPATH = sandbox.home.slice(homeDrive.length);
+    overrides.APPDATA = path.join(sandbox.home, "AppData", "Roaming");
+    overrides.LOCALAPPDATA = path.join(sandbox.home, "AppData", "Local");
   }
-  let w = new Set(Object.keys(h).map((key) => key.toUpperCase()));
-  let b = {
+  let overrideKeys = new Set(Object.keys(overrides).map((key) => key.toUpperCase()));
+  let env = {
     ...subprocessEnv(),
   };
-  Object.assign(b, sanitizedIndexEnvs(b));
+  Object.assign(env, sanitizedIndexEnvs(env));
   for (let [key, value] of Object.entries(process.env))
-    if (/^EVAL_/i.test(key) && value !== undefined) b[key] = value;
-  let y = new Set(getHostManagedProviderConflicts(upperCaseEnvKeys(process.env)).map((G) => G.toUpperCase()));
-  let R = y.size > 0;
-  for (let key of Object.keys(b)) {
+    if (/^EVAL_/i.test(key) && value !== undefined) env[key] = value;
+  let blockedKeys = new Set(
+    getHostManagedProviderConflicts(upperCaseEnvKeys(process.env)).map((key) => key.toUpperCase()),
+  );
+  let hasProviderConflict = blockedKeys.size > 0;
+  for (let key of Object.keys(env)) {
     let upper = key.toUpperCase();
-    if (PLACEHOLDER_CREDENTIAL_KEYS.includes(key) && b[key] === PROXY_INJECTED_MARKER) continue;
+    if (PLACEHOLDER_CREDENTIAL_KEYS.includes(key) && env[key] === PROXY_INJECTED_MARKER) continue;
     if (
       !shouldStripEnvVar(key) ||
-      y.has(upper) ||
-      (R && (upper === "ANTHROPIC_CONFIG_DIR" || upper === "ANTHROPIC_PROFILE")) ||
+      blockedKeys.has(upper) ||
+      (hasProviderConflict && (upper === "ANTHROPIC_CONFIG_DIR" || upper === "ANTHROPIC_PROFILE")) ||
       ALLOWED_EVAL_ENV_KEYS.has(upper) ||
-      w.has(upper) ||
+      overrideKeys.has(upper) ||
       SHELL_STARTUP_ENV_VARS.has(upper) ||
-      (s && MCP_TIMING_ENV_VARS.has(upper))
+      (mcpTimingCarried && MCP_TIMING_ENV_VARS.has(upper))
     )
-      delete b[key];
+      delete env[key];
   }
-  for (let G of ["CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"])
-    if (b.ANTHROPIC_UNIX_SOCKET && process.env[G] === SSH_PLACEHOLDER) b[G] = SSH_PLACEHOLDER;
-  let S = {
-    ...b,
+  for (let credentialKey of ["CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"])
+    if (env.ANTHROPIC_UNIX_SOCKET && process.env[credentialKey] === SSH_PLACEHOLDER)
+      env[credentialKey] = SSH_PLACEHOLDER;
+  let finalEnv = {
+    ...env,
     ...case_.execution.env,
-    ...h,
+    ...overrides,
   };
-  stripBlockedEnvVars(S);
-  S.GIT_CONFIG_NOSYSTEM = "1";
-  S.GIT_PROXY_COMMAND = "";
+  stripBlockedEnvVars(finalEnv);
+  finalEnv.GIT_CONFIG_NOSYSTEM = "1";
+  finalEnv.GIT_PROXY_COMMAND = "";
   let evalGitConfigPairs = getEvalGitConfigPairs();
-  S.GIT_CONFIG_COUNT = String(evalGitConfigPairs.length);
-  evalGitConfigPairs.forEach(([G, J], Z) => {
-    S[`GIT_CONFIG_KEY_${Z}`] = G;
-    S[`GIT_CONFIG_VALUE_${Z}`] = J;
+  finalEnv.GIT_CONFIG_COUNT = String(evalGitConfigPairs.length);
+  evalGitConfigPairs.forEach(([gitConfigKey, gitConfigValue], gitConfigIndex) => {
+    finalEnv[`GIT_CONFIG_KEY_${gitConfigIndex}`] = gitConfigKey;
+    finalEnv[`GIT_CONFIG_VALUE_${gitConfigIndex}`] = gitConfigValue;
   });
-  let N = os_2.homedir();
-  let x = new Set(Object.keys(S).map((key) => key.toUpperCase()));
-  let j = {
-    ...(!R && {
-      AWS_SHARED_CREDENTIALS_FILE: path.join(N, ".aws", "credentials"),
-      AWS_CONFIG_FILE: path.join(N, ".aws", "config"),
+  let homeDir = os_2.homedir();
+  let finalKeys = new Set(Object.keys(finalEnv).map((key) => key.toUpperCase()));
+  let credentialPaths = {
+    ...(!hasProviderConflict && {
+      AWS_SHARED_CREDENTIALS_FILE: path.join(homeDir, ".aws", "credentials"),
+      AWS_CONFIG_FILE: path.join(homeDir, ".aws", "config"),
       CLOUDSDK_CONFIG:
         getPlatform() === "windows"
-          ? path.join(process.env.APPDATA ?? path.join(N, "AppData", "Roaming"), "gcloud")
-          : path.join(N, ".config", "gcloud"),
-      AZURE_CONFIG_DIR: path.join(N, ".azure"),
+          ? path.join(process.env.APPDATA ?? path.join(homeDir, "AppData", "Roaming"), "gcloud")
+          : path.join(homeDir, ".config", "gcloud"),
+      AZURE_CONFIG_DIR: path.join(homeDir, ".azure"),
     }),
   };
-  for (let [key, value] of Object.entries(j)) if (!x.has(key)) S[key] = value;
+  for (let [key, value] of Object.entries(credentialPaths)) if (!finalKeys.has(key)) finalEnv[key] = value;
   if (getWIFPrecedenceSource() === "env-quad") {
-    let G = federationCacheDir();
-    if (G !== null) S.CLAUDE_CODE_FEDERATION_CACHE_DIR = G;
+    let cacheDir = federationCacheDir();
+    if (cacheDir !== null) finalEnv.CLAUDE_CODE_FEDERATION_CACHE_DIR = cacheDir;
   }
-  for (let key of Object.keys(S)) {
-    let J = GIT_NO_PROMPT_ENV[key.toUpperCase()];
-    if (J !== undefined && S[key] !== J) delete S[key];
+  for (let key of Object.keys(finalEnv)) {
+    let expectedValue = GIT_NO_PROMPT_ENV[key.toUpperCase()];
+    if (expectedValue !== undefined && finalEnv[key] !== expectedValue) delete finalEnv[key];
   }
-  let { GIT_NO_LAZY_FETCH, ...X } = missingGitSafetyEnv(S);
-  Object.assign(S, X);
-  let W = new Set(
+  let { GIT_NO_LAZY_FETCH, ...missingSafetyEnv } = missingGitSafetyEnv(finalEnv);
+  Object.assign(finalEnv, missingSafetyEnv);
+  let carriedKeys = new Set(
     BG_CARRIED_ENV_KEYS_2.filter(
-      (G) => G !== "ANTHROPIC_MODEL" && G !== "CLAUDE_AX_SCREEN_READER" && !(G in GIT_NO_PROMPT_ENV),
-    ).map((G) => G.toUpperCase()),
+      (carriedKey) =>
+        carriedKey !== "ANTHROPIC_MODEL" &&
+        carriedKey !== "CLAUDE_AX_SCREEN_READER" &&
+        !(carriedKey in GIT_NO_PROMPT_ENV),
+    ).map((carriedKey) => carriedKey.toUpperCase()),
   );
-  W.delete("CLAUDE_CODE_RESTRICTED");
-  W.delete("CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG");
-  for (let key of Object.keys(S)) if (W.has(key.toUpperCase())) delete S[key];
-  stripInternalEntrypoint(S);
-  S.CLAUDE_CODE_EVAL_CONFINED = "1";
+  carriedKeys.delete("CLAUDE_CODE_RESTRICTED");
+  carriedKeys.delete("CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG");
+  for (let key of Object.keys(finalEnv)) if (carriedKeys.has(key.toUpperCase())) delete finalEnv[key];
+  stripInternalEntrypoint(finalEnv);
+  finalEnv.CLAUDE_CODE_EVAL_CONFINED = "1";
   if (artifactPublishGranted) {
-    S.CLAUDE_CODE_EVAL_ARTIFACT_STUB_DIR = stubPublishDir(sandbox);
-    S.MCP_CONNECTION_NONBLOCKING = "0";
+    finalEnv.CLAUDE_CODE_EVAL_ARTIFACT_STUB_DIR = stubPublishDir(sandbox);
+    finalEnv.MCP_CONNECTION_NONBLOCKING = "0";
     if (growthbookOverrides && Object.keys(growthbookOverrides).length > 0)
-      S.CLAUDE_INTERNAL_FC_OVERRIDES = jsonStringify(growthbookOverrides);
+      finalEnv.CLAUDE_INTERNAL_FC_OVERRIDES = jsonStringify(growthbookOverrides);
   }
-  return S;
+  return finalEnv;
 }
 export {
   buildChildEnv,

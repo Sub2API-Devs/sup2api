@@ -11,55 +11,55 @@
 import { wireName, internalToolNameFor } from "../../services/mcp/serverIdentity.js";
 
 //@ chunk-a76knw89.js:19213-19265 sole-consumer
-function isObject(e) {
-  return typeof e === "object" && e !== null;
+function isObject(value) {
+  return typeof value === "object" && value !== null;
 }
 //@ chunk-a76knw89.js:19265-19316 sole-consumer
-function toSpinnerLine(e) {
-  return typeof e === "string" ? wireName(e) : e;
+function toSpinnerLine(value) {
+  return typeof value === "string" ? wireName(value) : value;
 }
 //@ chunk-a76knw89.js:19316-19845 fingerprint = getMessagePreview (0.334)
 function getMessagePreview(messages) {
   if (Array.isArray(messages)) return messages.map(getMessagePreview);
   if (!isObject(messages)) return messages;
-  let n = {};
+  let line = {};
   for (let key of Object.keys(messages)) {
     let messages_2 = messages[key];
-    n[key] =
+    line[key] =
       key === "input"
         ? messages_2
         : key === "exclude_tools" && Array.isArray(messages_2)
           ? messages_2.map(toSpinnerLine)
           : getMessagePreview(messages_2);
   }
-  switch (n.type) {
+  switch (line.type) {
     case "tool_use":
       return {
-        ...n,
-        name: typeof n.name === "string" ? internalToolNameFor(n.name) : n.name,
+        ...line,
+        name: typeof line.name === "string" ? internalToolNameFor(line.name) : line.name,
       };
     case "tool_reference":
       return {
-        ...n,
-        ...("name" in n && {
-          name: toSpinnerLine(n.name),
+        ...line,
+        ...("name" in line && {
+          name: toSpinnerLine(line.name),
         }),
-        ...("tool_name" in n && {
-          tool_name: toSpinnerLine(n.tool_name),
+        ...("tool_name" in line && {
+          tool_name: toSpinnerLine(line.tool_name),
         }),
       };
     case "tool_definition":
-      return isObject(n.definition)
+      return isObject(line.definition)
         ? {
-            ...n,
+            ...line,
             definition: {
-              ...n.definition,
-              name: toSpinnerLine(n.definition.name),
+              ...line.definition,
+              name: toSpinnerLine(line.definition.name),
             },
           }
-        : n;
+        : line;
     default:
-      return n;
+      return line;
   }
 }
 export { getMessagePreview };

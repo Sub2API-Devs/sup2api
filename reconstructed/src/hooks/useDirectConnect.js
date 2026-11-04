@@ -8,14 +8,14 @@
  * pieces: chunk-18hwfzwa.js (1)
  * attribution: callgraph-fingerprint 1
  */
-import { Q } from "../../vendor/react/cjs/react.production.js";
+import { useMemo } from "../../vendor/react/cjs/react.production.js";
 import { DirectConnectSessionManager } from "../server/directConnectManager.js";
 import { gracefulShutdown } from "../utils/gracefulShutdown.js";
 import { useRemoteTransportCore } from "../remote/useRemoteTransportCore.js";
 
 //@ chunk-18hwfzwa.js:262843-263226 callgraph-fingerprint = useDirectConnect (0.173)
 function useDirectConnect({ config, sink, requestDialog, toolPermissionContext, tools }) {
-  let converted = Q(() => {
+  let converted = useMemo(() => {
     if (!config) return;
     return {
       label: "directConnect",

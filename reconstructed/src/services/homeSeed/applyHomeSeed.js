@@ -31,7 +31,7 @@ import { stripBom } from "../../utils/json.js";
 import { tryJsonParse } from "./portableSettings.js";
 import { parseSettingsContent } from "../../utils/settings/settingsFileParsing.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { record, string, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import { record, stringSchema, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
 import { readOnlyNoFollowFlags } from "../../utils/platformTargets.js";
 import { getErrnoCode, isENOENT } from "../../utils/errors.js";
 import { createHomeFileWriter, resolveDestinationSpelling } from "./destination.js";
@@ -51,13 +51,16 @@ import { MAX_PACK_BYTES } from "./homePack.js";
 import { logEvent } from "../analytics/index.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../analytics/featureTelemetry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-twq47pff.js:36275-36405 placement = formatRecentMessages (1)
-function formatRecentMessages(homeReal, e) {
+function formatRecentMessages(homeReal, entry) {
   try {
-    return processMemoryFile(e.content.toString("utf8"), join(homeReal, ...e.path.split("/")), "User").every(
-      (n) => isSkillPathOutsideOutputStyles(homeReal, n),
-    );
+    return processMemoryFile(
+      entry.content.toString("utf8"),
+      join(homeReal, ...entry.path.split("/")),
+      "User",
+    ).every((label) => isSkillPathOutsideOutputStyles(homeReal, label));
   } catch {
     return false;
   }
@@ -66,11 +69,11 @@ function formatRecentMessages(homeReal, e) {
 /**
  * 路径在技能根目录内且不是 output_style 类型。旧版名 getOutputStyleAttachment 为错配；归错文件（技能改进相关）。
  */
-function isSkillPathOutsideOutputStyles(t, e) {
-  let n = relative(t, e);
-  if (n === "" || n === ".." || n.startsWith(`..${sep}`) || isAbsolute(n)) return false;
-  let l = workingFileDestination(n.split(sep).join("/"));
-  return l !== null && l.kind !== "output_style";
+function isSkillPathOutsideOutputStyles(input, options) {
+  let deps = relative(input, options);
+  if (deps === "" || deps === ".." || deps.startsWith(`..${sep}`) || isAbsolute(deps)) return false;
+  let report = workingFileDestination(deps.split(sep).join("/"));
+  return report !== null && report.kind !== "output_style";
 }
 //@ chunk-twq47pff.js:36571-36663 placement = isFileReadDenied (1)
 /**
@@ -81,8 +84,8 @@ async function readHomeSeedFile(filePath) {
   return denyRule.kind === "read" ? parseHomeSidecar(denyRule.content) : null;
 }
 //@ chunk-twq47pff.js:36663-36812 placement
-async function checkSidecarState(t) {
-  let boundedFile = await readBoundedFile(join(t, CCR_HOME_SEED_JSON), MAX_SIDECAR_BYTES);
+async function checkSidecarState(configHome) {
+  let boundedFile = await readBoundedFile(join(configHome, CCR_HOME_SEED_JSON), MAX_SIDECAR_BYTES);
   if (boundedFile.kind === "absent") return "absent";
   return boundedFile.kind === "read" && parseHomeSidecar(boundedFile.content) !== null ? "valid" : "invalid";
 }
@@ -90,39 +93,39 @@ async function checkSidecarState(t) {
 /**
  * 读取云会话的 settings 文件并判断可用状态（absent/unusable/object）。
  */
-async function readCloudSettingsForSeed(t) {
-  let boundedFile = await readBoundedFile(t, MAX_RENDERED_SETTINGS_BYTES);
-  return parseExistingSettings(boundedFile, t);
+async function readCloudSettingsForSeed(path) {
+  let boundedFile = await readBoundedFile(path, MAX_RENDERED_SETTINGS_BYTES);
+  return parseExistingSettings(boundedFile, path);
 }
 //@ chunk-twq47pff.js:36869-37165 placement
 /**
  * 解析云端现有 settings 文件：不存在、不可读或过大分别返回 absent/unusable，能解析为对象时返回 object。
  */
-function parseExistingSettings(t, e) {
-  if (t.kind === "absent")
+function parseExistingSettings(input, options) {
+  if (input.kind === "absent")
     return {
       kind: "absent",
     };
-  if (t.kind !== "read" || t.content.length > MAX_RENDERED_SETTINGS_BYTES)
+  if (input.kind !== "read" || input.content.length > MAX_RENDERED_SETTINGS_BYTES)
     return {
       kind: "unusable",
     };
-  let str = t.content.toString("utf8");
-  let l = stripBom(str);
-  let d = cloudSettingsSchema().safeParse(l.trim() === "" ? {} : tryJsonParse(l));
-  return d.success && parseSettingsContent(str, e).settings !== null
+  let str = input.content.toString("utf8");
+  let deps = stripBom(str);
+  let report = cloudSettingsSchema().safeParse(deps.trim() === "" ? {} : tryJsonParse(deps));
+  return report.success && parseSettingsContent(str, options).settings !== null
     ? {
         kind: "object",
-        value: d.data,
+        value: report.data,
       }
     : {
         kind: "unusable",
       };
 }
 //@ chunk-twq47pff.js:37165-37274 placement
-function isEmptySettingsFile(existing, settingsPath) {
+function isEmptySettingsFile(existing, options) {
   try {
-    let existingSettings = parseExistingSettings(existing, settingsPath);
+    let existingSettings = parseExistingSettings(existing, options);
     return existingSettings.kind === "object" && Object.keys(existingSettings.value).length === 0;
   } catch {
     return false;
@@ -132,7 +135,10 @@ function isEmptySettingsFile(existing, settingsPath) {
 /**
  * 云会话 settings 的宽松 schema（未知键原样保留）。
  */
-var cloudSettingsSchema = DoctorLazy(() => record(string(), unknown()));
+var cloudSettingsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-twq47pff.js:37274", () => {
+  cloudSettingsSchema = DoctorLazy(() => record(stringSchema(), unknown()));
+});
 //@ chunk-twq47pff.js:37301-37351 placement = isRealPathWithinTeamDir (1)
 function isNotFoundCode_2(realCandidate) {
   return realCandidate === "ENOENT" || realCandidate === "ENOTDIR";
@@ -141,39 +147,39 @@ function isNotFoundCode_2(realCandidate) {
 /**
  * 打开并读取不超过上限的普通文件，返回 read/absent/not_regular/too_large/unreadable。
  */
-async function readBoundedFile(t, e) {
+async function readBoundedFile(filePath, maxBytes) {
   try {
-    let n = await open(t, readOnlyNoFollowFlags());
+    let handle = await open(filePath, readOnlyNoFollowFlags());
     try {
-      let stats = await n.stat();
+      let stats = await handle.stat();
       if (!stats.isFile())
         return {
           kind: "not_regular",
         };
-      if (stats.size > e)
+      if (stats.size > maxBytes)
         return {
           kind: "too_large",
         };
       return {
         kind: "read",
-        content: await readJSONLFile(n, stats.size),
+        content: await readJSONLFile(handle, stats.size),
       };
     } finally {
-      await n.close();
+      await handle.close();
     }
   } catch (error) {
-    let l = getErrnoCode(error) ?? "unknown";
-    if (isNotFoundCode_2(l))
+    let code = getErrnoCode(error) ?? "unknown";
+    if (isNotFoundCode_2(code))
       return {
         kind: "absent",
       };
-    return l === "ELOOP" || l === "EISDIR" || l === "ENXIO"
+    return code === "ELOOP" || code === "EISDIR" || code === "ENXIO"
       ? {
           kind: "not_regular",
         }
       : {
           kind: "unreadable",
-          code: l,
+          code,
         };
   }
 }
@@ -186,13 +192,13 @@ function createApplyDeps({ storageV5, configHome }) {
       configHome,
     }),
     markInternalWrite,
-    consumeInternalWrite: (n) => {
-      consumeInternalWrite(n, INTERNAL_WRITE_WINDOW_MS);
+    consumeInternalWrite: (writer) => {
+      consumeInternalWrite(writer, INTERNAL_WRITE_WINDOW_MS);
     },
-    inSettingsWriteQueue: (n) =>
+    inSettingsWriteQueue: (key) =>
       runInSettingsWriteQueue(
         getSettingsFilePathForSource("userSettings") ?? join(configHome, SETTINGS_JSON),
-        n,
+        key,
       ),
     now: () => Date.now(),
     settingsToCloud: isSettingsToCloudAvailable,
@@ -269,14 +275,14 @@ async function vetHomeSeedRoot(configHome, repoRoot, syncedRoot = SYNCED_FILE_RO
   }
   if (
     [syncedRoot, realSyncedRoot].some(
-      (E) =>
-        E !== null &&
+      (resolved) =>
+        resolved !== null &&
         (isPathInside({
           path: realHome,
-          directory: E,
+          directory: resolved,
         }) ||
           isPathInside({
-            path: E,
+            path: resolved,
             directory: realHome,
           })),
     )
@@ -291,19 +297,19 @@ async function vetHomeSeedRoot(configHome, repoRoot, syncedRoot = SYNCED_FILE_RO
   };
 }
 //@ chunk-twq47pff.js:38742-38854 placement
-async function isInsideGitWorktree(t) {
-  for (let e = t; ; e = dirname(e)) {
-    if ((await statOrState(join(e, ".git"))) !== "absent") return true;
-    if (dirname(e) === e) return false;
+async function isInsideGitWorktree(root) {
+  for (let dir = root; ; dir = dirname(dir)) {
+    if ((await statOrState(join(dir, ".git"))) !== "absent") return true;
+    if (dirname(dir) === dir) return false;
   }
 }
 //@ chunk-twq47pff.js:38854-38948 placement
 /**
  * 取路径状态：不存在返回 absent，其他错误返回 unverifiable。
  */
-async function statOrState(t) {
+async function statOrState(path) {
   try {
-    return await lstat(t);
+    return await lstat(path);
   } catch (error) {
     return isNotFoundCode_2(getErrnoCode(error)) ? "absent" : "unverifiable";
   }
@@ -316,115 +322,134 @@ function isPathInside({ path, directory }) {
   return path === directory || path.startsWith(directory.endsWith(sep) ? directory : directory + sep);
 }
 //@ chunk-twq47pff.js:39032-42658 placement
-async function applyHomeSeedToCloudSession(t, e, n) {
-  let l = await Promise.resolve()
-    .then(n.settingsToCloud)
+async function applyHomeSeedToCloudSession(plan, options, deps) {
+  let flagState = await Promise.resolve()
+    .then(deps.settingsToCloud)
     .then(
-      (S) => (S ? "on" : "off"),
+      (on) => (on ? "on" : "off"),
       () => "threw",
     );
-  if (l !== "on") {
+  if (flagState !== "on") {
     logForDiagnosticsNoPII("info", "home_seed_apply_flag_off", {
-      gate: l,
+      gate: flagState,
     });
     return {
       outcome: "flag_off",
-      generation: t.generation,
+      generation: plan.generation,
     };
   }
-  let d = await vetHomeSeedRoot(e.configHome, e.repoRoot, e.syncedRoot);
-  if (!d.ok) {
+  let vetResult = await vetHomeSeedRoot(options.configHome, options.repoRoot, options.syncedRoot);
+  if (!vetResult.ok) {
     logForDiagnosticsNoPII("warn", "home_seed_config_home_unsafe", {
-      reason: d.reason,
+      reason: vetResult.reason,
     });
     return {
       outcome: "config_home_unsafe",
-      generation: t.generation,
-      reason: d.reason,
+      generation: plan.generation,
+      reason: vetResult.reason,
     };
   }
-  let ctx = {
-    configHome: resolve(e.configHome),
-    homeReal: d.real,
-    keepsForeignFiles: e.foreignFiles !== "replaced",
-    deps: n,
+  let applyContext = {
+    configHome: resolve(options.configHome),
+    homeReal: vetResult.real,
+    keepsForeignFiles: options.foreignFiles !== "replaced",
+    deps,
   };
-  let w = [];
-  for (let removal of t.removals)
-    w.push({
+  let removals = [];
+  for (let removal of plan.removals)
+    removals.push({
       removal,
-      result: await removeSeedFile(removal, ctx),
+      result: await removeSeedFile(removal, applyContext),
     });
-  let v = [];
-  for (let write of t.writes) {
-    let { result: ee, stoodForeign } = await applySeedFile(write, t.priorEntries.get(write.path), ctx);
-    v.push({
+  let writes = [];
+  for (let write of plan.writes) {
+    let { result, stoodForeign } = await applySeedFile(
+      write,
+      plan.priorEntries.get(write.path),
+      applyContext,
+    );
+    writes.push({
       file: write,
-      result: ee,
+      result,
       stoodForeign,
     });
-    let ae = t.priorEntries.get(write.path);
-    if (ee === "loader_reach" && ae !== undefined) {
-      let Re = {
+    let priorSha = plan.priorEntries.get(write.path);
+    if (result === "loader_reach" && priorSha !== undefined) {
+      let removal = {
         path: write.path,
         kind: write.kind,
-        sha256: ae,
+        sha256: priorSha,
       };
-      w.push({
-        removal: Re,
-        result: await removeSeedFile(Re, ctx),
+      removals.push({
+        removal,
+        result: await removeSeedFile(removal, applyContext),
       });
     }
   }
-  let P = await ctx.deps.inSettingsWriteQueue(() => applySeedSettings(t, e.settingsPath, ctx));
-  let filtered = v.filter(({ result: S }) => S === "applied");
-  let filtered_2 = w.filter(({ result: S }) => S === "removed");
-  let j = new Set(w.filter(({ result: S }) => S !== "failed").map(({ removal }) => removal.path));
-  let filtered_3 = v.filter(({ result: S }) => S === "applied" || S === "unverified");
-  let Q = new Set(filtered_3.map(({ file }) => file.path));
-  let x = new Map([
-    ...[...t.priorEntries].filter(([S]) => !j.has(S) && !Q.has(S)),
+  let settingsResult = await applyContext.deps.inSettingsWriteQueue(() =>
+    applySeedSettings(plan, options.settingsPath, applyContext),
+  );
+  let filtered = writes.filter(({ result }) => result === "applied");
+  let filtered_2 = removals.filter(({ result }) => result === "removed");
+  let removedPaths = new Set(
+    removals.filter(({ result }) => result !== "failed").map(({ removal }) => removal.path),
+  );
+  let filtered_3 = writes.filter(({ result }) => result === "applied" || result === "unverified");
+  let writtenPaths = new Set(filtered_3.map(({ file }) => file.path));
+  let entries = new Map([
+    ...[...plan.priorEntries].filter(([path]) => !removedPaths.has(path) && !writtenPaths.has(path)),
     ...filtered_3.map(({ file }) => [file.path, file.sha256]),
   ]);
-  let N = t.settings !== null && e.settingsPath !== undefined;
-  let q = t.settings === null && t.priorSettingsSha256 !== null && e.settingsPath !== undefined;
-  let X = N || q || (e.settingsPath !== undefined && t.counts.refused.settings !== "none");
-  let Te = t.counts.refused.settings === "none" && !P.keptForeign && (P.written || (q && !P.removeFailed));
-  let K = t.writes.length + t.counts.refilteredCredentialFiles + w.length + (X ? 1 : 0);
-  let de = count(w, ({ result: S }) => S === "failed");
-  let ue = filtered.length + (w.length - de) + (Te ? 1 : 0);
-  let se = (S) => count(v, (ee) => ee.result === S);
-  let Me = K === 0 ? "empty" : ue === K ? "applied" : "partial";
-  let be = t.restoreRecord === true;
-  let we =
-    !(be
-      ? !P.written
-      : x.size === 0 &&
-        P.sha256After === null &&
-        t.priorEntries.size === 0 &&
-        t.priorSettingsSha256 === null) &&
-    (await writeHomeSidecar(ctx, {
+  let settingsAttempted = plan.settings !== null && options.settingsPath !== undefined;
+  let settingsRemovalWanted =
+    plan.settings === null && plan.priorSettingsSha256 !== null && options.settingsPath !== undefined;
+  let settingsTouched =
+    settingsAttempted ||
+    settingsRemovalWanted ||
+    (options.settingsPath !== undefined && plan.counts.refused.settings !== "none");
+  let settingsApplied =
+    plan.counts.refused.settings === "none" &&
+    !settingsResult.keptForeign &&
+    (settingsResult.written || (settingsRemovalWanted && !settingsResult.removeFailed));
+  let totalExpected =
+    plan.writes.length + plan.counts.refilteredCredentialFiles + removals.length + (settingsTouched ? 1 : 0);
+  let removalsFailed = count(removals, ({ result }) => result === "failed");
+  let totalDone = filtered.length + (removals.length - removalsFailed) + (settingsApplied ? 1 : 0);
+  let countByResult = (wanted) => count(writes, (entry) => entry.result === wanted);
+  let outcome = totalExpected === 0 ? "empty" : totalDone === totalExpected ? "applied" : "partial";
+  let isRestore = plan.restoreRecord === true;
+  let sidecarWritten =
+    !(isRestore
+      ? !settingsResult.written
+      : entries.size === 0 &&
+        settingsResult.sha256After === null &&
+        plan.priorEntries.size === 0 &&
+        plan.priorSettingsSha256 === null) &&
+    (await writeHomeSidecar(applyContext, {
       version: SIDECAR_VERSION,
-      generation: t.generation,
-      writtenAtMs: n.now(),
-      entries: be
-        ? ((await readHomeSeedFile(e.configHome))?.entries ?? [])
-        : [...x].map(([S, ee]) => ({
-            path: S,
-            sha256: ee,
+      generation: plan.generation,
+      writtenAtMs: deps.now(),
+      entries: isRestore
+        ? ((await readHomeSeedFile(options.configHome))?.entries ?? [])
+        : [...entries].map(([path, sha256]) => ({
+            path,
+            sha256,
           })),
-      settingsSha256: be && !(ctx.keepsForeignFiles && P.nothingStood) ? null : P.sha256After,
-      ...(Me !== "partial" && {
-        packEtag: t.packEtag,
+      settingsSha256:
+        isRestore && !(applyContext.keepsForeignFiles && settingsResult.nothingStood)
+          ? null
+          : settingsResult.sha256After,
+      ...(outcome !== "partial" && {
+        packEtag: plan.packEtag,
       }),
     }));
-  if (we && x.size > MAX_SIDECAR_ENTRIES)
+  if (sidecarWritten && entries.size > MAX_SIDECAR_ENTRIES)
     logForDiagnosticsNoPII("warn", "home_seed_sidecar_trimmed", {
-      dropped: x.size - MAX_SIDECAR_ENTRIES,
+      dropped: entries.size - MAX_SIDECAR_ENTRIES,
     });
   return {
-    outcome: Me,
-    generation: t.generation,
+    outcome,
+    generation: plan.generation,
     filesApplied: filtered.length,
     appliedByKind: {
       claude_md: count(filtered, ({ file }) => file.kind === "claude_md"),
@@ -433,84 +458,84 @@ async function applyHomeSeedToCloudSession(t, e, n) {
     },
     filesReplacedForeign: count(filtered, ({ stoodForeign }) => stoodForeign),
     filesRefused: {
-      destination: t.counts.refused.destination,
-      overCap: t.counts.refused.overCap,
-      resolvedDestination: se("refused") + se("unverified"),
-      parentNotDirectory: se("parent_not_directory"),
-      destIsDirectory: se("dest_is_directory"),
-      loaderReach: se("loader_reach"),
-      credential: t.counts.refilteredCredentialFiles,
-      keptForeign: se("kept_foreign"),
+      destination: plan.counts.refused.destination,
+      overCap: plan.counts.refused.overCap,
+      resolvedDestination: countByResult("refused") + countByResult("unverified"),
+      parentNotDirectory: countByResult("parent_not_directory"),
+      destIsDirectory: countByResult("dest_is_directory"),
+      loaderReach: countByResult("loader_reach"),
+      credential: plan.counts.refilteredCredentialFiles,
+      keptForeign: countByResult("kept_foreign"),
     },
-    filesFailed: se("failed"),
+    filesFailed: countByResult("failed"),
     filesRemoved: filtered_2.length,
-    removalsFailed: de,
-    settingsAttempted: N,
-    settingsWritten: P.written,
-    settingsKeptForeign: P.keptForeign,
-    rulesLeftOut: P.keptForeign ? (t.restrictingSettings?.rulesLeftOut ?? 0) : 0,
-    settingsRemoved: P.removed,
-    settingsRemoveFailed: P.removeFailed,
-    standingSettingsUnreadable: P.unreadable,
-    settingsRefused: t.counts.refused.settings,
-    replacedExistingSettings: P.replaced,
-    refilteredKeys: t.counts.refilteredKeys,
-    refilteredCredentials: t.counts.refilteredCredentials,
-    refilteredCredentialRestrictions: t.counts.refilteredCredentialRestrictions,
-    permissionsDropped: t.counts.permissionsDropped,
+    removalsFailed,
+    settingsAttempted,
+    settingsWritten: settingsResult.written,
+    settingsKeptForeign: settingsResult.keptForeign,
+    rulesLeftOut: settingsResult.keptForeign ? (plan.restrictingSettings?.rulesLeftOut ?? 0) : 0,
+    settingsRemoved: settingsResult.removed,
+    settingsRemoveFailed: settingsResult.removeFailed,
+    standingSettingsUnreadable: settingsResult.unreadable,
+    settingsRefused: plan.counts.refused.settings,
+    replacedExistingSettings: settingsResult.replaced,
+    refilteredKeys: plan.counts.refilteredKeys,
+    refilteredCredentials: plan.counts.refilteredCredentials,
+    refilteredCredentialRestrictions: plan.counts.refilteredCredentialRestrictions,
+    permissionsDropped: plan.counts.permissionsDropped,
     touchedKinds: new Set([
       ...filtered_3.map(({ file }) => file.kind),
       ...filtered_2.map(({ removal }) => removal.kind),
     ]),
-    sidecarWritten: we,
+    sidecarWritten,
   };
 }
 //@ chunk-twq47pff.js:42658-42704 placement
 /**
  * 在根目录下按 / 分隔的相对路径拼接。
  */
-function joinUnder(configHome, e) {
-  return join(configHome, ...e.split("/"));
+function joinUnder(configHome, relPath) {
+  return join(configHome, ...relPath.split("/"));
 }
 //@ chunk-twq47pff.js:42704-42940 placement
-async function applySeedFile(write, e, n) {
-  let l = await checkSeedFileDestination(write, n);
-  if (l !== "clear")
+async function applySeedFile(write, priorSha, ctx) {
+  let destination = await checkSeedFileDestination(write, ctx);
+  if (destination !== "clear")
     return {
-      result: l,
+      result: destination,
       stoodForeign: false,
     };
-  let d = await hasForeignFileAt(write.path, e, n);
-  if (d && n.keepsForeignFiles)
+  let foreign = await hasForeignFileAt(write.path, priorSha, ctx);
+  if (foreign && ctx.keepsForeignFiles)
     return {
       result: "kept_foreign",
       stoodForeign: false,
     };
   return {
-    result: await writeSeedFile(write, n),
-    stoodForeign: d,
+    result: await writeSeedFile(write, ctx),
+    stoodForeign: foreign,
   };
 }
 //@ chunk-twq47pff.js:42940-43542 placement
 /**
  * 检查单个种子文件能否写入：非输出样式需在加载器可达范围；解析后的拼写须是合法目的地；路径无阻碍且 home 已核实。返回 clear 或拒绝原因（均记诊断）。
  */
-async function checkSeedFileDestination(t, e) {
-  if (t.kind !== "output_style" && !formatRecentMessages(e.homeReal, t)) {
+async function checkSeedFileDestination(file, context) {
+  if (file.kind !== "output_style" && !formatRecentMessages(context.homeReal, file)) {
     logForDiagnosticsNoPII("warn", "home_seed_destination_refused", {
       reason: "loader_reach",
     });
     return "loader_reach";
   }
-  let destPath = joinUnder(e.configHome, t.path);
-  let resolvedRel = await resolveDestinationSpelling(e.homeReal, destPath);
+  let destPath = joinUnder(context.configHome, file.path);
+  let resolvedRel = await resolveDestinationSpelling(context.homeReal, destPath);
   if (resolvedRel === null || !isWorkingFilePath(resolvedRel)) {
     logForDiagnosticsNoPII("warn", "home_seed_destination_refused", {
       reason: "resolved_spelling",
     });
     return "refused";
   }
-  let obstruction = await findDestinationObstruction(t.path, e);
+  let obstruction = await findDestinationObstruction(file.path, context);
   if (obstruction !== "clear") {
     logForDiagnosticsNoPII("warn", "home_seed_destination_obstructed", {
       reason: obstruction,
@@ -519,7 +544,7 @@ async function checkSeedFileDestination(t, e) {
       ? obstruction
       : "refused";
   }
-  if (!(await isHomeStillVetted(e))) {
+  if (!(await isHomeStillVetted(context))) {
     logForDiagnosticsNoPII("warn", "home_seed_destination_refused", {
       reason: "home_unvetted",
     });
@@ -531,61 +556,64 @@ async function checkSeedFileDestination(t, e) {
 /**
  * 写入种子文件并核实落点，返回 applied/unverified；目标被拒或写入失败时记诊断。
  */
-async function writeSeedFile(t, e) {
-  let n = joinUnder(e.configHome, t.path);
+async function writeSeedFile(write, ctx) {
+  let fullPath = joinUnder(ctx.configHome, write.path);
   try {
-    await e.deps.writeHomeFile(e.configHome, n, t.content);
-    if (!(await verifyWrittenSeedFile(t.path, e))) return "unverified";
+    await ctx.deps.writeHomeFile(ctx.configHome, fullPath, write.content);
+    if (!(await verifyWrittenSeedFile(write.path, ctx))) return "unverified";
     return "applied";
   } catch (error) {
-    let d = getErrnoCode(error) ?? "unknown";
-    if (d.startsWith("WORKING_") || d.startsWith("HOME_DEST_")) {
+    let code = getErrnoCode(error) ?? "unknown";
+    if (code.startsWith("WORKING_") || code.startsWith("HOME_DEST_")) {
       logForDiagnosticsNoPII("warn", "home_seed_destination_refused", {
-        reason: d,
+        reason: code,
       });
       return "refused";
     }
     logForDiagnosticsNoPII("warn", "home_seed_write_failed", {
-      code: d,
+      code,
     });
     return "failed";
   }
 }
 //@ chunk-twq47pff.js:43928-44035 placement
-async function isHomeStillVetted(t) {
+async function isHomeStillVetted(context) {
   try {
-    return (await realpath(t.configHome)) === t.homeReal && !(await isInsideGitWorktree(t.homeReal));
+    return (
+      (await realpath(context.configHome)) === context.homeReal &&
+      !(await isInsideGitWorktree(context.homeReal))
+    );
   } catch {
     return false;
   }
 }
 //@ chunk-twq47pff.js:44035-44290 placement
-async function verifyWrittenSeedFile(path, e) {
-  let n = joinUnder(e.configHome, path);
-  let d =
-    (await resolveDestinationSpelling(e.homeReal, n)) !== path
+async function verifyWrittenSeedFile(path, context) {
+  let destPath = joinUnder(context.configHome, path);
+  let actual =
+    (await resolveDestinationSpelling(context.homeReal, destPath)) !== path
       ? "resolved_spelling"
-      : await checkLeafRegular(n);
-  if (d !== null) {
+      : await checkLeafRegular(destPath);
+  if (actual !== null) {
     logForDiagnosticsNoPII("warn", "home_seed_write_escaped", {
-      reason: d,
+      reason: actual,
     });
     return false;
   }
-  if (!(await isHomeStillVetted(e))) {
+  if (!(await isHomeStillVetted(context))) {
     logForDiagnosticsNoPII("warn", "home_seed_write_unverified", {});
     return false;
   }
   return true;
 }
 //@ chunk-twq47pff.js:44290-44437 placement
-async function checkLeafRegular(t) {
-  let e = await statOrState(t);
-  return e === "absent"
+async function checkLeafRegular(path) {
+  let state = await statOrState(path);
+  return state === "absent"
     ? "leaf_absent"
-    : e === "unverifiable"
+    : state === "unverifiable"
       ? "leaf_unverifiable"
-      : e.isFile()
+      : state.isFile()
         ? null
         : "leaf_not_regular";
 }
@@ -593,18 +621,18 @@ async function checkLeafRegular(t) {
 /**
  * 逐级检查目标的祖先：不存在为 none；无法验证、是符号链接、不是目录或位于 git 工作区内则返回相应阻碍。
  */
-async function findAncestorObstruction(t, e) {
-  let parts = t.split("/");
+async function findAncestorObstruction(relPath, ctx) {
+  let parts = relPath.split("/");
   for (let j = 1; j < parts.length; j++) {
-    let d = joinUnder(e.configHome, parts.slice(0, j).join("/"));
-    let u = await statOrState(d);
-    if (u === "absent") return "none";
-    if (u === "unverifiable") return "ancestor_unverifiable";
-    if (u.isSymbolicLink()) return "ancestor_is_symlink";
-    if (!u.isDirectory()) return "parent_not_directory";
-    let w = await statOrState(join(d, ".git"));
-    if (w === "unverifiable") return "ancestor_unverifiable";
-    if (w !== "absent") return "ancestor_in_worktree";
+    let ancestorPath = joinUnder(ctx.configHome, parts.slice(0, j).join("/"));
+    let stats = await statOrState(ancestorPath);
+    if (stats === "absent") return "none";
+    if (stats === "unverifiable") return "ancestor_unverifiable";
+    if (stats.isSymbolicLink()) return "ancestor_is_symlink";
+    if (!stats.isDirectory()) return "parent_not_directory";
+    let gitStats = await statOrState(join(ancestorPath, ".git"));
+    if (gitStats === "unverifiable") return "ancestor_unverifiable";
+    if (gitStats !== "absent") return "ancestor_in_worktree";
   }
   return "none";
 }
@@ -612,19 +640,19 @@ async function findAncestorObstruction(t, e) {
 /**
  * 检查目标位置是否被占用：先查上层障碍，再看目标叶子（不存在、无法核验、符号链接、目录或非普通文件）。
  */
-async function findDestinationObstruction(path, e) {
-  let ancestorObstruction = await findAncestorObstruction(path, e);
+async function findDestinationObstruction(relPath, context) {
+  let ancestorObstruction = await findAncestorObstruction(relPath, context);
   if (ancestorObstruction !== "none") return ancestorObstruction;
-  let l = await statOrState(joinUnder(e.configHome, path));
-  if (l === "absent") return "clear";
-  if (l === "unverifiable") return "leaf_unverifiable";
-  if (l.isSymbolicLink()) return "leaf_is_symlink";
-  if (l.isDirectory()) return "dest_is_directory";
-  return l.isFile() ? "clear" : "leaf_not_regular";
+  let leaf = await statOrState(joinUnder(context.configHome, relPath));
+  if (leaf === "absent") return "clear";
+  if (leaf === "unverifiable") return "leaf_unverifiable";
+  if (leaf.isSymbolicLink()) return "leaf_is_symlink";
+  if (leaf.isDirectory()) return "dest_is_directory";
+  return leaf.isFile() ? "clear" : "leaf_not_regular";
 }
 //@ chunk-twq47pff.js:45201-45411 placement
-async function hasForeignFileAt(path, e, n) {
-  let boundedFile = await readBoundedFile(joinUnder(n.configHome, path), MAX_WORKING_FILE_BYTES);
+async function hasForeignFileAt(path, relPath, context) {
+  let boundedFile = await readBoundedFile(joinUnder(context.configHome, path), MAX_WORKING_FILE_BYTES);
   switch (boundedFile.kind) {
     case "absent":
     case "not_regular":
@@ -633,23 +661,23 @@ async function hasForeignFileAt(path, e, n) {
     case "unreadable":
       return true;
     case "read":
-      return e === undefined || computeContentHash(boundedFile.content) !== e;
+      return relPath === undefined || computeContentHash(boundedFile.content) !== relPath;
   }
 }
 //@ chunk-twq47pff.js:45411-46159 placement
 /**
  * 删除之前由种子写入的文件：home 未核实、无法解析或位置不合法时失败；文件已不存在为 gone；内容摘要不符视为别人的文件不删。
  */
-async function removeSeedFile(t, e) {
-  let destPath = joinUnder(e.configHome, t.path);
-  let resolvedRel = await resolveDestinationSpelling(e.homeReal, destPath);
-  let obstruction = !(await isHomeStillVetted(e))
+async function removeSeedFile(file, context) {
+  let destPath = joinUnder(context.configHome, file.path);
+  let resolvedRel = await resolveDestinationSpelling(context.homeReal, destPath);
+  let obstruction = !(await isHomeStillVetted(context))
     ? "home_unvetted"
     : resolvedRel === null
       ? "unresolvable"
       : !isWorkingFilePath(resolvedRel)
         ? "resolves_elsewhere"
-        : await findAncestorObstruction(t.path, e);
+        : await findAncestorObstruction(file.path, context);
   if (obstruction !== "none") {
     logForDiagnosticsNoPII("warn", "home_seed_remove_obstructed", {
       reason: obstruction,
@@ -675,15 +703,15 @@ async function removeSeedFile(t, e) {
     case "read":
       break;
   }
-  if (computeContentHash(read.content) !== t.sha256) return "not_ours";
+  if (computeContentHash(read.content) !== file.sha256) return "not_ours";
   try {
     await unlink(destPath);
     return "removed";
   } catch (error) {
-    let v = getErrnoCode(error) ?? "unknown";
-    if (isNotFoundCode_2(v)) return "gone";
+    let resolved = getErrnoCode(error) ?? "unknown";
+    if (isNotFoundCode_2(resolved)) return "gone";
     logForDiagnosticsNoPII("warn", "home_seed_remove_failed", {
-      code: v,
+      code: resolved,
     });
     return "failed";
   }
@@ -692,7 +720,7 @@ async function removeSeedFile(t, e) {
 /**
  * 把种子设置写入云端 settings.json：校验路径与 home；按现有文件是否为本方写入或他人文件决定替换、保留或只合并限制性规则；设置为空且文件是本方写入时删除；写后核实并返回各状态与新摘要。
  */
-async function applySeedSettings(t, settingsPath, n) {
+async function applySeedSettings(plan, filePath, ctx) {
   let baseResult = {
     written: false,
     keptForeign: false,
@@ -701,21 +729,21 @@ async function applySeedSettings(t, settingsPath, n) {
     removeFailed: false,
     unreadable: false,
     replaced: "none",
-    sha256After: t.priorSettingsSha256,
+    sha256After: plan.priorSettingsSha256,
   };
-  if (settingsPath === undefined || (t.settings === null && t.priorSettingsSha256 === null))
+  if (filePath === undefined || (plan.settings === null && plan.priorSettingsSha256 === null))
     return baseResult;
-  if (basename(settingsPath) !== SETTINGS_JSON || !(await isFileDirectlyIn(n.homeReal, settingsPath))) {
+  if (basename(filePath) !== SETTINGS_JSON || !(await isFileDirectlyIn(ctx.homeReal, filePath))) {
     logForDiagnosticsNoPII("warn", "home_seed_settings_path_refused", {});
-    return t.settings === null
+    return plan.settings === null
       ? {
           ...baseResult,
           removeFailed: true,
         }
       : baseResult;
   }
-  let settingsPath_2 = settingsPath;
-  if (t.settings === null && !(await isHomeStillVetted(n))) {
+  let settingsPath = filePath;
+  if (plan.settings === null && !(await isHomeStillVetted(ctx))) {
     logForDiagnosticsNoPII("warn", "home_seed_settings_remove_failed", {
       code: "home_unvetted",
     });
@@ -724,7 +752,7 @@ async function applySeedSettings(t, settingsPath, n) {
       removeFailed: true,
     };
   }
-  let existing = await readBoundedFile(settingsPath_2, MAX_PACK_BYTES);
+  let existing = await readBoundedFile(settingsPath, MAX_PACK_BYTES);
   if (existing.kind === "not_regular" || existing.kind === "unreadable") {
     logForDiagnosticsNoPII("warn", "home_seed_settings_not_replaceable", {
       reason: existing.kind,
@@ -732,32 +760,32 @@ async function applySeedSettings(t, settingsPath, n) {
     return {
       ...baseResult,
       unreadable: true,
-      removeFailed: t.settings === null,
+      removeFailed: plan.settings === null,
     };
   }
   let ownership =
     existing.kind === "absent"
       ? "none"
-      : existing.kind === "read" && computeContentHash(existing.content) === t.priorSettingsSha256
+      : existing.kind === "read" && computeContentHash(existing.content) === plan.priorSettingsSha256
         ? "ours"
         : "foreign";
-  let isRestore = t.restoreRecord === true;
-  let refusedSettings = t.counts.refused.settings !== "none" && !isRestore;
+  let isRestore = plan.restoreRecord === true;
+  let refusedSettings = plan.counts.refused.settings !== "none" && !isRestore;
   let nothingStood =
-    existing.kind === "absent" || (n.keepsForeignFiles && isEmptySettingsFile(existing, settingsPath_2));
-  let foreignStands = n.keepsForeignFiles && ownership === "foreign" && !nothingStood;
-  let keepForeign = foreignStands && t.settings !== null && !isRestore;
+    existing.kind === "absent" || (ctx.keepsForeignFiles && isEmptySettingsFile(existing, settingsPath));
+  let foreignStands = ctx.keepsForeignFiles && ownership === "foreign" && !nothingStood;
+  let keepForeign = foreignStands && plan.settings !== null && !isRestore;
   let result = {
     ...baseResult,
     keptForeign: keepForeign,
     nothingStood,
     replaced: keepForeign ? "none" : ownership,
   };
-  let renderRestrictive = (settings) => {
+  let renderRestrictive = (plan) => {
     try {
       return renderRestrictiveSettings(
-        settings,
-        parseExistingSettings(existing, settingsPath_2),
+        plan,
+        parseExistingSettings(existing, settingsPath),
         isRestore && !foreignStands
           ? "restore"
           : ownership === "foreign"
@@ -769,10 +797,10 @@ async function applySeedSettings(t, settingsPath, n) {
     }
   };
   let toWrite = keepForeign
-    ? renderRestrictive(t.restrictingSettings?.plan ?? null)
+    ? renderRestrictive(plan.restrictingSettings?.plan ?? null)
     : refusedSettings || isRestore
-      ? renderRestrictive(t.settings)
-      : t.settings;
+      ? renderRestrictive(plan.settings)
+      : plan.settings;
   if (toWrite === "unreadable") {
     logForDiagnosticsNoPII("warn", "home_seed_settings_not_replaceable", {
       reason: "not_read_whole",
@@ -790,21 +818,21 @@ async function applySeedSettings(t, settingsPath, n) {
         sha256After: null,
       };
     try {
-      await unlink(settingsPath_2);
+      await unlink(settingsPath);
       return {
         ...result,
         removed: true,
         sha256After: null,
       };
     } catch (error) {
-      let X = getErrnoCode(error) ?? "unknown";
-      if (isNotFoundCode_2(X))
+      let code = getErrnoCode(error) ?? "unknown";
+      if (isNotFoundCode_2(code))
         return {
           ...result,
           sha256After: null,
         };
       logForDiagnosticsNoPII("warn", "home_seed_settings_remove_failed", {
-        code: X,
+        code,
       });
       return {
         ...result,
@@ -812,7 +840,7 @@ async function applySeedSettings(t, settingsPath, n) {
       };
     }
   }
-  if (!(await isHomeStillVetted(n))) {
+  if (!(await isHomeStillVetted(ctx))) {
     logForDiagnosticsNoPII("warn", "home_seed_settings_not_replaceable", {
       reason: "home_unvetted",
     });
@@ -820,13 +848,13 @@ async function applySeedSettings(t, settingsPath, n) {
   }
   let shaAfter =
     (refusedSettings || keepForeign) && ownership === "foreign" && !nothingStood ? null : toWrite.sha256;
-  n.deps.markInternalWrite(settingsPath_2);
+  ctx.deps.markInternalWrite(settingsPath);
   try {
-    await n.deps.writeHomeFile(n.configHome, settingsPath_2, Buffer.from(toWrite.rendered));
-    let q = await checkLeafRegular(settingsPath_2);
-    if (q !== null || !(await isHomeStillVetted(n))) {
+    await ctx.deps.writeHomeFile(ctx.configHome, settingsPath, Buffer.from(toWrite.rendered));
+    let leafProblem = await checkLeafRegular(settingsPath);
+    if (leafProblem !== null || !(await isHomeStillVetted(ctx))) {
       logForDiagnosticsNoPII("warn", "home_seed_write_unverified", {
-        reason: q ?? "home_unvetted",
+        reason: leafProblem ?? "home_unvetted",
       });
       return {
         ...result,
@@ -839,13 +867,13 @@ async function applySeedSettings(t, settingsPath, n) {
       sha256After: shaAfter,
     };
   } catch (error) {
-    n.deps.consumeInternalWrite(settingsPath_2);
+    ctx.deps.consumeInternalWrite(settingsPath);
     logForDiagnosticsNoPII("warn", "home_seed_settings_write_failed", {
       code: getErrnoCode(error) ?? "unknown",
     });
     return {
       ...result,
-      sha256After: ownership === "ours" ? t.priorSettingsSha256 : null,
+      sha256After: ownership === "ours" ? plan.priorSettingsSha256 : null,
     };
   }
 }
@@ -853,9 +881,9 @@ async function applySeedSettings(t, settingsPath, n) {
 /**
  * 判断文件是否直接位于目录 t 下（不跟随到别处）。
  */
-async function isFileDirectlyIn(homeReal, e) {
+async function isFileDirectlyIn(homeReal, filePath) {
   try {
-    return (await realpath(dirname(e))) === homeReal && basename(e) !== "";
+    return (await realpath(dirname(filePath))) === homeReal && basename(filePath) !== "";
   } catch {
     return false;
   }
@@ -897,11 +925,11 @@ async function writeHomeSidecar(ctx, seed) {
   return true;
 }
 //@ chunk-twq47pff.js:49023-49173 placement = readJSONLFile (1)
-async function readJSONLFile(t, e) {
-  let buf = Buffer.allocUnsafe(e);
+async function readJSONLFile(path, size) {
+  let buf = Buffer.allocUnsafe(size);
   let totalRead = 0;
-  while (totalRead < e) {
-    let { bytesRead } = await t.read(buf, totalRead, e - totalRead, totalRead);
+  while (totalRead < size) {
+    let { bytesRead } = await path.read(buf, totalRead, size - totalRead, totalRead);
     if (bytesRead === 0) break;
     totalRead += bytesRead;
   }
@@ -927,7 +955,7 @@ function createHomeSeedTelemetry() {
       restoreNoticeSuperseded,
       answersNotRestored,
     }) => {
-      let y =
+      let unused =
         report !== null && report.outcome !== "config_home_unsafe" && report.outcome !== "flag_off"
           ? report
           : null;
@@ -943,33 +971,33 @@ function createHomeSeedTelemetry() {
           restore_notice_superseded: restoreNoticeSuperseded,
           answers_not_restored: answersNotRestored,
           ...emptyUpdate(),
-          ...(y !== null && {
-            files_applied: y.filesApplied,
-            files_replaced_foreign: y.filesReplacedForeign,
-            files_refused_destination: y.filesRefused.destination,
-            files_refused_over_cap: y.filesRefused.overCap,
-            files_refused_resolved_destination: y.filesRefused.resolvedDestination,
-            files_refused_parent_not_directory: y.filesRefused.parentNotDirectory,
-            files_refused_dest_is_directory: y.filesRefused.destIsDirectory,
-            files_refused_loader_reach: y.filesRefused.loaderReach,
-            files_refused_credential: y.filesRefused.credential,
-            files_refused_kept_foreign: y.filesRefused.keptForeign,
-            files_failed: y.filesFailed,
-            files_removed: y.filesRemoved,
-            removals_failed: y.removalsFailed,
-            settings_written: y.settingsWritten,
-            settings_kept_foreign: y.settingsKeptForeign,
-            rules_left_out: y.rulesLeftOut,
-            settings_removed: y.settingsRemoved,
-            settings_refused: fromEnum(y.settingsRefused),
-            settings_attempted: y.settingsAttempted,
-            standing_settings_unreadable: y.standingSettingsUnreadable,
-            replaced_existing_settings: fromEnum(y.replacedExistingSettings),
-            refiltered_keys: y.refilteredKeys,
-            refiltered_credentials: y.refilteredCredentials,
-            refiltered_credential_restrictions: y.refilteredCredentialRestrictions,
-            permissions_dropped: y.permissionsDropped,
-            sidecar_written: y.sidecarWritten,
+          ...(unused !== null && {
+            files_applied: unused.filesApplied,
+            files_replaced_foreign: unused.filesReplacedForeign,
+            files_refused_destination: unused.filesRefused.destination,
+            files_refused_over_cap: unused.filesRefused.overCap,
+            files_refused_resolved_destination: unused.filesRefused.resolvedDestination,
+            files_refused_parent_not_directory: unused.filesRefused.parentNotDirectory,
+            files_refused_dest_is_directory: unused.filesRefused.destIsDirectory,
+            files_refused_loader_reach: unused.filesRefused.loaderReach,
+            files_refused_credential: unused.filesRefused.credential,
+            files_refused_kept_foreign: unused.filesRefused.keptForeign,
+            files_failed: unused.filesFailed,
+            files_removed: unused.filesRemoved,
+            removals_failed: unused.removalsFailed,
+            settings_written: unused.settingsWritten,
+            settings_kept_foreign: unused.settingsKeptForeign,
+            rules_left_out: unused.rulesLeftOut,
+            settings_removed: unused.settingsRemoved,
+            settings_refused: fromEnum(unused.settingsRefused),
+            settings_attempted: unused.settingsAttempted,
+            standing_settings_unreadable: unused.standingSettingsUnreadable,
+            replaced_existing_settings: fromEnum(unused.replacedExistingSettings),
+            refiltered_keys: unused.refilteredKeys,
+            refiltered_credentials: unused.refilteredCredentials,
+            refiltered_credential_restrictions: unused.refilteredCredentialRestrictions,
+            permissions_dropped: unused.permissionsDropped,
+            sidecar_written: unused.sidecarWritten,
           }),
           ...(report?.outcome === "config_home_unsafe" && {
             config_home_unsafe_reason: fromEnum(report.reason),
@@ -1062,19 +1090,22 @@ function createHomeSeedTelemetry() {
 /**
  * 种子应用后按变化刷新：设置变化重载用户设置，CLAUDE.md/规则变化清记忆与用户上下文，首个询问后清系统提示分段，输出样式变化清样式缓存。
  */
-function reloadAfterSeedApply(t, e, reloaders) {
-  if (t.outcome === "config_home_unsafe" || t.outcome === "flag_off") return;
-  if (t.settingsWritten || t.settingsRemoved) reloaders.reloadUserSettings();
-  if (t.touchedKinds.has("claude_md") || t.touchedKinds.has("rule")) {
-    reloaders.clearMemoryFiles();
-    reloaders.clearUserContext();
+function reloadAfterSeedApply(applyReport, reloaders, reloaders_2) {
+  if (applyReport.outcome === "config_home_unsafe" || applyReport.outcome === "flag_off") return;
+  if (applyReport.settingsWritten || applyReport.settingsRemoved) reloaders_2.reloadUserSettings();
+  if (applyReport.touchedKinds.has("claude_md") || applyReport.touchedKinds.has("rule")) {
+    reloaders_2.clearMemoryFiles();
+    reloaders_2.clearUserContext();
   }
   if (
-    (t.filesApplied > 0 || t.filesRemoved > 0 || t.settingsWritten || t.settingsRemoved) &&
-    !e.beforeFirstAsk
+    (applyReport.filesApplied > 0 ||
+      applyReport.filesRemoved > 0 ||
+      applyReport.settingsWritten ||
+      applyReport.settingsRemoved) &&
+    !reloaders.beforeFirstAsk
   )
-    reloaders.clearSystemPromptSections();
-  if (t.touchedKinds.has("output_style")) reloaders.clearOutputStyles();
+    reloaders_2.clearSystemPromptSections();
+  if (applyReport.touchedKinds.has("output_style")) reloaders_2.clearOutputStyles();
 }
 //@ chunk-twq47pff.js:52668-53774 placement
 /**

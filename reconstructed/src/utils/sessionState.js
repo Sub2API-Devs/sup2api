@@ -21,14 +21,15 @@ import { escapeXml_2 as escapeXml } from "./confusables.js";
 import { hasBackgroundBashStopAfterReply } from "../tools/AgentTool/backgroundGates.js";
 import { isDiskless } from "../bootstrap/state.js";
 import { logError } from "./log.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-achyj058.js:655-774 placement
 /**
  * 取请求 id（或被抑制的请求 id）。
  */
-function requestIdOf(e) {
-  for (let n of [e?.request_id, e?.suppressed_request_id])
-    if (typeof n === "string" && n.length > 0) return n;
+function requestIdOf(request) {
+  for (let requestId of [request?.request_id, request?.suppressed_request_id])
+    if (typeof requestId === "string" && requestId.length > 0) return requestId;
   return;
 }
 //@ chunk-achyj058.js:774-785 placement
@@ -40,42 +41,42 @@ var MAX_PENDING_ACTION_ARGS = 32;
 /**
  * 生成待决动作的描述（工具名、显示名、原始命令）。
  */
-function pendingActionPayload(e) {
-  let { display_tool_name: displayToolName, raw_command: rawCommand } = e;
+function pendingActionPayload(action) {
+  let { display_tool_name: displayToolName, raw_command: rawCommand } = action;
   return {
-    tool_name: e.tool_name,
+    tool_name: action.tool_name,
     ...(displayToolName === undefined
       ? {}
       : {
           display_tool_name: displayToolName,
         }),
-    action_description: truncate(e.action_description, MAX_DESCRIPTION_CHARS),
+    action_description: truncate(action.action_description, MAX_DESCRIPTION_CHARS),
     ...(rawCommand === undefined
       ? {}
       : {
           raw_command: truncate(rawCommand, MAX_DESCRIPTION_CHARS),
         }),
-    tool_use_id: e.tool_use_id,
-    request_id: e.request_id,
-    ...(e.suppressed_request_id === undefined
+    tool_use_id: action.tool_use_id,
+    request_id: action.request_id,
+    ...(action.suppressed_request_id === undefined
       ? {}
       : {
-          suppressed_request_id: e.suppressed_request_id,
+          suppressed_request_id: action.suppressed_request_id,
         }),
-    ...(e.decision_reason_type === undefined
+    ...(action.decision_reason_type === undefined
       ? {}
       : {
-          decision_reason_type: e.decision_reason_type,
+          decision_reason_type: action.decision_reason_type,
         }),
-    ...(e.decision_reason_code === undefined
+    ...(action.decision_reason_code === undefined
       ? {}
       : {
-          decision_reason_code: e.decision_reason_code,
+          decision_reason_code: action.decision_reason_code,
         }),
-    ...(e.agent_id === undefined
+    ...(action.agent_id === undefined
       ? {}
       : {
-          agent_id: e.agent_id,
+          agent_id: action.agent_id,
         }),
   };
 }
@@ -83,15 +84,15 @@ function pendingActionPayload(e) {
 /**
  * pendingActionRows：待决动作的展示行。
  */
-function pendingActionRows(e, n) {
-  return [e, ...n.slice(0, MAX_PENDING_ACTION_ARGS - 1).map(pendingActionPayload)];
+function pendingActionRows(lead, rest) {
+  return [lead, ...rest.slice(0, MAX_PENDING_ACTION_ARGS - 1).map(pendingActionPayload)];
 }
 //@ chunk-achyj058.js:1404-1481 placement
-function truncateForPendingAction(e) {
-  let n = truncate(e, MAX_DESCRIPTION_CHARS);
-  return n.length <= 4 * MAX_DESCRIPTION_CHARS
-    ? n
-    : `${truncateToLength(n, 4 * MAX_DESCRIPTION_CHARS - 1)}\u2026`;
+function truncateForPendingAction(text) {
+  let truncated = truncate(text, MAX_DESCRIPTION_CHARS);
+  return truncated.length <= 4 * MAX_DESCRIPTION_CHARS
+    ? truncated
+    : `${truncateToLength(truncated, 4 * MAX_DESCRIPTION_CHARS - 1)}\u2026`;
 }
 //@ chunk-achyj058.js:1481-1642 placement
 function parseCrossSessionInboundCapability(externalMetadata) {
@@ -171,9 +172,9 @@ class SessionStateTracker {
       this.currentState === "requires_action" && this.mainLoopRefcount - this.nestedBlockedChainCount <= 0
     );
   }
-  setMainLoopRefcount(e) {
-    this.mainLoopRefcount = e;
-    if (e > 0 && this.resumableOrphanedAgents.length > 0) this.restartNoticeShown = true;
+  setMainLoopRefcount(refcount) {
+    this.mainLoopRefcount = refcount;
+    if (refcount > 0 && this.resumableOrphanedAgents.length > 0) this.restartNoticeShown = true;
     this.emitIfWaitingChanged();
   }
   emitIfWaitingChanged() {
@@ -199,48 +200,49 @@ class SessionStateTracker {
   reteeWaitingOnUser() {
     this.onWaitingOnUserChanged?.(this.waitingOnUser);
   }
-  notifyNestedPromptBlocking(e) {
+  notifyNestedPromptBlocking(agentId) {
     if (env.CLAUDE_CODE_DISABLE_NESTED_CHAIN_IDLE) return;
-    if (this.droppedChainAgentIds[e]) return;
-    let n = this.nestedBlockedChains[e] ?? 0;
-    this.nestedBlockedChains[e] = n + 1;
-    if (n === 0) {
+    if (this.droppedChainAgentIds[agentId]) return;
+    let previous = this.nestedBlockedChains[agentId] ?? 0;
+    this.nestedBlockedChains[agentId] = previous + 1;
+    if (previous === 0) {
       this.nestedBlockedChainCount++;
-      if (this.nestedBlockedChainCount <= this.mainLoopRefcount) this.nestedChainUnparks[e] = parkOnUser();
+      if (this.nestedBlockedChainCount <= this.mainLoopRefcount)
+        this.nestedChainUnparks[agentId] = parkOnUser();
     }
     this.emitIfWaitingChanged();
   }
-  notifyNestedPromptUnblocking(e) {
-    let n = (this.nestedBlockedChains[e] ?? 0) - 1;
-    if (n > 0) this.nestedBlockedChains[e] = n;
-    else if (this.nestedBlockedChains[e] !== undefined) this.removeChain(e);
+  notifyNestedPromptUnblocking(agentId) {
+    let remaining = (this.nestedBlockedChains[agentId] ?? 0) - 1;
+    if (remaining > 0) this.nestedBlockedChains[agentId] = remaining;
+    else if (this.nestedBlockedChains[agentId] !== undefined) this.removeChain(agentId);
     this.emitIfWaitingChanged();
   }
-  removeChain(e) {
-    delete this.nestedBlockedChains[e];
+  removeChain(agentId) {
+    delete this.nestedBlockedChains[agentId];
     this.nestedBlockedChainCount--;
-    this.nestedChainUnparks[e]?.();
-    delete this.nestedChainUnparks[e];
+    this.nestedChainUnparks[agentId]?.();
+    delete this.nestedChainUnparks[agentId];
   }
-  dropNestedBlockedChain(e) {
-    this.droppedChainAgentIds[e] = true;
-    if (this.nestedBlockedChains[e] !== undefined) {
-      this.removeChain(e);
+  dropNestedBlockedChain(agentId) {
+    this.droppedChainAgentIds[agentId] = true;
+    if (this.nestedBlockedChains[agentId] !== undefined) {
+      this.removeChain(agentId);
       this.emitIfWaitingChanged();
     }
   }
-  notifyTurnStarting(e, n) {
-    this.onTurnStarting?.(e, n);
+  notifyTurnStarting(state, detail) {
+    this.onTurnStarting?.(state, detail);
   }
   notifyTurnBeganBeforeInit() {
     this.onTurnBeganBeforeInit?.();
   }
-  notifyStateChanged(e, n) {
-    this.currentState = e;
+  notifyStateChanged(state, detail) {
+    this.currentState = state;
     this.lastWaitingOnUser = this.waitingOnUser;
-    this.onStateChanged?.(e, n);
-    emitSafely(this.stateChanged, e, n);
-    if (e === "requires_action" && n) this.republishPendingAction(n);
+    this.onStateChanged?.(state, detail);
+    emitSafely(this.stateChanged, state, detail);
+    if (state === "requires_action" && detail) this.republishPendingAction(detail);
     else if (this.hasPendingAction) {
       this.hasPendingAction = false;
       this.pendingActionLeadRequestId = undefined;
@@ -251,8 +253,8 @@ class SessionStateTracker {
       });
       emitSafely(this.pendingActionWritten, null);
     }
-    if (e === "running") this.wipeTurnScopedMetadata();
-    if (e === "idle" && this.hasTaskSummary) {
+    if (state === "running") this.wipeTurnScopedMetadata();
+    if (state === "idle" && this.hasTaskSummary) {
       this.hasTaskSummary = false;
       this.notifyMetadataChanged({
         task_summary: null,
@@ -262,23 +264,23 @@ class SessionStateTracker {
       enqueueTaskNotification({
         type: "system",
         subtype: "session_state_changed",
-        state: e,
+        state,
       });
     else if (env.CLAUDE_CODE_SDK_READS_SESSION_STATE)
       enqueueTaskNotification({
         type: "system",
         subtype: "session_state_changed",
-        state: e,
+        state,
         sdk_host_only: true,
       });
   }
-  republishPendingAction(e) {
+  republishPendingAction(lead) {
     this.hasPendingAction = true;
-    let { lead, patch } = this.pendingActionPatch(e);
+    let { lead: lead_2, patch } = this.pendingActionPatch(lead);
     this.onMetadataChanged?.(patch);
-    emitSafely(this.pendingActionWritten, lead);
+    emitSafely(this.pendingActionWritten, lead_2);
   }
-  leadRecordRefused(e) {
+  leadRecordRefused(action) {
     let writtenLead = this.writtenLead;
     let slimsRefusedLead = this.slimsRefusedLead;
     if (
@@ -286,8 +288,8 @@ class SessionStateTracker {
       !(typeof slimsRefusedLead === "function" ? slimsRefusedLead(writtenLead) : slimsRefusedLead) ||
       this.slimLeads.has(writtenLead) ||
       writtenLead.tool_name.startsWith("dialog:") ||
-      e.tool_use_id !== writtenLead.tool_use_id ||
-      requestIdOf(e) !== requestIdOf(writtenLead)
+      action.tool_use_id !== writtenLead.tool_use_id ||
+      requestIdOf(action) !== requestIdOf(writtenLead)
     )
       return false;
     this.slimLeads.add(writtenLead);
@@ -297,30 +299,30 @@ class SessionStateTracker {
   forgetWrittenLead() {
     this.writtenLead = undefined;
   }
-  isWrittenSlim(e) {
-    return this.slimLeads.has(e);
+  isWrittenSlim(lead) {
+    return this.slimLeads.has(lead);
   }
   pendingTurnEndSummary;
-  holdTurnEndSummary(e, deadlineAt) {
-    let t = {
-      promise: e,
+  holdTurnEndSummary(promise, deadlineAt) {
+    let heldSummary = {
+      promise,
       deadlineAt,
       settled: false,
       superseded: false,
     };
-    let r = () => {
-      t.settled = true;
+    let markSettled = () => {
+      heldSummary.settled = true;
     };
-    e.then(r, r);
-    this.pendingTurnEndSummary = t;
-    return t;
+    promise.then(markSettled, markSettled);
+    this.pendingTurnEndSummary = heldSummary;
+    return heldSummary;
   }
-  turnEndSummaryOutstanding(e = performance.now()) {
+  turnEndSummaryOutstanding(now = performance.now()) {
     let pendingTurnEndSummary = this.pendingTurnEndSummary;
     return (
       pendingTurnEndSummary !== undefined &&
       !pendingTurnEndSummary.settled &&
-      e < pendingTurnEndSummary.deadlineAt
+      now < pendingTurnEndSummary.deadlineAt
     );
   }
   supersedeTurnEndSummary() {
@@ -359,81 +361,81 @@ class SessionStateTracker {
   adoptRestoredPendingAction() {
     this.hasPendingAction = true;
   }
-  pendingActionPatch(e) {
-    let n = this.getPendingActionDetails?.(requestIdOf(e) ?? e.request_id) ?? [];
-    let t =
-      (this.leadsWithOldestCard && n.includes(e)
-        ? n.find((s) => s.agent_id === undefined && !s.tool_name.startsWith("dialog:"))
-        : undefined) ?? e;
-    this.pendingActionLeadRequestId = requestIdOf(t);
-    this.writtenLead = t;
-    let r = n.filter((s) => s !== t).reverse();
-    let o = this.slimLeads.has(t)
+  pendingActionPatch(action) {
+    let details = this.getPendingActionDetails?.(requestIdOf(action) ?? action.request_id) ?? [];
+    let lead =
+      (this.leadsWithOldestCard && details.includes(action)
+        ? details.find((detail) => detail.agent_id === undefined && !detail.tool_name.startsWith("dialog:"))
+        : undefined) ?? action;
+    this.pendingActionLeadRequestId = requestIdOf(lead);
+    this.writtenLead = lead;
+    let rest = details.filter((detail) => detail !== lead).reverse();
+    let leadPayload = this.slimLeads.has(lead)
       ? {
-          ...pendingActionPayload(t),
-          ...(t.display_tool_name !== undefined && {
-            display_tool_name: truncateForPendingAction(t.display_tool_name),
+          ...pendingActionPayload(lead),
+          ...(lead.display_tool_name !== undefined && {
+            display_tool_name: truncateForPendingAction(lead.display_tool_name),
           }),
-          action_description: truncateForPendingAction(t.action_description),
+          action_description: truncateForPendingAction(lead.action_description),
           raw_command: undefined,
-          ...(t.request_id && {
+          ...(lead.request_id && {
             request_id: "",
-            suppressed_request_id: t.request_id,
+            suppressed_request_id: lead.request_id,
             blanked_for_size: true,
           }),
         }
-      : t;
+      : lead;
     return {
-      lead: t,
+      lead,
       patch: {
-        pending_action: o,
-        pending_actions: pendingActionRows(o, r),
+        pending_action: leadPayload,
+        pending_actions: pendingActionRows(leadPayload, rest),
       },
     };
   }
-  notifyMetadataChanged(e, n) {
-    if ("post_turn_summary" in e && n?.turnEndVerdict !== true) this.supersedeTurnEndSummary();
-    this.onMetadataChanged?.(e);
-    if ("is_ultracode_active" in e && this.onMetadataChanged) {
-      this.ultracodeActiveSent = e.is_ultracode_active === true;
+  notifyMetadataChanged(patch, options) {
+    if ("post_turn_summary" in patch && options?.turnEndVerdict !== true) this.supersedeTurnEndSummary();
+    this.onMetadataChanged?.(patch);
+    if ("is_ultracode_active" in patch && this.onMetadataChanged) {
+      this.ultracodeActiveSent = patch.is_ultracode_active === true;
       this.ultracodeActiveWritten = true;
     }
-    if ("goal" in e) this.hasTerminalGoalSnapshot = e.goal?.met === true;
-    if ("task_summary" in e) {
-      if (e.task_summary != null) this.hasTaskSummary = true;
+    if ("goal" in patch) this.hasTerminalGoalSnapshot = patch.goal?.met === true;
+    if ("task_summary" in patch) {
+      if (patch.task_summary != null) this.hasTaskSummary = true;
       enqueueTaskNotification({
         type: "system",
         subtype: "task_summary",
-        detail: e.task_summary ?? null,
+        detail: patch.task_summary ?? null,
       });
     }
-    if ("artifacts" in e)
+    if ("artifacts" in patch)
       enqueueTaskNotification({
         type: "system",
         subtype: "session_metadata",
         metadata: {
-          artifacts: e.artifacts,
+          artifacts: patch.artifacts,
         },
       });
   }
   ultracodeActiveSent = false;
   ultracodeActiveWritten = false;
-  ultracodeActivePatch(e) {
-    return e === this.ultracodeActiveSent
+  ultracodeActivePatch(active) {
+    return active === this.ultracodeActiveSent
       ? {}
       : {
-          is_ultracode_active: e || null,
+          is_ultracode_active: active || null,
         };
   }
-  notifyUltracodeActive(e) {
-    let n = this.ultracodeActivePatch(e);
-    if ("is_ultracode_active" in n) this.notifyMetadataChanged(n);
+  notifyUltracodeActive(active) {
+    let patch = this.ultracodeActivePatch(active);
+    if ("is_ultracode_active" in patch) this.notifyMetadataChanged(patch);
   }
-  settleUltracodeActive(e, n) {
+  settleUltracodeActive(active, read) {
     if (!this.ultracodeActiveWritten)
       this.ultracodeActiveSent =
-        n?.readFailed === true ? undefined : n?.external?.is_ultracode_active === true;
-    this.notifyUltracodeActive(e);
+        read?.readFailed === true ? undefined : read?.external?.is_ultracode_active === true;
+    this.notifyUltracodeActive(active);
   }
   workerPermissionModeRecordEnabled = false;
   get isWorkerPermissionModeRecordEnabled() {
@@ -442,8 +444,8 @@ class SessionStateTracker {
   enableWorkerPermissionModeRecord() {
     this.workerPermissionModeRecordEnabled = true;
   }
-  notifyPermissionModeChanged(e) {
-    this.onPermissionModeChanged?.(e);
+  notifyPermissionModeChanged(mode) {
+    this.onPermissionModeChanged?.(mode);
   }
   notifyProactivityLevelChanged() {
     this.onProactivityLevelChanged?.();
@@ -465,11 +467,11 @@ class SessionStateTracker {
       });
     }
   }
-  notifyInternalMetadataChanged(e) {
-    this.onInternalMetadataChanged?.(e);
+  notifyInternalMetadataChanged(patch) {
+    this.onInternalMetadataChanged?.(patch);
   }
-  notifyActiveGoalChanged(e) {
-    this.onActiveGoalChanged?.(e);
+  notifyActiveGoalChanged(goal) {
+    this.onActiveGoalChanged?.(goal);
   }
   notifyAutocompactInputsChanged() {
     this.onAutocompactInputsChanged?.();
@@ -482,48 +484,52 @@ class SessionStateTracker {
 /**
  * 会话结束时可能被停止的长期任务类型与提示。
  */
-var LONG_RUNNING_TASK_TYPES = new Set(["local_bash", "monitor_mcp", "monitor_ws"]);
-var LONG_RUNNING_PROCESS_NOTE =
-  "In this session every process left running is likely stopped a few minutes after each reply, so a command you re-create now will likely be stopped after your next reply too: run in the foreground, with a long enough `timeout`, any that must finish and can finish within the foreground maximum, and otherwise tell the user it will likely be stopped a few minutes after your reply.";
+var LONG_RUNNING_TASK_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var LONG_RUNNING_PROCESS_NOTE;
+deferInit("chunk-achyj058.js:9513", () => {
+  LONG_RUNNING_TASK_TYPES = new Set(["local_bash", "monitor_mcp", "monitor_ws"]);
+  LONG_RUNNING_PROCESS_NOTE =
+    "In this session every process left running is likely stopped a few minutes after each reply, so a command you re-create now will likely be stopped after your next reply too: run in the foreground, with a long enough `timeout`, any that must finish and can finish within the foreground maximum, and otherwise tell the user it will likely be stopped a few minutes after your reply.";
+});
 //@ chunk-achyj058.js:9954-11007 placement
 /**
  * 描述仍在运行的后台进程（会话结束前提醒）。
  */
-function describeRunningProcesses(e, orphanTasks, canUseTool) {
-  let r = [];
-  if (e.length > 0) {
-    let mapped = e.map(
-      (s) => `- ${escapeXml(s.description || "(no description)")} (task ${escapeXml(s.task_id)})`,
+function describeRunningProcesses(stoppedTasks, orphanTasks, canUseTool) {
+  let sections = [];
+  if (stoppedTasks.length > 0) {
+    let mapped = stoppedTasks.map(
+      (task) => `- ${escapeXml(task.description || "(no description)")} (task ${escapeXml(task.task_id)})`,
     );
-    r.push(`The following background tasks were running and are now stopped:
+    sections.push(`The following background tasks were running and are now stopped:
 ${mapped.join(`
 `)}
-${canUseTool ? `${canUseTool} Re-create anything else` : "Re-create them"} if still needed.${hasBackgroundBashStopAfterReply() && e.some((s) => LONG_RUNNING_TASK_TYPES.has(s.task_type ?? "")) ? ` ${LONG_RUNNING_PROCESS_NOTE}` : ""}`);
+${canUseTool ? `${canUseTool} Re-create anything else` : "Re-create them"} if still needed.${hasBackgroundBashStopAfterReply() && stoppedTasks.some((task) => LONG_RUNNING_TASK_TYPES.has(task.task_type ?? "")) ? ` ${LONG_RUNNING_PROCESS_NOTE}` : ""}`);
   }
   if (orphanTasks.length > 0) {
-    let mapped = orphanTasks.map((a) => (isDiskless() ? undefined : a.output_file));
-    let mapped_2 = orphanTasks.map((a, p) => {
-      let u = mapped[p];
-      let g = u ? `output: ${escapeXml(u)}` : "no output file";
-      return `- ${escapeXml(a.description || "(no description)")} (task ${escapeXml(a.task_id)}), status ${escapeXml(a.status)}, ${g}`;
+    let mapped = orphanTasks.map((task) => (isDiskless() ? undefined : task.output_file));
+    let mapped_2 = orphanTasks.map((task, index) => {
+      let outputPath = mapped[index];
+      let outputText = outputPath ? `output: ${escapeXml(outputPath)}` : "no output file";
+      return `- ${escapeXml(task.description || "(no description)")} (task ${escapeXml(task.task_id)}), status ${escapeXml(task.status)}, ${outputText}`;
     });
-    let h = mapped.some(Boolean)
+    let hint = mapped.some(Boolean)
       ? "Read the output file to get the result (it is gone if the restart replaced the container); they cannot be stopped or messaged."
       : "No output file was recorded for them, and they cannot be stopped or messaged; re-create them if still needed.";
-    r.push(`These background tasks finished before the restart, but their results were not delivered to you:
+    sections.push(`These background tasks finished before the restart, but their results were not delivered to you:
 ${mapped_2.join(`
 `)}
-${h}`);
+${hint}`);
   }
   return `<system-reminder>
-The container was restarted. ${r.join(`
+The container was restarted. ${sections.join(`
 `)}
 </system-reminder>`;
 }
 //@ chunk-achyj058.js:11007-11058 placement
-function emitSafely(e, ...n) {
+function emitSafely(signal, ...args) {
   try {
-    e.emit(...n);
+    signal.emit(...args);
   } catch (error) {
     logError(error);
   }

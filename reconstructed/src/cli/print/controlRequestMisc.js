@@ -35,21 +35,21 @@ import { buildNoApprovalSurfaceDenial } from "../../services/pushNotifications/p
 var SESSION_NOT_FOUND_MESSAGE = "No conversation found with session ID:";
 var FAILED_TO_RESUME_SESSION_TEXT = "Failed to resume session";
 //@ chunk-tyg7f3ek.js:503456-503506 placement
-function mcpCallRefusalFor(e) {
-  return isComputerUseTool(e) ? HOSTED_DESKTOP_ONLY_MESSAGE : remoteBrowserRefusal(e.serverName);
+function mcpCallRefusalFor(server) {
+  return isComputerUseTool(server) ? HOSTED_DESKTOP_ONLY_MESSAGE : remoteBrowserRefusal(server.serverName);
 }
 //@ chunk-tyg7f3ek.js:503506-503546 placement
 function remoteBrowserRefusal(tool) {
   return refusesRemoteBrowserCallOutsideChecks(tool) ? REMOTE_BROWSER_OUTSIDE_CHECKS_REFUSED : undefined;
 }
 //@ chunk-tyg7f3ek.js:503546-503686 placement
-function guardRemoteBrowserMcpCall(callMCPTool, n) {
-  let r = remoteBrowserRefusal(n.client.name);
-  return r === undefined
-    ? callMCPTool(n)
+function guardRemoteBrowserMcpCall(callMCPTool, request) {
+  let refusal = remoteBrowserRefusal(request.client.name);
+  return refusal === undefined
+    ? callMCPTool(request)
     : Promise.reject(
         new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          r,
+          refusal,
           "cloud browser mcp_call refused before an attempt",
         ),
       );
@@ -58,56 +58,75 @@ function guardRemoteBrowserMcpCall(callMCPTool, n) {
 /**
  * 为跨会话 inbox 消息创建权限判定器：按权限模式与缓存判定是否可自动处理。
  */
-function createInboxPermissionChecker(e, n, r, s, storageV5, credentials) {
-  let S = new InboxVerdictCache();
-  let R;
-  let w;
-  return async (P) => {
+function createInboxPermissionChecker(
+  askHandler,
+  getAppState,
+  getConversation,
+  getToolContext,
+  storageV5,
+  credentials,
+) {
+  let verdictCache = new InboxVerdictCache();
+  let lastState;
+  let lastUserUuid;
+  return async (request) => {
     if (settingsGrantsConfined()) return false;
-    let L = n();
-    if (R !== L) {
-      S.clear();
-      R = L;
+    let appState = getAppState();
+    if (lastState !== appState) {
+      verdictCache.clear();
+      lastState = appState;
     }
-    switch (getModeBaseBehavior(L.mode, L.isBypassPermissionsModeAvailable)) {
+    switch (getModeBaseBehavior(appState.mode, appState.isBypassPermissionsModeAvailable)) {
       case "allow":
         return true;
       case "deny":
         return false;
       case "classify": {
         if (areCommandNetworkListsOffered()) return commandDomainDenyReason();
-        let x = sandboxHostDenyReason();
-        if (x !== undefined) return x;
-        let G = r();
-        let Z = lastRealUserUuid(G);
-        if (Z !== w) {
-          S.clear();
-          w = Z;
+        let hostDenyReason = sandboxHostDenyReason();
+        if (hostDenyReason !== undefined) return hostDenyReason;
+        let conversation = getConversation();
+        let userUuid = lastRealUserUuid(conversation);
+        if (userUuid !== lastUserUuid) {
+          verdictCache.clear();
+          lastUserUuid = userUuid;
         }
-        return S.getOrClassify(P.host, P.port, conversationSnapshot(G), () =>
-          classifySandboxNetworkHost(P.host, P.port, G, s(), L, new AbortController().signal, {
-            isSubagentLoop: isModelDrivenSession(undefined),
-            recordPresumed: true,
-            storageV5,
-            credentials,
-          }),
+        return verdictCache.getOrClassify(
+          request.host,
+          request.port,
+          conversationSnapshot(conversation),
+          () =>
+            classifySandboxNetworkHost(
+              request.host,
+              request.port,
+              conversation,
+              getToolContext(),
+              appState,
+              new AbortController().signal,
+              {
+                isSubagentLoop: isModelDrivenSession(undefined),
+                recordPresumed: true,
+                storageV5,
+                credentials,
+              },
+            ),
         );
       }
       case "ask":
-        return e(P);
+        return askHandler(request);
     }
   };
 }
 //@ chunk-tyg7f3ek.js:504247-504394 placement
 function createSandboxNetworkAsker(headlessIO) {
-  return async (n) => {
+  return async (request) => {
     headlessIO.emitPermissionDenied(
       SANDBOX_NETWORK_ACCESS_TOOL_NAME,
       randomUUID(),
       undefined,
       buildNoApprovalSurfaceDenial({
         behavior: "ask",
-        message: `Allow network connection to ${n.host}?`,
+        message: `Allow network connection to ${request.host}?`,
       }),
     );
     return false;

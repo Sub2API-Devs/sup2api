@@ -42,29 +42,29 @@ class UpdaterSessionState {
  */
 var packageManagerAutoUpdaterSlot = new HostScoped(() => new UpdaterSessionState());
 //@ chunk-tzghj6zv.js:38210-38254 placement
-function selectAutoUpdaterResult(Tt) {
-  return Tt.autoUpdaterResult;
+function selectAutoUpdaterResult(state) {
+  return state.autoUpdaterResult;
 }
 //@ chunk-tzghj6zv.js:38254-38359 placement
 /**
  * 自动更新结果是 install_failed 时把它清掉，返回新状态；否则原样返回。
  */
-function clearFailedAutoUpdaterResult(cr) {
-  return cr.autoUpdaterResult?.status === "install_failed"
+function clearFailedAutoUpdaterResult(state) {
+  return state.autoUpdaterResult?.status === "install_failed"
     ? {
-        ...cr,
+        ...state,
         autoUpdaterResult: null,
       }
-    : cr;
+    : state;
 }
 //@ chunk-tzghj6zv.js:38359-38669 placement
 /**
  * 返回包管理器的升级命令 argv：homebrew 用 brew upgrade --cask，winget 用 LOCALAPPDATA 下的 winget.exe 静默升级 Anthropic.ClaudeCode；其他返回 null。
  */
-function getPackageManagerUpgradeCommand(packageManager, h) {
+function getPackageManagerUpgradeCommand(packageManager, pkgName) {
   switch (packageManager) {
     case "homebrew":
-      return ["brew", "upgrade", "--cask", h ?? "claude-code"];
+      return ["brew", "upgrade", "--cask", pkgName ?? "claude-code"];
     case "winget": {
       let envLocalappdata = process.env.LOCALAPPDATA;
       return [
@@ -82,10 +82,10 @@ function getPackageManagerUpgradeCommand(packageManager, h) {
   }
 }
 //@ chunk-tzghj6zv.js:38669-38943 fingerprint = PackageManagerAutoUpdater (0.442)
-function PackageManagerAutoUpdater_2(d, h) {
-  switch (d) {
+function PackageManagerAutoUpdater_2(packageManager, pkgName) {
+  switch (packageManager) {
     case "homebrew":
-      return `brew upgrade ${h ?? "claude-code"}`;
+      return `brew upgrade ${pkgName ?? "claude-code"}`;
     case "winget":
       return "winget upgrade Anthropic.ClaudeCode";
     case "mise":

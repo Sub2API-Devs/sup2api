@@ -23,7 +23,13 @@ import {
 } from "../../utils/plugins/officialMarketplaceNames.js";
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 import { useActivePlugins } from "../../state/AppState.js";
-import { y, R, P, Q, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import {
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  init_react_production,
+} from "../../../vendor/react/cjs/react.production.js";
 import { useClock } from "../../ink/components/ClockContext.js";
 import {
   loadKnownMarketplacesWithDeclared,
@@ -104,13 +110,17 @@ import {
   AUTOUPDATE_SETTING_SOURCES_TEXT,
   getMarketplaceAutoUpdate,
 } from "../../utils/plugins/marketplaceAutoUpdate.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { KeyboardShortcutHint } from "../../components/design-system/KeyboardShortcutHint.js";
 import { commandSourceSession } from "../../utils/plugins/commandSourceErrors.js";
 import { isMarketplaceAutoUpdate, ANTHROPIC_PLUGIN_DIRECTORY } from "../../utils/plugins/schemas.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-vrb44rx7.js:103318-103453 placement
-var BUILTIN_MARKETPLACE_OFF_NOTICE = `${OFFICIAL_MARKETPLACE_DISPLAY} is off. Plugins you installed from it stay installed and keep updating. Turn it back on in /plugin \u2192 Marketplaces.`;
+var BUILTIN_MARKETPLACE_OFF_NOTICE; // deferred: uses OFFICIAL_MARKETPLACE_DISPLAY (../../utils/plugins/officialMarketplaceNames.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-vrb44rx7.js:103318", () => {
+  BUILTIN_MARKETPLACE_OFF_NOTICE = `${OFFICIAL_MARKETPLACE_DISPLAY} is off. Plugins you installed from it stay installed and keep updating. Turn it back on in /plugin \u2192 Marketplaces.`;
+});
 //@ chunk-vrb44rx7.js:103453-122462 fingerprint = ManageMarketplaces (0.48)
 function ManageMarketplaces({
   setViewState,
@@ -124,55 +134,55 @@ function ManageMarketplaces({
 }) {
   let { storageV5, credentials } = useTheme_2();
   let activePlugins = useActivePlugins();
-  let [marketplaceStates, setMarketplaceStates] = y([]);
-  let [_, J] = y([]);
-  let [pe, fe] = y({
+  let [marketplaceStates, setMarketplaceStates] = useState([]);
+  let [marketplaces, setMarketplaces] = useState([]);
+  let [sectionStates, setSectionStates] = useState({
     available: [],
     hosted: [],
     browseOnly: [],
   });
-  let [prev, ne] = y(null);
-  let hasAttemptedAutoAction = R(null);
-  let [loading, setLoading] = y(true);
-  let [selectedIndex, setSelectedIndex] = y(0);
-  let [je, ae] = y(false);
-  let [processError, setProcessError] = y(null);
-  let [successMessage, setSuccessMessage] = y(null);
-  let [progressMessage, setProgressMessage] = y(null);
-  let [internalView, setInternalView] = y("list");
-  let [selectedMarketplace, setSelectedMarketplace] = y(null);
-  let [detailsMenuIndex, setDetailsMenuIndex] = y("browse");
-  let an = R(false);
+  let [prev, setPrev] = useState(null);
+  let hasAttemptedAutoAction = useRef(null);
+  let [loading, setLoading] = useState(true);
+  let [selectedIndex, setSelectedIndex] = useState(0);
+  let [busy, setBusy] = useState(false);
+  let [processError, setProcessError] = useState(null);
+  let [successMessage, setSuccessMessage] = useState(null);
+  let [progressMessage, setProgressMessage] = useState(null);
+  let [internalView, setInternalView] = useState("list");
+  let [selectedMarketplace, setSelectedMarketplace] = useState(null);
+  let [detailsMenuIndex, setDetailsMenuIndex] = useState("browse");
+  let detailBusy = useRef(false);
   let clock = useClock();
-  let _e = R(undefined);
-  let qe = R(true);
-  let vt = R(false);
-  P(
+  let pendingAction = useRef(undefined);
+  let officialHintShown = useRef(true);
+  let cancelledRef = useRef(false);
+  useEffect(
     () => () => {
-      qe.current = false;
-      _e.current?.();
+      officialHintShown.current = false;
+      pendingAction.current?.();
     },
     [],
   );
-  P(() => {
+  useEffect(() => {
     async function loadMarketplaces() {
       try {
         let knownMarketplaces = await loadKnownMarketplacesWithDeclared(storageV5);
         let { enabled, disabled } = await loadAllPlugins(storageV5, credentials);
         let allPlugins = [...enabled, ...disabled];
-        J(Object.keys(getInstalledPlugins().plugins));
+        setMarketplaces(Object.keys(getInstalledPlugins().plugins));
         let { marketplaces, failures } = await loadMarketplacesWithErrors(knownMarketplaces, storageV5);
-        let Ce = await listClaudeAiMarketplaces(credentials).catch(() => null);
-        hasAttemptedAutoAction.current = Ce;
-        fe({
-          ...filterUnaddedClaudeAiMarketplaces(Ce, knownMarketplaces),
-          browseOnly: Ce?.browseOnly ?? [],
+        let claudeAiMarketplaces = await listClaudeAiMarketplaces(credentials).catch(() => null);
+        hasAttemptedAutoAction.current = claudeAiMarketplaces;
+        setSectionStates({
+          ...filterUnaddedClaudeAiMarketplaces(claudeAiMarketplaces, knownMarketplaces),
+          browseOnly: claudeAiMarketplaces?.browseOnly ?? [],
         });
-        let Ve = await withOfficialMarketplaceRow(
+        let rows = await withOfficialMarketplaceRow(
           buildMarketplaceRows(marketplaces, failures, allPlugins, await readClaudeAiMarketplaceRegistry()),
           knownMarketplaces,
         );
-        setMarketplaceStates(Ve);
+        setMarketplaceStates(rows);
         let successCount = count(marketplaces, (m) => m.data !== null);
         let errorResult = formatMarketplaceLoadingErrors(failures, successCount);
         if (errorResult)
@@ -182,23 +192,23 @@ function ManageMarketplaces({
           )
             setProcessError(errorResult.message);
           else throw Error(errorResult.message);
-        if (targetMarketplace && !an.current && !error) {
-          an.current = true;
-          let Jt =
+        if (targetMarketplace && !detailBusy.current && !error) {
+          detailBusy.current = true;
+          let blockedAction =
             action === "remove" && isOfficialMarketplaceSpelling(targetMarketplace)
-              ? listReservedNameRefusals(knownMarketplaces).filter(({ name: xt }) =>
+              ? listReservedNameRefusals(knownMarketplaces).filter(({ name }) =>
                   isOfficialMarketplaceName_2(targetMarketplace)
-                    ? isOfficialMarketplaceName_2(xt)
-                    : xt === targetMarketplace,
+                    ? isOfficialMarketplaceName_2(name)
+                    : name === targetMarketplace,
                 )
               : [];
-          let targetIndex = Ve.findIndex(
-            (xt) =>
-              xt.name === targetMarketplace ||
-              (xt.builtIn !== undefined && isOfficialMarketplaceName_2(targetMarketplace)),
+          let targetIndex = rows.findIndex(
+            (marketplace) =>
+              marketplace.name === targetMarketplace ||
+              (marketplace.builtIn !== undefined && isOfficialMarketplaceName_2(targetMarketplace)),
           );
-          if (Jt.length > 0) {
-            let xt = await removeMarketplaceWithReservedSiblings(
+          if (blockedAction.length > 0) {
+            let removed = await removeMarketplaceWithReservedSiblings(
               targetMarketplace,
               undefined,
               storageV5,
@@ -207,65 +217,67 @@ function ManageMarketplaces({
                 onlyIgnoredNameEntries: true,
               },
             );
-            let _t = [];
-            let Mt = false;
-            if (xt.kind === "ignored-plugin-directory-name-entry-removed") {
-              Mt = xt.removedNames.length > 0;
-              for (let removedName of xt.removedNames)
-                _t.push(removedMarketplaceMessage(removedName, isPluginDirectoryModeOn()));
-              let hn = blockedPluginsNotice(xt.disabledPluginIds, xt.disabledReason);
-              if (hn !== null) _t.push(hn);
-              activePlugins.removeErrorsOf(xt.removedPluginIds);
-              if (!Mt) _t.push(marketplaceEntryGoneText(targetMarketplace));
-            } else if (xt.kind === "removed") {
-              Mt = true;
-              _t.push(`Removed marketplace "${quotedPrintable(targetMarketplace)}"`);
-              activePlugins.removeErrorsOf(xt.removedPluginIds);
+            let failedNames = [];
+            let anyFailed = false;
+            if (removed.kind === "ignored-plugin-directory-name-entry-removed") {
+              anyFailed = removed.removedNames.length > 0;
+              for (let removedName of removed.removedNames)
+                failedNames.push(removedMarketplaceMessage(removedName, isPluginDirectoryModeOn()));
+              let blockedNotice = blockedPluginsNotice(removed.disabledPluginIds, removed.disabledReason);
+              if (blockedNotice !== null) failedNames.push(blockedNotice);
+              activePlugins.removeErrorsOf(removed.removedPluginIds);
+              if (!anyFailed) failedNames.push(marketplaceEntryGoneText(targetMarketplace));
+            } else if (removed.kind === "removed") {
+              anyFailed = true;
+              failedNames.push(`Removed marketplace "${quotedPrintable(targetMarketplace)}"`);
+              activePlugins.removeErrorsOf(removed.removedPluginIds);
             }
-            if (Mt)
+            if (anyFailed)
               logEvent("tengu_marketplace_removed", {
                 marketplace_name: marketplaceForTelemetry(targetMarketplace),
                 _PROTO_marketplace_name: targetMarketplace,
                 is_official_marketplace: isOfficialMarketplaceName_3(targetMarketplace),
               });
             refreshPluginCaches(storageV5, credentials);
-            setResult(stripInvisibleKeepEmoji(`${figures_default.tick} ${_t.join(" ")}`));
+            setResult(stripInvisibleKeepEmoji(`${figures_default.tick} ${failedNames.join(" ")}`));
             await onManageComplete();
             setViewState({
               type: "menu",
             });
           } else if (targetIndex >= 0) {
-            let xt = Ve[targetIndex];
-            if (xt?.builtIn === "blocked" && action !== undefined && action !== "confirm-remove") {
+            let targetRow = rows[targetIndex];
+            if (targetRow?.builtIn === "blocked" && action !== undefined && action !== "confirm-remove") {
               setSelectedIndex(targetIndex + 1);
               {
-                let _t = pluginDirectoryPolicyBlockHint();
-                if (action === "remove") setProcessError(formatPluginDirectoryBlockedMessage(_t));
-                else setProcessError(officialMarketplaceBlockedText(_t));
+                let policyHint = pluginDirectoryPolicyBlockHint();
+                if (action === "remove") setProcessError(formatPluginDirectoryBlockedMessage(policyHint));
+                else setProcessError(officialMarketplaceBlockedText(policyHint));
               }
-            } else if (xt?.builtIn === "blocked") {
-              let _t = `@${OFFICIAL_MARKETPLACE_NAME}`;
-              let found = Object.keys(getInstalledPlugins().plugins).find((key) => key.endsWith(_t));
+            } else if (targetRow?.builtIn === "blocked") {
+              let officialLabel = `@${OFFICIAL_MARKETPLACE_NAME}`;
+              let found = Object.keys(getInstalledPlugins().plugins).find((key) =>
+                key.endsWith(officialLabel),
+              );
               if (found) {
                 setViewState({
                   type: "manage-plugins",
-                  targetPlugin: found.slice(0, -_t.length),
+                  targetPlugin: found.slice(0, -officialLabel.length),
                   targetMarketplace: OFFICIAL_MARKETPLACE_NAME,
                 });
                 return;
               }
               setSelectedIndex(targetIndex + 1);
-            } else if (action === "confirm-remove" && xt) {
+            } else if (action === "confirm-remove" && targetRow) {
               setSelectedIndex(targetIndex + 1);
-              setSelectedMarketplace(xt);
-              _e.current?.();
-              setInternalView(xt.builtIn ? "details" : "confirm-remove");
-            } else if (action === "remove" && xt?.builtIn) {
+              setSelectedMarketplace(targetRow);
+              pendingAction.current?.();
+              setInternalView(targetRow.builtIn ? "details" : "confirm-remove");
+            } else if (action === "remove" && targetRow?.builtIn) {
               setSelectedIndex(targetIndex + 1);
               buildDetailsMenuOptions(false);
             } else if (action) {
               setSelectedIndex(targetIndex + 1);
-              let states = Ve.map((state, idx) =>
+              let states = rows.map((state, idx) =>
                 idx === targetIndex
                   ? {
                       ...state,
@@ -276,18 +288,18 @@ function ManageMarketplaces({
               );
               setMarketplaceStates(states);
               applyChanges(states);
-            } else if (xt) {
+            } else if (targetRow) {
               setSelectedIndex(targetIndex + 1);
-              setSelectedMarketplace(xt);
-              _e.current?.();
+              setSelectedMarketplace(targetRow);
+              pendingAction.current?.();
               setInternalView("details");
             }
           } else setError(`Marketplace not found: ${targetMarketplace}`);
         }
       } catch (err) {
-        let Ue = printableMessage(err);
-        setError(Ue);
-        setProcessError(Ue);
+        let errorText = printableMessage(err);
+        setError(errorText);
+        setProcessError(errorText);
       } finally {
         setLoading(false);
       }
@@ -296,37 +308,37 @@ function ManageMarketplaces({
   }, [targetMarketplace, action, error]);
   let hasPendingChanges = () => marketplaceStates.some((state) => state.pendingUpdate || state.pendingRemove);
   let getPendingCounts = () => {
-    let updateCount = count(marketplaceStates, (Ue) => Ue.pendingUpdate);
-    let removeCount = count(marketplaceStates, (Ue) => Ue.pendingRemove);
+    let updateCount = count(marketplaceStates, (state) => state.pendingUpdate);
+    let removeCount = count(marketplaceStates, (state) => state.pendingRemove);
     return {
       updateCount,
       removeCount,
     };
   };
   let applyChanges = async (states) => {
-    if (vt.current) return;
-    vt.current = true;
+    if (cancelledRef.current) return;
+    cancelledRef.current = true;
     let statesToProcess = states || marketplaceStates;
     let wasInDetailsView = internalView === "details";
-    ae(true);
+    setBusy(true);
     setProcessError(null);
     setSuccessMessage(null);
     setProgressMessage(null);
     try {
-      let dt = 0;
+      let updatedCount = 0;
       let removedCount = 0;
-      let wt = null;
-      let We = [];
-      let Ce = [];
+      let lastError = null;
+      let policyRefused = [];
+      let failedPlugins = [];
       let refreshedMarketplaces = new Set();
       for (let state of statesToProcess) {
         if (state.pendingRemove) {
           if (state.installedPlugins.length > 0)
             await updateSettingsForSourceWithTransform(
               "userSettings",
-              (de) => {
+              (sectionState) => {
                 let newEnabledPlugins = {
-                  ...de?.enabledPlugins,
+                  ...sectionState?.enabledPlugins,
                 };
                 for (let plugin of state.installedPlugins) {
                   let pluginId = formatPluginId(plugin.name, state.name);
@@ -339,12 +351,21 @@ function ManageMarketplaces({
               undefined,
               storageV5,
             );
-          let At = await removeMarketplaceWithReservedSiblings(state.name, undefined, storageV5, credentials);
+          let removedState = await removeMarketplaceWithReservedSiblings(
+            state.name,
+            undefined,
+            storageV5,
+            credentials,
+          );
           removedCount++;
-          if (At.kind !== "plugin-directory-built-in") activePlugins.removeErrorsOf(At.removedPluginIds);
-          if (At.kind === "ignored-plugin-directory-name-entry-removed") {
-            let de = blockedPluginsNotice(At.disabledPluginIds, At.disabledReason);
-            wt = de === null ? null : stripInvisibleKeepEmoji(de);
+          if (removedState.kind !== "plugin-directory-built-in")
+            activePlugins.removeErrorsOf(removedState.removedPluginIds);
+          if (removedState.kind === "ignored-plugin-directory-name-entry-removed") {
+            let removedNotice = blockedPluginsNotice(
+              removedState.disabledPluginIds,
+              removedState.disabledReason,
+            );
+            lastError = removedNotice === null ? null : stripInvisibleKeepEmoji(removedNotice);
           }
           logEvent("tengu_marketplace_removed", {
             marketplace_name: marketplaceForTelemetry(state.name),
@@ -361,19 +382,19 @@ function ManageMarketplaces({
             });
           } catch (error) {
             if (error instanceof CommandSourceError) {
-              We.push(state.name);
+              policyRefused.push(state.name);
               logForDebugging(
                 `Marketplace ${state.name} not updated (managed policy): ${errorMessage(error)}`,
               );
               continue;
             }
-            Ce.push(state.name);
+            failedPlugins.push(state.name);
             logForDebugging(`Marketplace ${state.name} could not be refreshed: ${errorMessage(error)}`, {
               level: "warn",
             });
             continue;
           }
-          dt++;
+          updatedCount++;
           refreshedMarketplaces.add(state.name.toLowerCase());
           logEvent("tengu_marketplace_updated", {
             marketplace_name: marketplaceForTelemetry(state.name),
@@ -385,10 +406,10 @@ function ManageMarketplaces({
       let updatedPluginCount = 0;
       let deferredPluginCount = 0;
       let policyBlockedPluginCount = 0;
-      let qt = 0;
-      let xt = 0;
-      let _t = [];
-      let Mt = [];
+      let blockedByPinner = 0;
+      let failedCount = 0;
+      let failedNames = [];
+      let failedStates = [];
       if (refreshedMarketplaces.size > 0) {
         let { updated, blocked, updateFailedCount, commandSourceSkipped } = await updatePluginsInMarketplaces(
           refreshedMarketplaces,
@@ -399,72 +420,80 @@ function ManageMarketplaces({
           storageV5,
         );
         updatedPluginCount = updated.length;
-        Mt = commandSourceSkipped;
-        deferredPluginCount = count(blocked, (mt) => mt.type === "autoupdate-deferred-entry-helper");
-        policyBlockedPluginCount = count(blocked, (mt) => mt.type === "autoupdate-disabled-by-policy");
-        qt = count(blocked, (mt) => mt.type === "autoupdate-blocked-by-pinner");
-        xt = updateFailedCount;
+        failedStates = commandSourceSkipped;
+        deferredPluginCount = count(blocked, (entry) => entry.type === "autoupdate-deferred-entry-helper");
+        policyBlockedPluginCount = count(blocked, (entry) => entry.type === "autoupdate-disabled-by-policy");
+        blockedByPinner = count(blocked, (entry) => entry.type === "autoupdate-blocked-by-pinner");
+        failedCount = updateFailedCount;
         let filtered = blocked.filter(
-          (mt) =>
-            mt.type !== "autoupdate-deferred-entry-helper" &&
-            mt.type !== "autoupdate-disabled-by-policy" &&
-            mt.type !== "autoupdate-blocked-by-pinner",
+          (entry) =>
+            entry.type !== "autoupdate-deferred-entry-helper" &&
+            entry.type !== "autoupdate-disabled-by-policy" &&
+            entry.type !== "autoupdate-blocked-by-pinner",
         );
         if (filtered.length > 0 || updated.length > 0)
           notifyPluginsAutoUpdated(updated, filtered, [], {
             announce: false,
           });
-        _t = filtered.flatMap((mt) => ("plugin" in mt && typeof mt.plugin === "string" ? [mt.plugin] : []));
+        failedNames = filtered.flatMap((entry) =>
+          "plugin" in entry && typeof entry.plugin === "string" ? [entry.plugin] : [],
+        );
       }
       refreshPluginCaches(storageV5, credentials);
       await onManageComplete();
-      if (!qe.current) return;
+      if (!officialHintShown.current) return;
       let updatedPluginIds = await loadKnownMarketplacesWithDeclared(storageV5);
       let { enabled, disabled } = await loadAllPlugins(storageV5, credentials);
-      if (!qe.current) return;
+      if (!officialHintShown.current) return;
       let allPlugins = [...enabled, ...disabled];
       let { marketplaces, failures } = await loadMarketplacesWithErrors(updatedPluginIds, storageV5);
-      if (!qe.current) return;
-      fe((plugin) => ({
+      if (!officialHintShown.current) return;
+      setSectionStates((plugin) => ({
         ...plugin,
         ...filterUnaddedClaudeAiMarketplaces(hasAttemptedAutoAction.current, updatedPluginIds),
       }));
-      let An = await withOfficialMarketplaceRow(
+      let refreshedRows = await withOfficialMarketplaceRow(
         buildMarketplaceRows(marketplaces, failures, allPlugins, await readClaudeAiMarketplaceRegistry()),
         updatedPluginIds,
       );
-      setMarketplaceStates(An);
-      setSelectedIndex((plugin) => Math.min(plugin, An.length));
+      setMarketplaceStates(refreshedRows);
+      setSelectedIndex((plugin) => Math.min(plugin, refreshedRows.length));
       if (wasInDetailsView && selectedMarketplace) {
-        let updatedMarketplace = An.find((At) => At.name === selectedMarketplace.name);
+        let updatedMarketplace = refreshedRows.find((row) => row.name === selectedMarketplace.name);
         if (updatedMarketplace) setSelectedMarketplace(updatedMarketplace);
       }
-      let Bn = [];
-      let Tn = wasInDetailsView ? displayMarketplaceName : escapedDisplayText;
-      if (dt > 0 || We.length > 0 || Ce.length > 0 || qt > 0 || xt > 0)
-        Bn.push(
+      let refreshedFailedNames = [];
+      let label = wasInDetailsView ? displayMarketplaceName : escapedDisplayText;
+      if (
+        updatedCount > 0 ||
+        policyRefused.length > 0 ||
+        failedPlugins.length > 0 ||
+        blockedByPinner > 0 ||
+        failedCount > 0
+      )
+        refreshedFailedNames.push(
           formatMarketplaceUpdateSummary({
-            updatedCount: dt,
+            updatedCount,
             updatedPluginCount,
             deferredPluginCount,
             policyBlockedPluginCount,
-            policyRefusedMarketplaces: We.map((ze) => Tn(ze)),
-            failedMarketplaces: Ce.map((ze) => Tn(ze)),
-            pinnedPluginCount: qt,
-            failedPluginCount: xt,
-            failedPluginNames: _t.map((ze) => Tn(ze)),
+            policyRefusedMarketplaces: policyRefused.map((name) => label(name)),
+            failedMarketplaces: failedPlugins.map((name) => label(name)),
+            pinnedPluginCount: blockedByPinner,
+            failedPluginCount: failedCount,
+            failedPluginNames: failedNames.map((name) => label(name)),
           }),
         );
-      if (Mt.length > 0) {
-        let ze = Mt.length;
-        let At = ze > 1;
-        let de = Mt.find(isSafeCliArg) ?? "";
-        let successMsg = `${At ? "(and the others) " : ""}to review (add --scope for a project/local install)`;
-        let fallback = `review and update ${At ? "each" : "it"} individually from the command line`;
-        Bn.push(
-          `${ze} command-sourced ${plural(ze, "plugin")} not updated here \u2014 ${runCommandHint(
+      if (failedStates.length > 0) {
+        let failedStateCount = failedStates.length;
+        let hasSeveralFailed = failedStateCount > 1;
+        let firstFailedName = failedStates.find(isSafeCliArg) ?? "";
+        let successMsg = `${hasSeveralFailed ? "(and the others) " : ""}to review (add --scope for a project/local install)`;
+        let fallback = `review and update ${hasSeveralFailed ? "each" : "it"} individually from the command line`;
+        refreshedFailedNames.push(
+          `${failedStateCount} command-sourced ${plural(failedStateCount, "plugin")} not updated here \u2014 ${runCommandHint(
             "plugin update",
-            de,
+            firstFailedName,
             {
               tail: successMsg,
               fallback,
@@ -472,22 +501,23 @@ function ManageMarketplaces({
           )}`,
         );
       }
-      if (removedCount > 0) Bn.push(`Removed ${removedCount} ${plural(removedCount, "marketplace")}`);
-      if (Bn.length > 0) {
-        let At = `${
+      if (removedCount > 0)
+        refreshedFailedNames.push(`Removed ${removedCount} ${plural(removedCount, "marketplace")}`);
+      if (refreshedFailedNames.length > 0) {
+        let statusLine = `${
           marketplaceUpdateIcon({
-            failedCount: Ce.length + xt,
-            updatedCount: dt + removedCount,
-            policyRefusedCount: We.length,
+            failedCount: failedPlugins.length + failedCount,
+            updatedCount: updatedCount + removedCount,
+            policyRefusedCount: policyRefused.length,
           }) ?? figures_default.warning
-        } ${Bn.join(", ")}`;
-        let de = wt === null ? At : `${wt} ${At}`;
-        if (wasInDetailsView) setSuccessMessage(de);
+        } ${refreshedFailedNames.join(", ")}`;
+        let statusWithPrefix = lastError === null ? statusLine : `${lastError} ${statusLine}`;
+        if (wasInDetailsView) setSuccessMessage(statusWithPrefix);
         else {
-          if (!qe.current) return;
-          setResult(de);
-          _e.current?.();
-          _e.current = clock.setTimeout(
+          if (!officialHintShown.current) return;
+          setResult(statusWithPrefix);
+          pendingAction.current?.();
+          pendingAction.current = clock.setTimeout(
             () =>
               setViewState({
                 type: "menu",
@@ -496,20 +526,20 @@ function ManageMarketplaces({
           );
         }
       } else if (!wasInDetailsView) {
-        if (!qe.current) return;
+        if (!officialHintShown.current) return;
         setViewState({
           type: "menu",
         });
       }
     } catch (err) {
       let errorMsg = printableMessage(err);
-      if (!qe.current) return;
+      if (!officialHintShown.current) return;
       setProcessError(errorMsg);
       setError(errorMsg);
     } finally {
-      vt.current = false;
-      if (qe.current) {
-        ae(false);
+      cancelledRef.current = false;
+      if (officialHintShown.current) {
+        setBusy(false);
         setProgressMessage(null);
       }
     }
@@ -527,7 +557,7 @@ function ManageMarketplaces({
     setMarketplaceStates(newStates);
     await applyChanges(newStates);
   };
-  let options = Q(() => {
+  let options = useMemo(() => {
     if (!selectedMarketplace) return [];
     if (selectedMarketplace.builtIn === "off")
       return [
@@ -582,10 +612,10 @@ function ManageMarketplaces({
     });
     return options;
   }, [selectedMarketplace]);
-  let Ut = R(false);
+  let detailOpen = useRef(false);
   let buildDetailsMenuOptions = async (marketplace) => {
-    if (Ut.current) return;
-    Ut.current = true;
+    if (detailOpen.current) return;
+    detailOpen.current = true;
     try {
       let pluginDirectoryState = await getPluginDirectoryState();
       try {
@@ -617,7 +647,7 @@ function ManageMarketplaces({
     } catch (error) {
       setProcessError(printableName(errorMessage(error), 300));
     }
-    Ut.current = false;
+    detailOpen.current = false;
   };
   let handleToggleAutoUpdate = async (marketplace) => {
     let newAutoUpdate = !marketplace.autoUpdate;
@@ -648,14 +678,14 @@ function ManageMarketplaces({
   useKeybinding(
     "confirm:no",
     () => {
-      _e.current?.();
+      pendingAction.current?.();
       setInternalView("list");
       setDetailsMenuIndex("browse");
     },
     {
       context: "Confirmation",
       isActive:
-        !je &&
+        !busy &&
         (internalView === "details" ||
           internalView === "confirm-remove" ||
           internalView === "confirm-add-claudeai"),
@@ -664,7 +694,7 @@ function ManageMarketplaces({
   useKeybinding(
     "confirm:no",
     () => {
-      _e.current?.();
+      pendingAction.current?.();
       setMarketplaceStates((prev) =>
         prev.map((state) => ({
           ...state,
@@ -676,7 +706,7 @@ function ManageMarketplaces({
     },
     {
       context: "Confirmation",
-      isActive: !je && internalView === "list" && hasPendingChanges(),
+      isActive: !busy && internalView === "list" && hasPendingChanges(),
     },
   );
   useKeybinding(
@@ -688,40 +718,42 @@ function ManageMarketplaces({
     },
     {
       context: "Confirmation",
-      isActive: !je && internalView === "list" && !hasPendingChanges(),
+      isActive: !busy && internalView === "list" && !hasPendingChanges(),
     },
   );
   MessageActionsKeybindings(
     {
       "select:previous": () => setSelectedIndex((prev) => Math.max(0, prev - 1)),
       "select:next": () => {
-        let totalItems = marketplaceStates.length + pe.available.length + pe.hosted.length + 1;
+        let totalItems =
+          marketplaceStates.length + sectionStates.available.length + sectionStates.hosted.length + 1;
         setSelectedIndex((prev) => Math.min(totalItems - 1, prev + 1));
       },
       "select:accept": () => {
-        _e.current?.();
-        let le = selectedIndex - 1;
-        let Te = pe.available[le - marketplaceStates.length];
-        let Ue = pe.hosted[le - marketplaceStates.length - pe.available.length];
+        pendingAction.current?.();
+        let listIndex = selectedIndex - 1;
+        let availableItem = sectionStates.available[listIndex - marketplaceStates.length];
+        let detailsContent =
+          sectionStates.hosted[listIndex - marketplaceStates.length - sectionStates.available.length];
         if (selectedIndex === 0)
           setViewState({
             type: "add-marketplace",
           });
         else if (hasPendingChanges()) applyChanges();
-        else if (Te)
+        else if (availableItem)
           setViewState({
             type: "add-marketplace",
             claudeAiListing: {
-              name: Te.name,
-              source: formatGitSourceSpec(Te.source),
+              name: availableItem.name,
+              source: formatGitSourceSpec(availableItem.source),
             },
           });
-        else if (Ue) {
-          ne(Ue);
+        else if (detailsContent) {
+          setPrev(detailsContent);
           setProcessError(null);
           setInternalView("confirm-add-claudeai");
         } else {
-          let marketplace = marketplaceStates[le];
+          let marketplace = marketplaceStates[listIndex];
           if (marketplace && marketplace.builtIn !== "blocked") {
             setSelectedMarketplace(marketplace);
             setInternalView("details");
@@ -732,20 +764,20 @@ function ManageMarketplaces({
     },
     {
       context: "Select",
-      isActive: !je && internalView === "list",
+      isActive: !busy && internalView === "list",
     },
   );
-  function mn(input) {
-    if (input.ctrl || input.meta || je) return;
+  function handleConfirmInput(input) {
+    if (input.ctrl || input.meta || busy) return;
     let marketplaceIndex = selectedIndex - 1;
     let builtIn = marketplaceStates[marketplaceIndex]?.builtIn;
     if (builtIn === "blocked") return;
     if (builtIn !== undefined && /^[udUD]$/.test(input.key)) {
-      let dt = marketplaceStates[marketplaceIndex];
-      if (dt && (builtIn === "off" || input.key === "d" || input.key === "D")) {
+      let state = marketplaceStates[marketplaceIndex];
+      if (state && (builtIn === "off" || input.key === "d" || input.key === "D")) {
         input.preventDefault();
-        _e.current?.();
-        setSelectedMarketplace(dt);
+        pendingAction.current?.();
+        setSelectedMarketplace(state);
         setInternalView("details");
         setDetailsMenuIndex(builtIn === "off" ? "turn-on" : "turn-off");
         return;
@@ -753,7 +785,7 @@ function ManageMarketplaces({
     }
     if ((input.key === "u" || input.key === "U") && marketplaceIndex >= 0) {
       input.preventDefault();
-      _e.current?.();
+      pendingAction.current?.();
       setMarketplaceStates((prev) =>
         prev.map((state, idx) =>
           idx === marketplaceIndex
@@ -770,13 +802,13 @@ function ManageMarketplaces({
       if (marketplace) {
         input.preventDefault();
         setSelectedMarketplace(marketplace);
-        _e.current?.();
+        pendingAction.current?.();
         setInternalView("confirm-remove");
       }
     }
   }
   let onSelect = (prev) => {
-    _e.current?.();
+    pendingAction.current?.();
     if (!selectedMarketplace) return;
     switch (prev) {
       case "browse":
@@ -809,35 +841,35 @@ function ManageMarketplaces({
         buildDetailsMenuOptions(prev === "turn-on");
     }
   };
-  function Ln(event) {
-    if (event.ctrl || event.meta || je) return;
+  function handleKeyDown(event) {
+    if (event.ctrl || event.meta || busy) return;
     if (event.key === "y" || event.key === "Y") {
       event.preventDefault();
-      _e.current?.();
+      pendingAction.current?.();
       confirmRemove();
     } else if (event.key === "n" || event.key === "N") {
       event.preventDefault();
-      _e.current?.();
+      pendingAction.current?.();
       setInternalView("list");
       setSelectedMarketplace(null);
     }
   }
-  function Mn(input) {
-    if (input.ctrl || input.meta || je) return;
+  function handleMenuInput(input) {
+    if (input.ctrl || input.meta || busy) return;
     if ((input.key === "y" || input.key === "Y") && prev) {
       input.preventDefault();
-      fn(prev);
+      addMarketplace(prev);
     } else if (input.key === "n" || input.key === "N") {
       input.preventDefault();
       setInternalView("list");
-      ne(null);
+      setPrev(null);
     }
   }
-  async function fn(prev) {
-    ae(true);
+  async function addMarketplace(prev) {
+    setBusy(true);
     setProcessError(null);
     try {
-      let { name: Te } = await addClaudeAiMarketplace(prev, {
+      let { name } = await addClaudeAiMarketplace(prev, {
         configured: await loadKnownMarketplacesWithDeclared(storageV5),
         credentials,
       });
@@ -846,16 +878,16 @@ function ManageMarketplaces({
       });
       refreshPluginCaches(storageV5, credentials);
       await onManageComplete();
-      if (!qe.current) return;
-      ne(null);
+      if (!officialHintShown.current) return;
+      setPrev(null);
       setViewState({
         type: "browse-marketplace",
-        targetMarketplace: Te,
+        targetMarketplace: name,
       });
     } catch (error) {
-      if (qe.current) setProcessError(printableMessage(error));
+      if (officialHintShown.current) setProcessError(printableMessage(error));
     } finally {
-      if (qe.current) ae(false);
+      if (officialHintShown.current) setBusy(false);
     }
   }
   if (loading)
@@ -864,9 +896,9 @@ function ManageMarketplaces({
     });
   if (
     marketplaceStates.length === 0 &&
-    pe.available.length === 0 &&
-    pe.hosted.length === 0 &&
-    pe.browseOnly.length === 0
+    sectionStates.available.length === 0 &&
+    sectionStates.hosted.length === 0 &&
+    sectionStates.browseOnly.length === 0
   )
     return jsxProd_default_2(Box, {
       flexDirection: "column",
@@ -931,7 +963,7 @@ function ManageMarketplaces({
     });
   if (internalView === "confirm-add-claudeai" && prev)
     return jsxProd_default_2(FocusColumn, {
-      onKeyDown: Mn,
+      onKeyDown: handleMenuInput,
       children: [
         jsxProd_default_2(Text, {
           bold: true,
@@ -967,7 +999,7 @@ function ManageMarketplaces({
                 ". Its plugins install from claude.ai.",
               ],
             }),
-            je &&
+            busy &&
               jsxProd_default(Box, {
                 marginTop: 1,
                 children: jsxProd_default(Text, {
@@ -982,7 +1014,7 @@ function ManageMarketplaces({
                   error: stripInvisibleKeepNewlines(processError),
                 }),
               }),
-            !je &&
+            !busy &&
               jsxProd_default(Box, {
                 marginTop: 1,
                 children: jsxProd_default_2(Text, {
@@ -1006,29 +1038,29 @@ function ManageMarketplaces({
       ],
     });
   if (internalView === "confirm-remove" && selectedMarketplace) {
-    let le = `@${selectedMarketplace.name}`;
-    let filtered = _.filter((state) => state.endsWith(le));
-    let Ue = new Map(filtered.map((input) => [input, input.slice(0, -le.length)]));
-    let dt = [];
+    let namePrefix = `@${selectedMarketplace.name}`;
+    let filtered = marketplaces.filter((state) => state.endsWith(namePrefix));
+    let nameByPluginId = new Map(filtered.map((input) => [input, input.slice(0, -namePrefix.length)]));
+    let installedRows = [];
     for (let installedPlugin of selectedMarketplace.installedPlugins) {
       let pluginName = findPluginName(filtered, installedPlugin.source);
       if (pluginName === undefined)
-        dt.push({
+        installedRows.push({
           id: installedPlugin.source,
           name: installedPlugin.name,
         });
-      else Ue.set(pluginName, installedPlugin.name);
+      else nameByPluginId.set(pluginName, installedPlugin.name);
     }
-    let Dt = [
-      ...[...Ue].map(([We, Ce]) => ({
-        id: We,
-        name: Ce,
+    let menuItems = [
+      ...[...nameByPluginId].map(([pluginId, name]) => ({
+        id: pluginId,
+        name,
       })),
-      ...dt,
+      ...installedRows,
     ];
-    let wt = Dt.length;
+    let menuCount = menuItems.length;
     return jsxProd_default_2(FocusColumn, {
-      onKeyDown: Ln,
+      onKeyDown: handleKeyDown,
       children: [
         jsxProd_default_2(Text, {
           bold: true,
@@ -1046,26 +1078,26 @@ function ManageMarketplaces({
         jsxProd_default_2(Box, {
           flexDirection: "column",
           children: [
-            wt > 0 &&
+            menuCount > 0 &&
               jsxProd_default(Box, {
                 marginTop: 1,
                 children: jsxProd_default_2(Text, {
                   color: "warning",
                   children: [
                     "This will also uninstall ",
-                    wt,
+                    menuCount,
                     " ",
-                    plural(wt, "plugin"),
+                    plural(menuCount, "plugin"),
                     " from this marketplace:",
                   ],
                 }),
               }),
-            wt > 0 &&
+            menuCount > 0 &&
               jsxProd_default(Box, {
                 flexDirection: "column",
                 marginTop: 1,
                 marginLeft: 2,
-                children: Dt.map((plugin) =>
+                children: menuItems.map((plugin) =>
                   jsxProd_default(
                     BulletRow,
                     {
@@ -1102,7 +1134,7 @@ function ManageMarketplaces({
     });
   }
   if (internalView === "details" && selectedMarketplace) {
-    let isUpdating = selectedMarketplace.pendingUpdate || je;
+    let isUpdating = selectedMarketplace.pendingUpdate || busy;
     return jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
@@ -1276,7 +1308,7 @@ function ManageMarketplaces({
   }
   let { updateCount, removeCount } = getPendingCounts();
   return jsxProd_default_2(FocusColumn, {
-    onKeyDown: mn,
+    onKeyDown: handleConfirmInput,
     children: [
       jsxProd_default(Box, {
         marginBottom: 1,
@@ -1416,22 +1448,22 @@ function ManageMarketplaces({
               state.name,
             );
           }),
-          pe.available.map((le, Te) => {
-            let Ue = marketplaceStates.length + Te + 1 === selectedIndex;
+          sectionStates.available.map((item, index) => {
+            let isSelected = marketplaceStates.length + index + 1 === selectedIndex;
             return jsxProd_default_2(
               TwoColumnRow,
               {
-                active: Ue,
+                active: isSelected,
                 flexDirection: "row",
                 gap: 1,
                 marginBottom: 1,
                 children: [
                   jsxProd_default_2(Text, {
-                    color: Ue ? "suggestion" : undefined,
+                    color: isSelected ? "suggestion" : undefined,
                     children: [
                       jsxProd_default_2(Text, {
                         "aria-hidden": true,
-                        children: [Ue ? figures_default.pointer : " ", " "],
+                        children: [isSelected ? figures_default.pointer : " ", " "],
                       }),
                       "+",
                     ],
@@ -1442,13 +1474,13 @@ function ManageMarketplaces({
                     children: [
                       jsxProd_default(Text, {
                         bold: true,
-                        children: stripInvisibleKeepEmoji(displayMarketplaceName(le.name)),
+                        children: stripInvisibleKeepEmoji(displayMarketplaceName(item.name)),
                       }),
                       jsxProd_default_2(Text, {
                         dimColor: true,
                         children: [
-                          stripInvisibleKeepEmoji(formatGitSourceSpec(le.source)),
-                          ` \xB7 available from claude.ai${le.scope ? ` (${le.scope})` : ""}`,
+                          stripInvisibleKeepEmoji(formatGitSourceSpec(item.source)),
+                          ` \xB7 available from claude.ai${item.scope ? ` (${item.scope})` : ""}`,
                           !hasPendingChanges() && " \xB7 Enter to add",
                         ],
                       }),
@@ -1456,25 +1488,26 @@ function ManageMarketplaces({
                   }),
                 ],
               },
-              `claudeai:${le.name}`,
+              `claudeai:${item.name}`,
             );
           }),
-          pe.hosted.map((state, idx) => {
-            let Ue = marketplaceStates.length + pe.available.length + idx + 1 === selectedIndex;
+          sectionStates.hosted.map((state, idx) => {
+            let browseOnlyRows =
+              marketplaceStates.length + sectionStates.available.length + idx + 1 === selectedIndex;
             return jsxProd_default_2(
               TwoColumnRow,
               {
-                active: Ue,
+                active: browseOnlyRows,
                 flexDirection: "row",
                 gap: 1,
                 marginBottom: 1,
                 children: [
                   jsxProd_default_2(Text, {
-                    color: Ue ? "suggestion" : undefined,
+                    color: browseOnlyRows ? "suggestion" : undefined,
                     children: [
                       jsxProd_default_2(Text, {
                         "aria-hidden": true,
-                        children: [Ue ? figures_default.pointer : " ", " "],
+                        children: [browseOnlyRows ? figures_default.pointer : " ", " "],
                       }),
                       "+",
                     ],
@@ -1503,7 +1536,7 @@ function ManageMarketplaces({
               `claudeai-hosted:${state.marketplaceId}`,
             );
           }),
-          pe.browseOnly.map((le) =>
+          sectionStates.browseOnly.map((item) =>
             jsxProd_default(
               Box,
               {
@@ -1511,10 +1544,10 @@ function ManageMarketplaces({
                 paddingLeft: 4,
                 children: jsxProd_default_2(Text, {
                   dimColor: true,
-                  children: [stripInvisibleKeepEmoji(noCliNameLabel(le)), " ", "\xB7 browse on claude.ai"],
+                  children: [stripInvisibleKeepEmoji(noCliNameLabel(item)), " ", "\xB7 browse on claude.ai"],
                 }),
               },
-              `claudeai-browse:${le.name}`,
+              `claudeai-browse:${item.name}`,
             ),
           ),
         ],
@@ -1553,7 +1586,7 @@ function ManageMarketplaces({
               }),
           ],
         }),
-      je &&
+      busy &&
         jsxProd_default(Box, {
           marginTop: 1,
           children: jsxProd_default(Text, {
@@ -1579,7 +1612,7 @@ function ManageMarketplaces({
 }
 //@ chunk-vrb44rx7.js:122462-123736 fingerprint = ManageMarketplacesKeyHints (0.783)
 function ManageMarketplacesKeyHints(props) {
-  let $ = w(23);
+  let $ = useMemoCache(23);
   let { exitState, hasPendingActions, isOnInertRow, builtInRow } = props;
   if (exitState.pending) {
     let t1;
@@ -1688,8 +1721,10 @@ function ManageMarketplacesKeyHints(props) {
   return t7;
 }
 //@ chunk-vrb44rx7.js:123736-123791 layout
-function getMarketplaceDisplayName(i) {
-  return i.builtIn !== undefined ? OFFICIAL_MARKETPLACE_DISPLAY : displayMarketplaceName(i.name);
+function getMarketplaceDisplayName(marketplace) {
+  return marketplace.builtIn !== undefined
+    ? OFFICIAL_MARKETPLACE_DISPLAY
+    : displayMarketplaceName(marketplace.name);
 }
 //@ chunk-vrb44rx7.js:123791-124310 layout
 /**
@@ -1699,9 +1734,9 @@ async function withOfficialMarketplaceRow(marketplaces, knownMarketplaces) {
   {
     let officialStatus = await getPluginDirectoryState();
     if (officialStatus === "unavailable") return marketplaces;
-    let C = knownMarketplaces[OFFICIAL_MARKETPLACE_NAME];
+    let officialMarketplace = knownMarketplaces[OFFICIAL_MARKETPLACE_NAME];
     if (officialStatus === "blocked")
-      return C && !isPluginDirectorySource(C.source)
+      return officialMarketplace && !isPluginDirectorySource(officialMarketplace.source)
         ? marketplaces
         : [
             {
@@ -1712,8 +1747,8 @@ async function withOfficialMarketplaceRow(marketplaces, knownMarketplaces) {
             },
             ...marketplaces,
           ];
-    if (C) {
-      if (!isPluginDirectorySource(C.source)) return marketplaces;
+    if (officialMarketplace) {
+      if (!isPluginDirectorySource(officialMarketplace.source)) return marketplaces;
       let size = commandSourceSession().catalogEntryNames?.size ?? 0;
       return marketplaces.map((marketplace) =>
         marketplace.name === OFFICIAL_MARKETPLACE_NAME
@@ -1746,57 +1781,63 @@ async function withOfficialMarketplaceRow(marketplaces, knownMarketplaces) {
 function buildMarketplaceRows(marketplaces, failures, allPlugins, claudeAiMarketplaceRegistry) {
   let declaredMarketplaces = getDeclaredMarketplaces();
   return marketplaces
-    .map(({ name: D, config, data: L }) => {
-      let filtered = allPlugins.filter((_) => _.source.endsWith(`@${D}`));
+    .map(({ name: marketplaceName, config, data }) => {
+      let filtered = allPlugins.filter((plugin) => plugin.source.endsWith(`@${marketplaceName}`));
       let source = getMarketplaceSourceDisplay(config.source);
-      let V;
+      let sourceLabel;
       if (config.source.source === "claudeai") {
-        source = formatClaudeAiMarketplaceLabel(claudeAiMarketplaceRegistry[D]);
-        let _ =
-          L === null
+        source = formatClaudeAiMarketplaceLabel(claudeAiMarketplaceRegistry[marketplaceName]);
+        let claudeAiNote =
+          data === null
             ? 0
-            : count(filtered, (J) => {
-                let found = L.plugins.find((plugin) => plugin.name === J.name);
+            : count(filtered, (plugin) => {
+                let found = data.plugins.find((plugin_2) => plugin_2.name === plugin.name);
                 return (
                   found !== undefined &&
                   typeof found.source === "object" &&
                   found.source.source === "claudeai" &&
                   found.source.version !== "" &&
-                  basename(J.path).replace(/\.zip$/, "") !== found.source.version
+                  basename(plugin.path).replace(/\.zip$/, "") !== found.source.version
                 );
               });
-        V =
-          failures.find((J) => J.name === D)?.error ??
-          (_ > 0
-            ? `${_} plugin ${plural(_, "update")} available \xB7 update the marketplace to apply`
+        sourceLabel =
+          failures.find((failure) => failure.name === marketplaceName)?.error ??
+          (claudeAiNote > 0
+            ? `${claudeAiNote} plugin ${plural(claudeAiNote, "update")} available \xB7 update the marketplace to apply`
             : undefined);
       }
-      let marketplaceAutoUpdate = getMarketplaceAutoUpdate(D, declaredMarketplaces);
+      let marketplaceAutoUpdate = getMarketplaceAutoUpdate(marketplaceName, declaredMarketplaces);
       return {
-        name: D,
+        name: marketplaceName,
         source,
-        ...(V !== undefined && {
-          note: V,
+        ...(sourceLabel !== undefined && {
+          note: sourceLabel,
         }),
         lastUpdated: config.lastUpdated,
-        pluginCount: L?.plugins.length,
+        pluginCount: data?.plugins.length,
         installedPlugins: filtered,
         pendingUpdate: false,
         pendingRemove: false,
-        autoUpdate: isMarketplaceAutoUpdate(D, config, marketplaceAutoUpdate),
+        autoUpdate: isMarketplaceAutoUpdate(marketplaceName, config, marketplaceAutoUpdate),
         ...(marketplaceAutoUpdate === false && {
           autoUpdateDeclaredOff: true,
         }),
       };
     })
-    .sort((D, U) => {
-      if (D.name === ANTHROPIC_PLUGIN_DIRECTORY) return -1;
-      if (U.name === ANTHROPIC_PLUGIN_DIRECTORY) return 1;
-      return D.name.localeCompare(U.name);
+    .sort((a, b) => {
+      if (a.name === ANTHROPIC_PLUGIN_DIRECTORY) return -1;
+      if (b.name === ANTHROPIC_PLUGIN_DIRECTORY) return 1;
+      return a.name.localeCompare(b.name);
     });
 }
 //@ chunk-vrb44rx7.js:125186-125190 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vrb44rx7.js:125186", () => {
+  init_react_production();
+});
 //@ chunk-vrb44rx7.js:125190-125194 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vrb44rx7.js:125190", () => {
+  init_react_production();
+});
 export { ManageMarketplaces };

@@ -22,7 +22,16 @@ import { SYNCED } from "../../utils/telemetry/pluginTelemetry.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { logError } from "../../utils/log.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, _enum, array, E, M, record, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  stringSchema,
+  _enum,
+  array,
+  numberSchema,
+  booleanSchema,
+  record,
+  unknown,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   HOOK_EVENTS,
   truncateHookOutput,
@@ -52,9 +61,10 @@ import { ServedCallError } from "../mcpServe/servedCallError.js";
 import { invalidateCommandNames } from "../../utils/settings/commandSyncNames.js";
 import { isBuiltinPluginId } from "../../plugins/builtinPlugins.js";
 import { convertPluginHooksToMatchers } from "../../utils/plugins/loadPluginHooks.js";
-import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { isManagedOrAllowlistedHook } from "../../utils/hooks/managedHooksOnly.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-bzb0qnrm.js:1583-1630 placement
 /**
@@ -78,13 +88,15 @@ function pluginHookListingStatus(
     if (!syncSettingsEnabled() || getPluginsSyncVetoed()) return "sync_off";
     if (accountListing === "refused") return "listing_refused";
     if (lastCompleteList === null || lastSyncedLaneLoad === null) return "unknown";
-    let c = stripInvisibleChars(pluginId);
-    let a = new Set();
-    for (let [h, S] of lastCompleteList.dirsById)
-      for (let P of S) if (stripInvisibleChars(syncedPluginFolderId(P)) === c) a.add(h);
-    if (a.size === 0) return "absent_from_listing";
+    let normalizedId = stripInvisibleChars(pluginId);
+    let lines = new Set();
+    for (let [bucket, items] of lastCompleteList.dirsById)
+      for (let item of items)
+        if (stripInvisibleChars(syncedPluginFolderId(item)) === normalizedId) lines.add(bucket);
+    if (lines.size === 0) return "absent_from_listing";
     let found = lastSyncedLaneLoad.find(
-      (h) => h.bucket === lastCompleteList.bucket && h.pluginId !== undefined && a.has(h.pluginId),
+      (load) =>
+        load.bucket === lastCompleteList.bucket && load.pluginId !== undefined && lines.has(load.pluginId),
     );
     switch (found?.outcome) {
       case undefined:
@@ -92,8 +104,10 @@ function pluginHookListingStatus(
       case "held_back":
         return "held_back";
       case "not_loaded": {
-        let h = joinPluginId(found.pluginName, SYNCED);
-        return warnings.some((S) => S.type === "synced-plugin-shadowed" && S.source === h)
+        let qualifiedName = joinPluginId(found.pluginName, SYNCED);
+        return warnings.some(
+          (warning) => warning.type === "synced-plugin-shadowed" && warning.source === qualifiedName,
+        )
           ? "local_copy_wins"
           : "not_loaded";
       }
@@ -110,81 +124,103 @@ function pluginHookListingStatus(
 /**
  * RunPluginHook/RunPluginHookIf 的输入 schema 与相关 schema（调用方、jsonInput）以及路径字段名正则。
  */
-var RUNPLUGINHOOK = "RunPluginHook";
-var RUNPLUGINHOOKIF = "RunPluginHookIf";
-var runPluginHookInputSchema = DoctorLazy(() =>
-  u({
-    pluginId: string(),
-    hookEvent: _enum(HOOK_EVENTS),
-    command: string(),
-    args: array(string()).optional(),
-    if: string().optional(),
-    timeout: E().positive().optional(),
-    jsonInput: string(),
-    hookIndex: E().int().nonnegative().optional(),
-    isOrgRequired: M().optional(),
-  }),
-);
-var remoteHookCallerSchema = DoctorLazy(() =>
-  u({
-    session_id: string().regex(SAFE_CALLER_ID),
-    cwd: string(),
-    effort: u({
-      level: string().regex(SAFE_CALLER_ID),
-    }).optional(),
-  }),
-);
-var jsonInputSchema = DoctorLazy(() => record(string(), unknown()));
-var PATH_FIELD_NAME_REGEX = /(?:^|_)(?:path|dir|cwd|directory)$/;
+var RUNPLUGINHOOK; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var RUNPLUGINHOOKIF;
+var runPluginHookInputSchema;
+var remoteHookCallerSchema;
+var jsonInputSchema;
+var PATH_FIELD_NAME_REGEX;
+deferInit("chunk-bzb0qnrm.js:2385", () => {
+  RUNPLUGINHOOK = "RunPluginHook";
+  RUNPLUGINHOOKIF = "RunPluginHookIf";
+  runPluginHookInputSchema = DoctorLazy(() =>
+    objectSchema({
+      pluginId: stringSchema(),
+      hookEvent: _enum(HOOK_EVENTS),
+      command: stringSchema(),
+      args: array(stringSchema()).optional(),
+      if: stringSchema().optional(),
+      timeout: numberSchema().positive().optional(),
+      jsonInput: stringSchema(),
+      hookIndex: numberSchema().int().nonnegative().optional(),
+      isOrgRequired: booleanSchema().optional(),
+    }),
+  );
+  remoteHookCallerSchema = DoctorLazy(() =>
+    objectSchema({
+      session_id: stringSchema().regex(SAFE_CALLER_ID),
+      cwd: stringSchema(),
+      effort: objectSchema({
+        level: stringSchema().regex(SAFE_CALLER_ID),
+      }).optional(),
+    }),
+  );
+  jsonInputSchema = DoctorLazy(() => record(stringSchema(), unknown()));
+  PATH_FIELD_NAME_REGEX = /(?:^|_)(?:path|dir|cwd|directory)$/;
+});
 //@ chunk-bzb0qnrm.js:2806-2887 placement
 /**
  * 钩子输入里的路径类字段与钩子结果字节上限。
  */
-var PATH_LIKE_FIELDS = new Set(["file_path", "trigger_file_path", "parent_file_path"]);
-var MAX_HOOK_RESULT_BYTES = 1048576;
+var PATH_LIKE_FIELDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_HOOK_RESULT_BYTES;
+deferInit("chunk-bzb0qnrm.js:2806", () => {
+  PATH_LIKE_FIELDS = new Set(["file_path", "trigger_file_path", "parent_file_path"]);
+  MAX_HOOK_RESULT_BYTES = 1048576;
+});
 //@ chunk-bzb0qnrm.js:2887-3448 placement
 /**
  * 远程钩子执行的提示文字与限制：策略不可读/会阻止启动、输出过长、需截断的文本字段与输出字段、被丢弃的字段。
  */
-var POLICY_UNREADABLE_TEXT = "this machine's policy cannot be read for now";
-var POLICY_BLOCKS_START_TEXT = "this machine's policy would stop claude from starting";
-var HOOK_OUTPUT_CUT_TEXT = "The hook printed more than is passed on.";
-var HOOK_OUTPUT_MAX_CHARS = 16384;
-var HOOK_TEXT_FIELDS = new Set([
-  "reason",
-  "stopReason",
-  "systemMessage",
-  "additionalContext",
-  "permissionDecisionReason",
-  "message",
-  "sessionTitle",
-  "classifierContext",
-]);
-var HOOK_UPDATED_OUTPUT_FIELDS = new Set(["updatedToolOutput", "updatedMCPToolOutput"]);
-var HOOK_OUTPUT_DROPPED_TEXT =
-  "A hook changed a tool's result, and the change was too long to pass on, so Claude read the result as the tool gave it.";
-var HOOK_DROPPED_FIELDS = new Set(["terminalSequence", "rewakeSummary", "metrics", "watchPaths"]);
+var POLICY_UNREADABLE_TEXT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var POLICY_BLOCKS_START_TEXT;
+var HOOK_OUTPUT_CUT_TEXT;
+var HOOK_OUTPUT_MAX_CHARS;
+var HOOK_TEXT_FIELDS;
+var HOOK_UPDATED_OUTPUT_FIELDS;
+var HOOK_OUTPUT_DROPPED_TEXT;
+var HOOK_DROPPED_FIELDS;
+deferInit("chunk-bzb0qnrm.js:2887", () => {
+  POLICY_UNREADABLE_TEXT = "this machine's policy cannot be read for now";
+  POLICY_BLOCKS_START_TEXT = "this machine's policy would stop claude from starting";
+  HOOK_OUTPUT_CUT_TEXT = "The hook printed more than is passed on.";
+  HOOK_OUTPUT_MAX_CHARS = 16384;
+  HOOK_TEXT_FIELDS = new Set([
+    "reason",
+    "stopReason",
+    "systemMessage",
+    "additionalContext",
+    "permissionDecisionReason",
+    "message",
+    "sessionTitle",
+    "classifierContext",
+  ]);
+  HOOK_UPDATED_OUTPUT_FIELDS = new Set(["updatedToolOutput", "updatedMCPToolOutput"]);
+  HOOK_OUTPUT_DROPPED_TEXT =
+    "A hook changed a tool's result, and the change was too long to pass on, so Claude read the result as the tool gave it.";
+  HOOK_DROPPED_FIELDS = new Set(["terminalSequence", "rewakeSummary", "metrics", "watchPaths"]);
+});
 //@ chunk-bzb0qnrm.js:3448-3949 placement
 /**
  * 让远程钩子执行结果不超过大小上限：依次替换 output、stderr、stdout 为截断说明；可安全放行的事件直接改为失败结果。
  */
 function fitHookResult(result, event) {
   if (byteLengthOfJson(result) <= MAX_HOOK_RESULT_BYTES) return result;
-  let r = {
+  let trimmed = {
     ...result,
     output: HOOK_OUTPUT_CUT_TEXT,
     missingScript: undefined,
     repairedInput: undefined,
   };
-  if (byteLengthOfJson(r) <= MAX_HOOK_RESULT_BYTES) return r;
-  let s = {
-    ...r,
+  if (byteLengthOfJson(trimmed) <= MAX_HOOK_RESULT_BYTES) return trimmed;
+  let withStderr = {
+    ...trimmed,
     stderr: HOOK_OUTPUT_CUT_TEXT,
     ...(isElicitationFailureExit(event, result.status) && {
       stdioClosedWithoutEnd: true,
     }),
   };
-  if (byteLengthOfJson(s) <= MAX_HOOK_RESULT_BYTES) return s;
+  if (byteLengthOfJson(withStderr) <= MAX_HOOK_RESULT_BYTES) return withStderr;
   if (
     result.status !== 2 &&
     !result.stdioIncomplete &&
@@ -202,97 +238,114 @@ function fitHookResult(result, event) {
         aborted: true,
       }),
     };
-  let i = {
-    ...s,
+  let noStdout = {
+    ...withStderr,
     stdout: "",
     stdioClosedWithoutEnd: true,
   };
-  let c = {
-    ...i,
+  let keepStderr = {
+    ...noStdout,
     stderr: result.stderr,
   };
-  return result.stderr !== "" && byteLengthOfJson(c) <= MAX_HOOK_RESULT_BYTES ? c : i;
+  return result.stderr !== "" && byteLengthOfJson(keepStderr) <= MAX_HOOK_RESULT_BYTES
+    ? keepStderr
+    : noStdout;
 }
 //@ chunk-bzb0qnrm.js:3949-4413 placement
 /**
  * 钩子标准输出超限时重写：解析为 JSON 则截断字段后重新序列化（阻断类结果保留关键字段），否则截断原文。
  */
-function shrinkHookStdout(e, n) {
+function shrinkHookStdout(result, event) {
   if (
-    e.status === 2 ||
-    e.aborted ||
-    e.stdioIncomplete ||
-    e.stdioClosedWithoutEnd ||
-    fitHookResult(e, n).stdout === e.stdout
+    result.status === 2 ||
+    result.aborted ||
+    result.stdioIncomplete ||
+    result.stdioClosedWithoutEnd ||
+    fitHookResult(result, event).stdout === result.stdout
   )
-    return e;
-  let { json, validationError } = parseHookOutput(e.stdout);
+    return result;
+  let { json, validationError } = parseHookOutput(result.stdout);
   if (json !== undefined)
     try {
-      let i = dropMcpUpdatedOutput(truncateHookOutput(json));
-      let c = jsonStringify(i);
-      let a = i.continue === false || i.decision === "block";
+      let shrunk = dropMcpUpdatedOutput(truncateHookOutput(json));
+      let text = jsonStringify(shrunk);
+      let mustKeep = shrunk.continue === false || shrunk.decision === "block";
       return {
-        ...e,
+        ...result,
         stdout:
-          a &&
+          mustKeep &&
           fitHookResult(
             {
-              ...e,
-              stdout: c,
+              ...result,
+              stdout: text,
             },
-            n,
-          ).stdout !== c
-            ? jsonStringify(SyncHookJSONOutputSchema(i))
-            : c,
+            event,
+          ).stdout !== text
+            ? jsonStringify(SyncHookJSONOutputSchema(shrunk))
+            : text,
       };
     } catch (error) {
       logForDebugging(`a hook's answer could not be written again: ${errorMessage(error)}`, {
         level: "error",
       });
-      return e;
+      return result;
     }
   return {
-    ...e,
-    stdout: validationError === undefined ? truncateHookField(e.stdout) : `${truncateHookField(e.stdout)}}`,
+    ...result,
+    stdout:
+      validationError === undefined
+        ? truncateHookField(result.stdout)
+        : `${truncateHookField(result.stdout)}}`,
   };
 }
 //@ chunk-bzb0qnrm.js:4413-5143 placement
 /**
  * 远程插件钩子被拒绝时的固定文案（插件未结算、无此插件、无此钩子、钩子被禁用、条件无法判断）与结果 schema。
  */
-var RUN_PLUGIN_HOOK_REFUSALS = DoctorLazy(() =>
-  u({
-    stdout: string(),
-    stderr: string(),
-    output: string(),
-    status: E(),
-    aborted: M().optional(),
-    spawnFailed: M().optional(),
-    notStarted: M().optional(),
-    stdioIncomplete: M().optional(),
-    stdioClosedWithoutEnd: M().optional(),
-    runsInBackground: M().optional(),
-    missingScript: u({
-      scriptPath: string().max(MAX_HOOK_RESULT_BYTES),
-      cutFrom: string().max(MAX_HOOK_RESULT_BYTES).optional(),
-      isRepeat: M(),
-    }).optional(),
-    repairedInput: jsonInputSchema().optional(),
-  }),
-);
-var PLUGINS_NOT_SETTLED_TEXT = "this machine has not settled its plugins yet: ask again";
-var NO_ENABLED_PLUGIN_TEXT = "no enabled plugin with that id";
-var ANTHROPIC_PLUGINABSENCE = "anthropic/pluginAbsence";
-var NO_SUCH_HOOK_TEXT = "the plugin declares no such hook for that event here";
-var HOOKS_DISABLED_TEXT =
-  "this machine keeps the plugin's hooks off (its settings or policy, how it was launched, or a folder nobody has trusted)";
-var HOOK_CONDITION_UNKNOWN_TEXT = "this machine could not judge the hook's condition";
+var RUN_PLUGIN_HOOK_REFUSALS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var PLUGINS_NOT_SETTLED_TEXT;
+var NO_ENABLED_PLUGIN_TEXT;
+var ANTHROPIC_PLUGINABSENCE;
+var NO_SUCH_HOOK_TEXT;
+var HOOKS_DISABLED_TEXT;
+var HOOK_CONDITION_UNKNOWN_TEXT;
+deferInit("chunk-bzb0qnrm.js:4413", () => {
+  RUN_PLUGIN_HOOK_REFUSALS = DoctorLazy(() =>
+    objectSchema({
+      stdout: stringSchema(),
+      stderr: stringSchema(),
+      output: stringSchema(),
+      status: numberSchema(),
+      aborted: booleanSchema().optional(),
+      spawnFailed: booleanSchema().optional(),
+      notStarted: booleanSchema().optional(),
+      stdioIncomplete: booleanSchema().optional(),
+      stdioClosedWithoutEnd: booleanSchema().optional(),
+      runsInBackground: booleanSchema().optional(),
+      missingScript: objectSchema({
+        scriptPath: stringSchema().max(MAX_HOOK_RESULT_BYTES),
+        cutFrom: stringSchema().max(MAX_HOOK_RESULT_BYTES).optional(),
+        isRepeat: booleanSchema(),
+      }).optional(),
+      repairedInput: jsonInputSchema().optional(),
+    }),
+  );
+  PLUGINS_NOT_SETTLED_TEXT = "this machine has not settled its plugins yet: ask again";
+  NO_ENABLED_PLUGIN_TEXT = "no enabled plugin with that id";
+  ANTHROPIC_PLUGINABSENCE = "anthropic/pluginAbsence";
+  NO_SUCH_HOOK_TEXT = "the plugin declares no such hook for that event here";
+  HOOKS_DISABLED_TEXT =
+    "this machine keeps the plugin's hooks off (its settings or policy, how it was launched, or a folder nobody has trusted)";
+  HOOK_CONDITION_UNKNOWN_TEXT = "this machine could not judge the hook's condition";
+});
 //@ chunk-bzb0qnrm.js:5143-5164 placement
 /**
  * 远程插件钩子调用失败时抛出的错误（携带插件缺席原因等元数据）。
  */
-class PluginHookServedCallError extends ServedCallError {}
+let PluginHookServedCallError; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bzb0qnrm.js:5143", () => {
+  PluginHookServedCallError = class PluginHookServedCallError extends ServedCallError {};
+});
 //@ chunk-bzb0qnrm.js:5164-5187 placement
 /**
  * 远程插件钩子的通用错误类。
@@ -302,32 +355,33 @@ class RemotePluginHookError extends Error {}
 /**
  * 在本机运行另一台机器（远程会话）发来的插件命令钩子：校验插件可用与同步状态、查找匹配的 command 钩子、检查 if 条件、组织托管设置未读时按事件拒绝或挂起，然后执行。
  */
-async function runRemotePluginHook(e, n, r) {
-  let { storageV5, credentials } = n;
-  let signal = n.abortController.signal;
+async function runRemotePluginHook(input, toolUseContext, awaitPluginSync) {
+  let { storageV5, credentials } = toolUseContext;
+  let signal = toolUseContext.abortController.signal;
   let {
     pluginId,
     hookEvent,
     command,
     args,
-    if: P,
+    if: condition,
     timeout,
     jsonInput,
     hookIndex,
     isOrgRequired,
-  } = runPluginHookInputSchema().parse(e);
+  } = runPluginHookInputSchema().parse(input);
   invalidateCommandNames();
   assertPluginHooksAllowed(pluginId);
   if (isBuiltinPluginId(pluginId)) throw Error("a built-in plugin's hooks are not run for another machine");
   let enabledPlugin = await findEnabledPlugin(pluginId, storageV5, credentials);
-  if (enabledPlugin.plugin === undefined && r !== undefined) {
-    let k = await r(async () => {
+  if (enabledPlugin.plugin === undefined && awaitPluginSync !== undefined) {
+    let syncResult = await awaitPluginSync(async () => {
       enabledPlugin = await findEnabledPlugin(pluginId, storageV5, credentials);
       return enabledPlugin.plugin !== undefined;
     });
     if (enabledPlugin.plugin === undefined)
       enabledPlugin = await findEnabledPlugin(pluginId, storageV5, credentials);
-    if (enabledPlugin.plugin === undefined) assertPluginSyncSettled(pluginId, k, n.session);
+    if (enabledPlugin.plugin === undefined)
+      assertPluginSyncSettled(pluginId, syncResult, toolUseContext.session);
   }
   let { plugin } = enabledPlugin;
   if (plugin === undefined)
@@ -337,7 +391,7 @@ async function runRemotePluginHook(e, n, r) {
         ? {
             [ANTHROPIC_PLUGINABSENCE]: pluginHookListingStatus(
               pluginId,
-              n.session.pluginsSync,
+              toolUseContext.session.pluginsSync,
               getLastSyncedLaneLoad(),
               enabledPlugin.warnings,
             ),
@@ -346,20 +400,23 @@ async function runRemotePluginHook(e, n, r) {
     );
   assertSyncedPluginUsable(plugin);
   let found = convertPluginHooksToMatchers(plugin)
-    [hookEvent].flatMap((k) => k.hooks)
+    [hookEvent].flatMap((matcher) => matcher.hooks)
     .find(
-      (k) =>
-        k.type === "command" && k.command === command && En(k.args, args) && (P === undefined || k.if === P),
+      (hook) =>
+        hook.type === "command" &&
+        hook.command === command &&
+        import_sortedIndex_2(hook.args, args) &&
+        (condition === undefined || hook.if === condition),
     );
   if (found === undefined || found.type !== "command") {
     let { errors } = await loadAllPluginsCacheOnly(storageV5, credentials);
-    let Q = plugin;
-    if (errors.some((error) => "plugin" in error && error.plugin === Q.name))
+    let pluginForErrors = plugin;
+    if (errors.some((error) => "plugin" in error && error.plugin === pluginForErrors.name))
       throw Error("this machine could not read the plugin's hooks for now");
     throw new PluginHookServedCallError(NO_SUCH_HOOK_TEXT);
   }
   let remoteHookInput = parseRemoteHookInput(jsonInput);
-  if (P !== undefined && found.if && !(await evaluateHookCondition(found.if, remoteHookInput)))
+  if (condition !== undefined && found.if && !(await evaluateHookCondition(found.if, remoteHookInput)))
     return {
       summary: "its condition does not hold",
       output: {
@@ -373,7 +430,7 @@ async function runRemotePluginHook(e, n, r) {
   invalidateCommandNames();
   assertPluginHooksAllowed(plugin.source);
   assertSyncedPluginUsable(plugin);
-  let N = await holdHookUntilManagedSettings(
+  let holdResult = await holdHookUntilManagedSettings(
     hookEvent,
     remoteHookInput.stdin,
     timeout ?? found.timeout,
@@ -381,8 +438,8 @@ async function runRemotePluginHook(e, n, r) {
     () => isOrgRequired === true || isManagedOrAllowlistedHook(plugin.source),
     HOOKS_DISABLED_TEXT,
   );
-  if (N === "answered") return runRemotePluginHook(e, n, r);
-  if (N !== undefined) return N;
+  if (holdResult === "answered") return runRemotePluginHook(input, toolUseContext, awaitPluginSync);
+  if (holdResult !== undefined) return holdResult;
   return runCommandHookWithTimeout(
     {
       ...found,
@@ -391,7 +448,7 @@ async function runRemotePluginHook(e, n, r) {
     hookEvent,
     remoteHookInput,
     hookIndex,
-    n,
+    toolUseContext,
     {
       root: plugin.path,
       id: plugin.source,
@@ -399,20 +456,20 @@ async function runRemotePluginHook(e, n, r) {
   );
 }
 //@ chunk-bzb0qnrm.js:10468-10625 placement
-function dropMcpUpdatedOutput(e) {
-  let hookSpecificOutput = e.hookSpecificOutput;
-  if (!isPlainObject(hookSpecificOutput) || !("updatedToolOutput" in hookSpecificOutput)) return e;
-  let { updatedMCPToolOutput, ...s } = hookSpecificOutput;
+function dropMcpUpdatedOutput(output) {
+  let hookSpecificOutput = output.hookSpecificOutput;
+  if (!isPlainObject(hookSpecificOutput) || !("updatedToolOutput" in hookSpecificOutput)) return output;
+  let { updatedMCPToolOutput, ...rest } = hookSpecificOutput;
   return {
-    ...e,
-    hookSpecificOutput: s,
+    ...output,
+    hookSpecificOutput: rest,
   };
 }
 //@ chunk-bzb0qnrm.js:10625-10680 placement
-function withDroppedOutputNote(e) {
-  return typeof e === "string"
+function withDroppedOutputNote(text) {
+  return typeof text === "string"
     ? `${HOOK_OUTPUT_DROPPED_TEXT}
-${e}`
+${text}`
     : HOOK_OUTPUT_DROPPED_TEXT;
 }
 export {

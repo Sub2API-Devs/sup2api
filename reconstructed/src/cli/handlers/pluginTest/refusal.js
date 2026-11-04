@@ -8,7 +8,7 @@
  * pieces: chunk-16wxtfnh.js (17)
  * attribution: placement 17
  */
-import { Ar } from "../../../../runtime/bun-runtime.js";
+import { __export } from "../../../../runtime/bun-runtime.js";
 import { getBasePolicySettings } from "../../../utils/settings/settings.js";
 import { hasRemoteHelperState } from "../../../utils/settings/policyHelper/helperRemote.js";
 import { getClaudeAIOAuthTokensAsync, shouldUseWIFAuth } from "../../../utils/auth.js";
@@ -20,7 +20,7 @@ import {
   PLUGIN_HOOKS_MODULES_GATE,
 } from "../../../services/analytics/growthbook.js";
 import { DoctorLazy } from "../util.js";
-import { u, record, string, unknown } from "../../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, record, stringSchema, unknown } from "../../../../vendor/zod/v4/classic/schemas.js";
 import {
   HOOKS_MODULES_DEFAULT,
   areHooksModulesAllowed,
@@ -48,7 +48,7 @@ import { sessionFactsRestored } from "../../../utils/auth/personProxyAuthHelper.
  */
 var PLUGIN_TEST_REFUSAL_EXPORTS = {};
 //@ chunk-16wxtfnh.js:703-1108 placement
-Ar(PLUGIN_TEST_REFUSAL_EXPORTS, {
+__export(PLUGIN_TEST_REFUSAL_EXPORTS, {
   IS_WORKTREE_LAUNCH: () => IS_WORKTREE_LAUNCH,
   SAVE_FAILURE: () => SAVE_FAILURE,
   SIGN_IN_MARGIN_MS: () => SIGN_IN_MARGIN_MS,
@@ -67,10 +67,10 @@ Ar(PLUGIN_TEST_REFUSAL_EXPORTS, {
   switchSaveSettled: () => switchSaveSettled,
 });
 //@ chunk-16wxtfnh.js:1108-1211 placement
-function pluginTestFormOf(e) {
-  let r = e[0] === "--file";
-  let any = e.some((i) => i.startsWith("-"));
-  return r ? "file" : any ? "other" : "run";
+function pluginTestFormOf(argv) {
+  let isFileForm = argv[0] === "--file";
+  let any = argv.some((arg) => arg.startsWith("-"));
+  return isFileForm ? "file" : any ? "other" : "run";
 }
 //@ chunk-16wxtfnh.js:1211-1222 placement
 var IS_WORKTREE_LAUNCH = false;
@@ -81,7 +81,9 @@ async function sessionHoldsEarlyFetch() {
     hasRemoteHelperState() ||
     basePolicySettings?.policyHelpers != null ||
     basePolicySettings?.policyHelper != null ||
-    import("./chunk-n0rgk8w9.js").then((r) => r.pendingSettingsEnvBlocksEarlyGb(IS_WORKTREE_LAUNCH))
+    import("../../startup/prepareSession.js").then((settingsEnvModule) =>
+      settingsEnvModule.pendingSettingsEnvBlocksEarlyGb(IS_WORKTREE_LAUNCH),
+    )
   );
 }
 //@ chunk-16wxtfnh.js:1395-1449 placement
@@ -111,15 +113,15 @@ function flagClientQuieted() {
 }
 //@ chunk-16wxtfnh.js:1658-1727 placement = getFeatureValue_CACHED_MAY_BE_STALE (1)
 var savedFlags = DoctorLazy(() =>
-  u({
-    cachedGrowthBookFeatures: record(string(), unknown()).optional(),
+  objectSchema({
+    cachedGrowthBookFeatures: record(stringSchema(), unknown()).optional(),
   }),
 );
 //@ chunk-16wxtfnh.js:1727-1858 placement = getFeatureValue_CACHED_MAY_BE_STALE (1)
 function isSavedSwitchOf(globalConfigFromDiskOrThrow) {
-  let r = savedFlags().safeParse(globalConfigFromDiskOrThrow);
-  let s = r.success ? r.data.cachedGrowthBookFeatures?.[PLUGIN_HOOKS_MODULES_GATE] : undefined;
-  return typeof s === "boolean" ? s : HOOKS_MODULES_DEFAULT;
+  let parsed = savedFlags().safeParse(globalConfigFromDiskOrThrow);
+  let flag = parsed.success ? parsed.data.cachedGrowthBookFeatures?.[PLUGIN_HOOKS_MODULES_GATE] : undefined;
+  return typeof flag === "boolean" ? flag : HOOKS_MODULES_DEFAULT;
 }
 //@ chunk-16wxtfnh.js:1858-2029 placement
 var SAVE_FAILURE =
@@ -148,15 +150,19 @@ var switchFetched = () =>
 //@ chunk-16wxtfnh.js:2275-2575 placement
 async function pluginTestGatesOf({ helperError, form, envPin }) {
   if (form === "file") markFollowConsumed();
-  let i = helperError === null && form === "run";
-  let n = i ? ((await sessionFactsRestored(envPin))?.reason ?? null) : helperError;
-  let a =
-    i && n === null && !isServedGateSource() && !(await earlyFetchVetoed()) && !(await fetchRefreshesSignIn())
+  let isRunForm = helperError === null && form === "run";
+  let helperReason = isRunForm ? ((await sessionFactsRestored(envPin))?.reason ?? null) : helperError;
+  let fetchReason =
+    isRunForm &&
+    helperReason === null &&
+    !isServedGateSource() &&
+    !(await earlyFetchVetoed()) &&
+    !(await fetchRefreshesSignIn())
       ? await switchFetched()
       : null;
   await checkHooksModulesFlag();
   return {
-    helperError: n ?? a,
+    helperError: helperReason ?? fetchReason,
     isRolloutOn: areHooksModulesAllowed(),
     isSwitchSaved: isDiskSourceWithCredential(),
     canLoadUserModules: areHooksModulesActive(),
@@ -192,4 +198,5 @@ export {
   signInNearsExpiry,
   switchFetched,
   switchSaveSettled,
+  PLUGIN_TEST_REFUSAL_EXPORTS,
 };

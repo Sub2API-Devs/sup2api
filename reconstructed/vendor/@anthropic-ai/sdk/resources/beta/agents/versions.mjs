@@ -6,7 +6,7 @@
  * attribution: esm-fingerprint 1
  */
 import { APIResource } from "../../../core/resource.mjs";
-import { I } from "../../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../../internal/utils/path.mjs";
 import { TokenPage } from "../../../core/pagination.mjs";
 import { buildHeaders } from "../../../internal/headers.mjs";
 
@@ -14,7 +14,7 @@ import { buildHeaders } from "../../../internal/headers.mjs";
 class Versions extends APIResource {
   list(agentID, params = {}, options) {
     let { betas, workspace_id, ...query } = params ?? {};
-    return this._client.getAPIList(I`/v1/agents/${agentID}/versions?beta=true`, TokenPage, {
+    return this._client.getAPIList(parseUrl_2`/v1/agents/${agentID}/versions?beta=true`, TokenPage, {
       query,
       ...options,
       headers: buildHeaders([

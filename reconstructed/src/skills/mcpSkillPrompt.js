@@ -16,12 +16,12 @@ import { READMCPRESOURCETOOL } from "../tools/ReadMcpResourceTool/prompt.js";
  * MCP 提供的技能说明：如何用 ReadMcpResource 读取相对路径的支持文件。
  */
 function mcpSkillResourceHint(mcpResourceRoot) {
-  let n = mcpResourceRoot.directoryRead
+  let directoryHint = mcpResourceRoot.directoryRead
     ? ` Call ${READ_MCP_RESOURCE_DIR_TOOL_NAME} on "${mcpResourceRoot.uri}" or a subdirectory URI to list its contents.`
     : "";
   return (
     `This skill is served by MCP server "${mcpResourceRoot.server}" at ${mcpResourceRoot.uri}. ` +
-    `To read a supporting file this skill references by a relative path \u2014 for example "templates/invoice.md" \u2014 call ${READMCPRESOURCETOOL} with server "${mcpResourceRoot.server}" and uri "${mcpResourceRoot.uri}/templates/invoice.md".${n}`
+    `To read a supporting file this skill references by a relative path \u2014 for example "templates/invoice.md" \u2014 call ${READMCPRESOURCETOOL} with server "${mcpResourceRoot.server}" and uri "${mcpResourceRoot.uri}/templates/invoice.md".${directoryHint}`
   );
 }
 export { mcpSkillResourceHint };

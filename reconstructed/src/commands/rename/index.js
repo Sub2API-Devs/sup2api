@@ -24,7 +24,7 @@ var renameCommandDefinition = {
   requires: {
     ink: true,
   },
-  load: () => import("./chunk-wqa2f5xk.js"),
+  load: () => import("./rename.js"),
 };
 var renameNonInteractiveCommand = {
   type: "local",
@@ -37,7 +37,7 @@ var renameNonInteractiveCommand = {
   get isHidden() {
     return !getIsNonInteractiveSession();
   },
-  load: () => import("./chunk-5h69ret3.js"),
+  load: () => import("../../utils/call.lazy.js"),
 };
 var renameCommand = renameCommandDefinition;
 export { renameCommand, renameNonInteractiveCommand };

@@ -15,6 +15,7 @@ import { buildMcpToolName } from "../mcp/mcpStringUtils.js";
 import { CLAUDE_ARTIFACTS } from "../mcp/firstPartyServerIds.js";
 import { hasLiveState, getLiveState } from "../liveReplica/liveReplica.js";
 import { ARTIFACT_FAMILY_TOOL_NAMES } from "../../tools/ArtifactTool/constants.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-3sqbw5c7.js:445-620 placement
 var ARTIFACTS_MCP_READ_TOOL = "read_artifact";
@@ -33,8 +34,8 @@ function artifactsMcpInCloudSession() {
   );
 }
 //@ chunk-3sqbw5c7.js:721-753 placement
-function artifactsMcpToolName(e) {
-  return buildMcpToolName(CLAUDE_ARTIFACTS, e);
+function artifactsMcpToolName(server) {
+  return buildMcpToolName(CLAUDE_ARTIFACTS, server);
 }
 //@ chunk-3sqbw5c7.js:753-824 placement = getToolNameForPermissionCheck (1)
 function artifactsMcpToolRef(tool) {
@@ -51,27 +52,33 @@ function isBuiltInArtifactHiddenForMcp() {
   return hasLiveState() && getLiveState().builtInArtifactHiddenForMcp;
 }
 //@ chunk-3sqbw5c7.js:884-1014 placement
-function isBuiltInArtifactReplacedByMcp(e) {
-  let o = ARTIFACT_FAMILY_TOOL_NAMES;
+function isBuiltInArtifactReplacedByMcp(name) {
+  let names = ARTIFACT_FAMILY_TOOL_NAMES;
   return (
     isBuiltInArtifactHiddenForMcp() &&
-    [e.name, e.underlyingV1ToolName, e.familyParentToolName].some((t) => t !== undefined && o.includes(t))
+    [name.name, name.underlyingV1ToolName, name.familyParentToolName].some(
+      (name) => name !== undefined && names.includes(name),
+    )
   );
 }
 //@ chunk-3sqbw5c7.js:1014-1083 placement = getToolNameForPermissionCheck (1)
 function artifactMcpToolsReplaceBuiltIn(tool) {
-  return isBuiltInArtifactHiddenForMcp() && tool.some((o) => o.mcpInfo?.serverName === CLAUDE_ARTIFACTS);
+  return (
+    isBuiltInArtifactHiddenForMcp() && tool.some((tool) => tool.mcpInfo?.serverName === CLAUDE_ARTIFACTS)
+  );
 }
 //@ chunk-3sqbw5c7.js:1083-1139 placement = getToolNameForPermissionCheck (1)
 function standsInForBuiltInArtifact(tool) {
   return isBuiltInArtifactHiddenForMcp() && tool.mcpInfo?.serverName === CLAUDE_ARTIFACTS;
 }
 //@ chunk-3sqbw5c7.js:1139-1212 placement
-function mcpReadToolsForHiddenBuiltIn(e) {
+function mcpReadToolsForHiddenBuiltIn(builtIn) {
   if (!isBuiltInArtifactHiddenForMcp()) return [];
-  return [ARTIFACTS_MCP_READ_TOOL, ARTIFACTS_MCP_GET_TOOL, ...(e ? [ARTIFACTS_MCP_READ_FILE_TOOL] : [])].map(
-    artifactsMcpToolRef,
-  );
+  return [
+    ARTIFACTS_MCP_READ_TOOL,
+    ARTIFACTS_MCP_GET_TOOL,
+    ...(builtIn ? [ARTIFACTS_MCP_READ_FILE_TOOL] : []),
+  ].map(artifactsMcpToolRef);
 }
 //@ chunk-3sqbw5c7.js:1212-1255 placement
 class HiddenBuiltInArtifactToolSlot {
@@ -81,7 +88,10 @@ class HiddenBuiltInArtifactToolSlot {
   }
 }
 //@ chunk-3sqbw5c7.js:1255-1269 placement
-var hiddenBuiltInArtifactToolSlot = new HiddenBuiltInArtifactToolSlot();
+var hiddenBuiltInArtifactToolSlot; // deferred: uses HiddenBuiltInArtifactToolSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3sqbw5c7.js:1255", () => {
+  hiddenBuiltInArtifactToolSlot = new HiddenBuiltInArtifactToolSlot();
+});
 //@ chunk-3sqbw5c7.js:1269-1320 placement
 function hiddenBuiltInArtifactTool() {
   return isBuiltInArtifactHiddenForMcp() ? (hiddenBuiltInArtifactToolSlot.tool ?? undefined) : undefined;
@@ -101,4 +111,8 @@ export {
   ARTIFACTS_MCP_READ_TOOL,
   ARTIFACTS_MCP_GET_TOOL,
   ARTIFACTS_MCP_READ_SHARED_TOOL,
+  ARTIFACTS_MCP_READ_FILE_TOOL,
+  artifactMcpToolsReplaceBuiltIn,
+  mcpReadToolsForHiddenBuiltIn,
+  standsInForBuiltInArtifact,
 };

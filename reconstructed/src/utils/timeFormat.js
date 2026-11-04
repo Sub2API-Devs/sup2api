@@ -19,9 +19,9 @@ var MAX_LOCALE_TAG_CHARS = 64;
 //@ chunk-hzbq5ybv.js:519-699 placement
 function normalizeLocaleTag(raw) {
   if (!raw || raw === "C" || raw === "POSIX" || raw.length > MAX_LOCALE_TAG_CHARS) return;
-  let e = firstLineOf(firstLineOf(raw, "."), "@");
-  if (!e) return;
-  let replaced = e.replaceAll("_", "-");
+  let line = firstLineOf(firstLineOf(raw, "."), "@");
+  if (!line) return;
+  let replaced = line.replaceAll("_", "-");
   try {
     new Intl.DateTimeFormat(replaced);
     return replaced;
@@ -61,16 +61,18 @@ var LONG_MONTH_OPTIONS = {
  * 在指定时区按 strftime 模式格式化日期，支持 %Y/%m/%d/%H/%M/%S/%p/%a/%b/%z/%F/%T 等及 %- 不补零。
  */
 function strftimeFormat(pattern, date, { locale, timeZone }) {
-  let g = getDateTimeFormat("en-US", withTimeZone(STRFTIME_PART_OPTIONS, timeZone)).formatToParts(date);
+  let patternCache = getDateTimeFormat("en-US", withTimeZone(STRFTIME_PART_OPTIONS, timeZone)).formatToParts(
+    date,
+  );
   let fields = {};
-  for (let part of g) fields[part.type] = part.value;
+  for (let part of patternCache) fields[part.type] = part.value;
   let year = Number(fields.year);
   let month = Number(fields.month);
   let day = Number(fields.day);
   let hour = Number(fields.hour);
   let hour12 = ((hour + 11) % 12) + 1;
   let utcDay = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
-  return pattern.replace(/%(-?)([\s\S])/g, (T, noPad, spec) => {
+  return pattern.replace(/%(-?)([\s\S])/g, (partCache, noPad, spec) => {
     switch (spec) {
       case "Y":
         return String(year);
@@ -134,38 +136,38 @@ function strftimeFormat(pattern, date, { locale, timeZone }) {
       case "%":
         return "%";
       default:
-        return T;
+        return partCache;
     }
   });
 }
 //@ chunk-hzbq5ybv.js:2275-2336 placement
-function padTwo(t, noPad) {
-  return noPad ? String(t) : String(t).padStart(2, "0");
+function padTwo(value, noPad) {
+  return noPad ? String(value) : String(value).padStart(2, "0");
 }
 //@ chunk-hzbq5ybv.js:2336-2397 placement
 function padThree(isoString, noPad) {
   return noPad ? String(isoString) : String(isoString).padStart(3, "0");
 }
 //@ chunk-hzbq5ybv.js:2397-2458 placement
-function padTwoSpace(t, noPad) {
-  return noPad ? String(t) : String(t).padStart(2, " ");
+function padTwoSpace(value, noPad) {
+  return noPad ? String(value) : String(value).padStart(2, " ");
 }
 //@ chunk-hzbq5ybv.js:2458-2529 placement = parseISOString (1)
 function parseISOString(year, month, day) {
   return (Date.UTC(year, month - 1, day) - Date.UTC(year, 0, 1)) / 86400000 + 1;
 }
 //@ chunk-hzbq5ybv.js:2529-2581 placement
-function formatWithDateTimeFormat(date, locale, timeZone, s) {
-  return getDateTimeFormat(locale, withTimeZone(s, timeZone)).format(date);
+function formatWithDateTimeFormat(date, locale, timeZone, pattern) {
+  return getDateTimeFormat(locale, withTimeZone(pattern, timeZone)).format(date);
 }
 //@ chunk-hzbq5ybv.js:2581-2842 placement
 function formatUtcOffset(date, year, month, day, hour, fields) {
-  let u = Date.UTC(year, month - 1, day, hour, Number(fields.minute), Number(fields.second));
-  let n = Math.floor(date.getTime() / 1000) * 1000;
-  let rounded = Math.round((u - n) / 60000);
-  let m = rounded < 0 ? "-" : "+";
-  let p = Math.abs(rounded);
-  return `${m}${String(Math.floor(p / 60)).padStart(2, "0")}${String(p % 60).padStart(2, "0")}`;
+  let timestamp = Date.UTC(year, month - 1, day, hour, Number(fields.minute), Number(fields.second));
+  let dateSeconds = Math.floor(date.getTime() / 1000) * 1000;
+  let rounded = Math.round((timestamp - dateSeconds) / 60000);
+  let sign = rounded < 0 ? "-" : "+";
+  let offsetMinutes = Math.abs(rounded);
+  return `${sign}${String(Math.floor(offsetMinutes / 60)).padStart(2, "0")}${String(offsetMinutes % 60).padStart(2, "0")}`;
 }
 //@ chunk-hzbq5ybv.js:2842-2852 placement
 var MAX_TIME_FORMAT_CHARS = 100;
@@ -173,30 +175,30 @@ var MAX_TIME_FORMAT_CHARS = 100;
 /**
  * 清洗时间格式串并截断到 100 字符。
  */
-function sanitizeTimeFormat(t) {
-  return truncateToLength(stripFormatChars(printableText(t)), MAX_TIME_FORMAT_CHARS);
+function sanitizeTimeFormat(format) {
+  return truncateToLength(stripFormatChars(printableText(format)), MAX_TIME_FORMAT_CHARS);
 }
 //@ chunk-hzbq5ybv.js:2891-3174 placement
-function resolveTimeFormat(t, e) {
-  let found = AUTO_CONNECT_LABELS.find((o) => o === t);
+function resolveTimeFormat(format, preset) {
+  let found = AUTO_CONNECT_LABELS.find((label) => label === format);
   if (found === "24-hour-utc")
     return {
       kind: "preset",
       preset: found,
       timeZone: "UTC",
     };
-  let timeZone = validTimeZone(e);
+  let timeZone = validTimeZone(preset);
   if (found)
     return {
       kind: "preset",
       preset: found,
       timeZone,
     };
-  let g = sanitizeTimeFormat(t);
-  return g.includes("%")
+  let cleaned = sanitizeTimeFormat(format);
+  return cleaned.includes("%")
     ? {
         kind: "pattern",
-        pattern: g,
+        pattern: cleaned,
         timeZone,
       }
     : {
@@ -206,26 +208,26 @@ function resolveTimeFormat(t, e) {
       };
 }
 //@ chunk-hzbq5ybv.js:3174-3253 placement
-function validTimeZone(t) {
-  if (!t) return;
+function validTimeZone(timeZone) {
+  if (!timeZone) return;
   try {
     getDateTimeFormat("en-US", {
-      timeZone: t,
+      timeZone,
     });
-    return t;
+    return timeZone;
   } catch {
     return;
   }
 }
 //@ chunk-hzbq5ybv.js:3253-3429 placement
-function presetFormatOptions(t, preset, timeZone) {
+function presetFormatOptions(pattern, preset, timeZone) {
   switch (preset) {
     case "auto":
-      return withTimeZone(t, timeZone);
+      return withTimeZone(pattern, timeZone);
     case "12-hour":
       return withTimeZone(
         {
-          ...t,
+          ...pattern,
           hourCycle: "h12",
         },
         timeZone,
@@ -234,7 +236,7 @@ function presetFormatOptions(t, preset, timeZone) {
     case "24-hour-utc":
       return withTimeZone(
         {
-          ...t,
+          ...pattern,
           hourCycle: "h23",
         },
         timeZone,
@@ -245,12 +247,14 @@ function presetFormatOptions(t, preset, timeZone) {
 /**
  * 按时间格式预设格式化日期；24 小时 UTC 预设在最后的分/秒后加 Z。
  */
-function formatWithPreset(t, e, r, s) {
-  let dateTimeFormat = getDateTimeFormat(r, presetFormatOptions(e, t.preset, t.timeZone));
-  if (t.preset !== "24-hour-utc") return dateTimeFormat.format(s);
-  let o = dateTimeFormat.formatToParts(s);
-  let lastIndex = o.findLastIndex((n) => n.type === "minute" || n.type === "second");
-  return o.map((n, c) => (c === lastIndex ? `${n.value}Z` : n.value)).join("");
+function formatWithPreset(date, preset, locale, timeZone) {
+  let dateTimeFormat = getDateTimeFormat(locale, presetFormatOptions(preset, date.preset, date.timeZone));
+  if (date.preset !== "24-hour-utc") return dateTimeFormat.format(timeZone);
+  let dateTimeFormat_2 = dateTimeFormat.formatToParts(timeZone);
+  let lastIndex = dateTimeFormat_2.findLastIndex((part) => part.type === "minute" || part.type === "second");
+  return dateTimeFormat_2
+    .map((part, index) => (index === lastIndex ? `${part.value}Z` : part.value))
+    .join("");
 }
 //@ chunk-hzbq5ybv.js:3679-3741 placement
 function formatCustomPattern(pattern, timeZone, date, locale) {
@@ -279,10 +283,10 @@ var CLOCK_TIME_OPTIONS = {
 /**
  * 格式化时刻：自定义模式走 strftime，否则按预设输出时:分。
  */
-function formatClockTime(t, date, locale, s = "2-digit") {
-  return t.kind === "pattern"
-    ? formatCustomPattern(t.pattern, t.timeZone, date, locale)
-    : formatWithPreset(t, CLOCK_TIME_OPTIONS[s], "en-US", date);
+function formatClockTime(format, timeZone, locale, timeZone_2 = "2-digit") {
+  return format.kind === "pattern"
+    ? formatCustomPattern(format.pattern, format.timeZone, timeZone, locale)
+    : formatWithPreset(format, CLOCK_TIME_OPTIONS[timeZone_2], "en-US", timeZone);
 }
 //@ chunk-hzbq5ybv.js:3975-4114 placement
 var FULL_TIMESTAMP_OPTIONS = {
@@ -299,18 +303,18 @@ var FULL_TIMESTAMP_OPTIONS = {
 /**
  * 格式化完整时间戳 YYYY-MM-DD HH:MM:SS，附上午/下午与时区名（UTC 预设加 Z）；自定义模式走 strftime。
  */
-function formatFullTimestamp(t, date, locale, s) {
-  let timeZone = t.timeZone ?? s;
-  if (t.kind === "pattern") return formatCustomPattern(t.pattern, timeZone, date, locale);
-  let o = presetFormatOptions(FULL_TIMESTAMP_OPTIONS, t.preset, timeZone);
-  let u = getDateTimeFormat("en-US", o).formatToParts(date);
-  let n = {};
-  for (let p of u) n[p.type] = p.value;
-  let c = n.dayPeriod ? ` ${n.dayPeriod}` : "";
-  let m = "";
-  if (t.preset === "24-hour-utc") m = "Z";
-  else if (n.timeZoneName) m = ` ${n.timeZoneName}`;
-  return `${n.year}-${n.month}-${n.day} ${n.hour}:${n.minute}:${n.second}${c}${m}`;
+function formatFullTimestamp(format, date, locale, timeZone) {
+  let timeZone_2 = format.timeZone ?? timeZone;
+  if (format.kind === "pattern") return formatCustomPattern(format.pattern, timeZone_2, date, locale);
+  let options = presetFormatOptions(FULL_TIMESTAMP_OPTIONS, format.preset, timeZone_2);
+  let parts = getDateTimeFormat("en-US", options).formatToParts(date);
+  let byType = {};
+  for (let part of parts) byType[part.type] = part.value;
+  let dayPeriodSuffix = byType.dayPeriod ? ` ${byType.dayPeriod}` : "";
+  let zoneSuffix = "";
+  if (format.preset === "24-hour-utc") zoneSuffix = "Z";
+  else if (byType.timeZoneName) zoneSuffix = ` ${byType.timeZoneName}`;
+  return `${byType.year}-${byType.month}-${byType.day} ${byType.hour}:${byType.minute}:${byType.second}${dayPeriodSuffix}${zoneSuffix}`;
 }
 //@ chunk-hzbq5ybv.js:4501-4580 placement
 /**
@@ -327,10 +331,10 @@ function formatCustomPatternForLocale(pattern, timeZone, date) {
   return formatCustomPattern(pattern, timeZone, date, getLocale());
 }
 export {
+  normalizeLocaleTag,
   resolvedTimeFormat,
   formatWithPreset,
   formatCustomPatternForLocale,
-  normalizeLocaleTag,
   formatFullTimestamp,
   formatClockTime,
   sanitizeTimeFormat,

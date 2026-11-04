@@ -36,7 +36,7 @@ import { noopModelPinReset } from "./sessionModelPin.js";
 /**
  * 重置对话（/clear 等）：停止副本与监听、清理缓存与状态。
  */
-function resetConversation(context, messages, m, a) {
+function resetConversation(context, messages, reason, options) {
   cancelQuotaAutoResume("conversation_reset");
   endLowPriority("conversation_reset");
   removeQueuedByFilter(isPassiveMainAgentCommand);
@@ -46,28 +46,30 @@ function resetConversation(context, messages, m, a) {
   resetForNewConversation();
   clearRefusedPublishBodies();
   runBundledSkillSessionResets();
-  let sessionId = getSessionId();
-  for (let s of getSessionStopPromptHooks(context.sessionHooksRegistry, sessionId))
-    context.sessionHooksRegistry.remove(sessionId, "Stop", s);
-  m();
+  let event = getSessionId();
+  for (let hook of getSessionStopPromptHooks(context.sessionHooksRegistry, event))
+    context.sessionHooksRegistry.remove(event, "Stop", hook);
+  reason();
   clearClassifierContext();
   context.markConversationRemote?.();
   clearFileStateCacheKeepingSeeds(context.readFileState);
   resetPickerState(context.memorySelector);
   forgetMainChainOnHandOff();
   primePasteIdsFromMessages(messages);
-  let t = hasOnlyPreservedBeforeBoundary(messages);
-  if (t) logFeatureSad("teleport_resume_history", "summarized_rows_absent");
+  let onlyPreservedBeforeBoundary = hasOnlyPreservedBeforeBoundary(messages);
+  if (onlyPreservedBeforeBoundary) logFeatureSad("teleport_resume_history", "summarized_rows_absent");
   else logFeatureOk("teleport_resume_history");
-  let i = t ? [createSystemMessage(COMPACTED_AWAY_NOTICE, "warning")] : [];
+  let noticeMessages = onlyPreservedBeforeBoundary
+    ? [createSystemMessage(COMPACTED_AWAY_NOTICE, "warning")]
+    : [];
   emitReplBridgeEvent(
-    a,
-    sessionId,
-    [...messages, ...i].map((s) => s.uuid),
+    options,
+    event,
+    [...messages, ...noticeMessages].map((message) => message.uuid),
   );
   context.applyMessageOp({
     type: "replace-all",
-    messages: [...markRemoteSourced(messages), ...i],
+    messages: [...markRemoteSourced(messages), ...noticeMessages],
   });
   noopModelPinReset(true);
 }

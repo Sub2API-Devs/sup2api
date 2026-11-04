@@ -65,66 +65,66 @@ var CLAUDE_MYTHOS_PREVIEW = "claude-mythos-preview";
 /**
  * 判断字符串是否为模型键别名（sonnet/opus/haiku/fable/best/opusplan 等）。
  */
-function isModelKeyAlias(e) {
-  return LEGACY_MODEL_IDS.includes(e);
+function isModelKeyAlias(model) {
+  return LEGACY_MODEL_IDS.includes(model);
 }
 //@ chunk-jabbzrn8.js:1029-1106 placement
 /**
  * 去掉 [1m] 后再判断是否为模型键别名。
  */
-function isModelKeyAliasOrResolved(e) {
-  if (isModelKeyAlias(e)) return true;
-  let n = strip1mSuffix(e);
-  return n !== e && strip1mSuffix(n) === n && isModelKeyAlias(n);
+function isModelKeyAliasOrResolved(model) {
+  if (isModelKeyAlias(model)) return true;
+  let stripped = strip1mSuffix(model);
+  return stripped !== model && strip1mSuffix(stripped) === stripped && isModelKeyAlias(stripped);
 }
 //@ chunk-jabbzrn8.js:1106-1153 placement
 /**
  * 去掉末尾的 [1m] 后缀。
  */
-function strip1mSuffix(e) {
-  return e.replace(/\[1m\]$/i, "");
+function strip1mSuffix(model) {
+  return model.replace(/\[1m\]$/i, "");
 }
 //@ chunk-jabbzrn8.js:1153-1219 placement
 /**
  * 忽略大小写与 [1m] 比较两个模型拼写是否相同。
  */
-function sameModelSpelling(e, n) {
-  return strip1mSuffix(e).toLowerCase() === strip1mSuffix(n).toLowerCase();
+function sameModelSpelling(modelA, modelB) {
+  return strip1mSuffix(modelA).toLowerCase() === strip1mSuffix(modelB).toLowerCase();
 }
 //@ chunk-jabbzrn8.js:1219-1270 placement
 /**
  * 去掉 [1m]/[2m] 后缀。
  */
-function stripAnyVersatileSuffix(e) {
-  return e.replace(/\[(1|2)m\]/gi, "");
+function stripAnyVersatileSuffix(model) {
+  return model.replace(/\[(1|2)m\]/gi, "");
 }
 //@ chunk-jabbzrn8.js:1270-1307 placement
 /**
  * 判断是否为基本模型键（不含 [1m]/opusplan）。
  */
-function isBaseModelKey(e) {
-  return MODEL_KEY_NAMES.includes(e);
+function isBaseModelKey(key) {
+  return MODEL_KEY_NAMES.includes(key);
 }
 //@ chunk-jabbzrn8.js:1307-1919 placement
 /**
  * 解析 Claude 模型 id（去掉 [1m]、路径前缀与 Bedrock 区域.anthropic. 前缀）为 {family, major, minor, legacyVersionFirst, base, date/trailer}；不合法返回 null。
  */
-function parseModelId(e) {
-  let lower = e.trim().toLowerCase();
-  if (lower === "" || /\s/.test(lower)) return null;
-  lower = lower.replace(/\[[12]m\]$/, "");
-  let index = lower.lastIndexOf("/");
-  if (index !== -1) lower = lower.slice(index + 1);
-  let match = /^(?:([a-z-]+)\.)?anthropic\.(claude-.*)$/.exec(lower);
+function parseModelId(raw) {
+  let text = raw.trim().toLowerCase();
+  if (text === "" || /\s/.test(text)) return null;
+  text = text.replace(/\[[12]m\]$/, "");
+  let index = text.lastIndexOf("/");
+  if (index !== -1) text = text.slice(index + 1);
+  let match = /^(?:([a-z-]+)\.)?anthropic\.(claude-.*)$/.exec(text);
   if (match) {
-    let [, a, l = ""] = match;
-    if (a !== undefined && !BEDROCK_REGION_PREFIXES.includes(a)) return null;
-    lower = l;
+    let [, regionPrefix, rest = ""] = match;
+    if (regionPrefix !== undefined && !BEDROCK_REGION_PREFIXES.includes(regionPrefix)) return null;
+    text = rest;
   }
-  let baseMatch = parseModelBase(lower);
+  let baseMatch = parseModelBase(text);
   if (!baseMatch) return null;
-  let sliced = lower.slice(baseMatch.base.length);
-  if (sliced !== "" && !/^[-@]/.test(sliced)) return null;
+  let trailer = text.slice(baseMatch.base.length);
+  if (trailer !== "" && !/^[-@]/.test(trailer)) return null;
   let parsed = {
     family: baseMatch.family,
     major: baseMatch.major,
@@ -132,10 +132,10 @@ function parseModelId(e) {
     base: baseMatch.base,
   };
   if (baseMatch.minor !== undefined) parsed.minor = baseMatch.minor;
-  if (!isStandardTrailer(sliced)) parsed.trailer = sliced;
+  if (!isStandardTrailer(trailer)) parsed.trailer = trailer;
   else {
-    let a = /(?:-v\d+@|[-@])(\d{8})/.exec(sliced)?.[1];
-    if (a !== undefined) parsed.date = a;
+    let date = /(?:-v\d+@|[-@])(\d{8})/.exec(trailer)?.[1];
+    if (date !== undefined) parsed.date = date;
   }
   return parsed;
 }
@@ -150,12 +150,12 @@ function normalizeDottedVersion(lowerCase) {
 /**
  * 判断模型 id 后缀是否为标准形式（fast/latest、日期、版本）。
  */
-function isStandardTrailer(e) {
-  return /^(?:-fast|-latest)?(?:-v\d{1,3}@\d{8}|[-@]\d{8})?(?:-v\d{1,3}(?::\d{1,3})?)?$/.test(e);
+function isStandardTrailer(trailer) {
+  return /^(?:-fast|-latest)?(?:-v\d{1,3}@\d{8}|[-@]\d{8})?(?:-v\d{1,3}(?::\d{1,3})?)?$/.test(trailer);
 }
 //@ chunk-jabbzrn8.js:2109-2217 placement
-function isReservedTag(e) {
-  return ["experimental", "internal", "prefixlock", "preview", "prod", "snapshot", "test"].includes(e);
+function isReservedTag(tag) {
+  return ["experimental", "internal", "prefixlock", "preview", "prod", "snapshot", "test"].includes(tag);
 }
 //@ chunk-jabbzrn8.js:2217-2333 placement
 /**
@@ -173,8 +173,8 @@ function hasReservedTag(model) {
 /**
  * 判断模型 id 是否带 -vN 版本后缀。
  */
-function hasVersionTrailer(e) {
-  return /-v\d+(?::\d+)?$/.test(e);
+function hasVersionTrailer(trailer) {
+  return /-v\d+(?::\d+)?$/.test(trailer);
 }
 //@ chunk-jabbzrn8.js:2381-2432 placement
 /**
@@ -194,8 +194,8 @@ function compareVersion(modelId, modelId_2) {
 /**
  * 判断两个解析后的模型是否同族同版本。
  */
-function isSameModelVersion(e, n) {
-  return e.family === n.family && e.legacyVersionFirst === n.legacyVersionFirst && compareVersion(e, n) === 0;
+function isSameModelVersion(a, b) {
+  return a.family === b.family && a.legacyVersionFirst === b.legacyVersionFirst && compareVersion(a, b) === 0;
 }
 //@ chunk-jabbzrn8.js:2604-2743 placement
 function modelFamilyOf(family) {
@@ -217,41 +217,41 @@ function modelFamilyOf(family) {
 /**
  * 判断第二个模型是否与第一个同代或更新（族排序与版本比较）。
  */
-function isNewerOrSameModel(model, n) {
+function isNewerOrSameModel(model, otherModel) {
   if (typeof model !== "string") return false;
   let modelId = parseModelId(model);
-  let modelId_2 = parseModelId(n);
+  let modelId_2 = parseModelId(otherModel);
   if (!isStandardVersion(modelId) || !isStandardVersion(modelId_2)) return false;
-  let r = modelFamilyOf(modelId.family);
-  let t = modelFamilyOf(modelId_2.family);
-  if (r === undefined || t === undefined) return false;
-  return t >= r && compareVersion(modelId_2, modelId) >= 0;
+  let familyA = modelFamilyOf(modelId.family);
+  let familyB = modelFamilyOf(modelId_2.family);
+  if (familyA === undefined || familyB === undefined) return false;
+  return familyB >= familyA && compareVersion(modelId_2, modelId) >= 0;
 }
 //@ chunk-jabbzrn8.js:2936-3348 placement
 /**
  * 匹配 claude-族-主[-次] 或旧式 claude-主[-次]-族 前缀，返回族名、主次版本、是否旧式与匹配到的基础名。
  */
-function parseModelBase(e) {
-  let match = /^claude-([a-z]+)-(\d{1,2})(?!\d)(?:-(\d{1,2})(?!\d))?/.exec(e);
+function parseModelBase(text) {
+  let match = /^claude-([a-z]+)-(\d{1,2})(?!\d)(?:-(\d{1,2})(?!\d))?/.exec(text);
   if (match) {
-    let [o, r = "", t = "", i] = match;
+    let [base, family = "", major = "", minor] = match;
     return {
-      family: r,
-      major: Number(t),
-      minor: i === undefined ? undefined : Number(i),
+      family,
+      major: Number(major),
+      minor: minor === undefined ? undefined : Number(minor),
       legacyVersionFirst: false,
-      base: o,
+      base,
     };
   }
-  let match_2 = /^claude-(\d{1,2})(?!\d)(?:-(\d{1,2})(?!\d))?-([a-z]+)/.exec(e);
+  let match_2 = /^claude-(\d{1,2})(?!\d)(?:-(\d{1,2})(?!\d))?-([a-z]+)/.exec(text);
   if (match_2) {
-    let [o, r = "", t, i = ""] = match_2;
+    let [base, major = "", minor, family = ""] = match_2;
     return {
-      family: i,
-      major: Number(r),
-      minor: t === undefined ? undefined : Number(t),
+      family,
+      major: Number(major),
+      minor: minor === undefined ? undefined : Number(minor),
       legacyVersionFirst: true,
-      base: o,
+      base,
     };
   }
   return null;

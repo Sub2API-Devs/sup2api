@@ -5,12 +5,12 @@
  * pieces: chunk-m4p5zn6n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 import { require_parse } from "./lib/parse.js";
 import { require_enoent } from "./lib/enoent.js";
 
 //@ chunk-m4p5zn6n.js:6175-6576 cjs-fingerprint
-var require_cross_spawn = x(function (cjsExports, cjsModule) {
+var require_cross_spawn = __commonJS(function (cjsExports, cjsModule) {
   var cp = importMetaRequire("child_process");
   var parse = require_parse();
   var enoent = require_enoent();

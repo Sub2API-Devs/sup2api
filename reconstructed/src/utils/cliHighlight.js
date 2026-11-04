@@ -10,103 +10,15 @@
  */
 import { sequential } from "./sequential.js";
 import { mergeCombiningGraphemes } from "./intl.js";
-import { h } from "../../vendor/cli-highlight/dist/theme.js";
+import { getThemeStyle } from "../../vendor/cli-highlight/dist/theme.js";
 import { ensureHighlightLanguage, highlightUnderMessage, highlightCore } from "./cliHighlightLanguages.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-85hd307w.js:345-361 placement = RESET (1)
-var RESET = "\x1B[0m";
-//@ chunk-85hd307w.js:361-457 placement
-function plainWithReset(e) {
-  return sequential.level > 0 && e.includes(RESET)
-    ? RESET + e.replace(/\r?\n/g, `${RESET}$&${RESET}`) + RESET
-    : sequential.reset(e);
-}
-//@ chunk-85hd307w.js:1135-1247 sole-consumer
-function mergeSplitGraphemes(e) {
-  let t = [];
-  let r = [];
-  collectTextNodes(e, t, r);
-  let i = mergeCombiningGraphemes(r);
-  if (i === r) return;
-  t.forEach(({ siblings, at }, g) => {
-    siblings[at] = i[g];
-  });
-}
-//@ chunk-85hd307w.js:1247-1376 sole-consumer
-function collectTextNodes(e, t, r) {
-  e.children.forEach((child, at) => {
-    if (typeof child === "string") {
-      t.push({
-        siblings: e.children,
-        at,
-      });
-      r.push(child);
-    } else collectTextNodes(child, t, r);
-  });
-}
-//@ chunk-85hd307w.js:1376-1505 sole-consumer
-function renderHighlightNode(e) {
-  if (typeof e === "string") return e;
-  let joined = e.children.map(renderHighlightNode).join("");
-  let r = e.scope ?? e.kind;
-  let i = r ? h(r) : undefined;
-  return i ? i(joined) : joined;
-}
-//@ chunk-85hd307w.js:1505-1850 sole-consumer
-/**
- * 用 highlight.js 高亮代码（可在工作线程中执行），合并被拆开的组合字符后按作用域着色；语言不支持或出错时原样返回。
- */
-function highlightCode(e, t) {
-  let language = t?.language;
-  if (!language) return e;
-  try {
-    let highlightLanguage = ensureHighlightLanguage(language);
-    if (!highlightLanguage) return e;
-    let work = t?.work;
-    let s = work
-      ? highlightUnderMessage(work, (c) =>
-          c.highlight(e, {
-            language: highlightLanguage,
-            ignoreIllegals: true,
-          }),
-        )
-      : highlightCore().highlight(e, {
-          language: highlightLanguage,
-          ignoreIllegals: true,
-        });
-    let g = s._emitter ?? s.emitter;
-    let a = g?.rootNode ?? g?.root;
-    if (!a || typeof a === "string") return e;
-    mergeSplitGraphemes(a);
-    return a.children.map(renderHighlightNode).join("");
-  } catch {
-    return e;
-  }
-}
-//@ chunk-85hd307w.js:1850-1885 sole-consumer
-/**
- * 判断高亮器是否支持某语言。
- */
-function isSupportedHighlightLanguage(e) {
-  return ensureHighlightLanguage(e) !== null;
-}
-//@ chunk-85hd307w.js:1885-1924 fingerprint = loadCliHighlight (0.783)
-var loadCliHighlight = {
-  highlight: highlightCode,
-  supportsLanguage: isSupportedHighlightLanguage,
-};
-//@ chunk-85hd307w.js:1924-1947 placement
-/**
- * 返回 CLI 高亮模块（highlight 与 supportsLanguage）。
- */
-function getCliHighlightModule() {
-  return loadCliHighlight;
-}
 //@ chunk-aepeg2w5.js:682798-683194 placement
 /**
  * highlight.js 的 Cedar 语言定义。
  */
-var cedarLanguage = (e) => ({
+var cedarLanguage = (highlightJs) => ({
   name: "Cedar",
   aliases: ["cedarpolicy"],
   keywords: {
@@ -115,9 +27,9 @@ var cedarLanguage = (e) => ({
     literal: "true false",
   },
   contains: [
-    e.QUOTE_STRING_MODE,
-    e.C_NUMBER_MODE,
-    e.C_LINE_COMMENT_MODE,
+    highlightJs.QUOTE_STRING_MODE,
+    highlightJs.C_NUMBER_MODE,
+    highlightJs.C_LINE_COMMENT_MODE,
     {
       className: "meta",
       begin: /@\w+/,
@@ -133,14 +45,19 @@ var CEDAR_LANGUAGE_DEFINITION = cedarLanguage;
 /**
  * 内置的 Cedar 语言定义表。
  */
-var CEDAR_LANGUAGES = {
-  cedar: CEDAR_LANGUAGE_DEFINITION,
-};
-var CEDAR_ALIASES = new Set(["cedarpolicy"]);
-var CEDAR_DISPLAY_NAMES = {
-  cedar: "Cedar",
-  cedarpolicy: "Cedar",
-};
+var CEDAR_LANGUAGES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var CEDAR_ALIASES;
+var CEDAR_DISPLAY_NAMES;
+deferInit("chunk-aepeg2w5.js:683194", () => {
+  CEDAR_LANGUAGES = {
+    cedar: CEDAR_LANGUAGE_DEFINITION,
+  };
+  CEDAR_ALIASES = new Set(["cedarpolicy"]);
+  CEDAR_DISPLAY_NAMES = {
+    cedar: "Cedar",
+    cedarpolicy: "Cedar",
+  };
+});
 //@ chunk-aepeg2w5.js:683282-690062 placement
 /**
  * 高亮语言 id 到显示名的大表。
@@ -558,6 +475,95 @@ var HIGHLIGHT_LANGUAGE_ALIASES = {
   xquery: ["xml"],
   yaml: ["ruby"],
 };
+//@ chunk-85hd307w.js:345-361 placement = RESET (1)
+var RESET = "\x1B[0m";
+//@ chunk-85hd307w.js:361-457 placement
+function plainWithReset(text) {
+  return sequential.level > 0 && text.includes(RESET)
+    ? RESET + text.replace(/\r?\n/g, `${RESET}$&${RESET}`) + RESET
+    : sequential.reset(text);
+}
+//@ chunk-85hd307w.js:1135-1247 sole-consumer
+function mergeSplitGraphemes(nodes) {
+  let results = [];
+  let group = [];
+  collectTextNodes(nodes, results, group);
+  let mergedGroup = mergeCombiningGraphemes(group);
+  if (mergedGroup === group) return;
+  results.forEach(({ siblings, at }, nodeIndex) => {
+    siblings[at] = mergedGroup[nodeIndex];
+  });
+}
+//@ chunk-85hd307w.js:1247-1376 sole-consumer
+function collectTextNodes(node, parents, textNodes) {
+  node.children.forEach((child, at) => {
+    if (typeof child === "string") {
+      parents.push({
+        siblings: node.children,
+        at,
+      });
+      textNodes.push(child);
+    } else collectTextNodes(child, parents, textNodes);
+  });
+}
+//@ chunk-85hd307w.js:1376-1505 sole-consumer
+function renderHighlightNode(node) {
+  if (typeof node === "string") return node;
+  let joined = node.children.map(renderHighlightNode).join("");
+  let scopeName = node.scope ?? node.kind;
+  let renderer = scopeName ? getThemeStyle(scopeName) : undefined;
+  return renderer ? renderer(joined) : joined;
+}
+//@ chunk-85hd307w.js:1505-1850 sole-consumer
+/**
+ * 用 highlight.js 高亮代码（可在工作线程中执行），合并被拆开的组合字符后按作用域着色；语言不支持或出错时原样返回。
+ */
+function highlightCode(code, options) {
+  let language = options?.language;
+  if (!language) return code;
+  try {
+    let highlightLanguage = ensureHighlightLanguage(language);
+    if (!highlightLanguage) return code;
+    let work = options?.work;
+    let highlighted = work
+      ? highlightUnderMessage(work, (highlighter) =>
+          highlighter.highlight(code, {
+            language: highlightLanguage,
+            ignoreIllegals: true,
+          }),
+        )
+      : highlightCore().highlight(code, {
+          language: highlightLanguage,
+          ignoreIllegals: true,
+        });
+    let emitter = highlighted._emitter ?? highlighted.emitter;
+    let rootNode = emitter?.rootNode ?? emitter?.root;
+    if (!rootNode || typeof rootNode === "string") return code;
+    mergeSplitGraphemes(rootNode);
+    return rootNode.children.map(renderHighlightNode).join("");
+  } catch {
+    return code;
+  }
+}
+//@ chunk-85hd307w.js:1850-1885 sole-consumer
+/**
+ * 判断高亮器是否支持某语言。
+ */
+function isSupportedHighlightLanguage(language) {
+  return ensureHighlightLanguage(language) !== null;
+}
+//@ chunk-85hd307w.js:1885-1924 fingerprint = loadCliHighlight (0.783)
+var loadCliHighlight = {
+  highlight: highlightCode,
+  supportsLanguage: isSupportedHighlightLanguage,
+};
+//@ chunk-85hd307w.js:1924-1947 placement
+/**
+ * 返回 CLI 高亮模块（highlight 与 supportsLanguage）。
+ */
+function getCliHighlightModule() {
+  return loadCliHighlight;
+}
 export {
   LANGUAGE_NAMES,
   HIGHLIGHT_LANGUAGE_NAME_MAP,

@@ -26,29 +26,29 @@ var tabGroupIdBySessionId = new Map();
 var FRONTLOADEDTABGROUPID = "frontLoadedTabGroupId";
 var _ = [FRONTLOADEDTABGROUPID, "isBridgeTimeout", "isFrontLoadBoundExceeded"];
 //@ chunk-3ewc7v9f.js:625-738 placement
-function exposedChromeTools(e) {
+function exposedChromeTools(host) {
   return BROWSER_TOOLS.filter(
-    (n) =>
-      (e.bridgeConfig !== undefined || !BRIDGE_EXCLUDED_TOOL_NAMES.has(n.name)) &&
-      !e.excludedTools?.has(n.name),
+    (tool) =>
+      (host.bridgeConfig !== undefined || !BRIDGE_EXCLUDED_TOOL_NAMES.has(tool.name)) &&
+      !host.excludedTools?.has(tool.name),
   );
 }
 //@ chunk-3ewc7v9f.js:738-812 placement
 /**
  * 按宿主能力创建 Chrome 桥接客户端、本机连接池或 socket 客户端。
  */
-function createChromeSocketClient(e) {
-  return e.bridgeConfig
-    ? createChromeBridgeClient(e)
-    : e.getSocketPaths
-      ? createLocalChromeBridgePool(e)
-      : createChromeSocketClient_2(e);
+function createChromeSocketClient(host) {
+  return host.bridgeConfig
+    ? createChromeBridgeClient(host)
+    : host.getSocketPaths
+      ? createLocalChromeBridgePool(host)
+      : createChromeSocketClient_2(host);
 }
 //@ chunk-3ewc7v9f.js:812-1922 placement
-function createChromeBridgeMcpServer(host, n) {
+function createChromeBridgeMcpServer(host, bridge) {
   let { serverName, logger } = host;
-  let bridge = n ?? createChromeSocketClient(host);
-  let a = new Server(
+  let bridge_2 = bridge ?? createChromeSocketClient(host);
+  let server = new Server(
     {
       name: serverName,
       version: "1.0.0",
@@ -62,29 +62,29 @@ function createChromeBridgeMcpServer(host, n) {
       },
     },
   );
-  a.setRequestHandler(ListToolsRequestSchema, () => {
+  server.setRequestHandler(ListToolsRequestSchema, () => {
     if (host.isDisabled?.())
       return {
         tools: [],
       };
-    let o = browserSelectionNote(host.askUserToolName);
+    let selectionNote = browserSelectionNote(host.askUserToolName);
     return {
       tools: [
-        ...exposedChromeTools(host).map((t) =>
-          t.name === "list_connected_browsers"
+        ...exposedChromeTools(host).map((tool) =>
+          tool.name === "list_connected_browsers"
             ? {
-                ...t,
-                description: `${t.description} ${o}`,
+                ...tool,
+                description: `${tool.description} ${selectionNote}`,
               }
-            : t,
+            : tool,
         ),
         ...(host.hostTools?.() ?? []),
       ],
     };
   });
-  a.setRequestHandler(CallToolRequestSchema, async (o) => {
-    logger.info(`[${serverName}] Executing tool: ${quoteTruncated(o.params.name)}`);
-    let rendererSessionScope = host.getRendererSessionScope?.(o.params._meta);
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    logger.info(`[${serverName}] Executing tool: ${quoteTruncated(request.params.name)}`);
+    let rendererSessionScope = host.getRendererSessionScope?.(request.params._meta);
     let callOptions = rendererSessionScope
       ? {
           permissionMode: "ask",
@@ -94,30 +94,39 @@ function createChromeBridgeMcpServer(host, n) {
           },
         }
       : undefined;
-    let s = await handleChromeToolCall(host, bridge, o.params.name, o.params.arguments || {}, callOptions);
-    if (rendererSessionScope && !s.isError) {
-      let l = s._meta?.[FRONTLOADEDTABGROUPID];
-      let c =
-        typeof l === "number"
-          ? l
-          : o.params.name === "tabs_context_mcp"
+    let result = await handleChromeToolCall(
+      host,
+      bridge_2,
+      request.params.name,
+      request.params.arguments || {},
+      callOptions,
+    );
+    if (rendererSessionScope && !result.isError) {
+      let frontloadedTabGroupId = result._meta?.[FRONTLOADEDTABGROUPID];
+      let tabGroupId =
+        typeof frontloadedTabGroupId === "number"
+          ? frontloadedTabGroupId
+          : request.params.name === "tabs_context_mcp"
             ? parseTabsContextResult({
-                result: s,
+                result,
               }).tabGroupId
             : undefined;
-      if (c !== undefined) tabGroupIdBySessionId.set(rendererSessionScope.sessionId, c);
+      if (tabGroupId !== undefined) tabGroupIdBySessionId.set(rendererSessionScope.sessionId, tabGroupId);
     }
-    if (s._meta) for (let l of _) delete s._meta[l];
-    return s;
+    if (result._meta) for (let metaKey of _) delete result._meta[metaKey];
+    return result;
   });
-  bridge.setNotificationHandler((o) => {
-    logger.info(`[${serverName}] Forwarding MCP notification: ${quoteTruncated(o.method)}`);
-    a.notification({
-      method: o.method,
-      params: o.params,
-    }).catch((error) => {
-      logger.info(`[${serverName}] Failed to forward MCP notification: ${error.message}`);
-    });
+  bridge_2.setNotificationHandler((notification) => {
+    logger.info(`[${serverName}] Forwarding MCP notification: ${quoteTruncated(notification.method)}`);
+    server
+      .notification({
+        method: notification.method,
+        params: notification.params,
+      })
+      .catch((error) => {
+        logger.info(`[${serverName}] Failed to forward MCP notification: ${error.message}`);
+      });
   });
-  return a;
+  return server;
 }
+export { exposedChromeTools, createChromeSocketClient, createChromeBridgeMcpServer };

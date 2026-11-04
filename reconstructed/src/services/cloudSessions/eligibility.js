@@ -68,20 +68,20 @@ var lastLoadStatusGetter = null;
 /**
  * 注入远程设置资格计算与加载状态读取的实现。
  */
-function setRemoteSettingsProbes(e, n) {
-  lastEligibilityCompute = e;
-  lastLoadStatusGetter = n;
+function setRemoteSettingsProbes(compute, statusGetter) {
+  lastEligibilityCompute = compute;
+  lastLoadStatusGetter = statusGetter;
 }
 //@ chunk-mdb2vxrz.js:1118-1152 placement
-function _(e) {
-  return lastEligibilityCompute?.(e) ?? null;
+function _(input) {
+  return lastEligibilityCompute?.(input) ?? null;
 }
 //@ chunk-mdb2vxrz.js:1152-1186 placement
 /**
  * 读取缓存的远程设置加载状态（未注入时返回 null）。
  */
-function getCachedLastLoadStatus(e) {
-  return lastLoadStatusGetter?.(e) ?? null;
+function getCachedLastLoadStatus(input) {
+  return lastLoadStatusGetter?.(input) ?? null;
 }
 //@ chunk-mdb2vxrz.js:1186-1299 placement
 /**
@@ -222,19 +222,19 @@ function describeRemoteSettingsStatus(remoteSettingsLoadState) {
     case "stale_cache":
       return `fetch failed \u2014 using stale cache (${describeFetchFailure(remoteSettingsLoadState.failure.errorKind, remoteSettingsLoadState.failure.httpStatus)})${remoteSettingsLoadState.transportEnvWithheld ? "; proxy/CA/provider env withheld until a fetch succeeds" : ""}`;
     case "failed": {
-      let n = `fetch failed \u2014 ${remoteSettingsLoadState.restrictionsOnly ? "the stale cache's restrictions still apply" : "no policy applied"} (${describeFetchFailure(remoteSettingsLoadState.failure.errorKind, remoteSettingsLoadState.failure.httpStatus)})`;
-      return remoteSettingsLoadState.restrictionsOnly && !n.includes("`claude auth")
-        ? `${n}; to clear them, run \`claude auth logout\` (signs out of all accounts)`
-        : n;
+      let detail = `fetch failed \u2014 ${remoteSettingsLoadState.restrictionsOnly ? "the stale cache's restrictions still apply" : "no policy applied"} (${describeFetchFailure(remoteSettingsLoadState.failure.errorKind, remoteSettingsLoadState.failure.httpStatus)})`;
+      return remoteSettingsLoadState.restrictionsOnly && !detail.includes("`claude auth")
+        ? `${detail}; to clear them, run \`claude auth logout\` (signs out of all accounts)`
+        : detail;
     }
     case "ineligible":
       return `not fetched \u2014 ${describeIneligibleReason(remoteSettingsLoadState.reason)}`;
   }
 }
 //@ chunk-mdb2vxrz.js:4857-4912 placement
-function getUrlHost(e) {
+function getUrlHost(url) {
   try {
-    return new URL(e).host;
+    return new URL(url).host;
   } catch {
     return;
   }
@@ -243,10 +243,10 @@ function getUrlHost(e) {
 /**
  * 判断 API 基址是否为官方（未设置或与 OAuth BASE_API_URL 同 host）。
  */
-function getBridgeBaseUrl(baseURL = env.ANTHROPIC_BASE_URL || getWIFProfileBaseUrl()) {
-  if (!baseURL) return true;
+function getBridgeBaseUrl(url = env.ANTHROPIC_BASE_URL || getWIFProfileBaseUrl()) {
+  if (!url) return true;
   let urlHost = getUrlHost(getOauthConfig().BASE_API_URL);
-  return urlHost !== undefined && getUrlHost(baseURL) === urlHost;
+  return urlHost !== undefined && getUrlHost(url) === urlHost;
 }
 //@ chunk-mdb2vxrz.js:5026-5046 placement
 /**
@@ -263,8 +263,8 @@ function persistOrgPinFromEligibility() {
   setStoredCopyOrgPin(readOrgPinState(computeRemoteSettingsEligibility()));
 }
 //@ chunk-mdb2vxrz.js:5074-5199 placement
-function readOrgPinState(e) {
-  if (!isSettingsGateSettled() && !isStoredLoginRemoteSettingsCredential(e))
+function readOrgPinState(credential) {
+  if (!isSettingsGateSettled() && !isStoredLoginRemoteSettingsCredential(credential))
     return {
       kind: "unreadable",
     };
@@ -280,10 +280,10 @@ function readOrgPinState(e) {
   }
 }
 //@ chunk-mdb2vxrz.js:5199-5372 placement
-function getRemoteSettingsOrgUuid(e) {
+function getRemoteSettingsOrgUuid(eligibility) {
   {
     if (
-      !e ||
+      !eligibility ||
       getAPIProvider() === "gateway" ||
       getSessionUsesGatewayVariable() ||
       getSessionHybridOrganizationUuid() !== null ||
@@ -298,14 +298,14 @@ function getRemoteSettingsOrgUuid(e) {
   return;
 }
 //@ chunk-mdb2vxrz.js:5372-5649 placement
-function isStoredLoginRemoteSettingsCredential(remoteSettingsEligibility, n = false) {
+function isStoredLoginRemoteSettingsCredential(eligibility, allowProfile = false) {
   try {
-    if (getRemoteSettingsOrgUuid(remoteSettingsEligibility) === undefined) return false;
+    if (getRemoteSettingsOrgUuid(eligibility) === undefined) return false;
     let { kind } = classifyRemoteSettingsCredential();
     return (
       kind !== "api_key" &&
       kind !== "host_bearer" &&
-      (n || kind !== "profile") &&
+      (allowProfile || kind !== "profile") &&
       getClaudeAIOAuthTokenOrigin() === "store"
     );
   } catch (error) {
@@ -335,11 +335,11 @@ function classifyRemoteSettingsCredential() {
         key,
       };
   } catch {}
-  let e = hostOrgSignInBearer();
-  if (e !== undefined)
+  let bearer = hostOrgSignInBearer();
+  if (bearer !== undefined)
     return {
       kind: "host_bearer",
-      bearer: e,
+      bearer,
     };
   return {
     kind: isProfileRemoteSettingsCredential() ? "profile" : "login",
@@ -380,11 +380,11 @@ function computeRemoteSettingsEligibility() {
       writesForHiddenDialog: () =>
         isStoredLoginRemoteSettingsCredential(computeRemoteSettingsEligibility(), true),
     });
-  let H = env.CLAUDE_CODE_EVAL_CONFINED === true;
-  let evalPolicySnapshotOnly = !eligible && H;
+  let evalConfined = env.CLAUDE_CODE_EVAL_CONFINED === true;
+  let evalPolicySnapshotOnly = !eligible && evalConfined;
   setEvalPolicySnapshotOnly(evalPolicySnapshotOnly);
-  let y = eligible || evalPolicySnapshotOnly;
-  return rememberEligibility(y, y ? undefined : ineligibleReason);
+  let evalSkippedPolicy = eligible || evalPolicySnapshotOnly;
+  return rememberEligibility(evalSkippedPolicy, evalSkippedPolicy ? undefined : ineligibleReason);
 }
 //@ chunk-mdb2vxrz.js:6448-6503 placement
 /**

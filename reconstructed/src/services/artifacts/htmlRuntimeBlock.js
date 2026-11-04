@@ -14,39 +14,40 @@ import { RAWTEXT_MODES } from "../../../vendor/@mixmark-io/domino/lib/HTMLParser
 //@ chunk-1c8ngz3c.js:260-299 placement
 var HTML_CLOSE_TAG_RE = /<\/(?:body|html)[\t\n\f\r />]/i;
 //@ chunk-1c8ngz3c.js:299-802 placement
-function runtimeBlockInsertionIndex(n) {
-  if (!HTML_CLOSE_TAG_RE.test(n)) return n.length;
-  let e = -1;
-  let o = () => {
-    e = -1;
+function runtimeBlockInsertionIndex(html) {
+  if (!HTML_CLOSE_TAG_RE.test(html)) return html.length;
+  let depth = -1;
+  let onHtmlClose = () => {
+    depth = -1;
   };
-  let r = () => {};
+  let noop = () => {};
   let { tokenizer, overBudget } = budgetedTokenizer(
     {
       sourceCodeLocationInfo: true,
     },
     {
-      onStartTag(t) {
-        let i = RAWTEXT_MODES.get(t.tagName);
-        if (i !== undefined) {
-          tokenizer.state = i;
-          tokenizer.lastStartTagName = t.tagName;
+      onStartTag(tag) {
+        let mode = RAWTEXT_MODES.get(tag.tagName);
+        if (mode !== undefined) {
+          tokenizer.state = mode;
+          tokenizer.lastStartTagName = tag.tagName;
         }
-        if (t.tagName !== "html") o();
+        if (tag.tagName !== "html") onHtmlClose();
       },
-      onEndTag(t) {
-        if (t.tagName !== "body" && t.tagName !== "html") o();
-        else if (e < 0 && t.location) e = t.location.startOffset;
+      onEndTag(tag) {
+        if (tag.tagName !== "body" && tag.tagName !== "html") onHtmlClose();
+        else if (depth < 0 && tag.location) depth = tag.location.startOffset;
       },
-      onComment: r,
-      onDoctype: r,
-      onCharacter: o,
-      onNullCharacter: o,
-      onWhitespaceCharacter: r,
-      onEof: r,
+      onComment: noop,
+      onDoctype: noop,
+      onCharacter: onHtmlClose,
+      onNullCharacter: onHtmlClose,
+      onWhitespaceCharacter: noop,
+      onEof: noop,
     },
   );
-  tokenizer.write(n, true);
+  tokenizer.write(html, true);
   if (overBudget()) return;
-  return e >= 0 ? e : n.length;
+  return depth >= 0 ? depth : html.length;
 }
+export { runtimeBlockInsertionIndex };

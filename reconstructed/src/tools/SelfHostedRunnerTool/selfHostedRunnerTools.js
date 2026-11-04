@@ -12,14 +12,14 @@ import { resolve, dirname } from "path";
 import { mkdir, writeFile, open } from "fs/promises";
 import { spawn } from "child_process";
 import {
-  string,
+  stringSchema,
   zodStrictObject,
-  u,
+  objectSchema,
   record,
   unknown,
   array,
-  E,
-  M,
+  numberSchema,
+  booleanSchema,
   union,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { hasUnsafePathGlyphsOrSurrogate } from "../../utils/unsafePathGlyphs.js";
@@ -75,14 +75,14 @@ var TAGGED_ID_READABLE_RE = /^[a-zA-Z0-9_-]{1,256}$/;
  * 不含控制字符的路径或字符串 schema（状态过滤、日志路径等）。
  */
 function pathLikeStringSchema() {
-  return string().refine((e) => !hasUnsafePathGlyphsOrSurrogate(e), TAGGED_ID_UNREADABLE_RULE);
+  return stringSchema().refine((value) => !hasUnsafePathGlyphsOrSurrogate(value), TAGGED_ID_UNREADABLE_RULE);
 }
 //@ chunk-3yy90gv7.js:5795-5844 placement
 /**
  * 带标签 id（ccpool_…）的字符串 schema。
  */
 function taggedIdSchema() {
-  return string().refine((e) => TAGGED_ID_READABLE_RE.test(e), TAGGED_ID_RULE_TEXT);
+  return stringSchema().refine((value) => TAGGED_ID_READABLE_RE.test(value), TAGGED_ID_RULE_TEXT);
 }
 //@ chunk-3yy90gv7.js:5844-6728 placement
 /**
@@ -94,10 +94,10 @@ var EnvironmentSummaryInputSchema = DoctorLazy(() =>
   }),
 );
 var environmentSummaryOutputSchema = DoctorLazy(() =>
-  u({
-    pool: record(string(), unknown()),
-    equivalent: u({
-      ui: string(),
+  objectSchema({
+    pool: record(stringSchema(), unknown()),
+    equivalent: objectSchema({
+      ui: stringSchema(),
     }),
   }),
 );
@@ -125,14 +125,20 @@ var EnvironmentSummaryTool = buildTool({
   async prompt() {
     return ENV_STATE_TOOL_DESCRIPTION;
   },
-  create(e) {
+  create(toolContext) {
     return {
-      async call({ pool_id: poolId }, r) {
-        let s = `/v1/code/runners/self-hosted/pools/${encodeURIComponent(poolId)}`;
-        let n = await runnerApiRequest("GET", s, undefined, r.signal, e.credentials);
+      async call({ pool_id: poolId }, callOptions) {
+        let requestPath = `/v1/code/runners/self-hosted/pools/${encodeURIComponent(poolId)}`;
+        let response = await runnerApiRequest(
+          "GET",
+          requestPath,
+          undefined,
+          callOptions.signal,
+          toolContext.credentials,
+        );
         return {
           data: {
-            pool: n.pool ?? n,
+            pool: response.pool ?? response,
             equivalent: withUi(
               "Admin settings \u2192 Cloud environments \u2192 Self-hosted environments \u2192 (environment) \u2014 header stat tiles",
             ),
@@ -141,11 +147,11 @@ var EnvironmentSummaryTool = buildTool({
       },
     };
   },
-  mapToolResultToToolResultBlockParam(e, t) {
-    return toolResultBlock(t, e);
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
+    return toolResultBlock(toolUseId, result);
   },
-  renderToolUseMessage(e) {
-    return describeArgs(e);
+  renderToolUseMessage(input) {
+    return describeArgs(input);
   },
 });
 //@ chunk-3yy90gv7.js:6728-7805 placement
@@ -161,10 +167,10 @@ var ListEnvironmentSessionsInputSchema = DoctorLazy(() =>
   }),
 );
 var environmentSessionsOutputSchema = DoctorLazy(() =>
-  u({
-    sessions: array(record(string(), unknown())),
-    equivalent: u({
-      ui: string(),
+  objectSchema({
+    sessions: array(record(stringSchema(), unknown())),
+    equivalent: objectSchema({
+      ui: stringSchema(),
     }),
   }),
 );
@@ -192,14 +198,23 @@ var ListEnvironmentSessionsTool = buildTool({
   async prompt() {
     return LIST_SESSIONS_TOOL_DESCRIPTION;
   },
-  create(e) {
+  create(toolContext) {
     return {
-      async call({ pool_id: poolId, status_filter: statusFilter }, s) {
-        let n = statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : "";
-        let a = `/v1/code/runners/self-hosted/pools/${encodeURIComponent(poolId)}/sessions${n}`;
+      async call({ pool_id: poolId, status_filter: statusFilter }, callOptions) {
+        let statusQuery = statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : "";
+        let requestPath = `/v1/code/runners/self-hosted/pools/${encodeURIComponent(poolId)}/sessions${statusQuery}`;
         return {
           data: {
-            sessions: (await runnerApiRequest("GET", a, undefined, s.signal, e.credentials)).sessions ?? [],
+            sessions:
+              (
+                await runnerApiRequest(
+                  "GET",
+                  requestPath,
+                  undefined,
+                  callOptions.signal,
+                  toolContext.credentials,
+                )
+              ).sessions ?? [],
             equivalent: withUi(
               "Admin settings \u2192 Cloud environments \u2192 Self-hosted environments \u2192 (environment) \u2192 Activity tab \u2192 Sessions",
             ),
@@ -208,11 +223,11 @@ var ListEnvironmentSessionsTool = buildTool({
       },
     };
   },
-  mapToolResultToToolResultBlockParam(e, t) {
-    return toolResultBlock(t, e);
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
+    return toolResultBlock(toolUseId, result);
   },
-  renderToolUseMessage(e) {
-    return describeArgs(e);
+  renderToolUseMessage(input) {
+    return describeArgs(input);
   },
 });
 //@ chunk-3yy90gv7.js:7805-8722 placement
@@ -225,10 +240,10 @@ var ListRunnersInputSchema = DoctorLazy(() =>
   }),
 );
 var runnersOutputSchema = DoctorLazy(() =>
-  u({
-    runners: array(record(string(), unknown())),
-    equivalent: u({
-      ui: string(),
+  objectSchema({
+    runners: array(record(stringSchema(), unknown())),
+    equivalent: objectSchema({
+      ui: stringSchema(),
     }),
   }),
 );
@@ -256,13 +271,22 @@ var ListRunnersTool = buildTool({
   async prompt() {
     return LIST_RUNNERS_TOOL_DESCRIPTION;
   },
-  create(e) {
+  create(toolContext) {
     return {
-      async call({ pool_id: poolId }, r) {
-        let s = `/v1/code/runners/self-hosted/runners?pool_id=${encodeURIComponent(poolId)}`;
+      async call({ pool_id: poolId }, callOptions) {
+        let requestPath = `/v1/code/runners/self-hosted/runners?pool_id=${encodeURIComponent(poolId)}`;
         return {
           data: {
-            runners: (await runnerApiRequest("GET", s, undefined, r.signal, e.credentials)).runners ?? [],
+            runners:
+              (
+                await runnerApiRequest(
+                  "GET",
+                  requestPath,
+                  undefined,
+                  callOptions.signal,
+                  toolContext.credentials,
+                )
+              ).runners ?? [],
             equivalent: withUi(
               "Admin settings \u2192 Cloud environments \u2192 Self-hosted environments \u2192 (environment) \u2192 Activity tab \u2192 Runners",
             ),
@@ -271,11 +295,11 @@ var ListRunnersTool = buildTool({
       },
     };
   },
-  mapToolResultToToolResultBlockParam(e, t) {
-    return toolResultBlock(t, e);
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
+    return toolResultBlock(toolUseId, result);
   },
-  renderToolUseMessage(e) {
-    return describeArgs(e);
+  renderToolUseMessage(input) {
+    return describeArgs(input);
   },
 });
 //@ chunk-3yy90gv7.js:8722-9649 placement
@@ -288,10 +312,10 @@ var ListEnvironmentSecretsInputSchema = DoctorLazy(() =>
   }),
 );
 var secretsOutputSchema = DoctorLazy(() =>
-  u({
-    secrets: array(record(string(), unknown())),
-    equivalent: u({
-      ui: string(),
+  objectSchema({
+    secrets: array(record(stringSchema(), unknown())),
+    equivalent: objectSchema({
+      ui: stringSchema(),
     }),
   }),
 );
@@ -319,13 +343,22 @@ var ListEnvironmentSecretsTool = buildTool({
   async prompt() {
     return LIST_SECRETS_TOOL_DESCRIPTION;
   },
-  create(e) {
+  create(toolContext) {
     return {
-      async call({ pool_id: poolId }, r) {
-        let s = `/v1/code/runners/self-hosted/pools/${encodeURIComponent(poolId)}/secrets`;
+      async call({ pool_id: poolId }, callOptions) {
+        let requestPath = `/v1/code/runners/self-hosted/pools/${encodeURIComponent(poolId)}/secrets`;
         return {
           data: {
-            secrets: (await runnerApiRequest("GET", s, undefined, r.signal, e.credentials)).secrets ?? [],
+            secrets:
+              (
+                await runnerApiRequest(
+                  "GET",
+                  requestPath,
+                  undefined,
+                  callOptions.signal,
+                  toolContext.credentials,
+                )
+              ).secrets ?? [],
             equivalent: withUi(
               "Admin settings \u2192 Cloud environments \u2192 Self-hosted environments \u2192 (environment) \u2192 Configuration tab \u2192 Environment keys",
             ),
@@ -334,11 +367,11 @@ var ListEnvironmentSecretsTool = buildTool({
       },
     };
   },
-  mapToolResultToToolResultBlockParam(e, t) {
-    return toolResultBlock(t, e);
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
+    return toolResultBlock(toolUseId, result);
   },
-  renderToolUseMessage(e) {
-    return describeArgs(e);
+  renderToolUseMessage(input) {
+    return describeArgs(input);
   },
 });
 //@ chunk-3yy90gv7.js:9649-10529 placement
@@ -347,15 +380,18 @@ var ListEnvironmentSecretsTool = buildTool({
  */
 var ProbeRunnerHealthInputSchema = DoctorLazy(() =>
   zodStrictObject({
-    health_port: E().int().optional().describe(`Default ${DEFAULT_RUNNER_PORT}. 0 means disabled.`),
+    health_port: numberSchema()
+      .int()
+      .optional()
+      .describe(`Default ${DEFAULT_RUNNER_PORT}. 0 means disabled.`),
   }),
 );
 var probeHealthOutputSchema = DoctorLazy(() =>
-  u({
-    health: record(string(), unknown()).optional(),
-    disabled: M().optional(),
-    unreachable: M().optional(),
-    error: string().optional(),
+  objectSchema({
+    health: record(stringSchema(), unknown()).optional(),
+    disabled: booleanSchema().optional(),
+    unreachable: booleanSchema().optional(),
+    error: stringSchema().optional(),
   }),
 );
 var ProbeRunnerHealthTool = buildTool({
@@ -413,11 +449,11 @@ var ProbeRunnerHealthTool = buildTool({
       },
     };
   },
-  mapToolResultToToolResultBlockParam(e, t) {
-    return toolResultBlock(t, e);
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
+    return toolResultBlock(toolUseId, result);
   },
-  renderToolUseMessage(e) {
-    return describeArgs(e);
+  renderToolUseMessage(input) {
+    return describeArgs(input);
   },
 });
 //@ chunk-3yy90gv7.js:10529-10810 placement
@@ -427,22 +463,25 @@ var ProbeRunnerHealthTool = buildTool({
 var RUNNER_METRIC_PREFIX = "claude_code_self_hosted_runner_";
 var runnerMetricsInputSchema = DoctorLazy(() =>
   zodStrictObject({
-    health_port: E().int().optional().describe(`Default ${DEFAULT_RUNNER_PORT}. 0 means disabled.`),
+    health_port: numberSchema()
+      .int()
+      .optional()
+      .describe(`Default ${DEFAULT_RUNNER_PORT}. 0 means disabled.`),
   }),
 );
 var runnerMetricsOutputSchema = DoctorLazy(() =>
-  u({
-    gauges: record(string(), union([E(), string()])).optional(),
-    raw: string().optional(),
-    disabled: M().optional(),
-    unreachable: M().optional(),
-    error: string().optional(),
+  objectSchema({
+    gauges: record(stringSchema(), union([numberSchema(), stringSchema()])).optional(),
+    raw: stringSchema().optional(),
+    disabled: booleanSchema().optional(),
+    unreachable: booleanSchema().optional(),
+    error: stringSchema().optional(),
   }),
 );
 //@ chunk-3yy90gv7.js:10810-11283 placement
-function parseRunnerMetrics(e) {
-  let t = {};
-  for (let line of e.split(`
+function parseRunnerMetrics(metricsText) {
+  let gauges = {};
+  for (let line of metricsText.split(`
 `)) {
     if (line.startsWith("#") || !line.startsWith(RUNNER_METRIC_PREFIX)) continue;
     let match = line.match(/^(\S+?)(\{[^}]*\})?\s+(\S+)\s*$/);
@@ -450,18 +489,18 @@ function parseRunnerMetrics(e) {
     let sliced = match[1].slice(RUNNER_METRIC_PREFIX.length);
     if (sliced.endsWith("_bucket") || sliced === "session_idle_seconds" || sliced === "poll_errors_total")
       continue;
-    let a = match[2] ?? "";
-    let i = Number(match[3]);
+    let labelText = match[2] ?? "";
+    let metricValue = Number(match[3]);
     if (sliced === "locked_account") {
-      let c = a.match(/email="([^"]*)"/)?.[1];
-      if (c) t.locked_account_email = c;
+      let lockedEmail = labelText.match(/email="([^"]*)"/)?.[1];
+      if (lockedEmail) gauges.locked_account_email = lockedEmail;
     }
-    if (!Number.isNaN(i)) {
-      let c = t[sliced];
-      t[sliced] = typeof c === "number" ? c + i : i;
+    if (!Number.isNaN(metricValue)) {
+      let existingValue = gauges[sliced];
+      gauges[sliced] = typeof existingValue === "number" ? existingValue + metricValue : metricValue;
     }
   }
-  return t;
+  return gauges;
 }
 //@ chunk-3yy90gv7.js:11283-12009 placement
 var READ_RUNNER_METRICS_TOOL = buildTool({
@@ -498,16 +537,16 @@ var READ_RUNNER_METRICS_TOOL = buildTool({
             },
           };
         try {
-          let t = await externalHttp.get(`http://127.0.0.1:${healthPort}/metrics`, {
+          let response = await externalHttp.get(`http://127.0.0.1:${healthPort}/metrics`, {
             timeout: 2000,
             responseType: "text",
             validateStatus: () => true,
           });
-          let r = redactSecretsInText(String(t.data));
+          let metricsText = redactSecretsInText(String(response.data));
           return {
             data: {
-              gauges: parseRunnerMetrics(r),
-              raw: r,
+              gauges: parseRunnerMetrics(metricsText),
+              raw: metricsText,
             },
           };
         } catch (error) {
@@ -521,11 +560,11 @@ var READ_RUNNER_METRICS_TOOL = buildTool({
       },
     };
   },
-  mapToolResultToToolResultBlockParam(e, t) {
-    return toolResultBlock(t, e);
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
+    return toolResultBlock(toolUseId, result);
   },
-  renderToolUseMessage(e) {
-    return describeArgs(e);
+  renderToolUseMessage(input) {
+    return describeArgs(input);
   },
 });
 //@ chunk-3yy90gv7.js:12009-13830 placement
@@ -541,10 +580,10 @@ var RequeueSessionInputSchema = DoctorLazy(() =>
   }),
 );
 var requeueSessionOutputSchema = DoctorLazy(() =>
-  u({
-    excluded_count: E().optional(),
-    equivalent: u({
-      ui: string(),
+  objectSchema({
+    excluded_count: numberSchema().optional(),
+    equivalent: objectSchema({
+      ui: stringSchema(),
     }),
   }),
 );
@@ -570,8 +609,8 @@ var RequeueSessionTool = buildTool({
   suppressesAlwaysAllowRule() {
     return true;
   },
-  toAutoClassifierInput(e) {
-    return `requeue session=${e.session_id} off runner=${e.runner_id}`;
+  toAutoClassifierInput(input) {
+    return `requeue session=${input.session_id} off runner=${input.runner_id}`;
   },
   async description() {
     return REQUEUE_SESSION_TOOL_DESCRIPTION;
@@ -579,32 +618,32 @@ var RequeueSessionTool = buildTool({
   async prompt() {
     return REQUEUE_SESSION_TOOL_DESCRIPTION;
   },
-  create(e) {
+  create(toolContext) {
     return {
-      async checkPermissions(t) {
-        if (e.permissions().mode === "auto")
+      async checkPermissions(input) {
+        if (toolContext.permissions().mode === "auto")
           return {
             behavior: "passthrough",
             message: "Requeueing a runner session requires classifier review.",
           };
         return {
           behavior: "ask",
-          message: `Requeue session ${t.session_id} off runner ${t.runner_id}? This re-launches the session on another runner in the environment.`,
+          message: `Requeue session ${input.session_id} off runner ${input.runner_id}? This re-launches the session on another runner in the environment.`,
         };
       },
-      async call({ session_id: sessionId, runner_id: runnerId }, s) {
-        let n = `/v1/code/runners/self-hosted/sessions/${encodeURIComponent(sessionId)}/requeue`;
+      async call({ session_id: sessionId, runner_id: runnerId }, callOptions) {
+        let requestPath = `/v1/code/runners/self-hosted/sessions/${encodeURIComponent(sessionId)}/requeue`;
         return {
           data: {
             excluded_count: (
               await runnerApiRequest(
                 "POST",
-                n,
+                requestPath,
                 {
                   runner_id: runnerId,
                 },
-                s.signal,
-                e.credentials,
+                callOptions.signal,
+                toolContext.credentials,
               )
             ).excluded_count,
             equivalent: withUi(
@@ -615,11 +654,11 @@ var RequeueSessionTool = buildTool({
       },
     };
   },
-  mapToolResultToToolResultBlockParam(e, t) {
-    return toolResultBlock(t, e);
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
+    return toolResultBlock(toolUseId, result);
   },
-  renderToolUseMessage(e) {
-    return describeArgs(e);
+  renderToolUseMessage(input) {
+    return describeArgs(input);
   },
 });
 //@ chunk-3yy90gv7.js:13965-14819 placement
@@ -633,48 +672,51 @@ var PATH_CONTROL_CHAR_REASON =
   "the path holds a control character, a tab or a line break, so the operator could not read it as written; use a path without such characters, or ask the operator to rename or move the file";
 var secretFileInputSchema = DoctorLazy(() =>
   zodStrictObject({
-    secret_file_path: string()
+    secret_file_path: stringSchema()
       .refine(isPrintablePathLike, PATH_CONTROL_CHAR_REASON)
       .describe("Path to the environment secret the operator saved from the Admin UI."),
-    capacity: E().int().positive().optional().describe("Default 1."),
-    base_dir: string()
+    capacity: numberSchema().int().positive().optional().describe("Default 1."),
+    base_dir: stringSchema()
       .refine(isPrintablePathLike, PATH_CONTROL_CHAR_REASON)
       .optional()
       .describe(
         `Always passed to the runner (its built-in default of /workspace is unwritable on laptops). Default: ${RUNNER_SETUP_WORKSPACE}`,
       ),
-    health_port: E().int().optional().describe(`Default ${DEFAULT_RUNNER_PORT}. 0 disables /healthz.`),
-    log_path: string()
+    health_port: numberSchema()
+      .int()
+      .optional()
+      .describe(`Default ${DEFAULT_RUNNER_PORT}. 0 disables /healthz.`),
+    log_path: stringSchema()
       .refine(isPrintablePathLike, PATH_CONTROL_CHAR_REASON)
       .optional()
       .describe(`Default: ${DEFAULT_RUNNER_LOG_PATH}`),
   }),
 );
 var spawnLocalRunnerOutputSchema = DoctorLazy(() =>
-  u({
-    pid: E(),
-    pid_file: string(),
-    log_path: string(),
-    health_port: E(),
-    command: string(),
+  objectSchema({
+    pid: numberSchema(),
+    pid_file: stringSchema(),
+    log_path: stringSchema(),
+    health_port: numberSchema(),
+    command: stringSchema(),
   }),
 );
 //@ chunk-3yy90gv7.js:14819-15046 placement
-function buildRunnerSpawnArgs(e) {
+function buildRunnerSpawnArgs(input) {
   return [
     "self-hosted-runner",
     "--environment-secret-file",
-    e.secret_file_path,
+    input.secret_file_path,
     "--capacity",
-    String(e.capacity),
+    String(input.capacity),
     "--base-dir",
-    e.base_dir,
+    input.base_dir,
     "--api-url",
     runnerApiBaseUrl(),
     "--health-port",
-    String(e.health_port),
+    String(input.health_port),
     "--log-file",
-    e.log_path,
+    input.log_path,
   ];
 }
 //@ chunk-3yy90gv7.js:15046-15126 placement = shellQuote (1)
@@ -710,8 +752,8 @@ var SPAWN_LOCAL_RUNNER_TOOL = buildTool({
   suppressesAlwaysAllowRule() {
     return true;
   },
-  toAutoClassifierInput(e) {
-    return `spawn runner: secret=${e.secret_file_path} base_dir=${e.base_dir ?? RUNNER_SETUP_WORKSPACE}`;
+  toAutoClassifierInput(input) {
+    return `spawn runner: secret=${input.secret_file_path} base_dir=${input.base_dir ?? RUNNER_SETUP_WORKSPACE}`;
   },
   async description() {
     return SPAWN_RUNNER_TOOL_DESCRIPTION;
@@ -719,17 +761,17 @@ var SPAWN_LOCAL_RUNNER_TOOL = buildTool({
   async prompt() {
     return SPAWN_RUNNER_TOOL_DESCRIPTION;
   },
-  create(e) {
+  create(toolContext) {
     return {
-      async checkPermissions(t) {
-        if (e.permissions().mode === "auto")
+      async checkPermissions(input) {
+        if (toolContext.permissions().mode === "auto")
           return {
             behavior: "passthrough",
             message: "Spawning a local runner requires classifier review.",
           };
         return {
           behavior: "ask",
-          message: `Start a detached self-hosted runner with the environment secret file ${t.secret_file_path} (base dir ${t.base_dir ?? RUNNER_SETUP_WORKSPACE})? The runner will execute that environment's queued sessions on this machine and will keep running after this session ends.`,
+          message: `Start a detached self-hosted runner with the environment secret file ${input.secret_file_path} (base dir ${input.base_dir ?? RUNNER_SETUP_WORKSPACE})? The runner will execute that environment's queued sessions on this machine and will keep running after this session ends.`,
         };
       },
       async call({
@@ -739,54 +781,56 @@ var SPAWN_LOCAL_RUNNER_TOOL = buildTool({
         health_port: healthPort = DEFAULT_RUNNER_PORT,
         log_path: logPath = DEFAULT_RUNNER_LOG_PATH,
       }) {
-        let i = resolve(baseDir);
-        let c = resolve(logPath);
+        let baseDirPath = resolve(baseDir);
+        let logFilePath = resolve(logPath);
         let secretFilePath_2 = resolve(secretFilePath);
-        await mkdir(i, {
+        await mkdir(baseDirPath, {
           recursive: true,
         });
-        await mkdir(dirname(c), {
+        await mkdir(dirname(logFilePath), {
           recursive: true,
         });
         let runnerSpawnArgs = buildRunnerSpawnArgs({
           secret_file_path: secretFilePath_2,
           capacity,
-          base_dir: i,
+          base_dir: baseDirPath,
           health_port: healthPort,
-          log_path: c,
+          log_path: logFilePath,
         });
         let execPath = process.execPath;
-        let R = isStandaloneExecutable() ? [] : [process.argv[1]];
-        let f = spawn(execPath, [...R, ...runnerSpawnArgs], {
+        let nodeArgs = isStandaloneExecutable() ? [] : [process.argv[1]];
+        let child = spawn(execPath, [...nodeArgs, ...runnerSpawnArgs], {
           detached: true,
           stdio: "ignore",
           windowsHide: true,
           env: withLaunchValuesOfHybridConnection(process.env),
         });
-        moveKeeperPid(f.pid);
+        moveKeeperPid(child.pid);
         let promise = await new Promise((resolve) => {
-          f.once("spawn", () => resolve(null));
-          f.once("error", resolve);
+          child.once("spawn", () => resolve(null));
+          child.once("error", resolve);
         });
-        f.unref();
-        let pid = f.pid;
+        child.unref();
+        let pid = child.pid;
         if (promise || pid === undefined)
           throw Error(
-            `Failed to spawn runner${promise ? ` (${promise.message})` : " (no pid)"}. Command: ${[shellQuote(execPath), ...R.map(shellQuote), ...runnerSpawnArgs.map(shellQuote)].join(" ")}`,
+            `Failed to spawn runner${promise ? ` (${promise.message})` : " (no pid)"}. Command: ${[shellQuote(execPath), ...nodeArgs.map(shellQuote), ...runnerSpawnArgs.map(shellQuote)].join(" ")}`,
           );
-        let z = resolve(DEFAULT_RUNNER_PID_PATH);
-        await mkdir(dirname(z), {
+        let pidPath = resolve(DEFAULT_RUNNER_PID_PATH);
+        await mkdir(dirname(pidPath), {
           recursive: true,
         });
-        await writeFile(z, String(pid));
-        let command = [shellQuote(execPath), ...R.map(shellQuote), ...runnerSpawnArgs.map(shellQuote)].join(
-          " ",
-        );
+        await writeFile(pidPath, String(pid));
+        let command = [
+          shellQuote(execPath),
+          ...nodeArgs.map(shellQuote),
+          ...runnerSpawnArgs.map(shellQuote),
+        ].join(" ");
         return {
           data: {
             pid,
-            pid_file: z,
-            log_path: c,
+            pid_file: pidPath,
+            log_path: logFilePath,
             health_port: healthPort,
             command,
           },
@@ -794,19 +838,19 @@ var SPAWN_LOCAL_RUNNER_TOOL = buildTool({
       },
     };
   },
-  mapToolResultToToolResultBlockParam(e, t) {
-    return toolResultBlock(t, e);
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
+    return toolResultBlock(toolUseId, result);
   },
-  renderToolUseMessage(e) {
-    return describeArgs(e);
+  renderToolUseMessage(input) {
+    return describeArgs(input);
   },
 });
 //@ chunk-3yy90gv7.js:16976-17034 placement
 /**
  * 判断值可打印且不含制表符与换行（路径字段校验）。
  */
-function isPrintablePathLike(e) {
-  return isAllPrintable(e) && !/[\t\n\u2028\u2029]/.test(e);
+function isPrintablePathLike(value) {
+  return isAllPrintable(value) && !/[\t\n\u2028\u2029]/.test(value);
 }
 //@ chunk-3yy90gv7.js:17070-18192 placement
 /**
@@ -816,7 +860,7 @@ var DEFAULT_LOG_TAIL_BYTES = 65536;
 var readRunnerLogInputSchema = DoctorLazy(() =>
   zodStrictObject({
     log_path: pathLikeStringSchema().describe("Path to the runner's --log-file."),
-    bytes: E()
+    bytes: numberSchema()
       .int()
       .positive()
       .optional()
@@ -824,10 +868,10 @@ var readRunnerLogInputSchema = DoctorLazy(() =>
   }),
 );
 var readRunnerLogOutputSchema = DoctorLazy(() =>
-  u({
-    lines: string(),
-    bytes_read: E(),
-    error: string().optional(),
+  objectSchema({
+    lines: stringSchema(),
+    bytes_read: numberSchema(),
+    error: stringSchema().optional(),
   }),
 );
 var ReadRunnerLogTool = buildTool({
@@ -854,28 +898,28 @@ var ReadRunnerLogTool = buildTool({
   async prompt() {
     return RUNNER_LOGS_TOOL_DESCRIPTION;
   },
-  getPath(e) {
-    return e.log_path;
+  getPath(input) {
+    return input.log_path;
   },
   create() {
     return {
       async call({ log_path: logPath, bytes = DEFAULT_LOG_TAIL_BYTES }) {
         try {
-          let r = await open(logPath, "r");
+          let handle = await open(logPath, "r");
           try {
-            let { size } = await r.stat();
+            let { size } = await handle.stat();
             let max = Math.max(0, size - bytes);
-            let a = size - max;
-            let i = Buffer.alloc(a);
-            await r.read(i, 0, a, max);
+            let readLength = size - max;
+            let buffer = Buffer.alloc(readLength);
+            await handle.read(buffer, 0, readLength, max);
             return {
               data: {
-                lines: redactSecretsInText(i.toString("utf8")),
-                bytes_read: a,
+                lines: redactSecretsInText(buffer.toString("utf8")),
+                bytes_read: readLength,
               },
             };
           } finally {
-            await r.close();
+            await handle.close();
           }
         } catch (error) {
           return {
@@ -889,18 +933,18 @@ var ReadRunnerLogTool = buildTool({
       },
     };
   },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
     return {
       tool_use_id: toolUseId,
       type: "tool_result",
-      content: e.error
-        ? `error: ${e.error}`
-        : `(last ${e.bytes_read} bytes, redacted)
-${e.lines}`,
+      content: result.error
+        ? `error: ${result.error}`
+        : `(last ${result.bytes_read} bytes, redacted)
+${result.lines}`,
     };
   },
-  renderToolUseMessage(e) {
-    return describeArgs(e);
+  renderToolUseMessage(input) {
+    return describeArgs(input);
   },
 });
 //@ chunk-3yy90gv7.js:18192-18219 placement
@@ -918,3 +962,4 @@ var SELF_HOSTED_RUNNER_TOOLS = [
   ReadRunnerLogTool,
   RequeueSessionTool,
 ];
+export { SELF_HOSTED_RUNNER_TOOLS };

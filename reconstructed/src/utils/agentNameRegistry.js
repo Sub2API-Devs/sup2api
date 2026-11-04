@@ -13,18 +13,20 @@ import { isTerminalTaskStatus } from "../tasks/taskStatus.js";
 import { isWaitingOnChildren, FLAG_IDLE_WINDOW } from "../tasks/LocalAgentTask/keepalive.js";
 import { isReservedSessionName } from "./sessionAddresses.js";
 import { logForDebugging } from "./debug.js";
-import { En } from "../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2 } from "../../vendor/lodash-es/_inlinedHelpers.js";
 
 //@ chunk-1jczmbs0.js:409-533 placement
-function findAgentRecord(r, i) {
-  if (Object.hasOwn(r, i)) return r[i];
-  return Object.values(r).find((n) => isInProcessTeammateTask(n) && n.identity.resumableAgentId === i);
+function findAgentRecord(agentRecords, agentId) {
+  if (Object.hasOwn(agentRecords, agentId)) return agentRecords[agentId];
+  return Object.values(agentRecords).find(
+    (task) => isInProcessTeammateTask(task) && task.identity.resumableAgentId === agentId,
+  );
 }
 //@ chunk-1jczmbs0.js:533-763 placement
-function liveAgentNames(agentNameRegistry, i) {
+function liveAgentNames(agentNameRegistry, tasks) {
   return new Map(
-    [...agentNameRegistry].filter(([, n]) => {
-      let agentRecord = findAgentRecord(i, n);
+    [...agentNameRegistry].filter(([, agentId]) => {
+      let agentRecord = findAgentRecord(tasks, agentId);
       if (agentRecord === undefined) return false;
       if (!isTerminalTaskStatus(agentRecord.status)) return true;
       return (
@@ -40,8 +42,8 @@ function liveAgentNames(agentNameRegistry, i) {
 var NOOP_AGENT_NAME_REGISTRY = {
   markTypeInvoked() {},
   registerName() {},
-  allocateName(r) {
-    return r;
+  allocateName(name) {
+    return name;
   },
   nameOf() {
     return;
@@ -56,100 +58,106 @@ var NOOP_AGENT_NAME_REGISTRY = {
  */
 function createAgentNameRegistry(getAppState, setAppState) {
   return {
-    markTypeInvoked(n) {
-      setAppState((e) =>
-        e.agentTypesInvokedThisSession.has(n)
-          ? e
+    markTypeInvoked(agentType) {
+      setAppState((prevState) =>
+        prevState.agentTypesInvokedThisSession.has(agentType)
+          ? prevState
           : {
-              ...e,
-              agentTypesInvokedThisSession: new Set(e.agentTypesInvokedThisSession).add(n),
+              ...prevState,
+              agentTypesInvokedThisSession: new Set(prevState.agentTypesInvokedThisSession).add(agentType),
             },
       );
     },
-    registerName(n, e) {
-      if (isReservedSessionName(n)) {
-        logForDebugging(`[registerName] refused reserved or agent-id-shaped name "${n}" for ${e}`);
+    registerName(name, agentId) {
+      if (isReservedSessionName(name)) {
+        logForDebugging(`[registerName] refused reserved or agent-id-shaped name "${name}" for ${agentId}`);
         return;
       }
-      setAppState((s) => {
-        if (s.agentNameRegistry.get(n) === e) return s;
-        let a = new Map(s.agentNameRegistry);
-        a.set(n, e);
+      setAppState((prevState) => {
+        if (prevState.agentNameRegistry.get(name) === agentId) return prevState;
+        let nextRegistry = new Map(prevState.agentNameRegistry);
+        nextRegistry.set(name, agentId);
         return {
-          ...s,
-          agentNameRegistry: a,
+          ...prevState,
+          agentNameRegistry: nextRegistry,
         };
       });
     },
-    allocateName(n) {
-      let e = sanitizeAgentName(n);
-      let s = getAppState();
-      let agentNameRegistry = s.agentNameRegistry;
-      let g = new Set(Object.values(s.teamContext?.teammates ?? {}).map((o) => o.name));
+    allocateName(preferredName) {
+      let baseName = sanitizeAgentName(preferredName);
+      let state = getAppState();
+      let agentNameRegistry = state.agentNameRegistry;
+      let teammateNames = new Set(
+        Object.values(state.teamContext?.teammates ?? {}).map((teammate) => teammate.name),
+      );
       for (let j = 1; ; j++) {
-        let m = j === 1 ? e : `${e}-${j}`;
-        if (isReservedSessionName(m) || g.has(m)) continue;
-        let d = agentNameRegistry.get(m);
-        if (d === undefined || findAgentRecord(s.tasks, d) === undefined) return m;
+        let candidate = j === 1 ? baseName : `${baseName}-${j}`;
+        if (isReservedSessionName(candidate) || teammateNames.has(candidate)) continue;
+        let existingAgentId = agentNameRegistry.get(candidate);
+        if (existingAgentId === undefined || findAgentRecord(state.tasks, existingAgentId) === undefined)
+          return candidate;
       }
     },
-    nameOf(n) {
-      for (let [e, s] of getAppState().agentNameRegistry) if (s === n) return e;
+    nameOf(agentId) {
+      for (let [name, mappedAgentId] of getAppState().agentNameRegistry)
+        if (mappedAgentId === agentId) return name;
       return;
     },
-    clearTodos(n) {
-      setAppState((e) => {
-        if (!(n in e.todos)) return e;
-        let { [n]: s, ...a } = e.todos;
+    clearTodos(agentId) {
+      setAppState((prevState) => {
+        if (!(agentId in prevState.todos)) return prevState;
+        let { [agentId]: removedTodo, ...remainingTodos } = prevState.todos;
         return {
-          ...e,
-          todos: a,
+          ...prevState,
+          todos: remainingTodos,
         };
       });
     },
-    setSendMessagePin(n, e) {
-      setAppState((s) => {
-        let a = Object.hasOwn(s.sendMessagePins, n) ? s.sendMessagePins[n] : undefined;
-        if (En(a, e)) return s;
+    setSendMessagePin(key, pinValue) {
+      setAppState((prevState) => {
+        let previousPin = Object.hasOwn(prevState.sendMessagePins, key)
+          ? prevState.sendMessagePins[key]
+          : undefined;
+        if (import_sortedIndex_2(previousPin, pinValue)) return prevState;
         return {
-          ...s,
+          ...prevState,
           sendMessagePins: {
-            ...s.sendMessagePins,
-            [n]: e,
+            ...prevState.sendMessagePins,
+            [key]: pinValue,
           },
         };
       });
     },
-    setTeammate(n, e) {
-      if (e !== undefined && isReservedSessionName(e.name)) {
+    setTeammate(name, teammate) {
+      if (teammate !== undefined && isReservedSessionName(teammate.name)) {
         logForDebugging(
-          `[setTeammate] refused reserved or agent-id-shaped teammate name "${e.name}" for ${n}`,
+          `[setTeammate] refused reserved or agent-id-shaped teammate name "${teammate.name}" for ${name}`,
         );
         return;
       }
-      setAppState((s) => {
-        let teamContext = s.teamContext;
-        if (!teamContext) return s;
-        let g = teamContext.teammates?.[n];
-        if (e === undefined) {
-          if (!g) return s;
-          let { [n]: o, ...m } = teamContext.teammates;
+      setAppState((prevState) => {
+        let teamContext = prevState.teamContext;
+        if (!teamContext) return prevState;
+        let existingTeammate = teamContext.teammates?.[name];
+        if (teammate === undefined) {
+          if (!existingTeammate) return prevState;
+          let { [name]: removedTeammate, ...remainingTeammates } = teamContext.teammates;
           return {
-            ...s,
+            ...prevState,
             teamContext: {
               ...teamContext,
-              teammates: m,
+              teammates: remainingTeammates,
             },
           };
         }
-        if (g === e) return s;
+        if (existingTeammate === teammate) return prevState;
         return {
-          ...s,
+          ...prevState,
           teamContext: {
             ...teamContext,
             teammates: {
               ...teamContext.teammates,
-              [n]: e,
+              [name]: teammate,
             },
           },
         };
@@ -158,8 +166,8 @@ function createAgentNameRegistry(getAppState, setAppState) {
   };
 }
 //@ chunk-1jczmbs0.js:2338-2450 placement
-function sanitizeAgentName(r) {
-  let sliced = r
+function sanitizeAgentName(rawName) {
+  let sliced = rawName
     .replace(/[^A-Za-z0-9_-]+/g, "-")
     .replace(/^-+/, "")
     .slice(0, 64);

@@ -5,13 +5,13 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_timestamp_pb } from "./google/protobuf/timestamp_pb.js";
 import { require_create } from "../../cjs/create.js";
 import { require_proto_int64 } from "../proto-int64.js";
 
 //@ chunk-fq0cr76a.js:414492-415008 cjs-fingerprint
-var require_timestamp = x(function (cjsExports) {
+var require_timestamp = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

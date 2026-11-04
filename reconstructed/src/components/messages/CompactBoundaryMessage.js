@@ -30,10 +30,10 @@ import { renderTruncatedContent } from "../../utils/terminal.js";
 import { REJECTED_FEEDBACK_PLACEHOLDER } from "./UserToolResultMessage/RejectedToolUseMessage.js";
 import { API_ERROR_MESSAGE_PREFIX } from "../../services/api/errors.js";
 import { sanitizeDisplayText } from "../../utils/sanitizeDisplayText.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useIsFullscreen } from "../../ink/renderModeContext.js";
 import { useShortcutDisplay } from "../../keybindings/useShortcutDisplay.js";
-import { Se } from "../../../vendor/react/cjs/react.production.js";
+import { useContext } from "../../../vendor/react/cjs/react.production.js";
 import { CompactSummaryContext, historyHintSuffix } from "./GroupedToolUseContent.js";
 import { filePathToUrl } from "../../hooks/useWorkspaceDiff.js";
 import { getDisplayPath } from "../../utils/file.js";
@@ -45,27 +45,39 @@ import {
 import { NoticeRowMessage } from "./teamMemSaved.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { TEARDROP_ASTERISK } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { TEARDROP_ASTERISK } from "../../constants/figures.js";
 import { FilePathLink } from "../FilePathLink.js";
 
 //@ chunk-ah34pb7m.js:51952-52444 placement
 /**
  * 压缩边界说明（摘要了多少消息/令牌）。
  */
-function compactBoundaryLabel(compactMetadata, historyShortcut, c) {
-  let g =
+function compactBoundaryLabel(compactMetadata, historyShortcut, historyTarget) {
+  let summaryText =
     compactMetadata.messagesSummarized !== undefined && compactMetadata.messagesSummarized > 0
       ? `${compactMetadata.messagesSummarized} ${compactMetadata.messagesSummarized === 1 ? "message" : "messages"} summarized`
       : compactMetadata.preTokens > 0
         ? `${formatTokens(compactMetadata.preTokens)} tokens summarized`
         : null;
-  let f = c === null ? (g ? "to see them" : "for history") : c.leadsToSummary ? "for the summary" : null;
+  let whereShortcutLeads =
+    historyTarget === null
+      ? summaryText
+        ? "to see them"
+        : "for history"
+      : historyTarget.leadsToSummary
+        ? "for the summary"
+        : null;
   return {
     tone: "dim",
     text: "Compacted",
-    detail: f === null ? (g ?? undefined) : g ? `${g} (${historyShortcut} ${f})` : `${historyShortcut} ${f}`,
-    ...(c?.savedIn !== undefined && {
-      subLines: [`Earlier messages are saved in ${c.savedIn}`],
+    detail:
+      whereShortcutLeads === null
+        ? (summaryText ?? undefined)
+        : summaryText
+          ? `${summaryText} (${historyShortcut} ${whereShortcutLeads})`
+          : `${historyShortcut} ${whereShortcutLeads}`,
+    ...(historyTarget?.savedIn !== undefined && {
+      subLines: [`Earlier messages are saved in ${historyTarget.savedIn}`],
     }),
     linkify: false,
   };
@@ -77,24 +89,24 @@ function compactBoundaryLabel(compactMetadata, historyShortcut, c) {
 function parseLocalCommandOutput(content, command) {
   let tag = extractTag(content, LOCAL_COMMAND_STDOUT);
   let tag_2 = extractTag(content, LOCAL_COMMAND_STDERR);
-  let f = tag === null ? "" : unescapeHtmlEntities(tag);
-  let h = tag_2 === null ? "" : unescapeHtmlEntities(tag_2);
-  let M = f.trim() !== "" && f.trim() !== NO_CONTENT_MESSAGE;
-  let T = h.trim() !== "";
-  let trimmed = (M ? f : h).trim();
+  let stdoutText = tag === null ? "" : unescapeHtmlEntities(tag);
+  let stderrText = tag_2 === null ? "" : unescapeHtmlEntities(tag_2);
+  let hasStdout = stdoutText.trim() !== "" && stdoutText.trim() !== NO_CONTENT_MESSAGE;
+  let hasStderr = stderrText.trim() !== "";
+  let label = (hasStdout ? stdoutText : stderrText).trim();
   if (
-    trimmed === "" ||
-    parseRateLimitLabel(trimmed) !== null ||
-    SYSTEM_NOTICE_PREFIXES.some((E) => trimmed.startsWith(E))
+    label === "" ||
+    parseRateLimitLabel(label) !== null ||
+    SYSTEM_NOTICE_PREFIXES.some((prefix) => label.startsWith(prefix))
   )
     return {
       kind: "legacy",
     };
-  let [k = "", ...b] = renderTruncatedContent(
-    M
-      ? `${f}
-${h}`
-      : h,
+  let [firstRow = "", ...subRows] = renderTruncatedContent(
+    hasStdout
+      ? `${stdoutText}
+${stderrText}`
+      : stderrText,
     {
       maxChars: SCHEDULED_TEXT_MAX_LENGTH,
       maxLines: 1 / 0,
@@ -104,10 +116,10 @@ ${h}`
   return {
     kind: "line",
     row: {
-      tone: T ? "red" : "dim",
-      text: k,
-      ...(command === "compact" && !M && classifySystemNoticeText(k)),
-      subLines: b.length > 0 ? b : undefined,
+      tone: hasStderr ? "red" : "dim",
+      text: firstRow,
+      ...(command === "compact" && !hasStdout && classifySystemNoticeText(firstRow)),
+      subLines: subRows.length > 0 ? subRows : undefined,
       linkify: false,
     },
   };
@@ -125,28 +137,28 @@ function interruptedRow({ isBySendNow }) {
 /**
  * 把 API 错误文本做成红色提示行：仅前缀时补"请稍后再试"，按长度截断，whole 时完整保留布局。
  */
-function buildApiErrorRow(text, { whole: d = false } = {}) {
-  let c =
+function buildApiErrorRow(text, { whole = false } = {}) {
+  let displayText =
     text === API_ERROR_MESSAGE_PREFIX
       ? `${API_ERROR_MESSAGE_PREFIX}: Please wait a moment and try again.`
       : text;
-  let [g = "", ...f] = renderTruncatedContent(c, {
+  let [firstRow = "", ...subRows] = renderTruncatedContent(displayText, {
     maxChars: SCHEDULED_TEXT_MAX_LENGTH,
-    ...(d && {
+    ...(whole && {
       maxChars: 1 / 0,
       maxLines: 1 / 0,
       preserveLayout: true,
     }),
   });
-  let h = splitNoticeDetail("red", g, {
-    linkify: !d,
+  let row = splitNoticeDetail("red", firstRow, {
+    linkify: !whole,
   });
-  return f.length > 0
+  return subRows.length > 0
     ? {
-        ...h,
-        subLines: f,
+        ...row,
+        subLines: subRows,
       }
-    : h;
+    : row;
 }
 //@ chunk-ah34pb7m.js:53208-53711 placement
 /**
@@ -157,25 +169,27 @@ function taskNotificationSummaryLine({ status, summary, context, durationMs, del
     context,
     Number.isFinite(durationMs) && durationMs > 0 ? formatDuration(durationMs) : null,
     deliveryNote,
-  ].filter((L) => L !== null);
-  let T = formatExitCodeSuffix(0);
-  let x =
-    status === "completed" && summary.startsWith(BACKGROUND_COMMAND_PREFIX) && summary.endsWith(T)
-      ? summary.slice(0, -T.length)
+  ].filter((part) => part !== null);
+  let exitCodeSuffix = formatExitCodeSuffix(0);
+  let cleanedSummary =
+    status === "completed" &&
+    summary.startsWith(BACKGROUND_COMMAND_PREFIX) &&
+    summary.endsWith(exitCodeSuffix)
+      ? summary.slice(0, -exitCodeSuffix.length)
       : summary;
-  let [k = "", ...b] = renderTruncatedContent(sanitizeDisplayText(x));
-  let E =
+  let [firstRow = "", ...subRows] = renderTruncatedContent(sanitizeDisplayText(cleanedSummary));
+  let sentNote =
     sentMessages === 1
       ? "sent a message (ctrl+o)"
       : sentMessages > 1
         ? `sent ${sentMessages} messages (ctrl+o)`
         : null;
-  let B = E === null ? b : [...b, E];
+  let mergedSubRows = sentNote === null ? subRows : [...subRows, sentNote];
   return {
     tone: status === "failed" ? "red" : status === "killed" ? "gold" : "dim",
-    text: k,
+    text: firstRow,
     detail: filtered.length > 0 ? filtered.join(" \xB7 ") : undefined,
-    subLines: B.length > 0 ? B : undefined,
+    subLines: mergedSubRows.length > 0 ? mergedSubRows : undefined,
     linkify: false,
   };
 }
@@ -184,13 +198,13 @@ function taskNotificationSummaryLine({ status, summary, context, durationMs, del
  * 构造钩子错误行：阻断性错误与普通错误给出不同标题，原因裁成多行附在下面（红色）。
  */
 function buildHookErrorRow({ hookName, blocking, reason }) {
-  let g = renderTruncatedContent(reason, {
+  let reasonLines = renderTruncatedContent(reason, {
     maxLines: HOOK_FEEDBACK_MAX_LINES,
   });
   return {
     tone: "red",
     text: blocking ? `${hookName} hook returned blocking error` : `${hookName} hook error`,
-    subLines: g.length > 0 ? g : undefined,
+    subLines: reasonLines.length > 0 ? reasonLines : undefined,
     linkify: false,
   };
 }
@@ -199,10 +213,10 @@ function buildHookErrorRow({ hookName, blocking, reason }) {
  * 构造系统提示行：按字符上限拆出首行与后续行；文本为空时退回旧版渲染。
  */
 function buildSystemNoticeLine(tone, content, { maxChars = HOOK_FEEDBACK_MAX_WIDTH, linkify }) {
-  let [f, ...h] = renderTruncatedContent(content, {
+  let [firstRow, ...subRowLines] = renderTruncatedContent(content, {
     maxChars,
   });
-  if (f === undefined)
+  if (firstRow === undefined)
     return {
       kind: "legacy",
     };
@@ -210,8 +224,8 @@ function buildSystemNoticeLine(tone, content, { maxChars = HOOK_FEEDBACK_MAX_WID
     kind: "line",
     row: {
       tone,
-      text: f,
-      subLines: h.length > 0 ? h : undefined,
+      text: firstRow,
+      subLines: subRowLines.length > 0 ? subRowLines : undefined,
       linkify,
     },
   };
@@ -220,18 +234,18 @@ function buildSystemNoticeLine(tone, content, { maxChars = HOOK_FEEDBACK_MAX_WID
 /**
  * 把提示文本按首个 " · " 或 ": " 拆成 text 与 detail。
  */
-function splitNoticeDetail(tone, d, { linkify }) {
-  let match = /.( \u00B7 |: )/s.exec(d);
+function splitNoticeDetail(tone, noticeText, { linkify }) {
+  let match = /.( \u00B7 |: )/s.exec(noticeText);
   if (match === null)
     return {
       tone,
-      text: d,
+      text: noticeText,
       linkify,
     };
   return {
     tone,
-    text: d.slice(0, match.index + 1),
-    detail: d.slice(match.index + match[0].length),
+    text: noticeText.slice(0, match.index + 1),
+    detail: noticeText.slice(match.index + match[0].length),
     linkify,
   };
 }
@@ -240,16 +254,17 @@ function splitNoticeDetail(tone, d, { linkify }) {
  * 压缩边界："✻ Conversation compacted (ctrl+o for history)"，说明早先消息保存在 transcript 中。
  */
 function CompactBoundaryMessage(props) {
-  let $ = w(22);
+  let $ = useMemoCache(22);
   let { message, transcriptV2Rows } = props;
   let isFullscreen = useIsFullscreen();
   let historyShortcut = useShortcutDisplay("app:toggleTranscript", "Global", "ctrl+o");
-  let h = Se(CompactSummaryContext);
-  let M = h !== null && h.uuid === message.uuid ? h : null;
-  let savedIn = M?.summary?.savedIn;
-  let k;
+  let summaryContext = useContext(CompactSummaryContext);
+  let matchingSummary =
+    summaryContext !== null && summaryContext.uuid === message.uuid ? summaryContext : null;
+  let savedIn = matchingSummary?.summary?.savedIn;
+  let savedFile;
   if ($[0] !== savedIn) {
-    k =
+    savedFile =
       savedIn === undefined || filePathToUrl(savedIn)
         ? undefined
         : {
@@ -257,71 +272,71 @@ function CompactBoundaryMessage(props) {
             shown: getDisplayPath(savedIn),
           };
     $[0] = savedIn;
-    $[1] = k;
-  } else k = $[1];
-  let b = k;
-  let E = isFullscreen && M === null;
-  if (transcriptV2Rows && PreCompactHookInputSchema_2(message.compactMetadata, E)) {
-    let B;
-    if ($[2] !== b?.shown || $[3] !== M) {
-      B = M && {
-        leadsToSummary: M.summary !== null,
-        savedIn: b?.shown,
+    $[1] = savedFile;
+  } else savedFile = $[1];
+  let savedFileInfo = savedFile;
+  let isTranscriptRow = isFullscreen && matchingSummary === null;
+  if (transcriptV2Rows && PreCompactHookInputSchema_2(message.compactMetadata, isTranscriptRow)) {
+    let summaryInfo;
+    if ($[2] !== savedFileInfo?.shown || $[3] !== matchingSummary) {
+      summaryInfo = matchingSummary && {
+        leadsToSummary: matchingSummary.summary !== null,
+        savedIn: savedFileInfo?.shown,
       };
-      $[2] = b?.shown;
-      $[3] = M;
-      $[4] = B;
-    } else B = $[4];
+      $[2] = savedFileInfo?.shown;
+      $[3] = matchingSummary;
+      $[4] = summaryInfo;
+    } else summaryInfo = $[4];
     let row;
-    if ($[5] !== historyShortcut || $[6] !== message.compactMetadata || $[7] !== B) {
-      row = compactBoundaryLabel(message.compactMetadata, historyShortcut, B);
+    if ($[5] !== historyShortcut || $[6] !== message.compactMetadata || $[7] !== summaryInfo) {
+      row = compactBoundaryLabel(message.compactMetadata, historyShortcut, summaryInfo);
       $[5] = historyShortcut;
       $[6] = message.compactMetadata;
-      $[7] = B;
+      $[7] = summaryInfo;
       $[8] = row;
     } else row = $[8];
-    let N;
+    let noticeRowMessageElement;
     if ($[9] !== row) {
-      N = jsxProd_default(NoticeRowMessage, {
+      noticeRowMessageElement = jsxProd_default(NoticeRowMessage, {
         row,
         addMargin: true,
       });
       $[9] = row;
-      $[10] = N;
-    } else N = $[10];
-    return N;
+      $[10] = noticeRowMessageElement;
+    } else noticeRowMessageElement = $[10];
+    return noticeRowMessageElement;
   }
-  if (E) {
+  if (isTranscriptRow) {
     return null;
   }
-  let B;
+  let marker;
   if ($[11] === MEMO_CACHE_SENTINEL) {
-    B = jsxProd_default_2(Text, {
+    marker = jsxProd_default_2(Text, {
       "aria-hidden": true,
       children: [TEARDROP_ASTERISK, " "],
     });
-    $[11] = B;
-  } else B = $[11];
-  let L;
-  if ($[12] !== historyShortcut || $[13] !== M) {
-    L = historyHintSuffix(M, historyShortcut);
+    $[11] = marker;
+  } else marker = $[11];
+  let hintSuffix;
+  if ($[12] !== historyShortcut || $[13] !== matchingSummary) {
+    hintSuffix = historyHintSuffix(matchingSummary, historyShortcut);
     $[12] = historyShortcut;
-    $[13] = M;
-    $[14] = L;
-  } else L = $[14];
-  let N;
-  if ($[15] !== L) {
-    N = jsxProd_default_2(Text, {
+    $[13] = matchingSummary;
+    $[14] = hintSuffix;
+  } else hintSuffix = $[14];
+  let labelText;
+  if ($[15] !== hintSuffix) {
+    labelText = jsxProd_default_2(Text, {
       dimColor: true,
-      children: [B, "Conversation compacted", L],
+      children: [marker, "Conversation compacted", hintSuffix],
     });
-    $[15] = L;
-    $[16] = N;
-  } else N = $[16];
-  let W;
-  if ($[17] !== b) {
-    W =
-      b !== undefined &&
+    $[15] = hintSuffix;
+    $[16] = labelText;
+  } else labelText = $[16];
+  let savedFileHint;
+  if ($[17] !== savedFileInfo) {
+    savedFileHint =
+      savedFileInfo !== undefined &&
       jsxProd_default(Box, {
         paddingLeft: 2,
         children: jsxProd_default_2(Text, {
@@ -330,27 +345,27 @@ function CompactBoundaryMessage(props) {
             "Earlier messages are saved in",
             " ",
             jsxProd_default(FilePathLink, {
-              filePath: b.file,
-              children: b.shown,
+              filePath: savedFileInfo.file,
+              children: savedFileInfo.shown,
             }),
           ],
         }),
       });
-    $[17] = b;
-    $[18] = W;
-  } else W = $[18];
-  let U;
-  if ($[19] !== N || $[20] !== W) {
-    U = jsxProd_default_2(Box, {
+    $[17] = savedFileInfo;
+    $[18] = savedFileHint;
+  } else savedFileHint = $[18];
+  let boxElement;
+  if ($[19] !== labelText || $[20] !== savedFileHint) {
+    boxElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginY: 1,
-      children: [N, W],
+      children: [labelText, savedFileHint],
     });
-    $[19] = N;
-    $[20] = W;
-    $[21] = U;
-  } else U = $[21];
-  return U;
+    $[19] = labelText;
+    $[20] = savedFileHint;
+    $[21] = boxElement;
+  } else boxElement = $[21];
+  return boxElement;
 }
 export {
   splitNoticeDetail,

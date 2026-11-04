@@ -7,7 +7,7 @@
  */
 import { APIResource } from "../../../../core/resource.mjs";
 import { Events_2 } from "./events.mjs";
-import { I } from "../../../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../../../internal/utils/path.mjs";
 import { buildHeaders } from "../../../../internal/headers.mjs";
 import { TokenPage } from "../../../../core/pagination.mjs";
 
@@ -20,7 +20,7 @@ var Threads = (() => {
     }
     retrieve(threadID, params, options) {
       let { session_id, betas, workspace_id } = params;
-      return this._client.get(I`/v1/sessions/${session_id}/threads/${threadID}?beta=true`, {
+      return this._client.get(parseUrl_2`/v1/sessions/${session_id}/threads/${threadID}?beta=true`, {
         ...options,
         headers: buildHeaders([
           {
@@ -37,7 +37,7 @@ var Threads = (() => {
     }
     list(sessionID, params = {}, options) {
       let { betas, workspace_id, ...query } = params ?? {};
-      return this._client.getAPIList(I`/v1/sessions/${sessionID}/threads?beta=true`, TokenPage, {
+      return this._client.getAPIList(parseUrl_2`/v1/sessions/${sessionID}/threads?beta=true`, TokenPage, {
         query,
         ...options,
         headers: buildHeaders([
@@ -55,7 +55,7 @@ var Threads = (() => {
     }
     archive(threadID, params, options) {
       let { session_id, betas, workspace_id } = params;
-      return this._client.post(I`/v1/sessions/${session_id}/threads/${threadID}/archive?beta=true`, {
+      return this._client.post(parseUrl_2`/v1/sessions/${session_id}/threads/${threadID}/archive?beta=true`, {
         ...options,
         headers: buildHeaders([
           {

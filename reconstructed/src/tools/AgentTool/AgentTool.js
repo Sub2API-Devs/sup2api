@@ -9,6 +9,9 @@
  * attribution: placement 2, fingerprint 4
  */
 import { realpath } from "fs/promises";
+import { env } from "../../utils/env.js";
+import { isBareMode } from "../../utils/envUtils.js";
+import { isCoordinatorMode_2 } from "../../coordinator/coordinatorMode.js";
 import {
   isAutoApprovableWebFetchDispatch,
   WebFetchDispatchApprovals,
@@ -28,7 +31,14 @@ import {
   buildAgentHandback,
   finalizeAgentTool,
 } from "./agentToolUtils.js";
-import { literal, string, u, array, M, union } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  literal,
+  stringSchema,
+  objectSchema,
+  array,
+  booleanSchema,
+  union,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   canContinueAgentSchema,
   getForkAvailability,
@@ -41,8 +51,6 @@ import {
   isGeneralPurposeAgentAvailable,
 } from "./agentToolDefinition.js";
 import { isRelativeEffortDisabled } from "./agentEffort.js";
-import { isCoordinatorMode_2 } from "../../coordinator/coordinatorMode.js";
-import { env } from "../../utils/env.js";
 import {
   assertAgentCwdAllowed,
   AgentPreconditionError,
@@ -253,8 +261,25 @@ import { categorizeRetryableAPIError } from "../../services/api/errors.js";
 import { getAssistantMessageContentLength } from "../../utils/tokens.js";
 import { getPendingHandbackReport, forgetHandback } from "./handbackReport.js";
 import { isLocalAgent } from "../../state/teammateViewHelpers.js";
-import { isBareMode } from "../../utils/envUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-apw2zhyn.js:1372-1439 fingerprint = isBackgroundTasksDisabled (1)
+/**
+ * 后台任务是否被禁用：CLAUDE_CODE_DISABLE_BACKGROUND_TASKS 或 --bare 模式。
+ */
+function isBackgroundTasksDisabled() {
+  return env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS || isBareMode();
+}
+//@ chunk-e6aww6q8.js:4709491-4709738 fingerprint = getAutoBackgroundMs (0.638)
+/**
+ * coordinator 模式或 CLAUDE_AUTO_BACKGROUND_TASKS 下解析 CLAUDE_CODE_WORKER_CHECKIN_SCHEDULE（逗号分隔秒数，1–86400）为毫秒数组。
+ */
+function getWorkerCheckinScheduleMs() {
+  if (!isCoordinatorMode_2() && !env.CLAUDE_AUTO_BACKGROUND_TASKS) return;
+  let mapped = env.CLAUDE_CODE_WORKER_CHECKIN_SCHEDULE?.split(",").map((part) => part.trim());
+  if (!mapped?.every((value) => /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 86400)) return;
+  return mapped.map((seconds) => Number(seconds) * 1000);
+}
 //@ chunk-0tkmvwy0.js:7783-7872 placement
 /**
  * AgentTool.checkPermissions 的免审分支：dontAsk 下 web-fetch 代理派发满足条件时登记并返回 true。
@@ -276,49 +301,53 @@ function markWebFetchDispatchApproved({ toolUseId, toolState }) {
 /**
  * Agent 工具输出 schema：completed（agentToolResultSchema + prompt/worktree）、async_launched（agentId/outputFile/resolvedModel/modelsUsed/sharesCwd…）、remote_launched（taskId/sessionUrl/outputFile）三者联合。
  */
-var completedResultSchema = DoctorLazy(() =>
-  agentToolResultSchema().extend({
-    status: literal("completed"),
-    prompt: string(),
-    worktreePath: string().optional(),
-    worktreeBranch: string().optional(),
-    canContinueAgent: canContinueAgentSchema(),
-  }),
-);
-var agentOutputSchema = DoctorLazy(() => {
-  let n = completedResultSchema();
-  let e = u({
-    status: literal("async_launched"),
-    isAsync: literal(true).optional(),
-    agentId: string().describe("The ID of the async agent"),
-    description: string().describe("The description of the task"),
-    resolvedModel: string()
-      .optional()
-      .describe("Model in use at the backgrounding transition (a pre-background swap is reflected here)"),
-    modelsUsed: array(string())
-      .optional()
-      .describe("Ordered distinct models used before backgrounding (length > 1 means a mid-run swap)"),
-    prompt: string().describe("The prompt for the agent"),
-    outputFile: string().describe("Path to the output file for checking agent progress"),
-    canReadOutputFile: M()
-      .optional()
-      .describe("Whether the calling agent has Read/Bash tools to check progress"),
-    canContinueAgent: canContinueAgentSchema(),
-    sharesCwd: M()
-      .optional()
-      .describe(
-        "@internal True when this unisolated write-capable agent was launched into a working directory where another one is already running and a worktree could have been made here (drives a model-facing note; not a stable consumer field)",
-      ),
+var completedResultSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var agentOutputSchema;
+deferInit("chunk-0tkmvwy0.js:16698", () => {
+  completedResultSchema = DoctorLazy(() =>
+    agentToolResultSchema().extend({
+      status: literal("completed"),
+      prompt: stringSchema(),
+      worktreePath: stringSchema().optional(),
+      worktreeBranch: stringSchema().optional(),
+      canContinueAgent: canContinueAgentSchema(),
+    }),
+  );
+  agentOutputSchema = DoctorLazy(() => {
+    let completedSchema = completedResultSchema();
+    let asyncSchema = objectSchema({
+      status: literal("async_launched"),
+      isAsync: literal(true).optional(),
+      agentId: stringSchema().describe("The ID of the async agent"),
+      description: stringSchema().describe("The description of the task"),
+      resolvedModel: stringSchema()
+        .optional()
+        .describe("Model in use at the backgrounding transition (a pre-background swap is reflected here)"),
+      modelsUsed: array(stringSchema())
+        .optional()
+        .describe("Ordered distinct models used before backgrounding (length > 1 means a mid-run swap)"),
+      prompt: stringSchema().describe("The prompt for the agent"),
+      outputFile: stringSchema().describe("Path to the output file for checking agent progress"),
+      canReadOutputFile: booleanSchema()
+        .optional()
+        .describe("Whether the calling agent has Read/Bash tools to check progress"),
+      canContinueAgent: canContinueAgentSchema(),
+      sharesCwd: booleanSchema()
+        .optional()
+        .describe(
+          "@internal True when this unisolated write-capable agent was launched into a working directory where another one is already running and a worktree could have been made here (drives a model-facing note; not a stable consumer field)",
+        ),
+    });
+    let remoteSchema = objectSchema({
+      status: literal("remote_launched"),
+      taskId: stringSchema().describe("The ID of the remote agent task"),
+      sessionUrl: stringSchema().describe("The URL of the cloud session"),
+      description: stringSchema().describe("The description of the task"),
+      prompt: stringSchema().describe("The prompt for the agent"),
+      outputFile: stringSchema().describe("Path to the output file for checking agent progress"),
+    });
+    return union([completedSchema, asyncSchema, remoteSchema]);
   });
-  let s = u({
-    status: literal("remote_launched"),
-    taskId: string().describe("The ID of the remote agent task"),
-    sessionUrl: string().describe("The URL of the cloud session"),
-    description: string().describe("The description of the task"),
-    prompt: string().describe("The prompt for the agent"),
-    outputFile: string().describe("Path to the output file for checking agent progress"),
-  });
-  return union([n, e, s]);
 });
 //@ chunk-0tkmvwy0.js:18155-48361 fingerprint = AgentTool (0.354)
 /**
@@ -366,11 +395,11 @@ async function callAgentTool({
       "This agent has been stopped and its stop is still completing; it cannot launch new agents.",
     );
   }
-  let Kt = isMainConversationsOwnCall(toolUseContext)
+  let resumedCall = isMainConversationsOwnCall(toolUseContext)
     ? toolUseContext.toolState.get(ResumedAgentCallRegistry).take(toolUseContext.toolUseId)
     : undefined;
-  if (Kt !== undefined) {
-    let resumedAgentCall = await resolveResumedAgentCall(Kt, toolUseContext);
+  if (resumedCall !== undefined) {
+    let resumedAgentCall = await resolveResumedAgentCall(resumedCall, toolUseContext);
     return resumedAgentCall.status === "async_launched"
       ? {
           data: {
@@ -431,16 +460,16 @@ async function callAgentTool({
       logFeatureBad("subagent_launch", "subagent_type_not_found");
       let mapped = (
         await getDispatchableAgents(activeAgents, allowedAgentTypes, permissionContext, toolUseContext)
-      ).map((R) => R.agentType);
+      ).map((agent) => agent.agentType);
       throw new AgentTypeError(
         `Agent type '${subagentType}' not found. Available agents: ${formatAgentList(mapped)}`,
       );
     }
   }
-  let assertCanLaunch = (r = false) => {
+  let assertCanLaunch = (assertCanLaunch = false) => {
     if (toolUseContext.abortController.signal.aborted) {
-      let R = unwrapAbortReason(toolUseContext.abortController.signal.reason);
-      if (!(r && R === "interrupt")) throw new AbortError();
+      let abortReason = unwrapAbortReason(toolUseContext.abortController.signal.reason);
+      if (!(assertCanLaunch && abortReason === "interrupt")) throw new AbortError();
     }
     let { maxBudgetUsd } = toolUseContext.options;
     if (hasReachedBudget(maxBudgetUsd)) {
@@ -451,11 +480,11 @@ async function callAgentTool({
       );
     }
   };
-  let oo = async () => {
-    let r = checkSubagentConcurrencyLimit(toolUseContext);
-    if (r) {
+  let takeSlot = async () => {
+    let limitError = checkSubagentConcurrencyLimit(toolUseContext);
+    if (limitError) {
       await cleanupAgentWorktree();
-      throw r;
+      throw limitError;
     }
     return toolUseContext.taskRegistry.takeConcurrencySlot();
   };
@@ -486,10 +515,13 @@ async function callAgentTool({
         );
       }
     }
-    let R =
+    let candidateAgent =
       teammateAgentDef ??
       (subagentType ? findAgentByNormalizedType(activeAgents, activeAgents, subagentType) : undefined);
-    if (!(R === undefined || (await filterOfferedAgents([R], toolUseContext)).length === 1)) {
+    if (!(
+      candidateAgent === undefined ||
+      (await filterOfferedAgents([candidateAgent], toolUseContext)).length === 1
+    )) {
       logFeatureBad("subagent_launch", "subagent_teammate_not_offered");
       throw new AgentTypeError(`Agent type '${subagentType}' is not offered in this session.`);
     }
@@ -504,12 +536,12 @@ async function callAgentTool({
     }
     assertCanLaunch(NO_INTERRUPT_ABORT);
     let mainLoopModel = getMainLoopModel(toolUseContext);
-    let L = loadedTeammateDef ?? teammateAgentIdentity(subagentType);
+    let teammateIdentity = loadedTeammateDef ?? teammateAgentIdentity(subagentType);
     let teammateSpawnHook = await launchAgentsWithHooks({
       tool_use_id: toolUseContext.toolUseId ?? "",
       prompt: agentPrompt,
       description: agentDescription,
-      agent: L,
+      agent: teammateIdentity,
       agents: offeredAgents,
       model,
       parentModel: mainLoopModel,
@@ -535,12 +567,12 @@ async function callAgentTool({
       teammateSpawnHook.isRewritten,
     );
     let spawn = teammateSpawnHook.spawn;
-    let V = await checkSpawnHookRewrite({
+    let rewriteRule = await checkSpawnHookRewrite({
       tool: AgentTool,
       raised: toSpawnHookInput(agentInput, {
         prompt: agentPrompt,
         description: agentDescription,
-        subagentType: L.agentType,
+        subagentType: teammateIdentity.agentType,
         model,
         background: true,
         cwd: undefined,
@@ -548,14 +580,14 @@ async function callAgentTool({
       rewritten: toSpawnHookInput(agentInput, spawn),
       context: toolUseContext,
     });
-    if (V) {
+    if (rewriteRule) {
       logFeatureBad("subagent_launch", "subagent_spawn_hook_rewrite_ruled");
       throw new AgentPreconditionError(
-        `A plugin's agent.spawn hook rewrote this spawn into one a permission rule ${RULE_BEHAVIOR_VERB[V.behavior]}: ${V.message} Dispatch it directly.`,
+        `A plugin's agent.spawn hook rewrote this spawn into one a permission rule ${RULE_BEHAVIOR_VERB[rewriteRule.behavior]}: ${rewriteRule.message} Dispatch it directly.`,
       );
     }
     let found = offeredAgents.find(
-      (offeredAgent) => offeredAgent === teammateSpawnHook.agent && offeredAgent !== L,
+      (offeredAgent) => offeredAgent === teammateSpawnHook.agent && offeredAgent !== teammateIdentity,
     );
     if (resolveAgentOverrides(found?.agentType, activeAgents)) {
       logFeatureBad("subagent_launch", "subagent_spawn_hook_teammate_rewrite");
@@ -594,7 +626,7 @@ async function callAgentTool({
         found ? loadedTeammateDef.agentType : (subagentType ?? loadedTeammateDef.agentType),
         loadedTeammateDef.color,
       );
-    let { spawnTeammate } = require("./chunk-cne5hsvz.js");
+    let { spawnTeammate } = require("../shared/spawnTeammate.lazy.js");
     let teammateSpawnResult = await spawnTeammate(
       {
         name: teammateName,
@@ -618,10 +650,10 @@ async function callAgentTool({
       resolvedModel: parseUserSpecifiedModel(teammateSpawnResult.data.model ?? mainLoopModel),
       ...teammateSpawnResult.data,
     };
-    let gt = teammateSpawnResult.loopAgentId ?? teammateSpawnResult.data.teammate_id;
-    recordSpawnProvenance(gt, toolUseContext);
+    let teammateAgentId = teammateSpawnResult.loopAgentId ?? teammateSpawnResult.data.teammate_id;
+    recordSpawnProvenance(teammateAgentId, toolUseContext);
     starting?.started({
-      agentId: gt,
+      agentId: teammateAgentId,
       model: parseUserSpecifiedModel(teammateSpawnResult.data.model ?? mainLoopModel),
       teammateId: teammateSpawnResult.data.teammate_id,
     });
@@ -630,7 +662,7 @@ async function callAgentTool({
       data,
     };
   }
-  let Jt = {
+  let forkCheckInput = {
     isolation,
     querySource: toolUseContext.options.querySource,
     messages: toolUseContext.messages,
@@ -638,7 +670,7 @@ async function callAgentTool({
   let selectedAgent;
   let agents = [];
   if (isForkLaunch) {
-    let forkPreconditionError = getForkPreconditionError(Jt);
+    let forkPreconditionError = getForkPreconditionError(forkCheckInput);
     if (forkPreconditionError) {
       logFeatureBad("subagent_launch", forkPreconditionError.code);
       throw new AgentPreconditionError(forkPreconditionError.message);
@@ -659,14 +691,17 @@ async function callAgentTool({
         availableCount: offeredAgentsList.length,
       });
       logFeatureBad("subagent_launch", "subagent_type_missing");
-      let F = available && getForkPreconditionError(Jt) === null ? [FORK, ...mapped] : mapped;
-      throw new AgentTypeError(`${SUBAGENT_TYPE_REQUIRED}. Available agents: ${formatAgentList(F)}`);
+      let forkFirstList =
+        available && getForkPreconditionError(forkCheckInput) === null ? [FORK, ...mapped] : mapped;
+      throw new AgentTypeError(
+        `${SUBAGENT_TYPE_REQUIRED}. Available agents: ${formatAgentList(forkFirstList)}`,
+      );
     }
     let requestedAgentType = subagentType ?? GENERAL_PURPOSE_AGENT.agentType;
     let found = offeredAgentsList.find((offeredAgents) => offeredAgents.agentType === requestedAgentType);
     if (!found) {
       let normalizedType = normalizeAgentName(requestedAgentType);
-      let L = new Set(mapped);
+      let offeredTypeSet = new Set(mapped);
       let normalizedMatches = normalizedType
         ? activeAgents.filter((activeAgent) => normalizeAgentName(activeAgent.agentType) === normalizedType)
         : [];
@@ -685,22 +720,22 @@ async function callAgentTool({
         logFeatureBad("subagent_launch", "subagent_type_ambiguous");
         let filtered = normalizedMatches
           .map((normalizedMatch) => normalizedMatch.agentType)
-          .filter((B) => L.has(B));
+          .filter((agentType) => offeredTypeSet.has(agentType));
         throw new AgentTypeError(
-          `Agent type '${requestedAgentType}' is ambiguous \u2014 matches ${normalizedMatches.map((normalizedMatch) => (L.has(normalizedMatch.agentType) ? normalizedMatch.agentType : `${normalizedMatch.agentType} (unavailable)`)).join(", ")}. ${filtered.length > 0 ? `Use the exact name: ${filtered.join(" or ")}` : `None of these are available. Available agents: ${formatAgentList(mapped)}`}`,
+          `Agent type '${requestedAgentType}' is ambiguous \u2014 matches ${normalizedMatches.map((normalizedMatch) => (offeredTypeSet.has(normalizedMatch.agentType) ? normalizedMatch.agentType : `${normalizedMatch.agentType} (unavailable)`)).join(", ")}. ${filtered.length > 0 ? `Use the exact name: ${filtered.join(" or ")}` : `None of these are available. Available agents: ${formatAgentList(mapped)}`}`,
         );
       }
       if (normalizedMatches.length === 1) {
-        let V = normalizedMatches[0];
-        if (L.has(V.agentType)) {
-          found = V;
+        let normalizedMatch = normalizedMatches[0];
+        if (offeredTypeSet.has(normalizedMatch.agentType)) {
+          found = normalizedMatch;
           if (found.color) setAgentColor(requestedAgentType, found.color);
           logEvent("tengu_subagent_type_normalized", {
             requestedNormalized,
             matched: agentTypeForAnalyticsFromDefinition(found),
           });
         } else {
-          let agentType = V.agentType;
+          let agentType = normalizedMatch.agentType;
           let denyRuleWithContent = findDenyRuleWithContent(permissionContext, AGENT, agentType);
           if (denyRuleWithContent) {
             logFeatureBad("subagent_launch", "subagent_type_denied");
@@ -708,7 +743,7 @@ async function callAgentTool({
               `Agent type '${agentType}' has been denied by permission rule '${AGENT}(${agentType})' from ${denyRuleWithContent.source}.`,
             );
           }
-          if (isAgentToolPoolDenied(V, permissionContext)) {
+          if (isAgentToolPoolDenied(normalizedMatch, permissionContext)) {
             logFeatureBad("subagent_launch", "subagent_type_tools_denied");
             throw new AgentTypeError(agentToolPoolDeniedMessage(agentType));
           }
@@ -743,73 +778,81 @@ async function callAgentTool({
     refuseUnavailableWorktree("agent worktree");
     if (!canRunAgentInWorktree()) throwAgentWorktreeNotGitRefusal();
   }
-  let en = isCoordinatorMode_2();
-  let tn = isForkSubagentEnabled();
-  let nn =
-    tn &&
+  let isCoordinator = isCoordinatorMode_2();
+  let forkSubagentOn = isForkSubagentEnabled();
+  let headlessSubagent =
+    forkSubagentOn &&
     toolUseContext.agentId !== undefined &&
     !toolUseContext.innerCall &&
     !callerIsInProcessTeammate &&
     getIsNonInteractiveSession();
-  let rn = tn && forkGateForcesBackground() && !callerIsInProcessTeammate && !nn;
+  let forceAsync =
+    forkSubagentOn && forkGateForcesBackground() && !callerIsInProcessTeammate && !headlessSubagent;
   let backgroundTasksAvailable = isForegroundAgentMoveOff();
   let backgroundLaunchGate = getBackgroundLaunchRule();
   let backgroundByDefault = isBackgroundLaunchByDefault();
-  let an =
+  let backgroundedToolUseId =
     backgroundLaunchGate !== undefined &&
     (runInBackground === true || (backgroundByDefault && runInBackground !== false)) &&
     !isBackgroundAgentLaunchDisabled()
       ? getBackgroundedToolUseId(assistantMessage, toolUseContext.toolUseId, backgroundByDefault)
       : undefined;
   let backgroundHandoff =
-    backgroundLaunchGate !== undefined && an !== undefined
+    backgroundLaunchGate !== undefined && backgroundedToolUseId !== undefined
       ? runBackgroundLaunchRules(backgroundLaunchGate, {
-          toolUseId: an,
+          toolUseId: backgroundedToolUseId,
           callerAgentId: toolUseContext.agentId,
           signal: toolUseContext.abortController.signal,
         })
       : undefined;
   let backgroundTasksDisabled =
     backgroundLaunchGate === undefined ? backgroundTasksAvailable : backgroundHandoff === undefined;
-  let un = autoBackgroundMsForLaunch(backgroundLaunchGate, backgroundTasksAvailable);
-  let dn = (agent, wantsBackground) =>
+  let autoBackgroundMs = autoBackgroundMsForLaunch(backgroundLaunchGate, backgroundTasksAvailable);
+  let decideLaunchMode = (agent, wantsBackground) =>
     decideAgentLaunchMode({
       agent,
       wantsBackground,
       isolation,
       restricted: permissionContext.restricted,
-      isCoordinator: en,
-      forceAsync: rn,
+      isCoordinator,
+      forceAsync,
       callerIsInProcessTeammate,
-      callerIsHeadlessSubagent: nn,
+      callerIsHeadlessSubagent: headlessSubagent,
       backgroundTasksDisabled,
     });
-  let { effectiveIsolation, isRemoteLaunch, shouldRunAsync } = dn(selectedAgent, runInBackground);
+  let { effectiveIsolation, isRemoteLaunch, shouldRunAsync } = decideLaunchMode(
+    selectedAgent,
+    runInBackground,
+  );
   if (!isRemoteLaunch) {
     if (toolUseContext.abortController.signal.aborted) {
-      let w = unwrapAbortReason(toolUseContext.abortController.signal.reason);
-      if (!(shouldRunAsync && w === "interrupt")) throw new AbortError();
+      let abortReason = unwrapAbortReason(toolUseContext.abortController.signal.reason);
+      if (!(shouldRunAsync && abortReason === "interrupt")) throw new AbortError();
     }
-    let r = checkSubagentConcurrencyLimit(toolUseContext);
-    if (r) throw r;
+    let limitError = checkSubagentConcurrencyLimit(toolUseContext);
+    if (limitError) throw limitError;
   }
   assertCanLaunch(shouldRunAsync && !isRemoteLaunch);
   let requiredMcpServers = selectedAgent.requiredMcpServers;
   let filtered = toolUseContext.options.tools.filter(isMcpTool);
-  let ln = () => toolUseContext.getAppState().mcp;
-  let so = timing?.mark("external");
+  let getMcpState = () => toolUseContext.getAppState().mcp;
+  let externalMark = timing?.mark("external");
   if (requiredMcpServers?.length) {
-    let r = (w) =>
+    let matchesRequired = (client) =>
       requiredMcpServers.some((requiredMcpServer) =>
-        w.name.toLowerCase().includes(requiredMcpServer.toLowerCase()),
+        client.name.toLowerCase().includes(requiredMcpServer.toLowerCase()),
       );
-    await waitForMcpClients(ln, (w, R) => r(w) && isPendingServerWithoutTools(w, R.tools), {
-      maxWaitMs: 30000,
-      until: (w) => w.clients.some((client) => client.type === "failed" && r(client)),
-    });
+    await waitForMcpClients(
+      getMcpState,
+      (client, state) => matchesRequired(client) && isPendingServerWithoutTools(client, state.tools),
+      {
+        maxWaitMs: 30000,
+        until: (state) => state.clients.some((client) => client.type === "failed" && matchesRequired(client)),
+      },
+    );
   }
-  if (!isRemoteLaunch) await waitForCoordinatorSubagentMcpServers(ln);
-  so?.();
+  if (!isRemoteLaunch) await waitForCoordinatorSubagentMcpServers(getMcpState);
+  externalMark?.();
   let appState_2 = toolUseContext.getAppState();
   if (requiredMcpServers?.length) {
     let availableServers = [];
@@ -866,7 +909,7 @@ async function callAgentTool({
     },
     spawnHookResult.isRewritten,
   );
-  let cn = () =>
+  let onProgressHook = () =>
     toSpawnHookInput(agentInput, {
       prompt: agentPrompt,
       description: agentDescription,
@@ -875,7 +918,7 @@ async function callAgentTool({
       background: shouldRunAsync,
       cwd: agentCwd,
     });
-  let raised = cn();
+  let raised = onProgressHook();
   let { spawn } = spawnHookResult;
   let agentRetypedByHook = spawnHookResult.agent !== selectedAgent;
   let launchShapeChanged = agentRetypedByHook || spawn.background !== shouldRunAsync;
@@ -886,23 +929,26 @@ async function callAgentTool({
   if (agentCwd !== cwd) await assertAgentCwdAllowed(agentCwd, "a hook");
   requestedModel = spawn.model;
   if (launchShapeChanged)
-    ({ effectiveIsolation, isRemoteLaunch, shouldRunAsync } = dn(selectedAgent, spawn.background));
+    ({ effectiveIsolation, isRemoteLaunch, shouldRunAsync } = decideLaunchMode(
+      selectedAgent,
+      spawn.background,
+    ));
   if (agentRetypedByHook && isUnreviewedWebFetchDispatch(toolUseContext)) {
     logFeatureBad("subagent_launch", "subagent_spawn_hook_retype_unreviewed");
     throw new AgentPreconditionError(
       "A plugin's agent.spawn hook named another agent for a web-fetch dispatch admitted without classifier review; it cannot run unconfined. Dispatch that agent directly.",
     );
   }
-  let Ot = await checkSpawnHookRewrite({
+  let rewriteRule = await checkSpawnHookRewrite({
     tool: AgentTool,
     raised,
-    rewritten: cn(),
+    rewritten: onProgressHook(),
     context: toolUseContext,
   });
-  if (Ot) {
+  if (rewriteRule) {
     logFeatureBad("subagent_launch", "subagent_spawn_hook_rewrite_ruled");
     throw new AgentPreconditionError(
-      `A plugin's agent.spawn hook rewrote this spawn into one a permission rule ${RULE_BEHAVIOR_VERB[Ot.behavior]}: ${Ot.message} Dispatch it directly.`,
+      `A plugin's agent.spawn hook rewrote this spawn into one a permission rule ${RULE_BEHAVIOR_VERB[rewriteRule.behavior]}: ${rewriteRule.message} Dispatch it directly.`,
     );
   }
   if (spawn.cwd !== undefined && spawn.cwd !== cwd && effectiveIsolation === "worktree") {
@@ -956,7 +1002,7 @@ async function callAgentTool({
         inheritedLayers: toolUseContext.permissionLayers,
         recordedBudgetText: undefined,
       });
-  let st =
+  let spawnInput =
     relativeEffort !== undefined && !isForkLaunch && effortPlan?.subagentEffort !== undefined
       ? findAdjacentEffortLevel(
           resolvedModel,
@@ -965,17 +1011,17 @@ async function callAgentTool({
         )
       : undefined;
   let effortBudgetPlan =
-    effortPlan !== undefined && st !== undefined
+    effortPlan !== undefined && spawnInput !== undefined
       ? {
           ...effortPlan,
           agentDefinition: {
             ...effortPlan.agentDefinition,
-            effort: st,
+            effort: spawnInput,
           },
-          subagentEffort: st,
+          subagentEffort: spawnInput,
         }
       : effortPlan;
-  let effectiveEffort = isForkLaunch ? undefined : (st ?? absoluteEffort);
+  let effectiveEffort = isForkLaunch ? undefined : (spawnInput ?? absoluteEffort);
   selectedAgent = effortBudgetPlan?.agentDefinition ?? selectedAgent;
   let agentTypeForTelemetry = agentTypeForAnalyticsFromDefinition(selectedAgent);
   toolUseContext.agentLifecycle.markTypeInvoked(selectedAgent.agentType);
@@ -994,7 +1040,7 @@ async function callAgentTool({
       kind: "agent",
       name: selectedAgent.filename,
     });
-  let pn = () => {
+  let progressFn = () => {
     logEvent("tengu_agent_tool_selected", {
       agent_type: agentTypeForTelemetry,
       model: telemetrySafeModelName(resolvedModel),
@@ -1026,26 +1072,26 @@ async function callAgentTool({
       logFeatureBad("subagent_launch", "subagent_remote_personal_config");
       throw new RemoteAgentPreconditionError(REMOTE_AGENT_RESTRICTED_CONFIG_ERROR);
     }
-    let r = await checkRemoteSessionEligibility({
+    let eligibility = await checkRemoteSessionEligibility({
       storageV5: toolUseContext.storageV5,
       credentials: toolUseContext.credentials,
     });
-    if (!r.eligible) {
-      let joined = r.errors.map(formatPreconditionError).join(`
+    if (!eligibility.eligible) {
+      let joined = eligibility.errors.map(formatPreconditionError).join(`
 `);
       logFeatureBad("subagent_launch", "subagent_remote_ineligible");
-      let q = new RemoteAgentPreconditionError(`Cannot launch cloud agent:
+      let eligibilityError = new RemoteAgentPreconditionError(`Cannot launch cloud agent:
 ${joined}`);
-      throw r.errors.some((error) => error.type === "not_logged_in" && error.message === undefined)
+      throw eligibility.errors.some((error) => error.type === "not_logged_in" && error.message === undefined)
         ? tagObject(
-            q,
+            eligibilityError,
             authExpiredBlockFor(await getClaudeAIOAuthTokenOriginAsync(toolUseContext.credentials)),
           )
-        : q;
+        : eligibilityError;
     }
-    let w;
-    let R = false;
-    let G = await teleportToRemote({
+    let teleportError;
+    let teleportFailed = false;
+    let remoteSession = await teleportToRemote({
       initialMessage: agentPrompt,
       source: "remote_agent",
       tags: [WORKFLOW_REMOTE_AGENT],
@@ -1067,31 +1113,31 @@ ${joined}`);
       ),
       branchName: await getPushedBranchForRemoteAgent(),
       signal: toolUseContext.abortController.signal,
-      onBundleFail: (E) => {
-        w = E;
+      onBundleFail: (bundleError) => {
+        teleportError = bundleError;
       },
-      onCreateFail: (E, q, ee) => {
-        w = E;
-        R = q === "no_access_token" || ee?.status === 401;
+      onCreateFail: (createError, createArg, createArg2) => {
+        teleportError = createError;
+        teleportFailed = createArg === "no_access_token" || createArg2?.status === 401;
       },
       storageV5: toolUseContext.storageV5,
       credentials: toolUseContext.credentials,
     });
-    if (!G) {
+    if (!remoteSession) {
       logFeatureBad("subagent_launch", "subagent_remote_session_failed");
-      let E = new RemoteAgentPreconditionError(w ?? "Failed to create cloud session");
-      throw R
+      let createError = new RemoteAgentPreconditionError(teleportError ?? "Failed to create cloud session");
+      throw teleportFailed
         ? tagObject(
-            E,
+            createError,
             authExpiredBlockFor(await getClaudeAIOAuthTokenOriginAsync(toolUseContext.credentials)),
           )
-        : E;
+        : createError;
     }
     let { taskId, sessionId } = registerRemoteAgentTask({
       remoteTaskType: "remote-agent",
       session: {
-        id: G.id,
-        title: G.title || agentDescription,
+        id: remoteSession.id,
+        title: remoteSession.title || agentDescription,
       },
       command: agentPrompt,
       context: toolUseContext,
@@ -1112,7 +1158,7 @@ ${joined}`);
         ),
       },
     });
-    pn();
+    progressFn();
     logEvent("tengu_agent_tool_remote_launched", {
       agent_type: agentTypeForTelemetry,
     });
@@ -1205,7 +1251,7 @@ ${joined}`);
     callerCanContinueAgents: getOwnToolSurface(toolUseContext, ownerAgentId),
     persistedToolResultFiles: isWebFetchAgent(selectedAgent) ? defaultToolResultsStorage() : undefined,
   };
-  let lo = assembleAgentToolPool(
+  let availableToolPool = assembleAgentToolPool(
     toolUseContext,
     permissionContext,
     toolUseContext.getAppState().mcp.tools.concat(filtered),
@@ -1222,7 +1268,7 @@ ${joined}`);
         spawnedDefinition: selectedAgent,
         spawnedIsObserver: false,
       });
-  let fn = observerPairing?.inheritedArming
+  let observerArmingContext = observerPairing?.inheritedArming
     ? {
         toolUseContext: observerPairing.inheritedArming.toolUseContext,
         canUseTool: observerPairing.inheritedArming.canUseTool,
@@ -1240,16 +1286,16 @@ ${joined}`);
     toolUseContext.agentContext !== undefined &&
     toolUseContext.agentContext.agentType !== "main" &&
     (toolUseContext.agentContext.isBackgroundAgent ?? false);
-  let hn = isDelegatedObservationContext(toolUseContext.agentContext);
+  let isDelegatedObservation = isDelegatedObservationContext(toolUseContext.agentContext);
   let parentPromptId = promptIdForRequest(toolUseContext.messages, toolUseContext.agentContext);
   let agentWorktree = null;
   if (effectiveIsolation === "worktree") {
-    let r = timing?.mark("external");
+    let worktreeExternalMark = timing?.mark("external");
     agentWorktree = await createAgentWorktree(agentSkillName(newAgentId), {
       storageV5: toolUseContext.storageV5,
       credentials: toolUseContext.credentials,
     });
-    r?.();
+    worktreeExternalMark?.();
     if (agentWorktree.hookBased) {
       let worktreePath = agentWorktree.worktreePath;
       agentWorktree.vettedRealPath = await realpath(worktreePath).catch((error) => {
@@ -1270,7 +1316,7 @@ ${joined}`);
         content: buildWorktreeNotice(getCwd(), agentWorktree.worktreePath),
       }),
     );
-  let wn = hasConcurrentEditingAgentInCwd({
+  let sharesCwd = hasConcurrentEditingAgentInCwd({
     taskRegistry,
     selectedAgent,
     effectiveIsolation,
@@ -1278,7 +1324,7 @@ ${joined}`);
     parentCwd: toolUseContext.session.project === null ? null : getCwd(),
     parentAgentId,
   });
-  if (wn)
+  if (sharesCwd)
     promptMessages.push(
       createUserMessage({
         content: CONCURRENT_WRITE_AGENT_WARNING,
@@ -1291,7 +1337,7 @@ ${joined}`);
         text: formatTotalTokensTag("padded-countdown", effortBudgetPlan.totalTokensBudget),
       }),
     );
-  let _n = wn && canRunAgentInWorktree();
+  let sharesCwdWarnable = sharesCwd && canRunAgentInWorktree();
   let { onToolPool, reviewTools } = createDeferredReviewTools(toolUseContext.options.tools);
   let runAgentParams = {
     agentDefinition: selectedAgent,
@@ -1324,8 +1370,8 @@ ${joined}`);
             systemPrompt: asSystemPrompt(agentSystemPrompt),
           }
         : undefined,
-    availableTools: isForkLaunch ? toolUseContext.options.tools : lo,
-    assembleAvailableTools: (r) => assembleAgentToolPool(toolUseContext, permissionContext, r),
+    availableTools: isForkLaunch ? toolUseContext.options.tools : availableToolPool,
+    assembleAvailableTools: (tools) => assembleAgentToolPool(toolUseContext, permissionContext, tools),
     onToolPool,
     forkContextMessages: isForkLaunch ? toolUseContext.messages : undefined,
     ...(isForkLaunch && {
@@ -1340,35 +1386,35 @@ ${joined}`);
     preserveToolUseResults: !getIsNonInteractiveSession(),
     toolUseId: toolUseContext.toolUseId,
     ...false,
-    onMcpServersBlocked: (r, w) =>
+    onMcpServersBlocked: (blockedServers, blockedBy) =>
       onProgress?.({
         type: "notification",
         notification: {
           key: `agent-mcp-blocked-${newAgentId}`,
-          text: `${selectedAgent.agentType} agent MCP ${plural(r.length, "server")} blocked by ${w}: ${r.join(", ")}`,
+          text: `${selectedAgent.agentType} agent MCP ${plural(blockedServers.length, "server")} blocked by ${blockedBy}: ${blockedServers.join(", ")}`,
           priority: "medium",
           color: "warning",
           timeoutMs: 1e4,
         },
       }),
-    onModelRestricted: (r, w) =>
+    onModelRestricted: (model, restriction) =>
       onProgress?.({
         type: "notification",
         notification: {
-          key: `agent-model-restricted-${selectedAgent.agentType}-${displayModelName(r)}`,
-          text: `${selectedAgent.agentType} agent: ${formatModelRestrictedNotice(r, w)}`,
+          key: `agent-model-restricted-${selectedAgent.agentType}-${displayModelName(model)}`,
+          text: `${selectedAgent.agentType} agent: ${formatModelRestrictedNotice(model, restriction)}`,
           priority: "medium",
           color: "warning",
           timeoutMs: 1e4,
         },
       }),
   };
-  let kn = agentCwd ?? agentWorktree?.worktreePath;
-  let cwd_2 = kn ?? (toolUseContext.agentWorktree !== undefined ? getCwd() : undefined);
-  let Lt = toolUseContext.session.withProject({
-    cwd: kn,
+  let effectiveCwd = agentCwd ?? agentWorktree?.worktreePath;
+  let cwd_2 = effectiveCwd ?? (toolUseContext.agentWorktree !== undefined ? getCwd() : undefined);
+  let projectScopedSession = toolUseContext.session.withProject({
+    cwd: effectiveCwd,
   });
-  let project = Lt.project;
+  let project = projectScopedSession.project;
   let cleanupAgentWorktree = async () => {
     if (!agentWorktree) return {};
     let {
@@ -1398,15 +1444,17 @@ ${joined}`);
       };
     }
     if (headCommit || baseChangeset !== undefined) {
-      let q = (isOccupying) =>
+      let findOccupant = (isOccupying) =>
         findTaskOccupyingPath(
           taskRegistry.all(),
           vettedRealPath === undefined ? [worktreePath] : [worktreePath, vettedRealPath],
           isOccupying,
         );
-      let ee = () => q() ?? q((task) => task.id !== newAgentId && isTaskStillOccupying(task, taskRegistry));
-      let V = ee();
-      let B = headCommit
+      let findOwnOccupant = () =>
+        findOccupant() ??
+        findOccupant((task) => task.id !== newAgentId && isTaskStillOccupying(task, taskRegistry));
+      let occupantBeforeCheck = findOwnOccupant();
+      let hasChanges = headCommit
         ? await hasWorktreeChanges(worktreePath, headCommit)
         : await getAgentWorktreeChanges(worktreePath, undefined, {
             hookBased: true,
@@ -1417,23 +1465,23 @@ ${joined}`);
             (agentWorktreeChanges) =>
               agentWorktreeChanges.dirty || agentWorktreeChanges.checkoutMoved === true,
           );
-      let ne = V ?? ee();
-      if (ne) {
+      let occupant = occupantBeforeCheck ?? findOwnOccupant();
+      if (occupant) {
         logForDebugging(
-          `Agent worktree ${worktreePath} is still the working directory of ${ne.type} task ${ne.id}; kept`,
+          `Agent worktree ${worktreePath} is still the working directory of ${occupant.type} task ${occupant.id}; kept`,
         );
         logEvent("tengu_agent_worktree_kept", {
-          reason: isTerminalTaskStatus(ne.status) ? lit("parked_task") : lit("live_task"),
-          task_type: fromEnum(ne.type),
-          seen: V ? lit("before_check") : lit("after_check"),
-          changed: B,
+          reason: isTerminalTaskStatus(occupant.status) ? lit("parked_task") : lit("live_task"),
+          task_type: fromEnum(occupant.type),
+          seen: occupantBeforeCheck ? lit("before_check") : lit("after_check"),
+          changed: hasChanges,
         });
         if (gitRoot)
           watchWorktreeForRelease({
             worktreePath,
             gitRoot,
             taskRegistry,
-            findOccupant: q,
+            findOccupant,
           });
         return {
           worktreePath,
@@ -1441,7 +1489,7 @@ ${joined}`);
         };
       }
       if (
-        !B &&
+        !hasChanges &&
         (await removeAgentWorktree(worktreePath, worktreeBranch, gitRoot, hookBased ?? false, "agent_tool"))
           .outcome === "removed"
       ) {
@@ -1490,8 +1538,8 @@ ${joined}`);
     };
   };
   if (toolUseContext.abortController.signal.aborted) {
-    let r = unwrapAbortReason(toolUseContext.abortController.signal.reason);
-    if (!(shouldRunAsync && r === "interrupt")) {
+    let abortReason = unwrapAbortReason(toolUseContext.abortController.signal.reason);
+    if (!(shouldRunAsync && abortReason === "interrupt")) {
       await cleanupAgentWorktree();
       throw new AbortError();
     }
@@ -1502,26 +1550,26 @@ ${joined}`);
       "A subagent cannot be started from here in this session. Do the task without a subagent.",
     );
   }
-  let releaseConcurrencySlot = await oo();
+  let releaseConcurrencySlot = await takeSlot();
   if (backgroundLaunchGate !== undefined && shouldRunAsync) {
-    let r =
+    let handoffDecision =
       backgroundHandoff === undefined
         ? {
             kind: "closed",
             message: backgroundLaunchRuleText(backgroundByDefault),
           }
         : backgroundHandoff.confirm(toolUseContext.abortController.signal);
-    if (r !== undefined) {
+    if (handoffDecision !== undefined) {
       releaseConcurrencySlot();
       await cleanupAgentWorktree();
-      if (r.kind === "aborted") throw new AbortError();
+      if (handoffDecision.kind === "aborted") throw new AbortError();
       logFeatureBad("subagent_launch", "subagent_background_launch_closed");
-      throw new AgentPreconditionError(r.message);
+      throw new AgentPreconditionError(handoffDecision.message);
     }
   }
-  let spawnTelemetry = pn();
+  let spawnTelemetry = progressFn();
   agentMetadata.spawnedSubagent = spawnTelemetry;
-  let Sn = () => {
+  let recordDeliveredTurns = () => {
     if (inheritedAttachments !== undefined)
       recordTurnsDeliveredDirect(
         {
@@ -1531,15 +1579,15 @@ ${joined}`);
         inheritedAttachments,
       );
   };
-  let Bt = async (r) => {
+  let runReleasingSlotOnError = async (promise) => {
     try {
-      return await r;
+      return await promise;
     } catch (error) {
       releaseConcurrencySlot();
       throw error;
     }
   };
-  let vn =
+  let previousNameOwnerId =
     backgroundHandoff !== undefined && teammateName && teammateName !== MAIN
       ? toolUseContext.getAppState().agentNameRegistry.get(teammateName)
       : undefined;
@@ -1555,11 +1603,11 @@ ${joined}`);
   let launchedWithDefaults = modelParam === undefined && !isHookOrPluginSteered(toolUseContext);
   let launchModel = isForkLaunch || isHookOrPluginSteered(toolUseContext) ? undefined : modelParam;
   if (shouldRunAsync) {
-    let r = newAgentId;
-    let w = registerAsyncAgent({
+    let backgroundAgentId = newAgentId;
+    let backgroundRegistration = registerAsyncAgent({
       outputFileReadable: willToolsLoseSessionState(toolUseContext.options.tools),
       ownerCanContinueAgents: agentMetadata.callerCanContinueAgents,
-      agentId: r,
+      agentId: backgroundAgentId,
       ownerAgentId,
       parentAgentId,
       spawnDepth: agentDepth_2,
@@ -1578,44 +1626,46 @@ ${joined}`);
     if (
       backgroundHandoff !== undefined &&
       !backgroundHandoff.handOver({
-        agentId: w.agentId,
-        abortController: w.abortController,
+        agentId: backgroundRegistration.agentId,
+        abortController: backgroundRegistration.abortController,
       })
     ) {
-      killAsyncAgent(w.agentId, taskRegistry, "system", undefined, {
+      killAsyncAgent(backgroundRegistration.agentId, taskRegistry, "system", undefined, {
         lifecycleNotStarted: true,
       });
       releaseConcurrencySlot();
-      markAgentNotified(w.agentId, taskRegistry);
-      if (teammateName && vn !== undefined) toolUseContext.agentLifecycle.registerName(teammateName, vn);
+      markAgentNotified(backgroundRegistration.agentId, taskRegistry);
+      if (teammateName && previousNameOwnerId !== undefined)
+        toolUseContext.agentLifecycle.registerName(teammateName, previousNameOwnerId);
       await cleanupAgentWorktree();
       logFeatureBad("subagent_launch", "subagent_background_launch_not_taken");
       throw new AgentPreconditionError(backgroundLaunchRuleText(backgroundByDefault));
     }
-    if (!getIsNonInteractiveSession()) addAgentKeepaliveReason(ownerAgentId, `agent:${r}`, taskRegistry);
+    if (!getIsNonInteractiveSession())
+      addAgentKeepaliveReason(ownerAgentId, `agent:${backgroundAgentId}`, taskRegistry);
     if (
       isZincHarborOn() &&
       !getIsNonInteractiveSession() &&
       (!teammateName || teammateName === MAIN) &&
       !FAST_BUILTIN_AGENTS.has(selectedAgent.agentType)
     ) {
-      let P = toolUseContext.agentLifecycle.allocateName(selectedAgent.agentType);
-      toolUseContext.agentLifecycle.registerName(P, identityAgentId2(r));
-      displayName = P;
+      let autoName = toolUseContext.agentLifecycle.allocateName(selectedAgent.agentType);
+      toolUseContext.agentLifecycle.registerName(autoName, identityAgentId2(backgroundAgentId));
+      displayName = autoName;
     }
     if (observerPairing)
-      await Bt(
+      await runReleasingSlotOnError(
         armObserver({
-          observedKey: r,
-          observedTaskId: r,
+          observedKey: backgroundAgentId,
+          observedTaskId: backgroundAgentId,
           observedName: displayName ?? teammateName ?? selectedAgent.agentType,
           observedAgentType: selectedAgent.agentType,
           config: observerPairing,
-          ...fn,
+          ...observerArmingContext,
         }),
       );
-    let R = {
-      agentId: r,
+    let asyncAgentContext = {
+      agentId: backgroundAgentId,
       parentAgentId,
       depth: agentDepth_2,
       ...(alwaysFalse(toolUseContext) && {
@@ -1627,7 +1677,7 @@ ${joined}`);
       displayName,
       isAsync: true,
       isBackgroundAgent: true,
-      ...(hn && {
+      ...(isDelegatedObservation && {
         delegatedObservation: true,
       }),
       isBuiltIn: isBuiltInAgent(selectedAgent),
@@ -1641,22 +1691,22 @@ ${joined}`);
       parentPromptId,
       ...getWorkflowRunFields(toolUseContext.agentContext),
     };
-    agentMetadata.agentContext = R;
-    runWithCwdOverride(R, () =>
+    agentMetadata.agentContext = asyncAgentContext;
+    runWithCwdOverride(asyncAgentContext, () =>
       withCallFrameCwd(project, () =>
         runAsyncAgentLifecycle({
-          taskId: w.agentId,
-          abortController: w.abortController,
+          taskId: backgroundRegistration.agentId,
+          abortController: backgroundRegistration.abortController,
           makeStream: (onCacheSafeParams, onQueryProgress, onStreamTokenEstimate) =>
             runAgent({
               ...runAgentParams,
               launchedWithDefaults,
-              session: Lt,
+              session: projectScopedSession,
               override: {
                 ...runAgentParams.override,
-                agentId: identityAgentId2(w.agentId),
-                agentContext: R,
-                abortController: w.abortController,
+                agentId: identityAgentId2(backgroundRegistration.agentId),
+                agentContext: asyncAgentContext,
+                abortController: backgroundRegistration.abortController,
               },
               onCacheSafeParams,
               onQueryProgress,
@@ -1666,18 +1716,19 @@ ${joined}`);
           description: agentDescription,
           toolUseContext,
           taskRegistry,
-          agentIdForCleanup: r,
+          agentIdForCleanup: backgroundAgentId,
           reviewTools,
           enableSummarization:
-            getSdkAgentProgressSummariesEnabled() || ((en || rn) && !getIsNonInteractiveSession()),
+            getSdkAgentProgressSummariesEnabled() ||
+            ((isCoordinator || forceAsync) && !getIsNonInteractiveSession()),
           getWorktreeResult: cleanupAgentWorktree,
           onRunSettled: releaseConcurrencySlot,
         }),
       ),
     );
-    Sn();
+    recordDeliveredTurns();
     starting?.started({
-      agentId: w.agentId,
+      agentId: backgroundRegistration.agentId,
       model: resolvedModel,
     });
     let canReadOutputFile =
@@ -1687,23 +1738,23 @@ ${joined}`);
       data: {
         isAsync: true,
         status: "async_launched",
-        agentId: w.agentId,
+        agentId: backgroundRegistration.agentId,
         description: agentDescription,
         resolvedModel,
         prompt: agentPrompt,
-        outputFile: w.outputFile ?? "",
+        outputFile: backgroundRegistration.outputFile ?? "",
         canReadOutputFile,
         canContinueAgent: hasSendMessageTool(toolUseContext.options.tools),
-        ...(_n && {
+        ...(sharesCwdWarnable && {
           sharesCwd: true,
         }),
       },
     };
   } else {
-    let r = identityAgentId2(newAgentId);
-    let w = isIterativeHavenGateOn() || getBackgroundLaunchRule() !== undefined;
-    let R = {
-      agentId: r,
+    let foregroundAgentId = identityAgentId2(newAgentId);
+    let recordsLaunchDefaults = isIterativeHavenGateOn() || getBackgroundLaunchRule() !== undefined;
+    let foregroundAgentContext = {
+      agentId: foregroundAgentId,
       parentAgentId,
       depth: agentDepth_2,
       ...(alwaysFalse(toolUseContext) && {
@@ -1715,7 +1766,7 @@ ${joined}`);
       displayName,
       isAsync: false,
       isBackgroundAgent,
-      ...(hn && {
+      ...(isDelegatedObservation && {
         delegatedObservation: true,
       }),
       isBuiltIn: isBuiltInAgent(selectedAgent),
@@ -1729,14 +1780,16 @@ ${joined}`);
       parentPromptId,
       ...getWorkflowRunFields(toolUseContext.agentContext),
     };
-    agentMetadata.agentContext = R;
-    let G = runWithCwdOverride(R, () =>
+    agentMetadata.agentContext = foregroundAgentContext;
+    let foregroundRun = runWithCwdOverride(foregroundAgentContext, () =>
       withCallFrameCwd(project, async () => {
         let now = Date.now();
         let resolvedModel_2 = resolvedModel;
-        let L = appendModelIfChanged([], resolvedModel);
+        let modelsUsed = appendModelIfChanged([], resolvedModel);
         if (promptMessages.length > 0) {
-          let found = normalizeMessages(promptMessages).find((pe) => pe.type === "user");
+          let found = normalizeMessages(promptMessages).find(
+            (normalizedMessage) => normalizedMessage.type === "user",
+          );
           if (found && found.type === "user" && onProgress)
             onProgress({
               type: "progress",
@@ -1745,19 +1798,19 @@ ${joined}`);
                 message: found,
                 type: "agent_progress",
                 prompt: agentPrompt,
-                agentId: r,
+                agentId: foregroundAgentId,
                 agentType: selectedAgent.agentType,
                 isBuiltIn: isBuiltInAgent(selectedAgent),
                 description: agentDescription,
                 resolvedModel: resolvedModel_2,
-                modelsUsed: L,
+                modelsUsed,
               },
             });
         }
-        let E = registerAgentForeground({
+        let foregroundRegistration = registerAgentForeground({
           outputFileReadable: willToolsLoseSessionState(toolUseContext.options.tools),
           ownerCanContinueAgents: agentMetadata.callerCanContinueAgents,
-          agentId: r,
+          agentId: foregroundAgentId,
           ownerAgentId,
           parentAgentId,
           spawnDepth: agentDepth_2,
@@ -1768,25 +1821,26 @@ ${joined}`);
           taskRegistry,
           parentAbortController: toolUseContext.abortController,
           toolUseId: toolUseContext.toolUseId,
-          ...autoBackgroundOptions(backgroundLaunchGate, un),
+          ...autoBackgroundOptions(backgroundLaunchGate, autoBackgroundMs),
           isDirectCall: !toolUseContext.innerCall && toolUseContext.hookCaller === undefined,
           cwd: cwd_2,
           spawnedSubagent: spawnTelemetry,
-          ...(w && {
+          ...(recordsLaunchDefaults && {
             launchedWithDefaults,
             launchModel,
           }),
         });
-        let { taskId, cancelAutoBackground, abortController, detachParentAbortRelay } = E;
+        let { taskId, cancelAutoBackground, abortController, detachParentAbortRelay } =
+          foregroundRegistration;
         if (observerPairing)
-          await Bt(
+          await runReleasingSlotOnError(
             armObserver({
-              observedKey: r,
-              observedTaskId: r,
+              observedKey: foregroundAgentId,
+              observedTaskId: foregroundAgentId,
               observedName: teammateName ?? selectedAgent.agentType,
               observedAgentType: selectedAgent.agentType,
               config: observerPairing,
-              ...fn,
+              ...observerArmingContext,
             }),
           );
         let backgroundWait = {
@@ -1795,28 +1849,28 @@ ${joined}`);
         logFeatureOk("subagent_launch");
         let agentMessages = [];
         let forwardSubagentText = toolUseContext.options.forwardSubagentText;
-        let ce;
-        let ct = false;
+        let lastRetryKey;
+        let sawAssistantMessage = false;
         let onMessage = (message) => {
           if (backgroundWait.moved) return;
           if (message.type === "query_model_change") {
             resolvedModel_2 = message.toModel;
-            L = appendModelIfChanged(L, message.toModel);
+            modelsUsed = appendModelIfChanged(modelsUsed, message.toModel);
             return;
           }
           if (message.type === "spinner_mode") return;
           if (message.type !== "api_metrics" && message.type !== "set_in_progress_tool_use_ids")
             agentMessages.push(message);
           if (!onProgress) return;
-          if (ce !== undefined && !(message.type === "system" && message.subtype === "api_error")) {
-            ce = undefined;
+          if (lastRetryKey !== undefined && !(message.type === "system" && message.subtype === "api_error")) {
+            lastRetryKey = undefined;
             onProgress({
               type: "progress",
               toolUseID: `agent_${assistantMessage.message.id}`,
               data: {
                 type: "agent_api_retry",
                 resolved: true,
-                agentId: r,
+                agentId: foregroundAgentId,
                 agentType: selectedAgent.agentType,
               },
             });
@@ -1836,22 +1890,22 @@ ${joined}`);
               data: message.data,
             });
           if (message.type === "system" && message.subtype === "api_error") {
-            let K = categorizeRetryableAPIError(message.error);
-            let pe = `${message.source ?? "request_retry"}:${message.retryAttempt}:${message.maxRetries}:${K}`;
-            if (pe !== ce) {
-              ce = pe;
+            let errorCategory = categorizeRetryableAPIError(message.error);
+            let retryKey = `${message.source ?? "request_retry"}:${message.retryAttempt}:${message.maxRetries}:${errorCategory}`;
+            if (retryKey !== lastRetryKey) {
+              lastRetryKey = retryKey;
               onProgress({
                 type: "progress",
                 toolUseID: `agent_${assistantMessage.message.id}`,
                 data: {
                   type: "agent_api_retry",
-                  agentId: r,
+                  agentId: foregroundAgentId,
                   agentType: selectedAgent.agentType,
                   attempt: message.retryAttempt,
                   maxRetries: message.maxRetries,
                   retryDelayMs: message.retryInMs,
                   errorStatus: message.error.status,
-                  errorCategory: K,
+                  errorCategory,
                 },
               });
             }
@@ -1863,8 +1917,8 @@ ${joined}`);
             return;
           }
           if (message.type !== "assistant" && message.type !== "user") return;
-          if (message.type === "user" && message.isMeta && !ct) return;
-          if (message.type === "assistant") ct = true;
+          if (message.type === "user" && message.isMeta && !sawAssistantMessage) return;
+          if (message.type === "assistant") sawAssistantMessage = true;
           if (message.type === "assistant") {
             let assistantMessageContentLength = getAssistantMessageContentLength(message);
             if (assistantMessageContentLength > 0)
@@ -1874,63 +1928,64 @@ ${joined}`);
                 delta: assistantMessageContentLength,
               });
           }
-          for (let K of normalizeMessages([message])) {
-            let pe = K.message.content[0];
-            if (!forwardSubagentText && pe.type !== "tool_use" && pe.type !== "tool_result") continue;
+          for (let normalizedMessage of normalizeMessages([message])) {
+            let firstBlock = normalizedMessage.message.content[0];
+            if (!forwardSubagentText && firstBlock.type !== "tool_use" && firstBlock.type !== "tool_result")
+              continue;
             onProgress({
               type: "progress",
               toolUseID: `agent_${assistantMessage.message.id}`,
               data: {
-                message: K,
+                message: normalizedMessage,
                 type: "agent_progress",
                 prompt: "",
-                agentId: r,
+                agentId: foregroundAgentId,
                 agentType: selectedAgent.agentType,
                 isBuiltIn: isBuiltInAgent(selectedAgent),
                 description: agentDescription,
                 resolvedModel: resolvedModel_2,
-                modelsUsed: L,
+                modelsUsed,
               },
             });
           }
         };
-        let ge = backgroundTasksAvailable
+        let backgroundHintTimer = backgroundTasksAvailable
           ? undefined
           : setTimeout(
-              (k) => {
-                if (k.toolUseId)
-                  k.emitToolProgress?.({
+              (toolUseContext) => {
+                if (toolUseContext.toolUseId)
+                  toolUseContext.emitToolProgress?.({
                     kind: "background_hint",
-                    toolUseId: k.toolUseId,
+                    toolUseId: toolUseContext.toolUseId,
                   });
               },
               BACKGROUND_HINT_DELAY_MS,
               toolUseContext,
             );
-        let pt = {};
+        let worktreeResult = {};
         let getWorktreeResult = async () => {
-          pt = await cleanupAgentWorktree();
-          return pt;
+          worktreeResult = await cleanupAgentWorktree();
+          return worktreeResult;
         };
         starting?.started({
-          agentId: r,
+          agentId: foregroundAgentId,
           model: resolvedModel,
         });
         timing?.mark("model");
-        let mo = runAsyncAgentLifecycle({
+        let lifecycleRun = runAsyncAgentLifecycle({
           taskId,
           abortController,
           makeStream: (onCacheSafeParams, onQueryProgress, onStreamTokenEstimate) =>
             runAgent({
               ...runAgentParams,
-              ...(w && {
+              ...(recordsLaunchDefaults && {
                 launchedWithDefaults,
               }),
-              session: Lt,
+              session: projectScopedSession,
               override: {
                 ...runAgentParams.override,
-                agentId: r,
-                agentContext: R,
+                agentId: foregroundAgentId,
+                agentContext: foregroundAgentContext,
                 abortController,
               },
               onCacheSafeParams,
@@ -1941,7 +1996,7 @@ ${joined}`);
           description: agentDescription,
           toolUseContext,
           taskRegistry,
-          agentIdForCleanup: r,
+          agentIdForCleanup: foregroundAgentId,
           reviewTools,
           enableSummarization: getSdkAgentProgressSummariesEnabled(),
           getWorktreeResult,
@@ -1949,30 +2004,34 @@ ${joined}`);
           shouldNotifyOwner: () => backgroundWait.moved,
           onRunSettled: releaseConcurrencySlot,
         });
-        Sn();
+        recordDeliveredTurns();
         let agentError;
-        let In;
+        let permissionStopMessage;
         try {
-          let k;
+          let launchOutcome;
           try {
-            k = await raceAgentLaunch(mo, E.backgroundSignal, un);
+            launchOutcome = await raceAgentLaunch(
+              lifecycleRun,
+              foregroundRegistration.backgroundSignal,
+              autoBackgroundMs,
+            );
           } catch (error) {
-            k = "done";
+            launchOutcome = "done";
             if (error instanceof AbortError) {
-              let Xe = unwrapAbortReason(abortController.signal.reason) === "permission-stop";
-              if (Xe) In = errorMessage(error);
+              let isPermissionStop = unwrapAbortReason(abortController.signal.reason) === "permission-stop";
+              if (isPermissionStop) permissionStopMessage = errorMessage(error);
               logEvent("tengu_agent_tool_terminated", {
                 agent_type: agentTypeForTelemetry,
                 model: telemetrySafeModelName(agentMetadata.resolvedAgentModel),
-                final_model: telemetrySafeModelName(L.at(-1) ?? agentMetadata.resolvedAgentModel),
-                model_swapped: L.length > 1,
+                final_model: telemetrySafeModelName(modelsUsed.at(-1) ?? agentMetadata.resolvedAgentModel),
+                model_swapped: modelsUsed.length > 1,
                 duration_ms: Date.now() - agentMetadata.startTime,
                 is_async: false,
                 is_built_in_agent: agentMetadata.isBuiltInAgent,
                 agent_depth: agentMetadata.agentDepth,
-                reason: Xe ? lit("permission_stop_sync") : lit("user_cancel_sync"),
+                reason: isPermissionStop ? lit("permission_stop_sync") : lit("user_cancel_sync"),
               });
-              if (!Xe) spawnTelemetry.killed("user");
+              if (!isPermissionStop) spawnTelemetry.killed("user");
               if (!(abortController.signal.aborted && !toolUseContext.abortController.signal.aborted))
                 throw error;
               agentError = toError(error);
@@ -1986,8 +2045,8 @@ ${joined}`);
           if (
             !agentError &&
             settleBackgroundedAgent({
-              outcome: k,
-              registration: E,
+              outcome: launchOutcome,
+              registration: foregroundRegistration,
               wait: backgroundWait,
               ownerAgentId,
               taskRegistry,
@@ -2008,14 +2067,14 @@ ${joined}`);
                 agentId: taskId,
                 description: agentDescription,
                 resolvedModel: resolvedModel_2,
-                ...(L.length > 1 && {
-                  modelsUsed: [...L],
+                ...(modelsUsed.length > 1 && {
+                  modelsUsed: [...modelsUsed],
                 }),
                 prompt: agentPrompt,
-                outputFile: E.outputFile ?? "",
+                outputFile: foregroundRegistration.outputFile ?? "",
                 canReadOutputFile,
                 canContinueAgent: hasSendMessageTool(toolUseContext.options.tools),
-                ...(_n && {
+                ...(sharesCwdWarnable && {
                   sharesCwd: true,
                 }),
               },
@@ -2028,8 +2087,8 @@ ${joined}`);
             logEvent("tengu_agent_tool_terminated", {
               agent_type: agentTypeForTelemetry,
               model: telemetrySafeModelName(agentMetadata.resolvedAgentModel),
-              final_model: telemetrySafeModelName(L.at(-1) ?? agentMetadata.resolvedAgentModel),
-              model_swapped: L.length > 1,
+              final_model: telemetrySafeModelName(modelsUsed.at(-1) ?? agentMetadata.resolvedAgentModel),
+              model_swapped: modelsUsed.length > 1,
               duration_ms: Date.now() - agentMetadata.startTime,
               is_async: false,
               is_built_in_agent: agentMetadata.isBuiltInAgent,
@@ -2040,34 +2099,34 @@ ${joined}`);
             throw new AbortError();
           }
           let cutoffNote;
-          let zt = agentMessages;
+          let reportMessages = agentMessages;
           if (agentError) {
-            let re;
+            let recovered;
             try {
-              re = recoverFromSyncAgentError(agentError, agentMessages);
+              recovered = recoverFromSyncAgentError(agentError, agentMessages);
             } catch (error) {
               spawnTelemetry.failed();
               throw error;
             }
-            cutoffNote = re.cutoffNote ?? In;
-            zt = re.history;
-            logForDebugging(`Sync agent recovering from error with ${zt.length} messages`);
+            cutoffNote = recovered.cutoffNote ?? permissionStopMessage;
+            reportMessages = recovered.history;
+            logForDebugging(`Sync agent recovering from error with ${reportMessages.length} messages`);
           }
           let agentHandback = await buildAgentHandback(
             finalizeAgentTool(
-              zt,
-              r,
+              reportMessages,
+              foregroundAgentId,
               {
                 ...agentMetadata,
-                modelsUsed: L,
+                modelsUsed,
               },
               {
                 suppressTelemetry: !agentError,
-                handback: getPendingHandbackReport(taskRegistry.get(r), r),
+                handback: getPendingHandbackReport(taskRegistry.get(foregroundAgentId), foregroundAgentId),
               },
             ),
             {
-              agentId: r,
+              agentId: foregroundAgentId,
               agentMessages,
               agentType: agentTypeForTelemetry,
               child: isForkLaunch ? "fork" : "agent",
@@ -2081,12 +2140,12 @@ ${joined}`);
               status: "completed",
               prompt: agentPrompt,
               ...agentHandback,
-              ...pt,
+              ...worktreeResult,
               canContinueAgent: hasSendMessageTool(toolUseContext.options.tools),
             },
           };
         } finally {
-          if (ge) clearTimeout(ge);
+          if (backgroundHintTimer) clearTimeout(backgroundHintTimer);
           if (toolUseContext.toolUseId)
             toolUseContext.emitToolProgress?.({
               kind: "clear",
@@ -2096,12 +2155,16 @@ ${joined}`);
           detachParentAbortRelay();
           if (!backgroundWait.moved) {
             forgetHandback(taskId);
-            let k = taskRegistry.get(taskId);
-            let progress = isLocalAgent(k) ? k.progress : undefined;
+            let settledTask = taskRegistry.get(taskId);
+            let progress = isLocalAgent(settledTask) ? settledTask.progress : undefined;
             unregisterAgentForeground(taskId, taskRegistry);
             emitTaskNotification(
               taskId,
-              k?.status === "failed" ? "failed" : k?.status === "killed" ? "stopped" : "completed",
+              settledTask?.status === "failed"
+                ? "failed"
+                : settledTask?.status === "killed"
+                  ? "stopped"
+                  : "completed",
               {
                 toolUseId: toolUseContext.toolUseId,
                 summary: agentDescription,
@@ -2116,25 +2179,8 @@ ${joined}`);
         }
       }),
     );
-    return Bt(G);
+    return runReleasingSlotOnError(foregroundRun);
   }
-}
-//@ chunk-apw2zhyn.js:1372-1439 fingerprint = isBackgroundTasksDisabled (1)
-/**
- * 后台任务是否被禁用：CLAUDE_CODE_DISABLE_BACKGROUND_TASKS 或 --bare 模式。
- */
-function isBackgroundTasksDisabled() {
-  return env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS || isBareMode();
-}
-//@ chunk-e6aww6q8.js:4709491-4709738 fingerprint = getAutoBackgroundMs (0.638)
-/**
- * coordinator 模式或 CLAUDE_AUTO_BACKGROUND_TASKS 下解析 CLAUDE_CODE_WORKER_CHECKIN_SCHEDULE（逗号分隔秒数，1–86400）为毫秒数组。
- */
-function getWorkerCheckinScheduleMs() {
-  if (!isCoordinatorMode_2() && !env.CLAUDE_AUTO_BACKGROUND_TASKS) return;
-  let mapped = env.CLAUDE_CODE_WORKER_CHECKIN_SCHEDULE?.split(",").map((n) => n.trim());
-  if (!mapped?.every((n) => /^\d+$/.test(n) && Number(n) >= 1 && Number(n) <= 86400)) return;
-  return mapped.map((n) => Number(n) * 1000);
 }
 export {
   agentOutputSchema,

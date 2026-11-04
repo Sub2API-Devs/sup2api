@@ -5,18 +5,18 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_Node } from "./Node.js";
 import { require_NodeList } from "./NodeList.js";
 import { require_utils } from "./utils.js";
 
 //@ chunk-vwj6ccer.js:62055-62721 cjs-fingerprint
-var require_Leaf = x(function (cjsExports, cjsModule) {
+var require_Leaf = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = Leaf;
   var Node = require_Node();
   var NodeList = require_NodeList();
-  var Hs = require_utils();
-  var { HierarchyRequestError, NotFoundError } = Hs;
+  var utils = require_utils();
+  var { HierarchyRequestError, NotFoundError } = utils;
   function Leaf() {
     Node.call(this);
   }

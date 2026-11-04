@@ -33,16 +33,17 @@ import { getStoreScopeLabel } from "./storeLabels.js";
 import { withTimeout } from "../../utils/sleep.js";
 import { getEnabledSettingSources } from "../../utils/settings/constants.js";
 import { getSettingsForSource } from "../../utils/settings/settings.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-82kqcve8.js:74945-75035 placement
 /**
  * 用给定模式与挂载名创建记忆库客户端。
  */
-function makeStoreClient(e, n, mount) {
+function makeStoreClient(store, writable, mount) {
   return new MemoryStoreClient(
     {
-      ...e,
-      mode: n ? "rw" : "ro",
+      ...store,
+      mode: writable ? "rw" : "ro",
       mount,
     },
     {
@@ -54,17 +55,17 @@ function makeStoreClient(e, n, mount) {
 /**
  * 替换文本块内容；内容变化且带有需剔除的引用时一并去掉这些引用。
  */
-function withCitationsDropped(e, n) {
-  if (n === e.text) return e;
-  return Array.isArray(e.citations) && e.citations.some(isSpanCitation)
+function withCitationsDropped(block, text) {
+  if (text === block.text) return block;
+  return Array.isArray(block.citations) && block.citations.some(isSpanCitation)
     ? {
-        ...e,
-        text: n,
-        citations: e.citations.filter((citation) => !isSpanCitation(citation)),
+        ...block,
+        text,
+        citations: block.citations.filter((citation) => !isSpanCitation(citation)),
       }
     : {
-        ...e,
-        text: n,
+        ...block,
+        text,
       };
 }
 //@ chunk-82kqcve8.js:75202-75272 placement
@@ -78,44 +79,54 @@ function isSpanCitation(citation) {
 /**
  * 提取 filenames 属性的正则。
  */
-var TENGU_SALT_MARSH = "tengu_salt_marsh";
-var MEMORY_TAG_VARIANTS = ["cc-memory", "cc_memory", "ccmemory", "CC-MEMORY", "CC_MEMORY", "CCMEMORY"];
-var MEMORY_TAG_ALTERNATION = `(?:${MEMORY_TAG_VARIANTS.join("|")})`;
-var MEMORY_TAG_PREFIXES = `(?:${MEMORY_TAG_VARIANTS.flatMap((e) => Array.from(e, (n, r) => e.slice(0, r + 1))).join("|")})`;
-var TAG_ATTR_CHARS = "[^>]{0,1024}";
-var regExp = new RegExp(`</?${MEMORY_TAG_ALTERNATION}(?=[\\s/>])${TAG_ATTR_CHARS}>`, "g");
-var regExp_2 = new RegExp(
-  `</?(?:${MEMORY_TAG_ALTERNATION}(?![^\\s/>])${TAG_ATTR_CHARS}|${MEMORY_TAG_PREFIXES})$`,
-);
-var FILENAMES_ATTR_RE = /\bfilenames="([^"]*)"/i;
+var TENGU_SALT_MARSH; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MEMORY_TAG_VARIANTS;
+var MEMORY_TAG_ALTERNATION;
+var MEMORY_TAG_PREFIXES;
+var TAG_ATTR_CHARS;
+var regExp;
+var regExp_2;
+var FILENAMES_ATTR_RE;
+deferInit("chunk-82kqcve8.js:75272", () => {
+  TENGU_SALT_MARSH = "tengu_salt_marsh";
+  MEMORY_TAG_VARIANTS = ["cc-memory", "cc_memory", "ccmemory", "CC-MEMORY", "CC_MEMORY", "CCMEMORY"];
+  MEMORY_TAG_ALTERNATION = `(?:${MEMORY_TAG_VARIANTS.join("|")})`;
+  MEMORY_TAG_PREFIXES = `(?:${MEMORY_TAG_VARIANTS.flatMap((variant) => Array.from(variant, (char, charIndex) => variant.slice(0, charIndex + 1))).join("|")})`;
+  TAG_ATTR_CHARS = "[^>]{0,1024}";
+  regExp = new RegExp(`</?${MEMORY_TAG_ALTERNATION}(?=[\\s/>])${TAG_ATTR_CHARS}>`, "g");
+  regExp_2 = new RegExp(
+    `</?(?:${MEMORY_TAG_ALTERNATION}(?![^\\s/>])${TAG_ATTR_CHARS}|${MEMORY_TAG_PREFIXES})$`,
+  );
+  FILENAMES_ATTR_RE = /\bfilenames="([^"]*)"/i;
+});
 //@ chunk-82kqcve8.js:75621-75660 placement
 /**
  * 去掉文本里的记忆引用标签。
  */
-function stripMemoryTags(e) {
-  return e.replace(regExp, "");
+function stripMemoryTags(text) {
+  return text.replace(regExp, "");
 }
 //@ chunk-82kqcve8.js:75660-76406 placement
 /**
  * 统计文本中的记忆引用标签：开闭标签数、标签内字符数、引用的记忆文件数、缺少 filenames 属性的情况与开标签字符数分桶，并返回去掉标签后的文本。
  */
 function measureMemoryTags(source) {
-  let n = [...source.matchAll(regExp)];
-  let filtered = n.filter((w) => !w[0].startsWith("</"));
-  let reduced = filtered.reduce((acc, S) => acc + S[0].length, 0);
-  let mapped = filtered.map((w) => w[0].match(FILENAMES_ATTR_RE));
-  let { taggedContentChars } = n.reduce(
-    (acc, S) => {
-      if (!S[0].startsWith("</"))
+  let tags = [...source.matchAll(regExp)];
+  let filtered = tags.filter((tag) => !tag[0].startsWith("</"));
+  let reduced = filtered.reduce((acc, tag) => acc + tag[0].length, 0);
+  let mapped = filtered.map((tag) => tag[0].match(FILENAMES_ATTR_RE));
+  let { taggedContentChars } = tags.reduce(
+    (acc, tag) => {
+      if (!tag[0].startsWith("</"))
         return acc.openAt === null
           ? {
               taggedContentChars: acc.taggedContentChars,
-              openAt: S.index + S[0].length,
+              openAt: tag.index + tag[0].length,
             }
           : acc;
       if (acc.openAt === null) return acc;
       return {
-        taggedContentChars: acc.taggedContentChars + (S.index - acc.openAt),
+        taggedContentChars: acc.taggedContentChars + (tag.index - acc.openAt),
         openAt: null,
       };
     },
@@ -127,13 +138,14 @@ function measureMemoryTags(source) {
   return {
     text: source.replace(regExp, ""),
     openTagCount: filtered.length,
-    closeTagCount: n.length - filtered.length,
+    closeTagCount: tags.length - filtered.length,
     taggedContentChars,
     memoryFileCount: mapped.reduce(
-      (acc, S) => acc + (S === null ? 0 : count((S[1] ?? "").split(","), (R) => R.trim() !== "")),
+      (acc, names) =>
+        acc + (names === null ? 0 : count((names[1] ?? "").split(","), (name) => name.trim() !== "")),
       0,
     ),
-    missingFilenamesAttr: mapped.some((w) => w === null),
+    missingFilenamesAttr: mapped.some((names) => names === null),
     openTagCharsBucket: reduced === 0 ? 0 : 2 ** Math.ceil(Math.log2(reduced)),
   };
 }
@@ -143,12 +155,12 @@ function measureMemoryTags(source) {
  */
 var MAX_SCANNED_TEXT_CHARS = 300;
 //@ chunk-82kqcve8.js:76417-76527 placement
-function extractCitedSentence(e) {
-  let n = e.length > MAX_SCANNED_TEXT_CHARS;
-  let trimmed = stripMemoryTags(truncateToLength(e, MAX_SCANNED_TEXT_CHARS)).replace(regExp_2, "").trim();
+function extractCitedSentence(text) {
+  let cut = text.length > MAX_SCANNED_TEXT_CHARS;
+  let trimmed = stripMemoryTags(truncateToLength(text, MAX_SCANNED_TEXT_CHARS)).replace(regExp_2, "").trim();
   return {
-    sentence: n ? `${trimmed}\u2026` : trimmed,
-    cut: n,
+    sentence: cut ? `${trimmed}\u2026` : trimmed,
+    cut,
   };
 }
 //@ chunk-82kqcve8.js:76527-76537 placement
@@ -160,88 +172,90 @@ var MAX_CITED_FILES = 32;
 /**
  * 统计记忆引用标签中的文件解析结果：已解析/未知、读/写、正文注入、浮现与列出的数量。
  */
-function classifyCitedMemories(source, n) {
+function classifyCitedMemories(source, classifyPath) {
   let mapped = [...source.matchAll(regExp)]
-    .filter((h) => !h[0].startsWith("</"))
-    .flatMap((h) => parseTagFilenames(h[0]))
+    .filter((tagMatch) => !tagMatch[0].startsWith("</"))
+    .flatMap((tagMatch) => parseTagFilenames(tagMatch[0]))
     .slice(0, MAX_CITED_FILES)
-    .map(n);
-  let s = count(mapped, (h) => h.resolved);
+    .map(classifyPath);
+  let resolvedCount = count(mapped, (citation) => citation.resolved);
   return {
-    resolved: s,
-    unknown: mapped.length - s,
-    read: count(mapped, (h) => h.read),
-    written: count(mapped, (h) => h.written),
-    injectedBody: count(mapped, (h) => h.injection === "body"),
-    surfaced: count(mapped, (h) => h.injection === "surfaced"),
-    listed: count(mapped, (h) => h.injection === "listed"),
+    resolved: resolvedCount,
+    unknown: mapped.length - resolvedCount,
+    read: count(mapped, (citation) => citation.read),
+    written: count(mapped, (citation) => citation.written),
+    injectedBody: count(mapped, (citation) => citation.injection === "body"),
+    surfaced: count(mapped, (citation) => citation.injection === "surfaced"),
+    listed: count(mapped, (citation) => citation.injection === "listed"),
   };
 }
 //@ chunk-82kqcve8.js:76898-77019 placement
-function parseTagFilenames(e) {
-  let match = e.match(FILENAMES_ATTR_RE);
+function parseTagFilenames(tagText) {
+  let match = tagText.match(FILENAMES_ATTR_RE);
   if (match === null) return [];
   return (match[1] ?? "")
     .split(",")
-    .map((r) => r.trim())
-    .filter((r) => r !== "");
+    .map((name) => name.trim())
+    .filter((name) => name !== "");
 }
 //@ chunk-82kqcve8.js:77019-77440 placement
 /**
  * 从文本中抽取记忆引用：每对标签内的句子（过长截断）及其文件名，未闭合的标签也取一段并标为不完整。
  */
 function extractMemoryCitations(text) {
-  let n = [];
-  let r = null;
+  let citations = [];
+  let contentStart = null;
   let filenames = [];
-  for (let h of text.matchAll(regExp)) {
-    if (!h[0].startsWith("</")) {
-      if (r === null) {
-        r = h.index + h[0].length;
-        filenames = parseTagFilenames(h[0]);
+  for (let match of text.matchAll(regExp)) {
+    if (!match[0].startsWith("</")) {
+      if (contentStart === null) {
+        contentStart = match.index + match[0].length;
+        filenames = parseTagFilenames(match[0]);
       }
       continue;
     }
-    if (r === null) continue;
-    let { sentence, cut } = extractCitedSentence(text.slice(r, h.index));
+    if (contentStart === null) continue;
+    let { sentence, cut } = extractCitedSentence(text.slice(contentStart, match.index));
     if (sentence !== "" && sentence !== "\u2026")
-      n.push({
+      citations.push({
         sentence,
         filenames,
         incomplete: cut,
       });
-    r = null;
+    contentStart = null;
   }
-  if (r !== null) {
-    let { sentence } = extractCitedSentence(text.slice(r, r + MAX_SCANNED_TEXT_CHARS + 1));
+  if (contentStart !== null) {
+    let { sentence } = extractCitedSentence(
+      text.slice(contentStart, contentStart + MAX_SCANNED_TEXT_CHARS + 1),
+    );
     if (sentence !== "" && sentence !== "\u2026")
-      n.push({
+      citations.push({
         sentence,
         filenames,
         incomplete: true,
       });
   }
-  return n;
+  return citations;
 }
 //@ chunk-82kqcve8.js:77440-77652 placement
 /**
  * 去掉文本与 thinking 块中的记忆标签，无变化时返回原数组。
  */
 function stripMemoryTagsFromBlocks(content) {
-  let mapped = content.map((r) => {
-    if (r.type === "text") return withCitationsDropped(r, stripMemoryTags(r.text));
-    if (r.type === "thinking") {
-      let s = stripMemoryTags(r.thinking);
-      return s === r.thinking
-        ? r
+  let mapped = content.map((block) => {
+    if (block.type === "text") return withCitationsDropped(block, stripMemoryTags(block.text));
+    if (block.type === "thinking") {
+      let stripped = stripMemoryTags(block.thinking);
+      return stripped === block.thinking
+        ? block
         : {
-            ...r,
-            thinking: s,
+            ...block,
+            thinking: stripped,
           };
     }
-    return r;
+    return block;
   });
-  return mapped.every((r, s) => r === content[s]) ? content : mapped;
+  return mapped.every((block, index) => block === content[index]) ? content : mapped;
 }
 //@ chunk-82kqcve8.js:121911-121992 placement
 /**
@@ -264,19 +278,21 @@ var RETRY_TTL_MS = 60000;
  */
 class PromptIndexCache {
   current = null;
-  entriesFor(e, n, r) {
-    let s =
-      this.current?.key === e && this.current.retryAtMs !== undefined && Date.now() >= this.current.retryAtMs;
-    if (this.current?.key !== e || s) {
-      let h = {
-        key: e,
-        entries: r(),
+  entriesFor(key, expectedCount, load) {
+    let retryDue =
+      this.current?.key === key &&
+      this.current.retryAtMs !== undefined &&
+      Date.now() >= this.current.retryAtMs;
+    if (this.current?.key !== key || retryDue) {
+      let entry = {
+        key,
+        entries: load(),
       };
-      h.entries = h.entries.then((y) => {
-        if (y.length < n) h.retryAtMs = Date.now() + RETRY_TTL_MS;
-        return y;
+      entry.entries = entry.entries.then((entries) => {
+        if (entries.length < expectedCount) entry.retryAtMs = Date.now() + RETRY_TTL_MS;
+        return entries;
       });
-      this.current = h;
+      this.current = entry;
     }
     return this.current.entries;
   }
@@ -285,80 +301,86 @@ class PromptIndexCache {
 /**
  * 按宿主的空索引映射。
  */
-var promptIndexCache = new HostScoped(() => new PromptIndexCache());
-var emptyIndexByHost = new HostScoped(() => new Map());
+var promptIndexCache; // deferred: uses PromptIndexCache of its import cycle while loading; runs once the cycle is complete
+var emptyIndexByHost;
+deferInit("chunk-82kqcve8.js:122331", () => {
+  promptIndexCache = new HostScoped(() => new PromptIndexCache());
+  emptyIndexByHost = new HostScoped(() => new Map());
+});
 //@ chunk-82kqcve8.js:122378-123076 placement
-async function readMemoryPromptIndexConfig(e = DEFAULT_INDEX_TIMEOUT_MS, n = {}) {
-  let r;
+async function readMemoryPromptIndexConfig(timeoutMs = DEFAULT_INDEX_TIMEOUT_MS, options = {}) {
+  let stores;
   try {
-    r = parseMemoryStoresEnv();
+    stores = parseMemoryStoresEnv();
   } catch (error) {
     logForDebugging(`memory-prompt-index: parseMemoryStoresEnv failed: ${errorMessage(error)}`, {
       level: "debug",
     });
     return [];
   }
-  let s = r ?? (n.serveConnectedStores ? [...readableOrgMemoryStores()] : null);
-  if (s === null) return [];
-  let filtered = s.filter((L) => L.promptIndex !== undefined);
+  let allStores = stores ?? (options.serveConnectedStores ? [...readableOrgMemoryStores()] : null);
+  if (allStores === null) return [];
+  let filtered = allStores.filter((store) => store.promptIndex !== undefined);
   if (filtered.length === 0) return [];
-  let y = memorySyncAvailability();
-  if (y !== "open") {
-    logFeatureSad("memory_prompt_index", y === "held" ? "policy_pending" : "unavailable");
+  let syncState = memorySyncAvailability();
+  if (syncState !== "open") {
+    logFeatureSad("memory_prompt_index", syncState === "held" ? "policy_pending" : "unavailable");
     return [];
   }
   let host = getRootSession().host;
-  let S = r === null;
-  let R = S ? null : emptyIndexByHost.of(host);
-  let O = async () =>
-    (await Promise.allSettled(filtered.map((j) => fetchMemoryPromptIndex(j, e, R)))).flatMap((j) =>
-      j.status === "fulfilled" && j.value !== null ? [j.value] : [],
-    );
-  if (!S) return O();
-  let joined = [orgMemoryIdentity() ?? "", ...filtered.map((L) => `${L.path} ${L.mode} ${L.promptIndex}`)]
-    .join(`
+  let hasEnvStores = stores === null;
+  let cacheByPath = hasEnvStores ? null : emptyIndexByHost.of(host);
+  let fetchIndexes = async () =>
+    (
+      await Promise.allSettled(filtered.map((store) => fetchMemoryPromptIndex(store, timeoutMs, cacheByPath)))
+    ).flatMap((settled) => (settled.status === "fulfilled" && settled.value !== null ? [settled.value] : []));
+  if (!hasEnvStores) return fetchIndexes();
+  let joined = [
+    orgMemoryIdentity() ?? "",
+    ...filtered.map((store) => `${store.path} ${store.mode} ${store.promptIndex}`),
+  ].join(`
 `);
-  return promptIndexCache.of(host).entriesFor(joined, filtered.length, O);
+  return promptIndexCache.of(host).entriesFor(joined, filtered.length, fetchIndexes);
 }
 //@ chunk-82kqcve8.js:123076-123752 placement
-async function fetchMemoryPromptIndex(e, n, knownIds) {
-  let promptIndex = e.promptIndex;
+async function fetchMemoryPromptIndex(config, timeoutMs, knownIds) {
+  let promptIndex = config.promptIndex;
   if (!isValidRelativeSegments(promptIndex)) {
     logFeatureSad("memory_prompt_index", "unsafe_path");
     return null;
   }
-  let h =
+  let client =
     knownIds === null
-      ? makeStoreClient(e, false, getStoreScopeLabel(e))
-      : new MemoryStoreClient(e, undefined, knownIds);
+      ? makeStoreClient(config, false, getStoreScopeLabel(config))
+      : new MemoryStoreClient(config, undefined, knownIds);
   try {
-    let y = await withTimeout(
-      h.readByPath(normalizePathPrefix(promptIndex)),
-      n,
-      `promptIndex fetch for ${e.mount}`,
+    let entry = await withTimeout(
+      client.readByPath(normalizePathPrefix(promptIndex)),
+      timeoutMs,
+      `promptIndex fetch for ${config.mount}`,
     );
-    if (y === null) {
-      logForDebugging(`memory-prompt-index[${e.mount}]: ${promptIndex} not found`, {
+    if (entry === null) {
+      logForDebugging(`memory-prompt-index[${config.mount}]: ${promptIndex} not found`, {
         level: "debug",
       });
       logFeatureOk("memory_prompt_index");
       return {
-        mount: e.mount,
+        mount: config.mount,
         promptIndex,
         content: "",
       };
     }
     logFeatureOk("memory_prompt_index");
     return {
-      mount: e.mount,
+      mount: config.mount,
       promptIndex,
-      content: y.content,
+      content: entry.content,
     };
   } catch (error) {
-    let w = errorMessage(error);
-    let S = w.includes(`promptIndex fetch for ${e.mount}`) ? "timeout" : "error";
-    logFeatureSad("memory_prompt_index", S);
-    logForDebugging(`memory-prompt-index[${e.mount}]: fetch failed (${S}): ${w}`, {
+    let message = errorMessage(error);
+    let reason = message.includes(`promptIndex fetch for ${config.mount}`) ? "timeout" : "error";
+    logFeatureSad("memory_prompt_index", reason);
+    logForDebugging(`memory-prompt-index[${config.mount}]: fetch failed (${reason}): ${message}`, {
       level: "debug",
     });
     return null;
@@ -368,9 +390,13 @@ async function fetchMemoryPromptIndex(e, n, knownIds) {
 /**
  * 加载记忆存储的提示索引：存储有索引且多存储同步可用时拉取，失败返回 null。
  */
-async function loadStorePromptIndex(store, n = {}) {
-  if (store.promptIndex === undefined || !isMultiStoreSyncAvailable()) return null;
-  let memoryPromptIndex = await fetchMemoryPromptIndex(store, n.timeoutMs ?? DEFAULT_INDEX_TIMEOUT_MS, null);
+async function loadStorePromptIndex(config, options = {}) {
+  if (config.promptIndex === undefined || !isMultiStoreSyncAvailable()) return null;
+  let memoryPromptIndex = await fetchMemoryPromptIndex(
+    config,
+    options.timeoutMs ?? DEFAULT_INDEX_TIMEOUT_MS,
+    null,
+  );
   return memoryPromptIndex === null
     ? null
     : {
@@ -382,8 +408,10 @@ async function loadStorePromptIndex(store, n = {}) {
 /**
  * 是否有已启用的设置来源打开了某权限项。
  */
-function isSettingEnabledInSources(e) {
-  return getEnabledSettingSources().some((n) => getSettingsForSource(n)?.permissions?.[e] === true);
+function isSettingEnabledInSources(setting) {
+  return getEnabledSettingSources().some(
+    (source) => getSettingsForSource(source)?.permissions?.[setting] === true,
+  );
 }
 export {
   stripMemoryTags,

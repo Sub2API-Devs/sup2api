@@ -5,7 +5,7 @@
  * pieces: chunk-kyj1a8d5.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_util_hex_encoding } from "../../util-hex-encoding/dist-cjs/index.js";
 import { require_util_utf8 } from "../../util-utf8/dist-cjs/index.js";
 import { require_is_array_buffer } from "../../is-array-buffer/dist-cjs/index.js";
@@ -14,11 +14,11 @@ import { require_util_middleware } from "../../util-middleware/dist-cjs/index.js
 import { require_util_uri_escape } from "../../util-uri-escape/dist-cjs/index.js";
 
 //@ chunk-kyj1a8d5.js:379-10813 cjs-fingerprint
-var require_signature_v4 = x(function (cjsExports) {
+var require_signature_v4 = __commonJS(function (cjsExports) {
   var toHex = require_util_hex_encoding();
-  var d = require_util_utf8();
+  var utf8Module = require_util_utf8();
   var isArrayBuffer = require_is_array_buffer();
-  var Y = require_protocol_http();
+  var protocolsModule = require_protocol_http();
   var normalizeProvider = require_util_middleware();
   var escapeUri = require_util_uri_escape();
   var ALGORITHM_QUERY_PARAM = "X-Amz-Algorithm";
@@ -32,7 +32,7 @@ var require_signature_v4 = x(function (cjsExports) {
   var AUTH_HEADER = "authorization";
   var AMZ_DATE_HEADER = AMZ_DATE_QUERY_PARAM.toLowerCase();
   var DATE_HEADER = "date";
-  var z = [AUTH_HEADER, AMZ_DATE_HEADER, DATE_HEADER];
+  var GENERATED_HEADERS = [AUTH_HEADER, AMZ_DATE_HEADER, DATE_HEADER];
   var SIGNATURE_HEADER = SIGNATURE_QUERY_PARAM.toLowerCase();
   var SHA256_HEADER = "x-amz-content-sha256";
   var TOKEN_HEADER = TOKEN_QUERY_PARAM.toLowerCase();
@@ -60,13 +60,14 @@ var require_signature_v4 = x(function (cjsExports) {
   var ALGORITHM_IDENTIFIER = "AWS4-HMAC-SHA256";
   var ALGORITHM_IDENTIFIER_V4A = "AWS4-ECDSA-P256-SHA256";
   var EVENT_ALGORITHM_IDENTIFIER = "AWS4-HMAC-SHA256-PAYLOAD";
-  var ee = "UNSIGNED-PAYLOAD";
+  var UNSIGNED_PAYLOAD = "UNSIGNED-PAYLOAD";
   var MAX_CACHE_SIZE = 50;
   var KEY_TYPE_IDENTIFIER = "aws4_request";
   var MAX_PRESIGNED_TTL = 604800;
   var signingKeyCache = {};
   var cacheQueue = [];
-  var createScope = (shortDate, region, r) => `${shortDate}/${region}/${r}/${KEY_TYPE_IDENTIFIER}`;
+  var createScope = (shortDate, region, service) =>
+    `${shortDate}/${region}/${service}/${KEY_TYPE_IDENTIFIER}`;
   var getSigningKey = async (sha256Constructor, credentials, shortDate, region, service) => {
     let credsHash = await hmac(sha256Constructor, credentials.secretAccessKey, credentials.accessKeyId);
     let cacheKey = `${shortDate}:${region}:${service}:${toHex.toHex(credsHash)}:${credentials.sessionToken}`;
@@ -86,7 +87,7 @@ var require_signature_v4 = x(function (cjsExports) {
   };
   var hmac = (ctor, secret, data) => {
     let hash = new ctor(secret);
-    hash.update(d.toUint8Array(data));
+    hash.update(utf8Module.toUint8Array(data));
     return hash.digest();
   };
   var getCanonicalHeaders = ({ headers }, unsignableHeaders, signableHeaders) => {
@@ -106,22 +107,22 @@ var require_signature_v4 = x(function (cjsExports) {
     }
     return canonical;
   };
-  var getPayloadHash = async ({ headers, body }, r) => {
+  var getPayloadHash = async ({ headers, body }, sha256Constructor) => {
     for (let headerName of Object.keys(headers))
       if (headerName.toLowerCase() === SHA256_HEADER) return headers[headerName];
     if (body == null) return "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
     else if (typeof body === "string" || ArrayBuffer.isView(body) || isArrayBuffer.isArrayBuffer(body)) {
-      let s = new r();
-      s.update(d.toUint8Array(body));
-      return toHex.toHex(await s.digest());
+      let hasher = new sha256Constructor();
+      hasher.update(utf8Module.toUint8Array(body));
+      return toHex.toHex(await hasher.digest());
     }
-    return ee;
+    return UNSIGNED_PAYLOAD;
   };
   class HeaderFormatter {
     format(headers) {
       let chunks = [];
       for (let headerName of Object.keys(headers)) {
-        let bytes = d.fromUtf8(headerName);
+        let bytes = utf8Module.fromUtf8(headerName);
         chunks.push(Uint8Array.from([bytes.byteLength]), bytes, this.formatHeaderValue(headers[headerName]));
       }
       let out = new Uint8Array(chunks.reduce((carry, bytes) => carry + bytes.byteLength, 0));
@@ -161,7 +162,7 @@ var require_signature_v4 = x(function (cjsExports) {
           binBytes.set(header.value, 3);
           return binBytes;
         case "string":
-          let utf8Bytes = d.fromUtf8(header.value);
+          let utf8Bytes = utf8Module.fromUtf8(header.value);
           let strView = new DataView(new ArrayBuffer(3 + utf8Bytes.byteLength));
           strView.setUint8(0, 7);
           strView.setUint16(1, utf8Bytes.byteLength, false);
@@ -219,18 +220,18 @@ var require_signature_v4 = x(function (cjsExports) {
       if (bytes[i] !== 0) break;
     }
   }
-  var hasHeader = (e, headers) => {
-    e = e.toLowerCase();
-    for (let key of Object.keys(headers)) if (e === key.toLowerCase()) return true;
+  var hasHeader = (headerName, headers) => {
+    headerName = headerName.toLowerCase();
+    for (let key of Object.keys(headers)) if (headerName === key.toLowerCase()) return true;
     return false;
   };
-  var moveHeadersToQuery = (request, t = {}) => {
-    let { headers, query = {} } = Y.HttpRequest.clone(request);
+  var moveHeadersToQuery = (request, options = {}) => {
+    let { headers, query = {} } = protocolsModule.HttpRequest.clone(request);
     for (let key of Object.keys(headers)) {
       let lower = key.toLowerCase();
       if (
-        (lower.slice(0, 6) === "x-amz-" && !t.unhoistableHeaders?.has(lower)) ||
-        t.hoistableHeaders?.has(lower)
+        (lower.slice(0, 6) === "x-amz-" && !options.unhoistableHeaders?.has(lower)) ||
+        options.hoistableHeaders?.has(lower)
       ) {
         query[key] = headers[key];
         delete headers[key];
@@ -242,10 +243,11 @@ var require_signature_v4 = x(function (cjsExports) {
       query,
     };
   };
-  var prepareRequest = (e) => {
-    e = Y.HttpRequest.clone(e);
-    for (let key of Object.keys(e.headers)) if (z.indexOf(key.toLowerCase()) > -1) delete e.headers[key];
-    return e;
+  var prepareRequest = (request) => {
+    request = protocolsModule.HttpRequest.clone(request);
+    for (let key of Object.keys(request.headers))
+      if (GENERATED_HEADERS.indexOf(key.toLowerCase()) > -1) delete request.headers[key];
+    return request;
   };
   var getCanonicalQuery = ({ query = {} }) => {
     let keys = [];
@@ -309,7 +311,7 @@ ${payloadHash}`;
     }
     async createStringToSign(longDate, credentialScope, canonicalRequest, algorithmIdentifier) {
       let hash = new this.sha256();
-      hash.update(d.toUint8Array(canonicalRequest));
+      hash.update(utf8Module.toUint8Array(canonicalRequest));
       let hashedRequest = await hash.digest();
       return `${algorithmIdentifier}
 ${longDate}
@@ -465,7 +467,7 @@ ${toHex.toHex(hashedRequest)}`;
       let region = signingRegion ?? (await this.regionProvider());
       let { shortDate } = this.formatDate(signingDate);
       let hash = new this.sha256(await this.getSigningKey(credentials, region, shortDate, signingService));
-      hash.update(d.toUint8Array(stringToSign));
+      hash.update(utf8Module.toUint8Array(stringToSign));
       return toHex.toHex(await hash.digest());
     }
     async signRequest(
@@ -502,7 +504,7 @@ ${toHex.toHex(hashedRequest)}`;
         ALGORITHM_IDENTIFIER,
       );
       let hash = new this.sha256(await keyPromise);
-      hash.update(d.toUint8Array(stringToSign));
+      hash.update(utf8Module.toUint8Array(stringToSign));
       return toHex.toHex(await hash.digest());
     }
     getSigningKey(credentials, region, shortDate, service) {
@@ -523,7 +525,7 @@ ${toHex.toHex(hashedRequest)}`;
   cjsExports.DATE_HEADER = DATE_HEADER;
   cjsExports.EVENT_ALGORITHM_IDENTIFIER = EVENT_ALGORITHM_IDENTIFIER;
   cjsExports.EXPIRES_QUERY_PARAM = EXPIRES_QUERY_PARAM;
-  cjsExports.GENERATED_HEADERS = z;
+  cjsExports.GENERATED_HEADERS = GENERATED_HEADERS;
   cjsExports.HOST_HEADER = HOST_HEADER;
   cjsExports.KEY_TYPE_IDENTIFIER = KEY_TYPE_IDENTIFIER;
   cjsExports.MAX_CACHE_SIZE = MAX_CACHE_SIZE;
@@ -540,7 +542,7 @@ ${toHex.toHex(hashedRequest)}`;
   cjsExports.TOKEN_HEADER = TOKEN_HEADER;
   cjsExports.TOKEN_QUERY_PARAM = TOKEN_QUERY_PARAM;
   cjsExports.UNSIGNABLE_PATTERNS = UNSIGNABLE_PATTERNS;
-  cjsExports.UNSIGNED_PAYLOAD = ee;
+  cjsExports.UNSIGNED_PAYLOAD = UNSIGNED_PAYLOAD;
   cjsExports.clearCredentialCache = clearCredentialCache;
   cjsExports.createScope = createScope;
   cjsExports.getCanonicalHeaders = getCanonicalHeaders;

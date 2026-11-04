@@ -18,8 +18,8 @@ import {
 import { isUnforwardedHostAsk } from "../../services/tools/hostWordedAsks.js";
 
 //@ chunk-zzvfscb1.js:281-355 placement
-function isSameDecision(e, _) {
-  return e === _ || (e.behavior === "ask" && e.forcedByCaller === true);
+function isSameDecision(decision, otherDecision) {
+  return decision === otherDecision || (decision.behavior === "ask" && decision.forcedByCaller === true);
 }
 //@ chunk-zzvfscb1.js:355-430 placement
 function isCanUseToolFailureReason(reason) {

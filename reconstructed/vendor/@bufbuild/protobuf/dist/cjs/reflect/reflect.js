@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_descriptors } from "../descriptors.js";
 import { require_reflect_check } from "./reflect-check.js";
 import { require_error_2 } from "./error.js";
@@ -17,7 +17,7 @@ import { require_proto_int64 } from "../../commonjs/proto-int64.js";
 import { require_guard } from "./guard.js";
 
 //@ chunk-fq0cr76a.js:345921-353042 cjs-require-graph
-var require_reflect = x(function (cjsExports) {
+var require_reflect = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

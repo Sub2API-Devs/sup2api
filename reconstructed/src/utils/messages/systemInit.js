@@ -10,7 +10,7 @@
  */
 import { randomUUID } from "crypto";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { findCapabilityValue } from "../model/promptBundles.js";
 import { getCanonicalName } from "../model/canonicalModelName.js";
 import { env } from "../env.js";
@@ -45,40 +45,42 @@ import { isViolinWoodEnabledCached } from "../../services/analytics/violinGates.
 import { getResolvedPowerShellPath } from "../shell/powershellDetection.js";
 import { clientStatusForSnapshot } from "../../services/mcp/config.js";
 import { toExternalPermissionMode } from "../permissions/PermissionMode.js";
-import { Ji } from "../../../vendor/lodash-es/uniqBy.js";
+import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { recordPhase, logStartupTiming, consumeStartupTiming } from "../startupTiming.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-gr407tas.js:1360-1407 placement
-var MAX_TOOL_TITLE_LINES = 6;
-var MAX_TOOL_TITLE_CHARS = 32;
-var toolEntryTextSchema = DoctorLazy(() =>
-  u({
-    text: string().optional(),
-  }),
-);
+var MAX_TOOL_TITLE_LINES; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_TOOL_TITLE_CHARS;
+var toolEntryTextSchema;
+deferInit("chunk-gr407tas.js:1360", () => {
+  MAX_TOOL_TITLE_LINES = 6;
+  MAX_TOOL_TITLE_CHARS = 32;
+  toolEntryTextSchema = DoctorLazy(() =>
+    objectSchema({
+      text: stringSchema().optional(),
+    }),
+  );
+});
 //@ chunk-gr407tas.js:1407-1538 placement
-function parseFooterIndicator(e) {
-  let r = toolEntryTextSchema().safeParse(e);
-  if (!r.success || r.data.text === undefined) return null;
-  let a = normalizeToolTitle(r.data.text);
-  return a.length > 0 ? a : null;
+function parseFooterIndicator(entry) {
+  let parsed = toolEntryTextSchema().safeParse(entry);
+  if (!parsed.success || parsed.data.text === undefined) return null;
+  let title = normalizeToolTitle(parsed.data.text);
+  return title.length > 0 ? title : null;
 }
 //@ chunk-gr407tas.js:1538-1676 placement
 /**
  * 决定 SDK 底栏指示文字：依次取环境变量、按模型配置的 footer_indicator_<模型> 开关，最后取服务端客户端数据里的设置。
  */
-function resolveFooterIndicator(e, mainLoopModel, a) {
-  let capabilityValue = findCapabilityValue(
-    "footer_indicator_",
-    getCanonicalName(mainLoopModel),
-    mainLoopModel,
-  );
-  for (let n of [e, capabilityValue])
-    if (n !== undefined) {
-      let t = normalizeToolTitle(n);
-      if (t.length > 0) return t;
+function resolveFooterIndicator(explicit, model, entry) {
+  let capabilityValue = findCapabilityValue("footer_indicator_", getCanonicalName(model), model);
+  for (let candidate of [explicit, capabilityValue])
+    if (candidate !== undefined) {
+      let title = normalizeToolTitle(candidate);
+      if (title.length > 0) return title;
     }
-  return parseFooterIndicator(a);
+  return parseFooterIndicator(entry);
 }
 //@ chunk-gr407tas.js:1676-1793 placement
 /**
@@ -97,8 +99,8 @@ function getFooterIndicator() {
       };
 }
 //@ chunk-gr407tas.js:1793-1887 placement
-function normalizeToolTitle(e) {
-  let trimmed = stripCombiningRepeated(stripAnsi(e))
+function normalizeToolTitle(rawTitle) {
+  let trimmed = stripCombiningRepeated(stripAnsi(rawTitle))
     .replace(/[\x00-\x1f\x7f-\x9f]/g, "")
     .trim();
   return truncateToWidth(truncateToLength(trimmed, MAX_TOOL_TITLE_CHARS), MAX_TOOL_TITLE_LINES);
@@ -130,8 +132,8 @@ var MCP_CALL_RESULT_NOT_FOR_MODEL_V1 = "mcp_call_result_not_for_model_v1";
 /**
  * 判断该传输不会改写持久化内容（无需脱敏）。
  */
-function persistsWithoutRedaction(e) {
-  return !e.redactsWhatItPersists && !e.isRemoteTransport;
+function persistsWithoutRedaction(tool) {
+  return !tool.redactsWhatItPersists && !tool.isRemoteTransport;
 }
 //@ chunk-gr407tas.js:2414-2444 placement
 var START_SHELL_TASK_V1 = "start_shell_task_v1";
@@ -139,10 +141,10 @@ var START_SHELL_TASK_V1 = "start_shell_task_v1";
 /**
  * 判断是否提示安装 Linux 沙箱：Linux 下有 Bash 工具、沙箱未就绪且开关开启。
  */
-function shouldOfferLinuxSandboxHint(e) {
+function shouldOfferLinuxSandboxHint(tools) {
   return (
     isRemoteEnvironmentAny() &&
-    e.some((r) => toolMatchesName(r, BASH_TOOL_NAME)) &&
+    tools.some((tool) => toolMatchesName(tool, BASH_TOOL_NAME)) &&
     getPlatform() === "linux" &&
     !isBackgroundTasksOff() &&
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_mossy_lathe", true)
@@ -177,14 +179,14 @@ var INTERRUPT_MARKER_KEYS = [
 /**
  * 把插件信息转为 system/init 中的插件条目（名称、路径、来源与版本）。
  */
-function toPluginInitInfo(e) {
-  let r = cleanOptionalText_2(e.manifest.version);
+function toPluginInitInfo(plugin) {
+  let version = cleanOptionalText_2(plugin.manifest.version);
   return {
-    name: e.name,
-    path: e.path,
-    source: e.source,
-    ...(r && {
-      version: r,
+    name: plugin.name,
+    path: plugin.path,
+    source: plugin.source,
+    ...(version && {
+      version,
     }),
   };
 }
@@ -206,15 +208,15 @@ function isPolicyVerdictAbsentOrHipaa() {
  */
 function buildSystemInitFields() {
   let settings_DEPRECATED = getSettings_DEPRECATED();
-  let r;
+  let memoryPaths;
   if (isAutoMemoryEnabled()) {
-    r = {
+    memoryPaths = {
       auto: getAutoMemPath(),
     };
-    if (canUseTeamMemory()) r.team = getMemoryDirNfc();
+    if (canUseTeamMemory()) memoryPaths.team = getMemoryDirNfc();
   }
   let messagingSocketPath;
-  messagingSocketPath = require("./chunk-cgamr0t5.js").getUdsMessagingSocketPath();
+  messagingSocketPath = require("../udsMessaging.js").getUdsMessagingSocketPath();
   let sessionId = getSessionId();
   return {
     cwd: getCwdOrNull() ?? "",
@@ -224,7 +226,7 @@ function buildSystemInitFields() {
     outputStyle: settings_DEPRECATED?.outputStyle ?? DEFAULT,
     analyticsDisabled: isFirstPartyTelemetryBlocked(),
     productFeedbackDisabled: !isPolicyAllowed("allow_product_feedback"),
-    memoryPaths: r,
+    memoryPaths,
     scratchpadPath: isScratchpadEnabled() ? (getScratchpadDir(sessionId) ?? undefined) : undefined,
     originalCwd: isPolicyVerdictAbsentOrHipaa() ? undefined : (getOriginalCwdOrNull() ?? undefined),
     messagingSocketPath,
@@ -261,12 +263,12 @@ function buildRemoteSystemInitFields() {
  * buildSystemInitMessage：SDK 首条 system/init 消息，列出工具、MCP 服务器状态（含失败的）、可调用的终端命令、模型、权限模式、代理/技能/插件、fast mode 与能力等。
  */
 function buildSystemInitMessage(inputs) {
-  let r = new Set(inputs.mcpClients.map((mcpClient) => mcpClient.name));
-  let filtered = inputs.mcpServerErrors.filter((mcpServerError) => !r.has(mcpServerError.name));
+  let connectedNames = new Set(inputs.mcpClients.map((mcpClient) => mcpClient.name));
+  let filtered = inputs.mcpServerErrors.filter((mcpServerError) => !connectedNames.has(mcpServerError.name));
   let mapped = inputs.commands
     .filter((command) => command.userInvocable !== false && command.terminalOriented === true)
     .map((command) => command.name);
-  let n = {
+  let message = {
     type: "system",
     subtype: "init",
     cwd: inputs.cwd,
@@ -302,8 +304,8 @@ function buildSystemInitMessage(inputs) {
     }.VERSION,
     output_style: inputs.outputStyle,
     agents: inputs.agents.map((agent) => agent.agentType),
-    skills: Ji(inputs.skills, "name")
-      .filter((t) => t.userInvocable !== false)
+    skills: uniqByExport(inputs.skills, "name")
+      .filter((skill) => skill.userInvocable !== false)
       .map((skill) => skill.name),
     plugins: inputs.plugins.map(toPluginInitInfo),
     ...(inputs.pluginErrors.length > 0 && {
@@ -329,37 +331,37 @@ function buildSystemInitMessage(inputs) {
     uuid: randomUUID(),
   };
   if (inputs.memoryPaths)
-    n.memory_paths = {
+    message.memory_paths = {
       ...inputs.memoryPaths,
     };
-  if (inputs.scratchpadPath !== undefined) n.scratchpad_path = inputs.scratchpadPath;
-  if (inputs.originalCwd !== undefined) n.original_cwd = inputs.originalCwd;
+  if (inputs.scratchpadPath !== undefined) message.scratchpad_path = inputs.scratchpadPath;
+  if (inputs.originalCwd !== undefined) message.original_cwd = inputs.originalCwd;
   if (inputs.additionalDirectories !== undefined)
-    n.additional_directories = [...inputs.additionalDirectories];
-  if (inputs.workerEpoch !== undefined && inputs.workerEpoch >= 1) n.worker_epoch = inputs.workerEpoch;
-  if (inputs.messagingSocketPath !== undefined) n.messaging_socket_path = inputs.messagingSocketPath;
-  n.fast_mode_state = inputs.fastModeState;
-  n.fast_mode_disabled_reason = inputs.fastModeDisabledReason;
+    message.additional_directories = [...inputs.additionalDirectories];
+  if (inputs.workerEpoch !== undefined && inputs.workerEpoch >= 1) message.worker_epoch = inputs.workerEpoch;
+  if (inputs.messagingSocketPath !== undefined) message.messaging_socket_path = inputs.messagingSocketPath;
+  message.fast_mode_state = inputs.fastModeState;
+  message.fast_mode_disabled_reason = inputs.fastModeDisabledReason;
   if (inputs.footerIndicator)
-    n.footer_indicator = {
+    message.footer_indicator = {
       ...inputs.footerIndicator,
     };
-  if (inputs.effort !== undefined) n.effort = inputs.effort;
-  if (inputs.perTurnEffortActive !== undefined) n.per_turn_effort_active = inputs.perTurnEffortActive;
-  if (inputs.ultrathinkAvailable !== undefined) n.ultrathink_available = inputs.ultrathinkAvailable;
-  if (inputs.viewMode !== undefined) n.view_mode = inputs.viewMode;
-  if (inputs.powerShellPath !== undefined) n.powershell_path = inputs.powerShellPath;
-  return n;
+  if (inputs.effort !== undefined) message.effort = inputs.effort;
+  if (inputs.perTurnEffortActive !== undefined) message.per_turn_effort_active = inputs.perTurnEffortActive;
+  if (inputs.ultrathinkAvailable !== undefined) message.ultrathink_available = inputs.ultrathinkAvailable;
+  if (inputs.viewMode !== undefined) message.view_mode = inputs.viewMode;
+  if (inputs.powerShellPath !== undefined) message.powershell_path = inputs.powerShellPath;
+  return message;
 }
 //@ chunk-gr407tas.js:6391-6504 placement
 /**
  * 记录 system/init 发出耗时与首次初始化打点，并附上启动计时信息。
  */
-function recordInitTiming(e, r) {
-  recordPhase("init_emit_ms", performance.now() - r, r);
+function recordInitTiming(message, startTime) {
+  recordPhase("init_emit_ms", performance.now() - startTime, startTime);
   logStartupTiming("first_init");
-  let a = consumeStartupTiming();
-  if (a) e.startup_timing = a;
+  let timing = consumeStartupTiming();
+  if (timing) message.startup_timing = timing;
 }
 export {
   BACKGROUND_TASKS_MOVES_BASH_V1,

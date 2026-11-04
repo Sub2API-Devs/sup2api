@@ -33,47 +33,51 @@ import {
   stripPresentationFields,
   joinWithAnd_2,
 } from "../../tools/ContinueInProjectsTool/submit.js";
+import { beginDeferredInits } from "../../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 2 modules closed by ../../tools/ContinueInProjectsTool/submit.js;
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("src/tools/ContinueInProjectsTool/submit.js");
 //@ chunk-dz3q485w.js:48314-48343 placement
 var BRIEF_SEND_RETRY_DELAYS_MS = [1000, 2000, 3000, 4000];
 //@ chunk-dz3q485w.js:48343-48413 placement
-async function waitBeforeAttempt(retryDelaysMs, n, signal) {
-  if (n > 0) await sleep(retryDelaysMs[n - 1] ?? 0, signal);
+async function waitBeforeAttempt(retryDelaysMs, attemptIndex, signal) {
+  if (attemptIndex > 0) await sleep(retryDelaysMs[attemptIndex - 1] ?? 0, signal);
   return !signal.aborted;
 }
 //@ chunk-dz3q485w.js:48413-48772 placement
 /**
  * 把简报消息发到项目频道：按重试间隔多次尝试，客户端消息 id 保持不变以便去重；返回 sent / not_sent / uncertain 及最后的错误。
  */
-async function sendBriefMessage(e) {
-  let { signal } = e;
+async function sendBriefMessage(request) {
+  let { signal } = request;
   let clientMessageId = newRequestId();
-  let retryDelaysMs = e.retryDelaysMs ?? BRIEF_SEND_RETRY_DELAYS_MS;
-  let a = false;
+  let retryDelaysMs = request.retryDelaysMs ?? BRIEF_SEND_RETRY_DELAYS_MS;
+  let mayHaveSent = false;
   let failure = null;
   for (let j = 0; j <= retryDelaysMs.length; j++) {
     if (!(await waitBeforeAttempt(retryDelaysMs, j, signal))) break;
     try {
       await postChannelMessage(
-        e.projectId,
+        request.projectId,
         {
-          body: appendSourceParagraph(e.message, e.sourceSessionId),
+          body: appendSourceParagraph(request.message, request.sourceSessionId),
           clientMessageId,
         },
         signal,
-        e.credentials,
+        request.credentials,
       );
       return {
         outcome: "sent",
       };
     } catch (error) {
       failure = error;
-      a ||= !isDefinitelyNotSent(error);
+      mayHaveSent ||= !isDefinitelyNotSent(error);
       if (signal.aborted || !isRetryableChannelError(error)) break;
     }
   }
   return {
-    outcome: a ? "uncertain" : "not_sent",
+    outcome: mayHaveSent ? "uncertain" : "not_sent",
     failure,
   };
 }
@@ -82,41 +86,41 @@ var LOCAL_PROPOSAL_FENCE_LABEL = "LOCAL SETUP PROPOSAL";
 var CLOUD_PROPOSAL_FENCE_LABEL = "CLOUD SETUP PROPOSAL";
 var TOOLS_USED_FENCE_LABEL = "LOCAL TOOLS USED";
 //@ chunk-dz3q485w.js:48850-48941 placement
-function quoteProposalJson(e, n = "remote_control") {
-  let quoteFence = makeQuoteFence(n === "cloud" ? CLOUD_PROPOSAL_FENCE_LABEL : LOCAL_PROPOSAL_FENCE_LABEL);
+function quoteProposalJson(value, kind = "remote_control") {
+  let quoteFence = makeQuoteFence(kind === "cloud" ? CLOUD_PROPOSAL_FENCE_LABEL : LOCAL_PROPOSAL_FENCE_LABEL);
   return {
     fence: quoteFence,
-    text: fenceQuotedText(quoteFence, e),
+    text: fenceQuotedText(quoteFence, value),
   };
 }
 //@ chunk-dz3q485w.js:48941-49079 placement
-function toolsUsedBlock(toolsUsed, n = "that computer") {
-  let s = toolsUsedServerLines(toolsUsed, n);
-  if (s.length === 0) return null;
+function toolsUsedBlock(toolsUsed, machineName = "that computer") {
+  let serverLines = toolsUsedServerLines(toolsUsed, machineName);
+  if (serverLines.length === 0) return null;
   let quoteFence = makeQuoteFence(TOOLS_USED_FENCE_LABEL);
   return {
     fence: quoteFence,
     text: fenceQuotedText(
       quoteFence,
       `${TOOLS_USED_HEADING}
-${s.join(`
+${serverLines.join(`
 `)}`,
     ),
   };
 }
 //@ chunk-dz3q485w.js:49079-49136 placement
-function toolsUsedServerLines(e, n) {
-  let s = knownServersOnly(e);
-  return s === null ? [] : toolsUsedLines(s, n);
+function toolsUsedServerLines(toolsUsed, machineName) {
+  let known = knownServersOnly(toolsUsed);
+  return known === null ? [] : toolsUsedLines(known, machineName);
 }
 //@ chunk-dz3q485w.js:49136-49232 placement
-function toolsUsedPhraseOrNull(toolsUsed) {
-  let n = toolsUsed === null ? null : knownServersOnly(toolsUsed);
-  return n === null ? null : toolsUsedPhrase(n, "the user\u2019s computer");
+function toolsUsedPhraseOrNull(summary) {
+  let known = summary === null ? null : knownServersOnly(summary);
+  return known === null ? null : toolsUsedPhrase(known, "the user\u2019s computer");
 }
 //@ chunk-dz3q485w.js:49232-49266 placement
-function indentJson(e) {
-  return jsonStringify(e, null, 2);
+function indentJson(value) {
+  return jsonStringify(value, null, 2);
 }
 //@ chunk-dz3q485w.js:49266-49433 placement
 function approvalPhrase(mode, dateIso) {
@@ -201,10 +205,10 @@ var CLOUD_PROPOSAL_LABEL = "setup proposal drafted in the user's Claude Code clo
 var CONTINUED_SECTION_HEADING = "## Continued from Claude Code CLI";
 var MAX_INSTRUCTIONS_BYTES = 16384;
 //@ chunk-dz3q485w.js:52002-52106 placement
-function fitsInstructionsLimit(e) {
-  let { lineCount, byteCount } = measureEntrypoint(e);
+function fitsInstructionsLimit(text) {
+  let { lineCount, byteCount } = measureEntrypoint(text);
   return (
-    Buffer.byteLength(e, "utf8") <= MAX_INSTRUCTIONS_BYTES &&
+    Buffer.byteLength(text, "utf8") <= MAX_INSTRUCTIONS_BYTES &&
     lineCount <= MAX_ENTRYPOINT_LINES &&
     byteCount <= MAX_ENTRYPOINT_BYTES
   );
@@ -224,7 +228,7 @@ function buildContinuedSection(opts) {
     ...(trimmed !== "" ? [`- What this is: ${trimmed}`] : []),
     ...(sessions.length > 0
       ? [
-          `- In flight: ${sessions.map((session, w) => `${w + 1}. ${session.title} (${session.who === "claude" ? "Claude" : "needs the user"})`).join("; ")}.`,
+          `- In flight: ${sessions.map((session, index) => `${index + 1}. ${session.title} (${session.who === "claude" ? "Claude" : "needs the user"})`).join("; ")}.`,
         ]
       : []),
     ...(routines.length > 0
@@ -284,16 +288,16 @@ var regExp_3 = new RegExp(
   String.raw`^-----BEGIN (${LOCAL_PROPOSAL_FENCE_LABEL}|${CLOUD_PROPOSAL_FENCE_LABEL}) ([0-9a-f]+) \(quoted data\)-----$`,
 );
 //@ chunk-dz3q485w.js:54034-54083 placement
-function endFenceLine(e, n) {
-  return `-----END ${e} ${n}-----`;
+function endFenceLine(label, nonce) {
+  return `-----END ${label} ${nonce}-----`;
 }
 //@ chunk-dz3q485w.js:54083-54584 placement
 var regExp_4 = new RegExp(
   String.raw`^(Drafted from the user's local Claude Code sessions in the folder \u201C.*\u201D and approved when |${CLOUD_DRAFT_PREFIX}\u201C.*\u201D on |- Repository: (https:\/\/\S+, the origin of that folder\.|none was attached when this section was written; the work was in the local folder \u201C.*\u201D\.)$|- Repositories: the project's own; the local work was in the folder \u201C.*\u201D\.$|- Source session: ${SESSION_ID_PATTERN}, the user's (Remote Control|cloud) session this work was continued from\. )`,
 );
 //@ chunk-dz3q485w.js:54584-54653 placement
-function isContextPointerLine(e) {
-  return regExp_2.test(e) || e.trimEnd().startsWith(`- ${CONTEXT_FILE_NAME}:`);
+function isContextPointerLine(line) {
+  return regExp_2.test(line) || line.trimEnd().startsWith(`- ${CONTEXT_FILE_NAME}:`);
 }
 //@ chunk-dz3q485w.js:54653-55523 placement
 /**
@@ -305,37 +309,42 @@ function mergeContinuedSection(existing, section) {
   let headingIndex = lines.findIndex((line) => line.trimEnd() === CONTINUED_SECTION_HEADING);
   let sectionEnd = lines.length;
   if (headingIndex >= 0) {
-    let index = lines.findIndex((line, B) => B > headingIndex && HEADING_REGEX.test(line));
-    let S = -1;
-    let P = -1;
-    let L = -1;
+    let index = lines.findIndex((line, index) => index > headingIndex && HEADING_REGEX.test(line));
+    let pointerIndex = -1;
+    let cutIndex = -1;
+    let fenceEndIndex = -1;
     for (let idx = headingIndex + 1; idx < lines.length; idx++) {
       if (index >= 0 && idx >= index) break;
-      if (idx <= L) continue;
-      let B = lines[idx]?.trimEnd() ?? "";
-      if (isContextPointerLine(B)) {
-        S = idx;
+      if (idx <= fenceEndIndex) continue;
+      let lineText = lines[idx]?.trimEnd() ?? "";
+      if (isContextPointerLine(lineText)) {
+        pointerIndex = idx;
         break;
       }
-      if (B === "") continue;
-      let match = regExp_3.exec(B);
+      if (lineText === "") continue;
+      let match = regExp_3.exec(lineText);
       if (match !== null) {
-        let se = endFenceLine(match[1] ?? "", match[2] ?? "");
-        L = lines.findIndex((line, X) => X > idx && (index < 0 || X < index) && line.trimEnd() === se);
-        if (L >= 0) continue;
+        let endLine = endFenceLine(match[1] ?? "", match[2] ?? "");
+        fenceEndIndex = lines.findIndex(
+          (line, index_2) => index_2 > idx && (index < 0 || index_2 < index) && line.trimEnd() === endLine,
+        );
+        if (fenceEndIndex >= 0) continue;
       }
-      if (match !== null || !regExp_4.test(B)) {
-        P = idx;
+      if (match !== null || !regExp_4.test(lineText)) {
+        cutIndex = idx;
         break;
       }
     }
-    sectionEnd = S >= 0 ? S + 1 : P >= 0 ? P : index >= 0 ? index : lines.length;
+    sectionEnd =
+      pointerIndex >= 0 ? pointerIndex + 1 : cutIndex >= 0 ? cutIndex : index >= 0 ? index : lines.length;
     while (sectionEnd > headingIndex + 1 && lines[sectionEnd - 1]?.trim() === "") sectionEnd--;
   }
   let filtered = (headingIndex >= 0 ? lines.slice(0, headingIndex) : lines).filter(
-    (j) => !isContextPointerLine(j),
+    (line) => !isContextPointerLine(line),
   );
-  let filtered_2 = (headingIndex >= 0 ? lines.slice(sectionEnd) : []).filter((j) => !isContextPointerLine(j));
+  let filtered_2 = (headingIndex >= 0 ? lines.slice(sectionEnd) : []).filter(
+    (line) => !isContextPointerLine(line),
+  );
   let pointer =
     section
       .split(
@@ -359,24 +368,24 @@ function mergeContinuedSection(existing, section) {
     [section, "section"],
     [pointer, "pointer"],
   ];
-  for (let [j, S] of candidates) {
-    let P = `${
+  for (let [content, wrote] of candidates) {
+    let candidate = `${
       before === ""
         ? ""
         : `${before}
 
 `
-    }${j}
+    }${content}
 ${
   after === ""
     ? ""
     : `${after}
 `
 }`;
-    if (fitsInstructionsLimit(P))
+    if (fitsInstructionsLimit(candidate))
       return {
-        content: P,
-        wrote: S,
+        content: candidate,
+        wrote,
       };
   }
   return {
@@ -394,7 +403,7 @@ function buildHandoffMessage(opts) {
   let projectName = safeLabel(opts.projectName);
   let folder = safeLabel(opts.folderName, "folder");
   let appliedFields = isNewViaPaneOrDesktop(opts.mode, opts.approvedVia)
-    ? ["icon", "color", "instructions"].filter((w) => (opts.proposal[w] ?? "") !== "")
+    ? ["icon", "color", "instructions"].filter((field) => (opts.proposal[field] ?? "") !== "")
     : [];
   let brief = quoteProposalJson(
     indentJson(stripPresentationFields(opts.proposal, opts.mode, opts.approvedVia)),

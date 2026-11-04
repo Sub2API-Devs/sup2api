@@ -11,6 +11,7 @@
 import { createMutex } from "../utils/promiseQueue.js";
 import { HostScoped } from "../utils/hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-s7k22nbx.js:297-1519 placement
 class BridgeInboundState {
@@ -179,7 +180,10 @@ class BridgeHostState {
 /**
  * 按会话宿主缓存的 BridgeHostState（桥接宿主侧状态机，包含 attestation、已读回执等）。
  */
-var BRIDGE_HOST_STATE_SLOT = new HostScoped(() => new BridgeHostState());
+var BRIDGE_HOST_STATE_SLOT; // deferred: uses BridgeHostState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s7k22nbx.js:3863", () => {
+  BRIDGE_HOST_STATE_SLOT = new HostScoped(() => new BridgeHostState());
+});
 //@ chunk-s7k22nbx.js:3888-3926 placement
 /**
  * 取当前根会话宿主的 BridgeHostState；桥接层 90 多处调用它读写 attestation/回执/占位记录等状态。

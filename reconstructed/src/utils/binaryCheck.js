@@ -13,7 +13,7 @@ import { SAFE_PATH_RE, installedSummaries } from "../hooks/useAwaySummary.js";
 import { whichAsync } from "./which.js";
 
 //@ chunk-18hwfzwa.js:1797785-1798239 fingerprint = isBinaryInstalled (0.836)
-async function isBinaryInstalled(h, command) {
+async function isBinaryInstalled(session, command) {
   if (!command || !command.trim()) {
     logForDebugging("[binaryCheck] Empty command provided, returning false");
     return false;
@@ -23,15 +23,15 @@ async function isBinaryInstalled(h, command) {
     logForDebugging(`[binaryCheck] Rejected command with unsafe characters: '${trimmedCommand}'`);
     return false;
   }
-  let L = installedSummaries.of(h);
-  let ee = L.lookup(trimmedCommand);
-  if (ee !== undefined) {
-    logForDebugging(`[binaryCheck] Cache hit for '${trimmedCommand}': ${ee}`);
-    return ee;
+  let summary = installedSummaries.of(session);
+  let cached = summary.lookup(trimmedCommand);
+  if (cached !== undefined) {
+    logForDebugging(`[binaryCheck] Cache hit for '${trimmedCommand}': ${cached}`);
+    return cached;
   }
   let exists = false;
   if (await whichAsync(trimmedCommand).catch(() => null)) exists = true;
-  L.remember(trimmedCommand, exists);
+  summary.remember(trimmedCommand, exists);
   logForDebugging(`[binaryCheck] Binary '${trimmedCommand}' ${exists ? "found" : "not found"}`);
   return exists;
 }

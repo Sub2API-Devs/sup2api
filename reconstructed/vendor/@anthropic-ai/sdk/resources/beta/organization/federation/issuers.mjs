@@ -7,7 +7,7 @@
  */
 import { APIResource } from "../../../../core/resource.mjs";
 import { buildHeaders } from "../../../../internal/headers.mjs";
-import { I } from "../../../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../../../internal/utils/path.mjs";
 import { TokenPage } from "../../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:121173-122282 esm-fingerprint
@@ -31,36 +31,42 @@ class Issuers extends APIResource {
   }
   retrieve(federationIssuerID, params = {}, options) {
     let { betas } = params ?? {};
-    return this._client.get(I`/v1/organizations/federation_issuers/${federationIssuerID}?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        {
-          ...(betas?.toString() != null
-            ? {
-                "anthropic-beta": betas?.toString(),
-              }
-            : undefined),
-        },
-        options?.headers,
-      ]),
-    });
+    return this._client.get(
+      parseUrl_2`/v1/organizations/federation_issuers/${federationIssuerID}?beta=true`,
+      {
+        ...options,
+        headers: buildHeaders([
+          {
+            ...(betas?.toString() != null
+              ? {
+                  "anthropic-beta": betas?.toString(),
+                }
+              : undefined),
+          },
+          options?.headers,
+        ]),
+      },
+    );
   }
   update(federationIssuerID, params, options) {
     let { betas, ...body } = params;
-    return this._client.post(I`/v1/organizations/federation_issuers/${federationIssuerID}?beta=true`, {
-      body,
-      ...options,
-      headers: buildHeaders([
-        {
-          ...(betas?.toString() != null
-            ? {
-                "anthropic-beta": betas?.toString(),
-              }
-            : undefined),
-        },
-        options?.headers,
-      ]),
-    });
+    return this._client.post(
+      parseUrl_2`/v1/organizations/federation_issuers/${federationIssuerID}?beta=true`,
+      {
+        body,
+        ...options,
+        headers: buildHeaders([
+          {
+            ...(betas?.toString() != null
+              ? {
+                  "anthropic-beta": betas?.toString(),
+                }
+              : undefined),
+          },
+          options?.headers,
+        ]),
+      },
+    );
   }
   list(params = {}, options) {
     let { betas, ...query } = params ?? {};
@@ -82,7 +88,7 @@ class Issuers extends APIResource {
   archive(federationIssuerID, params = {}, options) {
     let { betas } = params ?? {};
     return this._client.post(
-      I`/v1/organizations/federation_issuers/${federationIssuerID}/archive?beta=true`,
+      parseUrl_2`/v1/organizations/federation_issuers/${federationIssuerID}/archive?beta=true`,
       {
         ...options,
         headers: buildHeaders([

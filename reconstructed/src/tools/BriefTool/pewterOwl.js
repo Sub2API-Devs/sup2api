@@ -25,13 +25,16 @@ function getPewterOwlModel(cachedClientData) {
 /**
  * pewter_owl 开关（环境变量、模型、GrowthBook）
  */
-function isPewterOwlEnabled(t) {
+function isPewterOwlEnabled(featureKey) {
   if (env.CLAUDE_CODE_PEWTER_OWL !== undefined) return env.CLAUDE_CODE_PEWTER_OWL;
   if (getIsNonInteractiveSession()) return false;
   let cachedClientData = getCachedClientData();
   let pewterOwlModel = getPewterOwlModel(cachedClientData);
   if (pewterOwlModel !== "" && !getCanonicalName(getMainLoopModel()).includes(pewterOwlModel)) return false;
-  return getFeatureValue_CACHED_MAY_BE_STALE(`tengu_${t}`, false) || cachedClientData?.[t] === true;
+  return (
+    getFeatureValue_CACHED_MAY_BE_STALE(`tengu_${featureKey}`, false) ||
+    cachedClientData?.[featureKey] === true
+  );
 }
 //@ chunk-gt4x42hj.js:623-745 placement
 /**

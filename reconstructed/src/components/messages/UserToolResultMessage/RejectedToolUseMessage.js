@@ -8,8 +8,12 @@
  * pieces: chunk-ah34pb7m.js (7)
  * attribution: placement 6, callgraph-fingerprint 1
  */
-import { init_react_production, qt, Se } from "../../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import {
+  init_react_production,
+  createContext,
+  useContext,
+} from "../../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import {
   jsxProd_default,
@@ -18,62 +22,75 @@ import {
 } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../../ink/components/Text.js";
 import { MessageResponse } from "../../MessageResponse.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-ah34pb7m.js:25329-25333 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ah34pb7m.js:25329", () => {
+  init_react_production();
+});
 //@ chunk-ah34pb7m.js:25333-25337 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ah34pb7m.js:25333", () => {
+  init_react_production();
+});
 //@ chunk-ah34pb7m.js:25337-25341 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ah34pb7m.js:25337", () => {
+  init_react_production();
+});
 //@ chunk-ah34pb7m.js:25341-25394 placement
 function REJECTED_FEEDBACK_PLACEHOLDER() {
   return "What should Claude do instead?";
 }
 //@ chunk-ah34pb7m.js:25394-25408 placement
-var interruptedByUserSignal = qt(false);
+var interruptedByUserSignal; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ah34pb7m.js:25394", () => {
+  interruptedByUserSignal = createContext(false);
+});
 //@ chunk-ah34pb7m.js:25408-25727 placement
 /**
  * "Interrupted" 提示行。
  */
 function InterruptedByUser() {
-  let d = w(3);
-  if (Se(interruptedByUserSignal)) {
-    let c;
-    if (d[0] === MEMO_CACHE_SENTINEL) {
-      c = jsxProd_default(Text, {
+  let $ = useMemoCache(3);
+  if (useContext(interruptedByUserSignal)) {
+    let interruptedText;
+    if ($[0] === MEMO_CACHE_SENTINEL) {
+      interruptedText = jsxProd_default(Text, {
         dimColor: true,
         children: "Interrupted",
       });
-      d[0] = c;
-    } else c = d[0];
-    return c;
+      $[0] = interruptedText;
+    } else interruptedText = $[0];
+    return interruptedText;
   }
-  let c;
-  if (d[1] === MEMO_CACHE_SENTINEL) {
-    c = jsxProd_default(Text, {
+  let interruptedSpacer;
+  if ($[1] === MEMO_CACHE_SENTINEL) {
+    interruptedSpacer = jsxProd_default(Text, {
       dimColor: true,
       children: "Interrupted ",
     });
-    d[1] = c;
-  } else c = d[1];
-  let g;
-  if (d[2] === MEMO_CACHE_SENTINEL) {
-    g = jsxProd_default_2(Fragment, {
+    $[1] = interruptedSpacer;
+  } else interruptedSpacer = $[1];
+  let fragmentElement;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    fragmentElement = jsxProd_default_2(Fragment, {
       children: [
-        c,
+        interruptedSpacer,
         jsxProd_default_2(Text, {
           dimColor: true,
           children: ["\xB7 ", REJECTED_FEEDBACK_PLACEHOLDER()],
         }),
       ],
     });
-    d[2] = g;
-  } else g = d[2];
-  return g;
+    $[2] = fragmentElement;
+  } else fragmentElement = $[2];
+  return fragmentElement;
 }
 //@ chunk-ah34pb7m.js:25727-25831 callgraph-fingerprint = RejectedToolUseMessage (0.304)
 function RejectedToolUseMessage() {
-  let $ = w(1);
+  let $ = useMemoCache(1);
   let t0;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     t0 = jsxProd_default(MessageResponse, {

@@ -62,31 +62,31 @@ async function sendDirectMemberMessage(recipientName, message, teamContext, writ
   };
 }
 //@ chunk-18hwfzwa.js:642587-643211 placement
-async function sendDirectMemberMessageAndNotify(h) {
-  let x = await sendDirectMemberMessage(
-    h.recipientName,
-    h.message,
-    h.teamContext,
-    h.writeToMailbox,
-    h.storageV5,
+async function sendDirectMemberMessageAndNotify(request) {
+  let result = await sendDirectMemberMessage(
+    request.recipientName,
+    request.message,
+    request.teamContext,
+    request.writeToMailbox,
+    request.storageV5,
   );
-  if (x.success) {
-    h.addNotification({
+  if (result.success) {
+    request.addNotification({
       key: "direct-message-sent",
       kind: "feedback",
-      text: `Sent to @${x.recipientName}`,
+      text: `Sent to @${result.recipientName}`,
       priority: "immediate",
       timeoutMs: 3000,
     });
-    h.clearInput();
+    request.clearInput();
     logFeatureOk("input_at_member_message");
     return "handled";
   }
-  if (x.error === "write_failed") {
-    h.addNotification({
+  if (result.error === "write_failed") {
+    request.addNotification({
       key: "direct-message-failed",
       kind: "feedback",
-      text: `Couldn't write to @${x.recipientName}'s inbox \u2014 message not sent. Try again.`,
+      text: `Couldn't write to @${result.recipientName}'s inbox \u2014 message not sent. Try again.`,
       priority: "immediate",
       timeoutMs: 5000,
     });
@@ -96,7 +96,7 @@ async function sendDirectMemberMessageAndNotify(h) {
   return "fall_through";
 }
 //@ chunk-18hwfzwa.js:643211-643256 placement
-function boldDirectMemberMessage(h) {
-  return replaceInlineCodeInModelResult(h, (x) => sequential.bold(x));
+function boldDirectMemberMessage(text) {
+  return replaceInlineCodeInModelResult(text, (code) => sequential.bold(code));
 }
 export { parseDirectMemberMessage, sendDirectMemberMessageAndNotify, boldDirectMemberMessage };

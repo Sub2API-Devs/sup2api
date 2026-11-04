@@ -31,42 +31,46 @@ import {
   readBlockExemptPathsInSettings,
 } from "../permissions/readBlock.js";
 import { withWriteBlockOn } from "../permissions/permissionSetup.js";
-import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { isAwaySummaryEnabled } from "../../services/awaySummary.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-pc1rmcr2.js:1032-1057 placement
 /**
  * settingsChangedSignal：设置变更信号。
  */
-var settingsChangedSignal = new SessionRootSlot(() => createSignal());
+var settingsChangedSignal; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-pc1rmcr2.js:1032", () => {
+  settingsChangedSignal = new SessionRootSlot(() => createSignal());
+});
 //@ chunk-pc1rmcr2.js:1057-1784 fingerprint = applySettingsChange (0.366)
 /**
  * 设置变更后刷新 AppState 中依赖设置的部分（权限上下文、模型等），日志 Settings changed from <source>, updating app state。
  */
-function applySettingsChange(e, r, o, storageV5, u) {
+function applySettingsChange(session, source, setState, provenance, options) {
   let newSettings = getInitialSettings_2();
-  logForDebugging(`Settings changed from ${r}, updating app state`);
+  logForDebugging(`Settings changed from ${source}, updating app state`);
   resetLocalSettingsGitTrackedCache();
   let updatedRules = loadAllPermissionRulesFromDisk();
   updateHooksConfigSnapshot({
     userLayer: "retain",
   });
   clearCommandMemoizationCaches();
-  let a = false;
-  o((prev) => {
+  let exitedAuto = false;
+  setState((prev) => {
     let newContext = syncPermissionRulesFromDisk(prev.toolPermissionContext, updatedRules);
     newContext = rebuildAdditionalDirectories(
       newContext,
       prev.settings.permissions?.additionalDirectories,
       loadTrustedAdditionalDirectoriesFromDisk(),
-      r,
-      u?.trustFlip === true,
-      u?.prevCwd,
-      storageV5,
+      source,
+      options?.trustFlip === true,
+      options?.prevCwd,
+      provenance,
     );
     let overlyBroad = refreshPermissionContext(newContext, updatedRules);
     newContext = overlyBroad.context;
-    a = overlyBroad.exitedAutoMode;
+    exitedAuto = overlyBroad.exitedAutoMode;
     if (newContext.blockReadsOutsideWorkingDirectories !== true && hasBlockReadsOutsideWorkingDirectories()) {
       newContext = {
         ...newContext,
@@ -77,21 +81,21 @@ function applySettingsChange(e, r, o, storageV5, u) {
     if (newContext.blockWritesOutsideWorkingDirectories !== true && isWriteBlockOn())
       newContext = withWriteBlockOn(newContext);
     let blockExemptPathsInSettings = readBlockExemptPathsInSettings();
-    if (!En(newContext.readBlockExemptPaths ?? [], blockExemptPathsInSettings))
+    if (!import_sortedIndex_2(newContext.readBlockExemptPaths ?? [], blockExemptPathsInSettings))
       newContext = {
         ...newContext,
         readBlockExemptPaths: blockExemptPathsInSettings,
       };
-    let h = isAwaySummaryEnabled();
+    let awayEnabled = isAwaySummaryEnabled();
     return {
       ...prev,
       settings: newSettings,
       toolPermissionContext: newContext,
-      ...(prev.awaySummaryEnabled !== h && {
-        awaySummaryEnabled: h,
+      ...(prev.awaySummaryEnabled !== awayEnabled && {
+        awaySummaryEnabled: awayEnabled,
       }),
     };
   });
-  if (a && e !== undefined) settingsChangedSignal.of(e).emit();
+  if (exitedAuto && session !== undefined) settingsChangedSignal.of(session).emit();
 }
 export { settingsChangedSignal, applySettingsChange };

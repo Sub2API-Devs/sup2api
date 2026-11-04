@@ -56,14 +56,14 @@ import { fromEnum, fromEnumOpt } from "../../services/analytics/safeMetadata.js"
 import { isLowPriorityActive, endLowPriority } from "../../services/lowPriority/lowPriorityMode.js";
 import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { onSessionSwitch } from "../../bootstrap/state.js";
-import { CIRCLE_MARK_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { CIRCLE_MARK_GLYPH } from "../../constants/figures.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import {
   SAFEGUARDS_MODEL_ARTICLE_URL,
   SAFEGUARDS_DEFAULT_ARTICLE_URL,
   CYBER_SAFEGUARDS_ARTICLE_URL,
 } from "../../services/api/refusalFallback.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useFallbackPermission } from "../permissions/FallbackPermissionRequest.js";
 import { EARLY_RETURN_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
@@ -72,26 +72,27 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { LinkifiedText as LinkifiedText_2 } from "../LinkifiedText.js";
 import { Text, Link } from "../../ink/components/Text.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-fm6h4dv7.js:40379-40615 placement
 /**
  * 用量额度已花完时给出下次可用时间说明。
  */
-function usageCreditsSpentLine(i, s = Date.now()) {
-  let d = answeredStatusForWall(i);
+function usageCreditsSpentLine(wall, now = Date.now()) {
+  let status = answeredStatusForWall(wall);
   if (
-    !isFiveHourAutoResumable(i) ||
-    d === undefined ||
-    d === null ||
-    d.arm !== "reset" ||
-    d.available ||
-    d.nextAvailableAt === null ||
-    i.resetsAt === undefined ||
-    i.resetsAt * 1000 <= s ||
+    !isFiveHourAutoResumable(wall) ||
+    status === undefined ||
+    status === null ||
+    status.arm !== "reset" ||
+    status.available ||
+    status.nextAvailableAt === null ||
+    wall.resetsAt === undefined ||
+    wall.resetsAt * 1000 <= now ||
     !isLimitResetEnabled()
   )
     return;
-  return fillDatePlaceholder(getLimitResetCopy().spentLine, formatIsoResetTime(d.nextAvailableAt));
+  return fillDatePlaceholder(getLimitResetCopy().spentLine, formatIsoResetTime(status.nextAvailableAt));
 }
 //@ chunk-fm6h4dv7.js:40615-40734 placement
 function formatIsoResetTime(nextAvailableAt) {
@@ -107,31 +108,31 @@ function formatIsoResetTime(nextAvailableAt) {
  */
 function offerUsageCreditsAtWall(quotaLimits, credentials) {
   if (!isLimitResetEnabled() || !isFiveHourAutoResumable(quotaLimits)) return;
-  let d = currentResetFlowState();
-  subscribeSessionSwitchReset(d);
-  d.continuableWallResetsAt = quotaLimits.resetsAt ?? null;
+  let flow = currentResetFlowState();
+  subscribeSessionSwitchReset(flow);
+  flow.continuableWallResetsAt = quotaLimits.resetsAt ?? null;
   askUsageCreditsAvailability(quotaLimits, credentials, "wall");
 }
 //@ chunk-fm6h4dv7.js:40852-41598 placement
 /**
  * 询问服务端用量额度是否可用（按阶段去重）。
  */
-function askUsageCreditsAvailability(currentLimits, s, d) {
-  if (!isLimitResetEnabled() || !isFiveHourAutoResumable(currentLimits)) return Promise.resolve();
-  let resetsAt = currentLimits.resetsAt;
+function askUsageCreditsAvailability(limits, credentials, signal) {
+  if (!isLimitResetEnabled() || !isFiveHourAutoResumable(limits)) return Promise.resolve();
+  let resetsAt = limits.resetsAt;
   if (resetsAt === undefined) return Promise.resolve();
-  let b = currentResetFlowState();
+  let flow = currentResetFlowState();
   let accountEpoch = getLimitsAccountEpoch();
-  let state = b.state;
+  let state = flow.state;
   let failures = 0;
-  if (state.phase !== "idle" && isFlowForWall(state, currentLimits))
+  if (state.phase !== "idle" && isFlowForWall(state, limits))
     switch (state.phase) {
       case "answered":
         return Promise.resolve();
       case "asking":
-        return b.pendingAsk ?? Promise.resolve();
+        return flow.pendingAsk ?? Promise.resolve();
       case "failed":
-        if (d === "wall" && state.failures >= MAX_STATUS_ATTEMPTS) return Promise.resolve();
+        if (signal === "wall" && state.failures >= MAX_STATUS_ATTEMPTS) return Promise.resolve();
         failures = state.failures;
     }
   setResetFlowState({
@@ -140,13 +141,13 @@ function askUsageCreditsAvailability(currentLimits, s, d) {
     accountEpoch,
   });
   let autoArmed = isQuotaAutoResumeArmed();
-  let k = withDeadline(fetchJuniperTideStatus(s), STATUS_RETRY_DELAY_MS)
-    .then((T) => {
+  let request = withDeadline(fetchJuniperTideStatus(credentials), STATUS_RETRY_DELAY_MS)
+    .then((result) => {
       settleUsageCreditsAsk({
         wallResetsAt: resetsAt,
         accountEpoch,
         failures,
-        result: T ?? {
+        result: result ?? {
           kind: "failed",
         },
         autoArmed,
@@ -169,16 +170,16 @@ function askUsageCreditsAvailability(currentLimits, s, d) {
       }
     })
     .finally(() => {
-      if (b.pendingAsk === k) b.pendingAsk = null;
+      if (flow.pendingAsk === request) flow.pendingAsk = null;
     });
-  b.pendingAsk = k;
-  return k;
+  flow.pendingAsk = request;
+  return request;
 }
 //@ chunk-fm6h4dv7.js:41598-42664 placement
 /**
  * 处理额度询问结果并更新状态。
  */
-function settleUsageCreditsAsk({ wallResetsAt, accountEpoch, failures, result: m, autoArmed }) {
+function settleUsageCreditsAsk({ wallResetsAt, accountEpoch, failures, result, autoArmed }) {
   let resetFlowPhase = getResetFlowPhase();
   if (
     resetFlowPhase.phase !== "asking" ||
@@ -186,8 +187,8 @@ function settleUsageCreditsAsk({ wallResetsAt, accountEpoch, failures, result: m
     resetFlowPhase.accountEpoch !== accountEpoch
   )
     return;
-  let status = m.kind === "answered" ? m.status : null;
-  if (m.kind === "failed")
+  let status = result.kind === "answered" ? result.status : null;
+  if (result.kind === "failed")
     setResetFlowState({
       phase: "failed",
       wallResetsAt,
@@ -202,7 +203,7 @@ function settleUsageCreditsAsk({ wallResetsAt, accountEpoch, failures, result: m
       status,
     });
   logEvent("tengu_juniper_tide_asked", {
-    outcome: fromEnum(m.kind === "answered" ? (status === null ? "absent" : "block") : m.kind),
+    outcome: fromEnum(result.kind === "answered" ? (status === null ? "absent" : "block") : result.kind),
     attempt: failures + 1,
     eligible: status?.eligible ?? false,
     ineligible_reason: fromEnumOpt(status?.ineligibleReason) ?? undefined,
@@ -229,15 +230,15 @@ function settleUsageCreditsAsk({ wallResetsAt, accountEpoch, failures, result: m
 /**
  * 每个重置时间只打点一次 tengu_juniper_tide_shown（5 小时限额重置提示），附带实验分组、展示位置与配置版本。
  */
-function logLimitResetOfferShown(i, s) {
-  let resetsAt = i.resetsAt ?? null;
-  let m = currentResetFlowState();
-  if (resetsAt === null || m.shownWallResetsAt === resetsAt) return;
-  m.shownWallResetsAt = resetsAt;
-  let b = answeredStatusForWall(i);
+function logLimitResetOfferShown(wall, now) {
+  let resetsAt = wall.resetsAt ?? null;
+  let flow = currentResetFlowState();
+  if (resetsAt === null || flow.shownWallResetsAt === resetsAt) return;
+  flow.shownWallResetsAt = resetsAt;
+  let status = answeredStatusForWall(wall);
   logEvent("tengu_juniper_tide_shown", {
-    arm: fromEnumOpt(b?.arm) ?? undefined,
-    surface: fromEnum(s),
+    arm: fromEnumOpt(status?.arm) ?? undefined,
+    surface: fromEnum(now),
     config_version: limitResetConfigVersion(),
   });
 }
@@ -252,9 +253,9 @@ function maybeOpenUsageCreditsDialog(claudeAiLimits, credentials) {
 /**
  * 检查用量额度（出错时返回 unavailable）。
  */
-async function checkUsageCredits(i, credentials) {
+async function checkUsageCredits(entry, credentials) {
   try {
-    return await checkUsageCreditsUnsafe(i, credentials);
+    return await checkUsageCreditsUnsafe(entry, credentials);
   } catch (error) {
     logError(toError(error));
     return {
@@ -268,21 +269,21 @@ async function checkUsageCredits(i, credentials) {
  * 检查用量额度的实际逻辑。
  */
 async function checkUsageCreditsUnsafe(entry, credentials) {
-  let d = currentResetFlowState();
+  let flow = currentResetFlowState();
   let limitResetCopy = getLimitResetCopy();
   if (answeredStatusForWall(getCurrentLimits()) === undefined) {
-    let k = d.pendingAsk !== null;
+    let hasPendingAsk = flow.pendingAsk !== null;
     await askUsageCreditsAvailability(getCurrentLimits(), credentials, entry);
-    if (k && isFailedForWall(getCurrentLimits()))
+    if (hasPendingAsk && isFailedForWall(getCurrentLimits()))
       await askUsageCreditsAvailability(getCurrentLimits(), credentials, entry);
   }
   let currentLimits = getCurrentLimits();
   if (!canArmLowPriorityReset(currentLimits) || currentLimits.resetsAt === undefined) {
-    let k = usageCreditsSpentLine(currentLimits);
-    if (k !== undefined)
+    let spentLine = usageCreditsSpentLine(currentLimits);
+    if (spentLine !== undefined)
       return {
         outcome: "spent",
-        text: k,
+        text: spentLine,
       };
     return isFailedForWall(currentLimits)
       ? {
@@ -294,7 +295,7 @@ async function checkUsageCreditsUnsafe(entry, credentials) {
           text: RESET_UNAVAILABLE_TEXT,
         };
   }
-  if (d.claiming)
+  if (flow.claiming)
     return {
       outcome: "unavailable",
       text: RESET_IN_PROGRESS_TEXT,
@@ -307,24 +308,24 @@ async function checkUsageCreditsUnsafe(entry, credentials) {
     config_version: configVersion,
   });
   let now = Date.now();
-  let A;
-  d.claiming = true;
+  let result;
+  flow.claiming = true;
   try {
-    A = (await withDeadline(claimJuniperTide(credentials), STATUS_REQUEST_TIMEOUT_MS)) ?? {
+    result = (await withDeadline(claimJuniperTide(credentials), STATUS_REQUEST_TIMEOUT_MS)) ?? {
       result: "error",
       nextAvailableAt: null,
     };
   } finally {
-    d.claiming = false;
+    flow.claiming = false;
   }
   switch (
     (logEvent("tengu_juniper_tide_result", {
-      result: fromEnum(A.result),
+      result: fromEnum(result.result),
       entry: fromEnum(entry),
       latency_ms: Date.now() - now,
       config_version: configVersion,
     }),
-    A.result)
+    result.result)
   ) {
     case "reset":
     case "not_limited":
@@ -336,34 +337,34 @@ async function checkUsageCreditsUnsafe(entry, credentials) {
     case "rate_limited":
     case "auth_error":
     case "error":
-      logFeatureSad("juniper_tide", A.result);
+      logFeatureSad("juniper_tide", result.result);
       break;
   }
-  switch (A.result) {
+  switch (result.result) {
     case "reset":
     case "not_limited": {
-      d.unsettledClaimWallResetsAt = null;
-      let k = limitResetAutoContinue() && d.continuableWallResetsAt === resetsAt;
-      d.continuableWallResetsAt = null;
-      applyFiveHourResetLocally(d, resetsAt, entry, k);
-      let T = fillDatePlaceholder(
+      flow.unsettledClaimWallResetsAt = null;
+      let notice = limitResetAutoContinue() && flow.continuableWallResetsAt === resetsAt;
+      flow.continuableWallResetsAt = null;
+      applyFiveHourResetLocally(flow, resetsAt, entry, notice);
+      let successLine = fillDatePlaceholder(
         limitResetCopy.successLine,
-        A.result === "reset" ? formatIsoResetTime(A.nextAvailableAt) : undefined,
+        result.result === "reset" ? formatIsoResetTime(result.nextAvailableAt) : undefined,
       );
       return {
         outcome: "reset",
-        text: k ? T : `${T} \xB7 send a message to continue`,
+        text: notice ? successLine : `${successLine} \xB7 send a message to continue`,
       };
     }
     case "already_used": {
-      markResetUnavailable(resetsAt, A.nextAvailableAt);
-      if (d.unsettledClaimWallResetsAt === resetsAt) {
-        d.unsettledClaimWallResetsAt = null;
+      markResetUnavailable(resetsAt, result.nextAvailableAt);
+      if (flow.unsettledClaimWallResetsAt === resetsAt) {
+        flow.unsettledClaimWallResetsAt = null;
         openUsageCreditsOffer(credentials);
       }
       return {
         outcome: "spent",
-        text: fillDatePlaceholder(limitResetCopy.spentLine, formatIsoResetTime(A.nextAvailableAt)),
+        text: fillDatePlaceholder(limitResetCopy.spentLine, formatIsoResetTime(result.nextAvailableAt)),
       };
     }
     case "ineligible":
@@ -380,7 +381,7 @@ async function checkUsageCreditsUnsafe(entry, credentials) {
     case "unavailable":
     case "rate_limited":
     case "error":
-      if (A.result === "error") d.unsettledClaimWallResetsAt = resetsAt;
+      if (result.result === "error") flow.unsettledClaimWallResetsAt = resetsAt;
       return {
         outcome: "unavailable",
         text: limitResetCopy.unavailableLine,
@@ -396,8 +397,8 @@ var RESET_LOGIN_FAILED_TEXT =
 /**
  * 5 小时限额重置成功后的本地收尾：取消额度自动继续、记录、把被拒的 five_hour 状态改回 allowed、复位提示状态、必要时刷新、发出 reset 事件；每步单独 try/catch。
  */
-function applyFiveHourResetLocally(i, resetsAt, entry, m) {
-  let b = [
+function applyFiveHourResetLocally(wall, resetsAt, entry, creditEntry) {
+  let steps = [
     () => cancelQuotaAutoResume("juniper_tide"),
     () => {
       endLowPriority("reset");
@@ -411,29 +412,29 @@ function applyFiveHourResetLocally(i, resetsAt, entry, m) {
         });
     },
     () => {
-      if (m) enqueueAutoContinuation();
+      if (creditEntry) enqueueAutoContinuation();
     },
     () =>
-      i.events.emit({
+      wall.events.emit({
         type: "reset",
         entry,
       }),
   ];
-  for (let _ of b)
+  for (let step of steps)
     try {
-      _();
+      step();
     } catch (error) {
       logError(toError(error));
     }
 }
 //@ chunk-fm6h4dv7.js:45202-45392 placement
-function clearFiveHourRejection(i) {
+function clearFiveHourRejection(resetsAt) {
   forgetHeldWindows(["five_hour"]);
   let currentLimits = getCurrentLimits();
   if (
     currentLimits.status !== "rejected" ||
     currentLimits.rateLimitType !== "five_hour" ||
-    currentLimits.resetsAt !== i
+    currentLimits.resetsAt !== resetsAt
   )
     return;
   emitLimitsStatusChange({
@@ -444,12 +445,12 @@ function clearFiveHourRejection(i) {
   });
 }
 //@ chunk-fm6h4dv7.js:45392-45465 placement
-function openUsageCreditsOffer(i) {
+function openUsageCreditsOffer(wall) {
   if (isQuotaAutoResumeArmed()) {
     confirmAndFire();
     return;
   }
-  probeQuotaStatusAtStart(i, undefined).catch((error) => {
+  probeQuotaStatusAtStart(wall, undefined).catch((error) => {
     logError(toError(error));
   });
 }
@@ -490,11 +491,11 @@ function markResetIneligible(resetsAt) {
   });
 }
 //@ chunk-fm6h4dv7.js:45801-45935 placement
-function subscribeSessionSwitchReset(i) {
-  if (i.sessionSwitchSubscribed) return;
-  i.sessionSwitchSubscribed = true;
-  onSessionSwitch((s, d) => {
-    if (isConversationResetSwitch(d)) i.continuableWallResetsAt = null;
+function subscribeSessionSwitchReset(wall) {
+  if (wall.sessionSwitchSubscribed) return;
+  wall.sessionSwitchSubscribed = true;
+  onSessionSwitch((conversation, switchKind) => {
+    if (isConversationResetSwitch(switchKind)) wall.continuableWallResetsAt = null;
   });
 }
 //@ chunk-fm6h4dv7.js:45935-46054 placement
@@ -511,37 +512,38 @@ var MIN_SESSION_NAME_CHARS = 20;
 /**
  * 按分隔符拆分状态文字、去掉空段，第一段之后的各段用 " · " 重新连接。
  */
-function normalizeStatusSegments(i) {
-  let filtered = i
+function normalizeStatusSegments(label) {
+  let filtered = label
     .split(CIRCLE_MARK_GLYPH)
-    .map((b) => b.trim())
+    .map((state) => state.trim())
     .filter(Boolean);
   if (filtered.length === 0) return;
-  let [d, ...m] = filtered;
-  return m.length === 0 ? d : `${d} ${CIRCLE_MARK_GLYPH} ${m.join(MIDDOT_SEPARATOR)}`;
+  let [first, ...rest] = filtered;
+  return rest.length === 0 ? first : `${first} ${CIRCLE_MARK_GLYPH} ${rest.join(MIDDOT_SEPARATOR)}`;
 }
 //@ chunk-fm6h4dv7.js:46209-46554 placement
 /**
  * 解析限额标签字符串。
  */
-function parseRateLimitLabel(i) {
-  if (!i.startsWith(SESSION_RUNNING_LABEL) && !i.startsWith(SESSION_WAITING_PROMPT_LABEL)) return null;
+function parseRateLimitLabel(label) {
+  if (!label.startsWith(SESSION_RUNNING_LABEL) && !label.startsWith(SESSION_WAITING_PROMPT_LABEL))
+    return null;
   if (
-    i.includes(`
+    label.includes(`
 `)
   )
     return null;
-  let parts = i.split(MIDDOT_SEPARATOR);
-  let d = parts[0];
-  if (d !== SESSION_RUNNING_LABEL && d !== SESSION_WAITING_PROMPT_LABEL) return null;
-  let lastIndex = parts.findLastIndex((k) => SHORT_ID_RE.test(k));
+  let parts = label.split(MIDDOT_SEPARATOR);
+  let runningPart = parts[0];
+  if (runningPart !== SESSION_RUNNING_LABEL && runningPart !== SESSION_WAITING_PROMPT_LABEL) return null;
+  let lastIndex = parts.findLastIndex((part) => SHORT_ID_RE.test(part));
   let id = lastIndex === -1 ? undefined : parts[lastIndex];
-  let _ = lastIndex === -1 ? parts.length : lastIndex;
-  let sliced = parts.slice(1, _);
+  let idEnd = lastIndex === -1 ? parts.length : lastIndex;
+  let sliced = parts.slice(1, idEnd);
   let name = sliced.length > 0 ? sliced.join(MIDDOT_SEPARATOR) : undefined;
   let chips = lastIndex === -1 ? [] : parts.slice(lastIndex + 1);
   return {
-    state: d,
+    state: runningPart,
     name,
     id,
     chips,
@@ -551,179 +553,197 @@ function parseRateLimitLabel(i) {
 /**
  * 按宽度逐步缩短限额标签。
  */
-function fitRateLimitLabel(fields, s, d = true) {
-  let m = (_) => bunStringWidth(offerDedupeKey(_));
-  let b = {
+function fitRateLimitLabel(fields, maxWidth, dropChips = true) {
+  let labelWidth = (fields) => bunStringWidth(offerDedupeKey(fields));
+  let fitted = {
     ...fields,
     chips: [...fields.chips],
   };
-  if (m(b) <= s) return b;
-  if (b.state === SESSION_WAITING_PROMPT_LABEL) {
-    b = {
-      ...b,
+  if (labelWidth(fitted) <= maxWidth) return fitted;
+  if (fitted.state === SESSION_WAITING_PROMPT_LABEL) {
+    fitted = {
+      ...fitted,
       state: SESSION_WAITING_LABEL,
     };
-    if (m(b) <= s) return b;
+    if (labelWidth(fitted) <= maxWidth) return fitted;
   }
-  if (b.id !== undefined && b.name !== undefined && d) {
-    b = {
-      ...b,
+  if (fitted.id !== undefined && fitted.name !== undefined && dropChips) {
+    fitted = {
+      ...fitted,
       id: undefined,
     };
-    if (m(b) <= s) return b;
+    if (labelWidth(fitted) <= maxWidth) return fitted;
   }
-  if (b.name !== undefined) {
-    let _ = m({
-      ...b,
+  if (fitted.name !== undefined) {
+    let nameWidth = labelWidth({
+      ...fitted,
       name: undefined,
     });
-    let h = s - _ - bunStringWidth(MIDDOT_SEPARATOR);
-    let C = bunStringWidth(b.name);
-    let A = C > MIN_SESSION_NAME_CHARS ? Math.max(h, MIN_SESSION_NAME_CHARS) : h;
-    if (A >= 1 && A < C)
-      b = {
-        ...b,
-        name: truncateToWidth(b.name, A),
+    let remainingWidth = maxWidth - nameWidth - bunStringWidth(MIDDOT_SEPARATOR);
+    let fittedNameWidth = bunStringWidth(fitted.name);
+    let chipsWidth =
+      fittedNameWidth > MIN_SESSION_NAME_CHARS
+        ? Math.max(remainingWidth, MIN_SESSION_NAME_CHARS)
+        : remainingWidth;
+    if (chipsWidth >= 1 && chipsWidth < fittedNameWidth)
+      fitted = {
+        ...fitted,
+        name: truncateToWidth(fitted.name, chipsWidth),
       };
   }
-  return b;
+  return fitted;
 }
 //@ chunk-fm6h4dv7.js:46927-47019 placement
 /**
  * 函数 offerDedupeKey（按状态/名/id/标签拼键）。
  */
-function offerDedupeKey(i) {
-  return [i.state, ...(i.name ? [i.name] : []), ...(i.id ? [i.id] : []), ...i.chips].join(MIDDOT_SEPARATOR);
+function offerDedupeKey(label) {
+  return [
+    label.state,
+    ...(label.name ? [label.name] : []),
+    ...(label.id ? [label.id] : []),
+    ...label.chips,
+  ].join(MIDDOT_SEPARATOR);
 }
 //@ chunk-fm6h4dv7.js:47019-47063 placement
-function hasIndex(i) {
-  let { index } = i;
+function hasIndex(field) {
+  let { index } = field;
   return index !== -1;
 }
 //@ chunk-fm6h4dv7.js:47063-47130 placement
-var mapped = [SAFEGUARDS_MODEL_ARTICLE_URL, SAFEGUARDS_DEFAULT_ARTICLE_URL, CYBER_SAFEGUARDS_ARTICLE_URL].map(
-  (i) => ({
-    url: i,
-    marker: `learn more: ${i}`,
-  }),
-);
+var mapped; // deferred: uses CYBER_SAFEGUARDS_ARTICLE_URL (../../services/api/refusalFallback.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-fm6h4dv7.js:47063", () => {
+  mapped = [SAFEGUARDS_MODEL_ARTICLE_URL, SAFEGUARDS_DEFAULT_ARTICLE_URL, CYBER_SAFEGUARDS_ARTICLE_URL].map(
+    (url) => ({
+      url,
+      marker: `learn more: ${url}`,
+    }),
+  );
+});
 //@ chunk-fm6h4dv7.js:47130-48311 placement
 /**
  * 把文本中的标记替换为可点击链接。
  */
 function LinkifiedText(props) {
-  let _ = w(33);
+  let $ = useMemoCache(33);
   let { children, color, bold } = props;
   let fallbackPermission = useFallbackPermission();
-  let h;
-  let C;
+  let textComponent;
+  let foundLink;
   let color_2;
   let bold_2;
-  let T;
-  let x;
-  if (_[0] !== bold || _[1] !== children || _[2] !== color || _[3] !== fallbackPermission) {
-    x = EARLY_RETURN_SENTINEL;
+  let beforeText;
+  let result;
+  if ($[0] !== bold || $[1] !== children || $[2] !== color || $[3] !== fallbackPermission) {
+    result = EARLY_RETURN_SENTINEL;
     Fe: {
-      let L;
-      if (_[10] !== children) {
-        L = (I) => {
-          let { url, marker } = I;
+      let locateMarker;
+      if ($[10] !== children) {
+        locateMarker = (link) => {
+          let { url, marker } = link;
           return {
             url,
             marker,
             index: children.indexOf(marker),
           };
         };
-        _[10] = children;
-        _[11] = L;
-      } else L = _[11];
-      C = mapped.map(L).find(hasIndex);
-      if (!fallbackPermission || C === undefined) {
-        let I;
-        if (_[12] !== bold || _[13] !== children || _[14] !== color) {
-          I = jsxProd_default(LinkifiedText_2, {
+        $[10] = children;
+        $[11] = locateMarker;
+      } else locateMarker = $[11];
+      foundLink = mapped.map(locateMarker).find(hasIndex);
+      if (!fallbackPermission || foundLink === undefined) {
+        let plainText;
+        if ($[12] !== bold || $[13] !== children || $[14] !== color) {
+          plainText = jsxProd_default(LinkifiedText_2, {
             color,
             bold,
             children,
           });
-          _[12] = bold;
-          _[13] = children;
-          _[14] = color;
-          _[15] = I;
-        } else I = _[15];
-        x = I;
+          $[12] = bold;
+          $[13] = children;
+          $[14] = color;
+          $[15] = plainText;
+        } else plainText = $[15];
+        result = plainText;
         break Fe;
       }
-      h = Text;
+      textComponent = Text;
       color_2 = color;
       bold_2 = bold;
-      T = children.slice(0, C.index);
+      beforeText = children.slice(0, foundLink.index);
     }
-    _[0] = bold;
-    _[1] = children;
-    _[2] = color;
-    _[3] = fallbackPermission;
-    _[4] = h;
-    _[5] = C;
-    _[6] = color_2;
-    _[7] = bold_2;
-    _[8] = T;
-    _[9] = x;
+    $[0] = bold;
+    $[1] = children;
+    $[2] = color;
+    $[3] = fallbackPermission;
+    $[4] = textComponent;
+    $[5] = foundLink;
+    $[6] = color_2;
+    $[7] = bold_2;
+    $[8] = beforeText;
+    $[9] = result;
   } else {
-    h = _[4];
-    C = _[5];
-    color_2 = _[6];
-    bold_2 = _[7];
-    T = _[8];
-    x = _[9];
+    textComponent = $[4];
+    foundLink = $[5];
+    color_2 = $[6];
+    bold_2 = $[7];
+    beforeText = $[8];
+    result = $[9];
   }
-  if (x !== EARLY_RETURN_SENTINEL) return x;
+  if (result !== EARLY_RETURN_SENTINEL) return result;
   let children_2;
-  if (_[16] !== bold || _[17] !== color) {
+  if ($[16] !== bold || $[17] !== color) {
     children_2 = jsxProd_default(Text, {
       color,
       bold,
       underline: true,
       children: "learn more",
     });
-    _[16] = bold;
-    _[17] = color;
-    _[18] = children_2;
-  } else children_2 = _[18];
-  let I;
-  if (_[19] !== C.url || _[20] !== children_2) {
-    I = jsxProd_default(Link, {
-      url: C.url,
+    $[16] = bold;
+    $[17] = color;
+    $[18] = children_2;
+  } else children_2 = $[18];
+  let linkElement;
+  if ($[19] !== foundLink.url || $[20] !== children_2) {
+    linkElement = jsxProd_default(Link, {
+      url: foundLink.url,
       children: children_2,
     });
-    _[19] = C.url;
-    _[20] = children_2;
-    _[21] = I;
-  } else I = _[21];
-  let G;
-  if (_[22] !== children || _[23] !== C.index || _[24] !== C.marker.length) {
-    G = children.slice(C.index + C.marker.length);
-    _[22] = children;
-    _[23] = C.index;
-    _[24] = C.marker.length;
-    _[25] = G;
-  } else G = _[25];
-  let R;
-  if (_[26] !== h || _[27] !== color_2 || _[28] !== bold_2 || _[29] !== T || _[30] !== I || _[31] !== G) {
-    R = jsxProd_default_2(h, {
+    $[19] = foundLink.url;
+    $[20] = children_2;
+    $[21] = linkElement;
+  } else linkElement = $[21];
+  let markerLink;
+  if ($[22] !== children || $[23] !== foundLink.index || $[24] !== foundLink.marker.length) {
+    markerLink = children.slice(foundLink.index + foundLink.marker.length);
+    $[22] = children;
+    $[23] = foundLink.index;
+    $[24] = foundLink.marker.length;
+    $[25] = markerLink;
+  } else markerLink = $[25];
+  let textComponentElement;
+  if (
+    $[26] !== textComponent ||
+    $[27] !== color_2 ||
+    $[28] !== bold_2 ||
+    $[29] !== beforeText ||
+    $[30] !== linkElement ||
+    $[31] !== markerLink
+  ) {
+    textComponentElement = jsxProd_default_2(textComponent, {
       color: color_2,
       bold: bold_2,
-      children: [T, I, G],
+      children: [beforeText, linkElement, markerLink],
     });
-    _[26] = h;
-    _[27] = color_2;
-    _[28] = bold_2;
-    _[29] = T;
-    _[30] = I;
-    _[31] = G;
-    _[32] = R;
-  } else R = _[32];
-  return R;
+    $[26] = textComponent;
+    $[27] = color_2;
+    $[28] = bold_2;
+    $[29] = beforeText;
+    $[30] = linkElement;
+    $[31] = markerLink;
+    $[32] = textComponentElement;
+  } else textComponentElement = $[32];
+  return textComponentElement;
 }
 export {
   LinkifiedText,

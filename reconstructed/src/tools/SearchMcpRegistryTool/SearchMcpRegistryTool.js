@@ -9,7 +9,13 @@
  * attribution: placement 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, array, string, u, literal } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  zodStrictObject,
+  array,
+  stringSchema,
+  objectSchema,
+  literal,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   connectorResultSchema,
   searchConnectors,
@@ -30,17 +36,17 @@ import { jsonStringify } from "../../utils/slowOperations.js";
  */
 var SearchMcpRegistryTool = DoctorLazy(() =>
   zodStrictObject({
-    keywords: array(string().min(1).max(64))
+    keywords: array(stringSchema().min(1).max(64))
       .min(1)
       .max(8)
       .describe("Keyword phrases describing the user's intent or a named product."),
   }),
 );
 var searchMcpRegistryOutputSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     results: array(connectorResultSchema()),
     opt_in_required: literal(true).optional(),
-    message: string().optional(),
+    message: stringSchema().optional(),
   }),
 );
 var SearchMcpRegistryTool_2 = buildTool({
@@ -70,20 +76,20 @@ var SearchMcpRegistryTool_2 = buildTool({
   },
   create({ credentials, mcpClients, session }) {
     return {
-      async call(a, { signal }) {
+      async call(input, { signal }) {
         try {
-          let t = await searchConnectors(a.keywords, signal, credentials);
-          if (isOptInRequired(t))
+          let searchResult = await searchConnectors(input.keywords, signal, credentials);
+          if (isOptInRequired(searchResult))
             return {
               data: {
                 results: [],
-                ...t,
+                ...searchResult,
               },
             };
-          let i = mcpClients();
+          let mcpClientsList = mcpClients();
           return {
             data: {
-              results: markEnabledInChat(t, i, session),
+              results: markEnabledInChat(searchResult, mcpClientsList, session),
             },
           };
         } catch (error) {
@@ -97,14 +103,15 @@ var SearchMcpRegistryTool_2 = buildTool({
       },
     };
   },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
     return {
       tool_use_id: toolUseId,
       type: "tool_result",
-      content: jsonStringify(e.opt_in_required ? e : e.results),
+      content: jsonStringify(result.opt_in_required ? result : result.results),
     };
   },
-  renderToolUseMessage(e) {
-    return (e.keywords ?? []).join(", ");
+  renderToolUseMessage(input) {
+    return (input.keywords ?? []).join(", ");
   },
 });
+export { SearchMcpRegistryTool_2 };

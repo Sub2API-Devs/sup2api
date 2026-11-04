@@ -33,12 +33,13 @@ import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { telemetrySafeModelName } from "./telemetryModelName.js";
 import { setCachedGateValue } from "../../services/analytics/growthbookGates.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { array, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { array, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { logForDebugging } from "../debug.js";
 import { env } from "../env.js";
 import { isEnvTruthy, isEnvDefinedFalsy } from "../envUtils.js";
-import { io } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { memoizeAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { HostScoped } from "../hostScoped.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-p1bhnnws.js:2662-2690 placement
 var TENGU_FENNEL_GODWIT = "tengu_fennel_godwit";
@@ -46,9 +47,9 @@ var TENGU_FENNEL_GODWIT = "tengu_fennel_godwit";
 /**
  * 判断模型是否使用 Opus 5 提示词包（能力声明且未被开关关闭）。
  */
-function usesOpus5PromptBundle(e) {
-  if (e === undefined) return false;
-  if (modelSupportsCapability(getCanonicalName(e), "opus_5_prompt_bundle", e) !== true) return false;
+function usesOpus5PromptBundle(model) {
+  if (model === undefined) return false;
+  if (modelSupportsCapability(getCanonicalName(model), "opus_5_prompt_bundle", model) !== true) return false;
   return !getFeatureValue_CACHED_MAY_BE_STALE(TENGU_FENNEL_GODWIT, false);
 }
 //@ chunk-p1bhnnws.js:2796-2860 placement
@@ -59,80 +60,84 @@ function supportsOpus55PromptBundle(canonicalName) {
 /**
  * 模型能力开关集合：对最新模型默认开启的能力、随 Opus 5 提示词包开启的能力、对另一组模型开启的能力，以及遥测去重上限与事件名。
  */
-var DEFAULT_ON_CAPABILITIES = new Set([
-  "turn_updates",
-  "bash_output_audience_note",
-  "silent_turn_reminder",
-  "thinking_display_updates",
-]);
-var OPUS5_BUNDLE_CAPABILITIES = new Set(["bison_cairn", "larch_cistern"]);
-var LATEST_MODEL_CAPABILITIES = new Set([
-  "silent_turn_reminder",
-  "quizzical_shore",
-  "original_games_guidance",
-]);
-var MAX_LOGGED_SESSIONS = 64;
-var TENGU_MODEL_CAPABILITY_FROM_CLIENT_DATA = "tengu_model_capability_from_client_data";
-var TENGU_MODEL_CAPABILITY_OFF_FROM_CLIENT_DATA = "tengu_model_capability_off_from_client_data";
+var DEFAULT_ON_CAPABILITIES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var OPUS5_BUNDLE_CAPABILITIES;
+var LATEST_MODEL_CAPABILITIES;
+var MAX_LOGGED_SESSIONS;
+var TENGU_MODEL_CAPABILITY_FROM_CLIENT_DATA;
+var TENGU_MODEL_CAPABILITY_OFF_FROM_CLIENT_DATA;
+deferInit("chunk-p1bhnnws.js:2860", () => {
+  DEFAULT_ON_CAPABILITIES = new Set([
+    "turn_updates",
+    "bash_output_audience_note",
+    "silent_turn_reminder",
+    "thinking_display_updates",
+  ]);
+  OPUS5_BUNDLE_CAPABILITIES = new Set(["bison_cairn", "larch_cistern"]);
+  LATEST_MODEL_CAPABILITIES = new Set(["silent_turn_reminder", "quizzical_shore", "original_games_guidance"]);
+  MAX_LOGGED_SESSIONS = 64;
+  TENGU_MODEL_CAPABILITY_FROM_CLIENT_DATA = "tengu_model_capability_from_client_data";
+  TENGU_MODEL_CAPABILITY_OFF_FROM_CLIENT_DATA = "tengu_model_capability_off_from_client_data";
+});
 //@ chunk-p1bhnnws.js:3190-3443 placement
 /**
  * 判断模型能力是否开启：显式覆盖 > 能力声明 > 默认开启集合（可被客户端数据关闭）> 客户端数据开启。
  */
-function isModelCapabilityEnabled(e, canonicalName, r, l) {
-  if (l !== undefined) return l;
-  let s = modelSupportsCapability(canonicalName, e, r);
-  if (s !== undefined) return s;
-  let d =
-    (DEFAULT_ON_CAPABILITIES.has(e) && usesFablePromptBundle(canonicalName)) ||
-    (OPUS5_BUNDLE_CAPABILITIES.has(e) && usesOpus5PromptBundle(r)) ||
-    (LATEST_MODEL_CAPABILITIES.has(e) && supportsOpus55PromptBundle(canonicalName));
-  let cachedClientDataSlot = getCachedClientDataSlot(r);
-  if (d) {
-    if (cachedClientDataSlot?.data?.[e] !== false) return true;
-    logClientDataCapability(TENGU_MODEL_CAPABILITY_OFF_FROM_CLIENT_DATA, e, cachedClientDataSlot);
+function isModelCapabilityEnabled(capability, canonicalName, model, explicit) {
+  if (explicit !== undefined) return explicit;
+  let supported = modelSupportsCapability(canonicalName, capability, model);
+  if (supported !== undefined) return supported;
+  let defaultOn =
+    (DEFAULT_ON_CAPABILITIES.has(capability) && usesFablePromptBundle(canonicalName)) ||
+    (OPUS5_BUNDLE_CAPABILITIES.has(capability) && usesOpus5PromptBundle(model)) ||
+    (LATEST_MODEL_CAPABILITIES.has(capability) && supportsOpus55PromptBundle(canonicalName));
+  let cachedClientDataSlot = getCachedClientDataSlot(model);
+  if (defaultOn) {
+    if (cachedClientDataSlot?.data?.[capability] !== false) return true;
+    logClientDataCapability(TENGU_MODEL_CAPABILITY_OFF_FROM_CLIENT_DATA, capability, cachedClientDataSlot);
     return false;
   }
-  if (cachedClientDataSlot?.data?.[e] !== true) return false;
-  logClientDataCapability(TENGU_MODEL_CAPABILITY_FROM_CLIENT_DATA, e, cachedClientDataSlot);
+  if (cachedClientDataSlot?.data?.[capability] !== true) return false;
+  logClientDataCapability(TENGU_MODEL_CAPABILITY_FROM_CLIENT_DATA, capability, cachedClientDataSlot);
   return true;
 }
 //@ chunk-p1bhnnws.js:3443-3575 placement
 /**
  * 在能力列表中查找某前缀的最后一个启用值，返回前缀后的部分。
  */
-function findCapabilityValue(e, canonicalName, r) {
-  let modelCapabilitiesEnv = parseModelCapabilitiesEnv(canonicalName);
-  return [...(servedCapabilities(r, canonicalName) ?? []), ...modelCapabilitiesEnv.keys()]
-    .findLast((s) => s.startsWith(e) && modelCapabilitiesEnv.get(s) !== false)
-    ?.slice(e.length);
+function findCapabilityValue(prefix, model, model_2) {
+  let modelCapabilitiesEnv = parseModelCapabilitiesEnv(model);
+  return [...(servedCapabilities(model_2, model) ?? []), ...modelCapabilitiesEnv.keys()]
+    .findLast((name) => name.startsWith(prefix) && modelCapabilitiesEnv.get(name) !== false)
+    ?.slice(prefix.length);
 }
 //@ chunk-p1bhnnws.js:3575-3872 placement
-function logClientDataCapability(e, n, cachedClientDataSlot) {
-  let l = cachedClientDataSlot.model ?? stripAnyVersatileSuffix(getMainLoopModel());
-  let s = (getSessionFeatureValues().clientDataCapabilityLogged ??= new Map());
+function logClientDataCapability(eventName, capability, cachedClientDataSlot) {
+  let model = cachedClientDataSlot.model ?? stripAnyVersatileSuffix(getMainLoopModel());
+  let loggedBySession = (getSessionFeatureValues().clientDataCapabilityLogged ??= new Map());
   let sessionId = getSessionId();
-  let u = s.get(sessionId);
-  if (u === undefined) {
-    u = new Set();
-    s.set(sessionId, u);
-    if (s.size > MAX_LOGGED_SESSIONS) {
-      let E = s.keys().next().value;
-      if (E !== undefined) s.delete(E);
+  let logged = loggedBySession.get(sessionId);
+  if (logged === undefined) {
+    logged = new Set();
+    loggedBySession.set(sessionId, logged);
+    if (loggedBySession.size > MAX_LOGGED_SESSIONS) {
+      let oldest = loggedBySession.keys().next().value;
+      if (oldest !== undefined) loggedBySession.delete(oldest);
     }
   }
-  let h = `${e === TENGU_MODEL_CAPABILITY_OFF_FROM_CLIENT_DATA ? "-" : ""}${n}:${l}`;
-  if (!u.has(h)) {
-    u.add(h);
-    logEvent(e, {
-      capability: fromEnum(n),
-      model: telemetrySafeModelName(l),
+  let logKey = `${eventName === TENGU_MODEL_CAPABILITY_OFF_FROM_CLIENT_DATA ? "-" : ""}${capability}:${model}`;
+  if (!logged.has(logKey)) {
+    logged.add(logKey);
+    logEvent(eventName, {
+      capability: fromEnum(capability),
+      model: telemetrySafeModelName(model),
     });
   }
 }
 //@ chunk-p1bhnnws.js:3872-3941 placement
-function usesPerTurnEffort(e, n) {
-  if (mainLoopCanonicalName() !== e) return false;
-  return isModelCapabilityEnabled("per_turn_effort", e, n);
+function usesPerTurnEffort(canonical, model) {
+  if (mainLoopCanonicalName() !== canonical) return false;
+  return isModelCapabilityEnabled("per_turn_effort", canonical, model);
 }
 //@ chunk-p1bhnnws.js:3941-3993 placement
 function mainLoopCanonicalName() {
@@ -143,156 +148,169 @@ function mainLoopCanonicalName() {
   }
 }
 //@ chunk-p1bhnnws.js:3993-4000 placement
-setCachedGateValue(usesPerTurnEffort);
+// deferred: uses setCachedGateValue (../../services/analytics/growthbookGates.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-p1bhnnws.js:3993", () => {
+  setCachedGateValue(usesPerTurnEffort);
+});
 //@ chunk-p1bhnnws.js:4000-4025 placement
 /**
  * 恒返回 false（无该档位能力）。
  */
-function neverTierCapability(e) {
+function neverTierCapability(capability) {
   return false;
 }
 //@ chunk-p1bhnnws.js:4025-4074 placement
 /**
  * 判断是否 Opus 4.8 模型。
  */
-function isOpus48Model(canonicalName) {
-  return strip1mSuffix(canonicalName) === "claude-opus-4-8";
+function isOpus48Model(modelName) {
+  return strip1mSuffix(modelName) === "claude-opus-4-8";
 }
 //@ chunk-p1bhnnws.js:4074-4099 placement
 /**
  * 恒返回 false（无该档位能力，占位）。
  */
-function neverTierCapabilityB(e) {
+function neverTierCapabilityB(capability) {
   return false;
 }
 //@ chunk-p1bhnnws.js:4099-4306 placement
-var LEGACY_PROMPT_MODELS = new Set([
-  "claude-opus-4-6",
-  "claude-haiku-4-5",
-  "claude-opus-4-5",
-  "claude-opus-4-1",
-  "claude-opus-4-0",
-  "claude-sonnet-4-5",
-  "claude-sonnet-4-0",
-  "claude-3-7-sonnet",
-  "claude-3-5-sonnet",
-  "claude-3-5-haiku",
-]);
+var LEGACY_PROMPT_MODELS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-p1bhnnws.js:4099", () => {
+  LEGACY_PROMPT_MODELS = new Set([
+    "claude-opus-4-6",
+    "claude-haiku-4-5",
+    "claude-opus-4-5",
+    "claude-opus-4-1",
+    "claude-opus-4-0",
+    "claude-sonnet-4-5",
+    "claude-sonnet-4-0",
+    "claude-3-7-sonnet",
+    "claude-3-5-sonnet",
+    "claude-3-5-haiku",
+  ]);
+});
 //@ chunk-p1bhnnws.js:4306-4340 placement
-function isLegacyPromptModel(e) {
-  return LEGACY_PROMPT_MODELS.has(strip1mSuffix(e));
+function isLegacyPromptModel(model) {
+  return LEGACY_PROMPT_MODELS.has(strip1mSuffix(model));
 }
 //@ chunk-p1bhnnws.js:4340-4420 placement
 /**
  * 判断模型（或覆盖模型）是否属于旧版提示词模型。
  */
-function isLegacyPromptModelOrOverride(canonicalName, remoteCall) {
-  if (remoteCall === undefined) return isLegacyPromptModel(canonicalName);
+function isLegacyPromptModelOrOverride(model, remoteCall) {
+  if (remoteCall === undefined) return isLegacyPromptModel(model);
   return remoteCall.model !== undefined && isLegacyPromptModel(remoteCall.model);
 }
 //@ chunk-p1bhnnws.js:4420-4478 placement
-var TENGU_LOGGIA_ROSTER = "tengu_loggia_roster";
-var loggiaRosterState = [];
-var loggiaRosterSchema = DoctorLazy(() => array(string().trim()));
+var TENGU_LOGGIA_ROSTER; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var loggiaRosterState;
+var loggiaRosterSchema;
 var loggiaRosterMemo;
+deferInit("chunk-p1bhnnws.js:4420", () => {
+  TENGU_LOGGIA_ROSTER = "tengu_loggia_roster";
+  loggiaRosterState = [];
+  loggiaRosterSchema = DoctorLazy(() => array(stringSchema().trim()));
+});
 //@ chunk-p1bhnnws.js:4478-4725 placement
 function getLoggiaRoster() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
     TENGU_LOGGIA_ROSTER,
     loggiaRosterState,
   );
-  let n = loggiaRosterMemo;
-  if (n !== undefined && n.raw === featureValue_CACHED_MAY_BE_STALE) return n.ids;
-  let r = loggiaRosterSchema().safeParse(featureValue_CACHED_MAY_BE_STALE);
-  if (!r.success)
+  let memo = loggiaRosterMemo;
+  if (memo !== undefined && memo.raw === featureValue_CACHED_MAY_BE_STALE) return memo.ids;
+  let parsed = loggiaRosterSchema().safeParse(featureValue_CACHED_MAY_BE_STALE);
+  if (!parsed.success)
     logForDebugging(
       `GrowthBook: ${TENGU_LOGGIA_ROSTER} is not a JSON array of model ids; treating it as empty`,
       {
         level: "warn",
       },
     );
-  let l = r.success ? r.data : loggiaRosterState;
+  let ids = parsed.success ? parsed.data : loggiaRosterState;
   loggiaRosterMemo = {
     raw: featureValue_CACHED_MAY_BE_STALE,
-    ids: l,
+    ids,
   };
-  return l;
+  return ids;
 }
 //@ chunk-p1bhnnws.js:4725-4771 placement
 /**
  * 判断模型是否在 loggia 名单中。
  */
-function isInLoggiaRoster(e) {
-  return getLoggiaRoster().some((n) => sameModelSpelling(e, n));
+function isInLoggiaRoster(model) {
+  return getLoggiaRoster().some((id) => sameModelSpelling(model, id));
 }
 //@ chunk-p1bhnnws.js:4771-4855 placement
 /**
  * 取该模型应使用的"精简改写"提示词包。
  */
-function leanRewriteFor(e) {
-  let n = currentPromptBundleState();
-  return isCatalogSuppressed() ? n.leanRewriteCompiledOnly(e) : n.leanRewrite(e);
+function leanRewriteFor(model) {
+  let state = currentPromptBundleState();
+  return isCatalogSuppressed() ? state.leanRewriteCompiledOnly(model) : state.leanRewrite(model);
 }
 //@ chunk-p1bhnnws.js:4855-4905 placement
 /**
  * 优先用显式 leanRewrite，否则按模型取。
  */
-function leanRewriteOf(e) {
-  return e.leanRewrite ?? leanRewriteFor(e.model);
+function leanRewriteOf(bundle) {
+  return bundle.leanRewrite ?? leanRewriteFor(bundle.model);
 }
 //@ chunk-p1bhnnws.js:4905-5181 placement
-function isLeanRewriteEnabled(e) {
-  if (e === undefined) return false;
-  let canonicalName = getCanonicalName(e);
-  let r = modelSupportsCapability(canonicalName, "temporal_hare", e);
-  if (r === false) return false;
-  if (isCatalogSuppressed()) return r === true && leanPromptFor(e);
-  if (!(r === true || getCachedClientDataSlot(e)?.data?.temporal_hare === true))
+function isLeanRewriteEnabled(model) {
+  if (model === undefined) return false;
+  let canonicalName = getCanonicalName(model);
+  let supported = modelSupportsCapability(canonicalName, "temporal_hare", model);
+  if (supported === false) return false;
+  if (isCatalogSuppressed()) return supported === true && leanPromptFor(model);
+  if (!(supported === true || getCachedClientDataSlot(model)?.data?.temporal_hare === true))
     return (
-      isOpus55FamilyModel(e) &&
-      leanPromptFor(e) &&
+      isOpus55FamilyModel(model) &&
+      leanPromptFor(model) &&
       getFeatureValue_SESSION_PINNED("tengu_temporal_hare", false) === true
     );
-  if (!leanPromptFor(e)) return false;
-  return isModelCapabilityEnabled("temporal_hare", canonicalName, e);
+  if (!leanPromptFor(model)) return false;
+  return isModelCapabilityEnabled("temporal_hare", canonicalName, model);
 }
 //@ chunk-p1bhnnws.js:5181-5306 placement
-function clientDataFlagIncludes(e, n) {
-  let r = getCachedClientData()?.[e];
+function clientDataFlagIncludes(flagName, keys) {
+  let flag = getCachedClientData()?.[flagName];
   return (
-    typeof r === "object" &&
-    r !== null &&
-    Object.entries(r).some(([key, value]) => value === true && n.includes(key))
+    typeof flag === "object" &&
+    flag !== null &&
+    Object.entries(flag).some(([key, value]) => value === true && keys.includes(key))
   );
 }
 //@ chunk-p1bhnnws.js:5306-5375 placement
 /**
  * 判断 basalt_cove 能力是否开启（环境变量或客户端数据）。
  */
-function isBasaltCoveOn(canonicalName) {
-  return env.CLAUDE_CODE_BASALT_COVE || clientDataFlagIncludes("basalt_cove", canonicalName);
+function isBasaltCoveOn(keys) {
+  return env.CLAUDE_CODE_BASALT_COVE || clientDataFlagIncludes("basalt_cove", keys);
 }
 //@ chunk-p1bhnnws.js:5375-5403 placement
 var TENGU_THRIFTY_SONIC = "tengu_thrifty_sonic";
 //@ chunk-p1bhnnws.js:5403-5512 placement
 function getBashFirstAssignment() {
-  let e = currentPromptBundleState();
-  return isCatalogSuppressed() ? e.bashFirstSessionAssignmentCompiledOnly() : e.bashFirstSessionAssignment();
+  let state = currentPromptBundleState();
+  return isCatalogSuppressed()
+    ? state.bashFirstSessionAssignmentCompiledOnly()
+    : state.bashFirstSessionAssignment();
 }
 //@ chunk-p1bhnnws.js:5512-5678 placement
 function computeBashFirstAssignment() {
-  let promptModel = getPromptModel(getMainLoopModel());
-  let canonicalName = getCanonicalName(promptModel);
-  let r = modelSupportsCapability(canonicalName, "thrifty_sonic", promptModel);
-  if (r === false) return "none";
+  let model = getPromptModel(getMainLoopModel());
+  let canonicalName = getCanonicalName(model);
+  let supported = modelSupportsCapability(canonicalName, "thrifty_sonic", model);
+  if (supported === false) return "none";
   if (
     usesFablePromptBundle(canonicalName) ||
     supportsOpus55PromptBundle(canonicalName) ||
     getCachedClientData()?.[TENGU_THRIFTY_SONIC] === true ||
-    r
+    supported
   )
     return "forced";
-  return isOpus5FamilyModel(promptModel) ? "cohort" : "none";
+  return isOpus5FamilyModel(model) ? "cohort" : "none";
 }
 //@ chunk-p1bhnnws.js:5678-5851 placement
 /**
@@ -339,8 +357,8 @@ function resolveBashFirstSteerVariant() {
 var TENGU_GORSE_PLOVER = "tengu_gorse_plover";
 var TENGU_WILLOW_TERN = "tengu_willow_tern";
 //@ chunk-p1bhnnws.js:6158-6209 placement
-function isClientFlagOrFeatureOn(e, n) {
-  return e || getCachedClientData()?.[n] === true || getFeatureValue_CACHED_MAY_BE_STALE(n, false);
+function isClientFlagOrFeatureOn(flagOn, name) {
+  return flagOn || getCachedClientData()?.[name] === true || getFeatureValue_CACHED_MAY_BE_STALE(name, false);
 }
 //@ chunk-p1bhnnws.js:6209-6322 placement
 /**
@@ -358,11 +376,11 @@ function isBashActFirstEnabled() {
 /**
  * 判断 amber_astrolabe 能力是否开启。
  */
-function isAmberAstrolabeEnabled(e) {
+function isAmberAstrolabeEnabled(model) {
   return isModelCapabilityEnabled(
     "amber_astrolabe",
-    getCanonicalName(e),
-    e,
+    getCanonicalName(model),
+    model,
     env.CLAUDE_CODE_AMBER_ASTROLABE || undefined,
   );
 }
@@ -370,11 +388,11 @@ function isAmberAstrolabeEnabled(e) {
 /**
  * 判断 bison_cairn 能力是否开启。
  */
-function isBisonCairnEnabled(promptModel) {
+function isBisonCairnEnabled(modelName) {
   return isModelCapabilityEnabled(
     "bison_cairn",
-    getCanonicalName(promptModel),
-    promptModel,
+    getCanonicalName(modelName),
+    modelName,
     env.CLAUDE_CODE_BISON_CAIRN,
   );
 }
@@ -382,11 +400,11 @@ function isBisonCairnEnabled(promptModel) {
 /**
  * 判断 larch_cistern 能力是否开启。
  */
-function isLarchCisternEnabled(promptModel) {
+function isLarchCisternEnabled(modelName) {
   return isModelCapabilityEnabled(
     "larch_cistern",
-    getCanonicalName(promptModel),
-    promptModel,
+    getCanonicalName(modelName),
+    modelName,
     env.CLAUDE_CODE_LARCH_CISTERN || undefined,
   );
 }
@@ -395,14 +413,14 @@ function isLarchCisternEnabled(promptModel) {
  * 读取客户端数据中的 willow_tern 布尔覆盖（非布尔值只提示一次）。
  */
 function getWillowTernOverride() {
-  let e = getCachedClientData()?.[TENGU_WILLOW_TERN];
-  if (typeof e === "boolean") return e;
-  if (e !== undefined) {
-    let n = currentPromptBundleState();
-    if (!n.unusableWritingOverrideTold) {
-      n.unusableWritingOverrideTold = true;
+  let value = getCachedClientData()?.[TENGU_WILLOW_TERN];
+  if (typeof value === "boolean") return value;
+  if (value !== undefined) {
+    let state = currentPromptBundleState();
+    if (!state.unusableWritingOverrideTold) {
+      state.unusableWritingOverrideTold = true;
       logForDebugging(
-        `willow_tern: ignoring non-boolean clientData ${TENGU_WILLOW_TERN} value of type ${typeof e}`,
+        `willow_tern: ignoring non-boolean clientData ${TENGU_WILLOW_TERN} value of type ${typeof value}`,
       );
     }
   }
@@ -412,14 +430,14 @@ function getWillowTernOverride() {
 /**
  * 判断 willow_tern 写作指引是否开启：环境变量、客户端数据、最新模型或 Opus 5 提示词包加开关。
  */
-function isWillowTernEnabled(e) {
+function isWillowTernEnabled(model) {
   if (env.CLAUDE_CODE_WILLOW_TERN) return true;
   let willowTernOverride = getWillowTernOverride();
   if (willowTernOverride !== undefined) return willowTernOverride;
-  if (e === undefined) return false;
-  let canonicalName = getCanonicalName(e);
+  if (model === undefined) return false;
+  let canonicalName = getCanonicalName(model);
   if (usesFablePromptBundle(canonicalName)) return true;
-  if (modelSupportsCapability(canonicalName, "opus_5_prompt_bundle", e) !== true) return false;
+  if (modelSupportsCapability(canonicalName, "opus_5_prompt_bundle", model) !== true) return false;
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_WILLOW_TERN, false);
 }
 //@ chunk-p1bhnnws.js:7025-7068 placement
@@ -430,12 +448,12 @@ function simpleModeEnv() {
   return env.CLAUDE_CODE_SIMPLE;
 }
 //@ chunk-p1bhnnws.js:7068-7350 placement
-function isLegacyPromptModel_2(e) {
-  let canonicalName = getCanonicalName(e, {
+function isLegacyPromptModel_2(model) {
+  let canonicalName = getCanonicalName(model, {
     deterministic: true,
   });
-  let r = modelSupportsCapability(canonicalName, "lean_prompt", e);
-  if (r !== undefined) return !r;
+  let supported = modelSupportsCapability(canonicalName, "lean_prompt", model);
+  if (supported !== undefined) return !supported;
   return (
     canonicalName.includes("claude-3-") ||
     canonicalName.includes("haiku") ||
@@ -451,25 +469,25 @@ function isLegacyPromptModel_2(e) {
 /**
  * 取该模型应使用的精简提示词包。
  */
-function leanPromptFor(e) {
-  let n = currentPromptBundleState();
-  return isCatalogSuppressed() ? n.leanPromptCompiledOnly(e) : n.leanPrompt(e);
+function leanPromptFor(model) {
+  let state = currentPromptBundleState();
+  return isCatalogSuppressed() ? state.leanPromptCompiledOnly(model) : state.leanPrompt(model);
 }
 //@ chunk-p1bhnnws.js:7431-7479 placement
 /**
  * 优先用显式 leanPrompt，否则按模型取。
  */
-function leanPromptOf(e) {
-  return e.leanPrompt ?? leanPromptFor(e.model);
+function leanPromptOf(bundle) {
+  return bundle.leanPrompt ?? leanPromptFor(bundle.model);
 }
 //@ chunk-p1bhnnws.js:7479-7706 placement
-function shouldUseLeanPrompt(e) {
-  if (!e) return false;
+function shouldUseLeanPrompt(model) {
+  if (!model) return false;
   if (isEnvTruthy(env.CLAUDE_CODE_SIMPLE_SYSTEM_PROMPT)) return true;
   if (isEnvDefinedFalsy(env.CLAUDE_CODE_SIMPLE_SYSTEM_PROMPT)) return false;
-  if (!isLegacyPromptModel_2(e)) return true;
+  if (!isLegacyPromptModel_2(model)) return true;
   if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_velvet_tide", false)) return true;
-  return clientDataFlagIncludes("simple_system_prompt", getCanonicalName(e));
+  return clientDataFlagIncludes("simple_system_prompt", getCanonicalName(model));
 }
 //@ chunk-p1bhnnws.js:7706-7730 placement
 var BREEZY_HORIZON = "breezy_horizon";
@@ -477,18 +495,18 @@ var BREEZY_HORIZON = "breezy_horizon";
 /**
  * 返回用于选择提示词的模型（可能被替换）。
  */
-function getPromptModel(e) {
-  if (e === undefined) return;
-  let n = currentPromptBundleState();
-  return isCatalogSuppressed() ? n.modelForPromptCompiledOnly(e) : n.modelForPrompt(e);
+function getPromptModel(model) {
+  if (model === undefined) return;
+  let state = currentPromptBundleState();
+  return isCatalogSuppressed() ? state.modelForPromptCompiledOnly(model) : state.modelForPrompt(model);
 }
 //@ chunk-p1bhnnws.js:7841-7916 placement
 /**
  * 若该模型在提示词模型替换缓存中，返回替换后的模型。
  */
-function promptModelOverride(e) {
+function promptModelOverride(model) {
   let modelForPrompt = currentPromptBundleState().modelForPrompt;
-  return modelForPrompt.cache.has(e) ? modelForPrompt(e) : undefined;
+  return modelForPrompt.cache.has(model) ? modelForPrompt(model) : undefined;
 }
 //@ chunk-p1bhnnws.js:7916-8551 placement
 /**
@@ -546,20 +564,23 @@ function isUsablePromptModelOverride(override) {
  * 按会话缓存的提示词包判定：bash 优先分组、精简提示词、提示词模型替换、精简改写（各有仅编译期目录的版本），以及已记录的替换与警告状态。
  */
 class PromptBundleState {
-  bashFirstSessionAssignment = io(computeBashFirstAssignment);
-  bashFirstSessionAssignmentCompiledOnly = io(computeBashFirstAssignment);
-  bashFirstSteerVariant = io(resolveBashFirstSteerVariant);
-  leanPrompt = io(shouldUseLeanPrompt);
-  leanPromptCompiledOnly = io(shouldUseLeanPrompt);
-  modelForPrompt = io(resolvePromptModelSwap);
-  modelForPromptCompiledOnly = io(resolvePromptModelSwap);
-  leanRewrite = io(isLeanRewriteEnabled);
-  leanRewriteCompiledOnly = io(isLeanRewriteEnabled);
+  bashFirstSessionAssignment = memoizeAlias(computeBashFirstAssignment);
+  bashFirstSessionAssignmentCompiledOnly = memoizeAlias(computeBashFirstAssignment);
+  bashFirstSteerVariant = memoizeAlias(resolveBashFirstSteerVariant);
+  leanPrompt = memoizeAlias(shouldUseLeanPrompt);
+  leanPromptCompiledOnly = memoizeAlias(shouldUseLeanPrompt);
+  modelForPrompt = memoizeAlias(resolvePromptModelSwap);
+  modelForPromptCompiledOnly = memoizeAlias(resolvePromptModelSwap);
+  leanRewrite = memoizeAlias(isLeanRewriteEnabled);
+  leanRewriteCompiledOnly = memoizeAlias(isLeanRewriteEnabled);
   promptModelSwapsLogged = new Set();
   unusableWritingOverrideTold = false;
 }
 //@ chunk-p1bhnnws.js:8916-8940 placement
-var promptBundleStateRegistry = new HostScoped(() => new PromptBundleState());
+var promptBundleStateRegistry; // deferred: uses PromptBundleState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-p1bhnnws.js:8916", () => {
+  promptBundleStateRegistry = new HostScoped(() => new PromptBundleState());
+});
 //@ chunk-p1bhnnws.js:8940-8976 placement
 function currentPromptBundleState() {
   return promptBundleStateRegistry.of(getRootSession().host);

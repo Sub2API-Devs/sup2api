@@ -105,7 +105,7 @@ function resolveWindowsShellLauncher({ powershellPath, script, outputPath, cwd }
 /**
  * 解析可用的 Windows shell 启动器：可被环境变量或功能开关关闭；解析失败或 cmd 探测不可用时记录原因并返回 undefined，否则返回启动配置。
  */
-async function resolveUsableWindowsLauncher(e, hostState) {
+async function resolveUsableWindowsLauncher(binShell, hostState) {
   if (env.CLAUDE_CODE_DISABLE_WINDOWS_SHELL_LAUNCHER) {
     logFeatureSad("shell_windows_launcher", "env_opt_out");
     return;
@@ -114,7 +114,7 @@ async function resolveUsableWindowsLauncher(e, hostState) {
     logFeatureSad("shell_windows_launcher", "flag_off");
     return;
   }
-  let windowsShellLauncher = resolveWindowsShellLauncher(e);
+  let windowsShellLauncher = resolveWindowsShellLauncher(binShell);
   if (!windowsShellLauncher.ok) {
     logFeatureSad("shell_windows_launcher", windowsShellLauncher.reason);
     return;
@@ -131,38 +131,38 @@ async function resolveUsableWindowsLauncher(e, hostState) {
 /**
  * 通过 Windows 启动器 pid 查找实际的 PowerShell 子进程 pid，找不到时保留启动器 pid。
  */
-async function resolveShellPidFromLauncher(pid, binShell) {
-  if (pid === undefined) return;
-  let base = win32.basename(binShell);
-  let s = await waitForWindowsChild(pid, base, {
+async function resolveShellPidFromLauncher(parentPid, binShell) {
+  if (parentPid === undefined) return;
+  let processName = win32.basename(binShell);
+  let childPid = await waitForWindowsChild(parentPid, processName, {
     powershellPath: binShell,
   });
-  if (s === undefined) {
+  if (childPid === undefined) {
     logForDebugging(
-      `[windows-shell-launcher] no ${base} child of launcher pid ${pid}; keeping the launcher pid`,
+      `[windows-shell-launcher] no ${processName} child of launcher pid ${parentPid}; keeping the launcher pid`,
       {
         level: "warn",
       },
     );
     logFeatureSad("shell_windows_launcher", "shell_pid_unresolved");
   }
-  return s;
+  return childPid;
 }
 //@ chunk-e6aww6q8.js:3075687-3075996 placement
 /**
  * 用 "/d /c exit 0" 探测启动器 cmd 是否可用（有超时），不可用时记录并返回 cmd_probe_timeout 或 cmd_unavailable。
  */
 async function probeCmdLauncher(file) {
-  let n = await execFileNoThrowWithCwd(file, ["/d", "/c", "exit", "0"], {
+  let probeResult = await execFileNoThrowWithCwd(file, ["/d", "/c", "exit", "0"], {
     timeout: CMD_PROBE_TIMEOUT_MS,
   });
-  if (n.code === 0) return;
+  if (probeResult.code === 0) return;
   logForDebugging(
-    `[windows-shell-launcher] ${file} unusable (code=${n.code} timedOut=${n.timedOut === true} ${n.error ?? ""}); PowerShell commands spawn directly`,
+    `[windows-shell-launcher] ${file} unusable (code=${probeResult.code} timedOut=${probeResult.timedOut === true} ${probeResult.error ?? ""}); PowerShell commands spawn directly`,
     {
       level: "warn",
     },
   );
-  return n.timedOut ? "cmd_probe_timeout" : "cmd_unavailable";
+  return probeResult.timedOut ? "cmd_probe_timeout" : "cmd_unavailable";
 }
 export { resolveUsableWindowsLauncher, DETACHED_LAUNCHER_SPAWN_OPTIONS, resolveShellPidFromLauncher };

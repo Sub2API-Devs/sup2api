@@ -17,33 +17,33 @@ import { errorMessage } from "../utils/errors.js";
 /**
  * 会话标题写回服务端的令牌桶合并器：同会话的更新合并、限速、失败退避重试，远端改名后放弃旧写入。
  */
-function createTitleWriteCoalescer(i) {
-  let n = {
+function createTitleWriteCoalescer(options) {
+  let state = {
     entries: new Map(),
-    burst: i?.burst ?? 3,
-    refillMs: i?.refillMs ?? 1e4,
-    retryMs: i?.retryMs ?? 60000,
-    isOwnTitle: i?.isOwnTitle ?? (() => false),
-    onRemoteTitleAdopted: i?.onRemoteTitleAdopted ?? (() => {}),
+    burst: options?.burst ?? 3,
+    refillMs: options?.refillMs ?? 1e4,
+    retryMs: options?.retryMs ?? 60000,
+    isOwnTitle: options?.isOwnTitle ?? (() => false),
+    onRemoteTitleAdopted: options?.onRemoteTitleAdopted ?? (() => {}),
   };
   return {
-    update: (e, r, s) => enqueueTitleWrite(n, e, r, s),
-    noteRemoteTitle: (e, r) => noteTitleSent(n, e, r),
-    forget: (e) => dropTitleEntry(n, e),
-    hasSent: (e, r) => n.entries.get(e)?.sentTitles.has(r) ?? false,
-    isKnownTitle: (e, r) => n.entries.get(e)?.knownTitles.has(r) ?? false,
+    update: (sessionId, title, options) => enqueueTitleWrite(state, sessionId, title, options),
+    noteRemoteTitle: (sessionId, title) => noteTitleSent(state, sessionId, title),
+    forget: (sessionId) => dropTitleEntry(state, sessionId),
+    hasSent: (sessionId, title) => state.entries.get(sessionId)?.sentTitles.has(title) ?? false,
+    isKnownTitle: (sessionId, title) => state.entries.get(sessionId)?.knownTitles.has(title) ?? false,
   };
 }
 //@ chunk-q8z5dt8p.js:739-1014 placement
-function titleEntryFor(i, n) {
-  let e = i.entries.get(n);
-  if (!e) {
-    e = {
+function titleEntryFor(coalescer, sessionId) {
+  let entry = coalescer.entries.get(sessionId);
+  if (!entry) {
+    entry = {
       lastSentTitle: undefined,
       lastSentOk: false,
       sentTitles: new Set(),
       knownTitles: new Set(),
-      tokens: i.burst,
+      tokens: coalescer.burst,
       refilledAt: Date.now(),
       pending: undefined,
       inFlight: false,
@@ -52,90 +52,97 @@ function titleEntryFor(i, n) {
       sendingRetry: false,
       suppressed: 0,
     };
-    i.entries.set(n, e);
+    coalescer.entries.set(sessionId, entry);
   }
-  return e;
+  return entry;
 }
 //@ chunk-q8z5dt8p.js:1014-1327 placement
-function enqueueTitleWrite(i, n, e, r) {
-  let s = titleEntryFor(i, n);
-  if (isTitleAlreadySent(s, e, r)) {
-    clearPendingTitleWrite(s);
+function enqueueTitleWrite(coalescer, sessionId, title, options) {
+  let entry = titleEntryFor(coalescer, sessionId);
+  if (isTitleAlreadySent(entry, title, options)) {
+    clearPendingTitleWrite(entry);
     return Promise.resolve();
   }
   return new Promise((resolve) => {
     let waiters = [resolve];
-    clearRetryTimer(s);
-    if (s.pending || s.inFlight) {
-      if (s.suppressed === 0) logFeatureSad("bridge_session_patch", "title_write_coalesced");
-      s.suppressed += 1;
+    clearRetryTimer(entry);
+    if (entry.pending || entry.inFlight) {
+      if (entry.suppressed === 0) logFeatureSad("bridge_session_patch", "title_write_coalesced");
+      entry.suppressed += 1;
     }
-    runWaiters(s.pending?.waiters);
-    s.pending = {
-      title: e,
-      opts: r,
+    runWaiters(entry.pending?.waiters);
+    entry.pending = {
+      title,
+      opts: options,
       waiters,
     };
-    s.sendingRetry = false;
-    flushTitleWrite(i, n);
+    entry.sendingRetry = false;
+    flushTitleWrite(coalescer, sessionId);
   });
 }
 //@ chunk-q8z5dt8p.js:1327-1500 placement
-function refillTitleTokens(i, n, e) {
-  let floored = Math.floor((e - n.refilledAt) / i.refillMs);
+function refillTitleTokens(coalescer, entry, now) {
+  let floored = Math.floor((now - entry.refilledAt) / coalescer.refillMs);
   if (floored > 0) {
-    n.tokens = Math.min(i.burst, n.tokens + floored);
-    n.refilledAt += floored * i.refillMs;
+    entry.tokens = Math.min(coalescer.burst, entry.tokens + floored);
+    entry.refilledAt += floored * coalescer.refillMs;
   }
-  if (n.tokens === i.burst) n.refilledAt = e;
+  if (entry.tokens === coalescer.burst) entry.refilledAt = now;
 }
 //@ chunk-q8z5dt8p.js:1500-2558 placement
-function flushTitleWrite(i, n) {
-  let e = i.entries.get(n);
-  if (!e || e.inFlight || !e.pending) return;
+function flushTitleWrite(coalescer, sessionId) {
+  let entry = coalescer.entries.get(sessionId);
+  if (!entry || entry.inFlight || !entry.pending) return;
   let now = Date.now();
-  refillTitleTokens(i, e, now);
-  if (e.tokens <= 0 && !e.pending.opts?.userInitiated) {
-    if (!e.timer) {
-      let max = Math.max(0, e.refilledAt + i.refillMs - now);
-      e.timer = setTimeout(onTitleWriteTimer, max, i, n);
-      e.timer.unref?.();
+  refillTitleTokens(coalescer, entry, now);
+  if (entry.tokens <= 0 && !entry.pending.opts?.userInitiated) {
+    if (!entry.timer) {
+      let max = Math.max(0, entry.refilledAt + coalescer.refillMs - now);
+      entry.timer = setTimeout(onTitleWriteTimer, max, coalescer, sessionId);
+      entry.timer.unref?.();
     }
     return;
   }
-  let { title, opts, waiters } = e.pending;
-  e.pending = undefined;
-  if (isTitleAlreadySent(e, title, opts) || (opts?.shouldSend !== undefined && !opts.shouldSend())) {
-    clearRetryTimer(e);
-    e.sendingRetry = false;
-    e.suppressed = 0;
+  let { title, opts, waiters } = entry.pending;
+  entry.pending = undefined;
+  if (isTitleAlreadySent(entry, title, opts) || (opts?.shouldSend !== undefined && !opts.shouldSend())) {
+    clearRetryTimer(entry);
+    entry.sendingRetry = false;
+    entry.suppressed = 0;
     runWaiters(waiters);
     return;
   }
-  e.tokens = Math.max(0, e.tokens - 1);
-  e.inFlight = true;
-  e.lastSentTitle = title;
-  e.lastSentOk = false;
-  e.sentTitles.add(title);
-  e.knownTitles.add(title);
-  clearRetryTimer(e);
-  let sendingRetry = e.sendingRetry;
-  e.sendingRetry = false;
-  if (e.suppressed > 0) {
-    logForDebugging(`[bridge] title write: sending latest after coalescing ${e.suppressed} update(s)`);
-    e.suppressed = 0;
+  entry.tokens = Math.max(0, entry.tokens - 1);
+  entry.inFlight = true;
+  entry.lastSentTitle = title;
+  entry.lastSentOk = false;
+  entry.sentTitles.add(title);
+  entry.knownTitles.add(title);
+  clearRetryTimer(entry);
+  let sendingRetry = entry.sendingRetry;
+  entry.sendingRetry = false;
+  if (entry.suppressed > 0) {
+    logForDebugging(`[bridge] title write: sending latest after coalescing ${entry.suppressed} update(s)`);
+    entry.suppressed = 0;
   }
-  updateBridgeSessionTitle(n, title, opts)
+  updateBridgeSessionTitle(sessionId, title, opts)
     .then(
-      (o) => {
-        if (o === "landed") {
-          e.lastSentTitle = title;
-          e.lastSentOk = true;
-        } else if (e.lastSentTitle === title) e.lastSentOk = false;
-        if (i.entries.get(n) !== e) return;
-        if (o === "failed" && !sendingRetry && !e.retryTimer && !e.pending) {
-          e.retryTimer = setTimeout(retryTitleWrite, i.retryMs, i, n, title, opts);
-          e.retryTimer.unref?.();
+      (outcome) => {
+        if (outcome === "landed") {
+          entry.lastSentTitle = title;
+          entry.lastSentOk = true;
+        } else if (entry.lastSentTitle === title) entry.lastSentOk = false;
+        if (coalescer.entries.get(sessionId) !== entry) return;
+        if (outcome === "failed" && !sendingRetry && !entry.retryTimer && !entry.pending) {
+          entry.retryTimer = setTimeout(
+            retryTitleWrite,
+            coalescer.retryMs,
+            coalescer,
+            sessionId,
+            title,
+            opts,
+          );
+          entry.retryTimer.unref?.();
         }
       },
       (error) => {
@@ -143,57 +150,57 @@ function flushTitleWrite(i, n) {
       },
     )
     .finally(() => {
-      e.inFlight = false;
+      entry.inFlight = false;
       runWaiters(waiters);
-      flushTitleWrite(i, n);
+      flushTitleWrite(coalescer, sessionId);
     });
 }
 //@ chunk-q8z5dt8p.js:2558-2624 placement
-function onTitleWriteTimer(i, n) {
-  let e = i.entries.get(n);
-  if (e) {
-    e.timer = undefined;
-    flushTitleWrite(i, n);
+function onTitleWriteTimer(coalescer, sessionId) {
+  let entry = coalescer.entries.get(sessionId);
+  if (entry) {
+    entry.timer = undefined;
+    flushTitleWrite(coalescer, sessionId);
   }
 }
 //@ chunk-q8z5dt8p.js:2624-3361 placement
-function retryTitleWrite(i, n, e, r) {
-  let s = i.entries.get(n);
-  if (!s) return;
-  s.retryTimer = undefined;
-  if (!isFailedResendCandidate(i, s, n, e)) return;
-  if (r?.shouldSend !== undefined && !r.shouldSend()) {
+function retryTitleWrite(coalescer, sessionId, title, options) {
+  let entry = coalescer.entries.get(sessionId);
+  if (!entry) return;
+  entry.retryTimer = undefined;
+  if (!isFailedResendCandidate(coalescer, entry, sessionId, title)) return;
+  if (options?.shouldSend !== undefined && !options.shouldSend()) {
     logForDebugging("[bridge] title write retry dropped: sending is now barred");
     return;
   }
-  getBridgeSession(n, {
-    baseUrl: r?.baseUrl,
-    getAccessToken: r?.getAccessToken,
-    credentials: r?.credentials,
+  getBridgeSession(sessionId, {
+    baseUrl: options?.baseUrl,
+    getAccessToken: options?.getAccessToken,
+    credentials: options?.credentials,
   }).then(
     (bridgeSession) => {
-      if (!isFailedResendCandidate(i, s, n, e)) return;
+      if (!isFailedResendCandidate(coalescer, entry, sessionId, title)) return;
       if (bridgeSession === null) {
         logForDebugging("[bridge] title write retry skipped: server state unreadable");
         return;
       }
       if (
         bridgeSession.title &&
-        !s.knownTitles.has(bridgeSession.title) &&
-        !i.isOwnTitle(n, bridgeSession.title)
+        !entry.knownTitles.has(bridgeSession.title) &&
+        !coalescer.isOwnTitle(sessionId, bridgeSession.title)
       ) {
         logForDebugging("[bridge] title write retry dropped: the session was renamed elsewhere");
-        noteTitleSent(i, n, bridgeSession.title);
-        i.onRemoteTitleAdopted(n, bridgeSession.title);
+        noteTitleSent(coalescer, sessionId, bridgeSession.title);
+        coalescer.onRemoteTitleAdopted(sessionId, bridgeSession.title);
         return;
       }
-      s.pending = {
-        title: e,
-        opts: r,
+      entry.pending = {
+        title,
+        opts: options,
         waiters: [],
       };
-      s.sendingRetry = true;
-      flushTitleWrite(i, n);
+      entry.sendingRetry = true;
+      flushTitleWrite(coalescer, sessionId);
     },
     (error) => {
       logForDebugging(`[bridge] title write retry skipped: ${errorMessage(error)}`);
@@ -201,56 +208,56 @@ function retryTitleWrite(i, n, e, r) {
   );
 }
 //@ chunk-q8z5dt8p.js:3361-3485 placement
-function isFailedResendCandidate(i, n, e, r) {
+function isFailedResendCandidate(coalescer, entry, sessionId, title) {
   return (
-    i.entries.get(e) === n &&
-    n.lastSentTitle === r &&
-    !n.lastSentOk &&
-    !n.inFlight &&
-    !n.pending &&
-    !n.retryTimer
+    coalescer.entries.get(sessionId) === entry &&
+    entry.lastSentTitle === title &&
+    !entry.lastSentOk &&
+    !entry.inFlight &&
+    !entry.pending &&
+    !entry.retryTimer
   );
 }
 //@ chunk-q8z5dt8p.js:3485-3581 placement
-function noteTitleSent(i, n, e) {
-  let r = titleEntryFor(i, n);
-  r.lastSentTitle = e;
-  r.lastSentOk = true;
-  r.knownTitles.add(e);
-  clearRetryTimer(r);
-  clearPendingTitleWrite(r);
+function noteTitleSent(coalescer, sessionId, title) {
+  let entry = titleEntryFor(coalescer, sessionId);
+  entry.lastSentTitle = title;
+  entry.lastSentOk = true;
+  entry.knownTitles.add(title);
+  clearRetryTimer(entry);
+  clearPendingTitleWrite(entry);
 }
 //@ chunk-q8z5dt8p.js:3581-3696 placement
-function dropTitleEntry(i, n) {
-  let e = i.entries.get(n);
-  if (!e) return;
-  if (e.timer) clearTimeout(e.timer);
-  clearRetryTimer(e);
-  clearPendingTitleWrite(e);
-  i.entries.delete(n);
+function dropTitleEntry(coalescer, sessionId) {
+  let entry = coalescer.entries.get(sessionId);
+  if (!entry) return;
+  if (entry.timer) clearTimeout(entry.timer);
+  clearRetryTimer(entry);
+  clearPendingTitleWrite(entry);
+  coalescer.entries.delete(sessionId);
 }
 //@ chunk-q8z5dt8p.js:3696-3782 placement
-function clearPendingTitleWrite(i) {
-  runWaiters(i.pending?.waiters);
-  i.pending = undefined;
-  i.sendingRetry = false;
-  i.suppressed = 0;
+function clearPendingTitleWrite(entry) {
+  runWaiters(entry.pending?.waiters);
+  entry.pending = undefined;
+  entry.sendingRetry = false;
+  entry.suppressed = 0;
 }
 //@ chunk-q8z5dt8p.js:3782-3859 placement
-function clearRetryTimer(i) {
-  if (i.retryTimer) {
-    clearTimeout(i.retryTimer);
-    i.retryTimer = undefined;
+function clearRetryTimer(entry) {
+  if (entry.retryTimer) {
+    clearTimeout(entry.retryTimer);
+    entry.retryTimer = undefined;
   }
 }
 //@ chunk-q8z5dt8p.js:3859-3896 placement
 function runWaiters(waiters) {
-  for (let n of waiters ?? []) n();
+  for (let waiter of waiters ?? []) waiter();
 }
 //@ chunk-q8z5dt8p.js:3896-4031 placement
-function isTitleAlreadySent(i, n, e) {
-  if (i.lastSentTitle !== n) return false;
-  if (i.inFlight || i.retryTimer !== undefined) return true;
-  return i.lastSentOk && !e?.userInitiated;
+function isTitleAlreadySent(entry, title, options) {
+  if (entry.lastSentTitle !== title) return false;
+  if (entry.inFlight || entry.retryTimer !== undefined) return true;
+  return entry.lastSentOk && !options?.userInitiated;
 }
 export { createTitleWriteCoalescer };

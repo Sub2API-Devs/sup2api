@@ -5,11 +5,11 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_yallist } from "../yallist/yallist.js";
 
 //@ chunk-1ny7cxrt.js:15716-19351 cjs-fingerprint
-var require_lru_cache = x(function (cjsExports, cjsModule) {
+var require_lru_cache = __commonJS(function (cjsExports, cjsModule) {
   var Yallist = require_yallist();
   var MAX = Symbol("max");
   var LENGTH = Symbol("length");
@@ -201,40 +201,40 @@ var require_lru_cache = x(function (cjsExports, cjsModule) {
       this[CACHE].forEach((value, key) => get(this, key, false));
     }
   }
-  var get = (e, key, doUse) => {
-    let node = e[CACHE].get(key);
+  var get = (cache, key, doUse) => {
+    let node = cache[CACHE].get(key);
     if (node) {
       let hit = node.value;
-      if (isStale(e, hit)) {
-        del(e, node);
-        if (!e[ALLOW_STALE]) return;
+      if (isStale(cache, hit)) {
+        del(cache, node);
+        if (!cache[ALLOW_STALE]) return;
       } else if (doUse) {
-        if (e[UPDATE_AGE_ON_GET]) node.value.now = Date.now();
-        e[LRU_LIST].unshiftNode(node);
+        if (cache[UPDATE_AGE_ON_GET]) node.value.now = Date.now();
+        cache[LRU_LIST].unshiftNode(node);
       }
       return hit.value;
     }
   };
-  var isStale = (e, hit) => {
-    if (!hit || (!hit.maxAge && !e[MAX_AGE])) return false;
+  var isStale = (cache, hit) => {
+    if (!hit || (!hit.maxAge && !cache[MAX_AGE])) return false;
     let diff = Date.now() - hit.now;
-    return hit.maxAge ? diff > hit.maxAge : e[MAX_AGE] && diff > e[MAX_AGE];
+    return hit.maxAge ? diff > hit.maxAge : cache[MAX_AGE] && diff > cache[MAX_AGE];
   };
-  var trim = (e) => {
-    if (e[LENGTH] > e[MAX])
-      for (let walker = e[LRU_LIST].tail; e[LENGTH] > e[MAX] && walker !== null;) {
+  var trim = (cache) => {
+    if (cache[LENGTH] > cache[MAX])
+      for (let walker = cache[LRU_LIST].tail; cache[LENGTH] > cache[MAX] && walker !== null;) {
         let prev = walker.prev;
-        del(e, walker);
+        del(cache, walker);
         walker = prev;
       }
   };
-  var del = (e, node) => {
+  var del = (cache, node) => {
     if (node) {
       let hit = node.value;
-      if (e[DISPOSE]) e[DISPOSE](hit.key, hit.value);
-      e[LENGTH] -= hit.length;
-      e[CACHE].delete(hit.key);
-      e[LRU_LIST].removeNode(node);
+      if (cache[DISPOSE]) cache[DISPOSE](hit.key, hit.value);
+      cache[LENGTH] -= hit.length;
+      cache[CACHE].delete(hit.key);
+      cache[LRU_LIST].removeNode(node);
     }
   };
   class Entry {
@@ -246,13 +246,13 @@ var require_lru_cache = x(function (cjsExports, cjsModule) {
       this.maxAge = maxAge || 0;
     }
   }
-  var forEachStep = (e, fn, node, thisp) => {
+  var forEachStep = (cache, fn, node, thisp) => {
     let hit = node.value;
-    if (isStale(e, hit)) {
-      del(e, node);
-      if (!e[ALLOW_STALE]) hit = undefined;
+    if (isStale(cache, hit)) {
+      del(cache, node);
+      if (!cache[ALLOW_STALE]) hit = undefined;
     }
-    if (hit) fn.call(thisp, hit.value, hit.key, e);
+    if (hit) fn.call(thisp, hit.value, hit.key, cache);
   };
   cjsModule.exports = LRUCache;
 });

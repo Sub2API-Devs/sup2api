@@ -14,12 +14,16 @@ import { isJsonNestingWithin, countJsonMembers, sliceTopLevelValues } from "../.
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { jsonParse, jsonStringify } from "../../utils/slowOperations.js";
 import { createParser } from "../../../vendor/eventsource-parser/dist/index.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ma4kr1qn.js:416-438 placement
 /**
  * 按宿主保存的入站门状态。
  */
-var inboundDoorState = new HostScoped(() => ({}));
+var inboundDoorState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ma4kr1qn.js:416", () => {
+  inboundDoorState = new HostScoped(() => ({}));
+});
 //@ chunk-ma4kr1qn.js:438-473 placement
 /**
  * 取当前宿主的入站门状态。
@@ -51,107 +55,112 @@ var SHORT_ERROR_CHARS = 1024;
 function mcpInboundDoorOnFetch() {
   let { door } = getInboundDoorState();
   if (door === undefined) return;
-  let c = new Map();
-  let a = new Map();
-  let m = (id) =>
-    typeof id === "string" && id.length <= MAX_ID_CHARS && !c.has(id) && !a.has(id) ? Number(id) : id;
-  let f = (n) => {
-    c.delete(n);
-    a.delete(n);
+  let asked = new Map();
+  let answered = new Map();
+  let normalizeId = (id) =>
+    typeof id === "string" && id.length <= MAX_ID_CHARS && !asked.has(id) && !answered.has(id)
+      ? Number(id)
+      : id;
+  let forgetId = (id) => {
+    asked.delete(id);
+    answered.delete(id);
   };
-  let g = (
+  let makeSide = (
     url,
-    d,
-    u = {
+    mayBeError,
+    flags = {
       any: false,
       lastMayBeShortError: false,
     },
   ) => ({
-    read(e) {
-      let s = e.length;
-      u.lastMayBeShortError = d && !u.any && s <= SHORT_ERROR_CHARS;
-      u.any = true;
-      let r = door.mostMembers(undefined, url);
-      if (u.lastMayBeShortError) r = Math.max(r, SHORT_ERROR_MEMBERS);
-      let t = !isJsonNestingWithin(e, MAX_NESTING_PARSED);
-      let o = t ? undefined : countJsonMembers(e, r, Math.min(r, PROBE_MEMBERS));
-      let l;
-      let p = e;
-      if (o === undefined) {
-        let M = sliceTopLevelValues(e, ESSENTIAL_MESSAGE_KEYS);
-        let h = M?.has("method") ? undefined : M?.get("id");
-        let w =
-          h !== undefined && h.length <= MAX_ID_PARSE_CHARS && ID_START_RE.test(h)
-            ? tryParseJson(h)
+    read(text) {
+      let length = text.length;
+      flags.lastMayBeShortError = mayBeError && !flags.any && length <= SHORT_ERROR_CHARS;
+      flags.any = true;
+      let mostMembers = door.mostMembers(undefined, url);
+      if (flags.lastMayBeShortError) mostMembers = Math.max(mostMembers, SHORT_ERROR_MEMBERS);
+      let nestingTooDeep = !isJsonNestingWithin(text, MAX_NESTING_PARSED);
+      let size = nestingTooDeep
+        ? undefined
+        : countJsonMembers(text, mostMembers, Math.min(mostMembers, PROBE_MEMBERS));
+      let known;
+      let candidateText = text;
+      if (size === undefined) {
+        let topLevel = sliceTopLevelValues(text, ESSENTIAL_MESSAGE_KEYS);
+        let rawId = topLevel?.has("method") ? undefined : topLevel?.get("id");
+        let parsedId =
+          rawId !== undefined && rawId.length <= MAX_ID_PARSE_CHARS && ID_START_RE.test(rawId)
+            ? tryParseJson(rawId)
             : undefined;
-        let R = m(w);
-        let y = c.get(R) ?? a.get(R);
-        if (y !== undefined) {
-          l = {
-            id: w,
-            asked: y,
+        let idKey = normalizeId(parsedId);
+        let tracked = asked.get(idKey) ?? answered.get(idKey);
+        if (tracked !== undefined) {
+          known = {
+            id: parsedId,
+            asked: tracked,
           };
-          r = door.mostMembers(y, url);
-          o = t ? undefined : countJsonMembers(e, r);
-          if (o === undefined && !t) p = door.withoutWhatIsDropped?.(e, y, url) ?? e;
-          if (p !== e) {
-            t = !isJsonNestingWithin(p, MAX_NESTING_PARSED);
-            o = t ? undefined : countJsonMembers(p, r);
+          mostMembers = door.mostMembers(tracked, url);
+          size = nestingTooDeep ? undefined : countJsonMembers(text, mostMembers);
+          if (size === undefined && !nestingTooDeep)
+            candidateText = door.withoutWhatIsDropped?.(text, tracked, url) ?? text;
+          if (candidateText !== text) {
+            nestingTooDeep = !isJsonNestingWithin(candidateText, MAX_NESTING_PARSED);
+            size = nestingTooDeep ? undefined : countJsonMembers(candidateText, mostMembers);
           }
         }
       }
-      let A = o === undefined ? undefined : tryParseJson(p);
-      if (o !== undefined && A !== undefined)
-        return p === e
+      let parsed = size === undefined ? undefined : tryParseJson(candidateText);
+      if (size !== undefined && parsed !== undefined)
+        return candidateText === text
           ? {
-              sent: A,
+              sent: parsed,
               size: {
-                ...o,
-                length: s,
+                ...size,
+                length,
               },
             }
           : {
-              sent: A,
+              sent: parsed,
               size: {
-                ...o,
-                length: s,
+                ...size,
+                length,
                 lighter: true,
               },
-              readInstead: p,
+              readInstead: candidateText,
             };
-      if (o !== undefined && l === undefined) {
-        let M = {
-          ...o,
-          length: s,
+      if (size !== undefined && known === undefined) {
+        let sizeInfo = {
+          ...size,
+          length,
         };
-        if (u.lastMayBeShortError && M.members <= SHORT_ERROR_MEMBERS)
+        if (flags.lastMayBeShortError && sizeInfo.members <= SHORT_ERROR_MEMBERS)
           return {
             sent: undefined,
-            size: M,
+            size: sizeInfo,
           };
-        door.chargeUnasked(url, M.members);
-        return door.judge(e, undefined, url, M) === undefined
+        door.chargeUnasked(url, sizeInfo.members);
+        return door.judge(text, undefined, url, sizeInfo) === undefined
           ? {
               standIn: undefined,
             }
           : {
               sent: undefined,
-              size: M,
+              size: sizeInfo,
             };
       }
-      f(m(l?.id));
+      forgetId(normalizeId(known?.id));
       return {
         standIn: door.standInForUnparsed(
-          l,
+          known,
           url,
-          t
+          nestingTooDeep
             ? {
                 reason: "nesting",
               }
-            : o === undefined
+            : size === undefined
               ? {
                   reason: "members",
-                  most: r,
+                  most: mostMembers,
                 }
               : {
                   reason: "not_json",
@@ -162,59 +171,60 @@ function mcpInboundDoorOnFetch() {
     chargeUnasked({ members }) {
       door.chargeUnasked(url, members);
     },
-    judge(e, s, r) {
-      let t = isPlainObject(e) && e.method === undefined ? m(e.id) : undefined;
-      let o = c.get(t);
-      let l = o ?? a.get(t);
+    judge(message, size, ofAnArray) {
+      let idKey =
+        isPlainObject(message) && message.method === undefined ? normalizeId(message.id) : undefined;
+      let askedEntry = asked.get(idKey);
+      let known = askedEntry ?? answered.get(idKey);
       if (
-        u.lastMayBeShortError &&
-        s.members <= SHORT_ERROR_MEMBERS &&
-        !r &&
-        l === undefined &&
-        isPlainObject(e) &&
-        e.method === undefined &&
-        (e.result === undefined || e.result === null)
+        flags.lastMayBeShortError &&
+        size.members <= SHORT_ERROR_MEMBERS &&
+        !ofAnArray &&
+        known === undefined &&
+        isPlainObject(message) &&
+        message.method === undefined &&
+        (message.result === undefined || message.result === null)
       )
-        return e;
-      if (o !== undefined) {
-        c.delete(t);
-        if (a.size >= MAX_TRACKED_IDS) a.delete(a.keys().next().value);
-        a.set(t, {
-          ...o,
+        return message;
+      if (askedEntry !== undefined) {
+        asked.delete(idKey);
+        if (answered.size >= MAX_TRACKED_IDS) answered.delete(answered.keys().next().value);
+        answered.set(idKey, {
+          ...askedEntry,
           answeredBefore: true,
         });
       }
-      if ((l === undefined || l.answeredBefore) && !r) door.chargeUnasked(url, s.members);
-      let p = door.judge(
-        e,
-        l,
+      if ((known === undefined || known.answeredBefore) && !ofAnArray) door.chargeUnasked(url, size.members);
+      let judged = door.judge(
+        message,
+        known,
         url,
-        r
+        ofAnArray
           ? {
-              ...s,
+              ...size,
               ofAnArray: true,
             }
-          : s,
+          : size,
       );
-      if (p !== e) f(t);
-      return p;
+      if (judged !== message) forgetId(idKey);
+      return judged;
     },
   });
   return {
-    noteRequests(n) {
-      if (typeof n !== "string") return;
-      let d = tryParseJson(n);
-      let u = Array.isArray(d) ? d : [d];
-      for (let e of u) {
-        if (!isPlainObject(e)) continue;
-        let { id, method, params } = e;
+    noteRequests(body) {
+      if (typeof body !== "string") return;
+      let parsed = tryParseJson(body);
+      let messages = Array.isArray(parsed) ? parsed : [parsed];
+      for (let message of messages) {
+        if (!isPlainObject(message)) continue;
+        let { id, method, params } = message;
         if (id !== undefined && typeof method === "string") {
-          if (c.size >= MAX_TRACKED_IDS) c.delete(c.keys().next().value);
-          let o = method === "tools/call" && isPlainObject(params) ? params.name : undefined;
-          c.set(id, {
+          if (asked.size >= MAX_TRACKED_IDS) asked.delete(asked.keys().next().value);
+          let toolName = method === "tools/call" && isPlainObject(params) ? params.name : undefined;
+          asked.set(id, {
             method,
-            ...(typeof o === "string" && {
-              tool: o,
+            ...(typeof toolName === "string" && {
+              tool: toolName,
             }),
             ...(isPlainObject(params) &&
               params.cursor !== undefined && {
@@ -225,15 +235,15 @@ function mcpInboundDoorOnFetch() {
       }
     },
     judging({ url, isGet, ok, contentType }) {
-      let s = g(url, !ok && !isGet);
+      let side = makeSide(url, !ok && !isGet);
       let lower = (contentType ?? "").toLowerCase();
       if (lower.includes("text/event-stream") || (isGet && ok))
         return {
-          through: sseInboundDoor(s),
+          through: sseInboundDoor(side),
           contentType: "text/event-stream",
         };
       return {
-        through: jsonInboundDoor(s),
+        through: jsonInboundDoor(side),
         contentType: lower.includes("application/json") ? "application/json" : undefined,
       };
     },
@@ -243,22 +253,26 @@ function mcpInboundDoorOnFetch() {
 /**
  * 探测 JSON 成员数时的上限（8）。
  */
-var ESSENTIAL_MESSAGE_KEYS = new Set(["id", "method"]);
-var PROBE_MEMBERS = 8;
+var ESSENTIAL_MESSAGE_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var PROBE_MEMBERS;
+deferInit("chunk-ma4kr1qn.js:2985", () => {
+  ESSENTIAL_MESSAGE_KEYS = new Set(["id", "method"]);
+  PROBE_MEMBERS = 8;
+});
 //@ chunk-ma4kr1qn.js:3020-3066 placement
 /**
  * 去掉开头的 BOM。
  */
-function stripBom(i) {
-  return i.replace(/^\uFEFF+/, "");
+function stripBom(text) {
+  return text.replace(/^\uFEFF+/, "");
 }
 //@ chunk-ma4kr1qn.js:3066-3111 placement
 /**
  * 尝试解析 JSON，失败返回 undefined。
  */
-function tryParseJson(i) {
+function tryParseJson(text) {
   try {
-    return jsonParse(i);
+    return jsonParse(text);
   } catch {
     return;
   }
@@ -267,51 +281,56 @@ function tryParseJson(i) {
 /**
  * 把结果写入流（可指定替换内容）。
  */
-function enqueueBody(i, c, readInstead) {
-  for (let m of readInstead === undefined ? c : [new TextEncoder().encode(readInstead)]) i.enqueue(m);
+function enqueueBody(controller, chunks, readInstead) {
+  for (let chunk of readInstead === undefined ? chunks : [new TextEncoder().encode(readInstead)])
+    controller.enqueue(chunk);
 }
 //@ chunk-ma4kr1qn.js:3198-3878 placement
 /**
  * JSON 响应体的入站检查
  */
 function jsonInboundDoor({ read, chargeUnasked, judge }) {
-  let m = [];
+  let chunks = [];
   return new TransformStream({
-    transform(f) {
-      m.push(f);
+    transform(chunk) {
+      chunks.push(chunk);
     },
-    flush(f) {
-      let g = read(stripBom(new TextDecoder().decode(Buffer.concat(m))));
-      if ("standIn" in g) {
-        f.enqueue(new TextEncoder().encode(jsonStringify(g.standIn ?? null)));
+    flush(controller) {
+      let result = read(stripBom(new TextDecoder().decode(Buffer.concat(chunks))));
+      if ("standIn" in result) {
+        controller.enqueue(new TextEncoder().encode(jsonStringify(result.standIn ?? null)));
         return;
       }
-      let { sent, size, readInstead } = g;
+      let { sent, size, readInstead } = result;
       if (typeof sent !== "object" || sent === null) {
-        enqueueBody(f, m, readInstead);
+        enqueueBody(controller, chunks, readInstead);
         return;
       }
       if (Array.isArray(sent)) chargeUnasked(size);
       if (Array.isArray(sent) && sent.length > MAX_SENT_IDS) {
-        f.enqueue(new TextEncoder().encode("null"));
+        controller.enqueue(new TextEncoder().encode("null"));
         return;
       }
-      let e;
-      let s;
+      let judged;
+      let unchanged;
       if (Array.isArray(sent)) {
-        let r = sent;
-        let filtered = r.map((o) => judge(o, size, true)).filter((o) => o !== undefined);
-        e = filtered;
-        s = filtered.length === r.length && r.every((o, l) => o === filtered[l]);
+        let messages = sent;
+        let filtered = messages
+          .map((message) => judge(message, size, true))
+          .filter((judgedMessage) => judgedMessage !== undefined);
+        judged = filtered;
+        unchanged =
+          filtered.length === messages.length &&
+          messages.every((message, index) => message === filtered[index]);
       } else {
-        e = judge(sent, size, false);
-        s = e === sent;
+        judged = judge(sent, size, false);
+        unchanged = judged === sent;
       }
-      if (s) {
-        enqueueBody(f, m, readInstead);
+      if (unchanged) {
+        enqueueBody(controller, chunks, readInstead);
         return;
       }
-      f.enqueue(new TextEncoder().encode(jsonStringify(e ?? null)));
+      controller.enqueue(new TextEncoder().encode(jsonStringify(judged ?? null)));
     },
   });
 }
@@ -322,42 +341,47 @@ function jsonInboundDoor({ read, chargeUnasked, judge }) {
 function sseInboundDoor({ read, judge }) {
   let textDecoder = new TextDecoder();
   let textEncoder = new TextEncoder();
-  let f = "";
+  let output = "";
   let parser = createParser({
-    onRetry(d) {
-      f += `retry: ${d}
+    onRetry(retryMs) {
+      output += `retry: ${retryMs}
 
 `;
     },
-    onEvent({ id, event, data: e }) {
-      let s = event;
-      let r = e;
-      if (e !== "" && (s === undefined || s === "message")) {
-        let t = read(stripBom(e));
-        let sent = "standIn" in t ? undefined : t.sent;
-        let l = "standIn" in t ? t.standIn : sent === undefined ? undefined : judge(sent, t.size, false);
-        if (!("standIn" in t) && sent === undefined) r = "!";
-        else if (l === undefined) {
-          s = "dropped";
-          r = "";
-        } else if (l !== sent) r = jsonStringify(l);
+    onEvent({ id, event, data }) {
+      let eventName = event;
+      let payload = data;
+      if (data !== "" && (eventName === undefined || eventName === "message")) {
+        let result = read(stripBom(data));
+        let sent = "standIn" in result ? undefined : result.sent;
+        let judged =
+          "standIn" in result
+            ? result.standIn
+            : sent === undefined
+              ? undefined
+              : judge(sent, result.size, false);
+        if (!("standIn" in result) && sent === undefined) payload = "!";
+        else if (judged === undefined) {
+          eventName = "dropped";
+          payload = "";
+        } else if (judged !== sent) payload = jsonStringify(judged);
         else
-          r = (("standIn" in t ? undefined : t.readInstead) ?? e).replaceAll(
+          payload = (("standIn" in result ? undefined : result.readInstead) ?? data).replaceAll(
             `
 `,
             " ",
           );
-      } else if (e.length > MAX_BUFFER_CHARS) r = "";
-      f +=
-        (s === undefined
+      } else if (data.length > MAX_BUFFER_CHARS) payload = "";
+      output +=
+        (eventName === undefined
           ? ""
-          : `event: ${s}
+          : `event: ${eventName}
 `) +
         (id === undefined
           ? ""
           : `id: ${id}
 `) +
-        r
+        payload
           .split(
             `
 `,
@@ -371,24 +395,24 @@ function sseInboundDoor({ read, judge }) {
 `;
     },
   });
-  let n = (d) => {
-    if (f !== "") {
-      d.enqueue(textEncoder.encode(f));
-      f = "";
+  let flushBuffer = (controller) => {
+    if (output !== "") {
+      controller.enqueue(textEncoder.encode(output));
+      output = "";
     }
   };
   return new TransformStream({
-    transform(d, u) {
+    transform(chunk, controller) {
       parser.feed(
-        textDecoder.decode(d, {
+        textDecoder.decode(chunk, {
           stream: true,
         }),
       );
-      n(u);
+      flushBuffer(controller);
     },
-    flush(d) {
+    flush(controller) {
       parser.feed(textDecoder.decode());
-      n(d);
+      flushBuffer(controller);
     },
   });
 }

@@ -5,14 +5,14 @@
  * pieces: chunk-h6b7mazd.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_get_intrinsic } from "../get-intrinsic/index.js";
 import { require_shams_2 } from "../has-tostringtag/shams.js";
 import { require_hasown } from "../hasown/index.js";
 import { require_es_object_atoms_7 } from "../es-object-atoms/index.js";
 
 //@ chunk-h6b7mazd.js:20651-21208 cjs-fingerprint
-var require_es_set_tostringtag = x(function (cjsExports, cjsModule) {
+var require_es_set_tostringtag = __commonJS(function (cjsExports, cjsModule) {
   var GetIntrinsic = require_get_intrinsic();
   var $defineProperty = GetIntrinsic("%Object.defineProperty%", true);
   var hasToStringTag = require_shams_2()();

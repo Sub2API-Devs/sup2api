@@ -15,14 +15,14 @@ import { readStringListAt } from "../desktopSettings.js";
 /**
  * 托管 env 中任一 OTLP 协议为 http/json 时用 http/json，否则 http/protobuf。
  */
-function otlpProtocol(settings) {
-  let t = envObject(settings);
+function otlpProtocol(bootstrap) {
+  let vars = envObject(bootstrap);
   return [
     "OTEL_EXPORTER_OTLP_PROTOCOL",
     "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL",
     "OTEL_EXPORTER_OTLP_LOGS_PROTOCOL",
     "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL",
-  ].some((o) => t[o] === "http/json")
+  ].some((name) => vars[name] === "http/json")
     ? "http/json"
     : "http/protobuf";
 }
@@ -30,8 +30,8 @@ function otlpProtocol(settings) {
 /**
  * 由 sandbox.network.allowedDomains 派生 coworkEgressAllowedHosts。
  */
-function coworkEgressHosts(settings) {
-  let stringListAt = readStringListAt(settings, ["sandbox", "network", "allowedDomains"]);
+function coworkEgressHosts(source) {
+  let stringListAt = readStringListAt(source, ["sandbox", "network", "allowedDomains"]);
   return stringListAt !== undefined && stringListAt.length > 0
     ? {
         coworkEgressAllowedHosts: stringListAt,

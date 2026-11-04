@@ -9,6 +9,13 @@
  * attribution: fingerprint 8, placement 7
  */
 import { createHash } from "crypto";
+import { sortKeysDeep, isGateAOn } from "../../utils/settings/settingsSourceTrust.js";
+import { jsonStringify } from "../../utils/slowOperations.js";
+import {
+  isRemoteBrowserEnabled,
+  remoteBrowserEnabledState,
+  remoteBrowserAllowedState,
+} from "../mcp/remoteBrowserServer.js";
 import { identity as identity_2 } from "../../utils/identity.js";
 import { DEFAULT_ORG_CONFIG_REQUIRED_FLAG } from "./orgConfigRequired.js";
 import { parseRelayFlag, keepIfFreshOrgConfig } from "../../utils/messageProvenance.js";
@@ -58,7 +65,6 @@ import {
   noteWifAccountAtWire,
   getPolicyPrincipal,
 } from "./policyState.js";
-import { isGateAOn, sortKeysDeep } from "../../utils/settings/settingsSourceTrust.js";
 import { tokenDigest } from "./cacheStamp.js";
 import {
   rowPrincipalStamp,
@@ -74,19 +80,35 @@ import { TENGU_DUNWICH_BELL } from "../../components/FeedbackSurvey/useMemorySur
 import { isAutoMemoryEnabled } from "../../memdir/paths.js";
 import { shouldSkipFeedbackSurvey } from "../../utils/hostEnvironment.js";
 import { env } from "../../utils/env.js";
-import {
-  isRemoteBrowserEnabled,
-  remoteBrowserEnabledState,
-  remoteBrowserAllowedState,
-} from "../mcp/remoteBrowserServer.js";
 import { isPlainObject } from "../../utils/objectUtils.js";
-import { Uo } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import {
   RESTRICTION_KEYS,
   neutralRestrictionSchema,
 } from "../../utils/permissions/permissionContextSerialization.js";
-import { jsonStringify } from "../../utils/slowOperations.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-dcmhvw5a.js:173545-173634 fingerprint = computeChecksum (1)
+function computeChecksum(restrictions) {
+  let sorted = sortKeysDeep(restrictions);
+  let normalized = jsonStringify(sorted);
+  return `sha256:${createHash("sha256").update(normalized).digest("hex")}`;
+}
+//@ chunk-1wpnxx5r.js:3119-3164 fingerprint = isPolicyAllowed (0.71)
+/**
+ * 按策略限制判断某项功能是否允许（缓存命中或失败开放）。
+ */
+function isPolicyAllowed() {
+  return isRemoteBrowserEnabled() || remoteBrowserEnabledState.on || remoteBrowserAllowedState.allowed;
+}
+//@ chunk-yxnffbzs.js:2475-2672 fingerprint = getPolicyLimitsEndpoint (0.467)
+/**
+ * 策略禁用与会话禁用两种原因文案（供各功能共用）。
+ */
+var POLICY_LIMITS_PATH = "/api/claude_code/policy_limits";
+var DISABLED_BY_POLICY_REASON = "disabled by your organization's policy";
+var DISABLED_FOR_SESSION_REASON =
+  "disabled for the rest of this session because an organization with a restricted policy was signed in earlier";
 //@ chunk-aepeg2w5.js:626183-626442 placement
 class ReaderRegistry {
   reader = null;
@@ -99,12 +121,12 @@ class ReaderRegistry {
     this.lastProblem = null;
     return reader_2;
   }
-  report(e, n) {
-    let r = `${e}:${n}`;
-    if (this.lastProblem === r) return;
-    this.lastProblem = r;
+  report(kind, detail) {
+    let key = `${kind}:${detail}`;
+    if (this.lastProblem === key) return;
+    this.lastProblem = key;
     try {
-      this.reporter?.(e, n);
+      this.reporter?.(kind, detail);
     } catch {}
   }
 }
@@ -112,24 +134,28 @@ class ReaderRegistry {
 /**
  * org-config 开关计划的单项缓存与读取器单例。
  */
-var orgConfigPlanCache = identity_2(
-  {
-    record: undefined,
-    plan: null,
-  },
-  (e) => {
-    e.record = undefined;
-    e.plan = null;
-  },
-);
-var orgConfigGateReaders = new ReaderRegistry();
+var orgConfigPlanCache; // deferred: uses ReaderRegistry of its import cycle while loading; runs once the cycle is complete
+var orgConfigGateReaders;
+deferInit("chunk-aepeg2w5.js:626442", () => {
+  orgConfigPlanCache = identity_2(
+    {
+      record: undefined,
+      plan: null,
+    },
+    (store) => {
+      store.record = undefined;
+      store.plan = null;
+    },
+  );
+  orgConfigGateReaders = new ReaderRegistry();
+});
 //@ chunk-aepeg2w5.js:626524-626587 placement = AgentsJsonSchema (0.484)
 /**
  * 注册 org-config 开关读取器与问题报告器（与代理无关，切分误归）。
  */
-function registerGateReader(e, n = null) {
+function registerGateReader(reader, fallback = null) {
   orgConfigPlanCache.record = undefined;
-  return orgConfigGateReaders.register(e, n);
+  return orgConfigGateReaders.register(reader, fallback);
 }
 //@ chunk-aepeg2w5.js:626587-626804 placement
 /**
@@ -138,14 +164,14 @@ function registerGateReader(e, n = null) {
 function readGateFlag() {
   let reader = orgConfigGateReaders.reader;
   if (!reader) return DEFAULT_ORG_CONFIG_REQUIRED_FLAG;
-  let n;
+  let rawFlag;
   try {
-    n = reader();
+    rawFlag = reader();
   } catch (error) {
     orgConfigGateReaders.report("unreadable", error instanceof Error ? error.name : typeof error);
     return DEFAULT_ORG_CONFIG_REQUIRED_FLAG;
   }
-  let { flag, problem } = parseRelayFlag(n);
+  let { flag, problem } = parseRelayFlag(rawFlag);
   if (problem !== undefined) orgConfigGateReaders.report("malformed", problem);
   return flag;
 }
@@ -160,15 +186,17 @@ function isPolicyGraceEnabled() {
 /**
  * 按开关计算组织配置计划（按记录键缓存）。
  */
-function resolveOrgConfigPlan(e, n, r = Date.now()) {
-  if (e === null || n === undefined) return e;
-  let s = `${e}:${n}`;
-  if (orgConfigPlanCache.record === s) return orgConfigPlanCache.plan;
+function resolveOrgConfigPlan(plan, verifiedAtMs, nowMs = Date.now()) {
+  if (plan === null || verifiedAtMs === undefined) return plan;
+  let cacheKey = `${plan}:${verifiedAtMs}`;
+  if (orgConfigPlanCache.record === cacheKey) return orgConfigPlanCache.plan;
   let gateFlag = readGateFlag();
-  let y = gateFlag.enabled ? keepIfFreshOrgConfig(e, n, gateFlag.graceTtlHours, r) : e;
-  orgConfigPlanCache.record = s;
-  orgConfigPlanCache.plan = y;
-  return y;
+  let resolved = gateFlag.enabled
+    ? keepIfFreshOrgConfig(plan, verifiedAtMs, gateFlag.graceTtlHours, nowMs)
+    : plan;
+  orgConfigPlanCache.record = cacheKey;
+  orgConfigPlanCache.plan = resolved;
+  return resolved;
 }
 //@ chunk-aepeg2w5.js:627035-627052 placement
 var REVALIDATE_IN_FULL_AFTER_MS = 21600000;
@@ -201,42 +229,43 @@ function getAuthHeaders_2(endpoint) {
 }
 //@ chunk-7t4fmt2f.js:16761-17340 fingerprint = fetchWithRetry (0.431)
 async function fetchWithRetry(
-  e,
-  r,
+  etag,
+  cachePath,
   credentials,
   storageV5,
   signal,
-  p,
+  onAttemptResult,
   oauthRefreshLatch,
-  y = FETCH_MAX_RETRIES,
-  { hedge: E = false, prefetched: R } = {},
+  maxRetries = FETCH_MAX_RETRIES,
+  { hedge = false, prefetched } = {},
 ) {
   let lastResult = null;
-  let K = (signal, A = false) =>
-    fetchPolicyLimits(e, r, credentials, storageV5, oauthRefreshLatch, signal, A);
-  let b = false;
-  for (let attempt = 1; attempt <= y + 1; attempt++) {
-    let A = R ?? abortableAttempt(K);
-    R = undefined;
-    if (E && attempt === 1) {
-      let G = await hedgedRequest({
-        first: A,
-        send: (P) => K(P, true),
-        isAnswer: (P, M) =>
-          P.success ||
-          (P.skipRetry === true && !(M && P.errorCode === "auth_failed" && P.httpStatus === 401)),
+  let sendRequest = (signal, forceRefresh = false) =>
+    fetchPolicyLimits(etag, cachePath, credentials, storageV5, oauthRefreshLatch, signal, forceRefresh);
+  let hedged = false;
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+    let pendingAttempt = prefetched ?? abortableAttempt(sendRequest);
+    prefetched = undefined;
+    if (hedge && attempt === 1) {
+      let hedgedResult = await hedgedRequest({
+        first: pendingAttempt,
+        send: (signal) => sendRequest(signal, true),
+        isAnswer: (attemptResult, isHedged) =>
+          attemptResult.success ||
+          (attemptResult.skipRetry === true &&
+            !(isHedged && attemptResult.errorCode === "auth_failed" && attemptResult.httpStatus === 401)),
         stillWanted: isManagedConfigPrefetchOn,
-        retryFollows: y > 0,
+        retryFollows: maxRetries > 0,
       });
-      lastResult = G.result;
-      b ||= G.hedged;
-    } else lastResult = await A.attempt;
+      lastResult = hedgedResult.result;
+      hedged ||= hedgedResult.hedged;
+    } else lastResult = await pendingAttempt.attempt;
     lastResult.attempts = attempt;
-    if (b) lastResult.hedged = true;
-    if (lastResult.success || lastResult.skipRetry || attempt > y) return lastResult;
-    p(lastResult);
+    if (hedged) lastResult.hedged = true;
+    if (lastResult.success || lastResult.skipRetry || attempt > maxRetries) return lastResult;
+    onAttemptResult(lastResult);
     let delayMs = getRetryDelay(attempt);
-    logForDebugging(`Policy limits: Retry ${attempt}/${y} after ${delayMs}ms`);
+    logForDebugging(`Policy limits: Retry ${attempt}/${maxRetries} after ${delayMs}ms`);
     await sleep(delayMs, signal);
     if (signal?.aborted) return lastResult;
   }
@@ -246,24 +275,32 @@ async function fetchWithRetry(
 /**
  * 请求 /api/claude_code/policy_limits（Bearer），支持 ETag/304，失败分类为 auth_failed/network_error/timeout 等，结果写入会话缓存与 policy-limits.json。
  */
-async function fetchPolicyLimits(e, r, n, o, u, signal, h = false) {
-  let y;
-  let E;
-  let R = false;
-  let S = 0;
-  let K = oauthRefreshLatchStamp(u.recoveries);
+async function fetchPolicyLimits(
+  etag,
+  cachePath,
+  credentials,
+  storageV5,
+  oauthRefreshLatch,
+  signal,
+  prefetched = false,
+) {
+  let refreshOutcome;
+  let forcedRefresh;
+  let sentStoredLogin = false;
+  let attemptCount = 0;
+  let latchStamp = oauthRefreshLatchStamp(oauthRefreshLatch.recoveries);
   let authHeaders = getPolicyLimitsTunnelSocket();
-  let w = null;
-  let A = null;
-  let O = false;
-  let G = null;
+  let principalKeyAtWire = null;
+  let askedKeyAtWire = null;
+  let principalMovedAtWire = false;
+  let sentEnvBearerDigest = null;
   let stampAtWire;
   try {
     let endpoint = policyLimitsEndpointUrl();
-    let q = {};
-    let T = async () => {
-      await noteStoredLoginAccountAtWire(o, n);
-      let U = currentPolicyCacheKey();
+    let headers = {};
+    let resolveAuthHeaders = async () => {
+      await noteStoredLoginAccountAtWire(storageV5, credentials);
+      let currentCacheKey = currentPolicyCacheKey();
       let authHeaders = await getAuthHeadersAsync(
         isGateAOn()
           ? {}
@@ -271,80 +308,83 @@ async function fetchPolicyLimits(e, r, n, o, u, signal, h = false) {
               envBearerFallbackFor: endpoint,
             },
       );
-      let te = effectiveAuthTokenEnv();
-      G = te !== undefined && authHeaders.headers.Authorization === `Bearer ${te}` ? tokenDigest(te) : null;
+      let envToken = effectiveAuthTokenEnv();
+      sentEnvBearerDigest =
+        envToken !== undefined && authHeaders.headers.Authorization === `Bearer ${envToken}`
+          ? tokenDigest(envToken)
+          : null;
       if (authHeaders.error) {
-        O = true;
-        w = null;
-        A = null;
+        principalMovedAtWire = true;
+        principalKeyAtWire = null;
+        askedKeyAtWire = null;
         return authHeaders;
       }
       noteWifAccountAtWire();
       let policyPrincipal = getPolicyPrincipal();
       stampAtWire = rowPrincipalStamp();
-      let s = policyPrincipal === null ? null : policyCacheKey(policyPrincipal);
-      O = U !== s;
-      w = O ? null : s;
-      A =
-        w !== null && isClassifiedPrincipal(policyPrincipal)
+      let principalCacheKeyNow = policyPrincipal === null ? null : policyCacheKey(policyPrincipal);
+      principalMovedAtWire = currentCacheKey !== principalCacheKeyNow;
+      principalKeyAtWire = principalMovedAtWire ? null : principalCacheKeyNow;
+      askedKeyAtWire =
+        principalKeyAtWire !== null && isClassifiedPrincipal(policyPrincipal)
           ? principalCacheKeyWithBearer(policyPrincipal)
-          : G !== null && isHostManagedProviderAuth()
-            ? envBearerCacheKey(G)
+          : sentEnvBearerDigest !== null && isHostManagedProviderAuth()
+            ? envBearerCacheKey(sentEnvBearerDigest)
             : null;
       return authHeaders;
     };
     if (!authHeaders) {
-      y = await checkAndRefreshOAuthTokenIfNeededWithOutcome({
-        credentials: n,
+      refreshOutcome = await checkAndRefreshOAuthTokenIfNeededWithOutcome({
+        credentials,
       });
-      let U = await T();
-      if (U.error)
+      let authResult = await resolveAuthHeaders();
+      if (authResult.error)
         return {
           success: false,
           error: "Authentication required for policy limits",
           errorCode: "auth_failed",
-          authUnavailableReason: U.reasonCode,
-          tokenRefreshOutcome: y,
-          skipRetry: !isAuthFailureWorthRetrying(y, undefined),
+          authUnavailableReason: authResult.reasonCode,
+          tokenRefreshOutcome: refreshOutcome,
+          skipRetry: !isAuthFailureWorthRetrying(refreshOutcome, undefined),
         };
-      q = U.headers;
+      headers = authResult.headers;
       let claudeAIOAuthTokens = getClaudeAIOAuthTokens();
-      R = Boolean(
+      sentStoredLogin = Boolean(
         claudeAIOAuthTokens?.accessToken &&
         claudeAIOAuthTokens.refreshToken &&
-        q.Authorization === `Bearer ${claudeAIOAuthTokens.accessToken}`,
+        headers.Authorization === `Bearer ${claudeAIOAuthTokens.accessToken}`,
       );
     }
-    let oe = revalidationChecksumForPolicy(e, r);
-    let se = async () => {
-      S++;
-      if (S > 1) K = oauthRefreshLatchStamp(u.recoveries);
-      let authHeaders_2 = S === 1 || authHeaders ? q : (await T()).headers;
+    let ifNoneMatch = revalidationChecksumForPolicy(etag, cachePath);
+    let sendAttempt = async () => {
+      attemptCount++;
+      if (attemptCount > 1) latchStamp = oauthRefreshLatchStamp(oauthRefreshLatch.recoveries);
+      let authHeaders_2 = attemptCount === 1 || authHeaders ? headers : (await resolveAuthHeaders()).headers;
       return fetchPolicyLimitsResponse({
         endpoint,
         authHeaders: authHeaders_2,
-        ifNoneMatch: oe,
+        ifNoneMatch,
         timeoutMs: POLICY_REQUEST_TIMEOUT_MS,
         socketPath: authHeaders,
         signal,
       });
     };
-    let I = authHeaders
-      ? await se()
-      : await withOAuth401Retry(se, {
-          credentials: n,
+    let response = authHeaders
+      ? await sendAttempt()
+      : await withOAuth401Retry(sendAttempt, {
+          credentials,
           gateToSessionOAuthCredential: true,
-          oauthRefreshLatch: u,
+          oauthRefreshLatch,
           signal,
           onForcedRefreshOutcome: (status) => {
-            E = {
+            forcedRefresh = {
               outcome: status,
             };
-            u.lastOutcome = status;
+            oauthRefreshLatch.lastOutcome = status;
           },
         });
-    if (I.kind === "not_modified") {
-      if (!oe || !e) {
+    if (response.kind === "not_modified") {
+      if (!ifNoneMatch || !etag) {
         logForDebugging("Policy limits: 304 to an unconditional request");
         return {
           success: false,
@@ -352,14 +392,14 @@ async function fetchPolicyLimits(e, r, n, o, u, signal, h = false) {
           errorCode: "request_failed",
           httpStatus: 304,
           skipRetry: true,
-          principalKeyAtWire: w,
-          askedKeyAtWire: A,
-          principalMovedAtWire: O,
+          principalKeyAtWire,
+          askedKeyAtWire,
+          principalMovedAtWire,
           stampAtWire,
-          retriedAfter401: S > 1,
+          retriedAfter401: attemptCount > 1,
         };
       }
-      if (!I.requestIdPresent && isPolicyGraceEnabled()) {
+      if (!response.requestIdPresent && isPolicyGraceEnabled()) {
         logForDebugging(
           "Policy limits: 304 without Anthropic's request id \u2014 an intermediary's answer, keeping cached restrictions",
         );
@@ -370,113 +410,122 @@ async function fetchPolicyLimits(e, r, n, o, u, signal, h = false) {
           httpStatus: 304,
           skipRetry: true,
           requestIdPresent: false,
-          principalKeyAtWire: w,
-          askedKeyAtWire: A,
-          principalMovedAtWire: O,
+          principalKeyAtWire,
+          askedKeyAtWire,
+          principalMovedAtWire,
           stampAtWire,
-          retriedAfter401: S > 1,
+          retriedAfter401: attemptCount > 1,
         };
       }
-      if (S === 1 && !h) restoreOAuthRefreshLatch(u, K);
+      if (attemptCount === 1 && !prefetched) restoreOAuthRefreshLatch(oauthRefreshLatch, latchStamp);
       logForDebugging("Policy limits: Using cached restrictions (304)");
       return {
         success: true,
         response: null,
-        etag: e,
-        signature: I.signature,
+        etag,
+        signature: response.signature,
         requestIdPresent: true,
-        principalKeyAtWire: w,
-        askedKeyAtWire: A,
-        principalMovedAtWire: O,
+        principalKeyAtWire,
+        askedKeyAtWire,
+        principalMovedAtWire,
         stampAtWire,
-        retriedAfter401: S > 1,
-        ...(G !== null &&
-          S === 1 && {
-            sentEnvBearerDigest: G,
+        retriedAfter401: attemptCount > 1,
+        ...(sentEnvBearerDigest !== null &&
+          attemptCount === 1 && {
+            sentEnvBearerDigest,
           }),
-        ...(I.tunnelCredentialEpoch !== undefined && {
-          tunnelCredentialEpoch: I.tunnelCredentialEpoch,
+        ...(response.tunnelCredentialEpoch !== undefined && {
+          tunnelCredentialEpoch: response.tunnelCredentialEpoch,
         }),
       };
     }
-    let X = projectPolicyLimitsBody(I.data);
-    if (!X.success) {
-      let U = responseShapeField(X.error.issues[0]?.path[0]);
-      let V = contentKindOf(I.contentType);
-      logForDebugging(`Policy limits: Invalid response format - field=${U} ct=${V} - ${X.error.message}`);
+    let projected = projectPolicyLimitsBody(response.data);
+    if (!projected.success) {
+      let errorField = responseShapeField(projected.error.issues[0]?.path[0]);
+      let contentType = contentKindOf(response.contentType);
+      logForDebugging(
+        `Policy limits: Invalid response format - field=${errorField} ct=${contentType} - ${projected.error.message}`,
+      );
       return {
         success: false,
         error: "Invalid policy limits format",
         errorCode: "parse_failed",
-        parseErrorField: U,
-        parseErrorContentType: V,
-        responseContentType: V,
-        requestIdPresent: I.requestIdPresent,
+        parseErrorField: errorField,
+        parseErrorContentType: contentType,
+        responseContentType: contentType,
+        requestIdPresent: response.requestIdPresent,
         skipRetry: isShimmyingStardustGateOn(),
-        principalKeyAtWire: w,
-        askedKeyAtWire: A,
-        principalMovedAtWire: O,
+        principalKeyAtWire,
+        askedKeyAtWire,
+        principalMovedAtWire,
         stampAtWire,
-        retriedAfter401: S > 1,
+        retriedAfter401: attemptCount > 1,
       };
     }
-    restoreOAuthRefreshLatch(u, K);
-    let j = countDroppedComplianceTaints(I.data);
-    if (j > 0) {
-      logForDebugging(`Policy limits: Fetched with ${j} malformed compliance_taints element(s) dropped`);
+    restoreOAuthRefreshLatch(oauthRefreshLatch, latchStamp);
+    let droppedTaints = countDroppedComplianceTaints(response.data);
+    if (droppedTaints > 0) {
+      logForDebugging(
+        `Policy limits: Fetched with ${droppedTaints} malformed compliance_taints element(s) dropped`,
+      );
       return {
         success: true,
-        response: X.data,
+        response: projected.data,
         parseErrorField: "compliance_taints",
         lossyComplianceTaints: true,
-        signature: I.signature,
-        principalKeyAtWire: w,
-        askedKeyAtWire: A,
-        principalMovedAtWire: O,
+        signature: response.signature,
+        principalKeyAtWire,
+        askedKeyAtWire,
+        principalMovedAtWire,
         stampAtWire,
-        retriedAfter401: S > 1,
-        ...(G !== null && {
-          sentEnvBearerDigest: G,
+        retriedAfter401: attemptCount > 1,
+        ...(sentEnvBearerDigest !== null && {
+          sentEnvBearerDigest,
         }),
-        ...(I.tunnelCredentialEpoch !== undefined && {
-          tunnelCredentialEpoch: I.tunnelCredentialEpoch,
+        ...(response.tunnelCredentialEpoch !== undefined && {
+          tunnelCredentialEpoch: response.tunnelCredentialEpoch,
         }),
       };
     }
     logForDebugging("Policy limits: Fetched successfully");
     return {
       success: true,
-      response: X.data,
-      signature: I.signature,
-      principalKeyAtWire: w,
-      askedKeyAtWire: A,
-      principalMovedAtWire: O,
+      response: projected.data,
+      signature: response.signature,
+      principalKeyAtWire,
+      askedKeyAtWire,
+      principalMovedAtWire,
       stampAtWire,
-      retriedAfter401: S > 1,
-      ...(G !== null && {
-        sentEnvBearerDigest: G,
+      retriedAfter401: attemptCount > 1,
+      ...(sentEnvBearerDigest !== null && {
+        sentEnvBearerDigest,
       }),
-      ...(I.tunnelCredentialEpoch !== undefined && {
-        tunnelCredentialEpoch: I.tunnelCredentialEpoch,
+      ...(response.tunnelCredentialEpoch !== undefined && {
+        tunnelCredentialEpoch: response.tunnelCredentialEpoch,
       }),
     };
   } catch (error) {
     let { kind, status, message } = classifyAxiosError(error);
-    let se = {
+    let serverFields = {
       ...extractServerErrorFields(error),
       ...responseHeaderFactsOf(error),
     };
-    let forcedRefreshOutcome = E !== undefined ? E.outcome : R && u.attempted ? u.lastOutcome : undefined;
-    let X = isTransientNetworkError(error);
-    let j = {
-      ...(S > 0 && {
-        principalKeyAtWire: w,
-        askedKeyAtWire: A,
-        principalMovedAtWire: O,
+    let forcedRefreshOutcome =
+      forcedRefresh !== undefined
+        ? forcedRefresh.outcome
+        : sentStoredLogin && oauthRefreshLatch.attempted
+          ? oauthRefreshLatch.lastOutcome
+          : undefined;
+    let tunnelEpoch = isTransientNetworkError(error);
+    let wireFields = {
+      ...(attemptCount > 0 && {
+        principalKeyAtWire,
+        askedKeyAtWire,
+        principalMovedAtWire,
         stampAtWire,
       }),
-      ...(X !== undefined && {
-        tunnelCredentialEpoch: X,
+      ...(tunnelEpoch !== undefined && {
+        tunnelCredentialEpoch: tunnelEpoch,
       }),
     };
     switch (
@@ -491,13 +540,17 @@ async function fetchPolicyLimits(e, r, n, o, u, signal, h = false) {
           error: "Not authorized for policy limits",
           errorCode: "auth_failed",
           httpStatus: status,
-          tokenRefreshOutcome: y,
-          skipRetry: !(status === 401 && R && isAuthFailureWorthRetrying(y, E)),
-          retriedAfter401: S > 1,
+          tokenRefreshOutcome: refreshOutcome,
+          skipRetry: !(
+            status === 401 &&
+            sentStoredLogin &&
+            isAuthFailureWorthRetrying(refreshOutcome, forcedRefresh)
+          ),
+          retriedAfter401: attemptCount > 1,
           forcedRefreshOutcome,
-          sentStoredLogin: R,
-          ...se,
-          ...j,
+          sentStoredLogin,
+          ...serverFields,
+          ...wireFields,
         };
       case "timeout":
         return {
@@ -505,8 +558,8 @@ async function fetchPolicyLimits(e, r, n, o, u, signal, h = false) {
           error: "Policy limits request timeout",
           errorCode: "timeout",
           errno: fetchErrorCode(error),
-          retriedAfter401: S > 1,
-          ...j,
+          retriedAfter401: attemptCount > 1,
+          ...wireFields,
         };
       case "network":
         return {
@@ -514,8 +567,8 @@ async function fetchPolicyLimits(e, r, n, o, u, signal, h = false) {
           error: "Cannot connect to server",
           errorCode: "network_error",
           errno: fetchErrorCode(error),
-          retriedAfter401: S > 1,
-          ...j,
+          retriedAfter401: attemptCount > 1,
+          ...wireFields,
         };
       default:
         return {
@@ -524,15 +577,15 @@ async function fetchPolicyLimits(e, r, n, o, u, signal, h = false) {
           errorCode: "request_failed",
           httpStatus: status,
           skipRetry: isNonRetryableClientError(status),
-          retriedAfter401: S > 1,
+          retriedAfter401: attemptCount > 1,
           forcedRefreshOutcome,
           ...(kind === "http" &&
             status === undefined && {
               noResponse: true,
               errno: fetchErrorCode(error),
             }),
-          ...se,
-          ...j,
+          ...serverFields,
+          ...wireFields,
         };
     }
   }
@@ -547,37 +600,16 @@ function isFeedbackSurveyAllowed() {
     !env.CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY
   );
 }
-//@ chunk-1wpnxx5r.js:3119-3164 fingerprint = isPolicyAllowed (0.71)
-/**
- * 按策略限制判断某项功能是否允许（缓存命中或失败开放）。
- */
-function isPolicyAllowed() {
-  return isRemoteBrowserEnabled() || remoteBrowserEnabledState.on || remoteBrowserAllowedState.allowed;
-}
 //@ chunk-2xp8150w.js:2601-2725 fingerprint = loadCachedRestrictions (0.611)
 function loadCachedRestrictions(permissionContext) {
   let restrictions = isPlainObject(permissionContext) ? permissionContext.restrictions : undefined;
   return (
     isPlainObject(restrictions) &&
-    Object.values(Uo(restrictions, RESTRICTION_KEYS)).some(
-      (t) => !neutralRestrictionSchema().safeParse(t).success,
+    Object.values(omitAlias(restrictions, RESTRICTION_KEYS)).some(
+      (restriction) => !neutralRestrictionSchema().safeParse(restriction).success,
     )
   );
 }
-//@ chunk-dcmhvw5a.js:173545-173634 fingerprint = computeChecksum (1)
-function computeChecksum(restrictions) {
-  let sorted = sortKeysDeep(restrictions);
-  let normalized = jsonStringify(sorted);
-  return `sha256:${createHash("sha256").update(normalized).digest("hex")}`;
-}
-//@ chunk-yxnffbzs.js:2475-2672 fingerprint = getPolicyLimitsEndpoint (0.467)
-/**
- * 策略禁用与会话禁用两种原因文案（供各功能共用）。
- */
-var POLICY_LIMITS_PATH = "/api/claude_code/policy_limits";
-var DISABLED_BY_POLICY_REASON = "disabled by your organization's policy";
-var DISABLED_FOR_SESSION_REASON =
-  "disabled for the rest of this session because an organization with a restricted policy was signed in earlier";
 export {
   isFeedbackSurveyAllowed,
   isPolicyAllowed,

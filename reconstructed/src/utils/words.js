@@ -785,9 +785,9 @@ var PASTED_PLACEHOLDER_PATTERN =
 /**
  * 取文本前 N 个词（去掉粘贴/图片占位符）生成小写短横线 slug。
  */
-function slugifyPromptWords(e, s = {}) {
-  let { words = 4, maxLen = 40 } = s;
-  return e
+function slugifyPromptWords(text, options = {}) {
+  let { words = 4, maxLen = 40 } = options;
+  return text
     .replace(PASTED_PLACEHOLDER_PATTERN, " ")
     .split(/\s+/)
     .filter(Boolean)
@@ -800,26 +800,32 @@ function slugifyPromptWords(e, s = {}) {
 }
 //@ chunk-bwbq4xvm.js:782909-782964 placement
 function randomWordSlug() {
-  let e = pickRandom(ADJECTIVES);
-  let s = pickRandom(VERBS);
-  return `${e}-${s}`;
+  let adjective = pickRandom(ADJECTIVES);
+  let verb = pickRandom(VERBS);
+  return `${adjective}-${verb}`;
 }
 //@ chunk-bwbq4xvm.js:782964-783194 placement
-function shortWordSlugFromSeed(e) {
-  if (e.length < 8) throw Error("shortWordSlugFromSeed needs at least 8 seed bytes");
-  let dataView = new DataView(e.buffer, e.byteOffset, e.byteLength);
-  let n = ADJECTIVES[dataView.getUint32(0) % ADJECTIVES.length];
-  let r = VERBS[dataView.getUint32(4) % VERBS.length];
-  return `${n}-${r}`;
+function shortWordSlugFromSeed(seed) {
+  if (seed.length < 8) throw Error("shortWordSlugFromSeed needs at least 8 seed bytes");
+  let dataView = new DataView(seed.buffer, seed.byteOffset, seed.byteLength);
+  let adjective = ADJECTIVES[dataView.getUint32(0) % ADJECTIVES.length];
+  let verb = VERBS[dataView.getUint32(4) % VERBS.length];
+  return `${adjective}-${verb}`;
 }
 //@ chunk-bwbq4xvm.js:783194-783368 placement
 function isWordSlug(lowerCase) {
-  let [s, n, ...r] = lowerCase.split("-");
-  let a = (wordSlugSets ??= {
+  let [firstWord, secondWord, ...extraParts] = lowerCase.split("-");
+  let wordSets = (wordSlugSets ??= {
     adjectives: new Set(ADJECTIVES),
     nouns: new Set(VERBS),
   });
-  return r.length === 0 && s !== undefined && n !== undefined && a.adjectives.has(s) && a.nouns.has(n);
+  return (
+    extraParts.length === 0 &&
+    firstWord !== undefined &&
+    secondWord !== undefined &&
+    wordSets.adjectives.has(firstWord) &&
+    wordSets.nouns.has(secondWord)
+  );
 }
 //@ chunk-bwbq4xvm.js:783368-783375 placement
 var wordSlugSets;

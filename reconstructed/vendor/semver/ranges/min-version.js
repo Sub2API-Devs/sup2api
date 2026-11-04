@@ -5,13 +5,13 @@
  * pieces: chunk-bwbq4xvm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_semver } from "../classes/semver.js";
 import { require_range } from "../classes/range.js";
 import { require_eq } from "../functions/eq.js";
 
 //@ chunk-bwbq4xvm.js:22380-22962 cjs-fingerprint
-var require_min_version = x(function (cjsExports, cjsModule) {
+var require_min_version = __commonJS(function (cjsExports, cjsModule) {
   var SemVer = require_semver();
   var Range = require_range();
   var gt = require_eq();

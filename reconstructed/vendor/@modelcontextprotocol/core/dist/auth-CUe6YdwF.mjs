@@ -8,13 +8,13 @@
 import {
   lazy,
   union,
-  string,
-  E,
-  M,
-  zg,
+  stringSchema,
+  numberSchema,
+  booleanSchema,
+  nullSchema,
   record,
   array,
-  u,
+  objectSchema,
   looseObject,
   literal,
   unknown,
@@ -23,13 +23,14 @@ import {
   preprocess,
   optional,
   discriminatedUnion,
-  A8e,
-  qne,
+  urlSchema,
+  anySchema,
 } from "../../../zod/v4/classic/schemas.js";
 import { parseToolOutputSchema } from "../../../../src/services/mcp/schemaParse.js";
-import { ZodIssueCode, F1e } from "../../../zod/v4/classic/compat.js";
-import { bY } from "../../../zod/v4/core/core.js";
+import { ZodIssueCode, coerceNumber } from "../../../zod/v4/classic/compat.js";
+import { INVALID } from "../../../zod/v4/core/core.js";
 import { DoctorLazy } from "../../../../src/cli/handlers/util.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-r1g76qsy.js:1173-1193 esm-fingerprint
 var LATEST_PROTOCOL_VERSION = "2025-11-25";
@@ -53,1075 +54,1283 @@ var JSONRPC_VERSION = "2.0";
 //@ chunk-r1g76qsy.js:1570-1585 esm-fingerprint
 var PARSE_ERROR = -32601;
 //@ chunk-r1g76qsy.js:1585-17821 esm-layout
-var JSONValueSchema = lazy(() =>
-  union([string(), E(), M(), zg(), record(string(), JSONValueSchema), array(JSONValueSchema)]),
-);
-var JSONObjectSchema = record(string(), JSONValueSchema);
-var Ta = array(JSONValueSchema);
-var ProgressTokenSchema = union([string(), E().int()]);
-var CursorSchema = string();
-var TaskMetadataSchema = u({
-  ttl: E().optional(),
-});
-var RelatedTaskMetadataSchema = u({
-  taskId: string(),
-});
-var RequestMetaSchema = looseObject({
-  progressToken: ProgressTokenSchema.optional(),
-  [RELATED_TASK_META_KEY]: RelatedTaskMetadataSchema.optional(),
-});
-var BaseRequestParamsSchema = u({
-  _meta: RequestMetaSchema.optional(),
-});
-var TaskAugmentedRequestParamsSchema = BaseRequestParamsSchema.extend({
-  task: TaskMetadataSchema.optional(),
-});
-var RequestSchema = u({
-  method: string(),
-  params: BaseRequestParamsSchema.loose().optional(),
-});
-var NotificationsParamsSchema = u({
-  _meta: RequestMetaSchema.optional(),
-});
-var NotificationSchema = u({
-  method: string(),
-  params: NotificationsParamsSchema.loose().optional(),
-});
-var ResultMetaObjectSchema = looseObject({
-  get [SERVER_INFO_META_KEY]() {
-    return ImplementationSchema.optional().catch(undefined);
-  },
-});
-var ResultSchema = looseObject({
-  _meta: ResultMetaObjectSchema.optional(),
-});
-var RequestIdSchema = union([string(), E().int()]);
-var JSONRPCRequestSchema = u({
-  jsonrpc: literal(JSONRPC_VERSION),
-  id: RequestIdSchema,
-  ...RequestSchema.shape,
-}).strict();
-var JSONRPCNotificationSchema = u({
-  jsonrpc: literal(JSONRPC_VERSION),
-  ...NotificationSchema.shape,
-}).strict();
-var JSONRPCResultResponseSchema = u({
-  jsonrpc: literal(JSONRPC_VERSION),
-  id: RequestIdSchema,
-  result: ResultSchema,
-}).strict();
-var JSONRPCErrorResponseSchema = u({
-  jsonrpc: literal(JSONRPC_VERSION),
-  id: RequestIdSchema.optional(),
-  error: u({
-    code: E().int(),
-    message: string(),
-    data: unknown().optional(),
-  }),
-}).strict();
-var fZe = union([
-  JSONRPCRequestSchema,
-  JSONRPCNotificationSchema,
-  JSONRPCResultResponseSchema,
-  JSONRPCErrorResponseSchema,
-]);
-var Ca = union([JSONRPCResultResponseSchema, JSONRPCErrorResponseSchema]);
-var EmptyResultSchema = ResultSchema.strict();
-var CancelledNotificationParamsSchema = NotificationsParamsSchema.extend({
-  requestId: RequestIdSchema.optional(),
-  reason: string().optional(),
-});
-var CancelledNotificationSchema = NotificationSchema.extend({
-  method: literal("notifications/cancelled"),
-  params: CancelledNotificationParamsSchema,
-});
-var IconSchema = u({
-  src: string(),
-  mimeType: string().optional(),
-  sizes: array(string()).optional(),
-  theme: _enum(["light", "dark"]).optional(),
-});
-var IconsSchema = u({
-  icons: array(IconSchema).optional(),
-});
-var BaseMetadataSchema = u({
-  name: string(),
-  title: string().optional(),
-});
-var ImplementationSchema = BaseMetadataSchema.extend({
-  ...BaseMetadataSchema.shape,
-  ...IconsSchema.shape,
-  version: string(),
-  websiteUrl: string().optional(),
-  description: string().optional(),
-});
-var FormElicitationCapabilitySchema = intersection(
-  u({
-    applyDefaults: M().optional(),
-  }),
-  JSONObjectSchema,
-);
-var ElicitationCapabilitySchema = preprocess(
-  (value) => {
-    if (value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0)
-      return {
-        form: {},
-      };
-    return value;
-  },
-  intersection(
-    u({
-      form: FormElicitationCapabilitySchema.optional(),
-      url: JSONObjectSchema.optional(),
+var JSONValueSchema; // deferred: uses lazy (../../../zod/v4/classic/schemas.js) of its import cycle while loading; runs once the cycle is complete
+var JSONObjectSchema;
+var JSONArraySchema;
+var ProgressTokenSchema;
+var CursorSchema;
+var TaskMetadataSchema;
+var RelatedTaskMetadataSchema;
+var RequestMetaSchema;
+var BaseRequestParamsSchema;
+var TaskAugmentedRequestParamsSchema;
+var RequestSchema;
+var NotificationsParamsSchema;
+var NotificationSchema;
+var ResultMetaObjectSchema;
+var ResultSchema;
+var RequestIdSchema;
+var JSONRPCRequestSchema;
+var JSONRPCNotificationSchema;
+var JSONRPCResultResponseSchema;
+var JSONRPCErrorResponseSchema;
+var JSONRPCMessageSchema;
+var JSONRPCResponseSchema;
+var EmptyResultSchema;
+var CancelledNotificationParamsSchema;
+var CancelledNotificationSchema;
+var IconSchema;
+var IconsSchema;
+var BaseMetadataSchema;
+var ImplementationSchema;
+var FormElicitationCapabilitySchema;
+var ElicitationCapabilitySchema;
+var ClientTasksCapabilitySchema;
+var ServerTasksCapabilitySchema;
+var ClientCapabilitiesSchema;
+var InitializeRequestParamsSchema;
+var InitializeRequestSchema;
+var ServerCapabilitiesSchema;
+var InitializeResultSchema;
+var InitializedNotificationSchema;
+var DiscoverRequestSchema;
+var DiscoverResultSchema;
+var PingRequestSchema;
+var ProgressSchema;
+var ProgressNotificationParamsSchema;
+var ProgressNotificationSchema;
+var PaginatedRequestParamsSchema;
+var PaginatedRequestSchema;
+var PaginatedResultSchema;
+var ResourceContentsSchema;
+var TextResourceContentsSchema;
+var Base64Schema;
+var BlobResourceContentsSchema;
+var RoleSchema;
+var AnnotationsSchema;
+var ResourceSchema;
+var ResourceTemplateSchema;
+var ListResourcesRequestSchema;
+var ListResourcesResultSchema;
+var ListResourceTemplatesRequestSchema;
+var ListResourceTemplatesResultSchema;
+var ResourceRequestParamsSchema;
+var ReadResourceRequestParamsSchema;
+var ReadResourceRequestSchema;
+var ReadResourceResultSchema;
+var ResourceListChangedNotificationSchema;
+var SubscribeRequestParamsSchema;
+var SubscribeRequestSchema;
+var UnsubscribeRequestParamsSchema;
+var UnsubscribeRequestSchema;
+var SubscriptionFilterSchema;
+var SubscriptionsListenRequestParamsSchema;
+var SubscriptionsListenRequestSchema;
+var SubscriptionsAcknowledgedNotificationParamsSchema;
+var SubscriptionsAcknowledgedNotificationSchema;
+var SubscriptionsListenResultMetaSchema;
+var SubscriptionsListenResultSchema;
+var ResourceUpdatedNotificationParamsSchema;
+var ResourceUpdatedNotificationSchema;
+var PromptArgumentSchema;
+var PromptSchema;
+var ListPromptsRequestSchema;
+var ListPromptsResultSchema;
+var GetPromptRequestParamsSchema;
+var GetPromptRequestSchema;
+var TextContentSchema;
+var ImageContentSchema;
+var AudioContentSchema;
+var ToolUseContentSchema;
+var EmbeddedResourceSchema;
+var ResourceLinkSchema;
+var ContentBlockSchema;
+var PromptMessageSchema;
+var GetPromptResultSchema;
+var PromptListChangedNotificationSchema;
+var ToolAnnotationsSchema;
+var ToolExecutionSchema;
+var ToolSchema;
+var ListToolsRequestSchema;
+var ListToolsResultSchema;
+var CallToolResultSchema;
+var CompatibilityCallToolResultSchema;
+var CallToolRequestParamsSchema;
+var CallToolRequestSchema;
+var ToolListChangedNotificationSchema;
+var ListChangedOptionsBaseSchema;
+var LoggingLevelSchema;
+var SetLevelRequestParamsSchema;
+var SetLevelRequestSchema;
+var LoggingMessageNotificationParamsSchema;
+var LoggingMessageNotificationSchema;
+var ModelHintSchema;
+var ModelPreferencesSchema;
+var ToolChoiceSchema;
+var ToolResultContentSchema;
+var SamplingContentSchema;
+var SamplingMessageContentBlockSchema;
+var SamplingMessageSchema;
+var CreateMessageRequestParamsSchema;
+var CreateMessageRequestSchema;
+var CreateMessageResultSchema;
+var CreateMessageResultWithToolsSchema;
+var BooleanSchemaSchema;
+var StringSchemaSchema;
+var NumberSchemaSchema;
+var UntitledSingleSelectEnumSchemaSchema;
+var TitledSingleSelectEnumSchemaSchema;
+var LegacyTitledEnumSchemaSchema;
+var SingleSelectEnumSchemaSchema;
+var UntitledMultiSelectEnumSchemaSchema;
+var TitledMultiSelectEnumSchemaSchema;
+var MultiSelectEnumSchemaSchema;
+var EnumSchemaSchema;
+var PrimitiveSchemaDefinitionSchema;
+var ElicitRequestFormParamsSchema;
+var ElicitRequestURLParamsSchema;
+var ElicitRequestParamsSchema;
+var ElicitRequestSchema;
+var ElicitationCompleteNotificationParamsSchema;
+var ElicitationCompleteNotificationSchema;
+var ElicitResultSchema;
+var ResourceTemplateReferenceSchema;
+var PromptReferenceSchema;
+var CompleteRequestParamsSchema;
+var CompleteRequestSchema;
+var CompleteResultSchema;
+var RootSchema;
+var ListRootsRequestSchema;
+var ListRootsResultSchema;
+var RootsListChangedNotificationSchema;
+var TaskCreationParamsSchema;
+var TaskStatusSchema;
+var TaskSchema;
+var CreateTaskResultSchema;
+var TaskStatusNotificationParamsSchema;
+var TaskStatusNotificationSchema;
+var GetTaskRequestSchema;
+var GetTaskResultSchema;
+var GetTaskPayloadRequestSchema;
+var GetTaskPayloadResultSchema;
+var ListTasksRequestSchema;
+var ListTasksResultSchema;
+var CancelTaskRequestSchema;
+var CancelTaskResultSchema;
+var ClientRequestSchema;
+var ClientNotificationSchema;
+var ClientResultSchema;
+var ServerRequestSchema;
+var ServerNotificationSchema;
+var ServerResultSchema;
+var SafeUrlSchema;
+var OAuthProtectedResourceMetadataSchema;
+var OAuthMetadataSchema;
+var OpenIdProviderMetadataSchema;
+var OpenIdProviderDiscoveryMetadataSchema;
+var OAuthTokensSchema;
+var IdJagTokenExchangeResponseSchema;
+var OAuthErrorResponseSchema;
+var OptionalSafeUrlSchema;
+var OAuthClientMetadataSchema;
+var OAuthClientInformationSchema;
+var OAuthClientInformationFullSchema;
+var OAuthClientRegistrationErrorSchema;
+var OAuthTokenRevocationRequestSchema;
+deferInit("chunk-r1g76qsy.js:1585", () => {
+  JSONValueSchema = lazy(() =>
+    union([
+      stringSchema(),
+      numberSchema(),
+      booleanSchema(),
+      nullSchema(),
+      record(stringSchema(), JSONValueSchema),
+      array(JSONValueSchema),
+    ]),
+  );
+  JSONObjectSchema = record(stringSchema(), JSONValueSchema);
+  JSONArraySchema = array(JSONValueSchema);
+  ProgressTokenSchema = union([stringSchema(), numberSchema().int()]);
+  CursorSchema = stringSchema();
+  TaskMetadataSchema = objectSchema({
+    ttl: numberSchema().optional(),
+  });
+  RelatedTaskMetadataSchema = objectSchema({
+    taskId: stringSchema(),
+  });
+  RequestMetaSchema = looseObject({
+    progressToken: ProgressTokenSchema.optional(),
+    [RELATED_TASK_META_KEY]: RelatedTaskMetadataSchema.optional(),
+  });
+  BaseRequestParamsSchema = objectSchema({
+    _meta: RequestMetaSchema.optional(),
+  });
+  TaskAugmentedRequestParamsSchema = BaseRequestParamsSchema.extend({
+    task: TaskMetadataSchema.optional(),
+  });
+  RequestSchema = objectSchema({
+    method: stringSchema(),
+    params: BaseRequestParamsSchema.loose().optional(),
+  });
+  NotificationsParamsSchema = objectSchema({
+    _meta: RequestMetaSchema.optional(),
+  });
+  NotificationSchema = objectSchema({
+    method: stringSchema(),
+    params: NotificationsParamsSchema.loose().optional(),
+  });
+  ResultMetaObjectSchema = looseObject({
+    get [SERVER_INFO_META_KEY]() {
+      return ImplementationSchema.optional().catch(undefined);
+    },
+  });
+  ResultSchema = looseObject({
+    _meta: ResultMetaObjectSchema.optional(),
+  });
+  RequestIdSchema = union([stringSchema(), numberSchema().int()]);
+  JSONRPCRequestSchema = objectSchema({
+    jsonrpc: literal(JSONRPC_VERSION),
+    id: RequestIdSchema,
+    ...RequestSchema.shape,
+  }).strict();
+  JSONRPCNotificationSchema = objectSchema({
+    jsonrpc: literal(JSONRPC_VERSION),
+    ...NotificationSchema.shape,
+  }).strict();
+  JSONRPCResultResponseSchema = objectSchema({
+    jsonrpc: literal(JSONRPC_VERSION),
+    id: RequestIdSchema,
+    result: ResultSchema,
+  }).strict();
+  JSONRPCErrorResponseSchema = objectSchema({
+    jsonrpc: literal(JSONRPC_VERSION),
+    id: RequestIdSchema.optional(),
+    error: objectSchema({
+      code: numberSchema().int(),
+      message: stringSchema(),
+      data: unknown().optional(),
     }),
-    JSONObjectSchema.optional(),
-  ),
-);
-var ClientTasksCapabilitySchema = looseObject({
-  list: JSONObjectSchema.optional(),
-  cancel: JSONObjectSchema.optional(),
-  requests: looseObject({
-    sampling: looseObject({
-      createMessage: JSONObjectSchema.optional(),
-    }).optional(),
-    elicitation: looseObject({
-      create: JSONObjectSchema.optional(),
-    }).optional(),
-  }).optional(),
-});
-var ServerTasksCapabilitySchema = looseObject({
-  list: JSONObjectSchema.optional(),
-  cancel: JSONObjectSchema.optional(),
-  requests: looseObject({
-    tools: looseObject({
-      call: JSONObjectSchema.optional(),
-    }).optional(),
-  }).optional(),
-});
-var ClientCapabilitiesSchema = u({
-  experimental: record(string(), JSONObjectSchema).optional(),
-  sampling: u({
-    context: JSONObjectSchema.optional(),
-    tools: JSONObjectSchema.optional(),
-  }).optional(),
-  elicitation: ElicitationCapabilitySchema.optional(),
-  roots: u({
-    listChanged: M().optional(),
-  }).optional(),
-  tasks: ClientTasksCapabilitySchema.optional(),
-  extensions: record(string(), JSONObjectSchema).optional(),
-});
-var InitializeRequestParamsSchema = BaseRequestParamsSchema.extend({
-  protocolVersion: string(),
-  capabilities: ClientCapabilitiesSchema,
-  clientInfo: ImplementationSchema,
-});
-var InitializeRequestSchema = RequestSchema.extend({
-  method: literal("initialize"),
-  params: InitializeRequestParamsSchema,
-});
-var ServerCapabilitiesSchema = u({
-  experimental: record(string(), JSONObjectSchema).optional(),
-  logging: JSONObjectSchema.optional(),
-  completions: JSONObjectSchema.optional(),
-  prompts: u({
-    listChanged: M().optional(),
-  }).optional(),
-  resources: u({
-    subscribe: M().optional(),
-    listChanged: M().optional(),
-  }).optional(),
-  tools: u({
-    listChanged: M().optional(),
-  }).optional(),
-  tasks: ServerTasksCapabilitySchema.optional(),
-  extensions: record(string(), JSONObjectSchema).optional(),
-});
-var InitializeResultSchema = ResultSchema.extend({
-  protocolVersion: string(),
-  capabilities: ServerCapabilitiesSchema,
-  serverInfo: ImplementationSchema,
-  instructions: string().optional(),
-});
-var InitializedNotificationSchema = NotificationSchema.extend({
-  method: literal("notifications/initialized"),
-  params: NotificationsParamsSchema.optional(),
-});
-var DiscoverRequestSchema = RequestSchema.extend({
-  method: literal("server/discover"),
-  params: BaseRequestParamsSchema.optional(),
-});
-var DiscoverResultSchema = ResultSchema.extend({
-  supportedVersions: array(string()),
-  capabilities: ServerCapabilitiesSchema,
-  instructions: string().optional(),
-});
-var PingRequestSchema = RequestSchema.extend({
-  method: literal("ping"),
-  params: BaseRequestParamsSchema.optional(),
-});
-var ProgressSchema = u({
-  progress: E(),
-  total: optional(E()),
-  message: optional(string()),
-});
-var ProgressNotificationParamsSchema = u({
-  ...NotificationsParamsSchema.shape,
-  ...ProgressSchema.shape,
-  progressToken: ProgressTokenSchema,
-});
-var ProgressNotificationSchema = NotificationSchema.extend({
-  method: literal("notifications/progress"),
-  params: ProgressNotificationParamsSchema,
-});
-var PaginatedRequestParamsSchema = BaseRequestParamsSchema.extend({
-  cursor: CursorSchema.optional(),
-});
-var PaginatedRequestSchema = RequestSchema.extend({
-  params: PaginatedRequestParamsSchema.optional(),
-});
-var PaginatedResultSchema = ResultSchema.extend({
-  nextCursor: CursorSchema.optional(),
-});
-var ResourceContentsSchema = u({
-  uri: string(),
-  mimeType: optional(string()),
-  _meta: record(string(), unknown()).optional(),
-});
-var TextResourceContentsSchema = ResourceContentsSchema.extend({
-  text: string(),
-});
-var Base64Schema = string().refine(
-  (val) => {
-    try {
-      atob(val);
-      return true;
-    } catch {
-      return false;
-    }
-  },
-  {
-    message: "Invalid Base64 string",
-  },
-);
-var BlobResourceContentsSchema = ResourceContentsSchema.extend({
-  blob: Base64Schema,
-});
-var RoleSchema = _enum(["user", "assistant"]);
-var AnnotationsSchema = u({
-  audience: array(RoleSchema).optional(),
-  priority: E().min(0).max(1).optional(),
-  lastModified: union([
-    parseToolOutputSchema({
-      offset: true,
+  }).strict();
+  JSONRPCMessageSchema = union([
+    JSONRPCRequestSchema,
+    JSONRPCNotificationSchema,
+    JSONRPCResultResponseSchema,
+    JSONRPCErrorResponseSchema,
+  ]);
+  JSONRPCResponseSchema = union([JSONRPCResultResponseSchema, JSONRPCErrorResponseSchema]);
+  EmptyResultSchema = ResultSchema.strict();
+  CancelledNotificationParamsSchema = NotificationsParamsSchema.extend({
+    requestId: RequestIdSchema.optional(),
+    reason: stringSchema().optional(),
+  });
+  CancelledNotificationSchema = NotificationSchema.extend({
+    method: literal("notifications/cancelled"),
+    params: CancelledNotificationParamsSchema,
+  });
+  IconSchema = objectSchema({
+    src: stringSchema(),
+    mimeType: stringSchema().optional(),
+    sizes: array(stringSchema()).optional(),
+    theme: _enum(["light", "dark"]).optional(),
+  });
+  IconsSchema = objectSchema({
+    icons: array(IconSchema).optional(),
+  });
+  BaseMetadataSchema = objectSchema({
+    name: stringSchema(),
+    title: stringSchema().optional(),
+  });
+  ImplementationSchema = BaseMetadataSchema.extend({
+    ...BaseMetadataSchema.shape,
+    ...IconsSchema.shape,
+    version: stringSchema(),
+    websiteUrl: stringSchema().optional(),
+    description: stringSchema().optional(),
+  });
+  FormElicitationCapabilitySchema = intersection(
+    objectSchema({
+      applyDefaults: booleanSchema().optional(),
     }),
-    parseToolOutputSchema({
-      offset: true,
-      precision: -1,
-    }),
-  ]).optional(),
-});
-var ResourceSchema = u({
-  ...BaseMetadataSchema.shape,
-  ...IconsSchema.shape,
-  uri: string(),
-  description: optional(string()),
-  mimeType: optional(string()),
-  size: optional(E()),
-  annotations: AnnotationsSchema.optional(),
-  _meta: optional(looseObject({})),
-});
-var ResourceTemplateSchema = u({
-  ...BaseMetadataSchema.shape,
-  ...IconsSchema.shape,
-  uriTemplate: string(),
-  description: optional(string()),
-  mimeType: optional(string()),
-  annotations: AnnotationsSchema.optional(),
-  _meta: optional(looseObject({})),
-});
-var ListResourcesRequestSchema = PaginatedRequestSchema.extend({
-  method: literal("resources/list"),
-});
-var ListResourcesResultSchema = PaginatedResultSchema.extend({
-  resources: array(ResourceSchema),
-});
-var ListResourceTemplatesRequestSchema = PaginatedRequestSchema.extend({
-  method: literal("resources/templates/list"),
-});
-var ListResourceTemplatesResultSchema = PaginatedResultSchema.extend({
-  resourceTemplates: array(ResourceTemplateSchema),
-});
-var ResourceRequestParamsSchema = BaseRequestParamsSchema.extend({
-  uri: string(),
-});
-var ReadResourceRequestParamsSchema = ResourceRequestParamsSchema;
-var ReadResourceRequestSchema = RequestSchema.extend({
-  method: literal("resources/read"),
-  params: ReadResourceRequestParamsSchema,
-});
-var ReadResourceResultSchema = ResultSchema.extend({
-  contents: array(union([TextResourceContentsSchema, BlobResourceContentsSchema])),
-});
-var ResourceListChangedNotificationSchema = NotificationSchema.extend({
-  method: literal("notifications/resources/list_changed"),
-  params: NotificationsParamsSchema.optional(),
-});
-var SubscribeRequestParamsSchema = ResourceRequestParamsSchema;
-var SubscribeRequestSchema = RequestSchema.extend({
-  method: literal("resources/subscribe"),
-  params: SubscribeRequestParamsSchema,
-});
-var UnsubscribeRequestParamsSchema = ResourceRequestParamsSchema;
-var UnsubscribeRequestSchema = RequestSchema.extend({
-  method: literal("resources/unsubscribe"),
-  params: UnsubscribeRequestParamsSchema,
-});
-var SubscriptionFilterSchema = u({
-  toolsListChanged: M().optional(),
-  promptsListChanged: M().optional(),
-  resourcesListChanged: M().optional(),
-  resourceSubscriptions: array(string()).optional(),
-});
-var SubscriptionsListenRequestParamsSchema = BaseRequestParamsSchema.extend({
-  notifications: SubscriptionFilterSchema,
-});
-var SubscriptionsListenRequestSchema = RequestSchema.extend({
-  method: literal("subscriptions/listen"),
-  params: SubscriptionsListenRequestParamsSchema,
-});
-var SubscriptionsAcknowledgedNotificationParamsSchema = NotificationsParamsSchema.extend({
-  notifications: SubscriptionFilterSchema,
-});
-var SubscriptionsAcknowledgedNotificationSchema = NotificationSchema.extend({
-  method: literal("notifications/subscriptions/acknowledged"),
-  params: SubscriptionsAcknowledgedNotificationParamsSchema,
-});
-var SubscriptionsListenResultMetaSchema = ResultMetaObjectSchema.extend({
-  [SUBSCRIPTION_ID_META_KEY]: RequestIdSchema,
-});
-var SubscriptionsListenResultSchema = ResultSchema.extend({
-  _meta: SubscriptionsListenResultMetaSchema,
-});
-var ResourceUpdatedNotificationParamsSchema = NotificationsParamsSchema.extend({
-  uri: string(),
-});
-var ResourceUpdatedNotificationSchema = NotificationSchema.extend({
-  method: literal("notifications/resources/updated"),
-  params: ResourceUpdatedNotificationParamsSchema,
-});
-var PromptArgumentSchema = u({
-  name: string(),
-  description: optional(string()),
-  required: optional(M()),
-});
-var PromptSchema = u({
-  ...BaseMetadataSchema.shape,
-  ...IconsSchema.shape,
-  description: optional(string()),
-  arguments: optional(array(PromptArgumentSchema)),
-  _meta: optional(looseObject({})),
-});
-var ListPromptsRequestSchema = PaginatedRequestSchema.extend({
-  method: literal("prompts/list"),
-});
-var ListPromptsResultSchema = PaginatedResultSchema.extend({
-  prompts: array(PromptSchema),
-});
-var GetPromptRequestParamsSchema = BaseRequestParamsSchema.extend({
-  name: string(),
-  arguments: record(string(), string()).optional(),
-});
-var GetPromptRequestSchema = RequestSchema.extend({
-  method: literal("prompts/get"),
-  params: GetPromptRequestParamsSchema,
-});
-var TextContentSchema = u({
-  type: literal("text"),
-  text: string(),
-  annotations: AnnotationsSchema.optional(),
-  _meta: record(string(), unknown()).optional(),
-});
-var ImageContentSchema = u({
-  type: literal("image"),
-  data: Base64Schema,
-  mimeType: string(),
-  annotations: AnnotationsSchema.optional(),
-  _meta: record(string(), unknown()).optional(),
-});
-var AudioContentSchema = u({
-  type: literal("audio"),
-  data: Base64Schema,
-  mimeType: string(),
-  annotations: AnnotationsSchema.optional(),
-  _meta: record(string(), unknown()).optional(),
-});
-var ToolUseContentSchema = u({
-  type: literal("tool_use"),
-  name: string(),
-  id: string(),
-  input: record(string(), unknown()),
-  _meta: record(string(), unknown()).optional(),
-});
-var EmbeddedResourceSchema = u({
-  type: literal("resource"),
-  resource: union([TextResourceContentsSchema, BlobResourceContentsSchema]),
-  annotations: AnnotationsSchema.optional(),
-  _meta: record(string(), unknown()).optional(),
-});
-var ResourceLinkSchema = ResourceSchema.extend({
-  type: literal("resource_link"),
-});
-var ContentBlockSchema = union([
-  TextContentSchema,
-  ImageContentSchema,
-  AudioContentSchema,
-  ResourceLinkSchema,
-  EmbeddedResourceSchema,
-]);
-var PromptMessageSchema = u({
-  role: RoleSchema,
-  content: ContentBlockSchema,
-});
-var GetPromptResultSchema = ResultSchema.extend({
-  description: string().optional(),
-  messages: array(PromptMessageSchema),
-});
-var PromptListChangedNotificationSchema = NotificationSchema.extend({
-  method: literal("notifications/prompts/list_changed"),
-  params: NotificationsParamsSchema.optional(),
-});
-var ToolAnnotationsSchema = u({
-  title: string().optional(),
-  readOnlyHint: M().optional(),
-  destructiveHint: M().optional(),
-  idempotentHint: M().optional(),
-  openWorldHint: M().optional(),
-});
-var ToolExecutionSchema = u({
-  taskSupport: _enum(["required", "optional", "forbidden"]).optional(),
-});
-var ToolSchema = u({
-  ...BaseMetadataSchema.shape,
-  ...IconsSchema.shape,
-  description: string().optional(),
-  inputSchema: u({
-    type: literal("object"),
-    properties: record(string(), JSONValueSchema).optional(),
-    required: array(string()).optional(),
-  }).catchall(unknown()),
-  outputSchema: looseObject({
-    $schema: string().optional(),
-  }).optional(),
-  annotations: ToolAnnotationsSchema.optional(),
-  execution: ToolExecutionSchema.optional(),
-  _meta: record(string(), unknown()).optional(),
-});
-var ListToolsRequestSchema = PaginatedRequestSchema.extend({
-  method: literal("tools/list"),
-});
-var ListToolsResultSchema = PaginatedResultSchema.extend({
-  tools: array(ToolSchema),
-});
-var CallToolResultSchema = ResultSchema.extend({
-  content: array(ContentBlockSchema).default([]),
-  structuredContent: unknown().optional(),
-  isError: M().optional(),
-});
-var CompatibilityCallToolResultSchema = CallToolResultSchema.or(
-  ResultSchema.extend({
-    toolResult: unknown(),
-  }),
-);
-var CallToolRequestParamsSchema = TaskAugmentedRequestParamsSchema.extend({
-  name: string(),
-  arguments: record(string(), unknown()).optional(),
-});
-var CallToolRequestSchema = RequestSchema.extend({
-  method: literal("tools/call"),
-  params: CallToolRequestParamsSchema,
-});
-var ToolListChangedNotificationSchema = NotificationSchema.extend({
-  method: literal("notifications/tools/list_changed"),
-  params: NotificationsParamsSchema.optional(),
-});
-var ListChangedOptionsBaseSchema = u({
-  autoRefresh: M().default(true),
-  debounceMs: E().int().nonnegative().default(300),
-});
-var LoggingLevelSchema = _enum([
-  "debug",
-  "info",
-  "notice",
-  "warning",
-  "error",
-  "critical",
-  "alert",
-  "emergency",
-]);
-var SetLevelRequestParamsSchema = BaseRequestParamsSchema.extend({
-  level: LoggingLevelSchema,
-});
-var SetLevelRequestSchema = RequestSchema.extend({
-  method: literal("logging/setLevel"),
-  params: SetLevelRequestParamsSchema,
-});
-var LoggingMessageNotificationParamsSchema = NotificationsParamsSchema.extend({
-  level: LoggingLevelSchema,
-  logger: string().optional(),
-  data: unknown(),
-});
-var LoggingMessageNotificationSchema = NotificationSchema.extend({
-  method: literal("notifications/message"),
-  params: LoggingMessageNotificationParamsSchema,
-});
-var ModelHintSchema = u({
-  name: string().optional(),
-});
-var ModelPreferencesSchema = u({
-  hints: array(ModelHintSchema).optional(),
-  costPriority: E().min(0).max(1).optional(),
-  speedPriority: E().min(0).max(1).optional(),
-  intelligencePriority: E().min(0).max(1).optional(),
-});
-var ToolChoiceSchema = u({
-  mode: _enum(["auto", "required", "none"]).optional(),
-});
-var ToolResultContentSchema = u({
-  type: literal("tool_result"),
-  toolUseId: string().describe("The unique identifier for the corresponding tool call."),
-  content: array(ContentBlockSchema),
-  structuredContent: unknown().optional(),
-  isError: M().optional(),
-  _meta: record(string(), unknown()).optional(),
-});
-var SamplingContentSchema = discriminatedUnion("type", [
-  TextContentSchema,
-  ImageContentSchema,
-  AudioContentSchema,
-]);
-var SamplingMessageContentBlockSchema = discriminatedUnion("type", [
-  TextContentSchema,
-  ImageContentSchema,
-  AudioContentSchema,
-  ToolUseContentSchema,
-  ToolResultContentSchema,
-]);
-var SamplingMessageSchema = u({
-  role: RoleSchema,
-  content: union([SamplingMessageContentBlockSchema, array(SamplingMessageContentBlockSchema)]),
-  _meta: record(string(), unknown()).optional(),
-});
-var CreateMessageRequestParamsSchema = TaskAugmentedRequestParamsSchema.extend({
-  messages: array(SamplingMessageSchema),
-  modelPreferences: ModelPreferencesSchema.optional(),
-  systemPrompt: string().optional(),
-  includeContext: _enum(["none", "thisServer", "allServers"]).optional(),
-  temperature: E().optional(),
-  maxTokens: E().int(),
-  stopSequences: array(string()).optional(),
-  metadata: JSONObjectSchema.optional(),
-  tools: array(ToolSchema).optional(),
-  toolChoice: ToolChoiceSchema.optional(),
-});
-var CreateMessageRequestSchema = RequestSchema.extend({
-  method: literal("sampling/createMessage"),
-  params: CreateMessageRequestParamsSchema,
-});
-var CreateMessageResultSchema = ResultSchema.extend({
-  model: string(),
-  stopReason: optional(_enum(["endTurn", "stopSequence", "maxTokens"]).or(string())),
-  role: RoleSchema,
-  content: SamplingContentSchema,
-});
-var CreateMessageResultWithToolsSchema = ResultSchema.extend({
-  model: string(),
-  stopReason: optional(_enum(["endTurn", "stopSequence", "maxTokens", "toolUse"]).or(string())),
-  role: RoleSchema,
-  content: union([SamplingMessageContentBlockSchema, array(SamplingMessageContentBlockSchema)]),
-});
-var BooleanSchemaSchema = u({
-  type: literal("boolean"),
-  title: string().optional(),
-  description: string().optional(),
-  default: M().optional(),
-});
-var StringSchemaSchema = u({
-  type: literal("string"),
-  title: string().optional(),
-  description: string().optional(),
-  minLength: E().optional(),
-  maxLength: E().optional(),
-  format: _enum(["email", "uri", "date", "date-time"]).optional(),
-  default: string().optional(),
-});
-var NumberSchemaSchema = u({
-  type: _enum(["number", "integer"]),
-  title: string().optional(),
-  description: string().optional(),
-  minimum: E().optional(),
-  maximum: E().optional(),
-  default: E().optional(),
-});
-var UntitledSingleSelectEnumSchemaSchema = u({
-  type: literal("string"),
-  title: string().optional(),
-  description: string().optional(),
-  enum: array(string()),
-  default: string().optional(),
-});
-var TitledSingleSelectEnumSchemaSchema = u({
-  type: literal("string"),
-  title: string().optional(),
-  description: string().optional(),
-  oneOf: array(
-    u({
-      const: string(),
-      title: string(),
-    }),
-  ),
-  default: string().optional(),
-});
-var LegacyTitledEnumSchemaSchema = u({
-  type: literal("string"),
-  title: string().optional(),
-  description: string().optional(),
-  enum: array(string()),
-  enumNames: array(string()).optional(),
-  default: string().optional(),
-});
-var SingleSelectEnumSchemaSchema = union([
-  UntitledSingleSelectEnumSchemaSchema,
-  TitledSingleSelectEnumSchemaSchema,
-]);
-var UntitledMultiSelectEnumSchemaSchema = u({
-  type: literal("array"),
-  title: string().optional(),
-  description: string().optional(),
-  minItems: E().optional(),
-  maxItems: E().optional(),
-  items: u({
-    type: literal("string"),
-    enum: array(string()),
-  }),
-  default: array(string()).optional(),
-});
-var TitledMultiSelectEnumSchemaSchema = u({
-  type: literal("array"),
-  title: string().optional(),
-  description: string().optional(),
-  minItems: E().optional(),
-  maxItems: E().optional(),
-  items: u({
-    anyOf: array(
-      u({
-        const: string(),
-        title: string(),
+    JSONObjectSchema,
+  );
+  ElicitationCapabilitySchema = preprocess(
+    (value) => {
+      if (value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0)
+        return {
+          form: {},
+        };
+      return value;
+    },
+    intersection(
+      objectSchema({
+        form: FormElicitationCapabilitySchema.optional(),
+        url: JSONObjectSchema.optional(),
       }),
+      JSONObjectSchema.optional(),
     ),
-  }),
-  default: array(string()).optional(),
-});
-var MultiSelectEnumSchemaSchema = union([
-  UntitledMultiSelectEnumSchemaSchema,
-  TitledMultiSelectEnumSchemaSchema,
-]);
-var EnumSchemaSchema = union([
-  LegacyTitledEnumSchemaSchema,
-  SingleSelectEnumSchemaSchema,
-  MultiSelectEnumSchemaSchema,
-]);
-var PrimitiveSchemaDefinitionSchema = union([
-  EnumSchemaSchema,
-  BooleanSchemaSchema,
-  StringSchemaSchema,
-  NumberSchemaSchema,
-]);
-var ElicitRequestFormParamsSchema = TaskAugmentedRequestParamsSchema.extend({
-  mode: literal("form").optional(),
-  message: string(),
-  requestedSchema: u({
-    type: literal("object"),
-    properties: record(string(), PrimitiveSchemaDefinitionSchema),
-    required: array(string()).optional(),
-  }).catchall(unknown()),
-});
-var ElicitRequestURLParamsSchema = TaskAugmentedRequestParamsSchema.extend({
-  mode: literal("url"),
-  message: string(),
-  elicitationId: string(),
-  url: string().url(),
-});
-var ElicitRequestParamsSchema = union([ElicitRequestFormParamsSchema, ElicitRequestURLParamsSchema]);
-var ElicitRequestSchema = RequestSchema.extend({
-  method: literal("elicitation/create"),
-  params: ElicitRequestParamsSchema,
-});
-var ElicitationCompleteNotificationParamsSchema = NotificationsParamsSchema.extend({
-  elicitationId: string(),
-});
-var ElicitationCompleteNotificationSchema = NotificationSchema.extend({
-  method: literal("notifications/elicitation/complete"),
-  params: ElicitationCompleteNotificationParamsSchema,
-});
-var ElicitResultSchema = ResultSchema.extend({
-  action: _enum(["accept", "decline", "cancel"]),
-  content: preprocess(
-    (val) => (val === null ? undefined : val),
-    record(string(), union([string(), E(), M(), array(string())])).optional(),
-  ),
-});
-var ResourceTemplateReferenceSchema = u({
-  type: literal("ref/resource"),
-  uri: string(),
-});
-var PromptReferenceSchema = u({
-  type: literal("ref/prompt"),
-  name: string(),
-});
-var CompleteRequestParamsSchema = BaseRequestParamsSchema.extend({
-  ref: union([PromptReferenceSchema, ResourceTemplateReferenceSchema]),
-  argument: u({
-    name: string(),
-    value: string(),
-  }),
-  context: u({
-    arguments: record(string(), string()).optional(),
-  }).optional(),
-});
-var CompleteRequestSchema = RequestSchema.extend({
-  method: literal("completion/complete"),
-  params: CompleteRequestParamsSchema,
-});
-var CompleteResultSchema = ResultSchema.extend({
-  completion: looseObject({
-    values: array(string()).max(100),
-    total: optional(E().int()),
-    hasMore: optional(M()),
-  }),
-});
-var RootSchema = u({
-  uri: string().startsWith("file://"),
-  name: string().optional(),
-  _meta: record(string(), unknown()).optional(),
-});
-var ListRootsRequestSchema = RequestSchema.extend({
-  method: literal("roots/list"),
-  params: BaseRequestParamsSchema.optional(),
-});
-var ListRootsResultSchema = ResultSchema.extend({
-  roots: array(RootSchema),
-});
-var RootsListChangedNotificationSchema = NotificationSchema.extend({
-  method: literal("notifications/roots/list_changed"),
-  params: NotificationsParamsSchema.optional(),
-});
-var TaskCreationParamsSchema = looseObject({
-  ttl: E().optional(),
-  pollInterval: E().optional(),
-});
-var TaskStatusSchema = _enum(["working", "input_required", "completed", "failed", "cancelled"]);
-var TaskSchema = u({
-  taskId: string(),
-  status: TaskStatusSchema,
-  ttl: union([E(), zg()]),
-  createdAt: string(),
-  lastUpdatedAt: string(),
-  pollInterval: optional(E()),
-  statusMessage: optional(string()),
-});
-var CreateTaskResultSchema = ResultSchema.extend({
-  task: TaskSchema,
-});
-var TaskStatusNotificationParamsSchema = NotificationsParamsSchema.merge(TaskSchema);
-var TaskStatusNotificationSchema = NotificationSchema.extend({
-  method: literal("notifications/tasks/status"),
-  params: TaskStatusNotificationParamsSchema,
-});
-var GetTaskRequestSchema = RequestSchema.extend({
-  method: literal("tasks/get"),
-  params: BaseRequestParamsSchema.extend({
-    taskId: string(),
-  }),
-});
-var GetTaskResultSchema = ResultSchema.merge(TaskSchema);
-var GetTaskPayloadRequestSchema = RequestSchema.extend({
-  method: literal("tasks/result"),
-  params: BaseRequestParamsSchema.extend({
-    taskId: string(),
-  }),
-});
-var GetTaskPayloadResultSchema = ResultSchema.loose();
-var ListTasksRequestSchema = PaginatedRequestSchema.extend({
-  method: literal("tasks/list"),
-});
-var ListTasksResultSchema = PaginatedResultSchema.extend({
-  tasks: array(TaskSchema),
-});
-var CancelTaskRequestSchema = RequestSchema.extend({
-  method: literal("tasks/cancel"),
-  params: BaseRequestParamsSchema.extend({
-    taskId: string(),
-  }),
-});
-var CancelTaskResultSchema = ResultSchema.merge(TaskSchema);
-var Fa = union([
-  PingRequestSchema,
-  InitializeRequestSchema,
-  DiscoverRequestSchema,
-  CompleteRequestSchema,
-  SetLevelRequestSchema,
-  GetPromptRequestSchema,
-  ListPromptsRequestSchema,
-  ListResourcesRequestSchema,
-  ListResourceTemplatesRequestSchema,
-  ReadResourceRequestSchema,
-  SubscribeRequestSchema,
-  UnsubscribeRequestSchema,
-  SubscriptionsListenRequestSchema,
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-]);
-var Ha = union([
-  CancelledNotificationSchema,
-  ProgressNotificationSchema,
-  InitializedNotificationSchema,
-  RootsListChangedNotificationSchema,
-]);
-var Ja = union([
-  EmptyResultSchema,
-  CreateMessageResultSchema,
-  CreateMessageResultWithToolsSchema,
-  ElicitResultSchema,
-  ListRootsResultSchema,
-]);
-var Ga = union([PingRequestSchema, CreateMessageRequestSchema, ElicitRequestSchema, ListRootsRequestSchema]);
-var Ba = union([
-  CancelledNotificationSchema,
-  ProgressNotificationSchema,
-  LoggingMessageNotificationSchema,
-  ResourceUpdatedNotificationSchema,
-  ResourceListChangedNotificationSchema,
-  ToolListChangedNotificationSchema,
-  PromptListChangedNotificationSchema,
-  SubscriptionsAcknowledgedNotificationSchema,
-  ElicitationCompleteNotificationSchema,
-]);
-var Wa = union([
-  EmptyResultSchema,
-  InitializeResultSchema,
-  DiscoverResultSchema,
-  CompleteResultSchema,
-  GetPromptResultSchema,
-  ListPromptsResultSchema,
-  ListResourcesResultSchema,
-  ListResourceTemplatesResultSchema,
-  ReadResourceResultSchema,
-  CallToolResultSchema,
-  ListToolsResultSchema,
-  SubscriptionsListenResultSchema,
-]);
-var SafeUrlSchema = A8e()
-  .superRefine((val, ctx) => {
-    if (!URL.canParse(val)) {
-      ctx.addIssue({
-        code: ZodIssueCode.custom,
-        message: "URL must be parseable",
-        fatal: true,
-      });
-      return bY;
-    }
-  })
-  .refine(
-    (url) => {
-      let u = new URL(url);
-      return u.protocol !== "javascript:" && u.protocol !== "data:" && u.protocol !== "vbscript:";
+  );
+  ClientTasksCapabilitySchema = looseObject({
+    list: JSONObjectSchema.optional(),
+    cancel: JSONObjectSchema.optional(),
+    requests: looseObject({
+      sampling: looseObject({
+        createMessage: JSONObjectSchema.optional(),
+      }).optional(),
+      elicitation: looseObject({
+        create: JSONObjectSchema.optional(),
+      }).optional(),
+    }).optional(),
+  });
+  ServerTasksCapabilitySchema = looseObject({
+    list: JSONObjectSchema.optional(),
+    cancel: JSONObjectSchema.optional(),
+    requests: looseObject({
+      tools: looseObject({
+        call: JSONObjectSchema.optional(),
+      }).optional(),
+    }).optional(),
+  });
+  ClientCapabilitiesSchema = objectSchema({
+    experimental: record(stringSchema(), JSONObjectSchema).optional(),
+    sampling: objectSchema({
+      context: JSONObjectSchema.optional(),
+      tools: JSONObjectSchema.optional(),
+    }).optional(),
+    elicitation: ElicitationCapabilitySchema.optional(),
+    roots: objectSchema({
+      listChanged: booleanSchema().optional(),
+    }).optional(),
+    tasks: ClientTasksCapabilitySchema.optional(),
+    extensions: record(stringSchema(), JSONObjectSchema).optional(),
+  });
+  InitializeRequestParamsSchema = BaseRequestParamsSchema.extend({
+    protocolVersion: stringSchema(),
+    capabilities: ClientCapabilitiesSchema,
+    clientInfo: ImplementationSchema,
+  });
+  InitializeRequestSchema = RequestSchema.extend({
+    method: literal("initialize"),
+    params: InitializeRequestParamsSchema,
+  });
+  ServerCapabilitiesSchema = objectSchema({
+    experimental: record(stringSchema(), JSONObjectSchema).optional(),
+    logging: JSONObjectSchema.optional(),
+    completions: JSONObjectSchema.optional(),
+    prompts: objectSchema({
+      listChanged: booleanSchema().optional(),
+    }).optional(),
+    resources: objectSchema({
+      subscribe: booleanSchema().optional(),
+      listChanged: booleanSchema().optional(),
+    }).optional(),
+    tools: objectSchema({
+      listChanged: booleanSchema().optional(),
+    }).optional(),
+    tasks: ServerTasksCapabilitySchema.optional(),
+    extensions: record(stringSchema(), JSONObjectSchema).optional(),
+  });
+  InitializeResultSchema = ResultSchema.extend({
+    protocolVersion: stringSchema(),
+    capabilities: ServerCapabilitiesSchema,
+    serverInfo: ImplementationSchema,
+    instructions: stringSchema().optional(),
+  });
+  InitializedNotificationSchema = NotificationSchema.extend({
+    method: literal("notifications/initialized"),
+    params: NotificationsParamsSchema.optional(),
+  });
+  DiscoverRequestSchema = RequestSchema.extend({
+    method: literal("server/discover"),
+    params: BaseRequestParamsSchema.optional(),
+  });
+  DiscoverResultSchema = ResultSchema.extend({
+    supportedVersions: array(stringSchema()),
+    capabilities: ServerCapabilitiesSchema,
+    instructions: stringSchema().optional(),
+  });
+  PingRequestSchema = RequestSchema.extend({
+    method: literal("ping"),
+    params: BaseRequestParamsSchema.optional(),
+  });
+  ProgressSchema = objectSchema({
+    progress: numberSchema(),
+    total: optional(numberSchema()),
+    message: optional(stringSchema()),
+  });
+  ProgressNotificationParamsSchema = objectSchema({
+    ...NotificationsParamsSchema.shape,
+    ...ProgressSchema.shape,
+    progressToken: ProgressTokenSchema,
+  });
+  ProgressNotificationSchema = NotificationSchema.extend({
+    method: literal("notifications/progress"),
+    params: ProgressNotificationParamsSchema,
+  });
+  PaginatedRequestParamsSchema = BaseRequestParamsSchema.extend({
+    cursor: CursorSchema.optional(),
+  });
+  PaginatedRequestSchema = RequestSchema.extend({
+    params: PaginatedRequestParamsSchema.optional(),
+  });
+  PaginatedResultSchema = ResultSchema.extend({
+    nextCursor: CursorSchema.optional(),
+  });
+  ResourceContentsSchema = objectSchema({
+    uri: stringSchema(),
+    mimeType: optional(stringSchema()),
+    _meta: record(stringSchema(), unknown()).optional(),
+  });
+  TextResourceContentsSchema = ResourceContentsSchema.extend({
+    text: stringSchema(),
+  });
+  Base64Schema = stringSchema().refine(
+    (val) => {
+      try {
+        atob(val);
+        return true;
+      } catch {
+        return false;
+      }
     },
     {
-      message: "URL cannot use javascript:, data:, or vbscript: scheme",
+      message: "Invalid Base64 string",
     },
   );
-var OAuthProtectedResourceMetadataSchema = looseObject({
-  resource: string().url(),
-  authorization_servers: array(SafeUrlSchema).optional(),
-  jwks_uri: string().url().optional(),
-  scopes_supported: array(string()).optional(),
-  bearer_methods_supported: array(string()).optional(),
-  resource_signing_alg_values_supported: array(string()).optional(),
-  resource_name: string().optional(),
-  resource_documentation: string().optional(),
-  resource_policy_uri: string().url().optional(),
-  resource_tos_uri: string().url().optional(),
-  tls_client_certificate_bound_access_tokens: M().optional(),
-  authorization_details_types_supported: array(string()).optional(),
-  dpop_signing_alg_values_supported: array(string()).optional(),
-  dpop_bound_access_tokens_required: M().optional(),
+  BlobResourceContentsSchema = ResourceContentsSchema.extend({
+    blob: Base64Schema,
+  });
+  RoleSchema = _enum(["user", "assistant"]);
+  AnnotationsSchema = objectSchema({
+    audience: array(RoleSchema).optional(),
+    priority: numberSchema().min(0).max(1).optional(),
+    lastModified: union([
+      parseToolOutputSchema({
+        offset: true,
+      }),
+      parseToolOutputSchema({
+        offset: true,
+        precision: -1,
+      }),
+    ]).optional(),
+  });
+  ResourceSchema = objectSchema({
+    ...BaseMetadataSchema.shape,
+    ...IconsSchema.shape,
+    uri: stringSchema(),
+    description: optional(stringSchema()),
+    mimeType: optional(stringSchema()),
+    size: optional(numberSchema()),
+    annotations: AnnotationsSchema.optional(),
+    _meta: optional(looseObject({})),
+  });
+  ResourceTemplateSchema = objectSchema({
+    ...BaseMetadataSchema.shape,
+    ...IconsSchema.shape,
+    uriTemplate: stringSchema(),
+    description: optional(stringSchema()),
+    mimeType: optional(stringSchema()),
+    annotations: AnnotationsSchema.optional(),
+    _meta: optional(looseObject({})),
+  });
+  ListResourcesRequestSchema = PaginatedRequestSchema.extend({
+    method: literal("resources/list"),
+  });
+  ListResourcesResultSchema = PaginatedResultSchema.extend({
+    resources: array(ResourceSchema),
+  });
+  ListResourceTemplatesRequestSchema = PaginatedRequestSchema.extend({
+    method: literal("resources/templates/list"),
+  });
+  ListResourceTemplatesResultSchema = PaginatedResultSchema.extend({
+    resourceTemplates: array(ResourceTemplateSchema),
+  });
+  ResourceRequestParamsSchema = BaseRequestParamsSchema.extend({
+    uri: stringSchema(),
+  });
+  ReadResourceRequestParamsSchema = ResourceRequestParamsSchema;
+  ReadResourceRequestSchema = RequestSchema.extend({
+    method: literal("resources/read"),
+    params: ReadResourceRequestParamsSchema,
+  });
+  ReadResourceResultSchema = ResultSchema.extend({
+    contents: array(union([TextResourceContentsSchema, BlobResourceContentsSchema])),
+  });
+  ResourceListChangedNotificationSchema = NotificationSchema.extend({
+    method: literal("notifications/resources/list_changed"),
+    params: NotificationsParamsSchema.optional(),
+  });
+  SubscribeRequestParamsSchema = ResourceRequestParamsSchema;
+  SubscribeRequestSchema = RequestSchema.extend({
+    method: literal("resources/subscribe"),
+    params: SubscribeRequestParamsSchema,
+  });
+  UnsubscribeRequestParamsSchema = ResourceRequestParamsSchema;
+  UnsubscribeRequestSchema = RequestSchema.extend({
+    method: literal("resources/unsubscribe"),
+    params: UnsubscribeRequestParamsSchema,
+  });
+  SubscriptionFilterSchema = objectSchema({
+    toolsListChanged: booleanSchema().optional(),
+    promptsListChanged: booleanSchema().optional(),
+    resourcesListChanged: booleanSchema().optional(),
+    resourceSubscriptions: array(stringSchema()).optional(),
+  });
+  SubscriptionsListenRequestParamsSchema = BaseRequestParamsSchema.extend({
+    notifications: SubscriptionFilterSchema,
+  });
+  SubscriptionsListenRequestSchema = RequestSchema.extend({
+    method: literal("subscriptions/listen"),
+    params: SubscriptionsListenRequestParamsSchema,
+  });
+  SubscriptionsAcknowledgedNotificationParamsSchema = NotificationsParamsSchema.extend({
+    notifications: SubscriptionFilterSchema,
+  });
+  SubscriptionsAcknowledgedNotificationSchema = NotificationSchema.extend({
+    method: literal("notifications/subscriptions/acknowledged"),
+    params: SubscriptionsAcknowledgedNotificationParamsSchema,
+  });
+  SubscriptionsListenResultMetaSchema = ResultMetaObjectSchema.extend({
+    [SUBSCRIPTION_ID_META_KEY]: RequestIdSchema,
+  });
+  SubscriptionsListenResultSchema = ResultSchema.extend({
+    _meta: SubscriptionsListenResultMetaSchema,
+  });
+  ResourceUpdatedNotificationParamsSchema = NotificationsParamsSchema.extend({
+    uri: stringSchema(),
+  });
+  ResourceUpdatedNotificationSchema = NotificationSchema.extend({
+    method: literal("notifications/resources/updated"),
+    params: ResourceUpdatedNotificationParamsSchema,
+  });
+  PromptArgumentSchema = objectSchema({
+    name: stringSchema(),
+    description: optional(stringSchema()),
+    required: optional(booleanSchema()),
+  });
+  PromptSchema = objectSchema({
+    ...BaseMetadataSchema.shape,
+    ...IconsSchema.shape,
+    description: optional(stringSchema()),
+    arguments: optional(array(PromptArgumentSchema)),
+    _meta: optional(looseObject({})),
+  });
+  ListPromptsRequestSchema = PaginatedRequestSchema.extend({
+    method: literal("prompts/list"),
+  });
+  ListPromptsResultSchema = PaginatedResultSchema.extend({
+    prompts: array(PromptSchema),
+  });
+  GetPromptRequestParamsSchema = BaseRequestParamsSchema.extend({
+    name: stringSchema(),
+    arguments: record(stringSchema(), stringSchema()).optional(),
+  });
+  GetPromptRequestSchema = RequestSchema.extend({
+    method: literal("prompts/get"),
+    params: GetPromptRequestParamsSchema,
+  });
+  TextContentSchema = objectSchema({
+    type: literal("text"),
+    text: stringSchema(),
+    annotations: AnnotationsSchema.optional(),
+    _meta: record(stringSchema(), unknown()).optional(),
+  });
+  ImageContentSchema = objectSchema({
+    type: literal("image"),
+    data: Base64Schema,
+    mimeType: stringSchema(),
+    annotations: AnnotationsSchema.optional(),
+    _meta: record(stringSchema(), unknown()).optional(),
+  });
+  AudioContentSchema = objectSchema({
+    type: literal("audio"),
+    data: Base64Schema,
+    mimeType: stringSchema(),
+    annotations: AnnotationsSchema.optional(),
+    _meta: record(stringSchema(), unknown()).optional(),
+  });
+  ToolUseContentSchema = objectSchema({
+    type: literal("tool_use"),
+    name: stringSchema(),
+    id: stringSchema(),
+    input: record(stringSchema(), unknown()),
+    _meta: record(stringSchema(), unknown()).optional(),
+  });
+  EmbeddedResourceSchema = objectSchema({
+    type: literal("resource"),
+    resource: union([TextResourceContentsSchema, BlobResourceContentsSchema]),
+    annotations: AnnotationsSchema.optional(),
+    _meta: record(stringSchema(), unknown()).optional(),
+  });
+  ResourceLinkSchema = ResourceSchema.extend({
+    type: literal("resource_link"),
+  });
+  ContentBlockSchema = union([
+    TextContentSchema,
+    ImageContentSchema,
+    AudioContentSchema,
+    ResourceLinkSchema,
+    EmbeddedResourceSchema,
+  ]);
+  PromptMessageSchema = objectSchema({
+    role: RoleSchema,
+    content: ContentBlockSchema,
+  });
+  GetPromptResultSchema = ResultSchema.extend({
+    description: stringSchema().optional(),
+    messages: array(PromptMessageSchema),
+  });
+  PromptListChangedNotificationSchema = NotificationSchema.extend({
+    method: literal("notifications/prompts/list_changed"),
+    params: NotificationsParamsSchema.optional(),
+  });
+  ToolAnnotationsSchema = objectSchema({
+    title: stringSchema().optional(),
+    readOnlyHint: booleanSchema().optional(),
+    destructiveHint: booleanSchema().optional(),
+    idempotentHint: booleanSchema().optional(),
+    openWorldHint: booleanSchema().optional(),
+  });
+  ToolExecutionSchema = objectSchema({
+    taskSupport: _enum(["required", "optional", "forbidden"]).optional(),
+  });
+  ToolSchema = objectSchema({
+    ...BaseMetadataSchema.shape,
+    ...IconsSchema.shape,
+    description: stringSchema().optional(),
+    inputSchema: objectSchema({
+      type: literal("object"),
+      properties: record(stringSchema(), JSONValueSchema).optional(),
+      required: array(stringSchema()).optional(),
+    }).catchall(unknown()),
+    outputSchema: looseObject({
+      $schema: stringSchema().optional(),
+    }).optional(),
+    annotations: ToolAnnotationsSchema.optional(),
+    execution: ToolExecutionSchema.optional(),
+    _meta: record(stringSchema(), unknown()).optional(),
+  });
+  ListToolsRequestSchema = PaginatedRequestSchema.extend({
+    method: literal("tools/list"),
+  });
+  ListToolsResultSchema = PaginatedResultSchema.extend({
+    tools: array(ToolSchema),
+  });
+  CallToolResultSchema = ResultSchema.extend({
+    content: array(ContentBlockSchema).default([]),
+    structuredContent: unknown().optional(),
+    isError: booleanSchema().optional(),
+  });
+  CompatibilityCallToolResultSchema = CallToolResultSchema.or(
+    ResultSchema.extend({
+      toolResult: unknown(),
+    }),
+  );
+  CallToolRequestParamsSchema = TaskAugmentedRequestParamsSchema.extend({
+    name: stringSchema(),
+    arguments: record(stringSchema(), unknown()).optional(),
+  });
+  CallToolRequestSchema = RequestSchema.extend({
+    method: literal("tools/call"),
+    params: CallToolRequestParamsSchema,
+  });
+  ToolListChangedNotificationSchema = NotificationSchema.extend({
+    method: literal("notifications/tools/list_changed"),
+    params: NotificationsParamsSchema.optional(),
+  });
+  ListChangedOptionsBaseSchema = objectSchema({
+    autoRefresh: booleanSchema().default(true),
+    debounceMs: numberSchema().int().nonnegative().default(300),
+  });
+  LoggingLevelSchema = _enum([
+    "debug",
+    "info",
+    "notice",
+    "warning",
+    "error",
+    "critical",
+    "alert",
+    "emergency",
+  ]);
+  SetLevelRequestParamsSchema = BaseRequestParamsSchema.extend({
+    level: LoggingLevelSchema,
+  });
+  SetLevelRequestSchema = RequestSchema.extend({
+    method: literal("logging/setLevel"),
+    params: SetLevelRequestParamsSchema,
+  });
+  LoggingMessageNotificationParamsSchema = NotificationsParamsSchema.extend({
+    level: LoggingLevelSchema,
+    logger: stringSchema().optional(),
+    data: unknown(),
+  });
+  LoggingMessageNotificationSchema = NotificationSchema.extend({
+    method: literal("notifications/message"),
+    params: LoggingMessageNotificationParamsSchema,
+  });
+  ModelHintSchema = objectSchema({
+    name: stringSchema().optional(),
+  });
+  ModelPreferencesSchema = objectSchema({
+    hints: array(ModelHintSchema).optional(),
+    costPriority: numberSchema().min(0).max(1).optional(),
+    speedPriority: numberSchema().min(0).max(1).optional(),
+    intelligencePriority: numberSchema().min(0).max(1).optional(),
+  });
+  ToolChoiceSchema = objectSchema({
+    mode: _enum(["auto", "required", "none"]).optional(),
+  });
+  ToolResultContentSchema = objectSchema({
+    type: literal("tool_result"),
+    toolUseId: stringSchema().describe("The unique identifier for the corresponding tool call."),
+    content: array(ContentBlockSchema),
+    structuredContent: unknown().optional(),
+    isError: booleanSchema().optional(),
+    _meta: record(stringSchema(), unknown()).optional(),
+  });
+  SamplingContentSchema = discriminatedUnion("type", [
+    TextContentSchema,
+    ImageContentSchema,
+    AudioContentSchema,
+  ]);
+  SamplingMessageContentBlockSchema = discriminatedUnion("type", [
+    TextContentSchema,
+    ImageContentSchema,
+    AudioContentSchema,
+    ToolUseContentSchema,
+    ToolResultContentSchema,
+  ]);
+  SamplingMessageSchema = objectSchema({
+    role: RoleSchema,
+    content: union([SamplingMessageContentBlockSchema, array(SamplingMessageContentBlockSchema)]),
+    _meta: record(stringSchema(), unknown()).optional(),
+  });
+  CreateMessageRequestParamsSchema = TaskAugmentedRequestParamsSchema.extend({
+    messages: array(SamplingMessageSchema),
+    modelPreferences: ModelPreferencesSchema.optional(),
+    systemPrompt: stringSchema().optional(),
+    includeContext: _enum(["none", "thisServer", "allServers"]).optional(),
+    temperature: numberSchema().optional(),
+    maxTokens: numberSchema().int(),
+    stopSequences: array(stringSchema()).optional(),
+    metadata: JSONObjectSchema.optional(),
+    tools: array(ToolSchema).optional(),
+    toolChoice: ToolChoiceSchema.optional(),
+  });
+  CreateMessageRequestSchema = RequestSchema.extend({
+    method: literal("sampling/createMessage"),
+    params: CreateMessageRequestParamsSchema,
+  });
+  CreateMessageResultSchema = ResultSchema.extend({
+    model: stringSchema(),
+    stopReason: optional(_enum(["endTurn", "stopSequence", "maxTokens"]).or(stringSchema())),
+    role: RoleSchema,
+    content: SamplingContentSchema,
+  });
+  CreateMessageResultWithToolsSchema = ResultSchema.extend({
+    model: stringSchema(),
+    stopReason: optional(_enum(["endTurn", "stopSequence", "maxTokens", "toolUse"]).or(stringSchema())),
+    role: RoleSchema,
+    content: union([SamplingMessageContentBlockSchema, array(SamplingMessageContentBlockSchema)]),
+  });
+  BooleanSchemaSchema = objectSchema({
+    type: literal("boolean"),
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
+    default: booleanSchema().optional(),
+  });
+  StringSchemaSchema = objectSchema({
+    type: literal("string"),
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
+    minLength: numberSchema().optional(),
+    maxLength: numberSchema().optional(),
+    format: _enum(["email", "uri", "date", "date-time"]).optional(),
+    default: stringSchema().optional(),
+  });
+  NumberSchemaSchema = objectSchema({
+    type: _enum(["number", "integer"]),
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
+    minimum: numberSchema().optional(),
+    maximum: numberSchema().optional(),
+    default: numberSchema().optional(),
+  });
+  UntitledSingleSelectEnumSchemaSchema = objectSchema({
+    type: literal("string"),
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
+    enum: array(stringSchema()),
+    default: stringSchema().optional(),
+  });
+  TitledSingleSelectEnumSchemaSchema = objectSchema({
+    type: literal("string"),
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
+    oneOf: array(
+      objectSchema({
+        const: stringSchema(),
+        title: stringSchema(),
+      }),
+    ),
+    default: stringSchema().optional(),
+  });
+  LegacyTitledEnumSchemaSchema = objectSchema({
+    type: literal("string"),
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
+    enum: array(stringSchema()),
+    enumNames: array(stringSchema()).optional(),
+    default: stringSchema().optional(),
+  });
+  SingleSelectEnumSchemaSchema = union([
+    UntitledSingleSelectEnumSchemaSchema,
+    TitledSingleSelectEnumSchemaSchema,
+  ]);
+  UntitledMultiSelectEnumSchemaSchema = objectSchema({
+    type: literal("array"),
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
+    minItems: numberSchema().optional(),
+    maxItems: numberSchema().optional(),
+    items: objectSchema({
+      type: literal("string"),
+      enum: array(stringSchema()),
+    }),
+    default: array(stringSchema()).optional(),
+  });
+  TitledMultiSelectEnumSchemaSchema = objectSchema({
+    type: literal("array"),
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
+    minItems: numberSchema().optional(),
+    maxItems: numberSchema().optional(),
+    items: objectSchema({
+      anyOf: array(
+        objectSchema({
+          const: stringSchema(),
+          title: stringSchema(),
+        }),
+      ),
+    }),
+    default: array(stringSchema()).optional(),
+  });
+  MultiSelectEnumSchemaSchema = union([
+    UntitledMultiSelectEnumSchemaSchema,
+    TitledMultiSelectEnumSchemaSchema,
+  ]);
+  EnumSchemaSchema = union([
+    LegacyTitledEnumSchemaSchema,
+    SingleSelectEnumSchemaSchema,
+    MultiSelectEnumSchemaSchema,
+  ]);
+  PrimitiveSchemaDefinitionSchema = union([
+    EnumSchemaSchema,
+    BooleanSchemaSchema,
+    StringSchemaSchema,
+    NumberSchemaSchema,
+  ]);
+  ElicitRequestFormParamsSchema = TaskAugmentedRequestParamsSchema.extend({
+    mode: literal("form").optional(),
+    message: stringSchema(),
+    requestedSchema: objectSchema({
+      type: literal("object"),
+      properties: record(stringSchema(), PrimitiveSchemaDefinitionSchema),
+      required: array(stringSchema()).optional(),
+    }).catchall(unknown()),
+  });
+  ElicitRequestURLParamsSchema = TaskAugmentedRequestParamsSchema.extend({
+    mode: literal("url"),
+    message: stringSchema(),
+    elicitationId: stringSchema(),
+    url: stringSchema().url(),
+  });
+  ElicitRequestParamsSchema = union([ElicitRequestFormParamsSchema, ElicitRequestURLParamsSchema]);
+  ElicitRequestSchema = RequestSchema.extend({
+    method: literal("elicitation/create"),
+    params: ElicitRequestParamsSchema,
+  });
+  ElicitationCompleteNotificationParamsSchema = NotificationsParamsSchema.extend({
+    elicitationId: stringSchema(),
+  });
+  ElicitationCompleteNotificationSchema = NotificationSchema.extend({
+    method: literal("notifications/elicitation/complete"),
+    params: ElicitationCompleteNotificationParamsSchema,
+  });
+  ElicitResultSchema = ResultSchema.extend({
+    action: _enum(["accept", "decline", "cancel"]),
+    content: preprocess(
+      (val) => (val === null ? undefined : val),
+      record(
+        stringSchema(),
+        union([stringSchema(), numberSchema(), booleanSchema(), array(stringSchema())]),
+      ).optional(),
+    ),
+  });
+  ResourceTemplateReferenceSchema = objectSchema({
+    type: literal("ref/resource"),
+    uri: stringSchema(),
+  });
+  PromptReferenceSchema = objectSchema({
+    type: literal("ref/prompt"),
+    name: stringSchema(),
+  });
+  CompleteRequestParamsSchema = BaseRequestParamsSchema.extend({
+    ref: union([PromptReferenceSchema, ResourceTemplateReferenceSchema]),
+    argument: objectSchema({
+      name: stringSchema(),
+      value: stringSchema(),
+    }),
+    context: objectSchema({
+      arguments: record(stringSchema(), stringSchema()).optional(),
+    }).optional(),
+  });
+  CompleteRequestSchema = RequestSchema.extend({
+    method: literal("completion/complete"),
+    params: CompleteRequestParamsSchema,
+  });
+  CompleteResultSchema = ResultSchema.extend({
+    completion: looseObject({
+      values: array(stringSchema()).max(100),
+      total: optional(numberSchema().int()),
+      hasMore: optional(booleanSchema()),
+    }),
+  });
+  RootSchema = objectSchema({
+    uri: stringSchema().startsWith("file://"),
+    name: stringSchema().optional(),
+    _meta: record(stringSchema(), unknown()).optional(),
+  });
+  ListRootsRequestSchema = RequestSchema.extend({
+    method: literal("roots/list"),
+    params: BaseRequestParamsSchema.optional(),
+  });
+  ListRootsResultSchema = ResultSchema.extend({
+    roots: array(RootSchema),
+  });
+  RootsListChangedNotificationSchema = NotificationSchema.extend({
+    method: literal("notifications/roots/list_changed"),
+    params: NotificationsParamsSchema.optional(),
+  });
+  TaskCreationParamsSchema = looseObject({
+    ttl: numberSchema().optional(),
+    pollInterval: numberSchema().optional(),
+  });
+  TaskStatusSchema = _enum(["working", "input_required", "completed", "failed", "cancelled"]);
+  TaskSchema = objectSchema({
+    taskId: stringSchema(),
+    status: TaskStatusSchema,
+    ttl: union([numberSchema(), nullSchema()]),
+    createdAt: stringSchema(),
+    lastUpdatedAt: stringSchema(),
+    pollInterval: optional(numberSchema()),
+    statusMessage: optional(stringSchema()),
+  });
+  CreateTaskResultSchema = ResultSchema.extend({
+    task: TaskSchema,
+  });
+  TaskStatusNotificationParamsSchema = NotificationsParamsSchema.merge(TaskSchema);
+  TaskStatusNotificationSchema = NotificationSchema.extend({
+    method: literal("notifications/tasks/status"),
+    params: TaskStatusNotificationParamsSchema,
+  });
+  GetTaskRequestSchema = RequestSchema.extend({
+    method: literal("tasks/get"),
+    params: BaseRequestParamsSchema.extend({
+      taskId: stringSchema(),
+    }),
+  });
+  GetTaskResultSchema = ResultSchema.merge(TaskSchema);
+  GetTaskPayloadRequestSchema = RequestSchema.extend({
+    method: literal("tasks/result"),
+    params: BaseRequestParamsSchema.extend({
+      taskId: stringSchema(),
+    }),
+  });
+  GetTaskPayloadResultSchema = ResultSchema.loose();
+  ListTasksRequestSchema = PaginatedRequestSchema.extend({
+    method: literal("tasks/list"),
+  });
+  ListTasksResultSchema = PaginatedResultSchema.extend({
+    tasks: array(TaskSchema),
+  });
+  CancelTaskRequestSchema = RequestSchema.extend({
+    method: literal("tasks/cancel"),
+    params: BaseRequestParamsSchema.extend({
+      taskId: stringSchema(),
+    }),
+  });
+  CancelTaskResultSchema = ResultSchema.merge(TaskSchema);
+  ClientRequestSchema = union([
+    PingRequestSchema,
+    InitializeRequestSchema,
+    DiscoverRequestSchema,
+    CompleteRequestSchema,
+    SetLevelRequestSchema,
+    GetPromptRequestSchema,
+    ListPromptsRequestSchema,
+    ListResourcesRequestSchema,
+    ListResourceTemplatesRequestSchema,
+    ReadResourceRequestSchema,
+    SubscribeRequestSchema,
+    UnsubscribeRequestSchema,
+    SubscriptionsListenRequestSchema,
+    CallToolRequestSchema,
+    ListToolsRequestSchema,
+  ]);
+  ClientNotificationSchema = union([
+    CancelledNotificationSchema,
+    ProgressNotificationSchema,
+    InitializedNotificationSchema,
+    RootsListChangedNotificationSchema,
+  ]);
+  ClientResultSchema = union([
+    EmptyResultSchema,
+    CreateMessageResultSchema,
+    CreateMessageResultWithToolsSchema,
+    ElicitResultSchema,
+    ListRootsResultSchema,
+  ]);
+  ServerRequestSchema = union([
+    PingRequestSchema,
+    CreateMessageRequestSchema,
+    ElicitRequestSchema,
+    ListRootsRequestSchema,
+  ]);
+  ServerNotificationSchema = union([
+    CancelledNotificationSchema,
+    ProgressNotificationSchema,
+    LoggingMessageNotificationSchema,
+    ResourceUpdatedNotificationSchema,
+    ResourceListChangedNotificationSchema,
+    ToolListChangedNotificationSchema,
+    PromptListChangedNotificationSchema,
+    SubscriptionsAcknowledgedNotificationSchema,
+    ElicitationCompleteNotificationSchema,
+  ]);
+  ServerResultSchema = union([
+    EmptyResultSchema,
+    InitializeResultSchema,
+    DiscoverResultSchema,
+    CompleteResultSchema,
+    GetPromptResultSchema,
+    ListPromptsResultSchema,
+    ListResourcesResultSchema,
+    ListResourceTemplatesResultSchema,
+    ReadResourceResultSchema,
+    CallToolResultSchema,
+    ListToolsResultSchema,
+    SubscriptionsListenResultSchema,
+  ]);
+  SafeUrlSchema = urlSchema()
+    .superRefine((val, ctx) => {
+      if (!URL.canParse(val)) {
+        ctx.addIssue({
+          code: ZodIssueCode.custom,
+          message: "URL must be parseable",
+          fatal: true,
+        });
+        return INVALID;
+      }
+    })
+    .refine(
+      (url) => {
+        let u = new URL(url);
+        return u.protocol !== "javascript:" && u.protocol !== "data:" && u.protocol !== "vbscript:";
+      },
+      {
+        message: "URL cannot use javascript:, data:, or vbscript: scheme",
+      },
+    );
+  OAuthProtectedResourceMetadataSchema = looseObject({
+    resource: stringSchema().url(),
+    authorization_servers: array(SafeUrlSchema).optional(),
+    jwks_uri: stringSchema().url().optional(),
+    scopes_supported: array(stringSchema()).optional(),
+    bearer_methods_supported: array(stringSchema()).optional(),
+    resource_signing_alg_values_supported: array(stringSchema()).optional(),
+    resource_name: stringSchema().optional(),
+    resource_documentation: stringSchema().optional(),
+    resource_policy_uri: stringSchema().url().optional(),
+    resource_tos_uri: stringSchema().url().optional(),
+    tls_client_certificate_bound_access_tokens: booleanSchema().optional(),
+    authorization_details_types_supported: array(stringSchema()).optional(),
+    dpop_signing_alg_values_supported: array(stringSchema()).optional(),
+    dpop_bound_access_tokens_required: booleanSchema().optional(),
+  });
+  OAuthMetadataSchema = looseObject({
+    issuer: stringSchema(),
+    authorization_endpoint: SafeUrlSchema,
+    token_endpoint: SafeUrlSchema,
+    registration_endpoint: SafeUrlSchema.optional(),
+    scopes_supported: array(stringSchema()).optional(),
+    response_types_supported: array(stringSchema()),
+    response_modes_supported: array(stringSchema()).optional(),
+    grant_types_supported: array(stringSchema()).optional(),
+    token_endpoint_auth_methods_supported: array(stringSchema()).optional(),
+    token_endpoint_auth_signing_alg_values_supported: array(stringSchema()).optional(),
+    service_documentation: SafeUrlSchema.optional(),
+    revocation_endpoint: SafeUrlSchema.optional(),
+    revocation_endpoint_auth_methods_supported: array(stringSchema()).optional(),
+    revocation_endpoint_auth_signing_alg_values_supported: array(stringSchema()).optional(),
+    introspection_endpoint: stringSchema().optional(),
+    introspection_endpoint_auth_methods_supported: array(stringSchema()).optional(),
+    introspection_endpoint_auth_signing_alg_values_supported: array(stringSchema()).optional(),
+    code_challenge_methods_supported: array(stringSchema()).optional(),
+    client_id_metadata_document_supported: booleanSchema().optional(),
+    authorization_response_iss_parameter_supported: booleanSchema().optional().catch(undefined),
+  });
+  OpenIdProviderMetadataSchema = looseObject({
+    issuer: stringSchema(),
+    authorization_endpoint: SafeUrlSchema,
+    token_endpoint: SafeUrlSchema,
+    userinfo_endpoint: SafeUrlSchema.optional(),
+    jwks_uri: SafeUrlSchema,
+    registration_endpoint: SafeUrlSchema.optional(),
+    scopes_supported: array(stringSchema()).optional(),
+    response_types_supported: array(stringSchema()),
+    response_modes_supported: array(stringSchema()).optional(),
+    grant_types_supported: array(stringSchema()).optional(),
+    acr_values_supported: array(stringSchema()).optional(),
+    subject_types_supported: array(stringSchema()),
+    id_token_signing_alg_values_supported: array(stringSchema()),
+    id_token_encryption_alg_values_supported: array(stringSchema()).optional(),
+    id_token_encryption_enc_values_supported: array(stringSchema()).optional(),
+    userinfo_signing_alg_values_supported: array(stringSchema()).optional(),
+    userinfo_encryption_alg_values_supported: array(stringSchema()).optional(),
+    userinfo_encryption_enc_values_supported: array(stringSchema()).optional(),
+    request_object_signing_alg_values_supported: array(stringSchema()).optional(),
+    request_object_encryption_alg_values_supported: array(stringSchema()).optional(),
+    request_object_encryption_enc_values_supported: array(stringSchema()).optional(),
+    token_endpoint_auth_methods_supported: array(stringSchema()).optional(),
+    token_endpoint_auth_signing_alg_values_supported: array(stringSchema()).optional(),
+    display_values_supported: array(stringSchema()).optional(),
+    claim_types_supported: array(stringSchema()).optional(),
+    claims_supported: array(stringSchema()).optional(),
+    service_documentation: stringSchema().optional(),
+    claims_locales_supported: array(stringSchema()).optional(),
+    ui_locales_supported: array(stringSchema()).optional(),
+    claims_parameter_supported: booleanSchema().optional(),
+    request_parameter_supported: booleanSchema().optional(),
+    request_uri_parameter_supported: booleanSchema().optional(),
+    require_request_uri_registration: booleanSchema().optional(),
+    op_policy_uri: SafeUrlSchema.optional(),
+    op_tos_uri: SafeUrlSchema.optional(),
+    client_id_metadata_document_supported: booleanSchema().optional(),
+    authorization_response_iss_parameter_supported: booleanSchema().optional().catch(undefined),
+  });
+  OpenIdProviderDiscoveryMetadataSchema = objectSchema({
+    ...OpenIdProviderMetadataSchema.shape,
+    ...OAuthMetadataSchema.pick({
+      code_challenge_methods_supported: true,
+    }).shape,
+  });
+  OAuthTokensSchema = objectSchema({
+    access_token: stringSchema(),
+    id_token: stringSchema().optional(),
+    token_type: stringSchema(),
+    expires_in: coerceNumber().optional(),
+    scope: stringSchema().optional(),
+    refresh_token: stringSchema().optional(),
+  }).strip();
+  IdJagTokenExchangeResponseSchema = objectSchema({
+    issued_token_type: literal("urn:ietf:params:oauth:token-type:id-jag"),
+    access_token: stringSchema(),
+    token_type: stringSchema().optional(),
+    expires_in: numberSchema().optional(),
+    scope: stringSchema().optional(),
+  }).strip();
+  OAuthErrorResponseSchema = objectSchema({
+    error: stringSchema(),
+    error_description: stringSchema().optional(),
+    error_uri: stringSchema().optional(),
+  });
+  OptionalSafeUrlSchema = SafeUrlSchema.optional().or(
+    literal("").transform(() => {
+      return;
+    }),
+  );
+  OAuthClientMetadataSchema = objectSchema({
+    redirect_uris: array(SafeUrlSchema),
+    token_endpoint_auth_method: stringSchema().optional(),
+    grant_types: array(stringSchema()).optional(),
+    response_types: array(stringSchema()).optional(),
+    application_type: stringSchema().optional(),
+    client_name: stringSchema().optional(),
+    client_uri: SafeUrlSchema.optional(),
+    logo_uri: OptionalSafeUrlSchema,
+    scope: stringSchema().optional(),
+    contacts: array(stringSchema()).optional(),
+    tos_uri: OptionalSafeUrlSchema,
+    policy_uri: stringSchema().optional(),
+    jwks_uri: SafeUrlSchema.optional(),
+    jwks: anySchema().optional(),
+    software_id: stringSchema().optional(),
+    software_version: stringSchema().optional(),
+    software_statement: stringSchema().optional(),
+  }).strip();
+  OAuthClientInformationSchema = objectSchema({
+    client_id: stringSchema(),
+    client_secret: stringSchema().optional(),
+    client_id_issued_at: numberSchema().optional(),
+    client_secret_expires_at: numberSchema().optional(),
+  }).strip();
+  OAuthClientInformationFullSchema = OAuthClientMetadataSchema.merge(OAuthClientInformationSchema);
+  OAuthClientRegistrationErrorSchema = objectSchema({
+    error: stringSchema(),
+    error_description: stringSchema().optional(),
+  }).strip();
+  OAuthTokenRevocationRequestSchema = objectSchema({
+    token: stringSchema(),
+    token_type_hint: stringSchema().optional(),
+  }).strip();
 });
-var OAuthMetadataSchema = looseObject({
-  issuer: string(),
-  authorization_endpoint: SafeUrlSchema,
-  token_endpoint: SafeUrlSchema,
-  registration_endpoint: SafeUrlSchema.optional(),
-  scopes_supported: array(string()).optional(),
-  response_types_supported: array(string()),
-  response_modes_supported: array(string()).optional(),
-  grant_types_supported: array(string()).optional(),
-  token_endpoint_auth_methods_supported: array(string()).optional(),
-  token_endpoint_auth_signing_alg_values_supported: array(string()).optional(),
-  service_documentation: SafeUrlSchema.optional(),
-  revocation_endpoint: SafeUrlSchema.optional(),
-  revocation_endpoint_auth_methods_supported: array(string()).optional(),
-  revocation_endpoint_auth_signing_alg_values_supported: array(string()).optional(),
-  introspection_endpoint: string().optional(),
-  introspection_endpoint_auth_methods_supported: array(string()).optional(),
-  introspection_endpoint_auth_signing_alg_values_supported: array(string()).optional(),
-  code_challenge_methods_supported: array(string()).optional(),
-  client_id_metadata_document_supported: M().optional(),
-  authorization_response_iss_parameter_supported: M().optional().catch(undefined),
-});
-var OpenIdProviderMetadataSchema = looseObject({
-  issuer: string(),
-  authorization_endpoint: SafeUrlSchema,
-  token_endpoint: SafeUrlSchema,
-  userinfo_endpoint: SafeUrlSchema.optional(),
-  jwks_uri: SafeUrlSchema,
-  registration_endpoint: SafeUrlSchema.optional(),
-  scopes_supported: array(string()).optional(),
-  response_types_supported: array(string()),
-  response_modes_supported: array(string()).optional(),
-  grant_types_supported: array(string()).optional(),
-  acr_values_supported: array(string()).optional(),
-  subject_types_supported: array(string()),
-  id_token_signing_alg_values_supported: array(string()),
-  id_token_encryption_alg_values_supported: array(string()).optional(),
-  id_token_encryption_enc_values_supported: array(string()).optional(),
-  userinfo_signing_alg_values_supported: array(string()).optional(),
-  userinfo_encryption_alg_values_supported: array(string()).optional(),
-  userinfo_encryption_enc_values_supported: array(string()).optional(),
-  request_object_signing_alg_values_supported: array(string()).optional(),
-  request_object_encryption_alg_values_supported: array(string()).optional(),
-  request_object_encryption_enc_values_supported: array(string()).optional(),
-  token_endpoint_auth_methods_supported: array(string()).optional(),
-  token_endpoint_auth_signing_alg_values_supported: array(string()).optional(),
-  display_values_supported: array(string()).optional(),
-  claim_types_supported: array(string()).optional(),
-  claims_supported: array(string()).optional(),
-  service_documentation: string().optional(),
-  claims_locales_supported: array(string()).optional(),
-  ui_locales_supported: array(string()).optional(),
-  claims_parameter_supported: M().optional(),
-  request_parameter_supported: M().optional(),
-  request_uri_parameter_supported: M().optional(),
-  require_request_uri_registration: M().optional(),
-  op_policy_uri: SafeUrlSchema.optional(),
-  op_tos_uri: SafeUrlSchema.optional(),
-  client_id_metadata_document_supported: M().optional(),
-  authorization_response_iss_parameter_supported: M().optional().catch(undefined),
-});
-var OpenIdProviderDiscoveryMetadataSchema = u({
-  ...OpenIdProviderMetadataSchema.shape,
-  ...OAuthMetadataSchema.pick({
-    code_challenge_methods_supported: true,
-  }).shape,
-});
-var OAuthTokensSchema = u({
-  access_token: string(),
-  id_token: string().optional(),
-  token_type: string(),
-  expires_in: F1e().optional(),
-  scope: string().optional(),
-  refresh_token: string().optional(),
-}).strip();
-var IdJagTokenExchangeResponseSchema = u({
-  issued_token_type: literal("urn:ietf:params:oauth:token-type:id-jag"),
-  access_token: string(),
-  token_type: string().optional(),
-  expires_in: E().optional(),
-  scope: string().optional(),
-}).strip();
-var OAuthErrorResponseSchema = u({
-  error: string(),
-  error_description: string().optional(),
-  error_uri: string().optional(),
-});
-var OptionalSafeUrlSchema = SafeUrlSchema.optional().or(
-  literal("").transform(() => {
-    return;
-  }),
-);
-var OAuthClientMetadataSchema = u({
-  redirect_uris: array(SafeUrlSchema),
-  token_endpoint_auth_method: string().optional(),
-  grant_types: array(string()).optional(),
-  response_types: array(string()).optional(),
-  application_type: string().optional(),
-  client_name: string().optional(),
-  client_uri: SafeUrlSchema.optional(),
-  logo_uri: OptionalSafeUrlSchema,
-  scope: string().optional(),
-  contacts: array(string()).optional(),
-  tos_uri: OptionalSafeUrlSchema,
-  policy_uri: string().optional(),
-  jwks_uri: SafeUrlSchema.optional(),
-  jwks: qne().optional(),
-  software_id: string().optional(),
-  software_version: string().optional(),
-  software_statement: string().optional(),
-}).strip();
-var OAuthClientInformationSchema = u({
-  client_id: string(),
-  client_secret: string().optional(),
-  client_id_issued_at: E().optional(),
-  client_secret_expires_at: E().optional(),
-}).strip();
-var OAuthClientInformationFullSchema = OAuthClientMetadataSchema.merge(OAuthClientInformationSchema);
-var OAuthClientRegistrationErrorSchema = u({
-  error: string(),
-  error_description: string().optional(),
-}).strip();
-var OAuthTokenRevocationRequestSchema = u({
-  token: string(),
-  token_type_hint: string().optional(),
-}).strip();
-//@ chunk-1kaj6e83.js:2564-2843 esm-fingerprint
-var TokenExchangeResponseSchema = DoctorLazy(() =>
-  u({
-    access_token: string().optional(),
-    issued_token_type: string().optional(),
-    expires_in: F1e().optional(),
-    scope: string().optional(),
-  }),
-);
-var JwtBearerResponseSchema = DoctorLazy(() =>
-  u({
-    access_token: string().min(1),
-    token_type: string().default("Bearer"),
-    expires_in: F1e().optional(),
-    scope: string().optional(),
-    refresh_token: string().optional(),
-  }),
-);
 //@ chunk-n1aavqzh.js:2611-2890 esm-fingerprint
-var TokenExchangeResponseSchema_2 = DoctorLazy(() =>
-  u({
-    access_token: string().optional(),
-    issued_token_type: string().optional(),
-    expires_in: F1e().optional(),
-    scope: string().optional(),
-  }),
-);
-var JwtBearerResponseSchema_2 = DoctorLazy(() =>
-  u({
-    access_token: string().min(1),
-    token_type: string().default("Bearer"),
-    expires_in: F1e().optional(),
-    scope: string().optional(),
-    refresh_token: string().optional(),
-  }),
-);
+var TokenExchangeResponseSchema_2; // deferred: uses DoctorLazy (../../../../src/cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var JwtBearerResponseSchema_2;
+deferInit("chunk-n1aavqzh.js:2611", () => {
+  TokenExchangeResponseSchema_2 = DoctorLazy(() =>
+    objectSchema({
+      access_token: stringSchema().optional(),
+      issued_token_type: stringSchema().optional(),
+      expires_in: coerceNumber().optional(),
+      scope: stringSchema().optional(),
+    }),
+  );
+  JwtBearerResponseSchema_2 = DoctorLazy(() =>
+    objectSchema({
+      access_token: stringSchema().min(1),
+      token_type: stringSchema().default("Bearer"),
+      expires_in: coerceNumber().optional(),
+      scope: stringSchema().optional(),
+      refresh_token: stringSchema().optional(),
+    }),
+  );
+});
+//@ chunk-1kaj6e83.js:2564-2843 esm-fingerprint
+var TokenExchangeResponseSchema; // deferred: uses DoctorLazy (../../../../src/cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var JwtBearerResponseSchema;
+deferInit("chunk-1kaj6e83.js:2564", () => {
+  TokenExchangeResponseSchema = DoctorLazy(() =>
+    objectSchema({
+      access_token: stringSchema().optional(),
+      issued_token_type: stringSchema().optional(),
+      expires_in: coerceNumber().optional(),
+      scope: stringSchema().optional(),
+    }),
+  );
+  JwtBearerResponseSchema = DoctorLazy(() =>
+    objectSchema({
+      access_token: stringSchema().min(1),
+      token_type: stringSchema().default("Bearer"),
+      expires_in: coerceNumber().optional(),
+      scope: stringSchema().optional(),
+      refresh_token: stringSchema().optional(),
+    }),
+  );
+});
 export {
   ListToolsResultSchema,
-  fZe,
+  JSONRPCMessageSchema,
   ListResourcesResultSchema,
   ListResourceTemplatesResultSchema,
   ListPromptsResultSchema,
@@ -1151,8 +1360,8 @@ export {
   SUBSCRIPTION_ID_META_KEY,
   ListChangedOptionsBaseSchema,
   PROTOCOL_VERSION_META_KEY,
-  TokenExchangeResponseSchema,
   TokenExchangeResponseSchema_2,
+  TokenExchangeResponseSchema,
   JwtBearerResponseSchema_2,
   PARSE_ERROR,
   RelatedTaskMetadataSchema,
@@ -1173,9 +1382,9 @@ export {
   CancelledNotificationParamsSchema,
   CancelledNotificationSchema,
   ClientCapabilitiesSchema,
-  Ha,
-  Fa,
-  Ja,
+  ClientNotificationSchema,
+  ClientRequestSchema,
+  ClientResultSchema,
   ClientTasksCapabilitySchema,
   CompleteRequestParamsSchema,
   CompleteRequestSchema,
@@ -1209,12 +1418,12 @@ export {
   InitializeRequestParamsSchema,
   InitializeRequestSchema,
   InitializedNotificationSchema,
-  Ta,
+  JSONArraySchema,
   JSONObjectSchema,
   JSONRPCErrorResponseSchema,
   JSONRPCNotificationSchema,
   JSONRPCRequestSchema,
-  Ca,
+  JSONRPCResponseSchema,
   JSONRPCResultResponseSchema,
   JSONValueSchema,
   LegacyTitledEnumSchemaSchema,
@@ -1268,9 +1477,9 @@ export {
   SamplingContentSchema,
   SamplingMessageContentBlockSchema,
   SamplingMessageSchema,
-  Ba,
-  Ga,
-  Wa,
+  ServerNotificationSchema,
+  ServerRequestSchema,
+  ServerResultSchema,
   ServerTasksCapabilitySchema,
   SetLevelRequestParamsSchema,
   SetLevelRequestSchema,

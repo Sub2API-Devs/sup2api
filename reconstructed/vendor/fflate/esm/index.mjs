@@ -8,11 +8,11 @@
 import { createRequire } from "module";
 
 //@ chunk-9t1jcaah.js:231-249 esm-layout
-var Hr = createRequire("/");
+var requireModule = createRequire("/");
 var Worker;
 //@ chunk-9t1jcaah.js:249-294 esm-fingerprint
 try {
-  Worker = Hr("worker_threads").Worker;
+  Worker = requireModule("worker_threads").Worker;
 } catch (e) {}
 //@ chunk-9t1jcaah.js:294-760 esm-layout
 /**
@@ -39,14 +39,14 @@ var freb = function (eb, start) {
     r,
   };
 };
-var Tr = freb(fleb, 2);
-var { b: Wr, r: revfl } = Tr;
+var frebFleb = freb(fleb, 2);
+var { b: flt, r: revfl } = frebFleb;
 //@ chunk-9t1jcaah.js:760-782 esm-layout
-Wr[28] = 258;
+flt[28] = 258;
 revfl[258] = 28;
 //@ chunk-9t1jcaah.js:782-829 esm-layout
-var Ur = freb(fdeb, 0);
-var { b: rn, r: revfd } = Ur;
+var frebFdeb = freb(fdeb, 0);
+var { b: fdt, r: revfd } = frebFdeb;
 var rev = new u16(32768);
 //@ chunk-9t1jcaah.js:829-967 esm-fingerprint
 for (i = 0; i < 32768; ++i) {
@@ -82,31 +82,31 @@ var hMap = function (cd, mb, r) {
   }
   return co;
 };
-var flt = new u8(288);
+var flt_2 = new u8(288);
 //@ chunk-9t1jcaah.js:1352-1377 esm-layout
-for (i = 0; i < 144; ++i) flt[i] = 8;
+for (i = 0; i < 144; ++i) flt_2[i] = 8;
 //@ chunk-9t1jcaah.js:1377-1383 esm-layout
 var i;
 //@ chunk-9t1jcaah.js:1383-1410 esm-layout
-for (i = 144; i < 256; ++i) flt[i] = 9;
+for (i = 144; i < 256; ++i) flt_2[i] = 9;
 //@ chunk-9t1jcaah.js:1410-1416 esm-layout
 var i;
 //@ chunk-9t1jcaah.js:1416-1443 esm-layout
-for (i = 256; i < 280; ++i) flt[i] = 7;
+for (i = 256; i < 280; ++i) flt_2[i] = 7;
 //@ chunk-9t1jcaah.js:1443-1449 esm-layout
 var i;
 //@ chunk-9t1jcaah.js:1449-1476 esm-layout
-for (i = 280; i < 288; ++i) flt[i] = 8;
+for (i = 280; i < 288; ++i) flt_2[i] = 8;
 //@ chunk-9t1jcaah.js:1476-1495 esm-layout
 var i;
-var fdt = new u8(32);
+var fdt_2 = new u8(32);
 //@ chunk-9t1jcaah.js:1495-1520 esm-layout
-for (i = 0; i < 32; ++i) fdt[i] = 5;
+for (i = 0; i < 32; ++i) fdt_2[i] = 5;
 //@ chunk-9t1jcaah.js:1520-1539 esm-layout
 var i;
-var Rr = hMap(flt, 9, 0);
+var import_hMap = hMap(flt_2, 9, 0);
 //@ chunk-9t1jcaah.js:1539-1557 esm-layout
-var Yr = hMap(fdt, 5, 0);
+var import_hMapDict = hMap(fdt_2, 5, 0);
 //@ chunk-9t1jcaah.js:1557-1697 esm-layout
 var shft = function (pos) {
   return ((pos + 7) / 8) | 0;
@@ -134,11 +134,11 @@ var ec = [
   "invalid zip data",
 ];
 var err = function (ind, msg, nt) {
-  var e = Error(msg || ec[ind]);
-  e.code = ind;
-  if (Error.captureStackTrace) Error.captureStackTrace(e, err);
-  if (!nt) throw e;
-  return e;
+  var error = Error(msg || ec[ind]);
+  error.code = ind;
+  if (Error.captureStackTrace) Error.captureStackTrace(error, err);
+  if (!nt) throw error;
+  return error;
 };
 //@ chunk-9t1jcaah.js:2102-6473 esm-layout
 var wbits = function (d, p, v) {
@@ -155,50 +155,50 @@ var wbits16 = function (d, p, v) {
   d[o + 2] |= v >> 16;
 };
 var hTree = function (d, mb) {
-  var t = [];
+  var freqEntries = [];
   for (var i_2 = 0; i_2 < d.length; ++i_2)
     if (d[i_2])
-      t.push({
+      freqEntries.push({
         s: i_2,
         f: d[i_2],
       });
-  var s_2 = t.length;
-  var sliced = t.slice();
+  var s_2 = freqEntries.length;
+  var sliced = freqEntries.slice();
   if (!s_2)
     return {
       t: et,
       l: 0,
     };
   if (s_2 == 1) {
-    var v = new u8(t[0].s + 1);
-    v[t[0].s] = 1;
+    var v = new u8(freqEntries[0].s + 1);
+    v[freqEntries[0].s] = 1;
     return {
       t: v,
       l: 1,
     };
   }
-  t.sort(function (a, b) {
+  freqEntries.sort(function (a, b) {
     return a.f - b.f;
   });
-  t.push({
+  freqEntries.push({
     s: -1,
     f: 25001,
   });
-  var l_2 = t[0];
-  var r = t[1];
+  var l_2 = freqEntries[0];
+  var r = freqEntries[1];
   var i0 = 0;
   var i1 = 1;
   var i2 = 2;
-  t[0] = {
+  freqEntries[0] = {
     s: -1,
     f: l_2.f + r.f,
     l: l_2,
     r,
   };
   while (i1 != s_2 - 1) {
-    l_2 = t[t[i0].f < t[i2].f ? i0++ : i2++];
-    r = t[i0 != i1 && t[i0].f < t[i2].f ? i0++ : i2++];
-    t[i1++] = {
+    l_2 = freqEntries[freqEntries[i0].f < freqEntries[i2].f ? i0++ : i2++];
+    r = freqEntries[i0 != i1 && freqEntries[i0].f < freqEntries[i2].f ? i0++ : i2++];
+    freqEntries[i1++] = {
       s: -1,
       f: l_2.f + r.f,
       l: l_2,
@@ -208,7 +208,7 @@ var hTree = function (d, mb) {
   var maxSym = sliced[0].s;
   for (var i_2 = 1; i_2 < s_2; ++i_2) if (sliced[i_2].s > maxSym) maxSym = sliced[i_2].s;
   var tr = new u16(maxSym + 1);
-  var mbt = ln(t[i1 - 1], tr, 0);
+  var mbt = ln(freqEntries[i1 - 1], tr, 0);
   if (mbt > mb) {
     var i_2 = 0;
     var dt = 0;
@@ -244,8 +244,10 @@ var hTree = function (d, mb) {
     l: mbt,
   };
 };
-var ln = function (n, l, d) {
-  return n.s == -1 ? Math.max(ln(n.l, l, d + 1), ln(n.r, l, d + 1)) : (l[n.s] = d);
+var ln = function (treeNode, l, d) {
+  return treeNode.s == -1
+    ? Math.max(ln(treeNode.l, l, d + 1), ln(treeNode.r, l, d + 1))
+    : (l[treeNode.s] = d);
 };
 var lc = function (c) {
   var s = c.length;
@@ -296,29 +298,29 @@ var wfblk = function (out, pos, dat) {
   out[o + 1] = s >> 8;
   out[o + 2] = out[o] ^ 255;
   out[o + 3] = out[o + 1] ^ 255;
-  for (var i = 0; i < s; ++i) out[o + i + 4] = dat[i];
+  for (var byteIndex = 0; byteIndex < s; ++byteIndex) out[o + byteIndex + 4] = dat[byteIndex];
   return (o + 4 + s) * 8;
 };
 var wblk = function (dat, out, final, syms, lf, df, eb, li, bs, bl, p_2) {
   wbits(out, p_2++, final);
   ++lf[256];
-  var u = hTree(lf, 15);
-  var { t: dlt, l: m } = u;
-  var w = hTree(df, 15);
-  var { t: ddt, l: x } = w;
-  var S = lc(dlt);
-  var { c: lclt, n: T } = S;
-  var C = lc(ddt);
-  var { c: lcdt, n: Z } = C;
+  var dictTree = hTree(lf, 15);
+  var { t: dlt, l: mlb } = dictTree;
+  var dfTree = hTree(df, 15);
+  var { t: ddt, l: mdb } = dfTree;
+  var lcData = lc(dlt);
+  var { c: lclt, n: nlc } = lcData;
+  var lcDict = lc(ddt);
+  var { c: lcdt, n: ndc } = lcDict;
   var lcfreq = new u16(19);
   for (var i = 0; i < lclt.length; ++i) ++lcfreq[lclt[i] & 31];
   for (var i = 0; i < lcdt.length; ++i) ++lcfreq[lcdt[i] & 31];
-  var c = hTree(lcfreq, 7);
-  var { t: lct, l: K } = c;
+  var lcTree = hTree(lcfreq, 7);
+  var { t: lct, l: mlcb } = lcTree;
   var nlcc = 19;
   for (; nlcc > 4 && !lct[clim[nlcc - 1]]; --nlcc);
   var flen = (bl + 5) << 3;
-  var ftlen = clen(lf, flt) + clen(df, fdt) + eb;
+  var ftlen = clen(lf, flt_2) + clen(df, fdt_2) + eb;
   var dtlen =
     clen(lf, dlt) +
     clen(df, ddt) +
@@ -337,13 +339,13 @@ var wblk = function (dat, out, final, syms, lf, df, eb, li, bs, bl, p_2) {
   wbits(out, p_2, 1 + (dtlen < ftlen));
   p_2 += 2;
   if (dtlen < ftlen) {
-    lm = hMap(dlt, m, 0);
+    lm = hMap(dlt, mlb, 0);
     ll = dlt;
-    dm = hMap(ddt, x, 0);
+    dm = hMap(ddt, mdb, 0);
     dl = ddt;
-    var llm = hMap(lct, K, 0);
-    wbits(out, p_2, T - 257);
-    wbits(out, p_2 + 5, Z - 1);
+    var llm = hMap(lct, mlcb, 0);
+    wbits(out, p_2, nlc - 257);
+    wbits(out, p_2 + 5, ndc - 1);
     wbits(out, p_2 + 10, nlcc - 4);
     p_2 += 14;
     for (var i = 0; i < nlcc; ++i) wbits(out, p_2 + 3 * i, lct[clim[i]]);
@@ -362,10 +364,10 @@ var wblk = function (dat, out, final, syms, lf, df, eb, li, bs, bl, p_2) {
       }
     }
   } else {
-    lm = Rr;
-    ll = flt;
-    dm = Yr;
-    dl = fdt;
+    lm = import_hMap;
+    ll = flt_2;
+    dm = import_hMapDict;
+    dl = fdt_2;
   }
   for (var i = 0; i < li; ++i) {
     var sym = syms[i];
@@ -536,7 +538,7 @@ var crc = function () {
   };
 };
 //@ chunk-9t1jcaah.js:6473-6857 esm-fingerprint
-var Gr = function (dat, opt, pre, post, st) {
+var deflateStream = function (dat, opt, pre, post, st) {
   if (!st) {
     st = {
       l: 1,
@@ -570,9 +572,9 @@ var mrg = function (a, b) {
   return o;
 };
 //@ chunk-9t1jcaah.js:6857-6905 esm-layout
-var wbytes = function (n, b, v) {
+var wbytes = function (out, b, v) {
   for (; v; ++b) {
-    n[b] = v;
+    out[b] = v;
     v >>>= 8;
   }
 };
@@ -599,7 +601,7 @@ var Deflate = (function () {
     }
   }
   Deflate.prototype.p = function (c, f) {
-    this.ondata(Gr(c, this.o, 0, 0, this.s), f);
+    this.ondata(deflateStream(c, this.o, 0, 0, this.s), f);
   };
   Deflate.prototype.push = function (chunk, final) {
     if (!this.ondata) err(5);
@@ -641,11 +643,11 @@ var Deflate = (function () {
   return Deflate;
 })();
 //@ chunk-9t1jcaah.js:7948-7988 esm-layout
-function deflateSync(file, r) {
-  return Gr(file, r || {}, 0, 0);
+function deflateSync(file, opts) {
+  return deflateStream(file, opts || {}, 0, 0);
 }
 //@ chunk-9t1jcaah.js:7988-8252 esm-layout
-var fltn = function (d, p, t, o_2) {
+var fltn = function (d, p, files, o_2) {
   for (var k in d) {
     var val = d[k];
     var n = p + k;
@@ -654,10 +656,10 @@ var fltn = function (d, p, t, o_2) {
       op = mrg(o_2, val[1]);
       val = val[0];
     }
-    if (val instanceof u8) t[n] = [val, op];
+    if (val instanceof u8) files[n] = [val, op];
     else {
-      t[(n += "/")] = [new u8(0), op];
-      fltn(val, n, t, o_2);
+      files[(n += "/")] = [new u8(0), op];
+      fltn(val, n, files, o_2);
     }
   }
 };
@@ -838,7 +840,7 @@ var ZipDeflate = (function () {
   return ZipDeflate;
 })();
 //@ chunk-9t1jcaah.js:10411-11990 esm-fingerprint
-var tn = (function () {
+var Zip = (function () {
   function Zip(ondata) {
     this.ondata = ondata;
     this.u = [];
@@ -852,8 +854,8 @@ var tn = (function () {
       var f_2 = strToU8(file.filename);
       var fl_1 = f_2.length;
       var com = file.comment;
-      var o = com && strToU8(com);
-      var u_2 = fl_1 != file.filename.length || (o && com.length != o.length);
+      var commentBytes = com && strToU8(com);
+      var u_2 = fl_1 != file.filename.length || (commentBytes && com.length != commentBytes.length);
       var hl_1 = fl_1 + exfl(file.extra) + 30;
       if (fl_1 > 65535) this.ondata(err(11, 0, 1), null, false);
       var header = new u8(hl_1);
@@ -872,7 +874,7 @@ var tn = (function () {
       var uf_1 = mrg(file, {
         f: f_2,
         u: u_2,
-        o,
+        o: commentBytes,
         t: function () {
           if (file.terminate) file.terminate();
         },
@@ -960,15 +962,15 @@ var tn = (function () {
   return Zip;
 })();
 //@ chunk-9t1jcaah.js:11990-12619 esm-fingerprint
-function en(data, r) {
-  if (!r) r = {};
-  var r_2 = {};
+function zipSync(data, opts) {
+  if (!opts) opts = {};
+  var r = {};
   var files = [];
-  fltn(data, "", r_2, r);
+  fltn(data, "", r, opts);
   var o_2 = 0;
   var tot = 0;
-  for (var fn in r_2) {
-    var _a = r_2[fn];
+  for (var fn in r) {
+    var _a = r[fn];
     var file = _a[0];
     var p_2 = _a[1];
     var compression = p_2.level == 0 ? 0 : 8;
@@ -999,8 +1001,8 @@ function en(data, r) {
     tot += 76 + 2 * (s + exl) + (ms || 0) + l;
   }
   var out = new u8(tot + 22);
-  var I = o_2;
-  var Z = tot - o_2;
+  var oe = o_2;
+  var cdl = tot - o_2;
   for (var i = 0; i < files.length; ++i) {
     var f = files[i];
     wzh(out, f.o, f, f.f, f.u, f.c.length);
@@ -1009,6 +1011,7 @@ function en(data, r) {
     wzh(out, o_2, f, f.f, f.u, f.c.length, f.o, f.m);
     o_2 += 16 + badd + (f.m ? f.m.length : 0);
   }
-  wzf(out, o_2, files.length, Z, I);
+  wzf(out, o_2, files.length, cdl, oe);
   return out;
 }
+export { Zip, ZipDeflate, zipSync };

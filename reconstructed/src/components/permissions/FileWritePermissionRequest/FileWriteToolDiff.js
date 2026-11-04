@@ -13,7 +13,7 @@ import { stripUnsafeChars } from "../../../utils/permissions/approvalPayloadSeri
 import { jsxProd_default } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { NoSelect } from "../../../ink/components/Input.js";
 import { Text } from "../../../ink/components/Text.js";
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../../../hooks/useTerminalSize.js";
 import { useExitCleanup } from "../FolderAccessPermissionRequest.js";
 import { getPatchForDisplay } from "../../../utils/diff.js";
@@ -22,14 +22,18 @@ import { intersperse } from "../../../utils/collections.js";
 import { StructuredDiff } from "../../StructuredDiff.js";
 import { HighlightedCode } from "../../HighlightedCode.js";
 import { DiffFrame } from "../../FileEditToolDiff.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1370706-1370710 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1370706", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1370710-1370764 layout
-function sanitizeFileEditLines(Et) {
+function sanitizeFileEditLines(diff) {
   return {
-    ...Et,
-    lines: Et.lines.map(stripUnsafeChars),
+    ...diff,
+    lines: diff.lines.map(stripUnsafeChars),
   };
 }
 //@ chunk-18hwfzwa.js:1370764-1370872 fingerprint = _temp (0.797)
@@ -48,7 +52,7 @@ function EllipsisRow(i) {
 }
 //@ chunk-18hwfzwa.js:1370872-1371962 fingerprint = FileWriteToolDiff (0.761)
 function FileWriteToolDiff(props) {
-  let $ = w(19);
+  let $ = useMemoCache(19);
   let { file_path, content, fileExists, oldContent } = props;
   let { columns } = useTerminalSize();
   useExitCleanup();
@@ -86,21 +90,21 @@ function FileWriteToolDiff(props) {
     $[5] = fileExists;
     $[6] = t2;
   } else t2 = $[6];
-  let Xe = t2;
-  let rt;
+  let displayContent = t2;
+  let firstLine;
   if ($[7] !== content) {
-    rt = stripUnsafeChars(getFirstLine(content));
+    firstLine = stripUnsafeChars(getFirstLine(content));
     $[7] = content;
-    $[8] = rt;
-  } else rt = $[8];
-  let firstLine = rt;
+    $[8] = firstLine;
+  } else firstLine = $[8];
+  let firstLine_2 = firstLine;
   let children;
   if (
     $[9] !== columns ||
     $[10] !== content ||
-    $[11] !== Xe ||
+    $[11] !== displayContent ||
     $[12] !== file_path ||
-    $[13] !== firstLine ||
+    $[13] !== firstLine_2 ||
     $[14] !== hunks ||
     $[15] !== oldContent
   ) {
@@ -119,7 +123,7 @@ function FileWriteToolDiff(props) {
                     patch: hunk,
                     dim: false,
                     filePath: file_path,
-                    firstLine,
+                    firstLine: firstLine_2,
                     fileContent: oldContent,
                     width: columns - 2,
                   },
@@ -129,14 +133,14 @@ function FileWriteToolDiff(props) {
               EllipsisRow,
             )
           : jsxProd_default(HighlightedCode, {
-              code: Xe || "(No content)",
+              code: displayContent || "(No content)",
               filePath: file_path,
             });
     $[9] = columns;
     $[10] = content;
-    $[11] = Xe;
+    $[11] = displayContent;
     $[12] = file_path;
-    $[13] = firstLine;
+    $[13] = firstLine_2;
     $[14] = hunks;
     $[15] = oldContent;
     $[16] = children;

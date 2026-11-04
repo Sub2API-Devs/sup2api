@@ -8,7 +8,7 @@
  * pieces: chunk-s5p7fp0c.js (1)
  * attribution: callgraph-fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useKeybinding } from "../../keybindings/useKeybinding.js";
 import {
@@ -24,35 +24,35 @@ import { Spinner } from "../Spinner.js";
 
 //@ chunk-s5p7fp0c.js:10633-11644 callgraph-fingerprint = AgentEditor (0.184)
 function AgentEditor(props) {
-  let $ = w(13);
+  let $ = useMemoCache(13);
   let { userCode, verificationUri, onCancel } = props;
-  let W;
+  let keybindingsContext;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    W = {
+    keybindingsContext = {
       context: "Confirmation",
     };
-    $[0] = W;
-  } else W = $[0];
-  useKeybinding("confirm:no", onCancel, W);
-  let F;
-  let U;
+    $[0] = keybindingsContext;
+  } else keybindingsContext = $[0];
+  useKeybinding("confirm:no", onCancel, keybindingsContext);
+  let title;
+  let declinedNote;
   if ($[1] === MEMO_CACHE_SENTINEL) {
-    F = jsxProd_default(Text, {
+    title = jsxProd_default(Text, {
       bold: true,
       children: "Cloud gateway \xB7 sign in",
     });
-    U = jsxProd_default(Text, {
+    declinedNote = jsxProd_default(Text, {
       children: TRUST_DECLINE_LABEL,
     });
-    $[1] = F;
-    $[2] = U;
+    $[1] = title;
+    $[2] = declinedNote;
   } else {
-    F = $[1];
-    U = $[2];
+    title = $[1];
+    declinedNote = $[2];
   }
-  let i;
+  let codeBox;
   if ($[3] !== userCode) {
-    i = jsxProd_default(Box, {
+    codeBox = jsxProd_default(Box, {
       borderDimColor: true,
       borderStyle: "round",
       paddingX: 2,
@@ -63,22 +63,22 @@ function AgentEditor(props) {
       }),
     });
     $[3] = userCode;
-    $[4] = i;
-  } else i = $[4];
-  let ae;
+    $[4] = codeBox;
+  } else codeBox = $[4];
+  let rejectedMessage;
   if ($[5] === MEMO_CACHE_SENTINEL) {
-    ae = jsxProd_default(Text, {
+    rejectedMessage = jsxProd_default(Text, {
       dimColor: true,
       children: TRUST_REJECTED_MESSAGE,
     });
-    $[5] = ae;
-  } else ae = $[5];
-  let x;
+    $[5] = rejectedMessage;
+  } else rejectedMessage = $[5];
+  let uriBox;
   if ($[6] !== verificationUri) {
-    x = jsxProd_default_2(Box, {
+    uriBox = jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
-        ae,
+        rejectedMessage,
         jsxProd_default(Text, {
           dimColor: true,
           wrap: "wrap",
@@ -87,10 +87,10 @@ function AgentEditor(props) {
       ],
     });
     $[6] = verificationUri;
-    $[7] = x;
-  } else x = $[7];
+    $[7] = uriBox;
+  } else uriBox = $[7];
   let _;
-  let Q;
+  let cancelHint;
   if ($[8] === MEMO_CACHE_SENTINEL) {
     _ = jsxProd_default_2(Box, {
       gap: 1,
@@ -102,27 +102,27 @@ function AgentEditor(props) {
         }),
       ],
     });
-    Q = jsxProd_default(Text, {
+    cancelHint = jsxProd_default(Text, {
       dimColor: true,
       children: "Press Esc to cancel",
     });
     $[8] = _;
-    $[9] = Q;
+    $[9] = cancelHint;
   } else {
     _ = $[8];
-    Q = $[9];
+    cancelHint = $[9];
   }
-  let ue;
-  if ($[10] !== i || $[11] !== x) {
-    ue = jsxProd_default_2(Box, {
+  let column;
+  if ($[10] !== codeBox || $[11] !== uriBox) {
+    column = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [F, U, i, x, _, Q],
+      children: [title, declinedNote, codeBox, uriBox, _, cancelHint],
     });
-    $[10] = i;
-    $[11] = x;
-    $[12] = ue;
-  } else ue = $[12];
-  return ue;
+    $[10] = codeBox;
+    $[11] = uriBox;
+    $[12] = column;
+  } else column = $[12];
+  return column;
 }
 export { AgentEditor };

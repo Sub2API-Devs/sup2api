@@ -5,7 +5,7 @@
  * pieces: chunk-5h78gfwc.js (3)
  * attribution: esm-fingerprint 3
  */
-import { JOSENotSupported } from "../../node/esm/util/errors.js";
+import { JOSENotSupported_2 } from "../../node/esm/util/errors.js";
 
 //@ chunk-5h78gfwc.js:16138-16208 esm-fingerprint
 var unsupportedAlg = 'Invalid or unsupported JWK "alg" (Algorithm) Parameter value';
@@ -25,7 +25,7 @@ function subtleMapping(jwk) {
           keyUsages = jwk.priv ? ["sign"] : ["verify"];
           break;
         default:
-          throw new JOSENotSupported(unsupportedAlg);
+          throw new JOSENotSupported_2(unsupportedAlg);
       }
       break;
     }
@@ -60,7 +60,7 @@ function subtleMapping(jwk) {
           keyUsages = jwk.d ? ["decrypt", "unwrapKey"] : ["encrypt", "wrapKey"];
           break;
         default:
-          throw new JOSENotSupported(unsupportedAlg);
+          throw new JOSENotSupported_2(unsupportedAlg);
       }
       break;
     }
@@ -90,7 +90,7 @@ function subtleMapping(jwk) {
           keyUsages = jwk.d ? ["deriveBits"] : [];
           break;
         default:
-          throw new JOSENotSupported(unsupportedAlg);
+          throw new JOSENotSupported_2(unsupportedAlg);
       }
       break;
     }
@@ -113,12 +113,12 @@ function subtleMapping(jwk) {
           keyUsages = jwk.d ? ["deriveBits"] : [];
           break;
         default:
-          throw new JOSENotSupported(unsupportedAlg);
+          throw new JOSENotSupported_2(unsupportedAlg);
       }
       break;
     }
     default:
-      throw new JOSENotSupported('Invalid or unsupported JWK "kty" (Key Type) Parameter value');
+      throw new JOSENotSupported_2('Invalid or unsupported JWK "kty" (Key Type) Parameter value');
   }
   return {
     algorithm,

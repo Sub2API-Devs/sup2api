@@ -18,30 +18,34 @@ import { getErrnoCode } from "../utils/errors.js";
 import { normalizeMessagesForAPI } from "../utils/messages.js";
 import { calculateUSDCost } from "../utils/modelCost.js";
 import { addToTotalSessionCost } from "../cost-tracker.js";
-import { xr, mve } from "../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_mapValues, import_isPlainObject } from "../../vendor/lodash-es/_inlinedHelpers.js";
 import { getClaudeConfigDir } from "../utils/envUtils.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:972881-973168 sole-consumer
 /**
  * 计算 VCR 指纹时忽略的附件类型（环境、日期、模型、输出风格、会话上下文等易变内容）。
  */
-var VCR_IGNORED_ATTACHMENT_TYPES = new Set([
-  "agent_listing_delta",
-  "sandbox_instructions",
-  "environment",
-  "model",
-  "output_style_instructions",
-  "language",
-  "session_context",
-  "coordinator_context",
-  "context_sections",
-  "date",
-  "instructions",
-  "remote_session_change",
-  "advisor_tool",
-  "prompt_snapshot",
-  "deferred_tools_record",
-]);
+var VCR_IGNORED_ATTACHMENT_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:972881", () => {
+  VCR_IGNORED_ATTACHMENT_TYPES = new Set([
+    "agent_listing_delta",
+    "sandbox_instructions",
+    "environment",
+    "model",
+    "output_style_instructions",
+    "language",
+    "session_context",
+    "coordinator_context",
+    "context_sections",
+    "date",
+    "instructions",
+    "remote_session_change",
+    "advisor_tool",
+    "prompt_snapshot",
+    "deferred_tools_record",
+  ]);
+});
 //@ chunk-e6aww6q8.js:973168-973192 sole-consumer
 /**
  * 恒返回 true。
@@ -53,8 +57,8 @@ function alwaysTrue() {
 /**
  * fixture 缺失时的提示（用 CLAUDE_CODE_TEST_ALLOW_REAL_NETWORK=1 录制）。
  */
-function formatMissingFixtureMessage(e, filename) {
-  return `${e} missing: ${filename}. Record it with \`CLAUDE_CODE_TEST_ALLOW_REAL_NETWORK=1 bun run test:file -- <this test file>\`, then commit the new fixture.`;
+function formatMissingFixtureMessage(label, filename) {
+  return `${label} missing: ${filename}. Record it with \`CLAUDE_CODE_TEST_ALLOW_REAL_NETWORK=1 bun run test:file -- <this test file>\`, then commit the new fixture.`;
 }
 //@ chunk-e6aww6q8.js:973363-973387 affinity
 /**
@@ -105,12 +109,12 @@ async function withVCR(messages, f) {
     }),
   );
   let dehydratedInput = mapMessages(
-    messagesForAPI.map((S) => S.message.content),
+    messagesForAPI.map((message) => message.message.content),
     dehydrateValue,
   );
   let filename = join(
     env.CLAUDE_CODE_TEST_FIXTURES_ROOT ?? getCwd(),
-    `fixtures/${dehydratedInput.map((S) => createHash("sha1").update(jsonStringify(S)).digest("hex").slice(0, 6)).join("-")}.json`,
+    `fixtures/${dehydratedInput.map((content) => createHash("sha1").update(jsonStringify(content)).digest("hex").slice(0, 6)).join("-")}.json`,
   );
   try {
     let cached = jsonParse(
@@ -164,44 +168,44 @@ function addCachedCostToTotalSessionCost(message) {
 function mapMessages(messages, f) {
   return messages.map((message) => {
     if (typeof message === "string") return f(message);
-    return message.map((s) => {
-      switch (s.type) {
+    return message.map((block) => {
+      switch (block.type) {
         case "tool_result":
-          if (typeof s.content === "string")
+          if (typeof block.content === "string")
             return {
-              ...s,
-              content: f(s.content),
+              ...block,
+              content: f(block.content),
             };
-          if (Array.isArray(s.content))
+          if (Array.isArray(block.content))
             return {
-              ...s,
-              content: s.content.map((h) => {
-                switch (h.type) {
+              ...block,
+              content: block.content.map((nested) => {
+                switch (nested.type) {
                   case "text":
                     return {
-                      ...h,
-                      text: f(h.text),
+                      ...nested,
+                      text: f(nested.text),
                     };
                   case "image":
-                    return h;
+                    return nested;
                   default:
                     return;
                 }
               }),
             };
-          return s;
+          return block;
         case "text":
           return {
-            ...s,
-            text: f(s.text),
+            ...block,
+            text: f(block.text),
           };
         case "tool_use":
           return {
-            ...s,
-            input: mapValuesDeep(s.input, f),
+            ...block,
+            input: mapValuesDeep(block.input, f),
           };
         case "image":
-          return redactImageData(s);
+          return redactImageData(block);
         default:
           return;
       }
@@ -212,12 +216,12 @@ function mapMessages(messages, f) {
 /**
  * base64 图片数据替换成 [IMAGE_DATA]（fixture 脱敏）。
  */
-function redactImageData(e) {
-  if (e.source.type !== "base64") return e;
+function redactImageData(block) {
+  if (block.source.type !== "base64") return block;
   return {
-    ...e,
+    ...block,
     source: {
-      ...e.source,
+      ...block.source,
       data: "[IMAGE_DATA]",
     },
   };
@@ -227,9 +231,9 @@ function redactImageData(e) {
  * 深度遍历对象/数组，对叶子值套用映射。
  */
 function mapValuesDeep(obj, f) {
-  return xr(obj, (val, key) => {
-    if (Array.isArray(val)) return val.map((h) => mapValuesDeep(h, f));
-    if (mve(val)) return mapValuesDeep(val, f);
+  return import_mapValues(obj, (val, key) => {
+    if (Array.isArray(val)) return val.map((item) => mapValuesDeep(item, f));
+    if (import_isPlainObject(val)) return mapValuesDeep(val, f);
     return f(val, key, obj);
   });
 }
@@ -254,21 +258,21 @@ function mapAssistantMessage(message, f, index, uuid) {
     message: {
       ...message.message,
       content: message.message.content
-        .map((h) => {
-          switch (h.type) {
+        .map((block) => {
+          switch (block.type) {
             case "text":
               return {
-                ...h,
-                text: f(h.text),
-                citations: h.citations || [],
+                ...block,
+                text: f(block.text),
+                citations: block.citations || [],
               };
             case "tool_use":
               return {
-                ...h,
-                input: mapValuesDeep(h.input, f),
+                ...block,
+                input: mapValuesDeep(block.input, f),
               };
             default:
-              return h;
+              return block;
           }
         })
         .filter(Boolean),
@@ -325,34 +329,35 @@ function hydrateValue(s) {
 /**
  * 流式查询的 VCR：录制时把事件收集起来（fallback 的 creditCode 清空），回放时补默认 refusedEffort。
  */
-async function* withStreamVCR(messages, n) {
-  if (!isVcrEnabled()) return yield* n();
-  let r = [];
+async function* withStreamVCR(messages, runStream) {
+  if (!isVcrEnabled()) return yield* runStream();
+  let collected = [];
   let cachedBuffer = await withVCR(messages, async () => {
-    for await (let h of n())
-      if (h.type === "fallback_request" && h.creditCode !== null)
-        r.push({
-          ...h,
+    for await (let event of runStream())
+      if (event.type === "fallback_request" && event.creditCode !== null)
+        collected.push({
+          ...event,
           creditCode: null,
         });
-      else r.push(h);
-    return r;
+      else collected.push(event);
+    return collected;
   });
   if (cachedBuffer.length > 0) {
-    yield* cachedBuffer.map((h) =>
-      (h.type === "fallback_request" || h.type === "server_fallback") && h.refusedEffort === undefined
+    yield* cachedBuffer.map((event) =>
+      (event.type === "fallback_request" || event.type === "server_fallback") &&
+      event.refusedEffort === undefined
         ? {
-            ...h,
+            ...event,
             refusedEffort: {
               carry: null,
               withheld: "none_sent",
             },
           }
-        : h,
+        : event,
     );
     return;
   }
-  yield* r;
+  yield* collected;
 }
 //@ chunk-e6aww6q8.js:977439-977825 fingerprint = withTokenCountVCR (1)
 /**

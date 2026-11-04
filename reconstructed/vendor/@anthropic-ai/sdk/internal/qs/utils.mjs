@@ -79,7 +79,7 @@ function isBufferLike(obj) {
   return !!(obj.constructor && obj.constructor.isBuffer && obj.constructor.isBuffer(obj));
 }
 //@ chunk-hwmsct5x.js:20411-20512 esm-layout
-function zi(val, fn) {
+function maybe_map(val, fn) {
   if (isArray(val)) {
     let mapped = [];
     for (let i = 0; i < val.length; i += 1) mapped.push(fn(val[i]));
@@ -87,4 +87,4 @@ function zi(val, fn) {
   }
   return fn(val);
 }
-export { encode, zi, isBufferLike, has };
+export { encode, maybe_map, isBufferLike, has };

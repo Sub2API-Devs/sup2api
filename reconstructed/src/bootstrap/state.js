@@ -41,6 +41,7 @@ import { SystemClock } from "../utils/sleep.js";
 import { initialCwdKey, INITIAL_CWD_KEY, launchCwd, identityString } from "../utils/cwd.js";
 import { setDisklessHooks, processScopedEmptyValues, HostScoped } from "../utils/hostScoped.js";
 import { identityAgentId2 } from "../utils/agentId.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ndmse9kj.js:60755-60848 sole-consumer
 function createCaBundleSlots() {
@@ -88,9 +89,9 @@ class TelemetryHandles {
   #m = createCaBundleSlots();
   #b = null;
   #k = null;
-  installMeter(e, createCounter, { omitUnits = false } = {}) {
-    this.#e = e;
-    let r = (i) => (omitUnits ? undefined : i);
+  installMeter(meter, createCounter, { omitUnits = false } = {}) {
+    this.#e = meter;
+    let unitOrUndefined = (unit) => (omitUnits ? undefined : unit);
     this.#t = createCounter("claude_code.session.count", {
       description: "Count of CLI sessions started",
     });
@@ -106,11 +107,11 @@ class TelemetryHandles {
     });
     this.#s = createCounter("claude_code.cost.usage", {
       description: "Cost of the Claude Code session",
-      unit: r("USD"),
+      unit: unitOrUndefined("USD"),
     });
     this.#i = createCounter("claude_code.token.usage", {
       description: "Number of tokens used",
-      unit: r("tokens"),
+      unit: unitOrUndefined("tokens"),
     });
     this.#d = createCounter("claude_code.code_edit_tool.decision", {
       description:
@@ -118,7 +119,7 @@ class TelemetryHandles {
     });
     this.#u = createCounter("claude_code.active_time.total", {
       description: "Total active time in seconds",
-      unit: r("s"),
+      unit: unitOrUndefined("s"),
     });
   }
   meter() {
@@ -151,14 +152,14 @@ class TelemetryHandles {
   statsStore() {
     return this.#c;
   }
-  replaceStatsStore(e) {
-    this.#c = e;
+  replaceStatsStore(statsStore) {
+    this.#c = statsStore;
   }
   loggerProvider() {
     return this.#l;
   }
-  replaceLoggerProvider(e) {
-    this.#l = e;
+  replaceLoggerProvider(loggerProvider) {
+    this.#l = loggerProvider;
   }
   eventLogger() {
     return this.#p;
@@ -166,22 +167,22 @@ class TelemetryHandles {
   eventLoggerOwner() {
     return this.#h;
   }
-  attachEventLogger(e, n) {
-    this.#p = e;
-    this.#h = e ? n : null;
-    if (!e) return;
-    let o = this.#a;
+  attachEventLogger(eventLogger, owner) {
+    this.#p = eventLogger;
+    this.#h = eventLogger ? owner : null;
+    if (!eventLogger) return;
+    let pendingEvents = this.#a;
     this.#a = null;
-    if (o) for (let r of o) e.emit(r);
+    if (pendingEvents) for (let event of pendingEvents) eventLogger.emit(event);
   }
-  bufferPendingEvent(e) {
+  bufferPendingEvent(event) {
     if (this.#a === null || this.#a.length >= 100) return false;
-    this.#a.push(e);
+    this.#a.push(event);
     return true;
   }
-  closeWindow(e) {
+  closeWindow(cause) {
     this.#a = null;
-    this.#g = e;
+    this.#g = cause;
   }
   windowCloseCause() {
     return this.#g;
@@ -195,38 +196,38 @@ class TelemetryHandles {
   meterProvider() {
     return this.#y;
   }
-  replaceMeterProvider(e) {
-    this.#y = e;
+  replaceMeterProvider(meterProvider) {
+    this.#y = meterProvider;
   }
   tracerProvider() {
     return this.#v;
   }
-  replaceTracerProvider(e) {
-    this.#v = e;
+  replaceTracerProvider(tracerProvider) {
+    this.#v = tracerProvider;
   }
   cachedTelemetryResource() {
     return this.#f;
   }
-  replaceCachedTelemetryResource(e) {
-    this.#f = e;
+  replaceCachedTelemetryResource(resource) {
+    this.#f = resource;
   }
-  cachedOtlpHttpAgentFactory(e, n) {
-    return this.#m[e ? "proxied" : "direct"][n];
+  cachedOtlpHttpAgentFactory(isProxied, factoryName) {
+    return this.#m[isProxied ? "proxied" : "direct"][factoryName];
   }
-  replaceCachedOtlpHttpAgentFactory(e, n, o) {
-    this.#m[e ? "proxied" : "direct"][n] = o;
+  replaceCachedOtlpHttpAgentFactory(isProxied, factoryName, factory) {
+    this.#m[isProxied ? "proxied" : "direct"][factoryName] = factory;
   }
   inClusterOtlpTrustRoots() {
     return this.#b;
   }
-  replaceInClusterOtlpTrustRoots(e) {
-    this.#b = e;
+  replaceInClusterOtlpTrustRoots(trustRoots) {
+    this.#b = trustRoots;
   }
   inClusterOtlpAgentFactory() {
     return this.#k;
   }
-  replaceInClusterOtlpAgentFactory(e) {
-    this.#k = e;
+  replaceInClusterOtlpAgentFactory(factory) {
+    this.#k = factory;
   }
   reset() {
     this.#e = null;
@@ -280,68 +281,68 @@ class CredentialSlots {
   sessionIngressToken() {
     return this.#e;
   }
-  replaceSessionIngressToken(e) {
-    this.#e = e;
+  replaceSessionIngressToken(token) {
+    this.#e = token;
   }
   inferenceRequestToken() {
     return this.#t;
   }
-  replaceInferenceRequestToken(e) {
-    this.#t = e;
+  replaceInferenceRequestToken(token) {
+    this.#t = token;
   }
   oauthTokenFromFd() {
     return this.#n;
   }
-  replaceOauthTokenFromFd(e) {
-    this.#n = e;
+  replaceOauthTokenFromFd(token) {
+    this.#n = token;
   }
   oauthTokenFromBgSnapshot() {
     return this.#o;
   }
-  replaceOauthTokenFromBgSnapshot(e) {
-    this.#o = e;
+  replaceOauthTokenFromBgSnapshot(isFromBgSnapshot) {
+    this.#o = isFromBgSnapshot;
   }
   loginStashedInTokenSlot() {
     return this.#r;
   }
-  replaceLoginStashedInTokenSlot(e) {
-    this.#r = e;
+  replaceLoginStashedInTokenSlot(slot) {
+    this.#r = slot;
   }
   oauthOrgFromBgSnapshot() {
     return this.#s;
   }
-  replaceOauthOrgFromBgSnapshot(e) {
-    this.#s = e;
+  replaceOauthOrgFromBgSnapshot(organization) {
+    this.#s = organization;
   }
   oauthScopesFromFd() {
     return this.#i;
   }
-  replaceOauthScopesFromFd(e) {
-    this.#i = e;
+  replaceOauthScopesFromFd(scopes) {
+    this.#i = scopes;
   }
   apiKeyFromFd() {
     return this.#d;
   }
-  replaceApiKeyFromFd(e) {
-    this.#d = e;
+  replaceApiKeyFromFd(apiKey) {
+    this.#d = apiKey;
   }
-  descriptorAnnouncementConsumed(e) {
-    return this.#u.has(e);
+  descriptorAnnouncementConsumed(descriptorId) {
+    return this.#u.has(descriptorId);
   }
-  markDescriptorAnnouncementConsumed(e) {
-    this.#u.add(e);
+  markDescriptorAnnouncementConsumed(descriptorId) {
+    this.#u.add(descriptorId);
   }
-  credentialRoad(e) {
-    return this.#c.get(e);
+  credentialRoad(roadKey) {
+    return this.#c.get(roadKey);
   }
-  noteCredentialRoad(e, n, o) {
-    if (o !== null && !this.#c.has(e)) this.#c.set(e, n);
+  noteCredentialRoad(roadKey, road, descriptor) {
+    if (descriptor !== null && !this.#c.has(roadKey)) this.#c.set(roadKey, road);
   }
   gatewayTokenFromDescriptor() {
     return this.#l;
   }
-  replaceGatewayTokenFromDescriptor(e) {
-    this.#l = e;
+  replaceGatewayTokenFromDescriptor(token) {
+    this.#l = token;
   }
   resetFdCredentialState() {
     this.#e = undefined;
@@ -355,29 +356,29 @@ class CredentialSlots {
   gatewayAuth() {
     return this.#p;
   }
-  replaceGatewayAuth(e) {
-    this.#p = e;
+  replaceGatewayAuth(auth) {
+    this.#p = auth;
   }
-  isGatewayHostHeldStrict(e) {
-    return this.#h.has(e);
+  isGatewayHostHeldStrict(host) {
+    return this.#h.has(host);
   }
-  holdGatewayHostStrict(e) {
-    this.#h.add(e);
+  holdGatewayHostStrict(host) {
+    this.#h.add(host);
   }
-  releaseGatewayHost(e) {
-    this.#h.delete(e);
+  releaseGatewayHost(host) {
+    this.#h.delete(host);
   }
   gatewayServerProcess() {
     return this.#y;
   }
-  replaceGatewayServerProcess(e) {
-    this.#y = e;
+  replaceGatewayServerProcess(gatewayServerProcess) {
+    this.#y = gatewayServerProcess;
   }
   gatewayRequiredByHostPolicy() {
     return this.#v();
   }
-  replaceGatewayRequiredByHostPolicyReader(e) {
-    this.#v = e;
+  replaceGatewayRequiredByHostPolicyReader(reader) {
+    this.#v = reader;
   }
   authenticatedAccount() {
     return this.#a;
@@ -385,49 +386,49 @@ class CredentialSlots {
   authenticatedAccountEpoch() {
     return this.#g;
   }
-  stampAuthenticatedAccount(e) {
-    let n = this.#a;
+  stampAuthenticatedAccount(account) {
+    let previousAccount = this.#a;
     if (
-      e !== null &&
-      n !== null &&
-      e.accountUuid === n.accountUuid &&
-      e.emailAddress === n.emailAddress &&
-      e.organizationUuid === n.organizationUuid
+      account !== null &&
+      previousAccount !== null &&
+      account.accountUuid === previousAccount.accountUuid &&
+      account.emailAddress === previousAccount.emailAddress &&
+      account.organizationUuid === previousAccount.organizationUuid
     )
       return;
     this.#g += 1;
-    this.#a = e;
+    this.#a = account;
     this.#S = null;
   }
   bearerPlan() {
     return this.#S;
   }
-  replaceBearerPlan(e) {
-    this.#S = e;
+  replaceBearerPlan(plan) {
+    this.#S = plan;
   }
   startupPolicySnapshot() {
     return this.#m;
   }
-  replaceStartupPolicySnapshot(e) {
-    this.#m = e;
+  replaceStartupPolicySnapshot(snapshot) {
+    this.#m = snapshot;
   }
   gatewayRefreshInFlight() {
     return this.#f;
   }
-  replaceGatewayRefreshInFlight(e) {
-    this.#f = e;
+  replaceGatewayRefreshInFlight(pendingRefresh) {
+    this.#f = pendingRefresh;
   }
   sdkOAuthTokenRefreshCallback() {
     return this.#b;
   }
-  replaceSdkOAuthTokenRefreshCallback(e) {
-    this.#b = e;
+  replaceSdkOAuthTokenRefreshCallback(callback) {
+    this.#b = callback;
   }
   hostAuthTokenRefreshCallback() {
     return this.#k;
   }
-  replaceHostAuthTokenRefreshCallback(e) {
-    this.#k = e;
+  replaceHostAuthTokenRefreshCallback(callback) {
+    this.#k = callback;
   }
   resetForTests() {
     this.#e = null;
@@ -462,23 +463,23 @@ class McpProcessWiring {
   directConnectServerUrl() {
     return this.#e;
   }
-  replaceDirectConnectServerUrl(e) {
-    this.#e = e;
+  replaceDirectConnectServerUrl(url) {
+    this.#e = url;
   }
   connectNonBlocking() {
     return this.#t;
   }
-  replaceConnectNonBlocking(e) {
-    this.#t = e;
+  replaceConnectNonBlocking(isNonBlocking) {
+    this.#t = isNonBlocking;
   }
   strictConfig() {
     return this.#n;
   }
-  replaceStrictConfig(e) {
-    this.#n = e;
+  replaceStrictConfig(isStrict) {
+    this.#n = isStrict;
   }
-  registerEnsureConnectedClient(e) {
-    this.#o = e;
+  registerEnsureConnectedClient(ensureConnectedClient) {
+    this.#o = ensureConnectedClient;
   }
   ensureConnectedClient() {
     return this.#o;
@@ -529,32 +530,32 @@ class RequestLatches {
   promptCache1hAllowlist() {
     return this.#e;
   }
-  replacePromptCache1hAllowlist(e) {
-    this.#e = e;
+  replacePromptCache1hAllowlist(allowlist) {
+    this.#e = allowlist;
   }
   thinkingTypeOverrides() {
     return this.#t;
   }
-  recordThinkingTypeOverride(e, n) {
-    this.#t.set(e, n);
+  recordThinkingTypeOverride(model, thinkingType) {
+    this.#t.set(model, thinkingType);
   }
   servedModelsByRequestedModel() {
     return this.#n;
   }
-  recordServedModels(e, n) {
-    this.#n.set(e, n);
+  recordServedModels(requestedModel, servedModels) {
+    this.#n.set(requestedModel, servedModels);
   }
   effortUnsupportedModels() {
     return this.#o;
   }
-  markEffortUnsupported(e) {
-    this.#o.add(e);
+  markEffortUnsupported(model) {
+    this.#o.add(model);
   }
   structuredOutputsUnsupportedModels() {
     return this.#r;
   }
-  markStructuredOutputsUnsupported(e) {
-    this.#r.add(e);
+  markStructuredOutputsUnsupported(model) {
+    this.#r.add(model);
   }
   clearStructuredOutputsUnsupported() {
     this.#r = new Set();
@@ -562,19 +563,19 @@ class RequestLatches {
   context1mRefusedModels() {
     return this.#s;
   }
-  markContext1mRefused(e) {
-    this.#s.add(e);
+  markContext1mRefused(model) {
+    this.#s.add(model);
   }
   clearContext1mRefused() {
     this.#s = new Set();
   }
-  refusedBetas(e) {
-    return this.#i.get(e) ?? [];
+  refusedBetas(model) {
+    return this.#i.get(model) ?? [];
   }
-  markBetaRefused(e, n) {
-    let o = this.#i.get(e);
-    if (o) o.add(n);
-    else this.#i.set(e, new Set([n]));
+  markBetaRefused(model, beta) {
+    let betas = this.#i.get(model);
+    if (betas) betas.add(beta);
+    else this.#i.set(model, new Set([beta]));
   }
   learnedEffortCaps() {
     return this.#d;
@@ -636,8 +637,8 @@ class RequestLatches {
   refusedBetaHeaders() {
     return this.#v;
   }
-  markBetaHeaderRefused(e) {
-    this.#v.add(e);
+  markBetaHeaderRefused(beta) {
+    this.#v.add(beta);
   }
   thinkingHighlightsRefused() {
     return this.#f;
@@ -648,8 +649,8 @@ class RequestLatches {
   toolChangeUnsupportedModels() {
     return this.#m;
   }
-  markToolChangeUnsupportedModel(e) {
-    this.#m.add(e);
+  markToolChangeUnsupportedModel(model) {
+    this.#m.add(model);
   }
   internalModelFieldsRefused() {
     return this.#b;
@@ -678,31 +679,33 @@ class RequestLatches {
   markThreadsHeldForServerClassifier() {
     this.#x = true;
   }
-  autoModeUnavailableResponse(e) {
-    return this.#C.get(e);
+  autoModeUnavailableResponse(threadId) {
+    return this.#C.get(threadId);
   }
-  autoModeUnavailableResponsesInARow(e) {
-    let n = 0;
-    for (let o of this.#C.values()) if (o.runKey === e) n++;
-    return n;
+  autoModeUnavailableResponsesInARow(runKey) {
+    let count = 0;
+    for (let response of this.#C.values()) if (response.runKey === runKey) count++;
+    return count;
   }
-  dropAutoModeUnavailableResponsesOfOtherTurns(e, n) {
-    for (let [o, r] of this.#C) if (r.runKey === e && r.turn !== undefined && r.turn !== n) this.#C.delete(o);
+  dropAutoModeUnavailableResponsesOfOtherTurns(runKey, turn) {
+    for (let [threadId, response] of this.#C)
+      if (response.runKey === runKey && response.turn !== undefined && response.turn !== turn)
+        this.#C.delete(threadId);
   }
-  noteAutoModeUnavailableResponse(e, n) {
-    this.#C.set(e, n);
+  noteAutoModeUnavailableResponse(threadId, response) {
+    this.#C.set(threadId, response);
   }
   clearAutoModeUnavailableResponses(agentId) {
     for (let [key, skill] of this.#C) if (skill.runKey === agentId) this.#C.delete(key);
   }
-  setAutoModeUnavailableStopNotice(e) {
-    this.#P = e;
+  setAutoModeUnavailableStopNotice(notice) {
+    this.#P = notice;
   }
   autoModeUnavailableStopNotice() {
     return this.#P;
   }
-  setLocalCommandExitCode(e) {
-    this.#T = e;
+  setLocalCommandExitCode(exitCode) {
+    this.#T = exitCode;
   }
   localCommandExitCode() {
     return this.#T;
@@ -713,32 +716,32 @@ class RequestLatches {
   serverClassifierFallbackChoice() {
     return this.#F;
   }
-  setServerClassifierFallbackChoice(e) {
-    this.#F = e;
+  setServerClassifierFallbackChoice(choice) {
+    this.#F = choice;
   }
   clearServerClassifierFallbackChoice() {
     this.#F = undefined;
   }
-  noteObservedGateway(e) {
-    this.#O ??= e;
+  noteObservedGateway(gateway) {
+    this.#O ??= gateway;
   }
   takeServerClassifierFallbackAnnouncement() {
     if (!this.#R || this.#w) return false;
     this.#w = true;
     return true;
   }
-  noteNoServerCheck(e) {
+  noteNoServerCheck(reason) {
     if (this.#A !== undefined) return false;
-    this.#A = e;
+    this.#A = reason;
     return true;
   }
   noteNoServerCheckStoppedTurn() {
     this.#M = true;
   }
   takeNoServerCheckStoppedTurn() {
-    let e = this.#M;
+    let stopped = this.#M;
     this.#M = false;
-    return e;
+    return stopped;
   }
   takeNoServerCheckAnnouncement() {
     if (this.#L || this.#A === undefined) return;
@@ -748,8 +751,8 @@ class RequestLatches {
   inferenceProfileBackingModels() {
     return this.#I;
   }
-  recordInferenceProfileBackingModel(e, n) {
-    this.#I.set(e, n);
+  recordInferenceProfileBackingModel(model, backingModel) {
+    this.#I.set(model, backingModel);
   }
   foundryDeploymentCapabilities() {
     return this.#E;
@@ -799,14 +802,14 @@ class AccountCreditLatches {
   longContext1mCreditsBlocked() {
     return this.#e;
   }
-  replaceLongContext1mCreditsBlocked(e) {
-    this.#e = e;
+  replaceLongContext1mCreditsBlocked(isBlocked) {
+    this.#e = isBlocked;
   }
   usageCreditsRequired() {
     return this.#t;
   }
-  replaceUsageCreditsRequired(e) {
-    this.#t = e;
+  replaceUsageCreditsRequired(areCreditsRequired) {
+    this.#t = areCreditsRequired;
   }
   reset() {
     this.#e = false;
@@ -825,26 +828,26 @@ class ProactivityState {
   selectorGateEverOn() {
     return this.#t;
   }
-  replaceSelectorGate(e) {
-    this.#e = e;
-    this.#t ||= e;
+  replaceSelectorGate(isOn) {
+    this.#e = isOn;
+    this.#t ||= isOn;
   }
   inheritSelectorGateEverOn() {
     this.#t = true;
   }
-  resampleSelectorGate(e) {
-    let n = this.#e;
-    this.#e = e;
-    this.#t ||= e;
-    if (n !== e) this.#o.emit(e);
+  resampleSelectorGate(isOn) {
+    let previous = this.#e;
+    this.#e = isOn;
+    this.#t ||= isOn;
+    if (previous !== isOn) this.#o.emit(isOn);
   }
-  subscribeSelectorGateChanged(e) {
-    return this.#o.subscribe(e);
+  subscribeSelectorGateChanged(listener) {
+    return this.#o.subscribe(listener);
   }
-  replaceHostGateSubscription(e) {
-    let n = this.#n;
-    this.#n = e;
-    n();
+  replaceHostGateSubscription(subscription) {
+    let previousSubscription = this.#n;
+    this.#n = subscription;
+    previousSubscription();
   }
   dropHostGateSubscription() {
     this.replaceHostGateSubscription(noop);
@@ -885,20 +888,20 @@ class HostState {
   requestLatches;
   accountCreditLatches;
   proactivity;
-  constructor(e) {
-    this.clock = e.clock;
-    this.backgroundHousekeeping = e.backgroundHousekeeping;
-    this.launchOptions = e.launchOptions;
-    this.settingsSource = e.settingsSource;
-    this.extensionsConfig = e.extensionsConfig;
-    this.modelStringsCache = e.modelStringsCache;
-    this.diagnostics = e.diagnostics;
-    this.telemetryHandles = e.telemetryHandles;
-    this.credentialSlots = e.credentialSlots;
-    this.mcpProcessWiring = e.mcpProcessWiring;
-    this.requestLatches = e.requestLatches;
-    this.accountCreditLatches = e.accountCreditLatches;
-    this.proactivity = e.proactivity;
+  constructor(services) {
+    this.clock = services.clock;
+    this.backgroundHousekeeping = services.backgroundHousekeeping;
+    this.launchOptions = services.launchOptions;
+    this.settingsSource = services.settingsSource;
+    this.extensionsConfig = services.extensionsConfig;
+    this.modelStringsCache = services.modelStringsCache;
+    this.diagnostics = services.diagnostics;
+    this.telemetryHandles = services.telemetryHandles;
+    this.credentialSlots = services.credentialSlots;
+    this.mcpProcessWiring = services.mcpProcessWiring;
+    this.requestLatches = services.requestLatches;
+    this.accountCreditLatches = services.accountCreditLatches;
+    this.proactivity = services.proactivity;
   }
 }
 //@ chunk-ndmse9kj.js:72768-73094 layout
@@ -923,14 +926,14 @@ function createHostState() {
 /**
  * 创建 root 会话：host=新 HostState，id=CLAUDE_CODE_SESSION_ID 等给定值或新 UUID，originalCwd/projectRoot/cwd 都是启动目录。
  */
-function createRootSession(e = initialCwdKey()) {
+function createRootSession(cwd = initialCwdKey()) {
   return forkRootSessionWithProject({
     host: createHostState(),
     id: remoteSessionUrlId() ?? randomUUID(),
     project: {
-      originalCwd: e,
-      projectRoot: e,
-      cwd: e,
+      originalCwd: cwd,
+      projectRoot: cwd,
+      cwd,
     },
   });
 }
@@ -938,7 +941,10 @@ function createRootSession(e = initialCwdKey()) {
 /**
  * 进程默认 root 会话（模块加载时创建）。
  */
-var defaultRootSession = createRootSession(INITIAL_CWD_KEY);
+var defaultRootSession; // deferred: uses createRootSession of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ndmse9kj.js:73199", () => {
+  defaultRootSession = createRootSession(INITIAL_CWD_KEY);
+});
 //@ chunk-ndmse9kj.js:73213-73237 facade-majority
 /**
  * getRootSession：返回当前会话（currentSession 的导出别名）。
@@ -957,16 +963,16 @@ function currentSession() {
 /**
  * 在进程默认 root 会话的 host 上取 HostScoped 槽位的值（进程级单例状态）。
  */
-function onProcessRootHost(e) {
-  return e.of(defaultRootSession.host);
+function onProcessRootHost(slot) {
+  return slot.of(defaultRootSession.host);
 }
 //@ chunk-ndmse9kj.js:73308-73358 layout
 /**
  * 异步上下文里的会话覆盖对象（无 session 字段的旧式覆盖：sessionId、originalCwd、cachedClaudeMdContent…）。
  */
 function getAgentContext() {
-  let e = agentContextGetter();
-  return e?.session ? undefined : e;
+  let context = agentContextGetter();
+  return context?.session ? undefined : context;
 }
 //@ chunk-ndmse9kj.js:73358-73377 layout
 var agentContextGetter = () => {
@@ -976,18 +982,24 @@ var agentContextGetter = () => {
 /**
  * 注入“会话覆盖对象”读取器（AsyncLocalStorage 取值函数），子代理/teammate 借此让 getSessionId 等返回自己的值。
  */
-function setSessionOverridesGetter(e) {
-  agentContextGetter = e;
+function setSessionOverridesGetter(getter) {
+  agentContextGetter = getter;
 }
 //@ chunk-ndmse9kj.js:73397-73436 layout
-setProjectDirectoryErrorHandler((e) =>
-  projectDirectoryErrorReporterSlot.of(currentSession().host).reporter?.(e),
-);
+// deferred: uses setProjectDirectoryErrorHandler (./sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ndmse9kj.js:73397", () => {
+  setProjectDirectoryErrorHandler((error) =>
+    projectDirectoryErrorReporterSlot.of(currentSession().host).reporter?.(error),
+  );
+});
 //@ chunk-ndmse9kj.js:73436-73537 layout
-setDisklessHooks({
-  isDiskless: () => isDiskless(),
-  isDisklessProcess: () => isDisklessProcess(),
-  reportBuilt: (e) => processScopedEmptyValues.of(currentSession().host).reporter?.(e),
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ndmse9kj.js:73436", () => {
+  setDisklessHooks({
+    isDiskless: () => isDiskless(),
+    isDisklessProcess: () => isDisklessProcess(),
+    reportBuilt: (report) => processScopedEmptyValues.of(currentSession().host).reporter?.(report),
+  });
 });
 //@ chunk-ndmse9kj.js:73537-73580 facade-majority
 /**
@@ -1003,54 +1015,57 @@ function getSessionId() {
 function mainAgentId() {
   let sessionId = getAgentContext()?.sessionId;
   if (sessionId) return identityAgentId2(sessionId);
-  let n = currentSession();
-  return n.identity.mainAgentId(n.id);
+  let session = currentSession();
+  return session.identity.mainAgentId(session.id);
 }
 //@ chunk-ndmse9kj.js:73679-73801 layout
 function hasSessionActivity() {
-  let e = currentSession();
-  return e.requestJournal.promptIndex() > 0 || e.sessionScratch.chromeAvailabilityStagesLogged().size > 0;
+  let session = currentSession();
+  return (
+    session.requestJournal.promptIndex() > 0 ||
+    session.sessionScratch.chromeAvailabilityStagesLogged().size > 0
+  );
 }
 //@ chunk-ndmse9kj.js:73801-74496 facade-majority
 /**
  * regenerateSessionId：/clear 等场景换新会话 id；清除每会话缓存（plan slug、最后请求、拒答回退等），可把旧 id 设为 parent，发出 clear 会话切换事件。
  */
-function regenerateSessionId(e = {}) {
-  let n = currentSession();
-  let id = n.id;
-  n.sessionScratch.forgetPlanSlug(id);
-  n.identity.replaceProjectDir(null);
-  let r = hasSessionActivity();
-  n.requestJournal.replacePromptIndex(0);
-  n.requestJournal.replaceLastPersonPrompt(null);
-  n.requestJournal.replaceLastCancelledAPIMessageId(null);
-  n.requestJournal.clearLastMainThreadRequest();
-  n.requestJournal.replaceLastMainRequestId(undefined, undefined);
-  n.modelSelection.forgetRefusalFallbackOccurred();
-  n.sessionFlags.forgetPendingContextCompacted();
-  n.sessionScratch.replacePendingBranchLinks();
-  n.sessionScratch.replaceChromeAvailabilityStagesLogged(r);
-  let i = restoreModelOnSessionTransition();
-  let s = e.next ?? randomUUID();
-  n.costLedger.scopeTo(s);
-  n.update({
-    id: s,
-    ...(e.setCurrentAsParent && {
+function regenerateSessionId(options = {}) {
+  let session = currentSession();
+  let id = session.id;
+  session.sessionScratch.forgetPlanSlug(id);
+  session.identity.replaceProjectDir(null);
+  let hadActivity = hasSessionActivity();
+  session.requestJournal.replacePromptIndex(0);
+  session.requestJournal.replaceLastPersonPrompt(null);
+  session.requestJournal.replaceLastCancelledAPIMessageId(null);
+  session.requestJournal.clearLastMainThreadRequest();
+  session.requestJournal.replaceLastMainRequestId(undefined, undefined);
+  session.modelSelection.forgetRefusalFallbackOccurred();
+  session.sessionFlags.forgetPendingContextCompacted();
+  session.sessionScratch.replacePendingBranchLinks();
+  session.sessionScratch.replaceChromeAvailabilityStagesLogged(hadActivity);
+  let modelRestore = restoreModelOnSessionTransition();
+  let nextSessionId = options.next ?? randomUUID();
+  session.costLedger.scopeTo(nextSessionId);
+  session.update({
+    id: nextSessionId,
+    ...(options.setCurrentAsParent && {
       parentId: id,
     }),
   });
-  emitSessionSwitch(n, "clear", i);
-  return n.id;
+  emitSessionSwitch(session, "clear", modelRestore);
+  return session.id;
 }
 //@ chunk-ndmse9kj.js:74496-74572 layout
-function emitSessionSwitch(e, n, o) {
-  let r = sessionSwitchListeners.of(e);
-  if (o) r.emit(e.id, n, o);
-  else r.emit(e.id, n);
+function emitSessionSwitch(session, reason, modelRestore) {
+  let listeners = sessionSwitchListeners.of(session);
+  if (modelRestore) listeners.emit(session.id, reason, modelRestore);
+  else listeners.emit(session.id, reason);
 }
 //@ chunk-ndmse9kj.js:74572-74620 layout
-function emitOriginalCwdChanged(e) {
-  originalCwdListeners.of(e).emit(getSessionProject(e).originalCwd);
+function emitOriginalCwdChanged(session) {
+  originalCwdListeners.of(session).emit(getSessionProject(session).originalCwd);
 }
 //@ chunk-ndmse9kj.js:74620-74685 facade-majority
 /**
@@ -1064,58 +1079,63 @@ function getParentSessionId() {
 /**
  * switchSession：切到给定会话 id（resume/fork），重置每会话缓存（fork 时保留最后主请求 id），可同时更新 project 目录。
  */
-function switchSession(e, n, o = null, r) {
-  let i = currentSession();
-  let s = r ? mergeProjectDirs(i.project, asProjectPatch(r)) : r;
-  let a;
-  let parentId = i.parentId;
-  if (i.id !== e) {
-    i.sessionScratch.forgetPlanSlug(i.id);
-    i.requestJournal.replaceLastCancelledAPIMessageId(null);
-    i.requestJournal.replaceLastPersonPrompt(null);
-    i.requestJournal.clearLastMainThreadRequest(e);
-    if (n !== "fork") i.requestJournal.replaceLastMainRequestId(undefined, undefined);
-    i.modelSelection.forgetRefusalFallbackOccurred();
-    i.sessionFlags.forgetPendingContextCompacted();
-    i.sessionScratch.replacePendingBranchLinks();
-    i.sessionScratch.replaceChromeAvailabilityStagesLogged(hasSessionActivity());
-    a = restoreModelOnSessionTransition();
+function switchSession(sessionId, reason, projectDir = null, projectPatch) {
+  let session = currentSession();
+  let nextProject = projectPatch
+    ? mergeProjectDirs(session.project, asProjectPatch(projectPatch))
+    : projectPatch;
+  let modelRestore;
+  let parentId = session.parentId;
+  if (session.id !== sessionId) {
+    session.sessionScratch.forgetPlanSlug(session.id);
+    session.requestJournal.replaceLastCancelledAPIMessageId(null);
+    session.requestJournal.replaceLastPersonPrompt(null);
+    session.requestJournal.clearLastMainThreadRequest(sessionId);
+    if (reason !== "fork") session.requestJournal.replaceLastMainRequestId(undefined, undefined);
+    session.modelSelection.forgetRefusalFallbackOccurred();
+    session.sessionFlags.forgetPendingContextCompacted();
+    session.sessionScratch.replacePendingBranchLinks();
+    session.sessionScratch.replaceChromeAvailabilityStagesLogged(hasSessionActivity());
+    modelRestore = restoreModelOnSessionTransition();
     parentId = undefined;
   }
-  i.identity.replaceProjectDir(o);
-  i.update({
-    id: e,
+  session.identity.replaceProjectDir(projectDir);
+  session.update({
+    id: sessionId,
     parentId,
-    ...(s !== undefined && {
-      project: s,
+    ...(nextProject !== undefined && {
+      project: nextProject,
     }),
   });
-  emitSessionSwitch(i, n, a);
-  if (r?.originalCwd !== undefined) emitOriginalCwdChanged(i);
+  emitSessionSwitch(session, reason, modelRestore);
+  if (projectPatch?.originalCwd !== undefined) emitOriginalCwdChanged(session);
 }
 //@ chunk-ndmse9kj.js:75381-75858 layout
 function restoreModelOnSessionTransition() {
-  let e = currentSession();
-  let n = e.modelSelection.refusalFallbackModelLatch();
-  e.modelSelection.unlatchRefusalFallbackModel("session_transition");
-  if (!n || e.modelSelection.mainLoopModelOverride() !== n.fallbackModel) return;
-  e.modelSelection.overrideMainLoopModel(n.previousOverride);
+  let session = currentSession();
+  let latch = session.modelSelection.refusalFallbackModelLatch();
+  session.modelSelection.unlatchRefusalFallbackModel("session_transition");
+  if (!latch || session.modelSelection.mainLoopModelOverride() !== latch.fallbackModel) return;
+  session.modelSelection.overrideMainLoopModel(latch.previousOverride);
   return {
-    appStateModel: n.previousAppStateModel,
-    forSessionValue: n.previousModelForSession,
-    overrideValue: n.previousOverride,
-    restoredToExplicitOverride: n.previousOverride !== undefined,
-    fallbackModel: n.fallbackModel,
+    appStateModel: latch.previousAppStateModel,
+    forSessionValue: latch.previousModelForSession,
+    overrideValue: latch.previousOverride,
+    restoredToExplicitOverride: latch.previousOverride !== undefined,
+    fallbackModel: latch.fallbackModel,
   };
 }
 //@ chunk-ndmse9kj.js:75858-75882 layout
-var sessionSwitchListeners = new SessionRootSlot(() => createSignal());
+var sessionSwitchListeners; // deferred: uses SessionRootSlot (./sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ndmse9kj.js:75858", () => {
+  sessionSwitchListeners = new SessionRootSlot(() => createSignal());
+});
 //@ chunk-ndmse9kj.js:75882-75928 facade-majority
 /**
  * 订阅会话切换（regenerateSessionId/switchSession 时触发，参数含原因与恢复的模型）。
  */
-function onSessionSwitch(e) {
-  return sessionSwitchListeners.of(currentSession()).subscribe(e);
+function onSessionSwitch(listener) {
+  return sessionSwitchListeners.of(currentSession()).subscribe(listener);
 }
 //@ chunk-ndmse9kj.js:75928-75994 facade-majority
 /**
@@ -1149,8 +1169,8 @@ function filesPlacedByNameRead() {
 /**
  * 状态访问器：调用当前会话的 会话暂存（sessionScratch） 上的 setFilesPlacedByNameRead()。
  */
-function setFilesPlacedByNameRead(e) {
-  currentSession().sessionScratch.setFilesPlacedByNameRead(e);
+function setFilesPlacedByNameRead(value) {
+  currentSession().sessionScratch.setFilesPlacedByNameRead(value);
 }
 //@ chunk-ndmse9kj.js:76249-76319 facade-majority
 /**
@@ -1219,19 +1239,19 @@ function getProjectRootOrNull() {
   return getProjectRoot();
 }
 //@ chunk-ndmse9kj.js:76815-76839 layout
-function asProjectPatch(e) {
-  return e;
+function asProjectPatch(patch) {
+  return patch;
 }
 //@ chunk-ndmse9kj.js:76839-76923 facade-majority
 /**
  * 更新会话的 project（originalCwd/projectRoot/cwd 三者合并），originalCwd 变化时发事件。
  */
-function setSessionProject(e) {
-  let n = currentSession();
-  n.update({
-    project: asProjectPatch(e),
+function setSessionProject(patch) {
+  let session = currentSession();
+  session.update({
+    project: asProjectPatch(patch),
   });
-  if (e.originalCwd !== undefined) emitOriginalCwdChanged(n);
+  if (patch.originalCwd !== undefined) emitOriginalCwdChanged(session);
 }
 //@ chunk-ndmse9kj.js:76923-76959 facade-majority = setOriginalCwd (0.445)
 /**
@@ -1243,13 +1263,16 @@ function setOriginalCwd(cwd) {
   });
 }
 //@ chunk-ndmse9kj.js:76959-76983 layout
-var originalCwdListeners = new SessionRootSlot(() => createSignal());
+var originalCwdListeners; // deferred: uses SessionRootSlot (./sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ndmse9kj.js:76959", () => {
+  originalCwdListeners = new SessionRootSlot(() => createSignal());
+});
 //@ chunk-ndmse9kj.js:76983-77030 facade-majority
 /**
  * 订阅 originalCwd 变化。
  */
-function onOriginalCwdChange(e) {
-  return originalCwdListeners.of(currentSession()).subscribe(e);
+function onOriginalCwdChange(listener) {
+  return originalCwdListeners.of(currentSession()).subscribe(listener);
 }
 //@ chunk-ndmse9kj.js:77030-77067 facade-majority = getProjectRoot (1)
 /**
@@ -1308,8 +1331,8 @@ function getMcpConnectNonBlocking() {
 /**
  * 状态访问器：写入当前会话的 host（host） → MCP 进程接线（mcpProcessWiring） 上的 replaceConnectNonBlocking()。
  */
-function setMcpConnectNonBlocking(e) {
-  currentSession().host.mcpProcessWiring.replaceConnectNonBlocking(e);
+function setMcpConnectNonBlocking(value) {
+  currentSession().host.mcpProcessWiring.replaceConnectNonBlocking(value);
 }
 //@ chunk-ndmse9kj.js:77443-77508 facade-majority
 /**
@@ -1322,8 +1345,8 @@ function getTeardownUnwindRequested() {
 /**
  * 状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceTeardownUnwindRequested()。
  */
-function setTeardownUnwindRequested(e) {
-  currentSession().sessionFlags.replaceTeardownUnwindRequested(e);
+function setTeardownUnwindRequested(value) {
+  currentSession().sessionFlags.replaceTeardownUnwindRequested(value);
 }
 //@ chunk-ndmse9kj.js:77575-77648 facade-majority
 /**
@@ -1336,8 +1359,8 @@ function getBackgroundAutoModeSetupInFlight() {
 /**
  * 状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceBackgroundAutoModeSetupInFlight()。
  */
-function setBackgroundAutoModeSetupInFlight(e) {
-  currentSession().sessionFlags.replaceBackgroundAutoModeSetupInFlight(e);
+function setBackgroundAutoModeSetupInFlight(value) {
+  currentSession().sessionFlags.replaceBackgroundAutoModeSetupInFlight(value);
 }
 //@ chunk-ndmse9kj.js:77723-77790 facade-majority
 /**
@@ -1364,8 +1387,8 @@ function getVerifySkillRolloutGateLatch() {
 /**
  * 状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceVerifySkillRolloutGateLatch()。
  */
-function setVerifySkillRolloutGateLatch(e) {
-  currentSession().sessionFlags.replaceVerifySkillRolloutGateLatch(e);
+function setVerifySkillRolloutGateLatch(value) {
+  currentSession().sessionFlags.replaceVerifySkillRolloutGateLatch(value);
 }
 //@ chunk-ndmse9kj.js:77999-78068 facade-majority
 /**
@@ -1378,8 +1401,8 @@ function getCommitSkillRolloutGateLatch() {
 /**
  * 状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceCommitSkillRolloutGateLatch()。
  */
-function setCommitSkillRolloutGateLatch(e) {
-  currentSession().sessionFlags.replaceCommitSkillRolloutGateLatch(e);
+function setCommitSkillRolloutGateLatch(value) {
+  currentSession().sessionFlags.replaceCommitSkillRolloutGateLatch(value);
 }
 //@ chunk-ndmse9kj.js:78139-78202 facade-majority
 /**
@@ -1392,19 +1415,19 @@ function getMemoryToolsShapeLatch() {
 /**
  * 状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceMemoryToolsShapeLatch()。
  */
-function setMemoryToolsShapeLatch(e) {
-  currentSession().sessionFlags.replaceMemoryToolsShapeLatch(e);
+function setMemoryToolsShapeLatch(value) {
+  currentSession().sessionFlags.replaceMemoryToolsShapeLatch(value);
 }
 //@ chunk-ndmse9kj.js:78267-78467 facade-majority
 /**
  * 压缩前记下最后一次主请求的响应（若 id 匹配），供压缩后的 context_compacted 附件使用。
  */
-function armPendingContextCompacted(compactionKind, n) {
-  let o = currentSession();
-  o.sessionFlags.armPendingContextCompacted(
+function armPendingContextCompacted(compactionKind, requestId) {
+  let session = currentSession();
+  session.sessionFlags.armPendingContextCompacted(
     compactionKind,
-    o.requestJournal.lastMainRequestId() === n
-      ? (o.requestJournal.lastMainResponse() ?? o.sessionFlags.responseBeforeCompaction())
+    session.requestJournal.lastMainRequestId() === requestId
+      ? (session.requestJournal.lastMainResponse() ?? session.sessionFlags.responseBeforeCompaction())
       : undefined,
   );
 }
@@ -1461,8 +1484,8 @@ function getCliSessionConfigCarried() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceCliSessionConfigCarried()。
  */
-function setCliSessionConfigCarried(e) {
-  currentSession().host.launchOptions.replaceCliSessionConfigCarried(e);
+function setCliSessionConfigCarried(value) {
+  currentSession().host.launchOptions.replaceCliSessionConfigCarried(value);
 }
 //@ chunk-ndmse9kj.js:79005-79078 facade-majority
 /**
@@ -1475,8 +1498,8 @@ function getForkRestrictedLaunchConfig() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceForkRestrictedLaunchConfig()。
  */
-function setForkRestrictedLaunchConfig(e) {
-  currentSession().host.launchOptions.replaceForkRestrictedLaunchConfig(e);
+function setForkRestrictedLaunchConfig(value) {
+  currentSession().host.launchOptions.replaceForkRestrictedLaunchConfig(value);
 }
 //@ chunk-ndmse9kj.js:79154-79224 facade-majority
 /**
@@ -1489,8 +1512,8 @@ function getForkReplayLaunchConfig() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceForkReplayLaunchConfig()。
  */
-function setForkReplayLaunchConfig(e) {
-  currentSession().host.launchOptions.replaceForkReplayLaunchConfig(e);
+function setForkReplayLaunchConfig(value) {
+  currentSession().host.launchOptions.replaceForkReplayLaunchConfig(value);
 }
 //@ chunk-ndmse9kj.js:79296-79357 facade-majority
 /**
@@ -1503,15 +1526,15 @@ function getSessionApprovedMcpServers() {
 /**
  * 状态访问器：调用当前会话的 MCP 会话接线（mcpSessionWiring） 上的 approveServers()。
  */
-function addSessionApprovedMcpServers(workspacePersistedTrustKey, n) {
-  currentSession().mcpSessionWiring.approveServers(workspacePersistedTrustKey, n);
+function addSessionApprovedMcpServers(workspacePersistedTrustKey, servers) {
+  currentSession().mcpSessionWiring.approveServers(workspacePersistedTrustKey, servers);
 }
 //@ chunk-ndmse9kj.js:79416-79472 facade-majority
 /**
  * 状态访问器：调用当前会话的 费用账本（costLedger） 上的 recordApiDuration()。
  */
-function addToTotalDurationState(durationMsIncludingRetries, n) {
-  currentSession().costLedger.recordApiDuration(durationMsIncludingRetries, n);
+function addToTotalDurationState(durationMsIncludingRetries, requestId) {
+  currentSession().costLedger.recordApiDuration(durationMsIncludingRetries, requestId);
 }
 //@ chunk-ndmse9kj.js:79472-79525 facade-majority
 /**
@@ -1524,8 +1547,8 @@ function addToTotalCostState(cost, modelUsage, model) {
 /**
  * 状态访问器：调用当前会话的 费用账本（costLedger） 上的 recordSpentTokens()。
  */
-function addToSpentTokens(e) {
-  currentSession().costLedger.recordSpentTokens(e);
+function addToSpentTokens(tokens) {
+  currentSession().costLedger.recordSpentTokens(tokens);
 }
 //@ chunk-ndmse9kj.js:79577-79628 facade-majority = getTotalCostUSD (0.713)
 /**
@@ -1538,8 +1561,8 @@ function getTotalCostUSD() {
 /**
  * 状态访问器：调用当前会话的 费用账本（costLedger） 上的 recordSideQueryCost()。
  */
-function addSideQueryCostUSD(e) {
-  currentSession().costLedger.recordSideQueryCost(e);
+function addSideQueryCostUSD(costUsd) {
+  currentSession().costLedger.recordSideQueryCost(costUsd);
 }
 //@ chunk-ndmse9kj.js:79682-79738 facade-majority
 /**
@@ -1580,8 +1603,8 @@ function getTotalToolDuration() {
 /**
  * 状态访问器：调用当前会话的 费用账本（costLedger） 上的 recordToolDuration()。
  */
-function addToToolDuration(e) {
-  currentSession().costLedger.recordToolDuration(e);
+function addToToolDuration(durationMs) {
+  currentSession().costLedger.recordToolDuration(durationMs);
 }
 //@ chunk-ndmse9kj.js:80026-80087 facade-majority = getStatsStore (0.729)
 /**
@@ -1601,8 +1624,8 @@ function setStatsStore(stats) {
 /**
  * 状态访问器：调用当前会话的 用户在场（userPresence） 上的 recordInteraction()。
  */
-function updateLastInteractionTime(e) {
-  currentSession().userPresence.recordInteraction(e);
+function updateLastInteractionTime(timestamp) {
+  currentSession().userPresence.recordInteraction(timestamp);
 }
 //@ chunk-ndmse9kj.js:80203-80250 facade-majority
 /**
@@ -1615,8 +1638,8 @@ function flushInteractionTime() {
 /**
  * 状态访问器：调用当前会话的 用户在场（userPresence） → interactionFired 上的 subscribe()。
  */
-function onInteraction(e) {
-  return currentSession().userPresence.interactionFired.subscribe(e);
+function onInteraction(listener) {
+  return currentSession().userPresence.interactionFired.subscribe(listener);
 }
 //@ chunk-ndmse9kj.js:80319-80367 facade-majority
 /**
@@ -1720,8 +1743,8 @@ function getLastMainRequestId() {
 /**
  * 状态访问器：写入当前会话的 请求日志（requestJournal） 上的 replaceLastMainRequestId()。
  */
-function setLastMainRequestId(e, n) {
-  currentSession().requestJournal.replaceLastMainRequestId(e, n);
+function setLastMainRequestId(requestId, response) {
+  currentSession().requestJournal.replaceLastMainRequestId(requestId, response);
 }
 //@ chunk-ndmse9kj.js:81183-81257 facade-majority
 /**
@@ -1756,8 +1779,8 @@ function getLastMainThreadCacheTtlMs() {
 /**
  * 状态访问器：调用当前会话的 请求日志（requestJournal） 上的 isLastMainThreadAskLive()。
  */
-function isLastMainThreadAskLive(e, n) {
-  return currentSession().requestJournal.isLastMainThreadAskLive(e, n);
+function isLastMainThreadAskLive(ttlMs, model) {
+  return currentSession().requestJournal.isLastMainThreadAskLive(ttlMs, model);
 }
 //@ chunk-ndmse9kj.js:81489-81555 facade-majority
 /**
@@ -1777,22 +1800,22 @@ function getLastLiveMainThreadRequestAt() {
 /**
  * 状态访问器：写入当前会话的 请求日志（requestJournal） 上的 replaceLastMainThreadCacheTtlMs()。
  */
-function setLastMainThreadCacheTtlMs(e, model, o) {
-  currentSession().requestJournal.replaceLastMainThreadCacheTtlMs(e, model, o);
+function setLastMainThreadCacheTtlMs(ttlMs, model, askedAt) {
+  currentSession().requestJournal.replaceLastMainThreadCacheTtlMs(ttlMs, model, askedAt);
 }
 //@ chunk-ndmse9kj.js:81704-81773 facade-majority
 /**
  * 状态访问器：调用当前会话的 请求日志（requestJournal） 上的 adjustLastMainThreadCacheTtlMs()。
  */
-function adjustLastMainThreadCacheTtlMs(e) {
-  currentSession().requestJournal.adjustLastMainThreadCacheTtlMs(e);
+function adjustLastMainThreadCacheTtlMs(ttlMs) {
+  currentSession().requestJournal.adjustLastMainThreadCacheTtlMs(ttlMs);
 }
 //@ chunk-ndmse9kj.js:81773-81844 facade-majority
 /**
  * 状态访问器：调用当前会话的 请求日志（requestJournal） 上的 recordLastMainThreadCacheRenewal()。
  */
-function recordLastMainThreadCacheRenewal(e) {
-  currentSession().requestJournal.recordLastMainThreadCacheRenewal(e);
+function recordLastMainThreadCacheRenewal(renewedAt) {
+  currentSession().requestJournal.recordLastMainThreadCacheRenewal(renewedAt);
 }
 //@ chunk-ndmse9kj.js:81844-81916 facade-majority
 /**
@@ -1812,17 +1835,18 @@ function getLastMainThreadContextTokens() {
 /**
  * 状态访问器：写入当前会话的 请求日志（requestJournal） 上的 replaceLastMainThreadContextTokens()。
  */
-function setLastMainThreadContextTokens(e) {
-  currentSession().requestJournal.replaceLastMainThreadContextTokens(e);
+function setLastMainThreadContextTokens(contextTokens) {
+  currentSession().requestJournal.replaceLastMainThreadContextTokens(contextTokens);
 }
 //@ chunk-ndmse9kj.js:82060-82207 facade-majority
 /**
  * resume 种子：会话 id 已一致时立即应用到请求日志，否则暂存待切换后应用。
  */
-function stageResumeJournalSeed(e) {
-  let n = currentSession();
-  if (e.sessionId !== undefined && e.sessionId === n.id) n.requestJournal.applyResumeSeed(e);
-  else n.requestJournal.stageResumeSeed(e);
+function stageResumeJournalSeed(seed) {
+  let session = currentSession();
+  if (seed.sessionId !== undefined && seed.sessionId === session.id)
+    session.requestJournal.applyResumeSeed(seed);
+  else session.requestJournal.stageResumeSeed(seed);
 }
 //@ chunk-ndmse9kj.js:82207-82276 facade-majority = getLastApiCompletionTimestamp (0.736)
 /**
@@ -1835,17 +1859,17 @@ function getLastApiCompletionTimestamp() {
 /**
  * 状态访问器：写入当前会话的 请求日志（requestJournal） 上的 replaceLastApiCompletionTimestamp()。
  */
-function setLastApiCompletionTimestamp(e) {
-  currentSession().requestJournal.replaceLastApiCompletionTimestamp(e);
+function setLastApiCompletionTimestamp(timestamp) {
+  currentSession().requestJournal.replaceLastApiCompletionTimestamp(timestamp);
 }
 //@ chunk-ndmse9kj.js:82348-82540 facade-majority
 /**
  * markPostCompaction：标记刚压缩并记录上下文 token；不保留缓存前缀时清掉最后主线程请求。
  */
-function markPostCompaction(e, { keepsCachedPrefix = false } = {}) {
+function markPostCompaction(contextTokens, { keepsCachedPrefix = false } = {}) {
   let requestJournal = currentSession().requestJournal;
   requestJournal.replacePendingPostCompaction(true);
-  requestJournal.replaceLastMainThreadContextTokens(e);
+  requestJournal.replaceLastMainThreadContextTokens(contextTokens);
   if (!keepsCachedPrefix) requestJournal.replaceLastMainThreadRequest(null, null);
 }
 //@ chunk-ndmse9kj.js:82540-82667 facade-majority = markPostCompaction (0.544)
@@ -1853,10 +1877,10 @@ function markPostCompaction(e, { keepsCachedPrefix = false } = {}) {
  * 读取并清除“刚压缩过”标记。
  */
 function consumePostCompaction() {
-  let e = currentSession();
-  let n = e.requestJournal.pendingPostCompaction();
-  e.requestJournal.replacePendingPostCompaction(false);
-  return n;
+  let session = currentSession();
+  let pending = session.requestJournal.pendingPostCompaction();
+  session.requestJournal.replacePendingPostCompaction(false);
+  return pending;
 }
 //@ chunk-ndmse9kj.js:82667-82727 facade-majority = flushInteractionTime_inner (0.693)
 /**
@@ -1888,8 +1912,8 @@ var NOTIF_ACTIVE_THRESHOLD_MS = 60000;
 /**
  * 状态访问器：调用当前会话的 用户在场（userPresence） 上的 updateTerminalFocus()。
  */
-function setTerminalFocusForState(e) {
-  currentSession().userPresence.updateTerminalFocus(e);
+function setTerminalFocusForState(focused) {
+  currentSession().userPresence.updateTerminalFocus(focused);
 }
 //@ chunk-ndmse9kj.js:82900-82955 facade-majority
 /**
@@ -1902,8 +1926,8 @@ function getTerminalFocus() {
 /**
  * 状态访问器：调用当前会话的 用户在场（userPresence） → terminalFocusFired 上的 subscribe()。
  */
-function onTerminalFocusChange(e) {
-  return currentSession().userPresence.terminalFocusFired.subscribe(e);
+function onTerminalFocusChange(listener) {
+  return currentSession().userPresence.terminalFocusFired.subscribe(listener);
 }
 //@ chunk-ndmse9kj.js:83027-83104 facade-majority
 /**
@@ -1988,8 +2012,8 @@ function getInitialMainLoopModel() {
 /**
  * 状态访问器：调用当前会话的 模型选择（modelSelection） 上的 overrideMainLoopModel()。
  */
-function setMainLoopModelOverride(e) {
-  currentSession().modelSelection.overrideMainLoopModel(e);
+function setMainLoopModelOverride(model) {
+  currentSession().modelSelection.overrideMainLoopModel(model);
 }
 //@ chunk-ndmse9kj.js:83750-83813 facade-majority
 /**
@@ -2002,15 +2026,15 @@ function getMainLoopEffortState() {
 /**
  * 状态访问器：写入当前会话的 模型选择（modelSelection） 上的 replaceMainLoopEffortState()。
  */
-function setMainLoopEffortState(e) {
-  currentSession().modelSelection.replaceMainLoopEffortState(e);
+function setMainLoopEffortState(effortState) {
+  currentSession().modelSelection.replaceMainLoopEffortState(effortState);
 }
 //@ chunk-ndmse9kj.js:83878-83944 facade-majority
 /**
  * 状态访问器：调用当前会话的 模型选择（modelSelection） 上的 markRefusalFallbackOccurred()。
  */
-function markRefusalFallbackOccurred(e) {
-  currentSession().modelSelection.markRefusalFallbackOccurred(e);
+function markRefusalFallbackOccurred(reason) {
+  currentSession().modelSelection.markRefusalFallbackOccurred(reason);
 }
 //@ chunk-ndmse9kj.js:83944-84010 facade-majority
 /**
@@ -2023,8 +2047,8 @@ function hasRefusalFallbackOccurred() {
 /**
  * 状态访问器：调用当前会话的 模型选择（modelSelection） 上的 armRefusalFallbackHeader()。
  */
-function markRefusalFallbackHeaderArmed(e) {
-  currentSession().modelSelection.armRefusalFallbackHeader(e);
+function markRefusalFallbackHeaderArmed(armed) {
+  currentSession().modelSelection.armRefusalFallbackHeader(armed);
 }
 //@ chunk-ndmse9kj.js:84073-84143 facade-majority
 /**
@@ -2059,17 +2083,17 @@ function getRefusalFallbackLatchOriginRequestId() {
  * 锁存拒答回退模型：已锁存且当前覆盖即回退模型时只更新回退模型与 effort，否则写入新锁存。
  */
 function latchRefusalFallbackModel(model) {
-  let n = currentSession();
-  let o = n.modelSelection.refusalFallbackModelLatch();
-  if (o && n.modelSelection.mainLoopModelOverride() === o.fallbackModel) {
-    n.modelSelection.replaceRefusalFallbackModelLatch({
-      ...o,
+  let session = currentSession();
+  let existingLatch = session.modelSelection.refusalFallbackModelLatch();
+  if (existingLatch && session.modelSelection.mainLoopModelOverride() === existingLatch.fallbackModel) {
+    session.modelSelection.replaceRefusalFallbackModelLatch({
+      ...existingLatch,
       fallbackModel: model.fallbackModel,
-      carriedEffort: model.carriedEffort ?? o.carriedEffort,
+      carriedEffort: model.carriedEffort ?? existingLatch.carriedEffort,
     });
     return;
   }
-  n.modelSelection.replaceRefusalFallbackModelLatch(model);
+  session.modelSelection.replaceRefusalFallbackModelLatch(model);
 }
 //@ chunk-ndmse9kj.js:84681-84757 facade-majority
 /**
@@ -2089,16 +2113,16 @@ function getRefusalFallbackModelLatch() {
 /**
  * 清掉拒答回退锁存里携带的 effort。
  */
-function releaseRefusalFallbackCarriedEffort(e) {
+function releaseRefusalFallbackCarriedEffort(reason) {
   let { modelSelection } = currentSession();
-  let o = modelSelection.refusalFallbackModelLatch();
-  if (o !== undefined)
+  let latch = modelSelection.refusalFallbackModelLatch();
+  if (latch !== undefined)
     modelSelection.replaceRefusalFallbackModelLatch(
       {
-        ...o,
+        ...latch,
         carriedEffort: undefined,
       },
-      e,
+      reason,
     );
 }
 //@ chunk-ndmse9kj.js:84979-85043 facade-majority
@@ -2113,11 +2137,11 @@ function takeRefusalFallbackCarriedEffortEnd() {
  * 改写拒答回退锁存里记录的“之前的模型覆盖”。
  */
 function rewriteRefusalFallbackPreviousOverride(previousOverride) {
-  let n = currentSession();
-  let o = n.modelSelection.refusalFallbackModelLatch();
-  if (o)
-    n.modelSelection.replaceRefusalFallbackModelLatch({
-      ...o,
+  let session = currentSession();
+  let latch = session.modelSelection.refusalFallbackModelLatch();
+  if (latch)
+    session.modelSelection.replaceRefusalFallbackModelLatch({
+      ...latch,
       previousOverride,
     });
 }
@@ -2132,8 +2156,8 @@ function clearRefusalFallbackOccurred() {
 /**
  * 状态访问器：调用当前会话的 宿主能力（surfaceCapabilities） 上的 markSdkDialogHostActive()。
  */
-function setSdkDialogHostActive(e) {
-  currentSession().surfaceCapabilities.markSdkDialogHostActive(e);
+function setSdkDialogHostActive(active) {
+  currentSession().surfaceCapabilities.markSdkDialogHostActive(active);
 }
 //@ chunk-ndmse9kj.js:85331-85398 facade-majority
 /**
@@ -2146,8 +2170,8 @@ function isSdkDialogHostActive() {
 /**
  * 状态访问器：调用当前会话的 宿主能力（surfaceCapabilities） 上的 declareDialogKinds()。
  */
-function setSdkSupportedDialogKinds(e, n) {
-  currentSession().surfaceCapabilities.declareDialogKinds(e, n);
+function setSdkSupportedDialogKinds(dialogKinds, source) {
+  currentSession().surfaceCapabilities.declareDialogKinds(dialogKinds, source);
 }
 //@ chunk-ndmse9kj.js:85464-85536 facade-majority
 /**
@@ -2161,16 +2185,16 @@ function getSdkSupportedDialogKinds() {
  * SDK 宿主声明的对话类型来源（未声明为 none）。
  */
 function getSdkDialogCapabilitySource() {
-  let e = currentSession();
-  if (e.surfaceCapabilities.sdkSupportedDialogKinds() === undefined) return "none";
-  return e.surfaceCapabilities.sdkSupportedDialogKindsSource() ?? "none";
+  let session = currentSession();
+  if (session.surfaceCapabilities.sdkSupportedDialogKinds() === undefined) return "none";
+  return session.surfaceCapabilities.sdkSupportedDialogKindsSource() ?? "none";
 }
 //@ chunk-ndmse9kj.js:85703-85775 facade-majority
 /**
  * 状态访问器：调用当前会话的 宿主能力（surfaceCapabilities） 上的 declarePerTaskStopAffordance()。
  */
-function setSdkPerTaskStopAffordance(e) {
-  currentSession().surfaceCapabilities.declarePerTaskStopAffordance(e);
+function setSdkPerTaskStopAffordance(affordance) {
+  currentSession().surfaceCapabilities.declarePerTaskStopAffordance(affordance);
 }
 //@ chunk-ndmse9kj.js:85775-85853 facade-majority
 /**
@@ -2183,8 +2207,8 @@ function getSdkPerTaskStopAffordance() {
 /**
  * 状态访问器：调用当前会话的 宿主能力（surfaceCapabilities） 上的 declareRapidFollowupPreempt()。
  */
-function setSdkRapidFollowupPreempt(e) {
-  currentSession().surfaceCapabilities.declareRapidFollowupPreempt(e);
+function setSdkRapidFollowupPreempt(enabled) {
+  currentSession().surfaceCapabilities.declareRapidFollowupPreempt(enabled);
 }
 //@ chunk-ndmse9kj.js:85924-86001 facade-majority
 /**
@@ -2197,15 +2221,15 @@ function getSdkRapidFollowupPreempt() {
 /**
  * 状态访问器：调用当前会话的 宿主能力（surfaceCapabilities） 上的 declareForwardNestedSubagentToolCalls()。
  */
-function setSdkForwardNestedSubagentToolCalls(e) {
-  currentSession().surfaceCapabilities.declareForwardNestedSubagentToolCalls(e);
+function setSdkForwardNestedSubagentToolCalls(enabled) {
+  currentSession().surfaceCapabilities.declareForwardNestedSubagentToolCalls(enabled);
 }
 //@ chunk-ndmse9kj.js:86082-86160 facade-majority
 /**
  * 状态访问器：调用当前会话的 宿主能力（surfaceCapabilities） 上的 declareHostRendersChromeSetupOffer()。
  */
-function setHostRendersChromeSetupOffer(e) {
-  currentSession().surfaceCapabilities.declareHostRendersChromeSetupOffer(e);
+function setHostRendersChromeSetupOffer(enabled) {
+  currentSession().surfaceCapabilities.declareHostRendersChromeSetupOffer(enabled);
 }
 //@ chunk-ndmse9kj.js:86160-86241 facade-majority
 /**
@@ -2225,8 +2249,8 @@ function getReplConfigArgv() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceReplConfigArgv()。
  */
-function setReplConfigArgv(e) {
-  currentSession().host.launchOptions.replaceReplConfigArgv(e);
+function setReplConfigArgv(argv) {
+  currentSession().host.launchOptions.replaceReplConfigArgv(argv);
 }
 //@ chunk-ndmse9kj.js:86366-86432 facade-majority
 /**
@@ -2246,8 +2270,8 @@ function getAvailabilityFallbackChain() {
 /**
  * 状态访问器：写入当前会话的 模型选择（modelSelection） 上的 replaceAvailabilityFallbackChain()。
  */
-function setAvailabilityFallbackChain(e) {
-  currentSession().modelSelection.replaceAvailabilityFallbackChain(e);
+function setAvailabilityFallbackChain(chain) {
+  currentSession().modelSelection.replaceAvailabilityFallbackChain(chain);
 }
 //@ chunk-ndmse9kj.js:86572-86640 facade-majority
 /**
@@ -2274,8 +2298,8 @@ function getResolvedOrgDefault() {
 /**
  * 状态访问器：写入当前会话的 模型选择（modelSelection） 上的 replaceResolvedOrgDefault()。
  */
-function setResolvedOrgDefault(e) {
-  currentSession().modelSelection.replaceResolvedOrgDefault(e);
+function setResolvedOrgDefault(model) {
+  currentSession().modelSelection.replaceResolvedOrgDefault(model);
 }
 //@ chunk-ndmse9kj.js:86836-86902 facade-majority
 /**
@@ -2288,8 +2312,8 @@ function getInitialEnvDefaultModel() {
 /**
  * 状态访问器：写入当前会话的 模型选择（modelSelection） 上的 replaceInitialEnvDefaultModel()。
  */
-function setInitialEnvDefaultModel(e) {
-  currentSession().modelSelection.replaceInitialEnvDefaultModel(e);
+function setInitialEnvDefaultModel(model) {
+  currentSession().modelSelection.replaceInitialEnvDefaultModel(model);
 }
 //@ chunk-ndmse9kj.js:86970-87041 facade-majority = getSdkBetas (0.724)
 /**
@@ -2316,8 +2340,8 @@ function isLongContext1mCreditsBlocked() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 账户额度锁存（accountCreditLatches） 上的 replaceLongContext1mCreditsBlocked()。
  */
-function setLongContext1mCreditsBlocked(e) {
-  currentSession().host.accountCreditLatches.replaceLongContext1mCreditsBlocked(e);
+function setLongContext1mCreditsBlocked(blocked) {
+  currentSession().host.accountCreditLatches.replaceLongContext1mCreditsBlocked(blocked);
 }
 //@ chunk-ndmse9kj.js:87266-87341 facade-majority
 /**
@@ -2330,36 +2354,36 @@ function isUsageCreditsRequired() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 账户额度锁存（accountCreditLatches） 上的 replaceUsageCreditsRequired()。
  */
-function setUsageCreditsRequired(e) {
-  currentSession().host.accountCreditLatches.replaceUsageCreditsRequired(e);
+function setUsageCreditsRequired(required) {
+  currentSession().host.accountCreditLatches.replaceUsageCreditsRequired(required);
 }
 //@ chunk-ndmse9kj.js:87418-87505 facade-majority
 /**
  * 状态访问器：调用当前会话的 仅额度模型同意（usageCreditsOnlyModelConsentSlots） 上的 consentSessionFallback()。
  */
-function hasUsageCreditsOnlyModelConsentSessionFallback(e) {
-  return currentSession().usageCreditsOnlyModelConsentSlots.consentSessionFallback(e);
+function hasUsageCreditsOnlyModelConsentSessionFallback(modelFamily) {
+  return currentSession().usageCreditsOnlyModelConsentSlots.consentSessionFallback(modelFamily);
 }
 //@ chunk-ndmse9kj.js:87505-87596 facade-majority
 /**
  * 状态访问器：写入当前会话的 仅额度模型同意（usageCreditsOnlyModelConsentSlots） 上的 replaceConsentSessionFallback()。
  */
-function setUsageCreditsOnlyModelConsentSessionFallback(e, n) {
-  currentSession().usageCreditsOnlyModelConsentSlots.replaceConsentSessionFallback(e, n);
+function setUsageCreditsOnlyModelConsentSessionFallback(modelFamily, consented) {
+  currentSession().usageCreditsOnlyModelConsentSlots.replaceConsentSessionFallback(modelFamily, consented);
 }
 //@ chunk-ndmse9kj.js:87596-87678 facade-majority
 /**
  * 状态访问器：调用当前会话的 仅额度模型同意（usageCreditsOnlyModelConsentSlots） 上的 sessionConsentKey()。
  */
-function getUsageCreditsOnlyModelSessionConsentKey(e) {
-  return currentSession().usageCreditsOnlyModelConsentSlots.sessionConsentKey(e);
+function getUsageCreditsOnlyModelSessionConsentKey(modelFamily) {
+  return currentSession().usageCreditsOnlyModelConsentSlots.sessionConsentKey(modelFamily);
 }
 //@ chunk-ndmse9kj.js:87678-87764 facade-majority
 /**
  * 状态访问器：写入当前会话的 仅额度模型同意（usageCreditsOnlyModelConsentSlots） 上的 replaceSessionConsentKey()。
  */
-function setUsageCreditsOnlyModelSessionConsentKey(e, n) {
-  currentSession().usageCreditsOnlyModelConsentSlots.replaceSessionConsentKey(e, n);
+function setUsageCreditsOnlyModelSessionConsentKey(modelFamily, ownerKey) {
+  currentSession().usageCreditsOnlyModelConsentSlots.replaceSessionConsentKey(modelFamily, ownerKey);
 }
 //@ chunk-ndmse9kj.js:87764-87842 facade-majority
 /**
@@ -2372,8 +2396,8 @@ function getSdkOAuthTokenRefreshCallback() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceSdkOAuthTokenRefreshCallback()。
  */
-function setSdkOAuthTokenRefreshCallback(e) {
-  currentSession().host.credentialSlots.replaceSdkOAuthTokenRefreshCallback(e);
+function setSdkOAuthTokenRefreshCallback(callback) {
+  currentSession().host.credentialSlots.replaceSdkOAuthTokenRefreshCallback(callback);
 }
 //@ chunk-ndmse9kj.js:87922-88000 facade-majority
 /**
@@ -2386,8 +2410,8 @@ function getHostAuthTokenRefreshCallback() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceHostAuthTokenRefreshCallback()。
  */
-function setHostAuthTokenRefreshCallback(e) {
-  currentSession().host.credentialSlots.replaceHostAuthTokenRefreshCallback(e);
+function setHostAuthTokenRefreshCallback(callback) {
+  currentSession().host.credentialSlots.replaceHostAuthTokenRefreshCallback(callback);
 }
 //@ chunk-ndmse9kj.js:88080-88126 facade-majority
 /**
@@ -2414,49 +2438,49 @@ function registerCostStateRecorder(recordCostState) {
 /**
  * 状态访问器：调用当前会话的 费用账本（costLedger） 上的 runTranscriptRecorder()。
  */
-function recordCostStateToTranscript(e, n) {
-  currentSession().costLedger.runTranscriptRecorder(e, n, defaultRootSession.costLedger);
+function recordCostStateToTranscript(recorder, options) {
+  currentSession().costLedger.runTranscriptRecorder(recorder, options, defaultRootSession.costLedger);
 }
 //@ chunk-ndmse9kj.js:88314-88375 facade-majority
 /**
  * 费用账本是否属于当前会话。
  */
 function costLedgerBelongsToCurrentSession() {
-  let e = currentSession();
-  return e.costLedger.belongsTo(e.id);
+  let session = currentSession();
+  return session.costLedger.belongsTo(session.id);
 }
 //@ chunk-ndmse9kj.js:88375-88425 facade-majority
 /**
  * 把费用账本归属到当前会话。
  */
 function claimCostLedgerForCurrentSession() {
-  let e = currentSession();
-  e.costLedger.claim(e.id);
+  let session = currentSession();
+  session.costLedger.claim(session.id);
 }
 //@ chunk-ndmse9kj.js:88425-88477 facade-majority
 /**
  * 把费用账本范围限定为当前会话。
  */
 function scopeCostLedgerToCurrentSession() {
-  let e = currentSession();
-  e.costLedger.scopeTo(e.id);
+  let session = currentSession();
+  session.costLedger.scopeTo(session.id);
 }
 //@ chunk-ndmse9kj.js:88477-88566 facade-majority
 /**
  * resetCostState：清空当前会话费用账本并清 promptId。
  */
 function resetCostState() {
-  let e = currentSession();
-  e.costLedger.reset(e.id);
-  e.requestJournal.replacePromptId(null);
+  let session = currentSession();
+  session.costLedger.reset(session.id);
+  session.requestJournal.replacePromptId(null);
 }
 //@ chunk-ndmse9kj.js:88566-88621 facade-majority
 /**
  * setCostStateForRestore：resume 时恢复费用状态。
  */
-function setCostStateForRestore(e) {
-  let n = currentSession();
-  n.costLedger.restore(e, n.id);
+function setCostStateForRestore(costState) {
+  let session = currentSession();
+  session.costLedger.restore(costState, session.id);
 }
 //@ chunk-ndmse9kj.js:88621-88685 facade-majority
 /**
@@ -2469,8 +2493,8 @@ function getProjectConfigRoot() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceProjectConfigRoot()。
  */
-function setProjectConfigRoot(e) {
-  currentSession().host.launchOptions.replaceProjectConfigRoot(e);
+function setProjectConfigRoot(root) {
+  currentSession().host.launchOptions.replaceProjectConfigRoot(root);
 }
 //@ chunk-ndmse9kj.js:88752-88816 facade-majority = getModelStrings (0.7)
 /**
@@ -2483,8 +2507,8 @@ function getModelStrings() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 模型字符串缓存（modelStringsCache） 上的 replaceModelStrings()。
  */
-function setModelStrings(e) {
-  currentSession().host.modelStringsCache.replaceModelStrings(e);
+function setModelStrings(modelStrings) {
+  currentSession().host.modelStringsCache.replaceModelStrings(modelStrings);
 }
 //@ chunk-ndmse9kj.js:88882-88937 facade-majority
 /**
@@ -2497,8 +2521,8 @@ function resetModelStrings() {
 /**
  * 状态访问器：调用当前会话的 host（host） → 模型字符串缓存（modelStringsCache） 上的 recordAdmin3PSteeringSnapshot()。
  */
-function setAdmin3PSteeringSnapshot(e) {
-  currentSession().host.modelStringsCache.recordAdmin3PSteeringSnapshot(e);
+function setAdmin3PSteeringSnapshot(snapshot) {
+  currentSession().host.modelStringsCache.recordAdmin3PSteeringSnapshot(snapshot);
 }
 //@ chunk-ndmse9kj.js:89013-89088 facade-majority
 /**
@@ -2553,22 +2577,22 @@ function getEventLoggerOwner() {
 /**
  * 状态访问器：调用当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 attachEventLogger()。
  */
-function setEventLogger(eventLogger, n = "org") {
-  currentSession().host.telemetryHandles.attachEventLogger(eventLogger, n);
+function setEventLogger(eventLogger, source = "org") {
+  currentSession().host.telemetryHandles.attachEventLogger(eventLogger, source);
 }
 //@ chunk-ndmse9kj.js:89582-89653 facade-majority
 /**
  * 状态访问器：调用当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 bufferPendingEvent()。
  */
-function bufferPendingOTelEvent(e) {
-  return currentSession().host.telemetryHandles.bufferPendingEvent(e);
+function bufferPendingOTelEvent(event) {
+  return currentSession().host.telemetryHandles.bufferPendingEvent(event);
 }
 //@ chunk-ndmse9kj.js:89653-89710 facade-majority
 /**
  * 状态访问器：调用当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 closeWindow()。
  */
-function discardPendingOTelEvents(e) {
-  currentSession().host.telemetryHandles.closeWindow(e);
+function discardPendingOTelEvents(reason) {
+  currentSession().host.telemetryHandles.closeWindow(reason);
 }
 //@ chunk-ndmse9kj.js:89710-89777 facade-majority
 /**
@@ -2623,22 +2647,22 @@ function getCachedTelemetryResource() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 replaceCachedTelemetryResource()。
  */
-function setCachedTelemetryResource(e) {
-  currentSession().host.telemetryHandles.replaceCachedTelemetryResource(e);
+function setCachedTelemetryResource(resource) {
+  currentSession().host.telemetryHandles.replaceCachedTelemetryResource(resource);
 }
 //@ chunk-ndmse9kj.js:90259-90342 facade-majority
 /**
  * 状态访问器：调用当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 cachedOtlpHttpAgentFactory()。
  */
-function getCachedOtlpHttpAgentFactory(e, n) {
-  return currentSession().host.telemetryHandles.cachedOtlpHttpAgentFactory(e, n);
+function getCachedOtlpHttpAgentFactory(useProxy, trustProfile) {
+  return currentSession().host.telemetryHandles.cachedOtlpHttpAgentFactory(useProxy, trustProfile);
 }
 //@ chunk-ndmse9kj.js:90342-90429 facade-majority
 /**
  * 状态访问器：写入当前会话的 host（host） → 遥测句柄（telemetryHandles） 上的 replaceCachedOtlpHttpAgentFactory()。
  */
-function setCachedOtlpHttpAgentFactory(e, n, o) {
-  currentSession().host.telemetryHandles.replaceCachedOtlpHttpAgentFactory(e, n, o);
+function setCachedOtlpHttpAgentFactory(useProxy, trustProfile, factory) {
+  currentSession().host.telemetryHandles.replaceCachedOtlpHttpAgentFactory(useProxy, trustProfile, factory);
 }
 //@ chunk-ndmse9kj.js:90429-90489 facade-majority = getIsNonInteractiveSession (0.711)
 /**
@@ -2676,9 +2700,9 @@ function markSpareParked() {
  */
 function markSpareClaiming() {
   let launchOptions = currentSession().host.launchOptions;
-  let n = launchOptions.spareParkedAtMs();
+  let parkedAtMs = launchOptions.spareParkedAtMs();
   launchOptions.replaceSpareClaimState("claiming");
-  return n === undefined ? undefined : Date.now() - n;
+  return parkedAtMs === undefined ? undefined : Date.now() - parkedAtMs;
 }
 //@ chunk-ndmse9kj.js:90882-90954 facade-majority
 /**
@@ -2699,8 +2723,8 @@ function markSpareClaimFailed() {
  * 会话状态函数 isUnclaimedSpare：涉及当前会话的 host.launchOptions.spareClaimState。
  */
 function isUnclaimedSpare() {
-  let e = currentSession().host.launchOptions.spareClaimState();
-  return e === "parked" || e === "claiming" || e === "failed";
+  let claimState = currentSession().host.launchOptions.spareClaimState();
+  return claimState === "parked" || claimState === "claiming" || claimState === "failed";
 }
 //@ chunk-ndmse9kj.js:91137-91197 facade-majority = getIsInteractive (0.711)
 /**
@@ -2735,10 +2759,10 @@ function markNoDialogLaunch() {
  * setIsInteractive：写 launchOptions.isInteractive；变化时让所有 HostScoped 缓存失效。
  */
 function setIsInteractive(value) {
-  let n = currentSession();
-  let o = n.host.launchOptions.isInteractive() !== value;
-  n.host.launchOptions.replaceIsInteractive(value);
-  if (o) SETTINGS_CACHE_STORE_SLOT.of(n.host).invalidateAll();
+  let session = currentSession();
+  let changed = session.host.launchOptions.isInteractive() !== value;
+  session.host.launchOptions.replaceIsInteractive(value);
+  if (changed) SETTINGS_CACHE_STORE_SLOT.of(session.host).invalidateAll();
 }
 //@ chunk-ndmse9kj.js:91540-91605 facade-majority
 /**
@@ -2751,8 +2775,8 @@ function getPrintOutputFormat() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replacePrintOutputFormat()。
  */
-function setPrintOutputFormat(e) {
-  currentSession().host.launchOptions.replacePrintOutputFormat(e);
+function setPrintOutputFormat(format) {
+  currentSession().host.launchOptions.replacePrintOutputFormat(format);
 }
 //@ chunk-ndmse9kj.js:91672-91743 facade-majority
 /**
@@ -2779,8 +2803,8 @@ function getPermissionPromptToolName() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replacePermissionPromptToolName()。
  */
-function setPermissionPromptToolName(e) {
-  currentSession().host.launchOptions.replacePermissionPromptToolName(e);
+function setPermissionPromptToolName(toolName) {
+  currentSession().host.launchOptions.replacePermissionPromptToolName(toolName);
 }
 //@ chunk-ndmse9kj.js:91961-92021 facade-majority
 /**
@@ -2800,8 +2824,8 @@ function setAttacherCaps(caps) {
 /**
  * 状态访问器：调用当前会话的 宿主能力（surfaceCapabilities） → attacherCapsChanged 上的 subscribe()。
  */
-function onAttacherCapsChange(e) {
-  return currentSession().surfaceCapabilities.attacherCapsChanged.subscribe(e);
+function onAttacherCapsChange(listener) {
+  return currentSession().surfaceCapabilities.attacherCapsChanged.subscribe(listener);
 }
 //@ chunk-ndmse9kj.js:92163-92232 facade-majority
 /**
@@ -2814,15 +2838,15 @@ function getRvSupervisorLinkLive() {
 /**
  * 状态访问器：写入当前会话的 宿主能力（surfaceCapabilities） 上的 replaceRvSupervisorLinkLive()。
  */
-function setRvSupervisorLinkLive(e) {
-  currentSession().surfaceCapabilities.replaceRvSupervisorLinkLive(e);
+function setRvSupervisorLinkLive(live) {
+  currentSession().surfaceCapabilities.replaceRvSupervisorLinkLive(live);
 }
 //@ chunk-ndmse9kj.js:92303-92387 facade-majority
 /**
  * 状态访问器：调用当前会话的 宿主能力（surfaceCapabilities） → rvSupervisorLinkChanged 上的 subscribe()。
  */
-function onRvSupervisorLinkChange(e) {
-  return currentSession().surfaceCapabilities.rvSupervisorLinkChanged.subscribe(e);
+function onRvSupervisorLinkChange(listener) {
+  return currentSession().surfaceCapabilities.rvSupervisorLinkChanged.subscribe(listener);
 }
 //@ chunk-ndmse9kj.js:92387-92452 facade-majority
 /**
@@ -2835,8 +2859,8 @@ function getHasStreamingInput() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceHasStreamingInput()。
  */
-function setHasStreamingInput(e) {
-  currentSession().host.launchOptions.replaceHasStreamingInput(e);
+function setHasStreamingInput(enabled) {
+  currentSession().host.launchOptions.replaceHasStreamingInput(enabled);
 }
 //@ chunk-ndmse9kj.js:92519-92577 facade-majority
 /**
@@ -2846,11 +2870,11 @@ function deriveSingleShotPrintSession({ hasStreamingInput, sdkUrl }) {
   return !hasStreamingInput && !sdkUrl;
 }
 //@ chunk-ndmse9kj.js:92577-92797 layout
-function resolveOwnEventsSink(e) {
-  if (e.entrypoint === "terminal") return e.ownEventsRequested ? "terminal" : "none";
-  if (e.ownEventsOnly) return "evals";
-  if (e.hasStreamingInput || e.sdkUrl) return "host";
-  if (e.ownEventsRequested) return "evals";
+function resolveOwnEventsSink(launchOptions) {
+  if (launchOptions.entrypoint === "terminal") return launchOptions.ownEventsRequested ? "terminal" : "none";
+  if (launchOptions.ownEventsOnly) return "evals";
+  if (launchOptions.hasStreamingInput || launchOptions.sdkUrl) return "host";
+  if (launchOptions.ownEventsRequested) return "evals";
   return "none";
 }
 //@ chunk-ndmse9kj.js:92797-92869 facade-majority
@@ -2906,8 +2930,8 @@ function getSdkAgentProgressSummariesEnabled() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceSdkAgentProgressSummariesEnabled()。
  */
-function setSdkAgentProgressSummariesEnabled(e) {
-  currentSession().host.launchOptions.replaceSdkAgentProgressSummariesEnabled(e);
+function setSdkAgentProgressSummariesEnabled(enabled) {
+  currentSession().host.launchOptions.replaceSdkAgentProgressSummariesEnabled(enabled);
 }
 //@ chunk-ndmse9kj.js:93343-93403 facade-majority
 /**
@@ -2920,8 +2944,8 @@ function getRendererModeForAnalytics() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceRendererMode()。
  */
-function setRendererModeForAnalytics(e) {
-  currentSession().host.launchOptions.replaceRendererMode(e);
+function setRendererModeForAnalytics(mode) {
+  currentSession().host.launchOptions.replaceRendererMode(mode);
 }
 //@ chunk-ndmse9kj.js:93465-93536 facade-majority = getStrictToolResultPairing (0.763)
 /**
@@ -2962,26 +2986,30 @@ function isWorkspaceRestricted() {
 /**
  * 会话状态函数 findRestrictedWorkspaceRoot：涉及当前会话的 host.launchOptions.restrictedWorkspaceRoots。
  */
-function findRestrictedWorkspaceRoot(e) {
-  for (let [n, o] of currentSession().host.launchOptions.restrictedWorkspaceRoots())
-    if (e === n || e.startsWith(n.endsWith(sep) ? n : n + sep)) return o;
+function findRestrictedWorkspaceRoot(path) {
+  for (let [workspaceRoot, restriction] of currentSession().host.launchOptions.restrictedWorkspaceRoots())
+    if (
+      path === workspaceRoot ||
+      path.startsWith(workspaceRoot.endsWith(sep) ? workspaceRoot : workspaceRoot + sep)
+    )
+      return restriction;
   return null;
 }
 //@ chunk-ndmse9kj.js:93940-93976 facade-majority
 /**
  * 路径是否在受限工作区根之下。
  */
-function isUnderRestrictedWorkspaceRoot(e) {
-  return findRestrictedWorkspaceRoot(e) !== null;
+function isUnderRestrictedWorkspaceRoot(path) {
+  return findRestrictedWorkspaceRoot(path) !== null;
 }
 //@ chunk-ndmse9kj.js:93976-94148 facade-majority
 /**
  * 会话状态函数 isRestrictedWorkspaceTrustKey：涉及当前会话的 host.launchOptions.restrictedWorkspaceRoots。
  */
-function isRestrictedWorkspaceTrustKey(e) {
-  if (getWorkspaceRestriction()?.gateKeys.includes(e)) return true;
-  for (let n of currentSession().host.launchOptions.restrictedWorkspaceRoots().values())
-    if (n.gateKeys.includes(e)) return true;
+function isRestrictedWorkspaceTrustKey(trustKey) {
+  if (getWorkspaceRestriction()?.gateKeys.includes(trustKey)) return true;
+  for (let restriction of currentSession().host.launchOptions.restrictedWorkspaceRoots().values())
+    if (restriction.gateKeys.includes(trustKey)) return true;
   return false;
 }
 //@ chunk-ndmse9kj.js:94148-94213 facade-majority
@@ -3003,19 +3031,22 @@ function getMemoryToggledOff() {
  * 设置“记忆已暂停”（/memory 开关），变化时通知订阅者。
  */
 function setMemoryToggledOff(pausing) {
-  let n = currentSession();
-  if (n.sessionFlags.memoryToggledOff() === pausing) return;
-  n.sessionFlags.replaceMemoryToggledOff(pausing);
-  memoryToggleListeners.of(n).emit(pausing);
+  let session = currentSession();
+  if (session.sessionFlags.memoryToggledOff() === pausing) return;
+  session.sessionFlags.replaceMemoryToggledOff(pausing);
+  memoryToggleListeners.of(session).emit(pausing);
 }
 //@ chunk-ndmse9kj.js:94403-94427 layout
-var memoryToggleListeners = new SessionRootSlot(() => createSignal());
+var memoryToggleListeners; // deferred: uses SessionRootSlot (./sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ndmse9kj.js:94403", () => {
+  memoryToggleListeners = new SessionRootSlot(() => createSignal());
+});
 //@ chunk-ndmse9kj.js:94427-94478 facade-majority
 /**
  * 订阅记忆暂停变化。
  */
-function onMemoryPauseChange(e, root = currentSession()) {
-  return memoryToggleListeners.of(root).subscribe(e);
+function onMemoryPauseChange(listener, root = currentSession()) {
+  return memoryToggleListeners.of(root).subscribe(listener);
 }
 //@ chunk-ndmse9kj.js:94478-94544 facade-majority
 /**
@@ -3028,21 +3059,25 @@ function getAutoMemoryOffThisSession() {
 /**
  * 设置本会话关闭自动记忆；账户记忆模式非 off 时同时清除命令导致的暂停。
  */
-function setAutoMemoryOffThisSession(e) {
-  let n = currentSession();
-  if (n.sessionFlags.autoMemoryOffThisSession() === e) return;
-  n.sessionFlags.replaceAutoMemoryOffThisSession(e);
-  if (n.sessionFlags.accountMemorySessionMode() !== "off") n.sessionFlags.replaceMemoryPausedByCommand(false);
-  autoMemoryOffListeners.of(n).emit(e);
+function setAutoMemoryOffThisSession(off) {
+  let session = currentSession();
+  if (session.sessionFlags.autoMemoryOffThisSession() === off) return;
+  session.sessionFlags.replaceAutoMemoryOffThisSession(off);
+  if (session.sessionFlags.accountMemorySessionMode() !== "off")
+    session.sessionFlags.replaceMemoryPausedByCommand(false);
+  autoMemoryOffListeners.of(session).emit(off);
 }
 //@ chunk-ndmse9kj.js:94794-94818 layout
-var autoMemoryOffListeners = new SessionRootSlot(() => createSignal());
+var autoMemoryOffListeners; // deferred: uses SessionRootSlot (./sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ndmse9kj.js:94794", () => {
+  autoMemoryOffListeners = new SessionRootSlot(() => createSignal());
+});
 //@ chunk-ndmse9kj.js:94818-94869 facade-majority
 /**
  * 订阅本会话自动记忆开关变化。
  */
-function onAutoMemorySessionSwitchChange(e, root = currentSession()) {
-  return autoMemoryOffListeners.of(root).subscribe(e);
+function onAutoMemorySessionSwitchChange(listener, root = currentSession()) {
+  return autoMemoryOffListeners.of(root).subscribe(listener);
 }
 //@ chunk-ndmse9kj.js:94869-94930 facade-majority
 /**
@@ -3055,8 +3090,8 @@ function getRestoredMemoryPause() {
 /**
  * 状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceRestoredMemoryPause()。
  */
-function setRestoredMemoryPause(e) {
-  currentSession().sessionFlags.replaceRestoredMemoryPause(e);
+function setRestoredMemoryPause(paused) {
+  currentSession().sessionFlags.replaceRestoredMemoryPause(paused);
 }
 //@ chunk-ndmse9kj.js:94993-95056 facade-majority
 /**
@@ -3069,19 +3104,19 @@ function getRestoredAutoMemoryOff() {
 /**
  * 状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceRestoredAutoMemoryOff()。
  */
-function setRestoredAutoMemoryOff(e) {
-  currentSession().sessionFlags.replaceRestoredAutoMemoryOff(e);
+function setRestoredAutoMemoryOff(off) {
+  currentSession().sessionFlags.replaceRestoredAutoMemoryOff(off);
 }
 //@ chunk-ndmse9kj.js:95121-95315 facade-majority
 /**
  * 会话状态函数 setWizardOperatorToolsEnabled：涉及当前会话的 host.launchOptions.replaceWizardOperatorToolsEnabled。
  */
-function setWizardOperatorToolsEnabled(e) {
-  if (e === false)
+function setWizardOperatorToolsEnabled(enabled) {
+  if (enabled === false)
     throw Error(
       "setWizardOperatorToolsEnabled(false) is test-only: the wizard latch is one-way in production",
     );
-  currentSession().host.launchOptions.replaceWizardOperatorToolsEnabled(e);
+  currentSession().host.launchOptions.replaceWizardOperatorToolsEnabled(enabled);
 }
 //@ chunk-ndmse9kj.js:95315-95389 facade-majority
 /**
@@ -3094,12 +3129,12 @@ function getWizardOperatorToolsEnabled() {
 /**
  * runner 声明“嵌套仓库差异”（单向锁存，false 只用于测试）。
  */
-function setRunnerDeclaredNestedRepositoryDiff(e) {
-  if (e === false)
+function setRunnerDeclaredNestedRepositoryDiff(declared) {
+  if (declared === false)
     throw Error(
       "setRunnerDeclaredNestedRepositoryDiff(false) is test-only: the runner's declaration is one-way in production",
     );
-  currentSession().host.launchOptions.replaceRunnerDeclaredNestedRepositoryDiff(e);
+  currentSession().host.launchOptions.replaceRunnerDeclaredNestedRepositoryDiff(declared);
 }
 //@ chunk-ndmse9kj.js:95607-95689 facade-majority
 /**
@@ -3112,12 +3147,12 @@ function getRunnerDeclaredNestedRepositoryDiff() {
 /**
  * runner 声明“未检出仓库”（单向锁存）。
  */
-function setRunnerDeclaredNoRepositoryCheckedOut(e) {
-  if (e === false)
+function setRunnerDeclaredNoRepositoryCheckedOut(declared) {
+  if (declared === false)
     throw Error(
       "setRunnerDeclaredNoRepositoryCheckedOut(false) is test-only: the runner's declaration is one-way in production",
     );
-  currentSession().host.launchOptions.replaceRunnerDeclaredNoRepositoryCheckedOut(e);
+  currentSession().host.launchOptions.replaceRunnerDeclaredNoRepositoryCheckedOut(declared);
 }
 //@ chunk-ndmse9kj.js:95911-95995 facade-majority
 /**
@@ -3130,12 +3165,12 @@ function getRunnerDeclaredNoRepositoryCheckedOut() {
 /**
  * runner 声明“每会话全新机器”（单向锁存）。
  */
-function setRunnerDeclaredFreshMachinePerSession(e) {
-  if (e === false)
+function setRunnerDeclaredFreshMachinePerSession(declared) {
+  if (declared === false)
     throw Error(
       "setRunnerDeclaredFreshMachinePerSession(false) is test-only: the runner's declaration is one-way in production",
     );
-  currentSession().host.launchOptions.replaceRunnerDeclaredFreshMachinePerSession(e);
+  currentSession().host.launchOptions.replaceRunnerDeclaredFreshMachinePerSession(declared);
 }
 //@ chunk-ndmse9kj.js:96217-96281 facade-majority
 /**
@@ -3169,11 +3204,11 @@ function markOwnEventDeliveryRequested() {
 /**
  * 按本次运行的入口/输入方式决定自有事件的去向（terminal/evals/host）并记录。
  */
-function markPollEventWiringForRun(e) {
-  let ownEventsSink = resolveOwnEventsSink(e);
+function markPollEventWiringForRun(launchOptions) {
+  let ownEventsSink = resolveOwnEventsSink(launchOptions);
   if (ownEventsSink !== "none" && !(ownEventsSink === "host" && getPollEventIngress() === "evals"))
     markPollEventIngress(ownEventsSink);
-  if (e.ownEventsRequested) markOwnEventDeliveryRequested();
+  if (launchOptions.ownEventsRequested) markOwnEventDeliveryRequested();
 }
 //@ chunk-ndmse9kj.js:96558-96617 facade-majority = getUserMsgOptIn (0.763)
 /**
@@ -3186,8 +3221,8 @@ function getUserMsgOptIn() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceUserMsgOptIn()。
  */
-function setUserMsgOptIn(e) {
-  currentSession().host.launchOptions.replaceUserMsgOptIn(e);
+function setUserMsgOptIn(enabled) {
+  currentSession().host.launchOptions.replaceUserMsgOptIn(enabled);
 }
 //@ chunk-ndmse9kj.js:96679-96743 facade-majority
 /**
@@ -3200,8 +3235,8 @@ function getSearchToolsOptIn() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceSearchToolsOptIn()。
  */
-function setSearchToolsOptIn(e) {
-  currentSession().host.launchOptions.replaceSearchToolsOptIn(e);
+function setSearchToolsOptIn(enabled) {
+  currentSession().host.launchOptions.replaceSearchToolsOptIn(enabled);
 }
 //@ chunk-ndmse9kj.js:96809-96871 facade-majority
 /**
@@ -3214,8 +3249,8 @@ function getTodoToolsOptIn() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceTodoToolsOptIn()。
  */
-function setTodoToolsOptIn(e) {
-  currentSession().host.launchOptions.replaceTodoToolsOptIn(e);
+function setTodoToolsOptIn(enabled) {
+  currentSession().host.launchOptions.replaceTodoToolsOptIn(enabled);
 }
 //@ chunk-ndmse9kj.js:96935-97007 facade-majority
 /**
@@ -3228,8 +3263,8 @@ function getToolsOmittedByLaunchList() {
 /**
  * 会话状态函数 setToolsOmittedByLaunchList：涉及当前会话的 host.launchOptions.replaceToolsOmittedByLaunchList。
  */
-function setToolsOmittedByLaunchList(e) {
-  currentSession().host.launchOptions.replaceToolsOmittedByLaunchList(new Set(e));
+function setToolsOmittedByLaunchList(toolNames) {
+  currentSession().host.launchOptions.replaceToolsOmittedByLaunchList(new Set(toolNames));
 }
 //@ chunk-ndmse9kj.js:97090-97154 facade-majority
 /**
@@ -3242,8 +3277,8 @@ function getSessionStartType() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceSessionStartType()。
  */
-function setSessionStartType(e) {
-  currentSession().host.launchOptions.replaceSessionStartType(e);
+function setSessionStartType(startType) {
+  currentSession().host.launchOptions.replaceSessionStartType(startType);
 }
 //@ chunk-ndmse9kj.js:97220-97289 facade-majority = getQuestionPreviewFormat (0.763)
 /**
@@ -3270,8 +3305,8 @@ function getExtendedQuestionsEnabled() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceExtendedQuestionsEnabled()。
  */
-function setExtendedQuestionsEnabled(e) {
-  currentSession().host.launchOptions.replaceExtendedQuestionsEnabled(e);
+function setExtendedQuestionsEnabled(enabled) {
+  currentSession().host.launchOptions.replaceExtendedQuestionsEnabled(enabled);
 }
 //@ chunk-ndmse9kj.js:97506-97588 facade-majority
 /**
@@ -3284,8 +3319,8 @@ function getQuestionOptionDescriptionsOptional() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceQuestionOptionDescriptionsOptional()。
  */
-function setQuestionOptionDescriptionsOptional(e) {
-  currentSession().host.launchOptions.replaceQuestionOptionDescriptionsOptional(e);
+function setQuestionOptionDescriptionsOptional(optional) {
+  currentSession().host.launchOptions.replaceQuestionOptionDescriptionsOptional(optional);
 }
 //@ chunk-ndmse9kj.js:97672-97729 facade-majority = getAgentColorMap (0.739)
 /**
@@ -3319,8 +3354,8 @@ function getFlagAgentsFilePaths() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 设置来源（settingsSource） 上的 replaceFlagAgentsFilePaths()。
  */
-function setFlagAgentsFilePaths(e) {
-  currentSession().host.settingsSource.replaceFlagAgentsFilePaths(e);
+function setFlagAgentsFilePaths(paths) {
+  currentSession().host.settingsSource.replaceFlagAgentsFilePaths(paths);
 }
 //@ chunk-ndmse9kj.js:97998-98069 facade-majority
 /**
@@ -3333,8 +3368,8 @@ function getFlagMcpConfigFilePaths() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 设置来源（settingsSource） 上的 replaceFlagMcpConfigFilePaths()。
  */
-function setFlagMcpConfigFilePaths(e) {
-  currentSession().host.settingsSource.replaceFlagMcpConfigFilePaths(e);
+function setFlagMcpConfigFilePaths(paths) {
+  currentSession().host.settingsSource.replaceFlagMcpConfigFilePaths(paths);
 }
 //@ chunk-ndmse9kj.js:98142-98217 facade-majority
 /**
@@ -3347,8 +3382,8 @@ function getFlagSettingsExpectedContent() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 设置来源（settingsSource） 上的 replaceFlagSettingsExpectedContent()。
  */
-function setFlagSettingsExpectedContent(e) {
-  currentSession().host.settingsSource.replaceFlagSettingsExpectedContent(e);
+function setFlagSettingsExpectedContent(content) {
+  currentSession().host.settingsSource.replaceFlagSettingsExpectedContent(content);
 }
 //@ chunk-ndmse9kj.js:98295-98372 facade-majority
 /**
@@ -3361,8 +3396,8 @@ function getFlagSettingsFilePinnedContent() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 设置来源（settingsSource） 上的 replaceFlagSettingsFilePinnedContent()。
  */
-function setFlagSettingsFilePinnedContent(e) {
-  currentSession().host.settingsSource.replaceFlagSettingsFilePinnedContent(e);
+function setFlagSettingsFilePinnedContent(content) {
+  currentSession().host.settingsSource.replaceFlagSettingsFilePinnedContent(content);
 }
 //@ chunk-ndmse9kj.js:98452-98518 facade-majority = getFlagSettingsInline (0.719)
 /**
@@ -3375,8 +3410,8 @@ function getFlagSettingsInline() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 设置来源（settingsSource） 上的 replaceFlagSettingsInline()。
  */
-function setFlagSettingsInline(e) {
-  currentSession().host.settingsSource.replaceFlagSettingsInline(e);
+function setFlagSettingsInline(settings) {
+  currentSession().host.settingsSource.replaceFlagSettingsInline(settings);
 }
 //@ chunk-ndmse9kj.js:98586-98656 facade-majority
 /**
@@ -3403,8 +3438,8 @@ function getParentManagedSettingsInvalid() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 设置来源（settingsSource） 上的 replaceParentManagedSettingsInvalid()。
  */
-function setParentManagedSettingsInvalid(e) {
-  currentSession().host.settingsSource.replaceParentManagedSettingsInvalid(e);
+function setParentManagedSettingsInvalid(invalid) {
+  currentSession().host.settingsSource.replaceParentManagedSettingsInvalid(invalid);
 }
 //@ chunk-ndmse9kj.js:98893-98968 facade-majority
 /**
@@ -3418,16 +3453,18 @@ function getParentOrganizationSettings() {
  * 会话状态函数 getSessionIngressToken：涉及当前会话的 host.credentialSlots.sessionIngressToken。
  */
 function getSessionIngressToken() {
-  let e = agentContextGetter();
-  return e ? e.secrets.sessionIngressToken : currentSession().host.credentialSlots.sessionIngressToken();
+  let context = agentContextGetter();
+  return context
+    ? context.secrets.sessionIngressToken
+    : currentSession().host.credentialSlots.sessionIngressToken();
 }
 //@ chunk-ndmse9kj.js:99079-99202 facade-majority = setSessionIngressToken (0.411)
 /**
  * 会话状态函数 setSessionIngressToken：涉及当前会话的 host.credentialSlots.replaceSessionIngressToken。
  */
 function setSessionIngressToken(token) {
-  let n = agentContextGetter();
-  if (n) n.secrets.sessionIngressToken = token;
+  let context = agentContextGetter();
+  if (context) context.secrets.sessionIngressToken = token;
   else currentSession().host.credentialSlots.replaceSessionIngressToken(token);
 }
 //@ chunk-ndmse9kj.js:99202-99267 facade-majority = getOauthTokenFromFd (0.739)
@@ -3441,8 +3478,8 @@ function getOauthTokenFromFd() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceOauthTokenFromFd()。
  */
-function setOauthTokenFromFd(e) {
-  currentSession().host.credentialSlots.replaceOauthTokenFromFd(e);
+function setOauthTokenFromFd(token) {
+  currentSession().host.credentialSlots.replaceOauthTokenFromFd(token);
 }
 //@ chunk-ndmse9kj.js:99334-99407 facade-majority
 /**
@@ -3455,8 +3492,8 @@ function isOauthTokenFromBgSnapshot() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceOauthTokenFromBgSnapshot()。
  */
-function setOauthTokenFromBgSnapshot(e) {
-  currentSession().host.credentialSlots.replaceOauthTokenFromBgSnapshot(e);
+function setOauthTokenFromBgSnapshot(token) {
+  currentSession().host.credentialSlots.replaceOauthTokenFromBgSnapshot(token);
 }
 //@ chunk-ndmse9kj.js:99483-99556 facade-majority
 /**
@@ -3469,8 +3506,8 @@ function getLoginStashedInTokenSlot() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceLoginStashedInTokenSlot()。
  */
-function setLoginStashedInTokenSlot(e) {
-  currentSession().host.credentialSlots.replaceLoginStashedInTokenSlot(e);
+function setLoginStashedInTokenSlot(value) {
+  currentSession().host.credentialSlots.replaceLoginStashedInTokenSlot(value);
 }
 //@ chunk-ndmse9kj.js:99631-99703 facade-majority
 /**
@@ -3483,8 +3520,8 @@ function getOauthOrgFromBgSnapshot() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceOauthOrgFromBgSnapshot()。
  */
-function setOauthOrgFromBgSnapshot(e) {
-  currentSession().host.credentialSlots.replaceOauthOrgFromBgSnapshot(e);
+function setOauthOrgFromBgSnapshot(org) {
+  currentSession().host.credentialSlots.replaceOauthOrgFromBgSnapshot(org);
 }
 //@ chunk-ndmse9kj.js:99777-99844 facade-majority
 /**
@@ -3511,15 +3548,15 @@ function getApiKeyFromFd() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceApiKeyFromFd()。
  */
-function setApiKeyFromFd(e) {
-  currentSession().host.credentialSlots.replaceApiKeyFromFd(e);
+function setApiKeyFromFd(apiKey) {
+  currentSession().host.credentialSlots.replaceApiKeyFromFd(apiKey);
 }
 //@ chunk-ndmse9kj.js:100039-100121 facade-majority
 /**
  * 状态访问器：调用当前会话的 host（host） → 凭证槽（credentialSlots） 上的 descriptorAnnouncementConsumed()。
  */
-function wasDescriptorAnnouncementConsumed(e) {
-  return currentSession().host.credentialSlots.descriptorAnnouncementConsumed(e);
+function wasDescriptorAnnouncementConsumed(key) {
+  return currentSession().host.credentialSlots.descriptorAnnouncementConsumed(key);
 }
 //@ chunk-ndmse9kj.js:100121-100200 facade-majority
 /**
@@ -3532,15 +3569,15 @@ function markDescriptorAnnouncementConsumed(envVar) {
 /**
  * 状态访问器：调用当前会话的 host（host） → 凭证槽（credentialSlots） 上的 credentialRoad()。
  */
-function getCredentialRoad(e) {
-  return currentSession().host.credentialSlots.credentialRoad(e);
+function getCredentialRoad(envVar) {
+  return currentSession().host.credentialSlots.credentialRoad(envVar);
 }
 //@ chunk-ndmse9kj.js:100266-100337 facade-majority
 /**
  * 状态访问器：调用当前会话的 host（host） → 凭证槽（credentialSlots） 上的 noteCredentialRoad()。
  */
-function noteCredentialRoad(envVar, n, o) {
-  currentSession().host.credentialSlots.noteCredentialRoad(envVar, n, o);
+function noteCredentialRoad(envVar, road, details) {
+  currentSession().host.credentialSlots.noteCredentialRoad(envVar, road, details);
 }
 //@ chunk-ndmse9kj.js:100337-100413 facade-majority
 /**
@@ -3553,8 +3590,8 @@ function getGatewayTokenFromDescriptor() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceGatewayTokenFromDescriptor()。
  */
-function setGatewayTokenFromDescriptor(gatewayToken) {
-  currentSession().host.credentialSlots.replaceGatewayTokenFromDescriptor(gatewayToken);
+function setGatewayTokenFromDescriptor(credentialDescriptor) {
+  currentSession().host.credentialSlots.replaceGatewayTokenFromDescriptor(credentialDescriptor);
 }
 //@ chunk-ndmse9kj.js:100491-100556 facade-majority
 /**
@@ -3575,15 +3612,15 @@ function getGatewayAuth() {
  * 会话状态函数 isGatewayAuthExpired：涉及当前会话的 host.credentialSlots.gatewayAuth。
  */
 function isGatewayAuthExpired() {
-  let e = currentSession().host.credentialSlots.gatewayAuth();
-  return !!e && e.expiresAt <= Date.now();
+  let auth = currentSession().host.credentialSlots.gatewayAuth();
+  return !!auth && auth.expiresAt <= Date.now();
 }
 //@ chunk-ndmse9kj.js:100711-100749 facade-majority
 /**
  * 网关认证是否已固定（非 unpinned）。
  */
-function isGatewayAuthPinned(e) {
-  return !!e && !e.unpinned;
+function isGatewayAuthPinned(auth) {
+  return !!auth && !auth.unpinned;
 }
 //@ chunk-ndmse9kj.js:100749-100832 facade-majority
 /**
@@ -3604,8 +3641,8 @@ function gatewayServesManagedSettings(gatewayAuth) {
 /**
  * 状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceGatewayServerProcess()。
  */
-function setGatewayServerProcess(e) {
-  currentSession().host.credentialSlots.replaceGatewayServerProcess(e);
+function setGatewayServerProcess(gatewayServerProcess) {
+  currentSession().host.credentialSlots.replaceGatewayServerProcess(gatewayServerProcess);
 }
 //@ chunk-ndmse9kj.js:100941-101011 facade-majority
 /**
@@ -3634,29 +3671,29 @@ function isGatewayRequiredByHostPolicy() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceGatewayAuth()。
  */
-function setGatewayAuth(e) {
-  currentSession().host.credentialSlots.replaceGatewayAuth(e);
+function setGatewayAuth(auth) {
+  currentSession().host.credentialSlots.replaceGatewayAuth(auth);
 }
 //@ chunk-ndmse9kj.js:101236-101311 facade-majority
 /**
  * 状态访问器：调用当前会话的 host（host） → 凭证槽（credentialSlots） 上的 isGatewayHostHeldStrict()。
  */
-function isGatewayHostHeldStrict(e) {
-  return currentSession().host.credentialSlots.isGatewayHostHeldStrict(e);
+function isGatewayHostHeldStrict(host) {
+  return currentSession().host.credentialSlots.isGatewayHostHeldStrict(host);
 }
 //@ chunk-ndmse9kj.js:101311-101395 facade-majority
 /**
  * 会话状态函数 holdGatewayHostStrict：涉及当前会话的 host.credentialSlots.holdGatewayHostStrict。
  */
-function holdGatewayHostStrict(e) {
-  currentSession().host.credentialSlots.holdGatewayHostStrict(e.replace(/\.$/, ""));
+function holdGatewayHostStrict(host) {
+  currentSession().host.credentialSlots.holdGatewayHostStrict(host.replace(/\.$/, ""));
 }
 //@ chunk-ndmse9kj.js:101395-101476 facade-majority
 /**
  * 会话状态函数 releaseGatewayHost：涉及当前会话的 host.credentialSlots.releaseGatewayHost。
  */
-function releaseGatewayHost(e) {
-  currentSession().host.credentialSlots.releaseGatewayHost(e.replace(/\.$/, ""));
+function releaseGatewayHost(host) {
+  currentSession().host.credentialSlots.releaseGatewayHost(host.replace(/\.$/, ""));
 }
 //@ chunk-ndmse9kj.js:101476-101546 facade-majority
 /**
@@ -3669,8 +3706,8 @@ function getAuthenticatedAccount() {
 /**
  * 状态访问器：调用当前会话的 host（host） → 凭证槽（credentialSlots） 上的 stampAuthenticatedAccount()。
  */
-function setAuthenticatedAccount(e) {
-  currentSession().host.credentialSlots.stampAuthenticatedAccount(e);
+function setAuthenticatedAccount(account) {
+  currentSession().host.credentialSlots.stampAuthenticatedAccount(account);
 }
 //@ chunk-ndmse9kj.js:101616-101691 facade-majority
 /**
@@ -3690,8 +3727,8 @@ function getBearerPlan() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceBearerPlan()。
  */
-function setBearerPlan(e) {
-  currentSession().host.credentialSlots.replaceBearerPlan(e);
+function setBearerPlan(plan) {
+  currentSession().host.credentialSlots.replaceBearerPlan(plan);
 }
 //@ chunk-ndmse9kj.js:101813-101884 facade-majority
 /**
@@ -3704,8 +3741,8 @@ function getStartupPolicySnapshot() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceStartupPolicySnapshot()。
  */
-function setStartupPolicySnapshot(e) {
-  currentSession().host.credentialSlots.replaceStartupPolicySnapshot(e);
+function setStartupPolicySnapshot(snapshot) {
+  currentSession().host.credentialSlots.replaceStartupPolicySnapshot(snapshot);
 }
 //@ chunk-ndmse9kj.js:101957-102029 facade-majority
 /**
@@ -3718,15 +3755,15 @@ function getGatewayRefreshInFlight() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 凭证槽（credentialSlots） 上的 replaceGatewayRefreshInFlight()。
  */
-function setGatewayRefreshInFlight(e) {
-  currentSession().host.credentialSlots.replaceGatewayRefreshInFlight(e);
+function setGatewayRefreshInFlight(inFlight) {
+  currentSession().host.credentialSlots.replaceGatewayRefreshInFlight(inFlight);
 }
 //@ chunk-ndmse9kj.js:102103-102163 facade-majority
 /**
  * 状态访问器：写入当前会话的 请求日志（requestJournal） 上的 replaceLastAPIRequest()。
  */
-function setLastAPIRequest(e) {
-  currentSession().requestJournal.replaceLastAPIRequest(e);
+function setLastAPIRequest(request) {
+  currentSession().requestJournal.replaceLastAPIRequest(request);
 }
 //@ chunk-ndmse9kj.js:102163-102221 facade-majority = setLastAPIRequest (0.736)
 /**
@@ -3753,15 +3790,15 @@ function getLastCancelledAPIMessageId() {
 /**
  * 状态访问器：写入当前会话的 请求日志（requestJournal） 上的 replaceLastAPIRequestMessages()。
  */
-function setLastAPIRequestMessages(e) {
-  currentSession().requestJournal.replaceLastAPIRequestMessages(e);
+function setLastAPIRequestMessages(messages) {
+  currentSession().requestJournal.replaceLastAPIRequestMessages(messages);
 }
 //@ chunk-ndmse9kj.js:102429-102497 facade-majority
 /**
  * 状态访问器：写入当前会话的 请求日志（requestJournal） 上的 replaceLastClassifierRequests()。
  */
-function setLastClassifierRequests(e) {
-  currentSession().requestJournal.replaceLastClassifierRequests(e);
+function setLastClassifierRequests(requests) {
+  currentSession().requestJournal.replaceLastClassifierRequests(requests);
 }
 //@ chunk-ndmse9kj.js:102497-102563 facade-majority = setLastClassifierRequests (0.736)
 /**
@@ -3810,8 +3847,8 @@ function getAllowedSettingSourcesAsConfigured() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 设置来源（settingsSource） 上的 replaceAllowedSettingSources()。
  */
-function setAllowedSettingSources(e) {
-  currentSession().host.settingsSource.replaceAllowedSettingSources(e);
+function setAllowedSettingSources(sources) {
+  currentSession().host.settingsSource.replaceAllowedSettingSources(sources);
 }
 //@ chunk-ndmse9kj.js:103100-103182 facade-majority = preferThirdPartyAuthentication (0.88)
 /**
@@ -3824,8 +3861,8 @@ function preferThirdPartyAuthentication() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 replaceInlinePlugins()。
  */
-function setInlinePlugins(e) {
-  currentSession().host.extensionsConfig.replaceInlinePlugins(e);
+function setInlinePlugins(plugins) {
+  currentSession().host.extensionsConfig.replaceInlinePlugins(plugins);
 }
 //@ chunk-ndmse9kj.js:103247-103310 facade-majority = setInlinePlugins (0.729)
 /**
@@ -3838,8 +3875,8 @@ function getInlinePlugins() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 replaceInlinePluginsNoMcp()。
  */
-function setInlinePluginsNoMcp(e) {
-  currentSession().host.extensionsConfig.replaceInlinePluginsNoMcp(e);
+function setInlinePluginsNoMcp(plugins) {
+  currentSession().host.extensionsConfig.replaceInlinePluginsNoMcp(plugins);
 }
 //@ chunk-ndmse9kj.js:103381-103449 facade-majority
 /**
@@ -3852,8 +3889,8 @@ function getInlinePluginsNoMcp() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 replaceInlinePluginUrls()。
  */
-function setInlinePluginUrls(e) {
-  currentSession().host.extensionsConfig.replaceInlinePluginUrls(e);
+function setInlinePluginUrls(urls) {
+  currentSession().host.extensionsConfig.replaceInlinePluginUrls(urls);
 }
 //@ chunk-ndmse9kj.js:103518-103585 facade-majority
 /**
@@ -3866,15 +3903,15 @@ function getInlinePluginUrls() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 replaceSyncedPluginDirs()。
  */
-function setSyncedPluginDirs(e, n, o) {
-  currentSession().host.extensionsConfig.replaceSyncedPluginDirs(e, n, o);
+function setSyncedPluginDirs(dirs, accountId, rowId) {
+  currentSession().host.extensionsConfig.replaceSyncedPluginDirs(dirs, accountId, rowId);
 }
 //@ chunk-ndmse9kj.js:103662-103732 facade-majority
 /**
  * 状态访问器：调用当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 syncedPluginRowId()。
  */
-function getSyncedPluginRowId(e) {
-  return currentSession().host.extensionsConfig.syncedPluginRowId(e);
+function getSyncedPluginRowId(dir) {
+  return currentSession().host.extensionsConfig.syncedPluginRowId(dir);
 }
 //@ chunk-ndmse9kj.js:103732-103808 facade-majority
 /**
@@ -3894,8 +3931,8 @@ function setAttestedOfficialPluginIds(officialAttestations) {
 /**
  * 状态访问器：调用当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 attestedOfficialPluginMarketplace()。
  */
-function getAttestedOfficialPluginMarketplace(e) {
-  return currentSession().host.extensionsConfig.attestedOfficialPluginMarketplace(e);
+function getAttestedOfficialPluginMarketplace(rowId) {
+  return currentSession().host.extensionsConfig.attestedOfficialPluginMarketplace(rowId);
 }
 //@ chunk-ndmse9kj.js:103972-104049 facade-majority
 /**
@@ -3922,22 +3959,22 @@ function markSyncedPluginLaneOpened() {
 /**
  * 会话状态函数 markSyncedPluginDirsLoadedHere：涉及当前会话的 pluginsSync.syncedDirsLoadedHere.add。
  */
-function markSyncedPluginDirsLoadedHere(e) {
-  for (let n of e) currentSession().pluginsSync.syncedDirsLoadedHere.add(resolve(n));
+function markSyncedPluginDirsLoadedHere(dirs) {
+  for (let dir of dirs) currentSession().pluginsSync.syncedDirsLoadedHere.add(resolve(dir));
 }
 //@ chunk-ndmse9kj.js:104233-104303 facade-majority
 /**
  * 会话状态函数 isSyncedPluginDirLoadedHere：涉及当前会话的 pluginsSync.syncedDirsLoadedHere.has。
  */
-function isSyncedPluginDirLoadedHere(e) {
-  return currentSession().pluginsSync.syncedDirsLoadedHere.has(resolve(e));
+function isSyncedPluginDirLoadedHere(dir) {
+  return currentSession().pluginsSync.syncedDirsLoadedHere.has(resolve(dir));
 }
 //@ chunk-ndmse9kj.js:104303-104357 facade-majority
 /**
  * 会话状态函数 markSyncedPluginDirNewHere：涉及当前会话的 pluginsSync.dirsNewHere.add。
  */
-function markSyncedPluginDirNewHere(e) {
-  currentSession().pluginsSync.dirsNewHere.add(resolve(e));
+function markSyncedPluginDirNewHere(dir) {
+  currentSession().pluginsSync.dirsNewHere.add(resolve(dir));
 }
 //@ chunk-ndmse9kj.js:104357-104406 facade-majority
 /**
@@ -4005,8 +4042,8 @@ function getSyncedPluginDirs() {
 /**
  * 状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceAccountSkillsSyncEnabled()。
  */
-function setAccountSkillsSyncEnabled(e) {
-  currentSession().sessionFlags.replaceAccountSkillsSyncEnabled(e);
+function setAccountSkillsSyncEnabled(enabled) {
+  currentSession().sessionFlags.replaceAccountSkillsSyncEnabled(enabled);
 }
 //@ chunk-ndmse9kj.js:105099-105165 facade-majority
 /**
@@ -4019,8 +4056,8 @@ function getAccountSkillsSyncEnabled() {
 /**
  * 状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceSkillsSyncVetoed()。
  */
-function setSkillsSyncVetoed(e) {
-  currentSession().sessionFlags.replaceSkillsSyncVetoed(e);
+function setSkillsSyncVetoed(vetoed) {
+  currentSession().sessionFlags.replaceSkillsSyncVetoed(vetoed);
 }
 //@ chunk-ndmse9kj.js:105225-105282 facade-majority
 /**
@@ -4033,8 +4070,8 @@ function getSkillsSyncVetoed() {
 /**
  * 状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceAccountPluginsSyncEnabled()。
  */
-function setAccountPluginsSyncEnabled(e) {
-  currentSession().sessionFlags.replaceAccountPluginsSyncEnabled(e);
+function setAccountPluginsSyncEnabled(enabled) {
+  currentSession().sessionFlags.replaceAccountPluginsSyncEnabled(enabled);
 }
 //@ chunk-ndmse9kj.js:105351-105418 facade-majority
 /**
@@ -4047,8 +4084,8 @@ function getAccountPluginsSyncEnabled() {
 /**
  * 状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replacePluginsSyncVetoed()。
  */
-function setPluginsSyncVetoed(e) {
-  currentSession().sessionFlags.replacePluginsSyncVetoed(e);
+function setPluginsSyncVetoed(vetoed) {
+  currentSession().sessionFlags.replacePluginsSyncVetoed(vetoed);
 }
 //@ chunk-ndmse9kj.js:105479-105537 facade-majority
 /**
@@ -4089,8 +4126,8 @@ function getTeammateAgentId() {
 /**
  * 状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceOnboardingShownThisSession()。
  */
-function setOnboardingShownThisSession(e) {
-  currentSession().sessionFlags.replaceOnboardingShownThisSession(e);
+function setOnboardingShownThisSession(shown) {
+  currentSession().sessionFlags.replaceOnboardingShownThisSession(shown);
 }
 //@ chunk-ndmse9kj.js:105880-105948 facade-majority
 /**
@@ -4103,10 +4140,10 @@ function getOnboardingShownThisSession() {
 /**
  * 设置是否使用 cowork 插件目录，并使 HostScoped 缓存失效。
  */
-function setUseCoworkPlugins(e) {
-  let n = currentSession();
-  n.host.settingsSource.replaceUseCoworkPlugins(e);
-  SETTINGS_CACHE_STORE_SLOT.of(n.host).invalidateAll();
+function setUseCoworkPlugins(enabled) {
+  let session = currentSession();
+  session.host.settingsSource.replaceUseCoworkPlugins(enabled);
+  SETTINGS_CACHE_STORE_SLOT.of(session.host).invalidateAll();
 }
 //@ chunk-ndmse9kj.js:106053-106118 facade-majority = setUseCoworkPlugins (0.732)
 /**
@@ -4161,8 +4198,8 @@ function getLocalUploadsRoot() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceSessionBypassPermissionsMode()。
  */
-function setSessionBypassPermissionsMode(e) {
-  currentSession().host.launchOptions.replaceSessionBypassPermissionsMode(e);
+function setSessionBypassPermissionsMode(enabled) {
+  currentSession().host.launchOptions.replaceSessionBypassPermissionsMode(enabled);
 }
 //@ chunk-ndmse9kj.js:106594-106670 facade-majority = setSessionBypassPermissionsMode (0.763)
 /**
@@ -4175,8 +4212,8 @@ function getSessionBypassPermissionsMode() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceScheduledTasksEnabled()。
  */
-function setScheduledTasksEnabled(e) {
-  currentSession().host.launchOptions.replaceScheduledTasksEnabled(e);
+function setScheduledTasksEnabled(enabled) {
+  currentSession().host.launchOptions.replaceScheduledTasksEnabled(enabled);
 }
 //@ chunk-ndmse9kj.js:106740-106809 facade-majority = setScheduledTasksEnabled (0.756)
 /**
@@ -4189,8 +4226,8 @@ function getScheduledTasksEnabled() {
 /**
  * 状态访问器：调用当前会话的 host（host） → 启动选项（launchOptions） 上的 onScheduledTasksEnabled()。
  */
-function onScheduledTasksEnabled(e) {
-  return currentSession().host.launchOptions.onScheduledTasksEnabled(e);
+function onScheduledTasksEnabled(listener) {
+  return currentSession().host.launchOptions.onScheduledTasksEnabled(listener);
 }
 //@ chunk-ndmse9kj.js:106882-106950 facade-majority = getSessionCronTasks (0.588)
 /**
@@ -4213,15 +4250,15 @@ function addSessionCronTask(task) {
 /**
  * 状态访问器：调用当前会话的 会话定时任务（sessionCron） 上的 chainStartedAt()。
  */
-function getLoopChainStartedAt(e) {
-  return currentSession().sessionCron.chainStartedAt(e);
+function getLoopChainStartedAt(chainId) {
+  return currentSession().sessionCron.chainStartedAt(chainId);
 }
 //@ chunk-ndmse9kj.js:107129-107185 facade-majority
 /**
  * 状态访问器：调用当前会话的 会话定时任务（sessionCron） 上的 recordChainStart()。
  */
-function setLoopChainStartedAt(e, n) {
-  currentSession().sessionCron.recordChainStart(e, n);
+function setLoopChainStartedAt(chainId, startedAt) {
+  currentSession().sessionCron.recordChainStart(chainId, startedAt);
 }
 //@ chunk-ndmse9kj.js:107185-107237 facade-majority
 /**
@@ -4262,8 +4299,8 @@ function getLoopConsecutiveKeepalives() {
 /**
  * 状态访问器：写入当前会话的 会话定时任务（sessionCron） 上的 replaceConsecutiveKeepalives()。
  */
-function setLoopConsecutiveKeepalives(e) {
-  currentSession().sessionCron.replaceConsecutiveKeepalives(e);
+function setLoopConsecutiveKeepalives(count) {
+  currentSession().sessionCron.replaceConsecutiveKeepalives(count);
 }
 //@ chunk-ndmse9kj.js:107546-107592 facade-majority
 /**
@@ -4297,9 +4334,9 @@ function resetLoopWakeFires() {
 /**
  * 会话状态函数 setLoopEnded：涉及当前会话的 sessionCron.replaceEnded、sessionCron.changed.emit。
  */
-function setLoopEnded(e) {
-  currentSession().sessionCron.replaceEnded(e);
-  if (e) currentSession().sessionCron.changed.emit();
+function setLoopEnded(ended) {
+  currentSession().sessionCron.replaceEnded(ended);
+  if (ended) currentSession().sessionCron.changed.emit();
 }
 //@ chunk-ndmse9kj.js:107822-108262 facade-majority = removeSessionCronTasks (0.227)
 /**
@@ -4309,16 +4346,16 @@ function removeSessionCronTasks(ids, { handOff = false } = {}) {
   if (ids.length === 0) return 0;
   let idSet = new Set(ids);
   let agentContext = getAgentContext();
-  let i = agentContext ? agentContext.sessionCronTasks : currentSession().sessionCron.tasks();
-  let remaining = i.filter((t) => !idSet.has(t.id));
-  let removed = i.length - remaining.length;
+  let tasks = agentContext ? agentContext.sessionCronTasks : currentSession().sessionCron.tasks();
+  let remaining = tasks.filter((t) => !idSet.has(t.id));
+  let removed = tasks.length - remaining.length;
   if (removed === 0) return 0;
-  let l = !handOff && i.some((p) => p.kind === "loop" && idSet.has(p.id));
+  let removedLoopTasks = !handOff && tasks.some((task) => task.kind === "loop" && idSet.has(task.id));
   if (agentContext) {
     agentContext.sessionCronTasks.length = 0;
     agentContext.sessionCronTasks.push(...remaining);
   } else currentSession().sessionCron.replaceTasks(remaining);
-  if (l) currentSession().sessionCron.pendingLoopWakeup.emit(undefined);
+  if (removedLoopTasks) currentSession().sessionCron.pendingLoopWakeup.emit(undefined);
   currentSession().sessionCron.changed.emit();
   return removed;
 }
@@ -4326,29 +4363,29 @@ function removeSessionCronTasks(ids, { handOff = false } = {}) {
 /**
  * 状态访问器：调用当前会话的 会话定时任务（sessionCron） → changed 上的 subscribe()。
  */
-function onSessionCronsChange(e) {
-  return currentSession().sessionCron.changed.subscribe(e);
+function onSessionCronsChange(listener) {
+  return currentSession().sessionCron.changed.subscribe(listener);
 }
 //@ chunk-ndmse9kj.js:108322-108392 facade-majority
 /**
  * 状态访问器：调用当前会话的 会话定时任务（sessionCron） → pendingLoopWakeup 上的 subscribe()。
  */
-function onPendingLoopWakeupChange(e) {
-  return currentSession().sessionCron.pendingLoopWakeup.subscribe(e);
+function onPendingLoopWakeupChange(listener) {
+  return currentSession().sessionCron.pendingLoopWakeup.subscribe(listener);
 }
 //@ chunk-ndmse9kj.js:108392-108450 facade-majority
 /**
  * 状态访问器：调用当前会话的 会话定时任务（sessionCron） → pendingLoopWakeup 上的 emit()。
  */
-function announcePendingLoopWakeup(e) {
-  currentSession().sessionCron.pendingLoopWakeup.emit(e);
+function announcePendingLoopWakeup(payload) {
+  currentSession().sessionCron.pendingLoopWakeup.emit(payload);
 }
 //@ chunk-ndmse9kj.js:108450-108513 facade-majority
 /**
  * 状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceSessionTrustAccepted()。
  */
-function setSessionTrustAccepted(e) {
-  currentSession().sessionFlags.replaceSessionTrustAccepted(e);
+function setSessionTrustAccepted(accepted) {
+  currentSession().sessionFlags.replaceSessionTrustAccepted(accepted);
 }
 //@ chunk-ndmse9kj.js:108513-108575 facade-majority = setSessionTrustAccepted (0.747)
 /**
@@ -4361,8 +4398,8 @@ function getSessionTrustAccepted() {
 /**
  * 状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceHomeTrustDialogAccepted()。
  */
-function setHomeTrustDialogAccepted(e) {
-  currentSession().sessionFlags.replaceHomeTrustDialogAccepted(e);
+function setHomeTrustDialogAccepted(accepted) {
+  currentSession().sessionFlags.replaceHomeTrustDialogAccepted(accepted);
 }
 //@ chunk-ndmse9kj.js:108642-108707 facade-majority
 /**
@@ -4375,8 +4412,8 @@ function getHomeTrustDialogAccepted() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceSessionPersistenceDisabled()。
  */
-function setSessionPersistenceDisabled(e) {
-  currentSession().host.launchOptions.replaceSessionPersistenceDisabled(e);
+function setSessionPersistenceDisabled(disabled) {
+  currentSession().host.launchOptions.replaceSessionPersistenceDisabled(disabled);
 }
 //@ chunk-ndmse9kj.js:108783-108856 facade-majority = setSessionPersistenceDisabled (0.763)
 /**
@@ -4424,8 +4461,8 @@ function getCcrDerivedSurface() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 启动选项（launchOptions） 上的 replaceEntrypointOnRequests()。
  */
-function setEntrypointOnRequests(e) {
-  currentSession().host.launchOptions.replaceEntrypointOnRequests(e);
+function setEntrypointOnRequests(enabled) {
+  currentSession().host.launchOptions.replaceEntrypointOnRequests(enabled);
 }
 //@ chunk-ndmse9kj.js:109185-109252 facade-majority
 /**
@@ -4476,8 +4513,8 @@ function hasExitedPlanModeInSession() {
 /**
  * 状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceHasExitedPlanMode()。
  */
-function setHasExitedPlanMode(e) {
-  currentSession().sessionFlags.replaceHasExitedPlanMode(e);
+function setHasExitedPlanMode(exited) {
+  currentSession().sessionFlags.replaceHasExitedPlanMode(exited);
 }
 //@ chunk-ndmse9kj.js:109636-109694 facade-majority
 /**
@@ -4504,29 +4541,29 @@ function inheritProactivitySelectorGateEverOn() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 主动性（proactivity） 上的 replaceSelectorGate()。
  */
-function setProactivitySelectorGate(e) {
-  currentSession().host.proactivity.replaceSelectorGate(e);
+function setProactivitySelectorGate(gate) {
+  currentSession().host.proactivity.replaceSelectorGate(gate);
 }
 //@ chunk-ndmse9kj.js:109882-109943 facade-majority
 /**
  * 状态访问器：调用当前会话的 host（host） → 主动性（proactivity） 上的 resampleSelectorGate()。
  */
-function resampleProactivitySelectorGate(e) {
-  currentSession().host.proactivity.resampleSelectorGate(e);
+function resampleProactivitySelectorGate(gate) {
+  currentSession().host.proactivity.resampleSelectorGate(gate);
 }
 //@ chunk-ndmse9kj.js:109943-110019 facade-majority
 /**
  * 状态访问器：调用当前会话的 host（host） → 主动性（proactivity） 上的 subscribeSelectorGateChanged()。
  */
-function onProactivitySelectorGateChanged(e) {
-  return currentSession().host.proactivity.subscribeSelectorGateChanged(e);
+function onProactivitySelectorGateChanged(listener) {
+  return currentSession().host.proactivity.subscribeSelectorGateChanged(listener);
 }
 //@ chunk-ndmse9kj.js:110019-110087 facade-majority
 /**
  * 状态访问器：写入当前会话的 host（host） → 主动性（proactivity） 上的 replaceHostGateSubscription()。
  */
-function replaceProactivityHostGateSubscription(e) {
-  currentSession().host.proactivity.replaceHostGateSubscription(e);
+function replaceProactivityHostGateSubscription(subscription) {
+  currentSession().host.proactivity.replaceHostGateSubscription(subscription);
 }
 //@ chunk-ndmse9kj.js:110087-110156 facade-majority = needsPlanModeExitAttachment (0.747)
 /**
@@ -4539,8 +4576,8 @@ function needsPlanModeExitAttachment() {
 /**
  * 状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceNeedsPlanModeExitAttachment()。
  */
-function setNeedsPlanModeExitAttachment(e) {
-  currentSession().sessionFlags.replaceNeedsPlanModeExitAttachment(e);
+function setNeedsPlanModeExitAttachment(needed) {
+  currentSession().sessionFlags.replaceNeedsPlanModeExitAttachment(needed);
 }
 //@ chunk-ndmse9kj.js:110226-110408 facade-majority
 /**
@@ -4563,8 +4600,8 @@ function needsAutoModeExitAttachment() {
 /**
  * 状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceNeedsAutoModeExitAttachment()。
  */
-function setNeedsAutoModeExitAttachment(e) {
-  currentSession().sessionFlags.replaceNeedsAutoModeExitAttachment(e);
+function setNeedsAutoModeExitAttachment(needed) {
+  currentSession().sessionFlags.replaceNeedsAutoModeExitAttachment(needed);
 }
 //@ chunk-ndmse9kj.js:110547-110782 facade-majority
 /**
@@ -4588,8 +4625,8 @@ function hasShownLspRecommendationThisSession() {
 /**
  * 状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceLspRecommendationShownThisSession()。
  */
-function setLspRecommendationShownThisSession(e) {
-  currentSession().sessionFlags.replaceLspRecommendationShownThisSession(e);
+function setLspRecommendationShownThisSession(shown) {
+  currentSession().sessionFlags.replaceLspRecommendationShownThisSession(shown);
 }
 //@ chunk-ndmse9kj.js:110934-110998 facade-majority
 /**
@@ -4609,15 +4646,15 @@ function getInitJsonSchema() {
 /**
  * 状态访问器：调用当前会话的 MCP 会话接线（mcpSessionWiring） 上的 registerClientsAccessor()。
  */
-function setMcpClientsAccessor(e) {
-  currentSession().mcpSessionWiring.registerClientsAccessor(e);
+function setMcpClientsAccessor(accessor) {
+  currentSession().mcpSessionWiring.registerClientsAccessor(accessor);
 }
 //@ chunk-ndmse9kj.js:111124-111194 facade-majority
 /**
  * 状态访问器：调用当前会话的 MCP 会话接线（mcpSessionWiring） 上的 acquireClientsAccessor()。
  */
-function acquireMcpClientsAccessor(e) {
-  return currentSession().mcpSessionWiring.acquireClientsAccessor(e);
+function acquireMcpClientsAccessor(owner) {
+  return currentSession().mcpSessionWiring.acquireClientsAccessor(owner);
 }
 //@ chunk-ndmse9kj.js:111194-111258 facade-majority
 /**
@@ -4630,8 +4667,8 @@ function getMcpClientsFromAccessor() {
 /**
  * 状态访问器：调用当前会话的 host（host） → MCP 进程接线（mcpProcessWiring） 上的 registerEnsureConnectedClient()。
  */
-function setEnsureConnectedClient(e) {
-  currentSession().host.mcpProcessWiring.registerEnsureConnectedClient(e);
+function setEnsureConnectedClient(ensureConnectedClient) {
+  currentSession().host.mcpProcessWiring.registerEnsureConnectedClient(ensureConnectedClient);
 }
 //@ chunk-ndmse9kj.js:111333-111404 facade-majority
 /**
@@ -4644,8 +4681,8 @@ function getEnsureConnectedClient() {
 /**
  * 状态访问器：调用当前会话的 MCP 会话接线（mcpSessionWiring） 上的 registerConnectedClientWiring()。
  */
-function setConnectedClientWiring(e) {
-  currentSession().mcpSessionWiring.registerConnectedClientWiring(e);
+function setConnectedClientWiring(wiring) {
+  currentSession().mcpSessionWiring.registerConnectedClientWiring(wiring);
 }
 //@ chunk-ndmse9kj.js:111474-111541 facade-majority
 /**
@@ -4665,15 +4702,15 @@ function setMcpServerToolsSwapper(commitReconnect) {
 /**
  * 状态访问器：调用当前会话的 MCP 会话接线（mcpSessionWiring） 上的 acquireToolsSwapper()。
  */
-function acquireMcpServerToolsSwapper(e) {
-  return currentSession().mcpSessionWiring.acquireToolsSwapper(e);
+function acquireMcpServerToolsSwapper(owner) {
+  return currentSession().mcpSessionWiring.acquireToolsSwapper(owner);
 }
 //@ chunk-ndmse9kj.js:111669-111740 facade-majority
 /**
  * 状态访问器：调用当前会话的 MCP 会话接线（mcpSessionWiring） 上的 swapServerTools()。
  */
-function swapMcpServerTools(e, n, config) {
-  return currentSession().mcpSessionWiring.swapServerTools(e, n, config);
+function swapMcpServerTools(owner, serverName, config) {
+  return currentSession().mcpSessionWiring.swapServerTools(owner, serverName, config);
 }
 //@ chunk-ndmse9kj.js:111740-111791 layout
 /**
@@ -4755,13 +4792,15 @@ function getReplyGatePolicy() {
 /**
  * 替换插件来源的注册钩子（保留运行器持有的插件的钩子）。
  */
-function replaceRegisteredPluginHooks(e) {
+function replaceRegisteredPluginHooks(hooksByKey) {
   let pluginHookRunner = getPluginHookRunner();
   clearRegisteredPluginHooks();
-  let o = {};
-  for (let [key, value] of Object.entries(e))
-    o[key] = value.filter((s) => !("pluginRoot" in s) || pluginHookRunner?.holds(s.pluginId) !== true);
-  registerHookCallbacks(o);
+  let keptHooks = {};
+  for (let [key, value] of Object.entries(hooksByKey))
+    keptHooks[key] = value.filter(
+      (hook) => !("pluginRoot" in hook) || pluginHookRunner?.holds(hook.pluginId) !== true,
+    );
+  registerHookCallbacks(keptHooks);
 }
 //@ chunk-ndmse9kj.js:112557-112834 fingerprint = clearRegisteredPluginHooks (0.671)
 function clearRegisteredPluginHooks() {
@@ -4779,7 +4818,10 @@ function clearRegisteredPluginHooks() {
   emitHookStoresChanged();
 }
 //@ chunk-ndmse9kj.js:112834-112857 layout
-var hooksChangedSignal = new HostScoped(() => createSignal());
+var hooksChangedSignal; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ndmse9kj.js:112834", () => {
+  hooksChangedSignal = new HostScoped(() => createSignal());
+});
 //@ chunk-ndmse9kj.js:112857-112886 facade-majority
 /**
  * 发出“钩子存储已变化”信号。
@@ -4939,8 +4981,8 @@ function getInheritedTeamName() {
 /**
  * 状态访问器：写入当前会话的 会话标志（sessionFlags） 上的 replaceInheritedTeamName()。
  */
-function setInheritedTeamName(e) {
-  currentSession().sessionFlags.replaceInheritedTeamName(e);
+function setInheritedTeamName(teamName) {
+  currentSession().sessionFlags.replaceInheritedTeamName(teamName);
 }
 //@ chunk-ndmse9kj.js:114436-114564 facade-majority = setTeleportedSessionInfo (0.583)
 /**
@@ -4971,7 +5013,14 @@ function markFirstTeleportMessageLogged() {
 /**
  * addInvokedSkill：记录本会话调用过的技能（压缩后重新注入用），键为 agentId:skillName。
  */
-function addInvokedSkill(skillName, skillPath, content, agentId = null, i = false, invokedAt = Date.now()) {
+function addInvokedSkill(
+  skillName,
+  skillPath,
+  content,
+  agentId = null,
+  servedByMcp = false,
+  invokedAt = Date.now(),
+) {
   let key = `${agentId ?? ""}:${skillName}`;
   currentSession().invokedSkills.record(key, {
     skillName,
@@ -4979,8 +5028,8 @@ function addInvokedSkill(skillName, skillPath, content, agentId = null, i = fals
     content,
     invokedAt,
     agentId,
-    ...(i && {
-      servedByMcp: i,
+    ...(servedByMcp && {
+      servedByMcp,
     }),
   });
 }
@@ -4995,12 +5044,12 @@ function getInvokedSkills() {
 /**
  * 更新已调用技能记录的内容。
  */
-function updateInvokedSkillContent(e, content) {
-  let o = currentSession();
-  let r = o.invokedSkills.lookup(e);
-  if (r)
-    o.invokedSkills.record(e, {
-      ...r,
+function updateInvokedSkillContent(key, content) {
+  let session = currentSession();
+  let existing = session.invokedSkills.lookup(key);
+  if (existing)
+    session.invokedSkills.record(key, {
+      ...existing,
       content,
     });
 }
@@ -5020,29 +5069,29 @@ function getInvokedSkillsForAgent(agentId) {
  * clearInvokedSkills：清除已调用技能，保留给定 agentId 集合的记录。
  */
 function clearInvokedSkills(preservedAgentIds) {
-  let n = currentSession();
+  let session = currentSession();
   if (!preservedAgentIds || preservedAgentIds.size === 0) {
-    n.invokedSkills.forgetAll();
+    session.invokedSkills.forgetAll();
     return;
   }
-  for (let [key, skill] of n.invokedSkills.skills())
-    if (skill.agentId === null || !preservedAgentIds.has(skill.agentId)) n.invokedSkills.forget(key);
+  for (let [key, skill] of session.invokedSkills.skills())
+    if (skill.agentId === null || !preservedAgentIds.has(skill.agentId)) session.invokedSkills.forget(key);
 }
 //@ chunk-ndmse9kj.js:115324-115433 facade-majority = clearInvokedSkillsForAgent (0.586)
 /**
  * clearInvokedSkillsForAgent：清除某代理的已调用技能。
  */
 function clearInvokedSkillsForAgent(agentId) {
-  let n = currentSession();
-  for (let [key, skill] of n.invokedSkills.skills())
-    if (skill.agentId === agentId) n.invokedSkills.forget(key);
+  let session = currentSession();
+  for (let [key, skill] of session.invokedSkills.skills())
+    if (skill.agentId === agentId) session.invokedSkills.forget(key);
 }
 //@ chunk-ndmse9kj.js:115433-115497 facade-majority
 /**
  * 状态访问器：调用当前会话的 host（host） → 诊断（diagnostics） 上的 recordSlowOperation()。
  */
-function addSlowOperation(e, n) {
-  currentSession().host.diagnostics.recordSlowOperation(e, n);
+function addSlowOperation(operationName, durationMs) {
+  currentSession().host.diagnostics.recordSlowOperation(operationName, durationMs);
 }
 //@ chunk-ndmse9kj.js:115497-115557 facade-majority = getSlowOperations (0.608)
 /**
@@ -5098,10 +5147,10 @@ function getRootMainThreadAgentHooks() {
 /**
  * 会话状态函数 setMainThreadAgentHooks：涉及当前会话的 hookRegistry.replaceMainThreadAgentHooks。
  */
-function setMainThreadAgentHooks(e) {
+function setMainThreadAgentHooks(hooks) {
   let agentContext = getAgentContext();
-  if (agentContext) agentContext.mainThreadAgentHooks = e;
-  else currentSession().hookRegistry.replaceMainThreadAgentHooks(e);
+  if (agentContext) agentContext.mainThreadAgentHooks = hooks;
+  else currentSession().hookRegistry.replaceMainThreadAgentHooks(hooks);
   emitHookStoresChanged();
 }
 //@ chunk-ndmse9kj.js:116086-116157 facade-majority
@@ -5129,8 +5178,8 @@ function getCaps() {
 /**
  * 状态访问器：写入当前会话的 宿主能力（surfaceCapabilities） 上的 replaceCaps()。
  */
-function setCaps(e) {
-  currentSession().surfaceCapabilities.replaceCaps(e);
+function setCaps(caps) {
+  currentSession().surfaceCapabilities.replaceCaps(caps);
 }
 //@ chunk-ndmse9kj.js:116338-116411 facade-majority
 /**
@@ -5151,25 +5200,25 @@ function setIsRemoteMode(isRemoteMode) {
  * 当前会话在云端的工作目录。
  */
 function getCloudCwd() {
-  let e = currentSession();
-  return e.surfaceCapabilities.cloudCwdOfSession(e.id);
+  let session = currentSession();
+  return session.surfaceCapabilities.cloudCwdOfSession(session.id);
 }
 //@ chunk-ndmse9kj.js:116543-116639 facade-majority
 /**
  * 会话状态函数 setCloudCwd：涉及当前会话的 surfaceCapabilities.replaceCloudCwd。
  */
-function setCloudCwd(e) {
+function setCloudCwd(update) {
   currentSession().surfaceCapabilities.replaceCloudCwd({
-    sessionId: e.sessionId,
-    cwd: identityString(e.cwd),
+    sessionId: update.sessionId,
+    cwd: identityString(update.cwd),
   });
 }
 //@ chunk-ndmse9kj.js:116639-116715 facade-majority
 /**
  * 状态访问器：调用当前会话的 宿主能力（surfaceCapabilities） → cloudCwdChanged 上的 subscribe()。
  */
-function onCloudCwdChange(e) {
-  return currentSession().surfaceCapabilities.cloudCwdChanged.subscribe(e);
+function onCloudCwdChange(listener) {
+  return currentSession().surfaceCapabilities.cloudCwdChanged.subscribe(listener);
 }
 //@ chunk-ndmse9kj.js:116715-116767 facade-majority
 /**
@@ -5189,16 +5238,16 @@ function setSystemPromptSectionCacheEntry(name, promptSection) {
 /**
  * 会话状态函数 clearSystemPromptSectionState：涉及当前会话的 promptAssembly.forgetAllSections。
  */
-function clearSystemPromptSectionState(e) {
+function clearSystemPromptSectionState(reason) {
   currentSession().promptAssembly.forgetAllSections();
-  noteSystemPromptSectionInvalidation(e);
+  noteSystemPromptSectionInvalidation(reason);
 }
 //@ chunk-ndmse9kj.js:116884-116938 facade-majority
 /**
  * 状态访问器：调用当前会话的 提示词组装（promptAssembly） 上的 noteInvalidation()。
  */
-function noteSystemPromptSectionInvalidation(e) {
-  currentSession().promptAssembly.noteInvalidation(e);
+function noteSystemPromptSectionInvalidation(reason) {
+  currentSession().promptAssembly.noteInvalidation(reason);
 }
 //@ chunk-ndmse9kj.js:116938-116986 facade-majority
 /**
@@ -5239,8 +5288,8 @@ function getAdditionalDirectoriesForClaudeMd() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 replaceAdditionalDirectoriesForClaudeMd()。
  */
-function setAdditionalDirectoriesForClaudeMd(e) {
-  currentSession().host.extensionsConfig.replaceAdditionalDirectoriesForClaudeMd(e);
+function setAdditionalDirectoriesForClaudeMd(dirs) {
+  currentSession().host.extensionsConfig.replaceAdditionalDirectoriesForClaudeMd(dirs);
 }
 //@ chunk-ndmse9kj.js:117343-117428 facade-majority
 /**
@@ -5267,8 +5316,8 @@ function getAllowedChannels() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 replaceAllowedChannels()。
  */
-function setAllowedChannels(e) {
-  currentSession().host.extensionsConfig.replaceAllowedChannels(e);
+function setAllowedChannels(channels) {
+  currentSession().host.extensionsConfig.replaceAllowedChannels(channels);
 }
 //@ chunk-ndmse9kj.js:117639-117704 facade-majority = getHasDevChannels (0.729)
 /**
@@ -5281,8 +5330,8 @@ function getHasDevChannels() {
 /**
  * 状态访问器：写入当前会话的 host（host） → 扩展配置（extensionsConfig） 上的 replaceHasDevChannels()。
  */
-function setHasDevChannels(e) {
-  currentSession().host.extensionsConfig.replaceHasDevChannels(e);
+function setHasDevChannels(hasDevChannels) {
+  currentSession().host.extensionsConfig.replaceHasDevChannels(hasDevChannels);
 }
 //@ chunk-ndmse9kj.js:117771-117842 facade-majority = getPromptCache1hAllowlist (0.75)
 /**
@@ -5296,64 +5345,64 @@ function setPromptCache1hAllowlist(allowlist) {
   currentSession().host.requestLatches.replacePromptCache1hAllowlist(allowlist);
 }
 //@ chunk-ndmse9kj.js:117915-117993 facade-majority
-function getThinkingTypeOverride(e) {
-  return currentSession().host.requestLatches.thinkingTypeOverrides().get(e);
+function getThinkingTypeOverride(model) {
+  return currentSession().host.requestLatches.thinkingTypeOverrides().get(model);
 }
 //@ chunk-ndmse9kj.js:117993-118067 facade-majority
-function setThinkingTypeOverride(model, n) {
-  currentSession().host.requestLatches.recordThinkingTypeOverride(model, n);
+function setThinkingTypeOverride(model, thinkingType) {
+  currentSession().host.requestLatches.recordThinkingTypeOverride(model, thinkingType);
 }
 //@ chunk-ndmse9kj.js:118067-118152 facade-majority
-function getServedModelsForRequestedModel(e) {
-  return currentSession().host.requestLatches.servedModelsByRequestedModel().get(e);
+function getServedModelsForRequestedModel(requestedModel) {
+  return currentSession().host.requestLatches.servedModelsByRequestedModel().get(requestedModel);
 }
 //@ chunk-ndmse9kj.js:118152-118314 facade-majority
-function recordServedModel(e, model) {
-  if (e === model) return;
+function recordServedModel(requestedModel, model) {
+  if (requestedModel === model) return;
   let requestLatches = currentSession().host.requestLatches;
-  let r = requestLatches.servedModelsByRequestedModel().get(e);
-  if (r) r.add(model);
-  else requestLatches.recordServedModels(e, new Set([model]));
+  let servedModels = requestLatches.servedModelsByRequestedModel().get(requestedModel);
+  if (servedModels) servedModels.add(model);
+  else requestLatches.recordServedModels(requestedModel, new Set([model]));
 }
 //@ chunk-ndmse9kj.js:118314-118394 facade-majority
 function isEffortMarkedUnsupported(model) {
   return currentSession().host.requestLatches.effortUnsupportedModels().has(model);
 }
 //@ chunk-ndmse9kj.js:118394-118459 facade-majority
-function markEffortUnsupported(e) {
-  currentSession().host.requestLatches.markEffortUnsupported(e);
+function markEffortUnsupported(model) {
+  currentSession().host.requestLatches.markEffortUnsupported(model);
 }
 //@ chunk-ndmse9kj.js:118459-118550 facade-majority
-function isStructuredOutputsMarkedUnsupported(e) {
-  return currentSession().host.requestLatches.structuredOutputsUnsupportedModels().has(e);
+function isStructuredOutputsMarkedUnsupported(model) {
+  return currentSession().host.requestLatches.structuredOutputsUnsupportedModels().has(model);
 }
 //@ chunk-ndmse9kj.js:118550-118626 facade-majority
-function markStructuredOutputsUnsupported(e) {
-  currentSession().host.requestLatches.markStructuredOutputsUnsupported(e);
+function markStructuredOutputsUnsupported(model) {
+  currentSession().host.requestLatches.markStructuredOutputsUnsupported(model);
 }
 //@ chunk-ndmse9kj.js:118626-118701 facade-majority
 function clearStructuredOutputsUnsupported() {
   currentSession().host.requestLatches.clearStructuredOutputsUnsupported();
 }
 //@ chunk-ndmse9kj.js:118701-118780 facade-majority
-function isContext1mMarkedRefused(e) {
-  return currentSession().host.requestLatches.context1mRefusedModels().has(e);
+function isContext1mMarkedRefused(model) {
+  return currentSession().host.requestLatches.context1mRefusedModels().has(model);
 }
 //@ chunk-ndmse9kj.js:118780-118844 facade-majority
-function markContext1mRefused(e) {
-  currentSession().host.requestLatches.markContext1mRefused(e);
+function markContext1mRefused(model) {
+  currentSession().host.requestLatches.markContext1mRefused(model);
 }
 //@ chunk-ndmse9kj.js:118844-118907 facade-majority
 function clearContext1mRefused() {
   currentSession().host.requestLatches.clearContext1mRefused();
 }
 //@ chunk-ndmse9kj.js:118907-118970 facade-majority
-function getRefusedBetasForModel(providerWireModelId) {
-  return currentSession().host.requestLatches.refusedBetas(providerWireModelId);
+function getRefusedBetasForModel(modelId) {
+  return currentSession().host.requestLatches.refusedBetas(modelId);
 }
 //@ chunk-ndmse9kj.js:118970-119033 facade-majority
-function markBetaRefusedForModel(e, n) {
-  currentSession().host.requestLatches.markBetaRefused(e, n);
+function markBetaRefusedForModel(model, betaName) {
+  currentSession().host.requestLatches.markBetaRefused(model, betaName);
 }
 //@ chunk-ndmse9kj.js:119033-119099 facade-majority
 function getLearnedEffortCaps() {
@@ -5400,24 +5449,24 @@ function dropAutoModeUnavailableResponsesOfOtherTurns(runKey, turn) {
   currentSession().host.requestLatches.dropAutoModeUnavailableResponsesOfOtherTurns(runKey, turn);
 }
 //@ chunk-ndmse9kj.js:119904-119983 facade-majority
-function noteAutoModeUnavailableResponse(toolUseId, n) {
-  currentSession().host.requestLatches.noteAutoModeUnavailableResponse(toolUseId, n);
+function noteAutoModeUnavailableResponse(toolUseId, response) {
+  currentSession().host.requestLatches.noteAutoModeUnavailableResponse(toolUseId, response);
 }
 //@ chunk-ndmse9kj.js:119983-120060 facade-majority
-function clearAutoModeUnavailableResponses(e) {
-  currentSession().host.requestLatches.clearAutoModeUnavailableResponses(e);
+function clearAutoModeUnavailableResponses(toolUseId) {
+  currentSession().host.requestLatches.clearAutoModeUnavailableResponses(toolUseId);
 }
 //@ chunk-ndmse9kj.js:120060-120136 facade-majority
-function setAutoModeUnavailableStopNotice(e) {
-  currentSession().host.requestLatches.setAutoModeUnavailableStopNotice(e);
+function setAutoModeUnavailableStopNotice(notice) {
+  currentSession().host.requestLatches.setAutoModeUnavailableStopNotice(notice);
 }
 //@ chunk-ndmse9kj.js:120136-120214 facade-majority
 function getAutoModeUnavailableStopNotice() {
   return currentSession().host.requestLatches.autoModeUnavailableStopNotice();
 }
 //@ chunk-ndmse9kj.js:120214-120281 facade-majority
-function setLocalCommandExitCode(e) {
-  currentSession().host.requestLatches.setLocalCommandExitCode(e);
+function setLocalCommandExitCode(exitCode) {
+  currentSession().host.requestLatches.setLocalCommandExitCode(exitCode);
 }
 //@ chunk-ndmse9kj.js:120281-120350 facade-majority
 function getLocalCommandExitCode() {
@@ -5436,8 +5485,8 @@ function getServerClassifierFallbackChoice() {
   return currentSession().host.requestLatches.serverClassifierFallbackChoice();
 }
 //@ chunk-ndmse9kj.js:120556-120633 facade-majority
-function setServerClassifierFallbackChoice(e) {
-  currentSession().host.requestLatches.setServerClassifierFallbackChoice(e);
+function setServerClassifierFallbackChoice(choice) {
+  currentSession().host.requestLatches.setServerClassifierFallbackChoice(choice);
 }
 //@ chunk-ndmse9kj.js:120633-120710 facade-majority
 function clearServerClassifierFallbackChoice() {
@@ -5448,8 +5497,8 @@ function takeServerClassifierFallbackAnnouncement() {
   return currentSession().host.requestLatches.takeServerClassifierFallbackAnnouncement();
 }
 //@ chunk-ndmse9kj.js:120799-120867 facade-majority
-function noteNoServerCheck(e) {
-  return currentSession().host.requestLatches.noteNoServerCheck(e);
+function noteNoServerCheck(reason) {
+  return currentSession().host.requestLatches.noteNoServerCheck(reason);
 }
 //@ chunk-ndmse9kj.js:120867-120937 facade-majority
 function noteNoServerCheckStoppedTurn() {
@@ -5524,8 +5573,8 @@ function getRefusedBetaHeaders() {
   return currentSession().host.requestLatches.refusedBetaHeaders();
 }
 //@ chunk-ndmse9kj.js:122132-122197 facade-majority
-function markBetaHeaderRefused(e) {
-  currentSession().host.requestLatches.markBetaHeaderRefused(e);
+function markBetaHeaderRefused(headerName) {
+  currentSession().host.requestLatches.markBetaHeaderRefused(headerName);
 }
 //@ chunk-ndmse9kj.js:122197-122271 facade-majority
 function isThinkingHighlightsRefused() {
@@ -5544,12 +5593,12 @@ function markToolChangeUnsupportedModel(canonicalName) {
   currentSession().host.requestLatches.markToolChangeUnsupportedModel(canonicalName);
 }
 //@ chunk-ndmse9kj.js:122500-122586 facade-majority
-function getInferenceProfileBackingModelCached(e) {
-  return currentSession().host.requestLatches.inferenceProfileBackingModels().get(e);
+function getInferenceProfileBackingModelCached(profileId) {
+  return currentSession().host.requestLatches.inferenceProfileBackingModels().get(profileId);
 }
 //@ chunk-ndmse9kj.js:122586-122668 facade-majority
-function setInferenceProfileBackingModel(profileId, n) {
-  currentSession().host.requestLatches.recordInferenceProfileBackingModel(profileId, n);
+function setInferenceProfileBackingModel(profileId, backingModel) {
+  currentSession().host.requestLatches.recordInferenceProfileBackingModel(profileId, backingModel);
 }
 //@ chunk-ndmse9kj.js:122668-122745 facade-majority
 function getStickyBetas() {
@@ -5561,10 +5610,10 @@ function getConversationAtisLatch() {
   return agentContext ? agentContext.conversationAtisLatch : currentSession().conversationLatches.atisLatch();
 }
 //@ chunk-ndmse9kj.js:122839-122945 facade-majority
-function setConversationAtisLatch(e) {
+function setConversationAtisLatch(latch) {
   let agentContext = getAgentContext();
-  if (agentContext) agentContext.conversationAtisLatch = e;
-  else currentSession().conversationLatches.replaceAtisLatch(e);
+  if (agentContext) agentContext.conversationAtisLatch = latch;
+  else currentSession().conversationLatches.replaceAtisLatch(latch);
 }
 //@ chunk-ndmse9kj.js:122945-123028 facade-majority
 function getConversationToolsUsed() {
@@ -5582,8 +5631,8 @@ function getPromptId() {
   return currentSession().requestJournal.promptId();
 }
 //@ chunk-ndmse9kj.js:123196-123250 facade-majority
-function setPromptId(e) {
-  currentSession().requestJournal.replacePromptId(e);
+function setPromptId(promptId) {
+  currentSession().requestJournal.replacePromptId(promptId);
 }
 //@ chunk-ndmse9kj.js:123250-123314 facade-majority
 function incrementPromptIndex() {
@@ -5594,14 +5643,14 @@ function getPromptIndex() {
   return currentSession().requestJournal.promptIndex();
 }
 //@ chunk-ndmse9kj.js:123368-123577 facade-majority
-function notePersonPrompt(uuid, n, clientPlatform) {
+function notePersonPrompt(uuid, timestamp, clientPlatform) {
   let requestJournal = currentSession().requestJournal;
-  let i = requestJournal.lastPersonPrompt();
-  let timestamp = Date.parse(n);
-  if (i === null || (!Number.isNaN(timestamp) && !(timestamp < Date.parse(i.timestamp))))
+  let existing = requestJournal.lastPersonPrompt();
+  let timestamp_2 = Date.parse(timestamp);
+  if (existing === null || (!Number.isNaN(timestamp_2) && !(timestamp_2 < Date.parse(existing.timestamp))))
     requestJournal.replaceLastPersonPrompt({
       uuid,
-      timestamp: n,
+      timestamp,
       clientPlatform,
     });
 }
@@ -5614,8 +5663,8 @@ function isReplBridgeActive() {
   return currentSession().surfaceCapabilities.replBridgeActive();
 }
 //@ chunk-ndmse9kj.js:123701-123768 facade-majority
-function setReplBridgeActive(e) {
-  currentSession().surfaceCapabilities.replaceReplBridgeActive(e);
+function setReplBridgeActive(active) {
+  currentSession().surfaceCapabilities.replaceReplBridgeActive(active);
 }
 //@ chunk-ndmse9kj.js:123768-123829 facade-majority
 function getMainLoopBusy() {
@@ -5626,8 +5675,8 @@ function getMainQueryRunning() {
   return currentSession().surfaceCapabilities.mainQueryRunning();
 }
 //@ chunk-ndmse9kj.js:123894-123959 facade-majority
-function setMainLoopStatus(e) {
-  currentSession().surfaceCapabilities.replaceMainLoopStatus(e);
+function setMainLoopStatus(status) {
+  currentSession().surfaceCapabilities.replaceMainLoopStatus(status);
 }
 //@ chunk-xdkvf45x.js:295-360 fingerprint = getSessionCounter (0.729)
 /**
@@ -5732,9 +5781,9 @@ export {
   getInitialMainLoopModel,
   markRefusalFallbackHeaderArmed,
   setOriginalCwd,
-  getDisableSlashCommands,
   getIsInteractive,
   getIsRemoteMode,
+  getDisableSlashCommands,
   getRootSession,
   setTeleportedSessionInfo,
   getAttacherCaps,
@@ -5766,6 +5815,7 @@ export {
   onProcessRootHost,
   isRestrictedWorkspaceTrustKey,
   getSessionTrustAccepted,
+  getSessionProjectDir,
   getConversationAtisLatch,
   getConversationToolsUsed,
   getPromptId,
@@ -5778,7 +5828,6 @@ export {
   getRestoredAutoMemoryOff,
   setRestoredAutoMemoryOff,
   setAutoMemoryOffThisSession,
-  getSessionProjectDir,
   getAuthenticatedAccountEpoch,
   setAdditionalDirectoriesForClaudeMd,
   getInvokedSkills,
@@ -5797,26 +5846,6 @@ export {
   isThinkingHighlightsRefused,
   isHomeDirectorySession,
   getInlinePluginsNoMcp,
-  setIsInteractive,
-  setSessionStartType,
-  setClientType,
-  setQuestionPreviewFormat,
-  setExtendedQuestionsEnabled,
-  setQuestionOptionDescriptionsOptional,
-  setSdkAgentProgressSummariesEnabled,
-  setGatewayServerProcess,
-  setOnboardingShownThisSession,
-  getUserMsgOptIn,
-  setIsRemoteMode,
-  setPrintOutputFormat,
-  isParkedSpare,
-  setSdkBetas,
-  getMcpConnectNonBlocking,
-  isDisklessProcess,
-  setProjectConfigRoot,
-  setInlinePluginsNoMcp,
-  setInlinePluginUrls,
-  isRestrictedSession,
   setFlagSettingsExpectedContent,
   setFlagSettingsFilePinnedContent,
   setFlagSettingsPath,
@@ -5828,6 +5857,26 @@ export {
   setRestrictedSession,
   getAllowedSettingSourcesAsConfigured,
   getExtendedQuestionsEnabled,
+  setPrintOutputFormat,
+  isParkedSpare,
+  setSdkBetas,
+  getMcpConnectNonBlocking,
+  isDisklessProcess,
+  setProjectConfigRoot,
+  setInlinePluginsNoMcp,
+  setInlinePluginUrls,
+  isRestrictedSession,
+  setIsInteractive,
+  setSessionStartType,
+  setClientType,
+  setQuestionPreviewFormat,
+  setExtendedQuestionsEnabled,
+  setQuestionOptionDescriptionsOptional,
+  setSdkAgentProgressSummariesEnabled,
+  setGatewayServerProcess,
+  setOnboardingShownThisSession,
+  getUserMsgOptIn,
+  setIsRemoteMode,
   isOauthTokenFromBgSnapshot,
   setGatewayAuth,
   holdGatewayHostStrict,
@@ -5874,16 +5923,18 @@ export {
   clearRefusalFallbackOccurred,
   onSessionCronsChange,
   getLastApiCompletionTimestamp,
+  getRefusalFallbackModelLatch,
+  releaseRefusalFallbackCarriedEffort,
   isEffortMarkedUnsupported,
   setMainLoopEffortState,
   onProactivitySelectorGateChanged,
+  getMcpClientsFromAccessor,
   getToolsMachine,
   getConnectedClientWiring,
   getEnsureConnectedClient,
   setEnsureConnectedClient,
   isPrintInputClosed,
   isSingleShotPrintSession,
-  getMcpClientsFromAccessor,
   filesPlacedByNameRead,
   isReplBridgeActive,
   getTotalCostUSD,
@@ -5945,9 +5996,9 @@ export {
   getClientType,
   getChromeFlagOverride,
   getIsScrollDraining,
+  setTerminalFocusForState,
   getLastMainThreadCacheTtlMs,
   getLastMainThreadCacheRenewedAt,
-  setTerminalFocusForState,
   hasShownLspRecommendationThisSession,
   setLspRecommendationShownThisSession,
   getLoopWakeFires,
@@ -5982,7 +6033,6 @@ export {
   markThinkingHighlightsRefused,
   markThinkingResumptionRefused,
   markBetaHeaderRefused,
-  getRefusalFallbackModelLatch,
   consumePendingContextCompacted,
   setThinkingTypeOverride,
   recordServedModel,
@@ -6084,6 +6134,7 @@ export {
   setLoopTickInFlightPrompt,
   getLoopTickInFlightPlugin,
   resetLoopWakeFires,
+  isSyncedPluginDirUnused,
   getMainThreadAgentHooks,
   getBareMcpServerMatchersWarned,
   getAttestedOfficialPluginMarketplace,
@@ -6091,13 +6142,11 @@ export {
   getSurfacedHookSpawnFailures,
   getStatsStore,
   takeSdkHostOutOfReachNote,
-  isSyncedPluginDirUnused,
+  getAllowedSettingSources,
   handleAutoModeTransition,
   setSearchToolsOptIn,
   setTodoToolsOptIn,
   setToolsOmittedByLaunchList,
-  getAllowedSettingSources,
-  releaseRefusalFallbackCarriedEffort,
   isHostVerifiedGatewayAuth,
   setAdmin3PSteeringSnapshot,
   recordProbeRefutedDocumentDefault,
@@ -6177,10 +6226,10 @@ export {
   getModelStrings,
   setModelStrings,
   releaseGatewayHost,
+  rootSession,
   getSessionCounter,
   getSessionStartType,
   discardPendingOTelEvents,
-  rootSession,
   getAdmin3PSteeringSnapshot,
   getResolvedOrgDefault,
   getProbeRefutedDocumentDefaults,
@@ -6353,4 +6402,13 @@ export {
   incrementPromptIndex,
   getAccountMemoryLaunchMode,
   setMcpConnectNonBlocking,
+  addSlowOperation,
+  getDevBarAlert,
+  getSlowOperations,
+  getSystemPromptInvalidationReason,
+  markNoDialogLaunch,
+  setRunnerDeclaredFreshMachinePerSession,
+  setRunnerDeclaredNestedRepositoryDiff,
+  setRunnerDeclaredNoRepositoryCheckedOut,
+  setSessionOverridesGetter,
 };

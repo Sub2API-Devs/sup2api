@@ -8,7 +8,7 @@
  * pieces: chunk-5nte8cwj.js (15)
  * attribution: placement 5, fingerprint 4, affinity 1, layout 4, callgraph-fingerprint 1
  */
-import { Re } from "../../runtime/bun-runtime.js";
+import { __toESM } from "../../runtime/bun-runtime.js";
 import { require_semver_3 } from "../../vendor/semver/index.js";
 import { execFileNoThrow } from "./execFileNoThrow.js";
 import { COPY_DIR } from "../commands/copy/copy.js";
@@ -20,12 +20,16 @@ import { getOauthConfig } from "../constants/oauth.js";
 import { isRelativePromoPath } from "../services/promo/promoState.js";
 import { HTTPS_CLAUDE_AI } from "../constants/product.js";
 import { openValidatedUrlSucceeded } from "./browser.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-5nte8cwj.js:623-640 placement
 /**
  * semver 模块的包装导入。
  */
-var semverModuleForDesktop = Re(require_semver_3(), 1);
+var semverModuleForDesktop; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5nte8cwj.js:623", () => {
+  semverModuleForDesktop = __toESM(require_semver_3(), 1);
+});
 //@ chunk-5nte8cwj.js:640-659 placement
 /**
  * 桌面端最低可用版本（1.1.9669），低于它需先更新。
@@ -33,15 +37,15 @@ var semverModuleForDesktop = Re(require_semver_3(), 1);
 var MIN_DESKTOP_VERSION = "1.1.9669";
 //@ chunk-5nte8cwj.js:659-885 placement = isRunningFromBuildDirectory (0.964)
 function isRunningFromBuildDirectory() {
-  let mapped = [process.argv[1] || "", process.execPath || ""].map((o) => o.replaceAll("\\", "/"));
+  let mapped = [process.argv[1] || "", process.execPath || ""].map((path) => path.replaceAll("\\", "/"));
   let buildDirs = ["/build-ant/", "/build-ant-native/", "/build-external/", "/build-external-native/"];
   return mapped.some((path) => buildDirs.some((dir) => path.includes(dir)));
 }
 //@ chunk-5nte8cwj.js:885-1012 placement = ghIsDangerousCallback (0.784)
-function buildUrlWithParams(e, n, o = {}) {
-  let r = new URL(`${e}://${n}`);
-  for (let [key, value] of Object.entries(o)) r.searchParams.set(key, value);
-  return r.toString();
+function buildUrlWithParams(scheme, host, params = {}) {
+  let url = new URL(`${scheme}://${host}`);
+  for (let [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+  return url.toString();
 }
 //@ chunk-5nte8cwj.js:1012-1184 placement
 function buildDesktopUrl(sessionId, scheme) {
@@ -55,9 +59,13 @@ function buildDesktopUrl(sessionId, scheme) {
   }
 }
 //@ chunk-5nte8cwj.js:1251-1399 fingerprint = isDesktopInstalled (0.4)
-async function isDesktopInstalled(e) {
+async function isDesktopInstalled(scheme) {
   {
-    let { code, stdout } = await execFileNoThrow("xdg-mime", ["query", "default", `x-scheme-handler/${e}`]);
+    let { code, stdout } = await execFileNoThrow("xdg-mime", [
+      "query",
+      "default",
+      `x-scheme-handler/${scheme}`,
+    ]);
     return code === 0 && stdout.trim().length > 0;
   }
   return false;
@@ -122,42 +130,42 @@ async function getDesktopInstallStatus() {
  */
 var MAX_DESKTOP_PATH_CHARS = 200;
 //@ chunk-5nte8cwj.js:2023-2529 layout
-function describeOpenFailure(e, n) {
-  let { code, exitCode, stderr, error, timedOut, maxBufferExceeded } = n;
+function describeOpenFailure(command, outcome) {
+  let { code, exitCode, stderr, error, timedOut, maxBufferExceeded } = outcome;
   if (code === 0)
     return {
       opened: true,
     };
-  let i = stderr || error;
+  let stderrText = stderr || error;
   logForDebugging(
-    `Deep link opener ${e} failed: code ${code}, exitCode ${exitCode ?? "undefined"}${i ? `: ${i}` : ""}`,
+    `Deep link opener ${command} failed: code ${code}, exitCode ${exitCode ?? "undefined"}${stderrText ? `: ${stderrText}` : ""}`,
   );
   if (timedOut)
     return {
       opened: false,
-      detail: `\`${e}\` timed out`,
+      detail: `\`${command}\` timed out`,
     };
   if (maxBufferExceeded)
     return {
       opened: false,
-      detail: `\`${e}\` printed too much output`,
+      detail: `\`${command}\` printed too much output`,
     };
-  let d = exitCode === undefined ? `\`${e}\` failed` : `\`${e}\` exited ${exitCode}`;
+  let summary = exitCode === undefined ? `\`${command}\` failed` : `\`${command}\` exited ${exitCode}`;
   let replaced = printableName(
     getFirstLine(stderr.trim()) || (exitCode === undefined ? error : "") || "",
     MAX_DESKTOP_PATH_CHARS,
   ).replace(/\.+$/, "");
   return {
     opened: false,
-    detail: replaced.length === 0 ? d : `${d}: ${replaced}`,
+    detail: replaced.length === 0 ? summary : `${summary}: ${replaced}`,
   };
 }
 //@ chunk-5nte8cwj.js:2529-2718 fingerprint = openDeepLink (0.355)
-async function openDeepLink(e, macApp) {
-  logForDebugging(`Opening deep link: ${e}`);
+async function openDeepLink(url, macApp) {
+  logForDebugging(`Opening deep link: ${url}`);
   return describeOpenFailure(
     "xdg-open",
-    await execFileNoThrow("xdg-open", [e], {
+    await execFileNoThrow("xdg-open", [url], {
       useCwd: true,
       useToolMemoryCgroup: false,
     }),
@@ -188,11 +196,8 @@ function getClaudeAiWebUrl(webPath) {
 async function openInDesktopOrBrowser({ webPath, desktopPath }) {
   if (!isRelativePromoPath(webPath) || !isRelativePromoPath(desktopPath)) return "none";
   if (getOauthConfig().CLAUDE_AI_ORIGIN === HTTPS_CLAUDE_AI) {
-    let desktopDeepLink = await buildDesktopDeepLink();
-    if (
-      desktopDeepLink !== null &&
-      (await openDeepLink(buildUrlWithParams(desktopDeepLink, `claude.ai${desktopPath}`))).opened
-    )
+    let scheme = await buildDesktopDeepLink();
+    if (scheme !== null && (await openDeepLink(buildUrlWithParams(scheme, `claude.ai${desktopPath}`))).opened)
       return "desktop";
   }
   return (await openValidatedUrlSucceeded(getClaudeAiWebUrl(webPath))) ? "browser" : "none";
@@ -231,8 +236,8 @@ export {
   buildDesktopDeepLink,
   semverModuleForDesktop,
   MIN_DESKTOP_VERSION,
-  getDesktopInstallStatus,
   openCurrentSessionInDesktop,
+  getDesktopInstallStatus,
   openInDesktopOrBrowser,
   getClaudeAiWebUrl,
 };

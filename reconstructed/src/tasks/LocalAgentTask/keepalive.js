@@ -21,25 +21,25 @@ var FLAG_IDLE_WINDOW = "flag:idle-window";
 /**
  * 判断后台代理已完成且只因空闲窗口保活。
  */
-function isIdleCompletedAgent(e) {
+function isIdleCompletedAgent(task) {
   return (
-    isCompletedBackgroundAgent(e) &&
-    (!("keepaliveReasons" in e) ||
-      !(e.keepaliveReasons instanceof Set) ||
-      [...e.keepaliveReasons].every((keepaliveReason) => keepaliveReason === FLAG_IDLE_WINDOW))
+    isCompletedBackgroundAgent(task) &&
+    (!("keepaliveReasons" in task) ||
+      !(task.keepaliveReasons instanceof Set) ||
+      [...task.keepaliveReasons].every((keepaliveReason) => keepaliveReason === FLAG_IDLE_WINDOW))
   );
 }
 //@ chunk-e6aww6q8.js:1620471-1620626 placement
 /**
  * 判断本地代理已完成但仍有保活原因（在等待子任务）。
  */
-function isWaitingOnChildren(e) {
+function isWaitingOnChildren(task) {
   return (
-    e.type === "local_agent" &&
-    e.status === "completed" &&
-    "keepaliveReasons" in e &&
-    e.keepaliveReasons instanceof Set &&
-    e.keepaliveReasons.size > 0
+    task.type === "local_agent" &&
+    task.status === "completed" &&
+    "keepaliveReasons" in task &&
+    task.keepaliveReasons instanceof Set &&
+    task.keepaliveReasons.size > 0
   );
 }
 export { FLAG_IDLE_WINDOW, isIdleCompletedAgent, isConcurrentShoreOn, isWaitingOnChildren };

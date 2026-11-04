@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:110452-113039 cjs-fingerprint
-var require_d = x(function (cjsExports, cjsModule) {
+var require_d = __commonJS(function (cjsExports, cjsModule) {
   function d(hljs) {
     let D_KEYWORDS = {
       $pattern: hljs.UNDERSCORE_IDENT_RE,
@@ -18,23 +18,23 @@ var require_d = x(function (cjsExports, cjsModule) {
         "bool cdouble cent cfloat char creal dchar delegate double dstring float function idouble ifloat ireal long real short string ubyte ucent uint ulong ushort wchar wstring",
       literal: "false null true",
     };
-    let n = "(0|[1-9][\\d_]*)";
-    let a = "(0|[1-9][\\d_]*|\\d[\\d_]*|[\\d_]+?\\d)";
+    let decimal_integer_re = "(0|[1-9][\\d_]*)";
+    let decimal_integer_nosus_re = "(0|[1-9][\\d_]*|\\d[\\d_]*|[\\d_]+?\\d)";
     let binary_integer_re = "0[bB][01_]+";
-    let o = "([\\da-fA-F][\\da-fA-F_]*|_[\\da-fA-F][\\da-fA-F_]*)";
-    let r = "0[xX]([\\da-fA-F][\\da-fA-F_]*|_[\\da-fA-F][\\da-fA-F_]*)";
-    let i = "([eE][+-]?(0|[1-9][\\d_]*|\\d[\\d_]*|[\\d_]+?\\d))";
-    let c =
+    let hexadecimal_digits_re = "([\\da-fA-F][\\da-fA-F_]*|_[\\da-fA-F][\\da-fA-F_]*)";
+    let hexadecimal_integer_re = "0[xX]([\\da-fA-F][\\da-fA-F_]*|_[\\da-fA-F][\\da-fA-F_]*)";
+    let decimal_exponent_re = "([eE][+-]?(0|[1-9][\\d_]*|\\d[\\d_]*|[\\d_]+?\\d))";
+    let decimal_float_re =
       "((0|[1-9][\\d_]*|\\d[\\d_]*|[\\d_]+?\\d)(\\.\\d*|" +
-      i +
+      decimal_exponent_re +
       ")|\\d+\\.(0|[1-9][\\d_]*|\\d[\\d_]*|[\\d_]+?\\d)|\\.(0|[1-9][\\d_]*)" +
-      i +
+      decimal_exponent_re +
       "?)";
-    let l =
+    let hexadecimal_float_re =
       "(0[xX](([\\da-fA-F][\\da-fA-F_]*|_[\\da-fA-F][\\da-fA-F_]*)\\.([\\da-fA-F][\\da-fA-F_]*|_[\\da-fA-F][\\da-fA-F_]*)|\\.?([\\da-fA-F][\\da-fA-F_]*|_[\\da-fA-F][\\da-fA-F_]*))[pP][+-]?(0|[1-9][\\d_]*|\\d[\\d_]*|[\\d_]+?\\d))";
-    let integer_re = "((0|[1-9][\\d_]*)|0[bB][01_]+|" + r + ")";
-    let m = "(" + l + "|" + c + ")";
-    let p = `\\\\(['"\\?\\\\abfnrtv]|u[\\dA-Fa-f]{4}|[0-7]{1,3}|x[\\dA-Fa-f]{2}|U[\\dA-Fa-f]{8})|&[a-zA-Z\\d]{2,};`;
+    let integer_re = "((0|[1-9][\\d_]*)|0[bB][01_]+|" + hexadecimal_integer_re + ")";
+    let float_re = "(" + hexadecimal_float_re + "|" + decimal_float_re + ")";
+    let escape_sequence_re = `\\\\(['"\\?\\\\abfnrtv]|u[\\dA-Fa-f]{4}|[0-7]{1,3}|x[\\dA-Fa-f]{2}|U[\\dA-Fa-f]{8})|&[a-zA-Z\\d]{2,};`;
     let D_INTEGER_MODE = {
       className: "number",
       begin: "\\b" + integer_re + "(L|u|U|Lu|LU|uL|UL)?",
@@ -42,21 +42,21 @@ var require_d = x(function (cjsExports, cjsModule) {
     };
     let D_FLOAT_MODE = {
       className: "number",
-      begin: "\\b(" + m + "([fF]|L|i|[fF]i|Li)?|" + integer_re + "(i|[fF]i|Li))",
+      begin: "\\b(" + float_re + "([fF]|L|i|[fF]i|Li)?|" + integer_re + "(i|[fF]i|Li))",
       relevance: 0,
     };
     let D_CHARACTER_MODE = {
       className: "string",
-      begin: "'(" + p + "|.)",
+      begin: "'(" + escape_sequence_re + "|.)",
       end: "'",
       illegal: ".",
     };
-    let f = {
+    let D_STRING_MODE = {
       className: "string",
       begin: '"',
       contains: [
         {
-          begin: p,
+          begin: escape_sequence_re,
           relevance: 0,
         },
       ],
@@ -111,7 +111,7 @@ var require_d = x(function (cjsExports, cjsModule) {
         hljs.C_BLOCK_COMMENT_MODE,
         D_NESTING_COMMENT_MODE,
         D_HEX_STRING_MODE,
-        f,
+        D_STRING_MODE,
         D_WYSIWYG_DELIMITED_STRING_MODE,
         D_ALTERNATE_WYSIWYG_STRING_MODE,
         D_TOKEN_STRING_MODE,

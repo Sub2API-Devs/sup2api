@@ -5,10 +5,10 @@
  * pieces: chunk-mrx6y2r5.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
-import { Yl, getUserAgentValue } from "../util/userAgent.js";
+import { getUserAgentHeader, getUserAgentValue } from "../util/userAgent.js";
 
 //@ chunk-mrx6y2r5.js:55718-55751 esm-layout
-var UserAgentHeaderName = Yl();
+var UserAgentHeaderName = getUserAgentHeader();
 var userAgentPolicyName = "userAgentPolicy";
 //@ chunk-mrx6y2r5.js:55751-55897 esm-fingerprint
 function userAgentPolicy(options = {}) {

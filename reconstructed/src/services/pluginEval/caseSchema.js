@@ -39,6 +39,7 @@ import { checkRepoAuthoredPath } from "../../cli/handlers/pluginEval/mockGuards.
 import { getPlatform } from "../../utils/platform.js";
 import { isSymlink, MAX_LAYERS } from "./mocks/mockResponders.js";
 import { getFileKind } from "../../utils/fileKind.js";
+import { deferInit, runDeferredInits } from "../../../runtime/deferred-init.js";
 
 //@ chunk-qchp9vrd.js:22013-22318 placement
 /**
@@ -83,67 +84,70 @@ function armSchema() {
 /**
  * 评分器定义模式（regex、last_message、文件、mock_calls、llm 等类型）。
  */
-var GraderSchema = DoctorLazy(() =>
-  create_17("type", [
-    create({
-      type: create_25("regex"),
-      name: create_2(),
-      target: graderInputSchema().default("last_message"),
-      pattern: create_2(),
-      flags: create_2()
-        .regex(/^[dgimsuvy]*$/, "must be JS RegExp flags (d g i m s u v y)")
-        .default(""),
-      match: create_16([
-        create_26(["contains", "not_contains"]),
-        create_2().regex(/^count:\d+$/, "must be contains | not_contains | count:N"),
-      ]).default("contains"),
-      weight: create_3().positive().default(1),
-      arm: armSchema(),
-    }).strict(),
-    create({
-      type: create_25("tool_order"),
-      name: create_2(),
-      before: toolExpectationSchema(),
-      after: toolExpectationSchema(),
-      weight: create_3().positive().default(1),
-      arm: armSchema(),
-    }).strict(),
-    create({
-      type: create_25("tool_used"),
-      name: create_2(),
-      tool: create_2(),
-      input_match: create_2().optional(),
-      min: create_3().int().nonnegative().optional(),
-      max: create_3().int().nonnegative().optional(),
-      weight: create_3().positive().default(1),
-      arm: armSchema(),
-    }).strict(),
-    create({
-      type: create_25("file_exists"),
-      name: create_2(),
-      path: create_2(),
-      exists: create_6().default(true),
-      weight: create_3().positive().default(1),
-      arm: armSchema(),
-    }).strict(),
-    create({
-      type: create_25("llm"),
-      name: create_2(),
-      criteria: create_2(),
-      focus: graderInputSchema().default("last_message"),
-      weight: create_3().positive().default(1),
-      arm: armSchema(),
-    }).strict(),
-    create({
-      type: create_25("baseline"),
-      name: create_2(),
-      baseline_file: create_2(),
-      criteria: create_2(),
-      weight: create_3().positive().default(1),
-      arm: armSchema(),
-    }).strict(),
-  ]),
-);
+var GraderSchema; // deferred: uses graderInputSchema of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-qchp9vrd.js:22529", () => {
+  GraderSchema = DoctorLazy(() =>
+    create_17("type", [
+      create({
+        type: create_25("regex"),
+        name: create_2(),
+        target: graderInputSchema().default("last_message"),
+        pattern: create_2(),
+        flags: create_2()
+          .regex(/^[dgimsuvy]*$/, "must be JS RegExp flags (d g i m s u v y)")
+          .default(""),
+        match: create_16([
+          create_26(["contains", "not_contains"]),
+          create_2().regex(/^count:\d+$/, "must be contains | not_contains | count:N"),
+        ]).default("contains"),
+        weight: create_3().positive().default(1),
+        arm: armSchema(),
+      }).strict(),
+      create({
+        type: create_25("tool_order"),
+        name: create_2(),
+        before: toolExpectationSchema(),
+        after: toolExpectationSchema(),
+        weight: create_3().positive().default(1),
+        arm: armSchema(),
+      }).strict(),
+      create({
+        type: create_25("tool_used"),
+        name: create_2(),
+        tool: create_2(),
+        input_match: create_2().optional(),
+        min: create_3().int().nonnegative().optional(),
+        max: create_3().int().nonnegative().optional(),
+        weight: create_3().positive().default(1),
+        arm: armSchema(),
+      }).strict(),
+      create({
+        type: create_25("file_exists"),
+        name: create_2(),
+        path: create_2(),
+        exists: create_6().default(true),
+        weight: create_3().positive().default(1),
+        arm: armSchema(),
+      }).strict(),
+      create({
+        type: create_25("llm"),
+        name: create_2(),
+        criteria: create_2(),
+        focus: graderInputSchema().default("last_message"),
+        weight: create_3().positive().default(1),
+        arm: armSchema(),
+      }).strict(),
+      create({
+        type: create_25("baseline"),
+        name: create_2(),
+        baseline_file: create_2(),
+        criteria: create_2(),
+        weight: create_3().positive().default(1),
+        arm: armSchema(),
+      }).strict(),
+    ]),
+  );
+});
 //@ chunk-qchp9vrd.js:23613-23744 placement
 function toolExpectationSchema() {
   return create_16([
@@ -158,100 +162,103 @@ function toolExpectationSchema() {
   ]);
 }
 //@ chunk-qchp9vrd.js:23744-24686 placement
-var GradersListSchema = DoctorLazy(() =>
-  create({
-    schema_version: create_2(),
-    name: create_2().min(1),
-    description: create_2().optional(),
-    tags: create_15(create_2()).default([]),
-    plugins: create_15(create_2()).optional(),
-    context: create({
-      scaffold_script: create_2().optional(),
-      history_file: create_2().optional(),
-      add_dirs: create_15(create_2()).default([]),
-    }).default({
-      add_dirs: [],
-    }),
-    execution: create({
-      prompt: create_2().optional(),
-      max_turns: create_3().int().positive().max(200).default(10),
-      timeout_seconds: create_3().int().positive().max(3600).default(300),
-      model: create_2().optional(),
-      allowed_tools: create_15(create_2()).default([]),
-      disallowed_tools: create_15(create_2()).optional(),
-      artifact_publish: create_6().optional(),
-      growthbook_overrides: create_20(
-        create_2(),
-        create_16([create_6(), create_2(), create_3(), create_10()]),
-      ).optional(),
-      append_system_prompt: create_2().optional(),
-      env: create_20(create_2(), create_2()).default({}),
-    }),
-    runs: create_3().int().positive().max(50).default(3),
-    graders: create_15(GraderSchema())
-      .min(1)
-      .superRefine((e, n) => {
-        let r = new Set();
-        for (let a of e) {
-          if (r.has(a.name))
-            n.addIssue({
-              code: ZodIssueCode.custom,
-              message: `duplicate grader name "${a.name}"`,
-            });
-          r.add(a.name);
-        }
+var GradersListSchema; // deferred: uses GraderSchema of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-qchp9vrd.js:23744", () => {
+  GradersListSchema = DoctorLazy(() =>
+    create({
+      schema_version: create_2(),
+      name: create_2().min(1),
+      description: create_2().optional(),
+      tags: create_15(create_2()).default([]),
+      plugins: create_15(create_2()).optional(),
+      context: create({
+        scaffold_script: create_2().optional(),
+        history_file: create_2().optional(),
+        add_dirs: create_15(create_2()).default([]),
+      }).default({
+        add_dirs: [],
       }),
-    expected_outcome: create_2().optional(),
-  }),
-);
+      execution: create({
+        prompt: create_2().optional(),
+        max_turns: create_3().int().positive().max(200).default(10),
+        timeout_seconds: create_3().int().positive().max(3600).default(300),
+        model: create_2().optional(),
+        allowed_tools: create_15(create_2()).default([]),
+        disallowed_tools: create_15(create_2()).optional(),
+        artifact_publish: create_6().optional(),
+        growthbook_overrides: create_20(
+          create_2(),
+          create_16([create_6(), create_2(), create_3(), create_10()]),
+        ).optional(),
+        append_system_prompt: create_2().optional(),
+        env: create_20(create_2(), create_2()).default({}),
+      }),
+      runs: create_3().int().positive().max(50).default(3),
+      graders: create_15(GraderSchema())
+        .min(1)
+        .superRefine((graders, ctx) => {
+          let seenNames = new Set();
+          for (let grader of graders) {
+            if (seenNames.has(grader.name))
+              ctx.addIssue({
+                code: ZodIssueCode.custom,
+                message: `duplicate grader name "${grader.name}"`,
+              });
+            seenNames.add(grader.name);
+          }
+        }),
+      expected_outcome: create_2().optional(),
+    }),
+  );
+});
 //@ chunk-qchp9vrd.js:24686-26080 placement
 /**
  * 校验 case.yaml：必须是对象且含 schema_version 等字段。
  */
-function parseCaseYaml(e) {
-  if (typeof e !== "object" || e === null)
+function parseCaseYaml(raw) {
+  if (typeof raw !== "object" || raw === null)
     return {
       ok: false,
       error: "case.yaml must be a YAML object",
     };
-  let schemaVersion = e.schema_version;
+  let schemaVersion = raw.schema_version;
   if (typeof schemaVersion !== "string")
     return {
       ok: false,
       error: 'missing required field schema_version (e.g. "1.0")',
     };
-  let r = parseInt(firstLineOf(schemaVersion, "."), 10);
-  if (Number.isNaN(r))
+  let schemaMajor = parseInt(firstLineOf(schemaVersion, "."), 10);
+  if (Number.isNaN(schemaMajor))
     return {
       ok: false,
       error: `schema_version "${schemaVersion}" is not a valid version string`,
     };
-  if (r > CASE_SCHEMA_VERSION)
+  if (schemaMajor > CASE_SCHEMA_VERSION)
     return {
       ok: false,
       error: `schema_version "${schemaVersion}" requires a newer Claude Code (this binary supports up to ${CASE_SCHEMA_VERSION}.x)`,
     };
-  let a = GradersListSchema().safeParse(e);
-  if (!a.success)
+  let parsed = GradersListSchema().safeParse(raw);
+  if (!parsed.success)
     return {
       ok: false,
       error: `invalid case.yaml:
-${a.error.issues.map((issue) => `  ${issue.path.join(".") || "(root)"}: ${issue.message}`).join(`
+${parsed.error.issues.map((issue) => `  ${issue.path.join(".") || "(root)"}: ${issue.message}`).join(`
 `)}`,
     };
-  if (!a.data.execution.prompt?.trim())
+  if (!parsed.data.execution.prompt?.trim())
     return {
       ok: false,
-      error: a.data.context.history_file
+      error: parsed.data.context.history_file
         ? "context.history_file requires execution.prompt (the resumed session needs a next turn)"
         : "execution.prompt is required (a prompt.md body, or execution.prompt in case.yaml)",
     };
-  if (a.data.execution.prompt.includes(TODO_AGENT_PROMPT))
+  if (parsed.data.execution.prompt.includes(TODO_AGENT_PROMPT))
     return {
       ok: false,
       error: `the prompt is still the blank \`init\` template \u2014 replace the "${TODO_AGENT_PROMPT}" line with the user prompt to test (in prompt.md, or in execution.prompt if the case is written in case.yaml)`,
     };
-  for (let grader of a.data.graders)
+  for (let grader of parsed.data.graders)
     if (
       ("criteria" in grader ? grader.criteria : "pattern" in grader ? grader.pattern : "").includes(
         TODO_CRITERIA_PROMPT,
@@ -263,107 +270,113 @@ ${a.error.issues.map((issue) => `  ${issue.path.join(".") || "(root)"}: ${issue.
       };
   return {
     ok: true,
-    case: a.data,
+    case: parsed.data,
   };
 }
 //@ chunk-qchp9vrd.js:26080-26348 placement
 /**
  * 用例执行配置允许的键。
  */
-var MAX_CASE_FILE_BYTES_2 = 1048576;
-var TOP_LEVEL_CASE_KEYS = new Set([
-  "schema_version",
-  "name",
-  "description",
-  "tags",
-  "plugins",
-  "runs",
-  "expected_outcome",
-]);
-var EXECUTION_CASE_KEYS = new Set([
-  "model",
-  "max_turns",
-  "timeout_seconds",
-  "allowed_tools",
-  "disallowed_tools",
-  "artifact_publish",
-  "growthbook_overrides",
-  "append_system_prompt",
-  "env",
-]);
+var MAX_CASE_FILE_BYTES_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var TOP_LEVEL_CASE_KEYS;
+var EXECUTION_CASE_KEYS;
+deferInit("chunk-qchp9vrd.js:26080", () => {
+  MAX_CASE_FILE_BYTES_2 = 1048576;
+  TOP_LEVEL_CASE_KEYS = new Set([
+    "schema_version",
+    "name",
+    "description",
+    "tags",
+    "plugins",
+    "runs",
+    "expected_outcome",
+  ]);
+  EXECUTION_CASE_KEYS = new Set([
+    "model",
+    "max_turns",
+    "timeout_seconds",
+    "allowed_tools",
+    "disallowed_tools",
+    "artifact_publish",
+    "growthbook_overrides",
+    "append_system_prompt",
+    "env",
+  ]);
+});
 //@ chunk-qchp9vrd.js:26348-27561 placement
 /**
  * 解析 prompt.md 的 frontmatter（graders、未知键报错）。
  */
 async function parsePromptMdCase(caseDir) {
   let joined = path.join(caseDir, "prompt.md");
-  let joined_2 = path.join(caseDir, "graders");
-  let [proseCase, gradersDir] = await Promise.all([readProseCase(joined), loadGradersDir(joined_2)]);
-  if (proseCase === null && gradersDir.length === 0) return null;
-  let h = {
+  let gradersDir = path.join(caseDir, "graders");
+  let [text, gradersDir_2] = await Promise.all([readProseCase(joined), loadGradersDir(gradersDir)]);
+  if (text === null && gradersDir_2.length === 0) return null;
+  let caseBody = {
     top: {},
     execution: {},
     graders: [],
   };
-  if (proseCase !== null) {
-    let { fm, body } = parseProseFrontmatter(proseCase, joined);
+  if (text !== null) {
+    let { fm, body } = parseProseFrontmatter(text, joined);
     let trimmed = body.trim();
-    if (trimmed.length > 0) h.prompt = trimmed;
+    if (trimmed.length > 0) caseBody.prompt = trimmed;
     for (let [key, value] of Object.entries(fm))
-      if (TOP_LEVEL_CASE_KEYS.has(key)) h.top[key] = value;
-      else if (EXECUTION_CASE_KEYS.has(key)) h.execution[key] = value;
+      if (TOP_LEVEL_CASE_KEYS.has(key)) caseBody.top[key] = value;
+      else if (EXECUTION_CASE_KEYS.has(key)) caseBody.execution[key] = value;
       else
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
           `${path.relative(caseDir, joined)}: unknown frontmatter key "${key}" (expected one of: ${[...TOP_LEVEL_CASE_KEYS, ...EXECUTION_CASE_KEYS].join(", ")})`,
           "prompt.md: unknown frontmatter key",
         );
   }
-  let w = [];
-  for (let b of gradersDir) {
-    let proseCase = await readProseCase(b);
+  let graderTexts = [];
+  for (let graderPath of gradersDir_2) {
+    let proseCase = await readProseCase(graderPath);
     if (proseCase === null)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${path.basename(b)} vanished from ${path.basename(path.dirname(b))}/ while being read; try again`,
+        `${path.basename(graderPath)} vanished from ${path.basename(path.dirname(graderPath))}/ while being read; try again`,
         "graders/: entry vanished during read",
       );
-    w.push(proseCase);
+    graderTexts.push(proseCase);
   }
-  for (let j = 0; j < gradersDir.length; j++) {
-    let y = gradersDir[j];
-    let R = w[j];
-    let { fm, body, hadFrontmatter } = parseProseFrontmatter(R, y);
+  for (let j = 0; j < gradersDir_2.length; j++) {
+    let graderPath = gradersDir_2[j];
+    let graderText = graderTexts[j];
+    let { fm, body, hadFrontmatter } = parseProseFrontmatter(graderText, graderPath);
     if (!hadFrontmatter) continue;
-    let name = path.basename(y, ".md");
+    let name = path.basename(graderPath, ".md");
     if (typeof fm.type !== "string")
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${path.relative(caseDir, y)}: frontmatter must include "type:" (regex | tool_order | tool_used | file_exists | llm | baseline)`,
+        `${path.relative(caseDir, graderPath)}: frontmatter must include "type:" (regex | tool_order | tool_used | file_exists | llm | baseline)`,
         "grader .md: frontmatter missing type",
       );
-    h.graders.push(buildGraderEntry(name, fm, body.trim()));
+    caseBody.graders.push(buildGraderEntry(name, fm, body.trim()));
   }
   if (
-    h.prompt === undefined &&
-    h.graders.length === 0 &&
-    Object.keys(h.top).length === 0 &&
-    Object.keys(h.execution).length === 0
+    caseBody.prompt === undefined &&
+    caseBody.graders.length === 0 &&
+    Object.keys(caseBody.top).length === 0 &&
+    Object.keys(caseBody.execution).length === 0
   )
     return null;
-  return h;
+  return caseBody;
 }
 //@ chunk-qchp9vrd.js:27561-27993 placement
 function normalizeCaseObject(caseYamlFile, promptMdCase, caseDir) {
-  let a = caseYamlFile ?? {
+  let yamlCase = caseYamlFile ?? {
     schema_version: DEFAULT_SCHEMA_VERSION,
     name: path.basename(caseDir),
   };
-  let s = {
-    ...a,
+  let merged = {
+    ...yamlCase,
     ...promptMdCase.top,
   };
-  let execution = typeof a.execution === "object" && a.execution !== null ? a.execution : {};
+  let execution =
+    typeof yamlCase.execution === "object" && yamlCase.execution !== null ? yamlCase.execution : {};
   let disallowedTools = execution.disallowed_tools;
   let disallowedTools_2 = promptMdCase.execution.disallowed_tools;
-  s.execution = {
+  merged.execution = {
     ...execution,
     ...promptMdCase.execution,
     ...((disallowedTools !== undefined || disallowedTools_2 !== undefined) && {
@@ -374,8 +387,8 @@ function normalizeCaseObject(caseYamlFile, promptMdCase, caseDir) {
     }),
   };
   if (promptMdCase.graders.length > 0)
-    s.graders = [...(Array.isArray(a.graders) ? a.graders : []), ...promptMdCase.graders];
-  return s;
+    merged.graders = [...(Array.isArray(yamlCase.graders) ? yamlCase.graders : []), ...promptMdCase.graders];
+  return merged;
 }
 //@ chunk-qchp9vrd.js:27993-28124 placement
 function concatArrays(disallowedTools, disallowedTools_2) {
@@ -394,57 +407,57 @@ var GRADER_FIELD_BY_TYPE = {
   regex: "pattern",
 };
 //@ chunk-qchp9vrd.js:28184-28316 placement
-function buildGraderEntry(name, n, r) {
-  let a = {
+function buildGraderEntry(name, frontmatter, body) {
+  let entry = {
     name,
-    ...n,
+    ...frontmatter,
   };
-  let s = typeof n.type === "string" ? GRADER_FIELD_BY_TYPE[n.type] : undefined;
-  if (s && a[s] === undefined && r.length > 0) a[s] = r;
-  return a;
+  let bodyField = typeof frontmatter.type === "string" ? GRADER_FIELD_BY_TYPE[frontmatter.type] : undefined;
+  if (bodyField && entry[bodyField] === undefined && body.length > 0) entry[bodyField] = body;
+  return entry;
 }
 //@ chunk-qchp9vrd.js:28316-29028 placement
 /**
  * 解析 .md 的 YAML frontmatter（未闭合、YAML 错误报告）。
  */
-function parseProseFrontmatter(e, n) {
-  e = stripBom_2(e);
-  let match = e.match(FRONTMATTER_REGEX);
+function parseProseFrontmatter(text, filePath) {
+  text = stripBom_2(text);
+  let match = text.match(FRONTMATTER_REGEX);
   if (!match) {
-    if (/^---\s*\n/.test(e))
+    if (/^---\s*\n/.test(text))
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${path.basename(n)}: unterminated frontmatter (opening "---" with no closing "---")`,
+        `${path.basename(filePath)}: unterminated frontmatter (opening "---" with no closing "---")`,
         "prose .md: unterminated frontmatter",
       );
     return {
       fm: {},
-      body: e,
+      body: text,
       hadFrontmatter: false,
     };
   }
-  let a;
+  let frontmatter;
   try {
-    a = parseYaml(match[1] ?? "");
+    frontmatter = parseYaml(match[1] ?? "");
   } catch (error) {
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${path.basename(n)}: invalid YAML frontmatter: ${error instanceof Error ? error.message : String(error)}`,
+      `${path.basename(filePath)}: invalid YAML frontmatter: ${error instanceof Error ? error.message : String(error)}`,
       "prose .md: invalid YAML frontmatter",
     );
   }
-  if (a === null || a === undefined)
+  if (frontmatter === null || frontmatter === undefined)
     return {
       fm: {},
-      body: e.slice(match[0].length),
+      body: text.slice(match[0].length),
       hadFrontmatter: true,
     };
-  if (typeof a !== "object" || Array.isArray(a))
+  if (typeof frontmatter !== "object" || Array.isArray(frontmatter))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${path.basename(n)}: frontmatter must be a YAML object`,
+      `${path.basename(filePath)}: frontmatter must be a YAML object`,
       "prose .md: frontmatter not a YAML object",
     );
   return {
-    fm: a,
-    body: e.slice(match[0].length),
+    fm: frontmatter,
+    body: text.slice(match[0].length),
     hadFrontmatter: true,
   };
 }
@@ -452,25 +465,28 @@ function parseProseFrontmatter(e, n) {
 /**
  * 读取文本文件（跟随链接），失败返回 null。
  */
-async function readTextFile(e, n, r) {
-  return (await readCaseFileFollowingLinks(e, n, r))?.toString("utf8") ?? null;
+async function readTextFile(baseDir, relativePath, label) {
+  return (await readCaseFileFollowingLinks(baseDir, relativePath, label))?.toString("utf8") ?? null;
 }
 //@ chunk-qchp9vrd.js:29101-30193 placement
 /**
  * 读取用例文件，处理悬空符号链接与 Windows 差异。
  */
-async function readCaseFileFollowingLinks(e, n, r) {
-  await checkRepoAuthoredPath(path.dirname(e), path.basename(e), r);
-  let a;
+async function readCaseFileFollowingLinks(filePath, maxBytes, label) {
+  await checkRepoAuthoredPath(path.dirname(filePath), path.basename(filePath), label);
+  let handle;
   try {
-    a = await open(e, constants.O_RDONLY | (getPlatform() === "windows" ? 0 : constants.O_NONBLOCK));
+    handle = await open(
+      filePath,
+      constants.O_RDONLY | (getPlatform() === "windows" ? 0 : constants.O_NONBLOCK),
+    );
   } catch (error) {
     if (isENOENT(error)) {
-      if (await isSymlink(e))
+      if (await isSymlink(filePath))
         throw Object.assign(
           new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `${path.basename(e)} is a symbolic link whose target does not exist \u2014 not read`,
-            `${r}: dangling symbolic link`,
+            `${path.basename(filePath)} is a symbolic link whose target does not exist \u2014 not read`,
+            `${label}: dangling symbolic link`,
           ),
           {
             code: "ENOENT",
@@ -481,8 +497,8 @@ async function readCaseFileFollowingLinks(e, n, r) {
     let errnoCode = getErrnoCode(error);
     throw Object.assign(
       new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${path.basename(e)} is unreadable (${errnoCode ?? "unknown error"})`,
-        `${r}: unreadable`,
+        `${path.basename(filePath)} is unreadable (${errnoCode ?? "unknown error"})`,
+        `${label}: unreadable`,
       ),
       {
         code: errnoCode,
@@ -490,77 +506,77 @@ async function readCaseFileFollowingLinks(e, n, r) {
     );
   }
   try {
-    let stats = await a.stat();
+    let stats = await handle.stat();
     if (!stats.isFile())
       throw Object.assign(
         new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `${path.basename(e)} is not a regular file`,
-          `${r}: not a regular file`,
+          `${path.basename(filePath)} is not a regular file`,
+          `${label}: not a regular file`,
         ),
         {
           code: stats.isDirectory() ? "EISDIR" : undefined,
         },
       );
     let size = stats.size;
-    if (size > n)
+    if (size > maxBytes)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${path.basename(e)} is ${size} bytes (cap: ${n})`,
-        `${r}: over size cap`,
+        `${path.basename(filePath)} is ${size} bytes (cap: ${maxBytes})`,
+        `${label}: over size cap`,
       );
-    let w = Buffer.allocUnsafe(Math.min(size, n) + 1);
-    let b = 0;
-    while (b < w.length) {
-      let { bytesRead } = await a.read(w, b, w.length - b);
+    let buffer = Buffer.allocUnsafe(Math.min(size, maxBytes) + 1);
+    let offset = 0;
+    while (offset < buffer.length) {
+      let { bytesRead } = await handle.read(buffer, offset, buffer.length - offset);
       if (bytesRead === 0) break;
-      b += bytesRead;
+      offset += bytesRead;
     }
-    if (b !== size)
+    if (offset !== size)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${path.basename(e)} changed while being read (vetted at ${size} bytes, read ${b > size ? "more" : String(b)}); try again`,
-        `${r}: changed during read`,
+        `${path.basename(filePath)} changed while being read (vetted at ${size} bytes, read ${offset > size ? "more" : String(offset)}); try again`,
+        `${label}: changed during read`,
       );
-    return w.subarray(0, b);
+    return buffer.subarray(0, offset);
   } finally {
-    await a.close().catch(() => {});
+    await handle.close().catch(() => {});
   }
 }
 //@ chunk-qchp9vrd.js:30193-30242 placement
 /**
  * 读取用例的 prose 文件。
  */
-async function readProseCase(e) {
-  return readTextFile(e, MAX_CASE_FILE_BYTES_2, "prose .md");
+async function readProseCase(caseFilePath) {
+  return readTextFile(caseFilePath, MAX_CASE_FILE_BYTES_2, "prose .md");
 }
 //@ chunk-qchp9vrd.js:30242-31046 placement
 /**
  * 加载 graders/ 目录下的评分器文件。
  */
-async function loadGradersDir(e) {
-  let n;
+async function loadGradersDir(gradersDir) {
+  let entries;
   try {
-    await checkRepoAuthoredPath(path.dirname(e), path.basename(e), "graders/");
-    n = await readdir(e, {
+    await checkRepoAuthoredPath(path.dirname(gradersDir), path.basename(gradersDir), "graders/");
+    entries = await readdir(gradersDir, {
       withFileTypes: true,
     });
   } catch (error) {
     if (isENOENT(error)) {
-      if (await isSymlink(e))
+      if (await isSymlink(gradersDir))
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `${path.basename(e)}/ is a symbolic link whose target does not exist`,
+          `${path.basename(gradersDir)}/ is a symbolic link whose target does not exist`,
           "graders/: dangling symbolic link",
         );
       return [];
     }
     if (getErrnoCode(error) === "ENOTDIR")
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${path.basename(e)} is not a directory`,
+        `${path.basename(gradersDir)} is not a directory`,
         "graders/: not a directory",
       );
     if (error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS) throw error;
     let errnoCode = getErrnoCode(error);
     throw Object.assign(
       new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${path.basename(e)}/ is unreadable (${errnoCode ?? "unknown error"})`,
+        `${path.basename(gradersDir)}/ is unreadable (${errnoCode ?? "unknown error"})`,
         "graders/: unreadable",
       ),
       {
@@ -568,20 +584,24 @@ async function loadGradersDir(e) {
       },
     );
   }
-  let filtered = n.filter((s) => s.name.endsWith(".md"));
+  let filtered = entries.filter((entry) => entry.name.endsWith(".md"));
   if (filtered.length > MAX_LAYERS)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${path.basename(e)}/ has ${filtered.length} .md entries (cap: ${MAX_LAYERS})`,
+      `${path.basename(gradersDir)}/ has ${filtered.length} .md entries (cap: ${MAX_LAYERS})`,
       "graders/: over file-count cap",
     );
-  let a = [];
-  for (let s of filtered) {
-    let joined = path.join(e, s.name);
-    if ((await getFileKind(s, joined, "other")) !== "dir") a.push(joined);
+  let paths = [];
+  for (let entry of filtered) {
+    let joined = path.join(gradersDir, entry.name);
+    if ((await getFileKind(entry, joined, "other")) !== "dir") paths.push(joined);
   }
-  a.sort();
-  return a;
+  paths.sort();
+  return paths;
 }
+
+// The import cycle this module closes (2 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("src/services/pluginEval/caseSchema.js");
 export {
   readTextFile,
   parseProseFrontmatter,

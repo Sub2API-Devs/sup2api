@@ -19,11 +19,11 @@ import { classifyFallbackOrigin } from "../../services/api/refusalFallback.js";
  * 会话切换时重置拒答回退锁存并上报 tengu_refusal_fallback_latch_reset。
  */
 function resetRefusalFallbackOnSwitch(setAppState) {
-  return onSessionSwitch((n, o, enable) => {
+  return onSessionSwitch((state, switchInfo, enable) => {
     if (!enable) return;
     applyFastMode(enable, setAppState);
     logEvent("tengu_refusal_fallback_latch_reset", {
-      source: fromEnum(o),
+      source: fromEnum(switchInfo),
       restored_to_explicit_override: enable.restoredToExplicitOverride,
       model_scope: fromEnum(classifyFallbackOrigin(enable.fallbackModel)),
     });
@@ -33,9 +33,9 @@ function resetRefusalFallbackOnSwitch(setAppState) {
 /**
  * 注册"切换会话时"的回调。
  */
-function onSessionSwitchCallback(e) {
-  return onSessionSwitch((n, o, r) => {
-    if (r) e();
+function onSessionSwitchCallback(fn) {
+  return onSessionSwitch((state, source, apply) => {
+    if (apply) fn();
   });
 }
 export { resetRefusalFallbackOnSwitch, onSessionSwitchCallback };

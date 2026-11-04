@@ -14,48 +14,48 @@ import { parseIp, ipInRanges, extractIpFromHost } from "./ssrfGuard.js";
 /**
  * 从受信代理的 X-Forwarded-For 中自右向左找第一个非受信地址作为客户端 IP；格式错误时返回 badHop。
  */
-function resolveClientIp(address, t, cidrList) {
-  if (!address || cidrList.length === 0)
+function resolveClientIp(text, forwardedFor, ranges) {
+  if (!text || ranges.length === 0)
     return {
-      clientIp: address,
+      clientIp: text,
     };
-  let o = parseIp(address);
-  if (!o || !ipInRanges(o, cidrList))
+  let addressIp = parseIp(text);
+  if (!addressIp || !ipInRanges(addressIp, ranges))
     return {
-      clientIp: address,
+      clientIp: text,
     };
-  if (!t)
+  if (!forwardedFor)
     return {
-      clientIp: address,
+      clientIp: text,
     };
-  let filtered = t
+  let filtered = forwardedFor
     .split(",")
-    .map((s) => s.trim())
+    .map((hop) => hop.trim())
     .filter(Boolean);
   for (let j = filtered.length - 1; j >= 0; j--) {
-    let a = filtered[j];
-    let l = parseIp(extractIpFromHost(a));
-    if (!l)
+    let hopValue = filtered[j];
+    let hopIp = parseIp(extractIpFromHost(hopValue));
+    if (!hopIp)
       return {
-        clientIp: address,
-        badHop: a.slice(0, 100),
+        clientIp: text,
+        badHop: hopValue.slice(0, 100),
       };
-    if (!ipInRanges(l, cidrList))
+    if (!ipInRanges(hopIp, ranges))
       return {
-        clientIp: l.toString(),
+        clientIp: hopIp.toString(),
       };
   }
   return {
-    clientIp: address,
+    clientIp: text,
   };
 }
 //@ chunk-1ny7cxrt.js:1337177-1337260 placement
 /**
  * 判断解析后的 IP 是否落在给定的 CIDR/地址范围内（地址为空或范围为空时返回 false）。
  */
-function isIpInRanges(e, cidrList) {
-  if (!e || cidrList.length === 0) return false;
-  let n = parseIp(e);
-  return n !== null && ipInRanges(n, cidrList);
+function isIpInRanges(ip, ranges) {
+  if (!ip || ranges.length === 0) return false;
+  let parsedIp = parseIp(ip);
+  return parsedIp !== null && ipInRanges(parsedIp, ranges);
 }
 export { isIpInRanges, resolveClientIp };

@@ -11,25 +11,25 @@
 import { resolveLocalPath } from "./inputSchema.js";
 
 //@ chunk-eg496hkq.js:19077-19652 placement
-function projectsActivityLabel(e) {
-  switch (e?.method) {
+function projectsActivityLabel(input) {
+  switch (input?.method) {
     case "project_info":
       return "Read project info";
     case "project_read":
-      return e.path ? `Read ${e.path}` : "Read project doc";
+      return input.path ? `Read ${input.path}` : "Read project doc";
     case "project_search":
-      return e.query ? `Search "${e.query}"` : "Search project";
+      return input.query ? `Search "${input.query}"` : "Search project";
     case "project_write": {
-      let path = e.path ?? "?";
-      let r = e.local_path ? ` from ${resolveLocalPath(e.local_path)}` : "";
-      return `Write ${path}${r}`;
+      let path = input.path ?? "?";
+      let localSuffix = input.local_path ? ` from ${resolveLocalPath(input.local_path)}` : "";
+      return `Write ${path}${localSuffix}`;
     }
     case "project_delete":
-      return e.path ? `Delete ${e.path}` : "Delete project doc";
+      return input.path ? `Delete ${input.path}` : "Delete project doc";
     case "project_memory_list":
       return "List project memory";
     case "project_memory_read":
-      return e.path ? `Read memory ${e.path}` : "Read project memory file";
+      return input.path ? `Read memory ${input.path}` : "Read project memory file";
     default:
       return "Project";
   }

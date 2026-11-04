@@ -23,92 +23,118 @@ import { setInteractiveHandlerHost } from "../../hooks/toolPermission/handlers/i
 import { isDesignGrantWatchEnabled } from "../../services/designSync/gates.js";
 import { pollDesignGrantApproval } from "../../services/design/designApi.js";
 import { DesignGateState } from "../../services/mcp/designPlanGate.js";
+import { deferInit, beginDeferredInits } from "../../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 3 modules closed by ./DesignTool.js;
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("src/tools/DesignTool/DesignTool.js");
 //@ chunk-171dhyhe.js:53132-54535 placement
 /**
  * 向 api.anthropic.com/v1/design/mcp 发 JSON-RPC（带 Mcp-Session-Id、X-Anthropic-Client），解析 JSON 或 SSE 响应，策略拒绝时报错。
  */
-async function postDesignMcp(e, accessToken, c, n, r, l, wasRetried = false) {
+async function postDesignMcp(
+  body,
+  accessToken,
+  mcpSessionId,
+  signal,
+  oauthOptions,
+  responseType,
+  wasRetried = false,
+) {
   if (!isFirstPartyAnthropicHost(getOauthConfig().BASE_API_URL))
     throw Error(
       "Claude Design is only reachable from api.anthropic.com; the current OAuth base URL is not on the first-party allowlist.",
     );
-  let y = await apiClient.post("/v1/design/mcp", e, {
+  let response = await apiClient.post("/v1/design/mcp", body, {
     auth: "none",
     headers: {
       ...getOAuthHeaders(accessToken),
       Accept: "application/json, text/event-stream",
       "X-Anthropic-Client": "claude-cli-design-tool",
-      ...(c && {
-        "Mcp-Session-Id": c,
+      ...(mcpSessionId && {
+        "Mcp-Session-Id": mcpSessionId,
       }),
     },
     timeout: 60000,
     maxContentLength: 16 * MAX_RESULT_IMAGE_CHARS,
     validateStatus: () => true,
-    signal: n,
-    ...(l && {
-      responseType: l,
+    signal,
+    ...(responseType && {
+      responseType,
     }),
   });
-  if (!y.ok)
+  if (!response.ok)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Claude Design unavailable: ${y.reason}`,
+      `Claude Design unavailable: ${response.reason}`,
       "design_tool_policy_refused",
     );
-  if (y.status === 401) {
-    if (!wasRetried && !n.aborted) {
-      let h = await handleOAuth401ErrorImpl_2(accessToken, n, r);
-      if (h !== null && !n.aborted)
+  if (response.status === 401) {
+    if (!wasRetried && !signal.aborted) {
+      let refreshedToken = await handleOAuth401ErrorImpl_2(accessToken, signal, oauthOptions);
+      if (refreshedToken !== null && !signal.aborted)
         try {
-          let m = await postDesignMcp(e, h, c, n, r, l, true);
-          if (typeof m.data === "string") {
-            if (m.data.includes(h)) m.data = redactToken(m.data, h);
-          } else if (m.data !== null && m.data !== undefined) {
-            let f = jsonStringify(m.data);
-            if (f !== undefined && f.includes(h)) m.data = jsonParse(redactToken(f, h));
+          let retryResult = await postDesignMcp(
+            body,
+            refreshedToken,
+            mcpSessionId,
+            signal,
+            oauthOptions,
+            responseType,
+            true,
+          );
+          if (typeof retryResult.data === "string") {
+            if (retryResult.data.includes(refreshedToken))
+              retryResult.data = redactToken(retryResult.data, refreshedToken);
+          } else if (retryResult.data !== null && retryResult.data !== undefined) {
+            let serializedData = jsonStringify(retryResult.data);
+            if (serializedData !== undefined && serializedData.includes(refreshedToken))
+              retryResult.data = jsonParse(redactToken(serializedData, refreshedToken));
           }
-          return m;
+          return retryResult;
         } catch (error) {
           if (error instanceof Error)
             try {
-              error.message = redactToken(error.message, h);
+              error.message = redactToken(error.message, refreshedToken);
             } catch {}
           throw error;
         }
     }
-    if (!wasRetried && n.aborted) throw new AbortError();
+    if (!wasRetried && signal.aborted) throw new AbortError();
     throw new DesignAuth401Error(wasRetried);
   }
-  if (y.status === 403) {
-    let h = y.data;
-    if (typeof h === "string")
+  if (response.status === 403) {
+    let responseData = response.data;
+    if (typeof responseData === "string")
       try {
-        h = jsonParse(h);
+        responseData = jsonParse(responseData);
       } catch {
-        h = null;
+        responseData = null;
       }
-    if (h !== null && typeof h === "object" && h.error === "needs_design_scopes")
+    if (
+      responseData !== null &&
+      typeof responseData === "object" &&
+      responseData.error === "needs_design_scopes"
+    )
       throw new DesignNeedsScopesError();
   }
-  let v = y.response.headers["content-type"];
-  if (typeof v === "string" && v.toLowerCase().startsWith("text/event-stream"))
+  let contentType = response.response.headers["content-type"];
+  if (typeof contentType === "string" && contentType.toLowerCase().startsWith("text/event-stream"))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "Claude Design returned a text/event-stream response; this client only handles JSON.",
       "design_tool_sse_unsupported",
     );
-  return y;
+  return response;
 }
 //@ chunk-171dhyhe.js:54535-55593 placement
-function designCredentialErrorMessage(designConsentKey, t) {
-  let c = designConsentKey.detail ? ` (${designConsentKey.detail})` : "";
+function designCredentialErrorMessage(designConsentKey, context) {
+  let detailSuffix = designConsentKey.detail ? ` (${designConsentKey.detail})` : "";
   switch (designConsentKey.reason) {
     case "needs_design_login":
-      if (t?.isNonInteractiveSession)
+      if (context?.isNonInteractiveSession)
         return "Claude Design needs a claude.ai credential, and /design login cannot run in this non-interactive session. Ask the user to run /design login once from an interactive Claude Code session on this machine \u2014 non-interactive runs here then reuse that authorization. (CI runners and hosted sessions have no interactive session; Claude Design is not reachable from those without a stored /design login credential.)";
-      return `No design-capable credential${c}. Run /design login to authorize Claude Design.`;
+      return `No design-capable credential${detailSuffix}. Run /design login to authorize Claude Design.`;
     case "design_refresh_failed":
-      return `Design token refresh failed${c}. Retry shortly${t?.isNonInteractiveSession ? "" : ", or run /design login"}.`;
+      return `Design token refresh failed${detailSuffix}. Retry shortly${context?.isNonInteractiveSession ? "" : ", or run /design login"}.`;
     case "wrong_provider":
       return "Claude Design is only available with claude.ai authentication. It is not supported through Bedrock, Vertex, or other third-party providers.";
     case "essential_traffic_only":
@@ -116,11 +142,14 @@ function designCredentialErrorMessage(designConsentKey, t) {
   }
 }
 //@ chunk-171dhyhe.js:55593-55704 placement
-setInteractiveHandlerHost({
-  isEnabled: isDesignGrantWatchEnabled,
-  createObserver: (e, t, c) =>
-    e.kind === "design_project_grant"
-      ? pollDesignGrantApproval(t.get(DesignGateState), e.projectId, c)
-      : null,
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-171dhyhe.js:55593", () => {
+  setInteractiveHandlerHost({
+    isEnabled: isDesignGrantWatchEnabled,
+    createObserver: (request, state, options) =>
+      request.kind === "design_project_grant"
+        ? pollDesignGrantApproval(state.get(DesignGateState), request.projectId, options)
+        : null,
+  });
 });
 export { designCredentialErrorMessage, postDesignMcp };

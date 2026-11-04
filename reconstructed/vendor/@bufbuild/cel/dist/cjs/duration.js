@@ -5,12 +5,12 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_error_4 } from "../../../../@anthropic-ai/bedrock-sdk/core/error.js";
 import { require_protobuf } from "../../../protobuf/dist/commonjs/index.js";
 
 //@ chunk-fq0cr76a.js:480792-481955 cjs-fingerprint
-var require_duration = x(function (cjsExports) {
+var require_duration = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -64,8 +64,8 @@ var require_duration = x(function (cjsExports) {
     }
     return createDuration(0n, sign * fullNanos);
   }
-  function badDurationStr(e) {
-    return Error(`Failed to parse duration: ${e}`);
+  function badDurationStr(duration) {
+    return Error(`Failed to parse duration: ${duration}`);
   }
 });
 export { require_duration };

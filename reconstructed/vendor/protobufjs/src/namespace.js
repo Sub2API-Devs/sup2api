@@ -5,7 +5,7 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS as x } from "../../../runtime/bun-runtime.js";
 import { Kt } from "./object.js";
 import { Yt } from "./field.js";
 import { de } from "./util.js";
@@ -30,20 +30,20 @@ var zr = x(function (cjsExports, cjsModule) {
   function arrayToJSON(array, toJSONOptions) {
     if (!(array && array.length)) return;
     var obj = {};
-    for (var i = 0; i < array.length; ++i) obj[array[i].name] = array[i].toJSON(toJSONOptions);
+    for (var idx = 0; idx < array.length; ++idx) obj[array[idx].name] = array[idx].toJSON(toJSONOptions);
     return obj;
   }
   Namespace.arrayToJSON = arrayToJSON;
   Namespace.isReservedId = function (reserved, id) {
     if (reserved) {
-      for (var i = 0; i < reserved.length; ++i)
-        if (typeof reserved[i] !== "string" && reserved[i][0] <= id && reserved[i][1] > id) return true;
+      for (var idx = 0; idx < reserved.length; ++idx)
+        if (typeof reserved[idx] !== "string" && reserved[idx][0] <= id && reserved[idx][1] > id) return true;
     }
     return false;
   };
   Namespace.isReservedName = function (reserved, name) {
     if (reserved) {
-      for (var i = 0; i < reserved.length; ++i) if (reserved[i] === name) return true;
+      for (var idx = 0; idx < reserved.length; ++idx) if (reserved[idx] === name) return true;
     }
     return false;
   };

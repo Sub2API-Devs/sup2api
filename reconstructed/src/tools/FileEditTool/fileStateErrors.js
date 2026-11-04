@@ -14,16 +14,16 @@ import { UNWRITABLE_ENCODING_REASONS } from "./constants.js";
 /**
  * Edit/Write 拒绝写入时的说明：文件编码不是 UTF-8/UTF-16LE（或含无法解码字节）时提示改用其他方式修改。
  */
-function fileWriteRefusalMessage(notText) {
-  return `File ${UNWRITABLE_ENCODING_REASONS[notText]}. These tools write UTF-8 (or UTF-16LE behind its byte-order mark) and never convert a file's encoding on their own, so nothing was written. If the file is text, make the change with a shell command that reads and writes it in its own encoding (iconv, or PowerShell Get-Content/Set-Content -Encoding), or ask the user whether to convert it to UTF-8 first. To replace the whole file with new UTF-8 text anyway, delete it first, then Write it.`;
+function fileWriteRefusalMessage(reason) {
+  return `File ${UNWRITABLE_ENCODING_REASONS[reason]}. These tools write UTF-8 (or UTF-16LE behind its byte-order mark) and never convert a file's encoding on their own, so nothing was written. If the file is text, make the change with a shell command that reads and writes it in its own encoding (iconv, or PowerShell Get-Content/Set-Content -Encoding), or ask the user whether to convert it to UTF-8 first. To replace the whole file with new UTF-8 text anyway, delete it first, then Write it.`;
 }
 //@ chunk-bwbq4xvm.js:175824-176080 placement
 /**
  * Read 结果尾部附加的编码提示：非 UTF-8 文件说明 U+FFFD 替换，并提醒 Edit/Write 会拒绝。
  */
 function fileReadEncodingNote(notText) {
-  let s = notText === "not_utf8" ? " Its undecodable bytes show above as U+FFFD." : "";
-  return `[This file ${UNWRITABLE_ENCODING_REASONS[notText]}.${s} Edit and Write will refuse it: change it with a shell command that keeps its encoding, or ask the user whether to convert it to UTF-8.]`;
+  let notTextReason = notText === "not_utf8" ? " Its undecodable bytes show above as U+FFFD." : "";
+  return `[This file ${UNWRITABLE_ENCODING_REASONS[notText]}.${notTextReason} Edit and Write will refuse it: change it with a shell command that keeps its encoding, or ask the user whether to convert it to UTF-8.]`;
 }
 //@ chunk-bwbq4xvm.js:176080-176155 placement
 class FileStateError extends Error {

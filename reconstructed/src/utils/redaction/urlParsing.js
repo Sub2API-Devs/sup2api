@@ -9,50 +9,51 @@
  * attribution: placement 24
  */
 import { tryParseUrl, decodePercentEscapes } from "../resultError.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-cgr0tezp.js:43695-43772 placement
 /**
  * sliceSpan：按区间切出文本与来源。
  */
-function sliceSpan(e, n, r) {
+function sliceSpan(span, start, end) {
   return {
-    text: e.text.slice(n, r),
-    origin: e.origin.slice(n, r),
+    text: span.text.slice(start, end),
+    origin: span.origin.slice(start, end),
   };
 }
 //@ chunk-cgr0tezp.js:43772-44098 placement
 /**
  * 解析 URL 协议与是否已改写。
  */
-function parseUrlScheme(e, { asRewritten: n = false } = {}) {
-  let r = e.trimStart();
-  let match = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec(r);
+function parseUrlScheme(text, { asRewritten = false } = {}) {
+  let trimmed = text.trimStart();
+  let match = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec(trimmed);
   if (match) {
     let lower = match[1]?.toLowerCase();
     if (lower === "file") return null;
     if (lower === "http" || lower === "https") {
-      let o = tryParseUrl(r);
-      return o?.hostname
+      let parsed = tryParseUrl(trimmed);
+      return parsed?.hostname
         ? {
-            host: o.hostname,
-            path: o.pathname,
+            host: parsed.hostname,
+            path: parsed.pathname,
           }
         : null;
     }
-    return findHostBoundary(decodePercentRuns(r.slice(match[0].length)), "/");
+    return findHostBoundary(decodePercentRuns(trimmed.slice(match[0].length)), "/");
   }
-  return findHostBoundary(n ? decodePercentRuns(r) : r, ":");
+  return findHostBoundary(asRewritten ? decodePercentRuns(trimmed) : trimmed, ":");
 }
 //@ chunk-cgr0tezp.js:44098-44258 placement
-function findBracketAndCut(e, n) {
-  let index = e.indexOf("@[");
-  let i = index === -1 ? 0 : index + 1;
-  let s = e[i] === "[" ? i : -1;
-  let o = s === -1 ? -1 : e.indexOf("]", s + 1);
-  let cut = e.indexOf(n, o === -1 ? 0 : o + 1);
+function findBracketAndCut(text, separator) {
+  let index = text.indexOf("@[");
+  let bracketAt = index === -1 ? 0 : index + 1;
+  let open = text[bracketAt] === "[" ? bracketAt : -1;
+  let close = open === -1 ? -1 : text.indexOf("]", open + 1);
+  let cut = text.indexOf(separator, close === -1 ? 0 : close + 1);
   return {
-    open: s,
-    close: o,
+    open,
+    close,
     cut,
   };
 }
@@ -60,17 +61,17 @@ function findBracketAndCut(e, n) {
 /**
  * 找出 URL 中主机部分的边界。
  */
-function findHostBoundary(e, n) {
-  let { open, close, cut } = findBracketAndCut(e, n);
-  let o = open === -1 ? 0 : open;
-  let index = e.indexOf("/");
-  if (n === ":" && (cut === -1 || (index !== -1 && index < e.indexOf(":")))) return null;
-  let path = cut === -1 ? "" : e.slice(n === ":" ? cut + 1 : cut);
+function findHostBoundary(text, separator) {
+  let { open, close, cut } = findBracketAndCut(text, separator);
+  let searchFrom = open === -1 ? 0 : open;
+  let index = text.indexOf("/");
+  if (separator === ":" && (cut === -1 || (index !== -1 && index < text.indexOf(":")))) return null;
+  let path = cut === -1 ? "" : text.slice(separator === ":" ? cut + 1 : cut);
   if (close !== -1) {
-    let sliced = e.slice(close + 1, cut === -1 ? e.length : cut);
-    let y = e.slice(0, o) + e.slice(o + 1, close);
-    let h = stripPort(sliced) !== sliced ? y : stripPort(y);
-    let sliced_2 = h.slice(h.lastIndexOf("@") + 1);
+    let sliced = text.slice(close + 1, cut === -1 ? text.length : cut);
+    let beforeParen = text.slice(0, searchFrom) + text.slice(searchFrom + 1, close);
+    let candidate = stripPort(sliced) !== sliced ? beforeParen : stripPort(beforeParen);
+    let sliced_2 = candidate.slice(candidate.lastIndexOf("@") + 1);
     let hostname = tryParseUrl(`ssh://[${sliced_2}]/`)?.hostname;
     return sliced_2
       ? {
@@ -79,44 +80,44 @@ function findHostBoundary(e, n) {
         }
       : null;
   }
-  let c = cut === -1 ? e : e.slice(0, cut);
-  let sliced = c.slice(c.lastIndexOf("@") + 1);
+  let withoutPath = cut === -1 ? text : text.slice(0, cut);
+  let sliced = withoutPath.slice(withoutPath.lastIndexOf("@") + 1);
   if (sliced.startsWith("[")) return null;
-  let d = n === "/" ? sliced.replace(/:\d*$/, "") : sliced;
-  return d
+  let host = separator === "/" ? sliced.replace(/:\d*$/, "") : sliced;
+  return host
     ? {
-        host: d,
+        host,
         path,
       }
     : null;
 }
 //@ chunk-cgr0tezp.js:44794-45000 placement
-function userinfoSpans(e) {
-  let { text, from } = decodePercentWithMap(e);
-  let { close, cut } = findBracketAndCut(text, "/");
-  let o = cut === -1 ? text.length : cut;
-  let a = [];
-  let u = (c, l) => {
-    let index = text.lastIndexOf("@", l - 1);
-    if (index >= c) a.push([from(c), from(index)]);
+function userinfoSpans(text) {
+  let { text: text_2, from } = decodePercentWithMap(text);
+  let { close, cut } = findBracketAndCut(text_2, "/");
+  let end = cut === -1 ? text_2.length : cut;
+  let spans = [];
+  let collect = (start, end) => {
+    let index = text_2.lastIndexOf("@", end - 1);
+    if (index >= start) spans.push([from(start), from(index)]);
   };
-  if (close === -1) u(0, o);
+  if (close === -1) collect(0, end);
   else {
-    u(0, close);
-    u(close + 1, o);
+    collect(0, close);
+    collect(close + 1, end);
   }
-  return a;
+  return spans;
 }
 //@ chunk-cgr0tezp.js:45000-45124 placement
 /**
  * 解码连续的百分号编码（失败保留）。
  */
-function decodePercentRuns(e) {
-  return e.replace(/(?:%(?!00)[0-9A-Fa-f]{2})+/g, (n) => {
+function decodePercentRuns(text) {
+  return text.replace(/(?:%(?!00)[0-9A-Fa-f]{2})+/g, (run) => {
     try {
-      return decodeURIComponent(n);
+      return decodeURIComponent(run);
     } catch {
-      return decodePercentEscapes(n);
+      return decodePercentEscapes(run);
     }
   });
 }
@@ -124,502 +125,534 @@ function decodePercentRuns(e) {
 /**
  * 百分号解码并保留位置映射。
  */
-function decodePercentWithMap(e) {
-  if (!e.includes("%"))
+function decodePercentWithMap(text) {
+  if (!text.includes("%"))
     return {
-      text: e,
-      from: (s) => s,
+      text,
+      from: (mapping) => mapping,
     };
-  let n = [];
-  let r = "";
-  let i = 0;
-  for (let s of e.matchAll(/(?:%(?!00)[0-9A-Fa-f]{2})+/g)) {
-    for (let l = i; l < s.index; l++) n.push(l);
-    r += e.slice(i, s.index);
-    let o;
-    let a;
+  let map = [];
+  let out = "";
+  let cursor = 0;
+  for (let percentRun of text.matchAll(/(?:%(?!00)[0-9A-Fa-f]{2})+/g)) {
+    for (let index = cursor; index < percentRun.index; index++) map.push(index);
+    out += text.slice(cursor, percentRun.index);
+    let decoded;
+    let byteLengths;
     try {
-      o = decodeURIComponent(s[0]);
-      a = Array.from(o, (l) => {
-        let codePoint = l.codePointAt(0);
+      decoded = decodeURIComponent(percentRun[0]);
+      byteLengths = Array.from(decoded, (char) => {
+        let codePoint = char.codePointAt(0);
         return codePoint < 128 ? 1 : codePoint < 2048 ? 2 : codePoint < 65536 ? 3 : 4;
       });
     } catch {
-      o = decodePercentEscapes(s[0]);
-      a = Array.from(o, () => 1);
+      decoded = decodePercentEscapes(percentRun[0]);
+      byteLengths = Array.from(decoded, () => 1);
     }
-    let index = s.index;
-    let c = 0;
-    for (let l of a) {
-      let d = o.codePointAt(c) > 65535 ? 2 : 1;
-      for (let j = 0; j < d; j++) n.push(index);
-      c += d;
-      index += 3 * l;
+    let index = percentRun.index;
+    let charOffset = 0;
+    for (let byteLength of byteLengths) {
+      let codeUnitLength = decoded.codePointAt(charOffset) > 65535 ? 2 : 1;
+      for (let j = 0; j < codeUnitLength; j++) map.push(index);
+      charOffset += codeUnitLength;
+      index += 3 * byteLength;
     }
-    r += o;
-    i = s.index + s[0].length;
+    out += decoded;
+    cursor = percentRun.index + percentRun[0].length;
   }
-  for (let s = i; s <= e.length; s++) n.push(s);
+  for (let index = cursor; index <= text.length; index++) map.push(index);
   return {
-    text: r + e.slice(i),
-    from: (s) => n[s],
+    text: out + text.slice(cursor),
+    from: (originalIndex) => map[originalIndex],
   };
 }
 //@ chunk-cgr0tezp.js:45693-45871 placement
-function stripPort(e) {
-  let index = e.indexOf(":");
-  let sliced = e.slice(index + 1);
-  if (index === -1 || !/^[ \t\n\v\f\r]*[+-]?\d+$/.test(sliced)) return e;
-  let i = Number.parseInt(sliced.trim(), 10);
-  return i >= 0 && i < 65536 ? e.slice(0, index) : e;
+function stripPort(value) {
+  let index = value.indexOf(":");
+  let sliced = value.slice(index + 1);
+  if (index === -1 || !/^[ \t\n\v\f\r]*[+-]?\d+$/.test(sliced)) return value;
+  let port = Number.parseInt(sliced.trim(), 10);
+  return port >= 0 && port < 65536 ? value.slice(0, index) : value;
 }
 //@ chunk-cgr0tezp.js:45871-46236 placement
 /**
  * URL 扫描用的正则组。
  */
-var URL_SCAN_PATTERNS = /\s/g;
-var URL_WHITESPACE_RE = /[\n\r\u2028\u2029]/g;
-var URL_LINEBREAK_RE = /(?:@|%40)(?:\[|%5B)/gi;
-var ENCODED_AT_BRACKET_RE = /^(?:\[|%5B)/i;
-var ENCODED_BRACKET_START_RE = /\]|%5D/gi;
-var ENCODED_BRACKET_END_RE = /(?:^|[^A-Za-z0-9+.-])(?:https?|wss?|ftps?)$/i;
-var URL_SCHEME_TAIL_RE = /(?:^|[^A-Za-z0-9+.-])(?:ssh|git|git\+ssh|ssh\+git)$/i;
-var SSH_SCHEME_TAIL_RE = /[,;|&]/g;
-var URL_DELIMITER_RE = /(?:^|[^A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]{0,31}$/;
-var SCHEME_TOKEN_RE = /["'`|,;&<>()[\]\\@/?#]|%40|%5B/i;
-var USERINFO_STOP_RE = /["'`]/;
-var QUOTE_SINGLE_RE = /[;|&\n]/g;
-var URL_TERMINATORS_RE = 64;
+var WHITESPACE_RE = /\s/g;
+var LINE_BREAK_RE = /[\n\r\u2028\u2029]/g;
+var ENCODED_AT_BRACKET_RE = /(?:@|%40)(?:\[|%5B)/gi;
+var ENCODED_BRACKET_START_RE = /^(?:\[|%5B)/i;
+var ENCODED_BRACKET_END_RE = /\]|%5D/gi;
+var WEB_SCHEME_TAIL_RE = /(?:^|[^A-Za-z0-9+.-])(?:https?|wss?|ftps?)$/i;
+var SSH_SCHEME_TAIL_RE = /(?:^|[^A-Za-z0-9+.-])(?:ssh|git|git\+ssh|ssh\+git)$/i;
+var URL_DELIMITER_RE = /[,;|&]/g;
+var SCHEME_TOKEN_RE = /(?:^|[^A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]{0,31}$/;
+var USERINFO_STOP_RE = /["'`|,;&<>()[\]\\@/?#]|%40|%5B/i;
+var QUOTE_RE = /["'`]/;
+var TERMINATOR_RE = /[;|&\n]/g;
+var LINE_SPAN_COST = 64;
 var MAX_SSH_USERINFO_SCAN = 2048;
-var MAX_URL_SCAN_LENGTH = /[\s"'`]/g;
+var URL_SCAN_STOP_RE = /[\s"'`]/g;
 //@ chunk-cgr0tezp.js:46236-46468 placement = ghIsDangerousCallback (1)
-function findSshUrlUserinfoSpans(e) {
-  let n = [];
-  let r = nextMatchIndex(e, MAX_URL_SCAN_LENGTH);
-  let i = 0;
-  for (let index = e.indexOf("://"); index !== -1;) {
-    let o = index + 3;
-    if (index >= i && URL_SCHEME_TAIL_RE.test(e.slice(Math.max(0, index - 8), index))) {
-      i = Math.min(r(o), o + MAX_SSH_USERINFO_SCAN);
-      for (let [a, u] of userinfoSpans(e.slice(o, i))) n.push([o + a, o + u]);
+function findSshUrlUserinfoSpans(text) {
+  let spans = [];
+  let stopAt = nextMatchIndex(text, URL_SCAN_STOP_RE);
+  let coveredUntil = 0;
+  for (let index = text.indexOf("://"); index !== -1;) {
+    let authorityStart = index + 3;
+    if (index >= coveredUntil && SSH_SCHEME_TAIL_RE.test(text.slice(Math.max(0, index - 8), index))) {
+      coveredUntil = Math.min(stopAt(authorityStart), authorityStart + MAX_SSH_USERINFO_SCAN);
+      for (let [start, end] of userinfoSpans(text.slice(authorityStart, coveredUntil)))
+        spans.push([authorityStart + start, authorityStart + end]);
     }
-    index = e.indexOf("://", o);
+    index = text.indexOf("://", authorityStart);
   }
-  return n;
+  return spans;
 }
 //@ chunk-cgr0tezp.js:46468-46503 placement
 /**
  * urlSpans：文本中的 URL 片段。
  */
-function urlSpans(e) {
-  return findUrlSpans(e).spans;
+function urlSpans(text) {
+  return findUrlSpans(text).spans;
 }
 //@ chunk-cgr0tezp.js:46503-47678 placement
 /**
  * 找出文本中的 URL 片段与主机部分。
  */
-function findUrlSpans(e) {
-  let n = [];
-  let r = [];
-  let i = nextMatchIndex(e, URL_SCAN_PATTERNS);
-  let s = nextMatchIndex(e, /\//g);
-  let o = cachedRegexExec(e, URL_LINEBREAK_RE);
-  let a = nextMatchIndex(e, ENCODED_BRACKET_START_RE);
-  let u = nextMatchIndex(e, /\//g);
-  let c = nextMatchIndex(e, QUOTE_SINGLE_RE);
-  let l = nextMatchIndex(e, /[/?#]/g);
-  let d = nextMatchIndex(e, SSH_SCHEME_TAIL_RE);
-  let g = nextMatchIndex(e, /@/g);
-  let y = nextMatchIndex(e, /%40/gi);
-  let h = nextMatchIndex(e, /\[REDACTED|\*\*\*:\*\*\*/g);
-  let S = nextMatchIndex(e, /[:%]/g);
-  let f = nextMatchIndex(e, /["'`,;|&<>{}()]/g);
-  let m = lastAtBefore(e, false);
-  let b = lastAtBefore(e, true);
-  for (let index = e.indexOf("://"); index !== -1;) {
-    let x = index + 3;
-    let L;
-    let index_2 = e.indexOf("://", x);
-    let w = i(x);
-    let M = g(x);
-    let F;
-    if (ENCODED_BRACKET_END_RE.test(e.slice(Math.max(0, index - 8), index))) {
-      let min = Math.min(l(x), w);
-      let min_2 = Math.min(d(x), min);
-      F = M < min ? Math.max(m(x, min), b(M, min)) : Math.max(m(x, Math.min(s(x), w)), b(x, min_2));
-      if (F <= x) {
-        let min_3 = Math.min(min, c(x));
-        r.push({
-          start: x,
+function findUrlSpans(text) {
+  let spans = [];
+  let hostParts = [];
+  let whitespace = nextMatchIndex(text, WHITESPACE_RE);
+  let slash = nextMatchIndex(text, /\//g);
+  let encodedAtBracket = cachedRegexExec(text, ENCODED_AT_BRACKET_RE);
+  let encodedBracketEnd = nextMatchIndex(text, ENCODED_BRACKET_END_RE);
+  let slashAfter = nextMatchIndex(text, /\//g);
+  let terminator = nextMatchIndex(text, TERMINATOR_RE);
+  let pathBreak = nextMatchIndex(text, /[/?#]/g);
+  let urlDelimiter = nextMatchIndex(text, URL_DELIMITER_RE);
+  let atSign = nextMatchIndex(text, /@/g);
+  let encodedAt = nextMatchIndex(text, /%40/gi);
+  let redactedMarker = nextMatchIndex(text, /\[REDACTED|\*\*\*:\*\*\*/g);
+  let colonOrPercent = nextMatchIndex(text, /[:%]/g);
+  let specialChar = nextMatchIndex(text, /["'`,;|&<>{}()]/g);
+  let lastAtBeforePlain = lastAtBefore(text, false);
+  let lastAtBeforeEncoded = lastAtBefore(text, true);
+  for (let index = text.indexOf("://"); index !== -1;) {
+    let authorityStart = index + 3;
+    let bracketClose;
+    let index_2 = text.indexOf("://", authorityStart);
+    let whitespaceAt = whitespace(authorityStart);
+    let atAt = atSign(authorityStart);
+    let spanEnd;
+    if (WEB_SCHEME_TAIL_RE.test(text.slice(Math.max(0, index - 8), index))) {
+      let min = Math.min(pathBreak(authorityStart), whitespaceAt);
+      let min_2 = Math.min(urlDelimiter(authorityStart), min);
+      spanEnd =
+        atAt < min
+          ? Math.max(lastAtBeforePlain(authorityStart, min), lastAtBeforeEncoded(atAt, min))
+          : Math.max(
+              lastAtBeforePlain(authorityStart, Math.min(slash(authorityStart), whitespaceAt)),
+              lastAtBeforeEncoded(authorityStart, min_2),
+            );
+      if (spanEnd <= authorityStart) {
+        let min_3 = Math.min(min, terminator(authorityStart));
+        hostParts.push({
+          start: authorityStart,
           fieldEnd: Math.min(min_2, min_3),
-          lastEncodedAt: b(x, min_3),
+          lastEncodedAt: lastAtBeforeEncoded(authorityStart, min_3),
         });
       }
     } else {
-      let min = Math.min(s(x), w);
-      let min_2 = Math.min(w, index_2 === -1 ? e.length : index_2);
-      let matches = URL_SCHEME_TAIL_RE.test(e.slice(Math.max(0, index - 8), index));
-      let T = matches ? o(x) : null;
-      let U = matches ? ENCODED_AT_BRACKET_RE.exec(e.slice(x, x + 3)) : null;
-      let R = [
-        [U !== null ? x + U[0].length : -1, min_2],
-        [T !== null && T.index < min_2 ? T.index + T[0].length : -1, w],
+      let min = Math.min(slash(authorityStart), whitespaceAt);
+      let min_2 = Math.min(whitespaceAt, index_2 === -1 ? text.length : index_2);
+      let matches = SSH_SCHEME_TAIL_RE.test(text.slice(Math.max(0, index - 8), index));
+      let encodedMatch = matches ? encodedAtBracket(authorityStart) : null;
+      let bracketStartMatch = matches
+        ? ENCODED_BRACKET_START_RE.exec(text.slice(authorityStart, authorityStart + 3))
+        : null;
+      let candidates = [
+        [bracketStartMatch !== null ? authorityStart + bracketStartMatch[0].length : -1, min_2],
+        [
+          encodedMatch !== null && encodedMatch.index < min_2
+            ? encodedMatch.index + encodedMatch[0].length
+            : -1,
+          whitespaceAt,
+        ],
       ];
-      for (let [v, j] of R) {
-        let G = v === -1 ? w : a(v);
-        if (G < j) {
-          L = Math.max(L ?? G, G);
-          min = Math.max(min, Math.min(u(G), w));
+      for (let [start, limit] of candidates) {
+        let closeIndex = start === -1 ? whitespaceAt : encodedBracketEnd(start);
+        if (closeIndex < limit) {
+          bracketClose = Math.max(bracketClose ?? closeIndex, closeIndex);
+          min = Math.max(min, Math.min(slashAfter(closeIndex), whitespaceAt));
         }
       }
-      F = Math.max(m(x, min), b(x, min));
+      spanEnd = Math.max(lastAtBeforePlain(authorityStart, min), lastAtBeforeEncoded(authorityStart, min));
     }
-    if (F > x)
-      n.push({
-        start: x,
-        end: F,
-        separatorEnd: F + (e[F] === "@" ? 1 : 3),
-        loginEnd: M <= F ? M : Math.min(y(x), F),
-        bracketClose: L,
+    if (spanEnd > authorityStart)
+      spans.push({
+        start: authorityStart,
+        end: spanEnd,
+        separatorEnd: spanEnd + (text[spanEnd] === "@" ? 1 : 3),
+        loginEnd: atAt <= spanEnd ? atAt : Math.min(encodedAt(authorityStart), spanEnd),
+        bracketClose,
       });
     else {
-      let O = h(x);
-      if (O > x && O < Math.min(w, s(x), f(x)) && S(x) < O)
-        n.push({
-          start: x,
-          end: O,
-          separatorEnd: O,
-          loginEnd: O,
+      let redactedAt = redactedMarker(authorityStart);
+      if (
+        redactedAt > authorityStart &&
+        redactedAt < Math.min(whitespaceAt, slash(authorityStart), specialChar(authorityStart)) &&
+        colonOrPercent(authorityStart) < redactedAt
+      )
+        spans.push({
+          start: authorityStart,
+          end: redactedAt,
+          separatorEnd: redactedAt,
+          loginEnd: redactedAt,
         });
     }
     index = index_2;
   }
   return {
-    spans: n,
-    hostParts: r,
+    spans,
+    hostParts,
   };
 }
 //@ chunk-cgr0tezp.js:47678-49063 placement
 /**
  * 收集需要遮盖的 URL 区间。
  */
-function collectUrlRedactions(e, n) {
-  let { spans, hostParts } = findUrlSpans(e);
+function collectUrlRedactions(text, rules) {
+  let { spans, hostParts } = findUrlSpans(text);
   if (spans.length === 0 && hostParts.length === 0) return [];
-  let s = nextMatchIndex(e, /[\s"'>}|,;&`)\]]/g);
-  let o = nextMatchIndex(e, /\s/g);
-  let a = [];
-  let u = [];
+  let fieldBoundary = nextMatchIndex(text, /[\s"'>}|,;&`)\]]/g);
+  let whitespaceAt = nextMatchIndex(text, /\s/g);
+  let redactions = [];
+  let merged = [];
   for (let span of spans) {
-    a.push({
+    redactions.push({
       start: span.start,
       end: span.end,
       loginEnd: span.loginEnd,
     });
-    u.push({
+    merged.push({
       ...span,
       userinfo: span,
     });
   }
-  let keyValueSecrets = findKeyValueSecrets(e, n);
+  let keyValueSecrets = findKeyValueSecrets(text, rules);
   for (let hostPart of hostParts) {
-    let S = keyValueSecrets(hostPart.start)[0];
-    if (S && S.keyStart < hostPart.fieldEnd && e.slice(hostPart.start, S.keyStart).includes("%")) {
-      let f = hostPart.lastEncodedAt > S.keyStart ? hostPart.lastEncodedAt : S.valueStart;
-      a.push({
+    let secret = keyValueSecrets(hostPart.start)[0];
+    if (
+      secret &&
+      secret.keyStart < hostPart.fieldEnd &&
+      text.slice(hostPart.start, secret.keyStart).includes("%")
+    ) {
+      let end = hostPart.lastEncodedAt > secret.keyStart ? hostPart.lastEncodedAt : secret.valueStart;
+      redactions.push({
         start: hostPart.start,
-        end: f,
-        loginEnd: f,
+        end,
+        loginEnd: end,
       });
-      u.push(
-        f > S.valueStart
+      merged.push(
+        end > secret.valueStart
           ? {
               start: hostPart.start,
-              end: f,
+              end,
               userinfo: {
                 start: hostPart.start,
-                end: f,
-                separatorEnd: f + 3,
-                loginEnd: f,
+                end,
+                separatorEnd: end + 3,
+                loginEnd: end,
               },
             }
           : {
               start: hostPart.start,
-              end: f,
+              end,
             },
       );
     }
   }
-  if (u.length === 0) return [];
-  a.sort((h, S) => h.start - S.start);
-  let keyValueSecrets_2 = findKeyValueSecrets(e, n);
-  let d = 0;
-  for (let h = 0, S = keyValueSecrets_2(h); S[0] !== undefined;) {
-    let f;
-    let m = null;
-    for (let A of S) {
-      m = A.valueEnd();
-      if (m !== null) {
-        f = A;
+  if (merged.length === 0) return [];
+  redactions.sort((left, right) => left.start - right.start);
+  let keyValueSecrets_2 = findKeyValueSecrets(text, rules);
+  let redactionCursor = 0;
+  for (let fromIndex = 0, secrets = keyValueSecrets_2(fromIndex); secrets[0] !== undefined;) {
+    let secret;
+    let valueEnd = null;
+    for (let candidate of secrets) {
+      valueEnd = candidate.valueEnd();
+      if (valueEnd !== null) {
+        secret = candidate;
         break;
       }
     }
-    if (f === undefined || m === null) {
-      h = S[0].keyStart + 1;
-      S = keyValueSecrets_2(h);
+    if (secret === undefined || valueEnd === null) {
+      fromIndex = secrets[0].keyStart + 1;
+      secrets = keyValueSecrets_2(fromIndex);
       continue;
     }
-    while (d < a.length && a[d].start <= f.keyStart) d++;
-    let b = a[d];
-    if (b !== undefined && b.start < m) {
-      let A = e[f.valueStart] ?? "";
+    while (redactionCursor < redactions.length && redactions[redactionCursor].start <= secret.keyStart)
+      redactionCursor++;
+    let redaction = redactions[redactionCursor];
+    if (redaction !== undefined && redaction.start < valueEnd) {
+      let quoteChar = text[secret.valueStart] ?? "";
       let end =
-        (A === '"' || A === "'") && m - 1 > f.valueStart && e[m - 1] === A
-          ? Math.max(m, b.end)
-          : o(Math.max(m, b.end, s(b.loginEnd + 1)));
-      u.push({
-        start: f.valueStart,
+        (quoteChar === '"' || quoteChar === "'") &&
+        valueEnd - 1 > secret.valueStart &&
+        text[valueEnd - 1] === quoteChar
+          ? Math.max(valueEnd, redaction.end)
+          : whitespaceAt(Math.max(valueEnd, redaction.end, fieldBoundary(redaction.loginEnd + 1)));
+      merged.push({
+        start: secret.valueStart,
         end,
       });
     }
-    h = m;
-    S = keyValueSecrets_2(h);
+    fromIndex = valueEnd;
+    secrets = keyValueSecrets_2(fromIndex);
   }
-  let g = {
-    nextKey: findKeyValueSecrets(e, n),
-    plainKeys: findKeyValueSecrets(e, n),
-    nextLineEnd: nextMatchIndex(e, URL_WHITESPACE_RE),
+  let context = {
+    nextKey: findKeyValueSecrets(text, rules),
+    plainKeys: findKeyValueSecrets(text, rules),
+    nextLineEnd: nextMatchIndex(text, LINE_BREAK_RE),
     span: 0,
     lineEnd: -1,
     resumeAt: 0,
-    overflowEnd: quoteBoundary(e, () => g.lineEnd),
+    overflowEnd: quoteBoundary(text, () => context.lineEnd),
   };
-  let y = [];
-  for (let h of mergeSpans(u)) {
-    let last = y.at(-1);
-    y.push(
-      last !== undefined && h.start < last.end
+  let out = [];
+  for (let span of mergeSpans(merged)) {
+    let last = out.at(-1);
+    out.push(
+      last !== undefined && span.start < last.end
         ? extendUrlSpan(
-            e,
+            text,
             {
-              start: y.pop().start,
-              end: Math.max(last.end, h.end),
+              start: out.pop().start,
+              end: Math.max(last.end, span.end),
             },
-            g,
+            context,
           )
-        : extendUrlSpan(e, h, g),
+        : extendUrlSpan(text, span, context),
     );
   }
-  return y.map((h) => (h.userinfo ? h : trimUnbalancedQuote(e, h)));
+  return out.map((span) => (span.userinfo ? span : trimUnbalancedQuote(text, span)));
 }
 //@ chunk-cgr0tezp.js:49063-49082 placement
-var weakMap = new WeakMap();
+var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-cgr0tezp.js:49063", () => {
+  weakMap = new WeakMap();
+});
 //@ chunk-cgr0tezp.js:49082-49287 placement
-function compileSecretRegexes(e) {
-  let n = weakMap.get(e);
-  if (!n) {
-    n = {
-      word: new RegExp(e.word, "gi"),
-      notTail: new RegExp(`(?!${e.tail})[^]`, "gi"),
-      separator: new RegExp(e.separator, "iy"),
-      value: new RegExp(e.value, "iy"),
+function compileSecretRegexes(rule) {
+  let regexes = weakMap.get(rule);
+  if (!regexes) {
+    regexes = {
+      word: new RegExp(rule.word, "gi"),
+      notTail: new RegExp(`(?!${rule.tail})[^]`, "gi"),
+      separator: new RegExp(rule.separator, "iy"),
+      value: new RegExp(rule.value, "iy"),
     };
-    weakMap.set(e, n);
+    weakMap.set(rule, regexes);
   }
-  return n;
+  return regexes;
 }
 //@ chunk-cgr0tezp.js:49287-49958 placement
 /**
  * 按关键词查找键值对形式的秘密。
  */
-function findKeyValueSecrets(e, n) {
-  let mapped = n.map((i) => {
-    let { word, notTail, separator, value: u } = compileSecretRegexes(i);
-    let c = cachedRegexExec(e, word);
-    let l = nextMatchIndex(e, notTail);
-    let d = -1;
-    let g = -1;
-    let y = -1;
-    let h = null;
-    let S = (A) => {
-      if (A !== y) {
-        y = A;
-        u.lastIndex = A;
-        h = u.test(e) ? u.lastIndex : null;
+function findKeyValueSecrets(text, rules) {
+  let mapped = rules.map((rule) => {
+    let { word, notTail, separator, value } = compileSecretRegexes(rule);
+    let wordMatches = cachedRegexExec(text, word);
+    let notTailIndex = nextMatchIndex(text, notTail);
+    let lastSeparatorFrom = -1;
+    let separatorEnd = -1;
+    let lastValueFrom = -1;
+    let valueEnd = null;
+    let valueEndFrom = (from) => {
+      if (from !== lastValueFrom) {
+        lastValueFrom = from;
+        value.lastIndex = from;
+        valueEnd = value.test(text) ? value.lastIndex : null;
       }
-      return h;
+      return valueEnd;
     };
-    let f = (A) => {
-      if (A !== d) {
-        d = A;
-        separator.lastIndex = A;
-        g = separator.test(e) ? separator.lastIndex : -1;
+    let separatorEndFrom = (from) => {
+      if (from !== lastSeparatorFrom) {
+        lastSeparatorFrom = from;
+        separator.lastIndex = from;
+        separatorEnd = separator.test(text) ? separator.lastIndex : -1;
       }
-      return g;
+      return separatorEnd;
     };
-    let m = -1;
-    let b = null;
-    return (A) => {
-      if (m !== -1 && A >= m && (b === null || A <= b.keyStart)) return b;
-      m = A;
-      b = null;
-      for (let x = c(A); x !== null;) {
-        let L = x.index + x[0].length;
-        let I = f(i.tail ? l(L) : L);
-        if (I !== -1) {
-          b = {
-            keyStart: x.index,
-            valueStart: I,
-            valueEnd: () => S(I),
+    let cachedFrom = -1;
+    let cachedSecret = null;
+    return (from) => {
+      if (cachedFrom !== -1 && from >= cachedFrom && (cachedSecret === null || from <= cachedSecret.keyStart))
+        return cachedSecret;
+      cachedFrom = from;
+      cachedSecret = null;
+      for (let match = wordMatches(from); match !== null;) {
+        let keyEnd = match.index + match[0].length;
+        let valueStart = separatorEndFrom(rule.tail ? notTailIndex(keyEnd) : keyEnd);
+        if (valueStart !== -1) {
+          cachedSecret = {
+            keyStart: match.index,
+            valueStart,
+            valueEnd: () => valueEndFrom(valueStart),
           };
           break;
         }
-        x = c(x.index + 1);
+        match = wordMatches(match.index + 1);
       }
-      return b;
+      return cachedSecret;
     };
   });
-  return (i) => {
-    let s = [];
-    for (let o of mapped) {
-      let a = o(i);
-      if (a && (!s[0] || a.keyStart <= s[0].keyStart))
-        s = s[0] && a.keyStart === s[0].keyStart ? [...s, a] : [a];
+  return (from) => {
+    let found = [];
+    for (let finder of mapped) {
+      let secret = finder(from);
+      if (secret && (!found[0] || secret.keyStart <= found[0].keyStart))
+        found = found[0] && secret.keyStart === found[0].keyStart ? [...found, secret] : [secret];
     }
-    return s;
+    return found;
   };
 }
 //@ chunk-cgr0tezp.js:49958-50515 placement
 /**
  * 扩展 URL 区间（包含 userinfo）。
  */
-function extendUrlSpan(e, n, r) {
-  if (n.userinfo && isEmailLikeSecret(e, n.userinfo, r)) return n;
-  let end = n.end;
-  r.resumeAt = Math.max(r.resumeAt, n.start);
-  for (let s = r.nextKey(r.resumeAt); s[0] !== undefined && s[0].keyStart < end;) {
-    let keyStart = s[0].keyStart;
-    if (keyStart > r.lineEnd) {
-      let l = r.nextLineEnd(keyStart);
-      r.span = URL_TERMINATORS_RE * (l - r.lineEnd);
-      r.lineEnd = l;
+function extendUrlSpan(text, span, context) {
+  if (span.userinfo && isEmailLikeSecret(text, span.userinfo, context)) return span;
+  let end = span.end;
+  context.resumeAt = Math.max(context.resumeAt, span.start);
+  for (
+    let secrets = context.nextKey(context.resumeAt);
+    secrets[0] !== undefined && secrets[0].keyStart < end;
+  ) {
+    let keyStart = secrets[0].keyStart;
+    if (keyStart > context.lineEnd) {
+      let nextLineEnd = context.nextLineEnd(keyStart);
+      context.span = LINE_SPAN_COST * (nextLineEnd - context.lineEnd);
+      context.lineEnd = nextLineEnd;
     }
-    let a = null;
-    let u = s[0];
-    for (let l of s) {
-      a = l.valueEnd();
-      if (a !== null) {
-        u = l;
+    let valueEnd = null;
+    let secret = secrets[0];
+    for (let candidateSecret of secrets) {
+      valueEnd = candidateSecret.valueEnd();
+      if (valueEnd !== null) {
+        secret = candidateSecret;
         break;
       }
     }
-    let c = a ?? u.valueStart;
-    r.span -= c - keyStart;
-    if (r.span < 0)
+    let valueEndIndex = valueEnd ?? secret.valueStart;
+    context.span -= valueEndIndex - keyStart;
+    if (context.span < 0)
       return {
-        start: n.start,
-        end: Math.max(end, r.overflowEnd(n.start)),
+        start: span.start,
+        end: Math.max(end, context.overflowEnd(span.start)),
       };
-    end = Math.max(end, c);
-    r.resumeAt = u.valueStart;
-    s = r.nextKey(r.resumeAt);
+    end = Math.max(end, valueEndIndex);
+    context.resumeAt = secret.valueStart;
+    secrets = context.nextKey(context.resumeAt);
   }
-  return end === n.end
-    ? n
+  return end === span.end
+    ? span
     : {
-        start: n.start,
+        start: span.start,
         end,
       };
 }
 //@ chunk-cgr0tezp.js:50515-50799 placement
-function isEmailLikeSecret(e, userinfo, r) {
+function isEmailLikeSecret(text, userinfo, context) {
   if (
-    e[userinfo.end] !== "@" ||
-    SCHEME_TOKEN_RE.test(e.slice(userinfo.start, userinfo.end)) ||
-    !URL_DELIMITER_RE.test(e.slice(Math.max(0, userinfo.start - 36), userinfo.start - 3))
+    text[userinfo.end] !== "@" ||
+    USERINFO_STOP_RE.test(text.slice(userinfo.start, userinfo.end)) ||
+    !SCHEME_TOKEN_RE.test(text.slice(Math.max(0, userinfo.start - 36), userinfo.start - 3))
   )
     return false;
   for (
-    let i = r.plainKeys(userinfo.start);
-    i[0] !== undefined && i[0].keyStart < userinfo.end;
-    i = r.plainKeys(i[0].keyStart + 1)
+    let secrets = context.plainKeys(userinfo.start);
+    secrets[0] !== undefined && secrets[0].keyStart < userinfo.end;
+    secrets = context.plainKeys(secrets[0].keyStart + 1)
   )
-    if (i.some((s) => s.valueStart === userinfo.end)) return false;
+    if (secrets.some((secret) => secret.valueStart === userinfo.end)) return false;
   return true;
 }
 //@ chunk-cgr0tezp.js:50799-50911 placement
-function quoteBoundary(e, n) {
-  let r = nextMatchIndex(e, /["'`]/g);
-  let i = -1;
-  let s = e.length;
-  return (o) => {
-    if (n() !== i) {
-      i = n();
-      s = r(o) < i ? e.length : i;
+function quoteBoundary(text, lineEnd) {
+  let quotes = nextMatchIndex(text, /["'`]/g);
+  let cachedLineEnd = -1;
+  let boundary = text.length;
+  return (from) => {
+    if (lineEnd() !== cachedLineEnd) {
+      cachedLineEnd = lineEnd();
+      boundary = quotes(from) < cachedLineEnd ? text.length : cachedLineEnd;
     }
-    return s;
+    return boundary;
   };
 }
 //@ chunk-cgr0tezp.js:50911-51066 placement
-function trimUnbalancedQuote(e, n) {
-  let r = e[n.end - 1];
-  if (r === undefined || !USERINFO_STOP_RE.test(r)) return n;
-  return (e.slice(n.start, n.end).split(r).length - 1) % 2 === 1
+function trimUnbalancedQuote(text, span) {
+  let lastChar = text[span.end - 1];
+  if (lastChar === undefined || !QUOTE_RE.test(lastChar)) return span;
+  return (text.slice(span.start, span.end).split(lastChar).length - 1) % 2 === 1
     ? {
-        start: n.start,
-        end: n.end - 1,
+        start: span.start,
+        end: span.end - 1,
       }
-    : n;
+    : span;
 }
 //@ chunk-cgr0tezp.js:51066-51275 placement
-function mergeSpans(e) {
-  e.sort((r, i) => r.start - i.start || i.end - r.end);
-  let n = [];
-  for (let r of e) {
-    let last = n.at(-1);
-    if (last === undefined || r.start >= last.end) n.push(r);
+function mergeSpans(spans) {
+  spans.sort((left, right) => left.start - right.start || right.end - left.end);
+  let merged = [];
+  for (let span of spans) {
+    let last = merged.at(-1);
+    if (last === undefined || span.start >= last.end) merged.push(span);
     else
-      n[n.length - 1] = {
+      merged[merged.length - 1] = {
         start: last.start,
-        end: Math.max(last.end, r.end),
+        end: Math.max(last.end, span.end),
       };
   }
-  return n;
+  return merged;
 }
 //@ chunk-cgr0tezp.js:51275-51338 placement
-function nextMatchIndex(e, n) {
-  let r = cachedRegexExec(e, n);
-  return (i) => r(i)?.index ?? e.length;
+function nextMatchIndex(text, pattern) {
+  let exec = cachedRegexExec(text, pattern);
+  return (from) => exec(from)?.index ?? text.length;
 }
 //@ chunk-cgr0tezp.js:51338-51459 placement
-function cachedRegexExec(e, n) {
-  let r = -1;
-  let i = null;
-  return (s) => {
-    if (r === -1 || s < r || (i !== null && s > i.index)) {
-      n.lastIndex = s;
-      i = n.exec(e);
-      r = s;
+function cachedRegexExec(text, pattern) {
+  let cachedFrom = -1;
+  let match = null;
+  return (from) => {
+    if (cachedFrom === -1 || from < cachedFrom || (match !== null && from > match.index)) {
+      pattern.lastIndex = from;
+      match = pattern.exec(text);
+      cachedFrom = from;
     }
-    return i;
+    return match;
   };
 }
 //@ chunk-cgr0tezp.js:51459-51715 placement
-function lastAtBefore(e, n) {
-  let r = null;
-  return (i, s) => {
-    if (r === null) {
-      r = new Int32Array(e.length + 1);
-      let a = -1;
-      for (let j = 0; j <= e.length; j++) {
-        if (n) {
-          if (j >= 3 && e.startsWith("%40", j - 3)) a = j - 3;
-        } else if (j >= 1 && e[j - 1] === "@") a = j - 1;
-        r[j] = a;
+function lastAtBefore(text, encoded) {
+  let table = null;
+  return (from, to) => {
+    if (table === null) {
+      table = new Int32Array(text.length + 1);
+      let lastAt = -1;
+      for (let j = 0; j <= text.length; j++) {
+        if (encoded) {
+          if (j >= 3 && text.startsWith("%40", j - 3)) lastAt = j - 3;
+        } else if (j >= 1 && text[j - 1] === "@") lastAt = j - 1;
+        table[j] = lastAt;
       }
     }
-    let o = r[Math.min(s, e.length)];
-    return o >= i ? o : -1;
+    let atIndex = table[Math.min(to, text.length)];
+    return atIndex >= from ? atIndex : -1;
   };
 }
 export {
@@ -629,5 +662,5 @@ export {
   decodePercentRuns,
   parseUrlScheme,
   urlSpans,
-  ENCODED_BRACKET_END_RE,
+  WEB_SCHEME_TAIL_RE,
 };

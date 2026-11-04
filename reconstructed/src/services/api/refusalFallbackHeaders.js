@@ -18,15 +18,16 @@ import { getCachedClientData } from "../../utils/config.js";
 import { hasRefusalFallbackTarget } from "./refusalFallback.js";
 import { stripAnyVersatileSuffix } from "../../utils/model/modelIds.js";
 import { getDefaultOpusModel, getDefaultSonnetModel } from "../../utils/model/model.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hwmsct5x.js:236067-236118 placement
 var CONVOLUTE_ARCADES_FLAG = "convolute_arcades";
 var X_CC_TENDER_QUILT = "x-cc-tender-quilt";
 //@ chunk-hwmsct5x.js:236118-236194 placement
-function markArmedFromResponse(headers, n) {
+function markArmedFromResponse(headers, responseHeaders) {
   if (headers.get(X_CC_TENDER_QUILT) !== "1") return;
   try {
-    if (n()) markSilentRefusalFallbackServerArmed();
+    if (responseHeaders()) markSilentRefusalFallbackServerArmed();
   } catch (error) {
     logError(error);
   }
@@ -60,27 +61,34 @@ function hasFallbackLatch() {
   return getFallbackLatchKind() !== "none";
 }
 //@ chunk-hwmsct5x.js:236428-236469 placement
-var SILENT_FALLBACK_CATEGORIES = new Set(["cyber", "frontier_llm"]);
+var SILENT_FALLBACK_CATEGORIES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hwmsct5x.js:236428", () => {
+  SILENT_FALLBACK_CATEGORIES = new Set(["cyber", "frontier_llm"]);
+});
 //@ chunk-hwmsct5x.js:236469-236728 placement
 function resolveLatchedFallbackModel(
-  e,
-  { visibleRouteDeclined: n = false, apiRefusalCategory: r, responseSwapped: s = false } = {},
+  model,
+  {
+    visibleRouteDeclined: routeDeclinedVisible = false,
+    apiRefusalCategory: category,
+    responseSwapped = false,
+  } = {},
 ) {
-  if (!n && hasRefusalFallbackTarget(e)) return;
+  if (!routeDeclinedVisible && hasRefusalFallbackTarget(model)) return;
   if (!hasFallbackLatch()) return;
-  let h = stripAnyVersatileSuffix(e);
-  if (h === stripAnyVersatileSuffix(getDefaultOpusModel())) return e;
-  return h === stripAnyVersatileSuffix(getDefaultSonnetModel()) &&
-    typeof r === "string" &&
-    SILENT_FALLBACK_CATEGORIES.has(r) &&
-    (getCachedClientData(e)?.[CONVOLUTE_ARCADES_FLAG] === true || isServerArmedSafely(s)) &&
+  let stripped = stripAnyVersatileSuffix(model);
+  if (stripped === stripAnyVersatileSuffix(getDefaultOpusModel())) return model;
+  return stripped === stripAnyVersatileSuffix(getDefaultSonnetModel()) &&
+    typeof category === "string" &&
+    SILENT_FALLBACK_CATEGORIES.has(category) &&
+    (getCachedClientData(model)?.[CONVOLUTE_ARCADES_FLAG] === true || isServerArmedSafely(responseSwapped)) &&
     !hasRefusalFallbackOccurred()
-    ? e
+    ? model
     : undefined;
 }
 //@ chunk-hwmsct5x.js:236728-236800 placement
-function isServerArmedSafely(e) {
-  if (!e) return false;
+function isServerArmedSafely(headers) {
+  if (!headers) return false;
   try {
     return isSilentRefusalFallbackServerArmed();
   } catch (error) {
@@ -94,10 +102,10 @@ function isServerArmedSafely(e) {
  */
 function isSonnetWithoutArcades(latchedFallbackModel) {
   try {
-    let n = stripAnyVersatileSuffix(latchedFallbackModel);
-    if (n === stripAnyVersatileSuffix(getDefaultOpusModel())) return false;
+    let latched = stripAnyVersatileSuffix(latchedFallbackModel);
+    if (latched === stripAnyVersatileSuffix(getDefaultOpusModel())) return false;
     return (
-      n === stripAnyVersatileSuffix(getDefaultSonnetModel()) &&
+      latched === stripAnyVersatileSuffix(getDefaultSonnetModel()) &&
       getCachedClientData(latchedFallbackModel)?.[CONVOLUTE_ARCADES_FLAG] !== true
     );
   } catch (error) {
@@ -113,9 +121,9 @@ var X_CC_FALLBACK_CATEGORY = "x-cc-fallback-category";
 var X_CC_FALLBACK_TRIGGER = "x-cc-fallback-trigger";
 var X_CC_ORIGINAL_REQUEST_ID = "x-cc-original-request-id";
 //@ chunk-hwmsct5x.js:237100-237204 placement
-function sanitizeHeaderValue(e) {
-  if (e === null || e === undefined) return;
-  return /^[\x21-\x7e][\x20-\x7e]{0,254}$/.test(e) ? e : undefined;
+function sanitizeHeaderValue(value) {
+  if (value === null || value === undefined) return;
+  return /^[\x21-\x7e][\x20-\x7e]{0,254}$/.test(value) ? value : undefined;
 }
 //@ chunk-hwmsct5x.js:237204-237231 placement
 function isSilentFallbackArmed() {

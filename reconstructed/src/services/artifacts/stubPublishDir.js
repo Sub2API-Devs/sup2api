@@ -22,21 +22,21 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 /**
  * 测试/离线桩：发布时不连服务器，把页面与支撑文件写入 CLAUDE_CODE_ARTIFACT_PUBLISH_STUB_DIR 下的 slug 目录。
  */
-async function publishToStubDir(dirPath, n, r) {
-  let redeploy = r.slug !== undefined;
-  let h = r.slug ?? randomUUID();
-  if (!ARTIFACT_SLUG_RE.test(h))
+async function publishToStubDir(dirPath, html, options) {
+  let redeploy = options.slug !== undefined;
+  let slug = options.slug ?? randomUUID();
+  if (!ARTIFACT_SLUG_RE.test(slug))
     return {
       url: null,
       slug: null,
       version: null,
-      err: `not an artifact slug: ${h}`,
+      err: `not an artifact slug: ${slug}`,
     };
-  let url = `${ARTIFACT_STUB_URL_PREFIX}${h}`;
-  let dirPath_2 = path.join(dirPath, h);
+  let url = `${ARTIFACT_STUB_URL_PREFIX}${slug}`;
+  let dirPath_2 = path.join(dirPath, slug);
   let dir = path.dirname(dirPath);
-  let w = await lstat(dir).catch(() => null);
-  if (w === null || !w.isDirectory() || (await realpath(dir).catch(() => null)) !== dir)
+  let parentStat = await lstat(dir).catch(() => null);
+  if (parentStat === null || !parentStat.isDirectory() || (await realpath(dir).catch(() => null)) !== dir)
     return {
       url: null,
       slug: null,
@@ -45,153 +45,153 @@ async function publishToStubDir(dirPath, n, r) {
     };
   await ensureDirectory(dirPath);
   await ensureDirectory(dirPath_2);
-  await replaceFileExclusive(path.join(dirPath_2, "index.html"), n);
-  for (let [j, X] of [
-    ["thumbnail.img", r.thumbnail],
-    ["thumbnail_dark.img", r.thumbnailDark],
+  await replaceFileExclusive(path.join(dirPath_2, "index.html"), html);
+  for (let [fileName, contents] of [
+    ["thumbnail.img", options.thumbnail],
+    ["thumbnail_dark.img", options.thumbnailDark],
   ])
-    if (X !== undefined) await replaceFileExclusive(path.join(dirPath_2, j), X);
+    if (contents !== undefined) await replaceFileExclusive(path.join(dirPath_2, fileName), contents);
     else
-      await rm(path.join(dirPath_2, j), {
+      await rm(path.join(dirPath_2, fileName), {
         recursive: true,
         force: true,
       });
   let dirPath_3 = path.join(dirPath_2, "files");
   await ensureDirectory(dirPath_3);
-  let C = await realpath(dirPath_3);
-  let k = [];
-  let V = (j) => j === C || j.startsWith(C + path.sep);
-  let L = async (j) => {
-    let resolved = path.resolve(dirPath_3, j);
+  let filesRoot = await realpath(dirPath_3);
+  let rejected = [];
+  let isInside = (candidate) => candidate === filesRoot || candidate.startsWith(filesRoot + path.sep);
+  let resolveSafe = async (relative) => {
+    let resolved = path.resolve(dirPath_3, relative);
     if (!resolved.startsWith(dirPath_3 + path.sep)) return null;
     if (isProtectedDirPath(resolved, dirPath_3 + path.sep, DANGEROUS_FILES_LOWER)) {
-      k.push({
-        path: j,
+      rejected.push({
+        path: relative,
         reason: "names a git, IDE/toolchain, or shell configuration component",
       });
       return null;
     }
     for (let dir = path.dirname(resolved); ; dir = path.dirname(dir))
       try {
-        return V(await realpath(dir)) ? resolved : null;
+        return isInside(await realpath(dir)) ? resolved : null;
       } catch (error) {
         if (!isENOENT(error) || dir === dirPath_3) throw error;
       }
   };
-  let q = async (j) => {
+  let checkParent = async (filePath) => {
     try {
-      return V(await realpath(path.dirname(j)));
+      return isInside(await realpath(path.dirname(filePath)));
     } catch (error) {
       if (isENOENT(error)) return "absent";
       throw error;
     }
   };
-  let W = [];
-  for (let j of r.removeFiles ?? [])
+  let alreadyGone = [];
+  for (let relative of options.removeFiles ?? [])
     try {
-      let X = await L(j);
-      if (X === null) continue;
-      let ge = await q(X);
-      if (ge === false) continue;
-      if (ge === "absent") {
-        W.push(j);
+      let resolved = await resolveSafe(relative);
+      if (resolved === null) continue;
+      let parentState = await checkParent(resolved);
+      if (parentState === false) continue;
+      if (parentState === "absent") {
+        alreadyGone.push(relative);
         continue;
       }
-      await unlink(X).catch((error) => {
+      await unlink(resolved).catch((error) => {
         if (!isENOENT(error)) throw error;
       });
-      W.push(j);
+      alreadyGone.push(relative);
     } catch (error) {
-      logForDebugging(`artifact stub: skipping removal of ${j}: ${error}`, {
+      logForDebugging(`artifact stub: skipping removal of ${relative}: ${error}`, {
         level: "warn",
       });
     }
-  let G = [];
-  for (let j of r.files ?? []) {
+  let materialized = [];
+  for (let file of options.files ?? []) {
     try {
-      let X = await L(j.path);
-      if (X === null) continue;
-      await mkdir(path.dirname(X), {
+      let resolved = await resolveSafe(file.path);
+      if (resolved === null) continue;
+      await mkdir(path.dirname(resolved), {
         recursive: true,
       });
-      if ((await q(X)) !== true) continue;
-      await replaceFileExclusive(X, j.content);
+      if ((await checkParent(resolved)) !== true) continue;
+      await replaceFileExclusive(resolved, file.content);
     } catch (error) {
-      logForDebugging(`artifact stub: skipping supporting file ${j.path}: ${error}`, {
+      logForDebugging(`artifact stub: skipping supporting file ${file.path}: ${error}`, {
         level: "warn",
       });
       continue;
     }
-    G.push({
-      path: j.path,
-      contentType: j.contentType,
-      bytes: Buffer.byteLength(j.content),
+    materialized.push({
+      path: file.path,
+      contentType: file.contentType,
+      bytes: Buffer.byteLength(file.content),
     });
   }
-  for (let j of k)
-    logForDebugging(`artifact stub: not materializing ${j.path}: ${j.reason}`, {
+  for (let entry of rejected)
+    logForDebugging(`artifact stub: not materializing ${entry.path}: ${entry.reason}`, {
       level: "warn",
     });
-  let P = {
-    slug: h,
+  let manifest = {
+    slug,
     url,
     redeploy,
-    title: r.title,
-    favicon: r.favicon,
-    ...(r.icon !== undefined && {
-      icon: r.icon,
+    title: options.title,
+    favicon: options.favicon,
+    ...(options.icon !== undefined && {
+      icon: options.icon,
     }),
-    ...(r.label !== undefined && {
-      label: r.label,
+    ...(options.label !== undefined && {
+      label: options.label,
     }),
-    ...(r.note !== undefined && {
-      note: r.note,
+    ...(options.note !== undefined && {
+      note: options.note,
     }),
-    ...(r.description !== undefined && {
-      description: r.description,
+    ...(options.description !== undefined && {
+      description: options.description,
     }),
-    files: G,
-    ...(W.length > 0 && {
-      removed: W,
+    files: materialized,
+    ...(alreadyGone.length > 0 && {
+      removed: alreadyGone,
     }),
-    ...(k.length > 0 && {
-      notMaterialized: k,
+    ...(rejected.length > 0 && {
+      notMaterialized: rejected,
     }),
-    ...((r.copiedFiles?.length ?? 0) > 0 && {
-      copied: r.copiedFiles,
+    ...((options.copiedFiles?.length ?? 0) > 0 && {
+      copied: options.copiedFiles,
     }),
-    ...(r.capabilities !== undefined && {
-      capabilities: r.capabilities,
+    ...(options.capabilities !== undefined && {
+      capabilities: options.capabilities,
     }),
-    ...(r.contract !== undefined && {
-      contract: r.contract,
+    ...(options.contract !== undefined && {
+      contract: options.contract,
     }),
-    ...(r.thumbnail !== undefined && {
+    ...(options.thumbnail !== undefined && {
       thumbnail: {
-        bytes: r.thumbnail.length,
+        bytes: options.thumbnail.length,
       },
     }),
-    ...(r.thumbnailDark !== undefined && {
+    ...(options.thumbnailDark !== undefined && {
       thumbnailDark: {
-        bytes: r.thumbnailDark.length,
+        bytes: options.thumbnailDark.length,
       },
     }),
-    ...(r.version !== undefined && {
-      version: r.version,
+    ...(options.version !== undefined && {
+      version: options.version,
     }),
-    ...(r.mcpTool !== undefined && {
-      mcpTool: r.mcpTool,
+    ...(options.mcpTool !== undefined && {
+      mcpTool: options.mcpTool,
     }),
-    ...(r.typeSlug !== undefined && {
-      typeSlug: r.typeSlug,
+    ...(options.typeSlug !== undefined && {
+      typeSlug: options.typeSlug,
     }),
     publishedAtMs: Date.now(),
   };
-  await replaceFileExclusive(path.join(dirPath_2, "manifest.json"), jsonStringify(P, null, 2));
+  await replaceFileExclusive(path.join(dirPath_2, "manifest.json"), jsonStringify(manifest, null, 2));
   return {
     url,
-    slug: h,
-    version: r.version ?? "1",
+    slug,
+    version: options.version ?? "1",
     err: null,
   };
 }

@@ -8,8 +8,14 @@
  * pieces: chunk-9h8dr0qb.js (3), chunk-e6aww6q8.js (1), chunk-f3qhjfah.js (2), chunk-tyg7f3ek.js (1), chunk-vrb44rx7.js (53)
  * attribution: placement 4, fingerprint 17, affinity 4, sole-consumer 14, file-local 3, layout 17, callgraph-fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
-import { R, init_react_production, P, y } from "../../../vendor/react/cjs/react.production.js";
+import { logError } from "../../utils/log.js";
+import {
+  init_react_production,
+  useRef,
+  useEffect,
+  useState,
+} from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { stripInvisibleChars } from "../../utils/sanitization.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
@@ -100,7 +106,7 @@ import { useSessionOrUndefined } from "../../context/session.js";
 import { setPromptValueFor } from "../../state/promptInputStore.js";
 import { parseSlashCommand } from "../../utils/slashCommandParsing.js";
 import { parsePluginArgs } from "./parseArgs.js";
-import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { PluginDetailsStore } from "./PluginDetails.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
@@ -120,73 +126,121 @@ import { BrowseMarketplace } from "./BrowseMarketplace.js";
 import { DiscoverPluginsScreen } from "./DiscoverPluginsScreen.js";
 import { ManageMarketplaces } from "./ManageMarketplaces.js";
 import { Pane } from "../../components/design-system/Pane.js";
-import { logError } from "../../utils/log.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-f3qhjfah.js:13962-14141 fingerprint = getPluginNameFromError (0.923)
+function getPluginNameFromError(error) {
+  if ("pluginId" in error && error.pluginId) return error.pluginId;
+  if ("plugin" in error && error.plugin) return error.plugin;
+  let index = error.source.lastIndexOf("@");
+  if (index > 0) return error.source.slice(0, index);
+  return;
+}
+//@ chunk-f3qhjfah.js:14141-14250 affinity
+/**
+ * 判断插件错误是否只是自动更新的提示类（延后条目辅助或被策略关闭），不算真正的加载失败。
+ */
+function isAutoupdateInfoError(info) {
+  return info.type === "autoupdate-deferred-entry-helper" || info.type === "autoupdate-disabled-by-policy";
+}
+//@ chunk-e6aww6q8.js:4236630-4236730 fingerprint = removeExtraMarketplace (0.702)
+function removeExtraMarketplace(name, sources) {
+  let extraKnownMarketplaces = name?.extraKnownMarketplaces;
+  return extraKnownMarketplaces !== undefined && Object.hasOwn(extraKnownMarketplaces, sources)
+    ? extraKnownMarketplaces[sources]
+    : undefined;
+}
+//@ chunk-tyg7f3ek.js:624262-624353 fingerprint = _temp1 (0.765)
+function initialPluginRefreshState(prev) {
+  let snapshot = {
+    needsRefresh: false,
+  };
+  prev()
+    .then((needsRefresh) => {
+      snapshot.needsRefresh = needsRefresh;
+    })
+    .catch(logError);
+  return snapshot;
+}
+//@ chunk-9h8dr0qb.js:42590-42594 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-9h8dr0qb.js:42590", () => {
+  init_react_production();
+});
+//@ chunk-9h8dr0qb.js:42594-42598 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-9h8dr0qb.js:42594", () => {
+  init_react_production();
+});
+//@ chunk-9h8dr0qb.js:42598-42639 fingerprint = _temp2 (0.665)
+function selectPluginCommands(s) {
+  return s.plugins.commands;
+}
 //@ chunk-vrb44rx7.js:101922-103281 placement
 /**
  * y/n 确认运行命令的对话框
  */
 function ConfirmCommandDialog(props) {
-  let T = w(19);
+  let $ = useMemoCache(19);
   let { command, onConfirm, onCancel } = props;
-  let x = R(false);
-  let D;
-  if (T[0] !== onCancel) {
-    D = function U() {
-      if (x.current) {
+  let runningRef = useRef(false);
+  let onConfirmOnce;
+  if ($[0] !== onCancel) {
+    onConfirmOnce = function onConfirmOnce() {
+      if (runningRef.current) {
         return;
       }
-      x.current = true;
+      runningRef.current = true;
       onCancel();
     };
-    T[0] = onCancel;
-    T[1] = D;
-  } else D = T[1];
-  let U = D;
-  let L;
-  if (T[2] !== U || T[3] !== onConfirm) {
-    L = function K(event) {
+    $[0] = onCancel;
+    $[1] = onConfirmOnce;
+  } else onConfirmOnce = $[1];
+  let confirm = onConfirmOnce;
+  let handleKeyDown;
+  if ($[2] !== confirm || $[3] !== onConfirm) {
+    handleKeyDown = function handleKeyDown(event) {
       if (event.ctrl || event.meta) {
         return;
       }
       if (event.key === "y" || event.key === "Y") {
         event.preventDefault();
-        if (x.current) {
+        if (runningRef.current) {
           return;
         }
-        x.current = true;
+        runningRef.current = true;
         onConfirm();
       } else if (event.key === "n" || event.key === "N") {
         event.preventDefault();
-        U();
+        confirm();
       }
     };
-    T[2] = U;
-    T[3] = onConfirm;
-    T[4] = L;
-  } else L = T[4];
-  let onKeyDown = L;
-  let V;
-  if (T[5] !== command) {
-    V = stripInvisibleChars(command, " ").trim().split(/\s+/).join(" ");
-    T[5] = command;
-    T[6] = V;
-  } else V = T[6];
-  let children = V;
-  let _;
-  if (T[7] === MEMO_CACHE_SENTINEL) {
-    _ = jsxProd_default(Text, {
+    $[2] = confirm;
+    $[3] = onConfirm;
+    $[4] = handleKeyDown;
+  } else handleKeyDown = $[4];
+  let onKeyDown = handleKeyDown;
+  let content;
+  if ($[5] !== command) {
+    content = stripInvisibleChars(command, " ").trim().split(/\s+/).join(" ");
+    $[5] = command;
+    $[6] = content;
+  } else content = $[6];
+  let children = content;
+  let statusLine;
+  if ($[7] === MEMO_CACHE_SENTINEL) {
+    statusLine = jsxProd_default(Text, {
       bold: true,
       children: "y",
     });
-    T[7] = _;
-  } else _ = T[7];
+    $[7] = statusLine;
+  } else statusLine = $[7];
   let inputGuide;
-  if (T[8] === MEMO_CACHE_SENTINEL) {
+  if ($[8] === MEMO_CACHE_SENTINEL) {
     inputGuide = jsxProd_default_2(Text, {
       children: [
         "Press ",
-        _,
+        statusLine,
         " to run or ",
         jsxProd_default(Text, {
           bold: true,
@@ -195,18 +249,18 @@ function ConfirmCommandDialog(props) {
         " to cancel",
       ],
     });
-    T[8] = inputGuide;
-  } else inputGuide = T[8];
-  let pe;
-  if (T[9] === MEMO_CACHE_SENTINEL) {
-    pe = jsxProd_default(Text, {
+    $[8] = inputGuide;
+  } else inputGuide = $[8];
+  let hint;
+  if ($[9] === MEMO_CACHE_SENTINEL) {
+    hint = jsxProd_default(Text, {
       children: "This command came from a link:",
     });
-    T[9] = pe;
-  } else pe = T[9];
-  let fe;
-  if (T[10] !== children) {
-    fe = jsxProd_default_2(Text, {
+    $[9] = hint;
+  } else hint = $[9];
+  let footer;
+  if ($[10] !== children) {
+    footer = jsxProd_default_2(Text, {
       children: [
         "  ",
         jsxProd_default(Text, {
@@ -215,49 +269,55 @@ function ConfirmCommandDialog(props) {
         }),
       ],
     });
-    T[10] = children;
-    T[11] = fe;
-  } else fe = T[11];
-  let me;
-  if (T[12] === MEMO_CACHE_SENTINEL) {
-    me = jsxProd_default(Box, {
+    $[10] = children;
+    $[11] = footer;
+  } else footer = $[11];
+  let body;
+  if ($[12] === MEMO_CACHE_SENTINEL) {
+    body = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(Text, {
         dimColor: true,
         children: "Nothing runs until you answer. Only run commands from links you trust.",
       }),
     });
-    T[12] = me;
-  } else me = T[12];
+    $[12] = body;
+  } else body = $[12];
   let children_2;
-  if (T[13] !== onKeyDown || T[14] !== fe) {
+  if ($[13] !== onKeyDown || $[14] !== footer) {
     children_2 = jsxProd_default_2(FocusColumn, {
       onKeyDown,
-      children: [pe, fe, me],
+      children: [hint, footer, body],
     });
-    T[13] = onKeyDown;
-    T[14] = fe;
-    T[15] = children_2;
-  } else children_2 = T[15];
-  let he;
-  if (T[16] !== U || T[17] !== children_2) {
-    he = jsxProd_default(Dialog, {
+    $[13] = onKeyDown;
+    $[14] = footer;
+    $[15] = children_2;
+  } else children_2 = $[15];
+  let detailRows;
+  if ($[16] !== confirm || $[17] !== children_2) {
+    detailRows = jsxProd_default(Dialog, {
       title: "Run this command?",
       color: "suggestion",
-      onCancel: U,
+      onCancel: confirm,
       inputGuide,
       children: children_2,
     });
-    T[16] = U;
-    T[17] = children_2;
-    T[18] = he;
-  } else he = T[18];
-  return he;
+    $[16] = confirm;
+    $[17] = children_2;
+    $[18] = detailRows;
+  } else detailRows = $[18];
+  return detailRows;
 }
 //@ chunk-vrb44rx7.js:103281-103285 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vrb44rx7.js:103281", () => {
+  init_react_production();
+});
 //@ chunk-vrb44rx7.js:217501-217505 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vrb44rx7.js:217501", () => {
+  init_react_production();
+});
 //@ chunk-vrb44rx7.js:217505-217734 sole-consumer
 var USER = "user";
 var PLUGIN_SETTINGS_ACTION_TEXTS = {
@@ -272,20 +332,20 @@ var PLUGIN_SETTINGS_ACTION_TEXTS = {
  */
 function PluginInstallRunner({ spec, onComplete, onInstallComplete }) {
   let { storageV5 } = useTheme_2();
-  let x = R({
+  let callbacks = useRef({
     onComplete,
     onInstallComplete,
   });
-  let T = R(false);
-  x.current = {
+  let busy = useRef(false);
+  callbacks.current = {
     onComplete,
     onInstallComplete,
   };
-  P(() => {
-    if (T.current) return;
-    T.current = true;
-    installPluginAndReport(spec, storageV5, x.current).then((D) =>
-      x.current.onComplete(stripInvisibleKeepEmoji(D)),
+  useEffect(() => {
+    if (busy.current) return;
+    busy.current = true;
+    installPluginAndReport(spec, storageV5, callbacks.current).then((result) =>
+      callbacks.current.onComplete(stripInvisibleKeepEmoji(result)),
     );
   }, [spec, storageV5]);
   return jsxProd_default(WorkerBadge, {
@@ -295,16 +355,16 @@ function PluginInstallRunner({ spec, onComplete, onInstallComplete }) {
 //@ chunk-vrb44rx7.js:218060-218336 sole-consumer
 async function installPluginAndReport(spec, storageV5, { onInstallComplete }) {
   try {
-    let C = await installPluginOp(spec, USER, {}, storageV5);
-    if (!C.success) return `${figures_default.cross} ${C.message}`;
-    let { pluginId } = C;
-    let D =
+    let installed = await installPluginOp(spec, USER, {}, storageV5);
+    if (!installed.success) return `${figures_default.cross} ${installed.message}`;
+    let { pluginId } = installed;
+    let actionText =
       PLUGIN_SETTINGS_ACTION_TEXTS[
         onInstallComplete !== undefined && pluginId !== undefined
           ? await onInstallComplete([pluginId])
           : "reload-required"
       ];
-    return `${figures_default.tick} ${C.message}.${D}`;
+    return `${figures_default.tick} ${installed.message}.${actionText}`;
   } catch (error) {
     return `${figures_default.cross} ${errorMessage(error)}`;
   }
@@ -314,44 +374,44 @@ function nullOnError() {
   return null;
 }
 //@ chunk-vrb44rx7.js:218362-218406 sole-consumer
-function bulletLine(he) {
-  return `  \u2022 ${escapedDisplayText(he)}`;
+function bulletLine(line) {
+  return `  \u2022 ${escapedDisplayText(line)}`;
 }
 //@ chunk-vrb44rx7.js:218406-218447 sole-consumer
-function selectPluginErrors(Ke) {
-  return Ke.plugins.errors;
+function selectPluginErrors(state) {
+  return state.plugins.errors;
 }
 //@ chunk-vrb44rx7.js:218447-218489 sole-consumer
-function selectEnabledPlugins(Et) {
-  return Et.plugins.enabled;
+function selectEnabledPlugins(state) {
+  return state.plugins.enabled;
 }
 //@ chunk-vrb44rx7.js:218489-218532 sole-consumer
-function selectDisabledPlugins(He) {
-  return He.plugins.disabled;
+function selectDisabledPlugins(state) {
+  return state.plugins.disabled;
 }
 //@ chunk-vrb44rx7.js:218532-218565 sole-consumer
-function pluginSource(ct) {
-  return ct.source;
+function pluginSource(plugin) {
+  return plugin.source;
 }
 //@ chunk-vrb44rx7.js:218565-218620 sole-consumer
-function selectWorkerPluginInventory(D) {
-  return D.workerInventory?.plugins ?? null;
+function selectWorkerPluginInventory(state) {
+  return state.workerInventory?.plugins ?? null;
 }
 //@ chunk-vrb44rx7.js:218620-218648 sole-consumer
-function escapeDisplayName(U) {
-  return stripInvisibleChars_2(U);
+function escapeDisplayName(name) {
+  return stripInvisibleChars_2(name);
 }
 //@ chunk-vrb44rx7.js:218648-218689 sole-consumer
-function selectPluginErrors_2(_n) {
-  return _n.plugins.errors;
+function selectPluginErrors_2(state) {
+  return state.plugins.errors;
 }
 //@ chunk-vrb44rx7.js:218689-218731 sole-consumer
-function selectEnabledPlugins_2(jn) {
-  return jn.plugins.enabled;
+function selectEnabledPlugins_2(state) {
+  return state.plugins.enabled;
 }
 //@ chunk-vrb44rx7.js:218731-218774 affinity
-function selectDisabledPlugins_2(Ro) {
-  return Ro.plugins.disabled;
+function selectDisabledPlugins_2(state) {
+  return state.plugins.disabled;
 }
 //@ chunk-vrb44rx7.js:218774-218827 fingerprint = _temp3 (1)
 function selectInstallationStatus(s_0) {
@@ -382,8 +442,8 @@ function emptySet() {
   return new Set();
 }
 //@ chunk-vrb44rx7.js:219046-219077 layout
-function isRealPluginError(ja) {
-  return !isAutoupdateInfoError(ja);
+function isRealPluginError(error) {
+  return !isAutoupdateInfoError(error);
 }
 //@ chunk-vrb44rx7.js:219077-219223 fingerprint = _temp0 (1)
 function countPluginErrors(s) {
@@ -395,84 +455,90 @@ function countPluginErrors(s) {
 }
 //@ chunk-vrb44rx7.js:219223-220291 fingerprint = MarketplaceList (0.411)
 function MarketplaceList(props) {
-  let C = w(5);
+  let $ = useMemoCache(5);
   let { onComplete } = props;
   let { storageV5 } = useTheme_2();
-  let x;
-  let T;
-  if (C[0] !== onComplete || C[1] !== storageV5) {
-    x = () => {
+  let printList;
+  let printDeps;
+  if ($[0] !== onComplete || $[1] !== storageV5) {
+    printList = () => {
       let loadList = async function loadList() {
         let knownMarketplacesWithDeclared = await loadKnownMarketplacesWithDeclared(storageV5);
         let names = Object.keys(knownMarketplacesWithDeclared);
-        let L = await listClaudeAiMarketplaces().catch(nullOnError);
-        let { available, hosted } = filterUnaddedClaudeAiMarketplaces(L, knownMarketplacesWithDeclared);
-        let browseOnly = L?.browseOnly ?? [];
+        let claudeAiList = await listClaudeAiMarketplaces().catch(nullOnError);
+        let { available, hosted } = filterUnaddedClaudeAiMarketplaces(
+          claudeAiList,
+          knownMarketplacesWithDeclared,
+        );
+        let browseOnly = claudeAiList?.browseOnly ?? [];
         if (names.length === 0 && available.length === 0 && hosted.length === 0 && browseOnly.length === 0)
           onComplete("No marketplaces configured");
         else {
-          let B =
+          let lines =
             names.length > 0
               ? ["Configured marketplaces:", ...names.map(bulletLine)]
               : ["No marketplaces configured"];
-          if (available.length > 0 || hosted.length > 0 || browseOnly.length > 0) B.push("From claude.ai:");
-          for (const _ of available)
-            B.push(
-              `  \u2022 ${stripInvisibleKeepEmoji(escapedDisplayText(_.name))} (available from claude.ai${_.scope ? `, ${_.scope}` : ""} \u2014 not added) \xB7 ${stripInvisibleKeepEmoji(formatGitSourceSpec(_.source))}`,
+          if (available.length > 0 || hosted.length > 0 || browseOnly.length > 0)
+            lines.push("From claude.ai:");
+          for (const marketplace of available)
+            lines.push(
+              `  \u2022 ${stripInvisibleKeepEmoji(escapedDisplayText(marketplace.name))} (available from claude.ai${marketplace.scope ? `, ${marketplace.scope}` : ""} \u2014 not added) \xB7 ${stripInvisibleKeepEmoji(formatGitSourceSpec(marketplace.source))}`,
             );
-          for (const J of hosted)
-            B.push(
-              `  \u2022 ${stripInvisibleKeepEmoji(accountMarketplaceLabel(J))} \u2014 hosted on claude.ai, ${formatMarketplaceScopeLabel(J.scope)} \xB7 not added`,
+          for (const marketplace of hosted)
+            lines.push(
+              `  \u2022 ${stripInvisibleKeepEmoji(accountMarketplaceLabel(marketplace))} \u2014 hosted on claude.ai, ${formatMarketplaceScopeLabel(marketplace.scope)} \xB7 not added`,
             );
-          for (const pe of browseOnly)
-            B.push(`  \u2022 ${stripInvisibleKeepEmoji(noCliNameLabel(pe))} (browse on claude.ai)`);
+          for (const marketplace of browseOnly)
+            lines.push(
+              `  \u2022 ${stripInvisibleKeepEmoji(noCliNameLabel(marketplace))} (browse on claude.ai)`,
+            );
           onComplete(
-            B.join(`
+            lines.join(`
 `),
           );
         }
       };
       loadList().catch((err) => onComplete(`Error loading marketplaces: ${errorMessage(err)}`));
     };
-    T = [onComplete, storageV5];
-    C[0] = onComplete;
-    C[1] = storageV5;
-    C[2] = x;
-    C[3] = T;
+    printDeps = [onComplete, storageV5];
+    $[0] = onComplete;
+    $[1] = storageV5;
+    $[2] = printList;
+    $[3] = printDeps;
   } else {
-    x = C[2];
-    T = C[3];
+    printList = $[2];
+    printDeps = $[3];
   }
-  P(x, T);
-  let ne;
-  if (C[4] === MEMO_CACHE_SENTINEL) {
-    ne = jsxProd_default(Text, {
+  useEffect(printList, printDeps);
+  let footer;
+  if ($[4] === MEMO_CACHE_SENTINEL) {
+    footer = jsxProd_default(Text, {
       children: "Loading marketplaces...",
     });
-    C[4] = ne;
-  } else ne = C[4];
-  return ne;
+    $[4] = footer;
+  } else footer = $[4];
+  return footer;
 }
 //@ chunk-vrb44rx7.js:220291-221458 layout
 /**
  * 文本模式列出已安装插件（/plugin list）：每个安装范围一行，标记 enabled/disabled/failed to load，需要 /reload-plugins 时附提示；可按 enabled/disabled 过滤。
  */
 function PluginListPrinter(props) {
-  let D = w(8);
+  let $ = useMemoCache(8);
   let { onComplete, filter } = props;
   let appState = useAppState(selectPluginErrors);
   let appState_2 = useAppState(selectEnabledPlugins);
   let appState_3 = useAppState(selectDisabledPlugins);
-  let U;
-  let L;
+  let printList;
+  let printDeps;
   if (
-    D[0] !== appState_2 ||
-    D[1] !== filter ||
-    D[2] !== appState_3 ||
-    D[3] !== appState ||
-    D[4] !== onComplete
+    $[0] !== appState_2 ||
+    $[1] !== filter ||
+    $[2] !== appState_3 ||
+    $[3] !== appState ||
+    $[4] !== onComplete
   ) {
-    U = () => {
+    printList = () => {
       let installedPlugins = getInstalledPlugins();
       let sorted = Object.keys(installedPlugins.plugins).sort();
       if (sorted.length === 0) {
@@ -480,63 +546,70 @@ function PluginListPrinter(props) {
         return;
       }
       let pluginEditableScopes = getPluginEditableScopes();
-      let B = new Set(appState_2.map(pluginSource));
-      let _ = ["Installed plugins:"];
-      let J = 0;
-      for (const pe of sorted) {
-        let fe = firstLineOf(pe, "@");
-        let me = pluginEditableScopes.has(pe);
-        if (filter !== undefined && (filter === "enabled") !== me) {
+      let enabledSources = new Set(appState_2.map(pluginSource));
+      let lines = ["Installed plugins:"];
+      let shownCount = 0;
+      for (const pluginName of sorted) {
+        let bareName = firstLineOf(pluginName, "@");
+        let isEnabled = pluginEditableScopes.has(pluginName);
+        if (filter !== undefined && (filter === "enabled") !== isEnabled) {
           continue;
         }
         let any = appState.some(
-          (ne) => !isAutoupdateInfoError(ne) && (ne.source === pe || ("plugin" in ne && ne.plugin === fe)),
+          (error) =>
+            !isAutoupdateInfoError(error) &&
+            (error.source === pluginName || ("plugin" in error && error.plugin === bareName)),
         );
-        let W = any
+        let statusText = any
           ? `${figures_default.cross} failed to load`
-          : me
+          : isEnabled
             ? `${figures_default.tick} enabled`
             : `${figures_default.cross} disabled`;
-        let Oe = !any && me !== B.has(pe) ? " \u2014 run /reload-plugins to apply" : "";
-        let version = (appState_2.find((rt) => rt.source === pe) ?? appState_3.find((et) => et.source === pe))
-          ?.manifest.version;
-        for (const ae of installedPlugins.plugins[pe] ?? []) {
-          let Se = formatFirstKnownVersion(ae.version, version);
-          let kt = Se ? `${escapeXml(printableName(Se, 100))}, ${ae.scope}` : ae.scope;
-          _.push(`  \u2022 ${pe} (${kt}) ${W}${Oe}`);
-          J++;
+        let reloadSuffix =
+          !any && isEnabled !== enabledSources.has(pluginName) ? " \u2014 run /reload-plugins to apply" : "";
+        let version = (
+          appState_2.find((entry) => entry.source === pluginName) ??
+          appState_3.find((entry) => entry.source === pluginName)
+        )?.manifest.version;
+        for (const install of installedPlugins.plugins[pluginName] ?? []) {
+          let versionText = formatFirstKnownVersion(install.version, version);
+          let scopeText = versionText
+            ? `${escapeXml(printableName(versionText, 100))}, ${install.scope}`
+            : install.scope;
+          lines.push(`  \u2022 ${pluginName} (${scopeText}) ${statusText}${reloadSuffix}`);
+          shownCount++;
         }
       }
-      if (J === 0) {
+      if (shownCount === 0) {
         onComplete(`No ${filter} plugins.`);
         return;
       }
       onComplete(
-        _.join(`
+        lines.join(`
 `),
       );
     };
-    L = [onComplete, appState, appState_2, appState_3, filter];
-    D[0] = appState_2;
-    D[1] = filter;
-    D[2] = appState_3;
-    D[3] = appState;
-    D[4] = onComplete;
-    D[5] = U;
-    D[6] = L;
+    printDeps = [onComplete, appState, appState_2, appState_3, filter];
+    $[0] = appState_2;
+    $[1] = filter;
+    $[2] = appState_3;
+    $[3] = appState;
+    $[4] = onComplete;
+    $[5] = printList;
+    $[6] = printDeps;
   } else {
-    U = D[5];
-    L = D[6];
+    printList = $[5];
+    printDeps = $[6];
   }
-  P(U, L);
-  let Tt;
-  if (D[7] === MEMO_CACHE_SENTINEL) {
-    Tt = jsxProd_default(Text, {
+  useEffect(printList, printDeps);
+  let footer;
+  if ($[7] === MEMO_CACHE_SENTINEL) {
+    footer = jsxProd_default(Text, {
       children: "Loading plugins...",
     });
-    D[7] = Tt;
-  } else Tt = D[7];
-  return Tt;
+    $[7] = footer;
+  } else footer = $[7];
+  return footer;
 }
 //@ chunk-vrb44rx7.js:221458-221484 layout
 function nullComponent() {
@@ -544,84 +617,84 @@ function nullComponent() {
 }
 //@ chunk-vrb44rx7.js:221484-221668 layout
 function SkillsMovedNotice() {
-  let i = w(1);
-  let h;
-  if (i[0] === MEMO_CACHE_SENTINEL) {
-    h = jsxProd_default(Box, {
+  let $ = useMemoCache(1);
+  let content;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    content = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(StatusRow, {
         status: "info",
         children: "Skills are now managed here under the Skills section.",
       }),
     });
-    i[0] = h;
-  } else h = i[0];
-  return h;
+    $[0] = content;
+  } else content = $[0];
+  return content;
 }
 //@ chunk-vrb44rx7.js:221668-222519 layout
 /**
  * 云会话下显示"云会话已加载哪些插件"及"这里的改动影响本机与之后的云会话"的说明。
  */
 function CloudSessionPluginsNotice() {
-  let h = w(7);
+  let $ = useMemoCache(7);
   let appState = useAppState(selectWorkerPluginInventory);
   let children;
-  if (h[0] !== appState) {
+  if ($[0] !== appState) {
     children =
       appState === null
         ? "The cloud session hasn't reported which plugins it loaded (it does at the start of each turn)."
         : appState.length === 0
           ? "The cloud session loaded no plugins."
           : `The cloud session loaded: ${appState.map(escapeDisplayName).join(", ")}.`;
-    h[0] = appState;
-    h[1] = children;
-  } else children = h[1];
-  let C;
-  if (h[2] !== children) {
-    C = jsxProd_default(StatusRow, {
+    $[0] = appState;
+    $[1] = children;
+  } else children = $[1];
+  let content;
+  if ($[2] !== children) {
+    content = jsxProd_default(StatusRow, {
       status: "info",
       children,
     });
-    h[2] = children;
-    h[3] = C;
-  } else C = h[3];
-  let x;
-  if (h[4] === MEMO_CACHE_SENTINEL) {
-    x = jsxProd_default(Text, {
+    $[2] = children;
+    $[3] = content;
+  } else content = $[3];
+  let status;
+  if ($[4] === MEMO_CACHE_SENTINEL) {
+    status = jsxProd_default(Text, {
       dimColor: true,
       wrap: "wrap-trim",
       children:
         "Changes here update this machine's plugins and future cloud sessions (/cloud-plugins decides whether they are sent), and reach a running cloud session only when this machine next attaches to it (or on your first Yes in /cloud-plugins); /reload-plugins re-reads the running session's own.",
     });
-    h[4] = x;
-  } else x = h[4];
-  let T;
-  if (h[5] !== C) {
-    T = jsxProd_default_2(Box, {
+    $[4] = status;
+  } else status = $[4];
+  let footer;
+  if ($[5] !== content) {
+    footer = jsxProd_default_2(Box, {
       marginTop: 1,
       flexDirection: "column",
-      children: [C, x],
+      children: [content, status],
     });
-    h[5] = C;
-    h[6] = T;
-  } else T = h[6];
-  return T;
+    $[5] = content;
+    $[6] = footer;
+  } else footer = $[6];
+  return footer;
 }
 //@ chunk-vrb44rx7.js:222519-222734 layout
 function SkillDoctorMovedNotice() {
-  let i = w(1);
-  let h;
-  if (i[0] === MEMO_CACHE_SENTINEL) {
-    h = jsxProd_default(Box, {
+  let $ = useMemoCache(1);
+  let content;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    content = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(StatusRow, {
         status: "info",
         children: "/skill-doctor moved \u2014 skill usage and context costs now live in this Stats tab.",
       }),
     });
-    i[0] = h;
-  } else h = i[0];
-  return h;
+    $[0] = content;
+  } else content = $[0];
+  return content;
 }
 //@ chunk-vrb44rx7.js:222734-223036 fingerprint = getExtraMarketplaceSourceInfo (0.954)
 function getExtraMarketplaceSourceInfo(name) {
@@ -653,33 +726,33 @@ function getExtraMarketplaceSourceInfo(name) {
   };
 }
 //@ chunk-vrb44rx7.js:223036-223111 layout
-function hasAutoUpdateSetting(i) {
-  return i?.extraKnownMarketplaces?.[OFFICIAL_MARKETPLACE_NAME]?.autoUpdate !== undefined;
+function hasAutoUpdateSetting(entry) {
+  return entry?.extraKnownMarketplaces?.[OFFICIAL_MARKETPLACE_NAME]?.autoUpdate !== undefined;
 }
 //@ chunk-vrb44rx7.js:223111-223525 layout
 /**
  * 决定删除某个市场时的动作：在 extraKnownMarketplaces 里时删设置项（官方市场可保留已启用插件），只在托管策略里时提示 managed-only，官方市场否则跳转到对应页，其他走常规市场删除。
  */
-function planMarketplaceRemoval(name, h, k = false) {
+function planMarketplaceRemoval(name, sources, force = false) {
   let { editableSources, isInPolicy } = getExtraMarketplaceSourceInfo(name);
   if (name === OFFICIAL_MARKETPLACE_NAME) {
     let filtered = editableSources.filter(
       ({ source }) =>
         !(source === "userSettings" && hasAutoUpdateSetting(getSettingsForSourceForUpkeep(source))),
     );
-    if (k && filtered.length > 0)
+    if (force && filtered.length > 0)
       return {
         kind: "remove-extra-marketplace",
         name,
         sources: filtered,
         keepEnabledPlugins: true,
       };
-    if (k && isInPolicy)
+    if (force && isInPolicy)
       return {
         kind: "managed-only",
         name,
       };
-    return navigateToOfficialMarketplace(h);
+    return navigateToOfficialMarketplace(sources);
   }
   if (editableSources.length > 0)
     return {
@@ -696,7 +769,7 @@ function planMarketplaceRemoval(name, h, k = false) {
 }
 //@ chunk-vrb44rx7.js:223525-223659 layout
 function joinScopeNames(sources) {
-  let mapped = sources.map((k) => k.scope);
+  let mapped = sources.map((source) => source.scope);
   return mapped.length > 1
     ? `${mapped.slice(0, -1).join(", ")}${mapped.length > 2 ? "," : ""} and ${mapped.at(-1)}`
     : (mapped[0] ?? "");
@@ -707,15 +780,15 @@ function joinScopeNames(sources) {
  */
 function describeMarketplaceRemoval(action, marketplaceNames) {
   if (action.kind === "remove-extra-marketplace") {
-    let D = quotedPrintable(action.name);
+    let quotedName = quotedPrintable(action.name);
     return action.keepEnabledPlugins
-      ? `Remove "${D}" from extraKnownMarketplaces in ${joinScopeNames(action.sources)} settings? The built-in ${OFFICIAL_MARKETPLACE_DISPLAY} and its plugins are not changed.`
-      : `Remove "${D}" from extraKnownMarketplaces in ${joinScopeNames(action.sources)} settings? Its plugins are also removed from enabledPlugins there.`;
+      ? `Remove "${quotedName}" from extraKnownMarketplaces in ${joinScopeNames(action.sources)} settings? The built-in ${OFFICIAL_MARKETPLACE_DISPLAY} and its plugins are not changed.`
+      : `Remove "${quotedName}" from extraKnownMarketplaces in ${joinScopeNames(action.sources)} settings? Its plugins are also removed from enabledPlugins there.`;
   }
   let quotedNames = marketplaceNames.map((marketplaceName) => `"${quotedPrintable(marketplaceName)}"`);
   let includesOfficial = marketplaceNames.includes(OFFICIAL_MARKETPLACE_NAME);
   let nonOfficialNames = quotedNames.filter(
-    (quotedName, U) => !(includesOfficial && marketplaceNames[U] === OFFICIAL_MARKETPLACE_NAME),
+    (quotedName, name) => !(includesOfficial && marketplaceNames[name] === OFFICIAL_MARKETPLACE_NAME),
   );
   let sentences = [
     quotedNames.length > 1
@@ -749,14 +822,14 @@ function buildMarketplaceAction(name) {
   };
 }
 //@ chunk-vrb44rx7.js:225083-225338 layout
-function navigateToOfficialMarketplace(i) {
-  if (pluginDirectoryPolicyBlock() !== null && i !== undefined)
+function navigateToOfficialMarketplace(entry) {
+  if (pluginDirectoryPolicyBlock() !== null && entry !== undefined)
     return {
       kind: "navigate",
       tab: "installed",
       viewState: {
         type: "manage-plugins",
-        targetPlugin: i,
+        targetPlugin: entry,
         targetMarketplace: OFFICIAL_MARKETPLACE_NAME,
       },
     };
@@ -790,7 +863,10 @@ function buildPluginAction(installedEntry, { resolveByUninstall }) {
   };
 }
 //@ chunk-vrb44rx7.js:225624-225690 fingerprint = TRANSIENT_ERROR_TYPES (1)
-var TRANSIENT_ERROR_TYPES = new Set(["git-auth-failed", "git-timeout", "network-error"]);
+var TRANSIENT_ERROR_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vrb44rx7.js:225624", () => {
+  TRANSIENT_ERROR_TYPES = new Set(["git-auth-failed", "git-timeout", "network-error"]);
+});
 //@ chunk-vrb44rx7.js:225690-225823 fingerprint = _temp7 (1)
 function isMarketplaceError(e_1) {
   return (
@@ -810,17 +886,29 @@ function isTransientPluginError(e_0) {
 /**
  * 从插件错误的 source 解析出插件名与市场：返回规范化 key、显示标签、可编辑范围、是否有名字。
  */
-function describePluginErrorTarget(i, h, k) {
-  let C = marketplaceOf(i.source);
-  let marketplace = "marketplace" in i ? i.marketplace : undefined;
-  let T = h ?? (C || marketplaceSuffix(i.source) !== undefined ? splitPluginId(i.source).name : undefined);
-  let D = C ?? marketplace ?? marketplaceSuffix(i.source);
+function describePluginErrorTarget(error, marketplace, pluginName) {
+  let marketplaceName = marketplaceOf(error.source);
+  let marketplace_2 = "marketplace" in error ? error.marketplace : undefined;
+  let resolvedName =
+    marketplace ??
+    (marketplaceName || marketplaceSuffix(error.source) !== undefined
+      ? splitPluginId(error.source).name
+      : undefined);
+  let label = marketplaceName ?? marketplace_2 ?? marketplaceSuffix(error.source);
   return {
-    key: T === undefined ? undefined : nfcLower(D ? `${T}@${D}` : T),
-    label: T === undefined ? i.source : D ? `${T} @ ${displayMarketplaceName(D)}` : T,
+    key: resolvedName === undefined ? undefined : nfcLower(label ? `${resolvedName}@${label}` : resolvedName),
+    label:
+      resolvedName === undefined
+        ? error.source
+        : label
+          ? `${resolvedName} @ ${displayMarketplaceName(label)}`
+          : resolvedName,
     scope:
-      editableScopeOf(k, i.source) ?? (T !== undefined && C ? editableScopeOf(k, `${T}@${C}`) : undefined),
-    named: T !== undefined,
+      editableScopeOf(pluginName, error.source) ??
+      (resolvedName !== undefined && marketplaceName
+        ? editableScopeOf(pluginName, `${resolvedName}@${marketplaceName}`)
+        : undefined),
+    named: resolvedName !== undefined,
   };
 }
 //@ chunk-vrb44rx7.js:226328-228408 fingerprint = buildErrorRows (0.788)
@@ -832,8 +920,8 @@ function buildErrorRows(
   brokenInstalledMarketplaces,
   transientErrors,
   pluginWarnings,
-  pluginEditableScopes,
-  L,
+  pluginName,
+  pluginId,
 ) {
   let rows = [];
   for (let error of transientErrors) {
@@ -884,20 +972,22 @@ function buildErrorRows(
     let sourceInfo = isPluginDirectoryUnavailableFailure(brokenInstalledMarketplace);
     if (!sourceInfo && shownMarketplaceNames.has(brokenInstalledMarketplace.name)) continue;
     if (!sourceInfo) shownMarketplaceNames.add(brokenInstalledMarketplace.name);
-    let J = sourceInfo
+    let resolvedName = sourceInfo
       ? brokenInstalledMarketplace.name
       : marketplaceDisplayName(brokenInstalledMarketplace.name);
-    let pe = false;
-    pe = brokenInstalledMarketplace.name === OFFICIAL_MARKETPLACE_NAME && !sourceInfo;
+    let isOfficialWithoutSource = false;
+    isOfficialWithoutSource = brokenInstalledMarketplace.name === OFFICIAL_MARKETPLACE_NAME && !sourceInfo;
     rows.push({
       label:
-        J === brokenInstalledMarketplace.name ? displayMarketplaceName(brokenInstalledMarketplace.name) : J,
+        resolvedName === brokenInstalledMarketplace.name
+          ? displayMarketplaceName(brokenInstalledMarketplace.name)
+          : resolvedName,
       message: brokenInstalledMarketplace.error,
-      ...(pe && {
+      ...(isOfficialWithoutSource && {
         guidance:
           "Reopen /plugin later to try again. Enter opens it in Marketplaces, where you can update it now or turn it off.",
       }),
-      action: pe
+      action: isOfficialWithoutSource
         ? navigateToOfficialMarketplace()
         : sourceInfo
           ? {
@@ -909,24 +999,24 @@ function buildErrorRows(
   }
   let shownPluginNames = new Set();
   for (let error of pluginLoadingErrors) {
-    let pluginName = describePluginErrorTarget(error, getPluginNameFromError(error), pluginEditableScopes);
-    if (pluginName.key !== undefined && shownPluginNames.has(pluginName.key)) continue;
-    if (pluginName.key !== undefined) shownPluginNames.add(pluginName.key);
-    let pluginName_2 = isAutoupdateInfoError(error);
+    let pluginName_2 = describePluginErrorTarget(error, getPluginNameFromError(error), pluginName);
+    if (pluginName_2.key !== undefined && shownPluginNames.has(pluginName_2.key)) continue;
+    if (pluginName_2.key !== undefined) shownPluginNames.add(pluginName_2.key);
+    let pluginName_3 = isAutoupdateInfoError(error);
     rows.push({
-      label: pluginName.label,
+      label: pluginName_2.label,
       message: formatSkillErrorMessage(error),
       guidance: getErrorGuidanceText(error),
       action:
-        pluginName.named && !pluginName_2
-          ? buildPluginAction(findInstalledEntry(error, L), {
+        pluginName_2.named && !pluginName_3
+          ? buildPluginAction(findInstalledEntry(error, pluginId), {
               resolveByUninstall: true,
             })
           : {
               kind: "none",
             },
-      isAdvisory: pluginName_2 || undefined,
-      scope: pluginName.scope,
+      isAdvisory: pluginName_3 || undefined,
+      scope: pluginName_2.scope,
     });
   }
   for (let error of otherErrors)
@@ -938,30 +1028,34 @@ function buildErrorRows(
         kind: "none",
       },
     });
-  for (let B of pluginWarnings) {
-    let _ = describePluginErrorTarget(B, "plugin" in B ? B.plugin : undefined, pluginEditableScopes);
-    let J = _.key ?? nfcLower(B.source);
-    let pe =
-      B.type === "mcpb-needs-config"
-        ? `${B.type}:${J}:${B.serverName}`
-        : "plugin" in B
-          ? J
-          : `${B.type}:${J}`;
-    if (shownPluginNames.has(pe)) continue;
-    shownPluginNames.add(pe);
+  for (let warning of pluginWarnings) {
+    let target = describePluginErrorTarget(
+      warning,
+      "plugin" in warning ? warning.plugin : undefined,
+      pluginName,
+    );
+    let key = target.key ?? nfcLower(warning.source);
+    let pluginState =
+      warning.type === "mcpb-needs-config"
+        ? `${warning.type}:${key}:${warning.serverName}`
+        : "plugin" in warning
+          ? key
+          : `${warning.type}:${key}`;
+    if (shownPluginNames.has(pluginState)) continue;
+    shownPluginNames.add(pluginState);
     rows.push({
-      label: _.label,
-      message: pluginWarningText(B),
-      guidance: pluginWarningFixText(B),
+      label: target.label,
+      message: pluginWarningText(warning),
+      guidance: pluginWarningFixText(warning),
       action:
-        B.type === "mcpb-needs-config" && _.named
-          ? buildPluginAction(findInstalledEntry(B, L), {
+        warning.type === "mcpb-needs-config" && target.named
+          ? buildPluginAction(findInstalledEntry(warning, pluginId), {
               resolveByUninstall: false,
             })
           : {
               kind: "none",
             },
-      scope: _.scope,
+      scope: target.scope,
       isAdvisory: true,
     });
   }
@@ -971,34 +1065,37 @@ function buildErrorRows(
 /**
  * 界面里把多个市场批量写回各自设置源的 extraKnownMarketplaces（可删除）。
  */
-function saveMarketplaceToSettings(name, sources, storageV5, C = false) {
+function saveMarketplaceToSettings(name, sources, storageV5, force = false) {
   for (let { source } of sources)
     updateSettingsForSourceWithTransform(
       source,
-      (T) => {
-        if (!T) return null;
-        let D = {};
+      (prev) => {
+        if (!prev) return null;
+        let next = {};
         let existing =
-          C && source === "userSettings" && name === OFFICIAL_MARKETPLACE_NAME && hasAutoUpdateSetting(T);
-        if (removeExtraMarketplace(T, name) && !existing)
-          D.extraKnownMarketplaces = {
-            ...T.extraKnownMarketplaces,
+          force &&
+          source === "userSettings" &&
+          name === OFFICIAL_MARKETPLACE_NAME &&
+          hasAutoUpdateSetting(prev);
+        if (removeExtraMarketplace(prev, name) && !existing)
+          next.extraKnownMarketplaces = {
+            ...prev.extraKnownMarketplaces,
             [name]: undefined,
           };
-        if (T.enabledPlugins && !C) {
-          let L = `@${name}`;
-          let A = false;
+        if (prev.enabledPlugins && !force) {
+          let label = `@${name}`;
+          let changed = false;
           let current = {
-            ...T.enabledPlugins,
+            ...prev.enabledPlugins,
           };
           for (let key in current)
-            if (key.endsWith(L)) {
+            if (key.endsWith(label)) {
               current[key] = undefined;
-              A = true;
+              changed = true;
             }
-          if (A) D.enabledPlugins = current;
+          if (changed) next.enabledPlugins = current;
         }
-        return Object.keys(D).length > 0 ? D : null;
+        return Object.keys(next).length > 0 ? next : null;
       },
       undefined,
       storageV5,
@@ -1006,7 +1103,7 @@ function saveMarketplaceToSettings(name, sources, storageV5, C = false) {
 }
 //@ chunk-vrb44rx7.js:228803-235684 fingerprint = ErrorsTabContent (0.612)
 function ErrorsTabContent(props) {
-  let W = w(59);
+  let $ = useMemoCache(59);
   let { setViewState, setActiveTab, markPluginsChanged } = props;
   let { storageV5, credentials } = useTheme_2();
   let errors = useAppState(selectPluginErrors_2);
@@ -1016,37 +1113,37 @@ function ErrorsTabContent(props) {
   let installationStatus_2 = useAppState(selectInstallationStatus);
   let setAppState = useSetAppState();
   let activePlugins = useActivePlugins();
-  let [selectedIndex, setSelectedIndex] = y(0);
-  let [pe, fe] = y(null);
-  let [action, ne] = y(null);
-  let he = R(false);
-  let Oe;
-  if (W[0] === MEMO_CACHE_SENTINEL) {
-    Oe = [];
-    W[0] = Oe;
-  } else Oe = W[0];
-  let [brokenInstalledMarketplaces, et] = y(Oe);
-  let je;
-  let ae;
-  if (W[1] !== storageV5) {
-    je = () => {
+  let [selectedIndex, setSelectedIndex] = useState(0);
+  let [statusMessage, setStatusMessage] = useState(null);
+  let [action, confirmAction] = useState(null);
+  let removingRef = useRef(false);
+  let errorRows;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    errorRows = [];
+    $[0] = errorRows;
+  } else errorRows = $[0];
+  let [errorRows_2, setErrorRows] = useState(errorRows);
+  let loadErrors;
+  let loadDeps;
+  if ($[1] !== storageV5) {
+    loadErrors = () => {
       (async () => {
         try {
           let config = await loadKnownMarketplacesWithDeclared(storageV5);
           let { failures } = await loadMarketplacesWithErrors(config, storageV5);
-          et(failures);
+          setErrorRows(failures);
         } catch {}
       })();
     };
-    ae = [storageV5];
-    W[1] = storageV5;
-    W[2] = je;
-    W[3] = ae;
+    loadDeps = [storageV5];
+    $[1] = storageV5;
+    $[2] = loadErrors;
+    $[3] = loadDeps;
   } else {
-    je = W[2];
-    ae = W[3];
+    loadErrors = $[2];
+    loadDeps = $[3];
   }
-  P(je, ae);
+  useEffect(loadErrors, loadDeps);
   let failedMarketplaces = installationStatus_2.marketplaces.filter(isFailedMarketplace);
   let failedMarketplaceNames = new Set(failedMarketplaces.map(marketplaceName));
   let transientErrors = [];
@@ -1060,144 +1157,156 @@ function ErrorsTabContent(props) {
     } else if (getPluginNameFromError(error) !== undefined) pluginLoadingErrors.push(error);
     else otherErrors.push(error);
   }
-  let errorRows = buildErrorRows(
+  let errorRows_3 = buildErrorRows(
     failedMarketplaces,
     extraMarketplaceErrors,
     pluginLoadingErrors,
     otherErrors,
-    brokenInstalledMarketplaces,
+    errorRows_2,
     transientErrors,
     pluginWarnings,
     getPluginEditableScopes(),
     [...installationStatus, ...appState],
   );
-  let at;
-  if (W[4] !== action || W[5] !== setViewState) {
-    at = () => {
+  let cancelAction;
+  if ($[4] !== action || $[5] !== setViewState) {
+    cancelAction = () => {
       if (action !== null) {
-        ne(null);
+        confirmAction(null);
         return;
       }
       setViewState({
         type: "menu",
       });
     };
-    W[4] = action;
-    W[5] = setViewState;
-    W[6] = at;
-  } else at = W[6];
-  let Ot;
-  if (W[7] === MEMO_CACHE_SENTINEL) {
-    Ot = {
+    $[4] = action;
+    $[5] = setViewState;
+    $[6] = cancelAction;
+  } else cancelAction = $[6];
+  let confirmKeybinds;
+  if ($[7] === MEMO_CACHE_SENTINEL) {
+    confirmKeybinds = {
       context: "Confirmation",
     };
-    W[7] = Ot;
-  } else Ot = W[7];
-  useKeybinding("confirm:no", at, Ot);
-  let an;
-  if (W[8] !== credentials || W[9] !== markPluginsChanged || W[10] !== setAppState || W[11] !== storageV5) {
-    an = (Yt) => {
-      let scopes = joinScopeNames(Yt.sources);
-      saveMarketplaceToSettings(Yt.name, Yt.sources, storageV5, Yt.keepEnabledPlugins === true);
+    $[7] = confirmKeybinds;
+  } else confirmKeybinds = $[7];
+  useKeybinding("confirm:no", cancelAction, confirmKeybinds);
+  let removeExtraMarketplace;
+  if ($[8] !== credentials || $[9] !== markPluginsChanged || $[10] !== setAppState || $[11] !== storageV5) {
+    removeExtraMarketplace = (entry) => {
+      let scopes = joinScopeNames(entry.sources);
+      saveMarketplaceToSettings(entry.name, entry.sources, storageV5, entry.keepEnabledPlugins === true);
       refreshPluginCaches(storageV5, credentials);
-      let qe = Yt.keepEnabledPlugins === true;
+      let keepEnabled = entry.keepEnabledPlugins === true;
       setAppState((prev) => ({
         ...prev,
         plugins: {
           ...prev.plugins,
           errors: prev.plugins.errors.filter(
-            (e_2) => qe || !("marketplace" in e_2 && e_2.marketplace === Yt.name),
+            (e_2) => keepEnabled || !("marketplace" in e_2 && e_2.marketplace === entry.name),
           ),
           installationStatus: {
             ...prev.plugins.installationStatus,
-            marketplaces: prev.plugins.installationStatus.marketplaces.filter((m_1) => m_1.name !== Yt.name),
+            marketplaces: prev.plugins.installationStatus.marketplaces.filter(
+              (m_1) => m_1.name !== entry.name,
+            ),
           },
         },
       }));
-      fe(
-        qe
-          ? `${figures_default.tick} Removed "${quotedPrintable(Yt.name)}" from extraKnownMarketplaces in ${scopes} settings. The built-in ${OFFICIAL_MARKETPLACE_DISPLAY} and its plugins are not changed.`
-          : `${figures_default.tick} Removed "${quotedPrintable(Yt.name)}" and its enabledPlugins entries from ${scopes} settings`,
+      setStatusMessage(
+        keepEnabled
+          ? `${figures_default.tick} Removed "${quotedPrintable(entry.name)}" from extraKnownMarketplaces in ${scopes} settings. The built-in ${OFFICIAL_MARKETPLACE_DISPLAY} and its plugins are not changed.`
+          : `${figures_default.tick} Removed "${quotedPrintable(entry.name)}" and its enabledPlugins entries from ${scopes} settings`,
       );
       markPluginsChanged();
     };
-    W[8] = credentials;
-    W[9] = markPluginsChanged;
-    W[10] = setAppState;
-    W[11] = storageV5;
-    W[12] = an;
-  } else an = W[12];
-  let $t = an;
-  let ln;
+    $[8] = credentials;
+    $[9] = markPluginsChanged;
+    $[10] = setAppState;
+    $[11] = storageV5;
+    $[12] = removeExtraMarketplace;
+  } else removeExtraMarketplace = $[12];
+  let removeExtra = removeExtraMarketplace;
+  let removeInstalled;
   if (
-    W[13] !== activePlugins ||
-    W[14] !== credentials ||
-    W[15] !== markPluginsChanged ||
-    W[16] !== storageV5
+    $[13] !== activePlugins ||
+    $[14] !== credentials ||
+    $[15] !== markPluginsChanged ||
+    $[16] !== storageV5
   ) {
-    ln = (e_2) => {
+    removeInstalled = (e_2) => {
       (async () => {
-        let Ut = false;
+        let wasRemoving = false;
         if (isOfficialMarketplaceSpelling(e_2.name)) {
-          if (he.current) {
+          if (removingRef.current) {
             return;
           }
-          he.current = true;
-          Ut = true;
+          removingRef.current = true;
+          wasRemoving = true;
         }
         try {
-          let rn = await removeMarketplaceWithReservedSiblings(e_2.name, undefined, storageV5, credentials, {
-            onlyIgnoredNameEntries: true,
-          });
-          let mn = `${figures_default.tick} Removed marketplace "${quotedPrintable(e_2.name)}"`;
-          let xn = [e_2.name];
-          let Ln = rn.kind !== "plugin-directory-built-in";
-          let Mn = [];
-          if (rn.kind !== "plugin-directory-built-in") Mn = rn.removedPluginIds;
-          if (rn.kind === "ignored-plugin-directory-name-entry-removed") {
-            let fn = isPluginDirectoryModeOn();
-            let mapped = rn.removedNames.map((m_1) => removedMarketplaceMessage(m_1, fn));
-            mn = `${figures_default.tick} ${mapped.join(" ")}`;
-            let le = blockedPluginsNotice(rn.disabledPluginIds, rn.disabledReason);
-            if (le !== null) mn = `${mn} ${le}`;
-            xn = [e_2.name, ...rn.removedNames];
-            Ln = rn.removedNames.length > 0;
-            if (!Ln) mn = `${figures_default.tick} ${marketplaceEntryGoneText(e_2.name)}`;
+          let result = await removeMarketplaceWithReservedSiblings(
+            e_2.name,
+            undefined,
+            storageV5,
+            credentials,
+            {
+              onlyIgnoredNameEntries: true,
+            },
+          );
+          let message = `${figures_default.tick} Removed marketplace "${quotedPrintable(e_2.name)}"`;
+          let removedNames = [e_2.name];
+          let hasRemovedNames = result.kind !== "plugin-directory-built-in";
+          let removedPluginIds = [];
+          if (result.kind !== "plugin-directory-built-in") removedPluginIds = result.removedPluginIds;
+          if (result.kind === "ignored-plugin-directory-name-entry-removed") {
+            let directoryMode = isPluginDirectoryModeOn();
+            let mapped = result.removedNames.map((m_1) => removedMarketplaceMessage(m_1, directoryMode));
+            message = `${figures_default.tick} ${mapped.join(" ")}`;
+            let blockedNotice = blockedPluginsNotice(result.disabledPluginIds, result.disabledReason);
+            if (blockedNotice !== null) message = `${message} ${blockedNotice}`;
+            removedNames = [e_2.name, ...result.removedNames];
+            hasRemovedNames = result.removedNames.length > 0;
+            if (!hasRemovedNames) message = `${figures_default.tick} ${marketplaceEntryGoneText(e_2.name)}`;
           }
-          if (Ln)
+          if (hasRemovedNames)
             logEvent("tengu_marketplace_removed", {
               marketplace_name: marketplaceForTelemetry(e_2.name),
               _PROTO_marketplace_name: e_2.name,
               is_official_marketplace: isOfficialMarketplaceName_3(e_2.name),
             });
           refreshPluginCaches(storageV5, credentials);
-          let Te = rn.kind === "ignored-plugin-directory-name-entry-removed";
-          et((prev) =>
-            prev.filter((dt) => !xn.includes(dt.name) || (Te && !isPluginDirectoryUnavailableFailure(dt))),
+          let isDirectoryEntry = result.kind === "ignored-plugin-directory-name-entry-removed";
+          setErrorRows((prev) =>
+            prev.filter(
+              (row) =>
+                !removedNames.includes(row.name) ||
+                (isDirectoryEntry && !isPluginDirectoryUnavailableFailure(row)),
+            ),
           );
-          activePlugins.removeErrorsOf(Mn);
-          fe(mn);
+          activePlugins.removeErrorsOf(removedPluginIds);
+          setStatusMessage(message);
           markPluginsChanged();
         } catch (error) {
-          let Dt = error;
-          fe(`Failed to remove "${quotedPrintable(e_2.name)}": ${printableMessage(Dt)}`);
+          let caught = error;
+          setStatusMessage(`Failed to remove "${quotedPrintable(e_2.name)}": ${printableMessage(caught)}`);
         }
-        if (Ut) he.current = false;
+        if (wasRemoving) removingRef.current = false;
       })();
     };
-    W[13] = activePlugins;
-    W[14] = credentials;
-    W[15] = markPluginsChanged;
-    W[16] = storageV5;
-    W[17] = ln;
-  } else ln = W[17];
-  let wt = ln;
-  let ke = () => {
-    let We = errorRows[selectedIndex];
-    if (!We) {
+    $[13] = activePlugins;
+    $[14] = credentials;
+    $[15] = markPluginsChanged;
+    $[16] = storageV5;
+    $[17] = removeInstalled;
+  } else removeInstalled = $[17];
+  let removeWithSiblings = removeInstalled;
+  let acceptRow = () => {
+    let row = errorRows_3[selectedIndex];
+    if (!row) {
       return;
     }
-    let { action } = We;
+    let { action } = row;
     Ve: switch (action.kind) {
       case "navigate": {
         setActiveTab(action.tab);
@@ -1205,11 +1314,11 @@ function ErrorsTabContent(props) {
         break Ve;
       }
       case "remove-extra-marketplace": {
-        ne(action);
+        confirmAction(action);
         break Ve;
       }
       case "remove-ignored-name-entries": {
-        ne(action);
+        confirmAction(action);
         break Ve;
       }
       case "managed-only": {
@@ -1218,45 +1327,42 @@ function ErrorsTabContent(props) {
       case "none":
     }
   };
-  let on;
-  if (W[18] === MEMO_CACHE_SENTINEL) {
-    on = () => setSelectedIndex(decrementNonNegative);
-    W[18] = on;
-  } else on = W[18];
-  const isActive = errorRows.length > 0 && !action;
-  let qt;
-  if (W[19] !== isActive) {
-    qt = {
+  let selectPrevious;
+  if ($[18] === MEMO_CACHE_SENTINEL) {
+    selectPrevious = () => setSelectedIndex(decrementNonNegative);
+    $[18] = selectPrevious;
+  } else selectPrevious = $[18];
+  const isActive = errorRows_3.length > 0 && !action;
+  let selectKeybinds;
+  if ($[19] !== isActive) {
+    selectKeybinds = {
       context: "Select",
       isActive,
     };
-    W[19] = isActive;
-    W[20] = qt;
-  } else qt = W[20];
+    $[19] = isActive;
+    $[20] = selectKeybinds;
+  } else selectKeybinds = $[20];
   MessageActionsKeybindings(
     {
-      "select:previous": on,
-      "select:next": () => setSelectedIndex((prev) => Math.min(errorRows.length - 1, prev + 1)),
-      "select:accept": ke,
+      "select:previous": selectPrevious,
+      "select:next": () => setSelectedIndex((prev) => Math.min(errorRows_3.length - 1, prev + 1)),
+      "select:accept": acceptRow,
     },
-    qt,
+    selectKeybinds,
   );
-  let xt;
-  if (W[21] !== brokenInstalledMarketplaces) {
-    xt = (_t) =>
-      _t.kind === "remove-ignored-name-entries" && isOfficialMarketplaceName_2(_t.name)
-        ? uniq([
-            _t.name,
-            ...brokenInstalledMarketplaces.filter(isOfficialDirUnavailableFailure).map(failureName),
-          ])
-        : [_t.name];
-    W[21] = brokenInstalledMarketplaces;
-    W[22] = xt;
-  } else xt = W[22];
-  let Mt = xt;
-  let hn;
-  if (W[23] !== action || W[24] !== $t || W[25] !== wt) {
-    hn = function sn(prev_2) {
+  let namesForAction;
+  if ($[21] !== errorRows_2) {
+    namesForAction = (row) =>
+      row.kind === "remove-ignored-name-entries" && isOfficialMarketplaceName_2(row.name)
+        ? uniq([row.name, ...errorRows_2.filter(isOfficialDirUnavailableFailure).map(failureName)])
+        : [row.name];
+    $[21] = errorRows_2;
+    $[22] = namesForAction;
+  } else namesForAction = $[22];
+  let actionNames = namesForAction;
+  let handleKeyDown;
+  if ($[23] !== action || $[24] !== removeExtra || $[25] !== removeWithSiblings) {
+    handleKeyDown = function handleKeyDown(prev_2) {
       if (prev_2.ctrl || prev_2.meta || action === null) {
         return;
       }
@@ -1266,55 +1372,55 @@ function ErrorsTabContent(props) {
       }
       if (prev_2.key === "y" || prev_2.key === "Y") {
         prev_2.preventDefault();
-        let Fn = action;
-        ne(null);
-        if (Fn.kind === "remove-extra-marketplace") $t(Fn);
-        else wt(Fn);
+        let pendingAction = action;
+        confirmAction(null);
+        if (pendingAction.kind === "remove-extra-marketplace") removeExtra(pendingAction);
+        else removeWithSiblings(pendingAction);
       } else if (prev_2.key === "n" || prev_2.key === "N") {
         prev_2.preventDefault();
-        ne(null);
+        confirmAction(null);
       }
     };
-    W[23] = action;
-    W[24] = $t;
-    W[25] = wt;
-    W[26] = hn;
-  } else hn = W[26];
-  let onKeyDown = hn;
-  if (errorRows.length === 0 && action !== null) ne(null);
-  let clampedIndex = Math.min(selectedIndex, Math.max(0, errorRows.length - 1));
+    $[23] = action;
+    $[24] = removeExtra;
+    $[25] = removeWithSiblings;
+    $[26] = handleKeyDown;
+  } else handleKeyDown = $[26];
+  let onKeyDown = handleKeyDown;
+  if (errorRows_3.length === 0 && action !== null) confirmAction(null);
+  let clampedIndex = Math.min(selectedIndex, Math.max(0, errorRows_3.length - 1));
   if (clampedIndex !== selectedIndex) setSelectedIndex(clampedIndex);
-  let selectedAction = errorRows[clampedIndex]?.action;
-  let An = selectedAction && selectedAction.kind !== "none" && selectedAction.kind !== "managed-only";
-  if (errorRows.length === 0) {
-    let Bn;
-    if (W[27] === MEMO_CACHE_SENTINEL) {
-      Bn = jsxProd_default(Box, {
+  let selectedAction = errorRows_3[clampedIndex]?.action;
+  let canConfirm = selectedAction && selectedAction.kind !== "none" && selectedAction.kind !== "managed-only";
+  if (errorRows_3.length === 0) {
+    let iconBox;
+    if ($[27] === MEMO_CACHE_SENTINEL) {
+      iconBox = jsxProd_default(Box, {
         marginLeft: 1,
         children: jsxProd_default(HintText, {
           children: "No plugin errors",
         }),
       });
-      W[27] = Bn;
-    } else Bn = W[27];
-    let Tn;
-    if (W[28] !== pe) {
-      Tn =
-        pe &&
+      $[27] = iconBox;
+    } else iconBox = $[27];
+    let statusLine;
+    if ($[28] !== statusMessage) {
+      statusLine =
+        statusMessage &&
         jsxProd_default(Box, {
           marginTop: 1,
           marginLeft: 1,
           children: jsxProd_default(Text, {
             color: "claude",
-            children: stripInvisibleKeepEmoji(pe),
+            children: stripInvisibleKeepEmoji(statusMessage),
           }),
         });
-      W[28] = pe;
-      W[29] = Tn;
-    } else Tn = W[29];
-    let ze;
-    if (W[30] === MEMO_CACHE_SENTINEL) {
-      ze = jsxProd_default(Box, {
+      $[28] = statusMessage;
+      $[29] = statusLine;
+    } else statusLine = $[29];
+    let spacerBox;
+    if ($[30] === MEMO_CACHE_SENTINEL) {
+      spacerBox = jsxProd_default(Box, {
         marginTop: 1,
         children: jsxProd_default(Text, {
           dimColor: true,
@@ -1327,28 +1433,28 @@ function ErrorsTabContent(props) {
           }),
         }),
       });
-      W[30] = ze;
-    } else ze = W[30];
-    let At;
-    if (W[31] !== Tn) {
-      At = jsxProd_default_2(Box, {
+      $[30] = spacerBox;
+    } else spacerBox = $[30];
+    let headerBox;
+    if ($[31] !== statusLine) {
+      headerBox = jsxProd_default_2(Box, {
         flexDirection: "column",
-        children: [Bn, Tn, ze],
+        children: [iconBox, statusLine, spacerBox],
       });
-      W[31] = Tn;
-      W[32] = At;
-    } else At = W[32];
-    return At;
+      $[31] = statusLine;
+      $[32] = headerBox;
+    } else headerBox = $[32];
+    return headerBox;
   }
-  const de = Box;
+  const BoxComponent = Box;
   const flexDirection = "column";
   const gap = 1;
-  let ze;
-  if (W[33] !== clampedIndex || W[34] !== action) {
-    ze = (row, idx) => {
-      let mt = idx === clampedIndex;
-      let en = row.isAdvisory ? "warning" : "error";
-      let Pt = mt
+  let renderRow;
+  if ($[33] !== clampedIndex || $[34] !== action) {
+    renderRow = (row, idx) => {
+      let isActiveRow = idx === clampedIndex;
+      let color = row.isAdvisory ? "warning" : "error";
+      let rowText = isActiveRow
         ? figures_default.pointer
         : row.isAdvisory
           ? figures_default.triangleUpOutline
@@ -1356,19 +1462,19 @@ function ErrorsTabContent(props) {
       return jsxProd_default_2(
         TwoColumnRow,
         {
-          active: mt && !action,
+          active: isActiveRow && !action,
           marginLeft: 1,
           flexDirection: "column",
           children: [
             jsxProd_default_2(Text, {
               children: [
                 jsxProd_default_2(Text, {
-                  "aria-hidden": mt,
-                  color: mt ? "suggestion" : en,
-                  children: [Pt, " "],
+                  "aria-hidden": isActiveRow,
+                  color: isActiveRow ? "suggestion" : color,
+                  children: [rowText, " "],
                 }),
                 jsxProd_default(Text, {
-                  bold: mt,
+                  bold: isActiveRow,
                   children: stripInvisibleKeepEmoji(row.label),
                 }),
                 row.scope &&
@@ -1381,7 +1487,7 @@ function ErrorsTabContent(props) {
             jsxProd_default(Box, {
               marginLeft: 3,
               children: jsxProd_default(Text, {
-                color: en,
+                color,
                 wrap: "wrap-trim",
                 children: stripInvisibleKeepNewlines(row.message),
               }),
@@ -1401,14 +1507,14 @@ function ErrorsTabContent(props) {
         idx,
       );
     };
-    W[33] = clampedIndex;
-    W[34] = action;
-    W[35] = ze;
-  } else ze = W[35];
-  const mapped = errorRows.map(ze);
-  let kn;
-  if (W[36] !== onKeyDown || W[37] !== action || W[38] !== Mt) {
-    kn =
+    $[33] = clampedIndex;
+    $[34] = action;
+    $[35] = renderRow;
+  } else renderRow = $[35];
+  const mapped = errorRows_3.map(renderRow);
+  let footerBox;
+  if ($[36] !== onKeyDown || $[37] !== action || $[38] !== actionNames) {
+    footerBox =
       action &&
       jsxProd_default(FocusColumn, {
         onKeyDown,
@@ -1419,7 +1525,7 @@ function ErrorsTabContent(props) {
             color: "warning",
             wrap: "wrap-trim",
             children: [
-              describeMarketplaceRemoval(action, Mt(action)),
+              describeMarketplaceRemoval(action, actionNames(action)),
               " ",
               "Press ",
               jsxProd_default(Text, {
@@ -1433,34 +1539,34 @@ function ErrorsTabContent(props) {
               }),
               " to keep",
               " ",
-              Mt(action).length > 1 ? "them" : "it",
+              actionNames(action).length > 1 ? "them" : "it",
               ".",
             ],
           }),
         }),
       });
-    W[36] = onKeyDown;
-    W[37] = action;
-    W[38] = Mt;
-    W[39] = kn;
-  } else kn = W[39];
-  let bn;
-  if (W[40] !== pe) {
-    bn =
-      pe &&
+    $[36] = onKeyDown;
+    $[37] = action;
+    $[38] = actionNames;
+    $[39] = footerBox;
+  } else footerBox = $[39];
+  let detailsBox;
+  if ($[40] !== statusMessage) {
+    detailsBox =
+      statusMessage &&
       jsxProd_default(Box, {
         marginLeft: 1,
         children: jsxProd_default(Text, {
           color: "claude",
-          children: stripInvisibleKeepEmoji(pe),
+          children: stripInvisibleKeepEmoji(statusMessage),
         }),
       });
-    W[40] = pe;
-    W[41] = bn;
-  } else bn = W[41];
-  let Hn;
-  if (W[42] !== action) {
-    Hn =
+    $[40] = statusMessage;
+    $[41] = detailsBox;
+  } else detailsBox = $[41];
+  let iconLine;
+  if ($[42] !== action) {
+    iconLine =
       !action &&
       jsxProd_default(ConfigurableShortcutHint, {
         action: "select:previous",
@@ -1468,13 +1574,13 @@ function ErrorsTabContent(props) {
         fallback: "\u2191",
         description: "navigate",
       });
-    W[42] = action;
-    W[43] = Hn;
-  } else Hn = W[43];
-  let wn;
-  if (W[44] !== An || W[45] !== action) {
-    wn =
-      An &&
+    $[42] = action;
+    $[43] = iconLine;
+  } else iconLine = $[43];
+  let statusLine;
+  if ($[44] !== canConfirm || $[45] !== action) {
+    statusLine =
+      canConfirm &&
       !action &&
       jsxProd_default(ConfigurableShortcutHint, {
         action: "select:accept",
@@ -1482,53 +1588,59 @@ function ErrorsTabContent(props) {
         fallback: "Enter",
         description: "resolve",
       });
-    W[44] = An;
-    W[45] = action;
-    W[46] = wn;
-  } else wn = W[46];
-  const description = action ? (Mt(action).length > 1 ? "keep them" : "keep it") : "go back";
-  let po;
-  if (W[47] !== description) {
-    po = jsxProd_default(ConfigurableShortcutHint, {
+    $[44] = canConfirm;
+    $[45] = action;
+    $[46] = statusLine;
+  } else statusLine = $[46];
+  const description = action ? (actionNames(action).length > 1 ? "keep them" : "keep it") : "go back";
+  let shortcutHint;
+  if ($[47] !== description) {
+    shortcutHint = jsxProd_default(ConfigurableShortcutHint, {
       action: "confirm:no",
       context: "Confirmation",
       fallback: "Esc",
       description,
     });
-    W[47] = description;
-    W[48] = po;
-  } else po = W[48];
-  let ao;
-  if (W[49] !== Hn || W[50] !== wn || W[51] !== po) {
-    ao = jsxProd_default(Box, {
+    $[47] = description;
+    $[48] = shortcutHint;
+  } else shortcutHint = $[48];
+  let hintBox;
+  if ($[49] !== iconLine || $[50] !== statusLine || $[51] !== shortcutHint) {
+    hintBox = jsxProd_default(Box, {
       children: jsxProd_default(Text, {
         dimColor: true,
         italic: true,
         children: jsxProd_default_2(Byline, {
-          children: [Hn, wn, po],
+          children: [iconLine, statusLine, shortcutHint],
         }),
       }),
     });
-    W[49] = Hn;
-    W[50] = wn;
-    W[51] = po;
-    W[52] = ao;
-  } else ao = W[52];
-  let Yn;
-  if (W[53] !== de || W[54] !== mapped || W[55] !== kn || W[56] !== bn || W[57] !== ao) {
-    Yn = jsxProd_default_2(de, {
+    $[49] = iconLine;
+    $[50] = statusLine;
+    $[51] = shortcutHint;
+    $[52] = hintBox;
+  } else hintBox = $[52];
+  let panel;
+  if (
+    $[53] !== BoxComponent ||
+    $[54] !== mapped ||
+    $[55] !== footerBox ||
+    $[56] !== detailsBox ||
+    $[57] !== hintBox
+  ) {
+    panel = jsxProd_default_2(BoxComponent, {
       flexDirection,
       gap,
-      children: [mapped, kn, bn, ao],
+      children: [mapped, footerBox, detailsBox, hintBox],
     });
-    W[53] = de;
-    W[54] = mapped;
-    W[55] = kn;
-    W[56] = bn;
-    W[57] = ao;
-    W[58] = Yn;
-  } else Yn = W[58];
-  return Yn;
+    $[53] = BoxComponent;
+    $[54] = mapped;
+    $[55] = footerBox;
+    $[56] = detailsBox;
+    $[57] = hintBox;
+    $[58] = panel;
+  } else panel = $[58];
+  return panel;
 }
 //@ chunk-vrb44rx7.js:235684-237549 fingerprint = getInitialViewState (0.746)
 function getInitialViewState(parsedCommand, fromLinkPrefill) {
@@ -1688,122 +1800,122 @@ function getInitialTab(viewState) {
  * PluginCommand：/plugin 的根组件（解析参数后渲染 PluginSettings）。
  */
 function PluginCommand(props) {
-  let k = w(21);
+  let $ = useMemoCache(21);
   let { onComplete } = props;
-  let C;
-  if (k[0] !== onComplete) {
-    C = (...x) => {
-      let T = x;
-      if (typeof T[0] === "string") T[0] = neutralizeInboundTags(T[0]);
-      onComplete(...T);
+  let finish;
+  if ($[0] !== onComplete) {
+    finish = (...args) => {
+      let resultArgs = args;
+      if (typeof resultArgs[0] === "string") resultArgs[0] = neutralizeInboundTags(resultArgs[0]);
+      onComplete(...resultArgs);
     };
-    k[0] = onComplete;
-    k[1] = C;
-  } else C = k[1];
-  let D = C;
+    $[0] = onComplete;
+    $[1] = finish;
+  } else finish = $[1];
+  let finishSafe = finish;
   let sessionOrUndefined = useSessionOrUndefined();
-  let x;
-  if (k[2] !== props.args || k[3] !== sessionOrUndefined) {
-    x = () => {
-      let L = sessionOrUndefined ? setPromptValueFor(sessionOrUndefined) : null;
-      if (L === null) {
+  let prepared;
+  if ($[2] !== props.args || $[3] !== sessionOrUndefined) {
+    prepared = () => {
+      let prompt = sessionOrUndefined ? setPromptValueFor(sessionOrUndefined) : null;
+      if (prompt === null) {
         return null;
       }
-      let args = parseSlashCommand(L)?.args;
+      let args = parseSlashCommand(prompt)?.args;
       let pluginArgs = parsePluginArgs(props.args);
-      if (args === undefined || !En(parsePluginArgs(args), pluginArgs)) {
+      if (args === undefined || !import_sortedIndex_2(parsePluginArgs(args), pluginArgs)) {
         return null;
       }
       let installLinkOff =
         pluginArgs.type === "install-from-source" &&
         !getFeatureValue_CACHED_MAY_BE_STALE("tengu_amber_tollgate", false);
       return {
-        command: L,
+        command: prompt,
         held: !isReadOnlyPluginCommand(pluginArgs),
         installLinkOff,
       };
     };
-    k[2] = props.args;
-    k[3] = sessionOrUndefined;
-    k[4] = x;
-  } else x = k[4];
-  let [B] = y(x);
-  let [_, J] = y(false);
-  let pe = B?.installLinkOff
+    $[2] = props.args;
+    $[3] = sessionOrUndefined;
+    $[4] = prepared;
+  } else prepared = $[4];
+  let [preparedState] = useState(prepared);
+  let [refreshing, setRefreshing] = useState(false);
+  let notice = preparedState?.installLinkOff
     ? "Plugin install links are turned off. To install, type /plugin install yourself."
-    : B?.held === true && !/^[\x20-\x7e]*$/.test(B.command)
+    : preparedState?.held === true && !/^[\x20-\x7e]*$/.test(preparedState.command)
       ? "The command from the link has characters that can't be shown faithfully, so it didn't run. To run it, type it yourself."
       : null;
-  let fe;
-  let me;
-  if (k[5] !== D || k[6] !== pe) {
-    fe = () => {
-      if (pe !== null) D(pe);
+  let content;
+  let footer;
+  if ($[5] !== finishSafe || $[6] !== notice) {
+    content = () => {
+      if (notice !== null) finishSafe(notice);
     };
-    me = [pe, D];
-    k[5] = D;
-    k[6] = pe;
-    k[7] = fe;
-    k[8] = me;
+    footer = [notice, finishSafe];
+    $[5] = finishSafe;
+    $[6] = notice;
+    $[7] = content;
+    $[8] = footer;
   } else {
-    fe = k[7];
-    me = k[8];
+    content = $[7];
+    footer = $[8];
   }
-  P(fe, me);
-  if (pe !== null) {
+  useEffect(content, footer);
+  if (notice !== null) {
     return null;
   }
-  if (B?.held && !_) {
+  if (preparedState?.held && !refreshing) {
     let onConfirm;
-    if (k[9] === MEMO_CACHE_SENTINEL) {
-      onConfirm = () => J(true);
-      k[9] = onConfirm;
-    } else onConfirm = k[9];
+    if ($[9] === MEMO_CACHE_SENTINEL) {
+      onConfirm = () => setRefreshing(true);
+      $[9] = onConfirm;
+    } else onConfirm = $[9];
     let onCancel;
-    if (k[10] !== D) {
-      onCancel = () => D("Cancelled. The command from the link didn't run.");
-      k[10] = D;
-      k[11] = onCancel;
-    } else onCancel = k[11];
-    let W;
-    if (k[12] !== B.command || k[13] !== onCancel) {
-      W = jsxProd_default(ConfirmCommandDialog, {
-        command: B.command,
+    if ($[10] !== finishSafe) {
+      onCancel = () => finishSafe("Cancelled. The command from the link didn't run.");
+      $[10] = finishSafe;
+      $[11] = onCancel;
+    } else onCancel = $[11];
+    let body;
+    if ($[12] !== preparedState.command || $[13] !== onCancel) {
+      body = jsxProd_default(ConfirmCommandDialog, {
+        command: preparedState.command,
         onConfirm,
         onCancel,
       });
-      k[12] = B.command;
-      k[13] = onCancel;
-      k[14] = W;
-    } else W = k[14];
-    return W;
+      $[12] = preparedState.command;
+      $[13] = onCancel;
+      $[14] = body;
+    } else body = $[14];
+    return body;
   }
   let props_2;
-  if (k[15] !== D || k[16] !== props) {
+  if ($[15] !== finishSafe || $[16] !== props) {
     props_2 = {
       ...props,
-      onComplete: D,
+      onComplete: finishSafe,
     };
-    k[15] = D;
-    k[16] = props;
-    k[17] = props_2;
-  } else props_2 = k[17];
-  const fromLinkPrefill = B !== null;
-  let W;
-  if (k[18] !== props_2 || k[19] !== fromLinkPrefill) {
-    W = jsxProd_default(PluginSettings, {
+    $[15] = finishSafe;
+    $[16] = props;
+    $[17] = props_2;
+  } else props_2 = $[17];
+  const fromLinkPrefill = preparedState !== null;
+  let statusLine;
+  if ($[18] !== props_2 || $[19] !== fromLinkPrefill) {
+    statusLine = jsxProd_default(PluginSettings, {
       props: props_2,
       fromLinkPrefill,
     });
-    k[18] = props_2;
-    k[19] = fromLinkPrefill;
-    k[20] = W;
-  } else W = k[20];
-  return W;
+    $[18] = props_2;
+    $[19] = fromLinkPrefill;
+    $[20] = statusLine;
+  } else statusLine = $[20];
+  return statusLine;
 }
 //@ chunk-vrb44rx7.js:239211-250512 fingerprint = PluginSettings (0.63)
 function PluginSettings(props) {
-  let _ = w(147);
+  let $ = useMemoCache(147);
   let { props: props_2, fromLinkPrefill } = props;
   let {
     onComplete,
@@ -1818,81 +1930,83 @@ function PluginSettings(props) {
     cloudSession,
   } = props_2;
   let parsedCommand;
-  let pe;
-  if (_[0] !== args || _[1] !== fromLinkPrefill) {
+  let viewState;
+  if ($[0] !== args || $[1] !== fromLinkPrefill) {
     parsedCommand = parsePluginArgs(args);
-    pe = getInitialViewState(parsedCommand, fromLinkPrefill);
-    _[0] = args;
-    _[1] = fromLinkPrefill;
-    _[2] = parsedCommand;
-    _[3] = pe;
+    viewState = getInitialViewState(parsedCommand, fromLinkPrefill);
+    $[0] = args;
+    $[1] = fromLinkPrefill;
+    $[2] = parsedCommand;
+    $[3] = viewState;
   } else {
-    parsedCommand = _[2];
-    pe = _[3];
+    parsedCommand = $[2];
+    viewState = $[3];
   }
-  let viewState = pe;
-  let me;
-  if (_[4] !== viewState || _[5] !== parsedCommand.message || _[6] !== parsedCommand.type) {
-    me = () => {
-      let ne = new PluginDetailsStore(viewState);
-      if (parsedCommand.type === "usage-error") ne.setResult(parsedCommand.message);
-      return ne;
+  let viewState_2 = viewState;
+  let store;
+  if ($[4] !== viewState_2 || $[5] !== parsedCommand.message || $[6] !== parsedCommand.type) {
+    store = () => {
+      let detailsStore = new PluginDetailsStore(viewState_2);
+      if (parsedCommand.type === "usage-error") detailsStore.setResult(parsedCommand.message);
+      return detailsStore;
     };
-    _[4] = viewState;
-    _[5] = parsedCommand.message;
-    _[6] = parsedCommand.type;
-    _[7] = me;
-  } else me = _[7];
-  let [he] = y(me);
-  let { viewState: viewState_2, result: Oe, error } = useStoreSelector(he);
-  let { setViewState, setResult, setError } = he;
-  let [Se] = y(emptySet);
-  let kt = R(null);
-  let Tt;
-  if (_[8] !== getSkillStatsInputs) {
-    Tt = () => {
-      if (kt.current === null) {
+    $[4] = viewState_2;
+    $[5] = parsedCommand.message;
+    $[6] = parsedCommand.type;
+    $[7] = store;
+  } else store = $[7];
+  let [storeRef] = useState(store);
+  let { viewState: viewState_3, result, error } = useStoreSelector(storeRef);
+  let { setViewState, setResult, setError } = storeRef;
+  let [loaded] = useState(emptySet);
+  let lastRef = useRef(null);
+  let editor;
+  if ($[8] !== getSkillStatsInputs) {
+    editor = () => {
+      if (lastRef.current === null) {
         if (!getSkillStatsInputs) {
           throw Error("Stats tab rendered without getSkillStatsInputs");
         }
-        kt.current = logSkillDoctor(getSkillStatsInputs());
+        lastRef.current = logSkillDoctor(getSkillStatsInputs());
       }
-      return kt.current;
+      return lastRef.current;
     };
-    _[8] = getSkillStatsInputs;
-    _[9] = Tt;
-  } else Tt = _[9];
-  let getReport = Tt;
-  let Et;
-  if (_[10] !== viewState) {
-    Et = getInitialTab(viewState);
-    _[10] = viewState;
-    _[11] = Et;
-  } else Et = _[11];
-  let [activeTab, setActiveTab] = y(Et);
-  let [inputValue, setInputValue] = y(
-    viewState_2.type === "add-marketplace" ? viewState_2.initialValue || "" : "",
+    $[8] = getSkillStatsInputs;
+    $[9] = editor;
+  } else editor = $[9];
+  let getReport = editor;
+  let statusLine;
+  if ($[10] !== viewState_2) {
+    statusLine = getInitialTab(viewState_2);
+    $[10] = viewState_2;
+    $[11] = statusLine;
+  } else statusLine = $[11];
+  let [activeTab, setActiveTab] = useState(statusLine);
+  let [inputValue, setInputValue] = useState(
+    viewState_3.type === "add-marketplace" ? viewState_3.initialValue || "" : "",
   );
-  let [cursorOffset, setCursorOffset] = y(0);
-  let [Ot, an] = y(
-    viewState.type === "add-marketplace" && !!viewState.initialValue && viewState.confirmAdd === undefined,
+  let [cursorOffset, setCursorOffset] = useState(0);
+  let [autoOpenAdd, setAutoOpenAdd] = useState(
+    viewState_2.type === "add-marketplace" &&
+      !!viewState_2.initialValue &&
+      viewState_2.confirmAdd === undefined,
   );
-  let Yt;
-  if (_[12] !== setViewState) {
-    Yt = (_e) => {
-      if (_e.type === "add-marketplace") {
-        let initialValue = _e.initialValue ?? "";
+  let handleStoreChange;
+  if ($[12] !== setViewState) {
+    handleStoreChange = (next) => {
+      if (next.type === "add-marketplace") {
+        let initialValue = next.initialValue ?? "";
         setInputValue(initialValue);
         setCursorOffset(initialValue.length);
-        an(false);
+        setAutoOpenAdd(false);
       }
-      setViewState(_e);
+      setViewState(next);
     };
-    _[12] = setViewState;
-    _[13] = Yt;
-  } else Yt = _[13];
-  let setViewState_2 = Yt;
-  let [childSearchActive, setChildSearchActive] = y(false);
+    $[12] = setViewState;
+    $[13] = handleStoreChange;
+  } else handleStoreChange = $[13];
+  let setViewState_2 = handleStoreChange;
+  let [childSearchActive, setChildSearchActive] = useState(false);
   let setAppState = activeModNames();
   let activePlugins = useActivePlugins();
   let mcpConnections = useMcpConnections();
@@ -1903,70 +2017,70 @@ function PluginSettings(props) {
     parsedCommand.type === "marketplace" &&
     parsedCommand.action === "add" &&
     parsedCommand.target !== undefined;
-  let xn;
-  if (_[14] !== getSkillStatsInputs) {
-    xn = getSkillStatsInputs !== undefined && lanternPrismEnabled();
-    _[14] = getSkillStatsInputs;
-    _[15] = xn;
-  } else xn = _[15];
-  let Ln = xn;
-  let Mn = R(false);
-  let fn;
-  if (_[16] !== activePlugins) {
-    fn = () => {
-      Mn.current = true;
+  let prevState;
+  if ($[14] !== getSkillStatsInputs) {
+    prevState = getSkillStatsInputs !== undefined && lanternPrismEnabled();
+    $[14] = getSkillStatsInputs;
+    $[15] = prevState;
+  } else prevState = $[15];
+  let previousViewState = prevState;
+  let searching = useRef(false);
+  let searchMode;
+  if ($[16] !== activePlugins) {
+    searchMode = () => {
+      searching.current = true;
       activePlugins.markNeedsRefresh();
     };
-    _[16] = activePlugins;
-    _[17] = fn;
-  } else fn = _[17];
-  let Be = fn;
-  let jt;
-  if (_[18] !== getReloadCacheImpactOptions) {
-    jt = getReloadCacheImpactOptions !== undefined && isPluginMenuCloseReloadEnabled();
-    _[18] = getReloadCacheImpactOptions;
-    _[19] = jt;
-  } else jt = _[19];
-  let le = jt;
-  let Te = R(false);
-  let Ue;
-  if (_[20] !== activePlugins || _[21] !== le || _[22] !== onComplete) {
-    Ue = (tabId) => {
-      if (Te.current) {
+    $[16] = activePlugins;
+    $[17] = searchMode;
+  } else searchMode = $[17];
+  let isSearchMode = searchMode;
+  let tab;
+  if ($[18] !== getReloadCacheImpactOptions) {
+    tab = getReloadCacheImpactOptions !== undefined && isPluginMenuCloseReloadEnabled();
+    $[18] = getReloadCacheImpactOptions;
+    $[19] = tab;
+  } else tab = $[19];
+  let selectedTab = tab;
+  let reloading = useRef(false);
+  let reloadStatus;
+  if ($[20] !== activePlugins || $[21] !== selectedTab || $[22] !== onComplete) {
+    reloadStatus = (tabId) => {
+      if (reloading.current) {
         return;
       }
-      Te.current = true;
-      let Dt = le && Mn.current ? schedulePluginMenuReload(activePlugins) : "none";
-      if (Dt === "none") {
+      reloading.current = true;
+      let reloadPlan = selectedTab && searching.current ? schedulePluginMenuReload(activePlugins) : "none";
+      if (reloadPlan === "none") {
         onComplete(tabId);
         return;
       }
-      onComplete(Dt === "deferred" ? firstNonEmpty(tabId, PLUGIN_CHANGES_DEFERRED_NOTICE) : tabId, {
+      onComplete(reloadPlan === "deferred" ? firstNonEmpty(tabId, PLUGIN_CHANGES_DEFERRED_NOTICE) : tabId, {
         nextInput: "/reload-plugins",
         submitNextInput: true,
       });
     };
-    _[20] = activePlugins;
-    _[21] = le;
-    _[22] = onComplete;
-    _[23] = Ue;
-  } else Ue = _[23];
-  let wt = Ue;
-  let exitState = useGlobalExitKeybindings(wt);
-  let Ce;
+    $[20] = activePlugins;
+    $[21] = selectedTab;
+    $[22] = onComplete;
+    $[23] = reloadStatus;
+  } else reloadStatus = $[23];
+  let statusValue = reloadStatus;
+  let exitState = useGlobalExitKeybindings(statusValue);
+  let reloadAfterChange;
   if (
-    _[24] !== activePlugins ||
-    _[25] !== getReloadCacheImpactOptions ||
-    _[26] !== Be ||
-    _[27] !== mcpConnections ||
-    _[28] !== storageV5
+    $[24] !== activePlugins ||
+    $[25] !== getReloadCacheImpactOptions ||
+    $[26] !== isSearchMode ||
+    $[27] !== mcpConnections ||
+    $[28] !== storageV5
   ) {
-    Ce = async (Ve) => {
+    reloadAfterChange = async (event) => {
       if (!getReloadCacheImpactOptions) {
-        Be();
+        isSearchMode();
         return "reload-required";
       }
-      Mn.current = true;
+      searching.current = true;
       return activatePluginsAfterInstall(
         () => ({
           ...getReloadCacheImpactOptions(),
@@ -1974,37 +2088,37 @@ function PluginSettings(props) {
           storageV5,
         }),
         activePlugins,
-        Ve,
+        event,
         storageV5,
       );
     };
-    _[24] = activePlugins;
-    _[25] = getReloadCacheImpactOptions;
-    _[26] = Be;
-    _[27] = mcpConnections;
-    _[28] = storageV5;
-    _[29] = Ce;
-  } else Ce = _[29];
-  let onInstallComplete = Ce;
-  let ht;
-  if (_[30] !== he) {
-    ht = (tabId) => {
+    $[24] = activePlugins;
+    $[25] = getReloadCacheImpactOptions;
+    $[26] = isSearchMode;
+    $[27] = mcpConnections;
+    $[28] = storageV5;
+    $[29] = reloadAfterChange;
+  } else reloadAfterChange = $[29];
+  let onInstallComplete = reloadAfterChange;
+  let content;
+  if ($[30] !== storeRef) {
+    content = (tabId) => {
       let tab = tabId;
-      xt: switch ((setActiveTab(tab), he.setError(null), tab)) {
+      xt: switch ((setActiveTab(tab), storeRef.setError(null), tab)) {
         case "discover": {
-          he.setViewState({
+          storeRef.setViewState({
             type: "discover-plugins",
           });
           break xt;
         }
         case "installed": {
-          he.setViewState({
+          storeRef.setViewState({
             type: "manage-plugins",
           });
           break xt;
         }
         case "marketplaces": {
-          he.setViewState({
+          storeRef.setViewState({
             type: "manage-marketplaces",
           });
           break xt;
@@ -2015,112 +2129,112 @@ function PluginSettings(props) {
         case "stats":
       }
     };
-    _[30] = he;
-    _[31] = ht;
-  } else ht = _[31];
-  let onTabChange = ht;
+    $[30] = storeRef;
+    $[31] = content;
+  } else content = $[31];
+  let onTabChange = content;
   let t5;
   let t6;
-  if (_[32] !== wt || _[33] !== Oe || _[34] !== viewState_2.type) {
+  if ($[32] !== statusValue || $[33] !== result || $[34] !== viewState_3.type) {
     t5 = () => {
-      if (viewState_2.type === "menu" && !Oe) wt();
+      if (viewState_3.type === "menu" && !result) statusValue();
     };
-    t6 = [viewState_2.type, Oe, wt];
-    _[32] = wt;
-    _[33] = Oe;
-    _[34] = viewState_2.type;
-    _[35] = t5;
-    _[36] = t6;
+    t6 = [viewState_3.type, result, statusValue];
+    $[32] = statusValue;
+    $[33] = result;
+    $[34] = viewState_3.type;
+    $[35] = t5;
+    $[36] = t6;
   } else {
-    t5 = _[35];
-    t6 = _[36];
+    t5 = $[35];
+    t6 = $[36];
   }
-  P(t5, t6);
-  let typeRef = R(viewState_2.type);
-  let Fn;
-  let sn;
-  if (_[37] !== viewState_2.type) {
-    Fn = () => {
-      if (viewState_2.type === typeRef.current) {
+  useEffect(t5, t6);
+  let typeRef = useRef(viewState_3.type);
+  let body;
+  let footer;
+  if ($[37] !== viewState_3.type) {
+    body = () => {
+      if (viewState_3.type === typeRef.current) {
         return;
       }
-      typeRef.current = viewState_2.type;
-      let Rn = {
+      typeRef.current = viewState_3.type;
+      let viewMap = {
         "browse-marketplace": "discover",
         "manage-plugins": "installed",
         "manage-marketplaces": "marketplaces",
-      }[viewState_2.type];
-      if (Rn) setActiveTab(Rn);
+      }[viewState_3.type];
+      if (viewMap) setActiveTab(viewMap);
     };
-    sn = [viewState_2.type];
-    _[37] = viewState_2.type;
-    _[38] = Fn;
-    _[39] = sn;
+    footer = [viewState_3.type];
+    $[37] = viewState_3.type;
+    $[38] = body;
+    $[39] = footer;
   } else {
-    Fn = _[38];
-    sn = _[39];
+    body = $[38];
+    footer = $[39];
   }
-  P(Fn, sn);
+  useEffect(body, footer);
   let t9;
-  if (_[40] !== he) {
+  if ($[40] !== storeRef) {
     t9 = () => {
       setActiveTab("marketplaces");
-      he.setViewState({
+      storeRef.setViewState({
         type: "manage-marketplaces",
       });
       setInputValue("");
-      he.setError(null);
+      storeRef.setError(null);
     };
-    _[40] = he;
-    _[41] = t9;
-  } else t9 = _[41];
+    $[40] = storeRef;
+    $[41] = t9;
+  } else t9 = $[41];
   let handleAddMarketplaceEscape = t9;
-  const isActive = viewState_2.type === "add-marketplace" && viewState_2.confirmAdd === undefined;
+  const isActive = viewState_3.type === "add-marketplace" && viewState_3.confirmAdd === undefined;
   let t11;
-  if (_[42] !== isActive) {
+  if ($[42] !== isActive) {
     t11 = {
       context: "Settings",
       isActive,
     };
-    _[42] = isActive;
-    _[43] = t11;
-  } else t11 = _[43];
+    $[42] = isActive;
+    $[43] = t11;
+  } else t11 = $[43];
   useKeybinding("confirm:no", handleAddMarketplaceEscape, t11);
   let t12;
   let t13;
-  if (_[44] !== wt || _[45] !== Oe) {
+  if ($[44] !== statusValue || $[45] !== result) {
     t12 = () => {
-      if (Oe) wt(Oe);
+      if (result) statusValue(result);
     };
-    t13 = [Oe, wt];
-    _[44] = wt;
-    _[45] = Oe;
-    _[46] = t12;
-    _[47] = t13;
+    t13 = [result, statusValue];
+    $[44] = statusValue;
+    $[45] = result;
+    $[46] = t12;
+    $[47] = t13;
   } else {
-    t12 = _[46];
-    t13 = _[47];
+    t12 = $[46];
+    t13 = $[47];
   }
-  P(t12, t13);
+  useEffect(t12, t13);
   let t14;
   let t15;
-  if (_[48] !== onComplete || _[49] !== viewState_2.type) {
+  if ($[48] !== onComplete || $[49] !== viewState_3.type) {
     t14 = () => {
-      if (viewState_2.type === "help") onComplete();
+      if (viewState_3.type === "help") onComplete();
     };
-    t15 = [viewState_2.type, onComplete];
-    _[48] = onComplete;
-    _[49] = viewState_2.type;
-    _[50] = t14;
-    _[51] = t15;
+    t15 = [viewState_3.type, onComplete];
+    $[48] = onComplete;
+    $[49] = viewState_3.type;
+    $[50] = t14;
+    $[51] = t15;
   } else {
-    t14 = _[50];
-    t15 = _[51];
+    t14 = $[50];
+    t15 = $[51];
   }
-  P(t14, t15);
-  if (viewState_2.type === "help") {
+  useEffect(t14, t15);
+  if (viewState_3.type === "help") {
     let t16;
-    if (_[52] === MEMO_CACHE_SENTINEL) {
+    if ($[52] === MEMO_CACHE_SENTINEL) {
       t16 = jsxProd_default_2(Box, {
         flexDirection: "column",
         children: [
@@ -2252,118 +2366,118 @@ function PluginSettings(props) {
           }),
         ],
       });
-      _[52] = t16;
-    } else t16 = _[52];
+      $[52] = t16;
+    } else t16 = $[52];
     return t16;
   }
-  if (viewState_2.type === "validate") {
-    let Ne;
-    if (_[53] !== onComplete || _[54] !== viewState_2.path) {
-      Ne = jsxProd_default(ValidatePlugin, {
+  if (viewState_3.type === "validate") {
+    let viewContent;
+    if ($[53] !== onComplete || $[54] !== viewState_3.path) {
+      viewContent = jsxProd_default(ValidatePlugin, {
         onComplete,
-        path: viewState_2.path,
+        path: viewState_3.path,
       });
-      _[53] = onComplete;
-      _[54] = viewState_2.path;
-      _[55] = Ne;
-    } else Ne = _[55];
-    return Ne;
+      $[53] = onComplete;
+      $[54] = viewState_3.path;
+      $[55] = viewContent;
+    } else viewContent = $[55];
+    return viewContent;
   }
-  if (viewState_2.type === "npm-install") {
-    let Ne;
-    if (_[56] !== onInstallComplete || _[57] !== onComplete || _[58] !== viewState_2.spec) {
-      Ne = jsxProd_default(PluginInstallRunner, {
-        spec: viewState_2.spec,
+  if (viewState_3.type === "npm-install") {
+    let detailBody;
+    if ($[56] !== onInstallComplete || $[57] !== onComplete || $[58] !== viewState_3.spec) {
+      detailBody = jsxProd_default(PluginInstallRunner, {
+        spec: viewState_3.spec,
         onComplete,
         onInstallComplete,
       });
-      _[56] = onInstallComplete;
-      _[57] = onComplete;
-      _[58] = viewState_2.spec;
-      _[59] = Ne;
-    } else Ne = _[59];
-    return Ne;
+      $[56] = onInstallComplete;
+      $[57] = onComplete;
+      $[58] = viewState_3.spec;
+      $[59] = detailBody;
+    } else detailBody = $[59];
+    return detailBody;
   }
-  if (viewState_2.type === "eval") {
-    let Ne;
-    if (_[60] !== onComplete || _[61] !== viewState_2.target) {
-      Ne = jsxProd_default(PluginEvalRunner, {
+  if (viewState_3.type === "eval") {
+    let menuBody;
+    if ($[60] !== onComplete || $[61] !== viewState_3.target) {
+      menuBody = jsxProd_default(PluginEvalRunner, {
         onComplete,
-        target: viewState_2.target,
+        target: viewState_3.target,
       });
-      _[60] = onComplete;
-      _[61] = viewState_2.target;
-      _[62] = Ne;
-    } else Ne = _[62];
-    return Ne;
+      $[60] = onComplete;
+      $[61] = viewState_3.target;
+      $[62] = menuBody;
+    } else menuBody = $[62];
+    return menuBody;
   }
-  if (viewState_2.type === "tag") {
-    let Ne;
+  if (viewState_3.type === "tag") {
+    let statusBox;
     if (
-      _[63] !== onComplete ||
-      _[64] !== viewState_2.dryRun ||
-      _[65] !== viewState_2.force ||
-      _[66] !== viewState_2.path ||
-      _[67] !== viewState_2.push ||
-      _[68] !== viewState_2.unknownFlag
+      $[63] !== onComplete ||
+      $[64] !== viewState_3.dryRun ||
+      $[65] !== viewState_3.force ||
+      $[66] !== viewState_3.path ||
+      $[67] !== viewState_3.push ||
+      $[68] !== viewState_3.unknownFlag
     ) {
-      Ne = jsxProd_default(PluginTagFlow, {
+      statusBox = jsxProd_default(PluginTagFlow, {
         onComplete,
-        path: viewState_2.path,
-        push: viewState_2.push,
-        dryRun: viewState_2.dryRun,
-        force: viewState_2.force,
-        unknownFlag: viewState_2.unknownFlag,
+        path: viewState_3.path,
+        push: viewState_3.push,
+        dryRun: viewState_3.dryRun,
+        force: viewState_3.force,
+        unknownFlag: viewState_3.unknownFlag,
       });
-      _[63] = onComplete;
-      _[64] = viewState_2.dryRun;
-      _[65] = viewState_2.force;
-      _[66] = viewState_2.path;
-      _[67] = viewState_2.push;
-      _[68] = viewState_2.unknownFlag;
-      _[69] = Ne;
-    } else Ne = _[69];
-    return Ne;
+      $[63] = onComplete;
+      $[64] = viewState_3.dryRun;
+      $[65] = viewState_3.force;
+      $[66] = viewState_3.path;
+      $[67] = viewState_3.push;
+      $[68] = viewState_3.unknownFlag;
+      $[69] = statusBox;
+    } else statusBox = $[69];
+    return statusBox;
   }
-  if (viewState_2.type === "marketplace-list") {
-    let Ne;
-    if (_[70] !== onComplete) {
-      Ne = jsxProd_default(MarketplaceList, {
+  if (viewState_3.type === "marketplace-list") {
+    let banner;
+    if ($[70] !== onComplete) {
+      banner = jsxProd_default(MarketplaceList, {
         onComplete,
       });
-      _[70] = onComplete;
-      _[71] = Ne;
-    } else Ne = _[71];
-    return Ne;
+      $[70] = onComplete;
+      $[71] = banner;
+    } else banner = $[71];
+    return banner;
   }
-  if (viewState_2.type === "plugin-list") {
-    let Ne;
-    if (_[72] !== onComplete || _[73] !== viewState_2.filter) {
-      Ne = jsxProd_default(PluginListPrinter, {
+  if (viewState_3.type === "plugin-list") {
+    let footerRow;
+    if ($[72] !== onComplete || $[73] !== viewState_3.filter) {
+      footerRow = jsxProd_default(PluginListPrinter, {
         onComplete,
-        filter: viewState_2.filter,
+        filter: viewState_3.filter,
       });
-      _[72] = onComplete;
-      _[73] = viewState_2.filter;
-      _[74] = Ne;
-    } else Ne = _[74];
-    return Ne;
+      $[72] = onComplete;
+      $[73] = viewState_3.filter;
+      $[74] = footerRow;
+    } else footerRow = $[74];
+    return footerRow;
   }
-  if (viewState_2.type === "add-marketplace") {
+  if (viewState_3.type === "add-marketplace") {
     let t16;
     if (
-      _[75] !== Ot ||
-      _[76] !== cliMode ||
-      _[77] !== cursorOffset ||
-      _[78] !== error ||
-      _[79] !== inputValue ||
-      _[80] !== Be ||
-      _[81] !== Oe ||
-      _[82] !== setError ||
-      _[83] !== setResult ||
-      _[84] !== setViewState ||
-      _[85] !== viewState_2.claudeAiListing ||
-      _[86] !== viewState_2.confirmAdd
+      $[75] !== autoOpenAdd ||
+      $[76] !== cliMode ||
+      $[77] !== cursorOffset ||
+      $[78] !== error ||
+      $[79] !== inputValue ||
+      $[80] !== isSearchMode ||
+      $[81] !== result ||
+      $[82] !== setError ||
+      $[83] !== setResult ||
+      $[84] !== setViewState ||
+      $[85] !== viewState_3.claudeAiListing ||
+      $[86] !== viewState_3.confirmAdd
     ) {
       t16 = jsxProd_default(AddMarketplace, {
         inputValue,
@@ -2372,40 +2486,40 @@ function PluginSettings(props) {
         setCursorOffset,
         error,
         setError,
-        result: Oe,
+        result,
         setResult,
         setViewState,
-        onAddComplete: Be,
+        onAddComplete: isSearchMode,
         cliMode,
-        autoAdd: Ot,
-        claudeAiListing: viewState_2.claudeAiListing,
-        confirmAdd: viewState_2.confirmAdd,
+        autoAdd: autoOpenAdd,
+        claudeAiListing: viewState_3.claudeAiListing,
+        confirmAdd: viewState_3.confirmAdd,
       });
-      _[75] = Ot;
-      _[76] = cliMode;
-      _[77] = cursorOffset;
-      _[78] = error;
-      _[79] = inputValue;
-      _[80] = Be;
-      _[81] = Oe;
-      _[82] = setError;
-      _[83] = setResult;
-      _[84] = setViewState;
-      _[85] = viewState_2.claudeAiListing;
-      _[86] = viewState_2.confirmAdd;
-      _[87] = t16;
-    } else t16 = _[87];
+      $[75] = autoOpenAdd;
+      $[76] = cliMode;
+      $[77] = cursorOffset;
+      $[78] = error;
+      $[79] = inputValue;
+      $[80] = isSearchMode;
+      $[81] = result;
+      $[82] = setError;
+      $[83] = setResult;
+      $[84] = setViewState;
+      $[85] = viewState_3.claudeAiListing;
+      $[86] = viewState_3.confirmAdd;
+      $[87] = t16;
+    } else t16 = $[87];
     return t16;
   }
-  let Ne;
+  let mainView;
   if (
-    _[88] !== activeTab ||
-    _[89] !== cloudSession ||
-    _[90] !== showMcpRedirectMessage ||
-    _[91] !== showSkillDoctorRedirectMessage ||
-    _[92] !== showSkillsRedirectMessage
+    $[88] !== activeTab ||
+    $[89] !== cloudSession ||
+    $[90] !== showMcpRedirectMessage ||
+    $[91] !== showSkillDoctorRedirectMessage ||
+    $[92] !== showSkillsRedirectMessage
   ) {
-    Ne = cloudSession
+    mainView = cloudSession
       ? jsxProd_default(CloudSessionPluginsNotice, {})
       : showMcpRedirectMessage && activeTab === "installed"
         ? jsxProd_default(nullComponent, {})
@@ -2414,16 +2528,16 @@ function PluginSettings(props) {
           : showSkillDoctorRedirectMessage && activeTab === "stats"
             ? jsxProd_default(SkillDoctorMovedNotice, {})
             : undefined;
-    _[88] = activeTab;
-    _[89] = cloudSession;
-    _[90] = showMcpRedirectMessage;
-    _[91] = showSkillDoctorRedirectMessage;
-    _[92] = showSkillsRedirectMessage;
-    _[93] = Ne;
-  } else Ne = _[93];
-  let mt = Ne;
+    $[88] = activeTab;
+    $[89] = cloudSession;
+    $[90] = showMcpRedirectMessage;
+    $[91] = showSkillDoctorRedirectMessage;
+    $[92] = showSkillsRedirectMessage;
+    $[93] = mainView;
+  } else mainView = $[93];
+  let renderedView = mainView;
   let banner;
-  if (_[94] !== setAppState || _[95] !== mt) {
+  if ($[94] !== setAppState || $[95] !== renderedView) {
     banner =
       setAppState.length > 0
         ? jsxProd_default_2(Fragment, {
@@ -2431,81 +2545,81 @@ function PluginSettings(props) {
               jsxProd_default(loadedModsSnapshot, {
                 names: setAppState,
               }),
-              mt,
+              renderedView,
             ],
           })
-        : mt;
-    _[94] = setAppState;
-    _[95] = mt;
-    _[96] = banner;
-  } else banner = _[96];
-  let Pt;
+        : renderedView;
+    $[94] = setAppState;
+    $[95] = renderedView;
+    $[96] = banner;
+  } else banner = $[96];
+  let statusFrame;
   if (
-    _[97] !== onInstallComplete ||
-    _[98] !== getSessionContext ||
-    _[99] !== Se ||
-    _[100] !== he ||
-    _[101] !== viewState_2.marketplace ||
-    _[102] !== viewState_2.searchQuery ||
-    _[103] !== viewState_2.targetMarketplace ||
-    _[104] !== viewState_2.targetPlugin ||
-    _[105] !== viewState_2.type
+    $[97] !== onInstallComplete ||
+    $[98] !== getSessionContext ||
+    $[99] !== loaded ||
+    $[100] !== storeRef ||
+    $[101] !== viewState_3.marketplace ||
+    $[102] !== viewState_3.searchQuery ||
+    $[103] !== viewState_3.targetMarketplace ||
+    $[104] !== viewState_3.targetPlugin ||
+    $[105] !== viewState_3.type
   ) {
-    Pt = jsxProd_default(
+    statusFrame = jsxProd_default(
       Tab,
       {
         id: "discover",
         title: "Discover",
         children:
-          viewState_2.type === "browse-marketplace"
+          viewState_3.type === "browse-marketplace"
             ? jsxProd_default(BrowseMarketplace, {
-                screen: he,
+                screen: storeRef,
                 onInstallComplete,
                 onSearchModeChange: setChildSearchActive,
-                targetMarketplace: viewState_2.targetMarketplace,
-                targetPlugin: viewState_2.targetPlugin,
+                targetMarketplace: viewState_3.targetMarketplace,
+                targetPlugin: viewState_3.targetPlugin,
               })
             : jsxProd_default(DiscoverPluginsScreen, {
-                screen: he,
+                screen: storeRef,
                 onInstallComplete,
                 onSearchModeChange: setChildSearchActive,
                 getSessionContext,
-                grantedSuggestions: Se,
-                targetPlugin: viewState_2.type === "discover-plugins" ? viewState_2.targetPlugin : undefined,
+                grantedSuggestions: loaded,
+                targetPlugin: viewState_3.type === "discover-plugins" ? viewState_3.targetPlugin : undefined,
                 initialMarketplace:
-                  viewState_2.type === "discover-plugins" ? viewState_2.marketplace : undefined,
+                  viewState_3.type === "discover-plugins" ? viewState_3.marketplace : undefined,
                 initialSearchQuery:
-                  viewState_2.type === "discover-plugins" ? viewState_2.searchQuery : undefined,
+                  viewState_3.type === "discover-plugins" ? viewState_3.searchQuery : undefined,
               }),
       },
       "discover",
     );
-    _[97] = onInstallComplete;
-    _[98] = getSessionContext;
-    _[99] = Se;
-    _[100] = he;
-    _[101] = viewState_2.marketplace;
-    _[102] = viewState_2.searchQuery;
-    _[103] = viewState_2.targetMarketplace;
-    _[104] = viewState_2.targetPlugin;
-    _[105] = viewState_2.type;
-    _[106] = Pt;
-  } else Pt = _[106];
-  const targetPlugin = viewState_2.type === "manage-plugins" ? viewState_2.targetPlugin : undefined;
-  const targetMarketplace = viewState_2.type === "manage-plugins" ? viewState_2.targetMarketplace : undefined;
-  const action = viewState_2.type === "manage-plugins" ? viewState_2.action : undefined;
-  let wn;
+    $[97] = onInstallComplete;
+    $[98] = getSessionContext;
+    $[99] = loaded;
+    $[100] = storeRef;
+    $[101] = viewState_3.marketplace;
+    $[102] = viewState_3.searchQuery;
+    $[103] = viewState_3.targetMarketplace;
+    $[104] = viewState_3.targetPlugin;
+    $[105] = viewState_3.type;
+    $[106] = statusFrame;
+  } else statusFrame = $[106];
+  const targetPlugin = viewState_3.type === "manage-plugins" ? viewState_3.targetPlugin : undefined;
+  const targetMarketplace = viewState_3.type === "manage-plugins" ? viewState_3.targetMarketplace : undefined;
+  const action = viewState_3.type === "manage-plugins" ? viewState_3.action : undefined;
+  let footerBox;
   if (
-    _[107] !== le ||
-    _[108] !== commands ||
-    _[109] !== Be ||
-    _[110] !== setResult ||
-    _[111] !== setViewState ||
-    _[112] !== targetPlugin ||
-    _[113] !== targetMarketplace ||
-    _[114] !== action
+    $[107] !== selectedTab ||
+    $[108] !== commands ||
+    $[109] !== isSearchMode ||
+    $[110] !== setResult ||
+    $[111] !== setViewState ||
+    $[112] !== targetPlugin ||
+    $[113] !== targetMarketplace ||
+    $[114] !== action
   ) {
-    wn = jsxProd_default(
+    footerBox = jsxProd_default(
       Tab,
       {
         id: "installed",
@@ -2513,8 +2627,8 @@ function PluginSettings(props) {
         children: jsxProd_default(ManagePlugins, {
           setViewState,
           setResult,
-          onManageComplete: Be,
-          changesApplyOnClose: le,
+          onManageComplete: isSearchMode,
+          changesApplyOnClose: selectedTab,
           onSearchModeChange: setChildSearchActive,
           commands,
           targetPlugin,
@@ -2524,31 +2638,31 @@ function PluginSettings(props) {
       },
       "installed",
     );
-    _[107] = le;
-    _[108] = commands;
-    _[109] = Be;
-    _[110] = setResult;
-    _[111] = setViewState;
-    _[112] = targetPlugin;
-    _[113] = targetMarketplace;
-    _[114] = action;
-    _[115] = wn;
-  } else wn = _[115];
+    $[107] = selectedTab;
+    $[108] = commands;
+    $[109] = isSearchMode;
+    $[110] = setResult;
+    $[111] = setViewState;
+    $[112] = targetPlugin;
+    $[113] = targetMarketplace;
+    $[114] = action;
+    $[115] = footerBox;
+  } else footerBox = $[115];
   const targetMarketplace_2 =
-    viewState_2.type === "manage-marketplaces" ? viewState_2.targetMarketplace : undefined;
-  const action_2 = viewState_2.type === "manage-marketplaces" ? viewState_2.action : undefined;
-  let ao;
+    viewState_3.type === "manage-marketplaces" ? viewState_3.targetMarketplace : undefined;
+  const action_2 = viewState_3.type === "manage-marketplaces" ? viewState_3.action : undefined;
+  let hintBox;
   if (
-    _[116] !== error ||
-    _[117] !== exitState ||
-    _[118] !== Be ||
-    _[119] !== setViewState_2 ||
-    _[120] !== setError ||
-    _[121] !== setResult ||
-    _[122] !== targetMarketplace_2 ||
-    _[123] !== action_2
+    $[116] !== error ||
+    $[117] !== exitState ||
+    $[118] !== isSearchMode ||
+    $[119] !== setViewState_2 ||
+    $[120] !== setError ||
+    $[121] !== setResult ||
+    $[122] !== targetMarketplace_2 ||
+    $[123] !== action_2
   ) {
-    ao = jsxProd_default(
+    hintBox = jsxProd_default(
       Tab,
       {
         id: "marketplaces",
@@ -2559,37 +2673,37 @@ function PluginSettings(props) {
           setError,
           setResult,
           exitState,
-          onManageComplete: Be,
+          onManageComplete: isSearchMode,
           targetMarketplace: targetMarketplace_2,
           action: action_2,
         }),
       },
       "marketplaces",
     );
-    _[116] = error;
-    _[117] = exitState;
-    _[118] = Be;
-    _[119] = setViewState_2;
-    _[120] = setError;
-    _[121] = setResult;
-    _[122] = targetMarketplace_2;
-    _[123] = action_2;
-    _[124] = ao;
-  } else ao = _[124];
+    $[116] = error;
+    $[117] = exitState;
+    $[118] = isSearchMode;
+    $[119] = setViewState_2;
+    $[120] = setError;
+    $[121] = setResult;
+    $[122] = targetMarketplace_2;
+    $[123] = action_2;
+    $[124] = hintBox;
+  } else hintBox = $[124];
   let children;
-  if (_[125] !== Be || _[126] !== setViewState) {
+  if ($[125] !== isSearchMode || $[126] !== setViewState) {
     children = jsxProd_default(ErrorsTabContent, {
       setViewState,
       setActiveTab,
-      markPluginsChanged: Be,
+      markPluginsChanged: isSearchMode,
     });
-    _[125] = Be;
-    _[126] = setViewState;
-    _[127] = children;
-  } else children = _[127];
-  let _n;
-  if (_[128] !== errorsTabTitle || _[129] !== children) {
-    _n = jsxProd_default(
+    $[125] = isSearchMode;
+    $[126] = setViewState;
+    $[127] = children;
+  } else children = $[127];
+  let frame;
+  if ($[128] !== errorsTabTitle || $[129] !== children) {
+    frame = jsxProd_default(
       Tab,
       {
         id: "errors",
@@ -2598,13 +2712,13 @@ function PluginSettings(props) {
       },
       "errors",
     );
-    _[128] = errorsTabTitle;
-    _[129] = children;
-    _[130] = _n;
-  } else _n = _[130];
-  let jn;
-  if (_[131] !== getReport || _[132] !== setViewState || _[133] !== Ln) {
-    jn = Ln
+    $[128] = errorsTabTitle;
+    $[129] = children;
+    $[130] = frame;
+  } else frame = $[130];
+  let outer;
+  if ($[131] !== getReport || $[132] !== setViewState || $[133] !== previousViewState) {
+    outer = previousViewState
       ? [
           jsxProd_default(
             Tab,
@@ -2623,30 +2737,36 @@ function PluginSettings(props) {
           ),
         ]
       : [];
-    _[131] = getReport;
-    _[132] = setViewState;
-    _[133] = Ln;
-    _[134] = jn;
-  } else jn = _[134];
+    $[131] = getReport;
+    $[132] = setViewState;
+    $[133] = previousViewState;
+    $[134] = outer;
+  } else outer = $[134];
   let children_2;
-  if (_[135] !== Pt || _[136] !== wn || _[137] !== ao || _[138] !== _n || _[139] !== jn) {
-    children_2 = [Pt, wn, ao, _n, ...jn];
-    _[135] = Pt;
-    _[136] = wn;
-    _[137] = ao;
-    _[138] = _n;
-    _[139] = jn;
-    _[140] = children_2;
-  } else children_2 = _[140];
-  let Si;
   if (
-    _[141] !== activeTab ||
-    _[142] !== childSearchActive ||
-    _[143] !== onTabChange ||
-    _[144] !== banner ||
-    _[145] !== children_2
+    $[135] !== statusFrame ||
+    $[136] !== footerBox ||
+    $[137] !== hintBox ||
+    $[138] !== frame ||
+    $[139] !== outer
   ) {
-    Si = jsxProd_default(Pane, {
+    children_2 = [statusFrame, footerBox, hintBox, frame, ...outer];
+    $[135] = statusFrame;
+    $[136] = footerBox;
+    $[137] = hintBox;
+    $[138] = frame;
+    $[139] = outer;
+    $[140] = children_2;
+  } else children_2 = $[140];
+  let resultBox;
+  if (
+    $[141] !== activeTab ||
+    $[142] !== childSearchActive ||
+    $[143] !== onTabChange ||
+    $[144] !== banner ||
+    $[145] !== children_2
+  ) {
+    resultBox = jsxProd_default(Pane, {
       color: "suggestion",
       children: jsxProd_default(Tabs, {
         title: "Plugins",
@@ -2658,18 +2778,18 @@ function PluginSettings(props) {
         children: children_2,
       }),
     });
-    _[141] = activeTab;
-    _[142] = childSearchActive;
-    _[143] = onTabChange;
-    _[144] = banner;
-    _[145] = children_2;
-    _[146] = Si;
-  } else Si = _[146];
-  return Si;
+    $[141] = activeTab;
+    $[142] = childSearchActive;
+    $[143] = onTabChange;
+    $[144] = banner;
+    $[145] = children_2;
+    $[146] = resultBox;
+  } else resultBox = $[146];
+  return resultBox;
 }
 //@ chunk-vrb44rx7.js:250512-250607 affinity
-function firstNonEmpty(...i) {
-  let filtered = i.filter((k) => k !== undefined && k !== "");
+function firstNonEmpty(...values) {
+  let filtered = values.filter((value) => value !== undefined && value !== "");
   return filtered.length > 0
     ? filtered.join(`
 `)
@@ -2688,48 +2808,6 @@ function isReadOnlyPluginCommand(pluginArgs) {
     default:
       return false;
   }
-}
-//@ chunk-9h8dr0qb.js:42590-42594 placement
-init_react_production();
-//@ chunk-9h8dr0qb.js:42594-42598 placement
-init_react_production();
-//@ chunk-9h8dr0qb.js:42598-42639 fingerprint = _temp2 (0.665)
-function selectPluginCommands(s) {
-  return s.plugins.commands;
-}
-//@ chunk-f3qhjfah.js:13962-14141 fingerprint = getPluginNameFromError (0.923)
-function getPluginNameFromError(error) {
-  if ("pluginId" in error && error.pluginId) return error.pluginId;
-  if ("plugin" in error && error.plugin) return error.plugin;
-  let index = error.source.lastIndexOf("@");
-  if (index > 0) return error.source.slice(0, index);
-  return;
-}
-//@ chunk-f3qhjfah.js:14141-14250 affinity
-/**
- * 判断插件错误是否只是自动更新的提示类（延后条目辅助或被策略关闭），不算真正的加载失败。
- */
-function isAutoupdateInfoError(e) {
-  return e.type === "autoupdate-deferred-entry-helper" || e.type === "autoupdate-disabled-by-policy";
-}
-//@ chunk-e6aww6q8.js:4236630-4236730 fingerprint = removeExtraMarketplace (0.702)
-function removeExtraMarketplace(name, sources) {
-  let extraKnownMarketplaces = name?.extraKnownMarketplaces;
-  return extraKnownMarketplaces !== undefined && Object.hasOwn(extraKnownMarketplaces, sources)
-    ? extraKnownMarketplaces[sources]
-    : undefined;
-}
-//@ chunk-tyg7f3ek.js:624262-624353 fingerprint = _temp1 (0.765)
-function initialPluginRefreshState(prev) {
-  let n = {
-    needsRefresh: false,
-  };
-  prev()
-    .then((needsRefresh) => {
-      n.needsRefresh = needsRefresh;
-    })
-    .catch(logError);
-  return n;
 }
 export {
   initialPluginRefreshState,

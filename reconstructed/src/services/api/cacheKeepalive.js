@@ -15,7 +15,12 @@ import {
   MAIN as MAIN_2,
 } from "./promptCacheBreakDetection.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, literal, E, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  literal,
+  numberSchema,
+  booleanSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import {
   getRootSession,
@@ -72,39 +77,55 @@ import { logEvent } from "../analytics/index.js";
 import { fromEnum, fromEnumOpt } from "../analytics/safeMetadata.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { gracefulShutdown_2 } from "../../utils/gracefulShutdown.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:227793-228288 placement
 /**
  * 缓存保活（cache keepalive）的常量与开关 schema：touch 端点、10 s 超时、3 次失败上限、5 分钟 TTL 与提前续期余量、拒用窗口 1 小时、客户端最大复用 4 分钟、活动事件名，以及配置字段。
  */
-var TENGU_SEQUENTIAL_CLOUD = "tengu_sequential_cloud";
-var ANTHROPIC_CACHE_KEEPALIVE = "anthropic-cache-keepalive";
-var CACHE_TOUCH_PATH = "/v1/messages/cache_touch";
-var TOUCH_TIMEOUT_MS = 1e4;
-var MAX_TOUCH_NOT_FOUND = 3;
-var MAX_FAILED_REQUESTS = 3;
-var MAX_MISSING_RECORDS = 3;
-var CACHE_TTL_MS = CACHE_TTL_5M_MS;
-var RENEW_BEFORE_EXPIRY_MS = CACHE_TTL_MS - TOUCH_TIMEOUT_MS;
-var REFUSAL_WINDOW_MS = 3600000;
-var MAX_CLIENT_AGE_MS = 240000;
-var ACTIVITY_EVENT_NAMES = [
-  "main_request",
-  "user_input",
-  "work_start",
-  "work_end",
-  "awaiting_user_start",
-  "awaiting_user_end",
-];
-var keepaliveConfigSchema = DoctorLazy(() =>
-  u({
-    enabled: literal(true),
-    touchIntervalSeconds: E().min(10).max(120).default(30),
-    activityWindowMinutes: E().min(1).max(1440).default(60),
-    inFlightWindowMinutes: E().min(1).max(1440).optional(),
-    resumeTouches: M().default(false).catch(false),
-  }),
-);
+var TENGU_SEQUENTIAL_CLOUD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var ANTHROPIC_CACHE_KEEPALIVE;
+var CACHE_TOUCH_PATH;
+var TOUCH_TIMEOUT_MS;
+var MAX_TOUCH_NOT_FOUND;
+var MAX_FAILED_REQUESTS;
+var MAX_MISSING_RECORDS;
+var CACHE_TTL_MS;
+var RENEW_BEFORE_EXPIRY_MS;
+var REFUSAL_WINDOW_MS;
+var MAX_CLIENT_AGE_MS;
+var ACTIVITY_EVENT_NAMES;
+var keepaliveConfigSchema;
+deferInit("chunk-e6aww6q8.js:227793", () => {
+  TENGU_SEQUENTIAL_CLOUD = "tengu_sequential_cloud";
+  ANTHROPIC_CACHE_KEEPALIVE = "anthropic-cache-keepalive";
+  CACHE_TOUCH_PATH = "/v1/messages/cache_touch";
+  TOUCH_TIMEOUT_MS = 1e4;
+  MAX_TOUCH_NOT_FOUND = 3;
+  MAX_FAILED_REQUESTS = 3;
+  MAX_MISSING_RECORDS = 3;
+  CACHE_TTL_MS = CACHE_TTL_5M_MS;
+  RENEW_BEFORE_EXPIRY_MS = CACHE_TTL_MS - TOUCH_TIMEOUT_MS;
+  REFUSAL_WINDOW_MS = 3600000;
+  MAX_CLIENT_AGE_MS = 240000;
+  ACTIVITY_EVENT_NAMES = [
+    "main_request",
+    "user_input",
+    "work_start",
+    "work_end",
+    "awaiting_user_start",
+    "awaiting_user_end",
+  ];
+  keepaliveConfigSchema = DoctorLazy(() =>
+    objectSchema({
+      enabled: literal(true),
+      touchIntervalSeconds: numberSchema().min(10).max(120).default(30),
+      activityWindowMinutes: numberSchema().min(1).max(1440).default(60),
+      inFlightWindowMinutes: numberSchema().min(1).max(1440).optional(),
+      resumeTouches: booleanSchema().default(false).catch(false),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:228288-228477 placement
 class CacheKeepaliveState {
   armed = undefined;
@@ -120,7 +141,10 @@ class CacheKeepaliveState {
   lastEventAt = {};
 }
 //@ chunk-e6aww6q8.js:228477-228504 placement
-var cacheKeepaliveStateSlot = new HostScoped(() => new CacheKeepaliveState());
+var cacheKeepaliveStateSlot; // deferred: uses CacheKeepaliveState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:228477", () => {
+  cacheKeepaliveStateSlot = new HostScoped(() => new CacheKeepaliveState());
+});
 //@ chunk-e6aww6q8.js:228504-228542 placement
 function keepaliveState() {
   return cacheKeepaliveStateSlot.of(getRootSession().host);
@@ -143,10 +167,10 @@ function getKeepaliveRoute(state) {
   return state.route;
 }
 //@ chunk-e6aww6q8.js:228797-228878 placement
-function hadActivityWithin(e, n, r) {
-  return ACTIVITY_EVENT_NAMES.some((s) => {
-    let h = e[s];
-    return h !== undefined && n - h <= r;
+function hadActivityWithin(lastEventAt, now, withinMs) {
+  return ACTIVITY_EVENT_NAMES.some((eventName) => {
+    let at = lastEventAt[eventName];
+    return at !== undefined && now - at <= withinMs;
   });
 }
 //@ chunk-e6aww6q8.js:228878-229025 placement
@@ -179,16 +203,16 @@ function isCacheKeepaliveAllowed() {
   );
 }
 //@ chunk-e6aww6q8.js:229181-229234 placement
-function isRouteMissingRecords(e) {
-  return getKeepaliveRoute(e).missingRecordCount >= MAX_MISSING_RECORDS;
+function isRouteMissingRecords(state) {
+  return getKeepaliveRoute(state).missingRecordCount >= MAX_MISSING_RECORDS;
 }
 //@ chunk-e6aww6q8.js:229234-229345 placement
-function isSubscriberHourCache(e, n) {
+function isSubscriberHourCache(cacheTtl, isNewChain) {
   return (
-    e?.ttl === "1h" &&
-    e.reason === "subscriber" &&
+    cacheTtl?.ttl === "1h" &&
+    cacheTtl.reason === "subscriber" &&
     isCacheKeepaliveAllowed() &&
-    !(n && (isUsageBasedBilling() || getCurrentLimits().isUsingOverage === true))
+    !(isNewChain && (isUsageBasedBilling() || getCurrentLimits().isUsingOverage === true))
   );
 }
 //@ chunk-e6aww6q8.js:229345-229479 placement
@@ -197,8 +221,8 @@ function getKeepaliveConfig() {
     let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SEQUENTIAL_CLOUD, false);
     if (typeof featureValue_CACHED_MAY_BE_STALE !== "object" || featureValue_CACHED_MAY_BE_STALE === null)
       return;
-    let n = keepaliveConfigSchema().safeParse(featureValue_CACHED_MAY_BE_STALE);
-    return n.success ? n.data : undefined;
+    let parsed = keepaliveConfigSchema().safeParse(featureValue_CACHED_MAY_BE_STALE);
+    return parsed.success ? parsed.data : undefined;
   }
   return;
 }
@@ -212,64 +236,64 @@ function isKeepaliveArmed() {
 //@ chunk-e6aww6q8.js:229521-230419 placement
 function releaseKeepaliveChain(conversation, { isMainLoopRequest, continuesPrefix, cacheTtl }) {
   {
-    let h = isMainLoopRequest || continuesPrefix;
-    let y = undefined;
-    let S = false;
+    let isMainChain = isMainLoopRequest || continuesPrefix;
+    let header = undefined;
+    let shouldLog = false;
     try {
       if (isMainLoopRequest) {
-        let L = keepaliveState();
+        let state = keepaliveState();
         let mainChainReleaseCount = getMainChainReleaseCount();
-        let header = L.header;
-        y =
-          header?.chainReleaseCount === mainChainReleaseCount
-            ? header
+        let header_2 = state.header;
+        header =
+          header_2?.chainReleaseCount === mainChainReleaseCount
+            ? header_2
             : {
                 chainReleaseCount: mainChainReleaseCount,
                 isSent: false,
               };
-        let Z = y !== header;
-        L.header = y;
-        if (Z) {
+        let chainChanged = header !== header_2;
+        state.header = header;
+        if (chainChanged) {
           forgetBeta(conversation, BETA_CACHE_KEEPALIVE);
-          if (L.armed !== undefined) stopKeepalive(L, "chain_released");
-        } else if (!y.isSent) markBetaRejected(conversation, BETA_CACHE_KEEPALIVE);
+          if (state.armed !== undefined) stopKeepalive(state, "chain_released");
+        } else if (!header.isSent) markBetaRejected(conversation, BETA_CACHE_KEEPALIVE);
         if (!isBetaRejected_2(conversation, BETA_CACHE_KEEPALIVE)) {
-          let Se = isSubscriberHourCache(cacheTtl, Z);
-          let ke = Se && getKeepaliveConfig() !== undefined;
-          S = Z && ke;
-          if (!ke) {
+          let hourCacheFlag = isSubscriberHourCache(cacheTtl, chainChanged);
+          let usable = hourCacheFlag && getKeepaliveConfig() !== undefined;
+          shouldLog = chainChanged && usable;
+          if (!usable) {
             markBetaRejected(conversation, BETA_CACHE_KEEPALIVE);
-            if (Se && !Z) logKeepalive("off for this chain: flag off", "warn");
-          } else if (Z && isRouteMissingRecords(L)) {
-            getKeepaliveRoute(L).missingRecordCount = 0;
+            if (hourCacheFlag && !chainChanged) logKeepalive("off for this chain: flag off", "warn");
+          } else if (chainChanged && isRouteMissingRecords(state)) {
+            getKeepaliveRoute(state).missingRecordCount = 0;
             markBetaRejected(conversation, BETA_CACHE_KEEPALIVE);
             logKeepalive("off for this chain: no records", "warn");
             logKeepaliveFeature("bad", "records_missing");
           } else markBetaSent(conversation, BETA_CACHE_KEEPALIVE);
         }
-        y.isSent = isBetaSent(conversation, BETA_CACHE_KEEPALIVE);
+        header.isSent = isBetaSent(conversation, BETA_CACHE_KEEPALIVE);
       }
     } catch (error) {
-      if (y?.isSent ?? isBetaSent(conversation, BETA_CACHE_KEEPALIVE))
+      if (header?.isSent ?? isBetaSent(conversation, BETA_CACHE_KEEPALIVE))
         markBetaSent(conversation, BETA_CACHE_KEEPALIVE);
       else markBetaRejected(conversation, BETA_CACHE_KEEPALIVE);
       logKeepaliveFailure("header_decision_failed", error);
     }
-    let w = false;
-    if (h && isBetaSent(conversation, BETA_CACHE_KEEPALIVE)) {
+    let headerOn = false;
+    if (isMainChain && isBetaSent(conversation, BETA_CACHE_KEEPALIVE)) {
       try {
-        w = !getKeepaliveRoute(keepaliveState()).refused && canSendFirstPartyBetas();
+        headerOn = !getKeepaliveRoute(keepaliveState()).refused && canSendFirstPartyBetas();
       } catch (error) {
         logKeepaliveFailure("header_gate_failed", error);
       }
-      if (!w && y !== undefined) {
-        y.isSent = false;
+      if (!headerOn && header !== undefined) {
+        header.isSent = false;
         markBetaRejected(conversation, BETA_CACHE_KEEPALIVE);
       }
     }
-    if (S) logKeepalive(`header ${w ? "on" : "off"} for this chain`);
-    if (w && y !== undefined) renewMainCacheLifeNow(CACHE_TTL_MS);
-    return w;
+    if (shouldLog) logKeepalive(`header ${headerOn ? "on" : "off"} for this chain`);
+    if (headerOn && header !== undefined) renewMainCacheLifeNow(CACHE_TTL_MS);
+    return headerOn;
   }
   return false;
 }
@@ -277,16 +301,16 @@ function releaseKeepaliveChain(conversation, { isMainLoopRequest, continuesPrefi
 /**
  * 导出函数 `withKeepaliveReset`：参数 e，返回 (Xg(e, DO), e)。
  */
-function withKeepaliveReset(e) {
-  markBetaRejected(e, BETA_CACHE_KEEPALIVE);
-  return e;
+function withKeepaliveReset(conversation) {
+  markBetaRejected(conversation, BETA_CACHE_KEEPALIVE);
+  return conversation;
 }
 //@ chunk-e6aww6q8.js:230453-230581 placement
-function onKeepaliveHeaderRejected(conversation, limitsAccountEpoch, r) {
+function onKeepaliveHeaderRejected(conversation, accountEpoch, isFirstPartyRequest) {
   markBetaRejected(conversation, BETA_CACHE_KEEPALIVE);
   try {
-    if (r) renewMainCacheLifeNow(CACHE_TTL_1H_MS);
-    if (limitsAccountEpoch === getLimitsAccountEpoch()) refuseKeepalive(keepaliveState(), "header_rejected");
+    if (isFirstPartyRequest) renewMainCacheLifeNow(CACHE_TTL_1H_MS);
+    if (accountEpoch === getLimitsAccountEpoch()) refuseKeepalive(keepaliveState(), "header_rejected");
   } catch (error) {
     logKeepaliveFailure("header_rejection_failed", error);
   }
@@ -308,47 +332,47 @@ function evaluateCacheKeepalive({
   clientOptions,
 }) {
   try {
-    let q = keepaliveState();
-    q.lastEventAt.main_request = now;
-    let Z = q.conversation === conversation;
-    q.conversation = conversation;
-    q.next = undefined;
+    let state = keepaliveState();
+    state.lastEventAt.main_request = now;
+    let sameConversation = state.conversation === conversation;
+    state.conversation = conversation;
+    state.next = undefined;
     if (!headerSent) {
-      stopKeepalive(q, "request_without_header");
+      stopKeepalive(state, "request_without_header");
       return;
     }
-    let Se = headers?.get(ANTHROPIC_CACHE_KEEPALIVE) === "active";
+    let responseActive = headers?.get(ANTHROPIC_CACHE_KEEPALIVE) === "active";
     if (chainReleaseCount === getMainChainReleaseCount())
-      renewMainCacheLifeNow(Se ? CACHE_TTL_MS : CACHE_TTL_1H_MS);
+      renewMainCacheLifeNow(responseActive ? CACHE_TTL_MS : CACHE_TTL_1H_MS);
     if (!isBetaSent(conversation, BETA_CACHE_KEEPALIVE)) {
-      stopKeepalive(q, "conversation_header_off");
+      stopKeepalive(state, "conversation_header_off");
       return;
     }
-    if (!Se) {
-      stopKeepalive(q, "response_not_active");
+    if (!responseActive) {
+      stopKeepalive(state, "response_not_active");
       logKeepalive(`response not active ${requestId}`);
       return;
     }
-    let ke = keepaliveInvalidReason({
+    let invalidReason = keepaliveInvalidReason({
       chainReleaseCount,
       accountEpoch,
       modelSwitchCount,
       isResumed: false,
     });
-    if (ke !== undefined) {
-      stopKeepalive(q, ke);
+    if (invalidReason !== undefined) {
+      stopKeepalive(state, invalidReason);
       return;
     }
     let keepaliveConfig = getKeepaliveConfig();
     if (keepaliveConfig === undefined) {
-      stopKeepalive(q, "flag_off");
+      stopKeepalive(state, "flag_off");
       return;
     }
     if (!isSessionsToken(requestId)) {
-      refuseKeepalive(q, "response_without_request_id");
+      refuseKeepalive(state, "response_without_request_id");
       return;
     }
-    let Ee = {
+    let entry = {
       requestId,
       chainReleaseCount,
       accountEpoch,
@@ -359,7 +383,7 @@ function evaluateCacheKeepalive({
       touch: undefined,
       client: undefined,
     };
-    let { armed } = q;
+    let { armed } = state;
     if (armed?.stream === "open") {
       armed.stream = "cut";
       armed.recordRenewedAt = now;
@@ -367,16 +391,16 @@ function evaluateCacheKeepalive({
     if (
       !isWhole &&
       armed !== undefined &&
-      Z &&
+      sameConversation &&
       armed.chainReleaseCount === chainReleaseCount &&
       armed.accountEpoch === accountEpoch &&
       isArmedForModel(armed, clientOptions.model) &&
       (armed.stream === "complete" || armed.lastTouch === "ok")
     ) {
-      q.next = Ee;
+      state.next = entry;
       return;
     }
-    armKeepalive(q, Ee, isWhole ? "complete" : "open", now);
+    armKeepalive(state, entry, isWhole ? "complete" : "open", now);
   } catch (error) {
     logKeepaliveFailure("sender_start_failed", error);
   }
@@ -387,13 +411,16 @@ function evaluateCacheKeepalive({
  */
 function onMainResponseEnd(requestId, complete, now) {
   try {
-    let s = keepaliveState();
-    s.lastEventAt.main_request = now;
-    let { armed, next: y } = s;
-    if (y !== undefined && y.requestId === requestId) {
-      s.next = undefined;
-      if ((complete || armed === undefined || armed.lastTouch === "touch_not_found") && isKeepaliveUsable(y))
-        armKeepalive(s, y, complete ? "complete" : "cut", now);
+    let state = keepaliveState();
+    state.lastEventAt.main_request = now;
+    let { armed, next: pending } = state;
+    if (pending !== undefined && pending.requestId === requestId) {
+      state.next = undefined;
+      if (
+        (complete || armed === undefined || armed.lastTouch === "touch_not_found") &&
+        isKeepaliveUsable(pending)
+      )
+        armKeepalive(state, pending, complete ? "complete" : "cut", now);
       return;
     }
     if (armed !== undefined && armed.requestId === requestId && armed.stream === "open") {
@@ -414,22 +441,22 @@ function stageResumeKeepalive(getReply) {
     stopResumeStaged(state);
     let reply = getReply();
     if (reply === undefined) return;
-    let { sessionId, requestId, ...y } = reply;
+    let { sessionId, requestId, ...replyRest } = reply;
     if (
       sessionId === undefined ||
       !isSessionsToken(requestId) ||
       containsProviderId(requestId) ||
-      typeof y.clientOptions.model !== "string"
+      typeof replyRest.clientOptions.model !== "string"
     )
       return;
-    let S = {
+    let stagedReply = {
       sessionId,
       requestId,
-      ...y,
+      ...replyRest,
     };
-    if (resumeKeepaliveConfig(state, S) === undefined) return;
+    if (resumeKeepaliveConfig(state, stagedReply) === undefined) return;
     state.resumeStaged = {
-      reply: S,
+      reply: stagedReply,
       stopListening: onSessionSwitch(() => tryStartResumeKeepalive(state)),
     };
     tryStartResumeKeepalive(state);
@@ -441,19 +468,20 @@ function stageResumeKeepalive(getReply) {
 /**
  * 模型切换时更新缓存保活状态：累计切换次数，仍是同一模型的保留并同步计数，否则丢弃待接管请求或解除武装。
  */
-function onKeepaliveModelSwitch(host, n, r) {
+function onKeepaliveModelSwitch(host, prevModel, nextModel) {
   try {
-    if (isSameModelIdentityKeepalive(n, r)) return;
-    let s = cacheKeepaliveStateSlot.of(host);
-    s.modelSwitchCount += 1;
-    let { armed, next: y } = s;
-    if (y !== undefined)
-      if (isSameModelIdentityKeepalive(y.clientOptions.model, r)) y.modelSwitchCount = s.modelSwitchCount;
-      else s.next = undefined;
+    if (isSameModelIdentityKeepalive(prevModel, nextModel)) return;
+    let state = cacheKeepaliveStateSlot.of(host);
+    state.modelSwitchCount += 1;
+    let { armed, next: pending } = state;
+    if (pending !== undefined)
+      if (isSameModelIdentityKeepalive(pending.clientOptions.model, nextModel))
+        pending.modelSwitchCount = state.modelSwitchCount;
+      else state.next = undefined;
     if (armed !== undefined)
-      if (isSameModelIdentityKeepalive(armed.clientOptions.model, r))
-        armed.modelSwitchCount = s.modelSwitchCount;
-      else stopKeepalive(s, "model_changed");
+      if (isSameModelIdentityKeepalive(armed.clientOptions.model, nextModel))
+        armed.modelSwitchCount = state.modelSwitchCount;
+      else stopKeepalive(state, "model_changed");
   } catch (error) {
     logKeepaliveFailure("model_switch_failed", error);
   }
@@ -468,32 +496,34 @@ function getModelSwitchCount() {
   return 0;
 }
 //@ chunk-e6aww6q8.js:232913-232953 placement
-function recordActivityEvent(e, n) {
-  keepaliveState().lastEventAt[e] = n;
+function recordActivityEvent(eventName, at) {
+  keepaliveState().lastEventAt[eventName] = at;
 }
 //@ chunk-e6aww6q8.js:232953-233179 placement
-function recordRunState(e, n) {
+function recordRunState(nextRun, now) {
   {
-    let r = keepaliveState();
-    if (sameRunState(r.run, e)) return;
-    if (r.run !== null) r.lastEventAt[r.run.kind === "work" ? "work_end" : "awaiting_user_end"] = n;
-    if (e !== null) r.lastEventAt[e.kind === "work" ? "work_start" : "awaiting_user_start"] = n;
-    r.run = e;
+    let state = keepaliveState();
+    if (sameRunState(state.run, nextRun)) return;
+    if (state.run !== null)
+      state.lastEventAt[state.run.kind === "work" ? "work_end" : "awaiting_user_end"] = now;
+    if (nextRun !== null)
+      state.lastEventAt[nextRun.kind === "work" ? "work_start" : "awaiting_user_start"] = now;
+    state.run = nextRun;
   }
 }
 //@ chunk-e6aww6q8.js:233179-233338 placement
-function sameRunState(e, n) {
-  if (e === null || n === null) return e === n;
-  return e.kind === "work"
-    ? n.kind === "work" && e.work === n.work
-    : n.kind === "awaiting_user" && e.awaiting === n.awaiting;
+function sameRunState(previousRun, nextRun) {
+  if (previousRun === null || nextRun === null) return previousRun === nextRun;
+  return previousRun.kind === "work"
+    ? nextRun.kind === "work" && previousRun.work === nextRun.work
+    : nextRun.kind === "awaiting_user" && previousRun.awaiting === nextRun.awaiting;
 }
 //@ chunk-e6aww6q8.js:233338-233662 placement
 /**
  * 武装缓存保活发送器：停掉旧的、按 touchIntervalMs 定时发送 cache_touch，记录流状态与续期时间。
  */
 function armKeepalive(state, entry, stream, now) {
-  let h = state.armed !== undefined;
+  let hadArmed = state.armed !== undefined;
   stopKeepalive(state, "next_response");
   if (getKeepaliveRoute(state).refused) return;
   let interval = setInterval(resumeTouchLoop, entry.touchIntervalMs, state);
@@ -509,22 +539,22 @@ function armKeepalive(state, entry, stream, now) {
     touch: undefined,
     client: entry.touch === undefined ? entry.client : undefined,
   };
-  if (!h) logKeepalive("sender started");
+  if (!hadArmed) logKeepalive("sender started");
 }
 //@ chunk-e6aww6q8.js:233662-233715 placement
-function isKeepaliveUsable(e) {
-  return keepaliveInvalidReason(e) === undefined && getKeepaliveConfig() !== undefined;
+function isKeepaliveUsable(entry) {
+  return keepaliveInvalidReason(entry) === undefined && getKeepaliveConfig() !== undefined;
 }
 //@ chunk-e6aww6q8.js:233715-233799 placement
-function isArmedForModel(e, n) {
-  return e.clientOptions.model === n && e.lastTouch !== "touch_not_found";
+function isArmedForModel(entry, model) {
+  return entry.clientOptions.model === model && entry.lastTouch !== "touch_not_found";
 }
 //@ chunk-e6aww6q8.js:233799-233902 placement
-function armPendingKeepalive(e, n) {
-  let { next: r } = e;
-  if (e.armed === undefined && r !== undefined && isKeepaliveUsable(r)) {
-    e.next = undefined;
-    armKeepalive(e, r, "open", n);
+function armPendingKeepalive(state, now) {
+  let { next: pending } = state;
+  if (state.armed === undefined && pending !== undefined && isKeepaliveUsable(pending)) {
+    state.next = undefined;
+    armKeepalive(state, pending, "open", now);
   }
 }
 //@ chunk-e6aww6q8.js:233902-234161 placement
@@ -545,10 +575,11 @@ function disarmKeepalive(state, reason) {
  * 停止保活并按最后一次 touch 结果记遥测；连续失败达到上限时整体关闭一段时间。
  */
 function stopKeepalive(state, reason) {
-  let r = disarmKeepalive(state, reason);
-  if (r === undefined || r.accountEpoch !== getLimitsAccountEpoch()) return;
-  if (r.lastTouch === undefined || r.lastTouch === "ok") {
-    if (r.lastTouch === undefined && r.wasRateLimited) logKeepaliveFeature("sad", "touch_rate_limited");
+  let entry = disarmKeepalive(state, reason);
+  if (entry === undefined || entry.accountEpoch !== getLimitsAccountEpoch()) return;
+  if (entry.lastTouch === undefined || entry.lastTouch === "ok") {
+    if (entry.lastTouch === undefined && entry.wasRateLimited)
+      logKeepaliveFeature("sad", "touch_rate_limited");
     else if (
       reason === "entry_lapsed" ||
       reason === "flag_off" ||
@@ -557,21 +588,21 @@ function stopKeepalive(state, reason) {
       reason === "model_changed"
     )
       logKeepaliveFeature("sad", reason);
-    else if (r.lastTouch === "ok") logKeepaliveOk();
+    else if (entry.lastTouch === "ok") logKeepaliveOk();
     return;
   }
   let keepaliveRoute = getKeepaliveRoute(state);
-  if (r.lastTouch === "touch_not_found") {
+  if (entry.lastTouch === "touch_not_found") {
     keepaliveRoute.failedRequestCount = 0;
-    if (r.stream === "complete") keepaliveRoute.missingRecordCount += 1;
+    if (entry.stream === "complete") keepaliveRoute.missingRecordCount += 1;
   } else {
     keepaliveRoute.failedRequestCount += 1;
     if (keepaliveRoute.failedRequestCount >= MAX_FAILED_REQUESTS) {
-      refuseKeepalive(state, r.lastTouch, REFUSAL_WINDOW_MS);
+      refuseKeepalive(state, entry.lastTouch, REFUSAL_WINDOW_MS);
       return;
     }
   }
-  logKeepaliveFeature("sad", r.lastTouch);
+  logKeepaliveFeature("sad", entry.lastTouch);
 }
 //@ chunk-e6aww6q8.js:234747-235071 placement
 /**
@@ -592,24 +623,25 @@ function refuseKeepalive(state, reason, durationMs) {
   logKeepaliveFeature("bad", reason);
 }
 //@ chunk-e6aww6q8.js:235071-235146 placement
-function logKeepalive(e, level = "debug") {
+function logKeepalive(message, level = "debug") {
   try {
-    logForDebugging(`[cache-keepalive] ${e}`, {
+    logForDebugging(`[cache-keepalive] ${message}`, {
       level,
     });
   } catch {}
 }
 //@ chunk-e6aww6q8.js:235146-235233 placement
-function logKeepaliveOk(e = false) {
+function logKeepaliveOk(isResume = false) {
   try {
-    logFeatureOk(e ? "api_cache_keepalive_resume" : "api_cache_keepalive");
+    logFeatureOk(isResume ? "api_cache_keepalive_resume" : "api_cache_keepalive");
   } catch {}
 }
 //@ chunk-e6aww6q8.js:235233-235401 placement
-function logKeepaliveFeature(e, n, r = false) {
+function logKeepaliveFeature(severity, reason, isResume = false) {
   try {
-    if (e === "sad") logFeatureSad(r ? "api_cache_keepalive_resume" : "api_cache_keepalive", n);
-    else logFeatureBad(r ? "api_cache_keepalive_resume" : "api_cache_keepalive", n);
+    if (severity === "sad")
+      logFeatureSad(isResume ? "api_cache_keepalive_resume" : "api_cache_keepalive", reason);
+    else logFeatureBad(isResume ? "api_cache_keepalive_resume" : "api_cache_keepalive", reason);
   } catch {}
 }
 //@ chunk-e6aww6q8.js:235401-235433 placement
@@ -619,17 +651,17 @@ function logSwallowedError(error) {
   } catch {}
 }
 //@ chunk-e6aww6q8.js:235433-235475 placement
-function logKeepaliveFailure(e, error, r = false) {
+function logKeepaliveFailure(reason, error, isResume = false) {
   logSwallowedError(error);
-  logKeepaliveFeature("bad", e, r);
+  logKeepaliveFeature("bad", reason, isResume);
 }
 //@ chunk-e6aww6q8.js:235475-235519 placement
-function resumeTouchLoop(e) {
-  touchCacheOnResume(e, Date.now()).catch(logSwallowedError);
+function resumeTouchLoop(state) {
+  touchCacheOnResume(state, Date.now()).catch(logSwallowedError);
 }
 //@ chunk-e6aww6q8.js:235519-235552 placement
-function abortWithTouchTimeout(e) {
-  e.abort(new CacheTouchTimeoutError());
+function abortWithTouchTimeout(abortController) {
+  abortController.abort(new CacheTouchTimeoutError());
 }
 //@ chunk-e6aww6q8.js:235552-235940 placement
 /**
@@ -699,11 +731,11 @@ async function sendTouchWithTimeout(entry, deadline) {
   let abortController = new AbortController();
   let timer = setTimeout(abortWithTouchTimeout, TOUCH_TIMEOUT_MS, abortController);
   timer.unref();
-  let h = {
+  let touchHandle = {
     controller: abortController,
     timeout: timer,
   };
-  entry.touch = h;
+  entry.touch = touchHandle;
   try {
     return await Promise.race([
       sendCacheTouch(entry, abortController.signal, deadline),
@@ -723,7 +755,7 @@ async function sendTouchWithTimeout(entry, deadline) {
       }),
     ]);
   } finally {
-    if (entry.touch === h) {
+    if (entry.touch === touchHandle) {
       clearTimeout(timer);
       entry.touch = undefined;
     }
@@ -733,79 +765,87 @@ async function sendTouchWithTimeout(entry, deadline) {
 /**
  * 缓存续期成功后更新记录（续期时间、清零失败计数），满足条件时安排下一次续期。
  */
-function onTouchOk(e, armed, r) {
-  armed.recordRenewedAt = Math.max(armed.recordRenewedAt, r);
+function onTouchOk(state, armed, now) {
+  armed.recordRenewedAt = Math.max(armed.recordRenewedAt, now);
   armed.notFoundCount = 0;
   armed.lastTouch = "ok";
   if (armed.accountEpoch === getLimitsAccountEpoch()) {
-    let keepaliveRoute = getKeepaliveRoute(e);
+    let keepaliveRoute = getKeepaliveRoute(state);
     keepaliveRoute.failedRequestCount = 0;
     keepaliveRoute.missingRecordCount = 0;
   }
   if (
     !armed.isResumed &&
-    e.header?.isSent === true &&
+    state.header?.isSent === true &&
     armed.chainReleaseCount === getMainChainReleaseCount() &&
     getCurrentLimits().isUsingOverage !== true
   )
-    renewMainCacheLife(undefined, r);
+    renewMainCacheLife(undefined, now);
   logKeepalive(`touch ok ${armed.requestId}`);
 }
 //@ chunk-e6aww6q8.js:237426-237456 placement
-function renewMainCacheLifeNow(e) {
-  renewMainCacheLife(e, undefined);
+function renewMainCacheLifeNow(ttlMs) {
+  renewMainCacheLife(ttlMs, undefined);
 }
 //@ chunk-e6aww6q8.js:237456-237588 placement
-function renewMainCacheLife(e, n) {
+function renewMainCacheLife(ttlMs, renewAt) {
   try {
     if (getLastMainThreadRequestAt() === null) return;
-    if (e !== undefined) adjustLastMainThreadCacheTtlMs(e);
-    if (n !== undefined) {
-      recordLastMainThreadCacheRenewal(n);
-      touchPromptCache(MAIN_2, n);
+    if (ttlMs !== undefined) adjustLastMainThreadCacheTtlMs(ttlMs);
+    if (renewAt !== undefined) {
+      recordLastMainThreadCacheRenewal(renewAt);
+      touchPromptCache(MAIN_2, renewAt);
     }
   } catch (error) {
     logKeepaliveFailure("cache_life_failed", error);
   }
 }
 //@ chunk-e6aww6q8.js:237588-237799 placement
-function backoffAfterTouchError(e, error, r, touchIntervalMs, now) {
-  if (error instanceof APIError && (r === "touch_rate_limited" || r === "touch_server_error")) {
-    let y = error.headers && parseRetryAfterMs(error.headers, now);
-    getKeepaliveRoute(e).skipTouchesUntil =
-      now + Math.min(y !== undefined && y > 0 ? y : Math.min(touchIntervalMs * 1.5, 60000), CACHE_TTL_MS);
+function backoffAfterTouchError(state, error, reason, touchIntervalMs, now) {
+  if (error instanceof APIError && (reason === "touch_rate_limited" || reason === "touch_server_error")) {
+    let retryAfterMs = error.headers && parseRetryAfterMs(error.headers, now);
+    getKeepaliveRoute(state).skipTouchesUntil =
+      now +
+      Math.min(
+        retryAfterMs !== undefined && retryAfterMs > 0
+          ? retryAfterMs
+          : Math.min(touchIntervalMs * 1.5, 60000),
+        CACHE_TTL_MS,
+      );
   }
 }
 //@ chunk-e6aww6q8.js:237799-238120 placement
 /**
  * 恢复会话后先续期一次再武装保活；失败时按错误分类处理，成功后转为已武装并更新记录。
  */
-async function touchThenArm(e, entry, r) {
+async function touchThenArm(state, entry, now) {
   try {
     if (!(await sendTouchWithTimeout(entry, 1 / 0))) return;
   } catch (error) {
-    if (e.next === entry && entry.accountEpoch === getLimitsAccountEpoch()) {
-      let h = classifyTouchError(error);
-      logKeepalive(`touch failed: ${h} ${entry.requestId}`);
-      backoffAfterTouchError(e, error, h, entry.touchIntervalMs, r);
+    if (state.next === entry && entry.accountEpoch === getLimitsAccountEpoch()) {
+      let reason = classifyTouchError(error);
+      logKeepalive(`touch failed: ${reason} ${entry.requestId}`);
+      backoffAfterTouchError(state, error, reason, entry.touchIntervalMs, now);
     }
     return;
   }
-  if (e.next !== entry || !isKeepaliveUsable(entry)) return;
-  e.next = undefined;
-  getKeepaliveRoute(e).failedRequestCount = 0;
-  armKeepalive(e, entry, "open", r);
-  if (e.armed !== undefined) onTouchOk(e, e.armed, r);
+  if (state.next !== entry || !isKeepaliveUsable(entry)) return;
+  state.next = undefined;
+  getKeepaliveRoute(state).failedRequestCount = 0;
+  armKeepalive(state, entry, "open", now);
+  if (state.armed !== undefined) onTouchOk(state, state.armed, now);
 }
 //@ chunk-e6aww6q8.js:238120-238190 placement
-function stopResumeStaged(e) {
-  e.resumeStaged?.stopListening();
-  e.resumeStaged = undefined;
+function stopResumeStaged(state) {
+  state.resumeStaged?.stopListening();
+  state.resumeStaged = undefined;
 }
 //@ chunk-e6aww6q8.js:238190-238300 placement
-function resumeKeepaliveConfig(e, n) {
-  let r = isSubscriberHourCache(n.cacheTtlOf(getMainLoopModel()), true) ? getKeepaliveConfig() : undefined;
-  return r?.resumeTouches === true && !isRouteMissingRecords(e) ? r : undefined;
+function resumeKeepaliveConfig(state, reply) {
+  let config = isSubscriberHourCache(reply.cacheTtlOf(getMainLoopModel()), true)
+    ? getKeepaliveConfig()
+    : undefined;
+  return config?.resumeTouches === true && !isRouteMissingRecords(state) ? config : undefined;
 }
 //@ chunk-e6aww6q8.js:238300-238801 placement
 /**
@@ -842,8 +882,8 @@ function tryStartResumeKeepalive(state) {
   }
 }
 //@ chunk-e6aww6q8.js:238801-238897 placement
-function scheduleResumeTouch(state, reply, r) {
-  state.resumeTimer = setTimeout(resumeTouchTimerFired, r.touchIntervalMs, state, reply, r);
+function scheduleResumeTouch(state, reply, entry) {
+  state.resumeTimer = setTimeout(resumeTouchTimerFired, entry.touchIntervalMs, state, reply, entry);
   state.resumeTimer.unref();
 }
 //@ chunk-e6aww6q8.js:238897-238970 placement
@@ -865,12 +905,12 @@ function canTakeUpResumedReply(state, reply, entry) {
     : undefined;
 }
 //@ chunk-e6aww6q8.js:239256-239331 placement
-function isSameModelIdentityKeepalive(model, n) {
+function isSameModelIdentityKeepalive(model, otherModel) {
   return (
     getCanonicalName(stripAnyVersatileSuffix(model), {
       identity: true,
     }) ===
-    getCanonicalName(stripAnyVersatileSuffix(n), {
+    getCanonicalName(stripAnyVersatileSuffix(otherModel), {
       identity: true,
     })
   );
@@ -881,16 +921,16 @@ function isSameModelIdentityKeepalive(model, n) {
  */
 async function touchResumedReply(state, reply, entry, now) {
   try {
-    let h = canTakeUpResumedReply(state, reply, entry);
+    let policy = canTakeUpResumedReply(state, reply, entry);
     if (
-      h === undefined ||
+      policy === undefined ||
       reply.repliedAt > now ||
       !hadActivityWithin(
         {
           main_request: reply.repliedAt,
         },
         now,
-        h.activityWindowMinutes * 60000,
+        policy.activityWindowMinutes * 60000,
       )
     ) {
       logKeepalive(`resumed reply left alone ${entry.requestId}`);
@@ -906,12 +946,12 @@ async function touchResumedReply(state, reply, entry, now) {
         return;
       }
     } catch (error) {
-      let S = classifyTouchError(error);
-      logKeepalive(`resumed touch failed: ${S} ${entry.requestId}`);
-      if (S === "touch_error") logSwallowedError(error);
+      let reason = classifyTouchError(error);
+      logKeepalive(`resumed touch failed: ${reason} ${entry.requestId}`);
+      if (reason === "touch_error") logSwallowedError(error);
       if (entry.accountEpoch === getLimitsAccountEpoch())
-        backoffAfterTouchError(state, error, S, entry.touchIntervalMs, now);
-      logKeepaliveFeature("sad", S, true);
+        backoffAfterTouchError(state, error, reason, entry.touchIntervalMs, now);
+      logKeepaliveFeature("sad", reason, true);
       return;
     }
     if (canTakeUpResumedReply(state, reply, entry) !== undefined) {
@@ -933,53 +973,59 @@ async function touchResumedReply(state, reply, entry, now) {
 /**
  * 会话恢复时续期提示缓存，按开关、记录过期、账号变化等条件决定是否发送 cache_touch。
  */
-async function touchCacheOnResume(e, n) {
-  let { armed } = e;
+async function touchCacheOnResume(state, now) {
+  let { armed } = state;
   if (armed === undefined) return;
-  let s = armed.stream === "open";
+  let isOpenStream = armed.stream === "open";
   try {
-    let h = keepaliveInvalidReason(armed);
-    if (h !== undefined) {
-      stopKeepalive(e, h);
+    let invalidReason = keepaliveInvalidReason(armed);
+    if (invalidReason !== undefined) {
+      stopKeepalive(state, invalidReason);
       return;
     }
     let keepaliveConfig = getKeepaliveConfig();
     if (keepaliveConfig === undefined) {
-      stopKeepalive(e, "flag_off");
+      stopKeepalive(state, "flag_off");
       return;
     }
     if (armed.isResumed && !keepaliveConfig.resumeTouches) {
-      stopKeepalive(e, "resume_touches_off");
+      stopKeepalive(state, "resume_touches_off");
       return;
     }
-    let S =
-      keepaliveConfig.inFlightWindowMinutes !== undefined && isWorkRunning(e.run)
+    let windowMinutes =
+      keepaliveConfig.inFlightWindowMinutes !== undefined && isWorkRunning(state.run)
         ? Math.max(keepaliveConfig.activityWindowMinutes, keepaliveConfig.inFlightWindowMinutes)
         : keepaliveConfig.activityWindowMinutes;
-    let w = hadActivityWithin(e.lastEventAt, n, S * 60000);
-    if (armed.stream !== "open" && n - armed.recordRenewedAt >= RENEW_BEFORE_EXPIRY_MS) {
-      e.lapsedRequestIds.add(armed.requestId);
-      stopKeepalive(e, w ? "entry_lapsed" : "record_expired");
-      armPendingKeepalive(e, n);
+    let hadActivity = hadActivityWithin(state.lastEventAt, now, windowMinutes * 60000);
+    if (armed.stream !== "open" && now - armed.recordRenewedAt >= RENEW_BEFORE_EXPIRY_MS) {
+      state.lapsedRequestIds.add(armed.requestId);
+      stopKeepalive(state, hadActivity ? "entry_lapsed" : "record_expired");
+      armPendingKeepalive(state, now);
       return;
     }
-    if (!w || armed.touch !== undefined || n < getKeepaliveRoute(e).skipTouchesUntil) return;
-    let deadline = armed.stream === "open" ? 1 / 0 : Date.now() + CACHE_TTL_MS - (n - armed.recordRenewedAt);
-    let { next: G } = e;
+    if (!hadActivity || armed.touch !== undefined || now < getKeepaliveRoute(state).skipTouchesUntil) return;
+    let deadline =
+      armed.stream === "open" ? 1 / 0 : Date.now() + CACHE_TTL_MS - (now - armed.recordRenewedAt);
+    let { next: pending } = state;
     if (
-      G !== undefined &&
-      G.touch === undefined &&
-      n + TOUCH_TIMEOUT_MS - armed.recordRenewedAt < RENEW_BEFORE_EXPIRY_MS
+      pending !== undefined &&
+      pending.touch === undefined &&
+      now + TOUCH_TIMEOUT_MS - armed.recordRenewedAt < RENEW_BEFORE_EXPIRY_MS
     ) {
-      await touchThenArm(e, G, n);
-      if (e.armed !== armed || armed.touch !== undefined || n < getKeepaliveRoute(e).skipTouchesUntil) return;
+      await touchThenArm(state, pending, now);
+      if (
+        state.armed !== armed ||
+        armed.touch !== undefined ||
+        now < getKeepaliveRoute(state).skipTouchesUntil
+      )
+        return;
     }
-    if (!(await sendTouchWithTimeout(armed, deadline)) || e.armed !== armed) return;
-    onTouchOk(e, armed, n);
+    if (!(await sendTouchWithTimeout(armed, deadline)) || state.armed !== armed) return;
+    onTouchOk(state, armed, now);
   } catch (error) {
-    if (error instanceof KeepaliveAbortError || e.armed !== armed) return;
+    if (error instanceof KeepaliveAbortError || state.armed !== armed) return;
     if (armed.accountEpoch !== getLimitsAccountEpoch()) {
-      stopKeepalive(e, "account_changed");
+      stopKeepalive(state, "account_changed");
       return;
     }
     if (
@@ -987,24 +1033,24 @@ async function touchCacheOnResume(e, n) {
       (error.status === 400 || error.status === 403) &&
       !isOAuthTokenRevokedError(error)
     ) {
-      refuseKeepalive(e, error.status === 400 ? "touch_bad_request" : "touch_refused");
+      refuseKeepalive(state, error.status === 400 ? "touch_bad_request" : "touch_refused");
       return;
     }
-    let y = classifyTouchError(error);
-    logKeepalive(`touch failed: ${y} ${armed.requestId}`);
-    if (y === "touch_not_found" && s) return;
-    backoffAfterTouchError(e, error, y, armed.touchIntervalMs, n);
-    if (y === "touch_rate_limited") {
+    let reason = classifyTouchError(error);
+    logKeepalive(`touch failed: ${reason} ${armed.requestId}`);
+    if (reason === "touch_not_found" && isOpenStream) return;
+    backoffAfterTouchError(state, error, reason, armed.touchIntervalMs, now);
+    if (reason === "touch_rate_limited") {
       armed.wasRateLimited = true;
       return;
     }
-    if (y === "touch_error" && armed.lastTouch !== y) logSwallowedError(error);
-    armed.lastTouch = y;
-    if (y === "touch_not_found" || y === "touch_route_not_found") {
+    if (reason === "touch_error" && armed.lastTouch !== reason) logSwallowedError(error);
+    armed.lastTouch = reason;
+    if (reason === "touch_not_found" || reason === "touch_route_not_found") {
       armed.notFoundCount += 1;
       if (armed.notFoundCount >= MAX_TOUCH_NOT_FOUND) {
-        stopKeepalive(e, y);
-        armPendingKeepalive(e, n);
+        stopKeepalive(state, reason);
+        armPendingKeepalive(state, now);
       }
     }
   }
@@ -1016,9 +1062,11 @@ class CacheTouchTimeoutError extends Error {}
 //@ chunk-e6aww6q8.js:241609-241732 placement
 function keepaliveRequestIds(model) {
   {
-    let { next: n, armed } = keepaliveState();
-    return [n, armed].flatMap((s) =>
-      s !== undefined && isArmedForModel(s, model) && isKeepaliveUsable(s) ? [s.requestId] : [],
+    let { next: pending, armed } = keepaliveState();
+    return [pending, armed].flatMap((entry) =>
+      entry !== undefined && isArmedForModel(entry, model) && isKeepaliveUsable(entry)
+        ? [entry.requestId]
+        : [],
     );
   }
   return [];
@@ -1054,7 +1102,10 @@ class HeartbeatShadowState {
   interactiveLogged = false;
 }
 //@ chunk-e6aww6q8.js:242134-242161 placement
-var heartbeatShadowSlot = new HostScoped(() => new HeartbeatShadowState());
+var heartbeatShadowSlot; // deferred: uses HeartbeatShadowState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:242134", () => {
+  heartbeatShadowSlot = new HostScoped(() => new HeartbeatShadowState());
+});
 //@ chunk-e6aww6q8.js:242161-242199 placement
 function heartbeatShadow() {
   return heartbeatShadowSlot.of(getRootSession().host);
@@ -1067,37 +1118,38 @@ function isDapperDawnEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_dapper_dawn", false);
 }
 //@ chunk-e6aww6q8.js:242247-242365 placement
-function resetHeartbeatShadow(e) {
-  e.lastMainRequestAt = 0;
-  e.lastEventAt = 0;
-  e.lastUserInputMonotonic = null;
-  e.run = null;
-  e.interactiveLogged = false;
+function resetHeartbeatShadow(shadow) {
+  shadow.lastMainRequestAt = 0;
+  shadow.lastEventAt = 0;
+  shadow.lastUserInputMonotonic = null;
+  shadow.run = null;
+  shadow.interactiveLogged = false;
 }
 //@ chunk-e6aww6q8.js:242365-242912 placement
 /**
  * 记录 tengu_cache_heartbeat_shadow 影子事件（运行状态、距上次事件/主请求的时间、是否交互），用于评估缓存心跳策略。
  */
 function logHeartbeatShadow(kind, { now, run, mainRequestAt }) {
-  let h = heartbeatShadow();
-  if (h.lastMainRequestAt === 0) return false;
+  let shadow = heartbeatShadow();
+  if (shadow.lastMainRequestAt === 0) return false;
   let lastMainRequestId = getLastMainRequestId();
   if (lastMainRequestId === undefined) {
-    resetHeartbeatShadow(h);
+    resetHeartbeatShadow(shadow);
     return false;
   }
-  let S = mainRequestAt ?? h.lastMainRequestAt;
+  let mainRequestAtFallback = mainRequestAt ?? shadow.lastMainRequestAt;
   logEvent("tengu_cache_heartbeat_shadow", {
     kind: fromEnum(kind),
     work: fromEnumOpt(run?.kind === "work" ? run.work : undefined),
     awaiting: fromEnumOpt(run?.kind === "awaiting_user" ? run.awaiting : undefined),
-    sinceLastEventMs: h.lastEventAt === 0 ? undefined : Math.max(0, now - h.lastEventAt),
-    sinceLastMainRequestMs: S === 0 ? undefined : Math.max(0, now - S),
+    sinceLastEventMs: shadow.lastEventAt === 0 ? undefined : Math.max(0, now - shadow.lastEventAt),
+    sinceLastMainRequestMs:
+      mainRequestAtFallback === 0 ? undefined : Math.max(0, now - mainRequestAtFallback),
     requestId: sanitizeMarkName(lastMainRequestId),
-    interactive: h.interactiveLogged ? undefined : h.interactive,
+    interactive: shadow.interactiveLogged ? undefined : shadow.interactive,
   });
-  h.interactiveLogged = true;
-  h.lastEventAt = now;
+  shadow.interactiveLogged = true;
+  shadow.lastEventAt = now;
   return true;
 }
 //@ chunk-e6aww6q8.js:242912-243031 placement
@@ -1112,8 +1164,8 @@ var RUN_EVENT_NAMES = {
   },
 };
 //@ chunk-e6aww6q8.js:243031-243085 placement
-function logRunStateChange(run, n, now) {
-  logHeartbeatShadow(RUN_EVENT_NAMES[run.kind][n], {
+function logRunStateChange(run, phase, now) {
+  logHeartbeatShadow(RUN_EVENT_NAMES[run.kind][phase], {
     now,
     run,
   });
@@ -1122,15 +1174,15 @@ function logRunStateChange(run, n, now) {
 /**
  * 切换交互状态：离开交互时结束当前运行计时并记录。
  */
-function setInteractive(e, n) {
+function setInteractive(isInteractive, options) {
   try {
-    if (!e) recordRunState(null, n?.now ?? Date.now());
-    let r = heartbeatShadow();
-    r.interactive = e;
-    if (!e && r.run !== null) {
-      let run = r.run;
-      r.run = null;
-      if (isDapperDawnEnabled()) logRunStateChange(run, "end", n?.now ?? Date.now());
+    if (!isInteractive) recordRunState(null, options?.now ?? Date.now());
+    let shadow = heartbeatShadow();
+    shadow.interactive = isInteractive;
+    if (!isInteractive && shadow.run !== null) {
+      let run = shadow.run;
+      shadow.run = null;
+      if (isDapperDawnEnabled()) logRunStateChange(run, "end", options?.now ?? Date.now());
     }
   } catch (error) {
     logError(error);
@@ -1141,18 +1193,18 @@ function onMainRequestLogged({ isMainLoop, now }) {
   try {
     if (!isMainLoop || !isDapperDawnEnabled()) return;
     if (getLastMainRequestId() === undefined) return;
-    let r = heartbeatShadow();
-    let lastMainRequestAt = r.lastMainRequestAt;
-    r.lastMainRequestAt = now;
+    let shadow = heartbeatShadow();
+    let lastMainRequestAt = shadow.lastMainRequestAt;
+    shadow.lastMainRequestAt = now;
     if (
       logHeartbeatShadow("main_request", {
         now,
         mainRequestAt: lastMainRequestAt,
       }) &&
       lastMainRequestAt === 0 &&
-      r.run !== null
+      shadow.run !== null
     )
-      logRunStateChange(r.run, "start", now);
+      logRunStateChange(shadow.run, "start", now);
   } catch (error) {
     logError(error);
   }
@@ -1161,20 +1213,23 @@ function onMainRequestLogged({ isMainLoop, now }) {
 /**
  * 记录用户输入事件（限频），用于空闲与活跃统计。
  */
-function onUserInput(e) {
+function onUserInput(options) {
   try {
-    recordActivityEvent("user_input", e?.now ?? Date.now());
+    recordActivityEvent("user_input", options?.now ?? Date.now());
     if (!isDapperDawnEnabled()) return;
-    let n = heartbeatShadow();
-    let r = e?.monotonic ?? performance.now();
-    if (n.lastUserInputMonotonic !== null && r - n.lastUserInputMonotonic < USER_INPUT_HEARTBEAT_DEBOUNCE_MS)
+    let shadow = heartbeatShadow();
+    let monotonic = options?.monotonic ?? performance.now();
+    if (
+      shadow.lastUserInputMonotonic !== null &&
+      monotonic - shadow.lastUserInputMonotonic < USER_INPUT_HEARTBEAT_DEBOUNCE_MS
+    )
       return;
     if (
       logHeartbeatShadow("user_input", {
-        now: e?.now ?? Date.now(),
+        now: options?.now ?? Date.now(),
       })
     )
-      n.lastUserInputMonotonic = r;
+      shadow.lastUserInputMonotonic = monotonic;
   } catch (error) {
     logError(error);
   }
@@ -1183,28 +1238,28 @@ function onUserInput(e) {
 /**
  * 加载动画状态变化时切换运行计时：结束旧的运行、开始新的运行。
  */
-function onSpinnerStateChange(e, n) {
+function onSpinnerStateChange(spinnerState, options) {
   try {
-    let r = runStateFromSpinner(e);
-    recordRunState(r, n?.now ?? Date.now());
+    let nextRun = runStateFromSpinner(spinnerState);
+    recordRunState(nextRun, options?.now ?? Date.now());
     if (!isDapperDawnEnabled()) return;
-    let s = heartbeatShadow();
-    if (sameRunState(r, s.run)) return;
-    let run = s.run;
-    s.run = r;
-    let y = n?.now ?? Date.now();
-    if (run !== null) logRunStateChange(run, "end", y);
-    if (r !== null) logRunStateChange(r, "start", y);
+    let shadow = heartbeatShadow();
+    if (sameRunState(nextRun, shadow.run)) return;
+    let run = shadow.run;
+    shadow.run = nextRun;
+    let now = options?.now ?? Date.now();
+    if (run !== null) logRunStateChange(run, "end", now);
+    if (nextRun !== null) logRunStateChange(nextRun, "start", now);
   } catch (error) {
     logError(error);
   }
 }
 //@ chunk-e6aww6q8.js:244022-244110 placement
-function endHeartbeatShadow(kind, n) {
+function endHeartbeatShadow(kind, options) {
   try {
     if (isDapperDawnEnabled())
       logHeartbeatShadow(kind, {
-        now: n?.now ?? Date.now(),
+        now: options?.now ?? Date.now(),
       });
     resetHeartbeatShadow(heartbeatShadow());
   } catch (error) {
@@ -1215,22 +1270,22 @@ function endHeartbeatShadow(kind, n) {
 /**
  * 导出函数 `endMaintenanceAtSubagentEnd`：参数 e。
  */
-function endMaintenanceAtSubagentEnd(requestId) {
-  gracefulShutdown_2("subagent_end", requestId);
+function endMaintenanceAtSubagentEnd(lastRequestId) {
+  gracefulShutdown_2("subagent_end", lastRequestId);
 }
 //@ chunk-e6aww6q8.js:244245-244286 placement
 /**
  * 导出函数 `endMaintenanceAndForget`：参数 e。
  */
-function endMaintenanceAndForget(e) {
-  gracefulShutdown_2(e, getLastMainRequestId());
-  endHeartbeatShadow(e);
+function endMaintenanceAndForget(reason) {
+  gracefulShutdown_2(reason, getLastMainRequestId());
+  endHeartbeatShadow(reason);
   forgetLastMainRequestId();
 }
 //@ chunk-e6aww6q8.js:244286-244366 placement
-function onLastMainRequestReplaced(e) {
-  if (getLastMainRequestId() !== e) return;
-  if (e === undefined) {
+function onLastMainRequestReplaced(requestId) {
+  if (getLastMainRequestId() !== requestId) return;
+  if (requestId === undefined) {
     forgetLastMainRequestId();
     return;
   }

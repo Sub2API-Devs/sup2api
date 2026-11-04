@@ -18,10 +18,11 @@ import { baseSystemPromptOf } from "./systemPromptBoundary.js";
 import { mainAgentContext } from "./agentContext.js";
 import { isBetaHeaderAllowed } from "./betas.js";
 import { createAbortController } from "./abortController.js";
-import { Jce, createColorAssigner } from "../services/artifacts/artifactReadConsent.js";
+import { NO_BRIDGE_CONSENT } from "../screens/repl/bridgeChannelSlot.js";
 import { createAppStateAccessors } from "../state/appStateSetters.js";
 import { createNotificationDrain } from "../services/queuedNotifications/queuedNotifications.js";
 import { createTaskFramework } from "./task/framework.js";
+import { createColorAssigner } from "../tools/AgentTool/agentColorManager.js";
 import { fieldAccessor } from "../state/sliceHelpers.js";
 
 //@ chunk-dmpxe2vf.js:583-1110 facade-exports = fetchSystemPromptParts (0.661)
@@ -39,7 +40,7 @@ async function fetchSystemPromptParts({
   storageV5,
   credentials,
 }) {
-  let [defaultSystemPrompt, userContext, systemContext, t] = await Promise.all([
+  let [defaultSystemPrompt, userContext, systemContext, extraContext] = await Promise.all([
     customSystemPrompt !== undefined
       ? Promise.resolve([])
       : getSystemPrompt(tools, mainLoopModel, {
@@ -62,7 +63,7 @@ async function fetchSystemPromptParts({
       userContext: {
         ...systemContext,
         ...userContext,
-        ...t,
+        ...extraContext,
       },
       systemContext: {},
     };
@@ -166,7 +167,7 @@ async function buildSideQuestionFallbackParams({
     readFileState,
     toolState,
     toolDecisions: new Map(),
-    permissionRelays: Jce,
+    permissionRelays: NO_BRIDGE_CONSENT,
     getAppState,
     setAppState,
     ...createAppStateAccessors(getAppState, setAppState),

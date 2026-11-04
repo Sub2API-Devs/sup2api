@@ -51,14 +51,14 @@ function getBackgroundUsageNote() {
 //@ chunk-mx04m55e.js:1465-2348 layout
 function getSleepGuidance() {
   if (isBackgroundTasksOff()) return null;
-  let e = backgroundCompletionNoticeEnabled();
-  let t = hasBackgroundBashStopAfterReply();
+  let completionNotice = backgroundCompletionNoticeEnabled();
+  let stopAfterReply = hasBackgroundBashStopAfterReply();
   return `  - Avoid unnecessary \`Start-Sleep\` commands:
-    - Do not sleep between commands that can run immediately \u2014 just run them.${e && !t ? "\n    - If your command is long running and you would like to be notified when it finishes \u2014 simply run your command using `run_in_background`. There is no need to sleep in this case." : ""}
+    - Do not sleep between commands that can run immediately \u2014 just run them.${completionNotice && !stopAfterReply ? "\n    - If your command is long running and you would like to be notified when it finishes \u2014 simply run your command using `run_in_background`. There is no need to sleep in this case." : ""}
     - Do not retry failing commands in a sleep loop \u2014 diagnose the root cause or consider an alternative approach.${
-      e
+      completionNotice
         ? `
-    - If waiting for a background task you started with \`run_in_background\`, you will be notified ${t ? "if it completes while you are still working" : "when it completes"} \u2014 do not poll.`
+    - If waiting for a background task you started with \`run_in_background\`, you will be notified ${stopAfterReply ? "if it completes while you are still working" : "when it completes"} \u2014 do not poll.`
         : ""
     }
     - If you must poll an external process, use a check command rather than sleeping first.
@@ -95,20 +95,20 @@ async function getPowerShellPrompt() {
 /**
  * PowerShell 工具提示词：版本节、已验证构建工具、目录验证、语法说明、Unix 命令对照、退出码注意、交互命令禁忌、here-string 用法、超时/输出截断、专用工具优先、并行/顺序、git 规则、sleep 规则。
  */
-function getPrompt(e) {
-  let { edition, buildTools } = e;
-  let backgroundNote = e.backgroundRuns ? getBackgroundUsageNote() : null;
-  let sleepGuidance = e.backgroundRuns ? getSleepGuidance() : null;
-  let r = e.onWindows
+function getPrompt(options) {
+  let { edition, buildTools } = options;
+  let backgroundNote = options.backgroundRuns ? getBackgroundUsageNote() : null;
+  let sleepGuidance = options.backgroundRuns ? getSleepGuidance() : null;
+  let msvcNote = options.onWindows
     ? "\n   - Exception: the MSVC toolchain (`cl`, `nmake`, `msbuild`) is only on PATH inside a Visual Studio developer shell, so it may be installed even if not listed. Environment changes do NOT persist between commands, so initialize and build in ONE command: `cmd /c '\"C:\\Program Files\\Microsoft Visual Studio\\<year>\\<edition>\\VC\\Auxiliary\\Build\\vcvarsall.bat\" x64 && <build command>'`"
     : "";
-  let a = buildTools.length
+  let buildToolsNote = buildTools.length
     ? `
 Developer tools verified on this machine's PATH: ${buildTools.join(", ")}
-   - Prefer these. A build/dev tool NOT in this list is likely not installed \u2014 do not assume \`make\`, \`gcc\`, or a package manager is available unless listed. Check with \`if (Get-Command <name> -ErrorAction SilentlyContinue) { ... }\` before relying on an unlisted tool, and prefer a listed equivalent.${r}
+   - Prefer these. A build/dev tool NOT in this list is likely not installed \u2014 do not assume \`make\`, \`gcc\`, or a package manager is available unless listed. Check with \`if (Get-Command <name> -ErrorAction SilentlyContinue) { ... }\` before relying on an unlisted tool, and prefer a listed equivalent.${msvcNote}
 `
     : "";
-  let d = `
+  let gitNote = `
   - For git commands:
     - Prefer to create a new commit rather than amending an existing commit.
     - Before running destructive operations (e.g., git reset --hard, git push --force, git checkout --), consider whether there is a safer alternative that achieves the same goal. Only use destructive operations when they are truly the best approach.
@@ -118,7 +118,7 @@ Developer tools verified on this machine's PATH: ${buildTools.join(", ")}
 IMPORTANT: This tool is for terminal operations via PowerShell: git, npm, docker, and PS cmdlets. DO NOT use it for file operations (reading, writing, editing, searching, finding files) - use the specialized tools for this instead.
 
 ${getEditionSection(edition)}
-${a}
+${buildToolsNote}
 Before executing the command, please follow these steps:
 
 1. Directory Verification:

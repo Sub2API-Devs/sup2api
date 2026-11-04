@@ -8,7 +8,7 @@
  * pieces: chunk-55w3ydvj.js (2)
  * attribution: fingerprint 2
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { SandboxManager } from "../../utils/sandbox/sandbox-adapter.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
@@ -25,7 +25,7 @@ import { LearnMoreLink } from "../LearnMoreLink.js";
 
 //@ chunk-55w3ydvj.js:22234-23177 fingerprint = SandboxOverridesTab (0.683)
 function SandboxOverridesTab(props) {
-  let $ = w(5);
+  let $ = useMemoCache(5);
   let { onComplete } = props;
   let isEnabled = SandboxManager.isSandboxingEnabled();
   let isLocked =
@@ -93,7 +93,7 @@ function SandboxOverridesTab(props) {
 }
 //@ chunk-55w3ydvj.js:23177-25340 fingerprint = OverridesSelect (0.777)
 function OverridesSelect(props) {
-  let $ = w(24);
+  let $ = useMemoCache(24);
   let { onComplete, currentMode } = props;
   let [theme] = useTheme();
   let { headerFocused, focusHeader } = useTabHeaderFocus();
@@ -138,12 +138,12 @@ function OverridesSelect(props) {
   if ($[9] !== onComplete) {
     t7 = async function handleSelect(value) {
       let mode = value;
-      let R = await SandboxManager.setSandboxSettings({
+      let settingsResult = await SandboxManager.setSandboxSettings({
         allowUnsandboxedCommands: mode === "open",
       });
       onComplete(
         sandboxSettingsErrorText(
-          R,
+          settingsResult,
           mode === "open"
             ? "\u2713 Unsandboxed fallback allowed - commands can run outside sandbox when necessary"
             : "\u2713 Strict sandbox mode - all commands must run in sandbox or be excluded via the `excludedCommands` option",
@@ -213,9 +213,9 @@ function OverridesSelect(props) {
     });
     $[20] = t11;
   } else t11 = $[20];
-  let N;
+  let modeRow;
   if ($[21] === MEMO_CACHE_SENTINEL) {
-    N = jsxProd_default_2(Box, {
+    modeRow = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginTop: 1,
       gap: 1,
@@ -239,13 +239,13 @@ function OverridesSelect(props) {
         }),
       ],
     });
-    $[21] = N;
-  } else N = $[21];
+    $[21] = modeRow;
+  } else modeRow = $[21];
   let t14;
   if ($[22] !== t10) {
     t14 = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [t8, t10, N],
+      children: [t8, t10, modeRow],
     });
     $[22] = t10;
     $[23] = t14;

@@ -36,7 +36,7 @@ import { jsonParse } from "../slowOperations.js";
 import { NoExtensionConnectedError, ExtensionDisconnectedMidCallError } from "./socketClient.js";
 import { setProvidedTabsProvider } from "./tabsProvider.js";
 import { firstLineOf } from "../stringUtils.js";
-import { ce } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
+import { SUPPORTED_IMAGE_TYPES } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { imageLimitsForModel } from "../attachmentMedia.js";
 import { maybeResizeAndDownsampleImageBlock } from "../imageResizer.js";
 import { CHROME_INPUT_APPROVED_TOOL_NAMES } from "./browserToolSchemas.js";
@@ -56,35 +56,36 @@ import { toolMatchesName } from "../../Tool.js";
 import { isAutoClassifierActive } from "../permissions/autoModeState.js";
 import { forgetClassifierContext } from "../permissions/serverClassifier/context.js";
 import { createChromeDomainAllowRule } from "../permissions/permissions.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-38x90rmj.js:1314-1423 placement
-function normalizedOriginOf(e) {
-  let o;
+function normalizedOriginOf(url) {
+  let parsed;
   try {
-    o = new URL(e);
+    parsed = new URL(url);
   } catch {
     return;
   }
-  if (o.host === "") return;
-  return `${o.protocol}//${normalizeChromeSite(o.host)}`;
+  if (parsed.host === "") return;
+  return `${parsed.protocol}//${normalizeChromeSite(parsed.host)}`;
 }
 //@ chunk-38x90rmj.js:1423-1494 placement
 /**
  * 判断两个来源是否不同（任一未知也视为不同）。
  */
-function originsDiffer(e, o) {
-  let t = normalizedOriginOf(e);
-  let i = normalizedOriginOf(o);
-  return t === undefined || i === undefined || t !== i;
+function originsDiffer(leftUrl, rightUrl) {
+  let leftOrigin = normalizedOriginOf(leftUrl);
+  let rightOrigin = normalizedOriginOf(rightUrl);
+  return leftOrigin === undefined || rightOrigin === undefined || leftOrigin !== rightOrigin;
 }
 //@ chunk-38x90rmj.js:1494-1610 placement
-function tabNavigationFor(e, url) {
-  let t = claudeInChromeSession().lastExecutedTabUrlByScope.get(e);
-  if (t === undefined) return;
-  return originsDiffer(t, url)
+function tabNavigationFor(scopeKey, rightUrl) {
+  let lastUrl = claudeInChromeSession().lastExecutedTabUrlByScope.get(scopeKey);
+  if (lastUrl === undefined) return;
+  return originsDiffer(lastUrl, rightUrl)
     ? {
-        from: t,
-        to: url,
+        from: lastUrl,
+        to: rightUrl,
       }
     : undefined;
 }
@@ -92,8 +93,8 @@ function tabNavigationFor(e, url) {
 /**
  * 记录某作用域最近执行的标签页 URL。
  */
-function rememberExecutedTabUrl(e, o) {
-  claudeInChromeSession().lastExecutedTabUrlByScope.set(e, o);
+function rememberExecutedTabUrl(scopeKey, url) {
+  claudeInChromeSession().lastExecutedTabUrlByScope.set(scopeKey, url);
 }
 //@ chunk-38x90rmj.js:1666-1676 placement
 /**
@@ -104,19 +105,19 @@ var MAX_RESOLVED_BY_TOOL_USE = 200;
 /**
  * 记录某工具调用解析出的站点。
  */
-function rememberResolvedHost(toolUseId, o) {
+function rememberResolvedHost(toolUseId, host) {
   let resolvedHostByToolUseId = claudeInChromeSession().resolvedHostByToolUseId;
   if (resolvedHostByToolUseId.size >= MAX_RESOLVED_BY_TOOL_USE) resolvedHostByToolUseId.clear();
-  resolvedHostByToolUseId.set(toolUseId, o);
+  resolvedHostByToolUseId.set(toolUseId, host);
 }
 //@ chunk-38x90rmj.js:1761-1846 placement
 /**
  * 记录某工具调用解析出的 URL。
  */
-function rememberResolvedUrl(toolUseId, o) {
+function rememberResolvedUrl(toolUseId, url) {
   let resolvedUrlByToolUseId = claudeInChromeSession().resolvedUrlByToolUseId;
   if (resolvedUrlByToolUseId.size >= MAX_RESOLVED_BY_TOOL_USE) resolvedUrlByToolUseId.clear();
-  resolvedUrlByToolUseId.set(toolUseId, o);
+  resolvedUrlByToolUseId.set(toolUseId, url);
 }
 //@ chunk-38x90rmj.js:1846-1942 placement
 /**
@@ -144,13 +145,13 @@ function setChromeBinding(context, socketClient) {
 /**
  * 是否有总是允许 Chrome 工具的规则
  */
-function hasChromeAlwaysAllow(toolPermissionContext, o) {
+function hasChromeAlwaysAllow(toolPermissionContext, toolName) {
   let sliced = CFC_TOOL_PREFIX.slice(0, -2);
-  let i = `${CFC_TOOL_PREFIX}*`;
+  let wildcardRule = `${CFC_TOOL_PREFIX}*`;
   for (let alwaysAllowRule of Object.values(toolPermissionContext.alwaysAllowRules))
-    for (let s of alwaysAllowRule ?? []) {
-      let replaced = s.replace(/\(\*?\)$/, "");
-      if (replaced === o || replaced === sliced || replaced === i) return true;
+    for (let rule of alwaysAllowRule ?? []) {
+      let replaced = rule.replace(/\(\*?\)$/, "");
+      if (replaced === toolName || replaced === sliced || replaced === wildcardRule) return true;
     }
   return false;
 }
@@ -158,143 +159,153 @@ function hasChromeAlwaysAllow(toolPermissionContext, o) {
 /**
  * 切换/选择浏览器的工具名集合。
  */
-var CHROME_TOOL_CLASSES = new Set([
-  "tabs_context_mcp",
-  "tabs_create_mcp",
-  "tabs_close_mcp",
-  "resize_window",
-  "shortcuts_list",
-  "list_connected_browsers",
-]);
-var BROWSER_SELECT_TOOL_NAMES = new Set(["switch_browser", "select_browser"]);
-var CHROME_TOOL_ERROR_MESSAGES = {
-  tab_missing:
-    "Couldn't determine which page this action targets. Pass the tabId from tabs_context_mcp and try again.",
-  batch_multiple_tabs:
-    "Claude in Chrome: a browser_batch must act on one tab. Pass the same tabId on every action.",
-  batch_after_navigate:
-    "Claude in Chrome: a browser_batch cannot act on a page after navigating to it. Issue the navigate on its own, then batch the actions on the loaded page.",
-  batch_browser_switch: "Claude in Chrome: switch browsers in its own call, not inside a browser_batch.",
-  batch_malformed_item:
-    "Claude in Chrome: a browser_batch action must be {name, input} and cannot nest another browser_batch.",
-};
+var CHROME_TOOL_CLASSES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var BROWSER_SELECT_TOOL_NAMES;
+var CHROME_TOOL_ERROR_MESSAGES;
+deferInit("chunk-38x90rmj.js:2193", () => {
+  CHROME_TOOL_CLASSES = new Set([
+    "tabs_context_mcp",
+    "tabs_create_mcp",
+    "tabs_close_mcp",
+    "resize_window",
+    "shortcuts_list",
+    "list_connected_browsers",
+  ]);
+  BROWSER_SELECT_TOOL_NAMES = new Set(["switch_browser", "select_browser"]);
+  CHROME_TOOL_ERROR_MESSAGES = {
+    tab_missing:
+      "Couldn't determine which page this action targets. Pass the tabId from tabs_context_mcp and try again.",
+    batch_multiple_tabs:
+      "Claude in Chrome: a browser_batch must act on one tab. Pass the same tabId on every action.",
+    batch_after_navigate:
+      "Claude in Chrome: a browser_batch cannot act on a page after navigating to it. Issue the navigate on its own, then batch the actions on the loaded page.",
+    batch_browser_switch: "Claude in Chrome: switch browsers in its own call, not inside a browser_batch.",
+    batch_malformed_item:
+      "Claude in Chrome: a browser_batch action must be {name, input} and cannot nest another browser_batch.",
+  };
+});
 //@ chunk-38x90rmj.js:3011-3818 placement
 /**
  * 检查 browser_batch 结构
  */
-function vetBrowserBatch(e, o) {
-  let t = [];
-  if (e === "browser_batch") {
-    if (!Array.isArray(o.actions))
+function vetBrowserBatch(toolName, input) {
+  let actions = [];
+  if (toolName === "browser_batch") {
+    if (!Array.isArray(input.actions))
       return {
         kind: "deny",
         code: "batch_malformed_item",
       };
-    for (let action of o.actions) {
+    for (let action of input.actions) {
       if (!isPlainObject(action) || typeof action.name !== "string" || action.name === "browser_batch")
         return {
           kind: "deny",
           code: "batch_malformed_item",
         };
-      t.push({
+      actions.push({
         name: action.name,
         input: isPlainObject(action.input) ? action.input : {},
       });
     }
   } else
-    t.push({
-      name: e,
-      input: o,
+    actions.push({
+      name: toolName,
+      input,
     });
-  let i = new Set();
-  let n = false;
-  for (let s of t) {
-    if (s.name === "navigate") {
-      n = true;
+  let tabIds = new Set();
+  let sawNavigate = false;
+  for (let action of actions) {
+    if (action.name === "navigate") {
+      sawNavigate = true;
       continue;
     }
-    if (BROWSER_SELECT_TOOL_NAMES.has(s.name)) {
-      if (t.length > 1)
+    if (BROWSER_SELECT_TOOL_NAMES.has(action.name)) {
+      if (actions.length > 1)
         return {
           kind: "deny",
           code: "batch_browser_switch",
         };
       continue;
     }
-    if (CHROME_TOOL_CLASSES.has(s.name)) continue;
-    if (n)
+    if (CHROME_TOOL_CLASSES.has(action.name)) continue;
+    if (sawNavigate)
       return {
         kind: "deny",
         code: "batch_after_navigate",
       };
-    if (typeof s.input.tabId !== "number")
+    if (typeof action.input.tabId !== "number")
       return {
         kind: "deny",
         code: "tab_missing",
       };
-    i.add(s.input.tabId);
+    tabIds.add(action.input.tabId);
   }
-  if (i.size === 0)
+  if (tabIds.size === 0)
     return {
       kind: "none",
     };
-  if (i.size > 1)
+  if (tabIds.size > 1)
     return {
       kind: "deny",
       code: "batch_multiple_tabs",
     };
   return {
     kind: "tab",
-    tabId: [...i][0],
+    tabId: [...tabIds][0],
   };
 }
 //@ chunk-38x90rmj.js:3818-3948 placement
-var CHROME_CALL_BUDGET_MS = 5000;
-var CHROME_RETRY_DELAY_MS = 2500;
-var RETRYABLE_TIMEOUT_FAILURES = new Set([
-  "connect_timeout",
-  "no_browser_selected_timeout",
-  "browser_selected_late_timeout",
-  "answer_timeout",
-]);
+var CHROME_CALL_BUDGET_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var CHROME_RETRY_DELAY_MS;
+var RETRYABLE_TIMEOUT_FAILURES;
+deferInit("chunk-38x90rmj.js:3818", () => {
+  CHROME_CALL_BUDGET_MS = 5000;
+  CHROME_RETRY_DELAY_MS = 2500;
+  RETRYABLE_TIMEOUT_FAILURES = new Set([
+    "connect_timeout",
+    "no_browser_selected_timeout",
+    "browser_selected_late_timeout",
+    "answer_timeout",
+  ]);
+});
 //@ chunk-38x90rmj.js:3948-5126 placement
 /**
  * 确定动作作用的标签页
  */
 async function resolveTargetTab(tabId) {
-  let o = systemClock.monotonicNow();
+  let startedMs = systemClock.monotonicNow();
   let deferred = Promise.withResolvers();
   let abortController = new AbortController();
-  let n = listTabsForPermission({
+  let quickListPromise = listTabsForPermission({
     onSentToSelectedBrowser: deferred.resolve,
-  }).then((a) => {
+  }).then((listResult) => {
     abortController.abort();
-    return findTargetTab(a, tabId);
+    return findTargetTab(listResult, tabId);
   });
-  let s = {
+  let retryState = {
     sent: false,
   };
-  let u = deferred.promise
+  let deferredPromise = deferred.promise
     .then(async () => {
       await sleep(CHROME_RETRY_DELAY_MS, abortController.signal);
-      let a = CHROME_CALL_BUDGET_MS - (systemClock.monotonicNow() - o);
+      let remainingBudgetMs = CHROME_CALL_BUDGET_MS - (systemClock.monotonicNow() - startedMs);
       let socketClient = claudeInChromeSession().bridgeBinding?.socketClient;
       if (
         abortController.signal.aborted ||
-        a <= 0 ||
+        remainingBudgetMs <= 0 ||
         socketClient?.isConnected() !== true ||
         socketClient.hasActiveSelection?.() !== true
       )
         return;
-      s.sent = true;
-      let targetTab = findTargetTab(
+      retryState.sent = true;
+      let result = findTargetTab(
         await listTabsForPermission({
-          capMs: a,
+          capMs: remainingBudgetMs,
         }),
         tabId,
       );
-      if (parseOkTabUrl(targetTab)) return targetTab;
-      if (targetTab.ok || !RETRYABLE_TIMEOUT_FAILURES.has(targetTab.failure)) s.callMs = targetTab.callMs;
+      if (parseOkTabUrl(result)) return result;
+      if (result.ok || !RETRYABLE_TIMEOUT_FAILURES.has(result.failure)) retryState.callMs = result.callMs;
       return;
     })
     .catch((error) => {
@@ -302,53 +313,55 @@ async function resolveTargetTab(tabId) {
       return;
     });
   let winner = await Promise.race([
-    n.then(() => {
+    quickListPromise.then(() => {
       return;
     }),
-    u,
+    deferredPromise,
   ]);
   if (winner === undefined) {
-    let a = await n;
-    if (s.sent && !a.ok && a.failure === "answer_timeout")
+    let listResult = await quickListPromise;
+    if (retryState.sent && !listResult.ok && listResult.failure === "answer_timeout")
       return {
-        ...a,
+        ...listResult,
         failure: "answer_timeout_after_retry",
-        retryCallMs: s.callMs,
+        retryCallMs: retryState.callMs,
       };
-    return a;
+    return listResult;
   }
-  n.then((a) => {
-    let d = {
-      connect_ms: a.connectMs,
-      call_ms: a.callMs,
-      retry_call_ms: winner.callMs,
-    };
-    let okTabUrl = parseOkTabUrl(a);
-    if (okTabUrl) {
-      if (normalizeChromeSite(okTabUrl.host) !== normalizeChromeSite(parseOkTabUrl(winner)?.host ?? ""))
-        logFeatureSad("chrome_permission_prompt", "tab_lookup_hosts_differed", d);
-      return;
-    }
-    let failure = a.ok ? "non_web_tab_url" : a.failure;
-    if (failure === "answer_timeout") {
-      logFeatureSad("chrome_permission_prompt", "tab_lookup_rescued_after_answer_timeout", d);
-      return;
-    }
-    logFeatureSad("chrome_permission_prompt", "tab_lookup_rescued_after_failure", {
-      ...d,
-      first_lookup_failure: fromEnum(failure),
-    });
-  }).catch(logError);
+  quickListPromise
+    .then((listResult) => {
+      let timingFields = {
+        connect_ms: listResult.connectMs,
+        call_ms: listResult.callMs,
+        retry_call_ms: winner.callMs,
+      };
+      let okTabUrl = parseOkTabUrl(listResult);
+      if (okTabUrl) {
+        if (normalizeChromeSite(okTabUrl.host) !== normalizeChromeSite(parseOkTabUrl(winner)?.host ?? ""))
+          logFeatureSad("chrome_permission_prompt", "tab_lookup_hosts_differed", timingFields);
+        return;
+      }
+      let failure = listResult.ok ? "non_web_tab_url" : listResult.failure;
+      if (failure === "answer_timeout") {
+        logFeatureSad("chrome_permission_prompt", "tab_lookup_rescued_after_answer_timeout", timingFields);
+        return;
+      }
+      logFeatureSad("chrome_permission_prompt", "tab_lookup_rescued_after_failure", {
+        ...timingFields,
+        first_lookup_failure: fromEnum(failure),
+      });
+    })
+    .catch(logError);
   return winner;
 }
 //@ chunk-38x90rmj.js:5126-5252 placement
-function chromeCallTimingFields(e) {
+function chromeCallTimingFields(result) {
   return {
-    connect_ms: e.connectMs,
-    call_ms: e.callMs,
-    ...(!e.ok &&
-      e.retryCallMs !== undefined && {
-        retry_call_ms: e.retryCallMs,
+    connect_ms: result.connectMs,
+    call_ms: result.callMs,
+    ...(!result.ok &&
+      result.retryCallMs !== undefined && {
+        retry_call_ms: result.retryCallMs,
       }),
   };
 }
@@ -356,18 +369,18 @@ function chromeCallTimingFields(e) {
 /**
  * 取成功结果里的 URL 并解析成主机信息。
  */
-function parseOkTabUrl(e) {
-  return e.ok ? parseChromeUrl(e.url) : undefined;
+function parseOkTabUrl(result) {
+  return result.ok ? parseChromeUrl(result.url) : undefined;
 }
 //@ chunk-38x90rmj.js:5296-5731 placement
 /**
  * 在标签列表中找目标标签
  */
-function findTargetTab(e, o) {
-  if (!e.ok) return e;
-  let { tabs, connectMs, callMs } = e;
-  let index = tabs.findIndex((tab) => tab == null || tab.tabId === o);
-  let u = tabs[index];
+function findTargetTab(result, tabId) {
+  if (!result.ok) return result;
+  let { tabs, connectMs, callMs } = result;
+  let index = tabs.findIndex((tab) => tab == null || tab.tabId === tabId);
+  let tab = tabs[index];
   if (index === -1)
     return {
       ok: false,
@@ -375,14 +388,14 @@ function findTargetTab(e, o) {
       connectMs,
       callMs,
     };
-  if (u == null || typeof u.url !== "string")
+  if (tab == null || typeof tab.url !== "string")
     return {
       ok: false,
       failure: "malformed_tab_list",
       connectMs,
       callMs,
     };
-  if (u.url === "")
+  if (tab.url === "")
     return {
       ok: false,
       failure: "tab_url_empty",
@@ -391,7 +404,7 @@ function findTargetTab(e, o) {
     };
   return {
     ok: true,
-    url: u.url,
+    url: tab.url,
     connectMs,
     callMs,
   };
@@ -400,10 +413,10 @@ function findTargetTab(e, o) {
 /**
  * 取标签上下文用于权限判断
  */
-async function listTabsForPermission(e) {
-  let o = systemClock.monotonicNow();
-  let t = {};
-  let i;
+async function listTabsForPermission(options) {
+  let startedMs = systemClock.monotonicNow();
+  let timing = {};
+  let outcome;
   try {
     let bridgeBinding = claudeInChromeSession().bridgeBinding;
     if (!bridgeBinding)
@@ -414,13 +427,13 @@ async function listTabsForPermission(e) {
         callMs: 0,
       };
     let { socketClient } = bridgeBinding;
-    i = await withTimeout(
+    outcome = await withTimeout(
       (async () => {
         if (!(await socketClient.ensureConnected())) return "not_connected";
-        t.browserSelected = socketClient.hasActiveSelection?.();
-        t.startedAt = systemClock.monotonicNow();
-        if (t.browserSelected === true) e?.onSentToSelectedBrowser?.();
-        let d = await socketClient.callTool(
+        timing.browserSelected = socketClient.hasActiveSelection?.();
+        timing.startedAt = systemClock.monotonicNow();
+        if (timing.browserSelected === true) options?.onSentToSelectedBrowser?.();
+        let response = await socketClient.callTool(
           "tabs_context_mcp",
           {
             createIfEmpty: false,
@@ -431,9 +444,10 @@ async function listTabsForPermission(e) {
             sessionScope: permissionScopeOfSession(),
           },
         );
-        if (!d) return "empty_result";
-        if (d.error) return `tool_error_${classifyToolError("tabs_context_mcp", firstTextContent(d.error))}`;
-        let content = d.result?.content;
+        if (!response) return "empty_result";
+        if (response.error)
+          return `tool_error_${classifyToolError("tabs_context_mcp", firstTextContent(response.error))}`;
+        let content = response.result?.content;
         let text =
           Array.isArray(content) &&
           content[0] &&
@@ -443,16 +457,16 @@ async function listTabsForPermission(e) {
             ? content[0].text
             : undefined;
         if (!text) return "no_text";
-        let C;
+        let parsed;
         try {
-          C = jsonParse(text);
+          parsed = jsonParse(text);
         } catch {
           return text.includes("createIfEmpty") ? "no_tab_group" : "not_json";
         }
-        let availableTabs = C?.availableTabs;
+        let availableTabs = parsed?.availableTabs;
         return Array.isArray(availableTabs) ? availableTabs : "no_tab_list";
       })().catch((error) => {
-        if (t.startedAt === undefined) return "connect_threw";
+        if (timing.startedAt === undefined) return "connect_threw";
         if (
           error instanceof Error &&
           (error.name === "SocketConnectionError" || error.name === "ToolCallLostError")
@@ -462,89 +476,92 @@ async function listTabsForPermission(e) {
         if (error instanceof ExtensionDisconnectedMidCallError) return "extension_disconnected";
         return "call_threw";
       }),
-      e?.capMs ?? CHROME_CALL_BUDGET_MS,
+      options?.capMs ?? CHROME_CALL_BUDGET_MS,
       "queryTabUrl bridge call",
     ).catch(() => {
-      if (t.startedAt === undefined) return "connect_timeout";
+      if (timing.startedAt === undefined) return "connect_timeout";
       if (socketClient.hasActiveSelection?.() === false) return "no_browser_selected_timeout";
-      return t.browserSelected === false ? "browser_selected_late_timeout" : "answer_timeout";
+      return timing.browserSelected === false ? "browser_selected_late_timeout" : "answer_timeout";
     });
   } catch {
-    i = "other_threw";
+    outcome = "other_threw";
   }
-  let n = systemClock.monotonicNow();
-  let connectMs = Math.round((t.startedAt ?? n) - o);
-  let callMs = t.startedAt === undefined ? 0 : Math.round(n - t.startedAt);
-  return typeof i === "string"
+  let endedMs = systemClock.monotonicNow();
+  let connectMs = Math.round((timing.startedAt ?? endedMs) - startedMs);
+  let callMs = timing.startedAt === undefined ? 0 : Math.round(endedMs - timing.startedAt);
+  return typeof outcome === "string"
     ? {
         ok: false,
-        failure: i,
+        failure: outcome,
         connectMs,
         callMs,
       }
     : {
         ok: true,
-        tabs: i,
+        tabs: outcome,
         connectMs,
         callMs,
       };
 }
 //@ chunk-38x90rmj.js:7399-7457 placement
-setProvidedTabsProvider(async () => {
-  let e = await listTabsForPermission();
-  return e.ok ? e.tabs : undefined;
+// deferred: uses listTabsForPermission of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-38x90rmj.js:7399", () => {
+  setProvidedTabsProvider(async () => {
+    let listResult = await listTabsForPermission();
+    return listResult.ok ? listResult.tabs : undefined;
+  });
 });
 //@ chunk-38x90rmj.js:7525-7621 placement
 /**
  * 构造“图片未内联”的占位文本。
  */
-function imageOmittedText(e) {
+function imageOmittedText(reason) {
   return {
     type: "text",
-    text: `[Image from Claude in Chrome \u2014 ${e}; not inlined]`,
+    text: `[Image from Claude in Chrome \u2014 ${reason}; not inlined]`,
   };
 }
 //@ chunk-38x90rmj.js:7621-7734 placement
 function isSupportedImageMimeType(mimeType) {
   if (!mimeType) return false;
   let lower = firstLineOf(mimeType, ";").trim().toLowerCase();
-  return ce.has(lower === "image/jpg" ? "image/jpeg" : lower);
+  return SUPPORTED_IMAGE_TYPES.has(lower === "image/jpg" ? "image/jpeg" : lower);
 }
 //@ chunk-38x90rmj.js:7734-8095 placement
 /**
  * 转换 Chrome 工具结果中的图片
  */
-async function convertChromeResult(e, o) {
-  let limits = imageLimitsForModel(o);
-  let i = [];
-  for (let n of e.content ?? [])
-    if (n.type === "text")
-      i.push({
+async function convertChromeResult(result, model) {
+  let limits = imageLimitsForModel(model);
+  let blocks = [];
+  for (let contentBlock of result.content ?? [])
+    if (contentBlock.type === "text")
+      blocks.push({
         type: "text",
-        text: n.text,
+        text: contentBlock.text,
       });
-    else if (n.type === "image")
-      if (isSupportedImageMimeType(n.mimeType))
+    else if (contentBlock.type === "image")
+      if (isSupportedImageMimeType(contentBlock.mimeType))
         try {
           let { block } = await maybeResizeAndDownsampleImageBlock({
-            data: String(n.data),
-            mediaType: n.mimeType,
+            data: String(contentBlock.data),
+            mediaType: contentBlock.mimeType,
             limits,
           });
-          i.push(block);
+          blocks.push(block);
         } catch {
-          i.push(imageOmittedText("could not be decoded"));
+          blocks.push(imageOmittedText("could not be decoded"));
         }
-      else i.push(imageOmittedText(`unsupported type ${n.mimeType ?? "unknown"}`));
-  return i;
+      else blocks.push(imageOmittedText(`unsupported type ${contentBlock.mimeType ?? "unknown"}`));
+  return blocks;
 }
 //@ chunk-38x90rmj.js:8095-8307 placement
 /**
  * batch 是否需要目标标签
  */
-function batchNeedsTab(e) {
-  if (!Array.isArray(e.actions)) return false;
-  return e.actions.some((action) => {
+function batchNeedsTab(input) {
+  if (!Array.isArray(input.actions)) return false;
+  return input.actions.some((action) => {
     if (!isPlainObject(action) || typeof action.name !== "string") return true;
     return (
       action.name === "browser_batch" ||
@@ -557,16 +574,16 @@ function batchNeedsTab(e) {
 /**
  * 取 browser_batch 中的导航地址
  */
-function batchNavigateUrls(e) {
-  if (!Array.isArray(e.actions)) return [];
-  let o = [];
-  for (let action of e.actions) {
+function batchNavigateUrls(input) {
+  if (!Array.isArray(input.actions)) return [];
+  let hosts = [];
+  for (let action of input.actions) {
     if (!isPlainObject(action)) continue;
     let input = isPlainObject(action.input) ? action.input : {};
     if (action.name === "browser_batch") {
-      let u = batchNavigateUrls(input);
-      if (u === "unvettable") return u;
-      o.push(...u);
+      let nestedHosts = batchNavigateUrls(input);
+      if (nestedHosts === "unvettable") return nestedHosts;
+      hosts.push(...nestedHosts);
       continue;
     }
     if (action.name !== "navigate" || typeof input.url !== "string") continue;
@@ -574,82 +591,84 @@ function batchNavigateUrls(e) {
     if (lower === "back" || lower === "forward") continue;
     let chromeUrl = parseChromeUrl(input.url);
     if (!chromeUrl) return "unvettable";
-    o.push(chromeUrl.host, hostWithDefaultPort(chromeUrl));
+    hosts.push(chromeUrl.host, hostWithDefaultPort(chromeUrl));
   }
-  return o;
+  return hosts;
 }
 //@ chunk-38x90rmj.js:8822-8940 placement
-function chromePermissionQuestion(e, o, t) {
-  let i = describeBrowserToolAction(e, o);
-  return t ? `Allow Claude in Chrome to ${i} on ${t}?` : `Allow Claude in Chrome to ${i}?`;
+function chromePermissionQuestion(toolName, input, site) {
+  let actionText = describeBrowserToolAction(toolName, input);
+  return site
+    ? `Allow Claude in Chrome to ${actionText} on ${site}?`
+    : `Allow Claude in Chrome to ${actionText}?`;
 }
 //@ chunk-38x90rmj.js:8940-9143 placement
 /**
  * 主机是否仍在允许集合
  */
-function isHostStillAllowed(allowed, denied) {
-  return async (t) => {
-    let i;
+function isHostStillAllowed(allowed, sites) {
+  return async (request) => {
+    let url;
     try {
-      i = new URL(t.url);
+      url = new URL(request.url);
     } catch {}
-    let n =
-      !!i?.host &&
-      allowed.has(normalizeChromeSite(i.host)) &&
+    let stillAllowed =
+      !!url?.host &&
+      allowed.has(normalizeChromeSite(url.host)) &&
       !isSiteDenied(
-        denied,
+        sites,
         normalizeChromeSite(
           hostWithDefaultPort({
-            url: i.href,
+            url: url.href,
           }),
         ),
       );
-    if (!n) logFeatureBad("chrome_permission_prompt", "stale_host_mismatch");
-    return n;
+    if (!stillAllowed) logFeatureBad("chrome_permission_prompt", "stale_host_mismatch");
+    return stillAllowed;
   };
 }
 //@ chunk-38x90rmj.js:9143-10233 placement
 /**
  * 带权限检查调用 Chrome 工具
  */
-async function callChromeWithPermission(toolName, o, signal, mainLoopModel, callOptions, timing, u) {
+async function callChromeWithPermission(toolName, input, signal, model, callOptions, timing, toolUseContext) {
   let bridgeBinding = claudeInChromeSession().bridgeBinding;
   if (!bridgeBinding) {
     logFeatureBad("chrome_permission_prompt", "binding_missing");
     throw Error("Claude in Chrome bridge is not initialized in this session.");
   }
   if (signal.aborted) throw new AbortError("Claude in Chrome tool call aborted");
-  let a;
+  let onAbort;
   let promise = new Promise((resolve, reject) => {
-    a = () => reject(new AbortError("Claude in Chrome tool call aborted"));
-    signal.addEventListener("abort", a, {
+    onAbort = () => reject(new AbortError("Claude in Chrome tool call aborted"));
+    signal.addEventListener("abort", onAbort, {
       once: true,
     });
   });
-  let r;
-  let b = timing?.mark("external");
+  let result;
+  let markExternal = timing?.mark("external");
   try {
-    r = await Promise.race([
+    result = await Promise.race([
       handleChromeToolCall(
         bridgeBinding.context,
         bridgeBinding.socketClient,
         toolName,
-        stripCyclesAndHiddenKeys(o ?? {}),
+        stripCyclesAndHiddenKeys(input ?? {}),
         callOptions,
       ),
       promise,
     ]);
   } finally {
-    b?.();
-    if (a) signal.removeEventListener("abort", a);
+    markExternal?.();
+    if (onAbort) signal.removeEventListener("abort", onAbort);
   }
-  if (r.isError) {
-    let k =
-      (r.content ?? []).flatMap((S) => (S.type === "text" ? [S.text] : [])).join(`
+  if (result.isError) {
+    let errorText =
+      (result.content ?? []).flatMap((block) => (block.type === "text" ? [block.text] : [])).join(`
 `) || `${toolName} failed`;
-    let _meta = r._meta;
+    let _meta = result._meta;
     let toolCallFailureCause = _meta?.toolCallFailureCause;
-    let v =
+    let classifiedCode =
       _meta?.isBridgeTimeout === true
         ? "bridge_timeout"
         : _meta?.isFrontLoadBoundExceeded === true
@@ -658,30 +677,30 @@ async function callChromeWithPermission(toolName, o, signal, mainLoopModel, call
               toolCallFailureCause === "connection_lost_before_call"
             ? toolCallFailureCause
             : undefined;
-    let A = isPlainObject(_meta) ? stripAnthropicMeta(_meta) : undefined;
+    let cleanMeta = isPlainObject(_meta) ? stripAnthropicMeta(_meta) : undefined;
     throw Object.assign(
       new McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        k,
+        errorText,
         "Claude in Chrome tool returned error",
-        A
+        cleanMeta
           ? {
-              _meta: A,
+              _meta: cleanMeta,
             }
           : undefined,
-        `chrome_${v ?? classifyToolError(toolName, k)}`,
+        `chrome_${classifiedCode ?? classifyToolError(toolName, errorText)}`,
       ),
       {
         mcpErrorSource: "other",
       },
     );
   }
-  let data = await convertChromeResult(await chromeNotConnectedAnswer(r, u), mainLoopModel);
-  let y = stripAnthropicMeta(r._meta);
+  let data = await convertChromeResult(await chromeNotConnectedAnswer(result, toolUseContext), model);
+  let cleanMeta = stripAnthropicMeta(result._meta);
   return {
     data,
-    ...(y && {
+    ...(cleanMeta && {
       mcpMeta: {
-        _meta: y,
+        _meta: cleanMeta,
       },
     }),
   };
@@ -691,14 +710,14 @@ async function callChromeWithPermission(toolName, o, signal, mainLoopModel, call
  * Claude in Chrome 工具的权限覆盖：确定动作作用的标签页与主机，校验 browser_batch，必要时弹出权限请求。
  */
 function getClaudeInChromePermissionOverrides(toolName) {
-  let o = `${CFC_TOOL_PREFIX}${toolName}`;
+  let commandName = `${CFC_TOOL_PREFIX}${toolName}`;
   return {
-    checkPermissions: async (n, s) => {
-      logChromeToolAttempted(s.options?.messageClientPlatform);
-      let toolUseId = s.toolUseId;
-      let _ = CHROME_INPUT_APPROVED_TOOL_NAMES.has(toolName);
-      if (_ && isBrowserHousekeepingCall(toolName, n)) {
-        let toolPermissionContext = getToolPermissionContext(s);
+    checkPermissions: async (input, toolUseContext) => {
+      logChromeToolAttempted(toolUseContext.options?.messageClientPlatform);
+      let toolUseId = toolUseContext.toolUseId;
+      let isInputApprovedTool = CHROME_INPUT_APPROVED_TOOL_NAMES.has(toolName);
+      if (isInputApprovedTool && isBrowserHousekeepingCall(toolName, input)) {
+        let toolPermissionContext = getToolPermissionContext(toolUseContext);
         if (
           toolPermissionContext?.chromeHostToolAsksEnabled !== false &&
           toolPermissionContext?.mcpAskForTools?.[CLAUDE_IN_CHROME_MCP_SERVER_NAME]?.includes(toolName) ===
@@ -716,38 +735,39 @@ function getClaudeInChromePermissionOverrides(toolName) {
             },
             metadata: {
               command: {
-                name: o,
-                description: chromePermissionQuestion(toolName, n, undefined),
+                name: commandName,
+                description: chromePermissionQuestion(toolName, input, undefined),
               },
             },
           };
         return {
           behavior: "allow",
-          updatedInput: n,
+          updatedInput: input,
         };
       }
-      let a =
-        (_ && !isBrowserHousekeepingCall(toolName, n)) || (toolName === "browser_batch" && batchNeedsTab(n));
+      let needsSiteCheck =
+        (isInputApprovedTool && !isBrowserHousekeepingCall(toolName, input)) ||
+        (toolName === "browser_batch" && batchNeedsTab(input));
       if (
         toolName === "navigate" &&
-        typeof n.url === "string" &&
-        (n.url.trim().toLowerCase() === "back" || n.url.trim().toLowerCase() === "forward")
+        typeof input.url === "string" &&
+        (input.url.trim().toLowerCase() === "back" || input.url.trim().toLowerCase() === "forward")
       )
         return {
           behavior: "allow",
-          updatedInput: n,
+          updatedInput: input,
         };
-      let d =
+      let siteAction =
         toolName === "browser_batch"
-          ? firstSiteActionInBatch(n)
+          ? firstSiteActionInBatch(input)
           : {
-              input: n,
+              input,
               toolName,
             };
-      let r;
-      if (d && d.toolName === "navigate" && typeof d.input.url === "string") {
-        r = parseChromeUrl(d.input.url);
-        if (!r) {
+      let chromeUrl;
+      if (siteAction && siteAction.toolName === "navigate" && typeof siteAction.input.url === "string") {
+        chromeUrl = parseChromeUrl(siteAction.input.url);
+        if (!chromeUrl) {
           logFeatureBad("chrome_permission_prompt", "non_web_url");
           return {
             behavior: "deny",
@@ -760,13 +780,13 @@ function getClaudeInChromePermissionOverrides(toolName) {
             },
           };
         }
-      } else if (d && typeof d.input.tabId === "number") {
-        let targetTab = await resolveTargetTab(d.input.tabId);
-        if (!targetTab.ok) {
+      } else if (siteAction && typeof siteAction.input.tabId === "number") {
+        let result = await resolveTargetTab(siteAction.input.tabId);
+        if (!result.ok) {
           logFeatureBad(
             "chrome_permission_prompt",
-            `tab_url_unresolved_${targetTab.failure}`,
-            chromeCallTimingFields(targetTab),
+            `tab_url_unresolved_${result.failure}`,
+            chromeCallTimingFields(result),
           );
           return {
             behavior: "deny",
@@ -779,8 +799,8 @@ function getClaudeInChromePermissionOverrides(toolName) {
             },
           };
         }
-        r = parseChromeUrl(targetTab.url);
-        if (!r) {
+        chromeUrl = parseChromeUrl(result.url);
+        if (!chromeUrl) {
           logFeatureBad("chrome_permission_prompt", "non_web_tab_url");
           return {
             behavior: "deny",
@@ -794,58 +814,59 @@ function getClaudeInChromePermissionOverrides(toolName) {
           };
         }
       }
-      let toolPermissionContext = getToolPermissionContext(s);
-      let C = isAutoAllowedInMode(
-        s.options?.tools?.find((tool) => toolMatchesName(tool, o)),
+      let toolPermissionContext = getToolPermissionContext(toolUseContext);
+      let autoAllowed = isAutoAllowedInMode(
+        toolUseContext.options?.tools?.find((tool) => toolMatchesName(tool, commandName)),
         toolPermissionContext,
       );
-      let y =
-        C === "bypassPermissions" || isPlanBypass(C, toolPermissionContext.isBypassPermissionsModeAvailable);
-      let k =
+      let isBypass =
+        autoAllowed === "bypassPermissions" ||
+        isPlanBypass(autoAllowed, toolPermissionContext.isBypassPermissionsModeAvailable);
+      let needsClassifier =
         toolPermissionContext.chromeNavigationClassifierEnabled === true &&
-        !y &&
-        (toolPermissionContext.chromeClassifierFloorEnabled === true || isAutoClassifierActive(C));
-      let h;
-      let w;
-      let v = () => {
+        !isBypass &&
+        (toolPermissionContext.chromeClassifierFloorEnabled === true || isAutoClassifierActive(autoAllowed));
+      let navigation;
+      let resolvedUrl;
+      let finalizeToolUse = () => {
         if (!toolUseId) return;
-        if (w === undefined) claudeInChromeSession().resolvedUrlByToolUseId.delete(toolUseId);
-        else rememberResolvedUrl(toolUseId, w);
-        if (h === undefined) forgetClassifierContext(toolUseId);
+        if (resolvedUrl === undefined) claudeInChromeSession().resolvedUrlByToolUseId.delete(toolUseId);
+        else rememberResolvedUrl(toolUseId, resolvedUrl);
+        if (navigation === undefined) forgetClassifierContext(toolUseId);
       };
-      if (k) {
-        let p = vetBrowserBatch(toolName, n);
-        if (p.kind === "deny") {
-          logFeatureBad("chrome_permission_prompt", p.code);
-          v();
+      if (needsClassifier) {
+        let vetResult = vetBrowserBatch(toolName, input);
+        if (vetResult.kind === "deny") {
+          logFeatureBad("chrome_permission_prompt", vetResult.code);
+          finalizeToolUse();
           return {
             behavior: "deny",
-            message: CHROME_TOOL_ERROR_MESSAGES[p.code],
+            message: CHROME_TOOL_ERROR_MESSAGES[vetResult.code],
             decisionReason: {
               type: "safetyCheck",
-              reason: `Claude in Chrome: ${p.code}`,
+              reason: `Claude in Chrome: ${vetResult.code}`,
               classifierApprovable: false,
             },
           };
         }
-        if (p.kind === "tab") {
-          let R =
-            r && d?.toolName !== "navigate" && d?.input.tabId === p.tabId
+        if (vetResult.kind === "tab") {
+          let tabResult =
+            chromeUrl && siteAction?.toolName !== "navigate" && siteAction?.input.tabId === vetResult.tabId
               ? {
                   ok: true,
-                  url: r.url,
+                  url: chromeUrl.url,
                   connectMs: 0,
                   callMs: 0,
                 }
-              : await resolveTargetTab(p.tabId);
-          let P = R.ok ? parseChromeUrl(R.url) : undefined;
-          if (P === undefined) {
+              : await resolveTargetTab(vetResult.tabId);
+          let tabActionUrl = tabResult.ok ? parseChromeUrl(tabResult.url) : undefined;
+          if (tabActionUrl === undefined) {
             logFeatureBad(
               "chrome_permission_prompt",
-              `tab_url_unresolved_${R.ok ? "non_web_tab_url" : R.failure}`,
-              chromeCallTimingFields(R),
+              `tab_url_unresolved_${tabResult.ok ? "non_web_tab_url" : tabResult.failure}`,
+              chromeCallTimingFields(tabResult),
             );
-            v();
+            finalizeToolUse();
             return {
               behavior: "deny",
               message:
@@ -857,13 +878,13 @@ function getClaudeInChromePermissionOverrides(toolName) {
               },
             };
           }
-          h = tabNavigationFor(sessionKeyOrHostKey(), P.url);
-          if (!(a && toolPermissionContext.mode === "plan")) w = P.url;
+          navigation = tabNavigationFor(sessionKeyOrHostKey(), tabActionUrl.url);
+          if (!(needsSiteCheck && toolPermissionContext.mode === "plan")) resolvedUrl = tabActionUrl.url;
         }
       }
-      v();
-      let A = toolName === "browser_batch" ? batchNavigateUrls(n) : [];
-      if (A === "unvettable") {
+      finalizeToolUse();
+      let batchHosts = toolName === "browser_batch" ? batchNavigateUrls(input) : [];
+      if (batchHosts === "unvettable") {
         logFeatureBad("chrome_permission_prompt", "non_web_url");
         return {
           behavior: "deny",
@@ -876,49 +897,54 @@ function getClaudeInChromePermissionOverrides(toolName) {
         };
       }
       let chromeSiteRules = collectChromeSiteRules(toolPermissionContext);
-      let found = [...(r ? [r.host, hostWithDefaultPort(r)] : []), ...A]
-        .map((p) => chromeSiteDenyDecision(chromeSiteRules, p))
-        .find((p) => p !== undefined);
+      let found = [...(chromeUrl ? [chromeUrl.host, hostWithDefaultPort(chromeUrl)] : []), ...batchHosts]
+        .map((host) => chromeSiteDenyDecision(chromeSiteRules, host))
+        .find((denyDecision) => denyDecision !== undefined);
       if (found) {
         logFeatureSad("chrome_permission_prompt", "domain_rule_denied");
         return found;
       }
-      let T = false;
-      let M;
-      if (r) {
-        let p = normalizeChromeSite(r.host);
-        let source = chromeSiteRules.sourceOf.get(p) ?? "session";
-        T = chromeSiteRules.allowed.has(p);
-        M = T ? createChromeDomainAllowRule(r.host, source) : undefined;
-        if (T && h === undefined && toolPermissionContext.chromeClassifierFloorEnabled !== true && !a) {
-          if (toolUseId) rememberResolvedHost(toolUseId, r);
+      let hostAllowed = false;
+      let grantRule;
+      if (chromeUrl) {
+        let site = normalizeChromeSite(chromeUrl.host);
+        let source = chromeSiteRules.sourceOf.get(site) ?? "session";
+        hostAllowed = chromeSiteRules.allowed.has(site);
+        grantRule = hostAllowed ? createChromeDomainAllowRule(chromeUrl.host, source) : undefined;
+        if (
+          hostAllowed &&
+          navigation === undefined &&
+          toolPermissionContext.chromeClassifierFloorEnabled !== true &&
+          !needsSiteCheck
+        ) {
+          if (toolUseId) rememberResolvedHost(toolUseId, chromeUrl);
           return {
             behavior: "allow",
-            updatedInput: n,
+            updatedInput: input,
             decisionReason: {
               type: "rule",
-              rule: createChromeDomainAllowRule(r.host, source),
+              rule: createChromeDomainAllowRule(chromeUrl.host, source),
             },
           };
         }
         if (
           toolUseId &&
-          (T ||
+          (hostAllowed ||
             toolPermissionContext.chromeClassifierFloorEnabled === true ||
-            !hasChromeAlwaysAllow(toolPermissionContext, o))
+            !hasChromeAlwaysAllow(toolPermissionContext, commandName))
         )
-          rememberResolvedHost(toolUseId, r);
+          rememberResolvedHost(toolUseId, chromeUrl);
       }
       let bridgeBinding = claudeInChromeSession().bridgeBinding;
       if (
         toolUseId &&
         bridgeBinding &&
-        !y &&
+        !isBypass &&
         !(
           toolPermissionContext.chromeClassifierFloorEnabled !== true &&
-          hasChromeAlwaysAllow(toolPermissionContext, o)
+          hasChromeAlwaysAllow(toolPermissionContext, commandName)
         ) &&
-        (await noBrowserConnected(s.abortController.signal))
+        (await noBrowserConnected(toolUseContext.abortController.signal))
       )
         return {
           behavior: "deny",
@@ -928,7 +954,7 @@ function getClaudeInChromePermissionOverrides(toolName) {
             reason: "Claude in Chrome: no browser connected",
           },
         };
-      if (a && toolPermissionContext.mode === "plan")
+      if (needsSiteCheck && toolPermissionContext.mode === "plan")
         return {
           behavior: "passthrough",
           message: "Claude in Chrome requires permission.",
@@ -937,7 +963,7 @@ function getClaudeInChromePermissionOverrides(toolName) {
               type: "addRules",
               rules: [
                 {
-                  toolName: o,
+                  toolName: commandName,
                   ruleContent: undefined,
                 },
               ],
@@ -949,8 +975,8 @@ function getClaudeInChromePermissionOverrides(toolName) {
       return {
         behavior: "ask",
         message: "Claude in Chrome requires permission.",
-        suggestions: r
-          ? T
+        suggestions: chromeUrl
+          ? hostAllowed
             ? undefined
             : [
                 {
@@ -958,7 +984,7 @@ function getClaudeInChromePermissionOverrides(toolName) {
                   rules: [
                     {
                       toolName: CLAUDE_IN_CHROME_DOMAIN_RULE_TOOL,
-                      ruleContent: r.host,
+                      ruleContent: chromeUrl.host,
                     },
                   ],
                   behavior: "allow",
@@ -970,7 +996,7 @@ function getClaudeInChromePermissionOverrides(toolName) {
                 type: "addRules",
                 rules: [
                   {
-                    toolName: o,
+                    toolName: commandName,
                     ruleContent: undefined,
                   },
                 ],
@@ -978,7 +1004,7 @@ function getClaudeInChromePermissionOverrides(toolName) {
                 destination: "session",
               },
             ],
-        decisionReason: h
+        decisionReason: navigation
           ? {
               type: "safetyCheck",
               reason: "Claude in Chrome: cross-site navigation pending",
@@ -986,19 +1012,19 @@ function getClaudeInChromePermissionOverrides(toolName) {
             }
           : {
               type: "other",
-              reason: r ? `Claude in Chrome action on ${r.host}` : "Claude in Chrome action",
+              reason: chromeUrl ? `Claude in Chrome action on ${chromeUrl.host}` : "Claude in Chrome action",
             },
         metadata: {
           command: {
-            name: o,
-            description: chromePermissionQuestion(toolName, n, r?.host),
-            chrome: r
+            name: commandName,
+            description: chromePermissionQuestion(toolName, input, chromeUrl?.host),
+            chrome: chromeUrl
               ? {
-                  ...r,
-                  domainAllowed: T,
-                  navigation: h,
-                  ...(M && {
-                    grantRule: M,
+                  ...chromeUrl,
+                  domainAllowed: hostAllowed,
+                  navigation,
+                  ...(grantRule && {
+                    grantRule,
                     classifierUnavailable:
                       toolPermissionContext.chromeClassifierFloorEnabled === true &&
                       toolPermissionContext.canAutoClassifierRun === false,
@@ -1009,34 +1035,36 @@ function getClaudeInChromePermissionOverrides(toolName) {
         },
       };
     },
-    call: async (n, s, u, _, a, d) => {
-      let toolUseId = s.toolUseId;
-      let b = toolUseId ? claudeInChromeSession().resolvedHostByToolUseId.get(toolUseId) : undefined;
-      let host = b?.host;
-      let y = toolUseId ? claudeInChromeSession().resolvedUrlByToolUseId.get(toolUseId) : undefined;
+    call: async (input, toolUseContext, canUseTool, assistantMessage, progressCallback, options) => {
+      let toolUseId = toolUseContext.toolUseId;
+      let resolvedHost = toolUseId
+        ? claudeInChromeSession().resolvedHostByToolUseId.get(toolUseId)
+        : undefined;
+      let host = resolvedHost?.host;
+      let resolvedUrl = toolUseId ? claudeInChromeSession().resolvedUrlByToolUseId.get(toolUseId) : undefined;
       if (toolUseId) {
         claudeInChromeSession().resolvedHostByToolUseId.delete(toolUseId);
         claudeInChromeSession().resolvedUrlByToolUseId.delete(toolUseId);
       }
-      let toolPermissionContext = getToolPermissionContext(s);
+      let toolPermissionContext = getToolPermissionContext(toolUseContext);
       let chromeSiteRules = collectChromeSiteRules(toolPermissionContext);
       let allowed = chromeSiteRules.allowed;
-      let v = [...chromeSiteRules.allowedRaw];
+      let allowedDomainsRaw = [...chromeSiteRules.allowedRaw];
       if (host && !allowed.has(normalizeChromeSite(host))) {
         allowed.add(normalizeChromeSite(host));
-        v.push(host);
+        allowedDomainsRaw.push(host);
       }
-      let found = s.options?.tools?.find((tool) => toolMatchesName(tool, o));
-      let S = isAutoAllowedInMode(found, toolPermissionContext);
-      let E =
-        S === "bypassPermissions" ||
-        (S === "auto" &&
-          s.autoModeClassified === true &&
+      let found = toolUseContext.options?.tools?.find((tool) => toolMatchesName(tool, commandName));
+      let autoAllowed = isAutoAllowedInMode(found, toolPermissionContext);
+      let isAutoRun =
+        autoAllowed === "bypassPermissions" ||
+        (autoAllowed === "auto" &&
+          toolUseContext.autoModeClassified === true &&
           host !== undefined &&
           chromeSiteRules.denied.size === 0 &&
-          b?.keepHostPin !== true);
+          resolvedHost?.keepHostPin !== true);
       let sessionScope = permissionScopeOfSession();
-      let M = E
+      let callOptions = isAutoRun
         ? {
             permissionMode: "skip_all_permission_checks",
             sessionScope,
@@ -1044,35 +1072,35 @@ function getClaudeInChromePermissionOverrides(toolName) {
         : host
           ? {
               permissionMode: "follow_a_plan",
-              allowedDomains: v,
+              allowedDomains: allowedDomainsRaw,
               onPermissionRequest: isHostStillAllowed(allowed, chromeSiteRules.denied),
               sessionScope,
             }
-          : v.length > 0
+          : allowedDomainsRaw.length > 0
             ? {
                 permissionMode: "follow_a_plan",
-                allowedDomains: v,
+                allowedDomains: allowedDomainsRaw,
                 sessionScope,
               }
             : {
                 permissionMode: "ask",
                 sessionScope,
               };
-      let I = await callChromeWithPermission(
+      let callResult = await callChromeWithPermission(
         toolName,
-        n,
-        s.abortController.signal,
-        s.options.mainLoopModel,
-        M,
-        d?.timing,
-        s,
+        input,
+        toolUseContext.abortController.signal,
+        toolUseContext.options.mainLoopModel,
+        callOptions,
+        options?.timing,
+        toolUseContext,
       );
-      if (y !== undefined) rememberExecutedTabUrl(sessionKeyOrHostKey(), y);
+      if (resolvedUrl !== undefined) rememberExecutedTabUrl(sessionKeyOrHostKey(), resolvedUrl);
       if (host) logFeatureOk("chrome_permission_prompt");
-      return I;
+      return callResult;
     },
-    ignoresWholeToolAllowRule: (n) =>
-      CHROME_INPUT_APPROVED_TOOL_NAMES.has(toolName) && isBrowserHousekeepingCall(toolName, n),
+    ignoresWholeToolAllowRule: (input) =>
+      CHROME_INPUT_APPROVED_TOOL_NAMES.has(toolName) && isBrowserHousekeepingCall(toolName, input),
   };
 }
-export { getClaudeInChromePermissionOverrides };
+export { getClaudeInChromePermissionOverrides, setChromeBinding };

@@ -33,13 +33,13 @@ function commandListDisplay(commands) {
 //@ chunk-66jn0ssz.js:3592-3810 fingerprint = commandListDisplayTruncated (0.389)
 function commandListDisplayTruncated(commands) {
   let { from } = commandListDisplay(commands);
-  let { name: r } = commandListDisplay(commands);
-  let s = r ? `@${r} (${from})` : from;
-  let d =
+  let { name } = commandListDisplay(commands);
+  let fromLabel = name ? `@${name} (${from})` : from;
+  let suppressedSuffix =
     commands.suppressed > 0
       ? ` (+${commands.suppressed} similar ${plural(commands.suppressed, "drop")} suppressed)`
       : "";
-  return `Dropped a peer message from ${s}: ${PEER_MESSAGE_DROP_REASONS[commands.reason]}.${d}`;
+  return `Dropped a peer message from ${fromLabel}: ${PEER_MESSAGE_DROP_REASONS[commands.reason]}.${suppressedSuffix}`;
 }
 //@ chunk-0e8j1zzj.js:4945-5290 callgraph-fingerprint = formatPathList (0.257)
 function formatPathList(paths) {
@@ -65,7 +65,7 @@ function formatPathList(paths) {
     });
   return jsxProd_default_2(Text, {
     children: [
-      paths.slice(0, -1).map((children, d) =>
+      paths.slice(0, -1).map((children, index) =>
         jsxProd_default_2(
           Text,
           {
@@ -78,7 +78,7 @@ function formatPathList(paths) {
               " ",
             ],
           },
-          d,
+          index,
         ),
       ),
       "and ",
@@ -90,12 +90,12 @@ function formatPathList(paths) {
   });
 }
 //@ chunk-18hwfzwa.js:1390271-1390671 fingerprint = generateShellSuggestionsLabel (0.551)
-function generateShellSuggestionsLabel(h) {
-  let allRules = h.filter((ee) => ee.type === "addRules").flatMap((ee) => ee.rules);
+function generateShellSuggestionsLabel(updates) {
+  let allRules = updates.filter((update) => update.type === "addRules").flatMap((update) => update.rules);
   if (allRules.length === 0 || allRules.length > CONSENT_ROW_LIMITS) return null;
-  let D;
+  let ruleLabels;
   try {
-    D = allRules.map((rule) =>
+    ruleLabels = allRules.map((rule) =>
       formatPermissionRule(
         rule.ruleContent === undefined
           ? {
@@ -110,10 +110,10 @@ function generateShellSuggestionsLabel(h) {
   } catch {
     return null;
   }
-  let L = uniqueLabels(uniq(D), (ee) => consentRowLabel(ee));
-  if (bunStringWidth(L.join(" and ")) > MAX_CONSENT_SUGGESTION_WIDTH) return null;
+  let displayLabels = uniqueLabels(uniq(ruleLabels), (label) => consentRowLabel(label));
+  if (bunStringWidth(displayLabels.join(" and ")) > MAX_CONSENT_SUGGESTION_WIDTH) return null;
   return jsxProd_default_2(Text, {
-    children: ["Yes, and don't ask again for ", formatPathList(L)],
+    children: ["Yes, and don't ask again for ", formatPathList(displayLabels)],
   });
 }
 export { formatPathList, commandListDisplayTruncated, generateShellSuggestionsLabel, commandListDisplay };

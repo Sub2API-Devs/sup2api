@@ -5,10 +5,11 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tyg7f3ek.js (33)
- * attribution: placement 33
+ * pieces: chunk-tyg7f3ek.js (34)
+ * attribution: placement 34
  */
 import { stat } from "fs/promises";
+import { stringLength } from "../../../vendor/axios/dist/esm/axios.js";
 import {
   setSdkDialogHostActive,
   setSdkSupportedDialogKinds,
@@ -39,7 +40,6 @@ import {
   refreshGrowthBookFeatures,
 } from "../../services/analytics/growthbook.js";
 import { logFeatureSad, logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
-import { nA } from "./_new/elicitationRegistrar.helpers-tyg7.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { getRequestTimingStore } from "../../services/tools/toolExecution.js";
 import { executeNotificationHooks } from "../../utils/hooks.js";
@@ -87,9 +87,70 @@ import {
 import { SKIP_PRECOMPACT_THRESHOLD } from "../../utils/sessionStoragePortable.js";
 import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
 
+//@ chunk-tyg7f3ek.js:378840-379702 placement
+function requestExceedsByteLimit(request, maxRequestBytes) {
+  let byteCount = 0;
+  let stack = [];
+  let current = request;
+  let hasPendingValue = true;
+  for (;;) {
+    if (hasPendingValue) {
+      hasPendingValue = false;
+      if (typeof current === "string") byteCount += stringLength(current, maxRequestBytes - byteCount);
+      else if (typeof current === "number")
+        byteCount += Number.isFinite(current) ? String(current).length : 4;
+      else if (typeof current === "boolean") byteCount += current ? 4 : 5;
+      else if (typeof current === "bigint") return true;
+      else if (Array.isArray(current)) {
+        if (current.length > maxRequestBytes - byteCount) return true;
+        byteCount += 2;
+        stack.push({
+          kind: "array",
+          members: current,
+          next: 0,
+        });
+      } else if (typeof current === "object" && current !== null) {
+        byteCount += 2;
+        stack.push({
+          kind: "object",
+          holder: current,
+          keys: Object.keys(current),
+          next: 0,
+          written: 0,
+        });
+      } else byteCount += 4;
+      if (byteCount > maxRequestBytes) return true;
+      continue;
+    }
+    let last = stack.at(-1);
+    if (last === undefined) return false;
+    if (last.kind === "array") {
+      if (last.next >= last.members.length) {
+        stack.pop();
+        continue;
+      }
+      if (last.next > 0) byteCount += 1;
+      current = last.members[last.next++];
+      hasPendingValue = true;
+      continue;
+    }
+    if (last.next >= last.keys.length) {
+      stack.pop();
+      continue;
+    }
+    let key = last.keys[last.next++];
+    let value = Reflect.get(last.holder, key);
+    if (value === undefined || typeof value === "function" || typeof value === "symbol") continue;
+    if (last.written++ > 0) byteCount += 1;
+    byteCount += stringLength(key, maxRequestBytes - byteCount) + 1;
+    if (byteCount > maxRequestBytes) return true;
+    current = value;
+    hasPendingValue = true;
+  }
+}
 //@ chunk-tyg7f3ek.js:380090-380142 placement
 function mcpModulesChunk() {
-  return require("./chunk-asne9cp8.js");
+  return require("../../services/mcp/emitTripwireEvent.lazy.js");
 }
 //@ chunk-tyg7f3ek.js:380142-380186 placement
 function mcpClientModule_3() {
@@ -103,14 +164,14 @@ function mcpElicitationHandlerModule() {
 var ANTHROPIC_PERMISSIONDISPLAY = "anthropic/permissionDisplay";
 //@ chunk-tyg7f3ek.js:380279-380480 placement
 function readPermissionDisplayMeta(meta) {
-  let n = meta?.[ANTHROPIC_PERMISSIONDISPLAY];
-  if (n == null || typeof n !== "object") return;
-  let r = n;
-  let s = (h) => (typeof r[h] === "string" ? r[h] : undefined);
+  let displayMeta = meta?.[ANTHROPIC_PERMISSIONDISPLAY];
+  if (displayMeta == null || typeof displayMeta !== "object") return;
+  let metaObject = displayMeta;
+  let readString = (key) => (typeof metaObject[key] === "string" ? metaObject[key] : undefined);
   return {
-    title: s("title"),
-    displayName: s("displayName"),
-    description: s("description"),
+    title: readString("title"),
+    displayName: readString("displayName"),
+    description: readString("description"),
   };
 }
 //@ chunk-tyg7f3ek.js:380480-381503 placement
@@ -121,31 +182,31 @@ function createSdkUserDialogHandler(structuredIO, commandQueue) {
   setSdkDialogHostActive(true);
   return async function (dialog, payload, options) {
     if (dialog.kind === MCP_URL_ELICITATION_DIALOG.kind) {
-      let S = payload;
+      let elicitationPayload = payload;
       return await structuredIO.handleElicitation(
-        S.serverName,
-        S.params.message,
+        elicitationPayload.serverName,
+        elicitationPayload.params.message,
         undefined,
         options?.signal,
-        S.params.mode,
-        S.params.url,
-        "elicitationId" in S.params ? S.params.elicitationId : undefined,
-        readPermissionDisplayMeta(S.params._meta),
+        elicitationPayload.params.mode,
+        elicitationPayload.params.url,
+        "elicitationId" in elicitationPayload.params ? elicitationPayload.params.elicitationId : undefined,
+        readPermissionDisplayMeta(elicitationPayload.params._meta),
       );
     }
     if (isSdkHostOrigin(dialog.kind, "sdk_host")) {
-      let S = dialog.kind === ENUM_PROMPT ? dialog.payload().safeParse(payload) : null;
-      if (S?.success === false) {
+      let parsedPayload = dialog.kind === ENUM_PROMPT ? dialog.payload().safeParse(payload) : null;
+      if (parsedPayload?.success === false) {
         logForDiagnosticsNoPII("error", "cli_enum_prompt_invalid_not_sent");
         return dialog.default;
       }
-      let R = S?.data ?? payload;
+      let dialogData = parsedPayload?.data ?? payload;
       if (commandQueue.peek(isPromptModeQueuedCommand) !== undefined) {
-        let L = dialogSourceOf(dialog.kind, R);
+        let dialogSource = dialogSourceOf(dialog.kind, dialogData);
         logEvent("tengu_request_user_dialog_implicit_cancel", {
           dialog_kind: shortHash(dialog.kind),
-          ...(L !== undefined && {
-            dialog_source: shortHash(L),
+          ...(dialogSource !== undefined && {
+            dialog_source: shortHash(dialogSource),
           }),
           reason: fromEnum("queued_at_park"),
         });
@@ -153,25 +214,25 @@ function createSdkUserDialogHandler(structuredIO, commandQueue) {
         options?.onSkippedForQueuedPrompt?.();
         return dialog.default;
       }
-      let w = await structuredIO.requestUserDialog(dialog.kind, R, {
+      let response = await structuredIO.requestUserDialog(dialog.kind, dialogData, {
         signal: options?.signal,
         onSettledUnanswered: options?.onSettledUnanswered,
         parkTimeoutMs: options?.parkTimeoutMs,
         closesOnNewPrompt: options?.closesOnNewPrompt,
       });
-      if (w.behavior === "cancelled") return dialog.default;
-      let P = dialog.result().safeParse(w.result);
-      return P.success ? stripDeclineMessage(P.data) : dialog.default;
+      if (response.behavior === "cancelled") return dialog.default;
+      let parsedResult = dialog.result().safeParse(response.result);
+      return parsedResult.success ? stripDeclineMessage(parsedResult.data) : dialog.default;
     }
     return dialog.default;
   };
 }
 //@ chunk-tyg7f3ek.js:381503-381631 placement
 function declareSdkDialogKinds(kinds, attaching, sessionState) {
-  let s = sanitizeStringList(kinds);
-  setSdkSupportedDialogKinds(s, attaching ? "attach_time" : "create_time");
+  let sanitizedKinds = sanitizeStringList(kinds);
+  setSdkSupportedDialogKinds(sanitizedKinds, attaching ? "attach_time" : "create_time");
   sessionState.notifyInternalMetadataChanged({
-    declared_dialog_kinds: s,
+    declared_dialog_kinds: sanitizedKinds,
   });
 }
 //@ chunk-tyg7f3ek.js:381631-381902 placement
@@ -181,19 +242,19 @@ function declareSdkDialogKinds(kinds, attaching, sessionState) {
 function restoreDeclaredDialogKinds(restoredState) {
   let declaredDialogKinds = restoredState?.internal?.declared_dialog_kinds;
   if (!Array.isArray(declaredDialogKinds) || getSdkSupportedDialogKinds() !== undefined) return;
-  let r = sanitizeStringList(declaredDialogKinds);
-  setSdkSupportedDialogKinds(r, "restored");
+  let sanitizedKinds = sanitizeStringList(declaredDialogKinds);
+  setSdkSupportedDialogKinds(sanitizedKinds, "restored");
   logEvent("tengu_supported_dialog_kinds_restored", {
-    n_kinds: fromNumber(r.length),
+    n_kinds: fromNumber(sanitizedKinds.length),
   });
-  logForDebugging(`restored ${r.length} declared dialog kind(s) from prior worker epoch`);
+  logForDebugging(`restored ${sanitizedKinds.length} declared dialog kind(s) from prior worker epoch`);
 }
 //@ chunk-tyg7f3ek.js:381902-382043 placement
 function cancelPendingUserDialogs(structuredIO, reason) {
-  let r = structuredIO.cancelPendingUserDialogs(REFUSAL_FALLBACK_DIALOG.kind, reason);
-  if (r > 0)
+  let cancelledCount = structuredIO.cancelPendingUserDialogs(REFUSAL_FALLBACK_DIALOG.kind, reason);
+  if (cancelledCount > 0)
     logForDiagnosticsNoPII("info", "cli_user_dialog_implicit_cancel", {
-      cancelled_count: r,
+      cancelled_count: cancelledCount,
       reason,
     });
 }
@@ -204,12 +265,12 @@ function cancelDialogsOnNewPrompt(structuredIO, unattendedRecord, isPersonPrompt
     return;
   }
   unattendedRecord.notePersonWrote();
-  let y = "new_user_message";
-  let S = structuredIO.cancelDialogsANewPromptCloses(y);
-  if (S > 0)
+  let cancelReason = "new_user_message";
+  let cancelledCount = structuredIO.cancelDialogsANewPromptCloses(cancelReason);
+  if (cancelledCount > 0)
     logForDiagnosticsNoPII("info", "cli_user_dialog_implicit_cancel", {
-      cancelled_count: S,
-      reason: y,
+      cancelled_count: cancelledCount,
+      reason: cancelReason,
       closes_on_new_prompt_at: closesAt,
     });
 }
@@ -234,12 +295,12 @@ function createElicitationRegistrar({
   onRefused,
 }) {
   let weakSet = new WeakSet();
-  let w = 0;
-  let P = [];
+  let outstandingCount = 0;
+  let admissionTimes = [];
   let weakMap = new WeakMap();
-  let q = 0;
-  let x = "";
-  let G = "";
+  let unansweredCount = 0;
+  let promptKey = "";
+  let lastRefusedPromptKey = "";
   return function (clients) {
     for (let client of clients) {
       if (client.type !== "connected" || weakSet.has(client.client)) continue;
@@ -253,7 +314,7 @@ function createElicitationRegistrar({
         weakSet.add(client.client);
         continue;
       }
-      let Ue = client.name;
+      let serverName = client.name;
       try {
         mcpClientModule_3().onMcpElicitRequest(client, async (request, extra) => {
           if (withdrawOn?.aborted)
@@ -261,130 +322,139 @@ function createElicitationRegistrar({
               action: "cancel",
             };
           let startTime = performance.now();
-          let Se;
-          let me = `${getPromptId()} ${getLastPersonPrompt()?.uuid}`;
-          if (me !== x) {
-            x = me;
-            q = 0;
+          let refusalCode;
+          let requestPromptKey = `${getPromptId()} ${getLastPersonPrompt()?.uuid}`;
+          if (requestPromptKey !== promptKey) {
+            promptKey = requestPromptKey;
+            unansweredCount = 0;
           }
           let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_linear_quail", 0);
-          if (w >= limits.maxOutstanding) Se = "cap";
+          if (outstandingCount >= limits.maxOutstanding) refusalCode = "cap";
           else if (
             Number.isInteger(featureValue_CACHED_MAY_BE_STALE) &&
             featureValue_CACHED_MAY_BE_STALE > 0 &&
-            q >= featureValue_CACHED_MAY_BE_STALE
+            unansweredCount >= featureValue_CACHED_MAY_BE_STALE
           ) {
-            Se = "unanswered";
-            if (G !== me) {
-              G = me;
+            refusalCode = "unanswered";
+            if (lastRefusedPromptKey !== requestPromptKey) {
+              lastRefusedPromptKey = requestPromptKey;
               logFeatureSad("mcp_question_brake", "refused");
             }
           } else if (limits.maxAdmittedPerMinute !== 1 / 0) {
-            while (P.length > 0 && startTime - P[0] >= 60000) P.shift();
-            if (P.length >= limits.maxAdmittedPerMinute) Se = "rate";
+            while (admissionTimes.length > 0 && startTime - admissionTimes[0] >= 60000)
+              admissionTimes.shift();
+            if (admissionTimes.length >= limits.maxAdmittedPerMinute) refusalCode = "rate";
           }
-          if (Se === undefined && limits.maxRequestBytes !== 1 / 0 && nA(request, limits.maxRequestBytes))
-            Se = "size";
-          if (Se !== undefined) {
-            onRefused?.(Se);
+          if (
+            refusalCode === undefined &&
+            limits.maxRequestBytes !== 1 / 0 &&
+            requestExceedsByteLimit(request, limits.maxRequestBytes)
+          )
+            refusalCode = "size";
+          if (refusalCode !== undefined) {
+            onRefused?.(refusalCode);
             return {
               action: "cancel",
             };
           }
           let transportErrorState = client.transportErrorState;
-          let He =
+          let watchdogSet =
             transportErrorState !== undefined && transportErrorState.activeCallWatchdogs.size > 0
               ? getWatchdogAbortSet(transportErrorState.activeCallWatchdogs, weakMap)
               : undefined;
-          let Xe =
-            He !== undefined &&
+          let allOffCriticalPath =
+            watchdogSet !== undefined &&
             transportErrorState !== undefined &&
             Array.from(transportErrorState.activeCallWatchdogs).every(
               (activeCallWatchdog) => activeCallWatchdog.offCriticalPath,
             );
-          let We = He === undefined ? undefined : new AbortController();
-          let St = [extra.signal];
-          if (withdrawOn !== null) St.push(withdrawOn);
-          if (We !== undefined) St.push(We.signal);
-          let wt = St.length === 1 ? extra.signal : AbortSignal.any(St);
-          if (limits.maxAdmittedPerMinute !== 1 / 0) P.push(startTime);
+          let questionAbort = watchdogSet === undefined ? undefined : new AbortController();
+          let signals = [extra.signal];
+          if (withdrawOn !== null) signals.push(withdrawOn);
+          if (questionAbort !== undefined) signals.push(questionAbort.signal);
+          let signal = signals.length === 1 ? extra.signal : AbortSignal.any(signals);
+          if (limits.maxAdmittedPerMinute !== 1 / 0) admissionTimes.push(startTime);
           if (transportErrorState) transportErrorState.pendingElicitations++;
-          w++;
-          if (He !== undefined && We !== undefined) He.add(We);
+          outstandingCount++;
+          if (watchdogSet !== undefined && questionAbort !== undefined) watchdogSet.add(questionAbort);
           try {
-            logMCPDebug(Ue, `Elicitation request received in print mode: ${jsonStringify(request)}`);
-            let Lt = request.params.mode === "url" ? "url" : "form";
+            logMCPDebug(serverName, `Elicitation request received in print mode: ${jsonStringify(request)}`);
+            let mode = request.params.mode === "url" ? "url" : "form";
             logEvent("tengu_mcp_elicitation_shown", {
-              mode: fromEnum(Lt),
+              mode: fromEnum(mode),
             });
-            let pn = await mcpElicitationHandlerModule().runElicitationHooks(Ue, request.params, wt);
-            if (pn) {
-              logMCPDebug(Ue, `Elicitation resolved by hook: ${jsonStringify(pn)}`);
+            let hookResult = await mcpElicitationHandlerModule().runElicitationHooks(
+              serverName,
+              request.params,
+              signal,
+            );
+            if (hookResult) {
+              logMCPDebug(serverName, `Elicitation resolved by hook: ${jsonStringify(hookResult)}`);
               logEvent("tengu_mcp_elicitation_response", {
-                mode: fromEnum(Lt),
-                action: fromEnum(pn.action),
+                mode: fromEnum(mode),
+                action: fromEnum(hookResult.action),
                 byHook: true,
               });
-              return pn;
+              return hookResult;
             }
-            let url = Lt === "url" && "url" in request.params ? request.params.url : undefined;
+            let url = mode === "url" && "url" in request.params ? request.params.url : undefined;
             let requestedSchema =
               "requestedSchema" in request.params ? request.params.requestedSchema : undefined;
             let elicitationId =
-              Lt === "url" && "elicitationId" in request.params ? request.params.elicitationId : undefined;
+              mode === "url" && "elicitationId" in request.params ? request.params.elicitationId : undefined;
             let permissionDisplayMeta = readPermissionDisplayMeta(request.params._meta);
             let list = Array.from(transportErrorState?.activeCallWatchdogs ?? []);
             let requestTimingStore = getRequestTimingStore();
-            let $r =
+            let openedWatchdogs =
               requestTimingStore === undefined || requestTimingStore === transportErrorState?.dialledUnder
                 ? list
-                : list.filter((En) => En.timing === requestTimingStore);
-            $r.forEach((En) => En.questionOpened?.());
-            let $n = $r.length === 1 ? $r[0] : undefined;
-            if ($n !== undefined) $n.openQuestions = ($n.openQuestions ?? 0) + 1;
+                : list.filter((watchdog) => watchdog.timing === requestTimingStore);
+            openedWatchdogs.forEach((watchdog) => watchdog.questionOpened?.());
+            let ownWatchdog = openedWatchdogs.length === 1 ? openedWatchdogs[0] : undefined;
+            if (ownWatchdog !== undefined) ownWatchdog.openQuestions = (ownWatchdog.openQuestions ?? 0) + 1;
             let startTime = performance.now();
-            let Yt;
+            let result;
             try {
-              Yt = await structuredIO.handleElicitation(
-                Ue,
+              result = await structuredIO.handleElicitation(
+                serverName,
                 request.params.message,
                 requestedSchema,
-                wt,
-                Lt,
+                signal,
+                mode,
                 url,
                 elicitationId,
                 permissionDisplayMeta,
-                Xe,
+                allOffCriticalPath,
               );
             } finally {
-              if ($n !== undefined) $n.openQuestions = ($n.openQuestions ?? 1) - 1;
-              $r.forEach((En) => En.questionClosed?.());
+              if (ownWatchdog !== undefined) ownWatchdog.openQuestions = (ownWatchdog.openQuestions ?? 1) - 1;
+              openedWatchdogs.forEach((watchdog) => watchdog.questionClosed?.());
             }
-            if (me === x) q = wt.aborted ? q + 1 : 0;
+            if (requestPromptKey === promptKey) unansweredCount = signal.aborted ? unansweredCount + 1 : 0;
             let questionOpenMs = Math.round(performance.now() - startTime);
-            let kn = await mcpElicitationHandlerModule().runElicitationResultHooks(
-              Ue,
-              Yt,
-              wt,
-              Lt,
+            let finalResult = await mcpElicitationHandlerModule().runElicitationResultHooks(
+              serverName,
+              result,
+              signal,
+              mode,
               elicitationId,
             );
-            if (kn.action !== Yt.action)
+            if (finalResult.action !== result.action)
               logEvent("tengu_mcp_elicitation_result_hook", {
-                mode: fromEnum(Lt),
-                action: fromEnum(kn.action),
+                mode: fromEnum(mode),
+                action: fromEnum(finalResult.action),
               });
             logEvent("tengu_mcp_elicitation_response", {
-              mode: fromEnum(Lt),
-              action: fromEnum(kn.action),
-              ...($r.some((En) => En.questionClosed) && {
+              mode: fromEnum(mode),
+              action: fromEnum(finalResult.action),
+              ...(openedWatchdogs.some((watchdog) => watchdog.questionClosed) && {
                 question_open_ms: questionOpenMs,
               }),
             });
-            return kn;
+            return finalResult;
           } finally {
-            w--;
-            if (We !== undefined) He?.delete(We);
+            outstandingCount--;
+            if (questionAbort !== undefined) watchdogSet?.delete(questionAbort);
             if (transportErrorState) {
               transportErrorState.pendingElicitations--;
               transportErrorState.lastElicitationClosedAt = Date.now();
@@ -392,12 +462,12 @@ function createElicitationRegistrar({
           }
         });
         if (limits.completions === "forward")
-          mcpClientModule_3().onMcpElicitationComplete(client, (ce) => {
-            logMCPDebug(Ue, `Elicitation completion notification: ${ce}`);
+          mcpClientModule_3().onMcpElicitationComplete(client, (elicitationId) => {
+            logMCPDebug(serverName, `Elicitation completion notification: ${elicitationId}`);
             executeNotificationHooks(
               session,
               {
-                message: `MCP server "${Ue}" confirmed elicitation ${ce} complete`,
+                message: `MCP server "${serverName}" confirmed elicitation ${elicitationId} complete`,
                 notificationType: "elicitation_complete",
               },
               {
@@ -408,8 +478,8 @@ function createElicitationRegistrar({
             enqueueTaskNotification({
               type: "system",
               subtype: "elicitation_complete",
-              mcp_server_name: Ue,
-              elicitation_id: ce,
+              mcp_server_name: serverName,
+              elicitation_id: elicitationId,
             });
           });
         weakSet.add(client.client);
@@ -422,18 +492,18 @@ function createElicitationRegistrar({
  * 给一组活动调用看门狗挂上"全部结束即中止"的 AbortController 集合：包装 delete，集合清空且开关 tengu_misty_twilight 开时中止所有登记的控制器。
  */
 function getWatchdogAbortSet(watchdogs, cache) {
-  let r = cache.get(watchdogs);
-  if (r !== undefined) return r;
-  let s = new Set();
-  cache.set(watchdogs, s);
-  let h = watchdogs.delete.bind(watchdogs);
-  watchdogs.delete = (y) => {
-    let S = h(y);
-    if (S && watchdogs.size === 0 && getFeatureValue_CACHED_MAY_BE_STALE("tengu_misty_twilight", true))
-      for (let R of Array.from(s)) R.abort();
-    return S;
+  let abortSet = cache.get(watchdogs);
+  if (abortSet !== undefined) return abortSet;
+  let createdAbortSet = new Set();
+  cache.set(watchdogs, createdAbortSet);
+  let originalDelete = watchdogs.delete.bind(watchdogs);
+  watchdogs.delete = (watchdog) => {
+    let deleted = originalDelete(watchdog);
+    if (deleted && watchdogs.size === 0 && getFeatureValue_CACHED_MAY_BE_STALE("tengu_misty_twilight", true))
+      for (let watchdog of Array.from(createdAbortSet)) watchdog.abort();
+    return deleted;
   };
-  return s;
+  return createdAbortSet;
 }
 //@ chunk-tyg7f3ek.js:386167-386700 placement
 /**
@@ -443,8 +513,8 @@ async function resolveResumeInterruption(options) {
   let { restored, load, forwarding, findUnresolved } = options;
   let journaledCalls = forwarding ? parseInFlightServedCalls(restored?.internal?.in_flight_served_calls) : [];
   let supersededIds = journaledCalls
-    .map((R) => R.tool_use_id)
-    .filter((R) => load.supersededToolUseIds?.has(R) ?? false);
+    .map((journaledCall) => journaledCall.tool_use_id)
+    .filter((toolUseId) => load.supersededToolUseIds?.has(toolUseId) ?? false);
   try {
     let offChainServedCalls = await findOffChainServedCalls(options, journaledCalls, supersededIds);
     return offChainServedCalls.offChainToolNames.size > 0
@@ -482,7 +552,7 @@ async function findOffChainServedCalls(
     turnInterruptionState?.kind === "none"
       ? findTrailingRestartContinuation(chain, isRestartContinuationRow)
       : undefined;
-  let q = continuation !== undefined ? chain.slice(0, continuation.continuationIndex + 1) : [];
+  let resumeChain = continuation !== undefined ? chain.slice(0, continuation.continuationIndex + 1) : [];
   if (!(
     journaledCalls.length > 0 &&
     lane.resumeInterruptedTurn &&
@@ -491,49 +561,56 @@ async function findOffChainServedCalls(
     load.supersededToolUseIds?.size === 0 &&
     (turnInterruptionState.kind !== "none" ||
       (continuation !== undefined &&
-        !isResumeTooOld(q, interruptedTurnResumePolicy(hasPendingActions(restored))?.maxAgeMs ?? 0)))
+        !isResumeTooOld(
+          resumeChain,
+          interruptedTurnResumePolicy(hasPendingActions(restored))?.maxAgeMs ?? 0,
+        )))
   ))
     return {
       turnInterruptionState,
       offChainToolNames: new Map(),
       journaledToolUses: await findUnresolved(supersededIds),
     };
-  let G = new Set(
-    chain.flatMap((ie) =>
-      ie.type === "user" && Array.isArray(ie.message.content)
-        ? ie.message.content.flatMap((Se) => (Se.type === "tool_result" ? [Se.tool_use_id] : []))
+  let answeredToolUseIds = new Set(
+    chain.flatMap((row) =>
+      row.type === "user" && Array.isArray(row.message.content)
+        ? row.message.content.flatMap((block) => (block.type === "tool_result" ? [block.tool_use_id] : []))
         : [],
     ),
   );
   let filtered = journaledCalls.filter(
     (journaledCall) =>
-      !G.has(journaledCall.tool_use_id) &&
+      !answeredToolUseIds.has(journaledCall.tool_use_id) &&
       (turnInterruptionState.kind !== "none" ||
         Date.now() - journaledCall.dispatched_at <= SYNC_ANSWER_TTL_MS),
   );
-  let unresolved = await findUnresolved(filtered.map((ie) => ie.tool_use_id));
-  let [Ae, ...Ue] = filtered.filter((ie) => !unresolved.has(ie.tool_use_id));
-  let ce = new Map(unresolved);
-  if (continuation !== undefined && Ae !== undefined && Ue.length === 0) {
-    let onPrunedBranch = await findOnPrunedBranch(Ae.tool_use_id);
-    if (onPrunedBranch !== null) ce.set(Ae.tool_use_id, onPrunedBranch);
+  let unresolved = await findUnresolved(filtered.map((journaledCall) => journaledCall.tool_use_id));
+  let [firstUnresolved, ...otherUnresolved] = filtered.filter(
+    (journaledCall) => !unresolved.has(journaledCall.tool_use_id),
+  );
+  let unresolvedByToolUse = new Map(unresolved);
+  if (continuation !== undefined && firstUnresolved !== undefined && otherUnresolved.length === 0) {
+    let onPrunedBranch = await findOnPrunedBranch(firstUnresolved.tool_use_id);
+    if (onPrunedBranch !== null) unresolvedByToolUse.set(firstUnresolved.tool_use_id, onPrunedBranch);
   }
-  let flattened = filtered.flatMap((ie) => {
-    let Se = ce.get(ie.tool_use_id);
-    let me = Array.isArray(Se?.message.content)
-      ? Se.message.content.find((Ee) => Ee.type === "tool_use" && Ee.id === ie.tool_use_id)
+  let flattened = filtered.flatMap((journaledCall) => {
+    let assistantMessage = unresolvedByToolUse.get(journaledCall.tool_use_id);
+    let toolUseBlock = Array.isArray(assistantMessage?.message.content)
+      ? assistantMessage.message.content.find(
+          (block) => block.type === "tool_use" && block.id === journaledCall.tool_use_id,
+        )
       : undefined;
-    let Me = Se === undefined ? NaN : Date.parse(Se.timestamp);
-    return Se !== undefined &&
-      me?.type === "tool_use" &&
-      me.name === ie.tool &&
-      isRemoteCapableCall(Se, ie.tool_use_id, tools, ie.host) &&
-      Number.isFinite(Me) &&
-      !hasRowsAfterTime(chain, Me, isRestartContinuationRow)
+    let messageTime = assistantMessage === undefined ? NaN : Date.parse(assistantMessage.timestamp);
+    return assistantMessage !== undefined &&
+      toolUseBlock?.type === "tool_use" &&
+      toolUseBlock.name === journaledCall.tool &&
+      isRemoteCapableCall(assistantMessage, journaledCall.tool_use_id, tools, journaledCall.host) &&
+      Number.isFinite(messageTime) &&
+      !hasRowsAfterTime(chain, messageTime, isRestartContinuationRow)
       ? [
           {
-            toolUseId: ie.tool_use_id,
-            name: me.name,
+            toolUseId: journaledCall.tool_use_id,
+            name: toolUseBlock.name,
           },
         ]
       : [];
@@ -542,7 +619,7 @@ async function findOffChainServedCalls(
     return {
       turnInterruptionState,
       offChainToolNames: new Map(),
-      journaledToolUses: ce,
+      journaledToolUses: unresolvedByToolUse,
     };
   logForDebugging(
     `[print.ts] ${flattened.length} served call(s) the previous worker journaled are off the resume chain but unresolved in the transcript: treating them as the interrupted turn's (${flattened
@@ -555,8 +632,8 @@ async function findOffChainServedCalls(
     turnInterruptionState:
       (continuation !== undefined ? buildInterruptedPromptState(chain, continuation) : undefined) ??
       turnInterruptionState,
-    offChainToolNames: new Map(flattened.map(({ toolUseId, name: Se }) => [toolUseId, Se])),
-    journaledToolUses: ce,
+    offChainToolNames: new Map(flattened.map(({ toolUseId, name: toolName }) => [toolUseId, toolName])),
+    journaledToolUses: unresolvedByToolUse,
   };
 }
 //@ chunk-tyg7f3ek.js:388620-389771 placement
@@ -588,7 +665,9 @@ async function findParkedCardBehindNote({ restored, load, chain, findUnresolved,
     (await findUnresolved([pendingToolUseId])).get(pendingToolUseId) ??
     (await findOnPrunedBranch(pendingToolUseId));
   let toolUse = Array.isArray(assistantMessage?.message.content)
-    ? assistantMessage.message.content.find((Z) => Z.type === "tool_use" && Z.id === pendingToolUseId)
+    ? assistantMessage.message.content.find(
+        (block) => block.type === "tool_use" && block.id === pendingToolUseId,
+      )
     : undefined;
   let interruptionState = buildInterruptedPromptState(chain, continuation);
   if (!assistantMessage || toolUse?.type !== "tool_use" || interruptionState === undefined) return;
@@ -620,12 +699,12 @@ async function findParkedCardBehindNote({ restored, load, chain, findUnresolved,
 }
 //@ chunk-tyg7f3ek.js:389771-390027 placement
 function buildInterruptedPromptState(chain, continuation) {
-  let [r] = normalizeMessages([continuation.continuation]);
+  let [interruptedMessage] = normalizeMessages([continuation.continuation]);
   let lastUserPromptUuid = findLastUserPromptUuid(chain.slice(0, continuation.continuationIndex + 1));
   return (
-    r && {
+    interruptedMessage && {
       kind: "interrupted_prompt",
-      message: r,
+      message: interruptedMessage,
       ...(lastUserPromptUuid !== undefined && {
         interruptedTurnUserMessageUuid: lastUserPromptUuid,
       }),
@@ -640,8 +719,8 @@ function isRestartContinuationRow(message) {
   if (message.isMeta !== true || message.origin !== undefined || message.promptSource !== undefined)
     return false;
   if (isPlainInterruptMarker(message)) return true;
-  let n = singleTextContent(message.message.content);
-  return n !== undefined && isOnlySystemReminders(n);
+  let text = singleTextContent(message.message.content);
+  return text !== undefined && isOnlySystemReminders(text);
 }
 //@ chunk-tyg7f3ek.js:390186-390301 placement
 function isRestartContinuationOrQueuedRow(message) {
@@ -660,20 +739,20 @@ function isRestartContinuationOrQueuedRow(message) {
 function findTrailingRestartContinuation(chain, predicate) {
   let loaderSentinel;
   for (let j = chain.length - 1; j >= 0; j--) {
-    let h = chain[j];
-    if (h.type === "assistant") {
-      if (isSyntheticApiErrorMessage(h)) {
-        loaderSentinel ??= h;
+    let row = chain[j];
+    if (row.type === "assistant") {
+      if (isSyntheticApiErrorMessage(row)) {
+        loaderSentinel ??= row;
         continue;
       }
-      if (isUnattendedStartUnconfirmed(h)) continue;
+      if (isUnattendedStartUnconfirmed(row)) continue;
       return;
     }
-    if (h.type !== "user" || isContextAppendMessage(h)) continue;
-    if (!predicate(h)) return;
-    if (isPlainInterruptMarker(h))
+    if (row.type !== "user" || isContextAppendMessage(row)) continue;
+    if (!predicate(row)) return;
+    if (isPlainInterruptMarker(row))
       return {
-        continuation: h,
+        continuation: row,
         continuationIndex: j,
         loaderSentinel,
       };
@@ -707,13 +786,13 @@ async function planServedCallAdoption({
 }) {
   let journaledCalls = forwarding ? inFlightCallsFor(restored, supersededToolUseIds) : [];
   let servedCallsToAdopt = journaledCalls.flatMap((journaledCall) => {
-    let G = journaledToolUses.get(journaledCall.tool_use_id);
-    return G !== undefined &&
-      isRemoteCapableCall(G, journaledCall.tool_use_id, adoptionTools, journaledCall.host)
+    let assistantMessage = journaledToolUses.get(journaledCall.tool_use_id);
+    return assistantMessage !== undefined &&
+      isRemoteCapableCall(assistantMessage, journaledCall.tool_use_id, adoptionTools, journaledCall.host)
       ? [
           {
             call: journaledCall,
-            assistantMessage: G,
+            assistantMessage,
           },
         ]
       : [];
@@ -739,15 +818,15 @@ async function planServedCallAdoption({
  * 为接管的已服务调用构造 orphaned-permission 模式的队列提示：主调用（优先本地有工具的）作为允许的权限结果，其余作为 siblings，并附上未发出的调用说明。
  */
 function buildOrphanedPermissionPrompt({ calls, tools, supersededToolNames, servedCallsNeverSent }) {
-  let hasTool = (L) => findToolByName(tools, L.call.tool) !== undefined;
-  let [primary, ...siblings] = [...calls].sort((L, q) => Number(hasTool(q)) - Number(hasTool(L)));
-  let callIds = new Set(calls.map((L) => L.call.tool_use_id));
+  let hasTool = (entry) => findToolByName(tools, entry.call.tool) !== undefined;
+  let [primary, ...siblings] = [...calls].sort((a, b) => Number(hasTool(b)) - Number(hasTool(a)));
+  let callIds = new Set(calls.map((call) => call.call.tool_use_id));
   let unsentNotice = describeUnsentServedCalls(
     {
       supersededToolNames,
       servedCallsNeverSent,
     },
-    (L) => !callIds.has(L),
+    (toolUseId) => !callIds.has(toolUseId),
   );
   let notSent = servedCallsNeverSent ?? [];
   return {
@@ -766,8 +845,8 @@ function buildOrphanedPermissionPrompt({ calls, tools, supersededToolNames, serv
       assistantMessage: primary.assistantMessage,
       initFirst: true,
       ...(siblings.length > 0 && {
-        siblings: siblings.map(({ call: L, assistantMessage }) => ({
-          toolUseID: L.tool_use_id,
+        siblings: siblings.map(({ call, assistantMessage }) => ({
+          toolUseID: call.tool_use_id,
           assistantMessage,
         })),
       }),
@@ -787,9 +866,9 @@ function parkedPermissionWaitMs() {
   return env.CLAUDE_CODE_PARKED_PERMISSION_WAIT_MS ?? 2000;
 }
 //@ chunk-tyg7f3ek.js:392077-392132 placement
-function isRemoteGateOn(e) {
+function isRemoteGateOn(gateName) {
   try {
-    return getRemoteFeatureGateState(e) === "on";
+    return getRemoteFeatureGateState(gateName) === "on";
   } catch {
     return false;
   }
@@ -846,26 +925,26 @@ async function readFlagWhenWarm(flag, reader) {
  */
 function createUnresolvedToolUseFinder({ supersededToolUseIds, tookOverAPrompt, storageV5 }) {
   return async (toolUseId) => {
-    let h = supersededToolUseIds?.has(toolUseId) === true;
-    let y = tookOverAPrompt && h;
+    let inLastTurn = supersededToolUseIds?.has(toolUseId) === true;
+    let checkEverywhere = tookOverAPrompt && inLastTurn;
     if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_eager_pillow", false)) {
-      let R =
+      let found =
         (await findUnresolvedToolUseMessageRows(toolUseId, storageV5)) ??
-        (y ? await readEveryBranch(toolUseId, storageV5, true) : null);
+        (checkEverywhere ? await readEveryBranch(toolUseId, storageV5, true) : null);
       return (
-        R && {
-          ...R,
-          inLastAssistantTurn: h,
+        found && {
+          ...found,
+          inLastAssistantTurn: inLastTurn,
         }
       );
     }
-    let S = y
+    let holder = checkEverywhere
       ? await findUnresolvedToolUseAnywhere(toolUseId, storageV5)
       : await findUnresolvedToolUse(toolUseId, storageV5);
     return (
-      S && {
-        holder: S,
-        inLastAssistantTurn: h,
+      holder && {
+        holder,
+        inLastAssistantTurn: inLastTurn,
       }
     );
   };
@@ -884,9 +963,9 @@ async function findUnresolvedToolUseAnywhere(toolUseId, storageV5) {
  */
 async function findUnresolvedToolUseOnAPrunedBranch(toolUseId, storageV5) {
   if (isDiskless()) return null;
-  let r;
+  let size;
   try {
-    r = (await stat(getTranscriptPath())).size;
+    size = (await stat(getTranscriptPath())).size;
   } catch (error) {
     logForDebugging(
       `findUnresolvedToolUseOnAPrunedBranch: the transcript's size could not be read (${getErrnoCode(error) ?? "no error code"}), so tool_use ${toolUseId} counts as not found`,
@@ -896,7 +975,7 @@ async function findUnresolvedToolUseOnAPrunedBranch(toolUseId, storageV5) {
     );
     return null;
   }
-  return r > SKIP_PRECOMPACT_THRESHOLD && r <= MAX_TRANSCRIPT_READ_BYTES
+  return size > SKIP_PRECOMPACT_THRESHOLD && size <= MAX_TRANSCRIPT_READ_BYTES
     ? ((await readEveryBranch(toolUseId, storageV5, false))?.holder ?? null)
     : null;
 }
@@ -914,26 +993,26 @@ async function readEveryBranch(toolUseId, storageV5, withMessageRows) {
         storageV5: transcriptStorageKey,
       }),
     });
-    let S = findUnresolvedToolUsesInTranscript(messages.values(), [toolUseId]).get(toolUseId);
-    if (S === undefined) {
+    let holder = findUnresolvedToolUsesInTranscript(messages.values(), [toolUseId]).get(toolUseId);
+    if (holder === undefined) {
       logForDebugging(
         `readEveryBranch: a second read of the transcript, keeping every branch, found no unresolved tool_use ${toolUseId} either`,
       );
       return null;
     }
-    let R = withMessageRows
+    let result = withMessageRows
       ? {
-          holder: S,
-          messageRows: assistantMessageRowsInTranscript(messages, S),
+          holder,
+          messageRows: assistantMessageRowsInTranscript(messages, holder),
         }
       : {
-          holder: S,
+          holder,
         };
     logForDebugging(
       `readEveryBranch: a second read of the transcript, keeping every branch, found tool_use ${toolUseId} after the first read did not`,
     );
     logForDiagnosticsNoPII("info", "cli_tool_use_found_on_second_transcript_read");
-    return R;
+    return result;
   } catch (error) {
     logForDebugging(
       `readEveryBranch: the second read of the transcript failed, so tool_use ${toolUseId} counts as not found: ${error}`,

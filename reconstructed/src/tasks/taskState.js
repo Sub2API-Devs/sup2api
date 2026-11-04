@@ -9,6 +9,7 @@
  * attribution: placement 4
  */
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-cgs3vg0v.js:262-506 placement
 function emptySpawnStats() {
@@ -52,8 +53,8 @@ class SpawnOutcomeRecorder {
   failed() {
     if (this.#n("failed")) this.#e.failed += 1;
   }
-  killed(e) {
-    if (this.#n("killed")) this.#e.killed[e ?? "user"] += 1;
+  killed(killedBy) {
+    if (this.#n("killed")) this.#e.killed[killedBy ?? "user"] += 1;
   }
   cancelledAfterCompletion() {
     if (this.#t === "completed") {
@@ -62,9 +63,9 @@ class SpawnOutcomeRecorder {
     }
     this.killed("user");
   }
-  #n(e) {
+  #n(outcome) {
     if (this.#t !== undefined) return false;
-    this.#t = e;
+    this.#t = outcome;
     return true;
   }
 }
@@ -75,33 +76,33 @@ class SpawnOutcomeRecorder {
 class SpawnStatsTracker {
   #e = emptySpawnStats();
   #t = new Map();
-  recordSpawn(e) {
+  recordSpawn(spawn) {
     let stats = this.#e;
     stats.spawned += 1;
     stats.requested[
-      e.runInBackground === undefined ? "unset" : e.runInBackground ? "background" : "foreground"
+      spawn.runInBackground === undefined ? "unset" : spawn.runInBackground ? "background" : "foreground"
     ] += 1;
-    if (e.runsInBackground) stats.started_in_background += 1;
-    this.#t.set(e.agentType, (this.#t.get(e.agentType) ?? 0) + 1);
-    stats.max_depth = Math.max(stats.max_depth, e.depth);
-    if (e.depth > 1) stats.spawned_by_subagents += 1;
+    if (spawn.runsInBackground) stats.started_in_background += 1;
+    this.#t.set(spawn.agentType, (this.#t.get(spawn.agentType) ?? 0) + 1);
+    stats.max_depth = Math.max(stats.max_depth, spawn.depth);
+    if (spawn.depth > 1) stats.spawned_by_subagents += 1;
     return new SpawnOutcomeRecorder(stats);
   }
-  recordRefused(e) {
-    this.#e.refused[e] += 1;
+  recordRefused(refusedReason) {
+    this.#e.refused[refusedReason] += 1;
   }
   snapshot() {
-    let e = this.#e;
+    let stats = this.#e;
     return {
-      ...e,
+      ...stats,
       requested: {
-        ...e.requested,
+        ...stats.requested,
       },
       killed: {
-        ...e.killed,
+        ...stats.killed,
       },
       refused: {
-        ...e.refused,
+        ...stats.refused,
       },
       by_type: Object.fromEntries(this.#t),
     };
@@ -115,5 +116,8 @@ class SpawnStatsTracker {
 /**
  * 按会话保存的派生统计跟踪器。
  */
-var spawnStatsSlots = new SessionRootSlot(() => new SpawnStatsTracker());
+var spawnStatsSlots; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-cgs3vg0v.js:1476", () => {
+  spawnStatsSlots = new SessionRootSlot(() => new SpawnStatsTracker());
+});
 export { spawnStatsSlots };

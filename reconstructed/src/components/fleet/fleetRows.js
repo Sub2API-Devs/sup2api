@@ -26,7 +26,7 @@ import {
 import { isBypassPermissionsModeDisabled } from "../../utils/permissions/permissionSetup.js";
 import { isBypassPermissionsAccepted } from "../../utils/permissions/bypassPermissionsAccepted.js";
 import { parseEffortFlag } from "../../utils/effort.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default_2,
   jsxProd_default,
@@ -69,7 +69,7 @@ import {
 import { CCR_SESSION_ID_RE } from "../../services/cloudSessions/ccrSessionList.js";
 import { remoteRowId } from "../../bridge/sessionIdCompat.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { record, string, u, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import { record, stringSchema, objectSchema, booleanSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   ANY_CONTROL_CHAR_RE,
   getFirstLine,
@@ -104,7 +104,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { env } from "../../utils/env.js";
 import { logFeatureBad, logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { y, R, P } from "../../../vendor/react/cjs/react.production.js";
+import { useState, useRef, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { getPlatform } from "../../utils/platform.js";
 import { defaultSetTimeout } from "../../ink/components/ClockContext.js";
@@ -137,10 +137,10 @@ function prepareFatalExit() {
  */
 async function reportFatalAndExit(error) {
   process.exitCode = 1;
-  let E = await import("./chunk-r3wdn2dp.js").catch(() => {
+  let cleanupModule = await import("../../utils/gracefulShutdown.js").catch(() => {
     return;
   });
-  E?.cleanupTerminalModes();
+  cleanupModule?.cleanupTerminalModes();
   try {
     writeSync(
       2,
@@ -150,12 +150,12 @@ async function reportFatalAndExit(error) {
     );
   } catch {}
   try {
-    let { initSinks } = await import("./chunk-19b0wnnf.js");
+    let { initSinks } = await import("../../utils/sinks.js");
     initSinks();
   } catch {}
   logError(error);
-  if (E === undefined) return cliError();
-  await E.gracefulShutdown(1, "other", {
+  if (cleanupModule === undefined) return cliError();
+  await cleanupModule.gracefulShutdown(1, "other", {
     suppressResumeHint: true,
   });
 }
@@ -166,39 +166,44 @@ async function reportFatalAndExit(error) {
 function resolveDispatchPermissionMode(dispatchDefaults) {
   let agent = dispatchDefaults?.agent ?? getInitialSettings_2().agent;
   if (!dispatchDefaults && !agent) return;
-  let k = dispatchDefaults?.permissionMode
+  let requestedMode = dispatchDefaults?.permissionMode
     ? permissionModeFromString(dispatchDefaults.permissionMode)
     : undefined;
-  let C = isBypassPermissionsModeDisabled();
-  let x = !C && isBypassPermissionsAccepted();
-  let T = !C && hasSkipDangerousModePermissionPrompt();
-  let A = dispatchDefaults?.permissionModeInherited ? k : "default";
-  let V = k === "bypassPermissions" && !x ? (T ? A : undefined) : k;
-  let D = dispatchDefaults?.allowBypass && x ? true : undefined;
+  let bypassDisabled = isBypassPermissionsModeDisabled();
+  let bypassAccepted = !bypassDisabled && isBypassPermissionsAccepted();
+  let skipPrompt = !bypassDisabled && hasSkipDangerousModePermissionPrompt();
+  let defaultMode = dispatchDefaults?.permissionModeInherited ? requestedMode : "default";
+  let permissionMode =
+    requestedMode === "bypassPermissions" && !bypassAccepted
+      ? skipPrompt
+        ? defaultMode
+        : undefined
+      : requestedMode;
+  let allowBypass = dispatchDefaults?.allowBypass && bypassAccepted ? true : undefined;
   let level = dispatchDefaults?.effort ? parseEffortFlag(dispatchDefaults.effort).level : undefined;
-  if (!V && !dispatchDefaults?.model && !level && !agent && !D) return;
+  if (!permissionMode && !dispatchDefaults?.model && !level && !agent && !allowBypass) return;
   return {
-    permissionMode: V,
-    permissionModeInherited: V ? dispatchDefaults?.permissionModeInherited : undefined,
+    permissionMode,
+    permissionModeInherited: permissionMode ? dispatchDefaults?.permissionModeInherited : undefined,
     model: dispatchDefaults?.model,
     effort: level,
     agent,
-    allowBypass: D,
+    allowBypass,
   };
 }
 //@ chunk-93kwxas0.js:8908-9037 placement
 /**
  * 派发默认值里是否有非默认项（权限模式、模型、effort、agent、bypass）。
  */
-function hasNonDefaultDispatchSettings(dispatchDefaults) {
+function hasNonDefaultDispatchSettings(defaults) {
   return (
-    (!!dispatchDefaults.permissionMode &&
-      dispatchDefaults.permissionMode !== "default" &&
-      !isInheritedBypassUnavailable(dispatchDefaults)) ||
-    !!dispatchDefaults.model ||
-    !!dispatchDefaults.effort ||
-    !!dispatchDefaults.agent ||
-    !!dispatchDefaults.allowBypass
+    (!!defaults.permissionMode &&
+      defaults.permissionMode !== "default" &&
+      !isInheritedBypassUnavailable(defaults)) ||
+    !!defaults.model ||
+    !!defaults.effort ||
+    !!defaults.agent ||
+    !!defaults.allowBypass
   );
 }
 //@ chunk-93kwxas0.js:9037-9951 placement
@@ -206,217 +211,224 @@ function hasNonDefaultDispatchSettings(dispatchDefaults) {
  * 显示派发默认值（权限模式、模型、effort、agent）。
  */
 function DispatchDefaultsLine(props) {
-  let L = w(20);
+  let $ = useMemoCache(20);
   let { defaults } = props;
   let { permissionMode, model, effort, agent, allowBypass } = defaults;
-  let V;
-  if (L[0] !== defaults || L[1] !== permissionMode) {
-    V = !!permissionMode && permissionMode !== "default" && !isInheritedBypassUnavailable(defaults);
-    L[0] = defaults;
-    L[1] = permissionMode;
-    L[2] = V;
-  } else V = L[2];
-  let D = V;
-  let U = allowBypass && !D;
-  if (!D && !model && !effort && !agent && !U) {
+  let hasMode;
+  if ($[0] !== defaults || $[1] !== permissionMode) {
+    hasMode = !!permissionMode && permissionMode !== "default" && !isInheritedBypassUnavailable(defaults);
+    $[0] = defaults;
+    $[1] = permissionMode;
+    $[2] = hasMode;
+  } else hasMode = $[2];
+  let hasMode_2 = hasMode;
+  let bypassAvailable = allowBypass && !hasMode_2;
+  if (!hasMode_2 && !model && !effort && !agent && !bypassAvailable) {
     return null;
   }
-  let N;
-  if (L[3] !== permissionMode || L[4] !== D) {
-    N =
-      D &&
+  let modeText;
+  if ($[3] !== permissionMode || $[4] !== hasMode_2) {
+    modeText =
+      hasMode_2 &&
       jsxProd_default_2(Text, {
         color: themeColorOf(permissionMode),
         children: [permissionModeSymbol(permissionMode), " ", permissionModeIndicator(permissionMode)],
       });
-    L[3] = permissionMode;
-    L[4] = D;
-    L[5] = N;
-  } else N = L[5];
-  let X;
-  if (L[6] !== U) {
-    X =
-      U &&
+    $[3] = permissionMode;
+    $[4] = hasMode_2;
+    $[5] = modeText;
+  } else modeText = $[5];
+  let bypassText;
+  if ($[6] !== bypassAvailable) {
+    bypassText =
+      bypassAvailable &&
       jsxProd_default_2(Text, {
         color: themeColorOf("bypassPermissions"),
         children: [permissionModeSymbol("bypassPermissions"), " bypass available"],
       });
-    L[6] = U;
-    L[7] = X;
-  } else X = L[7];
-  let K;
-  if (L[8] !== agent) {
-    K =
+    $[6] = bypassAvailable;
+    $[7] = bypassText;
+  } else bypassText = $[7];
+  let agentText;
+  if ($[8] !== agent) {
+    agentText =
       agent &&
       jsxProd_default_2(Text, {
         dimColor: true,
         children: ["@", agent],
       });
-    L[8] = agent;
-    L[9] = K;
-  } else K = L[9];
-  let W;
-  if (L[10] !== model) {
-    W =
+    $[8] = agent;
+    $[9] = agentText;
+  } else agentText = $[9];
+  let modelText;
+  if ($[10] !== model) {
+    modelText =
       model &&
       jsxProd_default(Text, {
         dimColor: true,
         children: model,
       });
-    L[10] = model;
-    L[11] = W;
-  } else W = L[11];
-  let z;
-  if (L[12] !== effort) {
-    z =
+    $[10] = model;
+    $[11] = modelText;
+  } else modelText = $[11];
+  let effortText;
+  if ($[12] !== effort) {
+    effortText =
       effort &&
       jsxProd_default(Text, {
         dimColor: true,
         children: effort,
       });
-    L[12] = effort;
-    L[13] = z;
-  } else z = L[13];
-  let oe;
-  if (L[14] !== N || L[15] !== X || L[16] !== K || L[17] !== W || L[18] !== z) {
-    oe = jsxProd_default_2(Byline, {
-      children: [N, X, K, W, z],
+    $[12] = effort;
+    $[13] = effortText;
+  } else effortText = $[13];
+  let line;
+  if (
+    $[14] !== modeText ||
+    $[15] !== bypassText ||
+    $[16] !== agentText ||
+    $[17] !== modelText ||
+    $[18] !== effortText
+  ) {
+    line = jsxProd_default_2(Byline, {
+      children: [modeText, bypassText, agentText, modelText, effortText],
     });
-    L[14] = N;
-    L[15] = X;
-    L[16] = K;
-    L[17] = W;
-    L[18] = z;
-    L[19] = oe;
-  } else oe = L[19];
-  return oe;
+    $[14] = modeText;
+    $[15] = bypassText;
+    $[16] = agentText;
+    $[17] = modelText;
+    $[18] = effortText;
+    $[19] = line;
+  } else line = $[19];
+  return line;
 }
 //@ chunk-93kwxas0.js:9951-10052 placement
 /**
  * 继承来的 bypassPermissions 模式在当前不可用。
  */
-function isInheritedBypassUnavailable(h) {
+function isInheritedBypassUnavailable(defaults) {
   return (
-    h.permissionMode === "bypassPermissions" &&
-    h.permissionModeInherited === true &&
+    defaults.permissionMode === "bypassPermissions" &&
+    defaults.permissionModeInherited === true &&
     !isBypassPermissionsAccepted()
   );
 }
 //@ chunk-93kwxas0.js:10052-10099 placement
-function isOtherLocalDaemonJob(h, originJobId) {
-  return isLocalDaemonAgent(h.state) && h.id !== originJobId;
+function isOtherLocalDaemonJob(job, originJobId) {
+  return isLocalDaemonAgent(job.state) && job.id !== originJobId;
 }
 //@ chunk-93kwxas0.js:10099-10175 placement
 function markJobFinished(resultSeen, entryChannel) {
-  let k = entryChannel ?? "unknown";
-  resultSeen.entryChannel = fromEnum(k);
+  let channel = entryChannel ?? "unknown";
+  resultSeen.entryChannel = fromEnum(channel);
   resultSeen.openFinished = null;
 }
 //@ chunk-93kwxas0.js:10175-10730 placement
 /**
  * 为新完成的会话发出一次性事件。
  */
-function emitFinishedJobs(resultSeen, E, k = logEvent) {
-  let C = E.now ?? Date.now();
-  if (resultSeen.openFinished === null) resultSeen.openFinished = new Set(E.allFinished.map((T) => T.id));
+function emitFinishedJobs(resultSeen, snapshot, emitEvent = logEvent) {
+  let nowMs = snapshot.now ?? Date.now();
+  if (resultSeen.openFinished === null)
+    resultSeen.openFinished = new Set(snapshot.allFinished.map((job) => job.id));
   let openFinished = resultSeen.openFinished;
-  for (let T of E.visibleFinished) {
-    if (resultSeen.emitted.has(T.id)) continue;
-    resultSeen.emitted.add(T.id);
-    let dateMs = parseDateMs(T.state.firstTerminalAt);
-    let L = dateMs ?? parseDateMs(T.state.updatedAt) ?? C;
-    k("tengu_bg_result_seen", {
-      trigger: openFinished.has(T.id) ? lit("list_open") : lit("render"),
-      outcome: fromEnumOpt(terminalOutcome(T.state.state)),
-      overlap: overlapsAnotherJob(T, E.allCandidates, C),
+  for (let job of snapshot.visibleFinished) {
+    if (resultSeen.emitted.has(job.id)) continue;
+    resultSeen.emitted.add(job.id);
+    let dateMs = parseDateMs(job.state.firstTerminalAt);
+    let seenAtMs = dateMs ?? parseDateMs(job.state.updatedAt) ?? nowMs;
+    emitEvent("tengu_bg_result_seen", {
+      trigger: openFinished.has(job.id) ? lit("list_open") : lit("render"),
+      outcome: fromEnumOpt(terminalOutcome(job.state.state)),
+      overlap: overlapsAnotherJob(job, snapshot.allCandidates, nowMs),
       entry_channel: resultSeen.entryChannel,
-      seen_latency_ms: Math.max(0, C - L),
+      seen_latency_ms: Math.max(0, nowMs - seenAtMs),
       terminal_at_missing: dateMs === null,
-      jobSessionId: sanitizeMarkName(T.state.sessionId),
+      jobSessionId: sanitizeMarkName(job.state.sessionId),
     });
   }
 }
 //@ chunk-93kwxas0.js:10730-10813 placement
-function parseDateMs(h) {
-  if (!h) return null;
-  let timestamp = Date.parse(h);
+function parseDateMs(value) {
+  if (!value) return null;
+  let timestamp = Date.parse(value);
   return Number.isNaN(timestamp) ? null : timestamp;
 }
 //@ chunk-93kwxas0.js:10813-11066 placement
 /**
  * 该会话的运行区间与其他会话重叠。
  */
-function overlapsAnotherJob(h, allCandidates, k) {
-  let dateMs = parseDateMs(h.state.createdAt);
+function overlapsAnotherJob(job, allCandidates, nowMs) {
+  let dateMs = parseDateMs(job.state.createdAt);
   if (dateMs === null) return false;
-  let x = parseDateMs(h.state.firstTerminalAt) ?? k;
-  return allCandidates.some((T) => {
-    if (T.id === h.id) return false;
-    let dateMs_2 = parseDateMs(T.state.createdAt);
+  let terminalMs = parseDateMs(job.state.firstTerminalAt) ?? nowMs;
+  return allCandidates.some((otherJob) => {
+    if (otherJob.id === job.id) return false;
+    let dateMs_2 = parseDateMs(otherJob.state.createdAt);
     if (dateMs_2 === null) return false;
-    let L = parseDateMs(T.state.firstTerminalAt) ?? k;
-    return dateMs < L && dateMs_2 < x;
+    let otherTerminalMs = parseDateMs(otherJob.state.firstTerminalAt) ?? nowMs;
+    return dateMs < otherTerminalMs && dateMs_2 < terminalMs;
   });
 }
 //@ chunk-93kwxas0.js:11066-11616 placement
 /**
  * 把对等会话记录转换为 job 状态。
  */
-function peerToJobState(h) {
-  let createdAt = new Date(h.startedAt).toISOString();
-  let updatedAt = new Date(h.updatedAt ?? h.startedAt).toISOString();
+function peerToJobState(peer) {
+  let createdAt = new Date(peer.startedAt).toISOString();
+  let updatedAt = new Date(peer.updatedAt ?? peer.startedAt).toISOString();
   return {
-    state: h.state ?? h.status ?? "running",
-    detail: h.detail ?? h.waitingFor ?? "",
-    tempo: h.tempo ?? (h.status === "busy" ? "active" : h.status === "waiting" ? "blocked" : "idle"),
-    needs: h.needs,
+    state: peer.state ?? peer.status ?? "running",
+    detail: peer.detail ?? peer.waitingFor ?? "",
+    tempo: peer.tempo ?? (peer.status === "busy" ? "active" : peer.status === "waiting" ? "blocked" : "idle"),
+    needs: peer.needs,
     output: null,
     children: null,
     linkScanOffset: 0,
-    template: h.agent ?? h.entrypoint ?? "interactive",
+    template: peer.agent ?? peer.entrypoint ?? "interactive",
     respawnFlags: [],
-    name: h.name,
-    intent: h.name ?? "",
-    sessionId: h.sessionId ?? "",
-    cwd: h.cwd,
-    originCwd: h.cwd,
+    name: peer.name,
+    intent: peer.name ?? "",
+    sessionId: peer.sessionId ?? "",
+    cwd: peer.cwd,
+    originCwd: peer.cwd,
     createdAt,
     updatedAt,
     firstTerminalAt: null,
     backend: "peer",
-    sock: h.sock,
-    pid: h.pid,
+    sock: peer.sock,
+    pid: peer.pid,
   };
 }
 //@ chunk-93kwxas0.js:11616-11794 placement
 /**
  * 名单轮询间隔：按是否活跃与距上次变化的时间分档。
  */
-function rosterPollInterval(terminalFocused, E) {
+function rosterPollInterval(terminalFocused, idleMs) {
   if (terminalFocused) {
-    if (E < 30000) return 15000;
-    if (E < 300000) return 60000;
+    if (idleMs < 30000) return 15000;
+    if (idleMs < 300000) return 60000;
     return 180000;
   }
-  if (E < 30000) return 60000;
-  if (E < 600000) return 300000;
-  if (E < 3600000) return 900000;
+  if (idleMs < 30000) return 60000;
+  if (idleMs < 600000) return 300000;
+  if (idleMs < 3600000) return 900000;
   return 1800000;
 }
 //@ chunk-93kwxas0.js:11830-12217 placement
 /**
  * 查询会话转录文件的存在与修改时间。
  */
-async function statTranscript(h, E) {
-  let transcriptStorageKey = getTranscriptStorageKey(h, E);
+async function statTranscript(filePath, sessionId) {
+  let transcriptStorageKey = getTranscriptStorageKey(filePath, sessionId);
   if (transcriptStorageKey !== undefined) {
-    let x = await transcriptStorageKey.backend.statMeta(transcriptStorageKey.key);
-    if (x.ok)
+    let metaResult = await transcriptStorageKey.backend.statMeta(transcriptStorageKey.key);
+    if (metaResult.ok)
       return {
         kind: "present",
-        mtimeMs: x.value.mtimeMs,
+        mtimeMs: metaResult.value.mtimeMs,
       };
-    let error = x.error;
+    let error = metaResult.error;
     if (error.code === "NotFound")
       return {
         kind: "absent",
@@ -433,35 +445,35 @@ async function statTranscript(h, E) {
   }
   return {
     kind: "present",
-    mtimeMs: (await stat(h)).mtimeMs,
+    mtimeMs: (await stat(filePath)).mtimeMs,
   };
 }
 //@ chunk-93kwxas0.js:12217-12616 placement
 /**
  * 读取会话转录末尾若干字节。
  */
-async function readTranscriptTail(h, E, k) {
-  let transcriptStorageKey = getTranscriptStorageKey(h, k);
+async function readTranscriptTail(filePath, maxBytes, sessionId) {
+  let transcriptStorageKey = getTranscriptStorageKey(filePath, sessionId);
   if (transcriptStorageKey !== undefined) {
-    let x = await transcriptStorageKey.backend.read([
+    let readResult = await transcriptStorageKey.backend.read([
       {
         key: transcriptStorageKey.key,
-        tail: E,
+        tail: maxBytes,
       },
     ]);
-    if (!x.ok)
+    if (!readResult.ok)
       throw Error("fleet view transcript tail read failed", {
-        cause: x.error,
+        cause: readResult.error,
       });
-    let T = x.value.items[0];
-    if (!T.found) throw Error("fleet view transcript tail: stream not found");
+    let streamItem = readResult.value.items[0];
+    if (!streamItem.found) throw Error("fleet view transcript tail: stream not found");
     return {
-      content: Buffer.from(T.value).toString("utf8"),
-      bytesRead: T.value.byteLength,
-      bytesTotal: T.totalBytes,
+      content: Buffer.from(streamItem.value).toString("utf8"),
+      bytesRead: streamItem.value.byteLength,
+      bytesTotal: streamItem.totalBytes,
     };
   }
-  return tailFile(h, E);
+  return tailFile(filePath, maxBytes);
 }
 //@ chunk-93kwxas0.js:12652-12742 placement
 var MAX_TAIL_ENTRIES = 7;
@@ -480,102 +492,113 @@ function emptyScanState() {
 /**
  * 增量扫描转录文件尾部（按 inode/偏移缓存）。
  */
-async function scanTranscriptTail(h, E) {
-  let { scanStates, inFlightScans } = h;
-  if (inFlightScans.has(E)) return null;
-  inFlightScans.add(E);
+async function scanTranscriptTail(tracker, filePath) {
+  let { scanStates, inFlightScans } = tracker;
+  if (inFlightScans.has(filePath)) return null;
+  inFlightScans.add(filePath);
   try {
-    let x = await open(E, "r");
+    let handle = await open(filePath, "r");
     try {
-      let { size, ino } = await x.stat();
-      let L = scanStates.get(E);
-      if (L && (L.ino !== ino || L.offset > size)) L = undefined;
-      if (L && L.tail.length > 0) {
-        let K = Buffer.alloc(L.tail.length);
-        let { bytesRead } = await x.read(K, 0, K.length, L.offset - K.length);
-        if (bytesRead !== K.length || !K.equals(L.tail)) L = undefined;
+      let { size, ino } = await handle.stat();
+      let scanState = scanStates.get(filePath);
+      if (scanState && (scanState.ino !== ino || scanState.offset > size)) scanState = undefined;
+      if (scanState && scanState.tail.length > 0) {
+        let tailBuffer = Buffer.alloc(scanState.tail.length);
+        let { bytesRead } = await handle.read(
+          tailBuffer,
+          0,
+          tailBuffer.length,
+          scanState.offset - tailBuffer.length,
+        );
+        if (bytesRead !== tailBuffer.length || !tailBuffer.equals(scanState.tail)) scanState = undefined;
       }
-      if (!L) {
-        L = {
+      if (!scanState) {
+        scanState = {
           ino,
           offset: 0,
           tail: Buffer.alloc(0),
           count: 0,
           recent: [],
         };
-        scanStates.set(E, L);
+        scanStates.set(filePath, scanState);
       }
-      if (size > L.offset) {
-        let count = L.count;
-        let sliced = L.recent.slice();
-        let z = Buffer.alloc(Math.min(MAX_SCAN_BYTES, size - L.offset));
-        let oe = null;
-        let offset = L.offset;
-        let offset_2 = L.offset;
-        let tail = L.tail;
+      if (size > scanState.offset) {
+        let count = scanState.count;
+        let sliced = scanState.recent.slice();
+        let readBuffer = Buffer.alloc(Math.min(MAX_SCAN_BYTES, size - scanState.offset));
+        let carryOver = null;
+        let offset = scanState.offset;
+        let offset_2 = scanState.offset;
+        let tail = scanState.tail;
         while (offset < size) {
-          let { bytesRead } = await x.read(z, 0, Math.min(z.length, size - offset), offset);
+          let { bytesRead } = await handle.read(
+            readBuffer,
+            0,
+            Math.min(readBuffer.length, size - offset),
+            offset,
+          );
           if (bytesRead <= 0) break;
-          let chunk = z.subarray(0, bytesRead);
-          let Je = oe ? oe.length : 0;
-          let le = oe ? Buffer.concat([oe, chunk]) : chunk;
-          let Oe = 0;
-          let index = le.indexOf(10, Je);
+          let chunk = readBuffer.subarray(0, bytesRead);
+          let carryLength = carryOver ? carryOver.length : 0;
+          let joinedText = carryOver ? Buffer.concat([carryOver, chunk]) : chunk;
+          let lineStart = 0;
+          let index = joinedText.indexOf(10, carryLength);
           while (index !== -1) {
-            let str = le.toString("utf-8", Oe, index);
+            let str = joinedText.toString("utf-8", lineStart, index);
             if (str.includes(SCHEDULED_FIRE_MARKER)) {
               let match = str.match(TIMESTAMP_RE);
-              let je = match ? Date.parse(match[1]) : NaN;
-              if (Number.isFinite(je)) {
+              let fireAtMs = match ? Date.parse(match[1]) : NaN;
+              if (Number.isFinite(fireAtMs)) {
                 count++;
-                sliced.push(je);
+                sliced.push(fireAtMs);
                 if (sliced.length > MAX_TAIL_ENTRIES) sliced.shift();
               }
             }
-            Oe = index + 1;
-            index = le.indexOf(10, Oe);
+            lineStart = index + 1;
+            index = joinedText.indexOf(10, lineStart);
           }
-          offset_2 += Oe;
+          offset_2 += lineStart;
           offset += bytesRead;
-          if (Oe >= TAIL_OVERLAP_BYTES) tail = Buffer.from(le.subarray(Oe - TAIL_OVERLAP_BYTES, Oe));
-          else if (Oe > 0) {
-            let buffer = Buffer.concat([tail, le.subarray(0, Oe)]);
+          if (lineStart >= TAIL_OVERLAP_BYTES)
+            tail = Buffer.from(joinedText.subarray(lineStart - TAIL_OVERLAP_BYTES, lineStart));
+          else if (lineStart > 0) {
+            let buffer = Buffer.concat([tail, joinedText.subarray(0, lineStart)]);
             tail = buffer.subarray(Math.max(0, buffer.length - TAIL_OVERLAP_BYTES));
           }
-          oe = Oe < le.length ? Buffer.from(le.subarray(Oe)) : null;
+          carryOver = lineStart < joinedText.length ? Buffer.from(joinedText.subarray(lineStart)) : null;
         }
-        if (offset_2 > L.offset) {
-          L.offset = offset_2;
-          L.count = count;
-          L.recent = sliced;
-          L.tail = tail;
+        if (offset_2 > scanState.offset) {
+          scanState.offset = offset_2;
+          scanState.count = count;
+          scanState.recent = sliced;
+          scanState.tail = tail;
         }
       }
-      let { count, recent } = L;
+      let { count, recent } = scanState;
       if (recent.length < 2)
         return {
           count,
           nextAt: null,
         };
-      let U = [];
-      for (let idx = 1; idx < recent.length; idx++) U.push(recent[idx] - recent[idx - 1]);
-      U.sort((K, W) => K - W);
-      let N = U[Math.floor(U.length / 2)];
-      let X = recent.at(-1) + N;
+      let gaps = [];
+      for (let idx = 1; idx < recent.length; idx++) gaps.push(recent[idx] - recent[idx - 1]);
+      gaps.sort((gapA, gapB) => gapA - gapB);
+      let medianGap = gaps[Math.floor(gaps.length / 2)];
+      let nextAtMs = recent.at(-1) + medianGap;
       return {
         count,
-        nextAt: X > Date.now() ? X : null,
+        nextAt: nextAtMs > Date.now() ? nextAtMs : null,
       };
     } finally {
-      await x.close();
+      await handle.close();
     }
   } finally {
-    inFlightScans.delete(E);
+    inFlightScans.delete(filePath);
   }
 }
 //@ chunk-93kwxas0.js:14321-14407 placement
-function pruneScanStates(h, E) {
-  for (let key of h.scanStates.keys()) if (!E.has(key)) h.scanStates.delete(key);
+function pruneScanStates(tracker, liveKeys) {
+  for (let key of tracker.scanStates.keys()) if (!liveKeys.has(key)) tracker.scanStates.delete(key);
 }
 //@ chunk-93kwxas0.js:14407-14416 placement
 var CLOUD_LIST_ATTEMPTS = 2;
@@ -583,17 +606,17 @@ var CLOUD_LIST_ATTEMPTS = 2;
 /**
  * 云会话列表失败原因：exhausted / no_sign_in / status / no_answer / unknown。
  */
-function classifyCloudListFailure(h) {
-  if (h instanceof CloudListPartialError_2) return classifyCloudListFailure(h.cause);
-  if (h instanceof CloudListPartialError)
+function classifyCloudListFailure(error) {
+  if (error instanceof CloudListPartialError_2) return classifyCloudListFailure(error.cause);
+  if (error instanceof CloudListPartialError)
     return {
       cause: "exhausted",
     };
-  if (h instanceof Error && h.name === "CloudSessionAccessError")
+  if (error instanceof Error && error.name === "CloudSessionAccessError")
     return {
       cause: "no_sign_in",
     };
-  let { kind, status } = classifyAxiosError(h);
+  let { kind, status } = classifyAxiosError(error);
   return status !== undefined
     ? {
         cause: "status",
@@ -607,9 +630,12 @@ function classifyCloudListFailure(h) {
 /**
  * 两个列表失败原因是否相同。
  */
-function sameCloudListFailure(h, E) {
-  if (h === null || E === null) return h === E;
-  return h.cause === E.cause && (h.cause !== "status" || E.cause !== "status" || h.status === E.status);
+function sameCloudListFailure(previous, next) {
+  if (previous === null || next === null) return previous === next;
+  return (
+    previous.cause === next.cause &&
+    (previous.cause !== "status" || next.cause !== "status" || previous.status === next.status)
+  );
 }
 //@ chunk-93kwxas0.js:14854-15045 placement
 /**
@@ -636,11 +662,9 @@ function isRemoteRowId(id) {
 /**
  * 会话对应的远程行 id。
  */
-function remoteRowIdOf(remoteJob) {
-  if (isRemoteRowId(remoteJob.id)) return remoteJob.id;
-  return CCR_SESSION_ID_RE.test(remoteJob.state.sessionId)
-    ? remoteRowId(remoteJob.state.sessionId)
-    : undefined;
+function remoteRowIdOf(fleetRow) {
+  if (isRemoteRowId(fleetRow.id)) return fleetRow.id;
+  return CCR_SESSION_ID_RE.test(fleetRow.state.sessionId) ? remoteRowId(fleetRow.state.sessionId) : undefined;
 }
 //@ chunk-93kwxas0.js:15211-15319 placement
 /**
@@ -648,10 +672,10 @@ function remoteRowIdOf(remoteJob) {
  */
 var JOB_PREFS_SCHEMA = DoctorLazy(() =>
   record(
-    string(),
-    u({
-      group: string().optional().catch(undefined),
-      pinned: M().optional().catch(undefined),
+    stringSchema(),
+    objectSchema({
+      group: stringSchema().optional().catch(undefined),
+      pinned: booleanSchema().optional().catch(undefined),
     }).catch({}),
   ),
 );
@@ -667,14 +691,14 @@ class ArchiveRejectedError extends Error {
   }
 }
 //@ chunk-93kwxas0.js:15478-15575 placement
-function withoutMissingKeys(h, E) {
-  let k;
-  for (let key of h.keys()) if (!E.has(key)) (k ??= new Map(h)).delete(key);
-  return k ?? h;
+function withoutMissingKeys(previous, keepKeys) {
+  let pruned;
+  for (let key of previous.keys()) if (!keepKeys.has(key)) (pruned ??= new Map(previous)).delete(key);
+  return pruned ?? previous;
 }
 //@ chunk-93kwxas0.js:15575-15634 placement
 function validChildren(children) {
-  return children?.filter((E) => !ANY_CONTROL_CHAR_RE.test(E.href)) ?? [];
+  return children?.filter((child) => !ANY_CONTROL_CHAR_RE.test(child.href)) ?? [];
 }
 //@ chunk-93kwxas0.js:15634-15648 placement
 var STUCK_AFTER_MS = 180000;
@@ -682,33 +706,33 @@ var STUCK_AFTER_MS = 180000;
 /**
  * 判断会话结果（成功/失败）。
  */
-function jobOutcome(h, prStatuses) {
-  let k = terminalOutcome(h.state);
-  if (k && h.tempo !== "active" && !(k === "success" && isSelfDriving(h))) return k;
-  let filtered = validChildren(h.children).filter((A) => A.kind !== "frame");
+function jobOutcome(job, prStatuses) {
+  let outcome = terminalOutcome(job.state);
+  if (outcome && job.tempo !== "active" && !(outcome === "success" && isSelfDriving(job))) return outcome;
+  let filtered = validChildren(job.children).filter((child) => child.kind !== "frame");
   if (
     prStatuses &&
-    h.tempo !== "active" &&
-    h.template === DEFAULT_BG_AGENT_TEMPLATE.name &&
+    job.tempo !== "active" &&
+    job.template === DEFAULT_BG_AGENT_TEMPLATE.name &&
     filtered.length &&
-    filtered.every((A) => prStatuses.get(A.href)?.state === "MERGED")
+    filtered.every((child) => prStatuses.get(child.href)?.state === "MERGED")
   )
     return "success";
-  let x = h.tempo === "active" ? 1 : 5;
-  let T = Date.now() - Date.parse(h.updatedAt);
-  if (T < x * STUCK_AFTER_MS) return "flowing";
-  if (T < x * 15 * 60000) return "slowing";
+  let stuckFactor = job.tempo === "active" ? 1 : 5;
+  let idleMs = Date.now() - Date.parse(job.updatedAt);
+  if (idleMs < stuckFactor * STUCK_AFTER_MS) return "flowing";
+  if (idleMs < stuckFactor * 15 * 60000) return "slowing";
   return "stuck";
 }
 //@ chunk-93kwxas0.js:16052-16229 placement
 /**
  * 会话 tempo：active/completed/blocked。
  */
-function jobTempo(state, E) {
-  if (E === "busy") return "active";
+function jobTempo(state, status) {
+  if (status === "busy") return "active";
   if (isSettled(state) && !(terminalOutcome(state.state) === "success" && isSelfDriving(state)))
     return "completed";
-  if (state.tempo === "blocked" || E === "waiting") return "blocked";
+  if (state.tempo === "blocked" || status === "waiting") return "blocked";
   return "active";
 }
 //@ chunk-93kwxas0.js:16229-16607 placement
@@ -729,30 +753,30 @@ var FLEET_BUCKET_HINTS = {
   done: "Finished sessions wait here for you to review",
 };
 //@ chunk-93kwxas0.js:16607-16690 placement
-function terminalTitle(h) {
-  return h > 0 ? `${h} awaiting input \xB7 claude agents` : "claude agents";
+function terminalTitle(awaitingCount) {
+  return awaitingCount > 0 ? `${awaitingCount} awaiting input \xB7 claude agents` : "claude agents";
 }
 //@ chunk-93kwxas0.js:16690-17137 placement
 /**
  * 计算会话所属分区。
  */
-function jobBucket(h, prStatuses, k) {
-  if (k === "busy") return "working";
-  if (h.activity === "failure") return "done";
-  if (h.activity === "stopped") return "done";
-  if (k === "waiting") return "blocked";
+function jobBucket(job, prStatuses, status) {
+  if (status === "busy") return "working";
+  if (job.activity === "failure") return "done";
+  if (job.activity === "stopped") return "done";
+  if (status === "waiting") return "blocked";
   if (
-    !isSelfDriving(h.state) &&
-    validChildren(h.state.children).some((x) => {
-      let T = prStatuses?.get(x.href);
-      if (T?.state !== "OPEN") return false;
-      let prStatusColor = getPrStatusColor(T);
-      return prStatusColor === "error" || (prStatusColor === "warning" && T.review !== "APPROVED");
+    !isSelfDriving(job.state) &&
+    validChildren(job.state.children).some((child) => {
+      let prStatus = prStatuses?.get(child.href);
+      if (prStatus?.state !== "OPEN") return false;
+      let prStatusColor = getPrStatusColor(prStatus);
+      return prStatusColor === "error" || (prStatusColor === "warning" && prStatus.review !== "APPROVED");
     })
   )
     return "review";
-  if (h.activity === "success") return "done";
-  if (h.state.tempo === "blocked") return "blocked";
+  if (job.activity === "success") return "done";
+  if (job.state.tempo === "blocked") return "blocked";
   return "working";
 }
 //@ chunk-93kwxas0.js:17137-17161 placement
@@ -761,33 +785,34 @@ function returnFalse_2(state) {
 }
 //@ chunk-93kwxas0.js:17161-17246 placement
 function isFailedSettledJob(state) {
-  let E = terminalOutcome(state.state);
-  return (E === "failure" || E === "stopped") && isSettled(state) && !isExecLaunch(state);
+  let outcome = terminalOutcome(state.state);
+  return (outcome === "failure" || outcome === "stopped") && isSettled(state) && !isExecLaunch(state);
 }
 //@ chunk-93kwxas0.js:17246-17278 placement
-function jobStatusKey(h) {
-  return `job:${h}`;
+function jobStatusKey(jobId) {
+  return `job:${jobId}`;
 }
 //@ chunk-93kwxas0.js:17278-17369 placement
-function statusForJob(statuses, E) {
-  return statuses.get(E.state.resumeSessionId ?? E.state.sessionId) ?? statuses.get(jobStatusKey(E.id));
+function statusForJob(statuses, job) {
+  return statuses.get(job.state.resumeSessionId ?? job.state.sessionId) ?? statuses.get(jobStatusKey(job.id));
 }
 //@ chunk-93kwxas0.js:17369-17904 placement
 /**
  * 从转录行提取可预览的文本。
  */
-function transcriptLinePreview(h) {
+function transcriptLinePreview(line) {
   try {
-    let E = jsonParse(h);
-    if (E.type === "assistant") {
-      let text = (E.message?.content ?? []).find((x) => x.type === "text")?.text;
+    let entry = jsonParse(line);
+    if (entry.type === "assistant") {
+      let text = (entry.message?.content ?? []).find((block) => block.type === "text")?.text;
       if (text) return text;
     }
-    if (E.type === "user") {
-      let content = E.message?.content;
-      let C = typeof content === "string" ? content : content?.find((T) => T.type === "text")?.text;
-      let x = C
-        ? stripSystemTags(C)
+    if (entry.type === "user") {
+      let content = entry.message?.content;
+      let rawText =
+        typeof content === "string" ? content : content?.find((block) => block.type === "text")?.text;
+      let userText = rawText
+        ? stripSystemTags(rawText)
             .split(
               `
 `,
@@ -795,15 +820,17 @@ function transcriptLinePreview(h) {
             .find((line) => line.trim())
             ?.trim()
         : undefined;
-      if (x) return `> ${x}`;
+      if (userText) return `> ${userText}`;
       if (Array.isArray(content)) {
-        let found = content.find((A) => A.type === "tool_result" && A.is_error);
+        let found = content.find(
+          (failedResult) => failedResult.type === "tool_result" && failedResult.is_error,
+        );
         if (found) {
-          let A =
+          let errorText =
             typeof found.content === "string"
               ? found.content
-              : found.content?.find((L) => L.type === "text")?.text;
-          if (A) return `\u2717 ${getFirstLine(A)}`;
+              : found.content?.find((block) => block.type === "text")?.text;
+          if (errorText) return `\u2717 ${getFirstLine(errorText)}`;
         }
       }
     }
@@ -811,8 +838,8 @@ function transcriptLinePreview(h) {
   return null;
 }
 //@ chunk-93kwxas0.js:17904-18000 placement
-function stripSystemTags(h) {
-  return h.replace(/<(system-reminder|task-notification)>[\s\S]*?(<\/\1>|$)/g, " ");
+function stripSystemTags(text) {
+  return text.replace(/<(system-reminder|task-notification)>[\s\S]*?(<\/\1>|$)/g, " ");
 }
 //@ chunk-93kwxas0.js:18000-18039 placement
 function isTerminalDetail(detail) {
@@ -822,42 +849,44 @@ function isTerminalDetail(detail) {
 /**
  * 预览文本去掉标签、特殊字符并压缩空白。
  */
-function stripJobPreviewText(detail) {
-  return stripSystemTags(stripAnsiPerLine(detail))
+function stripJobPreviewText(previewText) {
+  return stripSystemTags(stripAnsiPerLine(previewText))
     .replace(/<\/?[\w-]+>/g, " ")
     .replace(CONTROL_CHARS_EXCEPT_WS_RE, "")
     .replace(/\s+/g, " ")
     .trim();
 }
 //@ chunk-93kwxas0.js:18141-18183 placement
-function jobPreviewText(state, E) {
-  return returnFalse_2(state) ? sanitizeAttentionText(E) : stripJobPreviewText(E);
+function jobPreviewText(state, text) {
+  return returnFalse_2(state) ? sanitizeAttentionText(text) : stripJobPreviewText(text);
 }
 //@ chunk-93kwxas0.js:18183-18328 placement
 /**
  * 会话可能的 transcript 路径（cwd 与 worktree 各一个）。
  */
 function jobTranscriptPaths(state) {
-  let E = `${state.resumeSessionId ?? state.sessionId}.jsonl`;
-  let k = state.worktreePath ? [state.cwd, state.worktreePath] : [state.cwd];
-  return uniq(k.map((C) => join(getProjectDir(C), E)));
+  let transcriptName = `${state.resumeSessionId ?? state.sessionId}.jsonl`;
+  let cwdCandidates = state.worktreePath ? [state.cwd, state.worktreePath] : [state.cwd];
+  return uniq(cwdCandidates.map((cwd) => join(getProjectDir(cwd), transcriptName)));
 }
 //@ chunk-93kwxas0.js:18328-18530 placement
 /**
  * 读会话 transcript 尾部，返回最后一行预览文本。
  */
-async function readJobLastLine(h, E) {
-  for (let k of jobTranscriptPaths(h.state))
+async function readJobLastLine(job, sessionId) {
+  for (let transcriptPath of jobTranscriptPaths(job.state))
     try {
-      let { content } = await readTranscriptTail(k, 16384, E);
+      let { content } = await readTranscriptTail(transcriptPath, 16384, sessionId);
       let filtered = content
         .split(
           `
 `,
         )
         .map(transcriptLinePreview)
-        .filter((A) => A !== null);
-      return (filtered.filter((A, L) => A !== filtered[L - 1]).at(-1) ?? "").trim();
+        .filter((previewLine) => previewLine !== null);
+      return (
+        filtered.filter((previewLine, lineIndex) => previewLine !== filtered[lineIndex - 1]).at(-1) ?? ""
+      ).trim();
     } catch {}
   return "";
 }
@@ -865,7 +894,7 @@ async function readJobLastLine(h, E) {
 /**
  * 按分区/分组布局行（空分区提示、完成折叠）。
  */
-function layoutRows(h, E, k) {
+function layoutRows(jobs, groupOf, options) {
   let {
     byState,
     byGroup,
@@ -875,187 +904,194 @@ function layoutRows(h, E, k) {
     doneFoldAt,
     emptyBucketHint,
     earlier = [],
-  } = k;
-  let N = [];
+  } = options;
+  let rows = [];
   if (byState && emptyBucketHint) {
-    let ne = 0;
-    let ae = 0;
-    let me = byState && !onRemoteTab ? earlier : [];
-    for (let le of FLEET_BUCKETS) {
-      let filtered = h.filter((De) => E.get(De.id) === le);
-      if (le === "review" && filtered.length === 0) continue;
-      N.push({
+    let doneCount = 0;
+    let earlierIndex = 0;
+    let doneEarlier = byState && !onRemoteTab ? earlier : [];
+    for (let bucket of FLEET_BUCKETS) {
+      let filtered = jobs.filter((job) => groupOf.get(job.id) === bucket);
+      if (bucket === "review" && filtered.length === 0) continue;
+      rows.push({
         kind: "header",
         origin: scopedFallbackOrigin,
-        group: le,
+        group: bucket,
       });
-      for (let De of filtered) {
-        if (le === "done") {
-          while (ae < me.length && me[ae].modified.getTime() > latestJobTimestamp(De.state)) {
-            if (ne++ < doneFoldAt)
-              N.push({
+      for (let job of filtered) {
+        if (bucket === "done") {
+          while (
+            earlierIndex < doneEarlier.length &&
+            doneEarlier[earlierIndex].modified.getTime() > latestJobTimestamp(job.state)
+          ) {
+            if (doneCount++ < doneFoldAt)
+              rows.push({
                 kind: "earlier",
-                entry: me[ae],
+                entry: doneEarlier[earlierIndex],
                 origin: scopedFallbackOrigin,
                 group: "done",
               });
-            ae++;
+            earlierIndex++;
           }
-          if (ne++ >= doneFoldAt) continue;
+          if (doneCount++ >= doneFoldAt) continue;
         }
-        N.push({
+        rows.push({
           kind: "job",
-          job: De,
-          origin: spawnOrigin(De.state),
-          group: le,
+          job,
+          origin: spawnOrigin(job.state),
+          group: bucket,
         });
       }
-      if (le === "done")
-        while (ae < me.length) {
-          if (ne++ < doneFoldAt)
-            N.push({
+      if (bucket === "done")
+        while (earlierIndex < doneEarlier.length) {
+          if (doneCount++ < doneFoldAt)
+            rows.push({
               kind: "earlier",
-              entry: me[ae],
+              entry: doneEarlier[earlierIndex],
               origin: scopedFallbackOrigin,
               group: "done",
             });
-          ae++;
+          earlierIndex++;
         }
     }
-    let max = Math.max(0, ne - doneFoldAt);
+    let max = Math.max(0, doneCount - doneFoldAt);
     if (max > 0)
-      N.push({
+      rows.push({
         kind: "fold",
         origin: scopedFallbackOrigin,
         group: "done",
         hidden: max,
       });
     return {
-      rows: N,
-      doneCount: ne,
+      rows,
+      doneCount,
       doneFoldHidden: max,
       foldGroup: "done",
     };
   }
-  let X = !byState && !byGroup && !onRemoteTab && !h.some((ne) => E.get(ne.id) === launcherGroup);
-  let K = 0;
-  let W = byState && !onRemoteTab ? earlier : [];
-  let z = 0;
-  let oe = (ne) => {
-    if (K++ >= doneFoldAt) return;
-    N.push(ne);
+  let needsLauncherHeader =
+    !byState && !byGroup && !onRemoteTab && !jobs.some((job) => groupOf.get(job.id) === launcherGroup);
+  let doneCount = 0;
+  let doneEarlier = byState && !onRemoteTab ? earlier : [];
+  let earlierIndex = 0;
+  let pushWithinCap = (row) => {
+    if (doneCount++ >= doneFoldAt) return;
+    rows.push(row);
   };
-  for (let idx = 0; idx < h.length; idx++) {
-    let ae = h[idx];
-    let me = E.get(ae.id);
-    let origin = spawnOrigin(ae.state);
-    if (idx === 0 || me !== E.get(h[idx - 1].id)) {
-      if (X && me !== "pinned") {
-        N.push({
+  for (let idx = 0; idx < jobs.length; idx++) {
+    let job = jobs[idx];
+    let group = groupOf.get(job.id);
+    let origin = spawnOrigin(job.state);
+    if (idx === 0 || group !== groupOf.get(jobs[idx - 1].id)) {
+      if (needsLauncherHeader && group !== "pinned") {
+        rows.push({
           kind: "header",
           origin: scopedFallbackOrigin,
           group: launcherGroup,
         });
-        X = false;
+        needsLauncherHeader = false;
       }
       let origin_2 =
-        byState || byGroup || me === "pinned" || me === launcherGroup ? scopedFallbackOrigin : origin;
-      N.push({
+        byState || byGroup || group === "pinned" || group === launcherGroup ? scopedFallbackOrigin : origin;
+      rows.push({
         kind: "header",
         origin: origin_2,
-        group: me,
+        group,
       });
     }
-    if (me === "done") {
-      while (z < W.length && W[z].modified.getTime() > latestJobTimestamp(ae.state)) {
-        oe({
+    if (group === "done") {
+      while (
+        earlierIndex < doneEarlier.length &&
+        doneEarlier[earlierIndex].modified.getTime() > latestJobTimestamp(job.state)
+      ) {
+        pushWithinCap({
           kind: "earlier",
-          entry: W[z],
+          entry: doneEarlier[earlierIndex],
           origin: scopedFallbackOrigin,
           group: "done",
         });
-        z++;
+        earlierIndex++;
       }
-      oe({
+      pushWithinCap({
         kind: "job",
-        job: ae,
+        job,
         origin,
-        group: me,
+        group,
       });
       continue;
     }
-    N.push({
+    rows.push({
       kind: "job",
-      job: ae,
+      job,
       origin,
-      group: me,
+      group,
     });
   }
-  if (z < W.length) {
-    if (K === 0)
-      N.push({
+  if (earlierIndex < doneEarlier.length) {
+    if (doneCount === 0)
+      rows.push({
         kind: "header",
         origin: scopedFallbackOrigin,
         group: "done",
       });
-    while (z < W.length) {
-      oe({
+    while (earlierIndex < doneEarlier.length) {
+      pushWithinCap({
         kind: "earlier",
-        entry: W[z],
+        entry: doneEarlier[earlierIndex],
         origin: scopedFallbackOrigin,
         group: "done",
       });
-      z++;
+      earlierIndex++;
     }
   }
-  if (X && h.length > 0)
-    N.push({
+  if (needsLauncherHeader && jobs.length > 0)
+    rows.push({
       kind: "header",
       origin: scopedFallbackOrigin,
       group: launcherGroup,
     });
-  let ge = !byState && !onRemoteTab ? earlier : [];
-  if (ge.length > 0) {
-    N.push({
+  let pendingEarlier = !byState && !onRemoteTab ? earlier : [];
+  if (pendingEarlier.length > 0) {
+    rows.push({
       kind: "header",
       origin: scopedFallbackOrigin,
       group: EARLIER,
     });
-    let max = Math.max(0, Math.min(doneFoldAt, ge.length));
-    for (let entry of ge.slice(0, max))
-      N.push({
+    let max = Math.max(0, Math.min(doneFoldAt, pendingEarlier.length));
+    for (let entry of pendingEarlier.slice(0, max))
+      rows.push({
         kind: "earlier",
         entry,
         origin: scopedFallbackOrigin,
         group: EARLIER,
       });
-    let ae = ge.length - max;
-    if (ae > 0)
-      N.push({
+    let hiddenEarlier = pendingEarlier.length - max;
+    if (hiddenEarlier > 0)
+      rows.push({
         kind: "fold",
         origin: scopedFallbackOrigin,
         group: EARLIER,
-        hidden: ae,
+        hidden: hiddenEarlier,
       });
     return {
-      rows: N,
-      doneCount: ge.length,
-      doneFoldHidden: ae,
+      rows,
+      doneCount: pendingEarlier.length,
+      doneFoldHidden: hiddenEarlier,
       foldGroup: EARLIER,
     };
   }
-  let se = K > doneFoldAt ? K - doneFoldAt : 0;
-  if (se > 0)
-    N.push({
+  let hiddenDone = doneCount > doneFoldAt ? doneCount - doneFoldAt : 0;
+  if (hiddenDone > 0)
+    rows.push({
       kind: "fold",
       origin: scopedFallbackOrigin,
       group: "done",
-      hidden: se,
+      hidden: hiddenDone,
     });
   return {
-    rows: N,
-    doneCount: K,
-    doneFoldHidden: se,
+    rows,
+    doneCount,
+    doneFoldHidden: hiddenDone,
     foldGroup: "done",
   };
 }
@@ -1064,40 +1100,40 @@ function layoutRows(h, E, k) {
  * 初始焦点行：首个远程会话，或来源会话、earlier 行。
  */
 function initialFocusIndex(rows, launcherCwd) {
-  let index = rows.findIndex((T) => T.kind === "job" && T.job.state.backend === "remote");
+  let index = rows.findIndex((row) => row.kind === "job" && row.job.state.backend === "remote");
   if (index !== -1) return index;
-  let C = rows[1];
-  if (C?.kind === "job" && C.origin === launcherCwd) return 1;
-  if (C?.kind === "earlier") return 1;
-  let index_2 = rows.findIndex((T) => T.kind === "earlier");
-  return index_2 !== -1 && !rows.some((T) => T.kind === "job") ? index_2 : 0;
+  let secondRow = rows[1];
+  if (secondRow?.kind === "job" && secondRow.origin === launcherCwd) return 1;
+  if (secondRow?.kind === "earlier") return 1;
+  let index_2 = rows.findIndex((row) => row.kind === "earlier");
+  return index_2 !== -1 && !rows.some((row) => row.kind === "job") ? index_2 : 0;
 }
 //@ chunk-93kwxas0.js:20933-21137 placement
 /**
  * 按搜索得分找最匹配的行。
  */
-function bestSearchMatchIndex(rows, E) {
-  let k = 0;
-  let C = -1;
-  for (let [x, T] of rows.entries()) {
-    if (T.kind !== "job" && T.kind !== "earlier") continue;
-    let A = E
+function bestSearchMatchIndex(rows, query) {
+  let bestIndex = 0;
+  let bestRank = -1;
+  for (let [rowIndex, row] of rows.entries()) {
+    if (row.kind !== "job" && row.kind !== "earlier") continue;
+    let rank = query
       ? rankJobNameMatch(
-          T.kind === "job"
-            ? T.job.state
+          row.kind === "job"
+            ? row.job.state
             : {
-                name: T.entry.title,
+                name: row.entry.title,
                 intent: "",
               },
-          E,
+          query,
         )
       : 0;
-    if (A > C) {
-      C = A;
-      k = x;
+    if (rank > bestRank) {
+      bestRank = rank;
+      bestIndex = rowIndex;
     }
   }
-  return k;
+  return bestIndex;
 }
 //@ chunk-93kwxas0.js:21137-21175 placement
 var DONE_CAP_MIN = 3;
@@ -1110,16 +1146,16 @@ var DONE_CAP_COMPACT_TITLE_ROWS = 2;
 /**
  * 按剩余高度计算已完成分区可显示的行数，不够时用紧凑标题。
  */
-function computeDoneCap(termRows, E) {
-  let k = (x) => termRows - DONE_CAP_RESERVED - x - E;
-  let C = k(DONE_CAP_TITLE_ROWS);
-  if (C >= DONE_CAP_MIN)
+function computeDoneCap(termRows, nonDoneRows) {
+  let capFor = (titleRows) => termRows - DONE_CAP_RESERVED - titleRows - nonDoneRows;
+  let doneCap = capFor(DONE_CAP_TITLE_ROWS);
+  if (doneCap >= DONE_CAP_MIN)
     return {
-      doneCap: C,
+      doneCap,
       compactHeader: false,
     };
   return {
-    doneCap: Math.max(0, k(DONE_CAP_COMPACT_TITLE_ROWS)),
+    doneCap: Math.max(0, capFor(DONE_CAP_COMPACT_TITLE_ROWS)),
     compactHeader: true,
   };
 }
@@ -1141,11 +1177,11 @@ function jobSortKey(state) {
 /**
  * 排序键：stateSortOrder 或（done 用终止时间，其余用更新时间）。
  */
-function jobSortKey_2(state, E) {
+function jobSortKey_2(state, group) {
   return (
     state.stateSortOrder ??
     Date.parse(
-      E === "done" ? (state.lastTerminalAt ?? state.firstTerminalAt ?? state.updatedAt) : state.updatedAt,
+      group === "done" ? (state.lastTerminalAt ?? state.firstTerminalAt ?? state.updatedAt) : state.updatedAt,
     )
   );
 }
@@ -1154,10 +1190,10 @@ function jobSortKey_2(state, E) {
  * 会话最近的有效时间戳（终止/首次终止/更新/创建）。
  */
 function latestJobTimestamp(state) {
-  for (let E of [state.lastTerminalAt, state.firstTerminalAt, state.updatedAt, state.createdAt])
-    if (E) {
-      let timestamp = Date.parse(E);
-      if (Number.isFinite(timestamp)) return timestamp;
+  for (let timestamp of [state.lastTerminalAt, state.firstTerminalAt, state.updatedAt, state.createdAt])
+    if (timestamp) {
+      let timestamp_2 = Date.parse(timestamp);
+      if (Number.isFinite(timestamp_2)) return timestamp_2;
     }
   return 0;
 }
@@ -1165,33 +1201,33 @@ function latestJobTimestamp(state) {
 /**
  * 计算已完成会话折叠的位置。
  */
-function doneFoldIndex({ done: h, earlier, doneCap, initialJobId, linkMatchId }) {
-  let T = h.length + earlier.length;
-  if (T < doneCap + DONE_CAP_SLACK) return 1 / 0;
-  let A = (W) => jobSortKey_2(W.state, "done");
-  let min = Math.min(doneCap, h.length);
+function doneFoldIndex({ done: doneJobs, earlier, doneCap, initialJobId, linkMatchId }) {
+  let totalDone = doneJobs.length + earlier.length;
+  if (totalDone < doneCap + DONE_CAP_SLACK) return 1 / 0;
+  let sortKeyOf = (job) => jobSortKey_2(job.state, "done");
+  let min = Math.min(doneCap, doneJobs.length);
   if (min > 0) {
-    let W = A(h[min - 1]);
-    while (min < h.length && W - A(h[min]) < DONE_MERGE_WINDOW_MS) min++;
+    let boundaryKey = sortKeyOf(doneJobs[min - 1]);
+    while (min < doneJobs.length && boundaryKey - sortKeyOf(doneJobs[min]) < DONE_MERGE_WINDOW_MS) min++;
   }
-  let mapped = h.map((W) => latestJobTimestamp(W.state));
-  let mapped_2 = earlier.map((W) => {
-    let time = W.modified.getTime();
-    return mapped.findIndex((oe) => time > oe);
+  let mapped = doneJobs.map((job) => latestJobTimestamp(job.state));
+  let mapped_2 = earlier.map((entry) => {
+    let time = entry.modified.getTime();
+    return mapped.findIndex((jobTime) => time > jobTime);
   });
-  let U = (W) => count(mapped_2, (z) => z !== -1 && z <= W);
+  let earlierBefore = (doneIndex) => count(mapped_2, (insertAt) => insertAt !== -1 && insertAt <= doneIndex);
   let max = Math.max(min, doneCap);
   let max_2 = Math.max(
-    h.findIndex((W) => W.id === initialJobId),
-    h.findIndex((W) => W.id === linkMatchId),
+    doneJobs.findIndex((job) => job.id === initialJobId),
+    doneJobs.findIndex((job) => job.id === linkMatchId),
   );
-  let K = max_2 < 0 ? -1 : max_2 + U(max_2);
-  if (T - max < DONE_CAP_SLACK || K >= max) return 1 / 0;
+  let protectedIndex = max_2 < 0 ? -1 : max_2 + earlierBefore(max_2);
+  if (totalDone - max < DONE_CAP_SLACK || protectedIndex >= max) return 1 / 0;
   return max;
 }
 //@ chunk-93kwxas0.js:22260-22325 placement
-function sortJobs(h) {
-  return [...h].sort((E, k) => jobSortKey(E.state) - jobSortKey(k.state));
+function sortJobs(jobs) {
+  return [...jobs].sort((jobA, jobB) => jobSortKey(jobA.state) - jobSortKey(jobB.state));
 }
 //@ chunk-93kwxas0.js:22325-22339 placement
 var REMOTE_STOP_TTL_MS = 120000;
@@ -1209,30 +1245,33 @@ var MAX_LIST_FAILURES = 15;
 function createFleetBackend() {
   return {
     listJobs: requestNudgeOnce,
-    listAliveDaemonJobs: (h) => listAliveDaemonJobs(h),
-    adoptRosterOrphans: (h, E, k) => adoptRosterOrphans(h, E, k),
-    listAllLiveSessions: (h) => listAllLiveSessions(h),
-    listRemoteSessions: (h) => emptyMergedJobs(h),
-    interruptRemoteSession: (h) => import("./chunk-djvrn9k9.js").then((E) => E.interruptRemoteSession(h)),
-    removeRemoteSession: (h, E) =>
+    listAliveDaemonJobs: (options) => listAliveDaemonJobs(options),
+    adoptRosterOrphans: (first, second, third) => adoptRosterOrphans(first, second, third),
+    listAllLiveSessions: (options) => listAllLiveSessions(options),
+    listRemoteSessions: (options) => emptyMergedJobs(options),
+    interruptRemoteSession: (sessionId) =>
+      import("../../utils/teleport.lazy.js").then((remoteSessionsModule) =>
+        remoteSessionsModule.interruptRemoteSession(sessionId),
+      ),
+    removeRemoteSession: (sessionId, options) =>
       Promise.resolve({
         failure: "gate_off",
         pausedRoutines: 0,
         mayStillRun: null,
       }),
-    updateRemoteSessionTitle: async (h, E) => false,
+    updateRemoteSessionTitle: async (sessionId, title) => false,
     readCloudRowMarks: () => EMPTY_MARKS_MAP,
-    saveCloudRowMarks: (h, E, k) => Promise.resolve(false),
-    readLogTail: (h, E) => readJobLastLine(h, E),
-    probeFleetTranscript: (h, E) => statTranscript(h, E),
-    scanLoopTranscript: (h, E) => scanTranscriptTail(h, E),
-    fetchPrStatusBatch: (h) => buildPrStatusQuery(h),
-    fetchPrStatusByUrl: (h) => fetchPrStatusByUrl(h),
-    loadPrStatusCache: (h) => loadPrStatusCache(h),
-    persistPrStatusCache: (h, E) => persistPrStatusCache(h, E),
-    touchFleetViewHeartbeat: (h) => touchFleetViewHeartbeat(h),
-    clearFleetViewHeartbeat: (h) => clearFleetViewHeartbeat(h),
-    watchJobDirOnce: (h, E) => watchJobDirOnce(h, E),
+    saveCloudRowMarks: (first, second, third) => Promise.resolve(false),
+    readLogTail: (job, sessionId) => readJobLastLine(job, sessionId),
+    probeFleetTranscript: (filePath, sessionId) => statTranscript(filePath, sessionId),
+    scanLoopTranscript: (tracker, filePath) => scanTranscriptTail(tracker, filePath),
+    fetchPrStatusBatch: (jobs) => buildPrStatusQuery(jobs),
+    fetchPrStatusByUrl: (url) => fetchPrStatusByUrl(url),
+    loadPrStatusCache: (cachePath) => loadPrStatusCache(cachePath),
+    persistPrStatusCache: (cachePath, cache) => persistPrStatusCache(cachePath, cache),
+    touchFleetViewHeartbeat: (heartbeatPath) => touchFleetViewHeartbeat(heartbeatPath),
+    clearFleetViewHeartbeat: (heartbeatPath) => clearFleetViewHeartbeat(heartbeatPath),
+    watchJobDirOnce: (dir, options) => watchJobDirOnce(dir, options),
   };
 }
 //@ chunk-93kwxas0.js:23193-23214 placement
@@ -1296,65 +1335,66 @@ class FleetRoster {
   #C = new Map();
   #M = emptyScanState();
   #O = null;
-  constructor(h) {
-    this.#n = h?.storageV5;
+  constructor(options) {
+    this.#n = options?.storageV5;
     this.#e = {
       ...createFleetBackend(),
-      ...h?.client,
+      ...options?.client,
     };
   }
   getSnapshot = () => this.#t;
-  usesStorage(h) {
-    return this.#n === h;
+  usesStorage(storageV5) {
+    return this.#n === storageV5;
   }
-  subscribe = (h) => this.#l.subscribe(h);
-  #f(h, E) {
-    let k = this.#t[h];
-    let C = E(k);
-    if (Object.is(C, k)) return;
+  subscribe = (listener) => this.#l.subscribe(listener);
+  #f(field, updater) {
+    let previous = this.#t[field];
+    let next = updater(previous);
+    if (Object.is(next, previous)) return;
     this.#t = {
       ...this.#t,
-      [h]: C,
+      [field]: next,
     };
     this.#l.emit();
   }
-  #A(h, E) {
-    return (this.#r?.setTimeout ?? defaultSetTimeout)(h, E);
+  #A(callback, delayMs) {
+    return (this.#r?.setTimeout ?? defaultSetTimeout)(callback, delayMs);
   }
-  attachView(h) {
+  attachView(view) {
     this.#i++;
-    if (this.#i === 1) this.#B(h);
-    let E = false;
+    if (this.#i === 1) this.#B(view);
+    let detached = false;
     return () => {
-      if (E) return;
-      E = true;
+      if (detached) return;
+      detached = true;
       this.#i--;
       if (this.#i === 0) this.#J();
     };
   }
-  setRemoteWanted(h) {
-    if (h === this.#c) return;
-    this.#c = h;
+  setRemoteWanted(wanted) {
+    if (wanted === this.#c) return;
+    this.#c = wanted;
     if (this.#i === 0) return;
-    if (h) this.#L();
+    if (wanted) this.#L();
     else {
       this.#a?.();
       this.#a = null;
     }
   }
-  #B(h) {
-    this.#r = h;
+  #B(view) {
+    this.#r = view;
     this.#y = 0;
     if (this.#t.prStatuses.size === 0)
-      this.#e.loadPrStatusCache(this.#n).then((E) => {
-        if (E.size) this.#F((k) => (k.size ? new Map([...E, ...k]) : E));
+      this.#e.loadPrStatusCache(this.#n).then((cachedMarks) => {
+        if (cachedMarks.size)
+          this.#F((current) => (current.size ? new Map([...cachedMarks, ...current]) : cachedMarks));
       });
     this.load();
     this.#s.push(
-      startClockInterval(h, () => void this.load(), POLL_INTERVAL_MS),
-      startClockInterval(h, this.#H, STATUS_POLL_MS),
+      startClockInterval(view, () => void this.load(), POLL_INTERVAL_MS),
+      startClockInterval(view, this.#H, STATUS_POLL_MS),
       startClockInterval(
-        h,
+        view,
         () => {
           this.#c;
         },
@@ -1365,24 +1405,24 @@ class FleetRoster {
   }
   #L() {
     if (!this.#r) return;
-    this.#f("remoteJobs", (h) => {
-      let mapped = h.map((k) => {
-        let C = jobOutcome(k.state);
-        return C === k.activity
-          ? k
+    this.#f("remoteJobs", (jobs) => {
+      let mapped = jobs.map((job) => {
+        let outcome = jobOutcome(job.state);
+        return outcome === job.activity
+          ? job
           : {
-              ...k,
-              activity: C,
+              ...job,
+              activity: outcome,
             };
       });
-      return mapped.every((k, C) => k === h[C]) ? h : mapped;
+      return mapped.every((job, jobIndex) => job === jobs[jobIndex]) ? jobs : mapped;
     });
     this.loadRemote();
     this.#a?.();
     this.#a = startClockInterval(this.#r, this.loadRemote, LOAD_TIMEOUT_MS);
   }
   #J() {
-    for (let k of this.#s) k();
+    for (let stopTimer of this.#s) stopTimer();
     this.#s = [];
     this.#a?.();
     this.#a = null;
@@ -1393,21 +1433,23 @@ class FleetRoster {
     this.#I.clear();
     this.#C.clear();
     this.#R = this.#E;
-    let h = this.#t;
-    let E = h.remoteJobs.some((remoteJob) => remoteJob.id.startsWith("remote-pending-"))
-      ? h.remoteJobs.filter((remoteJob) => !remoteJob.id.startsWith("remote-pending-"))
-      : h.remoteJobs;
+    let previous = this.#t;
+    let settledRemoteJobs = previous.remoteJobs.some((remoteJob) =>
+      remoteJob.id.startsWith("remote-pending-"),
+    )
+      ? previous.remoteJobs.filter((remoteJob) => !remoteJob.id.startsWith("remote-pending-"))
+      : previous.remoteJobs;
     if (
-      h.pendings.length > 0 ||
-      E !== h.remoteJobs ||
-      h.remoteListLoaded ||
-      h.remoteListFailure !== null ||
-      h.overlaidLoadLanded
+      previous.pendings.length > 0 ||
+      settledRemoteJobs !== previous.remoteJobs ||
+      previous.remoteListLoaded ||
+      previous.remoteListFailure !== null ||
+      previous.overlaidLoadLanded
     ) {
       this.#t = {
-        ...h,
-        pendings: h.pendings.length > 0 ? [] : h.pendings,
-        remoteJobs: E,
+        ...previous,
+        pendings: previous.pendings.length > 0 ? [] : previous.pendings,
+        remoteJobs: settledRemoteJobs,
         remoteListLoaded: false,
         remoteListFailure: null,
         overlaidLoadLanded: false,
@@ -1418,40 +1460,40 @@ class FleetRoster {
   get jobs() {
     return this.#t.jobs;
   }
-  isDeleting(h) {
-    return this.#u.has(h);
+  isDeleting(jobId) {
+    return this.#u.has(jobId);
   }
-  deleteRefusalOf = (h) => this.#t.deleteRefusals.get(h);
-  isDeletingSession(h) {
-    return this.#S.has(h);
+  deleteRefusalOf = (jobId) => this.#t.deleteRefusals.get(jobId);
+  isDeletingSession(sessionId) {
+    return this.#S.has(sessionId);
   }
-  isHolding(h) {
-    return this.#h.has(h);
+  isHolding(jobId) {
+    return this.#h.has(jobId);
   }
-  isArchiving(h) {
-    return this.#v.has(h);
+  isArchiving(jobId) {
+    return this.#v.has(jobId);
   }
-  isRetitling(h) {
-    return this.#x.has(h);
+  isRetitling(jobId) {
+    return this.#x.has(jobId);
   }
-  liveStatus(h) {
-    let { sessionId, resumeSessionId } = h.state;
-    if (isExecLaunch(h.state)) return h.state.tempo === "active" ? "busy" : undefined;
-    if (h.state.backend === "remote")
-      return h.state.tempo === "active" ? "busy" : h.state.tempo === "blocked" ? "waiting" : undefined;
+  liveStatus(job) {
+    let { sessionId, resumeSessionId } = job.state;
+    if (isExecLaunch(job.state)) return job.state.tempo === "active" ? "busy" : undefined;
+    if (job.state.backend === "remote")
+      return job.state.tempo === "active" ? "busy" : job.state.tempo === "blocked" ? "waiting" : undefined;
     if (this.#C.has(resumeSessionId ?? sessionId)) return "busy";
     if (this.#t.pendings.some((pending) => pending.state.sessionId === sessionId)) return "busy";
-    let C =
-      this.terminalHolderOf(h) !== undefined
-        ? this.#t.statuses.get(jobStatusKey(h.id))
-        : statusForJob(this.#t.statuses, h);
-    if (C) return C;
+    let status =
+      this.terminalHolderOf(job) !== undefined
+        ? this.#t.statuses.get(jobStatusKey(job.id))
+        : statusForJob(this.#t.statuses, job);
+    if (status) return status;
     if (this.#I.has(sessionId)) return "busy";
     return;
   }
-  terminalHolderOf(h) {
-    if (h.state.backend === "peer" || h.state.backend === "remote") return;
-    return this.#t.terminalHolders.get(h.state.resumeSessionId ?? h.state.sessionId);
+  terminalHolderOf(job) {
+    if (job.state.backend === "peer" || job.state.backend === "remote") return;
+    return this.#t.terminalHolders.get(job.state.resumeSessionId ?? job.state.sessionId);
   }
   bumpGen() {
     this.#m = ++this.#o;
@@ -1459,119 +1501,123 @@ class FleetRoster {
   resetPrFetchGate() {
     this.#y = 0;
   }
-  holdJob = (h) => {
+  holdJob = (jobId) => {
     this.#m = ++this.#o;
-    this.#h.set(h, (this.#h.get(h) ?? 0) + 1);
+    this.#h.set(jobId, (this.#h.get(jobId) ?? 0) + 1);
     return () => {
       this.#m = ++this.#o;
-      let E = (this.#h.get(h) ?? 1) - 1;
-      if (E <= 0) this.#h.delete(h);
-      else this.#h.set(h, E);
+      let remaining = (this.#h.get(jobId) ?? 1) - 1;
+      if (remaining <= 0) this.#h.delete(jobId);
+      else this.#h.set(jobId, remaining);
     };
   };
-  optimistic = (h, E, k) => {
+  optimistic = (update, deletingJobId, holdJobId) => {
     this.#m = ++this.#o;
-    if (E) {
-      this.#u.add(E);
-      let found = this.#t.jobs?.find((job) => job.id === E);
+    if (deletingJobId) {
+      this.#u.add(deletingJobId);
+      let found = this.#t.jobs?.find((job) => job.id === deletingJobId);
       if (found) {
-        let filtered = [found.state.sessionId, found.state.resumeSessionId].filter((A) => Boolean(A));
-        this.#d.set(E, filtered);
-        for (let A of filtered) this.#S.add(A);
+        let filtered = [found.state.sessionId, found.state.resumeSessionId].filter((sessionId) =>
+          Boolean(sessionId),
+        );
+        this.#d.set(deletingJobId, filtered);
+        for (let sessionId of filtered) this.#S.add(sessionId);
       }
     }
-    let C = k ? this.holdJob(k) : undefined;
-    this.updateJobs((x) => (x ? h(x) : x));
-    return E || C
+    let releaseHold = holdJobId ? this.holdJob(holdJobId) : undefined;
+    this.updateJobs((jobs) => (jobs ? update(jobs) : jobs));
+    return deletingJobId || releaseHold
       ? () => {
-          if (E) {
+          if (deletingJobId) {
             this.#m = ++this.#o;
-            this.#u.delete(E);
-            for (let x of this.#d.get(E) ?? []) this.#S.delete(x);
-            this.#d.delete(E);
+            this.#u.delete(deletingJobId);
+            for (let sessionId of this.#d.get(deletingJobId) ?? []) this.#S.delete(sessionId);
+            this.#d.delete(deletingJobId);
           }
-          C?.();
+          releaseHold?.();
         }
       : undefined;
   };
-  noteDeleteRefusal = (h, E) => {
-    this.#k.delete(h);
-    this.#f("deleteRefusals", (k) => {
-      if (E === null && !k.has(h)) return k;
-      let C = new Map(k);
-      if (E === null) C.delete(h);
-      else C.set(h, E);
-      return C;
+  noteDeleteRefusal = (jobId, notice) => {
+    this.#k.delete(jobId);
+    this.#f("deleteRefusals", (refusals) => {
+      if (notice === null && !refusals.has(jobId)) return refusals;
+      let nextRefusals = new Map(refusals);
+      if (notice === null) nextRefusals.delete(jobId);
+      else nextRefusals.set(jobId, notice);
+      return nextRefusals;
     });
   };
-  updateJobs(h) {
-    this.#f("jobs", h);
+  updateJobs(updater) {
+    this.#f("jobs", updater);
   }
-  updateAdoptedPeers(h) {
-    this.#f("adoptedPeers", h);
+  updateAdoptedPeers(updater) {
+    this.#f("adoptedPeers", updater);
   }
-  updateRemoteJobs(h) {
-    this.#f("remoteJobs", h);
+  updateRemoteJobs(updater) {
+    this.#f("remoteJobs", updater);
   }
-  #D(h) {
-    return h;
+  #D(row) {
+    return row;
   }
   dropRemoteJobs() {
     this.#R = this.#E;
     this.#w.clear();
     this.#_ = null;
-    this.#f("remoteJobs", (h) => (h.length > 0 ? [] : h));
+    this.#f("remoteJobs", (jobs) => (jobs.length > 0 ? [] : jobs));
     this.#f("remoteListHasOlder", () => false);
   }
-  updatePendings(h) {
-    this.#f("pendings", h);
+  updatePendings(updater) {
+    this.#f("pendings", updater);
   }
-  #F(h) {
+  #F(updater) {
     let prStatuses = this.#t.prStatuses;
-    this.#f("prStatuses", h);
+    this.#f("prStatuses", updater);
     if (this.#t.prStatuses !== prStatuses) this.#e.persistPrStatusCache(this.#t.prStatuses, this.#n);
   }
-  seedJobs(h) {
-    this.updateJobs((E) => {
-      let mapped = h
-        .filter((x) => !this.#u.has(x.id))
-        .map((x) => ({
-          ...x,
-          activity: jobOutcome(x.state),
+  seedJobs(jobs) {
+    this.updateJobs((previous) => {
+      let mapped = jobs
+        .filter((job) => !this.#u.has(job.id))
+        .map((job) => ({
+          ...job,
+          activity: jobOutcome(job.state),
         }));
-      let C =
-        E && this.#h.size > 0 ? new Map(E.filter((x) => this.#h.has(x.id)).map((x) => [x.id, x])) : null;
-      return sortJobs(C ? mapped.map((x) => C.get(x.id) ?? x) : mapped);
+      let heldMap =
+        previous && this.#h.size > 0
+          ? new Map(previous.filter((job) => this.#h.has(job.id)).map((job) => [job.id, job]))
+          : null;
+      return sortJobs(heldMap ? mapped.map((job) => heldMap.get(job.id) ?? job) : mapped);
     });
   }
-  settleLandedPendings(h) {
-    let E = new Set(h.map((k) => k.id));
-    for (let k of h) {
-      let sessionId = k.state.sessionId;
+  settleLandedPendings(pendings) {
+    let landedIds = new Set(pendings.map((pending) => pending.id));
+    for (let pending of pendings) {
+      let sessionId = pending.state.sessionId;
       this.#I.add(sessionId);
       this.#A(() => this.#I.delete(sessionId), SESSION_IDLE_TTL_MS);
     }
-    this.updatePendings((k) => k.filter((C) => !E.has(C.id)));
+    this.updatePendings((pendings) => pendings.filter((pending) => !landedIds.has(pending.id)));
   }
-  kick(h, jobId) {
-    let k = {
+  kick(sessionId, jobId) {
+    let kicked = {
       kickedAt: Date.now(),
       jobId,
     };
-    this.#C.set(h, k);
+    this.#C.set(sessionId, kicked);
     this.#A(() => {
-      if (this.#C.get(h) === k) {
-        this.#C.delete(h);
-        this.#f("statuses", (C) => new Map(C));
+      if (this.#C.get(sessionId) === kicked) {
+        this.#C.delete(sessionId);
+        this.#f("statuses", (statuses) => new Map(statuses));
       }
     }, SESSION_IDLE_TTL_MS);
     return () => {
-      if (this.#C.get(h) === k) this.#C.delete(h);
+      if (this.#C.get(sessionId) === kicked) this.#C.delete(sessionId);
     };
   }
-  watchPendingJobDir(h) {
+  watchPendingJobDir(jobId) {
     this.#O?.();
-    this.#O = this.#e.watchJobDirOnce(h, () => void this.load());
+    this.#O = this.#e.watchJobDirOnce(jobId, () => void this.load());
   }
   reload = () => {
     this.load();
@@ -1582,9 +1628,12 @@ class FleetRoster {
       getFeatureValue_CACHED_MAY_BE_STALE("tengu_fleetview_peers", false)
     )
       this.#e.touchFleetViewHeartbeat(this.#n);
-    let h = ++this.#o;
-    let [E, k] = await Promise.all([this.#e.listJobs(this.#n), this.#e.listAliveDaemonJobs(this.#n)]);
-    if (E !== null) this.#g = 0;
+    let generation = ++this.#o;
+    let [listed, daemonListing] = await Promise.all([
+      this.#e.listJobs(this.#n),
+      this.#e.listAliveDaemonJobs(this.#n),
+    ]);
+    if (listed !== null) this.#g = 0;
     else if (this.#t.jobs?.length && ++this.#g <= MAX_LIST_FAILURES) {
       if (this.#g === 1)
         logForDebugging(
@@ -1595,54 +1644,62 @@ class FleetRoster {
         );
       return;
     }
-    let mapped = markCrashed(await this.#e.adoptRosterOrphans(E ?? [], k.records, this.#n), k.shorts)
-      .filter((N) => !this.#u.has(N.id))
-      .map((N) => ({
-        ...N,
-        activity: jobOutcome(N.state, this.#t.prStatuses),
+    let mapped = markCrashed(
+      await this.#e.adoptRosterOrphans(listed ?? [], daemonListing.records, this.#n),
+      daemonListing.shorts,
+    )
+      .filter((job) => !this.#u.has(job.id))
+      .map((job) => ({
+        ...job,
+        activity: jobOutcome(job.state, this.#t.prStatuses),
       }));
-    if (h <= this.#m) return;
-    this.#m = h;
+    if (generation <= this.#m) return;
+    this.#m = generation;
     if (this.#i > 0) this.#f("overlaidLoadLanded", () => true);
-    this.updateJobs((N) => {
-      let X =
-        N && this.#h.size > 0 ? new Map(N.filter((W) => this.#h.has(W.id)).map((W) => [W.id, W])) : null;
-      let K = sortJobs(X ? mapped.map((W) => X.get(W.id) ?? W) : mapped);
+    this.updateJobs((previous) => {
+      let heldMap =
+        previous && this.#h.size > 0
+          ? new Map(previous.filter((job) => this.#h.has(job.id)).map((job) => [job.id, job]))
+          : null;
+      let next = sortJobs(heldMap ? mapped.map((job) => heldMap.get(job.id) ?? job) : mapped);
       if (
-        N &&
-        N.length === K.length &&
-        N.every(
-          (W, z) =>
-            W.id === K[z].id &&
-            W.state.updatedAt === K[z].state.updatedAt &&
-            W.state.state === K[z].state.state &&
-            W.state.pinned === K[z].state.pinned &&
-            W.state.group === K[z].state.group &&
-            W.state.stateSortOrder === K[z].state.stateSortOrder &&
-            W.activity === K[z].activity,
+        previous &&
+        previous.length === next.length &&
+        previous.every(
+          (job, jobIndex) =>
+            job.id === next[jobIndex].id &&
+            job.state.updatedAt === next[jobIndex].state.updatedAt &&
+            job.state.state === next[jobIndex].state.state &&
+            job.state.pinned === next[jobIndex].state.pinned &&
+            job.state.group === next[jobIndex].state.group &&
+            job.state.stateSortOrder === next[jobIndex].state.stateSortOrder &&
+            job.activity === next[jobIndex].activity,
         )
       )
-        return N;
-      return K;
+        return previous;
+      return next;
     });
-    let filtered = mapped.filter((N) => jobTempo(N.state) !== "completed");
-    let results = await Promise.all(filtered.map(async (N) => [N.id, await this.#e.readLogTail(N, this.#n)]));
-    this.#f("logTails", (N) => {
-      let X = Object.fromEntries(results);
-      let keys = Object.keys(N);
-      if (keys.length === results.length && keys.every((W) => N[W] === X[W])) return N;
-      return X;
+    let filtered = mapped.filter((job) => jobTempo(job.state) !== "completed");
+    let results = await Promise.all(
+      filtered.map(async (job) => [job.id, await this.#e.readLogTail(job, this.#n)]),
+    );
+    this.#f("logTails", (tails) => {
+      let nextTails = Object.fromEntries(results);
+      let keys = Object.keys(tails);
+      if (keys.length === results.length && keys.every((jobId) => tails[jobId] === nextTails[jobId]))
+        return tails;
+      return nextTails;
     });
-    let filtered_2 = mapped.filter((N) => isLoopJob(N.state));
+    let filtered_2 = mapped.filter((job) => isLoopJob(job.state));
     if (filtered_2.length > 0) {
       let filtered = (
         await Promise.all(
-          filtered_2.map(async (K) => {
-            for (let W of jobTranscriptPaths(K.state))
+          filtered_2.map(async (job) => {
+            for (let transcriptPath of jobTranscriptPaths(job.state))
               try {
-                let z = await this.#e.probeFleetTranscript(W, this.#n);
-                if (z.kind === "present") return [K.state.sessionId, z.mtimeMs, W];
-                if (z.kind !== "absent") return null;
+                let probe = await this.#e.probeFleetTranscript(transcriptPath, this.#n);
+                if (probe.kind === "present") return [job.state.sessionId, probe.mtimeMs, transcriptPath];
+                if (probe.kind !== "absent") return null;
               } catch (error) {
                 if (!isPathAbsent(error)) return null;
               }
@@ -1650,22 +1707,22 @@ class FleetRoster {
           }),
         )
       )
-        .filter((K) => K !== null)
-        .filter(([K, W]) => {
-          let z = this.#t.loopKicks.get(K);
-          return !z || z.mtimeMs !== W;
+        .filter((entry) => entry !== null)
+        .filter(([sessionId, mtimeMs]) => {
+          let kick = this.#t.loopKicks.get(sessionId);
+          return !kick || kick.mtimeMs !== mtimeMs;
         });
       if (filtered.length > 0) {
         let results = await Promise.all(
-          filtered.map(async ([W, z, oe]) => {
+          filtered.map(async ([sessionId, mtimeMs, transcriptPath]) => {
             try {
-              let ge = await this.#e.scanLoopTranscript(this.#M, oe);
-              return ge
+              let scan = await this.#e.scanLoopTranscript(this.#M, transcriptPath);
+              return scan
                 ? [
-                    W,
+                    sessionId,
                     {
-                      mtimeMs: z,
-                      ...ge,
+                      mtimeMs,
+                      ...scan,
                     },
                   ]
                 : null;
@@ -1674,182 +1731,200 @@ class FleetRoster {
             }
           }),
         );
-        this.#f("loopKicks", (W) => {
-          let z = false;
-          let oe = new Map(W);
-          for (let ge of results)
-            if (ge) {
-              oe.set(ge[0], ge[1]);
-              z = true;
+        this.#f("loopKicks", (kicks) => {
+          let changed = false;
+          let nextKicks = new Map(kicks);
+          for (let entry of results)
+            if (entry) {
+              nextKicks.set(entry[0], entry[1]);
+              changed = true;
             }
-          return z ? oe : W;
+          return changed ? nextKicks : kicks;
         });
       }
     }
-    let L = uniq(
-      mapped.flatMap((N) =>
-        validChildren(N.state.children)
-          .filter((X) => X.kind !== "frame")
-          .map((X) => X.href),
+    let childUrls = uniq(
+      mapped.flatMap((job) =>
+        validChildren(job.state.children)
+          .filter((child) => child.kind !== "frame")
+          .map((child) => child.href),
       ),
     );
-    let filtered_3 = L.filter((N) => {
-      let state = this.#t.prStatuses.get(N)?.state;
+    let filtered_3 = childUrls.filter((url) => {
+      let state = this.#t.prStatuses.get(url)?.state;
       return state !== "MERGED" && state !== "CLOSED";
     });
     let now = Date.now();
-    let U = now - this.#y >= rosterPollInterval(getTerminalFocused(), now - getLastInteractionTime());
-    if (filtered_3.length > 0 && U) {
+    let shouldPollPrs =
+      now - this.#y >= rosterPollInterval(getTerminalFocused(), now - getLastInteractionTime());
+    if (filtered_3.length > 0 && shouldPollPrs) {
       this.#y = now;
       let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
         "tengu_fleetview_pr_batch",
         true,
       );
       (async () => {
-        let X;
+        let nextStatuses;
         if (featureValue_CACHED_MAY_BE_STALE) {
           let prStatusBatch = await this.#e.fetchPrStatusBatch(filtered_3);
-          X = prStatusBatch.statuses;
+          nextStatuses = prStatusBatch.statuses;
           await Promise.all(
-            prStatusBatch.unbatched.map(async (W) => X.set(W, await this.#e.fetchPrStatusByUrl(W))),
+            prStatusBatch.unbatched.map(async (url) =>
+              nextStatuses.set(url, await this.#e.fetchPrStatusByUrl(url)),
+            ),
           );
         } else
-          X = new Map(
-            await Promise.all(filtered_3.map(async (K) => [K, await this.#e.fetchPrStatusByUrl(K)])),
+          nextStatuses = new Map(
+            await Promise.all(filtered_3.map(async (url) => [url, await this.#e.fetchPrStatusByUrl(url)])),
           );
-        this.#F((K) => {
-          let W = false;
-          for (let [oe, ge] of X) {
-            let se = K.get(oe);
+        this.#F((cached) => {
+          let changed = false;
+          for (let [url, status] of nextStatuses) {
+            let previousStatus = cached.get(url);
             if (
-              se?.state !== ge?.state ||
-              se?.title !== ge?.title ||
-              se?.review !== ge?.review ||
-              se?.checks.passed !== ge?.checks.passed ||
-              se?.checks.failed !== ge?.checks.failed ||
-              se?.checks.pending !== ge?.checks.pending ||
-              se?.additions !== ge?.additions ||
-              se?.deletions !== ge?.deletions
+              previousStatus?.state !== status?.state ||
+              previousStatus?.title !== status?.title ||
+              previousStatus?.review !== status?.review ||
+              previousStatus?.checks.passed !== status?.checks.passed ||
+              previousStatus?.checks.failed !== status?.checks.failed ||
+              previousStatus?.checks.pending !== status?.checks.pending ||
+              previousStatus?.additions !== status?.additions ||
+              previousStatus?.deletions !== status?.deletions
             ) {
-              W = true;
+              changed = true;
               break;
             }
           }
-          if (!W) return K;
-          let z = new Map(K);
-          for (let [oe, ge] of X) if (ge !== null || !K.has(oe)) z.set(oe, ge);
-          return z;
+          if (!changed) return cached;
+          let nextCache = new Map(cached);
+          for (let [url, status] of nextStatuses)
+            if (status !== null || !cached.has(url)) nextCache.set(url, status);
+          return nextCache;
         });
       })().catch(logError);
     }
-    if (this.#m === h) {
-      let N = new Set(mapped.map((K) => K.state.sessionId));
-      let X = new Set(L);
-      this.#f("loopKicks", (K) => withoutMissingKeys(K, N));
-      this.#F((K) => withoutMissingKeys(K, X));
+    if (this.#m === generation) {
+      let liveSessions = new Set(mapped.map((job) => job.state.sessionId));
+      let liveUrls = new Set(childUrls);
+      this.#f("loopKicks", (kicks) => withoutMissingKeys(kicks, liveSessions));
+      this.#F((cache) => withoutMissingKeys(cache, liveUrls));
       if (mapped.length > 0) {
         let deleteRefusals = this.#t.deleteRefusals;
-        let W = new Set(this.#u);
-        for (let z of mapped) {
-          if (!deleteRefusals.has(z.id)) continue;
-          if (isSettled(z.state)) {
-            this.#k.add(z.id);
-            W.add(z.id);
-          } else if (!this.#k.has(z.id)) W.add(z.id);
+        let activeDeleting = new Set(this.#u);
+        for (let job of mapped) {
+          if (!deleteRefusals.has(job.id)) continue;
+          if (isSettled(job.state)) {
+            this.#k.add(job.id);
+            activeDeleting.add(job.id);
+          } else if (!this.#k.has(job.id)) activeDeleting.add(job.id);
         }
-        this.#f("deleteRefusals", (z) => withoutMissingKeys(z, W));
-        for (let z of this.#k) if (!W.has(z)) this.#k.delete(z);
+        this.#f("deleteRefusals", (refusals) => withoutMissingKeys(refusals, activeDeleting));
+        for (let jobId of this.#k) if (!activeDeleting.has(jobId)) this.#k.delete(jobId);
       }
-      pruneScanStates(this.#M, new Set(mapped.flatMap((K) => jobTranscriptPaths(K.state))));
+      pruneScanStates(this.#M, new Set(mapped.flatMap((job) => jobTranscriptPaths(job.state))));
     }
   };
   #H = () => {
     this.#e
       .listAllLiveSessions(this.#n)
-      .then((h) => {
-        let E = new Map();
-        let k = new Map();
-        for (let T of h) {
-          if (T.kind === "interactive" && T.pid !== process.pid && T.sessionId && T.parkedJobId === undefined)
-            k.set(T.sessionId, T.pid);
-          if (!T.status) continue;
-          if (T.sessionId) E.set(T.sessionId, T.status);
-          if (T.jobId) E.set(jobStatusKey(T.jobId), T.status);
-        }
-        for (let key of E.keys()) this.#I.delete(key);
-        let C = takeSpareHandle();
-        if (C && h.some((T) => T.sessionId === C.sessionId)) markSpareReady(C.sessionId);
-        let x = false;
-        for (let [T, A] of this.#C) {
-          let found = h.find((V) => V.sessionId === T || V.jobId === A.jobId);
+      .then((sessions) => {
+        let statuses = new Map();
+        let holders = new Map();
+        for (let session of sessions) {
           if (
-            E.get(T) === "busy" ||
-            E.get(jobStatusKey(A.jobId)) === "busy" ||
+            session.kind === "interactive" &&
+            session.pid !== process.pid &&
+            session.sessionId &&
+            session.parkedJobId === undefined
+          )
+            holders.set(session.sessionId, session.pid);
+          if (!session.status) continue;
+          if (session.sessionId) statuses.set(session.sessionId, session.status);
+          if (session.jobId) statuses.set(jobStatusKey(session.jobId), session.status);
+        }
+        for (let key of statuses.keys()) this.#I.delete(key);
+        let spareHandle = takeSpareHandle();
+        if (spareHandle && sessions.some((session) => session.sessionId === spareHandle.sessionId))
+          markSpareReady(spareHandle.sessionId);
+        let kicksChanged = false;
+        for (let [sessionId, kick] of this.#C) {
+          let found = sessions.find(
+            (session) => session.sessionId === sessionId || session.jobId === kick.jobId,
+          );
+          if (
+            statuses.get(sessionId) === "busy" ||
+            statuses.get(jobStatusKey(kick.jobId)) === "busy" ||
             (found !== undefined &&
-              (found.statusUpdatedAt ?? 0) > A.kickedAt &&
-              found.startedAt <= A.kickedAt)
+              (found.statusUpdatedAt ?? 0) > kick.kickedAt &&
+              found.startedAt <= kick.kickedAt)
           ) {
-            this.#C.delete(T);
-            x = true;
+            this.#C.delete(sessionId);
+            kicksChanged = true;
           }
         }
-        this.#f("statuses", (T) =>
-          !x && T.size === E.size && [...E].every(([A, L]) => T.get(A) === L) ? T : E,
+        this.#f("statuses", (current) =>
+          !kicksChanged &&
+          current.size === statuses.size &&
+          [...statuses].every(([key, value]) => current.get(key) === value)
+            ? current
+            : statuses,
         );
-        this.#f("terminalHolders", (T) =>
-          T.size === k.size && [...k].every(([A, L]) => T.get(A) === L) ? T : k,
+        this.#f("terminalHolders", (current) =>
+          current.size === holders.size && [...holders].every(([key, value]) => current.get(key) === value)
+            ? current
+            : holders,
         );
         if (
           isCrossSessionMessagingEnabled() &&
           getFeatureValue_CACHED_MAY_BE_STALE("tengu_fleetview_peers", false)
         ) {
-          let T = new Set((this.#t.jobs ?? []).map((V) => V.state.sessionId));
+          let knownSessionIds = new Set((this.#t.jobs ?? []).map((job) => job.state.sessionId));
           let now = Date.now();
-          let mapped = h
+          let mapped = sessions
             .filter(
-              (V) =>
-                V.kind === "interactive" &&
-                V.pid !== process.pid &&
-                V.sessionId &&
-                !T.has(V.sessionId) &&
-                (V.peerProtocol ?? 0) >= PEER_PROTOCOL &&
-                now - (V.updatedAt ?? V.startedAt) < 86400000,
+              (session) =>
+                session.kind === "interactive" &&
+                session.pid !== process.pid &&
+                session.sessionId &&
+                !knownSessionIds.has(session.sessionId) &&
+                (session.peerProtocol ?? 0) >= PEER_PROTOCOL &&
+                now - (session.updatedAt ?? session.startedAt) < 86400000,
             )
-            .map((V) => {
-              let D = peerToJobState(V);
+            .map((session) => {
+              let peerState = peerToJobState(session);
               return {
-                id: `peer-${V.pid}`,
-                state: D,
-                activity: jobOutcome(D),
+                id: `peer-${session.pid}`,
+                state: peerState,
+                activity: jobOutcome(peerState),
               };
             });
-          this.updateAdoptedPeers((V) => {
-            let D = new Map(V.map((N) => [N.id, N]));
-            let mapped_2 = mapped.map((N) => {
-              let X = D.get(N.id);
-              return X &&
-                X.state.name !== N.state.name &&
-                (X.state.updatedAt ?? "") >= (N.state.updatedAt ?? "")
+          this.updateAdoptedPeers((previous) => {
+            let previousById = new Map(previous.map((peer) => [peer.id, peer]));
+            let mapped_2 = mapped.map((peer) => {
+              let existing = previousById.get(peer.id);
+              return existing &&
+                existing.state.name !== peer.state.name &&
+                (existing.state.updatedAt ?? "") >= (peer.state.updatedAt ?? "")
                 ? {
-                    ...N,
+                    ...peer,
                     state: {
-                      ...N.state,
-                      name: X.state.name,
-                      intent: X.state.intent,
-                      updatedAt: X.state.updatedAt,
+                      ...peer.state,
+                      name: existing.state.name,
+                      intent: existing.state.intent,
+                      updatedAt: existing.state.updatedAt,
                     },
                   }
-                : N;
+                : peer;
             });
-            return V.length === mapped_2.length &&
-              V.every(
-                (N, X) =>
-                  N.id === mapped_2[X].id &&
-                  N.state.updatedAt === mapped_2[X].state.updatedAt &&
-                  N.state.name === mapped_2[X].state.name &&
-                  N.activity === mapped_2[X].activity,
+            return previous.length === mapped_2.length &&
+              previous.every(
+                (peer, peerIndex) =>
+                  peer.id === mapped_2[peerIndex].id &&
+                  peer.state.updatedAt === mapped_2[peerIndex].state.updatedAt &&
+                  peer.state.name === mapped_2[peerIndex].state.name &&
+                  peer.activity === mapped_2[peerIndex].activity,
               )
-              ? V
+              ? previous
               : mapped_2;
           });
         }
@@ -1862,26 +1937,26 @@ class FleetRoster {
   loadRemote = () => {
     let now = Date.now();
     this.#T = now;
-    let E = ++this.#E;
-    let k = {
+    let generation = ++this.#E;
+    let cursor = {
       moreRemain: false,
     };
     this.#e
-      .listRemoteSessions(k)
+      .listRemoteSessions(cursor)
       .then(
-        (C) => this.#P(E, now, C, null, k.moreRemain),
+        (rows) => this.#P(generation, now, rows, null, cursor.moreRemain),
         (error) => {
-          let x = error instanceof CloudListPartialError_2 ? error : null;
+          let partialError = error instanceof CloudListPartialError_2 ? error : null;
           logForDebugging(
-            `[fleet:remote] list failed after ${x?.rows.length ?? 0} rows: ${errorMessage(x?.cause ?? error)}`,
+            `[fleet:remote] list failed after ${partialError?.rows.length ?? 0} rows: ${errorMessage(partialError?.cause ?? error)}`,
           );
-          this.#P(E, now, x?.rows ?? [], classifyCloudListFailure(error), false);
+          this.#P(generation, now, partialError?.rows ?? [], classifyCloudListFailure(error), false);
         },
       )
       .catch((error) => {
         logForDebugging(`[fleet:remote] poll mapper threw: ${errorMessage(error)}`);
         this.#P(
-          E,
+          generation,
           now,
           [],
           {
@@ -1891,140 +1966,151 @@ class FleetRoster {
         );
       });
   };
-  #P(h, E, k, C, x) {
-    if (h <= this.#R) return;
-    let T = null;
-    for (let [D, U] of this.#p) if (E >= U.answeredAt) this.#p.delete(D);
-    let filtered = k
-      .map((D) => {
-        let U = remoteRowId(D.id);
-        let N = this.#p.get(U);
-        let X = describeSessionAttention(
-          N
+  #P(generation, nowMs, rows, failure, hasOlder) {
+    if (generation <= this.#R) return;
+    let pendingMarks = null;
+    for (let [rowId, reply] of this.#p) if (nowMs >= reply.answeredAt) this.#p.delete(rowId);
+    let filtered = rows
+      .map((row) => {
+        let id = remoteRowId(row.id);
+        let reply = this.#p.get(id);
+        let state = describeSessionAttention(
+          reply
             ? {
-                ...D,
-                title: N.title,
+                ...row,
+                title: reply.title,
               }
-            : D,
+            : row,
         );
-        let K = T?.get(U);
-        if (K)
-          X = {
-            ...X,
-            group: K.group,
-            pinned: K.pinned,
+        let mark = pendingMarks?.get(id);
+        if (mark)
+          state = {
+            ...state,
+            group: mark.group,
+            pinned: mark.pinned,
           };
-        let W = this.#b.get(U);
-        if (W !== undefined)
-          if (isSettled(X) || (D.worker_status === "idle" && h > W.lastPoll) || E > W.expiry)
-            this.#b.delete(U);
+        let stopMark = this.#b.get(id);
+        if (stopMark !== undefined)
+          if (
+            isSettled(state) ||
+            (row.worker_status === "idle" && generation > stopMark.lastPoll) ||
+            nowMs > stopMark.expiry
+          )
+            this.#b.delete(id);
           else
-            X = {
-              ...X,
+            state = {
+              ...state,
               state: "stopped",
               tempo: "idle",
               needs: undefined,
-              detail: X.detail,
+              detail: state.detail,
             };
         return {
-          id: U,
-          state: X,
-          activity: jobOutcome(X),
+          id,
+          state,
+          activity: jobOutcome(state),
         };
       })
-      .filter((D) => {
-        let U = this.#v.get(D.id);
-        if (U === undefined) return true;
-        if (E > U && !this.#w.has(D.id)) {
-          this.#v.delete(D.id);
+      .filter((job) => {
+        let archivingUntil = this.#v.get(job.id);
+        if (archivingUntil === undefined) return true;
+        if (nowMs > archivingUntil && !this.#w.has(job.id)) {
+          this.#v.delete(job.id);
           return true;
         }
-        if (this.#w.has(D.id)) this.#w.set(D.id, D);
+        if (this.#w.has(job.id)) this.#w.set(job.id, job);
         return false;
       });
-    this.#R = h;
-    let L = C !== null && C.cause !== "exhausted";
-    let V = new Set(filtered.map((D) => D.id));
-    this.updateRemoteJobs((D) =>
+    this.#R = generation;
+    let keepExisting = failure !== null && failure.cause !== "exhausted";
+    let incomingIds = new Set(filtered.map((job) => job.id));
+    this.updateRemoteJobs((current) =>
       mergePendingRemoteJobs(
-        D,
-        L ? [...filtered, ...D.filter((U) => !V.has(U.id) && !U.id.startsWith("remote-pending-"))] : filtered,
+        current,
+        keepExisting
+          ? [
+              ...filtered,
+              ...current.filter((job) => !incomingIds.has(job.id) && !job.id.startsWith("remote-pending-")),
+            ]
+          : filtered,
       ),
     );
-    this.#f("remoteListHasOlder", (D) => (L ? D : x));
+    this.#f("remoteListHasOlder", (current) => (keepExisting ? current : hasOlder));
     if (this.#i > 0) {
-      this.#f("remoteListFailure", (D) => (sameCloudListFailure(D, C) ? D : C));
+      this.#f("remoteListFailure", (current) => (sameCloudListFailure(current, failure) ? current : failure));
       this.#f("remoteListLoaded", () => true);
     }
   }
-  markRemoteRow(h, E) {
-    return this.#N((k) => {
-      let C = k.get(h) ?? EMPTY_ROW_MARK;
-      let x = E(C);
-      return x.group === C.group && x.pinned === C.pinned ? EMPTY_MARKS_MAP : new Map([[h, x]]);
+  markRemoteRow(rowId, updater) {
+    return this.#N((marks) => {
+      let mark = marks.get(rowId) ?? EMPTY_ROW_MARK;
+      let next = updater(mark);
+      return next.group === mark.group && next.pinned === mark.pinned
+        ? EMPTY_MARKS_MAP
+        : new Map([[rowId, next]]);
     });
   }
-  regroupRemoteRows(h, group) {
-    return this.#N((k) => {
-      let C = new Map();
-      for (let [x, T] of k)
-        if (T.group === h)
-          C.set(x, {
-            ...T,
+  regroupRemoteRows(fromGroup, group) {
+    return this.#N((marks) => {
+      let changed = new Map();
+      for (let [rowId, mark] of marks)
+        if (mark.group === fromGroup)
+          changed.set(rowId, {
+            ...mark,
             group,
           });
-      return C;
+      return changed;
     });
   }
-  #N(h) {
-    let E = h(this.#e.readCloudRowMarks());
-    if (E.size === 0) return Promise.resolve(true);
+  #N(computeMarks) {
+    let nextMarks = computeMarks(this.#e.readCloudRowMarks());
+    if (nextMarks.size === 0) return Promise.resolve(true);
     let remoteJobs = this.#t.remoteJobs;
-    let C = this.#e.saveCloudRowMarks(
-      h,
+    let saved = this.#e.saveCloudRowMarks(
+      computeMarks,
       new Set(remoteJobs.map((remoteJob) => remoteRowIdOf(remoteJob) ?? remoteJob.id)),
       this.#n,
     );
-    if (remoteJobs.some((remoteJob) => E.has(remoteRowIdOf(remoteJob) ?? remoteJob.id)))
-      this.updateRemoteJobs((x) =>
-        x.map((T) => {
-          let A = E.get(remoteRowIdOf(T) ?? T.id);
-          return A
+    if (remoteJobs.some((remoteJob) => nextMarks.has(remoteRowIdOf(remoteJob) ?? remoteJob.id)))
+      this.updateRemoteJobs((jobs) =>
+        jobs.map((job) => {
+          let mark = nextMarks.get(remoteRowIdOf(job) ?? job.id);
+          return mark
             ? {
-                ...T,
+                ...job,
                 state: {
-                  ...T.state,
-                  group: A.group,
-                  pinned: A.pinned ?? false,
+                  ...job.state,
+                  group: mark.group,
+                  pinned: mark.pinned ?? false,
                 },
               }
-            : T;
+            : job;
         }),
       );
-    return C;
+    return saved;
   }
-  async stopRemote(h) {
-    let sessionId = h.state.sessionId;
-    let k = {
+  async stopRemote(job) {
+    let sessionId = job.state.sessionId;
+    let stopMark = {
       expiry: Date.now() + REMOTE_STOP_TTL_MS,
       lastPoll: this.#E,
     };
-    this.#b.set(h.id, k);
-    this.updateRemoteJobs((C) =>
-      C.map((x) =>
-        x.id === h.id && !isSettled(x.state)
+    this.#b.set(job.id, stopMark);
+    this.updateRemoteJobs((jobs) =>
+      jobs.map((row) =>
+        row.id === job.id && !isSettled(row.state)
           ? {
-              ...x,
+              ...row,
               state: {
-                ...x.state,
+                ...row.state,
                 state: "stopped",
                 tempo: "idle",
                 needs: undefined,
-                detail: x.state.detail,
+                detail: row.state.detail,
               },
               activity: "stopped",
             }
-          : x,
+          : row,
       ),
     );
     try {
@@ -2038,102 +2124,106 @@ class FleetRoster {
     } catch (error) {
       logFeatureBad("fleet_view_stop_session", "interrupt_failed");
       logForDebugging(`[fleet:remote] interrupt ${sessionId} failed: ${errorMessage(error)}`);
-      if (this.#b.get(h.id) === k) {
-        this.#b.delete(h.id);
-        if (this.#w.has(h.id)) this.#w.set(h.id, h);
-        this.updateRemoteJobs((x) =>
-          x.some((T) => T.id === h.id) ? x.map((T) => (T.id === h.id ? this.#D(h) : T)) : x,
+      if (this.#b.get(job.id) === stopMark) {
+        this.#b.delete(job.id);
+        if (this.#w.has(job.id)) this.#w.set(job.id, job);
+        this.updateRemoteJobs((jobs) =>
+          jobs.some((row) => row.id === job.id)
+            ? jobs.map((row) => (row.id === job.id ? this.#D(job) : row))
+            : jobs,
         );
       }
       this.loadRemote();
       throw error;
     }
   }
-  remoteReplyLanded(h) {
-    this.#b.delete(h);
+  remoteReplyLanded(jobId) {
+    this.#b.delete(jobId);
     this.loadRemote();
   }
-  remoteSessionOpened(h) {
-    let E = this.#b.get(h);
-    if (E !== undefined) E.expiry = 0;
+  remoteSessionOpened(jobId) {
+    let stopMark = this.#b.get(jobId);
+    if (stopMark !== undefined) stopMark.expiry = 0;
   }
-  async archiveRemote(h) {
-    let sessionId = h.state.sessionId;
-    this.#v.set(h.id, Date.now() + REMOTE_STOP_TTL_MS);
-    this.#w.set(h.id, h);
-    this.updateRemoteJobs((T) => T.filter((A) => A.id !== h.id));
-    let k = (this.#_ ??= {
+  async archiveRemote(job) {
+    let sessionId = job.state.sessionId;
+    this.#v.set(job.id, Date.now() + REMOTE_STOP_TTL_MS);
+    this.#w.set(job.id, job);
+    this.updateRemoteJobs((jobs) => jobs.filter((row) => row.id !== job.id));
+    let burst = (this.#_ ??= {
       left: 0,
       deleted: 0,
       failed: new Map(),
       pausedRoutines: 0,
       mayStillRun: false,
     });
-    k.left++;
-    let C = "archive_failed";
+    burst.left++;
+    let failureCode = "archive_failed";
     try {
-      let T = await this.#e.removeRemoteSession(sessionId, this.#n);
-      k.pausedRoutines += T.pausedRoutines;
-      k.mayStillRun ||= T.mayStillRun !== null;
-      if (T.failure !== null) {
-        C = T.failure;
+      let result = await this.#e.removeRemoteSession(sessionId, this.#n);
+      burst.pausedRoutines += result.pausedRoutines;
+      burst.mayStillRun ||= result.mayStillRun !== null;
+      if (result.failure !== null) {
+        failureCode = result.failure;
         throw Error("archive rejected");
       }
-      if (T.mayStillRun !== null) logFeatureSad("fleet_view_archive_session", T.mayStillRun);
+      if (result.mayStillRun !== null) logFeatureSad("fleet_view_archive_session", result.mayStillRun);
       else logFeatureOk("fleet_view_archive_session");
       logEvent("tengu_bg_agent_action", {
         action: lit("archive"),
         source: lit("fleet"),
         jobSessionId: sanitizeMarkName(sessionId),
       });
-      k.deleted++;
-      k.failed.delete(h.id);
+      burst.deleted++;
+      burst.failed.delete(job.id);
     } catch (error) {
-      k.failed.set(h.id, C);
-      let burst = this.#V(k);
-      logFeatureBad("fleet_view_archive_session", C);
-      logForDebugging(`[fleet:remote] archive ${sessionId} failed (${C}): ${errorMessage(error)}`);
-      let L = this.#w.get(h.id);
-      if (this.#v.delete(h.id) && L !== undefined)
-        this.updateRemoteJobs((V) =>
-          h.id.startsWith("remote-pending-") || V.some((D) => D.id === h.id) ? V : [...V, this.#D(L)],
+      burst.failed.set(job.id, failureCode);
+      let burst_2 = this.#V(burst);
+      logFeatureBad("fleet_view_archive_session", failureCode);
+      logForDebugging(`[fleet:remote] archive ${sessionId} failed (${failureCode}): ${errorMessage(error)}`);
+      let archivedJob = this.#w.get(job.id);
+      if (this.#v.delete(job.id) && archivedJob !== undefined)
+        this.updateRemoteJobs((jobs) =>
+          job.id.startsWith("remote-pending-") || jobs.some((row) => row.id === job.id)
+            ? jobs
+            : [...jobs, this.#D(archivedJob)],
         );
       this.loadRemote();
-      throw new ArchiveRejectedError(burst);
+      throw new ArchiveRejectedError(burst_2);
     } finally {
-      this.#w.delete(h.id);
+      this.#w.delete(job.id);
     }
-    return this.#V(k);
+    return this.#V(burst);
   }
-  #V(h) {
-    if (--h.left > 0 || this.#_ !== h) return null;
+  #V(burst) {
+    if (--burst.left > 0 || this.#_ !== burst) return null;
     this.#_ = null;
-    let { left, failed, ...C } = h;
-    let x = [...failed.values()];
+    let { left, failed, ...rest } = burst;
+    let failureCodes = [...failed.values()];
     return {
-      ...C,
+      ...rest,
       failed: failed.size,
-      ofProject: count(x, (T) => T === PROJECT_SESSION),
-      maybeOfProject: count(x, (T) => T === PROJECT_UNKNOWN),
+      ofProject: count(failureCodes, (code) => code === PROJECT_SESSION),
+      maybeOfProject: count(failureCodes, (code) => code === PROJECT_UNKNOWN),
     };
   }
-  async renameRemote(h, E, k) {}
+  async renameRemote(job, sessionId, title) {}
 }
 //@ chunk-93kwxas0.js:37835-38080 placement
 /**
  * 取或创建这次访问的 FleetRoster；storageV5 不同时报错并保留原实例。
  */
-function ensureFleetRoster(h, storageV5) {
-  if (h.roster) {
-    if (!h.roster.usesStorage(storageV5))
+function ensureFleetRoster(visit, storageV5) {
+  if (visit.roster) {
+    if (!visit.roster.usesStorage(storageV5))
       logError(
         Error(
           "[fleet:roster] ensureFleetRoster called with a different storageV5 than the visit was created with; keeping the original",
         ),
       );
-    return h.roster;
+    return visit.roster;
   }
-  return (h.roster = new FleetRoster({
+  return (visit.roster = new FleetRoster({
     storageV5,
   }));
 }
@@ -2159,12 +2249,12 @@ function createInitialSelectionState(collapsed) {
  * 旧格式的折叠键补上 state:/directory: 前缀。
  */
 function normalizeCollapsedKeys(collapsed) {
-  let E = FLEET_BUCKETS;
+  let buckets = FLEET_BUCKETS;
   return new Set(
-    collapsed.map((k) =>
-      k === "pinned" || /^(state|directory|group):/.test(k)
-        ? k
-        : `${E.includes(k) ? "state" : "directory"}:${k}`,
+    collapsed.map((key) =>
+      key === "pinned" || /^(state|directory|group):/.test(key)
+        ? key
+        : `${buckets.includes(key) ? "state" : "directory"}:${key}`,
     ),
   );
 }
@@ -2196,41 +2286,43 @@ class FleetAttachController {
   #R = null;
   #v = false;
   #b = null;
-  constructor(h) {
-    this.#n = h.roster;
-    this.#e = h.storageV5;
+  constructor(options) {
+    this.#n = options.roster;
+    this.#e = options.storageV5;
     this.#t = createInitialSelectionState(
-      h.collapsed && h.collapsed.length > 0 ? normalizeCollapsedKeys(h.collapsed) : EMPTY_SET,
+      options.collapsed && options.collapsed.length > 0
+        ? normalizeCollapsedKeys(options.collapsed)
+        : EMPTY_SET,
     );
   }
   getSnapshot = () => this.#t;
-  subscribe = (h) => this.#l.subscribe(h);
-  #p(h) {
-    let E = this.#t;
-    let k = {
-      ...E,
-      ...h,
+  subscribe = (listener) => this.#l.subscribe(listener);
+  #p(patch) {
+    let previous = this.#t;
+    let next = {
+      ...previous,
+      ...patch,
     };
     if (
-      k.focusedIdx === E.focusedIdx &&
-      k.hoverFocusIdx === E.hoverFocusIdx &&
-      k.collapsed === E.collapsed &&
-      k.capExpanded === E.capExpanded &&
-      k.draftPick === E.draftPick &&
-      k.followOrigin === E.followOrigin
+      next.focusedIdx === previous.focusedIdx &&
+      next.hoverFocusIdx === previous.hoverFocusIdx &&
+      next.collapsed === previous.collapsed &&
+      next.capExpanded === previous.capExpanded &&
+      next.draftPick === previous.draftPick &&
+      next.followOrigin === previous.followOrigin
     )
       return;
-    this.#t = k;
+    this.#t = next;
     this.#l.emit();
   }
-  attachView(h) {
+  attachView(view) {
     this.#r++;
-    this.#i = h.clock;
-    this.#c = h.onError;
-    let E = false;
+    this.#i = view.clock;
+    this.#c = view.onError;
+    let detached = false;
     return () => {
-      if (E) return;
-      E = true;
+      if (detached) return;
+      detached = true;
       this.#r--;
       if (this.#r === 0) this.#x();
     };
@@ -2238,10 +2330,10 @@ class FleetAttachController {
   #x() {
     this.#u?.();
     this.#u = null;
-    let h = this.#d;
+    let pendingReleases = this.#d;
     this.#d = [];
     this.#I().finally(() => {
-      for (let E of h) E();
+      for (let release of pendingReleases) release();
     });
     this.#i = null;
     this.#c = null;
@@ -2262,31 +2354,31 @@ class FleetAttachController {
       focusedIdx,
     });
   }
-  navigateTo(h, E) {
-    this.#w(h, E);
+  navigateTo(rowIndex, row) {
+    this.#w(rowIndex, row);
     this.#p({
-      focusedIdx: h,
+      focusedIdx: rowIndex,
       hoverFocusIdx: null,
     });
   }
-  jumpToHeader(h, E) {
-    this.#b = h;
-    this.navigateTo(h, E);
+  jumpToHeader(rowIndex, row) {
+    this.#b = rowIndex;
+    this.navigateTo(rowIndex, row);
   }
-  takeRevealAtTop(h) {
-    let E = this.#b === h;
+  takeRevealAtTop(rowIndex) {
+    let matches = this.#b === rowIndex;
     this.#b = null;
-    return E;
+    return matches;
   }
-  hoverTo(h, E) {
-    this.#w(h, E);
+  hoverTo(rowIndex, row) {
+    this.#w(rowIndex, row);
     this.#p({
-      focusedIdx: h,
-      hoverFocusIdx: h,
+      focusedIdx: rowIndex,
+      hoverFocusIdx: rowIndex,
     });
   }
-  followPick(focusedIdx, E) {
-    this.#s = E?.kind === "job" ? E.job.id : E?.kind === "earlier" ? E.entry.sessionId : null;
+  followPick(focusedIdx, row) {
+    this.#s = row?.kind === "job" ? row.job.id : row?.kind === "earlier" ? row.entry.sessionId : null;
     this.#p({
       focusedIdx,
       hoverFocusIdx: null,
@@ -2294,47 +2386,48 @@ class FleetAttachController {
       followOrigin: null,
     });
   }
-  returnPickTo(h) {
-    this.#y = h;
+  returnPickTo(jobId) {
+    this.#y = jobId;
     this.#T = null;
   }
-  releasePick(h, E, k) {
-    let C = this.#y;
-    let x = this.#T;
-    let index = h.findIndex((V) =>
-      x
-        ? V.kind === "header" && V.group === x
-        : (V.kind === "job" && V.job.id === C) || (V.kind === "earlier" && V.entry.sessionId === C),
+  releasePick(rows, fallbackIndex, preferHeader) {
+    let savedJobId = this.#y;
+    let savedGroup = this.#T;
+    let index = rows.findIndex((row) =>
+      savedGroup
+        ? row.kind === "header" && row.group === savedGroup
+        : (row.kind === "job" && row.job.id === savedJobId) ||
+          (row.kind === "earlier" && row.entry.sessionId === savedJobId),
     );
-    let A = index >= 0 ? index : E;
-    let L = h[A];
-    if (k && this.#s && L?.kind === "header" && L.group !== this.#R) {
+    let nextIndex = index >= 0 ? index : fallbackIndex;
+    let nextRow = rows[nextIndex];
+    if (preferHeader && this.#s && nextRow?.kind === "header" && nextRow.group !== this.#R) {
       this.followId = this.#s;
       return;
     }
-    this.followId = index >= 0 ? C : null;
-    this.followOrigin = index >= 0 ? x : null;
+    this.followId = index >= 0 ? savedJobId : null;
+    this.followOrigin = index >= 0 ? savedGroup : null;
     this.#p({
-      focusedIdx: A,
+      focusedIdx: nextIndex,
       hoverFocusIdx: null,
     });
   }
-  sessionListedAs(h, E) {
-    this.#E.set(h, E);
+  sessionListedAs(placeholderId, jobId) {
+    this.#E.set(placeholderId, jobId);
   }
-  #w(h, E) {
-    this.followId = E?.kind === "job" ? E.job.id : null;
-    this.followOrigin = E?.kind === "header" ? E.group : null;
-    if (h !== this.#t.focusedIdx) this.#R = this.followOrigin;
+  #w(rowIndex, row) {
+    this.followId = row?.kind === "job" ? row.job.id : null;
+    this.followOrigin = row?.kind === "header" ? row.group : null;
+    if (rowIndex !== this.#t.focusedIdx) this.#R = this.followOrigin;
   }
   get followId() {
     return this.#s;
   }
-  set followId(h) {
-    this.#s = h;
-    this.#y = h;
+  set followId(jobId) {
+    this.#s = jobId;
+    this.#y = jobId;
     this.#T = this.followOrigin;
-    if (h) this.#R = null;
+    if (jobId) this.#R = null;
     this.#p({
       draftPick: false,
     });
@@ -2342,10 +2435,10 @@ class FleetAttachController {
   get followOrigin() {
     return this.#t.followOrigin;
   }
-  set followOrigin(h) {
-    this.#T = h;
+  set followOrigin(origin) {
+    this.#T = origin;
     this.#p({
-      followOrigin: h,
+      followOrigin: origin,
     });
   }
   clearFollow() {
@@ -2360,27 +2453,29 @@ class FleetAttachController {
       hoverFocusIdx,
     });
   }
-  clampFocus(h) {
+  clampFocus(rowCount) {
     this.#p({
-      focusedIdx: clamp(this.#t.focusedIdx, 0, Math.max(0, h - 1)),
+      focusedIdx: clamp(this.#t.focusedIdx, 0, Math.max(0, rowCount - 1)),
     });
   }
-  syncRows(h) {
-    this.#a = h;
+  syncRows(rows) {
+    this.#a = rows;
     this.#o = false;
-    for (let [T, A] of this.#E)
-      if (h.some((L) => L.kind === "job" && L.job.id === A)) {
-        if (this.#s === T) this.#s = A;
-        if (this.#y === T) this.#y = A;
-        if (this.#h === T) this.#h = A;
-        this.#E.delete(T);
+    for (let [placeholderId, jobId] of this.#E)
+      if (rows.some((row) => row.kind === "job" && row.job.id === jobId)) {
+        if (this.#s === placeholderId) this.#s = jobId;
+        if (this.#y === placeholderId) this.#y = jobId;
+        if (this.#h === placeholderId) this.#h = jobId;
+        this.#E.delete(placeholderId);
       } else if (
-        !this.#n.getSnapshot().remoteJobs.some((remoteJob) => remoteJob.id === T || remoteJob.id === A)
+        !this.#n
+          .getSnapshot()
+          .remoteJobs.some((remoteJob) => remoteJob.id === placeholderId || remoteJob.id === jobId)
       )
-        this.#E.delete(T);
+        this.#E.delete(placeholderId);
     let { focusedIdx, followOrigin } = this.#t;
     if (followOrigin) {
-      let index = h.findIndex((A) => A.kind === "header" && A.group === followOrigin);
+      let index = rows.findIndex((row) => row.kind === "header" && row.group === followOrigin);
       if (index >= 0 && index !== focusedIdx) this.#_(index);
       if (index < 0)
         this.#p({
@@ -2389,24 +2484,28 @@ class FleetAttachController {
       return;
     }
     if (!this.#s) return;
-    let C = this.#s;
-    let index = h.findIndex(
-      (T) => (T.kind === "job" && T.job.id === C) || (T.kind === "earlier" && T.entry.sessionId === C),
+    let jobId = this.#s;
+    let index = rows.findIndex(
+      (row) =>
+        (row.kind === "job" && row.job.id === jobId) ||
+        (row.kind === "earlier" && row.entry.sessionId === jobId),
     );
     if (index < 0) {
       this.#s = null;
       return;
     }
     if (index !== focusedIdx) {
-      logForDebugging(`[FV-poll] follow re-pin moved focus: was=${focusedIdx} now=${index} followId=${C}`);
+      logForDebugging(
+        `[FV-poll] follow re-pin moved focus: was=${focusedIdx} now=${index} followId=${jobId}`,
+      );
       this.#_(index);
     }
   }
-  #_(h) {
+  #_(rowIndex) {
     let { focusedIdx, hoverFocusIdx } = this.#t;
     this.#p({
-      focusedIdx: h,
-      hoverFocusIdx: hoverFocusIdx === focusedIdx ? h : hoverFocusIdx,
+      focusedIdx: rowIndex,
+      hoverFocusIdx: hoverFocusIdx === focusedIdx ? rowIndex : hoverFocusIdx,
     });
   }
   focusedRow() {
@@ -2415,26 +2514,26 @@ class FleetAttachController {
   get reorderIssued() {
     return this.#o;
   }
-  beginReorder(followId, E) {
+  beginReorder(followId, rowIndex) {
     this.followId = followId;
     this.#o = true;
-    this.#_(E);
+    this.#_(rowIndex);
   }
-  queueOrderWrites(h, E) {
-    let k = E === "state" ? this.#g : this.#m;
-    for (let [x, T] of h) {
-      k.set(x, T);
-      this.#d.push(this.#n.holdJob(x));
+  queueOrderWrites(orders, mode) {
+    let target = mode === "state" ? this.#g : this.#m;
+    for (let [jobId, order] of orders) {
+      target.set(jobId, order);
+      this.#d.push(this.#n.holdJob(jobId));
     }
     this.#u?.();
-    let C = this.#i?.setTimeout ?? defaultSetTimeout;
-    this.#u = C(() => {
+    let setTimeoutFn = this.#i?.setTimeout ?? defaultSetTimeout;
+    this.#u = setTimeoutFn(() => {
       this.#u = null;
       this.#n.bumpGen();
-      let x = this.#d;
+      let releases = this.#d;
       this.#d = [];
       this.#I().finally(() => {
-        for (let T of x) T();
+        for (let release of releases) release();
         if (this.#r > 0) this.#n.reload();
       });
     }, HOVER_POLL_MS);
@@ -2445,11 +2544,11 @@ class FleetAttachController {
     this.#m.clear();
     this.#g.clear();
     if (list.length === 0 && list_2.length === 0) return Promise.resolve();
-    let k = this.#e;
+    let storageV5 = this.#e;
     return withSortOrderLock(() =>
       Promise.all([
-        ...list.map(([C, x]) => writeSortOrder(getJobDir(C), x, k)),
-        ...list_2.map(([C, x]) => writeStateSortOrder(getJobDir(C), x, k)),
+        ...list.map(([jobId, order]) => writeSortOrder(getJobDir(jobId), order, storageV5)),
+        ...list_2.map(([jobId, order]) => writeStateSortOrder(getJobDir(jobId), order, storageV5)),
       ]),
     )
       .then(() => {
@@ -2461,65 +2560,67 @@ class FleetAttachController {
         logFeatureBad("fleet_view_reorder_job", "write_sort_order_failed");
       });
   }
-  toggleCollapsed(h, E) {
-    let k = new Set(this.#t.collapsed);
-    if (k.has(h)) {
-      k.delete(h);
+  toggleCollapsed(key, capKey) {
+    let nextCollapsed = new Set(this.#t.collapsed);
+    if (nextCollapsed.has(key)) {
+      nextCollapsed.delete(key);
       this.#p({
-        collapsed: k,
+        collapsed: nextCollapsed,
       });
       return;
     }
-    k.add(h);
+    nextCollapsed.add(key);
     let capExpanded = this.#t.capExpanded;
     this.#p({
-      collapsed: k,
+      collapsed: nextCollapsed,
       capExpanded:
-        E !== null && capExpanded.has(E) ? new Set([...capExpanded].filter((x) => x !== E)) : capExpanded,
+        capKey !== null && capExpanded.has(capKey)
+          ? new Set([...capExpanded].filter((capEntry) => capEntry !== capKey))
+          : capExpanded,
     });
   }
-  uncollapse(...h) {
+  uncollapse(...keys) {
     let collapsed = this.#t.collapsed;
-    if (!h.some((C) => collapsed.has(C))) return;
-    let k = new Set(collapsed);
-    for (let C of h) k.delete(C);
+    if (!keys.some((key) => collapsed.has(key))) return;
+    let nextCollapsed = new Set(collapsed);
+    for (let key of keys) nextCollapsed.delete(key);
     this.#p({
-      collapsed: k,
+      collapsed: nextCollapsed,
     });
   }
-  renameCollapsedKey(h, E) {
+  renameCollapsedKey(oldKey, newKey) {
     let collapsed = this.#t.collapsed;
-    if (!collapsed.has(h)) return;
-    let C = new Set(collapsed);
-    C.delete(h);
-    C.add(E);
+    if (!collapsed.has(oldKey)) return;
+    let nextCollapsed = new Set(collapsed);
+    nextCollapsed.delete(oldKey);
+    nextCollapsed.add(newKey);
     this.#p({
-      collapsed: C,
+      collapsed: nextCollapsed,
     });
   }
-  expandCap(h) {
-    if (this.#t.capExpanded.has(h)) return;
+  expandCap(group) {
+    if (this.#t.capExpanded.has(group)) return;
     this.#p({
-      capExpanded: new Set(this.#t.capExpanded).add(h),
+      capExpanded: new Set(this.#t.capExpanded).add(group),
     });
   }
   get restoreAttempts() {
     return this.#S;
   }
-  set restoreAttempts(h) {
-    this.#S = h;
+  set restoreAttempts(attempts) {
+    this.#S = attempts;
   }
   get restoreCountedJobs() {
     return this.#k;
   }
-  set restoreCountedJobs(h) {
-    this.#k = h;
+  set restoreCountedJobs(jobs) {
+    this.#k = jobs;
   }
   get savedFocusJobId() {
     return this.#h;
   }
-  set savedFocusJobId(h) {
-    this.#h = h;
+  set savedFocusJobId(jobId) {
+    this.#h = jobId;
   }
   isFirstQueryOfLook() {
     if (this.#v) return false;
@@ -2528,8 +2629,8 @@ class FleetAttachController {
   }
 }
 //@ chunk-93kwxas0.js:43414-43499 placement
-function ensureFleetSelection(h, roster, storageV5, collapsed) {
-  return (h.selection ??= new FleetAttachController({
+function ensureFleetSelection(visit, roster, storageV5, collapsed) {
+  return (visit.selection ??= new FleetAttachController({
     roster,
     storageV5,
     collapsed,
@@ -2567,29 +2668,29 @@ class FleetLiveStatusStore {
   #g = null;
   #u = new Set();
   getSnapshot = () => this.#e;
-  subscribe = (h) => this.#n.subscribe(h);
-  #d(h) {
-    let E = this.#e;
-    let k = {
-      ...E,
-      ...h,
+  subscribe = (listener) => this.#n.subscribe(listener);
+  #d(patch) {
+    let previous = this.#e;
+    let next = {
+      ...previous,
+      ...patch,
     };
     if (
-      k.attachingJobId === E.attachingJobId &&
-      k.newSessionOpening === E.newSessionOpening &&
-      k.warmingJobIds === E.warmingJobIds &&
-      k.autoOpened === E.autoOpened
+      next.attachingJobId === previous.attachingJobId &&
+      next.newSessionOpening === previous.newSessionOpening &&
+      next.warmingJobIds === previous.warmingJobIds &&
+      next.autoOpened === previous.autoOpened
     )
       return;
-    this.#e = k;
+    this.#e = next;
     this.#n.emit();
   }
   attachView() {
     this.#l++;
-    let h = false;
+    let detached = false;
     return () => {
-      if (h) return;
-      h = true;
+      if (detached) return;
+      detached = true;
       this.#l--;
       if (this.#l === 0) {
         this.#r = null;
@@ -2607,44 +2708,44 @@ class FleetLiveStatusStore {
       }
     };
   }
-  arm(attachingJobId, E) {
-    this.#r = E;
+  arm(attachingJobId, jobId) {
+    this.#r = jobId;
     this.#d({
       attachingJobId,
     });
   }
   disarm() {
-    let h = this.#r;
+    let previousJobId = this.#r;
     this.#r = null;
     this.#d({
       attachingJobId: null,
     });
-    return h;
+    return previousJobId;
   }
   nextRespawnAttempt() {
     return ++this.#i;
   }
-  isCurrentRespawnAttempt(h) {
-    return this.#i === h;
+  isCurrentRespawnAttempt(attempt) {
+    return this.#i === attempt;
   }
   abandonRespawnAttempt() {
     this.#i++;
   }
-  getWarming(h) {
-    return this.#t.get(h);
+  getWarming(jobId) {
+    return this.#t.get(jobId);
   }
-  trackWarming(h, E) {
-    this.#t.set(h, E);
+  trackWarming(jobId, promise) {
+    this.#t.set(jobId, promise);
     this.#S();
-    E.then(() => {
-      if (this.#t.get(h) === E) {
-        this.#t.delete(h);
+    promise.then(() => {
+      if (this.#t.get(jobId) === promise) {
+        this.#t.delete(jobId);
         this.#S();
       }
     });
   }
-  dropWarming(h) {
-    if (this.#t.delete(h)) this.#S();
+  dropWarming(jobId) {
+    if (this.#t.delete(jobId)) this.#S();
   }
   #S() {
     this.#d({
@@ -2654,21 +2755,21 @@ class FleetLiveStatusStore {
   get forkRefusedJobId() {
     return this.#s;
   }
-  set forkRefusedJobId(h) {
-    this.#s = h;
+  set forkRefusedJobId(jobId) {
+    this.#s = jobId;
   }
   get restartOfferedJobId() {
     return this.#a;
   }
-  set restartOfferedJobId(h) {
-    this.#a = h;
+  set restartOfferedJobId(jobId) {
+    this.#a = jobId;
   }
   get deadEpochOfferedJobId() {
     return this.#o;
   }
-  set deadEpochOfferedJobId(h) {
-    this.#o = h;
-    this.#m = h === null ? 0 : Date.now();
+  set deadEpochOfferedJobId(jobId) {
+    this.#o = jobId;
+    this.#m = jobId === null ? 0 : Date.now();
   }
   deadEpochOfferAgeMs() {
     return this.#o === null ? 1 / 0 : Date.now() - this.#m;
@@ -2676,20 +2777,20 @@ class FleetLiveStatusStore {
   get deadEpochGoneJobId() {
     return this.#g;
   }
-  set deadEpochGoneJobId(h) {
-    this.#g = h;
+  set deadEpochGoneJobId(jobId) {
+    this.#g = jobId;
   }
-  isPromoting(h) {
-    return this.#u.has(h);
+  isPromoting(jobId) {
+    return this.#u.has(jobId);
   }
-  beginPromote(h) {
-    this.#u.add(h);
+  beginPromote(jobId) {
+    this.#u.add(jobId);
   }
-  endPromote(h) {
-    this.#u.delete(h);
+  endPromote(jobId) {
+    this.#u.delete(jobId);
   }
-  releasePromoted(h) {
-    for (let E of this.#u) if (h.has(E)) this.#u.delete(E);
+  releasePromoted(jobIds) {
+    for (let jobId of this.#u) if (jobIds.has(jobId)) this.#u.delete(jobId);
   }
   beginNewSession() {
     this.#d({
@@ -2697,8 +2798,8 @@ class FleetLiveStatusStore {
     });
     return ++this.#c;
   }
-  isCurrentNewSessionAttempt(h) {
-    return this.#c === h;
+  isCurrentNewSessionAttempt(attempt) {
+    return this.#c === attempt;
   }
   endNewSession() {
     this.#d({
@@ -2718,22 +2819,22 @@ class FleetLiveStatusStore {
   }
 }
 //@ chunk-93kwxas0.js:45557-45597 placement
-function ensureFleetLiveStatus(h) {
-  return (h.attach ??= new FleetLiveStatusStore());
+function ensureFleetLiveStatus(visit) {
+  return (visit.attach ??= new FleetLiveStatusStore());
 }
 //@ chunk-93kwxas0.js:45597-45837 placement
 /**
  * 删除不再被任何消息引用的粘贴内容（默认只删图片）。
  */
-function prunePastedContents(h, E, { pruneTextPastes: k = false } = {}) {
-  let values = Object.values(h);
-  function x(A) {
-    return k || A.type === "image";
+function prunePastedContents(pastes, texts, { pruneTextPastes = false } = {}) {
+  let values = Object.values(pastes);
+  function shouldKeep(paste) {
+    return pruneTextPastes || paste.type === "image";
   }
-  if (!values.some(x)) return;
-  let T = new Set();
-  for (let A of E) for (let L of parsePastedRefs(A)) T.add(L.id);
-  for (let A of values) if (x(A) && !T.has(A.id)) delete h[A.id];
+  if (!values.some(shouldKeep)) return;
+  let referencedIds = new Set();
+  for (let text of texts) for (let ref of parsePastedRefs(text)) referencedIds.add(ref.id);
+  for (let paste of values) if (shouldKeep(paste) && !referencedIds.has(paste.id)) delete pastes[paste.id];
 }
 export {
   jobSortKey_2,

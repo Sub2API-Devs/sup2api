@@ -11,7 +11,7 @@
 import { createDialFailureLatch, boundDial } from "../mcp/dialFailureLatch.js";
 import { createSignal } from "../../utils/signal.js";
 import { count } from "../../utils/collections.js";
-import { SS, xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { partitionAlias, import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { pMap } from "../../../vendor/p-map/index.js";
 import { logError } from "../../utils/log.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -31,16 +31,16 @@ import {
   maxDescriptionLength,
 } from "../mcp/client.js";
 import { awaitPolicyColdStartWaiter } from "../policyLimits/coldStartWaiter.js";
-import { ensureMdmLoaded } from "../../utils/settings/managedPluginTiers.js";
+import { ensureMdmLoaded } from "../../utils/settings/mdm/mdmLoader.js";
 import { invalidateCommandNames } from "../../utils/settings/commandSyncNames.js";
 import { isMcpServerAllowedByPolicy } from "../mcp/config.js";
 import { isToolFromMcpServer, buildMcpToolName } from "../mcp/mcpStringUtils.js";
 import { BASE_CALLER_FIELDS, CALLER_FIELDS, withinDepth } from "../../remote/tools/protocolSchemas.js";
-import { Uo } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { imageLimitsForModel } from "../../utils/attachmentMedia.js";
 import { stripAnthropicMeta } from "../mcp/anthropicMeta.js";
 import {
-  MAX_PREFIXED_TOOL_NAME,
+  MAX_PREFIXED_TOOL_NAME_CHARS,
   MAX_RESULT_SIZE_HINT,
   MAX_PASSTHROUGH_TOOLS,
   MAX_INPUT_SCHEMA_DEPTH,
@@ -61,7 +61,11 @@ import { getEmptyToolPermissionContext } from "../../Tool.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { identityMap } from "../../remote/tools/protocolConstants.js";
 import { TOOL_META_KEYS } from "../../bridge/deviceRegistration.js";
+import { beginDeferredInits } from "../../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 2 modules closed by ./deviceMcpConsent.js;
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("src/services/deviceBridge/deviceMcpConsent.js");
 //@ chunk-weh04swb.js:1665-1690 placement
 /**
  * 策略重新读取的最小间隔（60 秒）。
@@ -73,8 +77,8 @@ var POLICY_REFRESH_INTERVAL_MS = 60000;
 class PassthroughMcpUnavailableError extends Error {
   unavailable;
   name = "PassthroughMcpUnavailableError";
-  constructor(unavailable, n, i) {
-    super(n, i);
+  constructor(unavailable, message, options) {
+    super(message, options);
     this.unavailable = unavailable;
   }
 }
@@ -82,228 +86,230 @@ class PassthroughMcpUnavailableError extends Error {
 /**
  * 设备桥：把本机 MCP 服务器的工具"直通"给云会话调用：列出/刷新服务器、重名与保留名检查、托管策略拒绝、调用转发与错误包装。
  */
-function createPassthroughMcpBridge(e) {
-  let n = e.ops ?? createPassthroughMcpDeps();
-  let i = e.dialLatch ?? createDialFailureLatch();
-  let keys = Object.keys(e.configs);
-  let s = new Map();
-  let c = new Map();
+function createPassthroughMcpBridge(options) {
+  let deps = options.ops ?? createPassthroughMcpDeps();
+  let dialLatch = options.dialLatch ?? createDialFailureLatch();
+  let keys = Object.keys(options.configs);
+  let served = new Map();
+  let statusByName = new Map();
   let weakSet = new WeakSet();
   let signal = createSignal();
   let now = Date.now();
-  let g;
-  let M = false;
-  let k = () => {};
+  let stopPromise;
+  let settled_ = false;
+  let settleResolve = () => {};
   let settled = new Promise((resolve) => {
-    k = resolve;
+    settleResolve = resolve;
   });
-  let O;
+  let settleTimer;
   let now_2 = Date.now();
-  let E = () => g !== undefined;
-  function B() {
-    if (M) return;
-    M = true;
-    if (O !== undefined) {
-      clearTimeout(O);
-      O = undefined;
+  let isStopped = () => stopPromise !== undefined;
+  function settle() {
+    if (settled_) return;
+    settled_ = true;
+    if (settleTimer !== undefined) {
+      clearTimeout(settleTimer);
+      settleTimer = undefined;
     }
-    let r = [...c.values()];
-    let a = (f) => count(r, (h) => h === f);
-    k({
+    let statuses = [...statusByName.values()];
+    let countStatus = (status) => count(statuses, (entryStatus) => entryStatus === status);
+    settleResolve({
       configured: keys.length,
-      connected: a("connected"),
-      cached: a("cached"),
-      failed: a("failed"),
-      needsAuth: a("needs-auth"),
-      disabled: a("disabled"),
-      blocked: a("blocked"),
-      excluded: a("excluded"),
-      unreported: keys.length - c.size,
+      connected: countStatus("connected"),
+      cached: countStatus("cached"),
+      failed: countStatus("failed"),
+      needsAuth: countStatus("needs-auth"),
+      disabled: countStatus("disabled"),
+      blocked: countStatus("blocked"),
+      excluded: countStatus("excluded"),
+      unreported: keys.length - statusByName.size,
       settleMs: Date.now() - now,
     });
-    re([...s].filter(([, f]) => f.handle.type === "cached").map(([f]) => f));
+    warmCached([...served].filter(([, handle]) => handle.handle.type === "cached").map(([name]) => name));
   }
-  async function re(r) {
-    let a = async (S) => {
-      q();
-      let D = s.get(S);
-      if (D && !E()) {
-        await se(S, D).catch(() => {});
-        q();
+  async function warmCached(names) {
+    let warmOne = async (name) => {
+      refreshPolicyIfDue();
+      let entry = served.get(name);
+      if (entry && !isStopped()) {
+        await dial(name, entry).catch(() => {});
+        refreshPolicyIfDue();
       }
     };
-    let f = (S) => n.dialConcurrency(e.configs[S]);
-    let filtered = r.filter((S) => s.has(S));
+    let dialConcurrency = (name) => deps.dialConcurrency(options.configs[name]);
+    let filtered = names.filter((name) => served.has(name));
     await Promise.all(
-      SS(filtered, (S) => f(S).kind === "local")
-        .filter((S) => S.length > 0)
-        .map((S) =>
-          pMap(S, a, {
-            concurrency: f(S[0]).limit,
+      partitionAlias(filtered, (name) => dialConcurrency(name).kind === "local")
+        .filter((group) => group.length > 0)
+        .map((group) =>
+          pMap(group, warmOne, {
+            concurrency: dialConcurrency(group[0]).limit,
           }),
         ),
     );
   }
-  function W() {
+  function emit() {
     try {
       signal.emit();
     } catch (error) {
       logError(error);
     }
   }
-  function x(r, a) {
-    let f = s.get(r);
-    if (f)
-      s.set(r, {
-        ...f,
-        ...a,
+  function patch(name, patchValues) {
+    let entry = served.get(name);
+    if (entry)
+      served.set(name, {
+        ...entry,
+        ...patchValues,
       });
   }
-  function Re(client, tools) {
-    let f = s.get(client.name);
-    let h = serverTools(client.name, tools);
-    s.set(client.name, {
+  function adoptClient(client, tools) {
+    let previous = served.get(client.name);
+    let serverToolList = serverTools(client.name, tools);
+    served.set(client.name, {
       handle: client,
-      tools: h,
-      dialing: f?.dialing,
+      tools: serverToolList,
+      dialing: previous?.dialing,
       listing: undefined,
       consecutiveDialFailures: 0,
-      everConnected: f?.everConnected === true || client.type === "connected",
+      everConnected: previous?.everConnected === true || client.type === "connected",
     });
     if (client.type === "connected") {
-      if (h.length === 0)
-        x(client.name, {
-          listing: G(client.name, client),
+      if (serverToolList.length === 0)
+        patch(client.name, {
+          listing: refreshTools(client.name, client),
         });
-      ie(client.name, client);
-    } else if (M) re([client.name]);
-    if (f !== undefined || M) W();
+      ensureListed(client.name, client);
+    } else if (settled_) warmCached([client.name]);
+    if (previous !== undefined || settled_) emit();
   }
-  function ie(r, a) {
-    let f = s.get(r);
-    if (!f || E()) return;
-    if (f.handle !== a) {
-      x(r, {
-        handle: a,
+  function ensureListed(name, client) {
+    let entry = served.get(name);
+    if (!entry || isStopped()) return;
+    if (entry.handle !== client) {
+      patch(name, {
+        handle: client,
         everConnected: true,
       });
-      x(r, {
-        listing: G(r, a),
+      patch(name, {
+        listing: refreshTools(name, client),
       });
-      W();
+      emit();
     }
-    if (!weakSet.has(a) && a.capabilities?.tools?.listChanged) {
-      weakSet.add(a);
-      n.onToolListChanged(a, async () => {
-        await G(r, a);
+    if (!weakSet.has(client) && client.capabilities?.tools?.listChanged) {
+      weakSet.add(client);
+      deps.onToolListChanged(client, async () => {
+        await refreshTools(name, client);
       });
     }
   }
-  function G(r, a) {
-    let f = false;
-    return n
+  function refreshTools(name, client) {
+    let changed = false;
+    return deps
       .refreshTools(
-        a,
-        (h, S) => {
-          if (s.get(r)?.handle === a && !E()) {
-            x(r, {
-              tools: serverTools(r, S),
+        client,
+        (tools, previousTools) => {
+          if (served.get(name)?.handle === client && !isStopped()) {
+            patch(name, {
+              tools: serverTools(name, previousTools),
               listing: undefined,
             });
-            f = true;
-            W();
+            changed = true;
+            emit();
           }
         },
-        e.storageV5,
+        options.storageV5,
       )
       .then(
-        () => f,
+        () => changed,
         (error) => {
           logForDebugging(
-            `[deviceBridge] passthrough MCP tools refresh failed for ${r}: ${toError(error).message}`,
+            `[deviceBridge] passthrough MCP tools refresh failed for ${name}: ${toError(error).message}`,
           );
           return false;
         },
       );
   }
-  function H(r, a) {
-    let f = s.get(r);
-    if (!f || E()) return;
-    s.delete(r);
-    n.dispose(r, f.handle.config);
-    n.cleanup([f.handle]);
-    logForDebugging(`[deviceBridge] passthrough MCP server ${r} left the pool (${a})`);
-    W();
+  function removeServer(name, reason) {
+    let entry = served.get(name);
+    if (!entry || isStopped()) return;
+    served.delete(name);
+    deps.dispose(name, entry.handle.config);
+    deps.cleanup([entry.handle]);
+    logForDebugging(`[deviceBridge] passthrough MCP server ${name} left the pool (${reason})`);
+    emit();
   }
-  function q() {
+  function refreshPolicyIfDue() {
     let now = Date.now();
     if (now - now_2 >= POLICY_REFRESH_INTERVAL_MS) {
       now_2 = now;
-      n.refreshPolicy();
+      deps.refreshPolicy();
     }
-    for (let [a, f] of s) if (!n.allowedByPolicy(a, f.handle.config)) H(a, "denied by managed policy");
+    for (let [name, entry] of served)
+      if (!deps.allowedByPolicy(name, entry.handle.config)) removeServer(name, "denied by managed policy");
   }
-  function se(r, a) {
-    if (a.dialing) return a.dialing;
-    if (i.shouldSkip(r))
+  function dial(name, entry) {
+    if (entry.dialing) return entry.dialing;
+    if (dialLatch.shouldSkip(name))
       return Promise.reject(
         new PassthroughMcpUnavailableError(
           "server",
           "MCP server failed to connect recently; not retrying yet",
         ),
       );
-    let f = n.ensureConnected(a.handle).then(
-      (h) => {
-        ae(r, f);
-        i.recordSuccess(r);
-        if (E() || !s.has(r)) {
-          n.cleanup([h]);
+    let promise = deps.ensureConnected(entry.handle).then(
+      (client) => {
+        clearDialing(name, promise);
+        dialLatch.recordSuccess(name);
+        if (isStopped() || !served.has(name)) {
+          deps.cleanup([client]);
           throw new PassthroughMcpUnavailableError(
             "server",
             "MCP server is no longer offered by this machine",
           );
         }
-        x(r, {
+        patch(name, {
           consecutiveDialFailures: 0,
         });
-        ie(r, h);
-        return h;
+        ensureListed(name, client);
+        return client;
       },
       (error) => {
-        ae(r, f);
+        clearDialing(name, promise);
         if (isMcpAuthError(error)) {
-          H(r, "needs authentication");
+          removeServer(name, "needs authentication");
           throw error;
         }
-        i.recordFailure(r);
-        let S = s.get(r);
-        let D = (S?.consecutiveDialFailures ?? 0) + 1;
-        x(r, {
-          consecutiveDialFailures: D,
+        dialLatch.recordFailure(name);
+        let dialEntry = served.get(name);
+        let failures = (dialEntry?.consecutiveDialFailures ?? 0) + 1;
+        patch(name, {
+          consecutiveDialFailures: failures,
         });
-        if (D >= MAX_CONSECUTIVE_DIAL_FAILURES && S?.everConnected !== true) H(r, "repeated dial failures");
-        else if (s.has(r)) n.dispose(r, a.handle.config);
+        if (failures >= MAX_CONSECUTIVE_DIAL_FAILURES && dialEntry?.everConnected !== true)
+          removeServer(name, "repeated dial failures");
+        else if (served.has(name)) deps.dispose(name, entry.handle.config);
         throw error;
       },
     );
-    x(r, {
-      dialing: f,
+    patch(name, {
+      dialing: promise,
     });
-    return f;
+    return promise;
   }
-  function ae(r, a) {
-    if (s.get(r)?.dialing === a)
-      x(r, {
+  function clearDialing(name, promise) {
+    if (served.get(name)?.dialing === promise)
+      patch(name, {
         dialing: undefined,
       });
   }
-  async function Oe(r, { signal, deadline }) {
-    let listing = s.get(r)?.listing;
+  async function waitForListing(name, { signal, deadline }) {
+    let listing = served.get(name)?.listing;
     while (listing !== undefined) {
-      let S = await boundDial(listing, {
+      let listed = await boundDial(listing, {
         signal,
         timeoutMs: Math.max(0, deadline - Date.now()),
-        serverName: r,
+        serverName: name,
         context: "device tool call",
       }).catch((error) => {
         if (isAbortError(error)) throw error;
@@ -311,45 +317,45 @@ function createPassthroughMcpBridge(e) {
           cause: error,
         });
       });
-      let D = s.get(r);
-      if (S || D?.listing === undefined) return;
-      if (D.listing !== listing) {
-        listing = D.listing;
+      let entry = served.get(name);
+      if (listed || entry?.listing === undefined) return;
+      if (entry.listing !== listing) {
+        listing = entry.listing;
         continue;
       }
-      if (D.handle.type === "connected")
-        x(r, {
-          listing: G(r, D.handle),
+      if (entry.handle.type === "connected")
+        patch(name, {
+          listing: refreshTools(name, entry.handle),
         });
       throw new PassthroughMcpUnavailableError("server", "MCP server did not list its tools");
     }
   }
-  async function Ne(r, { signal, timeoutMs }) {
-    let h = s.get(r);
-    if (E() || !h)
+  async function connectFor(name, { signal, timeoutMs }) {
+    let entry = served.get(name);
+    if (isStopped() || !entry)
       throw new PassthroughMcpUnavailableError("server", "MCP server is not available on this machine");
     try {
-      return await boundDial(se(r, h), {
+      return await boundDial(dial(name, entry), {
         signal,
         timeoutMs,
-        serverName: r,
+        serverName: name,
         context: "device tool call",
       });
     } catch (error) {
       if (isAbortError(error) || error instanceof PassthroughMcpUnavailableError) throw error;
       if (isMcpAuthError(error)) throw needsAuthError(error);
-      logForDebugging(`[deviceBridge] passthrough MCP dial failed for ${r}: ${toError(error).message}`);
+      logForDebugging(`[deviceBridge] passthrough MCP dial failed for ${name}: ${toError(error).message}`);
       throw new PassthroughMcpUnavailableError("server", "MCP server could not be reached for this call", {
         cause: error,
       });
     }
   }
-  function ce(r, a) {
-    q();
-    let f = s.get(r);
-    if (!f || E())
+  function assertServable(name, toolName) {
+    refreshPolicyIfDue();
+    let entry = served.get(name);
+    if (!entry || isStopped())
       throw new PassthroughMcpUnavailableError("server", "MCP server is not available on this machine");
-    let found = f.tools.find((tool) => toolNameOf(tool) === a);
+    let found = entry.tools.find((tool) => toolNameOf(tool) === toolName);
     if (!found) throw new PassthroughMcpUnavailableError("tool", "MCP tool is not offered by this machine");
     if (found.mcpInfo?.effectiveMaxPermission === "blocked")
       throw new PassthroughMcpUnavailableError(
@@ -357,195 +363,196 @@ function createPassthroughMcpBridge(e) {
         "MCP tool is blocked on this machine by the organization",
       );
   }
-  async function xe(r, name, { signal, deadline }) {
-    ce(r, name);
-    let S = await Ne(r, {
+  async function prepareCall(name, toolName, { signal, deadline }) {
+    assertServable(name, toolName);
+    let client = await connectFor(name, {
       signal,
       timeoutMs: Math.max(0, deadline - Date.now()),
     });
-    await Oe(r, {
+    await waitForListing(name, {
       signal,
       deadline,
     });
-    ce(r, name);
-    if (s.get(r)?.handle !== S)
+    assertServable(name, toolName);
+    if (served.get(name)?.handle !== client)
       throw new PassthroughMcpUnavailableError(
         "server",
         "MCP server was reconnected during this call; retry",
       );
     if (deadline - Date.now() <= 0)
       throw new PassthroughMcpUnavailableError("server", "MCP server connected too late for this call");
-    return S;
+    return client;
   }
-  async function ke(r, a, f, { signal, deadline, imageLimits }) {
+  async function invokeTool(name, client, args, { signal, deadline, imageLimits }) {
     let combinedAbortSignal = createCombinedAbortSignal(signal, {
       timeoutMs: Math.max(0, deadline - Date.now()),
       refTimer: true,
     });
-    let X = (error) =>
+    let mapError = (error) =>
       signal.aborted
-        ? new AbortError(`MCP tool call on '${r}' aborted`)
+        ? new AbortError(`MCP tool call on '${name}' aborted`)
         : combinedAbortSignal.signal.aborted
           ? new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `MCP server "${r}" did not answer the call within its deadline`,
+              `MCP server "${name}" did not answer the call within its deadline`,
               "MCP passthrough call deadline",
             )
           : error;
     try {
-      let L = await n
-        .callTool(a, f, {
+      let result = await deps
+        .callTool(client, args, {
           signal: combinedAbortSignal.signal,
           imageLimits,
         })
         .catch((error) => {
-          throw X(error);
+          throw mapError(error);
         });
-      if (L.isError)
-        throw "urlElicitationDeclined" in L
+      if (result.isError)
+        throw "urlElicitationDeclined" in result
           ? new PassthroughMcpUnavailableError(
               "tool",
               "MCP tool needs a consent step in a browser on this machine, which a served call cannot show",
             )
-          : X(
+          : mapError(
               new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
                 "MCP tool call on this machine ended without a result",
                 "MCP passthrough call ended without a result",
               ),
             );
-      return L;
+      return result;
     } finally {
       combinedAbortSignal.cleanup();
     }
   }
-  function Ie(r, cause) {
+  function maybeNeedsAuth(name, cause) {
     if (!isMcpAuthError(cause)) return cause;
-    H(r, "needs authentication");
+    removeServer(name, "needs authentication");
     return needsAuthError(cause);
   }
-  function He({ client, tools }) {
-    if (E() || c.get(client.name) === "dropped") {
-      n.cleanup([client]);
+  function onDiscovered({ client, tools }) {
+    if (isStopped() || statusByName.get(client.name) === "dropped") {
+      deps.cleanup([client]);
       return;
     }
-    if (!Object.hasOwn(e.configs, client.name)) return;
+    if (!Object.hasOwn(options.configs, client.name)) return;
     switch (client.type) {
       case "connected":
       case "cached":
-        c.set(client.name, client.type);
-        Re(client, tools);
+        statusByName.set(client.name, client.type);
+        adoptClient(client, tools);
         break;
       case "failed":
-        c.set(client.name, client.type);
-        H(client.name, "failed");
+        statusByName.set(client.name, client.type);
+        removeServer(client.name, "failed");
         break;
       case "needs-auth":
-        c.set(client.name, client.type);
-        H(client.name, "needs authentication");
+        statusByName.set(client.name, client.type);
+        removeServer(client.name, "needs authentication");
         break;
       case "disabled":
-        c.set(client.name, client.type);
-        H(client.name, "disabled");
+        statusByName.set(client.name, client.type);
+        removeServer(client.name, "disabled");
         break;
       case "pending":
         break;
       default:
     }
-    if (c.size >= keys.length) B();
+    if (statusByName.size >= keys.length) settle();
   }
-  n.policySettled()
+  deps
+    .policySettled()
     .then(() => {
-      if (E()) return;
-      O = setTimeout(B, e.settleTimeoutMs ?? DEFAULT_SETTLE_TIMEOUT_MS);
-      let r = pickByHelper(e.configs, (a, f) => {
-        if (c.get(f) === "dropped") return false;
-        if (n.needsLocalPrompts(a)) {
-          c.set(f, "excluded");
+      if (isStopped()) return;
+      settleTimer = setTimeout(settle, options.settleTimeoutMs ?? DEFAULT_SETTLE_TIMEOUT_MS);
+      let initial = pickByHelper(options.configs, (config, name) => {
+        if (statusByName.get(name) === "dropped") return false;
+        if (deps.needsLocalPrompts(config)) {
+          statusByName.set(name, "excluded");
           return false;
         }
-        let h = n.allowedByPolicy(f, a);
-        if (!h) c.set(f, "blocked");
-        return h;
+        let allowed = deps.allowedByPolicy(name, config);
+        if (!allowed) statusByName.set(name, "blocked");
+        return allowed;
       });
-      return n.discover(He, r, e.storageV5);
+      return deps.discover(onDiscovered, initial, options.storageV5);
     })
     .catch((error) => {
       logForDebugging(`[deviceBridge] passthrough MCP discovery failed: ${toError(error).message}`);
     })
     .finally(() => {
-      B();
-      de((r) => E() || c.get(r) === "dropped");
+      settle();
+      disposeAll((name) => isStopped() || statusByName.get(name) === "dropped");
     });
-  function de(r = () => true) {
-    for (let a of keys.filter(r)) n.dispose(a, e.configs[a]);
+  function disposeAll(predicate = () => true) {
+    for (let name of keys.filter(predicate)) deps.dispose(name, options.configs[name]);
   }
   return {
     settled,
     servers() {
-      q();
-      return keys.flatMap((r) => {
-        let a = s.get(r);
-        return a
+      refreshPolicyIfDue();
+      return keys.flatMap((name) => {
+        let entry = served.get(name);
+        return entry
           ? [
               {
-                name: r,
-                scope: a.handle.config.scope,
-                tools: a.tools,
-                status: a.handle.type,
+                name,
+                scope: entry.handle.config.scope,
+                tools: entry.tools,
+                status: entry.handle.type,
               },
             ]
           : [];
       });
     },
     subscribe: signal.subscribe,
-    async callTool(r, a, { signal, timeout, imageLimits }) {
+    async callTool(name, args, { signal, timeout, imageLimits }) {
       let deadline = Date.now() + timeout;
-      let R = async (X) => {
-        let L = await xe(r, a.name, {
+      let callOnce = async (mayRetry) => {
+        let client = await prepareCall(name, args.name, {
           signal,
           deadline,
         });
         try {
-          return await ke(r, L, a, {
+          return await invokeTool(name, client, args, {
             signal,
             deadline,
             imageLimits,
           });
         } catch (error) {
-          let Fe = a.name;
+          let toolName = args.name;
           if (
-            X &&
+            mayRetry &&
             error instanceof McpSessionExpiredError &&
             (!error.mayHaveRun ||
-              s.get(r)?.tools.find((tool) => toolNameOf(tool) === Fe)?.readOnlyHint === true)
+              served.get(name)?.tools.find((tool) => toolNameOf(tool) === toolName)?.readOnlyHint === true)
           )
-            return R(false);
-          throw Ie(r, error);
+            return callOnce(false);
+          throw maybeNeedsAuth(name, error);
         }
       };
-      return R(true);
+      return callOnce(true);
     },
-    toolTimeoutMs: (r) => n.toolTimeoutMs(e.configs[r]),
-    dropServer(r) {
-      if (E() || !Object.hasOwn(e.configs, r)) return;
-      c.set(r, "dropped");
-      if (s.has(r)) H(r, "dropped by the caller");
-      else n.dispose(r, e.configs[r]);
-      if (c.size >= keys.length) B();
+    toolTimeoutMs: (name) => deps.toolTimeoutMs(options.configs[name]),
+    dropServer(name) {
+      if (isStopped() || !Object.hasOwn(options.configs, name)) return;
+      statusByName.set(name, "dropped");
+      if (served.has(name)) removeServer(name, "dropped by the caller");
+      else deps.dispose(name, options.configs[name]);
+      if (statusByName.size >= keys.length) settle();
     },
     stop() {
-      g ??= (async () => {
-        if (O !== undefined) {
-          clearTimeout(O);
-          O = undefined;
+      stopPromise ??= (async () => {
+        if (settleTimer !== undefined) {
+          clearTimeout(settleTimer);
+          settleTimer = undefined;
         }
         signal.clear();
-        let mapped = [...s.values()].map((a) => a.handle);
-        s.clear();
-        B();
-        de();
-        await n.cleanup(mapped);
+        let mapped = [...served.values()].map((handle) => handle.handle);
+        served.clear();
+        settle();
+        disposeAll();
+        await deps.cleanup(mapped);
       })();
-      return g;
+      return stopPromise;
     },
   };
 }
@@ -554,35 +561,36 @@ function createPassthroughMcpBridge(e) {
  * 构造设备桥接透传 MCP 的依赖对象：策略就绪、发现工具、确保连接、监听工具列表变化、刷新工具、调用工具、清理/释放连接、策略判定、是否需要本地提示、按本地/远程决定拨号并发、工具超时。
  */
 function createPassthroughMcpDeps() {
-  let mcpClient = require("./chunk-asne9cp8.js").mcpClientModule();
+  let mcpClient = require("../mcp/emitTripwireEvent.lazy.js").mcpClientModule();
   return {
     policySettled: () =>
       Promise.all([awaitPolicyColdStartWaiter(), ensureMdmLoaded()]).then(() => {
         return;
       }),
-    discover: (n, i, m) => mcpClient.getMcpToolsCommandsAndResources(n, i, m),
-    ensureConnected: (n) => mcpClient.ensureConnectedClient(n),
-    onToolListChanged: (n, i) => mcpClient.onMcpToolListChanged(n, i),
+    discover: (server, context, options) =>
+      mcpClient.getMcpToolsCommandsAndResources(server, context, options),
+    ensureConnected: (server) => mcpClient.ensureConnectedClient(server),
+    onToolListChanged: (server, listener) => mcpClient.onMcpToolListChanged(server, listener),
     refreshTools: refreshMcpServerTools,
-    callTool: (client, i, { signal, imageLimits }) =>
+    callTool: (client, call, { signal, imageLimits }) =>
       mcpClient.callMCPTool({
         client,
-        tool: i.name,
-        args: i.arguments ?? {},
-        meta: i._meta,
+        tool: call.name,
+        args: call.arguments ?? {},
+        meta: call._meta,
         signal,
         imageLimits,
         hasResultSizeAnnotation: true,
         storageV5: undefined,
         credentials: undefined,
       }),
-    cleanup: (n) => mcpClient.cleanupConnectedMcpClients(n),
-    dispose: (n, i) => mcpClient.disposeServerConnectionDetached(n, i),
+    cleanup: (serverNames) => mcpClient.cleanupConnectedMcpClients(serverNames),
+    dispose: (server, connection) => mcpClient.disposeServerConnectionDetached(server, connection),
     refreshPolicy: invalidateCommandNames,
     allowedByPolicy: isMcpServerAllowedByPolicy,
-    needsLocalPrompts: (n) => mcpClient.isFirstPartyDesignServerConfig(n),
-    dialConcurrency: (n) =>
-      mcpClient.isLocalMcpServer(n)
+    needsLocalPrompts: (server) => mcpClient.isFirstPartyDesignServerConfig(server),
+    dialConcurrency: (server) =>
+      mcpClient.isLocalMcpServer(server)
         ? {
             kind: "local",
             limit: mcpClient.getMcpServerConnectionBatchSize(),
@@ -591,7 +599,7 @@ function createPassthroughMcpDeps() {
             kind: "remote",
             limit: mcpClient.getRemoteMcpServerConnectionBatchSize(),
           },
-    toolTimeoutMs: (n) => mcpClient.getMcpToolTimeoutMs(n),
+    toolTimeoutMs: (server) => mcpClient.getMcpToolTimeoutMs(server),
   };
 }
 //@ chunk-weh04swb.js:9961-10011 placement
@@ -624,8 +632,8 @@ function needsAuthError(cause) {
 /**
  * 取某服务器提供的全部 MCP 工具。
  */
-function serverTools(e, n) {
-  return n.filter((i) => i.mcpInfo !== undefined && isToolFromMcpServer(i, e));
+function serverTools(serverName, tools) {
+  return tools.filter((tool) => tool.mcpInfo !== undefined && isToolFromMcpServer(tool, serverName));
 }
 //@ chunk-weh04swb.js:10298-10315 placement
 /**
@@ -636,9 +644,9 @@ var defaultList = CALLER_FIELDS;
 //@ chunk-weh04swb.js:10315-10427 placement
 class PassthroughCallError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
   verdict;
-  constructor(e, n, i) {
-    super(n, i, e.code);
-    this.verdict = e;
+  constructor(verdict, message, telemetry) {
+    super(message, telemetry, verdict.code);
+    this.verdict = verdict;
     this.name = "PassthroughCallError";
   }
 }
@@ -646,17 +654,17 @@ class PassthroughCallError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_COD
 /**
  * 透传工具未提供时的校验失败结果，并通知工具判定回调。
  */
-function refuseNotServedValidation(remoteCall, n) {
+function refuseNotServedValidation(remoteCall, refusal) {
   remoteCall?.onToolVerdict?.(
     {
       kind: "refused",
       code: "not_served",
     },
-    n.message,
+    refusal.message,
   );
   return {
     result: false,
-    message: n.message,
+    message: refusal.message,
     errorCode: 1,
   };
 }
@@ -665,7 +673,7 @@ function refuseNotServedValidation(remoteCall, n) {
  * 抛出"工具未提供"的透传调用错误，并通知工具判定回调。
  */
 function throwNotServed(remoteCall, message, telemetry) {
-  let m = new PassthroughCallError(
+  let error = new PassthroughCallError(
     {
       kind: "refused",
       code: "not_served",
@@ -673,17 +681,17 @@ function throwNotServed(remoteCall, message, telemetry) {
     message,
     telemetry,
   );
-  remoteCall?.onToolVerdict?.(m.verdict, m.message);
-  throw m;
+  remoteCall?.onToolVerdict?.(error.verdict, error.message);
+  throw error;
 }
 //@ chunk-weh04swb.js:10679-11311 placement
 /**
  * 生成透传 MCP 工具的 call 函数：只接受远程调用，去掉保留参数后调用本机 MCP 服务器（带超时与图片限制），把错误转成透传错误并回报判定；返回内容与 _meta/structuredContent。
  */
 function makePassthroughCall(deps, serverName, toolName, argRenames) {
-  let s = new Set(argRenames.values());
-  let filtered = defaultList.filter((input) => !s.has(input));
-  return async (v, context) => {
+  let renamed = new Set(argRenames.values());
+  let filtered = defaultList.filter((input) => !renamed.has(input));
+  return async (args, context) => {
     if (context.remoteCall === undefined)
       throw new PassthroughCallError(
         {
@@ -700,7 +708,7 @@ function makePassthroughCall(deps, serverName, toolName, argRenames) {
         serverName,
         {
           name: toolName,
-          arguments: Uo(v, filtered),
+          arguments: omitAlias(args, filtered),
         },
         {
           signal: context.abortController.signal,
@@ -789,7 +797,7 @@ function isJsonRpcErrorCode32042(err) {
 /**
  * 提交给远端的工具名长度上限。
  */
-var MAX_TOOL_NAME_CHARS = MAX_PREFIXED_TOOL_NAME;
+var MAX_TOOL_NAME_CHARS = MAX_PREFIXED_TOOL_NAME_CHARS;
 //@ chunk-weh04swb.js:12469-12636 placement
 /**
  * 透传 MCP 工具公告的限制：总字节预算、工具数、单个定义大小、标题与搜索提示长度，以及作用域优先级与管理员作用域集合。
@@ -817,19 +825,22 @@ var ADMIN_SCOPES = new Set(["enterprise", "managed"]);
 async function buildPassthroughAnnouncement(servers, options) {
   let servers_2 = sortServersByScope(servers);
   let results = await Promise.all(
-    servers_2.map((y) =>
-      Promise.all(y.tools.map((tool) => describePassthroughTool(y.name, tool, options.target))),
+    servers_2.map((server) =>
+      Promise.all(server.tools.map((tool) => describePassthroughTool(server.name, tool, options.target))),
     ),
   );
   let collisionChecker = buildCollisionChecker(servers_2, results, options.configured);
   let { tools, dropped, byServer } = servers_2.reduce(
-    (acc, g, M) => {
-      let k = isAdminScope(g.scope)
+    (acc, server, index) => {
+      let serverRejection = isAdminScope(server.scope)
         ? {
             reason: "enterprise_scope",
           }
-        : collisionChecker.server(g);
-      return (results[M] ?? []).reduce((acc, O) => admitTool(acc, O, k, collisionChecker, options), acc);
+        : collisionChecker.server(server);
+      return (results[index] ?? []).reduce(
+        (acc, tool) => admitTool(acc, tool, serverRejection, collisionChecker, options),
+        acc,
+      );
     },
     {
       announced: new Set(),
@@ -860,8 +871,8 @@ function buildCollisionChecker(servers, toolGroups, extraServers) {
   let adminPrefixes = [...adminServers].map(
     (adminServer) => `${normalizedKey(getPrefixServerKey(adminServer))}_`,
   );
-  let shadowsAdminPrefix = (g, M) =>
-    !adminServers.has(g) && adminPrefixes.some((adminPrefix) => `${M}_`.startsWith(adminPrefix));
+  let shadowsAdminPrefix = (serverName, key) =>
+    !adminServers.has(serverName) && adminPrefixes.some((adminPrefix) => `${key}_`.startsWith(adminPrefix));
   let serversByKey = groupByAlias(
     allServers.map((server) => [
       normalizedKey(getPrefixServerKey(server.name)),
@@ -872,66 +883,66 @@ function buildCollisionChecker(servers, toolGroups, extraServers) {
     ]),
   );
   let toolsByKey = groupByAlias(
-    toolGroups.flat().map((g) => [
-      normalizedKey(g.name),
+    toolGroups.flat().map((tool) => [
+      normalizedKey(tool.name),
       {
-        server: g.server,
-        admin: adminServers.has(g.server),
-        rawName: g.rawName,
+        server: tool.server,
+        admin: adminServers.has(tool.server),
+        rawName: tool.rawName,
       },
     ]),
   );
   return {
-    server: (g) =>
-      isClaudeAiServerName(g.name) ||
-      isOrgConnectorName(g.name) ||
-      shadowsAdminPrefix(g.name, normalizedKey(getPrefixServerKey(g.name)))
+    server: (server) =>
+      isClaudeAiServerName(server.name) ||
+      isOrgConnectorName(server.name) ||
+      shadowsAdminPrefix(server.name, normalizedKey(getPrefixServerKey(server.name)))
         ? {
             reason: "collision",
           }
         : resolveAliasGroup(
-            serversByKey.get(normalizedKey(getPrefixServerKey(g.name))) ?? [],
-            g.name,
-            (M) => M.server === g.name,
+            serversByKey.get(normalizedKey(getPrefixServerKey(server.name))) ?? [],
+            server.name,
+            (entry) => entry.server === server.name,
           ),
-    tool: (g) =>
-      isServiceReservedToolName(g.name)
+    tool: (tool) =>
+      isServiceReservedToolName(tool.name)
         ? {
             reason: "service_reserved",
           }
-        : !mayBePassthroughTool(g.name) ||
-            isClaudeAiServerName(g.name) ||
-            isOrgConnectorName(g.name) ||
-            shadowsAdminPrefix(g.server, normalizedKey(g.name))
+        : !mayBePassthroughTool(tool.name) ||
+            isClaudeAiServerName(tool.name) ||
+            isOrgConnectorName(tool.name) ||
+            shadowsAdminPrefix(tool.server, normalizedKey(tool.name))
           ? {
               reason: "collision",
             }
           : resolveAliasGroup(
-              toolsByKey.get(normalizedKey(g.name)) ?? [],
-              g.server,
-              (M) => M.server === g.server && M.rawName === g.rawName,
+              toolsByKey.get(normalizedKey(tool.name)) ?? [],
+              tool.server,
+              (entry) => entry.server === tool.server && entry.rawName === tool.rawName,
             ),
   };
 }
 //@ chunk-weh04swb.js:13810-14022 placement
-function resolveAliasGroup(e, n, i) {
-  let m = e.find((s) => s.admin) ?? (e.length === 1 ? e[0] : undefined);
-  if (m === undefined)
+function resolveAliasGroup(group, name, isSelf) {
+  let winner = group.find((candidate) => candidate.admin) ?? (group.length === 1 ? group[0] : undefined);
+  if (winner === undefined)
     return {
       reason: "alias_collision",
-      contenders: e.map((s) => s.server).filter((s) => s !== n),
+      contenders: group.map((candidate) => candidate.server).filter((server) => server !== name),
     };
-  return i(m)
+  return isSelf(winner)
     ? undefined
     : {
         reason: "collision",
       };
 }
 //@ chunk-weh04swb.js:14022-14158 placement
-function groupByAlias(e) {
-  return e.reduce((acc, [i, m]) => {
-    let s = acc.get(i) ?? [];
-    if (!s.some((c) => c.server === m.server)) acc.set(i, [...s, m]);
+function groupByAlias(pairs) {
+  return pairs.reduce((acc, [key, entry]) => {
+    let group = acc.get(key) ?? [];
+    if (!group.some((existing) => existing.server === entry.server)) acc.set(key, [...group, entry]);
     return acc;
   }, new Map());
 }
@@ -939,43 +950,43 @@ function groupByAlias(e) {
 /**
  * 决定是否把一个设备 MCP 工具透传给会话：权限上限阻止、命中拒绝规则或描述失败时记入丢弃列表；否则累加大小并加入工具列表和按服务器分组。
  */
-function admitTool(e, n, i, collisionChecker, { isDenied, serve }) {
-  let v =
-    i ??
-    collisionChecker.tool(n) ??
-    (n.tool.mcpInfo?.effectiveMaxPermission === "blocked"
+function admitTool(acc, tool, serverRejection, collisionChecker, { isDenied, serve }) {
+  let rejection =
+    serverRejection ??
+    collisionChecker.tool(tool) ??
+    (tool.tool.mcpInfo?.effectiveMaxPermission === "blocked"
       ? {
           reason: "permission_ceiling",
         }
-      : isDenied(n.tool)
+      : isDenied(tool.tool)
         ? {
             reason: "deny_rule",
           }
-        : checkToolLimits(n, e));
-  if ("reason" in v) {
-    e.dropped.push({
-      server: n.server,
-      tool: n.rawName,
-      ...v,
+        : checkToolLimits(tool, acc));
+  if ("reason" in rejection) {
+    acc.dropped.push({
+      server: tool.server,
+      tool: tool.rawName,
+      ...rejection,
     });
-    return e;
+    return acc;
   }
-  e.announced.add(n.name);
-  e.bytes += v.bytes;
-  e.tools.push(
+  acc.announced.add(tool.name);
+  acc.bytes += rejection.bytes;
+  acc.tools.push(
     serve({
-      ...n,
-      definition: v.definition,
-      wireArguments: v.wireArguments,
+      ...tool,
+      definition: rejection.definition,
+      wireArguments: rejection.wireArguments,
     }),
   );
-  let P = e.byServer.get(n.server);
-  if (P === undefined) {
-    P = [];
-    e.byServer.set(n.server, P);
+  let serverTools = acc.byServer.get(tool.server);
+  if (serverTools === undefined) {
+    serverTools = [];
+    acc.byServer.set(tool.server, serverTools);
   }
-  P.push(v.definition);
-  return e;
+  serverTools.push(rejection.definition);
+  return acc;
 }
 //@ chunk-weh04swb.js:14647-15175 placement
 /**
@@ -1024,13 +1035,13 @@ function checkToolLimits({ name: candidate, definition, wireArguments }, { annou
 //@ chunk-weh04swb.js:15175-15312 placement
 function sortServersByScope(servers) {
   return servers
-    .map((n, index) => ({
-      server: n,
+    .map((server, index) => ({
+      server,
       index,
-      rank: scopeRank(n.scope),
+      rank: scopeRank(server.scope),
     }))
-    .sort((n, i) => n.rank - i.rank || n.index - i.index)
-    .map((n) => n.server);
+    .sort((left, right) => left.rank - right.rank || left.index - right.index)
+    .map((entry) => entry.server);
 }
 //@ chunk-weh04swb.js:15312-15365 placement
 /**
@@ -1043,31 +1054,31 @@ function scopeRank(scope) {
 /**
  * 生成透传工具的描述：名称、原始名、定义与参数改写信息；定义生成失败时记日志并返回空定义。
  */
-async function describePassthroughTool(name, tool, target) {
-  let m = tool.mcpInfo?.toolName ?? tool.name;
-  let name_2 = strippedMcpToolName(name, m);
-  let c = planArgumentRenames(tool.inputJSONSchema);
-  let v = c === "reserved_argument" ? renamedFieldCacheMap() : c;
+async function describePassthroughTool(serverName, tool, serverInfo) {
+  let rawName = tool.mcpInfo?.toolName ?? tool.name;
+  let name = strippedMcpToolName(serverName, rawName);
+  let renames = planArgumentRenames(tool.inputJSONSchema);
+  let renameMap = renames === "reserved_argument" ? renamedFieldCacheMap() : renames;
   try {
     return {
-      server: name,
-      rawName: m,
-      name: name_2,
+      server: serverName,
+      rawName,
+      name,
       tool,
-      definition: await buildToolDefinition(name_2, tool, target, v),
-      wireArguments: c,
+      definition: await buildToolDefinition(name, tool, serverInfo, renameMap),
+      wireArguments: renames,
     };
   } catch (error) {
-    logForDebugging(`[deviceBridge] passthrough cannot describe '${name_2}': ${toError(error).message}`, {
+    logForDebugging(`[deviceBridge] passthrough cannot describe '${name}': ${toError(error).message}`, {
       level: "error",
     });
     return {
-      server: name,
-      rawName: m,
-      name: name_2,
+      server: serverName,
+      rawName,
+      name,
       tool,
       definition: undefined,
-      wireArguments: c,
+      wireArguments: renames,
     };
   }
 }
@@ -1075,15 +1086,15 @@ async function describePassthroughTool(name, tool, target) {
 /**
  * 去掉 mcp__ 前缀的工具名。
  */
-function strippedMcpToolName(e, n) {
-  return buildMcpToolName(e, n).slice(5);
+function strippedMcpToolName(serverName, toolName) {
+  return buildMcpToolName(serverName, toolName).slice(5);
 }
 //@ chunk-weh04swb.js:15797-15829 placement
 /**
  * 参数冲突检查用的键名（<名字>_arg）。
  */
-function argKey(e) {
-  return `${e}_arg`;
+function argKey(key) {
+  return `${key}_arg`;
 }
 //@ chunk-weh04swb.js:15829-16146 placement
 /**
@@ -1122,46 +1133,49 @@ var REF_SCHEMA_KEYS = new Set([
 function planArgumentRenames(schema) {
   let properties = schema?.properties;
   let required = schema?.required;
-  let m = new Set([
+  let declaredKeys = new Set([
     ...(typeof properties === "object" && properties !== null ? Object.keys(properties) : []),
-    ...(Array.isArray(required) ? required.filter((y) => typeof y === "string") : []),
+    ...(Array.isArray(required) ? required.filter((name) => typeof name === "string") : []),
   ]);
-  let s = defaultList;
-  let c = defaultListHandler;
-  if (c.some((y) => m.has(argKey(y)))) return "reserved_argument";
-  let conflicting = s.filter((y) => m.has(y));
+  let defaultNames = defaultList;
+  let defaultHandlers = defaultListHandler;
+  if (defaultHandlers.some((defaultName) => declaredKeys.has(argKey(defaultName))))
+    return "reserved_argument";
+  let conflicting = defaultNames.filter((name) => declaredKeys.has(name));
   if (conflicting.length === 0) return renamedFieldCacheMap();
   if (
-    conflicting.some((y) => !c.includes(y)) ||
+    conflicting.some((name) => !defaultHandlers.includes(name)) ||
     schema === undefined ||
     !isObjectSchemaType(schema.type) ||
     Object.keys(schema).some((key) => !ALLOWED_SCHEMA_KEYS.has(key)) ||
     hasRefKeywords(schema) ||
     conflicting.some(
-      (y) =>
+      (name) =>
         typeof properties === "object" &&
         properties !== null &&
-        Object.hasOwn(properties, y) &&
-        !isPropertySchemaObject(Reflect.get(properties, y)),
+        Object.hasOwn(properties, name) &&
+        !isPropertySchemaObject(Reflect.get(properties, name)),
     )
   )
     return "reserved_argument";
-  let P = new Map(conflicting.map((y) => [argKey(y), y]));
-  return [...P.keys()].some((key) => s.includes(key)) ? "reserved_argument" : P;
+  let renames = new Map(conflicting.map((name) => [argKey(name), name]));
+  return [...renames.keys()].some((key) => defaultNames.includes(key)) ? "reserved_argument" : renames;
 }
 //@ chunk-weh04swb.js:16758-16971 placement
-function hasRefKeywords(schema) {
-  let n = (i, m) => {
-    if (m > MAX_INPUT_SCHEMA_DEPTH) return true;
-    if (Array.isArray(i)) return i.some((s) => n(s, m + 1));
-    if (typeof i !== "object" || i === null) return false;
-    return Object.entries(i).some(([key, value]) => REF_SCHEMA_KEYS.has(key) || n(value, m + 1));
+function hasRefKeywords(node) {
+  let containsRef = (node, depth) => {
+    if (depth > MAX_INPUT_SCHEMA_DEPTH) return true;
+    if (Array.isArray(node)) return node.some((entry) => containsRef(entry, depth + 1));
+    if (typeof node !== "object" || node === null) return false;
+    return Object.entries(node).some(
+      ([key, value]) => REF_SCHEMA_KEYS.has(key) || containsRef(value, depth + 1),
+    );
   };
-  return n(schema, 0);
+  return containsRef(node, 0);
 }
 //@ chunk-weh04swb.js:16971-17250 placement
-async function buildToolDefinition(name, n, i, m) {
-  let s = await n.description(
+async function buildToolDefinition(name, tool, serverInfo, renamePlan) {
+  let description = await tool.description(
     {},
     {
       isNonInteractiveSession: false,
@@ -1169,19 +1183,22 @@ async function buildToolDefinition(name, n, i, m) {
       tools: [],
     },
   );
-  let toolAnnotations = buildToolAnnotations(n);
-  let v = maxDescriptionLength();
+  let toolAnnotations = buildToolAnnotations(tool);
+  let maxLength = maxDescriptionLength();
   return {
     name,
     description:
-      s.length <= Math.min(v, MAX_TOOL_DESCRIPTION_CHARS)
-        ? s
-        : truncateSuffix(s, Math.min(v, MAX_TOOL_DESCRIPTION_CHARS - TRUNCATION_SUFFIX.length)),
-    inputSchema: buildInputSchema(n, m),
+      description.length <= Math.min(maxLength, MAX_TOOL_DESCRIPTION_CHARS)
+        ? description
+        : truncateSuffix(
+            description,
+            Math.min(maxLength, MAX_TOOL_DESCRIPTION_CHARS - TRUNCATION_SUFFIX.length),
+          ),
+    inputSchema: buildInputSchema(tool, renamePlan),
     ...(toolAnnotations && {
       annotations: toolAnnotations,
     }),
-    _meta: buildToolMeta(n, i),
+    _meta: buildToolMeta(tool, serverInfo),
   };
 }
 //@ chunk-weh04swb.js:17250-17278 placement
@@ -1193,12 +1210,12 @@ var TRUNCATION_SUFFIX = "\u2026 [truncated]";
 /**
  * 超长则截断并加截断后缀。
  */
-function truncateSuffix(e, n) {
-  return e.length > n ? truncateToLength(e, n) + TRUNCATION_SUFFIX : e;
+function truncateSuffix(text, maxLen) {
+  return text.length > maxLen ? truncateToLength(text, maxLen) + TRUNCATION_SUFFIX : text;
 }
 //@ chunk-weh04swb.js:17325-17584 placement
-function buildInputSchema(e, n) {
-  let inputJSONSchema = e.inputJSONSchema;
+function buildInputSchema(tool, renames) {
+  let inputJSONSchema = tool.inputJSONSchema;
   if (inputJSONSchema === undefined || !isObjectSchemaType(inputJSONSchema.type))
     return {
       type: "object",
@@ -1216,42 +1233,44 @@ function buildInputSchema(e, n) {
       type: "object",
       properties,
     },
-    n,
+    renames,
   );
 }
 //@ chunk-weh04swb.js:17584-17892 placement
 /**
  * 在 schema 中应用参数重命名：改写属性名与 required，并在描述中注明原参数名。
  */
-function applyArgumentRenames(e, n) {
-  if (n.size === 0) return e;
-  let i = new Map([...n].map(([c, v]) => [v, c]));
-  let properties = xr(
-    identityMap(e.properties, (c, v) => i.get(v) ?? v),
-    (c, v) => {
-      let P = n.get(v);
-      return P === undefined
-        ? c
+function applyArgumentRenames(schema, renames) {
+  if (renames.size === 0) return schema;
+  let reverseRenames = new Map([...renames].map(([original, renamed]) => [renamed, original]));
+  let properties = import_mapValues(
+    identityMap(schema.properties, (propSchema, propName) => reverseRenames.get(propName) ?? propName),
+    (propSchema, propName) => {
+      let original = renames.get(propName);
+      return original === undefined
+        ? propSchema
         : {
-            ...c,
-            description: describeRenamedParam(P, c),
+            ...propSchema,
+            description: describeRenamedParam(original, propSchema),
           };
     },
   );
-  let s = Array.isArray(e.required) ? e.required.map((c) => i.get(c) ?? c) : undefined;
+  let required = Array.isArray(schema.required)
+    ? schema.required.map((requiredName) => reverseRenames.get(requiredName) ?? requiredName)
+    : undefined;
   return {
-    ...e,
+    ...schema,
     properties,
-    ...(s && {
-      required: s,
+    ...(required && {
+      required,
     }),
   };
 }
 //@ chunk-weh04swb.js:17892-18056 placement
-function describeRenamedParam(e, n) {
-  let i = Reflect.get(n, "description");
-  let m = `(The tool's own "${e}" parameter, passed under this name.)`;
-  return typeof i === "string" && i !== "" ? `${i} ${m}` : m;
+function describeRenamedParam(originalName, schema) {
+  let description = Reflect.get(schema, "description");
+  let note = `(The tool's own "${originalName}" parameter, passed under this name.)`;
+  return typeof description === "string" && description !== "" ? `${description} ${note}` : note;
 }
 //@ chunk-weh04swb.js:18056-18143 placement
 /**
@@ -1272,51 +1291,51 @@ function keepValidProperties(properties) {
 /**
  * 判断属性 schema 是否为对象（true 或普通对象）。
  */
-function isPropertySchemaObject(e) {
-  return e === true || (typeof e === "object" && e !== null && !Array.isArray(e));
+function isPropertySchemaObject(value) {
+  return value === true || (typeof value === "object" && value !== null && !Array.isArray(value));
 }
 //@ chunk-weh04swb.js:18327-18598 placement
-function buildToolAnnotations(e) {
-  let title = e.mcpInfo?.title;
-  let i = {
+function buildToolAnnotations(tool) {
+  let title = tool.mcpInfo?.title;
+  let picked = {
     ...(title !== undefined && {
       title: truncateSuffix(title, MAX_TITLE_CHARS),
     }),
-    ...(e.readOnlyHint !== undefined && {
-      readOnlyHint: e.readOnlyHint,
+    ...(tool.readOnlyHint !== undefined && {
+      readOnlyHint: tool.readOnlyHint,
     }),
-    ...(e.isDestructive?.({}) === true && {
+    ...(tool.isDestructive?.({}) === true && {
       destructiveHint: true,
     }),
-    ...(e.isOpenWorld?.({}) === true && {
+    ...(tool.isOpenWorld?.({}) === true && {
       openWorldHint: true,
     }),
   };
-  return Object.keys(i).length > 0 ? i : undefined;
+  return Object.keys(picked).length > 0 ? picked : undefined;
 }
 //@ chunk-weh04swb.js:18598-18955 placement
 /**
  * 构造透传工具的 _meta：透传标记（版本、工具名、目标），以及搜索提示、始终加载、结果大小上限与需要用户交互等元信息。
  */
-function buildToolMeta(e, n) {
-  let { inventory, ...m } = n;
-  let s = {
+function buildToolMeta(tool, serverInfo) {
+  let { inventory, ...target } = serverInfo;
+  let marker = {
     v: PASSTHROUGH_ANNOUNCE_FORMAT_VERSION,
-    tool: e.name,
-    target: m,
+    tool: tool.name,
+    target,
   };
   return {
-    [PASSTHROUGH_MARKER_KEY]: s,
-    ...(e.searchHint !== undefined && {
-      [TOOL_META_KEYS.searchHint]: truncateSuffix(e.searchHint, MAX_SEARCH_HINT_CHARS),
+    [PASSTHROUGH_MARKER_KEY]: marker,
+    ...(tool.searchHint !== undefined && {
+      [TOOL_META_KEYS.searchHint]: truncateSuffix(tool.searchHint, MAX_SEARCH_HINT_CHARS),
     }),
-    ...(e.alwaysLoad === true && {
+    ...(tool.alwaysLoad === true && {
       [TOOL_META_KEYS.alwaysLoad]: true,
     }),
-    ...(e.persistenceThresholdCeiling !== undefined && {
-      [TOOL_META_KEYS.maxResultSizeChars]: e.maxResultSizeChars,
+    ...(tool.persistenceThresholdCeiling !== undefined && {
+      [TOOL_META_KEYS.maxResultSizeChars]: tool.maxResultSizeChars,
     }),
-    ...(e.requiresUserInteraction?.() === true && {
+    ...(tool.requiresUserInteraction?.() === true && {
       [TOOL_META_KEYS.requiresUserInteraction]: true,
     }),
   };

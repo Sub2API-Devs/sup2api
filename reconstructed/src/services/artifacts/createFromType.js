@@ -27,7 +27,7 @@ import {
 } from "./frameRelay.js";
 import { isUserSessionWorker } from "../ccrAgentProxy/agentProxy.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { looseObject, string, unknown, u } from "../../../vendor/zod/v4/classic/schemas.js";
+import { looseObject, stringSchema, unknown, objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { ARTIFACT_SLUG_RE } from "../../tools/ArtifactTool/constants.js";
 import { lit } from "../analytics/safeMetadata.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
@@ -51,6 +51,7 @@ import { typeLockFromWire, splitManifestPaths } from "./pagePreparation.js";
 import { echoAudience } from "./listArtifacts.js";
 import { artifactViewerUrl } from "./publishInstanceFiles.js";
 import { parseContractVersion } from "./capabilityDeclaration.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-w08rdxhd.js:17563-17598 placement
 var TENGU_COBALT_PLINTH_LARCH = "tengu_cobalt_plinth_larch";
@@ -117,55 +118,61 @@ var RELAY_UNAVAILABLE_CREATE_RESULT = {
   fromFrame: false,
 };
 //@ chunk-w08rdxhd.js:18363-18435 placement
-function createFromTypePath(e) {
-  return `/api/frame/types/${encodeURIComponent(e)}/create`;
+function createFromTypePath(typeSlug) {
+  return `/api/frame/types/${encodeURIComponent(typeSlug)}/create`;
 }
 //@ chunk-w08rdxhd.js:18435-18868 placement
 /**
  * 从类型创建 artifact 的响应 schema（slug、版本、标题、契约、类型/预配/重放/读取/共享信息）、外部 id 格式正则，以及存储目标（store/project_id/file_id/node_id）schema。
  */
-var MAX_CREATE_RESPONSE_BYTES = 1048576;
-var CREATE_RESPONSE_SCHEMA = DoctorLazy(() =>
-  looseObject({
-    slug: string().regex(ARTIFACT_SLUG_RE),
-    version: string().min(1).max(64),
-    title: string().max(2048).optional(),
-    favicon: string().max(256).optional(),
-    contract: string().max(64).optional(),
-    type: unknown().optional(),
-    provisioned: unknown().optional(),
-    replayed: unknown().optional(),
-    read: unknown().optional(),
-    shared: unknown().optional(),
-  }),
-);
-var EXTERNAL_ID_RE = /^[A-Za-z0-9_.:-]{1,128}$/;
-var STORE_TARGET_SCHEMA = DoctorLazy(() =>
-  u({
-    store: string().min(1).max(32),
-    project_id: string().regex(ARTIFACT_SLUG_RE),
-    file_id: unknown().optional(),
-    node_id: unknown().optional(),
-  }),
-);
+var MAX_CREATE_RESPONSE_BYTES; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var CREATE_RESPONSE_SCHEMA;
+var EXTERNAL_ID_RE;
+var STORE_TARGET_SCHEMA;
+deferInit("chunk-w08rdxhd.js:18435", () => {
+  MAX_CREATE_RESPONSE_BYTES = 1048576;
+  CREATE_RESPONSE_SCHEMA = DoctorLazy(() =>
+    looseObject({
+      slug: stringSchema().regex(ARTIFACT_SLUG_RE),
+      version: stringSchema().min(1).max(64),
+      title: stringSchema().max(2048).optional(),
+      favicon: stringSchema().max(256).optional(),
+      contract: stringSchema().max(64).optional(),
+      type: unknown().optional(),
+      provisioned: unknown().optional(),
+      replayed: unknown().optional(),
+      read: unknown().optional(),
+      shared: unknown().optional(),
+    }),
+  );
+  EXTERNAL_ID_RE = /^[A-Za-z0-9_.:-]{1,128}$/;
+  STORE_TARGET_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      store: stringSchema().min(1).max(32),
+      project_id: stringSchema().regex(ARTIFACT_SLUG_RE),
+      file_id: unknown().optional(),
+      node_id: unknown().optional(),
+    }),
+  );
+});
 //@ chunk-w08rdxhd.js:18868-19153 placement
 /**
  * 校验并解析创建结果里的存储目标，project_id 必须与给定 slug 一致；file_id/node_id 只接受安全格式。
  */
 function parseStoreTarget(provisioned, slug) {
-  let s = STORE_TARGET_SCHEMA().safeParse(provisioned);
-  if (!s.success || s.data.project_id !== slug) return;
-  let n = (h) => (typeof h === "string" && EXTERNAL_ID_RE.test(h) ? h : undefined);
-  let a = n(s.data.file_id);
-  let l = n(s.data.node_id);
+  let parsed = STORE_TARGET_SCHEMA().safeParse(provisioned);
+  if (!parsed.success || parsed.data.project_id !== slug) return;
+  let decodeId = (id) => (typeof id === "string" && EXTERNAL_ID_RE.test(id) ? id : undefined);
+  let fileId = decodeId(parsed.data.file_id);
+  let nodeId = decodeId(parsed.data.node_id);
   return {
-    store: s.data.store,
-    projectId: s.data.project_id,
-    ...(a !== undefined && {
-      fileId: a,
+    store: parsed.data.store,
+    projectId: parsed.data.project_id,
+    ...(fileId !== undefined && {
+      fileId,
     }),
-    ...(l !== undefined && {
-      nodeId: l,
+    ...(nodeId !== undefined && {
+      nodeId,
     }),
   };
 }
@@ -173,18 +180,22 @@ function parseStoreTarget(provisioned, slug) {
 /**
  * 创建结果不确定时的提示（先 list 再决定是否重建），以及可重试的服务端失败消息集合。
  */
-var CREATE_OUTCOME_UNKNOWN =
-  'the Artifact may or may not have been created: check with action "list" before creating again';
-var RETRYABLE_CREATE_ERRORS = new Set([
-  "copy timed out \u2014 retry",
-  "content read failed \u2014 retry",
-  "content write failed \u2014 retry",
-  "provisioning unavailable \u2014 retry",
-  "provisioning refused \u2014 retry later",
-]);
+var CREATE_OUTCOME_UNKNOWN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var RETRYABLE_CREATE_ERRORS;
+deferInit("chunk-w08rdxhd.js:19153", () => {
+  CREATE_OUTCOME_UNKNOWN =
+    'the Artifact may or may not have been created: check with action "list" before creating again';
+  RETRYABLE_CREATE_ERRORS = new Set([
+    "copy timed out \u2014 retry",
+    "content read failed \u2014 retry",
+    "content write failed \u2014 retry",
+    "provisioning unavailable \u2014 retry",
+    "provisioning refused \u2014 retry later",
+  ]);
+});
 //@ chunk-w08rdxhd.js:19452-19521 placement
-function isRetryableCreateFailure(status, r) {
-  return status < 500 || (typeof r === "string" && RETRYABLE_CREATE_ERRORS.has(r.trim()));
+function isRetryableCreateFailure(status, body) {
+  return status < 500 || (typeof body === "string" && RETRYABLE_CREATE_ERRORS.has(body.trim()));
 }
 //@ chunk-w08rdxhd.js:19521-19828 placement
 /**
@@ -200,25 +211,25 @@ var TYPE_NOT_FOUND_MESSAGE =
 /**
  * 用 Artifact 类型新建 Artifact（POST /api/frame/types/{slug}/create）：直连或经中继、幂等重试，处理 cloud_unavailable/invalid_slug 等。
  */
-async function createArtifactFromType(typeSlug, r) {
-  let s = "direct";
-  let n = 0;
-  let a = canCreateFromTypeInCloud();
-  let l = () => ({
-    route: s === "relay" ? lit("relay") : lit("direct"),
-    ...(n > 0 && {
-      n_frame_retry_waits: n,
+async function createArtifactFromType(typeSlug, options) {
+  let route = "direct";
+  let frameRetryWaits = 0;
+  let inCloud = canCreateFromTypeInCloud();
+  let commonTelemetry = () => ({
+    route: route === "relay" ? lit("relay") : lit("direct"),
+    ...(frameRetryWaits > 0 && {
+      n_frame_retry_waits: frameRetryWaits,
     }),
-    ...(a && {
+    ...(inCloud && {
       agent: true,
     }),
     ...(isByocEnvironment() && {
       runner: true,
     }),
   });
-  let h = (P, message, status) => {
-    logFeatureBad("artifact_create_from_type", P, {
-      ...l(),
+  let fail = (reason, message, status) => {
+    logFeatureBad("artifact_create_from_type", reason, {
+      ...commonTelemetry(),
       ...(status !== undefined && {
         status,
       }),
@@ -226,13 +237,13 @@ async function createArtifactFromType(typeSlug, r) {
     return {
       kind: "error",
       message,
-      reason: P,
+      reason,
     };
   };
-  let S = 0;
-  let x = (P, status) => {
-    logFeatureBad("artifact_create_from_type", P, {
-      ...l(),
+  let attempts = 0;
+  let failUnavailable = (reason, status) => {
+    logFeatureBad("artifact_create_from_type", reason, {
+      ...commonTelemetry(),
       ...(status !== undefined && {
         status,
       }),
@@ -241,233 +252,243 @@ async function createArtifactFromType(typeSlug, r) {
       kind: "error",
       message: CREATE_FROM_TYPE_UNAVAILABLE,
       reason: "cloud_unavailable",
-      ...(S > 1 && {
+      ...(attempts > 1 && {
         afterRetry: true,
       }),
     };
   };
-  if (!ARTIFACT_SLUG_RE.test(typeSlug)) return h("invalid_slug", "type_url does not name an Artifact");
-  let w = [
-    ...(r.idempotencyKey !== undefined ? [`idempotency_key=${encodeURIComponent(r.idempotencyKey)}`] : []),
-    ...(r.createConfirmed === true ? [CREATE_CONFIRMED_QUERY] : []),
+  if (!ARTIFACT_SLUG_RE.test(typeSlug)) return fail("invalid_slug", "type_url does not name an Artifact");
+  let queryParts = [
+    ...(options.idempotencyKey !== undefined
+      ? [`idempotency_key=${encodeURIComponent(options.idempotencyKey)}`]
+      : []),
+    ...(options.createConfirmed === true ? [CREATE_CONFIRMED_QUERY] : []),
   ];
-  let k = `${createFromTypePath(typeSlug)}${w.length === 0 ? "" : `?${w.join("&")}`}`;
-  let I = {
+  let url = `${createFromTypePath(typeSlug)}${queryParts.length === 0 ? "" : `?${queryParts.join("&")}`}`;
+  let body = {
     target_type_version: null,
-    ...(r.title !== undefined &&
-      r.title !== "" && {
-        title: r.title,
+    ...(options.title !== undefined &&
+      options.title !== "" && {
+        title: options.title,
       }),
     ...getSessionHintHeaders(),
-    ...requestIdMeta(r.requestId),
+    ...requestIdMeta(options.requestId),
   };
-  let R = {
+  let requestOptions = {
     refreshOAuth: true,
     headers: buildFrameHeaders(),
     timeout: 60000,
     maxContentLength: MAX_CREATE_RESPONSE_BYTES,
-    signal: r.signal,
-    credentials: r.credentials,
+    signal: options.signal,
+    credentials: options.credentials,
   };
-  let L = () => {
-    S++;
-    if (a) return frameApi.post(k, I, R);
+  let post = () => {
+    attempts++;
+    if (inCloud) return frameApi.post(url, body, requestOptions);
     if (isRelayUnavailableForTypeCreate()) return Promise.resolve(RELAY_UNAVAILABLE_CREATE_RESULT);
-    return isByocEnvironment() ? frameApi.postRelayStrict(k, I, R) : frameApi.postRelayOnly(k, I, R);
+    return isByocEnvironment()
+      ? frameApi.postRelayStrict(url, body, requestOptions)
+      : frameApi.postRelayOnly(url, body, requestOptions);
   };
-  let y = async (P) => {
-    s = P.route;
-    let j = P.ok && P.fromFrame ? findRejectedHintFields(P.status, P.data, I) : [];
-    if (j.length === 0) return P;
-    if (j.includes("request_id")) logFeatureSad("artifact_create_from_type", "request_id_rejected", l());
-    if (mentionsSessionHintField(j)) {
-      logFeatureSad("artifact_create_from_type", "session_hints_rejected", l());
+  let retryOnRejectedHints = async (result) => {
+    route = result.route;
+    let rejectedHints =
+      result.ok && result.fromFrame ? findRejectedHintFields(result.status, result.data, body) : [];
+    if (rejectedHints.length === 0) return result;
+    if (rejectedHints.includes("request_id"))
+      logFeatureSad("artifact_create_from_type", "request_id_rejected", commonTelemetry());
+    if (mentionsSessionHintField(rejectedHints)) {
+      logFeatureSad("artifact_create_from_type", "session_hints_rejected", commonTelemetry());
       noteSessionHintsRefused();
     }
-    I = stripSessionHints(I);
-    return L();
+    body = stripSessionHints(body);
+    return post();
   };
-  let d;
-  let z = false;
-  let C = false;
+  let result;
+  let sawConflict = false;
+  let sawUnavailable = false;
   try {
-    d = await y(await L());
-    s = d.route;
-    if (d.ok && d.gatewayRetryAfterMs !== undefined) {
-      S--;
-      await sleep(Math.min(d.gatewayRetryAfterMs, RELAY_ONLY_BUSY_WAIT_MAX_MS), r.signal, {
+    result = await retryOnRejectedHints(await post());
+    route = result.route;
+    if (result.ok && result.gatewayRetryAfterMs !== undefined) {
+      attempts--;
+      await sleep(Math.min(result.gatewayRetryAfterMs, RELAY_ONLY_BUSY_WAIT_MAX_MS), options.signal, {
         throwOnAbort: true,
       });
-      d = await y(await L());
-      s = d.route;
+      result = await retryOnRejectedHints(await post());
+      route = result.route;
     }
-    let P = false;
-    while (n < CREATE_MAX_ATTEMPTS) {
-      let j = d.ok && d.fromFrame ? d.response?.headers?.["retry-after"] : undefined;
-      if (!d.ok || typeof j !== "string") break;
-      let W = d.status === 409 || d.status === 429;
-      let Ee =
-        d.status === 503 &&
-        r.idempotencyKey !== undefined &&
-        typeof d.data === "string" &&
-        d.data.trim() === CREATE_UNAVAILABLE_RETRY;
-      if (!Ee && (!W || P)) break;
-      P ||= W;
-      z ||= d.status === 409;
-      C ||= Ee;
-      await sleep(Math.min(parseRetryAfterMs(j) ?? 1000, 1e4), r.signal, {
+    let sawRetryableConflict = false;
+    while (frameRetryWaits < CREATE_MAX_ATTEMPTS) {
+      let retryAfter = result.ok && result.fromFrame ? result.response?.headers?.["retry-after"] : undefined;
+      if (!result.ok || typeof retryAfter !== "string") break;
+      let isConflictOrRateLimited = result.status === 409 || result.status === 429;
+      let isUnavailableRetry =
+        result.status === 503 &&
+        options.idempotencyKey !== undefined &&
+        typeof result.data === "string" &&
+        result.data.trim() === CREATE_UNAVAILABLE_RETRY;
+      if (!isUnavailableRetry && (!isConflictOrRateLimited || sawRetryableConflict)) break;
+      sawRetryableConflict ||= isConflictOrRateLimited;
+      sawConflict ||= result.status === 409;
+      sawUnavailable ||= isUnavailableRetry;
+      await sleep(Math.min(parseRetryAfterMs(retryAfter) ?? 1000, 1e4), options.signal, {
         throwOnAbort: true,
       });
-      n++;
-      d = await y(await L());
-      s = d.route;
+      frameRetryWaits++;
+      result = await retryOnRejectedHints(await post());
+      route = result.route;
     }
   } catch (error) {
-    if (isCancel(error) || r.signal.aborted) throw error;
-    let j = threwOnRelayLeg(error);
-    if (j) s = "relay";
+    if (isCancel(error) || options.signal.aborted) throw error;
+    let threwOnRelay = threwOnRelayLeg(error);
+    if (threwOnRelay) route = "relay";
     if (isMaxContentLengthError(error))
-      return h(
+      return fail(
         "echo_too_large",
         `the server's answer was too large to read \u2014 ${CREATE_OUTCOME_UNKNOWN}`,
       );
-    if (j) return h("request_error", `the cloud relay drew no answer \u2014 ${CREATE_OUTCOME_UNKNOWN}`);
-    return h(
+    if (threwOnRelay)
+      return fail("request_error", `the cloud relay drew no answer \u2014 ${CREATE_OUTCOME_UNKNOWN}`);
+    return fail(
       "request_error",
       `the request failed before the server answered \u2014 ${CREATE_OUTCOME_UNKNOWN}`,
     );
   }
-  if (!d.ok) {
-    if (d.reason === "relay-unavailable" || d.reason === "relay-not-served")
-      return x(d.reason.replace(/-/g, "_"), d.status);
-    if (a && d.reason === "no-auth") return x("agent_no_credential");
-    return h(
-      d.reason.replace(/-/g, "_"),
-      d.reason === "no-auth"
-        ? describeArtifactAuthFailure(d.detail)
-        : `creating Artifacts is unavailable here: ${d.reason}`,
+  if (!result.ok) {
+    if (result.reason === "relay-unavailable" || result.reason === "relay-not-served")
+      return failUnavailable(result.reason.replace(/-/g, "_"), result.status);
+    if (inCloud && result.reason === "no-auth") return failUnavailable("agent_no_credential");
+    return fail(
+      result.reason.replace(/-/g, "_"),
+      result.reason === "no-auth"
+        ? describeArtifactAuthFailure(result.detail)
+        : `creating Artifacts is unavailable here: ${result.reason}`,
     );
   }
-  if (d.gatewayRetryAfterMs !== undefined && !z && !C) {
-    S--;
-    return x("relay_busy", d.status);
+  if (result.gatewayRetryAfterMs !== undefined && !sawConflict && !sawUnavailable) {
+    attempts--;
+    return failUnavailable("relay_busy", result.status);
   }
-  if (d.gatewayPolicy !== undefined)
-    return x(d.gatewayPolicy === "unapproved" ? "relay_approval_refused" : "relay_policy_refused", d.status);
-  if (!d.fromFrame && (d.status < 200 || d.status >= 300))
-    return h(
+  if (result.gatewayPolicy !== undefined)
+    return failUnavailable(
+      result.gatewayPolicy === "unapproved" ? "relay_approval_refused" : "relay_policy_refused",
+      result.status,
+    );
+  if (!result.fromFrame && (result.status < 200 || result.status >= 300))
+    return fail(
       "relay_error",
-      `create: the cloud relay failed (HTTP ${d.status}) \u2014 ${CREATE_OUTCOME_UNKNOWN}`,
-      d.status,
+      `create: the cloud relay failed (HTTP ${result.status}) \u2014 ${CREATE_OUTCOME_UNKNOWN}`,
+      result.status,
     );
-  if (d.status === 404) return h("not_found", TYPE_NOT_FOUND_MESSAGE, 404);
-  if (d.status === 403) {
-    if (typeof d.data === "string" && d.data.startsWith(CCR_CREDENTIAL_REFUSED_PREFIX))
-      return x("ccr_credential_refused", 403);
-    let P = denyPolicyBody(d.data);
-    if (a && !P) return x("agent_credential_refused", 403);
-    return h(
-      P ? "denied" : "forbidden",
-      `create denied: ${P ? scrubServerLine(P.error, 300) : errBody(d.data)}`,
+  if (result.status === 404) return fail("not_found", TYPE_NOT_FOUND_MESSAGE, 404);
+  if (result.status === 403) {
+    if (typeof result.data === "string" && result.data.startsWith(CCR_CREDENTIAL_REFUSED_PREFIX))
+      return failUnavailable("ccr_credential_refused", 403);
+    let denyBody = denyPolicyBody(result.data);
+    if (inCloud && !denyBody) return failUnavailable("agent_credential_refused", 403);
+    return fail(
+      denyBody ? "denied" : "forbidden",
+      `create denied: ${denyBody ? scrubServerLine(denyBody.error, 300) : errBody(result.data)}`,
       403,
     );
   }
-  if (d.status !== 200) {
+  if (result.status !== 200) {
     if (
-      d.status === 409 &&
-      (d.response?.headers?.[X_FRAME_REFUSAL] === CREATE_IN_FLIGHT ||
-        denyPolicyBody(d.data)?.reason === CREATE_IN_FLIGHT)
+      result.status === 409 &&
+      (result.response?.headers?.[X_FRAME_REFUSAL] === CREATE_IN_FLIGHT ||
+        denyPolicyBody(result.data)?.reason === CREATE_IN_FLIGHT)
     )
-      return h(
+      return fail(
         "create_in_flight",
         'an earlier attempt of this call is still creating the Artifact \u2014 use action "list" to find it before creating again',
         409,
       );
-    return h(
-      `status_${d.status}`,
-      !C && isRetryableCreateFailure(d.status, d.data)
-        ? `create ${d.status}: ${errBody(d.data)} (nothing was created)`
-        : `create ${d.status}: ${errBody(d.data)} \u2014 ${CREATE_OUTCOME_UNKNOWN}`,
-      d.status,
+    return fail(
+      `status_${result.status}`,
+      !sawUnavailable && isRetryableCreateFailure(result.status, result.data)
+        ? `create ${result.status}: ${errBody(result.data)} (nothing was created)`
+        : `create ${result.status}: ${errBody(result.data)} \u2014 ${CREATE_OUTCOME_UNKNOWN}`,
+      result.status,
     );
   }
-  let N = CREATE_RESPONSE_SCHEMA().safeParse(d.data);
-  if (!N.success)
-    return h(
+  let parsed = CREATE_RESPONSE_SCHEMA().safeParse(result.data);
+  if (!parsed.success)
+    return fail(
       "malformed_echo",
       'the Artifact was created but the server reply was unreadable \u2014 use action "list" to find it rather than creating again',
       200,
     );
-  let O = N.data;
-  let Y = typeLockFromWire(O.type);
-  if (Y === undefined)
-    return h(
+  let data = parsed.data;
+  let typeLock = typeLockFromWire(data.type);
+  if (typeLock === undefined)
+    return fail(
       "malformed_echo",
       'the Artifact was created but the server reply was unreadable \u2014 use action "list" to find it rather than creating again',
       200,
     );
-  let X = splitManifestPaths(d.data);
-  let Z = X ?? {
+  let manifestPaths = splitManifestPaths(result.data);
+  let paths = manifestPaths ?? {
     own: [],
     type: [],
   };
-  let storeTarget = parseStoreTarget(O.provisioned, O.slug);
-  let Te = O.replayed === true;
-  let Q = echoAudience(O.read, O.shared);
+  let storeTarget = parseStoreTarget(data.provisioned, data.slug);
+  let replayed = data.replayed === true;
+  let audience = echoAudience(data.read, data.shared);
   logFeatureOk("artifact_create_from_type", {
     provisioned: storeTarget !== undefined,
-    already_created: Te,
-    keyed: r.idempotencyKey !== undefined,
-    ...l(),
-    n_own_files: Z.own.length,
-    n_type_files: Z.type.length,
-    titled: r.title !== undefined && r.title !== "",
+    already_created: replayed,
+    keyed: options.idempotencyKey !== undefined,
+    ...commonTelemetry(),
+    n_own_files: paths.own.length,
+    n_type_files: paths.type.length,
+    titled: options.title !== undefined && options.title !== "",
   });
   return {
     kind: "created",
     created: {
-      slug: O.slug,
-      version: O.version,
-      url: artifactViewerUrl(O.slug),
-      ...(O.title !== undefined && {
-        title: O.title,
+      slug: data.slug,
+      version: data.version,
+      url: artifactViewerUrl(data.slug),
+      ...(data.title !== undefined && {
+        title: data.title,
       }),
-      ...(O.favicon !== undefined && {
-        favicon: O.favicon,
+      ...(data.favicon !== undefined && {
+        favicon: data.favicon,
       }),
-      storedContract: parseContractVersion(O.contract),
-      typeLock: Y,
-      ownFiles: Z.own,
-      typeFiles: Z.type,
+      storedContract: parseContractVersion(data.contract),
+      typeLock,
+      ownFiles: paths.own,
+      typeFiles: paths.type,
       ...(storeTarget !== undefined && {
         provisioned: storeTarget,
       }),
-      ...(Te && {
+      ...(replayed && {
         alreadyCreated: true,
       }),
-      ...(Q.read !== undefined && {
-        read: Q.read,
+      ...(audience.read !== undefined && {
+        read: audience.read,
       }),
-      ...(Q.shared !== undefined && {
-        shared: Q.shared,
+      ...(audience.shared !== undefined && {
+        shared: audience.shared,
       }),
-      ...(X === undefined && {
+      ...(manifestPaths === undefined && {
         manifestUnread: true,
       }),
     },
   };
 }
 //@ chunk-w08rdxhd.js:24596-24629 placement
-function hasDbCapability(capabilities) {
-  return hasKey(capabilities, "db");
+function hasDbCapability(target) {
+  return hasKey(target, "db");
 }
 //@ chunk-w08rdxhd.js:24629-24669 placement
-function hasEndpointsCapability(capabilities) {
-  return hasKey(capabilities, "endpoints");
+function hasEndpointsCapability(target) {
+  return hasKey(target, "endpoints");
 }
 //@ chunk-w08rdxhd.js:24669-24731 placement
-function hasKey(e, r) {
-  return typeof e === "object" && e !== null && r in e;
+function hasKey(target, key) {
+  return typeof target === "object" && target !== null && key in target;
 }
 export {
   artifactTypesEnabled,

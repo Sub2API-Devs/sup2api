@@ -48,6 +48,7 @@ import {
   getLastLoadStatus,
 } from "../../services/remoteManagedSettings/remoteSettingsState.js";
 import { sleep, withDeadline } from "../sleep.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-7kt7c7a3.js:7799-7914 placement
 class ForegroundTurnState {
@@ -61,43 +62,46 @@ class ForegroundTurnState {
   valveTimer = null;
 }
 //@ chunk-7kt7c7a3.js:7914-7940 placement
-var foregroundTurnSlot = new SessionRootSlot(() => new ForegroundTurnState());
+var foregroundTurnSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-7kt7c7a3.js:7914", () => {
+  foregroundTurnSlot = new SessionRootSlot(() => new ForegroundTurnState());
+});
 //@ chunk-7kt7c7a3.js:7940-7971 placement
 function foregroundTurnState() {
   return foregroundTurnSlot.of(getRootSession());
 }
 //@ chunk-7kt7c7a3.js:7971-8107 placement
-function releaseIdleWaiters(o) {
-  if (o.valveTimer !== null) {
-    clearTimeout(o.valveTimer);
-    o.valveTimer = null;
+function releaseIdleWaiters(state) {
+  if (state.valveTimer !== null) {
+    clearTimeout(state.valveTimer);
+    state.valveTimer = null;
   }
-  let e = [...o.idleWaiters];
-  o.idleWaiters.clear();
-  scheduleMicrotasks(e);
+  let waiters = [...state.idleWaiters];
+  state.idleWaiters.clear();
+  scheduleMicrotasks(waiters);
 }
 //@ chunk-7kt7c7a3.js:8107-8155 placement
-function scheduleMicrotasks(o) {
-  for (let e of o) queueMicrotask(e);
+function scheduleMicrotasks(waiters) {
+  for (let waiter of waiters) queueMicrotask(waiter);
 }
 //@ chunk-7kt7c7a3.js:8155-8424 placement
 /**
  * 标记前台回合开始或结束：key 不匹配或状态未变时忽略；从忙变闲时唤醒空闲与结束等待者，并记录 running/key/busySince/edgeAt。
  */
-function setForegroundTurnBusy(o, e = null) {
-  let s = foregroundTurnState();
-  let r = e === null || e === s.key;
-  if (o ? s.busy && r : !s.busy || !r) return;
-  if (s.busy) {
-    releaseIdleWaiters(s);
-    scheduleMicrotasks([...s.endWaiters]);
-    s.endWaiters.clear();
+function setForegroundTurnBusy(busy, key = null) {
+  let state = foregroundTurnState();
+  let sameTurn = key === null || key === state.key;
+  if (busy ? state.busy && sameTurn : !state.busy || !sameTurn) return;
+  if (state.busy) {
+    releaseIdleWaiters(state);
+    scheduleMicrotasks([...state.endWaiters]);
+    state.endWaiters.clear();
   }
-  s.busy = o;
-  s.running = o ? Symbol("foreground turn") : null;
-  s.key = o ? e : null;
-  s.busySince = o ? performance.now() : 0;
-  s.edgeAt = Date.now();
+  state.busy = busy;
+  state.running = busy ? Symbol("foreground turn") : null;
+  state.key = busy ? key : null;
+  state.busySince = busy ? performance.now() : 0;
+  state.edgeAt = Date.now();
 }
 //@ chunk-7kt7c7a3.js:8424-8455 placement
 /**
@@ -117,10 +121,10 @@ function isForegroundRunning() {
 /**
  * runWhenTurnEnds：回合结束时执行。
  */
-function runWhenTurnEnds(o) {
-  let e = foregroundTurnState();
-  if (e.busy) e.endWaiters.add(o);
-  else queueMicrotask(o);
+function runWhenTurnEnds(callback) {
+  let state = foregroundTurnState();
+  if (state.busy) state.endWaiters.add(callback);
+  else queueMicrotask(callback);
 }
 //@ chunk-7kt7c7a3.js:8568-8601 placement
 /**
@@ -133,79 +137,79 @@ function foregroundEdgeAt() {
 /**
  * isBusyShorterThan：忙碌时间短于阈值。
  */
-function isBusyShorterThan(o = performance.now(), autoReactRateLimit = BUSY_EDGE_THRESHOLD_MS) {
-  let s = foregroundTurnState();
-  return s.busy && o - s.busySince < autoReactRateLimit;
+function isBusyShorterThan(now = performance.now(), autoReactRateLimit = BUSY_EDGE_THRESHOLD_MS) {
+  let state = foregroundTurnState();
+  return state.busy && now - state.busySince < autoReactRateLimit;
 }
 //@ chunk-7kt7c7a3.js:8682-8764 placement
 /**
  * isBusyAtLeast：忙碌时间达到阈值。
  */
-function isBusyAtLeast(o = performance.now(), autoReactRateLimit = BUSY_EDGE_THRESHOLD_MS) {
-  let s = foregroundTurnState();
-  return s.busy && o - s.busySince >= autoReactRateLimit;
+function isBusyAtLeast(now = performance.now(), autoReactRateLimit = BUSY_EDGE_THRESHOLD_MS) {
+  let state = foregroundTurnState();
+  return state.busy && now - state.busySince >= autoReactRateLimit;
 }
 //@ chunk-7kt7c7a3.js:8764-9217 placement
 /**
  * 前台空闲或忙碌超过阀门时长时立刻（微任务）执行 o；否则登记为空闲等待者并启动阀门定时器。返回取消函数，abort 时自动取消。
  */
-function runWhenForegroundIdle(o, signal, autoReactRateLimit = BUSY_EDGE_THRESHOLD_MS) {
+function runWhenForegroundIdle(callback, signal, autoReactRateLimit = BUSY_EDGE_THRESHOLD_MS) {
   if (signal.aborted) return () => {};
-  let r = foregroundTurnState();
-  let n = false;
-  let a = () => {
-    signal.removeEventListener("abort", u);
-    if (!n && !signal.aborted) o();
+  let state = foregroundTurnState();
+  let cancelled = false;
+  let run = () => {
+    signal.removeEventListener("abort", cancel);
+    if (!cancelled && !signal.aborted) callback();
   };
-  let u = () => {
-    n = true;
-    r.idleWaiters.delete(a);
-    signal.removeEventListener("abort", u);
+  let cancel = () => {
+    cancelled = true;
+    state.idleWaiters.delete(run);
+    signal.removeEventListener("abort", cancel);
   };
   if (!isBusyShorterThan(performance.now(), autoReactRateLimit)) {
-    queueMicrotask(a);
-    return u;
+    queueMicrotask(run);
+    return cancel;
   }
-  r.idleWaiters.add(a);
-  signal.addEventListener("abort", u, {
+  state.idleWaiters.add(run);
+  signal.addEventListener("abort", cancel, {
     once: true,
   });
-  if (r.valveTimer === null) {
-    let f = r.busySince + autoReactRateLimit - performance.now();
-    r.valveTimer = setTimeout(releaseIdleWaiters, Math.max(0, f), r);
-    r.valveTimer.unref?.();
+  if (state.valveTimer === null) {
+    let remainingMs = state.busySince + autoReactRateLimit - performance.now();
+    state.valveTimer = setTimeout(releaseIdleWaiters, Math.max(0, remainingMs), state);
+    state.valveTimer.unref?.();
   }
-  return u;
+  return cancel;
 }
 //@ chunk-7kt7c7a3.js:9217-9410 placement
 /**
  * GrowthBook 刷新后开关变化时（等前台空闲）触发重载。
  */
-function watchRolloutSwitchChanges(o) {
-  let e = {
+function watchRolloutSwitchChanges(onChange) {
+  let state = {
     isStopped: false,
     isWaiting: false,
   };
-  function s() {
-    e.isWaiting = false;
-    if (!e.isStopped && isHooksModulesSwitchStale()) o();
+  function recheck() {
+    state.isWaiting = false;
+    if (!state.isStopped && isHooksModulesSwitchStale()) onChange();
   }
-  let r = onGrowthBookRefresh(() => {
-    if (!e.isWaiting && isHooksModulesSwitchStale()) {
-      e.isWaiting = true;
-      runWhenTurnEnds(s);
+  let unsubscribe = onGrowthBookRefresh(() => {
+    if (!state.isWaiting && isHooksModulesSwitchStale()) {
+      state.isWaiting = true;
+      runWhenTurnEnds(recheck);
     }
   });
   return () => {
-    e.isStopped = true;
-    r();
+    state.isStopped = true;
+    unsubscribe();
   };
 }
 //@ chunk-7kt7c7a3.js:9410-9826 placement
 /**
  * 唤醒边界为 ahead、已读开关且无进行中的跟随时：等待组织设置与 rollout 标志后跟随 rollout 或结算唤醒；结果 Promise 共享，结束清空。
  */
-function followRolloutSwitchOnce(o, e, standDownInstalledHooksModules) {
+function followRolloutSwitchOnce(follow, standDown, standDown_2) {
   let pluginRegistry = getPluginRegistry();
   if (!(
     pluginRegistry.hooksModulesWakeBound === "ahead" &&
@@ -214,24 +218,24 @@ function followRolloutSwitchOnce(o, e, standDownInstalledHooksModules) {
     isAutoModeGateOpen()
   ))
     return null;
-  let a = waitForSettlement(currentFetchHold())
+  let followPass = waitForSettlement(currentFetchHold())
     .then(() => waitForRolloutFlag())
     .then(() => {
       pluginRegistry.hooksModulesSwitchFollowing = undefined;
       markWakeBoundPassed();
       return (
-        followHooksModulesRollout(o, e, standDownInstalledHooksModules) ??
-        settleHooksModulesWake(o, e, standDownInstalledHooksModules) ??
+        followHooksModulesRollout(follow, standDown, standDown_2) ??
+        settleHooksModulesWake(follow, standDown, standDown_2) ??
         undefined
       );
     })
     .catch(logError)
     .finally(() => {
-      if (pluginRegistry.hooksModulesSwitchFollowing === a)
+      if (pluginRegistry.hooksModulesSwitchFollowing === followPass)
         pluginRegistry.hooksModulesSwitchFollowing = undefined;
     });
-  pluginRegistry.hooksModulesSwitchFollowing = a;
-  return a;
+  pluginRegistry.hooksModulesSwitchFollowing = followPass;
+  return followPass;
 }
 //@ chunk-7kt7c7a3.js:9826-9903 placement
 /**
@@ -259,16 +263,16 @@ var hooksModulesGateSourceChanged = () =>
 /**
  * 仅在 isManagedPending 时处理：集合未知、加载有错或有未满足插件时记日志保持欠载；否则按 isDecided 更新或清除开关读取状态。
  */
-function settleManagedModulesLoad(o) {
-  let hooksModulesSwitchRead = o.registry.hooksModulesSwitchRead;
+function settleManagedModulesLoad(outcome) {
+  let hooksModulesSwitchRead = outcome.registry.hooksModulesSwitchRead;
   if (hooksModulesSwitchRead?.isManagedPending !== true) return false;
-  if (!(o.isSetKnown && o.isLoadFaultless && o.unmet.length === 0)) {
+  if (!(outcome.isSetKnown && outcome.isLoadFaultless && outcome.unmet.length === 0)) {
     logForDebugging(
-      `the load of an organization's hooks modules stays owed: its set ${o.isSetKnown ? "is known" : "is not known yet"}, the load ${o.isLoadFaultless ? "ran" : "did not run faultless"}, ${o.unmet.length} named plugin(s) not found or not loaded`,
+      `the load of an organization's hooks modules stays owed: its set ${outcome.isSetKnown ? "is known" : "is not known yet"}, the load ${outcome.isLoadFaultless ? "ran" : "did not run faultless"}, ${outcome.unmet.length} named plugin(s) not found or not loaded`,
     );
     return false;
   }
-  o.registry.hooksModulesSwitchRead = o.isDecided
+  outcome.registry.hooksModulesSwitchRead = outcome.isDecided
     ? {
         ...hooksModulesSwitchRead,
         isManagedPending: false,
@@ -283,77 +287,79 @@ function settleManagedModulesLoad(o) {
 var ORGANIZATION_MODS_UNLOADED_MESSAGE =
   "Your organization's mods could not be loaded, so this turn was not run.";
 //@ chunk-7kt7c7a3.js:10500-11539 placement
-async function waitForOrganizationMods(o, e, s, r) {
+async function waitForOrganizationMods(evaluate, endSignal, timeoutMs, isDeadEnd) {
   let pluginRegistry = getPluginRegistry();
-  let a = {
+  let sessionState = {
     isEnded: false,
   };
-  let u = {
+  let wakeSignal = {
     wake: () => {},
   };
-  let f = new Set();
+  let settledPasses = new Set();
   let abortController = new AbortController();
-  let p = onGrowthBookRefresh(() => u.wake());
-  let w = pluginRegistry.hookRegistrationEnded.subscribe(() => u.wake());
-  let h = {
+  let unsubscribeRefresh = onGrowthBookRefresh(() => wakeSignal.wake());
+  let unsubscribeEnd = pluginRegistry.hookRegistrationEnded.subscribe(() => wakeSignal.wake());
+  let moveState = {
     hasMoved: false,
     passesBefore: 0,
   };
-  let E = onLastLoadStatusChanged(() => {
-    h.hasMoved = true;
-    h.passesBefore = pluginRegistry.hookRegistrationEpoch;
-    u.wake();
+  let unsubscribeStatus = onLastLoadStatusChanged(() => {
+    moveState.hasMoved = true;
+    moveState.passesBefore = pluginRegistry.hookRegistrationEpoch;
+    wakeSignal.wake();
   });
-  let M = () => h.hasMoved && pluginRegistry.hookRegistrationEpoch === h.passesBefore;
-  let k = {
+  let hasMovedSince = () =>
+    moveState.hasMoved && pluginRegistry.hookRegistrationEpoch === moveState.passesBefore;
+  let limit = {
     isPassed: false,
   };
-  let C = {
+  let deadEnd = {
     isMet: false,
   };
-  let N = () => !a.isEnded && !k.isPassed && !C.isMet && isOrganizationModsLoadPending();
-  let mo = sleep(s, abortController.signal).then(() => {
-    k.isPassed = true;
+  let shouldContinue = () =>
+    !sessionState.isEnded && !limit.isPassed && !deadEnd.isMet && isOrganizationModsLoadPending();
+  let timeoutTimer = sleep(timeoutMs, abortController.signal).then(() => {
+    limit.isPassed = true;
   });
-  e.then(() => {
-    a.isEnded = true;
+  endSignal.then(() => {
+    sessionState.isEnded = true;
   });
   try {
-    while (N()) {
-      let K = {
+    while (shouldContinue()) {
+      let interval = {
         isOver: false,
       };
-      let uo = sleep(REREAD_INTERVAL_MS, abortController.signal, {
+      let intervalTimer = sleep(REREAD_INTERVAL_MS, abortController.signal, {
         unref: true,
       }).then(() => {
-        K.isOver = true;
+        interval.isOver = true;
       });
-      let po = M();
-      let I = Promise.resolve()
-        .then(() => o(po))
+      let moved = hasMovedSince();
+      let pass = Promise.resolve()
+        .then(() => evaluate(moved))
         .catch(logError);
-      h.hasMoved = false;
-      while (N() && !K.isOver && !(M() && f.has(I))) {
+      moveState.hasMoved = false;
+      while (shouldContinue() && !interval.isOver && !(hasMovedSince() && settledPasses.has(pass))) {
         let promise = new Promise((resolve) => {
-          u.wake = resolve;
+          wakeSignal.wake = resolve;
         });
         let mapped = [
-          I,
+          pass,
           pluginRegistry.hooksModulesSwitchFollowing,
           ...pluginRegistry.hookRegistrationsInFlight,
         ]
-          .flatMap((O) => (O === undefined || f.has(O) ? [] : [O]))
-          .map((O) => Promise.allSettled([O]).then(() => f.add(O)));
-        await Promise.race([uo, mo, e, promise, ...mapped]);
-        C.isMet = !k.isPassed && f.has(I) && !M() && r();
+          .flatMap((promise) => (promise === undefined || settledPasses.has(promise) ? [] : [promise]))
+          .map((promise) => Promise.allSettled([promise]).then(() => settledPasses.add(promise)));
+        await Promise.race([intervalTimer, timeoutTimer, endSignal, promise, ...mapped]);
+        deadEnd.isMet = !limit.isPassed && settledPasses.has(pass) && !hasMovedSince() && isDeadEnd();
       }
     }
-    return k.isPassed ? "limit" : C.isMet ? "dead-end" : "released";
+    return limit.isPassed ? "limit" : deadEnd.isMet ? "dead-end" : "released";
   } finally {
     abortController.abort();
-    p();
-    w();
-    E();
+    unsubscribeRefresh();
+    unsubscribeEnd();
+    unsubscribeStatus();
   }
 }
 //@ chunk-7kt7c7a3.js:11539-11553 placement
@@ -364,23 +370,23 @@ var ORGANIZATION_MODS_WAITING_MESSAGE = "Waiting for your organization's mods to
 /**
  * 按加载状态去重执行组织状态加载。
  */
-function runOrganizationStatusLoadOnce(reload, e) {
+function runOrganizationStatusLoadOnce(reload, force) {
   let pluginRegistry = getPluginRegistry();
-  let n = `${hasLoadCycleEnded() ? "ended" : "under way"} since reset ${getSyncCacheResetEpoch()}`;
-  let a = getLastLoadStatus() ?? n;
+  let generation = `${hasLoadCycleEnded() ? "ended" : "under way"} since reset ${getSyncCacheResetEpoch()}`;
+  let standing = getLastLoadStatus() ?? generation;
   let organizationsStatusLoad = pluginRegistry.organizationsStatusLoad;
-  if (!e && organizationsStatusLoad?.standing === a) return organizationsStatusLoad.pass;
-  let f = Promise.resolve().then(reload);
-  let c = {
-    standing: a,
-    pass: f,
+  if (!force && organizationsStatusLoad?.standing === standing) return organizationsStatusLoad.pass;
+  let pass = Promise.resolve().then(reload);
+  let entry = {
+    standing,
+    pass,
   };
-  let p = () => {
-    if (pluginRegistry.organizationsStatusLoad === c) pluginRegistry.organizationsStatusLoad = undefined;
+  let clearIfCurrent = () => {
+    if (pluginRegistry.organizationsStatusLoad === entry) pluginRegistry.organizationsStatusLoad = undefined;
   };
-  pluginRegistry.organizationsStatusLoad = c;
-  f.then(p, p);
-  return f;
+  pluginRegistry.organizationsStatusLoad = entry;
+  pass.then(clearIfCurrent, clearIfCurrent);
+  return pass;
 }
 //@ chunk-7kt7c7a3.js:11942-12033 placement
 /**
@@ -392,59 +398,64 @@ var ORGANIZATION_POLICY_UNREADABLE_MESSAGE =
 /**
  * 组织模块仍待加载时：先提示，再等待组织 mods（必要时重读开关），超时则按截止时间重载； 返回 {kind:"start"}（已不再等待）、{kind:"ended"}（回合已结束）或 {kind:"failed", message}。
  */
-function waitForOrganizationModsOnClaim(reload, tell, standDown, r, isFirstReadOverdue) {
+function waitForOrganizationModsOnClaim(reload, tell, standDown, endSignal, isDeadEnd) {
   if (!isOrganizationModsLoadPending()) return null;
-  let a = {
+  let sessionState = {
     isEnded: false,
   };
-  let u = {
+  let outcome = {
     end: "released",
   };
-  let f = () => getPluginRegistry().hooksModulesSwitchRead?.isManagedPending === true;
-  let c = () =>
+  let ispending = () => getPluginRegistry().hooksModulesSwitchRead?.isManagedPending === true;
+  let followOrSettle = () =>
     followHooksModulesRollout(reload, tell, standDown) ?? settleHooksModulesWake(reload, tell, standDown);
-  r.then(() => {
-    a.isEnded = true;
+  endSignal.then(() => {
+    sessionState.isEnded = true;
   });
   return Promise.resolve()
     .then(() => tell(ORGANIZATION_MODS_WAITING_MESSAGE))
     .catch(logError)
     .then(() =>
       waitForOrganizationMods(
-        (p) =>
+        (isFirstReadOverdue) =>
           followRolloutAfterReread(
-            p ? () => runOrganizationStatusLoadOnce(reload, false) : reload,
+            isFirstReadOverdue ? () => runOrganizationStatusLoadOnce(reload, false) : reload,
             tell,
             standDown,
           ),
-        r,
+        endSignal,
         ORGANIZATION_POLICY_LOAD_TIMEOUT_MS,
-        isFirstReadOverdue,
+        isDeadEnd,
       ),
     )
     .then((end) => {
-      u.end = end;
+      outcome.end = end;
     })
     .catch(logError)
     .then(() =>
-      !isOrganizationModsLoadPending() && f()
-        ? withDeadline(reloadAndReportDroppedModules(standDown, tell, c), REREAD_INITIAL_DELAY_MS)
+      !isOrganizationModsLoadPending() && ispending()
+        ? withDeadline(
+            reloadAndReportDroppedModules(standDown, tell, followOrSettle),
+            REREAD_INITIAL_DELAY_MS,
+          )
         : undefined,
     )
     .catch(logError)
     .then(() => {
-      let p = u.end === "dead-end";
+      let soundDeadEnd = outcome.end === "dead-end";
       if (!isOrganizationModsLoadPending())
         return {
           kind: "start",
         };
-      return a.isEnded
+      return sessionState.isEnded
         ? {
             kind: "ended",
           }
         : {
             kind: "failed",
-            message: p ? ORGANIZATION_POLICY_UNREADABLE_MESSAGE : ORGANIZATION_MODS_UNLOADED_MESSAGE,
+            message: soundDeadEnd
+              ? ORGANIZATION_POLICY_UNREADABLE_MESSAGE
+              : ORGANIZATION_MODS_UNLOADED_MESSAGE,
           };
     });
 }

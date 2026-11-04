@@ -5,7 +5,7 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-eavynfj6.js (11)
+ * pieces: chunk-eavynfj6.js (10)
  * attribution: placement 11
  */
 import {
@@ -14,12 +14,6 @@ import {
   matchesContentHash,
 } from "../../../utils/remoteFileState.js";
 import {
-  UNSET_REGEX_A,
-  MEDIUM_EFFORT,
-  ANGLE_BOUNDARY_RE,
-  UNSET_REGEX_B,
-  MAX_HTML_ENTITY_ATTEMPTS,
-  ESCAPE_MAX_CHARS,
   MUSICAL_SYMBOL_RE,
   HTML_ESCAPE_RE,
   NAMED_ENTITY_MAP,
@@ -29,12 +23,7 @@ import {
   RIGHT_ANGLE_VARIANTS_RE,
   TEXT_ESCAPE_RE,
 } from "./autoEditPatch.js";
-import {
-  confusableTagScrubPattern,
-  createTagNeutralizer,
-  foldConfusableCharacters,
-} from "../../../utils/confusables.js";
-import { stripCombiningRepeated } from "../../../utils/sanitization.js";
+import { foldConfusableCharacters } from "../../../utils/confusables.js";
 import {
   getDenyRuleForTool,
   getAskRuleForTool,
@@ -52,16 +41,16 @@ import { FileReadTool } from "../../../tools/FileReadTool/FileReadTool.js";
 import { getLiveState } from "../../liveReplica/liveReplica.js";
 
 //@ chunk-eavynfj6.js:26912-27226 placement
-function applyFindReplaceEdits(e, t) {
-  let o = e;
-  let n = [];
-  for (let i of t) {
-    let { find, replace } = i;
+function applyFindReplaceEdits(text, edits) {
+  let current = text;
+  let applied = [];
+  for (let edit of edits) {
+    let { find, replace } = edit;
     if (
       replace === "" &&
       !find.endsWith(`
 `) &&
-      o.includes(
+      current.includes(
         find +
           `
 `,
@@ -73,181 +62,167 @@ function applyFindReplaceEdits(e, t) {
 `;
     }
     if (find === replace) continue;
-    let index = o.indexOf(find);
-    if (index === -1 || o.indexOf(find, index + 1) !== -1) return;
-    o = o.slice(0, index) + replace + o.slice(index + find.length);
-    n.push({
+    let index = current.indexOf(find);
+    if (index === -1 || current.indexOf(find, index + 1) !== -1) return;
+    current = current.slice(0, index) + replace + current.slice(index + find.length);
+    applied.push({
       oldString: find,
       newString: replace,
     });
   }
-  return n.length === 0 || o === e ? undefined : n;
+  return applied.length === 0 || current === text ? undefined : applied;
 }
 //@ chunk-eavynfj6.js:27226-27435 placement
 /**
  * 把自动编辑读到的文件内容写进文件读取状态（标记不在模型上下文中）；已有同内容且更新的记录时不覆盖。
  */
-function recordAutoEditRead(readFileState, path, o, n) {
-  let i = stripBomAndCarriageReturn(o);
-  let r = readFileState.get(path);
-  if (r !== undefined && isFullFileView(r) && matchesContentHash(r, i) && Math.floor(n) <= r.timestamp)
+function recordAutoEditRead(readFileState, path, content, mtimeMs) {
+  let stripped = stripBomAndCarriageReturn(content);
+  let existing = readFileState.get(path);
+  if (
+    existing !== undefined &&
+    isFullFileView(existing) &&
+    matchesContentHash(existing, stripped) &&
+    Math.floor(mtimeMs) <= existing.timestamp
+  )
     return;
   readFileState.set(path, {
-    content: i,
-    timestamp: Math.floor(n),
+    content: stripped,
+    timestamp: Math.floor(mtimeMs),
     offset: undefined,
     limit: undefined,
     contentNotInModelContext: true,
   });
 }
-//@ chunk-eavynfj6.js:27435-27726 placement
-/**
- * 判断文本里是否藏有 harness 标签：逐轮尝试反斜杠/尖括号同形字替换、HTML 转义解码、去组合字符与同形字折叠后检测，超过轮数或膨胀过大时保守地返回结果。
- */
-function containsHarnessTags(e) {
-  let t = (UNSET_REGEX_A ??= confusableTagScrubPattern(MEDIUM_EFFORT, () => ANGLE_BOUNDARY_RE));
-  let o = (UNSET_REGEX_B ??= createTagNeutralizer([
-    {
-      tags: MEDIUM_EFFORT,
-      tail: ({ name: i }) => `[-_]*(?![${i}])`,
-    },
-  ]));
-  let n = e;
-  for (let i = 0; ; i++) {
-    if (matchesTagPattern(n, t, o)) return true;
-    if (i === MAX_HTML_ENTITY_ATTEMPTS) return false;
-    let r = decodeMusicalSymbols(decodeHtmlEscapes(decodeMusicalSymbols(n)));
-    if (r !== n && matchesTagPattern(r, t, o)) return true;
-    let s = foldConfusableCharacters(stripCombiningRepeated(r).replace(ESCAPE_MAX_CHARS, ""));
-    if (s === n) return false;
-    if (s.length > 2 * e.length) return true;
-    n = s;
-  }
-}
 //@ chunk-eavynfj6.js:27726-27822 placement
-function decodeMusicalSymbols(e) {
-  return e.replace(MUSICAL_SYMBOL_RE, (t) => String.fromCodePoint((t.codePointAt(0) ?? 917536) - 917504));
+function decodeMusicalSymbols(text) {
+  return text.replace(MUSICAL_SYMBOL_RE, (symbol) =>
+    String.fromCodePoint((symbol.codePointAt(0) ?? 917536) - 917504),
+  );
 }
 //@ chunk-eavynfj6.js:27822-28641 placement
-function decodeHtmlEscapes(e) {
-  if (!e.includes("&") && !e.includes("\\") && !e.includes("%")) return e;
-  return e.replace(HTML_ESCAPE_RE, (t, o, n, i, r, s, ...l) => {
-    let f = r ?? s;
-    if (f !== undefined) {
-      let E = NAMED_ENTITY_MAP.get(f.toLowerCase());
-      if (E !== undefined) return E;
-      let b = /^(?:amp|lt|gt|laquo|raquo)/i.exec(f)?.[0];
-      return b === undefined
+function decodeHtmlEscapes(text) {
+  if (!text.includes("&") && !text.includes("\\") && !text.includes("%")) return text;
+  return text.replace(HTML_ESCAPE_RE, (full, named, dec, hex, name1, name2, ...namedGroups) => {
+    let entity = name1 ?? name2;
+    if (entity !== undefined) {
+      let mapped = NAMED_ENTITY_MAP.get(entity.toLowerCase());
+      if (mapped !== undefined) return mapped;
+      let legacy = /^(?:amp|lt|gt|laquo|raquo)/i.exec(entity)?.[0];
+      return legacy === undefined
         ? INVALID_CODE_POINT
-        : (NAMED_ENTITY_MAP.get(b.toLowerCase()) ?? "") + f.slice(b.length) + ";";
+        : (NAMED_ENTITY_MAP.get(legacy.toLowerCase()) ?? "") + entity.slice(legacy.length) + ";";
     }
-    let [a, u, d, h, A, y, p, C, x, _, c, m] = l
-      .slice(0, 12)
-      .map((E) => (typeof E === "string" ? E : undefined));
-    let k = l[12];
+    let [group1, group2, group3, group4, group5, group6, group7, group8, group9, group10, group11, group12] =
+      namedGroups.slice(0, 12).map((group) => (typeof group === "string" ? group : undefined));
+    let codepoint = namedGroups[12];
     if (
-      typeof k === "number" &&
-      !/[;\s]$/.test(t) &&
-      (n ?? i ?? p ?? C ?? c) !== undefined &&
-      isConfusableHexDigit(e, k + t.length, n !== undefined)
+      typeof codepoint === "number" &&
+      !/[;\s]$/.test(full) &&
+      (dec ?? hex ?? group7 ?? group8 ?? group11) !== undefined &&
+      isConfusableHexDigit(text, codepoint + full.length, dec !== undefined)
     )
-      return t;
-    if (a !== undefined && u !== undefined) return String.fromCharCode(parseInt(a, 16), parseInt(u, 16));
-    if (x !== undefined) return SIMPLE_ESCAPE_MAP.get(x) ?? x;
-    if (m !== undefined) return safeDecodeURIComponent(m);
-    let g = o ?? i ?? d ?? h ?? A ?? y ?? p ?? c;
-    let w =
-      n !== undefined
-        ? parseInt(n, 10)
-        : C !== undefined
-          ? parseInt(C, 8)
-          : g !== undefined
-            ? parseInt(g, 16)
+      return full;
+    if (group1 !== undefined && group2 !== undefined)
+      return String.fromCharCode(parseInt(group1, 16), parseInt(group2, 16));
+    if (group9 !== undefined) return SIMPLE_ESCAPE_MAP.get(group9) ?? group9;
+    if (group12 !== undefined) return safeDecodeURIComponent(group12);
+    let decoded = named ?? hex ?? group3 ?? group4 ?? group5 ?? group6 ?? group7 ?? group11;
+    let out =
+      dec !== undefined
+        ? parseInt(dec, 10)
+        : group8 !== undefined
+          ? parseInt(group8, 8)
+          : decoded !== undefined
+            ? parseInt(decoded, 16)
             : undefined;
-    if (w === undefined) return _ ?? "";
-    return codePointToString(w);
+    if (out === undefined) return group10 ?? "";
+    return codePointToString(out);
   });
 }
 //@ chunk-eavynfj6.js:28641-28789 placement
-function isConfusableHexDigit(e, t, o) {
-  let codePoint = e.codePointAt(t);
-  if (codePoint === undefined || codePoint < 128) return false;
-  let i = foldConfusableCharacters(String.fromCodePoint(codePoint));
-  return (o ? /^[0-9]$/ : /^[0-9a-f]$/i).test(i);
+function isConfusableHexDigit(text, index, codePoint) {
+  let codePoint_2 = text.codePointAt(index);
+  if (codePoint_2 === undefined || codePoint_2 < 128) return false;
+  let folded = foldConfusableCharacters(String.fromCodePoint(codePoint_2));
+  return (codePoint ? /^[0-9]$/ : /^[0-9a-f]$/i).test(folded);
 }
 //@ chunk-eavynfj6.js:28789-28869 placement
-function codePointToString(e) {
-  return e <= 1114111 && (e < 55296 || e > 57343) ? String.fromCodePoint(e) : INVALID_CODE_POINT;
+function codePointToString(cp) {
+  return cp <= 1114111 && (cp < 55296 || cp > 57343) ? String.fromCodePoint(cp) : INVALID_CODE_POINT;
 }
 //@ chunk-eavynfj6.js:28869-29006 placement
-function safeDecodeURIComponent(e) {
+function safeDecodeURIComponent(text) {
   try {
-    return decodeURIComponent(e);
+    return decodeURIComponent(text);
   } catch {
-    return e.replace(/%([0-9a-fA-F]{2})/g, (t, o) => String.fromCharCode(parseInt(o, 16)));
+    return text.replace(/%([0-9a-fA-F]{2})/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)));
   }
 }
 //@ chunk-eavynfj6.js:29006-29238 placement
-function matchesTagPattern(e, t, o) {
-  let n = e.includes("\\") ? e.replaceAll("\\", " ") : e;
-  let replaced = n.replace(LEFT_ANGLE_VARIANTS_RE, "<").replace(RIGHT_ANGLE_VARIANTS_RE, ">");
+function matchesTagPattern(text, pattern, opener) {
+  let unescaped = text.includes("\\") ? text.replaceAll("\\", " ") : text;
+  let replaced = unescaped.replace(LEFT_ANGLE_VARIANTS_RE, "<").replace(RIGHT_ANGLE_VARIANTS_RE, ">");
   let replaced_2 = replaced.replace(TEXT_ESCAPE_RE, "l");
-  let s = [n];
-  if (replaced !== n) s.push(replaced);
-  if (replaced_2 !== replaced) s.push(replaced_2);
-  return s.some((l) => l.search(t) !== -1 || o.openerOffsets(l).length > 0);
+  let candidates = [unescaped];
+  if (replaced !== unescaped) candidates.push(replaced);
+  if (replaced_2 !== replaced) candidates.push(replaced_2);
+  return candidates.some((line) => line.search(pattern) !== -1 || opener.openerOffsets(line).length > 0);
 }
 //@ chunk-eavynfj6.js:29238-29721 placement
-function getEditPermissionVerdict(path, t) {
-  if (t.mode === "plan") return "would_ask";
-  if (getDenyRuleForTool(t, FileEditTool) !== null || getAskRuleForTool(t, FileEditTool) !== null)
+function getEditPermissionVerdict(path, context) {
+  if (context.mode === "plan") return "would_ask";
+  if (getDenyRuleForTool(context, FileEditTool) !== null || getAskRuleForTool(context, FileEditTool) !== null)
     return "would_ask";
-  let o = {
+  let input = {
     file_path: path,
     old_string: "a",
     new_string: "b",
     replace_all: false,
   };
-  let n = walkPermissionCheckPaths(path);
-  if (leafSymlinkWriteRefusal(path, n) !== null) return "would_ask";
-  let i = checkWritePermissionForTool(FileEditTool, o, t, n);
-  if (i.behavior === "allow") return "allowed";
-  if (i.behavior !== "ask") return "would_ask";
-  let r = i.decisionReason?.type;
-  if (r === "rule" || r === "safetyCheck" || r === "mode") return "would_ask";
-  return t.mode === "bypassPermissions" || toolAlwaysAllowedRule(t, FileEditTool) !== null
+  let paths = walkPermissionCheckPaths(path);
+  if (leafSymlinkWriteRefusal(path, paths) !== null) return "would_ask";
+  let verdict = checkWritePermissionForTool(FileEditTool, input, context, paths);
+  if (verdict.behavior === "allow") return "allowed";
+  if (verdict.behavior !== "ask") return "would_ask";
+  let reasonType = verdict.decisionReason?.type;
+  if (reasonType === "rule" || reasonType === "safetyCheck" || reasonType === "mode") return "would_ask";
+  return context.mode === "bypassPermissions" || toolAlwaysAllowedRule(context, FileEditTool) !== null
     ? "allowed"
     : "would_ask";
 }
 //@ chunk-eavynfj6.js:29721-30239 placement
-function canWriteWithoutPrompt(path, slug, o) {
-  if (o.mode === "plan") return false;
-  let n = {
+function canWriteWithoutPrompt(path, slug, context) {
+  if (context.mode === "plan") return false;
+  let toolRef = {
     name: ARTIFACT_TOOL_NAME,
   };
-  if (getDenyRuleForTool(o, n) !== null || getAskRuleForTool(o, n) !== null) return false;
-  if (getDenyRuleForTool(o, FileReadTool) !== null || getAskRuleForTool(o, FileReadTool) !== null)
+  if (getDenyRuleForTool(context, toolRef) !== null || getAskRuleForTool(context, toolRef) !== null)
     return false;
-  let i = checkReadPermissionForTool(
+  if (getDenyRuleForTool(context, FileReadTool) !== null || getAskRuleForTool(context, FileReadTool) !== null)
+    return false;
+  let verdict = checkReadPermissionForTool(
     FileReadTool,
     {
       file_path: path,
     },
-    o,
+    context,
   );
-  if (i.behavior === "deny") return false;
-  if (i.behavior === "ask" && i.decisionReason?.type === "rule") return false;
-  if (i.behavior !== "allow" && o.mode !== "bypassPermissions") return false;
+  if (verdict.behavior === "deny") return false;
+  if (verdict.behavior === "ask" && verdict.decisionReason?.type === "rule") return false;
+  if (verdict.behavior !== "allow" && context.mode !== "bypassPermissions") return false;
   let liveState = getLiveState();
   if (liveState.routineRepublishedPaths.has(path) || liveState.commentRepublishedPaths.has(path))
     return false;
-  let s = liveState.shareStatus.bySlug.get(slug);
-  return s === undefined || (!s.isSharedLive && s.probeFailed !== true);
+  let share = liveState.shareStatus.bySlug.get(slug);
+  return share === undefined || (!share.isSharedLive && share.probeFailed !== true);
 }
 export {
-  containsHarnessTags,
   getEditPermissionVerdict,
   canWriteWithoutPrompt,
   applyFindReplaceEdits,
   recordAutoEditRead,
+  matchesTagPattern,
+  decodeMusicalSymbols,
+  decodeHtmlEscapes,
 };

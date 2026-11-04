@@ -104,7 +104,7 @@ import {
 import { aliasCanonicalNames } from "../services/mcp/ccrMetaMcp.js";
 import { NO_REPLY_TOOL_SUFFIX } from "../bridge/projectsReplyEvaluation.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, array, string } from "../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, array, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { isMachineOnlyTurnRange } from "./messages/messageSource.js";
 import { getTerminalMcpTools } from "./transcript/deserialize.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
@@ -113,16 +113,17 @@ import { parseExternalEventWake, isSessionInboxWake } from "./externalEventWake.
 import { isGeneratedToolCountSummary } from "./permissions/yoloClassifier.js";
 import { FETCH_INBOX_MESSAGE_TOOL_NAME } from "../tools/FetchInboxMessageTool/prompt.js";
 import { READNOTIFICATIONS } from "../tools/ReadNotificationsTool/ReadNotificationsTool.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:193960-194054 placement
 /**
  * 判断输入是否为需要唤醒的 poll-event 命令。
  */
-function isPollEventWakeInput(e, pollEmptyDispatchStalled, r) {
+function isPollEventWakeInput(input, pollEmptyDispatchStalled, forceWake) {
   return (
-    e !== undefined &&
-    e.mode === "poll-event" &&
-    (e.pollEvent?.wake === true || r) &&
+    input !== undefined &&
+    input.mode === "poll-event" &&
+    (input.pollEvent?.wake === true || forceWake) &&
     !pollEmptyDispatchStalled
   );
 }
@@ -143,8 +144,8 @@ function isPromptCapableMode(mode, clientBashCommand) {
 /**
  * 判断命令是否属于主 agent。
  */
-function isMainAgentCommand(e) {
-  return e.agentId === mainAgentId();
+function isMainAgentCommand(command) {
+  return command.agentId === mainAgentId();
 }
 //@ chunk-e6aww6q8.js:194221-194278 placement
 /**
@@ -158,8 +159,8 @@ var GOAL_CHECKIN_ORIGIN = {
 /**
  * 判断来源是否为目标检查通知。
  */
-function isGoalCheckinNotification(e) {
-  return e.origin?.kind === "task-notification" && e.origin.source === "goal-checkin";
+function isGoalCheckinNotification(origin) {
+  return origin.origin?.kind === "task-notification" && origin.origin.source === "goal-checkin";
 }
 //@ chunk-e6aww6q8.js:194372-194431 placement
 /**
@@ -170,12 +171,12 @@ var WORKER_CHECKIN_ORIGIN = {
   source: "worker-checkin",
 };
 //@ chunk-e6aww6q8.js:194431-194598 placement
-function isCheckinNotification(e) {
+function isCheckinNotification(message) {
   return (
-    e.origin?.kind === "task-notification" &&
-    (e.origin.source === "goal-checkin" ||
-      e.origin.source === "worker-checkin" ||
-      e.origin.source === "shell-checkin")
+    message.origin?.kind === "task-notification" &&
+    (message.origin.source === "goal-checkin" ||
+      message.origin.source === "worker-checkin" ||
+      message.origin.source === "shell-checkin")
   );
 }
 //@ chunk-e6aww6q8.js:194598-194657 placement = processQueuedCommands (1)
@@ -186,36 +187,36 @@ function processQueuedCommands(queuedCommands) {
 /**
  * 归一化队列来源（检查通知做规范来源）。
  */
-function normalizedQueueOrigin(e) {
-  let n = e.queueOrigin ?? e.origin;
+function normalizedQueueOrigin(command) {
+  let origin = command.queueOrigin ?? command.origin;
   return isCheckinNotification({
-    origin: n,
+    origin,
   })
-    ? normalizeTaskNotificationOrigin(n)
-    : n;
+    ? normalizeTaskNotificationOrigin(origin)
+    : origin;
 }
 //@ chunk-e6aww6q8.js:194735-194783 placement
 /**
  * 取队列中的通知模式（显式 queueMode 或按来源推断）。
  */
-function queuedNotificationMode(e) {
-  return e.queueMode ?? getQueuedNotificationMode(normalizedQueueOrigin(e));
+function queuedNotificationMode(command) {
+  return command.queueMode ?? getQueuedNotificationMode(normalizedQueueOrigin(command));
 }
 //@ chunk-e6aww6q8.js:194783-194874 placement
 /**
  * 判断是否应跳过该队列附件的附加处理。
  */
-function shouldSkipQueueAttachments(message) {
-  return message.queueSkipAttachments === true || queuedNotificationMode(message) === "task-notification"
+function shouldSkipQueueAttachments(command) {
+  return command.queueSkipAttachments === true || queuedNotificationMode(command) === "task-notification"
     ? true
     : undefined;
 }
 //@ chunk-e6aww6q8.js:194874-195172 placement
-function textNotTypedFlags(e, n) {
-  if (!isTextNotTyped(e)) return;
-  if ("text_not_typed" in e && e.text_not_typed === true) logFeatureOk("input_text_not_typed");
+function textNotTypedFlags(text, meta) {
+  if (!isTextNotTyped(text)) return;
+  if ("text_not_typed" in text && text.text_not_typed === true) logFeatureOk("input_text_not_typed");
   else logFeatureSad("input_text_not_typed", "malformed_mark");
-  let flattened = (n?.writtenFiles ?? []).flatMap((s) => (s.inlined ? [] : [s.path]));
+  let flattened = (meta?.writtenFiles ?? []).flatMap((file) => (file.inlined ? [] : [file.path]));
   return {
     textNotTyped: true,
     skipSlashCommands: true,
@@ -245,45 +246,50 @@ function queueInputFlags(message) {
   };
 }
 //@ chunk-e6aww6q8.js:195506-195658 placement
-function getSchedulingPlugin(e) {
-  let { origin } = e;
-  let r =
+function getSchedulingPlugin(input) {
+  let { origin } = input;
+  let originPlugin =
     origin?.kind === "plugin"
       ? origin.name
       : typeof origin === "object" && origin !== null && "plugin" in origin
         ? origin.plugin
         : undefined;
-  return e.scheduledByPlugin ?? r;
+  return input.scheduledByPlugin ?? originPlugin;
 }
 //@ chunk-e6aww6q8.js:195658-195699 placement
 /**
  * 判断两条命令是否来自同一调度插件。
  */
-function sameSchedulingPlugin(e, n) {
-  return getSchedulingPlugin(e) === getSchedulingPlugin(n);
+function sameSchedulingPlugin(inputA, inputB) {
+  return getSchedulingPlugin(inputA) === getSchedulingPlugin(inputB);
 }
 //@ chunk-e6aww6q8.js:195699-195774 placement
 /**
  * 找出这批命令的调度插件（混合来源时为 undefined）。
  */
-function firstSchedulingPlugin(e) {
-  return e.some(isOwnWordTurn) ? undefined : e.map(getSchedulingPlugin).find((n) => n !== undefined);
+function firstSchedulingPlugin(inputs) {
+  return inputs.some(isOwnWordTurn)
+    ? undefined
+    : inputs.map(getSchedulingPlugin).find((plugin) => plugin !== undefined);
 }
 //@ chunk-e6aww6q8.js:195774-195858 placement
 class QueueInstallerHolder {
   current = null;
-  register(e) {
-    this.current = e;
+  register(installer) {
+    this.current = installer;
   }
   registered() {
     return this.current;
   }
 }
 //@ chunk-e6aww6q8.js:195858-195874 placement
-var queueInstallerSingleton = new QueueInstallerHolder();
+var queueInstallerSingleton; // deferred: uses QueueInstallerHolder of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:195858", () => {
+  queueInstallerSingleton = new QueueInstallerHolder();
+});
 //@ chunk-e6aww6q8.js:195874-195906 placement
-function setQueueInstaller(e) {
-  queueInstallerSingleton.register(e);
+function setQueueInstaller(installer) {
+  queueInstallerSingleton.register(installer);
 }
 //@ chunk-e6aww6q8.js:195906-195945 placement
 /**
@@ -296,17 +302,17 @@ function getProcessedQueuedCommands() {
 /**
  * {now:0, next:1, later:2}。
  */
-var recordQueueOperation_2 = (e) => {
+var recordQueueOperation_2 = (operation) => {
   if (isDiskless()) {
     logForDebugging(
-      `Diskless session: queue operation '${e.operation}' not recorded: the default queue has no storage backend`,
+      `Diskless session: queue operation '${operation.operation}' not recorded: the default queue has no storage backend`,
       {
         level: "warn",
       },
     );
     return;
   }
-  recordQueueOperation(e);
+  recordQueueOperation(operation);
 };
 var PRIORITY_ORDER = {
   now: 0,
@@ -318,42 +324,45 @@ function isPeerOrigin(origin) {
   return origin?.kind === "peer" && origin.senderTaskId === undefined;
 }
 //@ chunk-e6aww6q8.js:552709-552979 placement
-function dropPeerHopChain(e) {
-  if (!isPeerOrigin(e.origin)) return e;
-  let n = e.value;
-  if (typeof n === "string") {
-    let h = dropHopChain(n);
-    return h === n
-      ? e
+function dropPeerHopChain(input) {
+  if (!isPeerOrigin(input.origin)) return input;
+  let rawValue = input.value;
+  if (typeof rawValue === "string") {
+    let stripped = dropHopChain(rawValue);
+    return stripped === rawValue
+      ? input
       : {
-          ...e,
-          value: h,
+          ...input,
+          value: stripped,
         };
   }
-  let r = false;
-  let value = n.map((h) => {
-    if (h.type !== "text") return h;
-    let y = dropHopChain(h.text);
-    if (y === h.text) return h;
-    r = true;
+  let changed = false;
+  let value = rawValue.map((block) => {
+    if (block.type !== "text") return block;
+    let strippedText = dropHopChain(block.text);
+    if (strippedText === block.text) return block;
+    changed = true;
     return {
-      ...h,
-      text: y,
+      ...block,
+      text: strippedText,
     };
   });
-  return r
+  return changed
     ? {
-        ...e,
+        ...input,
         value,
       }
-    : e;
+    : input;
 }
 //@ chunk-e6aww6q8.js:552979-553049 placement
 function isVouchedPeerOrigin(origin) {
   return origin.verifiedPeerPid !== undefined || origin.from !== "unknown";
 }
 //@ chunk-e6aww6q8.js:553049-553101 placement
-var NON_EDITABLE_MODES = new Set(["task-notification", "poll-event"]);
+var NON_EDITABLE_MODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:553049", () => {
+  NON_EDITABLE_MODES = new Set(["task-notification", "poll-event"]);
+});
 //@ chunk-e6aww6q8.js:553101-553135 placement
 function isPromptInputModeEditable(mode) {
   return !NON_EDITABLE_MODES.has(mode);
@@ -362,19 +371,19 @@ function isPromptInputModeEditable(mode) {
 /**
  * 判断历史条目是否可用于回填输入框（可改写且有字符串值）。
  */
-function isReplayableHistoryEntry(e) {
-  return e.historyEntry !== undefined && isRefillableInput(e) && typeof e.value === "string";
+function isReplayableHistoryEntry(entry) {
+  return entry.historyEntry !== undefined && isRefillableInput(entry) && typeof entry.value === "string";
 }
 //@ chunk-e6aww6q8.js:553216-553284 placement
 /**
  * 判断输入是否可回填（可编辑提示模式、非 meta、人类/自动续写来源）。
  */
-function isRefillableInput(e) {
+function isRefillableInput(input) {
   return (
-    isPromptInputModeEditable(e.mode) &&
-    !e.isMeta &&
-    isHumanOrAutoContinuation(e.origin) &&
-    !isPassiveOrAttachedCommand(e)
+    isPromptInputModeEditable(input.mode) &&
+    !input.isMeta &&
+    isHumanOrAutoContinuation(input.origin) &&
+    !isPassiveOrAttachedCommand(input)
   );
 }
 //@ chunk-e6aww6q8.js:553284-553337 placement = prependModeCharacterToInput (1)
@@ -382,98 +391,99 @@ function shouldPrependModeChar(input, mode) {
   return isRefillableInput(input) && (mode || input.mode !== "bash");
 }
 //@ chunk-e6aww6q8.js:553337-553478 placement
-function hasPreExpansionText(e) {
+function hasPreExpansionText(input) {
   return (
-    (e.skipSlashCommands === true || e.pasteTagged === true) &&
-    typeof e.preExpansionValue === "string" &&
-    e.preExpansionValue.trim() !== ""
+    (input.skipSlashCommands === true || input.pasteTagged === true) &&
+    typeof input.preExpansionValue === "string" &&
+    input.preExpansionValue.trim() !== ""
   );
 }
 //@ chunk-e6aww6q8.js:553478-553551 placement
 /**
  * 取输入的展示文本（展开前原文优先）。
  */
-function inputDisplayText(e) {
-  if (hasPreExpansionText(e)) return e.preExpansionValue;
-  return extractTextFromValue(e.value);
+function inputDisplayText(input) {
+  if (hasPreExpansionText(input)) return input.preExpansionValue;
+  return extractTextFromValue(input.value);
 }
 //@ chunk-e6aww6q8.js:553551-553697 placement
-function getRetainedPastedContents(e) {
-  if (!e.pastedContents) return [];
-  let n = hasPreExpansionText(e);
-  return Object.values(e.pastedContents).filter(
-    (pastedContent) => pastedContent.type === "image" || pastedContent.inline === true || n,
+function getRetainedPastedContents(input) {
+  if (!input.pastedContents) return [];
+  let keepAll = hasPreExpansionText(input);
+  return Object.values(input.pastedContents).filter(
+    (pastedContent) => pastedContent.type === "image" || pastedContent.inline === true || keepAll,
   );
 }
 //@ chunk-e6aww6q8.js:553697-553872 placement
-function isNonHumanQueuedCommand(e, n) {
-  let kind = e.origin?.kind;
+function isNonHumanQueuedCommand(command, meta) {
+  let kind = command.origin?.kind;
   if (
     (kind === "task-notification" &&
-      !(isSessionTaskNotificationOrigin(e.origin) && isBareTaskNotificationOrigin(e.origin))) ||
+      !(isSessionTaskNotificationOrigin(command.origin) && isBareTaskNotificationOrigin(command.origin))) ||
     kind === "auto-continuation" ||
     kind === "plugin"
   )
     return true;
-  return isNonHumanInboundOrigin(e.origin, n) || isRefillableInput(e);
+  return isNonHumanInboundOrigin(command.origin, meta) || isRefillableInput(command);
 }
 //@ chunk-e6aww6q8.js:553872-553916 placement
 /**
  * 判断是否为主 agent 的非被动命令。
  */
-function isActiveMainAgentCommand(e) {
-  return isMainAgentCommand(e) && e.passive !== true;
+function isActiveMainAgentCommand(command) {
+  return isMainAgentCommand(command) && command.passive !== true;
 }
 //@ chunk-e6aww6q8.js:553916-553953 placement
 /**
  * 判断该排队命令是否可发送（活跃且未被挂起）。
  */
-function isSendableQueuedCommand(e) {
-  return isActiveMainAgentCommand(e) && !isPollEventMode(e);
+function isSendableQueuedCommand(command) {
+  return isActiveMainAgentCommand(command) && !isPollEventMode(command);
 }
 //@ chunk-e6aww6q8.js:554106-554154 placement
 /**
  * 判断是否为主 agent 的被动命令。
  */
-function isPassiveMainAgentCommand(e) {
-  return e.passive === true && isMainAgentCommand(e) && true;
+function isPassiveMainAgentCommand(command) {
+  return command.passive === true && isMainAgentCommand(command) && true;
 }
 //@ chunk-e6aww6q8.js:554154-554211 placement = isSlashCommand (1)
 function isSlashCommand_2(cmd) {
   return looksLikeSlashInput(cmd.value) && !cmd.skipSlashCommands;
 }
 //@ chunk-e6aww6q8.js:554211-554290 placement = getValueFromInput (1)
-function getValueFromInput(e, isMainThreadQuery) {
+function getValueFromInput(commands, isMainThreadQuery) {
   runIgnoringAbort(() => {
-    if (isMainThreadQuery && e.some((s) => s.mode === "prompt" && isOwnWordTurn(s))) clearScheduledByPlugin();
+    if (isMainThreadQuery && commands.some((command) => command.mode === "prompt" && isOwnWordTurn(command)))
+      clearScheduledByPlugin();
   });
 }
 //@ chunk-e6aww6q8.js:554290-554470 placement
 function filterQueuedCommandsForThread(commandsByMaxPriority, { isMainThread, currentAgentId }) {
-  let filtered = commandsByMaxPriority.filter((h) => {
-    if (isSlashCommand_2(h)) return false;
-    if (isMainThread) return isMainAgentCommand(h);
-    return (h.mode === "task-notification" || false) && h.agentId === currentAgentId;
+  let commands = commandsByMaxPriority.filter((command) => {
+    if (isSlashCommand_2(command)) return false;
+    if (isMainThread) return isMainAgentCommand(command);
+    return (command.mode === "task-notification" || false) && command.agentId === currentAgentId;
   });
-  return dedupePollEvents(filtered);
+  return dedupePollEvents(commands);
 }
 //@ chunk-e6aww6q8.js:554470-554577 placement
-function createQueueFilterForThread(e) {
-  return e.isMainThread
+function createQueueFilterForThread(threadInfo) {
+  return threadInfo.isMainThread
     ? isActiveMainAgentCommand
-    : (n) =>
-        filterQueuedCommandsForThread([n], {
+    : (command) =>
+        filterQueuedCommandsForThread([command], {
           isMainThread: false,
-          currentAgentId: e.agentId,
+          currentAgentId: threadInfo.agentId,
         }).length > 0;
 }
 //@ chunk-e6aww6q8.js:554577-554767 placement
-function dedupePollEvents(e) {
-  let filtered = e.filter((s) => s.mode === "poll-event");
-  if (filtered.length === 0) return e;
-  let r = new Set(selectPollEventBatch(filtered));
-  if (r.size === filtered.length) return e;
-  return e.filter((s) => s.mode !== "poll-event" || r.has(s));
+function dedupePollEvents(commands) {
+  let entries = commands.filter((command) => command.mode === "poll-event");
+  if (entries.length === 0) return commands;
+  let batchIds = new Set(selectPollEventBatch(entries));
+  if (batchIds.size === entries.length) return commands;
+  return commands.filter((command) => command.mode !== "poll-event" || batchIds.has(command));
 }
 //@ chunk-e6aww6q8.js:554767-554815 placement = getValueFromInput (1)
 function isPromptModeQueuedCommand(input) {
@@ -483,8 +493,8 @@ function isPromptModeQueuedCommand(input) {
 /**
  * 判断该命令是否尚未通过屏幕检查（可回填）。
  */
-function isRefillableCommand(e) {
-  return isRefillableInput(e);
+function isRefillableCommand(input) {
+  return isRefillableInput(input);
 }
 //@ chunk-e6aww6q8.js:554844-554899 placement
 function extractTextFromValue(value) {
@@ -522,35 +532,35 @@ function extractImagesFromValue(value, startId) {
 /**
  * 图片块按是否有原 paste id 分成 stamped / manufactured。
  */
-function splitStampedImages(e, imagePasteIds) {
-  let r = {};
-  let s = {};
-  e.forEach((h, y) => {
-    if (!isBase64ImageBlock_3(h)) return;
-    let S = imagePasteIds?.[y];
-    let w = S ?? y + 1;
-    let mediaType = h.source.media_type;
-    let G = S !== undefined ? r : s;
-    G[w] = {
-      id: w,
+function splitStampedImages(content, imagePasteIds) {
+  let stamped = {};
+  let manufactured = {};
+  content.forEach((block, index) => {
+    if (!isBase64ImageBlock_3(block)) return;
+    let pasteId = imagePasteIds?.[index];
+    let id = pasteId ?? index + 1;
+    let mediaType = block.source.media_type;
+    let target = pasteId !== undefined ? stamped : manufactured;
+    target[id] = {
+      id,
       type: "image",
-      content: h.source.data,
+      content: block.source.data,
       mediaType: typeof mediaType === "string" ? mediaType : undefined,
     };
   });
   return {
-    stamped: r,
-    manufactured: s,
+    stamped,
+    manufactured,
   };
 }
 //@ chunk-e6aww6q8.js:555410-555554 callgraph-fingerprint = popAllEditable (0.232)
 /**
  * 可编辑命令弹回输入框：图片换成 [Image #n] 引用并重新编号。
  */
-function popAllEditable(text, n, r, s) {
-  let mapped = extractImagesFromValue(n, 0).map((cmd) => ({
+function popAllEditable(text, images, pastePrefix, seq) {
+  let mapped = extractImagesFromValue(images, 0).map((cmd) => ({
     ...cmd,
-    id: mintPasteId(r, s),
+    id: mintPasteId(pastePrefix, seq),
   }));
   return {
     text: [...mapped.map((cmd) => formatImageRef(cmd.id)), text].filter(Boolean).join(" "),
@@ -558,39 +568,42 @@ function popAllEditable(text, n, r, s) {
   };
 }
 //@ chunk-e6aww6q8.js:555554-555706 placement
-function joinWithCursor(e, n, r) {
-  if (!e)
+function joinWithCursor(leftText, rightText, rightCursor) {
+  if (!leftText)
     return {
-      text: n,
-      cursorOffset: r,
+      text: rightText,
+      cursorOffset: rightCursor,
     };
-  if (!n)
+  if (!rightText)
     return {
-      text: e,
-      cursorOffset: e.length + r,
+      text: leftText,
+      cursorOffset: leftText.length + rightCursor,
     };
   return {
-    text: `${e}
-${n}`,
-    cursorOffset: e.length + 1 + r,
+    text: `${leftText}
+${rightText}`,
+    cursorOffset: leftText.length + 1 + rightCursor,
   };
 }
 //@ chunk-e6aww6q8.js:555706-555864 placement
-function hasUnpassedScreening(e) {
-  let { promptSubmitted, value: r } = e;
+function hasUnpassedScreening(command) {
+  let { promptSubmitted, value } = command;
   return (
     promptSubmitted === undefined ||
-    e.screeningPending === true ||
-    e.screeningOwed === true ||
+    command.screeningPending === true ||
+    command.screeningOwed === true ||
     promptSubmitted.stopped !== undefined ||
-    unchangedOrUndefined(r, promptSubmitted.text) !== undefined
+    unchangedOrUndefined(value, promptSubmitted.text) !== undefined
   );
 }
 //@ chunk-e6aww6q8.js:555864-555932 placement
-var queueSignalsRegistry = new HostScoped(() => ({
-  commandsDiscarded: createSignal(),
-  commandsConsumed: createSignal(),
-}));
+var queueSignalsRegistry; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:555864", () => {
+  queueSignalsRegistry = new HostScoped(() => ({
+    commandsDiscarded: createSignal(),
+    commandsConsumed: createSignal(),
+  }));
+});
 //@ chunk-e6aww6q8.js:555932-555962 placement
 function currentQueueSignals() {
   return onProcessRootHost(queueSignalsRegistry);
@@ -599,11 +612,15 @@ function currentQueueSignals() {
 /**
  * 队列事件信号：命令被丢弃与命令被消费。
  */
-var commandsDiscardedSignal = createLazySignal(() => currentQueueSignals().commandsDiscarded);
-var commandsConsumedSignal = createLazySignal(() => currentQueueSignals().commandsConsumed);
+var commandsDiscardedSignal; // deferred: uses currentQueueSignals of its import cycle while loading; runs once the cycle is complete
+var commandsConsumedSignal;
+deferInit("chunk-e6aww6q8.js:555962", () => {
+  commandsDiscardedSignal = createLazySignal(() => currentQueueSignals().commandsDiscarded);
+  commandsConsumedSignal = createLazySignal(() => currentQueueSignals().commandsConsumed);
+});
 //@ chunk-e6aww6q8.js:556037-556126 placement
-function queuedUnderPlugins(e) {
-  return e.queuedUnder ?? (e.origin?.kind === "plugin" ? [e.origin.name] : undefined);
+function queuedUnderPlugins(command) {
+  return command.queuedUnder ?? (command.origin?.kind === "plugin" ? [command.origin.name] : undefined);
 }
 //@ chunk-e6aww6q8.js:556126-556148 placement
 var PEER_ADMITTED = {
@@ -613,180 +630,187 @@ var PEER_ADMITTED = {
 /**
  * 创建消息队列管理器：入队、暂扣、钩子丢弃、交回等操作。
  */
-function createMessageQueueManager(e) {
-  let n = e?.recordOperation ?? createQueueRecorder(recordQueueOperation_2);
-  let r = currentQueueSignals();
-  function s(operation, zs, li, nl, Tl, kd) {
-    let na = {
+function createMessageQueueManager(options) {
+  let recordOperation = options?.recordOperation ?? createQueueRecorder(recordQueueOperation_2);
+  let queueSignals = currentQueueSignals();
+  function recordQueueOperation(operation, content, reason, commandUuid, deliveryId, queuedUnder) {
+    let queueOperation = {
       type: "queue-operation",
       operation,
       timestamp: new Date().toISOString(),
       sessionId: getSessionId(),
-      ...(zs !== undefined && {
-        content: zs,
+      ...(content !== undefined && {
+        content,
       }),
-      ...(li !== undefined && {
-        reason: li,
+      ...(reason !== undefined && {
+        reason,
       }),
-      ...(nl !== undefined && {
-        commandUuid: nl,
+      ...(commandUuid !== undefined && {
+        commandUuid,
       }),
-      ...(Tl !== undefined && {
-        deliveryId: Tl,
+      ...(deliveryId !== undefined && {
+        deliveryId,
       }),
     };
-    if (kd === undefined) n(na);
-    else n(na, kd);
+    if (queuedUnder === undefined) recordOperation(queueOperation);
+    else recordOperation(queueOperation, queuedUnder);
   }
-  function h(wr, zs) {
-    s(wr, queueRecordText(zs), undefined, undefined, undefined, queuedUnderPlugins(zs));
+  function recordEnqueue(operation, command) {
+    recordQueueOperation(
+      operation,
+      queueRecordText(command),
+      undefined,
+      undefined,
+      undefined,
+      queuedUnderPlugins(command),
+    );
   }
-  let y = [...(e?.adopt ?? [])];
-  let S = Object.freeze([...y]);
+  let commands = [...(options?.adopt ?? [])];
+  let snapshot = Object.freeze([...commands]);
   let signal = createSignal();
   let signal_2 = createSignal();
   let signal_3 = createSignal();
-  registerPasteCarrier(() => y.filter(isRefillableInput).map(inputDisplayText));
-  let q = new Set();
-  let Z = new Set();
-  let Se = 256;
-  function ke() {
-    S = Object.freeze([...y]);
+  registerPasteCarrier(() => commands.filter(isRefillableInput).map(inputDisplayText));
+  let cancelPending = new Set();
+  let cancelPendingAcked = new Set();
+  let maxCancelPending = 256;
+  function emitQueueChanged() {
+    snapshot = Object.freeze([...commands]);
     signal.emit();
   }
-  let we;
-  function Ee(wr) {
-    if (we === undefined || wr.passive === true || !we.holds(wr)) return false;
-    wr.passive = true;
-    we.marked.add(wr);
+  let hold;
+  function markHeldPassive(command) {
+    if (hold === undefined || command.passive === true || !hold.holds(command)) return false;
+    command.passive = true;
+    hold.marked.add(command);
     return true;
   }
-  function Ae(holds) {
-    if (we !== undefined)
+  function holdBack(holds) {
+    if (hold !== undefined)
       throw Error(
         "holdBack: this message queue already has a hold; end it with the function the first call returned before setting another",
       );
-    let zs = {
+    let newHold = {
       holds,
       marked: new Set(),
     };
-    we = zs;
+    hold = newHold;
     try {
-      if (count(y, Ee) > 0) ke();
+      if (count(commands, markHeldPassive) > 0) emitQueueChanged();
     } catch (error) {
-      if (we === zs) we = undefined;
-      for (let nl of zs.marked) delete nl.passive;
+      if (hold === newHold) hold = undefined;
+      for (let command of newHold.marked) delete command.passive;
       throw error;
     }
     return () => {
-      if (we !== zs) return 0;
-      we = undefined;
-      let filtered = y.filter((Tl) => zs.marked.has(Tl));
+      if (hold !== newHold) return 0;
+      hold = undefined;
+      let filtered = commands.filter((heldCommand) => newHold.marked.has(heldCommand));
       if (filtered.length === 0) return 0;
-      let filtered_2 = y.filter((Tl) => !zs.marked.has(Tl));
-      for (let Tl of filtered) delete Tl.passive;
-      y.length = 0;
-      y.push(...filtered_2, ...filtered);
-      ke();
+      let filtered_2 = commands.filter((unheldCommand) => !newHold.marked.has(unheldCommand));
+      for (let heldCommand of filtered) delete heldCommand.passive;
+      commands.length = 0;
+      commands.push(...filtered_2, ...filtered);
+      emitQueueChanged();
       return filtered.length;
     };
   }
-  function Ie(wr) {
-    let marked = we?.marked;
-    let filtered = y.filter((nl) => marked?.has(nl) === true && wr(nl));
-    for (let nl of filtered) {
-      delete nl.passive;
-      marked?.delete(nl);
+  function letHeldBackGo(predicate) {
+    let marked = hold?.marked;
+    let filtered = commands.filter((command) => marked?.has(command) === true && predicate(command));
+    for (let command of filtered) {
+      delete command.passive;
+      marked?.delete(command);
     }
-    if (filtered.length > 0) ke();
+    if (filtered.length > 0) emitQueueChanged();
     return filtered.length;
   }
-  function Me(wr, zs) {
-    if (q.delete(wr)) q.add(wr);
+  function markCancelPending(uuid, options) {
+    if (cancelPending.delete(uuid)) cancelPending.add(uuid);
     else {
-      if (zs?.terminalEmitted !== true && q.size >= Se) {
-        let li;
-        for (let nl of q)
-          if (!Z.has(nl)) {
-            li = nl;
+      if (options?.terminalEmitted !== true && cancelPending.size >= maxCancelPending) {
+        let evictUuid;
+        for (let queuedUuid of cancelPending)
+          if (!cancelPendingAcked.has(queuedUuid)) {
+            evictUuid = queuedUuid;
             break;
           }
-        if (li !== undefined) q.delete(li);
+        if (evictUuid !== undefined) cancelPending.delete(evictUuid);
       }
-      q.add(wr);
+      cancelPending.add(uuid);
     }
-    if (zs?.terminalEmitted !== true) return false;
-    if (Z.has(wr)) return false;
-    Z.add(wr);
+    if (options?.terminalEmitted !== true) return false;
+    if (cancelPendingAcked.has(uuid)) return false;
+    cancelPendingAcked.add(uuid);
     return true;
   }
-  function We(wr) {
-    return q.delete(wr);
+  function consumeCancelPending(uuid) {
+    return cancelPending.delete(uuid);
   }
-  function ze(wr) {
-    return Z.delete(wr);
+  function consumeCancelPendingAcked(uuid) {
+    return cancelPendingAcked.delete(uuid);
   }
-  function lt(wr) {
-    return Z.has(wr);
+  function hasCancelPendingAcked(uuid) {
+    return cancelPendingAcked.has(uuid);
   }
-  let Je = new Set();
-  function nt(wr) {
-    for (let zs of wr) {
-      Je.add(zs);
-      if (zs.uuid !== undefined) Je.add(zs.uuid);
+  let foldInFlight = new Set();
+  function registerFoldInFlight(foldedCommands) {
+    for (let command of foldedCommands) {
+      foldInFlight.add(command);
+      if (command.uuid !== undefined) foldInFlight.add(command.uuid);
     }
   }
-  function pt(wr) {
-    for (let zs of wr) {
-      Je.delete(zs);
-      if (zs.uuid !== undefined) Je.delete(zs.uuid);
+  function unregisterFoldInFlight(foldedCommands) {
+    for (let command of foldedCommands) {
+      foldInFlight.delete(command);
+      if (command.uuid !== undefined) foldInFlight.delete(command.uuid);
     }
   }
-  function Et(wr) {
-    return Je.has(wr);
+  function isFoldInFlight(uuid) {
+    return foldInFlight.has(uuid);
   }
-  let yt = new Map();
-  function gt(wr) {
-    if (wr === undefined)
+  let inboundIngests = new Map();
+  function beginInboundIngest(messageId) {
+    if (messageId === undefined)
       return {
         withdrawn: () => false,
         [Symbol.dispose]: () => {},
       };
-    let zs = {
+    let ingestState = {
       withdrawn: false,
     };
-    yt.set(wr, zs);
+    inboundIngests.set(messageId, ingestState);
     return {
-      withdrawn: () => zs.withdrawn,
+      withdrawn: () => ingestState.withdrawn,
       [Symbol.dispose]: () => {
-        if (yt.get(wr) === zs) yt.delete(wr);
+        if (inboundIngests.get(messageId) === ingestState) inboundIngests.delete(messageId);
       },
     };
   }
-  function At(wr) {
-    let zs = yt.get(wr);
-    if (zs === undefined || zs.withdrawn) return false;
-    zs.withdrawn = true;
+  function withdrawInboundIngest(messageId) {
+    let ingestState = inboundIngests.get(messageId);
+    if (ingestState === undefined || ingestState.withdrawn) return false;
+    ingestState.withdrawn = true;
     return true;
   }
-  let It = false;
-  let Yt;
-  function qt() {
-    if (It) return;
-    It = true;
-    ke();
+  let midTurnFoldSuspended = false;
+  let turnStartFoldTarget;
+  function suspendMidTurnFold() {
+    if (midTurnFoldSuspended) return;
+    midTurnFoldSuspended = true;
+    emitQueueChanged();
   }
-  function Zt(wr, zs) {
-    return no(
-      y.find((li) => li.uuid === wr && li.screeningPending === true),
-      zs,
+  function settleScreening(uuid, result) {
+    return applyScreeningResult(
+      commands.find((command) => command.uuid === uuid && command.screeningPending === true),
+      result,
     );
   }
-  function rn(wr, zs) {
-    return no(y.includes(wr) ? wr : undefined, zs);
+  function settleSurfaced(command, result) {
+    return applyScreeningResult(commands.includes(command) ? command : undefined, result);
   }
-  function pn(wr) {
-    let filtered = wr.filter(isReplayableHistoryEntry);
+  function handTypedBack(entries) {
+    let filtered = entries.filter(isReplayableHistoryEntry);
     if (filtered.length === 0) return;
     try {
       signal_3.emit(filtered);
@@ -795,81 +819,87 @@ function createMessageQueueManager(e) {
       else logError(error);
     }
   }
-  function no(wr, zs) {
-    if (wr === undefined) return false;
-    if ("dropped" in zs) {
-      Di([wr], {
+  function applyScreeningResult(command, result) {
+    if (command === undefined) return false;
+    if ("dropped" in result) {
+      remove([command], {
         reason: "dropped_by_hook",
       });
       return true;
     }
-    let li = wr.screeningPending === true;
-    delete wr.screeningPending;
-    wr.promptSubmitted = zs.promptSubmitted;
-    wr.drainOnly = zs.drainOnly;
-    if (zs.promptSubmitted === undefined) wr.screeningOwed = true;
-    else delete wr.screeningOwed;
-    ke();
-    if (li && !wr.unlogged) h("enqueue", wr);
+    let wasScreeningPending = command.screeningPending === true;
+    delete command.screeningPending;
+    command.promptSubmitted = result.promptSubmitted;
+    command.drainOnly = result.drainOnly;
+    if (result.promptSubmitted === undefined) command.screeningOwed = true;
+    else delete command.screeningOwed;
+    emitQueueChanged();
+    if (wasScreeningPending && !command.unlogged) recordEnqueue("enqueue", command);
     return true;
   }
-  function hn(wr) {
-    let found = y.find((li) => li.uuid === wr);
-    if (found === undefined || found.priority === "now" || Je.has(wr)) return false;
+  function promoteToNow(uuid) {
+    let found = commands.find((command) => command.uuid === uuid);
+    if (found === undefined || found.priority === "now" || foldInFlight.has(uuid)) return false;
     found.priority = "now";
-    ke();
+    emitQueueChanged();
     return true;
   }
-  function ho(wr, priority) {
-    let found = y.find((nl) => nl.uuid === wr);
+  function demoteFromNow(uuid, priority) {
+    let found = commands.find((command) => command.uuid === uuid);
     if (found === undefined || found.priority !== "now") return false;
     found.priority = priority;
-    ke();
+    emitQueueChanged();
     return true;
   }
-  function yn() {
-    return It || isTerminalShutdown();
+  function isMidTurnFoldSuspended() {
+    return midTurnFoldSuspended || isTerminalShutdown();
   }
-  let Kn = null;
-  let Xn;
-  function fo(wr) {
-    Kn = wr;
-    Xn = undefined;
+  let inFlightDrainBatch = null;
+  let drainBatchStanding;
+  function setInFlightDrainBatch(drainBatch) {
+    inFlightDrainBatch = drainBatch;
+    drainBatchStanding = undefined;
   }
-  function To(wr) {
-    if (wr === undefined || Kn === wr) {
-      Kn = null;
-      Xn = undefined;
+  function clearInFlightDrainBatch(drainBatch) {
+    if (drainBatch === undefined || inFlightDrainBatch === drainBatch) {
+      inFlightDrainBatch = null;
+      drainBatchStanding = undefined;
     }
   }
-  function bo(wr) {
-    return Kn !== null && Kn.some(wr);
+  function someInFlightDrainCommand(predicate) {
+    return inFlightDrainBatch !== null && inFlightDrainBatch.some(predicate);
   }
-  let vn = new Set();
-  function co(wr) {
-    vn.add(wr);
+  let inFlightSubmissions = new Set();
+  function trackSubmission(submission) {
+    inFlightSubmissions.add(submission);
     return {
       [Symbol.dispose]: () => {
-        vn.delete(wr);
+        inFlightSubmissions.delete(submission);
       },
     };
   }
-  function So(wr) {
-    for (let zs of vn) if (wr(zs)) return true;
+  function someSubmissionInFlight(predicate) {
+    for (let submission of inFlightSubmissions) if (predicate(submission)) return true;
     return false;
   }
-  function ko(wr) {
-    let zs = new Set(wr.map((nl) => nl.uuid));
-    for (let nl of vn) if (nl.uuid !== undefined && zs.has(nl.uuid)) vn.delete(nl);
-    let flattened = (Kn ?? []).flatMap((nl) => (nl.uuid === undefined ? [] : [nl.uuid]));
-    if (flattened.length > 0 && Xn !== "appended")
-      Xn = flattened.some((nl) => zs.has(nl)) ? "appended" : "passed-over";
+  function noteTurnAppended(appendedCommands) {
+    let appendedUuids = new Set(appendedCommands.map((command) => command.uuid));
+    for (let submission of inFlightSubmissions)
+      if (submission.uuid !== undefined && appendedUuids.has(submission.uuid))
+        inFlightSubmissions.delete(submission);
+    let flattened = (inFlightDrainBatch ?? []).flatMap((batchCommand) =>
+      batchCommand.uuid === undefined ? [] : [batchCommand.uuid],
+    );
+    if (flattened.length > 0 && drainBatchStanding !== "appended")
+      drainBatchStanding = flattened.some((batchUuid) => appendedUuids.has(batchUuid))
+        ? "appended"
+        : "passed-over";
   }
-  function un() {
-    return Xn;
+  function getInFlightDrainBatchStanding() {
+    return drainBatchStanding;
   }
   let resolved = Promise.resolve();
-  function $o() {
+  function takeInboundEnqueueTurn() {
     let prior = resolved;
     let release;
     resolved = new Promise((resolve) => {
@@ -880,99 +910,101 @@ function createMessageQueueManager(e) {
       release,
     };
   }
-  function yo() {
-    return S;
+  function getCommandQueueSnapshot() {
+    return snapshot;
   }
-  function Ho() {
-    return [...y];
+  function getCommandQueue() {
+    return [...commands];
   }
-  function rr() {
-    return y.length;
+  function getCommandQueueLength() {
+    return commands.length;
   }
-  function br() {
-    return count(y, isSendableQueuedCommand);
+  function getMainThreadQueueLength() {
+    return count(commands, isSendableQueuedCommand);
   }
-  function Hr() {
-    return br() + count(y, (wr) => we?.marked.has(wr) === true);
+  function getDrainableMainThreadQueueLength() {
+    return (
+      getMainThreadQueueLength() + count(commands, (heldCommand) => hold?.marked.has(heldCommand) === true)
+    );
   }
-  function Fr() {
-    return y.length > 0;
+  function hasCommandsInQueue() {
+    return commands.length > 0;
   }
-  function cs() {
-    return y.some((wr) => !isPollEventMode(wr) && wr.passive !== true);
+  function hasUserIntentCommandsInQueue() {
+    return commands.some((command) => !isPollEventMode(command) && command.passive !== true);
   }
-  function _r() {
-    if (y.length > 0) ke();
+  function recheckCommandQueue() {
+    if (commands.length > 0) emitQueueChanged();
   }
   let hopGuard = createHopGuard({}, getPeerGuardLimits);
-  let Vr =
-    e?.dropReceiptTrailMs === undefined
+  let peerDropConfig =
+    options?.dropReceiptTrailMs === undefined
       ? {}
       : {
-          trailMs: e.dropReceiptTrailMs,
+          trailMs: options.dropReceiptTrailMs,
         };
-  let peerDropLogger = createPeerDropLogger(Vr);
-  function jr() {
+  let peerDropLogger = createPeerDropLogger(peerDropConfig);
+  function resetPeerGuard() {
     hopGuard = createHopGuard({}, getPeerGuardLimits);
     peerDropLogger.dispose();
-    peerDropLogger = createPeerDropLogger(Vr);
+    peerDropLogger = createPeerDropLogger(peerDropConfig);
   }
-  function Or(wr) {
-    return peerDropLogger.flushPendingReceipts(wr);
+  function flushPeerDropReceipts(options) {
+    return peerDropLogger.flushPendingReceipts(options);
   }
-  function Io() {
-    let wr = (li) => isPeerOrigin(li.origin);
-    let zs = 0;
+  function getQueuedPeerMessageCount() {
+    let isPeerCommand = (command) => isPeerOrigin(command.origin);
+    let inFlightCount = 0;
     runIgnoringAbort(() => {
-      zs = inFlightDrainProbe.get()?.(wr) ?? 0;
+      inFlightCount = inFlightDrainProbe.get()?.(isPeerCommand) ?? 0;
     });
-    return count(y, wr) + zs;
+    return count(commands, isPeerCommand) + inFlightCount;
   }
-  function zo(wr, zs = "coalesced") {
-    let origin = wr.origin;
+  function admitPeerCommand(command, receiptMode = "coalesced") {
+    let origin = command.origin;
     if (!isPeerOrigin(origin)) return PEER_ADMITTED;
-    let nl = wr.admissionExempt === "resurrected";
-    if (!nl && !isVouchedPeerOrigin(origin)) {
-      let Tl = hopGuard.checkHopChain(origin.hopChain, ownHopTokens());
-      if (Tl && !Tl.admitted) {
+    let isResurrected = command.admissionExempt === "resurrected";
+    if (!isResurrected && !isVouchedPeerOrigin(origin)) {
+      let hopCheck = hopGuard.checkHopChain(origin.hopChain, ownHopTokens());
+      if (hopCheck && !hopCheck.admitted) {
         peerDropLogger.report({
-          reason: Tl.reason,
+          reason: hopCheck.reason,
           from: origin.from,
           ...(origin.name !== undefined && {
             name: origin.name,
           }),
         });
-        if (zs === "coalesced") rs(wr, Tl.reason);
+        if (receiptMode === "coalesced") reportPeerDrop(command, hopCheck.reason);
         return {
           admitted: false,
-          reason: Tl.reason,
+          reason: hopCheck.reason,
         };
       }
     }
-    if (!nl && isVouchedPeerOrigin(origin)) {
-      let body = typeof wr.value === "string" ? wr.value : extractTextContent_2(wr.value);
-      let kd = hopGuard.admit({
+    if (!isResurrected && isVouchedPeerOrigin(origin)) {
+      let body = typeof command.value === "string" ? command.value : extractTextContent_2(command.value);
+      let admission = hopGuard.admit({
         senderKey: origin.from !== "unknown" ? `from:${origin.from}` : `pid:${origin.verifiedPeerPid}`,
         body,
         hopChain: origin.hopChain,
         ownTokens: ownHopTokens(),
       });
-      if (!kd.admitted) {
+      if (!admission.admitted) {
         peerDropLogger.report({
-          reason: kd.reason,
+          reason: admission.reason,
           from: origin.from,
           ...(origin.name !== undefined && {
             name: origin.name,
           }),
         });
-        if (zs === "coalesced") rs(wr, kd.reason);
+        if (receiptMode === "coalesced") reportPeerDrop(command, admission.reason);
         return {
           admitted: false,
-          reason: kd.reason,
+          reason: admission.reason,
         };
       }
     }
-    if (!nl && Io() >= getPeerGuardLimits().maxQueuedPeerMessages) {
+    if (!isResurrected && getQueuedPeerMessageCount() >= getPeerGuardLimits().maxQueuedPeerMessages) {
       peerDropLogger.report({
         reason: "queue-full",
         from: origin.from,
@@ -980,7 +1012,7 @@ function createMessageQueueManager(e) {
           name: origin.name,
         }),
       });
-      if (zs === "coalesced") rs(wr, "queue-full");
+      if (receiptMode === "coalesced") reportPeerDrop(command, "queue-full");
       return {
         admitted: false,
         reason: "queue-full",
@@ -989,8 +1021,8 @@ function createMessageQueueManager(e) {
     logFeatureOk("peer_loop_guard");
     return PEER_ADMITTED;
   }
-  function rs(wr, reason) {
-    let origin = wr.origin;
+  function reportPeerDrop(command, reason) {
+    let origin = command.origin;
     if (
       origin?.kind !== "peer" ||
       parseAddress(origin.from).scheme !== "uds" ||
@@ -1001,146 +1033,151 @@ function createMessageQueueManager(e) {
       `${origin.from}\x00${origin.verifiedPeerPid ?? ""}\x00${reason}`,
       origin.msg_id,
       (droppedMsgIds) =>
-        swarmHostState().inbound.sendPeerReceipt?.(wr, "dropped", {
+        swarmHostState().inbound.sendPeerReceipt?.(command, "dropped", {
           dropReason: reason,
           droppedMsgIds,
         }),
     );
   }
-  function Es(wr, zs) {
-    let li = false;
+  function queueWithReceipt(command, commit) {
+    let queued = false;
     runIgnoringAbort(() => {
-      let nl = () => Sd([wr]);
-      li = receiptQueuedProbe.get()?.(wr, zs, nl) === true;
-      if (li) markReceiptQueued(wr.uuid);
+      let commitThunk = () => emitDiscarded([command]);
+      queued = receiptQueuedProbe.get()?.(command, commit, commitThunk) === true;
+      if (queued) markReceiptQueued(command.uuid);
     });
-    return li;
+    return queued;
   }
-  function Nr(wr, { receipt: zs = "coalesced", ahead: li = false } = {}) {
-    let nl = zo(wr, zs);
-    if (!nl.admitted) return nl;
-    let Tl = {
-      ...dropPeerHopChain(wr),
-      priority: wr.priority ?? "next",
-      timestamp: wr.timestamp ?? new Date().toISOString(),
+  function enqueueReportingAdmission(command, { receipt: receiptMode = "coalesced", ahead = false } = {}) {
+    let admission = admitPeerCommand(command, receiptMode);
+    if (!admission.admitted) return admission;
+    let preparedCommand = {
+      ...dropPeerHopChain(command),
+      priority: command.priority ?? "next",
+      timestamp: command.timestamp ?? new Date().toISOString(),
     };
-    let kd = () => Is(wr, Tl, li);
-    if (!Es(Tl, kd)) kd();
+    let commit = () => commitPeerCommand(command, preparedCommand, ahead);
+    if (!queueWithReceipt(preparedCommand, commit)) commit();
     return PEER_ADMITTED;
   }
-  function Is(wr, zs, li) {
-    Ee(zs);
-    if (li) y.unshift(zs);
-    else y.push(zs);
+  function commitPeerCommand(originalCommand, command, ahead) {
+    markHeldPassive(command);
+    if (ahead) commands.unshift(command);
+    else commands.push(command);
     if (
-      wr.origin?.kind === "peer" &&
-      wr.origin.handback === true &&
-      wr.origin.senderTaskId !== undefined &&
-      wr.admissionExempt !== "resurrected"
+      originalCommand.origin?.kind === "peer" &&
+      originalCommand.origin.handback === true &&
+      originalCommand.origin.senderTaskId !== undefined &&
+      originalCommand.admissionExempt !== "resurrected"
     )
       noteHandback({
-        sender: wr.origin.senderTaskId,
-        recipient: wr.agentId,
-        senderName: wr.origin.from,
-        flagged: wr.origin.flagged === true,
+        sender: originalCommand.origin.senderTaskId,
+        recipient: originalCommand.agentId,
+        senderName: originalCommand.origin.from,
+        flagged: originalCommand.origin.flagged === true,
       });
-    markReceiptQueued(wr.uuid);
-    ke();
-    if (!wr.unlogged && wr.screeningPending !== true) h("enqueue", wr);
+    markReceiptQueued(originalCommand.uuid);
+    emitQueueChanged();
+    if (!originalCommand.unlogged && originalCommand.screeningPending !== true)
+      recordEnqueue("enqueue", originalCommand);
   }
-  function fs(wr) {
-    Nr(wr);
+  function enqueue(command) {
+    enqueueReportingAdmission(command);
   }
-  function as(wr, { turnAttribution: zs = "none" } = {}) {
-    if (!zo(wr).admitted) return;
-    let li = wr;
-    if (wr.mode === "task-notification" && typeof wr.value === "string") {
-      let Ac = truncateMiddle_2(wr.value, MAX_MERGED_PROMPTS);
-      if (Ac !== wr.value) {
+  function enqueuePendingNotification(command, { turnAttribution = "none" } = {}) {
+    if (!admitPeerCommand(command).admitted) return;
+    let nextCommand = command;
+    if (command.mode === "task-notification" && typeof command.value === "string") {
+      let truncatedValue = truncateMiddle_2(command.value, MAX_MERGED_PROMPTS);
+      if (truncatedValue !== command.value) {
         logForDebugging(
-          `enqueuePendingNotification: task-notification capped from ${wr.value.length} to ${Ac.length} chars`,
+          `enqueuePendingNotification: task-notification capped from ${command.value.length} to ${truncatedValue.length} chars`,
           {
             level: "warn",
           },
         );
-        li = {
-          ...wr,
-          value: Ac,
+        nextCommand = {
+          ...command,
+          value: truncatedValue,
         };
       }
     }
-    let nl =
-      wr.inheritedTurnAttributionKey ??
-      (zs === "inherit" && wr.mode === "task-notification" ? getContextKey() : undefined);
+    let attributionKey =
+      command.inheritedTurnAttributionKey ??
+      (turnAttribution === "inherit" && command.mode === "task-notification" ? getContextKey() : undefined);
     if (
-      zs === "inherit" &&
-      wr.mode === "task-notification" &&
-      (li.origin === undefined || li.origin.kind === "task-notification")
+      turnAttribution === "inherit" &&
+      command.mode === "task-notification" &&
+      (nextCommand.origin === undefined || nextCommand.origin.kind === "task-notification")
     )
-      li = {
-        ...li,
+      nextCommand = {
+        ...nextCommand,
         origin: {
-          ...(li.origin ?? {
+          ...(nextCommand.origin ?? {
             kind: "task-notification",
           }),
           producer: "session-task",
         },
       };
-    let Tl =
-      wr.mode === "task-notification" && wr.taskId !== undefined
-        ? (wr.runId ?? getRunId(wr.taskId))
+    let runId =
+      command.mode === "task-notification" && command.taskId !== undefined
+        ? (command.runId ?? getRunId(command.taskId))
         : undefined;
-    if (Tl !== undefined)
-      li = {
-        ...li,
-        runId: Tl,
+    if (runId !== undefined)
+      nextCommand = {
+        ...nextCommand,
+        runId,
       };
-    let kd =
-      wr.stampThreadState ??
-      (wr.mode === "task-notification" &&
-        wr.handbackPointer !== true &&
-        isActiveMainAgentCommand(wr) &&
+    let stampThreadState =
+      command.stampThreadState ??
+      (command.mode === "task-notification" &&
+        command.handbackPointer !== true &&
+        isActiveMainAgentCommand(command) &&
         shouldStampThreadState({
           isPeer: false,
         }));
-    let na = {
-      ...dropPeerHopChain(li),
-      priority: wr.priority ?? "later",
-      timestamp: wr.timestamp ?? new Date().toISOString(),
-      ...(nl && {
-        inheritedTurnAttributionKey: nl,
+    let preparedCommand = {
+      ...dropPeerHopChain(nextCommand),
+      priority: command.priority ?? "later",
+      timestamp: command.timestamp ?? new Date().toISOString(),
+      ...(attributionKey && {
+        inheritedTurnAttributionKey: attributionKey,
       }),
-      ...(kd && {
+      ...(stampThreadState && {
         stampThreadState: true,
       }),
     };
-    let em = () => {
-      Ee(na);
-      y.push(na);
-      ke();
-      if (!wr.unlogged) s("enqueue", queueRecordText(li));
+    let commit = () => {
+      markHeldPassive(preparedCommand);
+      commands.push(preparedCommand);
+      emitQueueChanged();
+      if (!command.unlogged) recordQueueOperation("enqueue", queueRecordText(nextCommand));
     };
-    if (!Es(na, em)) em();
+    if (!queueWithReceipt(preparedCommand, commit)) commit();
   }
-  async function Vi(wr) {
-    Wi(1);
-    let { command, delivered } = ii(wr, undefined);
-    y.push(command);
-    ke();
-    s("enqueue", command.pollEvent?.envelope);
+  async function enqueuePollEvent(request) {
+    assertPollEventCapacity(1);
+    let { command, delivered } = buildPollEventCommand(request, undefined);
+    commands.push(command);
+    emitQueueChanged();
+    recordQueueOperation("enqueue", command.pollEvent?.envelope);
     return delivered;
   }
-  async function ji(wr) {
-    Wi(wr.length);
-    if (wr.length === 0 || wr.length > MAX_POLL_EVENTS_PER_BATCH || wr.some((kd) => kd.wake === false)) {
+  async function enqueuePollEventGroup(requests) {
+    assertPollEventCapacity(requests.length);
+    if (
+      requests.length === 0 ||
+      requests.length > MAX_POLL_EVENTS_PER_BATCH ||
+      requests.some((request) => request.wake === false)
+    ) {
       logFeatureBad("poll_event_delivery", "group_refused");
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `poll event rejected: a group holds 1 to ${MAX_POLL_EVENTS_PER_BATCH} events, none of them wake: false`,
         "poll event rejected: group shape",
       );
     }
-    let zs = randomUUID();
-    let mapped = wr.map((kd) => ii(kd, zs));
+    let groupId = randomUUID();
+    let mapped = requests.map((request) => buildPollEventCommand(request, groupId));
     let reduced = mapped.reduce(
       (acc, { command }) => acc + Buffer.byteLength(command.pollEvent?.envelope ?? "", "utf8"),
       0,
@@ -1152,8 +1189,8 @@ function createMessageQueueManager(e) {
         "poll event rejected: group too large",
       );
     }
-    let reduced_2 = wr.reduce(
-      (acc, na) => acc + (na.declared === undefined ? 0 : eventByteLength(na.declared.fields)),
+    let reduced_2 = requests.reduce(
+      (acc, request) => acc + (request.declared === undefined ? 0 : eventByteLength(request.declared.fields)),
       0,
     );
     if (reduced_2 > MAX_POLL_EVENT_BATCH_BYTES) {
@@ -1163,53 +1200,53 @@ function createMessageQueueManager(e) {
         "poll event rejected: group too large",
       );
     }
-    y.push(...mapped.map(({ command }) => command));
-    ke();
-    for (let { command } of mapped) s("enqueue", command.pollEvent?.envelope);
+    commands.push(...mapped.map(({ command }) => command));
+    emitQueueChanged();
+    for (let { command } of mapped) recordQueueOperation("enqueue", command.pollEvent?.envelope);
     await Promise.all(mapped.map(({ delivered }) => delivered));
   }
-  function Wi(wr) {
-    let zs = count(y, isPollEventMode);
-    if (zs + wr > POLL_KIND_DEFAULT_TIMEOUT_MS) {
+  function assertPollEventCapacity(incomingCount) {
+    let queuedCount = count(commands, isPollEventMode);
+    if (queuedCount + incomingCount > POLL_KIND_DEFAULT_TIMEOUT_MS) {
       logFeatureBad("poll_event_delivery", "queue_cap");
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        wr === 1
+        incomingCount === 1
           ? `poll event rejected: ${POLL_KIND_DEFAULT_TIMEOUT_MS} events already queued`
-          : `poll event rejected: the queue holds at most ${POLL_KIND_DEFAULT_TIMEOUT_MS} events (${zs} queued, ${wr} arriving)`,
+          : `poll event rejected: the queue holds at most ${POLL_KIND_DEFAULT_TIMEOUT_MS} events (${queuedCount} queued, ${incomingCount} arriving)`,
         "poll event rejected: queue depth cap",
       );
     }
   }
-  function ii(wr, zs) {
-    if (!isValidPollEventKind(wr.kind)) {
+  function buildPollEventCommand(event, groupId) {
+    if (!isValidPollEventKind(event.kind)) {
       logFeatureBad("poll_event_delivery", "invalid_kind");
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         "poll event rejected: invalid kind (a lowercase letter, then lowercase letters, digits and hyphens, at most 64 characters)",
         "poll event rejected: invalid kind",
       );
     }
-    if (mentionsReservedKind(wr.kind) && wr.allowReservedKind !== true) {
+    if (mentionsReservedKind(event.kind) && event.allowReservedKind !== true) {
       logFeatureBad("poll_event_delivery", "reserved_kind");
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `poll event rejected: kind "${wr.kind}" is reserved for a trusted in-process producer`,
+        `poll event rejected: kind "${event.kind}" is reserved for a trusted in-process producer`,
         "poll event rejected: reserved kind",
       );
     }
-    let li;
-    let nl = "element";
-    let Tl;
-    if (wr.element !== undefined) {
-      if (wr.content !== undefined || wr.declared !== undefined)
+    let envelope;
+    let envelopeFormat = "element";
+    let declaredFields;
+    if (event.element !== undefined) {
+      if (event.content !== undefined || event.declared !== undefined)
         throw Error("poll event: pass one of content, element, declared");
-      let np = Buffer.byteLength(wr.element, "utf8");
-      if (np > pollEventMaxEnvelopeBytes(wr.kind)) {
+      let byteLength = Buffer.byteLength(event.element, "utf8");
+      if (byteLength > pollEventMaxEnvelopeBytes(event.kind)) {
         logFeatureBad("poll_event_delivery", "envelope_too_large");
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `poll event rejected: envelope is ${np} bytes (cap ${pollEventMaxEnvelopeBytes(wr.kind)})`,
+          `poll event rejected: envelope is ${byteLength} bytes (cap ${pollEventMaxEnvelopeBytes(event.kind)})`,
           "poll event rejected: envelope too large",
         );
       }
-      let pollEventEnvelope = parsePollEventEnvelope(wr.element);
+      let pollEventEnvelope = parsePollEventEnvelope(event.element);
       if (!pollEventEnvelope.ok) {
         logFeatureBad("poll_event_delivery", "validation_failed");
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -1217,48 +1254,48 @@ function createMessageQueueManager(e) {
           "poll event rejected: element failed validation",
         );
       }
-      if (pollEventEnvelope.kind !== wr.kind) {
+      if (pollEventEnvelope.kind !== event.kind) {
         logFeatureBad("poll_event_delivery", "kind_mismatch");
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `poll event rejected: element kind "${pollEventEnvelope.kind}" does not match declared kind "${wr.kind}"`,
+          `poll event rejected: element kind "${pollEventEnvelope.kind}" does not match declared kind "${event.kind}"`,
           "poll event rejected: kind mismatch",
         );
       }
-      li = wr.element;
-    } else if (wr.declared !== undefined) {
-      if (wr.content !== undefined) throw Error("poll event: pass one of content, element, declared");
-      let pollEventEnvelope = buildPollEventEnvelope(wr.declared);
-      if (!pollEventEnvelope.ok || wr.declared.declaration.kind !== wr.kind) {
+      envelope = event.element;
+    } else if (event.declared !== undefined) {
+      if (event.content !== undefined) throw Error("poll event: pass one of content, element, declared");
+      let pollEventEnvelope = buildPollEventEnvelope(event.declared);
+      if (!pollEventEnvelope.ok || event.declared.declaration.kind !== event.kind) {
         logFeatureBad("poll_event_delivery", "fields_invalid");
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
           `poll event rejected: ${pollEventEnvelope.ok ? "declaration is for another kind" : pollEventEnvelope.reason}`,
           "poll event rejected: fields failed validation",
         );
       }
-      li = pollEventEnvelope.envelope;
-      nl = "json";
-      Tl = {
-        at: wr.declared.at,
+      envelope = pollEventEnvelope.envelope;
+      envelopeFormat = "json";
+      declaredFields = {
+        at: event.declared.at,
         fields: pollEventEnvelope.fields,
       };
-    } else if (wr.content !== undefined)
-      li = validatePollEvent({
-        kind: wr.kind,
+    } else if (event.content !== undefined)
+      envelope = validatePollEvent({
+        kind: event.kind,
         at: new Date().toISOString(),
-        content: wr.content,
+        content: event.content,
       });
     else throw Error("poll event: content, element or declared is required");
-    let kd = randomEventNonce();
-    li = withEventNonce(li, kd, nl);
-    let na = Buffer.byteLength(li, "utf8");
-    if (na > pollEventMaxEnvelopeBytes(wr.kind)) {
+    let nonce = randomEventNonce();
+    envelope = withEventNonce(envelope, nonce, envelopeFormat);
+    let stampedLength = Buffer.byteLength(envelope, "utf8");
+    if (stampedLength > pollEventMaxEnvelopeBytes(event.kind)) {
       logFeatureBad("poll_event_delivery", "envelope_too_large");
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `poll event rejected: envelope is ${na} bytes after nonce stamping (cap ${pollEventMaxEnvelopeBytes(wr.kind)})`,
+        `poll event rejected: envelope is ${stampedLength} bytes after nonce stamping (cap ${pollEventMaxEnvelopeBytes(event.kind)})`,
         "poll event rejected: envelope too large",
       );
     }
-    let wake = wr.wake ?? true;
+    let wake = event.wake ?? true;
     let settleDelivered;
     let settleDropped;
     let delivered = new Promise((resolve, reject) => {
@@ -1267,7 +1304,7 @@ function createMessageQueueManager(e) {
     });
     return {
       command: {
-        value: li,
+        value: envelope,
         mode: "poll-event",
         agentId: mainAgentId(),
         priority: wake ? "next" : "later",
@@ -1276,12 +1313,12 @@ function createMessageQueueManager(e) {
         ...false,
         timestamp: new Date().toISOString(),
         pollEvent: {
-          kind: wr.kind,
-          envelope: li,
+          kind: event.kind,
+          envelope,
           ...false,
-          ...(wr.media !== undefined &&
-            wr.media.length > 0 && {
-              media: wr.media,
+          ...(event.media !== undefined &&
+            event.media.length > 0 && {
+              media: event.media,
             }),
           ...false,
           ...false,
@@ -1291,54 +1328,54 @@ function createMessageQueueManager(e) {
           ...false,
           settleDelivered,
           settleDropped,
-          provenance: wr.provenance,
-          ...(Tl !== undefined && {
-            declared: Tl,
+          provenance: event.provenance,
+          ...(declaredFields !== undefined && {
+            declared: declaredFields,
           }),
-          ...(zs !== undefined && {
-            group: zs,
+          ...(groupId !== undefined && {
+            group: groupId,
           }),
         },
       },
       delivered,
     };
   }
-  function wa(wr) {
-    let filtered = y.filter((kd) => isPollEventForAgent(kd, wr));
-    if (filtered.length === 0)
+  function drainPollEventChunk(agentId) {
+    let entries = commands.filter((command) => isPollEventForAgent(command, agentId));
+    if (entries.length === 0)
       return {
         commands: [],
         remainingWakeCount: 0,
       };
-    let pollEventBatch = selectPollEventBatch(filtered);
-    let nl = new Set(pollEventBatch);
-    let filtered_2 = y.filter((kd) => !nl.has(kd));
-    y.length = 0;
-    y.push(...filtered_2);
-    ke();
-    for (let kd of nl) if (!kd.unlogged) s("dequeue");
+    let pollEventBatch = selectPollEventBatch(entries);
+    let selected = new Set(pollEventBatch);
+    let filtered = commands.filter((command) => !selected.has(command));
+    commands.length = 0;
+    commands.push(...filtered);
+    emitQueueChanged();
+    for (let command of selected) if (!command.unlogged) recordQueueOperation("dequeue");
     return {
       commands: pollEventBatch,
-      remainingWakeCount: jo(wr),
+      remainingWakeCount: countPendingWakePollEvents(agentId),
     };
   }
-  let hr = new Set();
-  function mi(wr) {
-    if (hr.has(wr)) return false;
-    hr.add(wr);
+  let activePollCalls = new Set();
+  function tryBeginPollCall(callId) {
+    if (activePollCalls.has(callId)) return false;
+    activePollCalls.add(callId);
     return true;
   }
-  function Ha(wr) {
-    hr.delete(wr);
+  function endPollCall(callId) {
+    activePollCalls.delete(callId);
   }
-  let $a = 0;
-  function nr() {
-    $a++;
+  let pollEventAdmissions = 0;
+  function beginPollEventAdmission() {
+    pollEventAdmissions++;
   }
-  function Ti() {
-    if ($a === 0) return;
-    $a--;
-    if ($a === 0)
+  function endPollEventAdmission() {
+    if (pollEventAdmissions === 0) return;
+    pollEventAdmissions--;
+    if (pollEventAdmissions === 0)
       try {
         signal.emit();
       } catch (error) {
@@ -1346,131 +1383,146 @@ function createMessageQueueManager(e) {
         else logError(error);
       }
   }
-  function Vs() {
-    return $a;
+  function pollEventAdmissionsPending() {
+    return pollEventAdmissions;
   }
-  function _i(wr) {
-    let agentId = wr.find(isPollEventMode)?.agentId;
-    let li = count(wr, (nl) => nl.pollEvent?.wake === true);
+  function countRemainingWakePollEventsAfter(chunkCommands) {
+    let agentId = chunkCommands.find(isPollEventMode)?.agentId;
+    let consumedWakeCount = count(chunkCommands, (command) => command.pollEvent?.wake === true);
     return Math.max(
       0,
       count(
-        y,
-        (nl) =>
-          nl.mode === "poll-event" &&
-          nl.agentId === (agentId ?? mainAgentId()) &&
-          nl.pollEvent?.wake === true,
-      ) - li,
+        commands,
+        (command) =>
+          command.mode === "poll-event" &&
+          command.agentId === (agentId ?? mainAgentId()) &&
+          command.pollEvent?.wake === true,
+      ) - consumedWakeCount,
     );
   }
-  function jo(wr) {
-    return count(y, (zs) => isPollEventForAgent(zs, wr) && zs.pollEvent?.wake === true);
+  function countPendingWakePollEvents(agentId) {
+    return count(
+      commands,
+      (command) => isPollEventForAgent(command, agentId) && command.pollEvent?.wake === true,
+    );
   }
-  function Qr(wr) {
-    if (y.length === 0) return;
-    let zs = -1;
-    let li = 1 / 0;
-    for (let idx = 0; idx < y.length; idx++) {
-      let kd = y[idx];
-      if (wr && !wr(kd)) continue;
-      let na = PRIORITY_ORDER[kd.priority ?? "next"];
-      if (na < li) {
-        zs = idx;
-        li = na;
+  function dequeue(predicate) {
+    if (commands.length === 0) return;
+    let bestIndex = -1;
+    let bestPriority = 1 / 0;
+    for (let idx = 0; idx < commands.length; idx++) {
+      let command = commands[idx];
+      if (predicate && !predicate(command)) continue;
+      let priorityValue = PRIORITY_ORDER[command.priority ?? "next"];
+      if (priorityValue < bestPriority) {
+        bestIndex = idx;
+        bestPriority = priorityValue;
       }
     }
-    if (zs === -1) return;
-    let [nl] = y.splice(zs, 1);
-    ke();
-    if (!nl.unlogged) s("dequeue");
-    return nl;
+    if (bestIndex === -1) return;
+    let [dequeued] = commands.splice(bestIndex, 1);
+    emitQueueChanged();
+    if (!dequeued.unlogged) recordQueueOperation("dequeue");
+    return dequeued;
   }
-  function fi() {
-    if (y.length === 0) return [];
-    let wr = [...y];
-    y.length = 0;
-    ke();
-    for (let zs of wr) if (!zs.unlogged) s("dequeue");
-    return wr;
+  function dequeueAll() {
+    if (commands.length === 0) return [];
+    let dequeued = [...commands];
+    commands.length = 0;
+    emitQueueChanged();
+    for (let command of dequeued) if (!command.unlogged) recordQueueOperation("dequeue");
+    return dequeued;
   }
-  function Ri(wr) {
-    if (y.length === 0) return;
-    let zs = -1;
-    let li = 1 / 0;
-    for (let idx = 0; idx < y.length; idx++) {
-      let Tl = y[idx];
-      if (wr && !wr(Tl)) continue;
-      let kd = PRIORITY_ORDER[Tl.priority ?? "next"];
-      if (kd < li) {
-        zs = idx;
-        li = kd;
+  function peek(predicate) {
+    if (commands.length === 0) return;
+    let bestIndex = -1;
+    let bestPriority = 1 / 0;
+    for (let idx = 0; idx < commands.length; idx++) {
+      let command = commands[idx];
+      if (predicate && !predicate(command)) continue;
+      let priorityValue = PRIORITY_ORDER[command.priority ?? "next"];
+      if (priorityValue < bestPriority) {
+        bestIndex = idx;
+        bestPriority = priorityValue;
       }
     }
-    if (zs === -1) return;
-    return y[zs];
+    if (bestIndex === -1) return;
+    return commands[bestIndex];
   }
-  function Ja(wr) {
-    let zs = [];
-    let li = [];
-    for (let nl of y)
-      if (wr(nl)) zs.push(nl);
-      else li.push(nl);
-    if (zs.length === 0) return [];
-    y.length = 0;
-    y.push(...li);
-    ke();
-    for (let nl of zs) if (!nl.unlogged) s("dequeue");
-    return zs;
+  function dequeueAllMatching(predicate) {
+    let matched = [];
+    let rest = [];
+    for (let command of commands)
+      if (predicate(command)) matched.push(command);
+      else rest.push(command);
+    if (matched.length === 0) return [];
+    commands.length = 0;
+    commands.push(...rest);
+    emitQueueChanged();
+    for (let command of matched) if (!command.unlogged) recordQueueOperation("dequeue");
+    return matched;
   }
-  function Di(wr, zs) {
-    vs((li) => wr.includes(li), r.commandsDiscarded, zs?.reason);
+  function remove(commands, options) {
+    removeCommands((command) => commands.includes(command), queueSignals.commandsDiscarded, options?.reason);
   }
-  let yr = e?.now ?? (() => Math.max(performance.timeOrigin + performance.now(), Date.now()));
-  let Kr;
-  let Li = new Set();
-  let Qs = new Set();
-  function Hi(wr, zs) {
-    let li = vs((nl) => wr.includes(nl), r.commandsConsumed, zs.reason);
-    if (zs.reason === "absorbed_mid_turn")
-      for (let nl of li) {
-        if (nl.mode !== "prompt" || !isMainAgentCommand(nl)) continue;
-        let { uuid } = nl;
+  let now = options?.now ?? (() => Math.max(performance.timeOrigin + performance.now(), Date.now()));
+  let requeueWindow;
+  let putBackUuids = new Set();
+  let discardedTaskIds = new Set();
+  function consume(commands, options) {
+    let consumed = removeCommands(
+      (command) => commands.includes(command),
+      queueSignals.commandsConsumed,
+      options.reason,
+    );
+    if (options.reason === "absorbed_mid_turn")
+      for (let command of consumed) {
+        if (command.mode !== "prompt" || !isMainAgentCommand(command)) continue;
+        let { uuid } = command;
         let requeueIfInterruptedWithinMs =
-          uuid !== undefined && nl.shouldQuery !== false && nl.passive !== true && !q.has(uuid)
-            ? nl.requeueIfInterruptedWithinMs
+          uuid !== undefined &&
+          command.shouldQuery !== false &&
+          command.passive !== true &&
+          !cancelPending.has(uuid)
+            ? command.requeueIfInterruptedWithinMs
             : undefined;
-        if (requeueIfInterruptedWithinMs !== undefined || Kr !== undefined)
-          Kr = {
+        if (requeueIfInterruptedWithinMs !== undefined || requeueWindow !== undefined)
+          requeueWindow = {
             uuid,
-            cmd: nl,
+            cmd: command,
             withinMs: requeueIfInterruptedWithinMs,
             until: undefined,
           };
       }
   }
-  function Xa() {
-    if (Kr?.withinMs !== undefined) Kr.until ??= yr() + Kr.withinMs;
+  function startRequeueWindow() {
+    if (requeueWindow?.withinMs !== undefined) requeueWindow.until ??= now() + requeueWindow.withinMs;
   }
-  function ta({ turnEnded: wr = false } = {}) {
-    Kr = undefined;
-    if (wr) Li.clear();
+  function settleTaken({ turnEnded = false } = {}) {
+    requeueWindow = undefined;
+    if (turnEnded) putBackUuids.clear();
   }
-  function Bs(wr) {
-    if (Kr?.uuid === wr) Kr.withinMs = undefined;
-    for (let zs of y) if (zs.uuid === wr) delete zs.requeueIfInterruptedWithinMs;
+  function forgoRequeue(uuid) {
+    if (requeueWindow?.uuid === uuid) requeueWindow.withinMs = undefined;
+    for (let command of commands) if (command.uuid === uuid) delete command.requeueIfInterruptedWithinMs;
   }
-  function Ca() {
-    let wr = Kr;
-    Kr = undefined;
-    if (wr?.uuid === undefined || wr.withinMs === undefined || (wr.until !== undefined && yr() > wr.until))
+  function requeueTaken() {
+    let interruptedCommand = requeueWindow;
+    requeueWindow = undefined;
+    if (
+      interruptedCommand?.uuid === undefined ||
+      interruptedCommand.withinMs === undefined ||
+      (interruptedCommand.until !== undefined && now() > interruptedCommand.until)
+    )
       return;
-    let { requeueIfInterruptedWithinMs, promptSubmitted, attachmentSourceUuid, deliveryId, ...kd } = wr.cmd;
-    Li.add(wr.uuid);
-    Je.delete(wr.uuid);
+    let { requeueIfInterruptedWithinMs, promptSubmitted, attachmentSourceUuid, deliveryId, ...commandRest } =
+      interruptedCommand.cmd;
+    putBackUuids.add(interruptedCommand.uuid);
+    foldInFlight.delete(interruptedCommand.uuid);
     try {
-      Nr(
+      enqueueReportingAdmission(
         {
-          ...kd,
+          ...commandRest,
           drainOnly: true,
           runsAlone: true,
           admissionExempt: "resurrected",
@@ -1485,128 +1537,140 @@ function createMessageQueueManager(e) {
     } catch (error) {
       logError(error);
     }
-    return wr.cmd;
+    return interruptedCommand.cmd;
   }
-  function tu(wr) {
-    return Li.has(wr);
+  function wasPutBack(uuid) {
+    return putBackUuids.has(uuid);
   }
-  function pd(wr) {
-    if (Li.has(wr)) return "drop";
-    if (Je.has(wr) && y.some((zs) => zs.uuid === wr && zs.requeueIfInterruptedWithinMs !== undefined))
+  function foldCopyFate(uuid) {
+    if (putBackUuids.has(uuid)) return "drop";
+    if (
+      foldInFlight.has(uuid) &&
+      commands.some((command) => command.uuid === uuid && command.requeueIfInterruptedWithinMs !== undefined)
+    )
       return "wait";
-    return Kr?.uuid === wr && Kr.withinMs !== undefined && (Kr.until === undefined || yr() <= Kr.until)
+    return requeueWindow?.uuid === uuid &&
+      requeueWindow.withinMs !== undefined &&
+      (requeueWindow.until === undefined || now() <= requeueWindow.until)
       ? "wait"
       : "keep";
   }
-  function ga(wr) {
-    if (Kr?.uuid === wr || Je.has(wr)) Bs(wr);
+  function foldCopyWritten(uuid) {
+    if (requeueWindow?.uuid === uuid || foldInFlight.has(uuid)) forgoRequeue(uuid);
   }
-  function Hl() {
-    return Kr?.withinMs !== undefined && Kr.until !== undefined && yr() <= Kr.until
-      ? Kr.until - yr()
+  function requeueWindowLeftMs() {
+    return requeueWindow?.withinMs !== undefined &&
+      requeueWindow.until !== undefined &&
+      now() <= requeueWindow.until
+      ? requeueWindow.until - now()
       : undefined;
   }
-  function hd(wr, zs) {
-    return vs(wr, r.commandsDiscarded, zs?.reason);
+  function removeByFilter(predicate, options) {
+    return removeCommands(predicate, queueSignals.commandsDiscarded, options?.reason);
   }
-  function Sd(wr) {
-    for (let { mode, taskId } of wr) if (mode === "task-notification" && taskId !== undefined) Qs.add(taskId);
-    settleReceiptsForMessages(wr);
-    r.commandsDiscarded.emit(wr);
+  function emitDiscarded(commands) {
+    for (let { mode, taskId } of commands)
+      if (mode === "task-notification" && taskId !== undefined) discardedTaskIds.add(taskId);
+    settleReceiptsForMessages(commands);
+    queueSignals.commandsDiscarded.emit(commands);
   }
-  function Ld(wr) {
-    return Qs.delete(wr);
+  function takeDiscardedNotice(taskId) {
+    return discardedTaskIds.delete(taskId);
   }
-  function vs(wr, zs, reason) {
-    let nl = [];
-    for (let idx = y.length - 1; idx >= 0; idx--) if (wr(y[idx])) nl.unshift(y.splice(idx, 1)[0]);
-    if (nl.length > 0) {
-      ke();
+  function removeCommands(predicate, removedSignal, reason) {
+    let removed = [];
+    for (let idx = commands.length - 1; idx >= 0; idx--)
+      if (predicate(commands[idx])) removed.unshift(commands.splice(idx, 1)[0]);
+    if (removed.length > 0) {
+      emitQueueChanged();
       try {
         signal_2.emit();
       } catch (error) {
         if (isAbortError(error)) logForDebugging(`commandsRemoved listener aborted: ${error}`);
         else logError(error);
       }
-      for (let Tl of nl) {
-        if (Tl.unlogged || Tl.screeningPending === true) continue;
-        s(
+      for (let command of removed) {
+        if (command.unlogged || command.screeningPending === true) continue;
+        recordQueueOperation(
           "remove",
-          reason === "dropped_by_hook" ? undefined : queueRecordText(Tl),
+          reason === "dropped_by_hook" ? undefined : queueRecordText(command),
           reason,
-          Tl.attachmentSourceUuid ?? Tl.uuid,
-          Tl.deliveryId,
-          queuedUnderPlugins(Tl),
+          command.attachmentSourceUuid ?? command.uuid,
+          command.deliveryId,
+          queuedUnderPlugins(command),
         );
       }
       if (reason === "cleared_on_cancel" || reason === "dropped_by_hook")
-        logDeliveryFailureForEndings(nl, reason);
-      if (zs === r.commandsDiscarded) Sd(nl);
-      else zs.emit(nl);
+        logDeliveryFailureForEndings(removed, reason);
+      if (removedSignal === queueSignals.commandsDiscarded) emitDiscarded(removed);
+      else removedSignal.emit(removed);
     }
-    return nl;
+    return removed;
   }
-  function ol(wr) {
-    if (y.length === 0) return [];
-    let keep = wr?.keep;
-    let li = keep ? y.filter((Tl) => !keep(Tl)) : y;
-    if (li.length === 0) return [];
-    let nl = groupByToObject(li, (Tl) => Tl.mode);
+  function clearCommandQueue(options) {
+    if (commands.length === 0) return [];
+    let keep = options?.keep;
+    let toDrop = keep ? commands.filter((command) => !keep(command)) : commands;
+    if (toDrop.length === 0) return [];
+    let countByMode = groupByToObject(toDrop, (command) => command.mode);
     logForDebugging(
-      `[clearCommandQueue] dropping ${li.length} queued command(s): ${Object.entries(nl)
+      `[clearCommandQueue] dropping ${toDrop.length} queued command(s): ${Object.entries(countByMode)
         .map(([key, value]) => `${key}=${value.length}`)
         .join(" ")}`,
       {
         level: "warn",
       },
     );
-    discardPollEvent(li.filter(isPollEventMode), "queue cleared");
-    return hd(keep ? (Tl) => !keep(Tl) : () => true, wr);
+    discardPollEvent(toDrop.filter(isPollEventMode), "queue cleared");
+    return removeByFilter(keep ? (command) => !keep(command) : () => true, options);
   }
-  function gd() {
-    y.length = 0;
-    S = Object.freeze([]);
-    hr.clear();
-    q.clear();
-    Z.clear();
-    Je.clear();
-    It = false;
-    Yt = undefined;
-    we = undefined;
-    Kr = undefined;
-    Li.clear();
-    Qs.clear();
-    jr();
-    To();
-    vn.clear();
+  function resetCommandQueue() {
+    commands.length = 0;
+    snapshot = Object.freeze([]);
+    activePollCalls.clear();
+    cancelPending.clear();
+    cancelPendingAcked.clear();
+    foldInFlight.clear();
+    midTurnFoldSuspended = false;
+    turnStartFoldTarget = undefined;
+    hold = undefined;
+    requeueWindow = undefined;
+    putBackUuids.clear();
+    discardedTaskIds.clear();
+    resetPeerGuard();
+    clearInFlightDrainBatch();
+    inFlightSubmissions.clear();
   }
-  function Su(wr, zs, li) {
-    let mapped = wr.map((na) => ({
-      text: inputDisplayText(na),
-      entries: getRetainedPastedContents(na),
+  function claimPasteIds(commands, editorText, editorPastes) {
+    let mapped = commands.map((command) => ({
+      text: inputDisplayText(command),
+      entries: getRetainedPastedContents(command),
     }));
-    function Tl(na, em) {
-      let Ac = new Set();
-      for (let tp of parsePastedRefs(na)) if (isValidPasteId(tp.id) && !em.has(tp.id)) Ac.add(tp.id);
-      return Ac;
+    function findReferencedPasteIds(text, knownIds) {
+      let referencedIds = new Set();
+      for (let pasteRef of parsePastedRefs(text))
+        if (isValidPasteId(pasteRef.id) && !knownIds.has(pasteRef.id)) referencedIds.add(pasteRef.id);
+      return referencedIds;
     }
-    let kd = [
-      Tl(zs, new Set(Object.keys(li).map(Number))),
-      ...mapped.map((na) => Tl(na.text, new Set(na.entries.map((entry) => entry.id)))),
+    let referencedByOthers = [
+      findReferencedPasteIds(editorText, new Set(Object.keys(editorPastes).map(Number))),
+      ...mapped.map((command) =>
+        findReferencedPasteIds(command.text, new Set(command.entries.map((entry) => entry.id))),
+      ),
     ];
-    return mapped.map((na, em) => {
-      let Ac = new Set();
-      kd.forEach((Ef, np) => {
-        if (np !== em + 1) for (let Rf of Ef) Ac.add(Rf);
+    return mapped.map((command, commandIndex) => {
+      let foreignIds = new Set();
+      referencedByOthers.forEach((ids, groupIndex) => {
+        if (groupIndex !== commandIndex + 1) for (let pasteId of ids) foreignIds.add(pasteId);
       });
-      let text = na.text;
-      let entries = na.entries.map((entry) => {
-        if (entry.type !== "text" || !Ac.has(entry.id)) return entry;
-        let np = mintPasteId(zs, li);
-        text = expandPastedTextRefs_2(text, entry.id, np, "text");
+      let text = command.text;
+      let entries = command.entries.map((entry) => {
+        if (entry.type !== "text" || !foreignIds.has(entry.id)) return entry;
+        let freshPasteId = mintPasteId(editorText, editorPastes);
+        text = expandPastedTextRefs_2(text, entry.id, freshPasteId, "text");
         return {
           ...entry,
-          id: np,
+          id: freshPasteId,
         };
       });
       return {
@@ -1615,181 +1679,193 @@ function createMessageQueueManager(e) {
       };
     });
   }
-  function Eu(wr, zs, li = {}) {
-    if (y.length === 0) return;
-    let nl = wr === "";
-    let filtered = y.filter((ap) => shouldPrependModeChar(ap, nl));
+  function popAllEditableCommands(editorText, cursorOffset, pastes = {}) {
+    if (commands.length === 0) return;
+    let isEditorEmpty = editorText === "";
+    let filtered = commands.filter((command) => shouldPrependModeChar(command, isEditorEmpty));
     if (filtered.length === 0) return;
-    let kd = filtered.every((ap) => ap.mode === "bash") ? "bash" : "prompt";
-    let na = kd === "bash" ? filtered : filtered.filter((ap) => ap.mode !== "bash");
-    let em = Su(na, wr, li);
-    let mapped = em.map((ap, al) => popAllEditable(ap.text, na[al].value, wr, li));
-    let { text, cursorOffset } = joinWithCursor(
-      mapped.map((ap) => ap.text).filter(Boolean).join(`
-`),
-      wr,
-      zs,
+    let mode = filtered.every((command) => command.mode === "bash") ? "bash" : "prompt";
+    let poppedCommands = mode === "bash" ? filtered : filtered.filter((command) => command.mode !== "bash");
+    let claimed = claimPasteIds(poppedCommands, editorText, pastes);
+    let mapped = claimed.map((entry, entryIndex) =>
+      popAllEditable(entry.text, poppedCommands[entryIndex].value, editorText, pastes),
     );
-    let Ef = [];
-    for (let [ap, al] of em.entries()) Ef.push(...al.entries, ...mapped[ap].images);
-    for (let ap of na) {
-      if (ap.unlogged || ap.screeningPending === true) continue;
-      h("popAll", ap);
+    let { text, cursorOffset: cursorOffset_2 } = joinWithCursor(
+      mapped.map((popped) => popped.text).filter(Boolean).join(`
+`),
+      editorText,
+      cursorOffset,
+    );
+    let images = [];
+    for (let [commandIndex, claimedEntry] of claimed.entries())
+      images.push(...claimedEntry.entries, ...mapped[commandIndex].images);
+    for (let command of poppedCommands) {
+      if (command.unlogged || command.screeningPending === true) continue;
+      recordEnqueue("popAll", command);
     }
-    let np = new Set(na);
-    let filtered_2 = y.filter((ap) => !np.has(ap));
-    y.length = 0;
-    y.push(...filtered_2);
-    ke();
-    Sd(na);
+    let poppedSet = new Set(poppedCommands);
+    let filtered_2 = commands.filter((command) => !poppedSet.has(command));
+    commands.length = 0;
+    commands.push(...filtered_2);
+    emitQueueChanged();
+    emitDiscarded(poppedCommands);
     return {
       text,
-      cursorOffset,
-      images: Ef,
-      mode: kd,
+      cursorOffset: cursorOffset_2,
+      images,
+      mode,
       ideSelection:
-        na.find((ap) => ap.ideSelection?.text)?.ideSelection ??
-        na.find((ap) => ap.ideSelection !== undefined)?.ideSelection,
-      unpassed: na.some(hasUnpassedScreening),
+        poppedCommands.find((command) => command.ideSelection?.text)?.ideSelection ??
+        poppedCommands.find((command) => command.ideSelection !== undefined)?.ideSelection,
+      unpassed: poppedCommands.some(hasUnpassedScreening),
     };
   }
-  function Uc(wr, zs, li, nl = {}) {
-    let kd = y.filter(isRefillableInput)[wr];
-    if (!kd) return;
-    if (!shouldPrependModeChar(kd, zs === "")) return;
-    let [na] = Su([kd], zs, nl);
-    let { text, entries } = na;
-    let tp = popAllEditable(text, kd.value, zs, nl);
-    let { text: text_2, cursorOffset } = joinWithCursor(tp.text, zs, li);
-    let np = entries;
-    np.push(...tp.images);
-    if (!kd.unlogged && kd.screeningPending !== true) h("popOne", kd);
-    let index = y.indexOf(kd);
-    if (index !== -1) {
-      y.splice(index, 1);
-      ke();
-      Sd([kd]);
+  function popEditableAt(index, editorText, cursorOffset, pastes = {}) {
+    let command = commands.filter(isRefillableInput)[index];
+    if (!command) return;
+    if (!shouldPrependModeChar(command, editorText === "")) return;
+    let [claimed] = claimPasteIds([command], editorText, pastes);
+    let { text, entries } = claimed;
+    let popped = popAllEditable(text, command.value, editorText, pastes);
+    let { text: text_2, cursorOffset: cursorOffset_2 } = joinWithCursor(
+      popped.text,
+      editorText,
+      cursorOffset,
+    );
+    let images = entries;
+    images.push(...popped.images);
+    if (!command.unlogged && command.screeningPending !== true) recordEnqueue("popOne", command);
+    let index_2 = commands.indexOf(command);
+    if (index_2 !== -1) {
+      commands.splice(index_2, 1);
+      emitQueueChanged();
+      emitDiscarded([command]);
     }
     return {
       text: text_2,
-      cursorOffset,
-      images: np,
-      mode: kd.mode === "bash" ? "bash" : "prompt",
-      ideSelection: kd.ideSelection,
-      unpassed: hasUnpassedScreening(kd),
+      cursorOffset: cursorOffset_2,
+      images,
+      mode: command.mode === "bash" ? "bash" : "prompt",
+      ideSelection: command.ideSelection,
+      unpassed: hasUnpassedScreening(command),
     };
   }
-  function Kc(wr) {
-    let zs = PRIORITY_ORDER[wr];
-    return y.filter((li) => PRIORITY_ORDER[li.priority ?? "next"] <= zs);
+  function getCommandsByMaxPriority(maxPriority) {
+    let maxOrder = PRIORITY_ORDER[maxPriority];
+    return commands.filter((command) => PRIORITY_ORDER[command.priority ?? "next"] <= maxOrder);
   }
-  function _s(wr) {
-    Yt = wr;
+  function setTurnStartFoldTarget(target) {
+    turnStartFoldTarget = target;
   }
-  function Qm(wr) {
-    return y.filter(
-      (zs) => PRIORITY_ORDER[zs.priority ?? "next"] <= PRIORITY_ORDER.next || (zs === Yt && !wr),
+  function getTurnStartFoldCommands(includeLater) {
+    return commands.filter(
+      (command) =>
+        PRIORITY_ORDER[command.priority ?? "next"] <= PRIORITY_ORDER.next ||
+        (command === turnStartFoldTarget && !includeLater),
     );
   }
   return {
     subscribe: signal.subscribe,
     subscribeToRemovals: signal_2.subscribe,
-    getCommandQueueSnapshot: yo,
-    getCommandQueue: Ho,
-    getCommandQueueLength: rr,
-    getMainThreadQueueLength: br,
-    getDrainableMainThreadQueueLength: Hr,
+    getCommandQueueSnapshot,
+    getCommandQueue,
+    getCommandQueueLength,
+    getMainThreadQueueLength,
+    getDrainableMainThreadQueueLength,
     ...{},
-    getQueuedPeerMessageCount: Io,
-    emitDiscarded: Sd,
-    takeDiscardedNotice: Ld,
-    hasCommandsInQueue: Fr,
-    recheckCommandQueue: _r,
-    enqueue: fs,
-    enqueueReportingAdmission: Nr,
-    flushPeerDropReceipts: Or,
-    enqueuePendingNotification: as,
-    holdBack: Ae,
-    letHeldBackGo: Ie,
-    enqueuePollEvent: Vi,
-    enqueuePollEventGroup: ji,
-    drainPollEventChunk: wa,
-    countPendingWakePollEvents: jo,
-    countRemainingWakePollEventsAfter: _i,
-    hasUserIntentCommandsInQueue: cs,
-    tryBeginPollCall: mi,
-    endPollCall: Ha,
-    beginPollEventAdmission: nr,
-    endPollEventAdmission: Ti,
-    pollEventAdmissionsPending: Vs,
-    dequeue: Qr,
-    dequeueAll: fi,
-    peek: Ri,
-    dequeueAllMatching: Ja,
-    remove: Di,
-    consume: Hi,
-    startRequeueWindow: Xa,
-    settleTaken: ta,
-    forgoRequeue: Bs,
-    requeueTaken: Ca,
-    wasPutBack: tu,
-    foldCopyFate: pd,
-    foldCopyWritten: ga,
-    requeueWindowLeftMs: Hl,
-    removeByFilter: hd,
-    clearCommandQueue: ol,
-    resetCommandQueue: gd,
-    popAllEditable: Eu,
-    popEditableAt: Uc,
-    getCommandsByMaxPriority: Kc,
-    setTurnStartFoldTarget: _s,
-    getTurnStartFoldCommands: Qm,
-    markCancelPending: Me,
-    consumeCancelPending: We,
-    consumeCancelPendingAcked: ze,
-    hasCancelPendingAcked: lt,
-    registerFoldInFlight: nt,
-    unregisterFoldInFlight: pt,
-    isFoldInFlight: Et,
-    beginInboundIngest: gt,
-    withdrawInboundIngest: At,
-    suspendMidTurnFold: qt,
-    isMidTurnFoldSuspended: yn,
-    settleScreening: Zt,
-    settleSurfaced: rn,
+    getQueuedPeerMessageCount,
+    emitDiscarded,
+    takeDiscardedNotice,
+    hasCommandsInQueue,
+    recheckCommandQueue,
+    enqueue,
+    enqueueReportingAdmission,
+    flushPeerDropReceipts,
+    enqueuePendingNotification,
+    holdBack,
+    letHeldBackGo,
+    enqueuePollEvent,
+    enqueuePollEventGroup,
+    drainPollEventChunk,
+    countPendingWakePollEvents,
+    countRemainingWakePollEventsAfter,
+    hasUserIntentCommandsInQueue,
+    tryBeginPollCall,
+    endPollCall,
+    beginPollEventAdmission,
+    endPollEventAdmission,
+    pollEventAdmissionsPending,
+    dequeue,
+    dequeueAll,
+    peek,
+    dequeueAllMatching,
+    remove,
+    consume,
+    startRequeueWindow,
+    settleTaken,
+    forgoRequeue,
+    requeueTaken,
+    wasPutBack,
+    foldCopyFate,
+    foldCopyWritten,
+    requeueWindowLeftMs,
+    removeByFilter,
+    clearCommandQueue,
+    resetCommandQueue,
+    popAllEditable: popAllEditableCommands,
+    popEditableAt,
+    getCommandsByMaxPriority,
+    setTurnStartFoldTarget,
+    getTurnStartFoldCommands,
+    markCancelPending,
+    consumeCancelPending,
+    consumeCancelPendingAcked,
+    hasCancelPendingAcked,
+    registerFoldInFlight,
+    unregisterFoldInFlight,
+    isFoldInFlight,
+    beginInboundIngest,
+    withdrawInboundIngest,
+    suspendMidTurnFold,
+    isMidTurnFoldSuspended,
+    settleScreening,
+    settleSurfaced,
     typedHandedBack: signal_3,
-    handTypedBack: pn,
-    promoteToNow: hn,
-    demoteFromNow: ho,
-    setInFlightDrainBatch: fo,
-    clearInFlightDrainBatch: To,
-    someInFlightDrainCommand: bo,
-    trackSubmission: co,
-    someSubmissionInFlight: So,
-    noteTurnAppended: ko,
-    getInFlightDrainBatchStanding: un,
-    takeInboundEnqueueTurn: $o,
+    handTypedBack,
+    promoteToNow,
+    demoteFromNow,
+    setInFlightDrainBatch,
+    clearInFlightDrainBatch,
+    someInFlightDrainCommand,
+    trackSubmission,
+    someSubmissionInFlight,
+    noteTurnAppended,
+    getInFlightDrainBatchStanding,
+    takeInboundEnqueueTurn,
   };
 }
 //@ chunk-e6aww6q8.js:576253-576302 placement
-var sessionCommandQueueSlot = new SessionRootSlot(() => ({
-  queue: createMessageQueueManager(),
-  installed: false,
-}));
+var sessionCommandQueueSlot; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:576253", () => {
+  sessionCommandQueueSlot = new SessionRootSlot(() => ({
+    queue: createMessageQueueManager(),
+    installed: false,
+  }));
+});
 //@ chunk-e6aww6q8.js:576302-576336 placement
 function currentSessionQueueState() {
   return sessionCommandQueueSlot.of(getRootSession());
 }
 //@ chunk-e6aww6q8.js:576336-576489 placement
-function installCommandQueue(e) {
-  let n = currentSessionQueueState();
-  if (n.installed) return n.queue;
-  let queue = n.queue;
-  let s = e(queue.getCommandQueue());
+function installCommandQueue(options) {
+  let state = currentSessionQueueState();
+  if (state.installed) return state.queue;
+  let queue = state.queue;
+  let installedQueue = options(queue.getCommandQueue());
   queue.resetCommandQueue();
-  n.queue = s;
-  n.installed = true;
-  return s;
+  state.queue = installedQueue;
+  state.installed = true;
+  return installedQueue;
 }
 //@ chunk-e6aww6q8.js:576489-576522 placement
 /**
@@ -1802,115 +1878,129 @@ function commandQueueManager() {
 /**
  * 宿主隔离的"回执已入队/正在排空"探测函数槽。
  */
-var receiptQueuedProbe = identity_2(createValueSlot(), (e) => e.set(undefined));
-var inFlightDrainProbe = identity_2(createValueSlot(), (e) => e.set(undefined));
+var receiptQueuedProbe; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var inFlightDrainProbe;
+deferInit("chunk-e6aww6q8.js:576522", () => {
+  receiptQueuedProbe = identity_2(createValueSlot(), (probeSlot) => probeSlot.set(undefined));
+  inFlightDrainProbe = identity_2(createValueSlot(), (probeSlot) => probeSlot.set(undefined));
+});
 //@ chunk-e6aww6q8.js:576590-576632 placement
 /**
  * 判断是否正在折叠队列。
  */
-var isFoldInFlight = (...e) => commandQueueManager().isFoldInFlight(...e);
+var isFoldInFlight = (...commandArgs) => commandQueueManager().isFoldInFlight(...commandArgs);
 //@ chunk-e6aww6q8.js:576632-576721 placement
 /**
  * 取命令队列快照与完整队列。
  */
-var getCommandQueueSnapshot = (...e) => commandQueueManager().getCommandQueueSnapshot(...e);
-var getCommandQueue = (...e) => commandQueueManager().getCommandQueue(...e);
+var getCommandQueueSnapshot = (...commandArgs) =>
+  commandQueueManager().getCommandQueueSnapshot(...commandArgs);
+var getCommandQueue = (...commandArgs) => commandQueueManager().getCommandQueue(...commandArgs);
 //@ chunk-e6aww6q8.js:576721-576773 placement
 /**
  * 取主线程队列长度。
  */
-var getMainThreadQueueLength = (...e) => commandQueueManager().getMainThreadQueueLength(...e);
+var getMainThreadQueueLength = (...commandArgs) =>
+  commandQueueManager().getMainThreadQueueLength(...commandArgs);
 //@ chunk-e6aww6q8.js:576773-576814 placement
 /**
  * 上报命令被丢弃。
  */
-var emitDiscardedCommand = (...e) => commandQueueManager().emitDiscarded(...e);
+var emitDiscardedCommand = (...commandArgs) => commandQueueManager().emitDiscarded(...commandArgs);
 //@ chunk-e6aww6q8.js:576814-576881 placement
 /**
  * 判断队列中是否存在可回填的主 agent 命令。
  */
-function hasRefillableMainAgentCommand(e) {
-  return e.getCommandQueue().some((n) => isMainAgentCommand(n) && isRefillableInput(n));
+function hasRefillableMainAgentCommand(commands) {
+  return commands
+    .getCommandQueue()
+    .some((command) => isMainAgentCommand(command) && isRefillableInput(command));
 }
 //@ chunk-e6aww6q8.js:576881-576946 placement
 /**
  * 判断队列中是否有带模式字符的命令。
  */
-function hasModeCharCommand(store, n) {
-  return store.getCommandQueue().some((r) => shouldPrependModeChar(r, n));
+function hasModeCharCommand(store, modeChar) {
+  return store.getCommandQueue().some((command) => shouldPrependModeChar(command, modeChar));
 }
 //@ chunk-e6aww6q8.js:576946-577062 placement
-function hasQueuedTaskNotification(e, n) {
+function hasQueuedTaskNotification(agentId, taskId) {
   return commandQueueManager()
     .getCommandQueue()
-    .some((r) => r.mode === "task-notification" && r.agentId === e && r.taskId === n);
+    .some(
+      (command) =>
+        command.mode === "task-notification" && command.agentId === agentId && command.taskId === taskId,
+    );
 }
 //@ chunk-e6aww6q8.js:577062-577199 placement
 function hasQueuedQueryingTaskNotification(recipientAgentId, taskId) {
   return commandQueueManager()
     .getCommandQueue()
     .some(
-      (r) =>
-        r.mode === "task-notification" &&
-        r.agentId === recipientAgentId &&
-        r.taskId === taskId &&
-        r.shouldQuery !== false,
+      (command) =>
+        command.mode === "task-notification" &&
+        command.agentId === recipientAgentId &&
+        command.taskId === taskId &&
+        command.shouldQuery !== false,
     );
 }
 //@ chunk-e6aww6q8.js:577199-577502 placement
 /**
  * 消息队列管理器各方法的转发函数（取丢弃通知、重查命令队列、入队等）。
  */
-var takeDiscardedNotice = (...e) => commandQueueManager().takeDiscardedNotice(...e);
-var recheckCommandQueue = (...e) => commandQueueManager().recheckCommandQueue(...e);
-var enqueueCommand = (...e) => commandQueueManager().enqueue(...e);
-var enqueueReportingAdmission = (...e) => commandQueueManager().enqueueReportingAdmission(...e);
-var flushPeerDropReceipts = (...e) => commandQueueManager().flushPeerDropReceipts(...e);
-var enqueuePollEvent = (...e) => commandQueueManager().enqueuePollEvent(...e);
-var enqueuePendingNotification = (...e) => commandQueueManager().enqueuePendingNotification(...e);
+var takeDiscardedNotice = (...args) => commandQueueManager().takeDiscardedNotice(...args);
+var recheckCommandQueue = (...args) => commandQueueManager().recheckCommandQueue(...args);
+var enqueueCommand = (...args) => commandQueueManager().enqueue(...args);
+var enqueueReportingAdmission = (...args) => commandQueueManager().enqueueReportingAdmission(...args);
+var flushPeerDropReceipts = (...args) => commandQueueManager().flushPeerDropReceipts(...args);
+var enqueuePollEvent = (...args) => commandQueueManager().enqueuePollEvent(...args);
+var enqueuePendingNotification = (...args) => commandQueueManager().enqueuePendingNotification(...args);
 //@ chunk-e6aww6q8.js:577502-577576 placement
 /**
  * 查看队首命令与按条件批量出队。
  */
-var peekQueuedCommand = (...e) => commandQueueManager().peek(...e);
-var dequeueAllMatching = (...e) => commandQueueManager().dequeueAllMatching(...e);
+var peekQueuedCommand = (...args) => commandQueueManager().peek(...args);
+var dequeueAllMatching = (...args) => commandQueueManager().dequeueAllMatching(...args);
 //@ chunk-e6aww6q8.js:577576-577617 placement
 /**
  * 按过滤条件移除排队命令。
  */
-var removeQueuedByFilter = (...e) => commandQueueManager().removeByFilter(...e);
+var removeQueuedByFilter = (...args) => commandQueueManager().removeByFilter(...args);
 //@ chunk-e6aww6q8.js:577617-577669 placement
 /**
  * 判断是否有正在排空的命令。
  */
-var someInFlightDrainCommand = (...e) => commandQueueManager().someInFlightDrainCommand(...e);
+var someInFlightDrainCommand = (...args) => commandQueueManager().someInFlightDrainCommand(...args);
 //@ chunk-e6aww6q8.js:577669-577937 placement
-setQueueInstaller((e, origin, r) => {
-  let s = r === undefined ? undefined : randomUUID();
-  enqueueCommand({
-    agentId: mainAgentId(),
-    mode: "prompt",
-    value: `/${e}`,
-    origin,
-    uuid: s,
-  });
-  if (r === undefined || r.until.aborted) return;
-  let h = commandsDiscardedSignal.subscribe((y) => {
-    if (y.some((S) => S.uuid === s)) {
-      h();
-      r.onDiscarded();
-    }
-  });
-  r.until.addEventListener("abort", h, {
-    once: true,
+// deferred: uses setQueueInstaller of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:577669", () => {
+  setQueueInstaller((commandName, origin, discardWatch) => {
+    let commandUuid = discardWatch === undefined ? undefined : randomUUID();
+    enqueueCommand({
+      agentId: mainAgentId(),
+      mode: "prompt",
+      value: `/${commandName}`,
+      origin,
+      uuid: commandUuid,
+    });
+    if (discardWatch === undefined || discardWatch.until.aborted) return;
+    let unsubscribe = commandsDiscardedSignal.subscribe((discarded) => {
+      if (discarded.some((command) => command.uuid === commandUuid)) {
+        unsubscribe();
+        discardWatch.onDiscarded();
+      }
+    });
+    discardWatch.until.addEventListener("abort", unsubscribe, {
+      once: true,
+    });
   });
 });
 //@ chunk-ha3km179.js:76331-76631 sole-consumer
 /**
  * 把带 ✓/○ 等符号的清单文本解析为 header 与 items（最多 32 条）。
  */
-function parseChecklistText(e) {
-  let mapped = e
+function parseChecklistText(text) {
+  let mapped = text
     .split(
       `
 `,
@@ -1921,18 +2011,18 @@ function parseChecklistText(e) {
         .trim()
         .replace(/^(\*{1,2})(.+?)\1$/, "$2"),
     );
-  let r = mapped[0] ?? "";
+  let firstLine = mapped[0] ?? "";
   return {
-    header: r !== "" && !CHECKLIST_MARKER_STATUS.has(r.charAt(0)) ? r : null,
+    header: firstLine !== "" && !CHECKLIST_MARKER_STATUS.has(firstLine.charAt(0)) ? firstLine : null,
     items: mapped
-      .flatMap((h) => {
-        let y = CHECKLIST_MARKER_STATUS.get(h.charAt(0));
-        let trimmed = h.slice(1).trim();
-        return y !== undefined && trimmed !== ""
+      .flatMap((line) => {
+        let status = CHECKLIST_MARKER_STATUS.get(line.charAt(0));
+        let trimmed = line.slice(1).trim();
+        return status !== undefined && trimmed !== ""
           ? [
               {
                 content: trimmed,
-                status: y,
+                status,
               },
             ]
           : [];
@@ -1944,38 +2034,46 @@ function parseChecklistText(e) {
 /**
  * 协调者内部工具名列表。
  */
-var COORDINATOR_TOOL_NAMES = aliasCanonicalNames(["update_status"]).map((e) => `__${e}`);
-var COORDINATOR_TOOL_SUFFIXES = [
-  NO_REPLY_TOOL_SUFFIX,
-  "__react",
-  "__message_coordinator",
-  "__message_thread",
-];
-var mapped = aliasCanonicalNames(["ask_decision"]).map((e) => `__${e}`);
-var mapped_2 = aliasCanonicalNames(["close_decision", "set_thread_resolved"]).map((e) => `__${e}`);
-var REPORTING_NOTIFICATION_ORIGINS = new Set(["github_webhook", "trigger_fire"]);
-var TOOL_RESULT_NOTIFICATIONS_SCHEMA = DoctorLazy(() =>
-  u({
-    notifications: array(
-      u({
-        origin: string(),
-      }),
-    ),
-  }),
-);
-var REPORTING_WINDOW_MS = 259200000;
+var COORDINATOR_TOOL_NAMES; // deferred: uses PROJECTS_MOUNT_FIRST_COMMAND_WAIT_MS (../bridge/projectsReplyEvaluation.js) of its import cycle while loading; runs once the cycle is complete
+var COORDINATOR_TOOL_SUFFIXES;
+var mapped;
+var mapped_2;
+var REPORTING_NOTIFICATION_ORIGINS;
+var TOOL_RESULT_NOTIFICATIONS_SCHEMA;
+var REPORTING_WINDOW_MS;
+deferInit("chunk-ha3km179.js:76631", () => {
+  COORDINATOR_TOOL_NAMES = aliasCanonicalNames(["update_status"]).map((name) => `__${name}`);
+  COORDINATOR_TOOL_SUFFIXES = [NO_REPLY_TOOL_SUFFIX, "__react", "__message_coordinator", "__message_thread"];
+  mapped = aliasCanonicalNames(["ask_decision"]).map((name) => `__${name}`);
+  mapped_2 = aliasCanonicalNames(["close_decision", "set_thread_resolved"]).map((name) => `__${name}`);
+  REPORTING_NOTIFICATION_ORIGINS = new Set(["github_webhook", "trigger_fire"]);
+  TOOL_RESULT_NOTIFICATIONS_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      notifications: array(
+        objectSchema({
+          origin: stringSchema(),
+        }),
+      ),
+    }),
+  );
+  REPORTING_WINDOW_MS = 259200000;
+});
 //@ chunk-ha3km179.js:76961-77218 placement
 /**
  * 找出最近一次"已展示但未读"的出错工具行 id（供分类器提示）。
  */
-function shownErroredToolRowId(e) {
+function shownErroredToolRowId(messages) {
   if (!isGracefulCakeEnabled()) return;
   try {
-    let recentErroredTools = findRecentErroredTools(e);
+    let recentErroredTools = findRecentErroredTools(messages);
     return recentErroredTools?.shown === true &&
       allUserTurnsSatisfy(
-        e.slice(recentErroredTools.row),
-        (r, s) => r === undefined && s.type === "user" && s.isMeta === true && s.turnOrigin === undefined,
+        messages.slice(recentErroredTools.row),
+        (block, message) =>
+          block === undefined &&
+          message.type === "user" &&
+          message.isMeta === true &&
+          message.turnOrigin === undefined,
       )
       ? recentErroredTools.id
       : undefined;
@@ -1996,11 +2094,11 @@ function logOperation(operation, content) {
       Date.now() - Date.parse(content[recentErroredTools.row].timestamp) >= REPORTING_WINDOW_MS
     )
       return false;
-    let sliced = content.slice(recentErroredTools.row);
+    let messages = content.slice(recentErroredTools.row);
     return (
-      isMachineOnlyTurnRange(sliced) &&
-      allUserTurnsSatisfy(sliced, isAutomatedNotification) &&
-      hasOnlyWaitCalls(sliced)
+      isMachineOnlyTurnRange(messages) &&
+      allUserTurnsSatisfy(messages, isAutomatedNotification) &&
+      hasOnlyWaitCalls(messages)
     );
   } catch (error) {
     logForDebugging(`[classifier] quiet turn not read: ${errorMessage(error)}`, {
@@ -2014,65 +2112,66 @@ function isGracefulCakeEnabled() {
   return (
     getTerminalMcpTools()
       .values()
-      .some((e) => e.endsWith(NO_REPLY_TOOL_SUFFIX)) &&
+      .some((toolName) => toolName.endsWith(NO_REPLY_TOOL_SUFFIX)) &&
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_graceful_cake", true)
   );
 }
 //@ chunk-ha3km179.js:77566-77617 placement
-function nameEndsWithAny(name, n) {
-  return n.some((r) => name.endsWith(r));
+function nameEndsWithAny(name, suffixes) {
+  return suffixes.some((suffix) => name.endsWith(suffix));
 }
 //@ chunk-ha3km179.js:77617-78323 placement
 /**
  * 找出最近出错的工具调用。
  */
-function findRecentErroredTools(e) {
+function findRecentErroredTools(messages) {
   let terminalMcpTools = getTerminalMcpTools();
-  let r = new Set();
-  for (let s of e)
-    if (s.type === "user" && Array.isArray(s.message.content)) {
-      for (let h of s.message.content)
-        if (h.type === "tool_result" && h.is_error === true) r.add(h.tool_use_id);
+  let erroredToolIds = new Set();
+  for (let message of messages)
+    if (message.type === "user" && Array.isArray(message.message.content)) {
+      for (let block of message.message.content)
+        if (block.type === "tool_result" && block.is_error === true) erroredToolIds.add(block.tool_use_id);
     }
-  for (let j = e.length - 1; j >= 0; j--) {
-    let h = e[j];
-    if (h.type !== "assistant") continue;
-    for (let y of h.message.content.toReversed()) {
-      if (y.type !== "tool_use") continue;
-      if (isExactReplToolName(y.name))
+  for (let j = messages.length - 1; j >= 0; j--) {
+    let message = messages[j];
+    if (message.type !== "assistant") continue;
+    for (let block of message.message.content.toReversed()) {
+      if (block.type !== "tool_use") continue;
+      if (isExactReplToolName(block.name))
         return {
           row: j,
-          id: y.id,
+          id: block.id,
           shown: false,
         };
-      if (r.has(y.id)) continue;
-      if (nameEndsWithAny(y.name, mapped_2))
+      if (erroredToolIds.has(block.id)) continue;
+      if (nameEndsWithAny(block.name, mapped_2))
         return {
           row: j,
-          id: y.id,
+          id: block.id,
           shown: false,
         };
-      if (nameEndsWithAny(y.name, mapped))
+      if (nameEndsWithAny(block.name, mapped))
         return {
           row: j,
-          id: y.id,
+          id: block.id,
           shown: true,
         };
-      if (!terminalMcpTools.has(y.name) || nameEndsWithAny(y.name, COORDINATOR_TOOL_SUFFIXES)) continue;
-      if (!nameEndsWithAny(y.name, COORDINATOR_TOOL_NAMES))
+      if (!terminalMcpTools.has(block.name) || nameEndsWithAny(block.name, COORDINATOR_TOOL_SUFFIXES))
+        continue;
+      if (!nameEndsWithAny(block.name, COORDINATOR_TOOL_NAMES))
         return {
           row: j,
-          id: y.id,
+          id: block.id,
           shown: true,
         };
       if (
-        !parseChecklistText(textFromTaskCreateInput(y) ?? "").items.some(
+        !parseChecklistText(textFromTaskCreateInput(block) ?? "").items.some(
           (item) => item.status !== "completed",
         )
       )
         return {
           row: j,
-          id: y.id,
+          id: block.id,
           shown: false,
         };
     }
@@ -2083,27 +2182,27 @@ function findRecentErroredTools(e) {
 /**
  * 是否为自动任务通知（定时触发、会话任务）。
  */
-function isAutomatedNotification(e, n) {
-  if (e !== undefined && e.kind !== "task-notification") return false;
-  if (e?.subkind === "scheduled-trigger" || e?.producer === "session-task") return true;
-  if (e?.subkind !== undefined) return false;
+function isAutomatedNotification(origin, message) {
+  if (origin !== undefined && origin.kind !== "task-notification") return false;
+  if (origin?.subkind === "scheduled-trigger" || origin?.producer === "session-task") return true;
+  if (origin?.subkind !== undefined) return false;
   if (
-    e === undefined &&
-    n.type === "user" &&
-    n.isMeta === true &&
-    (n.turnOrigin === undefined || n.turnOrigin === "scheduled")
+    origin === undefined &&
+    message.type === "user" &&
+    message.isMeta === true &&
+    (message.turnOrigin === undefined || message.turnOrigin === "scheduled")
   )
     return true;
-  let r =
-    n.type === "user"
-      ? getContentText(n.message.content)
-      : n.type === "attachment" && n.attachment.type === "queued_command"
-        ? getContentText(n.attachment.prompt)
+  let text =
+    message.type === "user"
+      ? getContentText(message.message.content)
+      : message.type === "attachment" && message.attachment.type === "queued_command"
+        ? getContentText(message.attachment.prompt)
         : null;
-  if (r === null) return false;
-  let externalEventWake = parseExternalEventWake(r);
+  if (text === null) return false;
+  let externalEventWake = parseExternalEventWake(text);
   return externalEventWake === null
-    ? isGeneratedToolCountSummary(r)
+    ? isGeneratedToolCountSummary(text)
     : !isSessionInboxWake(externalEventWake) &&
         (externalEventWake.from === undefined || externalEventWake.from === "system");
 }
@@ -2111,47 +2210,64 @@ function isAutomatedNotification(e, n) {
 /**
  * 回合是否只有等待类调用。
  */
-function hasOnlyWaitCalls(e) {
-  let n = new Set();
-  for (let r of e)
-    if (r.type === "assistant")
-      for (let s of r.message.content) {
-        if (s.type !== "tool_use") continue;
-        if (s.name === FETCH_INBOX_MESSAGE_TOOL_NAME) return false;
-        if (s.name === READNOTIFICATIONS) n.add(s.id);
+function hasOnlyWaitCalls(messages) {
+  let pendingReadIds = new Set();
+  for (let message of messages)
+    if (message.type === "assistant")
+      for (let block of message.message.content) {
+        if (block.type !== "tool_use") continue;
+        if (block.name === FETCH_INBOX_MESSAGE_TOOL_NAME) return false;
+        if (block.name === READNOTIFICATIONS) pendingReadIds.add(block.id);
       }
-    else if (r.type === "user" && Array.isArray(r.message.content))
-      for (let s of r.message.content) {
-        if (s.type !== "tool_result" || !n.delete(s.tool_use_id)) continue;
-        let h = TOOL_RESULT_NOTIFICATIONS_SCHEMA().safeParse(r.toolUseResult);
+    else if (message.type === "user" && Array.isArray(message.message.content))
+      for (let block of message.message.content) {
+        if (block.type !== "tool_result" || !pendingReadIds.delete(block.tool_use_id)) continue;
+        let parsed = TOOL_RESULT_NOTIFICATIONS_SCHEMA().safeParse(message.toolUseResult);
         if (
-          !h.success ||
-          !h.data.notifications.every((notification) =>
+          !parsed.success ||
+          !parsed.data.notifications.every((notification) =>
             REPORTING_NOTIFICATION_ORIGINS.has(notification.origin),
           )
         )
           return false;
       }
-  return n.size === 0;
+  return pendingReadIds.size === 0;
 }
 //@ chunk-ha3km179.js:79416-79488 placement
 /**
  * 惰性加载的两个 chunk 模块引用。
  */
-var lazyChunkCv3 = require("./chunk-cv3kgbt2.js");
-var lazyChunkVsw = require("./chunk-vswknp5v.js");
+var lazyChunkCv3; // deferred: loads other modules while loading; runs once its import cycle is complete
+var lazyChunkVsw;
+deferInit("chunk-ha3km179.js:79416", () => {
+  lazyChunkCv3 = require("../tools/BriefTool/BriefTool.js");
+  lazyChunkVsw = require("../tools/BriefTool/prompt.js");
+});
 //@ chunk-ha3km179.js:79488-79526 placement
 /**
  * 取已排队的对等消息数量。
  */
-var getQueuedPeerMessageCount = require("./chunk-wpq8yj9g.js");
+var getQueuedPeerMessageCount; // deferred: loads other modules while loading; runs once its import cycle is complete
+deferInit("chunk-ha3km179.js:79488", () => {
+  getQueuedPeerMessageCount = require("../bridge/projectsReplyEvaluation.js");
+});
+//@ chunk-0sfjpx19.js:15971-16045 fingerprint = enqueuePendingNotification (0.592)
+/**
+ * 已验证的 Slack 人类消息且优先级为 later。旧版名 enqueuePendingNotification 为错配。
+ */
+function isSlackLaterNotification(command) {
+  return command.verifiedSlackHumanTurn === true && command.priority === "later";
+}
 //@ chunk-18hwfzwa.js:1655060-1655107 fingerprint = snapshot (0.673)
 /**
  * {status:null,next:null}。旧版名 snapshot 为错配。
  */
-var EMPTY_LIMIT_NOTICES = Object.freeze({
-  status: null,
-  next: null,
+var EMPTY_LIMIT_NOTICES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1655060", () => {
+  EMPTY_LIMIT_NOTICES = Object.freeze({
+    status: null,
+    next: null,
+  });
 });
 //@ chunk-18hwfzwa.js:1661253-1661334 fingerprint = isSlashCommand (1)
 /**
@@ -2160,13 +2276,6 @@ var EMPTY_LIMIT_NOTICES = Object.freeze({
 function isSlashCommand(cmd) {
   if (cmd.skipSlashCommands && isPeerOrSlackPing(cmd.origin)) return false;
   return looksLikeSlashInput(cmd.value);
-}
-//@ chunk-0sfjpx19.js:15971-16045 fingerprint = enqueuePendingNotification (0.592)
-/**
- * 已验证的 Slack 人类消息且优先级为 later。旧版名 enqueuePendingNotification 为错配。
- */
-function isSlackLaterNotification(command) {
-  return command.verifiedSlackHumanTurn === true && command.priority === "later";
 }
 export {
   commandQueueManager,

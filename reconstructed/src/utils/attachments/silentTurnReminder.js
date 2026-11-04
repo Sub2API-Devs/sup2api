@@ -66,11 +66,13 @@ function cachedSilentTurnReminderTurns() {
 /**
  * 读取静默回合提醒的秒数阈值：环境变量或客户端数据（≥1 的整数）。
  */
-function getSilentTurnReminderSeconds(e) {
+function getSilentTurnReminderSeconds(mainLoopModel) {
   let CLAUDE_CODE_SILENT_TURN_REMINDER_SECONDS = env.CLAUDE_CODE_SILENT_TURN_REMINDER_SECONDS;
   if (CLAUDE_CODE_SILENT_TURN_REMINDER_SECONDS !== undefined) return CLAUDE_CODE_SILENT_TURN_REMINDER_SECONDS;
-  let r = getCachedClientData(e)?.[SILENT_TURN_REMINDER_SECONDS];
-  return typeof r === "number" && Number.isFinite(r) && r >= 1 ? Math.floor(r) : undefined;
+  let clientValue = getCachedClientData(mainLoopModel)?.[SILENT_TURN_REMINDER_SECONDS];
+  return typeof clientValue === "number" && Number.isFinite(clientValue) && clientValue >= 1
+    ? Math.floor(clientValue)
+    : undefined;
 }
 //@ chunk-e6aww6q8.js:3292723-3292891 placement
 function getSilentTurnReminderTurns() {

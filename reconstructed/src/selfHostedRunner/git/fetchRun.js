@@ -42,17 +42,21 @@ import { redactGitArg, hoistFatalLines, redactToken } from "./tokenRedact.js";
 import { GIT_NO_PROMPT_ENV } from "../../utils/plugins/marketplaceManager.js";
 import { createTimeoutSignal } from "./repoSources.js";
 import { cgroupSpawnOptions } from "../../utils/toolCgroup.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-t3sg9e26.js:27339-27377 placement
-var WATCHDOG_SUBCOMMAND_SET = new Set(["fetch", "ls-remote"]);
+var WATCHDOG_SUBCOMMAND_SET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-t3sg9e26.js:27339", () => {
+  WATCHDOG_SUBCOMMAND_SET = new Set(["fetch", "ls-remote"]);
+});
 //@ chunk-t3sg9e26.js:27377-27501 placement
-function gitSubcommandOf(e) {
-  for (let j = 0; j < e.length; j++) {
-    if (e[j] === "-c" || e[j] === "--git-dir" || e[j] === "-C") {
+function gitSubcommandOf(argv) {
+  for (let j = 0; j < argv.length; j++) {
+    if (argv[j] === "-c" || argv[j] === "--git-dir" || argv[j] === "-C") {
       j++;
       continue;
     }
-    return e[j];
+    return argv[j];
   }
   return;
 }
@@ -60,43 +64,43 @@ function gitSubcommandOf(e) {
 /**
  * 运行 git 子进程（代理、进度超时、无数据检测）
  */
-async function runGit(e, repoPath, t, r, s = MAX_SERVER_PROGRESS_CAP_MS, o) {
-  let a = e.getAuthToken !== undefined;
-  let c = gitSubcommandOf(t);
-  let d = c !== undefined && WATCHDOG_SUBCOMMAND_SET.has(c);
-  let u = a && d ? e.getAuthToken() : undefined;
-  let h = r?.GIT_ALLOW_PROTOCOL === "none";
-  let y = [
+async function runGit(options, repoPath, args, cwd, capMs = MAX_SERVER_PROGRESS_CAP_MS, extra) {
+  let hasToken = options.getAuthToken !== undefined;
+  let subcommand = gitSubcommandOf(args);
+  let needsProxy = subcommand !== undefined && WATCHDOG_SUBCOMMAND_SET.has(subcommand);
+  let proxyToken = hasToken && needsProxy ? options.getAuthToken() : undefined;
+  let protocolLocked = cwd?.GIT_ALLOW_PROTOCOL === "none";
+  let gitArgs = [
     ...SAFE_GIT_CONFIG_ARGS,
-    ...gitConfigPairs(e.gitEnvironment?.commandScopeEntries ?? []),
-    ...(h ? SAFE_GIT_EXTRA_ARGS : []),
+    ...gitConfigPairs(options.gitEnvironment?.commandScopeEntries ?? []),
+    ...(protocolLocked ? SAFE_GIT_EXTRA_ARGS : []),
     "-c",
     "http.proxyAuthMethod=basic",
-    ...(a && d ? remoteProxyArgs(e.gitURL) : []),
-    ...(u ? credentialHelperArgs(e.gitURL) : []),
-    ...(e.governedMount && d ? LFS_NO_LOCKVERIFY_ARGS : []),
-    ...t,
+    ...(hasToken && needsProxy ? remoteProxyArgs(options.gitURL) : []),
+    ...(proxyToken ? credentialHelperArgs(options.gitURL) : []),
+    ...(options.governedMount && needsProxy ? LFS_NO_LOCKVERIFY_ARGS : []),
+    ...args,
   ];
-  let f = u ?? e.token;
-  let mapped = y.map((B) => redactGitArg(B, e.authURL, e.gitURL, f));
-  e.onDebug(`[byoc:git] git ${mapped.join(" ")} (dir=${repoPath || "."})`);
-  let b = !d || a || Boolean(e.token);
-  let P = {
+  let authToken = proxyToken ?? options.token;
+  let mapped = gitArgs.map((arg) => redactGitArg(arg, options.authURL, options.gitURL, authToken));
+  options.onDebug(`[byoc:git] git ${mapped.join(" ")} (dir=${repoPath || "."})`);
+  let usesProxy = !needsProxy || hasToken || Boolean(options.token);
+  let childEnv = {
     ...process.env,
-    ...r,
-    ...e.gitEnvironment?.envOverrides,
-    ...(u
+    ...cwd,
+    ...options.gitEnvironment?.envOverrides,
+    ...(proxyToken
       ? {
-          [SHR_GIT_PROXY_TOKEN]: u,
+          [SHR_GIT_PROXY_TOKEN]: proxyToken,
         }
       : undefined),
     CLAUDE_CODE_SESSION_ACCESS_TOKEN: undefined,
-    ...(a
+    ...(hasToken
       ? {
           GIT_CONFIG_GLOBAL: "/dev/null",
         }
       : undefined),
-    ...(b
+    ...(usesProxy
       ? {
           GIT_CONFIG: undefined,
         }
@@ -106,260 +110,271 @@ async function runGit(e, repoPath, t, r, s = MAX_SERVER_PROGRESS_CAP_MS, o) {
     LC_ALL: "C",
     GIT_PROGRESS_DELAY: "0",
     ...SAFE_GIT_ENV,
-    ...(e.authURL.startsWith("file://") && {
+    ...(options.authURL.startsWith("file://") && {
       GIT_ALLOW_PROTOCOL: `file:${SAFE_GIT_ENV.GIT_ALLOW_PROTOCOL}`,
     }),
     GIT_SSH_COMMAND: `${process.env.GIT_SSH_COMMAND || "ssh"} -o BatchMode=yes -o ConnectTimeout=30`,
-    ...(h && {
+    ...(protocolLocked && {
       GIT_ALLOW_PROTOCOL: "none",
       GIT_SSH_COMMAND: "false",
     }),
   };
-  if (b) {
-    for (let key of Object.keys(P)) if (key.toUpperCase() === "GIT_CONFIG") P[key] = undefined;
+  if (usesProxy) {
+    for (let key of Object.keys(childEnv)) if (key.toUpperCase() === "GIT_CONFIG") childEnv[key] = undefined;
   }
-  let { signal, dispose } = createTimeoutSignal(e.signal, s);
-  let E =
-    c !== undefined && SKIP_WATCHDOG_SUBCOMMANDS.has(c)
+  let { signal, dispose } = createTimeoutSignal(options.signal, capMs);
+  let silenceBudgetMs =
+    subcommand !== undefined && SKIP_WATCHDOG_SUBCOMMANDS.has(subcommand)
       ? GIT_WATCHDOG_MS
-      : (e.watchdog?.silenceMs ?? MIN_SERVER_PROGRESS_CAP_MS);
-  let l;
-  let T;
+      : (options.watchdog?.silenceMs ?? MIN_SERVER_PROGRESS_CAP_MS);
+  let killReason;
+  let lastClientProgress;
   let now = Date.now();
-  let z = e.watchdog?.preTransferCapMs ?? resolveServerProgressCap().capMs;
-  let k;
-  let N = new Set();
-  let O;
-  let Q = false;
-  let Te = {
+  let preTransferCapMs = options.watchdog?.preTransferCapMs ?? resolveServerProgressCap().capMs;
+  let lastServerProgress;
+  let serverLabels = new Set();
+  let serverProgressAt;
+  let stderrTruncated = false;
+  let serverStatus = {
     active: false,
   };
   let now_2 = Date.now();
   try {
     return await new Promise((resolve, reject) => {
-      let F = spawn("git", y, {
+      let child = spawn("git", gitArgs, {
         cwd: repoPath || undefined,
         windowsHide: true,
         ...cgroupSpawnOptions("helper"),
-        env: P,
+        env: childEnv,
         stdio: ["ignore", "pipe", "pipe"],
       });
-      let le = 10485760;
-      let K = 8192;
-      let ee = 0;
-      let M = [];
-      let D = "";
+      let stdoutCapBytes = 10485760;
+      let stderrTailChars = 8192;
+      let stdoutBytes = 0;
+      let stdoutChunks = [];
+      let stderrTail = "";
       let skipFirstLine = false;
-      let L = 0;
-      let te = -1;
-      let Ie;
-      let Se = (w) => {
-        if (typeof w === "object" && "unref" in w) w.unref();
-        return w;
+      let lastProgressLogAt = 0;
+      let lastLoggedPct = -1;
+      let lastDisplayLabel;
+      let unrefTimer = (timer) => {
+        if (typeof timer === "object" && "unref" in timer) timer.unref();
+        return timer;
       };
-      let X = false;
-      let ve;
-      let Ne = (w) => {
-        if (l === undefined) l = w;
-        F.kill("SIGTERM");
-        ve ??= Se(
+      let settled = false;
+      let killTimer;
+      let onStall = (reason) => {
+        if (killReason === undefined) killReason = reason;
+        child.kill("SIGTERM");
+        killTimer ??= unrefTimer(
           setTimeout(() => {
-            if (X) return;
-            F.kill("SIGKILL");
-            l = "escalated";
-            X = true;
+            if (settled) return;
+            child.kill("SIGKILL");
+            killReason = "escalated";
+            settled = true;
             reject(
               Object.assign(Error("git did not exit after SIGTERM"), {
-                stdout: Buffer.concat(M).toString("utf8"),
-                stderr: D,
+                stdout: Buffer.concat(stdoutChunks).toString("utf8"),
+                stderr: stderrTail,
               }),
             );
           }, PROGRESS_LOG_INTERVAL_MS),
         );
       };
-      let fe = (w = E) => Se(setTimeout((I) => I("silence"), w, Ne));
-      let Y = fe();
-      F.stdout.on("data", (w) => {
-        if (ee < 10485760) {
-          M.push(w);
-          ee += w.length;
-        } else if (o) o.stdoutTruncated = true;
+      let armSilenceTimer = (delayMs = silenceBudgetMs) =>
+        unrefTimer(setTimeout((firedReason) => firedReason("silence"), delayMs, onStall));
+      let silenceTimer = armSilenceTimer();
+      child.stdout.on("data", (data) => {
+        if (stdoutBytes < 10485760) {
+          stdoutChunks.push(data);
+          stdoutBytes += data.length;
+        } else if (extra) extra.stdoutTruncated = true;
       });
-      F.stderr.on("data", (w) => {
-        let chunk = w.toString("utf8");
-        let j = D + chunk;
-        if (j.length > 8192) Q = true;
-        D = j.slice(-8192);
+      child.stderr.on("data", (data) => {
+        let chunk = data.toString("utf8");
+        let combined = stderrTail + chunk;
+        if (combined.length > 8192) stderrTruncated = true;
+        stderrTail = combined.slice(-8192);
         let gitProgress = parseGitProgress(chunk, skipFirstLine);
         let { display, client, server } = gitProgress;
         if (chunk.length > 0) skipFirstLine = !/[\r\n]$/.test(chunk);
-        if (o !== undefined) {
-          noteServerProgress(Te, gitProgress, Date.now());
-          if (Te.active) o.sawRemoteActivity = true;
+        if (extra !== undefined) {
+          noteServerProgress(serverStatus, gitProgress, Date.now());
+          if (serverStatus.active) extra.sawRemoteActivity = true;
         }
         if (client) {
-          if (o !== undefined) o.sawClientProgress = true;
-          if (E < DELTA_COMPLETE_SILENCE_MS && isDeltasComplete(client)) {
-            E = DELTA_COMPLETE_SILENCE_MS;
-            clearTimeout(Y);
-            Y = fe();
+          if (extra !== undefined) extra.sawClientProgress = true;
+          if (silenceBudgetMs < DELTA_COMPLETE_SILENCE_MS && isDeltasComplete(client)) {
+            silenceBudgetMs = DELTA_COMPLETE_SILENCE_MS;
+            clearTimeout(silenceTimer);
+            silenceTimer = armSilenceTimer();
           }
-          if (isProgressAdvance(T, client)) {
+          if (isProgressAdvance(lastClientProgress, client)) {
             now = Date.now();
-            clearTimeout(Y);
-            Y = fe();
+            clearTimeout(silenceTimer);
+            silenceTimer = armSilenceTimer();
           }
-          T = client;
+          lastClientProgress = client;
           if (
-            o !== undefined &&
+            extra !== undefined &&
             client.bytes !== undefined &&
             client.label === RECEIVING_OBJECTS &&
-            client.bytes > (o.transferBytes ?? -1)
+            client.bytes > (extra.transferBytes ?? -1)
           )
-            o.transferBytes = client.bytes;
-        } else if (server !== undefined && T === undefined) {
-          if (shouldLogProgress(k, N, server)) {
-            k = server;
-            let he = now_2 + z - Date.now();
-            if (z > 0 && he > 0) {
-              O = Date.now();
-              clearTimeout(Y);
-              Y = fe(Math.min(E, he));
-              if (o !== undefined) o.sawServerProgress = true;
+            extra.transferBytes = client.bytes;
+        } else if (server !== undefined && lastClientProgress === undefined) {
+          if (shouldLogProgress(lastServerProgress, serverLabels, server)) {
+            lastServerProgress = server;
+            let remainingPreTransferMs = now_2 + preTransferCapMs - Date.now();
+            if (preTransferCapMs > 0 && remainingPreTransferMs > 0) {
+              serverProgressAt = Date.now();
+              clearTimeout(silenceTimer);
+              silenceTimer = armSilenceTimer(Math.min(silenceBudgetMs, remainingPreTransferMs));
+              if (extra !== undefined) extra.sawServerProgress = true;
             }
           }
-          N.add(server.label);
+          serverLabels.add(server.label);
         }
         if (display) {
-          if (display.label !== Ie) {
-            Ie = display.label;
-            te = -1;
+          if (display.label !== lastDisplayLabel) {
+            lastDisplayLabel = display.label;
+            lastLoggedPct = -1;
           }
           let floored = Math.floor(display.pct / 10);
-          let Fe = Date.now() - L;
-          if (Fe >= STDERR_TAIL_CHARS && (Fe >= NO_DATA_WARN_MS || floored > Math.floor(te / 10))) {
-            L = Date.now();
-            te = display.pct;
+          let sinceLogMs = Date.now() - lastProgressLogAt;
+          if (
+            sinceLogMs >= STDERR_TAIL_CHARS &&
+            (sinceLogMs >= NO_DATA_WARN_MS || floored > Math.floor(lastLoggedPct / 10))
+          ) {
+            lastProgressLogAt = Date.now();
+            lastLoggedPct = display.pct;
             try {
-              e.onDebug(`[byoc:git] ${c ?? "git"}: ${display.raw}`);
-              e.onProgress?.(c ?? "git", display);
+              options.onDebug(`[byoc:git] ${subcommand ?? "git"}: ${display.raw}`);
+              options.onProgress?.(subcommand ?? "git", display);
             } catch {}
           }
         }
       });
-      let Pe = () => {
-        if (e.signal?.aborted) {
-          F.kill("SIGTERM");
-          ve ??= Se(
+      let onAbort = () => {
+        if (options.signal?.aborted) {
+          child.kill("SIGTERM");
+          killTimer ??= unrefTimer(
             setTimeout(() => {
-              if (X) return;
-              F.kill("SIGKILL");
-              X = true;
-              let w = Error("The operation was aborted");
-              w.name = "AbortError";
+              if (settled) return;
+              child.kill("SIGKILL");
+              settled = true;
+              let abortError = Error("The operation was aborted");
+              abortError.name = "AbortError";
               reject(
-                Object.assign(w, {
-                  stderr: D,
+                Object.assign(abortError, {
+                  stderr: stderrTail,
                 }),
               );
             }, PROGRESS_LOG_INTERVAL_MS),
           );
-        } else Ne("hard-cap");
+        } else onStall("hard-cap");
       };
-      if (signal.aborted) Pe();
+      if (signal.aborted) onAbort();
       else
-        signal.addEventListener("abort", Pe, {
+        signal.addEventListener("abort", onAbort, {
           once: true,
         });
-      let Ge;
-      F.on("error", (w) => {
-        Ge = w;
+      let spawnError;
+      child.on("error", (error) => {
+        spawnError = error;
       });
-      F.on("close", (w, I) => {
-        if (X) return;
-        X = true;
-        clearTimeout(Y);
-        clearTimeout(ve);
-        signal.removeEventListener("abort", Pe);
-        if (o !== undefined) {
-          o.exitCode = w;
-          o.wroteStderr = D.length > 0;
+      child.on("close", (exitCode, exitSignal) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(silenceTimer);
+        clearTimeout(killTimer);
+        signal.removeEventListener("abort", onAbort);
+        if (extra !== undefined) {
+          extra.exitCode = exitCode;
+          extra.wroteStderr = stderrTail.length > 0;
         }
-        let str = Buffer.concat(M).toString("utf8");
-        if (e.signal?.aborted && l === undefined) {
-          let U = Error("The operation was aborted");
-          U.name = "AbortError";
+        let str = Buffer.concat(stdoutChunks).toString("utf8");
+        if (options.signal?.aborted && killReason === undefined) {
+          let abortError = Error("The operation was aborted");
+          abortError.name = "AbortError";
           return reject(
-            Object.assign(U, {
+            Object.assign(abortError, {
               stdout: str,
-              stderr: D,
-              code: w,
-              signal: I,
+              stderr: stderrTail,
+              code: exitCode,
+              signal: exitSignal,
             }),
           );
         }
-        if (Ge)
+        if (spawnError)
           return reject(
-            Object.assign(Ge, {
+            Object.assign(spawnError, {
               stdout: str,
-              stderr: D,
+              stderr: stderrTail,
             }),
           );
-        if (w === 0) return resolve(str);
-        let ge = Error(I !== null ? `git exited on signal ${I}` : `git exited with code ${w}`);
+        if (exitCode === 0) return resolve(str);
+        let exitError = Error(
+          exitSignal !== null ? `git exited on signal ${exitSignal}` : `git exited with code ${exitCode}`,
+        );
         reject(
-          Object.assign(ge, {
+          Object.assign(exitError, {
             stdout: str,
-            stderr: D,
-            code: w,
-            signal: I,
+            stderr: stderrTail,
+            code: exitCode,
+            signal: exitSignal,
           }),
         );
       });
     });
   } catch (error) {
-    let x = error;
-    if (l !== undefined) {
-      let le = T ? ` at ${T.label} ${T.pct}%${T.total ? ` (${T.done}/${T.total})` : ""}` : "";
+    let caught = error;
+    if (killReason !== undefined) {
+      let progressNote = lastClientProgress
+        ? ` at ${lastClientProgress.label} ${lastClientProgress.pct}%${lastClientProgress.total ? ` (${lastClientProgress.done}/${lastClientProgress.total})` : ""}`
+        : "";
       let now_3 = Date.now();
-      let ee = now_3 - now;
-      let M = "";
-      let D = `no forward progress for ${ee}ms (budget ${E}ms)${le}`;
-      if (T === undefined && k !== undefined && O !== undefined) {
-        let L = k;
-        let te =
-          L.done !== undefined
-            ? L.pct > 0
-              ? ` ${L.pct}% (${L.done}${L.total !== undefined ? `/${L.total}` : ""})`
-              : ` ${L.done}`
-            : ` ${L.pct}%`;
-        M = ` \u2014 no pack data received; server-side progress last advanced ${now_3 - O}ms ago at ${L.label}${te}`;
-        D =
-          now_3 - now_2 >= z
-            ? `pre-transfer cap ${z}ms reached with no client-side progress${M}`
-            : `no client-side progress for ${now_3 - now_2}ms and server-side progress stopped advancing (budget ${E}ms)${M}`;
+      let elapsedMs = now_3 - now;
+      let serverNote = "";
+      let stallReason = `no forward progress for ${elapsedMs}ms (budget ${silenceBudgetMs}ms)${progressNote}`;
+      if (
+        lastClientProgress === undefined &&
+        lastServerProgress !== undefined &&
+        serverProgressAt !== undefined
+      ) {
+        let serverProgress = lastServerProgress;
+        let serverDetail =
+          serverProgress.done !== undefined
+            ? serverProgress.pct > 0
+              ? ` ${serverProgress.pct}% (${serverProgress.done}${serverProgress.total !== undefined ? `/${serverProgress.total}` : ""})`
+              : ` ${serverProgress.done}`
+            : ` ${serverProgress.pct}%`;
+        serverNote = ` \u2014 no pack data received; server-side progress last advanced ${now_3 - serverProgressAt}ms ago at ${serverProgress.label}${serverDetail}`;
+        stallReason =
+          now_3 - now_2 >= preTransferCapMs
+            ? `pre-transfer cap ${preTransferCapMs}ms reached with no client-side progress${serverNote}`
+            : `no client-side progress for ${now_3 - now_2}ms and server-side progress stopped advancing (budget ${silenceBudgetMs}ms)${serverNote}`;
       }
-      let ue =
-        l === "silence"
-          ? D
-          : l === "hard-cap"
-            ? `hard cap ${s}ms after ${now_3 - now_2}ms${le}${M}`
-            : `did not exit within ${PROGRESS_LOG_INTERVAL_MS}ms of SIGTERM (D-state? \u2014 last forward ${ee}ms ago)${le}`;
-      e.onDebug(
-        `[runner:stuck] git ${mapped.join(" ")} (dir=${repoPath || "."}) \u2014 ${ue} \u2014 killing subprocess`,
+      let killReasonText =
+        killReason === "silence"
+          ? stallReason
+          : killReason === "hard-cap"
+            ? `hard cap ${capMs}ms after ${now_3 - now_2}ms${progressNote}${serverNote}`
+            : `did not exit within ${PROGRESS_LOG_INTERVAL_MS}ms of SIGTERM (D-state? \u2014 last forward ${elapsedMs}ms ago)${progressNote}`;
+      options.onDebug(
+        `[runner:stuck] git ${mapped.join(" ")} (dir=${repoPath || "."}) \u2014 ${killReasonText} \u2014 killing subprocess`,
       );
     }
-    let W =
-      x.stderr !== undefined && x.stderr.length > 0
-        ? gitStderrSummary(x.stderr, Q, e.authURL, f)
-        : hoistFatalLines(redactToken(x.stdout || x.message || "", e.authURL, f)).slice(
-            0,
-            MAX_GIT_OUTPUT_TAIL_CHARS,
-          );
-    let F = l !== undefined ? ` (watchdog: ${l})` : "";
-    throw Error(`git ${c ?? "?"} failed${F}: ${W}`);
+    let detail =
+      caught.stderr !== undefined && caught.stderr.length > 0
+        ? gitStderrSummary(caught.stderr, stderrTruncated, options.authURL, authToken)
+        : hoistFatalLines(
+            redactToken(caught.stdout || caught.message || "", options.authURL, authToken),
+          ).slice(0, MAX_GIT_OUTPUT_TAIL_CHARS);
+    let watchdogSuffix = killReason !== undefined ? ` (watchdog: ${killReason})` : "";
+    throw Error(`git ${subcommand ?? "?"} failed${watchdogSuffix}: ${detail}`);
   } finally {
-    if (o !== undefined && l !== undefined) o.killReason = l;
+    if (extra !== undefined && killReason !== undefined) extra.killReason = killReason;
     dispose();
   }
 }

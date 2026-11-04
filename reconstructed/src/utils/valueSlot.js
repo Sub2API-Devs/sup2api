@@ -14,12 +14,12 @@
  * 创建一个简单值槽（set/get）。
  */
 function createValueSlot() {
-  let t;
+  let value;
   return {
-    set: (o) => {
-      t = o;
+    set: (value_2) => {
+      value = value_2;
     },
-    get: () => t,
+    get: () => value,
   };
 }
 export { createValueSlot };

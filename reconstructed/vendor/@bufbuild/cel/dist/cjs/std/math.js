@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_operator_const } from "../gen/dev/cel/expr/operator_const.js";
 import { require_type } from "../type.js";
 import { require_list } from "../list.js";
@@ -16,7 +16,7 @@ import { require_error } from "../error.js";
 import { require_func } from "../func.js";
 
 //@ chunk-fq0cr76a.js:484761-487762 cjs-fingerprint
-var require_math = x(function (cjsExports) {
+var require_math = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -80,13 +80,13 @@ var require_math = x(function (cjsExports) {
       l.message.nanos - r.message.nanos,
     );
   }
-  function safeDivide(type, l, r) {
-    if (r === 0n) throw error_js_1.celError(`${type.name} divide by zero`);
-    return safeInt(l / r, `divide by ${r}`);
+  function safeDivide(type, l, value) {
+    if (value === 0n) throw error_js_1.celError(`${type.name} divide by zero`);
+    return safeInt(l / value, `divide by ${value}`);
   }
-  function safeModulo(type, l, r) {
-    if (r === 0n) throw error_js_1.celError(`${type.name} modulus by zero`);
-    return l % r;
+  function safeModulo(type, l, value) {
+    if (value === 0n) throw error_js_1.celError(`${type.name} modulus by zero`);
+    return l % value;
   }
   var LIST = type_js_1.listType(type_js_1.CelScalar.DYN);
   var { BYTES, DOUBLE, INT, STRING, UINT } = type_js_1.CelScalar;

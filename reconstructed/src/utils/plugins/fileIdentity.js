@@ -18,31 +18,31 @@ import { foldName } from "../permissions/protectedDirNames.js";
 /**
  * isSameFileIdentity：两路径是否为同一文件。
  */
-async function isSameFileIdentity(e, n) {
-  return (await compareFileIdentity(e, n)) === "same";
+async function isSameFileIdentity(pathA, pathB) {
+  return (await compareFileIdentity(pathA, pathB)) === "same";
 }
 //@ chunk-e6aww6q8.js:611915-612263 placement
 /**
  * 用 bigint lstat 比较两路径的 dev/ino；inode 是哨兵值或与父目录相同时退回比较去掉不可见字符后的路径。返回 same/different/unknown。
  */
-async function compareFileIdentity(e, n) {
-  if (e === n) return "same";
+async function compareFileIdentity(pathA, pathB) {
+  if (pathA === pathB) return "same";
   try {
-    let [r, s, h] = await Promise.all([
-      lstat(e, {
+    let [statA, statB, parentStatA] = await Promise.all([
+      lstat(pathA, {
         bigint: true,
       }),
-      lstat(n, {
+      lstat(pathB, {
         bigint: true,
       }),
-      lstat(dirname(e), {
+      lstat(dirname(pathA), {
         bigint: true,
       }),
     ]);
-    if (isSentinelInode(r.ino) !== isSentinelInode(s.ino)) return "unknown";
-    if (isSentinelInode(r.ino) || (r.dev === h.dev && r.ino === h.ino))
-      return stripInvisibleChars_3(e) === stripInvisibleChars_3(n) ? "same" : "different";
-    return r.dev === s.dev && r.ino === s.ino ? "same" : "different";
+    if (isSentinelInode(statA.ino) !== isSentinelInode(statB.ino)) return "unknown";
+    if (isSentinelInode(statA.ino) || (statA.dev === parentStatA.dev && statA.ino === parentStatA.ino))
+      return stripInvisibleChars_3(pathA) === stripInvisibleChars_3(pathB) ? "same" : "different";
+    return statA.dev === statB.dev && statA.ino === statB.ino ? "same" : "different";
   } catch {
     return "different";
   }
@@ -52,15 +52,15 @@ async function compareFileIdentity(e, n) {
  * 返回判定同步条目是否仍指向已知目标的函数（live/not-live/indeterminate）。
  */
 function createLiveEntryClassifier(liveDirs) {
-  let n = new Map(Array.from(liveDirs, (r) => [stripInvisibleChars_3(r), r]));
-  return async (r) => {
-    let s = n.get(stripInvisibleChars_3(r));
-    if (s === undefined) return "not-live";
-    let h = await compareFileIdentity(r, s);
-    if (h === "same") return "live";
-    if (h === "unknown") return "indeterminate";
+  let liveByStrip = new Map(Array.from(liveDirs, (dir) => [stripInvisibleChars_3(dir), dir]));
+  return async (entryPath) => {
+    let liveDir = liveByStrip.get(stripInvisibleChars_3(entryPath));
+    if (liveDir === undefined) return "not-live";
+    let identity = await compareFileIdentity(entryPath, liveDir);
+    if (identity === "same") return "live";
+    if (identity === "unknown") return "indeterminate";
     try {
-      await lstat(s);
+      await lstat(liveDir);
       return "not-live";
     } catch {
       return "indeterminate";
@@ -71,21 +71,21 @@ function createLiveEntryClassifier(liveDirs) {
 /**
  * 递归查找是否含 git 目录（HEAD + commondir/refs）。
  */
-async function containsGitDirectory(e) {
-  let n = [e];
-  while (n.length > 0) {
-    let r = n.pop();
-    let s;
+async function containsGitDirectory(rootDir) {
+  let pending = [rootDir];
+  while (pending.length > 0) {
+    let dir = pending.pop();
+    let entries;
     try {
-      s = await readdir(r, {
+      entries = await readdir(dir, {
         withFileTypes: true,
       });
     } catch {
       continue;
     }
-    let h = new Set(s.map((y) => foldName(y.name)));
-    if (h.has("head") && (h.has("commondir") || h.has("refs"))) return true;
-    for (let y of s) if (y.isDirectory()) n.push(join(r, y.name));
+    let names = new Set(entries.map((entry) => foldName(entry.name)));
+    if (names.has("head") && (names.has("commondir") || names.has("refs"))) return true;
+    for (let entry of entries) if (entry.isDirectory()) pending.push(join(dir, entry.name));
   }
   return false;
 }

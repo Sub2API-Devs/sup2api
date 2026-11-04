@@ -59,23 +59,23 @@ import { uniq } from "../utils/collections.js";
  */
 function getVisibleBackgroundTasks(tasks) {
   return Object.values(tasks).filter(
-    (n) =>
-      !isObserverAgentTask(n) &&
-      !(n.type === "local_agent" && n.agentType === "main-session") &&
-      (isActiveAgentTask(n) || isRunningShellTask(n)),
+    (task) =>
+      !isObserverAgentTask(task) &&
+      !(task.type === "local_agent" && task.agentType === "main-session") &&
+      (isActiveAgentTask(task) || isRunningShellTask(task)),
   );
 }
 //@ chunk-ha3km179.js:99315-99418 placement
 function createQueueDelivery(messageQueue) {
   return {
-    deliver: (n) => {
+    deliver: (message) => {
       enqueueHookTaskNotification({
-        ...n,
+        ...message,
         queue: messageQueue,
         origin: GOAL_CHECKIN_ORIGIN,
       });
     },
-    hasQueued: (n) => messageQueue.peek(n) !== undefined,
+    hasQueued: (predicate) => messageQueue.peek(predicate) !== undefined,
   };
 }
 //@ chunk-ha3km179.js:99418-99445 placement
@@ -137,9 +137,9 @@ var GOAL_CLEAR_REASONS = 80;
 /**
  * 因错误清除目标并移除 Stop hook。
  */
-function* clearGoalOnError(activeGoal, n, cause) {
+function* clearGoalOnError(activeGoal, toolUseContext, cause) {
   let { label, errorCode } = GOAL_CLEAR_REASONS_2[cause];
-  n.sessionHooksRegistry.remove(getSessionId(), "Stop", {
+  toolUseContext.sessionHooksRegistry.remove(getSessionId(), "Stop", {
     type: "prompt",
     prompt: activeGoal.condition,
   });
@@ -188,7 +188,7 @@ var GOAL_ERROR_TEXT = {
 /**
  * 回合结束后更新目标状态（达成、重试、暂停）。
  */
-function* updateGoalAfterTurn(toolUseContext, getAppState, querySource, s, createQueueDelivery) {
+function* updateGoalAfterTurn(toolUseContext, getAppState, querySource, terminal, createQueueDelivery) {
   try {
     if (toolUseContext.agentId || classifyQuerySource(querySource) !== "main") return;
     let { sessionScratch } = toolUseContext.session;
@@ -197,31 +197,35 @@ function* updateGoalAfterTurn(toolUseContext, getAppState, querySource, s, creat
       clearGoalRepromptState(sessionScratch);
       return;
     }
-    let M = classifyTurnEnd(s);
-    if (M.kind === "none") {
-      if (s.reason !== "completed" || s.goalPass !== undefined) clearGoalRepromptState(sessionScratch);
+    let turnEnd = classifyTurnEnd(terminal);
+    if (turnEnd.kind === "none") {
+      if (terminal.reason !== "completed" || terminal.goalPass !== undefined)
+        clearGoalRepromptState(sessionScratch);
       return;
     }
-    if (M.kind === "stop") {
+    if (turnEnd.kind === "stop") {
       clearGoalRepromptState(sessionScratch);
       if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_quartz_pipit", true)) return;
-      logGoalInterruption(s, M, "cleared", 0);
-      yield* clearGoalOnError(activeGoal, toolUseContext, M.cause);
+      logGoalInterruption(terminal, turnEnd, "cleared", 0);
+      yield* clearGoalOnError(activeGoal, toolUseContext, turnEnd.cause);
       return;
     }
     if (!isGoalCheckinOn() || toolUseContext.options.isNonInteractiveSession) {
       clearGoalRepromptState(sessionScratch);
       return;
     }
-    let R = sessionScratch.goalInterruptionStreak();
-    let T = R?.goalSetAt === activeGoal.setAt;
-    let retries = T ? R.retries : 0;
-    let announced = T ? R.announced : undefined;
-    if (M.kind === "retry") {
-      let L = createQueueDelivery(toolUseContext.messageQueue);
-      if (T && (sessionScratch.pendingGoalReprompt() !== undefined || L.hasQueued(isGoalCheckinNotification)))
+    let streak = sessionScratch.goalInterruptionStreak();
+    let sameGoal = streak?.goalSetAt === activeGoal.setAt;
+    let retries = sameGoal ? streak.retries : 0;
+    let announced = sameGoal ? streak.announced : undefined;
+    if (turnEnd.kind === "retry") {
+      let delivery = createQueueDelivery(toolUseContext.messageQueue);
+      if (
+        sameGoal &&
+        (sessionScratch.pendingGoalReprompt() !== undefined || delivery.hasQueued(isGoalCheckinNotification))
+      )
         return;
-      let z = GOAL_RETRY_REASON_TEXT[M.cause];
+      let causeText = GOAL_RETRY_REASON_TEXT[turnEnd.cause];
       if (retries >= MAX_GOAL_RETRIES) {
         if (announced === "gave_up") return;
         sessionScratch.replaceGoalInterruptionStreak({
@@ -229,10 +233,10 @@ function* updateGoalAfterTurn(toolUseContext, getAppState, querySource, s, creat
           retries,
           announced: "gave_up",
         });
-        logGoalInterruption(s, M, "gave_up", retries);
+        logGoalInterruption(terminal, turnEnd, "gave_up", retries);
         logFeatureSad("goal_interruption", "gave_up");
         yield createInformationalSystemMessage(
-          `Goal paused after ${MAX_GOAL_RETRIES} automatic retries \xB7 ${z} \xB7 send a message to continue`,
+          `Goal paused after ${MAX_GOAL_RETRIES} automatic retries \xB7 ${causeText} \xB7 send a message to continue`,
           "warning",
         );
         return;
@@ -242,36 +246,37 @@ function* updateGoalAfterTurn(toolUseContext, getAppState, querySource, s, creat
         retries: retries + 1,
         announced: undefined,
       });
-      let G = GOAL_RETRY_DELAYS_2[retries] ?? GOAL_RETRY_DELAYS_2[0];
+      let baseDelayMs = GOAL_RETRY_DELAYS_2[retries] ?? GOAL_RETRY_DELAYS_2[0];
       scheduleGoalReprompt(
         {
           goal: activeGoal,
-          cause: z,
+          cause: causeText,
           sessionScratch,
           getAppState,
-          ...L,
+          ...delivery,
         },
-        Math.round(G * (1 + Math.random() * GOAL_RETRY_DELAYS)),
+        Math.round(baseDelayMs * (1 + Math.random() * GOAL_RETRY_DELAYS)),
       );
-      logGoalInterruption(s, M, "reprompt_armed", retries + 1);
+      logGoalInterruption(terminal, turnEnd, "reprompt_armed", retries + 1);
       yield createInformationalSystemMessage(
-        `Goal still active \xB7 ${z} \xB7 retrying in ${Math.round(G / 60000)} min (${retries + 1}/${MAX_GOAL_RETRIES}) \xB7 send a message to retry now`,
+        `Goal still active \xB7 ${causeText} \xB7 retrying in ${Math.round(baseDelayMs / 60000)} min (${retries + 1}/${MAX_GOAL_RETRIES}) \xB7 send a message to retry now`,
         "notice",
       );
       return;
     }
     clearPendingGoalReprompt(sessionScratch);
-    let Q = M.cause === "usage_limit" && intentProviderSlot.of(toolUseContext.session.host).hasIntent();
-    let cause = Q ? "usage_limit_waiting" : M.cause;
+    let waitingOnUsage =
+      turnEnd.cause === "usage_limit" && intentProviderSlot.of(toolUseContext.session.host).hasIntent();
+    let cause = waitingOnUsage ? "usage_limit_waiting" : turnEnd.cause;
     if (announced === cause) return;
     sessionScratch.replaceGoalInterruptionStreak({
       goalSetAt: activeGoal.setAt,
       retries,
       announced: cause,
     });
-    if (Q) logGoalInterruption(s, M, "usage_limit_wait_owns", retries);
+    if (waitingOnUsage) logGoalInterruption(terminal, turnEnd, "usage_limit_wait_owns", retries);
     else {
-      logGoalInterruption(s, M, "paused", retries);
+      logGoalInterruption(terminal, turnEnd, "paused", retries);
       logFeatureSad("goal_interruption", "paused");
     }
     yield createInformationalSystemMessage(GOAL_ERROR_TEXT[cause], "notice");
@@ -283,10 +288,10 @@ function* updateGoalAfterTurn(toolUseContext, getAppState, querySource, s, creat
 /**
  * 按终止原因分类回合结束（完成、中止、错误等）。
  */
-function classifyTurnEnd(e) {
-  switch (e.reason) {
+function classifyTurnEnd(terminal) {
+  switch (terminal.reason) {
     case "completed":
-      return goalCheckInterruption(e.goalPass);
+      return goalCheckInterruption(terminal.goalPass);
     case "aborted_streaming":
     case "aborted_tools":
     case "max_turns":
@@ -324,8 +329,8 @@ function classifyTurnEnd(e) {
         cause: "unreadable_tool_call",
       };
     case "api_error":
-      if (e.errorKind === "rate_limit")
-        return e.quotaLimits !== undefined && isAutoResumableLimit(e.quotaLimits)
+      if (terminal.errorKind === "rate_limit")
+        return terminal.quotaLimits !== undefined && isAutoResumableLimit(terminal.quotaLimits)
           ? {
               kind: "pause",
               cause: "usage_limit",
@@ -334,22 +339,22 @@ function classifyTurnEnd(e) {
               kind: "pause",
               cause: "rate_limited",
             };
-      if (e.errorKind === "max_output_tokens")
+      if (terminal.errorKind === "max_output_tokens")
         return {
           kind: "retry",
           cause: "output_limit",
         };
-      if (e.errorKind === "cloud_credential_error")
+      if (terminal.errorKind === "cloud_credential_error")
         return {
           kind: "retry",
           cause: "cloud_credentials",
         };
-      if (e.isTransient)
+      if (terminal.isTransient)
         return {
           kind: "retry",
           cause: "api_unavailable",
         };
-      switch (e.oauthRefreshDiskFull ? "authentication_failed" : e.errorKind) {
+      switch (terminal.oauthRefreshDiskFull ? "authentication_failed" : terminal.errorKind) {
         case "overloaded":
         case "server_error":
           return {
@@ -379,7 +384,7 @@ function classifyTurnEnd(e) {
               }
             : {
                 kind: "stop",
-                cause: e.oauthRefreshDiskFull ? "disk_full" : "auth",
+                cause: terminal.oauthRefreshDiskFull ? "disk_full" : "auth",
               };
         case "account_on_hold":
           return {
@@ -432,14 +437,14 @@ function goalCheckInterruption(goalPass) {
   }
 }
 //@ chunk-ha3km179.js:105402-105656 placement
-function logGoalInterruption(e, n, r, retries) {
+function logGoalInterruption(terminal, turnEnd, action, retries) {
   logEvent("tengu_goal_interruption", {
-    interruption: fromEnum(n.kind),
-    action: fromEnum(r),
-    cause: fromEnum(n.cause),
-    terminal_reason: fromEnum(e.reason),
-    error_kind: fromEnumOpt(e.reason === "api_error" ? e.errorKind : undefined),
-    goal_pass: fromEnumOpt(e.reason === "completed" ? e.goalPass : undefined),
+    interruption: fromEnum(turnEnd.kind),
+    action: fromEnum(action),
+    cause: fromEnum(turnEnd.cause),
+    terminal_reason: fromEnum(terminal.reason),
+    error_kind: fromEnumOpt(terminal.reason === "api_error" ? terminal.errorKind : undefined),
+    goal_pass: fromEnumOpt(terminal.reason === "completed" ? terminal.goalPass : undefined),
     retries,
   });
 }
@@ -447,7 +452,7 @@ function logGoalInterruption(e, n, r, retries) {
 /**
  * 中止回合的终止信息与提示行。
  */
-function abortedTurnRows(inPlaceOfFirstRequest, n) {
+function abortedTurnRows(inPlaceOfFirstRequest, options) {
   if (inPlaceOfFirstRequest !== "aborted")
     return {
       rows: [inPlaceOfFirstRequest],
@@ -462,15 +467,15 @@ function abortedTurnRows(inPlaceOfFirstRequest, n) {
   try {
     return {
       terminal,
-      rows: isSilentAbortReason(n.signal.reason)
+      rows: isSilentAbortReason(options.signal.reason)
         ? []
         : [
             createUserInterruptionMessage({
               toolUse: false,
-              interruptedMessageId: n.interruptedMessageId(),
-              interruptedByShutdown: shutdownInterruptStamp(n.signal),
-              now: n.now,
-              uuidFn: n.uuid,
+              interruptedMessageId: options.interruptedMessageId(),
+              interruptedByShutdown: shutdownInterruptStamp(options.signal),
+              now: options.now,
+              uuidFn: options.uuid,
             }),
           ],
     };
@@ -528,8 +533,11 @@ var COMPACT_HINT = "try /compact";
 /**
  * 压缩失败的系统提示
  */
-function notifyCompactFailure(e) {
-  return createSystemMessage(e ? `${COULD_NOT_COMPACT} \xB7 ${e}` : COULD_NOT_COMPACT, "warning");
+function notifyCompactFailure(compactFailure) {
+  return createSystemMessage(
+    compactFailure ? `${COULD_NOT_COMPACT} \xB7 ${compactFailure}` : COULD_NOT_COMPACT,
+    "warning",
+  );
 }
 //@ chunk-ha3km179.js:106490-106876 placement
 /**
@@ -573,10 +581,12 @@ function nudgeAfterToolEndTurn({
   }
 }
 //@ chunk-ha3km179.js:106876-107170 placement
-function applyDisallowedTools(e, joinedDisallowedTools, options) {
+function applyDisallowedTools(commands, joinedDisallowedTools, options) {
   try {
-    let flattened = e.flatMap((h) =>
-      h.replacesDisallowedTools === true && h.disallowedTools !== undefined ? [h.disallowedTools] : [],
+    let flattened = commands.flatMap((command) =>
+      command.replacesDisallowedTools === true && command.disallowedTools !== undefined
+        ? [command.disallowedTools]
+        : [],
     );
     if (flattened.length === 0 || joinedDisallowedTools === undefined) return options.tools;
     joinedDisallowedTools(uniq(flattened.flat()));

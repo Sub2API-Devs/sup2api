@@ -17,24 +17,24 @@ import { bunStringWidth } from "../ink/stringWidth.js";
 /**
  * 是否为可直接放进命令的参数。
  */
-function isSafeCliArg(e) {
-  return /^\w[\w.@-]*$/.test(e);
+function isSafeCliArg(arg) {
+  return /^\w[\w.@-]*$/.test(arg);
 }
 //@ chunk-dcmhvw5a.js:14893-14974 placement
 /**
  * 生成 claude 子命令文本。
  */
-function claudeCommand(e, n, r) {
-  if (!isSafeCliArg(n)) return null;
-  return `claude ${e} ${n}${r ? ` ${r}` : ""}`;
+function claudeCommand(flag, sessionId, extra) {
+  if (!isSafeCliArg(sessionId)) return null;
+  return `claude ${flag} ${sessionId}${extra ? ` ${extra}` : ""}`;
 }
 //@ chunk-dcmhvw5a.js:14974-15086 placement
 /**
  * "运行某命令"提示文本。
  */
-function runCommandHint(e, n, { extra, tail = "", fallback }) {
-  let c = claudeCommand(e, n, extra);
-  return c === null ? fallback : `run \`${c}\`${tail ? ` ${tail}` : ""}`;
+function runCommandHint(flag, sessionId, { extra, tail = "", fallback }) {
+  let command = claudeCommand(flag, sessionId, extra);
+  return command === null ? fallback : `run \`${command}\`${tail ? ` ${tail}` : ""}`;
 }
 //@ chunk-dcmhvw5a.js:15086-15228 placement
 var WORKTREE_RESUME_LINES = [
@@ -47,33 +47,35 @@ var WORKTREE_RESUME_LINES = [
  * 会话在 worktree 中运行时的恢复提示。
  */
 function worktreeResumeHint({ sessionId, worktree, columns, envAssignment }) {
-  let a = envAssignment === undefined ? "claude" : `${envAssignment} claude`;
-  let c = normalizeUuidOrNull(sessionId);
-  let arg = c === null ? "none" : "id";
-  let m = c === null ? "" : ` ${c}`;
+  let launcher = envAssignment === undefined ? "claude" : `${envAssignment} claude`;
+  let uuid = normalizeUuidOrNull(sessionId);
+  let arg = uuid === null ? "none" : "id";
+  let idSuffix = uuid === null ? "" : ` ${uuid}`;
   if (worktree === undefined)
     return {
       advice: [],
-      command: `${a} --resume${m}`,
+      command: `${launcher} --resume${idSuffix}`,
       arg,
       worktree: "absent",
     };
   let { name: slug, recordCleared } = worktree;
   let skillLimit = parseSkillLimit(columns);
-  let b =
+  let candidates =
     typeof slug === "string" && !slug.startsWith("-") && validateWorktreeSlug_2(slug) === undefined
       ? [
           {
-            command: `${a} --worktree "${slug}" --resume${m}`,
+            command: `${launcher} --worktree "${slug}" --resume${idSuffix}`,
             worktree: "printed",
           },
           {
-            command: `${a} -w "${slug}" -r${m}`,
+            command: `${launcher} -w "${slug}" -r${idSuffix}`,
             worktree: "printed_short_flags",
           },
         ]
       : [];
-  let found = b.find(({ command }) => skillLimit !== undefined && bunStringWidth(command) <= skillLimit);
+  let found = candidates.find(
+    ({ command }) => skillLimit !== undefined && bunStringWidth(command) <= skillLimit,
+  );
   if (found !== undefined)
     return {
       advice: [],
@@ -82,9 +84,9 @@ function worktreeResumeHint({ sessionId, worktree, columns, envAssignment }) {
     };
   return {
     advice: recordCleared ? WORKTREE_RESUME_LINES : [],
-    command: `${a} --resume${m}`,
+    command: `${launcher} --resume${idSuffix}`,
     arg,
-    worktree: b.length === 0 ? "refused" : skillLimit !== undefined ? "too_wide" : "width_unknown",
+    worktree: candidates.length === 0 ? "refused" : skillLimit !== undefined ? "too_wide" : "width_unknown",
   };
 }
 export { runCommandHint, claudeCommand, isSafeCliArg, worktreeResumeHint };

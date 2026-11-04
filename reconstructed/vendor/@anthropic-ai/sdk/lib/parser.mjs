@@ -8,12 +8,12 @@
 import { AnthropicError } from "../core/error.mjs";
 
 //@ chunk-hwmsct5x.js:146814-146861 esm-fingerprint
-function getOutputFormat_2(params) {
+function getOutputFormat_3(params) {
   return params?.output_config?.format;
 }
 //@ chunk-hwmsct5x.js:146861-147106 esm-fingerprint
 function maybeParseMessage(message, params, opts) {
-  let outputFormat = getOutputFormat_2(params);
+  let outputFormat = getOutputFormat_3(params);
   if (!params || !("parse" in (outputFormat ?? {})))
     return {
       ...message,
@@ -63,7 +63,7 @@ function parseMessage(message, params, opts) {
 }
 //@ chunk-hwmsct5x.js:147340-147532 esm-fingerprint
 function parseOutputFormat(params, content) {
-  let outputFormat = getOutputFormat_2(params);
+  let outputFormat = getOutputFormat_3(params);
   if (outputFormat?.type !== "json_schema") return null;
   try {
     if ("parse" in outputFormat) return outputFormat.parse(content);

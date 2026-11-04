@@ -15,9 +15,9 @@ import { ANSI_OR_C1_RE, WORD_JOINER } from "../utils/textWrap.js";
 /**
  * 把文本里的制表符展开成空格（逐行、逐 \r 段，用分词器保留转义序列不展开）。
  */
-function expandTabs(e) {
+function expandTabs(text) {
   let tokenizer = createTokenizer();
-  return e
+  return text
     .split(
       `
 `,
@@ -27,14 +27,14 @@ function expandTabs(e) {
         ? line
         : line
             .split("\r")
-            .map((s) =>
-              s.search(ANSI_OR_C1_RE) === -1
-                ? s
-                : [...tokenizer.feed(s), ...tokenizer.flush()]
-                    .map((o) =>
-                      o.type === "sequence"
-                        ? WORD_JOINER.repeat(o.value.length)
-                        : o.value.replace(ANSI_OR_C1_RE, WORD_JOINER),
+            .map((line) =>
+              line.search(ANSI_OR_C1_RE) === -1
+                ? line
+                : [...tokenizer.feed(line), ...tokenizer.flush()]
+                    .map((token) =>
+                      token.type === "sequence"
+                        ? WORD_JOINER.repeat(token.value.length)
+                        : token.value.replace(ANSI_OR_C1_RE, WORD_JOINER),
                     )
                     .join(""),
             )

@@ -41,26 +41,27 @@ async function checkCrossProjectResume(log, showAllProjects, worktreePaths) {
   )
     return null;
   let sessionId = getSessionIdFromLog(log);
-  let b = isSafeIdSegment_2(sessionId) ? ` ${sessionId}` : "";
-  return `cd ${shellQuoteArgs([log.projectPath])} ${getShellChainOperator()} claude --resume${b}`;
+  let resumeArg = isSafeIdSegment_2(sessionId) ? ` ${sessionId}` : "";
+  return `cd ${shellQuoteArgs([log.projectPath])} ${getShellChainOperator()} claude --resume${resumeArg}`;
 }
 //@ chunk-b79vwm1h.js:20477-20816 sole-consumer
 /**
  * 检查路径上是否有符号链接或无法读取的部分（兼容 Windows 路径）。
  */
 async function pathHasSymlinkOrUnreadable(projectPath) {
-  let d = getPlatform() === "windows";
-  let { parse, sep } = d ? win32 : posix;
-  let u = d ? parse(projectPath).root.replaceAll("/", sep) : parse(projectPath).root;
+  let isWindows = getPlatform() === "windows";
+  let { parse, sep } = isWindows ? win32 : posix;
+  let rootPath = isWindows ? parse(projectPath).root.replaceAll("/", sep) : parse(projectPath).root;
   let filtered = projectPath
     .slice(parse(projectPath).root.length)
-    .split(d ? /[\\/]+/ : sep)
+    .split(isWindows ? /[\\/]+/ : sep)
     .filter(Boolean);
-  let b = u;
-  for (let p of filtered) {
-    b = b === "" || b.endsWith(sep) ? b + p : b + sep + p;
+  let currentPath = rootPath;
+  for (let segment of filtered) {
+    currentPath =
+      currentPath === "" || currentPath.endsWith(sep) ? currentPath + segment : currentPath + sep + segment;
     try {
-      if ((await lstat(b)).isSymbolicLink()) return true;
+      if ((await lstat(currentPath)).isSymbolicLink()) return true;
     } catch (error) {
       let errnoCode = getErrnoCode(error);
       return errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR";

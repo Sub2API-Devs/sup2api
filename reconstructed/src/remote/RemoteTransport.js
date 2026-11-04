@@ -9,7 +9,7 @@
  * attribution: placement 8
  */
 import { randomUUID } from "crypto";
-import { BOXED_DIAMOND_GLYPH } from "../utils/permissions/autoModeRulesPrompt.js";
+import { BOXED_DIAMOND_GLYPH } from "../constants/figures.js";
 import {
   createRemoteModeHandle,
   LOCAL_MODE_HANDLE,
@@ -21,7 +21,7 @@ import {
   jsxProd_default_2,
 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logForDebugging } from "../utils/debug.js";
-import { string } from "../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../ink/components/Text.js";
 import { createSignal } from "../utils/signal.js";
 import { createRetractionState, mergeSessionCapabilities } from "./remoteSessionEvents.js";
@@ -87,39 +87,44 @@ import { runLocalCommand } from "../screens/repl/runLocalCommand.js";
 import { resolvePromptOrigin } from "../utils/messageOrigin.js";
 import { viewportInfo } from "../plugins/functionHooks/surfaceBinding.js";
 import { useAppStoreDirect, useSetAppState, useAppState } from "../state/AppState.js";
-import { y, Q, zt } from "../../vendor/react/cjs/react.production.js";
+import { useState, useMemo, useLayoutEffect } from "../../vendor/react/cjs/react.production.js";
 import { useStoreSelector } from "../hooks/useStoreSelector.js";
 import { useRemoteSession } from "../hooks/useRemoteSession.js";
 import { useDirectConnect } from "../hooks/useDirectConnect.js";
 import { useSSHSession } from "../hooks/useSSHSession.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:312946-313440 placement
 /**
  * 远程会话里不支持的命令说明表（ide/resume/continue/statusline/workflows/artifacts）及统一提示。
  */
-var REMOTE_UNSUPPORTED_COMMANDS =
-  "run /exit, then `claude --cloud <session-id>` to open another one (ids are listed at claude.ai/code)";
-var REMOTE_UNSUPPORTED_COMMAND_NOTICES = new Map([
-  ["ide", "the session runs in a cloud container that can't reach your IDE"],
-  ["resume", REMOTE_UNSUPPORTED_COMMANDS],
-  ["continue", REMOTE_UNSUPPORTED_COMMANDS],
-  [
-    "statusline",
-    "run it in a local `claude` session; the status line it sets up shows in cloud terminals too",
-  ],
-  ["workflows", "/tasks lists running workflows"],
-  [
-    "artifacts",
-    `once this session has an artifact, choose ${BOXED_DIAMOND_GLYPH} under the prompt (arrow keys, then Enter)`,
-  ],
-]);
+var REMOTE_UNSUPPORTED_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var REMOTE_UNSUPPORTED_COMMAND_NOTICES;
+deferInit("chunk-18hwfzwa.js:312946", () => {
+  REMOTE_UNSUPPORTED_COMMANDS =
+    "run /exit, then `claude --cloud <session-id>` to open another one (ids are listed at claude.ai/code)";
+  REMOTE_UNSUPPORTED_COMMAND_NOTICES = new Map([
+    ["ide", "the session runs in a cloud container that can't reach your IDE"],
+    ["resume", REMOTE_UNSUPPORTED_COMMANDS],
+    ["continue", REMOTE_UNSUPPORTED_COMMANDS],
+    [
+      "statusline",
+      "run it in a local `claude` session; the status line it sets up shows in cloud terminals too",
+    ],
+    ["workflows", "/tasks lists running workflows"],
+    [
+      "artifacts",
+      `once this session has an artifact, choose ${BOXED_DIAMOND_GLYPH} under the prompt (arrow keys, then Enter)`,
+    ],
+  ]);
+});
 //@ chunk-18hwfzwa.js:313440-313463 placement
-function remoteCommandNoticeStub(h) {
+function remoteCommandNoticeStub(args) {
   return;
 }
 //@ chunk-18hwfzwa.js:313463-313533 placement
-function isSameStringArray(h, x) {
-  return h.length === x.length && h.every((D, L) => D === x[L]);
+function isSameStringArray(left, right) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 //@ chunk-18hwfzwa.js:313533-313741 placement
 function remoteTransportKind({ ssh, direct, ccr, ccrViewerOnly, ccrSessionId, ccrConsoleProfileBearer }) {
@@ -149,8 +154,8 @@ class RemoteTransport {
   #c = createStore([]);
   waitingLines = this.#c;
   #i = new Set();
-  constructor(h) {
-    this.#e = h;
+  constructor(services) {
+    this.#e = services;
   }
   subscribe = this.#s.subscribe;
   getSnapshot = () => this.#n;
@@ -161,134 +166,141 @@ class RemoteTransport {
     let activeRemote = this.#n.activeRemote;
     return isDeviceIdentityEnabledCached() && activeRemote.isRemoteMode && activeRemote.caps.sessionRecord;
   }
-  bindHost(h) {
-    this.#t = h;
+  bindHost(host) {
+    this.#t = host;
   }
   #l() {
     if (this.#t === null) throw Error("RemoteTransport: used before its screen bound a host");
     return this.#t;
   }
-  setActiveRemote(h) {
-    let x = h.isRemoteMode ? h : null;
-    let D = h.isRemoteMode && h.caps.catchupReplay ? "ccr-api" : "local-jsonl";
+  setActiveRemote(activeRemote) {
+    let remoteCaps = activeRemote.isRemoteMode ? activeRemote : null;
+    let transcriptSource =
+      activeRemote.isRemoteMode && activeRemote.caps.catchupReplay ? "ccr-api" : "local-jsonl";
     let caps = getCaps();
-    if (caps.remote !== x || caps.transcriptSource !== D)
+    if (caps.remote !== remoteCaps || caps.transcriptSource !== transcriptSource)
       setCaps({
         ...caps,
-        remote: x,
-        transcriptSource: D,
+        remote: remoteCaps,
+        transcriptSource,
       });
-    if (h === this.#n.activeRemote) return;
+    if (activeRemote === this.#n.activeRemote) return;
     this.#n = {
-      activeRemote: h,
+      activeRemote,
     };
-    if (!h.isRemoteMode) this.#e.workerCommands.setState(() => null);
+    if (!activeRemote.isRemoteMode) this.#e.workerCommands.setState(() => null);
     this.#s.emit();
   }
-  setMessages = (h) => {
-    this.#e.transcript.replace(h);
+  setMessages = (updater) => {
+    this.#e.transcript.replace(updater);
   };
-  setIsLoading = (h) => {
-    if (!h) this.landWaitingLines();
-    this.#e.turn.setExternalLoading(h);
+  setIsLoading = (loading) => {
+    if (!loading) this.landWaitingLines();
+    this.#e.turn.setExternalLoading(loading);
   };
-  holdLine = (h) => {
-    this.#c.setState((x) => (x.some((D) => D.uuid === h.uuid) ? x : [...x, h]));
+  holdLine = (line) => {
+    this.#c.setState((waitingLines) =>
+      waitingLines.some((waiting) => waiting.uuid === line.uuid) ? waitingLines : [...waitingLines, line],
+    );
   };
-  lineTaken = (h) => {
-    let lower = h.toLowerCase();
-    let D = this.#d((L) => L.uuid.toLowerCase() === lower);
-    for (let idx = 0; idx < D; idx++) logFeatureOk("cloud_waiting_line");
+  lineTaken = (uuid) => {
+    let lower = uuid.toLowerCase();
+    let takenCount = this.#d((waiting) => waiting.uuid.toLowerCase() === lower);
+    for (let idx = 0; idx < takenCount; idx++) logFeatureOk("cloud_waiting_line");
   };
   landWaitingLines = () => {
-    let h = this.#d(() => true);
-    for (let idx = 0; idx < h; idx++) logFeatureSad("cloud_waiting_line", "landed_without_report");
+    let landedCount = this.#d(() => true);
+    for (let idx = 0; idx < landedCount; idx++) logFeatureSad("cloud_waiting_line", "landed_without_report");
   };
-  rowsDrawn = (h) => {
+  rowsDrawn = (drawnRows) => {
     if (this.#i.size === 0) return;
-    let x = new Set(h.map((ee) => ee.uuid));
-    let D = new Set(this.#e.transcript.getSnapshot().map((ee) => ee.uuid));
-    let filtered = [...this.#i].filter((ee) => x.has(ee) || !D.has(ee));
-    for (let ee of filtered) this.#i.delete(ee);
-    if (filtered.length > 0) this.#c.setState((ee) => ee.filter((ke) => !filtered.includes(ke.uuid)));
+    let drawnUuids = new Set(drawnRows.map((row) => row.uuid));
+    let transcriptUuids = new Set(this.#e.transcript.getSnapshot().map((row) => row.uuid));
+    let filtered = [...this.#i].filter((uuid) => drawnUuids.has(uuid) || !transcriptUuids.has(uuid));
+    for (let uuid of filtered) this.#i.delete(uuid);
+    if (filtered.length > 0)
+      this.#c.setState((waitingLines) => waitingLines.filter((line) => !filtered.includes(line.uuid)));
   };
-  #d(h) {
-    let filtered = this.#c.getState().filter((D) => h(D) && !this.#i.has(D.uuid));
+  #d(predicate) {
+    let filtered = this.#c.getState().filter((line) => predicate(line) && !this.#i.has(line.uuid));
     if (filtered.length === 0) return 0;
-    for (let D of filtered) this.#i.add(D.uuid);
-    this.#e.transcript.replace((D) => [...D, ...filtered.filter((L) => !D.some((ee) => ee.uuid === L.uuid))]);
+    for (let line of filtered) this.#i.add(line.uuid);
+    this.#e.transcript.replace((rows) => [
+      ...rows,
+      ...filtered.filter((line) => !rows.some((row) => row.uuid === line.uuid)),
+    ]);
     return filtered.length;
   }
   getIsLoading = () => this.#e.turn.isExternalLoading;
   get streaming() {
     return this.#e.turn.stream;
   }
-  setStreamMode = (h) => {
-    this.#e.spinner.setMode(h);
+  setStreamMode = (mode) => {
+    this.#e.spinner.setMode(mode);
   };
-  setInProgressToolUseIDs = (h) => {
-    this.#e.store.setState((x) => {
-      let D = applyInProgressToolUses(x.transcripts, this.#r, h);
-      return D === x.transcripts
-        ? x
+  setInProgressToolUseIDs = (toolUseIds) => {
+    this.#e.store.setState((appState) => {
+      let nextTranscripts = applyInProgressToolUses(appState.transcripts, this.#r, toolUseIds);
+      return nextTranscripts === appState.transcripts
+        ? appState
         : {
-            ...x,
-            transcripts: D,
+            ...appState,
+            transcripts: nextTranscripts,
           };
     });
   };
-  onTurnComplete = (h) => {
-    this.#e.turn.markRemoteTurnComplete(h);
+  onTurnComplete = (completion) => {
+    this.#e.turn.markRemoteTurnComplete(completion);
   };
   onTurnStopped = () => {
     this.#e.turn.markRemoteTurnStopped();
   };
-  onOtherTurnComplete = (h) => {
-    this.#e.idleNudge.onOtherTurnComplete(h);
+  onOtherTurnComplete = (otherCompletion) => {
+    this.#e.idleNudge.onOtherTurnComplete(otherCompletion);
   };
-  onConversationReset = (h) => {
-    this.#e.applyConversationReset(h);
+  onConversationReset = (reset) => {
+    this.#e.applyConversationReset(reset);
   };
-  onInit = (h) => {
+  onInit = (initFrame) => {
     this.#s.emit();
     let { workerCommands, setAppState } = this.#e;
-    if (h.slash_commands !== undefined) {
-      let ee = new Set(h.slash_commands);
-      workerCommands.setState(() => ee);
+    if (initFrame.slash_commands !== undefined) {
+      let commandNames = new Set(initFrame.slash_commands);
+      workerCommands.setState(() => commandNames);
     }
-    setAppState((ee) => {
-      let workerInventory = ee.workerInventory ?? undefined;
-      let Re = mergeSessionCapabilities(workerInventory, {
-        ...h,
-        slashCommands: h.slash_commands,
+    setAppState((prevState) => {
+      let workerInventory = prevState.workerInventory ?? undefined;
+      let inventory = mergeSessionCapabilities(workerInventory, {
+        ...initFrame,
+        slashCommands: initFrame.slash_commands,
       });
-      if (Re === undefined || Re === workerInventory) return ee;
+      if (inventory === undefined || inventory === workerInventory) return prevState;
       return workerInventory !== undefined &&
-        isSameStringArray(workerInventory.skills, Re.skills) &&
-        isSameStringArray(workerInventory.plugins, Re.plugins) &&
-        isSameStringArray(workerInventory.tools ?? [], Re.tools ?? []) &&
-        isSameStringArray(workerInventory.commands ?? [], Re.commands ?? [])
-        ? ee
+        isSameStringArray(workerInventory.skills, inventory.skills) &&
+        isSameStringArray(workerInventory.plugins, inventory.plugins) &&
+        isSameStringArray(workerInventory.tools ?? [], inventory.tools ?? []) &&
+        isSameStringArray(workerInventory.commands ?? [], inventory.commands ?? [])
+        ? prevState
         : {
-            ...ee,
-            workerInventory: Re,
+            ...prevState,
+            workerInventory: inventory,
           };
     });
-    let model = h.model;
+    let model = initFrame.model;
     if (model !== undefined)
-      setAppState((ee) =>
-        ee.mainLoopModel === model
-          ? ee
+      setAppState((prevState) =>
+        prevState.mainLoopModel === model
+          ? prevState
           : {
-              ...ee,
+              ...prevState,
               mainLoopModel: model,
             },
       );
   };
   noteOwnPermissionModePush = (mode) => {
-    let x = this.#a();
-    let sent = recordOwnSend(this.modeWire, mode, x ? "person" : "wire");
-    return x
+    let personOriginated = this.#a();
+    let sent = recordOwnSend(this.modeWire, mode, personOriginated ? "person" : "wire");
+    return personOriginated
       ? () => {
           recordOwnAck(this.modeWire, {
             mode,
@@ -298,13 +310,13 @@ class RemoteTransport {
         }
       : () => {};
   };
-  noteOwnPermissionModeAnswer = (h) => {
+  noteOwnPermissionModeAnswer = (answer) => {
     if (!this.#a()) return;
-    noteOwnModeAnswerPending(this.modeWire, h);
+    noteOwnModeAnswerPending(this.modeWire, answer);
     let activeRemote = this.#n.activeRemote;
     if (activeRemote.isRemoteMode && activeRemote.sessionId !== undefined) {
       let { setAppState } = this.#e;
-      landOutstandingMode(setAppState, activeRemote.sessionId, h);
+      landOutstandingMode(setAppState, activeRemote.sessionId, answer);
     }
   };
   noteOwnUnrecordedModeAnswer = () => {
@@ -317,65 +329,72 @@ class RemoteTransport {
       }
     }
   };
-  onPermissionModeChange = (h, x = "worker") => {
-    if (!EXTERNAL_PERMISSION_MODES.includes(h)) {
+  onPermissionModeChange = (mode, origin = "worker") => {
+    if (!EXTERNAL_PERMISSION_MODES.includes(mode)) {
       if (this.#a()) recordModeBroadcast(this.modeWire, null);
       return;
     }
-    recordModeBroadcast(this.modeWire, h);
-    let D = x === "worker" && consumeOwnAnswer(this.modeWire, h);
+    recordModeBroadcast(this.modeWire, mode);
+    let personAnswer = origin === "worker" && consumeOwnAnswer(this.modeWire, mode);
     let { store, setAppState } = this.#e;
-    if (store.getState().toolPermissionContext.mode === h) return;
-    let ke = setPermissionModeWithGuards(h, store.getState().toolPermissionContext, (Re) => {
-      recordAppliedMode(this.modeWire, h, D);
+    if (store.getState().toolPermissionContext.mode === mode) return;
+    let applyResult = setPermissionModeWithGuards(mode, store.getState().toolPermissionContext, (guard) => {
+      recordAppliedMode(this.modeWire, mode, personAnswer);
       let activeRemote = this.#n.activeRemote;
       if (this.#a() && activeRemote.isRemoteMode && activeRemote.sessionId !== undefined)
-        applyRemoteMode(setAppState, activeRemote.sessionId, h, D ? "person" : "wire");
-      setAppState((He) => ({
-        ...He,
-        toolPermissionContext: Re(He.toolPermissionContext),
+        applyRemoteMode(setAppState, activeRemote.sessionId, mode, personAnswer ? "person" : "wire");
+      setAppState((prevState) => ({
+        ...prevState,
+        toolPermissionContext: guard(prevState.toolPermissionContext),
       }));
     });
-    if (!ke.ok) {
-      logForDebugging(`[remote] Permission-mode broadcast '${h}' rejected locally: ${ke.error}`, {
+    if (!applyResult.ok) {
+      logForDebugging(`[remote] Permission-mode broadcast '${mode}' rejected locally: ${applyResult.error}`, {
         level: "warn",
       });
       return;
     }
-    logForDebugging(`[remote] Applied permission-mode broadcast: ${h}`);
+    logForDebugging(`[remote] Applied permission-mode broadcast: ${mode}`);
   };
-  refuseSubmit(h, x, D) {
+  refuseSubmit(text, inputMode, submission) {
     let activeRemote = this.activeRemote;
     if (!activeRemote.isRemoteMode) return false;
-    if (!h.trim()) return true;
-    if (x === "bash")
-      return this.#m(activeRemote, h, D?.sentByPerson ?? false, D?.pastedContents ?? {}) === undefined;
+    if (!text.trim()) return true;
+    if (inputMode === "bash")
+      return (
+        this.#m(activeRemote, text, submission?.sentByPerson ?? false, submission?.pastedContents ?? {}) ===
+        undefined
+      );
     return false;
   }
-  #m(h, x, D, L) {
+  #m(activeRemote, text, sentByPerson, pastedContents) {
     this.#o = undefined;
-    let ee;
+    let noticeText;
     let { addNotification } = this.#l();
     addNotification({
       key: "remote-bash-mode-unavailable",
       kind: "feedback",
       text:
-        ee ??
-        (h.caps.bashExec
+        noticeText ??
+        (activeRemote.caps.bashExec
           ? "'!' commands aren't available in cloud sessions yet"
           : "'!' commands aren't available in a session on another machine"),
-      ...(ee === undefined &&
-        h.caps.bashExec && {
+      ...(noticeText === undefined &&
+        activeRemote.caps.bashExec && {
           row1Hint: NOT_IN_CLOUD_SESSIONS,
         }),
-      priority: ee === undefined ? "medium" : "immediate",
+      priority: noticeText === undefined ? "medium" : "immediate",
     });
-    if (ee !== undefined) this.#e.transcript.replace((Re) => [...Re, createSystemMessage(ee, "warning")]);
+    if (noticeText !== undefined)
+      this.#e.transcript.replace((rows) => [...rows, createSystemMessage(noticeText, "warning")]);
     return;
   }
   submit(text, { inputMode, pastedContents, fromKeybinding, sentByPerson, recordHistory }) {
     if (remoteSessionAwaits() && !prependModeCharacterToInput_2_2(text, inputMode, this.#e.scope.commands)) {
-      this.#e.transcript.replace((Et) => [...Et, createSystemMessage(NO_CLOUD_SESSION_MESSAGE, "notice")]);
+      this.#e.transcript.replace((rows) => [
+        ...rows,
+        createSystemMessage(NO_CLOUD_SESSION_MESSAGE, "notice"),
+      ]);
       recordHistory({
         startsTurn: false,
       });
@@ -385,66 +404,71 @@ class RemoteTransport {
     if (!activeRemote.isRemoteMode) return null;
     let { addNotification } = this.#l();
     if (inputMode === "bash") {
-      let Et = this.#o;
+      let heldBash = this.#o;
       this.#o = undefined;
-      let Dt =
-        Et !== undefined &&
-        Et.input === text &&
-        Et.sessionId === activeRemote.sessionId &&
+      let submission =
+        heldBash !== undefined &&
+        heldBash.input === text &&
+        heldBash.sessionId === activeRemote.sessionId &&
         sentByPerson === true
-          ? Et
+          ? heldBash
           : this.#m(activeRemote, text, sentByPerson ?? false, pastedContents);
       return Promise.resolve(undefined);
     }
     let { commands } = this.#e.scope;
-    let ze = text.trim().startsWith("/") ? text.trim().slice(1).split(/\s/)[0] : undefined;
-    let cmd = ze
+    let commandName = text.trim().startsWith("/") ? text.trim().slice(1).split(/\s/)[0] : undefined;
+    let cmd = commandName
       ? commands.find(
           (command) =>
             isCommandEnabled(command) &&
-            (command.name === ze || command.aliases?.includes(ze) || getCommandName(command) === ze),
+            (command.name === commandName ||
+              command.aliases?.includes(commandName) ||
+              getCommandName(command) === commandName),
         )
       : undefined;
-    let rt = cmd ? getThinClientDispatchMode(cmd, isRemoteControlChannelAvailable()) : "post-text";
-    let kt = cmd?.name === "login" ? getLoginAvailability(activeRemote) : undefined;
-    let At = kt?.kind === "refused" ? kt : undefined;
-    let It =
-      (rt === "unavailable" || At !== undefined) && cmd
+    let dispatchMode = cmd ? getThinClientDispatchMode(cmd, isRemoteControlChannelAvailable()) : "post-text";
+    let loginAvailability = cmd?.name === "login" ? getLoginAvailability(activeRemote) : undefined;
+    let loginRefusal = loginAvailability?.kind === "refused" ? loginAvailability : undefined;
+    let blockedCommand =
+      (dispatchMode === "unavailable" || loginRefusal !== undefined) && cmd
         ? cmd.name
-        : ze && !cmd && shippedCommandNames().has(ze)
-          ? ze
+        : commandName && !cmd && shippedCommandNames().has(commandName)
+          ? commandName
           : undefined;
-    if (It) {
+    if (blockedCommand) {
       logFeatureBad(
-        cmdFeature(shippedCommandNames().has(It) ? It : "custom"),
-        At?.cause ?? "remote_unavailable",
+        cmdFeature(shippedCommandNames().has(blockedCommand) ? blockedCommand : "custom"),
+        loginRefusal?.cause ?? "remote_unavailable",
       );
-      let Et =
-        (It === "teleport" || It === "tp") &&
+      let teleportHint =
+        (blockedCommand === "teleport" || blockedCommand === "tp") &&
         activeRemote.sessionId !== undefined &&
         isSelfAddressableSessionId(activeRemote.sessionId)
-          ? `/${It} isn't available in cloud sessions. To continue this session locally, run this in a shell on your machine:
+          ? `/${blockedCommand} isn't available in cloud sessions. To continue this session locally, run this in a shell on your machine:
 claude --teleport ${toCompatSessionId(activeRemote.sessionId)}`
           : undefined;
-      let Dt =
-        At?.notice ??
+      let noticeText =
+        loginRefusal?.notice ??
         (activeRemote.sessionId !== undefined && !activeRemote.viewerOnly
-          ? (remoteCommandNoticeStub(It) ?? Et)
-          : Et);
-      if (Dt !== undefined) this.#e.transcript.replace((Lt) => [...Lt, createSystemMessage(Dt, "notice")]);
+          ? (remoteCommandNoticeStub(blockedCommand) ?? teleportHint)
+          : teleportHint);
+      if (noticeText !== undefined)
+        this.#e.transcript.replace((rows) => [...rows, createSystemMessage(noticeText, "notice")]);
       else {
-        let Lt =
-          activeRemote.sessionId === undefined ? undefined : REMOTE_UNSUPPORTED_COMMAND_NOTICES.get(It);
+        let commandHint =
+          activeRemote.sessionId === undefined
+            ? undefined
+            : REMOTE_UNSUPPORTED_COMMAND_NOTICES.get(blockedCommand);
         addNotification({
-          key: `remote-slash-command-unavailable-${It}`,
+          key: `remote-slash-command-unavailable-${blockedCommand}`,
           kind: "feedback",
           text:
-            Lt !== undefined
-              ? `/${It} isn't available in cloud sessions \u2014 ${Lt}`
+            commandHint !== undefined
+              ? `/${blockedCommand} isn't available in cloud sessions \u2014 ${commandHint}`
               : activeRemote.viewerOnly
-                ? `/${It} isn't available while viewing read-only`
-                : `/${It} isn't available in cloud sessions yet`,
-          ...(Lt === undefined &&
+                ? `/${blockedCommand} isn't available while viewing read-only`
+                : `/${blockedCommand} isn't available in cloud sessions yet`,
+          ...(commandHint === undefined &&
             !activeRemote.viewerOnly && {
               row1Hint: NOT_IN_CLOUD_SESSIONS,
             }),
@@ -456,49 +480,49 @@ claude --teleport ${toCompatSessionId(activeRemote.sessionId)}`
       });
       return Promise.resolve(undefined);
     }
-    if (rt !== "post-text") return null;
+    if (dispatchMode !== "post-text") return null;
     let pastedTextReference = resolvePastedTextReference(text, fromKeybinding ? {} : pastedContents);
     return this.#p(activeRemote, pastedTextReference, {
       clearsConversation: cmd?.name === "clear",
       recordHistory,
     });
   }
-  async #p(h, x, { clearsConversation, recordHistory }) {
-    if (x.kind === "cancel") {
-      logFeatureBad("remote_paste_splice", x.reason);
-      let ze =
-        x.reason === "paste_gone"
-          ? buildUnavailablePasteError(x.removed)
+  async #p(activeRemote, splice, { clearsConversation, recordHistory }) {
+    if (splice.kind === "cancel") {
+      logFeatureBad("remote_paste_splice", splice.reason);
+      let errorText =
+        splice.reason === "paste_gone"
+          ? buildUnavailablePasteError(splice.removed)
           : "Not sent: the pasted text is blank.";
-      this.#e.transcript.replace((Xe) => [...Xe, createSystemMessage(ze, "notice")]);
+      this.#e.transcript.replace((rows) => [...rows, createSystemMessage(errorText, "notice")]);
       return {
         handBack: true,
       };
     }
-    if (x.removed.length === 0 && x.inlinePastes.length > 0) logFeatureOk("remote_paste_splice");
-    if (x.removed.length > 0) {
+    if (splice.removed.length === 0 && splice.inlinePastes.length > 0) logFeatureOk("remote_paste_splice");
+    if (splice.removed.length > 0) {
       logFeatureSad("remote_paste_splice", "paste_gone");
       this.#l().addNotification({
         key: "pasted-text-unavailable",
         kind: "feedback",
-        text: describeRemovedPastes(x.removed),
+        text: describeRemovedPastes(splice.removed),
         priority: "immediate",
       });
     }
-    let images = x.images;
+    let images = splice.images;
     let imagePasteIds = images.length > 0 ? images.map((image) => image.id) : undefined;
-    let { text, postedText } = x;
+    let { text, postedText } = splice;
     if (images.length > 0) {
-      let ze = [];
-      let Xe = [];
-      if (x.text) {
-        ze.push({
+      let content = [];
+      let postedContent = [];
+      if (splice.text) {
+        content.push({
           type: "text",
-          text: x.text,
+          text: splice.text,
         });
-        Xe.push({
+        postedContent.push({
           type: "text",
-          text: x.postedText,
+          text: splice.postedText,
         });
       }
       for (let image of images) {
@@ -507,17 +531,17 @@ claude --teleport ${toCompatSessionId(activeRemote.sessionId)}`
           media_type: image.mediaType ?? "image/png",
           data: image.content,
         };
-        ze.push({
+        content.push({
           type: "image",
           source,
         });
-        Xe.push({
+        postedContent.push({
           type: "image",
           source,
         });
       }
-      text = ze;
-      postedText = Xe;
+      text = content;
+      postedText = postedContent;
     }
     let userMessage = createUserMessage({
       content: text,
@@ -526,91 +550,102 @@ claude --teleport ${toCompatSessionId(activeRemote.sessionId)}`
         kind: "human",
       },
     });
-    if (h.caps.deliveryReports && this.#e.turn.isExternalLoading && !clearsConversation && !h.holdsSends())
+    if (
+      activeRemote.caps.deliveryReports &&
+      this.#e.turn.isExternalLoading &&
+      !clearsConversation &&
+      !activeRemote.holdsSends()
+    )
       this.holdLine(userMessage);
     else {
       this.landWaitingLines();
-      this.#e.transcript.replace((ze) => [...ze, userMessage]);
+      this.#e.transcript.replace((rows) => [...rows, userMessage]);
     }
     this.#e.turn.stream.clearApiMetrics();
     recordHistory({
       startsTurn: true,
     });
-    let We = await h.sendMessage(postedText, {
+    let sendResult = await activeRemote.sendMessage(postedText, {
       uuid: userMessage.uuid,
-      ...(x.inlinePastes.length > 0 && {
-        inlinePastes: x.inlinePastes,
+      ...(splice.inlinePastes.length > 0 && {
+        inlinePastes: splice.inlinePastes,
       }),
       ...(clearsConversation && {
         clearsConversation: true,
       }),
     });
-    if (!We) this.landWaitingLines();
-    if (We && clearsConversation) {
+    if (!sendResult) this.landWaitingLines();
+    if (sendResult && clearsConversation) {
       this.landWaitingLines();
       this.#e.transcript.replace(() => []);
       this.#e.applyLocalConversationReset(randomUUID());
     }
-    return We && !h.holdsSends()
+    return sendResult && !activeRemote.holdsSends()
       ? {
           sent: true,
           uuid: userMessage.uuid,
         }
       : undefined;
   }
-  runBridgeImmediateCommand = (h, x, D, submissionOrigin) => {
-    if (h.type !== "local") return;
+  runBridgeImmediateCommand = (command, args, displayName, submissionOrigin) => {
+    if (command.type !== "local") return;
     let { turn, transcript } = this.#e;
     (async () => {
-      let Re;
+      let activeNotices;
       try {
         let { mainLoopModel } = this.#l();
-        Re = getActiveNotices(
+        activeNotices = getActiveNotices(
           turn.buildToolUseContext(transcript.getSnapshot(), [], createAbortController(), mainLoopModel),
           turn.guard,
         );
       } catch (error) {
         logError(withTelemetryMessage(toError(error), "bridge immediate command context failed"));
-        let He = `${escapeForkedSkillTag(sanitizeTelemetryString(h.name))} failed (detail withheld on this connection)`;
+        let failureText = `${escapeForkedSkillTag(sanitizeTelemetryString(command.name))} failed (detail withheld on this connection)`;
         turn.appendAfterTurn([
           createCommandInputMessage(
-            formatCommandInputTags(D, isPromptHookObserved() || shouldEscapeNdjsonForBridge() ? "" : x),
+            formatCommandInputTags(
+              displayName,
+              isPromptHookObserved() || shouldEscapeNdjsonForBridge() ? "" : args,
+            ),
           ),
-          createCommandInputMessage(`<${LOCAL_COMMAND_STDERR}>${escapeXml(He)}</${LOCAL_COMMAND_STDERR}>`, {
-            commandOutcome: {
-              kind: "failed",
+          createCommandInputMessage(
+            `<${LOCAL_COMMAND_STDERR}>${escapeXml(failureText)}</${LOCAL_COMMAND_STDERR}>`,
+            {
+              commandOutcome: {
+                kind: "failed",
+              },
             },
-          }),
+          ),
         ]);
         return;
       }
       await runLocalCommand({
-        command: h,
+        command,
         input: {
-          command: getCommandName(h),
-          args: x,
+          command: getCommandName(command),
+          args,
           origin: resolvePromptOrigin({
             submissionOrigin,
             dispatchedOverBridge: true,
             promptSource: undefined,
           }),
-          presentation: viewportInfo(Re.presentation),
+          presentation: viewportInfo(activeNotices.presentation),
         },
-        displayName: D,
+        displayName,
         invokedAs: undefined,
-        context: Re,
+        context: activeNotices,
         printRows: turn.appendAfterTurn,
       });
     })();
   };
 }
 //@ chunk-18hwfzwa.js:322610-322653 placement
-function selectIsExternalLoading_2(h) {
-  return h.isExternalLoading;
+function selectIsExternalLoading_2(state) {
+  return state.isExternalLoading;
 }
 //@ chunk-18hwfzwa.js:322653-322699 placement
-function selectCombinedInitialTools(h) {
-  return h.combinedInitialTools;
+function selectCombinedInitialTools(state) {
+  return state.combinedInitialTools;
 }
 //@ chunk-18hwfzwa.js:322699-323813 placement
 function useRemoteTransport({
@@ -628,7 +663,7 @@ function useRemoteTransport({
 }) {
   let store = useAppStoreDirect();
   let setAppState = useSetAppState();
-  let [kt] = y(
+  let [transport] = useState(
     () =>
       new RemoteTransport({
         store,
@@ -643,32 +678,32 @@ function useRemoteTransport({
         workerCommands: scope.workerCommands,
       }),
   );
-  let toolPermissionContext = useAppState((Xt) => Xt.toolPermissionContext);
+  let toolPermissionContext = useAppState((appState) => appState.toolPermissionContext);
   let tools = useStoreSelector(scope, selectCombinedInitialTools);
-  let storeSelector = useStoreSelector(turn, selectIsExternalLoading_2);
+  let enabled = useStoreSelector(turn, selectIsExternalLoading_2);
   let remoteSession = useRemoteSession({
     config: remoteSessionConfig,
     adoptRateLimits,
-    sink: kt,
+    sink: transport,
     requestDialog: scope.requestDialog,
     toolPermissionContext,
     tools,
   });
   let directConnect = useDirectConnect({
     config: directConnectConfig,
-    sink: kt,
+    sink: transport,
     requestDialog: scope.requestDialog,
     toolPermissionContext,
     tools,
   });
   let sshSession_2 = useSSHSession({
     session: sshSession,
-    sink: kt,
+    sink: transport,
     requestDialog: scope.requestDialog,
     toolPermissionContext,
     tools,
   });
-  let oo = Q(
+  let activeRemote = useMemo(
     () =>
       remoteTransportKind({
         ssh: sshSession_2,
@@ -687,14 +722,14 @@ function useRemoteTransport({
       remoteSessionConfig?.consoleProfileBearer,
     ],
   );
-  zt(() => {
-    kt.setActiveRemote(oo);
-  }, [kt, oo]);
-  useRemotePermissionModeSync(kt);
+  useLayoutEffect(() => {
+    transport.setActiveRemote(activeRemote);
+  }, [transport, activeRemote]);
+  useRemotePermissionModeSync(transport);
   return {
-    transport: kt,
-    activeRemote: oo,
-    cancellableExternalLoading: canUseRemoteFeature(oo, storeSelector),
+    transport,
+    activeRemote,
+    cancellableExternalLoading: canUseRemoteFeature(activeRemote, enabled),
   };
 }
 export { useRemoteTransport };

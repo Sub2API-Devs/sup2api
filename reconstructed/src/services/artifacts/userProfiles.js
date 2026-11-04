@@ -23,14 +23,14 @@ import { cleanAnchorText } from "./comments/commentFormatting.js";
 /**
  * 读取 artifact 用户资料（/api/frame/user/profiles），用于评论作者显示名，按账号 epoch 失效。
  */
-async function fetchArtifactUserProfiles(slug, profileIds, signal, credentials) {
+async function fetchArtifactUserProfiles(host, profileIds, signal, credentials) {
   let liveState = getLiveState();
   let accountEpoch = liveState.accountEpoch;
-  let a = liveState.profileIdsForgets.get(slug) ?? 0;
-  let l;
+  let forgetCount = liveState.profileIdsForgets.get(host) ?? 0;
+  let response;
   try {
-    l = await frameApi.postRelayBound(
-      `/api/frame/user/profiles/${encodeURIComponent(slug)}`,
+    response = await frameApi.postRelayBound(
+      `/api/frame/user/profiles/${encodeURIComponent(host)}`,
       {
         ids: profileIds,
       },
@@ -49,56 +49,62 @@ async function fetchArtifactUserProfiles(slug, profileIds, signal, credentials) 
       ok: false,
     };
   }
-  if (!l.ok)
+  if (!response.ok)
     return {
       ok: false,
     };
-  let d = () =>
+  let stillCurrent = () =>
     getLiveState() === liveState &&
     liveState.accountEpoch === accountEpoch &&
-    (liveState.profileIdsForgets.get(slug) ?? 0) === a;
-  if (!l.fromFrame || l.status < 200 || l.status >= 300) {
-    if (l.fromFrame && d() && l.status === 403 && isPlainObject(l.data) && l.data.error === "not_declared")
-      liveState.profileIdsServed.set(slug, false);
+    (liveState.profileIdsForgets.get(host) ?? 0) === forgetCount;
+  if (!response.fromFrame || response.status < 200 || response.status >= 300) {
+    if (
+      response.fromFrame &&
+      stillCurrent() &&
+      response.status === 403 &&
+      isPlainObject(response.data) &&
+      response.data.error === "not_declared"
+    )
+      liveState.profileIdsServed.set(host, false);
     return {
       ok: false,
-      status: l.status,
+      status: response.status,
     };
   }
-  let profiles = isPlainObject(l.data) ? l.data.profiles : undefined;
+  let profiles = isPlainObject(response.data) ? response.data.profiles : undefined;
   if (!isPlainObject(profiles))
     return {
       ok: false,
-      status: l.status,
+      status: response.status,
     };
-  let p = new Set(profileIds);
-  let g = {};
+  let wanted = new Set(profileIds);
+  let profileMap = {};
   for (let [key, value] of Object.entries(profiles)) {
-    if (!p.has(key)) continue;
-    let h = profileFields(value);
-    if (h.name !== undefined || h.guest === true) g[key] = h;
+    if (!wanted.has(key)) continue;
+    let fields = profileFields(value);
+    if (fields.name !== undefined || fields.guest === true) profileMap[key] = fields;
   }
-  if (d()) {
-    liveState.profileIdsServed.set(slug, true);
-    cacheProfileNames(slug, {
-      ...Object.fromEntries(profileIds.map((c) => [c, {}])),
-      ...g,
+  if (stillCurrent()) {
+    liveState.profileIdsServed.set(host, true);
+    cacheProfileNames(host, {
+      ...Object.fromEntries(profileIds.map((id) => [id, {}])),
+      ...profileMap,
     });
   }
   return {
     ok: true,
-    profiles: g,
+    profiles: profileMap,
   };
 }
 //@ chunk-qxvqcab6.js:21433-21545 placement
-function profileFields(e) {
-  if (!isPlainObject(e)) return {};
-  let n = cleanAnchorText(e.name);
+function profileFields(profile) {
+  if (!isPlainObject(profile)) return {};
+  let name = cleanAnchorText(profile.name);
   return {
-    ...(n !== undefined && {
-      name: n,
+    ...(name !== undefined && {
+      name,
     }),
-    ...(e.guest === true && {
+    ...(profile.guest === true && {
       guest: true,
     }),
   };
@@ -106,17 +112,17 @@ function profileFields(e) {
 //@ chunk-qxvqcab6.js:21545-21555 placement
 var MAX_PROFILE_NAMES = 512;
 //@ chunk-qxvqcab6.js:21555-21592 placement
-function profileKey(e, n) {
-  return `${e}\x00${n}`;
+function profileKey(host, id) {
+  return `${host}\x00${id}`;
 }
 //@ chunk-qxvqcab6.js:21592-21816 placement
-function cacheProfileNames(e, n) {
+function cacheProfileNames(host, profiles) {
   let profileNames = getLiveState().profileNames;
-  for (let [key, value] of Object.entries(n)) {
-    let u = profileKey(e, key);
-    profileNames.delete(u);
+  for (let [key, value] of Object.entries(profiles)) {
+    let cacheKey = profileKey(host, key);
+    profileNames.delete(cacheKey);
     profileNames.set(
-      u,
+      cacheKey,
       value.name === undefined
         ? {
             ...value,
@@ -126,9 +132,9 @@ function cacheProfileNames(e, n) {
     );
   }
   while (profileNames.size > MAX_PROFILE_NAMES) {
-    let o = profileNames.keys().next().value;
-    if (o === undefined) break;
-    profileNames.delete(o);
+    let oldest = profileNames.keys().next().value;
+    if (oldest === undefined) break;
+    profileNames.delete(oldest);
   }
 }
 export { profileFields, fetchArtifactUserProfiles };

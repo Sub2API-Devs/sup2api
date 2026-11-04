@@ -9,7 +9,7 @@
  * attribution: placement 11
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   getFeatureValue_CACHED_MAY_BE_STALE,
   getFeatureValue_SESSION_PINNED,
@@ -22,42 +22,55 @@ import { apiClient } from "../../services/routines/routinesApi.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 import { logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { MarkdownText_2, MARKDOWN_LINK_SCHEMES } from "../pluginUi/render/MarkdownBlock.js";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ag5x7vhf.js:92617-92887 placement
-var API_CREDIT_LINK_FLAG = "tengu_snug_storm";
-var TENGU_RADIANT_FOX = "tengu_radiant_fox";
-var API_CREDIT_LINK = "api-credit-link";
-var API_CREDIT_MAX_ASKS = 3;
-var ONE_DAY_MS_CREDIT = 86400000;
-var API_CREDIT_REASK_WINDOW_MS = 7 * ONE_DAY_MS_CREDIT;
-var API_CREDIT_MAX_IMPRESSIONS = 10;
-var ApiCreditLinkTextSchema = DoctorLazy(() =>
-  u({
-    text: string()
-      .trim()
-      .min(1)
-      .max(240)
-      .regex(/^[^\p{Cc}\p{Cf}]*$/u),
-  }),
-);
-var ApiCreditLinkStatusSchema = DoctorLazy(() =>
-  u({
-    status: string(),
-  }),
-);
-var ApiCreditLinkCacheSchema = DoctorLazy(() =>
-  u({
-    eligibleSince: E().nullable(),
-    nextAskAt: E(),
-    asks: E(),
-  }),
-);
+var API_CREDIT_LINK_FLAG; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var TENGU_RADIANT_FOX;
+var API_CREDIT_LINK;
+var API_CREDIT_MAX_ASKS;
+var ONE_DAY_MS_CREDIT;
+var API_CREDIT_REASK_WINDOW_MS;
+var API_CREDIT_MAX_IMPRESSIONS;
+var ApiCreditLinkTextSchema;
+var ApiCreditLinkStatusSchema;
+var ApiCreditLinkCacheSchema;
+deferInit("chunk-ag5x7vhf.js:92617", () => {
+  API_CREDIT_LINK_FLAG = "tengu_snug_storm";
+  TENGU_RADIANT_FOX = "tengu_radiant_fox";
+  API_CREDIT_LINK = "api-credit-link";
+  API_CREDIT_MAX_ASKS = 3;
+  ONE_DAY_MS_CREDIT = 86400000;
+  API_CREDIT_REASK_WINDOW_MS = 7 * ONE_DAY_MS_CREDIT;
+  API_CREDIT_MAX_IMPRESSIONS = 10;
+  ApiCreditLinkTextSchema = DoctorLazy(() =>
+    objectSchema({
+      text: stringSchema()
+        .trim()
+        .min(1)
+        .max(240)
+        .regex(/^[^\p{Cc}\p{Cf}]*$/u),
+    }),
+  );
+  ApiCreditLinkStatusSchema = DoctorLazy(() =>
+    objectSchema({
+      status: stringSchema(),
+    }),
+  );
+  ApiCreditLinkCacheSchema = DoctorLazy(() =>
+    objectSchema({
+      eligibleSince: numberSchema().nullable(),
+      nextAskAt: numberSchema(),
+      asks: numberSchema(),
+    }),
+  );
+});
 //@ chunk-ag5x7vhf.js:92887-93012 placement
 /**
  * 读 API 额度链接提示的 GrowthBook 配置并校验，返回提示文字；未配置或校验失败返回 null。
@@ -66,17 +79,17 @@ function getApiCreditLinkText() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(API_CREDIT_LINK_FLAG, null);
   if (featureValue_CACHED_MAY_BE_STALE === null || featureValue_CACHED_MAY_BE_STALE === undefined)
     return null;
-  let h = ApiCreditLinkTextSchema().safeParse(featureValue_CACHED_MAY_BE_STALE);
-  return h.success ? h.data.text : null;
+  let parsed = ApiCreditLinkTextSchema().safeParse(featureValue_CACHED_MAY_BE_STALE);
+  return parsed.success ? parsed.data.text : null;
 }
 //@ chunk-ag5x7vhf.js:93012-93136 placement
 /**
  * 判断当前账号的 passes 资格是否在本进程启动之前就已具备。
  */
 function isPassesEligibleBeforeLaunch() {
-  let m = shouldCheckForPasses();
+  let version = shouldCheckForPasses();
   let eligibleSince =
-    m === undefined ? undefined : readApiCreditLinkCache(getGlobalConfig(), m)?.eligibleSince;
+    version === undefined ? undefined : readApiCreditLinkCache(getGlobalConfig(), version)?.eligibleSince;
   return typeof eligibleSince === "number" && eligibleSince < performance.timeOrigin;
 }
 //@ chunk-ag5x7vhf.js:93136-93247 placement
@@ -84,12 +97,12 @@ function isPassesEligibleBeforeLaunch() {
  * 首次展示前打点 tengu_api_credit_link_notice_arm；会话固定开关 TENGU_RADIANT_FOX 打开时返回 false（不压制），否则 true。
  */
 function shouldSuppressApiCreditLinkNotice() {
-  let m = getFeatureValue_SESSION_PINNED(TENGU_RADIANT_FOX, false) === true;
+  let enabled = getFeatureValue_SESSION_PINNED(TENGU_RADIANT_FOX, false) === true;
   if (claimNoticeImpression(`${API_CREDIT_LINK}-arm`))
     logEvent("tengu_api_credit_link_notice_arm", {
-      shown: m,
+      shown: enabled,
     });
-  return !m;
+  return !enabled;
 }
 //@ chunk-ag5x7vhf.js:93247-93402 placement
 function recordApiCreditLinkShown(storageV5) {
@@ -97,11 +110,11 @@ function recordApiCreditLinkShown(storageV5) {
     impression: apiCreditLinkImpressionCount(getGlobalConfig()) + 1,
   });
   saveGlobalConfig(
-    (h) => ({
-      ...h,
+    (config) => ({
+      ...config,
       seenNotifications: {
-        ...h.seenNotifications,
-        [API_CREDIT_LINK]: apiCreditLinkImpressionCount(h) + 1,
+        ...config.seenNotifications,
+        [API_CREDIT_LINK]: apiCreditLinkImpressionCount(config) + 1,
       },
     }),
     storageV5,
@@ -112,13 +125,13 @@ function recordApiCreditLinkShown(storageV5) {
  * 后台查询组织的 API 额度链接状态（/api/oauth/organizations/:orgUUID/…），缓存到全局配置并控制重问间隔。
  */
 async function refreshApiCreditLinkStatus(credentials, storageV5) {
-  let x = shouldCheckForPasses();
-  if (x === undefined) return;
-  let apiCreditLinkCache = readApiCreditLinkCache(getGlobalConfig(), x);
+  let version = shouldCheckForPasses();
+  if (version === undefined) return;
+  let apiCreditLinkCache = readApiCreditLinkCache(getGlobalConfig(), version);
   if (apiCreditLinkCache !== undefined && !shouldAskApiCreditLink(apiCreditLinkCache, Date.now())) return;
-  let k;
+  let response;
   try {
-    k = await apiClient.get("/api/oauth/organizations/:orgUUID/quirky-lollipop/link-offer", {
+    response = await apiClient.get("/api/oauth/organizations/:orgUUID/quirky-lollipop/link-offer", {
       auth: "teleport-org",
       timeout: 1e4,
       isBackground: true,
@@ -132,34 +145,35 @@ async function refreshApiCreditLinkStatus(credentials, storageV5) {
       level: "error",
     });
   }
-  if (k?.ok === false) {
+  if (response?.ok === false) {
     logFeatureSad("api_credit_link_status_fetch", "not_sent");
     return;
   }
-  let status = k?.status;
-  let I = ApiCreditLinkStatusSchema().safeParse(status === 200 ? k?.data : undefined);
-  if (I.success) logFeatureOk("api_credit_link_status_fetch");
+  let status = response?.status;
+  let parsed = ApiCreditLinkStatusSchema().safeParse(status === 200 ? response?.data : undefined);
+  if (parsed.success) logFeatureOk("api_credit_link_status_fetch");
   else if (status === undefined) logFeatureSad("api_credit_link_status_fetch", "request_failed");
   else logFeatureSad("api_credit_link_status_fetch", status === 200 ? "malformed" : `http_${status}`);
-  if (shouldCheckForPasses() !== x) return;
+  if (shouldCheckForPasses() !== version) return;
   let now = Date.now();
-  await saveGlobalConfig((A) => {
-    let apiCreditLinkCache = readApiCreditLinkCache(A, x);
+  await saveGlobalConfig((config) => {
+    let apiCreditLinkCache = readApiCreditLinkCache(config, version);
     let asks = apiCreditLinkCache?.asks ?? 0;
-    if (asks >= API_CREDIT_MAX_IMPRESSIONS) return A;
+    if (asks >= API_CREDIT_MAX_IMPRESSIONS) return config;
     let eligibleSince = apiCreditLinkCache?.eligibleSince ?? null;
-    if (I.success) {
-      let K = eligibleSince !== null && eligibleSince <= now ? eligibleSince : now;
-      eligibleSince = I.data.status === "eligible" ? K : null;
+    if (parsed.success) {
+      let nextEligibleSince = eligibleSince !== null && eligibleSince <= now ? eligibleSince : now;
+      eligibleSince = parsed.data.status === "eligible" ? nextEligibleSince : null;
     }
-    let z = I.success && eligibleSince === null ? API_CREDIT_REASK_WINDOW_MS : ONE_DAY_MS_CREDIT;
+    let reaskDelay =
+      parsed.success && eligibleSince === null ? API_CREDIT_REASK_WINDOW_MS : ONE_DAY_MS_CREDIT;
     return {
-      ...A,
+      ...config,
       apiCreditLinkStatusCache: {
-        ...A.apiCreditLinkStatusCache,
-        [x]: {
+        ...config.apiCreditLinkStatusCache,
+        [version]: {
           eligibleSince,
-          nextAskAt: now + z,
+          nextAskAt: now + reaskDelay,
           asks: asks + 1,
         },
       },
@@ -167,15 +181,15 @@ async function refreshApiCreditLinkStatus(credentials, storageV5) {
   }, storageV5);
 }
 //@ chunk-ag5x7vhf.js:94448-94515 placement
-function shouldAskApiCreditLink({ nextAskAt, asks }, x) {
+function shouldAskApiCreditLink({ nextAskAt, asks }, nowMs) {
   return (
     asks < API_CREDIT_MAX_IMPRESSIONS &&
-    (x >= nextAskAt || nextAskAt - x > API_CREDIT_REASK_WINDOW_MS + ONE_DAY_MS_CREDIT)
+    (nowMs >= nextAskAt || nextAskAt - nowMs > API_CREDIT_REASK_WINDOW_MS + ONE_DAY_MS_CREDIT)
   );
 }
 //@ chunk-ag5x7vhf.js:94708-94785 placement
-function readApiCreditLinkCache(globalConfig, h) {
-  return ApiCreditLinkCacheSchema().safeParse(globalConfig.apiCreditLinkStatusCache?.[h]).data;
+function readApiCreditLinkCache(globalConfig, version) {
+  return ApiCreditLinkCacheSchema().safeParse(globalConfig.apiCreditLinkStatusCache?.[version]).data;
 }
 //@ chunk-ag5x7vhf.js:94785-94836 placement
 function apiCreditLinkImpressionCount(globalConfig) {
@@ -183,44 +197,47 @@ function apiCreditLinkImpressionCount(globalConfig) {
 }
 //@ chunk-ag5x7vhf.js:94836-95165 placement
 function ApiCreditLinkNotice() {
-  let h = w(5);
+  let $ = useMemoCache(5);
   let { storageV5 } = useTheme_2();
-  let x;
-  if (h[0] === MEMO_CACHE_SENTINEL) {
-    x = getApiCreditLinkText();
-    h[0] = x;
-  } else x = h[0];
-  let T = x;
-  let k;
-  if (h[1] !== storageV5) {
-    k = () => recordApiCreditLinkShown(storageV5);
-    h[1] = storageV5;
-    h[2] = k;
-  } else k = h[2];
-  let _;
-  if (h[3] === MEMO_CACHE_SENTINEL) {
-    _ = {
-      enabled: T !== null,
+  let text;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    text = getApiCreditLinkText();
+    $[0] = text;
+  } else text = $[0];
+  let text_2 = text;
+  let onShown;
+  if ($[1] !== storageV5) {
+    onShown = () => recordApiCreditLinkShown(storageV5);
+    $[1] = storageV5;
+    $[2] = onShown;
+  } else onShown = $[2];
+  let options;
+  if ($[3] === MEMO_CACHE_SENTINEL) {
+    options = {
+      enabled: text_2 !== null,
     };
-    h[3] = _;
-  } else _ = h[3];
-  useNoticeImpression(API_CREDIT_LINK, k, _);
-  let I;
-  if (h[4] === MEMO_CACHE_SENTINEL) {
-    I =
-      T === null
+    $[3] = options;
+  } else options = $[3];
+  useNoticeImpression(API_CREDIT_LINK, onShown, options);
+  let content;
+  if ($[4] === MEMO_CACHE_SENTINEL) {
+    content =
+      text_2 === null
         ? null
         : jsxProd_default(MarkdownText_2, {
             stripPromptTags: false,
             linkSchemes: MARKDOWN_LINK_SCHEMES,
-            children: T,
+            children: text_2,
           });
-    h[4] = I;
-  } else I = h[4];
-  return I;
+    $[4] = content;
+  } else content = $[4];
+  return content;
 }
 //@ chunk-ag5x7vhf.js:95165-95169 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:95165", () => {
+  init_react_production();
+});
 export {
   refreshApiCreditLinkStatus,
   API_CREDIT_LINK,

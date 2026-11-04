@@ -8,9 +8,9 @@
  * pieces: chunk-8rmevhsy.js (7)
  * attribution: placement 1, file-local 2, fingerprint 4
  */
-import { init_react_production, P, R } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useEffect, useRef } from "../../../vendor/react/cjs/react.production.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { getMcpConfigsByScope } from "../../services/mcp/config.js";
@@ -105,153 +105,168 @@ function withTrustAccepted(current) {
  * 工作区信任对话框：列出项目中会自动执行或放权的配置（hooks、MCP 服务器、bash 权限、apiKeyHelper、OTEL headers helper、AWS/GCP 命令、危险 env、技能/插件），用户选择信任后写入项目配置；拒绝则退出。
  */
 function TrustDialog(props) {
-  let $ = w(67);
+  let $ = useMemoCache(67);
   let { onDone, commands } = props;
   let { storageV5 } = useTheme_2();
-  let qe;
+  let projectMcpConfigs;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    qe = getMcpConfigsByScope("project");
-    $[0] = qe;
-  } else qe = $[0];
-  let { servers: projectServers } = qe;
-  let Qe;
+    projectMcpConfigs = getMcpConfigsByScope("project");
+    $[0] = projectMcpConfigs;
+  } else projectMcpConfigs = $[0];
+  let { servers: projectServers } = projectMcpConfigs;
+  let projectServerNames;
   if ($[1] === MEMO_CACHE_SENTINEL) {
-    Qe = Object.keys(projectServers);
-    $[1] = Qe;
-  } else Qe = $[1];
-  let we = Qe.length > 0;
-  let Ue;
+    projectServerNames = Object.keys(projectServers);
+    $[1] = projectServerNames;
+  } else projectServerNames = $[1];
+  let hasMcpServers = projectServerNames.length > 0;
+  let hookSourcesList;
   if ($[2] === MEMO_CACHE_SENTINEL) {
-    Ue = getHooksSources_3();
-    $[2] = Ue;
-  } else Ue = $[2];
-  let He = Ue.length > 0;
-  let Xe;
+    hookSourcesList = getHooksSources_3();
+    $[2] = hookSourcesList;
+  } else hookSourcesList = $[2];
+  let hasHooks = hookSourcesList.length > 0;
+  let hooksSources;
   if ($[3] === MEMO_CACHE_SENTINEL) {
-    Xe = getHooksSources();
-    $[3] = Xe;
-  } else Xe = $[3];
-  let Lo = Xe;
+    hooksSources = getHooksSources();
+    $[3] = hooksSources;
+  } else hooksSources = $[3];
+  let hookSourceLabels = hooksSources;
   let allowRuleSources = collectAllowRuleSources();
-  let B = allowRuleSources.sources.length > 0;
+  let hasProjectAllowRules = allowRuleSources.sources.length > 0;
   let additionalDirectorySources = collectAdditionalDirectorySources();
-  let E = additionalDirectorySources.sources.length > 0;
-  let Ye;
+  let hasProjectAddDirs = additionalDirectorySources.sources.length > 0;
+  let apiKeyHelperSources;
   if ($[4] === MEMO_CACHE_SENTINEL) {
-    Ye = getHooksSources_6();
-    $[4] = Ye;
-  } else Ye = $[4];
-  let ye = Ye.length > 0;
-  let ze;
+    apiKeyHelperSources = getHooksSources_6();
+    $[4] = apiKeyHelperSources;
+  } else apiKeyHelperSources = $[4];
+  let hasApiKeyHelper = apiKeyHelperSources.length > 0;
+  let awsSources;
   if ($[5] === MEMO_CACHE_SENTINEL) {
-    ze = getHooksSources_7();
-    $[5] = ze;
-  } else ze = $[5];
-  let Ae = ze.length > 0;
-  let Je;
+    awsSources = getHooksSources_7();
+    $[5] = awsSources;
+  } else awsSources = $[5];
+  let hasAwsCommands = awsSources.length > 0;
+  let gcpSources;
   if ($[6] === MEMO_CACHE_SENTINEL) {
-    Je = getHooksSources_8();
-    $[6] = Je;
-  } else Je = $[6];
-  let ke = Je.length > 0;
-  let Ze;
+    gcpSources = getHooksSources_8();
+    $[6] = gcpSources;
+  } else gcpSources = $[6];
+  let hasGcpCommands = gcpSources.length > 0;
+  let otelSources;
   if ($[7] === MEMO_CACHE_SENTINEL) {
-    Ze = getHooksSources_4();
-    $[7] = Ze;
-  } else Ze = $[7];
-  let De = Ze.length > 0;
-  let $e;
+    otelSources = getHooksSources_4();
+    $[7] = otelSources;
+  } else otelSources = $[7];
+  let hasOtelHeadersHelper = otelSources.length > 0;
+  let proxyAuthSources;
   if ($[8] === MEMO_CACHE_SENTINEL) {
-    $e = getHooksSources_9();
-    $[8] = $e;
-  } else $e = $[8];
-  let Se = $e.length > 0;
-  let Le;
+    proxyAuthSources = getHooksSources_9();
+    $[8] = proxyAuthSources;
+  } else proxyAuthSources = $[8];
+  let hasProxyAuthHelper = proxyAuthSources.length > 0;
+  let permissionSources;
   if ($[9] === MEMO_CACHE_SENTINEL) {
     let bashPermissionSources = getBashPermissionSources();
     let bashAndMcpPermissionSources = getBashAndMcpPermissionSources(bashPermissionSources);
-    Le = {
+    permissionSources = {
       marketplaceHelperSources: bashPermissionSources,
       repoHelperSources: bashAndMcpPermissionSources,
       offerBackstop: hasUngatedTrustSources(bashAndMcpPermissionSources),
     };
-    $[9] = Le;
-  } else Le = $[9];
-  let { marketplaceHelperSources, repoHelperSources, offerBackstop } = Le;
-  let je = marketplaceHelperSources.length > 0;
-  let _ = repoHelperSources.length > 0;
-  let so;
+    $[9] = permissionSources;
+  } else permissionSources = $[9];
+  let { marketplaceHelperSources, repoHelperSources, offerBackstop } = permissionSources;
+  let hasMarketplaceHeadersHelper = marketplaceHelperSources.length > 0;
+  let hasRepoHeadersHelpers = repoHelperSources.length > 0;
+  let dangerousEnvSources;
   if ($[10] === MEMO_CACHE_SENTINEL) {
-    so = getHooksSources_10();
-    $[10] = so;
-  } else so = $[10];
-  let Ce = so.length > 0;
-  let to;
+    dangerousEnvSources = getHooksSources_10();
+    $[10] = dangerousEnvSources;
+  } else dangerousEnvSources = $[10];
+  let hasDangerousEnvVars = dangerousEnvSources.length > 0;
+  let autoMemorySources;
   if ($[11] === MEMO_CACHE_SENTINEL) {
-    to = getHooksSources_5();
-    $[11] = to;
-  } else to = $[11];
-  let be = to.length > 0;
-  let ao;
+    autoMemorySources = getHooksSources_5();
+    $[11] = autoMemorySources;
+  } else autoMemorySources = $[11];
+  let hasAutoMemoryDirectory = autoMemorySources.length > 0;
+  let hasLegacyBashCommand;
   if ($[12] !== commands) {
-    ao = commands?.some(isLegacyProjectCommandWithBashAllow) ?? false;
+    hasLegacyBashCommand = commands?.some(isLegacyProjectCommandWithBashAllow) ?? false;
     $[12] = commands;
-    $[13] = ao;
-  } else ao = $[13];
-  let rr = ao;
-  let no;
+    $[13] = hasLegacyBashCommand;
+  } else hasLegacyBashCommand = $[13];
+  let hasLegacyBashCommand_ = hasLegacyBashCommand;
+  let hasSkillBashAllow;
   if ($[14] !== commands) {
-    no = commands?.some(isProjectSkillWithBashAllow) ?? false;
+    hasSkillBashAllow = commands?.some(isProjectSkillWithBashAllow) ?? false;
     $[14] = commands;
-    $[15] = no;
-  } else no = $[15];
-  let sr = no;
-  let p = Lo.length > 0 || rr || sr;
-  let co;
+    $[15] = hasSkillBashAllow;
+  } else hasSkillBashAllow = $[15];
+  let hasSkillBashAllow_ = hasSkillBashAllow;
+  let hasBashExecution = hookSourceLabels.length > 0 || hasLegacyBashCommand_ || hasSkillBashAllow_;
+  let trustAccepted;
   if ($[16] === MEMO_CACHE_SENTINEL) {
-    co = checkHasTrustDialogAccepted();
-    $[16] = co;
-  } else co = $[16];
-  let io = co;
-  let u = io;
-  let lo;
-  let po;
-  if ($[17] !== p) {
-    lo = () => {
+    trustAccepted = checkHasTrustDialogAccepted();
+    $[16] = trustAccepted;
+  } else trustAccepted = $[16];
+  let hasAcceptedTrust = trustAccepted;
+  let hasAcceptedTrust_ = hasAcceptedTrust;
+  let logShown;
+  let logShownDeps;
+  if ($[17] !== hasBashExecution) {
+    logShown = () => {
       let isHomeDir = isHomeDirectorySession();
       logEvent("tengu_trust_dialog_shown", {
         isHomeDir,
-        hasMcpServers: we,
-        hasHooks: He,
-        hasBashExecution: p,
-        hasProjectAllowRules: B,
-        hasProjectAddDirs: E,
-        hasApiKeyHelper: ye,
-        hasAwsCommands: Ae,
-        hasGcpCommands: ke,
-        hasOtelHeadersHelper: De,
-        hasProxyAuthHelper: Se,
-        hasMarketplaceHeadersHelper: je,
-        hasRepoHeadersHelpers: _,
-        hasDangerousEnvVars: Ce,
-        hasAutoMemoryDirectory: be,
+        hasMcpServers,
+        hasHooks,
+        hasBashExecution,
+        hasProjectAllowRules,
+        hasProjectAddDirs,
+        hasApiKeyHelper,
+        hasAwsCommands,
+        hasGcpCommands,
+        hasOtelHeadersHelper,
+        hasProxyAuthHelper,
+        hasMarketplaceHeadersHelper,
+        hasRepoHeadersHelpers,
+        hasDangerousEnvVars,
+        hasAutoMemoryDirectory,
       });
     };
-    po = [we, He, p, B, E, ye, Ae, ke, De, Se, je, _, Ce, be];
-    $[17] = p;
-    $[18] = lo;
-    $[19] = po;
+    logShownDeps = [
+      hasMcpServers,
+      hasHooks,
+      hasBashExecution,
+      hasProjectAllowRules,
+      hasProjectAddDirs,
+      hasApiKeyHelper,
+      hasAwsCommands,
+      hasGcpCommands,
+      hasOtelHeadersHelper,
+      hasProxyAuthHelper,
+      hasMarketplaceHeadersHelper,
+      hasRepoHeadersHelpers,
+      hasDangerousEnvVars,
+      hasAutoMemoryDirectory,
+    ];
+    $[17] = hasBashExecution;
+    $[18] = logShown;
+    $[19] = logShownDeps;
   } else {
-    lo = $[18];
-    po = $[19];
+    logShown = $[18];
+    logShownDeps = $[19];
   }
-  P(lo, po);
-  let G = R(false);
+  useEffect(logShown, logShownDeps);
+  let hasAnsweredRef = useRef(false);
   let inputRefusalWindow = useInputRefusalWindow();
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
-  let uo;
+  let isInputRefused;
   if ($[20] !== inputRefusalWindow || $[21] !== noteRefused || $[22] !== refusedWithin) {
-    uo = function K() {
+    isInputRefused = function isInputRefused_() {
       if (inputRefusalWindow() || refusedWithin()) {
         noteRefused();
         return true;
@@ -261,32 +276,32 @@ function TrustDialog(props) {
     $[20] = inputRefusalWindow;
     $[21] = noteRefused;
     $[22] = refusedWithin;
-    $[23] = uo;
-  } else uo = $[23];
-  let refuseInput = uo;
+    $[23] = isInputRefused;
+  } else isInputRefused = $[23];
+  let refuseInput = isInputRefused;
   let openedAt = useMountTime();
-  let xe = settleKey(epoch);
-  let ho;
+  let remount = settleKey(epoch);
+  let handleChange;
   if (
-    $[24] !== p ||
-    $[25] !== u ||
+    $[24] !== hasBashExecution ||
+    $[25] !== hasAcceptedTrust_ ||
     $[26] !== inputRefusalWindow ||
     $[27] !== noteRefused ||
     $[28] !== onDone ||
     $[29] !== refusedWithin ||
     $[30] !== storageV5
   ) {
-    ho = function onChange(value) {
-      if (G.current || isShuttingDown()) {
+    handleChange = function onChange(value) {
+      if (hasAnsweredRef.current || isShuttingDown()) {
         return;
       }
       if (inputRefusalWindow() || refusedWithin()) {
         noteRefused();
         return;
       }
-      G.current = true;
+      hasAnsweredRef.current = true;
       if (value === "exit") {
-        if (u) {
+        if (hasAcceptedTrust_) {
           logFeatureBad("onboarding_trust_dialog", "gated_grants_backstop_declined");
           onDone();
           return;
@@ -299,20 +314,20 @@ function TrustDialog(props) {
       logFeatureOk("onboarding_trust_dialog");
       logEvent("tengu_trust_dialog_accept", {
         isHomeDir,
-        hasMcpServers: we,
-        hasHooks: He,
-        hasBashExecution: p,
-        hasProjectAllowRules: B,
-        hasProjectAddDirs: E,
-        hasApiKeyHelper: ye,
-        hasAwsCommands: Ae,
-        hasGcpCommands: ke,
-        hasOtelHeadersHelper: De,
-        hasProxyAuthHelper: Se,
-        hasMarketplaceHeadersHelper: je,
-        hasRepoHeadersHelpers: _,
-        hasDangerousEnvVars: Ce,
-        hasAutoMemoryDirectory: be,
+        hasMcpServers,
+        hasHooks,
+        hasBashExecution,
+        hasProjectAllowRules,
+        hasProjectAddDirs,
+        hasApiKeyHelper,
+        hasAwsCommands,
+        hasGcpCommands,
+        hasOtelHeadersHelper,
+        hasProxyAuthHelper,
+        hasMarketplaceHeadersHelper,
+        hasRepoHeadersHelpers,
+        hasDangerousEnvVars,
+        hasAutoMemoryDirectory,
       });
       if (isHomeDir) {
         setSessionTrustAccepted(true);
@@ -320,111 +335,111 @@ function TrustDialog(props) {
       } else saveCurrentProjectConfig(withTrustAccepted, storageV5);
       onDone();
     };
-    $[24] = p;
-    $[25] = u;
+    $[24] = hasBashExecution;
+    $[25] = hasAcceptedTrust_;
     $[26] = inputRefusalWindow;
     $[27] = noteRefused;
     $[28] = onDone;
     $[29] = refusedWithin;
     $[30] = storageV5;
-    $[31] = ho;
-  } else ho = $[31];
-  let l = ho;
-  let fo;
+    $[31] = handleChange;
+  } else handleChange = $[31];
+  let handleChange_ = handleChange;
+  let handleExit;
   if ($[32] === MEMO_CACHE_SENTINEL) {
-    fo = () => {
-      G.current = true;
+    handleExit = () => {
+      hasAnsweredRef.current = true;
       gracefulShutdownSync(1);
     };
-    $[32] = fo;
-  } else fo = $[32];
-  let exitState = useGlobalExitKeybindings(fo);
-  let go;
+    $[32] = handleExit;
+  } else handleExit = $[32];
+  let exitState = useGlobalExitKeybindings(handleExit);
+  let handleCancel;
   if (
-    $[33] !== u ||
+    $[33] !== hasAcceptedTrust_ ||
     $[34] !== inputRefusalWindow ||
     $[35] !== noteRefused ||
-    $[36] !== l ||
+    $[36] !== handleChange_ ||
     $[37] !== refusedWithin
   ) {
-    go = () => {
+    handleCancel = () => {
       if (isKbCohesionFixesOn()) {
-        l("exit");
+        handleChange_("exit");
         return;
       }
-      if (u) {
-        l("exit");
+      if (hasAcceptedTrust_) {
+        handleChange_("exit");
         return;
       }
       if (inputRefusalWindow() || refusedWithin()) {
         noteRefused();
         return;
       }
-      if (G.current || isShuttingDown()) {
+      if (hasAnsweredRef.current || isShuttingDown()) {
         return;
       }
-      G.current = true;
+      hasAnsweredRef.current = true;
       gracefulShutdownSync(0);
     };
-    $[33] = u;
+    $[33] = hasAcceptedTrust_;
     $[34] = inputRefusalWindow;
     $[35] = noteRefused;
-    $[36] = l;
+    $[36] = handleChange_;
     $[37] = refusedWithin;
-    $[38] = go;
-  } else go = $[38];
-  let wo;
+    $[38] = handleCancel;
+  } else handleCancel = $[38];
+  let confirmationKeybindingOptions;
   if ($[39] === MEMO_CACHE_SENTINEL) {
-    wo = {
+    confirmationKeybindingOptions = {
       context: "Confirmation",
     };
-    $[39] = wo;
-  } else wo = $[39];
-  useKeybinding("confirm:no", go, wo);
-  if (io && !offerBackstop) {
+    $[39] = confirmationKeybindingOptions;
+  } else confirmationKeybindingOptions = $[39];
+  useKeybinding("confirm:no", handleCancel, confirmationKeybindingOptions);
+  if (hasAcceptedTrust && !offerBackstop) {
     queueMicrotask(onDone);
     return null;
   }
-  const ve = PermissionDialog_2;
+  const PermissionDialogComponent = PermissionDialog_2;
   const color = "warning";
   const titleColor = "warning";
   const title = "Accessing workspace:";
-  const Pe = Box;
+  const BoxComponent = Box;
   const flexDirection = "column";
   const gap = 1;
   const paddingTop = 1;
-  let F;
-  let W;
-  let N;
+  let cwdElement;
+  let questionElement;
+  let accessElement;
   if ($[40] === MEMO_CACHE_SENTINEL) {
-    F = jsxProd_default(Text, {
+    cwdElement = jsxProd_default(Text, {
       bold: true,
       children: escapePathForDisplay(getFsImplementation().cwd()),
     });
-    W = jsxProd_default_2(Text, {
+    questionElement = jsxProd_default_2(Text, {
       children: [
         "Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source project, or work from your team). If not, take a moment to review what",
         "'",
         "s in this folder first.",
       ],
     });
-    N = jsxProd_default_2(Text, {
+    accessElement = jsxProd_default_2(Text, {
       children: ["Claude Code", "'", "ll be able to read, edit, and execute files here."],
     });
-    $[40] = F;
-    $[41] = W;
-    $[42] = N;
+    $[40] = cwdElement;
+    $[41] = questionElement;
+    $[42] = accessElement;
   } else {
-    F = $[40];
-    W = $[41];
-    N = $[42];
+    cwdElement = $[40];
+    questionElement = $[41];
+    accessElement = $[42];
   }
-  const Te =
-    (B || E || _) &&
+  const preapprovedGrantsElement =
+    (hasProjectAllowRules || hasProjectAddDirs || hasRepoHeadersHelpers) &&
     jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
-        B &&
+        hasProjectAllowRules &&
           jsxProd_default_2(Fragment, {
             children: [
               jsxProd_default_2(Text, {
@@ -455,7 +470,7 @@ function TrustDialog(props) {
               }),
             ],
           }),
-        E &&
+        hasProjectAddDirs &&
           jsxProd_default_2(Fragment, {
             children: [
               jsxProd_default_2(Text, {
@@ -487,7 +502,7 @@ function TrustDialog(props) {
               }),
             ],
           }),
-        _ &&
+        hasRepoHeadersHelpers &&
           jsxProd_default_2(Text, {
             bold: true,
             color: "warning",
@@ -506,38 +521,38 @@ function TrustDialog(props) {
         }),
       ],
     });
-  let Ho;
+  let securityLinkElement;
   if ($[43] === MEMO_CACHE_SENTINEL) {
-    Ho = jsxProd_default(Text, {
+    securityLinkElement = jsxProd_default(Text, {
       dimColor: true,
       children: jsxProd_default(Link, {
         url: "https://code.claude.com/docs/en/security",
         children: "Security guide",
       }),
     });
-    $[43] = Ho;
-  } else Ho = $[43];
+    $[43] = securityLinkElement;
+  } else securityLinkElement = $[43];
   let onConfirm;
   let onCancel;
-  if ($[44] !== l) {
-    onConfirm = () => l("enable_all");
-    onCancel = () => l("exit");
-    $[44] = l;
+  if ($[44] !== handleChange_) {
+    onConfirm = () => handleChange_("enable_all");
+    onCancel = () => handleChange_("exit");
+    $[44] = handleChange_;
     $[45] = onConfirm;
     $[46] = onCancel;
   } else {
     onConfirm = $[45];
     onCancel = $[46];
   }
-  let Y;
+  let confirmElement;
   if (
-    $[47] !== xe.remountKey ||
+    $[47] !== remount.remountKey ||
     $[48] !== refuseInput ||
     $[49] !== openedAt ||
     $[50] !== onConfirm ||
     $[51] !== onCancel
   ) {
-    Y = jsxProd_default(
+    confirmElement = jsxProd_default(
       ConfirmSelect,
       {
         refuseInput,
@@ -546,22 +561,22 @@ function TrustDialog(props) {
         cancelFirst: true,
         focus: "cancel",
         confirmLabel: "Yes, I trust this folder",
-        cancelLabel: u ? "No, continue without these permissions" : "No, exit",
+        cancelLabel: hasAcceptedTrust_ ? "No, continue without these permissions" : "No, exit",
         onConfirm,
         onCancel,
       },
-      xe.remountKey,
+      remount.remountKey,
     );
-    $[47] = xe.remountKey;
+    $[47] = remount.remountKey;
     $[48] = refuseInput;
     $[49] = openedAt;
     $[50] = onConfirm;
     $[51] = onCancel;
-    $[52] = Y;
-  } else Y = $[52];
-  let z;
+    $[52] = confirmElement;
+  } else confirmElement = $[52];
+  let exitHintElement;
   if ($[53] !== exitState.keyName || $[54] !== exitState.pending) {
-    z = jsxProd_default(Text, {
+    exitHintElement = jsxProd_default(Text, {
       dimColor: true,
       children: exitState.pending
         ? jsxProd_default_2(Fragment, {
@@ -582,44 +597,53 @@ function TrustDialog(props) {
     });
     $[53] = exitState.keyName;
     $[54] = exitState.pending;
-    $[55] = z;
-  } else z = $[55];
+    $[55] = exitHintElement;
+  } else exitHintElement = $[55];
   let children;
   if (
-    $[56] !== Pe ||
-    $[57] !== F ||
-    $[58] !== W ||
-    $[59] !== N ||
-    $[60] !== Te ||
-    $[61] !== Y ||
-    $[62] !== z
+    $[56] !== BoxComponent ||
+    $[57] !== cwdElement ||
+    $[58] !== questionElement ||
+    $[59] !== accessElement ||
+    $[60] !== preapprovedGrantsElement ||
+    $[61] !== confirmElement ||
+    $[62] !== exitHintElement
   ) {
-    children = jsxProd_default_2(Pe, {
+    children = jsxProd_default_2(BoxComponent, {
       flexDirection,
       gap,
       paddingTop,
-      children: [F, W, N, Te, Ho, Y, z],
+      children: [
+        cwdElement,
+        questionElement,
+        accessElement,
+        preapprovedGrantsElement,
+        securityLinkElement,
+        confirmElement,
+        exitHintElement,
+      ],
     });
-    $[56] = Pe;
-    $[57] = F;
-    $[58] = W;
-    $[59] = N;
-    $[60] = Te;
-    $[61] = Y;
-    $[62] = z;
+    $[56] = BoxComponent;
+    $[57] = cwdElement;
+    $[58] = questionElement;
+    $[59] = accessElement;
+    $[60] = preapprovedGrantsElement;
+    $[61] = confirmElement;
+    $[62] = exitHintElement;
     $[63] = children;
   } else children = $[63];
-  let yo;
-  if ($[64] !== ve || $[65] !== children) {
-    yo = jsxProd_default(ve, {
+  let dialogElement;
+  if ($[64] !== PermissionDialogComponent || $[65] !== children) {
+    dialogElement = jsxProd_default(PermissionDialogComponent, {
       color,
       titleColor,
       title,
       children,
     });
-    $[64] = ve;
+    $[64] = PermissionDialogComponent;
     $[65] = children;
-    $[66] = yo;
-  } else yo = $[66];
-  return yo;
+    $[66] = dialogElement;
+  } else dialogElement = $[66];
+  return dialogElement;
 }
+export { TrustDialog };

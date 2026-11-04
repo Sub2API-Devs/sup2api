@@ -49,16 +49,16 @@ function isPersistentLoopMode() {
 }
 //@ chunk-w6rm7nhv.js:4205-4322 placement
 function getAutonomousLoopPreamble() {
-  let e = isPersistentLoopMode() ? LOOP_PROMPT_PERSISTENT_RESOURCE : LOOP_PROMPT_RESOURCE;
+  let loopPrompt = isPersistentLoopMode() ? LOOP_PROMPT_PERSISTENT_RESOURCE : LOOP_PROMPT_RESOURCE;
   let prStewardPrompt = buildPrStewardPrompt({
     forCloudSession: Boolean(env.CLAUDE_CODE_REMOTE),
   });
   return prStewardPrompt
-    ? `${e.trimEnd()}
+    ? `${loopPrompt.trimEnd()}
 
 ${prStewardPrompt}
 `
-    : e;
+    : loopPrompt;
 }
 //@ chunk-w6rm7nhv.js:4322-4393 placement
 function _() {
@@ -70,15 +70,15 @@ function _() {
 /**
  * 自主循环结束条件的提示句。
  */
-function loopEndingGuidance(e = false) {
+function loopEndingGuidance(isPersistent = false) {
   if (!isAgentPushNotificationEnabled()) return "";
-  let o =
-    !e && isPersistentLoopMode()
+  let stopReason =
+    !isPersistent && isPersistentLoopMode()
       ? "newly blocked on a decision you won't make alone, you're ending the loop"
       : "newly blocked on a decision you won't make alone, third straight tick with nothing to do, you're ending the loop";
   return `
 
-Use ${PUSHNOTIFICATION} when the loop can't move further without the user, or when something landed that they'd want to act on now: ${o}, or a major update arrived (CI went red, a review changes the plan). Progress you made yourself isn't a trigger \u2014 the transcript covers that. One ping per state, not per tick.`;
+Use ${PUSHNOTIFICATION} when the loop can't move further without the user, or when something landed that they'd want to act on now: ${stopReason}, or a major update arrived (CI went red, a review changes the plan). Progress you made yourself isn't a trigger \u2014 the transcript covers that. One ping per state, not per tick.`;
 }
 //@ chunk-w6rm7nhv.js:4947-5244 placement
 function AUTONOMOUS_TICK_FALLBACK() {
@@ -92,18 +92,20 @@ Run the autonomous check using the loop instructions established earlier in this
  */
 function loopStatusGuidance() {
   let mainLoopModel = getMainLoopModel();
-  let t = needsFableMitigations(getCanonicalName(mainLoopModel), mainLoopModel);
-  let o = isBriefEnabled();
-  let n = o
+  let needsFableCompat = needsFableMitigations(getCanonicalName(mainLoopModel), mainLoopModel);
+  let isBrief = isBriefEnabled();
+  let briefInstruction = isBrief
     ? `send a brief status update for this tick via ${BRIEF_TOOL_NAME}`
     : "write a brief status update for this tick";
-  let r = t ? `Immediately before re-arming, ${n}.` : `After re-arming, ${n}.`;
+  let briefTiming = needsFableCompat
+    ? `Immediately before re-arming, ${briefInstruction}.`
+    : `After re-arming, ${briefInstruction}.`;
   return `
 
-If a ${MONITOR} is armed (check ${TASK_LIST_TOOL_NAME}), keep \`delaySeconds\` at 1200\u20131800s \u2014 the ${MONITOR} is the wake signal and this is only the fallback heartbeat. If you were woken by a \`<task-notification>\`, handle the event before deciding whether to re-arm. ${r} ${wakeupPreArmParagraph(
+If a ${MONITOR} is armed (check ${TASK_LIST_TOOL_NAME}), keep \`delaySeconds\` at 1200\u20131800s \u2014 the ${MONITOR} is the wake signal and this is only the fallback heartbeat. If you were woken by a \`<task-notification>\`, handle the event before deciding whether to re-arm. ${briefTiming} ${wakeupPreArmParagraph(
     {
-      preArmStatus: t,
-      briefMode: o,
+      preArmStatus: needsFableCompat,
+      briefMode: isBrief,
     },
   )} To stop the loop, call ${SCHEDULE_WAKEUP_TOOL_NAME} with \`stop: true\` and ${TASKSTOP} the monitor (use ${TASK_LIST_TOOL_NAME} to find its task ID if no longer in context).`;
 }
@@ -119,24 +121,25 @@ Run the autonomous check using the loop instructions established earlier in this
 You scheduled this tick via the ${SCHEDULE_WAKEUP_TOOL_NAME} tool (not a recurring cron). To keep the loop alive, call ${SCHEDULE_WAKEUP_TOOL_NAME} again this turn with \`prompt\` set to the literal sentinel \`${AUTONOMOUS_LOOP_DYNAMIC_PROMPT}\` and \`noop\` set to \`true\` if this tick changed nothing (or \`false\` if it did) \u2014 otherwise the loop ends after this tick.${loopStatusGuidance()}${loopEndingGuidance()}`;
 }
 //@ chunk-w6rm7nhv.js:6417-6455 placement
-function isAutonomousLoopCron(e) {
-  return e === AUTONOMOUS_LOOP_PROMPT || e === AUTONOMOUS_LOOP_DYNAMIC_PROMPT;
+function isAutonomousLoopCron(cronPrompt) {
+  return cronPrompt === AUTONOMOUS_LOOP_PROMPT || cronPrompt === AUTONOMOUS_LOOP_DYNAMIC_PROMPT;
 }
 //@ chunk-w6rm7nhv.js:6455-6652 placement
 /**
  * 生成自主循环心跳的提示词：首次投递时附上循环说明前言，此后只发心跳提示；不是该循环的 cron 时返回 null。
  */
-function buildAutonomousTickPrompt(e, t) {
-  if (!isAutonomousLoopCron(t)) return null;
+function buildAutonomousTickPrompt(context, cronPrompt) {
+  if (!isAutonomousLoopCron(cronPrompt)) return null;
   _();
-  let o = t === AUTONOMOUS_LOOP_DYNAMIC_PROMPT ? autonomousLoopTickPrompt() : AUTONOMOUS_TICK_FALLBACK();
-  if (e.autonomousPreambleDelivered || e.lastLoopFileDelivered !== null) return o;
-  e.autonomousPreambleDelivered = true;
+  let tickPrompt =
+    cronPrompt === AUTONOMOUS_LOOP_DYNAMIC_PROMPT ? autonomousLoopTickPrompt() : AUTONOMOUS_TICK_FALLBACK();
+  if (context.autonomousPreambleDelivered || context.lastLoopFileDelivered !== null) return tickPrompt;
+  context.autonomousPreambleDelivered = true;
   return `${getAutonomousLoopPreamble()}
 
 ---
 
-${o}`;
+${tickPrompt}`;
 }
 //@ chunk-w6rm7nhv.js:6652-6724 placement
 var AUTONOMOUS_PREAMBLE_MARKER = "__autonomous_preamble__";
@@ -174,14 +177,14 @@ You scheduled this tick via the ${SCHEDULE_WAKEUP_TOOL_NAME} tool (not a recurri
 var MAX_LOOP_MD_CHARS = 25000;
 var MAX_LOOP_MD_READ_BYTES = (MAX_LOOP_MD_CHARS + 1) * 3;
 //@ chunk-w6rm7nhv.js:8143-8321 placement
-function truncateLoopMd(e, t) {
-  if (e.length <= MAX_LOOP_MD_CHARS && !t) return e;
-  let index = e.lastIndexOf(
+function truncateLoopMd(content, wasTruncated) {
+  if (content.length <= MAX_LOOP_MD_CHARS && !wasTruncated) return content;
+  let index = content.lastIndexOf(
     `
 `,
     MAX_LOOP_MD_CHARS,
   );
-  return `${e.slice(0, index > 0 ? index : MAX_LOOP_MD_CHARS)}
+  return `${content.slice(0, index > 0 ? index : MAX_LOOP_MD_CHARS)}
 
 > WARNING: loop.md was truncated to ${MAX_LOOP_MD_CHARS} bytes. Keep the task list concise.`;
 }
@@ -198,14 +201,14 @@ function configLoopMdPath() {
   return join(getClaudeConfigDir(), "loop.md");
 }
 //@ chunk-w6rm7nhv.js:8448-8639 placement
-function readLoopMdSync(path) {
-  let t;
+function readLoopMdSync(loopFilePath) {
+  let text;
   try {
     let fsImplementation = getFsImplementation();
-    t =
-      checkSmallFileReadableSync(fsImplementation, path, Number.POSITIVE_INFINITY).verdict === "read"
+    text =
+      checkSmallFileReadableSync(fsImplementation, loopFilePath, Number.POSITIVE_INFINITY).verdict === "read"
         ? fsImplementation
-            .readSync(path, {
+            .readSync(loopFilePath, {
               length: MAX_LOOP_MD_READ_BYTES,
             })
             .buffer.toString("utf8")
@@ -213,22 +216,22 @@ function readLoopMdSync(path) {
   } catch (error) {
     return rethrowUnlessInaccessible(error);
   }
-  return t === null ? null : toLoopFile(path, t);
+  return text === null ? null : toLoopFile(loopFilePath, text);
 }
 //@ chunk-w6rm7nhv.js:8639-8845 placement
-async function readLoopMd(path) {
-  let t;
+async function readLoopMd(loopFilePath) {
+  let text;
   try {
     let fsImplementation = getFsImplementation();
-    let { verdict } = await checkSmallFileReadable(fsImplementation, path, Number.POSITIVE_INFINITY);
-    t =
+    let { verdict } = await checkSmallFileReadable(fsImplementation, loopFilePath, Number.POSITIVE_INFINITY);
+    text =
       verdict === "read"
-        ? (await fsImplementation.readFileBytes(path, MAX_LOOP_MD_READ_BYTES)).toString("utf8")
+        ? (await fsImplementation.readFileBytes(loopFilePath, MAX_LOOP_MD_READ_BYTES)).toString("utf8")
         : null;
   } catch (error) {
     return rethrowUnlessInaccessible(error);
   }
-  return t === null ? null : toLoopFile(path, t);
+  return text === null ? null : toLoopFile(loopFilePath, text);
 }
 //@ chunk-w6rm7nhv.js:8845-8905 placement
 function rethrowUnlessInaccessible(error) {
@@ -236,89 +239,105 @@ function rethrowUnlessInaccessible(error) {
   throw error;
 }
 //@ chunk-w6rm7nhv.js:8905-9024 placement
-function toLoopFile(path, t) {
-  let trimmed = t.trim();
-  if (trimmed.length === 0) return null;
-  let n = Buffer.byteLength(t) >= MAX_LOOP_MD_READ_BYTES;
+function toLoopFile(path, content) {
+  let content_2 = content.trim();
+  if (content_2.length === 0) return null;
+  let isTruncated = Buffer.byteLength(content) >= MAX_LOOP_MD_READ_BYTES;
   return {
     path,
-    content: truncateLoopMd(trimmed, n),
+    content: truncateLoopMd(content_2, isTruncated),
   };
 }
 //@ chunk-w6rm7nhv.js:9024-9313 placement
 /**
  * 加载 loop.md：先读会话级路径，再读默认路径；启用存储时从存储的 loop-file 状态读取（读失败回退文件）。
  */
-async function loadLoopFile(e) {
+async function loadLoopFile(storage) {
   let loopMd = await readLoopMd(projectLoopMdPath());
   if (loopMd) return loopMd;
-  let path = configLoopMdPath();
-  if (!e) return readLoopMd(path);
-  let n = await e.read([STORAGE_SPACES.state("loop-file")]);
-  if (!n.ok) return readLoopMd(path);
-  let r = n.value.items[0];
-  if (!r.found) return null;
+  let configPath = configLoopMdPath();
+  if (!storage) return readLoopMd(configPath);
+  let storageResult = await storage.read([STORAGE_SPACES.state("loop-file")]);
+  if (!storageResult.ok) return readLoopMd(configPath);
+  let item = storageResult.value.items[0];
+  if (!item.found) return null;
   return toLoopFile(
-    path,
-    Buffer.from(r.value.buffer, r.value.byteOffset, r.value.byteLength).toString("utf-8"),
+    configPath,
+    Buffer.from(item.value.buffer, item.value.byteOffset, item.value.byteLength).toString("utf-8"),
   );
 }
 //@ chunk-w6rm7nhv.js:9313-9347 placement
-function isLoopFileMarker(e) {
-  return e === LOOP_MD_MARKER || e === LOOP_MD_DYNAMIC_MARKER;
+function isLoopFileMarker(marker) {
+  return marker === LOOP_MD_MARKER || marker === LOOP_MD_DYNAMIC_MARKER;
 }
 //@ chunk-w6rm7nhv.js:9347-9402 placement
-function loopTickPromptForCron(e, t) {
-  if (!isLoopFileMarker(t)) return null;
-  return loopTickPrompt(e, t, readLoopMdAnywhere());
+function loopTickPromptForCron(context, marker) {
+  if (!isLoopFileMarker(marker)) return null;
+  return loopTickPrompt(context, marker, readLoopMdAnywhere());
 }
 //@ chunk-w6rm7nhv.js:9402-9472 placement
-async function loopTickPromptForCronAsync(e, t, o) {
-  if (!isLoopFileMarker(t)) return null;
-  return loopTickPrompt(e, t, await loadLoopFile(o));
+async function loopTickPromptForCronAsync(context, marker, storage) {
+  if (!isLoopFileMarker(marker)) return null;
+  return loopTickPrompt(context, marker, await loadLoopFile(storage));
 }
 //@ chunk-w6rm7nhv.js:9472-10067 placement
 /**
  * 组合 /loop tick 提示（循环文件内容变化时重新发送）。
  */
-function loopTickPrompt(e, t, o) {
-  let n = t === LOOP_MD_DYNAMIC_MARKER;
-  if (o) {
-    let p = n ? loopFileTickPrompt() : LOOP_MD_TICK_PROMPT();
-    if (e.lastLoopFileDelivered === o.content) return p;
-    e.lastLoopFileDelivered = o.content;
-    return `# /loop tick \u2014 tasks from ${o.path}
+function loopTickPrompt(context, marker, loopFile) {
+  let isDynamic = marker === LOOP_MD_DYNAMIC_MARKER;
+  if (loopFile) {
+    let tickPrompt = isDynamic ? loopFileTickPrompt() : LOOP_MD_TICK_PROMPT();
+    if (context.lastLoopFileDelivered === loopFile.content) return tickPrompt;
+    context.lastLoopFileDelivered = loopFile.content;
+    return `# /loop tick \u2014 tasks from ${loopFile.path}
 
 The user configured a loop-tasks file. Work through the tasks defined below; these are the instructions for this tick and every subsequent tick (the reminder on later fires refers back to this message).
 
 ---
 
-${o.content}
+${loopFile.content}
 
 ---
 
-${p}`;
+${tickPrompt}`;
   }
   _();
-  let r = n ? loopFileAbsentTickPrompt() : AUTONOMOUS_TICK_FALLBACK();
-  if (e.lastLoopFileDelivered === AUTONOMOUS_PREAMBLE_MARKER || e.autonomousPreambleDelivered) return r;
-  e.lastLoopFileDelivered = AUTONOMOUS_PREAMBLE_MARKER;
-  e.autonomousPreambleDelivered = true;
+  let fallbackPrompt = isDynamic ? loopFileAbsentTickPrompt() : AUTONOMOUS_TICK_FALLBACK();
+  if (context.lastLoopFileDelivered === AUTONOMOUS_PREAMBLE_MARKER || context.autonomousPreambleDelivered)
+    return fallbackPrompt;
+  context.lastLoopFileDelivered = AUTONOMOUS_PREAMBLE_MARKER;
+  context.autonomousPreambleDelivered = true;
   return `${getAutonomousLoopPreamble()}
 
 ---
 
-${r}`;
+${fallbackPrompt}`;
 }
 //@ chunk-w6rm7nhv.js:10067-10100 placement
-function isLoopTickCron(e) {
-  return isAutonomousLoopCron(e) || isLoopFileMarker(e);
+function isLoopTickCron(value) {
+  return isAutonomousLoopCron(value) || isLoopFileMarker(value);
 }
 //@ chunk-w6rm7nhv.js:10100-10142 placement
-function buildTickPromptSync(e, t) {
-  return buildAutonomousTickPrompt(e, t) ?? loopTickPromptForCron(e, t) ?? t;
+function buildTickPromptSync(cron, fallback) {
+  return buildAutonomousTickPrompt(cron, fallback) ?? loopTickPromptForCron(cron, fallback) ?? fallback;
 }
 //@ chunk-w6rm7nhv.js:10142-10200 placement
-async function buildTickPromptAsync(e, t, o) {
-  return buildAutonomousTickPrompt(e, t) ?? (await loopTickPromptForCronAsync(e, t, o)) ?? t;
+async function buildTickPromptAsync(cron, fallback, session) {
+  return (
+    buildAutonomousTickPrompt(cron, fallback) ??
+    (await loopTickPromptForCronAsync(cron, fallback, session)) ??
+    fallback
+  );
 }
+export {
+  LOOP_MD_DYNAMIC_MARKER,
+  LOOP_MD_MARKER,
+  getAutonomousLoopPreamble,
+  isLoopTickCron,
+  isLoopFileMarker,
+  _,
+  loadLoopFile,
+  buildTickPromptSync,
+  buildTickPromptAsync,
+};

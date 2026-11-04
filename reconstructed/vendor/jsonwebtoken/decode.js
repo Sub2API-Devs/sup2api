@@ -5,11 +5,11 @@
  * pieces: chunk-mrx6y2r5.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_jws } from "../jws/index.js";
 
 //@ chunk-mrx6y2r5.js:3532-3839 cjs-fingerprint
-var require_decode = x(function (cjsExports, cjsModule) {
+var require_decode = __commonJS(function (cjsExports, cjsModule) {
   var jws = require_jws();
   cjsModule.exports = function (jwt, options) {
     options = options || {};

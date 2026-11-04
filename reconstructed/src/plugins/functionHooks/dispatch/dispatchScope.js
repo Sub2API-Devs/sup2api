@@ -11,14 +11,15 @@
 import { AsyncLocalStorage } from "async_hooks";
 import { isAbortError } from "../../../utils/errors.js";
 import { logError } from "../../../utils/log.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:198898-198946 placement
 /**
  * 执行并忽略中止错误
  */
-function runIgnoringAbort(e) {
+function runIgnoringAbort(fn) {
   try {
-    e();
+    fn();
   } catch (error) {
     if (!isAbortError(error)) logError(error);
   }
@@ -42,31 +43,34 @@ var createDrawingScope = (instanceKey, { surface, component, requestId }, plugin
 /**
  * 结束作用域
  */
-function endScope(e) {
-  if (e?.scope && e.scope.owner === e) {
-    e.scope.isEnded = true;
-    e.scope.values = undefined;
+function endScope(holder) {
+  if (holder?.scope && holder.scope.owner === holder) {
+    holder.scope.isEnded = true;
+    holder.scope.values = undefined;
   }
 }
 //@ chunk-s61vbvea.js:199243-199257 placement
 /**
  * 分发作用域 ALS
  */
-var dispatchScopeStorage = new AsyncLocalStorage();
+var dispatchScopeStorage; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:199243", () => {
+  dispatchScopeStorage = new AsyncLocalStorage();
+});
 //@ chunk-s61vbvea.js:199257-199319 placement
 /**
  * 取未结束的作用域
  */
 function currentScope() {
-  let e = dispatchScopeStorage.getStore();
-  return e?.isEnded ? undefined : e;
+  let scope = dispatchScopeStorage.getStore();
+  return scope?.isEnded ? undefined : scope;
 }
 //@ chunk-s61vbvea.js:199319-199354 placement
 /**
  * 新建作用域
  */
-var newScope = (e = {}) => ({
-  ...e,
+var newScope = (base = {}) => ({
+  ...base,
   isEnded: false,
 });
 //@ chunk-s61vbvea.js:199354-199448 placement
@@ -85,9 +89,12 @@ function scopeOf(scopeHolder) {
 /**
  * 在作用域里执行
  */
-var runInScope = (scope, n) => (scope ? dispatchScopeStorage.run(scope, n) : n());
+var runInScope = (scope, fn) => (scope ? dispatchScopeStorage.run(scope, fn) : fn());
 //@ chunk-s61vbvea.js:199530-199544 placement
-var asyncStoreS61 = new AsyncLocalStorage();
+var asyncStoreS61; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:199530", () => {
+  asyncStoreS61 = new AsyncLocalStorage();
+});
 //@ chunk-s61vbvea.js:199544-199570 placement = getAgentContext (1)
 /**
  * 取一个 AsyncLocalStorage 的当前值，用途未确认。

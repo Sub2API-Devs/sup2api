@@ -16,17 +16,17 @@ import { defineLazyGetter, defineLazyGetterAlt, definePolicyGate } from "./skill
 /**
  * 把内置插件的技能包装为提示命令（提取技能文件）。
  */
-function builtinPluginSkillCommand(skill, o) {
+function builtinPluginSkillCommand(skill, toolUseContext) {
   let builtinPluginWiredSkills = getHostState().builtinPluginWiredSkills;
-  let r = builtinPluginWiredSkills.get(skill);
-  if (!r) {
-    let { wireSkillFilesExtraction } = require("./chunk-et4cgz1y.js");
-    r = wireSkillFilesExtraction(skill);
-    builtinPluginWiredSkills.set(skill, r);
+  let wired = builtinPluginWiredSkills.get(skill);
+  if (!wired) {
+    let { wireSkillFilesExtraction } = require("./bundledSkills.js");
+    wired = wireSkillFilesExtraction(skill);
+    builtinPluginWiredSkills.set(skill, wired);
   }
-  let { skillRoot, getPromptForCommand } = r;
-  tagHooksWithSource(skill.hooks ?? {}, o);
-  let p = {
+  let { skillRoot, getPromptForCommand } = wired;
+  tagHooksWithSource(skill.hooks ?? {}, toolUseContext);
+  let command = {
     type: "prompt",
     name: skill.name,
     description: typeof skill.description === "function" ? "" : skill.description,
@@ -69,12 +69,12 @@ function builtinPluginSkillCommand(skill, o) {
     getArgumentCompletions: skill.getArgumentCompletions,
     enterTakesArgumentCompletion: skill.enterTakesArgumentCompletion,
   };
-  defineLazyGetter(p, "description", skill.description);
-  defineLazyGetter(p, "menuDescription", skill.menuDescription);
-  defineLazyGetter(p, "argumentHint", skill.argumentHint);
-  defineLazyGetter(p, "whenToUse", skill.whenToUse);
-  defineLazyGetterAlt(p, "disableModelInvocation", skill.disableModelInvocation);
-  definePolicyGate(p, skill.policyGate);
-  return p;
+  defineLazyGetter(command, "description", skill.description);
+  defineLazyGetter(command, "menuDescription", skill.menuDescription);
+  defineLazyGetter(command, "argumentHint", skill.argumentHint);
+  defineLazyGetter(command, "whenToUse", skill.whenToUse);
+  defineLazyGetterAlt(command, "disableModelInvocation", skill.disableModelInvocation);
+  definePolicyGate(command, skill.policyGate);
+  return command;
 }
 export { builtinPluginSkillCommand };

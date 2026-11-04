@@ -73,10 +73,10 @@ function getPluginErrorMessage(error) {
       return `Plugin ${quotedPrintable(error.pluginId)} not found in marketplace ${quotedPrintable(error.marketplace)}`;
     case "marketplace-not-found":
       if (error.registrationHidden !== undefined) {
-        let n = `Marketplace ${quotedPrintable(error.marketplace)} is added but ignored`;
+        let intro = `Marketplace ${quotedPrintable(error.marketplace)} is added but ignored`;
         return error.registrationHiddenReason === undefined
-          ? `${n} (see the debug log)`
-          : `${n}. ${capitalize(printableText(error.registrationHiddenReason))}. ${capitalize(MARKETPLACE_SOURCE_FIX_HINTS[error.registrationHidden])}.`;
+          ? `${intro} (see the debug log)`
+          : `${intro}. ${capitalize(printableText(error.registrationHiddenReason))}. ${capitalize(MARKETPLACE_SOURCE_FIX_HINTS[error.registrationHidden])}.`;
       }
       return `Marketplace ${quotedPrintable(error.marketplace)} not found`;
     case "marketplace-load-failed":
@@ -114,19 +114,19 @@ function getPluginErrorMessage(error) {
     case "lsp-request-failed":
       return `Plugin "${quotedPrintable(error.plugin)}" LSP server "${quotedPrintable(error.serverName)}" ${quotedPrintable(error.method)} request failed: ${quotedPrintable(error.error)}`;
     case "marketplace-blocked-by-policy": {
-      let n = pluginBlockSource(error);
-      if (n !== null) return directoryBlockedMessage(error.plugin, n);
+      let blockSource = pluginBlockSource(error);
+      if (blockSource !== null) return directoryBlockedMessage(error.plugin, blockSource);
       if (error.blockedByBlocklist)
         return `Marketplace '${quotedPrintable(error.marketplace)}' is blocked by enterprise policy`;
       return `Marketplace '${quotedPrintable(error.marketplace)}' is not in the allowed marketplace list`;
     }
     case "dependency-unsatisfied": {
-      let n = claudeCommand("plugin install", error.dependency);
-      let r =
+      let installCommand = claudeCommand("plugin install", error.dependency);
+      let reasonText =
         error.reason === "not-enabled"
           ? "disabled \u2014 enable it or remove the dependency"
-          : `not installed \u2014 ${error.sameNameSyncedPlugin === undefined ? "" : `${cloudOnlyDependencyMessage(error.sameNameSyncedPlugin)}; `}${n ? `run \`${n}\`, or ` : ""}check that its marketplace is added`;
-      return `Dependency "${quotedPrintable(error.dependency)}" is ${r}`;
+          : `not installed \u2014 ${error.sameNameSyncedPlugin === undefined ? "" : `${cloudOnlyDependencyMessage(error.sameNameSyncedPlugin)}; `}${installCommand ? `run \`${installCommand}\`, or ` : ""}check that its marketplace is added`;
+      return `Dependency "${quotedPrintable(error.dependency)}" is ${reasonText}`;
     }
     case "dependency-version-unsatisfied":
       return `Requires "${quotedPrintable(error.dependency)}" ${quotedPrintable(error.required)}, installed ${quotedPrintable(error.installed ?? "version unknown")}`;
@@ -135,22 +135,22 @@ function getPluginErrorMessage(error) {
         return `Plugin "${quotedPrintable(error.plugin)}" is not loaded: installed_plugins.json could not be read, so its install could not be checked \u2014 fix or restore installed_plugins.json in the plugins directory, then run /reload-plugins${error.installedListHeldNote === undefined ? "" : `. ${error.installedListHeldNote}`}`;
       return `Plugin "${quotedPrintable(error.plugin)}" not cached at ${printableOrEmpty(error.installPath)} \u2014 run /plugin to refresh${error.installedListHeldNote === undefined ? "" : `. ${error.installedListHeldNote}`}`;
     case "plugin-not-installed": {
-      let n = claudeCommand("plugin install", error.source, "--scope project");
+      let installCommand = claudeCommand("plugin install", error.source, "--scope project");
       if (error.installedListHeldNote !== undefined)
         return `Plugin "${quotedPrintable(error.plugin)}" is enabled in project settings, but whether it is installed could not be checked. ${error.installedListHeldNote}`;
-      return `Plugin "${quotedPrintable(error.plugin)}" is enabled in project settings but isn't installed${n ? ` \u2014 run \`${n}\`` : " \u2014 install it at project scope (from /plugin or claude plugin install)"}`;
+      return `Plugin "${quotedPrintable(error.plugin)}" is enabled in project settings but isn't installed${installCommand ? ` \u2014 run \`${installCommand}\`` : " \u2014 install it at project scope (from /plugin or claude plugin install)"}`;
     }
     case "autoupdate-deferred-entry-helper":
     case "autoupdate-disabled-by-policy":
       return error.message;
     case "autoupdate-blocked-by-pinner": {
-      let n = error.heldAt ? ` at ${printableOrEmpty(error.heldAt)}` : "";
-      let r = quotedPrintable(error.blockedBy.join(", "));
-      let s =
+      let heldSuffix = error.heldAt ? ` at ${printableOrEmpty(error.heldAt)}` : "";
+      let pinnersText = quotedPrintable(error.blockedBy.join(", "));
+      let disabledNote =
         error.disabledPinners.length > 0
           ? ` (note: ${quotedPrintable(error.disabledPinners.join(", "))} ${error.disabledPinners.length === 1 ? "is" : "are"} currently disabled)`
           : "";
-      return `Autoupdate held "${quotedPrintable(error.plugin)}"${n} \u2014 version constraint from ${r}${s}`;
+      return `Autoupdate held "${quotedPrintable(error.plugin)}"${heldSuffix} \u2014 version constraint from ${pinnersText}${disabledNote}`;
     }
   }
 }

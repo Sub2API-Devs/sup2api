@@ -11,10 +11,31 @@
 import { join, extname } from "path";
 import * as fsPromisesModule from "fs/promises";
 import { mkdir, writeFile, readFile, unlink, readdir } from "fs/promises";
+import {
+  sanitizePathForGit,
+  buildSafeGitEnv,
+  SAFE_GIT_ENV,
+  C_LOCALE_ENV,
+  DISABLED_SSH_ENV,
+} from "../utils/git/gitSafeEnv.js";
+import { ARTIFACT_BLOCK_TAGS } from "../constants/xml.js";
+import {
+  isUserQueuedCommandAttachment,
+  isRealUserPromptMessage,
+  extractTextContent_2,
+} from "../utils/messages.js";
+import { truncateToLength, countCharInString, firstLineOf } from "../utils/stringUtils.js";
 import { areBuiltinModelsKnownHosted } from "../utils/model/smallFastModel.js";
 import { getDefaultOpusModel, getMainLoopModel } from "../utils/model/model.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, string, E, record, array, M as M_2 } from "../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  stringSchema,
+  numberSchema,
+  record,
+  array,
+  booleanSchema,
+} from "../../vendor/zod/v4/classic/schemas.js";
 import { getClaudeConfigDir } from "../utils/envUtils.js";
 import { STORAGE_SPACES } from "../utils/storage/storageSpaces.js";
 import { isStorageV5Enabled } from "../utils/hoverRest.js";
@@ -26,8 +47,7 @@ import { AGENT, TASK } from "../tools/AgentTool/constants.js";
 import { FILE_EDIT_TOOL_NAME } from "../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../tools/FileWriteTool/prompt.js";
 import { NOTEBOOK_EDIT_TOOL_NAME } from "../tools/NotebookEditTool/constants.js";
-import { Y5e } from "../../vendor/diff/libesm/diff/line.js";
-import { countCharInString, firstLineOf, truncateToLength } from "../utils/stringUtils.js";
+import { diffLines } from "../../vendor/diff/libesm/diff/line.js";
 import { BASH_TOOL_NAME } from "../tools/BashTool/toolName.js";
 import { getDestructiveTargetCategory } from "../tools/BashTool/destructiveTargets.js";
 import { checkReadOnlyConstraints } from "../tools/BashTool/readOnlyValidation.js";
@@ -42,11 +62,6 @@ import {
 import { queryHaiku } from "../services/api/claude.js";
 import { asSystemPrompt } from "../utils/systemPromptType.js";
 import { mainAgentContext } from "../utils/agentContext.js";
-import {
-  extractTextContent_2,
-  isUserQueuedCommandAttachment,
-  isRealUserPromptMessage,
-} from "../utils/messages.js";
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
 import { jsonParse, jsonStringify } from "../utils/slowOperations.js";
 import { logError } from "../utils/log.js";
@@ -69,11 +84,97 @@ import { isAutoClassifierActive } from "../utils/permissions/autoModeState.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum, fromNumber } from "../services/analytics/safeMetadata.js";
 import { builtinToolNameForMcp } from "../services/analytics/metadata.js";
-import { ARTIFACT_BLOCK_TAGS } from "../constants/xml.js";
-import { sanitizePathForGit, buildSafeGitEnv, M, b, F } from "../utils/git/gitSafeEnv.js";
 import { roundToMinute } from "../utils/cronTasks.js";
 import { formatBriefTimestamp } from "../utils/formatBriefTimestamp.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-3a1caa6f.js:3079-3216 fingerprint = getRemoteHostSessionCount (0.407)
+function getRemoteHostSessionCount(env, options = {}) {
+  let allowsSsh = env?.GIT_ALLOW_PROTOCOL?.split(":").includes("ssh") ?? false;
+  return sanitizePathForGit(
+    buildSafeGitEnv(
+      {
+        ...SAFE_GIT_ENV,
+        ...(options.userLocale !== true && C_LOCALE_ENV),
+        ...(!allowsSsh && DISABLED_SSH_ENV),
+      },
+      env,
+      options,
+    ),
+  );
+}
+//@ chunk-01p2saxj.js:305-474 placement
+/**
+ * 字符串或数组规整为内容块数组
+ */
+function toContentBlocks(content) {
+  if (typeof content === "string")
+    return [
+      {
+        type: "text",
+        text: content,
+      },
+    ];
+  if (!Array.isArray(content)) return [];
+  return content.filter((entry) => entry !== null && typeof entry === "object" && !Array.isArray(entry));
+}
+//@ chunk-01p2saxj.js:474-541 placement
+var regExp; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-01p2saxj.js:474", () => {
+  regExp = new RegExp(`<(${ARTIFACT_BLOCK_TAGS.join("|")})>[\\s\\S]*?(?:</\\1>|$)`, "g");
+});
+//@ chunk-01p2saxj.js:541-585 layout
+function stripXmlTags(text) {
+  return text.replace(regExp, "").trim();
+}
+//@ chunk-01p2saxj.js:585-708 layout
+function textBlocksOf(content) {
+  return toContentBlocks(content)
+    .flatMap((block) => (block.type === "text" && typeof block.text === "string" ? [block.text] : []))
+    .map(stripXmlTags)
+    .filter((text) => text !== "");
+}
+//@ chunk-01p2saxj.js:708-1642 fingerprint = formatTranscriptForFacets (0.397)
+function formatTranscriptForFacets(messages, options) {
+  let lines = [];
+  let seen = new Set();
+  for (let block of messages) {
+    if (
+      block.type === "attachment" &&
+      typeof block.attachment === "object" &&
+      block.attachment !== null &&
+      isUserQueuedCommandAttachment(block)
+    ) {
+      let prompt = block.attachment.type === "queued_command" ? block.attachment.prompt : "";
+      let sourceUuid = block.attachment.source_uuid;
+      if (typeof sourceUuid === "string") {
+        if (seen.has(sourceUuid)) continue;
+        seen.add(sourceUuid);
+      }
+      for (let line of textBlocksOf(prompt))
+        lines.push(`[User]: ${truncateToLength(line, options.userTextChars)}`);
+      continue;
+    }
+    if (block.type === "user" && block.message) {
+      if (block.isCompactSummary) {
+        for (let text of textBlocksOf(block.message.content))
+          lines.push(`[Summary of earlier conversation]: ${truncateToLength(text, options.userTextChars)}`);
+        continue;
+      }
+      if (!isRealUserPromptMessage(block) || (typeof block.uuid === "string" && seen.has(block.uuid)))
+        continue;
+      for (let text of textBlocksOf(block.message.content))
+        lines.push(`[User]: ${truncateToLength(text, options.userTextChars)}`);
+    } else if (block.type === "assistant" && block.message) {
+      for (let contentBlock of toContentBlocks(block.message.content))
+        if (contentBlock.type === "text" && typeof contentBlock.text === "string")
+          lines.push(`[Assistant]: ${truncateToLength(contentBlock.text, options.assistantTextChars)}`);
+        else if (contentBlock.type === "tool_use" && typeof contentBlock.name === "string")
+          lines.push(`[Tool: ${contentBlock.name}]`);
+    }
+  }
+  return lines;
+}
 //@ chunk-yt6zn9vg.js:12517-12554 sole-consumer
 function insightsModel() {
   return areBuiltinModelsKnownHosted() ? getDefaultOpusModel() : getMainLoopModel();
@@ -82,126 +183,131 @@ function insightsModel() {
 /**
  * /insights 会话元数据缓存的 zod 结构（消息数、工具计数、语言、git 提交、token、代码行变化、权限模式等）；Ve 是扩展名到语言名表，qe 是分面键到显示名的表。
  */
-var sessionMetaSchema = DoctorLazy(() =>
-  u({
-    session_id: string(),
-    transcript_mtime: E().optional(),
-    project_path: string(),
-    start_time: string(),
-    duration_minutes: E(),
-    user_message_count: E(),
-    assistant_message_count: E(),
-    tool_counts: record(string(), E()).optional(),
-    languages: record(string(), E()).optional(),
-    git_commits: E(),
-    git_pushes: E(),
-    input_tokens: E(),
-    output_tokens: E(),
-    first_prompt: string(),
-    summary: string().optional(),
-    user_interruptions: E().optional(),
-    user_response_times: array(E()).optional(),
-    tool_errors: E().optional(),
-    tool_error_categories: record(string(), E()).optional(),
-    uses_task_agent: M_2().optional(),
-    uses_mcp: M_2().optional(),
-    uses_web_search: M_2().optional(),
-    uses_web_fetch: M_2().optional(),
-    lines_added: E().optional(),
-    lines_removed: E().optional(),
-    files_modified: E().optional(),
-    message_hours: array(E()).optional(),
-    user_message_timestamps: array(string()).optional(),
-    permission_mode: string().optional(),
-    bash_would_prompt_count: E().optional(),
-    file_edit_tool_count: E().optional(),
-    destructive_command_count: E().optional(),
-  }),
-);
-var EXTENSION_TO_LANGUAGE = {
-  ".ts": "TypeScript",
-  ".tsx": "TypeScript",
-  ".js": "JavaScript",
-  ".jsx": "JavaScript",
-  ".py": "Python",
-  ".rb": "Ruby",
-  ".go": "Go",
-  ".rs": "Rust",
-  ".java": "Java",
-  ".c": "C",
-  ".h": "C",
-  ".cpp": "C++",
-  ".cc": "C++",
-  ".cxx": "C++",
-  ".hpp": "C++",
-  ".hh": "C++",
-  ".hxx": "C++",
-  ".ipp": "C++",
-  ".md": "Markdown",
-  ".json": "JSON",
-  ".yaml": "YAML",
-  ".yml": "YAML",
-  ".sh": "Shell",
-  ".css": "CSS",
-  ".html": "HTML",
-};
-var FACET_LABELS = {
-  debug_investigate: "Debug/Investigate",
-  implement_feature: "Implement Feature",
-  fix_bug: "Fix Bug",
-  write_script_tool: "Write Script/Tool",
-  refactor_code: "Refactor Code",
-  configure_system: "Configure System",
-  create_pr_commit: "Create PR/Commit",
-  analyze_data: "Analyze Data",
-  understand_codebase: "Understand Codebase",
-  write_tests: "Write Tests",
-  write_docs: "Write Docs",
-  deploy_infra: "Deploy/Infra",
-  warmup_minimal: "Cache Warmup",
-  fast_accurate_search: "Fast/Accurate Search",
-  correct_code_edits: "Correct Code Edits",
-  good_explanations: "Good Explanations",
-  proactive_help: "Proactive Help",
-  multi_file_changes: "Multi-file Changes",
-  handled_complexity: "Multi-file Changes",
-  good_debugging: "Good Debugging",
-  misunderstood_request: "Misunderstood Request",
-  wrong_approach: "Wrong Approach",
-  buggy_code: "Buggy Code",
-  user_rejected_action: "User Rejected Action",
-  claude_got_blocked: "Claude Got Blocked",
-  user_stopped_early: "User Stopped Early",
-  wrong_file_or_location: "Wrong File/Location",
-  excessive_changes: "Excessive Changes",
-  slow_or_verbose: "Slow/Verbose",
-  tool_failed: "Tool Failed",
-  user_unclear: "User Unclear",
-  external_issue: "External Issue",
-  frustrated: "Frustrated",
-  dissatisfied: "Dissatisfied",
-  likely_satisfied: "Likely Satisfied",
-  satisfied: "Satisfied",
-  happy: "Happy",
-  unsure: "Unsure",
-  neutral: "Neutral",
-  delighted: "Delighted",
-  single_task: "Single Task",
-  multi_task: "Multi Task",
-  iterative_refinement: "Iterative Refinement",
-  exploration: "Exploration",
-  quick_question: "Quick Question",
-  fully_achieved: "Fully Achieved",
-  mostly_achieved: "Mostly Achieved",
-  partially_achieved: "Partially Achieved",
-  not_achieved: "Not Achieved",
-  unclear_from_transcript: "Unclear",
-  unhelpful: "Unhelpful",
-  slightly_helpful: "Slightly Helpful",
-  moderately_helpful: "Moderately Helpful",
-  very_helpful: "Very Helpful",
-  essential: "Essential",
-};
+var sessionMetaSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var EXTENSION_TO_LANGUAGE;
+var FACET_LABELS;
+deferInit("chunk-yt6zn9vg.js:12554", () => {
+  sessionMetaSchema = DoctorLazy(() =>
+    objectSchema({
+      session_id: stringSchema(),
+      transcript_mtime: numberSchema().optional(),
+      project_path: stringSchema(),
+      start_time: stringSchema(),
+      duration_minutes: numberSchema(),
+      user_message_count: numberSchema(),
+      assistant_message_count: numberSchema(),
+      tool_counts: record(stringSchema(), numberSchema()).optional(),
+      languages: record(stringSchema(), numberSchema()).optional(),
+      git_commits: numberSchema(),
+      git_pushes: numberSchema(),
+      input_tokens: numberSchema(),
+      output_tokens: numberSchema(),
+      first_prompt: stringSchema(),
+      summary: stringSchema().optional(),
+      user_interruptions: numberSchema().optional(),
+      user_response_times: array(numberSchema()).optional(),
+      tool_errors: numberSchema().optional(),
+      tool_error_categories: record(stringSchema(), numberSchema()).optional(),
+      uses_task_agent: booleanSchema().optional(),
+      uses_mcp: booleanSchema().optional(),
+      uses_web_search: booleanSchema().optional(),
+      uses_web_fetch: booleanSchema().optional(),
+      lines_added: numberSchema().optional(),
+      lines_removed: numberSchema().optional(),
+      files_modified: numberSchema().optional(),
+      message_hours: array(numberSchema()).optional(),
+      user_message_timestamps: array(stringSchema()).optional(),
+      permission_mode: stringSchema().optional(),
+      bash_would_prompt_count: numberSchema().optional(),
+      file_edit_tool_count: numberSchema().optional(),
+      destructive_command_count: numberSchema().optional(),
+    }),
+  );
+  EXTENSION_TO_LANGUAGE = {
+    ".ts": "TypeScript",
+    ".tsx": "TypeScript",
+    ".js": "JavaScript",
+    ".jsx": "JavaScript",
+    ".py": "Python",
+    ".rb": "Ruby",
+    ".go": "Go",
+    ".rs": "Rust",
+    ".java": "Java",
+    ".c": "C",
+    ".h": "C",
+    ".cpp": "C++",
+    ".cc": "C++",
+    ".cxx": "C++",
+    ".hpp": "C++",
+    ".hh": "C++",
+    ".hxx": "C++",
+    ".ipp": "C++",
+    ".md": "Markdown",
+    ".json": "JSON",
+    ".yaml": "YAML",
+    ".yml": "YAML",
+    ".sh": "Shell",
+    ".css": "CSS",
+    ".html": "HTML",
+  };
+  FACET_LABELS = {
+    debug_investigate: "Debug/Investigate",
+    implement_feature: "Implement Feature",
+    fix_bug: "Fix Bug",
+    write_script_tool: "Write Script/Tool",
+    refactor_code: "Refactor Code",
+    configure_system: "Configure System",
+    create_pr_commit: "Create PR/Commit",
+    analyze_data: "Analyze Data",
+    understand_codebase: "Understand Codebase",
+    write_tests: "Write Tests",
+    write_docs: "Write Docs",
+    deploy_infra: "Deploy/Infra",
+    warmup_minimal: "Cache Warmup",
+    fast_accurate_search: "Fast/Accurate Search",
+    correct_code_edits: "Correct Code Edits",
+    good_explanations: "Good Explanations",
+    proactive_help: "Proactive Help",
+    multi_file_changes: "Multi-file Changes",
+    handled_complexity: "Multi-file Changes",
+    good_debugging: "Good Debugging",
+    misunderstood_request: "Misunderstood Request",
+    wrong_approach: "Wrong Approach",
+    buggy_code: "Buggy Code",
+    user_rejected_action: "User Rejected Action",
+    claude_got_blocked: "Claude Got Blocked",
+    user_stopped_early: "User Stopped Early",
+    wrong_file_or_location: "Wrong File/Location",
+    excessive_changes: "Excessive Changes",
+    slow_or_verbose: "Slow/Verbose",
+    tool_failed: "Tool Failed",
+    user_unclear: "User Unclear",
+    external_issue: "External Issue",
+    frustrated: "Frustrated",
+    dissatisfied: "Dissatisfied",
+    likely_satisfied: "Likely Satisfied",
+    satisfied: "Satisfied",
+    happy: "Happy",
+    unsure: "Unsure",
+    neutral: "Neutral",
+    delighted: "Delighted",
+    single_task: "Single Task",
+    multi_task: "Multi Task",
+    iterative_refinement: "Iterative Refinement",
+    exploration: "Exploration",
+    quick_question: "Quick Question",
+    fully_achieved: "Fully Achieved",
+    mostly_achieved: "Mostly Achieved",
+    partially_achieved: "Partially Achieved",
+    not_achieved: "Not Achieved",
+    unclear_from_transcript: "Unclear",
+    unhelpful: "Unhelpful",
+    slightly_helpful: "Slightly Helpful",
+    moderately_helpful: "Moderately Helpful",
+    very_helpful: "Very Helpful",
+    essential: "Essential",
+  };
+});
 //@ chunk-yt6zn9vg.js:15582-15625 fingerprint = getDataDir (1)
 function getDataDir() {
   return join(getClaudeConfigDir(), "usage-data");
@@ -215,28 +321,28 @@ function getSessionMetaDir() {
   return join(getDataDir(), "session-meta");
 }
 //@ chunk-yt6zn9vg.js:15709-15785 layout
-function facetsStorePath(e) {
-  return STORAGE_SPACES.userConfigDir("usage-data", ["facets", `${e}.json`]);
+function facetsStorePath(sessionId) {
+  return STORAGE_SPACES.userConfigDir("usage-data", ["facets", `${sessionId}.json`]);
 }
 //@ chunk-yt6zn9vg.js:15785-15867 layout
 function sessionMetaStorePath(sessionId) {
   return STORAGE_SPACES.userConfigDir("usage-data", ["session-meta", `${sessionId}.json`]);
 }
 //@ chunk-yt6zn9vg.js:15867-15924 layout = getDataDir (0.8)
-function getDataDir_2(e) {
-  return STORAGE_SPACES.userConfigDir("usage-data", [e]);
+function getDataDir_2(name) {
+  return STORAGE_SPACES.userConfigDir("usage-data", [name]);
 }
 //@ chunk-yt6zn9vg.js:15924-16399 callgraph-fingerprint = saveSessionMeta (0.26)
-async function saveSessionMeta(htmlReport, s, storageV5) {
-  let metaPath = join(getDataDir(), `report-${s}.html`);
+async function saveSessionMeta(htmlReport, sessionId, storageV5) {
+  let metaPath = join(getDataDir(), `report-${sessionId}.html`);
   if (isStorageV5Enabled() && storageV5) {
-    for (let g of [`report-${s}.html`, "report.html"]) {
-      let m = await storageV5.write(getDataDir_2(g), htmlReport, {
+    for (let fileName of [`report-${sessionId}.html`, "report.html"]) {
+      let written = await storageV5.write(getDataDir_2(fileName), htmlReport, {
         mode: 384,
         keepExistingMode: true,
       });
-      if (!m.ok) {
-        logForDebugging(`insights: report write failed: ${formatStorageError(m.error)}`);
+      if (!written.ok) {
+        logForDebugging(`insights: report write failed: ${formatStorageError(written.error)}`);
         throw Error("insights: report write through the storage backend failed");
       }
     }
@@ -270,10 +376,10 @@ function isExpectedCacheWriteFailure(error) {
 //@ chunk-yt6zn9vg.js:16579-16589 layout
 var INSIGHTS_MCP_AUTH_BATCH = 50;
 //@ chunk-yt6zn9vg.js:16589-16675 layout
-function chunkArray(e, s) {
-  let n = [];
-  for (let r = 0; r < e.length; r += s) n.push(e.slice(r, r + s));
-  return n;
+function chunkArray(items, size) {
+  let chunks = [];
+  for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size));
+  return chunks;
 }
 //@ chunk-yt6zn9vg.js:16675-16794 callgraph-fingerprint = loadCachedSessionMeta (0.327)
 function loadCachedSessionMeta(sessionId) {
@@ -320,8 +426,8 @@ CRITICAL GUIDELINES:
 SESSION:
 `;
 //@ chunk-yt6zn9vg.js:17942-17989 layout
-function stringOrEmpty(e) {
-  return typeof e === "string" ? e : "";
+function stringOrEmpty(value) {
+  return typeof value === "string" ? value : "";
 }
 //@ chunk-yt6zn9vg.js:17989-18285 layout
 var TOOL_ERROR_CATEGORY_RULES = [
@@ -336,7 +442,11 @@ var TOOL_ERROR_CATEGORY_RULES = [
 function categorizeToolError(content) {
   if (typeof content !== "string") return "Other";
   let lower = content.toLowerCase();
-  return TOOL_ERROR_CATEGORY_RULES.find(([n]) => n.some((r) => lower.includes(r)))?.[1] ?? "Other";
+  return (
+    TOOL_ERROR_CATEGORY_RULES.find(([keywords]) =>
+      keywords.some((keyword) => lower.includes(keyword)),
+    )?.[1] ?? "Other"
+  );
 }
 //@ chunk-yt6zn9vg.js:18423-20612 fingerprint = extractToolStats (0.708)
 function extractToolStats(log) {
@@ -356,14 +466,14 @@ function extractToolStats(log) {
   let filesModified = new Set();
   let messageHours = [];
   let userMessageTimestamps = [];
-  let R = 0;
-  let J = 0;
-  let U = 0;
+  let toolCalls = 0;
+  let errors = 0;
+  let mcpCalls = 0;
   let usesMcp = false;
   let usesWebSearch = false;
   let usesWebFetch = false;
   let lastAssistantTimestamp = null;
-  let de = isCcsTenant();
+  let isCcs = isCcsTenant();
   for (let msg of log.messages) {
     let msgTimestamp = msg.timestamp;
     if (msg.type === "assistant" && msg.message) {
@@ -396,16 +506,16 @@ function extractToolStats(log) {
                 toolName === FILE_WRITE_TOOL_NAME ||
                 toolName === NOTEBOOK_EDIT_TOOL_NAME
               )
-                J++;
+                errors++;
               if (toolName === "Edit") {
                 let oldString = stringOrEmpty(input.old_string);
                 let newString = stringOrEmpty(input.new_string);
-                if (de) {
-                  let oe = countLineChanges(oldString, newString);
-                  linesAdded += oe.added;
-                  linesRemoved += oe.removed;
+                if (isCcs) {
+                  let changes = countLineChanges(oldString, newString);
+                  linesAdded += changes.added;
+                  linesRemoved += changes.removed;
                 } else
-                  for (let change of Y5e(oldString, newString)) {
+                  for (let change of diffLines(oldString, newString)) {
                     if (change.added) linesAdded += change.count || 0;
                     if (change.removed) linesRemoved += change.count || 0;
                   }
@@ -423,10 +533,10 @@ function extractToolStats(log) {
               let command = stringOrEmpty(input.command);
               if (command.includes("git commit")) gitCommits++;
               if (command.includes("git push")) gitPushes++;
-              if (toolName === BASH_TOOL_NAME && command && !de) {
+              if (toolName === BASH_TOOL_NAME && command && !isCcs) {
                 if (!isReadOnlyBashCommandCached(command)) {
-                  R++;
-                  if (getDestructiveTargetCategory(command) !== null) U++;
+                  toolCalls++;
+                  if (getDestructiveTargetCategory(command) !== null) mcpCalls++;
                 }
               }
             }
@@ -464,8 +574,8 @@ function extractToolStats(log) {
           if (block.type === "tool_result" && "content" in block) {
             if (block.is_error) {
               toolErrors++;
-              let W = categorizeToolError(block.content);
-              toolErrorCategories[W] = (toolErrorCategories[W] || 0) + 1;
+              let category = categorizeToolError(block.content);
+              toolErrorCategories[category] = (toolErrorCategories[category] || 0) + 1;
             }
           }
       }
@@ -504,43 +614,47 @@ function extractToolStats(log) {
     filesModified,
     messageHours,
     userMessageTimestamps,
-    bashWouldPromptCount: R,
-    fileEditToolCount: J,
-    destructiveCommandCount: U,
+    bashWouldPromptCount: toolCalls,
+    fileEditToolCount: errors,
+    destructiveCommandCount: mcpCalls,
   };
 }
 //@ chunk-yt6zn9vg.js:20612-20857 layout = wordDiffStrings (1)
 function countLineChanges(oldStr, newStr) {
-  let n = new Map();
+  let lineCounts = new Map();
   for (let line of oldStr.split(`
 `))
-    n.set(line, (n.get(line) ?? 0) + 1);
+    lineCounts.set(line, (lineCounts.get(line) ?? 0) + 1);
   let added = newStr
     .split(
       `
 `,
     )
     .reduce((acc, line) => {
-      let y = n.get(line) ?? 0;
-      n.set(line, y - 1);
-      return y > 0 ? acc : acc + 1;
+      let count = lineCounts.get(line) ?? 0;
+      lineCounts.set(line, count - 1);
+      return count > 0 ? acc : acc + 1;
     }, 0);
-  let len = [...n.values()].reduce((acc, d) => acc + Math.max(d, 0), 0);
+  let len = [...lineCounts.values()].reduce((acc, n) => acc + Math.max(n, 0), 0);
   return {
     added,
     removed: len,
   };
 }
 //@ chunk-yt6zn9vg.js:20857-20880 layout
-var INSIGHTS_CACHE = new Map();
-var MAX_INSIGHTS_CACHE_ENTRIES = 5000;
+var INSIGHTS_CACHE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_INSIGHTS_CACHE_ENTRIES;
+deferInit("chunk-yt6zn9vg.js:20857", () => {
+  INSIGHTS_CACHE = new Map();
+  MAX_INSIGHTS_CACHE_ENTRIES = 5000;
+});
 //@ chunk-yt6zn9vg.js:20880-21085 layout
 function isReadOnlyBashCommandCached(command) {
-  let s = INSIGHTS_CACHE.get(command);
-  if (s !== undefined) return s;
-  let n;
+  let cached = INSIGHTS_CACHE.get(command);
+  if (cached !== undefined) return cached;
+  let fresh;
   try {
-    n =
+    fresh =
       checkReadOnlyConstraints(
         {
           command,
@@ -551,13 +665,13 @@ function isReadOnlyBashCommandCached(command) {
         },
       ).behavior === "allow";
   } catch {
-    n = false;
+    fresh = false;
   }
   if (command.length <= SPLIT_MAX_LEN) {
     if (INSIGHTS_CACHE.size >= MAX_INSIGHTS_CACHE_ENTRIES) INSIGHTS_CACHE.clear();
-    INSIGHTS_CACHE.set(command, n);
+    INSIGHTS_CACHE.set(command, fresh);
   }
-  return n;
+  return fresh;
 }
 //@ chunk-yt6zn9vg.js:21085-22424 fingerprint = logToSessionMeta (0.918)
 function logToSessionMeta(log) {
@@ -618,10 +732,11 @@ function logToSessionMeta(log) {
   };
 }
 //@ chunk-yt6zn9vg.js:22424-22597 fingerprint = deduplicateSessionBranches (0.759)
-function deduplicateSessionBranches(meta, s) {
-  if (!s) return true;
-  if (meta.user_message_count !== s.user_message_count) return meta.user_message_count > s.user_message_count;
-  return meta.duration_minutes > s.duration_minutes;
+function deduplicateSessionBranches(meta, otherMeta) {
+  if (!otherMeta) return true;
+  if (meta.user_message_count !== otherMeta.user_message_count)
+    return meta.user_message_count > otherMeta.user_message_count;
+  return meta.duration_minutes > otherMeta.duration_minutes;
 }
 //@ chunk-yt6zn9vg.js:22597-22902 layout = formatTranscriptWithSummarization (0.799)
 function formatTranscriptWithSummarization_2(log) {
@@ -632,11 +747,11 @@ function formatTranscriptWithSummarization_2(log) {
   chunks.push(`Project: ${meta.project_path}`);
   chunks.push(`Duration: ${meta.duration_minutes} min`);
   chunks.push("");
-  for (let r of formatTranscriptForFacets(log.messages, {
+  for (let facet of formatTranscriptForFacets(log.messages, {
     userTextChars: 500,
     assistantTextChars: 300,
   }))
-    chunks.push(r);
+    chunks.push(facet);
   return chunks.join(`
 `);
 }
@@ -652,12 +767,12 @@ Keep it concise - 3-5 sentences. Preserve specific details like file names, erro
 TRANSCRIPT CHUNK:
 `;
 //@ chunk-yt6zn9vg.js:23229-23659 fingerprint = summarizeTranscriptChunk (0.924)
-async function summarizeTranscriptChunk(chunk, credentials, n = "", r) {
+async function summarizeTranscriptChunk(chunk, credentials, sectionTitle = "", options) {
   try {
     let result = await queryHaiku({
       systemPrompt: asSystemPrompt([]),
-      userPrompt: n + SUMMARIZE_CHUNK_PROMPT + chunk,
-      signal: r ?? new AbortController().signal,
+      userPrompt: sectionTitle + SUMMARIZE_CHUNK_PROMPT + chunk,
+      signal: options ?? new AbortController().signal,
       options: {
         model: insightsModel(),
         querySource: "insights",
@@ -677,23 +792,31 @@ async function summarizeTranscriptChunk(chunk, credentials, n = "", r) {
   }
 }
 //@ chunk-yt6zn9vg.js:23659-23698 layout
-var CCS_INSIGHTS_SESSION_LIMIT = 5;
-var INSIGHTS_RUNNING_SLOT = new SessionRootSlot(() => ({
-  running: false,
-}));
+var CCS_INSIGHTS_SESSION_LIMIT; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+var INSIGHTS_RUNNING_SLOT;
+deferInit("chunk-yt6zn9vg.js:23659", () => {
+  CCS_INSIGHTS_SESSION_LIMIT = 5;
+  INSIGHTS_RUNNING_SLOT = new SessionRootSlot(() => ({
+    running: false,
+  }));
+});
 //@ chunk-yt6zn9vg.js:23698-24184 fingerprint = formatTranscriptWithSummarization (0.939)
-async function formatTranscriptWithSummarization(log, credentials, n, r) {
+async function formatTranscriptWithSummarization(log, credentials, sectionTitle, options) {
   let fullTranscript = formatTranscriptWithSummarization_2(log);
   if (fullTranscript.length <= 30000) return fullTranscript;
   let CHUNK_SIZE = 25000;
   let chunks = [];
   for (let i = 0; i < fullTranscript.length; i += CHUNK_SIZE)
     chunks.push(fullTranscript.slice(i, i + CHUNK_SIZE));
-  let y = isCcsTenant() ? CCS_INSIGHTS_SESSION_LIMIT : chunks.length;
-  let w = [];
-  for (let f of chunkArray(chunks, y)) {
-    r?.throwIfAborted();
-    w.push(...(await Promise.all(f.map((k) => summarizeTranscriptChunk(k, credentials, n, r)))));
+  let batchSize = isCcsTenant() ? CCS_INSIGHTS_SESSION_LIMIT : chunks.length;
+  let summaries = [];
+  for (let batch of chunkArray(chunks, batchSize)) {
+    options?.throwIfAborted();
+    summaries.push(
+      ...(await Promise.all(
+        batch.map((part) => summarizeTranscriptChunk(part, credentials, sectionTitle, options)),
+      )),
+    );
   }
   let meta = logToSessionMeta(log);
   return (
@@ -706,7 +829,7 @@ async function formatTranscriptWithSummarization(log, credentials, n, r) {
       "",
     ].join(`
 `) +
-    w.join(`
+    summaries.join(`
 
 ---
 
@@ -714,10 +837,10 @@ async function formatTranscriptWithSummarization(log, credentials, n, r) {
   );
 }
 //@ chunk-yt6zn9vg.js:24184-24401 fingerprint = loadCachedFacets (1)
-async function loadCachedFacets(sessionId, s) {
-  if (s) {
-    let [r] = await getMcpAuthCache([sessionId], s);
-    return r ?? null;
+async function loadCachedFacets(sessionId, storageV5) {
+  if (storageV5) {
+    let [facet] = await getMcpAuthCache([sessionId], storageV5);
+    return facet ?? null;
   }
   let facetPath = join(getFacetsDir(), `${sessionId}.json`);
   try {
@@ -737,19 +860,19 @@ async function loadCachedFacets(sessionId, s) {
   }
 }
 //@ chunk-yt6zn9vg.js:24401-24570 layout = getMcpAuthCache (1)
-function getMcpAuthCache(e, s) {
-  return batchReadWithFallback(e, facetsStorePath, s, async (n, r) => {
-    let g;
+function getMcpAuthCache(sessionIds, storageV5) {
+  return batchReadWithFallback(sessionIds, facetsStorePath, storageV5, async (key, file) => {
+    let parsed;
     try {
-      g = jsonParse(Buffer.from(n).toString("utf-8"));
+      parsed = jsonParse(Buffer.from(key).toString("utf-8"));
     } catch {
       return null;
     }
-    if (!isValidSessionFacets(g)) {
-      await s.delete(facetsStorePath(r));
+    if (!isValidSessionFacets(parsed)) {
+      await storageV5.delete(facetsStorePath(file));
       return null;
     }
-    return g;
+    return parsed;
   });
 }
 //@ chunk-yt6zn9vg.js:24570-24974 fingerprint = saveFacets (0.557)
@@ -761,12 +884,12 @@ async function saveFacets(facets, storageV5) {
       });
     } catch {}
   if (isStorageV5Enabled() && storageV5) {
-    let r = await storageV5.write(facetsStorePath(facets.session_id), jsonStringify(facets, null, 2), {
+    let written = await storageV5.write(facetsStorePath(facets.session_id), jsonStringify(facets, null, 2), {
       publishDiscipline: "inPlace",
       mode: 384,
     });
-    if (!r.ok) {
-      logForDebugging(`saveFacets: cache write failed: ${formatStorageError(r.error)}`);
+    if (!written.ok) {
+      logForDebugging(`saveFacets: cache write failed: ${formatStorageError(written.error)}`);
       throw Error("saveFacets: cache write through the storage backend failed");
     }
     return;
@@ -778,10 +901,10 @@ async function saveFacets(facets, storageV5) {
   });
 }
 //@ chunk-yt6zn9vg.js:24974-25116 layout
-async function loadSessionMeta(sessionId, s) {
-  if (s) {
-    let [n] = await getMcpAuthCache_2([sessionId], s);
-    return n ?? null;
+async function loadSessionMeta(sessionId, storageV5) {
+  if (storageV5) {
+    let [meta] = await getMcpAuthCache_2([sessionId], storageV5);
+    return meta ?? null;
   }
   try {
     let meta = await loadCachedSessionMeta(sessionId).read();
@@ -791,28 +914,32 @@ async function loadSessionMeta(sessionId, s) {
   }
 }
 //@ chunk-yt6zn9vg.js:25116-25299 layout = getMcpAuthCache (0.763)
-function getMcpAuthCache_2(e, s) {
-  return batchReadWithFallback(e, sessionMetaStorePath, s, (data) => {
+function getMcpAuthCache_2(sessionIds, storageV5) {
+  return batchReadWithFallback(sessionIds, sessionMetaStorePath, storageV5, (data) => {
     try {
-      let r = sessionMetaSchema()
+      let schema = sessionMetaSchema()
         .nullable()
         .safeParse(jsonParse(Buffer.from(data).toString("utf-8")));
-      return r.success && r.data !== null ? withSessionMetaDefaults(r.data) : null;
+      return schema.success && schema.data !== null ? withSessionMetaDefaults(schema.data) : null;
     } catch {
       return null;
     }
   });
 }
 //@ chunk-yt6zn9vg.js:25299-25584 layout
-async function batchReadWithFallback(e, s, n, r) {
-  if (e.length === 0) return [];
-  let g = await n.read(e.map(s));
-  if (!g.ok && e.length > 1)
-    return (await Promise.all(e.map((d) => batchReadWithFallback([d], s, n, r)))).map(([d]) => d ?? null);
+async function batchReadWithFallback(sessionIds, pathFor, storageV5, parse) {
+  if (sessionIds.length === 0) return [];
+  let batch = await storageV5.read(sessionIds.map(pathFor));
+  if (!batch.ok && sessionIds.length > 1)
+    return (
+      await Promise.all(
+        sessionIds.map((sessionId) => batchReadWithFallback([sessionId], pathFor, storageV5, parse)),
+      )
+    ).map(([result]) => result ?? null);
   return Promise.all(
-    e.map(async (m, d) => {
-      let y = g.ok ? g.value.items[d] : undefined;
-      return y?.found ? r(y.value, m) : null;
+    sessionIds.map(async (sessionId, index) => {
+      let item = batch.ok ? batch.value.items[index] : undefined;
+      return item?.found ? parse(item.value, sessionId) : null;
     }),
   );
 }
@@ -847,11 +974,15 @@ function withSessionMetaDefaults(meta) {
 async function writeSessionMetaCache(meta, storageV5) {
   try {
     if (storageV5) {
-      let n = await storageV5.write(sessionMetaStorePath(meta.session_id), jsonStringify(meta, null, 2), {
-        mode: 384,
-      });
-      if (!n.ok) {
-        let error = n.error;
+      let written = await storageV5.write(
+        sessionMetaStorePath(meta.session_id),
+        jsonStringify(meta, null, 2),
+        {
+          mode: 384,
+        },
+      );
+      if (!written.ok) {
+        let error = written.error;
         if (isExpectedCacheWriteFailure(error))
           logForDebugging(`saveSessionMeta: cache write failed: ${formatStorageError(error)}`);
         else
@@ -874,9 +1005,9 @@ async function writeSessionMetaCache(meta, storageV5) {
   }
 }
 //@ chunk-yt6zn9vg.js:26559-27969 fingerprint = extractFacetsFromAPI (0.971)
-async function extractFacetsFromAPI(log, sessionId, credentials, privacyLabels, signal) {
+async function extractFacetsFromAPI(log, sessionId, credentials, sectionTitle, options) {
   try {
-    let transcript = await formatTranscriptWithSummarization(log, credentials, privacyLabels, signal);
+    let transcript = await formatTranscriptWithSummarization(log, credentials, sectionTitle, options);
     let jsonPrompt = `${FACET_EXTRACTION_PROMPT}${transcript}
 
 RESPOND WITH ONLY A VALID JSON OBJECT matching this schema:
@@ -894,8 +1025,8 @@ RESPOND WITH ONLY A VALID JSON OBJECT matching this schema:
 }`;
     let result = await queryHaiku({
       systemPrompt: asSystemPrompt([]),
-      userPrompt: privacyLabels + jsonPrompt,
-      signal: signal ?? new AbortController().signal,
+      userPrompt: sectionTitle + jsonPrompt,
+      signal: options ?? new AbortController().signal,
       options: {
         model: insightsModel(),
         querySource: "insights",
@@ -935,7 +1066,7 @@ function detectMultiClauding(sessions) {
         sessionId: session.session_id,
       });
     }
-  allSessionMessages.sort((w, i) => w.ts - i.ts);
+  allSessionMessages.sort((a, b) => a.ts - b.ts);
   let multiClaudeSessionPairs = new Set();
   let messagesDuringMulticlaude = new Set();
   let windowStart = 0;
@@ -965,9 +1096,9 @@ function detectMultiClauding(sessions) {
   }
   let sessionsWithOverlaps = new Set();
   for (let pair of multiClaudeSessionPairs) {
-    let [i, h] = pair.split(":");
-    if (i) sessionsWithOverlaps.add(i);
-    if (h) sessionsWithOverlaps.add(h);
+    let [left, right] = pair.split(":");
+    if (left) sessionsWithOverlaps.add(left);
+    if (right) sessionsWithOverlaps.add(right);
   }
   return {
     overlap_events: multiClaudeSessionPairs.size,
@@ -1032,8 +1163,8 @@ function aggregateData(sessions, facets) {
   };
   let dates = [];
   let allResponseTimes = [];
-  let m = [];
-  let d = [];
+  let sortedSessions = [];
+  let responseTimes = [];
   for (let session of sessions) {
     dates.push(session.start_time);
     result.total_messages += session.user_message_count;
@@ -1054,11 +1185,11 @@ function aggregateData(sessions, facets) {
     result.total_lines_added += session.lines_added;
     result.total_lines_removed += session.lines_removed;
     result.total_files_modified += session.files_modified;
-    m.push(...session.message_hours);
+    sortedSessions.push(...session.message_hours);
     if (session.bash_would_prompt_count !== undefined) {
       let permissionMode = session.permission_mode;
       if (permissionMode === "auto" || permissionMode === "default" || permissionMode === "acceptEdits")
-        d.push({
+        responseTimes.push({
           start_time: session.start_time,
           auto: permissionMode === "auto",
           prompts:
@@ -1105,7 +1236,7 @@ function aggregateData(sessions, facets) {
   result.date_range.end = firstLineOf(dates.at(-1) ?? "", "T");
   result.user_response_times = allResponseTimes;
   if (allResponseTimes.length > 0) {
-    let sorted = [...allResponseTimes].sort((h, f) => h - f);
+    let sorted = [...allResponseTimes].sort((a, b) => a - b);
     result.median_response_time = sorted[Math.floor(sorted.length / 2)] || 0;
     result.avg_response_time =
       allResponseTimes.reduce((acc, responseTime) => acc + responseTime, 0) / allResponseTimes.length;
@@ -1114,18 +1245,19 @@ function aggregateData(sessions, facets) {
   result.days_active = uniqueDays.size;
   result.messages_per_day =
     result.days_active > 0 ? Math.round((result.total_messages / result.days_active) * 10) / 10 : 0;
-  result.message_hours = m;
+  result.message_hours = sortedSessions;
   result.multi_clauding = detectMultiClauding(sessions);
-  d.sort((i, h) => h.start_time.localeCompare(i.start_time));
-  let sliced = d.slice(0, MAX_GLANCE_SESSIONS);
-  for (let i of sliced)
-    if (i.auto) result.auto_mode_stats.auto_sessions++;
+  responseTimes.sort((a, b) => b.start_time.localeCompare(a.start_time));
+  let sliced = responseTimes.slice(0, MAX_GLANCE_SESSIONS);
+  for (let session of sliced)
+    if (session.auto) result.auto_mode_stats.auto_sessions++;
     else {
       result.auto_mode_stats.non_auto_sessions++;
-      result.auto_mode_stats.estimated_prompts_in_non_auto += i.prompts;
-      result.auto_mode_stats.destructive_in_non_auto += i.destructive;
+      result.auto_mode_stats.estimated_prompts_in_non_auto += session.prompts;
+      result.auto_mode_stats.destructive_in_non_auto += session.destructive;
     }
-  result.auto_mode_stats.recent_all_auto = sliced.length >= 3 && sliced.slice(0, 3).every((i) => i.auto);
+  result.auto_mode_stats.recent_all_auto =
+    sliced.length >= 3 && sliced.slice(0, 3).every((session) => session.auto);
   return result;
 }
 //@ chunk-yt6zn9vg.js:32723-32759 layout
@@ -1168,21 +1300,21 @@ function autoModeRecommendation(report, context) {
 //@ chunk-yt6zn9vg.js:33396-33494 layout
 function roundToTwoSigFigs(estimatedPrompts) {
   if (estimatedPrompts < 100) return estimatedPrompts;
-  let s = 10 ** (Math.floor(Math.log10(estimatedPrompts)) - 1);
-  return Math.round(estimatedPrompts / s) * s;
+  let step = 10 ** (Math.floor(Math.log10(estimatedPrompts)) - 1);
+  return Math.round(estimatedPrompts / step) * step;
 }
 //@ chunk-yt6zn9vg.js:33494-33887 layout
 /**
  * 读取生成自动模式建议所需的上下文开关（是否可用、当前会话是否 auto、沙箱自动放行、无对话框、仲裁器是分类器、setup 技能、已配置环境）。
  */
 function readAutoModeContext(permissionGates) {
-  let s = permissionGates?.();
+  let gates = permissionGates?.();
   return {
-    autoModeAvailable: s?.autoModeAvailable === true,
-    currentSessionIsAuto: s?.currentSessionIsAuto === true,
-    sandboxAutoAllowActive: s?.sandboxAutoAllowActive === true,
-    currentSessionSeesNoDialogs: s?.currentSessionSeesNoDialogs === true,
-    liveArbiterIsAutoClassifier: s?.liveArbiterIsAutoClassifier === true,
+    autoModeAvailable: gates?.autoModeAvailable === true,
+    currentSessionIsAuto: gates?.currentSessionIsAuto === true,
+    sandboxAutoAllowActive: gates?.sandboxAutoAllowActive === true,
+    currentSessionSeesNoDialogs: gates?.currentSessionSeesNoDialogs === true,
+    liveArbiterIsAutoClassifier: gates?.liveArbiterIsAutoClassifier === true,
     setupSkillAvailable: isAutoModeSetupNotOverridden(),
     hasAutoModeEnvironment: (getAutoModeConfig()?.environment?.length ?? 0) > 0,
   };
@@ -1330,19 +1462,19 @@ Find something genuinely interesting or amusing from the session summaries.`,
   },
 ];
 //@ chunk-yt6zn9vg.js:39924-40569 fingerprint = generateSectionInsight (0.803)
-async function generateSectionInsight(section, dataContext, credentials, r, g) {
+async function generateSectionInsight(section, dataContext, credentials, storageV5, options) {
   try {
     let result = await queryHaiku({
       systemPrompt: asSystemPrompt([]),
       userPrompt:
-        r +
+        storageV5 +
         section.prompt +
         `
 
 DATA:
 ` +
         dataContext,
-      signal: g ?? new AbortController().signal,
+      signal: options ?? new AbortController().signal,
       options: {
         model: insightsModel(),
         querySource: "insights",
@@ -1376,7 +1508,7 @@ DATA:
       result: null,
     };
   } catch (err) {
-    if (!g?.aborted)
+    if (!options?.aborted)
       logError(
         withTelemetryMessage(
           Error(`${section.name} failed: ${toError(err).message}`),
@@ -1390,18 +1522,18 @@ DATA:
   }
 }
 //@ chunk-yt6zn9vg.js:40569-44394 fingerprint = generateParallelInsights (0.942)
-async function generateParallelInsights(data, facets, credentials, privacyLabels, signal) {
+async function generateParallelInsights(data, facets, credentials, storageV5, options) {
   let facetSummaries = Array.from(facets.values())
     .slice(0, 50)
-    .map((x) => `- ${x.brief_summary} (${x.outcome}, ${x.claude_helpfulness})`).join(`
+    .map((item) => `- ${item.brief_summary} (${item.outcome}, ${item.claude_helpfulness})`).join(`
 `);
   let frictionDetails = Array.from(facets.values())
-    .filter((x) => x.friction_detail)
+    .filter((item) => item.friction_detail)
     .slice(0, 20)
-    .map((x) => `- ${x.friction_detail}`).join(`
+    .map((item) => `- ${item.friction_detail}`).join(`
 `);
   let userInstructions = Array.from(facets.values())
-    .flatMap((x) => x.user_instructions_to_claude || [])
+    .flatMap((item) => item.user_instructions_to_claude || [])
     .slice(0, 15)
     .map((i) => `- ${i}`).join(`
 `);
@@ -1415,10 +1547,10 @@ async function generateParallelInsights(data, facets, credentials, privacyLabels
         hours: Math.round(data.total_duration_hours),
         commits: data.git_commits,
         top_tools: Object.entries(data.tool_counts)
-          .sort((x, H) => H[1] - x[1])
+          .sort((a, b) => b[1] - a[1])
           .slice(0, 8),
         top_goals: Object.entries(data.goal_categories)
-          .sort((x, H) => H[1] - x[1])
+          .sort((a, b) => b[1] - a[1])
           .slice(0, 8),
         outcomes: data.outcomes,
         satisfaction: data.satisfaction,
@@ -1446,17 +1578,17 @@ USER INSTRUCTIONS TO CLAUDE:
     (userInstructions || "None captured");
   let results = await Promise.all(
     INSIGHT_SECTIONS.map((section) =>
-      generateSectionInsight(section, dataContext, credentials, privacyLabels, signal),
+      generateSectionInsight(section, dataContext, credentials, storageV5, options),
     ),
   );
-  signal?.throwIfAborted();
+  options?.throwIfAborted();
   let insights = {};
   for (let { name, result } of results) if (result) insights[name] = result;
   let projectAreasText =
-    insights.project_areas?.areas?.map((x) => `- ${x.name}: ${x.description}`).join(`
+    insights.project_areas?.areas?.map((area) => `- ${area.name}: ${area.description}`).join(`
 `) || "";
   let bigWinsText =
-    insights.what_works?.impressive_workflows?.map((x) => `- ${x.title}: ${x.description}`).join(`
+    insights.what_works?.impressive_workflows?.map((item) => `- ${item.title}: ${item.description}`).join(`
 `) || "";
   let frictionText =
     insights.friction_analysis?.categories?.map(
@@ -1464,7 +1596,8 @@ USER INSTRUCTIONS TO CLAUDE:
     ).join(`
 `) || "";
   let featuresText =
-    insights.suggestions?.features_to_try?.map((x) => `- ${x.feature}: ${x.one_liner}`).join(`
+    insights.suggestions?.features_to_try?.map((feature) => `- ${feature.feature}: ${feature.one_liner}`)
+      .join(`
 `) || "";
   let patternsText =
     insights.suggestions?.usage_patterns?.map(
@@ -1522,13 +1655,7 @@ ${patternsText}
 ${horizonText}`,
     maxTokens: 8192,
   };
-  let atAGlanceResult = await generateSectionInsight(
-    atAGlanceSection,
-    "",
-    credentials,
-    privacyLabels,
-    signal,
-  );
+  let atAGlanceResult = await generateSectionInsight(atAGlanceSection, "", credentials, storageV5, options);
   if (atAGlanceResult.result) insights.at_a_glance = atAGlanceResult.result;
   return insights;
 }
@@ -1554,14 +1681,14 @@ function generateBarChart(data, color, maxItems = 6, fixedOrder) {
       .map((key) => [key, data[key] ?? 0]);
   else
     entries = Object.entries(data)
-      .sort((d, y) => y[1] - d[1])
+      .sort((a, b) => b[1] - a[1])
       .slice(0, maxItems);
   if (entries.length === 0) return '<p class="empty">No data</p>';
   let maxVal = Math.max(...entries.map((e) => e[1]));
   return entries.map(([label, count]) => {
     let pct = (count / maxVal) * 100;
     let cleanLabel =
-      FACET_LABELS[label] || label.replaceAll("_", " ").replace(/\b\w/g, (h) => h.toUpperCase());
+      FACET_LABELS[label] || label.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
     return `<div class="bar-row">
         <div class="bar-label">${escapeXmlAttr(cleanLabel)}</div>
         <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>
@@ -1627,7 +1754,7 @@ function generateTimeOfDayChart(messageHours) {
   for (let messageHour of messageHours) hourCounts[messageHour] = (hourCounts[messageHour] || 0) + 1;
   let periodCounts = periods.map((period) => ({
     label: period.label,
-    count: period.range.reduce((sum, w) => sum + (hourCounts[w] || 0), 0),
+    count: period.range.reduce((sum, hour) => sum + (hourCounts[hour] || 0), 0),
   }));
   let maxVal = Math.max(...periodCounts.map((periodCount) => periodCount.count)) || 1;
   return `<div id="hour-histogram">${periodCounts.map(
@@ -1656,8 +1783,8 @@ function generateHtmlReport(data, insights, htmlReport) {
 
 `,
       )
-      .map((j) => {
-        let html = escapeXmlAttr(j);
+      .map((row) => {
+        let html = escapeXmlAttr(row);
         html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
         html = html.replace(/^- /gm, "\u2022 ");
         html = html.replaceAll(
@@ -1683,7 +1810,7 @@ function generateHtmlReport(data, insights, htmlReport) {
     </div>
     `
     : "";
-  let d = !htmlReport
+  let cell = !htmlReport
     ? ""
     : htmlReport.kind === "switch_to_auto"
       ? `
@@ -2314,7 +2441,7 @@ function generateHtmlReport(data, insights, htmlReport) {
 
     ${atAGlanceHtml}
 
-    ${d}
+    ${cell}
 
     <nav class="nav-toc">
       <a href="#section-work">What You Work On</a>
@@ -2470,29 +2597,29 @@ function generateHtmlReport(data, insights, htmlReport) {
  */
 async function listSessionFilesForInsights(storage) {
   if (storage) {
-    let m = [];
+    let results = [];
     switch (
       (
         await readAllPages(
-          (h) =>
+          (kind) =>
             storage.listEntries(
               {
                 namespace: "transcript",
               },
-              h
+              kind
                 ? {
-                    cursor: h,
+                    cursor: kind,
                   }
                 : undefined,
             ),
-          (h) => {
-            for (let f of h)
+          (entries) => {
+            for (let entry of entries)
               if (
-                f.kind === "scope" &&
-                f.scope.namespace === "transcript" &&
-                f.scope.projectKey !== undefined
+                entry.kind === "scope" &&
+                entry.scope.namespace === "transcript" &&
+                entry.scope.projectKey !== undefined
               )
-                m.push(f.scope.projectKey);
+                results.push(entry.scope.projectKey);
           },
         )
       ).status
@@ -2503,46 +2630,51 @@ async function listSessionFilesForInsights(storage) {
         return [];
       case "capped":
         logForDebugging(
-          `insights: project listing truncated at ${DEFAULT_MAX_PAGES} pages; scanning the ${m.length} projects seen`,
+          `insights: project listing truncated at ${DEFAULT_MAX_PAGES} pages; scanning the ${results.length} projects seen`,
           {
             level: "warn",
           },
         );
         break;
     }
-    let y = [];
+    let sessions = [];
     let budget = {
       pagesLeft: DEFAULT_MAX_PAGES,
     };
-    let i = 0;
-    for (let j = 0; j < m.length; j++) {
-      let f = m[j];
+    let page = 0;
+    for (let j = 0; j < results.length; j++) {
+      let result = results[j];
       switch (
         (
           await readAllPages(
-            (I) =>
+            (page) =>
               storage.listEntries(
                 {
                   namespace: "transcript",
-                  projectKey: f,
+                  projectKey: result,
                 },
-                I
+                page
                   ? {
-                      cursor: I,
+                      cursor: page,
                     }
                   : undefined,
               ),
-            (I) => {
-              for (let D of I) {
-                if (D.kind !== "key" || D.key.namespace !== "transcript") continue;
-                if (D.key.agentId !== undefined || D.key.journal === true || D.key.projectKey !== f) continue;
-                let O = normalizeUuidOrNull(D.key.sessionId);
-                if (!O) continue;
-                y.push({
-                  sessionId: O,
-                  key: STORAGE_SPACES.transcript(f, O),
-                  mtime: D.mtimeMs ?? 0,
-                  size: D.size ?? 0,
+            (entries) => {
+              for (let entry of entries) {
+                if (entry.kind !== "key" || entry.key.namespace !== "transcript") continue;
+                if (
+                  entry.key.agentId !== undefined ||
+                  entry.key.journal === true ||
+                  entry.key.projectKey !== result
+                )
+                  continue;
+                let sessionId = normalizeUuidOrNull(entry.key.sessionId);
+                if (!sessionId) continue;
+                sessions.push({
+                  sessionId,
+                  key: STORAGE_SPACES.transcript(result, sessionId),
+                  mtime: entry.mtimeMs ?? 0,
+                  size: entry.size ?? 0,
                 });
               }
             },
@@ -2557,27 +2689,27 @@ async function listSessionFilesForInsights(storage) {
         case "error":
           break;
         case "capped":
-          if (i === 0)
+          if (page === 0)
             logForDebugging(
-              `insights: session listing for project ${f} truncated (the scan's ${DEFAULT_MAX_PAGES}-page session-listing budget is spent); keeping the sessions seen`,
+              `insights: session listing for project ${result} truncated (the scan's ${DEFAULT_MAX_PAGES}-page session-listing budget is spent); keeping the sessions seen`,
               {
                 level: "warn",
               },
             );
-          i++;
+          page++;
           break;
       }
       if (j % 10 === 9) await new Promise((resolve) => setImmediate(resolve));
     }
-    if (i > 1)
+    if (page > 1)
       logForDebugging(
-        `insights: ${i - 1} more ${i === 2 ? "project was" : "projects were"} left without a session listing after the scan's budget ran out`,
+        `insights: ${page - 1} more ${page === 2 ? "project was" : "projects were"} left without a session listing after the scan's budget ran out`,
         {
           level: "warn",
         },
       );
-    y.sort((h, f) => f.mtime - h.mtime);
-    return y;
+    sessions.sort((a, b) => b.mtime - a.mtime);
+    return sessions;
   }
   let projectsDir = getProjectsDir();
   let entries;
@@ -2594,70 +2726,77 @@ async function listSessionFilesForInsights(storage) {
   let sessions = [];
   for (let i = 0; i < projectDirs.length; i++) {
     let sessionFilesWithMtime = await getSessionFilesWithMtime(projectDirs[i]);
-    for (let [y, w] of sessionFilesWithMtime)
+    for (let [sessionId, mtime] of sessionFilesWithMtime)
       sessions.push({
-        sessionId: y,
-        path: w.path,
-        mtime: w.mtime,
-        size: w.size,
+        sessionId,
+        path: mtime.path,
+        mtime: mtime.mtime,
+        size: mtime.size,
       });
     if (i % 10 === 9) await new Promise((resolve) => setImmediate(resolve));
   }
-  sessions.sort((m, d) => d.mtime - m.mtime);
+  sessions.sort((a, b) => b.mtime - a.mtime);
   return sessions;
 }
 //@ chunk-yt6zn9vg.js:92317-95879 fingerprint = generateUsageReport (0.578)
 async function generateUsageReport(options) {
   let remoteStats;
-  let n = options?.liveSession === undefined ? await listSessionFilesForInsights(options?.storageV5) : [];
+  let sessionFiles =
+    options?.liveSession === undefined ? await listSessionFilesForInsights(options?.storageV5) : [];
   let totalSessionsScanned =
-    options?.liveSession === undefined ? n.length : options.liveSession === null ? 0 : 1;
+    options?.liveSession === undefined ? sessionFiles.length : options.liveSession === null ? 0 : 1;
   let MAX_SESSIONS_TO_LOAD = 200;
-  let m = [];
-  let d = [];
-  let y = 0;
-  let w = 0;
-  let i = 0;
-  for (let v of chunkArray(n, INSIGHTS_MCP_AUTH_BATCH)) {
+  let logs = [];
+  let failures = [];
+  let scannedCount = 0;
+  let skippedCount = 0;
+  let offset = 0;
+  for (let batch of chunkArray(sessionFiles, INSIGHTS_MCP_AUTH_BATCH)) {
     let storageV5 = options?.storageV5;
-    let B = storageV5
+    let cached = storageV5
       ? await getMcpAuthCache_2(
-          v.map((T) => T.sessionId),
+          batch.map((info) => info.sessionId),
           storageV5,
         )
-      : await Promise.all(v.map((sessionInfo) => loadSessionMeta(sessionInfo.sessionId)));
-    let mapped = v.map((sessionInfo, F) => ({
+      : await Promise.all(batch.map((sessionInfo) => loadSessionMeta(sessionInfo.sessionId)));
+    let mapped = batch.map((sessionInfo, index) => ({
       sessionInfo,
-      cached: B[F] ?? null,
+      cached: cached[index] ?? null,
     }));
-    for (let [T, { sessionInfo: F, cached: V }] of mapped.entries()) {
-      let _e = i + T;
-      let ce = V?.bash_would_prompt_count !== undefined || _e >= BASH_PROMPT_LOOKBACK_SESSIONS;
-      if (V && ce && (V.transcript_mtime === undefined || V.transcript_mtime >= F.mtime)) m.push(V);
-      else if (!V) {
-        if (y < MAX_SESSIONS_TO_LOAD) {
-          d.push({
-            sessionInfo: F,
-            cached: V,
+    for (let [index, { sessionInfo: info, cached }] of mapped.entries()) {
+      let globalIndex = offset + index;
+      let batchResults =
+        cached?.bash_would_prompt_count !== undefined || globalIndex >= BASH_PROMPT_LOOKBACK_SESSIONS;
+      if (
+        cached &&
+        batchResults &&
+        (cached.transcript_mtime === undefined || cached.transcript_mtime >= info.mtime)
+      )
+        logs.push(cached);
+      else if (!cached) {
+        if (scannedCount < MAX_SESSIONS_TO_LOAD) {
+          failures.push({
+            sessionInfo: info,
+            cached,
           });
-          y++;
+          scannedCount++;
         }
-      } else if (w < MAX_SESSIONS_TO_LOAD) {
-        d.push({
-          sessionInfo: F,
-          cached: V,
+      } else if (skippedCount < MAX_SESSIONS_TO_LOAD) {
+        failures.push({
+          sessionInfo: info,
+          cached,
         });
-        w++;
-      } else m.push(V);
+        skippedCount++;
+      } else logs.push(cached);
     }
-    i += v.length;
+    offset += batch.length;
   }
   let privacyLabels = options?.privacyLabels ?? "";
   let logsForFacets = new Map();
   if (options?.liveSession) {
-    let v = logToSessionMeta(options.liveSession);
-    m.push(v);
-    logsForFacets.set(v.session_id, options.liveSession);
+    let liveMeta = logToSessionMeta(options.liveSession);
+    logs.push(liveMeta);
+    logsForFacets.set(liveMeta.session_id, options.liveSession);
   }
   let isMetaSession = (log) => {
     for (let msg of log.messages.slice(0, 5))
@@ -2671,8 +2810,8 @@ async function generateUsageReport(options) {
     return false;
   };
   let LOAD_BATCH_SIZE = 10;
-  for (let i = 0; i < d.length; i += LOAD_BATCH_SIZE) {
-    let batch = d.slice(i, i + LOAD_BATCH_SIZE);
+  for (let i = 0; i < failures.length; i += LOAD_BATCH_SIZE) {
+    let batch = failures.slice(i, i + LOAD_BATCH_SIZE);
     let batchResults = await Promise.all(
       batch.map(async ({ sessionInfo, cached }) => {
         try {
@@ -2696,51 +2835,56 @@ async function generateUsageReport(options) {
         }
       }),
     );
-    let ee = new Map();
-    for (let { sessionInfo, cached, logs } of batchResults) {
-      let _e = false;
-      for (let log of logs) {
+    let facets = new Map();
+    for (let { sessionInfo, cached, logs: logs_2 } of batchResults) {
+      let failed = false;
+      for (let log of logs_2) {
         if (isMetaSession(log) || Number.isNaN(log.created.getTime()) || Number.isNaN(log.modified.getTime()))
           continue;
         let meta = logToSessionMeta(log);
         meta.transcript_mtime = sessionInfo.mtime;
-        m.push(meta);
-        _e = true;
-        if (deduplicateSessionBranches(meta, ee.get(meta.session_id))) ee.set(meta.session_id, meta);
+        logs.push(meta);
+        failed = true;
+        if (deduplicateSessionBranches(meta, facets.get(meta.session_id))) facets.set(meta.session_id, meta);
         logsForFacets.set(meta.session_id, log);
       }
-      if (!_e && cached) m.push(cached);
+      if (!failed && cached) logs.push(cached);
     }
-    await Promise.all([...ee.values()].map((meta) => writeSessionMetaCache(meta, options?.storageV5)));
+    await Promise.all([...facets.values()].map((meta) => writeSessionMetaCache(meta, options?.storageV5)));
   }
   let bestBySession = new Map();
-  for (let meta of m)
+  for (let meta of logs)
     if (deduplicateSessionBranches(meta, bestBySession.get(meta.session_id)))
       bestBySession.set(meta.session_id, meta);
   let keptSessionIds = new Set(bestBySession.keys());
-  m = [...bestBySession.values()];
+  logs = [...bestBySession.values()];
   for (let sessionId of logsForFacets.keys())
     if (!keptSessionIds.has(sessionId)) logsForFacets.delete(sessionId);
-  m.sort((v, P) => P.start_time.localeCompare(v.start_time));
+  logs.sort((a, b) => b.start_time.localeCompare(a.start_time));
   let isSubstantiveSession = (meta) => {
     if (meta.user_message_count < 2) return false;
     if (meta.duration_minutes < 1) return false;
     return true;
   };
-  let substantiveMetas = m.filter(isSubstantiveSession);
+  let substantiveMetas = logs.filter(isSubstantiveSession);
   let facets = new Map();
   let toExtract = [];
   let MAX_FACET_EXTRACTIONS = 50;
   let storageV5 = options?.storageV5;
-  let H = options?.liveSession === undefined ? substantiveMetas.map((v) => v.session_id) : [];
-  let le = storageV5
+  let substantiveIds =
+    options?.liveSession === undefined ? substantiveMetas.map((meta) => meta.session_id) : [];
+  let substantiveFacets = storageV5
     ? (
-        await Promise.all(chunkArray(H, INSIGHTS_MCP_AUTH_BATCH).map((v) => getMcpAuthCache(v, storageV5)))
+        await Promise.all(
+          chunkArray(substantiveIds, INSIGHTS_MCP_AUTH_BATCH).map((batch) =>
+            getMcpAuthCache(batch, storageV5),
+          ),
+        )
       ).flat()
-    : await Promise.all(H.map((meta) => loadCachedFacets(meta)));
-  let mapped = substantiveMetas.map((meta, P) => ({
+    : await Promise.all(substantiveIds.map((meta) => loadCachedFacets(meta)));
+  let mapped = substantiveMetas.map((meta, index) => ({
     sessionId: meta.session_id,
-    cached: le[P] ?? null,
+    cached: substantiveFacets[index] ?? null,
   }));
   for (let { sessionId, cached } of mapped)
     if (cached) facets.set(sessionId, cached);
@@ -2777,7 +2921,7 @@ async function generateUsageReport(options) {
         facetsToSave.push(newFacets);
       }
     if (options?.liveSession === undefined)
-      await Promise.all(facetsToSave.map((T) => saveFacets(T, options?.storageV5)));
+      await Promise.all(facetsToSave.map((facet) => saveFacets(facet, options?.storageV5)));
   }
   INSIGHTS_CACHE.clear();
   let isMinimalSession = (sessionId) => {
@@ -2787,10 +2931,11 @@ async function generateUsageReport(options) {
     let catKeys = safeKeys(cats).filter((k) => (cats[k] ?? 0) > 0);
     return catKeys.length === 1 && catKeys[0] === "warmup_minimal";
   };
-  let substantiveSessions = substantiveMetas.filter((v) => !isMinimalSession(v.session_id));
-  let substantiveFacets = new Map();
-  for (let [sessionId, P] of facets) if (!isMinimalSession(sessionId)) substantiveFacets.set(sessionId, P);
-  let aggregated = aggregateData(substantiveSessions, substantiveFacets);
+  let substantiveSessions = substantiveMetas.filter((meta) => !isMinimalSession(meta.session_id));
+  let substantiveFacets_2 = new Map();
+  for (let [sessionId, value] of facets)
+    if (!isMinimalSession(sessionId)) substantiveFacets_2.set(sessionId, value);
+  let aggregated = aggregateData(substantiveSessions, substantiveFacets_2);
   aggregated.total_sessions_scanned = totalSessionsScanned;
   options?.signal?.throwIfAborted();
   let insights = await generateParallelInsights(
@@ -2807,20 +2952,20 @@ async function generateUsageReport(options) {
       htmlPath: "",
       data: aggregated,
       remoteStats,
-      facets: substantiveFacets,
+      facets: substantiveFacets_2,
       autoModeReco: htmlReport,
     };
   let htmlReport_2 = generateHtmlReport(aggregated, insights, htmlReport);
   let date = new Date();
-  let G = (v) => String(v).padStart(2, "0");
-  let he = `${date.getFullYear()}-${G(date.getMonth() + 1)}-${G(date.getDate())}-${G(date.getHours())}${G(date.getMinutes())}${G(date.getSeconds())}`;
-  let htmlPath = await saveSessionMeta(htmlReport_2, he, options?.storageV5);
+  let pad2 = (n) => String(n).padStart(2, "0");
+  let stamp = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}-${pad2(date.getHours())}${pad2(date.getMinutes())}${pad2(date.getSeconds())}`;
+  let htmlPath = await saveSessionMeta(htmlReport_2, stamp, options?.storageV5);
   return {
     insights,
     htmlPath,
     data: aggregated,
     remoteStats,
-    facets: substantiveFacets,
+    facets: substantiveFacets_2,
     autoModeReco: htmlReport,
   };
 }
@@ -2852,10 +2997,10 @@ var insightsCommandDefinition = {
         },
       ];
     let collectRemote = false;
-    let r = [];
-    let g = false;
-    let m = INSIGHTS_RUNNING_SLOT.of(context.session);
-    if (isCcsTenant() && m.running)
+    let warnings = [];
+    let alreadyRunning = false;
+    let lock = INSIGHTS_RUNNING_SLOT.of(context.session);
+    if (isCcsTenant() && lock.running)
       return [
         {
           type: "text",
@@ -2864,7 +3009,7 @@ var insightsCommandDefinition = {
       ];
     let liveSession = isCcsTenant() ? currentSessionAsLog(context.messages) : undefined;
     let privacyLabels = isCcsTenant() ? tagAndManifestArtifactContent(context.messages) : "";
-    m.running = isCcsTenant();
+    lock.running = isCcsTenant();
     let { insights, htmlPath, data, remoteStats, autoModeReco } = await generateUsageReport({
       collectRemote,
       liveSession,
@@ -2885,7 +3030,7 @@ var insightsCommandDefinition = {
         };
       },
     }).finally(() => {
-      m.running = false;
+      lock.running = false;
     });
     if (autoModeReco && !isCcsTenant())
       logEvent("tengu_insights_auto_mode_recommendation", {
@@ -3005,13 +3150,13 @@ ${header}${summaryText}
 Give the user this summary in your own words. There is no report file to open, so don't mention one. End by asking whether they want to dig into any section or try one of the suggestions.`;
 }
 //@ chunk-yt6zn9vg.js:99520-99729 layout = countToolCallsSince (1)
-function normalizeToolUseNames(e) {
-  if (e.type !== "assistant" || !Array.isArray(e.message.content)) return e;
+function normalizeToolUseNames(names) {
+  if (names.type !== "assistant" || !Array.isArray(names.message.content)) return names;
   return {
-    ...e,
+    ...names,
     message: {
-      ...e.message,
-      content: e.message.content.map((block) =>
+      ...names.message,
+      content: names.message.content.map((block) =>
         block.type === "tool_use"
           ? {
               ...block,
@@ -3028,21 +3173,23 @@ function normalizeToolUseNames(e) {
  */
 function currentSessionAsLog(messages) {
   let sessionId = getSessionId();
-  let flattened = messages.flatMap((d) =>
-    d.type === "user" || d.type === "assistant" || d.type === "attachment"
+  let flattened = messages.flatMap((message) =>
+    message.type === "user" || message.type === "assistant" || message.type === "attachment"
       ? [
           {
-            ...normalizeToolUseNames(d),
+            ...normalizeToolUseNames(message),
             sessionId,
             userType: "",
           },
         ]
       : [],
   );
-  let filtered = flattened.map((d) => Date.parse(d.timestamp)).filter((d) => !Number.isNaN(d));
+  let filtered = flattened
+    .map((message) => Date.parse(message.timestamp))
+    .filter((time) => !Number.isNaN(time));
   if (filtered.length === 0) return null;
-  let created = new Date(filtered.reduce((acc, y) => Math.min(acc, y)));
-  let date = new Date(filtered.reduce((acc, y) => Math.max(acc, y)));
+  let created = new Date(filtered.reduce((acc, time) => Math.min(acc, time)));
+  let date = new Date(filtered.reduce((acc, time) => Math.max(acc, time)));
   return {
     date: date.toISOString(),
     messages: flattened,
@@ -3058,122 +3205,42 @@ function currentSessionAsLog(messages) {
 //@ chunk-yt6zn9vg.js:100192-100565 fingerprint = isValidSessionFacets (1)
 function isValidSessionFacets(obj) {
   if (!obj || typeof obj !== "object") return false;
-  let s = obj;
+  let value = obj;
   return (
-    typeof s.underlying_goal === "string" &&
-    typeof s.outcome === "string" &&
-    typeof s.brief_summary === "string" &&
-    s.goal_categories !== null &&
-    typeof s.goal_categories === "object" &&
-    s.user_satisfaction_counts !== null &&
-    typeof s.user_satisfaction_counts === "object" &&
-    s.friction_counts !== null &&
-    typeof s.friction_counts === "object"
+    typeof value.underlying_goal === "string" &&
+    typeof value.outcome === "string" &&
+    typeof value.brief_summary === "string" &&
+    value.goal_categories !== null &&
+    typeof value.goal_categories === "object" &&
+    value.user_satisfaction_counts !== null &&
+    typeof value.user_satisfaction_counts === "object" &&
+    value.friction_counts !== null &&
+    typeof value.friction_counts === "object"
   );
 }
 //@ chunk-yt6zn9vg.js:100565-100575 affinity
 var insightsCommand = insightsCommandDefinition;
-//@ chunk-01p2saxj.js:305-474 placement
-/**
- * 字符串或数组规整为内容块数组
- */
-function toContentBlocks(content) {
-  if (typeof content === "string")
-    return [
-      {
-        type: "text",
-        text: content,
-      },
-    ];
-  if (!Array.isArray(content)) return [];
-  return content.filter((e) => e !== null && typeof e === "object" && !Array.isArray(e));
-}
-//@ chunk-01p2saxj.js:474-541 placement
-var regExp = new RegExp(`<(${ARTIFACT_BLOCK_TAGS.join("|")})>[\\s\\S]*?(?:</\\1>|$)`, "g");
-//@ chunk-01p2saxj.js:541-585 layout
-function stripXmlTags(r) {
-  return r.replace(regExp, "").trim();
-}
-//@ chunk-01p2saxj.js:585-708 layout
-function textBlocksOf(r) {
-  return toContentBlocks(r)
-    .flatMap((e) => (e.type === "text" && typeof e.text === "string" ? [e.text] : []))
-    .map(stripXmlTags)
-    .filter((e) => e !== "");
-}
-//@ chunk-01p2saxj.js:708-1642 fingerprint = formatTranscriptForFacets (0.397)
-function formatTranscriptForFacets(messages, e) {
-  let lines = [];
-  let o = new Set();
-  for (let block of messages) {
-    if (
-      block.type === "attachment" &&
-      typeof block.attachment === "object" &&
-      block.attachment !== null &&
-      isUserQueuedCommandAttachment(block)
-    ) {
-      let prompt = block.attachment.type === "queued_command" ? block.attachment.prompt : "";
-      let sourceUuid = block.attachment.source_uuid;
-      if (typeof sourceUuid === "string") {
-        if (o.has(sourceUuid)) continue;
-        o.add(sourceUuid);
-      }
-      for (let u of textBlocksOf(prompt)) lines.push(`[User]: ${truncateToLength(u, e.userTextChars)}`);
-      continue;
-    }
-    if (block.type === "user" && block.message) {
-      if (block.isCompactSummary) {
-        for (let s of textBlocksOf(block.message.content))
-          lines.push(`[Summary of earlier conversation]: ${truncateToLength(s, e.userTextChars)}`);
-        continue;
-      }
-      if (!isRealUserPromptMessage(block) || (typeof block.uuid === "string" && o.has(block.uuid))) continue;
-      for (let s of textBlocksOf(block.message.content))
-        lines.push(`[User]: ${truncateToLength(s, e.userTextChars)}`);
-    } else if (block.type === "assistant" && block.message) {
-      for (let s of toContentBlocks(block.message.content))
-        if (s.type === "text" && typeof s.text === "string")
-          lines.push(`[Assistant]: ${truncateToLength(s.text, e.assistantTextChars)}`);
-        else if (s.type === "tool_use" && typeof s.name === "string") lines.push(`[Tool: ${s.name}]`);
-    }
-  }
-  return lines;
-}
 //@ chunk-23fm9f0d.js:39583-39849 fingerprint = scanAllSessions (0.665)
-async function scanAllSessions(e, r, s) {
-  if (r === null) return true;
-  let n = await fsPromisesModule
-    .readdir(e, {
+async function scanAllSessions(dir, options, onEntry) {
+  if (options === null) return true;
+  let entries = await fsPromisesModule
+    .readdir(dir, {
       withFileTypes: true,
     })
     .catch(() => []);
-  for (let f of n) {
-    let i = join(e, f.name);
-    let m = await fsPromisesModule.lstat(i).catch(() => null);
-    if (m !== null && m.mtime > r) return true;
-    if (s > 1 && f.isDirectory() && (await scanAllSessions(i, r, s - 1))) return true;
+  for (let entry of entries) {
+    let path = join(dir, entry.name);
+    let stat = await fsPromisesModule.lstat(path).catch(() => null);
+    if (stat !== null && stat.mtime > options) return true;
+    if (onEntry > 1 && entry.isDirectory() && (await scanAllSessions(path, options, onEntry - 1)))
+      return true;
   }
   return false;
 }
-//@ chunk-3a1caa6f.js:3079-3216 fingerprint = getRemoteHostSessionCount (0.407)
-function getRemoteHostSessionCount(e, r = {}) {
-  let n = e?.GIT_ALLOW_PROTOCOL?.split(":").includes("ssh") ?? false;
-  return sanitizePathForGit(
-    buildSafeGitEnv(
-      {
-        ...M,
-        ...(r.userLocale !== true && b),
-        ...(!n && F),
-      },
-      e,
-      r,
-    ),
-  );
-}
 //@ chunk-ah34pb7m.js:35940-36053 fingerprint = hasValidDates (0.343)
 function hasValidDates(log) {
-  let d = roundToMinute(log ?? Number.NaN);
-  return Number.isNaN(d.getTime()) ? "" : `, next run ${formatBriefTimestamp(d.toISOString())}`;
+  let minute = roundToMinute(log ?? Number.NaN);
+  return Number.isNaN(minute.getTime()) ? "" : `, next run ${formatBriefTimestamp(minute.toISOString())}`;
 }
 export {
   getRemoteHostSessionCount,
@@ -3181,4 +3248,5 @@ export {
   hasValidDates,
   toContentBlocks,
   formatTranscriptForFacets,
+  insightsCommand,
 };

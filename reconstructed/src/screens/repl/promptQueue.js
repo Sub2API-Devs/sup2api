@@ -18,14 +18,14 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logForDebugging } from "../../utils/debug.js";
 import {
-  string,
-  u,
+  stringSchema,
+  objectSchema,
   literal,
-  E,
+  numberSchema,
   _enum,
-  zJt,
+  uuidSchema,
   record,
-  M,
+  booleanSchema,
   array,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { LowLatencySubmitQueue } from "../../cli/print/lowLatencySubmit.js";
@@ -48,9 +48,9 @@ import {
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { y, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { useState, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { isHumanOrigin } from "../../utils/turnOrigin.js";
 import { looksLikeSlashInput } from "../../commands.js";
 import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
@@ -64,36 +64,37 @@ import { plural } from "../../utils/stringUtils.js";
 import { readSmallFileOrNull } from "../../utils/readSmallFile.js";
 import { readJobState } from "../../services/daemon/jobState.js";
 import { retryFsOpSync } from "../../utils/atomicPublishWrite.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:51162-51177 placement
 var noopSubscribe = () => {};
 //@ chunk-18hwfzwa.js:51177-51927 placement
-function makeAgentTurnFacade(h, taskRegistry) {
-  let D = () => {
-    let ke = taskRegistry.get(h);
-    return isLocalAgent(ke) ? ke : undefined;
+function makeAgentTurnFacade(agentId, taskRegistry) {
+  let getLocalTask = () => {
+    let task = taskRegistry.get(agentId);
+    return isLocalAgent(task) ? task : undefined;
   };
-  let L = () => D()?.status === "running";
-  let ee = () => humanPendingMessagesOf(D());
+  let isRunning = () => getLocalTask()?.status === "running";
+  let pendingMessages = () => humanPendingMessagesOf(getLocalTask());
   return {
     turn: {
-      agentId: h,
+      agentId,
       guard: {
         get isActive() {
-          return L();
+          return isRunning();
         },
         get isRunning() {
-          return L();
+          return isRunning();
         },
         isDispatchingForModel: false,
         subscribe: () => noopSubscribe,
       },
       get abortController() {
-        return D()?.abortController ?? null;
+        return getLocalTask()?.abortController ?? null;
       },
       readEvidence: () => ({
         isHeldByDialog: false,
-        isToolCallStarting: (taskRegistry.getTranscript(h)?.inProgressToolUseIDs.size ?? 0) > 0,
+        isToolCallStarting: (taskRegistry.getTranscript(agentId)?.inProgressToolUseIDs.size ?? 0) > 0,
         isCompacting: false,
         isMainRequestAnnounced: false,
       }),
@@ -101,8 +102,8 @@ function makeAgentTurnFacade(h, taskRegistry) {
       endsUnmovableShells: false,
     },
     messageQueue: {
-      getCommandQueueSnapshot: ee,
-      getCommandQueue: ee,
+      getCommandQueueSnapshot: pendingMessages,
+      getCommandQueue: pendingMessages,
       subscribe: () => noopSubscribe,
       isFoldInFlight: () => false,
       isMidTurnFoldSuspended: () => false,
@@ -110,71 +111,72 @@ function makeAgentTurnFacade(h, taskRegistry) {
       demoteFromNow: () => false,
     },
     transcript: {
-      getSnapshot: () => removeMessagesByUuid(taskRegistry.getTranscript(h)?.messages ?? [], ee()),
+      getSnapshot: () =>
+        removeMessagesByUuid(taskRegistry.getTranscript(agentId)?.messages ?? [], pendingMessages()),
     },
   };
 }
 //@ chunk-18hwfzwa.js:51927-52153 placement
-function humanPendingMessagesOf(h) {
-  if (h === undefined) return [];
-  let x = [];
-  for (let pendingMessage of h.pendingMessages)
+function humanPendingMessagesOf(task) {
+  if (task === undefined) return [];
+  let messages = [];
+  for (let pendingMessage of task.pendingMessages)
     if (pendingMessage.origin?.kind === "human" && pendingMessage.shownAs !== undefined)
-      x.push({
+      messages.push({
         value: pendingMessage.text,
         mode: "prompt",
         uuid: pendingMessage.shownAs,
-        agentId: identityAgentId2(h.agentId),
+        agentId: identityAgentId2(task.agentId),
         origin: pendingMessage.origin,
       });
-  return x;
+  return messages;
 }
 //@ chunk-18hwfzwa.js:52153-52267 placement
 /**
  * 去掉 uuid 在列表中的消息。
  */
-function removeMessagesByUuid(h, x) {
-  if (x.length === 0) return h;
-  let D = new Set(x.map((L) => L.uuid));
-  return h.filter((L) => !D.has(L.uuid));
+function removeMessagesByUuid(commands, removed) {
+  if (removed.length === 0) return commands;
+  let uuidSet = new Set(removed.map((command) => command.uuid));
+  return commands.filter((command) => !uuidSet.has(command.uuid));
 }
 //@ chunk-18hwfzwa.js:52267-53091 placement
 class QueuedSendNowController {
   #e;
   #t = new Map();
   #o = false;
-  constructor(h) {
-    this.#e = h;
+  constructor(options) {
+    this.#e = options;
   }
-  sendQueuedNow = (h) => {
+  sendQueuedNow = (params) => {
     if (this.#o) return false;
-    for (let [D, L] of this.#t)
-      if (D !== undefined && this.#e.taskRegistry.get(D) === undefined) {
-        L.dispose();
-        this.#t.delete(D);
+    for (let [agentId, queue] of this.#t)
+      if (agentId !== undefined && this.#e.taskRegistry.get(agentId) === undefined) {
+        queue.dispose();
+        this.#t.delete(agentId);
       }
-    let x = this.#t.get(h);
-    if (x === undefined) {
-      x = new LowLatencySubmitQueue({
-        ...this.#n(h),
+    let queue = this.#t.get(params);
+    if (queue === undefined) {
+      queue = new LowLatencySubmitQueue({
+        ...this.#n(params),
         session: this.#e.session,
         taskRegistry: this.#e.taskRegistry,
         clock: this.#e.clock,
         featureName: "input_low_latency_submit",
       });
-      this.#t.set(h, x);
+      this.#t.set(params, queue);
     }
-    return x.sendQueuedNow();
+    return queue.sendQueuedNow();
   };
   dispose() {
     this.#o = true;
-    for (let h of this.#t.values()) h.dispose();
+    for (let queue of this.#t.values()) queue.dispose();
     this.#t.clear();
   }
-  #n(h) {
-    if (h !== undefined) return makeAgentTurnFacade(h, this.#e.taskRegistry);
-    let x = this.#e;
-    let { turn, messageQueue, transcript } = x;
+  #n(agentId) {
+    if (agentId !== undefined) return makeAgentTurnFacade(agentId, this.#e.taskRegistry);
+    let mainTurnSource = this.#e;
+    let { turn, messageQueue, transcript } = mainTurnSource;
     return {
       turn: {
         agentId: undefined,
@@ -182,7 +184,7 @@ class QueuedSendNowController {
         get abortController() {
           return turn.abortController;
         },
-        readEvidence: () => readTurnBusyState(x),
+        readEvidence: () => readTurnBusyState(mainTurnSource),
         interruptForSubmit: () => turn.interruptForSubmit(),
         endsUnmovableShells: true,
       },
@@ -193,30 +195,30 @@ class QueuedSendNowController {
 }
 //@ chunk-18hwfzwa.js:53091-53520 placement
 function readTurnBusyState({ turn, store, session, spinnerStore, dialogStore }) {
-  let ke = spinnerStore.get();
+  let spinner = spinnerStore.get();
   let state = dialogStore.getState();
   let inProgressToolUseIDs = store.getState().transcripts[mainAgentId()]?.inProgressToolUseIDs;
   return {
     isHeldByDialog:
       hasWaitingFor(session) ||
       topBlockingDialog(state) !== null ||
-      state.open.some((He) => He.userInvoked === true),
-    isToolCallStarting: (inProgressToolUseIDs?.size ?? 0) > 0 || ke.mode === "tool-input",
-    isCompacting: ke.isCompacting,
+      state.open.some((dialog) => dialog.userInvoked === true),
+    isToolCallStarting: (inProgressToolUseIDs?.size ?? 0) > 0 || spinner.mode === "tool-input",
+    isCompacting: spinner.isCompacting,
     isMainRequestAnnounced: turn.stream.isMainRequestAwaitingResponse || turn.stream.isMainResponseStreaming,
   };
 }
 //@ chunk-18hwfzwa.js:53520-53567 placement
-function isPollEmptyDispatchCommand(h) {
-  return h.pollEmptyDispatch === true;
+function isPollEmptyDispatchCommand(command) {
+  return command.pollEmptyDispatch === true;
 }
 //@ chunk-18hwfzwa.js:53567-53605 placement
-function isNonPollQueuedCommand(h) {
-  return isSendableQueuedCommand(h) && !isPollEmptyDispatchCommand(h);
+function isNonPollQueuedCommand(command) {
+  return isSendableQueuedCommand(command) && !isPollEmptyDispatchCommand(command);
 }
 //@ chunk-18hwfzwa.js:53605-53663 placement
-function isWakePollCommand(h) {
-  return isMainAgentPollEventMode(h) && h.pollEvent?.wake === true && true;
+function isWakePollCommand(command) {
+  return isMainAgentPollEventMode(command) && command.pollEvent?.wake === true && true;
 }
 //@ chunk-18hwfzwa.js:53663-55849 placement
 /**
@@ -236,10 +238,10 @@ class PollEventIdleDelivery {
   #d = false;
   #m = false;
   #p = false;
-  constructor(h) {
-    this.#e = h;
-    this.#t = h.guard.isActive;
-    this.#o = h.guard.generation;
+  constructor(options) {
+    this.#e = options;
+    this.#t = options.guard.isActive;
+    this.#o = options.guard.generation;
   }
   connect() {
     if (this.#m || this.#p) return;
@@ -270,9 +272,9 @@ class PollEventIdleDelivery {
       this.#S(error);
     }
   };
-  #S(h) {
-    if (isAbortError(h)) logForDebugging(`poll-event idle delivery listener aborted: ${h}`);
-    else logError(h);
+  #S(state) {
+    if (isAbortError(state)) logForDebugging(`poll-event idle delivery listener aborted: ${state}`);
+    else logError(state);
   }
   #h() {
     let { guard } = this.#e;
@@ -288,20 +290,20 @@ class PollEventIdleDelivery {
       } else this.#C();
     } else if (isActive && guard.isRunning && this.#r) this.#r.ranQuery = true;
     else if (!isActive && this.#t) {
-      let L = this.#r;
+      let wakeSnapshot = this.#r;
       this.#r = undefined;
       if (generation !== this.#o) {
         this.#n = true;
         this.#c = undefined;
         this.#i = undefined;
         this.#C();
-      } else if (L === undefined) this.#b(undefined);
-      else if (L.ranQuery) {
+      } else if (wakeSnapshot === undefined) this.#b(undefined);
+      else if (wakeSnapshot.ranQuery) {
         this.#i = undefined;
-        this.#b(L);
-      } else if (this.#i !== undefined && isSameWakeSnapshot(this.#i, L)) this.#b(L);
+        this.#b(wakeSnapshot);
+      } else if (this.#i !== undefined && isSameWakeSnapshot(this.#i, wakeSnapshot)) this.#b(wakeSnapshot);
       else {
-        this.#i = L;
+        this.#i = wakeSnapshot;
         this.#b(undefined);
       }
     }
@@ -320,8 +322,8 @@ class PollEventIdleDelivery {
     }
     this.#b(undefined);
   }
-  #b(h) {
-    if (h !== undefined) this.#g(h);
+  #b(state) {
+    if (state !== undefined) this.#g(state);
     if (this.#d) return;
     this.#d = true;
     queueMicrotask(() => {
@@ -334,10 +336,10 @@ class PollEventIdleDelivery {
       }
     });
   }
-  #g(h) {
-    let x = this.#w();
-    if (x === undefined || !isSameWakeSnapshot(x, h)) return;
-    this.#c = h;
+  #g(wakeSnapshot) {
+    let current = this.#w();
+    if (current === undefined || !isSameWakeSnapshot(current, wakeSnapshot)) return;
+    this.#c = wakeSnapshot;
     logError(
       Error(
         "Queued events were not delivered by the turn started for them; they stay queued until the next prompt or a newer event",
@@ -363,13 +365,13 @@ class PollEventIdleDelivery {
         };
   }
   #T() {
-    let h = this.#w();
-    if (h === undefined) return;
+    let wakeSnapshot = this.#w();
+    if (wakeSnapshot === undefined) return;
     let commandQueue = this.#e.queue.getCommandQueue();
     if (commandQueue.some(isPollEmptyDispatchCommand) || commandQueue.some(isNonPollQueuedCommand)) return;
-    if (this.#c !== undefined && isSameWakeSnapshot(h, this.#c)) return;
+    if (this.#c !== undefined && isSameWakeSnapshot(wakeSnapshot, this.#c)) return;
     this.#c = undefined;
-    this.#s = h;
+    this.#s = wakeSnapshot;
     this.#e.queue.enqueue({
       value: [],
       mode: "prompt",
@@ -382,8 +384,8 @@ class PollEventIdleDelivery {
   }
 }
 //@ chunk-18hwfzwa.js:55849-55913 placement
-function isSameWakeSnapshot(h, x) {
-  return h.first === x.first && h.newest === x.newest;
+function isSameWakeSnapshot(left, right) {
+  return left.first === right.first && left.newest === right.newest;
 }
 //@ chunk-18hwfzwa.js:56108-56177 placement
 /**
@@ -401,113 +403,123 @@ function isLeftArrowCarriesQueuedOn() {
 /**
  * 跨进程携带的排队提示 schema：粘贴内容、提示与整份记录。
  */
-var CARRIED_PASTE_SCHEMA = DoctorLazy(() =>
-  u({
-    id: E().int(),
-    type: _enum(["text", "image"]),
-    content: string(),
-    mediaType: string().optional(),
-    filename: string().optional(),
-    dimensions: u({
-      originalWidth: E().optional(),
-      originalHeight: E().optional(),
-      displayWidth: E().optional(),
-      displayHeight: E().optional(),
-    }).optional(),
-    unavailable: literal(true).optional(),
-    inline: literal(true).optional(),
-    slashNameOnly: literal(true).optional(),
-  }),
-);
-var CARRIED_PROMPT_SCHEMA = DoctorLazy(() =>
-  u({
-    value: string(),
-    uuid: zJt().optional(),
-    pastes: u({
-      preExpansionValue: string().optional(),
-      pastedContents: record(string(), CARRIED_PASTE_SCHEMA()),
-      pasteTagged: literal(true).optional(),
-    }).optional(),
-    inputSource: _enum(["typed", "queued", "suggestion_accepted"]).optional(),
-    suppressWorkflowKeyword: M().optional(),
-    wait: literal(true).optional(),
-    perhapsDelivered: literal(true).optional(),
-  }),
-);
-var CARRIED_PROMPTS_FILE_SCHEMA = DoctorLazy(() =>
-  u({
-    writtenAtMs: E(),
-    prompts: array(CARRIED_PROMPT_SCHEMA()).max(MAX_CARRIED_PROMPTS),
-  }),
-);
+var CARRIED_PASTE_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var CARRIED_PROMPT_SCHEMA;
+var CARRIED_PROMPTS_FILE_SCHEMA;
+deferInit("chunk-18hwfzwa.js:56238", () => {
+  CARRIED_PASTE_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      id: numberSchema().int(),
+      type: _enum(["text", "image"]),
+      content: stringSchema(),
+      mediaType: stringSchema().optional(),
+      filename: stringSchema().optional(),
+      dimensions: objectSchema({
+        originalWidth: numberSchema().optional(),
+        originalHeight: numberSchema().optional(),
+        displayWidth: numberSchema().optional(),
+        displayHeight: numberSchema().optional(),
+      }).optional(),
+      unavailable: literal(true).optional(),
+      inline: literal(true).optional(),
+      slashNameOnly: literal(true).optional(),
+    }),
+  );
+  CARRIED_PROMPT_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      value: stringSchema(),
+      uuid: uuidSchema().optional(),
+      pastes: objectSchema({
+        preExpansionValue: stringSchema().optional(),
+        pastedContents: record(stringSchema(), CARRIED_PASTE_SCHEMA()),
+        pasteTagged: literal(true).optional(),
+      }).optional(),
+      inputSource: _enum(["typed", "queued", "suggestion_accepted"]).optional(),
+      suppressWorkflowKeyword: booleanSchema().optional(),
+      wait: literal(true).optional(),
+      perhapsDelivered: literal(true).optional(),
+    }),
+  );
+  CARRIED_PROMPTS_FILE_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      writtenAtMs: numberSchema(),
+      prompts: array(CARRIED_PROMPT_SCHEMA()).max(MAX_CARRIED_PROMPTS),
+    }),
+  );
+});
 //@ chunk-18hwfzwa.js:56966-57109 placement
-function isHumanPromptCommand(h) {
+function isHumanPromptCommand(command) {
   return (
-    isMainAgentCommand(h) &&
-    (h.mode === "prompt" || h.mode === "bash") &&
-    isHumanOrigin(h.origin) &&
-    h.verifiedSlackHumanTurn !== true &&
-    h.isMeta !== true &&
-    h.passive !== true
+    isMainAgentCommand(command) &&
+    (command.mode === "prompt" || command.mode === "bash") &&
+    isHumanOrigin(command.origin) &&
+    command.verifiedSlackHumanTurn !== true &&
+    command.isMeta !== true &&
+    command.passive !== true
   );
 }
 //@ chunk-18hwfzwa.js:57109-57426 placement
 /**
  * 排队提示允许的字段。
  */
-var QUEUED_PROMPT_KEYS = new Set([
-  "value",
-  "uuid",
-  "preExpansionValue",
-  "pastedContents",
-  "pasteTagged",
-  "inputSource",
-  "suppressWorkflowKeyword",
-  "wait",
-  "agentId",
-  "mode",
-  "priority",
-  "origin",
-  "skipSlashCommands",
-  "timestamp",
-  "submittedAtMs",
-  "composerEnter",
-  "historyEntry",
-  "promptSubmitted",
-  "ideSelection",
-  "deliveryId",
-  "attachmentSourceUuid",
-]);
+var QUEUED_PROMPT_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:57109", () => {
+  QUEUED_PROMPT_KEYS = new Set([
+    "value",
+    "uuid",
+    "preExpansionValue",
+    "pastedContents",
+    "pasteTagged",
+    "inputSource",
+    "suppressWorkflowKeyword",
+    "wait",
+    "agentId",
+    "mode",
+    "priority",
+    "origin",
+    "skipSlashCommands",
+    "timestamp",
+    "submittedAtMs",
+    "composerEnter",
+    "historyEntry",
+    "promptSubmitted",
+    "ideSelection",
+    "deliveryId",
+    "attachmentSourceUuid",
+  ]);
+});
 //@ chunk-18hwfzwa.js:57426-57672 placement
-function toQueuedPromptCommand(h) {
+function toQueuedPromptCommand(command) {
   return (
-    h.mode === "prompt" &&
-    typeof h.value === "string" &&
-    h.priority !== "later" &&
-    !h.ideSelection?.text &&
-    h.promptSubmitted?.stopped === undefined &&
-    !(looksLikeSlashInput(h.value) && !h.skipSlashCommands) &&
-    Object.entries(h).every(([key, value]) => value === undefined || QUEUED_PROMPT_KEYS.has(key))
+    command.mode === "prompt" &&
+    typeof command.value === "string" &&
+    command.priority !== "later" &&
+    !command.ideSelection?.text &&
+    command.promptSubmitted?.stopped === undefined &&
+    !(looksLikeSlashInput(command.value) && !command.skipSlashCommands) &&
+    Object.entries(command).every(([key, value]) => value === undefined || QUEUED_PROMPT_KEYS.has(key))
   );
 }
 //@ chunk-18hwfzwa.js:57672-58147 placement
-function promptHasImages(h, perhapsDelivered) {
-  let D = h.promptSubmitted !== undefined && h.promptSubmitted.text !== h.value;
-  let filtered = Object.entries(h.pastedContents ?? {}).filter(([, value]) => !D || value.type === "image");
+function promptHasImages(command, perhapsDelivered) {
+  let editedText = command.promptSubmitted !== undefined && command.promptSubmitted.text !== command.value;
+  let filtered = Object.entries(command.pastedContents ?? {}).filter(
+    ([, value]) => !editedText || value.type === "image",
+  );
   return {
-    value: D ? h.promptSubmitted.text : h.value,
-    uuid: h.uuid,
+    value: editedText ? command.promptSubmitted.text : command.value,
+    uuid: command.uuid,
     pastes:
       filtered.length > 0
         ? {
-            preExpansionValue: D ? undefined : h.preExpansionValue,
+            preExpansionValue: editedText ? undefined : command.preExpansionValue,
             pastedContents: Object.fromEntries(filtered),
-            pasteTagged: D ? undefined : h.pasteTagged,
+            pasteTagged: editedText ? undefined : command.pasteTagged,
           }
         : undefined,
-    inputSource: h.inputSource,
-    suppressWorkflowKeyword: h.suppressWorkflowKeyword,
-    wait: h.wait,
+    inputSource: command.inputSource,
+    suppressWorkflowKeyword: command.suppressWorkflowKeyword,
+    wait: command.wait,
     perhapsDelivered,
   };
 }
@@ -515,29 +527,32 @@ function promptHasImages(h, perhapsDelivered) {
 /**
  * 序列化要携带的提示（校验 schema、超过字节上限返回 null）。
  */
-function serializeCarriedPrompts(h, x) {
-  let D = CARRIED_PROMPTS_FILE_SCHEMA().safeParse({
+function serializeCarriedPrompts(folded, remaining) {
+  let parsed = CARRIED_PROMPTS_FILE_SCHEMA().safeParse({
     writtenAtMs: Date.now(),
-    prompts: [...h.map((ee) => promptHasImages(ee, true)), ...x.map((ee) => promptHasImages(ee))],
+    prompts: [
+      ...folded.map((command) => promptHasImages(command, true)),
+      ...remaining.map((command) => promptHasImages(command)),
+    ],
   });
-  if (!D.success) return null;
-  let L = jsonStringify(D.data);
-  return Buffer.byteLength(L) > MAX_CARRIED_PROMPTS_BYTES ? null : L;
+  if (!parsed.success) return null;
+  let serialized = jsonStringify(parsed.data);
+  return Buffer.byteLength(serialized) > MAX_CARRIED_PROMPTS_BYTES ? null : serialized;
 }
 //@ chunk-18hwfzwa.js:58355-58885 placement
-function collectCarriablePrompts(h, x = []) {
-  let filtered = h.getCommandQueue().filter(isHumanPromptCommand);
-  let L = (ze) => ze.uuid !== undefined && h.isFoldInFlight(ze.uuid);
-  let filtered_2 = filtered.filter((ze) => L(ze) && toQueuedPromptCommand(ze));
-  let filtered_3 = filtered.filter((ze) => !L(ze));
-  let filtered_4 = filtered_3.filter(toQueuedPromptCommand);
-  let Be = new Set([...filtered_2, ...filtered_4].map((ze) => ze.uuid));
-  let filtered_5 = x.filter((ze) => ze.uuid === undefined || !Be.has(ze.uuid));
-  let We =
-    filtered_5.length + filtered_2.length + filtered_4.length > 0
-      ? serializeCarriedPrompts([...filtered_5, ...filtered_2], filtered_4)
+function collectCarriablePrompts(queue, carried = []) {
+  let filtered = queue.getCommandQueue().filter(isHumanPromptCommand);
+  let isFolding = (command) => command.uuid !== undefined && queue.isFoldInFlight(command.uuid);
+  let filtered_2 = filtered.filter((command) => isFolding(command) && toQueuedPromptCommand(command));
+  let filtered_3 = filtered.filter((command) => !isFolding(command));
+  let remaining = filtered_3.filter(toQueuedPromptCommand);
+  let uuids = new Set([...filtered_2, ...remaining].map((command) => command.uuid));
+  let filtered_4 = carried.filter((prompt) => prompt.uuid === undefined || !uuids.has(prompt.uuid));
+  let extra =
+    filtered_4.length + filtered_2.length + remaining.length > 0
+      ? serializeCarriedPrompts([...filtered_4, ...filtered_2], remaining)
       : "";
-  return We === null
+  return extra === null
     ? {
         leftEarlier: [],
         beingRead: [],
@@ -546,29 +561,29 @@ function collectCarriablePrompts(h, x = []) {
         fileContents: "",
       }
     : {
-        leftEarlier: filtered_5,
+        leftEarlier: filtered_4,
         beingRead: filtered_2,
-        carriable: filtered_4,
-        stranded: filtered_3.filter((ze) => !toQueuedPromptCommand(ze)),
-        fileContents: We,
+        carriable: remaining,
+        stranded: filtered_3.filter((command) => !toQueuedPromptCommand(command)),
+        fileContents: extra,
       };
 }
 //@ chunk-18hwfzwa.js:58885-58937 placement
-function writeCarriedPrompts(h, fileContents) {
-  setCarriedPromptHash(h, fileContents);
-  return replaceFileExclusive(join(h, ADOPT_JSON_QUEUED_PROMPTS), fileContents);
+function writeCarriedPrompts(dir, prompts) {
+  setCarriedPromptHash(dir, prompts);
+  return replaceFileExclusive(join(dir, ADOPT_JSON_QUEUED_PROMPTS), prompts);
 }
 //@ chunk-18hwfzwa.js:58937-59109 placement
-function cannotOpenAgentsQueuedMessage(h) {
-  return `Cannot open agents \u2014 ${h} queued ${plural(h, "message")} can't move to the background. Press \u2190 again once Claude has read ${h === 1 ? "it" : "them"}.`;
+function cannotOpenAgentsQueuedMessage(count) {
+  return `Cannot open agents \u2014 ${count} queued ${plural(count, "message")} can't move to the background. Press \u2190 again once Claude has read ${count === 1 ? "it" : "them"}.`;
 }
 //@ chunk-18hwfzwa.js:59109-59218 placement
 /**
  * 判断是否为 “Cannot open agents — N queued” 提示。
  */
-function isCannotOpenAgentsMessage(h) {
-  let x = /^Cannot open agents \u2014 (\d+) /.exec(h)?.[1];
-  return x !== undefined && h === cannotOpenAgentsQueuedMessage(Number(x));
+function isCannotOpenAgentsMessage(message) {
+  let match = /^Cannot open agents \u2014 (\d+) /.exec(message)?.[1];
+  return match !== undefined && message === cannotOpenAgentsQueuedMessage(Number(match));
 }
 //@ chunk-18hwfzwa.js:59218-59240 placement
 var EMPTY_CARRIED_PROMPTS = {
@@ -578,25 +593,25 @@ var EMPTY_CARRIED_PROMPTS = {
 /**
  * 后台 fork 子进程启动时读取父进程带过来的排队提示文件（adopt.json.queued-prompts），用环境变量里的 SHA256 校验未被篡改，返回 bound/unbound/altered 及提示列表。
  */
-async function readCarriedPrompts(bgJobDir, snapshot, storageV5) {
+async function readCarriedPrompts(bgJobDir, messages, storageV5) {
   let CLAUDE_BG_CARRIED_PROMPTS_SHA256_2 = env.CLAUDE_BG_CARRIED_PROMPTS_SHA256;
   env.unset(CLAUDE_BG_CARRIED_PROMPTS_SHA256);
   if (!bgJobDir || !isLeftArrowCarriesQueuedOn()) return EMPTY_CARRIED_PROMPTS;
-  let ee = join(bgJobDir, ADOPT_JSON_QUEUED_PROMPTS);
+  let path = join(bgJobDir, ADOPT_JSON_QUEUED_PROMPTS);
   try {
-    let smallFileOrNull = await readSmallFileOrNull(ee, MAX_CARRIED_PROMPTS_BYTES);
+    let smallFileOrNull = await readSmallFileOrNull(path, MAX_CARRIED_PROMPTS_BYTES);
     if (smallFileOrNull === null) return EMPTY_CARRIED_PROMPTS;
-    let Re = CARRIED_PROMPTS_FILE_SCHEMA().parse(jsonParse(smallFileOrNull));
-    let Be = Re.prompts.some((prompt) => prompt.perhapsDelivered)
-      ? carriedPromptsFromMessages(Re.prompts, snapshot)
-      : Re.prompts;
+    let parsed = CARRIED_PROMPTS_FILE_SCHEMA().parse(jsonParse(smallFileOrNull));
+    let deliveredPrompts = parsed.prompts.some((prompt) => prompt.perhapsDelivered)
+      ? carriedPromptsFromMessages(parsed.prompts, messages)
+      : parsed.prompts;
     let jobState = await readJobState(bgJobDir, storageV5);
-    let We =
+    let promptSummary =
       jobState !== null &&
       (jobState.cliVersion !== undefined ||
         (jobState.resumeSessionId !== undefined && jobState.resumeSessionId !== jobState.sessionId));
-    let ze = jobState === null;
-    let Xe =
+    let noJob = jobState === null;
+    let carriedSummary =
       CLAUDE_BG_CARRIED_PROMPTS_SHA256_2 === undefined
         ? "unbound"
         : CLAUDE_BG_CARRIED_PROMPTS_SHA256_2 === sha256Hex(smallFileOrNull)
@@ -605,7 +620,7 @@ async function readCarriedPrompts(bgJobDir, snapshot, storageV5) {
     return {
       take: () => {
         try {
-          retryFsOpSync(ee, ee, unlinkSync);
+          retryFsOpSync(path, path, unlinkSync);
         } catch (error) {
           if (!isENOENT(error))
             logForDebugging(`[carried-prompts] not deleted, not sent: ${error}`, {
@@ -613,26 +628,26 @@ async function readCarriedPrompts(bgJobDir, snapshot, storageV5) {
             });
           return [];
         }
-        let rt = Date.now() - Re.writtenAtMs;
-        let kt =
-          Xe !== "bound"
-            ? Xe
-            : ze
+        let ageMs = Date.now() - parsed.writtenAtMs;
+        let writeState =
+          carriedSummary !== "bound"
+            ? carriedSummary
+            : noJob
               ? "no_row"
-              : We
+              : promptSummary
                 ? "job_has_run"
-                : rt > CARRIED_PROMPTS_TTL_MS
+                : ageMs > CARRIED_PROMPTS_TTL_MS
                   ? "too_old"
-                  : rt < -60000
+                  : ageMs < -60000
                     ? "future_dated"
                     : "sent";
         logEvent("tengu_carried_prompts_taken", {
-          count: Be.length,
-          already_delivered: Re.prompts.length - Be.length,
-          outcome: fromEnum(kt),
-          age_ms: rt,
+          count: deliveredPrompts.length,
+          already_delivered: parsed.prompts.length - deliveredPrompts.length,
+          outcome: fromEnum(writeState),
+          age_ms: ageMs,
         });
-        return kt === "sent" ? Be.map(carriedToQueuedCommand) : [];
+        return writeState === "sent" ? deliveredPrompts.map(carriedToQueuedCommand) : [];
       },
     };
   } catch (error) {
@@ -647,30 +662,32 @@ async function readCarriedPrompts(bgJobDir, snapshot, storageV5) {
   }
 }
 //@ chunk-18hwfzwa.js:60281-60517 placement
-function carriedPromptsFromMessages(prompts, x) {
-  let D = new Set(
-    x.map((L) =>
-      L.type === "user"
-        ? L.uuid
-        : L.type === "attachment" && L.attachment.type === "queued_command"
-          ? L.attachment.source_uuid
+function carriedPromptsFromMessages(prompts, messages) {
+  let uuids = new Set(
+    messages.map((message) =>
+      message.type === "user"
+        ? message.uuid
+        : message.type === "attachment" && message.attachment.type === "queued_command"
+          ? message.attachment.source_uuid
           : undefined,
     ),
   );
-  return prompts.filter((L) => !(L.perhapsDelivered && L.uuid !== undefined && D.has(L.uuid)));
+  return prompts.filter(
+    (prompt) => !(prompt.perhapsDelivered && prompt.uuid !== undefined && uuids.has(prompt.uuid)),
+  );
 }
 //@ chunk-18hwfzwa.js:60517-60753 placement
 /**
  * 携带的提示转为下一条执行的主线程排队命令。
  */
-function carriedToQueuedCommand(h) {
+function carriedToQueuedCommand(prompt) {
   return {
-    value: h.value,
-    uuid: h.uuid,
-    ...h.pastes,
-    inputSource: h.inputSource,
-    suppressWorkflowKeyword: h.suppressWorkflowKeyword,
-    wait: h.wait,
+    value: prompt.value,
+    uuid: prompt.uuid,
+    ...prompt.pastes,
+    inputSource: prompt.inputSource,
+    suppressWorkflowKeyword: prompt.suppressWorkflowKeyword,
+    wait: prompt.wait,
     agentId: mainAgentId(),
     mode: "prompt",
     priority: "next",
@@ -681,7 +698,10 @@ function carriedToQueuedCommand(h) {
   };
 }
 //@ chunk-18hwfzwa.js:60873-60877 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:60873", () => {
+  init_react_production();
+});
 export {
   isLeftArrowCarriesQueuedOn,
   collectCarriablePrompts,

@@ -15,13 +15,13 @@ import { getGlobalConfig } from "../../utils/config.js";
 function MIGRATIONS() {
   if (getMainLoopModelOverride() !== undefined) return false;
   let globalConfig = getGlobalConfig();
-  let h = [
+  let timestamps = [
     globalConfig.sonnet45To46MigrationTimestamp,
     globalConfig.fable5ToFableAliasMigrationTimestamp,
     globalConfig.legacyOpusMigrationTimestamp,
     globalConfig.opusProMigrationTimestamp,
   ];
-  let x = Date.now() - process.uptime() * 1000;
-  return h.some((T) => T !== undefined && T >= x - 3000);
+  let startupAt = Date.now() - process.uptime() * 1000;
+  return timestamps.some((timestamp) => timestamp !== undefined && timestamp >= startupAt - 3000);
 }
 export { MIGRATIONS };

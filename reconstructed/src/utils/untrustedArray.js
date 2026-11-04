@@ -20,34 +20,39 @@ var UNREADABLE_LIST_TEXT = "<unreadable list>";
 /**
  * 安全复制不可信数组：读取失败的元素为 undefined；长度不可读或超出上限时返回 unreadable 标记，非数组为 undefined。
  */
-function readUntrustedArray(e) {
-  let n;
+function readUntrustedArray(array) {
+  let length;
   try {
-    if (!Array.isArray(e)) return;
-    n = e.length;
+    if (!Array.isArray(array)) return;
+    length = array.length;
   } catch {
     return UNREADABLE_ARRAY;
   }
-  if (typeof n !== "number" || !Number.isSafeInteger(n) || n < 0 || n > CLONE_DEPTH_THRESHOLD)
+  if (
+    typeof length !== "number" ||
+    !Number.isSafeInteger(length) ||
+    length < 0 ||
+    length > CLONE_DEPTH_THRESHOLD
+  )
     return UNREADABLE_ARRAY;
-  let u = [];
-  for (let i = 0; i < n; i++) {
-    let t;
+  let copy = [];
+  for (let i = 0; i < length; i++) {
+    let element;
     try {
-      t = e[i];
+      element = array[i];
     } catch {
-      t = undefined;
+      element = undefined;
     }
-    u.push(t);
+    copy.push(element);
   }
-  return u;
+  return copy;
 }
 //@ chunk-kev4jdty.js:524-575 placement
 /**
  * 安全读取不可信数组，不可读返回 undefined。
  */
-function readUntrustedArrayOrUndefined(e) {
-  let untrustedArray = readUntrustedArray(e);
+function readUntrustedArrayOrUndefined(array) {
+  let untrustedArray = readUntrustedArray(array);
   return untrustedArray === UNREADABLE_ARRAY ? undefined : untrustedArray;
 }
 export { UNREADABLE_ARRAY, UNREADABLE_LIST_TEXT, readUntrustedArray, readUntrustedArrayOrUndefined };

@@ -48,43 +48,46 @@ function silentHeronCheckinMs() {
 /**
  * 为后台 shell 注册无输出检查：按代理归属加入观察集合并按需启动轮询计时器；返回注销函数（同时撤回未送达的提醒）。
  */
-function watchQuietShell(e, n) {
-  let r = silentHeronCheckinMs();
-  if (r === 0 || (e.toolUseId !== undefined && stripPreambleSuffix(e.toolUseId).endsWith(INNER_TASK_SUFFIX)))
+function watchQuietShell(request, queue) {
+  let checkinMs = silentHeronCheckinMs();
+  if (
+    checkinMs === 0 ||
+    (request.toolUseId !== undefined && stripPreambleSuffix(request.toolUseId).endsWith(INNER_TASK_SUFFIX))
+  )
     return () => {};
   let now = Date.now();
-  let quietShellOwner = getQuietShellOwner(e.agentId ?? mainAgentId());
-  let y = {
-    ...e,
-    owner: quietShellOwner,
-    queue: n,
+  let owner = getQuietShellOwner(request.agentId ?? mainAgentId());
+  let watch = {
+    ...request,
+    owner,
+    queue,
     lastSize: 0,
     lastOutputAt: now,
   };
-  quietShellOwner.watches.add(y);
-  if (quietShellOwner.timer === undefined) {
-    quietShellOwner.pollMs = Math.min(MEMORY_PRESSURE_RECHECK_MS, Math.ceil(r / 4));
-    quietShellOwner.lastPollAt = now;
-    quietShellOwner.timer = setInterval(pollQuietShells, quietShellOwner.pollMs, quietShellOwner);
-    quietShellOwner.timer.unref();
+  owner.watches.add(watch);
+  if (owner.timer === undefined) {
+    owner.pollMs = Math.min(MEMORY_PRESSURE_RECHECK_MS, Math.ceil(checkinMs / 4));
+    owner.lastPollAt = now;
+    owner.timer = setInterval(pollQuietShells, owner.pollMs, owner);
+    owner.timer.unref();
   }
   return () => {
-    unwatchQuietShell(y);
-    if (n.removeByFilter((w) => isShellCheckinNotice(w, quietShellOwner)).length > 0) {
-      quietShellOwner.checkins = Math.max(0, quietShellOwner.checkins - 1);
-      quietShellOwner.lastCheckinAt = quietShellOwner.previousCheckinAt;
+    unwatchQuietShell(watch);
+    if (queue.removeByFilter((queued) => isShellCheckinNotice(queued, owner)).length > 0) {
+      owner.checkins = Math.max(0, owner.checkins - 1);
+      owner.lastCheckinAt = owner.previousCheckinAt;
     }
   };
 }
 //@ chunk-e6aww6q8.js:4742386-4742661 placement
-function getQuietShellOwner(e) {
+function getQuietShellOwner(agentId) {
   let quietShellOwners = getTaskRunState().quietShellOwners;
-  let r = quietShellOwners.get(e);
-  if (r !== undefined) return r;
-  for (let [h, y] of quietShellOwners)
-    if (y.watches.size === 0 && h !== mainAgentId()) quietShellOwners.delete(h);
-  let s = {
-    agentId: e,
+  let existing = quietShellOwners.get(agentId);
+  if (existing !== undefined) return existing;
+  for (let [key, owner] of quietShellOwners)
+    if (owner.watches.size === 0 && key !== mainAgentId()) quietShellOwners.delete(key);
+  let owner = {
+    agentId,
     watches: new Set(),
     pollMs: 0,
     timer: undefined,
@@ -93,48 +96,50 @@ function getQuietShellOwner(e) {
     lastCheckinAt: 0,
     previousCheckinAt: 0,
   };
-  quietShellOwners.set(e, s);
-  return s;
+  quietShellOwners.set(agentId, owner);
+  return owner;
 }
 //@ chunk-e6aww6q8.js:4742661-4742771 placement
-function unwatchQuietShell(e) {
-  let owner = e.owner;
-  owner.watches.delete(e);
+function unwatchQuietShell(watch) {
+  let owner = watch.owner;
+  owner.watches.delete(watch);
   if (owner.watches.size === 0) {
     clearInterval(owner.timer);
     owner.timer = undefined;
   }
 }
 //@ chunk-e6aww6q8.js:4742771-4742891 placement
-function isShellCheckinNotice(e, n) {
+function isShellCheckinNotice(queued, owner) {
   return (
-    e.origin?.kind === "task-notification" && e.origin.source === "shell-checkin" && e.agentId === n.agentId
+    queued.origin?.kind === "task-notification" &&
+    queued.origin.source === "shell-checkin" &&
+    queued.agentId === owner.agentId
   );
 }
 //@ chunk-e6aww6q8.js:4742891-4743232 placement
 /**
  * 检查安静的后台 shell：用户已提交新输入等情况下停止观察，再读取各任务输出大小并生成签到提示。
  */
-function pollQuietShells(e) {
-  let n = silentHeronCheckinMs() === 0;
+function pollQuietShells(owner) {
+  let isDisabled = silentHeronCheckinMs() === 0;
   let lastSubmitTime = getLastSubmitTime();
-  for (let watch of e.watches) {
+  for (let watch of owner.watches) {
     let startTime = watch.taskRegistry.get(watch.taskId)?.startTime;
-    if (n || (watch.agentId === undefined && startTime !== undefined && lastSubmitTime > startTime))
+    if (isDisabled || (watch.agentId === undefined && startTime !== undefined && lastSubmitTime > startTime))
       unwatchQuietShell(watch);
   }
-  let s = [...e.watches];
+  let watches = [...owner.watches];
   Promise.all(
-    s.map((h) =>
-      getTaskOutputSize(h.taskId).catch(() => {
+    watches.map((watch) =>
+      getTaskOutputSize(watch.taskId).catch(() => {
         return;
       }),
     ),
-  ).then((h) => {
+  ).then((sizes) => {
     try {
-      buildShellCheckinNotice(e, s, h);
+      buildShellCheckinNotice(owner, watches, sizes);
     } catch (error) {
-      s.forEach(unwatchQuietShell);
+      watches.forEach(unwatchQuietShell);
       logFeatureBad("task_local_shell_quiet_checkin", "threw");
       logError(error);
     }
@@ -144,56 +149,58 @@ function pollQuietShells(e) {
 /**
  * 后台 shell 长时间无新输出时生成提醒，说明运行时长与输出文件位置。
  */
-function buildShellCheckinNotice(e, n, r) {
-  let s = silentHeronCheckinMs();
-  if (e.timer === undefined || s === 0) return;
+function buildShellCheckinNotice(owner, watches, sizes) {
+  let checkinMs = silentHeronCheckinMs();
+  if (owner.timer === undefined || checkinMs === 0) return;
   let now = Date.now();
-  let y = now - e.lastPollAt - e.pollMs;
-  let S = y > e.pollMs ? y : 0;
-  e.lastPollAt = now;
-  e.lastCheckinAt = Math.min(now, e.lastCheckinAt + S);
-  if (e.agentId === mainAgentId() && getLastSubmitTime() > e.lastCheckinAt) e.checkins = 0;
-  let w = [];
-  for (let [Ee, Ae] of n.entries()) {
-    Ae.lastOutputAt = Math.min(now, Ae.lastOutputAt + S);
-    let Ie = r[Ee];
-    if (Ie === undefined || !e.watches.has(Ae)) continue;
-    if (Ie > Ae.lastSize) {
-      Ae.lastSize = Ie;
-      Ae.lastOutputAt = now;
+  let lateMs = now - owner.lastPollAt - owner.pollMs;
+  let skewMs = lateMs > owner.pollMs ? lateMs : 0;
+  owner.lastPollAt = now;
+  owner.lastCheckinAt = Math.min(now, owner.lastCheckinAt + skewMs);
+  if (owner.agentId === mainAgentId() && getLastSubmitTime() > owner.lastCheckinAt) owner.checkins = 0;
+  let candidates = [];
+  for (let [watchId, watch] of watches.entries()) {
+    watch.lastOutputAt = Math.min(now, watch.lastOutputAt + skewMs);
+    let size = sizes[watchId];
+    if (size === undefined || !owner.watches.has(watch)) continue;
+    if (size > watch.lastSize) {
+      watch.lastSize = size;
+      watch.lastOutputAt = now;
     }
-    let Me = Ae.taskRegistry.get(Ae.taskId);
+    let task = watch.taskRegistry.get(watch.taskId);
     if (
-      isLocalShellTask(Me) &&
-      Me.status === "running" &&
-      !Me.notified &&
-      Me.shellCommand?.status === "backgrounded"
+      isLocalShellTask(task) &&
+      task.status === "running" &&
+      !task.notified &&
+      task.shellCommand?.status === "backgrounded"
     )
-      w.push({
-        watch: Ae,
-        task: Me,
+      candidates.push({
+        watch,
+        task,
       });
   }
-  let L = s * 2 ** Math.min(e.checkins, MEMORY_PRESSURE_MAX_KILLS);
-  let found = w.find(({ watch }) => now - Math.max(watch.lastOutputAt, e.lastCheckinAt) >= L);
+  let thresholdMs = checkinMs * 2 ** Math.min(owner.checkins, MEMORY_PRESSURE_MAX_KILLS);
+  let found = candidates.find(
+    ({ watch }) => now - Math.max(watch.lastOutputAt, owner.lastCheckinAt) >= thresholdMs,
+  );
   if (
     found === undefined ||
-    now - getLastInteractionTime() < s ||
+    now - getLastInteractionTime() < checkinMs ||
     getMainLoopBusy() ||
     hasActiveAgentTasks(found.watch.taskRegistry.all()) ||
-    found.watch.queue.peek((Ee) => isShellCheckinNotice(Ee, e)) !== undefined
+    found.watch.queue.peek((queued) => isShellCheckinNotice(queued, owner)) !== undefined
   )
     return;
   let { watch, task } = found;
-  let Se = now - watch.lastOutputAt;
-  let joined = w
-    .filter((Ee) => Ee !== found)
+  let silentMs = now - watch.lastOutputAt;
+  let joined = candidates
+    .filter((candidate) => candidate !== found)
     .map(
-      (Ee) => `
-- ${Ee.watch.taskId} "${escapeXml(Ee.watch.description)}": no new output for ${formatDurationCoarse(now - Ee.watch.lastOutputAt)}, output file ${getTaskOutputPath(Ee.watch.taskId)}`,
+      (candidate) => `
+- ${candidate.watch.taskId} "${escapeXml(candidate.watch.description)}": no new output for ${formatDurationCoarse(now - candidate.watch.lastOutputAt)}, output file ${getTaskOutputPath(candidate.watch.taskId)}`,
     )
     .join("");
-  let we = s * 2 ** Math.min(e.checkins + 1, MEMORY_PRESSURE_MAX_KILLS);
+  let nextThresholdMs = checkinMs * 2 ** Math.min(owner.checkins + 1, MEMORY_PRESSURE_MAX_KILLS);
   watch.queue.enqueuePendingNotification(
     {
       value: formatTaskNotification({
@@ -201,10 +208,10 @@ function buildShellCheckinNotice(e, n, r) {
         toolUseId: watch.toolUseId,
         outputFile: getTaskOutputPath(watch.taskId),
         summary: escapeXml(
-          `${BACKGROUND_COMMAND_PREFIX}"${watch.description}" is still running after ${formatDurationCoarse(now - task.startTime)}, with no new output for ${formatDurationCoarse(Se)}`,
+          `${BACKGROUND_COMMAND_PREFIX}"${watch.description}" is still running after ${formatDurationCoarse(now - task.startTime)}, with no new output for ${formatDurationCoarse(silentMs)}`,
         ),
         trailing: `
-This is a check-in, not a completion. The command may be working quietly, or it may be hung: waiting on a lock, on input, or on a process that will never exit. Find out which before you wait any longer: read its output file and look at its processes. If it is stuck, stop this task and get the work done another way. If it is making progress, or is meant to keep running (a server, a watcher), leave it and end your turn. The next check-in comes after another ${formatDurationCoarse(we)} of silence.${
+This is a check-in, not a completion. The command may be working quietly, or it may be hung: waiting on a lock, on input, or on a process that will never exit. Find out which before you wait any longer: read its output file and look at its processes. If it is stuck, stop this task and get the work done another way. If it is making progress, or is meant to keep running (a server, a watcher), leave it and end your turn. The next check-in comes after another ${formatDurationCoarse(nextThresholdMs)} of silence.${
           joined &&
           `
 It speaks for your other background commands too, which get none of their own. Look at any that has been silent for longer than it should:${joined}`
@@ -218,18 +225,18 @@ It speaks for your other background commands too, which get none of their own. L
       },
       skipAttachments: true,
       priority: "next",
-      agentId: e.agentId,
+      agentId: owner.agentId,
     },
     {
       turnAttribution: "inherit",
     },
   );
-  e.previousCheckinAt = e.lastCheckinAt;
-  e.lastCheckinAt = now;
-  e.checkins++;
+  owner.previousCheckinAt = owner.lastCheckinAt;
+  owner.lastCheckinAt = now;
+  owner.checkins++;
   logFeatureOk("task_local_shell_quiet_checkin");
   logForDebugging(
-    `LocalShellTask ${watch.taskId}: quiet check-in #${e.checkins} for ${w.length} command(s) after ${Se}ms of silence`,
+    `LocalShellTask ${watch.taskId}: quiet check-in #${owner.checkins} for ${candidates.length} command(s) after ${silentMs}ms of silence`,
   );
 }
 export { watchQuietShell };

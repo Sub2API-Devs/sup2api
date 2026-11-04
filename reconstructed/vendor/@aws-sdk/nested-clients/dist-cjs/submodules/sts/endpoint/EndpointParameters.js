@@ -5,10 +5,10 @@
  * pieces: chunk-a8ee6x44.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-a8ee6x44.js:1925-2573 cjs-require-graph
-var require_EndpointParameters = x(function (cjsExports) {
+var require_EndpointParameters = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

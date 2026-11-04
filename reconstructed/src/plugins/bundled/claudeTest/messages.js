@@ -85,8 +85,8 @@ var REQUEST_NOT_RUN_TEXT = "Claude Test did not run this request. Type /claude-t
 /**
  * 让模型只转述并停止
  */
-function tellPersonAndStop(e) {
-  return `Tell the person exactly this, and stop. Do not run anything: ${e}`;
+function tellPersonAndStop(message) {
+  return `Tell the person exactly this, and stop. Do not run anything: ${message}`;
 }
 //@ chunk-ae5g0zb5.js:87784-88391 placement
 /**

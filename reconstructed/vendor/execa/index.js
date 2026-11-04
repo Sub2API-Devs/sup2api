@@ -9,33 +9,37 @@ import { default as Mr } from "process";
 import path from "path";
 import { Buffer as jo } from "buffer";
 import child_process from "child_process";
-import { Re } from "../../runtime/bun-runtime.js";
+import { __toESM } from "../../runtime/bun-runtime.js";
 import { require_cross_spawn } from "../cross-spawn/index.js";
-import { Kt } from "../npm-run-path/index.js";
+import { npmRunPath } from "../npm-run-path/index.js";
 import { verboseDefault, logCommand } from "./lib/verbose.js";
 import { normalizeStdio } from "./lib/stdio.js";
-import { Ue, Ke, parseTemplates } from "./lib/command.js";
+import { commandString, escapedCommand, parseTemplates } from "./lib/command.js";
 import { validateTimeout, setupTimeout, setExitHandler, spawnedKill, spawnedCancel } from "./lib/kill.js";
 import { makeError } from "./lib/error.js";
 import { mergePromise, getSpawnedPromise } from "./lib/promise.js";
 import { onetime_default } from "../human-signals/build/src/realtime.js";
 import { getSpawnedResult, handleInput, makeAllStream, handleInputSync } from "./lib/stream.js";
 import { addPipeMethods } from "./lib/pipe.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-m4p5zn6n.js:7096-7115 placement
-var import_cross_spawn = Re(require_cross_spawn(), 1);
+var import_cross_spawn; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-m4p5zn6n.js:7096", () => {
+  import_cross_spawn = __toESM(require_cross_spawn(), 1);
+});
 //@ chunk-m4p5zn6n.js:7223-7413 placement
-function Ce(e) {
-  let n =
-    typeof e === "string"
+function stripFinalNewline(text) {
+  let lastChar =
+    typeof text === "string"
       ? `
 `
       : `
 `.charCodeAt();
-  let r = typeof e === "string" ? "\r" : "\r".charCodeAt();
-  if (e[e.length - 1] === n) e = e.slice(0, -1);
-  if (e[e.length - 1] === r) e = e.slice(0, -1);
-  return e;
+  let cr = typeof text === "string" ? "\r" : "\r".charCodeAt();
+  if (text[text.length - 1] === lastChar) text = text.slice(0, -1);
+  if (text[text.length - 1] === cr) text = text.slice(0, -1);
+  return text;
 }
 //@ chunk-m4p5zn6n.js:27831-28526 esm-layout
 var DEFAULT_MAX_BUFFER = 1e8;
@@ -47,7 +51,7 @@ var getEnv = ({ env: envOption, extendEnv, preferLocal, localDir, execPath }) =>
       }
     : envOption;
   if (preferLocal)
-    return Kt({
+    return npmRunPath({
       env,
       cwd: localDir,
       execPath,
@@ -87,15 +91,15 @@ var handleArguments = (file, args, options = {}) => {
 };
 var handleOutput = (options, value, error) => {
   if (typeof value !== "string" && !jo.isBuffer(value)) return error === undefined ? undefined : "";
-  if (options.stripFinalNewline) return Ce(value);
+  if (options.stripFinalNewline) return stripFinalNewline(value);
   return value;
 };
 //@ chunk-m4p5zn6n.js:28526-29569 esm-fingerprint
 function execa(file, args, options) {
   let parsed = handleArguments(file, args, options);
-  let command = Ue(file, args);
-  let escapedCommand = Ke(file, args);
-  logCommand(escapedCommand, parsed.options);
+  let command = commandString(file, args);
+  let escapedCommand_2 = escapedCommand(file, args);
+  logCommand(escapedCommand_2, parsed.options);
   validateTimeout(parsed.options);
   let spawned;
   try {
@@ -109,7 +113,7 @@ function execa(file, args, options) {
         stderr: "",
         all: "",
         command,
-        escapedCommand,
+        escapedCommand: escapedCommand_2,
         parsed,
         timedOut: false,
         isCanceled: false,
@@ -142,7 +146,7 @@ function execa(file, args, options) {
         stderr,
         all,
         command,
-        escapedCommand,
+        escapedCommand: escapedCommand_2,
         parsed,
         timedOut,
         isCanceled: context.isCanceled || (parsed.options.signal ? parsed.options.signal.aborted : false),
@@ -153,7 +157,7 @@ function execa(file, args, options) {
     }
     return {
       command,
-      escapedCommand,
+      escapedCommand: escapedCommand_2,
       exitCode: 0,
       stdout,
       stderr,
@@ -173,9 +177,9 @@ function execa(file, args, options) {
 //@ chunk-m4p5zn6n.js:29569-30299 esm-fingerprint
 function execaSync(file, args, options) {
   let parsed = handleArguments(file, args, options);
-  let command = Ue(file, args);
-  let escapedCommand = Ke(file, args);
-  logCommand(escapedCommand, parsed.options);
+  let command = commandString(file, args);
+  let escapedCommand_2 = escapedCommand(file, args);
+  logCommand(escapedCommand_2, parsed.options);
   let input = handleInputSync(parsed.options);
   let result;
   try {
@@ -190,7 +194,7 @@ function execaSync(file, args, options) {
       stderr: "",
       all: "",
       command,
-      escapedCommand,
+      escapedCommand: escapedCommand_2,
       parsed,
       timedOut: false,
       isCanceled: false,
@@ -207,7 +211,7 @@ function execaSync(file, args, options) {
       signal: result.signal,
       exitCode: result.status,
       command,
-      escapedCommand,
+      escapedCommand: escapedCommand_2,
       parsed,
       timedOut: result.error && result.error.code === "ETIMEDOUT",
       isCanceled: false,
@@ -218,7 +222,7 @@ function execaSync(file, args, options) {
   }
   return {
     command,
-    escapedCommand,
+    escapedCommand: escapedCommand_2,
     exitCode: 0,
     stdout,
     stderr,
@@ -260,5 +264,8 @@ function create$(options) {
   return $;
 }
 //@ chunk-m4p5zn6n.js:30740-30752 affinity
-var oa = create$();
+var execaSyncImpl; // deferred: uses create$ of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-m4p5zn6n.js:30740", () => {
+  execaSyncImpl = create$();
+});
 export { execa, execaSync };

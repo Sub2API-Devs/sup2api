@@ -65,7 +65,7 @@ import {
   errorMessage,
 } from "../errors.js";
 import { classifyDirEntry, classifyDirEntrySafe, removeDirectoryTreeNoFollow } from "../fsRemove.js";
-import { pluginLinkSchema, PLUGIN_LINK_FILE_2, PLUGIN_LINK_FILE } from "./pluginLinks.js";
+import { PLUGIN_LINK_HEADER, PLUGIN_LINK_FILE, pluginLinkSchema } from "./pluginLinks.js";
 import { MAX_CONSENT_COMMAND_LENGTH } from "./schemas.js";
 import { runCommandHint } from "../worktreeResumeHint.js";
 import { hasDotSegmentAlias } from "../pathClassification.js";
@@ -88,6 +88,7 @@ import { listSecretEnvNames } from "../settings/policyHelper/helperEnv.js";
 import { sanitizeEnvCredentials } from "../settings/policyHelper/helperExec.js";
 import { logError } from "../log.js";
 import { withDeadline } from "../sleep.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-21ppfwx8.js:1536-1597 placement
 /**
@@ -113,7 +114,7 @@ var COMMAND_SOURCE_FETCH_TIMEOUT_MS = 30000;
  */
 function isPluginsDirOnLocalDisk() {
   let pluginsDirectory = getPluginsDirectory();
-  let n = stripWin32DevicePrefix(projectPluginsDir());
+  let pluginRootPath = stripWin32DevicePrefix(projectPluginsDir());
   if (
     getPlatform() === "windows"
       ? isTrustedLocalWindowsPath(pluginsDirectory)
@@ -121,25 +122,25 @@ function isPluginsDirOnLocalDisk() {
   )
     return true;
   let provenLocalRoots = getPluginRegistry().provenLocalRoots;
-  let i = provenLocalRoots.get(n);
-  if (i === undefined || !isFreshTimestamp(i, COMMAND_SOURCE_FETCH_TIMEOUT_MS)) {
+  let provenAt = provenLocalRoots.get(pluginRootPath);
+  if (provenAt === undefined || !isFreshTimestamp(provenAt, COMMAND_SOURCE_FETCH_TIMEOUT_MS)) {
     if (
-      realpathAllowMissing(n, {
+      realpathAllowMissing(pluginRootPath, {
         allowLocalWsl: true,
       })
     ) {
-      provenLocalRoots.delete(n);
+      provenLocalRoots.delete(pluginRootPath);
       return true;
     }
-    provenLocalRoots.set(n, Date.now());
+    provenLocalRoots.set(pluginRootPath, Date.now());
   }
-  if (isPathWithin(getClaudeConfigDir(), n)) return false;
+  if (isPathWithin(getClaudeConfigDir(), pluginRootPath)) return false;
   return trustedLocalRoots().some(
-    (o) =>
-      isPathWithin(n, o, {
+    (root) =>
+      isPathWithin(pluginRootPath, root, {
         foldCase: true,
       }) ||
-      isPathWithin(o, n, {
+      isPathWithin(root, pluginRootPath, {
         foldCase: true,
       }),
   );
@@ -147,8 +148,8 @@ function isPluginsDirOnLocalDisk() {
 //@ chunk-21ppfwx8.js:1979-2070 placement
 function trustedLocalRoots() {
   return uniq(
-    [getOriginalCwd(), ...getAdditionalDirectoriesForClaudeMd()].flatMap((e) =>
-      [e, findGitRoot(e), noUncachedRoot(e)].filter((n) => n !== null),
+    [getOriginalCwd(), ...getAdditionalDirectoriesForClaudeMd()].flatMap((dir) =>
+      [dir, findGitRoot(dir), noUncachedRoot(dir)].filter((rootCandidate) => rootCandidate !== null),
     ),
   );
 }
@@ -169,20 +170,31 @@ function makeTempCachePathName(temporaryCacheNameForPlugin) {
 /**
  * TEMP_CACHE_DIR_MAX_RANDOM：临时缓存目录名随机段长度；TEMP_CACHE_LINK_SUFFIX：临时缓存目录的 link 后缀；TEMP_CACHE_CLONE_SUFFIX：临时缓存目录的 clone 后缀（同一声明共 3 个绑定）。
  */
-var TEMP = "temp_";
-var TEMP_CACHE_DIR_MAX_RANDOM = 6;
-var TEMP_CACHE_LINK_SUFFIX = "_x";
-var TEMP_CACHE_CLONE_SUFFIX = ".clone";
-var regExp = new RegExp(
-  `^${TEMP}(?:${COMMAND_SOURCE_KINDS.join("|")})_(\\d{10,})_[a-z0-9]{1,${TEMP_CACHE_DIR_MAX_RANDOM}}(?:${TEMP_CACHE_LINK_SUFFIX}|\\${TEMP_CACHE_CLONE_SUFFIX})?$`,
-);
+var TEMP; // deferred: uses COMMAND_SOURCE_KINDS of its import cycle while loading; runs once the cycle is complete
+var TEMP_CACHE_DIR_MAX_RANDOM;
+var TEMP_CACHE_LINK_SUFFIX;
+var TEMP_CACHE_CLONE_SUFFIX;
+var regExp;
+deferInit("chunk-21ppfwx8.js:2590", () => {
+  TEMP = "temp_";
+  TEMP_CACHE_DIR_MAX_RANDOM = 6;
+  TEMP_CACHE_LINK_SUFFIX = "_x";
+  TEMP_CACHE_CLONE_SUFFIX = ".clone";
+  regExp = new RegExp(
+    `^${TEMP}(?:${COMMAND_SOURCE_KINDS.join("|")})_(\\d{10,})_[a-z0-9]{1,${TEMP_CACHE_DIR_MAX_RANDOM}}(?:${TEMP_CACHE_LINK_SUFFIX}|\\${TEMP_CACHE_CLONE_SUFFIX})?$`,
+  );
+});
 //@ chunk-21ppfwx8.js:2722-2761 placement
-function linkingTempName(e, pid) {
-  return `${e}${LINKING_DIR_PREFIX}${pid}`;
+function linkingTempName(sourcePath, pid) {
+  return `${sourcePath}${LINKING_DIR_PREFIX}${pid}`;
 }
 //@ chunk-21ppfwx8.js:2761-2813 placement
-var LINKING_DIR_PREFIX = ".linking-";
-var regExp_2 = new RegExp(`\\${LINKING_DIR_PREFIX}(\\d+)$`);
+var LINKING_DIR_PREFIX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var regExp_2;
+deferInit("chunk-21ppfwx8.js:2761", () => {
+  LINKING_DIR_PREFIX = ".linking-";
+  regExp_2 = new RegExp(`\\${LINKING_DIR_PREFIX}(\\d+)$`);
+});
 //@ chunk-21ppfwx8.js:2852-2864 placement
 var COMMAND_SOURCE_MAX_OUTPUT = 2000;
 //@ chunk-21ppfwx8.js:2864-4508 placement
@@ -197,13 +209,13 @@ function spawnCommandSource(command, { cwd, env, timeoutMs, maxStdoutBytes, maxS
   return new Promise((resolve) => {
     let stdout = "";
     let stderr = "";
-    let h = 0;
-    let p = 0;
-    let w = false;
-    let S = false;
-    let A;
-    let b;
-    let _ = spawn(command, [], {
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
+    let settled = false;
+    let exited = false;
+    let failureKind;
+    let exitFallbackTimer;
+    let child = spawn(command, [], {
       shell: true,
       cwd,
       env,
@@ -212,100 +224,106 @@ function spawnCommandSource(command, { cwd, env, timeoutMs, maxStdoutBytes, maxS
       windowsHide: true,
       ...cgroupSpawnOptions("plugin"),
     });
-    let Ae = registerCleanup(async () => {
-      if (!w && _.pid !== undefined) await killProcessGroup(_.pid, "SIGKILL");
+    let unregisterCleanup = registerCleanup(async () => {
+      if (!settled && child.pid !== undefined) await killProcessGroup(child.pid, "SIGKILL");
     });
-    function P(y) {
-      if (w) return;
-      w = true;
-      Ae();
+    function finish(result) {
+      if (settled) return;
+      settled = true;
+      unregisterCleanup();
       clearTimeout(timer);
-      if (b) clearTimeout(b);
-      _.stdout?.removeAllListeners("data");
-      _.stderr?.removeAllListeners("data");
-      _.stdout?.destroy();
-      _.stderr?.destroy();
-      resolve(y);
+      if (exitFallbackTimer) clearTimeout(exitFallbackTimer);
+      child.stdout?.removeAllListeners("data");
+      child.stderr?.removeAllListeners("data");
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+      resolve(result);
     }
-    function q(y) {
-      if (A) return;
-      A = y;
-      _.stdout?.removeAllListeners("data");
-      _.stderr?.removeAllListeners("data");
-      _.stdout?.pause();
-      _.stderr?.pause();
-      let T = {
-        kind: y,
+    function failOrKill(kind) {
+      if (failureKind) return;
+      failureKind = kind;
+      child.stdout?.removeAllListeners("data");
+      child.stderr?.removeAllListeners("data");
+      child.stdout?.pause();
+      child.stderr?.pause();
+      let result = {
+        kind,
         stdout,
         stderr,
       };
-      let N = () => {
-        if (w) return;
-        if (S) {
-          P(T);
+      let finishAfterKill = () => {
+        if (settled) return;
+        if (exited) {
+          finish(result);
           return;
         }
-        let x = () => P(T);
-        _.once("exit", x);
-        b = setTimeout((G) => G(), COMMAND_SOURCE_MAX_OUTPUT, x);
-        if (typeof b === "object") b.unref();
+        let onExit = () => finish(result);
+        child.once("exit", onExit);
+        exitFallbackTimer = setTimeout((token) => token(), COMMAND_SOURCE_MAX_OUTPUT, onExit);
+        if (typeof exitFallbackTimer === "object") exitFallbackTimer.unref();
       };
-      if (_.pid === undefined) {
-        P(T);
+      if (child.pid === undefined) {
+        finish(result);
         return;
       }
-      killProcessGroup(_.pid, "SIGKILL").then(N, N);
+      killProcessGroup(child.pid, "SIGKILL").then(finishAfterKill, finishAfterKill);
     }
-    let timer = setTimeout((y) => y("timed-out"), timeoutMs, q);
-    _.stdout?.setEncoding("utf8");
-    _.stderr?.setEncoding("utf8");
-    _.stdout?.on("data", (y) => {
-      h += Buffer.byteLength(y);
-      if (h > maxStdoutBytes) {
-        q("stdout-overflow");
+    let timer = setTimeout((onTimeout) => onTimeout("timed-out"), timeoutMs, failOrKill);
+    child.stdout?.setEncoding("utf8");
+    child.stderr?.setEncoding("utf8");
+    child.stdout?.on("data", (chunk) => {
+      stdoutBytes += Buffer.byteLength(chunk);
+      if (stdoutBytes > maxStdoutBytes) {
+        failOrKill("stdout-overflow");
         return;
       }
-      stdout += y;
+      stdout += chunk;
     });
-    _.stderr?.on("data", (y) => {
-      if (p >= maxStderrBytes) return;
-      p += Buffer.byteLength(y);
-      stderr += y;
+    child.stderr?.on("data", (chunk) => {
+      if (stderrBytes >= maxStderrBytes) return;
+      stderrBytes += Buffer.byteLength(chunk);
+      stderr += chunk;
     });
-    _.once("error", (y) => {
-      P({
+    child.once("error", (spawnError) => {
+      finish({
         kind: "spawn-error",
-        message: y.message,
+        message: spawnError.message,
         stdout,
         stderr,
       });
     });
-    function J(y, T) {
-      if (A) return;
-      if (typeof y === "number")
-        P({
+    function onExited(exitCode, signal) {
+      if (failureKind) return;
+      if (typeof exitCode === "number")
+        finish({
           kind: "exited",
-          exitCode: y,
+          exitCode,
           stdout,
           stderr,
         });
       else
-        P({
+        finish({
           kind: "signaled",
-          signal: T ?? "unknown",
+          signal: signal ?? "unknown",
           stdout,
           stderr,
         });
     }
-    _.once("exit", (y, T) => {
-      S = true;
-      if (w || A) return;
+    child.once("exit", (exitCode, signal) => {
+      exited = true;
+      if (settled || failureKind) return;
       clearTimeout(timer);
-      b = setTimeout((N, x, G) => N(x, G), COMMAND_SOURCE_MAX_OUTPUT, J, y, T);
-      if (typeof b === "object") b.unref();
+      exitFallbackTimer = setTimeout(
+        (fn, code, signalName) => fn(code, signalName),
+        COMMAND_SOURCE_MAX_OUTPUT,
+        onExited,
+        exitCode,
+        signal,
+      );
+      if (typeof exitFallbackTimer === "object") exitFallbackTimer.unref();
     });
-    _.once("close", (y, T) => {
-      J(y, T);
+    child.once("close", (exitCode, signal) => {
+      onExited(exitCode, signal);
     });
   });
 }
@@ -313,46 +331,57 @@ function spawnCommandSource(command, { cwd, env, timeoutMs, maxStdoutBytes, maxS
 /**
  * 插件布局常量：.claude-plugin 目录、其中的 plugin.json 与 marketplace.json 相对路径、组件目录（commands/skills/agents/…）、 根目录识别文件（SKILL.md、.mcp.json、.lsp.json）与它们的合集。
  */
-var PLUGIN_MANIFEST_DIR = ".claude-plugin";
-var PLUGIN_MANIFEST_PATH = join(PLUGIN_MANIFEST_DIR, "plugin.json");
-var PLUGIN_JSON = "plugin.json";
-var MARKETPLACE_MANIFEST_PATH = join(PLUGIN_MANIFEST_DIR, "marketplace.json");
-var PLUGIN_COMPONENT_DIRS = [
-  "commands",
-  "skills",
-  "agents",
-  "hooks",
-  "themes",
-  "output-styles",
-  "monitors",
-  "workflows",
-];
-var PLUGIN_ROOT_MARKER_FILES = ["SKILL.md", ".mcp.json", ".lsp.json"];
-var PLUGIN_ROOT_MARKERS = [PLUGIN_MANIFEST_DIR, ...PLUGIN_COMPONENT_DIRS, ...PLUGIN_ROOT_MARKER_FILES];
+var PLUGIN_MANIFEST_DIR; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var PLUGIN_MANIFEST_PATH;
+var PLUGIN_JSON;
+var MARKETPLACE_MANIFEST_PATH;
+var PLUGIN_COMPONENT_DIRS;
+var PLUGIN_ROOT_MARKER_FILES;
+var PLUGIN_ROOT_MARKERS;
+deferInit("chunk-21ppfwx8.js:4586", () => {
+  PLUGIN_MANIFEST_DIR = ".claude-plugin";
+  PLUGIN_MANIFEST_PATH = join(PLUGIN_MANIFEST_DIR, "plugin.json");
+  PLUGIN_JSON = "plugin.json";
+  MARKETPLACE_MANIFEST_PATH = join(PLUGIN_MANIFEST_DIR, "marketplace.json");
+  PLUGIN_COMPONENT_DIRS = [
+    "commands",
+    "skills",
+    "agents",
+    "hooks",
+    "themes",
+    "output-styles",
+    "monitors",
+    "workflows",
+  ];
+  PLUGIN_ROOT_MARKER_FILES = ["SKILL.md", ".mcp.json", ".lsp.json"];
+  PLUGIN_ROOT_MARKERS = [PLUGIN_MANIFEST_DIR, ...PLUGIN_COMPONENT_DIRS, ...PLUGIN_ROOT_MARKER_FILES];
+});
 //@ chunk-21ppfwx8.js:4837-4909 placement
 /**
  * pluginRootHasMarker：目录下是否有插件根标记。
  */
-async function pluginRootHasMarker(e) {
-  return (await readdir(e)).filter((r) => !isJunkEntryName(r)).some(isPluginRootMarker);
+async function pluginRootHasMarker(pluginRoot) {
+  return (await readdir(pluginRoot))
+    .filter((entryName) => !isJunkEntryName(entryName))
+    .some(isPluginRootMarker);
 }
 //@ chunk-21ppfwx8.js:4909-5199 placement
 /**
  * 定位解压后的插件根：本层有 .claude-plugin 就返回本层；只有一个子目录且其中有 .claude-plugin（或像插件根）则返回子目录。
  */
-async function findPluginRootInExtracted(e) {
+async function findPluginRootInExtracted(extractedDir) {
   let filtered = (
-    await readdir(e, {
+    await readdir(extractedDir, {
       withFileTypes: true,
     })
-  ).filter((r) => !isJunkEntryName(r.name));
-  if (filtered.some((r) => r.name === ".claude-plugin")) return e;
+  ).filter((entry) => !isJunkEntryName(entry.name));
+  if (filtered.some((entry) => entry.name === ".claude-plugin")) return extractedDir;
   if (filtered.length === 1 && filtered[0].isDirectory()) {
-    let r = join(e, filtered[0].name);
-    if (await pathExists(join(r, ".claude-plugin"))) return r;
-    if (!isPluginRootMarker(filtered[0].name) && (await pluginRootHasMarker(r))) return r;
+    let nestedDir = join(extractedDir, filtered[0].name);
+    if (await pathExists(join(nestedDir, ".claude-plugin"))) return nestedDir;
+    if (!isPluginRootMarker(filtered[0].name) && (await pluginRootHasMarker(nestedDir))) return nestedDir;
   }
-  return e;
+  return extractedDir;
 }
 //@ chunk-21ppfwx8.js:5199-5238 placement
 /**
@@ -365,74 +394,83 @@ function isPluginRootMarker(name) {
 /**
  * isPluginComponentDir：是否为插件组件目录名。
  */
-function isPluginComponentDir(e) {
-  return PLUGIN_COMPONENT_DIRS.includes(e);
+function isPluginComponentDir(dirName) {
+  return PLUGIN_COMPONENT_DIRS.includes(dirName);
 }
 //@ chunk-21ppfwx8.js:5277-5340 placement
-async function pathExists(e) {
+async function pathExists(targetPath) {
   try {
-    await stat(e);
+    await stat(targetPath);
     return true;
   } catch {
     return false;
   }
 }
 //@ chunk-21ppfwx8.js:5340-5394 placement
-function isJunkEntryName(e) {
-  return e === "__MACOSX" || e === ".DS_Store";
+function isJunkEntryName(entryName) {
+  return entryName === "__MACOSX" || entryName === ".DS_Store";
 }
 //@ chunk-21ppfwx8.js:5394-5467 placement
-var COMMAND_SOURCE_KILL_GRACE_MS = 60;
-var COMMAND_SOURCE_MAX_FILE_BYTES = 65536;
-var COMMAND_SOURCE_MAX_TOTAL_BYTES = 65536;
-var COMMAND_SOURCE_MAX_ENTRIES = 500;
-var COMMAND_SOURCE_MAX_SCAN_BYTES = 268435456;
-var MAX_COMMAND_SOURCE_NAME_LENGTH = 20000;
-var PLUGIN_ROOT_MARKER_SET = new Set(PLUGIN_ROOT_MARKERS);
+var COMMAND_SOURCE_KILL_GRACE_MS; // deferred: uses PLUGIN_MANIFEST_DIR of its import cycle while loading; runs once the cycle is complete
+var COMMAND_SOURCE_MAX_FILE_BYTES;
+var COMMAND_SOURCE_MAX_TOTAL_BYTES;
+var COMMAND_SOURCE_MAX_ENTRIES;
+var COMMAND_SOURCE_MAX_SCAN_BYTES;
+var MAX_COMMAND_SOURCE_NAME_LENGTH;
+var PLUGIN_ROOT_MARKER_SET;
+deferInit("chunk-21ppfwx8.js:5394", () => {
+  COMMAND_SOURCE_KILL_GRACE_MS = 60;
+  COMMAND_SOURCE_MAX_FILE_BYTES = 65536;
+  COMMAND_SOURCE_MAX_TOTAL_BYTES = 65536;
+  COMMAND_SOURCE_MAX_ENTRIES = 500;
+  COMMAND_SOURCE_MAX_SCAN_BYTES = 268435456;
+  MAX_COMMAND_SOURCE_NAME_LENGTH = 20000;
+  PLUGIN_ROOT_MARKER_SET = new Set(PLUGIN_ROOT_MARKERS);
+});
 //@ chunk-21ppfwx8.js:5467-8893 placement
 /**
  * 运行插件的命令源（command source）生成插件目录，带超时
  */
-async function runPluginCommandSource(e) {
-  let n = (e.timeout ?? COMMAND_SOURCE_KILL_GRACE_MS) * 1000;
-  let r = printableName(e.command, 200);
-  logForDebugging(`Plugin command source: running \`${r}\` (timeout ${n}ms)`);
-  let commandSource = await spawnCommandSource(e.command, {
+async function runPluginCommandSource(commandSourceConfig) {
+  let timeoutMs = (commandSourceConfig.timeout ?? COMMAND_SOURCE_KILL_GRACE_MS) * 1000;
+  let printableCommand = printableName(commandSourceConfig.command, 200);
+  logForDebugging(`Plugin command source: running \`${printableCommand}\` (timeout ${timeoutMs}ms)`);
+  let commandSource = await spawnCommandSource(commandSourceConfig.command, {
     cwd: homedir(),
     env: subprocessEnv(),
-    timeoutMs: n,
+    timeoutMs,
     maxStdoutBytes: COMMAND_SOURCE_MAX_FILE_BYTES,
     maxStderrBytes: COMMAND_SOURCE_MAX_TOTAL_BYTES,
   });
-  let o = printableName(commandSource.stderr.trim(), COMMAND_SOURCE_MAX_ENTRIES);
-  let a = o ? ` (stderr: ${o})` : "";
+  let stderrText = printableName(commandSource.stderr.trim(), COMMAND_SOURCE_MAX_ENTRIES);
+  let stderrSuffix = stderrText ? ` (stderr: ${stderrText})` : "";
   switch (commandSource.kind) {
     case "exited":
       if (commandSource.exitCode !== 0)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `Plugin source command \`${r}\` exited with code ${commandSource.exitCode}` +
-            (o ? `: ${o}` : " and no error output."),
+          `Plugin source command \`${printableCommand}\` exited with code ${commandSource.exitCode}` +
+            (stderrText ? `: ${stderrText}` : " and no error output."),
           "plugin command source exited non-zero",
         );
       break;
     case "timed-out":
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Plugin source command \`${r}\` did not finish within ${n / 1000}s and was stopped.${a}`,
+        `Plugin source command \`${printableCommand}\` did not finish within ${timeoutMs / 1000}s and was stopped.${stderrSuffix}`,
         "plugin command source timed out",
       );
     case "stdout-overflow":
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Plugin source command \`${r}\` printed more than ${COMMAND_SOURCE_MAX_FILE_BYTES / 1024} KB and was stopped; it must print a single absolute path.`,
+        `Plugin source command \`${printableCommand}\` printed more than ${COMMAND_SOURCE_MAX_FILE_BYTES / 1024} KB and was stopped; it must print a single absolute path.`,
         "plugin command source exceeded the stdout cap",
       );
     case "signaled":
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Plugin source command \`${r}\` was killed by ${commandSource.signal} before it finished.${a}`,
+        `Plugin source command \`${printableCommand}\` was killed by ${commandSource.signal} before it finished.${stderrSuffix}`,
         "plugin command source killed by a signal",
       );
     case "spawn-error":
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Plugin source command \`${r}\` could not be started: ` +
+        `Plugin source command \`${printableCommand}\` could not be started: ` +
           printableName(commandSource.message, COMMAND_SOURCE_MAX_ENTRIES),
         "plugin command source failed to spawn",
       );
@@ -440,105 +478,108 @@ async function runPluginCommandSource(e) {
   let filtered = commandSource.stdout
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((p) => p.length > 0);
+    .filter((line) => line.length > 0);
   if (filtered.length === 0)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Plugin source command \`${r}\` printed nothing; it must print the absolute path of the plugin directory.`,
+      `Plugin source command \`${printableCommand}\` printed nothing; it must print the absolute path of the plugin directory.`,
       "plugin command source printed nothing",
     );
   if (filtered.length > 1)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Plugin source command \`${r}\` printed ${filtered.length} lines; it must print exactly one absolute path.`,
+      `Plugin source command \`${printableCommand}\` printed ${filtered.length} lines; it must print exactly one absolute path.`,
       "plugin command source printed multiple lines",
     );
-  let s = filtered[0];
-  if (!isAbsolute(s))
+  let printedPath = filtered[0];
+  if (!isAbsolute(printedPath))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Plugin source command \`${r}\` printed \`${printableName(s, 200)}\`, which is not an absolute path.`,
+      `Plugin source command \`${printableCommand}\` printed \`${printableName(printedPath, 200)}\`, which is not an absolute path.`,
       "plugin command source printed a relative path",
     );
-  if ((getPlatform() === "windows" && isUntrustedLinkPath(s)) || isNetworkRelatedPath(s))
+  if ((getPlatform() === "windows" && isUntrustedLinkPath(printedPath)) || isNetworkRelatedPath(printedPath))
     throw new CommandSourceError(
-      `Plugin source command \`${r}\` printed \`${printableName(s, 200)}\`, a network path (UNC or automount), which is not supported as a plugin directory.`,
+      `Plugin source command \`${printableCommand}\` printed \`${printableName(printedPath, 200)}\`, a network path (UNC or automount), which is not supported as a plugin directory.`,
       "plugin command source printed a network path",
     );
-  if (traversesOrResolvesUntrustedLink(s))
+  if (traversesOrResolvesUntrustedLink(printedPath))
     throw new CommandSourceError(
-      `Plugin source command \`${r}\` printed \`${printableName(s, 200)}\`, which is reached through a link onto a network location (or one that cannot be trusted); that is not supported as a plugin directory.`,
+      `Plugin source command \`${printableCommand}\` printed \`${printableName(printedPath, 200)}\`, which is reached through a link onto a network location (or one that cannot be trusted); that is not supported as a plugin directory.`,
       "plugin command source printed a path through a suspect link",
     );
-  let u;
+  let resolvedPath;
   try {
-    u = await realpath(s);
+    resolvedPath = await realpath(printedPath);
   } catch (error) {
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Plugin source command \`${r}\` printed \`${printableName(s, 200)}\`, but that path could not be resolved (${getErrnoCode(error) ?? "unknown error"}).`,
+      `Plugin source command \`${printableCommand}\` printed \`${printableName(printedPath, 200)}\`, but that path could not be resolved (${getErrnoCode(error) ?? "unknown error"}).`,
       "plugin command source path does not resolve",
     );
   }
-  if (isNetworkRelatedPath(u) || (getPlatform() === "windows" && isUntrustedLinkPath(u)))
+  if (
+    isNetworkRelatedPath(resolvedPath) ||
+    (getPlatform() === "windows" && isUntrustedLinkPath(resolvedPath))
+  )
     throw new CommandSourceError(
-      `Plugin source command \`${r}\` printed a path that resolves to a network location, which is not supported as a plugin directory.`,
+      `Plugin source command \`${printableCommand}\` printed a path that resolves to a network location, which is not supported as a plugin directory.`,
       "plugin command source path resolves to a network path",
     );
-  let h;
+  let entries;
   try {
-    h = await readdir(u);
+    entries = await readdir(resolvedPath);
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Plugin source command \`${r}\` printed \`${printableName(s, 200)}\`, ` +
+      `Plugin source command \`${printableCommand}\` printed \`${printableName(printedPath, 200)}\`, ` +
         (errnoCode === "ENOTDIR"
           ? "which is not a directory."
           : `which could not be read as a directory (${errnoCode ?? "unknown error"}).`),
       "plugin command source path is not a readable directory",
     );
   }
-  if (!h.some((p) => PLUGIN_ROOT_MARKER_SET.has(p)))
+  if (!entries.some((entryName) => PLUGIN_ROOT_MARKER_SET.has(entryName)))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Plugin source command \`${r}\` printed \`${printableName(s, 200)}\`, but that directory has no plugin content (expected .claude-plugin/ or a commands/, skills/, agents/, hooks/, themes/, output-styles/, monitors/, workflows/, SKILL.md, .mcp.json, or .lsp.json at the top level). Nothing was installed.`,
+      `Plugin source command \`${printableCommand}\` printed \`${printableName(printedPath, 200)}\`, but that directory has no plugin content (expected .claude-plugin/ or a commands/, skills/, agents/, hooks/, themes/, output-styles/, monitors/, workflows/, SKILL.md, .mcp.json, or .lsp.json at the top level). Nothing was installed.`,
       "plugin command source directory has no plugin content",
     );
-  logForDebugging(`Plugin command source: resolved plugin directory ${u}`);
-  return u;
+  logForDebugging(`Plugin command source: resolved plugin directory ${resolvedPath}`);
+  return resolvedPath;
 }
 //@ chunk-21ppfwx8.js:8893-9573 placement
-async function checkPluginDirSize(e, symlinks, fileSizes) {
-  let i = [];
-  let o = 0;
-  let a = 0;
-  async function c(s) {
-    let u = await readdir(s, {
+async function checkPluginDirSize(root, symlinks, fileSizes) {
+  let files = [];
+  let totalBytes = 0;
+  let entryCount = 0;
+  async function walk(dir) {
+    let entries = await readdir(dir, {
       withFileTypes: true,
     });
-    for (let h of u) {
-      a++;
-      if (a > MAX_COMMAND_SOURCE_NAME_LENGTH)
+    for (let entry of entries) {
+      entryCount++;
+      if (entryCount > MAX_COMMAND_SOURCE_NAME_LENGTH)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
           `Plugin directory has more than ${MAX_COMMAND_SOURCE_NAME_LENGTH} entries; refusing to install it as a plugin.`,
           "plugin command source directory has too many files",
         );
-      let p = join(s, h.name);
-      let w = await classifyDirEntry(s, h);
-      if (w.isDirectory) {
-        if (s === e && h.name === ".git") continue;
-        await c(p);
-      } else if (w.isFile) {
-        let size = w.size ?? (await lstat(p)).size;
-        fileSizes?.set(p, size);
-        o += size;
-        if (o > COMMAND_SOURCE_MAX_SCAN_BYTES)
+      let entryPath = join(dir, entry.name);
+      let entryInfo = await classifyDirEntry(dir, entry);
+      if (entryInfo.isDirectory) {
+        if (dir === root && entry.name === ".git") continue;
+        await walk(entryPath);
+      } else if (entryInfo.isFile) {
+        let size = entryInfo.size ?? (await lstat(entryPath)).size;
+        fileSizes?.set(entryPath, size);
+        totalBytes += size;
+        if (totalBytes > COMMAND_SOURCE_MAX_SCAN_BYTES)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
             `Plugin directory is larger than ${COMMAND_SOURCE_MAX_SCAN_BYTES / 1048576} MB; refusing to install it as a plugin.`,
             "plugin command source directory too large",
           );
-        i.push(p);
-      } else if (w.isSymbolicLink) symlinks?.push(p);
+        files.push(entryPath);
+      } else if (entryInfo.isSymbolicLink) symlinks?.push(entryPath);
     }
   }
-  await c(e);
+  await walk(root);
   symlinks?.sort();
-  return i.sort();
+  return files.sort();
 }
 //@ chunk-21ppfwx8.js:9573-10063 placement
 /**
@@ -550,29 +591,29 @@ async function hashPluginDirectoryContents(root) {
   let files = await checkPluginDirSize(root, symlinks, fileSizes);
   let hash = createHash("sha256");
   for (let file of files) {
-    let c = fileSizes.get(file) ?? 0;
-    hash.update(`f ${relative(root, file).split(sep).join("/")}\x00${c}\x00`);
-    let s = c;
-    if (c > 0) {
-      let u = await open(file, "r");
+    let fileSize = fileSizes.get(file) ?? 0;
+    hash.update(`f ${relative(root, file).split(sep).join("/")}\x00${fileSize}\x00`);
+    let remaining = fileSize;
+    if (fileSize > 0) {
+      let handle = await open(file, "r");
       try {
-        for await (let h of u.createReadStream({
+        for await (let chunk of handle.createReadStream({
           start: 0,
-          end: c - 1,
+          end: fileSize - 1,
         })) {
-          hash.update(h);
-          s -= h.length;
+          hash.update(chunk);
+          remaining -= chunk.length;
         }
       } finally {
-        await u.close();
+        await handle.close();
       }
     }
-    if (s > 0) hash.update(Buffer.alloc(s));
+    if (remaining > 0) hash.update(Buffer.alloc(remaining));
   }
   for (let symlink of symlinks) {
-    let c = await readlink(symlink);
+    let target = await readlink(symlink);
     hash.update(`l ${relative(root, symlink).split(sep).join("/")}\x00`);
-    hash.update(`${Buffer.byteLength(c)}\x00${c}`);
+    hash.update(`${Buffer.byteLength(target)}\x00${target}`);
   }
   return hash.digest("hex");
 }
@@ -587,7 +628,7 @@ var LINK_MODE_UNSUPPORTED_ON_WINDOWS_MESSAGE =
  * describeCommandOutputMode：说明 link/copy 模式对输出目录的处理。
  */
 function describeCommandOutputMode(source) {
-  return source.mode === "link" ? `${source.command}${pluginLinkSchema}` : source.command;
+  return source.mode === "link" ? `${source.command}${PLUGIN_LINK_HEADER}` : source.command;
 }
 //@ chunk-21ppfwx8.js:10263-10444 placement
 /**
@@ -602,19 +643,26 @@ function describeCommandSourceMode(source) {
 /**
  * CommandSourceError：命令源错误类。
  */
-class CommandSourceError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {}
+let CommandSourceError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-21ppfwx8.js:10444", () => {
+  CommandSourceError = class CommandSourceError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {};
+});
 //@ chunk-21ppfwx8.js:10464-12145 placement
-function describePluginSourceMode(e, n) {
-  if (n && n.kind !== "none" && n.command === describeCommandOutputMode(e)) return;
-  let r = printableName(e.command, MAX_CONSENT_COMMAND_LENGTH) + (e.mode === "link" ? " [mode: link]" : "");
-  let i = n?.pluginId !== undefined ? printableName(n.pluginId, 200) : undefined;
-  let o = i ?? "This plugin";
-  let a = i ?? "";
-  if (n?.kind === "recorded" && n.command !== undefined)
+function describePluginSourceMode(source, consent) {
+  if (consent && consent.kind !== "none" && consent.command === describeCommandOutputMode(source)) return;
+  let commandLabel =
+    printableName(source.command, MAX_CONSENT_COMMAND_LENGTH) +
+    (source.mode === "link" ? " [mode: link]" : "");
+  let pluginIdLabel = consent?.pluginId !== undefined ? printableName(consent.pluginId, 200) : undefined;
+  let subject = pluginIdLabel ?? "This plugin";
+  let pluginIdArg = pluginIdLabel ?? "";
+  if (consent?.kind === "recorded" && consent.command !== undefined)
     throw new CommandSourceError(
-      `${o}'s marketplace changed the command that installs it, or how its output is used (now \`${r}\`), since it was accepted, so it was not run. Review and accept the new command: ${runCommandHint(
+      `${subject}'s marketplace changed the command that installs it, or how its output is used (now \`${commandLabel}\`), since it was accepted, so it was not run. Review and accept the new command: ${runCommandHint(
         "plugin update",
-        a,
+        pluginIdArg,
         {
           tail: "in a terminal (add `--scope` for a project/local install)",
           fallback: "an explicit plugin update in a terminal reviews it",
@@ -622,11 +670,11 @@ function describePluginSourceMode(e, n) {
       )}.`,
       "plugin command source command changed since consent",
     );
-  if (n?.kind === "recorded")
+  if (consent?.kind === "recorded")
     throw new CommandSourceError(
-      `${o}'s marketplace entry now installs it by running a command on this machine (\`${r}\`) that has not been reviewed yet, so it was not run. Review and accept it: ${runCommandHint(
+      `${subject}'s marketplace entry now installs it by running a command on this machine (\`${commandLabel}\`) that has not been reviewed yet, so it was not run. Review and accept it: ${runCommandHint(
         "plugin update",
-        a,
+        pluginIdArg,
         {
           tail: "in a terminal (add `--scope` for a project/local install)",
           fallback: "an explicit plugin update in a terminal reviews it",
@@ -634,15 +682,15 @@ function describePluginSourceMode(e, n) {
       )}.`,
       "plugin command source never consented for an installed plugin",
     );
-  if (n?.kind === "shown")
+  if (consent?.kind === "shown")
     throw new CommandSourceError(
-      `${o}'s marketplace entry changed while it was being installed (it now declares \`${r}\`, not the command that was shown), so nothing was run. Re-run the install/update to review the current command.`,
+      `${subject}'s marketplace entry changed while it was being installed (it now declares \`${commandLabel}\`, not the command that was shown), so nothing was run. Re-run the install/update to review the current command.`,
       "plugin command source changed between display and run",
     );
   throw new CommandSourceError(
-    `${o} is installed by running a command on this machine (\`${r}\`) that has not been reviewed yet, so it was not run. Review and accept it from its /plugin details pane, or in a terminal: ${runCommandHint(
+    `${subject} is installed by running a command on this machine (\`${commandLabel}\`) that has not been reviewed yet, so it was not run. Review and accept it from its /plugin details pane, or in a terminal: ${runCommandHint(
       "plugin install",
-      a,
+      pluginIdArg,
       {
         fallback: "an explicit plugin install reviews it",
       },
@@ -654,100 +702,105 @@ function describePluginSourceMode(e, n) {
 /**
  * 在 n 下为源目录 e 的每一项创建符号链接（目标先经安全检查），写入 PLUGIN_LINK_FILE 标记（wx 独占）， 返回由源路径与各链接名/目标计算的 sha256。
  */
-async function createLinkFarm(e, n) {
-  let sorted = (await readdir(e)).filter((a) => !isPristineLinkFarm(a)).sort();
-  let i = await checkPluginEntryLinks(
-    e,
-    sorted.map((a) => ({
-      name: a,
-      path: join(e, a),
+async function createLinkFarm(producerDir, farmDir) {
+  let sorted = (await readdir(producerDir)).filter((entryName) => !isPristineLinkFarm(entryName)).sort();
+  let links = await checkPluginEntryLinks(
+    producerDir,
+    sorted.map((entryName) => ({
+      name: entryName,
+      path: join(producerDir, entryName),
     })),
   );
-  await mkdir(n, {
+  await mkdir(farmDir, {
     recursive: true,
   });
-  for (let { name: a, target, isDirectory } of i)
-    await symlink(target, join(n, a), isDirectory ? "dir" : "file");
+  for (let { name: entryName, target, isDirectory } of links)
+    await symlink(target, join(farmDir, entryName), isDirectory ? "dir" : "file");
   await writeFile(
-    join(n, PLUGIN_LINK_FILE_2),
+    join(farmDir, PLUGIN_LINK_FILE),
     JSON.stringify({
-      target: e,
+      target: producerDir,
     }),
     {
       flag: "wx",
     },
   );
   let hash = createHash("sha256");
-  hash.update(`${e}\x00`);
-  for (let { name: a, target } of i) {
-    hash.update(`${Buffer.byteLength(a)}\x00${a}`);
+  hash.update(`${producerDir}\x00`);
+  for (let { name: entryName, target } of links) {
+    hash.update(`${Buffer.byteLength(entryName)}\x00${entryName}`);
     hash.update(`${Buffer.byteLength(target)}\x00${target}`);
   }
   return hash.digest("hex");
 }
 //@ chunk-21ppfwx8.js:12605-13459 placement
-async function checkPluginEntryLinks(e, n) {
-  let r = [];
-  for (let { name: i, path } of n) {
+async function checkPluginEntryLinks(producerDir, entries) {
+  let links = [];
+  for (let { name: entryName, path } of entries) {
     if (resolvePathChain(path, dirname(path)))
       throw new CommandSourceError(
-        `A top-level entry of the plugin directory (${printableName(i, 100)}) points at a network location or through a link that cannot be trusted; refusing to link it.`,
+        `A top-level entry of the plugin directory (${printableName(entryName, 100)}) points at a network location or through a link that cannot be trusted; refusing to link it.`,
         "plugin command source entry traverses a suspect link",
       );
-    let a;
+    let targetPath;
     let isDirectory;
     try {
-      a = await realpath(path);
-      isDirectory = (await stat(a)).isDirectory();
+      targetPath = await realpath(path);
+      isDirectory = (await stat(targetPath)).isDirectory();
     } catch {
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `A top-level entry of the plugin directory its command produced could not be resolved (${printableName(i, 80)}); refusing to link it.`,
+        `A top-level entry of the plugin directory its command produced could not be resolved (${printableName(entryName, 80)}); refusing to link it.`,
         "plugin command source link entry unresolvable",
       );
     }
-    let s = relative(e, a);
-    if (s === "" || s === ".." || s.startsWith(`..${sep}`) || isAbsolute(s))
+    let relativePath = relative(producerDir, targetPath);
+    if (
+      relativePath === "" ||
+      relativePath === ".." ||
+      relativePath.startsWith(`..${sep}`) ||
+      isAbsolute(relativePath)
+    )
       throw new CommandSourceError(
-        `A top-level entry of the plugin directory its command produced (${printableName(i, 80)}) points outside that directory; refusing to link it.`,
+        `A top-level entry of the plugin directory its command produced (${printableName(entryName, 80)}) points outside that directory; refusing to link it.`,
         "plugin command source link escapes producer directory",
       );
-    r.push({
-      name: i,
-      target: a,
+    links.push({
+      name: entryName,
+      target: targetPath,
       isDirectory,
     });
   }
-  return r;
+  return links;
 }
 //@ chunk-21ppfwx8.js:13459-14892 placement
 async function checkRelinkTarget(sourcePath, cachePath) {
-  let r = resolve(getOriginalCwd(), sourcePath);
-  let i = resolve(getOriginalCwd(), cachePath);
-  let linkFarmMarker = await readLinkFarmMarker(join(r, PLUGIN_LINK_FILE_2));
-  let target = PLUGIN_LINK_FILE().parse(JSON.parse(linkFarmMarker)).target;
+  let sourceDir = resolve(getOriginalCwd(), sourcePath);
+  let cacheDir = resolve(getOriginalCwd(), cachePath);
+  let linkFarmMarker = await readLinkFarmMarker(join(sourceDir, PLUGIN_LINK_FILE));
+  let target = pluginLinkSchema().parse(JSON.parse(linkFarmMarker)).target;
   if (traversesUntrustedLink(target))
     throw new CommandSourceError(
       "The link farm points at a producer reached through a link that cannot be trusted; refusing to relink it.",
       "plugin command source relink target traverses a suspect link",
     );
-  let c = await realpath(target);
-  if (isUntrustedLinkPath(c))
+  let producerDir = await realpath(target);
+  if (isUntrustedLinkPath(producerDir))
     throw new CommandSourceError(
       "The link farm points at a producer that now resolves to a network location; refusing to relink it.",
       "plugin command source relink target resolves to a network path",
     );
-  let s = [];
-  for (let w of await readdir(r, {
+  let linkEntries = [];
+  for (let dirent of await readdir(sourceDir, {
     withFileTypes: true,
   })) {
-    if (isPristineLinkFarm(w.name)) continue;
-    if ((await classifyDirEntrySafe(r, w))?.isSymbolicLink) s.push(w);
+    if (isPristineLinkFarm(dirent.name)) continue;
+    if ((await classifyDirEntrySafe(sourceDir, dirent))?.isSymbolicLink) linkEntries.push(dirent);
   }
-  let u = [];
-  for (let w of s) {
-    let S;
+  let relinkedEntries = [];
+  for (let entry of linkEntries) {
+    let linkTarget;
     try {
-      S = await readlink(join(r, w.name));
+      linkTarget = await readlink(join(sourceDir, entry.name));
     } catch (error) {
       if (isENOENT(error)) continue;
       throw new CommandSourceError(
@@ -755,40 +808,40 @@ async function checkRelinkTarget(sourcePath, cachePath) {
         "plugin command source relink entry unreadable",
       );
     }
-    if (hasDotSegmentAlias(S))
+    if (hasDotSegmentAlias(linkTarget))
       throw new CommandSourceError(
         "A link in the staged farm is not in canonical form; refusing to relink it.",
         "plugin command source relink entry not canonical",
       );
-    u.push(w);
+    relinkedEntries.push(entry);
   }
-  let h = await checkPluginEntryLinks(
-    c,
-    u.map((w) => ({
-      name: w.name,
-      path: join(r, w.name),
+  let links = await checkPluginEntryLinks(
+    producerDir,
+    relinkedEntries.map((entry) => ({
+      name: entry.name,
+      path: join(sourceDir, entry.name),
     })),
   );
-  await mkdir(dirname(i), {
+  await mkdir(dirname(cacheDir), {
     recursive: true,
   });
-  let p = linkingTempName(i, process.pid);
-  await removeDirectoryTreeNoFollow(p);
-  await mkdir(p);
+  let tempDir = linkingTempName(cacheDir, process.pid);
+  await removeDirectoryTreeNoFollow(tempDir);
+  await mkdir(tempDir);
   try {
-    for (let { name: w, target, isDirectory } of h)
-      await symlink(target, join(p, w), isDirectory ? "dir" : "file");
-    await writeFile(join(p, PLUGIN_LINK_FILE_2), linkFarmMarker, {
+    for (let { name: entryName, target, isDirectory } of links)
+      await symlink(target, join(tempDir, entryName), isDirectory ? "dir" : "file");
+    await writeFile(join(tempDir, PLUGIN_LINK_FILE), linkFarmMarker, {
       flag: "wx",
     });
-    await rename(p, i);
+    await rename(tempDir, cacheDir);
   } catch (error) {
-    await removeDirectoryTreeNoFollow(p).catch(() => {});
+    await removeDirectoryTreeNoFollow(tempDir).catch(() => {});
     let errnoCode = getErrnoCode(error);
     if (
       (errnoCode === "ENOTEMPTY" || errnoCode === "EEXIST") &&
-      (await classifyLinkFarm(i)) === "live" &&
-      !(await hasEntriesOutsideTarget(i, c))
+      (await classifyLinkFarm(cacheDir)) === "live" &&
+      !(await hasEntriesOutsideTarget(cacheDir, producerDir))
     )
       return;
     throw error;
@@ -798,66 +851,76 @@ async function checkRelinkTarget(sourcePath, cachePath) {
 /**
  * 删掉缓存目录中应忽略的项（可保留 .git）。
  */
-async function removeIgnoredEntries(e, { keepGit }) {
-  for (let r of await readdir(e))
-    if (isPristineLinkFarm(r) && !(keepGit && foldCase_2(r) === ".git"))
-      await removeDirectoryTreeNoFollow(join(e, r));
+async function removeIgnoredEntries(dir, { keepGit }) {
+  for (let entryName of await readdir(dir))
+    if (isPristineLinkFarm(entryName) && !(keepGit && foldCase_2(entryName) === ".git"))
+      await removeDirectoryTreeNoFollow(join(dir, entryName));
 }
 //@ chunk-21ppfwx8.js:14999-15032 placement
 /**
  * isPristineLinkFarm：链接农场是否只含缓存元数据。
  */
-function isPristineLinkFarm(name) {
-  return matchesSegmentOrTempName(name, LINK_FARM_META_NAMES);
+function isPristineLinkFarm(entryName) {
+  return matchesSegmentOrTempName(entryName, LINK_FARM_META_NAMES);
 }
 //@ chunk-21ppfwx8.js:15032-15064 placement
-var LINK_FARM_META_NAMES = new Set([...CACHE_META_FILES, ".git"]);
+var LINK_FARM_META_NAMES; // deferred: uses CACHE_META_FILES (./cacheUtils.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-21ppfwx8.js:15032", () => {
+  LINK_FARM_META_NAMES = new Set([...CACHE_META_FILES, ".git"]);
+});
 //@ chunk-21ppfwx8.js:15064-15179 placement
 /**
  * 链接农场是否仍是 live（无法判定时按参数决定）。
  */
-async function isLiveLinkFarm(e, { unclassifiableIsFarm: n = false } = {}) {
-  let r = await classifyLinkFarm(e);
-  return r === "live" || (r === "unclassifiable" && n);
+async function isLiveLinkFarm(farmDir, { unclassifiableIsFarm = false } = {}) {
+  let classification = await classifyLinkFarm(farmDir);
+  return classification === "live" || (classification === "unclassifiable" && unclassifiableIsFarm);
 }
 //@ chunk-21ppfwx8.js:15179-15632 placement
 /**
  * 读取链接标记并校验；目录中存在指向绝对路径的符号链接则为 live，否则 not-live；读取错误按 errno 归为 not-live 或 unclassifiable。
  */
-async function classifyLinkFarm(e) {
+async function classifyLinkFarm(farmDir) {
   try {
-    PLUGIN_LINK_FILE().parse(JSON.parse(await readLinkFarmMarker(join(e, PLUGIN_LINK_FILE_2))));
+    pluginLinkSchema().parse(JSON.parse(await readLinkFarmMarker(join(farmDir, PLUGIN_LINK_FILE))));
   } catch (error) {
-    if (getErrnoCode(error) !== undefined) return n(error);
+    if (getErrnoCode(error) !== undefined) return classifyError(error);
   }
   try {
-    for (let r of await readdir(e, {
+    for (let entry of await readdir(farmDir, {
       withFileTypes: true,
     })) {
-      if (isPristineLinkFarm(r.name)) continue;
+      if (isPristineLinkFarm(entry.name)) continue;
       try {
-        let i = await classifyDirEntry(e, r);
-        if (i.isSymbolicLink && isAbsolute(i.linkTarget ?? (await readlink(join(e, r.name))))) return "live";
+        let entryInfo = await classifyDirEntry(farmDir, entry);
+        if (
+          entryInfo.isSymbolicLink &&
+          isAbsolute(entryInfo.linkTarget ?? (await readlink(join(farmDir, entry.name))))
+        )
+          return "live";
       } catch (error) {
         if (getErrnoCode(error) === "ENOENT") continue;
-        return n(error);
+        return classifyError(error);
       }
     }
     return "not-live";
   } catch (error) {
-    return n(error);
+    return classifyError(error);
   }
-  function n(error) {
+  function classifyError(error) {
     let errnoCode = getErrnoCode(error);
     return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? "not-live" : "unclassifiable";
   }
 }
 //@ chunk-21ppfwx8.js:15632-15697 placement
-var IGNORED_CACHE_ENTRIES = new Set([".ds_store", "thumbs.db", "desktop.ini", "icon\r"]);
+var IGNORED_CACHE_ENTRIES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-21ppfwx8.js:15632", () => {
+  IGNORED_CACHE_ENTRIES = new Set([".ds_store", "thumbs.db", "desktop.ini", "icon\r"]);
+});
 //@ chunk-21ppfwx8.js:15697-15761 placement
 function isIgnoredCacheEntry(name) {
-  let n = foldCase_2(name);
-  return IGNORED_CACHE_ENTRIES.has(n) || n.startsWith("._");
+  let foldedName = foldCase_2(name);
+  return IGNORED_CACHE_ENTRIES.has(foldedName) || foldedName.startsWith("._");
 }
 //@ chunk-21ppfwx8.js:15761-15794 placement
 function isCacheMetaFile(name) {
@@ -867,25 +930,34 @@ function isCacheMetaFile(name) {
 /**
  * 检查缓存目录 e：跳过忽略项与缓存元数据文件，若有普通文件/目录或指向 n 之外（或可疑）路径的符号链接则返回 true。
  */
-async function hasEntriesOutsideTarget(e, n) {
-  let r = n.replace(/[\\/]+$/, "") + sep;
+async function hasEntriesOutsideTarget(farmDir, targetDir) {
+  let targetPrefix = targetDir.replace(/[\\/]+$/, "") + sep;
   try {
-    for (let i of await readdir(e, {
+    for (let entry of await readdir(farmDir, {
       withFileTypes: true,
     })) {
-      if (isCacheMetaFile(i.name)) continue;
-      let o;
+      if (isCacheMetaFile(entry.name)) continue;
+      let linkTarget;
       try {
-        let a = await classifyDirEntry(e, i);
-        if (a.isFile && (isIgnoredCacheEntry(i.name) || matchesSegmentOrTempName(i.name, CACHE_META_FILES)))
+        let entryInfo = await classifyDirEntry(farmDir, entry);
+        if (
+          entryInfo.isFile &&
+          (isIgnoredCacheEntry(entry.name) || matchesSegmentOrTempName(entry.name, CACHE_META_FILES))
+        )
           continue;
-        if (!a.isSymbolicLink) return true;
-        o = a.linkTarget ?? (await readlink(join(e, i.name)));
+        if (!entryInfo.isSymbolicLink) return true;
+        linkTarget = entryInfo.linkTarget ?? (await readlink(join(farmDir, entry.name)));
       } catch (error) {
         if (getErrnoCode(error) === "ENOENT") continue;
         return true;
       }
-      if (!isAbsolute(o) || hasDotSegmentAlias(o) || isUntrustedLinkPath(o) || !o.startsWith(r)) return true;
+      if (
+        !isAbsolute(linkTarget) ||
+        hasDotSegmentAlias(linkTarget) ||
+        isUntrustedLinkPath(linkTarget) ||
+        !linkTarget.startsWith(targetPrefix)
+      )
+        return true;
     }
     return false;
   } catch (error) {
@@ -897,9 +969,10 @@ async function hasEntriesOutsideTarget(e, n) {
 /**
  * readLinkFarmTarget：读取链接农场标记的目标。
  */
-async function readLinkFarmTarget(e) {
+async function readLinkFarmTarget(farmDir) {
   try {
-    return PLUGIN_LINK_FILE().parse(JSON.parse(await readLinkFarmMarker(join(e, PLUGIN_LINK_FILE_2)))).target;
+    return pluginLinkSchema().parse(JSON.parse(await readLinkFarmMarker(join(farmDir, PLUGIN_LINK_FILE))))
+      .target;
   } catch {
     return;
   }
@@ -907,14 +980,14 @@ async function readLinkFarmTarget(e) {
 //@ chunk-21ppfwx8.js:16329-16342 placement
 var MAX_LINK_FARM_MARKER_BYTES = 16384;
 //@ chunk-21ppfwx8.js:16342-16574 placement
-async function readLinkFarmMarker(e) {
-  let n = await lstat(e);
-  if (!n.isFile() || n.size > MAX_LINK_FARM_MARKER_BYTES)
+async function readLinkFarmMarker(markerPath) {
+  let markerStat = await lstat(markerPath);
+  if (!markerStat.isFile() || markerStat.size > MAX_LINK_FARM_MARKER_BYTES)
     throw new CommandSourceError(
       "The link-farm marker is not a small regular file; refusing to read it.",
       "plugin command source link marker not a small regular file",
     );
-  return readFile(e, "utf8");
+  return readFile(markerPath, "utf8");
 }
 //@ chunk-21ppfwx8.js:16574-16648 placement
 /**
@@ -931,7 +1004,7 @@ function isLinkModeCommandSource(source) {
   return commandSourceSpecOf(source)?.mode === "link";
 }
 //@ chunk-21ppfwx8.js:16693-17682 placement
-async function holdCommandSourceForOrg(source, root, r, commandSourceConsent) {
+async function holdCommandSourceForOrg(source, targetPath, materialize, consent) {
   if (isHttpMcpServeInvocation())
     throw new CommandSourceError(
       "A tool server doesn't run a plugin's command on its own. The plugin was not installed or updated and its command was not run.",
@@ -951,32 +1024,32 @@ async function holdCommandSourceForOrg(source, root, r, commandSourceConsent) {
       LINK_MODE_UNSUPPORTED_ON_WINDOWS_MESSAGE,
       "plugin command source link mode unsupported on windows",
     );
-  describePluginSourceMode(source, commandSourceConsent);
+  describePluginSourceMode(source, consent);
   return withFeatureTelemetry("plugin_command_install", async () => {
-    let o = await runPluginCommandSource(source);
+    let producerDir = await runPluginCommandSource(source);
     if (
-      isPathWithin(o, getOriginalCwd(), {
+      isPathWithin(producerDir, getOriginalCwd(), {
         foldCase: true,
       })
     )
       throw new CommandSourceError(
-        `Plugin source command printed the working directory or one of its parents (${printableName(o, 300)}); refusing to use it as a plugin.`,
+        `Plugin source command printed the working directory or one of its parents (${printableName(producerDir, 300)}); refusing to use it as a plugin.`,
         "plugin command source printed cwd or an ancestor",
       );
-    recordProducerDir(o);
+    recordProducerDir(producerDir);
     if (source.mode === "link")
       return {
-        contentSha256: await createLinkFarm(o, root),
-        producerDirectory: o,
+        contentSha256: await createLinkFarm(producerDir, targetPath),
+        producerDirectory: producerDir,
       };
-    await checkPluginDirSize(o);
-    await r(o, root);
-    await removeIgnoredEntries(root, {
+    await checkPluginDirSize(producerDir);
+    await materialize(producerDir, targetPath);
+    await removeIgnoredEntries(targetPath, {
       keepGit: false,
     });
     return {
-      contentSha256: await hashPluginDirectoryContents(root),
-      producerDirectory: o,
+      contentSha256: await hashPluginDirectoryContents(targetPath),
+      producerDirectory: producerDir,
     };
   });
 }
@@ -999,7 +1072,7 @@ async function classifyCommandSourceFailure(options) {
       ok: false,
       reason: "missing_trust",
     };
-  let n =
+  let builtEnv =
     options.readEnvAsStarts !== undefined
       ? options.readEnvAsStarts(() => ({
           env: buildCommandSourceEnv(options),
@@ -1012,18 +1085,18 @@ async function classifyCommandSourceFailure(options) {
           env: buildCommandSourceEnv(options),
           withoutContextEnv: undefined,
         };
-  let env = n.env;
+  let env = builtEnv.env;
   if (options.pluginId !== undefined)
     checkPluginBunOptions(
       options.pluginId,
       env,
-      n.withoutContextEnv ??
+      builtEnv.withoutContextEnv ??
         buildCommandSourceEnv({
           ...options,
           env: undefined,
         }),
     );
-  let i = await execFileNoThrowWithCwd(options.command, [], {
+  let result = await execFileNoThrowWithCwd(options.command, [], {
     shell: true,
     timeout: TRUST_DIALOG_TIMEOUT_MS,
     maxBuffer: TRUST_DIALOG_LONG_TIMEOUT_MS,
@@ -1031,37 +1104,37 @@ async function classifyCommandSourceFailure(options) {
     env,
     extendEnv: false,
   });
-  if (i.code !== 0 || !i.stdout)
+  if (result.code !== 0 || !result.stdout)
     return {
       ok: false,
       reason: "exec_failed",
     };
-  let o;
+  let parsed;
   try {
-    o = jsonParse(i.stdout.trim());
+    parsed = jsonParse(result.stdout.trim());
   } catch {
     return {
       ok: false,
       reason: "parse_failed",
     };
   }
-  if (!isPlainObject(o))
+  if (!isPlainObject(parsed))
     return {
       ok: false,
       reason: "non_object",
     };
-  let a = {};
-  for (let [key, value] of Object.entries(o)) {
+  let headers = {};
+  for (let [key, value] of Object.entries(parsed)) {
     if (typeof value !== "string")
       return {
         ok: false,
         reason: "non_string_value",
       };
-    a[key] = value;
+    headers[key] = value;
   }
   return {
     ok: true,
-    headers: a,
+    headers,
   };
 }
 //@ chunk-21ppfwx8.js:18559-19129 placement
@@ -1078,20 +1151,22 @@ function buildCommandSourceEnv(options) {
       ...options.env,
     };
   let secrets = [];
-  for (let c of listSecretEnvNames()) {
-    let s = process.env[c] ?? env[c];
-    if (s !== undefined && s !== "" && !isEnvTruthy(s) && !isEnvDefinedFalsy(s)) secrets.push(s);
-    delete env[c];
+  for (let name of listSecretEnvNames()) {
+    let value = process.env[name] ?? env[name];
+    if (value !== undefined && value !== "" && !isEnvTruthy(value) && !isEnvDefinedFalsy(value))
+      secrets.push(value);
+    delete env[name];
   }
   let env_2 = process.env;
-  let o = {};
-  for (let c of new Set([...Object.keys(env), ...Object.keys(env_2)])) o[c] = env_2[c] ?? env[c];
-  for (let c of sanitizeEnvCredentials(o).lostCredential) {
-    let s = o[c];
-    if (s !== undefined && s !== "") secrets.push(s);
+  let mergedEnv = {};
+  for (let name of new Set([...Object.keys(env), ...Object.keys(env_2)]))
+    mergedEnv[name] = env_2[name] ?? env[name];
+  for (let name of sanitizeEnvCredentials(mergedEnv).lostCredential) {
+    let value = mergedEnv[name];
+    if (value !== undefined && value !== "") secrets.push(value);
   }
   Object.assign(env, sanitizeEnvCredentials(env).respelled);
-  secrets.sort((c, s) => s.length - c.length);
+  secrets.sort((entryA, entryB) => entryB.length - entryA.length);
   let extraEnv = {};
   for (let [key, value] of Object.entries(options.env ?? {}))
     extraEnv[key] =
@@ -1141,11 +1216,13 @@ var ORGANIZATION_ANSWER_POLL_MS = 3000;
 /**
  * 带截止时间等待组织答复（共享）。
  */
-function waitForOrganizationAnswer(e) {
+function waitForOrganizationAnswer(timeoutMs) {
   let organizationAsk = getPluginRegistry().organizationAsk;
-  organizationAsk.answerWait ??= withDeadline(askOrganizationOnce(), ORGANIZATION_ANSWER_POLL_MS, e).then(
-    () => {},
-  );
+  organizationAsk.answerWait ??= withDeadline(
+    askOrganizationOnce(),
+    ORGANIZATION_ANSWER_POLL_MS,
+    timeoutMs,
+  ).then(() => {});
   return organizationAsk.answerWait;
 }
 //@ chunk-21ppfwx8.js:19505-19578 placement

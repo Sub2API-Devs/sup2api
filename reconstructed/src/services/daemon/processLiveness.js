@@ -15,9 +15,9 @@ import { isSameProcessAsync, isExitedProcessAsync } from "../../utils/processIde
 /**
  * 检查进程存活：pid 不存在、启动时间不符、僵尸或存活。
  */
-async function checkProcessLiveness(pid, n) {
+async function checkProcessLiveness(pid, procStart) {
   if (!isProcessRunning(pid)) return "dead_pid";
-  if (!(await isSameProcessAsync(pid, n))) return "procstart_mismatch";
+  if (!(await isSameProcessAsync(pid, procStart))) return "procstart_mismatch";
   if (await isExitedProcessAsync(pid)) return "zombie";
   return "live";
 }
@@ -37,7 +37,7 @@ var UNSAFE_MODEL_ARG_RE = /^-|^[A-Za-z][A-Za-z0-9+.-]+:\/\//;
 /**
  * 判断字符串是否可作为模型参数（非选项、非 URL、无 NUL）。
  */
-function isAcceptableModelArg(e) {
-  return !UNSAFE_MODEL_ARG_RE.test(e) && !e.includes("\x00");
+function isAcceptableModelArg(value) {
+  return !UNSAFE_MODEL_ARG_RE.test(value) && !value.includes("\x00");
 }
 export { isAcceptableModelArg, checkProcessLiveness, isProcessLive };

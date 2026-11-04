@@ -24,6 +24,7 @@ import { renderModelName } from "../../utils/model/modelDisplay.js";
 import { getRefusalFallbackModelLatch, getMainLoopModelOverride } from "../../bootstrap/state.js";
 import { logError } from "../../utils/log.js";
 import { toError } from "../../utils/errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hwmsct5x.js:231889-232301 placement
 /**
@@ -41,18 +42,18 @@ var FALLBACK_PREFERENCE_LABELS = {
   notAskedYet: "Not asked yet",
 };
 //@ chunk-hwmsct5x.js:232301-232444 placement
-function setSwitchModelsOnFlag(e, n, r) {
+function setSwitchModelsOnFlag(value, reason, source) {
   logEvent("tengu_refusal_fallback_setting_changed", {
-    enabled: e,
-    via: fromEnum(n),
+    enabled: value,
+    via: fromEnum(reason),
   });
   return updateSettingsForSource(
     "userSettings",
     {
-      switchModelsOnFlag: e,
+      switchModelsOnFlag: value,
     },
     undefined,
-    r,
+    source,
   );
 }
 //@ chunk-hwmsct5x.js:232444-232471 placement
@@ -69,28 +70,28 @@ var SAFEGUARD_CATEGORY_LEADS = {
     "Our intentionally broad safeguards allow us to deliver more capabilities faster, but can sometimes flag legitimate coding and cybersecurity tasks.",
 };
 //@ chunk-hwmsct5x.js:232772-232847 placement
-function categoryFlaggedLead(e, n) {
-  return `${e}'s safeguards flagged this message. ${SAFEGUARD_CATEGORY_LEADS[n]}`;
+function categoryFlaggedLead(model, category) {
+  return `${model}'s safeguards flagged this message. ${SAFEGUARD_CATEGORY_LEADS[category]}`;
 }
 //@ chunk-hwmsct5x.js:232847-232977 placement
-function formatRefusalDetails(e) {
-  if (typeof e !== "string") return "";
-  let n = sanitizeDisplayText(e, {
+function formatRefusalDetails(category) {
+  if (typeof category !== "string") return "";
+  let cleaned = sanitizeDisplayText(category, {
     drop: /[`\[\]]/g,
     maxCodeUnits: MAX_TITLE_LENGTH,
   });
-  return n
+  return cleaned
     ? `
 
-Details: \`[${n}]\``
+Details: \`[${cleaned}]\``
     : "";
 }
 //@ chunk-hwmsct5x.js:232977-233089 placement
 var GENERIC_SAFEGUARD_MESSAGE =
   "This model's safeguards flagged this message. This sometimes happens with safe, normal conversations.";
 //@ chunk-hwmsct5x.js:233089-233208 placement
-function safeguardsFlaggedLead(e) {
-  return `${e}'s safeguards flagged this message. This sometimes happens with safe, normal conversations.`;
+function safeguardsFlaggedLead(model) {
+  return `${model}'s safeguards flagged this message. This sometimes happens with safe, normal conversations.`;
 }
 //@ chunk-hwmsct5x.js:233208-234089 placement
 /**
@@ -98,12 +99,12 @@ function safeguardsFlaggedLead(e) {
  */
 var SAFEGUARD_FIRST_TIME_NOTES = "this session";
 var FIRST_TIME_CATEGORY_NOTES = {
-  cyber: (e, n) =>
-    `You may be seeing this for the first time${n}: ${e} is more capable and has stronger safeguards as a result, which can sometimes flag non-cybersecurity work. We're improving these safeguards to reduce the amount of incorrectly flagged messages.`,
-  bio: (e, n) =>
-    `You may be seeing this for the first time${n}: ${e} is more capable and has stronger safeguards as a result, which can sometimes flag biology-research-adjacent work. We're improving these safeguards to reduce the amount of incorrectly flagged messages.`,
-  frontier_llm: (e, n) =>
-    `You may be seeing this for the first time${n}: ${e} is more capable and has stronger safeguards as a result. We're improving these safeguards to reduce the amount of incorrectly flagged messages.`,
+  cyber: (model, category) =>
+    `You may be seeing this for the first time${category}: ${model} is more capable and has stronger safeguards as a result, which can sometimes flag non-cybersecurity work. We're improving these safeguards to reduce the amount of incorrectly flagged messages.`,
+  bio: (model, category) =>
+    `You may be seeing this for the first time${category}: ${model} is more capable and has stronger safeguards as a result, which can sometimes flag biology-research-adjacent work. We're improving these safeguards to reduce the amount of incorrectly flagged messages.`,
+  frontier_llm: (model, category) =>
+    `You may be seeing this for the first time${category}: ${model} is more capable and has stronger safeguards as a result. We're improving these safeguards to reduce the amount of incorrectly flagged messages.`,
 };
 var FAMILY_SAFEGUARD_RULES = {
   sonnet: {
@@ -113,37 +114,49 @@ var FAMILY_SAFEGUARD_RULES = {
   },
 };
 //@ chunk-hwmsct5x.js:234089-234180 placement
-function familySafeguardRule(e) {
-  let family = getCatalogEntry(strippedCanonicalName(e))?.family;
-  return family !== undefined && Object.hasOwn(FAMILY_SAFEGUARD_RULES, family)
-    ? FAMILY_SAFEGUARD_RULES[family]
+function familySafeguardRule(family) {
+  let family_2 = getCatalogEntry(strippedCanonicalName(family))?.family;
+  return family_2 !== undefined && Object.hasOwn(FAMILY_SAFEGUARD_RULES, family_2)
+    ? FAMILY_SAFEGUARD_RULES[family_2]
     : undefined;
 }
 //@ chunk-hwmsct5x.js:234180-234216 placement
-var OPUS_55_FAMILY_MODELS = new Set(["claude-opus-5-5"]);
+var OPUS_55_FAMILY_MODELS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hwmsct5x.js:234180", () => {
+  OPUS_55_FAMILY_MODELS = new Set(["claude-opus-5-5"]);
+});
 //@ chunk-hwmsct5x.js:234216-234268 placement
-function hasFirstTimeSafeguardNote(e) {
-  return OPUS_55_FAMILY_MODELS.has(strippedCanonicalName(e)) || familySafeguardRule(e) !== undefined;
+function hasFirstTimeSafeguardNote(info) {
+  return OPUS_55_FAMILY_MODELS.has(strippedCanonicalName(info)) || familySafeguardRule(info) !== undefined;
 }
 //@ chunk-hwmsct5x.js:234268-234434 placement
 var FALLBACK_RECOVERY_LINES = {
-  switched: (e) => `${e.fallback} is answering instead, or you can edit and retry with ${e.model}.`,
-  paused: (e) => `Edit and retry, or continue with ${e.fallback}.`,
+  switched: (line) => `${line.fallback} is answering instead, or you can edit and retry with ${line.model}.`,
+  paused: (line) => `Edit and retry, or continue with ${line.fallback}.`,
 };
 //@ chunk-hwmsct5x.js:234434-234649 placement
-function categoryLeadFormatter(e, n) {
-  if (e == null || typeof n !== "string" || usesSecondSafeguardsArticle(e) || !hasFirstTimeSafeguardNote(e))
+function categoryLeadFormatter(model, category) {
+  if (
+    model == null ||
+    typeof category !== "string" ||
+    usesSecondSafeguardsArticle(model) ||
+    !hasFirstTimeSafeguardNote(model)
+  )
     return;
-  let r = familySafeguardRule(e);
-  if (r !== undefined && !r.categories.includes(n)) return;
-  let s = Object.hasOwn(FIRST_TIME_CATEGORY_NOTES, n) ? FIRST_TIME_CATEGORY_NOTES[n] : undefined;
-  let firstTimeOn = r?.firstTimeOn ?? "";
-  return s && ((y) => s(y, firstTimeOn));
+  let rule = familySafeguardRule(model);
+  if (rule !== undefined && !rule.categories.includes(category)) return;
+  let firstTimeNote = Object.hasOwn(FIRST_TIME_CATEGORY_NOTES, category)
+    ? FIRST_TIME_CATEGORY_NOTES[category]
+    : undefined;
+  let firstTimeOn = rule?.firstTimeOn ?? "";
+  return firstTimeNote && ((firstTime) => firstTimeNote(firstTime, firstTimeOn));
 }
 //@ chunk-hwmsct5x.js:234649-234760 placement
-function formatSafeguardLead(e, n, r, s = "") {
-  let h = categoryLeadFormatter(n, r);
-  return h === undefined ? undefined : `${e}'s safeguards flagged ${SAFEGUARD_FIRST_TIME_NOTES}${s}. ${h(e)}`;
+function formatSafeguardLead(model, category, modelLabel, suffix = "") {
+  let formatter = categoryLeadFormatter(category, modelLabel);
+  return formatter === undefined
+    ? undefined
+    : `${model}'s safeguards flagged ${SAFEGUARD_FIRST_TIME_NOTES}${suffix}. ${formatter(model)}`;
 }
 //@ chunk-hwmsct5x.js:234760-234918 placement
 /**
@@ -157,55 +170,57 @@ function safeguardRecoveryLine(state, names, model, category) {
     : undefined;
 }
 //@ chunk-hwmsct5x.js:234918-234980 placement
-function getSafeguardLead(e, n, r) {
+function getSafeguardLead(fromModel, info, category) {
   return (
-    formatSafeguardLead(e, n, r) ??
-    (isHardRefusalCategory(r) ? categoryFlaggedLead(e, r) : safeguardsFlaggedLead(e))
+    formatSafeguardLead(fromModel, info, category) ??
+    (isHardRefusalCategory(category)
+      ? categoryFlaggedLead(fromModel, category)
+      : safeguardsFlaggedLead(fromModel))
   );
 }
 //@ chunk-hwmsct5x.js:234980-235072 placement
-function switchedSafeguardLine(model, n, category) {
+function switchedSafeguardLine(model, info, category) {
   return (
     safeguardRecoveryLine(
       "switched",
       {
         model: renderModelName(model),
-        fallback: n,
+        fallback: info,
       },
       model,
       category,
-    ) ?? `Switched to ${n}.`
+    ) ?? `Switched to ${info}.`
   );
 }
 //@ chunk-hwmsct5x.js:235072-235170 placement
 /**
  * 生成"某模型的安全机制标记了此消息"的用户提示（类别说明、可选切换建议、了解更多链接）。
  */
-function buildRefusalMessage(e, n, apiRefusalCategory) {
-  let s = renderModelName(n);
-  let safeguardLead = getSafeguardLead(renderModelName(e), e, apiRefusalCategory);
-  let y = switchedSafeguardLine(e, s, apiRefusalCategory);
-  return `${safeguardLead} ${y} ${buildSafeguardsLearnMore(e)}${formatRefusalDetails(apiRefusalCategory)}`;
+function buildRefusalMessage(fromModel, toModel, apiRefusalCategory) {
+  let modelName = renderModelName(toModel);
+  let safeguardLead = getSafeguardLead(renderModelName(fromModel), fromModel, apiRefusalCategory);
+  let line = switchedSafeguardLine(fromModel, modelName, apiRefusalCategory);
+  return `${safeguardLead} ${line} ${buildSafeguardsLearnMore(fromModel)}${formatRefusalDetails(apiRefusalCategory)}`;
 }
 //@ chunk-hwmsct5x.js:235170-235325 placement
-function buildFallbackGeneratedNotice(e, n, apiRefusalCategory) {
-  let s = renderModelName(n);
-  return `${getSafeguardLead(renderModelName(e), e, apiRefusalCategory)} This response was generated by ${s} instead. Your session model is unchanged. ${buildSafeguardsLearnMore(e)}${formatRefusalDetails(apiRefusalCategory)}`;
+function buildFallbackGeneratedNotice(fromModel, toModel, apiRefusalCategory) {
+  let modelName = renderModelName(toModel);
+  return `${getSafeguardLead(renderModelName(fromModel), fromModel, apiRefusalCategory)} This response was generated by ${modelName} instead. Your session model is unchanged. ${buildSafeguardsLearnMore(fromModel)}${formatRefusalDetails(apiRefusalCategory)}`;
 }
 //@ chunk-hwmsct5x.js:235325-235472 placement
 function buildFallbackCompletedNotice(fromModel, toModel, apiRefusalCategory) {
-  let s = renderModelName(toModel);
-  return `${getSafeguardLead(renderModelName(fromModel), fromModel, apiRefusalCategory)} This response was completed by ${s}. Your session model is unchanged. ${buildSafeguardsLearnMore(fromModel)}${formatRefusalDetails(apiRefusalCategory)}`;
+  let toModelName = renderModelName(toModel);
+  return `${getSafeguardLead(renderModelName(fromModel), fromModel, apiRefusalCategory)} This response was completed by ${toModelName}. Your session model is unchanged. ${buildSafeguardsLearnMore(fromModel)}${formatRefusalDetails(apiRefusalCategory)}`;
 }
 //@ chunk-hwmsct5x.js:235472-235570 placement
 /**
  * 导出函数 `safeguardsFlaggedMessage`：参数 e, n, r，返回 `${h} ${y} ${buildSafeguardsLearnMore(e)}${formatRefusalDetails(r)}`。
  */
 function safeguardsFlaggedMessage(fromModel, toModel, apiRefusalCategory) {
-  let s = renderModelName(toModel);
+  let toModelName = renderModelName(toModel);
   let safeguardLead = getSafeguardLead(renderModelName(fromModel), fromModel, apiRefusalCategory);
-  let y = switchedSafeguardLine(fromModel, s, apiRefusalCategory);
-  return `${safeguardLead} ${y} ${buildSafeguardsLearnMore(fromModel)}${formatRefusalDetails(apiRefusalCategory)}`;
+  let line = switchedSafeguardLine(fromModel, toModelName, apiRefusalCategory);
+  return `${safeguardLead} ${line} ${buildSafeguardsLearnMore(fromModel)}${formatRefusalDetails(apiRefusalCategory)}`;
 }
 //@ chunk-hwmsct5x.js:235570-235717 placement
 function getActiveModelFallback() {
@@ -223,14 +238,17 @@ function getActiveModelFallback() {
 //@ chunk-hwmsct5x.js:235717-235949 placement
 function isFallbackServedRequest({ requestModel, turnRefusalOverride, chainStepModel, userModel }) {
   try {
-    let h = strippedCanonicalName(requestModel);
-    let w =
-      strippedCanonicalName(userModel) !== h &&
-      [turnRefusalOverride, chainStepModel].some((E) => E !== undefined && strippedCanonicalName(E) === h);
+    let requestCanonical = strippedCanonicalName(requestModel);
+    let compare =
+      strippedCanonicalName(userModel) !== requestCanonical &&
+      [turnRefusalOverride, chainStepModel].some(
+        (candidate) => candidate !== undefined && strippedCanonicalName(candidate) === requestCanonical,
+      );
     let activeModelFallback = getActiveModelFallback();
     return (
-      w ||
-      (activeModelFallback !== undefined && strippedCanonicalName(activeModelFallback.fallbackModel) === h)
+      compare ||
+      (activeModelFallback !== undefined &&
+        strippedCanonicalName(activeModelFallback.fallbackModel) === requestCanonical)
     );
   } catch (error) {
     logError(toError(error));
@@ -238,8 +256,8 @@ function isFallbackServedRequest({ requestModel, turnRefusalOverride, chainStepM
   }
 }
 //@ chunk-hwmsct5x.js:235949-236067 placement
-function describeAutoSwitchedModel(e) {
-  return `automatically switched from ${e} after a message was flagged \u2014 run /model to switch back`;
+function describeAutoSwitchedModel(info) {
+  return `automatically switched from ${info} after a message was flagged \u2014 run /model to switch back`;
 }
 export {
   getActiveModelFallback,

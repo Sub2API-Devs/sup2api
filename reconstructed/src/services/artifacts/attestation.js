@@ -11,16 +11,16 @@
 import { getLiveState } from "../liveReplica/liveReplica.js";
 
 //@ chunk-jv307fw4.js:20487-20555 placement
-function getAttestationKind(e) {
-  return getLiveState().attestedTypeArtifacts.get(e)?.mark?.kind;
+function getAttestationKind(read) {
+  return getLiveState().attestedTypeArtifacts.get(read)?.mark?.kind;
 }
 //@ chunk-jv307fw4.js:20555-20593 placement
-function isAttestedArtifact(e) {
-  return getAttestationKind(e) !== undefined;
+function isAttestedArtifact(read) {
+  return getAttestationKind(read) !== undefined;
 }
 //@ chunk-jv307fw4.js:20593-21024 placement
-function describeAttestationKind(e) {
-  switch (e) {
+function describeAttestationKind(read) {
+  switch (read) {
     case "first_party_type":
       return "a published first-party Artifact type";
     case "org_pinned_instance":
@@ -33,8 +33,8 @@ function describeAttestationKind(e) {
 }
 //@ chunk-jv307fw4.js:21024-21098 placement
 function formatAttestationTag(slug) {
-  let attestationKind = getAttestationKind(slug);
-  return attestationKind === undefined ? "" : ` [attested: ${describeAttestationKind(attestationKind)}]`;
+  let read = getAttestationKind(slug);
+  return read === undefined ? "" : ` [attested: ${describeAttestationKind(read)}]`;
 }
 //@ chunk-jv307fw4.js:21098-21112 placement
 var ATTESTATION_KIND_TTL_MS = 600000;

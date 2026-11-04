@@ -5,19 +5,19 @@
  * pieces: chunk-m4p5zn6n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_resolveCommand } from "./util/resolveCommand.js";
 import { require_escape } from "./util/escape.js";
 import { require_readShebang } from "./util/readShebang.js";
 
 //@ chunk-m4p5zn6n.js:5330-5816 cjs-fingerprint
-var require_parse = x(function (cjsExports, cjsModule) {
+var require_parse = __commonJS(function (cjsExports, cjsModule) {
   var path = importMetaRequire("path");
   var resolveCommand = require_resolveCommand();
-  var ee = require_escape();
+  var escapeModule = require_escape();
   var readShebang = require_readShebang();
-  var lr = /\.(?:com|exe)$/i;
-  var fr = /node_modules[\\/].bin[\\/][^\\/]+\.cmd$/i;
+  var isExecutableRegExp = /\.(?:com|exe)$/i;
+  var isCmdShimRegExp = /node_modules[\\/].bin[\\/][^\\/]+\.cmd$/i;
   function detectShebang(parsed) {
     parsed.file = resolveCommand(parsed);
     let shebang = parsed.file && readShebang(parsed.file);

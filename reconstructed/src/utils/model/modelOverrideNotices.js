@@ -49,28 +49,32 @@ import { agentMcpSpecsToScopedConfigs } from "../../tools/AgentTool/loadAgentsDi
 /**
  * 汇总模型来源（命令行、环境变量、设置、代理定义），生成覆盖提示。
  */
-async function collectModelOverrides(e) {
-  let o = {
+async function collectModelOverrides(options) {
+  let sources = {
     cli: {
-      model: e.userSpecifiedModel,
+      model: options.userSpecifiedModel,
       isNonInteractiveSession: getIsNonInteractiveSession(),
     },
     env: process.env,
     settings: getSettings_DEPRECATED() || {},
     agentFrontmatter:
-      e.agentModel !== undefined
+      options.agentModel !== undefined
         ? {
-            model: e.agentModel,
-            modelSource: e.agentModelSource,
+            model: options.agentModel,
+            modelSource: options.agentModelSource,
           }
         : undefined,
   };
-  let startupModel = resolveStartupModel(o, e.storageV5);
-  let r;
+  let startupModel = resolveStartupModel(sources, options.storageV5);
+  let reprobeResult;
   if (startupModel.restrictedModel !== undefined)
     try {
-      r = await reprobeEntitlementDeny(startupModel.restrictedModel, e.storageV5, e.credentials);
-      if (r === "overturned") startupModel = resolveStartupModel(o, e.storageV5);
+      reprobeResult = await reprobeEntitlementDeny(
+        startupModel.restrictedModel,
+        options.storageV5,
+        options.credentials,
+      );
+      if (reprobeResult === "overturned") startupModel = resolveStartupModel(sources, options.storageV5);
     } catch (error) {
       logError(error);
     }
@@ -86,24 +90,24 @@ async function collectModelOverrides(e) {
   setMainLoopModelOverride(effectiveModel);
   setInitialMainLoopModel(initialMainLoopModel);
   setInitialModelSettingLayer(settingLayer);
-  setSessionModelReprobe((A) => reprobeEntitlementDeny(A, e.storageV5, e.credentials));
+  setSessionModelReprobe((model) => reprobeEntitlementDeny(model, options.storageV5, options.credentials));
   let orgModelDefault = getOrgModelDefault();
-  let P = orgModelDefault !== null && !isRecognizedOrgDefaultName(orgModelDefault.name);
-  if (P) logFeatureSad("model_org_default", "unrecognized");
+  let orgDefaultUnrecognized = orgModelDefault !== null && !isRecognizedOrgDefaultName(orgModelDefault.name);
+  if (orgDefaultUnrecognized) logFeatureSad("model_org_default", "unrecognized");
   else setResolvedOrgDefault(getResolvedOrgDefaultModel());
   setInitialEnvDefaultModel(env.ANTHROPIC_DEFAULT_MODEL ?? null);
   if (env.ANTHROPIC_DEFAULT_MODEL !== undefined)
     if (getEnvDefaultModel() === null) logFeatureSad("model_env_default", "inert");
-    else if (P) logFeatureSad("model_env_default", "org_default_unrecognized");
+    else if (orgDefaultUnrecognized) logFeatureSad("model_env_default", "org_default_unrecognized");
     else if (resolveDefaultMainLoopModelSetting().attribution === "org")
       logFeatureSad("model_env_default", "outranked_by_org_default");
     else logFeatureOk("model_env_default");
-  if (!e.routineModelTransientlySkipped)
-    syncRespawnFlag("--model", ["-m"], initialMainLoopModel, undefined, e.storageV5);
+  if (!options.routineModelTransientlySkipped)
+    syncRespawnFlag("--model", ["-m"], initialMainLoopModel, undefined, options.storageV5);
   if (restrictedModel !== undefined)
     logFeatureSad(
       "startup_resolve_model",
-      r === "probe_failed" ? "entitlement_probe_failed" : "requested_model_restricted",
+      reprobeResult === "probe_failed" ? "entitlement_probe_failed" : "requested_model_restricted",
       {
         model: telemetrySafeModelName(restrictedModel) ?? lit("nonconforming"),
       },
@@ -128,31 +132,28 @@ async function collectModelOverrides(e) {
   };
 }
 //@ chunk-3wek6r2k.js:66146-66539 placement
-function applyAgentModelOverride(dynamicMcpConfig, mainThreadAgentDefinition, n) {
-  if (!mainThreadAgentDefinition) return dynamicMcpConfig;
-  if (isSafeMode()) return dynamicMcpConfig;
+function applyAgentModelOverride(configs, agent, options) {
+  if (!agent) return configs;
+  if (isSafeMode()) return configs;
   if (isDiskless()) {
-    if (mainThreadAgentDefinition.mcpServers?.length) reportOnce("main_agent_mcp_servers");
-    return dynamicMcpConfig;
+    if (agent.mcpServers?.length) reportOnce("main_agent_mcp_servers");
+    return configs;
   }
-  if (
-    (n?.strictMcpConfig && mainThreadAgentDefinition.source !== "flagSettings") ||
-    doesEnterpriseMcpConfigExist()
-  )
-    return dynamicMcpConfig;
-  let u = agentMcpSpecsToScopedConfigs(mainThreadAgentDefinition);
-  if (Object.keys(u).length === 0) return dynamicMcpConfig;
-  let { allowed, blocked } = filterMcpServersByPolicy(u);
-  if (blocked.length > 0) n?.onBlocked?.(blocked);
-  let { servers, refused } = refuseReservedNamesForCarrier(allowed, dynamicMcpConfig);
-  for (let M of refused)
+  if ((options?.strictMcpConfig && agent.source !== "flagSettings") || doesEnterpriseMcpConfigExist())
+    return configs;
+  let agentSpecs = agentMcpSpecsToScopedConfigs(agent);
+  if (Object.keys(agentSpecs).length === 0) return configs;
+  let { allowed, blocked } = filterMcpServersByPolicy(agentSpecs);
+  if (blocked.length > 0) options?.onBlocked?.(blocked);
+  let { servers, refused } = refuseReservedNamesForCarrier(allowed, configs);
+  for (let refusal of refused)
     addAgentModelOverrideNotice({
-      ...M,
+      ...refusal,
       scope: "agent",
     });
   return {
     ...servers,
-    ...dynamicMcpConfig,
+    ...configs,
   };
 }
 //@ chunk-3wek6r2k.js:66576-66663 placement

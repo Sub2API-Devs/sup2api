@@ -8,23 +8,36 @@
  * pieces: chunk-9d1pf3s4.js (1), chunk-aepeg2w5.js (10), chunk-hvpfdswb.js (1), chunk-jhrww53q.js (1)
  * attribution: fingerprint 6, sole-consumer 2, affinity 1, layout 4
  */
+import { isDisklessEnvProbe, env, hasInternetAccess_2, isDockerenvPresent } from "./env.js";
+import { getFsImplementation } from "./fsOperations.js";
+import { CCR_TOKEN_DIR } from "./authFileDescriptor.js";
 import { HostScoped } from "./hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
-import { hasInternetAccess_2, isDockerenvPresent, env, isDisklessEnvProbe } from "./env.js";
-import { CCR_TOKEN_DIR } from "./authFileDescriptor.js";
-import { getFsImplementation } from "./fsOperations.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-jhrww53q.js:49897-49964 fingerprint = getIsDocker (0.479)
+function getIsDocker() {
+  if (isDisklessEnvProbe()) return false;
+  return getFsImplementation().existsSync("/.dockerenv");
+}
+//@ chunk-hvpfdswb.js:1601-1666 fingerprint = isMuslEnvironment (1)
+function isMuslEnvironment_2(platform) {
+  return env.platform !== "linux" && platform.startsWith(`${CCR_TOKEN_DIR}/`);
+}
 //@ chunk-aepeg2w5.js:752249-752299 sole-consumer
-var internetAccessProbe = new HostScoped(() => ({
-  probe: undefined,
-  outcome: undefined,
-}));
+var internetAccessProbe; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:752249", () => {
+  internetAccessProbe = new HostScoped(() => ({
+    probe: undefined,
+    outcome: undefined,
+  }));
+});
 //@ chunk-aepeg2w5.js:752299-752384 sole-consumer
 function hasInternetAccess() {
-  let e = internetAccessProbe.of(getRootSession().host);
-  return (e.probe ??= hasInternetAccess_2().then((n) => {
-    e.outcome = n;
-    return n;
+  let probe = internetAccessProbe.of(getRootSession().host);
+  return (probe.probe ??= hasInternetAccess_2().then((outcome) => {
+    probe.outcome = outcome;
+    return outcome;
   }));
 }
 //@ chunk-aepeg2w5.js:752384-753511 affinity
@@ -79,21 +92,27 @@ class EnvironmentProbe {
   }
 }
 //@ chunk-aepeg2w5.js:753511-753829 fingerprint = getIsBubblewrapSandbox (0.442)
-var getIsBubblewrapSandbox_2 = new HostScoped(
-  () =>
-    new EnvironmentProbe({
-      platform: "linux",
-      isDockerenvPresent,
-      isBubblewrapEnvSet: () => env.CLAUDE_CODE_BUBBLEWRAP,
-      isSandboxEnvSet: () => process.env.IS_SANDBOX === "1",
-      getuid: () => (typeof process.getuid === "function" ? process.getuid() : undefined),
-      hasInternetAccess,
-      probeInternalNetworkAccess: () => env.probeInternalNetworkAccess(),
-    }),
-);
+/**
+ * 按 host 缓存的 Linux 沙箱探测槽：new W(() => new yx({platform:"linux", isDockerenvPresent, isBubblewrapEnvSet, probeInternalNetworkAccess, …}))；gs() 返回 cj.of(B().host)，所以同一进程里每个 host 只有一个探测实例，不是可直接调用的函数。
+ */
+var bubblewrapSandboxPerHost; // deferred: uses EnvironmentProbe of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:753511", () => {
+  bubblewrapSandboxPerHost = new HostScoped(
+    () =>
+      new EnvironmentProbe({
+        platform: "linux",
+        isDockerenvPresent,
+        isBubblewrapEnvSet: () => env.CLAUDE_CODE_BUBBLEWRAP,
+        isSandboxEnvSet: () => process.env.IS_SANDBOX === "1",
+        getuid: () => (typeof process.getuid === "function" ? process.getuid() : undefined),
+        hasInternetAccess,
+        probeInternalNetworkAccess: () => env.probeInternalNetworkAccess(),
+      }),
+  );
+});
 //@ chunk-aepeg2w5.js:753829-753866 layout
 function getIsBubblewrapSandbox() {
-  return getIsBubblewrapSandbox_2.of(getRootSession().host);
+  return bubblewrapSandboxPerHost.of(getRootSession().host);
 }
 //@ chunk-aepeg2w5.js:753866-753878 layout
 var emptyHostFlag = null;
@@ -106,28 +125,32 @@ function isAndroidEnvironment() {
   return false;
 }
 //@ chunk-aepeg2w5.js:753924-754397 fingerprint = getTerminalWithJetBrainsDetectionAsync (0.532)
-var NON_INTERACTIVE_TERMINAL = "non-interactive";
-var envDynamicProbe = {
-  terminal:
-    env.TERMINAL_EMULATOR === "JetBrains-JediTerm" && env.platform !== "darwin" ? "pycharm" : env.terminal,
-  getIsDocker() {
-    return getIsBubblewrapSandbox().isDocker();
-  },
-  getIsBubblewrapSandbox() {
-    return getIsBubblewrapSandbox().isBubblewrapSandbox();
-  },
-  passesAntDspEnvGate() {
-    return getIsBubblewrapSandbox().passesAntDspEnvGate();
-  },
-  passesAntDspEnvGateCached() {
-    return getIsBubblewrapSandbox().passesAntDspEnvGateSync();
-  },
-  isRootOutsideDeliberateSandbox() {
-    return getIsBubblewrapSandbox().isRootOutsideDeliberateSandbox();
-  },
-  isMuslEnvironment,
-  isAndroidEnvironment,
-};
+var NON_INTERACTIVE_TERMINAL; // deferred: uses env (./env.js) of its import cycle while loading; runs once the cycle is complete
+var envDynamicProbe;
+deferInit("chunk-aepeg2w5.js:753924", () => {
+  NON_INTERACTIVE_TERMINAL = "non-interactive";
+  envDynamicProbe = {
+    terminal:
+      env.TERMINAL_EMULATOR === "JetBrains-JediTerm" && env.platform !== "darwin" ? "pycharm" : env.terminal,
+    getIsDocker() {
+      return getIsBubblewrapSandbox().isDocker();
+    },
+    getIsBubblewrapSandbox() {
+      return getIsBubblewrapSandbox().isBubblewrapSandbox();
+    },
+    passesAntDspEnvGate() {
+      return getIsBubblewrapSandbox().passesAntDspEnvGate();
+    },
+    passesAntDspEnvGateCached() {
+      return getIsBubblewrapSandbox().passesAntDspEnvGateSync();
+    },
+    isRootOutsideDeliberateSandbox() {
+      return getIsBubblewrapSandbox().isRootOutsideDeliberateSandbox();
+    },
+    isMuslEnvironment,
+    isAndroidEnvironment,
+  };
+});
 //@ chunk-aepeg2w5.js:754397-754516 fingerprint = envDynamic (0.44)
 async function envDynamic() {
   if (envDynamicProbe.getIsBubblewrapSandbox()) return "bubblewrap";
@@ -138,28 +161,19 @@ async function envDynamic() {
 /**
  * 平台与架构对应的 musl/darwin 目标三元组（如 x86_64-unknown-linux-musl），不支持时为 undefined。
  */
-function muslTargetTriple(platform, e) {
-  let n = e === "arm64" ? "aarch64" : e === "x64" ? "x86_64" : undefined;
-  if (n === undefined) return;
+function muslTargetTriple(platform, arch) {
+  let triple = arch === "arm64" ? "aarch64" : arch === "x64" ? "x86_64" : undefined;
+  if (triple === undefined) return;
   switch (platform) {
     case "macos":
-      return `${n}-apple-darwin`;
+      return `${triple}-apple-darwin`;
     case "linux":
     case "wsl":
-      return `${n}-unknown-linux-musl`;
+      return `${triple}-unknown-linux-musl`;
     case "windows":
     case "unknown":
       return;
   }
-}
-//@ chunk-hvpfdswb.js:1601-1666 fingerprint = isMuslEnvironment (1)
-function isMuslEnvironment_2(e) {
-  return env.platform !== "linux" && e.startsWith(`${CCR_TOKEN_DIR}/`);
-}
-//@ chunk-jhrww53q.js:49897-49964 fingerprint = getIsDocker (0.479)
-function getIsDocker() {
-  if (isDisklessEnvProbe()) return false;
-  return getFsImplementation().existsSync("/.dockerenv");
 }
 export {
   envDynamicProbe,

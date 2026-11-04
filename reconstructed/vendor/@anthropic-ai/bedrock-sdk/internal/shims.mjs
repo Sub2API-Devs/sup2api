@@ -8,12 +8,12 @@
 
 //@ chunk-h87x8cg3.js:5935-6155 esm-fingerprint
 function makeReadableStream(...args) {
-  let t = globalThis.ReadableStream;
-  if (typeof t === "undefined")
+  let ReadableStream_2 = globalThis.ReadableStream;
+  if (typeof ReadableStream_2 === "undefined")
     throw Error(
       "`ReadableStream` is not defined as a global; You will need to polyfill it, `globalThis.ReadableStream = ReadableStream`",
     );
-  return new t(...args);
+  return new ReadableStream_2(...args);
 }
 //@ chunk-h87x8cg3.js:6155-6389 esm-fingerprint
 function ReadableStreamFrom(iterable) {

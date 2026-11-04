@@ -14,13 +14,17 @@ import { env } from "../env.js";
 import { logForDebugging } from "../debug.js";
 import { isWebFetchSubagentContext } from "../../tools/WebFetchTool/harnessNotes.js";
 import { TOOL_AND_BATCH_HOOK_EVENTS } from "../hooks/hookEvents.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-a9ek44g8.js:7159-7182 placement
 class PerfettoState {
   recorder = null;
 }
 //@ chunk-a9ek44g8.js:7182-7207 placement
-var perfettoStateByHost = new HostScoped(() => new PerfettoState());
+var perfettoStateByHost; // deferred: uses PerfettoState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-a9ek44g8.js:7182", () => {
+  perfettoStateByHost = new HostScoped(() => new PerfettoState());
+});
 //@ chunk-a9ek44g8.js:7207-7252 placement
 function perfettoRecorder() {
   return perfettoStateByHost.of(getRootSession().host).recorder;
@@ -44,19 +48,19 @@ function isPerfettoRecording() {
 /**
  * 注册 Perfetto 代理。
  */
-function registerPerfettoAgent(agentId, e, r) {
-  let s = perfettoRecorder();
-  if (!s) return;
-  s.registerAgent(agentId, e, r);
+function registerPerfettoAgent(agentId, metadata, attributes) {
+  let recorder = perfettoRecorder();
+  if (!recorder) return;
+  recorder.registerAgent(agentId, metadata, attributes);
 }
 //@ chunk-a9ek44g8.js:7467-7527 placement
 /**
  * 注销 Perfetto 代理。
  */
 function unregisterPerfettoAgent(agentId) {
-  let e = perfettoRecorder();
-  if (!e) return;
-  e.unregisterAgent(agentId);
+  let recorder = perfettoRecorder();
+  if (!recorder) return;
+  recorder.unregisterAgent(agentId);
 }
 //@ chunk-e6aww6q8.js:1291797-1291919 fingerprint = registerAgent (0.327)
 function registerAgent(agentId, agentName, parentAgentId) {

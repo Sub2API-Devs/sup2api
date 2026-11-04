@@ -97,7 +97,7 @@ import {
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logForDebugging, createAttachmentMessage_2 as createAttachmentMessage } from "../../utils/debug.js";
-import { string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { createSignal } from "../../utils/signal.js";
 import { createQueueBusyCheck } from "../../utils/messageQueueIdle.js";
@@ -351,101 +351,110 @@ import {
 } from "../../utils/claudemd.js";
 import { getReadTimestamp } from "../../tools/FileReadTool/savedOutputPaths.js";
 import { stripBomAndCarriageReturn } from "../../utils/remoteFileState.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:344654-344715 placement
-function appendLine(h, x) {
-  if (h.trim() === "") return x;
-  return `${h}
-${x}`;
+function appendLine(existing, line) {
+  if (existing.trim() === "") return line;
+  return `${existing}
+${line}`;
 }
 //@ chunk-18hwfzwa.js:344715-344830 placement
-function restorePromptAfterCancel(draft, x, { neverSubmitted: D = false } = {}) {
+function restorePromptAfterCancel(draft, text, { neverSubmitted = false } = {}) {
   draft.setMode("prompt");
-  draft.replaceValue(appendLine(draft.value, x));
-  if (!D) draft.markCameBack();
+  draft.replaceValue(appendLine(draft.value, text));
+  if (!neverSubmitted) draft.markCameBack();
 }
 //@ chunk-18hwfzwa.js:369774-369833 placement
 function noopController({ store, dialogStore, queue }) {
   return () => {};
 }
 //@ chunk-18hwfzwa.js:369833-371237 placement
-function mergeQueuedHumanMessages(h, messages) {
-  let D = new Set(messages.map((kt) => kt.uuid));
-  let filtered = h.filter((kt) => !D.has(kt.uuid));
-  if (!isSubagentHistoryEnabled()) return [...filtered, ...messages];
-  let ee = [];
-  for (let kt of filtered) {
-    if (kt.type !== "user" || kt.isMeta !== true || typeof kt.message.content !== "string") continue;
-    let kind = kt.origin?.kind;
-    let It =
+function mergeQueuedHumanMessages(messages, messages_2) {
+  let uuids = new Set(messages_2.map((message) => message.uuid));
+  let filtered = messages.filter((message) => !uuids.has(message.uuid));
+  if (!isSubagentHistoryEnabled()) return [...filtered, ...messages_2];
+  let merged = [];
+  for (let message of filtered) {
+    if (message.type !== "user" || message.isMeta !== true || typeof message.message.content !== "string")
+      continue;
+    let kind = message.origin?.kind;
+    let unwrapped =
       kind === "human"
-        ? unwrapMidTurnUserMessage(kt.message.content)
+        ? unwrapMidTurnUserMessage(message.message.content)
         : kind === "coordinator"
-          ? unwrapCoordinatorMessage(kt.message.content)
+          ? unwrapCoordinatorMessage(message.message.content)
           : undefined;
-    if (kind !== undefined && It !== undefined)
-      ee.push({
-        row: kt,
-        key: joinLines(kind, It),
-        words: It,
+    if (kind !== undefined && unwrapped !== undefined)
+      merged.push({
+        row: message,
+        key: joinLines(kind, unwrapped),
+        words: unwrapped,
       });
   }
-  let ke = new Map(h.map((kt, At) => [kt.uuid, At]));
-  let Re = new Set();
-  let Be = [];
-  let He;
-  for (let kt of messages) {
-    let At = ke.get(kt.uuid);
-    if (At !== undefined) {
-      He = At;
+  let indexByUuid = new Map(messages.map((message, index) => [message.uuid, index]));
+  let consumedUuids = new Set();
+  let unmatchedKeys = [];
+  let lastIndex;
+  for (let message of messages_2) {
+    let index = indexByUuid.get(message.uuid);
+    if (index !== undefined) {
+      lastIndex = index;
       continue;
     }
-    if (kt.type !== "user" || kt.isMeta === true || typeof kt.message.content !== "string") continue;
-    let kind = kt.origin?.kind;
+    if (message.type !== "user" || message.isMeta === true || typeof message.message.content !== "string")
+      continue;
+    let kind = message.origin?.kind;
     if (kind !== "human" && kind !== "coordinator") continue;
-    let Ot = joinLines(kind, kt.message.content);
-    let Et = He;
-    let Dt =
-      Et === undefined
+    let key = joinLines(kind, message.message.content);
+    let afterIndex = lastIndex;
+    let match =
+      afterIndex === undefined
         ? undefined
-        : ee.find((Lt) => Lt.key === Ot && !Re.has(Lt.row.uuid) && (ke.get(Lt.row.uuid) ?? -1) > Et);
-    if (Dt === undefined) Be.push(Ot);
-    else Re.add(Dt.row.uuid);
+        : merged.find(
+            (entry) =>
+              entry.key === key &&
+              !consumedUuids.has(entry.row.uuid) &&
+              (indexByUuid.get(entry.row.uuid) ?? -1) > afterIndex,
+          );
+    if (match === undefined) unmatchedKeys.push(key);
+    else consumedUuids.add(match.row.uuid);
   }
-  for (let kt of Be) {
-    let last = ee.findLast((It) => It.key === kt && !Re.has(It.row.uuid));
-    if (last !== undefined) Re.add(last.row.uuid);
+  for (let key of unmatchedKeys) {
+    let last = merged.findLast((entry) => entry.key === key && !consumedUuids.has(entry.row.uuid));
+    if (last !== undefined) consumedUuids.add(last.row.uuid);
   }
-  let We = new Map();
-  for (let { row, words } of ee)
-    if (!Re.has(row.uuid)) {
-      let { isMeta, ...Ot } = row;
-      We.set(row.uuid, {
-        ...Ot,
+  let rewrittenRows = new Map();
+  for (let { row, words } of merged)
+    if (!consumedUuids.has(row.uuid)) {
+      let { isMeta, ...rest } = row;
+      rewrittenRows.set(row.uuid, {
+        ...rest,
         message: {
           ...row.message,
           content: words,
         },
       });
     }
-  let ze = [];
-  let Xe = new Map();
-  let rt;
-  for (let kt of h) {
-    let At = We.get(kt.uuid);
-    if (D.has(kt.uuid)) rt = kt.uuid;
-    else if (At !== undefined && rt !== undefined) Xe.set(rt, [...(Xe.get(rt) ?? []), At]);
+  let kept = [];
+  let extrasByUuid = new Map();
+  let anchorUuid;
+  for (let message of messages) {
+    let rewritten = rewrittenRows.get(message.uuid);
+    if (uuids.has(message.uuid)) anchorUuid = message.uuid;
+    else if (rewritten !== undefined && anchorUuid !== undefined)
+      extrasByUuid.set(anchorUuid, [...(extrasByUuid.get(anchorUuid) ?? []), rewritten]);
     else {
-      ze.push(At ?? kt);
-      rt = undefined;
+      kept.push(rewritten ?? message);
+      anchorUuid = undefined;
     }
   }
-  return [...ze, ...messages.flatMap((kt) => [kt, ...(Xe.get(kt.uuid) ?? [])])];
+  return [...kept, ...messages_2.flatMap((message) => [message, ...(extrasByUuid.get(message.uuid) ?? [])])];
 }
 //@ chunk-18hwfzwa.js:371237-371273 placement
-function joinLines(kind, x) {
+function joinLines(kind, text) {
   return `${kind}
-${x}`;
+${text}`;
 }
 //@ chunk-18hwfzwa.js:371273-371914 placement
 function syncViewedAgentPermissionMode({ store, setAppState, storageV5 }) {
@@ -453,39 +462,39 @@ function syncViewedAgentPermissionMode({ store, setAppState, storageV5 }) {
     [store],
     () => {
       let { viewingAgentTaskId, tasks } = store.getState();
-      let ke = viewingAgentTaskId ? tasks[viewingAgentTaskId] : undefined;
-      let Re = isLocalAgent(ke) && ke.retain && !ke.diskLoaded;
-      return [viewingAgentTaskId, Re];
+      let task = viewingAgentTaskId ? tasks[viewingAgentTaskId] : undefined;
+      let condition = isLocalAgent(task) && task.retain && !task.diskLoaded;
+      return [viewingAgentTaskId, condition];
     },
-    (L, ee) => {
-      if (!L || !ee) return;
-      let ke = L;
-      getAgentTranscript(identityAgentId2(ke), storageV5)
+    (agentId, newMessages) => {
+      if (!agentId || !newMessages) return;
+      let taskId = agentId;
+      getAgentTranscript(identityAgentId2(taskId), storageV5)
         .then((agentTranscript) => {
-          setAppState((Be) => {
-            let He = Be.tasks[ke];
-            if (!isLocalAgent(He) || He.diskLoaded || !He.retain) return Be;
-            let We = Be.transcripts[ke];
-            let messages = We?.messages ?? [];
-            let Xe = new Set(messages.map((message) => message.uuid));
-            let rt = mergeQueuedHumanMessages(agentTranscript?.messages ?? [], messages);
-            let filtered = rt.filter((At) => !Xe.has(At.uuid));
+          setAppState((state) => {
+            let task = state.tasks[taskId];
+            if (!isLocalAgent(task) || task.diskLoaded || !task.retain) return state;
+            let agentTranscript_2 = state.transcripts[taskId];
+            let messages = agentTranscript_2?.messages ?? [];
+            let existingUuids = new Set(messages.map((message) => message.uuid));
+            let mergedMessages = mergeQueuedHumanMessages(agentTranscript?.messages ?? [], messages);
+            let filtered = mergedMessages.filter((message) => !existingUuids.has(message.uuid));
             degradeRestoredMessages(filtered);
             return {
-              ...Be,
+              ...state,
               tasks: {
-                ...Be.tasks,
-                [ke]: {
-                  ...He,
+                ...state.tasks,
+                [taskId]: {
+                  ...task,
                   diskLoaded: true,
                 },
               },
               transcripts: {
-                ...Be.transcripts,
-                [ke]: {
+                ...state.transcripts,
+                [taskId]: {
                   inProgressToolUseIDs: new Set(),
-                  ...We,
-                  messages: rt,
+                  ...agentTranscript_2,
+                  messages: mergedMessages,
                 },
               },
             };
@@ -496,32 +505,38 @@ function syncViewedAgentPermissionMode({ store, setAppState, storageV5 }) {
   );
 }
 //@ chunk-18hwfzwa.js:371914-371989 placement
-var artifactsMcpEntryModule = require("./chunk-cm57mjc2.js");
-var RESUME_RETRY_DELAYS_MS = [1000, 3000, 1e4];
-var DRAIN_CHECK_INTERVAL_MS = 50;
-var MAX_DRAIN_WAIT_CYCLES = 1300;
+var artifactsMcpEntryModule; // deferred: loads other modules while loading; runs once its import cycle is complete
+var RESUME_RETRY_DELAYS_MS;
+var DRAIN_CHECK_INTERVAL_MS;
+var MAX_DRAIN_WAIT_CYCLES;
+deferInit("chunk-18hwfzwa.js:371914", () => {
+  artifactsMcpEntryModule = require("../../services/mcp/startArtifactsMcpEntryWatch.lazy.js");
+  RESUME_RETRY_DELAYS_MS = [1000, 3000, 1e4];
+  DRAIN_CHECK_INTERVAL_MS = 50;
+  MAX_DRAIN_WAIT_CYCLES = 1300;
+});
 //@ chunk-18hwfzwa.js:371989-372064 placement
 function oauthAccountFingerprint() {
   let oauthAccountInfo = getOauthAccountInfo();
   return `${oauthAccountInfo?.accountUuid}|${oauthAccountInfo?.profileFetchedAt}`;
 }
 //@ chunk-18hwfzwa.js:372064-372127 placement
-function isNotPlacedSystemMessage(h) {
-  return h.type !== "system" || h.subtype !== "placed";
+function isNotPlacedSystemMessage(message) {
+  return message.type !== "system" || message.subtype !== "placed";
 }
 //@ chunk-18hwfzwa.js:372127-372224 placement
-function transcriptStampSessionController(h) {
-  let lastIndex = h.findLastIndex(isNotPlacedSystemMessage);
-  let found = h.find(isNotPlacedSystemMessage);
-  return `${lastIndex + 1}|${found?.uuid}|${h[lastIndex]?.uuid}`;
+function transcriptStampSessionController(messages) {
+  let lastIndex = messages.findLastIndex(isNotPlacedSystemMessage);
+  let found = messages.find(isNotPlacedSystemMessage);
+  return `${lastIndex + 1}|${found?.uuid}|${messages[lastIndex]?.uuid}`;
 }
 //@ chunk-18hwfzwa.js:372224-372356 placement
 /**
  * 当前会话 id 与 transcript 路径（持久化关闭或无会话文件时 null）。
  */
 function currentTranscriptRef() {
-  let h = currentRestoreSource();
-  if (h !== null) return h;
+  let source = currentRestoreSource();
+  if (source !== null) return source;
   if (isTranscriptPersistenceDisabled() || getMaterializedSessionFile() === null) return null;
   let sessionId = getSessionId();
   return {
@@ -530,11 +545,14 @@ function currentTranscriptRef() {
   };
 }
 //@ chunk-18hwfzwa.js:372356-372447 placement
-var SLASH_COMMAND_PICKER_KEYS = new Set([
-  "slash_command_picker",
-  "slash_command_session_id",
-  "slash_command_title",
-]);
+var SLASH_COMMAND_PICKER_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:372356", () => {
+  SLASH_COMMAND_PICKER_KEYS = new Set([
+    "slash_command_picker",
+    "slash_command_session_id",
+    "slash_command_title",
+  ]);
+});
 //@ chunk-18hwfzwa.js:372447-411777 placement
 /**
  * SessionController：REPL 会话控制器，管理会话 ID、续接、分叉与会话级状态。
@@ -653,28 +671,28 @@ class SessionController {
       haikuTitle: undefined,
       headHooksPending: this.headHooksPending,
     };
-    let Ao = () => this._adoptedPrefill;
+    let getAdoptedPrefill = () => this._adoptedPrefill;
     this.adoptedPrefillRef = {
       get current() {
-        return Ao();
+        return getAdoptedPrefill();
       },
     };
   }
   subscribe = this._changed.subscribe;
   getSnapshot = () => this._snapshot;
-  _publish(h) {
+  _publish(patch) {
     let _snapshot = this._snapshot;
-    let D = {
+    let next = {
       ..._snapshot,
-      ...h,
+      ...patch,
     };
     if (
-      D.conversationId === _snapshot.conversationId &&
-      D.haikuTitle === _snapshot.haikuTitle &&
-      D.headHooksPending === _snapshot.headHooksPending
+      next.conversationId === _snapshot.conversationId &&
+      next.haikuTitle === _snapshot.haikuTitle &&
+      next.headHooksPending === _snapshot.headHooksPending
     )
       return;
-    this._snapshot = D;
+    this._snapshot = next;
     this._changed.emit();
   }
   bindHost(_host) {
@@ -719,44 +737,44 @@ class SessionController {
     this.preClearOrigin = this.conversationOrigin;
     this.conversationOrigin = "local";
   };
-  maybePromptStaleResume(h, x) {
-    this._promptStaleResume(h, x).catch(logError);
+  maybePromptStaleResume(messages, pin) {
+    this._promptStaleResume(messages, pin).catch(logError);
   }
-  async _promptStaleResume(h, x) {
+  async _promptStaleResume(messages, pin) {
     let { transcript, storageV5, session } = this;
-    let ke = shouldOfferResumeCompact(h, estimateTokensWithAnchor);
-    if (ke) {
-      let Re = messagesSinceCompactBoundary(h);
+    let offer = shouldOfferResumeCompact(messages, estimateTokensWithAnchor);
+    if (offer) {
+      let recentMessages = messagesSinceCompactBoundary(messages);
       try {
         loadPrecomputedCompact(
           session.precompute,
           "main",
           getQuerySourceForREPL(),
-          Re,
+          recentMessages,
           getMainLoopModelFromState(this.store.getState()),
           storageV5,
         );
       } catch (error) {
         logError(error);
       }
-      let Be = () => {
+      let hasPrecomputedSummary = () => {
         let precomputeEntry = getPrecomputeEntry(session.precompute, undefined);
         return (
           precomputeEntry?.status === "ready" &&
-          Re.some((ze) => ze.uuid === precomputeEntry.coverage.lastUuid)
+          recentMessages.some((message) => message.uuid === precomputeEntry.coverage.lastUuid)
         );
       };
       if (
         (await runResumeCompactOffer(
           this.scope.requestDialog,
           {
-            ...ke,
-            hasPrecomputedSummary: Be(),
+            ...offer,
+            hasPrecomputedSummary: hasPrecomputedSummary(),
           },
           {
             getMessageCount: () => transcript.getSnapshot().length,
             storage: storageV5,
-            hasPrecomputedSummary: Be,
+            hasPrecomputedSummary,
             runCompact: () => void this._submitSlashCommand("/compact"),
           },
         )) !== "skipped_no_summary"
@@ -764,15 +782,19 @@ class SessionController {
         return;
     }
     try {
-      let Re = maybeShowColdResumeQuotaWarning(h, getMainLoopModelFromState(this.store.getState()), "resume");
-      if (Re) {
-        let Be = this.#t;
+      let warning = maybeShowColdResumeQuotaWarning(
+        messages,
+        getMainLoopModelFromState(this.store.getState()),
+        "resume",
+      );
+      if (warning) {
+        let generation = this.#t;
         this.#c(
-          Be,
-          await showIdleReturnDialog(this.scope.requestDialog, Re, {
+          generation,
+          await showIdleReturnDialog(this.scope.requestDialog, warning, {
             trigger: "resume",
-            offersLookUp: offersLookUp(h, x),
-            startNewConversation: () => this._startNewConversation(h, x),
+            offersLookUp: offersLookUp(messages, pin),
+            startNewConversation: () => this._startNewConversation(messages, pin),
           }),
         );
         return;
@@ -782,10 +804,10 @@ class SessionController {
       throw error;
     }
     try {
-      await useDefaultToNewerModelKey(h, {
+      await useDefaultToNewerModelKey(messages, {
         requestDialog: this.scope.requestDialog,
-        addNotification: (Re) => this._requireHost().addNotification(Re),
-        removeNotification: (Re) => this._requireHost().removeNotification(Re),
+        addNotification: (notification) => this._requireHost().addNotification(notification),
+        removeNotification: (notification) => this._requireHost().removeNotification(notification),
         session,
         store: this.store,
         setAppState: this._setAppState,
@@ -811,35 +833,35 @@ class SessionController {
       return null;
     }
   }
-  async askIdleCacheQuota(h) {
-    let x = this.#t;
+  async askIdleCacheQuota(warning) {
+    let generation = this.#t;
     try {
-      let D = await showIdleReturnDialog(this.scope.requestDialog, h, {
+      let outcome = await showIdleReturnDialog(this.scope.requestDialog, warning, {
         trigger: "idle",
         offersLookUp: offersLookUp(this.transcript.getSnapshot(), currentTranscriptRef()),
         startNewConversation: () =>
           this._startNewConversation(this.transcript.getSnapshot(), currentTranscriptRef(), "idle"),
       });
-      this.#c(x, D);
+      this.#c(generation, outcome);
     } catch (error) {
       logFeatureBad(quotaWarningSurface("idle"), "prompt_failed");
       throw error;
     }
   }
-  #c(h, x) {
-    if (x === "resume" || x === "dismiss") this.#o = h;
+  #c(generation, outcome) {
+    if (outcome === "resume" || outcome === "dismiss") this.#o = generation;
   }
-  async _startNewConversation(h, x, D = "resume") {
-    let L = quotaWarningSurface(D);
+  async _startNewConversation(messages, pin, trigger = "resume") {
+    let feature = quotaWarningSurface(trigger);
     let sessionId = getSessionId();
-    let ke = pinSessionId(sessionId);
-    let Re = null;
+    let pinnedSid = pinSessionId(sessionId);
+    let pointer = null;
     let pointerFailed = false;
-    if (x !== null && canLookUpPrevious(h, ke))
+    if (pin !== null && canLookUpPrevious(messages, pinnedSid))
       try {
-        Re = buildPreviousConversationPointer({
-          resumed: h,
-          source: x,
+        pointer = buildPreviousConversationPointer({
+          resumed: messages,
+          source: pin,
         });
       } catch (error) {
         pointerFailed = true;
@@ -847,15 +869,15 @@ class SessionController {
       }
     let previousTitle;
     try {
-      previousTitle = Re === null ? undefined : getCurrentSessionDisplayTitle(sessionId);
+      previousTitle = pointer === null ? undefined : getCurrentSessionDisplayTitle(sessionId);
     } catch (error) {
       logError(error);
     }
-    let We = new Set(this.messageQueue.getCommandQueue());
+    let beforeUuids = new Set(this.messageQueue.getCommandQueue());
     try {
       await this._submitSlashCommand(
         "/clear",
-        D === "idle"
+        trigger === "idle"
           ? {
               fromKeybinding: true,
               keepsComposer: true,
@@ -864,111 +886,113 @@ class SessionController {
           : undefined,
       );
     } catch (error) {
-      logFeatureBad(L, "clear_failed");
+      logFeatureBad(feature, "clear_failed");
       logError(error);
       return;
     }
-    let ze = {
-      pointer: Re,
+    let plan = {
+      pointer,
       pointerFailed,
       previousTitle,
-      feature: L,
+      feature,
     };
     if (getSessionId() !== sessionId) {
-      this._finishNewConversation(ze, true);
+      this._finishNewConversation(plan, true);
       return;
     }
-    let Xe = (kt) => !We.has(kt) && kt.mode === "prompt" && kt.value === "/clear";
-    let found = this.messageQueue.getCommandQueue().find(Xe);
-    this.messageQueue.someInFlightDrainCommand((kt) => {
-      if (found === undefined && Xe(kt)) found = kt;
+    let isClearCommand = (command) =>
+      !beforeUuids.has(command) && command.mode === "prompt" && command.value === "/clear";
+    let found = this.messageQueue.getCommandQueue().find(isClearCommand);
+    this.messageQueue.someInFlightDrainCommand((command) => {
+      if (found === undefined && isClearCommand(command)) found = command;
       return found !== undefined;
     });
     if (found === undefined) {
-      this._finishNewConversation(ze, false);
+      this._finishNewConversation(plan, false);
       return;
     }
-    this._watchQueuedClear(found, sessionId, ke, ze);
+    this._watchQueuedClear(found, sessionId, pinnedSid, plan);
   }
-  _watchQueuedClear(h, x, D, L) {
+  _watchQueuedClear(clearCommand, sessionId, pin, plan) {
     this._queuedClearWatch?.settle(false);
     if (this._disposed) {
-      this._finishNewConversation(L, false);
+      this._finishNewConversation(plan, false);
       return;
     }
     let { messageQueue, turn } = this;
-    let Re = [];
-    let Be = false;
-    let He = false;
-    let We = {
+    let unsubscribers = [];
+    let settled = false;
+    let remoteMove = false;
+    let watch = {
       stop: () => {
-        for (let It of Re.splice(0)) It();
-        if (this._queuedClearWatch === We) this._queuedClearWatch = null;
+        for (let unsubscribe of unsubscribers.splice(0)) unsubscribe();
+        if (this._queuedClearWatch === watch) this._queuedClearWatch = null;
       },
-      settle: (It) => {
-        if (Be) return;
-        Be = true;
-        We.stop();
+      settle: (remote) => {
+        if (settled) return;
+        settled = true;
+        watch.stop();
         this._finishNewConversation(
-          He
+          remoteMove
             ? {
-                ...L,
+                ...plan,
                 pointer: null,
               }
-            : L,
-          It,
+            : plan,
+          remote,
         );
       },
     };
-    this._queuedClearWatch = We;
-    let ze = (It) => It === h || (h.uuid !== undefined && It.uuid === h.uuid);
-    let Xe = messageQueue.someInFlightDrainCommand(ze);
-    let rt;
-    let kt = 0;
-    let At = () => {
+    this._queuedClearWatch = watch;
+    let matches = (command) =>
+      command === clearCommand || (clearCommand.uuid !== undefined && command.uuid === clearCommand.uuid);
+    let inFlight = messageQueue.someInFlightDrainCommand(matches);
+    let cancelTimer;
+    let waitCycles = 0;
+    let check = () => {
       try {
-        if (this._queuedClearWatch !== We) return;
-        if (getSessionId() === x && isRemoteOrBridgeSession(D)) He = true;
-        let It = messageQueue.someInFlightDrainCommand(ze);
-        Xe ||= It;
+        if (this._queuedClearWatch !== watch) return;
+        if (getSessionId() === sessionId && isRemoteOrBridgeSession(pin)) remoteMove = true;
+        let stillInFlight = messageQueue.someInFlightDrainCommand(matches);
+        inFlight ||= stillInFlight;
         if (turn.guard.isActive) {
-          kt = 0;
+          waitCycles = 0;
           return;
         }
-        if (messageQueue.getCommandQueue().some(ze)) return;
-        let Ot = Xe && getSessionId() !== x && getParentSessionId() === x;
-        if (!Ot && It && kt < MAX_DRAIN_WAIT_CYCLES) {
-          kt++;
-          rt?.();
-          rt = this._clock.setTimeout(At, DRAIN_CHECK_INTERVAL_MS);
+        if (messageQueue.getCommandQueue().some(matches)) return;
+        let landedElsewhere = inFlight && getSessionId() !== sessionId && getParentSessionId() === sessionId;
+        if (!landedElsewhere && stillInFlight && waitCycles < MAX_DRAIN_WAIT_CYCLES) {
+          waitCycles++;
+          cancelTimer?.();
+          cancelTimer = this._clock.setTimeout(check, DRAIN_CHECK_INTERVAL_MS);
           return;
         }
-        We.settle(Ot);
+        watch.settle(landedElsewhere);
       } catch (error) {
-        We.stop();
+        watch.stop();
         logError(error);
-        if (!Be) {
-          Be = true;
-          logFeatureSad(L.feature, "clear_not_applied");
+        if (!settled) {
+          settled = true;
+          logFeatureSad(plan.feature, "clear_not_applied");
         }
       }
     };
-    Re.push(
-      turn.guard.subscribe(At),
-      messageQueue.subscribe(() => queueMicrotask(At)),
-      () => rt?.(),
+    unsubscribers.push(
+      turn.guard.subscribe(check),
+      messageQueue.subscribe(() => queueMicrotask(check)),
+      () => cancelTimer?.(),
     );
-    queueMicrotask(At);
+    queueMicrotask(check);
   }
-  _finishNewConversation({ pointer, pointerFailed, previousTitle, feature }, ee) {
-    let ke = false;
-    if (pointer !== null && ee)
+  _finishNewConversation({ pointer, pointerFailed, previousTitle, feature }, landed) {
+    let pointerFailedToAppend = false;
+    if (pointer !== null && landed)
       try {
-        let Re = previousTitle === undefined ? "" : stripIgnorables(previousTitle);
+        let cleanTitle = previousTitle === undefined ? "" : stripIgnorables(previousTitle);
         let systemMessage = createSystemMessage(
-          Re === ""
+          cleanTitle === ""
             ? "New conversation. Claude can look up the previous conversation if you refer to it."
-            : `New conversation. Claude can look up "${truncateToWidth(Re, 60)}" if you refer to it.`,
+            : `New conversation. Claude can look up "${truncateToWidth(cleanTitle, 60)}" if you refer to it.`,
           "notice",
         );
         this.transcript.apply({
@@ -976,24 +1000,24 @@ class SessionController {
           messages: [systemMessage, pointer],
         });
       } catch (error) {
-        ke = true;
+        pointerFailedToAppend = true;
         logError(error);
       }
-    if (!ee) logFeatureSad(feature, "clear_not_applied");
-    else if (pointerFailed || ke)
+    if (!landed) logFeatureSad(feature, "clear_not_applied");
+    else if (pointerFailed || pointerFailedToAppend)
       logFeatureSad(feature, pointerFailed ? "pointer_failed" : "pointer_append_failed");
     else logFeatureOk(feature);
   }
-  _submitSlashCommand(h, x) {
+  _submitSlashCommand(text, options) {
     return this._requireHost().onSubmit(
-      h,
+      text,
       {
         setCursorOffset: () => {},
         clearBuffer: () => {},
         resetHistory: () => {},
       },
       {
-        ...x,
+        ...options,
         inputModeOverride: "prompt",
       },
     );
@@ -1002,7 +1026,7 @@ class SessionController {
     this.conversationOrigin = "remote";
     this.#t++;
   };
-  resume = async (h, log, D) => {
+  resume = async (taskId, log, mode) => {
     let {
       session,
       store,
@@ -1026,20 +1050,20 @@ class SessionController {
         messages: dropMalformedAttachments(log.messages),
       };
       let messages = deserializeToMessages(result.messages);
-      let Lt = undefined;
-      let oo = require("./chunk-yxywkh50.js");
-      let Xt = oo.matchSessionMode(log.mode);
-      if (Xt) {
+      let modelNotice = undefined;
+      let sessionModeModule = require("../../coordinator/coordinatorMode.js");
+      let modeWarning = sessionModeModule.matchSessionMode(log.mode);
+      if (modeWarning) {
         let agentDefinitions = await reloadAgentDefinitionsForModeSwitch(
           getSessionProject(session).originalCwd,
           [],
           storageV5,
         );
-        _setAppState((Yo) => ({
-          ...Yo,
+        _setAppState((state) => ({
+          ...state,
           agentDefinitions,
         }));
-        messages.push(createSystemMessage(Xt, "warning"));
+        messages.push(createSystemMessage(modeWarning, "warning"));
       }
       let sessionEndHookTimeoutMs = getSessionEndHookTimeoutMs();
       await executeSessionEndHooks(session, "resume", {
@@ -1057,120 +1081,126 @@ class SessionController {
         {
           sessionAgentDefinitions,
           sessionCwd: log.projectPath,
-          onResolveMiss: (vo) => messages.push(createSystemMessage(vo, "warning")),
+          onResolveMiss: (notice) => messages.push(createSystemMessage(notice, "warning")),
         },
       );
       scope.setMainThreadAgentDefinition(agentDefinition);
-      _setAppState((vo) => ({
-        ...vo,
+      _setAppState((state) => ({
+        ...state,
         agent: agentDefinition?.agentType,
       }));
-      let ao;
-      let co;
-      if (D !== "fork")
-        co = await restoreModelFromSession(
+      let flushTelemetry;
+      let restoredModel;
+      if (mode !== "fork")
+        restoredModel = await restoreModelFromSession(
           messages,
           mainLoopModel,
-          (vo) => messages.push(createSystemMessage(vo, "warning")),
+          (notice) => messages.push(createSystemMessage(notice, "warning")),
           {
-            scheduleTelemetry: (vo) => {
-              ao = vo;
+            scheduleTelemetry: (schedule) => {
+              flushTelemetry = schedule;
             },
             storageV5,
             credentials,
           },
         );
       appendSlackTagResumeRecords(messages, {
-        fork: D === "fork",
-        sessionId: h,
+        fork: mode === "fork",
+        sessionId: taskId,
       });
-      let bo = await processSessionStartHooks(session, D === "fork" ? "fork" : "resume", {
-        sessionId: h,
-        envFileSessionId: identityAgentId(h),
+      let startRows = await processSessionStartHooks(session, mode === "fork" ? "fork" : "resume", {
+        sessionId: taskId,
+        envFileSessionId: identityAgentId(taskId),
         sessionTitle: log.customTitle,
         agentType: agentDefinition?.agentType,
-        model: co ?? mainLoopModel,
+        model: restoredModel ?? mainLoopModel,
         resumedMessages: log.messages,
         storageV5,
         credentials,
       });
-      messages.push(...dedupeSessionStartRows(messages, bo));
-      if (D === "fork") copyPlanForFork(log, identityAgentId(h), storageV5);
-      else copyPlanForResume(log, identityAgentId(h), storageV5);
-      if (log.fileHistorySnapshots) copyFileHistoryForResume(log, identityAgentId(h), storageV5);
-      _setAppState((vo) => ({
-        ...vo,
+      messages.push(...dedupeSessionStartRows(messages, startRows));
+      if (mode === "fork") copyPlanForFork(log, identityAgentId(taskId), storageV5);
+      else copyPlanForResume(log, identityAgentId(taskId), storageV5);
+      if (log.fileHistorySnapshots) copyFileHistoryForResume(log, identityAgentId(taskId), storageV5);
+      _setAppState((state) => ({
+        ...state,
         standaloneAgentContext: computeStandaloneAgentContext(log.agentName, log.agentColor),
         sendMessagePins: {},
-        agentNameRegistry: liveAgentNames(vo.agentNameRegistry, vo.tasks),
+        agentNameRegistry: liveAgentNames(state.agentNameRegistry, state.tasks),
       }));
-      let Ao =
-        D === "fork"
+      let origin =
+        mode === "fork"
           ? this.conversationOrigin
-          : D === "rewind_pre_clear"
+          : mode === "rewind_pre_clear"
             ? (this.preClearOrigin ?? this.conversationOrigin)
             : "local";
       turn.resetLoadingState();
       turn.setAbortController(null);
       this.transcript.cut();
       this._publish({
-        conversationId: h,
+        conversationId: taskId,
       });
       this._resetTurnEventTail();
       flushAndSaveCosts(undefined, storageV5);
-      let taskId = identityAgentId(h);
-      let Ro = pinSessionId(taskId);
+      let agentId = identityAgentId(taskId);
+      let taintSid = pinSessionId(agentId);
       let sessionId = getSessionId();
       this.#e.add(sessionId);
-      let Io = this.#e.has(taskId);
-      switchSession(taskId, D === "fork" ? "fork" : "resume", log.fullPath ? dirname(log.fullPath) : null);
-      if (D !== "fork") _setAppState(forfeitAllChatPins);
-      if (D !== "fork" && taskId !== sessionId) clearFileStateCacheKeepingSeeds(scope.readFileState);
+      let known = this.#e.has(agentId);
+      switchSession(
+        agentId,
+        mode === "fork" ? "fork" : "resume",
+        log.fullPath ? dirname(log.fullPath) : null,
+      );
+      if (mode !== "fork") _setAppState(forfeitAllChatPins);
+      if (mode !== "fork" && agentId !== sessionId) clearFileStateCacheKeepingSeeds(scope.readFileState);
       this.restoreReadFileState(
         messages,
         log.projectPath ?? getSessionProject(session).originalCwd,
-        D === "fork",
-        Ao,
+        mode === "fork",
+        origin,
       );
-      if (D !== "fork")
-        getTaskRunState().inheritPredecessorLinks(taskOutputDirForSession(taskId), log.modified.getTime());
-      if (D !== "fork")
+      if (mode !== "fork")
+        getTaskRunState().inheritPredecessorLinks(taskOutputDirForSession(agentId), log.modified.getTime());
+      if (mode !== "fork")
         seedCommentMonitorIntent(log.artifactCommentMonitor, {
           ...(storageV5 !== undefined && {
             storageV5,
           }),
         });
-      if (co) {
-        let vo = installRestoredModel(messages, co, false, storageV5, credentials);
-        if (vo)
-          _setAppState((Yo) => {
-            if (Yo.mainLoopModel === vo) return Yo;
-            recordSwitchIfChanged(session, Yo, vo, "resume");
+      if (restoredModel) {
+        let restoredModelValue = installRestoredModel(messages, restoredModel, false, storageV5, credentials);
+        if (restoredModelValue)
+          _setAppState((state) => {
+            if (state.mainLoopModel === restoredModelValue) return state;
+            recordSwitchIfChanged(session, state, restoredModelValue, "resume");
             return {
-              ...Yo,
-              mainLoopModel: vo,
+              ...state,
+              mainLoopModel: restoredModelValue,
             };
           });
       }
-      rearmRefusalFallbackHeaderFromTranscript(messages, D === "fork");
-      ao?.();
-      let { renameRecordingForSession } = await import("./chunk-qh27pgpw.js");
+      rearmRefusalFallbackHeaderFromTranscript(messages, mode === "fork");
+      flushTelemetry?.();
+      let { renameRecordingForSession } = await import("../../utils/asciicast.js");
       await renameRecordingForSession(session, storageV5);
       await resetSessionFilePointer();
-      let mn = isAgentSwarmsEnabled()
-        ? await (await import("./chunk-6cc2zqkz.js")).rekeySessionTeamInSession(storageV5)
+      let teamContext = isAgentSwarmsEnabled()
+        ? await (
+            await import("../../tools/TeamCreateTool/initializeSessionTeam.lazy.js")
+          ).rekeySessionTeamInSession(storageV5)
         : undefined;
-      if (mn)
-        _setAppState((vo) => ({
-          ...vo,
-          teamContext: mn.teamContext,
-          teammateColors: mn.teammateColors,
+      if (teamContext)
+        _setAppState((state) => ({
+          ...state,
+          teamContext: teamContext.teamContext,
+          teammateColors: teamContext.teammateColors,
         }));
-      if (D !== "fork") {
+      if (mode !== "fork") {
         retireResumeSwapPair(store.getState, store.setState, dialogStore, this.session);
         retireConversationReplicas();
         disposeLiveState();
-        this.rehydrateResumedFrameState(messages, false, Ao, false);
+        this.rehydrateResumedFrameState(messages, false, origin, false);
         resetStickyBetaNameOnlyEntries(getStickyBetas());
         clearAdvisorHeld(getStickyBetas());
         clearInlineToolsRefusal(getStickyBetas());
@@ -1190,7 +1220,7 @@ class SessionController {
           invalidateToolDescriptions();
           clearDeclared(session.host);
         }
-        if (SLASH_COMMAND_PICKER_KEYS.has(D) && !Io) {
+        if (SLASH_COMMAND_PICKER_KEYS.has(mode) && !known) {
           let planModeRestoreOnInteractiveResume = await preparePlanModeRestoreOnInteractiveResume({
             storedPermissionMode: log.permissionMode,
             messages,
@@ -1198,24 +1228,24 @@ class SessionController {
             permissionModeSuppliedOnInvocation: false,
             lane: "interactive_slash",
           });
-          _setAppState((kn) => {
-            let Fn = planModeRestoreOnInteractiveResume(kn.toolPermissionContext);
-            return Fn
+          _setAppState((state) => {
+            let nextContext = planModeRestoreOnInteractiveResume(state.toolPermissionContext);
+            return nextContext
               ? {
-                  ...kn,
-                  toolPermissionContext: Fn,
+                  ...state,
+                  toolPermissionContext: nextContext,
                 }
-              : kn;
+              : state;
           });
         }
       }
       restoreSessionStateFromLog(result, store.setState, this.sessionHooks, {
-        preserveLiveBudget: D === "fork" || D === "rewind_pre_clear",
+        preserveLiveBudget: mode === "fork" || mode === "rewind_pre_clear",
       });
       applyEndedByModelOnResume(getEndedByModel(log), _setAppState);
       clearSessionMetadata();
       restoreSessionMetadata(
-        D === "fork"
+        mode === "fork"
           ? buildForkAdoptionMeta(log, {
               stripRelocatedCwd: true,
             })
@@ -1224,28 +1254,28 @@ class SessionController {
               artifactCommentMonitor: undefined,
             },
         {
-          taintSid: Ro,
+          taintSid,
           storageV5,
         },
       );
       installDevModsPlaceholderExpander();
       pushRestoredMemoryPauseNotice(messages);
-      if (D === "fork")
+      if (mode === "fork")
         if (log.precautionarySuppressionHeld) {
-          holdPrecautionarySuppressionFor(Ro);
-          markPrecautionClearResilientFor(Ro);
-        } else copyPrecautionarySuppressionTo(Ro, pinSessionId(getSessionIdFromLog(log)));
-      let Cn = takePendingHookSessionTitle();
-      if (Cn) cacheHookSessionTitle(Cn);
+          holdPrecautionarySuppressionFor(taintSid);
+          markPrecautionClearResilientFor(taintSid);
+        } else copyPrecautionarySuppressionTo(taintSid, pinSessionId(getSessionIdFromLog(log)));
+      let hookTitle = takePendingHookSessionTitle();
+      if (hookTitle) cacheHookSessionTitle(hookTitle);
       reclaimSessionNameOnResume(log.agentName, storageV5, {
         autoOnly: !log.customTitle,
       });
-      if (D !== "fork" && log.bridgeSessionId)
-        _setAppState((vo) =>
-          vo.replBridgeEnabled && !vo.replBridgeOutboundOnly
-            ? vo
+      if (mode !== "fork" && log.bridgeSessionId)
+        _setAppState((state) =>
+          state.replBridgeEnabled && !state.replBridgeOutboundOnly
+            ? state
             : {
-                ...vo,
+                ...state,
                 replBridgeEnabled: true,
                 replBridgeOutboundOnly: false,
               },
@@ -1253,12 +1283,12 @@ class SessionController {
       this._publish({
         haikuTitle: undefined,
       });
-      if (D !== "fork") {
+      if (mode !== "fork") {
         exitRestoredWorktree(
           log.worktreeSession === undefined ? log.projectPath : log.worktreeSession?.worktreePath,
           storageV5,
         );
-        let vo = restoreWorktreeForResume(
+        let worktree = restoreWorktreeForResume(
           lastResumeRecordRegistry.of(session.host),
           log.worktreeSession,
           log.projectPath,
@@ -1266,7 +1296,7 @@ class SessionController {
             storageV5,
           },
         );
-        if (vo) messages.push(createSystemMessage(worktreeResumeNotice(vo), "warning"));
+        if (worktree) messages.push(createSystemMessage(worktreeResumeNotice(worktree), "warning"));
         this._resetReplTabToConvo();
         scope.isolationLatch.onLatch = undefined;
         if (isStorageV5Enabled() && storageV5 !== undefined) await adoptResumedSessionFileAsync(storageV5);
@@ -1282,39 +1312,40 @@ class SessionController {
             ),
         );
         {
-          let Yo = takeRestoredMonitorIntents({
+          let monitorIntents = takeRestoredMonitorIntents({
             ...(storageV5 !== undefined && {
               storageV5,
             }),
           });
-          let kn = [...tornStopIntents()];
-          let Fn = currentToolPermissionContext() ? "replShort" : "repl";
-          if (kn.length > 0) {
+          let tornIntents = [...tornStopIntents()];
+          let surface = currentToolPermissionContext() ? "replShort" : "repl";
+          if (tornIntents.length > 0) {
             let env = claudeAiEnvironment();
             messages.push(
               createSystemMessage(
                 describeNotResumedIncomplete(
-                  kn.map((slug) =>
+                  tornIntents.map((slug) =>
                     artifactViewerUrlFor({
                       slug,
                       env,
                     }),
                   ),
-                  Fn,
+                  surface,
                 ),
                 "warning",
               ),
             );
           }
-          let bn = otherArmedSlugs(Yo, isAutoReactWired);
-          if (bn.length > 0) {
-            let sessionId = taskId;
-            let hn = "unknown";
-            let Mn;
+          let otherSlugs = otherArmedSlugs(monitorIntents, isAutoReactWired);
+          if (otherSlugs.length > 0) {
+            let sessionId = agentId;
+            let replyState = "unknown";
+            let liveReply;
             let others = 0;
-            let Sn = false;
+            let stopped = false;
             try {
-              let { listRegisteredSessionRecords } = await import("./chunk-ewxn4535.js");
+              let { listRegisteredSessionRecords } =
+                await import("../../utils/udsMessaging/SessionRecordsUnreadableError.lazy.js");
               let liveReplyHolder = await findLiveReplyHolder({
                 records: await listRegisteredSessionRecords(),
                 sessionId,
@@ -1322,45 +1353,49 @@ class SessionController {
                 isRunning: isProcessRunning,
                 isSameProcess: provenSameProcessAsync,
               });
-              Sn = true;
-              hn = liveReplyHolder.verdict;
-              Mn = liveReplyHolder.holder;
+              stopped = true;
+              replyState = liveReplyHolder.verdict;
+              liveReply = liveReplyHolder.holder;
               others = liveReplyHolder.otherHolders?.length ?? 0;
             } catch {
               logFeatureSad("artifact_live_subscribe", "holder_probe_failed");
             }
             let env = claudeAiEnvironment();
-            let mapped = bn.map((slug) =>
+            let mapped = otherSlugs.map((slug) =>
               artifactViewerUrlFor({
                 slug,
                 env,
               }),
             );
             let now = Date.now();
-            if (hn !== "none" && Sn)
-              classifyMonitorHold(hn === "live" ? "held_by_live_session" : "holder_unknown", {
+            if (replyState !== "none" && stopped)
+              classifyMonitorHold(replyState === "live" ? "held_by_live_session" : "holder_unknown", {
                 path: "switch",
-                probed: Sn,
-                liveHolder: Mn,
+                probed: stopped,
+                liveHolder: liveReply,
                 otherHolders: others,
-                monitors: bn.length,
-                jobStamped: [...Yo.values()].some((cn) => cn.state === "armed" && cn.holder === "bg"),
+                monitors: otherSlugs.length,
+                jobStamped: [...monitorIntents.values()].some(
+                  (record) => record.state === "armed" && record.holder === "bg",
+                ),
                 jobHolder: "none",
                 takeover: "not_attempted",
                 now,
               });
-            if (hn === "live")
+            if (replyState === "live")
               messages.push(
                 createSystemMessage(
                   describeHeldMonitor(
                     mapped,
-                    Mn !== undefined ? describeHolderWithOthersComments(Mn, others, now) : undefined,
-                    Fn,
+                    liveReply !== undefined
+                      ? describeHolderWithOthersComments(liveReply, others, now)
+                      : undefined,
+                    surface,
                   ),
                   "notice",
                 ),
               );
-            else messages.push(createSystemMessage(describeNotResumedAfterSwitch(mapped, Fn), "notice"));
+            else messages.push(createSystemMessage(describeNotResumedAfterSwitch(mapped, surface), "notice"));
           }
         }
         restoreRemoteAgentTasks({
@@ -1371,7 +1406,7 @@ class SessionController {
         });
         if (isMcpTasksEnabled())
           loadMcpTaskModule({
-            sessionId: taskId,
+            sessionId: agentId,
             conversation: [...messages],
             taskRegistry,
             getMcpClients: () => store.getState().mcp.clients,
@@ -1380,7 +1415,7 @@ class SessionController {
             credentials,
           });
         removeSessionCronTasks(
-          getSessionCronTasks().map((Yo) => Yo.id),
+          getSessionCronTasks().map((task) => task.id),
           {
             handOff: true,
           },
@@ -1399,23 +1434,23 @@ class SessionController {
         if (currentWorktreeSession) saveWorktreeState(currentWorktreeSession, storageV5);
         if (scope.isolationLatch.current) saveIsolationLatch(scope.isolationLatch.current, storageV5);
       }
-      let { isCoordinatorMode } = require("./chunk-yxywkh50.js");
+      let { isCoordinatorMode } = require("../../coordinator/coordinatorMode.js");
       saveMode(isCoordinatorMode() ? "coordinator" : "normal");
       resetCostState();
       setCostStateForRestore(log);
-      if (D !== "fork") scope.reconstructContentReplacementState(messages, log.contentReplacements ?? []);
+      if (mode !== "fork") scope.reconstructContentReplacementState(messages, log.contentReplacements ?? []);
       primePasteIdsFromMessages(messages);
-      emitReplBridgeEvent(session, identityAgentId(h));
+      emitReplBridgeEvent(session, identityAgentId(taskId));
       clearClassifierContext();
       replace(() => messages);
-      this.conversationOrigin = Ao;
-      if (D !== "fork") draft.replaceValue("");
-      if (D !== "fork") {
+      this.conversationOrigin = origin;
+      if (mode !== "fork") draft.replaceValue("");
+      if (mode !== "fork") {
         try {
           await prefetchPrecomputedSidecar(
-            taskId,
+            agentId,
             {
-              sessionId: taskId,
+              sessionId: agentId,
               transcriptPath: log.fullPath,
             },
             session.precompute,
@@ -1425,18 +1460,18 @@ class SessionController {
           logError(error);
         }
         this.maybePromptStaleResume(messages, {
-          sessionId: taskId,
-          transcriptPath: log.fullPath ?? getTranscriptPathForSession(taskId),
+          sessionId: agentId,
+          transcriptPath: log.fullPath ?? getTranscriptPathForSession(agentId),
         });
       }
       logEvent("tengu_session_resumed", {
-        entrypoint: fromEnum(D),
+        entrypoint: fromEnum(mode),
         success: true,
         resume_duration_ms: Math.round(performance.now() - startTime),
       });
     } catch (error) {
       logEvent("tengu_session_resumed", {
-        entrypoint: fromEnum(D),
+        entrypoint: fromEnum(mode),
         success: false,
         failure_reason: lit_2("processing_error"),
         error_name: sanitizedErrorNameForTelemetry(toError(error)),
@@ -1444,82 +1479,82 @@ class SessionController {
       throw error;
     }
   };
-  rehydrateResumedFrameState(h, continuesConversation = false, D = "local", reportCarry = true) {
+  rehydrateResumedFrameState(messages, continuesConversation = false, origin = "local", reportCarry = true) {
     let { _setAppState } = this;
     applyArtifactResumeCarry(
       _setAppState,
-      collectResumeArtifactCarry(h, {
-        origin: D,
+      collectResumeArtifactCarry(messages, {
+        origin,
         seedEligible: isResumeFrameSeedEligible(),
         reportCarry,
       }),
       {
         continuesConversation,
-        keepCloudRows: D === "remote",
+        keepCloudRows: origin === "remote",
       },
     );
   }
-  _discardDetachedToolCallsOutside(h) {
-    discardQueuedOutside(detachedCallSlots.of(this.session), this.messageQueue, h);
+  _discardDetachedToolCallsOutside(keepBefore) {
+    discardQueuedOutside(detachedCallSlots.of(this.session), this.messageQueue, keepBefore);
   }
-  restoreReadFileState(h, x, D = false, L = "local") {
+  restoreReadFileState(messages, cwd, isFork = false, origin = "local") {
     let { scope, turn, store } = this;
-    scope.mergeReadFileStateFrom(h, x);
+    scope.mergeReadFileStateFrom(messages, cwd);
     turn.resetForConversation({
       kind: "resumed",
-      messages: h,
+      messages,
     });
-    this._discardDetachedToolCallsOutside(h);
-    this.rehydrateResumedFrameState(h, D, L);
-    store.setState((Be) =>
-      rehydrateSession(h, Be, {
-        restoreAgentNames: !D,
+    this._discardDetachedToolCallsOutside(messages);
+    this.rehydrateResumedFrameState(messages, isFork, origin);
+    store.setState((state) =>
+      rehydrateSession(messages, state, {
+        restoreAgentNames: !isFork,
       }),
     );
   }
   start() {
-    let h = [];
-    let x = () => {
+    let completed = [];
+    let finish = () => {
       this._disposed = true;
       this._queuedClearWatch?.settle(false);
-      for (let idx = h.length - 1; idx >= 0; idx--) h[idx]();
+      for (let idx = completed.length - 1; idx >= 0; idx--) completed[idx]();
       diagnosticTrackingSlot.of(this.session).shutdown();
     };
     try {
-      this._runStartSteps(h);
+      this._runStartSteps(completed);
     } catch (error) {
-      x();
+      finish();
       throw error;
     }
-    return x;
+    return finish;
   }
-  _runStartSteps(h) {
+  _runStartSteps(messages) {
     let { store, transcript, session, storageV5 } = this;
-    h.push(
+    messages.push(
       syncViewedAgentPermissionMode({
         store,
         setAppState: store.setState,
         storageV5,
       }),
     );
-    this._startFeeds(h);
-    h.push(
-      onSessionSwitch((He, We) => {
-        this.#e.add(He);
-        if (isConversationResetSwitch(We)) this.#t++;
+    this._startFeeds(messages);
+    messages.push(
+      onSessionSwitch((from, to) => {
+        this.#e.add(from);
+        if (isConversationResetSwitch(to)) this.#t++;
       }),
     );
-    h.push(
+    messages.push(
       subscribeSessionAgentNameChanged(() => {
         let currentSessionAgentName = getCurrentSessionAgentName();
         if (!currentSessionAgentName) return;
-        store.setState((We) =>
-          We.standaloneAgentContext?.name === currentSessionAgentName
-            ? We
+        store.setState((state) =>
+          state.standaloneAgentContext?.name === currentSessionAgentName
+            ? state
             : {
-                ...We,
+                ...state,
                 standaloneAgentContext: {
-                  ...We.standaloneAgentContext,
+                  ...state.standaloneAgentContext,
                   name: currentSessionAgentName,
                 },
               },
@@ -1527,7 +1562,7 @@ class SessionController {
       }),
     );
     try {
-      this._startSiblingLoginWatch(h);
+      this._startSiblingLoginWatch(messages);
     } catch (error) {
       logError(
         Error("SessionController.start: sibling-login watch threw", {
@@ -1537,14 +1572,14 @@ class SessionController {
     }
     this._raiseSessionStart();
     if (this._pendingHookSet) this._subscribeHookSet(this._pendingHookSet);
-    h.push(
+    messages.push(
       this.session.subscribe(() => {
         let _pendingHookSet = this._pendingHookSet;
         if (_pendingHookSet && this.session.id !== _pendingHookSet.sessionId)
           this._releaseHookSet(_pendingHookSet, true);
       }),
     );
-    h.push(() => this.releasePendingHookMessages());
+    messages.push(() => this.releasePendingHookMessages());
     try {
       this.restoreOnMount();
     } catch (error) {
@@ -1564,13 +1599,13 @@ class SessionController {
       );
     }
     this.onInit().catch(logError);
-    let ke = this._sandbox.start();
-    h.push(ke.stop);
-    if (ke.refused) return;
-    let Re = teammatePermissionContextBySessionRoot.of(session);
-    Re.registerSetter((He) => setToolPermissionContextAndNotify(store.setState, He));
-    h.push(() => Re.unregisterSetter());
-    h.push(this.turn.watchLaunchPrompt());
+    let sandboxStop = this._sandbox.start();
+    messages.push(sandboxStop.stop);
+    if (sandboxStop.refused) return;
+    let permissionContext = teammatePermissionContextBySessionRoot.of(session);
+    permissionContext.registerSetter((setter) => setToolPermissionContextAndNotify(store.setState, setter));
+    messages.push(() => permissionContext.unregisterSetter());
+    messages.push(this.turn.watchLaunchPrompt());
     noteFirstFullscreenFrame();
     commitGate(session);
     setJitPolicyAfterStartup();
@@ -1579,12 +1614,12 @@ class SessionController {
       transcript,
       store,
       storageV5,
-      addNotification: (He) => this._requireHost().addNotification(He),
+      addNotification: (notification) => this._requireHost().addNotification(notification),
       artifactMountGate: this.artifactMountGate,
     });
     if (artifactsMcpEntryModule !== null)
       try {
-        h.push(
+        messages.push(
           artifactsMcpEntryModule.startArtifactsMcpEntryWatch({
             session,
             store,
@@ -1600,9 +1635,9 @@ class SessionController {
           }),
         );
       }
-    h.push(this._startUnattendedMonitoringWatch());
+    messages.push(this._startUnattendedMonitoringWatch());
     if (!this.runsNoModelTurn)
-      h.push(
+      messages.push(
         WakeRouter({
           clock: this._clock,
           store,
@@ -1635,39 +1670,39 @@ class SessionController {
             }),
         }),
       );
-    h.push(getTaskRunState().taskEvicted.subscribe(this._spinnerStore.evict));
-    h.push(lazyCommandRunSignal.subscribe(this._spinnerStore.applyEvent));
+    messages.push(getTaskRunState().taskEvicted.subscribe(this._spinnerStore.evict));
+    messages.push(lazyCommandRunSignal.subscribe(this._spinnerStore.applyEvent));
     if (!this.runsNoModelTurn)
-      h.push(
+      messages.push(
         resumeStrandedAgent({
           taskRegistry: this.taskRegistry,
           getToolUseContext: () => this._buildIdleToolUseContext(),
           liveTranscript: this._liveTranscript(),
           getCanUseTool: () => this._requireHost().canUseTool,
-          addNotification: (He) => this._requireHost().addNotification(He),
+          addNotification: (notification) => this._requireHost().addNotification(notification),
         }),
       );
-    let Be = idleCompactionSlot.of(session);
-    Be.host = this.#d;
-    h.push(() => {
-      if (Be.host === this.#d) Be.host = null;
+    let slot = idleCompactionSlot.of(session);
+    slot.host = this.#d;
+    messages.push(() => {
+      if (slot.host === this.#d) slot.host = null;
     });
   }
-  _startSiblingLoginWatch(h) {
+  _startSiblingLoginWatch(attempt) {
     if (!this._siblingLoginWatchEnabled()) return;
-    h.push(
+    attempt.push(
       subscribeOAuthCredentialsChangedOnDisk(this.session.host, () => {
         if (!this._siblingLoginWatchEnabled()) return;
         this._adoptSiblingLogin().catch(logError);
       }),
     );
-    let x = oauthAccountFingerprint();
-    h.push(
+    let fingerprint = oauthAccountFingerprint();
+    attempt.push(
       subscribeGlobalConfigInstalled(() => {
         try {
-          let D = oauthAccountFingerprint();
-          if (D === x) return;
-          x = D;
+          let initialFingerprint = oauthAccountFingerprint();
+          if (initialFingerprint === fingerprint) return;
+          fingerprint = initialFingerprint;
           if (!this._siblingLoginWatchEnabled()) return;
         } catch (error) {
           logForDebugging(`sibling-login watch: the account-entry listener failed: ${errorMessage(error)}`, {
@@ -1684,15 +1719,15 @@ class SessionController {
   _siblingLoginWatchEnabled() {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_streamed_thimble", true);
   }
-  _scheduleSiblingLoginCheck(h) {
-    let x = RESUME_RETRY_DELAYS_MS[h];
-    if (x === undefined) return;
+  _scheduleSiblingLoginCheck(attempt) {
+    let delayMs = RESUME_RETRY_DELAYS_MS[attempt];
+    if (delayMs === undefined) return;
     this._cancelSiblingLoginCheck = this._clock.setTimeout(() => {
       this._cancelSiblingLoginCheck = undefined;
       if (this._disposed || !this.scope.apiKeyVerification.showsLoginNotice()) return;
       checkOAuthCredentialsChangedOnDisk(this.session.host, this.credentials).catch(logError);
-      this._scheduleSiblingLoginCheck(h + 1);
-    }, x);
+      this._scheduleSiblingLoginCheck(attempt + 1);
+    }, delayMs);
   }
   async _adoptSiblingLogin() {
     let { session, scope, storageV5, credentials } = this;
@@ -1709,15 +1744,15 @@ class SessionController {
     getGroveNoticeConfig.cache?.clear?.();
     resetUserData();
     refreshGrowthBookAfterAuthChange();
-    let ke;
+    let stop;
     try {
-      ke = await refreshRemoteManagedSettings(showStandaloneSecurityDialog, storageV5, credentials);
+      stop = await refreshRemoteManagedSettings(showStandaloneSecurityDialog, storageV5, credentials);
     } catch (error) {
       logFeatureBad("auth_sibling_login_adopt", "managed_settings_refresh_threw");
       throw error;
     }
     if (this._disposed) return;
-    if (!ke) {
+    if (!stop) {
       logForDebugging(
         "sibling-login watch: the managed-settings refresh for the adopted login did not complete; claude.ai connectors and the other login-dependent surfaces stay as they were until /login or a restart",
         {
@@ -1733,34 +1768,34 @@ class SessionController {
   _startUnattendedMonitoringWatch() {
     if (!isBgSession()) return () => {};
     let { store, taskRegistry, storageV5 } = this;
-    let L = () => {};
+    let noop = () => {};
     {
-      let Re = canAutoReply();
-      L = subscribeAutoReplyChanges(() => {
-        let Be = canAutoReply();
-        if (Be === Re) return;
-        Re = Be;
-        if (Be) this.discloseUnattendedActivity();
+      let autoReply = canAutoReply();
+      noop = subscribeAutoReplyChanges(() => {
+        let autoReplyOn = canAutoReply();
+        if (autoReplyOn === autoReply) return;
+        autoReply = autoReplyOn;
+        if (autoReplyOn) this.discloseUnattendedActivity();
       });
     }
-    let ee = count(Object.values(store.getState().tasks), isCarriedFrameLiveWatch);
+    let liveWatches = count(Object.values(store.getState().tasks), isCarriedFrameLiveWatch);
     let dependencyWatcher = createDependencyWatcher(
       [store],
       () => [count(Object.values(store.getState().tasks), isCarriedFrameLiveWatch)],
-      (Re) => {
-        if (Re === ee) return;
-        ee = Re;
+      (task) => {
+        if (task === liveWatches) return;
+        liveWatches = task;
         syncLiveInFlightSnapshot(summarizeBackgroundWork(taskRegistry.all()), storageV5);
       },
     );
     return () => {
-      L();
+      noop();
       dependencyWatcher();
     };
   }
-  _startFeeds(h) {
+  _startFeeds(messages) {
     let { store, transcript, messageQueue } = this;
-    h.push(
+    messages.push(
       HeldPeerMessages({
         clock: this._clock,
         store,
@@ -1769,31 +1804,31 @@ class SessionController {
         visibleDialog: createAutoDialogSelector(this.dialogStore, promptInputStoreFor(this.session)),
       }),
     );
-    h.push(
+    messages.push(
       startCrossSessionHoldReceipt({
         clock: this._clock,
         transcript,
         queue: messageQueue,
       }),
     );
-    h.push(
+    messages.push(
       registerReplyYieldNotices({
         transcript,
       }),
     );
-    h.push(
+    messages.push(
       syncJobStateName({
         session: this.session,
         storageV5: this.storageV5,
         credentials: this.credentials,
         setAppState: store.setState,
-        onYieldedName: (ee, ke) => {
-          let Re = sessionNameYieldedNotice(ke, ee);
+        onYieldedName: (name, reason) => {
+          let notice = sessionNameYieldedNotice(reason, name);
           if (!getMaterializedSessionFile()) {
             this._requireHost().addNotification({
               key: "session-name-yielded",
               kind: "warning",
-              text: Re,
+              text: notice,
               color: "warning",
               priority: "immediate",
               timeoutMs: 15000,
@@ -1802,19 +1837,19 @@ class SessionController {
           }
           transcript.apply({
             type: "append",
-            messages: [createSystemMessage(Re, "notice")],
+            messages: [createSystemMessage(notice, "notice")],
           });
         },
       }),
     );
-    h.push(
+    messages.push(
       noopController({
         store,
         dialogStore: this.dialogStore,
         queue: messageQueue,
       }),
     );
-    h.push(
+    messages.push(
       swarmHostState().ingress.messageDropped.subscribe((commands) =>
         transcript.apply({
           type: "append",
@@ -1830,81 +1865,81 @@ class SessionController {
       isInteractive: true,
     });
   }
-  _releaseHookSet(h, x) {
-    if (this._pendingHookSet !== h) return;
+  _releaseHookSet(hookSet, why) {
+    if (this._pendingHookSet !== hookSet) return;
     this._pendingHookSet = null;
     this._publish({
       headHooksPending: false,
     });
-    if (x) {
-      if (this._landingHookSet === h) this._landingHookSet = null;
-      h.run.abort();
+    if (why) {
+      if (this._landingHookSet === hookSet) this._landingHookSet = null;
+      hookSet.run.abort();
     }
   }
-  _settleHookSet(h, x) {
-    if (this._pendingHookSet !== h || this._landingHookSet === h) return;
-    let D = this.session.id === h.sessionId && x.length > 0;
-    switch (h.run.placement) {
+  _settleHookSet(hookSet, messages) {
+    if (this._pendingHookSet !== hookSet || this._landingHookSet === hookSet) return;
+    let sameSession = this.session.id === hookSet.sessionId && messages.length > 0;
+    switch (hookSet.run.placement) {
       case "head": {
-        if (!D) {
-          this._releaseHookSet(h, false);
+        if (!sameSession) {
+          this._releaseHookSet(hookSet, false);
           return;
         }
-        this._landingHookSet = h;
-        let L = () => {
-          if (this._landingHookSet === h) this._landingHookSet = null;
-          this._releaseHookSet(h, false);
+        this._landingHookSet = hookSet;
+        let release = () => {
+          if (this._landingHookSet === hookSet) this._landingHookSet = null;
+          this._releaseHookSet(hookSet, false);
         };
         try {
-          let ee = 0;
-          let ke = appendRowsWithHooks(this.transcript.conversation, x, {
-            keep: (Re) => {
-              if (this._landingHookSet !== h) return;
-              let Be = ee;
-              ee += Re.length;
-              this.transcript.replace((He) => He.toSpliced(Be, 0, ...Re));
+          let count = 0;
+          let appended = appendRowsWithHooks(this.transcript.conversation, messages, {
+            keep: (message) => {
+              if (this._landingHookSet !== hookSet) return;
+              let total = count;
+              count += message.length;
+              this.transcript.replace((rows) => rows.toSpliced(total, 0, ...message));
             },
           });
-          if (ke instanceof Promise)
-            return ke.then(L, (error) => {
+          if (appended instanceof Promise)
+            return appended.then(release, (error) => {
               if (!isAbortError(error)) logError(error);
-              L();
+              release();
             });
         } catch (error) {
           if (!isAbortError(error)) logError(error);
         }
-        L();
+        release();
         return;
       }
       case "tail": {
-        this._releaseHookSet(h, false);
-        if (!D) return;
+        this._releaseHookSet(hookSet, false);
+        if (!sameSession) return;
         let snapshot = this.transcript.getSnapshot();
-        let ee = dedupeSessionStartRows(snapshot, x);
-        if (ee.length === 0) return;
-        let ke = appendRowsWithHooks(this.transcript.conversation, ee, {
-          keep: (Re) => {
+        let deduped = dedupeSessionStartRows(snapshot, messages);
+        if (deduped.length === 0) return;
+        let appended = appendRowsWithHooks(this.transcript.conversation, deduped, {
+          keep: (message) => {
             let snapshot = this.transcript.getSnapshot();
             if (this.isAsRestored(snapshot))
-              this._restoredStamp = transcriptStampSessionController([...snapshot, ...Re]);
+              this._restoredStamp = transcriptStampSessionController([...snapshot, ...message]);
             this.transcript.keep({
               type: "append",
-              messages: [...Re],
+              messages: [...message],
             });
           },
         });
-        if (ke instanceof Promise)
-          ke.catch((error) => {
+        if (appended instanceof Promise)
+          appended.catch((error) => {
             if (!isAbortError(error)) logError(error);
           });
         return;
       }
     }
   }
-  _subscribeHookSet(h) {
-    h.run.promise.then(
-      (x) => this._settleHookSet(h, x),
-      () => this._releaseHookSet(h, false),
+  _subscribeHookSet(hookSet) {
+    hookSet.run.promise.then(
+      (messages) => this._settleHookSet(hookSet, messages),
+      () => this._releaseHookSet(hookSet, false),
     );
   }
   awaitPendingHooks = () => {
@@ -1914,20 +1949,20 @@ class SessionController {
       this._releaseHookSet(_pendingHookSet, true);
       return;
     }
-    return _pendingHookSet.run.promise.then((x) => this._settleHookSet(_pendingHookSet, x));
+    return _pendingHookSet.run.promise.then((result) => this._settleHookSet(_pendingHookSet, result));
   };
-  deferHookMessages = (h) => {
+  deferHookMessages = (run) => {
     this.releasePendingHookMessages();
-    let x = {
-      run: startHookRun("head", h),
+    let hookSet = {
+      run: startHookRun("head", run),
       sessionId: this.session.id,
     };
-    this._pendingHookSet = x;
+    this._pendingHookSet = hookSet;
     this._publish({
       headHooksPending: true,
     });
-    this._subscribeHookSet(x);
-    if (this._disposed) this._releaseHookSet(x, true);
+    this._subscribeHookSet(hookSet);
+    if (this._disposed) this._releaseHookSet(hookSet, true);
   };
   releasePendingHookMessages = () => {
     let _pendingHookSet = this._pendingHookSet;
@@ -1936,8 +1971,8 @@ class SessionController {
   get headHooksPending() {
     return this._pendingHookSet?.run.placement === "head";
   }
-  isAsRestored(h) {
-    return this._restoredStamp === transcriptStampSessionController(h);
+  isAsRestored(snapshot) {
+    return this._restoredStamp === transcriptStampSessionController(snapshot);
   }
   restoreOnMount() {
     let { initialMessages, session, taskRegistry, storageV5, credentials, store, scope, messageQueue } = this;
@@ -1976,7 +2011,7 @@ class SessionController {
         });
       if (isActingAsBgJob()) {
         let bgJobDir = getBgJobDir();
-        let We = readAndConsumeAdoptJson(bgJobDir, {
+        let adoptPromise = readAndConsumeAdoptJson(bgJobDir, {
           waitMs: isBgSession() || !getBgTakeover()?.expectHandoff ? 0 : TAKEOVER_ADOPT_WAIT_MS,
           extraShellOutputRoot: (() => {
             let bgTakeover = getBgTakeover();
@@ -1990,28 +2025,32 @@ class SessionController {
           })(),
         });
         let owner = Symbol("adopt-consume");
-        this._adoptedPrefill = We.then((kt) => kt?.prefill).catch(() => {
-          return;
-        });
-        this._adoptedFrameLive = We.then((kt) => {
-          if (kt?.frameLive === undefined) return;
-          if (bgJobDir !== undefined) recordUnresumedFrameLive(bgJobDir, kt.frameLive, owner);
-          return {
-            entries: kt.frameLive,
-            jobDir: bgJobDir,
-            owner,
-          };
-        }).catch(() => {
-          return;
-        });
-        let Xe = new Set();
-        let rt = new Set();
+        this._adoptedPrefill = adoptPromise
+          .then((adopt) => adopt?.prefill)
+          .catch(() => {
+            return;
+          });
+        this._adoptedFrameLive = adoptPromise
+          .then((adopt) => {
+            if (adopt?.frameLive === undefined) return;
+            if (bgJobDir !== undefined) recordUnresumedFrameLive(bgJobDir, adopt.frameLive, owner);
+            return {
+              entries: adopt.frameLive,
+              jobDir: bgJobDir,
+              owner,
+            };
+          })
+          .catch(() => {
+            return;
+          });
+        let seen = new Set();
+        let reported = new Set();
         (async () => {
           try {
-            let kt = await We;
-            if (kt) {
-              let At = await reconcileCarriedAgents(
-                kt.agents ?? [],
+            let adopted = await adoptPromise;
+            if (adopted) {
+              let agents = await reconcileCarriedAgents(
+                adopted.agents ?? [],
                 {
                   initialMessages,
                   taskRegistry,
@@ -2019,11 +2058,11 @@ class SessionController {
                 },
                 messageQueue,
               );
-              Xe = At.reported;
-              let { registered } = At;
-              let Ot = new Set(registered.map((Dt) => Dt.agentId));
-              for (let shell of kt.shells) {
-                if (shell.agentId !== undefined && !Ot.has(shell.agentId)) {
+              seen = agents.reported;
+              let { registered } = agents;
+              let agentIds = new Set(registered.map((entry) => entry.agentId));
+              for (let shell of adopted.shells) {
+                if (shell.agentId !== undefined && !agentIds.has(shell.agentId)) {
                   killOrphanedAdoptedShell(shell);
                   logFeatureSad("task_local_agent", "adopt_owner_skipped", {
                     skipped_kind: fromEnum("shell"),
@@ -2037,10 +2076,10 @@ class SessionController {
                   continue;
                 }
                 try {
-                  await initTaskOutputAsSymlink(shell.taskId, shell.outputPath, (Lt) =>
+                  await initTaskOutputAsSymlink(shell.taskId, shell.outputPath, (link) =>
                     logEvent("tengu_adopt_link", {
                       kind: lit_2("shell"),
-                      method: fromEnum(Lt),
+                      method: fromEnum(link),
                     }),
                   );
                   spawnShellTask(
@@ -2068,8 +2107,8 @@ class SessionController {
                 }
               }
               adoptCron(
-                kt.cron.filter((Dt) => {
-                  if (Dt.agentId !== undefined && !Ot.has(Dt.agentId)) {
+                adopted.cron.filter((task) => {
+                  if (task.agentId !== undefined && !agentIds.has(task.agentId)) {
                     logFeatureSad("task_local_agent", "adopt_owner_skipped", {
                       skipped_kind: fromEnum("cron"),
                     });
@@ -2077,53 +2116,53 @@ class SessionController {
                   }
                   return true;
                 }),
-                kt.loopWakeFires,
+                adopted.loopWakeFires,
               );
-              let Et = [];
-              for (let Dt of kt.workflows ?? []) {
-                let Lt;
+              let promises = [];
+              for (let workflow of adopted.workflows ?? []) {
+                let scriptText;
                 try {
-                  Lt = {
-                    ...Dt,
-                    scriptPath: resolveAdoptedScriptPath(Dt.scriptPath),
+                  scriptText = {
+                    ...workflow,
+                    scriptPath: resolveAdoptedScriptPath(workflow.scriptPath),
                   };
-                  await linkAdoptedWorkflowDir(Lt);
-                  registerAdoptedWorkflowTask(Lt, taskRegistry);
-                  Et.push(Lt);
-                  rt.add(Lt.taskId);
+                  await linkAdoptedWorkflowDir(scriptText);
+                  registerAdoptedWorkflowTask(scriptText, taskRegistry);
+                  promises.push(scriptText);
+                  reported.add(scriptText.taskId);
                 } catch (error) {
-                  if (Lt === undefined) {
-                    let { scriptPath, ...io } = Dt;
-                    emitAdoptWorkflowFailed(io, "adopt scriptPath rejected", messageQueue);
+                  if (scriptText === undefined) {
+                    let { scriptPath, ...rest } = workflow;
+                    emitAdoptWorkflowFailed(rest, "adopt scriptPath rejected", messageQueue);
                     logFeatureSad("task_local_workflow", "adopt_scriptpath_rejected");
-                    logForDebugging(`[adopt] workflow ${Dt.taskId} skipped: scriptPath rejected`, {
+                    logForDebugging(`[adopt] workflow ${workflow.taskId} skipped: scriptPath rejected`, {
                       level: "warn",
                     });
                   } else {
-                    emitAdoptWorkflowFailed(Lt, "transcript link failed", messageQueue);
+                    emitAdoptWorkflowFailed(scriptText, "transcript link failed", messageQueue);
                     logFeatureSad("task_local_workflow", "adopt_link_failed");
-                    logForDebugging(`[adopt] workflow ${Dt.taskId} skipped: ${error}`, {
+                    logForDebugging(`[adopt] workflow ${workflow.taskId} skipped: ${error}`, {
                       level: "warn",
                     });
                   }
                 }
               }
-              if (bgJobDir !== undefined) recordUnresumedAdopt(bgJobDir, registered, Et, owner);
-              this.resumeAdoptedAgents(registered, Et, bgJobDir, owner);
+              if (bgJobDir !== undefined) recordUnresumedAdopt(bgJobDir, registered, promises, owner);
+              this.resumeAdoptedAgents(registered, promises, bgJobDir, owner);
             }
           } finally {
             await formatOrphanSummary(
               initialMessages,
               taskRegistry,
-              (kt) => this.resumeOrphanedAgents(kt, bgJobDir),
-              Xe,
+              (task) => this.resumeOrphanedAgents(task, bgJobDir),
+              seen,
               storageV5,
               undefined,
               () => ({
                 kind: "runningPool",
                 tools: this.scope.computeTools(),
               }),
-              rt,
+              reported,
             );
           }
         })();
@@ -2144,21 +2183,21 @@ class SessionController {
         this.maybePromptStaleResume(initialMessages, currentRestoreSource());
     }
   }
-  resumeAdoptedAgents(h, x, D, L) {
+  resumeAdoptedAgents(agents, entries, bgJobDir, owner) {
     let { store, taskRegistry, storageV5, messageQueue } = this;
     waitForStoreState(store, mcpSettledForAdopt, {
       timeoutMs: STALE_THRESHOLD_MS / 4,
     })
       .then(() => {
-        if (!isActingAsBgJob() || getBgJobDir() !== D) {
+        if (!isActingAsBgJob() || getBgJobDir() !== bgJobDir) {
           logForDebugging(
             "[adopt] deferred resume skipped: takeover released or replaced during MCP-settle wait",
           );
           return;
         }
-        if (D !== undefined && (h.length > 0 || x.length > 0)) {
-          let Xe = takeUnresumedAdopt(D, L);
-          if (Xe.agents.length === 0 && Xe.workflows.length === 0) {
+        if (bgJobDir !== undefined && (agents.length > 0 || entries.length > 0)) {
+          let known = takeUnresumedAdopt(bgJobDir, owner);
+          if (known.agents.length === 0 && known.workflows.length === 0) {
             logForDebugging(
               "[adopt] deferred resume skipped: parked entries already taken by the exit handoff or a later consume",
             );
@@ -2168,9 +2207,9 @@ class SessionController {
         let { canUseTool } = this._requireHost();
         let { toolState } = this._buildIdleToolUseContext();
         let permissionMode = store.getState().toolPermissionContext.mode;
-        for (let Xe of x)
+        for (let entry of entries)
           resumeCarriedWorkflow(
-            Xe,
+            entry,
             {
               taskRegistry,
               toolState,
@@ -2178,33 +2217,33 @@ class SessionController {
             },
             messageQueue,
           );
-        for (let Xe of h)
+        for (let agent of agents)
           resumeAgentBackground({
-            agentId: Xe.agentId,
-            prompt: Xe.description ?? "(resumed agent)",
+            agentId: agent.agentId,
+            prompt: agent.description ?? "(resumed agent)",
             continueInterruptedTurn: true,
             toolUseContext: this._buildIdleToolUseContext(),
             canUseTool,
           })
-            .then((rt) => {
-              if (isResumeDenied(rt)) {
+            .then((result) => {
+              if (isResumeDenied(result)) {
                 try {
                   logFeatureSad("task_local_agent", "adopt_resume_denied");
-                  emitAdoptAgentDenied(Xe, rt.deniedByPlugin, taskRegistry, messageQueue);
+                  emitAdoptAgentDenied(agent, result.deniedByPlugin, taskRegistry, messageQueue);
                 } catch (error) {
                   logError(error);
                 }
                 return;
               }
-              if (!rt.alreadyCompleted)
+              if (!result.alreadyCompleted)
                 syncLiveInFlightSnapshot(summarizeBackgroundWork(taskRegistry.all()), storageV5);
             })
             .catch((error) => {
-              taskRegistry.remove(Xe.agentId);
-              emitAdoptAgentFailed(Xe, "resume failed", taskRegistry, messageQueue);
+              taskRegistry.remove(agent.agentId);
+              emitAdoptAgentFailed(agent, "resume failed", taskRegistry, messageQueue);
               logFeatureSad("task_local_agent", "adopt_resume_failed");
               if (error instanceof ResumeAgentStateError) {
-                logForDebugging(`[adopt] agent ${Xe.agentId} resume skipped: ${error.message}`, {
+                logForDebugging(`[adopt] agent ${agent.agentId} resume skipped: ${error.message}`, {
                   level: "warn",
                 });
                 return;
@@ -2214,58 +2253,64 @@ class SessionController {
       })
       .catch(logError);
   }
-  resumeOrphanedAgents(h, x) {
+  resumeOrphanedAgents(agents, bgJobDir) {
     let { store, taskRegistry, storageV5 } = this;
     waitForStoreState(store, mcpSettledForAdopt, {
       timeoutMs: STALE_THRESHOLD_MS / 4,
     })
       .then(() => {
-        if (!isActingAsBgJob() || getBgJobDir() !== x) {
+        if (!isActingAsBgJob() || getBgJobDir() !== bgJobDir) {
           logForDebugging(
             "[orphan-resume] deferred auto-resume skipped: takeover released or replaced during MCP-settle wait",
           );
           return;
         }
         let { canUseTool } = this._requireHost();
-        for (let Re of h)
+        for (let agent of agents)
           resumeAgentBackground({
-            agentId: Re.agentId,
-            prompt: Re.description,
+            agentId: agent.agentId,
+            prompt: agent.description,
             continueInterruptedTurn: true,
             toolUseContext: this._buildIdleToolUseContext(),
             canUseTool,
-            isWebFetchLaunch: Re.isWebFetchLaunch,
+            isWebFetchLaunch: agent.isWebFetchLaunch,
           })
-            .then((Be) => {
-              if (isResumeDenied(Be)) {
+            .then((outcome) => {
+              if (isResumeDenied(outcome)) {
                 try {
                   logFeatureSad("task_local_agent", "orphan_auto_resume_denied");
-                  formatAgentRestartFailedNotice(this._orphanAsThisSessionSeesIt(Re), Be.deniedByPlugin);
+                  formatAgentRestartFailedNotice(
+                    this._orphanAsThisSessionSeesIt(agent),
+                    outcome.deniedByPlugin,
+                  );
                 } catch (error) {
                   logError(error);
                 }
                 return;
               }
-              if (Be.alreadyCompleted) {
+              if (outcome.alreadyCompleted) {
                 formatOrphanedAgentNotification(
                   {
-                    ...this._orphanAsThisSessionSeesIt(Re),
-                    outputFile: Re.outputFile ?? Be.outputFile,
+                    ...this._orphanAsThisSessionSeesIt(agent),
+                    outputFile: agent.outputFile ?? outcome.outputFile,
                   },
                   taskRegistry,
                 );
                 return;
               }
-              formatAgentRestartedNotice(Re);
+              formatAgentRestartedNotice(agent);
               syncLiveInFlightSnapshot(summarizeBackgroundWork(taskRegistry.all()), storageV5);
             })
             .catch((error) => {
               logFeatureSad("task_local_agent", "orphan_auto_resume_failed");
-              formatAgentRestartFailedNotice(this._orphanAsThisSessionSeesIt(Re), errorMessage(error));
+              formatAgentRestartFailedNotice(this._orphanAsThisSessionSeesIt(agent), errorMessage(error));
               if (error instanceof ResumeAgentStateError) {
-                logForDebugging(`[orphan-resume] agent ${Re.agentId} auto-resume failed: ${error.message}`, {
-                  level: "warn",
-                });
+                logForDebugging(
+                  `[orphan-resume] agent ${agent.agentId} auto-resume failed: ${error.message}`,
+                  {
+                    level: "warn",
+                  },
+                );
                 return;
               }
               logError(error);
@@ -2273,9 +2318,9 @@ class SessionController {
       })
       .catch(logError);
   }
-  _orphanAsThisSessionSeesIt(h) {
+  _orphanAsThisSessionSeesIt(task) {
     try {
-      return withResumeCapabilities(h, {
+      return withResumeCapabilities(task, {
         kind: "runningPool",
         tools: this.scope.computeTools(),
       });
@@ -2285,7 +2330,7 @@ class SessionController {
           cause: error,
         }),
       );
-      return h;
+      return task;
     }
   }
   artifactMountGate = async () => {
@@ -2308,13 +2353,13 @@ class SessionController {
       allowed,
     };
   };
-  discloseUnattendedActivity = (h) => {
+  discloseUnattendedActivity = (text) => {
     let { taskRegistry } = this;
-    let D = drainUnattendedReplies();
-    if (D.total === 0) return;
+    let replies = drainUnattendedReplies();
+    if (replies.total === 0) return;
     let filtered = Object.values(taskRegistry.all()).filter(isCarriedFrameLiveWatch);
     let env = claudeAiEnvironment();
-    let mapped = [...D.bySlug.keys()]
+    let mapped = [...replies.bySlug.keys()]
       .map((slug) => ({
         slug,
         url: artifactViewerUrlFor({
@@ -2324,16 +2369,16 @@ class SessionController {
       }))
       .filter(({ slug, url }) => parseArtifactUrl(url)?.slug === slug)
       .map(({ url }) => url);
-    let where = D.bySlug.size === 1 && mapped.length === 1 ? ` on ${mapped[0]}` : "";
+    let where = replies.bySlug.size === 1 && mapped.length === 1 ? ` on ${mapped[0]}` : "";
     let shortcutDisplay = getShortcutDisplay("chat:killAgents", "Chat", "ctrl+x ctrl+k");
     let stop =
-      filtered.length > 0 || h?.willRearm === true || getAutoReactSlugs().size > 0
+      filtered.length > 0 || text?.willRearm === true || getAutoReactSlugs().size > 0
         ? ` To turn off automatic replies, stop the Artifact comment monitor task, or press ${shortcutDisplay} twice to turn them off for this session.`
         : "";
     this.transcript.apply({
       type: "append",
       messages: [
-        formatAutoReplyNotice(D.total, {
+        formatAutoReplyNotice(replies.total, {
           where,
           stop,
         }),
@@ -2352,10 +2397,10 @@ class SessionController {
         publishContext: isBgSession() ? "bg_session" : "interactive",
         ui: "repl",
         shortNotices: currentToolPermissionContext,
-        emit: (L) =>
+        emit: (messages) =>
           this.transcript.apply({
             type: "append",
-            messages: [...L],
+            messages: [...messages],
           }),
         gate: this.artifactMountGate,
         readFrameState: () => {
@@ -2366,14 +2411,15 @@ class SessionController {
             frameUrls: state.frameUrls,
           };
         },
-        getKnownVer: (L) => mainObservedArtifactVersion(store.getState(), L),
-        commentsGateOpen: () => require("./chunk-8vtgtz3z.js").artifactCommentsPromptGateOpen(),
+        getKnownVer: (path) => mainObservedArtifactVersion(store.getState(), path),
+        commentsGateOpen: () =>
+          require("../../services/artifacts/artifactToolSchema.js").artifactCommentsPromptGateOpen(),
         mayRequestTakeover: () => true,
         jobHolderVerdicts: probeAdoptedJob,
         carried: {
-          adopted: this._adoptedFrameLive?.then((L) => {
-            if (L === undefined) return;
-            let { entries, jobDir, owner } = L;
+          adopted: this._adoptedFrameLive?.then((frame) => {
+            if (frame === undefined) return;
+            let { entries, jobDir, owner } = frame;
             return {
               entries,
               park:
@@ -2381,12 +2427,12 @@ class SessionController {
                   ? undefined
                   : {
                       take: () => takeUnresumedFrameLive(jobDir, owner),
-                      repark: (Be) => reparkUnresumedFrameLive(jobDir, Be, owner),
-                      release: (Be) => releaseReparkedFrameLive(jobDir, Be, owner),
+                      repark: (agent) => reparkUnresumedFrameLive(jobDir, agent, owner),
+                      release: (agent) => releaseReparkedFrameLive(jobDir, agent, owner),
                     },
             };
           }),
-          discloseUnattended: (L) => this.discloseUnattendedActivity(L),
+          discloseUnattended: (text) => this.discloseUnattendedActivity(text),
           onCarriedArmed: () => {
             if (isBgSession())
               syncLiveInFlightSnapshot(summarizeBackgroundWork(taskRegistry.all()), storageV5);
@@ -2395,17 +2441,17 @@ class SessionController {
       },
     );
   }
-  rewindConversationTo(h, x) {
+  rewindConversationTo(messages, uuid) {
     let { transcript, scope, store, turn } = this;
-    let snapshot = transcript.getSnapshot();
-    let messageIndex = findMessageIndex(snapshot, h);
+    let messages_2 = transcript.getSnapshot();
+    let messageIndex = findMessageIndex(messages_2, messages);
     if (messageIndex === -1) return;
-    let messages = snapshot.slice(0, messageIndex);
-    let sliced = snapshot.slice(messageIndex);
+    let messages_3 = messages_2.slice(0, messageIndex);
+    let sliced = messages_2.slice(messageIndex);
     noopLedger(getStickyBetas(), "rewind");
-    cancelOnConversationReset(x);
-    let ze = decideRefusalFallbackRestore({
-      keptMessages: messages,
+    cancelOnConversationReset(uuid);
+    let restore = decideRefusalFallbackRestore({
+      keptMessages: messages_3,
       slicedMessages: sliced,
       currentOverride: getMainLoopModelOverride(),
       latchActive: hasRefusalFallbackOccurred() || hasRefusalFallbackHeaderArmed(),
@@ -2418,25 +2464,25 @@ class SessionController {
     } catch (error) {
       logError(error);
     }
-    if (x !== "auto_restore_cancel") resetPickerState(scope.memorySelector);
+    if (uuid !== "auto_restore_cancel") resetPickerState(scope.memorySelector);
     logEvent("tengu_conversation_rewind", {
-      preRewindMessageCount: snapshot.length,
+      preRewindMessageCount: messages_2.length,
       postRewindMessageCount: messageIndex,
-      messagesRemoved: snapshot.length - messageIndex,
+      messagesRemoved: messages_2.length - messageIndex,
       rewindToMessageIndex: messageIndex,
-      source: fromEnum(x),
+      source: fromEnum(uuid),
     });
     notePendingConversationEdit("rewind");
     transcript.cut();
-    transcript.replace(messages);
+    transcript.replace(messages_3);
     if (!this.runsNoModelTurn)
       try {
-        let It = cronCarryAttachment(messages, sliced);
-        if (It !== null)
+        let cronRow = cronCarryAttachment(messages_3, sliced);
+        if (cronRow !== null)
           transcript.apply(
             {
               type: "append",
-              messages: [It],
+              messages: [cronRow],
             },
             "held",
           );
@@ -2444,137 +2490,137 @@ class SessionController {
         logError(error);
       }
     try {
-      let It = threadAskMarkerFor(messages);
-      if (It !== null)
+      let marker = threadAskMarkerFor(messages_3);
+      if (marker !== null)
         transcript.apply(
           {
             type: "append",
-            messages: [createAttachmentMessage(It)],
+            messages: [createAttachmentMessage(marker)],
           },
           "held",
         );
     } catch (error) {
       logError(error);
     }
-    setLastMainThreadContextTokens(contextTokensOf(messages));
-    setLastCacheSafeForkMessages(messages);
+    setLastMainThreadContextTokens(contextTokensOf(messages_3));
+    setLastCacheSafeForkMessages(messages_3);
     this.bumpConversationId();
-    if (x === "message_selector") this.#r.repin(true, "rewind");
+    if (uuid === "message_selector") this.#r.repin(true, "rewind");
     this._resetTurnEventTail();
     turn.resetForConversation({
       kind: "rewound",
     });
-    this._discardDetachedToolCallsOutside(messages);
+    this._discardDetachedToolCallsOutside(messages_3);
     clearPendingContextCompacted();
-    if (ze) {
-      if (ze.clearLatch) clearRefusalFallbackOccurred();
-      if (ze.model.action === "restore") setMainLoopModelOverride(ze.model.value);
+    if (restore) {
+      if (restore.clearLatch) clearRefusalFallbackOccurred();
+      if (restore.model.action === "restore") setMainLoopModelOverride(restore.model.value);
       logEvent("tengu_refusal_fallback_rewind_unwind", {
         action: fromEnum(
-          ze.model.action === "restore"
+          restore.model.action === "restore"
             ? "model_restored"
-            : ze.model.reason === "not_first_party"
+            : restore.model.reason === "not_first_party"
               ? "model_kept_3p"
               : "model_kept_writer_mismatch",
         ),
-        ...(ze.model.action === "restore" && {
-          restored_from: fromEnum(ze.model.restoredFrom),
+        ...(restore.model.action === "restore" && {
+          restored_from: fromEnum(restore.model.restoredFrom),
         }),
-        latch_cleared: ze.clearLatch,
-        banners_sliced: ze.bannersSliced,
-        model_scope: fromEnum(classifyFallbackOrigin(ze.lastSlicedFallbackModel)),
-        source: fromEnum(x),
+        latch_cleared: restore.clearLatch,
+        banners_sliced: restore.bannersSliced,
+        model_scope: fromEnum(classifyFallbackOrigin(restore.lastSlicedFallbackModel)),
+        source: fromEnum(uuid),
       });
     }
-    let Xe =
-      ze && ze.model.action === "restore"
+    let a =
+      restore && restore.model.action === "restore"
         ? {
-            mainLoopModel: ze.model.value,
+            mainLoopModel: restore.model.value,
           }
         : undefined;
     let fastMode = store.getState().fastMode;
-    let kt = Xe && isFastModeEnabled() ? isFastModeActive(Xe.mainLoopModel, fastMode) : undefined;
-    let At =
-      x === "auto_restore_cancel"
+    let b = a && isFastModeEnabled() ? isFastModeActive(a.mainLoopModel, fastMode) : undefined;
+    let c =
+      uuid === "auto_restore_cancel"
         ? null
         : rebuildArtifactCarryAfterRewind(
-            messages,
+            messages_3,
             isResumeFrameSeedEligible() && this.conversationOrigin === "local",
           );
-    store.setState((It) => ({
-      ...(x === "auto_restore_cancel"
-        ? It
-        : rehydrateSession(messages, It, {
+    store.setState((state) => ({
+      ...(uuid === "auto_restore_cancel"
+        ? state
+        : rehydrateSession(messages_3, state, {
             restoreAgentNames: false,
           })),
-      ...At,
-      ...Xe,
-      ...(kt !== undefined && {
-        fastMode: kt,
+      ...c,
+      ...a,
+      ...(b !== undefined && {
+        fastMode: b,
       }),
       toolPermissionContext:
-        h.permissionMode && It.toolPermissionContext.mode !== h.permissionMode
+        messages.permissionMode && state.toolPermissionContext.mode !== messages.permissionMode
           ? {
-              ...It.toolPermissionContext,
-              mode: h.permissionMode,
+              ...state.toolPermissionContext,
+              mode: messages.permissionMode,
             }
-          : It.toolPermissionContext,
+          : state.toolPermissionContext,
       promptSuggestion: {
         status: "empty",
       },
-      ...(findLastRealAssistantMessage(messages) === undefined && {
+      ...(findLastRealAssistantMessage(messages_3) === undefined && {
         cacheMissAckedAtOutputTokens: getTotalOutputTokens(),
       }),
     }));
-    if (kt !== undefined) reportFastModeToggle(fastMode, kt);
+    if (b !== undefined) reportFastModeToggle(fastMode, b);
     logFeatureOk("repl_rewind_conversation");
   }
-  restoreMessageSync = (h, x, D = []) => {
-    let L = D[0];
-    if (L === undefined) {
-      this.rewindConversationTo(h, x);
-      this.restoreDraftFrom(h);
+  restoreMessageSync = (rows, entry, prior = []) => {
+    let lastPrior = prior[0];
+    if (lastPrior === undefined) {
+      this.rewindConversationTo(rows, entry);
+      this.restoreDraftFrom(rows);
       return;
     }
-    let ee = [];
+    let restored = [];
     try {
-      for (let Re of [...D, h]) {
-        let Be = {
+      for (let row of [...prior, rows]) {
+        let blank = {
           value: "",
           pastedContents: {},
         };
-        this.restoreDraftInto(Re, {
+        this.restoreDraftInto(row, {
           replaceValue: (value) => {
-            Be.value = value;
+            blank.value = value;
           },
           setMode: () => {},
           setPastedContents: (pastedContents) => {
-            Be.pastedContents = pastedContents;
+            blank.pastedContents = pastedContents;
           },
         });
-        ee.push(Be);
+        restored.push(blank);
       }
     } catch (error) {
       logError(error);
-      this.rewindConversationTo(h, x);
-      this.restoreDraftFrom(h);
+      this.rewindConversationTo(rows, entry);
+      this.restoreDraftFrom(rows);
       return;
     }
-    this.rewindConversationTo(L, x);
-    this.draft.replaceValue(ee.reduce((acc, Be) => appendLine(acc, Be.value), ""));
+    this.rewindConversationTo(lastPrior, entry);
+    this.draft.replaceValue(restored.reduce((acc, acc2) => appendLine(acc, acc2.value), ""));
     this.draft.setMode("prompt");
-    let ke = {};
-    for (let Re of ee) ke = mergeTurnTags(ke, Object.values(Re.pastedContents));
-    if (Object.keys(ke).length > 0) this.draft.setPastedContents(ke);
+    let pastes = {};
+    for (let row of restored) pastes = mergeTurnTags(pastes, Object.values(row.pastedContents));
+    if (Object.keys(pastes).length > 0) this.draft.setPastedContents(pastes);
   };
-  restoreDraftFrom = (h) => {
-    this.restoreDraftInto(h, this.draft);
+  restoreDraftFrom = (entry) => {
+    this.restoreDraftInto(entry, this.draft);
   };
-  restoreDraftInto(h, x) {
+  restoreDraftInto(entry, index) {
     let { _setAppState } = this;
-    this.#s.restoreIdeSelectionConsumedBy(h.uuid);
-    let modeFromInput = getModeFromInput(h);
-    let ee = modeFromInput
+    this.#s.restoreIdeSelectionConsumedBy(entry.uuid);
+    let modeFromInput = getModeFromInput(entry);
+    let mode = modeFromInput
       ? modeFromInput.mode === "prompt"
         ? readPromptText(modeFromInput.text)
         : {
@@ -2582,52 +2628,52 @@ class SessionController {
             pastedContents: {},
           }
       : undefined;
-    if (modeFromInput && ee) {
-      x.replaceValue(ee.text);
-      x.setMode(modeFromInput.mode);
-      if (Object.keys(ee.pastedContents).length > 0) x.setPastedContents(ee.pastedContents);
+    if (modeFromInput && mode) {
+      index.replaceValue(mode.text);
+      index.setMode(modeFromInput.mode);
+      if (Object.keys(mode.pastedContents).length > 0) index.setPastedContents(mode.pastedContents);
     }
-    if (Array.isArray(h.message.content)) {
-      let filtered = h.message.content.filter((Re) => isObjectBlock(Re) && Re.type === "image");
-      if (filtered.length > 0) {
-        let { stamped, manufactured } = splitStampedImages(filtered, h.imagePasteIds);
-        let He = renumberPastedContents({
-          display: ee?.text ?? "",
+    if (Array.isArray(entry.message.content)) {
+      let content = entry.message.content.filter((block) => isObjectBlock(block) && block.type === "image");
+      if (content.length > 0) {
+        let { stamped, manufactured } = splitStampedImages(content, entry.imagePasteIds);
+        let before = renumberPastedContents({
+          display: mode?.text ?? "",
           pastedContents: manufactured,
           allowCurrentEpochSkip: false,
         });
-        let We = renumberPastedContents({
-          display: He.display,
+        let after = renumberPastedContents({
+          display: before.display,
           pastedContents: stamped,
           allowCurrentEpochSkip: true,
         });
-        let ze = {
-          ...He.pastedContents,
-          ...We.pastedContents,
+        let pastes = {
+          ...before.pastedContents,
+          ...after.pastedContents,
         };
-        if (ee && We.display !== ee.text) x.replaceValue(We.display);
-        let Xe = setSliceField(_setAppState, "storedImagePaths");
-        for (let rt of Object.values(ze))
-          if (stamped[rt.id] === undefined && manufactured[rt.id] === undefined) {
-            recordImagePath(rt, Xe);
-            storeImageAndRecord(rt, Xe);
+        if (mode && after.display !== mode.text) index.replaceValue(after.display);
+        let stored = setSliceField(_setAppState, "storedImagePaths");
+        for (let paste of Object.values(pastes))
+          if (stamped[paste.id] === undefined && manufactured[paste.id] === undefined) {
+            recordImagePath(paste, stored);
+            storeImageAndRecord(paste, stored);
           }
-        x.setPastedContents({
-          ...ee?.pastedContents,
-          ...ze,
+        index.setPastedContents({
+          ...mode?.pastedContents,
+          ...pastes,
         });
       }
     }
   }
-  handleRestoreMessage = async (h, x) => {
-    setImmediate((D, L, ee) => D(L, ee), this.restoreMessageSync, h, x);
+  handleRestoreMessage = async (messages, index) => {
+    setImmediate((fn, a, b) => fn(a, b), this.restoreMessageSync, messages, index);
   };
-  handleSummarize = async (h, userFeedback, D = "from") => {
+  handleSummarize = async (messages, userFeedback, direction = "from") => {
     let { transcript, turn, _setAppState, draft } = this;
     let { mainLoopModel, addNotification } = this._requireHost();
     let replace = transcript.replace;
-    let messages = messagesSinceCompactBoundary(transcript.getSnapshot());
-    let pivotIndex = findMessageIndex(messages, h);
+    let messages_2 = messagesSinceCompactBoundary(transcript.getSnapshot());
+    let pivotIndex = findMessageIndex(messages_2, messages);
     if (pivotIndex === -1) {
       transcript.apply({
         type: "append",
@@ -2641,29 +2687,29 @@ class SessionController {
       return;
     }
     let abortController = createAbortController();
-    let context = turn.buildToolUseContext(messages, [], abortController, mainLoopModel);
+    let context = turn.buildToolUseContext(messages_2, [], abortController, mainLoopModel);
     let cacheSafeParams = await buildCompactCacheSafeParams({
       toolUseContext: context,
-      forkContextMessages: messages,
+      forkContextMessages: messages_2,
       mainThreadAgentDefinition: this.scope.mainThreadAgentDefinition,
     });
-    let It = await partialCompactConversation(messages, pivotIndex, context, cacheSafeParams, {
+    let compacted = await partialCompactConversation(messages_2, pivotIndex, context, cacheSafeParams, {
       userFeedback,
-      direction: D,
+      direction,
       onNotification: addNotification,
       onResponseLength: turn.stream.onResponseLength,
     });
-    let postCompactMessages = buildPostCompactMessages_2(It, D);
-    if (this.#n === "fullscreen" && D === "from")
-      replace((Dt) => {
-        let messageIndexByUuid = findMessageIndexByUuid(Dt, h.uuid);
-        return [...Dt.slice(0, messageIndexByUuid === -1 ? 0 : messageIndexByUuid), ...postCompactMessages];
+    let postCompactMessages = buildPostCompactMessages_2(compacted, direction);
+    if (this.#n === "fullscreen" && direction === "from")
+      replace((rows) => {
+        let messageIndexByUuid = findMessageIndexByUuid(rows, messages.uuid);
+        return [...rows.slice(0, messageIndexByUuid === -1 ? 0 : messageIndexByUuid), ...postCompactMessages];
       });
     else {
       replace(postCompactMessages);
       this.bumpConversationId();
     }
-    _setAppState((Dt) => pruneDisplayedContent(Dt, transcript.getSnapshot()));
+    _setAppState((state) => pruneDisplayedContent(state, transcript.getSnapshot()));
     setLastCacheSafeForkMessages(postCompactMessages);
     cleanupAfterCompaction(
       context.session,
@@ -2673,31 +2719,31 @@ class SessionController {
       undefined,
       context.storageV5,
     );
-    if (D === "from") {
-      let modeFromInput = getModeFromInput(h);
+    if (direction === "from") {
+      let modeFromInput = getModeFromInput(messages);
       if (modeFromInput) {
-        let Lt =
+        let branch =
           modeFromInput.mode === "prompt"
             ? readPromptText(modeFromInput.text)
             : {
                 text: modeFromInput.text,
                 pastedContents: {},
               };
-        draft.replaceValue(Lt.text);
+        draft.replaceValue(branch.text);
         draft.setMode(modeFromInput.mode);
-        if (Object.keys(Lt.pastedContents).length > 0) draft.setPastedContents(Lt.pastedContents);
-        this.#s.restoreIdeSelectionConsumedBy(h.uuid);
+        if (Object.keys(branch.pastedContents).length > 0) draft.setPastedContents(branch.pastedContents);
+        this.#s.restoreIdeSelectionConsumedBy(messages.uuid);
       }
     }
-    let Et = leadingCompactHint(
+    let hint = leadingCompactHint(
       transcript.getSnapshot(),
-      It.boundaryMarker.uuid,
+      compacted.boundaryMarker.uuid,
       getShortcutDisplay("app:toggleTranscript", "Global", "ctrl+o"),
     );
     addNotification({
       key: "summarize-ctrl-o-hint",
       kind: "contextual",
-      text: `Conversation summarized${Et}`,
+      text: `Conversation summarized${hint}`,
       priority: "medium",
       timeoutMs: 8000,
     });
@@ -2711,12 +2757,13 @@ class SessionController {
   }
   async #a() {
     try {
-      let { isHeldInAnotherPidDomain, listRegisteredSessionRecords } = await import("./chunk-ewxn4535.js");
-      let D = await listRegisteredSessionRecords();
+      let { isHeldInAnotherPidDomain, listRegisteredSessionRecords } =
+        await import("../../utils/udsMessaging/SessionRecordsUnreadableError.lazy.js");
+      let records = await listRegisteredSessionRecords();
       let sessionId = getSessionId();
-      if (await isHeldInAnotherPidDomain(D, sessionId)) return true;
+      if (await isHeldInAnotherPidDomain(records, sessionId)) return true;
       let { verdict } = await findLiveReplyHolder({
-        records: D,
+        records,
         sessionId,
         selfPid: process.pid,
         isRunning: isProcessRunning,
@@ -2731,16 +2778,16 @@ class SessionController {
   async #l() {
     if (isTranscriptPersistenceDisabled()) return null;
     let transcriptTailForTip = await readTranscriptTailForTip(getSessionId(), this.storageV5);
-    let x =
+    let uuid =
       transcriptTailForTip === null ? undefined : extractLastSyncedEventUuid(transcriptTailForTip.content);
-    if (x === undefined) return "transcript_unreadable";
-    return this.transcript.getSnapshot().some((D) => D.uuid === x) ? null : "transcript_advanced";
+    if (uuid === undefined) return "transcript_unreadable";
+    return this.transcript.getSnapshot().some((row) => row.uuid === uuid) ? null : "transcript_advanced";
   }
   #d = {
     refusal: async () => {
       if (await this.#a()) return "held_elsewhere";
-      let h = await this.#l();
-      if (h !== null) return h;
+      let result = await this.#l();
+      if (result !== null) return result;
       if (this.#i() !== null || this.turn.guard.isActive) return "busy";
       if (Date.now() - getLastInteractionTime() < NOTIF_ACTIVE_THRESHOLD_MS) return "present";
       return null;
@@ -2752,15 +2799,15 @@ class SessionController {
           count: 1,
         },
       }).then(
-        (h) => {
-          if (h.skip !== undefined) return null;
+        (state) => {
+          if (state.skip !== undefined) return null;
           this.transcript.apply({
             type: "append",
             messages: [createSystemMessage(COMPACTED_WHILE_IDLE_TEXT, "notice")],
           });
           return {
-            tokensBefore: h.tokensBefore,
-            tokensAfter: h.tokensAfter,
+            tokensBefore: state.tokensBefore,
+            tokensAfter: state.tokensAfter,
           };
         },
         (error) => {
@@ -2778,10 +2825,10 @@ class SessionController {
   compactConversation = async ({ instructions, origin, apiAttemptsLeft }) => {
     let { transcript, turn, scope, _setAppState } = this;
     let { mainLoopModel, addNotification } = this._requireHost();
-    let We = this.#i();
-    if (We !== null) throw We;
-    let ze = turn.guard.isActive ? null : turn.guard.tryStart();
-    if (ze === null) throw Error("a turn is in flight; the conversation compacts between turns");
+    let x = this.#i();
+    if (x !== null) throw x;
+    let handle = turn.guard.isActive ? null : turn.guard.tryStart();
+    if (handle === null) throw Error("a turn is in flight; the conversation compacts between turns");
     let abortController = createAbortController();
     turn.setAbortController(abortController);
     try {
@@ -2794,57 +2841,57 @@ class SessionController {
       );
       toolUseContext.compactionApiAttemptsLeft = apiAttemptsLeft;
       let { compactManually } = await compactCommand.load();
-      let It = await compactManually(toolUseContext, {
+      let result = await compactManually(toolUseContext, {
         customInstructions: instructions,
         mainThreadAgentDefinition: scope.mainThreadAgentDefinition,
         trigger: origin === undefined ? "auto" : "plugin",
         origin,
       });
-      if (It.type === "skipped")
+      if (result.type === "skipped")
         return {
-          skip: It.reason,
+          skip: result.reason,
         };
-      if (It.type !== "compact")
+      if (result.type !== "compact")
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          It.type === "text" ? It.value : "the compaction produced no summary",
+          result.type === "text" ? result.value : "the compaction produced no summary",
           "plugin compaction refused",
         );
-      if (turn.guard.generation !== ze && turn.guard.isActive)
+      if (turn.guard.generation !== handle && turn.guard.isActive)
         throw Error("a newer turn began before the compaction could be applied");
       let postCompactMessages = buildPostCompactMessages({
-        ...It.compactionResult,
-        messagesToKeep: It.compactionResult.messagesToKeep.map(getTokenCountFromUsage_4),
+        ...result.compactionResult,
+        messagesToKeep: result.compactionResult.messagesToKeep.map(getTokenCountFromUsage_4),
       });
-      let Dt = new Set(snapshot.map((io) => io.uuid));
-      let Lt = new Set(postCompactMessages.map((postCompactMessage) => postCompactMessage.uuid));
-      let oo = (io) => io.filter((so) => !Dt.has(so.uuid) && !Lt.has(so.uuid));
+      let beforeUuids = new Set(snapshot.map((row) => row.uuid));
+      let afterUuids = new Set(postCompactMessages.map((postCompactMessage) => postCompactMessage.uuid));
+      let keepRest = (row) => row.filter((row) => !beforeUuids.has(row.uuid) && !afterUuids.has(row.uuid));
       if (this.#n === "fullscreen")
-        transcript.replace((io) => [
-          ...io.filter((so) => Dt.has(so.uuid) && !Lt.has(so.uuid)),
+        transcript.replace((rows) => [
+          ...rows.filter((row) => beforeUuids.has(row.uuid) && !afterUuids.has(row.uuid)),
           ...postCompactMessages,
-          ...oo(io),
+          ...keepRest(rows),
         ]);
       else {
-        transcript.replace((io) => [...postCompactMessages, ...oo(io)]);
+        transcript.replace((rows) => [...postCompactMessages, ...keepRest(rows)]);
         this.bumpConversationId();
       }
-      _setAppState((io) => pruneDisplayedContent(io, transcript.getSnapshot()));
+      _setAppState((state) => pruneDisplayedContent(state, transcript.getSnapshot()));
       setLastCacheSafeForkMessages(messagesSinceCompactBoundary(transcript.getSnapshot()));
-      let Xt = leadingCompactHint(
+      let hint = leadingCompactHint(
         transcript.getSnapshot(),
-        It.compactionResult.boundaryMarker.uuid,
+        result.compactionResult.boundaryMarker.uuid,
         getShortcutDisplay("app:toggleTranscript", "Global", "ctrl+o"),
       );
       addNotification({
         key: "summarize-ctrl-o-hint",
         kind: "contextual",
-        text: `Conversation compacted${Xt}`,
+        text: `Conversation compacted${hint}`,
         priority: "medium",
         timeoutMs: 8000,
       });
-      return It.result;
+      return result.result;
     } finally {
-      turn.guard.end(ze);
+      turn.guard.end(handle);
       if (turn.getSnapshot().abortController === abortController) turn.setAbortController(null);
     }
   };
@@ -2854,27 +2901,27 @@ class SessionController {
       credentials,
       storageV5,
     });
-    let ke = isClaudeMdLoadingDisabled()
+    let disabled = isClaudeMdLoadingDisabled()
       ? []
       : await getMemoryFilesCached(session, false, storageV5, credentials);
-    if (ke.length > 0) {
-      let joined = ke.map(
-        (He) =>
-          `  [${He.type}] ${He.path} (${He.content.length} chars)${He.parent ? ` (included by ${He.parent})` : ""}`,
+    if (disabled.length > 0) {
+      let joined = disabled.map(
+        (a) =>
+          `  [${a.type}] ${a.path} (${a.content.length} chars)${a.parent ? ` (included by ${a.parent})` : ""}`,
       ).join(`
 `);
-      logForDebugging(`Loaded ${ke.length} CLAUDE.md/rules files:
+      logForDebugging(`Loaded ${disabled.length} CLAUDE.md/rules files:
 ${joined}`);
     } else logForDebugging("No CLAUDE.md/rules files found");
     let results = await Promise.all(
-      ke
-        .filter((Be) => !isManagedOrVirtualPath(Be.path))
-        .map(async (Be) => {
-          let He = shouldInjectMemoryFile(Be);
-          let seedTs = await getReadTimestamp(Be, He, storageV5);
+      disabled
+        .filter((file) => !isManagedOrVirtualPath(file.path))
+        .map(async (file) => {
+          let inject = shouldInjectMemoryFile(file);
+          let seedTs = await getReadTimestamp(file, inject, storageV5);
           return {
-            file: Be,
-            injected: He,
+            file,
+            injected: inject,
             seedTs,
           };
         }),
@@ -2907,26 +2954,28 @@ ${joined}`);
   }
 }
 //@ chunk-18hwfzwa.js:411777-411834 placement
-function offersLookUp(h, x) {
+function offersLookUp(resumed, pin) {
   return (
-    x !== null && canLookUpPrevious(h, pinSessionId(getSessionId())) && isPreviousConversationPointerAllowed()
+    pin !== null &&
+    canLookUpPrevious(resumed, pinSessionId(getSessionId())) &&
+    isPreviousConversationPointerAllowed()
   );
 }
 //@ chunk-18hwfzwa.js:411834-411880 placement
-function canLookUpPrevious(h, x) {
-  return !isRemoteOrBridgeSession(x) && !h.some(isForeignToBridgeSession);
+function canLookUpPrevious(messages, pin) {
+  return !isRemoteOrBridgeSession(pin) && !messages.some(isForeignToBridgeSession);
 }
 //@ chunk-18hwfzwa.js:411880-411926 placement
-function isRemoteOrBridgeSession(h) {
-  return isRemoteEgressSuppressedFor(h) || bridgeSessionForPulledWindow(h) !== undefined;
+function isRemoteOrBridgeSession(pin) {
+  return isRemoteEgressSuppressedFor(pin) || bridgeSessionForPulledWindow(pin) !== undefined;
 }
 //@ chunk-18hwfzwa.js:411926-411997 placement
-function findMessageIndex(h, x) {
-  let index = h.lastIndexOf(x);
-  return index !== -1 ? index : findMessageIndexByUuid(h, x.uuid);
+function findMessageIndex(messages, message) {
+  let index = messages.lastIndexOf(message);
+  return index !== -1 ? index : findMessageIndexByUuid(messages, message.uuid);
 }
 //@ chunk-18hwfzwa.js:411997-412092 placement
-function isForeignToBridgeSession(h) {
-  return "foreignToBridgeSession" in h && typeof h.foreignToBridgeSession === "string";
+function isForeignToBridgeSession(message) {
+  return "foreignToBridgeSession" in message && typeof message.foreignToBridgeSession === "string";
 }
 export { SessionController, appendLine, restorePromptAfterCancel };

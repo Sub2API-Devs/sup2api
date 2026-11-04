@@ -14,16 +14,17 @@ import {
   SERVER_PLUGIN_ID_PATTERN,
 } from "../plugins/pluginAttribution.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { env } from "../env.js";
 import { parseJsonRegistryFile, normalizeRegistryKey } from "../plugins/localMarketplacePaths.js";
 import { logForDebugging } from "../debug.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-csq9ftr9.js:3713-3767 placement
 var SKILL_ID_RE = /^skill_(?:staging_|local_)?[A-Za-z0-9]{1,64}$/;
 //@ chunk-csq9ftr9.js:3767-3798 placement
-function isValidSkillId(e) {
-  return SKILL_ID_RE.test(e);
+function isValidSkillId(skillId) {
+  return SKILL_ID_RE.test(skillId);
 }
 //@ chunk-csq9ftr9.js:3798-3815 placement
 var SKILL_ID = "skill_id";
@@ -32,22 +33,28 @@ var SKILL_ID = "skill_id";
  * 合法的 skillId/pluginId 归属。
  */
 function buildSkillAttribution(skillId, backingPluginId) {
-  let r = {};
-  if (typeof skillId === "string" && isValidSkillId(skillId)) r.skillId = skillId;
-  if (typeof backingPluginId === "string" && isServerPluginId(backingPluginId)) r.pluginId = backingPluginId;
-  return r.skillId === undefined && r.pluginId === undefined ? undefined : r;
+  let attribution = {};
+  if (typeof skillId === "string" && isValidSkillId(skillId)) attribution.skillId = skillId;
+  if (typeof backingPluginId === "string" && isServerPluginId(backingPluginId))
+    attribution.pluginId = backingPluginId;
+  return attribution.skillId === undefined && attribution.pluginId === undefined ? undefined : attribution;
 }
 //@ chunk-csq9ftr9.js:3983-4116 placement
-var SkillAttributionSchema = DoctorLazy(() =>
-  u({
-    [SKILL_ID]: string().regex(SKILL_ID_RE).optional().catch(undefined),
-    [SERVER_PLUGIN_ID]: string().regex(SERVER_PLUGIN_ID_PATTERN).optional().catch(undefined),
-  }),
-);
-var MAX_ATTRIBUTION_BYTES = 262144;
-var noop = () => {
-  return;
-};
+var SkillAttributionSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_ATTRIBUTION_BYTES;
+var noop;
+deferInit("chunk-csq9ftr9.js:3983", () => {
+  SkillAttributionSchema = DoctorLazy(() =>
+    objectSchema({
+      [SKILL_ID]: stringSchema().regex(SKILL_ID_RE).optional().catch(undefined),
+      [SERVER_PLUGIN_ID]: stringSchema().regex(SERVER_PLUGIN_ID_PATTERN).optional().catch(undefined),
+    }),
+  );
+  MAX_ATTRIBUTION_BYTES = 262144;
+  noop = () => {
+    return;
+  };
+});
 //@ chunk-csq9ftr9.js:4116-4269 placement
 function isSkillAttributionEnabled() {
   let CLAUDE_CODE_SKILL_ATTRIBUTION = env.CLAUDE_CODE_SKILL_ATTRIBUTION;
@@ -58,26 +65,26 @@ function isSkillAttributionEnabled() {
     MAX_ATTRIBUTION_BYTES,
     parseSkillAttribution,
   );
-  return (r) => jsonRegistryFile.get(normalizeRegistryKey(r));
+  return (registry) => jsonRegistryFile.get(normalizeRegistryKey(registry));
 }
 //@ chunk-csq9ftr9.js:4269-4620 placement
 /**
  * 校验 CLAUDE_CODE_SKILL_ATTRIBUTION 条目。
  */
-function parseSkillAttribution(e) {
-  let n = SkillAttributionSchema().safeParse(e);
-  if (!n.success) {
+function parseSkillAttribution(entry) {
+  let result = SkillAttributionSchema().safeParse(entry);
+  if (!result.success) {
     logForDebugging("Ignoring a CLAUDE_CODE_SKILL_ATTRIBUTION entry: not a JSON object");
     return;
   }
-  let skillAttribution = buildSkillAttribution(n.data[SKILL_ID], n.data[SERVER_PLUGIN_ID]);
-  if (typeof e === "object" && e !== null) {
-    for (let [s, g] of [
+  let skillAttribution = buildSkillAttribution(result.data[SKILL_ID], result.data[SERVER_PLUGIN_ID]);
+  if (typeof entry === "object" && entry !== null) {
+    for (let [field, value] of [
       [SKILL_ID, skillAttribution?.skillId],
       [SERVER_PLUGIN_ID, skillAttribution?.pluginId],
     ])
-      if (s in e && g === undefined)
-        logForDebugging(`Ignoring a CLAUDE_CODE_SKILL_ATTRIBUTION entry field: invalid ${s}`);
+      if (field in entry && value === undefined)
+        logForDebugging(`Ignoring a CLAUDE_CODE_SKILL_ATTRIBUTION entry field: invalid ${field}`);
   }
   return skillAttribution;
 }

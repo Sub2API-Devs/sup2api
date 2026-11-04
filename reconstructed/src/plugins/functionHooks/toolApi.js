@@ -74,10 +74,10 @@ import { uniq } from "../../utils/collections.js";
 /**
  * 校验工具输入并调用工具的 isReadOnly，是只读时返回 {isReadOnly: true}；出错记录日志并返回空对象。
  */
-function checkToolReadOnly(tool, n, r) {
+function checkToolReadOnly(tool, input, toolContext) {
   try {
-    let s = tool.inputSchema.safeParse(n);
-    return s.success && tool.isReadOnly(s.data, r)
+    let parsed = tool.inputSchema.safeParse(input);
+    return parsed.success && tool.isReadOnly(parsed.data, toolContext)
       ? {
           isReadOnly: true,
         }
@@ -91,9 +91,9 @@ function checkToolReadOnly(tool, n, r) {
 /**
  * 生成被取消的工具结果消息（带记忆纠正提示）。
  */
-function createCancelledToolResult(e, assistantMessage, signal, now) {
+function createCancelledToolResult(toolUseId, assistantMessage, signal, now) {
   let cancelMessage = getCancelMessage(signal);
-  let cancelledToolResultBlock = createCancelledToolResultBlock(e);
+  let cancelledToolResultBlock = createCancelledToolResultBlock(toolUseId);
   cancelledToolResultBlock.content = withMemoryCorrectionHint(cancelMessage);
   return createUserMessage({
     content: [cancelledToolResultBlock],
@@ -114,13 +114,13 @@ function markRecordGenuine() {
 /**
  * 把工具输入与结果中的文本记入会话宿主的记录（失败时标记记录丢失）。
  */
-function noteToolTexts(observableInput, n) {
+function noteToolTexts(observableInput, content) {
   try {
     let host = getRootSession().host;
-    for (let s of collectMemoryTextFields(observableInput)) noteToolText(host, s);
-    if (typeof n === "string") noteToolText(host, n);
-    else if (Array.isArray(n)) {
-      for (let s of n) if (s.type === "text") noteToolText(host, s.text);
+    for (let text of collectMemoryTextFields(observableInput)) noteToolText(host, text);
+    if (typeof content === "string") noteToolText(host, content);
+    else if (Array.isArray(content)) {
+      for (let block of content) if (block.type === "text") noteToolText(host, block.text);
     }
   } catch (error) {
     logError(error);
@@ -133,10 +133,10 @@ function noteToolTexts(observableInput, n) {
 /**
  * 记录决定
  */
-function setDecided(decisionOut, mode, r) {
-  endToolBlockedOnUserSpan(r.decision, r.source);
+function setDecided(decisionOut, mode, decision) {
+  endToolBlockedOnUserSpan(decision.decision, decision.source);
   decisionOut.decided = {
-    record: r,
+    record: decision,
     mode,
   };
 }
@@ -144,28 +144,28 @@ function setDecided(decisionOut, mode, r) {
 /**
  * 给结果消息附权限决定
  */
-function attachPermissionDecision(e, toolUseID, record) {
-  if (record === undefined) return e;
-  for (let s of findToolResultMessages(e, toolUseID)) s.permissionDecision = record;
-  return e;
+function attachPermissionDecision(messages, toolUseId, record) {
+  if (record === undefined) return messages;
+  for (let message of findToolResultMessages(messages, toolUseId)) message.permissionDecision = record;
+  return messages;
 }
 //@ chunk-e6aww6q8.js:3969116-3969347 placement
 /**
  * 找出只包含指定 tool_use_id 结果的用户消息。
  */
-function findToolResultMessages(e, n) {
-  let r = [];
-  for (let { message } of e) {
+function findToolResultMessages(rows, toolUseId) {
+  let matches = [];
+  for (let { message } of rows) {
     if (message.type !== "user" || !Array.isArray(message.message.content)) continue;
-    let filtered = message.message.content.filter((y) => y.type === "tool_result");
-    if (filtered.length === 1 && filtered[0].tool_use_id === n) r.push(message);
+    let filtered = message.message.content.filter((block) => block.type === "tool_result");
+    if (filtered.length === 1 && filtered[0].tool_use_id === toolUseId) matches.push(message);
   }
-  return r;
+  return matches;
 }
 //@ chunk-e6aww6q8.js:3969347-3969456 placement
-function awaitSpawnedAnswerForever(e) {
+function awaitSpawnedAnswerForever(options) {
   return awaitSpawnedAgentAnswer({
-    ...e,
+    ...options,
     signal: new AbortController().signal,
     settleWaitMs: Number.POSITIVE_INFINITY,
   });
@@ -174,22 +174,22 @@ function awaitSpawnedAnswerForever(e) {
 /**
  * 插件 $.tool.call：按名字调用会话中的工具，可附带用户同意字符串。
  */
-async function toolCallForPlugin(e, n) {
-  let { tool, consent } = e;
-  let h = toolInputOf(e);
-  let { plugin, signal } = n;
-  let w = plugin;
+async function toolCallForPlugin(request, caller) {
+  let { tool, consent } = request;
+  let input = toolInputOf(request);
+  let { plugin, signal } = caller;
+  let pluginName = plugin;
   if (consent !== undefined && typeof consent !== "string")
-    throw new HooksError(`${w}: $.tool.call: consent, when given, is a string`);
-  let origin = n.origin ?? [w];
-  let G = requireBoundSession(w, "$.tool.call");
-  let filtered = G.tools().filter((yt) => !isMultiEntryAliasTool(yt));
+    throw new HooksError(`${pluginName}: $.tool.call: consent, when given, is a string`);
+  let origin = caller.origin ?? [pluginName];
+  let session = requireBoundSession(pluginName, "$.tool.call");
+  let filtered = session.tools().filter((entry) => !isMultiEntryAliasTool(entry));
   let tool_2 = findTool(filtered, tool);
   if (!tool_2) {
     logForDebugging(
-      `$.tool.call (${w}): no tool named "${tool}"; the session has ${filtered.map((yt) => yt.name).join(", ")}`,
+      `$.tool.call (${pluginName}): no tool named "${tool}"; the session has ${filtered.map((entry) => entry.name).join(", ")}`,
     );
-    throw new HooksError(`${w}: $.tool.call: no tool named "${tool}" in this session`);
+    throw new HooksError(`${pluginName}: $.tool.call: no tool named "${tool}" in this session`);
   }
   if (
     consent !== undefined &&
@@ -198,20 +198,20 @@ async function toolCallForPlugin(e, n) {
       isRemoteBrowserToolUnderModeFloor(tool_2))
   )
     throw new HooksError(
-      `${w}: $.tool.call: ${tool_2.name} does not accept \`consent\` in this session. Call it without \`consent\`, and the normal permission check will decide.`,
+      `${pluginName}: $.tool.call: ${tool_2.name} does not accept \`consent\` in this session. Call it without \`consent\`, and the normal permission check will decide.`,
     );
   let abortController = new AbortController();
-  let we = forwardAbort(signal, abortController);
-  let Ee = pluginToolContext(G, abortController, {
-    plugin: w,
+  let releaseAbort = forwardAbort(signal, abortController);
+  let toolContext = pluginToolContext(session, abortController, {
+    plugin: pluginName,
     origin,
-    ...(n.servesModel && {
+    ...(caller.servesModel && {
       servesModel: true,
     }),
   });
   if (consent !== undefined)
-    Ee.messages = [
-      ...Ee.messages,
+    toolContext.messages = [
+      ...toolContext.messages,
       createUserMessage({
         content: consent,
         origin: {
@@ -219,104 +219,111 @@ async function toolCallForPlugin(e, n) {
         },
       }),
     ];
-  let Ae = pluginToolUse(tool_2.name, h);
+  let toolUse = pluginToolUse(tool_2.name, input);
   let assistantMessage = createAssistantMessage({
-    content: [Ae],
+    content: [toolUse],
     isVirtual: true,
   });
   let now = Date.now();
-  logForDebugging(`$.tool.call (${w}): ${tool_2.name} (${Object.keys(h).join(", ") || "no input"})`);
+  logForDebugging(
+    `$.tool.call (${pluginName}): ${tool_2.name} (${Object.keys(input).join(", ") || "no input"})`,
+  );
   let text = "";
   let result;
-  let lt = false;
-  let Je = false;
-  let nt = false;
-  let pt = false;
+  let isError = false;
+  let isDenied = false;
+  let isWithheld = false;
+  let hasResult = false;
   try {
-    for await (let yt of runToolUse(Ae, assistantMessage, G.canUseTool, Ee, () => new Date().toISOString())) {
-      let gt = unwrapUserMessage(yt);
-      if (!gt) continue;
-      let content = gt.message.content;
+    for await (let update of runToolUse(toolUse, assistantMessage, session.canUseTool, toolContext, () =>
+      new Date().toISOString(),
+    )) {
+      let userMessage = unwrapUserMessage(update);
+      if (!userMessage) continue;
+      let content = userMessage.message.content;
       if (typeof content === "string") continue;
-      for (let It of content)
-        if (It.type === "tool_result" && It.tool_use_id === Ae.id) {
-          pt = true;
-          text = toolInputText(It.content);
-          lt = It.is_error === true;
-          nt = isWithheldResult(gt);
-          Je = nt || gt.toolDenialKind !== undefined;
+      for (let block of content)
+        if (block.type === "tool_result" && block.tool_use_id === toolUse.id) {
+          hasResult = true;
+          text = toolInputText(block.content);
+          isError = block.is_error === true;
+          isWithheld = isWithheldResult(userMessage);
+          isDenied = isWithheld || userMessage.toolDenialKind !== undefined;
         }
-      if (gt.toolUseResult !== undefined && result === undefined)
+      if (userMessage.toolUseResult !== undefined && result === undefined)
         try {
-          result = jsonCloneValue(gt.toolUseResult);
+          result = jsonCloneValue(userMessage.toolUseResult);
         } catch {
           result = undefined;
         }
     }
   } catch (error) {
-    rethrowHooksError(w, error, `$.tool.call(${tool_2.name})`);
+    rethrowHooksError(pluginName, error, `$.tool.call(${tool_2.name})`);
   } finally {
-    we();
+    releaseAbort();
   }
-  if (!pt)
+  if (!hasResult)
     throw new HooksError(
-      `${w}: $.tool.call(${tool_2.name}) produced no result${abortController.signal.aborted ? " (aborted)" : ""}`,
+      `${pluginName}: $.tool.call(${tool_2.name}) produced no result${abortController.signal.aborted ? " (aborted)" : ""}`,
     );
   logForDebugging(
-    `$.tool.call (${w}): ${tool_2.name} answered in ${Date.now() - now}ms, ${text.length} chars${Je ? ", denied" : lt ? ", isError" : ""}`,
+    `$.tool.call (${pluginName}): ${tool_2.name} answered in ${Date.now() - now}ms, ${text.length} chars${isDenied ? ", denied" : isError ? ", isError" : ""}`,
   );
-  if (nt)
+  if (isWithheld)
     return {
       deny: text,
     };
-  if (Je)
+  if (isDenied)
     return {
       deny: text.replace(/^<tool_use_error>|<\/tool_use_error>$/g, ""),
     };
   let agentId = launchedAgentId(tool_2.name, result);
-  if (agentId !== undefined && n.isLaunchOnly) {
-    let yt = awaitSpawnedAnswerForever({
-      registry: Ee.taskRegistry,
+  if (agentId !== undefined && caller.isLaunchOnly) {
+    let settled = awaitSpawnedAnswerForever({
+      registry: toolContext.taskRegistry,
       agentId,
-      pluginName: w,
+      pluginName,
     });
-    n.leftRunning?.(
-      yt.then(
+    caller.leftRunning?.(
+      settled.then(
         () => {
           return;
         },
         (error) =>
-          logForDebugging(`$.agent.spawn (${w}): waiting on Agent ${agentId} failed: ${String(error)}`, {
-            level: "error",
-          }),
+          logForDebugging(
+            `$.agent.spawn (${pluginName}): waiting on Agent ${agentId} failed: ${String(error)}`,
+            {
+              level: "error",
+            },
+          ),
       ),
     );
-    logForDebugging(`$.agent.spawn (${w}): Agent ${agentId} started`);
+    logForDebugging(`$.agent.spawn (${pluginName}): Agent ${agentId} started`);
     return {
       result: subagentCaller(agentId, resolvedModelOf(result)),
       text: "",
     };
   }
   if (agentId !== undefined) {
-    let yt = await awaitSpawnedAgentAnswer({
-      registry: Ee.taskRegistry,
+    let answer = await awaitSpawnedAgentAnswer({
+      registry: toolContext.taskRegistry,
       agentId,
-      pluginName: w,
+      pluginName,
       signal: signal ?? abortController.signal,
     });
-    if (yt.isError) {
-      if (yt.settled) n.leftRunning?.(yt.settled);
-      return errorToolResult(undefined, yt.text);
+    if (answer.isError) {
+      if (answer.settled) caller.leftRunning?.(answer.settled);
+      return errorToolResult(undefined, answer.text);
     }
     logForDebugging(
-      `$.tool.call (${w}): Agent ${agentId} settled in ${Date.now() - now}ms, ${yt.text.length} chars`,
+      `$.tool.call (${pluginName}): Agent ${agentId} settled in ${Date.now() - now}ms, ${answer.text.length} chars`,
     );
     return {
       result: subagentCaller(agentId, resolvedModelOf(result)),
-      text: yt.text,
+      text: answer.text,
     };
   }
-  return lt
+  return isError
     ? errorToolResult(result, text)
     : {
         result,
@@ -324,17 +331,17 @@ async function toolCallForPlugin(e, n) {
       };
 }
 //@ chunk-e6aww6q8.js:3973570-3973672 placement
-function checkServerNameReserved(e) {
-  if (isBuiltinMcpServerName(e))
-    throw new HooksError(`${e}: $.tool.register: "${e}" is a reserved MCP server name`);
+function checkServerNameReserved(name) {
+  if (isBuiltinMcpServerName(name))
+    throw new HooksError(`${name}: $.tool.register: "${name}" is a reserved MCP server name`);
 }
 //@ chunk-e6aww6q8.js:3973672-3973946 placement
-function checkServerNameTaken(e, n, key) {
-  if (moduleStore.serverKey(n) !== undefined || moduleStore.minted(key)) return;
-  let found = e.mcpServers().find((y) => normalizeNameForMCP(y) === normalizeNameForMCP(key));
+function checkServerNameTaken(session, pluginName, key) {
+  if (moduleStore.serverKey(pluginName) !== undefined || moduleStore.minted(key)) return;
+  let found = session.mcpServers().find((name) => normalizeNameForMCP(name) === normalizeNameForMCP(key));
   if (found === undefined) return;
   throw new HooksError(
-    `${n}: $.tool.register: the session already has an MCP server named "${found}" in its MCP config; registering would replace it`,
+    `${pluginName}: $.tool.register: the session already has an MCP server named "${found}" in its MCP config; registering would replace it`,
   );
 }
 //@ chunk-e6aww6q8.js:3973946-3973958 placement
@@ -348,25 +355,29 @@ var MAX_TOOL_DESCRIBE_CHARS = 100;
  */
 var TOOL_DESCRIBE_CACHE_MS = 8000;
 //@ chunk-e6aww6q8.js:3973971-3974541 placement
-async function toolCheckForPlugin(e, n) {
-  let { plugin, signal } = n;
-  let { tool, input } = e;
+async function toolCheckForPlugin(args, caller) {
+  let { plugin, signal } = caller;
+  let { tool, input } = args;
   if (!isPlainObject_5(input))
     throw new HooksError(`${plugin}: $.tool.check: input is the tool's arguments, an object`);
-  let origin = n.origin ?? [plugin];
-  let w = requireBoundSession(plugin, "$.tool.check");
+  let origin = caller.origin ?? [plugin];
+  let session = requireBoundSession(plugin, "$.tool.check");
   let tool_2 = findTool(
-    w.tools().filter((ke) => !isMultiEntryAliasTool(ke)),
+    session.tools().filter((entry) => !isMultiEntryAliasTool(entry)),
     tool,
   );
   if (!tool_2) throw new HooksError(`${plugin}: $.tool.check: no tool named "${tool}" in this session`);
   let abortController = new AbortController();
-  let q = pluginToolContext(w, abortController, {
+  let toolContext = pluginToolContext(session, abortController, {
     plugin,
     origin,
   });
-  let Z = forwardAbort(signal, abortController);
-  let toolCheckCore = createToolCheckCore(() => checkDeclarativePermission(tool_2, input, q), tool_2, q);
+  let releaseAbort = forwardAbort(signal, abortController);
+  let toolCheckCore = createToolCheckCore(
+    () => checkDeclarativePermission(tool_2, input, toolContext),
+    tool_2,
+    toolContext,
+  );
   try {
     return await eventCallersFor2({
       signal: abortController.signal,
@@ -378,11 +389,11 @@ async function toolCheckForPlugin(e, n) {
       tool: tool_2.name,
       input,
       ...mcpPermissionCeiling(tool_2),
-      ...toolCheckApprover(tool_2, q),
-      ...checkToolReadOnly(tool_2, input, q),
+      ...toolCheckApprover(tool_2, toolContext),
+      ...checkToolReadOnly(tool_2, input, toolContext),
     });
   } finally {
-    Z();
+    releaseAbort();
   }
 }
 //@ chunk-e6aww6q8.js:3974541-3974849 placement
@@ -390,15 +401,15 @@ async function toolCheckForPlugin(e, n) {
  * $.tool.list：列出会话工具（名字、截断后的描述、是否 MCP），描述按工具缓存。
  */
 async function toolListOp(plugin) {
-  let n = requireBoundSession(plugin, "$.tool.list");
-  let filtered = n.tools().filter((h) => !isMultiEntryAliasTool(h));
-  let toolPermissionContext = getToolPermissionContext(n.toolContext(new AbortController()));
+  let session = requireBoundSession(plugin, "$.tool.list");
+  let filtered = session.tools().filter((entry) => !isMultiEntryAliasTool(entry));
+  let toolPermissionContext = getToolPermissionContext(session.toolContext(new AbortController()));
   return Promise.all(
-    filtered.map(async (h) => ({
-      name: h.name,
-      description: await toolDescriptionCache.of(h, async () =>
+    filtered.map(async (entry) => ({
+      name: entry.name,
+      description: await toolDescriptionCache.of(entry, async () =>
         truncateToLength(
-          await h.prompt({
+          await entry.prompt({
             getToolPermissionContext: async () => toolPermissionContext,
             tools: filtered,
             agents: [],
@@ -406,7 +417,7 @@ async function toolListOp(plugin) {
           TOOL_DESCRIBE_SETTLE_MS,
         ),
       ),
-      mcp: h.isMcp === true,
+      mcp: entry.isMcp === true,
     })),
   );
 }
@@ -414,54 +425,59 @@ async function toolListOp(plugin) {
 /**
  * 插件 $.tool.register：注册插件工具；--tools 为空或 --bare 会话中拒绝。
  */
-async function toolRegisterForPlugin(e, plugin) {
+async function toolRegisterForPlugin(registration, plugin) {
   checkServerNameReserved(plugin);
-  let r = requireBoundSession(plugin, "$.tool.register");
-  let s = r.toolContext(new AbortController());
-  if (getToolPermissionContext(s).builtInToolsDisabled === true)
+  let session = requireBoundSession(plugin, "$.tool.register");
+  let toolContext = session.toolContext(new AbortController());
+  if (getToolPermissionContext(toolContext).builtInToolsDisabled === true)
     throw new HooksError(
-      `${plugin}: $.tool.register: "${e.name}" refused: this session has no built-in tools (--tools ""), so it takes none from plugins`,
+      `${plugin}: $.tool.register: "${registration.name}" refused: this session has no built-in tools (--tools ""), so it takes none from plugins`,
     );
   if (isBareMode() && isBuiltinSuffixed(pluginStorageIdOf(plugin)))
     throw new HooksError(
-      `${plugin}: $.tool.register: "${e.name}" refused: this session runs with --bare, which takes tools from the plugins its command line names and from no built-in one`,
+      `${plugin}: $.tool.register: "${registration.name}" refused: this session runs with --bare, which takes tools from the plugins its command line names and from no built-in one`,
     );
-  let h = currentToolCall();
-  if (!h) {
+  let registrar = currentToolCall();
+  if (!registrar) {
     logFeatureBad("plugin_function_hooks_register_tool", "no_registrar");
     throw new HooksError(
       `${plugin}: $.tool.register: this host cannot add tools at run time (no in-process MCP server registrar installed)`,
     );
   }
-  let y = registeredMcpToolName(r, e, plugin);
-  if (y !== undefined) {
-    logForDebugging(`$.tool.register (${plugin}): ${y} unchanged and listed; not re-registered`);
+  let existingName = registeredMcpToolName(session, registration, plugin);
+  if (existingName !== undefined) {
+    logForDebugging(`$.tool.register (${plugin}): ${existingName} unchanged and listed; not re-registered`);
     return {
-      tool: y,
+      tool: existingName,
     };
   }
-  let S = moduleStore.own(plugin);
-  let { key, config } = h(plugin, [...new Map(S).set(e.name, e).values()]);
-  checkServerNameTaken(r, plugin, key);
-  S.set(e.name, e);
+  let toolsByName = moduleStore.own(plugin);
+  let { key, config } = registrar(plugin, [
+    ...new Map(toolsByName).set(registration.name, registration).values(),
+  ]);
+  checkServerNameTaken(session, plugin, key);
+  toolsByName.set(registration.name, registration);
   moduleStore.keyed(plugin, key);
-  let rawMcpToolName = buildRawMcpToolName(key, e.name);
+  let rawMcpToolName = buildRawMcpToolName(key, registration.name);
   logForDebugging(
-    `$.tool.register (${plugin}): ${rawMcpToolName} (${S.size} tool(s) on server ${jsonStringify(key)}); connecting`,
+    `$.tool.register (${plugin}): ${rawMcpToolName} (${toolsByName.size} tool(s) on server ${jsonStringify(key)}); connecting`,
   );
   let now = Date.now();
   let abortController = new AbortController();
   try {
-    await Promise.race([r.addMcpServer(key, config), sleep(TOOL_DESCRIBE_CACHE_MS, abortController.signal)]);
+    await Promise.race([
+      session.addMcpServer(key, config),
+      sleep(TOOL_DESCRIBE_CACHE_MS, abortController.signal),
+    ]);
   } finally {
     abortController.abort();
   }
   if (
-    isToolDroppedByDenyRules(getToolPermissionContext(s), {
+    isToolDroppedByDenyRules(getToolPermissionContext(toolContext), {
       name: rawMcpToolName,
       mcpInfo: {
         serverName: key,
-        toolName: e.name,
+        toolName: registration.name,
       },
     })
   ) {
@@ -476,7 +492,7 @@ async function toolRegisterForPlugin(e, plugin) {
     };
   }
   while (Date.now() - now < TOOL_DESCRIBE_CACHE_MS) {
-    if (r.tools().some((we) => we.name === rawMcpToolName)) {
+    if (session.tools().some((tool) => tool.name === rawMcpToolName)) {
       logFeatureOk("plugin_function_hooks_register_tool");
       logForDebugging(`$.tool.register (${plugin}): ${rawMcpToolName} visible after ${Date.now() - now}ms`);
       return {
@@ -498,8 +514,11 @@ async function toolRegisterForPlugin(e, plugin) {
 }
 //@ chunk-e6aww6q8.js:3976621-3976724 placement = getMcpPrefix (1)
 var listServersInToolNames = (serverName) =>
-  uniq(serverName.filter((n) => n.startsWith("mcp__")).map((n) => n.split("__")[1] ?? "")).join(", ") ||
-  "none";
+  uniq(
+    serverName
+      .filter((toolName) => toolName.startsWith("mcp__"))
+      .map((toolName) => toolName.split("__")[1] ?? ""),
+  ).join(", ") || "none";
 //@ chunk-e6aww6q8.js:3976724-3976788 placement = getMcpPrefix (1)
 var mcpToolNameVariants = (server, tool) =>
   new Set([

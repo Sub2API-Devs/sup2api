@@ -75,107 +75,115 @@ function validateApplyFlagSettings(settings) {
       ok: false,
       error: `apply_flag_settings requires \`settings\` to be an object, got ${settings === null ? "null" : Array.isArray(settings) ? "an array" : typeof settings}`,
     };
-  let n = normalizeFallbackModelsSetting(settings);
-  if (exceedsNestingDepth(n, SETTINGS_NESTING_LIMITS))
+  let normalized = normalizeFallbackModelsSetting(settings);
+  if (exceedsNestingDepth(normalized, SETTINGS_NESTING_LIMITS))
     return {
       ok: false,
       error: `apply_flag_settings: settings nest deeper than ${SETTINGS_NESTING_LIMITS} levels`,
     };
   return {
     ok: true,
-    settings: n,
+    settings: normalized,
   };
 }
 //@ chunk-tyg7f3ek.js:568159-568493 placement
 /**
  * 合并并应用 SDK 传入的 flag 设置（规范化 null 别名、写入内联 flagSettings）。
  */
-function applyFlagSettings(e, n) {
-  let r = {
-    ...normalizeFallbackModelsSetting(e),
+function applyFlagSettings(settings, isUnchanged) {
+  let next = {
+    ...normalizeFallbackModelsSetting(settings),
   };
-  for (let S of applySettingAliases(r, "apply_flag_settings", {
+  for (let warning of applySettingAliases(next, "apply_flag_settings", {
     loneNullAlias: "rename",
   }))
-    logForDebugging(`apply_flag_settings: ${S.message}`, {
+    logForDebugging(`apply_flag_settings: ${warning.message}`, {
       level: "warn",
     });
   let flagSettingsInline = getFlagSettingsInline();
-  let h = {
+  let merged = {
     ...(flagSettingsInline ?? {}),
-    ...r,
+    ...next,
   };
-  for (let key of Object.keys(h)) if (h[key] === null) delete h[key];
+  for (let key of Object.keys(merged)) if (merged[key] === null) delete merged[key];
   if (!(
-    isDeepStrictEqual(h, flagSettingsInline) &&
+    isDeepStrictEqual(merged, flagSettingsInline) &&
     isRemoteCowork() &&
     !shouldAllowManagedPermissionRulesOnly() &&
-    !n()
+    !isUnchanged()
   )) {
-    setFlagSettingsInline(h);
+    setFlagSettingsInline(merged);
     settingsChangeDetector.notifyChange("flagSettings");
   }
-  if ("viewMode" in e) invalidateFocusModeSection();
+  if ("viewMode" in settings) invalidateFocusModeSection();
 }
 //@ chunk-tyg7f3ek.js:568493-569196 placement
 /**
  * 处理 flag 设置中的 effortLevel / ultracode / 模型等需要即时生效的键。
  */
-function applyFlagSettingsSideEffects(e, n) {
-  let r = "ultracode" in e ? e.ultracode === true : undefined;
-  if ("effortLevel" in e && !isRequestedEffortTheHeldLevel(n.model, e.effortLevel, n.getEngineState())) {
-    let s =
-      e.effortLevel == null
+function applyFlagSettingsSideEffects(settings, host) {
+  let ultracode = "ultracode" in settings ? settings.ultracode === true : undefined;
+  if (
+    "effortLevel" in settings &&
+    !isRequestedEffortTheHeldLevel(host.model, settings.effortLevel, host.getEngineState())
+  ) {
+    let effortValue =
+      settings.effortLevel == null
         ? undefined
-        : (parseEffortValue(e.effortLevel) ?? resolveEffortKeyword(e.effortLevel));
-    if (e.effortLevel == null || s !== undefined) {
-      let effortSettingOrDefault = toEffortSettingOrDefault(s);
-      let S = parseEffortKeyword(e.effortLevel) === "ultracode";
-      n.setEngineState((R) => {
-        let w = r ?? (S || (isEffortChangedFromSession(n.model, R, s) ? false : undefined));
-        let P = R;
-        if (!isSameEffortSetting(P.sessionEffort, effortSettingOrDefault))
-          P = {
-            ...P,
+        : (parseEffortValue(settings.effortLevel) ?? resolveEffortKeyword(settings.effortLevel));
+    if (settings.effortLevel == null || effortValue !== undefined) {
+      let effortSettingOrDefault = toEffortSettingOrDefault(effortValue);
+      let isUltracode = parseEffortKeyword(settings.effortLevel) === "ultracode";
+      host.setEngineState((state) => {
+        let nextUltracode =
+          ultracode ??
+          (isUltracode || (isEffortChangedFromSession(host.model, state, effortValue) ? false : undefined));
+        let next = state;
+        if (!isSameEffortSetting(next.sessionEffort, effortSettingOrDefault))
+          next = {
+            ...next,
             sessionEffort: effortSettingOrDefault,
           };
-        if (w !== undefined && (P.ultracode ?? false) !== w)
-          P = {
-            ...P,
-            ultracode: w,
+        if (nextUltracode !== undefined && (next.ultracode ?? false) !== nextUltracode)
+          next = {
+            ...next,
+            ultracode: nextUltracode,
           };
-        return P;
+        return next;
       });
     }
-    let h = e.effortLevel == null ? null : String(s ?? e.effortLevel);
-    if (h === null || h.length <= SETTINGS_STRING_MAX_CHARS) n.reportEffortMetadata(h);
+    let effortText = settings.effortLevel == null ? null : String(effortValue ?? settings.effortLevel);
+    if (effortText === null || effortText.length <= SETTINGS_STRING_MAX_CHARS)
+      host.reportEffortMetadata(effortText);
   }
-  if (r !== undefined)
-    n.setEngineState((s) =>
-      (s.ultracode ?? false) === r
-        ? s
+  if (ultracode !== undefined)
+    host.setEngineState((state) =>
+      (state.ultracode ?? false) === ultracode
+        ? state
         : {
-            ...s,
-            ultracode: r,
+            ...state,
+            ultracode,
           },
     );
-  return "effortLevel" in e || r !== undefined;
+  return "effortLevel" in settings || ultracode !== undefined;
 }
 //@ chunk-tyg7f3ek.js:569196-569377 placement
-function exceedsNestingDepth(e, n) {
-  let r = [e];
-  for (let j = 1; r.length > 0; j++) {
-    if (j > n) return true;
-    let h = [];
-    for (let y of r) for (let S of Object.values(y)) if (typeof S === "object" && S !== null) h.push(S);
-    r = h;
+function exceedsNestingDepth(value, maxDepth) {
+  let level = [value];
+  for (let j = 1; level.length > 0; j++) {
+    if (j > maxDepth) return true;
+    let nextLevel = [];
+    for (let node of level)
+      for (let child of Object.values(node))
+        if (typeof child === "object" && child !== null) nextLevel.push(child);
+    level = nextLevel;
   }
   return false;
 }
 //@ chunk-tyg7f3ek.js:569377-569877 placement
-function normalizeFallbackModelsSetting(e) {
-  let n = e[ACCESSFALLBACKMODELS];
-  if (n == null || isAccessFallbackModelsData(n)) return e;
+function normalizeFallbackModelsSetting(settings) {
+  let value = settings[ACCESSFALLBACKMODELS];
+  if (value == null || isAccessFallbackModelsData(value)) return settings;
   logForDebugging(
     `apply_flag_settings: ${ACCESSFALLBACKMODELS} must be null or an object with exactly "for" (the session's model, in the spelling the session holds; 1 to 256 characters) and "models" (a list of one to three model ids, each 1 to 256 characters: letters, digits, . _ : / @ [ ] -, starting with a letter or digit). The value sent was not, so it is read as null, which removes any earlier value if the request is applied.`,
     {
@@ -183,7 +191,7 @@ function normalizeFallbackModelsSetting(e) {
     },
   );
   return {
-    ...e,
+    ...settings,
     [ACCESSFALLBACKMODELS]: null,
   };
 }
@@ -195,18 +203,18 @@ function readRecordedThinkingSettings(restoredWorkerState) {
     };
   let maxThinkingTokens = restoredWorkerState.internal?.max_thinking_tokens ?? null;
   let thinkingDisplay = restoredWorkerState.internal?.thinking_display ?? null;
-  let s = isValidThinkingSettingsRequest({
+  let tokensValid = isValidThinkingSettingsRequest({
     max_thinking_tokens: maxThinkingTokens,
   });
-  let h = thinkingDisplay === null || isThinkingDisplayMode(thinkingDisplay);
+  let displayValid = thinkingDisplay === null || isThinkingDisplayMode(thinkingDisplay);
   return {
-    ...(s && {
+    ...(tokensValid && {
       max_thinking_tokens: maxThinkingTokens,
     }),
-    ...(h && {
+    ...(displayValid && {
       thinking_display: thinkingDisplay,
     }),
-    malformed: !s || !h,
+    malformed: !tokensValid || !displayValid,
   };
 }
 //@ chunk-tyg7f3ek.js:570152-570598 placement
@@ -224,45 +232,47 @@ var THINKING_RECORD_OUTCOME_TEXT = {
  */
 function restoreThinkingSettingsFromRecord({ launch, startupDisplay, recorded, report, log }) {
   let thinkingDisplayExplicit = getThinkingDisplayExplicit();
-  let S = launch();
-  let { malformed, ...w } = recorded;
-  let P = w;
-  let L = malformed ? "malformed" : undefined;
-  let maxThinkingTokens = w.max_thinking_tokens ?? undefined;
-  let thinkingDisplay = w.thinking_display ?? undefined;
+  let budget = launch();
+  let { malformed, ...fields } = recorded;
+  let recordedFields = fields;
+  let outcome = malformed ? "malformed" : undefined;
+  let maxThinkingTokens = fields.max_thinking_tokens ?? undefined;
+  let thinkingDisplay = fields.thinking_display ?? undefined;
   try {
-    if (startupDisplay !== undefined) S.apply(undefined, startupDisplay);
+    if (startupDisplay !== undefined) budget.apply(undefined, startupDisplay);
     if (maxThinkingTokens !== undefined || thinkingDisplay !== undefined) {
-      let G = applyThinkingBudget(S, maxThinkingTokens, thinkingDisplay);
-      L ??= G ? "display_refused" : "applied";
+      let displayRefused = applyThinkingBudget(budget, maxThinkingTokens, thinkingDisplay);
+      outcome ??= displayRefused ? "display_refused" : "applied";
     }
   } catch (error) {
     logError(toError(error));
-    S = launch();
+    budget = launch();
     setThinkingDisplayExplicit(thinkingDisplayExplicit);
-    P = {};
-    L = "failed";
+    recordedFields = {};
+    outcome = "failed";
   }
-  if (L !== undefined)
+  if (outcome !== undefined)
     log({
-      outcome: L,
-      message: THINKING_RECORD_OUTCOME_TEXT[L],
-      thinkingOff: S.current()?.type === "disabled",
+      outcome,
+      message: THINKING_RECORD_OUTCOME_TEXT[outcome],
+      thinkingOff: budget.current()?.type === "disabled",
     });
   return {
-    current: () => S.current(),
-    refreshDefault: () => S.refreshDefault(),
-    apply(G, Z) {
-      S.apply(G, Z);
-      let re = {};
-      if (G !== undefined && G !== P.max_thinking_tokens) re.max_thinking_tokens = G;
-      if (Z !== undefined && Z !== P.thinking_display) re.thinking_display = Z;
-      if (Object.keys(re).length > 0) {
-        P = {
-          ...P,
-          ...re,
+    current: () => budget.current(),
+    refreshDefault: () => budget.refreshDefault(),
+    apply(maxThinkingTokens, thinkingDisplay) {
+      budget.apply(maxThinkingTokens, thinkingDisplay);
+      let changed = {};
+      if (maxThinkingTokens !== undefined && maxThinkingTokens !== recordedFields.max_thinking_tokens)
+        changed.max_thinking_tokens = maxThinkingTokens;
+      if (thinkingDisplay !== undefined && thinkingDisplay !== recordedFields.thinking_display)
+        changed.thinking_display = thinkingDisplay;
+      if (Object.keys(changed).length > 0) {
+        recordedFields = {
+          ...recordedFields,
+          ...changed,
         };
-        report(re);
+        report(changed);
       }
     },
   };
@@ -271,9 +281,9 @@ function restoreThinkingSettingsFromRecord({ launch, startupDisplay, recorded, r
 /**
  * 处理 SDK 的 workspaceTrust：accepted 且目录为绝对路径时记录信任。
  */
-async function applyWorkspaceTrust(e, n) {
-  if (typeof e !== "object" || e === null) return;
-  let { accepted, directory } = e;
+async function applyWorkspaceTrust(request, context) {
+  if (typeof request !== "object" || request === null) return;
+  let { accepted, directory } = request;
   if (accepted !== true) return;
   if (typeof directory !== "string" || !isAbsolute(directory)) {
     logForDebugging("workspaceTrust ignored \u2014 accepted requires an absolute directory", {
@@ -281,42 +291,46 @@ async function applyWorkspaceTrust(e, n) {
     });
     return;
   }
-  let h = (q, x) => {
+  let reportOutcome = (outcome, ok) => {
     logEvent("tengu_sdk_workspace_trust", {
-      outcome: fromEnum(q),
+      outcome: fromEnum(outcome),
     });
-    if (!x)
-      logForDebugging(`workspaceTrust recorded nothing (${q})`, {
+    if (!ok)
+      logForDebugging(`workspaceTrust recorded nothing (${outcome})`, {
         level: "warn",
       });
-    return x;
+    return ok;
   };
-  let persistedTrustKeyForPath = getPersistedTrustKeyForPath(n.cwd);
-  let S = directory;
-  if (directory !== n.cwd) {
-    let q;
+  let persistedTrustKeyForPath = getPersistedTrustKeyForPath(context.cwd);
+  let resolvedDirectory = directory;
+  if (directory !== context.cwd) {
+    let expanded;
     try {
-      q = expandPath(directory);
-      if (!vetPathSpellingsOrChain(directory, q, n.trustedNetworkDirectories).ok) q = undefined;
+      expanded = expandPath(directory);
+      if (!vetPathSpellingsOrChain(directory, expanded, context.trustedNetworkDirectories).ok)
+        expanded = undefined;
     } catch {
-      q = undefined;
+      expanded = undefined;
     }
-    if (q === undefined) return h("screened", false);
+    if (expanded === undefined) return reportOutcome("screened", false);
     try {
-      if (!(await stat(q)).isDirectory()) return h("not_a_directory", false);
-      S = await realpath(q);
+      if (!(await stat(expanded)).isDirectory()) return reportOutcome("not_a_directory", false);
+      resolvedDirectory = await realpath(expanded);
     } catch {
-      return h("not_a_directory", false);
+      return reportOutcome("not_a_directory", false);
     }
-    if (pathVettingReason(S, n.trustedNetworkDirectories) !== undefined) return h("screened", false);
+    if (pathVettingReason(resolvedDirectory, context.trustedNetworkDirectories) !== undefined)
+      return reportOutcome("screened", false);
   }
   let { hasUnsafePathGlyphs, recordDirectoryTrust, reapplyProjectSettingsAfterTrustChange } =
-    await import("./chunk-frfx56e3.js");
-  if ([S, n.cwd, persistedTrustKeyForPath].some(hasUnsafePathGlyphs)) return h("unsafe_path", false);
-  if (getPersistedTrustKeyForPath(S) !== persistedTrustKeyForPath) return h("mismatch", false);
-  if (isTrustKeyPersistedTrusted(persistedTrustKeyForPath)) return h("already_trusted", true);
-  let L = await recordDirectoryTrust(n.cwd, n.storageV5);
-  if (!isTrustKeyPersistedTrusted(persistedTrustKeyForPath)) return h("session_only", false);
+    await import("../../utils/cdRuleRefusalMessage.lazy.js");
+  if ([resolvedDirectory, context.cwd, persistedTrustKeyForPath].some(hasUnsafePathGlyphs))
+    return reportOutcome("unsafe_path", false);
+  if (getPersistedTrustKeyForPath(resolvedDirectory) !== persistedTrustKeyForPath)
+    return reportOutcome("mismatch", false);
+  if (isTrustKeyPersistedTrusted(persistedTrustKeyForPath)) return reportOutcome("already_trusted", true);
+  let recorded = await recordDirectoryTrust(context.cwd, context.storageV5);
+  if (!isTrustKeyPersistedTrusted(persistedTrustKeyForPath)) return reportOutcome("session_only", false);
   try {
     reapplyProjectSettingsAfterTrustChange();
   } catch (error) {
@@ -327,27 +341,27 @@ async function applyWorkspaceTrust(e, n) {
       },
     );
   }
-  return h(L ? "recorded" : "not_durable", L);
+  return reportOutcome(recorded ? "recorded" : "not_durable", recorded);
 }
 //@ chunk-tyg7f3ek.js:572616-572750 placement
-function resolveAllowedModelPick(e) {
-  if (typeof e !== "string") return;
-  let n = e.trim().toLowerCase() === "default" ? getDefaultMainLoopModel() : e;
-  return isExemptDefaultResolvingPick(n) ||
-    (isModelAllowedUnderActiveEnforcement(n) !== false && isModelAllowed(n))
-    ? n
+function resolveAllowedModelPick(pick) {
+  if (typeof pick !== "string") return;
+  let model = pick.trim().toLowerCase() === "default" ? getDefaultMainLoopModel() : pick;
+  return isExemptDefaultResolvingPick(model) ||
+    (isModelAllowedUnderActiveEnforcement(model) !== false && isModelAllowed(model))
+    ? model
     : undefined;
 }
 //@ chunk-tyg7f3ek.js:572750-572859 placement
-function applyModelSetting(model, n) {
-  let allowedModelPick = resolveAllowedModelPick(model);
+function applyModelSetting(pick, setEngineState) {
+  let allowedModelPick = resolveAllowedModelPick(pick);
   if (allowedModelPick === undefined) return;
   setMainLoopModelOverride(allowedModelPick);
-  n((s) =>
-    s.mainLoopModel === allowedModelPick
-      ? s
+  setEngineState((state) =>
+    state.mainLoopModel === allowedModelPick
+      ? state
       : {
-          ...s,
+          ...state,
           mainLoopModel: allowedModelPick,
         },
   );
@@ -382,76 +396,76 @@ var REWIND_REFUSAL_TEXT = {
 };
 var REWIND_REQUEST_MAX_AGE_MS = REWIND_REQUEST_MAX_AGE_MS_2;
 //@ chunk-tyg7f3ek.js:573523-573895 placement
-function checkRewindExpiry({ storedAt, serviceNow, newestFrameAt }, s) {
-  let h = typeof s === "string" ? parseIsoTimestamp(s) : Number.NaN;
-  if (Number.isNaN(h))
+function checkRewindExpiry({ storedAt, serviceNow, newestFrameAt }, expiresAt) {
+  let expiresAtMs = typeof expiresAt === "string" ? parseIsoTimestamp(expiresAt) : Number.NaN;
+  if (Number.isNaN(expiresAtMs))
     return {
       outcome: "unparseable",
     };
-  let y = serviceNow ?? newestFrameAt;
-  if (y === undefined)
+  let now = serviceNow ?? newestFrameAt;
+  if (now === undefined)
     return {
       outcome: "no_service_time",
     };
   return {
-    outcome: y > h ? "refused" : "in_time",
+    outcome: now > expiresAtMs ? "refused" : "in_time",
     frameTimeOnly: serviceNow === undefined,
-    secondsLeft: Math.floor((h - y) / 1000),
-    secondsLeftWhenStored: storedAt === undefined ? undefined : Math.floor((h - storedAt) / 1000),
+    secondsLeft: Math.floor((expiresAtMs - now) / 1000),
+    secondsLeftWhenStored: storedAt === undefined ? undefined : Math.floor((expiresAtMs - storedAt) / 1000),
   };
 }
 //@ chunk-tyg7f3ek.js:573895-574504 placement
 /**
  * 判断 rewind 请求的 expires_at 是否已过期（以服务端时间或最新帧时间为准）。
  */
-function rewindExpiryVerdict(e, expiresAt, r) {
-  let s = expiresAt === undefined ? undefined : checkRewindExpiry(e, expiresAt);
-  if (s !== undefined) {
-    switch (s.outcome) {
+function rewindExpiryVerdict(request, expiresAt, onChecked) {
+  let check = expiresAt === undefined ? undefined : checkRewindExpiry(request, expiresAt);
+  if (check !== undefined) {
+    switch (check.outcome) {
       case "refused":
       case "in_time":
         logFeatureOk("rewind_expires_at", {
-          refused: s.outcome === "refused",
-          frame_time_only: s.frameTimeOnly,
-          seconds_left: s.secondsLeft,
-          ...(s.secondsLeftWhenStored !== undefined && {
-            seconds_left_when_stored: s.secondsLeftWhenStored,
+          refused: check.outcome === "refused",
+          frame_time_only: check.frameTimeOnly,
+          seconds_left: check.secondsLeft,
+          ...(check.secondsLeftWhenStored !== undefined && {
+            seconds_left_when_stored: check.secondsLeftWhenStored,
           }),
         });
         break;
       case "no_service_time":
       case "unparseable":
-        logFeatureSad("rewind_expires_at", s.outcome);
+        logFeatureSad("rewind_expires_at", check.outcome);
         break;
     }
-    r?.(s);
+    onChecked?.(check);
   }
-  let h = rewindRequestAge(e);
-  let y = h !== undefined && h > REWIND_REQUEST_MAX_AGE_MS;
-  if (y)
+  let ageMs = rewindRequestAge(request);
+  let expired = ageMs !== undefined && ageMs > REWIND_REQUEST_MAX_AGE_MS;
+  if (expired)
     logEvent("tengu_rewind_conversation_expired", {
-      age_minutes: Math.round(h / 60000),
-      by_service_clock: e.serviceNow !== undefined,
+      age_minutes: Math.round(ageMs / 60000),
+      by_service_clock: request.serviceNow !== undefined,
     });
-  return y || s?.outcome === "refused" ? rewindRefusal("expired") : undefined;
+  return expired || check?.outcome === "refused" ? rewindRefusal("expired") : undefined;
 }
 //@ chunk-tyg7f3ek.js:574504-574641 placement
-function rewindRefusal(e, n) {
+function rewindRefusal(reason, isolationLatch) {
   return {
     rewound: false,
     prefillText: null,
     precedingAssistantUuid: null,
-    error: REWIND_REFUSAL_TEXT[e],
-    reason: e,
-    ...(n !== undefined && {
-      isolation_latch: n,
+    error: REWIND_REFUSAL_TEXT[reason],
+    reason,
+    ...(isolationLatch !== undefined && {
+      isolation_latch: isolationLatch,
     }),
   };
 }
 //@ chunk-tyg7f3ek.js:574641-574720 placement
-function usageLimitedRewindRefusal(targetFound, n) {
+function usageLimitedRewindRefusal(targetFound, latch) {
   return {
-    ...rewindRefusal("usage_limited", n),
+    ...rewindRefusal("usage_limited", latch),
     ...(!targetFound && {
       target_not_found: true,
     }),
@@ -475,55 +489,61 @@ var REWIND_REFUSAL_RETRYABLE = {
 };
 //@ chunk-tyg7f3ek.js:574990-575226 placement
 function findPersistAnchor(messages, index) {
-  let r = null;
+  let persistAnchor = null;
   let precedingAssistantUuid = null;
   for (let j = index - 1; j >= 0; j--) {
-    let y = messages[j];
-    if (!y) continue;
-    if (y.type === "assistant") {
-      precedingAssistantUuid = y.uuid;
-      r ??= y.uuid;
+    let message = messages[j];
+    if (!message) continue;
+    if (message.type === "assistant") {
+      precedingAssistantUuid = message.uuid;
+      persistAnchor ??= message.uuid;
       break;
     }
-    if (y.type === "user" && r === null && !isReorderedRow(y.uuid)) r = y.uuid;
+    if (message.type === "user" && persistAnchor === null && !isReorderedRow(message.uuid))
+      persistAnchor = message.uuid;
   }
   return {
-    persistAnchor: r,
+    persistAnchor,
     precedingAssistantUuid,
   };
 }
 //@ chunk-tyg7f3ek.js:575226-575757 placement = buildTranscriptEntries (0.77)
 function isAwaitingToolResultAnchor(messages, index) {
   for (let j = index - 1; j >= 0; j--) {
-    let s = messages[j];
-    if (s.type === "user" || s.type === "assistant") {
-      let h = new Set();
+    let message = messages[j];
+    if (message.type === "user" || message.type === "assistant") {
+      let exactReplToolUseIds = new Set();
       for (let msg of messages)
         if (msg.type === "assistant" && Array.isArray(msg.message.content)) {
-          for (let S of msg.message.content)
-            if (S?.type === "tool_use" && isExactReplToolName(S.name)) h.add(S.id);
+          for (let block of msg.message.content)
+            if (block?.type === "tool_use" && isExactReplToolName(block.name))
+              exactReplToolUseIds.add(block.id);
         }
       return (
         j > messages.findLastIndex(isCompactBoundaryMessage) &&
-        s.uuid === findPersistAnchor(messages, index).persistAnchor &&
-        s.type === "user" &&
-        Array.isArray(s.message.content) &&
-        s.message.content.some((block) => block?.type === "tool_result" && !h.has(block.tool_use_id))
+        message.uuid === findPersistAnchor(messages, index).persistAnchor &&
+        message.type === "user" &&
+        Array.isArray(message.message.content) &&
+        message.message.content.some(
+          (block) => block?.type === "tool_result" && !exactReplToolUseIds.has(block.tool_use_id),
+        )
       );
     }
-    if (s.type === "attachment" && s.attachment.type === "queued_command") return false;
+    if (message.type === "attachment" && message.attachment.type === "queued_command") return false;
   }
   return false;
 }
 //@ chunk-tyg7f3ek.js:575757-575930 placement
-function isRewindTargetQueued(e, targetMessageUuid, lastSeenUserMessageUuid) {
+function isRewindTargetQueued(messages, targetUuid, lastSeenUserMessageUuid) {
   if (typeof lastSeenUserMessageUuid !== "string") return false;
   let sliced = lastSeenUserMessageUuid.slice(0, UUID_PREFIX_LENGTH);
-  let last = e.at(-1);
+  let message = messages.at(-1);
   return (
-    (last === undefined || !isModelCommandMessage(last)) &&
-    findRewindTargetIndex(e, targetMessageUuid) >= 0 &&
-    e.some((y) => getMessageIdentityUuids(y).some((S) => S.slice(0, UUID_PREFIX_LENGTH) === sliced))
+    (message === undefined || !isModelCommandMessage(message)) &&
+    findRewindTargetIndex(messages, targetUuid) >= 0 &&
+    messages.some((message) =>
+      getMessageIdentityUuids(message).some((uuid) => uuid.slice(0, UUID_PREFIX_LENGTH) === sliced),
+    )
   );
 }
 export {

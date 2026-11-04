@@ -27,7 +27,12 @@ import { getCwd } from "./cwd.js";
 import { firstLineOf } from "./stringUtils.js";
 import { logForDebugging } from "./debug.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, E, string, M } from "../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  numberSchema,
+  stringSchema,
+  booleanSchema,
+} from "../../vendor/zod/v4/classic/schemas.js";
 import { jsonParse, jsonStringify } from "./slowOperations.js";
 import { MAX_REPO_URL_CHARS, regExp_2 as regExp_2_2, regExp as regExp_18 } from "./detectRepository.js";
 import { isEssentialTrafficOnly } from "./privacyLevel.js";
@@ -52,6 +57,7 @@ import { writeFileAtomic } from "./atomicPublishWrite.js";
 import { isWorkspacePersistedTrusted } from "./config.js";
 import { GIT_SAFE_GLOBAL_ARGS } from "./git/gitSafeEnv.js";
 import { externalHttp } from "../services/http/externalHttp.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:550055-550122 placement
 var GLAB_TIMEOUT_MS = 2500;
@@ -72,7 +78,10 @@ class GlabProbeState {
   }
 }
 //@ chunk-s61vbvea.js:550362-550387 placement
-var glabProbeRegistry = new HostScoped(() => new GlabProbeState());
+var glabProbeRegistry; // deferred: uses GlabProbeState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:550362", () => {
+  glabProbeRegistry = new HostScoped(() => new GlabProbeState());
+});
 //@ chunk-s61vbvea.js:550387-550572 placement
 function repoOwnerFromRemote() {
   try {
@@ -89,15 +98,18 @@ function repoOwnerFromRemote() {
   }
 }
 //@ chunk-s61vbvea.js:550572-550721 placement
-var GitlabMrSchema = DoctorLazy(() =>
-  u({
-    iid: E().int().min(1).max(Number.MAX_SAFE_INTEGER),
-    state: string(),
-    draft: M().optional(),
-    detailed_merge_status: string().optional(),
-    web_url: string(),
-  }),
-);
+var GitlabMrSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:550572", () => {
+  GitlabMrSchema = DoctorLazy(() =>
+    objectSchema({
+      iid: numberSchema().int().min(1).max(Number.MAX_SAFE_INTEGER),
+      state: stringSchema(),
+      draft: booleanSchema().optional(),
+      detailed_merge_status: stringSchema().optional(),
+      web_url: stringSchema(),
+    }),
+  );
+});
 //@ chunk-s61vbvea.js:550721-550767 placement
 function tryParseJson(stdout) {
   try {
@@ -107,26 +119,30 @@ function tryParseJson(stdout) {
   }
 }
 //@ chunk-s61vbvea.js:550767-550875 placement
-function hasErrorObject(e) {
+function hasErrorObject(value) {
   return (
-    typeof e === "object" && e !== null && "error" in e && typeof e.error === "object" && e.error !== null
+    typeof value === "object" &&
+    value !== null &&
+    "error" in value &&
+    typeof value.error === "object" &&
+    value.error !== null
   );
 }
 //@ chunk-s61vbvea.js:550875-550980 placement
-function isMrUrlForIid(webUrl, n) {
+function isMrUrlForIid(webUrl, iid) {
   if (webUrl.length > MAX_REPO_URL_CHARS || !regExp_2_2.test(webUrl)) return false;
-  return Number(webUrl.slice(webUrl.lastIndexOf("/") + 1)) === n;
+  return Number(webUrl.slice(webUrl.lastIndexOf("/") + 1)) === iid;
 }
 //@ chunk-s61vbvea.js:550980-551090 placement
-function mrBadgeState(state, n, detailedMergeStatus) {
+function mrBadgeState(state, isDraft, detailedMergeStatus) {
   if (state !== "opened") return null;
-  if (n) return "draft";
+  if (isDraft) return "draft";
   return detailedMergeStatus === "mergeable" ? "approved" : "pending";
 }
 //@ chunk-s61vbvea.js:551090-551202 placement
-function reportGlabFailure(e) {
-  logFeatureBad("gitlab_mr_badge", e);
-  logForDebugging(`glab MR badge poll failed: ${e}`, {
+function reportGlabFailure(code) {
+  logFeatureBad("gitlab_mr_badge", code);
+  logForDebugging(`glab MR badge poll failed: ${code}`, {
     level: "warn",
   });
   return "fetch-failed";
@@ -135,15 +151,15 @@ function reportGlabFailure(e) {
 /**
  * 用 gh/glab 查询当前分支 PR 状态
  */
-async function fetchPrStatus(e) {
+async function fetchPrStatus(host) {
   if (isEssentialTrafficOnly()) return null;
-  let n = glabProbeRegistry.of(e);
-  if (!n.isGlabOnPath()) return null;
-  let r = repoOwnerFromRemote();
-  if (r === null) return null;
-  if (getGitHostKind(r) === "github") return null;
-  if (n.unauthenticatedHosts.has(r)) return null;
-  let s = await execFileNoThrow("glab", ["mr", "view", "-F", "json"], {
+  let probe = glabProbeRegistry.of(host);
+  if (!probe.isGlabOnPath()) return null;
+  let repoHost = repoOwnerFromRemote();
+  if (repoHost === null) return null;
+  if (getGitHostKind(repoHost) === "github") return null;
+  if (probe.unauthenticatedHosts.has(repoHost)) return null;
+  let result = await execFileNoThrow("glab", ["mr", "view", "-F", "json"], {
     timeout: GLAB_TIMEOUT_MS,
     preserveOutputOnError: true,
     useCwd: true,
@@ -154,33 +170,33 @@ async function fetchPrStatus(e) {
       OAUTH_TOKEN: undefined,
     },
   });
-  if (s.code !== 0) {
-    if (GLAB_UNAUTHENTICATED_RE.test(s.stdout) || GLAB_UNAUTHENTICATED_RE.test(s.stderr)) {
-      n.unauthenticatedHosts.add(r);
+  if (result.code !== 0) {
+    if (GLAB_UNAUTHENTICATED_RE.test(result.stdout) || GLAB_UNAUTHENTICATED_RE.test(result.stderr)) {
+      probe.unauthenticatedHosts.add(repoHost);
       return null;
     }
-    let R = tryParseJson(s.stdout);
-    if (R === undefined) return reportGlabFailure("glab_unresponsive");
-    if (hasErrorObject(R)) return null;
+    let parsed = tryParseJson(result.stdout);
+    if (parsed === undefined) return reportGlabFailure("glab_unresponsive");
+    if (hasErrorObject(parsed)) return null;
     return reportGlabFailure("glab_unresponsive");
   }
-  let h = tryParseJson(s.stdout);
-  if (h === undefined) return reportGlabFailure("parse_failed");
-  if (hasErrorObject(h)) return null;
-  let y = GitlabMrSchema().safeParse(h);
-  if (!y.success) return reportGlabFailure("parse_failed");
-  let S = y.data;
-  if (!isMrUrlForIid(S.web_url, S.iid)) {
+  let parsed = tryParseJson(result.stdout);
+  if (parsed === undefined) return reportGlabFailure("parse_failed");
+  if (hasErrorObject(parsed)) return null;
+  let validated = GitlabMrSchema().safeParse(parsed);
+  if (!validated.success) return reportGlabFailure("parse_failed");
+  let mr = validated.data;
+  if (!isMrUrlForIid(mr.web_url, mr.iid)) {
     logFeatureBad("gitlab_mr_badge", "web_url_rejected");
     return null;
   }
-  let w = mrBadgeState(S.state, S.draft === true, S.detailed_merge_status);
-  if (w === null) return null;
-  n.emitOkOnce();
+  let reviewState = mrBadgeState(mr.state, mr.draft === true, mr.detailed_merge_status);
+  if (reviewState === null) return null;
+  probe.emitOkOnce();
   return {
-    number: S.iid,
-    url: S.web_url,
-    reviewState: w,
+    number: mr.iid,
+    url: mr.web_url,
+    reviewState,
     kind: "mr",
   };
 }
@@ -190,11 +206,11 @@ var PR_URL_RE = /^https:\/\/([\w.-]+)\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)\b/;
 /**
  * 解析 PR URL（主机、所有者、仓库、编号）。
  */
-function parsePrUrl(e) {
-  let match = e.match(PR_URL_RE);
+function parsePrUrl(text) {
+  let match = text.match(PR_URL_RE);
   if (!match) return null;
   return {
-    url: e,
+    url: text,
     host: match[1],
     owner: match[2],
     repo: match[3],
@@ -224,10 +240,10 @@ class PrStatusFetcher {
   prStatusByUrl = memoizeWithTTL(fetchPrStatus_2, 30000);
   ghBackoffUntil = 0;
   lastPersistedCacheBody = "";
-  directStateForBranch(e) {
-    if (this.directState?.branch !== e)
+  directStateForBranch(branch) {
+    if (this.directState?.branch !== branch)
       this.directState = {
-        branch: e,
+        branch,
         etag: null,
         pr: null,
         reviewDecision: "",
@@ -236,33 +252,33 @@ class PrStatusFetcher {
       };
     return this.directState;
   }
-  logAuthState(e) {
-    if (e === this.lastLoggedGhAuthState) return;
-    this.lastLoggedGhAuthState = e;
+  logAuthState(authState) {
+    if (authState === this.lastLoggedGhAuthState) return;
+    this.lastLoggedGhAuthState = authState;
     logEvent("tengu_gh_pr_status_auth_state", {
-      auth_state: fromEnum(e),
+      auth_state: fromEnum(authState),
     });
   }
-  rememberBaseRepo(e) {
-    this.baseRepoCache = e;
-    return e;
+  rememberBaseRepo(baseRepo) {
+    this.baseRepoCache = baseRepo;
+    return baseRepo;
   }
   backOffUntil(ghBackoffUntil) {
     this.ghBackoffUntil = ghBackoffUntil;
   }
-  backOffFromResponse(e) {
-    let n = Number(e.headers.get("retry-after"));
-    let r = Number(e.headers.get("x-ratelimit-reset"));
+  backOffFromResponse(response) {
+    let retryAfterSeconds = Number(response.headers.get("retry-after"));
+    let rateLimitResetSeconds = Number(response.headers.get("x-ratelimit-reset"));
     this.ghBackoffUntil =
-      Number.isFinite(n) && n > 0
-        ? Date.now() + n * 1000
-        : Number.isFinite(r) && r > 0
-          ? r * 1000
+      Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+        ? Date.now() + retryAfterSeconds * 1000
+        : Number.isFinite(rateLimitResetSeconds) && rateLimitResetSeconds > 0
+          ? rateLimitResetSeconds * 1000
           : Date.now() + RATE_LIMIT_BACKOFF_MS;
   }
-  notePersistedCacheBody(e) {
-    if (e === this.lastPersistedCacheBody) return false;
-    this.lastPersistedCacheBody = e;
+  notePersistedCacheBody(body) {
+    if (body === this.lastPersistedCacheBody) return false;
+    this.lastPersistedCacheBody = body;
     return true;
   }
   reset() {
@@ -280,7 +296,10 @@ class PrStatusFetcher {
   }
 }
 //@ chunk-s61vbvea.js:553785-553810 placement
-var prStatusFetcherRegistry = new HostScoped(() => new PrStatusFetcher());
+var prStatusFetcherRegistry; // deferred: uses PrStatusFetcher of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:553785", () => {
+  prStatusFetcherRegistry = new HostScoped(() => new PrStatusFetcher());
+});
 //@ chunk-s61vbvea.js:553810-553847 placement
 /**
  * 取当前宿主的 PR 状态获取器。
@@ -292,8 +311,8 @@ function currentPrStatusFetcher() {
 /**
  * PR 状态不可用时的提示。
  */
-function prStatusHint(e) {
-  switch (e) {
+function prStatusHint(hint) {
+  switch (hint) {
     case "needs-auth":
       return "gh auth login for PR status";
     case "gh-missing":
@@ -315,36 +334,43 @@ function deriveReviewState(isDraft, reviewDecision) {
   }
 }
 //@ chunk-s61vbvea.js:554142-554291 layout
-async function getPrStatus(e) {
+async function getPrStatus(host) {
   if (!(await getIsGit())) return null;
   let [branch, defaultBranch] = await Promise.all([getBranch(), getDefaultBranch()]);
   if (branch === defaultBranch) return null;
-  return (await (() => fetchPrStatusForBranch(branch))()) ?? (await fetchPrStatus(e));
+  return (await (() => fetchPrStatusForBranch(branch))()) ?? (await fetchPrStatus(host));
 }
 //@ chunk-s61vbvea.js:554291-554523 layout
-var PR_STATUS_CACHE_TTL_MS = 300000;
-var PR_STATUS_API_VERSION = "2022-11-28";
-var REDIRECT_STATUS_CODES = new Set([301, 302, 307, 308]);
-var prSummarySchema = DoctorLazy(() =>
-  create_15(
+var PR_STATUS_CACHE_TTL_MS; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var PR_STATUS_API_VERSION;
+var REDIRECT_STATUS_CODES;
+var prSummarySchema;
+var prReviewDecisionSchema;
+deferInit("chunk-s61vbvea.js:554291", () => {
+  PR_STATUS_CACHE_TTL_MS = 300000;
+  PR_STATUS_API_VERSION = "2022-11-28";
+  REDIRECT_STATUS_CODES = new Set([301, 302, 307, 308]);
+  prSummarySchema = DoctorLazy(() =>
+    create_15(
+      create({
+        number: create_3(),
+        html_url: create_2(),
+        draft: create_6(),
+      }),
+    ),
+  );
+  prReviewDecisionSchema = DoctorLazy(() =>
     create({
-      number: create_3(),
-      html_url: create_2(),
-      draft: create_6(),
-    }),
-  ),
-);
-var prReviewDecisionSchema = DoctorLazy(() =>
-  create({
-    data: create({
-      repository: create({
-        pullRequest: create({
-          reviewDecision: create_2().nullable(),
+      data: create({
+        repository: create({
+          pullRequest: create({
+            reviewDecision: create_2().nullable(),
+          }).nullable(),
         }).nullable(),
-      }).nullable(),
+      }),
     }),
-  }),
-);
+  );
+});
 //@ chunk-s61vbvea.js:554523-557132 layout
 /**
  * 查询当前分支对应 PR 的状态（GitHub REST + GraphQL reviewDecision、check runs），用于页脚 PR 状态；主分支或仅必要流量时不查。
@@ -365,16 +391,16 @@ async function fetchPrStatusForBranch(branch) {
   currentPrStatusFetcher().logAuthState("token_present");
   let token = ghToken.token;
   let baseRepo = await resolveBaseRepo(originRepo, token);
-  let S = currentPrStatusFetcher().directStateForBranch(branch);
-  let w = S.pr && {
-    ...S.pr,
-    reviewDecision: S.reviewDecision,
+  let directState = currentPrStatusFetcher().directStateForBranch(branch);
+  let previousPr = directState.pr && {
+    ...directState.pr,
+    reviewDecision: directState.reviewDecision,
   };
-  let R = githubApiBase(originRepo.host);
-  let origin = new URL(R).origin;
-  let P = `${R}/repos/${baseRepo.owner}/${baseRepo.repo}/pulls?head=${encodeURIComponent(originRepo.owner)}:${encodeURIComponent(branch)}&state=open&per_page=1`;
-  let j = false;
-  let G;
+  let apiBase = githubApiBase(originRepo.host);
+  let origin = new URL(apiBase).origin;
+  let listUrl = `${apiBase}/repos/${baseRepo.owner}/${baseRepo.repo}/pulls?head=${encodeURIComponent(originRepo.owner)}:${encodeURIComponent(branch)}&state=open&per_page=1`;
+  let gotFreshList = false;
+  let httpStatus;
   try {
     let signal = AbortSignal.timeout(GH_REQUEST_TIMEOUT_MS);
     let headers = {
@@ -382,11 +408,11 @@ async function fetchPrStatusForBranch(branch) {
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": PR_STATUS_API_VERSION,
       "User-Agent": claudeCodeUserAgent(),
-      ...(S.etag && {
-        "If-None-Match": S.etag,
+      ...(directState.etag && {
+        "If-None-Match": directState.etag,
       }),
     };
-    let he = (href) =>
+    let fetchWithHeaders = (href) =>
       fetch(href, {
         ...getProxyFetchOptions({
           url: href,
@@ -397,43 +423,46 @@ async function fetchPrStatusForBranch(branch) {
         redirect: "manual",
         signal,
       });
-    let Se = await he(S.redirectedListUrl ?? P);
-    let ce = REDIRECT_STATUS_CODES.has(Se.status) ? Se.headers.get("location") : null;
-    let we = ce ? new URL(ce, P) : null;
-    if (we?.origin === origin) {
-      S.redirectedListUrl = we.href;
-      Se = await he(we.href);
+    let response = await fetchWithHeaders(directState.redirectedListUrl ?? listUrl);
+    let redirectLocation = REDIRECT_STATUS_CODES.has(response.status)
+      ? response.headers.get("location")
+      : null;
+    let redirectUrl = redirectLocation ? new URL(redirectLocation, listUrl) : null;
+    if (redirectUrl?.origin === origin) {
+      directState.redirectedListUrl = redirectUrl.href;
+      response = await fetchWithHeaders(redirectUrl.href);
     }
-    G = Se.status;
-    if (Se.status === 304);
-    else if (Se.ok) {
-      S.etag = Se.headers.get("etag");
-      j = true;
-      let ie = prSummarySchema().safeParse(await Se.json());
-      let Ee = ie.success ? ie.data[0] : undefined;
-      if (Ee && S.pr?.number !== Ee.number) S.reviewDecision = "";
-      S.pr = Ee
+    httpStatus = response.status;
+    if (response.status === 304);
+    else if (response.ok) {
+      directState.etag = response.headers.get("etag");
+      gotFreshList = true;
+      let parsedList = prSummarySchema().safeParse(await response.json());
+      let summary = parsedList.success ? parsedList.data[0] : undefined;
+      if (summary && directState.pr?.number !== summary.number) directState.reviewDecision = "";
+      directState.pr = summary
         ? {
-            number: Ee.number,
-            url: Ee.html_url,
-            isDraft: Ee.draft,
+            number: summary.number,
+            url: summary.html_url,
+            isDraft: summary.draft,
           }
         : null;
     } else {
-      if (Se.status === 401) clearGhTokenCache(originRepo.host);
-      else if (Se.status === 403 || Se.status === 429) currentPrStatusFetcher().backOffFromResponse(Se);
+      if (response.status === 401) clearGhTokenCache(originRepo.host);
+      else if (response.status === 403 || response.status === 429)
+        currentPrStatusFetcher().backOffFromResponse(response);
       logFeatureBad(
         "github_pr_status_direct",
-        Se.status === 401
+        response.status === 401
           ? "unauthorized"
-          : Se.status === 403 || Se.status === 429
+          : response.status === 403 || response.status === 429
             ? "rate_limited"
             : "http_error",
         {
-          http_status: fromNumber(Se.status),
+          http_status: fromNumber(response.status),
         },
       );
-      logForDebugging(`[ghPrStatus] REST list ${Se.status} on ${originRepo.host}`, {
+      logForDebugging(`[ghPrStatus] REST list ${response.status} on ${originRepo.host}`, {
         level: "debug",
       });
       return "fetch-failed";
@@ -445,19 +474,20 @@ async function fetchPrStatusForBranch(branch) {
     });
     return "fetch-failed";
   }
-  let pr = S.pr;
+  let pr = directState.pr;
   if (!pr) {
     logFeatureOk("github_pr_status_direct", {
-      http_status: fromNumber(G),
+      http_status: fromNumber(httpStatus),
       pr_found: false,
       review_fetched: false,
     });
     return null;
   }
-  let reviewDecision = S.reviewDecision;
-  let Q = false;
-  let Z = j || Date.now() - S.lastReviewFetchAt >= PR_STATUS_CACHE_TTL_MS;
-  if (Z) {
+  let reviewDecision = directState.reviewDecision;
+  let reviewUnavailable = false;
+  let shouldFetchReview =
+    gotFreshList || Date.now() - directState.lastReviewFetchAt >= PR_STATUS_CACHE_TTL_MS;
+  if (shouldFetchReview) {
     let prReviewDecision = await fetchPrReviewDecision(
       {
         host: originRepo.host,
@@ -469,50 +499,51 @@ async function fetchPrStatusForBranch(branch) {
     );
     if (prReviewDecision !== null) {
       reviewDecision = prReviewDecision;
-      if (S.pr?.number === pr.number) {
-        S.reviewDecision = prReviewDecision;
-        S.lastReviewFetchAt = lastReviewFetchAt;
+      if (directState.pr?.number === pr.number) {
+        directState.reviewDecision = prReviewDecision;
+        directState.lastReviewFetchAt = lastReviewFetchAt;
       }
-    } else Q = true;
+    } else reviewUnavailable = true;
   }
-  let ee = {
-    http_status: fromNumber(G),
+  let telemetryFields = {
+    http_status: fromNumber(httpStatus),
     pr_found: true,
-    review_fetched: Z,
+    review_fetched: shouldFetchReview,
   };
-  if (Q) logFeatureSad("github_pr_status_direct", "review_decision_unavailable", ee);
-  else logFeatureOk("github_pr_status_direct", ee);
-  let ae =
-    !Q &&
-    w?.number === pr.number &&
-    w.url === pr.url &&
-    w.isDraft === pr.isDraft &&
-    w.reviewDecision === reviewDecision;
+  if (reviewUnavailable)
+    logFeatureSad("github_pr_status_direct", "review_decision_unavailable", telemetryFields);
+  else logFeatureOk("github_pr_status_direct", telemetryFields);
+  let unchanged =
+    !reviewUnavailable &&
+    previousPr?.number === pr.number &&
+    previousPr.url === pr.url &&
+    previousPr.isDraft === pr.isDraft &&
+    previousPr.reviewDecision === reviewDecision;
   return {
     number: pr.number,
     url: pr.url,
     reviewState: deriveReviewState(pr.isDraft, reviewDecision),
-    ...(ae && {
+    ...(unchanged && {
       notModified: true,
     }),
   };
 }
 //@ chunk-s61vbvea.js:557132-557701 layout
-async function fetchPrReviewDecision(e, token, number) {
-  let s = githubGraphqlUrl(e.host);
+async function fetchPrReviewDecision(repoRef, token, number) {
+  let graphqlUrl = githubGraphqlUrl(repoRef.host);
   let body = jsonStringify({
     query:
       "query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){reviewDecision}}}",
     variables: {
-      o: e.owner,
-      r: e.repo,
+      o: repoRef.owner,
+      r: repoRef.repo,
       n: number,
     },
   });
   try {
-    let response = await fetch(s, {
+    let response = await fetch(graphqlUrl, {
       ...getProxyFetchOptions({
-        url: s,
+        url: graphqlUrl,
       }),
       keepalive: false,
       method: "POST",
@@ -526,8 +557,8 @@ async function fetchPrReviewDecision(e, token, number) {
       signal: AbortSignal.timeout(GH_REQUEST_TIMEOUT_MS),
     });
     if (!response.ok) return null;
-    let S = prReviewDecisionSchema().safeParse(await response.json());
-    return S.success ? (S.data.data.repository?.pullRequest?.reviewDecision ?? "") : null;
+    let parsed = prReviewDecisionSchema().safeParse(await response.json());
+    return parsed.success ? (parsed.data.data.repository?.pullRequest?.reviewDecision ?? "") : null;
   } catch {
     return null;
   }
@@ -541,46 +572,49 @@ async function getOriginRepo() {
 /**
  * 把 git remote URL 解析为 {host, owner, repo}（拒绝 IP 主机）。
  */
-function parseGitHubRemote(e) {
-  let n = normalizeGitRemoteUrl(e);
-  if (!n) return null;
-  let parts = n.split("/");
+function parseGitHubRemote(remoteUrl) {
+  let normalized = normalizeGitRemoteUrl(remoteUrl);
+  if (!normalized) return null;
+  let parts = normalized.split("/");
   if (parts.length < 3) return null;
-  let s = parts[0];
-  if (/^[\d.]+$/.test(s) || /^\[?[0-9a-f:]+\]?$/i.test(s)) return null;
+  let host = parts[0];
+  if (/^[\d.]+$/.test(host) || /^\[?[0-9a-f:]+\]?$/i.test(host)) return null;
   return {
-    host: s,
+    host,
     owner: parts[1],
     repo: parts[2],
   };
 }
 //@ chunk-s61vbvea.js:557962-558038 layout
-var prForkParentSchema = DoctorLazy(() =>
-  create({
-    parent: create({
-      name: create_2(),
-      owner: create({
-        login: create_2(),
-      }),
-    }).nullish(),
-  }),
-);
+var prForkParentSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:557962", () => {
+  prForkParentSchema = DoctorLazy(() =>
+    create({
+      parent: create({
+        name: create_2(),
+        owner: create({
+          login: create_2(),
+        }),
+      }).nullish(),
+    }),
+  );
+});
 //@ chunk-s61vbvea.js:558038-558372 layout
 async function resolveBaseRepo(originRepo, token) {
-  let r = `${originRepo.host}/${originRepo.owner}/${originRepo.repo}`;
+  let originKey = `${originRepo.host}/${originRepo.owner}/${originRepo.repo}`;
   let baseRepoCache = currentPrStatusFetcher().baseRepoCache;
-  if (baseRepoCache?.forOrigin === r) return baseRepoCache;
-  let upstreamRemoteUrl = await getUpstreamRemoteUrl();
-  let y = upstreamRemoteUrl ? parseGitHubRemote(upstreamRemoteUrl) : null;
-  if (y && y.host === originRepo.host)
+  if (baseRepoCache?.forOrigin === originKey) return baseRepoCache;
+  let remoteUrl = await getUpstreamRemoteUrl();
+  let upstreamRepo = remoteUrl ? parseGitHubRemote(remoteUrl) : null;
+  if (upstreamRepo && upstreamRepo.host === originRepo.host)
     return currentPrStatusFetcher().rememberBaseRepo({
-      forOrigin: r,
-      owner: y.owner,
-      repo: y.repo,
+      forOrigin: originKey,
+      owner: upstreamRepo.owner,
+      repo: upstreamRepo.repo,
     });
   let repoParent = await fetchRepoParent(originRepo, token);
   return currentPrStatusFetcher().rememberBaseRepo({
-    forOrigin: r,
+    forOrigin: originKey,
     ...(repoParent ?? {
       owner: originRepo.owner,
       repo: originRepo.repo,
@@ -596,16 +630,16 @@ async function getUpstreamRemoteUrl() {
   return code === 0 && stdout.trim() ? stdout.trim() : null;
 }
 //@ chunk-s61vbvea.js:558547-558998 layout
-async function fetchRepoParent(e, n) {
-  let s = `${githubApiBase(e.host)}/repos/${e.owner}/${e.repo}`;
+async function fetchRepoParent(originRepo, token) {
+  let repoUrl = `${githubApiBase(originRepo.host)}/repos/${originRepo.owner}/${originRepo.repo}`;
   try {
-    let response = await fetch(s, {
+    let response = await fetch(repoUrl, {
       ...getProxyFetchOptions({
-        url: s,
+        url: repoUrl,
       }),
       method: "GET",
       headers: {
-        Authorization: `Bearer ${n}`,
+        Authorization: `Bearer ${token}`,
         Accept: "application/vnd.github+json",
         "X-GitHub-Api-Version": PR_STATUS_API_VERSION,
         "User-Agent": claudeCodeUserAgent(),
@@ -614,8 +648,8 @@ async function fetchRepoParent(e, n) {
       signal: AbortSignal.timeout(GH_REQUEST_TIMEOUT_MS),
     });
     if (!response.ok) return null;
-    let y = prForkParentSchema().safeParse(await response.json());
-    let parent = y.success ? y.data.parent : null;
+    let parsed = prForkParentSchema().safeParse(await response.json());
+    let parent = parsed.success ? parsed.data.parent : null;
     return parent
       ? {
           owner: parent.owner.login,
@@ -627,53 +661,53 @@ async function fetchRepoParent(e, n) {
   }
 }
 //@ chunk-s61vbvea.js:558998-559267 layout
-function getPrStatusColor(e) {
-  switch (e.state) {
+function getPrStatusColor(prStatus) {
+  switch (prStatus.state) {
     case "MERGED":
       return "merged";
     case "CLOSED":
     case "DRAFT":
       return "inactive";
     case "OPEN": {
-      if (e.checks.failed > 0 || e.review === "CHANGES_REQUESTED") return "error";
-      if (e.checks.pending === 0 && e.review !== "REVIEW_REQUIRED") return "success";
+      if (prStatus.checks.failed > 0 || prStatus.review === "CHANGES_REQUESTED") return "error";
+      if (prStatus.checks.pending === 0 && prStatus.review !== "REVIEW_REQUIRED") return "success";
       return "warning";
     }
   }
 }
 //@ chunk-s61vbvea.js:559267-559611 layout
 function summarizeCheckRuns(statusCheckRollup) {
-  let n = 0;
-  let r = 0;
-  let s = 0;
-  for (let h of statusCheckRollup ?? []) {
-    let upper = (h.conclusion ?? h.state)?.toUpperCase();
-    if (upper === "SUCCESS" || upper === "NEUTRAL" || upper === "SKIPPED") n++;
-    else if (upper === "FAILURE" || upper === "ERROR") r++;
+  let passedCount = 0;
+  let failedCount = 0;
+  let pendingCount = 0;
+  for (let check of statusCheckRollup ?? []) {
+    let upper = (check.conclusion ?? check.state)?.toUpperCase();
+    if (upper === "SUCCESS" || upper === "NEUTRAL" || upper === "SKIPPED") passedCount++;
+    else if (upper === "FAILURE" || upper === "ERROR") failedCount++;
     else if (
       upper == null ||
       upper === "ACTION_REQUIRED" ||
       upper === "PENDING" ||
       upper === "EXPECTED" ||
-      h.status?.toUpperCase() !== "COMPLETED"
+      check.status?.toUpperCase() !== "COMPLETED"
     )
-      s++;
-    else r++;
+      pendingCount++;
+    else failedCount++;
   }
   return {
-    passed: n,
-    failed: r,
-    pending: s,
+    passed: passedCount,
+    failed: failedCount,
+    pending: pendingCount,
   };
 }
 //@ chunk-s61vbvea.js:559611-560217 fingerprint = fetchPrStatus (0.483)
-async function fetchPrStatus_2(e) {
+async function fetchPrStatus_2(prUrl) {
   let { stdout, code } = await execFileNoThrow(
     "gh",
     [
       "pr",
       "view",
-      e,
+      prUrl,
       "--json",
       "number,title,state,isDraft,statusCheckRollup,reviewDecision,additions,deletions",
     ],
@@ -714,102 +748,106 @@ async function fetchPrStatus_2(e) {
 /**
  * 按 URL 查 PR 状态（仅必要流量时不查）。
  */
-function fetchPrStatusByUrl(e) {
+function fetchPrStatusByUrl(prUrl) {
   if (isEssentialTrafficOnly() || isGhApiBackedOff()) return Promise.resolve(null);
   return currentPrStatusFetcher()
-    .prStatusByUrl(e)
+    .prStatusByUrl(prUrl)
     .catch(() => null);
 }
 //@ chunk-s61vbvea.js:560321-560535 placement
-function expandPrUrlTemplate(e, n) {
-  if (!n) return e;
-  let prUrl = parsePrUrl(e);
-  if (!prUrl) return e;
-  return n
+function expandPrUrlTemplate(template, pattern) {
+  if (!pattern) return template;
+  let prUrl = parsePrUrl(template);
+  if (!prUrl) return template;
+  return pattern
     .replaceAll("{host}", prUrl.host)
     .replaceAll("{owner}", prUrl.owner)
     .replaceAll("{repo}", prUrl.repo)
     .replaceAll("{number}", String(prUrl.num))
-    .replaceAll("{url}", e);
+    .replaceAll("{url}", template);
 }
 //@ chunk-s61vbvea.js:560535-560582 placement
 /**
  * 有模板时把 PR URL 中的占位符展开，否则原样返回。
  */
-function expandPrUrlIfTemplate(url, appState) {
-  if (appState) return expandPrUrlTemplate(url, appState);
-  return url;
+function expandPrUrlIfTemplate(template, pattern) {
+  if (pattern) return expandPrUrlTemplate(template, pattern);
+  return template;
 }
 //@ chunk-s61vbvea.js:560582-561144 placement
 /**
  * GraphQL PR 响应 schema 与字段列表。
  */
-var GraphqlPrSchema = DoctorLazy(() => {
-  let stateCountsSchema = create_15(
-    create({
+var GraphqlPrSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var PR_GRAPHQL_FIELDS;
+deferInit("chunk-s61vbvea.js:560582", () => {
+  GraphqlPrSchema = DoctorLazy(() => {
+    let stateCountsSchema = create_15(
+      create({
+        state: create_2(),
+        count: create_3(),
+      }),
+    ).nullable();
+    let rollupSchema = create({
+      contexts: create({
+        checkRunCountsByState: stateCountsSchema,
+        statusContextCountsByState: stateCountsSchema,
+      }).nullable(),
+    });
+    let commitNodeSchema = create({
+      commit: create({
+        statusCheckRollup: rollupSchema.nullable(),
+      }),
+    });
+    return create({
+      number: create_3(),
+      title: create_2(),
       state: create_2(),
-      count: create_3(),
-    }),
-  ).nullable();
-  let rollupSchema = create({
-    contexts: create({
-      checkRunCountsByState: stateCountsSchema,
-      statusContextCountsByState: stateCountsSchema,
-    }).nullable(),
+      isDraft: create_6(),
+      reviewDecision: create_2().nullable(),
+      additions: create_3(),
+      deletions: create_3(),
+      commits: create({
+        nodes: create_15(commitNodeSchema.nullable()),
+      }),
+    });
   });
-  let commitNodeSchema = create({
-    commit: create({
-      statusCheckRollup: rollupSchema.nullable(),
-    }),
-  });
-  return create({
-    number: create_3(),
-    title: create_2(),
-    state: create_2(),
-    isDraft: create_6(),
-    reviewDecision: create_2().nullable(),
-    additions: create_3(),
-    deletions: create_3(),
-    commits: create({
-      nodes: create_15(commitNodeSchema.nullable()),
-    }),
-  });
+  PR_GRAPHQL_FIELDS = [
+    "number",
+    "title",
+    "state",
+    "isDraft",
+    "reviewDecision",
+    "additions",
+    "deletions",
+    "commits",
+    "nodes",
+    "commit",
+    "statusCheckRollup",
+    "contexts",
+    "checkRunCountsByState",
+    "statusContextCountsByState",
+    "count",
+  ];
 });
-var PR_GRAPHQL_FIELDS = [
-  "number",
-  "title",
-  "state",
-  "isDraft",
-  "reviewDecision",
-  "additions",
-  "deletions",
-  "commits",
-  "nodes",
-  "commit",
-  "statusCheckRollup",
-  "contexts",
-  "checkRunCountsByState",
-  "statusContextCountsByState",
-  "count",
-];
 //@ chunk-s61vbvea.js:561144-561655 placement
 function summarizeChecks(checkRunCountsByState, statusContextCountsByState) {
-  let r = 0;
-  let s = 0;
-  let h = 0;
+  let passedCount = 0;
+  let failedCount = 0;
+  let pendingCount = 0;
   for (let { state, count } of checkRunCountsByState ?? [])
     switch (state) {
       case "SUCCESS":
       case "NEUTRAL":
       case "SKIPPED":
-        r += count;
+        passedCount += count;
         break;
       case "FAILURE":
       case "CANCELLED":
       case "TIMED_OUT":
       case "STALE":
       case "STARTUP_FAILURE":
-        s += count;
+        failedCount += count;
         break;
       case "ACTION_REQUIRED":
       case "IN_PROGRESS":
@@ -818,64 +856,71 @@ function summarizeChecks(checkRunCountsByState, statusContextCountsByState) {
       case "WAITING":
       case "REQUESTED":
       case "COMPLETED":
-        h += count;
+        pendingCount += count;
         break;
       default:
-        s += count;
+        failedCount += count;
     }
   for (let { state, count } of statusContextCountsByState ?? [])
     switch (state) {
       case "SUCCESS":
-        r += count;
+        passedCount += count;
         break;
       case "FAILURE":
       case "ERROR":
-        s += count;
+        failedCount += count;
         break;
       default:
-        h += count;
+        pendingCount += count;
     }
   return {
-    passed: r,
-    failed: s,
-    pending: h,
+    passed: passedCount,
+    failed: failedCount,
+    pending: pendingCount,
   };
 }
 //@ chunk-s61vbvea.js:561655-562119 placement
-function prStateLabel(e) {
-  let statusCheckRollup = e.commits.nodes[0]?.commit.statusCheckRollup ?? null;
+function prStateLabel(node) {
+  let statusCheckRollup = node.commits.nodes[0]?.commit.statusCheckRollup ?? null;
   return {
-    number: e.number,
-    title: e.title,
-    state: e.state === "MERGED" ? "MERGED" : e.state === "CLOSED" ? "CLOSED" : e.isDraft ? "DRAFT" : "OPEN",
+    number: node.number,
+    title: node.title,
+    state:
+      node.state === "MERGED"
+        ? "MERGED"
+        : node.state === "CLOSED"
+          ? "CLOSED"
+          : node.isDraft
+            ? "DRAFT"
+            : "OPEN",
     checks: summarizeChecks(
       statusCheckRollup?.contexts?.checkRunCountsByState,
       statusCheckRollup?.contexts?.statusContextCountsByState,
     ),
     review:
-      e.reviewDecision === "APPROVED" ||
-      e.reviewDecision === "CHANGES_REQUESTED" ||
-      e.reviewDecision === "REVIEW_REQUIRED"
-        ? e.reviewDecision
+      node.reviewDecision === "APPROVED" ||
+      node.reviewDecision === "CHANGES_REQUESTED" ||
+      node.reviewDecision === "REVIEW_REQUIRED"
+        ? node.reviewDecision
         : null,
-    additions: e.additions,
-    deletions: e.deletions,
+    additions: node.additions,
+    deletions: node.deletions,
   };
 }
 //@ chunk-s61vbvea.js:562119-562186 placement = cost (0.391)
-function cost(e) {
-  return e !== null && typeof e === "object" && !("cost" in e);
+function cost(repositoryNode) {
+  return repositoryNode !== null && typeof repositoryNode === "object" && !("cost" in repositoryNode);
 }
 //@ chunk-s61vbvea.js:562186-562297 placement
-function groupByKey(e, n) {
-  let r = new Map();
-  for (let s of e) {
-    let h = n(s);
-    let y = r.get(h);
-    if (y) y.push(s);
-    else r.set(h, [s]);
+function groupByKey(items, keyOf) {
+  let groups = new Map();
+  for (let item of items) {
+    let groupKey = keyOf(item);
+    let group = groups.get(groupKey);
+    if (group) group.push(item);
+    else groups.set(groupKey, [item]);
   }
-  return r;
+  return groups;
 }
 //@ chunk-s61vbvea.js:562297-562642 placement
 /**
@@ -903,49 +948,51 @@ function isGhApiBackedOff() {
   return Date.now() < currentPrStatusFetcher().ghBackoffUntil;
 }
 //@ chunk-s61vbvea.js:562694-565418 placement
-async function buildPrStatusQuery(e) {
-  let n = new Map();
-  let r = [];
-  let s = null;
-  if (e.length === 0 || isEssentialTrafficOnly() || isGhApiBackedOff()) {
-    for (let w of e) n.set(w, null);
+async function buildPrStatusQuery(prUrls) {
+  let statuses = new Map();
+  let unbatched = [];
+  let lowestRateLimit = null;
+  if (prUrls.length === 0 || isEssentialTrafficOnly() || isGhApiBackedOff()) {
+    for (let prUrl of prUrls) statuses.set(prUrl, null);
     return {
-      statuses: n,
-      rateLimit: s,
+      statuses,
+      rateLimit: lowestRateLimit,
       unbatched: [],
     };
   }
-  let h = [];
-  for (let w of e) {
-    let prUrl = parsePrUrl(w);
-    if (prUrl) h.push(prUrl);
-    else if (/\/pull\/\d+/.test(w)) r.push(w);
+  let parsedUrls = [];
+  for (let prUrl of prUrls) {
+    let prUrl_2 = parsePrUrl(prUrl);
+    if (prUrl_2) parsedUrls.push(prUrl_2);
+    else if (/\/pull\/\d+/.test(prUrl)) unbatched.push(prUrl);
   }
-  h.sort((w, R) => w.url.localeCompare(R.url));
-  let y = [];
-  for (let [w, R] of groupByKey(h, (x) => x.host))
-    for (let x = 0; x < R.length; x += GRAPHQL_BATCH_SIZE)
-      y.push({
-        host: w,
-        chunk: R.slice(x, x + GRAPHQL_BATCH_SIZE),
+  parsedUrls.sort((leftUrl, rightUrl) => leftUrl.url.localeCompare(rightUrl.url));
+  let batches = [];
+  for (let [host, hostPrs] of groupByKey(parsedUrls, (prUrl) => prUrl.host))
+    for (let offset = 0; offset < hostPrs.length; offset += GRAPHQL_BATCH_SIZE)
+      batches.push({
+        host,
+        chunk: hostPrs.slice(offset, offset + GRAPHQL_BATCH_SIZE),
       });
-  let S = limitConcurrency(GRAPHQL_CONCURRENCY, async ({ host, chunk }) => {
+  let runBatch = limitConcurrency(GRAPHQL_CONCURRENCY, async ({ host, chunk }) => {
     if (isGhApiBackedOff()) {
-      for (let se of chunk) n.set(se.url, null);
+      for (let prUrl of chunk) statuses.set(prUrl.url, null);
       return;
     }
-    let x = new Map();
-    let mapped = [...groupByKey(chunk, (se) => `${se.owner}/${se.repo}`)].map(([se, re], he) => {
-      let [Se, ce] = se.split("/");
-      let joined = re
-        .map((ie, Ee) => {
-          let Ie = `p${he}_${Ee}`;
-          x.set(Ie, ie.url);
-          return `${Ie}: pullRequest(number: ${ie.num}) { ...pr }`;
-        })
-        .join(" ");
-      return `r${he}: repository(owner:"${Se}", name:"${ce}") { ${joined} }`;
-    });
+    let aliasToUrl = new Map();
+    let mapped = [...groupByKey(chunk, (prUrl) => `${prUrl.owner}/${prUrl.repo}`)].map(
+      ([repoKey, repoPrs], repoIndex) => {
+        let [owner, repoName] = repoKey.split("/");
+        let joined = repoPrs
+          .map((prUrl, prIndex) => {
+            let alias = `p${repoIndex}_${prIndex}`;
+            aliasToUrl.set(alias, prUrl.url);
+            return `${alias}: pullRequest(number: ${prUrl.num}) { ...pr }`;
+          })
+          .join(" ");
+        return `r${repoIndex}: repository(owner:"${owner}", name:"${repoName}") { ${joined} }`;
+      },
+    );
     let input = `${PR_GRAPHQL_FRAGMENT}
 query { rateLimit{cost remaining resetAt} ${mapped.join(" ")} }`;
     let { stdout, stderr, code, maxBufferExceeded } = await execFileNoThrow(
@@ -958,14 +1005,14 @@ query { rateLimit{cost remaining resetAt} ${mapped.join(" ")} }`;
         maxBuffer: MAX_RESPONSE_BYTES,
       },
     );
-    let ee = null;
+    let reply = null;
     if (stdout.trim())
       try {
-        ee = jsonParse(stdout);
+        reply = jsonParse(stdout);
       } catch {
-        ee = null;
+        reply = null;
       }
-    if (!ee?.data) {
+    if (!reply?.data) {
       if (maxBufferExceeded) {
         logForDebugging(
           `[ghPrStatus] batch reply from ${host} is over the cap of ${MAX_RESPONSE_BYTES} characters; keeping last-known`,
@@ -982,140 +1029,149 @@ query { rateLimit{cost remaining resetAt} ${mapped.join(" ")} }`;
           level: "warn",
         });
       } else logForDebugging(`[ghPrStatus] batch query failed on ${host} (exit ${code}); keeping last-known`);
-      for (let se of chunk) n.set(se.url, null);
+      for (let prUrl of chunk) statuses.set(prUrl.url, null);
       return;
     }
-    let rateLimit = ee.data.rateLimit;
+    let rateLimit = reply.data.rateLimit;
     if (rateLimit) {
-      if (!s || rateLimit.remaining < s.remaining) s = rateLimit;
+      if (!lowestRateLimit || rateLimit.remaining < lowestRateLimit.remaining) lowestRateLimit = rateLimit;
       if (rateLimit.remaining < 50)
         currentPrStatusFetcher().backOffUntil(
           Date.parse(rateLimit.resetAt) || Date.now() + RATE_LIMIT_BACKOFF_MS,
         );
     }
-    for (let [key, value] of Object.entries(ee.data)) {
+    for (let [key, value] of Object.entries(reply.data)) {
       if (!key.startsWith("r") || !cost(value)) continue;
       for (let [key, value_2] of Object.entries(value)) {
-        let ce = x.get(key);
-        if (!ce) continue;
-        let we = GraphqlPrSchema().safeParse(value_2);
-        if (!we.success && value_2 !== null) {
-          let { issues } = we.error;
+        let prUrl = aliasToUrl.get(key);
+        if (!prUrl) continue;
+        let parsedPr = GraphqlPrSchema().safeParse(value_2);
+        if (!parsedPr.success && value_2 !== null) {
+          let { issues } = parsedPr.error;
           let mapped = issues.slice(0, 8).map((issue) => issue.path.join(".") || "the node itself");
-          let Ie = Array.isArray(ee.errors) ? ee.errors.length : 0;
+          let graphqlErrorCount = Array.isArray(reply.errors) ? reply.errors.length : 0;
           logForDebugging(
-            `[ghPrStatus] a PR in the batch reply from ${host} has an unexpected shape (gh exit ${code}; GraphQL errors: ${Ie}; bad or missing: ${mapped.join(", ")}); keeping its last-known status`,
+            `[ghPrStatus] a PR in the batch reply from ${host} has an unexpected shape (gh exit ${code}; GraphQL errors: ${graphqlErrorCount}; bad or missing: ${mapped.join(", ")}); keeping its last-known status`,
           );
           if (!currentPrStatusFetcher().malformedBatchNodeLogged) {
             currentPrStatusFetcher().malformedBatchNodeLogged = true;
-            let ke = new Set(issues.map((issue) => issue.path.findLast((We) => typeof We === "string")));
+            let badFieldSet = new Set(
+              issues.map((issue) => issue.path.findLast((segment) => typeof segment === "string")),
+            );
             logFeatureSad("github_pr_status_batch", "malformed_node", {
               gh_exit_nonzero: code !== 0,
-              graphql_errors: Ie,
+              graphql_errors: graphqlErrorCount,
               github_dot_com: isGithubDotCom(host),
-              bad_fields: fromEnumArr(PR_GRAPHQL_FIELDS.filter((Me) => ke.has(Me))),
+              bad_fields: fromEnumArr(PR_GRAPHQL_FIELDS.filter((fieldName) => badFieldSet.has(fieldName))),
             });
           }
         }
-        n.set(ce, we.success ? prStateLabel(we.data) : null);
+        statuses.set(prUrl, parsedPr.success ? prStateLabel(parsedPr.data) : null);
       }
     }
-    for (let se of x.values()) if (!n.has(se)) n.set(se, null);
+    for (let prUrl of aliasToUrl.values()) if (!statuses.has(prUrl)) statuses.set(prUrl, null);
   });
-  await Promise.all(y.map(S));
+  await Promise.all(batches.map(runBatch));
   return {
-    statuses: n,
-    rateLimit: s,
-    unbatched: r,
+    statuses,
+    rateLimit: lowestRateLimit,
+    unbatched,
   };
 }
 //@ chunk-s61vbvea.js:565418-565498 placement
-var prStatusCachePath = () => join(getClaudeConfigDir(), "gh-pr-status-cache.json");
-var Mk = STORAGE_SPACES.state("gh-pr-status-cache");
+var prStatusCachePath; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var PR_STATUS_CACHE_STORAGE;
+deferInit("chunk-s61vbvea.js:565418", () => {
+  prStatusCachePath = () => join(getClaudeConfigDir(), "gh-pr-status-cache.json");
+  PR_STATUS_CACHE_STORAGE = STORAGE_SPACES.state("gh-pr-status-cache");
+});
 //@ chunk-s61vbvea.js:565498-565868 placement
-function persistPrStatusCache(e, n) {
-  let r = {};
-  for (let [h, y] of e) if (y) r[h] = y;
-  let s = jsonStringify(r);
-  if (s === "{}" || !currentPrStatusFetcher().notePersistedCacheBody(s)) return Promise.resolve();
-  if (isStorageV5Enabled() && n)
+function persistPrStatusCache(statuses, storageV5) {
+  let payload = {};
+  for (let [prUrl, prStatus] of statuses) if (prStatus) payload[prUrl] = prStatus;
+  let body = jsonStringify(payload);
+  if (body === "{}" || !currentPrStatusFetcher().notePersistedCacheBody(body)) return Promise.resolve();
+  if (isStorageV5Enabled() && storageV5)
     return Promise.resolve()
       .then(() =>
-        n.write(Mk, s, {
+        storageV5.write(PR_STATUS_CACHE_STORAGE, body, {
           mode: 438 & ~process.umask(),
         }),
       )
-      .then((h) => {
-        if (!h.ok) logForDebugging(`persistPrStatusCache: ${h.error.code}`);
+      .then((writeResult) => {
+        if (!writeResult.ok) logForDebugging(`persistPrStatusCache: ${writeResult.error.code}`);
       })
       .catch((error) => {
         logForDebugging(`persistPrStatusCache: ${errorMessage(error)}`);
       });
-  return writeFileAtomic(prStatusCachePath(), s).catch(() => {});
+  return writeFileAtomic(prStatusCachePath(), body).catch(() => {});
 }
 //@ chunk-s61vbvea.js:565868-566109 placement
-var CachedPrStatusSchema = DoctorLazy(() =>
-  create({
-    number: create_3(),
-    title: create_2(),
-    state: create_26(["OPEN", "MERGED", "CLOSED", "DRAFT"]),
-    checks: create({
-      passed: create_3(),
-      failed: create_3(),
-      pending: create_3(),
+var CachedPrStatusSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:565868", () => {
+  CachedPrStatusSchema = DoctorLazy(() =>
+    create({
+      number: create_3(),
+      title: create_2(),
+      state: create_26(["OPEN", "MERGED", "CLOSED", "DRAFT"]),
+      checks: create({
+        passed: create_3(),
+        failed: create_3(),
+        pending: create_3(),
+      }),
+      review: create_26(["APPROVED", "CHANGES_REQUESTED", "REVIEW_REQUIRED"]).nullable(),
+      additions: create_3(),
+      deletions: create_3(),
     }),
-    review: create_26(["APPROVED", "CHANGES_REQUESTED", "REVIEW_REQUIRED"]).nullable(),
-    additions: create_3(),
-    deletions: create_3(),
-  }),
-);
+  );
+});
 //@ chunk-s61vbvea.js:566109-566408 placement
-function parsePrStatusCache(e) {
-  let n = new Map();
-  let r;
+function parsePrStatusCache(text) {
+  let statuses = new Map();
+  let parsed;
   try {
-    r = jsonParse(e);
+    parsed = jsonParse(text);
   } catch {
-    return n;
+    return statuses;
   }
-  if (r === null || typeof r !== "object" || Array.isArray(r)) return n;
-  let s = 0;
-  for (let [key, value] of Object.entries(r)) {
-    let S = CachedPrStatusSchema().safeParse(value);
-    if (S.success) n.set(key, S.data);
-    else s++;
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return statuses;
+  let droppedCount = 0;
+  for (let [key, value] of Object.entries(parsed)) {
+    let parsedEntry = CachedPrStatusSchema().safeParse(value);
+    if (parsedEntry.success) statuses.set(key, parsedEntry.data);
+    else droppedCount++;
   }
-  if (s > 0) logForDebugging(`loadPrStatusCache: dropped ${s} malformed cache entries`);
-  return n;
+  if (droppedCount > 0) logForDebugging(`loadPrStatusCache: dropped ${droppedCount} malformed cache entries`);
+  return statuses;
 }
 //@ chunk-s61vbvea.js:566408-566825 placement
-async function loadPrStatusCache(e) {
-  if (e) {
-    let n;
+async function loadPrStatusCache(storageV5) {
+  if (storageV5) {
+    let readResult;
     try {
-      n = await e.read([Mk]);
+      readResult = await storageV5.read([PR_STATUS_CACHE_STORAGE]);
     } catch (error) {
       logForDebugging(`loadPrStatusCache: ${errorMessage(error)}`);
       return new Map();
     }
-    if (!n.ok) {
-      logForDebugging(`loadPrStatusCache: ${n.error.code}`);
+    if (!readResult.ok) {
+      logForDebugging(`loadPrStatusCache: ${readResult.error.code}`);
       return new Map();
     }
-    let r = n.value.items[0];
-    if (!r?.found) return new Map();
-    let s;
+    let item = readResult.value.items[0];
+    if (!item?.found) return new Map();
+    let text;
     try {
-      s = Buffer.from(r.value).toString("utf-8");
+      text = Buffer.from(item.value).toString("utf-8");
     } catch (error) {
       logForDebugging(`loadPrStatusCache: ${errorMessage(error)}`);
       return new Map();
     }
-    return parsePrStatusCache(s);
+    return parsePrStatusCache(text);
   }
   try {
-    let file = await readFile(prStatusCachePath(), "utf8");
-    return parsePrStatusCache(file);
+    let text = await readFile(prStatusCachePath(), "utf8");
+    return parsePrStatusCache(text);
   } catch {
     return new Map();
   }
@@ -1128,11 +1184,11 @@ var GERRIT_QUERY_TIMEOUT_MS = 4000;
 async function findGerritReview() {
   if (isEssentialTrafficOnly() || !isWorkspacePersistedTrusted(getCwd())) return null;
   let canonicalGitRoot = findCanonicalGitRoot(getCwd());
-  let n = canonicalGitRoot ? findRepoRemoteSlug(canonicalGitRoot) : null;
-  let r = n ? GERRIT_HOST_RE.exec(n) : null;
-  let s = r?.[1];
-  let h = r ? n.slice(r[0].length).replace(/^a\//, "") : undefined;
-  if (!s || !h || s.endsWith("-review")) return null;
+  let remoteSlug = canonicalGitRoot ? findRepoRemoteSlug(canonicalGitRoot) : null;
+  let hostMatch = remoteSlug ? GERRIT_HOST_RE.exec(remoteSlug) : null;
+  let hostPrefix = hostMatch?.[1];
+  let projectPath = hostMatch ? remoteSlug.slice(hostMatch[0].length).replace(/^a\//, "") : undefined;
+  if (!hostPrefix || !projectPath || hostPrefix.endsWith("-review")) return null;
   let { stdout, code } = await execFileNoThrow(
     gitExe(),
     [...GIT_SAFE_GLOBAL_ARGS, "log", "-1", "--format=%B"],
@@ -1143,33 +1199,38 @@ async function findGerritReview() {
       useCwd: true,
     },
   );
-  let w = code === 0 ? [...stdout.matchAll(GERRIT_CHANGE_ID_RE)].at(-1)?.[1] : undefined;
-  if (!w) return null;
-  let R = `${s}-review.googlesource.com`;
-  let x;
+  let changeId = code === 0 ? [...stdout.matchAll(GERRIT_CHANGE_ID_RE)].at(-1)?.[1] : undefined;
+  if (!changeId) return null;
+  let reviewHost = `${hostPrefix}-review.googlesource.com`;
+  let changes;
   try {
-    let G = await externalHttp.get(`https://${R}/changes/?q=change:${w}+status:open&n=5`, {
-      timeout: GERRIT_QUERY_TIMEOUT_MS,
-      responseType: "text",
-      maxRedirects: 0,
-      withCredentials: false,
-      transformResponse: (q) => q,
-    });
-    let L = typeof G.data === "string" ? G.data : "";
-    x = jsonParse(L.startsWith(")]}'") ? L.slice(4) : L);
+    let response = await externalHttp.get(
+      `https://${reviewHost}/changes/?q=change:${changeId}+status:open&n=5`,
+      {
+        timeout: GERRIT_QUERY_TIMEOUT_MS,
+        responseType: "text",
+        maxRedirects: 0,
+        withCredentials: false,
+        transformResponse: (rawResponse) => rawResponse,
+      },
+    );
+    let bodyText = typeof response.data === "string" ? response.data : "";
+    changes = jsonParse(bodyText.startsWith(")]}'") ? bodyText.slice(4) : bodyText);
   } catch {
     return null;
   }
-  let P = Array.isArray(x)
-    ? x.find((G) => typeof G?.project === "string" && G.project.toLowerCase() === h)
+  let change = Array.isArray(changes)
+    ? changes.find(
+        (entry) => typeof entry?.project === "string" && entry.project.toLowerCase() === projectPath,
+      )
     : undefined;
-  if (!P || typeof P._number !== "number") return null;
-  let j = `https://${R}/c/${P.project}/+/${P._number}`;
-  return regExp_18.test(j)
+  if (!change || typeof change._number !== "number") return null;
+  let changeUrl = `https://${reviewHost}/c/${change.project}/+/${change._number}`;
+  return regExp_18.test(changeUrl)
     ? {
-        url: j,
-        project: P.project,
-        number: P._number,
+        url: changeUrl,
+        project: change.project,
+        number: change._number,
       }
     : null;
 }

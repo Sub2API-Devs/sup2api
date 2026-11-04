@@ -5,12 +5,12 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { require_errors } from "../errors.js";
 import { require_www_authenticate_parser } from "./www_authenticate_parser.js";
 
 //@ chunk-1ny7cxrt.js:9227-10006 cjs-fingerprint
-var require_process_response = x(function (cjsExports, cjsModule) {
+var require_process_response = __commonJS(function (cjsExports, cjsModule) {
   var { STATUS_CODES } = importMetaRequire("http");
   var { format } = importMetaRequire("util");
   var { OPError } = require_errors();

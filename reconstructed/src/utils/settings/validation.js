@@ -34,13 +34,17 @@ import {
 } from "./hooksValidation.js";
 import { generateSettingsJSONSchema } from "./schemaOutput.js";
 import { validatePermissionRule } from "./permissionValidation.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-dcmhvw5a.js:437432-437494 sole-consumer
-var strictSettingsSchema = DoctorLazy(() =>
-  buildWholeSettingsSchema(enabledSettingsFeatureGroups(), {
-    strictPolicyHelperKeys: true,
-  }).strict(),
-);
+var strictSettingsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:437432", () => {
+  strictSettingsSchema = DoctorLazy(() =>
+    buildWholeSettingsSchema(enabledSettingsFeatureGroups(), {
+      strictPolicyHelperKeys: true,
+    }).strict(),
+  );
+});
 //@ chunk-dcmhvw5a.js:437494-437540 fingerprint = isInvalidTypeIssue (1)
 function isInvalidTypeIssue(issue) {
   return issue.code === "invalid_type";
@@ -61,22 +65,22 @@ function isTooSmallIssue(issue) {
 /**
  * isBlockingSettingsIssue：是否阻断的设置问题。
  */
-function isBlockingSettingsIssue(e) {
-  return e.severity !== "warning" && !e.loadedWithoutGuardHook;
+function isBlockingSettingsIssue(issue) {
+  return issue.severity !== "warning" && !issue.loadedWithoutGuardHook;
 }
 //@ chunk-dcmhvw5a.js:437754-438033 layout
 var UNLOADABLE_GUARD_HOOK_TEXT =
   'a PreToolUse/PermissionRequest hook that cannot be loaded does not run, nor does any other hook of the document where "hooks" is listed here as ignored; fix or remove the entry. The managed settings document is not skipped for it, unlike a user or project settings file';
 //@ chunk-dcmhvw5a.js:438033-438186 layout
-function explainUnloadableGuardHooks(e) {
-  return e.map((n) =>
-    n.severity !== "warning" && n.message.includes(UNLOADABLE_GUARD_NOTE)
+function explainUnloadableGuardHooks(issues) {
+  return issues.map((issue) =>
+    issue.severity !== "warning" && issue.message.includes(UNLOADABLE_GUARD_NOTE)
       ? {
-          ...n,
-          message: n.message.replace(UNLOADABLE_GUARD_NOTE, () => UNLOADABLE_GUARD_HOOK_TEXT),
+          ...issue,
+          message: issue.message.replace(UNLOADABLE_GUARD_NOTE, () => UNLOADABLE_GUARD_HOOK_TEXT),
           loadedWithoutGuardHook: true,
         }
-      : n,
+      : issue,
   );
 }
 //@ chunk-dcmhvw5a.js:438186-438308 fingerprint = getReceivedType (1)
@@ -101,9 +105,9 @@ function formatZodError(error, filePath) {
       if (issue.code !== "invalid_union" || issue.path.join(".") !== "attribution") return [issue];
       let filtered = issue.errors.flat().filter((error) => error.path.length > 0);
       return filtered.length > 0
-        ? filtered.map((c) => ({
-            ...c,
-            path: [...issue.path, ...c.path],
+        ? filtered.map((error) => ({
+            ...error,
+            path: [...issue.path, ...error.path],
           }))
         : [issue];
     })
@@ -172,46 +176,53 @@ function formatZodError(error, filePath) {
 function validateSettingsFileContent(content) {
   try {
     let jsonData = jsonParse(content);
-    let r = isPlainObject_2(jsonData)
+    let settingsObject = isPlainObject_2(jsonData)
       ? {
           ...jsonData,
         }
       : jsonData;
-    let mapped = applySettingAliases(r, "settings").map(aliasConflictMessage);
-    let a = jsonData;
+    let mapped = applySettingAliases(settingsObject, "settings").map(aliasConflictMessage);
+    let parsedForValidation = jsonData;
     if (isPlainObject_2(jsonData)) {
-      let filtered = SETTING_ALIASES.map((w) => w.alias).filter((w) => w in jsonData && jsonData[w] === null);
+      let filtered = SETTING_ALIASES.map((alias) => alias.alias).filter(
+        (aliasName) => aliasName in jsonData && jsonData[aliasName] === null,
+      );
       if (filtered.length > 0) {
-        let w = {
+        let withoutNullAliases = {
           ...jsonData,
         };
-        for (let L of filtered) delete w[L];
-        a = w;
+        for (let aliasName of filtered) delete withoutNullAliases[aliasName];
+        parsedForValidation = withoutNullAliases;
       }
     }
-    let result = strictSettingsSchema().safeParse(a);
-    let g = result.success ? [] : formatZodError(result.error, "settings");
-    let m = crossSessionInboundError(jsonData);
-    if (m !== undefined)
-      g.push({
+    let result = strictSettingsSchema().safeParse(parsedForValidation);
+    let issues = result.success ? [] : formatZodError(result.error, "settings");
+    let crossSessionError = crossSessionInboundError(jsonData);
+    if (crossSessionError !== undefined)
+      issues.push({
         path: CROSSSESSIONINBOUND,
-        message: `"crossSessionInbound" ${m}.`,
+        message: `"crossSessionInbound" ${crossSessionError}.`,
       });
-    let f = strictPluginOnlyCustomizationError(jsonData);
-    if (f !== undefined)
-      g.push({
+    let pluginOnlyError = strictPluginOnlyCustomizationError(jsonData);
+    if (pluginOnlyError !== undefined)
+      issues.push({
         path: "strictPluginOnlyCustomization",
-        message: `"strictPluginOnlyCustomization" ${f}.`,
+        message: `"strictPluginOnlyCustomization" ${pluginOnlyError}.`,
       });
-    let h = validateAllowedProviders(jsonData);
-    if (h !== undefined)
-      g.push({
+    let providersError = validateAllowedProviders(jsonData);
+    if (providersError !== undefined)
+      issues.push({
         path: "allowedProviders",
-        message: `"allowedProviders" ${h}.`,
+        message: `"allowedProviders" ${providersError}.`,
       });
-    let y = staticPayloadWarnings(jsonData);
-    let ruleWarnings = collectRuleWarnings(r);
-    if (g.length === 0 && mapped.length === 0 && y.length === 0 && ruleWarnings.length === 0)
+    let payloadWarnings = staticPayloadWarnings(jsonData);
+    let ruleWarnings = collectRuleWarnings(settingsObject);
+    if (
+      issues.length === 0 &&
+      mapped.length === 0 &&
+      payloadWarnings.length === 0 &&
+      ruleWarnings.length === 0
+    )
       return {
         isValid: true,
       };
@@ -221,14 +232,14 @@ function validateSettingsFileContent(content) {
         `Settings validation failed:
 ` +
         [
-          ...mapped.map((C) => `- ${C}`),
-          ...g.map((C) => {
-            let w = `- ${C.path}: ${C.message}`;
-            if (C.suggestion) w += `. ${C.suggestion}`;
-            return w;
+          ...mapped.map((aliasMessage) => `- ${aliasMessage}`),
+          ...issues.map((issue) => {
+            let line = `- ${issue.path}: ${issue.message}`;
+            if (issue.suggestion) line += `. ${issue.suggestion}`;
+            return line;
           }),
           ...ruleWarnings.map((ruleWarning) => `- ${ruleWarning}`),
-          ...y.map((err) => `- ${err}`),
+          ...payloadWarnings.map((err) => `- ${err}`),
         ].join(`
 `),
       fullSchema: generateSettingsJSONSchema(),
@@ -242,93 +253,94 @@ function validateSettingsFileContent(content) {
   }
 }
 //@ chunk-dcmhvw5a.js:440624-441480 layout
-function validatePolicyHelperConfig(e, n) {
-  let r = clone(e);
-  let s = [];
-  if (r && typeof r === "object") {
-    let y = r;
-    for (let b of ["policyHelper", "policyHelpers"])
-      if (y[b] !== undefined) {
-        if (y[b] !== null) s.push(b);
-        delete y[b];
+function validatePolicyHelperConfig(config, documentPath) {
+  let settings = clone(config);
+  let strippedKeys = [];
+  if (settings && typeof settings === "object") {
+    let record = settings;
+    for (let key of ["policyHelper", "policyHelpers"])
+      if (record[key] !== undefined) {
+        if (record[key] !== null) strippedKeys.push(key);
+        delete record[key];
       }
   }
-  let a = new Map();
-  let warnings = validateSettingsDocument(r, n, {
+  let marketplacePatternIndex = new Map();
+  let warnings = validateSettingsDocument(settings, documentPath, {
     mcpServerEntrySalvageOnly: true,
     policySource: true,
-    marketplacePatternIndexMapOut: a,
+    marketplacePatternIndexMapOut: marketplacePatternIndex,
   });
-  let g = n.startsWith("policyHelpers.") ? "payload" : "managedSettings";
-  let m = strictPluginOnlyCustomizationError(r);
-  if (m !== undefined)
+  let label = documentPath.startsWith("policyHelpers.") ? "payload" : "managedSettings";
+  let pluginOnlyError = strictPluginOnlyCustomizationError(settings);
+  if (pluginOnlyError !== undefined)
     return {
-      error: `${g} rejected: strictPluginOnlyCustomization: ${m}`,
+      error: `${label} rejected: strictPluginOnlyCustomization: ${pluginOnlyError}`,
       warnings,
-      strippedKeys: s,
+      strippedKeys,
     };
-  let f = validateAllowedProviders(r);
-  if (f !== undefined)
+  let providersError = validateAllowedProviders(settings);
+  if (providersError !== undefined)
     return {
-      error: `${g} rejected: allowedProviders: ${f}`,
+      error: `${label} rejected: allowedProviders: ${providersError}`,
       warnings,
-      strippedKeys: s,
+      strippedKeys,
     };
-  let h = getSettingsSchemaForDocument(r).safeParse(r);
-  if (!h.success) {
-    let joined = h.error.issues
+  let parsed = getSettingsSchemaForDocument(settings).safeParse(settings);
+  if (!parsed.success) {
+    let joined = parsed.error.issues
       .slice(0, 3)
       .map((issue) => {
-        let S = remapIssuePath(issue.path, a);
-        return S.length ? `${S.join(".")}: ${issue.message}` : issue.message;
+        let pathSegments = remapIssuePath(issue.path, marketplacePatternIndex);
+        return pathSegments.length ? `${pathSegments.join(".")}: ${issue.message}` : issue.message;
       })
       .join("; ");
     return {
-      error: `${g} rejected: ${joined}`,
+      error: `${label} rejected: ${joined}`,
       warnings,
-      strippedKeys: s,
+      strippedKeys,
     };
   }
-  copyAllowedProviders(r, h.data);
+  copyAllowedProviders(settings, parsed.data);
   return {
-    settings: h.data,
+    settings: parsed.data,
     warnings,
-    strippedKeys: s,
+    strippedKeys,
   };
 }
 //@ chunk-dcmhvw5a.js:441480-442221 layout
 /**
  * 检查 policyHelpers 中的静态设置载荷（default 与各平台 defaultSettings）：别名冲突、规则警告与无效载荷（来自 OS 管理员来源时会拒绝启动），返回警告文字列表。
  */
-function staticPayloadWarnings(e) {
-  if (!e || typeof e !== "object" || Array.isArray(e)) return [];
-  let policyHelpers = e.policyHelpers;
+function staticPayloadWarnings(settings) {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return [];
+  let policyHelpers = settings.policyHelpers;
   if (!policyHelpers || typeof policyHelpers !== "object" || Array.isArray(policyHelpers)) return [];
   let payloads = [];
   let helpers = policyHelpers;
   if (helpers.default !== undefined && helpers.default !== null)
     payloads.push(["policyHelpers.default", helpers.default]);
-  for (let c of SUPPORTED_PLATFORMS) {
-    let g = helpers[c];
-    if (g && typeof g === "object" && !Array.isArray(g)) {
-      let defaultSettings = g.defaultSettings;
+  for (let platform of SUPPORTED_PLATFORMS) {
+    let entry = helpers[platform];
+    if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+      let defaultSettings = entry.defaultSettings;
       if (defaultSettings !== undefined && defaultSettings !== null)
-        payloads.push([`policyHelpers.${c}.defaultSettings`, defaultSettings]);
+        payloads.push([`policyHelpers.${platform}.defaultSettings`, defaultSettings]);
     }
   }
   let warnings = [];
-  for (let [c, g] of payloads) {
-    let m = isPlainObject_2(g)
+  for (let [payloadPath, payload] of payloads) {
+    let payloadCopy = isPlainObject_2(payload)
       ? {
-          ...g,
+          ...payload,
         }
-      : g;
-    for (let h of applySettingAliases(m, c)) warnings.push(`${c}: ${aliasConflictMessage(h)}`);
-    for (let h of collectRuleWarnings(m)) warnings.push(`${c}.${h}`);
-    let f = validatePolicyHelperConfig(g, c);
-    if ("error" in f)
+      : payload;
+    for (let conflict of applySettingAliases(payloadCopy, payloadPath))
+      warnings.push(`${payloadPath}: ${aliasConflictMessage(conflict)}`);
+    for (let ruleWarning of collectRuleWarnings(payloadCopy)) warnings.push(`${payloadPath}.${ruleWarning}`);
+    let validation = validatePolicyHelperConfig(payload, payloadPath);
+    if ("error" in validation)
       warnings.push(
-        `${c}: not a valid static settings payload \u2014 Claude Code refuses to start on it when delivered from an OS-admin policy source (${f.error})`,
+        `${payloadPath}: not a valid static settings payload \u2014 Claude Code refuses to start on it when delivered from an OS-admin policy source (${validation.error})`,
       );
   }
   return warnings;
@@ -337,13 +349,13 @@ function staticPayloadWarnings(e) {
 /**
  * 从 permissions.allow/deny/ask 中剔除格式错误的规则并给出警告，避免整份设置作废。
  */
-function filterInvalidPermissionRules(data, filePath, r) {
+function filterInvalidPermissionRules(data, filePath, options) {
   if (!data || typeof data !== "object") return [];
   let obj = data;
   if (!obj.permissions || typeof obj.permissions !== "object") return [];
   let perms = obj.permissions;
   let warnings = [];
-  let g = new Map();
+  let unreadableRuleKinds = new Map();
   for (let key of ["allow", "deny", "ask"]) {
     let rules = perms[key];
     if (!Array.isArray(rules)) continue;
@@ -373,24 +385,24 @@ function filterInvalidPermissionRules(data, filePath, r) {
       }
       return true;
     });
-    if (r?.policySource && key !== "allow" && rules.length > 0 && filtered.length === 0) {
-      if (!r.strictParseFollows) continue;
-      g.set(key, "unreadable");
-    } else if (filtered.length < rules.length) g.set(key, "trimmed");
+    if (options?.policySource && key !== "allow" && rules.length > 0 && filtered.length === 0) {
+      if (!options.strictParseFollows) continue;
+      unreadableRuleKinds.set(key, "unreadable");
+    } else if (filtered.length < rules.length) unreadableRuleKinds.set(key, "trimmed");
     perms[key] = filtered;
   }
   withholdGrants(
     "permissions",
     perms,
-    (m) => g.get(m),
-    (m) =>
+    (ruleKind) => unreadableRuleKinds.get(ruleKind),
+    (warning) =>
       warnings.push({
         file: filePath,
-        path: m.path,
-        message: m.message,
+        path: warning.path,
+        message: warning.message,
         severity: "warning",
-        ...(m.substituted && {
-          substituted: m.substituted,
+        ...(warning.substituted && {
+          substituted: warning.substituted,
         }),
       }),
   );

@@ -19,12 +19,16 @@ import {
 import { AGENT } from "../../tools/AgentTool/constants.js";
 import { registerBundledSkill } from "../bundledSkills.js";
 import { SIMPLIFY } from "./bundledSkillNames.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hantmvxa.js:187076-189778 placement
 /**
  * 无法并行派子代理时使用的单遍 /simplify 提示词。
  */
-var SIMPLIFY_AGENTS_PROMPT = `\`/simplify \u2192 4 cleanup agents in parallel \u2192 apply the fixes\`
+var SIMPLIFY_AGENTS_PROMPT; // deferred: uses AGENT (../../tools/AgentTool/constants.js) of its import cycle while loading; runs once the cycle is complete
+var SIMPLIFY_SINGLE_PASS_PROMPT;
+deferInit("chunk-hantmvxa.js:187076", () => {
+  SIMPLIFY_AGENTS_PROMPT = `\`/simplify \u2192 4 cleanup agents in parallel \u2192 apply the fixes\`
 
 You are improving the quality of the changed code, not hunting for bugs. Review
 it for reuse, simplification, efficiency, and altitude issues, then fix what you
@@ -54,7 +58,7 @@ diff, or that you judge to be a false positive \u2014 note the skip rather than
 arguing with it. Finish with a brief summary of what was fixed and what was
 skipped (or confirm the code was already clean).
 `;
-var SIMPLIFY_SINGLE_PASS_PROMPT = `\`/simplify \u2192 ${AGENT} tool unavailable \u2192 single-pass inline cleanup \u2192 apply the fixes\`
+  SIMPLIFY_SINGLE_PASS_PROMPT = `\`/simplify \u2192 ${AGENT} tool unavailable \u2192 single-pass inline cleanup \u2192 apply the fixes\`
 
 You are improving the quality of the changed code, not hunting for bugs. Review
 it for reuse, simplification, efficiency, and altitude issues, then fix what you
@@ -88,6 +92,7 @@ already clean). State clearly in your summary that this was a single-pass
 review done without the ${AGENT} tool, not the full 4-agent
 fan-out, so whoever reads it isn't misled about what actually ran.
 `;
+});
 //@ chunk-hantmvxa.js:189778-190259 placement
 /**
  * 注册 simplify skill（"Clean up the changed code without changing behavior"）：按会话能否派子代理选 4 代理并行版或单代理版提示词，参数是审查目标。
@@ -100,19 +105,19 @@ function registerSimplifySkill() {
       "Review the changed code for reuse, simplification, efficiency, and altitude cleanups, then apply the fixes. Quality only \u2014 it does not hunt for bugs; use /code-review for that.",
     argumentHint: "[<target>]",
     userInvocable: true,
-    async getPromptForCommand(e, n) {
-      let trimmed = e.trim();
-      let r = trimmed
+    async getPromptForCommand(args, context) {
+      let trimmed = args.trim();
+      let targetNote = trimmed
         ? `Review target: \`${trimmed}\`
 
 `
         : "";
-      let h = "";
-      let y = canSpawnReviewAgents(n) ? SIMPLIFY_AGENTS_PROMPT : SIMPLIFY_SINGLE_PASS_PROMPT;
+      let notes = "";
+      let reviewPrompt = canSpawnReviewAgents(context) ? SIMPLIFY_AGENTS_PROMPT : SIMPLIFY_SINGLE_PASS_PROMPT;
       return [
         {
           type: "text",
-          text: `${r}${h}${y}`,
+          text: `${targetNote}${notes}${reviewPrompt}`,
         },
       ];
     },

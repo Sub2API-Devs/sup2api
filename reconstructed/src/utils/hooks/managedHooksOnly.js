@@ -18,50 +18,57 @@ import {
 import { logError } from "../log.js";
 import { isOfficialMarketplaceRef } from "../plugins/marketplaceNames.js";
 import { isManagedHookAllowed } from "../hooks.js";
-import { getAutoUpdatedPluginNames } from "./hooksSettings.js";
+import { filterHooksByPluginHold } from "./hooksSettings.js";
 
 //@ chunk-s61vbvea.js:199570-199646 placement = _temp7 (0.778)
 var policyHookKeysForEvent = (a_2) =>
-  new Set((getSettingsForSource("policySettings")?.hooks?.[a_2] ?? []).map((n) => stableStringifySafe(n)));
+  new Set(
+    (getSettingsForSource("policySettings")?.hooks?.[a_2] ?? []).map((matcher) =>
+      stableStringifySafe(matcher),
+    ),
+  );
 //@ chunk-s61vbvea.js:199646-199931 placement
-function getManagedHooksHoldState(e) {
-  let n = {
+function getManagedHooksHoldState(event) {
+  let state = {
     isHolding: isOrganizationHookPolicyPending(),
     isFaulted: false,
     managedKeys: new Set(),
   };
-  if (!n.isHolding) return n;
+  if (!state.isHolding) return state;
   try {
-    n.isHolding =
+    state.isHolding =
       isHookPolicyUnanswered() || getSettingsForSource("policySettings")?.allowManagedHooksOnly === true;
   } catch (error) {
     logError(error);
-    n.isFaulted = true;
+    state.isFaulted = true;
   }
-  if (!n.isHolding) return n;
+  if (!state.isHolding) return state;
   try {
-    n.managedKeys = policyHookKeysForEvent(e);
+    state.managedKeys = policyHookKeysForEvent(event);
   } catch (error) {
     logError(error);
-    n.isFaulted = true;
+    state.isFaulted = true;
   }
-  return n;
+  return state;
 }
 //@ chunk-s61vbvea.js:199931-199979 placement
-var countHooks = (e) => e.reduce((acc, r) => acc + r.hooks.length, 0);
+var countHooks = (matchers) => matchers.reduce((acc, matcher) => acc + matcher.hooks.length, 0);
 //@ chunk-s61vbvea.js:199979-200006 placement
 /**
  * 判断钩子是否来自官方市场或允许名单。
  */
-var isManagedOrAllowlistedHook = (e) => isOfficialMarketplaceRef(e) || isManagedHookAllowed(e);
+var isManagedOrAllowlistedHook = (pluginId) =>
+  isOfficialMarketplaceRef(pluginId) || isManagedHookAllowed(pluginId);
 //@ chunk-s61vbvea.js:200618-200796 placement
-function filterHooksByManagedHold(e, n, held) {
-  if (held === "included") return e;
-  let s = held === "only";
-  let managedHooksHoldState = getManagedHooksHoldState(n);
-  if (!managedHooksHoldState.isHolding) return s ? [] : e;
-  let flattened = e.flatMap((w) => getAutoUpdatedPluginNames(w, managedHooksHoldState, s));
-  if (s ? flattened.length > 0 : countHooks(flattened) < countHooks(e)) markOrganizationAskHeld();
-  return flattened;
+function filterHooksByManagedHold(matchers, event, held) {
+  if (held === "included") return matchers;
+  let only = held === "only";
+  let managedHooksHoldState = getManagedHooksHoldState(event);
+  if (!managedHooksHoldState.isHolding) return only ? [] : matchers;
+  let matchers_2 = matchers.flatMap((matcher) =>
+    filterHooksByPluginHold(matcher, managedHooksHoldState, only),
+  );
+  if (only ? matchers_2.length > 0 : countHooks(matchers_2) < countHooks(matchers)) markOrganizationAskHeld();
+  return matchers_2;
 }
 export { filterHooksByManagedHold, isManagedOrAllowlistedHook, getManagedHooksHoldState };

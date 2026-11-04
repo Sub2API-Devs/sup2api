@@ -45,9 +45,9 @@ var INITIAL_ANNOUNCEMENT = {
 /**
  * 调用 enabledNow 判断是否当下启用（出错视为否）。
  */
-function isEnabledNow(t) {
+function isEnabledNow(host) {
   try {
-    return t.enabledNow?.() === true;
+    return host.enabledNow?.() === true;
   } catch {
     return false;
   }
@@ -56,13 +56,13 @@ function isEnabledNow(t) {
 /**
  * 微任务里调用回调，出错时记诊断（不带 PII）。
  */
-function runGuarded(t, e, n) {
-  if (e === undefined) return;
+function runGuarded(fn, arg, eventName) {
+  if (arg === undefined) return;
   queueMicrotask(() => {
     try {
-      t(e);
+      fn(arg);
     } catch {
-      logForDiagnosticsNoPII("error", n, {});
+      logForDiagnosticsNoPII("error", eventName, {});
     }
   });
 }
@@ -70,330 +70,360 @@ function runGuarded(t, e, n) {
 /**
  * home seed 应用过程的用户提示状态机（外来文件替换、恢复提示、询问等）。
  */
-function createHomeSeedAnnouncer(t, e) {
-  let n;
-  let l = false;
-  let d;
-  let u = false;
-  let w = new Set();
-  let v = new Set();
-  let P;
-  let E;
-  let y = false;
+function createHomeSeedAnnouncer(options, deps) {
+  let verdict;
+  let deaf = false;
+  let deafReason;
+  let stopped = false;
+  let appliedListeners = new Set();
+  let restoreListeners = new Set();
+  let lastAppliedEvent;
+  let lastRestoreEvent;
+  let discardLogged = false;
   let lastAppliedGeneration = 0;
-  let M = 0;
-  let Q = false;
-  let x = false;
-  let N;
-  let q;
-  let X = false;
-  let Te = 0;
-  let K;
-  let de;
-  let ue = false;
-  let se;
-  let keepsForeignFiles = t.foreignFiles !== "replaced";
-  let be;
-  let Be;
-  let we = false;
-  let S = false;
-  let ee = false;
-  let re = !e.epochGt1;
-  let ae = e.epochGt1 && isEnabledNow(e);
-  let Re = false;
-  let De = false;
-  let Ce;
-  let ve;
-  let nt = false;
-  let ot;
-  let it = false;
-  let Ht = false;
-  let He = new Set();
-  let ce = () => {
-    for (let r of [...He]) r();
+  let runCount = 0;
+  let enabled = false;
+  let enabledResolved = false;
+  let latestAnnouncement;
+  let runningAnnouncement;
+  let runInFlight = false;
+  let lastHandledOrdinal = 0;
+  let readyWriteState;
+  let restoredEtag;
+  let readyWritePending = false;
+  let sidecarSnapshot;
+  let keepsForeignFiles = options.foreignFiles !== "replaced";
+  let sidecarReadPromise;
+  let readyEtag;
+  let verdictsSubscribing = false;
+  let firstAskSeen = false;
+  let recoveryArmed = false;
+  let announcementDecided = !deps.epochGt1;
+  let provisionalRecovery = deps.epochGt1 && isEnabledNow(deps);
+  let restoreStarted = false;
+  let settingsGoneRetryArmed = false;
+  let restoreFailureReason;
+  let pendingRestoreResult;
+  let runningAfterAnnounce = false;
+  let sidecarState;
+  let sidecarCountedAsAbsent = false;
+  let sidecarReadStarted = false;
+  let holdReleaseCallbacks = new Set();
+  let notifyHoldWaiters = () => {
+    for (let callback of [...holdReleaseCallbacks]) callback();
   };
-  let me = (r) => {
-    if (!l) {
-      d = r;
-      if (N !== undefined || q !== undefined) Et();
+  let goDeaf = (reason) => {
+    if (!deaf) {
+      deafReason = reason;
+      if (latestAnnouncement !== undefined || runningAnnouncement !== undefined) logDiscarded();
     }
-    l = true;
-    N = undefined;
-    q = undefined;
-    if (ee && !Re) Z("lane_unavailable", 0, e.now(), false);
-    ee = false;
-    ae = false;
-    re = true;
-    ce();
+    deaf = true;
+    latestAnnouncement = undefined;
+    runningAnnouncement = undefined;
+    if (recoveryArmed && !restoreStarted) recordFailure("lane_unavailable", 0, deps.now(), false);
+    recoveryArmed = false;
+    provisionalRecovery = false;
+    announcementDecided = true;
+    notifyHoldWaiters();
   };
-  let Et = () => {
-    if (!y) {
-      y = true;
+  let logDiscarded = () => {
+    if (!discardLogged) {
+      discardLogged = true;
       logForDiagnosticsNoPII("info", "home_seed_announcement_discarded", {
-        reason: d ?? "stopped",
+        reason: deafReason ?? "stopped",
       });
     }
   };
-  let st = () => {
-    let filtered = [N, q, ee || ae ? INITIAL_ANNOUNCEMENT : undefined].filter((s) => s !== undefined);
+  let latestPendingAnnouncement = () => {
+    let filtered = [
+      latestAnnouncement,
+      runningAnnouncement,
+      recoveryArmed || provisionalRecovery ? INITIAL_ANNOUNCEMENT : undefined,
+    ].filter((candidate) => candidate !== undefined);
     return filtered.length === 0
       ? undefined
-      : filtered.reduce((acc, R) => (R.ordinal > acc.ordinal ? R : acc));
+      : filtered.reduce((acc, best) => (best.ordinal > acc.ordinal ? best : acc));
   };
-  function At(r) {
-    if (l || u) {
-      Et();
+  function onAnnouncement(announcement) {
+    if (deaf || stopped) {
+      logDiscarded();
       return;
     }
-    if (r.etag === N?.etag || r.etag === q?.etag) return;
-    if (r.etag === de) {
-      if (se !== undefined && K === undefined)
-        K = {
-          etag: r.etag,
-          ready: On(se),
+    if (announcement.etag === latestAnnouncement?.etag || announcement.etag === runningAnnouncement?.etag)
+      return;
+    if (announcement.etag === restoredEtag) {
+      if (sidecarSnapshot !== undefined && readyWriteState === undefined)
+        readyWriteState = {
+          etag: announcement.etag,
+          ready: encodeRestoredReadyRow(sidecarSnapshot),
           readyWritten: false,
         };
-      if (K !== undefined && !K.readyWritten)
-        if (X || !Q || n !== "served") ue = true;
-        else dt();
+      if (readyWriteState !== undefined && !readyWriteState.readyWritten)
+        if (runInFlight || !enabled || verdict !== "served") readyWritePending = true;
+        else writeReadyFromSidecar();
       return;
     }
-    if (K !== undefined && r.etag === K.etag) {
-      if (!K.readyWritten)
-        if (X) ue = true;
-        else dt();
+    if (readyWriteState !== undefined && announcement.etag === readyWriteState.etag) {
+      if (!readyWriteState.readyWritten)
+        if (runInFlight) readyWritePending = true;
+        else writeReadyFromSidecar();
       return;
     }
-    N = r;
-    if (e.epochGt1 && !Ht) {
-      Ht = true;
-      let s = e.now();
-      be ??= e.readSidecar(t.configHome).catch(() => null);
-      be.then((R) => {
-        Sn(R, s);
+    latestAnnouncement = announcement;
+    if (deps.epochGt1 && !sidecarReadStarted) {
+      sidecarReadStarted = true;
+      let startedAt = deps.now();
+      sidecarReadPromise ??= deps.readSidecar(options.configHome).catch(() => null);
+      sidecarReadPromise.then((sidecar) => {
+        adoptSidecarApplied(sidecar, startedAt);
       });
     }
-    if (n === "served") ze(false);
+    if (verdict === "served") runApply(false);
   }
-  function Sn(r, s) {
+  function adoptSidecarApplied(sidecar, startedAt) {
     if (
-      r === null ||
-      r.packEtag === undefined ||
-      r.packEtag === RESTORED_WITHOUT_ANNOUNCEMENT ||
-      N?.etag !== r.packEtag ||
-      K !== undefined ||
-      de !== undefined
+      sidecar === null ||
+      sidecar.packEtag === undefined ||
+      sidecar.packEtag === RESTORED_WITHOUT_ANNOUNCEMENT ||
+      latestAnnouncement?.etag !== sidecar.packEtag ||
+      readyWriteState !== undefined ||
+      restoredEtag !== undefined
     )
       return;
-    de = r.packEtag;
-    se = r;
-    N = undefined;
-    lt();
-    ne("already_applied", "none", null, r.generation, s);
-    ce();
+    restoredEtag = sidecar.packEtag;
+    sidecarSnapshot = sidecar;
+    latestAnnouncement = undefined;
+    disarmRecovery();
+    reportApplyTelemetry("already_applied", "none", null, sidecar.generation, startedAt);
+    notifyHoldWaiters();
   }
-  function wn(r, s) {
-    if (l || u) return;
-    n = r;
-    if (r === "served") {
-      if (N !== undefined) ze(!s);
-      else if (ue) Ae();
+  function onVerdict(nextVerdict, hadVerdict) {
+    if (deaf || stopped) return;
+    verdict = nextVerdict;
+    if (nextVerdict === "served") {
+      if (latestAnnouncement !== undefined) runApply(!hadVerdict);
+      else if (readyWritePending) resumePendingWork();
       else {
-        at(!s);
-        Ie(s);
+        startRecovery(!hadVerdict);
+        maybeCheckSettingsGone(hadVerdict);
       }
       return;
     }
-    me(r === "off" ? "verdict_off" : "verdict_refused");
+    goDeaf(nextVerdict === "off" ? "verdict_off" : "verdict_refused");
   }
-  function Ft() {
-    if (!re && Q && ot === "absent" && !l && !u) {
-      re = true;
-      ee = true;
-      ae = false;
+  function armProvisionalRecovery() {
+    if (!announcementDecided && enabled && sidecarState === "absent" && !deaf && !stopped) {
+      announcementDecided = true;
+      recoveryArmed = true;
+      provisionalRecovery = false;
     }
   }
-  function at(r = false) {
-    Ft();
-    if (!ee || n !== "served" || X || l || u) return;
-    X = true;
-    Re = true;
-    let s = e.now();
-    Rn(!r, s)
+  function startRecovery(probeFirst = false) {
+    armProvisionalRecovery();
+    if (!recoveryArmed || verdict !== "served" || runInFlight || deaf || stopped) return;
+    runInFlight = true;
+    restoreStarted = true;
+    let startedAt = deps.now();
+    runRecovery(!probeFirst, startedAt)
       .catch((error) => {
         logForDiagnosticsNoPII("error", "home_seed_recovery_threw", {
           name: safeErrorName(error),
         });
-        ge("threw", 0, s);
+        reportRecoveryTelemetry("threw", 0, startedAt);
       })
       .finally(() => {
-        X = false;
-        ee = false;
-        ce();
-        Ae();
-        if (q === undefined || S) xe();
+        runInFlight = false;
+        recoveryArmed = false;
+        notifyHoldWaiters();
+        resumePendingWork();
+        if (runningAnnouncement === undefined || firstAskSeen) flushRestoreResult();
       });
   }
-  async function Rn(r, s) {
-    M++;
-    if (r) {
-      let row = await e.getRow(joined);
-      if (Ee(s)) return;
+  async function runRecovery(probeFirst, startedAt) {
+    runCount++;
+    if (probeFirst) {
+      let row = await deps.getRow(joined);
+      if (isGateClosed(startedAt)) return;
       if (row.kind !== "ok" && row.kind !== "not_found") {
-        let he = Ge(row);
-        if (he === "refused" || he === "rejected") me("probe_refused");
-        Z(he === "auth" ? "auth_failed" : "request_failed", 0, s, he === "auth");
+        let failureKind = classifyRowFailure(row);
+        if (failureKind === "refused" || failureKind === "rejected") goDeaf("probe_refused");
+        recordFailure(
+          failureKind === "auth" ? "auth_failed" : "request_failed",
+          0,
+          startedAt,
+          failureKind === "auth",
+        );
         return;
       }
     }
-    let row = await e.getRow(joined_6);
-    if (Ee(s)) return;
+    let row = await deps.getRow(joined_6);
+    if (isGateClosed(startedAt)) return;
     if (row.kind !== "ok") {
-      if (row.kind === "not_found") Z("no_ready_row", 0, s, false);
+      if (row.kind === "not_found") recordFailure("no_ready_row", 0, startedAt, false);
       else {
-        let te = Ge(row);
-        if (te === "refused") me("ready_refused");
-        Z(te === "auth" ? "auth_failed" : "request_failed", 0, s, te === "auth");
+        let failureKind = classifyRowFailure(row);
+        if (failureKind === "refused") goDeaf("ready_refused");
+        recordFailure(
+          failureKind === "auth" ? "auth_failed" : "request_failed",
+          0,
+          startedAt,
+          failureKind === "auth",
+        );
       }
       return;
     }
     let homeReadyRow = parseHomeReadyRow(row.buf);
     if (!homeReadyRow.ok) {
-      Z("ready_unreadable", 0, s, true);
+      recordFailure("ready_unreadable", 0, startedAt, true);
       return;
     }
     let generation = homeReadyRow.ready.generation;
-    let row_2 = await e.getRow(joined_5);
-    if (Ee(s)) return;
+    let row_2 = await deps.getRow(joined_5);
+    if (isGateClosed(startedAt)) return;
     if (row_2.kind !== "ok") {
-      let te = row_2.kind === "not_found" ? "not_found" : Ge(row_2);
-      if (te === "refused") me("pack_refused");
-      Z(
-        te === "not_found" ? "pack_absent" : te === "auth" ? "auth_failed" : "request_failed",
+      let failureKind = row_2.kind === "not_found" ? "not_found" : classifyRowFailure(row_2);
+      if (failureKind === "refused") goDeaf("pack_refused");
+      recordFailure(
+        failureKind === "not_found"
+          ? "pack_absent"
+          : failureKind === "auth"
+            ? "auth_failed"
+            : "request_failed",
         generation,
-        s,
+        startedAt,
         true,
       );
       return;
     }
-    let C = decodeHomePack(row_2.buf);
-    if (!C.ok) {
+    let decodedPack = decodeHomePack(row_2.buf);
+    if (!decodedPack.ok) {
       logForDiagnosticsNoPII("warn", "home_seed_bad_pack", {
-        reason: C.reason,
+        reason: decodedPack.reason,
       });
-      Z("pack_unreadable", generation, s, true);
+      recordFailure("pack_unreadable", generation, startedAt, true);
       return;
     }
-    if (C.pack.generation !== generation) {
-      Z("generation_mismatch", generation, s, true);
+    if (decodedPack.pack.generation !== generation) {
+      recordFailure("generation_mismatch", generation, startedAt, true);
       return;
     }
-    let U = planHomeSeedApply({
-      pack: C.pack,
+    let applyPlan = planHomeSeedApply({
+      pack: decodedPack.pack,
       packEtag: RESTORED_WITHOUT_ANNOUNCEMENT,
-      refused: C.refused,
+      refused: decodedPack.refused,
       sidecar: null,
       lastAppliedGeneration: 0,
       permissionsAdmissible: false,
-      onlyClaudeMd: t.onlyClaudeMd === true,
+      onlyClaudeMd: options.onlyClaudeMd === true,
     });
-    if (U.kind === "stale_generation") {
-      Z("generation_mismatch", generation, s, true);
+    if (applyPlan.kind === "stale_generation") {
+      recordFailure("generation_mismatch", generation, startedAt, true);
       return;
     }
-    if (C.refused.settings !== "none") {
-      Z("settings_refused", generation, s, true);
+    if (decodedPack.refused.settings !== "none") {
+      recordFailure("settings_refused", generation, startedAt, true);
       return;
     }
-    let W = Pt(U.plan, C.pack.settings);
-    if (W.deny.length === 0 && W.ask.length === 0) {
-      if (W.dropped > 0) Z("rules_unverifiable", generation, s, true, W.dropped);
-      else Z("no_rules", generation, s, false);
+    let announcableRules = collectAnnouncableRules(applyPlan.plan, decodedPack.pack.settings);
+    if (announcableRules.deny.length === 0 && announcableRules.ask.length === 0) {
+      if (announcableRules.dropped > 0)
+        recordFailure("rules_unverifiable", generation, startedAt, true, announcableRules.dropped);
+      else recordFailure("no_rules", generation, startedAt, false);
       return;
     }
-    if (t.settingsPath === undefined) {
-      Z("no_rules", generation, s, false);
+    if (options.settingsPath === undefined) {
+      recordFailure("no_rules", generation, startedAt, false);
       return;
     }
-    let B = await e.readStandingSettings(t.settingsPath).catch(() => ({
+    let standingSettings = await deps.readStandingSettings(options.settingsPath).catch(() => ({
       kind: "unusable",
     }));
-    if (Ee(s)) return;
-    let L = B.kind === "unusable" ? null : vn(U.plan, W, B);
-    if (L === null) {
-      Z("settings_unusable", generation, s, true);
+    if (isGateClosed(startedAt)) return;
+    let mergedPlan =
+      standingSettings.kind === "unusable"
+        ? null
+        : mergeRulesIntoPlan(applyPlan.plan, announcableRules, standingSettings);
+    if (mergedPlan === null) {
+      recordFailure("settings_unusable", generation, startedAt, true);
       return;
     }
-    let G = await e.execute(L, t, e.applyDeps());
-    let beforeFirstAsk = !S;
-    if (G.outcome === "config_home_unsafe" || G.outcome === "flag_off") {
-      ne(G.outcome, "recovery", G, G.generation, s);
-      Z("nothing_applied", generation, s, false);
+    let applyReport = await deps.execute(mergedPlan, options, deps.applyDeps());
+    let beforeFirstAsk = !firstAskSeen;
+    if (applyReport.outcome === "config_home_unsafe" || applyReport.outcome === "flag_off") {
+      reportApplyTelemetry(applyReport.outcome, "recovery", applyReport, applyReport.generation, startedAt);
+      recordFailure("nothing_applied", generation, startedAt, false);
       return;
     }
-    if (!G.settingsWritten) {
-      ne(G.outcome, "recovery", G, G.generation, s);
-      Z("nothing_applied", generation, s, true);
+    if (!applyReport.settingsWritten) {
+      reportApplyTelemetry(applyReport.outcome, "recovery", applyReport, applyReport.generation, startedAt);
+      recordFailure("nothing_applied", generation, startedAt, true);
       return;
     }
     try {
-      e.afterApply(G, {
+      deps.afterApply(applyReport, {
         beforeFirstAsk,
-        applied: Dt(L, G),
+        applied: summarizeApplied(mergedPlan, applyReport),
       });
     } catch {
       logForDiagnosticsNoPII("error", "home_seed_after_apply_threw", {});
     }
-    ve = {
+    pendingRestoreResult = {
       kind: "restored",
-      denyRules: W.deny.length,
-      askRules: W.ask.length,
-      droppedRules: W.dropped,
+      denyRules: announcableRules.deny.length,
+      askRules: announcableRules.ask.length,
+      droppedRules: announcableRules.dropped,
       beforeFirstAsk,
-      duringHold: He.size > 0,
+      duringHold: holdReleaseCallbacks.size > 0,
       keepsForeignFiles,
     };
-    ne(G.outcome, "recovery", G, G.generation, s);
-    ge("restored", generation, s, W.dropped);
+    reportApplyTelemetry(applyReport.outcome, "recovery", applyReport, applyReport.generation, startedAt);
+    reportRecoveryTelemetry("restored", generation, startedAt, announcableRules.dropped);
   }
-  function Pt(plan, settings) {
+  function collectAnnouncableRules(plan, settings) {
     let permissions = plan.settings?.document.permissions;
-    let b = (B) => (B ?? []).filter((L) => ANNOUNCED_RULE_RE.test(L)).slice(0, MAX_ANNOUNCED_RULES);
-    let h = b(permissions?.deny);
-    let I = b(permissions?.ask);
-    let C = permissionsSchema().safeParse(settings?.permissions);
-    let U = (B) => (C.success ? uniq(toStringArray(C.data[B])).length : 0);
-    let dropped = Math.max(0, U("deny") + U("ask") - h.length - I.length);
+    let filterRules = (rules) =>
+      (rules ?? []).filter((rule) => ANNOUNCED_RULE_RE.test(rule)).slice(0, MAX_ANNOUNCED_RULES);
+    let denyRules = filterRules(permissions?.deny);
+    let askRules = filterRules(permissions?.ask);
+    let parsedPermissions = permissionsSchema().safeParse(settings?.permissions);
+    let countRules = (ruleKind) =>
+      parsedPermissions.success ? uniq(toStringArray(parsedPermissions.data[ruleKind])).length : 0;
+    let dropped = Math.max(0, countRules("deny") + countRules("ask") - denyRules.length - askRules.length);
     return {
-      deny: h,
-      ask: I,
+      deny: denyRules,
+      ask: askRules,
       dropped,
     };
   }
-  function vn(plan, s, R) {
-    let b = R.kind === "object" ? R.value : {};
-    let h = permissionsSchema().safeParse(b.permissions);
-    if (b.permissions !== undefined && b.permissions !== null && !h.success) return null;
-    let I = h.success ? h.data : {};
-    let C = mergeRuleLists(toStringArray(I.deny), s.deny);
-    let U = mergeRuleLists(toStringArray(I.ask), s.ask);
-    let W = {
-      ...b,
+  function mergeRulesIntoPlan(plan, rules, standingRow) {
+    let standingSettings = standingRow.kind === "object" ? standingRow.value : {};
+    let permissionsResult = permissionsSchema().safeParse(standingSettings.permissions);
+    if (
+      standingSettings.permissions !== undefined &&
+      standingSettings.permissions !== null &&
+      !permissionsResult.success
+    )
+      return null;
+    let permissions = permissionsResult.success ? permissionsResult.data : {};
+    let denyRules = mergeRuleLists(toStringArray(permissions.deny), rules.deny);
+    let askRules = mergeRuleLists(toStringArray(permissions.ask), rules.ask);
+    let nextDocument = {
+      ...standingSettings,
       permissions: {
-        ...I,
-        ...(C.length > 0 && {
-          deny: C,
+        ...permissions,
+        ...(denyRules.length > 0 && {
+          deny: denyRules,
         }),
-        ...(U.length > 0 && {
-          ask: U,
+        ...(askRules.length > 0 && {
+          ask: askRules,
         }),
       },
     };
-    let B =
-      jsonStringify(W, null, 2) +
+    let rendered =
+      jsonStringify(nextDocument, null, 2) +
       `
 `;
-    if (Buffer.byteLength(B) > MAX_RENDERED_SETTINGS_BYTES) return null;
+    if (Buffer.byteLength(rendered) > MAX_RENDERED_SETTINGS_BYTES) return null;
     return {
       ...plan,
       writes: [],
@@ -406,189 +436,207 @@ function createHomeSeedAnnouncer(t, e) {
       settings: {
         document: {
           permissions: {
-            ...(s.deny.length > 0 && {
-              deny: [...s.deny],
+            ...(rules.deny.length > 0 && {
+              deny: [...rules.deny],
             }),
-            ...(s.ask.length > 0 && {
-              ask: [...s.ask],
+            ...(rules.ask.length > 0 && {
+              ask: [...rules.ask],
             }),
           },
         },
-        rendered: B,
-        sha256: computeContentHash(B),
+        rendered,
+        sha256: computeContentHash(rendered),
       },
     };
   }
-  function Ge(r) {
-    let s = classifyRowError(r);
+  function classifyRowFailure(row) {
+    let failureKind = classifyRowError(row);
     logForDiagnosticsNoPII("warn", "home_seed_lane_request_failed", {
-      outcome: s,
-      kind: r.errorKind,
-      status: r.status ?? 0,
+      outcome: failureKind,
+      kind: row.errorKind,
+      status: row.status ?? 0,
     });
-    return s;
+    return failureKind;
   }
-  function Ee(r) {
-    if (l || u) {
-      ge("gate_closed", 0, r);
+  function isGateClosed(startedAt) {
+    if (deaf || stopped) {
+      reportRecoveryTelemetry("gate_closed", 0, startedAt);
       return true;
     }
     return false;
   }
-  function lt() {
-    if (ee) {
-      ee = false;
-      ge("superseded", 0, e.now());
+  function disarmRecovery() {
+    if (recoveryArmed) {
+      recoveryArmed = false;
+      reportRecoveryTelemetry("superseded", 0, deps.now());
     }
-    re = true;
-    ae = false;
+    announcementDecided = true;
+    provisionalRecovery = false;
   }
-  function Z(r, generation, R, b, dropped = 0) {
-    ee = false;
-    ge(r, generation, R, dropped);
-    if (b && En(r))
-      ve = {
+  function recordFailure(outcome, generation, startedAt, reportable, dropped = 0) {
+    recoveryArmed = false;
+    reportRecoveryTelemetry(outcome, generation, startedAt, dropped);
+    if (reportable && isNotRestoredReason(outcome))
+      pendingRestoreResult = {
         kind: "not_restored",
-        reason: r,
+        reason: outcome,
         keepsForeignFiles,
       };
   }
-  function xe() {
-    let r = ve;
-    ve = undefined;
-    if (r !== undefined) Tt(r);
+  function flushRestoreResult() {
+    let restoreResult = pendingRestoreResult;
+    pendingRestoreResult = undefined;
+    if (restoreResult !== undefined) dispatchApplyResult(restoreResult);
   }
-  let Ot = () => N !== undefined || q !== undefined || K !== undefined || de !== undefined;
-  function Ie(r = true) {
-    if (!De || !S || n !== "served" || l || u || Ot()) return;
-    De = false;
-    let s = e.now();
-    Hn(r, s).catch((error) => {
+  let hasPendingAnnouncement = () =>
+    latestAnnouncement !== undefined ||
+    runningAnnouncement !== undefined ||
+    readyWriteState !== undefined ||
+    restoredEtag !== undefined;
+  function maybeCheckSettingsGone(probeFirst = true) {
+    if (
+      !settingsGoneRetryArmed ||
+      !firstAskSeen ||
+      verdict !== "served" ||
+      deaf ||
+      stopped ||
+      hasPendingAnnouncement()
+    )
+      return;
+    settingsGoneRetryArmed = false;
+    let startedAt = deps.now();
+    runSettingsGoneCheck(probeFirst, startedAt).catch((error) => {
       logForDiagnosticsNoPII("error", "home_seed_recovery_threw", {
         name: safeErrorName(error),
       });
-      ge("threw", 0, s);
+      reportRecoveryTelemetry("threw", 0, startedAt);
     });
   }
-  async function Hn(r, s) {
-    let R = (h) => {
-      Z(Ge(h) === "auth" ? "auth_failed" : "request_failed", 0, s, false);
-      De = true;
+  async function runSettingsGoneCheck(probeFirst, startedAt) {
+    let onFailure = (row) => {
+      recordFailure(
+        classifyRowFailure(row) === "auth" ? "auth_failed" : "request_failed",
+        0,
+        startedAt,
+        false,
+      );
+      settingsGoneRetryArmed = true;
     };
-    if (r) {
-      let row = await e.getRow(joined);
-      if (Ee(s)) return;
+    if (probeFirst) {
+      let row = await deps.getRow(joined);
+      if (isGateClosed(startedAt)) return;
       if (row.kind !== "ok" && row.kind !== "not_found") {
-        R(row);
+        onFailure(row);
         return;
       }
     }
-    let row = await e.getRow(joined_6);
-    if (Ee(s)) return;
-    if (Ot()) {
-      De = true;
+    let row = await deps.getRow(joined_6);
+    if (isGateClosed(startedAt)) return;
+    if (hasPendingAnnouncement()) {
+      settingsGoneRetryArmed = true;
       return;
     }
     if (row.kind === "not_found") {
-      Z("no_ready_row", 0, s, false);
+      recordFailure("no_ready_row", 0, startedAt, false);
       return;
     }
     if (row.kind !== "ok") {
-      R(row);
+      onFailure(row);
       return;
     }
-    Z("settings_gone", 0, s, true);
-    xe();
+    recordFailure("settings_gone", 0, startedAt, true);
+    flushRestoreResult();
   }
-  function En(r) {
+  function isNotRestoredReason(reason) {
     return (
-      r === "ready_unreadable" ||
-      r === "rules_unverifiable" ||
-      r === "settings_refused" ||
-      r === "auth_failed" ||
-      r === "pack_absent" ||
-      r === "pack_unreadable" ||
-      r === "generation_mismatch" ||
-      r === "request_failed" ||
-      r === "settings_unusable" ||
-      r === "nothing_applied" ||
-      r === "settings_gone"
+      reason === "ready_unreadable" ||
+      reason === "rules_unverifiable" ||
+      reason === "settings_refused" ||
+      reason === "auth_failed" ||
+      reason === "pack_absent" ||
+      reason === "pack_unreadable" ||
+      reason === "generation_mismatch" ||
+      reason === "request_failed" ||
+      reason === "settings_unusable" ||
+      reason === "nothing_applied" ||
+      reason === "settings_gone"
     );
   }
-  function ge(outcome, generation, R, rulesDropped = 0) {
+  function reportRecoveryTelemetry(outcome, generation, startedAt, rulesDropped = 0) {
     try {
-      e.telemetry.recovery({
+      deps.telemetry.recovery({
         outcome,
         generation,
-        durationMs: e.now() - R,
+        durationMs: deps.now() - startedAt,
         rulesDropped,
-        afterAnnouncedRun: nt,
-        sidecarCountedAsAbsent: it,
+        afterAnnouncedRun: runningAfterAnnounce,
+        sidecarCountedAsAbsent,
       });
     } catch {
       logForDiagnosticsNoPII("error", "home_seed_telemetry_threw", {});
     }
   }
-  function Tt(r) {
-    let s = (R, b, h) => {
-      for (let I of R)
+  function dispatchApplyResult(result) {
+    let callListeners = (listeners, payload, logEventName) => {
+      for (let listener of listeners)
         try {
-          I(b);
+          listener(payload);
         } catch {
-          logForDiagnosticsNoPII("error", h, {});
+          logForDiagnosticsNoPII("error", logEventName, {});
         }
     };
-    if (r.kind === "restored" || r.kind === "not_restored") {
-      E = v.size === 0 ? r : undefined;
-      if (r.kind === "not_restored" && v.size > 0) Ce = r.reason;
-      s(v, r, "home_seed_restore_listener_threw");
+    if (result.kind === "restored" || result.kind === "not_restored") {
+      lastRestoreEvent = restoreListeners.size === 0 ? result : undefined;
+      if (result.kind === "not_restored" && restoreListeners.size > 0) restoreFailureReason = result.reason;
+      callListeners(restoreListeners, result, "home_seed_restore_listener_threw");
     } else {
-      P = w.size === 0 ? r : undefined;
-      s(w, r, "home_seed_applied_listener_threw");
+      lastAppliedEvent = appliedListeners.size === 0 ? result : undefined;
+      callListeners(appliedListeners, result, "home_seed_applied_listener_threw");
     }
   }
-  function ze(r) {
-    if (!Q || X || N === undefined || l || u) return;
-    if (nt && !re) return;
-    X = true;
-    An(r)
+  function runApply(probeFirst) {
+    if (!enabled || runInFlight || latestAnnouncement === undefined || deaf || stopped) return;
+    if (runningAfterAnnounce && !announcementDecided) return;
+    runInFlight = true;
+    runApplyFromAnnouncement(probeFirst)
       .catch((error) => {
         logForDiagnosticsNoPII("error", "home_seed_run_threw", {
           name: safeErrorName(error),
         });
       })
       .finally(() => {
-        X = false;
-        q = undefined;
-        xe();
-        ce();
-        Ae();
-        Ie();
+        runInFlight = false;
+        runningAnnouncement = undefined;
+        flushRestoreResult();
+        notifyHoldWaiters();
+        resumePendingWork();
+        maybeCheckSettingsGone();
       });
   }
-  function Ae() {
-    at();
-    if (X) return;
-    if (N !== undefined && n === "served") {
-      ze(false);
-      if (X) ue = false;
+  function resumePendingWork() {
+    startRecovery();
+    if (runInFlight) return;
+    if (latestAnnouncement !== undefined && verdict === "served") {
+      runApply(false);
+      if (runInFlight) readyWritePending = false;
       return;
     }
-    if (!ue) return;
-    if (K === undefined || K.readyWritten) {
-      ue = false;
+    if (!readyWritePending) return;
+    if (readyWriteState === undefined || readyWriteState.readyWritten) {
+      readyWritePending = false;
       return;
     }
-    dt();
-    if (X) ue = false;
+    writeReadyFromSidecar();
+    if (runInFlight) readyWritePending = false;
   }
-  function dt() {
-    if (K === undefined || X || l || u || !Q || n !== "served") return;
-    let r = K;
-    X = true;
-    ut(r.ready)
-      .then((s) => {
-        if (s) r.readyWritten = true;
+  function writeReadyFromSidecar() {
+    if (readyWriteState === undefined || runInFlight || deaf || stopped || !enabled || verdict !== "served")
+      return;
+    let state = readyWriteState;
+    runInFlight = true;
+    writeReadyRowWithRetry(state.ready)
+      .then((ok) => {
+        if (ok) state.readyWritten = true;
       })
       .catch((error) => {
         logForDiagnosticsNoPII("error", "home_seed_run_threw", {
@@ -596,227 +644,249 @@ function createHomeSeedAnnouncer(t, e) {
         });
       })
       .finally(() => {
-        X = false;
-        ce();
-        Ae();
+        runInFlight = false;
+        notifyHoldWaiters();
+        resumePendingWork();
       });
   }
-  async function An(r) {
-    let s = e.now();
-    let R = N;
-    if (R === undefined) return;
-    N = undefined;
-    if (K !== undefined && R.etag === K.etag) {
-      if (!K.readyWritten) K.readyWritten = await ut(K.ready);
+  async function runApplyFromAnnouncement(probeFirst) {
+    let startedAt = deps.now();
+    let announcement = latestAnnouncement;
+    if (announcement === undefined) return;
+    latestAnnouncement = undefined;
+    if (readyWriteState !== undefined && announcement.etag === readyWriteState.etag) {
+      if (!readyWriteState.readyWritten)
+        readyWriteState.readyWritten = await writeReadyRowWithRetry(readyWriteState.ready);
       return;
     }
-    if (R.etag === de) return;
-    q = R;
-    nt = true;
-    M++;
-    if (e.epochGt1 && K === undefined && de === undefined) {
-      let ie = await (be ?? e.readSidecar(t.configHome));
-      if (ie?.packEtag === R.etag && R.etag !== RESTORED_WITHOUT_ANNOUNCEMENT) {
-        de = R.etag;
-        se = ie;
-        lt();
-        ne("already_applied", "none", null, ie.generation, s);
+    if (announcement.etag === restoredEtag) return;
+    runningAnnouncement = announcement;
+    runningAfterAnnounce = true;
+    runCount++;
+    if (deps.epochGt1 && readyWriteState === undefined && restoredEtag === undefined) {
+      let sidecarState = await (sidecarReadPromise ?? deps.readSidecar(options.configHome));
+      if (
+        sidecarState?.packEtag === announcement.etag &&
+        announcement.etag !== RESTORED_WITHOUT_ANNOUNCEMENT
+      ) {
+        restoredEtag = announcement.etag;
+        sidecarSnapshot = sidecarState;
+        disarmRecovery();
+        reportApplyTelemetry("already_applied", "none", null, sidecarState.generation, startedAt);
         return;
       }
     }
-    let b = "verdict_wake";
-    if (!r) {
-      let ie = await Ct(joined);
-      if (ie.kind === "deaf") return;
-      b = Pn(ie.kind);
-      if (ie.kind === "refused" || ie.kind === "rejected") {
-        ne("refused_lane", b, null, 0, s);
-        me("probe_refused");
+    let probeLabel = "verdict_wake";
+    if (!probeFirst) {
+      let laneResult = await readRowWithRetry(joined);
+      if (laneResult.kind === "deaf") return;
+      probeLabel = probeKindToLabel(laneResult.kind);
+      if (laneResult.kind === "refused" || laneResult.kind === "rejected") {
+        reportApplyTelemetry("refused_lane", probeLabel, null, 0, startedAt);
+        goDeaf("probe_refused");
         return;
       }
-      if (ie.kind === "auth" || ie.kind === "transport") {
-        ne(ie.kind === "auth" ? "auth_skipped" : "transport_failed", b, null, 0, s);
+      if (laneResult.kind === "auth" || laneResult.kind === "transport") {
+        reportApplyTelemetry(
+          laneResult.kind === "auth" ? "auth_skipped" : "transport_failed",
+          probeLabel,
+          null,
+          0,
+          startedAt,
+        );
         return;
       }
     }
-    let h = await Ct(joined_5);
-    switch (h.kind) {
+    let packRow = await readRowWithRetry(joined_5);
+    switch (packRow.kind) {
       case "deaf":
         return;
       case "refused":
-        ne("refused_lane", b, null, 0, s);
-        me("pack_refused");
+        reportApplyTelemetry("refused_lane", probeLabel, null, 0, startedAt);
+        goDeaf("pack_refused");
         return;
       case "rejected":
-        ne("request_rejected", b, null, 0, s);
+        reportApplyTelemetry("request_rejected", probeLabel, null, 0, startedAt);
         return;
       case "auth":
       case "transport":
-        ne(h.kind === "auth" ? "auth_skipped" : "transport_failed", b, null, 0, s);
+        reportApplyTelemetry(
+          packRow.kind === "auth" ? "auth_skipped" : "transport_failed",
+          probeLabel,
+          null,
+          0,
+          startedAt,
+        );
         return;
       case "not_found":
-        ne("pack_absent", b, null, 0, s);
+        reportApplyTelemetry("pack_absent", probeLabel, null, 0, startedAt);
         return;
       case "ok":
         break;
     }
-    let last = e.announcements.remembered().findLast((ie) => ie.etag === h.etag);
+    let last = deps.announcements.remembered().findLast((remembered) => remembered.etag === packRow.etag);
     if (last === undefined) {
-      ne("unannounced_row", b, null, 0, s);
+      reportApplyTelemetry("unannounced_row", probeLabel, null, 0, startedAt);
       return;
     }
-    let C = decodeHomePack(h.buf);
-    if (!C.ok) {
+    let decodedPack = decodeHomePack(packRow.buf);
+    if (!decodedPack.ok) {
       logForDiagnosticsNoPII("warn", "home_seed_bad_pack", {
-        reason: C.reason,
+        reason: decodedPack.reason,
       });
-      ne("bad_pack", b, null, 0, s);
+      reportApplyTelemetry("bad_pack", probeLabel, null, 0, startedAt);
       return;
     }
-    let U = planHomeSeedApply({
-      pack: C.pack,
-      packEtag: h.etag,
-      refused: C.refused,
-      sidecar: await e.readSidecar(t.configHome),
+    let applyPlan = planHomeSeedApply({
+      pack: decodedPack.pack,
+      packEtag: packRow.etag,
+      refused: decodedPack.refused,
+      sidecar: await deps.readSidecar(options.configHome),
       lastAppliedGeneration,
       permissionsAdmissible:
-        e.limits.permissionsFromAnyAnnouncedPack || (last.beforeFirstCommand && !e.epochGt1),
-      onlyClaudeMd: t.onlyClaudeMd === true,
+        deps.limits.permissionsFromAnyAnnouncedPack || (last.beforeFirstCommand && !deps.epochGt1),
+      onlyClaudeMd: options.onlyClaudeMd === true,
     });
-    if (U.kind === "stale_generation") {
-      ne("stale_generation", b, null, U.generation, s);
+    if (applyPlan.kind === "stale_generation") {
+      reportApplyTelemetry("stale_generation", probeLabel, null, applyPlan.generation, startedAt);
       return;
     }
-    let W = t.foreignFiles !== "replaced" && t.onlyClaudeMd !== true ? Pt(U.plan, C.pack.settings) : null;
-    let B =
-      W === null
-        ? U.plan
+    let announcableRules =
+      options.foreignFiles !== "replaced" && options.onlyClaudeMd !== true
+        ? collectAnnouncableRules(applyPlan.plan, decodedPack.pack.settings)
+        : null;
+    let planWithRestrictions =
+      announcableRules === null
+        ? applyPlan.plan
         : {
-            ...U.plan,
+            ...applyPlan.plan,
             restrictingSettings: {
               plan:
-                W.deny.length === 0 && W.ask.length === 0
+                announcableRules.deny.length === 0 && announcableRules.ask.length === 0
                   ? null
                   : renderSidecarPlan({
                       permissions: {
-                        ...(W.deny.length > 0 && {
-                          deny: [...W.deny],
+                        ...(announcableRules.deny.length > 0 && {
+                          deny: [...announcableRules.deny],
                         }),
-                        ...(W.ask.length > 0 && {
-                          ask: [...W.ask],
+                        ...(announcableRules.ask.length > 0 && {
+                          ask: [...announcableRules.ask],
                         }),
                       },
                     }),
-              rulesLeftOut: W.dropped,
+              rulesLeftOut: announcableRules.dropped,
             },
           };
-    let L = await e.execute(B, t, e.applyDeps());
-    let appliedBeforeFirstAsk = !S;
-    if (L.outcome === "config_home_unsafe" || L.outcome === "flag_off") {
-      ne(L.outcome, b, L, L.generation, s);
+    let applyReport = await deps.execute(planWithRestrictions, options, deps.applyDeps());
+    let appliedBeforeFirstAsk = !firstAskSeen;
+    if (applyReport.outcome === "config_home_unsafe" || applyReport.outcome === "flag_off") {
+      reportApplyTelemetry(applyReport.outcome, probeLabel, applyReport, applyReport.generation, startedAt);
       return;
     }
-    lastAppliedGeneration = L.generation;
-    let _e = {
+    lastAppliedGeneration = applyReport.generation;
+    let appliedEvents = {
       beforeFirstAsk: appliedBeforeFirstAsk,
-      applied: Dt(B, L),
+      applied: summarizeApplied(planWithRestrictions, applyReport),
     };
     try {
-      e.afterApply(L, _e);
+      deps.afterApply(applyReport, appliedEvents);
     } catch {
       logForDiagnosticsNoPII("error", "home_seed_after_apply_threw", {});
     }
-    lt();
-    let te = L.settingsWritten && (ve ?? E) !== undefined;
-    if (te) {
-      ve = undefined;
-      E = undefined;
+    disarmRecovery();
+    let noticeSuperseded =
+      applyReport.settingsWritten && (pendingRestoreResult ?? lastRestoreEvent) !== undefined;
+    if (noticeSuperseded) {
+      pendingRestoreResult = undefined;
+      lastRestoreEvent = undefined;
     }
-    xe();
-    let he = He.size > 0;
-    let Lt = await Fn(B, L);
-    let ft = Ce !== undefined && (Ce === "settings_gone" || L.settingsWritten);
-    Tt({
-      ..._e,
-      outcome: L.outcome,
-      generation: L.generation,
-      duringHold: he || He.size > 0,
-      outputStyleMissing: Lt === "unresolved",
-      answersNotRestored: ft,
+    flushRestoreResult();
+    let duringHold = holdReleaseCallbacks.size > 0;
+    let outputStyleCheck = await checkOutputStyle(planWithRestrictions, applyReport);
+    let answersNotRestored =
+      restoreFailureReason !== undefined &&
+      (restoreFailureReason === "settings_gone" || applyReport.settingsWritten);
+    dispatchApplyResult({
+      ...appliedEvents,
+      outcome: applyReport.outcome,
+      generation: applyReport.generation,
+      duringHold: duringHold || holdReleaseCallbacks.size > 0,
+      outputStyleMissing: outputStyleCheck === "unresolved",
+      answersNotRestored,
     });
-    if (ft && L.outcome === "applied") Ce = undefined;
-    ne(L.outcome, b, L, L.generation, s, {
+    if (answersNotRestored && applyReport.outcome === "applied") restoreFailureReason = undefined;
+    reportApplyTelemetry(applyReport.outcome, probeLabel, applyReport, applyReport.generation, startedAt, {
       appliedBeforeFirstAsk,
-      outputStyleCheck: Lt,
-      restoreNoticeSuperseded: te,
-      answersNotRestored: ft,
+      outputStyleCheck,
+      restoreNoticeSuperseded: noticeSuperseded,
+      answersNotRestored,
     });
-    let Kt = Tn(L, appliedBeforeFirstAsk);
-    let $t = {
-      etag: h.etag,
-      ready: Kt,
+    let appliedReadyRow = encodeAppliedReadyRow(applyReport, appliedBeforeFirstAsk);
+    let readyWriteState2 = {
+      etag: packRow.etag,
+      ready: appliedReadyRow,
       readyWritten: false,
     };
-    K = $t;
-    q = undefined;
-    ce();
-    $t.readyWritten = await ut(Kt);
+    readyWriteState = readyWriteState2;
+    runningAnnouncement = undefined;
+    notifyHoldWaiters();
+    readyWriteState2.readyWritten = await writeReadyRowWithRetry(appliedReadyRow);
   }
-  function Mt(r, s) {
-    if (!s.settingsWritten) return;
-    return (s.settingsKeptForeign ? r.restrictingSettings?.plan : r.settings)?.document;
+  function appliedSettingsDocument(plan, report) {
+    if (!report.settingsWritten) return;
+    return (report.settingsKeptForeign ? plan.restrictingSettings?.plan : plan.settings)?.document;
   }
-  function Dt(r, s) {
-    let R = Mt(r, s);
-    let permissions = R?.permissions;
+  function summarizeApplied(plan, report) {
+    let settingsDocument = appliedSettingsDocument(plan, report);
+    let permissions = settingsDocument?.permissions;
     return {
-      claudeMd: s.appliedByKind.claude_md > 0,
-      rules: s.appliedByKind.rule,
-      outputStyles: s.appliedByKind.output_style,
+      claudeMd: report.appliedByKind.claude_md > 0,
+      rules: report.appliedByKind.rule,
+      outputStyles: report.appliedByKind.output_style,
       permissionRules:
         (permissions?.allow?.length ?? 0) +
         (permissions?.deny?.length ?? 0) +
         (permissions?.ask?.length ?? 0),
-      settingsKeys: Object.keys(R ?? {}).filter((key) => key !== "permissions"),
-      settingsNotWritten: s.settingsAttempted && !s.settingsWritten && !s.settingsKeptForeign,
-      settingsRefused: s.settingsRefused !== "none" && !s.settingsKeptForeign,
-      settingsKeptForeign: s.settingsKeptForeign,
-      credentialRestrictionsLeftOut: s.refilteredCredentialRestrictions,
-      rulesLeftOut: Math.max(0, s.rulesLeftOut - s.refilteredCredentialRestrictions),
-      credentialFilesLeftOut: s.filesRefused.credential,
-      filesKeptForeign: s.filesRefused.keptForeign,
+      settingsKeys: Object.keys(settingsDocument ?? {}).filter((key) => key !== "permissions"),
+      settingsNotWritten: report.settingsAttempted && !report.settingsWritten && !report.settingsKeptForeign,
+      settingsRefused: report.settingsRefused !== "none" && !report.settingsKeptForeign,
+      settingsKeptForeign: report.settingsKeptForeign,
+      credentialRestrictionsLeftOut: report.refilteredCredentialRestrictions,
+      rulesLeftOut: Math.max(0, report.rulesLeftOut - report.refilteredCredentialRestrictions),
+      credentialFilesLeftOut: report.filesRefused.credential,
+      filesKeptForeign: report.filesRefused.keptForeign,
       filesNotApplied:
-        Object.values(s.filesRefused).reduce((acc, I) => acc + I, 0) -
-        s.filesRefused.credential -
-        s.filesRefused.keptForeign +
-        s.filesFailed,
-      filesRemoved: s.filesRemoved,
-      settingsRemoved: s.settingsRemoved,
-      removalsFailed: s.removalsFailed,
-      settingsRemoveFailed: s.settingsRemoveFailed,
+        Object.values(report.filesRefused).reduce((acc, count) => acc + count, 0) -
+        report.filesRefused.credential -
+        report.filesRefused.keptForeign +
+        report.filesFailed,
+      filesRemoved: report.filesRemoved,
+      settingsRemoved: report.settingsRemoved,
+      removalsFailed: report.removalsFailed,
+      settingsRemoveFailed: report.settingsRemoveFailed,
     };
   }
-  async function Fn(r, s) {
-    let outputStyle = Mt(r, s)?.outputStyle;
-    let outputStyleAvailable = e.outputStyleAvailable;
+  async function checkOutputStyle(plan, report) {
+    let outputStyle = appliedSettingsDocument(plan, report)?.outputStyle;
+    let outputStyleAvailable = deps.outputStyleAvailable;
     if (outputStyle === undefined || outputStyleAvailable === undefined) return "not_asked";
     let promise = await new Promise((resolve) => {
-      let C = e.setTimer(() => resolve("ask_capped"), ANNOUNCE_POLL_MS);
+      let timer = deps.setTimer(() => resolve("ask_capped"), ANNOUNCE_POLL_MS);
       Promise.resolve()
         .then(() => outputStyleAvailable(outputStyle))
         .then(
-          (U) => (U ? "available" : "unresolved"),
+          (available) => (available ? "available" : "unresolved"),
           () => "ask_failed",
         )
-        .then((U) => {
-          C();
-          resolve(U);
+        .then((result) => {
+          timer();
+          resolve(result);
         });
     });
     if (promise === "unresolved") logForDiagnosticsNoPII("info", "home_seed_output_style_unresolved", {});
     return promise;
   }
-  function Pn(kind) {
+  function probeKindToLabel(kind) {
     switch (kind) {
       case "ok":
         return "found";
@@ -830,41 +900,41 @@ function createHomeSeedAnnouncer(t, e) {
         return kind;
     }
   }
-  function ne(
+  function reportApplyTelemetry(
     outcome,
     probe,
     report,
     generation,
-    h,
-    I = {
-      appliedBeforeFirstAsk: !S,
+    startedAt,
+    extraFields = {
+      appliedBeforeFirstAsk: !firstAskSeen,
       outputStyleCheck: "not_asked",
       restoreNoticeSuperseded: false,
       answersNotRestored: false,
     },
   ) {
     try {
-      e.telemetry.apply({
+      deps.telemetry.apply({
         outcome,
         probe,
         report,
         generation,
-        epochGt1: e.epochGt1,
-        durationMs: e.now() - h,
-        ...I,
+        epochGt1: deps.epochGt1,
+        durationMs: deps.now() - startedAt,
+        ...extraFields,
       });
     } catch {
       logForDiagnosticsNoPII("error", "home_seed_telemetry_threw", {});
     }
   }
-  async function Ct(r) {
-    let requestRetryDelayMs = e.limits.requestRetryDelayMs;
+  async function readRowWithRetry(key) {
+    let requestRetryDelayMs = deps.limits.requestRetryDelayMs;
     for (let idx = 1; ; idx++) {
-      if (l || u)
+      if (deaf || stopped)
         return {
           kind: "deaf",
         };
-      let row = await e.getRow(r);
+      let row = await deps.getRow(key);
       if (row.kind === "ok")
         return {
           kind: "ok",
@@ -875,265 +945,284 @@ function createHomeSeedAnnouncer(t, e) {
         return {
           kind: "not_found",
         };
-      let h = classifyRowError(row);
-      if (h !== "transport" || idx >= e.limits.requestAttempts) {
+      let failureKind = classifyRowError(row);
+      if (failureKind !== "transport" || idx >= deps.limits.requestAttempts) {
         logForDiagnosticsNoPII("warn", "home_seed_lane_request_failed", {
-          outcome: h,
+          outcome: failureKind,
           kind: row.errorKind,
           status: row.status ?? 0,
         });
         return {
-          kind: h,
+          kind: failureKind,
         };
       }
-      await e.sleep(requestRetryDelayMs);
+      await deps.sleep(requestRetryDelayMs);
       requestRetryDelayMs *= 2;
     }
   }
-  async function ut(ready) {
-    let requestRetryDelayMs = e.limits.requestRetryDelayMs;
-    let R = false;
+  async function writeReadyRowWithRetry(row) {
+    let requestRetryDelayMs = deps.limits.requestRetryDelayMs;
+    let sawConflict = false;
     for (let idx = 1; ; idx++) {
-      if (l || u) return false;
-      let h = await e.putRow(joined_6, ready, Be);
-      if (h.kind === "ok") {
-        Be = h.content_sha256;
+      if (deaf || stopped) return false;
+      let putResult = await deps.putRow(joined_6, row, readyEtag);
+      if (putResult.kind === "ok") {
+        readyEtag = putResult.content_sha256;
         return true;
       }
-      if (h.kind === "conflict" && !R) {
-        R = true;
-        if (l || u) return false;
-        let row = await e.getRow(joined_6);
-        Be = row.kind === "ok" ? row.content_sha256 : undefined;
+      if (putResult.kind === "conflict" && !sawConflict) {
+        sawConflict = true;
+        if (deaf || stopped) return false;
+        let row = await deps.getRow(joined_6);
+        readyEtag = row.kind === "ok" ? row.content_sha256 : undefined;
         continue;
       }
-      if (!(h.kind === "error" && classifyRowError(h) === "transport") || idx >= e.limits.requestAttempts) {
+      if (
+        !(putResult.kind === "error" && classifyRowError(putResult) === "transport") ||
+        idx >= deps.limits.requestAttempts
+      ) {
         logForDiagnosticsNoPII("warn", "home_seed_ready_put_failed", {
-          kind: h.kind,
-          ...(h.kind === "error" && {
-            errorKind: h.errorKind,
-            status: h.status ?? 0,
+          kind: putResult.kind,
+          ...(putResult.kind === "error" && {
+            errorKind: putResult.errorKind,
+            status: putResult.status ?? 0,
           }),
         });
         return false;
       }
-      await e.sleep(requestRetryDelayMs);
+      await deps.sleep(requestRetryDelayMs);
       requestRetryDelayMs *= 2;
     }
   }
-  function On(r) {
+  function encodeRestoredReadyRow(snapshot) {
     return encodeHomeReadyRow({
-      generation: r.generation,
+      generation: snapshot.generation,
       appliedBeforeFirstAsk: false,
       outcome: "applied",
-      filesApplied: r.entries.length,
+      filesApplied: snapshot.entries.length,
       filesRefused: 0,
-      settingsWritten: r.settingsSha256 !== null,
+      settingsWritten: snapshot.settingsSha256 !== null,
       replacedForeign: 0,
-      writtenAtMs: e.now(),
+      writtenAtMs: deps.now(),
     });
   }
-  function Tn(r, appliedBeforeFirstAsk) {
+  function encodeAppliedReadyRow(report, appliedBeforeFirstAsk) {
     return encodeHomeReadyRow({
-      generation: r.generation,
+      generation: report.generation,
       appliedBeforeFirstAsk,
-      outcome: r.outcome === "applied" ? "applied" : "partial",
-      filesApplied: r.filesApplied,
-      filesRefused: Object.values(r.filesRefused).reduce((acc, b) => acc + b, 0) + r.filesFailed,
-      settingsWritten: r.settingsWritten && r.settingsAttempted,
-      replacedForeign: r.filesReplacedForeign + (r.replacedExistingSettings === "foreign" ? 1 : 0),
-      writtenAtMs: e.now(),
+      outcome: report.outcome === "applied" ? "applied" : "partial",
+      filesApplied: report.filesApplied,
+      filesRefused:
+        Object.values(report.filesRefused).reduce((acc, count) => acc + count, 0) + report.filesFailed,
+      settingsWritten: report.settingsWritten && report.settingsAttempted,
+      replacedForeign: report.filesReplacedForeign + (report.replacedExistingSettings === "foreign" ? 1 : 0),
+      writtenAtMs: deps.now(),
     });
   }
-  function Mn(r) {
-    let s = e.now();
-    let firstAsk = !S;
-    let b = () => {
-      let h = l || u ? undefined : st();
-      return h !== undefined && h.ordinal > Te ? h : undefined;
+  function holdBeforeTurn(signal) {
+    let startedAt = deps.now();
+    let firstAsk = !firstAskSeen;
+    let pendingAnnouncement = () => {
+      let candidate = deaf || stopped ? undefined : latestPendingAnnouncement();
+      return candidate !== undefined && candidate.ordinal > lastHandledOrdinal ? candidate : undefined;
     };
-    if (b() === undefined || e.limits.holdMaxMs <= 0) {
-      S = true;
-      Ie();
+    if (pendingAnnouncement() === undefined || deps.limits.holdMaxMs <= 0) {
+      firstAskSeen = true;
+      maybeCheckSettingsGone();
       return Promise.resolve();
     }
     return new Promise((resolve) => {
-      let I = false;
-      let C = 0;
-      let U = n !== undefined && x;
-      let W = [];
-      let B = (te) => {
-        if (I) return;
-        I = true;
-        for (let he of W) he();
-        He.delete(L);
-        if (te !== "released" && te !== "gate_off") Te = Math.max(Te, st()?.ordinal ?? 0);
-        S = true;
-        Ie();
+      let released = false;
+      let verdictWaitMs = 0;
+      let verdictResolved = verdict !== undefined && enabledResolved;
+      let cleanupFns = [];
+      let release = (outcome) => {
+        if (released) return;
+        released = true;
+        for (let cleanup of cleanupFns) cleanup();
+        holdReleaseCallbacks.delete(onVerdictChange);
+        if (outcome !== "released" && outcome !== "gate_off")
+          lastHandledOrdinal = Math.max(lastHandledOrdinal, latestPendingAnnouncement()?.ordinal ?? 0);
+        firstAskSeen = true;
+        maybeCheckSettingsGone();
         resolve();
         try {
-          e.telemetry.hold({
-            outcome: te,
-            waitedMs: e.now() - s,
-            verdictWaitMs: C,
+          deps.telemetry.hold({
+            outcome,
+            waitedMs: deps.now() - startedAt,
+            verdictWaitMs,
             firstAsk,
           });
         } catch {
           logForDiagnosticsNoPII("error", "home_seed_telemetry_threw", {});
         }
       };
-      let L = () => {
-        if (!U && n !== undefined && x) {
-          U = true;
-          C = e.now() - s;
-          G();
+      let onVerdictChange = () => {
+        if (!verdictResolved && verdict !== undefined && enabledResolved) {
+          verdictResolved = true;
+          verdictWaitMs = deps.now() - startedAt;
+          clearVerdictTimer();
         }
-        if (l || u) B("gate_off");
-        else if (b() === undefined) B("released");
+        if (deaf || stopped) release("gate_off");
+        else if (pendingAnnouncement() === undefined) release("released");
       };
-      let G = () => {};
-      if (r.aborted) {
-        B("interrupted");
+      let clearVerdictTimer = () => {};
+      if (signal.aborted) {
+        release("interrupted");
         return;
       }
-      He.add(L);
-      W.push(e.setTimer(() => B("timeout"), e.limits.holdMaxMs));
-      if (!U) {
-        G = e.setTimer(() => {
-          C = e.now() - s;
-          if (n === undefined) B("verdict_timeout");
-          else if (!x) B("flag_timeout");
-        }, e.limits.verdictWaitMaxMs);
-        W.push(() => G());
+      holdReleaseCallbacks.add(onVerdictChange);
+      cleanupFns.push(deps.setTimer(() => release("timeout"), deps.limits.holdMaxMs));
+      if (!verdictResolved) {
+        clearVerdictTimer = deps.setTimer(() => {
+          verdictWaitMs = deps.now() - startedAt;
+          if (verdict === undefined) release("verdict_timeout");
+          else if (!enabledResolved) release("flag_timeout");
+        }, deps.limits.verdictWaitMaxMs);
+        cleanupFns.push(() => clearVerdictTimer());
       }
-      let _e = () => B("interrupted");
-      r.addEventListener("abort", _e, {
+      let onAbort = () => release("interrupted");
+      signal.addEventListener("abort", onAbort, {
         once: true,
       });
-      W.push(() => r.removeEventListener("abort", _e));
+      cleanupFns.push(() => signal.removeEventListener("abort", onAbort));
     });
   }
-  let ct;
+  let enabledPromise;
   try {
-    ct = e.enabled();
+    enabledPromise = deps.enabled();
   } catch {
-    ct = Promise.resolve(false);
+    enabledPromise = Promise.resolve(false);
   }
-  let Ye = false;
-  let xt = () => {
-    if (Ye && ot === "absent") {
-      Ye = false;
-      ge("restore_gate_off", 0, e.now());
-      De = true;
-      Ie();
+  let restoreBlockedByFlag = false;
+  let checkRestoreGate = () => {
+    if (restoreBlockedByFlag && sidecarState === "absent") {
+      restoreBlockedByFlag = false;
+      reportRecoveryTelemetry("restore_gate_off", 0, deps.now());
+      settingsGoneRetryArmed = true;
+      maybeCheckSettingsGone();
     }
   };
-  ct.then(
-    (r) => {
-      x = true;
-      if (r === true || r === "announced_only") {
-        Q = true;
-        Ye = e.epochGt1 && r !== true;
-        re ||= r !== true;
-        xt();
-        ae = !re;
-        It();
-        Ft();
-        if (N !== undefined && n === "served") ze(false);
-        else if (ue) Ae();
-        else at();
-        return;
-      }
-      me("flag_off");
-    },
-    () => {
-      x = true;
-      me("flag_off");
-    },
-  ).finally(ce);
-  let Nt = false;
-  let It = () => {
-    if (Nt || !e.epochGt1) return;
-    Nt = true;
-    e.sidecarState(t.configHome)
-      .then(async (r) => {
-        it =
-          r === "valid" &&
-          t.foreignFiles !== "replaced" &&
-          (await e.readSidecar(t.configHome))?.settingsSha256 === null;
-        return it ? "absent" : r;
+  enabledPromise
+    .then(
+      (flagValue) => {
+        enabledResolved = true;
+        if (flagValue === true || flagValue === "announced_only") {
+          enabled = true;
+          restoreBlockedByFlag = deps.epochGt1 && flagValue !== true;
+          announcementDecided ||= flagValue !== true;
+          checkRestoreGate();
+          provisionalRecovery = !announcementDecided;
+          refreshSidecarState();
+          armProvisionalRecovery();
+          if (latestAnnouncement !== undefined && verdict === "served") runApply(false);
+          else if (readyWritePending) resumePendingWork();
+          else startRecovery();
+          return;
+        }
+        goDeaf("flag_off");
+      },
+      () => {
+        enabledResolved = true;
+        goDeaf("flag_off");
+      },
+    )
+    .finally(notifyHoldWaiters);
+  let sidecarRefreshStarted = false;
+  let refreshSidecarState = () => {
+    if (sidecarRefreshStarted || !deps.epochGt1) return;
+    sidecarRefreshStarted = true;
+    deps
+      .sidecarState(options.configHome)
+      .then(async (state) => {
+        sidecarCountedAsAbsent =
+          state === "valid" &&
+          options.foreignFiles !== "replaced" &&
+          (await deps.readSidecar(options.configHome))?.settingsSha256 === null;
+        return sidecarCountedAsAbsent ? "absent" : state;
       })
       .catch(() => "invalid")
-      .then((r) => {
-        ot = r;
-        xt();
-        if (r !== "absent") {
-          if (r === "invalid" && (!re || Ye)) ge("sidecar_invalid", 0, e.now());
-          re = true;
-          ae = false;
+      .then((state) => {
+        sidecarState = state;
+        checkRestoreGate();
+        if (state !== "absent") {
+          if (state === "invalid" && (!announcementDecided || restoreBlockedByFlag))
+            reportRecoveryTelemetry("sidecar_invalid", 0, deps.now());
+          announcementDecided = true;
+          provisionalRecovery = false;
         }
-        Ae();
-        ce();
+        resumePendingWork();
+        notifyHoldWaiters();
       });
   };
-  if (ae) It();
-  for (let r of e.announcements.remembered()) At(r);
-  let Dn = e.announcements.subscribe((r) => {
+  if (provisionalRecovery) refreshSidecarState();
+  for (let remembered of deps.announcements.remembered()) onAnnouncement(remembered);
+  let unsubscribeAnnouncements = deps.announcements.subscribe((announcement) => {
     queueMicrotask(() => {
-      At(r);
-      ce();
+      onAnnouncement(announcement);
+      notifyHoldWaiters();
     });
   });
-  let Wt = () => {};
-  we = true;
+  let unsubscribeVerdicts = () => {};
+  verdictsSubscribing = true;
   try {
-    Wt = e.verdicts.subscribe((r) => {
-      let s = we;
+    unsubscribeVerdicts = deps.verdicts.subscribe((verdictValue) => {
+      let hadVerdict = verdictsSubscribing;
       queueMicrotask(() => {
-        wn(r, s);
-        ce();
+        onVerdict(verdictValue, hadVerdict);
+        notifyHoldWaiters();
       });
     });
   } catch {
     logForDiagnosticsNoPII("error", "home_seed_verdict_subscribe_threw", {});
   } finally {
-    we = false;
+    verdictsSubscribing = false;
   }
   return {
-    beforeTurn: (r) => Mn(r).then(xe),
+    beforeTurn: (signal) => holdBeforeTurn(signal).then(flushRestoreResult),
     state: () => ({
-      verdict: n,
-      deaf: l,
-      deafReason: d,
+      verdict,
+      deaf,
+      deafReason,
       lastAppliedGeneration,
-      pending: st() !== undefined || X || !re,
-      runs: M,
-      restore: Re ? (X && ee ? "running" : "done") : ee ? "armed" : ae ? "provisional" : re ? "done" : "none",
+      pending: latestPendingAnnouncement() !== undefined || runInFlight || !announcementDecided,
+      runs: runCount,
+      restore: restoreStarted
+        ? runInFlight && recoveryArmed
+          ? "running"
+          : "done"
+        : recoveryArmed
+          ? "armed"
+          : provisionalRecovery
+            ? "provisional"
+            : announcementDecided
+              ? "done"
+              : "none",
     }),
-    onApplied: (r) => {
-      w.add(r);
-      runGuarded(r, P, "home_seed_applied_listener_threw");
-      P = undefined;
-      return () => w.delete(r);
+    onApplied: (listener) => {
+      appliedListeners.add(listener);
+      runGuarded(listener, lastAppliedEvent, "home_seed_applied_listener_threw");
+      lastAppliedEvent = undefined;
+      return () => appliedListeners.delete(listener);
     },
-    onRestore: (r) => {
-      v.add(r);
+    onRestore: (listener) => {
+      restoreListeners.add(listener);
       runGuarded(
-        (s) => {
-          if (s.kind === "not_restored") Ce = s.reason;
-          r(s);
+        (result) => {
+          if (result.kind === "not_restored") restoreFailureReason = result.reason;
+          listener(result);
         },
-        E,
+        lastRestoreEvent,
         "home_seed_restore_listener_threw",
       );
-      E = undefined;
-      return () => v.delete(r);
+      lastRestoreEvent = undefined;
+      return () => restoreListeners.delete(listener);
     },
     stop: () => {
-      u = true;
-      Dn();
-      Wt();
-      me("stopped");
+      stopped = true;
+      unsubscribeAnnouncements();
+      unsubscribeVerdicts();
+      goDeaf("stopped");
     },
   };
 }

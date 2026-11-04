@@ -10,7 +10,7 @@
  */
 import { randomUUID } from "crypto";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, int, _enum, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, int, _enum, array } from "../../../vendor/zod/v4/classic/schemas.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { isTeamMemPath } from "../../memdir/teamMemPaths.js";
 import { isAutoMemPath } from "../../memdir/paths.js";
@@ -30,78 +30,94 @@ import {
 } from "../../memdir/memoryTypes.js";
 import { getSessionId } from "../../bootstrap/state.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { En, wi, mve } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import {
+  import_sortedIndex_2,
+  import_reject,
+  import_isPlainObject,
+} from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { countCharInString } from "../../utils/stringUtils.js";
-import { Uo } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { parseYaml } from "../../utils/yaml.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-a477qqne.js:4131-4795 placement
 /**
  * claudeCodeItem 元数据的 schema。
  */
-var MEMORY_STAMP_SCHEMA = 16;
-var MAX_IDS = 64;
-var SHORT_TOKEN_RE = /^[A-Za-z0-9_-]{1,128}$/;
-var UUID_RE = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
-var SHA256_HEX_RE = /^[0-9a-f]{64}$/;
-var typedTurnSchema = DoctorLazy(() =>
-  u({
-    session: string().regex(SHORT_TOKEN_RE),
-    generation: string().regex(SHORT_TOKEN_RE).nullable(),
-    turn: int().nonnegative(),
-    prompt: string().regex(SHORT_TOKEN_RE),
-  }),
-);
-var promotedSchema = DoctorLazy(() =>
-  u({
-    account_path: string().min(1).max(1024),
-    line_hash: string().regex(SHA256_HEX_RE),
-    at: string().min(1).max(64),
-  }),
-);
-var claudeCodeItemSchema = DoctorLazy(() =>
-  u({
-    id: string().regex(UUID_RE),
-    minted: string().min(1).max(64).optional(),
-    state: _enum(["legacy", "pending", "acked", "suppressed"]),
-    consent: _enum(["on", "off"]),
-    account: string().regex(SHORT_TOKEN_RE).nullable(),
-    src: _enum(["typed", "inferred"]),
-    typed: typedTurnSchema().nullable(),
-    scope: _enum(["person", "repo", "unknown"]),
-    promoted: array(promotedSchema()).max(MEMORY_STAMP_SCHEMA),
-    ids: array(string().regex(UUID_RE)).max(MAX_IDS),
-  }),
-);
-var CLAUDECODEITEM = "claudeCodeItem";
+var MAX_PROMOTED_ENTRIES; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_IDS;
+var SHORT_TOKEN_RE;
+var UUID_RE;
+var SHA256_HEX_RE;
+var typedTurnSchema;
+var promotedSchema;
+var claudeCodeItemSchema;
+var CLAUDECODEITEM;
+deferInit("chunk-a477qqne.js:4131", () => {
+  MAX_PROMOTED_ENTRIES = 16;
+  MAX_IDS = 64;
+  SHORT_TOKEN_RE = /^[A-Za-z0-9_-]{1,128}$/;
+  UUID_RE = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
+  SHA256_HEX_RE = /^[0-9a-f]{64}$/;
+  typedTurnSchema = DoctorLazy(() =>
+    objectSchema({
+      session: stringSchema().regex(SHORT_TOKEN_RE),
+      generation: stringSchema().regex(SHORT_TOKEN_RE).nullable(),
+      turn: int().nonnegative(),
+      prompt: stringSchema().regex(SHORT_TOKEN_RE),
+    }),
+  );
+  promotedSchema = DoctorLazy(() =>
+    objectSchema({
+      account_path: stringSchema().min(1).max(1024),
+      line_hash: stringSchema().regex(SHA256_HEX_RE),
+      at: stringSchema().min(1).max(64),
+    }),
+  );
+  claudeCodeItemSchema = DoctorLazy(() =>
+    objectSchema({
+      id: stringSchema().regex(UUID_RE),
+      minted: stringSchema().min(1).max(64).optional(),
+      state: _enum(["legacy", "pending", "acked", "suppressed"]),
+      consent: _enum(["on", "off"]),
+      account: stringSchema().regex(SHORT_TOKEN_RE).nullable(),
+      src: _enum(["typed", "inferred"]),
+      typed: typedTurnSchema().nullable(),
+      scope: _enum(["person", "repo", "unknown"]),
+      promoted: array(promotedSchema()).max(MAX_PROMOTED_ENTRIES),
+      ids: array(stringSchema().regex(UUID_RE)).max(MAX_IDS),
+    }),
+  );
+  CLAUDECODEITEM = "claudeCodeItem";
+});
 //@ chunk-a477qqne.js:4795-4849 placement
 /**
  * 取记忆前言里的 claudeCodeItem 对象。
  */
 function claudeCodeItemMeta(frontmatter) {
-  let n = frontmatter.metadata[CLAUDECODEITEM];
-  return isPlainObject(n) ? n : {};
+  let itemMetadata = frontmatter.metadata[CLAUDECODEITEM];
+  return isPlainObject(itemMetadata) ? itemMetadata : {};
 }
 //@ chunk-a477qqne.js:4849-5142 placement
 function readItemMetadata(frontmatter) {
-  let n = claudeCodeItemMeta(frontmatter);
-  if (n.id === undefined) return;
-  let r = claudeCodeItemSchema().safeParse({
-    id: n.id,
-    ...(n.minted !== undefined && {
-      minted: n.minted,
+  let rawMetadata = claudeCodeItemMeta(frontmatter);
+  if (rawMetadata.id === undefined) return;
+  let parsed = claudeCodeItemSchema().safeParse({
+    id: rawMetadata.id,
+    ...(rawMetadata.minted !== undefined && {
+      minted: rawMetadata.minted,
     }),
-    state: n.state,
-    consent: n.consent,
-    account: n.account ?? null,
-    src: n.src,
-    typed: n.typed ?? null,
-    scope: n.scope,
-    promoted: arrayOrEmpty(n.promoted),
-    ids: n.ids ?? [],
+    state: rawMetadata.state,
+    consent: rawMetadata.consent,
+    account: rawMetadata.account ?? null,
+    src: rawMetadata.src,
+    typed: rawMetadata.typed ?? null,
+    scope: rawMetadata.scope,
+    promoted: arrayOrEmpty(rawMetadata.promoted),
+    ids: rawMetadata.ids ?? [],
   });
-  return r.success ? r.data : undefined;
+  return parsed.success ? parsed.data : undefined;
 }
 //@ chunk-a477qqne.js:5142-5220 placement
 /**
@@ -112,27 +128,27 @@ function arrayOrEmpty(promoted) {
   return Array.isArray(promoted) ? promoted : [promoted];
 }
 //@ chunk-a477qqne.js:5220-5499 placement
-function serializeItemMetadata(e) {
+function serializeItemMetadata(item) {
   return {
-    id: e.id,
-    ...(e.minted !== undefined && {
-      minted: e.minted,
+    id: item.id,
+    ...(item.minted !== undefined && {
+      minted: item.minted,
     }),
-    state: e.state,
-    consent: e.consent,
-    ...(e.account !== null && {
-      account: e.account,
+    state: item.state,
+    consent: item.consent,
+    ...(item.account !== null && {
+      account: item.account,
     }),
-    src: e.src,
-    ...(e.typed !== null && {
-      typed: e.typed,
+    src: item.src,
+    ...(item.typed !== null && {
+      typed: item.typed,
     }),
-    scope: e.scope,
-    ...(e.promoted.length > 0 && {
-      promoted: e.promoted,
+    scope: item.scope,
+    ...(item.promoted.length > 0 && {
+      promoted: item.promoted,
     }),
-    ...(e.ids.length > 0 && {
-      ids: e.ids,
+    ...(item.ids.length > 0 && {
+      ids: item.ids,
     }),
   };
 }
@@ -147,27 +163,27 @@ var INDENTED_LINE_RE = /^\s+\S/;
 /**
  * 预处理记忆内容并取正文。
  */
-function prepareContent(e, n, r) {
-  return prepareMemoryContent(e, n, r).content;
+function prepareContent(filePath, content, context) {
+  return prepareMemoryContent(filePath, content, context).content;
 }
 //@ chunk-a477qqne.js:5598-6838 placement
 /**
  * 写入前处理记忆文档内容（前言、换行、BOM）。
  */
-function prepareMemoryContent(e, n, context) {
-  let s = isTeamMemPath(e);
-  if (!(e.endsWith(".md") && (isAutoMemPath(e) || false)))
+function prepareMemoryContent(filePath, content, context) {
+  let isTeamMem = isTeamMemPath(filePath);
+  if (!(filePath.endsWith(".md") && (isAutoMemPath(filePath) || false)))
     return {
-      content: n,
+      content,
       item: undefined,
     };
-  let d = !s;
-  if (context !== undefined && d && n !== normalizeLineEndings(n)) {
-    let included = n.includes(`\r
+  let isPersonalMem = !isTeamMem;
+  if (context !== undefined && isPersonalMem && content !== normalizeLineEndings(content)) {
+    let included = content.includes(`\r
 `);
-    let S = n.startsWith("\uFEFF");
-    let memoryContent = prepareMemoryContent(e, normalizeLineEndings(n), context);
-    let I = included
+    let hadBom = content.startsWith("\uFEFF");
+    let memoryContent = prepareMemoryContent(filePath, normalizeLineEndings(content), context);
+    let restoredContent = included
       ? memoryContent.content.replaceAll(
           `
 `,
@@ -177,53 +193,58 @@ function prepareMemoryContent(e, n, context) {
       : memoryContent.content;
     return {
       ...memoryContent,
-      content: S && !I.startsWith("\uFEFF") ? "\uFEFF" + I : I,
+      content: hadBom && !restoredContent.startsWith("\uFEFF") ? "\uFEFF" + restoredContent : restoredContent,
     };
   }
-  if (context !== undefined && d && context.prior !== undefined && !FRONTMATTER_REGEX.test(n))
+  if (
+    context !== undefined &&
+    isPersonalMem &&
+    context.prior !== undefined &&
+    !FRONTMATTER_REGEX.test(content)
+  )
     return {
-      content: n,
+      content,
       item: undefined,
       refusal: emptyRefusalHeader(),
       refusalKind: "header",
     };
-  let l = n;
-  if (!FRONTMATTER_REGEX.test(l))
+  let text = content;
+  if (!FRONTMATTER_REGEX.test(text))
     return {
-      content: n,
+      content,
       item: undefined,
     };
   let modified = new Date().toISOString();
-  let y = d
-    ? parseMemoryFile(l, e, {
+  let memoryFile = isPersonalMem
+    ? parseMemoryFile(text, filePath, {
         quoteLossyValues: true,
       })
     : null;
-  if (context !== undefined && y !== null) {
-    let M = stampMemoryWrite(l, y, context, modified);
-    if (M !== undefined)
+  if (context !== undefined && memoryFile !== null) {
+    let stamped = stampMemoryWrite(text, memoryFile, context, modified);
+    if (stamped !== undefined)
       return {
-        content: M.content ?? stampNewMemoryContent(e, l, y, modified),
-        item: M.item,
+        content: stamped.content ?? stampNewMemoryContent(filePath, text, memoryFile, modified),
+        item: stamped.item,
       };
   }
   if (context === undefined)
     return {
-      content: stampNewMemoryContent(e, l, y, modified),
+      content: stampNewMemoryContent(filePath, text, memoryFile, modified),
       item: undefined,
     };
-  if (d && context.prior !== undefined) {
-    let M =
+  if (isPersonalMem && context.prior !== undefined) {
+    let previousFile =
       context.previous === null
         ? undefined
-        : parseMemoryFile(context.previous, e, {
+        : parseMemoryFile(context.previous, filePath, {
             quoteLossyValues: true,
           });
-    return M !== undefined &&
+    return previousFile !== undefined &&
       context.previous !== null &&
       restampMemoryContent(
         context.previous,
-        M,
+        previousFile,
         {
           id: context.prior.id,
           ...context.prior.fields,
@@ -231,35 +252,40 @@ function prepareMemoryContent(e, n, context) {
         modified,
       ) !== undefined
       ? {
-          content: n,
+          content,
           item: undefined,
           refusal: emptyRefusalHeader(),
           refusalKind: "header",
         }
       : {
-          content: stampNewMemoryContent(e, l, y, modified),
+          content: stampNewMemoryContent(filePath, text, memoryFile, modified),
           item: undefined,
         };
   }
-  let w = withoutFrontmatterKeys(l, CLAUDECODE_KEYS, {
+  let strippedText = withoutFrontmatterKeys(text, CLAUDECODE_KEYS, {
     topLevel: false,
   });
-  if (w === undefined)
+  if (strippedText === undefined)
     return {
-      content: n,
+      content,
       item: undefined,
       refusal: emptyRefusalMissingItem(),
       refusalKind: "item_keys",
     };
   if (context.claimsRecordedId === true)
     return {
-      content: n,
+      content,
       item: undefined,
       refusal: emptyRefusalCopiedId(),
       refusalKind: "copied_id",
     };
   return {
-    content: stampNewMemoryContent(e, w, parseMemoryFileLoose(w, e), modified),
+    content: stampNewMemoryContent(
+      filePath,
+      strippedText,
+      parseMemoryFileLoose(strippedText, filePath),
+      modified,
+    ),
     item: undefined,
   };
 }
@@ -267,8 +293,8 @@ function prepareMemoryContent(e, n, context) {
 /**
  * 宽松解析记忆文件（保留有损值的引用形式）。
  */
-function parseMemoryFileLoose(e, n) {
-  return parseMemoryFile(e, n, {
+function parseMemoryFileLoose(text, filePath) {
+  return parseMemoryFile(text, filePath, {
     quoteLossyValues: true,
   });
 }
@@ -304,27 +330,36 @@ function emptyRefusalMissingItem() {
 /**
  * 给新记忆内容加来源会话与修改时间。
  */
-function stampNewMemoryContent(e, n, r, s) {
-  let i = r !== null && getMemoryMetadata(r.frontmatter, "originSessionId") === null ? r : null;
-  if (i !== null) {
-    if (i.rewriteHazard === undefined)
+function stampNewMemoryContent(filePath, content, memoryFile, modified) {
+  let existingFile =
+    memoryFile !== null && getMemoryMetadata(memoryFile.frontmatter, "originSessionId") === null
+      ? memoryFile
+      : null;
+  if (existingFile !== null) {
+    if (existingFile.rewriteHazard === undefined)
       return serializeMemoryFile(
-        withMemoryMetadata(i.frontmatter, {
+        withMemoryMetadata(existingFile.frontmatter, {
           originSessionId: getSessionId(),
-          modified: s,
+          modified,
         }),
-        i.body,
+        existingFile.body,
       );
-    logForDebugging(`stampNewMemoryContent: not stamping provenance on ${e} \u2014 ${i.rewriteHazard}`, {
-      level: "warn",
-    });
+    logForDebugging(
+      `stampNewMemoryContent: not stamping provenance on ${filePath} \u2014 ${existingFile.rewriteHazard}`,
+      {
+        level: "warn",
+      },
+    );
   }
-  let memoryFrontmatter = parseMemoryFrontmatter(n, s);
+  let memoryFrontmatter = parseMemoryFrontmatter(content, modified);
   if (memoryFrontmatter === null) {
-    logForDebugging(`stampNewMemoryContent: not dating ${e} \u2014 no faithful place for a modified line`, {
-      level: "warn",
-    });
-    return n;
+    logForDebugging(
+      `stampNewMemoryContent: not dating ${filePath} \u2014 no faithful place for a modified line`,
+      {
+        level: "warn",
+      },
+    );
+    return content;
   }
   return memoryFrontmatter;
 }
@@ -332,8 +367,8 @@ function stampNewMemoryContent(e, n, r, s) {
 /**
  * 统一 BOM 与换行。
  */
-function normalizeLineEndings(e) {
-  return e.replace(/^\uFEFF/, "").replaceAll(
+function normalizeLineEndings(text) {
+  return text.replace(/^\uFEFF/, "").replaceAll(
     `\r
 `,
     `
@@ -344,34 +379,39 @@ function normalizeLineEndings(e) {
 /**
  * 只含 claudeCodeItem 的键列表。
  */
-var TYPEDTURN = "typedTurn";
-var CLAUDECODE_KEYS = [CLAUDECODEITEM, TYPEDTURN];
-var CLAUDECODE_ITEM_KEYS = [CLAUDECODEITEM];
+var TYPEDTURN; // deferred: uses MAX_PROMOTED_ENTRIES of its import cycle while loading; runs once the cycle is complete
+var CLAUDECODE_KEYS;
+var CLAUDECODE_ITEM_KEYS;
+deferInit("chunk-a477qqne.js:7500", () => {
+  TYPEDTURN = "typedTurn";
+  CLAUDECODE_KEYS = [CLAUDECODEITEM, TYPEDTURN];
+  CLAUDECODE_ITEM_KEYS = [CLAUDECODEITEM];
+});
 //@ chunk-a477qqne.js:7537-8361 placement
 /**
  * 写入时更新记忆前言（保留原值、记录写者）。
  */
-function stampMemoryWrite(e, n, r, modified) {
-  let { previous, writer, consent, account, prior } = r;
-  let w =
+function stampMemoryWrite(content, memoryFile, context, modified) {
+  let { previous, writer, consent, account, prior } = context;
+  let previousFile =
     previous === null || !FRONTMATTER_REGEX.test(normalizeLineEndings(previous))
       ? undefined
       : parseMemoryFile(normalizeLineEndings(previous), undefined, {
           quoteLossyValues: true,
         });
-  let M =
-    w === undefined ||
-    !En(
-      pickComparableFields(w),
+  let bodyChanged =
+    previousFile === undefined ||
+    !import_sortedIndex_2(
+      pickComparableFields(previousFile),
       pickComparableFields(
-        parseMemoryFile(normalizeLineEndings(e), undefined, {
+        parseMemoryFile(normalizeLineEndings(content), undefined, {
           quoteLossyValues: true,
         }),
       ),
     );
-  let S;
+  let item;
   if (prior !== undefined) {
-    S = {
+    item = {
       ...prior.fields,
       id: prior.id,
       ...(!prior.trusted && {
@@ -379,109 +419,118 @@ function stampMemoryWrite(e, n, r, modified) {
         typed: null,
       }),
     };
-    if (S.scope === "unknown" && prior.trusted)
-      S = {
-        ...S,
-        scope: getMemoryScope(n.frontmatter),
+    if (item.scope === "unknown" && prior.trusted)
+      item = {
+        ...item,
+        scope: getMemoryScope(memoryFile.frontmatter),
       };
-    if (M) {
-      S =
-        S.src === "typed" && writer.src === "typed"
+    if (bodyChanged) {
+      item =
+        item.src === "typed" && writer.src === "typed"
           ? {
-              ...S,
+              ...item,
               typed: writer.typed,
             }
           : {
-              ...S,
+              ...item,
               src: "inferred",
               typed: null,
             };
       if (consent === "off")
-        S = {
-          ...S,
+        item = {
+          ...item,
           consent: "off",
         };
     }
   } else {
-    let I = previous === null || r.mintAsNew === true;
-    S = {
+    let isNew = previous === null || context.mintAsNew === true;
+    item = {
       id: randomUUID(),
       minted: modified,
-      state: I ? "pending" : "legacy",
+      state: isNew ? "pending" : "legacy",
       consent,
       account,
       src: previous === null ? writer.src : "inferred",
       typed: previous === null && writer.src === "typed" ? writer.typed : null,
-      scope: getMemoryScope(n.frontmatter),
+      scope: getMemoryScope(memoryFile.frontmatter),
       promoted: [],
       ids: [],
     };
   }
-  let v = restampMemoryContent(e, n, S, modified);
-  return v === "unchanged"
+  let result = restampMemoryContent(content, memoryFile, item, modified);
+  return result === "unchanged"
     ? {
         content: undefined,
-        item: S,
+        item,
       }
-    : v === undefined
+    : result === undefined
       ? undefined
       : {
-          content: v,
-          item: S,
+          content: result,
+          item,
         };
 }
 //@ chunk-a477qqne.js:8361-8843 placement
 /**
  * 必要时更新记忆前言，否则返回 unchanged。
  */
-function restampMemoryContent(e, n, r, modified) {
-  let i = {
-    originSessionId: getMemoryMetadata(n.frontmatter, "originSessionId") ?? getSessionId(),
+function restampMemoryContent(originalContent, memoryFile, item, modified) {
+  let freshMetadata = {
+    originSessionId: getMemoryMetadata(memoryFile.frontmatter, "originSessionId") ?? getSessionId(),
     modified,
   };
-  if (n.rewriteHazard === undefined) {
+  if (memoryFile.rewriteHazard === undefined) {
     if (
-      En(claudeCodeItemMeta(n.frontmatter), serializeItemMetadata(r)) &&
-      getMemoryMetadata(n.frontmatter, TYPEDTURN) === null &&
-      !hasManagedMetadataKeys(e) &&
-      !hasEmptyListKeys(e)
+      import_sortedIndex_2(claudeCodeItemMeta(memoryFile.frontmatter), serializeItemMetadata(item)) &&
+      getMemoryMetadata(memoryFile.frontmatter, TYPEDTURN) === null &&
+      !hasManagedMetadataKeys(originalContent) &&
+      !hasEmptyListKeys(originalContent)
     )
       return "unchanged";
-    let l = En(parseMemoryFile(e).frontmatter, n.frontmatter) ? rewriteFrontmatterKeys(e, r, i) : undefined;
+    let rewritten = import_sortedIndex_2(parseMemoryFile(originalContent).frontmatter, memoryFile.frontmatter)
+      ? rewriteFrontmatterKeys(originalContent, item, freshMetadata)
+      : undefined;
     if (
-      l !== undefined &&
-      ((M) =>
+      rewritten !== undefined &&
+      ((text) =>
         countCharInString(
-          STRICT_FRONTMATTER_REGEX.exec(M)?.[0] ?? "",
+          STRICT_FRONTMATTER_REGEX.exec(text)?.[0] ?? "",
           `
 `,
-        ) <= MAX_UNTRUSTED_FRONTMATTER_LINES)(l)
+        ) <= MAX_UNTRUSTED_FRONTMATTER_LINES)(rewritten)
     )
-      return l;
-    let y = serializeMemoryFile(
-      withMemoryMetadata(n.frontmatter, {
-        [CLAUDECODEITEM]: Uo(serializeItemMetadata(r), ITEM_METADATA_KEYS),
+      return rewritten;
+    let serialized = serializeMemoryFile(
+      withMemoryMetadata(memoryFile.frontmatter, {
+        [CLAUDECODEITEM]: omitAlias(serializeItemMetadata(item), ITEM_METADATA_KEYS),
         [TYPEDTURN]: null,
-        ...i,
+        ...freshMetadata,
       }),
-      n.body,
+      memoryFile.body,
     );
-    let w = insertMetadataLines(y, r);
-    return isMetadataUnchanged(w, parseMemoryFile(y), r) ? w : (l ?? rewriteFrontmatterKeys(e, r, i));
+    let inserted = insertMetadataLines(serialized, item);
+    return isMetadataUnchanged(inserted, parseMemoryFile(serialized), item)
+      ? inserted
+      : (rewritten ?? rewriteFrontmatterKeys(originalContent, item, freshMetadata));
   }
-  return rewriteFrontmatterKeys(e, r, i);
+  return rewriteFrontmatterKeys(originalContent, item, freshMetadata);
 }
 //@ chunk-a477qqne.js:8843-9125 placement
-function isMetadataUnchanged(e, memoryFile, r) {
-  let frontmatter = parseMemoryFile(e).frontmatter;
-  if (!isPlainFrontmatter(e)) return false;
-  let i = (metadata) =>
-    wi(metadata, (l, h) => [...CLAUDECODE_KEYS, "originSessionId", "modified", "node_type"].includes(h));
+function isMetadataUnchanged(text, memoryFile, item) {
+  let frontmatter = parseMemoryFile(text).frontmatter;
+  if (!isPlainFrontmatter(text)) return false;
+  let pickManagedMetadata = (metadata) =>
+    import_reject(metadata, (value, key) =>
+      [...CLAUDECODE_KEYS, "originSessionId", "modified", "node_type"].includes(key),
+    );
   return (
-    En(readItemMetadata(frontmatter), r) &&
+    import_sortedIndex_2(readItemMetadata(frontmatter), item) &&
     frontmatter.name === memoryFile.frontmatter.name &&
     frontmatter.description === memoryFile.frontmatter.description &&
-    En(i(frontmatter.metadata), i(memoryFile.frontmatter.metadata))
+    import_sortedIndex_2(
+      pickManagedMetadata(frontmatter.metadata),
+      pickManagedMetadata(memoryFile.frontmatter.metadata),
+    )
   );
 }
 //@ chunk-a477qqne.js:9125-9159 placement
@@ -493,50 +542,60 @@ var ITEM_METADATA_KEYS = ["typed", "promoted", "ids"];
 /**
  * 生成 item 元数据的前言行。
  */
-function metadataLines(e, n) {
-  let r = serializeItemMetadata(e);
-  return ITEM_METADATA_KEYS.flatMap((s) => (r[s] === undefined ? [] : [n + s + ": " + jsonStringify(r[s])]));
+function metadataLines(item, indent) {
+  let serialized = serializeItemMetadata(item);
+  return ITEM_METADATA_KEYS.flatMap((key) =>
+    serialized[key] === undefined ? [] : [indent + key + ": " + jsonStringify(serialized[key])],
+  );
 }
 //@ chunk-a477qqne.js:9247-9642 placement
 /**
  * 在前言中查找元数据块。
  */
 function findMetadataBlock(lines) {
-  let lastIndex = lines.findLastIndex((i, d) => d > 0 && i.trim() === "---");
-  let index = lines.findIndex((i, d) => d > 0 && d < lastIndex && METADATA_BLOCK_RE.test(i));
+  let lastIndex = lines.findLastIndex((line, lineIndex) => lineIndex > 0 && line.trim() === "---");
+  let index = lines.findIndex(
+    (line, lineIndex) => lineIndex > 0 && lineIndex < lastIndex && METADATA_BLOCK_RE.test(line),
+  );
   if (index === -1) return;
   let regExp = new RegExp(`^(\\s+)(["']?)` + CLAUDECODEITEM + "\\2\\s*:\\s*$");
-  for (let i = index + 1; i < lastIndex; i++) {
-    let d = lines[i];
-    if (!COMMENT_OR_EMPTY_RE.test(d) && leadingSpaces(d) === 0) return;
-    let match = regExp.exec(d);
+  for (let lineIndex = index + 1; lineIndex < lastIndex; lineIndex++) {
+    let line = lines[lineIndex];
+    if (!COMMENT_OR_EMPTY_RE.test(line) && leadingSpaces(line) === 0) return;
+    let match = regExp.exec(line);
     if (match === null) continue;
-    let h = i + 1;
-    while (h < lastIndex && (COMMENT_OR_EMPTY_RE.test(lines[h]) || leadingSpaces(lines[h]) > match[1].length))
-      h++;
-    while (h > i + 1 && COMMENT_OR_EMPTY_RE.test(lines[h - 1])) h--;
-    return [i, h];
+    let blockEnd = lineIndex + 1;
+    while (
+      blockEnd < lastIndex &&
+      (COMMENT_OR_EMPTY_RE.test(lines[blockEnd]) || leadingSpaces(lines[blockEnd]) > match[1].length)
+    )
+      blockEnd++;
+    while (blockEnd > lineIndex + 1 && COMMENT_OR_EMPTY_RE.test(lines[blockEnd - 1])) blockEnd--;
+    return [lineIndex, blockEnd];
   }
   return;
 }
 //@ chunk-a477qqne.js:9642-9894 placement
-function insertMetadataLines(e, n) {
-  let r = FRONTMATTER_REGEX.exec(e)?.[0];
-  if (r === undefined) return e;
-  let lines = r.split(`
+function insertMetadataLines(text, item) {
+  let frontmatterText = FRONTMATTER_REGEX.exec(text)?.[0];
+  if (frontmatterText === undefined) return text;
+  let lines = frontmatterText.split(`
 `);
   let metadataBlock = findMetadataBlock(lines);
-  if (metadataBlock === undefined) return e;
-  let [d, l] = metadataBlock;
-  let h = l > d + 1 ? " ".repeat(leadingSpaces(lines[d + 1])) : " ".repeat(leadingSpaces(lines[d]) + 2);
+  if (metadataBlock === undefined) return text;
+  let [blockStart, blockEnd] = metadataBlock;
+  let indent =
+    blockEnd > blockStart + 1
+      ? " ".repeat(leadingSpaces(lines[blockStart + 1]))
+      : " ".repeat(leadingSpaces(lines[blockStart]) + 2);
   return (
-    [...lines.slice(0, l), ...metadataLines(n, h), ...lines.slice(l)].join(`
-`) + e.slice(r.length)
+    [...lines.slice(0, blockEnd), ...metadataLines(item, indent), ...lines.slice(blockEnd)].join(`
+`) + text.slice(frontmatterText.length)
   );
 }
 //@ chunk-a477qqne.js:9894-10050 placement
-function hasEmptyListKeys(e) {
-  let lines = (FRONTMATTER_REGEX.exec(e)?.[0] ?? "").split(`
+function hasEmptyListKeys(text) {
+  let lines = (FRONTMATTER_REGEX.exec(text)?.[0] ?? "").split(`
 `);
   let metadataBlock = findMetadataBlock(lines);
   return (
@@ -547,26 +606,26 @@ function hasEmptyListKeys(e) {
   );
 }
 //@ chunk-a477qqne.js:10050-10251 placement
-function pickComparableFields(e) {
-  let metadata = wi(
-    e.frontmatter.metadata,
-    (r, s) => CLAUDECODE_KEYS.includes(s) || s === "originSessionId" || s === "modified",
+function pickComparableFields(memoryFile) {
+  let metadata = import_reject(
+    memoryFile.frontmatter.metadata,
+    (value, key) => CLAUDECODE_KEYS.includes(key) || key === "originSessionId" || key === "modified",
   );
   return {
-    name: e.frontmatter.name,
-    description: e.frontmatter.description,
+    name: memoryFile.frontmatter.name,
+    description: memoryFile.frontmatter.description,
     metadata,
-    body: e.body,
+    body: memoryFile.body,
   };
 }
 //@ chunk-a477qqne.js:10251-10363 placement
-function hasManagedMetadataKeys(e) {
-  return (FRONTMATTER_REGEX.exec(e)?.[0] ?? "")
+function hasManagedMetadataKeys(text) {
+  return (FRONTMATTER_REGEX.exec(text)?.[0] ?? "")
     .split(
       `
 `,
     )
-    .some((line) => CLAUDECODE_KEYS.some((s) => new RegExp("^" + s + "\\s*:").test(line)));
+    .some((line) => CLAUDECODE_KEYS.some((key) => new RegExp("^" + key + "\\s*:").test(line)));
 }
 //@ chunk-a477qqne.js:10363-10453 placement
 /**
@@ -578,301 +637,344 @@ var METADATA_START_RE = /^(["']?)metadata\1\s*:/;
 /**
  * 判断文本是否匹配前言正则。
  */
-function matchesFrontmatter(e) {
-  return regExp_2.test(e);
+function matchesFrontmatter(text) {
+  return regExp_2.test(text);
 }
 //@ chunk-a477qqne.js:10487-10575 placement
-var regExp_2 = new RegExp(
-  `^[ \\t]*(-[ \\t]+)*((&|!)\\S*[ \\t]+)*["']?` + CLAUDECODEITEM + `["']?[ \\t]*:`,
-  "m",
-);
+var regExp_2; // deferred: uses MAX_PROMOTED_ENTRIES of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-a477qqne.js:10487", () => {
+  regExp_2 = new RegExp(
+    `^[ \\t]*(-[ \\t]+)*((&|!)\\S*[ \\t]+)*["']?` + CLAUDECODEITEM + `["']?[ \\t]*:`,
+    "m",
+  );
+});
 //@ chunk-a477qqne.js:10575-10715 placement
-function hasNestedKey(e, n) {
-  if (Array.isArray(e)) return e.some((r) => hasNestedKey(r, n));
-  if (!mve(e)) return false;
-  return Object.entries(e).some(([key, value]) => key === n || hasNestedKey(value, n));
+function hasNestedKey(value, key) {
+  if (Array.isArray(value)) return value.some((item) => hasNestedKey(item, key));
+  if (!import_isPlainObject(value)) return false;
+  return Object.entries(value).some(([key_2, value]) => key_2 === key || hasNestedKey(value, key));
 }
 //@ chunk-a477qqne.js:10715-10935 placement
-function countOccurrences_2(e, n) {
-  let r = (s) => s.split(n).length - 1;
-  if (typeof e === "string") return r(e);
-  if (Array.isArray(e)) return e.reduce((acc, i) => acc + countOccurrences_2(i, n), 0);
-  if (!mve(e)) return 0;
-  return Object.entries(e).reduce((acc, [i, d]) => acc + r(i) + countOccurrences_2(d, n), 0);
+function countOccurrences_2(value, needle) {
+  let countIn = (text) => text.split(needle).length - 1;
+  if (typeof value === "string") return countIn(value);
+  if (Array.isArray(value)) return value.reduce((acc, item) => acc + countOccurrences_2(item, needle), 0);
+  if (!import_isPlainObject(value)) return 0;
+  return Object.entries(value).reduce(
+    (acc, [key, value]) => acc + countIn(key) + countOccurrences_2(value, needle),
+    0,
+  );
 }
 //@ chunk-a477qqne.js:10935-10979 placement
 /**
  * 统计子串出现次数。
  */
-function countOccurrences(e, n) {
-  return e.split(n).length - 1;
+function countOccurrences(text, needle) {
+  return text.split(needle).length - 1;
 }
 //@ chunk-a477qqne.js:10979-11178 placement
-function hasYamlAliases(e) {
-  let n = (s) =>
-    new Set([...e.matchAll(new RegExp("(^|[\\s[{,:-])\\" + s + "([^\\s,[\\]{}]+)", "gm"))].map((i) => i[2]));
-  let r = n("&");
-  return [...n("*")].some((s) => r.has(s)) || /(^|\s)<<[ \t]*:/m.test(e);
+function hasYamlAliases(text) {
+  let aliasNames = (marker) =>
+    new Set(
+      [...text.matchAll(new RegExp("(^|[\\s[{,:-])\\" + marker + "([^\\s,[\\]{}]+)", "gm"))].map(
+        (match) => match[2],
+      ),
+    );
+  let declaredAnchors = aliasNames("&");
+  return (
+    [...aliasNames("*")].some((aliasName) => declaredAnchors.has(aliasName)) || /(^|\s)<<[ \t]*:/m.test(text)
+  );
 }
 //@ chunk-a477qqne.js:11178-11827 placement
 /**
  * 规范化前言（BOM、分隔线）。
  */
-function normalizeFrontmatter(e) {
-  if (e.startsWith("\uFEFF")) {
-    let w = normalizeFrontmatter(e.slice(1));
-    return w === undefined ? undefined : "\uFEFF" + w;
+function normalizeFrontmatter(text) {
+  if (text.startsWith("\uFEFF")) {
+    let normalized = normalizeFrontmatter(text.slice(1));
+    return normalized === undefined ? undefined : "\uFEFF" + normalized;
   }
-  if (!/^---/.test(e)) return e;
-  let frontmatterObject = parseFrontmatterObject(e);
+  if (!/^---/.test(text)) return text;
+  let frontmatterObject = parseFrontmatterObject(text);
   if (!(
     frontmatterObject !== undefined &&
-    /^---[ \t]*\r?\n/.test(e) &&
-    FRONTMATTER_REGEX.test(e) &&
-    !hasLooseFrontmatter(e)
+    /^---[ \t]*\r?\n/.test(text) &&
+    FRONTMATTER_REGEX.test(text) &&
+    !hasLooseFrontmatter(text)
   ))
-    return mentionsItemKey(e) || hasRiskyQuotedEscapes(e) ? undefined : e;
-  let s = e.match(STRICT_FRONTMATTER_REGEX)?.[0] ?? "";
-  if (hasNestedKey(frontmatterObject, CLAUDECODEITEM) && hasYamlAliases(s)) return;
-  let i = withoutFrontmatterKeys(e, CLAUDECODE_ITEM_KEYS, {
+    return mentionsItemKey(text) || hasRiskyQuotedEscapes(text) ? undefined : text;
+  let strictFrontmatter = text.match(STRICT_FRONTMATTER_REGEX)?.[0] ?? "";
+  if (hasNestedKey(frontmatterObject, CLAUDECODEITEM) && hasYamlAliases(strictFrontmatter)) return;
+  let stripped = withoutFrontmatterKeys(text, CLAUDECODE_ITEM_KEYS, {
     topLevel: false,
   });
-  let d = i === undefined ? undefined : parseFrontmatterObject(i);
-  let l =
-    parseFrontmatterObject(e, {
+  let strippedObject = stripped === undefined ? undefined : parseFrontmatterObject(stripped);
+  let strictParseFailed =
+    parseFrontmatterObject(text, {
       lenient: false,
     }) === undefined;
-  let h = (w) => w.metadata ?? {};
-  let y = i?.match(STRICT_FRONTMATTER_REGEX)?.[0] ?? "";
-  return d !== undefined &&
-    !hasNestedKey(d, CLAUDECODEITEM) &&
-    countOccurrences(y, CLAUDECODEITEM) === countOccurrences_2(d, CLAUDECODEITEM) &&
-    !(countOccurrences_2(d, CLAUDECODEITEM) > 0 && (y.includes("\\") || hasYamlAliases(y))) &&
-    !(l && (mentionsItemKey(i?.match(STRICT_FRONTMATTER_REGEX)?.[0] ?? "") || hasRiskyQuotedEscapes(s))) &&
-    En(Uo(d, "metadata"), Uo(frontmatterObject, "metadata")) &&
-    En(
-      h(d),
-      mve(frontmatterObject.metadata) ? Uo(frontmatterObject.metadata, CLAUDECODEITEM) : h(frontmatterObject),
+  let metadataOf = (object) => object.metadata ?? {};
+  let strippedFrontmatter = stripped?.match(STRICT_FRONTMATTER_REGEX)?.[0] ?? "";
+  return strippedObject !== undefined &&
+    !hasNestedKey(strippedObject, CLAUDECODEITEM) &&
+    countOccurrences(strippedFrontmatter, CLAUDECODEITEM) ===
+      countOccurrences_2(strippedObject, CLAUDECODEITEM) &&
+    !(
+      countOccurrences_2(strippedObject, CLAUDECODEITEM) > 0 &&
+      (strippedFrontmatter.includes("\\") || hasYamlAliases(strippedFrontmatter))
+    ) &&
+    !(
+      strictParseFailed &&
+      (mentionsItemKey(stripped?.match(STRICT_FRONTMATTER_REGEX)?.[0] ?? "") ||
+        hasRiskyQuotedEscapes(strictFrontmatter))
+    ) &&
+    import_sortedIndex_2(omitAlias(strippedObject, "metadata"), omitAlias(frontmatterObject, "metadata")) &&
+    import_sortedIndex_2(
+      metadataOf(strippedObject),
+      import_isPlainObject(frontmatterObject.metadata)
+        ? omitAlias(frontmatterObject.metadata, CLAUDECODEITEM)
+        : metadataOf(frontmatterObject),
     )
-    ? i
+    ? stripped
     : undefined;
 }
 //@ chunk-a477qqne.js:11827-11864 placement
 /**
  * 判断文本里是否含 claudeCodeItem 键。
  */
-function mentionsItemKey(e) {
-  return e.includes(CLAUDECODEITEM);
+function mentionsItemKey(text) {
+  return text.includes(CLAUDECODEITEM);
 }
 //@ chunk-a477qqne.js:11864-11993 placement
-function hasRiskyQuotedEscapes(e) {
-  return e
+function hasRiskyQuotedEscapes(text) {
+  return text
     .split(/\r\n?|\n/)
     .some((line) => line.includes('"') && (/\\[xuU][0-9A-Fa-f]/.test(line) || line.trimEnd().endsWith("\\")));
 }
 //@ chunk-a477qqne.js:11993-12182 placement
-function parseFrontmatterObject(e, { lenient: n = true } = {}) {
-  let r = e.match(STRICT_FRONTMATTER_REGEX)?.[1];
-  if (r === undefined) return;
-  if (!n)
+function parseFrontmatterObject(text, { lenient = true } = {}) {
+  let body = text.match(STRICT_FRONTMATTER_REGEX)?.[1];
+  if (body === undefined) return;
+  if (!lenient)
     try {
-      let yaml = parseYaml(r);
-      return mve(yaml) ? yaml : undefined;
+      let yaml = parseYaml(body);
+      return import_isPlainObject(yaml) ? yaml : undefined;
     } catch {
       return;
     }
-  let yamlLenient = parseYamlLenient(r);
-  return yamlLenient.ok && mve(yamlLenient.value) ? yamlLenient.value : undefined;
+  let yamlLenient = parseYamlLenient(body);
+  return yamlLenient.ok && import_isPlainObject(yamlLenient.value) ? yamlLenient.value : undefined;
 }
 //@ chunk-a477qqne.js:12182-12290 placement
-function isPlainFrontmatter(e) {
-  let frontmatterObject = parseFrontmatterObject(e);
+function isPlainFrontmatter(text) {
+  let frontmatterObject = parseFrontmatterObject(text);
   return (
     frontmatterObject !== undefined &&
-    ![...CLAUDECODE_KEYS, "originSessionId", "modified"].some((r) => frontmatterObject[r] !== undefined)
+    ![...CLAUDECODE_KEYS, "originSessionId", "modified"].some((key) => frontmatterObject[key] !== undefined)
   );
 }
 //@ chunk-a477qqne.js:12290-12412 placement
-function hasLooseFrontmatter(e) {
-  let n = FRONTMATTER_REGEX.exec(e)?.[1];
-  if (n === undefined) return false;
-  let r = e.match(STRICT_FRONTMATTER_REGEX)?.[1];
-  return r === undefined || n.trim() !== r.trim();
+function hasLooseFrontmatter(text) {
+  let looseBody = FRONTMATTER_REGEX.exec(text)?.[1];
+  if (looseBody === undefined) return false;
+  let strictBody = text.match(STRICT_FRONTMATTER_REGEX)?.[1];
+  return strictBody === undefined || looseBody.trim() !== strictBody.trim();
 }
 //@ chunk-a477qqne.js:12412-13485 placement
 /**
  * 重写前言中的指定键。
  */
-function rewriteFrontmatterKeys(e, n, r) {
-  let match = FRONTMATTER_REGEX.exec(e);
-  if (match === null || hasLooseFrontmatter(e)) return;
-  let i = match[0];
-  let d = stripFrontmatterKeys(
-    i.split(`
+function rewriteFrontmatterKeys(text, item, metadata) {
+  let match = FRONTMATTER_REGEX.exec(text);
+  if (match === null || hasLooseFrontmatter(text)) return;
+  let frontmatterText = match[0];
+  let lines = stripFrontmatterKeys(
+    frontmatterText.split(`
 `),
     [...CLAUDECODE_KEYS, "originSessionId", "modified"],
   );
-  let lastIndex = d.findLastIndex((x, z) => z > 0 && x.trim() === "---");
+  let lastIndex = lines.findLastIndex((line, lineIndex) => lineIndex > 0 && line.trim() === "---");
   if (lastIndex === -1) return;
-  let metadata = parseMemoryFile(
-    d.join(`
-`) + e.slice(i.length),
+  let metadata_2 = parseMemoryFile(
+    lines.join(`
+`) + text.slice(frontmatterText.length),
   ).frontmatter.metadata;
-  if ([...CLAUDECODE_KEYS, "originSessionId", "modified"].some((x) => metadata[x] !== undefined)) return;
-  let index = d.findIndex((x, z) => z > 0 && z < lastIndex && METADATA_BLOCK_RE.test(x));
+  if ([...CLAUDECODE_KEYS, "originSessionId", "modified"].some((key) => metadata_2[key] !== undefined))
+    return;
+  let index = lines.findIndex(
+    (line, lineIndex) => lineIndex > 0 && lineIndex < lastIndex && METADATA_BLOCK_RE.test(line),
+  );
   if (index === -1) return;
-  let w = index + 1;
-  let M;
-  while (w < lastIndex) {
-    let x = d[w];
-    if (x.trim() === "" || /^\s*#/.test(x)) {
-      w++;
+  let insertAt = index + 1;
+  let childIndent;
+  while (insertAt < lastIndex) {
+    let line = lines[insertAt];
+    if (line.trim() === "" || /^\s*#/.test(line)) {
+      insertAt++;
       continue;
     }
-    if (leadingSpaces(x) === 0) break;
-    M ??= leadingSpaces(x);
-    w++;
+    if (leadingSpaces(line) === 0) break;
+    childIndent ??= leadingSpaces(line);
+    insertAt++;
   }
-  let S = " ".repeat(M ?? 2);
-  let v = (x, z) =>
-    serializeFrontmatter(x)
+  let indent = " ".repeat(childIndent ?? 2);
+  let indentedLines = (object, prefix) =>
+    serializeFrontmatter(object)
       .trimEnd()
       .split(
         `
 `,
       )
-      .map((line) => z + line);
-  let I = [
-    ...v(
+      .map((line) => prefix + line);
+  let addedLines = [
+    ...indentedLines(
       {
-        [CLAUDECODEITEM]: Uo(serializeItemMetadata(n), ITEM_METADATA_KEYS),
+        [CLAUDECODEITEM]: omitAlias(serializeItemMetadata(item), ITEM_METADATA_KEYS),
       },
-      S,
+      indent,
     ),
-    ...metadataLines(n, S + "  "),
-    ...v(r, S),
+    ...metadataLines(item, indent + "  "),
+    ...indentedLines(metadata, indent),
   ];
-  let T =
-    [...d.slice(0, w), ...I, ...d.slice(w)].join(`
-`) + e.slice(i.length);
-  if (!isPlainFrontmatter(T)) return;
-  let frontmatter = parseMemoryFile(T).frontmatter;
-  let R = {
+  let result =
+    [...lines.slice(0, insertAt), ...addedLines, ...lines.slice(insertAt)].join(`
+`) + text.slice(frontmatterText.length);
+  if (!isPlainFrontmatter(result)) return;
+  let frontmatter = parseMemoryFile(result).frontmatter;
+  let actualMetadata = {
     item: readItemMetadata(frontmatter),
     turn: frontmatter.metadata[TYPEDTURN],
     originSessionId: frontmatter.metadata.originSessionId,
     modified: frontmatter.metadata.modified,
   };
-  let L = {
-    item: n,
+  let wantedMetadata = {
+    item,
     turn: undefined,
-    ...r,
+    ...metadata,
   };
-  let frontmatter_2 = parseMemoryFile(e).frontmatter;
-  let O = (metadata) =>
-    wi(metadata, (z, we) => [...CLAUDECODE_KEYS, "originSessionId", "modified"].includes(we));
-  return En(R, L) &&
+  let frontmatter_2 = parseMemoryFile(text).frontmatter;
+  let pickManagedMetadata = (metadata) =>
+    import_reject(metadata, (value, key) =>
+      [...CLAUDECODE_KEYS, "originSessionId", "modified"].includes(key),
+    );
+  return import_sortedIndex_2(actualMetadata, wantedMetadata) &&
     frontmatter.name === frontmatter_2.name &&
     frontmatter.description === frontmatter_2.description &&
-    En(O(frontmatter.metadata), O(frontmatter_2.metadata))
-    ? T
+    import_sortedIndex_2(
+      pickManagedMetadata(frontmatter.metadata),
+      pickManagedMetadata(frontmatter_2.metadata),
+    )
+    ? result
     : undefined;
 }
 //@ chunk-a477qqne.js:13485-13536 placement
 /**
  * 计算行首缩进宽度。
  */
-function leadingSpaces(e) {
-  return e.length - e.trimStart().length;
+function leadingSpaces(line) {
+  return line.length - line.trimStart().length;
 }
 //@ chunk-a477qqne.js:13536-14045 placement
 /**
  * 删除前言中的指定键。
  */
-function stripFrontmatterKeys(e, n, { topLevel: r = true } = {}) {
-  let regExp = new RegExp(`^(\\s*)(["']?)(` + n.join("|") + ")\\2\\s*:");
-  let i = [];
-  let d = false;
-  let l;
-  for (let idx = 0; idx < e.length; idx++) {
-    let y = e[idx];
-    let w = leadingSpaces(y);
-    let matches = /^\s*#/.test(y);
-    if (idx > 0 && w === 0 && y.trim() !== "" && !matches) {
-      d = METADATA_BLOCK_RE.test(y);
-      l = undefined;
-    } else if (d && l === undefined && y.trim() !== "" && !matches) l = w;
+function stripFrontmatterKeys(lines, keys, { topLevel = true } = {}) {
+  let regExp = new RegExp(`^(\\s*)(["']?)(` + keys.join("|") + ")\\2\\s*:");
+  let kept = [];
+  let inMetadataBlock = false;
+  let metadataIndent;
+  for (let idx = 0; idx < lines.length; idx++) {
+    let line = lines[idx];
+    let lineIndent = leadingSpaces(line);
+    let matches = /^\s*#/.test(line);
+    if (idx > 0 && lineIndent === 0 && line.trim() !== "" && !matches) {
+      inMetadataBlock = METADATA_BLOCK_RE.test(line);
+      metadataIndent = undefined;
+    } else if (inMetadataBlock && metadataIndent === undefined && line.trim() !== "" && !matches)
+      metadataIndent = lineIndent;
     if (
-      !(regExp.exec(y) !== null && ((r && w === 0) || (d && w === l))) ||
+      !(
+        regExp.exec(line) !== null &&
+        ((topLevel && lineIndent === 0) || (inMetadataBlock && lineIndent === metadataIndent))
+      ) ||
       idx === 0 ||
-      idx === e.length - 1
+      idx === lines.length - 1
     ) {
-      i.push(y);
+      kept.push(line);
       continue;
     }
-    let I = idx;
-    for (let idx_2 = idx + 1; idx_2 < e.length - 1; idx_2++) {
-      let T = e[idx_2];
-      if (COMMENT_OR_EMPTY_RE.test(T)) continue;
-      if (leadingSpaces(T) > w || (leadingSpaces(T) === w && /^\s*-(\s|$)/.test(T))) {
-        I = idx_2;
+    let removeUntil = idx;
+    for (let idx_2 = idx + 1; idx_2 < lines.length - 1; idx_2++) {
+      let innerLine = lines[idx_2];
+      if (COMMENT_OR_EMPTY_RE.test(innerLine)) continue;
+      if (
+        leadingSpaces(innerLine) > lineIndent ||
+        (leadingSpaces(innerLine) === lineIndent && /^\s*-(\s|$)/.test(innerLine))
+      ) {
+        removeUntil = idx_2;
         continue;
       }
       break;
     }
-    idx = I;
+    idx = removeUntil;
   }
-  return i;
+  return kept;
 }
 //@ chunk-a477qqne.js:14045-14404 placement
 /**
  * 去掉前言中的保留键。
  */
-function withoutFrontmatterKeys(e, n = CLAUDECODE_KEYS, { topLevel: r = true } = {}) {
-  let s = FRONTMATTER_REGEX.exec(e)?.[0];
-  if (s === undefined) return e;
-  if (hasLooseFrontmatter(e)) {
-    let lines = (e.match(STRICT_FRONTMATTER_REGEX)?.[0] ?? e).split(`
+function withoutFrontmatterKeys(text, keys = CLAUDECODE_KEYS, { topLevel = true } = {}) {
+  let frontmatterText = FRONTMATTER_REGEX.exec(text)?.[0];
+  if (frontmatterText === undefined) return text;
+  if (hasLooseFrontmatter(text)) {
+    let lines = (text.match(STRICT_FRONTMATTER_REGEX)?.[0] ?? text).split(`
 `);
-    return stripFrontmatterKeys(lines, n, {
-      topLevel: r,
+    return stripFrontmatterKeys(lines, keys, {
+      topLevel,
     }).length === lines.length
-      ? e
+      ? text
       : undefined;
   }
-  let i =
+  let stripped =
     stripFrontmatterKeys(
-      s.split(`
+      frontmatterText.split(`
 `),
-      n,
+      keys,
       {
-        topLevel: r,
+        topLevel,
       },
     ).join(`
-`) + e.slice(s.length);
-  let metadata = parseMemoryFile(i).frontmatter.metadata;
-  let l = r ? {} : frontmatterLines(i);
-  return n.some((y) => metadata[y] !== undefined && (r || !En(metadata[y], l[y]))) ? undefined : i;
+`) + text.slice(frontmatterText.length);
+  let metadata = parseMemoryFile(stripped).frontmatter.metadata;
+  let nestedMetadata = topLevel ? {} : frontmatterLines(stripped);
+  return keys.some(
+    (key) =>
+      metadata[key] !== undefined && (topLevel || !import_sortedIndex_2(metadata[key], nestedMetadata[key])),
+  )
+    ? undefined
+    : stripped;
 }
 //@ chunk-a477qqne.js:14404-14704 placement
 /**
  * 前言的行。
  */
-function frontmatterLines(e) {
-  let n = FRONTMATTER_REGEX.exec(e)?.[0];
-  if (n === undefined) return {};
-  let lines = n.split(`
+function frontmatterLines(text) {
+  let frontmatterText = FRONTMATTER_REGEX.exec(text)?.[0];
+  if (frontmatterText === undefined) return {};
+  let lines = frontmatterText.split(`
 `);
-  let s = [];
-  let i = false;
-  for (let [d, l] of lines.entries()) {
-    let h = leadingSpaces(l);
-    if (d > 0 && h === 0 && l.trim() !== "" && !/^\s*#/.test(l)) i = METADATA_START_RE.test(l);
-    if (!i || d === lines.length - 1 || l.trim() === "---") s.push(l);
+  let kept = [];
+  let inMetadata = false;
+  for (let [lineIndex, line] of lines.entries()) {
+    let indent = leadingSpaces(line);
+    if (lineIndex > 0 && indent === 0 && line.trim() !== "" && !/^\s*#/.test(line))
+      inMetadata = METADATA_START_RE.test(line);
+    if (!inMetadata || lineIndex === lines.length - 1 || line.trim() === "---") kept.push(line);
   }
   return parseMemoryFile(
-    s.join(`
-`) + e.slice(n.length),
+    kept.join(`
+`) + text.slice(frontmatterText.length),
   ).frontmatter.metadata;
 }
 //@ chunk-a477qqne.js:14704-14923 placement
@@ -895,107 +997,123 @@ function getMemoryScope(frontmatter) {
 /**
  * 解析记忆前言（name、description、metadata）。
  */
-function parseMemoryFrontmatter(e, n) {
-  let match = e.match(FRONTMATTER_REGEX);
-  let match_2 = e.match(STRICT_FRONTMATTER_REGEX);
+function parseMemoryFrontmatter(text, modifiedLine) {
+  let match = text.match(FRONTMATTER_REGEX);
+  let match_2 = text.match(STRICT_FRONTMATTER_REGEX);
   if (match === null || match_2 === null || match[1].trim() !== match_2[1].trim()) return null;
-  let memoryFile = parseMemoryFile(e);
-  let { name: d, description, metadata } = memoryFile.frontmatter;
-  if (d === null && description === null && Object.keys(metadata).length === 0) return null;
-  let y = match_2[0].length;
-  let lines = e.slice(0, y).split(`
+  let memoryFile = parseMemoryFile(text);
+  let { name, description, metadata } = memoryFile.frontmatter;
+  if (name === null && description === null && Object.keys(metadata).length === 0) return null;
+  let frontmatterLength = match_2[0].length;
+  let lines = text.slice(0, frontmatterLength).split(`
 `);
-  let M = e.slice(0, y).includes(`\r
+  let crlf = text.slice(0, frontmatterLength).includes(`\r
 `)
     ? "\r"
     : "";
-  let S = (C, O = "") => `${C}modified: ${n}${O}${M}`;
-  let flattened = lines.flatMap((line, O) =>
-    O > 0 && O < lines.length - 1 && MODIFIED_LINE_RE.test(line) ? [O] : [],
+  let makeModifiedLine = (indent, comment = "") => `${indent}modified: ${modifiedLine}${comment}${crlf}`;
+  let flattened = lines.flatMap((line, lineIndex) =>
+    lineIndex > 0 && lineIndex < lines.length - 1 && MODIFIED_LINE_RE.test(line) ? [lineIndex] : [],
   );
   if (flattened.length > 1 || (flattened.length === 0 && "modified" in metadata)) return null;
-  let I = flattened[0];
-  let P =
-    I !== undefined
-      ? [...lines.slice(0, I), S(...splitModifiedLine(stripTrailingCR(lines[I]))), ...lines.slice(I + 1)]
-      : findMetadataInsertion(lines, S);
-  if (P === null) return null;
-  let T =
-    P.join(`
-`) + e.slice(y);
-  let memoryFile_2 = parseMemoryFile(T);
-  let match_3 = T.match(STRICT_FRONTMATTER_REGEX);
-  return En(memoryFile_2.frontmatter, {
+  let modifiedLineIndex = flattened[0];
+  let updatedLines =
+    modifiedLineIndex !== undefined
+      ? [
+          ...lines.slice(0, modifiedLineIndex),
+          makeModifiedLine(...splitModifiedLine(stripTrailingCR(lines[modifiedLineIndex]))),
+          ...lines.slice(modifiedLineIndex + 1),
+        ]
+      : findMetadataInsertion(lines, makeModifiedLine);
+  if (updatedLines === null) return null;
+  let result =
+    updatedLines.join(`
+`) + text.slice(frontmatterLength);
+  let memoryFile_2 = parseMemoryFile(result);
+  let match_3 = result.match(STRICT_FRONTMATTER_REGEX);
+  return import_sortedIndex_2(memoryFile_2.frontmatter, {
     ...memoryFile.frontmatter,
     metadata: {
       ...metadata,
-      modified: n,
+      modified: modifiedLine,
     },
   }) &&
     memoryFile_2.body === memoryFile.body &&
     match_3 !== null &&
-    T.slice(match_3[0].length) === e.slice(y)
-    ? T
+    result.slice(match_3[0].length) === text.slice(frontmatterLength)
+    ? result
     : null;
 }
 //@ chunk-a477qqne.js:15690-15731 placement
 /**
  * 去掉行尾的 \r。
  */
-function stripTrailingCR(e) {
-  return e.replace(/\r$/, "");
+function stripTrailingCR(line) {
+  return line.replace(/\r$/, "");
 }
 //@ chunk-a477qqne.js:15731-15870 placement
-function splitModifiedLine(e) {
-  let [, n, r] = e.match(/^(\s*)modified\s*:([\s\S]*)$/);
-  return [n, /^["']/.test(r.trimStart()) ? "" : (r.match(/([ \t]+#.*)$/)?.[1] ?? "")];
+function splitModifiedLine(line) {
+  let [, indent, rest] = line.match(/^(\s*)modified\s*:([\s\S]*)$/);
+  return [indent, /^["']/.test(rest.trimStart()) ? "" : (rest.match(/([ \t]+#.*)$/)?.[1] ?? "")];
 }
 //@ chunk-a477qqne.js:15870-15929 placement
 /**
  * 在指定位置插入一行。
  */
-function insertAt(e, n, r) {
-  return [...e.slice(0, n), r, ...e.slice(n)];
+function insertAt(lines, index, line) {
+  return [...lines.slice(0, index), line, ...lines.slice(index)];
 }
 //@ chunk-a477qqne.js:15929-16300 placement
 /**
  * 找到插入 metadata 的位置。
  */
-function findMetadataInsertion(lines, n) {
-  let index = lines.findIndex((h, y) => y > 0 && /^metadata:/.test(stripTrailingCR(h)));
-  let index_2 = lines.findIndex((h, y) => y > 0 && /^metadata:\s*(#.*)?$/.test(stripTrailingCR(h)));
-  if (index !== -1 && index_2 === -1) return null;
-  if (index_2 === -1) {
-    let lastIndex = lines.findLastIndex((y) => stripTrailingCR(y).trim() === "---");
-    return lastIndex > 0 ? insertAt(lines, lastIndex, n("")) : null;
+function findMetadataInsertion(lines, makeLines) {
+  let index = lines.findIndex((line, lineIndex) => lineIndex > 0 && /^metadata:/.test(stripTrailingCR(line)));
+  let blockStart = lines.findIndex(
+    (line, lineIndex) => lineIndex > 0 && /^metadata:\s*(#.*)?$/.test(stripTrailingCR(line)),
+  );
+  if (index !== -1 && blockStart === -1) return null;
+  if (blockStart === -1) {
+    let index = lines.findLastIndex((line) => stripTrailingCR(line).trim() === "---");
+    return index > 0 ? insertAt(lines, index, makeLines("")) : null;
   }
-  let i = skipContinuationLines(lines, index_2);
-  let l =
+  let blockEnd = skipContinuationLines(lines, blockStart);
+  let childIndent =
     lines
-      .slice(index_2 + 1, i)
-      .find((h) => INDENTED_LINE_RE.test(stripTrailingCR(h)) && !COMMENT_OR_EMPTY_RE.test(stripTrailingCR(h)))
+      .slice(blockStart + 1, blockEnd)
+      .find(
+        (line) =>
+          INDENTED_LINE_RE.test(stripTrailingCR(line)) && !COMMENT_OR_EMPTY_RE.test(stripTrailingCR(line)),
+      )
       ?.match(/^(\s+)/)?.[1] ?? "  ";
-  return insertAt(lines, i, n(l));
+  return insertAt(lines, blockEnd, makeLines(childIndent));
 }
 //@ chunk-a477qqne.js:16300-16515 placement
-function skipContinuationLines(e, n) {
-  let r = n + 1;
-  while (r < e.length - 1) {
-    if (INDENTED_LINE_RE.test(stripTrailingCR(e[r]))) {
-      r++;
+function skipContinuationLines(lines, blockStart) {
+  let lineIndex = blockStart + 1;
+  while (lineIndex < lines.length - 1) {
+    if (INDENTED_LINE_RE.test(stripTrailingCR(lines[lineIndex]))) {
+      lineIndex++;
       continue;
     }
-    if (COMMENT_OR_EMPTY_RE.test(stripTrailingCR(e[r]))) {
-      let s = r + 1;
-      while (s < e.length - 1 && COMMENT_OR_EMPTY_RE.test(stripTrailingCR(e[s]))) s++;
-      if (s < e.length - 1 && INDENTED_LINE_RE.test(stripTrailingCR(e[s]))) {
-        r = s;
+    if (COMMENT_OR_EMPTY_RE.test(stripTrailingCR(lines[lineIndex]))) {
+      let nextContentIndex = lineIndex + 1;
+      while (
+        nextContentIndex < lines.length - 1 &&
+        COMMENT_OR_EMPTY_RE.test(stripTrailingCR(lines[nextContentIndex]))
+      )
+        nextContentIndex++;
+      if (
+        nextContentIndex < lines.length - 1 &&
+        INDENTED_LINE_RE.test(stripTrailingCR(lines[nextContentIndex]))
+      ) {
+        lineIndex = nextContentIndex;
         continue;
       }
     }
     break;
   }
-  return r;
+  return lineIndex;
 }
 export {
   prepareMemoryContent,

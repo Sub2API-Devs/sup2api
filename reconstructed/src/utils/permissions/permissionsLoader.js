@@ -87,26 +87,27 @@ import {
 import { jsonStringify } from "../slowOperations.js";
 import { formatPermissionRule } from "./disallowedToolsFlag.js";
 import { isPlainObject } from "../isPlainObject.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-anrta56w.js:1051-1170 placement
 /**
  * 取命令的来源仓库：插件命令取插件仓库，内置命令取其会话函数钩子，其他为 undefined。
  */
-function getCommandRepository(e) {
-  if (e.source === "plugin") return e.pluginInfo?.repository;
-  return e.source === "bundled" ? getSessionFunctionHooks(e.hooks) : undefined;
+function getCommandRepository(hook) {
+  if (hook.source === "plugin") return hook.pluginInfo?.repository;
+  return hook.source === "bundled" ? getSessionFunctionHooks(hook.hooks) : undefined;
 }
 //@ chunk-anrta56w.js:1170-1202 placement
 /**
  * isVouchedMarketplaceRef：官方或受信策略插件的市场引用。
  */
-var isVouchedMarketplaceRef = (e) =>
-  isOfficialMarketplaceRef(e) || hasSimilarMarketplaceName(e, getVouchedPolicyPluginIds());
+var isVouchedMarketplaceRef = (ref) =>
+  isOfficialMarketplaceRef(ref) || hasSimilarMarketplaceName(ref, getVouchedPolicyPluginIds());
 //@ chunk-anrta56w.js:1202-1379 placement
 /**
  * 是否加载权限规则（信任与远程设置状态）。
  */
-function shouldLoadPermissionRules(hooks, r) {
+function shouldLoadPermissionRules(hooks, marketplaceRef) {
   if (!isOrganizationHookPolicyPending() || !hasGuardHooks_2(hooks)) return false;
   try {
     if (shouldSkipSessionHooksByPolicy()) return true;
@@ -115,14 +116,14 @@ function shouldLoadPermissionRules(hooks, r) {
     return true;
   }
   if (!isHookPolicyUnanswered()) return false;
-  let o = true;
+  let shouldHold = true;
   try {
-    o = r === undefined || !isVouchedMarketplaceRef(r);
+    shouldHold = marketplaceRef === undefined || !isVouchedMarketplaceRef(marketplaceRef);
   } catch (error) {
     logError(error);
   }
-  if (o) markOrganizationAskHeld();
-  return o;
+  if (shouldHold) markOrganizationAskHeld();
+  return shouldHold;
 }
 //@ chunk-anrta56w.js:1379-1459 facade-majority = shouldAllowManagedPermissionRulesOnly (1)
 /**
@@ -136,38 +137,41 @@ function shouldShowAlwaysAllowOptions() {
   return !shouldAllowManagedPermissionRulesOnly();
 }
 //@ chunk-anrta56w.js:1485-1533 layout
-function isToolGrantAllowed(source, pluginOriginInfo, o = false) {
-  return frontmatterToolGrantWithheldReason(source, pluginOriginInfo, o) === undefined;
+function isToolGrantAllowed(source, pluginOrigin, fromHostCatalog = false) {
+  return frontmatterToolGrantWithheldReason(source, pluginOrigin, fromHostCatalog) === undefined;
 }
 //@ chunk-anrta56w.js:1533-1671 facade-majority
 /**
  * 前置声明（frontmatter）里 allowed-tools 授权被扣留的原因：仅托管规则模式且来源非托管 → managed_rules_only；限制个人配置时来自个人配置 → personal_config。
  */
-function frontmatterToolGrantWithheldReason(e, r, o = false) {
+function frontmatterToolGrantWithheldReason(source, pluginOrigin, fromHostCatalog = false) {
   if (shouldAllowManagedPermissionRulesOnly()) {
-    if (!(e === "plugin" ? isVouchedPluginOrigin(r) : isSourceAdminTrusted(e))) return "managed_rules_only";
+    if (!(source === "plugin" ? isVouchedPluginOrigin(pluginOrigin) : isSourceAdminTrusted(source)))
+      return "managed_rules_only";
   }
-  return isPersonalConfigRestricted() && !o && isUntrustedRuleOrigin(e, r) ? "personal_config" : undefined;
+  return isPersonalConfigRestricted() && !fromHostCatalog && isUntrustedRuleOrigin(source, pluginOrigin)
+    ? "personal_config"
+    : undefined;
 }
 //@ chunk-anrta56w.js:1671-1998 layout
 /**
  * 规则来源是否不可信：用户设置或未知来源；插件来自非组织 claude.ai 市场、未认证的同步市场或指定的内联插件时也视为不可信。
  */
-function isUntrustedRuleOrigin(source, r) {
+function isUntrustedRuleOrigin(source, pluginOrigin) {
   if (source === undefined || source === "userSettings") return true;
   if (source !== "plugin") return false;
-  let marketplaceSource = r?.marketplaceSource;
+  let marketplaceSource = pluginOrigin?.marketplaceSource;
   if (
     marketplaceSource?.source === "claudeai" &&
     marketplaceSource.scope !== "org" &&
     marketplaceSource.scope !== "default"
   )
     return true;
-  let id = r?.id;
+  let id = pluginOrigin?.id;
   if (id === undefined) return true;
   switch (marketplaceOf(id) ?? marketplaceSuffix(id)) {
     case SYNCED:
-      return r?.officiallyAttested !== true;
+      return pluginOrigin?.officiallyAttested !== true;
     case INLINE_PLUGIN_MARKETPLACE:
       return nfcLower(id) === ANTHROPIC_SKILLS_PLUGIN_ID;
     default:
@@ -178,11 +182,11 @@ function isUntrustedRuleOrigin(source, r) {
 /**
  * 插件来源是否被担保：内置；同步市场需官方认证；npm 需策略担保的解析；官方市场名需官方来源；其他需策略担保的市场源。
  */
-function isVouchedPluginOrigin(e) {
-  let id = e?.id;
+function isVouchedPluginOrigin(pluginOrigin) {
+  let id = pluginOrigin?.id;
   if (id === undefined) return false;
-  let o = marketplaceOf(id) ?? marketplaceSuffix(id);
-  switch (o) {
+  let marketplace = marketplaceOf(id) ?? marketplaceSuffix(id);
+  switch (marketplace) {
     case undefined:
     case SKILLS_DIR:
       return false;
@@ -194,20 +198,27 @@ function isVouchedPluginOrigin(e) {
     case BUILTIN:
       return true;
     case SYNCED:
-      return e?.officiallyAttested === true;
+      return pluginOrigin?.officiallyAttested === true;
     case pluginManifestPathSchemas:
-      return e?.npmResolution !== undefined && isNpmResolutionVouchedByPolicy(e.npmResolution);
+      return (
+        pluginOrigin?.npmResolution !== undefined &&
+        isNpmResolutionVouchedByPolicy(pluginOrigin.npmResolution)
+      );
     default:
       break;
   }
-  if (e?.marketplaceSource === undefined) return false;
+  if (pluginOrigin?.marketplaceSource === undefined) return false;
   return (
-    (isOfficialMarketplaceName_3(o) && isOfficialMarketplaceSourceVouched(e.marketplaceSource)) ||
-    isMarketplaceSourceVouchedByPolicy(e.marketplaceSource, e.home)
+    (isOfficialMarketplaceName_3(marketplace) &&
+      isOfficialMarketplaceSourceVouched(pluginOrigin.marketplaceSource)) ||
+    isMarketplaceSourceVouchedByPolicy(pluginOrigin.marketplaceSource, pluginOrigin.home)
   );
 }
 //@ chunk-anrta56w.js:2436-2461 layout
-var warnedGrantHosts = new HostScoped(() => new Set());
+var warnedGrantHosts; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-anrta56w.js:2436", () => {
+  warnedGrantHosts = new HostScoped(() => new Set());
+});
 //@ chunk-anrta56w.js:2461-2498 facade-majority
 function getIgnoredFrontmatterToolGrants() {
   return warnedGrantHosts.of(getRootSession().host);
@@ -216,37 +227,37 @@ function getIgnoredFrontmatterToolGrants() {
 /**
  * 报告被忽略的 skill/command frontmatter allowed-tools：记告警（区分 allowManagedPermissionRulesOnly 与 CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG），上报 tengu_frontmatter_grant_withheld，文本模式下也打印到 stderr。
  */
-function reportIgnoredFrontmatterToolGrants(e, r, o, n = "managed_rules_only") {
-  let s = "pluginId" in r ? r.pluginId : getRuleSourceLabel(r.source);
-  let u =
-    "pluginId" in r
-      ? marketplaceOf(r.pluginId) === SKILLS_DIR
+function reportIgnoredFrontmatterToolGrants(skillName, origin, tools, reason = "managed_rules_only") {
+  let originLabel = "pluginId" in origin ? origin.pluginId : getRuleSourceLabel(origin.source);
+  let originKind =
+    "pluginId" in origin
+      ? marketplaceOf(origin.pluginId) === SKILLS_DIR
         ? "plugin_skills_dir"
         : "plugin_other"
-      : r.source;
-  let d = stripControlChars(`/${e} (${s})`);
-  let g = n === "personal_config";
+      : origin.source;
+  let sourceLabel = stripControlChars(`/${skillName} (${originLabel})`);
+  let isPersonalConfig = reason === "personal_config";
   logForDebugging(
-    g
-      ? `Ignoring allowed-tools ${stripControlChars(o.join(", "))} from ${d}: this session does not let your own skills and commands pre-approve tools (CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG).`
-      : `Ignoring allowed-tools ${stripControlChars(o.join(", "))} from ${d}: permission rules are restricted to managed settings (allowManagedPermissionRulesOnly).`,
+    isPersonalConfig
+      ? `Ignoring allowed-tools ${stripControlChars(tools.join(", "))} from ${sourceLabel}: this session does not let your own skills and commands pre-approve tools (CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG).`
+      : `Ignoring allowed-tools ${stripControlChars(tools.join(", "))} from ${sourceLabel}: permission rules are restricted to managed settings (allowManagedPermissionRulesOnly).`,
     {
       level: "warn",
     },
   );
-  if (!g) warnedGrantHosts.of(getRootSession().host).add(d);
+  if (!isPersonalConfig) warnedGrantHosts.of(getRootSession().host).add(sourceLabel);
   logEvent("tengu_frontmatter_grant_withheld", {
-    origin: fromEnum(u),
-    tool_count: o.length,
-    ...(g && {
-      reason: fromEnum(n),
+    origin: fromEnum(originKind),
+    tool_count: tools.length,
+    ...(isPersonalConfig && {
+      reason: fromEnum(reason),
     }),
   });
   if (getPrintOutputFormat() === "text" && !isBgSession())
     console.error(
-      g
-        ? `allowed-tools from ${d} ignored: this session doesn't let your own skills and commands pre-approve tools (CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG), so their tool calls are checked like any other call, and their inline shell commands run only if this session's permission rules already allow them.`
-        : `allowed-tools from ${d} ignored: your organization restricts permission rules to managed settings (allowManagedPermissionRulesOnly). Ask an admin to add the rules it needs to managed settings.`,
+      isPersonalConfig
+        ? `allowed-tools from ${sourceLabel} ignored: this session doesn't let your own skills and commands pre-approve tools (CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG), so their tool calls are checked like any other call, and their inline shell commands run only if this session's permission rules already allow them.`
+        : `allowed-tools from ${sourceLabel} ignored: your organization restricts permission rules to managed settings (allowManagedPermissionRulesOnly). Ask an admin to add the rules it needs to managed settings.`,
     );
 }
 //@ chunk-anrta56w.js:3696-3913 layout
@@ -270,21 +281,23 @@ function getRuleSourceLabel(source) {
 /**
  * 命令/skill 实际生效的 allowed-tools：读取工具列表；带有被扣留的钩子或授权被扣留时返回空。
  */
-async function armedAllowedToolsOf(e) {
-  let r = (await e.getAllowedTools?.()) ?? e.allowedTools ?? [];
-  let o = shouldLoadPermissionRules(e.hooks, getCommandRepository(e));
-  if (r.length === 0 || o) return [];
-  return isToolGrantAllowed(e.source, getPluginOriginInfo(e), e.fromHostCatalog === true) ? r : [];
+async function armedAllowedToolsOf(command) {
+  let tools = (await command.getAllowedTools?.()) ?? command.allowedTools ?? [];
+  let rulesHeld = shouldLoadPermissionRules(command.hooks, getCommandRepository(command));
+  if (tools.length === 0 || rulesHeld) return [];
+  return isToolGrantAllowed(command.source, getPluginOriginInfo(command), command.fromHostCatalog === true)
+    ? tools
+    : [];
 }
 //@ chunk-anrta56w.js:4091-4337 layout
-function getPluginOriginInfo(e) {
-  return e.source === "plugin"
+function getPluginOriginInfo(command) {
+  return command.source === "plugin"
     ? {
-        id: e.pluginInfo?.repository,
-        officiallyAttested: e.pluginInfo?.officiallyAttested,
-        marketplaceSource: e.pluginInfo?.marketplaceSource,
-        npmResolution: e.pluginInfo?.npmResolution,
-        home: e.pluginInfo?.home,
+        id: command.pluginInfo?.repository,
+        officiallyAttested: command.pluginInfo?.officiallyAttested,
+        marketplaceSource: command.pluginInfo?.marketplaceSource,
+        npmResolution: command.pluginInfo?.npmResolution,
+        home: command.pluginInfo?.home,
       }
     : undefined;
 }
@@ -296,11 +309,11 @@ function arePluginHooksHeld(a_5) {
 /**
  * 插件授权的来源信息：插件 id、是否官方认证、市场来源。
  */
-function pluginGrantProvenanceOf(e) {
+function pluginGrantProvenanceOf(origin) {
   return {
-    id: e.source,
-    officiallyAttested: e.officialAttestation !== undefined,
-    marketplaceSource: e.marketplaceSource,
+    id: origin.source,
+    officiallyAttested: origin.officialAttestation !== undefined,
+    marketplaceSource: origin.marketplaceSource,
   };
 }
 //@ chunk-anrta56w.js:4509-4562 facade-majority
@@ -314,13 +327,13 @@ function takesNarrowingModeOnly(selectedAgent) {
 /**
  * 代理是否属于被限制的个人配置（运行时注册的不算）。
  */
-function isRestrictedPersonalAgent(agentDefinition) {
-  if (!isPersonalConfigRestricted() || agentDefinition.registeredAtRunTime === true) return false;
+function isRestrictedPersonalAgent(agent) {
+  if (!isPersonalConfigRestricted() || agent.registeredAtRunTime === true) return false;
   return isUntrustedRuleOrigin(
-    agentDefinition.source,
-    agentDefinition.source === "plugin"
-      ? (agentDefinition.pluginProvenance ?? {
-          id: agentDefinition.plugin,
+    agent.source,
+    agent.source === "plugin"
+      ? (agent.pluginProvenance ?? {
+          id: agent.plugin,
         })
       : undefined,
   );
@@ -329,11 +342,11 @@ function isRestrictedPersonalAgent(agentDefinition) {
 /**
  * 命令的钩子是否被扣留：开启个人配置限制、非宿主目录来源且来源受限。
  */
-function areCommandHooksHeld(e) {
+function areCommandHooksHeld(command) {
   return (
     isPersonalConfigRestricted() &&
-    e.fromHostCatalog !== true &&
-    isUntrustedRuleOrigin(e.source, getPluginOriginInfo(e))
+    command.fromHostCatalog !== true &&
+    isUntrustedRuleOrigin(command.source, getPluginOriginInfo(command))
   );
 }
 //@ chunk-anrta56w.js:4774-4803 file-local
@@ -380,24 +393,24 @@ function loadAllPermissionRulesFromDisk(options = {}) {
 function loadSettingsPermissionRules(options = {}) {
   if (shouldAllowManagedPermissionRulesOnly()) return getPermissionRulesForSource("policySettings");
   let rules = [];
-  for (let o of getEnabledSettingSources()) rules.push(...getPermissionRulesForSource(o));
+  for (let source of getEnabledSettingSources()) rules.push(...getPermissionRulesForSource(source));
   if (!(options.strictPersistedTrust ?? isWorkspacePersistedTrusted())) {
     let { gateProject, gateLocal } = getProjectGrantGates();
-    let s = new Set();
+    let gatedFiles = new Set();
     let filtered = rules.filter((rule) => {
       if (rule.ruleBehavior !== "allow") return true;
       if (rule.source === "projectSettings" && gateProject) {
-        s.add(".claude/settings.json");
+        gatedFiles.add(".claude/settings.json");
         return false;
       }
       if (rule.source === "localSettings" && gateLocal) {
-        s.add(".claude/settings.local.json");
+        gatedFiles.add(".claude/settings.local.json");
         return false;
       }
       return true;
     });
     if (filtered.length !== rules.length)
-      warnDroppedUntrustedGrants("permissions.allow", rules.length - filtered.length, [...s]);
+      warnDroppedUntrustedGrants("permissions.allow", rules.length - filtered.length, [...gatedFiles]);
     return filtered;
   }
   return rules;
@@ -406,21 +419,21 @@ function loadSettingsPermissionRules(options = {}) {
 /**
  * 仓库内的设置来源：projectSettings，以及在 settings.local.json 被 git 跟踪（或曾见过被跟踪）时加上 localSettings；首次发现被跟踪时持久化标记。
  */
-function repoResidentSettingSources(e) {
+function repoResidentSettingSources(storage) {
   let originalCwdOrNull = getOriginalCwdOrNull();
   if (originalCwdOrNull === null) return ["projectSettings", "localSettings"];
-  let o = GIT_TRACKED_LOCAL_SETTINGS_STATE.of(getRootSession().host);
-  let n = isLocalSettingsGitTracked({
+  let state = GIT_TRACKED_LOCAL_SETTINGS_STATE.of(getRootSession().host);
+  let isTracked = isLocalSettingsGitTracked({
     onIndeterminate: "tracked",
   });
-  if (n && checkHasTrustDialogAccepted()) {
-    o.markTracked(originalCwdOrNull);
-    if (!o.persistIssued(originalCwdOrNull) && isLocalSettingsGitTrackedInIndex()) {
-      o.markPersistIssued(originalCwdOrNull);
-      markLocalSettingsSeenGitTracked(e);
+  if (isTracked && checkHasTrustDialogAccepted()) {
+    state.markTracked(originalCwdOrNull);
+    if (!state.persistIssued(originalCwdOrNull) && isLocalSettingsGitTrackedInIndex()) {
+      state.markPersistIssued(originalCwdOrNull);
+      markLocalSettingsSeenGitTracked(storage);
     }
   }
-  return n || o.isTracked(originalCwdOrNull) || hasSeenGitTrackedLocalSettings()
+  return isTracked || state.isTracked(originalCwdOrNull) || hasSeenGitTrackedLocalSettings()
     ? ["projectSettings", "localSettings"]
     : ["projectSettings"];
 }
@@ -428,93 +441,100 @@ function repoResidentSettingSources(e) {
 class GitTrackedLocalSettingsState {
   tracked = new Set();
   persisted = new Set();
-  isTracked(e) {
-    return this.tracked.has(e);
+  isTracked(workspace) {
+    return this.tracked.has(workspace);
   }
-  markTracked(e) {
-    this.tracked.add(e);
+  markTracked(workspace) {
+    this.tracked.add(workspace);
   }
-  persistIssued(e) {
-    return this.persisted.has(e);
+  persistIssued(workspace) {
+    return this.persisted.has(workspace);
   }
-  markPersistIssued(e) {
-    this.persisted.add(e);
+  markPersistIssued(workspace) {
+    this.persisted.add(workspace);
   }
 }
 //@ chunk-anrta56w.js:6130-6153 layout
-var GIT_TRACKED_LOCAL_SETTINGS_STATE = new HostScoped(() => new GitTrackedLocalSettingsState());
+var GIT_TRACKED_LOCAL_SETTINGS_STATE; // deferred: uses GitTrackedLocalSettingsState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-anrta56w.js:6130", () => {
+  GIT_TRACKED_LOCAL_SETTINGS_STATE = new HostScoped(() => new GitTrackedLocalSettingsState());
+});
 //@ chunk-anrta56w.js:6153-6229 layout
 function hasSeenGitTrackedLocalSettings() {
   return getGlobalConfig().projects?.[getWorkspacePersistedTrustKey()]?.localSettingsSeenGitTracked === true;
 }
 //@ chunk-anrta56w.js:6229-6428 layout
-function markLocalSettingsSeenGitTracked(e) {
+function markLocalSettingsSeenGitTracked(storage) {
   let workspacePersistedTrustKey = getWorkspacePersistedTrustKey();
-  saveGlobalConfig((o) => {
-    if (o.projects?.[workspacePersistedTrustKey]?.localSettingsSeenGitTracked === true) return o;
+  saveGlobalConfig((config) => {
+    if (config.projects?.[workspacePersistedTrustKey]?.localSettingsSeenGitTracked === true) return config;
     return {
-      ...o,
+      ...config,
       projects: {
-        ...o.projects,
+        ...config.projects,
         [workspacePersistedTrustKey]: {
-          ...(o.projects?.[workspacePersistedTrustKey] ?? DEFAULT_PROJECT_CONFIG),
+          ...(config.projects?.[workspacePersistedTrustKey] ?? DEFAULT_PROJECT_CONFIG),
           localSettingsSeenGitTracked: true,
         },
       },
     };
-  }, e);
+  }, storage);
 }
 //@ chunk-anrta56w.js:6428-6704 facade-majority
 /**
  * 汇总各层 settings 声明的 additionalDirectories，区分只由仓库控制层（project/local）声明的目录 repoOnly。
  */
-function additionalDirectoryProvenance(e, r) {
-  let o = repoResidentSettingSources(r);
-  let n = (d) =>
-    new Set(d.flatMap((g) => (getSettingsForSource(g)?.permissions?.additionalDirectories ?? []).flatMap(e)));
-  let s = n(o);
-  let u = new Set([
-    ...n(getEnabledSettingSources().filter((d) => !o.includes(d))),
-    ...getAdditionalDirectoriesForClaudeMd().flatMap(e),
+function additionalDirectoryProvenance(expand, storage) {
+  let repoSources = repoResidentSettingSources(storage);
+  let dirsOfSources = (sources) =>
+    new Set(
+      sources.flatMap((source) =>
+        (getSettingsForSource(source)?.permissions?.additionalDirectories ?? []).flatMap(expand),
+      ),
+    );
+  let repoDirs = dirsOfSources(repoSources);
+  let otherDirs = new Set([
+    ...dirsOfSources(getEnabledSettingSources().filter((source) => !repoSources.includes(source))),
+    ...getAdditionalDirectoriesForClaudeMd().flatMap(expand),
   ]);
-  for (let d of u) s.delete(d);
+  for (let dir of otherDirs) repoDirs.delete(dir);
   return {
-    declared: new Set([...s, ...u]),
-    repoOnly: s,
+    declared: new Set([...repoDirs, ...otherDirs]),
+    repoOnly: repoDirs,
   };
 }
 //@ chunk-anrta56w.js:6704-7199 facade-majority
 /**
  * 读取 settings 各层 permissions.additionalDirectories；未受信任工作区跳过 project/local 层并告警；评测受限模式返回空。
  */
-function loadTrustedAdditionalDirectoriesFromDisk(e = {}) {
+function loadTrustedAdditionalDirectoriesFromDisk(options = {}) {
   if (settingsGrantsConfined()) return [];
-  let r = e.strictPersistedTrust ?? isWorkspacePersistedTrusted();
-  let { gateProject, gateLocal } = r
+  let strictPersistedTrust = options.strictPersistedTrust ?? isWorkspacePersistedTrusted();
+  let { gateProject, gateLocal } = strictPersistedTrust
     ? {
         gateProject: false,
         gateLocal: false,
       }
     : getProjectGrantGates();
-  let s = [];
+  let directories = [];
   let count = 0;
-  let d = new Set();
-  for (let g of getEnabledSettingSources()) {
-    let additionalDirectories = getSettingsForSource(g)?.permissions?.additionalDirectories ?? [];
-    if (gateProject && g === "projectSettings" && additionalDirectories.length > 0) {
+  let gatedFiles = new Set();
+  for (let source of getEnabledSettingSources()) {
+    let additionalDirectories = getSettingsForSource(source)?.permissions?.additionalDirectories ?? [];
+    if (gateProject && source === "projectSettings" && additionalDirectories.length > 0) {
       count += additionalDirectories.length;
-      d.add(".claude/settings.json");
+      gatedFiles.add(".claude/settings.json");
       continue;
     }
-    if (gateLocal && g === "localSettings" && additionalDirectories.length > 0) {
+    if (gateLocal && source === "localSettings" && additionalDirectories.length > 0) {
       count += additionalDirectories.length;
-      d.add(".claude/settings.local.json");
+      gatedFiles.add(".claude/settings.local.json");
       continue;
     }
-    s.push(...additionalDirectories);
+    directories.push(...additionalDirectories);
   }
-  if (count > 0) warnDroppedUntrustedGrants("permissions.additionalDirectories", count, [...d]);
-  return s;
+  if (count > 0) warnDroppedUntrustedGrants("permissions.additionalDirectories", count, [...gatedFiles]);
+  return directories;
 }
 //@ chunk-anrta56w.js:7199-7284 facade-majority
 /**
@@ -529,11 +549,11 @@ function getProjectGrantGates() {
   };
 }
 //@ chunk-anrta56w.js:7284-7436 layout
-function sourceGrantsPermissions(e) {
-  if (!getEnabledSettingSources().includes(e)) return false;
+function sourceGrantsPermissions(source) {
+  if (!getEnabledSettingSources().includes(source)) return false;
   return (
-    getPermissionRulesForSource(e).some((r) => r.ruleBehavior === "allow") ||
-    (getSettingsForSource(e)?.permissions?.additionalDirectories?.length ?? 0) > 0
+    getPermissionRulesForSource(source).some((rule) => rule.ruleBehavior === "allow") ||
+    (getSettingsForSource(source)?.permissions?.additionalDirectories?.length ?? 0) > 0
   );
 }
 //@ chunk-anrta56w.js:7436-7568 facade-majority
@@ -567,9 +587,9 @@ function workspaceHasGatedGrants() {
 //@ chunk-anrta56w.js:7718-7846 layout
 class OnceWarner {
   warned = new Set();
-  firstTimeFor(e) {
-    if (this.warned.has(e)) return false;
-    this.warned.add(e);
+  firstTimeFor(key) {
+    if (this.warned.has(key)) return false;
+    this.warned.add(key);
     return true;
   }
   reset() {
@@ -577,10 +597,13 @@ class OnceWarner {
   }
 }
 //@ chunk-anrta56w.js:7846-7869 layout
-var DROPPED_GRANTS_WARNER = new HostScoped(() => new OnceWarner());
+var DROPPED_GRANTS_WARNER; // deferred: uses OnceWarner of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-anrta56w.js:7846", () => {
+  DROPPED_GRANTS_WARNER = new HostScoped(() => new OnceWarner());
+});
 //@ chunk-anrta56w.js:7869-7923 facade-majority
-function firstGatedTrustDiagnosticFor(e) {
-  return DROPPED_GRANTS_WARNER.of(getRootSession().host).firstTimeFor(e);
+function firstGatedTrustDiagnosticFor(key) {
+  return DROPPED_GRANTS_WARNER.of(getRootSession().host).firstTimeFor(key);
 }
 //@ chunk-anrta56w.js:7923-8631 layout
 /**
@@ -593,21 +616,21 @@ function warnDroppedUntrustedGrants(settingKey, count, files) {
   );
   if (!getIsNonInteractiveSession() && (!checkHasTrustDialogAccepted() || shouldWarnUntrustedGrants()))
     return;
-  let n = files.length > 0 ? files.join(" and ") : ".claude/ settings";
-  let s = `Ignoring ${count} ${settingKey} ${count === 1 ? "entry" : "entries"} from ${n}: `;
+  let filesDescription = files.length > 0 ? files.join(" and ") : ".claude/ settings";
+  let ignorePrefix = `Ignoring ${count} ${settingKey} ${count === 1 ? "entry" : "entries"} from ${filesDescription}: `;
   if (getOriginalCwdOrNull() === null) {
-    console.error(`${s}a session with no working directory is never trusted.`);
+    console.error(`${ignorePrefix}a session with no working directory is never trusted.`);
     return;
   }
   if (ignoresPersistedTrust()) {
     console.error(
-      `${s}${PERSISTED_TRUST_IGNORED}. Put ${count === 1 ? "it" : "them"} in user or managed settings instead.`,
+      `${ignorePrefix}${PERSISTED_TRUST_IGNORED}. Put ${count === 1 ? "it" : "them"} in user or managed settings instead.`,
     );
     return;
   }
   let workspacePersistedTrustKey = getWorkspacePersistedTrustKey();
   console.error(
-    s +
+    ignorePrefix +
       `this workspace has not been trusted. Run Claude Code interactively here once and accept the trust dialog, or set projects[${jsonStringify(workspacePersistedTrustKey)}].hasTrustDialogAccepted: true in ${describeGlobalConfigFile()}.`,
   );
 }
@@ -617,31 +640,34 @@ function getPermissionRulesForSource(source) {
   return settingsJsonToRules(settingsData, source);
 }
 //@ chunk-anrta56w.js:8674-8683 layout
-var EDITABLE_SETTING_SOURCES = EDITABLE_SETTING_SOURCES_2;
+var EDITABLE_SETTING_SOURCES; // deferred: uses EDITABLE_SETTING_SOURCES (../settings/constants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-anrta56w.js:8674", () => {
+  EDITABLE_SETTING_SOURCES = EDITABLE_SETTING_SOURCES_2;
+});
 //@ chunk-anrta56w.js:8683-9266 facade-majority = deletePermissionRuleFromSettings (0.709)
 /**
  * 从可编辑 settings 文件删除一条规则（按规范化串比较）；localSettings 另查实际文件确认。
  */
-async function deletePermissionRuleFromSettings(rule, r) {
+async function deletePermissionRuleFromSettings(rule, storageV5) {
   if (!EDITABLE_SETTING_SOURCES.includes(rule.source)) return false;
   let ruleString = formatPermissionRule(rule.ruleValue);
   let normalizeEntry = (raw) => formatPermissionRule(permissionRuleValueFromString(raw));
   try {
-    let s = false;
+    let inLegacyFile = false;
     if (rule.source === "localSettings") {
       let legacyLocalSettingsFilePath = getLegacyLocalSettingsFilePath();
       if (legacyLocalSettingsFilePath)
-        s = !!parseSettingsFile(legacyLocalSettingsFilePath).settings?.permissions?.[rule.ruleBehavior]?.some(
-          (raw) => normalizeEntry(raw) === ruleString,
-        );
+        inLegacyFile = !!parseSettingsFile(legacyLocalSettingsFilePath).settings?.permissions?.[
+          rule.ruleBehavior
+        ]?.some((raw) => normalizeEntry(raw) === ruleString);
     }
-    let u = false;
+    let removed = false;
     let { error } = await updateSettingsForSourceWithTransform(
       rule.source,
-      (g) => {
-        let behaviorArray = g?.permissions?.[rule.ruleBehavior];
+      (settings) => {
+        let behaviorArray = settings?.permissions?.[rule.ruleBehavior];
         if (!behaviorArray || !behaviorArray.some((raw) => normalizeEntry(raw) === ruleString)) return null;
-        u = true;
+        removed = true;
         return {
           permissions: {
             [rule.ruleBehavior]: behaviorArray.filter((raw) => normalizeEntry(raw) !== ruleString),
@@ -649,17 +675,17 @@ async function deletePermissionRuleFromSettings(rule, r) {
         };
       },
       undefined,
-      r,
+      storageV5,
     );
     if (error) return false;
-    if (!u && s) {
+    if (!removed && inLegacyFile) {
       let legacyLocalSettingsFilePath = getLegacyLocalSettingsFilePath();
       if (legacyLocalSettingsFilePath)
         return !parseSettingsFile(legacyLocalSettingsFilePath).settings?.permissions?.[
           rule.ruleBehavior
         ]?.some((raw) => normalizeEntry(raw) === ruleString);
     }
-    return u || s;
+    return removed || inLegacyFile;
   } catch (error) {
     logError(error);
     return false;
@@ -674,25 +700,25 @@ async function addPermissionRulesToSettings({ ruleValues, ruleBehavior }, destin
   if (ruleValues.length < 1) return true;
   let ruleStrings = ruleValues.map(formatPermissionRule);
   try {
-    let u = await updateSettingsForSourceWithTransform(
+    let updateResult = await updateSettingsForSourceWithTransform(
       destination,
-      (d) => {
-        let g = d?.permissions?.[ruleBehavior] || [];
+      (currentSettings) => {
+        let existingRules = currentSettings?.permissions?.[ruleBehavior] || [];
         let existingRulesSet = new Set(
-          g.map((raw) => formatPermissionRule(permissionRuleValueFromString(raw))),
+          existingRules.map((raw) => formatPermissionRule(permissionRuleValueFromString(raw))),
         );
         let newRules = ruleStrings.filter((rule) => !existingRulesSet.has(rule));
         if (newRules.length === 0) return null;
         return {
           permissions: {
-            [ruleBehavior]: [...g, ...newRules],
+            [ruleBehavior]: [...existingRules, ...newRules],
           },
         };
       },
       undefined,
       storage,
     );
-    if (u.error) throw u.error;
+    if (updateResult.error) throw updateResult.error;
     return true;
   } catch (error) {
     logForDebugging(
@@ -711,10 +737,10 @@ async function addPermissionRulesToSettings({ ruleValues, ruleBehavior }, destin
 function extractRestrictivePermissions(settings) {
   let { permissions } = settings;
   if (!isPlainObject(permissions)) return null;
-  let flattened = ["deny", "ask"].flatMap((r) => {
-    let s = permissions[r];
-    let i = Array.isArray(s) ? s.filter((c) => typeof c === "string") : [];
-    return i.length === 0 ? [] : [[r, i]];
+  let flattened = ["deny", "ask"].flatMap((behavior) => {
+    let rawList = permissions[behavior];
+    let rules = Array.isArray(rawList) ? rawList.filter((entry) => typeof entry === "string") : [];
+    return rules.length === 0 ? [] : [[behavior, rules]];
   });
   return flattened.length === 0
     ? null
@@ -731,11 +757,11 @@ export {
   deletePermissionRuleFromSettings,
   armedAllowedToolsOf,
   takesNarrowingModeOnly,
+  isGatedGrantsBackstopExempt,
+  workspaceHasGatedGrants,
   getPermissionRulesForSource,
   settingsJsonToRules,
   getProjectGrantGates,
-  isGatedGrantsBackstopExempt,
-  workspaceHasGatedGrants,
   loadTrustedAdditionalDirectoriesFromDisk,
   firstGatedTrustDiagnosticFor,
   arePluginHooksHeld,

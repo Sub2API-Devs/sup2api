@@ -15,16 +15,21 @@ import { hasStoredOAuthToken } from "../../utils/auth.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { apiClient } from "../../services/routines/routinesApi.js";
 import { logEvent } from "../../services/analytics/index.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1736467-1736547 placement
-var TEAM_ONBOARDING_TIMEOUT_MS = 1e4;
-var TEAM_ONBOARDING_FETCH_OPTIONS = {
-  auth: "teleport-org",
-  timeout: TEAM_ONBOARDING_TIMEOUT_MS,
-  headers: {
-    "anthropic-beta": OAUTH_BETA_HEADER,
-  },
-};
+var TEAM_ONBOARDING_TIMEOUT_MS; // deferred: uses ORG_CREATE_API_KEY (../../constants/oauth.js) of its import cycle while loading; runs once the cycle is complete
+var TEAM_ONBOARDING_FETCH_OPTIONS;
+deferInit("chunk-e6aww6q8.js:1736467", () => {
+  TEAM_ONBOARDING_TIMEOUT_MS = 1e4;
+  TEAM_ONBOARDING_FETCH_OPTIONS = {
+    auth: "teleport-org",
+    timeout: TEAM_ONBOARDING_TIMEOUT_MS,
+    headers: {
+      "anthropic-beta": OAUTH_BETA_HEADER,
+    },
+  };
+});
 //@ chunk-e6aww6q8.js:1736547-1736678 placement
 /**
  * isTeamOnboardingShareEnabled：tengu_flint_harbor_share 且 allow_team_onboarding。
@@ -36,9 +41,12 @@ function isTeamOnboardingShareEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_flint_harbor_share", false);
 }
 //@ chunk-e6aww6q8.js:1736678-1736804 placement
-function unwrapOnboardingResult(e) {
-  if (!e.ok) throw Error(e.reason === "no-auth" ? e.detail : `Onboarding guide unavailable: ${e.reason}`);
-  return e.data;
+function unwrapOnboardingResult(result) {
+  if (!result.ok)
+    throw Error(
+      result.reason === "no-auth" ? result.detail : `Onboarding guide unavailable: ${result.reason}`,
+    );
+  return result.data;
 }
 //@ chunk-e6aww6q8.js:1736804-1736912 placement
 function assertOnboardingAllowed() {
@@ -51,7 +59,7 @@ function assertOnboardingAllowed() {
  */
 async function createOnboardingGuide(content, name, credentials) {
   assertOnboardingAllowed();
-  let s = await apiClient.post(
+  let response = await apiClient.post(
     "/api/organizations/:orgUUID/claude_code/onboarding",
     {
       content,
@@ -62,18 +70,18 @@ async function createOnboardingGuide(content, name, credentials) {
       credentials,
     },
   );
-  let h = unwrapOnboardingResult(s);
+  let guide = unwrapOnboardingResult(response);
   logEvent("tengu_team_onboarding_share_created", {});
-  return h;
+  return guide;
 }
 //@ chunk-e6aww6q8.js:1737122-1737349 placement
 /**
  * 更新指定 id 的团队入门指南内容。
  */
-async function updateOnboardingGuide(e, content, credentials) {
+async function updateOnboardingGuide(shareId, content, credentials) {
   assertOnboardingAllowed();
-  let s = await apiClient.put(
-    `/api/organizations/:orgUUID/claude_code/onboarding/${encodeURIComponent(e)}`,
+  let response = await apiClient.put(
+    `/api/organizations/:orgUUID/claude_code/onboarding/${encodeURIComponent(shareId)}`,
     {
       content,
     },
@@ -82,25 +90,25 @@ async function updateOnboardingGuide(e, content, credentials) {
       credentials,
     },
   );
-  let h = unwrapOnboardingResult(s);
+  let guide = unwrapOnboardingResult(response);
   logEvent("tengu_team_onboarding_share_updated", {});
-  return h;
+  return guide;
 }
 //@ chunk-e6aww6q8.js:1737349-1737561 placement
 /**
  * 删除指定 id 的团队入门指南。
  */
-async function deleteOnboardingGuide(e, credentials) {
+async function deleteOnboardingGuide(shareId, credentials) {
   assertOnboardingAllowed();
-  let r = await apiClient.delete(
-    `/api/organizations/:orgUUID/claude_code/onboarding/${encodeURIComponent(e)}`,
+  let response = await apiClient.delete(
+    `/api/organizations/:orgUUID/claude_code/onboarding/${encodeURIComponent(shareId)}`,
     undefined,
     {
       ...TEAM_ONBOARDING_FETCH_OPTIONS,
       credentials,
     },
   );
-  unwrapOnboardingResult(r);
+  unwrapOnboardingResult(response);
   logEvent("tengu_team_onboarding_share_deleted", {});
 }
 //@ chunk-e6aww6q8.js:1737561-1737706 placement
@@ -109,11 +117,11 @@ async function deleteOnboardingGuide(e, credentials) {
  */
 async function listOnboardingGuides(credentials) {
   assertOnboardingAllowed();
-  let n = await apiClient.get("/api/organizations/:orgUUID/claude_code/onboarding", {
+  let response = await apiClient.get("/api/organizations/:orgUUID/claude_code/onboarding", {
     ...TEAM_ONBOARDING_FETCH_OPTIONS,
     credentials,
   });
-  return unwrapOnboardingResult(n).guides;
+  return unwrapOnboardingResult(response).guides;
 }
 export {
   isTeamOnboardingShareEnabled,

@@ -113,29 +113,29 @@ class EvalLoginRefresher {
       for (let drainedWaiter of drainedWaiters) drainedWaiter();
     }
   }
-  async rotate(e, n, r) {
-    if (this.skip !== null && this.skip.expiry === e && Date.now() < this.skip.until) return;
+  async rotate(expiry, requiredExpiry, refresh) {
+    if (this.skip !== null && this.skip.expiry === expiry && Date.now() < this.skip.until) return;
     this.leave();
     try {
       this.rotation ??= (async () => {
         if (this.holders > 0) await new Promise((resolve) => this.drainedWaiters.push(resolve));
-        let a;
+        let newExpiry;
         try {
-          a = await r();
+          newExpiry = await refresh();
         } catch (error) {
           logForDebugging(`eval: login refresh failed: ${errorMessage(error)}`, {
             level: "error",
           });
-          a = e;
+          newExpiry = expiry;
         }
-        if (a === null || a <= e)
+        if (newExpiry === null || newExpiry <= expiry)
           this.skip = {
-            expiry: e,
+            expiry,
             until: Date.now() + this.retryBackoffMs,
           };
-        else if (a < n)
+        else if (newExpiry < requiredExpiry)
           this.skip = {
-            expiry: a,
+            expiry: newExpiry,
             until: Number.POSITIVE_INFINITY,
           };
         else this.skip = null;
@@ -155,107 +155,114 @@ class EvalLoginRefresher {
 /**
  * 运行单个用例：准备目录与模拟、启动子会话、评分并产出结果（约 17 KB）。
  */
-async function runEvalCase(e) {
-  let n = (onNotice) => (ie) => {
+async function runEvalCase(options) {
+  let guardedSink = (onNotice) => (notice) => {
     try {
-      onNotice(ie);
+      onNotice(notice);
     } catch (error) {
       logForDebugging(`eval: progress sink failed: ${errorMessage(error)}`, {
         level: "error",
       });
     }
   };
-  let r = {
-    ...e,
-    onLine: n((B) => e.onLine(replaceControlChars(B))),
-    onNotice: n(e.onNotice),
+  let ctx = {
+    ...options,
+    onLine: guardedSink((line) => options.onLine(replaceControlChars(line))),
+    onNotice: guardedSink(options.onNotice),
   };
-  let concurrency = r.concurrency ?? 1;
+  let concurrency = ctx.concurrency ?? 1;
   let date = new Date();
   let evalCases = await discoverEvalCases(
-    r.rootPath,
+    ctx.rootPath,
     {
-      caseGlob: r.caseGlob,
-      tags: r.tags,
+      caseGlob: ctx.caseGlob,
+      tags: ctx.tags,
     },
     {
-      evalDirSegments: r.evalDirSegments,
-      frameRoot: r.frameRoot,
-      adoptionDecided: r.adoptionDecided,
-      trust: r.trust,
-      targetScreened: r.targetScreened,
-      consentDecided: r.consentDecided,
+      evalDirSegments: ctx.evalDirSegments,
+      frameRoot: ctx.frameRoot,
+      adoptionDecided: ctx.adoptionDecided,
+      trust: ctx.trust,
+      targetScreened: ctx.targetScreened,
+      consentDecided: ctx.consentDecided,
     },
   );
   let { errors, root, suite } = evalCases;
-  let runToolRules = buildRunToolRules([], e.allowTools);
+  let runToolRules = buildRunToolRules([], options.allowTools);
   if (runToolRules.denied.length > 0)
     errors.push({
       file: "--allow-tools",
       error: `refused ${plural(runToolRules.denied.length, "entry", "entries")}: malformed, a wildcard tool name the child does not support, or a tool never available in an evaluation (Monitor, EnterWorktree, ExitWorktree): ${runToolRules.denied.join(", ")}`,
     });
-  r.allowTools = runToolRules.allowed;
-  let S = splitAllowedTools(e.disallowTools ?? []);
-  if (S.rejected.length > 0)
+  ctx.allowTools = runToolRules.allowed;
+  let disallowSplit = splitAllowedTools(options.disallowTools ?? []);
+  if (disallowSplit.rejected.length > 0)
     errors.push({
       file: "--disallow-tools",
-      error: `${describeUndisallowableTools(S.rejected)} No case was run.`,
+      error: `${describeUndisallowableTools(disallowSplit.rejected)} No case was run.`,
     });
-  else if (S.tools.length > 0)
-    r.onNotice(`Removed from Claude's tools in every case (--disallow-tools): ${S.tools.join(", ")}`);
-  r.disallowTools = S.tools;
-  let cases = S.rejected.length > 0 ? [] : evalCases.cases;
-  let N = [];
-  for (let B of cases) {
-    let { rejected } = splitAllowedTools(B.execution.disallowed_tools ?? []);
+  else if (disallowSplit.tools.length > 0)
+    ctx.onNotice(
+      `Removed from Claude's tools in every case (--disallow-tools): ${disallowSplit.tools.join(", ")}`,
+    );
+  ctx.disallowTools = disallowSplit.tools;
+  let cases = disallowSplit.rejected.length > 0 ? [] : evalCases.cases;
+  let runnableCases = [];
+  for (let evalCase of cases) {
+    let { rejected } = splitAllowedTools(evalCase.execution.disallowed_tools ?? []);
     if (rejected.length === 0) {
-      N.push(B);
+      runnableCases.push(evalCase);
       continue;
     }
     errors.push({
-      file: B.caseSource === "prose" ? B.caseDir : B.caseFile,
+      file: evalCase.caseSource === "prose" ? evalCase.caseDir : evalCase.caseFile,
       error: `disallowed_tools: ${describeUndisallowableTools(rejected)}`,
     });
   }
-  for (let error of errors) r.onLine(`\u2717 ${error.file}: ${error.error}`);
-  let x =
-    r.ablation === "auto" ? (N.some((B) => B.pluginDirs.length > 0) ? "with-without" : "none") : r.ablation;
-  if (r.ablation === "auto" && x === "with-without")
-    r.onNotice(
+  for (let error of errors) ctx.onLine(`\u2717 ${error.file}: ${error.error}`);
+  let ablationMode =
+    ctx.ablation === "auto"
+      ? runnableCases.some((evalCase) => evalCase.pluginDirs.length > 0)
+        ? "with-without"
+        : "none"
+      : ctx.ablation;
+  if (ctx.ablation === "auto" && ablationMode === "with-without")
+    ctx.onNotice(
       "Ablation: defaulting to with-without \u2014 a plugin resolved from this path, so each case also runs a no-plugin baseline arm (2\xD7 runs) and reports \u0394; " +
         "graders marked with-only (including `tool_used: Skill`) become a plugin-fired indicator rather than part of the score. Pass --ablation none for the previous single-arm run and scoring.",
     );
-  let j = N;
-  if (r.ablation === "auto" && x === "with-without") {
-    let filtered = j.filter((ie) => getRunArms(ie, x, true).length === 1);
+  let selectedCases = runnableCases;
+  if (ctx.ablation === "auto" && ablationMode === "with-without") {
+    let filtered = selectedCases.filter((evalCase) => getRunArms(evalCase, ablationMode, true).length === 1);
     if (filtered.length > 0)
-      r.onNotice(
-        `${filtered.length} ${plural(filtered.length, "case")} ${plural(filtered.length, "runs", "run")} single-arm (no \u0394) \u2014 no plugin to strip, or a replay case whose history carries the plugin into both arms: ${filtered.map((ie) => ie.name).join(", ")}`,
+      ctx.onNotice(
+        `${filtered.length} ${plural(filtered.length, "case")} ${plural(filtered.length, "runs", "run")} single-arm (no \u0394) \u2014 no plugin to strip, or a replay case whose history carries the plugin into both arms: ${filtered.map((evalCase) => evalCase.name).join(", ")}`,
       );
   }
-  if (r.ablation === "with-without") {
-    let filtered = j.filter((ie) => ie.pluginDirs.length === 0);
-    for (let ie of filtered) {
-      let _e =
+  if (ctx.ablation === "with-without") {
+    let filtered = selectedCases.filter((evalCase) => evalCase.pluginDirs.length === 0);
+    for (let evalCase of filtered) {
+      let problem =
         "ablation requested but no plugin resolved for this case: auto-detection found no plugin.json, .claude-plugin/plugin.json, or SKILL.md " +
         "it may load between the case directory and the discovery root \u2014 " +
         `a manifest or skill folder that ${UNTRUSTED_FOLDER_REASON} is not loaded. The with and without arms would run identical ` +
         "configs, so \u0394 would measure nothing. Fix: target the plugin " +
         "directory itself (or run from within it), declare `plugins:` in the case pointing at a plugin or skill directory beneath the discovery root, or pass --ablation none for a single-arm eval.";
       errors.push({
-        file: ie.caseSource === "prose" ? ie.caseDir : ie.caseFile,
-        error: _e,
+        file: evalCase.caseSource === "prose" ? evalCase.caseDir : evalCase.caseFile,
+        error: problem,
       });
-      r.onLine(`\u2717 ${ie.name}: ${_e}`);
+      ctx.onLine(`\u2717 ${evalCase.name}: ${problem}`);
     }
-    if (filtered.length > 0) j = j.filter((ie) => ie.pluginDirs.length > 0);
+    if (filtered.length > 0)
+      selectedCases = selectedCases.filter((evalCase) => evalCase.pluginDirs.length > 0);
   }
-  if (j.length === 0)
+  if (selectedCases.length === 0)
     return {
       report: buildSuiteReport(
         [],
         date,
-        r.signal.aborted ? "interrupted" : undefined,
+        ctx.signal.aborted ? "interrupted" : undefined,
         {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -270,69 +277,70 @@ async function runEvalCase(e) {
         [],
         concurrency,
       ),
-      exitCode: r.signal.aborted ? 2 : errors.length > 0 ? 1 : 0,
+      exitCode: ctx.signal.aborted ? 2 : errors.length > 0 ? 1 : 0,
       errors,
-      ablation: x,
+      ablation: ablationMode,
       root,
       suite,
       resolvedCases: [],
       harnessFailures: 0,
     };
-  checkDuplicateCaseNames(j, r.onLine);
+  checkDuplicateCaseNames(selectedCases, ctx.onLine);
   let caseTargetPath = await resolveCaseTargetPath(
-    j.flatMap((B) => B.pluginDirs),
+    selectedCases.flatMap((evalCase) => evalCase.pluginDirs),
     root,
-    r.frameRoot,
+    ctx.frameRoot,
   );
   if (caseTargetPath.length === 0)
-    r.onLine("Plugin under test: none resolved \u2014 cases run against baseline Claude Code");
-  let X = x === "with-without";
-  let W = X ? "the with-arm" : "this eval";
-  for (let B of caseTargetPath) {
-    let ie = B.version === undefined ? "(no version)" : `version ${quotedShort(B.version, 80)}`;
-    (B.problem === undefined ? r.onLine : r.onNotice)(
-      `Plugin under test: ${quotedShort(B.name, 160)} ${ie} at ${quotedShort(B.path, 1000)}`,
+    ctx.onLine("Plugin under test: none resolved \u2014 cases run against baseline Claude Code");
+  let isAblation = ablationMode === "with-without";
+  let armLabel = isAblation ? "the with-arm" : "this eval";
+  for (let target of caseTargetPath) {
+    let versionText =
+      target.version === undefined ? "(no version)" : `version ${quotedShort(target.version, 80)}`;
+    (target.problem === undefined ? ctx.onLine : ctx.onNotice)(
+      `Plugin under test: ${quotedShort(target.name, 160)} ${versionText} at ${quotedShort(target.path, 1000)}`,
     );
-    let Ae =
-      B.problemDetail === undefined
+    let problem =
+      target.problemDetail === undefined
         ? undefined
-        : printableName(B.problemDetail.replace(invisiblePatternAccessor(), " "), 300);
-    let De = Ae === undefined ? "" : ` (${Ae})`;
-    switch (B.problem) {
+        : printableName(target.problemDetail.replace(invisiblePatternAccessor(), " "), 300);
+    let problemSuffix = problem === undefined ? "" : ` (${problem})`;
+    switch (target.problem) {
       case undefined:
         break;
       case "manifest_invalid":
-        r.onNotice(
-          r.mocks !== "off" && r.allowRealServers !== true
-            ? `  \u26A0 its manifest is invalid${De}: its cases are refused (record mode cannot enumerate the MCP servers it declares) \u2014 fix the manifest, or pass --mocks off / --allow-real-servers to run ${W} WITHOUT this plugin`
-            : `  \u26A0 its manifest is invalid${De}, so ${W} will run WITHOUT this plugin`,
+        ctx.onNotice(
+          ctx.mocks !== "off" && ctx.allowRealServers !== true
+            ? `  \u26A0 its manifest is invalid${problemSuffix}: its cases are refused (record mode cannot enumerate the MCP servers it declares) \u2014 fix the manifest, or pass --mocks off / --allow-real-servers to run ${armLabel} WITHOUT this plugin`
+            : `  \u26A0 its manifest is invalid${problemSuffix}, so ${armLabel} will run WITHOUT this plugin`,
         );
         break;
       case "identity_unverified":
-        r.onNotice(
-          `  \u26A0 identity not verified${De}; the child decides at load time whether it loads${X ? ' \u2014 read a zero \u0394 here as "may not have loaded"' : ""}`,
+        ctx.onNotice(
+          `  \u26A0 identity not verified${problemSuffix}; the child decides at load time whether it loads${isAblation ? ' \u2014 read a zero \u0394 here as "may not have loaded"' : ""}`,
         );
         break;
       case "disabled_by_default":
-        r.onNotice(
-          `  \u26A0 its manifest sets defaultEnabled: false and nothing in the eval sandbox enables it, so ${W} will run WITHOUT this plugin`,
+        ctx.onNotice(
+          `  \u26A0 its manifest sets defaultEnabled: false and nothing in the eval sandbox enables it, so ${armLabel} will run WITHOUT this plugin`,
         );
         break;
       case "archive_not_probed":
-        r.onNotice(
+        ctx.onNotice(
           "  \u26A0 a plugin archive: its identity was not probed here \u2014 the child extracts and loads what is inside it",
         );
         break;
       case "will_not_load": {
-        let he = Ae ?? "nothing loadable at this path";
-        r.onNotice(`  \u26A0 ${he}, so ${W} will run WITHOUT this plugin`);
+        let problemText = problem ?? "nothing loadable at this path";
+        ctx.onNotice(`  \u26A0 ${problemText}, so ${armLabel} will run WITHOUT this plugin`);
         break;
       }
     }
   }
   {
-    let B = await r.authPreflight();
-    if (r.signal.aborted)
+    let preflight = await ctx.authPreflight();
+    if (ctx.signal.aborted)
       return {
         report: buildSuiteReport(
           [],
@@ -358,15 +366,15 @@ async function runEvalCase(e) {
         suite,
         resolvedCases: [],
         harnessFailures: 0,
-        ablation: x,
+        ablation: ablationMode,
       };
-    if (!B.ok) {
-      let ie = `authentication check failed before running any case \u2014 every run would use this same credential: ${B.message}`;
+    if (!preflight.ok) {
+      let preflightFailure = `authentication check failed before running any case \u2014 every run would use this same credential: ${preflight.message}`;
       errors.push({
         file: root,
-        error: ie,
+        error: preflightFailure,
       });
-      r.onLine(`\u2717 ${ie}`);
+      ctx.onLine(`\u2717 ${preflightFailure}`);
       return {
         report: buildSuiteReport(
           [],
@@ -392,21 +400,21 @@ async function runEvalCase(e) {
         suite,
         resolvedCases: [],
         harnessFailures: 0,
-        ablation: x,
+        ablation: ablationMode,
         authPreflightFailed: true,
       };
     }
-    if (B.warning !== undefined) r.onNotice(`Note: ${B.warning}`);
+    if (preflight.warning !== undefined) ctx.onNotice(`Note: ${preflight.warning}`);
   }
   try {
     await checkGitVersionForEval(subprocessEnv());
   } catch (error) {
-    let ie = errorMessage(error);
+    let message = errorMessage(error);
     errors.push({
       file: root,
-      error: ie,
+      error: message,
     });
-    r.onLine(`\u2717 ${ie}`);
+    ctx.onLine(`\u2717 ${message}`);
     return {
       report: buildSuiteReport(
         [],
@@ -432,28 +440,28 @@ async function runEvalCase(e) {
       suite,
       resolvedCases: [],
       harnessFailures: 0,
-      ablation: x,
+      ablation: ablationMode,
       gitPreflightFailed: true,
     };
   }
-  if (r.maxCostUsd === undefined && j.some((B) => allowsArtifactPublish(B, r)))
-    r.onNotice("Note: artifact publishing enabled with no --max-cost-usd; consider setting a cost ceiling");
-  let G = new Map();
-  let J = new Map();
-  let Z = new Map();
-  if (r.mocks !== "off") {
-    let B = emptyMockState();
-    for (let ie of j)
+  if (ctx.maxCostUsd === undefined && selectedCases.some((evalCase) => allowsArtifactPublish(evalCase, ctx)))
+    ctx.onNotice("Note: artifact publishing enabled with no --max-cost-usd; consider setting a cost ceiling");
+  let advisories = new Map();
+  let mocksByCase = new Map();
+  let mockNotes = new Map();
+  if (ctx.mocks !== "off") {
+    let mockState = emptyMockState();
+    for (let evalCase of selectedCases)
       try {
-        let _e = await enumerateMockedServersForRun(ie, root, r.evalDirSegments, B, {
-          allowRealServers: r.allowRealServers === true,
+        let enumerated = await enumerateMockedServersForRun(evalCase, root, ctx.evalDirSegments, mockState, {
+          allowRealServers: ctx.allowRealServers === true,
         });
-        J.set(ie, _e.servers);
-        for (let note of _e.notes) r.onNotice(replaceControlChars(`  ${ie.name}: ${note}`));
-        Z.set(ie, _e.notes);
+        mocksByCase.set(evalCase, enumerated.servers);
+        for (let note of enumerated.notes) ctx.onNotice(replaceControlChars(`  ${evalCase.name}: ${note}`));
+        mockNotes.set(evalCase, enumerated.notes);
       } catch (error) {
-        J.set(
-          ie,
+        mocksByCase.set(
+          evalCase,
           error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
             ? error
             : new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -466,37 +474,39 @@ async function runEvalCase(e) {
         });
       }
   }
-  let se = (B) => {
-    let ie = J.get(B);
-    return ie === undefined || ie instanceof Error ? [] : ie;
+  let mocksFor = (evalCase) => {
+    let mocks = mocksByCase.get(evalCase);
+    return mocks === undefined || mocks instanceof Error ? [] : mocks;
   };
-  for (let B of j) {
-    if (B.context.scaffold_script && r.noScaffold)
-      r.onNotice(
-        `\u26A0 case "${B.name}": its scaffold_script is not run without --scaffold (author-supplied bash that runs as you - pass it only for suites you trust); the case runs against an unstaged workspace`,
+  for (let evalCase of selectedCases) {
+    if (evalCase.context.scaffold_script && ctx.noScaffold)
+      ctx.onNotice(
+        `\u26A0 case "${evalCase.name}": its scaffold_script is not run without --scaffold (author-supplied bash that runs as you - pass it only for suites you trust); the case runs against an unstaged workspace`,
       );
-    let ie = checkGradersSatisfiable(B, r.allowTools, {
-      scaffolded: !!B.context.scaffold_script && !r.noScaffold,
-      artifactPublishGranted: allowsArtifactPublish(B, r),
-      disallowedTools: mergedDisallowedTools(B, r),
-      mockedTools: listMockedToolNames(se(B)),
-      withheldServers: withheldSegments(se(B)),
+    let problems = checkGradersSatisfiable(evalCase, ctx.allowTools, {
+      scaffolded: !!evalCase.context.scaffold_script && !ctx.noScaffold,
+      artifactPublishGranted: allowsArtifactPublish(evalCase, ctx),
+      disallowedTools: mergedDisallowedTools(evalCase, ctx),
+      mockedTools: listMockedToolNames(mocksFor(evalCase)),
+      withheldServers: withheldSegments(mocksFor(evalCase)),
     });
-    if (ie.length > 0) {
-      G.set(B, ie);
-      for (let _e of ie) r.onNotice(`\u26A0 case "${B.name}": ${_e.text}`);
+    if (problems.length > 0) {
+      advisories.set(evalCase, problems);
+      for (let advisory of problems) ctx.onNotice(`\u26A0 case "${evalCase.name}": ${advisory.text}`);
     }
   }
-  if (x === "with-without") {
-    let reduced = j.reduce(
-      (acc, _e) => acc + (r.runs ?? _e.runs) * getRunArms(_e, x, r.ablation === "auto").length,
+  if (ablationMode === "with-without") {
+    let reduced = selectedCases.reduce(
+      (acc, evalCase) =>
+        acc +
+        (ctx.runs ?? evalCase.runs) * getRunArms(evalCase, ablationMode, ctx.ablation === "auto").length,
       0,
     );
-    r.onLine(
-      `Ablation: 2 arms \xD7 ${j.length} ${plural(j.length, "case")} (${reduced} ${plural(reduced, "run")})`,
+    ctx.onLine(
+      `Ablation: 2 arms \xD7 ${selectedCases.length} ${plural(selectedCases.length, "case")} (${reduced} ${plural(reduced, "run")})`,
     );
   }
-  let Q = {
+  let runState = {
     spent: 0,
     partialReason: undefined,
     authBackstopArmed: true,
@@ -506,29 +516,31 @@ async function runEvalCase(e) {
     harnessFailures: 0,
     tokenGate: new EvalLoginRefresher(),
   };
-  await using Se = {
+  await using agentServiceGuard = {
     async [Symbol.asyncDispose]() {
-      let B =
-        Q.agentService ??
-        (Q.agentServiceStarting !== null ? await Q.agentServiceStarting.catch(() => null) : null);
-      Q.agentService = null;
-      Q.agentServiceStarting = null;
-      if (B !== null) await B.close();
+      let agentService =
+        runState.agentService ??
+        (runState.agentServiceStarting !== null
+          ? await runState.agentServiceStarting.catch(() => null)
+          : null);
+      runState.agentService = null;
+      runState.agentServiceStarting = null;
+      if (agentService !== null) await agentService.close();
     },
   };
   if (concurrency > 1)
-    r.onLine(
+    ctx.onLine(
       `Concurrency: up to ${concurrency} runs in flight (all children share your rate limit; progress lines interleave, results keep case order)`,
     );
-  let we = new Map();
-  let Be = [];
-  let Je = (B, error) => {
-    we.set(B, {
-      case_: B,
+  let resultsByCase = new Map();
+  let plans = [];
+  let failCase = (evalCase, error) => {
+    resultsByCase.set(evalCase, {
+      case_: evalCase,
       report: {
-        name: B.name,
-        dir: relativeCaseDir(root, B),
-        source: B.caseSource,
+        name: evalCase.name,
+        dir: relativeCaseDir(root, evalCase),
+        source: evalCase.caseSource,
         score: 0,
         pass_rate: 0,
         runs: [
@@ -545,122 +557,126 @@ async function runEvalCase(e) {
       },
     });
   };
-  let Ee = (B) => {
-    let runs = r.runs ?? B.runs;
-    let _e = allowsArtifactPublish(B, r);
-    let Ae = J.get(B);
-    let De = se(B);
-    if (Ae instanceof Error) {
+  let prepareCase = (evalCase) => {
+    let runs = ctx.runs ?? evalCase.runs;
+    let artifactPublish = allowsArtifactPublish(evalCase, ctx);
+    let mocks = mocksByCase.get(evalCase);
+    let mockList = mocksFor(evalCase);
+    if (mocks instanceof Error) {
       logFeatureBad("cli_plugin_eval_mocks", "load_failed");
-      let error = replaceControlChars(Ae.message);
-      r.onLine(`  ${B.name}: ${error}`);
-      Je(B, error);
+      let error = replaceControlChars(mocks.message);
+      ctx.onLine(`  ${evalCase.name}: ${error}`);
+      failCase(evalCase, error);
       return null;
     }
-    if (De.length > 0) {
-      r.onLine(replaceControlChars(`  ${B.name}: mocked: ${describeMockMode(De)}`));
-      if (usesAgentResponder(De))
-        r.onLine(
+    if (mockList.length > 0) {
+      ctx.onLine(replaceControlChars(`  ${evalCase.name}: mocked: ${describeMockMode(mockList)}`));
+      if (usesAgentResponder(mockList))
+        ctx.onLine(
           replaceControlChars(
-            `  ${B.name}: mock budget = ${CALLS_PER_TURN}\xD7max_turns = ${callBudgetForTurns(B.execution.max_turns)} agent-answered calls per run, shared by all mocked servers (model: ${normalizeJudgeModel(r.judgeModel) ?? "default small model"}, shared with --judge-model)`,
+            `  ${evalCase.name}: mock budget = ${CALLS_PER_TURN}\xD7max_turns = ${callBudgetForTurns(evalCase.execution.max_turns)} agent-answered calls per run, shared by all mocked servers (model: ${normalizeJudgeModel(ctx.judgeModel) ?? "default small model"}, shared with --judge-model)`,
           ),
         );
     }
-    let disallowedTools = mergedDisallowedTools(B, r);
-    let runToolRules = buildRunToolRules(B.execution.allowed_tools, r.allowTools, {
-      artifactPublishGranted: _e,
-      mockedTools: listMockedToolNames(De),
+    let disallowedTools = mergedDisallowedTools(evalCase, ctx);
+    let runToolRules = buildRunToolRules(evalCase.execution.allowed_tools, ctx.allowTools, {
+      artifactPublishGranted: artifactPublish,
+      mockedTools: listMockedToolNames(mockList),
       disallowedTools,
     });
-    let tools = splitAllowedTools(B.execution.disallowed_tools ?? []).tools;
+    let tools = splitAllowedTools(evalCase.execution.disallowed_tools ?? []).tools;
     if (tools.length > 0)
-      r.onNotice(
+      ctx.onNotice(
         replaceControlChars(
-          `  ${B.name}: removed from Claude's tools by the case's disallowed_tools: ${tools.join(", ")}`,
+          `  ${evalCase.name}: removed from Claude's tools by the case's disallowed_tools: ${tools.join(", ")}`,
         ),
       );
     if (runToolRules.denied.length > 0)
-      r.onLine(
+      ctx.onLine(
         replaceControlChars(
-          `  ${B.name}: not granted (missing --allow-tools grant, or a malformed entry): ${runToolRules.denied.join(", ")}`,
+          `  ${evalCase.name}: not granted (missing --allow-tools grant, or a malformed entry): ${runToolRules.denied.join(", ")}`,
         ),
       );
-    let Ne = (Ge) =>
-      splitRuleList([Ge.join(",")]).some(
-        (Lt) => permissionRuleValueFromString(Lt).toolName === ARTIFACT_TOOL_NAME,
+    let grantsArtifact = (rules) =>
+      splitRuleList([rules.join(",")]).some(
+        (rule) => permissionRuleValueFromString(rule).toolName === ARTIFACT_TOOL_NAME,
       );
-    if ((Ne(runToolRules.denied) || Ne(r.allowTools)) && !_e)
-      r.onLine(
-        `  ${B.name}: the ${ARTIFACT_TOOL_NAME} tool is not available inside eval runs; --allow-tools cannot enable it`,
+    if ((grantsArtifact(runToolRules.denied) || grantsArtifact(ctx.allowTools)) && !artifactPublish)
+      ctx.onLine(
+        `  ${evalCase.name}: the ${ARTIFACT_TOOL_NAME} tool is not available inside eval runs; --allow-tools cannot enable it`,
       );
-    if (B.execution.artifact_publish === true && !_e)
-      r.onLine(
-        `  ${B.name}: requests artifact publishing; not granted (operator opt-in required) \u2014 running without it`,
+    if (evalCase.execution.artifact_publish === true && !artifactPublish)
+      ctx.onLine(
+        `  ${evalCase.name}: requests artifact publishing; not granted (operator opt-in required) \u2014 running without it`,
       );
-    let flagOverrides = resolveFlagOverrides(B, r);
+    let flagOverrides = resolveFlagOverrides(evalCase, ctx);
     let grant = {
-      granted: _e,
+      granted: artifactPublish,
       seededFlags: flagOverrides.seeded,
     };
     if (Object.keys(flagOverrides.declared).length > 0)
-      if (!_e)
-        r.onLine(
-          `  ${B.name}: growthbook_overrides not applied \u2014 they seed only a run granted artifact publishing`,
+      if (!artifactPublish)
+        ctx.onLine(
+          `  ${evalCase.name}: growthbook_overrides not applied \u2014 they seed only a run granted artifact publishing`,
         );
       else {
         if (Object.keys(flagOverrides.seeded).length > 0)
-          r.onLine(`  ${B.name}: seeding growthbook_overrides ${jsonStringify(flagOverrides.seeded)}`);
+          ctx.onLine(
+            `  ${evalCase.name}: seeding growthbook_overrides ${jsonStringify(flagOverrides.seeded)}`,
+          );
         if (flagOverrides.dropped.length > 0)
-          r.onLine(
-            `  ${B.name}: growthbook_overrides dropped (operator allowlist required \u2014 CLAUDE_CODE_EVAL_ALLOW_FLAG_OVERRIDES): ${jsonStringify(flagOverrides.dropped)}`,
+          ctx.onLine(
+            `  ${evalCase.name}: growthbook_overrides dropped (operator allowlist required \u2014 CLAUDE_CODE_EVAL_ALLOW_FLAG_OVERRIDES): ${jsonStringify(flagOverrides.dropped)}`,
           );
       }
-    let mapped = getRunArms(B, x, r.ablation === "auto").map((Ge) => ({
-      arm: Ge,
+    let mapped = getRunArms(evalCase, ablationMode, ctx.ablation === "auto").map((arm) => ({
+      arm,
       armCase:
-        Ge === "without"
+        arm === "without"
           ? {
-              ...B,
+              ...evalCase,
               pluginDirs: [],
             }
-          : B,
+          : evalCase,
       allowed:
-        Ge === "without" && De.length > 0
-          ? buildRunToolRules(B.execution.allowed_tools, r.allowTools, {
-              artifactPublishGranted: _e,
-              mockedTools: listMockedToolNames(filterForArm(De, Ge)),
+        arm === "without" && mockList.length > 0
+          ? buildRunToolRules(evalCase.execution.allowed_tools, ctx.allowTools, {
+              artifactPublishGranted: artifactPublish,
+              mockedTools: listMockedToolNames(filterForArm(mockList, arm)),
               disallowedTools,
             }).allowed
           : runToolRules.allowed,
     }));
-    let lt = {
-      case_: B,
+    let plan = {
+      case_: evalCase,
       runs,
       grant,
-      mockServers: De,
-      mockNotes: Z.get(B) ?? [],
+      mockServers: mockList,
+      mockNotes: mockNotes.get(evalCase) ?? [],
       arms: mapped,
-      results: new Map(mapped.map((Ge) => [Ge.arm, Array(runs)])),
+      results: new Map(mapped.map((arm) => [arm.arm, Array(runs)])),
       landed: 0,
       finalized: false,
     };
-    Be.push(lt);
-    return lt;
+    plans.push(plan);
+    return plan;
   };
-  let Qe = (B) => {
-    if (B.finalized) return;
-    B.finalized = true;
-    let case_ = B.case_;
-    let _e = (lt) => B.results.get(lt)?.filter((Ge) => Ge !== undefined);
-    let Ae = _e("with") ?? [];
-    let De = _e("without");
-    if (Ae.length === 0 && Q.partialReason) return;
-    let { score, passRate } = aggregateRunScores(Ae);
-    let Me = De && De.length > 0 ? aggregateRunScores(De) : undefined;
-    let Ne = (lt) => !!lt?.some((Ge) => Ge.skipped_paid_graders);
-    let ot = Ae.some((lt) => lt.ended_on_api_error) || !!De?.some((lt) => lt.ended_on_api_error);
-    let nt = !Ne(Ae) && !Ne(De) && !ot;
-    we.set(case_, {
+  let finalizeCase = (plan) => {
+    if (plan.finalized) return;
+    plan.finalized = true;
+    let case_ = plan.case_;
+    let runsFor = (arm) => plan.results.get(arm)?.filter((run) => run !== undefined);
+    let withRuns = runsFor("with") ?? [];
+    let withoutRuns = runsFor("without");
+    if (withRuns.length === 0 && runState.partialReason) return;
+    let { score, passRate } = aggregateRunScores(withRuns);
+    let withoutAggregate =
+      withoutRuns && withoutRuns.length > 0 ? aggregateRunScores(withoutRuns) : undefined;
+    let hasPaidSkips = (runs) => !!runs?.some((run) => run.skipped_paid_graders);
+    let sawApiError =
+      withRuns.some((run) => run.ended_on_api_error) || !!withoutRuns?.some((run) => run.ended_on_api_error);
+    let complete = !hasPaidSkips(withRuns) && !hasPaidSkips(withoutRuns) && !sawApiError;
+    resultsByCase.set(case_, {
       case_,
       report: {
         name: case_.name,
@@ -668,67 +684,68 @@ async function runEvalCase(e) {
         source: case_.caseSource,
         score,
         pass_rate: passRate,
-        runs: Ae,
-        ...(G.has(case_) && {
-          advisories: G.get(case_),
+        runs: withRuns,
+        ...(advisories.has(case_) && {
+          advisories: advisories.get(case_),
         }),
-        ...(Me &&
-          De && {
-            pass_rate_without: Me.passRate,
-            runs_without: De,
-            ...(nt && {
-              score_without: Me.score,
-              delta: score - Me.score,
+        ...(withoutAggregate &&
+          withoutRuns && {
+            pass_rate_without: withoutAggregate.passRate,
+            runs_without: withoutRuns,
+            ...(complete && {
+              score_without: withoutAggregate.score,
+              delta: score - withoutAggregate.score,
             }),
           }),
       },
     });
-    let mt = Ae.length + (De?.length ?? 0);
-    let Ye =
-      Ae.reduce((acc, Ge) => acc + Ge.cost_usd, 0) + (De?.reduce((acc, Ge) => acc + Ge.cost_usd, 0) ?? 0);
-    if (Me && nt) {
-      let lt = score - Me.score;
-      let Ge = lt > 0 ? "+" : "";
-      r.onLine(
-        `${score >= r.threshold ? "\u2713" : "\u2717"} ${case_.name}  with ${score.toFixed(2)}  without ${Me.score.toFixed(2)}  \u0394 ${Ge}${lt.toFixed(2)}  (${mt} ${plural(mt, "run")})  $${Ye.toFixed(2)}`,
+    let runCount = withRuns.length + (withoutRuns?.length ?? 0);
+    let totalCost =
+      withRuns.reduce((acc, run) => acc + run.cost_usd, 0) +
+      (withoutRuns?.reduce((acc, run) => acc + run.cost_usd, 0) ?? 0);
+    if (withoutAggregate && complete) {
+      let delta = score - withoutAggregate.score;
+      let deltaSign = delta > 0 ? "+" : "";
+      ctx.onLine(
+        `${score >= ctx.threshold ? "\u2713" : "\u2717"} ${case_.name}  with ${score.toFixed(2)}  without ${withoutAggregate.score.toFixed(2)}  \u0394 ${deltaSign}${delta.toFixed(2)}  (${runCount} ${plural(runCount, "run")})  $${totalCost.toFixed(2)}`,
       );
-    } else if (Me)
-      r.onLine(
-        `${score >= r.threshold ? "\u2713" : "\u2717"} ${case_.name}  with ${score.toFixed(2)}  \u0394 \u2014 (${ot ? "a run ended on an API error and was not graded" : "cost ceiling: arms graded under different rules"})  (${mt} ${plural(mt, "run")})  $${Ye.toFixed(2)}`,
+    } else if (withoutAggregate)
+      ctx.onLine(
+        `${score >= ctx.threshold ? "\u2713" : "\u2717"} ${case_.name}  with ${score.toFixed(2)}  \u0394 \u2014 (${sawApiError ? "a run ended on an API error and was not graded" : "cost ceiling: arms graded under different rules"})  (${runCount} ${plural(runCount, "run")})  $${totalCost.toFixed(2)}`,
       );
     else
-      r.onLine(
-        `${score >= r.threshold ? "\u2713" : "\u2717"} ${case_.name}  score ${score.toFixed(2)}  (${Ae.length} ${plural(Ae.length, "run")})  $${Ye.toFixed(2)}`,
+      ctx.onLine(
+        `${score >= ctx.threshold ? "\u2713" : "\u2717"} ${case_.name}  score ${score.toFixed(2)}  (${withRuns.length} ${plural(withRuns.length, "run")})  $${totalCost.toFixed(2)}`,
       );
   };
-  function* ye() {
-    let B = () => {
-      if (Q.partialReason === undefined && r.signal.aborted) Q.partialReason = "interrupted";
-      return Q.partialReason !== undefined;
+  function* runAllCases() {
+    let finalizeAll = () => {
+      if (runState.partialReason === undefined && ctx.signal.aborted) runState.partialReason = "interrupted";
+      return runState.partialReason !== undefined;
     };
-    for (let ie of j) {
-      if (B()) return;
-      let _e;
+    for (let evalCase of selectedCases) {
+      if (finalizeAll()) return;
+      let plan;
       try {
-        _e = Ee(ie);
+        plan = prepareCase(evalCase);
       } catch (error) {
         logForDebugging(`eval case plan: ${errorMessage(error)}`, {
           level: "error",
         });
-        let De =
+        let caseResult =
           error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
             ? error.message
             : (getErrnoCode(error) ?? "unknown error");
-        Je(ie, `case could not be planned (${De}) \u2014 see the debug log`);
-        Q.harnessFailures++;
+        failCase(evalCase, `case could not be planned (${caseResult}) \u2014 see the debug log`);
+        runState.harnessFailures++;
         continue;
       }
-      if (_e === null) continue;
-      for (let arm of _e.arms)
-        for (let idx = 0; idx < _e.runs; idx++) {
-          if (B()) return;
+      if (plan === null) continue;
+      for (let arm of plan.arms)
+        for (let idx = 0; idx < plan.runs; idx++) {
+          if (finalizeAll()) return;
           yield {
-            plan: _e,
+            plan,
             arm,
             index: idx,
           };
@@ -736,25 +753,29 @@ async function runEvalCase(e) {
     }
   }
   await pMap(
-    ye(),
+    runAllCases(),
     async ({ plan, arm, index }) => {
-      let Ae = plan.arms.length * plan.runs;
-      if (r.signal.aborted) Q.partialReason ??= "interrupted";
-      else if (r.maxCostUsd !== undefined && Q.spent >= r.maxCostUsd && Q.partialReason === undefined)
-        Q.partialReason = "cost_ceiling";
-      if (Q.partialReason === "cost_ceiling" && !Q.costCeilingAnnounced) {
-        Q.costCeilingAnnounced = true;
-        r.onLine(`\u26A0 cost ceiling $${r.maxCostUsd} hit; skipping remaining cases`);
+      let runCount = plan.arms.length * plan.runs;
+      if (ctx.signal.aborted) runState.partialReason ??= "interrupted";
+      else if (
+        ctx.maxCostUsd !== undefined &&
+        runState.spent >= ctx.maxCostUsd &&
+        runState.partialReason === undefined
+      )
+        runState.partialReason = "cost_ceiling";
+      if (runState.partialReason === "cost_ceiling" && !runState.costCeilingAnnounced) {
+        runState.costCeilingAnnounced = true;
+        ctx.onLine(`\u26A0 cost ceiling $${ctx.maxCostUsd} hit; skipping remaining cases`);
       }
-      if (Q.partialReason) return;
-      let De = await formatCaseResultLine(
+      if (runState.partialReason) return;
+      let line = await formatCaseResultLine(
         arm.armCase,
         index,
         plan.runs,
         arm.allowed,
         plan.grant,
-        r,
-        Q,
+        ctx,
+        runState,
         plan.arms.length > 1 ? arm.arm : undefined,
         plan.mockServers,
         plan.mockNotes,
@@ -763,8 +784,8 @@ async function runEvalCase(e) {
           level: "error",
         });
         let error_2 = `run could not start (${error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS ? error.message : (getErrnoCode(error) ?? "unknown error")}) \u2014 see the debug log`;
-        Q.harnessFailures++;
-        r.onLine(
+        runState.harnessFailures++;
+        ctx.onLine(
           `  ${plan.case_.name} run ${index + 1}/${plan.runs}${plan.arms.length > 1 ? ` [${arm.arm}]` : ""}: score 0.00  $0.00  error: ${oneLineMessage(`run could not start: ${errorMessage(error)}`)}`,
         );
         return {
@@ -777,35 +798,35 @@ async function runEvalCase(e) {
           error: error_2,
         };
       });
-      plan.results.get(arm.arm)[index] = De;
+      plan.results.get(arm.arm)[index] = line;
       plan.landed++;
-      if (plan.landed === Ae) Qe(plan);
+      if (plan.landed === runCount) finalizeCase(plan);
     },
     {
       concurrency,
       stopOnError: false,
     },
   ).catch((error) => {
-    let ie = error instanceof AggregateError ? error.errors : [error];
-    for (let _e of ie) logError(_e);
-    Q.harnessFailures += ie.length;
+    let errorsList = error instanceof AggregateError ? error.errors : [error];
+    for (let error of errorsList) logError(error);
+    runState.harnessFailures += errorsList.length;
   });
-  for (let B of Be) Qe(B);
-  if (r.maxCostUsd !== undefined && Q.spent > r.maxCostUsd && !Q.costCeilingAnnounced) {
-    Q.costCeilingAnnounced = true;
-    r.onNotice(
-      `\u26A0 cost ceiling $${r.maxCostUsd} exceeded: $${Q.spent.toFixed(2)} spent by runs already in flight when it was crossed; nothing was skipped`,
+  for (let plan of plans) finalizeCase(plan);
+  if (ctx.maxCostUsd !== undefined && runState.spent > ctx.maxCostUsd && !runState.costCeilingAnnounced) {
+    runState.costCeilingAnnounced = true;
+    ctx.onNotice(
+      `\u26A0 cost ceiling $${ctx.maxCostUsd} exceeded: $${runState.spent.toFixed(2)} spent by runs already in flight when it was crossed; nothing was skipped`,
     );
   }
-  let flattened = j.flatMap((B) => {
-    let ie = we.get(B);
-    return ie === undefined ? [] : [ie];
+  let flattened = selectedCases.flatMap((evalCase) => {
+    let result = resultsByCase.get(evalCase);
+    return result === undefined ? [] : [result];
   });
-  if (Q.partialReason === undefined && r.signal.aborted) Q.partialReason = "interrupted";
+  if (runState.partialReason === undefined && ctx.signal.aborted) runState.partialReason = "interrupted";
   let suiteReport = buildSuiteReport(
     flattened,
     date,
-    Q.partialReason,
+    runState.partialReason,
     {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -820,22 +841,22 @@ async function runEvalCase(e) {
     caseTargetPath,
     concurrency,
   );
-  let all = suiteReport.cases.every((B) => B.score >= r.threshold);
-  if (Q.harnessFailures > 0)
-    r.onNotice(
-      `\u26A0 ${Q.harnessFailures} ${plural(Q.harnessFailures, "run")} could not be started by the harness (see the errors above and the debug log); the suite exits non-zero regardless of scores`,
+  let all = suiteReport.cases.every((caseReport) => caseReport.score >= ctx.threshold);
+  if (runState.harnessFailures > 0)
+    ctx.onNotice(
+      `\u26A0 ${runState.harnessFailures} ${plural(runState.harnessFailures, "run")} could not be started by the harness (see the errors above and the debug log); the suite exits non-zero regardless of scores`,
     );
-  let ce = count(
-    suiteReport.cases.flatMap((B) => B.runs.concat(B.runs_without ?? [])),
-    (B) => B.ended_on_api_error === true,
+  let apiErrorCount = count(
+    suiteReport.cases.flatMap((caseReport) => caseReport.runs.concat(caseReport.runs_without ?? [])),
+    (run) => run.ended_on_api_error === true,
   );
-  if (ce > 0)
-    r.onNotice(
-      `\u26A0 ${ce} ${plural(ce, "run")} ended on an API error and scored 0 without grading (each run's error is on its progress line above, or in its \`error\` field under --json); fix the cause and re-run \u2014 the suite exits non-zero regardless of scores`,
+  if (apiErrorCount > 0)
+    ctx.onNotice(
+      `\u26A0 ${apiErrorCount} ${plural(apiErrorCount, "run")} ended on an API error and scored 0 without grading (each run's error is on its progress line above, or in its \`error\` field under --json); fix the cause and re-run \u2014 the suite exits non-zero regardless of scores`,
     );
-  let exitCode = Q.partialReason
+  let exitCode = runState.partialReason
     ? 2
-    : all && errors.length === 0 && Q.harnessFailures === 0 && ce === 0
+    : all && errors.length === 0 && runState.harnessFailures === 0 && apiErrorCount === 0
       ? 0
       : 1;
   return {
@@ -845,8 +866,8 @@ async function runEvalCase(e) {
     root,
     suite,
     resolvedCases: flattened,
-    ablation: x,
-    harnessFailures: Q.harnessFailures,
+    ablation: ablationMode,
+    harnessFailures: runState.harnessFailures,
   };
 }
 //@ chunk-qchp9vrd.js:272299-272308 placement
@@ -856,67 +877,76 @@ async function runEvalCase(e) {
 var MAX_START_RETRIES = 2;
 //@ chunk-qchp9vrd.js:272308-273279 placement
 async function formatCaseResultLine(
-  armCase,
+  caseSpec,
   index,
   runs,
   allowedTools,
   grant,
-  h,
-  w,
-  b,
+  progress,
+  budget,
+  arm,
   mockServers = [],
   mockNotes = [],
 ) {
   let now = Date.now();
-  let T = await runEvalSuite(armCase, allowedTools, grant, h, mockServers, mockNotes, w, b);
-  T.started_at = new Date(now).toISOString();
-  T.duration_seconds = Math.round((Date.now() - now) / 1000);
-  w.spent += T.cost_usd;
-  let N = b ? ` [${b}]` : "";
-  let x = T.error
-    ? `  error: ${oneLineMessage(T.error)}`
-    : T.aborted
-      ? `  aborted by mock ${T.aborted.server}/${T.aborted.tool}: ${oneLineMessage(replaceControlChars(T.aborted.reason))}`
-      : "";
-  h.onLine(
-    `  ${armCase.name} run ${index + 1}/${runs}${N}: score ${T.score.toFixed(2)}  $${T.cost_usd.toFixed(2)}${x}`,
+  let report = await runEvalSuite(
+    caseSpec,
+    allowedTools,
+    grant,
+    progress,
+    mockServers,
+    mockNotes,
+    budget,
+    arm,
   );
-  for (let grader of T.graders) {
-    let X = grader.with_only ? " [with-only, not scored]" : ` (weight ${grader.weight})`;
-    h.onLine(
-      `    ${grader.passed ? "\u2713" : "\u2717"} ${replaceControlChars(grader.name)}${X}: ${oneLineMessage(grader.explanation)}`,
+  report.started_at = new Date(now).toISOString();
+  report.duration_seconds = Math.round((Date.now() - now) / 1000);
+  budget.spent += report.cost_usd;
+  let armSuffix = arm ? ` [${arm}]` : "";
+  let detail = report.error
+    ? `  error: ${oneLineMessage(report.error)}`
+    : report.aborted
+      ? `  aborted by mock ${report.aborted.server}/${report.aborted.tool}: ${oneLineMessage(replaceControlChars(report.aborted.reason))}`
+      : "";
+  progress.onLine(
+    `  ${caseSpec.name} run ${index + 1}/${runs}${armSuffix}: score ${report.score.toFixed(2)}  $${report.cost_usd.toFixed(2)}${detail}`,
+  );
+  for (let grader of report.graders) {
+    let weightNote = grader.with_only ? " [with-only, not scored]" : ` (weight ${grader.weight})`;
+    progress.onLine(
+      `    ${grader.passed ? "\u2713" : "\u2717"} ${replaceControlChars(grader.name)}${weightNote}: ${oneLineMessage(grader.explanation)}`,
     );
   }
-  let authBackstopArmed = w.authBackstopArmed;
-  if (T.auth_rejected !== undefined) w.authBackstopArmed = false;
-  if (authBackstopArmed && T.auth_rejected === true && w.partialReason === undefined) {
-    w.partialReason = "auth_failed";
-    h.onLine(
+  let authBackstopArmed = budget.authBackstopArmed;
+  if (report.auth_rejected !== undefined) budget.authBackstopArmed = false;
+  if (authBackstopArmed && report.auth_rejected === true && budget.partialReason === undefined) {
+    budget.partialReason = "auth_failed";
+    progress.onLine(
       "\u26A0 a run could not authenticate \u2014 every remaining run would fail the same way, so the suite stops here. Fix the credential above and re-run.",
     );
   }
-  return T;
+  return report;
 }
 //@ chunk-qchp9vrd.js:273279-273340 placement
 /**
  * 把多行文本压成一行并截断到 200 字符。
  */
-function oneLineMessage(e) {
-  return truncateWithCount(replaceControlChars(e.replace(/\s*\n\s*/g, " ")), 200);
+function oneLineMessage(text) {
+  return truncateWithCount(replaceControlChars(text.replace(/\s*\n\s*/g, " ")), 200);
 }
 //@ chunk-qchp9vrd.js:273340-273604 placement
-function checkDuplicateCaseNames(e, onLine) {
-  let r = new Map();
-  for (let a of e) {
-    let s = r.get(a.name) ?? [];
-    s.push(a.caseDir);
-    r.set(a.name, s);
+function checkDuplicateCaseNames(cases, onLine) {
+  let dirsByName = new Map();
+  for (let caseSpec of cases) {
+    let dirs = dirsByName.get(caseSpec.name) ?? [];
+    dirs.push(caseSpec.caseDir);
+    dirsByName.set(caseSpec.name, dirs);
   }
-  for (let [a, s] of r)
-    if (s.length > 1)
+  for (let [caseName, dirs] of dirsByName)
+    if (dirs.length > 1)
       onLine(
         replaceControlChars(
-          `\u26A0 ${s.length} cases share the name "${a}" (${s.join(", ")}); the report and --case filter cannot distinguish them`,
+          `\u26A0 ${dirs.length} cases share the name "${caseName}" (${dirs.join(", ")}); the report and --case filter cannot distinguish them`,
         ),
       );
 }
@@ -924,34 +954,34 @@ function checkDuplicateCaseNames(e, onLine) {
 /**
  * 计算用例目录相对于根目录的路径。
  */
-function relativeCaseDir(root, n) {
-  let relativePath = path.relative(root, n.caseDir);
+function relativeCaseDir(root, evalCase) {
+  let relativePath = path.relative(root, evalCase.caseDir);
   return relativePath === "" ? "." : relativePath;
 }
 //@ chunk-qchp9vrd.js:273672-280997 placement
 /**
  * 运行全部用例（with/without 插件对比）、脚手架与结果汇总（约 7 KB）。
  */
-async function runEvalSuite(e, allowedTools, r, a, s, h, w, b) {
-  let y = false;
-  let R = (K) => {
-    if (y) return;
-    y = true;
-    logArtifactPublishOutcome(r, b, K);
+async function runEvalSuite(caseSpec, allowedTools, grant, options, mockServers, mockNotes, suiteState, arm) {
+  let publishLogged = false;
+  let logPublishOutcome = (outcome) => {
+    if (publishLogged) return;
+    publishLogged = true;
+    logArtifactPublishOutcome(grant, arm, outcome);
   };
   let evalTempDir = await createEvalTempDir();
-  let T = false;
-  let N = false;
-  let x = null;
-  let j = 0;
+  let runFailed = false;
+  let holdingToken = false;
+  let mocks = null;
+  let costUsd = 0;
   try {
-    if (e.context.scaffold_script && !a.noScaffold) {
-      let ye = await checkCaseInsideRoot(e, e.context.scaffold_script);
-      a.onLine(replaceControlChars(`  scaffold: ${ye}`));
-      let je = await runScaffoldCommand(ye, evalTempDir, a.signal);
-      if (je.code !== 0) {
-        T = true;
-        R({
+    if (caseSpec.context.scaffold_script && !options.noScaffold) {
+      let scaffoldPath = await checkCaseInsideRoot(caseSpec, caseSpec.context.scaffold_script);
+      options.onLine(replaceControlChars(`  scaffold: ${scaffoldPath}`));
+      let scaffoldResult = await runScaffoldCommand(scaffoldPath, evalTempDir, options.signal);
+      if (scaffoldResult.code !== 0) {
+        runFailed = true;
+        logPublishOutcome({
           published: false,
           errored: true,
         });
@@ -962,35 +992,39 @@ async function runEvalSuite(e, allowedTools, r, a, s, h, w, b) {
           judge_cost_usd: 0,
           graders: [],
           trace_path: "",
-          error: replaceControlChars(`scaffold failed (exit ${je.code}): ${takeLastChars(je.stderr, 500)}`),
+          error: replaceControlChars(
+            `scaffold failed (exit ${scaffoldResult.code}): ${takeLastChars(scaffoldResult.stderr, 500)}`,
+          ),
         };
       }
     }
-    await w.tokenGate.enter();
-    N = true;
-    let K = await checkEvalAuthPreflight(a.credentials, e.execution.timeout_seconds, (ye, je, pt) =>
-      w.tokenGate.rotate(ye, je, pt),
+    await suiteState.tokenGate.enter();
+    holdingToken = true;
+    let auth = await checkEvalAuthPreflight(
+      options.credentials,
+      caseSpec.execution.timeout_seconds,
+      (expiresAt, requiredAt, refresh) => suiteState.tokenGate.rotate(expiresAt, requiredAt, refresh),
     );
-    if (K?.warning) a.onLine(`  \u26A0 ${K.warning}`);
+    if (auth?.warning) options.onLine(`  \u26A0 ${auth.warning}`);
     try {
-      if (usesAgentResponder(filterForArm(s, b)))
-        for (let idx = 1; w.agentService === null; idx++) {
-          w.agentServiceStarting ??= createMockRelayPipe({
-            credentials: a.credentials,
+      if (usesAgentResponder(filterForArm(mockServers, arm)))
+        for (let idx = 1; suiteState.agentService === null; idx++) {
+          suiteState.agentServiceStarting ??= createMockRelayPipe({
+            credentials: options.credentials,
           }).catch((error) => {
-            w.agentServiceStarting = null;
+            suiteState.agentServiceStarting = null;
             throw error;
           });
           try {
-            w.agentService = await w.agentServiceStarting;
+            suiteState.agentService = await suiteState.agentServiceStarting;
           } catch (error) {
             if (idx >= MAX_START_RETRIES) throw error;
           }
         }
-      x = await writeRunMocks(s, b, evalTempDir, {
-        maxTurns: e.execution.max_turns,
-        model: normalizeJudgeModel(a.judgeModel) ?? null,
-        service: w.agentService,
+      mocks = await writeRunMocks(mockServers, arm, evalTempDir, {
+        maxTurns: caseSpec.execution.max_turns,
+        model: normalizeJudgeModel(options.judgeModel) ?? null,
+        service: suiteState.agentService,
       });
     } catch (error) {
       if (
@@ -1008,58 +1042,60 @@ async function runEvalSuite(e, allowedTools, r, a, s, h, w, b) {
         "mocks: run setup failed",
       );
     }
-    let X = await listRunDirFiles(evalTempDir.cwd);
-    if (await prepareRunDirectory(evalTempDir.cwd, X, "scaffold"))
+    let filesBefore = await listRunDirFiles(evalTempDir.cwd);
+    if (await prepareRunDirectory(evalTempDir.cwd, filesBefore, "scaffold"))
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `the case's scaffold created ${EVAL_ARTIFACTS_DIR}/ in the run's working directory \u2014 that name is reserved for the run's artifact publishes; have the scaffold use another name`,
         "eval scaffold created the reserved publish directory",
       );
     let runTraceHistory = await readRunTraceHistory({
-      case_: e,
+      case_: caseSpec,
       sandbox: evalTempDir,
       allowedTools,
-      disallowedTools: mergedDisallowedTools(e, a),
-      operatorAllowedTools: a.allowTools,
-      modelOverride: a.model,
-      artifactPublishGranted: r.granted,
-      growthbookOverrides: r.seededFlags,
-      verbose: a.verbose,
-      mocks: x ?? undefined,
-      signal: a.signal,
-      credential: K,
+      disallowedTools: mergedDisallowedTools(caseSpec, options),
+      operatorAllowedTools: options.allowTools,
+      modelOverride: options.model,
+      artifactPublishGranted: grant.granted,
+      growthbookOverrides: grant.seededFlags,
+      verbose: options.verbose,
+      mocks: mocks ?? undefined,
+      signal: options.signal,
+      credential: auth,
     });
-    N = false;
-    w.tokenGate.leave();
-    j = runTraceHistory.costUsd;
-    R({
+    holdingToken = false;
+    suiteState.tokenGate.leave();
+    costUsd = runTraceHistory.costUsd;
+    logPublishOutcome({
       published: runTraceHistory.artifactPublishes.length > 0,
       errored: runTraceHistory.error !== null || runTraceHistory.timedOut,
     });
-    let agentRun = x?.agentRun ?? null;
-    let J = null;
-    let Z = false;
-    let se = null;
-    if (agentRun !== null && x) {
+    let agentRun = mocks?.agentRun ?? null;
+    let inputsRewrittenNote = null;
+    let inFlightAnswerLost = false;
+    let deniedByChildNote = null;
+    if (agentRun !== null && mocks) {
       let inFlight = agentRun.state.inFlight;
       agentRun.dispose();
       await withDeadline(agentRun.settled(), DISPOSE_TIMEOUT_MS);
       if (runTraceHistory.aborted === null && agentRun.state.aborted !== null)
         runTraceHistory.aborted = agentRun.state.aborted;
       runTraceHistory.costUsd += agentRun.state.costUsd;
-      j = runTraceHistory.costUsd;
-      let je = verifyTraceIntegrity(agentRun.state.answers, runTraceHistory, x);
-      if (je.deniedByChild > 0)
-        se = `${je.deniedByChild} agent-mock ${plural(je.deniedByChild, "call")} ${plural(je.deniedByChild, "was", "were")} refused by the child itself (a permission rule or the plugin's own PreToolUse hook) \u2014 never relayed, so abort_when was not judged for ${plural(je.deniedByChild, "it", "them")} and the model read the refusal text, not a mock answer`;
-      if (je.inputsRewritten > 0)
-        J = `${je.inputsRewritten} agent-mock ${plural(je.inputsRewritten, "call")} reached the mock with arguments different from the model's tool_use (rewritten before dispatch, e.g. by a plugin PreToolUse hook) \u2014 abort_when and the responder judged the rewritten arguments; the transcript shows the model's`;
+      costUsd = runTraceHistory.costUsd;
+      let integrity = verifyTraceIntegrity(agentRun.state.answers, runTraceHistory, mocks);
+      if (integrity.deniedByChild > 0)
+        deniedByChildNote = `${integrity.deniedByChild} agent-mock ${plural(integrity.deniedByChild, "call")} ${plural(integrity.deniedByChild, "was", "were")} refused by the child itself (a permission rule or the plugin's own PreToolUse hook) \u2014 never relayed, so abort_when was not judged for ${plural(integrity.deniedByChild, "it", "them")} and the model read the refusal text, not a mock answer`;
+      if (integrity.inputsRewritten > 0)
+        inputsRewrittenNote = `${integrity.inputsRewritten} agent-mock ${plural(integrity.inputsRewritten, "call")} reached the mock with arguments different from the model's tool_use (rewritten before dispatch, e.g. by a plugin PreToolUse hook) \u2014 abort_when and the responder judged the rewritten arguments; the transcript shows the model's`;
       if (runTraceHistory.aborted === null && runTraceHistory.mockSetupFailure === null) {
-        if (je.mismatch !== null) {
+        if (integrity.mismatch !== null) {
           runTraceHistory.mockSetupFailure = "integrity";
           runTraceHistory.error =
-            runTraceHistory.error === null ? je.mismatch : `${runTraceHistory.error} \xB7 ${je.mismatch}`;
-        } else if (je.absorbedInFlightAnswer || inFlight > 0) {
+            runTraceHistory.error === null
+              ? integrity.mismatch
+              : `${runTraceHistory.error} \xB7 ${integrity.mismatch}`;
+        } else if (integrity.absorbedInFlightAnswer || inFlight > 0) {
           runTraceHistory.mockSetupFailure = "integrity";
-          Z = true;
+          inFlightAnswerLost = true;
           runTraceHistory.error = `${runTraceHistory.error ?? "ended"} \xB7 mocks: an agent mock call was in flight when the child was killed (its answer or abort_when verdict never reached the run) \u2014 the run is not graded`;
         }
       }
@@ -1070,13 +1106,13 @@ async function runEvalSuite(e, allowedTools, r, a, s, h, w, b) {
       )
         runTraceHistory.mockRecordings = [...agentRun.state.recordings];
     }
-    j = runTraceHistory.costUsd;
-    if (x)
-      if (Z) logFeatureSad("cli_plugin_eval_mocks", "agent_call_in_flight");
+    costUsd = runTraceHistory.costUsd;
+    if (mocks)
+      if (inFlightAnswerLost) logFeatureSad("cli_plugin_eval_mocks", "agent_call_in_flight");
       else logMockRegistration(runTraceHistory);
-    let Q = x
+    let mocksSummary = mocks
       ? {
-          servers: x.servers.map((server) => ({
+          servers: mocks.servers.map((server) => ({
             server: server.dirName,
             kind: server.kind,
             ...(server.withheld && {
@@ -1091,10 +1127,10 @@ async function runEvalSuite(e, allowedTools, r, a, s, h, w, b) {
             })),
           })),
           warnings: [
-            ...h,
-            ...describeMissingToolsJsonEntry(filterForArm(s, b)),
-            ...(J === null ? [] : [J]),
-            ...(se === null ? [] : [se]),
+            ...mockNotes,
+            ...describeMissingToolsJsonEntry(filterForArm(mockServers, arm)),
+            ...(inputsRewrittenNote === null ? [] : [inputsRewrittenNote]),
+            ...(deniedByChildNote === null ? [] : [deniedByChildNote]),
           ].map(replaceControlChars),
           calls: {
             ...(runTraceHistory.mockTally ?? {
@@ -1111,8 +1147,8 @@ async function runEvalSuite(e, allowedTools, r, a, s, h, w, b) {
         }
       : undefined;
     if (runTraceHistory.aborted !== null || runTraceHistory.mockSetupFailure !== null) {
-      if (runTraceHistory.mockSetupFailure !== null) T = true;
-      if (runTraceHistory.aborted?.reason.startsWith(MOCK_RESPONDER_FAILED_TEXT)) T = true;
+      if (runTraceHistory.mockSetupFailure !== null) runFailed = true;
+      if (runTraceHistory.aborted?.reason.startsWith(MOCK_RESPONDER_FAILED_TEXT)) runFailed = true;
       return {
         score: 0,
         turns: runTraceHistory.numTurns,
@@ -1131,8 +1167,8 @@ async function runEvalSuite(e, allowedTools, r, a, s, h, w, b) {
             reason: replaceControlChars(runTraceHistory.aborted.reason),
           },
         }),
-        ...(Q && {
-          mocks: Q,
+        ...(mocksSummary && {
+          mocks: mocksSummary,
         }),
         ...(runTraceHistory.authRejected !== null && {
           auth_rejected: runTraceHistory.authRejected,
@@ -1143,7 +1179,7 @@ async function runEvalSuite(e, allowedTools, r, a, s, h, w, b) {
       };
     }
     if (runTraceHistory.endedOnApiError) {
-      T = true;
+      runFailed = true;
       return {
         score: 0,
         turns: runTraceHistory.numTurns,
@@ -1153,26 +1189,26 @@ async function runEvalSuite(e, allowedTools, r, a, s, h, w, b) {
         trace_path: runTraceHistory.tracePath,
         error: runTraceHistory.error === null ? null : replaceControlChars(runTraceHistory.error),
         ended_on_api_error: true,
-        ...(Q && {
-          mocks: Q,
+        ...(mocksSummary && {
+          mocks: mocksSummary,
         }),
         ...(runTraceHistory.authRejected !== null && {
           auth_rejected: runTraceHistory.authRejected,
         }),
       };
     }
-    let Se = await listRunDirFiles(evalTempDir.cwd);
-    if (await prepareRunDirectory(evalTempDir.cwd, Se, "run"))
+    let filesAfter = await listRunDirFiles(evalTempDir.cwd);
+    if (await prepareRunDirectory(evalTempDir.cwd, filesAfter, "run"))
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `the run created ${EVAL_ARTIFACTS_DIR}/ in its working directory \u2014 that name is reserved for the run's artifact publishes, so its file evidence cannot be trusted`,
         "eval run planted the reserved publish directory",
       );
-    if (r.granted) {
-      let ye = stubPublishDir(evalTempDir);
+    if (grant.granted) {
+      let stubDir = stubPublishDir(evalTempDir);
       if (
-        (await lstat(ye).catch((error) => {
+        (await lstat(stubDir).catch((error) => {
           if (isENOENT(error)) return null;
-          logForDebugging(`eval: cannot examine ${ye}: ${errorMessage(error)}`, {
+          logForDebugging(`eval: cannot examine ${stubDir}: ${errorMessage(error)}`, {
             level: "warn",
           });
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -1181,24 +1217,26 @@ async function runEvalSuite(e, allowedTools, r, a, s, h, w, b) {
           );
         })) !== null
       )
-        for (let pt of await listRunDirFiles(ye)) Se.add(`${EVAL_ARTIFACTS_DIR}/${pt}`);
+        for (let relativeFile of await listRunDirFiles(stubDir))
+          filesAfter.add(`${EVAL_ARTIFACTS_DIR}/${relativeFile}`);
     }
-    let cwdDiff = diffSortedLines(X, Se);
-    let skipPaidGraders = a.maxCostUsd !== undefined && runTraceHistory.costUsd >= a.maxCostUsd - w.spent;
+    let cwdDiff = diffSortedLines(filesBefore, filesAfter);
+    let skipPaidGraders =
+      options.maxCostUsd !== undefined && runTraceHistory.costUsd >= options.maxCostUsd - suiteState.spent;
     let { results, judgeCostUsd, paidGradersSkipped } = await gradeCase({
-      case_: e,
+      case_: caseSpec,
       run: runTraceHistory,
       cwdDiff,
       sandboxCwd: evalTempDir.cwd,
-      stubPublishDir: r.granted ? stubPublishDir(evalTempDir) : undefined,
-      judgeModel: a.judgeModel,
+      stubPublishDir: grant.granted ? stubPublishDir(evalTempDir) : undefined,
+      judgeModel: options.judgeModel,
       skipPaidGraders,
-      arm: b,
-      mockCallsWithOnly: isWithoutArmEmpty(s, b),
-      signal: a.signal,
-      credentials: a.credentials,
+      arm,
+      mockCallsWithOnly: isWithoutArmEmpty(mockServers, arm),
+      signal: options.signal,
+      credentials: options.credentials,
     });
-    if (runTraceHistory.error !== null) T = true;
+    if (runTraceHistory.error !== null) runFailed = true;
     return {
       score: computeWeightedScore(results),
       turns: runTraceHistory.numTurns,
@@ -1207,8 +1245,8 @@ async function runEvalSuite(e, allowedTools, r, a, s, h, w, b) {
       graders: results,
       trace_path: runTraceHistory.tracePath,
       error: runTraceHistory.error === null ? null : replaceControlChars(runTraceHistory.error),
-      ...(Q && {
-        mocks: Q,
+      ...(mocksSummary && {
+        mocks: mocksSummary,
       }),
       ...(runTraceHistory.mockRecordings.length > 0 && {
         mockRecordings: runTraceHistory.mockRecordings,
@@ -1221,32 +1259,32 @@ async function runEvalSuite(e, allowedTools, r, a, s, h, w, b) {
       }),
     };
   } catch (error) {
-    T = true;
-    R({
+    runFailed = true;
+    logPublishOutcome({
       published: false,
       errored: true,
     });
     return {
       score: 0,
       turns: 0,
-      cost_usd: j > 0 ? j : (x?.agentRun?.state.costUsd ?? 0),
+      cost_usd: costUsd > 0 ? costUsd : (mocks?.agentRun?.state.costUsd ?? 0),
       judge_cost_usd: 0,
       graders: [],
       trace_path: "",
       error: replaceControlChars(errorMessage(error)),
     };
   } finally {
-    if (N) w.tokenGate.leave();
-    x?.agentRun?.dispose();
+    if (holdingToken) suiteState.tokenGate.leave();
+    mocks?.agentRun?.dispose();
     await rm_2(path.join(evalTempDir.outDir, MOCKS_JSON_FILE), {
       force: true,
     }).catch(() => {});
     await rm_2(path.join(evalTempDir.configDir, SETTINGS_FILENAME_ALIAS), {
       force: true,
     }).catch(() => {});
-    let K = T && a.keepFailedRuns && !a.signal.aborted;
-    if (a.keepTemp || K) {
-      let X = await sealKeptSandbox(evalTempDir).then(
+    let keepFailedRun = runFailed && options.keepFailedRuns && !options.signal.aborted;
+    if (options.keepTemp || keepFailedRun) {
+      let sealResult = await sealKeptSandbox(evalTempDir).then(
         (sealed) => ({
           sealed,
           error: null,
@@ -1256,25 +1294,27 @@ async function runEvalSuite(e, allowedTools, r, a, s, h, w, b) {
           error: errorMessage(error),
         }),
       );
-      a.onLine(`  kept temp${K && !a.keepTemp ? " (run failed)" : ""}: ${evalTempDir.root}`);
-      a.onNotice(
-        X.sealed !== null
-          ? `\u26A0 kept ${evalTempDir.root}: ${formatSealedKeptNotice(evalTempDir, X.sealed)}`
-          : `\u26A0 kept ${evalTempDir.root}: could NOT seal what the plugin under test wrote (${X.error}) \u2014 everything in it except out/ and config/ may be agent-written, wherever it now sits (modes were closed as far as possible); read out/ if you need it, do not run git or anything that loads configuration from a working directory anywhere inside, and remove it (\`${formatRemoveRunDirCommand(evalTempDir.root)}\`)`,
+      options.onLine(
+        `  kept temp${keepFailedRun && !options.keepTemp ? " (run failed)" : ""}: ${evalTempDir.root}`,
+      );
+      options.onNotice(
+        sealResult.sealed !== null
+          ? `\u26A0 kept ${evalTempDir.root}: ${formatSealedKeptNotice(evalTempDir, sealResult.sealed)}`
+          : `\u26A0 kept ${evalTempDir.root}: could NOT seal what the plugin under test wrote (${sealResult.error}) \u2014 everything in it except out/ and config/ may be agent-written, wherever it now sits (modes were closed as far as possible); read out/ if you need it, do not run git or anything that loads configuration from a working directory anywhere inside, and remove it (\`${formatRemoveRunDirCommand(evalTempDir.root)}\`)`,
       );
     } else
       await evalTempDir.cleanup().catch((error) => {
-        a.onNotice(
+        options.onNotice(
           `\u26A0 could not remove ${evalTempDir.root} (${errorMessage(error)}); it holds what the plugin under test wrote \u2014 do not run git or anything that loads configuration from a working directory inside it, and remove it (\`${formatRemoveRunDirCommand(evalTempDir.root)}\`)`,
         );
       });
   }
 }
 //@ chunk-qchp9vrd.js:280997-281733 placement
-async function runScaffoldCommand(e, evalTempDir, signal) {
+async function runScaffoldCommand(scriptPath, evalTempDir, signal) {
   return await new Promise((resolve) => {
-    let s = "";
-    let h = spawn("bash", [e], {
+    let stderrText = "";
+    let child = spawn("bash", [scriptPath], {
       cwd: evalTempDir.cwd,
       windowsHide: true,
       ...cgroupSpawnOptions("plugin"),
@@ -1292,43 +1332,48 @@ async function runScaffoldCommand(e, evalTempDir, signal) {
         NODE_ENV: "production",
       },
     });
-    let timer = setTimeout((y) => y.kill("SIGKILL"), 120000, h);
-    let b = () => h.kill("SIGKILL");
-    if (signal.aborted) b();
+    let timer = setTimeout((proc) => proc.kill("SIGKILL"), 120000, child);
+    let killScaffold = () => child.kill("SIGKILL");
+    if (signal.aborted) killScaffold();
     else
-      signal.addEventListener("abort", b, {
+      signal.addEventListener("abort", killScaffold, {
         once: true,
       });
-    h.stderr?.setEncoding("utf8");
-    h.stderr?.on("data", (y) => {
-      if (s.length < 16384) s += y;
+    child.stderr?.setEncoding("utf8");
+    child.stderr?.on("data", (chunk) => {
+      if (stderrText.length < 16384) stderrText += chunk;
     });
-    h.on("error", (y) => {
+    child.on("error", (error) => {
       clearTimeout(timer);
-      signal.removeEventListener("abort", b);
+      signal.removeEventListener("abort", killScaffold);
       resolve({
         code: 127,
-        stderr: String(y),
+        stderr: String(error),
       });
     });
-    h.on("close", (code) => {
+    child.on("close", (code) => {
       clearTimeout(timer);
-      signal.removeEventListener("abort", b);
+      signal.removeEventListener("abort", killScaffold);
       resolve({
         code,
-        stderr: s,
+        stderr: stderrText,
       });
     });
   });
 }
 //@ chunk-qchp9vrd.js:281733-281920 placement
-async function listRunDirFiles(cwd) {
-  let n = new Set();
-  let r = await lstat(cwd).catch(() => null);
-  if (r === null || !r.isDirectory() || r.isSymbolicLink() || (await realpath(cwd).catch(() => null)) !== cwd)
+async function listRunDirFiles(root) {
+  let files = new Set();
+  let cwdStats = await lstat(root).catch(() => null);
+  if (
+    cwdStats === null ||
+    !cwdStats.isDirectory() ||
+    cwdStats.isSymbolicLink() ||
+    (await realpath(root).catch(() => null)) !== root
+  )
     throw checkRunDirUnchanged();
-  await walkRunDir(cwd, "", n, 0);
-  return n;
+  await walkRunDir(root, "", files, 0);
+  return files;
 }
 //@ chunk-qchp9vrd.js:281920-282225 placement
 function checkRunDirUnchanged() {
@@ -1338,10 +1383,10 @@ function checkRunDirUnchanged() {
   );
 }
 //@ chunk-qchp9vrd.js:282225-282812 placement
-async function prepareRunDirectory(cwd, n, r) {
+async function prepareRunDirectory(cwd, files, phase) {
   let lower = EVAL_ARTIFACTS_DIR.toLowerCase();
-  let s = await lstat(path.join(cwd, EVAL_ARTIFACTS_DIR)).then(
-    (h) => (r === "run" && h.isFile() && h.size === 0 ? "placeholder" : "present"),
+  let reservedState = await lstat(path.join(cwd, EVAL_ARTIFACTS_DIR)).then(
+    (stats) => (phase === "run" && stats.isFile() && stats.size === 0 ? "placeholder" : "present"),
     (error) => {
       if (isENOENT(error)) return "absent";
       logForDebugging(`eval: cannot examine the reserved publish name in ${cwd}: ${errorMessage(error)}`, {
@@ -1353,9 +1398,10 @@ async function prepareRunDirectory(cwd, n, r) {
       );
     },
   );
-  if (s === "placeholder") n.delete(EVAL_ARTIFACTS_DIR);
-  for (let h of n) if (firstLineOf(h.toLowerCase().replaceAll("\\", "/"), "/") === lower) return true;
-  return s === "present";
+  if (reservedState === "placeholder") files.delete(EVAL_ARTIFACTS_DIR);
+  for (let relativeFile of files)
+    if (firstLineOf(relativeFile.toLowerCase().replaceAll("\\", "/"), "/") === lower) return true;
+  return reservedState === "present";
 }
 //@ chunk-qchp9vrd.js:282812-282970 placement
 function formatRemoveRunDirCommand(root) {
@@ -1374,117 +1420,121 @@ var MAX_RUN_DIR_ENTRIES = 200000;
  * 递归列出运行目录中的文件（深度与条目数有上限），每级检查目录不是链接、realpath 未变且 inode 前后一致，否则抛出。
  */
 async function walkRunDir(
-  e,
-  n,
-  r,
-  a,
-  s = {
+  root,
+  relativeDir,
+  files,
+  depth,
+  budget = {
     count: 0,
   },
 ) {
-  if (a > MAX_RUN_DIR_DEPTH) throw checkRunDirUnchanged();
-  let joined = path.join(e, n);
-  let w = await lstat(joined, {
+  if (depth > MAX_RUN_DIR_DEPTH) throw checkRunDirUnchanged();
+  let joined = path.join(root, relativeDir);
+  let dirStats = await lstat(joined, {
     bigint: true,
   }).catch(() => null);
   if (
-    w === null ||
-    !w.isDirectory() ||
-    w.isSymbolicLink() ||
+    dirStats === null ||
+    !dirStats.isDirectory() ||
+    dirStats.isSymbolicLink() ||
     (await realpath(joined).catch(() => null)) !== joined
   )
     throw checkRunDirUnchanged();
-  let b;
+  let entries;
   try {
-    b = await readdir(joined, {
+    entries = await readdir(joined, {
       withFileTypes: true,
     });
   } catch {
     throw checkRunDirUnchanged();
   }
-  let y = await lstat(joined, {
+  let recheckedStats = await lstat(joined, {
     bigint: true,
   }).catch(() => null);
-  if (y === null || y.ino !== w.ino || y.dev !== w.dev) throw checkRunDirUnchanged();
-  s.count += b.length;
-  if (s.count > MAX_RUN_DIR_ENTRIES) throw checkRunDirUnchanged();
-  for (let R of b) {
-    let S = n ? `${n}/${R.name}` : R.name;
-    if (R.isDirectory()) await walkRunDir(e, S, r, a + 1, s);
-    else r.add(S);
+  if (recheckedStats === null || recheckedStats.ino !== dirStats.ino || recheckedStats.dev !== dirStats.dev)
+    throw checkRunDirUnchanged();
+  budget.count += entries.length;
+  if (budget.count > MAX_RUN_DIR_ENTRIES) throw checkRunDirUnchanged();
+  for (let entry of entries) {
+    let relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) await walkRunDir(root, relativePath, files, depth + 1, budget);
+    else files.add(relativePath);
   }
 }
 //@ chunk-qchp9vrd.js:283509-283599 placement
 /**
  * 返回在第二个集合里不存在的项（排序后拼接）。
  */
-function diffSortedLines(e, n) {
-  let r = [];
-  for (let a of n) if (!e.has(a)) r.push(a);
-  return r.sort().join(`
+function diffSortedLines(before, after) {
+  let added = [];
+  for (let file of after) if (!before.has(file)) added.push(file);
+  return added.sort().join(`
 `);
 }
 //@ chunk-qchp9vrd.js:283599-283689 placement
 /**
  * 清洗控制字符并截断后转成 JSON 字符串。
  */
-function quotedShort(e, n) {
-  let r = replaceControlChars(e.replace(invisiblePatternAccessor(), " "));
-  return jsonStringify(r.length > n ? `${truncateToLength(r, n)}\u2026` : r);
+function quotedShort(text, maxChars) {
+  let clean = replaceControlChars(text.replace(invisiblePatternAccessor(), " "));
+  return jsonStringify(clean.length > maxChars ? `${truncateToLength(clean, maxChars)}\u2026` : clean);
 }
 //@ chunk-qchp9vrd.js:283689-283923 placement
-function logArtifactPublishOutcome(e, n, r) {
-  if (!e.granted || n === "without") return;
-  if (r.published) logFeatureOk("cli_plugin_eval_artifact_publish");
-  else if (r.errored) logFeatureSad("cli_plugin_eval_artifact_publish", "run_errored");
+function logArtifactPublishOutcome(grant, arm, outcome) {
+  if (!grant.granted || arm === "without") return;
+  if (outcome.published) logFeatureOk("cli_plugin_eval_artifact_publish");
+  else if (outcome.errored) logFeatureSad("cli_plugin_eval_artifact_publish", "run_errored");
   else logFeatureSad("cli_plugin_eval_artifact_publish", "no_publish");
 }
 //@ chunk-qchp9vrd.js:283923-284021 placement
 /**
  * 合并用例与命令行给出的禁用工具。
  */
-function mergedDisallowedTools(e, n) {
-  return uniq([...splitAllowedTools(e.execution.disallowed_tools ?? []).tools, ...(n.disallowTools ?? [])]);
+function mergedDisallowedTools(caseSpec, options) {
+  return uniq([
+    ...splitAllowedTools(caseSpec.execution.disallowed_tools ?? []).tools,
+    ...(options.disallowTools ?? []),
+  ]);
 }
 //@ chunk-qchp9vrd.js:284021-284311 placement
 function describeUndisallowableTools(rejected) {
   return `${rejected.map(formatGuardValueJson).join(", ")} cannot be disallowed: ${rejected.length === 1 ? "it is not a built-in tool" : "they are not built-in tools"} that this version of Claude Code can remove. Use bare names such as Agent or TaskStop; patterns such as Bash(rm:*) and MCP tools are not accepted.`;
 }
 //@ chunk-qchp9vrd.js:284311-284438 placement
-function allowsArtifactPublish(e, n) {
+function allowsArtifactPublish(caseSpec, options) {
   return (
-    (n.artifactPublish ?? antEnv.CLAUDE_CODE_EVAL_ALLOW_ARTIFACT_PUBLISH === true) &&
-    e.execution.artifact_publish === true
+    (options.artifactPublish ?? antEnv.CLAUDE_CODE_EVAL_ALLOW_ARTIFACT_PUBLISH === true) &&
+    caseSpec.execution.artifact_publish === true
   );
 }
 //@ chunk-qchp9vrd.js:284438-284747 placement
 /**
  * 解析评测套件声明的 GrowthBook 开关覆盖：只保留允许列表（参数或 CLAUDE_CODE_EVAL_ALLOW_FLAG_OVERRIDES）中的开关，其余记为丢弃。
  */
-function resolveFlagOverrides(e, n) {
-  let growthbookOverrides = e.execution.growthbook_overrides ?? {};
-  let a = new Set(
-    n.allowFlagOverrides ??
+function resolveFlagOverrides(caseSpec, options) {
+  let growthbookOverrides = caseSpec.execution.growthbook_overrides ?? {};
+  let flagAllowlist = new Set(
+    options.allowFlagOverrides ??
       (antEnv.CLAUDE_CODE_EVAL_ALLOW_FLAG_OVERRIDES ?? "")
         .split(",")
-        .map((w) => w.trim())
-        .filter((w) => w.length > 0),
+        .map((name) => name.trim())
+        .filter((name) => name.length > 0),
   );
-  let s = {};
-  let h = [];
+  let seeded = {};
+  let dropped = [];
   for (let [key, value] of Object.entries(growthbookOverrides))
-    if (a.has(key)) s[key] = value;
-    else h.push(key);
+    if (flagAllowlist.has(key)) seeded[key] = value;
+    else dropped.push(key);
   return {
     declared: growthbookOverrides,
-    seeded: s,
-    dropped: h,
+    seeded,
+    dropped,
   };
 }
 //@ chunk-qchp9vrd.js:284747-284897 placement
-function getRunArms(e, n, r) {
-  if (n !== "with-without" || e.pluginDirs.length === 0) return ["with"];
-  if (r && e.context.history_file) return ["with"];
+function getRunArms(caseSpec, ablation, withheldMocks) {
+  if (ablation !== "with-without" || caseSpec.pluginDirs.length === 0) return ["with"];
+  if (withheldMocks && caseSpec.context.history_file) return ["with"];
   return ["with", "without"];
 }
 //@ chunk-qchp9vrd.js:284897-285480 placement
@@ -1514,9 +1564,9 @@ var DISPOSE_TIMEOUT_MS = 5000;
 /**
  * 安全计算内容哈希（失败返回空串）。
  */
-function safeCanonicalHash(e) {
+function safeCanonicalHash(value) {
   try {
-    return canonicalHash(e);
+    return canonicalHash(value);
   } catch {
     return "";
   }
@@ -1525,85 +1575,90 @@ function safeCanonicalHash(e) {
 /**
  * 校验 trace 中的结果都是 harness 给出的（未被事后篡改）。
  */
-function verifyTraceIntegrity(answers, runTraceHistory, r) {
-  let a = new Map();
-  for (let server of r.servers)
+function verifyTraceIntegrity(answers, runTraceHistory, mocks) {
+  let agentTools = new Map();
+  for (let server of mocks.servers)
     for (let tool of server.tools)
       if (server.responderKinds[tool] === "agent")
-        a.set(server.toolFullNames[tool] ?? "", {
+        agentTools.set(server.toolFullNames[tool] ?? "", {
           server: server.dirName,
           tool,
         });
-  let s = new Map();
-  let h = (T) => jsonStringify([T.tool, T.verdict, T.outputKey]);
-  for (let T of answers) {
-    let N = s.get(T.server) ?? new Map();
-    let x = h(T);
-    let j = N.get(x) ?? {
-      tool: T.tool,
+  let answersByServer = new Map();
+  let answerKey = (answer) => jsonStringify([answer.tool, answer.verdict, answer.outputKey]);
+  for (let answer of answers) {
+    let perServer = answersByServer.get(answer.server) ?? new Map();
+    let key = answerKey(answer);
+    let entry = perServer.get(key) ?? {
+      tool: answer.tool,
       inputKeys: [],
       rewritten: 0,
     };
-    j.inputKeys.push(T.inputKey);
-    N.set(x, j);
-    s.set(T.server, N);
+    entry.inputKeys.push(answer.inputKey);
+    perServer.set(key, entry);
+    answersByServer.set(answer.server, perServer);
   }
-  let w = new Map();
-  let b = [];
-  let y = 0;
-  let R = 0;
+  let noResultTools = new Map();
+  let problems = [];
+  let rewrittenCount = 0;
+  let deniedCount = 0;
   for (let toolCall of runTraceHistory.toolCalls) {
-    let N = a.get(toolCall.name);
-    if (N === undefined || toolCall.mock === undefined) continue;
+    let mockedTool = agentTools.get(toolCall.name);
+    if (mockedTool === undefined || toolCall.mock === undefined) continue;
     if (toolCall.deniedByChild) {
-      R++;
+      deniedCount++;
       continue;
     }
     if (toolCall.mock.verdict === "no_result") {
-      let W = w.get(N.server) ?? new Set();
-      W.add(N.tool);
-      w.set(N.server, W);
+      let tools = noResultTools.get(mockedTool.server) ?? new Set();
+      tools.add(mockedTool.tool);
+      noResultTools.set(mockedTool.server, tools);
       continue;
     }
-    let x = s.get(N.server);
-    let j = h({
-      tool: N.tool,
+    let perServer = answersByServer.get(mockedTool.server);
+    let key = answerKey({
+      tool: mockedTool.tool,
       verdict: toolCall.mock.verdict,
       outputKey: outputKey(toolCall.output ?? "", toolCall.mock.verdict),
     });
-    let K = x?.get(j);
-    if (K === undefined || K.inputKeys.length - K.rewritten <= 0) {
-      b.push(
-        `${N.server}/${N.tool}: a result in the trace is not one the harness gave \u2014 altered after the stand-in returned it (a PostToolUse hook that rewrites this tool's output does that; a run cannot be graded on answers the harness did not give) or answered by something else`,
+    let entry = perServer?.get(key);
+    if (entry === undefined || entry.inputKeys.length - entry.rewritten <= 0) {
+      problems.push(
+        `${mockedTool.server}/${mockedTool.tool}: a result in the trace is not one the harness gave \u2014 altered after the stand-in returned it (a PostToolUse hook that rewrites this tool's output does that; a run cannot be graded on answers the harness did not give) or answered by something else`,
       );
       break;
     }
-    let index = K.inputKeys.indexOf(safeCanonicalHash(toolCall.input));
+    let index = entry.inputKeys.indexOf(safeCanonicalHash(toolCall.input));
     if (index === -1) {
-      K.rewritten++;
-      y++;
-    } else K.inputKeys.splice(index, 1);
+      entry.rewritten++;
+      rewrittenCount++;
+    } else entry.inputKeys.splice(index, 1);
   }
-  for (let T of s.values()) for (let N of T.values()) N.inputKeys.splice(0, N.rewritten);
+  for (let perServer of answersByServer.values())
+    for (let entry of perServer.values()) entry.inputKeys.splice(0, entry.rewritten);
   let absorbedInFlightAnswer = false;
-  if (b.length === 0)
-    for (let [T, N] of s) {
-      let flattened = [...N.values()].flatMap(({ tool, inputKeys }) => inputKeys.map(() => tool));
+  if (problems.length === 0)
+    for (let [server, perServer] of answersByServer) {
+      let flattened = [...perServer.values()].flatMap(({ tool, inputKeys }) => inputKeys.map(() => tool));
       if (flattened.length === 0) continue;
-      if (flattened.length === 1 && runTraceHistory.killedInFlight && w.get(T)?.has(flattened[0])) {
+      if (
+        flattened.length === 1 &&
+        runTraceHistory.killedInFlight &&
+        noResultTools.get(server)?.has(flattened[0])
+      ) {
         absorbedInFlightAnswer = true;
         continue;
       }
-      b.push(
-        `${T}: the harness answered ${flattened.length} agent mock ${plural(flattened.length, "call")} the trace does not show (the responder was reached other than through the mocked tools)`,
+      problems.push(
+        `${server}: the harness answered ${flattened.length} agent mock ${plural(flattened.length, "call")} the trace does not show (the responder was reached other than through the mocked tools)`,
       );
       break;
     }
   return {
-    mismatch: b.length === 0 ? null : `mocks: ${b.join("; ")}`,
+    mismatch: problems.length === 0 ? null : `mocks: ${problems.join("; ")}`,
     absorbedInFlightAnswer,
-    inputsRewritten: y,
-    deniedByChild: R,
+    inputsRewritten: rewrittenCount,
+    deniedByChild: deniedCount,
   };
 }
 //@ chunk-qchp9vrd.js:287311-287335 placement

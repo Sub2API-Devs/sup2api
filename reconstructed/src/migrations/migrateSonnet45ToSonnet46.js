@@ -21,7 +21,7 @@ import { fromEnum } from "../services/analytics/safeMetadata.js";
 /**
  * 迁移（仅 firstParty）：Sonnet 4.5 全名 → sonnet 别名（Sonnet 4.6 起）。
  */
-async function migrateSonnet45ToSonnet46(e) {
+async function migrateSonnet45ToSonnet46(context) {
   if (getAPIProvider() !== "firstParty") return true;
   if (!isProSubscriber() && !isMaxSubscriber() && !isTeamPremiumSubscriber()) return true;
   let model = getSettingsForSourceForUpkeep("userSettings")?.model;
@@ -39,7 +39,7 @@ async function migrateSonnet45ToSonnet46(e) {
       model: has1m ? "sonnet[1m]" : "sonnet",
     },
     undefined,
-    e,
+    context,
   );
   if (error) {
     logForDebugging(`Failed to migrate Sonnet 4.5 model setting: ${error}`, {
@@ -54,7 +54,7 @@ async function migrateSonnet45ToSonnet46(e) {
         ...current,
         sonnet45To46MigrationTimestamp: Date.now(),
       }),
-      e,
+      context,
     );
   logEvent("tengu_sonnet45_to_46_migration", {
     from_model: fromEnum(model),

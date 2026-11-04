@@ -23,14 +23,14 @@ import { logForDebugging } from "../../utils/debug.js";
 import { toError } from "../../utils/errors.js";
 import { uiSignals } from "../../state/uiSignals.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import { useHost } from "../../context/session.js";
 import { useNoticeImpressionEnabled, CondensedLogo } from "./CondensedLogo.js";
 import { isSessionRestored } from "../../utils/sessionRestore.js";
 import { isBgSession } from "../../utils/concurrentSessions.js";
 import { getTeammateAgentId } from "../../bootstrap/state.js";
-import { y, P, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { useState, useEffect, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { env } from "../../utils/env.js";
 import {
   jsxProd_default,
@@ -38,6 +38,7 @@ import {
   Fragment,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text, Link } from "../../ink/components/Text.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ag5x7vhf.js:65318-65583 placement
 var BUGFIX_PATTERN =
@@ -47,72 +48,72 @@ var FEATURE_PREFIX_RE =
 var BRACKET_PREFIX_RE = /^\[[^\]]+\]\s*/;
 var NAMESPACE_PREFIX_RE = /^[a-z0-9 /._`-]{1,40}:\s*/;
 //@ chunk-ag5x7vhf.js:65583-65697 placement
-function classifyReleaseNote(m) {
-  if (BUGFIX_PATTERN.test(m) || m.includes("regression")) return "bugFix";
-  if (FEATURE_PREFIX_RE.test(m)) return "feature";
+function classifyReleaseNote(note) {
+  if (BUGFIX_PATTERN.test(note) || note.includes("regression")) return "bugFix";
+  if (FEATURE_PREFIX_RE.test(note)) return "feature";
   return "other";
 }
 //@ chunk-ag5x7vhf.js:65697-65755 placement
 var BUGFIX_ROLLUP_RE = /^(various )?bug ?fixes\b.*\bimprovements$/;
 var CLASSIFY_MAX_CHARS = 500;
 //@ chunk-ag5x7vhf.js:65755-65925 placement
-function classifyReleaseNoteEntry(m) {
-  let lower = m.slice(0, CLASSIFY_MAX_CHARS).trim().toLowerCase();
-  if (BUGFIX_ROLLUP_RE.test(lower)) return "bugFixRollup";
-  let x = classifyReleaseNote(lower);
-  if (x !== "other") return x;
-  return classifyReleaseNote(lower.replace(BRACKET_PREFIX_RE, "").replace(NAMESPACE_PREFIX_RE, ""));
+function classifyReleaseNoteEntry(note) {
+  let note_2 = note.slice(0, CLASSIFY_MAX_CHARS).trim().toLowerCase();
+  if (BUGFIX_ROLLUP_RE.test(note_2)) return "bugFixRollup";
+  let kind = classifyReleaseNote(note_2);
+  if (kind !== "other") return kind;
+  return classifyReleaseNote(note_2.replace(BRACKET_PREFIX_RE, "").replace(NAMESPACE_PREFIX_RE, ""));
 }
 //@ chunk-ag5x7vhf.js:65925-66386 placement
 function summarizeReleaseNotes({ entries }) {
-  let h = releaseNoteStrings(entries);
-  if (h.length === 0) return null;
-  let x = 0;
-  let T = 0;
-  let k = 0;
-  for (let I of h)
-    switch (classifyReleaseNoteEntry(I)) {
+  let notes = releaseNoteStrings(entries);
+  if (notes.length === 0) return null;
+  let featureCount = 0;
+  let bugFixCount = 0;
+  let otherCount = 0;
+  for (let note of notes)
+    switch (classifyReleaseNoteEntry(note)) {
       case "feature":
-        x++;
+        featureCount++;
         break;
       case "bugFix":
-        T++;
+        bugFixCount++;
         break;
       case "other":
-        k++;
+        otherCount++;
         break;
       case "bugFixRollup":
         break;
     }
-  let _ = [];
-  if (x > 0) _.push(`${x} ${plural(x, "feature")}`);
-  if (T > 0) _.push(`${T} ${plural(T, "bugfix", "bugfixes")}`);
-  if (k > 0) {
-    let I = _.length > 0 ? "other change" : "change";
-    _.push(`${k} ${plural(k, I)}`);
+  let parts = [];
+  if (featureCount > 0) parts.push(`${featureCount} ${plural(featureCount, "feature")}`);
+  if (bugFixCount > 0) parts.push(`${bugFixCount} ${plural(bugFixCount, "bugfix", "bugfixes")}`);
+  if (otherCount > 0) {
+    let otherNoun = parts.length > 0 ? "other change" : "change";
+    parts.push(`${otherCount} ${plural(otherCount, otherNoun)}`);
   }
-  if (_.length === 0) return "Updated to latest.";
-  return `Updated to latest. Got ${formatListWithAnd(_)}.`;
+  if (parts.length === 0) return "Updated to latest.";
+  return `Updated to latest. Got ${formatListWithAnd(parts)}.`;
 }
 //@ chunk-ag5x7vhf.js:66386-66531 placement = formatListWithAnd (0.812)
-function formatListWithAnd(m) {
-  if (m.length <= 1) return m.join("");
-  if (m.length === 2) return `${m[0]} and ${m[1]}`;
-  return `${m.slice(0, -1).join(", ")}, and ${m.at(-1)}`;
+function formatListWithAnd(parts) {
+  if (parts.length <= 1) return parts.join("");
+  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
+  return `${parts.slice(0, -1).join(", ")}, and ${parts.at(-1)}`;
 }
 //@ chunk-ag5x7vhf.js:66531-66657 placement
 function releaseNoteStrings(entries) {
   if (!Array.isArray(entries)) return [];
-  let h = [];
-  for (let x of entries) if (typeof x === "string" && x.trim() !== "") h.push(x);
-  return h;
+  let out = [];
+  for (let note of entries) if (typeof note === "string" && note.trim() !== "") out.push(note);
+  return out;
 }
 //@ chunk-ag5x7vhf.js:66657-67455 placement
 /**
  * 启动时汇总自上次看过以来的版本更新说明（feature/bugFix 计数），用于"Updated to latest"提示。
  */
 function computeStartupUpdateSummary(
-  m = {
+  version = {
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
@@ -127,19 +128,19 @@ function computeStartupUpdateSummary(
   try {
     let forcedFirstLaunch = getForcedFirstLaunch();
     if (forcedFirstLaunch) {
-      let T = BUNDLED_CHANGELOG();
+      let changelog = BUNDLED_CHANGELOG();
       return summarizeReleaseNotes({
         entries:
           forcedFirstLaunch.pretendLastSeen === undefined
-            ? latestReleaseNotes(T)
-            : formatReleaseNotes(T, forcedFirstLaunch.pretendLastSeen, m),
+            ? latestReleaseNotes(changelog)
+            : formatReleaseNotes(changelog, forcedFirstLaunch.pretendLastSeen, version),
       });
     }
     let lastReleaseNotesSeen = getGlobalConfig().lastReleaseNotesSeen;
-    if (!isSemverString(lastReleaseNotesSeen) || !isNewerClawdEntranceVersion(lastReleaseNotesSeen, m))
+    if (!isSemverString(lastReleaseNotesSeen) || !isNewerClawdEntranceVersion(lastReleaseNotesSeen, version))
       return null;
     return summarizeReleaseNotes({
-      entries: formatReleaseNotes(BUNDLED_CHANGELOG(), lastReleaseNotesSeen, m),
+      entries: formatReleaseNotes(BUNDLED_CHANGELOG(), lastReleaseNotesSeen, version),
     });
   } catch (error) {
     logForDebugging(`computeUpdateSummary: ${toError(error).message}`, {
@@ -158,12 +159,12 @@ function getStartupUpdateSummary() {
   return uiSignals.startupUpdateSummary;
 }
 //@ chunk-ag5x7vhf.js:67621-68202 placement
-function markReleaseNotesSeen(pe) {
-  if (!isNewerClawdEntranceVersion(pe.lastReleaseNotesSeen)) {
-    return pe;
+function markReleaseNotesSeen(config) {
+  if (!isNewerClawdEntranceVersion(config.lastReleaseNotesSeen)) {
+    return config;
   }
   return {
-    ...pe,
+    ...config,
     lastReleaseNotesSeen: {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -182,72 +183,72 @@ function markReleaseNotesSeen(pe) {
  * 启动时显示精简 Logo 与"本次更新摘要 + changelog 链接"；后台/队友会话或非首屏时不显示，并在显示后标记已看过发行说明。
  */
 function StartupUpdateSummary(props) {
-  let I = w(17);
+  let $ = useMemoCache(17);
   let { hideLogo } = props;
-  let x = hideLogo === undefined ? false : hideLogo;
+  let hide = hideLogo === undefined ? false : hideLogo;
   let { storageV5 } = useTheme_2();
   let host = useHost();
   let noticeImpressionEnabled = useNoticeImpressionEnabled();
-  let D;
-  if (I[0] !== host || I[1] !== noticeImpressionEnabled) {
-    D = () =>
+  let selectHidden;
+  if ($[0] !== host || $[1] !== noticeImpressionEnabled) {
+    selectHidden = () =>
       !noticeImpressionEnabled ||
       isSessionRestored(host) ||
       isBgSession() ||
       getTeammateAgentId() !== undefined;
-    I[0] = host;
-    I[1] = noticeImpressionEnabled;
-    I[2] = D;
-  } else D = I[2];
-  let [A] = y(D);
-  let L;
-  if (I[3] !== A) {
-    L = () => (A || env.DEMO_VERSION ? null : getStartupUpdateSummary());
-    I[3] = A;
-    I[4] = L;
-  } else L = I[4];
-  let [V] = y(L);
-  let W;
-  let z;
-  if (I[5] !== A || I[6] !== storageV5) {
-    W = () => {
-      if (A || !isNewerClawdEntranceVersion(getGlobalConfig().lastReleaseNotesSeen)) {
+    $[0] = host;
+    $[1] = noticeImpressionEnabled;
+    $[2] = selectHidden;
+  } else selectHidden = $[2];
+  let [hidden] = useState(selectHidden);
+  let loadSummary;
+  if ($[3] !== hidden) {
+    loadSummary = () => (hidden || env.DEMO_VERSION ? null : getStartupUpdateSummary());
+    $[3] = hidden;
+    $[4] = loadSummary;
+  } else loadSummary = $[4];
+  let [summary] = useState(loadSummary);
+  let markSeen;
+  let markDeps;
+  if ($[5] !== hidden || $[6] !== storageV5) {
+    markSeen = () => {
+      if (hidden || !isNewerClawdEntranceVersion(getGlobalConfig().lastReleaseNotesSeen)) {
         return;
       }
       saveGlobalConfig(markReleaseNotesSeen, storageV5);
     };
-    z = [A, storageV5];
-    I[5] = A;
-    I[6] = storageV5;
-    I[7] = W;
-    I[8] = z;
+    markDeps = [hidden, storageV5];
+    $[5] = hidden;
+    $[6] = storageV5;
+    $[7] = markSeen;
+    $[8] = markDeps;
   } else {
-    W = I[7];
-    z = I[8];
+    markSeen = $[7];
+    markDeps = $[8];
   }
-  P(W, z);
-  let K;
-  if (I[9] !== x || I[10] !== A) {
-    K =
-      !x &&
+  useEffect(markSeen, markDeps);
+  let logo;
+  if ($[9] !== hide || $[10] !== hidden) {
+    logo =
+      !hide &&
       jsxProd_default(CondensedLogo, {
-        oneShotsAllowed: !A,
+        oneShotsAllowed: !hidden,
       });
-    I[9] = x;
-    I[10] = A;
-    I[11] = K;
-  } else K = I[11];
-  let q;
-  if (I[12] !== V) {
-    q =
-      V &&
+    $[9] = hide;
+    $[10] = hidden;
+    $[11] = logo;
+  } else logo = $[11];
+  let summaryBox;
+  if ($[12] !== summary) {
+    summaryBox =
+      summary &&
       jsxProd_default_2(Box, {
         paddingLeft: 2,
         flexDirection: "column",
         children: [
           jsxProd_default(Text, {
             bold: true,
-            children: V,
+            children: summary,
           }),
           jsxProd_default_2(Text, {
             dimColor: true,
@@ -261,24 +262,33 @@ function StartupUpdateSummary(props) {
           }),
         ],
       });
-    I[12] = V;
-    I[13] = q;
-  } else q = I[13];
-  let Y;
-  if (I[14] !== K || I[15] !== q) {
-    Y = jsxProd_default_2(Fragment, {
-      children: [K, q, false],
+    $[12] = summary;
+    $[13] = summaryBox;
+  } else summaryBox = $[13];
+  let content;
+  if ($[14] !== logo || $[15] !== summaryBox) {
+    content = jsxProd_default_2(Fragment, {
+      children: [logo, summaryBox, false],
     });
-    I[14] = K;
-    I[15] = q;
-    I[16] = Y;
-  } else Y = I[16];
-  return Y;
+    $[14] = logo;
+    $[15] = summaryBox;
+    $[16] = content;
+  } else content = $[16];
+  return content;
 }
 //@ chunk-ag5x7vhf.js:69046-69050 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:69046", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:69050-69054 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:69050", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:69054-69058 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:69054", () => {
+  init_react_production();
+});
 export { StartupUpdateSummary };

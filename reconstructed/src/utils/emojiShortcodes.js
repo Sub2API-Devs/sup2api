@@ -1638,33 +1638,33 @@ var MAX_EMOJI_SUGGESTIONS = 20;
 var EMOJI_LOOKUP = new Map(
   Object.entries(EMOJI_BY_SHORTCODE).concat(
     Object.entries(EMOJI_SHORTCODE_ALIASES).flatMap(([key, value]) => {
-      let D = EMOJI_BY_SHORTCODE[value];
-      if (D === undefined || key in EMOJI_BY_SHORTCODE) return [];
-      return [[key, D]];
+      let emoji = EMOJI_BY_SHORTCODE[value];
+      if (emoji === undefined || key in EMOJI_BY_SHORTCODE) return [];
+      return [[key, emoji]];
     }),
   ),
 );
 var EMOJI_SHORTCODES = [...EMOJI_LOOKUP.keys()];
 //@ chunk-18hwfzwa.js:607679-607713 placement
-function lookupEmoji(h) {
-  return EMOJI_LOOKUP.get(h);
+function lookupEmoji(shortcode) {
+  return EMOJI_LOOKUP.get(shortcode);
 }
 //@ chunk-18hwfzwa.js:607713-607982 placement
 /**
  * 按输入片段（不区分大小写）过滤 emoji 短码，前缀匹配优先、再按长度排序，返回最多 20 条 {id: "emoji:名", displayText: emoji, description: ":名:"} 补全建议。
  */
-function getEmojiSuggestions(h) {
-  let lower = h.toLowerCase();
-  let filtered = EMOJI_SHORTCODES.filter((L) => L.includes(lower));
-  filtered.sort((L, ee) => {
-    let ke = L.startsWith(lower) ? 0 : 1;
-    let Re = ee.startsWith(lower) ? 0 : 1;
-    return ke - Re || L.length - ee.length;
+function getEmojiSuggestions(query) {
+  let lower = query.toLowerCase();
+  let filtered = EMOJI_SHORTCODES.filter((shortcode) => shortcode.includes(lower));
+  filtered.sort((leftCode, rightCode) => {
+    let leftPrefixRank = leftCode.startsWith(lower) ? 0 : 1;
+    let rightPrefixRank = rightCode.startsWith(lower) ? 0 : 1;
+    return leftPrefixRank - rightPrefixRank || leftCode.length - rightCode.length;
   });
-  return filtered.slice(0, MAX_EMOJI_SUGGESTIONS).map((L) => ({
-    id: `emoji:${L}`,
-    displayText: EMOJI_LOOKUP.get(L),
-    description: `:${L}:`,
+  return filtered.slice(0, MAX_EMOJI_SUGGESTIONS).map((shortcode) => ({
+    id: `emoji:${shortcode}`,
+    displayText: EMOJI_LOOKUP.get(shortcode),
+    description: `:${shortcode}:`,
   }));
 }
 export { lookupEmoji, getEmojiSuggestions };

@@ -8,8 +8,8 @@
  * pieces: chunk-18hwfzwa.js (2)
  * attribution: affinity 1, fingerprint 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
-import { y } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
+import { useState } from "../../vendor/react/cjs/react.production.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { useKeybinding } from "../keybindings/useKeybinding.js";
 import { stableEmptyObject } from "../utils/stableEmptyObject.js";
@@ -30,9 +30,9 @@ var THINKING_TOGGLE_TITLE = "Toggle thinking mode";
 var THINKING_TOGGLE_DESCRIPTION = "Enable or disable thinking for this session.";
 //@ chunk-18hwfzwa.js:676166-678371 fingerprint = ThinkingToggle (0.819)
 function ThinkingToggle(props) {
-  let $ = w(24);
+  let $ = useMemoCache(24);
   let { currentValue, onSelect, onCancel, isMidConversation } = props;
-  let [confirmationPending, setConfirmationPending] = y(null);
+  let [confirmationPending, setConfirmationPending] = useState(null);
   let t1;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     t1 = [
@@ -106,15 +106,15 @@ function ThinkingToggle(props) {
     t8 = stableEmptyObject(false);
     $[14] = t8;
   } else t8 = $[14];
-  let oo = t8;
-  let Xt;
+  let hintOptions = t8;
+  let bodyElement;
   if (
     $[15] !== confirmationPending ||
     $[16] !== currentValue ||
     $[17] !== handleSelectChange ||
     $[18] !== onCancel
   ) {
-    Xt =
+    bodyElement =
       confirmationPending !== null
         ? jsxProd_default_2(Box, {
             flexDirection: "column",
@@ -148,36 +148,36 @@ function ThinkingToggle(props) {
     $[16] = currentValue;
     $[17] = handleSelectChange;
     $[18] = onCancel;
-    $[19] = Xt;
-  } else Xt = $[19];
-  let io = Xt;
-  let so;
+    $[19] = bodyElement;
+  } else bodyElement = $[19];
+  let body_ = bodyElement;
+  let footerElement;
   if ($[20] === MEMO_CACHE_SENTINEL) {
-    so = jsxProd_default(AgentNavigationFooter, {
+    footerElement = jsxProd_default(AgentNavigationFooter, {
       italic: false,
       children: jsxProd_default_2(Byline, {
         children: [
           jsxProd_default(KeyboardShortcutHint, {
             chord: "enter",
             action: "confirm",
-            ...oo,
+            ...hintOptions,
           }),
           jsxProd_default(ConfigurableShortcutHint, {
             action: "confirm:no",
             context: "Confirmation",
             fallback: "Esc",
             description: "cancel",
-            ...oo,
+            ...hintOptions,
           }),
         ],
       }),
     });
-    $[20] = so;
-  } else so = $[20];
-  let po = so;
-  let ao;
+    $[20] = footerElement;
+  } else footerElement = $[20];
+  let footer_ = footerElement;
+  let headerElement;
   if ($[21] === MEMO_CACHE_SENTINEL) {
-    ao = jsxProd_default_2(Box, {
+    headerElement = jsxProd_default_2(Box, {
       marginBottom: 1,
       flexDirection: "column",
       children: [
@@ -192,21 +192,21 @@ function ThinkingToggle(props) {
         }),
       ],
     });
-    $[21] = ao;
-  } else ao = $[21];
+    $[21] = headerElement;
+  } else headerElement = $[21];
   let t11;
-  if ($[22] !== io) {
+  if ($[22] !== body_) {
     t11 = jsxProd_default_2(Pane, {
       color: "permission",
       children: [
         jsxProd_default_2(Box, {
           flexDirection: "column",
-          children: [ao, io],
+          children: [headerElement, body_],
         }),
-        po,
+        footer_,
       ],
     });
-    $[22] = io;
+    $[22] = body_;
     $[23] = t11;
   } else t11 = $[23];
   return t11;

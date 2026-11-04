@@ -20,22 +20,22 @@ import { getPluginMcpServers } from "../utils/plugins/mcpPluginIntegration.js";
 async function collectProjectMcpServerNames(root) {
   let { servers: projectServers } = getMcpConfigsByScope("project");
   let keys = Object.keys(projectServers);
-  let o = new Set(keys);
-  let l = new Set();
+  let seenNames = new Set(keys);
+  let pluginServerNames = new Set();
   let { enabled } = await loadAllPluginsCacheOnly(root);
   let pendingServers = enabled.filter(isProjectLocalPlugin);
   for (let pendingServer of pendingServers) {
     let pluginMcpServers = await getPluginMcpServers(pendingServer, [], root);
     if (!pluginMcpServers) continue;
     for (let key of Object.keys(pluginMcpServers)) {
-      if (o.has(key) || l.has(key)) continue;
+      if (seenNames.has(key) || pluginServerNames.has(key)) continue;
       keys.push(key);
-      l.add(key);
+      pluginServerNames.add(key);
     }
   }
   return {
     serverNames: keys,
-    pluginServerNames: l,
+    pluginServerNames,
     rootServers: projectServers,
   };
 }

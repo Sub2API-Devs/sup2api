@@ -10,7 +10,7 @@ import { isIP, BlockList } from "net";
 //@ chunk-078pp0rm.js:407-437 esm-fingerprint
 var LOOPBACK_RANGES = ["127.0.0.0/8", "::1"];
 //@ chunk-078pp0rm.js:437-502 esm-fingerprint
-function ipFamily(address) {
+function ipFamily_2(address) {
   let fam = isIP(address);
   return fam === 4 ? "ipv4" : fam === 6 ? "ipv6" : undefined;
 }
@@ -18,7 +18,7 @@ function ipFamily(address) {
 function parseAddressRange(entry) {
   let slash = entry.indexOf("/");
   let address = stripZone(slash === -1 ? entry : entry.slice(0, slash));
-  let family = ipFamily(address);
+  let family = ipFamily_2(address);
   if (!family) return;
   let max = family === "ipv6" ? 128 : 32;
   let prefix = max;
@@ -63,7 +63,7 @@ function buildAddressSet(entries) {
 //@ chunk-078pp0rm.js:1084-1152 esm-fingerprint
 function addressInSet(list, address) {
   let addr = stripZone(address);
-  let family = ipFamily(addr);
+  let family = ipFamily_2(addr);
   return family !== undefined && list.check(addr, family);
 }
 //@ chunk-078pp0rm.js:1152-1216 esm-fingerprint
@@ -110,7 +110,7 @@ function embeddedIPv4(address) {
 //@ chunk-078pp0rm.js:1983-1996 esm-layout
 var LOOPBACK = buildAddressSet(LOOPBACK_RANGES);
 //@ chunk-078pp0rm.js:1996-2028 esm-layout
-function M3r(address) {
+function ipFamily(address) {
   return addressInSet(LOOPBACK, address);
 }
 //@ chunk-078pp0rm.js:2028-2133 esm-fingerprint
@@ -120,7 +120,7 @@ function isLoopbackName(hostname) {
 }
 export {
   addRange,
-  M3r,
+  ipFamily,
   addressInSet,
   mappedIPv4,
   LOOPBACK_RANGES,

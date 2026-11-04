@@ -47,12 +47,12 @@ var CONTROL_CHAR_RE = /\p{Cc}/u;
 /**
  * 文本是否含控制字符。
  */
-function hasControlChars(e) {
-  return CONTROL_CHAR_RE.test(e);
+function hasControlChars(text) {
+  return CONTROL_CHAR_RE.test(text);
 }
 //@ chunk-fw249fsw.js:843-1045 placement
-function assertNoControlChars(e) {
-  let match = CONTROL_CHAR_RE.exec(e);
+function assertNoControlChars(text) {
+  let match = CONTROL_CHAR_RE.exec(text);
   if (match) {
     let codePoint = match[0].codePointAt(0);
     throw new SwarmPaneError(
@@ -72,8 +72,8 @@ function sanitizeName(name) {
   return name.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase();
 }
 //@ chunk-fw249fsw.js:1161-1206 facade-exports
-function sanitizeAgentName(e) {
-  return e.replaceAll("@", "-");
+function sanitizeAgentName(name) {
+  return name.replaceAll("@", "-");
 }
 //@ chunk-fw249fsw.js:1206-1245 facade-exports
 /**
@@ -98,9 +98,10 @@ function teamStoreKey(teamName) {
 }
 //@ chunk-fw249fsw.js:1329-1493 layout
 function formatStoreError(error) {
-  let r = "failureClass" in error ? `/${error.failureClass}` : "";
-  let n = "telemetryCode" in error && error.telemetryCode !== undefined ? ` [${error.telemetryCode}]` : "";
-  return `${error.code}${r}${n}`;
+  let failureClassSuffix = "failureClass" in error ? `/${error.failureClass}` : "";
+  let telemetrySuffix =
+    "telemetryCode" in error && error.telemetryCode !== undefined ? ` [${error.telemetryCode}]` : "";
+  return `${error.code}${failureClassSuffix}${telemetrySuffix}`;
 }
 //@ chunk-fw249fsw.js:1493-1570 layout
 function isLockSuspectError(error) {
@@ -111,31 +112,33 @@ function isLockContendedError(error) {
   return error.code === "Unavailable" && error.telemetryCode === "LockContended";
 }
 //@ chunk-fw249fsw.js:1649-1868 layout
-function isBenignStoreError(e) {
+function isBenignStoreError(error) {
   return (
-    e.code === "Unavailable" ||
-    e.code === "NotFound" ||
-    (e.code === "Failed" &&
-      (e.failureClass === "permission" ||
-        e.failureClass === "resource" ||
-        e.failureClass === "environment" ||
-        (e.failureClass === "unknown" && isSyscallError(e.cause))))
+    error.code === "Unavailable" ||
+    error.code === "NotFound" ||
+    (error.code === "Failed" &&
+      (error.failureClass === "permission" ||
+        error.failureClass === "resource" ||
+        error.failureClass === "environment" ||
+        (error.failureClass === "unknown" && isSyscallError(error.cause))))
   );
 }
 //@ chunk-fw249fsw.js:1868-2156 layout
 /**
  * 规范化团队文件：剔除格式不对的成员与 leadProcess。
  */
-function sanitizeTeamFile(e) {
-  if (typeof e !== "object" || e === null || Array.isArray(e)) return null;
-  let r = e;
-  let n = Array.isArray(r.members) ? r.members.filter(isValidMember) : [];
-  let leadProcess = isValidLeadProcess(r.leadProcess) ? r.leadProcess : undefined;
-  return Array.isArray(r.members) && n.length === r.members.length && leadProcess === r.leadProcess
-    ? r
+function sanitizeTeamFile(teamFile) {
+  if (typeof teamFile !== "object" || teamFile === null || Array.isArray(teamFile)) return null;
+  let record = teamFile;
+  let members = Array.isArray(record.members) ? record.members.filter(isValidMember) : [];
+  let leadProcess = isValidLeadProcess(record.leadProcess) ? record.leadProcess : undefined;
+  return Array.isArray(record.members) &&
+    members.length === record.members.length &&
+    leadProcess === record.leadProcess
+    ? record
     : {
-        ...r,
-        members: n,
+        ...record,
+        members,
         leadProcess,
       };
 }
@@ -154,14 +157,14 @@ function isValidLeadProcess(leadProcess) {
   );
 }
 //@ chunk-fw249fsw.js:2393-2526 layout
-function isValidMember(e) {
+function isValidMember(member) {
   return (
-    typeof e === "object" &&
-    e !== null &&
-    "agentId" in e &&
-    typeof e.agentId === "string" &&
-    "name" in e &&
-    typeof e.name === "string"
+    typeof member === "object" &&
+    member !== null &&
+    "agentId" in member &&
+    typeof member.agentId === "string" &&
+    "name" in member &&
+    typeof member.name === "string"
   );
 }
 //@ chunk-fw249fsw.js:2526-3028 facade-exports = readTeamFile (0.837)
@@ -170,15 +173,15 @@ function isValidMember(e) {
  */
 async function readTeamFileAsync(teamName, storage) {
   if (storage) {
-    let n = await storage.read([teamStoreKey(teamName)]);
-    if (!n.ok) {
-      logForDebugging(`[TeammateTool] Failed to read team file for ${teamName}: ${n.error.code}`);
+    let readResult = await storage.read([teamStoreKey(teamName)]);
+    if (!readResult.ok) {
+      logForDebugging(`[TeammateTool] Failed to read team file for ${teamName}: ${readResult.error.code}`);
       return null;
     }
-    let i = n.value.items[0];
-    if (!i.found) return null;
+    let item = readResult.value.items[0];
+    if (!item.found) return null;
     try {
-      return sanitizeTeamFile(jsonParse(Buffer.from(i.value).toString("utf8")));
+      return sanitizeTeamFile(jsonParse(Buffer.from(item.value).toString("utf8")));
     } catch (error) {
       logForDebugging(`[TeammateTool] Failed to read team file for ${teamName}: ${errorMessage(error)}`);
       return null;
@@ -209,9 +212,9 @@ function logTeamFileWriteFailure(teamName, error) {
   else logError(error);
 }
 //@ chunk-fw249fsw.js:3248-3414 layout
-function isBenignStoreErrorCause(e) {
-  if (!(e instanceof Error) || e.cause === undefined || e.cause === null) return false;
-  let cause = e.cause;
+function isBenignStoreErrorCause(error) {
+  if (!(error instanceof Error) || error.cause === undefined || error.cause === null) return false;
+  let cause = error.cause;
   if (typeof cause !== "object" || typeof cause.code !== "string") return false;
   return isBenignStoreError(cause);
 }
@@ -242,9 +245,9 @@ function teamFileMissingError(teamName) {
 async function updateTeamFile(teamName, mutate, options, storage) {
   if (storage) return updateTeamFileInStore(teamName, mutate, options, storage);
   let teamDir = getTeamFilePath(teamName);
-  let u;
+  let releaseLock;
   try {
-    u = await lock(teamDir, {
+    releaseLock = await lock(teamDir, {
       lockfilePath: `${teamDir}.lock`,
       ...TEAM_FILE_LOCK_OPTIONS,
     });
@@ -255,18 +258,18 @@ async function updateTeamFile(teamName, mutate, options, storage) {
   try {
     let teamFile = await readTeamFileAsync(teamName);
     if (!teamFile) throw Error("Team config file unreadable (lock acquired, read failed)");
-    let c = mutate(teamFile);
-    if (c === false) return;
+    let result = mutate(teamFile);
+    if (result === false) return;
     try {
       await writeTeamFileAsync(teamName, teamFile);
     } catch (error) {
       if (!options?.bestEffortWrite) throw error;
       logTeamFileWriteFailure(teamName, error);
     }
-    return c;
+    return result;
   } finally {
     try {
-      await u();
+      await releaseLock();
     } catch (error) {
       logForDebugging(`[TeammateTool] updateTeamFile lock release failed: ${errorMessage(error)}`);
     }
@@ -280,10 +283,10 @@ async function removeTeamMember(teamName, agentId, storage) {
   try {
     await updateTeamFile(
       teamName,
-      (i) => {
-        let memberIndex = i.members.findIndex((m) => m.agentId === agentId);
+      (teamFile) => {
+        let memberIndex = teamFile.members.findIndex((m) => m.agentId === agentId);
         if (memberIndex === -1) return false;
-        i.members.splice(memberIndex, 1);
+        teamFile.members.splice(memberIndex, 1);
       },
       undefined,
       storage,
@@ -297,21 +300,21 @@ async function removeTeamMember(teamName, agentId, storage) {
  * 在存储 v5 上原子更新团队文件：锁可疑/文件不可读时最多重试 5 次，其余错误按 bestEffortWrite 决定抛出或记录。
  */
 async function updateTeamFileInStore(teamName, mutate, options, storage) {
-  let o = teamStoreKey(teamName);
-  let u = 5;
+  let storeKey = teamStoreKey(teamName);
+  let maxAttempts = 5;
   let jitteredBackoff = createJitteredBackoff(50);
-  let c;
-  let y = (p) => {
-    if (p === undefined)
+  let lastResult;
+  let updater = (current) => {
+    if (current === undefined)
       return {
         skip: true,
         result: {
           kind: "missing",
         },
       };
-    let T;
+    let teamFile;
     try {
-      T = sanitizeTeamFile(jsonParse(Buffer.from(p.value).toString("utf8"))) ?? undefined;
+      teamFile = sanitizeTeamFile(jsonParse(Buffer.from(current.value).toString("utf8"))) ?? undefined;
     } catch (error) {
       return {
         skip: true,
@@ -321,16 +324,16 @@ async function updateTeamFileInStore(teamName, mutate, options, storage) {
         },
       };
     }
-    if (!T)
+    if (!teamFile)
       return {
         skip: true,
         result: {
           kind: "unreadable",
         },
       };
-    let b;
+    let applied;
     try {
-      b = mutate(T);
+      applied = mutate(teamFile);
     } catch (error) {
       return {
         skip: true,
@@ -340,82 +343,83 @@ async function updateTeamFileInStore(teamName, mutate, options, storage) {
         },
       };
     }
-    if (b === false)
+    if (applied === false)
       return {
         skip: true,
         result: {
           kind: "declined",
         },
       };
-    c = b;
+    lastResult = applied;
     return {
-      write: jsonStringify(T, null, 2),
+      write: jsonStringify(teamFile, null, 2),
       result: {
         kind: "applied",
-        result: b,
+        result: applied,
       },
     };
   };
-  let a;
+  let updateResult;
   for (let idx = 1; ; idx++) {
-    a = await storage.update(o, y);
-    if (!a.ok) {
-      if (isLockSuspectError(a.error) && idx < 5) {
+    updateResult = await storage.update(storeKey, updater);
+    if (!updateResult.ok) {
+      if (isLockSuspectError(updateResult.error) && idx < 5) {
         await jitteredBackoff(idx);
         continue;
       }
       break;
     }
-    let T = a.value.result;
-    if (T === undefined || T.kind === "declined") return;
-    switch (T.kind) {
+    let outcome = updateResult.value.result;
+    if (outcome === undefined || outcome.kind === "declined") return;
+    switch (outcome.kind) {
       case "missing":
         throw teamFileMissingError(teamName);
       case "unreadable":
-        if (T.parseError !== undefined)
-          logForDebugging(`[TeammateTool] Failed to read team file for ${teamName}: ${T.parseError}`);
+        if (outcome.parseError !== undefined)
+          logForDebugging(`[TeammateTool] Failed to read team file for ${teamName}: ${outcome.parseError}`);
         if (idx < 5) {
           await jitteredBackoff(idx);
           continue;
         }
         throw Error("Team config file unreadable (lock acquired, read failed)");
       case "threw":
-        throw T.error;
+        throw outcome.error;
       case "applied":
         logFeatureOk("swarm_team_file_update");
-        return T.result;
+        return outcome.result;
       default:
-        return T;
+        return outcome;
     }
   }
-  let w = isLockContendedError(a.error);
-  if (w) logFeatureSad("swarm_team_file_update", "lock_contended");
+  let contended = isLockContendedError(updateResult.error);
+  if (contended) logFeatureSad("swarm_team_file_update", "lock_contended");
   if (!options?.bestEffortWrite) {
-    let p = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Team file update failed (${formatStoreError(a.error)}) for ${teamName}`,
+    let error = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+      `Team file update failed (${formatStoreError(updateResult.error)}) for ${teamName}`,
       "Team file update failed (storage v5)",
     );
-    p.cause = a.error;
-    if (!w && !isBenignStoreError(a.error)) logFeatureBad("swarm_team_file_update", a.error.code);
-    throw p;
+    error.cause = updateResult.error;
+    if (!contended && !isBenignStoreError(updateResult.error))
+      logFeatureBad("swarm_team_file_update", updateResult.error.code);
+    throw error;
   }
-  if (!isLockSuspectError(a.error) && isBenignStoreError(a.error))
+  if (!isLockSuspectError(updateResult.error) && isBenignStoreError(updateResult.error))
     logForDebugging(
-      `[TeammateTool] Failed to update team file for ${teamName} (${formatStoreError(a.error)})`,
+      `[TeammateTool] Failed to update team file for ${teamName} (${formatStoreError(updateResult.error)})`,
       {
         level: "error",
       },
     );
   else {
-    let p = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Team file update failed (${formatStoreError(a.error)}) for ${teamName}`,
+    let error = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+      `Team file update failed (${formatStoreError(updateResult.error)}) for ${teamName}`,
       "Team file update failed (storage v5)",
     );
-    p.cause = a.error;
-    logFeatureBad("swarm_team_file_update", a.error.code);
-    logError(p);
+    error.cause = updateResult.error;
+    logFeatureBad("swarm_team_file_update", updateResult.error.code);
+    logError(error);
   }
-  return c;
+  return lastResult;
 }
 //@ chunk-fw249fsw.js:5944-6252 facade-exports = writeTeamFileAsync (0.14)
 /**
@@ -423,18 +427,18 @@ async function updateTeamFileInStore(teamName, mutate, options, storage) {
  */
 async function writeTeamFileAsync(teamName, teamFile, storage) {
   if (storage) {
-    let o = await storage.write(teamStoreKey(teamName), jsonStringify(teamFile, null, 2), {
+    let writeResult = await storage.write(teamStoreKey(teamName), jsonStringify(teamFile, null, 2), {
       precondition: {
         type: "none",
       },
     });
-    if (!o.ok) {
-      let u = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Team file write failed (${formatStoreError(o.error)}) for ${teamName}`,
+    if (!writeResult.ok) {
+      let error = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+        `Team file write failed (${formatStoreError(writeResult.error)}) for ${teamName}`,
         "Team file write failed (storage v5)",
       );
-      u.cause = o.error;
-      throw u;
+      error.cause = writeResult.error;
+      throw error;
     }
     return;
   }
@@ -448,38 +452,38 @@ async function writeTeamFileAsync(teamName, teamFile, storage) {
 /**
  * 按 agentId 或名字从团队文件删除成员（尽力写入）。
  */
-async function removeTeammateFromTeamFile(teamName, identifier, n) {
+async function removeTeammateFromTeamFile(teamName, identifier, storageV5) {
   let identifierStr = identifier.agentId || identifier.name;
   if (!identifierStr) {
     logForDebugging("[TeammateTool] removeTeammateFromTeamFile called with no identifier");
     return false;
   }
-  let o = false;
+  let notFound = false;
   try {
-    let u =
+    let updated =
       (await updateTeamFile(
         teamName,
         (teamFile) => {
-          o = false;
+          notFound = false;
           let originalLength = teamFile.members.length;
           teamFile.members = teamFile.members.filter((m) => {
             if (identifier.agentId && m.agentId === identifier.agentId) return false;
             if (identifier.name && m.name === identifier.name) return false;
             return true;
           });
-          let y = teamFile.members.length !== originalLength;
-          o = !y;
-          return y;
+          let removed = teamFile.members.length !== originalLength;
+          notFound = !removed;
+          return removed;
         },
         {
           bestEffortWrite: true,
         },
-        n,
+        storageV5,
       )) ?? false;
-    if (u) logForDebugging(`[TeammateTool] Removed teammate from team file: ${identifierStr}`);
-    else if (o)
+    if (updated) logForDebugging(`[TeammateTool] Removed teammate from team file: ${identifierStr}`);
+    else if (notFound)
       logForDebugging(`[TeammateTool] Teammate ${identifierStr} not found in team file for "${teamName}"`);
-    return u;
+    return updated;
   } catch (error) {
     logForDebugging(
       `[TeammateTool] Cannot remove teammate ${identifierStr} from "${teamName}": ${errorMessage(error)}`,
@@ -491,38 +495,38 @@ async function removeTeammateFromTeamFile(teamName, identifier, n) {
 /**
  * 按 agentId 删除成员；onlyIfJoinedBefore 防止删掉删除发起后又重新加入的同 ID 成员。
  */
-async function removeMemberByAgentId(teamName, agentId, n, i) {
-  let o = false;
+async function removeMemberByAgentId(teamName, agentId, options, storageV5) {
+  let stale = false;
   try {
-    let u =
+    let updated =
       (await updateTeamFile(
         teamName,
-        (s) => {
-          let memberIndex = s.members.findIndex((m) => m.agentId === agentId);
-          let y = s.members[memberIndex];
-          if (!y) {
-            o = false;
+        (teamFile) => {
+          let memberIndex = teamFile.members.findIndex((m) => m.agentId === agentId);
+          let member = teamFile.members[memberIndex];
+          if (!member) {
+            stale = false;
             return false;
           }
-          if (n?.onlyIfJoinedBefore !== undefined && y.joinedAt >= n.onlyIfJoinedBefore) {
-            o = true;
+          if (options?.onlyIfJoinedBefore !== undefined && member.joinedAt >= options.onlyIfJoinedBefore) {
+            stale = true;
             return false;
           }
-          o = false;
-          s.members.splice(memberIndex, 1);
+          stale = false;
+          teamFile.members.splice(memberIndex, 1);
           return true;
         },
         {
           bestEffortWrite: true,
         },
-        i,
+        storageV5,
       )) ?? false;
-    if (u) logForDebugging(`[TeammateTool] Removed member ${agentId} from team ${teamName}`);
-    else if (o)
+    if (updated) logForDebugging(`[TeammateTool] Removed member ${agentId} from team ${teamName}`);
+    else if (stale)
       logForDebugging(
         `[TeammateTool] Skipped stale removal of ${agentId} from team ${teamName} (re-added after removal was initiated)`,
       );
-    return u;
+    return updated;
   } catch (error) {
     logForDebugging(
       `[TeammateTool] removeMemberByAgentId(${agentId}) failed for team ${teamName}: ${errorMessage(error)}`,
@@ -535,31 +539,31 @@ async function removeMemberByAgentId(teamName, agentId, n, i) {
  * 设置成员的权限模式（mode），返回状态 absent/unchanged/set 只用于日志。
  */
 async function setMemberMode(teamName, memberName, mode, storage) {
-  let o = "unchanged";
+  let outcome = "unchanged";
   try {
     await updateTeamFile(
       teamName,
-      (u) => {
-        let member = u.members.find((m) => m.name === memberName);
+      (teamFile) => {
+        let member = teamFile.members.find((m) => m.name === memberName);
         if (!member) {
-          o = "absent";
+          outcome = "absent";
           return false;
         }
         if (member.mode === mode) {
-          o = "unchanged";
+          outcome = "unchanged";
           return false;
         }
-        o = "set";
+        outcome = "set";
         member.mode = mode;
       },
       undefined,
       storage,
     );
-    if (o === "absent")
+    if (outcome === "absent")
       logForDebugging(
         `[TeammateTool] Cannot set member mode: member ${memberName} not found in team ${teamName}`,
       );
-    else if (o === "set")
+    else if (outcome === "set")
       logForDebugging(`[TeammateTool] Set member ${memberName} in team ${teamName} to mode: ${mode}`);
   } catch (error) {
     logForDebugging(`[TeammateTool] Cannot set member mode: ${errorMessage(error)}`);
@@ -580,31 +584,31 @@ async function syncTeammateMode(mode, teamName, storage) {
  * 设置成员 isActive（空闲/活动）。
  */
 async function setMemberActive(teamName, memberName, isActive, storage) {
-  let o = "unchanged";
+  let outcome = "unchanged";
   try {
     await updateTeamFile(
       teamName,
-      (u) => {
-        let member = u.members.find((m) => m.name === memberName);
+      (teamFile) => {
+        let member = teamFile.members.find((m) => m.name === memberName);
         if (!member) {
-          o = "absent";
+          outcome = "absent";
           return false;
         }
         if (member.isActive === isActive) {
-          o = "unchanged";
+          outcome = "unchanged";
           return false;
         }
-        o = "set";
+        outcome = "set";
         member.isActive = isActive;
       },
       undefined,
       storage,
     );
-    if (o === "absent")
+    if (outcome === "absent")
       logForDebugging(
         `[TeammateTool] Cannot set member active: member ${memberName} not found in team ${teamName}`,
       );
-    else if (o === "set")
+    else if (outcome === "set")
       logForDebugging(
         `[TeammateTool] Set member ${memberName} in team ${teamName} to ${isActive ? "active" : "idle"}`,
       );
@@ -623,21 +627,21 @@ function registerTeamForSessionCleanup(teamName) {
 /**
  * 会话结束时清理本会话创建的团队：先杀孤儿 pane，再删团队目录。
  */
-async function cleanupSessionTeams(e) {
+async function cleanupSessionTeams(storageV5) {
   return withFeatureTelemetry("swarm_session_cleanup", async () => {
     let sessionCreatedTeams = getSessionCreatedTeams();
     if (sessionCreatedTeams.size === 0) return;
     let teams = Array.from(sessionCreatedTeams);
     logForDebugging(`cleanupSessionTeams: removing ${teams.length} orphan team dir(s): ${teams.join(", ")}`);
-    await Promise.allSettled(teams.map((name) => killOrphanedTeammatePanes(name, e)));
+    await Promise.allSettled(teams.map((name) => killOrphanedTeammatePanes(name, storageV5)));
     let settled = await Promise.allSettled(teams.map((name) => cleanupTeamDirectories(name)));
     sessionCreatedTeams.clear();
-    for (let o of settled) if (o.status === "rejected") throw o.reason;
+    for (let result of settled) if (result.status === "rejected") throw result.reason;
   }).catch(() => {});
 }
 //@ chunk-fw249fsw.js:8861-8895 layout
-function paneKey(backendType, r) {
-  return `${backendType}:${r}`;
+function paneKey(backendType, paneId) {
+  return `${backendType}:${paneId}`;
 }
 //@ chunk-fw249fsw.js:8895-8944 facade-exports
 /**
@@ -651,8 +655,8 @@ function recordSpawnedTeammatePane(backendType, paneId) {
 /**
  * 杀掉团队文件中、由本会话创建的 tmux/iTerm2 pane。
  */
-async function killOrphanedTeammatePanes(teamName, r) {
-  let teamFile = await readTeamFileAsync(teamName, r);
+async function killOrphanedTeammatePanes(teamName, storageV5) {
+  let teamFile = await readTeamFileAsync(teamName, storageV5);
   if (!teamFile) return;
   let sessionSpawnedTeammatePanes = getSessionSpawnedTeammatePanes();
   let paneMembers = teamFile.members.filter(
@@ -665,8 +669,8 @@ async function killOrphanedTeammatePanes(teamName, r) {
   );
   if (paneMembers.length === 0) return;
   let [{ ensureBackendsRegistered, getBackendByType }, { isInsideTmux }] = await Promise.all([
-    import("./chunk-qv0x351r.js"),
-    import("./chunk-1bjs4yb5.js"),
+    import("./backends/registry.js"),
+    import("./backends/detection.js"),
   ]);
   await ensureBackendsRegistered();
   let useExternalSession = !(await isInsideTmux());
@@ -702,7 +706,7 @@ async function cleanupTeamDirectories(teamName) {
         throw error;
       }
     },
-    (r) => sanitizeErrnoForTelemetry(r) ?? "error",
+    (error) => sanitizeErrnoForTelemetry(error) ?? "error",
   );
 }
 //@ chunk-cne5hsvz.js:22255-22452 callgraph-fingerprint = setMultipleMemberModes (0.329)
@@ -713,8 +717,8 @@ async function setMemberPaneInfo(teamName, agentId, paneInfo, storage) {
   recordSpawnedTeammatePane(paneInfo.backendType, paneInfo.tmuxPaneId);
   await updateTeamFile(
     teamName,
-    (E) => {
-      let found = E.members.find((member) => member.agentId === agentId);
+    (teamFile) => {
+      let found = teamFile.members.find((member) => member.agentId === agentId);
       if (!found) return false;
       found.tmuxPaneId = paneInfo.tmuxPaneId;
       found.backendType = paneInfo.backendType;
@@ -745,4 +749,6 @@ export {
   sanitizeName,
   isPaneBackendType,
   setMemberMode,
+  cleanupSessionTeams,
+  recordSpawnedTeammatePane,
 };

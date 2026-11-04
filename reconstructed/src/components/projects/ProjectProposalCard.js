@@ -27,7 +27,7 @@ import {
 import { Text, Box } from "../../ink/components/Text.js";
 import { formatShortcutHint, KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { reactNodeText } from "../../utils/reactText.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { Byline } from "../design-system/Byline.js";
 import { OverflowHint } from "../CtrlOToExpand.js";
@@ -41,43 +41,43 @@ var BRIEF_LABEL_KEYS = {
 };
 var VERTICAL_BAR_PREFIX = "\u2502 ";
 //@ chunk-a6f4nz0a.js:793-820 placement
-function normalizeText(t) {
-  return stripNonPrintable(t);
+function normalizeText(text) {
+  return stripNonPrintable(text);
 }
 //@ chunk-a6f4nz0a.js:820-1017 placement
 /**
  * 把文本按宽度硬换行（保留空行，可选不裁剪空白），超宽的行再强制切分；被项目对话框多处复用。
  */
-function wrapTextToWidth(t, o, c = false) {
-  let max = Math.max(1, o);
-  let l = [];
-  for (let line of t.split(`
+function wrapTextToWidth(text, columns, preserveIndent = false) {
+  let max = Math.max(1, columns);
+  let outLines = [];
+  for (let line of text.split(`
 `)) {
     if (line === "") {
-      l.push("");
+      outLines.push("");
       continue;
     }
     for (let line_2 of wrapAnsi(line, max, {
       hard: true,
-      trim: !c,
+      trim: !preserveIndent,
     }).split(`
 `))
-      l.push(...(bunStringWidth(line_2) <= max ? [line_2] : splitByDisplayWidth(line_2, max)));
+      outLines.push(...(bunStringWidth(line_2) <= max ? [line_2] : splitByDisplayWidth(line_2, max)));
   }
-  return l;
+  return outLines;
 }
 //@ chunk-a6f4nz0a.js:1017-1074 placement
-function padToWidth(t, o) {
-  let c = bunStringWidth(t);
-  return c >= o ? t : t + repeatString(" ", o - c);
+function padToWidth(text, width) {
+  let textWidth = bunStringWidth(text);
+  return textWidth >= width ? text : text + repeatString(" ", width - textWidth);
 }
 //@ chunk-a6f4nz0a.js:1074-1137 placement
 function renderProposalFlow(session) {
   return `${THREAD_WHO_LABELS[session.who]} \u2192 ${THREAD_PRODUCES_LABELS[session.produces]}`;
 }
 //@ chunk-a6f4nz0a.js:1137-1300 placement
-function renderQuotedLines(t, o, c, dimColor) {
-  return wrapTextToWidth(normalizeText(t), o - VERTICAL_BAR_PREFIX.length, true).map((l, d) =>
+function renderQuotedLines(text, width, kind, dimColor) {
+  return wrapTextToWidth(normalizeText(text), width - VERTICAL_BAR_PREFIX.length, true).map((line, index) =>
     jsxProd_default_2(
       Text,
       {
@@ -88,11 +88,11 @@ function renderQuotedLines(t, o, c, dimColor) {
           }),
           jsxProd_default(Text, {
             dimColor,
-            children: l === "" ? " " : l,
+            children: line === "" ? " " : line,
           }),
         ],
       },
-      `${c}${d}`,
+      `${kind}${index}`,
     ),
   );
 }
@@ -100,11 +100,11 @@ function renderQuotedLines(t, o, c, dimColor) {
 /**
  * 函数 wrapCardText（按宽度换行）。
  */
-function wrapCardText(t, o) {
-  return renderQuotedLines(t.trim(), o, "msg", false);
+function wrapCardText(text, width) {
+  return renderQuotedLines(text.trim(), width, "msg", false);
 }
 //@ chunk-a6f4nz0a.js:1348-1575 placement = _temp2 (0.87)
-function renderProposalHeaderRow(t, o, c, i, l) {
+function renderProposalHeaderRow(index, title, suffix, meta, color) {
   return jsxProd_default_2(
     Text,
     {
@@ -112,41 +112,41 @@ function renderProposalHeaderRow(t, o, c, i, l) {
       children: [
         jsxProd_default(Text, {
           bold: true,
-          children: o,
+          children: title,
         }),
-        c !== null
+        suffix !== null
           ? jsxProd_default_2(Text, {
               dimColor: true,
-              children: [" (", c, ")"],
+              children: [" (", suffix, ")"],
             })
           : null,
-        i !== null
+        meta !== null
           ? jsxProd_default_2(Text, {
               dimColor: true,
-              children: ["  ", truncateToWidth(i, Math.max(1, l - bunStringWidth(o) - 8))],
+              children: ["  ", truncateToWidth(meta, Math.max(1, color - bunStringWidth(title) - 8))],
             })
           : null,
       ],
     },
-    t,
+    index,
   );
 }
 //@ chunk-a6f4nz0a.js:1575-1619 placement
-function renderSpace(t) {
+function renderSpace(key) {
   return jsxProd_default(
     Text,
     {
       children: " ",
     },
-    t,
+    key,
   );
 }
 //@ chunk-a6f4nz0a.js:1619-2191 placement
-function renderFromLine(session, o, c, i) {
-  let l = `${o + 1}. `;
-  let d = " ".repeat(l.length);
-  let p = i;
-  let m = [
+function renderFromLine(session, index, senderName, body) {
+  let numberPrefix = `${index + 1}. `;
+  let indent = " ".repeat(numberPrefix.length);
+  let columns = body;
+  let headerRow = [
     jsxProd_default_2(
       Text,
       {
@@ -154,11 +154,11 @@ function renderFromLine(session, o, c, i) {
         children: [
           jsxProd_default(Text, {
             dimColor: true,
-            children: l,
+            children: numberPrefix,
           }),
           jsxProd_default(Text, {
             bold: true,
-            children: padToWidth(truncateToWidth(normalizeText(session.title), p), p),
+            children: padToWidth(truncateToWidth(normalizeText(session.title), columns), columns),
           }),
           "  ",
           jsxProd_default(Text, {
@@ -171,66 +171,71 @@ function renderFromLine(session, o, c, i) {
           }),
         ],
       },
-      `t${o}`,
+      `t${index}`,
     ),
   ];
-  wrapTextToWidth(normalizeText(session.description), c - l.length).forEach((u, a) =>
-    m.push(
-      jsxProd_default_2(
-        Text,
-        {
-          children: [d, u],
-        },
-        `d${o}.${a}`,
+  wrapTextToWidth(normalizeText(session.description), senderName - numberPrefix.length).forEach(
+    (line, itemIndex) =>
+      headerRow.push(
+        jsxProd_default_2(
+          Text,
+          {
+            children: [indent, line],
+          },
+          `d${index}.${itemIndex}`,
+        ),
       ),
-    ),
   );
-  wrapTextToWidth(`from ${normalizeText(session.basis)}`, c - l.length).forEach((u, a) =>
-    m.push(
-      jsxProd_default_2(
-        Text,
-        {
-          dimColor: true,
-          children: [
-            d,
-            a === 0
-              ? jsxProd_default_2(Fragment, {
-                  children: [
-                    jsxProd_default(Text, {
-                      italic: true,
-                      children: "from",
-                    }),
-                    u.slice(4),
-                  ],
-                })
-              : u,
-          ],
-        },
-        `b${o}.${a}`,
+  wrapTextToWidth(`from ${normalizeText(session.basis)}`, senderName - numberPrefix.length).forEach(
+    (line, itemIndex) =>
+      headerRow.push(
+        jsxProd_default_2(
+          Text,
+          {
+            dimColor: true,
+            children: [
+              indent,
+              itemIndex === 0
+                ? jsxProd_default_2(Fragment, {
+                    children: [
+                      jsxProd_default(Text, {
+                        italic: true,
+                        children: "from",
+                      }),
+                      line.slice(4),
+                    ],
+                  })
+                : line,
+            ],
+          },
+          `b${index}.${itemIndex}`,
+        ),
       ),
-    ),
   );
-  return m;
+  return headerRow;
 }
 //@ chunk-a6f4nz0a.js:2191-5033 placement
 /**
  * 生成提议的各行（名称、图标、颜色、线程、例程、权限、指令）。
  */
-function buildProposalRows(proposal, width, c) {
-  let i = [];
-  let l = (m) => {
-    if (i.length > 0) i.push(renderSpace(`gap${i.length}`));
-    i.push(m);
+function buildProposalRows(proposal, senderName, options) {
+  let rows = [];
+  let pushRow = (node) => {
+    if (rows.length > 0) rows.push(renderSpace(`gap${rows.length}`));
+    rows.push(node);
   };
   if (proposal.name !== undefined || proposal.icon !== undefined || proposal.color !== undefined) {
     let color = proposal.color !== undefined ? PROJECT_COLOR_HEX[proposal.color] : undefined;
-    let u = [
+    let extras = [
       ...(proposal.icon !== undefined ? [["icon", proposal.icon]] : []),
       ...(proposal.color !== undefined ? [["color", proposal.color]] : []),
     ];
-    let reduced = u.reduce((acc, [C, f]) => acc + 3 + C.length + 1 + bunStringWidth(f), 0);
-    let max = Math.max(6, width - 22 - 7 - reduced);
-    i.push(
+    let reduced = extras.reduce(
+      (acc, [proposal, width]) => acc + 3 + proposal.length + 1 + bunStringWidth(width),
+      0,
+    );
+    let max = Math.max(6, senderName - 22 - 7 - reduced);
+    rows.push(
       jsxProd_default_2(
         Text,
         {
@@ -254,12 +259,12 @@ function buildProposalRows(proposal, width, c) {
                   ],
                 })
               : null,
-            u.map(([R, C], f) =>
+            extras.map(([label, value], index) =>
               jsxProd_default_2(
                 Text,
                 {
                   children: [
-                    f > 0 || proposal.name !== undefined
+                    index > 0 || proposal.name !== undefined
                       ? jsxProd_default(Text, {
                           dimColor: true,
                           children: " \xB7 ",
@@ -267,15 +272,15 @@ function buildProposalRows(proposal, width, c) {
                       : null,
                     jsxProd_default_2(Text, {
                       dimColor: true,
-                      children: [R, " "],
+                      children: [label, " "],
                     }),
                     jsxProd_default(Text, {
                       color,
-                      children: C,
+                      children: value,
                     }),
                   ],
                 },
-                R,
+                label,
               ),
             ),
           ],
@@ -285,33 +290,44 @@ function buildProposalRows(proposal, width, c) {
     );
   }
   if (proposal.summary !== undefined && proposal.summary.trim() !== "")
-    i.push(...renderQuotedLines(proposal.summary.trim(), width, "sum", true));
+    rows.push(...renderQuotedLines(proposal.summary.trim(), senderName, "sum", true));
   let sessions = proposal.sessions ?? [];
   if (sessions.length > 0) {
-    l(renderProposalHeaderRow("threads", "Threads", sessions.length, null, width));
+    pushRow(renderProposalHeaderRow("threads", "Threads", sessions.length, null, senderName));
     let max = Math.max(
       1,
       Math.min(
         Math.max(...sessions.map((session) => bunStringWidth(normalizeText(session.title)))),
-        width - 3 - Math.max(...sessions.map((session) => bunStringWidth(renderProposalFlow(session)))) - 2,
+        senderName -
+          3 -
+          Math.max(...sessions.map((session) => bunStringWidth(renderProposalFlow(session)))) -
+          2,
       ),
     );
-    sessions.forEach((session, a) => i.push(...renderFromLine(session, a, width, max)));
+    sessions.forEach((session, index) => rows.push(...renderFromLine(session, index, senderName, max)));
   }
   let routines = proposal.routines ?? [];
   if (routines.length > 0) {
-    l(renderProposalHeaderRow("routines", "Routines", routines.length, "off until you turn one on", width));
-    let m = (routine) => `${normalizeText(routine.cron_expression)} UTC`;
+    pushRow(
+      renderProposalHeaderRow(
+        "routines",
+        "Routines",
+        routines.length,
+        "off until you turn one on",
+        senderName,
+      ),
+    );
+    let cronLabel = (routine) => `${normalizeText(routine.cron_expression)} UTC`;
     let max = Math.max(
       1,
       Math.min(
         Math.max(...routines.map((routine) => bunStringWidth(normalizeText(routine.name)))),
-        width - 2 - Math.max(...routines.map((routine) => bunStringWidth(m(routine)))) - 2,
+        senderName - 2 - Math.max(...routines.map((routine) => bunStringWidth(cronLabel(routine)))) - 2,
       ),
     );
-    routines.forEach((routine, h) => {
-      let children = m(routine);
-      i.push(
+    routines.forEach((routine, index) => {
+      let children = cronLabel(routine);
+      rows.push(
         jsxProd_default_2(
           Text,
           {
@@ -332,39 +348,39 @@ function buildProposalRows(proposal, width, c) {
               }),
             ],
           },
-          `r${h}`,
+          `r${index}`,
         ),
       );
       if (routine.description !== undefined && routine.description !== "")
-        wrapTextToWidth(normalizeText(routine.description), width - 2).forEach((C, f) =>
-          i.push(
+        wrapTextToWidth(normalizeText(routine.description), senderName - 2).forEach((line, lineIndex) =>
+          rows.push(
             jsxProd_default_2(
               Text,
               {
-                children: ["  ", C],
+                children: ["  ", line],
               },
-              `rd${h}.${f}`,
+              `rd${index}.${lineIndex}`,
             ),
           ),
         );
     });
   }
   if (proposal.instructions !== undefined && proposal.instructions.trim() !== "") {
-    l(
+    pushRow(
       renderProposalHeaderRow(
         "instructions",
         "Project instructions",
         null,
-        c.existingProject
+        options.existingProject
           ? "replace the project\u2019s current ones when applied"
           : "set on the project on Yes",
-        width,
+        senderName,
       ),
     );
-    i.push(...renderQuotedLines(proposal.instructions.trim(), width, "ins", false));
+    rows.push(...renderQuotedLines(proposal.instructions.trim(), senderName, "ins", false));
   }
   if (sessions.length + routines.length > 0) {
-    l(
+    pushRow(
       renderProposalHeaderRow(
         "prompts",
         routines.length === 0
@@ -378,35 +394,35 @@ function buildProposalRows(proposal, width, c) {
           : sessions.length === 0
             ? "what each routine starts with"
             : "what each thread and routine starts with",
-        width,
+        senderName,
       ),
     );
-    sessions.forEach((session, u) => {
-      i.push(
+    sessions.forEach((session, index) => {
+      rows.push(
         jsxProd_default_2(
           Text,
           {
             dimColor: true,
             wrap: "truncate-end",
-            children: [u + 1, ". ", normalizeText(session.title)],
+            children: [index + 1, ". ", normalizeText(session.title)],
           },
-          `pt${u}`,
+          `pt${index}`,
         ),
       );
-      renderQuotedLines(session.prompt.trim(), width - 3, `pp${u}.`, true).forEach((a) =>
-        i.push(
+      renderQuotedLines(session.prompt.trim(), senderName - 3, `pp${index}.`, true).forEach((line) =>
+        rows.push(
           jsxProd_default_2(
             Text,
             {
-              children: ["   ", a],
+              children: ["   ", line],
             },
-            `i${String(a.key)}`,
+            `i${String(line.key)}`,
           ),
         ),
       );
     });
-    routines.forEach((routine, u) => {
-      i.push(
+    routines.forEach((routine, index) => {
+      rows.push(
         jsxProd_default_2(
           Text,
           {
@@ -414,24 +430,24 @@ function buildProposalRows(proposal, width, c) {
             wrap: "truncate-end",
             children: ["\xB7 ", normalizeText(routine.name)],
           },
-          `rt${u}`,
+          `rt${index}`,
         ),
       );
-      renderQuotedLines(routine.prompt.trim(), width - 3, `rp${u}.`, true).forEach((a) =>
-        i.push(
+      renderQuotedLines(routine.prompt.trim(), senderName - 3, `rp${index}.`, true).forEach((line) =>
+        rows.push(
           jsxProd_default_2(
             Text,
             {
-              children: ["   ", a],
+              children: ["   ", line],
             },
-            `i${String(a.key)}`,
+            `i${String(line.key)}`,
           ),
         ),
       );
     });
   }
   if (proposal.evidence?.sessions_matched !== undefined)
-    l(
+    pushRow(
       jsxProd_default_2(
         Text,
         {
@@ -449,7 +465,7 @@ function buildProposalRows(proposal, width, c) {
         "evidence",
       ),
     );
-  return i;
+  return rows;
 }
 //@ chunk-a6f4nz0a.js:5033-5079 placement
 /**
@@ -457,20 +473,20 @@ function buildProposalRows(proposal, width, c) {
  */
 var DRAFTED_BY_CLAUDE_TEXT = "Drafted by Claude from this session";
 //@ chunk-a6f4nz0a.js:5079-5475 placement
-function describeInstructionsScope(t, o, chord) {
-  let i = t.sessions?.length ?? 0;
-  let l = t.routines?.length ?? 0;
-  let d = t.instructions !== undefined && t.instructions.trim() !== "";
+function describeInstructionsScope(proposal, indexBase, chord) {
+  let threadCount = proposal.sessions?.length ?? 0;
+  let routineCount = proposal.routines?.length ?? 0;
+  let hasInstructions = proposal.instructions !== undefined && proposal.instructions.trim() !== "";
   return [
-    `Brief  ${[i > 0 ? `${i} ${plural(i, "thread")}` : null, l > 0 ? `${l} ${plural(l, "routine")}` : null, d ? "instructions" : null, i + l === 0 && !d ? "summary only" : null, `${(o / 1024).toFixed(1)} KB`].filter((m) => m !== null).join(" \xB7 ")}`,
+    `Brief  ${[threadCount > 0 ? `${threadCount} ${plural(threadCount, "thread")}` : null, routineCount > 0 ? `${routineCount} ${plural(routineCount, "routine")}` : null, hasInstructions ? "instructions" : null, threadCount + routineCount === 0 && !hasInstructions ? "summary only" : null, `${(indexBase / 1024).toFixed(1)} KB`].filter((part) => part !== null).join(" \xB7 ")}`,
     chord === null ? "" : formatShortcut(chord, "show as text"),
   ]
-    .filter((m) => m !== "")
+    .filter((part) => part !== "")
     .join("  ");
 }
 //@ chunk-a6f4nz0a.js:5475-5550 placement
-function shortcutHintText(t, chord) {
-  return [formatOverflowHint(t), formatShortcut(chord, "expand")].filter((c) => c !== "").join(" ");
+function shortcutHintText(count, chord) {
+  return [formatOverflowHint(count), formatShortcut(chord, "expand")].filter((part) => part !== "").join(" ");
 }
 //@ chunk-a6f4nz0a.js:5550-5632 placement
 function formatShortcut(chord, action) {
@@ -487,34 +503,34 @@ function formatShortcut(chord, action) {
 /**
  * 计算项目指令说明区需要的最大行数（两种展示形式取大者）。
  */
-function measureInstructionsRows(proposal, o, shortcutDisplay, columns) {
+function measureInstructionsRows(proposal, indexBase, shortcutDisplay, columns) {
   return Math.max(
-    wrapTextToWidth(describeInstructionsScope(proposal, o, shortcutDisplay), columns, true).length,
-    wrapTextToWidth(describeInstructionsScope(proposal, o, null), columns, true).length +
-      wrapTextToWidth(shortcutHintText(Math.max(1, o), shortcutDisplay), columns, true).length,
+    wrapTextToWidth(describeInstructionsScope(proposal, indexBase, shortcutDisplay), columns, true).length,
+    wrapTextToWidth(describeInstructionsScope(proposal, indexBase, null), columns, true).length +
+      wrapTextToWidth(shortcutHintText(Math.max(1, indexBase), shortcutDisplay), columns, true).length,
   );
 }
 //@ chunk-a6f4nz0a.js:5759-5898 placement
 /**
  * 在 o 行内能放下多少个列表项（c 为宽度；null 时按项数计）。
  */
-function countItemsFittingRows(t, o, c) {
-  if (c === null) return Math.min(t.length, o);
-  let i = 0;
-  let l = 0;
-  for (let d of t) {
-    i += wrapTextToWidth(reactNodeText(d), c, true).length;
-    if (i > o) break;
-    l++;
+function countItemsFittingRows(items, maxRows, columns) {
+  if (columns === null) return Math.min(items.length, maxRows);
+  let rowsUsed = 0;
+  let fitting = 0;
+  for (let item of items) {
+    rowsUsed += wrapTextToWidth(reactNodeText(item), columns, true).length;
+    if (rowsUsed > maxRows) break;
+    fitting++;
   }
-  return l;
+  return fitting;
 }
 //@ chunk-a6f4nz0a.js:5898-8834 placement
 /**
  * 显示项目设置提议并等待确认（终端太矮时提示）。
  */
 function ProjectProposalCard(props) {
-  let h = w(61);
+  let $ = useMemoCache(61);
   let {
     proposal,
     proposalBytes,
@@ -526,169 +542,186 @@ function ProjectProposalCard(props) {
     screenReaderColumns,
     messageFrom,
   } = props;
-  let R;
-  if (h[0] !== existingProject || h[1] !== messageFrom || h[2] !== proposal || h[3] !== width) {
-    R =
+  let allRows;
+  if ($[0] !== existingProject || $[1] !== messageFrom || $[2] !== proposal || $[3] !== width) {
+    allRows =
       messageFrom !== null
         ? wrapCardText(proposal.summary ?? "", width)
         : buildProposalRows(proposal, width, {
             existingProject,
           });
-    h[0] = existingProject;
-    h[1] = messageFrom;
-    h[2] = proposal;
-    h[3] = width;
-    h[4] = R;
-  } else R = h[4];
-  let C = R;
-  let f;
-  if (h[5] !== maxRows || h[6] !== C || h[7] !== screenReaderColumns) {
-    f = C.slice(0, countItemsFittingRows(C, maxRows, screenReaderColumns));
-    while (f.length < C.length && f.length > 1 && String(f.at(-1)?.key).startsWith("gap")) f.pop();
-    h[5] = maxRows;
-    h[6] = C;
-    h[7] = screenReaderColumns;
-    h[8] = f;
-  } else f = h[8];
-  let g = C.length - f.length;
+    $[0] = existingProject;
+    $[1] = messageFrom;
+    $[2] = proposal;
+    $[3] = width;
+    $[4] = allRows;
+  } else allRows = $[4];
+  let allRows_2 = allRows;
+  let visibleRows;
+  if ($[5] !== maxRows || $[6] !== allRows_2 || $[7] !== screenReaderColumns) {
+    visibleRows = allRows_2.slice(0, countItemsFittingRows(allRows_2, maxRows, screenReaderColumns));
+    while (
+      visibleRows.length < allRows_2.length &&
+      visibleRows.length > 1 &&
+      String(visibleRows.at(-1)?.key).startsWith("gap")
+    )
+      visibleRows.pop();
+    $[5] = maxRows;
+    $[6] = allRows_2;
+    $[7] = screenReaderColumns;
+    $[8] = visibleRows;
+  } else visibleRows = $[8];
+  let hiddenCount = allRows_2.length - visibleRows.length;
   if (messageFrom !== null) {
     const marginTop_2 = screenReaderColumns !== null ? 0 : marginTop;
     const paddingLeft = screenReaderColumns !== null ? 0 : 1;
-    let x;
-    if (h[9] !== g) {
-      x =
-        g > 0
+    let overflowHint;
+    if ($[9] !== hiddenCount) {
+      overflowHint =
+        hiddenCount > 0
           ? jsxProd_default_2(Text, {
               color: "warning",
               wrap: "truncate-end",
-              children: [formatOverflowHint(g), ". Make this terminal taller to read and send it."],
+              children: [formatOverflowHint(hiddenCount), ". Make this terminal taller to read and send it."],
             })
           : null;
-      h[9] = g;
-      h[10] = x;
-    } else x = h[10];
-    let y;
-    if (h[11] !== messageFrom || h[12] !== screenReaderColumns) {
-      y =
+      $[9] = hiddenCount;
+      $[10] = overflowHint;
+    } else overflowHint = $[10];
+    let draftedNote;
+    if ($[11] !== messageFrom || $[12] !== screenReaderColumns) {
+      draftedNote =
         messageFrom === "drafted"
           ? jsxProd_default_2(Text, {
               dimColor: true,
               children: [screenReaderColumns !== null ? "" : "  ", DRAFTED_BY_CLAUDE_TEXT],
             })
           : null;
-      h[11] = messageFrom;
-      h[12] = screenReaderColumns;
-      h[13] = y;
-    } else y = h[13];
-    let k;
-    if (h[14] !== f || h[15] !== marginTop_2 || h[16] !== paddingLeft || h[17] !== x || h[18] !== y) {
-      k = jsxProd_default_2(Box, {
+      $[11] = messageFrom;
+      $[12] = screenReaderColumns;
+      $[13] = draftedNote;
+    } else draftedNote = $[13];
+    let messageBox;
+    if (
+      $[14] !== visibleRows ||
+      $[15] !== marginTop_2 ||
+      $[16] !== paddingLeft ||
+      $[17] !== overflowHint ||
+      $[18] !== draftedNote
+    ) {
+      messageBox = jsxProd_default_2(Box, {
         flexDirection: "column",
         marginTop: marginTop_2,
         paddingLeft,
-        children: [f, x, y],
+        children: [visibleRows, overflowHint, draftedNote],
       });
-      h[14] = f;
-      h[15] = marginTop_2;
-      h[16] = paddingLeft;
-      h[17] = x;
-      h[18] = y;
-      h[19] = k;
-    } else k = h[19];
-    return k;
+      $[14] = visibleRows;
+      $[15] = marginTop_2;
+      $[16] = paddingLeft;
+      $[17] = overflowHint;
+      $[18] = draftedNote;
+      $[19] = messageBox;
+    } else messageBox = $[19];
+    return messageBox;
   }
   if (screenReaderColumns !== null) {
-    const P = g === 0 ? transcriptChord : null;
+    const chord = hiddenCount === 0 ? transcriptChord : null;
     let children;
-    if (h[20] !== proposal || h[21] !== proposalBytes || h[22] !== P) {
-      children = describeInstructionsScope(proposal, proposalBytes, P);
-      h[20] = proposal;
-      h[21] = proposalBytes;
-      h[22] = P;
-      h[23] = children;
-    } else children = h[23];
-    let x;
-    if (h[24] !== children) {
-      x = jsxProd_default(Text, {
+    if ($[20] !== proposal || $[21] !== proposalBytes || $[22] !== chord) {
+      children = describeInstructionsScope(proposal, proposalBytes, chord);
+      $[20] = proposal;
+      $[21] = proposalBytes;
+      $[22] = chord;
+      $[23] = children;
+    } else children = $[23];
+    let scopeElement;
+    if ($[24] !== children) {
+      scopeElement = jsxProd_default(Text, {
         children,
       });
-      h[24] = children;
-      h[25] = x;
-    } else x = h[25];
-    let y;
-    if (h[26] !== g || h[27] !== transcriptChord) {
-      y =
-        g > 0
+      $[24] = children;
+      $[25] = scopeElement;
+    } else scopeElement = $[25];
+    let shortcutHint;
+    if ($[26] !== hiddenCount || $[27] !== transcriptChord) {
+      shortcutHint =
+        hiddenCount > 0
           ? jsxProd_default(Text, {
-              children: shortcutHintText(g, transcriptChord),
+              children: shortcutHintText(hiddenCount, transcriptChord),
             })
           : null;
-      h[26] = g;
-      h[27] = transcriptChord;
-      h[28] = y;
-    } else y = h[28];
-    let k;
-    if (h[29] !== f || h[30] !== x || h[31] !== y) {
-      k = jsxProd_default_2(Box, {
+      $[26] = hiddenCount;
+      $[27] = transcriptChord;
+      $[28] = shortcutHint;
+    } else shortcutHint = $[28];
+    let screenReaderBox;
+    if ($[29] !== visibleRows || $[30] !== scopeElement || $[31] !== shortcutHint) {
+      screenReaderBox = jsxProd_default_2(Box, {
         flexDirection: "column",
-        children: [x, f, y],
+        children: [scopeElement, visibleRows, shortcutHint],
       });
-      h[29] = f;
-      h[30] = x;
-      h[31] = y;
-      h[32] = k;
-    } else k = h[32];
-    return k;
+      $[29] = visibleRows;
+      $[30] = scopeElement;
+      $[31] = shortcutHint;
+      $[32] = screenReaderBox;
+    } else screenReaderBox = $[32];
+    return screenReaderBox;
   }
-  let B = proposal.sessions?.length ?? 0;
-  let _ = proposal.routines?.length ?? 0;
-  let me = proposal.instructions !== undefined && proposal.instructions.trim() !== "";
-  let P;
-  if (h[33] === MEMO_CACHE_SENTINEL) {
-    P = jsxProd_default(Text, {
+  let sessionCount = proposal.sessions?.length ?? 0;
+  let routineCount = proposal.routines?.length ?? 0;
+  let hasInstructions = proposal.instructions !== undefined && proposal.instructions.trim() !== "";
+  let briefLabel;
+  if ($[33] === MEMO_CACHE_SENTINEL) {
+    briefLabel = jsxProd_default(Text, {
       bold: true,
       children: "Brief",
     });
-    h[33] = P;
-  } else P = h[33];
-  let T;
-  if (h[34] !== B) {
-    T = B > 0 ? `${B} ${plural(B, "thread")}` : null;
-    h[34] = B;
-    h[35] = T;
-  } else T = h[35];
-  let x;
-  if (h[36] !== _) {
-    x = _ > 0 ? `${_} ${plural(_, "routine")}` : null;
-    h[36] = _;
-    h[37] = x;
-  } else x = h[37];
-  const y = me ? "instructions" : null;
-  const k = B + _ === 0 && !me ? "summary only" : null;
-  const ee = proposalBytes / 1024;
-  let de;
-  if (h[38] !== ee) {
-    de = ee.toFixed(1);
-    h[38] = ee;
-    h[39] = de;
-  } else de = h[39];
-  const ne = `${de} KB`;
-  let K;
-  if (h[40] !== T || h[41] !== x || h[42] !== y || h[43] !== k || h[44] !== ne) {
-    K = jsxProd_default_2(Byline, {
-      children: [T, x, y, k, ne],
+    $[33] = briefLabel;
+  } else briefLabel = $[33];
+  let sessionText;
+  if ($[34] !== sessionCount) {
+    sessionText = sessionCount > 0 ? `${sessionCount} ${plural(sessionCount, "thread")}` : null;
+    $[34] = sessionCount;
+    $[35] = sessionText;
+  } else sessionText = $[35];
+  let routineText;
+  if ($[36] !== routineCount) {
+    routineText = routineCount > 0 ? `${routineCount} ${plural(routineCount, "routine")}` : null;
+    $[36] = routineCount;
+    $[37] = routineText;
+  } else routineText = $[37];
+  const instructionsLabel = hasInstructions ? "instructions" : null;
+  const summaryOnlyLabel = sessionCount + routineCount === 0 && !hasInstructions ? "summary only" : null;
+  const bytesInKb = proposalBytes / 1024;
+  let kbText;
+  if ($[38] !== bytesInKb) {
+    kbText = bytesInKb.toFixed(1);
+    $[38] = bytesInKb;
+    $[39] = kbText;
+  } else kbText = $[39];
+  const sizeText = `${kbText} KB`;
+  let statsByline;
+  if (
+    $[40] !== sessionText ||
+    $[41] !== routineText ||
+    $[42] !== instructionsLabel ||
+    $[43] !== summaryOnlyLabel ||
+    $[44] !== sizeText
+  ) {
+    statsByline = jsxProd_default_2(Byline, {
+      children: [sessionText, routineText, instructionsLabel, summaryOnlyLabel, sizeText],
     });
-    h[40] = T;
-    h[41] = x;
-    h[42] = y;
-    h[43] = k;
-    h[44] = ne;
-    h[45] = K;
-  } else K = h[45];
-  let N;
-  if (h[46] !== g || h[47] !== transcriptChord) {
-    N =
-      g === 0
+    $[40] = sessionText;
+    $[41] = routineText;
+    $[42] = instructionsLabel;
+    $[43] = summaryOnlyLabel;
+    $[44] = sizeText;
+    $[45] = statsByline;
+  } else statsByline = $[45];
+  let expandHint;
+  if ($[46] !== hiddenCount || $[47] !== transcriptChord) {
+    expandHint =
+      hiddenCount === 0
         ? jsxProd_default_2(Fragment, {
             children: [
               "  ",
@@ -703,62 +736,62 @@ function ProjectProposalCard(props) {
             ],
           })
         : null;
-    h[46] = g;
-    h[47] = transcriptChord;
-    h[48] = N;
-  } else N = h[48];
-  let Y;
-  if (h[49] !== K || h[50] !== N) {
-    Y = jsxProd_default_2(Text, {
+    $[46] = hiddenCount;
+    $[47] = transcriptChord;
+    $[48] = expandHint;
+  } else expandHint = $[48];
+  let header;
+  if ($[49] !== statsByline || $[50] !== expandHint) {
+    header = jsxProd_default_2(Text, {
       wrap: "truncate-end",
       children: [
-        P,
+        briefLabel,
         jsxProd_default_2(Text, {
           dimColor: true,
-          children: ["  ", K, N],
+          children: ["  ", statsByline, expandHint],
         }),
       ],
     });
-    h[49] = K;
-    h[50] = N;
-    h[51] = Y;
-  } else Y = h[51];
-  let G;
-  if (h[52] !== g) {
-    G = jsxProd_default(Text, {
+    $[49] = statsByline;
+    $[50] = expandHint;
+    $[51] = header;
+  } else header = $[51];
+  let overflowElement;
+  if ($[52] !== hiddenCount) {
+    overflowElement = jsxProd_default(Text, {
       wrap: "truncate-end",
       children: jsxProd_default(OverflowHint, {
-        count: g,
+        count: hiddenCount,
         expandable: true,
       }),
     });
-    h[52] = g;
-    h[53] = G;
-  } else G = h[53];
-  let X;
-  if (h[54] !== f || h[55] !== G) {
-    X = jsxProd_default_2(Box, {
+    $[52] = hiddenCount;
+    $[53] = overflowElement;
+  } else overflowElement = $[53];
+  let rowsBox;
+  if ($[54] !== visibleRows || $[55] !== overflowElement) {
+    rowsBox = jsxProd_default_2(Box, {
       flexDirection: "column",
       paddingLeft: 1,
-      children: [f, G],
+      children: [visibleRows, overflowElement],
     });
-    h[54] = f;
-    h[55] = G;
-    h[56] = X;
-  } else X = h[56];
-  let he;
-  if (h[57] !== marginTop || h[58] !== Y || h[59] !== X) {
-    he = jsxProd_default_2(Box, {
+    $[54] = visibleRows;
+    $[55] = overflowElement;
+    $[56] = rowsBox;
+  } else rowsBox = $[56];
+  let card;
+  if ($[57] !== marginTop || $[58] !== header || $[59] !== rowsBox) {
+    card = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginTop,
-      children: [Y, X],
+      children: [header, rowsBox],
     });
-    h[57] = marginTop;
-    h[58] = Y;
-    h[59] = X;
-    h[60] = he;
-  } else he = h[60];
-  return he;
+    $[57] = marginTop;
+    $[58] = header;
+    $[59] = rowsBox;
+    $[60] = card;
+  } else card = $[60];
+  return card;
 }
 export {
   wrapTextToWidth,

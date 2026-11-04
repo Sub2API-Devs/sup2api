@@ -18,31 +18,31 @@ import { registerIsolationRuntime } from "../../utils/worktreeIsolation.js";
  * 启动时在满足远程工具服务开关时异步加载并注册工具宿主（tool hosts），失败只记日志。
  */
 function registerToolHosts() {
-  let t;
-  let o = false;
-  let r = () => {
+  let runtime;
+  let loaded = false;
+  let load = () => {
     if (isRemoteToolForwardingSwitchOn()) {
-      o = true;
-      import("./chunk-dtv8x2hx.js")
+      loaded = true;
+      import("./createRemoteToolHostsRuntime.lazy.js")
         .then(({ createRemoteToolHostsRuntime }) => {
-          t = createRemoteToolHostsRuntime();
+          runtime = createRemoteToolHostsRuntime();
         })
         .catch((error) => {
           logError(toError(error));
-          o = false;
+          loaded = false;
         });
     }
   };
-  let i = undefined;
+  let loopbackDev = undefined;
   registerIsolationRuntime({
     get remote() {
-      if (!o) r();
-      return t;
+      if (!loaded) load();
+      return runtime;
     },
-    ...(i !== undefined && {
-      loopbackDev: i,
+    ...(loopbackDev !== undefined && {
+      loopbackDev,
     }),
   });
-  if (isRemoteToolForwardingSwitchOn()) r();
+  if (isRemoteToolForwardingSwitchOn()) load();
 }
 export { registerToolHosts };

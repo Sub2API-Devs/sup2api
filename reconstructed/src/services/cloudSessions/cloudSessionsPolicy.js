@@ -64,62 +64,57 @@ function cloudSessionsUnavailableReason() {
     return `Cloud sessions aren't available with ${THIRD_PARTY_PROVIDER_LABELS[apiProvider]}. They run on Anthropic's infrastructure and require an Anthropic account.`;
   let { policy } = CLOUD_SESSIONS_POLICY;
   let { featureLabel, verb } = policyKeyLabel(policy);
-  let n = policyDeniedReason(policy, featureLabel, verb);
-  if (n === null) return null;
-  let a = policyDenyKind(policy);
-  if (a === "org_denied") {
-    let r =
+  let sessionLabel = policyDeniedReason(policy, featureLabel, verb);
+  if (sessionLabel === null) return null;
+  let noun = policyDenyKind(policy);
+  if (noun === "org_denied") {
+    let who =
       isSessionVerdictFromServerFetch() && getComplianceTaints().length === 0
         ? getConflictingApiCredentialSource()
         : null;
-    if (r === null) return n;
-    let c = `${featureLabel} ${verb} ${policyDisabledMessageFor([])}.`;
-    if (r === "apiKeyHelper") return c;
-    let { noun, fetchedTheLoadedAnswer } = AUTH_KEY_NOUNS[r];
-    if (!fetchedTheLoadedAnswer()) return n;
-    return `${c} This session is using ${r}, so Claude Code checked the policy for the organization that ${noun} belongs to. ${CLOUD_SESSIONS_LOGIN_NOTE}`;
+    if (who === null) return sessionLabel;
+    let orgLabel = `${featureLabel} ${verb} ${policyDisabledMessageFor([])}.`;
+    if (who === "apiKeyHelper") return orgLabel;
+    let { noun, fetchedTheLoadedAnswer } = AUTH_KEY_NOUNS[who];
+    if (!fetchedTheLoadedAnswer()) return sessionLabel;
+    return `${orgLabel} This session is using ${who}, so Claude Code checked the policy for the organization that ${noun} belongs to. ${CLOUD_SESSIONS_LOGIN_NOTE}`;
   }
-  let lastFetchOutcome = getLastFetchOutcome();
-  if (
-    a !== "cache_miss" ||
-    lastFetchOutcome === null ||
-    lastFetchOutcome.success ||
-    lastFetchOutcome.httpStatus === 404
-  )
-    return n;
-  if (lastFetchOutcome.retrying)
-    return lastFetchOutcome.errorCode === "auth_failed" &&
-      lastFetchOutcome.httpStatus === 401 &&
+  let failure = getLastFetchOutcome();
+  if (noun !== "cache_miss" || failure === null || failure.success || failure.httpStatus === 404)
+    return sessionLabel;
+  if (failure.retrying)
+    return failure.errorCode === "auth_failed" &&
+      failure.httpStatus === 401 &&
       !isPolicyDeniedByRefusedCacheHint(policy) &&
       canRetryCloudSessionsWithOAuth()
-      ? `${n} If that doesn't help, run \`claude auth login\` (or /login in a local session).`
-      : n;
-  let u = policyUnavailableMessage(featureLabel, verb, lastFetchOutcome);
+      ? `${sessionLabel} If that doesn't help, run \`claude auth login\` (or /login in a local session).`
+      : sessionLabel;
+  let message = policyUnavailableMessage(featureLabel, verb, failure);
   if (
-    lastFetchOutcome.errorCode !== "auth_failed" ||
-    lastFetchOutcome.httpStatus === 403 ||
+    failure.errorCode !== "auth_failed" ||
+    failure.httpStatus === 403 ||
     isPolicyDeniedByRefusedCacheHint(policy)
   )
-    return u;
+    return message;
   if (getConflictingApiCredentialSource() !== null) {
-    let r = describeAuthPrecedenceBlocker({
+    let hint = describeAuthPrecedenceBlocker({
       prefix: CLOUD_SESSIONS_LOGIN_NOTE,
       suffix: "to use cloud sessions.",
     });
-    return `${u} ${r}`;
+    return `${message} ${hint}`;
   }
-  if (lastFetchOutcome.httpStatus === 401 && canRetryCloudSessionsWithOAuth())
-    return `${u} Run \`claude auth login\` (or /login in a local session), then try again.`;
+  if (failure.httpStatus === 401 && canRetryCloudSessionsWithOAuth())
+    return `${message} Run \`claude auth login\` (or /login in a local session), then try again.`;
   if (
     !getAnthropicApiKeySafe() &&
     shouldUseWIFAuth() &&
-    lastFetchOutcome.httpStatus === null &&
+    failure.httpStatus === null &&
     wouldWIFProfileYieldToClaudeAILogin() &&
     isOAuthRefreshKnownDead() &&
     !isEnvTruthy(false)
   )
-    return `${u} Cloud sessions need a claude.ai sign-in. Run \`claude auth login\` (or /login in a local session), then try again.`;
-  return u;
+    return `${message} Cloud sessions need a claude.ai sign-in. Run \`claude auth login\` (or /login in a local session), then try again.`;
+  return message;
 }
 //@ chunk-pemtjbn7.js:2280-2331 placement
 /**

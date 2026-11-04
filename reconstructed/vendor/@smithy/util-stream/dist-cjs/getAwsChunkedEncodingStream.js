@@ -5,10 +5,10 @@
  * pieces: chunk-wjd9n4jx.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-wjd9n4jx.js:5983-6573 cjs-fingerprint
-var require_getAwsChunkedEncodingStream = x(function (cjsExports) {
+var require_getAwsChunkedEncodingStream = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

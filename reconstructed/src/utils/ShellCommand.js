@@ -29,7 +29,14 @@ import { killIfUnchanged, killProcessGroup as killProcessGroup_2 } from "./auth/
 import { HostScoped } from "./hostScoped.js";
 import { onProcessRootHost } from "../bootstrap/state.js";
 import { logForDebugging } from "./debug.js";
-import { string, u, E, literal, array, M } from "../../vendor/zod/v4/classic/schemas.js";
+import {
+  stringSchema,
+  objectSchema,
+  numberSchema,
+  literal,
+  array,
+  booleanSchema,
+} from "../../vendor/zod/v4/classic/schemas.js";
 import { env } from "./env.js";
 import { logEvent } from "../services/analytics/index.js";
 import {
@@ -51,12 +58,12 @@ import {
   isTaskOutputSwapRefusal,
   MAX_TASK_OUTPUT_BYTES_DISPLAY,
 } from "./task/diskOutput.js";
-import { P, R } from "../../vendor/react/cjs/react.production.js";
+import { useEffect, useRef } from "../../vendor/react/cjs/react.production.js";
 import { unwrapAbortReason } from "./abortController.js";
 import { isTurnLevelAbort } from "./abortReasons.js";
 import { getPlatform } from "./platform.js";
 import { isPlainObject as isPlainObject_5 } from "./isPlainObject.js";
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 import { DISK_SPACE_CHECK_INTERVAL_MS, buildDiskFullWarning } from "./shell/diskSpaceWarning.js";
 import { isProcessGroupAlive, leftoverProcessTracker, findProcessesByPgid } from "./shell/cpuReport.js";
 import { formatDuration } from "./format.js";
@@ -64,40 +71,42 @@ import { processStartTokens } from "./processIdentity.js";
 import { TaskOutput } from "./task/TaskOutput.js";
 import { generateTaskId } from "../Task.js";
 import { logForDiagnosticsNoPII } from "./diagLogs.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:250002-250080 placement
 /**
  * 判断进程是否仍存活且启动标记一致（用于进程树清理）。
  */
-function isPidStillAlive(e, n) {
-  let processInfo = readProcessInfo(e);
-  return processInfo !== undefined && !processInfo.exited && processInfo.startToken === n;
+function isPidStillAlive(pid, startToken) {
+  let processInfo = readProcessInfo(pid);
+  return processInfo !== undefined && !processInfo.exited && processInfo.startToken === startToken;
 }
 //@ chunk-e6aww6q8.js:250080-250438 placement
 /**
  * 从进程列表中收集以给定 pid 或进程组为根的进程树（广度优先，跳过 pid≤1 与自身）。
  */
-function collectProcessTree(e, n) {
-  let r = new Map();
-  let s = [];
-  for (let S of e) {
-    if (S.ppid !== undefined) {
-      let w = r.get(S.ppid);
-      if (w) w.push(S);
-      else r.set(S.ppid, [S]);
+function collectProcessTree(processInfos, rootPgids) {
+  let childrenByPpid = new Map();
+  let pending = [];
+  for (let processInfo of processInfos) {
+    if (processInfo.ppid !== undefined) {
+      let children = childrenByPpid.get(processInfo.ppid);
+      if (children) children.push(processInfo);
+      else childrenByPpid.set(processInfo.ppid, [processInfo]);
     }
-    if (n.has(S.pid) || (S.pgrp !== undefined && n.has(S.pgrp))) s.push(S);
+    if (rootPgids.has(processInfo.pid) || (processInfo.pgrp !== undefined && rootPgids.has(processInfo.pgrp)))
+      pending.push(processInfo);
   }
-  let h = new Set();
-  let y = [];
-  while (s.length > 0) {
-    let S = s.shift();
-    if (S.pid <= 1 || S.pid === process.pid || h.has(S.pid)) continue;
-    h.add(S.pid);
-    y.push(S);
-    s.push(...(r.get(S.pid) ?? []));
+  let seenPids = new Set();
+  let tree = [];
+  while (pending.length > 0) {
+    let current = pending.shift();
+    if (current.pid <= 1 || current.pid === process.pid || seenPids.has(current.pid)) continue;
+    seenPids.add(current.pid);
+    tree.push(current);
+    pending.push(...(childrenByPpid.get(current.pid) ?? []));
   }
-  return y;
+  return tree;
 }
 //@ chunk-e6aww6q8.js:250438-252316 placement
 /**
@@ -106,37 +115,44 @@ function collectProcessTree(e, n) {
 function sweepShellTrees(shells, graceMs) {
   let startedAt = Date.now();
   let processList = listProcessInfos();
-  let processByPid = new Map(processList?.map((Me) => [Me.pid, Me]));
+  let processByPid = new Map(processList?.map((processInfo) => [processInfo.pid, processInfo]));
   let ownedPgids = new Set();
   let unlistedShells = [];
   for (let shell of shells) {
     if (!isSignalablePid(shell.pid)) continue;
-    let We = processByPid.get(shell.pid);
+    let shellInfo = processByPid.get(shell.pid);
     if (processList === undefined) unlistedShells.push(shell);
-    else if (We === undefined || (shell.running && We.ppid === process.pid)) ownedPgids.add(shell.pid);
+    else if (shellInfo === undefined || (shell.running && shellInfo.ppid === process.pid))
+      ownedPgids.add(shell.pid);
   }
   let groupMembers = new Map();
   let alive = new Map();
   let loneTargets = new Map();
-  for (let Me of processList ? collectProcessTree(processList, ownedPgids) : []) {
-    if (Me.startToken === undefined) continue;
-    let pgrp = Me.pgrp !== undefined && ownedPgids.has(Me.pgrp) ? Me.pgrp : undefined;
+  for (let processInfo of processList ? collectProcessTree(processList, ownedPgids) : []) {
+    if (processInfo.startToken === undefined) continue;
+    let pgrp =
+      processInfo.pgrp !== undefined && ownedPgids.has(processInfo.pgrp) ? processInfo.pgrp : undefined;
     if (pgrp !== undefined) {
-      let ze = groupMembers.get(pgrp) ?? new Map();
-      groupMembers.set(pgrp, ze.set(Me.pid, Me.startToken));
+      let members = groupMembers.get(pgrp) ?? new Map();
+      groupMembers.set(pgrp, members.set(processInfo.pid, processInfo.startToken));
     }
-    if (Me.exited) continue;
-    alive.set(Me.pid, Me.startToken);
-    if (pgrp === undefined) loneTargets.set(Me.pid, Me.startToken);
+    if (processInfo.exited) continue;
+    alive.set(processInfo.pid, processInfo.startToken);
+    if (pgrp === undefined) loneTargets.set(processInfo.pid, processInfo.startToken);
   }
   let askedPids = new Set();
   for (let shell of shells) {
     if (shell.askedAt !== undefined) askedPids.add(shell.pid);
-    for (let [We, ze] of shell.descendants ?? []) {
-      if (shell.askedAt !== undefined) askedPids.add(We);
-      if (processList !== undefined && isSignalablePid(We) && !alive.has(We) && isPidStillAlive(We, ze)) {
-        alive.set(We, ze);
-        loneTargets.set(We, ze);
+    for (let [pid, startToken] of shell.descendants ?? []) {
+      if (shell.askedAt !== undefined) askedPids.add(pid);
+      if (
+        processList !== undefined &&
+        isSignalablePid(pid) &&
+        !alive.has(pid) &&
+        isPidStillAlive(pid, startToken)
+      ) {
+        alive.set(pid, startToken);
+        loneTargets.set(pid, startToken);
       }
     }
   }
@@ -147,18 +163,26 @@ function sweepShellTrees(shells, graceMs) {
       waitedMs: 0,
       outlivedGrace: undefined,
     };
-  let signalAll = (Me) => {
-    let We = (ze) => Me === "SIGTERM" && askedPids.has(ze);
-    for (let [ze, lt] of groupMembers)
-      if ([...lt].some(([nt, pt]) => readProcessInfo(nt)?.startToken === pt) && !We(ze))
-        tryKillProcess(-ze, Me);
+  let signalAll = (signal) => {
+    let alreadyAsked = (targetPid) => signal === "SIGTERM" && askedPids.has(targetPid);
+    for (let [pgid, members] of groupMembers)
+      if (
+        [...members].some(([pid, startToken]) => readProcessInfo(pid)?.startToken === startToken) &&
+        !alreadyAsked(pgid)
+      )
+        tryKillProcess(-pgid, signal);
     for (let unlistedShell of unlistedShells)
-      if (!We(unlistedShell.pid) && !tryKillProcess(-unlistedShell.pid, Me) && unlistedShell.running)
-        tryKillProcess(unlistedShell.pid, Me);
-    killIfUnchanged(new Map([...loneTargets].filter(([ze]) => !We(ze))), Me);
+      if (
+        !alreadyAsked(unlistedShell.pid) &&
+        !tryKillProcess(-unlistedShell.pid, signal) &&
+        unlistedShell.running
+      )
+        tryKillProcess(unlistedShell.pid, signal);
+    killIfUnchanged(new Map([...loneTargets].filter(([targetPid]) => !alreadyAsked(targetPid))), signal);
   };
   signalAll("SIGTERM");
-  let deadlineFor = (Me, We) => Math.max(0, ...Me.map((ze) => (ze.askedAt ?? startedAt) + We));
+  let deadlineFor = (shells, grace) =>
+    Math.max(0, ...shells.map((shell) => (shell.askedAt ?? startedAt) + grace));
   let minDeadline = deadlineFor(unlistedShells, Math.min(graceMs, UNLISTED_SHELL_GRACE_MS));
   let maxDeadline = Math.max(
     minDeadline,
@@ -174,16 +198,22 @@ function sweepShellTrees(shells, graceMs) {
     idx > 0 && performance.now() - waitStart < waitMs && Date.now() < maxDeadline;
     idx--
   ) {
-    for (let [We, ze] of alive) if (!isPidStillAlive(We, ze)) alive.delete(We);
+    for (let [pid, startToken] of alive) if (!isPidStillAlive(pid, startToken)) alive.delete(pid);
     if (alive.size === 0 && Date.now() >= minDeadline) break;
     sleepBlocking(Math.min(SWEEP_WAIT_STEP_MS, Math.max(1, maxDeadline - Date.now())));
   }
   if (alive.size > 0) {
-    let Me = listProcessInfos() ?? [];
-    let filtered = Me.filter((ze) => ze.startToken !== undefined && alive.get(ze.pid) === ze.startToken);
-    for (let ze of collectProcessTree(Me, new Set(filtered.map((lt) => lt.pid))))
-      if (!ze.exited && ze.startToken !== undefined && !alive.has(ze.pid))
-        loneTargets.set(ze.pid, ze.startToken);
+    let processInfos = listProcessInfos() ?? [];
+    let filtered = processInfos.filter(
+      (processInfo) =>
+        processInfo.startToken !== undefined && alive.get(processInfo.pid) === processInfo.startToken,
+    );
+    for (let processInfo of collectProcessTree(
+      processInfos,
+      new Set(filtered.map((processInfo) => processInfo.pid)),
+    ))
+      if (!processInfo.exited && processInfo.startToken !== undefined && !alive.has(processInfo.pid))
+        loneTargets.set(processInfo.pid, processInfo.startToken);
   }
   signalAll("SIGKILL");
   return {
@@ -207,7 +237,10 @@ class ShellCommandRegistry {
 /**
  * 按宿主缓存的 ShellCommand 注册表（待决 kill、存活命令、待收束进程树）。
  */
-var shellCommandRegistryByHost = new HostScoped(() => new ShellCommandRegistry());
+var shellCommandRegistryByHost; // deferred: uses ShellCommandRegistry of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:257296", () => {
+  shellCommandRegistryByHost = new HostScoped(() => new ShellCommandRegistry());
+});
 //@ chunk-e6aww6q8.js:257323-257353 placement
 function shellCommandRegistry() {
   return onProcessRootHost(shellCommandRegistryByHost);
@@ -245,11 +278,11 @@ class StreamWrapper {
     stream.setEncoding("utf-8");
     stream.on("data", this.#r);
     this.ended = new Promise((resolve) => {
-      function h() {
+      function resolveEnded() {
         resolve();
       }
-      stream.once("end", h);
-      stream.once("close", h);
+      stream.once("end", resolveEnded);
+      stream.once("close", resolveEnded);
     });
   }
   #i(data) {
@@ -298,61 +331,62 @@ class ShellCommandImpl {
   #E;
   #T;
   taskOutput;
-  static #O(e) {
-    if (e.#S && e.#m)
-      e.#m((n) =>
-        e.background(n, {
+  static #O(command) {
+    if (command.#S && command.#m)
+      command.#m((registerOnTimeout) =>
+        command.background(registerOnTimeout, {
           atExit: "kill",
         }),
       );
-    else e.#C(SIGTERM_EXIT_CODE);
+    else command.#C(SIGTERM_EXIT_CODE);
   }
   result;
   outputEnded;
   onTimeout;
   constructor(
-    e,
-    n,
-    r,
+    childProcess,
+    abortSignal,
+    timeoutMs,
     taskOutput,
-    h = false,
-    y = MAX_TASK_OUTPUT_BYTES_2,
-    S = "inner",
-    w,
-    L = {
+    hasOnTimeout = false,
+    maxOutputBytes = MAX_TASK_OUTPUT_BYTES_2,
+    level = "inner",
+    cwd,
+    timing = {
       startedAt: performance.now(),
       cpuTime: false,
     },
   ) {
-    this.#f = L;
-    this.#r = e;
-    this.#b = e.pid;
-    this.#l = n;
-    this.#u = S;
-    this.#g = r;
-    this.#S = h;
-    this.#c = y;
-    this.#_ = w;
+    this.#f = timing;
+    this.#r = childProcess;
+    this.#b = childProcess.pid;
+    this.#l = abortSignal;
+    this.#u = level;
+    this.#g = timeoutMs;
+    this.#S = hasOnTimeout;
+    this.#c = maxOutputBytes;
+    this.#_ = cwd;
     this.taskOutput = taskOutput;
-    this.#o = e.stderr ? new StreamWrapper(e.stderr, taskOutput, true) : null;
-    this.#n = e.stdout ? new StreamWrapper(e.stdout, taskOutput, false) : null;
+    this.#o = childProcess.stderr ? new StreamWrapper(childProcess.stderr, taskOutput, true) : null;
+    this.#n = childProcess.stdout ? new StreamWrapper(childProcess.stdout, taskOutput, false) : null;
     this.outputEnded =
       this.#n || this.#o ? Promise.all([this.#n?.ended, this.#o?.ended]).then(() => {}) : undefined;
-    if (h)
-      this.onTimeout = (G) => {
-        this.#m = G;
+    if (hasOnTimeout)
+      this.onTimeout = (onTimeout) => {
+        this.#m = onTimeout;
       };
     this.result = this.#L();
     this.#p.liveShellCommands.add(this);
     installExitSweep();
-    if (n.aborted) this.#P();
+    if (abortSignal.aborted) this.#P();
   }
   get status() {
     return this.#e;
   }
   #P() {
-    let e = unwrapAbortReason(this.#l.reason);
-    if ((e === "interrupt" && !killOnInterruptWhenNoBackground()) || isTurnLevelAbort(e, this.#u)) return;
+    let reason = unwrapAbortReason(this.#l.reason);
+    if ((reason === "interrupt" && !killOnInterruptWhenNoBackground()) || isTurnLevelAbort(reason, this.#u))
+      return;
     this.kill();
   }
   #I(code, signal) {
@@ -362,10 +396,10 @@ class ShellCommandImpl {
   #D() {
     this.#R(1, true);
   }
-  #R(e, n = false) {
+  #R(exitCode, flag = false) {
     if (this.#h) {
-      this.#v = n;
-      this.#h(e);
+      this.#v = flag;
+      this.#h(exitCode);
       this.#h = null;
     }
   }
@@ -436,33 +470,33 @@ class ShellCommandImpl {
       exitPromise.then(this.#N.bind(this));
     });
   }
-  async #N(e) {
+  async #N(exitCode) {
     let wallMs = (this.#w ?? performance.now()) - this.#f.startedAt;
-    let r = this.#f.cpuAccountWindow && closeCpuWindow(this.#f.cpuAccountWindow);
+    let cpuAccount = this.#f.cpuAccountWindow && closeCpuWindow(this.#f.cpuAccountWindow);
     this.#p.liveShellCommands.delete(this);
     this.#A();
-    let s = this.#e === "killed";
+    let wasKilled = this.#e === "killed";
     if (this.#e === "running" || this.#e === "backgrounded") this.#e = "completed";
     let pid = this.#r?.pid;
-    let y = s || !this.#f.cpuTime ? undefined : readProcessResourceUsage(this.#r);
-    let S = y !== undefined && pid !== undefined && pid > 1 && isProcessGroupAlive(pid);
-    let w =
-      (S && this.#f.procCpuTime) ||
-      (y !== undefined && pid !== undefined && this.#f.procCpuTime === "background marker")
+    let usage = wasKilled || !this.#f.cpuTime ? undefined : readProcessResourceUsage(this.#r);
+    let groupAlive = usage !== undefined && pid !== undefined && pid > 1 && isProcessGroupAlive(pid);
+    let procCpuMs =
+      (groupAlive && this.#f.procCpuTime) ||
+      (usage !== undefined && pid !== undefined && this.#f.procCpuTime === "background marker")
         ? readProcCpuTime(pid)
         : this.#E;
     let stdout = await this.taskOutput.getStdout();
-    let G = {
-      code: e,
+    let result = {
+      code: exitCode,
       stdout,
       stderr: this.taskOutput.getStderr(),
-      interrupted: s && e === SIGKILL_EXIT_CODE,
+      interrupted: wasKilled && exitCode === SIGKILL_EXIT_CODE,
       backgroundTaskId: this.#t,
     };
-    if (this.#v) G.noExitStatus = true;
-    if (s && this.#T !== undefined) G.stopLabel = this.#T;
+    if (this.#v) result.noExitStatus = true;
+    if (wasKilled && this.#T !== undefined) result.stopLabel = this.#T;
     if (
-      !s &&
+      !wasKilled &&
       pid !== undefined &&
       pid > 1 &&
       leftoverProcessTracker.follows(this.#u) &&
@@ -470,21 +504,21 @@ class ShellCommandImpl {
         (await findProcessesByPgid(new Set([pid])).catch(() => new Map())).has(pid)) &&
       this.#e !== "killed"
     )
-      G.leftRunningPgid = pid;
+      result.leftRunningPgid = pid;
     if (this.#b !== undefined)
-      G.shellUsage = {
+      result.shellUsage = {
         wallMs,
-        ...(y !== undefined && {
+        ...(usage !== undefined && {
           cpu: {
-            ...y,
-            leftProcessRunning: G.leftRunningPgid !== undefined || S || w !== undefined,
+            ...usage,
+            leftProcessRunning: result.leftRunningPgid !== undefined || groupAlive || procCpuMs !== undefined,
           },
         }),
-        ...(w !== undefined && {
-          procCpuMs: w,
+        ...(procCpuMs !== undefined && {
+          procCpuMs,
         }),
-        ...(r !== undefined && {
-          cpuAccount: r,
+        ...(cpuAccount !== undefined && {
+          cpuAccount,
         }),
       };
     if (this.taskOutput.stdoutToFile && !this.#t)
@@ -493,76 +527,80 @@ class ShellCommandImpl {
           if (!this.#t) this.taskOutput.deleteOutputFile();
         });
       else {
-        G.outputFilePath = this.taskOutput.path;
-        G.outputFileSize = this.taskOutput.outputFileSize;
-        G.outputTaskId = this.taskOutput.taskId;
+        result.outputFilePath = this.taskOutput.path;
+        result.outputFileSize = this.taskOutput.outputFileSize;
+        result.outputTaskId = this.taskOutput.taskId;
       }
-    let q = (Se) => {
+    let prefixMessage = (message) => {
       if (this.taskOutput.stdoutToFile && !this.#t)
-        G.stdout = stdout
-          ? `${Se}
+        result.stdout = stdout
+          ? `${message}
 ${stdout}`
-          : Se;
-      else G.stderr = G.stderr ? `${Se} ${G.stderr}` : Se;
+          : message;
+      else result.stderr = result.stderr ? `${message} ${result.stderr}` : message;
     };
-    if (this.#d) q("Command killed: its output file was replaced or could no longer be verified");
+    if (this.#d) prefixMessage("Command killed: its output file was replaced or could no longer be verified");
     else if (this.#a) {
-      q(`Command killed: output file exceeded ${MAX_TASK_OUTPUT_BYTES_DISPLAY}`);
-      G.outputFileSize = this.taskOutput.outputFileSize;
-    } else if (s && e === SIGTERM_EXIT_CODE) {
-      G.timedOut = true;
-      q(`Command timed out after ${formatDuration(this.#g)}`);
-    } else if (this.taskOutput.stdoutToFile && e !== 0 && !(s && e === SIGKILL_EXIT_CODE)) {
+      prefixMessage(`Command killed: output file exceeded ${MAX_TASK_OUTPUT_BYTES_DISPLAY}`);
+      result.outputFileSize = this.taskOutput.outputFileSize;
+    } else if (wasKilled && exitCode === SIGTERM_EXIT_CODE) {
+      result.timedOut = true;
+      prefixMessage(`Command timed out after ${formatDuration(this.#g)}`);
+    } else if (
+      this.taskOutput.stdoutToFile &&
+      exitCode !== 0 &&
+      !(wasKilled && exitCode === SIGKILL_EXIT_CODE)
+    ) {
       let diskFullWarning = await buildDiskFullWarning(this.taskOutput.path, stdout === "");
       if (diskFullWarning)
-        G.stdout = stdout
+        result.stdout = stdout
           ? `${diskFullWarning}
 ${stdout}`
           : diskFullWarning;
     }
-    let Z = this.#y;
-    if (Z) {
+    let exitListener = this.#y;
+    if (exitListener) {
       this.#y = null;
-      Z(G);
+      exitListener(result);
     }
   }
-  #C(e) {
+  #C(exitCode) {
     this.#e = "killed";
-    let n = this.#r;
-    let pid = n?.pid;
-    let s = this.#h !== null;
-    this.#R(e ?? SIGKILL_EXIT_CODE);
-    if (!pid || pid <= 1 || isWindowsExitedProcess(n)) return Promise.resolve();
-    if (s && this.#f.procCpuTime) {
+    let childProcess = this.#r;
+    let pid = childProcess?.pid;
+    let hasWaiter = this.#h !== null;
+    this.#R(exitCode ?? SIGKILL_EXIT_CODE);
+    if (!pid || pid <= 1 || isWindowsExitedProcess(childProcess)) return Promise.resolve();
+    if (hasWaiter && this.#f.procCpuTime) {
       this.#w = performance.now();
       this.#E = readProcCpuTime(pid);
     }
-    let h = killProcessGroup_2(pid, "SIGTERM");
+    let groupKill = killProcessGroup_2(pid, "SIGTERM");
     let askedAt;
-    let S = () => {
+    let noteAsked = () => {
       askedAt = Date.now();
     };
-    h.then(S, S);
-    let w = new Map();
+    groupKill.then(noteAsked, noteAsked);
+    let startTokens = new Map();
     let promise = new Promise((resolve) => {
-      let we;
-      let Ee = false;
-      let Ae = isCpuAccountingEnabled();
-      let Ie = h.then(async (We) => {
-        if (!Ae) return;
-        if (Ee) {
-          for (let ze of We)
+      let pollTimer;
+      let killEscalated = false;
+      let cpuAccountingEnabled = isCpuAccountingEnabled();
+      let tokensReady = groupKill.then(async (pids) => {
+        if (!cpuAccountingEnabled) return;
+        if (killEscalated) {
+          for (let pid of pids)
             try {
-              process.kill(ze, "SIGKILL");
+              process.kill(pid, "SIGKILL");
             } catch {}
           return;
         }
-        for (let [ze, lt] of await processStartTokens(We)) w.set(ze, lt);
+        for (let [pid, startToken] of await processStartTokens(pids)) startTokens.set(pid, startToken);
       });
       let timer = setTimeout(() => {
-        Ee = true;
-        clearInterval(we);
-        if (isWindowsExitedProcess(n)) {
+        killEscalated = true;
+        clearInterval(pollTimer);
+        if (isWindowsExitedProcess(childProcess)) {
           resolve();
           return;
         }
@@ -570,58 +608,58 @@ ${stdout}`
           process.kill(-pid, "SIGKILL");
         } catch {}
         Promise.all([
-          Ie.then(() => killIfUnchanged(w, "SIGKILL")),
+          tokensReady.then(() => killIfUnchanged(startTokens, "SIGKILL")),
           killProcessGroup_2(pid, "SIGKILL"),
         ]).finally(resolve);
       }, KILL_GRACE_MS);
       timer.unref();
       if (getPlatform() !== "windows")
-        Ie.then(() => {
-          if (Ee) return;
-          if (isProcessTreeGone(pid, w)) {
+        tokensReady.then(() => {
+          if (killEscalated) return;
+          if (isProcessTreeGone(pid, startTokens)) {
             clearTimeout(timer);
             resolve();
             return;
           }
-          we = setInterval(() => {
-            if (!isProcessTreeGone(pid, w)) return;
+          pollTimer = setInterval(() => {
+            if (!isProcessTreeGone(pid, startTokens)) return;
             clearTimeout(timer);
-            clearInterval(we);
+            clearInterval(pollTimer);
             resolve();
           }, TREE_POLL_INTERVAL_MS);
-          we.unref();
+          pollTimer.unref();
         });
     });
     let { pendingKillBackstops, dyingTrees } = this.#p;
-    let Z = () => ({
+    let buildSweepEntry = () => ({
       pid,
-      running: !hasProcessExited(n),
+      running: !hasProcessExited(childProcess),
       askedAt,
-      descendants: w,
+      descendants: startTokens,
     });
     pendingKillBackstops.add(promise);
-    dyingTrees.add(Z);
+    dyingTrees.add(buildSweepEntry);
     let cpuAccountWindow = this.#f.cpuAccountWindow;
     if (cpuAccountWindow !== undefined) markCpuWindowHeld(cpuAccountWindow);
     promise.finally(() => {
       pendingKillBackstops.delete(promise);
-      dyingTrees.delete(Z);
+      dyingTrees.delete(buildSweepEntry);
       if (cpuAccountWindow !== undefined) releaseCpuWindow(cpuAccountWindow);
     });
     return promise;
   }
-  kill(e) {
-    if (this.#e === "running" || this.#e === "backgrounded") this.#T = e;
+  kill(reason) {
+    if (this.#e === "running" || this.#e === "backgrounded") this.#T = reason;
     return this.#C();
   }
-  background(taskId, n) {
+  background(taskId, options) {
     if (this.#e === "running") {
       this.#t = taskId;
       this.#e = "backgrounded";
-      if (n.atExit === "leave") this.#p.liveShellCommands.delete(this);
+      if (options.atExit === "leave") this.#p.liveShellCommands.delete(this);
       this.#A();
       if (this.taskOutput.stdoutToFile) this.#M();
-      else if (!n.skipSpill) this.taskOutput.spillToDisk();
+      else if (!options.skipSpill) this.taskOutput.spillToDisk();
       return true;
     }
     return false;
@@ -630,12 +668,12 @@ ${stdout}`
     return this.#r?.pid;
   }
   exitSweepTarget() {
-    let e = this.#r;
-    return e?.pid === undefined
+    let childProcess = this.#r;
+    return childProcess?.pid === undefined
       ? undefined
       : {
-          pid: e.pid,
-          running: !hasProcessExited(e),
+          pid: childProcess.pid,
+          running: !hasProcessExited(childProcess),
         };
   }
   async detach() {
@@ -663,17 +701,27 @@ ${stdout}`
  * 用子进程、abort 信号、超时、TaskOutput 等构造 ShellCommandImpl。
  */
 function wrapSpawn(
-  e,
-  n,
-  r,
-  s,
-  shouldAutoBackground = false,
-  y = MAX_TASK_OUTPUT_BYTES_2,
-  caller = "inner",
-  w,
-  L,
+  childProcess,
+  abortSignal,
+  timeoutMs,
+  taskOutput,
+  hasOnTimeout = false,
+  maxOutputBytes = MAX_TASK_OUTPUT_BYTES_2,
+  level = "inner",
+  cwd,
+  timing,
 ) {
-  return new ShellCommandImpl(e, n, r, s, shouldAutoBackground, y, caller, w, L);
+  return new ShellCommandImpl(
+    childProcess,
+    abortSignal,
+    timeoutMs,
+    taskOutput,
+    hasOnTimeout,
+    maxOutputBytes,
+    level,
+    cwd,
+    timing,
+  );
 }
 //@ chunk-e6aww6q8.js:265530-265807 fingerprint = AbortedShellCommand (0.952)
 /**
@@ -708,12 +756,12 @@ function createAbortedCommand() {
   return new AbortedShellCommand();
 }
 //@ chunk-e6aww6q8.js:265836-265883 layout
-function isWindowsExitedProcess(e) {
-  return getPlatform() === "windows" && hasProcessExited(e);
+function isWindowsExitedProcess(childProcess) {
+  return getPlatform() === "windows" && hasProcessExited(childProcess);
 }
 //@ chunk-e6aww6q8.js:265883-265945 layout
-function hasProcessExited(e) {
-  return e.exitCode !== null || e.signalCode !== null;
+function hasProcessExited(childProcess) {
+  return childProcess.exitCode !== null || childProcess.signalCode !== null;
 }
 //@ chunk-e6aww6q8.js:265945-266521 layout
 /**
@@ -721,39 +769,42 @@ function hasProcessExited(e) {
  */
 function sweepShellTreesOnExit(exitCode) {
   try {
-    let n = shellCommandRegistry();
-    let r = new Map();
-    let s = new Map();
-    for (let [S, w] of [
-      ...Array.from(n.liveShellCommands, (L) => [r, () => L.exitSweepTarget?.()]),
-      ...Array.from(n.dyingTrees, (L) => [s, L]),
+    let registry = shellCommandRegistry();
+    let liveEntries = new Map();
+    let dyingEntries = new Map();
+    for (let [targetMap, getTarget] of [
+      ...Array.from(registry.liveShellCommands, (command) => [
+        liveEntries,
+        () => command.exitSweepTarget?.(),
+      ]),
+      ...Array.from(registry.dyingTrees, (dyingTree) => [dyingEntries, dyingTree]),
     ])
       try {
-        let L = w();
-        let G = L && S.get(L.pid);
-        if (L !== undefined)
-          S.set(
-            L.pid,
-            G === undefined
-              ? L
+        let target = getTarget();
+        let existing = target && targetMap.get(target.pid);
+        if (target !== undefined)
+          targetMap.set(
+            target.pid,
+            existing === undefined
+              ? target
               : {
-                  ...L,
-                  askedAt: G.askedAt ?? L.askedAt,
-                  descendants: new Map([...(G.descendants ?? []), ...(L.descendants ?? [])]),
+                  ...target,
+                  askedAt: existing.askedAt ?? target.askedAt,
+                  descendants: new Map([...(existing.descendants ?? []), ...(target.descendants ?? [])]),
                 },
           );
       } catch {}
-    let shells = [...new Map([...r, ...s]).values()];
+    let shells = [...new Map([...liveEntries, ...dyingEntries]).values()];
     if (shells.length === 0) return;
-    let y = sweepShellTrees(shells, KILL_GRACE_MS);
+    let sweepResult = sweepShellTrees(shells, KILL_GRACE_MS);
     logForDiagnosticsNoPII(
       "info",
       "cli_shell_exit_sweep",
       {
         exit_code: exitCode,
-        shell_trees: y.trees,
-        waited_ms: y.waitedMs,
-        processes_sigkilled: y.outlivedGrace,
+        shell_trees: sweepResult.trees,
+        waited_ms: sweepResult.waitedMs,
+        processes_sigkilled: sweepResult.outlivedGrace,
       },
       "now",
     );
@@ -776,29 +827,29 @@ function installExitSweep() {
 /**
  * 用 kill(pid,0) 探测进程组与已知子孙是否都已不存在（ESRCH）。
  */
-function isProcessTreeGone(pid, n) {
-  let r = true;
-  for (let s of [-pid, pid])
+function isProcessTreeGone(pid, startTokens) {
+  let allGone = true;
+  for (let target of [-pid, pid])
     try {
-      process.kill(s, 0);
-      r = false;
+      process.kill(target, 0);
+      allGone = false;
     } catch (error) {
-      if (getErrnoCode(error) !== "ESRCH") r = false;
+      if (getErrnoCode(error) !== "ESRCH") allGone = false;
     }
-  for (let key of n.keys())
+  for (let key of startTokens.keys())
     try {
       process.kill(key, 0);
-      r = false;
+      allGone = false;
     } catch {
-      n.delete(key);
+      startTokens.delete(key);
     }
-  return r;
+  return allGone;
 }
 //@ chunk-e6aww6q8.js:266865-267146 fingerprint = createFailedCommand (0.932)
 /**
  * 构造未启动即失败的命令对象：code 1、stderr=原因、preSpawnError（可带 preSpawnErrorCode 如 e2big）。
  */
-function createFailedCommand(preSpawnError, n) {
+function createFailedCommand(preSpawnError, errorCode) {
   let taskOutput = new TaskOutput(generateTaskId("local_bash"), null);
   return {
     status: "completed",
@@ -808,8 +859,8 @@ function createFailedCommand(preSpawnError, n) {
       stderr: preSpawnError,
       interrupted: false,
       preSpawnError,
-      ...(n !== undefined && {
-        preSpawnErrorCode: n,
+      ...(errorCode !== undefined && {
+        preSpawnErrorCode: errorCode,
       }),
     }),
     taskOutput,
@@ -826,11 +877,11 @@ function createFailedCommand(preSpawnError, n) {
 /**
  * 结果没有 backgroundTaskId 时原样返回，否则去掉 shellUsage 字段（具体用途未完全确认）。
  */
-function stripShellUsageUnlessBackgrounded(e) {
-  return e.backgroundTaskId === undefined
-    ? e
+function stripShellUsageUnlessBackgrounded(result) {
+  return result.backgroundTaskId === undefined
+    ? result
     : {
-        ...e,
+        ...result,
         shellUsage: undefined,
       };
 }

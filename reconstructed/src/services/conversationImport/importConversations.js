@@ -10,7 +10,13 @@
  */
 import { writeFile, mkdir, stat, readFile } from "fs/promises";
 import { dirname, join, basename } from "path";
-import { array, unknown, string, u, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  array,
+  unknown,
+  stringSchema,
+  objectSchema,
+  numberSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { normalizeCaseForComparison, DANGEROUS_FILES_LOWER } from "../../utils/permissions/filesystem.js";
 import { TRAILING_DOTS_OR_SPACES_RE, isReservedDeviceName } from "../../utils/windowsProfileFolders.js";
@@ -35,23 +41,21 @@ import { TOOL_CATALOG } from "../../tools.js";
 import { query } from "../../query.js";
 import { createRemoteFileState, READ_FILE_STATE_CACHE_SIZE } from "../../utils/remoteFileState.js";
 import { InstanceRegistry } from "../../utils/instanceRegistry.js";
-import {
-  Jce,
-  createEmptyArtifactSessionStores,
-  NO_OP_COLOR_ASSIGNER,
-} from "../artifacts/artifactReadConsent.js";
+import { NO_BRIDGE_CONSENT } from "../../screens/repl/bridgeChannelSlot.js";
 import { UNLIMITED_RATE_LIMITER } from "../../tasks/taskLoopRegistry.js";
 import { NOOP_FUNCTION_HOOK_REGISTRY } from "../../utils/hooks/functionHookNoop.js";
 import { NOOP_NOTIFICATION_DRAIN } from "../queuedNotifications/queuedNotifications.js";
 import { artifactReadObservationIn } from "../artifacts/readObservation.js";
+import { createEmptyArtifactSessionStores } from "../artifacts/artifactReadConsent.js";
 import { NOOP_AGENT_NAME_REGISTRY } from "../../utils/agentNameRegistry.js";
+import { NO_OP_COLOR_ASSIGNER } from "../../tools/AgentTool/agentColorManager.js";
 import { isAttachmentReadDeniedOrThrown } from "../../utils/attachments/fileAttachments.js";
 import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
 import { generateFileAttachment } from "../../utils/attachments.js";
 import { createAttachmentMessage_2 as createAttachmentMessage, logForDebugging } from "../../utils/debug.js";
-import { Ph } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
+import { sniffImageMediaType } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { maybeResizeAndDownsampleImageBlock } from "../../utils/imageResizer.js";
-import { IMAGE_LIMITS } from "../../utils/truncateGraphemes.js";
+import { IMAGE_LIMITS } from "../../utils/mediaLimits.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { NO_CONTENT_MESSAGE } from "../../constants/messages.js";
 import { slugifyTaskName } from "../../components/daemon/DaemonScheduledTaskDetail.js";
@@ -76,13 +80,13 @@ var AUDIO_VIDEO_EXT_RE = /\.(mp3|m4a|mp4|wav|ogg|oga|opus|flac|aac|webm)$/i;
 /**
  * 宽松数组 schema：非数组视为空，元素逐个校验，丢弃不合法的。
  */
-function lenientArrayOf(e) {
+function lenientArrayOf(schema) {
   return array(unknown())
     .catch([])
-    .transform((n) =>
-      n.flatMap((s) => {
-        let r = e.safeParse(s);
-        return r.success ? [r.data] : [];
+    .transform((items) =>
+      items.flatMap((item) => {
+        let parsed = schema.safeParse(item);
+        return parsed.success ? [parsed.data] : [];
       }),
     );
 }
@@ -90,15 +94,15 @@ function lenientArrayOf(e) {
 /**
  * 导出摘要的 schema（账号、各对话/项目的条数）。
  */
-var optionalString = DoctorLazy(() => string().optional().catch(undefined));
+var optionalString = DoctorLazy(() => stringSchema().optional().catch(undefined));
 var userFileRefSchema = DoctorLazy(() =>
-  u({
-    file_uuid: string(),
+  objectSchema({
+    file_uuid: stringSchema(),
     file_name: optionalString(),
   }),
 );
 var contentPartInputSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     id: optionalString(),
     command: optionalString(),
     content: optionalString(),
@@ -114,55 +118,55 @@ var contentPartInputSchema = DoctorLazy(() =>
     .catch(undefined),
 );
 var chatMessageSchema = DoctorLazy(() =>
-  u({
-    uuid: string(),
-    parent_message_uuid: string().nullish().catch(null),
-    sender: string().catch("assistant"),
-    text: string().catch(""),
+  objectSchema({
+    uuid: stringSchema(),
+    parent_message_uuid: stringSchema().nullish().catch(null),
+    sender: stringSchema().catch("assistant"),
+    text: stringSchema().catch(""),
     content: lenientArrayOf(
-      u({
-        type: string(),
+      objectSchema({
+        type: stringSchema(),
         text: optionalString(),
         name: optionalString(),
         input: contentPartInputSchema(),
       }),
     ),
-    created_at: string().catch(""),
+    created_at: stringSchema().catch(""),
     attachments: lenientArrayOf(
-      u({
-        file_name: string().catch(""),
-        extracted_content: string(),
+      objectSchema({
+        file_name: stringSchema().catch(""),
+        extracted_content: stringSchema(),
       }),
     ),
     files: lenientArrayOf(userFileRefSchema()),
   }),
 );
 var conversationSchema = DoctorLazy(() =>
-  u({
-    uuid: string(),
-    name: string().catch(""),
+  objectSchema({
+    uuid: stringSchema(),
+    name: stringSchema().catch(""),
     created_at: optionalString(),
     updated_at: optionalString(),
-    project_uuid: string().nullish().catch(null),
+    project_uuid: stringSchema().nullish().catch(null),
     chat_messages: lenientArrayOf(chatMessageSchema()),
   }),
 );
 var projectDocSchema = DoctorLazy(() =>
-  u({
-    uuid: string(),
-    name: string().catch(""),
+  objectSchema({
+    uuid: stringSchema(),
+    name: stringSchema().catch(""),
     prompt_template: optionalString(),
     docs: lenientArrayOf(
-      u({
+      objectSchema({
         filename: optionalString(),
-        content: string(),
+        content: stringSchema(),
       }),
     ),
     files: lenientArrayOf(userFileRefSchema()),
   }),
 );
 var exportBundleSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     manifest: unknown().optional(),
     conversations: lenientArrayOf(conversationSchema()),
     projects: lenientArrayOf(projectDocSchema()),
@@ -173,18 +177,18 @@ var exportBundleSchema = DoctorLazy(() =>
   }),
 );
 var accountStatsSchema = DoctorLazy(() =>
-  u({
-    account_uuid: string().catch("unknown"),
+  objectSchema({
+    account_uuid: stringSchema().catch("unknown"),
     conversations: array(
-      u({
-        uuid: string().catch(""),
-        message_count: E(),
+      objectSchema({
+        uuid: stringSchema().catch(""),
+        message_count: numberSchema(),
       }),
     ),
     projects: array(
-      u({
-        uuid: string().catch(""),
-        doc_count: E(),
+      objectSchema({
+        uuid: stringSchema().catch(""),
+        doc_count: numberSchema(),
       }),
     ),
   }),
@@ -193,19 +197,19 @@ var accountStatsSchema = DoctorLazy(() =>
 /**
  * 把任意字符串清洗成安全文件名片段（非法字符换成 _）。
  */
-function sanitizeFilenameSegment(e) {
-  return e.replace(/[^a-zA-Z0-9._-]+/g, "_");
+function sanitizeFilenameSegment(name) {
+  return name.replace(/[^a-zA-Z0-9._-]+/g, "_");
 }
 //@ chunk-sdzpqjn8.js:18144-18193 placement
 /**
  * 安全文件名片段，最多 128 字符，空时用 "file"。
  */
-function safeFilenameSegment(e) {
-  return sanitizeFilenameSegment(e).slice(0, 128) || "file";
+function safeFilenameSegment(name) {
+  return sanitizeFilenameSegment(name).slice(0, 128) || "file";
 }
 //@ chunk-sdzpqjn8.js:18193-18516 placement
-function PROJECT_DOC_NAMES(e) {
-  let replaced = normalizeCaseForComparison(e).replace(TRAILING_DOTS_OR_SPACES_RE, "");
+function PROJECT_DOC_NAMES(name) {
+  let replaced = normalizeCaseForComparison(name).replace(TRAILING_DOTS_OR_SPACES_RE, "");
   return replaced === "claude.md" ||
     replaced === "claude.local.md" ||
     replaced === "architecture.md" ||
@@ -220,19 +224,21 @@ function PROJECT_DOC_NAMES(e) {
     DANGEROUS_FILES_LOWER.has(replaced) ||
     replaced === ".worktreeinclude" ||
     isReservedDeviceName(replaced)
-    ? `imported-${e}`
-    : e;
+    ? `imported-${name}`
+    : name;
 }
 //@ chunk-sdzpqjn8.js:18516-18586 placement
 /**
  * 在文件名里拼上 file_uuid（有值时）。
  */
-function fileUuidFilename(e, n) {
-  return typeof n === "string" && n !== "" ? `${e}-${safeFilenameSegment(n)}` : e;
+function fileUuidFilename(fileUuid, suffix) {
+  return typeof suffix === "string" && suffix !== ""
+    ? `${fileUuid}-${safeFilenameSegment(suffix)}`
+    : fileUuid;
 }
 //@ chunk-sdzpqjn8.js:18586-18703 placement = tryCreateExclusive (1)
-async function tryCreateExclusive(e, n) {
-  return writeFile(e, n, {
+async function tryCreateExclusive(path, content) {
+  return writeFile(path, content, {
     mode: 384,
     flag: "wx",
   }).then(
@@ -247,61 +253,61 @@ async function tryCreateExclusive(e, n) {
 /**
  * 非无盘会话时创建目录（权限 0700）。
  */
-async function ensureDirUnlessDiskless(projectDir, n) {
-  if (n) return;
+async function ensureDirUnlessDiskless(projectDir, diskless) {
+  if (diskless) return;
   await mkdir(projectDir, {
     recursive: true,
     mode: 448,
   });
 }
 //@ chunk-sdzpqjn8.js:18774-18913 placement
-async function pathExists(e, n) {
-  if (n) {
-    let s = await n.backend.statMeta(n.key);
-    return s.ok || s.error.code !== "NotFound";
+async function pathExists(path, storageRef) {
+  if (storageRef) {
+    let statResult = await storageRef.backend.statMeta(storageRef.key);
+    return statResult.ok || statResult.error.code !== "NotFound";
   }
-  return stat(e).then(
+  return stat(path).then(
     () => true,
     () => false,
   );
 }
 //@ chunk-sdzpqjn8.js:18913-19384 placement
-async function appendImportedTranscript(e, n, transcriptStorageKey) {
-  if (transcriptStorageKey && n.length > 0) {
-    if (await pathExists(e, transcriptStorageKey)) return false;
-    let a = await transcriptStorageKey.backend.append(
-      transcriptStorageKey.key,
-      n.map((g) => ({
+async function appendImportedTranscript(dir, lines, storageRef) {
+  if (storageRef && lines.length > 0) {
+    if (await pathExists(dir, storageRef)) return false;
+    let appended = await storageRef.backend.append(
+      storageRef.key,
+      lines.map((line) => ({
         data:
-          jsonStringify(g) +
+          jsonStringify(line) +
           `
 `,
       })),
     );
-    if (a.ok) return true;
+    if (appended.ok) return true;
     throw Object.assign(
       new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `transcript import append failed: ${a.error.code}`,
+        `transcript import append failed: ${appended.error.code}`,
         "transcript import append failed",
       ),
       {
-        cause: a.error,
+        cause: appended.error,
       },
     );
   }
-  if (transcriptStorageKey)
-    await mkdir(dirname(e), {
+  if (storageRef)
+    await mkdir(dirname(dir), {
       recursive: true,
       mode: 448,
     });
-  let r =
-    n.map((a) => jsonStringify(a)).join(`
+  let body =
+    lines.map((created) => jsonStringify(created)).join(`
 `) +
-    (n.length
+    (lines.length
       ? `
 `
       : "");
-  return writeFile(e, r, {
+  return writeFile(dir, body, {
     mode: 384,
     flag: "wx",
   }).then(
@@ -316,13 +322,15 @@ async function appendImportedTranscript(e, n, transcriptStorageKey) {
 /**
  * 取消息的正文文本（优先 content 里的 text 块，否则 message.text）。
  */
-function messageText(e) {
-  return e.content.find((n) => n.type === "text" && n.text !== undefined)?.text ?? e.text;
+function messageText(content) {
+  return (
+    content.content.find((block) => block.type === "text" && block.text !== undefined)?.text ?? content.text
+  );
 }
 //@ chunk-sdzpqjn8.js:19474-19646 placement
-function exportMessageText(e, n) {
-  let s = messageText(e);
-  let joined = e.attachments
+function exportMessageText(message, prefixLines) {
+  let text = messageText(message);
+  let joined = message.attachments
     .map(
       (attachment) => `
 
@@ -332,12 +340,12 @@ ${attachment.extracted_content}
     )
     .join("");
   return (
-    (n.length > 0
-      ? `${n.join(`
+    (prefixLines.length > 0
+      ? `${prefixLines.join(`
 `)}
 `
       : "") +
-    s +
+    text +
     joined
   );
 }
@@ -361,9 +369,9 @@ function replaceFirstText(content, oldStr, newStr) {
   if (newStr === undefined) return;
   if (content === undefined) return newStr;
   if (oldStr === undefined) return;
-  let r = content.includes(oldStr) ? oldStr : oldStr.trim();
-  if (r === "") return;
-  return content.replace(r, () => newStr);
+  let needle = content.includes(oldStr) ? oldStr : oldStr.trim();
+  if (needle === "") return;
+  return content.replace(needle, () => newStr);
 }
 //@ chunk-sdzpqjn8.js:19919-20093 placement
 function replaceUniqueText(content, oldStr, newStr) {
@@ -446,29 +454,29 @@ function artifactExtension(type, language) {
   }
 }
 //@ chunk-sdzpqjn8.js:20916-21044 placement
-function splitFileExtension(e) {
-  let index = e.lastIndexOf(".");
-  return index > 0 && index < e.length - 1
+function splitFileExtension(name) {
+  let index = name.lastIndexOf(".");
+  return index > 0 && index < name.length - 1
     ? {
-        stem: e.slice(0, index),
-        extension: e.slice(index),
+        stem: name.slice(0, index),
+        extension: name.slice(index),
       }
     : {
-        stem: e,
+        stem: name,
         extension: "",
       };
 }
 //@ chunk-sdzpqjn8.js:21044-21431 placement
-function fileNameForArtifact(e) {
-  let replaced = e.title.replace(TRAILING_DOTS_OR_SPACES_RE, "");
+function fileNameForArtifact(artifact) {
+  let name = artifact.title.replace(TRAILING_DOTS_OR_SPACES_RE, "");
   let { stem, extension } =
-    e.kind === "file"
-      ? splitFileExtension(replaced)
+    artifact.kind === "file"
+      ? splitFileExtension(name)
       : {
-          stem: replaced,
-          extension: artifactExtension(e.type, e.language),
+          stem: name,
+          extension: artifactExtension(artifact.type, artifact.language),
         };
-  if (e.kind === "file") {
+  if (artifact.kind === "file") {
     extension = sanitizeFilenameSegment(extension);
     if (!TEXT_ARTIFACT_EXTENSIONS.has(extension.toLowerCase())) {
       stem += extension;
@@ -478,7 +486,7 @@ function fileNameForArtifact(e) {
     stem = stem.slice(0, -extension.length);
   stem = safeFilenameSegment(stem).replace(/^\.+/, "").replace(TRAILING_DOTS_OR_SPACES_RE, "");
   return {
-    stem: /[a-zA-Z0-9]/.test(stem) ? stem : e.kind,
+    stem: /[a-zA-Z0-9]/.test(stem) ? stem : artifact.kind,
     extension,
   };
 }
@@ -504,37 +512,37 @@ function MIME_TYPE_EXTENSIONS(type, language) {
   }
 }
 //@ chunk-sdzpqjn8.js:21742-21854 placement
-function artifactHeading(e) {
-  return `**${e.kind === "file" ? "File" : "Artifact"}: ${e.title}**${e.version > 1 ? ` (v${e.version})` : ""}`;
+function artifactHeading(artifact) {
+  return `**${artifact.kind === "file" ? "File" : "Artifact"}: ${artifact.title}**${artifact.version > 1 ? ` (v${artifact.version})` : ""}`;
 }
 //@ chunk-sdzpqjn8.js:21854-22102 placement
-function formatArtifactBlock(e) {
-  let n = artifactHeading(e);
-  let s =
-    e.kind === "file"
+function formatArtifactBlock(artifact) {
+  let heading = artifactHeading(artifact);
+  let extension =
+    artifact.kind === "file"
       ? truncateToLength(
-          splitFileExtension(e.title).extension.slice(1).toLowerCase(),
+          splitFileExtension(artifact.title).extension.slice(1).toLowerCase(),
           MAX_TITLE_EXTENSION_CHARS,
         )
-      : MIME_TYPE_EXTENSIONS(e.type, e.language);
-  if (s === undefined)
-    return `${n}
+      : MIME_TYPE_EXTENSIONS(artifact.type, artifact.language);
+  if (extension === undefined)
+    return `${heading}
 
-${e.content}`;
-  let r = e.content.endsWith(`
+${artifact.content}`;
+  let artifactArg = artifact.content.endsWith(`
 `)
-    ? e.content.slice(0, -1)
-    : e.content;
-  return `${n}
+    ? artifact.content.slice(0, -1)
+    : artifact.content;
+  return `${heading}
 
-${fenceCodeBlock(r, s)}`;
+${fenceCodeBlock(artifactArg, extension)}`;
 }
 //@ chunk-sdzpqjn8.js:22102-22171 placement
 /**
  * 生成 “Artifact 已更新，最终版本见下” 的说明文本。
  */
-function artifactUpdatedText(e) {
-  return `${artifactHeading(e)} \u2014 updated; final version below.`;
+function artifactUpdatedText(artifact) {
+  return `${artifactHeading(artifact)} \u2014 updated; final version below.`;
 }
 //@ chunk-sdzpqjn8.js:22171-22249 placement
 /**
@@ -557,202 +565,212 @@ function createImportBudget(cap = DEFAULT_TOTAL_CHAR_CAP) {
  */
 function convertExportMessages(
   chatMessages,
-  n = DEFAULT_MESSAGE_CHAR_BUDGET,
+  charBudget = DEFAULT_MESSAGE_CHAR_BUDGET,
   importBudget = createImportBudget(),
 ) {
-  let r = new Map();
-  chatMessages.forEach((m, h) => {
-    if (!r.has(m.uuid)) r.set(m.uuid, h);
+  let indexByUuid = new Map();
+  chatMessages.forEach((message, index) => {
+    if (!indexByUuid.has(message.uuid)) indexByUuid.set(message.uuid, index);
   });
-  let a = (m) => {
-    let parentMessageUuid = chatMessages[m].parent_message_uuid;
-    let v = typeof parentMessageUuid === "string" ? r.get(parentMessageUuid) : undefined;
-    return v === undefined || v === m ? undefined : v;
+  let parentIndex = (index) => {
+    let parentMessageUuid = chatMessages[index].parent_message_uuid;
+    let parentIndex = typeof parentMessageUuid === "string" ? indexByUuid.get(parentMessageUuid) : undefined;
+    return parentIndex === undefined || parentIndex === index ? undefined : parentIndex;
   };
-  let g = new Map();
-  let S = [];
-  chatMessages.forEach((m, h) => {
-    let v = a(h);
-    if (v === undefined) {
-      S.push(h);
+  let childrenByParent = new Map();
+  let roots = [];
+  chatMessages.forEach((message, index) => {
+    let parent = parentIndex(index);
+    if (parent === undefined) {
+      roots.push(index);
       return;
     }
-    let O = g.get(v);
-    if (O) O.push(h);
-    else g.set(v, [h]);
+    let children = childrenByParent.get(parent);
+    if (children) children.push(index);
+    else childrenByParent.set(parent, [index]);
   });
-  let y = chatMessages.length - 1;
+  let leafIndex = chatMessages.length - 1;
   for (let j = 0; j < chatMessages.length; j++) {
-    let h = g.get(y);
-    if (h === undefined || h.length === 0) break;
-    y = h.at(-1);
+    let children = childrenByParent.get(leafIndex);
+    if (children === undefined || children.length === 0) break;
+    leafIndex = children.at(-1);
   }
-  let X = new Map();
+  let finalState = new Map();
   let editsFailed = 0;
-  let mapped = chatMessages.map((m) =>
-    m.content.map(() => {
+  let mapped = chatMessages.map((message) =>
+    message.content.map(() => {
       return;
     }),
   );
-  let b = new Set();
-  let w = 0;
-  let P = (m) => {
-    w += m;
-    importBudget.spent += m;
+  let visited = new Set();
+  let spentChars = 0;
+  let spend = (cost) => {
+    spentChars += cost;
+    importBudget.spent += cost;
   };
-  let f = () => w > n || importBudget.spent > importBudget.cap;
-  let x = [];
-  let M = (m, inherited, marked) => {
-    let O = chatMessages[m];
-    let L = marked;
-    if (O.sender === "human")
+  let overBudget = () => spentChars > charBudget || importBudget.spent > importBudget.cap;
+  let omitted = [];
+  let applyBlock = (messageIndex, inherited, marked) => {
+    let message = chatMessages[messageIndex];
+    let inheritedMarked = marked;
+    if (message.sender === "human")
       return {
         state: inherited,
-        marked: L,
+        marked: inheritedMarked,
       };
-    let N;
-    O.content.forEach((D, V) => {
-      let input = D.input;
-      if (D.type !== "tool_use" || input === undefined) return;
-      let I = D.name === ARTIFACTS;
-      let G = D.name === CREATE_FILE || D.name === STR_REPLACE;
-      let j =
-        I && input.id !== undefined
+    let nextState;
+    message.content.forEach((content, blockIndex) => {
+      let input = content.input;
+      if (content.type !== "tool_use" || input === undefined) return;
+      let isArtifact = content.name === ARTIFACTS;
+      let isFileWrite = content.name === CREATE_FILE || content.name === STR_REPLACE;
+      let artifactKey =
+        isArtifact && input.id !== undefined
           ? `artifact:${input.id}`
-          : G && input.path !== undefined
+          : isFileWrite && input.path !== undefined
             ? `file:${input.path}`
             : undefined;
-      if (j === undefined) return;
-      if (f()) {
-        if (!L) {
-          x.push({
-            i: m,
-            b: V,
+      if (artifactKey === undefined) return;
+      if (overBudget()) {
+        if (!inheritedMarked) {
+          omitted.push({
+            i: messageIndex,
+            b: blockIndex,
           });
-          L = true;
+          inheritedMarked = true;
         }
         return;
       }
-      let F = (N ?? inherited).get(j);
-      let Y = F?.content.length ?? 0;
-      let K =
-        (I && input.command === "update" && !input.content) || D.name === STR_REPLACE
-          ? Math.ceil((Y * (input.old_str?.length ?? 0)) / STR_REPLACE_PENALTY_DIVISOR)
+      let previousArtifact = (nextState ?? inherited).get(artifactKey);
+      let previousLength = previousArtifact?.content.length ?? 0;
+      let editPenalty =
+        (isArtifact && input.command === "update" && !input.content) || content.name === STR_REPLACE
+          ? Math.ceil((previousLength * (input.old_str?.length ?? 0)) / STR_REPLACE_PENALTY_DIVISOR)
           : 0;
-      P(Math.max(MIN_FILE_TEXT_CHARS, input.content?.length ?? 0, input.file_text?.length ?? 0, Y) + K);
-      if (f()) {
-        if (!L) {
-          x.push({
-            i: m,
-            b: V,
+      spend(
+        Math.max(
+          MIN_FILE_TEXT_CHARS,
+          input.content?.length ?? 0,
+          input.file_text?.length ?? 0,
+          previousLength,
+        ) + editPenalty,
+      );
+      if (overBudget()) {
+        if (!inheritedMarked) {
+          omitted.push({
+            i: messageIndex,
+            b: blockIndex,
           });
-          L = true;
+          inheritedMarked = true;
         }
         return;
       }
-      let H;
-      if (I)
-        H =
+      let artifactContent;
+      if (isArtifact)
+        artifactContent =
           input.command === "create" || input.command === "rewrite"
             ? input.content?.trimStart()
             : input.command === "update"
               ? input.content
                 ? input.content
-                : replaceFirstText(F?.content, input.old_str, input.new_str)
+                : replaceFirstText(previousArtifact?.content, input.old_str, input.new_str)
               : undefined;
-      else if (D.name === CREATE_FILE) H = input.file_text;
+      else if (content.name === CREATE_FILE) artifactContent = input.file_text;
       else {
-        H = replaceUniqueText(F?.content, input.old_str, input.new_str);
-        if (H === undefined && F !== undefined) editsFailed += 1;
+        artifactContent = replaceUniqueText(previousArtifact?.content, input.old_str, input.new_str);
+        if (artifactContent === undefined && previousArtifact !== undefined) editsFailed += 1;
       }
-      if (H === undefined) return;
-      let it = {
-        kind: F?.kind ?? (I ? "artifact" : "file"),
+      if (artifactContent === undefined) return;
+      let artifactState = {
+        kind: previousArtifact?.kind ?? (isArtifact ? "artifact" : "file"),
         title:
-          F?.title ??
-          (sanitizeDisplayText(I ? (input.title ?? "") : ((input.path ?? "").split(/[/\\]/).pop() ?? ""), {
-            drop: /`/g,
-            maxCodeUnits: MAX_CODE_UNITS_IN_DROP,
-          }) ||
+          previousArtifact?.title ??
+          (sanitizeDisplayText(
+            isArtifact ? (input.title ?? "") : ((input.path ?? "").split(/[/\\]/).pop() ?? ""),
+            {
+              drop: /`/g,
+              maxCodeUnits: MAX_CODE_UNITS_IN_DROP,
+            },
+          ) ||
             "Untitled"),
-        type: F?.type ?? (I ? (input.type ?? "") : ""),
-        language: F?.language ?? (I ? (input.language ?? "") : ""),
-        content: H,
-        version: (F?.version ?? 0) + 1,
+        type: previousArtifact?.type ?? (isArtifact ? (input.type ?? "") : ""),
+        language: previousArtifact?.language ?? (isArtifact ? (input.language ?? "") : ""),
+        content: artifactContent,
+        version: (previousArtifact?.version ?? 0) + 1,
         final: false,
       };
-      if (N === undefined) {
-        P(inherited.size * CHAR_TO_TOKEN_ESTIMATE);
-        N = new Map(inherited);
+      if (nextState === undefined) {
+        spend(inherited.size * CHAR_TO_TOKEN_ESTIMATE);
+        nextState = new Map(inherited);
       }
-      N.set(j, it);
-      mapped[m][V] = it;
+      nextState.set(artifactKey, artifactState);
+      mapped[messageIndex][blockIndex] = artifactState;
     });
     return {
-      state: N ?? inherited,
-      marked: L,
+      state: nextState ?? inherited,
+      marked: inheritedMarked,
     };
   };
   let weakSet = new WeakSet();
-  let k = (m) => {
-    let h = [
+  let walk = (startIndex) => {
+    let stack = [
       {
-        i: m,
+        i: startIndex,
         inherited: new Map(),
         marked: false,
       },
     ];
-    while (h.length > 0) {
-      let { i: v, inherited, marked } = h.pop();
-      if (b.has(v)) continue;
-      b.add(v);
-      let { state, marked: marked_2 } = M(v, inherited, marked);
-      if (v === y) X = state;
-      let V = g.get(v) ?? [];
-      if (V.every((c) => b.has(c)) && !weakSet.has(state)) {
+    while (stack.length > 0) {
+      let { i: index, inherited, marked } = stack.pop();
+      if (visited.has(index)) continue;
+      visited.add(index);
+      let { state, marked: marked_2 } = applyBlock(index, inherited, marked);
+      if (index === leafIndex) finalState = state;
+      let children = childrenByParent.get(index) ?? [];
+      if (children.every((child) => visited.has(child)) && !weakSet.has(state)) {
         weakSet.add(state);
-        for (let c of state.values()) c.final = true;
+        for (let artifact of state.values()) artifact.final = true;
       }
-      for (let j = V.length - 1; j >= 0; j--)
-        h.push({
-          i: V[j],
+      for (let j = children.length - 1; j >= 0; j--)
+        stack.push({
+          i: children[j],
           inherited: state,
           marked: marked_2,
         });
     }
   };
-  S.forEach(k);
-  chatMessages.forEach((m, h) => {
-    if (b.has(h)) return;
-    let v = new Set();
-    let O = h;
-    while (!v.has(O)) {
-      v.add(O);
-      let L = a(O);
-      if (L === undefined || b.has(L)) break;
-      O = L;
+  roots.forEach(walk);
+  chatMessages.forEach((message, index) => {
+    if (visited.has(index)) return;
+    let seen = new Set();
+    let current = index;
+    while (!seen.has(current)) {
+      seen.add(current);
+      let parent = parentIndex(current);
+      if (parent === undefined || visited.has(parent)) break;
+      current = parent;
     }
-    k(O);
+    walk(current);
   });
-  let J = new Set(X.values());
-  let R = [];
-  let mapped_2 = mapped.map((m, messageIndex) =>
-    m.map((v, blockIndex) => {
-      if (v === undefined) return;
-      if (!v.final) return artifactUpdatedText(v);
-      if (J.has(v))
-        R.push({
+  let finalArtifacts = new Set(finalState.values());
+  let kept = [];
+  let mapped_2 = mapped.map((blocks, messageIndex) =>
+    blocks.map((blockIndex, blockIndex_2) => {
+      if (blockIndex === undefined) return;
+      if (!blockIndex.final) return artifactUpdatedText(blockIndex);
+      if (finalArtifacts.has(blockIndex))
+        kept.push({
           messageIndex,
-          blockIndex,
-          artifact: v,
+          blockIndex: blockIndex_2,
+          artifact: blockIndex,
         });
-      return formatArtifactBlock(v);
+      return formatArtifactBlock(blockIndex);
     }),
   );
-  for (let m of x) mapped_2[m.i][m.b] = ARTIFACT_CONTENT_OMITTED_TEXT;
+  for (let omission of omitted) mapped_2[omission.i][omission.b] = ARTIFACT_CONTENT_OMITTED_TEXT;
   return {
     texts: mapped_2,
-    kept: R,
+    kept,
     editsFailed,
   };
 }
@@ -760,12 +778,12 @@ function convertExportMessages(
 /**
  * 导入导出包中的 Artifact 内容（功能关闭时跳过）。
  */
-function importArtifactContent(e, cwd, storageV5) {
+function importArtifactContent(file, cwd, storageV5) {
   let tools = [];
   let defaultAppState = getDefaultAppState_2();
   let session = forkRootSessionWithProject({
     host: getRootSession().host,
-    id: identityAgentId(e),
+    id: identityAgentId(file),
     project: {
       originalCwd: cwd,
       projectRoot: cwd,
@@ -776,7 +794,7 @@ function importArtifactContent(e, cwd, storageV5) {
     defaultAppState.toolPermissionContext,
     loadAllPermissionRulesFromDisk(),
   );
-  let y = {
+  let fileArg = {
     ...defaultAppState,
     toolPermissionContext,
   };
@@ -803,21 +821,21 @@ function importArtifactContent(e, cwd, storageV5) {
         activeAgents: [],
         allAgents: [],
       },
-      autoCompactWindow: y.autoCompactWindow,
-      fastMode: y.fastMode,
-      cacheBreakerPhrase: y.cacheBreakerPhrase,
+      autoCompactWindow: fileArg.autoCompactWindow,
+      fastMode: fileArg.fastMode,
+      cacheBreakerPhrase: fileArg.cacheBreakerPhrase,
     },
     abortController: new AbortController(),
     readFileState: createRemoteFileState(READ_FILE_STATE_CACHE_SIZE),
     toolState: new InstanceRegistry(),
     toolDecisions: new Map(),
-    permissionRelays: Jce,
-    getAppState: () => y,
+    permissionRelays: NO_BRIDGE_CONSENT,
+    getAppState: () => fileArg,
     setAppState: () => {},
-    getAdvisorSetting: () => y.advisorModel,
-    getMcp: () => y.mcp,
-    getProactivityLevel: () => y.proactivityLevel,
-    getWebBrowser: () => y.webBrowser,
+    getAdvisorSetting: () => fileArg.advisorModel,
+    getMcp: () => fileArg.mcp,
+    getProactivityLevel: () => fileArg.proactivityLevel,
+    getWebBrowser: () => fileArg.webBrowser,
     setToolPermissionContext: () => {},
     setSessionToolPermissionContext: () => {},
     taskRegistry: UNLIMITED_RATE_LIMITER,
@@ -825,7 +843,7 @@ function importArtifactContent(e, cwd, storageV5) {
     queuedNotificationsRegistry: NOOP_NOTIFICATION_DRAIN,
     setWebBrowserSlice: () => {},
     setArtifactReadVersion: () => {},
-    getArtifactReadObservation: artifactReadObservationIn(() => y),
+    getArtifactReadObservation: artifactReadObservationIn(() => fileArg),
     artifactRegistries: createEmptyArtifactSessionStores(),
     setArtifactContractTarget: () => {},
     getArtifactContractTarget: () => ({
@@ -853,27 +871,27 @@ function importArtifactContent(e, cwd, storageV5) {
   };
 }
 //@ chunk-sdzpqjn8.js:26453-26692 placement
-function redactAttachmentPaths(fileAttachment, n) {
-  if (typeof fileAttachment.filename === "string") fileAttachment.filename = n;
-  if (typeof fileAttachment.displayPath === "string") fileAttachment.displayPath = n;
+function redactAttachmentPaths(fileAttachment, placeholder) {
+  if (typeof fileAttachment.filename === "string") fileAttachment.filename = placeholder;
+  if (typeof fileAttachment.displayPath === "string") fileAttachment.displayPath = placeholder;
   let content = fileAttachment.content;
   let file = content?.file;
-  if (file && typeof file.filePath === "string") file.filePath = n;
+  if (file && typeof file.filePath === "string") file.filePath = placeholder;
   if (content?.type === "pdf" && file && "base64" in file) delete file.base64;
 }
 //@ chunk-sdzpqjn8.js:26692-27042 placement
-async function logImportAttachment(toolUseContext, cwd, s, uuid, fileUuid, timestamp) {
+async function logImportAttachment(toolUseContext, cwd, relPath, uuid, fileUuid, timestamp) {
   try {
-    if (isAttachmentReadDeniedOrThrown(s, getToolPermissionContext(toolUseContext))) return null;
+    if (isAttachmentReadDeniedOrThrown(relPath, getToolPermissionContext(toolUseContext))) return null;
     let fileAttachment = await generateFileAttachment(
-      join(cwd, s),
+      join(cwd, relPath),
       toolUseContext,
       "tengu_import_attachment_success",
       "tengu_import_attachment_error",
       "at-mention",
     );
     if (!fileAttachment) return null;
-    redactAttachmentPaths(fileAttachment, s);
+    redactAttachmentPaths(fileAttachment, relPath);
     return createAttachmentMessage(fileAttachment, {
       now: () => timestamp,
       uuid: () => hashAgentId(`${uuid}:${fileUuid}:attachment`, CLAUDE_AI_EXPORT_NAMESPACE),
@@ -886,25 +904,25 @@ async function logImportAttachment(toolUseContext, cwd, s, uuid, fileUuid, times
   }
 }
 //@ chunk-sdzpqjn8.js:27042-27362 placement
-function buildToolResultMessage(e, uuid, timestamp) {
+function buildToolResultMessage(written, uuid, timestamp) {
   return {
     type: "user",
-    uuid: hashAgentId(`${uuid}:${e.toolUseId}:result`, CLAUDE_AI_EXPORT_NAMESPACE),
+    uuid: hashAgentId(`${uuid}:${written.toolUseId}:result`, CLAUDE_AI_EXPORT_NAMESPACE),
     timestamp,
     message: {
       role: "user",
       content: [
         {
           type: "tool_result",
-          tool_use_id: e.toolUseId,
-          content: `File created successfully at: ${e.path}`,
+          tool_use_id: written.toolUseId,
+          content: `File created successfully at: ${written.path}`,
         },
       ],
     },
     toolUseResult: {
       type: "create",
-      filePath: e.path,
-      content: e.content,
+      filePath: written.path,
+      content: written.content,
       structuredPatch: [],
       originalFile: null,
     },
@@ -914,8 +932,18 @@ function buildToolResultMessage(e, uuid, timestamp) {
 /**
  * 转换一条导出消息（文本、附件、工具调用）为转录行。
  */
-async function convertExportMessage(chatMessage, cwd, sessionId, files, a, g, S, y, X) {
-  let T = {
+async function convertExportMessage(
+  chatMessage,
+  cwd,
+  sessionId,
+  files,
+  fileNamesById,
+  filePathsById,
+  attachments,
+  artifactTexts,
+  fileWrites,
+) {
+  let base = {
     parentUuid: chatMessage.parent_message_uuid ?? null,
     isSidechain: false,
     uuid: chatMessage.uuid,
@@ -926,57 +954,59 @@ async function convertExportMessage(chatMessage, cwd, sessionId, files, a, g, S,
     version: "claude-export-import",
   };
   if (chatMessage.sender === "human") {
-    let w = [];
-    let P = [];
-    let f = (R) => sanitizeFilenameSegment(a[R.file_uuid] ?? "").length <= 128;
-    let x = (R) => `files/${fileUuidFilename(R.file_uuid, a[R.file_uuid])}`;
-    let M = (file) => {
-      let U = x(file);
-      g.set(file.file_uuid, U);
-      if (!S.some((m) => m.fileUuid === file.file_uuid))
-        S.push({
+    let imageBlocks = [];
+    let fileRefs = [];
+    let isAttachable = (fileUuid) =>
+      sanitizeFilenameSegment(fileNamesById[fileUuid.file_uuid] ?? "").length <= 128;
+    let relativePath = (fileRef) =>
+      `files/${fileUuidFilename(fileRef.file_uuid, fileNamesById[fileRef.file_uuid])}`;
+    let addFileRef = (file) => {
+      let rel = relativePath(file);
+      filePathsById.set(file.file_uuid, rel);
+      if (!attachments.some((attachment) => attachment.fileUuid === file.file_uuid))
+        attachments.push({
           fileUuid: file.file_uuid,
-          rel: U,
-          attachable: f(file),
+          rel,
+          attachable: isAttachable(file),
         });
-      return `@"${U}"`;
+      return `@"${rel}"`;
     };
-    let W = new Set();
+    let seenFileUuids = new Set();
     for (let file of chatMessage.files) {
-      if (W.has(file.file_uuid)) continue;
-      W.add(file.file_uuid);
-      let U = files[file.file_uuid];
-      if (!U) continue;
-      let m = Ph(Buffer.from(U));
-      if (m)
+      if (seenFileUuids.has(file.file_uuid)) continue;
+      seenFileUuids.add(file.file_uuid);
+      let fileBytes = files[file.file_uuid];
+      if (!fileBytes) continue;
+      let mediaType = sniffImageMediaType(Buffer.from(fileBytes));
+      if (mediaType)
         try {
           let { block } = await maybeResizeAndDownsampleImageBlock({
-            data: Buffer.from(U),
-            mediaType: m,
+            data: Buffer.from(fileBytes),
+            mediaType,
             limits: IMAGE_LIMITS,
           });
-          if (block.type === "image") w.push(block);
-          else P.push(M(file));
+          if (block.type === "image") imageBlocks.push(block);
+          else fileRefs.push(addFileRef(file));
         } catch {
-          P.push(M(file));
+          fileRefs.push(addFileRef(file));
         }
-      else P.push(M(file));
+      else fileRefs.push(addFileRef(file));
     }
-    let k = exportMessageText(chatMessage, P);
+    let text = exportMessageText(chatMessage, fileRefs);
     let content =
-      w.length > 0
-        ? k.trim().length > 0
+      imageBlocks.length > 0
+        ? text.trim().length > 0
           ? [
-              ...w,
+              ...imageBlocks,
               {
                 type: "text",
-                text: k,
+                text,
               },
             ]
-          : w
-        : k;
+          : imageBlocks
+        : text;
     return {
-      ...T,
+      ...base,
       type: "user",
       message: {
         role: "user",
@@ -984,31 +1014,34 @@ async function convertExportMessage(chatMessage, cwd, sessionId, files, a, g, S,
       },
     };
   }
-  let flattened = chatMessage.content.flatMap((w, P) => {
-    let f = w.type === "text" && w.text !== undefined && w.text.trim() !== "" ? w.text : y[P];
-    return f !== undefined
+  let flattened = chatMessage.content.flatMap((block, blockIndex) => {
+    let blockText =
+      block.type === "text" && block.text !== undefined && block.text.trim() !== ""
+        ? block.text
+        : artifactTexts[blockIndex];
+    return blockText !== undefined
       ? [
           {
             type: "text",
-            text: f,
+            text: blockText,
             citations: [],
           },
         ]
       : [];
   });
-  for (let w of X)
+  for (let fileWrite of fileWrites)
     flattened.push({
       type: "tool_use",
-      id: w.toolUseId,
+      id: fileWrite.toolUseId,
       name: FILE_WRITE_TOOL_NAME,
       input: {
-        file_path: w.path,
-        content: w.content,
+        file_path: fileWrite.path,
+        content: fileWrite.content,
       },
     });
-  let b = messageText(chatMessage);
+  let text = messageText(chatMessage);
   return {
-    ...T,
+    ...base,
     type: "assistant",
     requestId: undefined,
     message: {
@@ -1023,14 +1056,14 @@ async function convertExportMessage(chatMessage, cwd, sessionId, files, a, g, S,
           : [
               {
                 type: "text",
-                text: b.trim() ? b : NO_CONTENT_MESSAGE,
+                text: text.trim() ? text : NO_CONTENT_MESSAGE,
                 citations: [],
               },
             ],
       container: null,
       context_management: null,
       stop_details: null,
-      stop_reason: X.length > 0 ? "tool_use" : "end_turn",
+      stop_reason: fileWrites.length > 0 ? "tool_use" : "end_turn",
       stop_sequence: null,
       usage: {
         output_tokens_details: null,
@@ -1053,34 +1086,34 @@ async function convertExportMessage(chatMessage, cwd, sessionId, files, a, g, S,
 /**
  * 解析时间戳字符串为毫秒数，非法返回 null。
  */
-function parseTimestamp(e) {
-  let n = typeof e === "string" ? Date.parse(e) : NaN;
-  return Number.isNaN(n) ? null : n;
+function parseTimestamp(value) {
+  let ms = typeof value === "string" ? Date.parse(value) : NaN;
+  return Number.isNaN(ms) ? null : ms;
 }
 //@ chunk-sdzpqjn8.js:29236-29335 placement
 /**
  * 项目的存储 slug：名称 slug 加 uuid，校验不过返回 null。
  */
-function projectSlugId(e) {
-  let n = `${slugifyTaskName(e.name) || "project"}-${e.uuid}`;
-  return SAFE_ID_RE.test(n) && n.length <= 200 ? n : null;
+function projectSlugId(project) {
+  let slug = `${slugifyTaskName(project.name) || "project"}-${project.uuid}`;
+  return SAFE_ID_RE.test(slug) && slug.length <= 200 ? slug : null;
 }
 //@ chunk-sdzpqjn8.js:29335-29620 placement
-function exportSummary(e, conversations, projects, r) {
-  let a = accountStatsSchema().safeParse(e);
-  if (a.success) return a.data;
+function exportSummary(accountStats, conversations, projects, accountUuid) {
+  let parsed = accountStatsSchema().safeParse(accountStats);
+  if (parsed.success) return parsed.data;
   return {
-    account_uuid: typeof r === "string" ? r : "unknown",
-    conversations: conversations.map((g) => ({
-      uuid: g.uuid,
-      message_count: g.chat_messages.length,
+    account_uuid: typeof accountUuid === "string" ? accountUuid : "unknown",
+    conversations: conversations.map((conversation) => ({
+      uuid: conversation.uuid,
+      message_count: conversation.chat_messages.length,
     })),
-    projects: projects.flatMap((g) =>
-      projectSlugId(g) !== null
+    projects: projects.flatMap((project) =>
+      projectSlugId(project) !== null
         ? [
             {
-              uuid: g.uuid,
-              doc_count: g.docs.length,
+              uuid: project.uuid,
+              doc_count: project.docs.length,
             },
           ]
         : [],
@@ -1088,19 +1121,20 @@ function exportSummary(e, conversations, projects, r) {
   };
 }
 //@ chunk-sdzpqjn8.js:29620-30157 placement
-function formatImportSummary(manifest, n) {
-  let s = [];
-  if (manifest.conversations.length !== n.conversations + n.skipped)
-    s.push(
-      `conversations: manifest=${manifest.conversations.length} imported=${n.conversations + n.skipped}`,
+function formatImportSummary(manifest, summary) {
+  let problems = [];
+  if (manifest.conversations.length !== summary.conversations + summary.skipped)
+    problems.push(
+      `conversations: manifest=${manifest.conversations.length} imported=${summary.conversations + summary.skipped}`,
     );
   let reduced = manifest.conversations.reduce((acc, conversation) => acc + conversation.message_count, 0);
-  if (reduced !== n.messages) s.push(`messages: manifest=${reduced} imported=${n.messages}`);
-  if (manifest.projects.length !== n.projects)
-    s.push(`projects: manifest=${manifest.projects.length} imported=${n.projects}`);
+  if (reduced !== summary.messages)
+    problems.push(`messages: manifest=${reduced} imported=${summary.messages}`);
+  if (manifest.projects.length !== summary.projects)
+    problems.push(`projects: manifest=${manifest.projects.length} imported=${summary.projects}`);
   let reduced_2 = manifest.projects.reduce((acc, project) => acc + project.doc_count, 0);
-  if (reduced_2 !== n.docs) s.push(`docs: manifest=${reduced_2} imported=${n.docs}`);
-  return s;
+  if (reduced_2 !== summary.docs) problems.push(`docs: manifest=${reduced_2} imported=${summary.docs}`);
+  return problems;
 }
 //@ chunk-sdzpqjn8.js:30157-30175 placement
 /**
@@ -1108,18 +1142,18 @@ function formatImportSummary(manifest, n) {
  */
 var MAX_EXPORT_BYTES = 1073741824;
 //@ chunk-sdzpqjn8.js:30175-31263 placement
-async function readExportFile(e) {
-  let { size } = await stat(e);
+async function readExportFile(exportPath) {
+  let { size } = await stat(exportPath);
   if (size > MAX_EXPORT_BYTES) throw Error("export file exceeds MAX_EXPORT_BYTES");
-  if (!e.endsWith(".zip")) {
-    let file = await readFile(e, "utf8");
-    let w;
+  if (!exportPath.endsWith(".zip")) {
+    let file = await readFile(exportPath, "utf8");
+    let parsed;
     try {
-      w = jsonParse(file);
+      parsed = jsonParse(file);
     } catch {
       throw Error("export file is not valid JSON");
     }
-    let { manifest, conversations, projects } = exportBundleSchema().parse(w);
+    let { manifest, conversations, projects } = exportBundleSchema().parse(parsed);
     return {
       manifest: exportSummary(manifest, conversations, projects, undefined),
       conversations,
@@ -1127,77 +1161,77 @@ async function readExportFile(e) {
       files: Object.create(null),
     };
   }
-  let s = await unzipFile(await readFile(e));
+  let entries = await unzipFile(await readFile(exportPath));
   let textDecoder = new TextDecoder();
-  let a = (b) => {
-    let w = s[b];
-    return w ? (safeParseJSON(textDecoder.decode(w), false) ?? undefined) : undefined;
+  let readEntry = (name) => {
+    let data = entries[name];
+    return data ? (safeParseJSON(textDecoder.decode(data), false) ?? undefined) : undefined;
   };
   let conversations;
   try {
-    let b = s["conversations.json"];
-    conversations = b ? jsonParse(textDecoder.decode(b)) : undefined;
+    let conversationsData = entries["conversations.json"];
+    conversations = conversationsData ? jsonParse(textDecoder.decode(conversationsData)) : undefined;
   } catch {
     throw Error("export conversations.json is not valid JSON");
   }
   let projects =
-    a("projects.json") ??
-    Object.keys(s).flatMap((key) =>
-      key.startsWith("projects/") && key.endsWith(".json") ? [a(key)].flat() : [],
+    readEntry("projects.json") ??
+    Object.keys(entries).flatMap((key) =>
+      key.startsWith("projects/") && key.endsWith(".json") ? [readEntry(key)].flat() : [],
     );
   let { conversations: conversations_2, projects: projects_2 } = exportBundleSchema().parse({
     conversations,
     projects,
   });
   let manifest = exportSummary(
-    a("manifest.json"),
+    readEntry("manifest.json"),
     conversations_2,
     projects_2,
     lenientArrayOf(
-      u({
-        uuid: string(),
+      objectSchema({
+        uuid: stringSchema(),
       }),
-    ).parse(a("users.json"))[0]?.uuid,
+    ).parse(readEntry("users.json"))[0]?.uuid,
   );
-  let Z = Object.create(null);
-  for (let [key, value] of Object.entries(s)) {
+  let files = Object.create(null);
+  for (let [key, value] of Object.entries(entries)) {
     if (!key.startsWith("files/") || key.endsWith("/")) continue;
-    let P = basename(key);
-    if (P.length === 0 || !SAFE_ID_RE.test(P)) continue;
-    Z[P] = value;
+    let fileName = basename(key);
+    if (fileName.length === 0 || !SAFE_ID_RE.test(fileName)) continue;
+    files[fileName] = value;
   }
   return {
     manifest,
     conversations: conversations_2,
     projects: projects_2,
-    files: Z,
+    files,
   };
 }
 //@ chunk-sdzpqjn8.js:31263-35092 placement
 /**
  * 读取导出文件、写入 projects/ 下的转录与 files/ 附件。
  */
-async function importConversations(e, n) {
-  let exportFile = await readExportFile(e);
-  let projectDir = getProjectDir(n.cwd);
+async function importConversations(exportPath, options) {
+  let exportFile = await readExportFile(exportPath);
+  let projectDir = getProjectDir(options.cwd);
   let importBudget = createImportBudget();
-  let storageV5 = n.storageV5;
-  let S =
+  let storageV5 = options.storageV5;
+  let supportsStorage =
     getTranscriptStorageKey(join(projectDir, "00000000-0000-0000-0000-000000000000.jsonl"), storageV5) !==
     undefined;
   let flattened = exportFile.projects.flatMap((project) => {
-    let x = projectSlugId(project);
-    return x === null
+    let dirName = projectSlugId(project);
+    return dirName === null
       ? []
       : [
           {
             project,
-            dirName: x,
+            dirName,
           },
         ];
   });
   let conversations = exportFile.conversations;
-  let T = {
+  let report = {
     conversations: 0,
     skipped: 0,
     messages: 0,
@@ -1219,228 +1253,249 @@ async function importConversations(e, n) {
     conversationProjects: {},
     attachmentFiles: {},
   };
-  if (!n.dryRun) {
-    await ensureDirUnlessDiskless(projectDir, S ? storageV5 : undefined);
-    await mkdir(join(n.cwd, "projects"), {
+  if (!options.dryRun) {
+    await ensureDirUnlessDiskless(projectDir, supportsStorage ? storageV5 : undefined);
+    await mkdir(join(options.cwd, "projects"), {
       recursive: true,
       mode: 448,
     });
-    await mkdir(join(n.cwd, "files"), {
+    await mkdir(join(options.cwd, "files"), {
       recursive: true,
       mode: 448,
     });
   }
-  let Z = (conversation) => {
+  let conversationTitle = (conversation) => {
     let trimmed = conversation.name.trim();
     if (trimmed && trimmed !== "New conversation") return trimmed;
     let text = conversation.chat_messages.find((chatMessage) => chatMessage.sender === "human")?.text ?? "";
     return truncateToLength(text.trim(), 60) || "Untitled";
   };
-  let b = Object.create(null);
+  let fileNameById = Object.create(null);
   for (let conversation of conversations)
     for (let chatMessage of conversation.chat_messages)
-      for (let file of chatMessage.files) b[file.file_uuid] = file.file_name;
-  let w = new Set();
+      for (let file of chatMessage.files) fileNameById[file.file_uuid] = file.file_name;
+  let usedFileUuids = new Set();
   for (let { project, dirName } of flattened) {
-    let M = join(n.cwd, "projects", dirName);
-    if (!n.dryRun)
-      await mkdir(M, {
+    let projectDir = join(options.cwd, "projects", dirName);
+    if (!options.dryRun)
+      await mkdir(projectDir, {
         recursive: true,
         mode: 448,
       });
     let trimmed = project.prompt_template?.trim();
-    if (trimmed && !n.dryRun) await tryCreateExclusive(join(M, "project-instructions.md"), trimmed);
+    if (trimmed && !options.dryRun)
+      await tryCreateExclusive(join(projectDir, "project-instructions.md"), trimmed);
     for (let doc of project.docs) {
-      let J = doc.filename ? safeFilenameSegment(doc.filename) : "";
-      let R = PROJECT_DOC_NAMES(/[a-zA-Z0-9]/.test(J) ? J : "untitled.md");
-      T.docs += 1;
-      if (!n.dryRun) await tryCreateExclusive(join(M, R), doc.content);
+      let docName = doc.filename ? safeFilenameSegment(doc.filename) : "";
+      let docFileName = PROJECT_DOC_NAMES(/[a-zA-Z0-9]/.test(docName) ? docName : "untitled.md");
+      report.docs += 1;
+      if (!options.dryRun) await tryCreateExclusive(join(projectDir, docFileName), doc.content);
     }
     for (let file of project.files) {
-      let J = exportFile.files[file.file_uuid];
-      if (!J) continue;
-      w.add(file.file_uuid);
-      T.files += 1;
-      let R = file.file_name ? safeFilenameSegment(file.file_name) : "";
-      let U = PROJECT_DOC_NAMES(/[a-zA-Z0-9]/.test(R) ? R : file.file_uuid);
-      if (!n.dryRun) await tryCreateExclusive(join(M, U), J);
+      let fileData = exportFile.files[file.file_uuid];
+      if (!fileData) continue;
+      usedFileUuids.add(file.file_uuid);
+      report.files += 1;
+      let fileName = file.file_name ? safeFilenameSegment(file.file_name) : "";
+      let storedName = PROJECT_DOC_NAMES(/[a-zA-Z0-9]/.test(fileName) ? fileName : file.file_uuid);
+      if (!options.dryRun) await tryCreateExclusive(join(projectDir, storedName), fileData);
     }
-    T.projects += 1;
+    report.projects += 1;
   }
   for (let [key, value] of Object.entries(exportFile.files)) {
-    if (w.has(key)) continue;
-    let M = fileUuidFilename(key, b[key]);
-    if (!n.dryRun) await tryCreateExclusive(join(n.cwd, "files", M), value);
-    T.files += 1;
+    if (usedFileUuids.has(key)) continue;
+    let storedName = fileUuidFilename(key, fileNameById[key]);
+    if (!options.dryRun) await tryCreateExclusive(join(options.cwd, "files", storedName), value);
+    report.files += 1;
   }
-  let P = new Map();
+  let artifactNameCounts = new Map();
   for (let conversation of conversations) {
     let sessionId = hashAgentId(conversation.uuid, CLAUDE_AI_EXPORT_NAMESPACE);
-    let M = new Map();
-    let W = [];
+    let attachmentRelByUuid = new Map();
+    let savedArtifactPaths = [];
     let mapped = conversation.chat_messages.map(() => []);
-    let J = async (artifact) => {
+    let writeArtifact = async (artifact) => {
       let { stem, extension } = fileNameForArtifact(artifact);
       let lower = `${stem}${extension}`.toLowerCase();
       for (let idx = 0; idx < MAX_ARTIFACT_UPDATE_ITEMS; idx++) {
-        let Y = (P.get(lower) ?? 0) + 1;
-        P.set(lower, Y);
-        let tt = PROJECT_DOC_NAMES(Y === 1 ? `${stem}${extension}` : `${stem}-${Y}${extension}`);
-        if (n.dryRun || (await tryCreateExclusive(join(n.cwd, "files", tt), artifact.content)))
-          return `files/${tt}`;
+        let nth = (artifactNameCounts.get(lower) ?? 0) + 1;
+        artifactNameCounts.set(lower, nth);
+        let candidateName = PROJECT_DOC_NAMES(
+          nth === 1 ? `${stem}${extension}` : `${stem}-${nth}${extension}`,
+        );
+        if (
+          options.dryRun ||
+          (await tryCreateExclusive(join(options.cwd, "files", candidateName), artifact.content))
+        )
+          return `files/${candidateName}`;
       }
       return;
     };
-    let R = importArtifactContent(sessionId, n.cwd, storageV5);
+    let importState = importArtifactContent(sessionId, options.cwd, storageV5);
     let mapped_2 = conversation.chat_messages.map(() => []);
-    let m = join(projectDir, `${sessionId}.jsonl`);
-    let transcriptStorageKey = getTranscriptStorageKey(m, storageV5);
-    let v = n.dryRun ? false : await pathExists(m, transcriptStorageKey);
-    let O = v
+    let transcriptPath = join(projectDir, `${sessionId}.jsonl`);
+    let storageRef = getTranscriptStorageKey(transcriptPath, storageV5);
+    let alreadyImported = options.dryRun ? false : await pathExists(transcriptPath, storageRef);
+    let converted = alreadyImported
       ? {
           texts: conversation.chat_messages.map(() => []),
           kept: [],
           editsFailed: 0,
         }
       : convertExportMessages(conversation.chat_messages, DEFAULT_MESSAGE_CHAR_BUDGET, importBudget);
-    let texts = O.texts;
-    T.fileEditsFailed += O.editsFailed;
-    for (let { messageIndex, blockIndex, artifact } of O.kept) {
-      let j = await J(artifact);
-      if (j === undefined) continue;
-      W.push(j);
+    let texts = converted.texts;
+    report.fileEditsFailed += converted.editsFailed;
+    for (let { messageIndex, blockIndex, artifact } of converted.kept) {
+      let savedRel = await writeArtifact(artifact);
+      if (savedRel === undefined) continue;
+      savedArtifactPaths.push(savedRel);
       texts[messageIndex][blockIndex] += `
 
-_Saved to ${j}_`;
+_Saved to ${savedRel}_`;
       let uuid = conversation.chat_messages[messageIndex].uuid;
       mapped[messageIndex].push({
-        toolUseId: `toolu_${hashAgentId(`${uuid}:${j}`, CLAUDE_AI_EXPORT_NAMESPACE).replaceAll("-", "")}`,
-        path: j,
+        toolUseId: `toolu_${hashAgentId(`${uuid}:${savedRel}`, CLAUDE_AI_EXPORT_NAMESPACE).replaceAll("-", "")}`,
+        path: savedRel,
         content: artifact.content,
       });
     }
-    T.artifacts += W.length;
+    report.artifacts += savedArtifactPaths.length;
     let results = await Promise.all(
-      conversation.chat_messages.map((chatMessage, I) =>
+      conversation.chat_messages.map((chatMessage, messageIndex) =>
         convertExportMessage(
           chatMessage,
-          n.cwd,
+          options.cwd,
           sessionId,
           exportFile.files,
-          b,
-          M,
-          mapped_2[I],
-          texts[I],
-          mapped[I],
+          fileNameById,
+          attachmentRelByUuid,
+          mapped_2[messageIndex],
+          texts[messageIndex],
+          mapped[messageIndex],
         ),
       ),
     );
-    let D = results;
-    if (!n.dryRun && !v) {
-      let c = new Map();
-      let I = new Map();
-      D = [];
+    let transcriptMessages = results;
+    if (!options.dryRun && !alreadyImported) {
+      let uuidByOldUuid = new Map();
+      let attachedByParent = new Map();
+      transcriptMessages = [];
       for (let idx = 0; idx < results.length; idx++) {
-        let j = results[idx];
-        let F = j.parentUuid ? c.get(j.parentUuid) : undefined;
-        D.push(
-          F
+        let convertedMessage = results[idx];
+        let newParentUuid = convertedMessage.parentUuid
+          ? uuidByOldUuid.get(convertedMessage.parentUuid)
+          : undefined;
+        transcriptMessages.push(
+          newParentUuid
             ? {
-                ...j,
-                parentUuid: F,
+                ...convertedMessage,
+                parentUuid: newParentUuid,
               }
-            : j,
+            : convertedMessage,
         );
-        let uuid = j.uuid;
-        for (let K of mapped[idx]) {
-          let toolResultMessage = buildToolResultMessage(K, j.uuid, j.timestamp);
-          D.push({
+        let uuid = convertedMessage.uuid;
+        for (let fileWrite of mapped[idx]) {
+          let toolResultMessage = buildToolResultMessage(
+            fileWrite,
+            convertedMessage.uuid,
+            convertedMessage.timestamp,
+          );
+          transcriptMessages.push({
             ...toolResultMessage,
             parentUuid: uuid,
             isSidechain: false,
-            cwd: n.cwd,
+            cwd: options.cwd,
             userType: "external",
             sessionId,
             version: "claude-export-import",
           });
           uuid = toolResultMessage.uuid;
         }
-        let tt = new Set((j.parentUuid && I.get(j.parentUuid)) || []);
+        let attached = new Set(
+          (convertedMessage.parentUuid && attachedByParent.get(convertedMessage.parentUuid)) || [],
+        );
         for (let { fileUuid, rel, attachable } of mapped_2[idx]) {
-          if (!attachable || w.has(fileUuid) || AUDIO_VIDEO_EXT_RE.test(rel)) continue;
-          if (!tt.has(fileUuid)) R.readFileState.delete(join(n.cwd, rel));
-          let ct = await logImportAttachment(R, n.cwd, rel, j.uuid, fileUuid, j.timestamp);
-          if (!ct) continue;
-          tt.add(fileUuid);
-          D.push({
-            ...ct,
+          if (!attachable || usedFileUuids.has(fileUuid) || AUDIO_VIDEO_EXT_RE.test(rel)) continue;
+          if (!attached.has(fileUuid)) importState.readFileState.delete(join(options.cwd, rel));
+          let attachmentMessage = await logImportAttachment(
+            importState,
+            options.cwd,
+            rel,
+            convertedMessage.uuid,
+            fileUuid,
+            convertedMessage.timestamp,
+          );
+          if (!attachmentMessage) continue;
+          attached.add(fileUuid);
+          transcriptMessages.push({
+            ...attachmentMessage,
             parentUuid: uuid,
             isSidechain: false,
-            cwd: n.cwd,
+            cwd: options.cwd,
             userType: "external",
             sessionId,
             version: "claude-export-import",
           });
-          uuid = ct.uuid;
+          uuid = attachmentMessage.uuid;
         }
-        I.set(j.uuid, tt);
-        if (uuid !== j.uuid) c.set(j.uuid, uuid);
+        attachedByParent.set(convertedMessage.uuid, attached);
+        if (uuid !== convertedMessage.uuid) uuidByOldUuid.set(convertedMessage.uuid, uuid);
       }
     }
-    T.jsonlPaths.push(m);
-    T.titles.push(Z(conversation));
-    T.createdAts.push(parseTimestamp(conversation.created_at));
-    T.updatedAts.push(parseTimestamp(conversation.updated_at));
-    T.conversationProjects[sessionId] = conversation.project_uuid ?? null;
-    let sorted = [...M]
-      .filter(([c]) => !w.has(c))
-      .map(([, c]) => c)
-      .concat(W)
+    report.jsonlPaths.push(transcriptPath);
+    report.titles.push(conversationTitle(conversation));
+    report.createdAts.push(parseTimestamp(conversation.created_at));
+    report.updatedAts.push(parseTimestamp(conversation.updated_at));
+    report.conversationProjects[sessionId] = conversation.project_uuid ?? null;
+    let sorted = [...attachmentRelByUuid]
+      .filter(([fileUuid]) => !usedFileUuids.has(fileUuid))
+      .map(([, rel]) => rel)
+      .concat(savedArtifactPaths)
       .sort();
-    if (sorted.length > 0) T.attachmentFiles[sessionId] = sorted;
-    T.messages += results.length;
-    if (!n.dryRun) {
-      if (!(await appendImportedTranscript(m, D, transcriptStorageKey))) {
-        T.skipped += 1;
+    if (sorted.length > 0) report.attachmentFiles[sessionId] = sorted;
+    report.messages += results.length;
+    if (!options.dryRun) {
+      if (!(await appendImportedTranscript(transcriptPath, transcriptMessages, storageRef))) {
+        report.skipped += 1;
         continue;
       }
     }
-    T.conversations += 1;
+    report.conversations += 1;
   }
-  T.manifestDiff = formatImportSummary(exportFile.manifest, T);
-  return T;
+  report.manifestDiff = formatImportSummary(exportFile.manifest, report);
+  return report;
 }
 //@ chunk-sdzpqjn8.js:35092-36785 placement
 /**
  * 子命令入口（需 CLAUDE_IMPORT_CONVERSATIONS、--cwd、大小上限）。
  */
-async function importConversationsCommand(e, n, s) {
+async function importConversationsCommand(exportPath, opts, storageV5) {
   if (!env.CLAUDE_IMPORT_CONVERSATIONS) return cliError("import-conversations is not enabled");
-  if (!n.cwd) return cliError("--cwd is required");
+  if (!opts.cwd) return cliError("--cwd is required");
   let cwd;
-  let a;
+  let result;
   try {
-    cwd = await canonicalizePath(n.cwd, getRealPathOptions(s));
-    a = await importConversations(e, {
+    cwd = await canonicalizePath(opts.cwd, getRealPathOptions(storageV5));
+    result = await importConversations(exportPath, {
       cwd,
-      dryRun: n.dryRun,
-      storageV5: s,
+      dryRun: opts.dryRun,
+      storageV5,
     });
   } catch (error) {
     logError(error);
-    let y = errorMessage(error);
-    let X =
-      y.startsWith("export file exceeds MAX_EXPORT_BYTES") ||
-      y.startsWith("Archive total size is too large") ||
-      y.startsWith("Suspicious compression ratio detected") ||
-      y.startsWith("Archive contains too many files") ||
-      (y.startsWith('File "') && y.includes("is too large:"));
+    let errorText = errorMessage(error);
+    let tooLarge =
+      errorText.startsWith("export file exceeds MAX_EXPORT_BYTES") ||
+      errorText.startsWith("Archive total size is too large") ||
+      errorText.startsWith("Suspicious compression ratio detected") ||
+      errorText.startsWith("Archive contains too many files") ||
+      (errorText.startsWith('File "') && errorText.includes("is too large:"));
     setBgExitCause("cli_error");
     await new Promise((resolve) =>
       process.stderr.write(
-        `import-conversations failed: ${truncateToLength(stripControlChars(getFirstLine(y)), 400)}
+        `import-conversations failed: ${truncateToLength(stripControlChars(getFirstLine(errorText)), 400)}
 ` +
-          (X
+          (tooLarge
             ? `Import failed: the export exceeds the import size limit (IMPORT_TOO_LARGE)
 `
             : `Import failed (IMPORT_ERROR)
@@ -1450,30 +1505,30 @@ async function importConversationsCommand(e, n, s) {
     );
     process.exit(1);
   }
-  let g = n.dryRun ? "[dry-run] " : "";
+  let prefix = opts.dryRun ? "[dry-run] " : "";
   process.stdout
-    .write(`${g}imported: conversations=${a.conversations} skipped=${a.skipped} messages=${a.messages} projects=${a.projects} docs=${a.docs} files=${a.files} artifacts=${a.artifacts}
+    .write(`${prefix}imported: conversations=${result.conversations} skipped=${result.skipped} messages=${result.messages} projects=${result.projects} docs=${result.docs} files=${result.files} artifacts=${result.artifacts}
 `);
   await new Promise((resolve) =>
     process.stdout.write(
       jsonStringify({
-        sessionIds: a.jsonlPaths.map((jsonlPath) => basename(jsonlPath, ".jsonl")),
-        titles: a.titles,
-        jsonlPaths: a.jsonlPaths,
-        createdAts: a.createdAts,
-        updatedAts: a.updatedAts,
+        sessionIds: result.jsonlPaths.map((jsonlPath) => basename(jsonlPath, ".jsonl")),
+        titles: result.titles,
+        jsonlPaths: result.jsonlPaths,
+        createdAts: result.createdAts,
+        updatedAts: result.updatedAts,
         cwd,
-        projects: a.projectList,
-        conversationProjects: a.conversationProjects,
-        attachmentFiles: a.attachmentFiles,
+        projects: result.projectList,
+        conversationProjects: result.conversationProjects,
+        attachmentFiles: result.attachmentFiles,
         counts: {
-          conversations: a.conversations,
-          projects: a.projects,
-          files: a.files,
-          docs: a.docs,
-          artifacts: a.artifacts,
-          fileEditsFailed: a.fileEditsFailed,
-          skipped: a.skipped,
+          conversations: result.conversations,
+          projects: result.projects,
+          files: result.files,
+          docs: result.docs,
+          artifacts: result.artifacts,
+          fileEditsFailed: result.fileEditsFailed,
+          skipped: result.skipped,
         },
       }) +
         `
@@ -1481,13 +1536,13 @@ async function importConversationsCommand(e, n, s) {
       resolve,
     ),
   );
-  if (a.manifestDiff.length > 0) {
+  if (result.manifestDiff.length > 0) {
     setBgExitCause("cli_error");
     await new Promise((resolve) =>
       process.stderr.write(
         `manifest mismatch:
   ` +
-          a.manifestDiff.join(`
+          result.manifestDiff.join(`
   `) +
           `
 Import completed with mismatches (IMPORT_MANIFEST_MISMATCH)
@@ -1499,3 +1554,4 @@ Import completed with mismatches (IMPORT_MANIFEST_MISMATCH)
   }
   process.exit(0);
 }
+export { importConversationsCommand };

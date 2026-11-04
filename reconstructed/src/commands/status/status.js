@@ -26,3 +26,4 @@ async function call(onDone, context) {
     defaultTab: "Status",
   });
 }
+export { call };

@@ -10,12 +10,13 @@
  */
 import { relative, isAbsolute } from "path";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
-import { Uo } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { taskCopyClearedAt, taskCwd } from "../../tasks/LocalShellTask/backgroundNotices.js";
 import { isRemoteToolForwardingEnabledCached } from "../../services/remoteTools/servingGates.js";
 import { ToolHostRegistry } from "../../remote/tools/toolHostRegistry.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { HOST_TOOL_INPUT_FIELD } from "../../bridge/deviceRegistration.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1439950-1440034 placement
 /**
@@ -25,9 +26,12 @@ function isSeparateCopyNoSync(description) {
   return description?.folder_relation === "separate_copy" && description.project_sync === "off";
 }
 //@ chunk-e6aww6q8.js:1440034-1440077 placement
-var folderSyncSlot = new SessionRootSlot(() => ({
-  engine: "no_engine",
-}));
+var folderSyncSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1440034", () => {
+  folderSyncSlot = new SessionRootSlot(() => ({
+    engine: "no_engine",
+  }));
+});
 //@ chunk-e6aww6q8.js:1440077-1440133 placement
 /**
  * folderSyncEngine：目录同步引擎。
@@ -53,10 +57,10 @@ function isSyncableProject(description) {
 /**
  * 没有同步引擎时把宿主描述的项目同步标为 off。
  */
-function withProjectSyncOff(description, n) {
-  return n === "no_engine" && isSyncableProject(description)
+function withProjectSyncOff(description, syncError) {
+  return syncError === "no_engine" && isSyncableProject(description)
     ? {
-        ...Uo(description, "sync_root", "folder_relation"),
+        ...omitAlias(description, "sync_root", "folder_relation"),
         project_sync: "off",
       }
     : description;
@@ -65,36 +69,40 @@ function withProjectSyncOff(description, n) {
 /**
  * 文件在本地缺失时，提示可用远程机器上用户自己的项目副本读取。
  */
-function separateCopyHint(e, n, r) {
-  let s = taskCopyClearedAt(r.session);
-  if (!isRemoteToolForwardingEnabledCached() || r.remoteCall !== undefined || (s !== null && s !== "kept"))
+function separateCopyHint(tool, filePath, context) {
+  let clearedAt = taskCopyClearedAt(context.session);
+  if (
+    !isRemoteToolForwardingEnabledCached() ||
+    context.remoteCall !== undefined ||
+    (clearedAt !== null && clearedAt !== "kept")
+  )
     return "";
-  let h = relative(taskCwd(r.session), n);
-  if (h === "" || h.startsWith("..") || isAbsolute(h)) return "";
-  let mapped = r.toolState
+  let relativePath = relative(taskCwd(context.session), filePath);
+  if (relativePath === "" || relativePath.startsWith("..") || isAbsolute(relativePath)) return "";
+  let mapped = context.toolState
     .get(ToolHostRegistry)
     .hosts()
-    .filter((Z) => Z.kind === "remote" && (Z.source === "session" || Z.source === "bridge"))
-    .map((Z) => ({
-      ...Z,
-      description: withProjectSyncOff(Z.description, "no_engine"),
+    .filter((host) => host.kind === "remote" && (host.source === "session" || host.source === "bridge"))
+    .map((host) => ({
+      ...host,
+      description: withProjectSyncOff(host.description, "no_engine"),
     }))
-    .map((Z) => Z);
+    .map((host) => host);
   let filtered = mapped.filter(
-    (Z) =>
-      Z.status === "online" &&
-      Z.protocol.kind !== "incompatible" &&
-      (Z.servedTools.has(e.name) || Z.servedTools.has(BASH_TOOL_NAME)),
+    (host) =>
+      host.status === "online" &&
+      host.protocol.kind !== "incompatible" &&
+      (host.servedTools.has(tool.name) || host.servedTools.has(BASH_TOOL_NAME)),
   );
-  let L =
-    filtered.find((Z) => isSyncableProject(Z.description)) ??
-    (mapped.length === 1 ? filtered.find((Z) => isSeparateCopyNoSync(Z.description)) : undefined);
-  if (L === undefined) return "";
-  let G = `${h.replaceAll("\\", "/")} in its project folder (named in the attached-machines note)`;
-  let q = L.servedTools.has(e.name)
-    ? `${e.name} with "${HOST_TOOL_INPUT_FIELD}": "${L.name}" on ${G}`
-    : `${BASH_TOOL_NAME} with "${HOST_TOOL_INPUT_FIELD}": "${L.name}" (ls, cat, rg) on ${G}`;
-  return ` ${L.name} holds the user's own separate copy of this project (nothing is synced between it and this session's checkout, and it may be at a different commit); if the file exists only in that copy, use ${q}.`;
+  let copyHost =
+    filtered.find((host) => isSyncableProject(host.description)) ??
+    (mapped.length === 1 ? filtered.find((host) => isSeparateCopyNoSync(host.description)) : undefined);
+  if (copyHost === undefined) return "";
+  let folderDescription = `${relativePath.replaceAll("\\", "/")} in its project folder (named in the attached-machines note)`;
+  let suggestion = copyHost.servedTools.has(tool.name)
+    ? `${tool.name} with "${HOST_TOOL_INPUT_FIELD}": "${copyHost.name}" on ${folderDescription}`
+    : `${BASH_TOOL_NAME} with "${HOST_TOOL_INPUT_FIELD}": "${copyHost.name}" (ls, cat, rg) on ${folderDescription}`;
+  return ` ${copyHost.name} holds the user's own separate copy of this project (nothing is synced between it and this session's checkout, and it may be at a different commit); if the file exists only in that copy, use ${suggestion}.`;
 }
 export {
   separateCopyHint,

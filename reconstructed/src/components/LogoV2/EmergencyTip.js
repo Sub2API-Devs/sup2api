@@ -9,7 +9,7 @@
  * attribution: fingerprint 3, layout 1, callgraph-witnessed 1, placement 1
  */
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
-import { Se, Q, P } from "../../../vendor/react/cjs/react.production.js";
+import { useContext, useMemo, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { SlashLinkContexts } from "../SlashCommandLink.js";
 import { useNoticeImpressionEnabled } from "./CondensedLogo.js";
 import { saveGlobalConfig, getGlobalConfig } from "../../utils/config.js";
@@ -18,7 +18,7 @@ import {
   jsxProd_default,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { WARNING_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { WARNING_GLYPH } from "../../constants/figures.js";
 import { getDynamicConfig_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { hasComplianceTaint } from "../../services/policyLimits/complianceTaints.js";
 
@@ -27,14 +27,14 @@ var CONFIG_NAME = "tengu-top-of-feed-tip";
 //@ chunk-ag5x7vhf.js:77906-78419 fingerprint = EmergencyTip (0.872)
 function EmergencyTip() {
   let { storageV5 } = useTheme_2();
-  let h = Se(SlashLinkContexts);
+  let linkContexts = useContext(SlashLinkContexts);
   let noticeImpressionEnabled = useNoticeImpressionEnabled();
-  let tip = Q(getTipOfFeed, []);
-  let lastShownTip = Q(
+  let tip = useMemo(getTipOfFeed, []);
+  let lastShownTip = useMemo(
     () => shouldShowEmergencyTip(tip, noticeImpressionEnabled),
     [tip, noticeImpressionEnabled],
   );
-  P(() => {
+  useEffect(() => {
     if (lastShownTip && !tip.persistent)
       saveGlobalConfig((current) => {
         if (current.lastShownEmergencyTip === tip.tip) return current;
@@ -45,7 +45,7 @@ function EmergencyTip() {
       }, storageV5);
   }, [lastShownTip, tip.tip, tip.persistent, storageV5]);
   if (!lastShownTip) return null;
-  if (h)
+  if (linkContexts)
     return jsxProd_default_2(Text, {
       color: tip.color === "error" ? "error" : "warning",
       children: [WARNING_GLYPH, " ", tip.tip],
@@ -70,10 +70,10 @@ function EmergencyTip() {
   });
 }
 //@ chunk-ag5x7vhf.js:78419-78522 layout
-function shouldShowEmergencyTip(m, noticeImpressionEnabled) {
-  if (!isEmergencyTipShown(m)) return false;
-  if (m.persistent) return true;
-  return m.tip !== getGlobalConfig().lastShownEmergencyTip;
+function shouldShowEmergencyTip(tip, noticeImpressionEnabled) {
+  if (!isEmergencyTipShown(tip)) return false;
+  if (tip.persistent) return true;
+  return tip.tip !== getGlobalConfig().lastShownEmergencyTip;
 }
 //@ chunk-ag5x7vhf.js:78522-78550 fingerprint = DEFAULT_TIP (1)
 var DEFAULT_TIP = {
@@ -85,9 +85,9 @@ function getTipOfFeed() {
   return getDynamicConfig_CACHED_MAY_BE_STALE(CONFIG_NAME, DEFAULT_TIP);
 }
 //@ chunk-ag5x7vhf.js:78581-78698 placement
-function isEmergencyTipShown(m) {
-  if (!m.tip) return false;
-  if (!Array.isArray(m.taints) || m.taints.length === 0) return true;
-  return m.taints.some(hasComplianceTaint);
+function isEmergencyTipShown(tip) {
+  if (!tip.tip) return false;
+  if (!Array.isArray(tip.taints) || tip.taints.length === 0) return true;
+  return tip.taints.some(hasComplianceTaint);
 }
 export { isEmergencyTipShown, getTipOfFeed, EmergencyTip };

@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:438651-445203 cjs-fingerprint
-var require_sql = x(function (cjsExports, cjsModule) {
+var require_sql = __commonJS(function (cjsExports, cjsModule) {
   function sql(hljs) {
     let regex = hljs.regex;
     let COMMENT_MODE = hljs.COMMENT("--", "$");

@@ -12,14 +12,15 @@ import { surfaceComposer } from "./surfaceBinding.js";
 import { makeCoreEvent } from "./coreHandlers.js";
 import { NO_CORE_AT_CHAIN_BOTTOM } from "./eventCatalog.js";
 import { logForDebugging } from "../../utils/debug.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:70673-70748 placement
 /**
  * 请求一条建议
  */
-async function proposeSuggestion(e, generationRequestId = null) {
+async function proposeSuggestion(text, generationRequestId = null) {
   return (
-    (await surfaceComposer()?.propose(e, generationRequestId)) ?? {
+    (await surfaceComposer()?.propose(text, generationRequestId)) ?? {
       isShown: false,
     }
   );
@@ -28,7 +29,10 @@ async function proposeSuggestion(e, generationRequestId = null) {
 /**
  * prompt.suggest 事件
  */
-var PROMPT_SUGGEST_EVENT = makeCoreEvent("prompt.suggest", (e) => proposeSuggestion(e.text));
+var PROMPT_SUGGEST_EVENT; // deferred: uses makeCoreEvent (./coreHandlers.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:70748", () => {
+  PROMPT_SUGGEST_EVENT = makeCoreEvent("prompt.suggest", (request) => proposeSuggestion(request.text));
+});
 //@ chunk-e6aww6q8.js:70794-70868 placement
 /**
  * 建议的核心步骤
@@ -37,15 +41,15 @@ var suggestCoreStep = (place) => ({
   name: "core",
   isCore: true,
   budgetMs: 0,
-  run: async (n) => place(n.text),
+  run: async (request) => place(request.text),
 });
 //@ chunk-e6aww6q8.js:70868-71153 placement
 /**
  * 经 prompt.suggest 钩子链显示一条提示建议（可提供放置函数作为核心），记录是否显示。
  */
-async function promptSuggestOp(e) {
-  let { text, origin, hookOrigin, signal, place } = e;
-  let S = await NO_CORE_AT_CHAIN_BOTTOM("prompt.suggest", {
+async function promptSuggestOp(request) {
+  let { text, origin, hookOrigin, signal, place } = request;
+  let outcome = await NO_CORE_AT_CHAIN_BOTTOM("prompt.suggest", {
     origin: hookOrigin,
     signal,
     ...(place !== undefined && {
@@ -58,8 +62,8 @@ async function promptSuggestOp(e) {
     origin,
   });
   logForDebugging(
-    `prompt.suggest (${origin.kind}): ${text.length} chars, ` + (S.isShown ? "shown" : "not shown"),
+    `prompt.suggest (${origin.kind}): ${text.length} chars, ` + (outcome.isShown ? "shown" : "not shown"),
   );
-  return S;
+  return outcome;
 }
 export { promptSuggestOp, proposeSuggestion, PROMPT_SUGGEST_EVENT };

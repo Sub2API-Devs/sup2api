@@ -8,14 +8,14 @@
  * pieces: chunk-4dnha4dk.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useShortcutDisplay } from "../keybindings/useKeybindingDisplay.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 
 //@ chunk-4dnha4dk.js:332-644 fingerprint = ConfigurableShortcutHint (0.556)
 function ConfigurableShortcutHint(props) {
-  let $ = w(7);
+  let $ = useMemoCache(7);
   let { action, context, fallback, description, parens, bold, terse, format } = props;
   let shortcut = useShortcutDisplay(action, context, fallback);
   let t1;

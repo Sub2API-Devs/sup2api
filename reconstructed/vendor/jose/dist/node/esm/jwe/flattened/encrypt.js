@@ -5,7 +5,7 @@
  * pieces: chunk-2tyrgda4.js (3)
  * attribution: esm-layout 2, esm-fingerprint 1
  */
-import { Xa } from "../../../../../../../runtime/bun-runtime.js";
+import { __esm } from "../../../../../../../runtime/bun-runtime.js";
 import { init_ecdhes } from "../../../../browser/runtime/ecdhes.js";
 import { init_check_p2s } from "../../lib/check_p2s.js";
 import { init_key_management } from "../../../../webapi/lib/key_management.js";
@@ -13,25 +13,26 @@ import { init_cek } from "../../lib/cek.js";
 import {
   init_content_encryption,
   init_content_encryption_2,
-  s,
-  f,
-  Se,
+  JWEInvalid,
+  JOSENotSupported,
+  generateIv,
 } from "../../../../webapi/lib/content_encryption.js";
 import { init_jwk_to_key } from "../../../../browser/runtime/jwk_to_key.js";
 import { init_encrypt_key_management_2, encryptKeyManagement } from "../../lib/encrypt_key_management.js";
-import { init_encrypt, encrypt_default } from "../../../../browser/runtime/encrypt.js";
+import { init_encrypt } from "../../lib/check_key_type.js";
 import { init_decrypt_key_management } from "../../lib/decrypt_key_management.js";
-import { G } from "../../../../webapi/lib/validate.js";
-import { X } from "../../../../webapi/lib/options.js";
-import { Gr } from "../compact/encrypt.js";
-import { l, encode, C } from "../../../../browser/runtime/base64url.js";
+import { validateCrit } from "../../../../webapi/lib/validate.js";
+import { validateCritInit } from "../../../../webapi/lib/options.js";
+import { jweEncryptInit } from "../compact/encrypt.js";
+import { encoder, encode, decoder } from "../../../../browser/runtime/base64url.js";
 import { concat } from "../../lib/buffer_utils.js";
 import { deflate } from "../../../../browser/runtime/zlib.js";
+import { encrypt_default } from "../../../../browser/runtime/encrypt.js";
 
 //@ chunk-2tyrgda4.js:32529-32536 esm-layout
 var encryptKeyManagement_default;
 //@ chunk-2tyrgda4.js:32536-32607 esm-layout
-var init_encrypt_2 = Xa(() => {
+var init_encrypt_2 = __esm(() => {
   init_ecdhes();
   init_check_p2s();
   init_key_management();
@@ -86,11 +87,11 @@ class FlattenedEncrypt {
   }
   async encrypt(key, options) {
     if (!this._protectedHeader && !this._unprotectedHeader && !this._sharedUnprotectedHeader)
-      throw new s(
+      throw new JWEInvalid(
         "either setProtectedHeader, setUnprotectedHeader, or sharedUnprotectedHeader must be called before #encrypt()",
       );
-    if (!G(this._protectedHeader, this._unprotectedHeader, this._sharedUnprotectedHeader))
-      throw new s(
+    if (!validateCrit(this._protectedHeader, this._unprotectedHeader, this._sharedUnprotectedHeader))
+      throw new JWEInvalid(
         "JWE Protected, JWE Shared Unprotected and JWE Per-Recipient Header Parameter names must be disjoint",
       );
     let joseHeader = {
@@ -98,8 +99,8 @@ class FlattenedEncrypt {
       ...this._unprotectedHeader,
       ...this._sharedUnprotectedHeader,
     };
-    X(
-      s,
+    validateCritInit(
+      JWEInvalid,
       new Map(),
       options === null || options === undefined ? undefined : options.crit,
       this._protectedHeader,
@@ -107,15 +108,15 @@ class FlattenedEncrypt {
     );
     if (joseHeader.zip !== undefined) {
       if (!this._protectedHeader || !this._protectedHeader.zip)
-        throw new s('JWE "zip" (Compression Algorithm) Header MUST be integrity protected');
+        throw new JWEInvalid('JWE "zip" (Compression Algorithm) Header MUST be integrity protected');
       if (joseHeader.zip !== "DEF")
-        throw new f('Unsupported JWE "zip" (Compression Algorithm) Header Parameter value');
+        throw new JOSENotSupported('Unsupported JWE "zip" (Compression Algorithm) Header Parameter value');
     }
     let { alg, enc } = joseHeader;
     if (typeof alg !== "string" || !alg)
-      throw new s('JWE "alg" (Algorithm) Header Parameter missing or invalid');
+      throw new JWEInvalid('JWE "alg" (Algorithm) Header Parameter missing or invalid');
     if (typeof enc !== "string" || !enc)
-      throw new s('JWE "enc" (Encryption Algorithm) Header Parameter missing or invalid');
+      throw new JWEInvalid('JWE "enc" (Encryption Algorithm) Header Parameter missing or invalid');
     let encryptedKey;
     if (alg === "dir") {
       if (this._cek) throw TypeError("setContentEncryptionKey cannot be called when using Direct Encryption");
@@ -134,7 +135,7 @@ class FlattenedEncrypt {
         this._keyManagementParameters,
       ));
       if (parameters)
-        if (options && Gr in options) {
+        if (options && jweEncryptInit in options) {
           if (!this._unprotectedHeader) this.setUnprotectedHeader(parameters);
           else
             this._unprotectedHeader = {
@@ -148,15 +149,16 @@ class FlattenedEncrypt {
             ...parameters,
           };
     }
-    if (!this._iv) this._iv = Se(enc);
+    if (!this._iv) this._iv = generateIv(enc);
     let additionalData;
     let protectedHeader;
     let aadMember;
-    if (this._protectedHeader) protectedHeader = l.encode(encode(JSON.stringify(this._protectedHeader)));
-    else protectedHeader = l.encode("");
+    if (this._protectedHeader)
+      protectedHeader = encoder.encode(encode(JSON.stringify(this._protectedHeader)));
+    else protectedHeader = encoder.encode("");
     if (this._aad) {
       aadMember = encode(this._aad);
-      additionalData = concat(protectedHeader, l.encode("."), l.encode(aadMember));
+      additionalData = concat(protectedHeader, encoder.encode("."), encoder.encode(aadMember));
     } else additionalData = protectedHeader;
     let ciphertext;
     let tag;
@@ -173,7 +175,7 @@ class FlattenedEncrypt {
     };
     if (encryptedKey) jwe.encrypted_key = encode(encryptedKey);
     if (aadMember) jwe.aad = aadMember;
-    if (this._protectedHeader) jwe.protected = C.decode(protectedHeader);
+    if (this._protectedHeader) jwe.protected = decoder.decode(protectedHeader);
     if (this._sharedUnprotectedHeader) jwe.unprotected = this._sharedUnprotectedHeader;
     if (this._unprotectedHeader) jwe.header = this._unprotectedHeader;
     return jwe;

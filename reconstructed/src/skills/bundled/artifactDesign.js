@@ -26,7 +26,7 @@ var ARTIFACT_DESIGN_WHEN_TO_USE =
 function getDatavizDesignAddendum() {
   if (
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_plinth_dataviz", false) &&
-    getBundledSkills().some((e) => e.name === DATAVIZ)
+    getBundledSkills().some((skill) => skill.name === DATAVIZ)
   )
     return `**When adding charts or diagrams** The craft shifts from identity to honesty \u2014 pick the form the data's shape calls for, keep encodings from exaggerating, title the finding rather than the axes. Load the \`${DATAVIZ}\` skill for the specifics; this skill continues to govern the page the chart sits in.`;
   return "";

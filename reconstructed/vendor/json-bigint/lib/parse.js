@@ -5,11 +5,11 @@
  * pieces: chunk-na3pph4p.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_bignumber } from "../../bignumber.js/bignumber.js";
 
 //@ chunk-na3pph4p.js:39504-43194 cjs-fingerprint
-var require_parse = x(function (cjsExports, cjsModule) {
+var require_parse = __commonJS(function (cjsExports, cjsModule) {
   var BigNumber = null;
   var suspectProtoRx =
     /(?:_|\\u005[Ff])(?:_|\\u005[Ff])(?:p|\\u0070)(?:r|\\u0072)(?:o|\\u006[Ff])(?:t|\\u0074)(?:o|\\u006[Ff])(?:_|\\u005[Ff])(?:_|\\u005[Ff])/;

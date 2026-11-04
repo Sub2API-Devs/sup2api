@@ -13,12 +13,18 @@ import { rmSync } from "fs";
 import { getPlatform as getPlatform_2 } from "../utils/platform.js";
 import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
 import { closeAfterFlush } from "./tls-terminate-proxy.js";
-import { Mm } from "./sandbox-manager.js";
+import { listenInRange } from "./sandbox-manager.js";
+import { deferInit } from "../../../../../runtime/deferred-init.js";
 
 //@ chunk-fq0cr76a.js:703511-703545 esm-layout
-var SOCKS_FIRST_BYTES = new Set([4, 5]);
-var DEFAULT_FIRST_BYTE_TIMEOUT_MS = 1e4;
-var backendSeq = 0;
+var SOCKS_FIRST_BYTES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DEFAULT_FIRST_BYTE_TIMEOUT_MS;
+var backendSeq;
+deferInit("chunk-fq0cr76a.js:703511", () => {
+  SOCKS_FIRST_BYTES = new Set([4, 5]);
+  DEFAULT_FIRST_BYTE_TIMEOUT_MS = 1e4;
+  backendSeq = 0;
+});
 //@ chunk-fq0cr76a.js:703545-703628 esm-fingerprint
 function unixSocketPath() {
   return join(tmpdir(), `srt-mux-${process.pid}-${(backendSeq++).toString(36)}.sock`);
@@ -107,7 +113,7 @@ mux backend dial failed (${code})
         logForDebugging_2(`mux: HTTP backend listening on ${path}`);
         return;
       }
-      await Mm(
+      await listenInRange(
         opts.httpServer,
         (p) => opts.httpServer.listen(p, "127.0.0.1"),
         opts.httpBackendPortRange,

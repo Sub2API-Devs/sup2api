@@ -31,30 +31,30 @@ var MAX_SLACK_PERMALINK_CHARS = 512;
 var MAX_SENDER_KIND_CHARS = 40;
 var SLACK_ARCHIVE_URL_PATTERN = /^https:\/\/([a-z0-9-]+\.)*slack\.com\/archives\/[\x21-\x7e]+$/;
 //@ chunk-w12gsta7.js:770-904 placement
-function sanitizeInboxText(e, r) {
-  let n = stripCombiningRepeated(e);
-  return r
-    ? n.replace(/(?![\n\t])[\p{Cc}\p{Zl}\p{Zp}]/gu, " ")
-    : n.replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, " ").trim();
+function sanitizeInboxText(text, keepNewlines) {
+  let stripped = stripCombiningRepeated(text);
+  return keepNewlines
+    ? stripped.replace(/(?![\n\t])[\p{Cc}\p{Zl}\p{Zp}]/gu, " ")
+    : stripped.replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, " ").trim();
 }
 //@ chunk-w12gsta7.js:904-1093 placement
-function foldSenderDisplayBrackets(e) {
-  return e
+function foldSenderDisplayBrackets(text) {
+  return text
     .replace(/(?!\()\p{Ps}|</gu, "(")
     .replace(/(?!\))\p{Pe}|>/gu, ")")
     .replace(/[\p{Pi}\p{Pf}]/gu, "'")
     .replace(/(?![\p{Sc}\p{Extended_Pictographic}\p{ASCII}])\p{S}/gu, "");
 }
 //@ chunk-w12gsta7.js:1093-1177 placement
-function inboxSenderProvenanceCaption(senderKind) {
-  return senderKind === "rc_owner" ? "your user \xB7 Remote Control" : "third-party";
+function inboxSenderProvenanceCaption(provenance) {
+  return provenance === "rc_owner" ? "your user \xB7 Remote Control" : "third-party";
 }
 //@ chunk-w12gsta7.js:1177-3114 placement
 /**
  * 从会话收件箱读取消息（/v1/code/sessions/:id/inbox/:file_id）并渲染内容信封。
  */
-async function fetchSessionInboxMessage(e) {
-  let { sessionId, fileId, baseUrl, getAccessToken, getTrustedDeviceToken } = e;
+async function fetchSessionInboxMessage(options) {
+  let { sessionId, fileId, baseUrl, getAccessToken, getTrustedDeviceToken } = options;
   if (!INBOX_FILE_ID_PATTERN.test(fileId)) {
     logFeatureBad("bridge_inbox_fetch", "malformed_id");
     return {
@@ -82,16 +82,16 @@ async function fetchSessionInboxMessage(e) {
       reason: "no_token",
     };
   }
-  let l = `${baseUrl}/v1/code/sessions/${toInfraSessionId(sessionId)}/inbox/${fileId}`;
-  let o;
+  let url = `${baseUrl}/v1/code/sessions/${toInfraSessionId(sessionId)}/inbox/${fileId}`;
+  let response;
   try {
-    o = await axios_default.get(l, {
+    response = await axios_default.get(url, {
       headers: buildAuthHeaders(accessToken, {
         trustedDeviceToken: await getTrustedDeviceToken?.(),
       }),
       timeout: 1e4,
       maxContentLength: 262144,
-      validateStatus: (a) => a < 500,
+      validateStatus: (status) => status < 500,
     });
   } catch (error) {
     logForDebugging(`[bridge] inbox fetch request failed: ${errorMessage(error)}`);
@@ -101,33 +101,33 @@ async function fetchSessionInboxMessage(e) {
       reason: "request_failed",
     };
   }
-  if (o.status !== 200) {
-    let errorReason = getErrorReason(o.data);
-    let errorDetail = extractErrorDetail(o.data);
+  if (response.status !== 200) {
+    let errorReason = getErrorReason(response.data);
+    let errorDetail = extractErrorDetail(response.data);
     logForDebugging(
-      `[bridge] inbox fetch failed ${o.status}${errorReason ? ` [${errorReason}]` : ""}${errorDetail ? `: ${errorDetail}` : ""}`,
+      `[bridge] inbox fetch failed ${response.status}${errorReason ? ` [${errorReason}]` : ""}${errorDetail ? `: ${errorDetail}` : ""}`,
     );
-    let _ = o.status === 403 ? classifyElevatedAuthError(o.data) : undefined;
-    let b =
-      o.status === 404
+    let authError = response.status === 403 ? classifyElevatedAuthError(response.data) : undefined;
+    let reason =
+      response.status === 404
         ? "not_found"
-        : _ === "untrusted_device"
+        : authError === "untrusted_device"
           ? "untrusted_device"
-          : _ === "session_stale_relogin"
+          : authError === "session_stale_relogin"
             ? "relogin"
             : errorReason === "feature_disabled"
               ? "feature_disabled"
-              : o.status === 403
+              : response.status === 403
                 ? "forbidden"
                 : "http_error";
-    logFeatureBad("bridge_inbox_fetch", b);
+    logFeatureBad("bridge_inbox_fetch", reason);
     return {
       ok: false,
-      reason: b,
-      detail: extractPlainErrorDetail(o.data),
+      reason,
+      detail: extractPlainErrorDetail(response.data),
     };
   }
-  let inboxMessageEnvelope = parseInboxMessageEnvelope(o.data, sessionId, fileId);
+  let inboxMessageEnvelope = parseInboxMessageEnvelope(response.data, sessionId, fileId);
   if (inboxMessageEnvelope === "wrong_session") {
     logForDebugging("[bridge] inbox fetch: the message names another session \u2014 refusing to relay it");
     logFeatureBad("bridge_inbox_fetch", "wrong_session");
@@ -160,37 +160,37 @@ async function fetchSessionInboxMessage(e) {
   };
 }
 //@ chunk-w12gsta7.js:3114-3802 placement
-function renderInboxContentEnvelope(message, r) {
-  let n = {
+function renderInboxContentEnvelope(message, attachments) {
+  let envelope = {
     message_id: message.messageId,
     source: message.source,
     sender_kind: message.senderKind,
     body: message.body,
   };
-  if (message.senderDisplay) n.sender_display = message.senderDisplay;
-  if (message.slackPermalink) n.slack_permalink = message.slackPermalink;
-  if (message.createdAt) n.received_at = message.createdAt;
-  if (r) n.attachments = r;
-  let p = MAX_INBOX_HEAD_CHARS;
-  let c = `<event source="session-inbox" kind="message.content" from="${message.senderKind}" trust="relay" untrusted-keys="body,sender_display,slack_permalink,attachments">
+  if (message.senderDisplay) envelope.sender_display = message.senderDisplay;
+  if (message.slackPermalink) envelope.slack_permalink = message.slackPermalink;
+  if (message.createdAt) envelope.received_at = message.createdAt;
+  if (attachments) envelope.attachments = attachments;
+  let maxChars = MAX_INBOX_HEAD_CHARS;
+  let openTag = `<event source="session-inbox" kind="message.content" from="${message.senderKind}" trust="relay" untrusted-keys="body,sender_display,slack_permalink,attachments">
 `;
-  let s = `
+  let closeTag = `
 </event>`;
-  let i = neutralizeConfusableTags("event", JSON.stringify(n));
-  if (c.length + i.length + s.length > p) {
-    let l = MAX_INBOX_BODY_CHARS;
+  let body = neutralizeConfusableTags("event", JSON.stringify(envelope));
+  if (openTag.length + body.length + closeTag.length > maxChars) {
+    let bodyLimit = MAX_INBOX_BODY_CHARS;
     do {
-      l = Math.floor(l / 2);
-      n.body = truncateWithNote(message.bodyHead, l, message.bodyDroppedAtIngest);
-      i = neutralizeConfusableTags("event", JSON.stringify(n));
-    } while (l > 64 && c.length + i.length + s.length > p);
+      bodyLimit = Math.floor(bodyLimit / 2);
+      envelope.body = truncateWithNote(message.bodyHead, bodyLimit, message.bodyDroppedAtIngest);
+      body = neutralizeConfusableTags("event", JSON.stringify(envelope));
+    } while (bodyLimit > 64 && openTag.length + body.length + closeTag.length > maxChars);
   }
-  return `${c}${i}${s}`;
+  return `${openTag}${body}${closeTag}`;
 }
 //@ chunk-w12gsta7.js:3802-3935 placement
-function truncateWithNote(bodyHead, r, bodyDroppedAtIngest = 0) {
-  return bodyHead.length > r
-    ? `${truncateToLength(bodyHead, r)} [\u2026truncated ${bodyHead.length - r + bodyDroppedAtIngest} chars]`
+function truncateWithNote(bodyHead, limit, bodyDroppedAtIngest = 0) {
+  return bodyHead.length > limit
+    ? `${truncateToLength(bodyHead, limit)} [\u2026truncated ${bodyHead.length - limit + bodyDroppedAtIngest} chars]`
     : bodyDroppedAtIngest > 0
       ? `${bodyHead} [\u2026truncated ${bodyDroppedAtIngest} chars]`
       : bodyHead;
@@ -199,56 +199,63 @@ function truncateWithNote(bodyHead, r, bodyDroppedAtIngest = 0) {
 /**
  * 校验并解析收件箱消息响应
  */
-function parseInboxMessageEnvelope(e, sessionId, fileId) {
-  if (!e || typeof e !== "object") return null;
-  let message = e.message;
+function parseInboxMessageEnvelope(data, sessionId, fileId) {
+  if (!data || typeof data !== "object") return null;
+  let message = data.message;
   if (!message || typeof message !== "object") return null;
-  let s = message;
+  let raw = message;
   if (
-    s.file_id !== fileId ||
-    typeof s.message_id !== "string" ||
-    normalizeUuidOrNull(s.message_id) === null ||
-    typeof s.body !== "string"
+    raw.file_id !== fileId ||
+    typeof raw.message_id !== "string" ||
+    normalizeUuidOrNull(raw.message_id) === null ||
+    typeof raw.body !== "string"
   )
     return null;
-  if (typeof s.session_id !== "string" || s.session_id === "") return null;
-  let i;
+  if (typeof raw.session_id !== "string" || raw.session_id === "") return null;
+  let infraSessionId;
   try {
-    validateBridgeId(s.session_id, "session id");
-    i = toInfraSessionId(s.session_id);
+    validateBridgeId(raw.session_id, "session id");
+    infraSessionId = toInfraSessionId(raw.session_id);
   } catch {
     return null;
   }
-  if (i !== toInfraSessionId(sessionId)) return "wrong_session";
-  let messageId = s.message_id.toLowerCase();
-  let o = inboxSenderKind(s.sender_kind);
-  let u =
-    o === "rc_owner"
+  if (infraSessionId !== toInfraSessionId(sessionId)) return "wrong_session";
+  let messageId = raw.message_id.toLowerCase();
+  let senderKind = inboxSenderKind(raw.sender_kind);
+  let attachments =
+    senderKind === "rc_owner"
       ? extractInboundAttachments({
-          file_attachments: s.attachments,
+          file_attachments: raw.attachments,
         })
       : [];
-  let slack = s.slack && typeof s.slack === "object" ? s.slack : undefined;
-  let f =
+  let slack = raw.slack && typeof raw.slack === "object" ? raw.slack : undefined;
+  let permalink =
     slack && typeof slack.permalink === "string" ? sanitizeInboxText(slack.permalink, false) : undefined;
-  let createdAt = typeof s.created_at === "string" ? s.created_at : undefined;
-  let b =
-    typeof s.sender_display === "string"
-      ? foldSenderDisplayBrackets(sanitizeInboxText(s.sender_display, false))
+  let createdAt = typeof raw.created_at === "string" ? raw.created_at : undefined;
+  let senderDisplay =
+    typeof raw.sender_display === "string"
+      ? foldSenderDisplayBrackets(sanitizeInboxText(raw.sender_display, false))
       : "";
-  let x = b.length > MAX_SENDER_LABEL_CHARS ? `${truncateToLength(b, MAX_SENDER_LABEL_CHARS)}\u2026` : b;
+  let truncatedSenderDisplay =
+    senderDisplay.length > MAX_SENDER_LABEL_CHARS
+      ? `${truncateToLength(senderDisplay, MAX_SENDER_LABEL_CHARS)}\u2026`
+      : senderDisplay;
   return {
     message: {
       messageId,
-      senderKind: o,
-      senderDisplay: x || undefined,
-      ...(u.length > 0 && {
-        attachments: u,
+      senderKind,
+      senderDisplay: truncatedSenderDisplay || undefined,
+      ...(attachments.length > 0 && {
+        attachments,
       }),
-      source: normalizeEnumLabel(s.source, "SESSION_INBOX_SOURCE_"),
-      ...truncateInboxBody(sanitizeInboxText(s.body, true)),
+      source: normalizeEnumLabel(raw.source, "SESSION_INBOX_SOURCE_"),
+      ...truncateInboxBody(sanitizeInboxText(raw.body, true)),
       slackPermalink:
-        f && f.length <= MAX_SLACK_PERMALINK_CHARS && SLACK_ARCHIVE_URL_PATTERN.test(f) ? f : undefined,
+        permalink &&
+        permalink.length <= MAX_SLACK_PERMALINK_CHARS &&
+        SLACK_ARCHIVE_URL_PATTERN.test(permalink)
+          ? permalink
+          : undefined,
       createdAt:
         createdAt &&
         createdAt.length <= MAX_SENDER_KIND_CHARS &&
@@ -261,36 +268,38 @@ function parseInboxMessageEnvelope(e, sessionId, fileId) {
 //@ chunk-w12gsta7.js:5023-5065 placement
 var INBOX_SENDER_KINDS = ["slack_user", "account", "rc_owner"];
 //@ chunk-w12gsta7.js:5065-5156 placement
-function inboxSenderKind(senderKind) {
-  let r = normalizeEnumLabel(senderKind, "SESSION_INBOX_SENDER_KIND_");
-  return INBOX_SENDER_KINDS.find((n) => n === r) ?? "unknown";
+function inboxSenderKind(label) {
+  let label_2 = normalizeEnumLabel(label, "SESSION_INBOX_SENDER_KIND_");
+  return INBOX_SENDER_KINDS.find((kind) => kind === label_2) ?? "unknown";
 }
 //@ chunk-w12gsta7.js:5156-5327 placement
 /**
  * 去前缀的枚举值转小写标签
  */
-function normalizeEnumLabel(e, r) {
-  if (typeof e !== "string") return "";
-  let n = e.startsWith(r) ? e.slice(r.length) : e;
-  return /^[A-Za-z_]{1,32}$/.test(n) && !n.endsWith("UNSPECIFIED") ? n.toLowerCase() : "";
+function normalizeEnumLabel(label, prefix) {
+  if (typeof label !== "string") return "";
+  let stripped = label.startsWith(prefix) ? label.slice(prefix.length) : label;
+  return /^[A-Za-z_]{1,32}$/.test(stripped) && !stripped.endsWith("UNSPECIFIED")
+    ? stripped.toLowerCase()
+    : "";
 }
 //@ chunk-w12gsta7.js:5327-5520 placement
 /**
  * 超长正文截断并标注丢弃字符数
  */
-function truncateInboxBody(e) {
-  if (e.length <= MAX_INBOX_BODY_CHARS)
+function truncateInboxBody(body) {
+  if (body.length <= MAX_INBOX_BODY_CHARS)
     return {
-      body: e,
-      bodyHead: e,
+      body,
+      bodyHead: body,
       bodyDroppedAtIngest: 0,
     };
-  let r = truncateToLength(e, MAX_INBOX_BODY_CHARS);
-  let n = e.length - r.length;
+  let head = truncateToLength(body, MAX_INBOX_BODY_CHARS);
+  let droppedCount = body.length - head.length;
   return {
-    body: `${r} [\u2026truncated ${n} chars]`,
-    bodyHead: r,
-    bodyDroppedAtIngest: n,
+    body: `${head} [\u2026truncated ${droppedCount} chars]`,
+    bodyHead: head,
+    bodyDroppedAtIngest: droppedCount,
   };
 }
 export {

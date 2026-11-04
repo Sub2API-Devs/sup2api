@@ -24,8 +24,10 @@ var configCommandDefinition = {
   requires: {
     ink: true,
   },
-  getArgumentCompletions: (e, n) =>
-    import("./chunk-7qydycm2.js").then((r) => r.getConfigArgumentCompletions(e, n)),
+  getArgumentCompletions: (arg, context) =>
+    import("./configShorthand.js").then((configModule) =>
+      configModule.getConfigArgumentCompletions(arg, context),
+    ),
 };
 var configNonInteractiveCommand = {
   type: "local",
@@ -38,7 +40,7 @@ var configNonInteractiveCommand = {
   get isHidden() {
     return !getIsNonInteractiveSession();
   },
-  load: () => import("./chunk-8ncxevqn.js"),
+  load: () => import("./call_2.lazy.js"),
 };
 var configCommand = configCommandDefinition;
 export { configCommand, configNonInteractiveCommand };

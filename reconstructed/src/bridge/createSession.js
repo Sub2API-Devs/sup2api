@@ -53,7 +53,7 @@ import {
   classifyElevatedAuthError,
 } from "./codeSessionApi.js";
 import { toDisplaySessionStatus } from "../utils/background/remote/remoteSession.js";
-import { isKnownWorkerState, reportSignerLoadFailure } from "../utils/telemetry/memorySummary.js";
+import { isKnownWorkerState } from "../utils/telemetry/memorySummary.js";
 import { parseCrossSessionInboundCapability } from "../utils/sessionState.js";
 import { ownRemoteSessionId } from "../utils/remoteSessionEnv.js";
 import {
@@ -71,8 +71,10 @@ import { isEssentialTrafficOnly } from "../utils/privacyLevel.js";
 import { env } from "../utils/env.js";
 import { isDeviceIdentityServedOff } from "../services/analytics/violinGates.js";
 import { isTopLevelBridgeSession } from "../utils/remoteEnvironment.js";
+import { reportSignerLoadFailure } from "../utils/telemetry/clientEventUploader.js";
 import { describeCredentialFailure } from "./remoteBridgeCore.js";
 import { stripAnsiAndControls } from "../utils/printableName.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-f25sswmp.js:25881-26085 placement
 var CREATE_RESPONSE_ERRORS = {
@@ -102,27 +104,27 @@ async function createBridgeSession({
   permissionMode,
   tags,
 }) {
-  let { getClaudeAIOAuthTokens, getClaudeAIOAuthTokensAsync } = await import("./chunk-7v0gj88m.js");
-  let { loginToHandOn } = await import("./chunk-temp5jed.js");
-  let { readHostSessionsBearer, recoverHostSessionsBearer } = await import("./chunk-k6mn44mc.js");
-  let { bearerOf } = await import("./chunk-28vb8cw9.js");
-  let { getOrganizationUUID } = await import("./chunk-appaeyg7.js");
-  let { getOauthConfig } = await import("./chunk-pcmb1mv7.js");
-  let { sessionsApiWire } = await import("./chunk-6phxatm7.js");
-  let { getMainLoopModel } = await import("./chunk-gqemcfsb.js");
-  let { getOriginalCwd } = await import("./chunk-nj7t53r7.js");
-  let { default: axios } = await import("./chunk-j1zq5m4b.js");
-  let { isCcrV2BridgeCreateEnabled } = await import("./chunk-zke21f1q.js");
-  let z = isCcrV2BridgeCreateEnabled() ? "v1alpha2" : "v1";
-  let U = {
-    create_endpoint: fromEnum(z),
+  let { getClaudeAIOAuthTokens, getClaudeAIOAuthTokensAsync } = await import("../utils/auth.js");
+  let { loginToHandOn } = await import("../utils/auth/launcherHostLogin.js");
+  let { readHostSessionsBearer, recoverHostSessionsBearer } = await import("../utils/hostSessionsBearer.js");
+  let { bearerOf } = await import("../services/oauth/sessionsBearerHooks.js");
+  let { getOrganizationUUID } = await import("../services/oauth/client.js");
+  let { getOauthConfig } = await import("../constants/oauth.js");
+  let { sessionsApiWire } = await import("../utils/teleport/api.js");
+  let { getMainLoopModel } = await import("../utils/model/DEFAULT_3P_FABLE_KEY.lazy.js");
+  let { getOriginalCwd } = await import("../bootstrap/state.js");
+  let { default: axios } = await import("../../vendor/axios/dist/esm/AxiosError.lazy.js");
+  let { isCcrV2BridgeCreateEnabled } = await import("./applyRemoteControlToAppState.lazy.js");
+  let apiVersion = isCcrV2BridgeCreateEnabled() ? "v1alpha2" : "v1";
+  let attributes = {
+    create_endpoint: fromEnum(apiVersion),
   };
-  let { isFirstPartyProvider } = await import("./chunk-hzephfq7.js");
+  let { isFirstPartyProvider } = await import("../utils/model/providers.js");
   if (!isFirstPartyProvider()) {
     logForDebugging("[bridge] Session create skipped on non-firstParty provider");
-    return logBridgeSessionCreateFailure("bridge_session_create_3p_provider", U);
+    return logBridgeSessionCreateFailure("bridge_session_create_3p_provider", attributes);
   }
-  let X =
+  let accessToken =
     getAccessToken?.() ??
     pickOrFallback(
       readHostSessionsBearer,
@@ -130,22 +132,22 @@ async function createBridgeSession({
         ? loginToHandOn(await getClaudeAIOAuthTokensAsync(credentials))?.accessToken
         : loginToHandOn(getClaudeAIOAuthTokens())?.accessToken,
     );
-  if (!X) {
+  if (!accessToken) {
     logForDebugging("[bridge] No access token for session creation");
-    return logBridgeSessionCreateFailure("bridge_session_create_no_token", U);
+    return logBridgeSessionCreateFailure("bridge_session_create_no_token", attributes);
   }
   let orgUUID = await getOrganizationUUID();
   if (!orgUUID) {
     logForDebugging("[bridge] No org UUID for session creation");
-    return logBridgeSessionCreateFailure("bridge_session_create_no_org", U);
+    return logBridgeSessionCreateFailure("bridge_session_create_no_org", attributes);
   }
   let { sources, outcomes, report } = await buildGitSessionContext(gitRepoUrl, branch, defaultBranch);
   let parsed = environmentSelector(environmentId);
   let model = getMainLoopModel();
   let cwd = getOriginalCwd();
   let events = permissionMode ? [setModeControlEvent(permissionMode)] : [];
-  let Ve =
-    z === "v1alpha2"
+  let body =
+    apiVersion === "v1alpha2"
       ? buildSessionCreateBody({
           title,
           worker: parsed,
@@ -175,56 +177,56 @@ async function createBridgeSession({
             tags,
           }),
         };
-  let me = sessionsApiWire(z, baseUrl ?? getOauthConfig().BASE_API_URL, X);
+  let wire = sessionsApiWire(apiVersion, baseUrl ?? getOauthConfig().BASE_API_URL, accessToken);
   let headers = {
-    ...me.headers,
+    ...wire.headers,
     "x-organization-uuid": orgUUID,
   };
   let response;
   try {
-    response = await axios.post(me.url, Ve, {
+    response = await axios.post(wire.url, body, {
       headers,
       signal,
-      validateStatus: (L) => L < 500,
+      validateStatus: (status) => status < 500,
     });
   } catch (err) {
     logForDebugging(`[bridge] Session creation request failed: ${errorMessage(err)}`);
-    return logBridgeSessionCreateFailure("bridge_session_create_request_failed", U);
+    return logBridgeSessionCreateFailure("bridge_session_create_request_failed", attributes);
   }
   if (!(response.status === 200 || response.status === 201)) {
     if (response.status === 401)
       recoverHostSessionsBearer(
-        bearerOf(response.config?.headers?.get?.("Authorization")) ?? X,
+        bearerOf(response.config?.headers?.get?.("Authorization")) ?? accessToken,
         lacksAuthorizationHeader(response.config) ? "withheld" : "refused",
       ).catch(() => {});
     let detail = extractErrorDetail(response.data);
     logForDebugging(
       `[bridge] Session creation failed with status ${response.status}${detail ? `: ${detail}` : ""}`,
     );
-    return logBridgeSessionCreateFailure("bridge_session_create_http_error", U);
+    return logBridgeSessionCreateFailure("bridge_session_create_http_error", attributes);
   }
-  let K = sessionIdFromCreateResponse(z, response.data);
-  if (!K.ok) {
-    logForDebugging(`[bridge] ${CREATE_RESPONSE_ERRORS[K.error].debug}`);
-    return logBridgeSessionCreateFailure(CREATE_RESPONSE_ERRORS[K.error].code, U);
+  let sessionResult = sessionIdFromCreateResponse(apiVersion, response.data);
+  if (!sessionResult.ok) {
+    logForDebugging(`[bridge] ${CREATE_RESPONSE_ERRORS[sessionResult.error].debug}`);
+    return logBridgeSessionCreateFailure(CREATE_RESPONSE_ERRORS[sessionResult.error].code, attributes);
   }
   reportGitSessionContext(report);
-  logFeatureOk("bridge_session_create", U);
-  return toCompatSessionId(K.value.id);
+  logFeatureOk("bridge_session_create", attributes);
+  return toCompatSessionId(sessionResult.value.id);
 }
 //@ chunk-f25sswmp.js:28598-28653 placement
-async function getBridgeSession(bridgeSessionId, n) {
-  return (await getBridgeSessionOrStatus(bridgeSessionId, n)).session;
+async function getBridgeSession(bridgeSessionId, options) {
+  return (await getBridgeSessionOrStatus(bridgeSessionId, options)).session;
 }
 //@ chunk-f25sswmp.js:28653-30375 placement
 async function getBridgeSessionOrStatus(sessionId, opts) {
-  let { getClaudeAIOAuthTokens, getClaudeAIOAuthTokensAsync } = await import("./chunk-7v0gj88m.js");
-  let { loginToHandOn } = await import("./chunk-temp5jed.js");
-  let { readHostSessionsBearer, recoverHostSessionsBearer } = await import("./chunk-k6mn44mc.js");
-  let { getOauthConfig } = await import("./chunk-pcmb1mv7.js");
-  let { getCodeSession } = await import("./chunk-g9dw262t.js");
-  let { isCcrV2SessionCrudEnabled } = await import("./chunk-zke21f1q.js");
-  let { isFirstPartyProvider } = await import("./chunk-hzephfq7.js");
+  let { getClaudeAIOAuthTokens, getClaudeAIOAuthTokensAsync } = await import("../utils/auth.js");
+  let { loginToHandOn } = await import("../utils/auth/launcherHostLogin.js");
+  let { readHostSessionsBearer, recoverHostSessionsBearer } = await import("../utils/hostSessionsBearer.js");
+  let { getOauthConfig } = await import("../constants/oauth.js");
+  let { getCodeSession } = await import("./codeSessionApi.js");
+  let { isCcrV2SessionCrudEnabled } = await import("./applyRemoteControlToAppState.lazy.js");
+  let { isFirstPartyProvider } = await import("../utils/model/providers.js");
   if (!isFirstPartyProvider()) {
     logFeatureBad("bridge_session_get", "bridge_session_get_3p_provider");
     return {
@@ -232,7 +234,7 @@ async function getBridgeSessionOrStatus(sessionId, opts) {
       notFound: false,
     };
   }
-  let T =
+  let accessToken =
     opts?.getAccessToken?.() ??
     pickOrFallback(
       readHostSessionsBearer,
@@ -240,7 +242,7 @@ async function getBridgeSessionOrStatus(sessionId, opts) {
         ? loginToHandOn(await getClaudeAIOAuthTokensAsync(opts.credentials))?.accessToken
         : loginToHandOn(getClaudeAIOAuthTokens())?.accessToken,
     );
-  if (!T) {
+  if (!accessToken) {
     logForDebugging("[bridge] No access token for session fetch");
     logFeatureBad("bridge_session_get", "bridge_session_get_no_token");
     return {
@@ -248,10 +250,10 @@ async function getBridgeSessionOrStatus(sessionId, opts) {
       notFound: false,
     };
   }
-  let S = opts?.useV2 ?? isCcrV2SessionCrudEnabled();
+  let useV2 = opts?.useV2 ?? isCcrV2SessionCrudEnabled();
   let response;
-  if (!S) {
-    let { getOrganizationUUID } = await import("./chunk-appaeyg7.js");
+  if (!useV2) {
+    let { getOrganizationUUID } = await import("../services/oauth/client.js");
     response = (await getOrganizationUUID()) ?? undefined;
     if (!response) {
       logForDebugging("[bridge] No org UUID for session fetch");
@@ -262,12 +264,18 @@ async function getBridgeSessionOrStatus(sessionId, opts) {
       };
     }
   }
-  let codeSession = await getCodeSession(opts?.baseUrl ?? getOauthConfig().BASE_API_URL, T, sessionId, 1e4, {
-    useV2: S,
-    orgUUID: response,
-  });
+  let codeSession = await getCodeSession(
+    opts?.baseUrl ?? getOauthConfig().BASE_API_URL,
+    accessToken,
+    sessionId,
+    1e4,
+    {
+      useV2,
+      orgUUID: response,
+    },
+  );
   if (typeof codeSession !== "object") {
-    if (codeSession === 401) recoverHostSessionsBearer(T).catch(() => {});
+    if (codeSession === 401) recoverHostSessionsBearer(accessToken).catch(() => {});
     logFeatureBad(
       "bridge_session_get",
       codeSession === "invalid"
@@ -299,139 +307,146 @@ async function getBridgeSessionOrStatus(sessionId, opts) {
   };
 }
 //@ chunk-f25sswmp.js:30375-31903 placement
-async function archiveBridgeSession(e, n, r, s) {
-  let { getClaudeAIOAuthTokens, getClaudeAIOAuthTokensAsync } = await import("./chunk-7v0gj88m.js");
-  let { loginToHandOn } = await import("./chunk-temp5jed.js");
-  let { readHostSessionsBearer, recoverHostSessionsBearer } = await import("./chunk-k6mn44mc.js");
-  let { getOauthConfig } = await import("./chunk-pcmb1mv7.js");
-  let { updateCodeSession } = await import("./chunk-g9dw262t.js");
-  let { isCcrV2SessionCrudEnabled } = await import("./chunk-zke21f1q.js");
-  let { isFirstPartyProvider } = await import("./chunk-hzephfq7.js");
+async function archiveBridgeSession(patch, fields, sessionId, options) {
+  let { getClaudeAIOAuthTokens, getClaudeAIOAuthTokensAsync } = await import("../utils/auth.js");
+  let { loginToHandOn } = await import("../utils/auth/launcherHostLogin.js");
+  let { readHostSessionsBearer, recoverHostSessionsBearer } = await import("../utils/hostSessionsBearer.js");
+  let { getOauthConfig } = await import("../constants/oauth.js");
+  let { updateCodeSession } = await import("./codeSessionApi.js");
+  let { isCcrV2SessionCrudEnabled } = await import("./applyRemoteControlToAppState.lazy.js");
+  let { isFirstPartyProvider } = await import("../utils/model/providers.js");
   if (!isFirstPartyProvider()) {
     logFeatureBad("bridge_session_patch", "bridge_session_patch_3p_provider");
     return "rejected";
   }
-  let v =
-    s?.getAccessToken?.() ??
+  let accessToken =
+    options?.getAccessToken?.() ??
     pickOrFallback(
       readHostSessionsBearer,
-      isStorageV5Enabled() && s?.credentials !== undefined
-        ? loginToHandOn(await getClaudeAIOAuthTokensAsync(s.credentials))?.accessToken
+      isStorageV5Enabled() && options?.credentials !== undefined
+        ? loginToHandOn(await getClaudeAIOAuthTokensAsync(options.credentials))?.accessToken
         : loginToHandOn(getClaudeAIOAuthTokens())?.accessToken,
     );
-  if (!v) {
-    logForDebugging(`[bridge] No access token for session ${r} update`);
+  if (!accessToken) {
+    logForDebugging(`[bridge] No access token for session ${sessionId} update`);
     return "failed";
   }
-  let b = "client_metadata" in n || isCcrV2SessionCrudEnabled();
-  let x;
-  if (!b) {
-    let { getOrganizationUUID } = await import("./chunk-appaeyg7.js");
-    x = (await getOrganizationUUID()) ?? undefined;
-    if (!x) {
-      logForDebugging(`[bridge] No org UUID for session ${r} update`);
+  let useV2 = "client_metadata" in fields || isCcrV2SessionCrudEnabled();
+  let orgUUID;
+  if (!useV2) {
+    let { getOrganizationUUID } = await import("../services/oauth/client.js");
+    orgUUID = (await getOrganizationUUID()) ?? undefined;
+    if (!orgUUID) {
+      logForDebugging(`[bridge] No org UUID for session ${sessionId} update`);
       return "failed";
     }
   }
-  logForDebugging(`[bridge] Updating session ${r}: ${e}`);
-  let k = await updateCodeSession(s?.baseUrl ?? getOauthConfig().BASE_API_URL, v, e, n, 1e4, {
-    useV2: b,
-    orgUUID: x,
-  });
-  if (k === "invalid") {
+  logForDebugging(`[bridge] Updating session ${sessionId}: ${patch}`);
+  let status = await updateCodeSession(
+    options?.baseUrl ?? getOauthConfig().BASE_API_URL,
+    accessToken,
+    patch,
+    fields,
+    1e4,
+    {
+      useV2,
+      orgUUID,
+    },
+  );
+  if (status === "invalid") {
     logFeatureBad("bridge_session_patch", "bridge_session_patch_invalid_id");
     return "rejected";
-  } else if (typeof k !== "number") {
+  } else if (typeof status !== "number") {
     logFeatureBad("bridge_session_patch", "bridge_session_patch_request_failed");
     return "failed";
-  } else if (k === 200) {
-    logForDebugging(`[bridge] Session ${r} updated successfully`);
+  } else if (status === 200) {
+    logForDebugging(`[bridge] Session ${sessionId} updated successfully`);
     logFeatureOk("bridge_session_patch");
     return "landed";
   } else {
-    if (k === 401) recoverHostSessionsBearer(v).catch(() => {});
+    if (status === 401) recoverHostSessionsBearer(accessToken).catch(() => {});
     logFeatureSad("bridge_session_patch", "bridge_session_patch_http_error");
     return "failed";
   }
 }
 //@ chunk-f25sswmp.js:31903-31962 placement
-async function updateBridgeSessionTitle(e, title, opts) {
+async function updateBridgeSessionTitle(sessionId, title, options) {
   return archiveBridgeSession(
-    e,
+    sessionId,
     {
       title,
     },
     "title",
-    opts,
+    options,
   );
 }
 //@ chunk-f25sswmp.js:31962-32094 placement
-async function markBridgeSessionRefusedAtCapacity(e, n, r) {
+async function markBridgeSessionRefusedAtCapacity(sessionId, machineName, options) {
   return markBridgeSessionRefused(
-    e,
+    sessionId,
     {
-      title: `Couldn't start \u2014 too many sessions are running \xB7 ${n}`,
+      title: `Couldn't start \u2014 too many sessions are running \xB7 ${machineName}`,
       reason: "capacity",
     },
-    r,
+    options,
   );
 }
 //@ chunk-f25sswmp.js:32094-32230 placement
-async function markBridgeSessionRefused(e, n, r) {
+async function markBridgeSessionRefused(sessionId, refusal, options) {
   return archiveBridgeSession(
-    e,
+    sessionId,
     {
-      title: n.title,
+      title: refusal.title,
       client_metadata: {
         desktop_rc_refusal: {
-          title: n.title,
-          reason: n.reason,
+          title: refusal.title,
+          reason: refusal.reason,
         },
       },
     },
     "refusal",
-    r,
+    options,
   );
 }
 //@ chunk-f25sswmp.js:32230-32247 placement
 var SESSION_COLOR_TAG_PREFIX = "color:";
 //@ chunk-f25sswmp.js:32247-32409 placement
-async function updateBridgeSessionColorTag(e, currentSessionAgentColor, r, s) {
-  let i = currentSessionAgentColor === "default";
-  let removeTags = r
-    .filter((E) => i || E !== currentSessionAgentColor)
-    .map((E) => SESSION_COLOR_TAG_PREFIX + E);
-  let addTags = i ? undefined : [SESSION_COLOR_TAG_PREFIX + currentSessionAgentColor];
+async function updateBridgeSessionColorTag(sessionId, currentSessionAgentColor, currentTags, options) {
+  let usesDefaultColor = currentSessionAgentColor === "default";
+  let removeTags = currentTags
+    .filter((tag) => usesDefaultColor || tag !== currentSessionAgentColor)
+    .map((tag) => SESSION_COLOR_TAG_PREFIX + tag);
+  let addTags = usesDefaultColor ? undefined : [SESSION_COLOR_TAG_PREFIX + currentSessionAgentColor];
   await archiveBridgeSession(
-    e,
+    sessionId,
     {
       add_tags: addTags,
       remove_tags: removeTags,
     },
     "color tag",
-    s,
+    options,
   );
 }
 //@ chunk-f25sswmp.js:32409-32444 placement
-async function updateBridgeSessionNameTag(e, n, r) {
+async function updateBridgeSessionNameTag(sessionId, nameTag, options) {
   return false;
 }
 //@ chunk-f25sswmp.js:32444-32503 placement
-function logBridgeSessionCreateFailure(e, n) {
-  logFeatureBad("bridge_session_create", e, n);
+function logBridgeSessionCreateFailure(code, attributes) {
+  logFeatureBad("bridge_session_create", code, attributes);
   return null;
 }
 //@ chunk-f25sswmp.js:32503-32552 placement
-function pickOrFallback(readHostSessionsBearer, n) {
-  return n === undefined ? undefined : (readHostSessionsBearer() ?? n);
+function pickOrFallback(readHostSessionsBearer, fallbackToken) {
+  return fallbackToken === undefined ? undefined : (readHostSessionsBearer() ?? fallbackToken);
 }
 //@ chunk-f25sswmp.js:32552-32684 placement
-function markTeleportedSession(e) {
+function markTeleportedSession(sessionId) {
   let teleportedSessionIds = bridgeHostState().teleportedSessionIds;
-  teleportedSessionIds.add(sessionIdBody(e));
+  teleportedSessionIds.add(sessionIdBody(sessionId));
   if (teleportedSessionIds.size > 64) {
-    let r = teleportedSessionIds.values().next().value;
-    if (r !== undefined) teleportedSessionIds.delete(r);
+    let oldestId = teleportedSessionIds.values().next().value;
+    if (oldestId !== undefined) teleportedSessionIds.delete(oldestId);
   }
 }
 //@ chunk-f25sswmp.js:32684-32743 placement
@@ -447,14 +462,17 @@ class BridgeSessionListenerSlot {
   listener = undefined;
 }
 //@ chunk-f25sswmp.js:32824-32850 placement
-var BRIDGE_SESSION_LISTENER_SLOT = new SessionRootSlot(() => new BridgeSessionListenerSlot());
+var BRIDGE_SESSION_LISTENER_SLOT; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-f25sswmp.js:32824", () => {
+  BRIDGE_SESSION_LISTENER_SLOT = new SessionRootSlot(() => new BridgeSessionListenerSlot());
+});
 //@ chunk-f25sswmp.js:32850-32937 placement
 /**
  * 安全地调用当前会话的桥接事件监听器（peek，不存在时忽略，异常只记日志）。
  */
-function notifyBridgeSessionListener(session, n) {
+function notifyBridgeSessionListener(session, event) {
   try {
-    return BRIDGE_SESSION_LISTENER_SLOT.peek(session)?.listener?.(n)?.catch(logError);
+    return BRIDGE_SESSION_LISTENER_SLOT.peek(session)?.listener?.(event)?.catch(logError);
   } catch (error) {
     logError(error);
     return;
@@ -464,11 +482,11 @@ function notifyBridgeSessionListener(session, n) {
 /**
  * 给当前根会话注册桥接事件监听器，返回注销函数（仅当仍是同一监听器时清除）。
  */
-function setBridgeSessionListener(e) {
-  let n = BRIDGE_SESSION_LISTENER_SLOT.of(getRootSession());
-  n.listener = e;
+function setBridgeSessionListener(listener) {
+  let slot = BRIDGE_SESSION_LISTENER_SLOT.of(getRootSession());
+  slot.listener = listener;
   return () => {
-    if (n.listener === e) n.listener = undefined;
+    if (slot.listener === listener) slot.listener = undefined;
   };
 }
 //@ chunk-ypjxapg8.js:5578-5601 sole-consumer
@@ -480,8 +498,8 @@ var MAX_BRIDGE_SESSION_BODY_CHARS = 32768;
  * 分页列出本组织的其他远程会话（v1 或 v1alpha2），跳过归档与自身，处理未信任设备的注册重试，返回对端列表并记录失败与截断。
  */
 async function listPeerSessions(stats, options) {
-  let { prepareApiRequest, sessionsApiWire } = await import("./chunk-6phxatm7.js");
-  let { getOauthConfig } = await import("./chunk-pcmb1mv7.js");
+  let { prepareApiRequest, sessionsApiWire } = await import("../utils/teleport/api.js");
+  let { getOauthConfig } = await import("../constants/oauth.js");
   let accessToken;
   let orgUuid;
   try {
@@ -523,7 +541,7 @@ async function listPeerSessions(stats, options) {
       response = await axios_default.get(url, {
         headers,
         timeout: 15000,
-        validateStatus: (n) => n < 500,
+        validateStatus: (status) => status < 500,
       });
     } catch (error) {
       logForDebugging(`[bridge:peers] list request failed: ${errorMessage(error)}`);
@@ -534,10 +552,10 @@ async function listPeerSessions(stats, options) {
       response.status === 403 && !enrollTried ? readUntrustedDeviceRefusal(response.data) : undefined;
     if (refusal !== undefined && shouldRemoteControlEnroll(refusal)) {
       enrollTried = true;
-      let n = await recoverFromUntrustedDevice(deviceToken);
-      if (n) {
-        headers["X-Trusted-Device-Token"] = n;
-        deviceToken = n;
+      let refreshedDeviceToken = await recoverFromUntrustedDevice(deviceToken);
+      if (refreshedDeviceToken) {
+        headers["X-Trusted-Device-Token"] = refreshedDeviceToken;
+        deviceToken = refreshedDeviceToken;
         idx--;
         continue;
       }
@@ -555,35 +573,35 @@ async function listPeerSessions(stats, options) {
       if (stats) stats.failed = true;
       return peers;
     }
-    for (let n of response.data.data)
+    for (let row of response.data.data)
       try {
-        let isV2Row = "session_status" in n;
-        let status = isV2Row ? n.session_status : toDisplaySessionStatus(n);
+        let isV2Row = "session_status" in row;
+        let status = isV2Row ? row.session_status : toDisplaySessionStatus(row);
         if (status === "archived") continue;
-        let sessionId = isV2Row ? n.id : toCompatSessionId(n.id);
+        let sessionId = isV2Row ? row.id : toCompatSessionId(row.id);
         let bodyId = sessionIdBody(sessionId);
         if (selfBody && bodyId === selfBody) {
-          adoptSelfBridgeTitleFromRoster(n.title);
+          adoptSelfBridgeTitleFromRoster(row.title);
           continue;
         }
         if (seen.has(bodyId)) continue;
         seen.add(bodyId);
         peers.push({
           id: sessionId,
-          title: isV2Row ? n.title : n.title || null,
+          title: isV2Row ? row.title : row.title || null,
           status,
-          updated_at: (isV2Row ? n.updated_at : n.last_event_at) ?? "",
-          ...(isKnownWorkerState(n.environment_kind) && {
-            environmentKind: n.environment_kind,
+          updated_at: (isV2Row ? row.updated_at : row.last_event_at) ?? "",
+          ...(isKnownWorkerState(row.environment_kind) && {
+            environmentKind: row.environment_kind,
           }),
-          ...((n.connection_status === "connected" || n.connection_status === "disconnected") && {
-            connected: n.connection_status === "connected",
+          ...((row.connection_status === "connected" || row.connection_status === "disconnected") && {
+            connected: row.connection_status === "connected",
           }),
           ...(isV2Row
             ? {
                 inboundReportUnavailable: true,
               }
-            : parseCrossSessionInboundCapability(n.external_metadata)),
+            : parseCrossSessionInboundCapability(row.external_metadata)),
         });
       } catch (error) {
         logForDebugging(`[bridge:peers] skipping malformed session row: ${errorMessage(error)}`);
@@ -614,31 +632,31 @@ async function listPeerSessions(stats, options) {
   return peers;
 }
 //@ chunk-ypjxapg8.js:7905-8175 sole-consumer
-function De(e) {
-  if (!e) return false;
-  if (e.startsWith("auth:")) return false;
-  if (e.startsWith("invalid session ID format")) return false;
-  let match = /^HTTP (\d{3})/.exec(e);
+function isRetryableConnectError(message) {
+  if (!message) return false;
+  if (message.startsWith("auth:")) return false;
+  if (message.startsWith("invalid session ID format")) return false;
+  let match = /^HTTP (\d{3})/.exec(message);
   if (match) {
-    let u = Number(match[1]);
-    if (u === 401 || u === 403) return false;
-    if (u >= 500) return false;
+    let statusCode = Number(match[1]);
+    if (statusCode === 401 || statusCode === 403) return false;
+    if (statusCode >= 500) return false;
   }
-  if (/status code 5\d\d/.test(e)) return false;
+  if (/status code 5\d\d/.test(message)) return false;
   return true;
 }
 //@ chunk-ypjxapg8.js:8175-8520 sole-consumer
 /**
  * 把发给对端会话的错误信息归类为 bridge_auth、invalid_target、4xx/5xx、timeout 或 other。
  */
-function classifyPeerSendError(e) {
-  if (!e) return "other";
-  if (e.startsWith("auth:")) return "bridge_auth";
-  if (e.startsWith("invalid session ID format")) return "invalid_target";
-  let match = /^HTTP (\d)\d\d/.exec(e);
+function classifyPeerSendError(message) {
+  if (!message) return "other";
+  if (message.startsWith("auth:")) return "bridge_auth";
+  if (message.startsWith("invalid session ID format")) return "invalid_target";
+  let match = /^HTTP (\d)\d\d/.exec(message);
   if (match) return match[1] === "5" ? "bridge_http_5xx" : "bridge_http_4xx";
-  if (/status code 5\d\d/.test(e)) return "bridge_http_5xx";
-  if (/timeout/i.test(e)) return "timeout";
+  if (/status code 5\d\d/.test(message)) return "bridge_http_5xx";
+  if (/timeout/i.test(message)) return "timeout";
   return "other";
 }
 //@ chunk-ypjxapg8.js:8520-10969 callgraph-fingerprint = updateBridgeSessionTitle (0.242)
@@ -650,18 +668,18 @@ async function postPeerMessage(
   text,
   fromName,
   fileAttachments,
-  b,
-  C,
+  hopChain,
+  msgId,
   credentials,
   fromPlugin,
-  A = false,
+  omitOrigin = false,
 ) {
-  let { prepareApiRequest, getOAuthRequestHeaders, CCR_BYOC_BETA } = await import("./chunk-6phxatm7.js");
-  let { getOauthConfig } = await import("./chunk-pcmb1mv7.js");
-  let p;
-  let I;
+  let { prepareApiRequest, getOAuthRequestHeaders, CCR_BYOC_BETA } = await import("../utils/teleport/api.js");
+  let { getOauthConfig } = await import("../constants/oauth.js");
+  let accessToken;
+  let orgUUID;
   try {
-    ({ accessToken: p, orgUUID: I } = await prepareApiRequest(credentials));
+    ({ accessToken, orgUUID } = await prepareApiRequest(credentials));
   } catch (error) {
     return {
       ok: false,
@@ -674,108 +692,108 @@ async function postPeerMessage(
       ok: false,
       error: `invalid session ID format: ${sessionId}`,
     };
-  let accessToken = getSelfBridgeCompatId() ?? ownRemoteSessionId();
-  let y = accessToken ? bridgeAddressFromToken(accessToken) : "unknown";
-  let l = wrapPeerMessage(
-    y,
+  let accessToken_2 = getSelfBridgeCompatId() ?? ownRemoteSessionId();
+  let fromAddress = accessToken_2 ? bridgeAddressFromToken(accessToken_2) : "unknown";
+  let textBody = wrapPeerMessage(
+    fromAddress,
     getSelfBridgeTitle() ?? fromName,
     text,
     undefined,
-    extendHopChain(b, accessToken ? hmacRandomId(y) : undefined),
-    C,
+    extendHopChain(hopChain, accessToken_2 ? hmacRandomId(fromAddress) : undefined),
+    msgId,
   );
   let messageEnvelope = createMessageEnvelope();
-  let g = peerMessageInfo(l);
-  let O = sanitizeAddressPart(fromPlugin);
-  let s = (fileAttachments?.length ?? 0) > 0;
-  let R = {
+  let info = peerMessageInfo(textBody);
+  let pluginPart = sanitizeAddressPart(fromPlugin);
+  let hasAttachments = (fileAttachments?.length ?? 0) > 0;
+  let postInfo = {
     kind: "peer",
-    from: y,
-    ...(g.name !== undefined && {
-      name: g.name,
+    from: fromAddress,
+    ...(info.name !== undefined && {
+      name: info.name,
     }),
-    ...(g.fromMode !== undefined && {
-      fromMode: g.fromMode,
+    ...(info.fromMode !== undefined && {
+      fromMode: info.fromMode,
     }),
-    ...(O !== undefined && {
-      plugin: O,
+    ...(pluginPart !== undefined && {
+      plugin: pluginPart,
     }),
-    ...(g.body !== undefined &&
-      !s &&
-      Buffer.byteLength(l) <= MAX_BRIDGE_SESSION_BODY_CHARS && {
-        body: g.body,
+    ...(info.body !== undefined &&
+      !hasAttachments &&
+      Buffer.byteLength(textBody) <= MAX_BRIDGE_SESSION_BODY_CHARS && {
+        body: info.body,
       }),
   };
-  let origin = stripPeerMessageBody(R, escapePluginTags(l), l);
-  let n = {
+  let origin = stripPeerMessageBody(postInfo, escapePluginTags(textBody), textBody);
+  let userFrame = {
     ...messageEnvelope,
     type: "user",
     message: {
       role: "user",
-      content: l,
+      content: textBody,
     },
     parent_tool_use_id: null,
     session_id: compatSessionId,
     uuid: randomUUID(),
-    ...(!A && {
+    ...(!omitOrigin && {
       origin,
     }),
     ...(fromPlugin !== undefined && {
       from_plugin: fromPlugin,
     }),
-    ...(s && {
+    ...(hasAttachments && {
       file_attachments: fileAttachments,
     }),
   };
-  let f = {
-    ...getOAuthRequestHeaders(p),
+  let headers = {
+    ...getOAuthRequestHeaders(accessToken),
     "anthropic-beta": CCR_BYOC_BETA,
-    "x-organization-uuid": I,
+    "x-organization-uuid": orgUUID,
   };
-  let orgUUID = await getTrustedDeviceToken();
-  if (orgUUID) f["X-Trusted-Device-Token"] = orgUUID;
-  let x = isCcrV2SendEventsEnabled();
+  let orgUUID_2 = await getTrustedDeviceToken();
+  if (orgUUID_2) headers["X-Trusted-Device-Token"] = orgUUID_2;
+  let useV2Events = isCcrV2SendEventsEnabled();
   let compatId = toInfraSessionId(compatSessionId);
-  let N =
-    orgUUID &&
-    x &&
+  let signerModule =
+    orgUUID_2 &&
+    useV2Events &&
     !isEssentialTrafficOnly() &&
     !env.CLAUDE_CODE_REMOTE &&
     !isDeviceIdentityServedOff() &&
     (isTopLevelBridgeSession() || isReplBridgeActive())
-      ? await import("./chunk-fwcps4x0.js").catch(reportSignerLoadFailure)
+      ? await import("../utils/peerSendSigner.js").catch(reportSignerLoadFailure)
       : undefined;
-  let F = N
-    ? await N.signForElevatedPeer(
+  let signed = signerModule
+    ? await signerModule.signForElevatedPeer(
         () =>
           axios_default
             .get(`${getOauthConfig().BASE_API_URL}/v1/code/sessions/${encodeURIComponent(compatId)}`, {
-              headers: f,
+              headers,
               timeout: BRIDGE_SESSION_API_TIMEOUT_MS,
-              validateStatus: (a) => a < 500,
+              validateStatus: (status) => status < 500,
             })
-            .then((a) => (a.status === 200 ? a.data : undefined)),
+            .then((response) => (response.status === 200 ? response.data : undefined)),
         compatId,
-        n,
+        userFrame,
         credentials,
       )
     : {
-        payload: n,
+        payload: userFrame,
         device_attestation: undefined,
       };
   let { url, body } = sessionEventsUrl(
     getOauthConfig().BASE_API_URL,
     compatSessionId,
-    [F.payload],
-    x,
-    F.device_attestation,
+    [signed.payload],
+    useV2Events,
+    signed.device_attestation,
   );
-  let o;
+  let response;
   try {
-    o = await axios_default.post(url, body, {
-      headers: f,
+    response = await axios_default.post(url, body, {
+      headers,
       timeout: 1e4,
-      validateStatus: (a) => a < 500,
+      validateStatus: (status) => status < 500,
     });
   } catch (error) {
     return {
@@ -783,29 +801,29 @@ async function postPeerMessage(
       error: errorMessage(error),
     };
   }
-  logPeerPostRejected(compatSessionId, o);
-  let M = o.status === 403 ? readUntrustedDeviceRefusal(o.data) : undefined;
-  if (M !== undefined) {
-    if (env.CLAUDE_CODE_REMOTE === true && !orgUUID && !env.CLAUDE_TRUSTED_DEVICE_TOKEN)
+  logPeerPostRejected(compatSessionId, response);
+  let refusal = response.status === 403 ? readUntrustedDeviceRefusal(response.data) : undefined;
+  if (refusal !== undefined) {
+    if (env.CLAUDE_CODE_REMOTE === true && !orgUUID_2 && !env.CLAUDE_TRUSTED_DEVICE_TOKEN)
       return {
         ok: false,
         error: `auth: ${CLOUD_CANNOT_REACH_ELEVATED_HINT}`,
       };
-    let detail = shouldRemoteControlEnroll(M);
+    let detail = shouldRemoteControlEnroll(refusal);
     if (!detail) {
-      logRefusalWithoutEnrollment("[bridge:peers]", M);
+      logRefusalWithoutEnrollment("[bridge:peers]", refusal);
       clearTrustedDeviceTokenCache();
     }
-    let H = detail ? await recoverFromUntrustedDevice(orgUUID) : undefined;
-    if (H) {
+    let recoveredToken = detail ? await recoverFromUntrustedDevice(orgUUID_2) : undefined;
+    if (recoveredToken) {
       try {
-        o = await axios_default.post(url, body, {
+        response = await axios_default.post(url, body, {
           headers: {
-            ...f,
-            "X-Trusted-Device-Token": H,
+            ...headers,
+            "X-Trusted-Device-Token": recoveredToken,
           },
           timeout: 1e4,
-          validateStatus: (L) => L < 500,
+          validateStatus: (status) => status < 500,
         });
       } catch (err) {
         return {
@@ -813,20 +831,20 @@ async function postPeerMessage(
           error: errorMessage(err),
         };
       }
-      logPeerPostRejected(compatSessionId, o);
+      logPeerPostRejected(compatSessionId, response);
     }
-    let refusal = o.status === 403 ? readUntrustedDeviceRefusal(o.data) : undefined;
-    if (refusal !== undefined) {
+    let refusal_2 = response.status === 403 ? readUntrustedDeviceRefusal(response.data) : undefined;
+    if (refusal_2 !== undefined) {
       if (isTrustedDeviceGateEnabled())
         return {
           ok: false,
-          error: `auth: ${untrustedDeviceHint(refusal, {
-            justEnrolled: Boolean(H),
+          error: `auth: ${untrustedDeviceHint(refusal_2, {
+            justEnrolled: Boolean(recoveredToken),
           })}`,
         };
     }
   }
-  if (o.status === 403 && classifyElevatedAuthError(o.data) === "session_stale_relogin")
+  if (response.status === 403 && classifyElevatedAuthError(response.data) === "session_stale_relogin")
     return {
       ok: false,
       error: `auth: ${describeCredentialFailure({
@@ -834,15 +852,15 @@ async function postPeerMessage(
         reason: "session_stale_relogin",
       })}`,
     };
-  if (!isHttpSuccessStatus(o.status)) {
-    if (o.status === 401 && env.CLAUDE_CODE_REMOTE === true)
+  if (!isHttpSuccessStatus(response.status)) {
+    if (response.status === 401 && env.CLAUDE_CODE_REMOTE === true)
       return {
         ok: false,
         error: `auth: ${CLOUD_CANNOT_MESSAGE_PEERS}`,
       };
     return {
       ok: false,
-      error: `HTTP ${o.status}`,
+      error: `HTTP ${response.status}`,
     };
   }
   logForDebugging(`[bridge:peers] posted to ${compatSessionId}: ${text.slice(0, 60)}`);
@@ -858,31 +876,36 @@ var CLOUD_CANNOT_MESSAGE_PEERS =
 /**
  * 云会话向对端发消息被拒（403/401）时生成说明，提示改用服务路由发送；不适用时返回 undefined。
  */
-function describeCloudPeerRefusal(e, r, sessionId, S) {
-  let b = e === "HTTP 403" ? "403" : e === `auth: ${CLOUD_CANNOT_MESSAGE_PEERS}` ? "401" : undefined;
-  if (env.CLAUDE_CODE_REMOTE !== true || b === undefined) return;
-  let C = S();
-  let _ =
-    C === undefined
+function describeCloudPeerRefusal(errorText, targetName, sessionId, getRoute) {
+  let httpCode =
+    errorText === "HTTP 403"
+      ? "403"
+      : errorText === `auth: ${CLOUD_CANNOT_MESSAGE_PEERS}`
+        ? "401"
+        : undefined;
+  if (env.CLAUDE_CODE_REMOTE !== true || httpCode === undefined) return;
+  let sendTool = getRoute();
+  let routeSentence =
+    sendTool === undefined
       ? undefined
       : serviceRouteSentence({
-          sendTool: C,
+          sendTool,
           sessionId,
         });
-  return _ === undefined
+  return routeSentence === undefined
     ? undefined
-    : `Nothing was sent to '${r}': the post from this cloud session was refused (HTTP ${b}). ${_}`;
+    : `Nothing was sent to '${targetName}': the post from this cloud session was refused (HTTP ${httpCode}). ${routeSentence}`;
 }
 //@ chunk-ypjxapg8.js:11510-11557 sole-consumer
 function isHttpSuccessStatus(status) {
   return status === 200 || status === 201 || status === 204;
 }
 //@ chunk-ypjxapg8.js:11557-11713 sole-consumer
-function logPeerPostRejected(compatSessionId, r) {
-  if (isHttpSuccessStatus(r.status)) return;
-  let errorDetail = extractErrorDetail(r.data);
+function logPeerPostRejected(compatSessionId, response) {
+  if (isHttpSuccessStatus(response.status)) return;
+  let errorDetail = extractErrorDetail(response.data);
   logForDebugging(
-    `[bridge:peers] post to ${compatSessionId} rejected: HTTP ${r.status}${errorDetail ? ` \u2014 ${stripAnsiAndControls(errorDetail)}` : ""}`,
+    `[bridge:peers] post to ${compatSessionId} rejected: HTTP ${response.status}${errorDetail ? ` \u2014 ${stripAnsiAndControls(errorDetail)}` : ""}`,
     {
       level: "warn",
     },
@@ -899,4 +922,13 @@ export {
   markTeleportedSession,
   updateBridgeSessionTitle,
   createBridgeSession,
+  SESSION_COLOR_TAG_PREFIX,
+  markBridgeSessionRefused,
+  markBridgeSessionRefusedAtCapacity,
+  updateBridgeSessionNameTag,
+  classifyPeerSendError,
+  describeCloudPeerRefusal,
+  isRetryableConnectError,
+  listPeerSessions,
+  postPeerMessage,
 };

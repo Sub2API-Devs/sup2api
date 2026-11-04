@@ -9,7 +9,7 @@
  * attribution: fingerprint 3, layout 5, placement 5, sole-consumer 3
  */
 import { isPlainObject } from "../utils/isPlainObject.js";
-import { Re } from "../../runtime/bun-runtime.js";
+import { __toESM } from "../../runtime/bun-runtime.js";
 import { cliBoxesModule } from "../../vendor/unresolved-cjs/index.js";
 import { squashSingleText } from "./layout/node.js";
 import { bunStringWidth } from "./stringWidth.js";
@@ -17,13 +17,17 @@ import { sliceAnsiToWidth } from "./styles.js";
 import { repeatString } from "../utils/stringUtils.js";
 import { applyColor, applyTextStyles } from "./colorize.js";
 import { sequential } from "../utils/sequential.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-zxbmtfmw.js:1479-1565 sole-consumer
 var BOX_KEYS = ["top", "left", "right", "bottom", "topLeft", "topRight", "bottomLeft", "bottomRight"];
 //@ chunk-zxbmtfmw.js:1565-1619 sole-consumer
-var isBoxStyle = (t) => isPlainObject(t) && BOX_KEYS.every((o) => typeof t[o] === "string");
+var isBoxStyle = (style) => isPlainObject(style) && BOX_KEYS.every((key) => typeof style[key] === "string");
 //@ chunk-zxbmtfmw.js:1619-1635 sole-consumer
-var cliBoxes = Re(cliBoxesModule(), 1);
+var cliBoxes; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-zxbmtfmw.js:1619", () => {
+  cliBoxes = __toESM(cliBoxesModule(), 1);
+});
 //@ chunk-zxbmtfmw.js:1635-1873 fingerprint = CUSTOM_BORDER_STYLES (0.948)
 /**
  * 在 cli-boxes 之外新增的边框样式：dashed（虚线）、quote（只有左侧竖条 ▎，用于引用块）。
@@ -51,33 +55,92 @@ var CUSTOM_BORDER_STYLES = {
   },
 };
 //@ chunk-zxbmtfmw.js:1873-1899 layout
-var BORDER_STYLES = {
-  ...cliBoxes.default,
-  ...CUSTOM_BORDER_STYLES,
-};
+var BORDER_STYLES; // deferred: uses cliBoxes of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-zxbmtfmw.js:1873", () => {
+  BORDER_STYLES = {
+    ...cliBoxes.default,
+    ...CUSTOM_BORDER_STYLES,
+  };
+});
 //@ chunk-zxbmtfmw.js:1899-1989 layout
 /**
  * borderStyle 名或自定义字符集 → 八个方向的边框字符；不合法返回 undefined。
  */
 function resolveBorderStyle(borderStyle) {
-  let i =
+  let style =
     typeof borderStyle === "string" && Object.hasOwn(BORDER_STYLES, borderStyle)
       ? BORDER_STYLES[borderStyle]
       : borderStyle;
-  return isBoxStyle(i) ? i : undefined;
+  return isBoxStyle(style) ? style : undefined;
 }
 //@ chunk-zxbmtfmw.js:1989-2041 layout
-var BORDER_STYLE_NAMES = Object.keys(BORDER_STYLES).filter((key) => resolveBorderStyle(key) !== undefined);
+var BORDER_STYLE_NAMES; // deferred: uses BORDER_STYLES of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-zxbmtfmw.js:1989", () => {
+  BORDER_STYLE_NAMES = Object.keys(BORDER_STYLES).filter((key) => resolveBorderStyle(key) !== undefined);
+});
 //@ chunk-zxbmtfmw.js:2041-2225 placement
-var BIDI_CONTROL_RANGES = Object.freeze([
-  [1564, 1564],
-  [8234, 8238],
-  [8294, 8297],
-]);
-var joined = BIDI_CONTROL_RANGES.map(
-  ([t, o]) => `\\u{${t.toString(16)}}` + (o > t ? `-\\u{${o.toString(16)}}` : ""),
-).join("");
-var regExp = new RegExp(`[${joined}]`, "gu");
+var BIDI_CONTROL_RANGES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var joined;
+var regExp;
+deferInit("chunk-zxbmtfmw.js:2041", () => {
+  BIDI_CONTROL_RANGES = Object.freeze([
+    [1564, 1564],
+    [8234, 8238],
+    [8294, 8297],
+  ]);
+  joined = BIDI_CONTROL_RANGES.map(
+    ([start, end]) => `\\u{${start.toString(16)}}` + (end > start ? `-\\u{${end.toString(16)}}` : ""),
+  ).join("");
+  regExp = new RegExp(`[${joined}]`, "gu");
+});
+//@ chunk-wj577vf9.js:7263-7311 placement
+function joinRawSegments(segments) {
+  return segments.map((segment) => segment.raw).join("");
+}
+//@ chunk-wj577vf9.js:7311-7357 placement
+/**
+ * 行首引用标记
+ */
+var BLOCKQUOTE_PREFIX_RE = /^[ \t>]+/gm;
+var INNER_SPACES_RE = /[ \t]+/g;
+var EXCESS_NEWLINES_RE = /\n{3,}/g;
+//@ chunk-wj577vf9.js:7357-7539 placement
+function createNestingGuard() {
+  let weakMap = new WeakMap();
+  let isAtLimit = (key) => (weakMap.get(key) ?? 0) >= 100;
+  return {
+    isAtMaxNesting: isAtLimit,
+    lexLevel: (key, fn) => {
+      if (isAtLimit(key)) return;
+      let depth = weakMap.get(key) ?? 0;
+      weakMap.set(key, depth + 1);
+      try {
+        return fn();
+      } finally {
+        weakMap.set(key, depth);
+      }
+    },
+  };
+}
+//@ chunk-wj577vf9.js:7539-7634 placement
+/**
+ * 渲染嵌套深度守卫
+ */
+var nestingGuard; // deferred: uses createNestingGuard of its import cycle while loading; runs once the cycle is complete
+var normalizeBlockText;
+deferInit("chunk-wj577vf9.js:7539", () => {
+  nestingGuard = createNestingGuard();
+  normalizeBlockText = (text) =>
+    text
+      .replace(BLOCKQUOTE_PREFIX_RE, (prefix) => prefix.replace(INNER_SPACES_RE, " ").trimStart())
+      .replace(
+        EXCESS_NEWLINES_RE,
+        `
+
+`,
+      )
+      .trimEnd();
+});
 //@ chunk-bzr73sfg.js:288217-288545 fingerprint = embedTextInBorder (1)
 /**
  * 把标题文字嵌进一条边框线：按 start/center/end 与 offset 定位，太长则截断；返回 [左段, 文字, 右段]。
@@ -87,9 +150,9 @@ function embedTextInBorder(borderLine, text, align, offset = 0, borderChar) {
   let textLength = bunStringWidth(text);
   let borderLength = borderLine.length;
   if (textLength >= borderLength - 2) {
-    let O = sliceAnsiToWidth(text, 0, borderLength);
-    let _ = borderChar.repeat(Math.max(0, borderLength - bunStringWidth(O)));
-    return ["", O, _];
+    let slice = sliceAnsiToWidth(text, 0, borderLength);
+    let filler = borderChar.repeat(Math.max(0, borderLength - bunStringWidth(slice)));
+    return ["", slice, filler];
   }
   let position;
   if (align === "center") position = Math.floor((borderLength - textLength) / 2);
@@ -202,50 +265,6 @@ var renderBorder = (x, y, node, output, backgroundColor) => {
   }
 };
 var renderBorderAlias = renderBorder;
-//@ chunk-wj577vf9.js:7263-7311 placement
-function joinRawSegments(e) {
-  return e.map((t) => t.raw).join("");
-}
-//@ chunk-wj577vf9.js:7311-7357 placement
-/**
- * 行首引用标记
- */
-var BLOCKQUOTE_PREFIX_RE = /^[ \t>]+/gm;
-var INNER_SPACES_RE = /[ \t]+/g;
-var EXCESS_NEWLINES_RE = /\n{3,}/g;
-//@ chunk-wj577vf9.js:7357-7539 placement
-function createNestingGuard() {
-  let weakMap = new WeakMap();
-  let t = (n) => (weakMap.get(n) ?? 0) >= 100;
-  return {
-    isAtMaxNesting: t,
-    lexLevel: (n, r) => {
-      if (t(n)) return;
-      let s = weakMap.get(n) ?? 0;
-      weakMap.set(n, s + 1);
-      try {
-        return r();
-      } finally {
-        weakMap.set(n, s);
-      }
-    },
-  };
-}
-//@ chunk-wj577vf9.js:7539-7634 placement
-/**
- * 渲染嵌套深度守卫
- */
-var nestingGuard = createNestingGuard();
-var normalizeBlockText = (e) =>
-  e
-    .replace(BLOCKQUOTE_PREFIX_RE, (t) => t.replace(INNER_SPACES_RE, " ").trimStart())
-    .replace(
-      EXCESS_NEWLINES_RE,
-      `
-
-`,
-    )
-    .trimEnd();
 export {
   joined,
   regExp,

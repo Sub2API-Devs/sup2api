@@ -73,7 +73,7 @@ var regExp_2 = new RegExp(
   `${NON_ASCII_NAME_CHARS_RE.source}|${CONTROL_OR_FORMAT_CHARS_RE.source}|\\p{Default_Ignorable_Code_Point}|[%\\p{Cs}\\u2018-\\u201f\\u1680\\u2800${DANGEROUS_SPELLING_CHARS}]`,
   "u",
 );
-var VARIATION_SELECTOR_CHARS = /^[\u200c\u200d\ufe0e\ufe0f]$/;
+var VARIATION_SELECTOR_RE = /^[\u200c\u200d\ufe0e\ufe0f]$/;
 var regExp_3 = new RegExp(
   `^(?![${DASH_LIKE_CHARS}])(?:[^\\P{L}\\p{ASCII}]|[^\\P{M}\\p{ASCII}]|[^\\P{N}\\p{ASCII}]|[^\\P{S}\\p{ASCII}])`,
   "u",
@@ -103,46 +103,47 @@ var DOWNLOAD_FAILURE_CODES = {
 var keys = Object.keys(DOWNLOAD_FAILURE_CODES);
 //@ chunk-ar2zwb92.js:2850-3129 placement
 function safeDownloadName(name, fileId) {
-  let o = name.length > MAX_ORIGINAL_NAME_CHARS ? "" : (name.normalize("NFKC").split(/[/\\]/).at(-1) ?? "");
-  let r = trimEndChars(sanitizeDownloadName(o).replace(regExp_4, ""), ". ");
-  let n =
-    r === "" ||
-    Buffer.byteLength(r, "utf8") > MAX_DOWNLOAD_NAME_BYTES ||
-    Buffer.byteLength(appendDownloadSuffixIfDangerous(r), "utf8") > MAX_DOWNLOAD_NAME_BYTES ||
-    WINDOWS_RESERVED_NAME_RE.test(firstLineOf(r, ".").trim().toLowerCase()) ||
-    hasProblematicFileName(r)
-      ? `${fileId}${FILE_EXTENSION_REGEX.exec(r)?.[0] ?? ""}`
-      : r;
-  return appendDownloadSuffixIfDangerous(n);
+  let baseName =
+    name.length > MAX_ORIGINAL_NAME_CHARS ? "" : (name.normalize("NFKC").split(/[/\\]/).at(-1) ?? "");
+  let cleanedName = trimEndChars(sanitizeDownloadName(baseName).replace(regExp_4, ""), ". ");
+  let finalName =
+    cleanedName === "" ||
+    Buffer.byteLength(cleanedName, "utf8") > MAX_DOWNLOAD_NAME_BYTES ||
+    Buffer.byteLength(appendDownloadSuffixIfDangerous(cleanedName), "utf8") > MAX_DOWNLOAD_NAME_BYTES ||
+    WINDOWS_RESERVED_NAME_RE.test(firstLineOf(cleanedName, ".").trim().toLowerCase()) ||
+    hasProblematicFileName(cleanedName)
+      ? `${fileId}${FILE_EXTENSION_REGEX.exec(cleanedName)?.[0] ?? ""}`
+      : cleanedName;
+  return appendDownloadSuffixIfDangerous(finalName);
 }
 //@ chunk-ar2zwb92.js:3129-3585 placement
-function validateTaskFileEntry(e, s) {
-  if (!FILE_ID_RE.test(e.fileId))
+function validateTaskFileEntry(file, signal) {
+  if (!FILE_ID_RE.test(file.fileId))
     return {
       ok: false,
       code: "bad_id",
     };
-  if (!Number.isSafeInteger(e.sizeBytes) || e.sizeBytes < 0)
+  if (!Number.isSafeInteger(file.sizeBytes) || file.sizeBytes < 0)
     return {
       ok: false,
       code: "bad_size",
     };
-  if (e.sizeBytes > FILES_API_MAX_FILE_BYTES)
+  if (file.sizeBytes > FILES_API_MAX_FILE_BYTES)
     return {
       ok: false,
       code: "too_large",
     };
-  let o = isPolicyLimitsCacheMissing();
-  let r = filesApiUnavailableReason({
+  let isPolicyMissing = isPolicyLimitsCacheMissing();
+  let unavailableReason = filesApiUnavailableReason({
     oauthToken: getAccessTokenWithCcrFallback(),
     isStoredLogin: true,
   });
-  if (r !== undefined)
+  if (unavailableReason !== undefined)
     return {
       ok: false,
-      code: r,
+      code: unavailableReason,
     };
-  if (o)
+  if (isPolicyMissing)
     return {
       ok: false,
       code: "policy_pending",
@@ -152,7 +153,7 @@ function validateTaskFileEntry(e, s) {
       ok: false,
       code: "not_https",
     };
-  if (s.aborted)
+  if (signal.aborted)
     return {
       ok: false,
       code: "canceled",
@@ -160,22 +161,22 @@ function validateTaskFileEntry(e, s) {
   return;
 }
 //@ chunk-ar2zwb92.js:3585-4943 placement
-async function streamDownload(e, storageV5, o) {
+async function streamDownload(file, storageV5, signal) {
   let abortController = new AbortController();
-  let n = {
+  let progress = {
     bytes: 0,
   };
-  let timer = setTimeout((a) => a.abort(), DOWNLOAD_TIMEOUT_MS, abortController);
-  let u;
-  let f = () => {
+  let timer = setTimeout((controller) => controller.abort(), DOWNLOAD_TIMEOUT_MS, abortController);
+  let stream;
+  let cleanup = () => {
     clearTimeout(timer);
-    u?.destroy();
+    stream?.destroy();
   };
-  let m = false;
+  let isHandedOff = false;
   try {
-    let a;
+    let response;
     try {
-      a = await apiClient.get(`/v1/files/${encodeURIComponent(e.fileId)}/content`, {
+      response = await apiClient.get(`/v1/files/${encodeURIComponent(file.fileId)}/content`, {
         auth: "claude-ai-oauth",
         refreshOAuth: true,
         recoverOAuth401: true,
@@ -188,79 +189,79 @@ async function streamDownload(e, storageV5, o) {
         },
         responseType: "stream",
         timeout: 0,
-        signal: AbortSignal.any([o, abortController.signal]),
+        signal: AbortSignal.any([signal, abortController.signal]),
         maxRedirects: 0,
         validateStatus: () => true,
       });
     } catch (error) {
-      logForDebugging(`[task files] ${e.fileId} request failed: ${errorMessage(error)}`, {
+      logForDebugging(`[task files] ${file.fileId} request failed: ${errorMessage(error)}`, {
         level: "error",
       });
       return {
         ok: false,
-        code: o.aborted ? "canceled" : abortController.signal.aborted ? "stalled" : "network",
+        code: signal.aborted ? "canceled" : abortController.signal.aborted ? "stalled" : "network",
       };
     }
-    if (!a.ok)
+    if (!response.ok)
       return {
         ok: false,
         code:
-          a.reason === "essential-traffic-only"
+          response.reason === "essential-traffic-only"
             ? "essential_traffic"
-            : a.reason === "no-auth"
+            : response.reason === "no-auth"
               ? "no_token"
               : "egress_blocked",
       };
-    u = a.data;
-    u.on("error", () => {});
-    if (a.status === 401)
+    stream = response.data;
+    stream.on("error", () => {});
+    if (response.status === 401)
       return {
         ok: false,
         code: "sign_in_expired",
       };
-    if (a.status !== 200)
+    if (response.status !== 200)
       return {
         ok: false,
         code: "refused",
-        status: a.status,
+        status: response.status,
       };
-    let _ = a.response.headers["content-length"];
-    if (_ !== undefined && Number(_) !== e.sizeBytes)
+    let contentLength = response.response.headers["content-length"];
+    if (contentLength !== undefined && Number(contentLength) !== file.sizeBytes)
       return {
         ok: false,
         code: "size_mismatch",
       };
-    m = true;
+    isHandedOff = true;
     return {
       ok: true,
-      bytes: limitedChunks(u, e.sizeBytes, timer, n),
-      bytesRead: () => n.bytes,
-      codeOfFailure(p) {
-        if (o.aborted) return "canceled";
+      bytes: limitedChunks(stream, file.sizeBytes, timer, progress),
+      bytesRead: () => progress.bytes,
+      codeOfFailure(error) {
+        if (signal.aborted) return "canceled";
         if (abortController.signal.aborted) return "stalled";
-        if (n.fault !== undefined) {
-          logForDebugging(`[task files] ${e.fileId} not saved: ${errorMessage(p)}`, {
+        if (progress.fault !== undefined) {
+          logForDebugging(`[task files] ${file.fileId} not saved: ${errorMessage(error)}`, {
             level: "error",
           });
-          return n.fault;
+          return progress.fault;
         }
-        logError(p);
+        logError(error);
         return "write_failed";
       },
-      close: f,
+      close: cleanup,
     };
   } finally {
-    if (!m) f();
+    if (!isHandedOff) cleanup();
   }
 }
 //@ chunk-ar2zwb92.js:4943-6470 placement
 /**
  * 下载任务附带的文件到本地任务目录：校验 id 与大小、避免重名、超时与磁盘检查。
  */
-async function downloadTaskFile(file, toolResultsDir, storageV5, signal) {
-  let n;
-  let c;
-  let u;
+async function downloadTaskFile(file, dir, storageV5, signal) {
+  let download;
+  let partialPath;
+  let partialHandle;
   try {
     if (isDiskless())
       return {
@@ -276,89 +277,93 @@ async function downloadTaskFile(file, toolResultsDir, storageV5, signal) {
         ok: false,
         code: "canceled",
       };
-    let f = validateTaskFileEntry(file, signal);
-    if (f !== undefined) return f;
-    let m = join(toolResultsDir, TASK_FILE_CONSTANTS);
-    let a = safeDownloadName(file.name, file.fileId);
-    await ensureToolResultsDir(toolResultsDir, storageV5);
-    if (!(await hasFreeSpace(toolResultsDir, file.sizeBytes)))
+    let validationRefusal = validateTaskFileEntry(file, signal);
+    if (validationRefusal !== undefined) return validationRefusal;
+    let targetDir = join(dir, TASK_FILE_CONSTANTS);
+    let targetName = safeDownloadName(file.name, file.fileId);
+    await ensureToolResultsDir(dir, storageV5);
+    if (!(await hasFreeSpace(dir, file.sizeBytes)))
       return {
         ok: false,
         code: "no_room",
       };
-    let _ = await streamDownload(file, storageV5, signal);
-    if (!_.ok) return _;
-    n = _;
-    let { bytes } = n;
+    let streamResult = await streamDownload(file, storageV5, signal);
+    if (!streamResult.ok) return streamResult;
+    download = streamResult;
+    let { bytes } = download;
     if (isStorageV5Enabled() && storageV5 !== undefined)
-      for (let i = 1; i <= MAX_DOWNLOAD_RETRIES; i++) {
-        let b = join(m, numberedName(a, i));
-        let A = pathToSessionSideKey(b);
-        if (A === undefined) break;
-        let g = await storageV5.writeFromStream(A, bytes, {
+      for (let attempt = 1; attempt <= MAX_DOWNLOAD_RETRIES; attempt++) {
+        let candidatePath = join(targetDir, numberedName(targetName, attempt));
+        let sideKey = pathToSessionSideKey(candidatePath);
+        if (sideKey === undefined) break;
+        let writeResult = await storageV5.writeFromStream(sideKey, bytes, {
           maxBytes: file.sizeBytes,
           precondition: {
             type: "ifAbsent",
           },
           mode: 384,
         });
-        if (g.ok)
+        if (writeResult.ok)
           return {
             ok: true,
-            filepath: b,
-            bytes: g.value.bytes,
+            filepath: candidatePath,
+            bytes: writeResult.value.bytes,
           };
-        if (g.error.code === "AlreadyExists" && n.bytesRead() > 0)
+        if (writeResult.error.code === "AlreadyExists" && download.bytesRead() > 0)
           return {
             ok: false,
             code: "name_taken",
           };
-        if (g.error.code !== "AlreadyExists") {
-          logForDebugging(`[task files] storage write failed (${g.error.code})`, {
+        if (writeResult.error.code !== "AlreadyExists") {
+          logForDebugging(`[task files] storage write failed (${writeResult.error.code})`, {
             level: "error",
           });
           throw Error("a task file was not stored");
         }
-        if (i === MAX_DOWNLOAD_RETRIES)
+        if (attempt === MAX_DOWNLOAD_RETRIES)
           return {
             ok: false,
             code: "name_taken",
           };
       }
-    await checkToolResultsWritable(m, getFileReader());
+    await checkToolResultsWritable(targetDir, getFileReader());
     try {
-      await mkdir(m, {
+      await mkdir(targetDir, {
         mode: 448,
       });
     } catch (error) {
       if (getErrnoCode(error) !== "EEXIST") throw error;
     }
-    c = join(m, `.${randomBytes(8).toString("hex")}.partial`);
-    u = await open(c, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | READ_LIMITS, 384);
-    await pipeline(bytes, u.createWriteStream());
-    let S = await open(c, NOFOLLOW_NONBLOCK_FLAGS | READ_LIMITS);
+    partialPath = join(targetDir, `.${randomBytes(8).toString("hex")}.partial`);
+    partialHandle = await open(
+      partialPath,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | READ_LIMITS,
+      384,
+    );
+    await pipeline(bytes, partialHandle.createWriteStream());
+    let verifyHandle = await open(partialPath, NOFOLLOW_NONBLOCK_FLAGS | READ_LIMITS);
     try {
-      for (let i = 1; i <= MAX_DOWNLOAD_RETRIES; i++) {
-        let b = join(m, numberedName(a, i));
-        if ((await linkIntoHome(c, S, b, 384)) !== undefined)
+      for (let attempt = 1; attempt <= MAX_DOWNLOAD_RETRIES; attempt++) {
+        let candidatePath = join(targetDir, numberedName(targetName, attempt));
+        if ((await linkIntoHome(partialPath, verifyHandle, candidatePath, 384)) !== undefined)
           return {
             ok: true,
-            filepath: b,
-            bytes: n.bytesRead(),
+            filepath: candidatePath,
+            bytes: download.bytesRead(),
           };
       }
     } finally {
-      await S.close();
+      await verifyHandle.close();
     }
     return {
       ok: false,
       code: "name_taken",
     };
   } catch (error) {
-    if (n !== undefined)
+    if (download !== undefined)
       return {
         ok: false,
-        code: n.codeOfFailure(error),
+        code: download.codeOfFailure(error),
       };
     if (signal.aborted)
       return {
@@ -371,83 +376,83 @@ async function downloadTaskFile(file, toolResultsDir, storageV5, signal) {
       code: "write_failed",
     };
   } finally {
-    n?.close();
-    await u?.close().catch(() => {});
-    if (c !== undefined) await unlink(c).catch(() => {});
+    download?.close();
+    await partialHandle?.close().catch(() => {});
+    if (partialPath !== undefined) await unlink(partialPath).catch(() => {});
   }
 }
 //@ chunk-ar2zwb92.js:6470-6619 placement
-async function hasFreeSpace(e, s) {
-  let o = await statfs(e, {
+async function hasFreeSpace(dir, neededBytes) {
+  let stats = await statfs(dir, {
     bigint: true,
   }).catch(() => {
     return;
   });
   return (
-    o === undefined ||
-    o.blocks <= 0n ||
-    o.bsize <= 0n ||
-    o.bavail * o.bsize >= BigInt(s + MIN_FREE_DISK_SLACK_BYTES)
+    stats === undefined ||
+    stats.blocks <= 0n ||
+    stats.bsize <= 0n ||
+    stats.bavail * stats.bsize >= BigInt(neededBytes + MIN_FREE_DISK_SLACK_BYTES)
   );
 }
 //@ chunk-ar2zwb92.js:6619-6702 placement
-function numberedName(e, s) {
-  if (s === 1) return e;
-  let { name: o, ext } = parse(e);
-  return `${o} (${s})${ext}`;
+function numberedName(fileName, index) {
+  if (index === 1) return fileName;
+  let { name: stem, ext } = parse(fileName);
+  return `${stem} (${index})${ext}`;
 }
 //@ chunk-ar2zwb92.js:6702-6755 placement
 /**
  * 危险扩展名时给文件名追加 .download。
  */
-function appendDownloadSuffixIfDangerous(e) {
-  return regExp.test(foldName(e)) ? `${e}.download` : e;
+function appendDownloadSuffixIfDangerous(fileName) {
+  return regExp.test(foldName(fileName)) ? `${fileName}.download` : fileName;
 }
 //@ chunk-ar2zwb92.js:6755-6850 placement
 /**
  * 判断文件名是否不合规（含 architecture.md 特判与拼写异常除外）。
  */
-function hasProblematicFileName(e) {
-  let s = homeFileNameProblem(e, true);
-  return foldName(e) === "architecture.md" || (s !== undefined && s !== "odd_spelling");
+function hasProblematicFileName(fileName) {
+  let problem = homeFileNameProblem(fileName, true);
+  return foldName(fileName) === "architecture.md" || (problem !== undefined && problem !== "odd_spelling");
 }
 //@ chunk-ar2zwb92.js:6850-7037 placement
 /**
  * 文件名清理：不安全字符替换为下划线（保留合法的变体选择符与零宽连接），压缩空格。
  */
-function sanitizeDownloadName(e) {
-  let s = "";
-  let o = "";
-  for (let r of e) {
-    o = (
-      VARIATION_SELECTOR_CHARS.test(r)
-        ? VARIATION_SELECTOR_CHARS.test(o)
-          ? r === "\u200D" && /[\ufe0e\ufe0f]/u.test(o)
-          : regExp_3.test(o)
-        : !regExp_2.test(r)
+function sanitizeDownloadName(name) {
+  let result = "";
+  let char = "";
+  for (let inputChar of name) {
+    char = (
+      VARIATION_SELECTOR_RE.test(inputChar)
+        ? VARIATION_SELECTOR_RE.test(char)
+          ? inputChar === "\u200D" && /[\ufe0e\ufe0f]/u.test(char)
+          : regExp_3.test(char)
+        : !regExp_2.test(inputChar)
     )
-      ? r
+      ? inputChar
       : "_";
-    s += o;
+    result += char;
   }
-  return s.replace(regExp_5, "$1_").replace(/ {2,}/g, " ");
+  return result.replace(regExp_5, "$1_").replace(/ {2,}/g, " ");
 }
 //@ chunk-ar2zwb92.js:7037-7304 placement
-async function* limitedChunks(e, sizeBytes, o, r) {
+async function* limitedChunks(source, sizeBytes, timer, progress) {
   try {
-    for await (let n of e) {
-      o.refresh();
-      r.bytes += n.length;
-      if (r.bytes > sizeBytes) break;
-      yield n;
+    for await (let chunk of source) {
+      timer.refresh();
+      progress.bytes += chunk.length;
+      if (progress.bytes > sizeBytes) break;
+      yield chunk;
     }
   } catch (error) {
-    r.fault = "network";
+    progress.fault = "network";
     throw error;
   }
-  clearTimeout(o);
-  if (r.bytes !== sizeBytes) {
-    r.fault = "size_mismatch";
+  clearTimeout(timer);
+  if (progress.bytes !== sizeBytes) {
+    progress.fault = "size_mismatch";
     throw Error("a task file did not have the size the server listed");
   }
 }

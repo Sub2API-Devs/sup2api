@@ -20,12 +20,13 @@ import { MODEL_SELECTION_ENV_VARS } from "../managedEnvConstants.js";
 import { parseUserSpecifiedModel } from "./modelDisplay.js";
 import { strip1mSuffix } from "./modelIds.js";
 import { filterPolicyPredicateEnv } from "../managedEnvApply.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-y1dxgk9v.js:454-479 placement
 /**
  * 恒返回 false（受限模型始终不允许）。
  */
-function isRestrictedModelAllowed(e) {
+function isRestrictedModelAllowed(model) {
   return false;
 }
 //@ chunk-y1dxgk9v.js:479-1332 placement
@@ -42,38 +43,41 @@ function resolveStartupModel({
   initialMainLoopModel,
   restrictedModel,
 }) {
-  let l = modelCli === "default" || (effectiveModel === undefined && initialMainLoopModel === null);
+  let isModelFromDefault =
+    modelCli === "default" || (effectiveModel === undefined && initialMainLoopModel === null);
   if (
     hasNonPolicyModelAllowlist() &&
     ((restrictedModel !== undefined && !isRestrictedModelAllowed(restrictedModel)) ||
-      (l &&
+      (isModelFromDefault &&
         (resolveDefaultMainLoopModelSetting().attribution === "enforced" ||
           hasNonPolicyEnforceAvailableModels())))
   )
     return "allowlist";
   if (
-    l &&
+    isModelFromDefault &&
     resolveDefaultMainLoopModelSetting().attribution === "env" &&
     isModelFromEditableSources("ANTHROPIC_DEFAULT_MODEL", model)
   )
     return "settings_env_default";
-  let d = isModelNamedInSettingsOverrides(model) ? "remap" : undefined;
-  if (modelCli) return d;
+  let isRemapped = isModelNamedInSettingsOverrides(model) ? "remap" : undefined;
+  if (modelCli) return isRemapped;
   if (effectiveModel !== undefined && agent?.model && agent.model !== "inherit") {
     let effectiveSettingSource = getEffectiveSettingSource_2("agent");
-    let D =
+    let isAgentSourceDowngraded =
       !agentSelectedByCli &&
       (effectiveSettingSource === null || isApiKeyHelperFromProjectOrLocalSettings(effectiveSettingSource));
-    return isProjectOrDefaultedAgentSource(agent) || D ? "agent" : d;
+    return isProjectOrDefaultedAgentSource(agent) || isAgentSourceDowngraded ? "agent" : isRemapped;
   }
-  if (effectiveModel !== undefined) return d;
-  let w =
+  if (effectiveModel !== undefined) return isRemapped;
+  let hasBetterAgentSource =
     !agentSelectedByCli &&
     isApiKeyHelperFromProjectOrLocalSettings(getEffectiveSettingSource_2("agent")) &&
     getEnabledSettingSources().some(
-      (s) => !isApiKeyHelperFromProjectOrLocalSettings(s) && getSettingsForSource(s)?.agent !== undefined,
+      (source) =>
+        !isApiKeyHelperFromProjectOrLocalSettings(source) &&
+        getSettingsForSource(source)?.agent !== undefined,
     );
-  let b =
+  let hasNonDroppedAgentModel =
     agent !== undefined &&
     isProjectOrDefaultedAgentSource(agent) &&
     agents.some(
@@ -83,40 +87,42 @@ function resolveStartupModel({
         Boolean(agent_2.model) &&
         agent_2.model !== "inherit",
     );
-  if (w || b) return "agent";
+  if (hasBetterAgentSource || hasNonDroppedAgentModel) return "agent";
   if (isSetOnlyByEditableSources("ANTHROPIC_MODEL")) return "settings_env";
-  if (!l && process.env.ANTHROPIC_MODEL) return d;
-  return isApiKeyHelperFromProjectOrLocalSettings(getEffectiveSettingSource_2("model")) ? "settings" : d;
+  if (!isModelFromDefault && process.env.ANTHROPIC_MODEL) return isRemapped;
+  return isApiKeyHelperFromProjectOrLocalSettings(getEffectiveSettingSource_2("model"))
+    ? "settings"
+    : isRemapped;
 }
 //@ chunk-y1dxgk9v.js:1332-1361 placement
 /**
  * 把值转成布尔（假值转 false）。
  */
-function boolFromMaybe(e) {
-  return e || false;
+function boolFromMaybe(value) {
+  return value || false;
 }
 //@ chunk-y1dxgk9v.js:1361-1960 placement
-function describeSelfHostedModeNotice(e) {
-  let permissionMode = resolvePermissionMode(e);
+function describeSelfHostedModeNotice(options) {
+  let permissionMode = resolvePermissionMode(options);
   let permissionMode_2 = resolvePermissionMode({
-    ...e,
+    ...options,
     settingsModeForwardable: false,
   });
-  let i = permissionMode.permissionMode !== permissionMode_2.permissionMode;
+  let isModeFromSettings = permissionMode.permissionMode !== permissionMode_2.permissionMode;
   let permissionMode_3 = permissionMode.permissionMode;
-  let r = permissionMode_3 === "default" ? PERMISSION_MODE_MANUAL_ALIAS : permissionMode_3;
+  let displayMode = permissionMode_3 === "default" ? PERMISSION_MODE_MANUAL_ALIAS : permissionMode_3;
   return {
     decision: permissionMode,
-    isModeFromSettings: i,
-    ...(i &&
+    isModeFromSettings,
+    ...(isModeFromSettings &&
       permissionMode_3 !== undefined && {
         noticeOnRunner: {
           level: permissionMode_3 === "plan" ? "warning" : "notice",
-          text: `This session runs on a self-hosted runner, where your settings' default permission mode (${r}) doesn't apply. To start in ${r} mode, relaunch with --permission-mode ${r}.`,
+          text: `This session runs on a self-hosted runner, where your settings' default permission mode (${displayMode}) doesn't apply. To start in ${displayMode} mode, relaunch with --permission-mode ${displayMode}.`,
           short:
             permissionMode_3 === "plan"
               ? "Type /plan: your default mode doesn't apply on a self-hosted runner."
-              : `Your settings' default mode (${r}) doesn't apply on a self-hosted runner.`,
+              : `Your settings' default mode (${displayMode}) doesn't apply on a self-hosted runner.`,
         },
       }),
   };
@@ -138,60 +144,75 @@ function resolvePermissionMode({
   trustedPlanDisplaced,
   settingsNeverForwarded = false,
 }) {
-  let S = !droppedMode && (explicitMode === undefined || (pinnedDefault && explicitMode === "default"));
+  let useSettingsMode =
+    !droppedMode && (explicitMode === undefined || (pinnedDefault && explicitMode === "default"));
   return {
-    permissionMode: S ? (settingsModeForwardable ? (S ? settingsMode : undefined) : undefined) : explicitMode,
+    permissionMode: useSettingsMode
+      ? settingsModeForwardable
+        ? useSettingsMode
+          ? settingsMode
+          : undefined
+        : undefined
+      : explicitMode,
     action: "none",
   };
 }
 //@ chunk-y1dxgk9v.js:2328-2394 placement
-var filtered = MODEL_SELECTION_ENV_VARS.filter((e) => /^ANTHROPIC_DEFAULT_[A-Z]+_MODEL$/.test(e));
+var filtered; // deferred: uses ARTIFACT_PROVIDER_ENV_VARS (../managedEnvConstants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-y1dxgk9v.js:2328", () => {
+  filtered = MODEL_SELECTION_ENV_VARS.filter((envName) => /^ANTHROPIC_DEFAULT_[A-Z]+_MODEL$/.test(envName));
+});
 //@ chunk-y1dxgk9v.js:2394-2561 placement = applyModelOverrides (1)
 /**
  * 模型是否出现在任一设置源的 modelOverrides 值或 ANTHROPIC_DEFAULT_*_MODEL 环境设置中。
  */
 function isModelNamedInSettingsOverrides(ms) {
-  return projectLocalSources().some((o) => {
-    let settingsForSource = getSettingsForSource(o);
-    let i = policyFilteredSettingsEnv(o);
+  return projectLocalSources().some((source) => {
+    let settingsForSource = getSettingsForSource(source);
+    let filteredEnv = policyFilteredSettingsEnv(source);
     return [
       ...Object.values(settingsForSource?.modelOverrides ?? {}),
-      ...filtered.filter((n) => isSetOnlyByEditableSources(n)).flatMap((n) => envValuesForName(i, n)),
-    ].some((n) => _(n, ms));
+      ...filtered
+        .filter((envName) => isSetOnlyByEditableSources(envName))
+        .flatMap((envName) => envValuesForName(filteredEnv, envName)),
+    ].some((modelId) => isSameModel(modelId, ms));
   });
 }
 //@ chunk-y1dxgk9v.js:2561-2633 placement
-function isModelFromEditableSources(e, model) {
+function isModelFromEditableSources(envName, modelB) {
   return (
-    isSetOnlyByEditableSources(e) &&
-    projectLocalSources().some((t) =>
-      envValuesForName(policyFilteredSettingsEnv(t), e).some((i) => _(i, model)),
+    isSetOnlyByEditableSources(envName) &&
+    projectLocalSources().some((sourceName) =>
+      envValuesForName(policyFilteredSettingsEnv(sourceName), envName).some((modelId) =>
+        isSameModel(modelId, modelB),
+      ),
     )
   );
 }
 //@ chunk-y1dxgk9v.js:2633-2689 placement
-function _(e, o) {
+function isSameModel(modelA, modelB) {
   return (
-    normalizeModelKey(e) === normalizeModelKey(o) ||
-    normalizeModelKey(parseUserSpecifiedModel(e)) === normalizeModelKey(parseUserSpecifiedModel(o))
+    normalizeModelKey(modelA) === normalizeModelKey(modelB) ||
+    normalizeModelKey(parseUserSpecifiedModel(modelA)) === normalizeModelKey(parseUserSpecifiedModel(modelB))
   );
 }
 //@ chunk-y1dxgk9v.js:2689-2744 placement
-function normalizeModelKey(userSpecifiedModel) {
-  return strip1mSuffix(userSpecifiedModel.trim().toLowerCase()).trim();
+function normalizeModelKey(modelName) {
+  return strip1mSuffix(modelName.trim().toLowerCase()).trim();
 }
 //@ chunk-y1dxgk9v.js:2744-2837 placement
 function hasNonPolicyEnforceAvailableModels() {
   return getEnabledSettingSources().some(
-    (e) => e !== "policySettings" && getSettingsForSource(e)?.enforceAvailableModels === true,
+    (sourceName) =>
+      sourceName !== "policySettings" && getSettingsForSource(sourceName)?.enforceAvailableModels === true,
   );
 }
 //@ chunk-y1dxgk9v.js:2837-3005 placement
 function hasNonPolicyModelAllowlist() {
   return (
     getSettingsForSource("policySettings")?.availableModels === undefined &&
-    projectLocalSources().some((e) => {
-      let settingsForSource = getSettingsForSource(e);
+    projectLocalSources().some((sourceName) => {
+      let settingsForSource = getSettingsForSource(sourceName);
       return (
         settingsForSource?.availableModels !== undefined ||
         settingsForSource?.enforceAvailableModels !== undefined
@@ -200,25 +221,25 @@ function hasNonPolicyModelAllowlist() {
   );
 }
 //@ chunk-y1dxgk9v.js:3005-3094 placement = getEnabledSettingSources (1)
-function isSetOnlyByEditableSources(e) {
+function isSetOnlyByEditableSources(envName) {
   return (
-    projectLocalSources().some((o) => isModelInSourceEnv(o, e)) &&
-    !isModelInSourceEnv("flagSettings", e) &&
-    !isModelInSourceEnv("policySettings", e)
+    projectLocalSources().some((sourceName) => isModelInSourceEnv(sourceName, envName)) &&
+    !isModelInSourceEnv("flagSettings", envName) &&
+    !isModelInSourceEnv("policySettings", envName)
   );
 }
 //@ chunk-y1dxgk9v.js:3094-3136 placement
-function isModelInSourceEnv(e, o) {
-  return envValuesForName(policyFilteredSettingsEnv(e), o).length > 0;
+function isModelInSourceEnv(sourceName, envName) {
+  return envValuesForName(policyFilteredSettingsEnv(sourceName), envName).length > 0;
 }
 //@ chunk-y1dxgk9v.js:3136-3174 placement
-function policyFilteredSettingsEnv(e) {
-  return filterPolicyPredicateEnv(getSettingsForSource(e)?.env, e);
+function policyFilteredSettingsEnv(sourceName) {
+  return filterPolicyPredicateEnv(getSettingsForSource(sourceName)?.env, sourceName);
 }
 //@ chunk-y1dxgk9v.js:3174-3265 placement
-function envValuesForName(e, o) {
-  return Object.entries(e)
-    .filter(([key]) => key.toUpperCase() === o)
+function envValuesForName(env, envName) {
+  return Object.entries(env)
+    .filter(([key]) => key.toUpperCase() === envName)
     .map(([, value]) => value);
 }
 //@ chunk-y1dxgk9v.js:3265-3351 placement
@@ -234,10 +255,9 @@ function projectLocalSources() {
   return getEnabledSettingSources().filter(isApiKeyHelperFromProjectOrLocalSettings);
 }
 //@ chunk-y1dxgk9v.js:3386-3457 placement = isApiKeyHelperFromProjectOrLocalSettings (0.831)
-function isApiKeyHelperFromProjectOrLocalSettings(effectiveSettingSource) {
+function isApiKeyHelperFromProjectOrLocalSettings(source) {
   return (
-    effectiveSettingSource === "localSettings" ||
-    (effectiveSettingSource === "projectSettings" && !projectSettingsAliasesUserSettings())
+    source === "localSettings" || (source === "projectSettings" && !projectSettingsAliasesUserSettings())
   );
 }
 export { boolFromMaybe, isRestrictedModelAllowed, describeSelfHostedModeNotice, resolveStartupModel };

@@ -5,7 +5,7 @@
  * pieces: chunk-h6b7mazd.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 import {
   require_es_object_atoms,
   require_es_object_atoms_2,
@@ -36,8 +36,8 @@ import { require_functionCall, require_functionCall_2 } from "../call-bind-apply
 import { require_function_bind } from "../function-bind/index.js";
 
 //@ chunk-h6b7mazd.js:12174-20428 cjs-fingerprint
-var require_get_intrinsic = x(function (cjsExports, cjsModule) {
-  var S;
+var require_get_intrinsic = __commonJS(function (cjsExports, cjsModule) {
+  var defaultLookup;
   var $Object = require_es_object_atoms();
   var $Error = require_es_object_atoms_2();
   var $EvalError = require_es_object_atoms_3();
@@ -85,24 +85,24 @@ var require_get_intrinsic = x(function (cjsExports, cjsModule) {
   var $apply = require_functionApply();
   var $call = require_functionCall();
   var needsEval = {};
-  var TypedArray = typeof Uint8Array === "undefined" || !getProto ? S : getProto(Uint8Array);
+  var TypedArray = typeof Uint8Array === "undefined" || !getProto ? defaultLookup : getProto(Uint8Array);
   var INTRINSICS = {
     __proto__: null,
-    "%AggregateError%": typeof AggregateError === "undefined" ? S : AggregateError,
+    "%AggregateError%": typeof AggregateError === "undefined" ? defaultLookup : AggregateError,
     "%Array%": Array,
-    "%ArrayBuffer%": typeof ArrayBuffer === "undefined" ? S : ArrayBuffer,
-    "%ArrayIteratorPrototype%": hasSymbols && getProto ? getProto([][Symbol.iterator]()) : S,
-    "%AsyncFromSyncIteratorPrototype%": S,
+    "%ArrayBuffer%": typeof ArrayBuffer === "undefined" ? defaultLookup : ArrayBuffer,
+    "%ArrayIteratorPrototype%": hasSymbols && getProto ? getProto([][Symbol.iterator]()) : defaultLookup,
+    "%AsyncFromSyncIteratorPrototype%": defaultLookup,
     "%AsyncFunction%": needsEval,
     "%AsyncGenerator%": needsEval,
     "%AsyncGeneratorFunction%": needsEval,
     "%AsyncIteratorPrototype%": needsEval,
-    "%Atomics%": typeof Atomics === "undefined" ? S : Atomics,
-    "%BigInt%": typeof BigInt === "undefined" ? S : BigInt,
-    "%BigInt64Array%": typeof BigInt64Array === "undefined" ? S : BigInt64Array,
-    "%BigUint64Array%": typeof BigUint64Array === "undefined" ? S : BigUint64Array,
+    "%Atomics%": typeof Atomics === "undefined" ? defaultLookup : Atomics,
+    "%BigInt%": typeof BigInt === "undefined" ? defaultLookup : BigInt,
+    "%BigInt64Array%": typeof BigInt64Array === "undefined" ? defaultLookup : BigInt64Array,
+    "%BigUint64Array%": typeof BigUint64Array === "undefined" ? defaultLookup : BigUint64Array,
     "%Boolean%": Boolean,
-    "%DataView%": typeof DataView === "undefined" ? S : DataView,
+    "%DataView%": typeof DataView === "undefined" ? defaultLookup : DataView,
     "%Date%": Date,
     "%decodeURI%": decodeURI,
     "%decodeURIComponent%": decodeURIComponent,
@@ -111,53 +111,58 @@ var require_get_intrinsic = x(function (cjsExports, cjsModule) {
     "%Error%": $Error,
     "%eval%": eval,
     "%EvalError%": $EvalError,
-    "%Float16Array%": typeof Float16Array === "undefined" ? S : Float16Array,
-    "%Float32Array%": typeof Float32Array === "undefined" ? S : Float32Array,
-    "%Float64Array%": typeof Float64Array === "undefined" ? S : Float64Array,
-    "%FinalizationRegistry%": typeof FinalizationRegistry === "undefined" ? S : FinalizationRegistry,
+    "%Float16Array%": typeof Float16Array === "undefined" ? defaultLookup : Float16Array,
+    "%Float32Array%": typeof Float32Array === "undefined" ? defaultLookup : Float32Array,
+    "%Float64Array%": typeof Float64Array === "undefined" ? defaultLookup : Float64Array,
+    "%FinalizationRegistry%":
+      typeof FinalizationRegistry === "undefined" ? defaultLookup : FinalizationRegistry,
     "%Function%": $Function,
     "%GeneratorFunction%": needsEval,
-    "%Int8Array%": typeof Int8Array === "undefined" ? S : Int8Array,
-    "%Int16Array%": typeof Int16Array === "undefined" ? S : Int16Array,
-    "%Int32Array%": typeof Int32Array === "undefined" ? S : Int32Array,
+    "%Int8Array%": typeof Int8Array === "undefined" ? defaultLookup : Int8Array,
+    "%Int16Array%": typeof Int16Array === "undefined" ? defaultLookup : Int16Array,
+    "%Int32Array%": typeof Int32Array === "undefined" ? defaultLookup : Int32Array,
     "%isFinite%": isFinite,
     "%isNaN%": isNaN,
-    "%IteratorPrototype%": hasSymbols && getProto ? getProto(getProto([][Symbol.iterator]())) : S,
-    "%JSON%": typeof JSON === "object" ? JSON : S,
-    "%Map%": typeof Map === "undefined" ? S : Map,
+    "%IteratorPrototype%": hasSymbols && getProto ? getProto(getProto([][Symbol.iterator]())) : defaultLookup,
+    "%JSON%": typeof JSON === "object" ? JSON : defaultLookup,
+    "%Map%": typeof Map === "undefined" ? defaultLookup : Map,
     "%MapIteratorPrototype%":
-      typeof Map === "undefined" || !hasSymbols || !getProto ? S : getProto(new Map()[Symbol.iterator]()),
+      typeof Map === "undefined" || !hasSymbols || !getProto
+        ? defaultLookup
+        : getProto(new Map()[Symbol.iterator]()),
     "%Math%": Math,
     "%Number%": Number,
     "%Object%": $Object,
     "%Object.getOwnPropertyDescriptor%": $gOPD,
     "%parseFloat%": parseFloat,
     "%parseInt%": parseInt,
-    "%Promise%": typeof Promise === "undefined" ? S : Promise,
-    "%Proxy%": typeof Proxy === "undefined" ? S : Proxy,
+    "%Promise%": typeof Promise === "undefined" ? defaultLookup : Promise,
+    "%Proxy%": typeof Proxy === "undefined" ? defaultLookup : Proxy,
     "%RangeError%": $RangeError,
     "%ReferenceError%": $ReferenceError,
-    "%Reflect%": typeof Reflect === "undefined" ? S : Reflect,
+    "%Reflect%": typeof Reflect === "undefined" ? defaultLookup : Reflect,
     "%RegExp%": RegExp,
-    "%Set%": typeof Set === "undefined" ? S : Set,
+    "%Set%": typeof Set === "undefined" ? defaultLookup : Set,
     "%SetIteratorPrototype%":
-      typeof Set === "undefined" || !hasSymbols || !getProto ? S : getProto(new Set()[Symbol.iterator]()),
-    "%SharedArrayBuffer%": typeof SharedArrayBuffer === "undefined" ? S : SharedArrayBuffer,
+      typeof Set === "undefined" || !hasSymbols || !getProto
+        ? defaultLookup
+        : getProto(new Set()[Symbol.iterator]()),
+    "%SharedArrayBuffer%": typeof SharedArrayBuffer === "undefined" ? defaultLookup : SharedArrayBuffer,
     "%String%": String,
-    "%StringIteratorPrototype%": hasSymbols && getProto ? getProto(""[Symbol.iterator]()) : S,
-    "%Symbol%": hasSymbols ? Symbol : S,
+    "%StringIteratorPrototype%": hasSymbols && getProto ? getProto(""[Symbol.iterator]()) : defaultLookup,
+    "%Symbol%": hasSymbols ? Symbol : defaultLookup,
     "%SyntaxError%": $SyntaxError,
     "%ThrowTypeError%": ThrowTypeError,
     "%TypedArray%": TypedArray,
     "%TypeError%": $TypeError,
-    "%Uint8Array%": typeof Uint8Array === "undefined" ? S : Uint8Array,
-    "%Uint8ClampedArray%": typeof Uint8ClampedArray === "undefined" ? S : Uint8ClampedArray,
-    "%Uint16Array%": typeof Uint16Array === "undefined" ? S : Uint16Array,
-    "%Uint32Array%": typeof Uint32Array === "undefined" ? S : Uint32Array,
+    "%Uint8Array%": typeof Uint8Array === "undefined" ? defaultLookup : Uint8Array,
+    "%Uint8ClampedArray%": typeof Uint8ClampedArray === "undefined" ? defaultLookup : Uint8ClampedArray,
+    "%Uint16Array%": typeof Uint16Array === "undefined" ? defaultLookup : Uint16Array,
+    "%Uint32Array%": typeof Uint32Array === "undefined" ? defaultLookup : Uint32Array,
     "%URIError%": $URIError,
-    "%WeakMap%": typeof WeakMap === "undefined" ? S : WeakMap,
-    "%WeakRef%": typeof WeakRef === "undefined" ? S : WeakRef,
-    "%WeakSet%": typeof WeakSet === "undefined" ? S : WeakSet,
+    "%WeakMap%": typeof WeakMap === "undefined" ? defaultLookup : WeakMap,
+    "%WeakRef%": typeof WeakRef === "undefined" ? defaultLookup : WeakRef,
+    "%WeakSet%": typeof WeakSet === "undefined" ? defaultLookup : WeakSet,
     "%Function.prototype.call%": $call,
     "%Function.prototype.apply%": $apply,
     "%Object.defineProperty%": $defineProperty,

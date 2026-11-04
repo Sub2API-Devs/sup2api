@@ -11,29 +11,29 @@
 import { getLastInteractionTime } from "../bootstrap/state.js";
 import { useTerminalNotification } from "../ink/useTerminalNotification.js";
 import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
-import { y, P } from "../../vendor/react/cjs/react.production.js";
+import { useState, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { useInterval } from "../ink/components/Input.js";
 import { HOOK_PROGRESS_INTERVAL_MS } from "../utils/hooks/hookEvents.js";
 import { notifyAsync } from "../utils/terminalProbe.js";
 
 //@ chunk-18hwfzwa.js:1445194-1445250 file-local
-function getTimeSinceLastInteraction(h, x) {
-  return Date.now() - Math.max(getLastInteractionTime(), x) >= h;
+function getTimeSinceLastInteraction(minimumIdleMs, sinceMs) {
+  return Date.now() - Math.max(getLastInteractionTime(), sinceMs) >= minimumIdleMs;
 }
 //@ chunk-18hwfzwa.js:1445250-1445523 fingerprint = useNotifyAfterTimeout (1)
-function useNotifyAfterTimeout(text, notificationType, D) {
+function useNotifyAfterTimeout(text, notificationType, isActive) {
   let terminal = useTerminalNotification();
   let { storageV5, credentials } = useTheme_2();
-  let [Re, Be] = y(false);
-  let [He] = y(() => Date.now());
-  P(() => {
-    Be(false);
+  let [isNotifying, setIsNotifying] = useState(false);
+  let [mountedAt] = useState(() => Date.now());
+  useEffect(() => {
+    setIsNotifying(false);
   }, [text, notificationType, terminal]);
   useInterval(
     () => {
-      if (!getTimeSinceLastInteraction(HOOK_PROGRESS_INTERVAL_MS, He)) return;
-      Be(true);
-      if (D !== undefined && !D()) return;
+      if (!getTimeSinceLastInteraction(HOOK_PROGRESS_INTERVAL_MS, mountedAt)) return;
+      setIsNotifying(true);
+      if (isActive !== undefined && !isActive()) return;
       notifyAsync(
         {
           message: text,
@@ -46,7 +46,7 @@ function useNotifyAfterTimeout(text, notificationType, D) {
         },
       );
     },
-    Re ? null : HOOK_PROGRESS_INTERVAL_MS,
+    isNotifying ? null : HOOK_PROGRESS_INTERVAL_MS,
   );
 }
 export { useNotifyAfterTimeout };

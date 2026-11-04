@@ -21,12 +21,19 @@ var CONTINUE_IN_PROJECTS_PERMISSION_DIALOG = withHideWhile({
   kind: "permission_continue_in_projects",
   payload: DoctorLazy(() =>
     deepFreezeToolName(
-      (e) =>
-        typeof e === "object" && e !== null && "requestId" in e && "toolName" in e && "permissionResult" in e,
+      (payload) =>
+        typeof payload === "object" &&
+        payload !== null &&
+        "requestId" in payload &&
+        "toolName" in payload &&
+        "permissionResult" in payload,
     ),
   ),
-  result: DoctorLazy(() => deepFreezeToolName((e) => typeof e === "object" && e !== null && "behavior" in e)),
+  result: DoctorLazy(() =>
+    deepFreezeToolName((result) => typeof result === "object" && result !== null && "behavior" in result),
+  ),
   default: {
     behavior: "cancelled",
   },
 });
+export { CONTINUE_IN_PROJECTS_PROMPT_TITLE, CONTINUE_IN_PROJECTS_PERMISSION_DIALOG };

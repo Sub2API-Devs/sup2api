@@ -22,6 +22,7 @@ import {
   errorMessage,
 } from "./errors.js";
 import { logForDebugging } from "./debug.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-6zvphrsz.js:4527-4559 affinity
 var CLAUDE_ALIAS_REGEX = /^\s*alias\s+claude\s*=/;
@@ -35,14 +36,15 @@ function getShellConfigPaths(options) {
   let platform = options?.platform ?? "linux";
   let fileExists = options?.fileExists ?? existsSync;
   let zshConfigDir = env.ZDOTDIR || home;
-  let R =
+  let bashProfileName =
     platform === "darwin"
-      ? ([".bash_profile", ".bash_login", ".profile"].find((p) => fileExists(join(home, p))) ??
-        ".bash_profile")
+      ? ([".bash_profile", ".bash_login", ".profile"].find((candidate) =>
+          fileExists(join(home, candidate)),
+        ) ?? ".bash_profile")
       : ".bashrc";
   return {
     zsh: join(zshConfigDir, ".zshrc"),
-    bash: join(home, R),
+    bash: join(home, bashProfileName),
     ...(platform === "darwin" && {
       bashrc: join(home, ".bashrc"),
     }),
@@ -115,17 +117,20 @@ async function writeFileLines(filePath, lines) {
   }
 }
 //@ chunk-6zvphrsz.js:5482-5614 layout
-var UNREADABLE_CONFIG_ERROR_CODES = new Set([
-  "EBUSY",
-  "EOPNOTSUPP",
-  "ENOTSUP",
-  "ENOMEM",
-  "ERR_FS_FILE_TOO_LARGE",
-  "ENOTCONN",
-  "EHOSTDOWN",
-  "EHOSTUNREACH",
-  "ETIMEDOUT",
-]);
+var UNREADABLE_CONFIG_ERROR_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-6zvphrsz.js:5482", () => {
+  UNREADABLE_CONFIG_ERROR_CODES = new Set([
+    "EBUSY",
+    "EOPNOTSUPP",
+    "ENOTSUP",
+    "ENOMEM",
+    "ERR_FS_FILE_TOO_LARGE",
+    "ENOTCONN",
+    "EHOSTDOWN",
+    "EHOSTUNREACH",
+    "ETIMEDOUT",
+  ]);
+});
 //@ chunk-6zvphrsz.js:5614-5981 callgraph-witnessed = findClaudeAlias (0)
 /**
  * 在 zsh/bash/fish 配置文件里查找 `alias claude=` 的目标；读不了的文件记日志跳过。

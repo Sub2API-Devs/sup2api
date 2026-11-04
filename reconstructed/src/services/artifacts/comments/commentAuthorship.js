@@ -13,7 +13,8 @@ import { getClaudeAIOAuthTokenOriginAsync } from "../../../utils/auth.js";
 import { getLiveState, resetOwnPrincipalTokens } from "../../liveReplica/liveReplica.js";
 import { directAuthFingerprint, settleDirectAuth } from "../frameRelay.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
-import { string } from "../../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../../../vendor/zod/v4/classic/schemas.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-av47g0rj.js:415-469 placement
 /**
@@ -22,64 +23,77 @@ import { string } from "../../../../vendor/zod/v4/classic/schemas.js";
 var PRINCIPAL_TOKEN_RE = /^u_[A-Za-z0-9_]{1,62}$/;
 var ORIGINAL_ROLE_RE = /^[a-z_]{0,32}$/;
 //@ chunk-av47g0rj.js:469-555 placement
-function hasAuthorAccount(n, e) {
-  return !(n === undefined || n === null || n === "" || (n === "agent" && e === "assistant"));
+function hasAuthorAccount(account, principal) {
+  return !(
+    account === undefined ||
+    account === null ||
+    account === "" ||
+    (account === "agent" && principal === "assistant")
+  );
 }
 //@ chunk-av47g0rj.js:555-655 placement
-function isOwnPrincipal(account, e) {
-  if (e.tokens.has(account)) return true;
-  return e.account !== undefined && account.toLowerCase() === e.account;
+function isOwnPrincipal(accountName, principal) {
+  if (principal.tokens.has(accountName)) return true;
+  return principal.account !== undefined && accountName.toLowerCase() === principal.account;
 }
 //@ chunk-av47g0rj.js:655-801 placement
 async function ownAccountUuid(credentials) {
   let { info } = resolveGatewayAccountInfo();
-  let r =
+  let out =
     (await getClaudeAIOAuthTokenOriginAsync(credentials)) === "store"
       ? info?.accountUuid?.toLowerCase()
       : undefined;
   return {
-    account: r === "" ? undefined : r,
+    account: out === "" ? undefined : out,
     tokens: ownPrincipalTokens(),
   };
 }
 //@ chunk-av47g0rj.js:801-1065 placement
-function classifyThreadAuthors(n, e) {
-  let r = e.account !== undefined || e.tokens.size > 0;
-  let i = false;
-  for (let t of n)
+function classifyThreadAuthors(comments, info) {
+  let hasAccount = info.account !== undefined || info.tokens.size > 0;
+  let unknown = false;
+  for (let comment of comments)
     if (
-      t.account === "unknown" ||
-      t.role === "degraded" ||
-      t.postedByArtifact === true ||
-      !r ||
-      (PRINCIPAL_TOKEN_RE.test(t.account) && e.tokens.size === 0)
+      comment.account === "unknown" ||
+      comment.role === "degraded" ||
+      comment.postedByArtifact === true ||
+      !hasAccount ||
+      (PRINCIPAL_TOKEN_RE.test(comment.account) && info.tokens.size === 0)
     )
-      i = true;
-    else if (!isOwnPrincipal(t.account, e)) return "other";
-  return i ? "unknown" : "own";
+      unknown = true;
+    else if (!isOwnPrincipal(comment.account, info)) return "other";
+  return unknown ? "unknown" : "own";
 }
 //@ chunk-av47g0rj.js:1065-1130 placement
 function ownAccountUuidForComments() {
   return resolveGatewayAccountInfo().info?.accountUuid?.toLowerCase() ?? null;
 }
 //@ chunk-av47g0rj.js:1130-1144 placement
-var EMPTY_PRINCIPAL_TOKENS = new Set();
+var EMPTY_TOKEN_SET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-av47g0rj.js:1130", () => {
+  EMPTY_TOKEN_SET = new Set();
+});
 //@ chunk-av47g0rj.js:1144-1350 placement
 function ownPrincipalTokens() {
-  let liveState = getLiveState();
-  let ownPrincipalTokens = liveState.ownPrincipalTokens;
-  if (ownPrincipalTokens.size === 0) return EMPTY_PRINCIPAL_TOKENS;
-  if (liveState.ownPrincipalTokenAccount !== ownAccountUuidForComments()) {
-    resetOwnPrincipalTokens(liveState);
-    return EMPTY_PRINCIPAL_TOKENS;
+  let replica = getLiveState();
+  let ownPrincipalTokens = replica.ownPrincipalTokens;
+  if (ownPrincipalTokens.size === 0) return EMPTY_TOKEN_SET;
+  if (replica.ownPrincipalTokenAccount !== ownAccountUuidForComments()) {
+    resetOwnPrincipalTokens(replica);
+    return EMPTY_TOKEN_SET;
   }
-  let r = directAuthFingerprint();
-  for (let [i, t] of ownPrincipalTokens) if (t !== RELAY && t !== r) ownPrincipalTokens.delete(i);
+  let fingerprint = directAuthFingerprint();
+  for (let [token, user] of ownPrincipalTokens)
+    if (user !== RELAY && user !== fingerprint) ownPrincipalTokens.delete(token);
   return new Set(ownPrincipalTokens.keys());
 }
 //@ chunk-av47g0rj.js:1350-1388 placement
-var RELAY = "relay";
-var principalTokenSchema = DoctorLazy(() => string().regex(PRINCIPAL_TOKEN_RE));
+var RELAY; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var principalTokenSchema;
+deferInit("chunk-av47g0rj.js:1350", () => {
+  RELAY = "relay";
+  principalTokenSchema = DoctorLazy(() => stringSchema().regex(PRINCIPAL_TOKEN_RE));
+});
 //@ chunk-av47g0rj.js:1388-1497 placement
 async function commentsAuthContext(credentials) {
   await settleDirectAuth(credentials);
@@ -91,23 +105,26 @@ async function commentsAuthContext(credentials) {
   };
 }
 //@ chunk-av47g0rj.js:1497-1878 placement
-function rememberPrincipalTokens(n, e, sentAuthFingerprint, route) {
+function rememberPrincipalTokens(account, tokens, sentAuthFingerprint, route) {
   let liveState = getLiveState();
-  if (liveState.ownPrincipalTokenEpoch !== e.epoch || ownAccountUuidForComments() !== e.account) return;
-  let a =
+  if (liveState.ownPrincipalTokenEpoch !== tokens.epoch || ownAccountUuidForComments() !== tokens.account)
+    return;
+  let stored =
     route === "relay"
       ? RELAY
-      : e.bearer !== null && directAuthFingerprint() === e.bearer && sentAuthFingerprint === e.bearer
-        ? e.bearer
+      : tokens.bearer !== null &&
+          directAuthFingerprint() === tokens.bearer &&
+          sentAuthFingerprint === tokens.bearer
+        ? tokens.bearer
         : undefined;
-  if (a === undefined) return;
-  let s = principalTokenSchema().safeParse(n);
-  if (s.success) {
-    if (liveState.ownPrincipalTokenAccount !== e.account) {
+  if (stored === undefined) return;
+  let parsed = principalTokenSchema().safeParse(account);
+  if (parsed.success) {
+    if (liveState.ownPrincipalTokenAccount !== tokens.account) {
       liveState.ownPrincipalTokens.clear();
-      liveState.ownPrincipalTokenAccount = e.account;
+      liveState.ownPrincipalTokenAccount = tokens.account;
     }
-    liveState.ownPrincipalTokens.set(s.data, a);
+    liveState.ownPrincipalTokens.set(parsed.data, stored);
   }
 }
 export {

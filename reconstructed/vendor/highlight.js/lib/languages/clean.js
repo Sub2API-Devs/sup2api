@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:64611-65209 cjs-fingerprint
-var require_clean = x(function (cjsExports, cjsModule) {
+var require_clean = __commonJS(function (cjsExports, cjsModule) {
   function clean(hljs) {
     return {
       name: "Clean",

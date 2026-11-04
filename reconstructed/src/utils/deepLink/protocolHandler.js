@@ -63,8 +63,8 @@ async function handleDeepLinkUri(uri) {
   try {
     launched = await launchInTerminal(claudePath, launchAction);
   } catch (error) {
-    let l = error instanceof Error ? error.message : String(error);
-    console.error(`Deep link error: ${l}`);
+    let message = error instanceof Error ? error.message : String(error);
+    console.error(`Deep link error: ${message}`);
     logFeatureBad("deep_link_handle", "launch_error");
     return 1;
   }
@@ -101,3 +101,4 @@ async function resolveCwd(action) {
     cwd: homedir(),
   };
 }
+export { handleDeepLinkUri };

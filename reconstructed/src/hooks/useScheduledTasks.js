@@ -9,7 +9,13 @@
  * attribution: sole-consumer 7, affinity 1, fingerprint 2
  */
 import { randomUUID } from "crypto";
-import { init_react_production, Oo, R, P } from "../../vendor/react/cjs/react.production.js";
+import { effectiveSessionTimeZone } from "../utils/sessionTimeZone.js";
+import {
+  init_react_production,
+  useEffectEvent,
+  useRef,
+  useEffect,
+} from "../../vendor/react/cjs/react.production.js";
 import { SCHEDULE_WAKEUP_TOOL_NAME } from "../tools/ScheduleWakeupTool/prompt.js";
 import { isToolResultMessage, createUserMessage, createScheduledTaskFireMessage } from "../utils/messages.js";
 import { plural } from "../utils/stringUtils.js";
@@ -48,18 +54,35 @@ import { getCronJitterConfig } from "../utils/cronJitterConfig.js";
 import { getSessionProject } from "../bootstrap/sessionSlices.js";
 import { SerialWriteQueue } from "../utils/errorLogSink.js";
 import { loopKeepaliveSetting, hasLoopTask, scheduleKeepaliveWakeup } from "../utils/loop/loopWakeups.js";
-import { effectiveSessionTimeZone } from "../utils/sessionTimeZone.js";
 
+//@ chunk-k8enqm3s.js:228-481 fingerprint = formatCronFireTime (0.874)
+function formatCronFireTime(date, options) {
+  return date
+    .toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      ...(options?.includeYear && {
+        year: "numeric",
+      }),
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: effectiveSessionTimeZone(),
+    })
+    .replace(/,? at |, (?=\d{1,2}:)/, " ")
+    .replace(/[ \u202f]([AP]M)/i, (ampm, ampm_2) => ampm_2.toLowerCase());
+}
 //@ chunk-4m1yk02k.js:12639-12643 sole-consumer
 init_react_production();
 //@ chunk-4m1yk02k.js:12679-12774 sole-consumer
-function isLoopCronFire(o) {
-  return o.type === "system" && o.subtype === "scheduled_task_fire" && o.cronKind === "loop";
+function isLoopCronFire(message) {
+  return (
+    message.type === "system" && message.subtype === "scheduled_task_fire" && message.cronKind === "loop"
+  );
 }
 //@ chunk-4m1yk02k.js:12774-12905 sole-consumer
-function isBlockingSystemMessage(o) {
-  if (o.type !== "system") return false;
-  if (o.subtype === "scheduled_task_fire" || o.subtype === "compact_boundary") return true;
+function isBlockingSystemMessage(message) {
+  if (message.type !== "system") return false;
+  if (message.subtype === "scheduled_task_fire" || message.subtype === "compact_boundary") return true;
   return false;
 }
 //@ chunk-4m1yk02k.js:12905-14200 sole-consumer
@@ -74,9 +97,9 @@ function analyzeLoopNoOpFold(messages) {
       kind: "none",
     };
   for (let i = fireIndex - 1; i >= 0; i--) {
-    let e = messages[i];
-    if (isLoopCronFire(e)) break;
-    if (isBlockingSystemMessage(e))
+    let message = messages[i];
+    if (isLoopCronFire(message)) break;
+    if (isBlockingSystemMessage(message))
       return {
         kind: "veto",
         fireIdx: fireIndex,
@@ -86,33 +109,33 @@ function analyzeLoopNoOpFold(messages) {
   let reportedNoop;
   let toolUseIds = new Set();
   for (let idx = fireIndex + 1; idx < messages.length; idx++) {
-    let e = messages[idx];
-    if (isBlockingSystemMessage(e))
+    let message = messages[idx];
+    if (isBlockingSystemMessage(message))
       return {
         kind: "veto",
         fireIdx: fireIndex,
         reason: "blocking_system_in_span",
       };
-    if (e.type === "assistant")
-      for (let i of e.message.content) {
-        if (i.type !== "tool_use") continue;
-        toolUseIds.add(i.id);
-        if (i.name === SCHEDULE_WAKEUP_TOOL_NAME) reportedNoop = i.input?.noop === true;
+    if (message.type === "assistant")
+      for (let block of message.message.content) {
+        if (block.type !== "tool_use") continue;
+        toolUseIds.add(block.id);
+        if (block.name === SCHEDULE_WAKEUP_TOOL_NAME) reportedNoop = block.input?.noop === true;
       }
-    else if (e.type === "user") {
-      if (e.toolDenialKind !== undefined)
+    else if (message.type === "user") {
+      if (message.toolDenialKind !== undefined)
         return {
           kind: "veto",
           fireIdx: fireIndex,
           reason:
-            e.toolDenialKind === "interrupted" || e.toolDenialKind === "cancelled"
+            message.toolDenialKind === "interrupted" || message.toolDenialKind === "cancelled"
               ? "tool_abort"
               : "tool_denial",
         };
-      let content = e.message.content;
+      let content = message.message.content;
       if (typeof content !== "string") {
-        for (let d of content)
-          if (d.type === "tool_result" && !toolUseIds.has(d.tool_use_id))
+        for (let block of content)
+          if (block.type === "tool_result" && !toolUseIds.has(block.tool_use_id))
             return {
               kind: "veto",
               fireIdx: fireIndex,
@@ -120,17 +143,17 @@ function analyzeLoopNoOpFold(messages) {
             };
       }
       if (
-        !isToolResultMessage(e) &&
-        (e.verifiedSlackHumanTurn === true ||
-          e.origin !== undefined ||
-          (e.queuePriority !== "later" && e.isMeta !== true))
+        !isToolResultMessage(message) &&
+        (message.verifiedSlackHumanTurn === true ||
+          message.origin !== undefined ||
+          (message.queuePriority !== "later" && message.isMeta !== true))
       )
         return {
           kind: "veto",
           fireIdx: fireIndex,
           reason: "foreign_user_input",
         };
-    } else if (e.type === "attachment" && e.attachment.type === "queued_command")
+    } else if (message.type === "attachment" && message.attachment.type === "queued_command")
       return {
         kind: "veto",
         fireIdx: fireIndex,
@@ -152,10 +175,10 @@ function analyzeLoopNoOpFold(messages) {
   };
 }
 //@ chunk-4m1yk02k.js:14200-14347 sole-consumer
-function createLoopHealthyNote(o) {
+function createLoopHealthyNote(wakeupCount) {
   return {
     ...createUserMessage({
-      content: `[${o} prior /loop ${plural(o, "wakeup")} found nothing actionable; loop is healthy.]`,
+      content: `[${wakeupCount} prior /loop ${plural(wakeupCount, "wakeup")} found nothing actionable; loop is healthy.]`,
       isMeta: true,
     }),
     turnCompanion: true,
@@ -184,26 +207,29 @@ function appendLoopWakeup(messages, isLoop, task, uuid) {
         }),
       }),
     ];
-  let i = fold.priorStreak + 1;
-  let d = formatCronFireTime(new Date(fold.since));
+  let streak = fold.priorStreak + 1;
+  let sinceText = formatCronFireTime(new Date(fold.since));
   let mapped = messages.slice(fold.fireIdx).map((message) => message.uuid);
   logFeatureOk("loop_noop_fold", {
-    streak: i,
+    streak,
     span_len: mapped.length,
     tool_uses: fold.toolUseCount,
     span_duration_s: getSpanDurationSeconds(messages, fold.fireIdx),
   });
   return [
     ...messages,
-    createScheduledTaskFireMessage(`${content} \xB7 ${i} no-op ${plural(i, "tick")} since ${d}`, {
-      task,
-      uuid,
-      cronKind: "loop",
-      noOpStreak: i,
-      streakStartedAt: fold.since,
-      foldedUuids: mapped,
-    }),
-    createLoopHealthyNote(i),
+    createScheduledTaskFireMessage(
+      `${content} \xB7 ${streak} no-op ${plural(streak, "tick")} since ${sinceText}`,
+      {
+        task,
+        uuid,
+        cronKind: "loop",
+        noOpStreak: streak,
+        streakStartedAt: fold.since,
+        foldedUuids: mapped,
+      },
+    ),
+    createLoopHealthyNote(streak),
   ];
 }
 //@ chunk-4m1yk02k.js:14919-15052 sole-consumer
@@ -214,20 +240,20 @@ function getSpanDurationSeconds(messages, fireIdx) {
   return Math.round((Date.parse(timestamp_2) - Date.parse(timestamp)) / 1000);
 }
 //@ chunk-4m1yk02k.js:15052-15096 affinity
-var scheduledTasksModule = require("./chunk-w6rm7nhv.js");
+var scheduledTasksModule = require("../utils/loop/LOOP_FILE_DYNAMIC_SENTINEL.lazy.js");
 var SCHEDULED_TASKS_PLACEHOLDER = null;
 //@ chunk-4m1yk02k.js:15096-17139 fingerprint = useScheduledTasks (0.512)
 function useScheduledTasks({ isLoading, assistantMode, transcript, storageV5, disabled = false }) {
   let commandQueueOrDefault = useCommandQueueOrDefault();
-  let isLoadingRef = Oo(() => isLoading);
-  let schedulerRef = R(null);
+  let isLoadingRef = useEffectEvent(() => isLoading);
+  let schedulerRef = useRef(null);
   let store = useSession();
   let setAppState = useAppStoreDirect();
   let setAppState_2 = useSetAppState();
   let taskRegistry = useSetVoiceState();
-  P(() => {
+  useEffect(() => {
     if (disabled || !isKairosCronEnabled() || getRemoteCaps() !== null) return;
-    let _ = (prompt, wakeupSource, u) => ({
+    let buildScheduledPrompt = (prompt, wakeupSource, fireMeta) => ({
       value: prompt,
       mode: "prompt",
       agentId: mainAgentId(),
@@ -237,30 +263,30 @@ function useScheduledTasks({ isLoading, assistantMode, transcript, storageV5, di
       modelScheduledOrigin: true,
       skipAttachments: true,
       wakeupSource,
-      scheduledTaskId: u?.taskId,
-      scheduledFireId: u?.fireId,
-      ...(u?.plugin !== undefined && {
-        scheduledByPlugin: u.plugin,
+      scheduledTaskId: fireMeta?.taskId,
+      scheduledFireId: fireMeta?.fireId,
+      ...(fireMeta?.plugin !== undefined && {
+        scheduledByPlugin: fireMeta.plugin,
       }),
       workload: WORKLOAD_CRON,
     });
     let resolved = Promise.resolve();
-    let b = (n, wakeupSource, u, l) => {
+    let enqueueScheduledWake = (taskPrompt, wakeupSource, taskMeta, onEnqueued) => {
       if (isStorageV5Enabled() && storageV5 !== undefined) {
         resolved = resolved.then(async () => {
           try {
             commandQueueOrDefault.enqueuePendingNotification(
-              _(
+              buildScheduledPrompt(
                 await scheduledTasksModule.resolveLoopDefaultFireAsync(
                   store.autonomousLoopPreamble,
-                  n,
+                  taskPrompt,
                   storageV5,
                 ),
                 wakeupSource,
-                u,
+                taskMeta,
               ),
             );
-            l?.();
+            onEnqueued?.();
           } catch (error) {
             logForDebugging(`[ScheduledTasks] fire enqueue (v5 arm) failed; fire skipped: ${error}`);
           }
@@ -268,9 +294,13 @@ function useScheduledTasks({ isLoading, assistantMode, transcript, storageV5, di
         return;
       }
       commandQueueOrDefault.enqueuePendingNotification(
-        _(scheduledTasksModule.resolveLoopDefaultFire(store.autonomousLoopPreamble, n), wakeupSource, u),
+        buildScheduledPrompt(
+          scheduledTasksModule.resolveLoopDefaultFire(store.autonomousLoopPreamble, taskPrompt),
+          wakeupSource,
+          taskMeta,
+        ),
       );
-      l?.();
+      onEnqueued?.();
     };
     let enqueueForLead = (prompt) => {
       if (scheduledTasksModule.isLoopDefaultSentinel(prompt.prompt))
@@ -280,46 +310,46 @@ function useScheduledTasks({ isLoading, assistantMode, transcript, storageV5, di
         };
       return prompt;
     };
-    let C = undefined;
+    let routineTasksModule = undefined;
     let scheduler = createCronScheduler({
-      onFire: (task) => b(task, "schedule_wakeup"),
-      onMissed: wrapScheduledTaskBatchRunner((missed, plugin, u) =>
-        b(
+      onFire: (task) => enqueueScheduledWake(task, "schedule_wakeup"),
+      onMissed: wrapScheduledTaskBatchRunner((missed, plugin, onMissedDone) =>
+        enqueueScheduledWake(
           buildMissedTaskNotification(missed),
           "schedule_wakeup",
           {
             plugin,
           },
-          u,
+          onMissedDone,
         ),
       ),
-      onFireTask: wrapScheduledTaskRunner((prompt, m) => {
-        if (prompt.agentId) {
-          let teammate = findTeammateTaskByAgentId(prompt.agentId, setAppState.getState().tasks);
+      onFireTask: wrapScheduledTaskRunner((scheduledTask, onFireDone) => {
+        if (scheduledTask.agentId) {
+          let teammate = findTeammateTaskByAgentId(scheduledTask.agentId, setAppState.getState().tasks);
           if (teammate && !isTerminalTaskStatus(teammate.status)) {
-            injectUserMessageToTeammate(teammate.id, prompt.prompt, taskRegistry, {
+            injectUserMessageToTeammate(teammate.id, scheduledTask.prompt, taskRegistry, {
               kind: "task-notification",
             });
-            m();
+            onFireDone();
             return;
           }
           logForDebugging(
-            `[ScheduledTasks] teammate ${prompt.agentId} gone, removing orphaned cron ${prompt.id}`,
+            `[ScheduledTasks] teammate ${scheduledTask.agentId} gone, removing orphaned cron ${scheduledTask.id}`,
           );
-          removeCronTasks([prompt.id]);
+          removeCronTasks([scheduledTask.id]);
           return;
         }
         let uuid = randomUUID();
-        if (prompt.kind === "loop") {
+        if (scheduledTask.kind === "loop") {
           let isLoop = !isLoadingRef();
-          transcript.replace((prev) => appendLoopWakeup(prev, isLoop, enqueueForLead(prompt), uuid));
-          setLoopTickInFlightPrompt(prompt.prompt, prompt.plugin);
+          transcript.replace((prev) => appendLoopWakeup(prev, isLoop, enqueueForLead(scheduledTask), uuid));
+          setLoopTickInFlightPrompt(scheduledTask.prompt, scheduledTask.plugin);
           recordLoopWakeFire();
         } else {
           let scheduledTaskFireMessage = createScheduledTaskFireMessage(
             `Running scheduled task (${formatCronFireTime(new Date())})`,
             {
-              task: enqueueForLead(prompt),
+              task: enqueueForLead(scheduledTask),
               uuid,
             },
           );
@@ -328,15 +358,15 @@ function useScheduledTasks({ isLoading, assistantMode, transcript, storageV5, di
             messages: [scheduledTaskFireMessage],
           });
         }
-        b(
-          prompt.prompt,
-          wakeupSourceForKind(prompt),
+        enqueueScheduledWake(
+          scheduledTask.prompt,
+          wakeupSourceForKind(scheduledTask),
           {
-            taskId: prompt.id,
+            taskId: scheduledTask.id,
             fireId: uuid,
-            plugin: prompt.plugin,
+            plugin: scheduledTask.plugin,
           },
-          m,
+          onFireDone,
         );
       }),
       isLoading: () => isLoadingRef(),
@@ -344,11 +374,11 @@ function useScheduledTasks({ isLoading, assistantMode, transcript, storageV5, di
       getJitterConfig: getCronJitterConfig,
       isKilled: () => !isKairosCronEnabled(),
       getExtraTasks:
-        SCHEDULED_TASKS_PLACEHOLDER && C && getProjectConfigRoot() === null
+        SCHEDULED_TASKS_PLACEHOLDER && routineTasksModule && getProjectConfigRoot() === null
           ? () =>
               SCHEDULED_TASKS_PLACEHOLDER.getRoutineCronTasks(
                 getSessionProject(store).projectRoot,
-                C,
+                routineTasksModule,
                 storageV5,
               )
           : undefined,
@@ -360,11 +390,11 @@ function useScheduledTasks({ isLoading, assistantMode, transcript, storageV5, di
       scheduler.stop();
     };
   }, [assistantMode, transcript, setAppState.getState, taskRegistry, store, disabled]);
-  P(() => {
-    let _ = new SerialWriteQueue();
-    return () => _.dispose();
+  useEffect(() => {
+    let writeQueue = new SerialWriteQueue();
+    return () => writeQueue.dispose();
   }, []);
-  P(() => {
+  useEffect(() => {
     if (isLoading) return;
     let loopTickInFlightPrompt = getLoopTickInFlightPrompt();
     if (loopTickInFlightPrompt !== null) {
@@ -377,20 +407,4 @@ function useScheduledTasks({ isLoading, assistantMode, transcript, storageV5, di
     schedulerRef.current?.checkNow();
   }, [isLoading]);
 }
-//@ chunk-k8enqm3s.js:228-481 fingerprint = formatCronFireTime (0.874)
-function formatCronFireTime(e, r) {
-  return e
-    .toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      ...(r?.includeYear && {
-        year: "numeric",
-      }),
-      hour: "numeric",
-      minute: "2-digit",
-      timeZone: effectiveSessionTimeZone(),
-    })
-    .replace(/,? at |, (?=\d{1,2}:)/, " ")
-    .replace(/[ \u202f]([AP]M)/i, (o, ampm) => ampm.toLowerCase());
-}
-export { formatCronFireTime };
+export { formatCronFireTime, useScheduledTasks };

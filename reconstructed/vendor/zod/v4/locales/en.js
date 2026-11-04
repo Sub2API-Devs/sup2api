@@ -5,7 +5,7 @@
  * pieces: chunk-7vp249v4.js (2)
  * attribution: esm-fingerprint 2
  */
-import { parsedType, stringifyPrimitive, Zgs } from "../core/util.js";
+import { parsedType, stringifyPrimitive, joinValues } from "../core/util.js";
 
 //@ chunk-7vp249v4.js:47724-50437 esm-fingerprint
 var error = () => {
@@ -85,7 +85,7 @@ var error = () => {
       case "invalid_value":
         if (issue.values.length === 1)
           return `Invalid input: expected ${stringifyPrimitive(issue.values[0])}`;
-        return `Invalid option: expected one of ${Zgs(issue.values, "|")}`;
+        return `Invalid option: expected one of ${joinValues(issue.values, "|")}`;
       case "too_big": {
         let adj = issue.exact ? "exactly " : issue.inclusive ? "<=" : "<";
         let sizing = getSizing(issue.origin);
@@ -111,7 +111,7 @@ var error = () => {
       case "not_multiple_of":
         return `Invalid number: must be a multiple of ${issue.divisor}`;
       case "unrecognized_keys":
-        return `Unrecognized key${issue.keys.length > 1 ? "s" : ""}: ${Zgs(issue.keys, ", ")}`;
+        return `Unrecognized key${issue.keys.length > 1 ? "s" : ""}: ${joinValues(issue.keys, ", ")}`;
       case "invalid_key":
         return `Invalid key in ${issue.origin}`;
       case "invalid_union":
@@ -127,9 +127,9 @@ var error = () => {
   };
 };
 //@ chunk-7vp249v4.js:50437-50476 esm-fingerprint
-function qe() {
+function defaultLocale() {
   return {
     localeError: error(),
   };
 }
-export { qe };
+export { defaultLocale };

@@ -14,11 +14,12 @@ import {
 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { formatClockTime } from "../bridge/bridgeStatusUtil.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
-import { y, P, init_react_production } from "../../vendor/react/cjs/react.production.js";
+import { useState, useEffect, init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { SandboxManager } from "../utils/sandbox/sandbox-adapter.js";
 import { getPlatform } from "../utils/platform.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:107469-107652 fingerprint = _temp (1)
 function renderViolationLine(v, i) {
@@ -36,14 +37,14 @@ function renderViolationLine(v, i) {
 }
 //@ chunk-18hwfzwa.js:107833-108843 fingerprint = SandboxViolationExpandedView (0.667)
 function SandboxViolationExpandedView() {
-  let $ = w(15);
+  let $ = useMemoCache(15);
   let t0;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     t0 = [];
     $[0] = t0;
   } else t0 = $[0];
-  let [violations, setViolations] = y(t0);
-  let [totalCount, setTotalCount] = y(0);
+  let [violations, setViolations] = useState(t0);
+  let [totalCount, setTotalCount] = useState(0);
   let t1;
   let t2;
   if ($[1] === MEMO_CACHE_SENTINEL) {
@@ -61,7 +62,7 @@ function SandboxViolationExpandedView() {
     t1 = $[1];
     t2 = $[2];
   }
-  P(t1, t2);
+  useEffect(t1, t2);
   if (!SandboxManager.isSandboxingEnabled() || getPlatform() === "linux") {
     return null;
   }
@@ -117,7 +118,13 @@ function SandboxViolationExpandedView() {
   return t8;
 }
 //@ chunk-18hwfzwa.js:108843-108847 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:108843", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:108847-108851 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:108847", () => {
+  init_react_production();
+});
 export { SandboxViolationExpandedView };

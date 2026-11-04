@@ -10,13 +10,13 @@
  */
 
 //@ chunk-mz6f608r.js:4378-4487 fingerprint = getClaudeCodeUserAgent (0.492)
-function getClaudeCodeUserAgent(e) {
+function getClaudeCodeUserAgent(options) {
   return {
     params: {
-      entrypoint: e.entrypoint,
-      model: e.model,
+      entrypoint: options.entrypoint,
+      model: options.model,
     },
-    userAgent: `claude-code/${e.ccVersion}`,
+    userAgent: `claude-code/${options.ccVersion}`,
   };
 }
 export { getClaudeCodeUserAgent };

@@ -5,11 +5,11 @@
  * pieces: chunk-s82q9s4x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_codegen_2 } from "../../compile/codegen/index.js";
 
 //@ chunk-s82q9s4x.js:88514-89001 cjs-fingerprint
-var require_limitItems = x(function (cjsExports) {
+var require_limitItems = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

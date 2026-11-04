@@ -8,11 +8,19 @@
  * pieces: chunk-975mts6d.js (18)
  * attribution: placement 18
  */
-import { init_react_production, y, R, Se, zt, ce, yt } from "../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useContext,
+  useLayoutEffect,
+  useCallback,
+  useSyncExternalStore,
+} from "../../vendor/react/cjs/react.production.js";
 import { useSessionOrUndefined } from "../context/session.js";
 import { usePreDispatchKeyHandler } from "../keybindings/useActionHandlers.js";
 import { useInputClock } from "../ink/components/Input.js";
-import { kp } from "../../vendor/convert-to-spaces/dist/index.js";
+import { APP_CONTEXT } from "../../vendor/convert-to-spaces/dist/index.js";
 import { isWithinRecentInput, RECENT_INPUT_GUARD_MS } from "../hooks/useRecentInputGuard.js";
 import { useRefusalTracker } from "./CustomSelect/selectTypeahead.js";
 import { setPromptStash, promptInputValue, promptInputStoreFor } from "../state/promptInputStore.js";
@@ -30,59 +38,69 @@ import { formatTokens, formatDurationCoarse } from "../utils/format.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 import { NO_COMMITTED_ROW } from "./CustomSelect/select.js";
 import { useClock } from "../ink/components/ClockContext.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-975mts6d.js:774-792 placement
-var weakMap = new WeakMap();
+var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-975mts6d.js:774", () => {
+  weakMap = new WeakMap();
+});
 //@ chunk-975mts6d.js:792-914 placement
-function getPasteHintState(o, t = "") {
-  let i = weakMap.get(o);
-  if (i === undefined) {
-    i = {
-      needsArrow: t.trim() !== "",
+function getPasteHintState(key, text = "") {
+  let state = weakMap.get(key);
+  if (state === undefined) {
+    state = {
+      needsArrow: text.trim() !== "",
       pastes: 0,
       pastesAtArrow: 0,
     };
-    weakMap.set(o, i);
+    weakMap.set(key, state);
   }
-  return i;
+  return state;
 }
 //@ chunk-975mts6d.js:914-960 placement
-function markNeedsArrow(o, t) {
-  getPasteHintState(o).needsArrow = t.trim() !== "";
+function markNeedsArrow(key, text) {
+  getPasteHintState(key).needsArrow = text.trim() !== "";
 }
 //@ chunk-975mts6d.js:960-1026 placement
-function clearNeedsArrow(o) {
-  let pasteHintState = getPasteHintState(o);
+function clearNeedsArrow(key) {
+  let pasteHintState = getPasteHintState(key);
   pasteHintState.needsArrow = false;
   pasteHintState.pastesAtArrow = pasteHintState.pastes;
 }
 //@ chunk-975mts6d.js:1026-1055 placement
-function bumpPasteCount(o) {
-  getPasteHintState(o).pastes += 1;
+function bumpPasteCount(key) {
+  getPasteHintState(key).pastes += 1;
 }
 //@ chunk-975mts6d.js:1055-1132 placement
-function needsArrowHint(o, t) {
-  let pasteHintState = getPasteHintState(o, t);
+function needsArrowHint(key, text) {
+  let pasteHintState = getPasteHintState(key, text);
   return pasteHintState.needsArrow || pasteHintState.pastes > pasteHintState.pastesAtArrow;
 }
 //@ chunk-975mts6d.js:1132-1136 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-975mts6d.js:1132", () => {
+  init_react_production();
+});
 //@ chunk-975mts6d.js:1136-1154 placement
-var weakMap_2 = new WeakMap();
+var weakMap_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-975mts6d.js:1136", () => {
+  weakMap_2 = new WeakMap();
+});
 //@ chunk-975mts6d.js:1154-1181 placement
-function setBaseline(o, t) {
-  weakMap_2.set(o, t);
+function setBaseline(key, baseline) {
+  weakMap_2.set(key, baseline);
 }
 //@ chunk-975mts6d.js:1181-1211 placement
-function getBaseline(o) {
-  return weakMap_2.get(o);
+function getBaseline(key) {
+  return weakMap_2.get(key);
 }
 //@ chunk-975mts6d.js:1211-1226 placement
 function noopHandler() {}
 //@ chunk-975mts6d.js:1226-1252 placement
-function increment(A) {
-  return A + 1;
+function increment(count) {
+  return count + 1;
 }
 //@ chunk-975mts6d.js:1252-1273 placement
 /**
@@ -106,57 +124,57 @@ function ResumeStaleConversationDialog({
 }) {
   let relativeTimeText = useRelativeTimeText(inactiveSince, trigger === "idle");
   let sessionOrUndefined = useSessionOrUndefined();
-  let m = trigger === "idle";
-  let [, v] = y(0);
-  let A = TokenCountText(sessionOrUndefined, m ? ask : null, v);
-  y(() => {
-    if (m) markNeedsArrow(ask, A);
+  let isIdleTrigger = trigger === "idle";
+  let [, setArrowTick] = useState(0);
+  let tokenCountText = TokenCountText(sessionOrUndefined, isIdleTrigger ? ask : null, setArrowTick);
+  useState(() => {
+    if (isIdleTrigger) markNeedsArrow(ask, tokenCountText);
   });
   usePreDispatchKeyHandler(
     (input, key) => {
       if (key.upArrow || key.downArrow) {
         clearNeedsArrow(ask);
-        v((oe) => oe + 1);
+        setArrowTick((nextTick) => nextTick + 1);
       }
     },
     {
-      isActive: m,
+      isActive: isIdleTrigger,
     },
   );
-  let K = m && A.trim() !== "";
-  let U = m && needsArrowHint(ask, A);
+  let hasTokenCount = isIdleTrigger && tokenCountText.trim() !== "";
+  let shouldShowArrowHint = isIdleTrigger && needsArrowHint(ask, tokenCountText);
   let inputClock = useInputClock();
-  let F = R(Date.now());
-  let { subscribeFrames } = Se(kp);
-  zt(() => {
-    let l = subscribeFrames(() => {
-      F.current = Date.now();
-      l();
+  let lastInputAtRef = useRef(Date.now());
+  let { subscribeFrames } = useContext(APP_CONTEXT);
+  useLayoutEffect(() => {
+    let unsubscribeFrames = subscribeFrames(() => {
+      lastInputAtRef.current = Date.now();
+      unsubscribeFrames();
     });
-    return l;
+    return unsubscribeFrames;
   }, [subscribeFrames]);
-  let z = () => isWithinRecentInput(inputClock, F.current, DECAY_TICK_MS);
+  let isRecentInput = () => isWithinRecentInput(inputClock, lastInputAtRef.current, DECAY_TICK_MS);
   let { refusedWithin, noteRefused } = useRefusalTracker();
-  let onChange = (l) => {
+  let onChange = (nextAction) => {
     if (
       focusedAction === "new_conversation" &&
-      l === "new_conversation" &&
-      (z() || refusedWithin(RECENT_INPUT_GUARD_MS))
+      nextAction === "new_conversation" &&
+      (isRecentInput() || refusedWithin(RECENT_INPUT_GUARD_MS))
     ) {
       noteRefused();
       return false;
     }
-    return onDone(l);
+    return onDone(nextAction);
   };
-  let E =
+  let onPasteHandler =
     trigger === "idle" && sessionOrUndefined !== undefined
-      ? (l) => {
+      ? (pasteEvent) => {
           bumpPasteCount(ask);
-          v((g) => g + 1);
+          setArrowTick((arrowTick) => arrowTick + 1);
           setPromptStash(
             sessionOrUndefined,
             promptInputValue(sessionOrUndefined) +
-              l.text.replace(
+              pasteEvent.text.replace(
                 /\r\n?/g,
                 `
 `,
@@ -164,13 +182,13 @@ function ResumeStaleConversationDialog({
           );
         }
       : undefined;
-  let I = jsxProd_default_2(Dialog, {
+  let dialogElement = jsxProd_default_2(Dialog, {
     title: "Resume this conversation?",
     color: "warning",
     onCancel: () => onDone("dismiss"),
     inputGuide: jsxProd_default_2(Byline, {
       children: [
-        U
+        shouldShowArrowHint
           ? jsxProd_default(KeyboardShortcutHint, {
               chord: ["up", "down"],
               action: "pick a row first",
@@ -184,7 +202,7 @@ function ResumeStaleConversationDialog({
           action: "confirm:no",
           context: "Confirmation",
           fallback: "Esc",
-          description: m ? "dismiss" : "resume",
+          description: isIdleTrigger ? "dismiss" : "resume",
         }),
       ],
     }),
@@ -225,7 +243,7 @@ function ResumeStaleConversationDialog({
                   }),
             ],
           }),
-          K &&
+          hasTokenCount &&
             jsxProd_default(Text, {
               dimColor: true,
               children: "Your unsent message will still be there after you answer.",
@@ -252,95 +270,95 @@ function ResumeStaleConversationDialog({
           defaultFocusValue: getBaseline(ask) ?? "new_conversation",
           onDownFromLastItem: trigger === "idle" ? noopCallback : undefined,
           selectedValue: NO_COMMITTED_ROW,
-          onFocus: (l) => {
-            if (l !== "dismiss") setBaseline(ask, l);
+          onFocus: (focusedActionValue) => {
+            if (focusedActionValue !== "dismiss") setBaseline(ask, focusedActionValue);
           },
         }),
         onChange,
       }),
     ],
   });
-  return E === undefined
-    ? I
+  return onPasteHandler === undefined
+    ? dialogElement
     : jsxProd_default(Box, {
         flexDirection: "column",
-        onPaste: E,
-        children: I,
+        onPaste: onPasteHandler,
+        children: dialogElement,
       });
 }
 //@ chunk-975mts6d.js:3260-3529 placement
-function useRelativeTimeText(inactiveSince, t) {
+function useRelativeTimeText(timestamp, options) {
   let clock = useClock();
-  let [a] = y(() => ({
-    since: inactiveSince,
-    text: friendlyElapsed(inactiveSince),
+  let [marker] = useState(() => ({
+    since: timestamp,
+    text: friendlyElapsed(timestamp),
   }));
-  if (a.since !== inactiveSince) {
-    a.since = inactiveSince;
-    a.text = friendlyElapsed(inactiveSince);
+  if (marker.since !== timestamp) {
+    marker.since = timestamp;
+    marker.text = friendlyElapsed(timestamp);
   }
-  let p = ce(
-    (u) => {
-      if (!t) return () => {};
-      let c = clock.setTimeout(function b() {
-        a.text = friendlyElapsed(a.since);
-        u();
-        c = clock.setTimeout(b, STALE_TICK_MS);
+  let scheduleTick = useCallback(
+    (callback) => {
+      if (!options) return () => {};
+      let tick = clock.setTimeout(function timer() {
+        marker.text = friendlyElapsed(marker.since);
+        callback();
+        tick = clock.setTimeout(timer, STALE_TICK_MS);
       }, STALE_TICK_MS);
-      return () => c();
+      return () => tick();
     },
-    [clock, a, t],
+    [clock, marker, options],
   );
-  return yt(
-    p,
-    () => a.text,
-    () => a.text,
+  return useSyncExternalStore(
+    scheduleTick,
+    () => marker.text,
+    () => marker.text,
   );
 }
 //@ chunk-975mts6d.js:3529-3579 placement
-function friendlyElapsed(o) {
-  return formatDurationCoarse(Math.max(0, Date.now() - o));
+function friendlyElapsed(timestamp) {
+  return formatDurationCoarse(Math.max(0, Date.now() - timestamp));
 }
 //@ chunk-975mts6d.js:3579-3999 placement
-function TokenCountText(sessionOrUndefined, t, i) {
-  let a = w(8);
-  let p;
-  if (a[0] !== sessionOrUndefined) {
-    p = sessionOrUndefined === undefined ? null : promptInputStoreFor(sessionOrUndefined);
-    a[0] = sessionOrUndefined;
-    a[1] = p;
-  } else p = a[1];
-  let u = p;
-  let c;
-  if (a[2] !== t || a[3] !== i || a[4] !== u) {
-    c = (b) =>
-      u === null
+function TokenCountText(sessionOrUndefined, session, columns) {
+  let $ = useMemoCache(8);
+  let promptStore;
+  if ($[0] !== sessionOrUndefined) {
+    promptStore = sessionOrUndefined === undefined ? null : promptInputStoreFor(sessionOrUndefined);
+    $[0] = sessionOrUndefined;
+    $[1] = promptStore;
+  } else promptStore = $[1];
+  let promptStoreState = promptStore;
+  let subscribePromptStore;
+  if ($[2] !== session || $[3] !== columns || $[4] !== promptStoreState) {
+    subscribePromptStore = (forceUpdate) =>
+      promptStoreState === null
         ? noopHandler
         : (() => {
-            let h = u.getState().value;
-            return u.subscribe(() => {
-              let d = u.getState().value;
-              if (t !== null && d !== h) {
-                markNeedsArrow(t, d);
-                i(increment);
+            let lastValue = promptStoreState.getState().value;
+            return promptStoreState.subscribe(() => {
+              let currentValue = promptStoreState.getState().value;
+              if (session !== null && currentValue !== lastValue) {
+                markNeedsArrow(session, currentValue);
+                columns(increment);
               }
-              h = d;
-              b();
+              lastValue = currentValue;
+              forceUpdate();
             });
           })();
-    a[2] = t;
-    a[3] = i;
-    a[4] = u;
-    a[5] = c;
-  } else c = a[5];
-  let m = c;
-  let v;
-  if (a[6] !== u) {
-    v = () => (u === null ? "" : u.getState().value);
-    a[6] = u;
-    a[7] = v;
-  } else v = a[7];
-  return yt(m, v);
+    $[2] = session;
+    $[3] = columns;
+    $[4] = promptStoreState;
+    $[5] = subscribePromptStore;
+  } else subscribePromptStore = $[5];
+  let subscribeEffect = subscribePromptStore;
+  let selectPromptValue;
+  if ($[6] !== promptStoreState) {
+    selectPromptValue = () => (promptStoreState === null ? "" : promptStoreState.getState().value);
+    $[6] = promptStoreState;
+    $[7] = selectPromptValue;
+  } else selectPromptValue = $[7];
+  return useSyncExternalStore(subscribeEffect, selectPromptValue);
 }
 //@ chunk-975mts6d.js:3999-4013 placement
 function noopCallback() {}

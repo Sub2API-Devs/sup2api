@@ -20,8 +20,8 @@ import { createCombinedAbortSignal } from "../../utils/combinedAbortSignal.js";
 /**
  * 带超时与中止的懒拨号
  */
-function boundDialWithLatch(i, signal, serverName, context = "connection", signal_2) {
-  let e = () =>
+function boundDialWithLatch(dial, signal, serverName, context = "connection", signal_2) {
+  let makeTimeoutError = () =>
     signal_2?.aborted
       ? new AbortError(`${context} for '${serverName}' aborted`)
       : Object.assign(
@@ -36,7 +36,7 @@ function boundDialWithLatch(i, signal, serverName, context = "connection", signa
           },
         );
   if (signal.aborted) {
-    i.catch(() => {});
+    dial.catch(() => {});
     return Promise.reject(
       signal_2?.aborted
         ? new AbortError(`${context} for '${serverName}' aborted before connect`)
@@ -47,31 +47,31 @@ function boundDialWithLatch(i, signal, serverName, context = "connection", signa
     );
   }
   return new Promise((resolve, reject) => {
-    let c = () => reject(e());
-    signal.addEventListener("abort", c, {
+    let onAbort = () => reject(makeTimeoutError());
+    signal.addEventListener("abort", onAbort, {
       once: true,
     });
-    i.then(
-      (l) => {
-        signal.removeEventListener("abort", c);
-        resolve(l);
+    dial.then(
+      (connection) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(connection);
       },
       (error) => {
-        signal.removeEventListener("abort", c);
+        signal.removeEventListener("abort", onAbort);
         reject(error);
       },
     );
   });
 }
 //@ chunk-sw4g2q2j.js:983-1160 placement
-async function boundDial(i, r) {
-  let timeoutMs = r.timeoutMs ?? getConnectionTimeoutMs();
-  let { signal, cleanup } = createCombinedAbortSignal(r.signal, {
+async function boundDial(dial, options) {
+  let timeoutMs = options.timeoutMs ?? getConnectionTimeoutMs();
+  let { signal, cleanup } = createCombinedAbortSignal(options.signal, {
     timeoutMs,
     refTimer: true,
   });
   try {
-    return await boundDialWithLatch(i, signal, r.serverName, r.context, r.signal);
+    return await boundDialWithLatch(dial, signal, options.serverName, options.context, options.signal);
   } finally {
     cleanup();
   }
@@ -86,32 +86,32 @@ var DEFAULT_MAX_HOLD_MS = 300000;
 /**
  * MCP 懒拨号失败闩锁。
  */
-function createDialFailureLatch(i) {
-  let baseHoldMs = i?.baseHoldMs ?? DEFAULT_BASE_HOLD_MS;
-  let maxHoldMs = i?.maxHoldMs ?? DEFAULT_MAX_HOLD_MS;
-  let n = new Map();
-  let a = (e, t) => {
-    let s = n.get(e);
-    return s !== undefined && t < s.holdUntil;
+function createDialFailureLatch(options) {
+  let baseHoldMs = options?.baseHoldMs ?? DEFAULT_BASE_HOLD_MS;
+  let maxHoldMs = options?.maxHoldMs ?? DEFAULT_MAX_HOLD_MS;
+  let holds = new Map();
+  let isHeld = (key, now) => {
+    let hold = holds.get(key);
+    return hold !== undefined && now < hold.holdUntil;
   };
   return {
-    shouldSkip(e, t = Date.now()) {
-      return a(e, t);
+    shouldSkip(key, now = Date.now()) {
+      return isHeld(key, now);
     },
-    recordFailure(e, t = Date.now()) {
-      if (a(e, t)) return;
-      let c = (n.get(e)?.count ?? 0) + 1;
-      let min = Math.min(maxHoldMs, baseHoldMs * 2 ** (c - 1));
-      n.set(e, {
-        count: c,
-        holdUntil: t + min,
+    recordFailure(key, now = Date.now()) {
+      if (isHeld(key, now)) return;
+      let failureCount = (holds.get(key)?.count ?? 0) + 1;
+      let min = Math.min(maxHoldMs, baseHoldMs * 2 ** (failureCount - 1));
+      holds.set(key, {
+        count: failureCount,
+        holdUntil: now + min,
       });
     },
-    recordSuccess(e) {
-      n.delete(e);
+    recordSuccess(key) {
+      holds.delete(key);
     },
-    holdUntil(e) {
-      return n.get(e)?.holdUntil;
+    holdUntil(key) {
+      return holds.get(key)?.holdUntil;
     },
   };
 }

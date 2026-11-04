@@ -31,8 +31,8 @@ var LIST_DENIED_PREFIX = "list denied: ";
 /**
  * 构造带错误码的 repo root 错误。
  */
-function repoRootError(e, n) {
-  return new WireSafeControlError(`${LIST_DENIED_PREFIX}${e}`, n, e);
+function repoRootError(errorCode, cause) {
+  return new WireSafeControlError(`${LIST_DENIED_PREFIX}${errorCode}`, cause, errorCode);
 }
 //@ chunk-6g64aje3.js:517-638 placement
 /**

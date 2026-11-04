@@ -44,6 +44,7 @@ import { usageCreditsOnlyFamily } from "./model/modelDisplay.js";
 import { DEFAULT_MODEL_FAMILY_NAMES } from "./model/thirdPartyModelDefaults.js";
 import { isOutOfCreditsReason } from "./fastMode.js";
 import { isPolicyAllowed } from "../services/policyLimits/policyEvidence.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-hwmsct5x.js:178037-178159 placement = isConsumerPlan (1)
 function isConsumerPlan() {
@@ -87,29 +88,33 @@ function canShowUpgradeCommand() {
   return !idleAmberFinchOn() && !env.DISABLE_UPGRADE_COMMAND && getSubscriptionType() !== "enterprise";
 }
 //@ chunk-hwmsct5x.js:178452-178741 placement
-var FableBillingSchema = DoctorLazy(() =>
-  create({
-    enabled: create_6().optional(),
-    planLimitsEndDate: create_2().optional(),
-    overageConsentRequired: create_6().optional(),
-    perModel: create_20(create_2(), create_12())
-      .optional()
-      .catch(() => {
-        logSaffronLatticeIgnored(
-          "perModel, which is not an object keyed by model id; the plan-wide keys still apply",
-        );
-        return;
-      }),
-  }),
-);
-var PerModelEntrySchema = DoctorLazy(() =>
-  create({
-    enabled: create_6(),
-  }),
-);
+var FableBillingSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var PerModelEntrySchema;
+deferInit("chunk-hwmsct5x.js:178452", () => {
+  FableBillingSchema = DoctorLazy(() =>
+    create({
+      enabled: create_6().optional(),
+      planLimitsEndDate: create_2().optional(),
+      overageConsentRequired: create_6().optional(),
+      perModel: create_20(create_2(), create_12())
+        .optional()
+        .catch(() => {
+          logSaffronLatticeIgnored(
+            "perModel, which is not an object keyed by model id; the plan-wide keys still apply",
+          );
+          return;
+        }),
+    }),
+  );
+  PerModelEntrySchema = DoctorLazy(() =>
+    create({
+      enabled: create_6(),
+    }),
+  );
+});
 //@ chunk-hwmsct5x.js:178741-178829 placement
-function logSaffronLatticeIgnored(e) {
-  logForDebugging(`GrowthBook flag tengu_saffron_lattice: ignoring ${e}`, {
+function logSaffronLatticeIgnored(flagValue) {
+  logForDebugging(`GrowthBook flag tengu_saffron_lattice: ignoring ${flagValue}`, {
     level: "warn",
   });
 }
@@ -119,47 +124,47 @@ function logSaffronLatticeIgnored(e) {
  */
 function parsePerModelBilling(perModel) {
   if (perModel === undefined) return;
-  let n = new Map();
-  let r = 0;
+  let perModelMap = new Map();
+  let invalidCount = 0;
   for (let [key, value] of Object.entries(perModel)) {
-    let y = PerModelEntrySchema().safeParse(value);
-    if (!y.success) {
-      r++;
+    let parseResult = PerModelEntrySchema().safeParse(value);
+    if (!parseResult.success) {
+      invalidCount++;
       continue;
     }
-    let { enabled } = y.data;
-    let S = modelBillingKey(key);
-    let E = n.get(S);
-    if (E !== undefined && E.enabled !== enabled) {
+    let { enabled } = parseResult.data;
+    let billingKey = modelBillingKey(key);
+    let existingEntry = perModelMap.get(billingKey);
+    if (existingEntry !== undefined && existingEntry.enabled !== enabled) {
       logForDebugging(
         `GrowthBook flag tengu_saffron_lattice: perModel lists "${key}" and another spelling of the same model with different "enabled" values; treating that model as billed to usage credits`,
         {
           level: "warn",
         },
       );
-      n.set(S, {
+      perModelMap.set(billingKey, {
         enabled: true,
       });
       continue;
     }
-    n.set(S, {
+    perModelMap.set(billingKey, {
       enabled,
     });
   }
-  if (r > 0)
+  if (invalidCount > 0)
     logSaffronLatticeIgnored(
-      `${r} perModel entr${r === 1 ? "y" : "ies"} whose value is not {"enabled": true|false}; the other entries and the plan-wide keys still apply`,
+      `${invalidCount} perModel entr${invalidCount === 1 ? "y" : "ies"} whose value is not {"enabled": true|false}; the other entries and the plan-wide keys still apply`,
     );
-  return n.size > 0 ? n : undefined;
+  return perModelMap.size > 0 ? perModelMap : undefined;
 }
 //@ chunk-hwmsct5x.js:179464-179680 placement
-function modelBillingKey(e) {
-  let modelId = parseModelId(e);
-  if (isStandardVersion(modelId)) {
-    let r = modelId.legacyVersionFirst ? "version-first" : "family-first";
-    return `version:${modelId.family}/${modelId.major}.${modelId.minor ?? 0}/${r}`;
+function modelBillingKey(modelId) {
+  let modelId_2 = parseModelId(modelId);
+  if (isStandardVersion(modelId_2)) {
+    let versionLayout = modelId_2.legacyVersionFirst ? "version-first" : "family-first";
+    return `version:${modelId_2.family}/${modelId_2.major}.${modelId_2.minor ?? 0}/${versionLayout}`;
   }
-  return `id:${strip1mSuffix(e.trim().toLowerCase()).replace(/-\d{8}$/, "")}`;
+  return `id:${strip1mSuffix(modelId.trim().toLowerCase()).replace(/-\d{8}$/, "")}`;
 }
 //@ chunk-hwmsct5x.js:179680-179733 placement
 function usageCreditsOnlyModelFlags() {
@@ -173,34 +178,37 @@ function getFableBillingConfig() {
     "tengu_saffron_lattice",
     EMPTY_BILLING_FLAGS,
   );
-  let n = usageCreditsOnlyModelFlags();
-  if (n.fableBilling === null || n.fableBilling.raw !== featureValue_CACHED_MAY_BE_STALE) {
-    let r = FableBillingSchema().safeParse(featureValue_CACHED_MAY_BE_STALE);
-    n.fableBilling = {
+  let cachedFlags = usageCreditsOnlyModelFlags();
+  if (
+    cachedFlags.fableBilling === null ||
+    cachedFlags.fableBilling.raw !== featureValue_CACHED_MAY_BE_STALE
+  ) {
+    let parseResult = FableBillingSchema().safeParse(featureValue_CACHED_MAY_BE_STALE);
+    cachedFlags.fableBilling = {
       raw: featureValue_CACHED_MAY_BE_STALE,
-      parsed: r.success
+      parsed: parseResult.success
         ? {
-            ...r.data,
-            perModel: parsePerModelBilling(r.data.perModel),
+            ...parseResult.data,
+            perModel: parsePerModelBilling(parseResult.data.perModel),
           }
         : EMPTY_BILLING_FLAGS,
     };
   }
-  return n.fableBilling.parsed;
+  return cachedFlags.fableBilling.parsed;
 }
 //@ chunk-hwmsct5x.js:179987-180075 placement
-function perModelBillingEntry(fableBillingConfig, n) {
-  if (fableBillingConfig.perModel === undefined || n === undefined) return;
-  return fableBillingConfig.perModel.get(modelBillingKey(n));
+function perModelBillingEntry(fableBillingConfig, modelId) {
+  if (fableBillingConfig.perModel === undefined || modelId === undefined) return;
+  return fableBillingConfig.perModel.get(modelBillingKey(modelId));
 }
 //@ chunk-hwmsct5x.js:180075-180237 placement
 /**
  * 模型是否按用量额度计费。
  */
-function isUsageCreditsModelBilled(e) {
+function isUsageCreditsModelBilled(modelId) {
   let fableBillingConfig = getFableBillingConfig();
-  let r = perModelBillingEntry(fableBillingConfig, e);
-  if (r !== undefined) return r.enabled;
+  let entry = perModelBillingEntry(fableBillingConfig, modelId);
+  if (entry !== undefined) return entry.enabled;
   if (fableBillingConfig.enabled === false) return false;
   return (
     fableBillingConfig.overageConsentRequired === true || fableBillingConfig.planLimitsEndDate !== undefined
@@ -210,8 +218,8 @@ function isUsageCreditsModelBilled(e) {
 /**
  * isModelBilledOrRequired：模型按额度计费或必须用额度。
  */
-function isModelBilledOrRequired(e) {
-  return isUsageCreditsModelBilled(e) || isUsageCreditsRequired();
+function isModelBilledOrRequired(modelId) {
+  return isUsageCreditsModelBilled(modelId) || isUsageCreditsRequired();
 }
 //@ chunk-hwmsct5x.js:180274-180359 placement
 /**
@@ -234,8 +242,12 @@ function hasKnownPlanTier() {
   );
 }
 //@ chunk-hwmsct5x.js:180428-180469 placement = isEnterpriseSubscriber (1)
-var CreditsOnlyTiersSchema = DoctorLazy(() => create_15(create_2()));
-var DEFAULT_CREDITS_ONLY_TIERS = ["enterprise"];
+var CreditsOnlyTiersSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var DEFAULT_CREDITS_ONLY_TIERS;
+deferInit("chunk-hwmsct5x.js:180428", () => {
+  CreditsOnlyTiersSchema = DoctorLazy(() => create_15(create_2()));
+  DEFAULT_CREDITS_ONLY_TIERS = ["enterprise"];
+});
 //@ chunk-hwmsct5x.js:180469-180807 placement
 /**
  * GrowthBook tengu_saffron_credits_only_tiers：只用额度（credits-only）的 seat tier 列表，默认 ['enterprise']。
@@ -245,19 +257,22 @@ function getCreditsOnlyTiers() {
     "tengu_saffron_credits_only_tiers",
     DEFAULT_CREDITS_ONLY_TIERS,
   );
-  let n = usageCreditsOnlyModelFlags();
-  if (n.creditsOnlyTiers === null || n.creditsOnlyTiers.raw !== featureValue_CACHED_MAY_BE_STALE) {
-    let r = CreditsOnlyTiersSchema().safeParse(featureValue_CACHED_MAY_BE_STALE);
-    if (!r.success)
+  let cachedFlags = usageCreditsOnlyModelFlags();
+  if (
+    cachedFlags.creditsOnlyTiers === null ||
+    cachedFlags.creditsOnlyTiers.raw !== featureValue_CACHED_MAY_BE_STALE
+  ) {
+    let parseResult = CreditsOnlyTiersSchema().safeParse(featureValue_CACHED_MAY_BE_STALE);
+    if (!parseResult.success)
       logForDebugging("tengu_saffron_credits_only_tiers: unparseable value, using default", {
         level: "warn",
       });
-    n.creditsOnlyTiers = {
+    cachedFlags.creditsOnlyTiers = {
       raw: featureValue_CACHED_MAY_BE_STALE,
-      parsed: r.success ? r.data : DEFAULT_CREDITS_ONLY_TIERS,
+      parsed: parseResult.success ? parseResult.data : DEFAULT_CREDITS_ONLY_TIERS,
     };
   }
-  return n.creditsOnlyTiers.parsed;
+  return cachedFlags.creditsOnlyTiers.parsed;
 }
 //@ chunk-hwmsct5x.js:180807-180904 placement = isEnterpriseSubscriber (1)
 function isEnterpriseSubscriber() {
@@ -297,92 +312,95 @@ function consentOwnerKey() {
   return oauthAccountInfo.accountUuid ? `acct:${oauthAccountInfo.accountUuid}` : null;
 }
 //@ chunk-hwmsct5x.js:181281-181377 placement
-function usageCreditsConsentFor(globalConfig, n) {
-  return n === "Fable" ? globalConfig.fableOverageConsentV2 : globalConfig.usageCreditsOnlyModelConsent?.[n];
+function usageCreditsConsentFor(config, modelId) {
+  return modelId === "Fable" ? config.fableOverageConsentV2 : config.usageCreditsOnlyModelConsent?.[modelId];
 }
 //@ chunk-hwmsct5x.js:181377-181674 placement
 /**
  * 当前组织/账号是否已同意用量额度模型计费。
  */
-function hasUsageCreditsConsent(e) {
-  let n = consentOwnerKey();
-  if (n === null) return hasUsageCreditsOnlyModelConsentSessionFallback(e);
+function hasUsageCreditsConsent(model) {
+  let ownerKey = consentOwnerKey();
+  if (ownerKey === null) return hasUsageCreditsOnlyModelConsentSessionFallback(model);
   let oauthAccountInfo = getOauthAccountInfo();
-  if (!oauthAccountInfo) return hasUsageCreditsOnlyModelConsentSessionFallback(e);
-  let s = oauthAccountInfo.accountUuid !== undefined ? `acct:${oauthAccountInfo.accountUuid}` : undefined;
-  let usageCreditsOnlyModelSessionConsentKey = getUsageCreditsOnlyModelSessionConsentKey(e);
+  if (!oauthAccountInfo) return hasUsageCreditsOnlyModelConsentSessionFallback(model);
+  let accountKey =
+    oauthAccountInfo.accountUuid !== undefined ? `acct:${oauthAccountInfo.accountUuid}` : undefined;
+  let usageCreditsOnlyModelSessionConsentKey = getUsageCreditsOnlyModelSessionConsentKey(model);
   if (
     usageCreditsOnlyModelSessionConsentKey !== null &&
-    (usageCreditsOnlyModelSessionConsentKey === n || usageCreditsOnlyModelSessionConsentKey === s)
+    (usageCreditsOnlyModelSessionConsentKey === ownerKey ||
+      usageCreditsOnlyModelSessionConsentKey === accountKey)
   )
     return true;
-  let y = usageCreditsConsentFor(getGlobalConfig(), e);
+  let consentByOrg = usageCreditsConsentFor(getGlobalConfig(), model);
   return (
-    (oauthAccountInfo.organizationUuid !== undefined && y?.[oauthAccountInfo.organizationUuid] === true) ||
-    (s !== undefined && y?.[s] === true)
+    (oauthAccountInfo.organizationUuid !== undefined &&
+      consentByOrg?.[oauthAccountInfo.organizationUuid] === true) ||
+    (accountKey !== undefined && consentByOrg?.[accountKey] === true)
   );
 }
 //@ chunk-hwmsct5x.js:181674-181891 placement
-function saveUsageCreditsConsent(e, n, r) {
-  if (usageCreditsConsentFor(getGlobalConfig(), e)?.[n] === true) return;
-  saveGlobalConfig((s) => {
-    let h = {
-      ...usageCreditsConsentFor(s, e),
-      [n]: true,
+function saveUsageCreditsConsent(modelId, ownerKey, storageV5) {
+  if (usageCreditsConsentFor(getGlobalConfig(), modelId)?.[ownerKey] === true) return;
+  saveGlobalConfig((config) => {
+    let nextConsent = {
+      ...usageCreditsConsentFor(config, modelId),
+      [ownerKey]: true,
     };
-    return e === "Fable"
+    return modelId === "Fable"
       ? {
-          ...s,
-          fableOverageConsentV2: h,
+          ...config,
+          fableOverageConsentV2: nextConsent,
         }
       : {
-          ...s,
+          ...config,
           usageCreditsOnlyModelConsent: {
-            ...s.usageCreditsOnlyModelConsent,
-            [e]: h,
+            ...config.usageCreditsOnlyModelConsent,
+            [modelId]: nextConsent,
           },
         };
-  }, r);
+  }, storageV5);
 }
 //@ chunk-hwmsct5x.js:181891-181960 placement
 /**
  * saveModelConsent：保存模型计费同意。
  */
-function saveModelConsent(e, storageV5) {
-  let r = consentOwnerKey();
-  if (r === null) {
-    setUsageCreditsOnlyModelConsentSessionFallback(e, true);
+function saveModelConsent(modelId, storageV5) {
+  let ownerKey = consentOwnerKey();
+  if (ownerKey === null) {
+    setUsageCreditsOnlyModelConsentSessionFallback(modelId, true);
     return;
   }
-  saveUsageCreditsConsent(e, r, storageV5);
+  saveUsageCreditsConsent(modelId, ownerKey, storageV5);
 }
 //@ chunk-hwmsct5x.js:181960-182036 placement
 /**
  * setModelFamilyConsent：按模型族保存同意。
  */
-function setModelFamilyConsent(mainLoopModel, n) {
-  let r = usageCreditsOnlyFamily(mainLoopModel);
-  if (r === undefined || isEnterpriseSubscriber() || !isUsageCreditsModelBilled(mainLoopModel)) return;
-  saveModelConsent(r, n);
+function setModelFamilyConsent(mainLoopModel, storageV5) {
+  let family = usageCreditsOnlyFamily(mainLoopModel);
+  if (family === undefined || isEnterpriseSubscriber() || !isUsageCreditsModelBilled(mainLoopModel)) return;
+  saveModelConsent(family, storageV5);
 }
 //@ chunk-hwmsct5x.js:182036-182102 placement
 /**
  * setSessionConsentKey：设置会话级同意键。
  */
-function setSessionConsentKey(e) {
-  let n = consentOwnerKey();
-  if (n === null) {
-    setUsageCreditsOnlyModelConsentSessionFallback(e, true);
+function setSessionConsentKey(family) {
+  let ownerKey = consentOwnerKey();
+  if (ownerKey === null) {
+    setUsageCreditsOnlyModelConsentSessionFallback(family, true);
     return;
   }
-  setUsageCreditsOnlyModelSessionConsentKey(e, n);
+  setUsageCreditsOnlyModelSessionConsentKey(family, ownerKey);
 }
 //@ chunk-hwmsct5x.js:182102-182146 placement
 /**
  * clearSessionConsentKeys：清空所有会话级同意键。
  */
 function clearSessionConsentKeys() {
-  for (let e of DEFAULT_MODEL_FAMILY_NAMES) setUsageCreditsOnlyModelSessionConsentKey(e, null);
+  for (let family of DEFAULT_MODEL_FAMILY_NAMES) setUsageCreditsOnlyModelSessionConsentKey(family, null);
 }
 //@ chunk-hwmsct5x.js:182146-182261 placement
 /**
@@ -406,22 +424,22 @@ function isModelBlockedByOverride(canonicalName) {
   );
   if (typeof dynamicConfig_CACHED_MAY_BE_STALE !== "object" || dynamicConfig_CACHED_MAY_BE_STALE === null)
     return false;
-  let r = dynamicConfig_CACHED_MAY_BE_STALE[canonicalName];
-  if (typeof r !== "object" || r === null) return false;
-  let block = r.block;
+  let modelOverride = dynamicConfig_CACHED_MAY_BE_STALE[canonicalName];
+  if (typeof modelOverride !== "object" || modelOverride === null) return false;
+  let block = modelOverride.block;
   return typeof block === "string" && block.trim() !== "";
 }
 //@ chunk-hwmsct5x.js:182489-182818 placement
 /**
  * 模型计费状态（计划内/按请求/管理员/需同意/需额度/已同意）。
  */
-function usageCreditsBillingState(e) {
-  let n = usageCreditsOnlyFamily(e);
-  if (n === undefined) return "included_in_plan";
+function usageCreditsBillingState(modelName) {
+  let family = usageCreditsOnlyFamily(modelName);
+  if (family === undefined) return "included_in_plan";
   if (usesPayAsYouGo()) return "pay_per_request";
   if (isEnterpriseSubscriber()) return "admin_billed";
-  if (!isModelBilledOrRequired(e)) return "included_in_plan";
-  if (!hasUsageCreditsConsent(n)) return "needs_consent";
+  if (!isModelBilledOrRequired(modelName)) return "included_in_plan";
+  if (!hasUsageCreditsConsent(family)) return "needs_consent";
   if (!hasExtraUsageProvisioned()) return "needs_credits";
   if (getGlobalConfig().cachedExtraUsageDisabledReason === "out_of_credits") return "out_of_credits";
   return "consented";
@@ -431,16 +449,16 @@ function usageCreditsBillingState(e) {
  * needsConsentOrCredits：需要同意或需要额度。
  */
 function needsConsentOrCredits(userSpecifiedModel) {
-  let n = usageCreditsBillingState(userSpecifiedModel);
-  return n === "needs_consent" || n === "needs_credits";
+  let state = usageCreditsBillingState(userSpecifiedModel);
+  return state === "needs_consent" || state === "needs_credits";
 }
 //@ chunk-hwmsct5x.js:182895-182994 placement
 /**
  * needsConsentCreditsOrOut：需要同意、额度不足或用尽。
  */
 function needsConsentCreditsOrOut(userSpecifiedModel) {
-  let n = usageCreditsBillingState(userSpecifiedModel);
-  return n === "needs_consent" || n === "needs_credits" || n === "out_of_credits";
+  let state = usageCreditsBillingState(userSpecifiedModel);
+  return state === "needs_consent" || state === "needs_credits" || state === "out_of_credits";
 }
 //@ chunk-m024s3ph.js:336-365 placement
 var ALLOW_PROMO_OFFERS = "allow_promo_offers";

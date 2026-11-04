@@ -5,11 +5,10 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (12)
+ * pieces: chunk-e6aww6q8.js (13)
  * attribution: placement 12
  */
 import { escapeSystemReminderTags } from "../../services/api/promptCacheBreakParts.js";
-import { cachedHookDisplayBuilder } from "./hookCommandResolution.js";
 import { confusableTagScrubPattern, escapedCharPrefix, escapeXml_2 as escapeXml } from "../confusables.js";
 import {
   USER_INPUT_WRAPPER_TAGS,
@@ -36,16 +35,22 @@ import { isHostEntrypoint } from "../entrypointKinds.js";
 import { isNoProjectDirectoryError } from "../../bootstrap/sessionSlices.js";
 import { errorMessage } from "../errors.js";
 import { logError } from "../log.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-e6aww6q8.js:947704-947712 placement (moved: shares a binding it assigns)
+/**
+ * 缓存的钩子展示文本构造器。
+ */
+var cachedHookDisplayBuilder;
 //@ chunk-e6aww6q8.js:947712-947779 placement
 /**
  * 清洗钩子输出中的 system-reminder 标签（转义结尾的单独 `<`）。
  */
-function scrubHookOutputTags(e) {
-  return escapeSystemReminderTags(e).replace(/<(?=\s*(?:\/\s*)?$)/, "&lt;");
+function scrubHookOutputTags(text) {
+  return escapeSystemReminderTags(text).replace(/<(?=\s*(?:\/\s*)?$)/, "&lt;");
 }
 //@ chunk-e6aww6q8.js:947779-947909 placement
-function scrubHookOutputTags_2(e) {
+function scrubHookOutputTags_2(text) {
   cachedHookDisplayBuilder ??= [
     confusableTagScrubPattern([
       ...USER_INPUT_WRAPPER_TAGS,
@@ -59,7 +64,7 @@ function scrubHookOutputTags_2(e) {
     ]),
     confusableTagScrubPattern(RESOURCE_UPDATE_TAGS, () => ""),
   ];
-  return cachedHookDisplayBuilder.reduce((acc, r) => acc.replace(r, escapedCharPrefix), e);
+  return cachedHookDisplayBuilder.reduce((acc, pattern) => acc.replace(pattern, escapedCharPrefix), text);
 }
 //@ chunk-e6aww6q8.js:947909-948214 placement
 /**
@@ -94,7 +99,10 @@ ${wrapInSystemReminder(body)}`,
   );
 }
 //@ chunk-e6aww6q8.js:948214-948240 placement
-var runningHooksStoreRegistry = new HostScoped(() => createStore([]));
+var runningHooksStoreRegistry; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:948214", () => {
+  runningHooksStoreRegistry = new HostScoped(() => createStore([]));
+});
 //@ chunk-e6aww6q8.js:948240-948273 placement
 /**
  * 取指定宿主的"运行中钩子"存储。
@@ -111,30 +119,30 @@ function currentRunningHooksStore() {
  * 登记正在运行的一组 hook（事件、子代理、工具名），并返回结束时移除的函数。
  */
 function trackRunningHooks({ hookEvent, hooks, agentId, toolName }) {
-  let h = currentRunningHooksStore();
-  let y = {
+  let store = currentRunningHooksStore();
+  let entry = {
     hookEvent,
     hooks,
     settled: new Set(),
     agentId,
     toolName,
   };
-  h.setState((S) => [...S, y]);
+  store.setState((entries) => [...entries, entry]);
   return {
-    settle: (S) =>
-      h.setState((w) => {
-        let index = w.indexOf(y);
-        if (index === -1 || y.settled.has(S)) return w;
-        y = {
-          ...y,
-          settled: new Set(y.settled).add(S),
+    settle: (hook) =>
+      store.setState((entries) => {
+        let index = entries.indexOf(entry);
+        if (index === -1 || entry.settled.has(hook)) return entries;
+        entry = {
+          ...entry,
+          settled: new Set(entry.settled).add(hook),
         };
-        return w.toSpliced(index, 1, y);
+        return entries.toSpliced(index, 1, entry);
       }),
     [Symbol.dispose]: () =>
-      h.setState((S) => {
-        let index = S.indexOf(y);
-        return index === -1 ? S : S.toSpliced(index, 1);
+      store.setState((entries) => {
+        let index = entries.indexOf(entry);
+        return index === -1 ? entries : entries.toSpliced(index, 1);
       }),
   };
 }
@@ -149,19 +157,19 @@ function isHostDisplayFeatureOn() {
 /**
  * 判断回调型 hook 是否由 SDK 宿主持有 stdin 直接处理。
  */
-function sanitizeHostPermissionDisplay(permissionDisplay, hook, r) {
-  let s =
+function sanitizeHostPermissionDisplay(permissionDisplay, hook, source) {
+  let hostOwns =
     hook.type === "callback" &&
-    r?.sdkHost === true &&
-    r.hostOwnsStdin === true &&
-    r.deviceForwarded !== true &&
-    r.pluginId === undefined &&
-    r.pluginRoot === undefined &&
-    r.skillRoot === undefined;
-  if (permissionDisplay === undefined || !s || !isHostDisplayFeatureOn()) return;
+    source?.sdkHost === true &&
+    source.hostOwnsStdin === true &&
+    source.deviceForwarded !== true &&
+    source.pluginId === undefined &&
+    source.pluginRoot === undefined &&
+    source.skillRoot === undefined;
+  if (permissionDisplay === undefined || !hostOwns || !isHostDisplayFeatureOn()) return;
   if (
-    ![permissionDisplay.title, permissionDisplay.description, permissionDisplay.displayName].every((y) =>
-      y
+    ![permissionDisplay.title, permissionDisplay.description, permissionDisplay.displayName].every((text) =>
+      text
         .split(
           `
 `,
@@ -178,18 +186,18 @@ function sanitizeHostPermissionDisplay(permissionDisplay, hook, r) {
   return permissionDisplay;
 }
 //@ chunk-e6aww6q8.js:949257-949441 placement
-function dropStaleHostDisplay(e, n) {
-  if (e.hostDisplay === undefined || sameMessageOrShape(e.hostDisplayInput, n)) return e;
+function dropStaleHostDisplay(result, input) {
+  if (result.hostDisplay === undefined || sameMessageOrShape(result.hostDisplayInput, input)) return result;
   logFeatureSad("permission_host_worded_ask", "input_rewritten");
-  let { hostDisplay, hostDisplayInput, ...h } = e;
-  return h;
+  let { hostDisplay, hostDisplayInput, ...rest } = result;
+  return rest;
 }
 //@ chunk-e6aww6q8.js:949441-949642 placement
 function hostNoResponseMessage(hookEvent) {
-  let n = isHostEntrypoint() ? "Claude Desktop" : "The app driving this session";
+  let appName = isHostEntrypoint() ? "Claude Desktop" : "The app driving this session";
   return hookEvent === "SessionStart"
-    ? `${n} didn't respond; carried on without it.`
-    : `${n} didn't respond, so this turn ended without it.`;
+    ? `${appName} didn't respond; carried on without it.`
+    : `${appName} didn't respond, so this turn ended without it.`;
 }
 //@ chunk-e6aww6q8.js:2075498-2075584 placement
 /**

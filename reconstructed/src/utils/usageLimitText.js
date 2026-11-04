@@ -20,28 +20,28 @@ var USAGE_LIMIT_SUFFIX = ` (after ${USAGE_LIMIT_TEXT})`;
 /**
  * 生成用量限额重置时间文本（resets at 时刻 / resets 日期）。
  */
-function resetsAtText(resetsAt, i = false) {
-  let l = formatResetTimeWithLocale(resetsAt, i);
-  if (l === undefined) return;
-  return /^\d/.test(l) ? `resets at ${l}` : `resets ${l}`;
+function resetsAtText(resetsAt, short = false) {
+  let text = formatResetTimeWithLocale(resetsAt, short);
+  if (text === undefined) return;
+  return /^\d/.test(text) ? `resets at ${text}` : `resets ${text}`;
 }
 //@ chunk-6rgkw5kr.js:491-554 placement
-function usageLimitLine(e) {
-  let i = resetsAtText(e);
-  return i === undefined ? USAGE_LIMIT_TEXT : `${USAGE_LIMIT_TEXT} ${i}`;
+function usageLimitLine(event) {
+  let text = resetsAtText(event);
+  return text === undefined ? USAGE_LIMIT_TEXT : `${USAGE_LIMIT_TEXT} ${text}`;
 }
 //@ chunk-6rgkw5kr.js:554-598 placement
 /**
  * 「Paused · 用量限额（重置时间）」文案。
  */
-function pausedUsageLine(resetsAt) {
-  return `Paused \xB7 ${usageLimitLine(resetsAt)}`;
+function pausedUsageLine(event) {
+  return `Paused \xB7 ${usageLimitLine(event)}`;
 }
 //@ chunk-6rgkw5kr.js:598-664 placement
 /**
  * 暂停行的分段（文案、限额、空段）。
  */
-function pausedUsageParts(resetsAt) {
-  return [["paused", usageLimitLine(resetsAt)], ["paused", USAGE_LIMIT_TEXT], ["paused"]];
+function pausedUsageParts(event) {
+  return [["paused", usageLimitLine(event)], ["paused", USAGE_LIMIT_TEXT], ["paused"]];
 }
 export { pausedUsageParts, resetsAtText, USAGE_LIMIT_SUFFIX, USAGE_LIMIT_TEXT, pausedUsageLine };

@@ -5,7 +5,7 @@
  * pieces: chunk-s82q9s4x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_codegen_2 } from "../../compile/codegen/index.js";
 import { require_types } from "./types.js";
 import { require_compile_2 } from "../../compile/index.js";
@@ -13,14 +13,14 @@ import { require_ref_error_2 } from "../../compile/ref_error.js";
 import { require_util_2 } from "../../compile/util.js";
 
 //@ chunk-s82q9s4x.js:109129-111418 cjs-fingerprint
-var require_discriminator = x(function (cjsExports) {
+var require_discriminator = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   var codegen_1 = require_codegen_2();
   var types_1 = require_types();
   var compile_1 = require_compile_2();
-  var $h = require_ref_error_2();
+  var refErrorModule = require_ref_error_2();
   var util_1 = require_util_2();
   var error = {
     message: ({ params: { discrError, tagName } }) =>
@@ -97,7 +97,7 @@ var require_discriminator = x(function (cjsExports) {
             let $ref = sch.$ref;
             sch = compile_1.resolveRef.call(it.self, it.schemaEnv.root, it.baseId, $ref);
             if (sch instanceof compile_1.SchemaEnv) sch = sch.schema;
-            if (sch === undefined) throw new $h.default(it.opts.uriResolver, it.baseId, $ref);
+            if (sch === undefined) throw new refErrorModule.default(it.opts.uriResolver, it.baseId, $ref);
           }
           let propSch =
             (_a = sch === null || sch === undefined ? undefined : sch.properties) === null || _a === undefined

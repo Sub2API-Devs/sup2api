@@ -22,44 +22,52 @@ var PARAMS_ERROR_CODES = new Set([-32002, ProtocolErrorCode.InvalidParams]);
 /**
  * 取 ProtocolError 的 code。
  */
-function protocolErrorCode(o) {
-  return o instanceof ProtocolError ? o.code : undefined;
+function protocolErrorCode(error) {
+  return error instanceof ProtocolError ? error.code : undefined;
 }
 //@ chunk-72dd9akm.js:350-415 placement
 /**
  * 判断是否为 MethodNotFound。
  */
-function isMethodNotFoundError(o) {
-  return o instanceof ProtocolError && o.code === ProtocolErrorCode.MethodNotFound;
+function isMethodNotFoundError(error) {
+  return error instanceof ProtocolError && error.code === ProtocolErrorCode.MethodNotFound;
 }
 //@ chunk-72dd9akm.js:415-509 placement
 /**
  * 判断是否为 MethodNotFound 或 InvalidParams。
  */
-function isMethodNotFoundOrInvalidParams(o) {
+function isMethodNotFoundOrInvalidParams(error) {
   return (
-    o instanceof ProtocolError &&
-    (o.code === ProtocolErrorCode.MethodNotFound || o.code === ProtocolErrorCode.InvalidParams)
+    error instanceof ProtocolError &&
+    (error.code === ProtocolErrorCode.MethodNotFound || error.code === ProtocolErrorCode.InvalidParams)
   );
 }
 //@ chunk-72dd9akm.js:509-561 placement
 /**
  * 判断是否属于参数类错误码。
  */
-function isParamsOrInvalidError(o) {
-  return o instanceof ProtocolError && PARAMS_ERROR_CODES.has(o.code);
+function isParamsOrInvalidError(error) {
+  return error instanceof ProtocolError && PARAMS_ERROR_CODES.has(error.code);
 }
 //@ chunk-72dd9akm.js:561-625 placement
 /**
  * 判断是否为 InvalidParams。
  */
-function isInvalidParamsError(o) {
-  return o instanceof ProtocolError && o.code === ProtocolErrorCode.InvalidParams;
+function isInvalidParamsError(error) {
+  return error instanceof ProtocolError && error.code === ProtocolErrorCode.InvalidParams;
 }
 //@ chunk-72dd9akm.js:625-698 placement
 /**
  * 判断是否为 UrlElicitationRequired。
  */
-function isUrlElicitationRequiredError(o) {
-  return o instanceof ProtocolError && o.code === ProtocolErrorCode.UrlElicitationRequired;
+function isUrlElicitationRequiredError(error) {
+  return error instanceof ProtocolError && error.code === ProtocolErrorCode.UrlElicitationRequired;
 }
+export {
+  protocolErrorCode,
+  isMethodNotFoundError,
+  isInvalidParamsError,
+  isParamsOrInvalidError,
+  isMethodNotFoundOrInvalidParams,
+  isUrlElicitationRequiredError,
+};

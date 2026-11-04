@@ -31,7 +31,7 @@ import { readScheduledStatus } from "../../daemon/scheduledWorker.js";
 import { readRoster } from "../../services/daemon/roster.js";
 import { getEnabledModelOptions } from "../../utils/model/modelOptions.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { y, R } from "../../../vendor/react/cjs/react.production.js";
+import { useState, useRef } from "../../../vendor/react/cjs/react.production.js";
 import { useClock } from "../../ink/components/ClockContext.js";
 import { useInterval } from "../../ink/components/Input.js";
 import { saveUnattendedServingConsent } from "../../services/remoteTools/unattendedServingConsent.js";
@@ -49,13 +49,22 @@ function consentSelectAction(unattendedServing) {
 //@ chunk-b7gstm5r.js:22109-22170 placement
 var CONSENT_SAVE_FAILED_TEXT = "The answer could not be saved. Nothing was changed.";
 //@ chunk-b7gstm5r.js:22170-22567 placement
-async function loadDaemonOverview(storageV5, unattendedServing) {
-  let o = await hasSystemdUserSession();
-  let f = readLiveServerLock(1, storageV5).catch(() => null);
-  let [i, scheduledTaskRuns, b, N, k, roster, u, servingConsentState] = await Promise.all([
-    f,
+async function loadDaemonOverview(storageV5, override) {
+  let hasSystemdSession = await hasSystemdUserSession();
+  let liveLock = readLiveServerLock(1, storageV5).catch(() => null);
+  let [
+    liveServerLock,
+    scheduledTaskRuns,
+    remoteServers,
+    daemonStatus,
+    scheduledStatus,
+    roster,
+    systemdServiceInstalled,
+    servingConsentState,
+  ] = await Promise.all([
+    liveLock,
     loadScheduledTaskRuns(storageV5),
-    f.then((p) => readRemoteControlServers(p !== null, storageV5)),
+    liveLock.then((lock) => readRemoteControlServers(lock !== null, storageV5)),
     readDaemonStatus(storageV5).catch(() => null),
     readScheduledStatus(storageV5).catch(() => null),
     readRoster(
@@ -64,27 +73,27 @@ async function loadDaemonOverview(storageV5, unattendedServing) {
       },
       storageV5,
     ),
-    o ? daemonServiceStatus() : Promise.resolve(false),
-    readServingConsentState(unattendedServing),
+    hasSystemdSession ? daemonServiceStatus() : Promise.resolve(false),
+    readServingConsentState(override),
   ]);
   return {
     tasks: scheduledTaskRuns,
-    servers: b,
-    lock: i,
-    status: N,
-    scheduledStatus: k,
+    servers: remoteServers,
+    lock: liveServerLock,
+    status: daemonStatus,
+    scheduledStatus,
     bgCount: Object.keys(roster.workers).length,
-    serviceInstalled: u,
-    serviceSupported: o,
+    serviceInstalled: systemdServiceInstalled,
+    serviceSupported: hasSystemdSession,
     unattendedServing: servingConsentState,
   };
 }
 //@ chunk-b7gstm5r.js:22567-22668 placement
 function modelSelectOptions() {
-  return getEnabledModelOptions(false).map((a) => ({
-    label: a.label,
-    value: a.value ?? "",
-    description: a.description,
+  return getEnabledModelOptions(false).map((option) => ({
+    label: option.label,
+    value: option.value ?? "",
+    description: option.description,
   }));
 }
 //@ chunk-b7gstm5r.js:22668-22797 placement
@@ -105,168 +114,168 @@ async function renderDaemonSetupFlow(onDone, context) {
  * 后台守护进程设置流程：选择服务类型、无人值守同意与模型。
  */
 function DaemonSetupFlow({ initialData, modelOptions, onDone, storageV5 }) {
-  let [i, v] = y(initialData);
+  let [data, setData] = useState(initialData);
   let clock = useClock();
-  let [N] = y(() => ({
+  let [clockAnchor] = useState(() => ({
     wall: Date.now(),
     clock: clock.now(),
   }));
-  let [wall, setWall] = y(N.wall);
-  let [u, T] = y({
+  let [wall, setWall] = useState(clockAnchor.wall);
+  let [view, setView] = useState({
     type: "hub",
   });
-  let [p, M] = y("scheduled");
-  let [m, D] = y(false);
-  let [C, F] = y(null);
-  let [U, B] = y(null);
-  let A = R(false);
-  async function c() {
-    let daemonOverview = await loadDaemonOverview(storageV5, i.unattendedServing);
-    v(daemonOverview);
+  let [activeTab, setActiveTab] = useState("scheduled");
+  let [isBusy, setIsBusy] = useState(false);
+  let [message, setMessage] = useState(null);
+  let [unattendedNotice, setUnattendedNotice] = useState(null);
+  let consentBusyRef = useRef(false);
+  async function refreshOverview() {
+    let daemonOverview = await loadDaemonOverview(storageV5, data.unattendedServing);
+    setData(daemonOverview);
   }
-  let te = R(0);
+  let tickRef = useRef(0);
   useInterval(
     () => {
-      setWall(N.wall + (clock.now() - N.clock));
-      if (te.current++ % 2 === 0) c();
+      setWall(clockAnchor.wall + (clock.now() - clockAnchor.clock));
+      if (tickRef.current++ % 2 === 0) refreshOverview();
     },
-    u.type === "hub" ? 1000 : null,
+    view.type === "hub" ? 1000 : null,
   );
-  async function g(h) {
-    if (m) return;
-    D(true);
-    F(null);
-    let x;
+  async function runServiceAction(action) {
+    if (isBusy) return;
+    setIsBusy(true);
+    setMessage(null);
+    let result;
     try {
-      switch (h) {
+      switch (action) {
         case "uninstall":
-          x = await uninstallDaemonService();
+          result = await uninstallDaemonService();
           break;
         case "stop":
-          x = await stopDaemonService();
+          result = await stopDaemonService();
           break;
       }
-      if (!x.ok) F(`${h} failed: ${x.error}`);
+      if (!result.ok) setMessage(`${action} failed: ${result.error}`);
     } finally {
       try {
-        await c();
+        await refreshOverview();
       } catch {}
-      D(false);
+      setIsBusy(false);
     }
   }
-  function L() {
-    c();
-    T({
+  function goHome() {
+    refreshOverview();
+    setView({
       type: "hub",
     });
   }
-  function W(h) {
-    v((x) => ({
-      ...x,
+  function applyConsentChoice(choice) {
+    setData((previous) => ({
+      ...previous,
       unattendedServing: {
-        ...x.unattendedServing,
-        choice: h,
-        canWithdraw: h === "accepted",
+        ...previous.unattendedServing,
+        choice,
+        canWithdraw: choice === "accepted",
       },
     }));
-    c();
+    refreshOverview();
   }
-  async function z() {
-    if (A.current) return;
-    let h = consentSelectAction(i.unattendedServing);
-    if (h === "none") return;
-    A.current = true;
-    B(null);
+  async function openConsentFlow() {
+    if (consentBusyRef.current) return;
+    let consentAction = consentSelectAction(data.unattendedServing);
+    if (consentAction === "none") return;
+    consentBusyRef.current = true;
+    setUnattendedNotice(null);
     try {
-      if (h === "withdraw") {
-        if ((await saveUnattendedServingConsent("declined")) === "saved") W("declined");
-        else B(CONSENT_SAVE_FAILED_TEXT);
+      if (consentAction === "withdraw") {
+        if ((await saveUnattendedServingConsent("declined")) === "saved") applyConsentChoice("declined");
+        else setUnattendedNotice(CONSENT_SAVE_FAILED_TEXT);
       } else {
-        let { UnattendedServingConsentDialog } = await import("./chunk-d8vjfv68.js");
-        T({
+        let { UnattendedServingConsentDialog } = await import("../UnattendedServingConsentDialog.lazy.js");
+        setView({
           type: "unattended-consent",
           dialog: UnattendedServingConsentDialog,
         });
       }
     } catch (error) {
       logError(error);
-      B(CONSENT_SAVE_FAILED_TEXT);
+      setUnattendedNotice(CONSENT_SAVE_FAILED_TEXT);
     } finally {
-      A.current = false;
+      consentBusyRef.current = false;
     }
   }
-  let J = R(false);
-  function Y(h) {
-    let x = J.current;
-    J.current = false;
-    if (x) {
-      B(CONSENT_SAVE_FAILED_TEXT);
-      M("remoteControl");
+  let saveFailedRef = useRef(false);
+  function handleConsentDone(consentChoice) {
+    let saveFailed = saveFailedRef.current;
+    saveFailedRef.current = false;
+    if (saveFailed) {
+      setUnattendedNotice(CONSENT_SAVE_FAILED_TEXT);
+      setActiveTab("remoteControl");
     }
-    if (h === "not_now") {
-      L();
+    if (consentChoice === "not_now") {
+      goHome();
       return;
     }
-    W(h);
-    T({
+    applyConsentChoice(consentChoice);
+    setView({
       type: "hub",
     });
   }
-  switch (u.type) {
+  switch (view.type) {
     case "detail-scheduled":
       return jsxProd_default(DaemonScheduledTaskDetail, {
-        task: u.entry,
-        onBack: L,
+        task: view.entry,
+        onBack: goHome,
         onEdit: (prefill) =>
-          T({
+          setView({
             type: "new",
             kind: "scheduled",
             prefill,
           }),
         onDone,
-        refresh: c,
+        refresh: refreshOverview,
         storageV5,
       });
     case "detail-remoteControl":
       return jsxProd_default(RemoteControlServerDetail, {
-        server: u.entry,
-        onBack: L,
+        server: view.entry,
+        onBack: goHome,
         onDone,
-        refresh: c,
+        refresh: refreshOverview,
         storageV5,
       });
     case "new":
-      if (u.kind === "remoteControl")
+      if (view.kind === "remoteControl")
         return jsxProd_default(AddRemoteControlServerForm, {
           defaultDir: getOriginalCwd(),
-          onCancel: L,
-          onAdded: () => L(),
+          onCancel: goHome,
+          onAdded: () => goHome(),
           storageV5,
         });
       return jsxProd_default(DaemonScheduledTaskForm, {
         defaultDir: getOriginalCwd(),
-        existingIds: i.tasks.map((task) => task.id),
-        prefill: u.prefill,
+        existingIds: data.tasks.map((task) => task.id),
+        prefill: view.prefill,
         modelOptions,
-        onCancel: L,
+        onCancel: goHome,
         onDone,
-        onSaved: async () => L(),
+        onSaved: async () => goHome(),
         storageV5,
       });
     case "unattended-consent": {
-      let dialog = u.dialog;
+      let dialog = view.dialog;
       return jsxProd_default(dialog, {
         exitOnCtrlCD: false,
         onSaveFailed: () => {
-          J.current = true;
+          saveFailedRef.current = true;
         },
-        onDone: Y,
+        onDone: handleConsentDone,
       });
     }
     case "hub":
       break;
   }
-  let ce = [
+  let tabs = [
     jsxProd_default(
       Tab,
       {
@@ -274,30 +283,30 @@ function DaemonSetupFlow({ initialData, modelOptions, onDone, storageV5 }) {
         title: "Scheduled",
         children: jsxProd_default(DaemonServicesView, {
           kind: "scheduled",
-          data: i,
+          data,
           now: wall,
-          busy: m,
-          message: C,
+          busy: isBusy,
+          message,
           onSelect: (entry) =>
-            T({
+            setView({
               type: "detail-scheduled",
               entry,
             }),
           onAddNew: () =>
-            T({
+            setView({
               type: "new",
               kind: "scheduled",
             }),
-          onService: (h) => void g(h),
-          onUnattendedServing: () => void z(),
-          unattendedNotice: U,
+          onService: (action) => void runServiceAction(action),
+          onUnattendedServing: () => void openConsentFlow(),
+          unattendedNotice,
           onCancel: () => onDone(),
         }),
       },
       "scheduled",
     ),
   ];
-  ce.push(
+  tabs.push(
     jsxProd_default(
       Tab,
       {
@@ -305,23 +314,23 @@ function DaemonSetupFlow({ initialData, modelOptions, onDone, storageV5 }) {
         title: "Remote Control",
         children: jsxProd_default(DaemonServicesView, {
           kind: "remoteControl",
-          data: i,
+          data,
           now: wall,
-          busy: m,
-          message: C,
+          busy: isBusy,
+          message,
           onSelect: (entry) =>
-            T({
+            setView({
               type: "detail-remoteControl",
               entry,
             }),
           onAddNew: () =>
-            T({
+            setView({
               type: "new",
               kind: "remoteControl",
             }),
-          onService: (h) => void g(h),
-          onUnattendedServing: () => void z(),
-          unattendedNotice: U,
+          onService: (action) => void runServiceAction(action),
+          onUnattendedServing: () => void openConsentFlow(),
+          unattendedNotice,
           onCancel: () => onDone(),
         }),
       },
@@ -335,10 +344,10 @@ function DaemonSetupFlow({ initialData, modelOptions, onDone, storageV5 }) {
     children: jsxProd_default(Tabs, {
       title: null,
       color: "permission",
-      selectedTab: p,
-      onTabChange: (h) => M(h),
+      selectedTab: activeTab,
+      onTabChange: (tabId) => setActiveTab(tabId),
       navFromContent: true,
-      children: ce,
+      children: tabs,
     }),
   });
 }
@@ -347,4 +356,11 @@ var SERVICE_KIND_LABELS = {
   scheduled: "scheduled task",
   remoteControl: "remote-control server",
 };
-export { consentSelectAction, SERVICE_KIND_LABELS, loadDaemonOverview, DaemonSetupFlow, modelSelectOptions };
+export {
+  consentSelectAction,
+  SERVICE_KIND_LABELS,
+  loadDaemonOverview,
+  DaemonSetupFlow,
+  modelSelectOptions,
+  renderDaemonSetupFlow,
+};

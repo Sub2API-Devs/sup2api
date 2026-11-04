@@ -5,47 +5,47 @@
  * pieces: chunk-4ymxyb4g.js (14)
  * attribution: esm-layout 5, esm-fingerprint 9
  */
-import { supportsColor_default, h } from "./vendor/supports-color/index.js";
+import { supportsColor_default, ansiStylesAlias } from "./vendor/supports-color/index.js";
 
 //@ chunk-4ymxyb4g.js:4788-4951 esm-layout
-function S(e, close, open) {
-  let index = e.indexOf(close);
-  if (index === -1) return e;
-  let n = close.length;
-  let a = 0;
-  let c = "";
+function stringReplaceAll(string, close, open) {
+  let index = string.indexOf(close);
+  if (index === -1) return string;
+  let substringLength = close.length;
+  let endIndex = 0;
+  let returnValue = "";
   do {
-    c += e.slice(a, index) + close + open;
-    a = index + n;
-    index = e.indexOf(close, a);
+    returnValue += string.slice(endIndex, index) + close + open;
+    endIndex = index + substringLength;
+    index = string.indexOf(close, endIndex);
   } while (index !== -1);
-  c += e.slice(a);
-  return c;
+  returnValue += string.slice(endIndex);
+  return returnValue;
 }
 //@ chunk-4ymxyb4g.js:4951-5109 esm-layout
-function L(e, closeAll, openAll, lfIndex) {
-  let n = 0;
-  let a = "";
+function stringEncaseCRLFWithFirstIndex(string, closeAll, openAll, lfIndex) {
+  let endIndex = 0;
+  let returnValue = "";
   do {
-    let c = e[lfIndex - 1] === "\r";
-    a +=
-      e.slice(n, c ? lfIndex - 1 : lfIndex) +
+    let isGotCR = string[lfIndex - 1] === "\r";
+    returnValue +=
+      string.slice(endIndex, isGotCR ? lfIndex - 1 : lfIndex) +
       closeAll +
-      (c
+      (isGotCR
         ? `\r
 `
         : `
 `) +
       openAll;
-    n = lfIndex + 1;
-    lfIndex = e.indexOf(
+    endIndex = lfIndex + 1;
+    lfIndex = string.indexOf(
       `
 `,
-      n,
+      endIndex,
     );
   } while (lfIndex !== -1);
-  a += e.slice(n);
-  return a;
+  returnValue += string.slice(endIndex);
+  return returnValue;
 }
 //@ chunk-4ymxyb4g.js:5109-5455 esm-fingerprint
 var { stdout: stdoutColor, stderr: stderrColor } = supportsColor_default;
@@ -54,7 +54,7 @@ var STYLER = Symbol("STYLER");
 var IS_EMPTY = Symbol("IS_EMPTY");
 var levelMapping = ["ansi", "ansi", "ansi256", "ansi16m"];
 var styles = Object.create(null);
-var H = (chalk, options = {}) => {
+var applyOptions = (chalk, options = {}) => {
   if (options.level && !(Number.isInteger(options.level) && options.level >= 0 && options.level <= 3))
     throw Error("The `level` option should be an integer from 0 to 3");
   let level = stdoutColor ? stdoutColor.level : 0;
@@ -69,7 +69,7 @@ class Chalk {
 //@ chunk-4ymxyb4g.js:5493-5585 esm-fingerprint
 var chalkFactory = (options) => {
   let chalk = (...strings) => strings.join(" ");
-  H(chalk, options);
+  applyOptions(chalk, options);
   Object.setPrototypeOf(chalk, createChalk.prototype);
   return chalk;
 };
@@ -80,7 +80,7 @@ function createChalk(options) {
 //@ chunk-4ymxyb4g.js:5611-5665 esm-fingerprint
 Object.setPrototypeOf(createChalk.prototype, Function.prototype);
 //@ chunk-4ymxyb4g.js:5665-5809 esm-fingerprint
-for (let [styleName, style] of Object.entries(h))
+for (let [styleName, style] of Object.entries(ansiStylesAlias))
   styles[styleName] = {
     get() {
       let builder = createBuilder(this, createStyler(style.open, style.close, this[STYLER]), this[IS_EMPTY]);
@@ -103,12 +103,13 @@ styles.visible = {
 //@ chunk-4ymxyb4g.js:5910-6184 esm-fingerprint
 var getModelAnsi = (model, level, type, ...arguments_) => {
   if (model === "rgb") {
-    if (level === "ansi16m") return h[type].ansi16m(...arguments_);
-    if (level === "ansi256") return h[type].ansi256(h.rgbToAnsi256(...arguments_));
-    return h[type].ansi(h.rgbToAnsi(...arguments_));
+    if (level === "ansi16m") return ansiStylesAlias[type].ansi16m(...arguments_);
+    if (level === "ansi256")
+      return ansiStylesAlias[type].ansi256(ansiStylesAlias.rgbToAnsi256(...arguments_));
+    return ansiStylesAlias[type].ansi(ansiStylesAlias.rgbToAnsi(...arguments_));
   }
-  if (model === "hex") return getModelAnsi("rgb", level, type, ...h.hexToRgb(...arguments_));
-  return h[type][model](...arguments_);
+  if (model === "hex") return getModelAnsi("rgb", level, type, ...ansiStylesAlias.hexToRgb(...arguments_));
+  return ansiStylesAlias[type][model](...arguments_);
 };
 var usedModels = ["rgb", "hex", "ansi256"];
 //@ chunk-4ymxyb4g.js:6184-6513 esm-fingerprint
@@ -119,21 +120,21 @@ for (let model of usedModels) {
       return function (...arguments_) {
         let styler = createStyler(
           getModelAnsi(model, levelMapping[level], "color", ...arguments_),
-          h.color.close,
+          ansiStylesAlias.color.close,
           this[STYLER],
         );
         return createBuilder(this, styler, this[IS_EMPTY]);
       };
     },
   };
-  let r = "bg" + model[0].toUpperCase() + model.slice(1);
-  styles[r] = {
+  let styleName = "bg" + model[0].toUpperCase() + model.slice(1);
+  styles[styleName] = {
     get() {
       let { level } = this;
       return function (...arguments_) {
         let styler = createStyler(
           getModelAnsi(model, levelMapping[level], "bgColor", ...arguments_),
-          h.bgColor.close,
+          ansiStylesAlias.bgColor.close,
           this[STYLER],
         );
         return createBuilder(this, styler, this[IS_EMPTY]);
@@ -172,35 +173,35 @@ var createStyler = (open, close, parent) => {
     parent,
   };
 };
-var createBuilder = (e, _styler, _isEmpty) => {
+var createBuilder = (parent, _styler, _isEmpty) => {
   let builder = (...arguments_) =>
     applyStyle(builder, arguments_.length === 1 ? "" + arguments_[0] : arguments_.join(" "));
   Object.setPrototypeOf(builder, proto);
-  builder[GENERATOR] = e;
+  builder[GENERATOR] = parent;
   builder[STYLER] = _styler;
   builder[IS_EMPTY] = _isEmpty;
   return builder;
 };
-var applyStyle = (e, string) => {
-  if (e.level <= 0 || !string) return e[IS_EMPTY] ? "" : string;
-  let styler = e[STYLER];
+var applyStyle = (builder, string) => {
+  if (builder.level <= 0 || !string) return builder[IS_EMPTY] ? "" : string;
+  let styler = builder[STYLER];
   if (styler === undefined) return string;
   let { openAll, closeAll } = styler;
   if (string.includes("\x1B"))
     while (styler !== undefined) {
-      string = S(string, styler.close, styler.open);
+      string = stringReplaceAll(string, styler.close, styler.open);
       styler = styler.parent;
     }
   let lfIndex = string.indexOf(`
 `);
-  if (lfIndex !== -1) string = L(string, closeAll, openAll, lfIndex);
+  if (lfIndex !== -1) string = stringEncaseCRLFWithFirstIndex(string, closeAll, openAll, lfIndex);
   return openAll + string + closeAll;
 };
 //@ chunk-4ymxyb4g.js:7121-7160 esm-fingerprint
 Object.defineProperties(createChalk.prototype, styles);
 //@ chunk-4ymxyb4g.js:7160-7196 esm-layout
-var Z = createChalk();
+var chalk = createChalk();
 var chalkStderr = createChalk({
   level: stderrColor ? stderrColor.level : 0,
 });
-export { Z, Chalk };
+export { chalk, Chalk };

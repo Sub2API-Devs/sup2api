@@ -10,7 +10,7 @@
  */
 import { connect } from "net";
 import { StringDecoder } from "string_decoder";
-import { daemonControlSocket, redactDaemonPipeKey } from "../../utils/sandbox/userNamespace.js";
+import { daemonControlSocket, redactDaemonPipeKey } from "./paths.js";
 import { errorMessage, getErrnoCode } from "../../utils/errors.js";
 import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
 import { getCwd } from "../../utils/cwd.js";
@@ -22,15 +22,16 @@ import { BG_PROTO, LeaseClosingNoticeSchema, LeaseAcknowledgementSchema } from "
 import { readStreamLines } from "../../utils/streamDestroy.js";
 import { safeParseJSON } from "../../utils/json.js";
 import { bgSupervisorStalledMessage } from "../../utils/fleetGates.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-6ffkpva1.js:683-1455 placement
 /**
  * 向后台守护进程的控制 socket 发请求；另有守护进程租约（必要时启动守护进程）。
  */
-async function controlRequest(g, m) {
-  let s;
+async function controlRequest(request, options) {
+  let socket;
   try {
-    s = connect(daemonControlSocket());
+    socket = connect(daemonControlSocket());
   } catch (error) {
     return {
       ok: false,
@@ -39,56 +40,56 @@ async function controlRequest(g, m) {
       errno: getErrnoCode(error),
     };
   }
-  let timeoutMs = m?.timeoutMs ?? 5000;
-  let o;
+  let timeoutMs = options?.timeoutMs ?? 5000;
+  let settle;
   let promise = new Promise((resolve) => {
-    o = resolve;
+    settle = resolve;
   });
-  let u = false;
+  let done = false;
   let connected = false;
-  let f = (r) => {
-    if (u) return;
-    u = true;
-    s.destroy();
-    o(r);
+  let finish = (result) => {
+    if (done) return;
+    done = true;
+    socket.destroy();
+    settle(result);
   };
-  s.setTimeout(timeoutMs, () =>
-    f({
+  socket.setTimeout(timeoutMs, () =>
+    finish({
       ok: false,
       code: "ETIMEOUT",
       error: "control socket timeout",
       connected,
     }),
   );
-  s.on("error", (r) =>
-    f({
+  socket.on("error", (error) =>
+    finish({
       ok: false,
       code: "ENOCONN",
-      error: redactDaemonPipeKey(errorMessage(r)),
+      error: redactDaemonPipeKey(errorMessage(error)),
       connected,
-      errno: getErrnoCode(r),
+      errno: getErrnoCode(error),
     }),
   );
-  s.once("connect", () => {
+  socket.once("connect", () => {
     connected = true;
-    s.write(
-      jsonStringify(g) +
+    socket.write(
+      jsonStringify(request) +
         `
 `,
     );
   });
-  let e = new StringDecoder("utf8");
-  let n = "";
-  s.on("data", (r) => {
-    n += e.write(r);
-    let index = n.indexOf(`
+  let decoder = new StringDecoder("utf8");
+  let buffer = "";
+  socket.on("data", (data) => {
+    buffer += decoder.write(data);
+    let index = buffer.indexOf(`
 `);
     if (index < 0) return;
-    let sliced = n.slice(0, index);
+    let sliced = buffer.slice(0, index);
     try {
-      f(jsonParse(sliced));
+      finish(jsonParse(sliced));
     } catch (error) {
-      f({
+      finish({
         ok: false,
         code: "ENOCONN",
         error: redactDaemonPipeKey(errorMessage(error)),
@@ -96,9 +97,9 @@ async function controlRequest(g, m) {
       });
     }
   });
-  s.once("close", () => {
-    if (!u)
-      f({
+  socket.once("close", () => {
+    if (!done)
+      finish({
         ok: false,
         code: "ENOCONN",
         error: "connection dropped mid-request \u2014 it may have restarted; retry",
@@ -111,8 +112,12 @@ async function controlRequest(g, m) {
 /**
  * 结束租约的操作集合（shutdown_op、upgrade、yield、displaced）。
  */
-var MAX_DAEMON_SPAWNS = 4;
-var LEASE_END_OPS = new Set(["shutdown_op", "upgrade", "yield", "displaced"]);
+var MAX_DAEMON_SPAWNS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var LEASE_END_OPS;
+deferInit("chunk-6ffkpva1.js:1455", () => {
+  MAX_DAEMON_SPAWNS = 4;
+  LEASE_END_OPS = new Set(["shutdown_op", "upgrade", "yield", "displaced"]);
+});
 //@ chunk-6ffkpva1.js:1520-1581 placement
 function openDaemonLease(label) {
   return openDaemonLeaseLoop({
@@ -125,29 +130,29 @@ function openDaemonLease(label) {
 /**
  * 维持守护进程租约，必要时启动守护进程
  */
-function openDaemonLeaseLoop(client, m) {
-  let s = false;
-  let p = null;
-  let o = null;
-  let l = true;
-  let u = MAX_DAEMON_SPAWNS;
-  let i = async (e) => {
-    if (e || !m || !l || u === 0) {
-      o = setTimeout(f, 1000);
-      o.unref();
+function openDaemonLeaseLoop(client, leaseClient) {
+  let stopped = false;
+  let socket = null;
+  let retryTimer = null;
+  let canSpawn = true;
+  let spawnsLeft = MAX_DAEMON_SPAWNS;
+  let reconnect = async (acknowledged) => {
+    if (acknowledged || !leaseClient || !canSpawn || spawnsLeft === 0) {
+      retryTimer = setTimeout(connectAndLease, 1000);
+      retryTimer.unref();
       return;
     }
-    let n = false;
+    let spawned = false;
     try {
-      n = (await m.ensureDaemon()) === "started";
+      spawned = (await leaseClient.ensureDaemon()) === "started";
     } catch (error) {
       logForDebugging(`daemon lease: ensureDaemon failed: ${redactDaemonPipeKey(errorMessage(error))}`, {
         level: "error",
       });
     }
-    l = n;
-    u -= n ? 1 : 0;
-    if (u === 0) {
+    canSpawn = spawned;
+    spawnsLeft -= spawned ? 1 : 0;
+    if (spawnsLeft === 0) {
       logEvent("tengu_bg_cloud_lease", {
         transition: lit("starts_used_up"),
       });
@@ -158,26 +163,26 @@ function openDaemonLeaseLoop(client, m) {
         },
       );
     }
-    f();
+    connectAndLease();
   };
-  let f = () => {
-    if (s) return;
-    let e;
+  let connectAndLease = () => {
+    if (stopped) return;
+    let newSocket;
     try {
-      e = connect(daemonControlSocket());
+      newSocket = connect(daemonControlSocket());
     } catch {
-      p = null;
-      i(false);
+      socket = null;
+      reconnect(false);
       return;
     }
-    p = e;
-    let n = false;
-    e.on("error", () => e.destroy());
-    e.once("connect", () => {
-      let r = process.getuid?.();
-      if (m && r !== undefined && getPeerUid(e) !== r) {
-        if (l) {
-          l = false;
+    socket = newSocket;
+    let acknowledged = false;
+    newSocket.on("error", () => newSocket.destroy());
+    newSocket.once("connect", () => {
+      let uid = process.getuid?.();
+      if (leaseClient && uid !== undefined && getPeerUid(newSocket) !== uid) {
+        if (canSpawn) {
+          canSpawn = false;
           logEvent("tengu_bg_cloud_lease", {
             transition: lit("server_not_this_user"),
           });
@@ -188,10 +193,10 @@ function openDaemonLeaseLoop(client, m) {
             },
           );
         }
-        e.destroy();
+        newSocket.destroy();
         return;
       }
-      e.write(
+      newSocket.write(
         jsonStringify({
           proto: BG_PROTO,
           op: "lease",
@@ -201,65 +206,65 @@ function openDaemonLeaseLoop(client, m) {
 `,
       );
     });
-    if (m)
-      readStreamLines(e, (r) => {
-        if (s) return;
-        let E = safeParseJSON(r, false);
-        let closing = LeaseClosingNoticeSchema().safeParse(E).data?.closing;
+    if (leaseClient)
+      readStreamLines(newSocket, (line) => {
+        if (stopped) return;
+        let message = safeParseJSON(line, false);
+        let closing = LeaseClosingNoticeSchema().safeParse(message).data?.closing;
         if (closing !== undefined) {
-          if (LEASE_END_OPS.has(closing)) l = false;
+          if (LEASE_END_OPS.has(closing)) canSpawn = false;
           logEvent("tengu_bg_cloud_lease", {
             transition: lit("daemon_closing"),
             cause: fromEnum(closing),
           });
-          m.onClosing(closing);
-        } else if (!n && LeaseAcknowledgementSchema().safeParse(E).success) {
-          n = true;
-          l = true;
-          m.onAcknowledged();
+          leaseClient.onClosing(closing);
+        } else if (!acknowledged && LeaseAcknowledgementSchema().safeParse(message).success) {
+          acknowledged = true;
+          canSpawn = true;
+          leaseClient.onAcknowledged();
         }
       });
-    else e.on("data", () => {});
-    e.once("close", () => {
-      p = null;
-      if (s) return;
-      i(n);
+    else newSocket.on("data", () => {});
+    newSocket.once("close", () => {
+      socket = null;
+      if (stopped) return;
+      reconnect(acknowledged);
     });
-    e.unref();
+    newSocket.unref();
   };
-  f();
+  connectAndLease();
   return () => {
-    s = true;
-    if (o) clearTimeout(o);
-    p?.destroy();
+    stopped = true;
+    if (retryTimer) clearTimeout(retryTimer);
+    socket?.destroy();
   };
 }
 //@ chunk-6ffkpva1.js:2874-3368 placement
-function subscribeControl(short, tail, s, p) {
-  let o;
+function subscribeControl(short, tail, onEvent, onError) {
+  let socket;
   try {
-    o = connect(daemonControlSocket());
+    socket = connect(daemonControlSocket());
   } catch (error) {
-    queueMicrotask(() => p(redactDaemonPipeKey(errorMessage(error))));
+    queueMicrotask(() => onError(redactDaemonPipeKey(errorMessage(error))));
     return () => {};
   }
-  let l = false;
-  let u = false;
-  let i = (e) => {
-    if (l) return;
-    l = true;
-    p(e);
+  let closed = false;
+  let gotFirstLine = false;
+  let fail = (message) => {
+    if (closed) return;
+    closed = true;
+    onError(message);
   };
-  o.setTimeout(1e4, () => {
-    if (!u) {
-      i(bgSupervisorStalledMessage());
-      o.destroy();
+  socket.setTimeout(1e4, () => {
+    if (!gotFirstLine) {
+      fail(bgSupervisorStalledMessage());
+      socket.destroy();
     }
   });
-  o.on("error", (e) => i(redactDaemonPipeKey(errorMessage(e))));
-  o.on("close", () => i("control socket closed"));
-  o.on("connect", () =>
-    o.write(
+  socket.on("error", (error) => fail(redactDaemonPipeKey(errorMessage(error))));
+  socket.on("close", () => fail("control socket closed"));
+  socket.on("connect", () =>
+    socket.write(
       jsonStringify({
         proto: BG_PROTO,
         op: "subscribe",
@@ -270,21 +275,21 @@ function subscribeControl(short, tail, s, p) {
 `,
     ),
   );
-  let streamLines = readStreamLines(o, (e) => {
-    if (!u) {
-      u = true;
-      o.setTimeout(0);
+  let streamLines = readStreamLines(socket, (line) => {
+    if (!gotFirstLine) {
+      gotFirstLine = true;
+      socket.setTimeout(0);
     }
     try {
-      let n = jsonParse(e);
-      if ("ok" in n && n.ok === false) i(n.error);
-      else s(n);
+      let message = jsonParse(line);
+      if ("ok" in message && message.ok === false) fail(message.error);
+      else onEvent(message);
     } catch {}
   });
   return () => {
-    l = true;
+    closed = true;
     streamLines();
-    o.destroy();
+    socket.destroy();
   };
 }
 export { controlRequest, openDaemonLease, subscribeControl };

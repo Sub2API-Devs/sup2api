@@ -8,7 +8,9 @@
  * pieces: chunk-18hwfzwa.js (2), chunk-e6aww6q8.js (1)
  * attribution: fingerprint 2, callgraph-witnessed 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { getGlobalConfig, saveGlobalConfig } from "../utils/config.js";
+import { envDynamicProbe } from "../utils/envDynamic.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { MessageActionsKeybindings } from "./messageActions.js";
@@ -24,13 +26,17 @@ import { BulletRow } from "./design-system/BulletRow.js";
 import { DiffStatCounts } from "./PrBadge.js";
 import { Dialog } from "./design-system/Dialog.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
-import { envDynamicProbe } from "../utils/envDynamic.js";
-import { saveGlobalConfig, getGlobalConfig } from "../utils/config.js";
 import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 
+//@ chunk-e6aww6q8.js:3248805-3248901 fingerprint = hasIdeOnboardingDialogBeenShown (1)
+function hasIdeOnboardingDialogBeenShown() {
+  let config = getGlobalConfig();
+  let terminal = envDynamicProbe.terminal || "unknown";
+  return config.hasIdeOnboardingBeenShown?.[terminal] === true;
+}
 //@ chunk-18hwfzwa.js:1192350-1194346 fingerprint = IdeOnboardingDialog (0.623)
 function IdeOnboardingDialog(props) {
-  let $ = w(22);
+  let $ = useMemoCache(22);
   let { onDone, installationStatus } = props;
   let { storageV5 } = useTheme_2();
   markDialogAsShown(storageV5);
@@ -115,9 +121,9 @@ function IdeOnboardingDialog(props) {
     });
     $[11] = t9;
   } else t9 = $[11];
-  let oo;
+  let diffBullet;
   if ($[12] === MEMO_CACHE_SENTINEL) {
-    oo = jsxProd_default_2(BulletRow, {
+    diffBullet = jsxProd_default_2(BulletRow, {
       children: [
         "Review Claude Code's changes",
         " ",
@@ -128,8 +134,8 @@ function IdeOnboardingDialog(props) {
         " in the comfort of your IDE",
       ],
     });
-    $[12] = oo;
-  } else oo = $[12];
+    $[12] = diffBullet;
+  } else diffBullet = $[12];
   let t12;
   if ($[13] === MEMO_CACHE_SENTINEL) {
     t12 = jsxProd_default_2(BulletRow, {
@@ -150,7 +156,7 @@ function IdeOnboardingDialog(props) {
       gap: 1,
       children: [
         t9,
-        oo,
+        diffBullet,
         t12,
         jsxProd_default_2(BulletRow, {
           children: [
@@ -223,11 +229,5 @@ function markDialogAsShown(storageV5) {
     storageV5,
   );
   logFeatureOk("onboarding_ide_dialog_shown");
-}
-//@ chunk-e6aww6q8.js:3248805-3248901 fingerprint = hasIdeOnboardingDialogBeenShown (1)
-function hasIdeOnboardingDialogBeenShown() {
-  let config = getGlobalConfig();
-  let terminal = envDynamicProbe.terminal || "unknown";
-  return config.hasIdeOnboardingBeenShown?.[terminal] === true;
 }
 export { IdeOnboardingDialog, hasIdeOnboardingDialogBeenShown };

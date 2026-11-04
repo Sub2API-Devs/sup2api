@@ -55,82 +55,86 @@ var MONITOR_WS_ACTIVITY_KINDS = ["publish", "attach", "watch", "resume", "sessio
 /**
  * 判断对象是否为 monitor_ws 任务。
  */
-function isMonitorWsTask(e) {
-  return typeof e === "object" && e !== null && "type" in e && e.type === "monitor_ws";
+function isMonitorWsTask(value) {
+  return typeof value === "object" && value !== null && "type" in value && value.type === "monitor_ws";
 }
 //@ chunk-xf84t5b0.js:13047-13094 placement
 /**
  * 记下某任务对应的 WebSocket。
  */
-function rememberMonitorSocket(e, n) {
-  getTaskRunState().monitorSockets.set(e, n);
+function rememberMonitorSocket(taskId, socket) {
+  getTaskRunState().monitorSockets.set(taskId, socket);
 }
 //@ chunk-xf84t5b0.js:13094-13150 placement
 /**
  * 判断某任务当前的 WebSocket 是否就是给定实例。
  */
-function isSameMonitorSocket(e, n) {
-  return getTaskRunState().monitorSockets.get(e) === n;
+function isSameMonitorSocket(taskId, socket) {
+  return getTaskRunState().monitorSockets.get(taskId) === socket;
 }
 //@ chunk-xf84t5b0.js:13150-13313 placement
-function isAutoReactArmedTask(e, isAutoreactArmed, t) {
+function isAutoReactArmedTask(task, isAutoreactArmed, options) {
   return (
-    isMonitorWsTask(e) &&
-    e.status === "running" &&
-    e.autoReactArmed === true &&
+    isMonitorWsTask(task) &&
+    task.status === "running" &&
+    task.autoReactArmed === true &&
     isAutoreactArmed() &&
-    (t?.includeStopLatched === true ||
-      !(e.autoReactSlug !== undefined && isSlugStoppedAnywhere(e.autoReactSlug)))
+    (options?.includeStopLatched === true ||
+      !(task.autoReactSlug !== undefined && isSlugStoppedAnywhere(task.autoReactSlug)))
   );
 }
 //@ chunk-xf84t5b0.js:13313-13379 placement
 /**
  * 判断该监视任务是否已被自动反应武装。
  */
-function isAutoReactArmedMonitorTask(e) {
-  return isAutoReactArmedTask(e, () => getLiveState().autoReact.enabledMemo === true);
+function isAutoReactArmedMonitorTask(task) {
+  return isAutoReactArmedTask(task, () => getLiveState().autoReact.enabledMemo === true);
 }
 //@ chunk-xf84t5b0.js:13379-13462 placement
 /**
  * 该任务的 WebSocket 是否仍在连接中或已打开。
  */
 function isMonitorSocketOpen(id) {
-  let n = getTaskRunState().monitorSockets.get(id);
-  return n !== undefined && n.readyState <= 1;
+  let socket = getTaskRunState().monitorSockets.get(id);
+  return socket !== undefined && socket.readyState <= 1;
 }
 //@ chunk-xf84t5b0.js:13462-13484 placement
 var STALE_MONITOR_GRACE_MS = 300000;
 var STALE_MONITOR_TTL_MS = SUMMON_STATE_TTL_MS + STALE_MONITOR_GRACE_MS;
 //@ chunk-xf84t5b0.js:13484-13702 placement
-function isMonitorWsTaskLive(e, n = Date.now()) {
-  let t = e.frameLive === undefined ? undefined : getLiveState().live.supervisors.get(e.frameLive.slug);
-  if (!isMonitorSocketOpen(e.id) || (t?.transport !== "sync" && n - e.startTime > STALE_MONITOR_TTL_MS))
+function isMonitorWsTaskLive(task, nowMs = Date.now()) {
+  let supervisor =
+    task.frameLive === undefined ? undefined : getLiveState().live.supervisors.get(task.frameLive.slug);
+  if (
+    !isMonitorSocketOpen(task.id) ||
+    (supervisor?.transport !== "sync" && nowMs - task.startTime > STALE_MONITOR_TTL_MS)
+  )
     return false;
-  let expMs = t?.lease?.expMs;
-  return expMs === undefined || n <= expMs + STALE_MONITOR_GRACE_MS;
+  let expMs = supervisor?.lease?.expMs;
+  return expMs === undefined || nowMs <= expMs + STALE_MONITOR_GRACE_MS;
 }
 //@ chunk-xf84t5b0.js:13702-13787 placement
 /**
  * 该任务的 WebSocket 是否已打开。
  */
-function isMonitorSocketOpenNow(e) {
-  let n = getTaskRunState().monitorSockets.get(e);
-  return n !== undefined && n.readyState === 1;
+function isMonitorSocketOpenNow(taskId) {
+  let socket = getTaskRunState().monitorSockets.get(taskId);
+  return socket !== undefined && socket.readyState === 1;
 }
 //@ chunk-xf84t5b0.js:13787-13942 placement
 var MonitorWsTask = {
   name: "MonitorWsTask",
   type: "monitor_ws",
-  async kill(e, n, t, o) {
+  async kill(taskId, taskRegistry, unusedThirdArg, stoppedBy) {
     stopMonitorWsTasks(
-      e,
-      n,
-      (o ?? "user") === "system"
+      taskId,
+      taskRegistry,
+      (stoppedBy ?? "user") === "system"
         ? {}
         : {
             userStop: true,
             taskStop: true,
-            modelOrigin: o === "parent",
+            modelOrigin: stoppedBy === "parent",
           },
     );
   },
@@ -171,24 +175,24 @@ function activeArtifactConnections() {
   return currentRoom()?.conns.size ?? 0;
 }
 //@ chunk-xf84t5b0.js:14192-15182 placement
-function leaveArtifactRooms(e) {
-  let n = currentRoom();
-  let t = getTaskRunState().artifactRoomStopObserver?.disposeAll() ?? 0;
-  let o = n?.consentRevoke?.() ?? 0;
-  if ((t <= 0 && o <= 0) || n?.consentGone?.() === true) return t;
-  let i =
+function leaveArtifactRooms(target) {
+  let room = currentRoom();
+  let disposedCount = getTaskRunState().artifactRoomStopObserver?.disposeAll() ?? 0;
+  let revokedCount = room?.consentRevoke?.() ?? 0;
+  if ((disposedCount <= 0 && revokedCount <= 0) || room?.consentGone?.() === true) return disposedCount;
+  let rejoinHint =
     "The next publish of such an artifact that declares a room will ask the user before joining again; do not republish to rejoin unless the user asks.";
-  let r = {
+  let notification = {
     agentId: mainAgentId(),
     value: formatTaskNotification({
       taskType: ARTIFACT_WATCH_LIFECYCLE,
       summary: escapeXml(
-        t > 0
-          ? `Left the live ${plural(t, "room")} of ${t} ${plural(t, "artifact")} (the user stopped background activity)`
-          : `Forgot the live-room ${plural(o, "approval")} of ${o} ${plural(o, "artifact")} (the user stopped background activity)`,
+        disposedCount > 0
+          ? `Left the live ${plural(disposedCount, "room")} of ${disposedCount} ${plural(disposedCount, "artifact")} (the user stopped background activity)`
+          : `Forgot the live-room ${plural(revokedCount, "approval")} of ${revokedCount} ${plural(revokedCount, "artifact")} (the user stopped background activity)`,
       ),
       body: `
-<event>${escapeXml(t > 0 ? `Page events from those artifacts' viewers will no longer arrive and room_send to them will report not_connected; every remembered room-join approval was forgotten too. ${i}` : `No room was open. ${i}`)}</event>`,
+<event>${escapeXml(disposedCount > 0 ? `Page events from those artifacts' viewers will no longer arrive and room_send to them will report not_connected; every remembered room-join approval was forgotten too. ${rejoinHint}` : `No room was open. ${rejoinHint}`)}</event>`,
     }),
     mode: "task-notification",
     skipAttachments: true,
@@ -199,9 +203,9 @@ function leaveArtifactRooms(e) {
       roomLifecycle: true,
     },
   };
-  if (e !== undefined) e.enqueuePendingNotification(r);
-  else enqueuePendingNotification(r);
-  return t;
+  if (target !== undefined) target.enqueuePendingNotification(notification);
+  else enqueuePendingNotification(notification);
+  return disposedCount;
 }
 //@ chunk-xf84t5b0.js:15182-15237 placement
 /**
@@ -211,46 +215,52 @@ function setAutoReactDeliberateStopObserver(autoReactDeliberateStopObserver) {
   getTaskRunState().autoReactDeliberateStopObserver = autoReactDeliberateStopObserver;
 }
 //@ chunk-xf84t5b0.js:15237-16228 placement
-function stopMonitorWsTasks(taskId, registry, t) {
-  let o = registry.all()[taskId];
-  if (isMonitorWsTask(o) && o.autoReactArmed === true) {
-    clearSummonWakeTimers(o.autoReactSlug);
-    if (o.autoReactSlug !== undefined && t?.connectionLost !== true) bumpSlugEpoch(o.autoReactSlug);
+function stopMonitorWsTasks(taskId, registry, options) {
+  let task = registry.all()[taskId];
+  if (isMonitorWsTask(task) && task.autoReactArmed === true) {
+    clearSummonWakeTimers(task.autoReactSlug);
+    if (task.autoReactSlug !== undefined && options?.connectionLost !== true)
+      bumpSlugEpoch(task.autoReactSlug);
     if (
-      t?.userStop === true &&
-      o.autoReactSlug !== undefined &&
-      (o.status === "running" || !isSlugSwept(o.autoReactSlug))
+      options?.userStop === true &&
+      task.autoReactSlug !== undefined &&
+      (task.status === "running" || !isSlugSwept(task.autoReactSlug))
     )
-      stopAutoReactForSlug(o.autoReactSlug);
+      stopAutoReactForSlug(task.autoReactSlug);
   }
-  if (t?.userStop === true && isMonitorWsTask(o) && o.frameLive !== undefined) {
+  if (options?.userStop === true && isMonitorWsTask(task) && task.frameLive !== undefined) {
     if (
-      getTaskRunState().frameLiveUserStopObserver?.(o.frameLive.slug, {
-        running: o.status === "running",
+      getTaskRunState().frameLiveUserStopObserver?.(task.frameLive.slug, {
+        running: task.status === "running",
         taskId,
-        taskStop: t?.taskStop === true,
-        modelOrigin: t?.modelOrigin === true,
+        taskStop: options?.taskStop === true,
+        modelOrigin: options?.modelOrigin === true,
         taskRegistry: registry,
       }) === true
     )
-      if (isSlugSwept(o.frameLive.slug)) stopAutoReactForSlug(o.frameLive.slug);
-      else getTaskRunState().autoReactDeliberateStopObserver?.(o.frameLive.slug);
+      if (isSlugSwept(task.frameLive.slug)) stopAutoReactForSlug(task.frameLive.slug);
+      else getTaskRunState().autoReactDeliberateStopObserver?.(task.frameLive.slug);
   }
-  if (t?.userStop === true && isMonitorWsTask(o) && o.frameLive === undefined && o.autoReactArmed !== true) {
+  if (
+    options?.userStop === true &&
+    isMonitorWsTask(task) &&
+    task.frameLive === undefined &&
+    task.autoReactArmed !== true
+  ) {
     getTaskRunState().liveDocUserStopObserver?.(taskId, {
-      modelOrigin: t?.modelOrigin === true,
-      running: o.status === "running",
+      modelOrigin: options?.modelOrigin === true,
+      running: task.status === "running",
     });
     getTaskRunState().artifactRoomStopObserver?.leaveByTaskId(taskId);
     getTaskRunState().artifactPresenceStopObserver?.closeByTaskId(taskId);
   }
   stopMonitorTask(taskId, registry, {
-    quiet: t?.quiet,
+    quiet: options?.quiet,
     onKilled() {
-      let i = getTaskRunState().monitorSockets.get(taskId);
-      if (i) {
+      let socket = getTaskRunState().monitorSockets.get(taskId);
+      if (socket) {
         getTaskRunState().monitorSockets.delete(taskId);
-        i.close();
+        socket.close();
       }
     },
   });
@@ -265,31 +275,32 @@ function stopAutoReactForSlugNow(slug) {
   stopAutoReactForSlug(slug);
 }
 //@ chunk-xf84t5b0.js:16265-16528 placement
-function stopAutoReactForSlug(e) {
-  stopSummonWakes(e);
-  getTaskRunState().autoReactDeliberateStopObserver?.(e);
-  emitSummonArm(getLiveState().live, e);
-  let n = flushCoalescedNotices(e);
-  getTaskRunState().artifactRoomStopObserver?.leave(e);
-  let t = removeQueuedByFilter(
+function stopAutoReactForSlug(slug) {
+  stopSummonWakes(slug);
+  getTaskRunState().autoReactDeliberateStopObserver?.(slug);
+  emitSummonArm(getLiveState().live, slug);
+  let coalesced = flushCoalescedNotices(slug);
+  getTaskRunState().artifactRoomStopObserver?.leave(slug);
+  let removed = removeQueuedByFilter(
     (queuedCommands) =>
       queuedCommands.origin?.kind === "task-notification" &&
-      queuedCommands.origin.slug === e &&
+      queuedCommands.origin.slug === slug &&
       processQueuedCommands(queuedCommands),
   );
-  collectCoalescedArtifactNotices(t, n);
-  declineSweptHandOffs(t);
-  if (t.some(isArtifactAutoReactNotification) || n.length > 0) clearAutoReactNoticePending(e);
-  artifactWatchStopNotice(0, n);
+  collectCoalescedArtifactNotices(removed, coalesced);
+  declineSweptHandOffs(removed);
+  if (removed.some(isArtifactAutoReactNotification) || coalesced.length > 0)
+    clearAutoReactNoticePending(slug);
+  artifactWatchStopNotice(0, coalesced);
 }
 //@ chunk-xf84t5b0.js:16528-16597 placement
 function isArtifactAutoReactSlug(source) {
   return source === "artifact-auto-react" || source === "artifact-room";
 }
 //@ chunk-xf84t5b0.js:16597-16881 placement
-function collectCoalescedArtifactNotices(e, n) {
-  for (let t of e) {
-    let origin = t.origin;
+function collectCoalescedArtifactNotices(notifications, into) {
+  for (let notification of notifications) {
+    let origin = notification.origin;
     if (
       origin?.kind === "task-notification" &&
       origin.coalesced !== undefined &&
@@ -297,7 +308,7 @@ function collectCoalescedArtifactNotices(e, n) {
       origin.slug !== undefined &&
       origin.displayName !== undefined
     )
-      n.push({
+      into.push({
         slug: origin.slug,
         family: origin.coalesced.family,
         artifactName: origin.displayName,
@@ -306,56 +317,56 @@ function collectCoalescedArtifactNotices(e, n) {
   }
 }
 //@ chunk-xf84t5b0.js:16881-19273 placement
-function artifactWatchStopNotice(e, n = [], t) {
-  if (e <= 0 && n.length === 0) return;
+function artifactWatchStopNotice(count, discardRecords = [], options) {
+  if (count <= 0 && discardRecords.length === 0) return;
   let builtInArtifactHiddenForMcp = getLiveState().builtInArtifactHiddenForMcp;
-  let i = plural(e, "it", "them");
-  let r = plural(e, "this artifact", "these artifacts");
-  let s = plural(e, "the watch is kept", "the watches are kept");
-  let a =
-    t?.catchUp === false
+  let itPronoun = plural(count, "it", "them");
+  let artifactNoun = plural(count, "this artifact", "these artifacts");
+  let watchKeptText = plural(count, "the watch is kept", "the watches are kept");
+  let summarySuffix =
+    options?.catchUp === false
       ? ""
       : builtInArtifactHiddenForMcp
-        ? ` (comments you send to Claude meanwhile reach this session ${t?.nameChordGesture === true ? "then" : plural(e, "once the watch resumes", "once the watches resume")})`
+        ? ` (comments you send to Claude meanwhile reach this session ${options?.nameChordGesture === true ? "then" : plural(count, "once the watch resumes", "once the watches resume")})`
         : " (comments sent to Claude meanwhile are answered then)";
-  let h =
-    t?.catchUp === false
+  let bodySuffix =
+    options?.catchUp === false
       ? ""
       : builtInArtifactHiddenForMcp
         ? ", and comments the user sent to Claude in the meantime reach you then"
         : ", and comments sent to Claude in the meantime are answered then";
-  let p =
-    t?.catchUp === false
+  let resumeSuffix =
+    options?.catchUp === false
       ? ""
       : builtInArtifactHiddenForMcp
         ? " (comments the user sent to Claude meanwhile reach you when that turn ends)"
         : " (comments sent to Claude meanwhile are being answered now)";
-  let u = builtInArtifactHiddenForMcp ? "" : ", or resume_replies if the user asks";
-  let y = `publishing without being asked, while handling a notification or a wake-up, leaves ${i} paused`;
-  let S = builtInArtifactHiddenForMcp
-    ? `the user can stop ${i} for good in the tasks list (/tasks, often under System tasks), and the kill-all-agents gesture stops ${i} until Claude Code restarts`
-    : `the user can stop ${i} for good with \u2715 on the watch in the tasks list or the kill-all-agents gesture`;
-  let v =
-    t?.nameChordGesture === true
-      ? `this receipt reaches you with a later turn: if that turn is the user's own typed message it has already resumed ${i}${p}, otherwise the user's next message resumes ${i} (so does a publish of ${r} the user asks for${u}; ${y})${h}; ${S}`
-      : `when the user asks you to publish ${r} again, that publish resumes ${i}${u}, as does the user's next typed message \u2014 each only on hosts that pass typed input through as the user's${h}; ${y}`;
+  let resumeRepliesText = builtInArtifactHiddenForMcp ? "" : ", or resume_replies if the user asks";
+  let republishWarning = `publishing without being asked, while handling a notification or a wake-up, leaves ${itPronoun} paused`;
+  let stopAdvice = builtInArtifactHiddenForMcp
+    ? `the user can stop ${itPronoun} for good in the tasks list (/tasks, often under System tasks), and the kill-all-agents gesture stops ${itPronoun} until Claude Code restarts`
+    : `the user can stop ${itPronoun} for good with \u2715 on the watch in the tasks list or the kill-all-agents gesture`;
+  let resumeExplanation =
+    options?.nameChordGesture === true
+      ? `this receipt reaches you with a later turn: if that turn is the user's own typed message it has already resumed ${itPronoun}${resumeSuffix}, otherwise the user's next message resumes ${itPronoun} (so does a publish of ${artifactNoun} the user asks for${resumeRepliesText}; ${republishWarning})${bodySuffix}; ${stopAdvice}`
+      : `when the user asks you to publish ${artifactNoun} again, that publish resumes ${itPronoun}${resumeRepliesText}, as does the user's next typed message \u2014 each only on hosts that pass typed input through as the user's${bodySuffix}; ${republishWarning}`;
   enqueuePendingNotification({
     agentId: mainAgentId(),
     value: formatTaskNotification({
       taskType: "artifact-auto-react",
       summary: escapeXml(
-        e > 0
-          ? `${e} artifact ${builtInArtifactHiddenForMcp ? plural(e, "comment watch", "comment watches") : `auto-reply ${plural(e, "subscription")}`} paused ${t?.nameChordGesture === true ? "until your next message" : "by the interrupt"}${a}`
+        count > 0
+          ? `${count} artifact ${builtInArtifactHiddenForMcp ? plural(count, "comment watch", "comment watches") : `auto-reply ${plural(count, "subscription")}`} paused ${options?.nameChordGesture === true ? "until your next message" : "by the interrupt"}${summarySuffix}`
           : "Artifact auto-reply activity stopped",
       ),
       body: `
 ${escapeXml(
-  n
+  discardRecords
     .map(stoppedAfterAutoActionsNotice)
     .concat(
-      e > 0
+      count > 0
         ? [
-            `The user's interrupt paused ${i} and ${s}; ${v}. ${builtInArtifactHiddenForMcp ? `Do not republish just to resume ${i}` : "Do not republish or resume just to re-enable auto-replies"} unless the user asks.`,
+            `The user's interrupt paused ${itPronoun} and ${watchKeptText}; ${resumeExplanation}. ${builtInArtifactHiddenForMcp ? `Do not republish just to resume ${itPronoun}` : "Do not republish or resume just to re-enable auto-replies"} unless the user asks.`,
           ]
         : [],
     ).join(`
@@ -365,7 +376,7 @@ ${escapeXml(
     }),
     mode: "task-notification",
     skipAttachments: true,
-    ...(t?.passive === true && {
+    ...(options?.passive === true && {
       passive: true,
       priority: "next",
     }),
@@ -373,15 +384,17 @@ ${escapeXml(
       kind: "task-notification",
       source: "artifact-auto-react-stop-disclosure",
       nonDurableStop: true,
-      ...(n.length > 0 && {
+      ...(discardRecords.length > 0 && {
         carriesDiscardRecord: true,
       }),
     },
   });
 }
 //@ chunk-xf84t5b0.js:19273-19373 placement
-function isArtifactAutoReactNotification(e) {
-  return e.origin?.kind === "task-notification" && e.origin.source === "artifact-auto-react";
+function isArtifactAutoReactNotification(notification) {
+  return (
+    notification.origin?.kind === "task-notification" && notification.origin.source === "artifact-auto-react"
+  );
 }
 //@ chunk-xf84t5b0.js:19373-19454 placement = processQueuedCommands (1)
 function processQueuedCommands(queuedCommands) {
@@ -391,41 +404,41 @@ function processQueuedCommands(queuedCommands) {
   );
 }
 //@ chunk-xf84t5b0.js:19454-19732 placement
-function drainQueuedTaskNotifications(store, n) {
-  let t = flushCoalescedNotices();
-  for (let i of t) clearAutoReactNoticePending(i.slug);
-  if (n?.leaveArtifactRooms === true) leaveArtifactRooms(store);
-  let o = store.removeByFilter(processQueuedCommands);
-  for (let i of o)
+function drainQueuedTaskNotifications(target, options) {
+  let coalesced = flushCoalescedNotices();
+  for (let notice of coalesced) clearAutoReactNoticePending(notice.slug);
+  if (options?.leaveArtifactRooms === true) leaveArtifactRooms(target);
+  let removed = target.removeByFilter(processQueuedCommands);
+  for (let notification of removed)
     if (
-      i.origin?.kind === "task-notification" &&
-      i.origin.source === "artifact-auto-react" &&
-      i.origin.slug !== undefined
+      notification.origin?.kind === "task-notification" &&
+      notification.origin.source === "artifact-auto-react" &&
+      notification.origin.slug !== undefined
     )
-      clearAutoReactNoticePending(i.origin.slug);
-  collectCoalescedArtifactNotices(o, t);
-  declineSweptHandOffs(o);
-  return t;
+      clearAutoReactNoticePending(notification.origin.slug);
+  collectCoalescedArtifactNotices(removed, coalesced);
+  declineSweptHandOffs(removed);
+  return coalesced;
 }
 //@ chunk-xf84t5b0.js:19732-20036 placement
 /**
  * 清除已无对应任务的自动反应待处理通知，返回清除数量。
  */
-function clearOrphanedAutoReactNotices(e = () => false) {
+function clearOrphanedAutoReactNotices(shouldKeep = () => false) {
   let { pendingNoticeSlugs } = getLiveState().shareStatus;
   if (pendingNoticeSlugs.size === 0) return 0;
-  let t = new Set();
-  for (let i of getCommandQueue()) {
-    let slug = i.origin?.kind === "task-notification" ? i.origin.slug : undefined;
-    if (slug !== undefined && processQueuedCommands(i)) t.add(slug);
+  let stillReferenced = new Set();
+  for (let notification of getCommandQueue()) {
+    let slug = notification.origin?.kind === "task-notification" ? notification.origin.slug : undefined;
+    if (slug !== undefined && processQueuedCommands(notification)) stillReferenced.add(slug);
   }
-  let o = 0;
+  let clearedCount = 0;
   for (let key of [...pendingNoticeSlugs.keys()]) {
-    if (t.has(key) || hasPendingNotice(key) || e(key)) continue;
+    if (stillReferenced.has(key) || hasPendingNotice(key) || shouldKeep(key)) continue;
     clearAutoReactNoticePending(key);
-    o++;
+    clearedCount++;
   }
-  return o;
+  return clearedCount;
 }
 //@ chunk-xf84t5b0.js:20036-20105 placement
 /**
@@ -442,16 +455,18 @@ function emptyPartitionedNotifications() {
 /**
  * 把停止相关的任务通知按来源分为说明披露与过期行等类别。
  */
-function partitionStopNotifications(e) {
-  declineSweptHandOffs(e);
-  let n = emptyPartitionedNotifications();
-  for (let t of e) {
-    if (t.origin?.kind !== "task-notification") continue;
-    if (t.origin.source === "artifact-auto-react-stop-disclosure") n.disclosures.push(t);
-    else if (t.origin.source === "artifact-changed") n.staleRows.push(t);
-    else if (t.origin.source === ARTIFACT_WATCH_LIFECYCLE) n.watchLifecycle.push(t);
+function partitionStopNotifications(notifications) {
+  declineSweptHandOffs(notifications);
+  let partitioned = emptyPartitionedNotifications();
+  for (let notification of notifications) {
+    if (notification.origin?.kind !== "task-notification") continue;
+    if (notification.origin.source === "artifact-auto-react-stop-disclosure")
+      partitioned.disclosures.push(notification);
+    else if (notification.origin.source === "artifact-changed") partitioned.staleRows.push(notification);
+    else if (notification.origin.source === ARTIFACT_WATCH_LIFECYCLE)
+      partitioned.watchLifecycle.push(notification);
   }
-  return n;
+  return partitioned;
 }
 //@ chunk-xf84t5b0.js:20412-20593 placement
 function isNonDurableStopDisclosure(disclosure) {
@@ -474,24 +489,24 @@ function dropNonDurableStopDisclosures(store) {
 /**
  * 把停止通知重新排入队列，用户已解除自动反应时丢弃相应披露。
  */
-function requeueStopNotifications(e, n, t) {
+function requeueStopNotifications(queue, partitioned, clearedCount) {
   let userDisarmed = getLiveState().autoReact.userDisarmed;
-  for (let disclosure of n.disclosures) {
-    let r =
+  for (let disclosure of partitioned.disclosures) {
+    let carriesDiscard =
       disclosure.origin?.kind === "task-notification" && disclosure.origin.carriesDiscardRecord === true;
-    let s = userDisarmed && isNonDurableStopDisclosure(disclosure);
-    if (r || (t === 0 && !s)) e.enqueuePendingNotification(disclosure);
+    let isNonDurable = userDisarmed && isNonDurableStopDisclosure(disclosure);
+    if (carriesDiscard || (clearedCount === 0 && !isNonDurable)) queue.enqueuePendingNotification(disclosure);
   }
-  for (let i of n.staleRows) e.enqueuePendingNotification(i);
-  for (let i of n.watchLifecycle) e.enqueuePendingNotification(i);
+  for (let notification of partitioned.staleRows) queue.enqueuePendingNotification(notification);
+  for (let notification of partitioned.watchLifecycle) queue.enqueuePendingNotification(notification);
 }
 //@ chunk-xf84t5b0.js:21006-21109 placement
 function closeAllMonitorSockets() {
-  for (let [e, n] of getTaskRunState().monitorSockets) {
+  for (let [taskId, socket] of getTaskRunState().monitorSockets) {
     try {
-      n.close();
+      socket.close();
     } catch {}
-    getTaskRunState().monitorSockets.delete(e);
+    getTaskRunState().monitorSockets.delete(taskId);
   }
 }
 //@ chunk-xf84t5b0.js:21109-21140 placement

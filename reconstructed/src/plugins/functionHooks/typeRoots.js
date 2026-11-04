@@ -67,6 +67,7 @@ import {
 } from "./pluginLifecycle.js";
 import { modsNoticeFor, presenceForPath } from "./devModsNotices.js";
 import { registerCleanup } from "../../utils/cleanupRegistry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:4128174-4128232 placement
 /**
@@ -88,7 +89,10 @@ var CLAUDE_CODE_TOOLS = "claude-code-tools";
 /**
  * 插件 types 目录
  */
-var TYPES_DIR = join(dirname(PLUGIN_MANIFEST_PATH_2), "types");
+var TYPES_DIR; // deferred: uses PLUGIN_MANIFEST_DIR (../../utils/plugins/commandSource.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:4128374", () => {
+  TYPES_DIR = join(dirname(PLUGIN_MANIFEST_PATH_2), "types");
+});
 //@ chunk-e6aww6q8.js:4146542-4147168 placement
 /**
  * 读取内置工具 schema 与会话 MCP 工具的输入类型（用于生成 .d.ts），读取失败返回空。
@@ -97,31 +101,31 @@ async function readToolTypes(replacesMcp) {
   try {
     let allBaseToolsFromRegistry = getAllBaseToolsFromRegistry();
     let builtin = allBaseToolsFromRegistry && builtinToolSchemasOf(allBaseToolsFromRegistry);
-    let s = currentSurfaceBinding();
-    if (s === undefined)
+    let binding = currentSurfaceBinding();
+    if (binding === undefined)
       return {
         builtin,
         mcp: undefined,
         replacesMcp,
       };
-    let h = s.toolContext(new AbortController());
-    let toolPermissionContext = getToolPermissionContext(h);
+    let toolContext = binding.toolContext(new AbortController());
+    let toolPermissionContext = getToolPermissionContext(toolContext);
     return {
       builtin,
       mcp: buildMcpToolInputTypes(
         await Promise.all(
-          s
+          binding
             .tools()
-            .filter((S) => S.isMcp === true)
-            .map(async (S) => ({
-              name: S.name,
-              inputJSONSchema: S.inputJSONSchema,
-              description: await S.description(
+            .filter((tool) => tool.isMcp === true)
+            .map(async (tool) => ({
+              name: tool.name,
+              inputJSONSchema: tool.inputJSONSchema,
+              description: await tool.description(
                 {},
                 {
-                  isNonInteractiveSession: h.options.isNonInteractiveSession,
+                  isNonInteractiveSession: toolContext.options.isNonInteractiveSession,
                   toolPermissionContext,
-                  tools: h.options.tools,
+                  tools: toolContext.options.tools,
                 },
               ),
             })),
@@ -151,38 +155,41 @@ var isRealPathWithinTeamDir_2 = (realCandidate) =>
 /**
  * 描述类型入口问题（错误原因与解析失败说明）。
  */
-function describeTypeEntryProblem(e, n, r) {
-  let cause = r instanceof Error ? r.cause : undefined;
-  let h = typeof cause === "string" && cause !== "ENOENT";
-  let y = getErrnoCode(r) ?? (h ? cause : undefined);
-  let S = stripPrefix_2(`${e}: ${n}`, errorMessage(r));
-  let included = S.includes("resolves outside the plugin's folder");
-  return y !== undefined
-    ? `not readable (${y})`
+function describeTypeEntryProblem(pluginName, path, error) {
+  let cause = error instanceof Error ? error.cause : undefined;
+  let isStringCause = typeof cause === "string" && cause !== "ENOENT";
+  let errnoCode = getErrnoCode(error) ?? (isStringCause ? cause : undefined);
+  let message = stripPrefix_2(`${pluginName}: ${path}`, errorMessage(error));
+  let included = message.includes("resolves outside the plugin's folder");
+  return errnoCode !== undefined
+    ? `not readable (${errnoCode})`
     : included
       ? "resolves outside the plugin's folder"
-      : S.replaceAll(n, ".");
+      : message.replaceAll(path, ".");
 }
 //@ chunk-e6aww6q8.js:4147630-4147828 placement
-function dependentPlugins(e, n) {
-  let r = new Map();
-  let s = [e];
-  for (let h of s) {
-    let filtered = n.filter((S) => S.name !== e.name && !r.has(S.name) && findReverseDependents(h, S));
-    for (let S of filtered)
-      if (!r.has(S.name)) {
-        r.set(S.name, S);
-        s.push(S);
+function dependentPlugins(plugin, loaded) {
+  let dependents = new Map();
+  let queue = [plugin];
+  for (let candidate of queue) {
+    let filtered = loaded.filter(
+      (other) =>
+        other.name !== plugin.name && !dependents.has(other.name) && findReverseDependents(candidate, other),
+    );
+    for (let dependent of filtered)
+      if (!dependents.has(dependent.name)) {
+        dependents.set(dependent.name, dependent);
+        queue.push(dependent);
       }
   }
-  return [...r.values()];
+  return [...dependents.values()];
 }
 //@ chunk-e6aww6q8.js:4147828-4147982 placement
-function isUsableTypeName(e) {
+function isUsableTypeName(name) {
   let any = [CLAUDE_CODE, CLAUDE_CODE_TOOLS, CLAUDE_CODE_MCP, ...Object.values(TYPE_ROOT_FILES)].some(
-    (r) => r.toLowerCase() === e.toLowerCase(),
+    (reserved) => reserved.toLowerCase() === name.toLowerCase(),
   );
-  return e !== "" && e !== "." && e !== ".." && !any && !PLUGIN_NAME_FORBIDDEN_CHARS_RE.test(e);
+  return name !== "" && name !== "." && name !== ".." && !any && !PLUGIN_NAME_FORBIDDEN_CHARS_RE.test(name);
 }
 //@ chunk-e6aww6q8.js:4147982-4148363 placement
 /**
@@ -191,22 +198,23 @@ function isUsableTypeName(e) {
 async function collectTypeEntries(plugin, loaded) {
   return (
     await Promise.all(
-      dependentPlugins(plugin, loaded).map(async (r) => {
-        let types = r.manifest.types;
-        if (!((types !== undefined || r.isBuiltin !== true) && isUsableTypeName(r.name))) return [];
-        let y = types ?? TYPES_ENTRY;
-        let S = resolve_2(r.path, y);
-        return checkInsidePluginRoot(S, r.path, r.name).then(
-          (w) => [
+      dependentPlugins(plugin, loaded).map(async (dependent) => {
+        let types = dependent.manifest.types;
+        if (!((types !== undefined || dependent.isBuiltin !== true) && isUsableTypeName(dependent.name)))
+          return [];
+        let typesEntry = types ?? TYPES_ENTRY;
+        let resolved = resolve_2(dependent.path, typesEntry);
+        return checkInsidePluginRoot(resolved, dependent.path, dependent.name).then(
+          (checked) => [
             {
-              name: r.name,
-              real: w.real,
+              name: dependent.name,
+              real: checked.real,
             },
           ],
           (error) => {
             if (!(types === undefined && isRealPathWithinTeamDir_2(error)))
               logForDebugging(
-                `type root of ${plugin.name}: no entry for ${r.name}: ${y}: ${describeTypeEntryProblem(r.name, S, error)}`,
+                `type root of ${plugin.name}: no entry for ${dependent.name}: ${typesEntry}: ${describeTypeEntryProblem(dependent.name, resolved, error)}`,
               );
             return [];
           },
@@ -234,25 +242,31 @@ var TYPE_ROOT_COMPILER_OPTIONS = {
 };
 //@ chunk-e6aww6q8.js:4148640-4148869 placement
 function typeRootIncludes(plugin) {
-  let n = join(plugin.path, "hooks");
-  let r = plugin.modulePath === undefined ? undefined : resolve_2(plugin.modulePath);
-  let s = r !== undefined && !isWithinDir(n, r);
-  return [n, join(plugin.path, "types"), join(plugin.path, "tests"), ...(s ? [r] : [])].map((h) =>
-    relative(join(plugin.path, TYPES_DIR), h).split(sep).join("/"),
-  );
+  let hooksDir = join(plugin.path, "hooks");
+  let modulePath = plugin.modulePath === undefined ? undefined : resolve_2(plugin.modulePath);
+  let isModuleOutside = modulePath !== undefined && !isWithinDir(hooksDir, modulePath);
+  return [
+    hooksDir,
+    join(plugin.path, "types"),
+    join(plugin.path, "tests"),
+    ...(isModuleOutside ? [modulePath] : []),
+  ].map((dir) => relative(join(plugin.path, TYPES_DIR), dir).split(sep).join("/"));
 }
 //@ chunk-e6aww6q8.js:4148898-4148978 placement
 /**
  * 生成 tsconfig 扩展
  */
-var TSCONFIG_EXPORTS = `${jsonStringify(
-  {
-    extends: [".", ...TYPES_DIR.split(sep), TYPE_ROOT_FILES.tsconfig].join("/"),
-  },
-  null,
-  2,
-)}
+var TSCONFIG_EXPORTS; // deferred: uses jsonStringify (../../utils/slowOperations.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:4148898", () => {
+  TSCONFIG_EXPORTS = `${jsonStringify(
+    {
+      extends: [".", ...TYPES_DIR.split(sep), TYPE_ROOT_FILES.tsconfig].join("/"),
+    },
+    null,
+    2,
+  )}
 `;
+});
 //@ chunk-e6aww6q8.js:4148978-4149070 placement
 /**
  * 生成类型根 tsconfig
@@ -271,48 +285,48 @@ var TSCONFIG_CONTENT = (types, include) => `${jsonStringify(
 )}
 `;
 //@ chunk-e6aww6q8.js:4149070-4149201 placement
-async function makeRootTsconfig(e) {
-  return (await e.standing("jsconfig.json").then(
+async function makeRootTsconfig(fs) {
+  return (await fs.standing("jsconfig.json").then(
     () => true,
     () => false,
   ))
     ? false
-    : e.make(TYPE_ROOT_FILES.tsconfig, TSCONFIG_EXPORTS).then(
+    : fs.make(TYPE_ROOT_FILES.tsconfig, TSCONFIG_EXPORTS).then(
         () => true,
         () => false,
       );
 }
 //@ chunk-e6aww6q8.js:4149376-4149457 affinity
-var toStatInfo = (e) => ({
-  isFile: e.isFile(),
-  isFolder: e.isDirectory(),
-  bytes: Number(e.size),
+var toStatInfo = (stats) => ({
+  isFile: stats.isFile(),
+  isFolder: stats.isDirectory(),
+  bytes: Number(stats.size),
 });
 //@ chunk-e6aww6q8.js:4149656-4150109 sole-consumer
-var createFsOps = (e, typeRoot, under) => ({
+var createFsOps = (root, typeRoot, under) => ({
   typeRoot,
   under,
-  standing: async (s) => toStatInfo(await lstat(join(e, s))),
-  text: (s) => releaseLock_2(join(e, s)),
-  write: (s, h) => writeFileAtomic_2(join(e, s), h),
-  make: (s, h) => writeNewFile(join(e, s), h),
-  makeFolder: async (s) => {
-    await mkdir(join(e, s));
+  standing: async (relativePath) => toStatInfo(await lstat(join(root, relativePath))),
+  text: (relativePath) => releaseLock_2(join(root, relativePath)),
+  write: (relativePath, text) => writeFileAtomic_2(join(root, relativePath), text),
+  make: (relativePath, text) => writeNewFile(join(root, relativePath), text),
+  makeFolder: async (relativePath) => {
+    await mkdir(join(root, relativePath));
   },
-  removeItself: (s) =>
-    rm_2(join(e, s), {
+  removeItself: (relativePath) =>
+    rm_2(join(root, relativePath), {
       force: true,
     }),
-  removeFolder: (s) => rmdir(join(e, s)),
-  removeAll: (s) =>
-    rm_2(join(e, s), {
+  removeFolder: (relativePath) => rmdir(join(root, relativePath)),
+  removeAll: (relativePath) =>
+    rm_2(join(root, relativePath), {
       force: true,
       recursive: true,
     }),
-  target: (s) => readlink(join(e, s)),
-  link: (s, h) => symlink(s, join(e, h)),
-  rename: async (s, h) => {
-    await retryFsOp(join(e, s), join(e, h));
+  target: (relativePath) => readlink(join(root, relativePath)),
+  link: (from, relativePath) => symlink(from, join(root, relativePath)),
+  rename: async (from, to) => {
+    await retryFsOp(join(root, from), join(root, to));
   },
   close: () => Promise.resolve(),
 });
@@ -321,24 +335,27 @@ function tryCreateExclusive_2(lock) {
   if (getErrnoCode(lock) !== "EEXIST") throw lock;
 }
 //@ chunk-e6aww6q8.js:4150251-4150433 placement
-async function makeTypeRootFolder(e) {
-  let n = await realpath(e);
-  let r = join(n, dirname(TYPES_DIR));
-  await mkdir(r).catch(tryCreateExclusive_2);
-  if ((await realpath(r)) !== r) return;
-  let h = join(n, TYPES_DIR);
-  await mkdir(h).catch(tryCreateExclusive_2);
-  return (await realpath(h)) === h ? h : undefined;
+async function makeTypeRootFolder(path) {
+  let realPath = await realpath(path);
+  let typesDir = join(realPath, dirname(TYPES_DIR));
+  await mkdir(typesDir).catch(tryCreateExclusive_2);
+  if ((await realpath(typesDir)) !== typesDir) return;
+  let typeRoot = join(realPath, TYPES_DIR);
+  await mkdir(typeRoot).catch(tryCreateExclusive_2);
+  return (await realpath(typeRoot)) === typeRoot ? typeRoot : undefined;
 }
 //@ chunk-e6aww6q8.js:4150462-4150494 placement
-var joined_2 = TYPES_DIR.split(sep).join("/");
+var joined_2; // deferred: uses TYPES_DIR of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:4150462", () => {
+  joined_2 = TYPES_DIR.split(sep).join("/");
+});
 //@ chunk-e6aww6q8.js:4150494-4150642 placement
-async function openPathTypeRoot(e, n) {
-  let r = await realpath(e);
-  logForDebugging(`type root under ${r} laid by path: ${n}`);
-  let typeRoot = await makeTypeRootFolder(e);
+async function openPathTypeRoot(path, reason) {
+  let realPath = await realpath(path);
+  logForDebugging(`type root under ${realPath} laid by path: ${reason}`);
+  let typeRoot = await makeTypeRootFolder(path);
   if (typeRoot === undefined) return;
-  return createFsOps(r, typeRoot, joined_2);
+  return createFsOps(realPath, typeRoot, joined_2);
 }
 //@ chunk-e6aww6q8.js:4150784-4150796 placement
 /**
@@ -351,26 +368,26 @@ var TYPE_ROOT_MODE = 438;
  */
 var typeRootDirMode = () => TYPE_ROOT_MODE & ~process.umask();
 //@ chunk-e6aww6q8.js:4150829-4150944 placement
-function mapErrnoTo(e, code) {
-  return (r) => {
-    throw getErrnoCode(r) === e
+function mapErrnoTo(errno, code) {
+  return (error) => {
+    throw getErrnoCode(error) === errno
       ? Object.assign(
           Error("the held folder refused", {
-            cause: r,
+            cause: error,
           }),
           {
             code,
           },
         )
-      : r;
+      : error;
   };
 }
 //@ chunk-e6aww6q8.js:4150944-4151038 placement
 /**
  * 写类型根目录
  */
-async function writeTypeRoots(e, n, r) {
-  await retryTransient(() => e.rename(n, r).catch(mapErrnoTo("WORKING_FILE_HELD", "EBUSY")));
+async function writeTypeRoots(fs, from, to) {
+  await retryTransient(() => fs.rename(from, to).catch(mapErrnoTo("WORKING_FILE_HELD", "EBUSY")));
 }
 //@ chunk-e6aww6q8.js:4151038-4151790 placement
 /**
@@ -379,35 +396,38 @@ async function writeTypeRoots(e, n, r) {
 var createAnchorFsOps = (treeAnchor, typeRoot, under) => ({
   typeRoot,
   under,
-  standing: async (s) => toStatInfo(await treeAnchor.lstat(s)),
-  text: async (s) => {
-    let h = await treeAnchor.open(s, constants.O_RDONLY | constants.O_NONBLOCK);
+  standing: async (relativePath) => toStatInfo(await treeAnchor.lstat(relativePath)),
+  text: async (relativePath) => {
+    let handle = await treeAnchor.open(relativePath, constants.O_RDONLY | constants.O_NONBLOCK);
     try {
-      return (await h.readFile()).toString("utf8");
+      return (await handle.readFile()).toString("utf8");
     } finally {
-      await h.close();
+      await handle.close();
     }
   },
-  write: async (s, h) => {
-    let y = `${s}.${randomUUID()}`;
-    await treeAnchor.create(y, Buffer.from(h), typeRootDirMode());
-    await writeTypeRoots(treeAnchor, y, s).catch(async (error) => {
-      await treeAnchor.unlink(y).catch(() => {});
+  write: async (relativePath, text) => {
+    let tempPath = `${relativePath}.${randomUUID()}`;
+    await treeAnchor.create(tempPath, Buffer.from(text), typeRootDirMode());
+    await writeTypeRoots(treeAnchor, tempPath, relativePath).catch(async (error) => {
+      await treeAnchor.unlink(tempPath).catch(() => {});
       throw error;
     });
   },
-  make: (s, h) =>
-    treeAnchor.create(s, Buffer.from(h), typeRootDirMode()).catch(mapErrnoTo("EISDIR", "EEXIST")),
-  makeFolder: (s) => treeAnchor.mkdirp(s).catch(mapErrnoTo("WORKING_PARENT_NOT_DIRECTORY", "EEXIST")),
-  removeItself: (s) =>
-    treeAnchor.unlink(s).catch((error) => {
+  make: (relativePath, text) =>
+    treeAnchor
+      .create(relativePath, Buffer.from(text), typeRootDirMode())
+      .catch(mapErrnoTo("EISDIR", "EEXIST")),
+  makeFolder: (relativePath) =>
+    treeAnchor.mkdirp(relativePath).catch(mapErrnoTo("WORKING_PARENT_NOT_DIRECTORY", "EEXIST")),
+  removeItself: (relativePath) =>
+    treeAnchor.unlink(relativePath).catch((error) => {
       if (!isENOENT(error)) throw error;
     }),
-  removeFolder: (s) => treeAnchor.rmdir(s),
-  removeAll: (s) => treeAnchor.removeTree(s),
-  target: (s) => treeAnchor.readlink(s),
-  link: (s, h) => treeAnchor.symlink(s, h),
-  rename: (s, h) => writeTypeRoots(treeAnchor, s, h),
+  removeFolder: (relativePath) => treeAnchor.rmdir(relativePath),
+  removeAll: (relativePath) => treeAnchor.removeTree(relativePath),
+  target: (relativePath) => treeAnchor.readlink(relativePath),
+  link: (from, relativePath) => treeAnchor.symlink(from, relativePath),
+  rename: (from, to) => writeTypeRoots(treeAnchor, from, to),
   close: () => treeAnchor.close(),
 });
 //@ chunk-e6aww6q8.js:4151790-4152176 placement
@@ -415,11 +435,11 @@ var createAnchorFsOps = (treeAnchor, typeRoot, under) => ({
  * 打开基于目录锚点的类型根（不可用时返回原因）。
  */
 async function openAnchoredTypeRoot(path) {
-  let n = await realpath(path);
-  let { openTreeAnchor } = await import("./chunk-ejkghqj9.js");
+  let realPath = await realpath(path);
+  let { openTreeAnchor } = await import("../../utils/fsAnchor/treeAnchor.js");
   let treeAnchor = await openTreeAnchor(await lazyDeviceTreeHost(), {
     gitRoot: path,
-    realRoot: n,
+    realRoot: realPath,
   });
   if ("unavailable" in treeAnchor)
     return openPathTypeRoot(path, `this machine holds no folder open (${treeAnchor.unavailable})`);
@@ -431,7 +451,7 @@ async function openAnchoredTypeRoot(path) {
       throw error;
     },
   ))
-    ? createAnchorFsOps(treeAnchor, join(n, TYPES_DIR), joined_2)
+    ? createAnchorFsOps(treeAnchor, join(realPath, TYPES_DIR), joined_2)
     : undefined;
 }
 //@ chunk-e6aww6q8.js:4152176-4152217 placement
@@ -445,91 +465,91 @@ var isFchmodError = (error) => isSyscallError(error) && error.syscall === "fchmo
  */
 var MAX_TSCONFIG_BYTES = 262144;
 //@ chunk-e6aww6q8.js:4152286-4152536 placement
-async function readTsconfigTypes(e) {
-  let n = `${e.under}/${TYPE_ROOT_FILES.tsconfig}`;
-  let r = await e.standing(n).then(
-    (h) => h.isFile && h.bytes <= MAX_TSCONFIG_BYTES,
+async function readTsconfigTypes(fs) {
+  let tsconfigPath = `${fs.under}/${TYPE_ROOT_FILES.tsconfig}`;
+  let isReadable = await fs.standing(tsconfigPath).then(
+    (stat) => stat.isFile && stat.bytes <= MAX_TSCONFIG_BYTES,
     () => false,
   );
-  let s = isApplicable().safeParse(
-    r
-      ? await e
-          .text(n)
-          .then((h) => jsonParse(h))
+  let parsed = isApplicable().safeParse(
+    isReadable
+      ? await fs
+          .text(tsconfigPath)
+          .then((text) => jsonParse(text))
           .catch(() => {
             return;
           })
       : undefined,
   );
-  return s.success ? s.data.compilerOptions.types : [];
+  return parsed.success ? parsed.data.compilerOptions.types : [];
 }
 //@ chunk-e6aww6q8.js:4152644-4152905 placement
 /**
  * 不跟随链接地读取类型文件（限大小、必须是常规文件）。
  */
-async function readTypeFileCapped(e) {
-  let n = await open(e, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS);
+async function readTypeFileCapped(path) {
+  let handle = await open(path, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS);
   try {
-    let stats = await n.stat();
+    let stats = await handle.stat();
     if (!(stats.isFile() && stats.size <= MAX_TSCONFIG_BYTES))
       throw Error("is over the size cap, or not a regular file, and was not read");
     return stripBom(
-      await n.readFile({
+      await handle.readFile({
         encoding: "utf8",
       }),
     );
   } finally {
-    await n.close();
+    await handle.close();
   }
 }
 //@ chunk-e6aww6q8.js:4152905-4153157 placement
 /**
  * 内容不同时才写文件（目标是目录则先删），返回是否写入。
  */
-async function writeIfChanged(e, n, r) {
-  let s = await e.standing(n).catch(() => {
+async function writeIfChanged(fs, relativePath, text) {
+  let existing = await fs.standing(relativePath).catch(() => {
     return;
   });
-  if (s !== undefined && !s.isFile) await e.removeAll(n);
+  if (existing !== undefined && !existing.isFile) await fs.removeAll(relativePath);
   if (
-    s !== undefined &&
-    s.isFile &&
-    s.bytes === Buffer.byteLength(r) &&
-    (await e.text(n).catch(() => {
+    existing !== undefined &&
+    existing.isFile &&
+    existing.bytes === Buffer.byteLength(text) &&
+    (await fs.text(relativePath).catch(() => {
       return;
-    })) === r
+    })) === text
   )
     return false;
-  await e.write(n, r);
+  await fs.write(relativePath, text);
   return true;
 }
 //@ chunk-e6aww6q8.js:4153157-4153417 placement
-async function linkOrCopyTypeEntry(e, n, real) {
+async function linkOrCopyTypeEntry(fs, relativePath, path) {
   if (
-    (await e.target(n).catch(() => {
+    (await fs.target(relativePath).catch(() => {
       return;
-    })) === real
+    })) === path
   )
     return "kept";
-  let h = `${n}.${randomUUID()}`;
+  let tempPath = `${relativePath}.${randomUUID()}`;
   if (
-    await e
-      .link(real, h)
-      .then(() => e.rename(h, n))
+    await fs
+      .link(path, tempPath)
+      .then(() => fs.rename(tempPath, relativePath))
       .then(
         () => true,
         () => false,
       )
   )
     return "linked";
-  await e.removeItself(h);
-  return (await writeIfChanged(e, n, await readTypeFileCapped(real))) ? "copied" : "kept";
+  await fs.removeItself(tempPath);
+  return (await writeIfChanged(fs, relativePath, await readTypeFileCapped(path))) ? "copied" : "kept";
 }
 //@ chunk-e6aww6q8.js:4153417-4153652 placement
-async function ensureTypeFolder(e, n) {
-  let r = `${e.under}/${n}`;
+async function ensureTypeFolder(fs, name) {
+  let folderPath = `${fs.under}/${name}`;
   if (
-    await e.makeFolder(r).then(
+    await fs.makeFolder(folderPath).then(
       () => true,
       (error) => {
         if (getErrnoCode(error) === "EEXIST") return false;
@@ -537,88 +557,95 @@ async function ensureTypeFolder(e, n) {
       },
     )
   )
-    return r;
-  let { isFolder } = await e.standing(r);
+    return folderPath;
+  let { isFolder } = await fs.standing(folderPath);
   if (!isFolder) {
-    await e.removeItself(r);
-    await e.makeFolder(r);
+    await fs.removeItself(folderPath);
+    await fs.makeFolder(folderPath);
   }
-  return r;
+  return folderPath;
 }
 //@ chunk-e6aww6q8.js:4153652-4153963 placement
 /**
  * 删除类型根中已不需要的条目。
  */
-async function removeStaleTypeEntries(e, n) {
-  let filtered = (await readTsconfigTypes(e)).filter((s) => isUsableTypeName(s) && !n.includes(s));
+async function removeStaleTypeEntries(fs, keep) {
+  let filtered = (await readTsconfigTypes(fs)).filter(
+    (name) => isUsableTypeName(name) && !keep.includes(name),
+  );
   await Promise.all(
-    filtered.map(async (s) => {
-      let h = `${e.under}/${s}`;
+    filtered.map(async (name) => {
+      let entryPath = `${fs.under}/${name}`;
       if (
-        !(await e.standing(h).then(
-          (S) => S.isFolder,
+        !(await fs.standing(entryPath).then(
+          (stat) => stat.isFolder,
           () => false,
         ))
       ) {
-        await e.removeItself(h);
+        await fs.removeItself(entryPath);
         return;
       }
-      await e.removeItself(`${h}/${INDEX_D_TS}`);
-      await e.removeFolder(h).catch(() => {});
+      await fs.removeItself(`${entryPath}/${INDEX_D_TS}`);
+      await fs.removeFolder(entryPath).catch(() => {});
     }),
   );
   return filtered;
 }
 //@ chunk-e6aww6q8.js:4153963-4154204 placement
-async function makeIfAbsent(e, n, r) {
-  let s = () =>
-    e.make(n, r).then(
+async function makeIfAbsent(fs, relativePath, text) {
+  let writeOnce = () =>
+    fs.make(relativePath, text).then(
       () => true,
       (error) => {
         if (getErrnoCode(error) === "EEXIST") return false;
         throw error;
       },
     );
-  if (await s()) return true;
-  let h = await e.standing(n).catch(() => {
+  if (await writeOnce()) return true;
+  let existing = await fs.standing(relativePath).catch(() => {
     return;
   });
-  if (!(h !== undefined && !h.isFile)) return false;
-  await e.removeAll(n);
-  return s();
+  if (!(existing !== undefined && !existing.isFile)) return false;
+  await fs.removeAll(relativePath);
+  return writeOnce();
 }
 //@ chunk-e6aww6q8.js:4154204-4155227 placement
 /**
  * 为 mod 开发写出类型根目录（index.d.ts 等），未变时保留原文件。
  */
-async function writeTypeRoots_2(e, { plugin, loaded, running: { version, tools } }) {
-  if (e === undefined) return;
+async function writeTypeRoots_2(fs, { plugin, loaded, running: { version, tools } }) {
+  if (fs === undefined) return;
   try {
     let { tsconfig, gitignore } = TYPE_ROOT_FILES;
-    let w = await writeIfChanged(
-      e,
-      `${e.under}/${gitignore}`,
+    let gitignoreWritten = await writeIfChanged(
+      fs,
+      `${fs.under}/${gitignore}`,
       `*
 `,
     );
     let typeEntries = await collectTypeEntries(plugin, loaded);
-    let types = [
+    let typeRootEntries = [
       CLAUDE_CODE,
       CLAUDE_CODE_TOOLS,
       CLAUDE_CODE_MCP,
       ...typeEntries.map((typeEntry) => typeEntry.name),
     ];
-    let q = await removeStaleTypeEntries(e, types);
-    let Z = async (Je) => `${await ensureTypeFolder(e, Je)}/${INDEX_D_TS}`;
-    let Se = await import("./chunk-72n15jmc.js");
-    let ke = await writeIfChanged(e, await Z(CLAUDE_CODE), Se.coreDeclarationsOf(version));
-    let we = async (Je, nt, pt) => (pt ? writeIfChanged : makeIfAbsent)(e, await Z(Je), nt);
-    let Ee = await we(
+    let removed = await removeStaleTypeEntries(fs, typeRootEntries);
+    let indexPathOf = async (name) => `${await ensureTypeFolder(fs, name)}/${INDEX_D_TS}`;
+    let declarations = await import("../hooksModules/PLUGIN_DECLARATIONS_TEXT.lazy.js");
+    let coreWritten = await writeIfChanged(
+      fs,
+      await indexPathOf(CLAUDE_CODE),
+      declarations.coreDeclarationsOf(version),
+    );
+    let writeToolTypes = async (name, text, overwrite) =>
+      (overwrite ? writeIfChanged : makeIfAbsent)(fs, await indexPathOf(name), text);
+    let builtinWritten = await writeToolTypes(
       CLAUDE_CODE_TOOLS,
       BUILTIN_TOOL_INPUTS_HEADER(tools.builtin ?? []),
       tools.builtin !== undefined,
     );
-    let Ae = await we(
+    let mcpWritten = await writeToolTypes(
       CLAUDE_CODE_MCP,
       MCP_TOOL_INPUTS_HEADER(tools.mcp ?? []),
       tools.replacesMcp && (tools.mcp ?? []).length > 0,
@@ -626,47 +653,49 @@ async function writeTypeRoots_2(e, { plugin, loaded, running: { version, tools }
     let results = await Promise.all(
       typeEntries.map(
         async (typeEntry) =>
-          (await linkOrCopyTypeEntry(e, await Z(typeEntry.name), typeEntry.real)) !== "kept",
+          (await linkOrCopyTypeEntry(fs, await indexPathOf(typeEntry.name), typeEntry.real)) !== "kept",
       ),
     );
-    let Me = await writeIfChanged(
-      e,
-      `${e.under}/${tsconfig}`,
-      TSCONFIG_CONTENT(types, typeRootIncludes(plugin)),
+    let tsconfigWritten = await writeIfChanged(
+      fs,
+      `${fs.under}/${tsconfig}`,
+      TSCONFIG_CONTENT(typeRootEntries, typeRootIncludes(plugin)),
     );
-    let rootTsconfig = await makeRootTsconfig(e);
+    let rootTsconfig = await makeRootTsconfig(fs);
     let joined = TYPES_DIR.split(sep).join("/");
-    let lt = (Je) => `${joined}/${Je}/${INDEX_D_TS}`;
+    let writtenPathOf = (name) => `${joined}/${name}/${INDEX_D_TS}`;
     return {
-      typeRoot: e.typeRoot,
-      entries: types,
+      typeRoot: fs.typeRoot,
+      entries: typeRootEntries,
       written: [
-        ...q.map((Je) => `${joined}/${Je}`),
-        ...(ke ? [lt(CLAUDE_CODE)] : []),
-        ...(Ee ? [lt(CLAUDE_CODE_TOOLS)] : []),
-        ...(Ae ? [lt(CLAUDE_CODE_MCP)] : []),
-        ...typeEntries.flatMap((typeEntry, nt) => (results[nt] === true ? [lt(typeEntry.name)] : [])),
-        ...(Me ? [`${joined}/${tsconfig}`] : []),
-        ...(w ? [`${joined}/${gitignore}`] : []),
+        ...removed.map((name) => `${joined}/${name}`),
+        ...(coreWritten ? [writtenPathOf(CLAUDE_CODE)] : []),
+        ...(builtinWritten ? [writtenPathOf(CLAUDE_CODE_TOOLS)] : []),
+        ...(mcpWritten ? [writtenPathOf(CLAUDE_CODE_MCP)] : []),
+        ...typeEntries.flatMap((typeEntry, index) =>
+          results[index] === true ? [writtenPathOf(typeEntry.name)] : [],
+        ),
+        ...(tsconfigWritten ? [`${joined}/${tsconfig}`] : []),
+        ...(gitignoreWritten ? [`${joined}/${gitignore}`] : []),
         ...(rootTsconfig ? [tsconfig] : []),
       ],
     };
   } finally {
-    await e.close();
+    await fs.close();
   }
 }
 //@ chunk-e6aww6q8.js:4155227-4155448 placement
-async function layTypeRoots(e, loaded, running) {
-  let s = {
-    plugin: e,
-    loaded,
+async function layTypeRoots(loaded, loaded_2, running) {
+  let rootArgs = {
+    plugin: loaded,
+    loaded: loaded_2,
     running,
   };
-  return writeTypeRoots_2(await openAnchoredTypeRoot(e.path), s).catch(async (error) => {
+  return writeTypeRoots_2(await openAnchoredTypeRoot(loaded.path), rootArgs).catch(async (error) => {
     if (!isFchmodError(error)) throw error;
     return writeTypeRoots_2(
-      await openPathTypeRoot(e.path, "this volume gives a file made in a held folder no mode"),
-      s,
+      await openPathTypeRoot(loaded.path, "this volume gives a file made in a held folder no mode"),
+      rootArgs,
     );
   });
 }
@@ -674,9 +703,9 @@ async function layTypeRoots(e, loaded, running) {
 /**
  * 为一个开发中的插件写出类型根，记录写了哪些文件或失败原因。
  */
-async function writePluginTypeRoot(e, loaded, tools) {
+async function writePluginTypeRoot(loaded, loaded_2, tools) {
   try {
-    let s = await layTypeRoots(e, loaded, {
+    let written = await layTypeRoots(loaded, loaded_2, {
       version: {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -690,42 +719,44 @@ async function writePluginTypeRoot(e, loaded, tools) {
       }.VERSION,
       tools,
     });
-    if (s === undefined) {
-      logForDebugging(`type root of ${e.name} not laid: its path leads outside the mod's folder`);
+    if (written === undefined) {
+      logForDebugging(`type root of ${loaded.name} not laid: its path leads outside the mod's folder`);
       return;
     }
-    if (s.written.length > 0) logFeatureOk("plugin_function_hooks_type_root");
+    if (written.written.length > 0) logFeatureOk("plugin_function_hooks_type_root");
     logForDebugging(
-      `type root of ${e.name} at ${s.typeRoot}: entries ${s.entries.join(", ")}; wrote ` +
-        (s.written.join(", ") || "nothing"),
+      `type root of ${loaded.name} at ${written.typeRoot}: entries ${written.entries.join(", ")}; wrote ` +
+        (written.written.join(", ") || "nothing"),
     );
   } catch (error) {
     let errnoCode = getErrnoCode(error);
-    let y = errorMessage(error);
-    let S = errnoCode === undefined || y.includes(errnoCode);
+    let message = errorMessage(error);
+    let hasCode = errnoCode === undefined || message.includes(errnoCode);
     logFeatureBad("plugin_function_hooks_type_root", "lay_failed");
-    logForDebugging(`type root of ${e.name} not laid: ` + (S ? y : `${errnoCode}: ${y}`));
+    logForDebugging(
+      `type root of ${loaded.name} not laid: ` + (hasCode ? message : `${errnoCode}: ${message}`),
+    );
   }
 }
 //@ chunk-e6aww6q8.js:4156447-4156522 placement
 /**
  * 只留被监视目录下的类型根
  */
-function filterWatchedTypeRoots(e) {
-  let n = filterWatchedPluginDirs(inlinePlugins());
-  return e.filter((r) => folderWatchTargets([r], n).length > 0);
+function filterWatchedTypeRoots(plugins) {
+  let watchedDirs = filterWatchedPluginDirs(inlinePlugins());
+  return plugins.filter((plugin) => folderWatchTargets([plugin], watchedDirs).length > 0);
 }
 //@ chunk-e6aww6q8.js:4156522-4156714 placement
-function refreshTypeRootAfterReload(e) {
-  let n = (r) => r.name === e;
+function refreshTypeRootAfterReload(pluginName) {
+  let isPlugin = (plugin) => plugin.name === pluginName;
   return pluginDirQueue(async () => {
-    if (!filterWatchedTypeRoots(watchedPluginRecords.get() ?? []).some(n)) return;
+    if (!filterWatchedTypeRoots(watchedPluginRecords.get() ?? []).some(isPlugin)) return;
     let tools = await readToolTypes(true);
-    let h = watchedPluginRecords.get() ?? [];
+    let plugins = watchedPluginRecords.get() ?? [];
     await Promise.all(
-      filterWatchedTypeRoots(h)
-        .filter(n)
-        .map((y) => writePluginTypeRoot(y, h, tools)),
+      filterWatchedTypeRoots(plugins)
+        .filter(isPlugin)
+        .map((plugin) => writePluginTypeRoot(plugin, plugins, tools)),
     );
   });
 }
@@ -734,14 +765,15 @@ function refreshTypeRootAfterReload(e) {
  * 创建并注册 plugin-dir 监视器（重载后刷新类型根），注册清理。
  */
 function startPluginDirWatcher() {
-  let e = runPluginDirWatch({
+  let watcher = runPluginDirWatch({
     watchDir: startPluginWatch,
     filesOf: loadedFilesOf,
     stampOf: readManifestStamp,
     loadedStampOf: bundledFileStamp,
     rereadManifest: retargetPluginModule,
     admit: passesConfigChangeGate,
-    reload: (n) => reloadHooksModule(n).finally(() => refreshTypeRootAfterReload(n)),
+    reload: (pluginName) =>
+      reloadHooksModule(pluginName).finally(() => refreshTypeRootAfterReload(pluginName)),
     tell: uiLog,
     debounceMs: RELOAD_SETTLE_MS,
     burst: RELOAD_BACKOFF,
@@ -754,9 +786,9 @@ function startPluginDirWatcher() {
     plainLine: modsNoticeFor,
     plainWording: presenceForPath,
   });
-  reloadControllerSlot.set(e);
-  registerCleanup(() => e.dispose());
-  return e;
+  reloadControllerSlot.set(watcher);
+  registerCleanup(() => watcher.dispose());
+  return watcher;
 }
 export {
   TYPES_ENTRY,

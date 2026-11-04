@@ -48,6 +48,7 @@ import { errorMessage } from "../utils/errors.js";
 import { logFeatureBad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { jsonStringify } from "../utils/slowOperations.js";
 import { logError } from "../utils/log.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-0jk9tmkx.js:1055-1214 fingerprint = TRUSTED_DEVICE_GATE (0.508)
 /**
@@ -73,17 +74,21 @@ class TrustedDeviceState {
 /**
  * 每宿主的可信设备状态，以及自动注册成功后的提示文字。
  */
-var trustedDeviceStates = new HostScoped(() => new TrustedDeviceState());
-var AUTOMATIC_ENROLLMENT_NOTICE =
-  "This computer was enrolled as a trusted device for your account (you will also get an email). If you did not expect this, review your devices in claude.ai settings.";
+var trustedDeviceStates; // deferred: uses TrustedDeviceState of its import cycle while loading; runs once the cycle is complete
+var AUTOMATIC_ENROLLMENT_NOTICE;
+deferInit("chunk-0jk9tmkx.js:1370", () => {
+  trustedDeviceStates = new HostScoped(() => new TrustedDeviceState());
+  AUTOMATIC_ENROLLMENT_NOTICE =
+    "This computer was enrolled as a trusted device for your account (you will also get an email). If you did not expect this, review your devices in claude.ai settings.";
+});
 //@ chunk-0jk9tmkx.js:1564-1684 facade-majority
 /**
  * 取出并清除"自动注册提示待显示"标记。
  */
 function takeAutomaticEnrollmentNotice() {
-  let e = trustedDeviceStates.of(getRootSession().host);
-  let automaticEnrollmentNoticePending = e.automaticEnrollmentNoticePending;
-  e.automaticEnrollmentNoticePending = false;
+  let state = trustedDeviceStates.of(getRootSession().host);
+  let automaticEnrollmentNoticePending = state.automaticEnrollmentNoticePending;
+  state.automaticEnrollmentNoticePending = false;
   return automaticEnrollmentNoticePending;
 }
 //@ chunk-0jk9tmkx.js:1684-1767 facade-majority
@@ -117,11 +122,11 @@ function isProactiveEnrollmentDisabled() {
 }
 //@ chunk-0jk9tmkx.js:2021-2072 layout
 function loadPolicyLimitsModule() {
-  return require("./chunk-qchbrsbw.js");
+  return require("../services/policyLimits/DefaultPolicyLimitsClientSlot.lazy.js");
 }
 //@ chunk-0jk9tmkx.js:2072-2123 layout
 function loadPolicyVerdictModule() {
-  return require("./chunk-sbc4zy7a.js");
+  return require("../services/policyLimits/CLIENT_POLICY_KEYS.lazy.js");
 }
 //@ chunk-0jk9tmkx.js:2123-2188 facade-majority
 /**
@@ -185,11 +190,11 @@ function serviceRouteSentence(target) {
  * 云会话向 Remote Control 会话发消息但缺少可信设备时的拒绝文案。
  */
 function formatUnreachableElevatedRefusal(sessionName, target) {
-  let r = `Nothing was sent: Remote Control session '${sessionName}' is`;
-  let o = serviceRouteSentence(target);
-  return o === undefined
-    ? `${r} ${CLOUD_CANNOT_REACH_ELEVATED_HINT}.`
-    : `${r} ${CLOUD_NO_DEVICE_REASON}. ${o}`;
+  let prefix = `Nothing was sent: Remote Control session '${sessionName}' is`;
+  let routeSentence = serviceRouteSentence(target);
+  return routeSentence === undefined
+    ? `${prefix} ${CLOUD_CANNOT_REACH_ELEVATED_HINT}.`
+    : `${prefix} ${CLOUD_NO_DEVICE_REASON}. ${routeSentence}`;
 }
 //@ chunk-0jk9tmkx.js:3192-3361 facade-majority
 /**
@@ -217,19 +222,19 @@ var TENGU_BRIDGE_ATTESTATION_ENFORCE_CONFIG = "tengu_bridge_attestation_enforce_
 //@ chunk-0jk9tmkx.js:3437-3633 layout
 function readAttestationEnforceConfig() {
   try {
-    let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
+    let { value: config, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
       TENGU_BRIDGE_ATTESTATION_ENFORCE_CONFIG,
       {},
     );
     switch (source) {
       case "payload":
         return hasGrowthBookUsedNonDefaultHost()
-          ? mergeAttestationConfig(e, DEFAULT_ATTESTATION_CONFIG())
-          : parseAttestationEnforceConfig(e);
+          ? mergeAttestationConfig(config, DEFAULT_ATTESTATION_CONFIG())
+          : parseAttestationEnforceConfig(config);
       case "disk":
-        return mergeAttestationConfig(e, DEFAULT_ATTESTATION_CONFIG());
+        return mergeAttestationConfig(config, DEFAULT_ATTESTATION_CONFIG());
       case "override":
-        return mergeAttestationConfig(e, attestationConfigFromOverride());
+        return mergeAttestationConfig(config, attestationConfigFromOverride());
       default:
         return attestationConfigFromOverride();
     }
@@ -252,10 +257,13 @@ function DEFAULT_ATTESTATION_CONFIG() {
   };
 }
 //@ chunk-0jk9tmkx.js:3755-3834 layout
-function mergeAttestationConfig(e, n) {
+function mergeAttestationConfig(config, fallback) {
   return {
-    ...n,
-    acceptLevel: weakerAttestationLevel(parseAttestationEnforceConfig(e).acceptLevel, n.acceptLevel),
+    ...fallback,
+    acceptLevel: weakerAttestationLevel(
+      parseAttestationEnforceConfig(config).acceptLevel,
+      fallback.acceptLevel,
+    ),
   };
 }
 //@ chunk-0jk9tmkx.js:3834-3964 facade-majority
@@ -263,10 +271,10 @@ function mergeAttestationConfig(e, n) {
  * 读取已存储的设备 token（结果按宿主缓存）。
  */
 function readStoredTrustedDeviceToken() {
-  let e = trustedDeviceStates.of(getRootSession().host);
-  if (e.storedTokenRead !== undefined) return e.storedTokenRead;
+  let state = trustedDeviceStates.of(getRootSession().host);
+  if (state.storedTokenRead !== undefined) return state.storedTokenRead;
   let storedToken = readStoredToken();
-  e.storedTokenRead = storedToken;
+  state.storedTokenRead = storedToken;
   return storedToken;
 }
 //@ chunk-0jk9tmkx.js:3964-4094 fingerprint = readStoredToken (0.831)
@@ -301,8 +309,8 @@ async function isTrustedDeviceUnenrolled() {
  */
 async function getTrustedDeviceBlocker() {
   if (!(await isTrustedDeviceUnenrolled())) return null;
-  let e = nullStub3();
-  if (e !== null) return e;
+  let stub = nullStub3();
+  if (stub !== null) return stub;
   if (isProactiveEnrollmentDisabled()) return PROACTIVE_ENROLLMENT_DISABLED_MESSAGE;
   return "Your organization requires Trusted Devices for Remote Control, but this device is not enrolled. Please run `/login` in Claude Code to enroll this device.";
 }
@@ -319,9 +327,9 @@ async function preflightTrustedDeviceBlocking(credentials) {
 /**
  * 日志：untrusted_device 被识别为某种拒绝，不重新注册。
  */
-function logRefusalWithoutEnrollment(e, n) {
+function logRefusalWithoutEnrollment(label, refusal) {
   logForDebugging(
-    `${e} untrusted_device read as ${n.kind}${"subReason" in n ? ` (sub_reason ${printableName(n.subReason, 64)})` : ""}; not re-enrolling`,
+    `${label} untrusted_device read as ${refusal.kind}${"subReason" in refusal ? ` (sub_reason ${printableName(refusal.subReason, 64)})` : ""}; not re-enrolling`,
   );
 }
 //@ chunk-0jk9tmkx.js:4683-4735 facade-majority
@@ -340,16 +348,16 @@ async function recoverFromUntrustedDevice(refusedToken, credentials) {
   clearTrustedDeviceTokenCache();
   let token = await getTrustedDeviceToken();
   if (!token || token === refusedToken) {
-    let o = await enrollmentAfterRefusalHold(token);
-    let y = trustedDeviceStates.of(getRootSession().host);
-    if (o !== "none")
+    let hold = await enrollmentAfterRefusalHold(token);
+    let state = trustedDeviceStates.of(getRootSession().host);
+    if (hold !== "none")
       logForDebugging(
-        o === "recent"
+        hold === "recent"
           ? "[trusted-device] The refused device token is one an earlier refusal enrolled; not enrolling again"
           : "[trusted-device] The stored time of the last enrollment after a refusal is unusable; not enrolling until a sign-in clears it",
       );
-    else if (Date.now() - y.lastEnrollAttemptAtMs >= ENROLL_THROTTLE_MS) {
-      y.lastEnrollAttemptAtMs = Date.now();
+    else if (Date.now() - state.lastEnrollAttemptAtMs >= ENROLL_THROTTLE_MS) {
+      state.lastEnrollAttemptAtMs = Date.now();
       await enrollTrustedDevice({
         trigger: "server_denied",
         credentials,
@@ -384,9 +392,9 @@ async function enrollmentAfterRefusalHold(token) {
  * 刷新设备 token 后用新 token 重放一次请求。
  */
 async function withUntrustedDeviceRecovery(refusedToken, retry, credentials) {
-  let o = await recoverFromUntrustedDevice(refusedToken, credentials);
-  if (!o) return;
-  return retry(o);
+  let freshToken = await recoverFromUntrustedDevice(refusedToken, credentials);
+  if (!freshToken) return;
+  return retry(freshToken);
 }
 //@ chunk-0jk9tmkx.js:5733-6040 facade-majority
 /**
@@ -449,7 +457,7 @@ async function trustedDeviceTokenForBind(credentials) {
  * 登出/换号时清除安全存储里的设备 token（非一方或非订阅时走另一清理）。
  */
 function clearTrustedDeviceToken() {
-  let { isClaudeAISubscriber } = require("./chunk-7v0gj88m.js");
+  let { isClaudeAISubscriber } = require("../utils/auth.js");
   if (!isFirstPartyProvider() || !isClaudeAISubscriber()) {
     forgetEnrollmentAfterRefusal();
     return;
@@ -460,14 +468,14 @@ function clearTrustedDeviceToken() {
   }
   clearTrustedDeviceTokenCache();
   getSecureStorage()
-    .mutate((n) =>
-      n.trustedDeviceToken || n.trustedDeviceEnrolledAfterRefusalAtMs !== undefined
+    .mutate((state) =>
+      state.trustedDeviceToken || state.trustedDeviceEnrolledAfterRefusalAtMs !== undefined
         ? {
-            ...n,
+            ...state,
             trustedDeviceToken: undefined,
             trustedDeviceEnrolledAfterRefusalAtMs: undefined,
           }
-        : n,
+        : state,
     )
     .catch(() => {});
 }
@@ -479,11 +487,11 @@ async function forgetEnrollmentAfterRefusal() {
   )
     return;
   await secureStorage
-    .mutate((r) =>
-      r.trustedDeviceEnrolledAfterRefusalAtMs === undefined
-        ? r
+    .mutate((state) =>
+      state.trustedDeviceEnrolledAfterRefusalAtMs === undefined
+        ? state
         : {
-            ...r,
+            ...state,
             trustedDeviceEnrolledAfterRefusalAtMs: undefined,
           },
     )
@@ -502,20 +510,20 @@ async function loginEnrollmentOnThisComputerSettled() {
   return (
     (await withDeadline(
       (async () => {
-        let n = await checkGate_CACHED_OR_BLOCKING(TENGU_SESSIONS_ELEVATED_AUTH_ENFORCEMENT);
-        if (!n)
+        let gate = await checkGate_CACHED_OR_BLOCKING(TENGU_SESSIONS_ELEVATED_AUTH_ENFORCEMENT);
+        if (!gate)
           return isGateOffInOwnEvaluation(TENGU_SESSIONS_ELEVATED_AUTH_ENFORCEMENT) ? "no_gate_off" : "no";
         await loadPolicyLimitsModule().waitForPolicyLimitsToLoad();
-        let r = loginEnrollmentAction(n);
+        let action = loginEnrollmentAction(gate);
         let policyVerdictModule = loadPolicyVerdictModule();
-        return r === "no" &&
+        return action === "no" &&
           shouldProactivelyEnrollDevice() &&
           !policyVerdictModule.isPolicyEnforced(REQUIRE_TRUSTED_DEVICES) &&
           (!policyVerdictModule.isPolicyLimitsEligible() ||
             (policyVerdictModule.isSessionVerdictFromServerFetch() &&
               !policyVerdictModule.isSessionVerdictDisowned()))
           ? "no_not_required"
-          : r;
+          : action;
       })(),
       LOGIN_ENROLLMENT_DEADLINE_MS,
     ).catch(() => {
@@ -526,9 +534,9 @@ async function loginEnrollmentOnThisComputerSettled() {
 //@ chunk-0jk9tmkx.js:8119-8131 affinity
 var LOGIN_ENROLLMENT_DEADLINE_MS = 5000;
 //@ chunk-0jk9tmkx.js:8131-8226 affinity
-function loginEnrollmentAction(e) {
+function loginEnrollmentAction(gate) {
   if (
-    !e ||
+    !gate ||
     !shouldProactivelyEnrollDevice() ||
     !loadPolicyVerdictModule().isPolicyEnforced(REQUIRE_TRUSTED_DEVICES)
   )
@@ -545,16 +553,16 @@ async function enrollTrustedDevice({ trigger = "proactive", lazy = false, creden
     isConsumerSubscriber,
     getClaudeAIOAuthTokens,
     checkAndRefreshOAuthTokenIfNeeded,
-  } = require("./chunk-7v0gj88m.js");
-  let { loginToHandOn } = require("./chunk-temp5jed.js");
+  } = require("../utils/auth.js");
+  let { loginToHandOn } = require("../utils/auth/launcherHostLogin.js");
   if (!isFirstPartyProvider() || !isClaudeAISubscriber()) return;
   if (env.CLAUDE_CODE_REMOTE === true) {
     logForDebugging("[trusted-device] In a cloud container, skipping enrollment");
     return;
   }
-  let h = trustedDeviceStates.of(getRootSession().host);
-  let S = trigger === "proactive" && !lazy;
-  if (S) h.signInEnrollmentsInFlight++;
+  let state = trustedDeviceStates.of(getRootSession().host);
+  let isSignInTrigger = trigger === "proactive" && !lazy;
+  if (isSignInTrigger) state.signInEnrollmentsInFlight++;
   try {
     if (!(await checkGate_CACHED_OR_BLOCKING(TENGU_SESSIONS_ELEVATED_AUTH_ENFORCEMENT))) {
       logForDebugging(
@@ -576,15 +584,19 @@ async function enrollTrustedDevice({ trigger = "proactive", lazy = false, creden
     }
     await loadPolicyLimitsModule().waitForPolicyLimitsToLoad();
     let policyVerdictModule = loadPolicyVerdictModule();
-    let I = policyVerdictModule.isPolicyEnforced(REQUIRE_TRUSTED_DEVICES);
-    let V = trigger === "server_denied" || (trigger === "device_bind" && isConsumerSubscriber());
-    if (!(I || (V && policyVerdictModule.isPolicyAllowed(REQUIRE_TRUSTED_DEVICES)))) {
+    let isOrgEnforced = policyVerdictModule.isPolicyEnforced(REQUIRE_TRUSTED_DEVICES);
+    let isAllowedTrigger =
+      trigger === "server_denied" || (trigger === "device_bind" && isConsumerSubscriber());
+    if (!(
+      isOrgEnforced ||
+      (isAllowedTrigger && policyVerdictModule.isPolicyAllowed(REQUIRE_TRUSTED_DEVICES))
+    )) {
       logForDebugging(`[trusted-device] Org has not enabled ${REQUIRE_TRUSTED_DEVICES}, skipping enrollment`);
       return;
     }
-    let p = {
+    let fields = {
       trigger: fromEnum(trigger),
-      org_enforced: I,
+      org_enforced: isOrgEnforced,
     };
     if (isEssentialTrafficOnly()) {
       logForDebugging("[trusted-device] Essential traffic only, skipping enrollment");
@@ -613,47 +625,47 @@ async function enrollTrustedDevice({ trigger = "proactive", lazy = false, creden
             "Content-Type": "application/json",
           },
           timeout: 1e4,
-          validateStatus: (s) => s < 500,
+          validateStatus: (status) => status < 500,
         },
       );
     } catch (err) {
       logForDebugging(`[trusted-device] Enrollment request failed: ${errorMessage(err)}`);
-      logFeatureBad("bridge_trusted_device_enroll", "request_failed", p);
+      logFeatureBad("bridge_trusted_device_enroll", "request_failed", fields);
       return;
     }
     if (response.status !== 200 && response.status !== 201) {
       logForDebugging(
         `[trusted-device] Enrollment failed ${response.status}: ${jsonStringify(response.data).slice(0, 200)}`,
       );
-      logFeatureBad("bridge_trusted_device_enroll", "http_error", p);
+      logFeatureBad("bridge_trusted_device_enroll", "http_error", fields);
       return;
     }
     let token = response.data?.device_token;
     if (!token || typeof token !== "string") {
       logForDebugging("[trusted-device] Enrollment response missing device_token field");
-      logFeatureBad("bridge_trusted_device_enroll", "missing_token", p);
+      logFeatureBad("bridge_trusted_device_enroll", "missing_token", fields);
       return;
     }
     try {
-      let s = await getSecureStorage().mutate((q) => ({
-        ...q,
+      let result = await getSecureStorage().mutate((state) => ({
+        ...state,
         trustedDeviceToken: token,
         trustedDeviceEnrolledAfterRefusalAtMs: trigger === "server_denied" ? Date.now() : undefined,
       }));
-      if (!s.success) {
-        logForDebugging(`[trusted-device] Failed to persist token: ${s.warning ?? "unknown"}`);
-        logFeatureBad("bridge_trusted_device_enroll", "storage_failed", p);
+      if (!result.success) {
+        logForDebugging(`[trusted-device] Failed to persist token: ${result.warning ?? "unknown"}`);
+        logFeatureBad("bridge_trusted_device_enroll", "storage_failed", fields);
         return;
       }
       clearTrustedDeviceTokenCache();
       logForDebugging(`[trusted-device] Enrolled device_id=${response.data.device_id ?? "unknown"}`);
-      logFeatureOk("bridge_trusted_device_enroll", p);
+      logFeatureOk("bridge_trusted_device_enroll", fields);
     } catch (err) {
       logForDebugging(`[trusted-device] Storage write failed: ${errorMessage(err)}`);
-      logFeatureBad("bridge_trusted_device_enroll", "storage_failed", p);
+      logFeatureBad("bridge_trusted_device_enroll", "storage_failed", fields);
       return;
     }
-    if (S || h.signInEnrollmentsInFlight > 0) return;
+    if (isSignInTrigger || state.signInEnrollmentsInFlight > 0) return;
     try {
       if (getIsNonInteractiveSession()) {
         logForDebugging(`[trusted-device] ${AUTOMATIC_ENROLLMENT_NOTICE}`);
@@ -661,8 +673,8 @@ async function enrollTrustedDevice({ trigger = "proactive", lazy = false, creden
           process.stderr.write(`${AUTOMATIC_ENROLLMENT_NOTICE}
 `);
       } else {
-        h.automaticEnrollmentNoticePending = true;
-        h.automaticEnrollmentNoticeRaised.emit();
+        state.automaticEnrollmentNoticePending = true;
+        state.automaticEnrollmentNoticeRaised.emit();
       }
     } catch (err) {
       logError(err);
@@ -673,7 +685,7 @@ async function enrollTrustedDevice({ trigger = "proactive", lazy = false, creden
       trigger: fromEnum(trigger),
     });
   } finally {
-    if (S) h.signInEnrollmentsInFlight--;
+    if (isSignInTrigger) state.signInEnrollmentsInFlight--;
   }
 }
 export {
@@ -703,4 +715,10 @@ export {
   forgetEnrollmentAfterRefusal,
   clearTrustedDeviceToken,
   enrollTrustedDevice,
+  enrollmentAfterRefusalHold,
+  formatUnreachableElevatedRefusal,
+  isRemoteControlPeerUnreachableFromHere,
+  loginEnrollmentOnThisComputer,
+  loginEnrollmentOnThisComputerSettled,
+  trustedDeviceTokenForBind,
 };

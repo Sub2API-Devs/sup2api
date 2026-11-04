@@ -26,9 +26,9 @@ var GH_PROXY_UNSET_MESSAGE =
 /**
  * 解析代理地址，只接受 http://127.0.0.1 的地址，返回规范化 href。
  */
-function parseLoopbackProxyUrl(n) {
-  let t = URL.parse(n?.trim() ?? "");
-  return t?.protocol === "http:" && t.hostname === "127.0.0.1" ? t.href : undefined;
+function parseLoopbackProxyUrl(value) {
+  let parsedUrl = URL.parse(value?.trim() ?? "");
+  return parsedUrl?.protocol === "http:" && parsedUrl.hostname === "127.0.0.1" ? parsedUrl.href : undefined;
 }
 //@ chunk-6p9kc8f6.js:579-1247 placement
 /**
@@ -55,23 +55,23 @@ HTTPS_PROXY="$proxy"; https_proxy="$proxy"; export HTTPS_PROXY https_proxy
 var ANY = "any";
 //@ chunk-6p9kc8f6.js:1260-1846 placement
 function parseGhStandinArgs() {
-  let [n, t = "", e = "", ...s] = process.argv.slice(2);
-  if (n !== "--gh-standin") return;
+  let [standinFlag, portArg = "", caBundlePath = "", ...rest] = process.argv.slice(2);
+  if (standinFlag !== "--gh-standin") return;
   process.argv = process.argv.slice(0, 3);
-  let o = s[0] === "--any-host";
-  let r = o || s[0]?.startsWith("--hosts=") ? s.shift() : undefined;
-  let [i, ...h] = s;
+  let isAnyHost = rest[0] === "--any-host";
+  let hostsArg = isAnyHost || rest[0]?.startsWith("--hosts=") ? rest.shift() : undefined;
+  let [separator, ...ghArgs] = rest;
   if (
-    (t === "standalone-proxy" || (/^[1-9]\d{0,4}$/.test(t) && Number(t) <= 65535)) &&
-    e !== "" &&
-    i === "--"
+    (portArg === "standalone-proxy" || (/^[1-9]\d{0,4}$/.test(portArg) && Number(portArg) <= 65535)) &&
+    caBundlePath !== "" &&
+    separator === "--"
   ) {
-    let ghesHosts = o ? ANY : (r?.slice(8).split(",") ?? []);
+    let ghesHosts = isAnyHost ? ANY : (hostsArg?.slice(8).split(",") ?? []);
     return {
-      port: t === "standalone-proxy" ? t : Number(t),
-      caBundlePath: e,
+      port: portArg === "standalone-proxy" ? portArg : Number(portArg),
+      caBundlePath,
       ghesHosts,
-      ghArgs: h,
+      ghArgs,
     };
   }
   process.stderr
@@ -81,25 +81,25 @@ function parseGhStandinArgs() {
   return "refused";
 }
 //@ chunk-6p9kc8f6.js:1846-2527 placement
-function describeGhStandinHosts(n) {
-  let [t, e] =
-    n.ghesHosts === ANY
+function describeGhStandinHosts(options) {
+  let [hostsFlag, hostsDescription] =
+    options.ghesHosts === ANY
       ? ["--any-host", " or the GitHub Enterprise host a command names"]
-      : n.ghesHosts.length > 0
-        ? ["--hosts=" + n.ghesHosts.join(","), " and the hosts named below"]
+      : options.ghesHosts.length > 0
+        ? ["--hosts=" + options.ghesHosts.join(","), " and the hosts named below"]
         : [undefined, ""];
   let mapped = [
-    ...n.command,
+    ...options.command,
     "--gh-standin",
-    String(n.port),
-    n.caBundlePath,
-    ...(t === undefined ? [] : [t]),
-  ].map((o) => `'${o}'`);
+    String(options.port),
+    options.caBundlePath,
+    ...(hostsFlag === undefined ? [] : [hostsFlag]),
+  ].map((arg) => `'${arg}'`);
   return `#!/bin/sh
 # Claude Code gh stand-in shim (auto-generated; per-session).
 # No GitHub CLI was found on this machine when this session started,
 # so gh here is Claude Code's own implementation of \`gh api\`: REST
-# requests to github.com${e} through the session's GitHub proxy. It reads
+# requests to github.com${hostsDescription} through the session's GitHub proxy. It reads
 # no GitHub token from the environment and sends none.
 exec ${mapped.join(" ")} -- "$@"
 `;

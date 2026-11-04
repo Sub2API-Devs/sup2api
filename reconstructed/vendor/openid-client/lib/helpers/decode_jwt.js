@@ -5,11 +5,11 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_base64url } from "./base64url.js";
 
 //@ chunk-1ny7cxrt.js:7617-8029 cjs-fingerprint
-var require_decode_jwt = x(function (cjsExports, cjsModule) {
+var require_decode_jwt = __commonJS(function (cjsExports, cjsModule) {
   var base64url = require_base64url();
   cjsModule.exports = (token) => {
     if (typeof token !== "string" || !token) throw TypeError("JWT must be a string");

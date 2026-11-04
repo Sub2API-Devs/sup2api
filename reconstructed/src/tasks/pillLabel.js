@@ -9,7 +9,7 @@
  * attribution: fingerprint 2, layout 2
  */
 import { count } from "../utils/collections.js";
-import { FILLED_DIAMOND_GLYPH, DIAMOND_GLYPH } from "../utils/permissions/autoModeRulesPrompt.js";
+import { FILLED_DIAMOND_GLYPH, DIAMOND_GLYPH } from "../constants/figures.js";
 import { isAutoReactArmedMonitorTask } from "./MonitorWsTask/MonitorWsTask.js";
 
 //@ chunk-1fg1sa83.js:302-1852 fingerprint = getPillLabel (0.699)
@@ -17,11 +17,11 @@ import { isAutoReactArmedMonitorTask } from "./MonitorWsTask/MonitorWsTask.js";
  * 生成后台任务胶囊文字：全部同类型时按类型给专门文案（如 "2 shells, 1 monitor"、"ultraplan ready"、"3 cloud sessions"、"dreaming"），否则回退为 "N background tasks"。
  */
 function getPillLabel(tasks) {
-  let r = tasks[0];
-  if (!r) return null;
+  let first = tasks[0];
+  if (!first) return null;
   let count_2 = tasks.length;
-  if (tasks.every((t) => t.type === r.type))
-    switch (r.type) {
+  if (tasks.every((t) => t.type === first.type))
+    switch (first.type) {
       case "local_bash": {
         let monitors = count(tasks, (t) => t.type === "local_bash" && t.kind === "monitor");
         let shells = count_2 - monitors;
@@ -39,8 +39,8 @@ function getPillLabel(tasks) {
       case "local_agent":
         return count_2 === 1 ? "1 local agent" : `${count_2} local agents`;
       case "remote_agent": {
-        if (count_2 === 1 && r.isUltraplan)
-          switch (r.ultraplanPhase) {
+        if (count_2 === 1 && first.isUltraplan)
+          switch (first.ultraplanPhase) {
             case "plan_ready":
               return `${FILLED_DIAMOND_GLYPH} ultraplan ready`;
             case "needs_input":
@@ -71,7 +71,9 @@ function getPillLabel(tasks) {
       case "auto_mode_scan":
         return "auto-mode scan";
       case "local_memory_import":
-        return r.windowsPlanned > 0 ? `memory import ${r.windowsDone}/${r.windowsPlanned}` : "memory import";
+        return first.windowsPlanned > 0
+          ? `memory import ${first.windowsDone}/${first.windowsPlanned}`
+          : "memory import";
       case "post_turn_memory":
         return "saving memories";
       default:

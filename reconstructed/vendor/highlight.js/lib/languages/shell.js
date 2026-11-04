@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:435514-435762 cjs-fingerprint
-var require_shell = x(function (cjsExports, cjsModule) {
+var require_shell = __commonJS(function (cjsExports, cjsModule) {
   function shell(hljs) {
     return {
       name: "Shell Session",

@@ -8,7 +8,15 @@
  * pieces: chunk-aepeg2w5.js (3), chunk-e6aww6q8.js (66), chunk-gr2vfhah.js (8), chunk-sycgf9xs.js (1)
  * attribution: placement 15, fingerprint 16, layout 43, file-local 1, callgraph-witnessed 2, affinity 1
  */
+import { backoffDelayMs, systemClock, sleep } from "../../utils/sleep.js";
 import {
+  APIError,
+  APIUserAbortError,
+  APIConnectionError,
+  APIConnectionTimeoutError,
+} from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
+import {
+  hasNestedError,
   GOOGLE_CREDENTIAL_ERROR_TEXT,
   extractConnectionErrorDetails,
   TRANSIENT_SOCKET_CODES,
@@ -18,8 +26,8 @@ import {
   formatApiErrorType,
   summarizeApiError,
   SSL_CERT_ERROR_CODES,
-  hasNestedError,
 } from "./errorUtils.js";
+import { calculateCostFromTokenCounts } from "../../utils/modelCost.js";
 import {
   findInCauseChain,
   getErrnoCode,
@@ -29,12 +37,6 @@ import {
   toError,
 } from "../../utils/errors.js";
 import { env } from "../../utils/env.js";
-import {
-  APIError,
-  APIUserAbortError,
-  APIConnectionError,
-  APIConnectionTimeoutError,
-} from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
 import {
   getClaudeAIOAuthTokens,
   effectiveAuthTokenEnv,
@@ -116,7 +118,6 @@ import {
   normalizeApiErrorTypeDiag,
   classifyApiErrorKind,
 } from "./responseDiagnostics.js";
-import { systemClock, sleep, backoffDelayMs } from "../../utils/sleep.js";
 import {
   isFastModeEnabled,
   isFallbackModelFastRejected,
@@ -200,8 +201,273 @@ import { streamFallbackWarning } from "./streamFallbackWarning.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { getAutoModeConfigOrDefault } from "../../utils/permissions/permissionSetup.js";
 import { CLASSIFIER_MAX_RETRIES } from "../../utils/permissions/classifierHostContext.js";
-import { calculateCostFromTokenCounts } from "../../utils/modelCost.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-sycgf9xs.js:17346-17402 fingerprint = isStaleConnectionError (0.632)
+/**
+ * EPIPE/ECONNRESET/ENOTCONN/EOF：视为连接已失效、可换新连接重试的错误码。旧版名 isStaleConnectionError 是函数名，这里是集合。
+ */
+var STALE_CONNECTION_ERROR_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-sycgf9xs.js:17346", () => {
+  STALE_CONNECTION_ERROR_CODES = new Set(["EPIPE", "ECONNRESET", "ENOTCONN", "EOF"]);
+});
+//@ chunk-gr2vfhah.js:421-440 affinity
+/**
+ * 0.25：退避的比例抖动。
+ */
+var BASE_RETRY_DELAY_MS = 500;
+var RETRY_JITTER_RATIO = 0.25;
+//@ chunk-gr2vfhah.js:440-657 callgraph-witnessed = getRetryDelay (0.161)
+/**
+ * 重试等待时间：以 500ms 为基数、上限 32s、25% 抖动的指数退避；有 retry-after（秒）时取两者较大值。
+ */
+function getRetryDelay(
+  attempt,
+  serverDelayMs,
+  capMs = 32000,
+  random = Math.random,
+  baseMs = BASE_RETRY_DELAY_MS,
+) {
+  let rounded = Math.round(
+    backoffDelayMs({
+      attempt,
+      baseMs,
+      capMs,
+      jitter: {
+        kind: "proportional",
+        ratio: RETRY_JITTER_RATIO,
+      },
+      random,
+    }),
+  );
+  if (serverDelayMs) {
+    let seconds = parseInt(serverDelayMs, 10);
+    if (!isNaN(seconds)) return Math.max(seconds * 1000, rounded);
+  }
+  return rounded;
+}
+//@ chunk-gr2vfhah.js:1242-1441 fingerprint = isOAuthTokenRevokedError (0.637)
+/**
+ * 403 "OAuth token has been revoked" 或 401 "OAuth access token has been revoked"。
+ */
+function isOAuthTokenRevokedError(error) {
+  if (!(error instanceof APIError)) return false;
+  let message = error.message ?? "";
+  return (
+    (error.status === 403 && message.includes("OAuth token has been revoked")) ||
+    (error.status === 401 && message.includes("OAuth access token has been revoked"))
+  );
+}
+//@ chunk-gr2vfhah.js:1441-1623 layout
+/**
+ * 403 permission_error 且消息含 "model:"（模型无权访问）。
+ */
+function isModelPermissionDeniedError(error) {
+  if (!(error instanceof APIError) || error.status !== 403) return false;
+  let message = error.message ?? "";
+  return (
+    (error.type === "permission_error" || message.includes('"type":"permission_error"')) &&
+    message.includes("model:")
+  );
+}
+//@ chunk-gr2vfhah.js:1623-1728 layout
+/**
+ * 错误类型为 not_found_error。
+ */
+function isNotFoundErrorType(error) {
+  return error.type === "not_found_error" || (error.message?.includes('"type":"not_found_error"') ?? false);
+}
+//@ chunk-gr2vfhah.js:1728-1841 layout
+/**
+ * 404 not_found_error 且消息含 "model:"。
+ */
+function isModelNotFoundError(error) {
+  if (!(error instanceof APIError) || error.status !== 404) return false;
+  return isNotFoundErrorType(error) && (error.message ?? "").includes("model:");
+}
+//@ chunk-gr2vfhah.js:1841-1962 layout
+/**
+ * Azure/Foundry 404 DeploymentNotFound。
+ */
+function isAzureDeploymentNotFound(error) {
+  if (!(error instanceof APIError) || error.status !== 404 || !hasNestedError(error)) return false;
+  return error.error?.error?.code === "DeploymentNotFound";
+}
+//@ chunk-gr2vfhah.js:1962-2086 fingerprint = is529Error (1)
+/**
+ * 529 或消息含 overloaded_error。
+ */
+function is529Error(error) {
+  if (!(error instanceof APIError)) return false;
+  return error.status === 529 || (error.message?.includes('"type":"overloaded_error"') ?? false);
+}
+//@ chunk-aepeg2w5.js:375506-375866 placement
+/**
+ * 计算回退请求的用量差值。
+ */
+function fallbackUsageDelta(usage) {
+  let { primaryUsage, usage: usage_2, model, fallbackFrom } = usage;
+  let delta =
+    primaryUsage && usage_2
+      ? {
+          inputTokens: usage_2.inputTokens - primaryUsage.inputTokens,
+          outputTokens: usage_2.outputTokens - primaryUsage.outputTokens,
+          cacheReadInputTokens: usage_2.cacheReadInputTokens - primaryUsage.cacheReadInputTokens,
+          cacheCreationInputTokens: usage_2.cacheCreationInputTokens - primaryUsage.cacheCreationInputTokens,
+        }
+      : usage_2;
+  if (!delta || !model) return;
+  return (
+    calculateCostFromTokenCounts(model, delta) +
+    (primaryUsage && fallbackFrom ? calculateCostFromTokenCounts(fallbackFrom, primaryUsage) : 0)
+  );
+}
+//@ chunk-aepeg2w5.js:376032-377675 placement
+/**
+ * withRetry 使用的一组开关名。
+ */
+var MOSSY_SQUID_GATE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var TENGU_TWINKLY_CLOVER;
+var TENGU_CANDID_JUNIPER;
+var TENGU_CHEEKY_TOUCAN;
+var TENGU_STEADFAST_WREN;
+var TENGU_COBALT_PLINTH_ORPINE;
+var TENGU_VALIANT_LANTERN;
+var TENGU_LEVEL_PLOVER;
+var TENGU_SPLENDID_LYNX;
+var TENGU_TENDER_MITTEN;
+var TENGU_SNUG_QUILL;
+var TENGU_MELLOW_RAINBOW;
+var TENGU_WONDROUS_HAVEN;
+var TENGU_GOOFY_HARE;
+var TENGU_MIGHTY_FLASK;
+var TENGU_STEADY_SCROLL;
+var TENGU_PLAID_KETTLE;
+var TENGU_ZIPPY_HARBOR;
+var TENGU_FALLOW_LANTERN;
+var TENGU_MELLOW_HOLLERITH;
+var TENGU_WITTY_KAY;
+var TENGU_STEADY_BITTERN;
+var TENGU_KIND_DEWDROP;
+var TENGU_THISTLE_ORRERY;
+var TENGU_TOASTY_BEACON;
+var TENGU_SNUG_WALL;
+var TENGU_IMPERATIVE_SPINDLE;
+var TENGU_PROUD_PEARL;
+var TENGU_FOAMY_PELICAN;
+var TENGU_FLAG_SET;
+var RETRY_FLAG_NAMES;
+deferInit("chunk-aepeg2w5.js:376032", () => {
+  MOSSY_SQUID_GATE = "tengu_mossy_squid";
+  TENGU_TWINKLY_CLOVER = "tengu_twinkly_clover";
+  TENGU_CANDID_JUNIPER = "tengu_candid_juniper";
+  TENGU_CHEEKY_TOUCAN = "tengu_cheeky_toucan";
+  TENGU_STEADFAST_WREN = "tengu_steadfast_wren";
+  TENGU_COBALT_PLINTH_ORPINE = "tengu_cobalt_plinth_orpine";
+  TENGU_VALIANT_LANTERN = "tengu_valiant_lantern";
+  TENGU_LEVEL_PLOVER = "tengu_level_plover";
+  TENGU_SPLENDID_LYNX = "tengu_splendid_lynx";
+  TENGU_TENDER_MITTEN = "tengu_tender_mitten";
+  TENGU_SNUG_QUILL = "tengu_snug_quill";
+  TENGU_MELLOW_RAINBOW = "tengu_mellow_rainbow";
+  TENGU_WONDROUS_HAVEN = "tengu_wondrous_haven";
+  TENGU_GOOFY_HARE = "tengu_goofy_hare";
+  TENGU_MIGHTY_FLASK = "tengu_mighty_flask";
+  TENGU_STEADY_SCROLL = "tengu_steady_scroll";
+  TENGU_PLAID_KETTLE = "tengu_plaid_kettle";
+  TENGU_ZIPPY_HARBOR = "tengu_zippy_harbor";
+  TENGU_FALLOW_LANTERN = "tengu_fallow_lantern";
+  TENGU_MELLOW_HOLLERITH = "tengu_mellow_hollerith";
+  TENGU_WITTY_KAY = "tengu_witty_kay";
+  TENGU_STEADY_BITTERN = "tengu_steady_bittern";
+  TENGU_KIND_DEWDROP = "tengu_kind_dewdrop";
+  TENGU_THISTLE_ORRERY = "tengu_thistle_orrery";
+  TENGU_TOASTY_BEACON = "tengu_toasty_beacon";
+  TENGU_SNUG_WALL = "tengu_snug_wall";
+  TENGU_IMPERATIVE_SPINDLE = "tengu_imperative_spindle";
+  TENGU_PROUD_PEARL = "tengu_proud_pearl";
+  TENGU_FOAMY_PELICAN = "tengu_foamy_pelican";
+  TENGU_FLAG_SET = new Set([
+    "tengu_steady_bittern",
+    "tengu_thistle_orrery",
+    "tengu_snug_wall",
+    "tengu_imperative_spindle",
+    "tengu_foamy_pelican",
+    ...[],
+  ]);
+  RETRY_FLAG_NAMES = new Set([
+    "tengu_steady_bittern",
+    ...[],
+    "tengu_twinkly_clover",
+    "tengu_candid_juniper",
+    "tengu_iterative_lightning",
+    "tengu_steadfast_wren",
+    "tengu_cheeky_toucan",
+    "tengu_cobalt_plinth_orpine",
+    "tengu_valiant_lantern",
+    "tengu_level_plover",
+    "tengu_splendid_lynx",
+    "tengu_tender_mitten",
+    "tengu_snug_quill",
+    "tengu_mellow_rainbow",
+    "tengu_mellow_heron",
+    "tengu_wondrous_haven",
+    "tengu_mighty_flask",
+    "tengu_goofy_hare",
+    "tengu_steady_scroll",
+    "tengu_zippy_harbor",
+    "tengu_fallow_lantern",
+    "tengu_mellow_hollerith",
+    "tengu_starry_wall",
+    "tengu_groovy_ember",
+    "tengu_composed_plum",
+    "tengu_witty_kay",
+    "tengu_kind_dewdrop",
+    "tengu_thistle_orrery",
+    "tengu_proud_pearl",
+    "tengu_snug_wall",
+    "tengu_foamy_pelican",
+    ...[],
+    "tengu_mossy_squid",
+    "tengu_toasty_beacon",
+    "tengu_plaid_kettle",
+  ]);
+});
+//@ chunk-aepeg2w5.js:377792-378332 fingerprint = FOREGROUND_529_RETRY_SOURCES (0.585)
+/**
+ * 529 时允许重试的查询来源集合：前台来源 + agent:*、compact、hook_agent、side_question、web_search_tool、auto_mode 等；isForegroundQuerySource(IIe) 用它判断。
+ */
+var FOREGROUND_529_RETRY_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var RETRY_ON_529_QUERY_SOURCES;
+deferInit("chunk-aepeg2w5.js:377792", () => {
+  FOREGROUND_529_RETRY_SOURCES = {
+    repl_main_thread: true,
+    "repl_main_thread:outputStyle:custom": true,
+    "repl_main_thread:outputStyle:Concise": true,
+    "repl_main_thread:outputStyle:Proactive": true,
+    "repl_main_thread:outputStyle:Explanatory": true,
+    "repl_main_thread:outputStyle:Learning": true,
+    sdk: true,
+  };
+  RETRY_ON_529_QUERY_SOURCES = new Set([
+    ...Object.keys(FOREGROUND_529_RETRY_SOURCES),
+    "agent:custom",
+    "agent:default",
+    "agent:builtin",
+    "compact",
+    "hook_agent",
+    "hook_prompt",
+    "side_question",
+    "web_search_tool",
+    "web_fetch_apply",
+    "auto_mode",
+    "compact_fab_check",
+    "auto_mode_critique",
+    "auto_mode_setup_propose",
+    "chrome_mcp",
+    "artifact_comment_reply",
+  ]);
+});
 //@ chunk-e6aww6q8.js:1570337-1570600 fingerprint = isGoogleAuthLibraryCredentialError (0.547)
 /**
  * google-auth-library 凭证加载失败的典型消息片段；f5o 为令牌刷新失败片段。
@@ -220,31 +486,37 @@ var GOOGLE_AUTH_REFRESH_ERROR_MESSAGES = [GOOGLE_CREDENTIAL_ERROR_TEXT, "Could n
 /**
  * 沿 cause 链找一个 message 含任一片段的错误。
  */
-function errorChainMessageIncludes(e, n) {
-  return findInCauseChain(e, (r) => n.some((s) => r.message.includes(s))) !== undefined;
+function errorChainMessageIncludes(error, needles) {
+  return (
+    findInCauseChain(error, (cause) => needles.some((needle) => cause.message.includes(needle))) !== undefined
+  );
 }
 //@ chunk-e6aww6q8.js:1570680-1570745 layout
 /**
  * EACCES/EPERM；g5o 为 open/read 系统调用名。
  */
-var FS_PERMISSION_ERROR_CODES = new Set(["EACCES", "EPERM"]);
-var CREDENTIAL_FILE_SYSCALLS = new Set(["open", "read"]);
+var FS_PERMISSION_ERROR_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var CREDENTIAL_FILE_SYSCALLS;
+deferInit("chunk-e6aww6q8.js:1570680", () => {
+  FS_PERMISSION_ERROR_CODES = new Set(["EACCES", "EPERM"]);
+  CREDENTIAL_FILE_SYSCALLS = new Set(["open", "read"]);
+});
 //@ chunk-e6aww6q8.js:1570745-1570922 layout
 /**
  * Google 凭证文件加载失败：已知消息片段，或凭证文件解析出 SyntaxError/读文件权限错误。
  */
-function isGoogleCredentialLoadError(e) {
+function isGoogleCredentialLoadError(error) {
   return (
-    errorChainMessageIncludes(e, GOOGLE_AUTH_CREDENTIAL_ERROR_MESSAGES) ||
-    (errorChainMessageIncludes(e, [GOOGLE_CREDENTIAL_ERROR_TEXT]) &&
+    errorChainMessageIncludes(error, GOOGLE_AUTH_CREDENTIAL_ERROR_MESSAGES) ||
+    (errorChainMessageIncludes(error, [GOOGLE_CREDENTIAL_ERROR_TEXT]) &&
       findInCauseChain(
-        e,
-        (n) =>
-          n.name === "SyntaxError" ||
-          (FS_PERMISSION_ERROR_CODES.has(getErrnoCode(n) ?? "") &&
-            "syscall" in n &&
-            typeof n.syscall === "string" &&
-            CREDENTIAL_FILE_SYSCALLS.has(n.syscall)),
+        error,
+        (cause) =>
+          cause.name === "SyntaxError" ||
+          (FS_PERMISSION_ERROR_CODES.has(getErrnoCode(cause) ?? "") &&
+            "syscall" in cause &&
+            typeof cause.syscall === "string" &&
+            CREDENTIAL_FILE_SYSCALLS.has(cause.syscall)),
       ) !== undefined)
   );
 }
@@ -277,10 +549,10 @@ class FallbackTriggeredError extends Error {
   reason;
   originalError;
   blockMessage;
-  constructor(model, n, reason = "overloaded", originalError, blockMessage) {
-    super(`Model fallback triggered: ${model} -> ${n}`);
+  constructor(model, retryContext, reason = "overloaded", originalError, blockMessage) {
+    super(`Model fallback triggered: ${model} -> ${retryContext}`);
     this.originalModel = model;
-    this.fallbackModel = n;
+    this.fallbackModel = retryContext;
     this.reason = reason;
     this.originalError = originalError;
     this.blockMessage = blockMessage;
@@ -326,12 +598,14 @@ function retryWatchdogEnv() {
   return env.CLAUDE_CODE_RETRY_WATCHDOG;
 }
 //@ chunk-e6aww6q8.js:2616426-2616488 placement
-function isCapacityError(e) {
-  return is529Error(e) || (e instanceof APIError && e.status === 429);
+function isCapacityError(error) {
+  return is529Error(error) || (error instanceof APIError && error.status === 429);
 }
 //@ chunk-e6aww6q8.js:2616488-2616582 placement
-function isRemoteAuthError(e) {
-  return env.CLAUDE_CODE_REMOTE && e instanceof APIError && (e.status === 401 || e.status === 403);
+function isRemoteAuthError(error) {
+  return (
+    env.CLAUDE_CODE_REMOTE && error instanceof APIError && (error.status === 401 || error.status === 403)
+  );
 }
 //@ chunk-e6aww6q8.js:2616582-2616647 placement
 function oauthTokenRotated(clientOAuthAccessToken) {
@@ -350,21 +624,21 @@ function isApiKeyHelperAuthError(error) {
   );
 }
 //@ chunk-e6aww6q8.js:2616747-2616869 placement
-function isAuthRetryableError(error, model) {
+function isAuthRetryableError(error, authError) {
   return (
     (error instanceof APIError && error.status === 401) ||
     isApiKeyHelperAuthError(error) ||
     (proxyAuthRequired(error) !== undefined && Boolean(getConfiguredProxyAuthHelper())) ||
     isOAuthTokenRevokedError(error) ||
-    isAwsAuthError(error, model) ||
+    isAwsAuthError(error, authError) ||
     isGoogleCloudAuthError(error)
   );
 }
 //@ chunk-e6aww6q8.js:2616869-2616971 placement
 function shouldOfferReauth(lastError) {
-  let n = classifyAPIError(lastError);
+  let kind = classifyAPIError(lastError);
   return (
-    (n === "auth_error" || n === "token_revoked") &&
+    (kind === "auth_error" || kind === "token_revoked") &&
     isClaudeAISubscriber() &&
     isActualFirstPartyAnthropicBaseUrl() &&
     !hasCustomApiKeyHeader() &&
@@ -395,9 +669,9 @@ function isTlsOrSocketError(lastError) {
 /**
  * 识别代理认证错误（407，含隧道错误），返回 proxy-authenticate 头。
  */
-function proxyAuthRequired(e) {
-  if (e instanceof APIConnectionError) {
-    let proxyTunnelError = findProxyTunnelError(e);
+function proxyAuthRequired(errorMessage) {
+  if (errorMessage instanceof APIConnectionError) {
+    let proxyTunnelError = findProxyTunnelError(errorMessage);
     if (proxyTunnelError && "status" in proxyTunnelError && proxyTunnelError.status === 407)
       return {
         proxyAuthenticate:
@@ -408,9 +682,9 @@ function proxyAuthRequired(e) {
       };
     return;
   }
-  if (e instanceof APIError && e.status === 407)
+  if (errorMessage instanceof APIError && errorMessage.status === 407)
     return {
-      proxyAuthenticate: e.headers?.get("proxy-authenticate") ?? undefined,
+      proxyAuthenticate: errorMessage.headers?.get("proxy-authenticate") ?? undefined,
     };
   return;
 }
@@ -418,7 +692,7 @@ function proxyAuthRequired(e) {
 /**
  * 连接失效时重新加载轮换后的 mTLS 客户端证书。
  */
-async function reloadMtlsMaterial(e) {
+async function reloadMtlsMaterial(reason) {
   if (!env.CLAUDE_CODE_CLIENT_CERT || env.CLAUDE_CODE_DISABLE_MTLS_RELOAD_ON_STALE_CONNECTION)
     return {
       reportedFailure: false,
@@ -431,10 +705,10 @@ async function reloadMtlsMaterial(e) {
       configureGlobalAgents();
     }
     if (readFailed) {
-      if (e)
+      if (reason)
         logFeatureSad("api_mtls_cert_reload", mismatched ? "material_mismatched" : "material_read_failed");
       return {
-        reportedFailure: e,
+        reportedFailure: reason,
         attempted: true,
       };
     }
@@ -448,9 +722,9 @@ async function reloadMtlsMaterial(e) {
     };
   } catch (error) {
     logError(error);
-    if (e) logFeatureBad("api_mtls_cert_reload", "reload_failed");
+    if (reason) logFeatureBad("api_mtls_cert_reload", "reload_failed");
     return {
-      reportedFailure: e,
+      reportedFailure: reason,
       attempted: true,
     };
   }
@@ -475,33 +749,37 @@ class CannotRetryError extends Error {
 /**
  * 一组判定函数（DLP、内容过滤、beta 拒绝、媒体错误……）：命中的错误不触发 last_resort fallback。
  */
-var NON_RETRYABLE_STATUS_CODES = new Set([401, 407, 429, 404, 403, 413]);
-var NON_FALLBACK_ERROR_PREDICATES = [
-  (e) => isConversationBindingError(e) && !isPrefixLockHealDeclined(e),
-  isPromptTooLongError,
-  isMaxTokensContextOverflow,
-  isInputTooLongError,
-  isCreditBalanceTooLow,
-  isOrganizationDisabled,
-  isFastModeNotEnabledError,
-  isAdvisorModelMismatchError,
-  isDlpRequestDenied,
-  isPolicyBlockedError,
-  isRequestTooLargeError_2,
-  isInvalidEffortError,
-  alwaysFalseB,
-  alwaysFalseD,
-  isMidConversationSystemRejected,
-  isWebSearchContentRejected,
-  isCodeExecutionOutputRejected,
-  alwaysFalseB_2,
-];
+var NON_RETRYABLE_STATUS_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var NON_FALLBACK_ERROR_PREDICATES;
+deferInit("chunk-e6aww6q8.js:2618376", () => {
+  NON_RETRYABLE_STATUS_CODES = new Set([401, 407, 429, 404, 403, 413]);
+  NON_FALLBACK_ERROR_PREDICATES = [
+    (error) => isConversationBindingError(error) && !isPrefixLockHealDeclined(error),
+    isPromptTooLongError,
+    isMaxTokensContextOverflow,
+    isInputTooLongError,
+    isCreditBalanceTooLow,
+    isOrganizationDisabled,
+    isFastModeNotEnabledError,
+    isAdvisorModelMismatchError,
+    isDlpRequestDenied,
+    isPolicyBlockedError,
+    isRequestTooLargeError_2,
+    isInvalidEffortError,
+    alwaysFalseB,
+    alwaysFalseD,
+    isMidConversationSystemRejected,
+    isWebSearchContentRejected,
+    isCodeExecutionOutputRejected,
+    alwaysFalseB_2,
+  ];
+});
 //@ chunk-e6aww6q8.js:2618504-2618547 layout
 /**
  * 任一 NON_FALLBACK_ERROR_PREDICATES 命中。
  */
-function isNonFallbackError(e) {
-  return NON_FALLBACK_ERROR_PREDICATES.some((n) => n(e));
+function isNonFallbackError(error) {
+  return NON_FALLBACK_ERROR_PREDICATES.some((predicate) => predicate(error));
 }
 //@ chunk-e6aww6q8.js:2618547-2633235 callgraph-witnessed = withRetry (0.268)
 /**
@@ -530,7 +808,7 @@ async function* withRetry(getClient, operation, options) {
   let remoteAuthRetries = 0;
   let reconnectingAfterExhaust = false;
   let unregisterReconnectExitHook;
-  let Ie = {
+  let reconnectSlot = {
     open: undefined,
   };
   let nonStreamingTimeoutRetries = 0;
@@ -551,13 +829,13 @@ async function* withRetry(getClient, operation, options) {
   let usedRetryLabels = new Set();
   let retryStatusShown = false;
   let lowPriorityMarkedAtDispatch = false;
-  let pn = {
+  let noResponseLedgerLocal = {
     count: 0,
   };
   let lowPriorityWait = options.lowPriorityWait ?? emptySuspendState();
-  let hn = options.lowPriorityWait === undefined;
-  let ho = gcpSignInFailures();
-  let yn = awsSignInFailures();
+  let ownsLowPriorityWait = options.lowPriorityWait === undefined;
+  let gcpSignInFailuresBefore = gcpSignInFailures();
+  let awsSignInFailuresBefore = awsSignInFailures();
   try {
     let accessFallbackModel = getAccessFallbackModel(options);
     if (accessFallbackModel !== undefined && isModelRefused(options.model))
@@ -578,24 +856,30 @@ async function* withRetry(getClient, operation, options) {
       let fastModeActive = isFastModeEnabled() ? retryContext.fastMode && !isFastModeCooldown() : false;
       let displayAttempt = Math.min(attempt + persistentRetryCount, maxAttempts + 1);
       try {
-        let vn = shouldRetry529(lastError);
-        if (vn) {
+        let staleConnection = shouldRetry529(lastError);
+        if (staleConnection) {
           logForDebugging("Stale connection \u2014 disabling keep-alive for retry");
           disableKeepAlive();
         }
-        let co = false;
+        let mtlsReloaded = false;
         if (isTlsOrSocketError(lastError)) {
-          let un = await reloadMtlsMaterial(!mtlsReloadFailed);
-          co = un.attempted;
-          if (un.reportedFailure) mtlsReloadFailed = true;
+          let mtlsOutcome = await reloadMtlsMaterial(!mtlsReloadFailed);
+          mtlsReloaded = mtlsOutcome.attempted;
+          if (mtlsOutcome.reportedFailure) mtlsReloadFailed = true;
         }
-        let So =
+        let oauthRotated =
           clientOAuthAccessToken !== undefined &&
           Boolean(env.CLAUDE_CODE_REMOTE_SESSION_ID) &&
           oauthTokenRotated(clientOAuthAccessToken);
-        if (So)
+        if (oauthRotated)
           logForDebugging("Credential rotated since the client was built \u2014 rebuilding before retry");
-        if (client === null || So || isAuthRetryableError(lastError, retryContext.model) || vn || co) {
+        if (
+          client === null ||
+          oauthRotated ||
+          isAuthRetryableError(lastError, retryContext.model) ||
+          staleConnection ||
+          mtlsReloaded
+        ) {
           if (
             (lastError instanceof APIError && lastError.status === 401) ||
             isOAuthTokenRevokedError(lastError) ||
@@ -605,10 +889,10 @@ async function* withRetry(getClient, operation, options) {
           ) {
             if (!getAnthropicApiKey() && shouldUseWIFAuth()) await invalidateWIFToken(client?.authToken);
             if (clientOAuthAccessToken) {
-              let un;
+              let refreshOutcome;
               await handleOAuth401Error(clientOAuthAccessToken, options.credentials, options.storageV5, {
-                onForcedRefreshOutcome: ($o) => {
-                  un = $o;
+                onForcedRefreshOutcome: (outcome) => {
+                  refreshOutcome = outcome;
                 },
               });
               let oAuthAccountOnHold = getOAuthAccountOnHold();
@@ -621,7 +905,7 @@ async function* withRetry(getClient, operation, options) {
                   getSdkOAuthTokenRefreshCallback() !== null ||
                   (!isRemoteAuthError(lastError) && ++oauthRefreshFailures >= MAX_OAUTH_REFRESH_FAILURES)
                 ) {
-                  if (un === "lock_disk_full" && shouldOfferReauth(lastError)) {
+                  if (refreshOutcome === "lock_disk_full" && shouldOfferReauth(lastError)) {
                     logFeatureBad("api_request", "api_request_oauth_refresh_disk_full");
                     throw new CannotRetryError(new OAuthRefreshDiskFullError(), retryContext);
                   }
@@ -635,45 +919,50 @@ async function* withRetry(getClient, operation, options) {
             )
               logForDebugging("Host credential replaced since the client was built \u2014 retrying with it");
             else if (withoutHostManagedProviderVars()) {
-              let un = null;
-              let ao;
-              let $o = false;
-              let yo = false;
+              let authRetryOutcome = null;
+              let hostAuthRetry;
+              let hostAuthDone = false;
+              let awsCredsRetried = false;
               try {
-                ({ authToken: un, materialUnchanged: ao } = await getHostAuthTokenRefreshCallback()());
+                ({ authToken: authRetryOutcome, materialUnchanged: hostAuthRetry } =
+                  await getHostAuthTokenRefreshCallback()());
               } catch (error) {
                 logForDebugging(`host getHostAuthToken callback failed: ${errorMessage(error)}`, {
                   level: "error",
                 });
                 if (error instanceof StreamClosedAbortError)
                   throw new CannotRetryError(lastError, retryContext);
-                if (isAbortError(error)) yo = true;
+                if (isAbortError(error)) awsCredsRetried = true;
                 else {
-                  $o = true;
+                  hostAuthDone = true;
                   logFeatureBad("host_auth_recovery", "callback_failed");
                 }
               }
-              let Ho = (rr) => {
+              let retryAuth = (attemptNumber) => {
                 if (++hostAuthRecoveryFailures >= MAX_HOST_AUTH_RECOVERY_FAILURES) {
-                  logFeatureBad("host_auth_recovery", rr);
+                  logFeatureBad("host_auth_recovery", attemptNumber);
                   logFeatureBad("api_request", "api_request_host_auth_exhausted");
                   throw new CannotRetryError(lastError, retryContext);
                 }
               };
-              if ($o);
-              else if (yo) Ho("callback_aborted");
-              else if (typeof un === "string" && un && un !== clientHostAuthToken) {
-                process.env[hostAuthEnvVarName()] = un;
+              if (hostAuthDone);
+              else if (awsCredsRetried) retryAuth("callback_aborted");
+              else if (
+                typeof authRetryOutcome === "string" &&
+                authRetryOutcome &&
+                authRetryOutcome !== clientHostAuthToken
+              ) {
+                process.env[hostAuthEnvVarName()] = authRetryOutcome;
                 emitCredentialChange();
                 hostAuthRecoveryFailures = 0;
                 logFeatureOk("host_auth_recovery");
-              } else if (un === null) {
-                if (ao === true) Ho("material_unchanged");
+              } else if (authRetryOutcome === null) {
+                if (hostAuthRetry === true) retryAuth("material_unchanged");
                 else {
                   hostAuthRecoveryFailures = 0;
                   logFeatureOk("host_auth_recovery");
                 }
-              } else Ho("bearer_unchanged");
+              } else retryAuth("bearer_unchanged");
             } else if (
               ((isHostManagedProviderAuth() && isFirstPartyProvider()) ||
                 isProviderManagedUnpinnedGateway()) &&
@@ -692,7 +981,7 @@ async function* withRetry(getClient, operation, options) {
             : undefined;
         }
         lowPriorityMarkedAtDispatch = isFirstPartyApiBackend() && isLowPriorityActiveSafe();
-        let ko = await operation(client, displayAttempt, retryContext);
+        let result = await operation(client, displayAttempt, retryContext);
         logFeatureOk("api_request");
         if (reconnectingAfterExhaust) {
           logFeatureOk("api_reconnect");
@@ -710,8 +999,8 @@ async function* withRetry(getClient, operation, options) {
           );
           rememberModelAccess(options.model, "ok");
         }
-        if (hn) recordLowPriorityServed(lowPriorityWait);
-        return ko;
+        if (ownsLowPriorityWait) recordLowPriorityServed(lowPriorityWait);
+        return result;
       } catch (error) {
         if (error instanceof CannotRetryError) throw error;
         if (error instanceof APIUserAbortError) throw error;
@@ -736,21 +1025,21 @@ async function* withRetry(getClient, operation, options) {
           throw new CannotRetryError(error, retryContext);
         }
         if (isRoutedFinalAnswerError(error)) {
-          let hr =
+          let retryError =
             isModelPermissionDeniedError(error) && !options.modelCallRetries?.outOfApiAttempts()
               ? (options.fallbackModel ??
                 (getProviderForModel(options.model) === "firstParty"
                   ? getAccessFallbackModel(options)
                   : undefined))
               : undefined;
-          if (hr && hr !== options.model) {
+          if (retryError && retryError !== options.model) {
             logEvent("tengu_api_model_not_found_fallback_triggered", {
               original_model: telemetrySafeModelName(options.model),
-              fallback_model: telemetrySafeModelName(hr),
+              fallback_model: telemetrySafeModelName(retryError),
               provider: getAPIProviderForAnalytics(),
               reason: fromEnum("permission_denied"),
             });
-            throw new FallbackTriggeredError(options.model, hr, "permission_denied", error);
+            throw new FallbackTriggeredError(options.model, retryError, "permission_denied", error);
           }
           logFeatureBad("api_request", "api_request_route_answer_final");
           throw new CannotRetryError(error, retryContext);
@@ -773,24 +1062,24 @@ async function* withRetry(getClient, operation, options) {
           }
           noResponseRetryLedger.count++;
         }
-        let co;
-        let So =
+        let timeoutRetry;
+        let backoffMs =
           env.CLAUDE_CODE_NONSTREAMING_TIMEOUT_RETRIES ??
           (isRetryWatchdogOn() && options.failedStreamOutlastedTimeout
             ? OUTLASTED_TIMEOUT_RETRIES
             : undefined);
         if (
-          So !== undefined &&
+          backoffMs !== undefined &&
           options.nonStreamingTimeoutMs !== undefined &&
           error instanceof APIConnectionTimeoutError &&
           clock.now() - attemptStartMs >= options.nonStreamingTimeoutMs * RETRY_DECAY_RATIO
         ) {
-          if (nonStreamingTimeoutRetries >= So) {
+          if (nonStreamingTimeoutRetries >= backoffMs) {
             logFeatureBad("api_request", "api_request_nonstreaming_timeout_exhausted");
             throw new CannotRetryError(error, retryContext);
           }
           nonStreamingTimeoutRetries++;
-          co = So - nonStreamingTimeoutRetries;
+          timeoutRetry = backoffMs - nonStreamingTimeoutRetries;
         }
         let retryLabel = await options.onError?.(error);
         if (retryLabel && !usedRetryLabels.has(retryLabel)) {
@@ -798,16 +1087,21 @@ async function* withRetry(getClient, operation, options) {
           let mockError = toRetryStatusError(error, retryContext.model);
           if (mockError?.noResponse) {
             retryStatusShown = true;
-            let mi = clampRetryDisplayMax(mockError, attempt, maxAttempts, noResponseRetryLedger.count);
+            let displayMax = clampRetryDisplayMax(
+              mockError,
+              attempt,
+              maxAttempts,
+              noResponseRetryLedger.count,
+            );
             options.onRetryStatus?.({
               kind: "retrying",
               error: mockError,
               attempt,
-              maxRetries: mi,
+              maxRetries: displayMax,
               retryInMs: 0,
               deadline: clock.now(),
             });
-            yield createSystemAPIErrorMessage(mockError, 0, attempt, mi, "request_retry");
+            yield createSystemAPIErrorMessage(mockError, 0, attempt, displayMax, "request_retry");
           }
           attempt--;
           continue;
@@ -852,36 +1146,28 @@ async function* withRetry(getClient, operation, options) {
           let awsAccessKeyId = await getAwsAccessKeyId(options.signal);
           if (awsAccessKeyId !== undefined && awsAccessKeyId === lastAwsAccessKeyId) {
             if (options.signal?.aborted) throw createRetryAbortError();
-            let availableFallbackModel = getAvailableFallbackModel(options);
-            let Ha =
-              availableFallbackModel === undefined
-                ? undefined
-                : await checkProviderModelAccess(availableFallbackModel, awsAccessKeyId);
+            let model = getAvailableFallbackModel(options);
+            let capacityWaitMs =
+              model === undefined ? undefined : await checkProviderModelAccess(model, awsAccessKeyId);
             if (
-              availableFallbackModel !== undefined &&
-              Ha === "accessible" &&
-              getAvailableFallbackModel(options) === availableFallbackModel
+              model !== undefined &&
+              capacityWaitMs === "accessible" &&
+              getAvailableFallbackModel(options) === model
             ) {
               markModelRefused(options.model, error);
               rememberModelAccess(options.model, "refused");
               logEvent("tengu_api_model_not_found_fallback_triggered", {
                 original_model: telemetrySafeModelName(options.model),
-                fallback_model: telemetrySafeModelName(availableFallbackModel),
+                fallback_model: telemetrySafeModelName(model),
                 provider: getAPIProviderForAnalytics(),
                 reason: fromEnum("model_access_denied"),
               });
-              throw new FallbackTriggeredError(
-                options.model,
-                availableFallbackModel,
-                "permission_denied",
-                error,
-              );
+              throw new FallbackTriggeredError(options.model, model, "permission_denied", error);
             }
-            let $a =
-              availableFallbackModel !== undefined && Ha === "refused" && options.fallbackModel === undefined;
-            if ($a) markModelRefused(availableFallbackModel, modelNotAvailableError(availableFallbackModel));
-            if (availableFallbackModel === undefined || $a)
-              classifyModelAccess(options.model, error, "denied");
+            let statusInfo =
+              model !== undefined && capacityWaitMs === "refused" && options.fallbackModel === undefined;
+            if (statusInfo) markModelRefused(model, modelNotAvailableError(model));
+            if (model === undefined || statusInfo) classifyModelAccess(options.model, error, "denied");
             throw new CannotRetryError(error, retryContext);
           }
           lastAwsAccessKeyId = awsAccessKeyId;
@@ -897,7 +1183,7 @@ async function* withRetry(getClient, operation, options) {
           fallbackForAccessError &&
           fallbackForAccessError !== options.model
         ) {
-          let hr = isModelNotFoundError(error)
+          let modelNotFound = isModelNotFoundError(error)
             ? "model_not_found"
             : isModelPermissionDeniedError(error)
               ? "permission_denied"
@@ -906,9 +1192,9 @@ async function* withRetry(getClient, operation, options) {
             original_model: telemetrySafeModelName(options.model),
             fallback_model: telemetrySafeModelName(fallbackForAccessError),
             provider: getAPIProviderForAnalytics(),
-            reason: fromEnum(hr),
+            reason: fromEnum(modelNotFound),
           });
-          throw new FallbackTriggeredError(options.model, fallbackForAccessError, hr, error);
+          throw new FallbackTriggeredError(options.model, fallbackForAccessError, modelNotFound, error);
         }
         let isApiKeyHelperAuthError_2 = isApiKeyHelperAuthError(error);
         let apiKeyHelperFastRetry =
@@ -933,8 +1219,8 @@ async function* withRetry(getClient, operation, options) {
             continue;
           }
           let retryAfterMs = getRetryAfterMs(error);
-          let Ha = retryAfterMs !== null && retryAfterMs < FAST_MODE_SHORT_RETRY_THRESHOLD_MS;
-          if (Ha && !persistentWatchdog) {
+          let shortRetry = retryAfterMs !== null && retryAfterMs < FAST_MODE_SHORT_RETRY_THRESHOLD_MS;
+          if (shortRetry && !persistentWatchdog) {
             if (attempt <= maxAttempts) {
               let min = Math.min(
                 getRetryDelay(
@@ -968,7 +1254,7 @@ async function* withRetry(getClient, operation, options) {
             }
             continue;
           }
-          if (!Ha) {
+          if (!shortRetry) {
             let cooldownMs = Math.max(
               retryAfterMs ?? FAST_MODE_DEFAULT_COOLDOWN_MS,
               FAST_MODE_MIN_COOLDOWN_MS,
@@ -1003,7 +1289,7 @@ async function* withRetry(getClient, operation, options) {
               model: retryContext.model,
               carriesConfigSkips: true,
             },
-            pn,
+            noResponseLedgerLocal,
           )
         ) {
           attempt--;
@@ -1057,7 +1343,7 @@ async function* withRetry(getClient, operation, options) {
         let overflowData = isNetworkDownError(error);
         if (overflowData && (options.modelCallRetries?.reconnectsLeft() ?? 0) > 0) maxAttempts++;
         if (attempt > maxAttempts && !persistentCapacityRetry && !sleptThroughRetry) {
-          let hr =
+          let errorKind =
             !(error instanceof APIError && error.status === 401) ||
             clientOAuthAccessToken !== undefined ||
             withoutHostManagedProviderVars() ||
@@ -1065,7 +1351,7 @@ async function* withRetry(getClient, operation, options) {
             (!getAnthropicApiKey() && shouldUseWIFAuth());
           if (
             !isAuthRetryableError(error, retryContext.model) ||
-            !hr ||
+            !errorKind ||
             options.modelCallRetries?.takeCredentialRenewal() !== true
           ) {
             logFeatureBad("api_request", "api_request_retry_exhausted");
@@ -1083,7 +1369,7 @@ async function* withRetry(getClient, operation, options) {
         let cloudAuthRetriesLeft;
         let cloudCredentialProvider = getCloudCredentialErrorProvider(error);
         if (
-          awsSignInFailures() > yn &&
+          awsSignInFailures() > awsSignInFailuresBefore &&
           (cloudCredentialProvider === "AWS" ||
             (!withoutHostManagedProviderVars() && isAwsAuthError(error, retryContext.model)))
         ) {
@@ -1105,7 +1391,7 @@ async function* withRetry(getClient, operation, options) {
           cloudCredentialProvider === "Google Cloud" ||
           (!withoutHostManagedProviderVars() && isGoogleCloudAuthError(error))
         ) {
-          if (gcpSignInFailures() > ho) {
+          if (gcpSignInFailures() > gcpSignInFailuresBefore) {
             logFeatureBad("api_request", "api_request_gcp_sign_in_failed");
             throw new CannotRetryError(error, retryContext);
           }
@@ -1149,7 +1435,7 @@ async function* withRetry(getClient, operation, options) {
           ) &&
           (!(error instanceof APIError) || !shouldRetry(error))
         ) {
-          let hr =
+          let nonFallback =
             error instanceof APIError &&
             ((error.status !== undefined &&
               NON_RETRYABLE_STATUS_CODES.has(error.status) &&
@@ -1158,11 +1444,11 @@ async function* withRetry(getClient, operation, options) {
               (options.isResumePrefillRequest === true &&
                 error.status !== undefined &&
                 isNonRetryable4xx(error.status)) ||
-              NON_FALLBACK_ERROR_PREDICATES.some((mi) => mi(error)));
+              NON_FALLBACK_ERROR_PREDICATES.some((predicate) => predicate(error)));
           if (
             error instanceof APIError &&
             error.status !== undefined &&
-            !hr &&
+            !nonFallback &&
             options.fallbackModel &&
             options.fallbackModel !== options.model
           ) {
@@ -1204,16 +1490,19 @@ async function* withRetry(getClient, operation, options) {
               );
               throw error;
             }
-            let Ti = availableContext;
-            if (retryContext.maxTokensOverride !== undefined && Ti >= retryContext.maxTokensOverride) {
+            let contextBefore = availableContext;
+            if (
+              retryContext.maxTokensOverride !== undefined &&
+              contextBefore >= retryContext.maxTokensOverride
+            ) {
               logError(Error("max_tokens overflow adjustment made no progress"));
               throw error;
             }
-            retryContext.maxTokensOverride = Ti;
+            retryContext.maxTokensOverride = contextBefore;
             logEvent("tengu_max_tokens_context_overflow_adjustment", {
               inputTokens,
               contextLimit,
-              adjustedMaxTokens: Ti,
+              adjustedMaxTokens: contextBefore,
               attempt,
             });
             continue;
@@ -1224,32 +1513,35 @@ async function* withRetry(getClient, operation, options) {
         let isPersistentWait = persistentCapacityRetry;
         let usageLimitError = null;
         if (persistentCapacityRetry) {
-          let hr = (env.CLAUDE_CODE_RETRY_WATCHDOG_MAX_WAIT_MS ?? 1 / 0) - capacityWait.spentMs;
-          if (hr <= 0) {
+          let waitBudgetMs = (env.CLAUDE_CODE_RETRY_WATCHDOG_MAX_WAIT_MS ?? 1 / 0) - capacityWait.spentMs;
+          if (waitBudgetMs <= 0) {
             logFeatureBad("api_request", "api_request_capacity_wait_exhausted");
             throw new CannotRetryError(error, retryContext);
           }
           persistentRetryCount++;
-          let mi = null;
+          let rateLimitType = null;
           if (error instanceof APIError && error.status === 429) {
-            mi = getRateLimitResetDelayMs(error, clock);
-            if (mi !== null && error.headers?.get?.("anthropic-ratelimit-unified-status") === "rejected") {
-              let Ha =
+            rateLimitType = getRateLimitResetDelayMs(error, clock);
+            if (
+              rateLimitType !== null &&
+              error.headers?.get?.("anthropic-ratelimit-unified-status") === "rejected"
+            ) {
+              let retryDelay =
                 (env.CLAUDE_CODE_RETRY_WATCHDOG_MAX_USAGE_LIMIT_WAIT_MS ?? 1 / 0) -
                 capacityWait.usageLimitSpentMs;
-              if (mi > Ha) {
-                let $a = error.headers?.get(OVERAGE_STATUS_HEADER);
-                let nr = $a === "allowed" || $a === "allowed_warning";
+              if (rateLimitType > retryDelay) {
+                let overageStatus = error.headers?.get(OVERAGE_STATUS_HEADER);
+                let overageAllowed = overageStatus === "allowed" || overageStatus === "allowed_warning";
                 if (
-                  Ha <= 0 ||
-                  (!nr && error.headers?.get(OVERAGE_DISABLED_REASON_HEADER) !== "fetch_error")
+                  retryDelay <= 0 ||
+                  (!overageAllowed && error.headers?.get(OVERAGE_DISABLED_REASON_HEADER) !== "fetch_error")
                 ) {
                   logFeatureBad("api_request", "api_request_usage_limit_wait_too_long");
                   throw new CannotRetryError(error, retryContext);
                 }
-                mi = nr
+                rateLimitType = overageAllowed
                   ? Math.min(
-                      Ha,
+                      retryDelay,
                       getRetryDelay(
                         persistentRetryCount,
                         null,
@@ -1257,13 +1549,13 @@ async function* withRetry(getClient, operation, options) {
                         options.random,
                       ),
                     )
-                  : Ha;
+                  : retryDelay;
               }
               usageLimitError = error;
             }
           }
           delayMs = Math.min(
-            mi ??
+            rateLimitType ??
               getRetryDelay(
                 persistentRetryCount,
                 retryAfterHeader,
@@ -1272,16 +1564,16 @@ async function* withRetry(getClient, operation, options) {
               ),
             PERSISTENT_WAIT_CAP_MS,
           );
-          delayMs = Math.min(delayMs, hr);
+          delayMs = Math.min(delayMs, waitBudgetMs);
         } else if (isRemoteAuthError(error)) delayMs = AUTH_RETRY_DELAY_MS;
         else if (apiKeyHelperFastRetry) delayMs = API_KEY_HELPER_RETRY_DELAY_MS;
         else {
           let retryAfter = is529Error(error);
-          let mi = retryAfter ? env.CLAUDE_CODE_OVERLOADED_RETRY_MAX_DELAY_MS : undefined;
+          let overloadedCap = retryAfter ? env.CLAUDE_CODE_OVERLOADED_RETRY_MAX_DELAY_MS : undefined;
           delayMs = getRetryDelay(
             attempt + persistentRetryCount,
             retryAfterHeader,
-            mi,
+            overloadedCap,
             options.random,
             retryAfter ? env.CLAUDE_CODE_OVERLOADED_RETRY_BASE_DELAY_MS : undefined,
           );
@@ -1289,7 +1581,8 @@ async function* withRetry(getClient, operation, options) {
             delayMs = Math.min(delayMs, PERSISTENT_WAIT_CAP_MS);
             isPersistentWait = true;
           } else if (
-            delayMs > Math.max(MAX_RETRY_AFTER_WAIT_MS, Math.ceil((mi ?? 0) * (1 + RETRY_JITTER_RATIO)))
+            delayMs >
+            Math.max(MAX_RETRY_AFTER_WAIT_MS, Math.ceil((overloadedCap ?? 0) * (1 + RETRY_JITTER_RATIO)))
           ) {
             logEvent("tengu_api_retry_after_too_long", {
               delayMs,
@@ -1355,8 +1648,8 @@ async function* withRetry(getClient, operation, options) {
           } catch (error) {
             logError(error);
           }
-        let Is = () => {
-          options.signal?.removeEventListener("abort", Is);
+        let dispose = () => {
+          options.signal?.removeEventListener("abort", dispose);
           try {
             quotaWindowWaitCleanup?.();
           } catch (error) {
@@ -1365,14 +1658,14 @@ async function* withRetry(getClient, operation, options) {
           quotaWindowWaitCleanup = undefined;
         };
         if (quotaWindowWaitCleanup)
-          options.signal?.addEventListener("abort", Is, {
+          options.signal?.addEventListener("abort", dispose, {
             once: true,
           });
-        using fs = {
-          [Symbol.dispose]: Is,
+        using disposable = {
+          [Symbol.dispose]: dispose,
         };
         let waitChunkMs = isPersistentWait ? PERSISTENT_WAIT_CHUNK_MS : delayMs;
-        let Vi = apiKeyHelperFastRetry && !isPersistentWait;
+        let fastRetry = apiKeyHelperFastRetry && !isPersistentWait;
         let usageLimitRecheckMs =
           usageLimitError && options.isUsageLimitLifted
             ? env.CLAUDE_CODE_RETRY_WATCHDOG_USAGE_LIMIT_RECHECK_MS
@@ -1381,12 +1674,12 @@ async function* withRetry(getClient, operation, options) {
           usageLimitRecheckCount++;
           usageLimitLiftedLastCheck = false;
         }
-        let Wi = usageLimitRecheckMs === undefined ? 1 / 0 : 0;
-        let ii = 0;
+        let usageLimitRecheckCap = usageLimitRecheckMs === undefined ? 1 / 0 : 0;
+        let usageLimitWaits = 0;
         let remainingWaitMs = delayMs;
         while (remainingWaitMs > 0) {
-          if (usageLimitRecheckMs !== undefined && Wi <= 0)
-            Wi = getRetryDelay(
+          if (usageLimitRecheckMs !== undefined && usageLimitRecheckCap <= 0)
+            usageLimitRecheckCap = getRetryDelay(
               1 + usageLimitRecheckCount,
               null,
               PERSISTENT_WAIT_CAP_MS / 2,
@@ -1394,67 +1687,74 @@ async function* withRetry(getClient, operation, options) {
               usageLimitRecheckMs,
             );
           if (isPersistentWait && options.signal?.aborted) throw new APIUserAbortError();
-          let retryStatusError = toRetryStatusError(error, retryContext.model);
-          if (Vi && retryStatusShown) {
+          let baseMs = toRetryStatusError(error, retryContext.model);
+          if (fastRetry && retryStatusShown) {
             options.onRetryStatus?.(null);
             retryStatusShown = false;
           }
-          if (retryStatusError && !Vi) {
+          if (baseMs && !fastRetry) {
             retryStatusShown = true;
-            let Ti = clampRetryDisplayMax(
-              retryStatusError,
+            let displayMax2 = clampRetryDisplayMax(
+              baseMs,
               attempt,
               (sleptThroughRetry ? Math.max(1, maxAttempts) : maxAttempts) +
                 (overflowData ? (options.modelCallRetries?.reconnectsLeft() ?? 0) : 0),
               noResponseRetryLedger.count,
-              cloudAuthRetriesLeft ?? co,
+              cloudAuthRetriesLeft ?? timeoutRetry,
             );
             options.onRetryStatus?.({
               kind: "retrying",
-              error: retryStatusError,
+              error: baseMs,
               attempt: attemptForTelemetry,
-              maxRetries: Ti,
+              maxRetries: displayMax2,
               retryInMs: remainingWaitMs,
               deadline: clock.now() + remainingWaitMs,
             });
             yield createSystemAPIErrorMessage(
-              retryStatusError,
+              baseMs,
               remainingWaitMs,
               attemptForTelemetry,
-              Ti,
+              displayMax2,
               "request_retry",
             );
           }
           let chunk = Math.min(remainingWaitMs, waitChunkMs);
-          let min = Math.min(chunk, ii);
-          ii = 0;
-          let $a = clock.monotonicNow();
-          let nr = await sleepOrWake(chunk - min, options);
+          let min = Math.min(chunk, usageLimitWaits);
+          usageLimitWaits = 0;
+          let waitStartedAt = clock.monotonicNow();
+          let woke = await sleepOrWake(chunk - min, options);
           if (persistentCapacityRetry) {
-            let Ti = nr ? Math.min(chunk, min + Math.round(clock.monotonicNow() - $a)) : chunk;
-            capacityWait.spentMs += Ti;
-            if (usageLimitError) capacityWait.usageLimitSpentMs += Ti;
+            let wokenResult = woke
+              ? Math.min(chunk, min + Math.round(clock.monotonicNow() - waitStartedAt))
+              : chunk;
+            capacityWait.spentMs += wokenResult;
+            if (usageLimitError) capacityWait.usageLimitSpentMs += wokenResult;
           }
-          if (nr) break;
+          if (woke) break;
           remainingWaitMs -= chunk;
-          Wi -= chunk;
-          if (Wi <= 0 && remainingWaitMs > waitChunkMs && usageLimitError && options.isUsageLimitLifted) {
-            let Ti = false;
-            let Vs = options.subscribeRetryWake?.(() => {
-              Ti = true;
+          usageLimitRecheckCap -= chunk;
+          if (
+            usageLimitRecheckCap <= 0 &&
+            remainingWaitMs > waitChunkMs &&
+            usageLimitError &&
+            options.isUsageLimitLifted
+          ) {
+            let retryStatusCleared = false;
+            let unsubscribe = options.subscribeRetryWake?.(() => {
+              retryStatusCleared = true;
             });
-            let _i = clock.monotonicNow();
-            let jo = false;
+            let wokeAt = clock.monotonicNow();
+            let aborted = false;
             try {
-              jo = await options.isUsageLimitLifted(usageLimitError);
+              aborted = await options.isUsageLimitLifted(usageLimitError);
             } catch (error) {
               logError(error);
             } finally {
-              Vs?.();
+              unsubscribe?.();
             }
-            usageLimitLiftedLastCheck = jo;
-            if (jo || Ti) break;
-            ii = Math.max(0, Math.round(clock.monotonicNow() - _i));
+            usageLimitLiftedLastCheck = aborted;
+            if (aborted || retryStatusCleared) break;
+            usageLimitWaits = Math.max(0, Math.round(clock.monotonicNow() - wokeAt));
           }
         }
         if (persistentCapacityRetry || sleptThroughRetry) attempt--;
@@ -1485,35 +1785,35 @@ async function* withRetry(getClient, operation, options) {
 /**
  * 等待指定毫秒，可被 subscribeRetryWake 提前唤醒（返回 true）；中止时抛 AbortError。
  */
-async function sleepOrWake(e, options) {
+async function sleepOrWake(delayMs, options) {
   let clock = options.clock ?? systemClock;
   if (!options.subscribeRetryWake) {
-    await sleep(e, options.signal, {
+    await sleep(delayMs, options.signal, {
       abortError: createRetryAbortError,
       clock,
     });
     return false;
   }
   if (options.signal?.aborted) throw createRetryAbortError();
-  let s = false;
+  let woken = false;
   let abortController = new AbortController();
-  let y = options.subscribeRetryWake(() => {
-    s = true;
+  let unsubscribe = options.subscribeRetryWake(() => {
+    woken = true;
     abortController.abort();
   });
-  let S = () => abortController.abort();
-  options.signal?.addEventListener("abort", S, {
+  let abort = () => abortController.abort();
+  options.signal?.addEventListener("abort", abort, {
     once: true,
   });
   try {
-    await sleep(e, abortController.signal, {
+    await sleep(delayMs, abortController.signal, {
       clock,
     });
     if (options.signal?.aborted) throw createRetryAbortError();
-    return s;
+    return woken;
   } finally {
-    y();
-    options.signal?.removeEventListener("abort", S);
+    unsubscribe();
+    options.signal?.removeEventListener("abort", abort);
   }
 }
 //@ chunk-e6aww6q8.js:2633660-2633750 fingerprint = getRetryAfter (1)
@@ -1559,11 +1859,11 @@ function isFastModeNotEnabledError(error) {
 /**
  * 400 "'<model>' does not support the `speed` parameter" 且模型与当前模型同族。
  */
-function isSpeedParameterUnsupportedError(e, model) {
-  if (!(e instanceof APIError) || e.status !== 400) return false;
+function isSpeedParameterUnsupportedError(error, model) {
+  if (!(error instanceof APIError) || error.status !== 400) return false;
   try {
-    let r = e.message?.match(/'([^']+)' does not support the `speed` parameter/)?.[1];
-    return r !== undefined && strippedCanonicalName(r) === strippedCanonicalName(model);
+    let paramName = error.message?.match(/'([^']+)' does not support the `speed` parameter/)?.[1];
+    return paramName !== undefined && strippedCanonicalName(paramName) === strippedCanonicalName(model);
   } catch (error) {
     logError(toError(error));
     return false;
@@ -1573,9 +1873,13 @@ function isSpeedParameterUnsupportedError(e, model) {
 /**
  * 5xx 但不是 529。
  */
-function isNon529ServerError(e) {
+function isNon529ServerError(error) {
   return (
-    e instanceof APIError && e.status !== undefined && e.status >= 500 && e.status < 600 && e.status !== 529
+    error instanceof APIError &&
+    error.status !== undefined &&
+    error.status >= 500 &&
+    error.status < 600 &&
+    error.status !== 529
   );
 }
 //@ chunk-e6aww6q8.js:2634661-2634923 layout
@@ -1591,8 +1895,8 @@ async function getAwsAccessKeyId(signal) {
   )
     return;
   try {
-    let n = await refreshAndGetAwsCredentials(signal);
-    if (n) return n.accessKeyId;
+    let creds = await refreshAndGetAwsCredentials(signal);
+    if (creds) return creds.accessKeyId;
     if (signal?.aborted) return;
     return (await (await getDefaultAwsProviderChain(getAwsRegionSync()))()).accessKeyId;
   } catch {
@@ -1604,8 +1908,8 @@ async function getAwsAccessKeyId(signal) {
  * fallbackModel 或可用的 accessFallbackModel，且不同于当前模型。
  */
 function getAvailableFallbackModel(options) {
-  let n = options.fallbackModel ?? getAccessFallbackModel(options);
-  return n !== undefined && n !== options.model ? n : undefined;
+  let fallback = options.fallbackModel ?? getAccessFallbackModel(options);
+  return fallback !== undefined && fallback !== options.model ? fallback : undefined;
 }
 //@ chunk-e6aww6q8.js:2635009-2635124 layout
 /**
@@ -1623,50 +1927,51 @@ function getAccessFallbackModel({ accessFallbackModel, toolFreeHelper }) {
 /**
  * Bedrock/anthropicAws/mantle 下的 AWS 凭证错误或 403，或 isAwsProvider401。旧版名 isBedrockAuthError 近似。
  */
-function isAwsAuthError(error, n) {
+function isAwsAuthError(error, authError) {
   if (env.CLAUDE_CODE_USE_BEDROCK || env.CLAUDE_CODE_USE_ANTHROPIC_AWS || env.CLAUDE_CODE_USE_MANTLE) {
     if (isAwsCredentialsProviderError(error) || (error instanceof APIError && error.status === 403))
       return true;
   }
-  return isAwsProvider401(error, n);
+  return isAwsProvider401(error, authError);
 }
 //@ chunk-e6aww6q8.js:2635299-2635416 layout
 /**
  * anthropicAws/mantle 端点上的 401。
  */
-function isAwsProvider401(error, n) {
+function isAwsProvider401(error, providerError) {
   if (!(error instanceof APIError) || error.status !== 401) return false;
-  let providerForModel = getProviderForModel(n);
+  let providerForModel = getProviderForModel(providerError);
   return providerForModel === "anthropicAws" || providerForModel === "mantle";
 }
 //@ chunk-e6aww6q8.js:2635416-2635534 layout
 /**
  * AWS 凭证错误（SDK 错误、401、x-amzn-errortype 指示过期）。
  */
-function isAwsCredentialExpiredError(e, n) {
+function isAwsCredentialExpiredError(error, message) {
   return (
-    isAwsCredentialsProviderError(e) ||
-    isAwsProvider401(e, n) ||
-    (e instanceof APIError &&
-      isAwsCredentialError(e.headers?.get("x-amzn-errortype") ?? undefined, e.message))
+    isAwsCredentialsProviderError(error) ||
+    isAwsProvider401(error, message) ||
+    (error instanceof APIError &&
+      isAwsCredentialError(error.headers?.get("x-amzn-errortype") ?? undefined, error.message))
   );
 }
 //@ chunk-e6aww6q8.js:2635534-2635652 layout
 /**
  * 重试提示里的"最大次数"：无响应时受 noResponse 账本限制。
  */
-function clampRetryDisplayMax(e, attempt, r, count, h) {
-  let y = r;
-  if (e.noResponse && !isRetryWatchdogOn()) y = Math.min(y, attempt + MAX_NO_RESPONSE_RETRIES - count);
-  if (h !== undefined) y = Math.min(y, attempt + h);
-  return y;
+function clampRetryDisplayMax(baseMs, attempt, displayMax, count, attemptCount) {
+  let current = displayMax;
+  if (baseMs.noResponse && !isRetryWatchdogOn())
+    current = Math.min(current, attempt + MAX_NO_RESPONSE_RETRIES - count);
+  if (attemptCount !== undefined) current = Math.min(current, attempt + attemptCount);
+  return current;
 }
 //@ chunk-e6aww6q8.js:2635652-2635921 layout
 /**
  * 把错误转成重试状态展示对象（formatted、rateLimits、noResponse 等）；云凭证错误标 isCloudCredentialError。
  */
 function toRetryStatusError(error, model) {
-  let r =
+  let quotaInfo =
     error instanceof APIError
       ? summarizeApiError(error)
       : isAwsCredentialExpiredError(error, model) ||
@@ -1683,12 +1988,12 @@ function toRetryStatusError(error, model) {
             noResponse: null,
           }
         : null;
-  return r && getCloudCredentialErrorProvider(error) !== null
+  return quotaInfo && getCloudCredentialErrorProvider(error) !== null
     ? {
-        ...r,
+        ...quotaInfo,
         isCloudCredentialError: true,
       }
-    : r;
+    : quotaInfo;
 }
 //@ chunk-e6aww6q8.js:2635921-2636010 layout
 /**
@@ -1725,10 +2030,10 @@ async function invalidateWifTokenOnError(error) {
     getWIFAccountOnHold(error) === null &&
     (error.statusCode === null || error.statusCode === 401 || error.statusCode >= 500)
   ) {
-    let n = await getWIFTokenCache().catch(() => null);
-    if (n === null) return false;
+    let cache = await getWIFTokenCache().catch(() => null);
+    if (cache === null) return false;
     if (getErrnoCode(error.cause) === "ELOCKED") return true;
-    n.invalidate();
+    cache.invalidate();
     return true;
   }
   return false;
@@ -1754,8 +2059,8 @@ function shouldRetry(error) {
       error.message?.toLowerCase().includes("usage credits are required") ||
       error.message?.toLowerCase().includes("extra usage is required"))
   ) {
-    let s = error.headers?.get("anthropic-ratelimit-unified-overage-disabled-reason");
-    if (s !== "fetch_error" && s !== "org_level_disabled_until") return false;
+    let reason = error.headers?.get("anthropic-ratelimit-unified-overage-disabled-reason");
+    if (reason !== "fetch_error" && reason !== "org_level_disabled_until") return false;
   }
   if (isSpendLimitError(error)) return false;
   if (
@@ -1788,10 +2093,10 @@ function shouldRetry(error) {
     return true;
   if (withoutHostManagedProviderVars() && (error.status === 401 || isOAuthTokenRevokedError(error)))
     return true;
-  let n = proxyAuthRequired(error);
-  if (n !== undefined) {
+  let needsAuth = proxyAuthRequired(error);
+  if (needsAuth !== undefined) {
     if (!getConfiguredProxyAuthHelper()) return false;
-    clearProxyAuthHelperCache(n.proxyAuthenticate);
+    clearProxyAuthHelperCache(needsAuth.proxyAuthenticate);
     return true;
   }
   if (
@@ -1824,47 +2129,58 @@ function shouldRetry(error) {
 /**
  * 429 且不是订阅额度用尽（无 overage-disabled-reason 头）。
  */
-function isRateLimitWithoutQuotaInfo(e) {
+function isRateLimitWithoutQuotaInfo(error) {
   return (
-    e.status === 429 && !hasUnifiedRateLimitHeaders(e) && !e.headers?.get?.(OVERAGE_DISABLED_REASON_HEADER)
+    error.status === 429 &&
+    !hasUnifiedRateLimitHeaders(error) &&
+    !error.headers?.get?.(OVERAGE_DISABLED_REASON_HEADER)
   );
 }
 //@ chunk-e6aww6q8.js:2637941-2638157 layout
 /**
  * 组织消费上限类 overage 禁用原因；cyn 加上 out_of_credits 等。
  */
-var SPEND_CAP_REASONS = new Set(["org_spend_cap_reached", "org_level_disabled_until"]);
-var OVERAGE_EXHAUSTED_REASONS = new Set([
-  ...SPEND_CAP_REASONS,
-  "out_of_credits",
-  "org_level_disabled",
-  "org_service_level_disabled",
-]);
-var OVERAGE_DISABLED_REASON_REGEX = /\\?"overageDisabledReason\\?":\s*\\?"([a-z_]+)\\?"/;
+var SPEND_CAP_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var OVERAGE_EXHAUSTED_REASONS;
+var OVERAGE_DISABLED_REASON_REGEX;
+deferInit("chunk-e6aww6q8.js:2637941", () => {
+  SPEND_CAP_REASONS = new Set(["org_spend_cap_reached", "org_level_disabled_until"]);
+  OVERAGE_EXHAUSTED_REASONS = new Set([
+    ...SPEND_CAP_REASONS,
+    "out_of_credits",
+    "org_level_disabled",
+    "org_service_level_disabled",
+  ]);
+  OVERAGE_DISABLED_REASON_REGEX = /\\?"overageDisabledReason\\?":\s*\\?"([a-z_]+)\\?"/;
+});
 //@ chunk-e6aww6q8.js:2638157-2638444 layout
 /**
  * 429 且是服务/组织消费上限或额度耗尽（头或消息体 overageDisabledReason）。
  */
-function isSpendLimitError(e) {
-  if (e.status !== 429) return false;
-  if (e.message.includes("service_spend_limit_reached")) return true;
-  let n = e.headers?.get?.(OVERAGE_DISABLED_REASON_HEADER);
-  if (n && (SPEND_CAP_REASONS.has(n) || (!hasUnifiedRateLimitHeaders(e) && OVERAGE_EXHAUSTED_REASONS.has(n))))
+function isSpendLimitError(error) {
+  if (error.status !== 429) return false;
+  if (error.message.includes("service_spend_limit_reached")) return true;
+  let reasonHeader = error.headers?.get?.(OVERAGE_DISABLED_REASON_HEADER);
+  if (
+    reasonHeader &&
+    (SPEND_CAP_REASONS.has(reasonHeader) ||
+      (!hasUnifiedRateLimitHeaders(error) && OVERAGE_EXHAUSTED_REASONS.has(reasonHeader)))
+  )
     return true;
-  let r = e.message.includes("exceeded_limit")
-    ? OVERAGE_DISABLED_REASON_REGEX.exec(e.message)?.[1]
+  let mentionsLimit = error.message.includes("exceeded_limit")
+    ? OVERAGE_DISABLED_REASON_REGEX.exec(error.message)?.[1]
     : undefined;
-  return r !== undefined && OVERAGE_EXHAUSTED_REASONS.has(r);
+  return mentionsLimit !== undefined && OVERAGE_EXHAUSTED_REASONS.has(mentionsLimit);
 }
 //@ chunk-e6aww6q8.js:2638444-2638679 layout
 /**
  * CLAUDE_CODE_MAX_RETRIES（非持久模式上限 15），默认 10；持久重试模式默认 300。
  */
 function getMaxRetriesFromEnv() {
-  let e = isRetryWatchdogOn();
+  let watchdogOn = isRetryWatchdogOn();
   let CLAUDE_CODE_MAX_RETRIES = env.CLAUDE_CODE_MAX_RETRIES;
   if (CLAUDE_CODE_MAX_RETRIES !== undefined && CLAUDE_CODE_MAX_RETRIES >= 0) {
-    if (CLAUDE_CODE_MAX_RETRIES > MAX_RETRIES_CAP && !e) {
+    if (CLAUDE_CODE_MAX_RETRIES > MAX_RETRIES_CAP && !watchdogOn) {
       if (streamFallbackWarning().once("max_retries_clamp_warning"))
         logForDebugging(`CLAUDE_CODE_MAX_RETRIES=${CLAUDE_CODE_MAX_RETRIES} clamped to ${MAX_RETRIES_CAP}`, {
           level: "warn",
@@ -1873,7 +2189,7 @@ function getMaxRetriesFromEnv() {
     }
     return CLAUDE_CODE_MAX_RETRIES;
   }
-  return e ? UNATTENDED_MAX_RETRIES : DEFAULT_MAX_RETRIES;
+  return watchdogOn ? UNATTENDED_MAX_RETRIES : DEFAULT_MAX_RETRIES;
 }
 //@ chunk-e6aww6q8.js:2638679-2638722 layout
 /**
@@ -1942,46 +2258,47 @@ var MAX_PATIENT_RETRIES = 300;
 /**
  * 流式模型调用重试决策入口：noResponse（休眠/断网）、httpError、streamFailed 三类分派，返回 {decision, counts}（retry/useFallbackModel/retryWithoutStreaming/keepPartial/fail）。
  */
-function decideStreamRetry(e, n, r, s) {
-  switch (e.kind) {
+function decideStreamRetry(failure, counts, limits, fallbackCouldHelp) {
+  switch (failure.kind) {
     case "noResponse":
-      if (e.suspended) return retryAfterSleep(n, r);
-      return e.networkDown && n.reconnects < r.maxReconnects
+      if (failure.suspended) return retryAfterSleep(counts, limits);
+      return failure.networkDown && counts.reconnects < limits.maxReconnects
         ? {
             decision: "retry",
             counts: {
-              ...n,
-              reconnects: n.reconnects + 1,
+              ...counts,
+              reconnects: counts.reconnects + 1,
             },
           }
-        : retryIfBudgetLeft(n, r);
+        : retryIfBudgetLeft(counts, limits);
     case "httpError":
-      return decideHttpErrorRetry(e, n, r);
+      return decideHttpErrorRetry(failure, counts, limits);
     case "streamFailed":
-      return decideStreamFailureRetry(e, n, r, s);
+      return decideStreamFailureRetry(failure, counts, limits, fallbackCouldHelp);
   }
 }
 //@ chunk-e6aww6q8.js:2639518-2639876 layout
 /**
  * HTTP 错误：529→overloaded 逻辑；持久模式 429 重试；fallback 可帮助时换模型；408/409/429/5xx 计次重试；404 改非流式；否则失败。
  */
-function decideHttpErrorRetry({ status, fallbackModelCouldHelp }, r, s) {
-  if (status === 529) return decideOverloadedRetry(r, s, undefined);
-  if (status === 429 && s.persistent)
+function decideHttpErrorRetry({ status, fallbackModelCouldHelp }, none, firstSlot) {
+  if (status === 529) return decideOverloadedRetry(none, firstSlot, undefined);
+  if (status === 429 && firstSlot.persistent)
     return {
       decision: "retry",
-      counts: r,
+      counts: none,
     };
-  if (fallbackModelCouldHelp && s.hasFallbackModel)
+  if (fallbackModelCouldHelp && firstSlot.hasFallbackModel)
     return {
       decision: "useFallbackModel",
-      counts: r,
+      counts: none,
     };
-  if (status === 408 || status === 409 || status === 429 || status >= 500) return retryIfBudgetLeft(r, s);
-  if (status === 404 && !r.triedWithoutStreaming) return retryWithoutStreaming(r, s, true);
+  if (status === 408 || status === 409 || status === 429 || status >= 500)
+    return retryIfBudgetLeft(none, firstSlot);
+  if (status === 404 && !none.triedWithoutStreaming) return retryWithoutStreaming(none, firstSlot, true);
   return {
     decision: "fail",
-    counts: r,
+    counts: none,
   };
 }
 //@ chunk-e6aww6q8.js:2639876-2641193 layout
@@ -1990,190 +2307,208 @@ function decideHttpErrorRetry({ status, fallbackModelCouldHelp }, r, s) {
  */
 function decideStreamFailureRetry(
   { cause, progress, stopReasonReceived, outlastedNonStreamingTimeout },
-  h,
-  y,
-  S,
+  counts,
+  failure,
+  limits,
 ) {
-  let w = {
+  let failResult = {
     decision: "fail",
-    counts: h,
+    counts,
   };
-  let L = {
+  let partialResult = {
     decision: "keepPartial",
-    counts: h,
+    counts,
   };
-  let G = retryWithoutStreaming(h, y, S);
-  if (cause === "denied") return w;
+  let withoutStreaming = retryWithoutStreaming(counts, failure, limits);
+  if (cause === "denied") return failResult;
   if (cause === "outputFiltered")
     return (progress === "nothing" || progress === "started") && !stopReasonReceived
-      ? retryWithCounter("outputFiltered", y.maxOutputFiltered, h, y, w)
-      : w;
-  if (progress === "output") return cause === "badRequest" || cause === "unknown" ? w : L;
+      ? retryWithCounter("outputFiltered", failure.maxOutputFiltered, counts, failure, failResult)
+      : failResult;
+  if (progress === "output")
+    return cause === "badRequest" || cause === "unknown" ? failResult : partialResult;
   if (progress === "thinkingOnly")
     switch (cause) {
       case "stalled":
-        return stopReasonReceived ? L : retryWithCounter("stalls", 1, h, y, L);
+        return stopReasonReceived
+          ? partialResult
+          : retryWithCounter("stalls", 1, counts, failure, partialResult);
       case "connectionLost":
       case "suspended":
       case "truncated":
       case "malformed":
-        return stopReasonReceived ? L : retryWithCounter("afterThinkingOnly", 2, h, y, L);
+        return stopReasonReceived
+          ? partialResult
+          : retryWithCounter("afterThinkingOnly", 2, counts, failure, partialResult);
       case "serverError":
       case "timedOut":
-        if (stopReasonReceived) return w;
-        if (y.hasFallbackModel && !isPersistentForAllErrors(y))
+        if (stopReasonReceived) return failResult;
+        if (failure.hasFallbackModel && !isPersistentForAllErrors(failure))
           return {
             decision: "useFallbackModel",
-            counts: h,
+            counts,
           };
-        return retryWithCounter("afterThinkingOnly", cause === "timedOut" ? 1 : 2, h, y, w);
+        return retryWithCounter(
+          "afterThinkingOnly",
+          cause === "timedOut" ? 1 : 2,
+          counts,
+          failure,
+          failResult,
+        );
       case "overloaded":
-        return stopReasonReceived ? w : decideOverloadedRetry(h, y, S);
+        return stopReasonReceived ? failResult : decideOverloadedRetry(counts, failure, limits);
       case "badRequest":
       case "unknown":
-        return w;
+        return failResult;
     }
   switch (cause) {
     case "overloaded":
       return progress === "partialOutput"
         ? retryWithoutStreaming(
             {
-              ...h,
-              overloaded: h.overloaded + 1,
+              ...counts,
+              overloaded: counts.overloaded + 1,
             },
-            y,
-            S,
+            failure,
+            limits,
           )
-        : decideOverloadedRetry(h, y, S);
+        : decideOverloadedRetry(counts, failure, limits);
     case "stalled":
-      return progress === "nothing" ? retryWithCounter("stalls", 1, h, y, G) : G;
+      return progress === "nothing"
+        ? retryWithCounter("stalls", 1, counts, failure, withoutStreaming)
+        : withoutStreaming;
     case "truncated":
-      return stopReasonReceived ? G : retryWithCounter("truncations", 1, h, y, G);
+      return stopReasonReceived
+        ? withoutStreaming
+        : retryWithCounter("truncations", 1, counts, failure, withoutStreaming);
     case "suspended":
-      if (stopReasonReceived) return G;
-      return progress === "partialOutput" ? retryIfBudgetLeft(h, y, G) : retryAfterSleep(h, y, G);
+      if (stopReasonReceived) return withoutStreaming;
+      return progress === "partialOutput"
+        ? retryIfBudgetLeft(counts, failure, withoutStreaming)
+        : retryAfterSleep(counts, failure, withoutStreaming);
     case "connectionLost":
-      return stopReasonReceived ? G : retryIfBudgetLeft(h, y, G);
+      return stopReasonReceived ? withoutStreaming : retryIfBudgetLeft(counts, failure, withoutStreaming);
     case "serverError":
       return outlastedNonStreamingTimeout && !stopReasonReceived && progress !== "partialOutput"
-        ? retryWithCounter("afterThinkingOnly", 2, h, y, G)
-        : G;
+        ? retryWithCounter("afterThinkingOnly", 2, counts, failure, withoutStreaming)
+        : withoutStreaming;
     case "timedOut":
     case "malformed":
     case "badRequest":
     case "unknown":
-      return G;
+      return withoutStreaming;
   }
 }
 //@ chunk-e6aww6q8.js:2641193-2641607 layout
 /**
  * 529 计数 +1：后台查询（非持久）只能换 fallback 或失败；未达上限继续重试；达上限换 fallback 或失败。
  */
-function decideOverloadedRetry(e, n, r) {
-  let s = {
-    ...e,
-    overloaded: e.overloaded + 1,
+function decideOverloadedRetry(counts, failure, limit) {
+  let nextCounts = {
+    ...counts,
+    overloaded: counts.overloaded + 1,
   };
-  let h = r !== undefined;
-  let y = h
-    ? retryWithoutStreaming(s, n, r)
+  let hasLimit = limit !== undefined;
+  let decision = hasLimit
+    ? retryWithoutStreaming(nextCounts, failure, limit)
     : {
         decision: "fail",
-        counts: s,
+        counts: nextCounts,
       };
-  let S = {
+  let retryResult = {
     decision: "retry",
-    counts: s,
+    counts: nextCounts,
   };
-  if (n.background && !isPersistentForAllErrors(n))
-    return h && n.hasFallbackModel
+  if (failure.background && !isPersistentForAllErrors(failure))
+    return hasLimit && failure.hasFallbackModel
       ? {
           decision: "useFallbackModel",
-          counts: s,
+          counts: nextCounts,
         }
-      : y;
-  if (s.overloaded < n.maxOverloaded) return n.persistent ? S : retryIfBudgetLeft(s, n, y);
-  if (n.hasFallbackModel)
+      : decision;
+  if (nextCounts.overloaded < failure.maxOverloaded)
+    return failure.persistent ? retryResult : retryIfBudgetLeft(nextCounts, failure, decision);
+  if (failure.hasFallbackModel)
     return {
       decision: "useFallbackModel",
-      counts: s,
+      counts: nextCounts,
     };
-  if (h) return y;
-  return n.persistent ? S : retryIfBudgetLeft(s, n);
+  if (hasLimit) return decision;
+  return failure.persistent ? retryResult : retryIfBudgetLeft(nextCounts, failure);
 }
 //@ chunk-e6aww6q8.js:2641607-2641740 layout
 /**
  * 电脑休眠导致断流：sleptThrough 未达上限则重试。
  */
-function retryAfterSleep(e, n, r) {
-  return e.sleptThrough < n.maxSleptThrough
+function retryAfterSleep(state, error, attempt) {
+  return state.sleptThrough < error.maxSleptThrough
     ? {
         decision: "retry",
         counts: {
-          ...e,
-          sleptThrough: e.sleptThrough + 1,
+          ...state,
+          sleptThrough: state.sleptThrough + 1,
         },
       }
-    : retryIfBudgetLeft(e, n, r);
+    : retryIfBudgetLeft(state, error, attempt);
 }
 //@ chunk-e6aww6q8.js:2641740-2641871 layout
 /**
  * retries 未达 maxRetries 时 retries+1 重试，否则返回给定的失败决策。
  */
 function retryIfBudgetLeft(
-  e,
-  n,
-  r = {
+  budget,
+  outcome,
+  fallback = {
     decision: "fail",
-    counts: e,
+    counts: budget,
   },
 ) {
-  return e.retries < n.maxRetries
+  return budget.retries < outcome.maxRetries
     ? {
         decision: "retry",
         counts: {
-          ...e,
-          retries: e.retries + 1,
+          ...budget,
+          retries: budget.retries + 1,
         },
       }
-    : r;
+    : fallback;
 }
 //@ chunk-e6aww6q8.js:2641871-2641936 layout
 /**
  * 指定计数器未达上限时自增并按 retryIfBudgetLeft 决策。
  */
-function retryWithCounter(e, n, r, s, h) {
-  return r[e] < n
+function retryWithCounter(counts, failure, key, limit, fallback) {
+  return key[counts] < failure
     ? retryIfBudgetLeft(
         {
-          ...r,
-          [e]: r[e] + 1,
+          ...key,
+          [counts]: key[counts] + 1,
         },
-        s,
-        h,
+        limit,
+        fallback,
       )
-    : h;
+    : fallback;
 }
 //@ chunk-e6aww6q8.js:2641936-2642203 layout
 /**
  * 改用非流式重试（只一次）；已试过且重试用尽则失败。
  */
-function retryWithoutStreaming(e, n, r) {
-  if (!r)
+function retryWithoutStreaming(budget, error, counts) {
+  if (!counts)
     return {
       decision: "fail",
-      counts: e,
+      counts: budget,
     };
-  if (e.triedWithoutStreaming && e.retries >= n.maxRetries)
+  if (budget.triedWithoutStreaming && budget.retries >= error.maxRetries)
     return {
       decision: "fail",
-      counts: e,
+      counts: budget,
     };
   return {
     decision: "retryWithoutStreaming",
     counts: {
-      ...e,
-      retries: Math.min(e.retries + 1, n.maxRetries),
+      ...budget,
+      retries: Math.min(budget.retries + 1, error.maxRetries),
       triedWithoutStreaming: true,
     },
   };
@@ -2182,8 +2517,8 @@ function retryWithoutStreaming(e, n, r) {
 /**
  * 持久重试且不是只对容量错误持久。
  */
-function isPersistentForAllErrors(e) {
-  return e.persistent && e.persistentCapacityOnly !== true;
+function isPersistentForAllErrors(error) {
+  return error.persistent && error.persistentCapacityOnly !== true;
 }
 //@ chunk-e6aww6q8.js:2642270-2642280 layout
 /**
@@ -2232,234 +2567,15 @@ function resolveClassifierMaxRetries() {
         src: "default",
       };
 }
-//@ chunk-gr2vfhah.js:421-440 affinity
-/**
- * 0.25：退避的比例抖动。
- */
-var BASE_RETRY_DELAY_MS = 500;
-var RETRY_JITTER_RATIO = 0.25;
-//@ chunk-gr2vfhah.js:440-657 callgraph-witnessed = getRetryDelay (0.161)
-/**
- * 重试等待时间：以 500ms 为基数、上限 32s、25% 抖动的指数退避；有 retry-after（秒）时取两者较大值。
- */
-function getRetryDelay(attempt, t, capMs = 32000, random = Math.random, baseMs = BASE_RETRY_DELAY_MS) {
-  let rounded = Math.round(
-    backoffDelayMs({
-      attempt,
-      baseMs,
-      capMs,
-      jitter: {
-        kind: "proportional",
-        ratio: RETRY_JITTER_RATIO,
-      },
-      random,
-    }),
-  );
-  if (t) {
-    let seconds = parseInt(t, 10);
-    if (!isNaN(seconds)) return Math.max(seconds * 1000, rounded);
-  }
-  return rounded;
-}
-//@ chunk-gr2vfhah.js:1242-1441 fingerprint = isOAuthTokenRevokedError (0.637)
-/**
- * 403 "OAuth token has been revoked" 或 401 "OAuth access token has been revoked"。
- */
-function isOAuthTokenRevokedError(error) {
-  if (!(error instanceof APIError)) return false;
-  let message = error.message ?? "";
-  return (
-    (error.status === 403 && message.includes("OAuth token has been revoked")) ||
-    (error.status === 401 && message.includes("OAuth access token has been revoked"))
-  );
-}
-//@ chunk-gr2vfhah.js:1441-1623 layout
-/**
- * 403 permission_error 且消息含 "model:"（模型无权访问）。
- */
-function isModelPermissionDeniedError(error) {
-  if (!(error instanceof APIError) || error.status !== 403) return false;
-  let message = error.message ?? "";
-  return (
-    (error.type === "permission_error" || message.includes('"type":"permission_error"')) &&
-    message.includes("model:")
-  );
-}
-//@ chunk-gr2vfhah.js:1623-1728 layout
-/**
- * 错误类型为 not_found_error。
- */
-function isNotFoundErrorType(e) {
-  return e.type === "not_found_error" || (e.message?.includes('"type":"not_found_error"') ?? false);
-}
-//@ chunk-gr2vfhah.js:1728-1841 layout
-/**
- * 404 not_found_error 且消息含 "model:"。
- */
-function isModelNotFoundError(error) {
-  if (!(error instanceof APIError) || error.status !== 404) return false;
-  return isNotFoundErrorType(error) && (error.message ?? "").includes("model:");
-}
-//@ chunk-gr2vfhah.js:1841-1962 layout
-/**
- * Azure/Foundry 404 DeploymentNotFound。
- */
-function isAzureDeploymentNotFound(e) {
-  if (!(e instanceof APIError) || e.status !== 404 || !hasNestedError(e)) return false;
-  return e.error?.error?.code === "DeploymentNotFound";
-}
-//@ chunk-gr2vfhah.js:1962-2086 fingerprint = is529Error (1)
-/**
- * 529 或消息含 overloaded_error。
- */
-function is529Error(error) {
-  if (!(error instanceof APIError)) return false;
-  return error.status === 529 || (error.message?.includes('"type":"overloaded_error"') ?? false);
-}
-//@ chunk-aepeg2w5.js:375506-375866 placement
-/**
- * 计算回退请求的用量差值。
- */
-function fallbackUsageDelta(e) {
-  let { primaryUsage, usage, model, fallbackFrom } = e;
-  let y =
-    primaryUsage && usage
-      ? {
-          inputTokens: usage.inputTokens - primaryUsage.inputTokens,
-          outputTokens: usage.outputTokens - primaryUsage.outputTokens,
-          cacheReadInputTokens: usage.cacheReadInputTokens - primaryUsage.cacheReadInputTokens,
-          cacheCreationInputTokens: usage.cacheCreationInputTokens - primaryUsage.cacheCreationInputTokens,
-        }
-      : usage;
-  if (!y || !model) return;
-  return (
-    calculateCostFromTokenCounts(model, y) +
-    (primaryUsage && fallbackFrom ? calculateCostFromTokenCounts(fallbackFrom, primaryUsage) : 0)
-  );
-}
-//@ chunk-aepeg2w5.js:376032-377675 placement
-/**
- * withRetry 使用的一组开关名。
- */
-var MOSSY_SQUID_GATE = "tengu_mossy_squid";
-var TENGU_TWINKLY_CLOVER = "tengu_twinkly_clover";
-var TENGU_CANDID_JUNIPER = "tengu_candid_juniper";
-var TENGU_CHEEKY_TOUCAN = "tengu_cheeky_toucan";
-var TENGU_STEADFAST_WREN = "tengu_steadfast_wren";
-var TENGU_COBALT_PLINTH_ORPINE = "tengu_cobalt_plinth_orpine";
-var TENGU_VALIANT_LANTERN = "tengu_valiant_lantern";
-var TENGU_LEVEL_PLOVER = "tengu_level_plover";
-var TENGU_SPLENDID_LYNX = "tengu_splendid_lynx";
-var TENGU_TENDER_MITTEN = "tengu_tender_mitten";
-var TENGU_SNUG_QUILL = "tengu_snug_quill";
-var TENGU_MELLOW_RAINBOW = "tengu_mellow_rainbow";
-var TENGU_WONDROUS_HAVEN = "tengu_wondrous_haven";
-var TENGU_GOOFY_HARE = "tengu_goofy_hare";
-var TENGU_MIGHTY_FLASK = "tengu_mighty_flask";
-var TENGU_STEADY_SCROLL = "tengu_steady_scroll";
-var TENGU_PLAID_KETTLE = "tengu_plaid_kettle";
-var TENGU_ZIPPY_HARBOR = "tengu_zippy_harbor";
-var TENGU_FALLOW_LANTERN = "tengu_fallow_lantern";
-var TENGU_MELLOW_HOLLERITH = "tengu_mellow_hollerith";
-var TENGU_WITTY_KAY = "tengu_witty_kay";
-var TENGU_STEADY_BITTERN = "tengu_steady_bittern";
-var TENGU_KIND_DEWDROP = "tengu_kind_dewdrop";
-var TENGU_THISTLE_ORRERY = "tengu_thistle_orrery";
-var TENGU_TOASTY_BEACON = "tengu_toasty_beacon";
-var TENGU_SNUG_WALL = "tengu_snug_wall";
-var TENGU_IMPERATIVE_SPINDLE = "tengu_imperative_spindle";
-var TENGU_PROUD_PEARL = "tengu_proud_pearl";
-var TENGU_FOAMY_PELICAN = "tengu_foamy_pelican";
-var TENGU_FLAG_SET = new Set([
-  "tengu_steady_bittern",
-  "tengu_thistle_orrery",
-  "tengu_snug_wall",
-  "tengu_imperative_spindle",
-  "tengu_foamy_pelican",
-  ...[],
-]);
-var RETRY_FLAG_NAMES = new Set([
-  "tengu_steady_bittern",
-  ...[],
-  "tengu_twinkly_clover",
-  "tengu_candid_juniper",
-  "tengu_iterative_lightning",
-  "tengu_steadfast_wren",
-  "tengu_cheeky_toucan",
-  "tengu_cobalt_plinth_orpine",
-  "tengu_valiant_lantern",
-  "tengu_level_plover",
-  "tengu_splendid_lynx",
-  "tengu_tender_mitten",
-  "tengu_snug_quill",
-  "tengu_mellow_rainbow",
-  "tengu_mellow_heron",
-  "tengu_wondrous_haven",
-  "tengu_mighty_flask",
-  "tengu_goofy_hare",
-  "tengu_steady_scroll",
-  "tengu_zippy_harbor",
-  "tengu_fallow_lantern",
-  "tengu_mellow_hollerith",
-  "tengu_starry_wall",
-  "tengu_groovy_ember",
-  "tengu_composed_plum",
-  "tengu_witty_kay",
-  "tengu_kind_dewdrop",
-  "tengu_thistle_orrery",
-  "tengu_proud_pearl",
-  "tengu_snug_wall",
-  "tengu_foamy_pelican",
-  ...[],
-  "tengu_mossy_squid",
-  "tengu_toasty_beacon",
-  "tengu_plaid_kettle",
-]);
-//@ chunk-aepeg2w5.js:377792-378332 fingerprint = FOREGROUND_529_RETRY_SOURCES (0.585)
-/**
- * 529 时允许重试的查询来源集合：前台来源 + agent:*、compact、hook_agent、side_question、web_search_tool、auto_mode 等；isForegroundQuerySource(IIe) 用它判断。
- */
-var FOREGROUND_529_RETRY_SOURCES = {
-  repl_main_thread: true,
-  "repl_main_thread:outputStyle:custom": true,
-  "repl_main_thread:outputStyle:Concise": true,
-  "repl_main_thread:outputStyle:Proactive": true,
-  "repl_main_thread:outputStyle:Explanatory": true,
-  "repl_main_thread:outputStyle:Learning": true,
-  sdk: true,
-};
-var RETRY_ON_529_QUERY_SOURCES = new Set([
-  ...Object.keys(FOREGROUND_529_RETRY_SOURCES),
-  "agent:custom",
-  "agent:default",
-  "agent:builtin",
-  "compact",
-  "hook_agent",
-  "hook_prompt",
-  "side_question",
-  "web_search_tool",
-  "web_fetch_apply",
-  "auto_mode",
-  "compact_fab_check",
-  "auto_mode_critique",
-  "auto_mode_setup_propose",
-  "chrome_mcp",
-  "artifact_comment_reply",
-]);
-//@ chunk-sycgf9xs.js:17346-17402 fingerprint = isStaleConnectionError (0.632)
-/**
- * EPIPE/ECONNRESET/ENOTCONN/EOF：视为连接已失效、可换新连接重试的错误码。旧版名 isStaleConnectionError 是函数名，这里是集合。
- */
-var STALE_CONNECTION_ERROR_CODES = new Set(["EPIPE", "ECONNRESET", "ENOTCONN", "EOF"]);
 export {
   TENGU_IMPERATIVE_SPINDLE,
   TENGU_KIND_DEWDROP,
   fallbackUsageDelta,
   TENGU_STEADY_SCROLL,
-  TENGU_WITTY_KAY,
-  retryWatchdogEnv,
   TENGU_GOOFY_HARE,
   TENGU_WONDROUS_HAVEN,
+  TENGU_WITTY_KAY,
+  retryWatchdogEnv,
   getRetryDelay,
   withRetry,
   CannotRetryError,
@@ -2491,6 +2607,7 @@ export {
   isModelPermissionDeniedError,
   RETRY_FLAG_NAMES,
   TENGU_FLAG_SET,
+  TENGU_STEADY_BITTERN,
   TENGU_SNUG_WALL,
   TENGU_ZIPPY_HARBOR,
   TENGU_FOAMY_PELICAN,
@@ -2500,7 +2617,6 @@ export {
   STREAM_RETRY_CONST_2,
   decideStreamRetry,
   resolveClassifierMaxRetries,
-  TENGU_STEADY_BITTERN,
   TENGU_LEVEL_PLOVER,
   TENGU_THISTLE_ORRERY,
   TENGU_COBALT_PLINTH_ORPINE,

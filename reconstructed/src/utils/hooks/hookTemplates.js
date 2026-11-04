@@ -21,27 +21,27 @@ function externalHookTemplates() {
 }
 //@ chunk-tmxcy2qw.js:278-319 placement
 function hookTemplateIds() {
-  return externalHookTemplates().map((e) => e.id);
+  return externalHookTemplates().map((template) => template.id);
 }
 //@ chunk-tmxcy2qw.js:319-438 placement
-function findTemplateByDigest(e) {
-  for (let t of externalHookTemplates()) {
-    let found = t.digests.find((digest) => digest.sha256 === e);
+function findTemplateByDigest(digest) {
+  for (let template of externalHookTemplates()) {
+    let found = template.digests.find((digest_2) => digest_2.sha256 === digest);
     if (found)
       return {
-        template: t,
+        template,
         label: found.label,
       };
   }
   return;
 }
 //@ chunk-tmxcy2qw.js:438-485 placement
-function getHookTemplate(e) {
-  return externalHookTemplates().find((t) => t.id === e);
+function getHookTemplate(templateId) {
+  return externalHookTemplates().find((template) => template.id === templateId);
 }
 //@ chunk-tmxcy2qw.js:485-531 placement
-function isPreToolUseTemplate(e) {
-  return e.event === "PreToolUse";
+function isPreToolUseTemplate(template) {
+  return template.event === "PreToolUse";
 }
 //@ chunk-tmxcy2qw.js:531-555 placement
 function alwaysTrue() {

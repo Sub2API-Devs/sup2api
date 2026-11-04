@@ -1,0 +1,14 @@
+{
+  "name": "claude-code-reconstructed",
+  "version": "2.1.316",
+  "private": true,
+  "type": "module",
+  "description": "Claude Code 2.1.316 reconstructed from the official build; builds with Bun 1.4.4 (docs/process/buildable.md)",
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node build.mjs run --"
+  },
+  "engines": {
+    "bun": "1.4.4"
+  }
+}

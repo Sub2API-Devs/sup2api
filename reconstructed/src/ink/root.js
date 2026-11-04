@@ -5,15 +5,14 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/root.ts
- * pieces: chunk-d4eg9at2.js (2), chunk-x6v6jz2y.js (6)
- * attribution: affinity 2, fingerprint 3, sole-consumer 2, layout 1
+ * pieces: chunk-x6v6jz2y.js (6)
+ * attribution: sole-consumer 2, affinity 1, fingerprint 2, layout 1
  */
 import { Stream } from "stream";
 import { getSecondRootError, setTerminalHooks } from "./terminal.js";
 import { cleanupTerminalModes_2 } from "../utils/gracefulShutdown.js";
 import { Ink } from "./ink.js";
 import { logForDebugging } from "../utils/debug.js";
-import { iterateStreamUntilClose } from "../utils/process.js";
 
 //@ chunk-x6v6jz2y.js:3042-3095 sole-consumer
 /**
@@ -71,7 +70,7 @@ async function createRootAsync(options = {}) {
   while (secondRootError.pendingStandaloneRender) await secondRootError.pendingStandaloneRender;
   let root = createRoot_2(options, "react");
   return {
-    render: (u) => root.render(u),
+    render: (element) => root.render(element),
     unmount: () => root.unmount(),
     waitUntilExit: () => root.waitUntilExit(),
   };
@@ -120,32 +119,14 @@ var getOptions = (options = {}) => {
     };
   return options;
 };
-var getInstance = (stdout, r) => {
+var getInstance = (stdout, create) => {
   let secondRootError = getSecondRootError();
-  let u = secondRootError.get(stdout);
-  if (!u) {
+  let existing = secondRootError.get(stdout);
+  if (!existing) {
     setTerminalHooks(inkShutdownHooks);
-    u = r();
-    secondRootError.set(stdout, u);
+    existing = create();
+    secondRootError.set(stdout, existing);
   }
-  return u;
+  return existing;
 };
-//@ chunk-d4eg9at2.js:46592-46615 affinity
-/**
- * plugin configure --values-stdin 读取上限 256 KB
- */
-var MAX_VALUES_STDIN_BYTES = 262144;
-var MAX_OPTION_VALUE_BYTES = 65536;
-//@ chunk-d4eg9at2.js:46615-46781 fingerprint = getOptions (0.609)
-async function getOptions_2() {
-  process.stdin.setEncoding("utf8");
-  let s = "";
-  let o = 0;
-  for await (let i of iterateStreamUntilClose(process.stdin)) {
-    o += Buffer.byteLength(i, "utf8");
-    if (o > MAX_VALUES_STDIN_BYTES) return;
-    s += i;
-  }
-  return s;
-}
-export { MAX_OPTION_VALUE_BYTES, getOptions_2, wrappedRender, createRootAsync };
+export { wrappedRender, createRootAsync };

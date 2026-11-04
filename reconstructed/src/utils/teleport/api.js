@@ -21,23 +21,20 @@ import {
 import { sleep } from "../sleep.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
-  u,
-  string,
+  objectSchema,
+  stringSchema,
   _enum,
   array,
   looseObject,
   literal,
   record,
   unknown,
-  M,
+  booleanSchema,
   discriminatedUnion,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   KNOWN_WORKER_STATES,
   describeCloudSession,
-  signClientEvent,
-  ClientEventUploader,
-  ClientEventUploadError,
   setTrustedDeviceProbe,
   getConsoleProfileBearerProvider,
   UPLOAD_CHUNK_BYTES,
@@ -68,6 +65,11 @@ import { sanitizeSessionTitle } from "../stringUtils.js";
 import { logError } from "../log.js";
 import { getClientPlatform, claudeCodeUserAgent, withOAuth401Retry } from "../http.js";
 import { cloudErrorMessage, safeTokenText } from "./cloudErrorMessage.js";
+import {
+  signClientEvent,
+  ClientEventUploader,
+  ClientEventUploadError,
+} from "../telemetry/clientEventUploader.js";
 import { printableName } from "../printableName.js";
 import { jsonStringify } from "../slowOperations.js";
 import { logEvent } from "../../services/analytics/index.js";
@@ -83,47 +85,48 @@ import { getWIFAuthType, getWIFAccountInfo } from "../wifProfile.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { lacksAuthorizationHeader } from "../../services/oauth/sessionsBearerHooks.js";
 import { TRANSIENT_NETWORK_ERRNOS } from "../../services/mcp/mcpClientCapabilities.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:777841-778062 placement
 /**
  * 按 payload.uuid 去重事件（就地），返回删除数。
  */
-function dedupeEventsByUuid(e) {
-  let n = new Set();
-  let r = 0;
-  for (let s = 0; s < e.length;) {
-    let h = e[s];
-    if (h.ephemeral || typeof h.payload.uuid !== "string") {
-      s++;
+function dedupeEventsByUuid(events) {
+  let seenUuids = new Set();
+  let removedCount = 0;
+  for (let index = 0; index < events.length;) {
+    let event = events[index];
+    if (event.ephemeral || typeof event.payload.uuid !== "string") {
+      index++;
       continue;
     }
-    if (n.has(h.payload.uuid)) {
-      e.splice(s, 1);
-      r++;
+    if (seenUuids.has(event.payload.uuid)) {
+      events.splice(index, 1);
+      removedCount++;
       continue;
     }
-    n.add(h.payload.uuid);
-    s++;
+    seenUuids.add(event.payload.uuid);
+    index++;
   }
-  return r;
+  return removedCount;
 }
 //@ chunk-aepeg2w5.js:778461-778628 placement
 /**
  * 构造成功的 control_response。
  */
-function buildControlResponse(requestId, n, r, s = false) {
+function buildControlResponse(requestId, response, toolName, alwaysAttachToolName = false) {
   return {
     type: "control_response",
     response: {
       subtype: "success",
       request_id: requestId,
       response:
-        r !== undefined && (n.behavior === "allow" || s)
+        toolName !== undefined && (response.behavior === "allow" || alwaysAttachToolName)
           ? {
-              ...n,
-              tool_name: r,
+              ...response,
+              tool_name: toolName,
             }
-          : n,
+          : response,
     },
   };
 }
@@ -131,12 +134,12 @@ function buildControlResponse(requestId, n, r, s = false) {
 /**
  * 响应中的会话对象。
  */
-function extractSessionFromResponse(e) {
-  if (e === null || typeof e !== "object") return;
-  let n = e;
-  let r = n.response_shape ?? n.session;
-  if (r === null || typeof r !== "object" || typeof r.id !== "string") return;
-  return r;
+function extractSessionFromResponse(payload) {
+  if (payload === null || typeof payload !== "object") return;
+  let body = payload;
+  let session = body.response_shape ?? body.session;
+  if (session === null || typeof session !== "object" || typeof session.id !== "string") return;
+  return session;
 }
 //@ chunk-aepeg2w5.js:781236-781349 fingerprint = fetchSession (0.343)
 /**
@@ -150,16 +153,16 @@ var RETRY_DELAYS_MS = [2000, 4000, 8000, 16000];
 var MAX_SESSION_API_RETRIES = RETRY_DELAYS_MS.length;
 var CCR_BYOC_BETA = "ccr-byoc-2025-07-29";
 //@ chunk-aepeg2w5.js:782400-782551 placement
-function sessionsApiWire(e, n, r) {
-  return e === "v1alpha2"
+function sessionsApiWire(apiVersion, baseUrl, credentials) {
+  return apiVersion === "v1alpha2"
     ? {
-        url: `${n}/v1/code/sessions`,
-        headers: getOAuthRequestHeaders(r),
+        url: `${baseUrl}/v1/code/sessions`,
+        headers: getOAuthRequestHeaders(credentials),
       }
     : {
-        url: `${n}/v1/sessions`,
+        url: `${baseUrl}/v1/sessions`,
         headers: {
-          ...getOAuthRequestHeaders(r),
+          ...getOAuthRequestHeaders(credentials),
           "anthropic-beta": CCR_BYOC_BETA,
         },
       };
@@ -175,8 +178,8 @@ function isTransientNetworkError(error) {
 /**
  * 带指数退避的 GET（只对瞬时网络错误重试）。
  */
-function axiosGetWithRetry(url, n) {
-  return axiosGetWithRetry_2(url, () => n);
+function axiosGetWithRetry(url, options) {
+  return axiosGetWithRetry_2(url, () => options);
 }
 //@ chunk-aepeg2w5.js:782704-783021 fingerprint = axiosGetWithRetry (1)
 async function axiosGetWithRetry_2(url, config) {
@@ -200,30 +203,33 @@ async function axiosGetWithRetry_2(url, config) {
   throw lastError;
 }
 //@ chunk-aepeg2w5.js:783021-783317 fingerprint = CodeSessionSchema (0.888)
-var CodeSessionSchema = DoctorLazy(() =>
-  u({
-    id: string(),
-    title: string(),
-    description: string(),
-    status: _enum(["idle", "working", "waiting", "completed", "archived", "cancelled", "rejected"]),
-    repo: u({
-      name: string(),
-      owner: u({
-        login: string(),
-      }),
-      default_branch: string().optional(),
-    }).nullable(),
-    turns: array(string()),
-    created_at: string(),
-    updated_at: string(),
-    environment_kind: _enum(KNOWN_WORKER_STATES).optional(),
-  }),
-);
+var CodeSessionSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:783021", () => {
+  CodeSessionSchema = DoctorLazy(() =>
+    objectSchema({
+      id: stringSchema(),
+      title: stringSchema(),
+      description: stringSchema(),
+      status: _enum(["idle", "working", "waiting", "completed", "archived", "cancelled", "rejected"]),
+      repo: objectSchema({
+        name: stringSchema(),
+        owner: objectSchema({
+          login: stringSchema(),
+        }),
+        default_branch: stringSchema().optional(),
+      }).nullable(),
+      turns: array(stringSchema()),
+      created_at: stringSchema(),
+      updated_at: stringSchema(),
+      environment_kind: _enum(KNOWN_WORKER_STATES).optional(),
+    }),
+  );
+});
 //@ chunk-aepeg2w5.js:783317-783407 placement
 function sessionsApiBearerFingerprint() {
   if (!isFirstPartyProvider()) return;
-  let e = sessionsApiAccessTokenNow(isConsoleProfileSessionsCredential());
-  return e === undefined ? undefined : computeContentHash(e).slice(0, 24);
+  let accessToken = sessionsApiAccessTokenNow(isConsoleProfileSessionsCredential());
+  return accessToken === undefined ? undefined : computeContentHash(accessToken).slice(0, 24);
 }
 //@ chunk-aepeg2w5.js:783407-783613 placement
 async function primeSessionsApiBearer({ refresh, credentials }) {
@@ -259,11 +265,11 @@ async function prepareApiRequest(requestType, statuses = true) {
     throw new CloudSessionAccessError(
       "Cloud sessions are only available on the first-party Anthropic API provider.",
     );
-  let r;
-  let s = isConsoleProfileSessionsCredential();
-  if (s)
+  let accessToken;
+  let isConsoleProfile = isConsoleProfileSessionsCredential();
+  if (isConsoleProfile)
     try {
-      r = await resolveConsoleProfileBearer({
+      accessToken = await resolveConsoleProfileBearer({
         credentials: requestType,
         signIn: false,
       });
@@ -275,30 +281,31 @@ async function prepareApiRequest(requestType, statuses = true) {
     await checkAndRefreshOAuthTokenIfNeeded({
       credentials: requestType,
     });
-    r = (statuses ? await ensureHostSessionsBearer() : null) ?? getClaudeAIOAuthTokens()?.accessToken;
+    accessToken =
+      (statuses ? await ensureHostSessionsBearer() : null) ?? getClaudeAIOAuthTokens()?.accessToken;
   }
-  if (r === undefined) throw new CloudSessionAccessError(cloudSessionsSignInRefusal());
-  let h = await sessionsApiOrganizationUUID(s);
-  if (!h) throw new CloudSessionAccessError(prepareApiRequest_2);
+  if (accessToken === undefined) throw new CloudSessionAccessError(cloudSessionsSignInRefusal());
+  let orgUUID = await sessionsApiOrganizationUUID(isConsoleProfile);
+  if (!orgUUID) throw new CloudSessionAccessError(prepareApiRequest_2);
   return {
-    accessToken: r,
-    orgUUID: h,
-    profile: s,
+    accessToken,
+    orgUUID,
+    profile: isConsoleProfile,
   };
 }
 //@ chunk-aepeg2w5.js:784178-784360 placement
-function repoFromGitSource(e) {
-  if (!e?.url) return null;
-  let gitHubRepository = parseGitHubRepository(e.url);
+function repoFromGitSource(gitSource) {
+  if (!gitSource?.url) return null;
+  let gitHubRepository = parseGitHubRepository(gitSource.url);
   if (!gitHubRepository) return null;
-  let [r, s] = gitHubRepository.split("/");
-  if (!r || !s) return null;
+  let [owner, repoName] = gitHubRepository.split("/");
+  if (!owner || !repoName) return null;
   return {
-    name: s,
+    name: repoName,
     owner: {
-      login: r,
+      login: owner,
     },
-    default_branch: e.revision || undefined,
+    default_branch: gitSource.revision || undefined,
   };
 }
 //@ chunk-aepeg2w5.js:784360-785105 placement = fetchCodeSessionsFromSessionsAPI (0.443)
@@ -356,15 +363,15 @@ function getOAuthHeaders(accessToken) {
 /**
  * User-Agent + OAuth 认证头。旧版名 getGroveSettings 为错配。
  */
-function getOAuthRequestHeaders(e) {
+function getOAuthRequestHeaders(credentials) {
   return {
     "User-Agent": claudeCodeUserAgent(),
-    ...getOAuthHeaders(e),
+    ...getOAuthHeaders(credentials),
   };
 }
 //@ chunk-aepeg2w5.js:785308-785404 placement
-async function fetchSession(e, n, credentials) {
-  let { session, serverNow } = await sendCloudSessionEvent(e, n, credentials);
+async function fetchSession(sessionId, request, credentials) {
+  let { session, serverNow } = await sendCloudSessionEvent(sessionId, request, credentials);
   return describeCloudSession(session, {
     serverNow,
   });
@@ -373,33 +380,34 @@ async function fetchSession(e, n, credentials) {
 /**
  * 发送云会话事件（仅第一方）。
  */
-async function sendCloudSessionEvent(e, n, r) {
+async function sendCloudSessionEvent(sessionId, options, credentials) {
   if (!isFirstPartyProvider())
     throw new TeleportOperationError(
       "Cloud sessions are only available on the first-party Anthropic API provider.",
       "Cloud sessions are only available on the first-party Anthropic API provider.",
     );
-  let { accessToken } = n ?? (await prepareApiRequest(r));
-  let h = `${getOauthConfig().BASE_API_URL}/v1/code/sessions/${e}`;
-  let y = await axios_default.get(h, {
+  let { accessToken } = options ?? (await prepareApiRequest(credentials));
+  let eventsUrl = `${getOauthConfig().BASE_API_URL}/v1/code/sessions/${sessionId}`;
+  let sessionResponse = await axios_default.get(eventsUrl, {
     headers: getOAuthRequestHeaders(accessToken),
     timeout: 15000,
-    validateStatus: (R) => R < 500,
+    validateStatus: (eventList) => eventList < 500,
   });
-  if (y.status !== 200) {
-    let { message, statusLine } = cloudErrorMessage(y, y.data?.error?.message);
-    if (y.status === 404) {
-      let P = `${SESSION_NOT_FOUND_MESSAGE} ${safeTokenText(e)}`;
-      throw new TeleportOperationError(P, P);
+  if (sessionResponse.status !== 200) {
+    let { message, statusLine } = cloudErrorMessage(sessionResponse, sessionResponse.data?.error?.message);
+    if (sessionResponse.status === 404) {
+      let notFoundMessage = `${SESSION_NOT_FOUND_MESSAGE} ${safeTokenText(sessionId)}`;
+      throw new TeleportOperationError(notFoundMessage, notFoundMessage);
     }
-    if (y.status === 401) throw new TeleportOperationError(SESSION_EXPIRED_MESSAGE, SESSION_EXPIRED_MESSAGE);
-    if (y.status === 400 && message?.startsWith(INVALID_SESSION_ID_MESSAGE))
+    if (sessionResponse.status === 401)
+      throw new TeleportOperationError(SESSION_EXPIRED_MESSAGE, SESSION_EXPIRED_MESSAGE);
+    if (sessionResponse.status === 400 && message?.startsWith(INVALID_SESSION_ID_MESSAGE))
       throw new TeleportOperationError(message, message);
     throw Error(message || `Failed to fetch session: ${statusLine}`);
   }
-  let sessionFromResponse = extractSessionFromResponse(y.data);
-  if (!sessionFromResponse) throw Error(`${SESSION_NOT_FOUND_MESSAGE} ${safeTokenText(e)}`);
-  let timestamp = Date.parse(String(y.headers?.date ?? ""));
+  let sessionFromResponse = extractSessionFromResponse(sessionResponse.data);
+  if (!sessionFromResponse) throw Error(`${SESSION_NOT_FOUND_MESSAGE} ${safeTokenText(sessionId)}`);
+  let timestamp = Date.parse(String(sessionResponse.headers?.date ?? ""));
   return {
     session: sessionFromResponse,
     serverNow: Number.isFinite(timestamp) ? timestamp : undefined,
@@ -418,54 +426,55 @@ async function getSessionRequestHeaders(accessToken, profile) {
   };
 }
 //@ chunk-aepeg2w5.js:786377-786946 placement
-async function resendAfterUntrustedDevice(e, n, r, s) {
-  if (e.status !== 403) return e;
-  let { isDeviceIdentityEnabled } = await import("./chunk-m288yvvf.js");
-  if (!(await isDeviceIdentityEnabled().catch(() => false))) return e;
+async function resendAfterUntrustedDevice(response, request, credentials, purpose) {
+  if (response.status !== 403) return response;
+  let { isDeviceIdentityEnabled } = await import("../../services/analytics/violinGates.js");
+  if (!(await isDeviceIdentityEnabled().catch(() => false))) return response;
   let { readUntrustedDeviceRefusal, shouldCloudSessionEnroll, shouldRemoteControlEnroll } =
-    await import("./chunk-g9dw262t.js");
-  let untrustedDeviceRefusal = readUntrustedDeviceRefusal(e.data);
-  if (untrustedDeviceRefusal === undefined) return e;
+    await import("../../bridge/codeSessionApi.js");
+  let untrustedDeviceRefusal = readUntrustedDeviceRefusal(response.data);
+  if (untrustedDeviceRefusal === undefined) return response;
   let { clearTrustedDeviceTokenCache, logRefusalWithoutEnrollment, withUntrustedDeviceRecovery } =
-    await import("./chunk-3kb57csj.js");
+    await import("../../bridge/trustedDevice.js");
   if (
-    !(s === "remote_control"
+    !(purpose === "remote_control"
       ? shouldRemoteControlEnroll(untrustedDeviceRefusal)
       : shouldCloudSessionEnroll(untrustedDeviceRefusal))
   ) {
     logRefusalWithoutEnrollment("[teleport]", untrustedDeviceRefusal);
     clearTrustedDeviceTokenCache();
-    return e;
+    return response;
   }
   return (
-    (await withUntrustedDeviceRecovery(n, r, undefined).catch(() => {
+    (await withUntrustedDeviceRecovery(request, credentials, undefined).catch(() => {
       return;
-    })) ?? e
+    })) ?? response
   );
 }
 //@ chunk-aepeg2w5.js:786946-787659 placement
 /**
  * 附加设备证明并签名事件。
  */
-async function attachDeviceAttestation(e, n, r, accessToken, h) {
+async function attachDeviceAttestation(response, event, credentials, accessToken, signerOptions) {
   if (
-    r.device_attestation !== undefined ||
-    typeof r.payload.uuid !== "string" ||
-    (h.eventSigner === undefined && h.signerForBoundDevice === undefined)
+    credentials.device_attestation !== undefined ||
+    typeof credentials.payload.uuid !== "string" ||
+    (signerOptions.eventSigner === undefined && signerOptions.signerForBoundDevice === undefined)
   )
     return;
-  let { classifyElevatedAuthError, classifyElevatedAuthSubReason } = await import("./chunk-g9dw262t.js");
+  let { classifyElevatedAuthError, classifyElevatedAuthSubReason } =
+    await import("../../bridge/codeSessionApi.js");
   if (
-    classifyElevatedAuthSubReason(e.data) !== "bound_unattested" &&
-    classifyElevatedAuthError(e.data) !== "session_stale_relogin"
+    classifyElevatedAuthSubReason(response.data) !== "bound_unattested" &&
+    classifyElevatedAuthError(response.data) !== "session_stale_relogin"
   )
     return;
-  if (h.eventSigner !== undefined) {
-    let x = await signClientEvent(h.eventSigner, n, r.payload);
-    if (x.device_attestation !== undefined) return x;
+  if (signerOptions.eventSigner !== undefined) {
+    let refusal = await signClientEvent(signerOptions.eventSigner, event, credentials.payload);
+    if (refusal.device_attestation !== undefined) return refusal;
   }
-  if (h.signerForBoundDevice === undefined) return;
-  let w = await fetchSession(n, {
+  if (signerOptions.signerForBoundDevice === undefined) return;
+  let envelope = await fetchSession(event, {
     accessToken,
   }).then(
     (session) => session.bound_device_uuid,
@@ -473,46 +482,46 @@ async function attachDeviceAttestation(e, n, r, accessToken, h) {
       return;
     },
   );
-  if (w === undefined) return;
-  let R = await signClientEvent(
-    h.signerForBoundDevice(w).catch(() => {
+  if (envelope === undefined) return;
+  let signed = await signClientEvent(
+    signerOptions.signerForBoundDevice(envelope).catch(() => {
       return;
     }),
-    n,
-    r.payload,
+    event,
+    credentials.payload,
   );
-  return R.device_attestation === undefined ? undefined : R;
+  return signed.device_attestation === undefined ? undefined : signed;
 }
 //@ chunk-aepeg2w5.js:787659-787817 placement
 /**
  * 可信设备令牌头 X-Trusted-Device-Token（设备身份功能开启时）。
  */
 async function trustedDeviceHeaders() {
-  let { getTrustedDeviceToken } = await import("./chunk-3kb57csj.js");
-  let n = await getTrustedDeviceToken().catch(() => {
+  let { getTrustedDeviceToken } = await import("../../bridge/trustedDevice.js");
+  let deviceToken = await getTrustedDeviceToken().catch(() => {
     return;
   });
-  return n
+  return deviceToken
     ? {
-        "X-Trusted-Device-Token": n,
+        "X-Trusted-Device-Token": deviceToken,
       }
     : {};
 }
 //@ chunk-aepeg2w5.js:787817-787956 placement
 function parsePositiveInt(sequenceNum) {
-  let n =
+  let sequenceNum_2 =
     typeof sequenceNum === "number"
       ? sequenceNum
       : typeof sequenceNum === "string" && /^\d+$/.test(sequenceNum)
         ? Number(sequenceNum)
         : NaN;
-  return Number.isSafeInteger(n) && n > 0 ? n : undefined;
+  return Number.isSafeInteger(sequenceNum_2) && sequenceNum_2 > 0 ? sequenceNum_2 : undefined;
 }
 //@ chunk-aepeg2w5.js:787956-790321 placement
 /**
  * 向远程会话发事件：POST <BASE_API_URL>/v1/code/sessions/<id>/events（OAuth Bearer + 组织头），403 未信任设备时尝试设备登记后重试；仅第一方。
  */
-async function sendEventToRemoteSession_2(e, n, r, s = {}) {
+async function sendEventToRemoteSession_2(sessionId, event, credentials, signerOptions = {}) {
   if (!isFirstPartyProvider())
     return {
       ok: false,
@@ -521,75 +530,79 @@ async function sendEventToRemoteSession_2(e, n, r, s = {}) {
     };
   try {
     let { accessToken, profile } = await prepareApiRequest();
-    let S = `${getOauthConfig().BASE_API_URL}/v1/code/sessions/${e}/events`;
+    let eventsUrl = `${getOauthConfig().BASE_API_URL}/v1/code/sessions/${sessionId}/events`;
     let headers = await getSessionRequestHeaders(accessToken, profile);
-    logForDebugging(`${r} Sending event to session ${e}`);
-    let R = await signClientEvent(s.eventSigner, e, n);
-    let x;
-    let P = (headers) =>
+    logForDebugging(`${credentials} Sending event to session ${sessionId}`);
+    let signedEvent = await signClientEvent(signerOptions.eventSigner, sessionId, event);
+    let firstRequestError;
+    let postWithHeaders = (headers) =>
       axios_default
         .post(
-          S,
+          eventsUrl,
           {
-            events: [R],
+            events: [signedEvent],
           },
           {
             headers,
-            validateStatus: (Q) => Q < 500,
+            validateStatus: (status) => status < 500,
             timeout: 30000,
           },
         )
         .catch((error) => {
-          x ??= {
+          firstRequestError ??= {
             error,
           };
           throw error;
         });
-    let F = await P(headers);
-    let L = false;
-    if (F.status === 403) {
-      let { isDeviceIdentityEnabled } = await import("./chunk-m288yvvf.js");
-      L = await isDeviceIdentityEnabled().catch(() => false);
-      let Q = L ? await attachDeviceAttestation(F, e, R, accessToken, s) : undefined;
-      if (Q !== undefined) {
-        logForDebugging(`${r} Refused unsigned by a session bound to this machine; resending signed`);
-        R = Q;
-        F = await P(headers).catch((error) => {
-          logForDebugging(`${r} Signed resend failed: ${errorMessage(error)}`);
-          return F;
+    let response = await postWithHeaders(headers);
+    let deviceIdentityEnabled = false;
+    if (response.status === 403) {
+      let { isDeviceIdentityEnabled } = await import("../../services/analytics/violinGates.js");
+      deviceIdentityEnabled = await isDeviceIdentityEnabled().catch(() => false);
+      let attestation = deviceIdentityEnabled
+        ? await attachDeviceAttestation(response, sessionId, signedEvent, accessToken, signerOptions)
+        : undefined;
+      if (attestation !== undefined) {
+        logForDebugging(
+          `${credentials} Refused unsigned by a session bound to this machine; resending signed`,
+        );
+        signedEvent = attestation;
+        response = await postWithHeaders(headers).catch((error) => {
+          logForDebugging(`${credentials} Signed resend failed: ${errorMessage(error)}`);
+          return response;
         });
       }
-      F = await resendAfterUntrustedDevice(
-        F,
+      response = await resendAfterUntrustedDevice(
+        response,
         headers["X-Trusted-Device-Token"],
-        async (re) => {
+        async (trustedToken) => {
           let apiRequest = await prepareApiRequest();
-          return P({
+          return postWithHeaders({
             ...getOAuthRequestHeaders(apiRequest.accessToken),
             ...(apiRequest.profile
               ? {}
               : {
-                  "X-Trusted-Device-Token": re,
+                  "X-Trusted-Device-Token": trustedToken,
                 }),
           });
         },
         "cloud_session",
       );
     }
-    let G = F.status === 200 || F.status === 201;
-    if (x !== undefined && !G) {
+    let succeeded = response.status === 200 || response.status === 201;
+    if (firstRequestError !== undefined && !succeeded) {
       logForDebugging(
-        `${r} Not reporting HTTP ${F.status} (${printableName(String(jsonStringify(F.data)), 500)}) as the outcome: another POST of this event failed (5xx, timeout or network) and may have been stored`,
+        `${credentials} Not reporting HTTP ${response.status} (${printableName(String(jsonStringify(response.data)), 500)}) as the outcome: another POST of this event failed (5xx, timeout or network) and may have been stored`,
       );
       logEvent("tengu_remote_send_refusal_not_reported", {
-        status: F.status,
-        cause: fromEnumOpt(classifyRequestFailure(x.error)),
+        status: response.status,
+        cause: fromEnumOpt(classifyRequestFailure(firstRequestError.error)),
       });
-      throw x.error;
+      throw firstRequestError.error;
     }
-    if (G) {
-      logForDebugging(`${r} Successfully sent event to session ${e}`);
-      let results = F.data?.results;
+    if (succeeded) {
+      logForDebugging(`${credentials} Successfully sent event to session ${sessionId}`);
+      let results = response.data?.results;
       let positiveInt = parsePositiveInt(results?.[0]?.sequence_num);
       return {
         ok: true,
@@ -601,46 +614,46 @@ async function sendEventToRemoteSession_2(e, n, r, s = {}) {
         }),
       };
     }
-    logForDebugging(`${r} Failed with status ${F.status}: ${jsonStringify(F.data)}`);
-    let j;
-    if (L && F.status === 403) {
-      let { classifyElevatedAuthSubReason } = await import("./chunk-g9dw262t.js");
-      if (classifyElevatedAuthSubReason(F.data) === "bound_unattested") {
-        let { loginEnrollmentOnThisComputer } = await import("./chunk-3kb57csj.js");
-        j =
+    logForDebugging(`${credentials} Failed with status ${response.status}: ${jsonStringify(response.data)}`);
+    let advice;
+    if (deviceIdentityEnabled && response.status === 403) {
+      let { classifyElevatedAuthSubReason } = await import("../../bridge/codeSessionApi.js");
+      if (classifyElevatedAuthSubReason(response.data) === "bound_unattested") {
+        let { loginEnrollmentOnThisComputer } = await import("../../bridge/trustedDevice.js");
+        advice =
           loginEnrollmentOnThisComputer() === "enrolls"
             ? "this machine could not prove it is the computer the session is bound to, or a trusted device; run /login to enroll it"
             : "this machine could not prove it is the computer the session is bound to, or a trusted device";
       }
     }
-    let message = F.data?.error?.message;
+    let message = response.data?.error?.message;
     return {
       ok: false,
       reason:
-        j !== undefined
-          ? `${j} (HTTP ${F.status})`
+        advice !== undefined
+          ? `${advice} (HTTP ${response.status})`
           : typeof message === "string"
-            ? `${printableName(message, 300)} (HTTP ${F.status})`
-            : `HTTP ${F.status}`,
-      status: F.status,
-      ...(j !== undefined && {
-        advice: j,
+            ? `${printableName(message, 300)} (HTTP ${response.status})`
+            : `HTTP ${response.status}`,
+      status: response.status,
+      ...(advice !== undefined && {
+        advice,
       }),
     };
   } catch (error) {
-    logForDebugging(`${r} Error: ${errorMessage(error)}`);
+    logForDebugging(`${credentials} Error: ${errorMessage(error)}`);
     if (error instanceof CloudSessionAccessError)
       return {
         ok: false,
         reason: error.message,
         advice: error.message,
       };
-    let y = classifyRequestFailure(error);
+    let cause = classifyRequestFailure(error);
     return {
       ok: false,
       reason: errorMessage(error),
-      ...(y !== undefined && {
-        cause: y,
+      ...(cause !== undefined && {
+        cause,
       }),
     };
   }
@@ -652,76 +665,76 @@ function classifyRequestFailure(error) {
   return error.code === "ECONNABORTED" ? "timeout" : "network";
 }
 //@ chunk-aepeg2w5.js:790455-790797 placement
-async function sendEventToRemoteSession(e, content, r) {
+async function sendEventToRemoteSession(sessionId, content, options) {
   return sendEventToRemoteSession_2(
-    e,
+    sessionId,
     {
-      uuid: r?.uuid ?? randomUUID(),
-      session_id: e,
+      uuid: options?.uuid ?? randomUUID(),
+      session_id: sessionId,
       type: "user",
       parent_tool_use_id: null,
       message: {
         role: "user",
         content,
       },
-      ...(r?.priority && {
-        priority: r.priority,
+      ...(options?.priority && {
+        priority: options.priority,
       }),
-      ...(r?.pastedContent && {
-        pasted_content: r.pastedContent,
+      ...(options?.pastedContent && {
+        pasted_content: options.pastedContent,
       }),
-      ...(r?.inlinePastes && {
-        inline_pastes: r.inlinePastes,
+      ...(options?.inlinePastes && {
+        inline_pastes: options.inlinePastes,
       }),
     },
     "[sendEventToRemoteSession]",
     {
-      eventSigner: r?.eventSigner,
+      eventSigner: options?.eventSigner,
     },
   );
 }
 //@ chunk-aepeg2w5.js:790797-790920 placement
-async function sendControlRequestToRemoteSession(e, renameSessionRequest, r) {
+async function sendControlRequestToRemoteSession(sessionId, renameSessionRequest, options) {
   return sendEventToRemoteSession_2(
-    e,
+    sessionId,
     {
       uuid: randomUUID(),
       ...renameSessionRequest,
     },
     "[sendControlRequestToRemoteSession]",
     {
-      eventSigner: r?.eventSigner,
+      eventSigner: options?.eventSigner,
     },
   );
 }
 //@ chunk-aepeg2w5.js:790920-791026 placement
-async function sendControlResponseToRemoteSession(sessionId, requestId, r, s) {
+async function sendControlResponseToRemoteSession(sessionId, requestId, response, options) {
   return sendEventToRemoteSession_2(
     sessionId,
     {
       uuid: randomUUID(),
-      ...buildControlResponse(requestId, r),
+      ...buildControlResponse(requestId, response),
     },
     "[sendControlResponseToRemoteSession]",
-    s,
+    options,
   );
 }
 //@ chunk-aepeg2w5.js:791026-791232 placement
-async function sendBashCommandToRemoteSession(sessionId, n, r) {
+async function sendBashCommandToRemoteSession(sessionId, command, options) {
   return sendEventToRemoteSession_2(
     sessionId,
     {
-      uuid: r?.uuid ?? randomUUID(),
+      uuid: options?.uuid ?? randomUUID(),
       session_id: sessionId,
       type: "bash_command",
-      command: n.command,
-      ...(n.cwd !== undefined && {
-        cwd: n.cwd,
+      command: command.command,
+      ...(command.cwd !== undefined && {
+        cwd: command.cwd,
       }),
     },
     "[sendBashCommandToRemoteSession]",
     {
-      eventSigner: r?.eventSigner,
+      eventSigner: options?.eventSigner,
     },
   );
 }
@@ -733,127 +746,133 @@ var MAX_CONSECUTIVE_FAILURES = 4;
 /**
  * 把本地会话历史批量上传为远程会话事件（/v1/code/sessions/<id>/events，分批、限大小）。
  */
-async function sendSessionHistoryEvents(infraSessionId, n, r) {
+async function sendSessionHistoryEvents(infraSessionId, events, credentials) {
   if (!isFirstPartyProvider())
     return {
       ok: false,
       reason: "Cloud sessions are only available on the first-party Anthropic API provider.",
     };
-  if (n.length === 0)
+  if (events.length === 0)
     return {
       ok: true,
       droppedEvents: 0,
     };
-  let s = "[sendSessionHistoryEvents]";
-  let h = `${getOauthConfig().BASE_API_URL}/v1/code/sessions/${infraSessionId}/events`;
-  let y = 0;
-  let S;
-  let w = false;
-  let R = new ClientEventUploader({
+  let logLabel = "[sendSessionHistoryEvents]";
+  let eventsUrl = `${getOauthConfig().BASE_API_URL}/v1/code/sessions/${infraSessionId}/events`;
+  let uploadedCount = 0;
+  let error;
+  let gaveUp = false;
+  let uploader = new ClientEventUploader({
     maxBatchSize: SESSION_EVENTS_BATCH_SIZE,
     maxBatchBytes: MAX_BATCH_BYTES,
-    maxQueueSize: Math.max(n.length, SESSION_EVENTS_BATCH_SIZE),
+    maxQueueSize: Math.max(events.length, SESSION_EVENTS_BATCH_SIZE),
     baseDelayMs: 500,
     maxDelayMs: 8000,
     jitterMs: 250,
     maxConsecutiveFailures: MAX_CONSECUTIVE_FAILURES,
     onBatchDropped: () => {
-      w = true;
-      R.close();
+      gaveUp = true;
+      uploader.close();
     },
-    send: async (x) => {
-      let mapped = x.map((j) => ({
+    send: async (batch) => {
+      let events = batch.map((event) => ({
         payload: {
-          ...j,
+          ...event,
           historical: true,
         },
         historical: true,
       }));
-      dedupeEventsByUuid(mapped);
-      let F;
+      dedupeEventsByUuid(events);
+      let response;
       try {
-        let { accessToken, profile } = await prepareApiRequest(r);
+        let { accessToken, profile } = await prepareApiRequest(credentials);
         let headers = await getSessionRequestHeaders(accessToken, profile);
-        let Q = (headers) =>
+        let postWithHeaders = (headers) =>
           axios_default.post(
-            h,
+            eventsUrl,
             {
-              events: mapped,
+              events,
             },
             {
               headers,
-              validateStatus: (se) => se < 500,
+              validateStatus: (status) => status < 500,
               timeout: 60000,
             },
           );
-        F = await resendAfterUntrustedDevice(
-          await Q(headers),
+        response = await resendAfterUntrustedDevice(
+          await postWithHeaders(headers),
           headers["X-Trusted-Device-Token"],
-          async (re) => {
-            let apiRequest = await prepareApiRequest(r);
-            return Q({
+          async (trustedToken) => {
+            let apiRequest = await prepareApiRequest(credentials);
+            return postWithHeaders({
               ...getOAuthRequestHeaders(apiRequest.accessToken),
               ...(apiRequest.profile
                 ? {}
                 : {
-                    "X-Trusted-Device-Token": re,
+                    "X-Trusted-Device-Token": trustedToken,
                   }),
             });
           },
           "remote_control",
         );
-      } catch (error) {
-        S = {
-          reason: errorMessage(error),
+      } catch (error_2) {
+        error = {
+          reason: errorMessage(error_2),
         };
-        throw error;
+        throw error_2;
       }
-      if (F.status === 200 || F.status === 201) return;
-      let message = F.data?.error?.message;
-      let G =
+      if (response.status === 200 || response.status === 201) return;
+      let message = response.data?.error?.message;
+      let errorText =
         typeof message === "string"
-          ? `${printableName(message, 300)} (HTTP ${F.status})`
-          : `HTTP ${F.status}`;
-      if (F.status === 400 || F.status === 413 || F.status === 422) {
-        logForDebugging(`${s} Dropping ${x.length} history event(s) the server refused: ${G}`, {
-          level: "warn",
-        });
-        y += x.length;
+          ? `${printableName(message, 300)} (HTTP ${response.status})`
+          : `HTTP ${response.status}`;
+      if (response.status === 400 || response.status === 413 || response.status === 422) {
+        logForDebugging(
+          `${logLabel} Dropping ${batch.length} history event(s) the server refused: ${errorText}`,
+          {
+            level: "warn",
+          },
+        );
+        uploadedCount += batch.length;
         return;
       }
-      S = {
-        reason: G,
-        status: F.status,
+      error = {
+        reason: errorText,
+        status: response.status,
       };
-      if (F.status === 429) {
-        let j = Number(F.headers?.["retry-after"]);
-        throw new ClientEventUploadError(G, Number.isFinite(j) ? j * 1000 : undefined);
+      if (response.status === 429) {
+        let retryAfterSeconds = Number(response.headers?.["retry-after"]);
+        throw new ClientEventUploadError(
+          errorText,
+          Number.isFinite(retryAfterSeconds) ? retryAfterSeconds * 1000 : undefined,
+        );
       }
       throw Error("session history POST refused");
     },
   });
   try {
-    await R.enqueue(n.slice());
-    await R.flush();
+    await uploader.enqueue(events.slice());
+    await uploader.flush();
   } finally {
-    R.close();
+    uploader.close();
   }
-  if (w) {
-    logForDebugging(`${s} Upload to ${infraSessionId} failed: ${S?.reason ?? "unknown"}`);
+  if (gaveUp) {
+    logForDebugging(`${logLabel} Upload to ${infraSessionId} failed: ${error?.reason ?? "unknown"}`);
     return {
       ok: false,
-      reason: S?.reason ?? "upload failed",
-      ...(S?.status !== undefined && {
-        status: S.status,
+      reason: error?.reason ?? "upload failed",
+      ...(error?.status !== undefined && {
+        status: error.status,
       }),
     };
   }
   logForDebugging(
-    `${s} Wrote ${n.length - y} history events to session ${infraSessionId}${y > 0 ? ` (${y} refused)` : ""}`,
+    `${logLabel} Wrote ${events.length - uploadedCount} history events to session ${infraSessionId}${uploadedCount > 0 ? ` (${uploadedCount} refused)` : ""}`,
   );
   return {
     ok: true,
-    droppedEvents: y,
+    droppedEvents: uploadedCount,
   };
 }
 //@ chunk-aepeg2w5.js:793010-793525 placement = updateSessionTitle (0.66)
@@ -890,25 +909,27 @@ async function updateSessionTitle(sessionId, title, signal) {
   }
 }
 //@ chunk-aepeg2w5.js:793525-793865 placement
-async function markSessionRead(sessionId, n) {
+async function markSessionRead(sessionId, eventId) {
   try {
     let { accessToken } = await prepareApiRequest();
-    let s = `${getOauthConfig().BASE_API_URL}/v1/code/sessions/${sessionId}/mark_read`;
-    let h = await axios_default.post(
-      s,
-      n
+    let url = `${getOauthConfig().BASE_API_URL}/v1/code/sessions/${sessionId}/mark_read`;
+    let response = await axios_default.post(
+      url,
+      eventId
         ? {
-            event_id: n,
+            event_id: eventId,
           }
         : {},
       {
         headers: getOAuthRequestHeaders(accessToken),
         timeout: 1e4,
-        validateStatus: (y) => y < 500,
+        validateStatus: (status) => status < 500,
       },
     );
-    if (h.status !== 200)
-      logForDebugging(`[markSessionRead] Failed with status ${h.status}: ${jsonStringify(h.data)}`);
+    if (response.status !== 200)
+      logForDebugging(
+        `[markSessionRead] Failed with status ${response.status}: ${jsonStringify(response.data)}`,
+      );
   } catch (error) {
     logForDebugging(`[markSessionRead] Error: ${errorMessage(error)}`);
   }
@@ -917,30 +938,35 @@ async function markSessionRead(sessionId, n) {
 /**
  * can_use_tool 控制请求的 zod schema（含工具名、输入、交互要求与匹配规则）。
  */
-var CanUseToolRequestSchema = DoctorLazy(() =>
-  looseObject({
-    subtype: literal("can_use_tool"),
-    tool_name: string(),
-    input: record(string(), unknown()),
-    tool_use_id: string(),
-    requires_user_interaction: M().optional(),
-    decision_reason_type: unknown().optional(),
-    classifier_approvable: unknown().optional(),
-    matched_ask_rule: unknown().optional(),
-  }),
-);
-var canUseToolRequestEventSchema = DoctorLazy(() =>
-  discriminatedUnion("type", [
-    u({
-      type: literal("control_request"),
-      request_id: string(),
-      request: CanUseToolRequestSchema(),
+var CanUseToolRequestSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var canUseToolRequestEventSchema;
+var MCP_QUESTION_GRACE_MS;
+deferInit("chunk-aepeg2w5.js:793865", () => {
+  CanUseToolRequestSchema = DoctorLazy(() =>
+    looseObject({
+      subtype: literal("can_use_tool"),
+      tool_name: stringSchema(),
+      input: record(stringSchema(), unknown()),
+      tool_use_id: stringSchema(),
+      requires_user_interaction: booleanSchema().optional(),
+      decision_reason_type: unknown().optional(),
+      classifier_approvable: unknown().optional(),
+      matched_ask_rule: unknown().optional(),
     }),
-    SDKControlResponseMessageSchema(),
-    SDKControlCancelRequestMessageSchema(),
-  ]),
-);
-var MCP_QUESTION_GRACE_MS = 600000;
+  );
+  canUseToolRequestEventSchema = DoctorLazy(() =>
+    discriminatedUnion("type", [
+      objectSchema({
+        type: literal("control_request"),
+        request_id: stringSchema(),
+        request: CanUseToolRequestSchema(),
+      }),
+      SDKControlResponseMessageSchema(),
+      SDKControlCancelRequestMessageSchema(),
+    ]),
+  );
+  MCP_QUESTION_GRACE_MS = 600000;
+});
 //@ chunk-aepeg2w5.js:794214-794324 placement
 function getAccessTokenWithCcrFallback() {
   return (
@@ -951,10 +977,10 @@ function getAccessTokenWithCcrFallback() {
   );
 }
 //@ chunk-aepeg2w5.js:794324-794401 placement
-function deviceBridgeAccessToken(apiCreds) {
+function deviceBridgeAccessToken(credentials) {
   return (
-    (apiCreds.profile ? sessionsApiAccessTokenNow(true) : getAccessTokenWithCcrFallback()) ??
-    (hostSessionsBearerOffered() ? undefined : apiCreds.accessToken)
+    (credentials.profile ? sessionsApiAccessTokenNow(true) : getAccessTokenWithCcrFallback()) ??
+    (hostSessionsBearerOffered() ? undefined : credentials.accessToken)
   );
 }
 //@ chunk-aepeg2w5.js:794401-794445 placement
@@ -970,35 +996,35 @@ function sessionsApiAccessTokenWithCcrFallback(profile) {
 async function pollRemoteSessionEvents(sessionId, afterId, opts) {
   if (!isFirstPartyProvider())
     throw Error("Cloud sessions are only available on the first-party Anthropic API provider.");
-  let s;
-  let h = isConsoleProfileSessionsCredential();
-  let y = null;
-  if (h) s = await sessionsApiAccessToken(h);
+  let accessToken;
+  let isConsoleProfile = isConsoleProfileSessionsCredential();
+  let hostBearer = null;
+  if (isConsoleProfile) accessToken = await sessionsApiAccessToken(isConsoleProfile);
   else {
     await checkAndRefreshOAuthTokenIfNeeded({
       credentials: opts.credentials,
     });
-    y = await ensureHostSessionsBearer();
-    s = y ?? getAccessTokenWithCcrFallback();
+    hostBearer = await ensureHostSessionsBearer();
+    accessToken = hostBearer ?? getAccessTokenWithCcrFallback();
   }
-  if (!s) throw Error("No access token for polling");
-  let S = s;
+  if (!accessToken) throw Error("No access token for polling");
+  let currentToken = accessToken;
   let eventsUrl = `${getOauthConfig().BASE_API_URL}/v1/code/sessions/${sessionId}/events`;
   let MAX_EVENT_PAGES = 50;
-  let x = [];
-  let P = [];
+  let newEvents = [];
+  let controlFrames = [];
   let cursor = afterId;
   for (let page = 0; page < MAX_EVENT_PAGES; page++) {
     let eventsResponse = await resendOnHeldBearer401(
-      y,
-      (Se) => {
-        y = Se;
+      hostBearer,
+      (heldToken) => {
+        hostBearer = heldToken;
         return axiosGetWithRetry_2(eventsUrl, async () => {
-          S = h
-            ? bearerToSend(null, s)
+          currentToken = isConsoleProfile
+            ? bearerToSend(null, accessToken)
             : bearerToSend(readHostSessionsBearer(), getAccessTokenWithCcrFallback());
           return {
-            headers: await getSessionRequestHeaders(S, h),
+            headers: await getSessionRequestHeaders(currentToken, isConsoleProfile),
             params: {
               sort_order: "asc",
               ...(cursor && {
@@ -1025,17 +1051,17 @@ async function pollRemoteSessionEvents(sessionId, afterId, opts) {
       if (sequenceNum !== undefined) cursor = String(sequenceNum);
       let payload = event?.payload;
       if (payload && typeof payload === "object" && "type" in payload) {
-        let Z = canUseToolRequestEventSchema().safeParse(payload);
-        if (Z.success) P.push(Z.data);
-        else if ("session_id" in payload) x.push(payload);
+        let parsedEvent = canUseToolRequestEventSchema().safeParse(payload);
+        if (parsedEvent.success) controlFrames.push(parsedEvent.data);
+        else if ("session_id" in payload) newEvents.push(payload);
       }
     }
     if (!eventsData.next_cursor) break;
   }
   if (opts.skipMetadata)
     return {
-      newEvents: x,
-      controlFrames: P,
+      newEvents,
+      controlFrames,
       lastEventId: cursor,
     };
   let branch;
@@ -1045,7 +1071,7 @@ async function pollRemoteSessionEvents(sessionId, afterId, opts) {
   let metadataFetchError;
   try {
     let sessionData = await fetchSession(sessionId, {
-      accessToken: S,
+      accessToken: currentToken,
     });
     branch = getBranchFromSession(sessionData);
     sessionStatus = sessionData.session_status;
@@ -1058,8 +1084,8 @@ async function pollRemoteSessionEvents(sessionId, afterId, opts) {
     });
   }
   return {
-    newEvents: x,
-    controlFrames: P,
+    newEvents,
+    controlFrames,
     lastEventId: cursor,
     branch,
     sessionStatus,
@@ -1077,22 +1103,24 @@ async function archiveRemoteSession(sessionId, timeout = 1e4) {
     logForDebugging(`[archiveRemoteSession] ${sessionId} skipped: non-first-party provider`);
     return false;
   }
-  let r = isConsoleProfileSessionsCredential();
-  let s = r ? null : readHostSessionsBearer();
-  let h = r ? sessionsApiAccessTokenNow(r) : getAccessTokenWithCcrFallback();
-  if (!(s ?? h)) return false;
+  let isConsoleProfile = isConsoleProfileSessionsCredential();
+  let hostBearer = isConsoleProfile ? null : readHostSessionsBearer();
+  let fallbackToken = isConsoleProfile
+    ? sessionsApiAccessTokenNow(isConsoleProfile)
+    : getAccessTokenWithCcrFallback();
+  if (!(hostBearer ?? fallbackToken)) return false;
   let url = `${getOauthConfig().BASE_API_URL}/v1/code/sessions/${sessionId}/archive`;
   try {
     let resp = await resendOnHeldBearer401(
-      s,
-      async (R) =>
+      hostBearer,
+      async (bearerR) =>
         axios_default.post(
           url,
           {},
           {
-            headers: await getSessionRequestHeaders(bearerToSend(R, h), r),
+            headers: await getSessionRequestHeaders(bearerToSend(bearerR, fallbackToken), isConsoleProfile),
             timeout,
-            validateStatus: (x) => x < 500,
+            validateStatus: (status) => status < 500,
           },
         ),
       {
@@ -1113,18 +1141,25 @@ async function archiveRemoteSession(sessionId, timeout = 1e4) {
   }
 }
 //@ chunk-aepeg2w5.js:796493-796571 placement
-var BEARER_FRESHNESS_MS = 30000;
-var consoleProfileBearerByHost = new HostScoped(() => ({
-  lastBearer: undefined,
-  storedCredentialCheck: undefined,
-}));
+var BEARER_FRESHNESS_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var consoleProfileBearerByHost;
+deferInit("chunk-aepeg2w5.js:796493", () => {
+  BEARER_FRESHNESS_MS = 30000;
+  consoleProfileBearerByHost = new HostScoped(() => ({
+    lastBearer: undefined,
+    storedCredentialCheck: undefined,
+  }));
+});
 //@ chunk-aepeg2w5.js:796571-796657 placement
 function isConsoleProfileSessionsCredential() {
   if (getWIFAuthType() !== "user_oauth" || !isWIFDispatchAuth()) return false;
   return consoleProfileOrganizationLabel() !== "not_ldr" || !hasUsableClaudeAILogin();
 }
 //@ chunk-aepeg2w5.js:796657-796664 placement
-setTrustedDeviceProbe(isConsoleProfileSessionsCredential);
+// deferred: uses setTrustedDeviceProbe (../telemetry/memorySummary.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:796657", () => {
+  setTrustedDeviceProbe(isConsoleProfileSessionsCredential);
+});
 //@ chunk-aepeg2w5.js:796664-796723 placement
 function consoleProfileOrganizationLabel() {
   return getConsoleProfileBearerProvider()?.organizationLabel() ?? "unknown";
@@ -1142,22 +1177,22 @@ function isConsoleProfileProviderReady() {
  * 是否有当前组织的最近凭据。
  */
 function hasRecentBearerForOrg() {
-  let e = consoleProfileOrganizationUuid();
-  if (e === undefined) return false;
-  let n = consoleProfileBearerByHost.of(getRootSession().host);
-  if (n.lastBearer?.organizationUuid === e) return true;
+  let organizationUuid = consoleProfileOrganizationUuid();
+  if (organizationUuid === undefined) return false;
+  let state = consoleProfileBearerByHost.of(getRootSession().host);
+  if (state.lastBearer?.organizationUuid === organizationUuid) return true;
   let now = Date.now();
   if (
-    n.storedCredentialCheck === undefined ||
-    n.storedCredentialCheck.organizationUuid !== e ||
-    now - n.storedCredentialCheck.at > BEARER_FRESHNESS_MS
+    state.storedCredentialCheck === undefined ||
+    state.storedCredentialCheck.organizationUuid !== organizationUuid ||
+    now - state.storedCredentialCheck.at > BEARER_FRESHNESS_MS
   )
-    n.storedCredentialCheck = {
+    state.storedCredentialCheck = {
       at: now,
-      organizationUuid: e,
-      present: getConsoleProfileBearerProvider()?.hasStored(e) === true,
+      organizationUuid,
+      present: getConsoleProfileBearerProvider()?.hasStored(organizationUuid) === true,
     };
-  return n.storedCredentialCheck.present;
+  return state.storedCredentialCheck.present;
 }
 //@ chunk-aepeg2w5.js:797176-797232 placement
 function consoleProfileCanStartCloudSessions() {
@@ -1197,17 +1232,17 @@ class ConsoleProfileCloudSessionsError extends Error {
 }
 //@ chunk-aepeg2w5.js:797997-798660 placement
 async function resolveConsoleProfileBearer({ credentials, signIn, onBrowserOpening }) {
-  let s = consoleProfileOrganizationUuid();
-  if (s === undefined)
+  let organizationUuid = consoleProfileOrganizationUuid();
+  if (organizationUuid === undefined)
     throw new ConsoleProfileCloudSessionsError(
       "Your Console sign-in doesn't record an organization, so a cloud session can't be started. Sign in again with /login or `ant auth login`.",
     );
   let consoleProfileCredential = await fetchConsoleProfileCredential({
-    organizationUuid: s,
+    organizationUuid,
     credentials,
   });
   if (consoleProfileCredential.ok)
-    return rememberConsoleProfileBearer(consoleProfileCredential.accessToken, s);
+    return rememberConsoleProfileBearer(consoleProfileCredential.accessToken, organizationUuid);
   if (consoleProfileCredential.reason === "refresh_failed")
     throw new ConsoleProfileCloudSessionsError(
       `Your cloud-sessions sign-in could not be renewed (${consoleProfileCredential.detail ?? "unknown cause"}). Try again.`,
@@ -1216,23 +1251,23 @@ async function resolveConsoleProfileBearer({ credentials, signIn, onBrowserOpeni
   if (!signIn || !isConsoleProfileProviderReady())
     throw new ConsoleProfileCloudSessionsError(cloudSessionsSignInRefusal());
   let consoleProfileBearerProvider = getConsoleProfileBearerProvider();
-  let S = consoleProfileBearerProvider
+  let provider = consoleProfileBearerProvider
     ? await consoleProfileBearerProvider.signIn({
-        organizationUuid: s,
+        organizationUuid,
         onBrowserOpening,
       })
     : {
         ok: false,
         message: cloudSessionsSignInRefusal(),
       };
-  if (!S.ok) throw new ConsoleProfileCloudSessionsError(S.message);
-  return rememberConsoleProfileBearer(S.accessToken, s);
+  if (!provider.ok) throw new ConsoleProfileCloudSessionsError(provider.message);
+  return rememberConsoleProfileBearer(provider.accessToken, organizationUuid);
 }
 //@ chunk-aepeg2w5.js:798660-798757 placement
-function fetchConsoleProfileCredential(e) {
+function fetchConsoleProfileCredential(options) {
   let consoleProfileBearerProvider = getConsoleProfileBearerProvider();
   return consoleProfileBearerProvider
-    ? consoleProfileBearerProvider.getValid(e)
+    ? consoleProfileBearerProvider.getValid(options)
     : Promise.resolve({
         ok: false,
         reason: "needs_sign_in",
@@ -1257,17 +1292,17 @@ function rememberConsoleProfileBearer(accessToken, organizationUuid) {
 }
 //@ chunk-aepeg2w5.js:798933-799021 placement
 function forgetConsoleProfileCloudSessionsBearer() {
-  let e = consoleProfileBearerByHost.of(getRootSession().host);
-  e.lastBearer = undefined;
-  e.storedCredentialCheck = undefined;
+  let state = consoleProfileBearerByHost.of(getRootSession().host);
+  state.lastBearer = undefined;
+  state.storedCredentialCheck = undefined;
 }
 //@ chunk-aepeg2w5.js:799021-799313 placement
-async function recoverConsoleProfileBearerOutcome(e) {
-  let n = consoleProfileOrganizationUuid();
-  if (n === undefined) return "needs_sign_in";
+async function recoverConsoleProfileBearerOutcome(refusedToken) {
+  let organizationUuid = consoleProfileOrganizationUuid();
+  if (organizationUuid === undefined) return "needs_sign_in";
   let consoleProfileCredential = await fetchConsoleProfileCredential({
-    organizationUuid: n,
-    refusedAccessToken: e,
+    organizationUuid,
+    refusedAccessToken: refusedToken,
   });
   if (!consoleProfileCredential.ok) {
     if (consoleProfileCredential.reason === "needs_sign_in") {
@@ -1276,144 +1311,156 @@ async function recoverConsoleProfileBearerOutcome(e) {
     }
     return "transient";
   }
-  if (consoleProfileCredential.accessToken === e) return "transient";
-  rememberConsoleProfileBearer(consoleProfileCredential.accessToken, n);
+  if (consoleProfileCredential.accessToken === refusedToken) return "transient";
+  rememberConsoleProfileBearer(consoleProfileCredential.accessToken, organizationUuid);
   return "recovered";
 }
 //@ chunk-aepeg2w5.js:799313-799368 placement
-async function isBearerRecovered(e) {
-  return (await recoverConsoleProfileBearerOutcome(e)) === "recovered";
+async function isBearerRecovered(refusedToken) {
+  return (await recoverConsoleProfileBearerOutcome(refusedToken)) === "recovered";
 }
 //@ chunk-aepeg2w5.js:799368-799537 placement
-function sessionsApiAccessTokenNow(e) {
-  if (e) {
+function sessionsApiAccessTokenNow(isConsoleProfile) {
+  if (isConsoleProfile) {
     let lastBearer = consoleProfileBearerByHost.of(getRootSession().host).lastBearer;
-    let r = consoleProfileOrganizationUuid();
-    return lastBearer !== undefined && r !== undefined && lastBearer.organizationUuid === r
+    let organizationUuid = consoleProfileOrganizationUuid();
+    return lastBearer !== undefined &&
+      organizationUuid !== undefined &&
+      lastBearer.organizationUuid === organizationUuid
       ? lastBearer.accessToken
       : undefined;
   }
   return readHostSessionsBearer() ?? getClaudeAIOAuthTokens()?.accessToken;
 }
 //@ chunk-aepeg2w5.js:799537-799599 placement
-async function accountApiAccessToken(e = isConsoleProfileSessionsCredential()) {
-  return e ? sessionsApiAccessToken(true) : getClaudeAIOAuthTokens()?.accessToken;
+async function accountApiAccessToken(isConsoleProfile = isConsoleProfileSessionsCredential()) {
+  return isConsoleProfile ? sessionsApiAccessToken(true) : getClaudeAIOAuthTokens()?.accessToken;
 }
 //@ chunk-aepeg2w5.js:799599-799816 placement
-async function sessionsApiAccessToken(e = isConsoleProfileSessionsCredential()) {
-  if (e) {
-    let n = consoleProfileOrganizationUuid();
-    if (n === undefined) return;
+async function sessionsApiAccessToken(isConsoleProfile = isConsoleProfileSessionsCredential()) {
+  if (isConsoleProfile) {
+    let organizationUuid = consoleProfileOrganizationUuid();
+    if (organizationUuid === undefined) return;
     let consoleProfileCredential = await fetchConsoleProfileCredential({
-      organizationUuid: n,
+      organizationUuid,
     });
     if (consoleProfileCredential.ok)
-      return rememberConsoleProfileBearer(consoleProfileCredential.accessToken, n);
+      return rememberConsoleProfileBearer(consoleProfileCredential.accessToken, organizationUuid);
     if (consoleProfileCredential.reason === "needs_sign_in") forgetConsoleProfileCloudSessionsBearer();
     return;
   }
   return (await ensureHostSessionsBearer()) ?? getClaudeAIOAuthTokens()?.accessToken;
 }
 //@ chunk-aepeg2w5.js:799816-799879 placement
-async function sessionsApiOrganizationUUID(e = isConsoleProfileSessionsCredential()) {
-  if (e) return consoleProfileOrganizationUuid() ?? null;
+async function sessionsApiOrganizationUUID(isConsoleProfile = isConsoleProfileSessionsCredential()) {
+  if (isConsoleProfile) return consoleProfileOrganizationUuid() ?? null;
   return getOrganizationUUID();
 }
 //@ chunk-aepeg2w5.js:799879-799937 placement
-function recoverSessionsApiBearer(e, n, r, profile) {
-  if (profile) return isBearerRecovered(e);
-  return recoverCloudSessionsBearer(e, n, r);
+function recoverSessionsApiBearer(token, mode, third, profile) {
+  if (profile) return isBearerRecovered(token);
+  return recoverCloudSessionsBearer(token, mode, third);
 }
 //@ chunk-aepeg2w5.js:799937-800530 placement
-async function withSessionsApiBearer401Retry(e, n) {
-  let r = n.profile ?? isConsoleProfileSessionsCredential();
+async function withSessionsApiBearer401Retry(run, options) {
+  let isConsoleProfile = options.profile ?? isConsoleProfileSessionsCredential();
   let fallbackToken =
-    n.fallbackToken !== undefined &&
-    !isHostHandedSessionsBearer(n.fallbackToken) &&
-    (r || !hostSessionsBearerOffered())
-      ? n.fallbackToken
+    options.fallbackToken !== undefined &&
+    !isHostHandedSessionsBearer(options.fallbackToken) &&
+    (isConsoleProfile || !hostSessionsBearerOffered())
+      ? options.fallbackToken
       : undefined;
-  let h = r ? sessionsApiAccessTokenNow(true) : ((await ensureHostSessionsBearer()) ?? undefined);
-  if (!r && h === undefined)
-    return withOAuth401Retry(() => e(requireBearer(sessionsApiAccessTokenNow(false) ?? fallbackToken)), n);
+  let token = isConsoleProfile
+    ? sessionsApiAccessTokenNow(true)
+    : ((await ensureHostSessionsBearer()) ?? undefined);
+  if (!isConsoleProfile && token === undefined)
+    return withOAuth401Retry(
+      () => run(requireBearer(sessionsApiAccessTokenNow(false) ?? fallbackToken)),
+      options,
+    );
   try {
-    return await e(requireBearer(h ?? fallbackToken));
+    return await run(requireBearer(token ?? fallbackToken));
   } catch (error) {
     if (
-      h === undefined ||
+      token === undefined ||
       !axios_default.isAxiosError(error) ||
       error.response?.status !== 401 ||
-      !(r
-        ? await isBearerRecovered(h)
+      !(isConsoleProfile
+        ? await isBearerRecovered(token)
         : (await recoverHostSessionsBearer(
-            h,
+            token,
             lacksAuthorizationHeader(error.config) ? "withheld" : "refused",
           )) === "recovered" || hasClaudeAISignInToken())
     )
       throw error;
-    let S = sessionsApiAccessTokenNow(r) ?? fallbackToken;
-    if (S === undefined) throw error;
+    let nextToken = sessionsApiAccessTokenNow(isConsoleProfile) ?? fallbackToken;
+    if (nextToken === undefined) throw error;
     try {
-      return await e(S);
+      return await run(nextToken);
     } catch (error) {
-      if (!r && axios_default.isAxiosError(error) && error.response?.status === 401)
-        recoverHostSessionsBearer(S, lacksAuthorizationHeader(error.config) ? "withheld" : "refused").catch(
-          () => {},
-        );
+      if (!isConsoleProfile && axios_default.isAxiosError(error) && error.response?.status === 401)
+        recoverHostSessionsBearer(
+          nextToken,
+          lacksAuthorizationHeader(error.config) ? "withheld" : "refused",
+        ).catch(() => {});
       throw error;
     }
   }
 }
 //@ chunk-aepeg2w5.js:800530-800588 placement
-function requireBearer(e) {
-  if (e === undefined) throw new CloudSessionAccessError(cloudSessionsSignInRefusal());
-  return e;
+function requireBearer(token) {
+  if (token === undefined) throw new CloudSessionAccessError(cloudSessionsSignInRefusal());
+  return token;
 }
 //@ chunk-aepeg2w5.js:800588-800712 placement
-function bearerToSend(e, n) {
-  let r = e ?? n;
-  if (r === undefined) throw Error("No credential left to send a cloud-sessions request with");
-  return r;
+function bearerToSend(heldToken, fallbackToken) {
+  let token = heldToken ?? fallbackToken;
+  if (token === undefined) throw Error("No credential left to send a cloud-sessions request with");
+  return token;
 }
 //@ chunk-aepeg2w5.js:800712-800948 placement
-async function resendOnHeldBearer401(e, n, { waitForHost }) {
-  let s;
+async function resendOnHeldBearer401(heldToken, send, { waitForHost }) {
+  let response;
   try {
-    s = await n(e);
+    response = await send(heldToken);
   } catch (error) {
-    if (e === null || !axios_default.isAxiosError(error) || error.response?.status !== 401) throw error;
-    return resolveSessionsAuth(e, n, waitForHost, lacksAuthorizationHeader(error.config));
+    if (heldToken === null || !axios_default.isAxiosError(error) || error.response?.status !== 401)
+      throw error;
+    return resolveSessionsAuth(heldToken, send, waitForHost, lacksAuthorizationHeader(error.config));
   }
-  if (e === null || s.status !== 401) return s;
-  return resolveSessionsAuth(e, n, waitForHost, lacksAuthorizationHeader(s.config));
+  if (heldToken === null || response.status !== 401) return response;
+  return resolveSessionsAuth(heldToken, send, waitForHost, lacksAuthorizationHeader(response.config));
 }
 //@ chunk-aepeg2w5.js:800948-801310 placement
 /**
  * 解析会话 API 的认证。
  */
-async function resolveSessionsAuth(e, n, waitForHost, s) {
-  let h = recoverHostSessionsBearer(e, s ? "withheld" : "refused");
-  let y;
+async function resolveSessionsAuth(heldToken, send, waitForHost, withheld) {
+  let recovery = recoverHostSessionsBearer(heldToken, withheld ? "withheld" : "refused");
+  let token;
   if (waitForHost) {
-    await h;
-    y = await ensureHostSessionsBearer();
+    await recovery;
+    token = await ensureHostSessionsBearer();
   } else {
-    h.catch(() => {});
-    y = heldHostSessionsBearer();
+    recovery.catch(() => {});
+    token = heldHostSessionsBearer();
   }
-  let S;
+  let response;
   try {
-    S = await n(y);
+    response = await send(token);
   } catch (error) {
-    if (y !== null && axios_default.isAxiosError(error) && error.response?.status === 401)
-      recoverHostSessionsBearer(y, lacksAuthorizationHeader(error.config) ? "withheld" : "refused").catch(
+    if (token !== null && axios_default.isAxiosError(error) && error.response?.status === 401)
+      recoverHostSessionsBearer(token, lacksAuthorizationHeader(error.config) ? "withheld" : "refused").catch(
         () => {},
       );
     throw error;
   }
-  if (y !== null && S.status === 401)
-    recoverHostSessionsBearer(y, lacksAuthorizationHeader(S.config) ? "withheld" : "refused").catch(() => {});
-  return S;
+  if (token !== null && response.status === 401)
+    recoverHostSessionsBearer(
+      token,
+      lacksAuthorizationHeader(response.config) ? "withheld" : "refused",
+    ).catch(() => {});
+  return response;
 }
 //@ chunk-aepeg2w5.js:801310-801387 placement
 class WarnOnceSlot {
@@ -1425,7 +1472,10 @@ class WarnOnceSlot {
   }
 }
 //@ chunk-aepeg2w5.js:801387-801412 placement
-var warnOnceSlotByHost = new HostScoped(() => new WarnOnceSlot());
+var warnOnceSlotByHost; // deferred: uses WarnOnceSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:801387", () => {
+  warnOnceSlotByHost = new HostScoped(() => new WarnOnceSlot());
+});
 //@ chunk-aepeg2w5.js:801412-801449 placement
 function warnOnceSlot() {
   return warnOnceSlotByHost.of(getRootSession().host);
@@ -1555,4 +1605,6 @@ export {
   sessionsApiAccessTokenWithCcrFallback,
   accountApiAccessToken,
   sendSessionHistoryEvents,
+  primeSessionsApiBearer,
+  sessionsApiBearerFingerprint,
 };

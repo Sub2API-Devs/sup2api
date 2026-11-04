@@ -13,12 +13,12 @@
 /**
  * 取消息关联的 tool_use_id：内容里第一个 tool_result 的 tool_use_id，否则 sourceToolUseID。
  */
-function getToolUseIdOfMessage(e) {
-  let { content } = e.message;
+function getToolUseIdOfMessage(message) {
+  let { content } = message.message;
   if (Array.isArray(content)) {
-    let found = content.find((n) => n.type === "tool_result");
+    let found = content.find((block) => block.type === "tool_result");
     if (found?.type === "tool_result") return found.tool_use_id;
   }
-  return e.sourceToolUseID;
+  return message.sourceToolUseID;
 }
 export { getToolUseIdOfMessage };

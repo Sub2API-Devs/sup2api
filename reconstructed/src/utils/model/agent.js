@@ -40,11 +40,11 @@ import { tierConfig } from "./stalePins.js";
 /**
  * 决定 Explore 代理的模型：内置 Explore 默认继承，存在比 Opus 更新的族时继承上限为 Opus。
  */
-function getExploreAgentModel(e, n) {
-  if (e.agentType !== EXPLORE_AGENT.agentType || e.source !== "built-in") return e.model;
+function getExploreAgentModel(agent, requestedModel) {
+  if (agent.agentType !== EXPLORE_AGENT.agentType || agent.source !== "built-in") return agent.model;
   if (modelIdsAreOpaque()) return "inherit";
   if (env.CLAUDE_CODE_DISABLE_EXPLORE_INHERIT_CAP) return "inherit";
-  return hasNewerFamilyThanOpus(n)
+  return hasNewerFamilyThanOpus(requestedModel)
     ? {
         inheritCap: OPUS,
       }
@@ -53,12 +53,12 @@ function getExploreAgentModel(e, n) {
 //@ chunk-e6aww6q8.js:183329-183344 placement
 var OPUS = "opus";
 //@ chunk-e6aww6q8.js:183344-183463 placement
-function hasNewerFamilyThanOpus(e) {
-  let n = modelFamilyOf_2(OPUS) ?? 1 / 0;
-  let filtered = uniq(getModelCatalog_2().models.map((model) => model.family)).filter(
-    (s) => (modelFamilyOf_2(s) ?? -1 / 0) > n,
+function hasNewerFamilyThanOpus(modelList) {
+  let opusFamily = modelFamilyOf_2(OPUS) ?? 1 / 0;
+  let needles = uniq(getModelCatalog_2().models.map((model) => model.family)).filter(
+    (family) => (modelFamilyOf_2(family) ?? -1 / 0) > opusFamily,
   );
-  return includesAnyIgnoreCase(e, filtered);
+  return includesAnyIgnoreCase(modelList, needles);
 }
 //@ chunk-e6aww6q8.js:1426182-1426268 callgraph-witnessed = getDefaultSubagentModel (0.711)
 /**
@@ -82,7 +82,7 @@ function getAgentModel(
   onModelAdjusted,
   options,
 ) {
-  let S = () =>
+  let inheritMainLoopModel = () =>
     getRuntimeMainLoopModel({
       permissionMode: permissionMode ?? "default",
       mainLoopModel: parentModel,
@@ -96,125 +96,146 @@ function getAgentModel(
     }
     return resolvedModel;
   };
-  let G = () => {
+  let defaultSubagentResolution = () => {
     let defaultSubagentModel = getDefaultSubagentModel();
-    if (defaultSubagentModel === "inherit") return S();
-    let Ee = applyParentRegionPrefix(parseUserSpecifiedModel(defaultSubagentModel), defaultSubagentModel);
-    if (isModelAllowed(Ee)) return Ee;
-    return stepDownRestrictedFamilyAliasPick(defaultSubagentModel) ?? S();
+    if (defaultSubagentModel === "inherit") return inheritMainLoopModel();
+    let resolvedDefault = applyParentRegionPrefix(
+      parseUserSpecifiedModel(defaultSubagentModel),
+      defaultSubagentModel,
+    );
+    if (isModelAllowed(resolvedDefault)) return resolvedDefault;
+    return stepDownRestrictedFamilyAliasPick(defaultSubagentModel) ?? inheritMainLoopModel();
   };
-  let q = (we, Ee, Ae = we) => {
-    let model = stepDownRestrictedFamilyAliasPick(we);
-    warnSubagentModelNotAllowed(we, model !== null);
-    let Me = model !== null ? (Ee ? isOpus1mUnavailable(identityModelId(model)) : model) : G();
+  let stepDownOrInherit = (spec, checkOpus1m, originalSpec = spec) => {
+    let model = stepDownRestrictedFamilyAliasPick(spec);
+    warnSubagentModelNotAllowed(spec, model !== null);
+    let resolvedModel =
+      model !== null
+        ? checkOpus1m
+          ? isOpus1mUnavailable(identityModelId(model))
+          : model
+        : defaultSubagentResolution();
     if (
-      strip1mSuffix(parseUserSpecifiedModel(Ae)).toLowerCase() !==
-      strip1mSuffix(parseUserSpecifiedModel(Me)).toLowerCase()
+      strip1mSuffix(parseUserSpecifiedModel(originalSpec)).toLowerCase() !==
+      strip1mSuffix(parseUserSpecifiedModel(resolvedModel)).toLowerCase()
     )
-      onModelAdjusted?.(we, Me, model !== null ? "family_step_down" : "parent_inherit");
-    return Me;
+      onModelAdjusted?.(spec, resolvedModel, model !== null ? "family_step_down" : "parent_inherit");
+    return resolvedModel;
   };
-  let Z = options?.inWorkflowRun ? getWorkflowSubagentModel() : undefined;
+  let workflowModel = options?.inWorkflowRun ? getWorkflowSubagentModel() : undefined;
   [agentModel, toolSpecifiedModel] =
-    Z !== undefined ? [undefined, undefined] : resolveAgentModelInputs(agentModel, toolSpecifiedModel);
+    workflowModel !== undefined
+      ? [undefined, undefined]
+      : resolveAgentModelInputs(agentModel, toolSpecifiedModel);
   if (toolSpecifiedModel) {
-    if (toolSpecifiedModel === "inherit") return S();
+    if (toolSpecifiedModel === "inherit") return inheritMainLoopModel();
     if (modelMatchesFamilyAlias(toolSpecifiedModel, parentModel)) return parentModel;
-    let we = applyParentRegionPrefix(
+    let resolvedToolModel = applyParentRegionPrefix(
       isOpus1mUnavailable(parseUserSpecifiedModel(toolSpecifiedModel)),
       toolSpecifiedModel,
     );
-    if (!isModelAllowed(we)) return q(toolSpecifiedModel, true, we);
-    return we;
+    if (!isModelAllowed(resolvedToolModel))
+      return stepDownOrInherit(toolSpecifiedModel, true, resolvedToolModel);
+    return resolvedToolModel;
   }
   if (agentModel !== undefined && agentModel !== "inherit") {
     if (modelMatchesFamilyAlias(agentModel, parentModel)) return parentModel;
-    let we = applyParentRegionPrefix(isOpus1mUnavailable(parseUserSpecifiedModel(agentModel)), agentModel);
-    if (!isModelAllowed(we)) return q(agentModel, true, we);
-    return we;
+    let resolvedAgentModel = applyParentRegionPrefix(
+      isOpus1mUnavailable(parseUserSpecifiedModel(agentModel)),
+      agentModel,
+    );
+    if (!isModelAllowed(resolvedAgentModel)) return stepDownOrInherit(agentModel, true, resolvedAgentModel);
+    return resolvedAgentModel;
   }
-  if (agentModel === "inherit") return S();
-  let agentModelWithExp = Z ?? getDefaultSubagentModel();
-  if (agentModelWithExp === "inherit") return S();
-  let ke = applyParentRegionPrefix(parseUserSpecifiedModel(agentModelWithExp), agentModelWithExp);
-  if (!isModelAllowed(ke)) return q(agentModelWithExp, false);
-  return ke;
+  if (agentModel === "inherit") return inheritMainLoopModel();
+  let agentModelWithExp = workflowModel ?? getDefaultSubagentModel();
+  if (agentModelWithExp === "inherit") return inheritMainLoopModel();
+  let resolvedDefaultModel = applyParentRegionPrefix(
+    parseUserSpecifiedModel(agentModelWithExp),
+    agentModelWithExp,
+  );
+  if (!isModelAllowed(resolvedDefaultModel)) return stepDownOrInherit(agentModelWithExp, false);
+  return resolvedDefaultModel;
 }
 //@ chunk-e6aww6q8.js:1427225-1428132 layout
 /**
  * 带来源统计的 getAgentModel：记录 subagent_model_resolve（来源、优先级、请求/解析族、降档或丢弃）。
  */
 function getAgentModelWithTelemetry(
-  exploreAgentModel,
+  agentSpec,
   parentModel,
-  model,
+  toolSpec,
   permissionMode,
   onModelRestricted,
-  y,
-  S,
+  source,
+  options,
 ) {
-  if (y === undefined)
-    return getAgentModel(exploreAgentModel, parentModel, model, permissionMode, onModelRestricted, S);
-  let w;
+  if (source === undefined)
+    return getAgentModel(agentSpec, parentModel, toolSpec, permissionMode, onModelRestricted, options);
+  let restrictedReason;
   let agentModel = getAgentModel(
-    exploreAgentModel,
+    agentSpec,
     parentModel,
-    model,
+    toolSpec,
     permissionMode,
-    (We, ze, lt) => {
-      w = lt;
-      onModelRestricted?.(We, ze);
+    (spec, resolved, reason) => {
+      restrictedReason = reason;
+      onModelRestricted?.(spec, resolved);
     },
-    S,
+    options,
   );
-  let [G, q] = resolveAgentModelInputs(exploreAgentModel, model);
+  let [agentSpec_2, toolSpec_2] = resolveAgentModelInputs(agentSpec, toolSpec);
   let defaultSubagentModel = getDefaultSubagentModel();
-  let Se = q
-    ? q === "inherit"
+  let requestedPair = toolSpec_2
+    ? toolSpec_2 === "inherit"
       ? [parentModel, "inherit"]
-      : [q, "tool"]
-    : G && G !== "inherit"
-      ? [G, "frontmatter"]
-      : G !== "inherit" && defaultSubagentModel !== "inherit"
+      : [toolSpec_2, "tool"]
+    : agentSpec_2 && agentSpec_2 !== "inherit"
+      ? [agentSpec_2, "frontmatter"]
+      : agentSpec_2 !== "inherit" && defaultSubagentModel !== "inherit"
         ? [defaultSubagentModel, "env"]
         : [parentModel, "inherit"];
-  let ke = S?.inWorkflowRun ? getWorkflowSubagentModel() : undefined;
-  let [we, Ee] = ke !== undefined ? [ke, "workflow_env"] : Se;
-  let Ae = modelFamilyOf(we, getCanonicalName(we));
-  let Ie = modelFamilyOf(agentModel, getCanonicalName(agentModel));
-  let Me = {
-    source: fromEnum(y),
-    precedence: fromEnum(Ee),
-    requested_family: fromEnum(Ae),
-    resolved_family: fromEnum(Ie),
-    requested_model: telemetrySafeModelName(we) ?? lit_2("none"),
+  let workflowModel = options?.inWorkflowRun ? getWorkflowSubagentModel() : undefined;
+  let [requestedModel, precedence] =
+    workflowModel !== undefined ? [workflowModel, "workflow_env"] : requestedPair;
+  let requestedFamily = modelFamilyOf(requestedModel, getCanonicalName(requestedModel));
+  let resolvedFamily = modelFamilyOf(agentModel, getCanonicalName(agentModel));
+  let eventFields = {
+    source: fromEnum(source),
+    precedence: fromEnum(precedence),
+    requested_family: fromEnum(requestedFamily),
+    resolved_family: fromEnum(resolvedFamily),
+    requested_model: telemetrySafeModelName(requestedModel) ?? lit_2("none"),
     resolved_model: telemetrySafeModelName(agentModel) ?? lit_2("none"),
   };
-  if (w === "family_step_down") logFeatureSad("subagent_model_resolve", "family_alias_stepped_down", Me);
-  else if (w === "parent_inherit") logFeatureSad("subagent_model_resolve", "override_dropped", Me);
-  else if (Ae !== "other" && Ie !== "other" && Ae !== Ie) {
-    if (Ee === "inherit") logFeatureSad("subagent_model_resolve", "inherit_family_mismatch", Me);
-    else logFeatureSad("subagent_model_resolve", "family_mismatch", Me);
-  } else logFeatureOk("subagent_model_resolve", Me);
+  if (restrictedReason === "family_step_down")
+    logFeatureSad("subagent_model_resolve", "family_alias_stepped_down", eventFields);
+  else if (restrictedReason === "parent_inherit")
+    logFeatureSad("subagent_model_resolve", "override_dropped", eventFields);
+  else if (requestedFamily !== "other" && resolvedFamily !== "other" && requestedFamily !== resolvedFamily) {
+    if (precedence === "inherit")
+      logFeatureSad("subagent_model_resolve", "inherit_family_mismatch", eventFields);
+    else logFeatureSad("subagent_model_resolve", "family_mismatch", eventFields);
+  } else logFeatureOk("subagent_model_resolve", eventFields);
   return agentModel;
 }
 //@ chunk-e6aww6q8.js:1428132-1428315 file-local
 /**
  * CLAUDE_CODE_SUBAGENT_MODEL_FORCE 时只保留 inherit 上限与 inherit 参数，忽略 frontmatter/工具参数。auto 名 getAgentModelDisplay 不准确。
  */
-function resolveAgentModelInputs(e, n) {
-  let r = typeof e === "object";
-  let s = r ? e.inheritCap : e;
-  if (!env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE) return [s, n];
+function resolveAgentModelInputs(agentSpec, toolSpec) {
+  let hasInheritCap = typeof agentSpec === "object";
+  let spec = hasInheritCap ? agentSpec.inheritCap : agentSpec;
+  if (!env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE) return [spec, toolSpec];
   return [
-    r && getDefaultSubagentModel() === "inherit" ? s : undefined,
-    n === "inherit" ? "inherit" : undefined,
+    hasInheritCap && getDefaultSubagentModel() === "inherit" ? spec : undefined,
+    toolSpec === "inherit" ? "inherit" : undefined,
   ];
 }
 //@ chunk-e6aww6q8.js:1428315-1428506 placement
-function warnSubagentModelNotAllowed(e, n) {
+function warnSubagentModelNotAllowed(spec, steppedDown) {
   logForDebugging(
-    `Subagent model "${e}" is not in the availableModels allowlist; ${n ? "using the newest allowed model in its family" : "inheriting the parent model"} instead`,
+    `Subagent model "${spec}" is not in the availableModels allowlist; ${steppedDown ? "using the newest allowed model in its family" : "inheriting the parent model"} instead`,
     {
       level: "warn",
     },
@@ -234,29 +255,31 @@ function isOpus1mUnavailable(model) {
 /**
  * 判断模型是否匹配族别名（如 opus），包括模型 id 不透明时的 Opus 别名候选。
  */
-function modelMatchesFamilyAlias(e, parentModel) {
-  let lower = e.toLowerCase();
+function modelMatchesFamilyAlias(spec, model) {
+  let lower = spec.toLowerCase();
   if (!isBaseModelKey(lower)) return false;
-  let s = strip1mSuffix(parentModel);
-  if (isModelKeyAlias(s) && !isBaseModelKey(s)) return false;
-  let canonicalName = getCanonicalName(parentModel);
+  let parentKey = strip1mSuffix(model);
+  if (isModelKeyAlias(parentKey) && !isBaseModelKey(parentKey)) return false;
+  let canonicalName = getCanonicalName(model);
   if (canonicalName.includes(lower)) return true;
   return (
     lower === "opus" &&
     modelIdsAreOpaque() &&
     !isDefaultOpusModelAdminSteered() &&
-    isOpusAliasCandidate(parentModel, canonicalName)
+    isOpusAliasCandidate(model, canonicalName)
   );
 }
 //@ chunk-4r745zza.js:639-768 fingerprint = aliasMatchesParentTier (1)
 /**
  * 用当前提供商 catalog 别名的 sonnet/opus/haiku 键构造档位默认表（srt），任一缺失返回 undefined。
  */
-function buildProviderTierDefaults(o) {
-  let l = catalogDefaultKeyForFamily("sonnet", o);
-  let f = catalogDefaultKeyForFamily("opus", o);
-  let r = catalogDefaultKeyForFamily("haiku", o);
-  return l === undefined || f === undefined || r === undefined ? undefined : tierConfig(f, l, r);
+function buildProviderTierDefaults(family) {
+  let sonnetKey = catalogDefaultKeyForFamily("sonnet", family);
+  let opusKey = catalogDefaultKeyForFamily("opus", family);
+  let haikuKey = catalogDefaultKeyForFamily("haiku", family);
+  return sonnetKey === undefined || opusKey === undefined || haikuKey === undefined
+    ? undefined
+    : tierConfig(opusKey, sonnetKey, haikuKey);
 }
 export {
   getAgentModel,

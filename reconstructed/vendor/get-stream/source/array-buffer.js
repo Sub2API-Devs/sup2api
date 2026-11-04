@@ -6,10 +6,10 @@
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { getStreamContents } from "./contents.js";
-import { throwObjectStream, getLengthProp, Fe } from "./utils.js";
+import { throwObjectStream, getLengthProp, noop } from "./utils.js";
 
 //@ chunk-m4p5zn6n.js:22966-23006 esm-layout
-async function Ge(stream, options) {
+async function getStreamAsBuffer(stream, options) {
   return getStreamContents(stream, arrayBufferMethods, options);
 }
 //@ chunk-m4p5zn6n.js:23006-23880 esm-fingerprint
@@ -63,7 +63,7 @@ var arrayBufferMethods = {
   getSize: getLengthProp,
   truncateChunk: truncateArrayBufferChunk,
   addChunk: addArrayBufferChunk,
-  getFinalChunk: Fe,
+  getFinalChunk: noop,
   finalize: finalizeArrayBuffer,
 };
-export { Ge };
+export { getStreamAsBuffer };

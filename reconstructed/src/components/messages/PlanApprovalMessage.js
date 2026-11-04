@@ -8,7 +8,7 @@
  * pieces: chunk-ah34pb7m.js (3)
  * attribution: fingerprint 2, callgraph-fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   UNKNOWN_SENDER,
   capIdFrameField,
@@ -32,179 +32,179 @@ import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-ah34pb7m.js:84356-85037 fingerprint = PlanApprovalRequestDisplay (0.377)
 function PlanApprovalRequestDisplay(props) {
-  let $ = w(12);
+  let $ = useMemoCache(12);
   let { request, senderName } = props;
-  let g = senderName || UNKNOWN_SENDER;
-  let h;
+  let sender = senderName || UNKNOWN_SENDER;
+  let filePath;
   if ($[0] !== request.planFilePath) {
-    h = capIdFrameField(request.planFilePath, IDLE_ID_FIELD_RECEIVE_BOUND);
+    filePath = capIdFrameField(request.planFilePath, IDLE_ID_FIELD_RECEIVE_BOUND);
     $[0] = request.planFilePath;
-    $[1] = h;
-  } else h = $[1];
-  let M = h;
-  let T;
+    $[1] = filePath;
+  } else filePath = $[1];
+  let cappedFilePath = filePath;
+  let planBody;
   if ($[2] !== request.planContent) {
-    T = capFrameBodyForDisplay(request.planContent, PLAN_CONTENT_DISPLAY_BOUND);
+    planBody = capFrameBodyForDisplay(request.planContent, PLAN_CONTENT_DISPLAY_BOUND);
     $[2] = request.planContent;
-    $[3] = T;
-  } else T = $[3];
-  let children = T;
-  const title = `Plan Approval Request from ${g}`;
-  let b;
+    $[3] = planBody;
+  } else planBody = $[3];
+  let children = planBody;
+  const title = `Plan Approval Request from ${sender}`;
+  let diffFrameElement;
   if ($[4] !== children) {
-    b = jsxProd_default(DiffFrame, {
+    diffFrameElement = jsxProd_default(DiffFrame, {
       children: jsxProd_default(MarkdownText_2, {
         stripPromptTags: false,
         children,
       }),
     });
     $[4] = children;
-    $[5] = b;
-  } else b = $[5];
-  let E;
-  if ($[6] !== M) {
-    E = jsxProd_default_2(Text, {
+    $[5] = diffFrameElement;
+  } else diffFrameElement = $[5];
+  let textElement;
+  if ($[6] !== cappedFilePath) {
+    textElement = jsxProd_default_2(Text, {
       dimColor: true,
-      children: ["Plan file: ", M],
+      children: ["Plan file: ", cappedFilePath],
     });
-    $[6] = M;
-    $[7] = E;
-  } else E = $[7];
-  let B;
-  if ($[8] !== title || $[9] !== b || $[10] !== E) {
-    B = jsxProd_default(Box, {
+    $[6] = cappedFilePath;
+    $[7] = textElement;
+  } else textElement = $[7];
+  let boxElement;
+  if ($[8] !== title || $[9] !== diffFrameElement || $[10] !== textElement) {
+    boxElement = jsxProd_default(Box, {
       flexDirection: "column",
       marginY: 1,
       children: jsxProd_default_2(ShutdownRequestDisplay, {
         color: "planMode",
         title,
-        children: [b, E],
+        children: [diffFrameElement, textElement],
       }),
     });
     $[8] = title;
-    $[9] = b;
-    $[10] = E;
-    $[11] = B;
-  } else B = $[11];
-  return B;
+    $[9] = diffFrameElement;
+    $[10] = textElement;
+    $[11] = boxElement;
+  } else boxElement = $[11];
+  return boxElement;
 }
 //@ chunk-ah34pb7m.js:85037-86383 callgraph-fingerprint = PlanApprovalResponseDisplay (0.272)
 function PlanApprovalResponseDisplay(props) {
-  let $ = w(20);
+  let $ = useMemoCache(20);
   let { response, senderName } = props;
-  let f;
+  let feedbackText;
   if ($[0] !== response.feedback) {
-    f = capFrameBodyForDisplay(response.feedback, IDLE_RESULT_MAX_LENGTH);
+    feedbackText = capFrameBodyForDisplay(response.feedback, IDLE_RESULT_MAX_LENGTH);
     $[0] = response.feedback;
-    $[1] = f;
-  } else f = $[1];
-  let h = f;
-  let M = senderName || UNKNOWN_SENDER;
+    $[1] = feedbackText;
+  } else feedbackText = $[1];
+  let cappedFeedback = feedbackText;
+  let sender = senderName || UNKNOWN_SENDER;
   if (response.approved) {
-    let T;
+    let checkMark;
     if ($[2] === MEMO_CACHE_SENTINEL) {
-      T = jsxProd_default(Text, {
+      checkMark = jsxProd_default(Text, {
         "aria-hidden": true,
         children: "\u2713 ",
       });
-      $[2] = T;
-    } else T = $[2];
+      $[2] = checkMark;
+    } else checkMark = $[2];
     let title;
-    if ($[3] !== M) {
+    if ($[3] !== sender) {
       title = jsxProd_default_2(Text, {
-        children: [T, "Plan Approved by ", M],
+        children: [checkMark, "Plan Approved by ", sender],
       });
-      $[3] = M;
+      $[3] = sender;
       $[4] = title;
     } else title = $[4];
-    let k;
-    if ($[5] !== h) {
-      k =
-        h &&
+    let feedbackText;
+    if ($[5] !== cappedFeedback) {
+      feedbackText =
+        cappedFeedback &&
         jsxProd_default(DiffFrame, {
           children: jsxProd_default_2(Text, {
-            children: ["Feedback: ", h],
+            children: ["Feedback: ", cappedFeedback],
           }),
         });
-      $[5] = h;
-      $[6] = k;
-    } else k = $[6];
-    let b;
+      $[5] = cappedFeedback;
+      $[6] = feedbackText;
+    } else feedbackText = $[6];
+    let proceedText;
     if ($[7] === MEMO_CACHE_SENTINEL) {
-      b = jsxProd_default(Text, {
+      proceedText = jsxProd_default(Text, {
         children: "You can now proceed with implementation. Your plan mode restrictions have been lifted.",
       });
-      $[7] = b;
-    } else b = $[7];
-    let E;
-    if ($[8] !== title || $[9] !== k) {
-      E = jsxProd_default(Box, {
+      $[7] = proceedText;
+    } else proceedText = $[7];
+    let approvedBox;
+    if ($[8] !== title || $[9] !== feedbackText) {
+      approvedBox = jsxProd_default(Box, {
         flexDirection: "column",
         marginY: 1,
         children: jsxProd_default_2(ShutdownRequestDisplay, {
           color: "success",
           title,
-          children: [k, b],
+          children: [feedbackText, proceedText],
         }),
       });
       $[8] = title;
-      $[9] = k;
-      $[10] = E;
-    } else E = $[10];
-    return E;
+      $[9] = feedbackText;
+      $[10] = approvedBox;
+    } else approvedBox = $[10];
+    return approvedBox;
   }
-  let T;
+  let crossMark;
   if ($[11] === MEMO_CACHE_SENTINEL) {
-    T = jsxProd_default(Text, {
+    crossMark = jsxProd_default(Text, {
       "aria-hidden": true,
       children: "\u2717 ",
     });
-    $[11] = T;
-  } else T = $[11];
+    $[11] = crossMark;
+  } else crossMark = $[11];
   let title;
-  if ($[12] !== M) {
+  if ($[12] !== sender) {
     title = jsxProd_default_2(Text, {
-      children: [T, "Plan Rejected by ", M],
+      children: [crossMark, "Plan Rejected by ", sender],
     });
-    $[12] = M;
+    $[12] = sender;
     $[13] = title;
   } else title = $[13];
-  let k;
-  if ($[14] !== h) {
-    k =
-      h &&
+  let feedbackElement;
+  if ($[14] !== cappedFeedback) {
+    feedbackElement =
+      cappedFeedback &&
       jsxProd_default(DiffFrame, {
         children: jsxProd_default_2(Text, {
-          children: ["Feedback: ", h],
+          children: ["Feedback: ", cappedFeedback],
         }),
       });
-    $[14] = h;
-    $[15] = k;
-  } else k = $[15];
-  let b;
+    $[14] = cappedFeedback;
+    $[15] = feedbackElement;
+  } else feedbackElement = $[15];
+  let reviseText;
   if ($[16] === MEMO_CACHE_SENTINEL) {
-    b = jsxProd_default(Text, {
+    reviseText = jsxProd_default(Text, {
       dimColor: true,
       children: "Please revise your plan based on the feedback and call ExitPlanMode again.",
     });
-    $[16] = b;
-  } else b = $[16];
-  let E;
-  if ($[17] !== title || $[18] !== k) {
-    E = jsxProd_default(Box, {
+    $[16] = reviseText;
+  } else reviseText = $[16];
+  let rejectedBox;
+  if ($[17] !== title || $[18] !== feedbackElement) {
+    rejectedBox = jsxProd_default(Box, {
       flexDirection: "column",
       marginY: 1,
       children: jsxProd_default_2(ShutdownRequestDisplay, {
         color: "error",
         title,
-        children: [k, b],
+        children: [feedbackElement, reviseText],
       }),
     });
     $[17] = title;
-    $[18] = k;
-    $[19] = E;
-  } else E = $[19];
-  return E;
+    $[18] = feedbackElement;
+    $[19] = rejectedBox;
+  } else rejectedBox = $[19];
+  return rejectedBox;
 }
 //@ chunk-ah34pb7m.js:86383-86535 fingerprint = tryRenderPlanApprovalMessage (1)
 function tryRenderPlanApprovalMessage(content, senderName) {

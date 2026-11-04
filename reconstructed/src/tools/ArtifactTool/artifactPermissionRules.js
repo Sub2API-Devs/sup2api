@@ -8,6 +8,7 @@
  * pieces: chunk-7zr1t9gr.js (1), chunk-p5cstt88.js (49)
  * attribution: placement 50
  */
+import { MCP_SERVER_NOT_ALLOWED_MESSAGE, artifactsMcpClient } from "../../services/mcp/client.js";
 import {
   getContentRulesMapForToolName,
   getDenyRuleForTool,
@@ -116,7 +117,6 @@ import { normalizeNfkc } from "../../utils/sanitization.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { INVISIBLE_FORMAT_CHARS_RE } from "../../utils/messages/forwardedTurnSanitize.js";
 import { isRunnerDynamicServer } from "../../services/analytics/metadata.js";
-import { artifactsMcpClient, MCP_SERVER_NOT_ALLOWED_MESSAGE } from "../../services/mcp/client.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { warmShareEntry } from "../../services/artifacts/shareEntryWarm.js";
 import { isAutoClassifierActive } from "../../utils/permissions/autoModeState.js";
@@ -125,23 +125,39 @@ import { isStrictHumanTurn } from "../../utils/turnOrigin.js";
 import { ownAccountUuid, ownPrincipalTokens } from "../../services/artifacts/comments/commentAuthorship.js";
 import { ANTHROPIC_FRAMECREATECONFIRMED } from "../../services/artifacts/frameApi.js";
 
+//@ chunk-7zr1t9gr.js:360-667 placement
+/**
+ * 判断错误是否是 Artifact 服务返回的 403 禁止访问错误。
+ */
+function isArtifactForbiddenError(error) {
+  if (!(error instanceof Error)) return false;
+  let message = error.message.trimEnd();
+  if (message === `Streamable HTTP error: ${MCP_SERVER_NOT_ALLOWED_MESSAGE}`)
+    return "code" in error && error.code === 403;
+  if (message !== MCP_SERVER_NOT_ALLOWED_MESSAGE) return false;
+  return "status" in error
+    ? error.status === 403
+    : "telemetryMessage" in error &&
+        typeof error.telemetryMessage === "string" &&
+        error.telemetryMessage.startsWith("SdkHttpError ");
+}
 //@ chunk-p5cstt88.js:6973-7175 placement
 var DATA_RULE_FIELDS = new Set(["db_op", "collection", "doc_id", "query", "data", "writes", "as_level"]);
 var ENDPOINT_RULE_FIELDS = new Set(["method", "path", "body", "body_file", "mode", "script"]);
 var DATA_RULE_ACTIONS = ["read_db", "write_db", "call_endpoint", "run_script"];
 //@ chunk-p5cstt88.js:7175-7391 placement
-function findDataContentRule(n, e) {
-  for (let [s, r] of getContentRulesMapForToolName(n, ARTIFACT_TOOL_NAME, e)) {
-    let index = s.indexOf(":");
-    let l = index <= 0 ? "" : s.slice(index + 1).trim();
-    if (l === "") continue;
-    let trimmed = s.slice(0, index).trim();
+function findDataContentRule(toolName, context) {
+  for (let [ruleContent, rule] of getContentRulesMapForToolName(toolName, ARTIFACT_TOOL_NAME, context)) {
+    let index = ruleContent.indexOf(":");
+    let value = index <= 0 ? "" : ruleContent.slice(index + 1).trim();
+    if (value === "") continue;
+    let trimmed = ruleContent.slice(0, index).trim();
     if (
       DATA_RULE_FIELDS.has(trimmed) ||
       ENDPOINT_RULE_FIELDS.has(trimmed) ||
-      (trimmed === "action" && DATA_RULE_ACTIONS.some((g) => matchWildcard(l, g)))
+      (trimmed === "action" && DATA_RULE_ACTIONS.some((action) => matchWildcard(value, action)))
     )
-      return r;
+      return rule;
   }
   return;
 }
@@ -149,7 +165,7 @@ function findDataContentRule(n, e) {
 /**
  * artifact MCP 动作到目标字段的映射表。
  */
-var ARTIFACT_ACTION_TARGETS = () => require("./chunk-d5fbj7hf.js");
+var ARTIFACT_ACTION_TARGETS = () => require("../../services/artifacts/artifactsMcpLaptop.js");
 var artifactRuleToolRef = {
   name: ARTIFACT_TOOL_NAME,
   mcpInfo: undefined,
@@ -383,75 +399,77 @@ var regExp_3 = new RegExp(
 /**
  * 把 artifact 地址或 slug 规范成小写 UUID slug：已是 slug 直接返回，否则从 URL 中解析（22 位 base58 解码为 UUID），失败返回 null。
  */
-function normalizeArtifactSlug(n) {
-  let lower = n.toLowerCase();
+function normalizeArtifactSlug(value) {
+  let lower = value.toLowerCase();
   if (regExp.test(lower)) return lower;
-  let trimmed = n.trim();
-  let r = trimmed.match(/^[^:/?#]+:\/\/[^/?#]*/)?.[0] ?? "";
-  let a = r.toLowerCase() + trimmed.slice(r.length);
-  let l = a.match(regExp_2)?.[1];
-  if (l !== undefined) return l.length === 22 ? decodeBase58Uuid(l) : l.toLowerCase();
-  return a.match(regExp_3)?.[1]?.toLowerCase() ?? null;
+  let trimmed = value.trim();
+  let origin = trimmed.match(/^[^:/?#]+:\/\/[^/?#]*/)?.[0] ?? "";
+  let lowered = origin.toLowerCase() + trimmed.slice(origin.length);
+  let slugMatch = lowered.match(regExp_2)?.[1];
+  if (slugMatch !== undefined)
+    return slugMatch.length === 22 ? decodeBase58Uuid(slugMatch) : slugMatch.toLowerCase();
+  return lowered.match(regExp_3)?.[1]?.toLowerCase() ?? null;
 }
 //@ chunk-p5cstt88.js:10972-12919 placement
 /**
  * 规范化 artifact 调用输入（目标、来源、拷贝）。
  */
-function normalizeArtifactInput(n, e, s) {
-  let r = Object.hasOwn(ARTIFACT_ACTION_TARGETS_MAP, n);
-  let a = r
-    ? ARTIFACT_ACTION_TARGETS_MAP[n]
+function normalizeArtifactInput(verb, input, hints) {
+  let known = Object.hasOwn(ARTIFACT_ACTION_TARGETS_MAP, verb);
+  let targets = known
+    ? ARTIFACT_ACTION_TARGETS_MAP[verb]
     : {
         target: "slug",
       };
-  let l = isPlainObject(e) ? e : {};
-  let u = {};
-  let g = !r;
-  let d = false;
-  let A = false;
-  let y = a?.target === undefined ? undefined : l[a.target];
-  let c = a?.source === undefined ? undefined : l[a.source];
-  for (let [m, o] of [
-    ["url", a?.target],
-    ["from_url", a?.source],
-    ["type_url", a?.type],
+  let fields = isPlainObject(input) ? input : {};
+  let normalized = {};
+  let unread = !known;
+  let copies = false;
+  let dbUnread = false;
+  let rawUrlField = targets?.target === undefined ? undefined : fields[targets.target];
+  let rawSourceField = targets?.source === undefined ? undefined : fields[targets.source];
+  for (let [normalizedKey, sourceField] of [
+    ["url", targets?.target],
+    ["from_url", targets?.source],
+    ["type_url", targets?.type],
   ]) {
-    let i = o === undefined ? undefined : l[o];
-    if (typeof i !== "string") {
-      if (i !== undefined && i !== null) {
-        g = true;
-        d ||= m === "from_url";
+    let rawValue = sourceField === undefined ? undefined : fields[sourceField];
+    if (typeof rawValue !== "string") {
+      if (rawValue !== undefined && rawValue !== null) {
+        unread = true;
+        copies ||= normalizedKey === "from_url";
       }
       continue;
     }
-    let p = normalizeArtifactSlug(i);
-    if (p === null) {
-      g = true;
-      d ||= m === "from_url";
+    let slug = normalizeArtifactSlug(rawValue);
+    if (slug === null) {
+      unread = true;
+      copies ||= normalizedKey === "from_url";
     } else
-      u[m] = artifactViewerUrlFor({
-        slug: p,
+      normalized[normalizedKey] = artifactViewerUrlFor({
+        slug,
         env: claudeAiEnvironment(),
       });
   }
-  if (a?.action !== undefined) u.action = a.action;
-  if (typeof l.title === "string") u.title = l.title;
-  let w = a?.action === "read_db" || a?.action === "write_db";
-  let untrustedArray = readUntrustedArray(l.ops);
-  if (!w && typeof l.path === "string") u.path = l.path;
-  if (Array.isArray(l.paths)) u.paths = l.paths;
-  if (w) {
-    let m = s?.op ?? DB_OP_NAMES[n] ?? (untrustedArray !== undefined ? "batch" : undefined);
-    if (m !== undefined) u.db_op = m;
-    let o = s?.path ?? (typeof l.path === "string" ? l.path : undefined);
-    let i = DB_OP_ARG_SPECS[n];
-    A =
-      i === undefined ||
-      Object.keys(l).some((key) => !SHARED_SCOPE_FIELDS.has(key) && !i.takes.has(key)) ||
-      (l.asLevel !== undefined && !DB_SCOPES.some((f) => f === l.asLevel)) ||
-      (i.names === "document" && !isArtifactAssetPath(l.path)) ||
-      (i.names === "collection" && !(typeof l.collection === "string" && regExp_2_2.test(l.collection))) ||
-      (i.names === "operations" &&
+  if (targets?.action !== undefined) normalized.action = targets.action;
+  if (typeof fields.title === "string") normalized.title = fields.title;
+  let isDbOp = targets?.action === "read_db" || targets?.action === "write_db";
+  let untrustedArray = readUntrustedArray(fields.ops);
+  if (!isDbOp && typeof fields.path === "string") normalized.path = fields.path;
+  if (Array.isArray(fields.paths)) normalized.paths = fields.paths;
+  if (isDbOp) {
+    let dbOp = hints?.op ?? DB_OP_NAMES[verb] ?? (untrustedArray !== undefined ? "batch" : undefined);
+    if (dbOp !== undefined) normalized.db_op = dbOp;
+    let documentPath = hints?.path ?? (typeof fields.path === "string" ? fields.path : undefined);
+    let argSpec = DB_OP_ARG_SPECS[verb];
+    dbUnread =
+      argSpec === undefined ||
+      Object.keys(fields).some((key) => !SHARED_SCOPE_FIELDS.has(key) && !argSpec.takes.has(key)) ||
+      (fields.asLevel !== undefined && !DB_SCOPES.some((scope) => scope === fields.asLevel)) ||
+      (argSpec.names === "document" && !isArtifactAssetPath(fields.path)) ||
+      (argSpec.names === "collection" &&
+        !(typeof fields.collection === "string" && regExp_2_2.test(fields.collection))) ||
+      (argSpec.names === "operations" &&
         !(
           untrustedArray !== undefined &&
           untrustedArray !== UNREADABLE_ARRAY &&
@@ -464,41 +482,41 @@ function normalizeArtifactInput(n, e, s) {
               isArtifactAssetPath(untrusted.path),
           )
         ));
-    if (typeof l.asLevel === "string") u.as_level = l.asLevel;
-    let p = o === undefined ? -1 : o.lastIndexOf("/");
-    if (o !== undefined && p > 0) {
-      u.collection = o.slice(0, p);
-      u.doc_id = o.slice(p + 1);
-    } else if (typeof l.collection === "string") u.collection = l.collection;
+    if (typeof fields.asLevel === "string") normalized.as_level = fields.asLevel;
+    let lastSlash = documentPath === undefined ? -1 : documentPath.lastIndexOf("/");
+    if (documentPath !== undefined && lastSlash > 0) {
+      normalized.collection = documentPath.slice(0, lastSlash);
+      normalized.doc_id = documentPath.slice(lastSlash + 1);
+    } else if (typeof fields.collection === "string") normalized.collection = fields.collection;
   }
-  if (typeof l.id === "string" && a?.action?.endsWith("_asset")) u.asset_id = l.id;
-  if (a?.action === "upload_asset" || n === "publish_files") {
-    let flattened = (readUntrustedArrayOrUndefined(l.files) ?? []).flatMap((o) =>
-      isPlainObject(o) && typeof o.path === "string" ? [o.path] : [],
+  if (typeof fields.id === "string" && targets?.action?.endsWith("_asset")) normalized.asset_id = fields.id;
+  if (targets?.action === "upload_asset" || verb === "publish_files") {
+    let flattened = (readUntrustedArrayOrUndefined(fields.files) ?? []).flatMap((file) =>
+      isPlainObject(file) && typeof file.path === "string" ? [file.path] : [],
     );
-    u.file_paths = flattened;
-    if (flattened.length === 1) u.file_path = flattened[0];
+    normalized.file_paths = flattened;
+    if (flattened.length === 1) normalized.file_path = flattened[0];
   }
   return {
-    input: u,
-    unread: g,
-    known: r,
-    ...(typeof y === "string" && {
-      rawUrl: y,
+    input: normalized,
+    unread,
+    known,
+    ...(typeof rawUrlField === "string" && {
+      rawUrl: rawUrlField,
     }),
-    ...(typeof c === "string" && {
-      rawSourceUrl: c,
+    ...(typeof rawSourceField === "string" && {
+      rawSourceUrl: rawSourceField,
     }),
-    ...(d && {
+    ...(copies && {
       copies: true,
     }),
-    ...(A && {
+    ...(dbUnread && {
       dbUnread: true,
     }),
-    ...((a?.readsBack === true ||
-      l.ifVersion !== undefined ||
+    ...((targets?.readsBack === true ||
+      fields.ifVersion !== undefined ||
       untrustedArray === UNREADABLE_ARRAY ||
-      (untrustedArray ?? []).some((m) => isPlainObject(m) && m.ifVersion !== undefined)) && {
+      (untrustedArray ?? []).some((op) => isPlainObject(op) && op.ifVersion !== undefined)) && {
       readsBack: true,
     }),
   };
@@ -507,25 +525,25 @@ function normalizeArtifactInput(n, e, s) {
 /**
  * 按谓词找第一个匹配项的值。
  */
-function findFirstMatch(contentRulesMapForToolName, e) {
-  for (let [s, r] of contentRulesMapForToolName) if (e(s)) return r;
+function findFirstMatch(contentRulesMapForToolName, predicate) {
+  for (let [key, rule] of contentRulesMapForToolName) if (predicate(key)) return rule;
   return null;
 }
 //@ chunk-p5cstt88.js:12982-13098 placement
-function findRuleForFields(contentRulesMapForToolName, e) {
-  for (let [s, r] of contentRulesMapForToolName) {
-    let index = s.indexOf(":");
-    if (index > 0 && e.includes(s.slice(0, index).trim())) return r;
+function findRuleForFields(contentRulesMapForToolName, fieldNames) {
+  for (let [key, rule] of contentRulesMapForToolName) {
+    let index = key.indexOf(":");
+    if (index > 0 && fieldNames.includes(key.slice(0, index).trim())) return rule;
   }
   return null;
 }
 //@ chunk-p5cstt88.js:13098-13250 placement
-function withoutNarrowingDenyRules(n) {
-  if ((n.alwaysDenyRules.toolsNarrowing?.length ?? 0) === 0) return n;
-  let { toolsNarrowing, ...s } = n.alwaysDenyRules;
+function withoutNarrowingDenyRules(context) {
+  if ((context.alwaysDenyRules.toolsNarrowing?.length ?? 0) === 0) return context;
+  let { toolsNarrowing, ...rest } = context.alwaysDenyRules;
   return {
-    ...n,
-    alwaysDenyRules: s,
+    ...context,
+    alwaysDenyRules: rest,
   };
 }
 //@ chunk-p5cstt88.js:13250-13296 placement
@@ -534,77 +552,89 @@ var PLACEHOLDER_SLUG = "00000000-0000-4000-8000-000000000000";
 /**
  * 用权限规则匹配 artifact 调用。
  */
-function matchArtifactRule(n, e, s) {
-  let { action, ...a } = e.input;
-  let url = e.input.url;
-  let u = typeof url === "string" ? normalizeArtifactSlug(url) : null;
-  let fromUrl = e.input.from_url;
-  let d = typeof fromUrl === "string" ? normalizeArtifactSlug(fromUrl) : null;
-  let A =
-    (s === "deny"
-      ? getDenyRuleForTool(withoutNarrowingDenyRules(n), artifactRuleToolRef)
-      : getAskRuleForTool(n, artifactRuleToolRef)) ??
-    findUrlContentRule(n, e.input, s) ??
-    matchArtifactRuleOrEquivalent(n, artifactRuleToolRef, e.input, s) ??
-    matchToolRule(n, artifactRuleToolRef, a, s) ??
-    artifactDataRule(s === "deny" ? withoutNarrowingDenyRules(n) : n, artifactRuleToolRef, e.input, s) ??
-    ((!e.known || ARTIFACT_WEBFETCH_READ_ACTIONS.has(String(e.input.action)) || e.readsBack === true) &&
-    u !== null
+function matchArtifactRule(context, normalized, behavior) {
+  let { action, ...fields } = normalized.input;
+  let url = normalized.input.url;
+  let slug = typeof url === "string" ? normalizeArtifactSlug(url) : null;
+  let fromUrl = normalized.input.from_url;
+  let sourceSlug = typeof fromUrl === "string" ? normalizeArtifactSlug(fromUrl) : null;
+  let rule =
+    (behavior === "deny"
+      ? getDenyRuleForTool(withoutNarrowingDenyRules(context), artifactRuleToolRef)
+      : getAskRuleForTool(context, artifactRuleToolRef)) ??
+    findUrlContentRule(context, normalized.input, behavior) ??
+    matchArtifactRuleOrEquivalent(context, artifactRuleToolRef, normalized.input, behavior) ??
+    matchToolRule(context, artifactRuleToolRef, fields, behavior) ??
+    artifactDataRule(
+      behavior === "deny" ? withoutNarrowingDenyRules(context) : context,
+      artifactRuleToolRef,
+      normalized.input,
+      behavior,
+    ) ??
+    ((!normalized.known ||
+      ARTIFACT_WEBFETCH_READ_ACTIONS.has(String(normalized.input.action)) ||
+      normalized.readsBack === true) &&
+    slug !== null
       ? webFetchRuleForArtifactRead(
-          n,
+          context,
           {
-            slug: u,
+            slug,
             env: claudeAiEnvironment(),
           },
-          e.rawUrl ?? url,
-          s,
+          normalized.rawUrl ?? url,
+          behavior,
         )
       : null) ??
-    (d !== null && typeof fromUrl === "string"
+    (sourceSlug !== null && typeof fromUrl === "string"
       ? webFetchRuleForArtifactRead(
-          n,
+          context,
           {
-            slug: d,
+            slug: sourceSlug,
             env: claudeAiEnvironment(),
           },
-          e.rawSourceUrl ?? fromUrl,
-          s,
+          normalized.rawSourceUrl ?? fromUrl,
+          behavior,
         )
       : null);
-  if (A !== null)
+  if (rule !== null)
     return {
-      rule: A,
+      rule,
       why: "named",
     };
-  if (e.input.action === "run_script" || e.input.action === "call_endpoint") {
-    let c =
-      findDataContentRule(s === "deny" ? withoutNarrowingDenyRules(n) : n, s) ??
-      findRuleForFields(getContentRulesMapForToolName(n, ARTIFACT_ACTION_TOOL_NAMES.data, s), [
+  if (normalized.input.action === "run_script" || normalized.input.action === "call_endpoint") {
+    let dataRule =
+      findDataContentRule(behavior === "deny" ? withoutNarrowingDenyRules(context) : context, behavior) ??
+      findRuleForFields(getContentRulesMapForToolName(context, ARTIFACT_ACTION_TOOL_NAMES.data, behavior), [
         ...DATA_RULE_FIELDS,
         "action",
       ]) ??
       undefined;
-    if (c !== undefined)
+    if (dataRule !== undefined)
       return {
-        rule: c,
+        rule: dataRule,
         why: "named",
       };
   }
-  let y = collapseArtifactAction(e.input);
-  if (isPlainObject(y) && y !== e.input) {
-    let { action, ...w } = y;
-    let h = matchToolRule(n, artifactRuleToolRef, isArtifactToolsetSplit() ? y : w, s);
-    if (h !== null)
+  let collapsed = collapseArtifactAction(normalized.input);
+  if (isPlainObject(collapsed) && collapsed !== normalized.input) {
+    let { action, ...rest } = collapsed;
+    let collapsedRule = matchToolRule(
+      context,
+      artifactRuleToolRef,
+      isArtifactToolsetSplit() ? collapsed : rest,
+      behavior,
+    );
+    if (collapsedRule !== null)
       return {
-        rule: h,
+        rule: collapsedRule,
         why: "named",
       };
   }
-  if (e.dbUnread === true)
-    for (let c of [ARTIFACT_TOOL_NAME, ARTIFACT_ACTION_TOOL_NAMES.data]) {
+  if (normalized.dbUnread === true)
+    for (let toolName of [ARTIFACT_TOOL_NAME, ARTIFACT_ACTION_TOOL_NAMES.data]) {
       let ruleForFields = findRuleForFields(
-        getContentRulesMapForToolName(n, c, s),
-        c === ARTIFACT_TOOL_NAME ? [...DATA_RULE_FIELDS] : [...DATA_RULE_FIELDS, "action"],
+        getContentRulesMapForToolName(context, toolName, behavior),
+        toolName === ARTIFACT_TOOL_NAME ? [...DATA_RULE_FIELDS] : [...DATA_RULE_FIELDS, "action"],
       );
       if (ruleForFields !== null)
         return {
@@ -612,54 +642,63 @@ function matchArtifactRule(n, e, s) {
           why: "unread",
         };
     }
-  for (let c of [ARTIFACT_TOOL_NAME, ...Object.values(ARTIFACT_ACTION_TOOL_NAMES)]) {
-    let contentRulesMapForToolName = getContentRulesMapForToolName(n, c, s);
-    let h = e.unread ? findRuleForFields(contentRulesMapForToolName, ["url", "from_url", "type_url"]) : null;
-    if (h !== null)
+  for (let toolName of [ARTIFACT_TOOL_NAME, ...Object.values(ARTIFACT_ACTION_TOOL_NAMES)]) {
+    let contentRulesMapForToolName = getContentRulesMapForToolName(context, toolName, behavior);
+    let unreadRule = normalized.unread
+      ? findRuleForFields(contentRulesMapForToolName, ["url", "from_url", "type_url"])
+      : null;
+    if (unreadRule !== null)
       return {
-        rule: h,
+        rule: unreadRule,
         why: "unread",
       };
-    let m = {
-      name: c,
+    let toolRef = {
+      name: toolName,
       mcpInfo: undefined,
       ruleContentField: undefined,
     };
-    let o = e.known
+    let unknownRule = normalized.known
       ? null
       : ([...contentRulesMapForToolName.values()][0] ??
-        (c === ARTIFACT_TOOL_NAME
+        (toolName === ARTIFACT_TOOL_NAME
           ? null
-          : s === "deny"
-            ? getDenyRuleForTool(withoutNarrowingDenyRules(n), m)
-            : getAskRuleForTool(n, m)));
-    if (o !== null)
+          : behavior === "deny"
+            ? getDenyRuleForTool(withoutNarrowingDenyRules(context), toolRef)
+            : getAskRuleForTool(context, toolRef)));
+    if (unknownRule !== null)
       return {
-        rule: o,
+        rule: unknownRule,
         why: "unknown",
       };
   }
   if (
-    e.unread &&
-    (!e.known ||
-      ARTIFACT_WEBFETCH_READ_ACTIONS.has(String(e.input.action)) ||
-      e.readsBack === true ||
-      e.copies === true)
+    normalized.unread &&
+    (!normalized.known ||
+      ARTIFACT_WEBFETCH_READ_ACTIONS.has(String(normalized.input.action)) ||
+      normalized.readsBack === true ||
+      normalized.copies === true)
   ) {
-    let c = {
+    let placeholder = {
       slug: PLACEHOLDER_SLUG,
       env: claudeAiEnvironment(),
     };
-    for (let h of [e.rawUrl, e.rawSourceUrl, artifactViewerUrlFor(c)]) {
-      let m = h === undefined ? null : webFetchRuleForArtifactRead(n, c, h, s);
-      if (m !== null)
+    for (let candidateUrl of [
+      normalized.rawUrl,
+      normalized.rawSourceUrl,
+      artifactViewerUrlFor(placeholder),
+    ]) {
+      let webFetchRule =
+        candidateUrl === undefined
+          ? null
+          : webFetchRuleForArtifactRead(context, placeholder, candidateUrl, behavior);
+      if (webFetchRule !== null)
         return {
-          rule: m,
+          rule: webFetchRule,
           why: "unread",
         };
     }
-    let firstMatch = findFirstMatch(getContentRulesMapForToolName(n, WEBFETCH, s), (h) =>
-      /^domain:(?:.*[.*])?claudeusercontent\.com$/i.test(h.trim()),
+    let firstMatch = findFirstMatch(getContentRulesMapForToolName(context, WEBFETCH, behavior), (key) =>
+      /^domain:(?:.*[.*])?claudeusercontent\.com$/i.test(key.trim()),
     );
     if (firstMatch !== null)
       return {
@@ -673,60 +712,61 @@ function matchArtifactRule(n, e, s) {
 /**
  * 去掉参数值末尾误带的 </invoke> 标签。
  */
-function stripTrailingInvoke(n) {
-  let e = n;
-  if (isPlainObject(n))
-    for (let [key, value] of Object.entries(n)) {
-      let a = typeof value === "string" ? value.trimEnd() : "";
-      if (!a.toLowerCase().endsWith("</invoke>")) continue;
-      let l = a.slice(0, -9).trimEnd();
-      if (l.toLowerCase().endsWith(`</${key.toLowerCase()}>`)) l = l.slice(0, -`</${key}>`.length).trimEnd();
-      e = {
-        ...(isPlainObject(e) ? e : n),
-        [key]: l,
+function stripTrailingInvoke(value) {
+  let stripped = value;
+  if (isPlainObject(value))
+    for (let [key, value_2] of Object.entries(value)) {
+      let text = typeof value_2 === "string" ? value_2.trimEnd() : "";
+      if (!text.toLowerCase().endsWith("</invoke>")) continue;
+      let withoutInvoke = text.slice(0, -9).trimEnd();
+      if (withoutInvoke.toLowerCase().endsWith(`</${key.toLowerCase()}>`))
+        withoutInvoke = withoutInvoke.slice(0, -`</${key}>`.length).trimEnd();
+      stripped = {
+        ...(isPlainObject(stripped) ? stripped : value),
+        [key]: withoutInvoke,
       };
     }
-  return e;
+  return stripped;
 }
 //@ chunk-p5cstt88.js:15249-15801 placement
 /**
  * 生成用于规则匹配的输入变体（多文件拆分）。
  */
-function artifactRuleInputs(toolPermissionContext, toolName, s, r) {
-  let a = stripTrailingInvoke(s);
-  let files = isPlainObject(s) && Array.isArray(s.files) && s.files.length > 1 ? s.files : [];
+function artifactRuleInputs(context, toolName, input, behavior) {
+  let stripped = stripTrailingInvoke(input);
+  let files = isPlainObject(input) && Array.isArray(input.files) && input.files.length > 1 ? input.files : [];
   let mapped = [
-    s,
-    ...(a === s ? [] : [a]),
+    input,
+    ...(stripped === input ? [] : [stripped]),
     ...files.map((file) => ({
-      ...(isPlainObject(s) ? s : {}),
+      ...(isPlainObject(input) ? input : {}),
       files: [file],
     })),
-  ].map((d) => [d, undefined]);
-  let g = !isPlainObject(s)
+  ].map((files) => [files, undefined]);
+  let ruleInput = !isPlainObject(input)
     ? []
     : toolName === "db_str_replace"
       ? [
           {
             op: "update",
-            path: s.path,
+            path: input.path,
           },
         ]
-      : toolName === "db_write" && Array.isArray(s.ops)
-        ? s.ops.filter(isPlainObject).flatMap((op) =>
+      : toolName === "db_write" && Array.isArray(input.ops)
+        ? input.ops.filter(isPlainObject).flatMap((op) =>
             (op.op === "merge" ? ["set", "update"] : [op.op]).map((op_2) => ({
               op: op_2,
               path: op.path,
             })),
           )
         : [];
-  for (let [d, A] of [
+  for (let [file, index] of [
     ...mapped,
-    ...g.flatMap(({ op, path }) =>
+    ...ruleInput.flatMap(({ op, path }) =>
       typeof op === "string" && typeof path === "string"
         ? [
             [
-              s,
+              input,
               {
                 op,
                 path,
@@ -736,8 +776,8 @@ function artifactRuleInputs(toolPermissionContext, toolName, s, r) {
         : [],
     ),
   ]) {
-    let y = matchArtifactRule(toolPermissionContext, normalizeArtifactInput(toolName, d, A), r);
-    if (y !== null) return y;
+    let listInput = matchArtifactRule(context, normalizeArtifactInput(toolName, file, index), behavior);
+    if (listInput !== null) return listInput;
   }
   return null;
 }
@@ -747,10 +787,10 @@ function listDataToolNames() {
   return values.length < 2 ? values.join("") : `${values.slice(0, -1).join(", ")}, or ${values.at(-1)}`;
 }
 //@ chunk-p5cstt88.js:15915-16201 placement
-function unreadCallRuleNote(n) {
-  return n === "unread"
+function unreadCallRuleNote(why) {
+  return why === "unread"
     ? " Claude Code couldn't tell what this call names or does, so the rule applies to it."
-    : n === "unknown"
+    : why === "unknown"
       ? ` Claude Code doesn't know what this tool does, so every ${ARTIFACT_TOOL_NAME} rule that names something in parentheses, and every rule on ${listDataToolNames()}, applies to it.`
       : "";
 }
@@ -772,16 +812,18 @@ var KNOWN_MCP_ARG_NAMES = new Set([
   "ifVersion",
   "asLevel",
 ]);
-var KNOWN_MCP_ARG_NAMES_UPPER = new Set([...KNOWN_MCP_ARG_NAMES].map((n) => n.toUpperCase()));
+var KNOWN_MCP_ARG_NAMES_UPPER = new Set([...KNOWN_MCP_ARG_NAMES].map((name) => name.toUpperCase()));
 //@ chunk-p5cstt88.js:16398-16597 placement
-function findMisspelledArgName(n) {
-  if (!isPlainObject(n)) return;
-  return [n, ...[n.files, n.ops].flat().filter(isPlainObject)]
+function findMisspelledArgName(input) {
+  if (!isPlainObject(input)) return;
+  return [input, ...[input.files, input.ops].flat().filter(isPlainObject)]
     .flatMap(Object.keys)
     .find(
-      (e) =>
-        !KNOWN_MCP_ARG_NAMES.has(e) &&
-        KNOWN_MCP_ARG_NAMES_UPPER.has(e.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().toUpperCase()),
+      (key) =>
+        !KNOWN_MCP_ARG_NAMES.has(key) &&
+        KNOWN_MCP_ARG_NAMES_UPPER.has(
+          key.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().toUpperCase(),
+        ),
     );
 }
 //@ chunk-p5cstt88.js:16597-16783 placement
@@ -797,8 +839,8 @@ var READ_ONLY_ACTIONS = new Set([
   "get_endpoints",
 ]);
 //@ chunk-p5cstt88.js:16783-16913 placement
-function allPublishFilesAutoReadable(n, toolPermissionContext) {
-  let filePaths = normalizeArtifactInput("publish_files", n).input.file_paths;
+function allPublishFilesAutoReadable(input, toolPermissionContext) {
+  let filePaths = normalizeArtifactInput("publish_files", input).input.file_paths;
   return (
     Array.isArray(filePaths) &&
     filePaths.every(
@@ -808,109 +850,109 @@ function allPublishFilesAutoReadable(n, toolPermissionContext) {
   );
 }
 //@ chunk-p5cstt88.js:16913-17176 placement
-function artifactsMcpUnavailableReason(n) {
+function artifactsMcpUnavailableReason(backend) {
   return (
-    (n !== "laptop" || getArtifactPublishStubDir() === null
+    (backend !== "laptop" || getArtifactPublishStubDir() === null
       ? policyDeniedReason("allow_cobalt_plinth", "Artifacts", "are")
       : null) ??
     (isArtifactToolEnabled()
       ? null
-      : `The Artifact tool isn't available in this session, so the Artifacts MCP tools aren't available either.${n === "laptop" ? " Check /login and /config." : ""}`)
+      : `The Artifact tool isn't available in this session, so the Artifacts MCP tools aren't available either.${backend === "laptop" ? " Check /login and /config." : ""}`)
   );
 }
 //@ chunk-p5cstt88.js:17176-18899 placement
 /**
  * artifact 工具权限检查（参数拼写、规则、分类器）。
  */
-function checkArtifactPermission(n, toolName, s, r, a, l = false) {
-  let u = artifactsMcpUnavailableReason(n);
-  if (u !== null)
+function checkArtifactPermission(backend, toolName, displayToolName, input, context, allowCowork = false) {
+  let unavailable = artifactsMcpUnavailableReason(backend);
+  if (unavailable !== null)
     return {
       behavior: "deny",
-      message: u,
+      message: unavailable,
       decisionReason: {
         type: "other",
-        reason: u,
+        reason: unavailable,
       },
     };
-  let misspelledArgName = findMisspelledArgName(r);
+  let misspelledArgName = findMisspelledArgName(input);
   if (misspelledArgName !== undefined) {
-    let c = `${s} takes no argument spelled ${refusalEcho(misspelledArgName)}. Spell argument names exactly as the tool lists them.`;
+    let message = `${displayToolName} takes no argument spelled ${refusalEcho(misspelledArgName)}. Spell argument names exactly as the tool lists them.`;
     return {
       behavior: "deny",
-      message: c,
+      message,
       decisionReason: {
         type: "other",
-        reason: c,
+        reason: message,
       },
     };
   }
-  let d = ARTIFACT_ACTION_TARGETS_MAP[toolName];
+  let targets = ARTIFACT_ACTION_TARGETS_MAP[toolName];
   if (
     isCoworkFramePublishSession() &&
-    consentMustDeny(a) &&
-    !l &&
-    (d === undefined || d.action === "publish" || d.target !== undefined) &&
+    consentMustDeny(context) &&
+    !allowCowork &&
+    (targets === undefined || targets.action === "publish" || targets.target !== undefined) &&
     !(
-      (READ_ONLY_ACTIONS.has(d?.action)
-        ? isOwnedTarget(toolName, r)
-        : isOwnPersonArtifactWithoutOtherComments(toolName, r)) &&
-      isPlainObject(r) &&
-      (r.shared_live ?? "") === "" &&
-      r.contract === undefined &&
-      d?.source === undefined &&
-      d?.action !== "upload_asset" &&
-      d?.action !== "call_endpoint" &&
-      d?.action !== "run_script" &&
+      (READ_ONLY_ACTIONS.has(targets?.action)
+        ? isOwnedTarget(toolName, input)
+        : isOwnPersonArtifactWithoutOtherComments(toolName, input)) &&
+      isPlainObject(input) &&
+      (input.shared_live ?? "") === "" &&
+      input.contract === undefined &&
+      targets?.source === undefined &&
+      targets?.action !== "upload_asset" &&
+      targets?.action !== "call_endpoint" &&
+      targets?.action !== "run_script" &&
       !UPLOAD_MCP_TOOLS.has(toolName) &&
-      pendingNoticeReadKind(toolName, r) === null
+      pendingNoticeReadKind(toolName, input) === null
     )
   ) {
-    let c = `In Cowork ${s} needs the approval card here, and no one can answer it. ${pendingNoticeReadKind(toolName, r) === null ? "Do not retry this call in this session." : "Tell the user in chat; do not retry it on this turn."}`;
+    let coworkMessage = `In Cowork ${displayToolName} needs the approval card here, and no one can answer it. ${pendingNoticeReadKind(toolName, input) === null ? "Do not retry this call in this session." : "Tell the user in chat; do not retry it on this turn."}`;
     return {
       behavior: "deny",
-      message: c,
+      message: coworkMessage,
       decisionReason: {
         type: "safetyCheck",
-        reason: c,
+        reason: coworkMessage,
         classifierApprovable: false,
       },
     };
   }
-  let A = artifactRuleInputs(getToolPermissionContext(a), toolName, r, "deny");
-  if (A !== null)
+  let denial = artifactRuleInputs(getToolPermissionContext(context), toolName, input, "deny");
+  if (denial !== null)
     return {
       behavior: "deny",
-      message: `Permission to use ${s} has been denied: ${denyRulePhrase(A.rule)} covers it.${unreadCallRuleNote(A.why)}`,
+      message: `Permission to use ${displayToolName} has been denied: ${denyRulePhrase(denial.rule)} covers it.${unreadCallRuleNote(denial.why)}`,
       decisionReason: {
         type: "rule",
-        rule: A.rule,
+        rule: denial.rule,
       },
     };
   if (
-    n === "laptop" &&
+    backend === "laptop" &&
     toolName === "publish_files" &&
     getArtifactPublishStubDir() !== null &&
-    !allPublishFilesAutoReadable(r, getToolPermissionContext(a))
+    !allPublishFilesAutoReadable(input, getToolPermissionContext(context))
   ) {
-    let c = `A Read rule refuses a file sent to ${s}, so nothing was read.`;
+    let message = `A Read rule refuses a file sent to ${displayToolName}, so nothing was read.`;
     return {
       behavior: "deny",
-      message: c,
+      message,
       decisionReason: {
         type: "other",
-        reason: c,
+        reason: message,
       },
     };
   }
   let action = ARTIFACT_ACTION_TARGETS_MAP[toolName]?.action;
   if (
-    planConsentMustDeny(a) &&
-    (dbWriteMayAsk(toolName, r) || !PLAN_SAFE_MCP_TOOLS.has(action) || action === "resolve")
+    planConsentMustDeny(context) &&
+    (dbWriteMayAsk(toolName, input) || !PLAN_SAFE_MCP_TOOLS.has(action) || action === "resolve")
   )
     return {
       behavior: "deny",
-      message: `${s} doesn't run in plan mode in this session, where no one can answer a prompt. Keep planning, and make this call once the plan is approved.`,
+      message: `${displayToolName} doesn't run in plan mode in this session, where no one can answer a prompt. Keep planning, and make this call once the plan is approved.`,
       decisionReason: {
         type: "safetyCheck",
         reason: "Plan mode with no one to ask runs no Artifacts call that names an artifact",
@@ -920,15 +962,15 @@ function checkArtifactPermission(n, toolName, s, r, a, l = false) {
   return;
 }
 //@ chunk-p5cstt88.js:18899-19130 placement
-function unknownMcpToolAsk(n) {
-  let e = `Claude Code doesn't know what ${n} does yet, so each call needs your approval.`;
+function unknownMcpToolAsk(toolName) {
+  let message = `Claude Code doesn't know what ${toolName} does yet, so each call needs your approval.`;
   return {
     behavior: "ask",
-    message: e,
+    message,
     suppressAlwaysAllowRule: true,
     decisionReason: {
       type: "safetyCheck",
-      reason: e,
+      reason: message,
       classifierApprovable: false,
     },
   };
@@ -937,36 +979,36 @@ function unknownMcpToolAsk(n) {
 /**
  * 数据库写入触发询问的原因。
  */
-function artifactDbAskReason(n, e, s) {
-  let toolName = n.mcpInfo?.toolName;
-  let toolPermissionContext = getToolPermissionContext(s);
+function artifactDbAskReason(tool, input, context) {
+  let toolName = tool.mcpInfo?.toolName;
+  let toolPermissionContext = getToolPermissionContext(context);
   if (
     toolName === undefined ||
     toolPermissionContext.mode === "plan" ||
-    isAutoAllowedInMode(n, toolPermissionContext) === "bypassPermissions" ||
-    !dbWriteMayAsk(toolName, e)
+    isAutoAllowedInMode(tool, toolPermissionContext) === "bypassPermissions" ||
+    !dbWriteMayAsk(toolName, input)
   )
     return;
-  let l = pendingNoticeReadKind(toolName, e);
-  let u = l === null ? null : targetFromSlugArg(e);
-  let g =
-    u === null
+  let dbOp = pendingNoticeReadKind(toolName, input);
+  let allowed = dbOp === null ? null : targetFromSlugArg(input);
+  let reason =
+    allowed === null
       ? null
-      : `the database of ${artifactViewerUrlFor(u)} \u2014 prompted by the new-comments notification; rows there are written by artifact viewers`;
-  let d =
-    g !== null && l === "rows"
-      ? `Claude wants to read ${g}.`
-      : g !== null && l === "edit"
-        ? `Claude wants to edit a document in ${g}, so only a person can approve this edit.`
+      : `the database of ${artifactViewerUrlFor(allowed)} \u2014 prompted by the new-comments notification; rows there are written by artifact viewers`;
+  let rule =
+    reason !== null && dbOp === "rows"
+      ? `Claude wants to read ${reason}.`
+      : reason !== null && dbOp === "edit"
+        ? `Claude wants to edit a document in ${reason}, so only a person can approve this edit.`
         : `Each call of the Artifacts tool ${toolName} like this one is approved by itself.`;
   return {
     behavior: "ask",
-    message: d,
+    message: rule,
     suppressAlwaysAllowRule: true,
     decisionReason: {
       type: "safetyCheck",
-      reason: d,
-      classifierApprovable: l !== "edit",
+      reason: rule,
+      classifierApprovable: dbOp !== "edit",
     },
   };
 }
@@ -974,36 +1016,40 @@ function artifactDbAskReason(n, e, s) {
 /**
  * laptop 端的 publish_version 是否属于"例行、仅自己可见的首次发布"：无 slug/共享/合约、非子代理、无人判断的例行运行、新 Artifact 默认私有、且没有针对这些工具的 ask/deny 规则。
  */
-function isRoutinePrivateFirstPublish(n, toolName, s, r) {
+function isRoutinePrivateFirstPublish(kind, toolName, input, context) {
   return (
-    n === "laptop" &&
+    kind === "laptop" &&
     toolName === "publish_version" &&
-    isPlainObject(s) &&
-    (s.slug ?? "") === "" &&
-    (s.shared_live ?? "") === "" &&
-    s.contract === undefined &&
-    r.agentId === undefined &&
+    isPlainObject(input) &&
+    (input.slug ?? "") === "" &&
+    (input.shared_live ?? "") === "" &&
+    input.contract === undefined &&
+    context.agentId === undefined &&
     isHostOriginHonored() &&
-    routineRunNobodyJudges(r) &&
+    routineRunNobodyJudges(context) &&
     newArtifactIsPersonsPrivate() &&
-    ![...getAskRules(getToolPermissionContext(r)), ...getDenyRules(getToolPermissionContext(r))].some(
-      (a) =>
-        toolMatchesRule(getToolPermissionContext(r), artifactRuleToolRef, a) ||
-        Object.values(ARTIFACT_ACTION_TOOL_NAMES).includes(a.ruleValue.toolName),
+    ![
+      ...getAskRules(getToolPermissionContext(context)),
+      ...getDenyRules(getToolPermissionContext(context)),
+    ].some(
+      (isFirstPublish) =>
+        toolMatchesRule(getToolPermissionContext(context), artifactRuleToolRef, isFirstPublish) ||
+        Object.values(ARTIFACT_ACTION_TOOL_NAMES).includes(isFirstPublish.ruleValue.toolName),
     )
   );
 }
 //@ chunk-p5cstt88.js:20083-20235 placement
-function askRuleCoversMessage(n, e) {
-  return `The ${refusalEcho(formatPermissionRule(n.rule.ruleValue))} ask rule from ${getSettingSourceDisplayNameLowercase(n.rule.source)} covers ${e}, so this call needs your approval.${unreadCallRuleNote(n.why)}`;
+function askRuleCoversMessage(denial, subject) {
+  return `The ${refusalEcho(formatPermissionRule(denial.rule.ruleValue))} ask rule from ${getSettingSourceDisplayNameLowercase(denial.rule.source)} covers ${subject}, so this call needs your approval.${unreadCallRuleNote(denial.why)}`;
 }
 //@ chunk-p5cstt88.js:20235-20340 placement
-function targetFromSlugArg(n) {
-  let e = isPlainObject(n) && typeof n.slug === "string" ? normalizeArtifactSlug(n.slug) : null;
-  return e === null
+function targetFromSlugArg(input) {
+  let slug =
+    isPlainObject(input) && typeof input.slug === "string" ? normalizeArtifactSlug(input.slug) : null;
+  return slug === null
     ? null
     : {
-        slug: e,
+        slug,
         env: claudeAiEnvironment(),
       };
 }
@@ -1011,16 +1057,16 @@ function targetFromSlugArg(n) {
 /**
  * 该 artifact（或任意 artifact）是否有待处理的自动反应通知。
  */
-function isAutoReactNoticePendingFor(n) {
-  let e = targetFromSlugArg(n);
-  return e === null ? anyAutoReactNoticePending() : hasAutoReactNoticePending(e.slug);
+function isAutoReactNoticePendingFor(input) {
+  let target = targetFromSlugArg(input);
+  return target === null ? anyAutoReactNoticePending() : hasAutoReactNoticePending(target.slug);
 }
 //@ chunk-p5cstt88.js:20398-20447 placement
 /**
  * 评论读取的决策入口（有待处理通知时用已载入规则）。
  */
-function commentReadDecision(n) {
-  return isAutoReactNoticePendingFor(n) ? personOnlyRegistry.loaded() : personOnlyRegistry.read;
+function commentReadDecision(input) {
+  return isAutoReactNoticePendingFor(input) ? personOnlyRegistry.loaded() : personOnlyRegistry.read;
 }
 //@ chunk-p5cstt88.js:20447-20858 placement
 /**
@@ -1039,24 +1085,24 @@ var ASSET_MUTATING_ACTIONS = new Set([
 ]);
 var VALID_SHARED_SCOPES = new Set([undefined, null, "", "users", "org", "others", "agent_scoped"]);
 //@ chunk-p5cstt88.js:20858-21006 placement
-function pendingNoticeReadKind(n, e) {
-  let { action, readsBack } = ARTIFACT_ACTION_TARGETS_MAP[n] ?? {};
-  let a =
+function pendingNoticeReadKind(toolName, input) {
+  let { action, readsBack } = ARTIFACT_ACTION_TARGETS_MAP[toolName] ?? {};
+  let kind =
     readsBack === true ? "edit" : action === "read_db" ? "rows" : action === "comments" ? "comments" : null;
-  return a !== null && isAutoReactNoticePendingFor(e) ? a : null;
+  return kind !== null && isAutoReactNoticePendingFor(input) ? kind : null;
 }
 //@ chunk-p5cstt88.js:21006-21189 placement
-function dbWriteMayAsk(toolName, e) {
+function dbWriteMayAsk(toolName, input) {
   return (
     ASSET_MUTATING_ACTIONS.has(ARTIFACT_ACTION_TARGETS_MAP[toolName]?.action) ||
     toolName === "declare_capabilities" ||
     ARTIFACT_ACTION_TARGETS_MAP[toolName]?.source !== undefined ||
     (ARTIFACT_ACTION_TARGETS_MAP[toolName]?.action === "publish" &&
       isCoworkFramePublishSession() &&
-      !isOwnPersonArtifactWithoutOtherComments(toolName, e)) ||
-    !isPlainObject(e) ||
-    !VALID_SHARED_SCOPES.has(e.shared_live) ||
-    pendingNoticeReadKind(toolName, e) !== null
+      !isOwnPersonArtifactWithoutOtherComments(toolName, input)) ||
+    !isPlainObject(input) ||
+    !VALID_SHARED_SCOPES.has(input.shared_live) ||
+    pendingNoticeReadKind(toolName, input) !== null
   );
 }
 //@ chunk-p5cstt88.js:21189-21403 placement
@@ -1065,118 +1111,122 @@ var UNRECOGNIZED_ADDRESS = "(unrecognized address)";
 var ANYONE_MAY_VIEW_NOTE =
   ", anyone may be a viewer, not only the user's colleagues: internal code and infrastructure detail count as sensitive";
 //@ chunk-p5cstt88.js:21403-21539 placement
-function isSessionWrittenArtifact(n) {
-  let e = typeof n === "string" ? normalizeArtifactSlug(n) : null;
-  let s = e === null ? undefined : getLiveState().ownCreatedSlugs.get(e);
-  return s?.wrotePage === true && s.env === claudeAiEnvironment();
+function isSessionWrittenArtifact(url) {
+  let slug = typeof url === "string" ? normalizeArtifactSlug(url) : null;
+  let record = slug === null ? undefined : getLiveState().ownCreatedSlugs.get(slug);
+  return record?.wrotePage === true && record.env === claudeAiEnvironment();
 }
 //@ chunk-p5cstt88.js:21539-21757 placement
-function noticeRequestedTag(n) {
-  return n === null
+function noticeRequestedTag(kind) {
+  return kind === null
     ? ""
-    : ` [requested after a new-comments notification${n === "rows" ? ": rows are written by artifact viewers" : n === "comments" ? ": the comment text it ingests is written by artifact viewers" : ""}]`;
+    : ` [requested after a new-comments notification${kind === "rows" ? ": rows are written by artifact viewers" : kind === "comments" ? ": the comment text it ingests is written by artifact viewers" : ""}]`;
 }
 //@ chunk-p5cstt88.js:21757-22880 placement
 /**
  * 检查 artifact 读取（共享、未读评论）。
  */
-function checkArtifactRead(toolName, e, s, r) {
-  let { input, unread, copies } = normalizeArtifactInput(toolName, e);
-  let g = isCreateAction(toolName, e);
-  let d = !g && (typeof input.url === "string" || unread);
-  let A = d ? classifierOwnershipMarks(input.url) : "";
-  let y = noticeRequestedTag(pendingNoticeReadKind(toolName, e));
-  let sharedLive = r.statesAudience && isPlainObject(e) ? e.shared_live : undefined;
-  let w = sharedLive === undefined || sharedLive === null || sharedLive === "";
-  let h = (g || d) && !r.readOnly && w && artifactsMcpInCloudSession();
-  let m =
+function checkArtifactRead(actionName, rawInput, renderPhrases, options) {
+  let { input, unread, copies } = normalizeArtifactInput(actionName, rawInput);
+  let isCreate = isCreateAction(actionName, rawInput);
+  let hasTarget = !isCreate && (typeof input.url === "string" || unread);
+  let ownershipMarks = hasTarget ? classifierOwnershipMarks(input.url) : "";
+  let noticeTag = noticeRequestedTag(pendingNoticeReadKind(actionName, rawInput));
+  let sharedLive = options.statesAudience && isPlainObject(rawInput) ? rawInput.shared_live : undefined;
+  let sharedLiveUnset = sharedLive === undefined || sharedLive === null || sharedLive === "";
+  let agentScoped =
+    (isCreate || hasTarget) && !options.readOnly && sharedLiveUnset && artifactsMcpInCloudSession();
+  let audience =
     sharedLive !== undefined && sharedLive !== null && sharedLive !== ""
       ? SHARED_AUDIENCE_MODES.has(sharedLive)
         ? String(sharedLive)
         : "unknown"
-      : d && !r.statesAudience && !r.readOnly
+      : hasTarget && !options.statesAudience && !options.readOnly
         ? "unknown"
-        : h
+        : agentScoped
           ? "agent_scoped"
           : undefined;
-  let o =
-    m === undefined
+  let audienceTag =
+    audience === undefined
       ? ""
-      : ` [${sharedLive === undefined && !h ? "shared" : "shared-live"}: ${m}${sharedLive === undefined && !h ? "" : m === "agent_scoped" || !VALID_SHARED_SCOPES.has(m) ? ANYONE_MAY_VIEW_NOTE : ""}]`;
-  let { shared_live: sharedLive_2, ...p } = isPlainObject(e) ? e : {};
-  let f = s(r.statesAudience && SHARED_AUDIENCE_MODES.has(sharedLive_2) ? p : e);
-  let R =
+      : ` [${sharedLive === undefined && !agentScoped ? "shared" : "shared-live"}: ${audience}${sharedLive === undefined && !agentScoped ? "" : audience === "agent_scoped" || !VALID_SHARED_SCOPES.has(audience) ? ANYONE_MAY_VIEW_NOTE : ""}]`;
+  let { shared_live: sharedLive_2, ...rest } = isPlainObject(rawInput) ? rawInput : {};
+  let phrasedInput = renderPhrases(
+    options.statesAudience && SHARED_AUDIENCE_MODES.has(sharedLive_2) ? rest : rawInput,
+  );
+  let copyTag =
     typeof input.from_url === "string" || copies === true
       ? ` [copies from: ${classifierArtifactTargetFor(input.from_url, UNRECOGNIZED_ADDRESS)}]${classifierOwnershipMarks(input.from_url).replace("[ownership:", "[copy source:").replace("[artifact created", "[copy source: created")}`
       : "";
-  let E = g
-    ? ` \u2192 a new ${m === undefined ? "private " : ""}artifact${toolName === "create_from_type" ? ` from the Artifact type ${classifierArtifactTargetFor(input.type_url, UNRECOGNIZED_ADDRESS)}` : ""}`
-    : d
+  let targetTag = isCreate
+    ? ` \u2192 a new ${audience === undefined ? "private " : ""}artifact${actionName === "create_from_type" ? ` from the Artifact type ${classifierArtifactTargetFor(input.type_url, UNRECOGNIZED_ADDRESS)}` : ""}`
+    : hasTarget
       ? ` \u2192 ${classifierArtifactTargetFor(input.url, UNRECOGNIZED_ADDRESS)}`
       : "";
-  return `${ARTIFACT_TOOL_NAME} ${typeof input.action === "string" ? input.action : "tool"}${r.readOnly ? " [read-only]" : ""}${A}${o}${y}${R}${E}, as Claude wrote it: ${foldClassifierCodePhrases(sweepProvenanceMarker(normalizeNfkc(typeof f === "string" ? f : jsonStringify(f)).replace(INVISIBLE_FORMAT_CHARS_RE, "?")).replace(DECISION_SURFACE_BRACKETS_RE, " "))}`;
+  return `${ARTIFACT_TOOL_NAME} ${typeof input.action === "string" ? input.action : "tool"}${options.readOnly ? " [read-only]" : ""}${ownershipMarks}${audienceTag}${noticeTag}${copyTag}${targetTag}, as Claude wrote it: ${foldClassifierCodePhrases(sweepProvenanceMarker(normalizeNfkc(typeof phrasedInput === "string" ? phrasedInput : jsonStringify(phrasedInput)).replace(INVISIBLE_FORMAT_CHARS_RE, "?")).replace(DECISION_SURFACE_BRACKETS_RE, " "))}`;
 }
 //@ chunk-p5cstt88.js:22880-23045 placement
-function createArtifactNotice(toolName, e) {
-  let slug = isPlainObject(e) ? e.slug : undefined;
-  let r = typeof slug === "string" ? normalizeArtifactSlug(slug) : null;
+function createArtifactNotice(toolName, input) {
+  let slug = isPlainObject(input) ? input.slug : undefined;
+  let normalizedSlug = typeof slug === "string" ? normalizeArtifactSlug(slug) : null;
   return toolName === "create_from_type" ||
-    (PUBLISH_ACTION_NAMES.has(toolName) && (r === null || getLiveState().reservedMints.has(r)))
+    (PUBLISH_ACTION_NAMES.has(toolName) &&
+      (normalizedSlug === null || getLiveState().reservedMints.has(normalizedSlug)))
     ? getArtifactCreateNotice()
     : null;
 }
 //@ chunk-p5cstt88.js:23045-23279 placement
-function createArtifactAsk(toolName, e, s) {
-  let artifactNotice = createArtifactNotice(toolName, e);
+function createArtifactAsk(toolName, input, context) {
+  let artifactNotice = createArtifactNotice(toolName, input);
   if (artifactNotice === null) return;
-  let a = `Claude wants to create a new artifact on claude.ai. ${artifactNotice}`;
+  let message = `Claude wants to create a new artifact on claude.ai. ${artifactNotice}`;
   return (
-    personOnlyDecisionFor(s) ?? {
+    personOnlyDecisionFor(context) ?? {
       behavior: "ask",
-      message: a,
+      message,
       ...PERSON_ONLY_DECISION,
       decisionReason: {
         type: "safetyCheck",
-        reason: a,
+        reason: message,
         classifierApprovable: false,
       },
     }
   );
 }
 //@ chunk-p5cstt88.js:23279-23391 placement
-function mcpTargetSlug(toolName, e) {
+function mcpTargetSlug(toolName, input) {
   let target = ARTIFACT_ACTION_TARGETS_MAP[toolName]?.target;
-  let r = stripTrailingInvoke(e);
-  let a = target !== undefined && isPlainObject(r) ? r[target] : undefined;
-  return typeof a === "string" ? normalizeArtifactSlug(a) : null;
+  let stripped = stripTrailingInvoke(input);
+  let rawSlug = target !== undefined && isPlainObject(stripped) ? stripped[target] : undefined;
+  return typeof rawSlug === "string" ? normalizeArtifactSlug(rawSlug) : null;
 }
 //@ chunk-p5cstt88.js:23391-23595 placement
-function ownPersonPublishedTarget(n, e) {
-  let target = ARTIFACT_ACTION_TARGETS_MAP[n]?.target;
-  let r = target !== undefined && isPlainObject(e) ? e[target] : undefined;
-  let a = typeof r === "string" ? normalizeArtifactSlug(r) : null;
-  let l = a === null ? undefined : getLiveState().ownPublishedSlugs.get(a);
-  return a !== null && l?.byPerson === true
+function ownPersonPublishedTarget(toolName, input) {
+  let target = ARTIFACT_ACTION_TARGETS_MAP[toolName]?.target;
+  let rawSlug = target !== undefined && isPlainObject(input) ? input[target] : undefined;
+  let slug = typeof rawSlug === "string" ? normalizeArtifactSlug(rawSlug) : null;
+  let record = slug === null ? undefined : getLiveState().ownPublishedSlugs.get(slug);
+  return slug !== null && record?.byPerson === true
     ? {
-        slug: a,
-        env: l.env,
+        slug,
+        env: record.env,
       }
     : null;
 }
 //@ chunk-p5cstt88.js:23595-23737 placement
-function isOwnedTarget(n, e) {
-  let s = ownPersonPublishedTarget(n, e);
-  if (s !== null && getArtifactPublishStubDir() !== null) return true;
-  let r = s === null ? undefined : getShareEntry(s.slug);
-  return r?.mode === "owner" && r.probeFailed !== true;
+function isOwnedTarget(toolName, input) {
+  let target = ownPersonPublishedTarget(toolName, input);
+  if (target !== null && getArtifactPublishStubDir() !== null) return true;
+  let shareEntry = target === null ? undefined : getShareEntry(target.slug);
+  return shareEntry?.mode === "owner" && shareEntry.probeFailed !== true;
 }
 //@ chunk-p5cstt88.js:23737-23806 placement
 /**
  * 自己发布的 artifact 且没有他人待处理评论。
  */
-function isOwnPersonArtifactWithoutOtherComments(n, e) {
-  let s = ownPersonPublishedTarget(n, e);
-  return s !== null && isOwnedTarget(n, e) && !hasOtherCommentPending(s.slug);
+function isOwnPersonArtifactWithoutOtherComments(toolName, input) {
+  let target = ownPersonPublishedTarget(toolName, input);
+  return target !== null && isOwnedTarget(toolName, input) && !hasOtherCommentPending(target.slug);
 }
 //@ chunk-p5cstt88.js:23806-23974 placement
 var PLAN_SAFE_MCP_TOOLS = new Set([
@@ -1193,57 +1243,62 @@ var WRITE_MCP_TOOLS = new Set(["publish_version", "edit_version", "publish_files
 /**
  * 为 artifacts MCP 工具（runner/laptop）安装权限与调用包装。
  */
-function applyArtifactRules(n, e) {
-  let s = isRunnerDynamicServer(n)
+function applyArtifactRules(serverName, entry) {
+  let kind = isRunnerDynamicServer(serverName)
     ? "runner"
-    : ARTIFACT_ACTION_TARGETS()?.isArtifactsMcpLaptopEntry(n) === true
+    : ARTIFACT_ACTION_TARGETS()?.isArtifactsMcpLaptopEntry(serverName) === true
       ? "laptop"
       : null;
-  if (s === null || e.mcpInfo === undefined) return;
-  if (s === "runner") {
-    e.mcpInfo = {
-      ...e.mcpInfo,
+  if (kind === null || entry.mcpInfo === undefined) return;
+  if (kind === "runner") {
+    entry.mcpInfo = {
+      ...entry.mcpInfo,
       standsInForBuiltIn: true,
     };
-    let o = e.call;
-    e.call = async (...i) => {
-      let p = artifactsMcpClient();
+    let originalCall = entry.call;
+    entry.call = async (...args) => {
+      let client = artifactsMcpClient();
       try {
-        return await o.apply(e, i);
+        return await originalCall.apply(entry, args);
       } catch (error) {
-        if (isArtifactForbiddenError(error)) getLiveState().mcpEntryRowNotServed = p ?? null;
+        if (isArtifactForbiddenError(error)) getLiveState().mcpEntryRowNotServed = client ?? null;
         throw error;
       }
     };
   }
-  let toolName = e.mcpInfo.toolName;
+  let toolName = entry.mcpInfo.toolName;
   if (!Object.hasOwn(ARTIFACT_ACTION_TARGETS_MAP, toolName)) {
-    e.requiresUserInteraction = () => true;
-    e.suppressesAlwaysAllowRule = () => true;
+    entry.requiresUserInteraction = () => true;
+    entry.suppressesAlwaysAllowRule = () => true;
   }
-  let suppressesAlwaysAllowRule = e.suppressesAlwaysAllowRule;
-  e.suppressesAlwaysAllowRule = (o, i) =>
-    dbWriteMayAsk(toolName, o) ||
-    createArtifactNotice(toolName, o) !== null ||
-    suppressesAlwaysAllowRule?.call(e, o, i) === true;
-  let ignoresWholeToolAllowRule = e.ignoresWholeToolAllowRule;
-  e.ignoresWholeToolAllowRule = (o) =>
-    dbWriteMayAsk(toolName, o) ||
-    createArtifactNotice(toolName, o) !== null ||
-    ignoresWholeToolAllowRule?.call(e, o) === true;
-  let u = `the Artifacts tool ${toolName}`;
-  let { checkPermissions, permissionCheckFailureDecision, toAutoClassifierInput } = e;
-  e.toAutoClassifierInput = (o) => {
+  let suppressesAlwaysAllowRule = entry.suppressesAlwaysAllowRule;
+  entry.suppressesAlwaysAllowRule = (input, context) =>
+    dbWriteMayAsk(toolName, input) ||
+    createArtifactNotice(toolName, input) !== null ||
+    suppressesAlwaysAllowRule?.call(entry, input, context) === true;
+  let ignoresWholeToolAllowRule = entry.ignoresWholeToolAllowRule;
+  entry.ignoresWholeToolAllowRule = (input) =>
+    dbWriteMayAsk(toolName, input) ||
+    createArtifactNotice(toolName, input) !== null ||
+    ignoresWholeToolAllowRule?.call(entry, input) === true;
+  let toolLabel = `the Artifacts tool ${toolName}`;
+  let { checkPermissions, permissionCheckFailureDecision, toAutoClassifierInput } = entry;
+  entry.toAutoClassifierInput = (input) => {
     try {
-      let i = isPlainObject(o)
+      let copiedInput = isPlainObject(input)
         ? {
-            ...o,
+            ...input,
           }
         : {};
-      return checkArtifactRead(toolName, i, (p) => toAutoClassifierInput.call(e, isPlainObject(p) ? p : {}), {
-        statesAudience: e.inputJSONSchema?.properties?.shared_live !== undefined,
-        readOnly: e.isReadOnly(i),
-      });
+      return checkArtifactRead(
+        toolName,
+        copiedInput,
+        (innerInput) => toAutoClassifierInput.call(entry, isPlainObject(innerInput) ? innerInput : {}),
+        {
+          statesAudience: entry.inputJSONSchema?.properties?.shared_live !== undefined,
+          readOnly: entry.isReadOnly(copiedInput),
+        },
+      );
     } catch {
       logForDebugging(`[artifacts-mcp] the classifier's line for ${toolName} could not be built`, {
         level: "warn",
@@ -1255,34 +1310,41 @@ function applyArtifactRules(n, e) {
       )} [shared: unknown]${noticeRequestedTag(pendingNoticeReadKind(toolName, {}))} \u2192 ${UNRECOGNIZED_ADDRESS}, as Claude wrote it: (unreadable arguments)`;
     }
   };
-  let y = new Set();
-  let c = new Set();
-  let w = new Map();
-  e.hookMatcherFamilyNames = (o) => {
-    let i = dataToolEquivalent(artifactRuleToolRef, normalizeArtifactInput(toolName, o).input);
+  let seenSlugs = new Set();
+  let seenPaths = new Set();
+  let memo = new Map();
+  entry.hookMatcherFamilyNames = (input) => {
+    let equivalent = dataToolEquivalent(artifactRuleToolRef, normalizeArtifactInput(toolName, input).input);
     if (!Object.hasOwn(ARTIFACT_ACTION_TARGETS_MAP, toolName))
       return [ARTIFACT_TOOL_NAME, ...Object.values(ARTIFACT_ACTION_TOOL_NAMES)];
-    return i === undefined
+    return equivalent === undefined
       ? [ARTIFACT_TOOL_NAME]
       : isArtifactToolsetSplit()
-        ? [ARTIFACT_TOOL_NAME, i.tool.name]
-        : [i.tool.name, ARTIFACT_TOOL_NAME];
+        ? [ARTIFACT_TOOL_NAME, equivalent.tool.name]
+        : [equivalent.tool.name, ARTIFACT_TOOL_NAME];
   };
-  e.checkPermissions = async (o, i) => {
-    let p = s === "laptop" ? ownPersonPublishedTarget(toolName, o) : null;
+  entry.checkPermissions = async (input, context) => {
+    let ownTarget = kind === "laptop" ? ownPersonPublishedTarget(toolName, input) : null;
     if (
-      p !== null &&
+      ownTarget !== null &&
       getArtifactPublishStubDir() === null &&
-      artifactsMcpUnavailableReason(s) === null &&
-      findMisspelledArgName(o) === undefined &&
-      artifactRuleInputs(getToolPermissionContext(i), toolName, o, "deny") === null
+      artifactsMcpUnavailableReason(kind) === null &&
+      findMisspelledArgName(input) === undefined &&
+      artifactRuleInputs(getToolPermissionContext(context), toolName, input, "deny") === null
     )
-      await warmShareEntry(p, i, "artifacts-mcp-published");
-    let f = checkArtifactPermission(s, toolName, u, o, i, isRoutinePrivateFirstPublish(s, toolName, o, i));
-    if (f !== undefined) return f;
+      await warmShareEntry(ownTarget, context, "artifacts-mcp-published");
+    let permissionRefusal = checkArtifactPermission(
+      kind,
+      toolName,
+      toolLabel,
+      input,
+      context,
+      isRoutinePrivateFirstPublish(kind, toolName, input, context),
+    );
+    if (permissionRefusal !== undefined) return permissionRefusal;
     if (toolName === ARTIFACTS_MCP_READ_COMMENTS_TOOL) {
-      let P = targetFromSlugArg(o);
-      if (P === null && isAutoReactNoticePendingFor(o))
+      let noticeTarget = targetFromSlugArg(input);
+      if (noticeTarget === null && isAutoReactNoticePendingFor(input))
         return {
           behavior: "deny",
           message: UNKNOWN_ARTIFACT_COMMENTS_MESSAGE,
@@ -1291,101 +1353,113 @@ function applyArtifactRules(n, e) {
             reason: UNKNOWN_ARTIFACT_COMMENTS_MESSAGE,
           },
         };
-      let Y =
-        P === null
+      let commentDecision =
+        noticeTarget === null
           ? null
-          : await commentReadDecision(o)?.decide(i, P, {
+          : await commentReadDecision(input)?.decide(context, noticeTarget, {
               replyGrant: null,
-              threadId: () => (isPlainObject(o) && typeof o.thread === "string" ? o.thread : undefined),
-              lateDeny: () => checkArtifactPermission(s, toolName, u, o, i) ?? null,
-              askRule: (re) => artifactRuleInputs(re, toolName, o, "ask")?.rule ?? getAskRuleForTool(re, e),
+              threadId: () =>
+                isPlainObject(input) && typeof input.thread === "string" ? input.thread : undefined,
+              lateDeny: () => checkArtifactPermission(kind, toolName, toolLabel, input, context) ?? null,
+              askRule: (permissionContext) =>
+                artifactRuleInputs(permissionContext, toolName, input, "ask")?.rule ??
+                getAskRuleForTool(permissionContext, entry),
               updatedInput: () => {
                 return;
               },
             });
-      if (Y !== null && Y !== undefined) return Y;
+      if (commentDecision !== null && commentDecision !== undefined) return commentDecision;
     }
-    let R = Object.hasOwn(ARTIFACT_ACTION_TARGETS_MAP, toolName)
-      ? await checkPermissions.call(e, o, i)
-      : unknownMcpToolAsk(u);
-    let E = checkArtifactPermission(s, toolName, u, o, i, isRoutinePrivateFirstPublish(s, toolName, o, i));
-    if (E !== undefined) return E;
-    let k = artifactRuleInputs(getToolPermissionContext(i), toolName, o, "ask");
-    let C = await applyAskRuleOverride(R, k?.rule ?? null, async () =>
-      k === null ? "" : askRuleCoversMessage(k, u),
+    let toolDecision = Object.hasOwn(ARTIFACT_ACTION_TARGETS_MAP, toolName)
+      ? await checkPermissions.call(entry, input, context)
+      : unknownMcpToolAsk(toolLabel);
+    let refusal = checkArtifactPermission(
+      kind,
+      toolName,
+      toolLabel,
+      input,
+      context,
+      isRoutinePrivateFirstPublish(kind, toolName, input, context),
     );
-    let S = C.behavior === "deny" ? undefined : createArtifactAsk(toolName, o, i);
-    if (S !== undefined) {
-      if (S.behavior === "ask" && i.toolUseId !== undefined) rememberToolUseId(y, i.toolUseId);
-      return S;
+    if (refusal !== undefined) return refusal;
+    let askRule = artifactRuleInputs(getToolPermissionContext(context), toolName, input, "ask");
+    let overridden = await applyAskRuleOverride(toolDecision, askRule?.rule ?? null, async () =>
+      askRule === null ? "" : askRuleCoversMessage(askRule, toolLabel),
+    );
+    let createAsk = overridden.behavior === "deny" ? undefined : createArtifactAsk(toolName, input, context);
+    if (createAsk !== undefined) {
+      if (createAsk.behavior === "ask" && context.toolUseId !== undefined)
+        rememberToolUseId(seenSlugs, context.toolUseId);
+      return createAsk;
     }
-    if (k !== null && C.behavior === "ask")
+    if (askRule !== null && overridden.behavior === "ask")
       return {
-        ...C,
+        ...overridden,
         suppressAlwaysAllowRule: true,
       };
-    if (C.behavior !== "passthrough") return C;
-    let toolPermissionContext = getToolPermissionContext(i);
-    if (toolPermissionContext.mode === "plan") return C;
-    if (isRoutinePrivateFirstPublish(s, toolName, o, i)) {
-      if (i.toolUseId === undefined) getLiveState().routineRunTainted = true;
-      else c.add(i.toolUseId);
+    if (overridden.behavior !== "passthrough") return overridden;
+    let toolPermissionContext = getToolPermissionContext(context);
+    if (toolPermissionContext.mode === "plan") return overridden;
+    if (isRoutinePrivateFirstPublish(kind, toolName, input, context)) {
+      if (context.toolUseId === undefined) getLiveState().routineRunTainted = true;
+      else seenPaths.add(context.toolUseId);
       return {
         behavior: "allow",
-        updatedInput: o,
+        updatedInput: input,
         decisionReason: {
           type: "other",
           reason: "A scheduled task's new artifact, private to the person",
         },
       };
     }
-    let I = checkArtifactPermission(s, toolName, u, o, i);
-    if (I !== undefined) return I;
-    let V =
+    let finalRefusal = checkArtifactPermission(kind, toolName, toolLabel, input, context);
+    if (finalRefusal !== undefined) return finalRefusal;
+    let targetSlug =
       toolName !== ARTIFACTS_MCP_REPLY_COMMENT_TOOL && WRITE_MCP_TOOLS.has(toolName)
-        ? mcpTargetSlug(toolName, o)
+        ? mcpTargetSlug(toolName, input)
         : null;
-    let G = V === null ? undefined : otherCommentPendingSeq(V);
+    let pendingSeq = targetSlug === null ? undefined : otherCommentPendingSeq(targetSlug);
     if (
-      V !== null &&
-      G !== undefined &&
-      i.toolUseId !== undefined &&
-      consentAskCanReachUser(i) &&
+      targetSlug !== null &&
+      pendingSeq !== undefined &&
+      context.toolUseId !== undefined &&
+      consentAskCanReachUser(context) &&
       !isAutoClassifierActive(toolPermissionContext.mode) &&
-      !isDelegatedObservationContext(i.agentContext)
+      !isDelegatedObservationContext(context.agentContext)
     ) {
-      w.set(i.toolUseId, {
-        slug: V,
-        seq: G,
+      memo.set(context.toolUseId, {
+        slug: targetSlug,
+        seq: pendingSeq,
       });
-      let P = `A comment that may not be the person's own is pending on this artifact, so ${u} needs their answer.`;
+      let commentPrompt = `A comment that may not be the person's own is pending on this artifact, so ${toolLabel} needs their answer.`;
       return {
         behavior: "ask",
-        message: P,
+        message: commentPrompt,
         suppressAlwaysAllowRule: true,
         decisionReason: {
           type: "safetyCheck",
-          reason: P,
+          reason: commentPrompt,
           classifierApprovable: false,
         },
       };
     }
-    let te = artifactDbAskReason(e, o, i);
-    if (te !== undefined) return te;
-    if (!Object.hasOwn(ARTIFACT_ACTION_TARGETS_MAP, toolName) || dbWriteMayAsk(toolName, o)) return C;
+    let dbAskReason = artifactDbAskReason(entry, input, context);
+    if (dbAskReason !== undefined) return dbAskReason;
+    if (!Object.hasOwn(ARTIFACT_ACTION_TARGETS_MAP, toolName) || dbWriteMayAsk(toolName, input))
+      return overridden;
     if (
-      s === "laptop" &&
+      kind === "laptop" &&
       (toolName === "publish_version" || toolName === "edit_version") &&
-      isOwnPersonArtifactWithoutOtherComments(toolName, o) &&
-      isPlainObject(o) &&
-      (o.shared_live ?? "") === "" &&
-      o.contract === undefined &&
-      !isDelegatedObservationContext(i.agentContext) &&
-      isStrictHumanTurn(i.messages)
+      isOwnPersonArtifactWithoutOtherComments(toolName, input) &&
+      isPlainObject(input) &&
+      (input.shared_live ?? "") === "" &&
+      input.contract === undefined &&
+      !isDelegatedObservationContext(context.agentContext) &&
+      isStrictHumanTurn(context.messages)
     )
       return {
         behavior: "allow",
-        updatedInput: o,
+        updatedInput: input,
         decisionReason: {
           type: "other",
           reason: "Redeploy of an artifact already published this session",
@@ -1395,89 +1469,100 @@ function applyArtifactRules(n, e) {
     if (PLAN_SAFE_MCP_TOOLS.has(action))
       return {
         behavior: "allow",
-        updatedInput: o,
+        updatedInput: input,
         decisionReason: {
           type: "other",
           reason: `The ${ARTIFACT_TOOL_NAME} tool asks nobody about this action`,
         },
       };
-    let se =
+    let commentPrompt =
       WRITE_MCP_TOOLS.has(toolName) &&
-      isPlainObject(o) &&
-      (o.shared_live ?? "") === "" &&
-      G === undefined &&
+      isPlainObject(input) &&
+      (input.shared_live ?? "") === "" &&
+      pendingSeq === undefined &&
       !isAutoClassifierActive(toolPermissionContext.mode) &&
       (toolPermissionContext.modeBeforeRewrite === undefined ||
         !isAutoClassifierActive(toolPermissionContext.modeBeforeRewrite))
         ? toolAlwaysAllowedRule(toolPermissionContext, artifactRuleToolRef)
         : null;
-    return se === null
-      ? C
+    return commentPrompt === null
+      ? overridden
       : {
           behavior: "allow",
-          updatedInput: o,
+          updatedInput: input,
           decisionReason: {
             type: "rule",
-            rule: se,
+            rule: commentPrompt,
           },
         };
   };
-  e.permissionCheckFailureDecision = (o, i) => {
-    let p = checkArtifactPermission(s, toolName, u, o, i);
-    if (p !== undefined) return p;
-    if (toolName === ARTIFACTS_MCP_READ_COMMENTS_TOOL && isAutoReactNoticePendingFor(o)) {
-      let k = `${COMMENTS_READ_REFUSALS} and the permission check for this call couldn't finish. Try once more; if it fails again, tell the user the comments couldn't be read.`;
+  entry.permissionCheckFailureDecision = (permissionFailure, input) => {
+    let denial = checkArtifactPermission(kind, toolName, toolLabel, permissionFailure, input);
+    if (denial !== undefined) return denial;
+    if (toolName === ARTIFACTS_MCP_READ_COMMENTS_TOOL && isAutoReactNoticePendingFor(permissionFailure)) {
+      let failureText = `${COMMENTS_READ_REFUSALS} and the permission check for this call couldn't finish. Try once more; if it fails again, tell the user the comments couldn't be read.`;
       return {
         behavior: "deny",
-        message: k,
+        message: failureText,
         decisionReason: {
           type: "other",
-          reason: k,
+          reason: failureText,
         },
       };
     }
-    let f = Object.hasOwn(ARTIFACT_ACTION_TARGETS_MAP, toolName)
-      ? (permissionCheckFailureDecision?.call(e, o, i) ?? artifactDbAskReason(e, o, i))
-      : unknownMcpToolAsk(u);
-    let R = f?.behavior === "deny" ? undefined : createArtifactAsk(toolName, o, i);
-    if (R !== undefined) {
-      if (R.behavior === "ask" && i.toolUseId !== undefined) rememberToolUseId(y, i.toolUseId);
-      return R;
+    let batchDeny = Object.hasOwn(ARTIFACT_ACTION_TARGETS_MAP, toolName)
+      ? (permissionCheckFailureDecision?.call(entry, permissionFailure, input) ??
+        artifactDbAskReason(entry, permissionFailure, input))
+      : unknownMcpToolAsk(toolLabel);
+    let askDecision =
+      batchDeny?.behavior === "deny" ? undefined : createArtifactAsk(toolName, permissionFailure, input);
+    if (askDecision !== undefined) {
+      if (askDecision.behavior === "ask" && input.toolUseId !== undefined)
+        rememberToolUseId(seenSlugs, input.toolUseId);
+      return askDecision;
     }
-    let E = artifactRuleInputs(getToolPermissionContext(i), toolName, o, "ask");
-    if (E === null || f?.behavior === "deny") return f;
-    return f?.behavior === "ask"
+    let askRule = artifactRuleInputs(getToolPermissionContext(input), toolName, permissionFailure, "ask");
+    if (askRule === null || batchDeny?.behavior === "deny") return batchDeny;
+    return batchDeny?.behavior === "ask"
       ? {
-          ...f,
-          matchedAskRule: f.matchedAskRule ?? E.rule,
+          ...batchDeny,
+          matchedAskRule: batchDeny.matchedAskRule ?? askRule.rule,
         }
       : {
           behavior: "ask",
-          message: `${askRuleCoversMessage(E, u)} This tool's permission check couldn't finish, so approving covers this call only.`,
+          message: `${askRuleCoversMessage(askRule, toolLabel)} This tool's permission check couldn't finish, so approving covers this call only.`,
           suppressAlwaysAllowRule: true,
           decisionReason: {
             type: "rule",
-            rule: E.rule,
+            rule: askRule.rule,
           },
         };
   };
-  let h = e.call;
-  e.call = async (o, i, p, f, R, E) => {
-    let k = i.toolUseId !== undefined && c.delete(i.toolUseId);
-    let C = i.toolUseId === undefined ? undefined : w.get(i.toolUseId);
-    if (i.toolUseId !== undefined) w.delete(i.toolUseId);
+  let originalCall = entry.call;
+  entry.call = async (slug, toolUseContext, a, b, argC, d) => {
+    let cleared = toolUseContext.toolUseId !== undefined && seenPaths.delete(toolUseContext.toolUseId);
+    let cachedSeq = toolUseContext.toolUseId === undefined ? undefined : memo.get(toolUseContext.toolUseId);
+    if (toolUseContext.toolUseId !== undefined) memo.delete(toolUseContext.toolUseId);
     try {
-      let S = await h.call(e, o, i, p, f, R, markFrameCreateConfirmed(E, i, y));
+      let callResult = await originalCall.call(
+        entry,
+        slug,
+        toolUseContext,
+        a,
+        b,
+        argC,
+        markFrameCreateConfirmed(d, toolUseContext, seenSlugs),
+      );
       if (
-        C !== undefined &&
-        consentAskCanReachUser(i) &&
-        !isAutoClassifierActive(getToolPermissionContext(i).mode)
+        cachedSeq !== undefined &&
+        consentAskCanReachUser(toolUseContext) &&
+        !isAutoClassifierActive(getToolPermissionContext(toolUseContext).mode)
       )
-        settleOtherCommentPending(C.slug, C.seq);
-      if (k) {
-        let { read, shared } = shareFieldsFromResult(S.data);
+        settleOtherCommentPending(cachedSeq.slug, cachedSeq.seq);
+      if (cleared) {
+        let { read, shared } = shareFieldsFromResult(callResult.data);
         recordUnaskedRoutineFirstPublish(
-          publishedArtifactFromResult(S.data)?.slug,
+          publishedArtifactFromResult(callResult.data)?.slug,
           read === undefined
             ? "unknown_outcome"
             : read === ""
@@ -1485,77 +1570,80 @@ function applyArtifactRules(n, e) {
               : deriveShareStatus(read, shared).mode,
         );
       }
-      return S;
+      return callResult;
     } catch (error) {
-      if (k) recordUnaskedRoutineFirstPublish(undefined, "unknown_outcome");
+      if (cleared) recordUnaskedRoutineFirstPublish(undefined, "unknown_outcome");
       throw error;
     }
   };
   let action = ARTIFACT_ACTION_TARGETS_MAP[toolName]?.action;
   if (action === "delete_asset" || action === "delete") {
-    let { checkPermissions, permissionCheckFailureDecision } = e;
-    e.checkPermissions = async (p, f) => askDefaultsToNo(e, await checkPermissions.call(e, p, f));
-    e.permissionCheckFailureDecision = (p, f) => {
-      let R = askDefaultsToNo(
-        e,
-        permissionCheckFailureDecision?.call(e, p, f) ?? {
+    let { checkPermissions, permissionCheckFailureDecision } = entry;
+    entry.checkPermissions = async (checkPermissionsWrapped, input) =>
+      askDefaultsToNo(entry, await checkPermissions.call(entry, checkPermissionsWrapped, input));
+    entry.permissionCheckFailureDecision = (failureWrapped, input) => {
+      let askDefaults = askDefaultsToNo(
+        entry,
+        permissionCheckFailureDecision?.call(entry, failureWrapped, input) ?? {
           behavior: "passthrough",
-          message: `The permission check for ${u} couldn't finish.`,
+          message: `The permission check for ${toolLabel} couldn't finish.`,
           checkIncomplete: true,
         },
       );
-      return R.behavior === "passthrough" ? undefined : R;
+      return askDefaults.behavior === "passthrough" ? undefined : askDefaults;
     };
   }
   if (toolName === ARTIFACTS_MCP_READ_COMMENTS_TOOL) {
-    let o = e.call;
-    e.call = async (i, p, ...f) => {
-      let R = targetFromSlugArg(i);
-      if (R === null && isAutoReactNoticePendingFor(i))
+    let originalCall = entry.call;
+    entry.call = async (slugArg, toolUseContext, ...rest) => {
+      let target = targetFromSlugArg(slugArg);
+      if (target === null && isAutoReactNoticePendingFor(slugArg))
         throw new ArtifactInputError(UNKNOWN_ARTIFACT_COMMENTS_MESSAGE, "mcp_comments_slug_unread");
-      let E = R === null ? undefined : commentReadDecision(i)?.consume(p, R.slug);
-      if (E?.noticeStood === true && !E.judged)
+      let callResult =
+        target === null ? undefined : commentReadDecision(slugArg)?.consume(toolUseContext, target.slug);
+      if (callResult?.noticeStood === true && !callResult.judged)
         throw new ArtifactInputError(
           `${COMMENTS_READ_REFUSALS} and this call's permission check did not ask for it. Call read_comments again for this artifact so the user can be asked.`,
           "mcp_comments_notice_unchecked",
         );
-      let k = s === "laptop" ? await ownAccountUuid(p.credentials) : null;
-      let C = await o.call(e, i, p, ...f);
-      let S = mcpTargetSlug(toolName, i);
-      if (S !== null && !isDelegatedObservationContext(p.agentContext)) {
+      let accountUuid = kind === "laptop" ? await ownAccountUuid(toolUseContext.credentials) : null;
+      let callResultRaw = await originalCall.call(entry, slugArg, toolUseContext, ...rest);
+      let targetSlug = mcpTargetSlug(toolName, slugArg);
+      if (targetSlug !== null && !isDelegatedObservationContext(toolUseContext.agentContext)) {
         let viewer =
-          k === null
+          accountUuid === null
             ? {
                 account: undefined,
                 tokens: ownPrincipalTokens(),
               }
-            : await ownAccountUuid(p.credentials);
-        let I = commentsFromResult(
-          C.data,
+            : await ownAccountUuid(toolUseContext.credentials);
+        let comments = commentsFromResult(
+          callResultRaw.data,
           viewer,
-          k === null || (k.account !== undefined && k.account === viewer.account),
+          accountUuid === null ||
+            (accountUuid.account !== undefined && accountUuid.account === viewer.account),
         );
-        if (I === null) recordUnaccountedComments(S, "fromRead");
-        else recordJudgedComments(S, I);
+        if (comments === null) recordUnaccountedComments(targetSlug, "fromRead");
+        else recordJudgedComments(targetSlug, comments);
       }
-      return C;
+      return callResultRaw;
     };
   }
 }
 //@ chunk-p5cstt88.js:30311-30591 placement
-function askDefaultsToNo(n, e) {
-  if (e.behavior === "ask")
+function askDefaultsToNo(entry, decision) {
+  if (decision.behavior === "ask")
     return {
-      ...e,
+      ...decision,
       defaultToNo: true,
     };
-  if (e.behavior !== "passthrough" || n.mcpInfo?.effectiveMaxPermission !== "ask") return e;
+  if (decision.behavior !== "passthrough" || entry.mcpInfo?.effectiveMaxPermission !== "ask") return decision;
   return {
     behavior: "ask",
-    message: e.message,
+    message: decision.message,
     suppressAlwaysAllowRule: true,
     defaultToNo: true,
-    ...(e.checkIncomplete === true && {
+    ...(decision.checkIncomplete === true && {
       checkIncomplete: true,
     }),
   };
@@ -1566,52 +1654,46 @@ var MAX_REMEMBERED_TOOL_USE_IDS = 64;
 /**
  * 记住被询问过的 toolUseId，超过上限逐出最早的。
  */
-function rememberToolUseId(n, toolUseId) {
-  n.add(toolUseId);
-  let s = n.values().next().value;
-  if (n.size > MAX_REMEMBERED_TOOL_USE_IDS && s !== undefined) n.delete(s);
+function rememberToolUseId(set, toolUseId) {
+  set.add(toolUseId);
+  let oldest = set.values().next().value;
+  if (set.size > MAX_REMEMBERED_TOOL_USE_IDS && oldest !== undefined) set.delete(oldest);
 }
 //@ chunk-p5cstt88.js:30694-30822 placement
-function markFrameCreateConfirmed(n, e, s) {
-  return e.toolUseId !== undefined && s.delete(e.toolUseId) && isUserDecidedToolUse(e)
+function markFrameCreateConfirmed(result, context, seenPaths) {
+  return context.toolUseId !== undefined &&
+    seenPaths.delete(context.toolUseId) &&
+    isUserDecidedToolUse(context)
     ? {
-        ...n,
+        ...result,
         mcpCallMeta: {
-          ...n?.mcpCallMeta,
+          ...result?.mcpCallMeta,
           [ANTHROPIC_FRAMECREATECONFIRMED]: true,
         },
       }
-    : n;
+    : result;
 }
 //@ chunk-p5cstt88.js:30822-30952 placement
-function classifierOwnershipMarks(n) {
-  let e = typeof n === "string" ? normalizeArtifactSlug(n) : null;
-  let s = e === null ? undefined : getShareEntry(e);
+function classifierOwnershipMarks(url) {
+  let slug = typeof url === "string" ? normalizeArtifactSlug(url) : null;
+  let shareEntry = slug === null ? undefined : getShareEntry(slug);
   return `${
-    isSessionWrittenArtifact(n)
+    isSessionWrittenArtifact(url)
       ? SESSION_CREATED_CLASSIFIER_MARK
       : ownershipClassifierMark(
-          isSomeoneElses(s)
-            ? s
+          isSomeoneElses(shareEntry)
+            ? shareEntry
             : {
                 role: undefined,
               },
         )
-  }${otherOrgClassifierMark(s)}`;
+  }${otherOrgClassifierMark(shareEntry)}`;
 }
-//@ chunk-7zr1t9gr.js:360-667 placement
-/**
- * 判断错误是否是 Artifact 服务返回的 403 禁止访问错误。
- */
-function isArtifactForbiddenError(error) {
-  if (!(error instanceof Error)) return false;
-  let e = error.message.trimEnd();
-  if (e === `Streamable HTTP error: ${MCP_SERVER_NOT_ALLOWED_MESSAGE}`)
-    return "code" in error && error.code === 403;
-  if (e !== MCP_SERVER_NOT_ALLOWED_MESSAGE) return false;
-  return "status" in error
-    ? error.status === 403
-    : "telemetryMessage" in error &&
-        typeof error.telemetryMessage === "string" &&
-        error.telemetryMessage.startsWith("SdkHttpError ");
-}
+export {
+  ARTIFACT_ACTION_TARGETS_MAP,
+  applyArtifactRules,
+  checkArtifactRead,
+  normalizeArtifactSlug,
+  normalizeArtifactInput,
+  matchArtifactRule,
+};

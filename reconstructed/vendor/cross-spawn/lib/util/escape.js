@@ -5,10 +5,10 @@
  * pieces: chunk-m4p5zn6n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-m4p5zn6n.js:4564-4874 cjs-fingerprint
-var require_escape = x(function (cjsExports, cjsModule) {
+var require_escape = __commonJS(function (cjsExports, cjsModule) {
   var metaCharsRegExp = /([()\][%!^"`<>&|;, *?])/g;
   function escapeCommand(arg) {
     arg = arg.replace(metaCharsRegExp, "^$1");

@@ -10,33 +10,40 @@
  */
 import { init_react_production } from "../../../../vendor/react/cjs/react.production.js";
 import { BRIEF_TOOL_NAME } from "../../../tools/BriefTool/prompt.js";
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { useHost } from "../../../context/session.js";
 import { displayOnlyMcpTool } from "../../../tools/MCPTool/displayOnlyTool.js";
 import { findToolByName, getAllBaseToolsFromRegistry } from "../../../Tool.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-ah34pb7m.js:220401-220405 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ah34pb7m.js:220401", () => {
+  init_react_production();
+});
 //@ chunk-ah34pb7m.js:220405-220426 sole-consumer
-var BRIEF_TOOL_NAME_SET = new Set([BRIEF_TOOL_NAME]);
+var BRIEF_TOOL_NAME_SET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ah34pb7m.js:220405", () => {
+  BRIEF_TOOL_NAME_SET = new Set([BRIEF_TOOL_NAME]);
+});
 //@ chunk-ah34pb7m.js:220426-220929 fingerprint = useGetToolFromMessages (1)
 function useGetToolFromMessages(toolUseID, tools, lookups) {
-  let $ = w(8);
-  let g = lookups.toolUseByToolUseID.get(toolUseID)?.name;
+  let $ = useMemoCache(8);
+  let toolName = lookups.toolUseByToolUseID.get(toolUseID)?.name;
   let host = useHost();
-  let h = g === undefined ? undefined : displayOnlyMcpTool(g, host);
+  let displayName = toolName === undefined ? undefined : displayOnlyMcpTool(toolName, host);
   let t0;
-  if ($[0] !== h || $[1] !== lookups.toolUseByToolUseID || $[2] !== toolUseID || $[3] !== tools) {
+  if ($[0] !== displayName || $[1] !== lookups.toolUseByToolUseID || $[2] !== toolUseID || $[3] !== tools) {
     k: {
       let toolUse = lookups.toolUseByToolUseID.get(toolUseID);
       if (!toolUse) {
         t0 = null;
         break k;
       }
-      let b = findToolByName(tools, toolUse.name) ?? h;
-      if (b) {
+      let label = findToolByName(tools, toolUse.name) ?? displayName;
+      if (label) {
         t0 = {
-          tool: b,
+          tool: label,
           toolUse,
         };
         break k;
@@ -45,19 +52,19 @@ function useGetToolFromMessages(toolUseID, tools, lookups) {
         (BRIEF_TOOL_NAME_SET.has(toolUse.name)
           ? findToolByName(getAllBaseToolsFromRegistry() ?? [], toolUse.name)
           : undefined) ?? undefined;
-      let B;
+      let cache;
       if ($[5] !== tool || $[6] !== toolUse) {
-        B = {
+        cache = {
           tool,
           toolUse,
         };
         $[5] = tool;
         $[6] = toolUse;
-        $[7] = B;
-      } else B = $[7];
-      t0 = B;
+        $[7] = cache;
+      } else cache = $[7];
+      t0 = cache;
     }
-    $[0] = h;
+    $[0] = displayName;
     $[1] = lookups.toolUseByToolUseID;
     $[2] = toolUseID;
     $[3] = tools;

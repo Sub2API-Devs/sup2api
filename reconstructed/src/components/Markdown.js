@@ -12,76 +12,82 @@ import { hasActualOperatorNodes, isNotSpaceToken } from "../utils/markdownHeadin
 import { joinRawSegments } from "../ink/render-border.js";
 import { MAX_MARKDOWN_BLOCKS, SMALL_MARKDOWN_THRESHOLD, GFM_RULES } from "../utils/doctorContextWarnings.js";
 import { applyMarkdown } from "../tools/ArtifactTool/markdownPage.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useSettingsState } from "../hooks/useSettings.js";
 import { getCliHighlightModule } from "../utils/cliHighlight.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { PreviewBoxBody } from "./permissions/AskUserQuestionPermissionRequest/PreviewBox.js";
 
 //@ chunk-wj577vf9.js:5806-5917 placement
-function findLastContentTokenIndex(e) {
-  let lastIndex = e.findLastIndex((r) => r.raw.trim() !== "");
-  return hasActualOperatorNodes(e[lastIndex]) ? lastIndex : Math.max(e.findLastIndex(isNotSpaceToken), 0);
+function findLastContentTokenIndex(tokens) {
+  let lastIndex = tokens.findLastIndex((token) => token.raw.trim() !== "");
+  return hasActualOperatorNodes(tokens[lastIndex])
+    ? lastIndex
+    : Math.max(tokens.findLastIndex(isNotSpaceToken), 0);
 }
 //@ chunk-wj577vf9.js:5917-5941 placement
 /**
  * 导出值：endsWith（字符串以某后缀结尾）；位于「Markdown 渲染：marked lexer（带缓存）→ 令牌格式化为 ANSI 文本；表格交给 MarkdownTable；流式 Markdown 只重渲染末尾块」模块。
  */
-var endsWith = (tokens, t) => joinRawSegments(tokens) === t;
+var endsWith = (tokens, raw) => joinRawSegments(tokens) === raw;
 //@ chunk-wj577vf9.js:5941-6069 placement
-function hasMarkdownSyntax(tokens, t, n) {
-  let r = joinRawSegments(tokens.slice(0, t));
-  let o = joinRawSegments(tokens.slice(t));
-  let s = n.endsWith(o);
-  return n.startsWith(r) ? r.length : s ? n.length - o.length : 0;
+function hasMarkdownSyntax(tokens, index, text) {
+  let before = joinRawSegments(tokens.slice(0, index));
+  let after = joinRawSegments(tokens.slice(index));
+  let endsWithAfter = text.endsWith(after);
+  return text.startsWith(before) ? before.length : endsWithAfter ? text.length - after.length : 0;
 }
 //@ chunk-wj577vf9.js:6069-6230 placement
 /**
  * 以第 t 个 token 为界把 marked token 列表拆成前后两段，求分界点在原始 Markdown 文本中的字符偏移（前缀匹配优先，否则按后缀对齐，都不符合时为 0）；用于流式渲染只重算末尾块。
  */
-function findTokenSplitOffset(e, t, n) {
-  let r = joinRawSegments(e.slice(0, t));
-  let o = joinRawSegments(e.slice(t));
-  let s = r.length + o.length === n.length || n.startsWith(r);
-  let l = n.endsWith(o);
-  return s ? r.length : l ? n.length - o.length : 0;
+function findTokenSplitOffset(tokens, index, text) {
+  let before = joinRawSegments(tokens.slice(0, index));
+  let after = joinRawSegments(tokens.slice(index));
+  let startsWithBefore = before.length + after.length === text.length || text.startsWith(before);
+  let endsWithAfter = text.endsWith(after);
+  return startsWithBefore ? before.length : endsWithAfter ? text.length - after.length : 0;
 }
 //@ chunk-wj577vf9.js:6230-6353 placement
-function advancePastLines(e, t, n) {
-  let r = t;
-  for (let k = 0; k < n && r < e.length && r - t < n * MAX_MARKDOWN_BLOCKS; k++) {
-    let index = e.indexOf(
+function advancePastLines(text, startOffset, lineCount) {
+  let offset = startOffset;
+  for (
+    let k = 0;
+    k < lineCount && offset < text.length && offset - startOffset < lineCount * MAX_MARKDOWN_BLOCKS;
+    k++
+  ) {
+    let index = text.indexOf(
       `
 `,
-      r,
+      offset,
     );
-    r = index === -1 ? e.length : index + 1;
+    offset = index === -1 ? text.length : index + 1;
   }
-  return r;
+  return offset;
 }
 //@ chunk-wj577vf9.js:6353-6469 placement
-function hasOverlongLine(e) {
-  let t = 0;
-  let n = false;
-  while (!n && t < e.length) {
-    let index = e.indexOf(
+function hasOverlongLine(text) {
+  let lineStart = 0;
+  let found = false;
+  while (!found && lineStart < text.length) {
+    let index = text.indexOf(
       `
 `,
-      t,
+      lineStart,
     );
-    let o = index === -1 ? e.length : index;
-    n = o - t > SMALL_MARKDOWN_THRESHOLD;
-    t = o + 1;
+    let lineEnd = index === -1 ? text.length : index;
+    found = lineEnd - lineStart > SMALL_MARKDOWN_THRESHOLD;
+    lineStart = lineEnd + 1;
   }
-  return n;
+  return found;
 }
 //@ chunk-wj577vf9.js:6469-6556 placement
 function consumeFirstBlock({ rest, lines }) {
   return rest.slice(0, advancePastLines(rest, GFM_RULES.fences.exec(rest)?.[0].length ?? 0, lines));
 }
 //@ chunk-wj577vf9.js:6556-6605 placement
-function restAfterBlock(e) {
-  return e.rest.slice(consumeFirstBlock(e).length);
+function restAfterBlock(block) {
+  return block.rest.slice(consumeFirstBlock(block).length);
 }
 //@ chunk-wj577vf9.js:6605-6673 placement
 /**
@@ -116,30 +122,30 @@ function isOnlyHtmlComments(raw) {
 /**
  * 流式 Markdown：只对最后一个未闭合块重新 lex，前面已稳定的块复用。
  */
-function StreamingMarkdown(e, n) {
-  let s;
+function StreamingMarkdown(text, offset) {
+  let tokens;
   try {
-    s = applyMarkdown(e);
+    tokens = applyMarkdown(text);
   } catch {
     return null;
   }
-  let r = 0;
-  for (let h of s) {
-    if (!e.startsWith(h.raw, r)) return null;
-    let lastContentIdx = r + h.raw.length;
-    if (lastContentIdx <= n || (r < n && e.slice(n, lastContentIdx).trim() === "")) {
-      r = lastContentIdx;
+  let pos = 0;
+  for (let token of tokens) {
+    if (!text.startsWith(token.raw, pos)) return null;
+    let lastContentIdx = pos + token.raw.length;
+    if (lastContentIdx <= offset || (pos < offset && text.slice(offset, lastContentIdx).trim() === "")) {
+      pos = lastContentIdx;
       continue;
     }
-    if (r < n) return null;
-    if (h.type === "space" || (h.type === "html" && isOnlyHtmlComments(h.raw))) {
-      r = lastContentIdx;
+    if (pos < offset) return null;
+    if (token.type === "space" || (token.type === "html" && isOnlyHtmlComments(token.raw))) {
+      pos = lastContentIdx;
       continue;
     }
     return {
-      token: h,
-      offset: r,
-      links: s.links ?? {},
+      token,
+      offset: pos,
+      links: tokens.links ?? {},
     };
   }
   return null;
@@ -149,22 +155,22 @@ function StreamingMarkdown(e, n) {
  * Markdown 组件：用缓存的 marked lexer 切成令牌，表格令牌交给 MarkdownTable，其余经 formatToken 转 ANSI 文本后用 Ansi 渲染。
  */
 function Markdown(props) {
-  let $ = w(5);
+  let $ = useMemoCache(5);
   let settings = useSettingsState();
-  let L;
+  let highlight;
   if ($[0] !== settings.syntaxHighlightingDisabled) {
-    L = settings.syntaxHighlightingDisabled ? null : getCliHighlightModule();
+    highlight = settings.syntaxHighlightingDisabled ? null : getCliHighlightModule();
     $[0] = settings.syntaxHighlightingDisabled;
-    $[1] = L;
-  } else L = $[1];
-  let highlight = L;
+    $[1] = highlight;
+  } else highlight = $[1];
+  let highlight_2 = highlight;
   let t0;
-  if ($[2] !== highlight || $[3] !== props) {
+  if ($[2] !== highlight_2 || $[3] !== props) {
     t0 = jsxProd_default(PreviewBoxBody, {
       ...props,
-      highlight,
+      highlight: highlight_2,
     });
-    $[2] = highlight;
+    $[2] = highlight_2;
     $[3] = props;
     $[4] = t0;
   } else t0 = $[4];

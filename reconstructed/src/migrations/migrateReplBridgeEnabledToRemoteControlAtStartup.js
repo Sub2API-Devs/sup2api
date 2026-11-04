@@ -15,8 +15,8 @@ import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 /**
  * 迁移：全局配置 replBridgeEnabled → remoteControlAtStartup。
  */
-function migrateReplBridgeEnabledToRemoteControlAtStartup(e) {
-  let r = false;
+function migrateReplBridgeEnabledToRemoteControlAtStartup(context) {
+  let migrated = false;
   saveGlobalConfig((prev) => {
     let oldValue = prev.replBridgeEnabled;
     if (oldValue === undefined) return prev;
@@ -26,9 +26,9 @@ function migrateReplBridgeEnabledToRemoteControlAtStartup(e) {
       remoteControlAtStartup: Boolean(oldValue),
     };
     delete next.replBridgeEnabled;
-    r = true;
+    migrated = true;
     return next;
-  }, e);
-  if (r) logFeatureOk("migration_repl_bridge_to_remote_control");
+  }, context);
+  if (migrated) logFeatureOk("migration_repl_bridge_to_remote_control");
 }
 export { migrateReplBridgeEnabledToRemoteControlAtStartup };

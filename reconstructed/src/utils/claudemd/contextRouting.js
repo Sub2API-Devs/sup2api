@@ -111,6 +111,7 @@ import { stripAnyVersatileSuffix } from "../model/modelIds.js";
 import { telemetrySafeModelName } from "../model/telemetryModelName.js";
 import { isForkBoilerplateMessage } from "../../constants/xml.js";
 import { getComputerUseSession } from "../computerUse/session.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ha3km179.js:38341-38394 placement
 /**
@@ -146,11 +147,11 @@ function announcedContextRendering(messages) {
   }
 }
 //@ chunk-ha3km179.js:38569-38694 placement
-function toInlineRouting(e) {
-  let { claudeMd, ...r } = e.userContext;
+function toInlineRouting(routing) {
+  let { claudeMd, ...restContext } = routing.userContext;
   return {
-    ...e,
-    userContext: claudeMd === "" ? r : e.userContext,
+    ...routing,
+    userContext: claudeMd === "" ? restContext : routing.userContext,
     bare: true,
     rendering: "inline",
   };
@@ -159,97 +160,100 @@ function toInlineRouting(e) {
 /**
  * 会话开始时组装上下文路由（用户/系统上下文、说明、工作者工具）。
  */
-async function buildContextRouting(e, n, r, s) {
-  let { session } = r;
-  let y = logProjectTextCutFailure(e, r);
-  let S = {
-    userContext: y,
-    systemContext: n,
+async function buildContextRouting(session, previous, options, context) {
+  let { session: session_2 } = options;
+  let cutFailure = logProjectTextCutFailure(session, options);
+  let state = {
+    userContext: cutFailure,
+    systemContext: previous,
     announced: {},
     workerTools: undefined,
     sections: [],
     instructions: undefined,
     refreshReason: "session_start",
-    bare: r.options.bareFork === true,
-    carriesContext: Object.keys(y).length > 0 || Object.keys(n).length > 0,
+    bare: options.options.bareFork === true,
+    carriesContext: Object.keys(cutFailure).length > 0 || Object.keys(previous).length > 0,
     rendering: undefined,
   };
-  if (r.options.bareFork) return S;
-  let M = latestContextRendering(s.messages) ?? announcedContextRendering(s.messages);
-  if (M === "inline") return toInlineRouting(S);
+  if (options.options.bareFork) return state;
+  let rendering = latestContextRendering(context.messages) ?? announcedContextRendering(context.messages);
+  if (rendering === "inline") return toInlineRouting(state);
   try {
-    let R =
-      y.claudeMd === undefined
+    let instructionFiles =
+      cutFailure.claudeMd === undefined
         ? undefined
         : await getUserContextInstructionFiles(
-            session,
-            isStorageV5Enabled() ? r.storageV5 : undefined,
-            isStorageV5Enabled() ? r.credentials : undefined,
+            session_2,
+            isStorageV5Enabled() ? options.storageV5 : undefined,
+            isStorageV5Enabled() ? options.credentials : undefined,
           );
-    let T = R && filterManagedInstructions(R, r.options);
-    let w = {
-      ...y,
+    let filteredInstructions =
+      instructionFiles && filterManagedInstructions(instructionFiles, options.options);
+    let userValues = {
+      ...cutFailure,
     };
-    let P = {
-      ...n,
+    let previousValues = {
+      ...previous,
     };
-    let Q = {};
-    for (let V of SESSION_CONTEXT_FIELDS) {
-      let fe = w[V] ?? P[V];
-      if (fe) Q[V] = fe;
-      delete w[V];
-      delete P[V];
+    let changedValues = {};
+    for (let field of SESSION_CONTEXT_FIELDS) {
+      let value = userValues[field] ?? previousValues[field];
+      if (value) changedValues[field] = value;
+      delete userValues[field];
+      delete previousValues[field];
     }
-    delete w.currentDate;
-    let workerToolsContext = isIndexedCorbatoGateOn() ? w.workerToolsContext : undefined;
-    if (workerToolsContext !== undefined) delete w.workerToolsContext;
-    delete P.currentDate;
-    let L;
-    if (w.claudeMd !== undefined && T !== undefined) {
-      L = toMemoryFileEntries(T);
-      let maxMemoryFileChars = getMaxMemoryFileChars(r.options.mainLoopModel);
-      let { readFileState } = r;
-      let { tools } = r.options;
-      let filtered = L.filter((re) => re.type !== "Managed" && re.content.length > maxMemoryFileChars);
+    delete userValues.currentDate;
+    let workerToolsContext = isIndexedCorbatoGateOn() ? userValues.workerToolsContext : undefined;
+    if (workerToolsContext !== undefined) delete userValues.workerToolsContext;
+    delete previousValues.currentDate;
+    let memoryFiles;
+    if (userValues.claudeMd !== undefined && filteredInstructions !== undefined) {
+      memoryFiles = toMemoryFileEntries(filteredInstructions);
+      let maxMemoryFileChars = getMaxMemoryFileChars(options.options.mainLoopModel);
+      let { readFileState } = options;
+      let { tools } = options.options;
+      let filtered = memoryFiles.filter(
+        (file) => file.type !== "Managed" && file.content.length > maxMemoryFileChars,
+      );
       if (
         filtered.length > 0 &&
         readFileState !== undefined &&
         tools !== undefined &&
-        hasAppState(r) &&
-        !session.host.launchOptions.isInteractive() &&
-        !session.host.launchOptions.diskless() &&
+        hasAppState(options) &&
+        !session_2.host.launchOptions.isInteractive() &&
+        !session_2.host.launchOptions.diskless() &&
         tools.some((tool) => toolMatchesName(tool, FILE_READ_TOOL_NAME)) &&
         !tools.some((tool) => toolMatchesName(tool, REPL_TOOL_NAME)) &&
         getFeatureValue_CACHED_MAY_BE_STALE("tengu_velvet_possum", false)
       ) {
-        let toolPermissionContext = getToolPermissionContext(r);
-        let Re = new Set(
-          filtered.filter((Te) => readWouldBeAutoAllowedForPath(Te.path, toolPermissionContext)),
+        let toolPermissionContext = getToolPermissionContext(options);
+        let startOnlyPaths = new Set(
+          filtered.filter((file) => readWouldBeAutoAllowedForPath(file.path, toolPermissionContext)),
         );
-        L = L.map((Te) =>
-          Re.has(Te)
+        memoryFiles = memoryFiles.map((file) =>
+          startOnlyPaths.has(file)
             ? {
-                ...Te,
-                content: truncateInstructionsAtLine(Te.content, Te.path, maxMemoryFileChars),
+                ...file,
+                content: truncateInstructionsAtLine(file.content, file.path, maxMemoryFileChars),
                 startOnly: true,
               }
-            : Te,
+            : file,
         );
-        for (let Te of Re) readFileState.markStartOnly(Te.path);
-        let se = claudeMdLoadStateByHost.of(session.host);
-        if (Re.size > 0 && !se.announcedFileCut) {
-          se.announcedFileCut = true;
+        for (let file of startOnlyPaths) readFileState.markStartOnly(file.path);
+        let loadState = claudeMdLoadStateByHost.of(session_2.host);
+        if (startOnlyPaths.size > 0 && !loadState.announcedFileCut) {
+          loadState.announcedFileCut = true;
           logFeatureSad("context_claude_md_load", "announced_file_cut");
         }
       }
-      delete w.claudeMd;
-    } else if (w.claudeMd === "") delete w.claudeMd;
-    let { cacheBreaker, ...G } = P;
-    let sections = [...Object.entries(w), ...Object.entries(G)]
-      .filter(([, V]) => V !== "")
-      .map(([V, fe]) => ({
-        name: V,
-        text: fe,
+      delete userValues.claudeMd;
+    } else if (userValues.claudeMd === "") delete userValues.claudeMd;
+    let { cacheBreaker, ...settings } = previousValues;
+    let sections = [...Object.entries(userValues), ...Object.entries(settings)]
+      .filter(([, value]) => value !== "")
+      .map(([name, text]) => ({
+        name,
+        text,
       }));
     return {
       userContext: {},
@@ -259,27 +263,27 @@ async function buildContextRouting(e, n, r, s) {
           : {
               cacheBreaker,
             },
-      announced: Q,
+      announced: changedValues,
       workerTools: workerToolsContext,
       sections,
-      instructions: L,
-      refreshReason: getUserContextRefreshReason(session) ?? "session_start",
+      instructions: memoryFiles,
+      refreshReason: getUserContextRefreshReason(session_2) ?? "session_start",
       bare: false,
-      carriesContext: S.carriesContext,
+      carriesContext: state.carriesContext,
       rendering: "announced",
     };
   } catch (error) {
     logError(error);
     logRoutingFailure(
       error,
-      s.querySource,
-      M === "announced" ? "none" : "inline",
-      s.afterCompaction === true,
+      context.querySource,
+      rendering === "announced" ? "none" : "inline",
+      context.afterCompaction === true,
     );
-    if (M === "announced") {
-      let { cacheBreaker } = n;
+    if (rendering === "announced") {
+      let { cacheBreaker } = previous;
       return {
-        ...S,
+        ...state,
         userContext: {},
         systemContext:
           cacheBreaker === undefined
@@ -291,17 +295,17 @@ async function buildContextRouting(e, n, r, s) {
         rendering: "announced",
       };
     }
-    return toInlineRouting(S);
+    return toInlineRouting(state);
   }
 }
 //@ chunk-ha3km179.js:40788-40946 placement
 /**
  * 压缩后重新构建上下文路由（仅 announced 模式），若新结果丢失指令则保留旧的。
  */
-async function rebuildRoutingAfterCompaction(contextRouting, userContext, systemContext, s, h) {
+async function rebuildRoutingAfterCompaction(contextRouting, session, previous, previous_2, context) {
   if (contextRouting.rendering !== "announced") return contextRouting;
-  let contextRouting_2 = await buildContextRouting(userContext, systemContext, s, {
-    ...h,
+  let contextRouting_2 = await buildContextRouting(session, previous, previous_2, {
+    ...context,
     afterCompaction: true,
   });
   return contextRouting.instructions && !contextRouting_2.instructions ? contextRouting : contextRouting_2;
@@ -310,16 +314,16 @@ async function rebuildRoutingAfterCompaction(contextRouting, userContext, system
 /**
  * 判断对象是否带 getAppState 方法。
  */
-function hasAppState(e) {
-  return "getAppState" in e;
+function hasAppState(value) {
+  return "getAppState" in value;
 }
 //@ chunk-ha3km179.js:40985-41131 placement
-function logRoutingFailure(error, querySource, r, afterCompaction) {
+function logRoutingFailure(error, querySource, options, afterCompaction) {
   try {
     logEvent("tengu_context_routing_failed", {
       error_class: sanitizedErrorNameForTelemetry(error),
       query_source: agentTypeForTelemetry(querySource),
-      fallback: fromEnum(r),
+      fallback: fromEnum(options),
       after_compaction: afterCompaction,
     });
   } catch (error) {
@@ -330,31 +334,31 @@ function logRoutingFailure(error, querySource, r, afterCompaction) {
 /**
  * 刷新路由上下文中的 git 状态。
  */
-async function refreshRoutedGitStatus(messages, n, toolUseContext, s) {
-  let { gitStatus, ...y } = n.announced;
+async function refreshRoutedGitStatus(messages, routing, toolUseContext, usePrefetch) {
+  let { gitStatus, ...restAnnounced } = routing.announced;
   try {
-    let S = s ? takeGitStatusPrefetch(toolUseContext.session) : undefined;
-    if (!n.carriesContext || n.bare) return n;
-    let M;
+    let prefetchedGitStatus = usePrefetch ? takeGitStatusPrefetch(toolUseContext.session) : undefined;
+    if (!routing.carriesContext || routing.bare) return routing;
+    let gitStatus;
     let sessionContextAttachmentData = getSessionContextAttachmentData(messages);
-    if (sessionContextAttachmentData !== undefined) M = sessionContextAttachmentData.gitStatus;
+    if (sessionContextAttachmentData !== undefined) gitStatus = sessionContextAttachmentData.gitStatus;
     else if (!toolUseContext.options.omitGitStatus && shouldPrefetchGitStatus())
-      M = (await (S ?? computeGitStatus(toolUseContext.session))) ?? undefined;
+      gitStatus = (await (prefetchedGitStatus ?? computeGitStatus(toolUseContext.session))) ?? undefined;
     return {
-      ...n,
+      ...routing,
       announced:
-        M === undefined
-          ? y
+        gitStatus === undefined
+          ? restAnnounced
           : {
-              ...y,
-              gitStatus: M,
+              ...restAnnounced,
+              gitStatus,
             },
     };
   } catch (error) {
     logError(error);
     return {
-      ...n,
-      announced: y,
+      ...routing,
+      announced: restAnnounced,
     };
   }
 }
@@ -362,23 +366,23 @@ async function refreshRoutedGitStatus(messages, n, toolUseContext, s) {
 /**
  * 判断是否发送项目文档文本：到期、带上下文、非 bare、未压缩过且未读取过等条件。
  */
-function shouldSendProjectDocText(messagesForQuery, n, toolUseContext, s, h) {
+function shouldSendProjectDocText(messages, routing, toolUseContext, projectText, isMidChat) {
   try {
     if (
       !attachedProjectDocText.mayBeDue(toolUseContext.session) ||
-      !s ||
-      !n.carriesContext ||
-      n.bare ||
-      messagesForQuery.some(isCompactBoundaryMessage) ||
-      getLastProjectDocReads(messagesForQuery) !== undefined ||
+      !projectText ||
+      !routing.carriesContext ||
+      routing.bare ||
+      messages.some(isCompactBoundaryMessage) ||
+      getLastProjectDocReads(messages) !== undefined ||
       loadCleanupHelpers()?.getTeleportCacheState().status === "active"
     )
       return false;
-    let filtered = messagesForQuery.filter((S) => S.type === "assistant");
+    let filtered = messages.filter((message) => message.type === "assistant");
     return (
       filtered.length === 0 ||
-      (h &&
-        filtered.some((S) => !isRealAssistantMessage(S)) &&
+      (isMidChat &&
+        filtered.some((message) => !isRealAssistantMessage(message)) &&
         getFeatureValue_CACHED_MAY_BE_STALE(DOC_TEXT_WIDER_FLAG, false))
     );
   } catch (error) {
@@ -396,13 +400,13 @@ var CONTEXT_WINDOW_BASELINE_TOKENS = 200000;
 /**
  * 判断能否读取项目文档（权限规则）。
  */
-async function checkProjectDocReadAllowed(e, toolUseContext, r, s, h) {
-  let any = s.messages.some((message) => message.type === "assistant");
-  let S;
+async function checkProjectDocReadAllowed(routing, toolUseContext, getDocumentText, announcement, hookStash) {
+  let any = announcement.messages.some((message) => message.type === "assistant");
+  let reads;
   try {
     let found = toolUseContext.options.tools.find((tool) => toolMatchesName(tool, PROJECTS_TOOL_NAME));
     let toolPermissionContext = getToolPermissionContext(toolUseContext);
-    let T =
+    let projectTextValue =
       found !== undefined &&
       (getDenyRuleForTool(toolPermissionContext, found) !== null ||
         getAskRuleForTool(toolPermissionContext, found) !== null ||
@@ -422,90 +426,91 @@ async function checkProjectDocReadAllowed(e, toolUseContext, r, s, h) {
           },
           "ask",
         ) !== null);
-    let w =
-      found === undefined || T
+    let hookMethod =
+      found === undefined || projectTextValue
         ? undefined
         : buildProjectTextHooks(
             {
               method: "project_read",
             },
-            r(),
+            getDocumentText(),
           );
-    let P = w === "pre_tool_use_hook" && h !== undefined && !isCcsTenant();
-    let Q = hasUsageAnchor(s.messages);
-    S = await attachedProjectDocText.read(
+    let isPreToolUseHook = hookMethod === "pre_tool_use_hook" && hookStash !== undefined && !isCcsTenant();
+    let hasAnchor = hasUsageAnchor(announcement.messages);
+    reads = await attachedProjectDocText.read(
       toolUseContext.session,
       toolUseContext.credentials,
       toolUseContext.abortController.signal,
-      (D, L) => {
-        let { bytesPerToken } = s.modelFacts;
-        let reduced = L.reduce(
-          (acc, V) =>
-            acc + Math.max(V.storedTokens ?? 0, Math.ceil(Buffer.byteLength(V.text, "utf8") / bytesPerToken)),
+      (anchorTokens, documents) => {
+        let { bytesPerToken } = announcement.modelFacts;
+        let reduced = documents.reduce(
+          (acc, doc) =>
+            acc +
+            Math.max(doc.storedTokens ?? 0, Math.ceil(Buffer.byteLength(doc.text, "utf8") / bytesPerToken)),
           0,
         );
         return (
           reduced <= MAX_PROJECT_DOC_TOKENS &&
           calculateTokenWarningState(
-            estimateTokensWithAnchor(s.messages, bytesPerToken) +
-              stripInProgressAssistantMessage(s.messages) +
+            estimateTokensWithAnchor(announcement.messages, bytesPerToken) +
+              stripInProgressAssistantMessage(announcement.messages) +
               roughTokenCountEstimation(
-                Q
-                  ? D
+                hasAnchor
+                  ? anchorTokens
                   : [
-                      D,
-                      ...s.systemPrompt,
-                      ...Object.values(e.systemContext),
-                      ...Object.values(e.announced),
-                      ...e.sections.map((section) => section.text),
-                      ...(e.instructions ?? []).map((ee) => ee.content),
+                      anchorTokens,
+                      ...announcement.systemPrompt,
+                      ...Object.values(routing.systemContext),
+                      ...Object.values(routing.announced),
+                      ...routing.sections.map((section) => section.text),
+                      ...(routing.instructions ?? []).map((instruction) => instruction.content),
                     ].join(`
 `),
                 bytesPerToken,
               ) +
-              (Q ? 0 : Math.ceil(CONTEXT_WINDOW_BASELINE_TOKENS / bytesPerToken)) +
+              (hasAnchor ? 0 : Math.ceil(CONTEXT_WINDOW_BASELINE_TOKENS / bytesPerToken)) +
               reduced -
-              L.reduce((acc, V) => acc + roughTokenCountEstimation(V.text, bytesPerToken), 0),
-            s.modelFacts,
+              documents.reduce((acc, doc) => acc + roughTokenCountEstimation(doc.text, bytesPerToken), 0),
+            announcement.modelFacts,
             toolUseContext.options.autoCompactWindow,
           ).level === "ok"
         );
       },
       found === undefined
         ? "tool_not_offered"
-        : T || w === "path_rule"
+        : projectTextValue || hookMethod === "path_rule"
           ? "read_refused_by_rule"
-          : w !== undefined && !P
+          : hookMethod !== undefined && !isPreToolUseHook
             ? "read_refused_by_hook"
             : undefined,
-      P ? h : undefined,
+      isPreToolUseHook ? hookStash : undefined,
     );
   } catch (error) {
     attachedProjectDocText.attachThrew(toolUseContext.session, error);
   }
-  if (any && !toolUseContext.abortController.signal.aborted) S ??= [];
-  return S === undefined
-    ? e
+  if (any && !toolUseContext.abortController.signal.aborted) reads ??= [];
+  return reads === undefined
+    ? routing
     : {
-        ...e,
-        projectDocReads: S,
+        ...routing,
+        projectDocReads: reads,
       };
 }
 //@ chunk-ha3km179.js:43008-43050 placement
 /**
  * 有映射函数就应用，否则原样返回。
  */
-function applyMapperOrIdentity(e, announcementWalk) {
-  return announcementWalk === undefined ? e : announcementWalk(e);
+function applyMapperOrIdentity(value, announcementWalk) {
+  return announcementWalk === undefined ? value : announcementWalk(value);
 }
 //@ chunk-ha3km179.js:43050-43128 placement
 /**
  * 应用映射函数，出错记日志并返回 undefined。
  */
-function safeMapOrUndefined(e, announcementWalk) {
-  if (announcementWalk === undefined) return e;
+function safeMapOrUndefined(value, announcementWalk) {
+  if (announcementWalk === undefined) return value;
   try {
-    return announcementWalk(e);
+    return announcementWalk(value);
   } catch (error) {
     logError(error);
     return;
@@ -515,27 +520,31 @@ function safeMapOrUndefined(e, announcementWalk) {
 /**
  * 生成上下文公告附件（说明文件、日期等）。
  */
-function contextAnnouncementAttachments(messages, n, { querySource, resumeActive, stamp, announcementWalk }) {
-  if (resumeActive || n.bare) return [];
-  let S = classifyQuerySource(querySource) === "auxiliary";
+function contextAnnouncementAttachments(
+  messages,
+  routing,
+  { querySource, resumeActive, stamp, announcementWalk },
+) {
+  if (resumeActive || routing.bare) return [];
+  let isAuxiliary = classifyQuerySource(querySource) === "auxiliary";
   try {
-    let M = [];
-    let R = latestInstructionFiles(messages);
-    let T = applyMapperOrIdentity(n.instructions, announcementWalk);
-    if (T && !(S && R)) {
-      let V = diffInstructionFiles(T, R);
-      if (V) {
+    let attachments = [];
+    let announcedInstructions = latestInstructionFiles(messages);
+    let instructionFiles = applyMapperOrIdentity(routing.instructions, announcementWalk);
+    if (instructionFiles && !(isAuxiliary && announcedInstructions)) {
+      let instructionDiff = diffInstructionFiles(instructionFiles, announcedInstructions);
+      if (instructionDiff) {
         let attachmentMessage = createAttachmentMessage_2(
           {
             type: "instructions",
-            ...V,
-            ...(V.changed && {
-              reason: n.refreshReason,
+            ...instructionDiff,
+            ...(instructionDiff.changed && {
+              reason: routing.refreshReason,
             }),
           },
           stamp,
         );
-        M.push({
+        attachments.push({
           ...attachmentMessage,
           ...(getAutoModeConfigOrDefault().typedMarks === true && {
             [MESSAGE_MARK_SYMBOLS]: {
@@ -546,34 +555,36 @@ function contextAnnouncementAttachments(messages, n, { querySource, resumeActive
       }
     }
     let sessionContextAttachmentData = getSessionContextAttachmentData(messages);
-    let P = applyMapperOrIdentity(n.announced, announcementWalk);
-    let Q = Object.keys(P).length > 0;
+    let announcedValues = applyMapperOrIdentity(routing.announced, announcementWalk);
+    let hasAnnounced = Object.keys(announcedValues).length > 0;
     if (
       sessionContextAttachmentData
-        ? !S && (Q || n.carriesContext) && !sameSessionContextValues(sessionContextAttachmentData, P)
-        : Q || n.carriesContext
+        ? !isAuxiliary &&
+          (hasAnnounced || routing.carriesContext) &&
+          !sameSessionContextValues(sessionContextAttachmentData, announcedValues)
+        : hasAnnounced || routing.carriesContext
     )
-      M.push(
+      attachments.push(
         createAttachmentMessage_2(
           sessionContextAttachmentData
             ? {
                 type: "session_context",
-                context: P,
+                context: announcedValues,
                 changed: true,
-                reason: n.refreshReason,
+                reason: routing.refreshReason,
               }
             : {
                 type: "session_context",
-                context: P,
+                context: announcedValues,
               },
           stamp,
         ),
       );
-    let D = coordinatorContextContent(messages);
-    let L = applyMapperOrIdentity(n.workerTools, announcementWalk);
-    let z = isCoordinatorMode_2();
-    if (!S && D && isIndexedCorbatoGateOn() && !z)
-      M.push(
+    let coordinatorContent = coordinatorContextContent(messages);
+    let workerTools = applyMapperOrIdentity(routing.workerTools, announcementWalk);
+    let isCoordinatorMode = isCoordinatorMode_2();
+    if (!isAuxiliary && coordinatorContent && isIndexedCorbatoGateOn() && !isCoordinatorMode)
+      attachments.push(
         createAttachmentMessage_2(
           {
             type: "coordinator_context",
@@ -583,51 +594,55 @@ function contextAnnouncementAttachments(messages, n, { querySource, resumeActive
           stamp,
         ),
       );
-    else if (z && L !== undefined && (S ? D === undefined : D !== L))
-      M.push(
+    else if (
+      isCoordinatorMode &&
+      workerTools !== undefined &&
+      (isAuxiliary ? coordinatorContent === undefined : coordinatorContent !== workerTools)
+    )
+      attachments.push(
         createAttachmentMessage_2(
           {
             type: "coordinator_context",
-            content: L,
-            ...(D !== undefined && {
+            content: workerTools,
+            ...(coordinatorContent !== undefined && {
               changed: true,
             }),
           },
           stamp,
         ),
       );
-    if (n.sections.length > 0 && getLastContextSections(messages) === undefined)
-      M.push(
+    if (routing.sections.length > 0 && getLastContextSections(messages) === undefined)
+      attachments.push(
         createAttachmentMessage_2(
           {
             type: "context_sections",
-            sections: applyMapperOrIdentity(n.sections, announcementWalk),
+            sections: applyMapperOrIdentity(routing.sections, announcementWalk),
           },
           stamp,
         ),
       );
-    if (n.projectDocReads !== undefined)
-      M.push(
+    if (routing.projectDocReads !== undefined)
+      attachments.push(
         createAttachmentMessage_2(
           {
             type: "project_doc_reads",
-            reads: n.projectDocReads,
-            ...(messages.some((V) => V.type === "assistant") && {
+            reads: routing.projectDocReads,
+            ...(messages.some((message) => message.type === "assistant") && {
               midChat: true,
             }),
           },
           stamp,
         ),
       );
-    let G = sessionDateString();
-    let ee = lastSessionDate(messages);
-    if (S ? ee === undefined : ee !== G)
-      M.push(
+    let today = sessionDateString();
+    let lastDate = lastSessionDate(messages);
+    if (isAuxiliary ? lastDate === undefined : lastDate !== today)
+      attachments.push(
         createAttachmentMessage_2(
           {
             type: "date",
-            date: G,
-            ...(ee !== undefined && {
+            date: today,
+            ...(lastDate !== undefined && {
               changed: true,
             }),
             ...(isTimeZoneAssumptionEnabled() && {
@@ -637,7 +652,7 @@ function contextAnnouncementAttachments(messages, n, { querySource, resumeActive
           stamp,
         ),
       );
-    return M;
+    return attachments;
   } catch (error) {
     logError(error);
     return [];
@@ -647,17 +662,17 @@ function contextAnnouncementAttachments(messages, n, { querySource, resumeActive
 /**
  * 生成上下文公告附件并上报遥测。
  */
-function reportContextAnnouncements(messagesForQuery, n, r) {
-  let s = contextAnnouncementAttachments(messagesForQuery, n, r);
-  reportContextAnnouncements_2(s, r.querySource);
-  return s;
+function reportContextAnnouncements(messagesForQuery, routing, options) {
+  let attachments = contextAnnouncementAttachments(messagesForQuery, routing, options);
+  reportContextAnnouncements_2(attachments, options.querySource);
+  return attachments;
 }
 //@ chunk-ha3km179.js:44496-44838 placement
 /**
  * 上报 tengu_context_announcement。
  */
-function reportContextAnnouncements_2(e, querySource) {
-  for (let { attachment } of e)
+function reportContextAnnouncements_2(attachments, querySource) {
+  for (let { attachment } of attachments)
     try {
       logEvent("tengu_context_announcement", {
         announcement_type: fromEnum(attachment.type),
@@ -679,35 +694,42 @@ function reportContextAnnouncements_2(e, querySource) {
 /**
  * 取最近一条协调者上下文附件的内容。
  */
-function coordinatorContextContent(e) {
-  return announcementSchema().safeParse(e.findLast(isCoordinatorContextAttachment)?.attachment).data?.content;
+function coordinatorContextContent(messages) {
+  return announcementSchema().safeParse(messages.findLast(isCoordinatorContextAttachment)?.attachment).data
+    ?.content;
 }
 //@ chunk-ha3km179.js:44918-45005 placement
 /**
  * 判断消息是否为协调者上下文附件。
  */
-function isCoordinatorContextAttachment(e) {
-  return e.type === "attachment" && e.attachment.type === "coordinator_context";
+function isCoordinatorContextAttachment(message) {
+  return message.type === "attachment" && message.attachment.type === "coordinator_context";
 }
 //@ chunk-ha3km179.js:45005-45158 placement
-function getLastContextSections(e) {
-  let last = e.findLast((r) => r.type === "attachment" && r.attachment.type === "context_sections");
+function getLastContextSections(messages) {
+  let last = messages.findLast(
+    (message) => message.type === "attachment" && message.attachment.type === "context_sections",
+  );
   return contextSectionsSchema().safeParse(last?.attachment).data?.sections;
 }
 //@ chunk-ha3km179.js:45158-45285 placement
-function getLastProjectDocReads(e) {
-  let last = e.findLast((r) => r.type === "attachment" && r.attachment.type === "project_doc_reads");
+function getLastProjectDocReads(messages) {
+  let last = messages.findLast(
+    (message) => message.type === "attachment" && message.attachment.type === "project_doc_reads",
+  );
   return trackedProjectReads(last?.attachment);
 }
 //@ chunk-ha3km179.js:45322-45573 placement
 /**
  * 并行运行项目文档读取钩子，任一阻止或出错时返回 true。
  */
-async function anyDocReadHookBlocks(e, toolUseContext, r) {
+async function anyDocReadHookBlocks(documents, toolUseContext, signal) {
   try {
-    return (await Promise.all(e.map((s) => runProjectDocReadHooks(s, toolUseContext, r)))).includes(true);
+    return (
+      await Promise.all(documents.map((doc) => runProjectDocReadHooks(doc, toolUseContext, signal)))
+    ).includes(true);
   } catch (error) {
-    if (!r.aborted)
+    if (!signal.aborted)
       logForDebugging(
         `project doc text: a PreToolUse hook threw (${error instanceof Error ? error.name : typeof error}), so no doc text is sent`,
         {
@@ -721,22 +743,22 @@ async function anyDocReadHookBlocks(e, toolUseContext, r) {
 /**
  * 运行项目文档读取 hooks。
  */
-async function runProjectDocReadHooks(e, n, r) {
-  for await (let s of executePreToolHooks(
+async function runProjectDocReadHooks(input, toolUseContext, signal) {
+  for await (let hookResult of executePreToolHooks(
     PROJECTS_TOOL_NAME,
     `project_doc_read_${randomUUID()}`,
-    clone(e),
-    n,
-    getToolPermissionContext(n).mode,
-    r,
+    clone(input),
+    toolUseContext,
+    getToolPermissionContext(toolUseContext).mode,
+    signal,
   ))
     if (
-      s.blockingError ||
-      s.preventContinuation ||
-      (s.permissionBehavior !== undefined &&
-        s.permissionBehavior !== "allow" &&
-        s.permissionBehavior !== "passthrough") ||
-      (s.updatedInput !== undefined && !isSameAnswerInput(s.updatedInput, e))
+      hookResult.blockingError ||
+      hookResult.preventContinuation ||
+      (hookResult.permissionBehavior !== undefined &&
+        hookResult.permissionBehavior !== "allow" &&
+        hookResult.permissionBehavior !== "passthrough") ||
+      (hookResult.updatedInput !== undefined && !isSameAnswerInput(hookResult.updatedInput, input))
     )
       return true;
   return false;
@@ -745,28 +767,30 @@ async function runProjectDocReadHooks(e, n, r) {
 /**
  * 创建上下文空间跟踪器：阈值、已占用量与已认领量。
  */
-function createContextRoomTracker(e, autoCompactWindow, r) {
+function createContextRoomTracker(modelFacts, autoCompactWindow, messages) {
   try {
-    getContextRoomThreshold(e(), autoCompactWindow);
+    getContextRoomThreshold(modelFacts(), autoCompactWindow);
   } catch (error) {
     logError(withTelemetryMessage(toError(error), "context room hand-in failed"));
     return;
   }
-  let s = 0;
+  let claimedTokens = 0;
   return {
     get threshold() {
-      return getContextRoomThreshold(e(), autoCompactWindow);
+      return getContextRoomThreshold(modelFacts(), autoCompactWindow);
     },
-    held: () => estimateTokensWithAnchor(r(), e().bytesPerToken) + stripInProgressAssistantMessage(r()),
-    claimed: () => s,
-    claim: (h) => {
-      s += h;
+    held: () =>
+      estimateTokensWithAnchor(messages(), modelFacts().bytesPerToken) +
+      stripInProgressAssistantMessage(messages()),
+    claimed: () => claimedTokens,
+    claim: (tokens) => {
+      claimedTokens += tokens;
     },
   };
 }
 //@ chunk-ha3km179.js:46099-46203 placement
-function getContextRoomThreshold(e, n) {
-  let autoCompactThresholdTokens = getAutoCompactThresholdTokens(e, n);
+function getContextRoomThreshold(modelFacts, autoCompactWindow) {
+  let autoCompactThresholdTokens = getAutoCompactThresholdTokens(modelFacts, autoCompactWindow);
   return usesPayAsYouGo() || getGlobalConfig().cachedExtraUsageDisabledReason === null
     ? autoCompactThresholdTokens
     : Math.min(autoCompactThresholdTokens, SECONDARY_CONTEXT_WINDOW);
@@ -776,18 +800,18 @@ function getContextRoomThreshold(e, n) {
  * 压缩后重新公告上下文。
  */
 async function reannounceAfterCompact(
-  e,
+  compactState,
   { routing, toolUseContext, querySource, resumeActive, foreground, stamp },
 ) {
   try {
-    let boundaryMarker = e.boundaryMarker;
+    let boundaryMarker = compactState.boundaryMarker;
     let anchorUuid = isCompactBoundaryMessage(boundaryMarker)
       ? boundaryMarker.compactMetadata.preservedMessages?.anchorUuid
       : undefined;
     if (
-      e.messagesToKeep.length === 0 ||
+      compactState.messagesToKeep.length === 0 ||
       resumeActive ||
-      (anchorUuid !== undefined && anchorUuid !== e.summaryMessages.at(-1)?.uuid)
+      (anchorUuid !== undefined && anchorUuid !== compactState.summaryMessages.at(-1)?.uuid)
     )
       return [];
     if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_calm_noodle", true)) {
@@ -797,29 +821,34 @@ async function reannounceAfterCompact(
       });
       return [];
     }
-    let T = new Set();
-    for (let D of e.messagesToKeep)
+    let keptTypes = new Set();
+    for (let message of compactState.messagesToKeep)
       if (
-        D.type === "attachment" &&
-        REANNOUNCED_ATTACHMENT_TYPES.has(D.attachment.type) &&
-        !(D.attachment.type === "instructions" && D.attachment.changed)
+        message.type === "attachment" &&
+        REANNOUNCED_ATTACHMENT_TYPES.has(message.attachment.type) &&
+        !(message.attachment.type === "instructions" && message.attachment.changed)
       )
-        T.add(D.attachment.type);
-    let postCompactMessages = buildPostCompactMessages(e);
-    let P = await refreshRoutedGitStatus(postCompactMessages, routing, toolUseContext, foreground);
-    let filtered = contextAnnouncementAttachments(postCompactMessages, P, {
+        keptTypes.add(message.attachment.type);
+    let postCompactMessages = buildPostCompactMessages(compactState);
+    let refreshedRouting = await refreshRoutedGitStatus(
+      postCompactMessages,
+      routing,
+      toolUseContext,
+      foreground,
+    );
+    let attachments = contextAnnouncementAttachments(postCompactMessages, refreshedRouting, {
       querySource,
       resumeActive,
       stamp,
       announcementWalk: toolUseContext.options.announcementWalk,
-    }).filter((D) => !T.has(D.attachment.type));
+    }).filter((attachment) => !keptTypes.has(attachment.attachment.type));
     logFeatureOk("compact_kept_tail_announcements", {
       enabled: true,
-      placed: filtered.length,
-      kept_types: T.size,
+      placed: attachments.length,
+      kept_types: keptTypes.size,
     });
-    reportContextAnnouncements_2(filtered, querySource);
-    return filtered;
+    reportContextAnnouncements_2(attachments, querySource);
+    return attachments;
   } catch (error) {
     logError(error);
     logFeatureSad("compact_kept_tail_announcements", "announce_failed");
@@ -830,10 +859,10 @@ async function reannounceAfterCompact(
 /**
  * 在压缩边界消息之后插入给定消息。
  */
-function insertAfterCompactBoundary(e, n) {
-  let [r, ...s] = e;
-  if (n.length === 0 || r === undefined || !isCompactBoundaryMessage(r)) return e;
-  return [r, ...n, ...s];
+function insertAfterCompactBoundary(messages, insert) {
+  let [first, ...rest] = messages;
+  if (insert.length === 0 || first === undefined || !isCompactBoundaryMessage(first)) return messages;
+  return [first, ...insert, ...rest];
 }
 //@ chunk-ha3km179.js:47244-47432 placement
 /**
@@ -844,8 +873,8 @@ var TENGU_GENTLE_PARASOL = "tengu_gentle_parasol";
 var BATCHING_REMINDER_TEXT =
   "First privately list what you need next; then request every item that doesn't depend on another's result in this one response.";
 //@ chunk-ha3km179.js:47432-47552 placement
-function makeEphemeralReminder(e, source, matchedPattern) {
-  let trimmed = e.trim();
+function makeEphemeralReminder(text, source, matchedPattern) {
+  let trimmed = text.trim();
   if (trimmed === "") return null;
   return {
     text: trimmed,
@@ -858,22 +887,25 @@ function makeEphemeralReminder(e, source, matchedPattern) {
 /**
  * 由环境变量构造一次性提醒（取值为假或真时返回 null）。
  */
-function envReminderOf(e) {
-  let trimmed = e.trim();
-  return isEnvDefinedFalsy(trimmed) || isEnvTruthy(trimmed)
+function envReminderOf(text) {
+  let text_2 = text.trim();
+  return isEnvDefinedFalsy(text_2) || isEnvTruthy(text_2)
     ? null
-    : makeEphemeralReminder(trimmed, "env", undefined);
+    : makeEphemeralReminder(text_2, "env", undefined);
 }
 //@ chunk-ha3km179.js:47626-47641 placement
 /**
  * 已告警过的客户端数据键集合（只告警一次）。
  */
-var warnedEphemeralKeys = new Set();
+var warnedEphemeralKeys; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ha3km179.js:47626", () => {
+  warnedEphemeralKeys = new Set();
+});
 //@ chunk-ha3km179.js:47641-47761 placement
-function warnIgnoredClientData(clientDataKey, n) {
+function warnIgnoredClientData(clientDataKey, reason) {
   if (warnedEphemeralKeys.has(clientDataKey)) return;
   warnedEphemeralKeys.add(clientDataKey);
-  logForDebugging(`[ephemeral reminder] ignoring client_data ${clientDataKey}: ${n}`, {
+  logForDebugging(`[ephemeral reminder] ignoring client_data ${clientDataKey}: ${reason}`, {
     level: "warn",
   });
 }
@@ -881,111 +913,120 @@ function warnIgnoredClientData(clientDataKey, n) {
 /**
  * 读取按模型的提醒文本覆盖（环境变量或客户端数据）。
  */
-function readModelReminderOverride(e, n) {
-  let r = env[e.envVar];
-  if (r !== undefined) return envReminderOf(r);
-  let s = getCachedClientData()?.[e.clientDataKey];
-  if (s !== undefined && s !== null)
-    if (typeof s !== "object" || Array.isArray(s))
+function readModelReminderOverride(definition, model) {
+  let envValue = env[definition.envVar];
+  if (envValue !== undefined) return envReminderOf(envValue);
+  let clientValue = getCachedClientData()?.[definition.clientDataKey];
+  if (clientValue !== undefined && clientValue !== null)
+    if (typeof clientValue !== "object" || Array.isArray(clientValue))
       warnIgnoredClientData(
-        e.clientDataKey,
-        `expected a map from model pattern to text, got ${Array.isArray(s) ? "array" : typeof s}`,
+        definition.clientDataKey,
+        `expected a map from model pattern to text, got ${Array.isArray(clientValue) ? "array" : typeof clientValue}`,
       );
     else {
-      let modelKeyedEntry = findModelKeyedEntry(s, n);
-      if (modelKeyedEntry !== undefined) return reminderFromClientData(e, modelKeyedEntry);
+      let modelKeyedEntry = findModelKeyedEntry(clientValue, model);
+      if (modelKeyedEntry !== undefined) return reminderFromClientData(definition, modelKeyedEntry);
     }
-  let h = e.modelOwn?.(getCanonicalName(n));
-  return h !== undefined ? makeEphemeralReminder(h, "model", undefined) : null;
+  let modelOwned = definition.modelOwn?.(getCanonicalName(model));
+  return modelOwned !== undefined ? makeEphemeralReminder(modelOwned, "model", undefined) : null;
 }
 //@ chunk-ha3km179.js:48143-48317 placement
-function reminderFromClientData(e, [matchedPattern, r]) {
-  if (typeof r !== "string") {
+function reminderFromClientData(definition, [matchedPattern, pattern]) {
+  if (typeof pattern !== "string") {
     warnIgnoredClientData(
-      e.clientDataKey,
-      `value for pattern "${matchedPattern}" is ${typeof r}, expected the reminder text`,
+      definition.clientDataKey,
+      `value for pattern "${matchedPattern}" is ${typeof pattern}, expected the reminder text`,
     );
     return null;
   }
-  return makeEphemeralReminder(r, "clientData", matchedPattern);
+  return makeEphemeralReminder(pattern, "clientData", matchedPattern);
 }
 //@ chunk-ha3km179.js:48317-48729 placement
 /**
  * 另一组已锁存提醒的会话状态。
  */
-var REMINDER_LATCHES = new SessionRootSlot(() => ({
-  latched: undefined,
-}));
-var latchedReminderState = new SessionRootSlot(() => ({
-  latched: undefined,
-}));
-var CLIENT_DATA_REMINDER = {
-  clientDataKey: TENGU_TOASTY_THIMBLE,
-  envVar: "CLAUDE_CODE_TOASTY_THIMBLE",
-  modelOwn: (e) => (usesFablePromptBundle(e) ? BATCHING_REMINDER_TEXT : undefined),
-  latches: REMINDER_LATCHES,
-  logApplied: (e) => {
-    logFeatureOk("batching_reminder");
-    logEvent("tengu_toasty_thimble_applied", e);
-  },
-};
-var REMINDER_LATCHES_2 = {
-  clientDataKey: TENGU_GENTLE_PARASOL,
-  envVar: "CLAUDE_CODE_GENTLE_PARASOL",
-  modelOwn: undefined,
-  latches: latchedReminderState,
-  logApplied: (e) => {
-    logFeatureOk("secondary_reminder");
-    logEvent("tengu_gentle_parasol_applied", e);
-  },
-};
+var REMINDER_LATCHES; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+var latchedReminderState;
+var CLIENT_DATA_REMINDER;
+var REMINDER_LATCHES_2;
+deferInit("chunk-ha3km179.js:48317", () => {
+  REMINDER_LATCHES = new SessionRootSlot(() => ({
+    latched: undefined,
+  }));
+  latchedReminderState = new SessionRootSlot(() => ({
+    latched: undefined,
+  }));
+  CLIENT_DATA_REMINDER = {
+    clientDataKey: TENGU_TOASTY_THIMBLE,
+    envVar: "CLAUDE_CODE_TOASTY_THIMBLE",
+    modelOwn: (model) => (usesFablePromptBundle(model) ? BATCHING_REMINDER_TEXT : undefined),
+    latches: REMINDER_LATCHES,
+    logApplied: (text) => {
+      logFeatureOk("batching_reminder");
+      logEvent("tengu_toasty_thimble_applied", text);
+    },
+  };
+  REMINDER_LATCHES_2 = {
+    clientDataKey: TENGU_GENTLE_PARASOL,
+    envVar: "CLAUDE_CODE_GENTLE_PARASOL",
+    modelOwn: undefined,
+    latches: latchedReminderState,
+    logApplied: (text) => {
+      logFeatureOk("secondary_reminder");
+      logEvent("tengu_gentle_parasol_applied", text);
+    },
+  };
+});
 //@ chunk-ha3km179.js:48729-49124 placement
 /**
  * 按对话锁存的提醒文本。
  */
-function latchedReminderText(e, n, r) {
-  if (!shouldUseMidConvSystem(r)) return null;
-  let modelReminderOverride = readModelReminderOverride(e, r);
+function latchedReminderText(definition, model, context) {
+  if (!shouldUseMidConvSystem(context)) return null;
+  let modelReminderOverride = readModelReminderOverride(definition, context);
   if (modelReminderOverride === null) return null;
-  let h = e.latches.of(n);
-  if (h.latched?.conversationId !== n.id)
-    h.latched = {
-      conversationId: n.id,
+  let latches = definition.latches.of(model);
+  if (latches.latched?.conversationId !== model.id)
+    latches.latched = {
+      conversationId: model.id,
       byModel: new Map(),
     };
-  let lower = stripAnyVersatileSuffix(getCanonicalName(r)).toLowerCase();
-  let S = h.latched.byModel.get(lower);
-  if (S === undefined) {
-    S = modelReminderOverride;
-    h.latched.byModel.set(lower, S);
-    e.logApplied({
-      model: telemetrySafeModelName(stripAnyVersatileSuffix(r)),
+  let lower = stripAnyVersatileSuffix(getCanonicalName(context)).toLowerCase();
+  let byModel = latches.latched.byModel.get(lower);
+  if (byModel === undefined) {
+    byModel = modelReminderOverride;
+    latches.latched.byModel.set(lower, byModel);
+    definition.logApplied({
+      model: telemetrySafeModelName(stripAnyVersatileSuffix(context)),
       source: fromEnum(modelReminderOverride.source),
       text: modelReminderOverride.textForAnalytics,
       len: modelReminderOverride.text.length,
     });
   }
-  return S.text;
+  return byModel.text;
 }
 //@ chunk-ha3km179.js:49124-49159 placement
 /**
  * 取客户端数据提醒文本。
  */
-function clientDataReminderText(e, n) {
-  return latchedReminderText(CLIENT_DATA_REMINDER, e, n);
+function clientDataReminderText(definition, context) {
+  return latchedReminderText(CLIENT_DATA_REMINDER, definition, context);
 }
 //@ chunk-ha3km179.js:49159-49194 placement
 /**
  * 取环境变量提醒文本。
  */
-function latchedReminderTextFor(e, n) {
-  return latchedReminderText(REMINDER_LATCHES_2, e, n);
+function latchedReminderTextFor(definition, context) {
+  return latchedReminderText(REMINDER_LATCHES_2, definition, context);
 }
 //@ chunk-ha3km179.js:49194-49262 placement
 /**
  * 视为排队输入的来源类型（queued_command、teammate_mailbox、poll_events）。
  */
-var QUEUED_INPUT_SOURCES = new Set(["queued_command", "teammate_mailbox", "poll_events"]);
+var QUEUED_INPUT_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ha3km179.js:49194", () => {
+  QUEUED_INPUT_SOURCES = new Set(["queued_command", "teammate_mailbox", "poll_events"]);
+});
 //@ chunk-ha3km179.js:49262-49331 placement
 /**
  * 各类拒绝/取消消息的前缀列表。
@@ -1009,108 +1050,110 @@ function rejectionMessagePrefixes() {
   ];
 }
 //@ chunk-ha3km179.js:49331-49574 placement
-function hasKnownToolResultPrefix(e) {
-  if (e.type !== "tool_result") return false;
-  let n =
-    typeof e.content === "string"
-      ? e.content
-      : Array.isArray(e.content)
-        ? e.content.map((r) => (r?.type === "text" && typeof r.text === "string" ? r.text : "")).join("")
+function hasKnownToolResultPrefix(text) {
+  if (text.type !== "tool_result") return false;
+  let prefixes =
+    typeof text.content === "string"
+      ? text.content
+      : Array.isArray(text.content)
+        ? text.content
+            .map((prefix) => (prefix?.type === "text" && typeof prefix.text === "string" ? prefix.text : ""))
+            .join("")
         : "";
-  return rejectionMessagePrefixes().some((r) => n.startsWith(r));
+  return rejectionMessagePrefixes().some((prefix) => prefixes.startsWith(prefix));
 }
 //@ chunk-ha3km179.js:49574-50279 placement
 /**
  * 决定批处理提醒插入位置。
  */
-function placeBatchingReminder(e, n, r) {
-  let s = {
-    messages: e,
+function placeBatchingReminder(messages, definition, context) {
+  let placement = {
+    messages,
     text: null,
     secondaryText: null,
     afterUuid: null,
   };
   try {
-    let h = true;
-    let y = e.length - 1;
-    for (; y >= 0; y--) {
-      let w = e[y];
-      if (isNonConversationMessage(w)) continue;
-      if (w.type !== "attachment") break;
-      if (QUEUED_INPUT_SOURCES.has(w.attachment.type)) h = false;
+    let stillEligible = true;
+    let index = messages.length - 1;
+    for (; index >= 0; index--) {
+      let lastMessage = messages[index];
+      if (isNonConversationMessage(lastMessage)) continue;
+      if (lastMessage.type !== "attachment") break;
+      if (QUEUED_INPUT_SOURCES.has(lastMessage.attachment.type)) stillEligible = false;
     }
-    let S = y >= 0 ? e[y] : undefined;
-    if (!hasToolResultBlock(S) || isForkBoilerplateMessage(S)) return s;
-    for (let w = y; h && w >= 0; w--) {
-      let P = e[w];
-      if (isNonConversationMessage(P) || P.type === "attachment") continue;
-      if (!hasToolResultBlock(P)) break;
-      if (P.message.content.some(hasKnownToolResultPrefix)) h = false;
+    let anchorMessage = index >= 0 ? messages[index] : undefined;
+    if (!hasToolResultBlock(anchorMessage) || isForkBoilerplateMessage(anchorMessage)) return placement;
+    for (let scanIndex = index; stillEligible && scanIndex >= 0; scanIndex--) {
+      let message = messages[scanIndex];
+      if (isNonConversationMessage(message) || message.type === "attachment") continue;
+      if (!hasToolResultBlock(message)) break;
+      if (message.message.content.some(hasKnownToolResultPrefix)) stillEligible = false;
     }
-    let M = h ? clientDataReminderText(n, r) : null;
-    let R = latchedReminderTextFor(n, r);
-    if (M === null && R === null) return s;
-    let T = [];
-    if (M !== null)
-      T.push(
+    let primaryText = stillEligible ? clientDataReminderText(definition, context) : null;
+    let latchedText = latchedReminderTextFor(definition, context);
+    if (primaryText === null && latchedText === null) return placement;
+    let pending = [];
+    if (primaryText !== null)
+      pending.push(
         createAttachmentMessage({
           type: "batching_reminder",
-          text: M,
+          text: primaryText,
         }),
       );
-    if (R !== null)
-      T.push(
+    if (latchedText !== null)
+      pending.push(
         createAttachmentMessage({
           type: "secondary_reminder",
-          text: R,
+          text: latchedText,
         }),
       );
     return {
-      messages: [...e.slice(0, y + 1), ...T, ...e.slice(y + 1)],
-      text: M,
-      secondaryText: R,
-      afterUuid: S.uuid,
+      messages: [...messages.slice(0, index + 1), ...pending, ...messages.slice(index + 1)],
+      text: primaryText,
+      secondaryText: latchedText,
+      afterUuid: anchorMessage.uuid,
     };
   } catch (error) {
     logError(error);
-    return s;
+    return placement;
   }
 }
 //@ chunk-ha3km179.js:50279-50796 placement
 /**
  * 应用批处理/次级提醒到消息。
  */
-function applyReminders(e, n, r) {
+function applyReminders(messages, definition, context) {
   try {
-    let s = placeBatchingReminder(e, n, r);
-    let h = new Map();
-    for (let j = e.length - 1; j >= 0; j--) {
-      let M = e[j];
-      if (M.type !== "attachment") {
-        if (isNonConversationMessage(M)) continue;
+    let placement = placeBatchingReminder(messages, definition, context);
+    let latchedByUuid = new Map();
+    for (let j = messages.length - 1; j >= 0; j--) {
+      let message = messages[j];
+      if (message.type !== "attachment") {
+        if (isNonConversationMessage(message)) continue;
         break;
       }
-      let attachment = M.attachment;
+      let attachment = message.attachment;
       if (
         (attachment.type === "batching_reminder_sent" || attachment.type === "secondary_reminder_sent") &&
         attachment.clearAt === "next_user_message" &&
-        !h.has(attachment.type)
+        !latchedByUuid.has(attachment.type)
       )
-        h.set(attachment.type, attachment.text);
+        latchedByUuid.set(attachment.type, attachment.text);
     }
-    let y = [];
-    for (let [S, M] of [
-      ["batching_reminder_sent", s.text ?? ""],
-      ["secondary_reminder_sent", s.secondaryText ?? ""],
+    let result = [];
+    for (let [uuid, text] of [
+      ["batching_reminder_sent", placement.text ?? ""],
+      ["secondary_reminder_sent", placement.secondaryText ?? ""],
     ]) {
-      let R = h.get(S);
-      if (R === undefined ? M !== "" : R !== M)
-        y.push({
-          type: S,
-          text: M,
+      let prior = latchedByUuid.get(uuid);
+      if (prior === undefined ? text !== "" : prior !== text)
+        result.push({
+          type: uuid,
+          text,
         });
     }
-    return y;
+    return result;
   } catch (error) {
     logError(error);
     return [];
@@ -1126,11 +1169,11 @@ function createAttachmentMessage(attachment) {
   };
 }
 //@ chunk-ha3km179.js:50895-51021 placement
-function hasToolResultBlock(e) {
+function hasToolResultBlock(message) {
   return (
-    e?.type === "user" &&
-    Array.isArray(e.message.content) &&
-    e.message.content.some((n) => n.type === "tool_result")
+    message?.type === "user" &&
+    Array.isArray(message.message.content) &&
+    message.message.content.some((block) => block.type === "tool_result")
   );
 }
 //@ chunk-ha3km179.js:51021-51062 placement

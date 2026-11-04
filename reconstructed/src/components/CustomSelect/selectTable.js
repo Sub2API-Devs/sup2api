@@ -9,9 +9,15 @@
  * attribution: placement 11
  */
 import { bunStringWidth } from "../../ink/stringWidth.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useScrollViewportSize } from "../ScrollViewportContext.js";
-import { Se, R, y, Fy, isValidElement_default } from "../../../vendor/react/cjs/react.production.js";
+import {
+  useContext,
+  useRef,
+  useState,
+  childrenExport,
+  isValidElement_default,
+} from "../../../vendor/react/cjs/react.production.js";
 import { TerminalSizeContext } from "../../ink/terminalModes.js";
 import { newSet, cursorIndexFor, getTextContent, merged, isMenuOpen } from "./select.js";
 import { measureElement } from "../../ink/hooks/useTerminalHooks.js";
@@ -24,14 +30,15 @@ import {
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { EARLY_RETURN_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { collapseWhitespace } from "../../utils/stringUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-r68xwcze.js:19250-19296 placement
-function labelWidth(oe) {
-  return bunStringWidth(cellText(oe.props.label));
+function labelWidth(item) {
+  return bunStringWidth(cellText(item.props.label));
 }
 //@ chunk-r68xwcze.js:19296-19354 placement
-function metaWidth(d) {
-  return bunStringWidth(metaTexts(d.props.meta).join(" \xB7 "));
+function metaWidth(option) {
+  return bunStringWidth(metaTexts(option.props.meta).join(" \xB7 "));
 }
 //@ chunk-r68xwcze.js:19354-19379 placement
 var TABLE_ROW_CHROME_WIDTH = 2;
@@ -39,222 +46,229 @@ var TABLE_COLUMN_GAP = 3;
 var MAX_LABEL_COLUMN_WIDTH = 50;
 var NARROW_TABLE_WIDTH = 6;
 //@ chunk-r68xwcze.js:19379-20797 placement
-function SelectTable(o) {
-  let t = w(30);
-  let i;
-  let a;
-  if (t[0] !== o) {
-    ({ children: i, ...a } = o);
-    t[0] = o;
-    t[1] = i;
-    t[2] = a;
+function SelectTable(props) {
+  let $ = useMemoCache(30);
+  let children;
+  let restProps;
+  if ($[0] !== props) {
+    ({ children, ...restProps } = props);
+    $[0] = props;
+    $[1] = children;
+    $[2] = restProps;
   } else {
-    i = t[1];
-    a = t[2];
+    children = $[1];
+    restProps = $[2];
   }
   let scrollViewportSize = useScrollViewportSize(
-    Se(TerminalSizeContext) ?? {
+    useContext(TerminalSizeContext) ?? {
       rows: 0,
       columns: 0,
     },
   );
-  let m = R(null);
-  let [l] = y(newSet);
-  let C;
-  if (t[3] !== l || t[4] !== scrollViewportSize) {
-    C = () => {
-      let [h] = l;
-      if (h) {
-        return measureElement(h).width;
+  let containerRef = useRef(null);
+  let [sharedRowLines] = useState(newSet);
+  let widthFn;
+  if ($[3] !== sharedRowLines || $[4] !== scrollViewportSize) {
+    widthFn = () => {
+      let [sharedNode] = sharedRowLines;
+      if (sharedNode) {
+        return measureElement(sharedNode).width;
       }
       return (
-        ((m.current && measureElement(m.current).width) || scrollViewportSize.columns) -
+        ((containerRef.current && measureElement(containerRef.current).width) || scrollViewportSize.columns) -
         TABLE_ROW_CHROME_WIDTH
       );
     };
-    t[3] = l;
-    t[4] = scrollViewportSize;
-    t[5] = C;
-  } else C = t[5];
-  let measured = useMeasured(C);
-  let T;
-  let k;
-  let M;
-  let children;
+    $[3] = sharedRowLines;
+    $[4] = scrollViewportSize;
+    $[5] = widthFn;
+  } else widthFn = $[5];
+  let measured = useMeasured(widthFn);
+  let ListComponent;
+  let BoxComponent;
+  let listProps;
+  let children_2;
   let ref;
   let flexDirection;
-  if (t[6] !== i || t[7] !== a || t[8] !== l || t[9] !== measured) {
-    let N = Fy.toArray(i);
-    let filtered = N.filter(isOrderedListItem);
-    let max = Math.max(0, ...N.map(cursorIndexFor));
+  if ($[6] !== children || $[7] !== restProps || $[8] !== sharedRowLines || $[9] !== measured) {
+    let childArray = childrenExport.toArray(children);
+    let filtered = childArray.filter(isOrderedListItem);
+    let max = Math.max(0, ...childArray.map(cursorIndexFor));
     let filtered_2 = filtered.filter(getTextContent);
     let min = Math.min(MAX_LABEL_COLUMN_WIDTH, Math.max(0, ...filtered_2.map(labelWidth)));
     let max_2 = Math.max(0, ...filtered_2.map(metaWidth));
-    let g = measured - (max > 0 ? max + 1 : 0) - TABLE_COLUMN_GAP;
-    let x = g - Math.min(min, Math.max(Math.ceil(g / 2), g - max_2));
-    let V =
-      min + max_2 > g && g < 2 * NARROW_TABLE_WIDTH
+    let contentWidth = measured - (max > 0 ? max + 1 : 0) - TABLE_COLUMN_GAP;
+    let factsBudget =
+      contentWidth - Math.min(min, Math.max(Math.ceil(contentWidth / 2), contentWidth - max_2));
+    let factsWidth =
+      min + max_2 > contentWidth && contentWidth < 2 * NARROW_TABLE_WIDTH
         ? 0
         : Math.min(
-            x,
-            Math.max(0, ...filtered_2.map((I) => bunStringWidth(fitBreadcrumb(metaTexts(I.props.meta), x)))),
+            factsBudget,
+            Math.max(
+              0,
+              ...filtered_2.map((item) =>
+                bunStringWidth(fitBreadcrumb(metaTexts(item.props.meta), factsBudget)),
+              ),
+            ),
           );
-    let nameWidth = Math.min(min, g - V);
-    k = Box;
-    ref = m;
+    let nameWidth = Math.min(min, contentWidth - factsWidth);
+    BoxComponent = Box;
+    ref = containerRef;
     flexDirection = "column";
-    T = merged;
-    M = a;
-    let b;
-    if (t[16] !== V || t[17] !== max || t[18] !== nameWidth || t[19] !== l) {
-      b = (K) =>
-        isOrderedListItem(K)
+    ListComponent = merged;
+    listProps = restProps;
+    let renderItem;
+    if ($[16] !== factsWidth || $[17] !== max || $[18] !== nameWidth || $[19] !== sharedRowLines) {
+      renderItem = (child) =>
+        isOrderedListItem(child)
           ? jsxProd_default(
               merged.Item,
               {
-                lines: cellText(K.props.description) ? 2 : 1,
+                lines: cellText(child.props.description) ? 2 : 1,
                 children: jsxProd_default(SelectTableRow, {
-                  item: K.props,
+                  item: child.props,
                   iconWidth: max,
                   nameWidth,
-                  factsWidth: V,
-                  rowLines: l,
+                  factsWidth,
+                  rowLines: sharedRowLines,
                 }),
               },
-              K.key,
+              child.key,
             )
-          : K;
-      t[16] = V;
-      t[17] = max;
-      t[18] = nameWidth;
-      t[19] = l;
-      t[20] = b;
-    } else b = t[20];
-    children = N.map(b);
-    t[6] = i;
-    t[7] = a;
-    t[8] = l;
-    t[9] = measured;
-    t[10] = T;
-    t[11] = k;
-    t[12] = M;
-    t[13] = children;
-    t[14] = ref;
-    t[15] = flexDirection;
+          : child;
+      $[16] = factsWidth;
+      $[17] = max;
+      $[18] = nameWidth;
+      $[19] = sharedRowLines;
+      $[20] = renderItem;
+    } else renderItem = $[20];
+    children_2 = childArray.map(renderItem);
+    $[6] = children;
+    $[7] = restProps;
+    $[8] = sharedRowLines;
+    $[9] = measured;
+    $[10] = ListComponent;
+    $[11] = BoxComponent;
+    $[12] = listProps;
+    $[13] = children_2;
+    $[14] = ref;
+    $[15] = flexDirection;
   } else {
-    T = t[10];
-    k = t[11];
-    M = t[12];
-    children = t[13];
-    ref = t[14];
-    flexDirection = t[15];
+    ListComponent = $[10];
+    BoxComponent = $[11];
+    listProps = $[12];
+    children_2 = $[13];
+    ref = $[14];
+    flexDirection = $[15];
   }
-  let children_2;
-  if (t[21] !== T || t[22] !== M || t[23] !== children) {
-    children_2 = jsxProd_default(T, {
-      ...M,
-      children,
-    });
-    t[21] = T;
-    t[22] = M;
-    t[23] = children;
-    t[24] = children_2;
-  } else children_2 = t[24];
-  let ee;
-  if (t[25] !== k || t[26] !== ref || t[27] !== flexDirection || t[28] !== children_2) {
-    ee = jsxProd_default(k, {
-      ref,
-      flexDirection,
+  let children_3;
+  if ($[21] !== ListComponent || $[22] !== listProps || $[23] !== children_2) {
+    children_3 = jsxProd_default(ListComponent, {
+      ...listProps,
       children: children_2,
     });
-    t[25] = k;
-    t[26] = ref;
-    t[27] = flexDirection;
-    t[28] = children_2;
-    t[29] = ee;
-  } else ee = t[29];
-  return ee;
+    $[21] = ListComponent;
+    $[22] = listProps;
+    $[23] = children_2;
+    $[24] = children_3;
+  } else children_3 = $[24];
+  let tableElement;
+  if ($[25] !== BoxComponent || $[26] !== ref || $[27] !== flexDirection || $[28] !== children_3) {
+    tableElement = jsxProd_default(BoxComponent, {
+      ref,
+      flexDirection,
+      children: children_3,
+    });
+    $[25] = BoxComponent;
+    $[26] = ref;
+    $[27] = flexDirection;
+    $[28] = children_3;
+    $[29] = tableElement;
+  } else tableElement = $[29];
+  return tableElement;
 }
 //@ chunk-r68xwcze.js:20797-22669 placement
 function SelectTableRow(props) {
-  let E = w(42);
+  let $ = useMemoCache(42);
   let { item, iconWidth, nameWidth, factsWidth, rowLines } = props;
-  let { icon, meta, ...h } = item;
-  let A = isMenuOpen();
+  let { icon, meta, ...restItem } = item;
+  let isMenuOpenFlag = isMenuOpen();
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let k = cellText(h.label);
-  let M = cellText(h.description);
-  let F;
-  let B;
+  let labelText = cellText(restItem.label);
+  let descriptionText = cellText(restItem.description);
+  let factsTextCached;
+  let readonlyResult;
   if (
-    E[0] !== M ||
-    E[1] !== factsWidth ||
-    E[2] !== icon ||
-    E[3] !== isScreenReaderEnabled ||
-    E[4] !== k ||
-    E[5] !== meta
+    $[0] !== descriptionText ||
+    $[1] !== factsWidth ||
+    $[2] !== icon ||
+    $[3] !== isScreenReaderEnabled ||
+    $[4] !== labelText ||
+    $[5] !== meta
   ) {
-    B = EARLY_RETURN_SENTINEL;
+    readonlyResult = EARLY_RETURN_SENTINEL;
     G: {
-      let N = metaTexts(meta);
+      let factsList = metaTexts(meta);
       if (isScreenReaderEnabled) {
-        const U = N.length > 0 && `, ${N.join(" \xB7 ")}`;
-        const W = M && `. ${M}`;
-        let L;
-        if (E[8] !== k || E[9] !== U || E[10] !== W) {
-          L = jsxProd_default_2(Text, {
-            children: [k, U, W],
+        const factsSuffix = factsList.length > 0 && `, ${factsList.join(" \xB7 ")}`;
+        const descriptionSuffix = descriptionText && `. ${descriptionText}`;
+        let srLabelElement;
+        if ($[8] !== labelText || $[9] !== factsSuffix || $[10] !== descriptionSuffix) {
+          srLabelElement = jsxProd_default_2(Text, {
+            children: [labelText, factsSuffix, descriptionSuffix],
           });
-          E[8] = k;
-          E[9] = U;
-          E[10] = W;
-          E[11] = L;
-        } else L = E[11];
-        let H;
-        if (E[12] !== icon || E[13] !== L) {
-          H = jsxProd_default_2(Box, {
-            children: [icon, L],
+          $[8] = labelText;
+          $[9] = factsSuffix;
+          $[10] = descriptionSuffix;
+          $[11] = srLabelElement;
+        } else srLabelElement = $[11];
+        let srRowElement;
+        if ($[12] !== icon || $[13] !== srLabelElement) {
+          srRowElement = jsxProd_default_2(Box, {
+            children: [icon, srLabelElement],
           });
-          E[12] = icon;
-          E[13] = L;
-          E[14] = H;
-        } else H = E[14];
-        B = H;
+          $[12] = icon;
+          $[13] = srLabelElement;
+          $[14] = srRowElement;
+        } else srRowElement = $[14];
+        readonlyResult = srRowElement;
         break G;
       }
-      F = factsWidth > 0 && N.length > 0 ? fitBreadcrumb(N, factsWidth) : undefined;
+      factsTextCached =
+        factsWidth > 0 && factsList.length > 0 ? fitBreadcrumb(factsList, factsWidth) : undefined;
     }
-    E[0] = M;
-    E[1] = factsWidth;
-    E[2] = icon;
-    E[3] = isScreenReaderEnabled;
-    E[4] = k;
-    E[5] = meta;
-    E[6] = F;
-    E[7] = B;
+    $[0] = descriptionText;
+    $[1] = factsWidth;
+    $[2] = icon;
+    $[3] = isScreenReaderEnabled;
+    $[4] = labelText;
+    $[5] = meta;
+    $[6] = factsTextCached;
+    $[7] = readonlyResult;
   } else {
-    F = E[6];
-    B = E[7];
+    factsTextCached = $[6];
+    readonlyResult = $[7];
   }
-  if (B !== EARLY_RETURN_SENTINEL) return B;
-  let g = F;
+  if (readonlyResult !== EARLY_RETURN_SENTINEL) return readonlyResult;
+  let factsText = factsTextCached;
   let ref;
-  if (E[15] !== rowLines) {
-    ref = (x) => {
-      if (!x) {
+  if ($[15] !== rowLines) {
+    ref = (node) => {
+      if (!node) {
         return;
       }
-      rowLines.add(x);
+      rowLines.add(node);
       return () => {
-        rowLines.delete(x);
+        rowLines.delete(node);
       };
     };
-    E[15] = rowLines;
-    E[16] = ref;
-  } else ref = E[16];
-  let W;
-  if (E[17] !== icon || E[18] !== iconWidth) {
-    W =
+    $[15] = rowLines;
+    $[16] = ref;
+  } else ref = $[16];
+  let iconElement;
+  if ($[17] !== icon || $[18] !== iconWidth) {
+    iconElement =
       iconWidth > 0 &&
       jsxProd_default(Box, {
         flexShrink: 0,
@@ -262,124 +276,128 @@ function SelectTableRow(props) {
         marginRight: 1,
         children: icon,
       });
-    E[17] = icon;
-    E[18] = iconWidth;
-    E[19] = W;
-  } else W = E[19];
-  const flexShrink = g === undefined ? 1 : 0;
-  const width = g === undefined ? undefined : nameWidth;
-  const marginRight = g === undefined ? 0 : TABLE_COLUMN_GAP;
-  const color = A ? "suggestion" : undefined;
+    $[17] = icon;
+    $[18] = iconWidth;
+    $[19] = iconElement;
+  } else iconElement = $[19];
+  const flexShrink = factsText === undefined ? 1 : 0;
+  const width = factsText === undefined ? undefined : nameWidth;
+  const marginRight = factsText === undefined ? 0 : TABLE_COLUMN_GAP;
+  const color = isMenuOpenFlag ? "suggestion" : undefined;
   let children;
-  if (E[20] !== k || E[21] !== color) {
+  if ($[20] !== labelText || $[21] !== color) {
     children = jsxProd_default(Text, {
       color,
       wrap: "truncate-end",
-      children: k,
+      children: labelText,
     });
-    E[20] = k;
-    E[21] = color;
-    E[22] = children;
-  } else children = E[22];
-  let b;
-  if (E[23] !== children || E[24] !== flexShrink || E[25] !== width || E[26] !== marginRight) {
-    b = jsxProd_default(Box, {
+    $[20] = labelText;
+    $[21] = color;
+    $[22] = children;
+  } else children = $[22];
+  let labelBox;
+  if ($[23] !== children || $[24] !== flexShrink || $[25] !== width || $[26] !== marginRight) {
+    labelBox = jsxProd_default(Box, {
       flexShrink,
       width,
       marginRight,
       children,
     });
-    E[23] = children;
-    E[24] = flexShrink;
-    E[25] = width;
-    E[26] = marginRight;
-    E[27] = b;
-  } else b = E[27];
-  let K;
-  if (E[28] !== factsWidth || E[29] !== g) {
-    K =
-      g !== undefined &&
+    $[23] = children;
+    $[24] = flexShrink;
+    $[25] = width;
+    $[26] = marginRight;
+    $[27] = labelBox;
+  } else labelBox = $[27];
+  let factsBox;
+  if ($[28] !== factsWidth || $[29] !== factsText) {
+    factsBox =
+      factsText !== undefined &&
       jsxProd_default(Box, {
         flexShrink: 1,
         maxWidth: factsWidth,
         children: jsxProd_default(Text, {
           dimColor: true,
           wrap: "truncate-end",
-          children: g,
+          children: factsText,
         }),
       });
-    E[28] = factsWidth;
-    E[29] = g;
-    E[30] = K;
-  } else K = E[30];
-  let ee;
-  if (E[31] !== b || E[32] !== K || E[33] !== ref || E[34] !== W) {
-    ee = jsxProd_default_2(Box, {
+    $[28] = factsWidth;
+    $[29] = factsText;
+    $[30] = factsBox;
+  } else factsBox = $[30];
+  let mainRow;
+  if ($[31] !== labelBox || $[32] !== factsBox || $[33] !== ref || $[34] !== iconElement) {
+    mainRow = jsxProd_default_2(Box, {
       ref,
-      children: [W, b, K],
+      children: [iconElement, labelBox, factsBox],
     });
-    E[31] = b;
-    E[32] = K;
-    E[33] = ref;
-    E[34] = W;
-    E[35] = ee;
-  } else ee = E[35];
-  let q;
-  if (E[36] !== M || E[37] !== iconWidth) {
-    q =
-      M &&
+    $[31] = labelBox;
+    $[32] = factsBox;
+    $[33] = ref;
+    $[34] = iconElement;
+    $[35] = mainRow;
+  } else mainRow = $[35];
+  let descriptionLine;
+  if ($[36] !== descriptionText || $[37] !== iconWidth) {
+    descriptionLine =
+      descriptionText &&
       jsxProd_default(Box, {
         paddingLeft: iconWidth > 0 ? iconWidth + 1 : 0,
         children: jsxProd_default(Text, {
           dimColor: true,
           wrap: "truncate-end",
-          children: M,
+          children: descriptionText,
         }),
       });
-    E[36] = M;
-    E[37] = iconWidth;
-    E[38] = q;
-  } else q = E[38];
-  let D;
-  if (E[39] !== ee || E[40] !== q) {
-    D = jsxProd_default_2(Box, {
+    $[36] = descriptionText;
+    $[37] = iconWidth;
+    $[38] = descriptionLine;
+  } else descriptionLine = $[38];
+  let rowElement;
+  if ($[39] !== mainRow || $[40] !== descriptionLine) {
+    rowElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       flexGrow: 1,
       flexShrink: 1,
-      children: [ee, q],
+      children: [mainRow, descriptionLine],
     });
-    E[39] = ee;
-    E[40] = q;
-    E[41] = D;
-  } else D = E[41];
-  return D;
+    $[39] = mainRow;
+    $[40] = descriptionLine;
+    $[41] = rowElement;
+  } else rowElement = $[41];
+  return rowElement;
 }
 //@ chunk-r68xwcze.js:22669-22696 placement
-function OrderedListItem(o) {
+function OrderedListItem(child) {
   return null;
 }
 //@ chunk-r68xwcze.js:22696-22737 placement
-function isOrderedListItem(o) {
-  return isValidElement_default(o) && o.type === OrderedListItem;
+function isOrderedListItem(child) {
+  return isValidElement_default(child) && child.type === OrderedListItem;
 }
 //@ chunk-r68xwcze.js:22737-22794 placement
 function metaTexts(meta) {
-  return (meta ?? []).map(cellText).filter((t) => t !== "");
+  return (meta ?? []).map(cellText).filter((text) => text !== "");
 }
 //@ chunk-r68xwcze.js:22794-22899 placement
-function fitBreadcrumb(o, t) {
+function fitBreadcrumb(segments, maxWidth) {
   return (
-    o.map((i, a) => o.slice(0, a + 1).join(" \xB7 ")).findLast((i, a) => a === 0 || bunStringWidth(i) <= t) ??
-    ""
+    segments
+      .map((segment, includedCount) => segments.slice(0, includedCount + 1).join(" \xB7 "))
+      .findLast((candidate, index) => index === 0 || bunStringWidth(candidate) <= maxWidth) ?? ""
   );
 }
 //@ chunk-r68xwcze.js:22899-23012 placement
-function cellText(o) {
-  if (typeof o === "string") return collapseWhitespace(o);
-  return typeof o === "number" || typeof o === "boolean" ? String(o) : "";
+function cellText(value) {
+  if (typeof value === "string") return collapseWhitespace(value);
+  return typeof value === "number" || typeof value === "boolean" ? String(value) : "";
 }
 //@ chunk-r68xwcze.js:23012-23047 placement
-var OrderedListWithItem = Object.assign(SelectTable, {
-  Item: OrderedListItem,
+var OrderedListWithItem; // deferred: uses SelectTable of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-r68xwcze.js:23012", () => {
+  OrderedListWithItem = Object.assign(SelectTable, {
+    Item: OrderedListItem,
+  });
 });
 export { OrderedListWithItem, cellText, isOrderedListItem, metaTexts };

@@ -31,15 +31,15 @@ function messageTurnAttributionKey(command) {
 /**
  * 规范化归属键（空值转 undefined）。
  */
-function attributionKeyOrUndefined(e) {
-  return normalizeUuidOrNull(e) ?? undefined;
+function attributionKeyOrUndefined(value) {
+  return normalizeUuidOrNull(value) ?? undefined;
 }
 //@ chunk-aepeg2w5.js:853455-853590 placement
 /**
  * 若消息中恰好有一条带回合归属键的非 meta 消息，返回其归属键。
  */
-function turnAttributionKeyOf(e) {
-  let filtered = e.filter((r) => r.turnAttributionKey !== undefined && !r.isMeta);
+function turnAttributionKeyOf(messages) {
+  let filtered = messages.filter((message) => message.turnAttributionKey !== undefined && !message.isMeta);
   return filtered.length === 1 ? attributionKeyOrUndefined(filtered[0]?.turnAttributionKey) : undefined;
 }
 export {

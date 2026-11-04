@@ -22,7 +22,7 @@ var compactCommandDefinition = {
   supportsNonInteractive: true,
   argumentHint: "<optional custom summarization instructions>",
   thinClientDispatch: "post-text",
-  load: () => import("./chunk-vrrvwm85.js"),
+  load: () => import("./call.lazy.js"),
 };
 var compactCommand = compactCommandDefinition;
 export { compactCommand };

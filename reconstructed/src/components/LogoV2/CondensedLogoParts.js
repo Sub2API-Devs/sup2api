@@ -10,13 +10,19 @@
  */
 import { CLAWD_BASE_WIDTH, AnimatedClawd } from "./AnimatedClawd.js";
 import { toRGBColor, parseRGB, interpolateColor } from "../Spinner/utils.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { usePrefersReducedMotion } from "../Spinner/spinnerFlags.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { useResolvedTheme, useTheme } from "../design-system/ThemeProvider.js";
 import { isLightTheme } from "../../utils/theme.js";
 import { useTerminalFocusState } from "../../ink/hooks/use-terminal-focus.js";
-import { R, Se, Uy, zt, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import {
+  useRef,
+  useContext,
+  useReducer,
+  useLayoutEffect,
+  init_react_production,
+} from "../../../vendor/react/cjs/react.production.js";
 import { TerminalSizeContext } from "../../ink/terminalModes.js";
 import { useTerminalViewport, fullRepaintInterval, useAnimationFrame } from "../../ink/components/Input.js";
 import { isBgSession } from "../../utils/concurrentSessions.js";
@@ -29,12 +35,13 @@ import {
   Fragment,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
-import { DIAGONAL, FOUR_POINTED_STAR } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { DIAGONAL, FOUR_POINTED_STAR } from "../../constants/figures.js";
 import { env } from "../../utils/env.js";
 import { isFullscreenEnvEnabled } from "../../utils/fullscreen.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { StatusIcon } from "../design-system/StatusIcon.js";
 import { describeMetaKey } from "../../ink/terminal.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ag5x7vhf.js:57348-57827 placement
 /**
@@ -131,8 +138,8 @@ var WAND_FLARE_FRAMES = 2;
 var WAND_COOLDOWN_FRAMES = 3;
 var WAND_WARMUP_FRAMES = 4;
 //@ chunk-ag5x7vhf.js:57827-57913 placement
-function plainWandColors(m) {
-  let { wood, gold } = m ? WAND_PALETTE_LIGHT : WAND_PALETTE_DARK;
+function plainWandColors(light) {
+  let { wood, gold } = light ? WAND_PALETTE_LIGHT : WAND_PALETTE_DARK;
   return {
     wand: toRGBColor(wood),
     flame: toRGBColor(gold),
@@ -143,22 +150,25 @@ function plainWandColors(m) {
 /**
  * 按时间生成一个 paint(列,行) 函数：以魔杖位置为圆心向外扩散的两道光波，按距离把底色与高光色插值（量化到若干级）。
  */
-function makeWandGlowPainter(m, h, x) {
-  let T = parseRGB(m, WHITE_RGB, (x ? WAND_PALETTE_LIGHT : WAND_PALETTE_DARK).crest);
-  let k = ((h % WAND_CYCLE_MS) / 1000) * GLOW_WAVE_SPEED;
-  return (_, I) => {
-    let D = Math.hypot(_ - WAND_GLOW_ORIGIN.column, 2 * (I - WAND_GLOW_ORIGIN.row));
-    let max = Math.max(glowFalloff(k - D), GLOW_ECHO.share * glowFalloff(k - GLOW_ECHO.behind - D));
-    return toRGBColor(parseRGB(m, T, Math.round(max * GLOW_LEVELS) / GLOW_LEVELS));
+function makeWandGlowPainter(ultraColor, frameMs, light) {
+  let base = parseRGB(ultraColor, WHITE_RGB, (light ? WAND_PALETTE_LIGHT : WAND_PALETTE_DARK).crest);
+  let phase = ((frameMs % WAND_CYCLE_MS) / 1000) * GLOW_WAVE_SPEED;
+  return (column, row) => {
+    let distance = Math.hypot(column - WAND_GLOW_ORIGIN.column, 2 * (row - WAND_GLOW_ORIGIN.row));
+    let max = Math.max(
+      glowFalloff(phase - distance),
+      GLOW_ECHO.share * glowFalloff(phase - GLOW_ECHO.behind - distance),
+    );
+    return toRGBColor(parseRGB(ultraColor, base, Math.round(max * GLOW_LEVELS) / GLOW_LEVELS));
   };
 }
 //@ chunk-ag5x7vhf.js:58122-58601 placement
 /**
  * 按动画时间算魔杖与火焰的颜色：周期开头闪亮、随后渐暗、周期末尾渐亮，其余时间火焰在 ember 与 gold 之间伪随机闪烁；返回 {wand, flame, isFlaring}。
  */
-function getWandColors(m, h) {
-  let { wood, woodLit, ember, gold, bright, flare } = h ? WAND_PALETTE_LIGHT : WAND_PALETTE_DARK;
-  let floored = Math.floor((m % WAND_CYCLE_MS) / WAND_FRAME_MS);
+function getWandColors(elapsedMs, light) {
+  let { wood, woodLit, ember, gold, bright, flare } = light ? WAND_PALETTE_LIGHT : WAND_PALETTE_DARK;
+  let floored = Math.floor((elapsedMs % WAND_CYCLE_MS) / WAND_FRAME_MS);
   if (floored < WAND_FLARE_FRAMES)
     return {
       wand: toRGBColor(woodLit),
@@ -166,36 +176,37 @@ function getWandColors(m, h) {
       isFlaring: true,
     };
   if (floored < WAND_FLARE_FRAMES + WAND_COOLDOWN_FRAMES) {
-    let W = (floored - WAND_FLARE_FRAMES + 1) / WAND_COOLDOWN_FRAMES;
+    let cooldownT = (floored - WAND_FLARE_FRAMES + 1) / WAND_COOLDOWN_FRAMES;
     return {
-      wand: toRGBColor(parseRGB(woodLit, wood, W)),
-      flame: toRGBColor(parseRGB(bright, gold, W)),
+      wand: toRGBColor(parseRGB(woodLit, wood, cooldownT)),
+      flame: toRGBColor(parseRGB(bright, gold, cooldownT)),
       isFlaring: false,
     };
   }
   if (floored >= WAND_CYCLE_FRAMES - WAND_WARMUP_FRAMES) {
-    let W = (floored - (WAND_CYCLE_FRAMES - WAND_WARMUP_FRAMES) + 1) / WAND_WARMUP_FRAMES;
+    let warmupT = (floored - (WAND_CYCLE_FRAMES - WAND_WARMUP_FRAMES) + 1) / WAND_WARMUP_FRAMES;
     return {
-      wand: toRGBColor(parseRGB(wood, woodLit, W / 2)),
-      flame: toRGBColor(parseRGB(gold, bright, W)),
+      wand: toRGBColor(parseRGB(wood, woodLit, warmupT / 2)),
+      flame: toRGBColor(parseRGB(gold, bright, warmupT)),
       isFlaring: false,
     };
   }
-  let floored_2 = Math.floor(m / WAND_FRAME_MS);
-  let V = Math.round((Math.abs(Math.sin(floored_2 * 12.9898) * 43758.5453) % 1) * GLOW_LEVELS) / GLOW_LEVELS;
+  let floored_2 = Math.floor(elapsedMs / WAND_FRAME_MS);
+  let emberT =
+    Math.round((Math.abs(Math.sin(floored_2 * 12.9898) * 43758.5453) % 1) * GLOW_LEVELS) / GLOW_LEVELS;
   return {
     wand: toRGBColor(wood),
-    flame: toRGBColor(parseRGB(ember, gold, V)),
+    flame: toRGBColor(parseRGB(ember, gold, emberT)),
     isFlaring: false,
   };
 }
 //@ chunk-ag5x7vhf.js:58601-58649 placement
-function glowFalloff(m) {
-  return Math.exp(m >= 0 ? -m / GLOW_TRAIL_WIDTH : m / GLOW_LEAD_WIDTH);
+function glowFalloff(delta) {
+  return Math.exp(delta >= 0 ? -delta / GLOW_TRAIL_WIDTH : delta / GLOW_LEAD_WIDTH);
 }
 //@ chunk-ag5x7vhf.js:58649-58677 placement
-function incrementCounter(tt) {
-  return tt + 1;
+function incrementCounter(count) {
+  return count + 1;
 }
 //@ chunk-ag5x7vhf.js:58677-58724 placement
 var CLAWD_DEFAULT_POSE = {
@@ -208,21 +219,21 @@ var CLAWD_DEFAULT_POSE = {
  * 精简版 Logo 的 Clawd 动画（含 effort ultra 的魔杖/火焰效果、全屏入场动画）。
  */
 function AnimatedClawdLogo(props) {
-  let Fe = w(21);
+  let $ = useMemoCache(21);
   let { fullscreen, entrance, ultra } = props;
   let prefersReducedMotion = usePrefersReducedMotion();
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let I = interpolateColor(useResolvedTheme().effortUltra);
-  let D = isLightTheme(useTheme()[0]);
+  let ultraColor = interpolateColor(useResolvedTheme().effortUltra);
+  let isLight = isLightTheme(useTheme()[0]);
   let terminalFocusState = useTerminalFocusState();
-  let terminalFocusStateRef = R(terminalFocusState);
-  let V = Se(TerminalSizeContext);
-  let columns = V?.columns;
-  let rows = V?.rows;
-  let [K, q, Y] = useTerminalViewport();
-  let { isVisible } = q;
-  let [, xe] = Uy(incrementCounter, 0);
-  let ge =
+  let terminalFocusStateRef = useRef(terminalFocusState);
+  let sizeContext = useContext(TerminalSizeContext);
+  let columns = sizeContext?.columns;
+  let rows = sizeContext?.rows;
+  let [setRef, viewport, isVisibleFn] = useTerminalViewport();
+  let { isVisible } = viewport;
+  let [, forceFrame] = useReducer(incrementCounter, 0);
+  let animating =
     ultra &&
     fullscreen &&
     fullRepaintInterval(WAND_FRAME_MS) === WAND_FRAME_MS &&
@@ -231,64 +242,64 @@ function AnimatedClawdLogo(props) {
     getTeammateAgentId() === undefined &&
     !prefersReducedMotion &&
     !isScreenReaderEnabled &&
-    I !== null &&
+    ultraColor !== null &&
     sequential.level >= 3 &&
     chalkForChart();
-  let [Re, We] = useAnimationFrame(ge ? WAND_FRAME_MS : null);
-  let fe = ge && isVisible;
-  let te;
-  if (Fe[0] !== ge || Fe[1] !== terminalFocusState || Fe[2] !== isVisible || Fe[3] !== Y) {
-    te = () => {
-      let me = terminalFocusStateRef.current !== terminalFocusState;
+  let [measureRef, frameMs] = useAnimationFrame(animating ? WAND_FRAME_MS : null);
+  let wandActive = animating && isVisible;
+  let repaintEffect;
+  if ($[0] !== animating || $[1] !== terminalFocusState || $[2] !== isVisible || $[3] !== isVisibleFn) {
+    repaintEffect = () => {
+      let focusChanged = terminalFocusStateRef.current !== terminalFocusState;
       terminalFocusStateRef.current = terminalFocusState;
-      if (ge && (me || Y() !== isVisible)) xe();
+      if (animating && (focusChanged || isVisibleFn() !== isVisible)) forceFrame();
     };
-    Fe[0] = ge;
-    Fe[1] = terminalFocusState;
-    Fe[2] = isVisible;
-    Fe[3] = Y;
-    Fe[4] = te;
-  } else te = Fe[4];
-  let se;
+    $[0] = animating;
+    $[1] = terminalFocusState;
+    $[2] = isVisible;
+    $[3] = isVisibleFn;
+    $[4] = repaintEffect;
+  } else repaintEffect = $[4];
+  let repaintDeps;
   if (
-    Fe[5] !== ge ||
-    Fe[6] !== columns ||
-    Fe[7] !== terminalFocusState ||
-    Fe[8] !== isVisible ||
-    Fe[9] !== Y ||
-    Fe[10] !== rows ||
-    Fe[11] !== We
+    $[5] !== animating ||
+    $[6] !== columns ||
+    $[7] !== terminalFocusState ||
+    $[8] !== isVisible ||
+    $[9] !== isVisibleFn ||
+    $[10] !== rows ||
+    $[11] !== frameMs
   ) {
-    se = [ge, terminalFocusState, isVisible, We, columns, rows, Y];
-    Fe[5] = ge;
-    Fe[6] = columns;
-    Fe[7] = terminalFocusState;
-    Fe[8] = isVisible;
-    Fe[9] = Y;
-    Fe[10] = rows;
-    Fe[11] = We;
-    Fe[12] = se;
-  } else se = Fe[12];
-  zt(te, se);
+    repaintDeps = [animating, terminalFocusState, isVisible, frameMs, columns, rows, isVisibleFn];
+    $[5] = animating;
+    $[6] = columns;
+    $[7] = terminalFocusState;
+    $[8] = isVisible;
+    $[9] = isVisibleFn;
+    $[10] = rows;
+    $[11] = frameMs;
+    $[12] = repaintDeps;
+  } else repaintDeps = $[12];
+  useLayoutEffect(repaintEffect, repaintDeps);
   if (isScreenReaderEnabled) {
     return null;
   }
   let color = ultra ? "effortUltra" : undefined;
-  let oe = jsxProd_default(WandGlyph, {
-    wand: fe ? getWandColors(We, D) : plainWandColors(D),
-    usesTerminalColors: I === null,
+  let wandGlyph = jsxProd_default(WandGlyph, {
+    wand: wandActive ? getWandColors(frameMs, isLight) : plainWandColors(isLight),
+    usesTerminalColors: ultraColor === null,
   });
-  const ve = Box;
+  const BoxComponent = Box;
   let ref;
-  if (Fe[13] !== Re || Fe[14] !== K) {
-    ref = (He) => {
-      Re(He);
-      K(He);
+  if ($[13] !== measureRef || $[14] !== setRef) {
+    ref = (node) => {
+      measureRef(node);
+      setRef(node);
     };
-    Fe[13] = Re;
-    Fe[14] = K;
-    Fe[15] = ref;
-  } else ref = Fe[15];
+    $[13] = measureRef;
+    $[14] = setRef;
+    $[15] = ref;
+  } else ref = $[15];
   const flexShrink = 0;
   const width = ultra ? CLAWD_BASE_WIDTH + HELD_POSE_WIDTH : CLAWD_BASE_WIDTH;
   const children = fullscreen
@@ -299,8 +310,11 @@ function AnimatedClawdLogo(props) {
         rest: ultra
           ? {
               pose: CLAWD_DEFAULT_POSE,
-              paint: fe && I !== null ? makeWandGlowPainter(I, We, D) : undefined,
-              held: oe,
+              paint:
+                wandActive && ultraColor !== null
+                  ? makeWandGlowPainter(ultraColor, frameMs, isLight)
+                  : undefined,
+              held: wandGlyph,
               heldWidth: HELD_POSE_WIDTH,
             }
           : undefined,
@@ -311,65 +325,65 @@ function AnimatedClawdLogo(props) {
             pose: ultra ? CLAWD_DEFAULT_POSE : "default",
             color,
           }),
-          ultra ? oe : null,
+          ultra ? wandGlyph : null,
         ],
       });
-  let ae;
-  if (Fe[16] !== ve || Fe[17] !== ref || Fe[18] !== width || Fe[19] !== children) {
-    ae = jsxProd_default(ve, {
+  let logo;
+  if ($[16] !== BoxComponent || $[17] !== ref || $[18] !== width || $[19] !== children) {
+    logo = jsxProd_default(BoxComponent, {
       ref,
       flexShrink,
       width,
       children,
     });
-    Fe[16] = ve;
-    Fe[17] = ref;
-    Fe[18] = width;
-    Fe[19] = children;
-    Fe[20] = ae;
-  } else ae = Fe[20];
-  return ae;
+    $[16] = BoxComponent;
+    $[17] = ref;
+    $[18] = width;
+    $[19] = children;
+    $[20] = logo;
+  } else logo = $[20];
+  return logo;
 }
 //@ chunk-ag5x7vhf.js:60079-60496 placement
 /**
  * 渲染魔杖"╱✦"两个字符，颜色来自 getWandColors；终端配色模式下统一用 warning 色。
  */
 function WandGlyph(props) {
-  let k = w(8);
+  let $ = useMemoCache(8);
   let { wand, usesTerminalColors } = props;
   const color = usesTerminalColors ? "warning" : wand.wand;
-  let _;
-  if (k[0] !== color) {
-    _ = jsxProd_default(Text, {
+  let wandText;
+  if ($[0] !== color) {
+    wandText = jsxProd_default(Text, {
       color,
       bold: true,
       children: DIAGONAL,
     });
-    k[0] = color;
-    k[1] = _;
-  } else _ = k[1];
+    $[0] = color;
+    $[1] = wandText;
+  } else wandText = $[1];
   const color_2 = usesTerminalColors ? "warning" : wand.flame;
-  let D;
-  if (k[2] !== color_2 || k[3] !== wand.isFlaring) {
-    D = jsxProd_default(Text, {
+  let flameText;
+  if ($[2] !== color_2 || $[3] !== wand.isFlaring) {
+    flameText = jsxProd_default(Text, {
       color: color_2,
       bold: wand.isFlaring,
       children: FOUR_POINTED_STAR,
     });
-    k[2] = color_2;
-    k[3] = wand.isFlaring;
-    k[4] = D;
-  } else D = k[4];
-  let A;
-  if (k[5] !== _ || k[6] !== D) {
-    A = jsxProd_default_2(Text, {
-      children: [_, D],
+    $[2] = color_2;
+    $[3] = wand.isFlaring;
+    $[4] = flameText;
+  } else flameText = $[4];
+  let glyph;
+  if ($[5] !== wandText || $[6] !== flameText) {
+    glyph = jsxProd_default_2(Text, {
+      children: [wandText, flameText],
     });
-    k[5] = _;
-    k[6] = D;
-    k[7] = A;
-  } else A = k[7];
-  return A;
+    $[5] = wandText;
+    $[6] = flameText;
+    $[7] = glyph;
+  } else glyph = $[7];
+  return glyph;
 }
 //@ chunk-ag5x7vhf.js:60496-60645 placement
 function justSwitchedRenderer() {
@@ -387,15 +401,15 @@ function justSwitchedRenderer() {
  * 刚切换渲染器（CLAUDE_CODE_TUI_JUST_SWITCHED）后的提示：全屏"flicker-free rendering"使用说明或回退说明。
  */
 function RendererSwitchNotice() {
-  let m = w(6);
+  let $ = useMemoCache(6);
   switch (justSwitchedRenderer()) {
     case "fullscreen": {
-      let h;
-      let x;
-      let T;
-      let k;
-      if (m[0] === MEMO_CACHE_SENTINEL) {
-        h = jsxProd_default_2(Text, {
+      let titleRow;
+      let cursorRow;
+      let expandRow;
+      let copyRow;
+      if ($[0] === MEMO_CACHE_SENTINEL) {
+        titleRow = jsxProd_default_2(Text, {
           children: [
             jsxProd_default(StatusIcon, {
               status: "success",
@@ -411,37 +425,37 @@ function RendererSwitchNotice() {
             }),
           ],
         });
-        x = jsxProd_default_2(Text, {
+        cursorRow = jsxProd_default_2(Text, {
           dimColor: true,
           children: ["  ", "\xB7 Click to move your cursor in the text input"],
         });
-        T = jsxProd_default_2(Text, {
+        expandRow = jsxProd_default_2(Text, {
           dimColor: true,
           children: ["  ", "\xB7 Click to expand collapsed tool results"],
         });
-        k = jsxProd_default_2(Text, {
+        copyRow = jsxProd_default_2(Text, {
           dimColor: true,
           children: ["  ", "\xB7 By default, text auto-copies when you select it (/config to change)"],
         });
-        m[0] = h;
-        m[1] = x;
-        m[2] = T;
-        m[3] = k;
+        $[0] = titleRow;
+        $[1] = cursorRow;
+        $[2] = expandRow;
+        $[3] = copyRow;
       } else {
-        h = m[0];
-        x = m[1];
-        T = m[2];
-        k = m[3];
+        titleRow = $[0];
+        cursorRow = $[1];
+        expandRow = $[2];
+        copyRow = $[3];
       }
-      let _;
-      if (m[4] === MEMO_CACHE_SENTINEL) {
-        _ = jsxProd_default_2(Box, {
+      let fullscreenNotice;
+      if ($[4] === MEMO_CACHE_SENTINEL) {
+        fullscreenNotice = jsxProd_default_2(Box, {
           flexDirection: "column",
           children: [
-            h,
-            x,
-            T,
-            k,
+            titleRow,
+            cursorRow,
+            expandRow,
+            copyRow,
             jsxProd_default_2(Text, {
               dimColor: true,
               children: [
@@ -453,20 +467,20 @@ function RendererSwitchNotice() {
             }),
           ],
         });
-        m[4] = _;
-      } else _ = m[4];
-      return _;
+        $[4] = fullscreenNotice;
+      } else fullscreenNotice = $[4];
+      return fullscreenNotice;
     }
     case "default": {
-      let h;
-      if (m[5] === MEMO_CACHE_SENTINEL) {
-        h = jsxProd_default(Text, {
+      let defaultNotice;
+      if ($[5] === MEMO_CACHE_SENTINEL) {
+        defaultNotice = jsxProd_default(Text, {
           dimColor: true,
           children: "Switched back to the classic renderer",
         });
-        m[5] = h;
-      } else h = m[5];
-      return h;
+        $[5] = defaultNotice;
+      } else defaultNotice = $[5];
+      return defaultNotice;
     }
     default: {
       return null;
@@ -474,5 +488,8 @@ function RendererSwitchNotice() {
   }
 }
 //@ chunk-ag5x7vhf.js:61634-61638 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:61634", () => {
+  init_react_production();
+});
 export { justSwitchedRenderer, AnimatedClawdLogo, RendererSwitchNotice };

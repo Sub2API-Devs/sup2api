@@ -10,9 +10,9 @@
  */
 
 //@ chunk-75vetdac.js:191-323 placement
-function typeReference(r, inlinedByCreate, printed, readByKit = false, needsDesignSystem = false) {
+function typeReference(typeSlug, inlinedByCreate, printed, readByKit = false, needsDesignSystem = false) {
   return {
-    path: `artifact-type/reference/${r}`,
+    path: `artifact-type/reference/${typeSlug}`,
     inlinedByCreate,
     printed,
     readByKit,
@@ -60,35 +60,37 @@ var DEFAULT_TYPE_REFERENCES = [
 /**
  * 按 artifact 类型取参考文件清单，并按“创建时内联/需要设计系统/打印/kit 读取”筛选的四个辅助函数。
  */
-function typeReferencesFor(r) {
-  return (r === undefined ? undefined : ARTIFACT_TYPE_REFERENCES.get(r)) ?? DEFAULT_TYPE_REFERENCES;
+function typeReferencesFor(typeSlug) {
+  return (
+    (typeSlug === undefined ? undefined : ARTIFACT_TYPE_REFERENCES.get(typeSlug)) ?? DEFAULT_TYPE_REFERENCES
+  );
 }
 //@ chunk-75vetdac.js:774-850 placement
 /**
  * 导出函数 `inlinedByCreatePaths`：参数 r，返回 n(r) .filter((e) => e.inlinedByCreate) .map((e) => e.path)。
  */
-function inlinedByCreatePaths(r) {
-  return typeReferencesFor(r)
-    .filter((e) => e.inlinedByCreate)
-    .map((e) => e.path);
+function inlinedByCreatePaths(types) {
+  return typeReferencesFor(types)
+    .filter((reference) => reference.inlinedByCreate)
+    .map((reference) => reference.path);
 }
 //@ chunk-75vetdac.js:850-947 placement
 /**
  * 导出函数 `inlinedByCreateDesignPaths`：参数 r，返回 n(r) .filter((e) => e.inlinedByCreate && e.needsDesignSystem) .map((e) => e.path)。
  */
-function inlinedByCreateDesignPaths(r) {
-  return typeReferencesFor(r)
-    .filter((e) => e.inlinedByCreate && e.needsDesignSystem)
-    .map((e) => e.path);
+function inlinedByCreateDesignPaths(types) {
+  return typeReferencesFor(types)
+    .filter((reference) => reference.inlinedByCreate && reference.needsDesignSystem)
+    .map((reference) => reference.path);
 }
 //@ chunk-75vetdac.js:947-1015 placement
 /**
  * 导出函数 `printedTypePaths`：参数 r，返回 n(r) .filter((e) => e.printed) .map((e) => e.path)。
  */
-function printedTypePaths(r) {
-  return typeReferencesFor(r)
-    .filter((e) => e.printed)
-    .map((e) => e.path);
+function printedTypePaths(types) {
+  return typeReferencesFor(types)
+    .filter((reference) => reference.printed)
+    .map((reference) => reference.path);
 }
 //@ chunk-75vetdac.js:1015-1085 placement
 /**
@@ -96,8 +98,8 @@ function printedTypePaths(r) {
  */
 function kitReadTypePaths(typeKey) {
   return typeReferencesFor(typeKey)
-    .filter((e) => e.readByKit)
-    .map((e) => e.path);
+    .filter((reference) => reference.readByKit)
+    .map((reference) => reference.path);
 }
 export {
   printedTypePaths,

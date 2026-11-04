@@ -17,16 +17,21 @@ import {
 //@ chunk-18hwfzwa.js:1756430-1756892 fingerprint = useAutoModeUnavailableNotification (0.739)
 var useAutoModeUnavailableNotification = {
   id: "auto-mode-unavailable",
-  deps: (h) => [h.permissionMode, h.isAutoModeAvailable, h.addNotification, h.store],
+  deps: (noticeState) => [
+    noticeState.permissionMode,
+    noticeState.isAutoModeAvailable,
+    noticeState.addNotification,
+    noticeState.store,
+  ],
   setup() {
-    let h = false;
-    let x;
+    let hasNotified = false;
+    let previousMode;
     return ({ addNotification, store, permissionMode, isAutoModeAvailable }) => {
-      if (x === undefined) x = permissionMode;
-      let prevMode = x;
-      x = permissionMode;
+      if (previousMode === undefined) previousMode = permissionMode;
+      let prevMode = previousMode;
+      previousMode = permissionMode;
       if (getIsRemoteMode()) return;
-      if (h) return;
+      if (hasNotified) return;
       if (!(
         permissionMode === "default" &&
         prevMode !== "default" &&
@@ -36,7 +41,7 @@ var useAutoModeUnavailableNotification = {
         return;
       let reason = getAutoModeUnavailableReason();
       if (!reason) return;
-      h = true;
+      hasNotified = true;
       addNotification({
         key: "auto-mode-unavailable",
         kind: "feedback",

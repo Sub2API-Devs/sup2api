@@ -15,7 +15,7 @@ import { REPO_DIR_SETTING_SOURCES, isSettingSourceEnabled } from "../../utils/se
 import { sanitizeAnsiText } from "../../utils/stripAnsi.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { union, array, unknown, u } from "../../../vendor/zod/v4/classic/schemas.js";
+import { union, array, unknown, objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { getPlatform } from "../../utils/platform.js";
 import { logFeatureBad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -28,29 +28,45 @@ import { getRemoteManagedSettingsSyncFromCache } from "../remoteManagedSettings/
 import { isUncOrDeviceSpelling } from "../../utils/fsJunctions.js";
 import { expandPath } from "../../utils/path.js";
 import { getSettingsForSource } from "../../utils/settings/settings.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-70qr4vka.js:863-1173 placement
 /**
  * Spinner 提示覆盖的常量：提示前缀、长度/条数/文件大小上限、可信设置来源、可重试 errno 与不可见字符集。
  */
-var ORG_TIP = "org-tip:";
-var CUSTOM_TIP = "custom-tip-";
-var MAX_TIP_CHARS = 500;
-var MAX_CUSTOM_TIPS = 200;
-var MAX_TIPS_FILE_BYTES = 262144;
-var TIP_ID_REGEX = "Tip";
-var MAX_TIP_LABEL_CHARS = /^[A-Za-z0-9._-]{1,64}$/;
-var TRUSTED_OVERRIDE_SOURCES = 40;
-var REPO_OVERRIDE_SOURCES = ["policySettings", "flagSettings", "userSettings"];
-var RETRYABLE_TIPS_FILE_ERRNOS = [...REPO_DIR_SETTING_SOURCES];
-var ORG_TIP_FILE = "org-tip:file:";
-var INVISIBLE_CHARS_REGEX = new Set(["EAGAIN", "EBUSY", "EINTR", "EIO", "EMFILE", "ENFILE"]);
-var TIP_MAX_NOTE_CHARS = /[\p{Cc}\p{Cf}\u2028\u2029\u180e\ufe00-\ufe0f\u{e0100}-\u{e01ef}]/gu;
+var ORG_TIP; // deferred: uses EDITABLE_SETTING_SOURCES (../../utils/settings/constants.js) of its import cycle while loading; runs once the cycle is complete
+var CUSTOM_TIP;
+var MAX_TIP_CHARS;
+var MAX_CUSTOM_TIPS;
+var MAX_TIPS_FILE_BYTES;
+var TIP_ID_REGEX;
+var TIP_ID_RE;
+var MAX_LABEL_CHARS;
+var REPO_OVERRIDE_SOURCES;
+var RETRYABLE_TIPS_FILE_ERRNOS;
+var DEFAULT_TIP_LABEL;
+var RETRYABLE_ERRNOS;
+var NOTE_INVISIBLE_CHARS_RE;
+deferInit("chunk-70qr4vka.js:863", () => {
+  ORG_TIP = "org-tip:";
+  CUSTOM_TIP = "custom-tip-";
+  MAX_TIP_CHARS = 500;
+  MAX_CUSTOM_TIPS = 200;
+  MAX_TIPS_FILE_BYTES = 262144;
+  TIP_ID_REGEX = "Tip";
+  TIP_ID_RE = /^[A-Za-z0-9._-]{1,64}$/;
+  MAX_LABEL_CHARS = 40;
+  REPO_OVERRIDE_SOURCES = ["policySettings", "flagSettings", "userSettings"];
+  RETRYABLE_TIPS_FILE_ERRNOS = [...REPO_DIR_SETTING_SOURCES];
+  DEFAULT_TIP_LABEL = "org-tip:file:";
+  RETRYABLE_ERRNOS = new Set(["EAGAIN", "EBUSY", "EINTR", "EIO", "EMFILE", "ENFILE"]);
+  NOTE_INVISIBLE_CHARS_RE = /[\p{Cc}\p{Cf}\u2028\u2029\u180e\ufe00-\ufe0f\u{e0100}-\u{e01ef}]/gu;
+});
 //@ chunk-70qr4vka.js:1173-1282 placement
-function sanitizeTipText(e) {
-  return sanitizeAnsiText(e)
+function sanitizeTipText(text) {
+  return sanitizeAnsiText(text)
     .replace(/[\t\n\r\u2028\u2029]+/g, " ")
-    .replace(TIP_MAX_NOTE_CHARS, "")
+    .replace(NOTE_INVISIBLE_CHARS_RE, "")
     .replace(/ {2,}/g, " ")
     .trim();
 }
@@ -58,32 +74,35 @@ function sanitizeTipText(e) {
 /**
  * 规范化提示标签：清掉不可见字符、截断到上限，空则回退为 Tip。
  */
-function tipLabel(override) {
-  if (override === undefined) return TIP_ID_REGEX;
-  let i = truncateToLength(sanitizeTipText(override), TRUSTED_OVERRIDE_SOURCES);
-  return i === "" ? TIP_ID_REGEX : i;
+function tipLabel(text) {
+  if (text === undefined) return TIP_ID_REGEX;
+  let label = truncateToLength(sanitizeTipText(text), MAX_LABEL_CHARS);
+  return label === "" ? TIP_ID_REGEX : label;
 }
 //@ chunk-70qr4vka.js:1354-1422 placement
 /**
  * 提示文件内容 schema：纯数组，或对象里的 tips 数组。
  */
-var tipsFileSchema = DoctorLazy(() =>
-  union([
-    array(unknown()),
-    u({
-      tips: array(unknown()),
-    }).transform((e) => e.tips),
-  ]),
-);
+var tipsFileSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-70qr4vka.js:1354", () => {
+  tipsFileSchema = DoctorLazy(() =>
+    union([
+      array(unknown()),
+      objectSchema({
+        tips: array(unknown()),
+      }).transform((parsed) => parsed.tips),
+    ]),
+  );
+});
 //@ chunk-70qr4vka.js:1422-2844 placement
 /**
  * 读取组织提示文件（spinnerTipsOverride.tipsFile）：不跟随链接打开，要求普通文件且不超过大小上限，解析为提示数组（或 {tips:[…]}）；各种失败打点并返回空列表，可重试的错误标记 transient。
  */
 async function readTipsFile(path) {
   try {
-    let i = getPlatform() === "windows" ? 0 : constants.O_NOFOLLOW | constants.O_NONBLOCK;
-    let handle = await open(await realpath(path), constants.O_RDONLY | i);
-    let n;
+    let extraFlags = getPlatform() === "windows" ? 0 : constants.O_NOFOLLOW | constants.O_NONBLOCK;
+    let handle = await open(await realpath(path), constants.O_RDONLY | extraFlags);
+    let content;
     try {
       let stats = await handle.stat();
       if (!stats.isFile()) {
@@ -118,13 +137,13 @@ async function readTipsFile(path) {
           transient: false,
         };
       }
-      n = stripBom(buffer.toString("utf8", 0, bytesRead));
+      content = stripBom(buffer.toString("utf8", 0, bytesRead));
     } finally {
       await handle.close();
     }
-    let l = tipsFileSchema().safeParse(jsonParse(n));
-    let d = l.success ? skillsSettingsSchema().parse(l.data) : undefined;
-    if (d === undefined) {
+    let parsed = tipsFileSchema().safeParse(jsonParse(content));
+    let entries = parsed.success ? skillsSettingsSchema().parse(parsed.data) : undefined;
+    if (entries === undefined) {
       logFeatureBad("tips_org_tips_file_load", "wrong_shape");
       logForDebugging(
         `spinnerTipsOverride.tipsFile ${path} must be a JSON array of tips (or {"tips": [...]}); ignoring it`,
@@ -139,19 +158,19 @@ async function readTipsFile(path) {
     }
     logFeatureOk("tips_org_tips_file_load");
     return {
-      entries: d,
+      entries,
       transient: false,
     };
   } catch (error) {
     let errnoCode = getErrnoCode(error);
-    let n = isENOENT(error)
+    let failureCode = isENOENT(error)
       ? "not_found"
       : errnoCode === "ELOOP" || errnoCode === "EISDIR"
         ? "not_regular_file"
         : error instanceof SyntaxError
           ? "parse_failed"
           : "read_failed";
-    logFeatureBad("tips_org_tips_file_load", n);
+    logFeatureBad("tips_org_tips_file_load", failureCode);
     logForDebugging(
       isENOENT(error)
         ? `spinnerTipsOverride.tipsFile ${path} does not exist; no file tips loaded`
@@ -162,7 +181,7 @@ async function readTipsFile(path) {
     );
     return {
       entries: [],
-      transient: errnoCode !== undefined && INVISIBLE_CHARS_REGEX.has(errnoCode),
+      transient: errnoCode !== undefined && RETRYABLE_ERRNOS.has(errnoCode),
     };
   }
 }
@@ -173,18 +192,21 @@ class TipsFileCache {
     return this.#e.size;
   }
   read(path) {
-    let i = this.#e.get(path);
-    if (i) return i;
-    let r = readTipsFile(path).then((tipsFile) => {
+    let cached = this.#e.get(path);
+    if (cached) return cached;
+    let pending = readTipsFile(path).then((tipsFile) => {
       if (tipsFile.transient) this.#e.delete(path);
       return tipsFile;
     });
-    this.#e.set(path, r);
-    return r;
+    this.#e.set(path, pending);
+    return pending;
   }
 }
 //@ chunk-70qr4vka.js:3030-3054 placement
-var tipsFileCacheSlots = new HostScoped(() => new TipsFileCache());
+var tipsFileCacheSlots; // deferred: uses TipsFileCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-70qr4vka.js:3030", () => {
+  tipsFileCacheSlots = new HostScoped(() => new TipsFileCache());
+});
 //@ chunk-70qr4vka.js:3054-3284 placement
 function isRemoteTipsFileIgnored() {
   if (getRemoteManagedSettingsSyncFromCache()?.spinnerTipsOverride?.tipsFile) {
@@ -202,15 +224,18 @@ function isRemoteTipsFileIgnored() {
 /**
  * 校验提示文件路径：必须是绝对路径或 ~/ 路径，不能是网络（UNC）路径；展开后返回，无效时写警告并返回 undefined。
  */
-function resolveTipsFilePath(e) {
-  if (!e) return;
-  if (!isAbsolute(e) && e !== "~" && !e.startsWith("~/")) {
-    logForDebugging(`spinnerTipsOverride.tipsFile must be an absolute or ~/ path (got "${e}"); ignoring it`, {
-      level: "warn",
-    });
+function resolveTipsFilePath(rawPath) {
+  if (!rawPath) return;
+  if (!isAbsolute(rawPath) && rawPath !== "~" && !rawPath.startsWith("~/")) {
+    logForDebugging(
+      `spinnerTipsOverride.tipsFile must be an absolute or ~/ path (got "${rawPath}"); ignoring it`,
+      {
+        level: "warn",
+      },
+    );
     return;
   }
-  if (isUncOrDeviceSpelling(e)) {
+  if (isUncOrDeviceSpelling(rawPath)) {
     logForDebugging(
       "spinnerTipsOverride.tipsFile must be a local path, not a network (UNC) path; ignoring it",
       {
@@ -220,46 +245,49 @@ function resolveTipsFilePath(e) {
     return;
   }
   try {
-    let i = expandPath(e);
-    return isUncOrDeviceSpelling(i) ? undefined : i;
+    let expandedPath = expandPath(rawPath);
+    return isUncOrDeviceSpelling(expandedPath) ? undefined : expandedPath;
   } catch (error) {
-    logForDebugging(`spinnerTipsOverride.tipsFile "${e}" is not a usable path: ${toError(error).message}`, {
-      level: "warn",
-    });
+    logForDebugging(
+      `spinnerTipsOverride.tipsFile "${rawPath}" is not a usable path: ${toError(error).message}`,
+      {
+        level: "warn",
+      },
+    );
     return;
   }
 }
 //@ chunk-70qr4vka.js:3740-3875 placement
-function collectTipOverrides(e) {
-  let i = [];
-  for (let r of e) {
-    if (!isSettingSourceEnabled(r)) continue;
-    let spinnerTipsOverride = getSettingsForSource(r)?.spinnerTipsOverride;
+function collectTipOverrides(sources) {
+  let overrides = [];
+  for (let source of sources) {
+    if (!isSettingSourceEnabled(source)) continue;
+    let spinnerTipsOverride = getSettingsForSource(source)?.spinnerTipsOverride;
     if (spinnerTipsOverride)
-      i.push({
-        source: r,
+      overrides.push({
+        source,
         override: spinnerTipsOverride,
       });
   }
-  return i;
+  return overrides;
 }
 //@ chunk-70qr4vka.js:3875-3947 placement
 /**
  * 在若干设置层里查找某个覆盖键的值。
  */
-function findOverride(e, i) {
-  return e.find((r) => r.override[i] !== undefined)?.override[i];
+function findOverride(overrides, key) {
+  return overrides.find((override) => override.override[key] !== undefined)?.override[key];
 }
 //@ chunk-70qr4vka.js:3947-4099 placement
 /**
  * 判断受信设置是否要求排除默认提示，且确实提供了自定义提示（文件或内联）。
  */
 function excludesDefaultTips() {
-  let tipOverrides = collectTipOverrides(REPO_OVERRIDE_SOURCES);
-  if (findOverride(tipOverrides, "excludeDefault") !== true) return false;
+  let overrides = collectTipOverrides(REPO_OVERRIDE_SOURCES);
+  if (findOverride(overrides, "excludeDefault") !== true) return false;
   return (
-    tipOverrides.some((tipOverride) => !!tipOverride.override.tipsFile) ||
-    tipOverrides.some((tipOverride) => (tipOverride.override.tips?.length ?? 0) > 0)
+    overrides.some((overrideEntry) => !!overrideEntry.override.tipsFile) ||
+    overrides.some((overrideEntry) => (overrideEntry.override.tips?.length ?? 0) > 0)
   );
 }
 //@ chunk-70qr4vka.js:4099-5493 placement
@@ -289,51 +317,55 @@ async function loadCustomTips(session) {
         },
       );
   let entries = tipsFilePath ? (await tipsFileCacheSlots.of(session).read(tipsFilePath)).entries : [];
-  let _ = new Set();
+  let seenIds = new Set();
   let tips = [];
-  let addTip = (s, o, cooldownSessions, priority, label) => {
+  let addTip = (id, text, cooldownSessions, priority, label) => {
     if (tips.length >= MAX_CUSTOM_TIPS) return;
-    let h = sanitizeTipText(o);
-    if (h === "") {
-      logForDebugging(`spinnerTipsOverride: tip "${s}" is empty after sanitizing; dropped`, {
+    let cleanText = sanitizeTipText(text);
+    if (cleanText === "") {
+      logForDebugging(`spinnerTipsOverride: tip "${id}" is empty after sanitizing; dropped`, {
         level: "warn",
       });
       return;
     }
-    if (h.length > MAX_TIP_CHARS) {
-      logForDebugging(`spinnerTipsOverride: tip "${s}" is longer than ${MAX_TIP_CHARS} characters; dropped`, {
+    if (cleanText.length > MAX_TIP_CHARS) {
+      logForDebugging(
+        `spinnerTipsOverride: tip "${id}" is longer than ${MAX_TIP_CHARS} characters; dropped`,
+        {
+          level: "warn",
+        },
+      );
+      return;
+    }
+    if (seenIds.has(id)) {
+      logForDebugging(`spinnerTipsOverride: duplicate tip id "${id}"; keeping the first`, {
         level: "warn",
       });
       return;
     }
-    if (_.has(s)) {
-      logForDebugging(`spinnerTipsOverride: duplicate tip id "${s}"; keeping the first`, {
-        level: "warn",
-      });
-      return;
-    }
-    _.add(s);
+    seenIds.add(id);
     tips.push({
-      id: s,
+      id,
       label,
-      content: async () => h,
+      content: async () => cleanText,
       cooldownSessions,
       priority,
       isRelevant: async () => true,
       providerAgnostic: true,
     });
   };
-  let R = 0;
+  let tipCounter = 0;
   for (let { source: source_2, override } of trustedOverrides) {
-    for (let a of override.tips ?? []) addTipEntry(a, `${CUSTOM_TIP}${R++}`, label, addTip);
+    for (let tipEntry of override.tips ?? [])
+      addTipEntry(tipEntry, `${CUSTOM_TIP}${tipCounter++}`, label, addTip);
     if (source_2 === source)
-      entries.forEach((entry, T) => addTipEntry(entry, `${ORG_TIP_FILE}${T}`, label, addTip));
+      entries.forEach((entry, index) => addTipEntry(entry, `${DEFAULT_TIP_LABEL}${index}`, label, addTip));
   }
   let trustedCount = tips.length;
   for (let { source, override } of projectOverrides)
-    for (let a of override.tips ?? []) {
-      let T = `${CUSTOM_TIP}${R++}`;
-      if (typeof a === "string") addTipEntry(a, T, TIP_ID_REGEX, addTip);
+    for (let tipEntry of override.tips ?? []) {
+      let tipId = `${CUSTOM_TIP}${tipCounter++}`;
+      if (typeof tipEntry === "string") addTipEntry(tipEntry, tipId, TIP_ID_REGEX, addTip);
       else
         logForDebugging(
           `spinnerTipsOverride: object tip entries in ${source} are ignored; only plain strings are read from project settings`,
@@ -351,18 +383,18 @@ async function loadCustomTips(session) {
 /**
  * 解析一条提示配置：字符串直接加入；对象需有 text 与合法 id，冷却次数与优先级取整并限制范围后加入。
  */
-function addTipEntry(e, i, label, addTip) {
-  if (typeof e === "string") {
-    addTip(i, e, 0, 0, label);
+function addTipEntry(entry, tipId, label, addTip) {
+  if (typeof entry === "string") {
+    addTip(tipId, entry, 0, 0, label);
     return;
   }
-  if (typeof e.text !== "string") {
+  if (typeof entry.text !== "string") {
     logForDebugging('spinnerTipsOverride: tip object without a "text" string; dropped', {
       level: "warn",
     });
     return;
   }
-  if (typeof e.id !== "string" || !MAX_TIP_LABEL_CHARS.test(e.id)) {
+  if (typeof entry.id !== "string" || !TIP_ID_RE.test(entry.id)) {
     logForDebugging(
       'spinnerTipsOverride: tip object needs an "id" of 1-64 letters, digits, ".", "_" or "-"; dropped',
       {
@@ -371,14 +403,16 @@ function addTipEntry(e, i, label, addTip) {
     );
     return;
   }
-  let l =
-    typeof e.cooldownSessions === "number" && Number.isInteger(e.cooldownSessions) && e.cooldownSessions >= 0
-      ? Math.min(e.cooldownSessions, 1000)
+  let cooldownSessions =
+    typeof entry.cooldownSessions === "number" &&
+    Number.isInteger(entry.cooldownSessions) &&
+    entry.cooldownSessions >= 0
+      ? Math.min(entry.cooldownSessions, 1000)
       : 0;
-  let d =
-    typeof e.priority === "number" && Number.isFinite(e.priority)
-      ? Math.max(-10, Math.min(10, Math.trunc(e.priority)))
+  let priority =
+    typeof entry.priority === "number" && Number.isFinite(entry.priority)
+      ? Math.max(-10, Math.min(10, Math.trunc(entry.priority)))
       : 0;
-  addTip(`${ORG_TIP}${e.id}`, e.text, l, d, label);
+  addTip(`${ORG_TIP}${entry.id}`, entry.text, cooldownSessions, priority, label);
 }
 export { loadCustomTips, excludesDefaultTips, ORG_TIP, CUSTOM_TIP };

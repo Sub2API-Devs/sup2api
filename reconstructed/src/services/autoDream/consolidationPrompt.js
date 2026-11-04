@@ -30,17 +30,24 @@ A \`feedback\` memory's "Why: the user corrected me" framing is not evidence it'
 /**
  * dream 整理提示：合并重复、删除过时、与 CLAUDE.md 对齐、可选团队记忆段。
  */
-function buildConsolidationPrompt(autoMemPath, transcriptDir, extra, y = false, p = false, s = false) {
+function buildConsolidationPrompt(
+  autoMemDir,
+  transcriptDir,
+  extra,
+  includeTeamMemorySection = false,
+  memoryToolsUnavailable = false,
+  unusedFlag = false,
+) {
   return `# Dream: Memory Consolidation
 
 You are performing a dream \u2014 a reflective pass over your memory files. Synthesize what you've learned recently into durable, well-organized memories so that future sessions can orient quickly.
 
-Memory directory: \`${autoMemPath}\`
+Memory directory: \`${autoMemDir}\`
 ${DIR_EXISTS_GUIDANCE}
 
 Session transcripts: \`${transcriptDir}\` (large JSONL files \u2014 grep narrowly, don't read whole files)
 ${
-  y
+  includeTeamMemorySection
     ? `
 ${TEAM_MEMORY_DREAM_SECTION}
 `
@@ -67,7 +74,7 @@ Don't exhaustively read transcripts. Look only for things you already suspect ma
 
 ## Phase 3 \u2014 Consolidate
 
-For each thing worth remembering, write or update a memory file at the top level of the memory directory. Use the memory file format and type conventions from your system prompt's auto-memory section \u2014 it's the source of truth for what to save, how to structure it, and what NOT to save.${p ? ` The ${MEMORY_LIST_TOOL_NAME} / ${MEMORY_READ} / ${MEMORY_WRITE} tools are unavailable in a dream: consolidate only this memory directory, and leave anything that section marks as shared with the project where it is \u2014 never copy it into these files.` : ""}${""}
+For each thing worth remembering, write or update a memory file at the top level of the memory directory. Use the memory file format and type conventions from your system prompt's auto-memory section \u2014 it's the source of truth for what to save, how to structure it, and what NOT to save.${memoryToolsUnavailable ? ` The ${MEMORY_LIST_TOOL_NAME} / ${MEMORY_READ} / ${MEMORY_WRITE} tools are unavailable in a dream: consolidate only this memory directory, and leave anything that section marks as shared with the project where it is \u2014 never copy it into these files.` : ""}${""}
 
 Focus on:
 - Merging new signal into existing topic files rather than creating near-duplicates

@@ -58,14 +58,14 @@ function extractFromServerConfigRecord(serverConfigs) {
   };
 }
 //@ chunk-18hwfzwa.js:1798880-1799413 fingerprint = getLspPluginsFromMarketplaces (1)
-async function getLspPluginsFromMarketplaces(h) {
+async function getLspPluginsFromMarketplaces(storageV5) {
   let result = new Map();
   try {
-    let config = await loadKnownMarketplacesWithDeclared(h);
+    let config = await loadKnownMarketplacesWithDeclared(storageV5);
     for (let [marketplaceName, value] of Object.entries(config)) {
       if (!isSourceAllowedByPolicy(value.source)) continue;
       try {
-        let marketplace = await getMarketplaceOrDirectoryCatalog(marketplaceName, h);
+        let marketplace = await getMarketplaceOrDirectoryCatalog(marketplaceName, storageV5);
         let isOfficial = isOfficialMarketplaceName_3(marketplaceName);
         for (let entry of marketplace.plugins) {
           if (!entry.lspServers) continue;
@@ -93,12 +93,12 @@ async function getLspPluginsFromMarketplaces(h) {
 /**
  * 按文件扩展名在市场中找提供对应 LSP 服务器的插件（排除已安装和用户拒绝过的），用于“安装 LSP 插件？”提示。
  */
-async function getMatchingLspPlugins(host, x, storageV5) {
+async function getMatchingLspPlugins(session, filePath, storageV5) {
   if (isLspRecommendationsDisabled()) {
     logForDebugging("[lspRecommendation] Recommendations are disabled");
     return [];
   }
-  let ext = extname(x).toLowerCase();
+  let ext = extname(filePath).toLowerCase();
   if (!ext) {
     logForDebugging("[lspRecommendation] No file extension found");
     return [];
@@ -124,16 +124,16 @@ async function getMatchingLspPlugins(host, x, storageV5) {
   }
   let pluginsWithBinary = [];
   for (let { info, pluginId } of matchingPlugins)
-    if (await isBinaryInstalled(host, info.command)) {
+    if (await isBinaryInstalled(session, info.command)) {
       pluginsWithBinary.push({
         info,
         pluginId,
       });
       logForDebugging(`[lspRecommendation] Binary '${info.command}' found for ${pluginId}`);
     } else logForDebugging(`[lspRecommendation] Skipping ${pluginId} (binary '${info.command}' not found)`);
-  pluginsWithBinary.sort((We, ze) => {
-    if (We.info.isOfficial && !ze.info.isOfficial) return -1;
-    if (!We.info.isOfficial && ze.info.isOfficial) return 1;
+  pluginsWithBinary.sort((left, right) => {
+    if (left.info.isOfficial && !right.info.isOfficial) return -1;
+    if (!left.info.isOfficial && right.info.isOfficial) return 1;
     return 0;
   });
   return pluginsWithBinary.map(({ info, pluginId }) => ({
@@ -150,7 +150,7 @@ async function getMatchingLspPlugins(host, x, storageV5) {
 /**
  * 把插件加入 LSP 推荐“永不推荐”列表（全局 lspRecommendationNeverPlugins）。
  */
-function addToNeverSuggest(pluginId, x) {
+function addToNeverSuggest(pluginId, storageV5) {
   saveGlobalConfig((currentConfig) => {
     let current = currentConfig.lspRecommendationNeverPlugins ?? [];
     if (current.includes(pluginId)) return currentConfig;
@@ -158,21 +158,21 @@ function addToNeverSuggest(pluginId, x) {
       ...currentConfig,
       lspRecommendationNeverPlugins: [...current, pluginId],
     };
-  }, x);
+  }, storageV5);
   logForDebugging(`[lspRecommendation] Added ${pluginId} to never suggest`);
 }
 //@ chunk-18hwfzwa.js:1800801-1800971 fingerprint = incrementIgnoredCount (1)
 /**
  * LSP 推荐被忽略次数 +1（多次忽略后自动关闭）。
  */
-function incrementIgnoredCount(h) {
+function incrementIgnoredCount(storageV5) {
   saveGlobalConfig((currentConfig) => {
     let newCount = (currentConfig.lspRecommendationIgnoredCount ?? 0) + 1;
     return {
       ...currentConfig,
       lspRecommendationIgnoredCount: newCount,
     };
-  }, h);
+  }, storageV5);
   logForDebugging("[lspRecommendation] Incremented ignored count");
 }
 //@ chunk-18hwfzwa.js:1800971-1801080 fingerprint = isLspRecommendationsDisabled (1)

@@ -35,11 +35,11 @@ import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { flagKey } from "../structuredIOProtocol.js";
 
 //@ chunk-tyg7f3ek.js:89213-89308 placement
-function installPermissionModeReporter(e, n) {
-  e.io.sessionState.onPermissionModeChanged = (r) => {
-    let permissionMode = toExternalPermissionMode(r);
-    let h = emitStatusMessage(e, permissionMode);
-    n(permissionMode, h);
+function installPermissionModeReporter(host, report) {
+  host.io.sessionState.onPermissionModeChanged = (mode) => {
+    let permissionMode = toExternalPermissionMode(mode);
+    let statusUuid = emitStatusMessage(host, permissionMode);
+    report(permissionMode, statusUuid);
   };
 }
 //@ chunk-tyg7f3ek.js:89308-89756 placement
@@ -101,10 +101,11 @@ class RapidFollowupPreempter {
   }
   noteTurnStart({ command, members }) {
     let preemptedBy = this.preemptedBy;
-    let s = preemptedBy !== undefined && members.some((member) => member.uuid === preemptedBy);
+    let isInMembers = preemptedBy !== undefined && members.some((member) => member.uuid === preemptedBy);
     if (
       preemptedBy !== undefined &&
-      (s || !this.messageQueue.getCommandQueueSnapshot().some((h) => h.uuid === preemptedBy))
+      (isInMembers ||
+        !this.messageQueue.getCommandQueueSnapshot().some((queued) => queued.uuid === preemptedBy))
     )
       this.preemptedBy = undefined;
     this.turnRunning = true;
@@ -114,39 +115,39 @@ class RapidFollowupPreempter {
       command.shouldQuery !== false &&
       !isSlashLikeCommand(command) &&
       !members.some((member) => member.priority === "now" || member.bridgeOrigin === true) &&
-      !s
+      !isInMembers
         ? {
-            messageUuids: members.map((member) => member.uuid).filter((h) => h !== undefined),
+            messageUuids: members.map((member) => member.uuid).filter((uuid) => uuid !== undefined),
             compacting: false,
             open: false,
           }
         : undefined;
     if (this.turn === undefined) this.held = undefined;
   }
-  noteFrame(e) {
+  noteFrame(frame) {
     let turn = this.turn;
     if (turn === undefined) return;
-    if (e.type === "system" && e.subtype === "status") {
-      if (e.status !== "requesting") turn.compacting = e.status === "compacting";
+    if (frame.type === "system" && frame.subtype === "status") {
+      if (frame.status !== "requesting") turn.compacting = frame.status === "compacting";
     } else if (
-      e.type === "result" ||
-      ((e.type === "assistant" ||
-        (e.type === "user" && !("isReplay" in e)) ||
-        (e.type === "stream_event" &&
-          (e.event.type === "content_block_start" || e.event.type === "content_block_delta"))) &&
-        e.parent_tool_use_id === null)
+      frame.type === "result" ||
+      ((frame.type === "assistant" ||
+        (frame.type === "user" && !("isReplay" in frame)) ||
+        (frame.type === "stream_event" &&
+          (frame.event.type === "content_block_start" || frame.event.type === "content_block_delta"))) &&
+        frame.parent_tool_use_id === null)
     ) {
       this.turn = undefined;
       this.held = undefined;
-    } else if (e.type === "system" && e.subtype === "init") {
+    } else if (frame.type === "system" && frame.subtype === "init") {
       turn.open = true;
       let held = this.held;
       this.held = undefined;
       if (held === undefined) return;
-      let commandQueueSnapshot = this.messageQueue.getCommandQueueSnapshot();
+      let queued = this.messageQueue.getCommandQueueSnapshot();
       if (
-        firstDispatchableCommand(commandQueueSnapshot) === held &&
-        !commandQueueSnapshot.some((h) => h.priority === "now" && isActiveMainAgentCommand(h))
+        firstDispatchableCommand(queued) === held &&
+        !queued.some((queued) => queued.priority === "now" && isActiveMainAgentCommand(queued))
       )
         runSafely(() => this.preempt(held));
     }
@@ -157,20 +158,20 @@ class RapidFollowupPreempter {
     this.held = undefined;
   }
   onQueueChanged() {
-    let e = this.takeArrivingFollowup();
+    let arriving = this.takeArrivingFollowup();
     if (
-      e === undefined ||
-      e.uuid === undefined ||
+      arriving === undefined ||
+      arriving.uuid === undefined ||
       !this.enabled() ||
-      !isPreemptingFollowup(e) ||
-      this.isSentNow(e)
+      !isPreemptingFollowup(arriving) ||
+      this.isSentNow(arriving)
     )
       return;
-    if (this.turn?.open) this.preempt(e);
-    else if (this.turn !== undefined || !this.turnRunning) this.held = e;
+    if (this.turn?.open) this.preempt(arriving);
+    else if (this.turn !== undefined || !this.turnRunning) this.held = arriving;
   }
-  preempt(e) {
-    let uuid = e.uuid;
+  preempt(command) {
+    let uuid = command.uuid;
     let turn = this.turn;
     let abortController = this.drain.abortController;
     if (
@@ -196,23 +197,23 @@ class RapidFollowupPreempter {
     abortController.abort(userAbortReason("interrupt"));
   }
   takeArrivingFollowup() {
-    let commandQueueSnapshot = this.messageQueue.getCommandQueueSnapshot();
-    let n = firstDispatchableCommand(commandQueueSnapshot);
-    let r = n !== undefined && !this.judged.has(n);
-    for (let s of commandQueueSnapshot) this.judged.add(s);
-    return r ? n : undefined;
+    let queued = this.messageQueue.getCommandQueueSnapshot();
+    let first = firstDispatchableCommand(queued);
+    let isNew = first !== undefined && !this.judged.has(first);
+    for (let queued_2 of queued) this.judged.add(queued_2);
+    return isNew ? first : undefined;
   }
 }
 //@ chunk-tyg7f3ek.js:92166-92299 placement
-function isPreemptingFollowup(e) {
+function isPreemptingFollowup(command) {
   return (
-    canBatchWith(e) &&
-    isHumanOrigin(e.origin) &&
-    e.verifiedSlackHumanTurn !== true &&
-    e.bridgeOrigin !== true &&
-    e.priority === "next" &&
-    !e.wait &&
-    !isSlashLikeCommand(e)
+    canBatchWith(command) &&
+    isHumanOrigin(command.origin) &&
+    command.verifiedSlackHumanTurn !== true &&
+    command.bridgeOrigin !== true &&
+    command.priority === "next" &&
+    !command.wait &&
+    !isSlashLikeCommand(command)
   );
 }
 //@ chunk-tyg7f3ek.js:92299-92337 placement
@@ -224,16 +225,16 @@ function runSafely(applyBridgeChildCliEntrypoint) {
   }
 }
 //@ chunk-tyg7f3ek.js:92337-92453 placement
-function firstDispatchableCommand(e) {
-  return e.find(
-    (n) =>
-      isActiveMainAgentCommand(n) &&
-      (n.mode === "prompt" || n.mode === "orphaned-permission" || n.priority !== "later"),
+function firstDispatchableCommand(queued) {
+  return queued.find(
+    (command) =>
+      isActiveMainAgentCommand(command) &&
+      (command.mode === "prompt" || command.mode === "orphaned-permission" || command.priority !== "later"),
   );
 }
 //@ chunk-tyg7f3ek.js:92453-92487 placement
-function isSlashLikeCommand(e) {
-  return looksLikeSlashInput(e.value);
+function isSlashLikeCommand(command) {
+  return looksLikeSlashInput(command.value);
 }
 //@ chunk-tyg7f3ek.js:92487-92498 placement
 var PREEMPT_DEBOUNCE_MS = 200;
@@ -257,9 +258,9 @@ class FollowupBackgroundsSubagent {
     this.host = host;
   }
   install() {
-    let e = this.host.messageQueue.subscribe(() => this.look());
+    let unsubscribe = this.host.messageQueue.subscribe(() => this.look());
     return () => {
-      e();
+      unsubscribe();
       this.uninstalled = true;
       this.forgetTurn();
     };
@@ -269,18 +270,26 @@ class FollowupBackgroundsSubagent {
     this.watching = !this.uninstalled && env.CLAUDE_AUTO_BACKGROUND_TASKS;
     this.look();
   }
-  noteFrame(e) {
-    if (!this.watching || (e.type !== "user" && e.type !== "assistant") || e.parent_tool_use_id !== null)
+  noteFrame(frame) {
+    if (
+      !this.watching ||
+      (frame.type !== "user" && frame.type !== "assistant") ||
+      frame.parent_tool_use_id !== null
+    )
       return;
     this.contained(() => {
-      if (e.type === "user") {
-        let { content } = e.message;
-        if (!("isReplay" in e) && Array.isArray(content) && content.some((r) => r.type === "tool_result"))
-          for (let r of this.waitingMessages()) this.queuedAtToolResult.add(r);
-      } else if (e.message.id !== this.responseId) {
-        this.responseId = e.message.id;
-        let n = this.waitingMessages();
-        for (let r of this.queuedAtToolResult) if (n.has(r)) this.passedOver.add(r);
+      if (frame.type === "user") {
+        let { content } = frame.message;
+        if (
+          !("isReplay" in frame) &&
+          Array.isArray(content) &&
+          content.some((block) => block.type === "tool_result")
+        )
+          for (let uuid of this.waitingMessages()) this.queuedAtToolResult.add(uuid);
+      } else if (frame.message.id !== this.responseId) {
+        this.responseId = frame.message.id;
+        let waiting = this.waitingMessages();
+        for (let uuid of this.queuedAtToolResult) if (waiting.has(uuid)) this.passedOver.add(uuid);
         this.queuedAtToolResult.clear();
       }
     });
@@ -315,12 +324,12 @@ class FollowupBackgroundsSubagent {
       let values = Object.values(taskRegistry.all());
       let filtered = values
         .filter(isMainThreadForegroundAgent)
-        .filter((S) => S.abortController?.signal.aborted !== true);
+        .filter((agent) => agent.abortController?.signal.aborted !== true);
       if (
         filtered.length === 0 ||
         this.host.isHumanDecisionPending() ||
         !filtered.every(isArmedDirectForegroundAgent) ||
-        values.some((S) => isMainThreadForegroundShell(S) && S.status === "running") ||
+        values.some((task) => isMainThreadForegroundShell(task) && task.status === "running") ||
         this.host.hasListedForegroundToolCall() ||
         count(filtered, isAutoBackgroundHeld) > 0
       ) {
@@ -328,11 +337,13 @@ class FollowupBackgroundsSubagent {
         return;
       }
       if (!this.host.enabled()) return;
-      let y = count(filtered, (S) => tryAutoBackgroundAgent(S.id, taskRegistry, "follow_up"));
-      logForDebugging(
-        `[followup-backgrounds-subagent] moved ${y} of ${filtered.length} foreground subagents to the background for a person's queued message`,
+      let movedCount = count(filtered, (agent) =>
+        tryAutoBackgroundAgent(agent.id, taskRegistry, "follow_up"),
       );
-      if (y > 0) {
+      logForDebugging(
+        `[followup-backgrounds-subagent] moved ${movedCount} of ${filtered.length} foreground subagents to the background for a person's queued message`,
+      );
+      if (movedCount > 0) {
         logFeatureOk("print_followup_backgrounds_subagent");
         this.lookAgainSoon();
       }
@@ -344,24 +355,28 @@ class FollowupBackgroundsSubagent {
     this.timer.unref?.();
   }
   waitingMessages() {
-    let e = new Set();
-    for (let n of filterQueuedCommandsForThread(this.host.messageQueue.getCommandsByMaxPriority("next"), {
-      isMainThread: true,
-      currentAgentId: undefined,
-    })) {
+    let uuids = new Set();
+    for (let queued of filterQueuedCommandsForThread(
+      this.host.messageQueue.getCommandsByMaxPriority("next"),
+      {
+        isMainThread: true,
+        currentAgentId: undefined,
+      },
+    )) {
       if (
-        n.drainOnly === true ||
-        n.screeningPending === true ||
-        (n.uuid !== undefined && this.passedOver.has(n.uuid))
+        queued.drainOnly === true ||
+        queued.screeningPending === true ||
+        (queued.uuid !== undefined && this.passedOver.has(queued.uuid))
       )
         break;
-      if (n.uuid !== undefined && isPreemptingFollowup(n) && !this.host.isSentNow(n)) e.add(n.uuid);
+      if (queued.uuid !== undefined && isPreemptingFollowup(queued) && !this.host.isSentNow(queued))
+        uuids.add(queued.uuid);
     }
-    return e;
+    return uuids;
   }
-  contained(e) {
+  contained(fn) {
     try {
-      e();
+      fn();
     } catch (error) {
       this.forgetTurn();
       logError(error);
@@ -370,18 +385,18 @@ class FollowupBackgroundsSubagent {
   }
 }
 //@ chunk-tyg7f3ek.js:95036-95418 placement
-function reportRedeliveredFollowupClosed(e, n, r) {
+function reportRedeliveredFollowupClosed(state, hasOpener, closedOn) {
   try {
-    let s = foldedFollowUpEnd(e, n);
-    let badEnd = r === "cancelled" ? "cancelled_with_continuation" : s?.badEnd;
-    if (s === undefined || badEnd === undefined) return;
+    let folded = foldedFollowUpEnd(state, hasOpener);
+    let badEnd = closedOn === "cancelled" ? "cancelled_with_continuation" : folded?.badEnd;
+    if (folded === undefined || badEnd === undefined) return;
     logForDiagnosticsNoPII("info", "cli_redelivered_follow_up_closed_unrun", {
       reason: badEnd,
       ...flagKey("reason", badEnd),
-      closed_on_arrival: r === "on_arrival",
-      error_was_transient: s.failedTransiently,
-      claude_row_after_it: s.claudesRowBehind,
-      re_run_wrote_a_row: s.reRunsRowBehind,
+      closed_on_arrival: closedOn === "on_arrival",
+      error_was_transient: folded.failedTransiently,
+      claude_row_after_it: folded.claudesRowBehind,
+      re_run_wrote_a_row: folded.reRunsRowBehind,
       ...chatOriginField(),
     });
   } catch (error) {

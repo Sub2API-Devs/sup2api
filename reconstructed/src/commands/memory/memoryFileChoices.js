@@ -114,7 +114,7 @@ function buildMemoryFileChoices(memoryFiles, cwd, indent = "  ") {
  * /memory 的自动记忆文件夹选项，团队记忆可用时加上团队记忆文件夹。
  */
 function getAutoMemoryChoices() {
-  let t = [
+  let choices = [
     {
       kind: "auto",
       path: getAutoMemPath(),
@@ -123,38 +123,38 @@ function getAutoMemoryChoices() {
     },
   ];
   if (isAutoMemoryEnabledIgnoringPause() && hasTeamStore())
-    t.push({
+    choices.push({
       kind: "team",
       path: getMemoryDirNfc(),
       label: "Open team memory folder",
       description: "",
     });
-  return t;
+  return choices;
 }
 //@ chunk-tx768c80.js:1765-1965 placement
 /**
  * 为声明了 memory 的代理生成"打开代理记忆"选项。
  */
-function getAgentMemoryChoices(activeAgents, o = (n) => n) {
-  let n = [];
-  for (let r of activeAgents)
-    if (r.memory)
-      n.push({
+function getAgentMemoryChoices(activeAgents, normalize = (value) => value) {
+  let choices = [];
+  for (let agent of activeAgents)
+    if (agent.memory)
+      choices.push({
         kind: "agent",
-        path: getAgentMemoryDir(r.agentType, r.memory),
-        label: `Open ${o(r.agentType)} agent memory`,
-        description: `${r.memory} scope`,
+        path: getAgentMemoryDir(agent.agentType, agent.memory),
+        label: `Open ${normalize(agent.agentType)} agent memory`,
+        description: `${agent.memory} scope`,
       });
-  return n;
+  return choices;
 }
 //@ chunk-tx768c80.js:1965-2134 placement
 /**
  * 记忆同步开关状态：open/pending 直接返回，账号或本地关闭时取同意状态（拒绝视为 closed）。
  */
 function getMemorySyncState() {
-  let t = memorySyncPolicyClosedStub();
-  if (t === "open" || t === "pending") return t;
-  if (t === "account_off" || t === "local_memory_off") {
+  let policy = memorySyncPolicyClosedStub();
+  if (policy === "open" || policy === "pending") return policy;
+  if (policy === "account_off" || policy === "local_memory_off") {
     let memorySyncPolicyState = getMemorySyncPolicyState();
     return memorySyncPolicyState === "denied" ? "closed" : memorySyncPolicyState;
   }

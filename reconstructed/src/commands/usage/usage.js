@@ -27,3 +27,4 @@ var call = async (onDone, context, args, invokedName) => {
     defaultTab,
   });
 };
+export { call };

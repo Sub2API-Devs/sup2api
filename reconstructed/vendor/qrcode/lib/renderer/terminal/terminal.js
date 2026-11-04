@@ -5,10 +5,10 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:53699-54100 cjs-fingerprint
-var qrTerminalRenderer = x(function (cjsExports) {
+var qrTerminalRenderer = __commonJS(function (cjsExports) {
   cjsExports.render = function (qrData, options, cb) {
     let size = qrData.modules.size;
     let data = qrData.modules.data;

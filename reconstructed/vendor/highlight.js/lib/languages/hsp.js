@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:190267-193632 cjs-fingerprint
-var require_hsp = x(function (cjsExports, cjsModule) {
+var require_hsp = __commonJS(function (cjsExports, cjsModule) {
   function hsp(hljs) {
     return {
       name: "HSP",

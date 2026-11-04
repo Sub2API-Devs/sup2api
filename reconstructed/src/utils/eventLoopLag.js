@@ -18,24 +18,24 @@ var LAG_SAMPLE_INTERVAL_MS = 50;
 /**
  * 启动事件循环延迟监测：定时器检查实际触发时间与预期的差，可取出并重置最大延迟，停止时返回最终最大值。
  */
-function startEventLoopLagMonitor(o) {
-  let r = performance.now() + o;
-  let e = 0;
+function startEventLoopLagMonitor(thresholdMs) {
+  let deadline = performance.now() + thresholdMs;
+  let lagCount = 0;
   let interval = setInterval(() => {
     let startTime = performance.now();
-    e = Math.max(e, startTime - r);
-    r = startTime + o;
-  }, o);
+    lagCount = Math.max(lagCount, startTime - deadline);
+    deadline = startTime + thresholdMs;
+  }, thresholdMs);
   interval.unref();
   return {
     takeMaxMs() {
-      let t = e;
-      e = 0;
-      return t;
+      let lagCount_2 = lagCount;
+      lagCount = 0;
+      return lagCount_2;
     },
     stop() {
       clearInterval(interval);
-      return Math.max(e, performance.now() - r);
+      return Math.max(lagCount, performance.now() - deadline);
     },
   };
 }

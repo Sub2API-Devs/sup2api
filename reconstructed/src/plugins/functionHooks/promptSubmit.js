@@ -27,13 +27,14 @@ import {
   requireBoundSession,
   isSlashCommandText,
   submitHoldRefusal,
-  MAX_SESSION_TEXT,
+  MAX_SESSION_TEXT_CHARS,
   LATER,
 } from "./sessionApi.js";
 import { HooksError } from "./hooksErrors.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:767357-767413 placement
 /**
@@ -45,10 +46,10 @@ var PROMPT_NOT_PASSED = "a hook answered without passing the prompt on";
  * 保证有 drop
  */
 function ensureDrop(answered, made) {
-  let r = made?.drop === undefined ? undefined : made;
+  let madeDrop = made?.drop === undefined ? undefined : made;
   return answered.drop !== undefined
     ? answered
-    : (r ?? {
+    : (madeDrop ?? {
         drop: PROMPT_NOT_PASSED,
       });
 }
@@ -68,61 +69,64 @@ var coreStep = (run) => ({
   run,
 });
 //@ chunk-e6aww6q8.js:767606-767757 placement
-var createManagedSubmitHandler = (e, n) => ({
+var createManagedSubmitHandler = (runHooks, noteManagedText) => ({
   name: MANAGED,
   isManaged: true,
   budgetMs: 0,
-  async run(r, s) {
-    let h = await e(r.text, {
+  async run(request, bottom) {
+    let outcome = await runHooks(request.text, {
       managedHooksOnly: true,
     });
-    n(r.text);
-    return h.drop === undefined ? s(r) : h;
+    noteManagedText(request.text);
+    return outcome.drop === undefined ? bottom(request) : outcome;
   },
 });
 //@ chunk-e6aww6q8.js:767757-767792 placement
 /**
  * 提交监视状态
  */
-var submitWatchState = new HostScoped(() => ({
-  watching: false,
-}));
+var submitWatchState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:767757", () => {
+  submitWatchState = new HostScoped(() => ({
+    watching: false,
+  }));
+});
 //@ chunk-e6aww6q8.js:767792-768237 placement
 /**
  * 跟踪排队中的提示提交：被移出队列时以丢弃结算，以文本形式交给模型时以文本结算。
  */
 function createSubmitWaiters() {
-  let e = new Map();
-  function n(uuid) {
-    let h = e.get(uuid);
-    e.delete(uuid);
-    return h;
+  let waitersByUuid = new Map();
+  function take(uuid) {
+    let waiter = waitersByUuid.get(uuid);
+    waitersByUuid.delete(uuid);
+    return waiter;
   }
-  function r(s, h) {
-    for (let y of s) {
-      if (y.uuid === undefined) continue;
-      n(y.uuid)?.settle(h(y));
+  function settleEach(commands, makeOutcome) {
+    for (let command of commands) {
+      if (command.uuid === undefined) continue;
+      take(command.uuid)?.settle(makeOutcome(command));
     }
   }
   return {
-    record: (s, h) => {
-      let y = onProcessRootHost(submitWatchState);
-      if (!y.watching) {
-        y.watching = true;
-        commandsDiscardedSignal.subscribe((S) =>
-          r(S, () => ({
+    record: (uuid, waiter) => {
+      let watchState = onProcessRootHost(submitWatchState);
+      if (!watchState.watching) {
+        watchState.watching = true;
+        commandsDiscardedSignal.subscribe((discarded) =>
+          settleEach(discarded, () => ({
             drop: "the prompt was removed from the queue before it ran",
           })),
         );
-        commandsConsumedSignal.subscribe((S) =>
-          r(S, (w) => {
-            let L = w.value;
+        commandsConsumedSignal.subscribe((consumed) =>
+          settleEach(consumed, (command) => {
+            let value = command.value;
             return {
               text:
-                typeof L === "string"
-                  ? L
+                typeof value === "string"
+                  ? value
                   : extractTextContent_2(
-                      L,
+                      value,
                       `
 `,
                     ),
@@ -130,24 +134,27 @@ function createSubmitWaiters() {
           }),
         );
       }
-      e.set(s, h);
+      waitersByUuid.set(uuid, waiter);
     },
-    take: n,
-    settleEach: r,
+    take,
+    settleEach,
   };
 }
 //@ chunk-e6aww6q8.js:768237-768251 placement
 /**
  * 提交等待者
  */
-var submitWaiters = createSubmitWaiters();
+var submitWaiters; // deferred: uses createSubmitWaiters of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:768237", () => {
+  submitWaiters = createSubmitWaiters();
+});
 //@ chunk-e6aww6q8.js:768251-768326 placement
 /**
  * 释放时丢弃等待项
  */
-var disposeDropsWaiting = (e) => ({
+var disposeDropsWaiting = (uuids) => ({
   [Symbol.dispose]: () => {
-    submitWaiters.settleEach(e, () => ({
+    submitWaiters.settleEach(uuids, () => ({
       drop: BATCH_FAILED_DROP,
     }));
   },
@@ -156,60 +163,63 @@ var disposeDropsWaiting = (e) => ({
 /**
  * 为 prompt.submit 构造链两端：托管钩子处理器与核心处理器（运行 UserPromptSubmit 钩子并记录每步结果）。
  */
-function createSubmitChainEnds(e, perform = (r) => Promise.resolve(r)) {
+function createSubmitChainEnds(runHooks, perform = (request) => Promise.resolve(request)) {
   let stepRecorder = createStepRecorder();
-  let s;
-  let h;
-  let managed = createManagedSubmitHandler(e, (L) => {
-    s = L;
+  let managedText;
+  let arrivedContext;
+  let managed = createManagedSubmitHandler(runHooks, (text) => {
+    managedText = text;
   });
-  async function S(L) {
-    h = L.context;
-    let G = await e(
-      L.text,
-      L.text === s
+  async function runBeforeCore(request) {
+    arrivedContext = request.context;
+    let outcome = await runHooks(
+      request.text,
+      request.text === managedText
         ? {
             managedHooksExcluded: true,
           }
         : {},
     );
-    let q = L.context !== undefined && L.context.length > 0;
-    let Se =
-      G.drop === undefined
+    let hasContext = request.context !== undefined && request.context.length > 0;
+    let kept =
+      outcome.drop === undefined
         ? {
-            text: G.text,
-            origin: L.origin,
-            ...(q && {
-              context: L.context,
+            text: outcome.text,
+            origin: request.origin,
+            ...(hasContext && {
+              context: request.context,
             }),
           }
-        : G;
-    stepRecorder.keep(L.text, Se);
-    return Se;
+        : outcome;
+    stepRecorder.keep(request.text, kept);
+    return kept;
   }
-  let core = coreStep(async (L) => {
-    let G = await S(L);
-    return G.drop === undefined ? perform(G) : G;
+  let core = coreStep(async (request) => {
+    let kept = await runBeforeCore(request);
+    return kept.drop === undefined ? perform(kept) : kept;
   });
   return {
     managed,
     core,
     runs: stepRecorder,
-    arrivedContext: () => h,
+    arrivedContext: () => arrivedContext,
   };
 }
 //@ chunk-e6aww6q8.js:768767-768795 placement
 /**
  * prompt.submit 站点规则
  */
-var PROMPT_SUBMIT_RULES = UI_ENV_SITE_RULES["prompt.submit"];
+var PROMPT_SUBMIT_RULES; // deferred: uses UI_ENV_SITE_RULES (./sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:768767", () => {
+  PROMPT_SUBMIT_RULES = UI_ENV_SITE_RULES["prompt.submit"];
+});
 //@ chunk-e6aww6q8.js:768795-768864 placement
 /**
  * 等待提交结果
  */
-var waitForSubmit = (e, origin) =>
+var waitForSubmit = (uuid, origin) =>
   new Promise((resolve) => {
-    submitWaiters.record(e, {
+    submitWaiters.record(uuid, {
       origin,
       settle: resolve,
     });
@@ -223,46 +233,49 @@ var takeSubmitWaiter = (uuid) => (uuid === undefined ? undefined : submitWaiters
 /**
  * 非 undefined 或 session.start
  */
-var isSubmittableEvent = (e) => e === undefined || e === "session.start";
+var isSubmittableEvent = (rootEvent) => rootEvent === undefined || rootEvent === "session.start";
 //@ chunk-e6aww6q8.js:768952-768987 placement
 /**
  * 提交标记槽
  */
-var submitMarksSlot = identity_2(createValueSlot(), (e) => e.set(undefined));
+var submitMarksSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:768952", () => {
+  submitMarksSlot = identity_2(createValueSlot(), (slot) => slot.set(undefined));
+});
 //@ chunk-e6aww6q8.js:768987-769042 placement
 /**
  * 记录提交标记
  */
-function markSubmit(e, rootEvent) {
-  let r = submitMarksSlot.get();
-  if (r && isSubmittableEvent(rootEvent)) r.add(e);
+function markSubmit(uuid, rootEvent) {
+  let marks = submitMarksSlot.get();
+  if (marks && isSubmittableEvent(rootEvent)) marks.add(uuid);
 }
 //@ chunk-e6aww6q8.js:769042-769370 placement
 /**
  * 提交标记集合：标记、查询，并按当前队列修剪。
  */
 function createSubmitMarks() {
-  let e = new Set();
-  let n = new Set();
+  let marked = new Set();
+  let aside = new Set();
   return {
-    mark: (r) => {
-      e.add(r);
+    mark: (uuid) => {
+      marked.add(uuid);
     },
-    has: (r) => r !== undefined && e.has(r),
-    prune: (r) => {
-      let s = new Set(r.map((h) => h.uuid));
-      for (let h of e) if (!s.has(h) && !n.has(h)) e.delete(h);
+    has: (uuid) => uuid !== undefined && marked.has(uuid),
+    prune: (commands) => {
+      let queued = new Set(commands.map((command) => command.uuid));
+      for (let uuid of marked) if (!queued.has(uuid) && !aside.has(uuid)) marked.delete(uuid);
     },
-    setAside: (r) => {
-      for (let s of r) if (e.has(s)) n.add(s);
+    setAside: (uuids) => {
+      for (let uuid of uuids) if (marked.has(uuid)) aside.add(uuid);
     },
     putBack: () => {
-      n.clear();
+      aside.clear();
     },
-    isAnyAside: () => n.size > 0,
+    isAnyAside: () => aside.size > 0,
     clear: () => {
-      e.clear();
-      n.clear();
+      marked.clear();
+      aside.clear();
     },
   };
 }
@@ -270,15 +283,18 @@ function createSubmitMarks() {
 /**
  * 提交标记集合
  */
-var submitMarks = identity_2(createSubmitMarks(), (e) => e.clear());
+var submitMarks; // deferred: uses createSubmitMarks of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:769370", () => {
+  submitMarks = identity_2(createSubmitMarks(), (marks) => marks.clear());
+});
 //@ chunk-e6aww6q8.js:769403-769489 placement
 /**
  * 按回合修剪并标记
  */
-function pruneAndMark(e, rootEvent, commandQueue) {
+function pruneAndMark(uuid, rootEvent, commandQueue) {
   if (rootEvent === "turn.start" || rootEvent === "turn.complete") {
     submitMarks.prune(commandQueue);
-    submitMarks.mark(e);
+    submitMarks.mark(uuid);
   }
 }
 //@ chunk-e6aww6q8.js:769489-770392 placement
@@ -288,7 +304,7 @@ function pruneAndMark(e, rootEvent, commandQueue) {
 function promptSubmitForPlugin(
   { text, attachments, asUser },
   plugin,
-  h = {
+  options = {
     origin: [plugin],
   },
 ) {
@@ -305,30 +321,32 @@ function promptSubmitForPlugin(
     return Promise.reject(
       new HooksError(`${plugin}: $.prompt.submit takes text alone; attachments cannot be submitted`),
     );
-  let y = submitHoldRefusal(
+  let refusal = submitHoldRefusal(
     {
       plugin,
-      ...h,
+      ...options,
     },
     "$.prompt.submit",
   );
-  if (y !== undefined)
+  if (refusal !== undefined)
     return Promise.resolve({
-      drop: y,
+      drop: refusal,
     });
-  logForDebugging(`$.prompt.submit (${plugin}): ` + jsonStringify(truncateToLength(text, MAX_SESSION_TEXT)));
-  let S = randomUUID();
-  let w = asUser === true;
-  let L = waitForSubmit(S, h.origin);
-  markSubmit(S, h.rootEvent);
-  pruneAndMark(S, h.rootEvent, getCommandQueue());
+  logForDebugging(
+    `$.prompt.submit (${plugin}): ` + jsonStringify(truncateToLength(text, MAX_SESSION_TEXT_CHARS)),
+  );
+  let uuid = randomUUID();
+  let isAsUser = asUser === true;
+  let settled = waitForSubmit(uuid, options.origin);
+  markSubmit(uuid, options.rootEvent);
+  pruneAndMark(uuid, options.rootEvent, getCommandQueue());
   enqueueCommand({
     agentId: mainAgentId(),
     mode: "prompt",
     value: text,
-    uuid: S,
+    uuid,
     priority: LATER,
-    origin: w
+    origin: isAsUser
       ? {
           kind: "plugin",
           name: plugin,
@@ -338,9 +356,9 @@ function promptSubmitForPlugin(
           kind: "plugin",
           name: plugin,
         },
-    queuedUnder: h.origin,
+    queuedUnder: options.origin,
   });
-  return L;
+  return settled;
 }
 export {
   submitMarks,

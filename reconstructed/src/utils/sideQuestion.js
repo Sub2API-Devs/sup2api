@@ -61,36 +61,40 @@ async function runSideQuestion({
   turnInProgress = true,
   agentId,
 }) {
-  let y = parentController ? createChildAbortController(parentController) : createAbortController();
+  let abortController = parentController
+    ? createChildAbortController(parentController)
+    : createAbortController();
   let btwHistory = threadHistory ? cacheSafeParams.toolUseContext.session.btwHistory : null;
   let flattened = (
     history ??
     btwHistory?.exchanges.filter((exchange) => exchange.agentId === agentId) ??
     []
-  ).flatMap((n) => {
-    let u = matchesFabricatedMarker(n.response)
+  ).flatMap((exchange) => {
+    let responseText = matchesFabricatedMarker(exchange.response)
       ? BTW_TOOL_TEXT_OMITTED
-      : n.response.endsWith(BTW_CUT_OFF_NOTICE)
+      : exchange.response.endsWith(BTW_CUT_OFF_NOTICE)
         ? BTW_CUT_OFF_OMITTED
-        : n.response;
+        : exchange.response;
     return [
       createUserMessage({
-        content: n.question,
+        content: exchange.question,
       }),
       createAssistantMessage({
-        content: n.fallbackNotice
-          ? `\u26A0 ${n.fallbackNotice}
+        content: exchange.fallbackNotice
+          ? `\u26A0 ${exchange.fallbackNotice}
 
-${u}`
-          : u,
+${responseText}`
+          : responseText,
       }),
     ];
   });
-  let h = turnInProgress ? createMissingToolResultsMessage(cacheSafeParams.forkContextMessages) : undefined;
+  let missingToolResults = turnInProgress
+    ? createMissingToolResultsMessage(cacheSafeParams.forkContextMessages)
+    : undefined;
   try {
     let agentResult = await runForkedAgent({
       promptMessages: [
-        ...(h ? [h] : []),
+        ...(missingToolResults ? [missingToolResults] : []),
         ...flattened,
         createUserMessage({
           content: [
@@ -138,39 +142,40 @@ Simply answer the question with the information you have.</system-reminder>
       skipCacheWrite: true,
       skipTranscript: true,
       overrides: {
-        abortController: y,
+        abortController,
       },
       onMessage: onRetry
-        ? (c) => {
-            if (isApiErrorSystemMessage(c))
+        ? (message) => {
+            if (isApiErrorSystemMessage(message))
               onRetry({
-                retryAttempt: c.retryAttempt,
-                maxRetries: c.maxRetries,
-                retryInMs: c.retryInMs,
-                status: c.error.status,
+                retryAttempt: message.retryAttempt,
+                maxRetries: message.maxRetries,
+                retryInMs: message.retryInMs,
+                status: message.error.status,
               });
           }
         : undefined,
     });
     let { live, notice } = dropRetractedOnResume(agentResult.messages);
     let { response, synthetic } = extractSideQuestionResponse(live);
-    let g = notice && {
+    let fallback = notice && {
       originalModel: notice.originalModel,
       fallbackModel: notice.fallbackModel,
       content: notice.content,
     };
-    if (btwHistory && response && !synthetic) btwHistory.append(question, response, g?.content, agentId);
+    if (btwHistory && response && !synthetic)
+      btwHistory.append(question, response, fallback?.content, agentId);
     return {
       response,
       synthetic,
       usage: agentResult.totalUsage,
-      ...(g &&
+      ...(fallback &&
         !synthetic && {
-          refusalFallback: g,
+          refusalFallback: fallback,
         }),
     };
   } catch (error) {
-    if (error instanceof APIUserAbortError || y.signal.aborted)
+    if (error instanceof APIUserAbortError || abortController.signal.aborted)
       return {
         response: null,
         synthetic: false,
@@ -185,18 +190,20 @@ Simply answer the question with the information you have.</system-reminder>
  * 为最后一条 assistant 中未配对的 tool_use 合成 tool_result（isMeta 用户消息），用于中断后修复消息序列。
  */
 function createMissingToolResultsMessage(message) {
-  let filtered = message.filter((t) => !isNonConversationMessage(t));
-  let block = filtered.findLast((t) => t.type === "assistant");
+  let filtered = message.filter((message) => !isNonConversationMessage(message));
+  let block = filtered.findLast((message) => message.type === "assistant");
   if (!block) return;
-  let s = new Set();
-  let l = [];
-  for (let t of filtered)
-    if (t.type === "user" && Array.isArray(t.message.content)) {
-      for (let e of t.message.content) if (e.type === "tool_result") s.add(e.tool_use_id);
-    } else if (t.type === "assistant" && t.message.id === block.message.id) {
-      for (let e of t.message.content) if (e.type === "tool_use") l.push(e.id);
+  let answeredToolIds = new Set();
+  let pendingToolIds = [];
+  for (let candidate of filtered)
+    if (candidate.type === "user" && Array.isArray(candidate.message.content)) {
+      for (let contentBlock of candidate.message.content)
+        if (contentBlock.type === "tool_result") answeredToolIds.add(contentBlock.tool_use_id);
+    } else if (candidate.type === "assistant" && candidate.message.id === block.message.id) {
+      for (let contentBlock of candidate.message.content)
+        if (contentBlock.type === "tool_use") pendingToolIds.push(contentBlock.id);
     }
-  let filtered_2 = l.filter((t) => !s.has(t));
+  let filtered_2 = pendingToolIds.filter((toolUseId) => !answeredToolIds.has(toolUseId));
   if (filtered_2.length === 0) return;
   return createUserMessage({
     content: filtered_2.map((toolUseId) => ({
@@ -223,12 +230,12 @@ function extractSideQuestionResponse(messages) {
 `,
   ).trim();
   if (text) {
-    let e = [
+    let notices = [
       ...(matchesFabricatedMarker(text) ? [BTW_NO_TOOLS_NOTICE] : []),
       ...(found ? [BTW_CUT_OFF_NOTICE] : []),
     ];
     return {
-      response: [text, ...e].join(`
+      response: [text, ...notices].join(`
 
 `),
       synthetic: false,
@@ -268,7 +275,7 @@ function extractSideQuestionResponse(messages) {
 /**
  * 是否为 system/api_error 消息（重试状态与错误提示用）。
  */
-function isApiErrorSystemMessage(o) {
-  return o.type === "system" && "subtype" in o && o.subtype === "api_error";
+function isApiErrorSystemMessage(message) {
+  return message.type === "system" && "subtype" in message && message.subtype === "api_error";
 }
 export { findBtwTriggerPositions, runSideQuestion };

@@ -46,8 +46,8 @@ function unregisterPermissionCallback(requestId) {
 /**
  * 函数 hasPendingSwarmPermission（该 id 有未决 swarm 权限）；位于「队友侧权限回复轮询：注册回调，处理领导经 mailbox 回复的权限/沙箱批准，校验输入摘要」模块。
  */
-function hasPendingSwarmPermission(e) {
-  return swarmHostState().swarmPermissions.pending.has(e);
+function hasPendingSwarmPermission(toolUseId) {
+  return swarmHostState().swarmPermissions.pending.has(toolUseId);
 }
 //@ chunk-rha5p3kj.js:870-915 layout
 /**
@@ -63,18 +63,19 @@ var SWARM_POLLING_ENABLED = true;
  * 校验领导的批准回复是否对应本请求。
  */
 function matchApprovalReply(callback, params) {
-  let s = params.toolUseId === undefined ? SWARM_POLLING_ENABLED : params.toolUseId === callback.toolUseId;
+  let toolUseMatches =
+    params.toolUseId === undefined ? SWARM_POLLING_ENABLED : params.toolUseId === callback.toolUseId;
   let approvedRequest = params.approvedRequest;
-  let i =
+  let requestMatches =
     approvedRequest === undefined
       ? SWARM_POLLING_ENABLED
       : approvedRequest.tool_use_id === callback.toolUseId && approvedRequest.tool_name === callback.toolName;
-  let r =
+  let digestMatches =
     approvedRequest === undefined
       ? SWARM_POLLING_ENABLED
       : approvedRequest.input_digest === callback.inputDigest;
-  if (!s || !i) return "mismatch";
-  if (!r) return "input_digest_mismatch";
+  if (!toolUseMatches || !requestMatches) return "mismatch";
+  if (!digestMatches) return "input_digest_mismatch";
   return params.toolUseId === undefined || approvedRequest === undefined ? "unbound" : "bound";
 }
 //@ chunk-rha5p3kj.js:1251-2283 fingerprint = processMailboxPermissionResponse (0.411)
@@ -91,27 +92,30 @@ function processMailboxPermissionResponse(params) {
     return false;
   }
   pending.delete(params.requestId);
-  let o = matchApprovalReply(callback, params);
-  if (o === "mismatch" || o === "input_digest_mismatch") {
+  let matchKind = matchApprovalReply(callback, params);
+  if (matchKind === "mismatch" || matchKind === "input_digest_mismatch") {
     let approvedRequest = params.approvedRequest;
-    let r = params.decision === "approved" ? "approval" : "denial";
-    let l =
-      o === "input_digest_mismatch"
+    let decisionKind = params.decision === "approved" ? "approval" : "denial";
+    let answerDescription =
+      matchKind === "input_digest_mismatch"
         ? `this ${jsonStringify(callback.toolName)} call (${jsonStringify(callback.toolUseId)}), but its input digest differs`
         : `${approvedRequest ? `${jsonStringify(approvedRequest.tool_name)} (${jsonStringify(approvedRequest.tool_use_id)})` : jsonStringify(params.toolUseId)}, not this ${jsonStringify(callback.toolName)} call (${jsonStringify(callback.toolUseId)})`;
     logForDebugging(
-      `[SwarmPermissionPoller] Refusing ${r} for request ${jsonStringify(params.requestId)}: the leader answered ${l}`,
+      `[SwarmPermissionPoller] Refusing ${decisionKind} for request ${jsonStringify(params.requestId)}: the leader answered ${answerDescription}`,
       {
         level: "warn",
       },
     );
-    callback.onRefuse(`The ${r} did not describe this tool call, so it was refused.`, r);
+    callback.onRefuse(
+      `The ${decisionKind} did not describe this tool call, so it was refused.`,
+      decisionKind,
+    );
     return true;
   }
   logForDebugging(
-    `[SwarmPermissionPoller] Processing mailbox response for request ${jsonStringify(params.requestId)}: ${params.decision} (${o})`,
+    `[SwarmPermissionPoller] Processing mailbox response for request ${jsonStringify(params.requestId)}: ${params.decision} (${matchKind})`,
   );
-  if (o === "unbound") callback.onUnboundVerdict();
+  if (matchKind === "unbound") callback.onUnboundVerdict();
   if (params.decision === "approved") {
     let permissionUpdates = parsePermissionUpdates(params.permissionUpdates);
     let updatedInput = params.updatedInput;
@@ -128,8 +132,8 @@ function registerSandboxPermissionCallback(callback) {
 /**
  * 函数 hasPendingSandboxPermission（该 id 有未决沙箱权限）；位于「队友侧权限回复轮询：注册回调，处理领导经 mailbox 回复的权限/沙箱批准，校验输入摘要」模块。
  */
-function hasPendingSandboxPermission(e) {
-  return swarmHostState().swarmPermissions.pendingSandbox.has(e);
+function hasPendingSandboxPermission(toolUseId) {
+  return swarmHostState().swarmPermissions.pendingSandbox.has(toolUseId);
 }
 //@ chunk-rha5p3kj.js:2506-3072 fingerprint = processSandboxPermissionResponse (0.603)
 function processSandboxPermissionResponse(params) {
@@ -159,18 +163,18 @@ function processSandboxPermissionResponse(params) {
   return true;
 }
 //@ chunk-18hwfzwa.js:1389942-1390271 fingerprint = processResponse (0.348)
-function processResponse(h, payload, D, L) {
-  switch (h) {
+function processResponse(choice, payload, consentRow, feedback) {
+  switch (choice) {
     case "yes":
       return {
         behavior: "allow",
         updatedInput: payload.input,
-        ...(L && {
-          feedback: L,
+        ...(feedback && {
+          feedback,
         }),
       };
     case "yes-apply-suggestions": {
-      if (D === null || !isConsentRow(D))
+      if (consentRow === null || !isConsentRow(consentRow))
         return {
           behavior: "allow",
           updatedInput: payload.input,
@@ -178,14 +182,14 @@ function processResponse(h, payload, D, L) {
       return {
         behavior: "allow",
         updatedInput: payload.input,
-        permissionUpdates: D.applies,
+        permissionUpdates: consentRow.applies,
       };
     }
     case "no":
       return {
         behavior: "deny",
-        ...(L && {
-          feedback: L,
+        ...(feedback && {
+          feedback,
         }),
       };
   }

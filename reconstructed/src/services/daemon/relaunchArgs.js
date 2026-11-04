@@ -48,8 +48,8 @@ function getRelaunchModel() {
 /**
  * 判断模型参数是否合法（"default" 或已知模型）。
  */
-function isValidModelArg(e) {
-  let lower = e.trim().toLowerCase();
+function isValidModelArg(value) {
+  let lower = value.trim().toLowerCase();
   return lower === "default" || isModelKeyAliasOrResolved(lower);
 }
 //@ chunk-y162pn60.js:18464-18516 placement
@@ -68,16 +68,16 @@ function buildRelaunchArgs(permissionContext, effort, { carryModel = true } = {}
   let args = [];
   let replArgv = getReplConfigArgv();
   for (let j = 0; j < replArgv.length; j++) {
-    let P = replArgv[j];
-    if (P === "--add-dir") j++;
-    else if (!carryModel && P === "--fallback-model") {
+    let arg = replArgv[j];
+    if (arg === "--add-dir") j++;
+    else if (!carryModel && arg === "--fallback-model") {
       let filtered = (replArgv[j + 1] ?? "")
         .split(",")
-        .map((D) => D.trim())
-        .filter((D) => isValidModelArg(D));
+        .map((arg) => arg.trim())
+        .filter((arg) => isValidModelArg(arg));
       j++;
       if (filtered.length > 0) args.push("--fallback-model", filtered.join(","));
-    } else if (P !== undefined) args.push(P);
+    } else if (arg !== undefined) args.push(arg);
   }
   let effortValue = effortLevelValue(effort);
   let fastMode = getFastModeFlag();
@@ -105,18 +105,18 @@ function buildRelaunchArgs(permissionContext, effort, { carryModel = true } = {}
 }
 //@ chunk-y162pn60.js:19325-19457 placement
 function getFastModeFlag() {
-  let e = eagerParseCliFlag("--fast-mode");
-  if (e !== "on" && e !== "off") return;
+  let flagValue = eagerParseCliFlag("--fast-mode");
+  if (flagValue !== "on" && flagValue !== "off") return;
   let fastMode = getFlagSettingsInline()?.fastMode;
-  return typeof fastMode === "boolean" ? (fastMode ? "on" : "off") : e;
+  return typeof fastMode === "boolean" ? (fastMode ? "on" : "off") : flagValue;
 }
 //@ chunk-y162pn60.js:19457-19525 placement
 /**
  * 判断一条权限规则能否原样写进重启命令行。
  */
-function isCarriableRule(e) {
-  let n = splitRuleList([e]);
-  return n.length === 1 && n[0] === e && isAcceptableModelArg(e);
+function isCarriableRule(rule) {
+  let parts = splitRuleList([rule]);
+  return parts.length === 1 && parts[0] === rule && isAcceptableModelArg(rule);
 }
 //@ chunk-y162pn60.js:19525-20095 placement
 /**
@@ -135,11 +135,11 @@ function listUncarriedLaunchSettings(permissionContext, hasRestrictedFlags) {
     ...([
       ...(permissionContext.alwaysAllowRules.cliArg ?? []),
       ...(permissionContext.alwaysDenyRules.cliArg ?? []),
-    ].some((r) => !isCarriableRule(r))
+    ].some((rule) => !isCarriableRule(rule))
       ? ["permission rules a command line cannot carry intact"]
       : []),
     ...(getDirsFromSources(permissionContext.additionalWorkingDirectories, ["cliArg"]).some(
-      (r) => !isAcceptableModelArg(r),
+      (rule) => !isAcceptableModelArg(rule),
     )
       ? ["added directories a command line cannot carry intact"]
       : []),
@@ -151,8 +151,8 @@ function listUncarriedLaunchSettings(permissionContext, hasRestrictedFlags) {
  */
 function buildPermissionAndAgentArgs(toolPermissionContext, forkReplayLaunchConfig) {
   return [
-    ...(toolPermissionContext.alwaysAllowRules.cliArg ?? []).flatMap((r) => ["--allowed-tools", r]),
-    ...(toolPermissionContext.alwaysDenyRules.cliArg ?? []).flatMap((r) => ["--disallowed-tools", r]),
+    ...(toolPermissionContext.alwaysAllowRules.cliArg ?? []).flatMap((rule) => ["--allowed-tools", rule]),
+    ...(toolPermissionContext.alwaysDenyRules.cliArg ?? []).flatMap((rule) => ["--disallowed-tools", rule]),
     ...flagArgs("--agent", forkReplayLaunchConfig.agent),
     ...flagArgs("--agents", forkReplayLaunchConfig.agents),
     ...flagArgs("--append-system-prompt", forkReplayLaunchConfig.appendSystemPrompt),
@@ -163,32 +163,32 @@ function buildPermissionAndAgentArgs(toolPermissionContext, forkReplayLaunchConf
 /**
  * 把标志与值拼成 argv 片段（含空格的值拆成两个参数）。
  */
-function flagArgs(e, n) {
-  if (!n) return [];
-  return isAcceptableModelArg(n) ? [e, n] : [`${e}=${n}`];
+function flagArgs(name, value) {
+  if (!value) return [];
+  return isAcceptableModelArg(value) ? [name, value] : [`${name}=${value}`];
 }
 //@ chunk-y162pn60.js:20498-20552 placement
 /**
  * 布尔值转 "on"/"off"（undefined 原样返回）。
  */
-function onOffFlagValue(e) {
-  return e === undefined ? undefined : e ? "on" : "off";
+function onOffFlagValue(enabled) {
+  return enabled === undefined ? undefined : enabled ? "on" : "off";
 }
 //@ chunk-y162pn60.js:20552-20675 placement
-function getDirsFromSources(additionalWorkingDirectories, n) {
-  return Array.from(additionalWorkingDirectories.values())
-    .filter((r) => n.includes(r.source))
-    .filter((r) => !isNonWslUncPath(r.path))
-    .map((r) => r.path);
+function getDirsFromSources(dirsByKey, sources) {
+  return Array.from(dirsByKey.values())
+    .filter((dirEntry) => sources.includes(dirEntry.source))
+    .filter((dirEntry) => !isNonWslUncPath(dirEntry.path))
+    .map((dirEntry) => dirEntry.path);
 }
 //@ chunk-y162pn60.js:20675-20759 placement
 /**
  * 生成重启时要保留的早期参数 argv。
  */
-function earlyArgsArgv(additionalWorkingDirectories) {
+function earlyArgsArgv(dirs) {
   return earlyArgsToArgv({
     ...parseEarlyArgs(getReplConfigArgv()).config,
-    addDir: cliAddDirs(additionalWorkingDirectories),
+    addDir: cliAddDirs(dirs),
     settingSources: appliedSettingSourcesFlagValue(),
   });
 }
@@ -196,32 +196,32 @@ function earlyArgsArgv(additionalWorkingDirectories) {
 /**
  * 去掉旧的 --add-dir 参数后加上新的附加目录。
  */
-function replaceAddDirArgs(e, n) {
-  return [...stripAddDirArgs(e), ...cliAddDirs(n).flatMap((r) => ["--add-dir", r])];
+function replaceAddDirArgs(args, dirs) {
+  return [...stripAddDirArgs(args), ...cliAddDirs(dirs).flatMap((dir) => ["--add-dir", dir])];
 }
 //@ chunk-y162pn60.js:20833-20940 placement
-function stripAddDirArgs(e) {
-  let n = [];
-  let r = false;
-  for (let s of e)
-    if (r) r = false;
-    else if (s === "--add-dir") r = true;
-    else n.push(s);
-  return n;
+function stripAddDirArgs(args) {
+  let kept = [];
+  let skipNext = false;
+  for (let arg of args)
+    if (skipNext) skipNext = false;
+    else if (arg === "--add-dir") skipNext = true;
+    else kept.push(arg);
+  return kept;
 }
 //@ chunk-y162pn60.js:20940-20991 placement
 /**
  * 取命令行来源的附加目录（过滤非法路径）。
  */
-function cliAddDirs(e) {
-  return getDirsFromSources(e, ["cliArg"]).filter(isAcceptableModelArg);
+function cliAddDirs(dirs) {
+  return getDirsFromSources(dirs, ["cliArg"]).filter(isAcceptableModelArg);
 }
 //@ chunk-y162pn60.js:20991-21044 placement
 /**
  * 取会话来源的附加目录。
  */
-function sessionAddDirs(e) {
-  return getDirsFromSources(e, ["session"]).filter(isAcceptableModelArg);
+function sessionAddDirs(dirs) {
+  return getDirsFromSources(dirs, ["session"]).filter(isAcceptableModelArg);
 }
 //@ chunk-y162pn60.js:21044-21087 placement
 var CLAUDE_RELAUNCH_SESSION_ADD_DIRS = "CLAUDE_RELAUNCH_SESSION_ADD_DIRS";
@@ -230,10 +230,10 @@ var CLAUDE_RELAUNCH_SESSION_ADD_DIRS = "CLAUDE_RELAUNCH_SESSION_ADD_DIRS";
  * 把会话附加目录写进重启环境变量。
  */
 function sessionAddDirsEnv(additionalWorkingDirectories) {
-  let n = sessionAddDirs(additionalWorkingDirectories);
-  return n.length > 0
+  let addDirs = sessionAddDirs(additionalWorkingDirectories);
+  return addDirs.length > 0
     ? {
-        [CLAUDE_RELAUNCH_SESSION_ADD_DIRS]: jsonStringify(n),
+        [CLAUDE_RELAUNCH_SESSION_ADD_DIRS]: jsonStringify(addDirs),
       }
     : {};
 }
@@ -241,18 +241,18 @@ function sessionAddDirsEnv(additionalWorkingDirectories) {
 /**
  * 从参数中去掉 --channels 及其值。
  */
-function stripChannelsArgs(e) {
-  let n = [];
-  for (let j = 0; j < e.length; j++) {
-    let s = e[j];
-    if (s === "--channels") {
+function stripChannelsArgs(args) {
+  let kept = [];
+  for (let j = 0; j < args.length; j++) {
+    let arg = args[j];
+    if (arg === "--channels") {
       j++;
       continue;
     }
-    if (s.startsWith("--channels=")) continue;
-    n.push(s);
+    if (arg.startsWith("--channels=")) continue;
+    kept.push(arg);
   }
-  return n;
+  return kept;
 }
 export {
   earlyArgsArgv,

@@ -68,29 +68,29 @@ function handleRemoteCancel({
   deliver,
   letHeldGo,
 }) {
-  let P = pressed !== undefined && pressed !== null && pressed !== "";
-  letHeldGo?.((re) => !P || re.uuid === pressed);
+  let hasPressed = pressed !== undefined && pressed !== null && pressed !== "";
+  letHeldGo?.((queued) => !hasPressed || queued.uuid === pressed);
   let filtered = drain.pendingDispatchUuids.filter(
     (pendingDispatchUuid) => !messageQueue.hasCancelPendingAcked(pendingDispatchUuid),
   );
-  let filtered_2 = messageQueue.getCommandQueueSnapshot().filter((re) => {
-    let Ae = re.uuid && standsFor?.(re.uuid);
-    return Ae
-      ? !P || Ae === pressed
-      : isPromptModeQueuedCommand(re) &&
-          !re.isMeta &&
-          isHumanOrAutoContinuation(re.origin) &&
-          re.shouldQuery !== false &&
-          re.passive !== true &&
-          (!P || re.uuid === pressed);
+  let filtered_2 = messageQueue.getCommandQueueSnapshot().filter((queued) => {
+    let stands = queued.uuid && standsFor?.(queued.uuid);
+    return stands
+      ? !hasPressed || stands === pressed
+      : isPromptModeQueuedCommand(queued) &&
+          !queued.isMeta &&
+          isHumanOrAutoContinuation(queued.origin) &&
+          queued.shouldQuery !== false &&
+          queued.passive !== true &&
+          (!hasPressed || queued.uuid === pressed);
   });
   let abortController = drain.abortController;
-  let G;
+  let sendNow;
   if (filtered_2.length === 0)
-    G = (
-      P
-        ? filtered.some((re) => (standsFor?.(re) ?? re) === pressed) ||
-          frameIntake.parkedUuids().some((re) => re === pressed)
+    sendNow = (
+      hasPressed
+        ? filtered.some((uuid) => (standsFor?.(uuid) ?? uuid) === pressed) ||
+          frameIntake.parkedUuids().some((uuid) => uuid === pressed)
         : (filtered.length > 0 && drain.intentBatchInFlight) || frameIntake.hasParked()
     )
       ? "delivering"
@@ -104,7 +104,7 @@ function handleRemoteCancel({
     filtered_2.every(({ uuid }) => uuid !== undefined && messageQueue.isFoldInFlight(uuid)) ||
     deliver?.() === true
   )
-    G = "delivering";
+    sendNow = "delivering";
   else {
     noteAuthRefreshStop();
     drain.sendNowCutTurn = true;
@@ -114,7 +114,7 @@ function handleRemoteCancel({
       messageQueue,
       io,
     });
-    G = "stopped";
+    sendNow = "stopped";
   }
   let { receipt } = cancelQueuedMessages({
     cancelQueued: false,
@@ -126,7 +126,7 @@ function handleRemoteCancel({
   });
   return {
     still_queued: receipt.still_queued,
-    send_now: G,
+    send_now: sendNow,
     ...(receipt.put_back && {
       put_back: receipt.put_back,
     }),
@@ -135,13 +135,14 @@ function handleRemoteCancel({
 //@ chunk-tyg7f3ek.js:294907-295176 placement
 function isCancelAimedAtParkedBatch({ drain, prewaitLatch, aim }) {
   if (aim === undefined) return false;
-  let s = prewaitLatch.parkedIntentBatch();
-  let h = mergeTurnUuids(drain.currentTurn, s);
-  if (!h.known || aim.names(h.uuids)) return false;
+  let batch = prewaitLatch.parkedIntentBatch();
+  let merged = mergeTurnUuids(drain.currentTurn, batch);
+  if (!merged.known || aim.names(merged.uuids)) return false;
   return !(
     (drain.turnUnderWay
       ? !drain.turnUnderWayAnswersAClient
-      : drain.abortController === undefined && !isResumedTurnBatch(s)) && prewaitLatch.namesQueuedWork(aim)
+      : drain.abortController === undefined && !isResumedTurnBatch(batch)) &&
+    prewaitLatch.namesQueuedWork(aim)
   );
 }
 //@ chunk-tyg7f3ek.js:295176-295239 placement
@@ -151,65 +152,67 @@ var REMOTE_GATE_STATE_LABELS = {
   cold: "flags_not_fetched",
 };
 //@ chunk-tyg7f3ek.js:295239-295408 placement
-function interruptCurrentTurn(e) {
-  let { drain } = e;
+function interruptCurrentTurn(options) {
+  let { drain } = options;
   noteAuthRefreshStop();
   if (drain.abortController) {
-    if (!e.lateBind) MODEL_SWITCH_STATE();
+    if (!options.lateBind) MODEL_SWITCH_STATE();
     drain.abortController.abort(userAbortReason("remote-cancel"));
-    return denyAnswersOnCancel(e, false) || drain.turnUnderWay;
+    return denyAnswersOnCancel(options, false) || drain.turnUnderWay;
   }
-  return cancelPendingAnswers(e);
+  return cancelPendingAnswers(options);
 }
 //@ chunk-tyg7f3ek.js:295408-295510 placement
-function cancelPendingAnswers(e) {
-  if (!e.lateBind) MODEL_SWITCH_STATE();
-  let n = e.prewaitLatch.interruptBeforeArm(e.aim);
-  return denyAnswersOnCancel(e, true) || n;
+function cancelPendingAnswers(options) {
+  if (!options.lateBind) MODEL_SWITCH_STATE();
+  let interrupted = options.prewaitLatch.interruptBeforeArm(options.aim);
+  return denyAnswersOnCancel(options, true) || interrupted;
 }
 //@ chunk-tyg7f3ek.js:295510-296387 placement
 function denyAnswersOnCancel(
   { drain, prewaitLatch, aim, cancelQueued, lateBind, onAnswerWaiting },
   besideTheLatch,
 ) {
-  let R = false;
+  let kept = false;
   try {
     if (!env.CLAUDE_CODE_REMOTE || prewaitLatch.pendingAnswersFor(undefined, cancelQueued).length === 0)
       return false;
-    let w = prewaitLatch.pendingAnswersFor(aim, cancelQueued);
-    let P =
-      w.length === 0
+    let answers = prewaitLatch.pendingAnswersFor(aim, cancelQueued);
+    let outcome =
+      answers.length === 0
         ? "not_named"
         : drain.turnUnderWay && drain.intentBatchInFlight
           ? "turn_under_way"
           : REMOTE_GATE_STATE_LABELS[getRemoteFeatureGateState(TENGU_SPLENDID_LYNX)];
-    let L = P === "kept" && lateBind ? "late_bind_not_kept" : P;
-    if (L === "kept") {
-      prewaitLatch.startAborted(w);
-      R = true;
+    let finalOutcome = outcome === "kept" && lateBind ? "late_bind_not_kept" : outcome;
+    if (finalOutcome === "kept") {
+      prewaitLatch.startAborted(answers);
+      kept = true;
     }
-    let q = {
+    let fields = {
       beside_the_latch: besideTheLatch,
-      answers_reached: w.length,
-      other_batch_taken: prewaitLatch.parkedIntentBatch().some((x) => x.orphanedPermission === undefined),
+      answers_reached: answers.length,
+      other_batch_taken: prewaitLatch
+        .parkedIntentBatch()
+        .some((queued) => queued.orphanedPermission === undefined),
       stop_has_names: aim !== undefined,
       cancel_queued: cancelQueued,
       late_bind_interrupt: lateBind,
       turn_armed_before: drain.abortController !== undefined,
     };
-    onAnswerWaiting?.(L, q);
-    if (L === "kept") logFeatureOk("headless_interrupt_kept_for_permission_answer", q);
-    else logFeatureSad("headless_interrupt_kept_for_permission_answer", L, q);
+    onAnswerWaiting?.(finalOutcome, fields);
+    if (finalOutcome === "kept") logFeatureOk("headless_interrupt_kept_for_permission_answer", fields);
+    else logFeatureSad("headless_interrupt_kept_for_permission_answer", finalOutcome, fields);
     logForDiagnosticsNoPII("info", "cli_stop_before_permission_answer", () => ({
-      outcome: L,
-      ...flagKey("outcome", L),
-      ...q,
+      outcome: finalOutcome,
+      ...flagKey("outcome", finalOutcome),
+      ...fields,
       ...chatOriginField(),
     }));
   } catch (error) {
     logError(error);
   }
-  return R;
+  return kept;
 }
 //@ chunk-tyg7f3ek.js:296387-296701 placement
 function requeueTakenMessage({ cancelQueued, messageQueue, io }) {
@@ -242,25 +245,28 @@ function cancelQueuedMessages({
   let filtered = messageQueue
     .getCommandQueueSnapshot()
     .filter(isMainAgentCommand)
-    .map((q) => q.uuid)
-    .filter((q) => q !== undefined);
-  let P = emptyPartitionedNotifications();
-  let L;
+    .map((queued) => queued.uuid)
+    .filter((uuid) => uuid !== undefined);
+  let survivors = emptyPartitionedNotifications();
+  let receipt;
   if (cancelQueued) {
-    let q = clearHeldInput();
+    let heldInput = clearHeldInput();
     let combined = messageQueue
       .removeByFilter(isMainAgentCommand, {
         reason: "cleared_on_cancel",
       })
-      .concat(q);
+      .concat(heldInput);
     forgetCodeliveredFollowups(combined);
-    P = partitionStopNotifications(combined);
+    survivors = partitionStopNotifications(combined);
     discardPollEvent(combined.filter(isPollEventMode), "interrupt cleared the queue");
-    let G = [...(frameIntake?.cancelParked() ?? []), ...(waitingCopies?.cancelWaitingToRun() ?? [])];
-    for (let re of G) io.onCommandLifecycle?.(re, "cancelled");
-    let Z = new Set([...P.staleRows, ...P.watchLifecycle].map((re) => re.uuid));
-    for (let re of combined)
-      if (re.uuid !== undefined && !Z.has(re.uuid)) io.onCommandLifecycle?.(re.uuid, "cancelled");
+    let cancelledCopies = [
+      ...(frameIntake?.cancelParked() ?? []),
+      ...(waitingCopies?.cancelWaitingToRun() ?? []),
+    ];
+    for (let uuid of cancelledCopies) io.onCommandLifecycle?.(uuid, "cancelled");
+    let keptUuids = new Set([...survivors.staleRows, ...survivors.watchLifecycle].map((row) => row.uuid));
+    for (let row of combined)
+      if (row.uuid !== undefined && !keptUuids.has(row.uuid)) io.onCommandLifecycle?.(row.uuid, "cancelled");
     prewaitLatch.clearIfNothingPending();
     for (let pendingDispatchUuid of drain.pendingDispatchUuids)
       if (
@@ -269,21 +275,21 @@ function cancelQueuedMessages({
         })
       )
         io.onCommandLifecycle?.(pendingDispatchUuid, "cancelled");
-    L = {
+    receipt = {
       still_queued: [],
       cancelled: [
         ...drain.pendingDispatchUuids,
-        ...filtered.filter((re) => !Z.has(re) && true),
-        ...q.flatMap((re) => re.uuid ?? []),
-        ...G,
+        ...filtered.filter((uuid) => !keptUuids.has(uuid) && true),
+        ...heldInput.flatMap((held) => held.uuid ?? []),
+        ...cancelledCopies,
       ],
     };
   } else {
     if (turn === undefined && !drain.abortController) waitingCopies?.stopWaitingToRun();
     let flattened = messageQueue
       .getCommandQueueSnapshot()
-      .flatMap((x) => (x.runsAlone && x.uuid !== undefined ? [x.uuid] : []));
-    L = {
+      .flatMap((queued) => (queued.runsAlone && queued.uuid !== undefined ? [queued.uuid] : []));
+    receipt = {
       still_queued: [
         ...drain.pendingDispatchUuids.filter(
           (pendingDispatchUuid) => !messageQueue.hasCancelPendingAcked(pendingDispatchUuid),
@@ -298,14 +304,14 @@ function cancelQueuedMessages({
     };
   }
   if (turn !== undefined) {
-    L.turn = turn;
+    receipt.turn = turn;
     logFeatureOk("headless_interrupt_turn", {
       outcome: fromEnum(turn),
     });
   }
   return {
-    receipt: L,
-    clearSurvivors: P,
+    receipt,
+    clearSurvivors: survivors,
   };
 }
 //@ chunk-tyg7f3ek.js:298033-298097 placement
@@ -334,9 +340,10 @@ class KeepaliveAfterStop {
       if (remoteFeatureGateState === "off" || this.deps.isSessionEnding()) return;
       let turnSignal = this.deps.getTurnSignal();
       if (turnSignal !== undefined && !turnSignal.aborted) return;
-      let r = unownedShellState(this.deps.getTasks(), Date.now());
-      if (r === "past_ceiling" && remoteFeatureGateState === "on") this.logWindow("ceiling_at_stop", 0, 0);
-      if (r !== "some") return;
+      let shellState = unownedShellState(this.deps.getTasks(), Date.now());
+      if (shellState === "past_ceiling" && remoteFeatureGateState === "on")
+        this.logWindow("ceiling_at_stop", 0, 0);
+      if (shellState !== "some") return;
       if (sendSessionActivitySignal_2()) {
         if (remoteFeatureGateState === "on" && !this.loggedWorkOnlyStop) {
           this.loggedWorkOnlyStop = true;
@@ -354,10 +361,10 @@ class KeepaliveAfterStop {
       this.fail(error, "arm_throw");
     }
   }
-  disarm(e) {
+  disarm(state) {
     this.loggedWorkOnlyStop = false;
     try {
-      this.end(e);
+      this.end(state);
     } catch (error) {
       this.fail(error, "disarm_throw");
     }
@@ -383,9 +390,9 @@ class KeepaliveAfterStop {
         this.end("keepalive_for_work_only");
         return;
       }
-      let r = unownedShellState(this.deps.getTasks(), Date.now());
-      if (r !== "some") {
-        this.end(r === "past_ceiling" ? "ceiling" : "task_ended");
+      let shellState = unownedShellState(this.deps.getTasks(), Date.now());
+      if (shellState !== "some") {
+        this.end(shellState === "past_ceiling" ? "ceiling" : "task_ended");
         return;
       }
       if (remoteFeatureGateState === "cold") return;
@@ -403,36 +410,36 @@ class KeepaliveAfterStop {
     this.unregisterExitCleanup = undefined;
     return true;
   }
-  end(e) {
+  end(keepalive) {
     if (!this.clear()) return;
-    if (this.sawFlagOn) this.logWindow(e, this.framesSent, Date.now() - this.armedAt);
+    if (this.sawFlagOn) this.logWindow(keepalive, this.framesSent, Date.now() - this.armedAt);
   }
-  logWindow(e, framesSent, armedMs) {
+  logWindow(reason, framesSent, armedMs) {
     logFeatureOk("ccr_keepalive_after_stop", {
-      retire_reason: fromEnum(e),
+      retire_reason: fromEnum(reason),
       frames_sent: framesSent,
       armed_ms: armedMs,
     });
   }
-  fail(e, n) {
+  fail(reason, error) {
     this.clear();
-    logFeatureBad("ccr_keepalive_after_stop", n);
-    logError(e);
+    logFeatureBad("ccr_keepalive_after_stop", error);
+    logError(reason);
   }
 }
 //@ chunk-tyg7f3ek.js:299901-299925 placement
-function tickKeepalive(e) {
-  e.tick();
+function tickKeepalive(keepalive) {
+  keepalive.tick();
 }
 //@ chunk-tyg7f3ek.js:299925-300074 placement
-function unownedShellState(tasks, n) {
-  let r = false;
-  for (let s of Object.values(tasks ?? {})) {
-    if (!isUnownedRunningShell(s)) continue;
-    if (n - s.startTime < OWN_CARD_DEADLINE_MS) return "some";
-    r = true;
+function unownedShellState(tasks, now) {
+  let sawPastCeiling = false;
+  for (let task of Object.values(tasks ?? {})) {
+    if (!isUnownedRunningShell(task)) continue;
+    if (now - task.startTime < OWN_CARD_DEADLINE_MS) return "some";
+    sawPastCeiling = true;
   }
-  return r ? "past_ceiling" : "none";
+  return sawPastCeiling ? "past_ceiling" : "none";
 }
 //@ chunk-tyg7f3ek.js:300074-300171 placement
 var TENGU_MISTY_AURORA = "tengu_misty_aurora";
@@ -510,109 +517,114 @@ class OwnCardDeadline {
   tick() {
     try {
       let now = Date.now();
-      let n = this.noteCards(now);
-      let r = unansweredCardDeadlineMs();
-      if (n === 0 || r === 0 || this.deps.isSessionEnding()) {
+      let cardState = this.noteCards(now);
+      let deadlineMs = unansweredCardDeadlineMs();
+      if (cardState === 0 || deadlineMs === 0 || this.deps.isSessionEnding()) {
         this.disarm();
         return;
       }
-      let s = this.deps.io.taskHoldSince();
-      if (s === undefined || now < s + r || now < getLastInteractionTime() + TASK_HOLD_AFTER_INTERACTION_MS)
+      let holdSince = this.deps.io.taskHoldSince();
+      if (
+        holdSince === undefined ||
+        now < holdSince + deadlineMs ||
+        now < getLastInteractionTime() + TASK_HOLD_AFTER_INTERACTION_MS
+      )
         return;
-      let h = staleCanUseToolRequests(this.deps.io, this.deps.mainTranscript);
-      if (h === undefined) {
+      let staleRequests = staleCanUseToolRequests(this.deps.io, this.deps.mainTranscript);
+      if (staleRequests === undefined) {
         this.disarm();
         logFeatureBad("ccr_own_card_deadline", "cards_unreadable");
         return;
       }
-      if (h.length !== this.deps.io.pendingHumanRequestCount) return;
-      let filtered = h.filter(
+      if (staleRequests.length !== this.deps.io.pendingHumanRequestCount) return;
+      let requests = staleRequests.filter(
         ({ request_id: requestId }) =>
           now >= (this.firstSeenAt.get(requestId) ?? now) + OWN_CARD_LATE_ASK_GRACE_MS,
       );
-      if (filtered.length === 0 || !this.hasFreshFlags(now)) return;
-      for (let { request_id: requestId } of filtered) this.firstSeenAt.delete(requestId);
-      let S = denyPermissionRequests(this.deps.io, filtered);
-      if (S > 0) {
+      if (requests.length === 0 || !this.hasFreshFlags(now)) return;
+      for (let { request_id: requestId } of requests) this.firstSeenAt.delete(requestId);
+      let deniedCount = denyPermissionRequests(this.deps.io, requests);
+      if (deniedCount > 0) {
         logForDebugging(
-          `[own-card-deadline] declined ${S} permission card(s) nobody answered, ${Math.round((now - s) / 60000)} min after the server's task hold began`,
+          `[own-card-deadline] declined ${deniedCount} permission card(s) nobody answered, ${Math.round((now - holdSince) / 60000)} min after the server's task hold began`,
         );
         logFeatureOk("ccr_own_card_deadline", {
-          declined: S,
-          hold_age_ms: now - s,
+          declined: deniedCount,
+          hold_age_ms: now - holdSince,
         });
       }
-      if (S < filtered.length) logFeatureSad("ccr_own_card_deadline", "decline_not_settled");
+      if (deniedCount < requests.length) logFeatureSad("ccr_own_card_deadline", "decline_not_settled");
     } catch (error) {
       this.fail(error, "tick_throw");
     }
   }
-  hasFreshFlags(e) {
-    if (this.flagsFetchedAt !== undefined && e - this.flagsFetchedAt <= FLAGS_FRESH_MS) return true;
+  hasFreshFlags(flags) {
+    if (this.flagsFetchedAt !== undefined && flags - this.flagsFetchedAt <= FLAGS_FRESH_MS) return true;
     if (this.flagFetchAskedAt !== undefined) {
-      if (e - this.flagFetchAskedAt < FLAG_FETCH_ASK_COOLDOWN_MS) return false;
+      if (flags - this.flagFetchAskedAt < FLAG_FETCH_ASK_COOLDOWN_MS) return false;
       if (!this.flagFetchFailureReported) {
         this.flagFetchFailureReported = true;
         logFeatureSad("ccr_own_card_deadline", "flag_fetch_brought_nothing");
       }
     }
-    this.flagFetchAskedAt = e;
+    this.flagFetchAskedAt = flags;
     refreshGrowthBookFeatures().catch(logError);
     return false;
   }
-  noteCards(e) {
-    let n = new Set(
+  noteCards(nowMs) {
+    let pendingIds = new Set(
       this.deps.io.getPendingPermissionRequests().map(({ request_id: requestId }) => requestId),
     );
-    for (let key of this.firstSeenAt.keys()) if (!n.has(key)) this.firstSeenAt.delete(key);
-    for (let r of n) if (!this.firstSeenAt.has(r)) this.firstSeenAt.set(r, e);
-    return n.size;
+    for (let key of this.firstSeenAt.keys()) if (!pendingIds.has(key)) this.firstSeenAt.delete(key);
+    for (let requestId of pendingIds)
+      if (!this.firstSeenAt.has(requestId)) this.firstSeenAt.set(requestId, nowMs);
+    return pendingIds.size;
   }
-  fail(e, n) {
+  fail(reason, error) {
     this.disarm();
-    logFeatureBad("ccr_own_card_deadline", n);
-    logError(e);
+    logFeatureBad("ccr_own_card_deadline", error);
+    logError(reason);
   }
 }
 //@ chunk-tyg7f3ek.js:302582-302606 placement
-function tickOwnCardDeadline(e) {
-  e.tick();
+function tickOwnCardDeadline(deadline) {
+  deadline.tick();
 }
 //@ chunk-tyg7f3ek.js:302643-302960 placement
-function markOwnWord(e, n) {
+function markOwnWord(message, fromHost) {
   try {
-    let r = n && e.shouldQuery !== false && !isPeerOrSlackPing(e.origin);
-    let s =
-      r &&
-      e.seededSummon !== true &&
-      e.foreignWord === undefined &&
-      e.artifactCommentTurn === undefined &&
-      !isVerifiedSlackHuman(e) &&
-      isUserTypedPrompt(e.value, e.origin, e.isMeta === true);
-    let h = s && e.uuid === undefined;
-    return r
+    let hostAsked = fromHost && message.shouldQuery !== false && !isPeerOrSlackPing(message.origin);
+    let isOwnWord =
+      hostAsked &&
+      message.seededSummon !== true &&
+      message.foreignWord === undefined &&
+      message.artifactCommentTurn === undefined &&
+      !isVerifiedSlackHuman(message) &&
+      isUserTypedPrompt(message.value, message.origin, message.isMeta === true);
+    let needsStopKey = isOwnWord && message.uuid === undefined;
+    return hostAsked
       ? {
-          ...e,
+          ...message,
           hostAsked: true,
-          ...(s && {
+          ...(isOwnWord && {
             ownWord: true,
           }),
-          ...(h && {
+          ...(needsStopKey && {
             stopKey: randomUUID(),
           }),
         }
-      : e;
+      : message;
   } catch (error) {
     if (!isAbortError(error)) logError(error);
-    return e;
+    return message;
   }
 }
 //@ chunk-tyg7f3ek.js:302960-303034 placement
-function withOwnWordStopKey(e) {
+function withOwnWordStopKey(message) {
   return {
-    ...e,
+    ...message,
     ownWord: true,
-    ...(e.uuid === undefined && {
+    ...(message.uuid === undefined && {
       stopKey: randomUUID(),
     }),
   };

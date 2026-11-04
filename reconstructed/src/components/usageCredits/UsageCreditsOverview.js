@@ -13,7 +13,7 @@ import { sanitizeUserText, formatCardOnFile } from "./ExtraUsageDialog.js";
 import { formatCurrency } from "../../services/api/referral.js";
 import { startOfDay } from "../../utils/formatBriefTimestamp.js";
 import { EXTRA_USAGE_SUPPORT_URL } from "../../services/claudeAiLimits.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
@@ -30,55 +30,55 @@ import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { promoOfferStrings, fillUsageTemplate } from "../../services/api/usage.js";
 import { percentOfBase, discountPercentOfPay, selectBonusPct } from "./creditOffers.js";
 import { logCreditOfferShown } from "../../services/usageCreditOffers.js";
-import { P } from "../../../vendor/react/cjs/react.production.js";
+import { useEffect } from "../../../vendor/react/cjs/react.production.js";
 
 //@ chunk-18hwfzwa.js:1146666-1147575 placement
-function promoCreditExpiry(balance, date) {
+function promoCreditExpiry(balance, startDate) {
   if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_juniper_bassoon", false)) return null;
-  let D = null;
-  for (let He of balance?.promo_tranches ?? []) {
-    let remainingAmountMinorUnits = He.remaining_amount_minor_units;
-    let timestamp = Date.parse(He.expires_at ?? "");
+  let earliest = null;
+  for (let tranche of balance?.promo_tranches ?? []) {
+    let remainingAmountMinorUnits = tranche.remaining_amount_minor_units;
+    let timestamp = Date.parse(tranche.expires_at ?? "");
     if (
       typeof remainingAmountMinorUnits !== "number" ||
       remainingAmountMinorUnits <= 0 ||
       Number.isNaN(timestamp)
     )
       continue;
-    if (timestamp <= date.getTime()) continue;
-    let Xe = sanitizeUserText(He.currency ?? "");
-    if (!Xe) continue;
-    if (!D || timestamp < D.expiresMs) {
-      let rt = He.name ? sanitizeUserText(He.name) : "";
-      D = {
+    if (timestamp <= startDate.getTime()) continue;
+    let currency = sanitizeUserText(tranche.currency ?? "");
+    if (!currency) continue;
+    if (!earliest || timestamp < earliest.expiresMs) {
+      let trancheName = tranche.name ? sanitizeUserText(tranche.name) : "";
+      earliest = {
         expiresMs: timestamp,
         amountMinorUnits: remainingAmountMinorUnits,
-        currency: Xe,
-        name: rt || null,
+        currency,
+        name: trancheName || null,
       };
     }
   }
-  if (!D) return null;
-  let L = formatCurrency(D.amountMinorUnits, D.currency);
-  let ee = D.name ? ` \xB7 ${D.name}` : "";
-  if (D.expiresMs - date.getTime() < 864000000) {
-    let ofDay = startOfDay(date, new Date(D.expiresMs));
-    let We = ofDay <= 0 ? "today" : ofDay === 1 ? "in 1 day" : `in ${ofDay} days`;
+  if (!earliest) return null;
+  let amountLabel = formatCurrency(earliest.amountMinorUnits, earliest.currency);
+  let nameSuffix = earliest.name ? ` \xB7 ${earliest.name}` : "";
+  if (earliest.expiresMs - startDate.getTime() < 864000000) {
+    let ofDay = startOfDay(startDate, new Date(earliest.expiresMs));
+    let daysLabel = ofDay <= 0 ? "today" : ofDay === 1 ? "in 1 day" : `in ${ofDay} days`;
     return {
-      text: `${L} of your balance expires ${We}${ee}`,
+      text: `${amountLabel} of your balance expires ${daysLabel}${nameSuffix}`,
       urgent: true,
     };
   }
-  let date_2 = new Date(D.expiresMs);
-  let Be = date_2.toLocaleDateString("en-US", {
+  let date = new Date(earliest.expiresMs);
+  let expiryDateLabel = date.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
-    ...(date_2.getFullYear() !== date.getFullYear() && {
+    ...(date.getFullYear() !== startDate.getFullYear() && {
       year: "numeric",
     }),
   });
   return {
-    text: `${L} expires ${Be}${ee}`,
+    text: `${amountLabel} expires ${expiryDateLabel}${nameSuffix}`,
     urgent: false,
   };
 }
@@ -86,94 +86,95 @@ function promoCreditExpiry(balance, date) {
 /**
  * 开关开启且月数有效时，返回"用量额度有效期 N 个月"的说明与了解更多链接。
  */
-function getCreditsValidityNote(h) {
+function getCreditsValidityNote(validityMonths) {
   if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_satchel_banjo", false)) return null;
-  if (h === null || !Number.isInteger(h) || h <= 0) return null;
-  return `Usage credits are valid for ${h} ${h === 1 ? "month" : "months"}. Learn more: ${EXTRA_USAGE_SUPPORT_URL}`;
+  if (validityMonths === null || !Number.isInteger(validityMonths) || validityMonths <= 0) return null;
+  return `Usage credits are valid for ${validityMonths} ${validityMonths === 1 ? "month" : "months"}. Learn more: ${EXTRA_USAGE_SUPPORT_URL}`;
 }
 //@ chunk-18hwfzwa.js:1147774-1151352 placement
 /**
  * UsageCreditsOverview：用量额度概览界面。
  */
 function UsageCreditsOverview(props) {
-  let $ = w(61);
+  let $ = useMemoCache(61);
   let { step, currency, onAction, onCancel } = props;
   let { columns } = useTerminalSize();
   let width = Math.min(columns - 6, 50);
   let { usage, balance } = step;
-  let ze;
+  let spentLabel;
   if ($[0] !== currency || $[1] !== usage.used_credits) {
-    ze = usage.used_credits !== null ? formatCurrency(usage.used_credits, currency) : "\u2014";
+    spentLabel = usage.used_credits !== null ? formatCurrency(usage.used_credits, currency) : "\u2014";
     $[0] = currency;
     $[1] = usage.used_credits;
-    $[2] = ze;
-  } else ze = $[2];
-  let Xe = ze;
-  let rt;
+    $[2] = spentLabel;
+  } else spentLabel = $[2];
+  let spentText = spentLabel;
+  let limitLabel;
   if ($[3] !== currency || $[4] !== usage.monthly_limit) {
-    rt = usage.monthly_limit !== null ? formatCurrency(usage.monthly_limit, currency, "fit") : "Unlimited";
+    limitLabel =
+      usage.monthly_limit !== null ? formatCurrency(usage.monthly_limit, currency, "fit") : "Unlimited";
     $[3] = currency;
     $[4] = usage.monthly_limit;
-    $[5] = rt;
-  } else rt = $[5];
-  let kt = rt;
-  let At;
+    $[5] = limitLabel;
+  } else limitLabel = $[5];
+  let limitText = limitLabel;
+  let usedPercent;
   if ($[6] !== usage.utilization) {
-    At = usage.utilization !== null ? Math.round(usage.utilization) : 0;
+    usedPercent = usage.utilization !== null ? Math.round(usage.utilization) : 0;
     $[6] = usage.utilization;
-    $[7] = At;
-  } else At = $[7];
-  let It = At;
-  let Ot;
+    $[7] = usedPercent;
+  } else usedPercent = $[7];
+  let usedPercent_ = usedPercent;
+  let balanceLabel;
   if ($[8] !== balance || $[9] !== currency) {
-    Ot = balance ? formatCurrency(balance.amount, currency) : "\u2014";
+    balanceLabel = balance ? formatCurrency(balance.amount, currency) : "\u2014";
     $[8] = balance;
     $[9] = currency;
-    $[10] = Ot;
-  } else Ot = $[10];
-  let Et = Ot;
-  let Dt = balance?.auto_reload_settings?.enabled === true;
-  let Lt;
-  let oo;
+    $[10] = balanceLabel;
+  } else balanceLabel = $[10];
+  let balanceText = balanceLabel;
+  let autoReloadOn = balance?.auto_reload_settings?.enabled === true;
+  let resetDateLabel;
+  let expiryNotice;
   if ($[11] !== balance) {
     let date = new Date();
     let date_2 = new Date(date.getFullYear(), date.getMonth() + 1, 1);
-    Lt = date_2.toLocaleDateString("en-US", {
+    resetDateLabel = date_2.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
     });
-    oo = promoCreditExpiry(balance, date);
+    expiryNotice = promoCreditExpiry(balance, date);
     $[11] = balance;
-    $[12] = Lt;
-    $[13] = oo;
+    $[12] = resetDateLabel;
+    $[13] = expiryNotice;
   } else {
-    Lt = $[12];
-    oo = $[13];
+    resetDateLabel = $[12];
+    expiryNotice = $[13];
   }
-  let so = oo;
-  let po = usage.is_enabled === false;
-  const label = `${Et} balance \xB7 auto-reload ${Dt ? "on" : "off"}
+  let expiryNotice_ = expiryNotice;
+  let isDisabledUsage = usage.is_enabled === false;
+  const label = `${balanceText} balance \xB7 auto-reload ${autoReloadOn ? "on" : "off"}
 `;
-  let co;
+  let autoReloadOption;
   if ($[14] !== label) {
-    co = {
+    autoReloadOption = {
       label,
       value: "auto_reload",
     };
     $[14] = label;
-    $[15] = co;
-  } else co = $[15];
-  let bo;
+    $[15] = autoReloadOption;
+  } else autoReloadOption = $[15];
+  let buyOption;
   if ($[16] === MEMO_CACHE_SENTINEL) {
-    bo = {
+    buyOption = {
       label: "Buy more",
       value: "buy",
     };
-    $[16] = bo;
-  } else bo = $[16];
-  let Ao;
-  if ($[17] !== po) {
-    Ao = po
+    $[16] = buyOption;
+  } else buyOption = $[16];
+  let continueOptions;
+  if ($[17] !== isDisabledUsage) {
+    continueOptions = isDisabledUsage
       ? []
       : [
           {
@@ -181,38 +182,38 @@ function UsageCreditsOverview(props) {
             value: "continue",
           },
         ];
-    $[17] = po;
-    $[18] = Ao;
-  } else Ao = $[18];
-  let Bo;
-  let Ro;
+    $[17] = isDisabledUsage;
+    $[18] = continueOptions;
+  } else continueOptions = $[18];
+  let adjustOption;
+  let manageOption;
   if ($[19] === MEMO_CACHE_SENTINEL) {
-    Bo = {
+    adjustOption = {
       label: "Adjust monthly limit",
       value: "adjust",
     };
-    Ro = {
+    manageOption = {
       label: "Manage on claude.ai",
       value: "manage",
     };
-    $[19] = Bo;
-    $[20] = Ro;
+    $[19] = adjustOption;
+    $[20] = manageOption;
   } else {
-    Bo = $[19];
-    Ro = $[20];
+    adjustOption = $[19];
+    manageOption = $[20];
   }
-  let Ho;
-  if ($[21] !== co || $[22] !== Ao) {
-    Ho = [co, bo, ...Ao, Bo, Ro];
-    $[21] = co;
-    $[22] = Ao;
-    $[23] = Ho;
-  } else Ho = $[23];
-  let Io = Ho;
-  let Wo;
-  if ($[24] !== po || $[25] !== usage.disabled_reason) {
-    Wo =
-      po &&
+  let options;
+  if ($[21] !== autoReloadOption || $[22] !== continueOptions) {
+    options = [autoReloadOption, buyOption, ...continueOptions, adjustOption, manageOption];
+    $[21] = autoReloadOption;
+    $[22] = continueOptions;
+    $[23] = options;
+  } else options = $[23];
+  let options_ = options;
+  let disabledNoticeElement;
+  if ($[24] !== isDisabledUsage || $[25] !== usage.disabled_reason) {
+    disabledNoticeElement =
+      isDisabledUsage &&
       jsxProd_default(Text, {
         color: "warning",
         children:
@@ -220,34 +221,34 @@ function UsageCreditsOverview(props) {
             ? "Out of usage credits \u2014 buy more below to keep going."
             : "You've hit your monthly limit \u2014 raise it below, or it resets next month.",
       });
-    $[24] = po;
+    $[24] = isDisabledUsage;
     $[25] = usage.disabled_reason;
-    $[26] = Wo;
-  } else Wo = $[26];
-  let mn;
-  if ($[27] !== so) {
-    mn =
-      so !== null &&
-      so.urgent &&
+    $[26] = disabledNoticeElement;
+  } else disabledNoticeElement = $[26];
+  let urgentExpiryElement;
+  if ($[27] !== expiryNotice_) {
+    urgentExpiryElement =
+      expiryNotice_ !== null &&
+      expiryNotice_.urgent &&
       jsxProd_default(Text, {
         color: "warning",
-        children: so.text,
+        children: expiryNotice_.text,
       });
-    $[27] = so;
-    $[28] = mn;
-  } else mn = $[28];
-  let Cn;
-  if ($[29] !== Xe) {
-    Cn = jsxProd_default_2(Text, {
-      children: [Xe, " spent"],
+    $[27] = expiryNotice_;
+    $[28] = urgentExpiryElement;
+  } else urgentExpiryElement = $[28];
+  let spentElement;
+  if ($[29] !== spentText) {
+    spentElement = jsxProd_default_2(Text, {
+      children: [spentText, " spent"],
     });
-    $[29] = Xe;
-    $[30] = Cn;
-  } else Cn = $[30];
-  const ratio = It / 100;
-  let vo;
+    $[29] = spentText;
+    $[30] = spentElement;
+  } else spentElement = $[30];
+  const ratio = usedPercent_ / 100;
+  let progressBar;
   if ($[31] !== ratio || $[32] !== width) {
-    vo = jsxProd_default(ProgressBar, {
+    progressBar = jsxProd_default(ProgressBar, {
       ratio,
       width,
       fillColor: "rate_limit_fill",
@@ -255,90 +256,95 @@ function UsageCreditsOverview(props) {
     });
     $[31] = ratio;
     $[32] = width;
-    $[33] = vo;
-  } else vo = $[33];
-  let Yo;
-  if ($[34] !== It) {
-    Yo = jsxProd_default_2(Text, {
-      children: [It, "% used"],
+    $[33] = progressBar;
+  } else progressBar = $[33];
+  let percentElement;
+  if ($[34] !== usedPercent_) {
+    percentElement = jsxProd_default_2(Text, {
+      children: [usedPercent_, "% used"],
     });
-    $[34] = It;
-    $[35] = Yo;
-  } else Yo = $[35];
-  let kn;
-  if ($[36] !== Cn || $[37] !== vo || $[38] !== Yo) {
-    kn = jsxProd_default_2(Box, {
+    $[34] = usedPercent_;
+    $[35] = percentElement;
+  } else percentElement = $[35];
+  let usageRow;
+  if ($[36] !== spentElement || $[37] !== progressBar || $[38] !== percentElement) {
+    usageRow = jsxProd_default_2(Box, {
       flexDirection: "row",
       gap: 1,
-      children: [Cn, vo, Yo],
+      children: [spentElement, progressBar, percentElement],
     });
-    $[36] = Cn;
-    $[37] = vo;
-    $[38] = Yo;
-    $[39] = kn;
-  } else kn = $[39];
-  let Fn;
-  if ($[40] !== kt || $[41] !== Lt) {
-    Fn = jsxProd_default_2(Text, {
+    $[36] = spentElement;
+    $[37] = progressBar;
+    $[38] = percentElement;
+    $[39] = usageRow;
+  } else usageRow = $[39];
+  let resetElement;
+  if ($[40] !== limitText || $[41] !== resetDateLabel) {
+    resetElement = jsxProd_default_2(Text, {
       dimColor: true,
-      children: ["Resets ", Lt, " \xB7 ", kt, " monthly limit"],
+      children: ["Resets ", resetDateLabel, " \xB7 ", limitText, " monthly limit"],
     });
-    $[40] = kt;
-    $[41] = Lt;
-    $[42] = Fn;
-  } else Fn = $[42];
-  let bn;
-  if ($[43] !== so) {
-    bn =
-      so !== null &&
-      !so.urgent &&
+    $[40] = limitText;
+    $[41] = resetDateLabel;
+    $[42] = resetElement;
+  } else resetElement = $[42];
+  let expiryElement;
+  if ($[43] !== expiryNotice_) {
+    expiryElement =
+      expiryNotice_ !== null &&
+      !expiryNotice_.urgent &&
       jsxProd_default(Text, {
         dimColor: true,
-        children: so.text,
+        children: expiryNotice_.text,
       });
-    $[43] = so;
-    $[44] = bn;
-  } else bn = $[44];
-  let Go;
-  if ($[45] !== kn || $[46] !== Fn || $[47] !== bn) {
-    Go = jsxProd_default_2(Box, {
+    $[43] = expiryNotice_;
+    $[44] = expiryElement;
+  } else expiryElement = $[44];
+  let usageBlock;
+  if ($[45] !== usageRow || $[46] !== resetElement || $[47] !== expiryElement) {
+    usageBlock = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [kn, Fn, bn],
+      children: [usageRow, resetElement, expiryElement],
     });
-    $[45] = kn;
-    $[46] = Fn;
-    $[47] = bn;
-    $[48] = Go;
-  } else Go = $[48];
-  let hn;
-  if ($[49] !== onAction || $[50] !== onCancel || $[51] !== Io) {
-    hn = jsxProd_default(ModelSelector, {
-      options: Io,
+    $[45] = usageRow;
+    $[46] = resetElement;
+    $[47] = expiryElement;
+    $[48] = usageBlock;
+  } else usageBlock = $[48];
+  let selectorElement;
+  if ($[49] !== onAction || $[50] !== onCancel || $[51] !== options_) {
+    selectorElement = jsxProd_default(ModelSelector, {
+      options: options_,
       onChange: onAction,
       onCancel,
-      visibleOptionCount: Io.length,
+      visibleOptionCount: options_.length,
     });
     $[49] = onAction;
     $[50] = onCancel;
-    $[51] = Io;
-    $[52] = hn;
-  } else hn = $[52];
+    $[51] = options_;
+    $[52] = selectorElement;
+  } else selectorElement = $[52];
   let children;
-  if ($[53] !== Wo || $[54] !== mn || $[55] !== Go || $[56] !== hn) {
+  if (
+    $[53] !== disabledNoticeElement ||
+    $[54] !== urgentExpiryElement ||
+    $[55] !== usageBlock ||
+    $[56] !== selectorElement
+  ) {
     children = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [Wo, mn, Go, hn],
+      children: [disabledNoticeElement, urgentExpiryElement, usageBlock, selectorElement],
     });
-    $[53] = Wo;
-    $[54] = mn;
-    $[55] = Go;
-    $[56] = hn;
+    $[53] = disabledNoticeElement;
+    $[54] = urgentExpiryElement;
+    $[55] = usageBlock;
+    $[56] = selectorElement;
     $[57] = children;
   } else children = $[57];
-  let Xo;
+  let dialogElement;
   if ($[58] !== onCancel || $[59] !== children) {
-    Xo = jsxProd_default(Dialog, {
+    dialogElement = jsxProd_default(Dialog, {
       title: "Usage credits",
       onCancel,
       color: "suggestion",
@@ -346,9 +352,9 @@ function UsageCreditsOverview(props) {
     });
     $[58] = onCancel;
     $[59] = children;
-    $[60] = Xo;
-  } else Xo = $[60];
-  return Xo;
+    $[60] = dialogElement;
+  } else dialogElement = $[60];
+  return dialogElement;
 }
 //@ chunk-18hwfzwa.js:1151352-1151441 placement
 function isOfferDriftError(error) {
@@ -359,24 +365,27 @@ function isOfferDriftError(error) {
 /**
  * 生成用量额度优惠的遥测字段（类型、实验组、标题百分比）。
  */
-function getOfferAnalytics(h) {
-  return h === null
+function getOfferAnalytics(offer) {
+  return offer === null
     ? {}
     : {
-        offer_kind: fromEnum(h.kind),
-        offer_arm: sanitizeMarkName(h.armId),
-        offer_headline_pct: h.headlinePct,
+        offer_kind: fromEnum(offer.kind),
+        offer_arm: sanitizeMarkName(offer.armId),
+        offer_headline_pct: offer.headlinePct,
       };
 }
 //@ chunk-18hwfzwa.js:1151553-1151729 placement
 function getOfferDialogHeader(offer) {
   if (offer === null) return null;
-  let x = promoOfferStrings();
+  let offerStrings = promoOfferStrings();
   return (
-    fillUsageTemplate(offer.kind === "pct_off" ? x.dialogHeaderPctOff : x.dialogHeaderExtraCredit, {
-      pct: offer.headlinePct,
-      daysLeft: offer.daysLeft,
-    }) ?? null
+    fillUsageTemplate(
+      offer.kind === "pct_off" ? offerStrings.dialogHeaderPctOff : offerStrings.dialogHeaderExtraCredit,
+      {
+        pct: offer.headlinePct,
+        daysLeft: offer.daysLeft,
+      },
+    ) ?? null
   );
 }
 //@ chunk-18hwfzwa.js:1151729-1154884 placement
@@ -384,210 +393,221 @@ function getOfferDialogHeader(offer) {
  * 额度包选择器。
  */
 function CreditBundlePicker(props) {
-  let $ = w(54);
+  let $ = useMemoCache(54);
   let { pm, presets, offer, customPreviewable, currency, expiryNotice, onConfirm, onCustom, onCancel } =
     props;
-  let ze = offer?.kind === "extra_credit";
-  let rt;
-  if ($[0] !== currency || $[1] !== customPreviewable || $[2] !== ze || $[3] !== offer || $[4] !== presets) {
-    let kt;
-    if ($[6] !== currency || $[7] !== ze) {
-      kt = (At, It) => {
-        if (ze && At.local_credit_minor_units > At.local_price_minor_units) {
-          let Ot = percentOfBase(At.credit_minor_units, At.price_minor_units);
+  let isExtraCredit = offer?.kind === "extra_credit";
+  let options;
+  if (
+    $[0] !== currency ||
+    $[1] !== customPreviewable ||
+    $[2] !== isExtraCredit ||
+    $[3] !== offer ||
+    $[4] !== presets
+  ) {
+    let toPresetOption;
+    if ($[6] !== currency || $[7] !== isExtraCredit) {
+      toPresetOption = (preset, presetIndex) => {
+        if (isExtraCredit && preset.local_credit_minor_units > preset.local_price_minor_units) {
+          let bonusPct = percentOfBase(preset.credit_minor_units, preset.price_minor_units);
           return {
-            label: `Pay ${formatCurrency(At.local_price_minor_units, currency, "fit")} \xB7 Get ${formatCurrency(At.local_credit_minor_units, currency, "fit")}`,
-            description: Ot > 0 ? `+${Ot}% credit` : undefined,
-            value: `p${It}`,
+            label: `Pay ${formatCurrency(preset.local_price_minor_units, currency, "fit")} \xB7 Get ${formatCurrency(preset.local_credit_minor_units, currency, "fit")}`,
+            description: bonusPct > 0 ? `+${bonusPct}% credit` : undefined,
+            value: `p${presetIndex}`,
           };
         }
-        let Et = discountPercentOfPay(At.credit_minor_units, At.price_minor_units);
+        let discountPct = discountPercentOfPay(preset.credit_minor_units, preset.price_minor_units);
         return {
-          label: formatCurrency(At.local_credit_minor_units, currency, "fit"),
-          description: Et > 0 ? `Save ${Et}%` : undefined,
-          value: `p${It}`,
+          label: formatCurrency(preset.local_credit_minor_units, currency, "fit"),
+          description: discountPct > 0 ? `Save ${discountPct}%` : undefined,
+          value: `p${presetIndex}`,
         };
       };
       $[6] = currency;
-      $[7] = ze;
-      $[8] = kt;
-    } else kt = $[8];
-    const mapped = presets.map(kt);
+      $[7] = isExtraCredit;
+      $[8] = toPresetOption;
+    } else toPresetOption = $[8];
+    const mapped = presets.map(toPresetOption);
     let description;
-    if ($[9] !== customPreviewable || $[10] !== ze || $[11] !== offer) {
+    if ($[9] !== customPreviewable || $[10] !== isExtraCredit || $[11] !== offer) {
       description =
-        ze && offer.customBonusTiers !== null && customPreviewable
+        isExtraCredit && offer.customBonusTiers !== null && customPreviewable
           ? `Get ${Math.min(...offer.customBonusTiers.map(selectBonusPct))}% extra credit or more`
           : undefined;
       $[9] = customPreviewable;
-      $[10] = ze;
+      $[10] = isExtraCredit;
       $[11] = offer;
       $[12] = description;
     } else description = $[12];
-    let oo;
+    let customOption;
     if ($[13] !== description) {
-      oo = {
+      customOption = {
         label: "Custom amount\u2026",
         description,
         value: "custom",
       };
       $[13] = description;
-      $[14] = oo;
-    } else oo = $[14];
-    let Xt;
+      $[14] = customOption;
+    } else customOption = $[14];
+    let cancelOption;
     if ($[15] === MEMO_CACHE_SENTINEL) {
-      Xt = {
+      cancelOption = {
         label: "Cancel",
         value: "cancel",
       };
-      $[15] = Xt;
-    } else Xt = $[15];
-    rt = [...mapped, oo, Xt];
+      $[15] = cancelOption;
+    } else cancelOption = $[15];
+    options = [...mapped, customOption, cancelOption];
     $[0] = currency;
     $[1] = customPreviewable;
-    $[2] = ze;
+    $[2] = isExtraCredit;
     $[3] = offer;
     $[4] = presets;
-    $[5] = rt;
-  } else rt = $[5];
-  let io = rt;
-  let kt;
+    $[5] = options;
+  } else options = $[5];
+  let options_ = options;
+  let headerText;
   if ($[16] !== offer) {
-    kt = getOfferDialogHeader(offer);
+    headerText = getOfferDialogHeader(offer);
     $[16] = offer;
-    $[17] = kt;
-  } else kt = $[17];
-  let so = kt;
-  let Dt;
-  let Lt;
-  if ($[18] !== so || $[19] !== offer) {
-    Dt = () => {
-      if (so !== null) logCreditOfferShown("cli_purchase_dialog", getOfferAnalytics(offer));
+    $[17] = headerText;
+  } else headerText = $[17];
+  let headerText_ = headerText;
+  let logShown;
+  let logShownDeps;
+  if ($[18] !== headerText_ || $[19] !== offer) {
+    logShown = () => {
+      if (headerText_ !== null) logCreditOfferShown("cli_purchase_dialog", getOfferAnalytics(offer));
     };
-    Lt = [so, offer];
-    $[18] = so;
+    logShownDeps = [headerText_, offer];
+    $[18] = headerText_;
     $[19] = offer;
-    $[20] = Dt;
-    $[21] = Lt;
+    $[20] = logShown;
+    $[21] = logShownDeps;
   } else {
-    Dt = $[20];
-    Lt = $[21];
+    logShown = $[20];
+    logShownDeps = $[21];
   }
-  P(Dt, Lt);
-  let oo;
+  useEffect(logShown, logShownDeps);
+  let defaultPresetIndex;
   if ($[22] !== offer || $[23] !== presets) {
-    oo =
+    defaultPresetIndex =
       offer?.defaultBundleId === null || offer === null
         ? -1
         : presets.findIndex((preset) => preset.id === offer.defaultBundleId);
     $[22] = offer;
     $[23] = presets;
-    $[24] = oo;
-  } else oo = $[24];
-  let ao = oo;
-  let Xt;
+    $[24] = defaultPresetIndex;
+  } else defaultPresetIndex = $[24];
+  let defaultPresetIndex_ = defaultPresetIndex;
+  let handleChange;
   if ($[25] !== onCancel || $[26] !== onConfirm || $[27] !== onCustom || $[28] !== presets) {
-    Xt = function Ao(co) {
-      if (co === "custom") {
+    handleChange = function handleChange_(value) {
+      if (value === "custom") {
         return onCustom();
       }
-      if (co === "cancel") {
+      if (value === "cancel") {
         return onCancel();
       }
-      let bo = Number(co.slice(1));
-      onConfirm(presets[bo]);
+      let presetIndex = Number(value.slice(1));
+      onConfirm(presets[presetIndex]);
     };
     $[25] = onCancel;
     $[26] = onConfirm;
     $[27] = onCustom;
     $[28] = presets;
-    $[29] = Xt;
-  } else Xt = $[29];
-  let onChange = Xt;
-  let Bo;
-  if ($[30] !== so) {
-    Bo =
-      so !== null &&
+    $[29] = handleChange;
+  } else handleChange = $[29];
+  let onChange = handleChange;
+  let headerElement;
+  if ($[30] !== headerText_) {
+    headerElement =
+      headerText_ !== null &&
       jsxProd_default(Text, {
         color: "success",
-        children: so,
+        children: headerText_,
       });
-    $[30] = so;
-    $[31] = Bo;
-  } else Bo = $[31];
-  let Ro;
+    $[30] = headerText_;
+    $[31] = headerElement;
+  } else headerElement = $[31];
+  let cardLabel;
   if ($[32] !== pm) {
-    Ro = formatCardOnFile(pm);
+    cardLabel = formatCardOnFile(pm);
     $[32] = pm;
-    $[33] = Ro;
-  } else Ro = $[33];
-  let Ho;
-  if ($[34] !== Ro) {
-    Ho = jsxProd_default_2(Text, {
+    $[33] = cardLabel;
+  } else cardLabel = $[33];
+  let cardElement;
+  if ($[34] !== cardLabel) {
+    cardElement = jsxProd_default_2(Text, {
       dimColor: true,
-      children: ["Payment: ", Ro],
+      children: ["Payment: ", cardLabel],
     });
-    $[34] = Ro;
-    $[35] = Ho;
-  } else Ho = $[35];
-  let Io;
-  if ($[36] !== ao) {
-    Io = ao >= 0 && {
-      defaultFocusValue: `p${ao}`,
+    $[34] = cardLabel;
+    $[35] = cardElement;
+  } else cardElement = $[35];
+  let focusProps;
+  if ($[36] !== defaultPresetIndex_) {
+    focusProps = defaultPresetIndex_ >= 0 && {
+      defaultFocusValue: `p${defaultPresetIndex_}`,
     };
-    $[36] = ao;
-    $[37] = Io;
-  } else Io = $[37];
-  let Wo;
-  if ($[38] !== onChange || $[39] !== onCancel || $[40] !== io || $[41] !== Io) {
-    Wo = jsxProd_default(ModelSelector, {
-      options: io,
-      ...Io,
+    $[36] = defaultPresetIndex_;
+    $[37] = focusProps;
+  } else focusProps = $[37];
+  let selectorElement;
+  if ($[38] !== onChange || $[39] !== onCancel || $[40] !== options_ || $[41] !== focusProps) {
+    selectorElement = jsxProd_default(ModelSelector, {
+      options: options_,
+      ...focusProps,
       onChange,
       onCancel,
-      visibleOptionCount: io.length,
+      visibleOptionCount: options_.length,
     });
     $[38] = onChange;
     $[39] = onCancel;
-    $[40] = io;
-    $[41] = Io;
-    $[42] = Wo;
-  } else Wo = $[42];
-  let mn;
+    $[40] = options_;
+    $[41] = focusProps;
+    $[42] = selectorElement;
+  } else selectorElement = $[42];
+  let chargeNoticeElement;
   if ($[43] === MEMO_CACHE_SENTINEL) {
-    mn = jsxProd_default(Text, {
+    chargeNoticeElement = jsxProd_default(Text, {
       dimColor: true,
       children: "By confirming, you allow Anthropic to charge your card in the amount above.",
     });
-    $[43] = mn;
-  } else mn = $[43];
-  let Cn;
+    $[43] = chargeNoticeElement;
+  } else chargeNoticeElement = $[43];
+  let expiryElement;
   if ($[44] !== expiryNotice) {
-    Cn =
+    expiryElement =
       expiryNotice !== null &&
       jsxProd_default(Text, {
         dimColor: true,
         children: expiryNotice,
       });
     $[44] = expiryNotice;
-    $[45] = Cn;
-  } else Cn = $[45];
+    $[45] = expiryElement;
+  } else expiryElement = $[45];
   let children;
-  if ($[46] !== Wo || $[47] !== Cn || $[48] !== Bo || $[49] !== Ho) {
+  if (
+    $[46] !== selectorElement ||
+    $[47] !== expiryElement ||
+    $[48] !== headerElement ||
+    $[49] !== cardElement
+  ) {
     children = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [Bo, Ho, Wo, mn, Cn],
+      children: [headerElement, cardElement, selectorElement, chargeNoticeElement, expiryElement],
     });
-    $[46] = Wo;
-    $[47] = Cn;
-    $[48] = Bo;
-    $[49] = Ho;
+    $[46] = selectorElement;
+    $[47] = expiryElement;
+    $[48] = headerElement;
+    $[49] = cardElement;
     $[50] = children;
   } else children = $[50];
-  let vo;
+  let dialogElement;
   if ($[51] !== onCancel || $[52] !== children) {
-    vo = jsxProd_default(Dialog, {
+    dialogElement = jsxProd_default(Dialog, {
       title: "Buy usage credits",
       onCancel,
       color: "suggestion",
@@ -595,9 +615,9 @@ function CreditBundlePicker(props) {
     });
     $[51] = onCancel;
     $[52] = children;
-    $[53] = vo;
-  } else vo = $[53];
-  return vo;
+    $[53] = dialogElement;
+  } else dialogElement = $[53];
+  return dialogElement;
 }
 export {
   getOfferAnalytics,

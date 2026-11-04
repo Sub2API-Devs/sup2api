@@ -17,37 +17,44 @@ import { logError } from "../log.js";
  * 统计内容里的图片块数量（字符串视为 0）。
  */
 function countImageParts(c) {
-  return typeof c === "string" ? 0 : count(c, (n) => n?.type === "image");
+  return typeof c === "string" ? 0 : count(c, (part) => part?.type === "image");
 }
 //@ chunk-e6aww6q8.js:3291314-3291455 placement
 /**
  * 只有在 bridge 目标未变时保留附件的文件 id，否则记录并丢弃。
  */
-function keepBridgeFileIds(e, n, r) {
-  if (!e?.length) return;
-  if (r === undefined || countImageParts(r) !== countImageParts(n)) {
+function keepBridgeFileIds(fileIds, originalContent, rewrittenContent) {
+  if (!fileIds?.length) return;
+  if (
+    rewrittenContent === undefined ||
+    countImageParts(rewrittenContent) !== countImageParts(originalContent)
+  ) {
     logFeatureSad("bridge_attachment_withdraw", "file_ids_not_kept");
     return;
   }
-  return e;
+  return fileIds;
 }
 //@ chunk-e6aww6q8.js:3291455-3291976 placement
-function withdrawBridgeAttachments(e, turnId, r, imageFileUuids, savedFiles) {
+function withdrawBridgeAttachments(messages, turnId, originalContent, fileIds, savedFiles) {
   try {
-    let found = e.find((w) => w.uuid === turnId);
+    let found = messages.find((message) => message.uuid === turnId);
     if (found?.type === "user" && savedFiles?.length) found.savedFiles = savedFiles;
     else if (savedFiles?.length) logFeatureSad("bridge_attachment_withdraw", "saved_files_not_kept");
-    if (!imageFileUuids?.length) return;
-    let S = keepBridgeFileIds(imageFileUuids, r, found?.type === "user" ? found.message.content : undefined);
-    if (S === undefined || found?.type !== "user") return;
-    found.imageFileUuids = S;
-    for (let w of e)
+    if (!fileIds?.length) return;
+    let keptFileIds = keepBridgeFileIds(
+      fileIds,
+      originalContent,
+      found?.type === "user" ? found.message.content : undefined,
+    );
+    if (keptFileIds === undefined || found?.type !== "user") return;
+    found.imageFileUuids = keptFileIds;
+    for (let message of messages)
       if (
-        w.type === "attachment" &&
-        w.attachment.type === "inlined_image_paths" &&
-        w.attachment.paths.length === S.length
+        message.type === "attachment" &&
+        message.attachment.type === "inlined_image_paths" &&
+        message.attachment.paths.length === keptFileIds.length
       )
-        w.attachment.fileUuids = S;
+        message.attachment.fileUuids = keptFileIds;
   } catch (error) {
     logError(error);
     logFeatureBad("bridge_attachment_withdraw", "stamp_failed");

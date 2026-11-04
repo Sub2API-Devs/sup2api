@@ -5,11 +5,11 @@
  * pieces: chunk-bwbq4xvm.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_range } from "../classes/range.js";
 
 //@ chunk-bwbq4xvm.js:21678-21798 cjs-require-graph
-var require_satisfies = x(function (cjsExports, cjsModule) {
+var require_satisfies = __commonJS(function (cjsExports, cjsModule) {
   var Range = require_range();
   var satisfies = (version, range, options) => {
     try {

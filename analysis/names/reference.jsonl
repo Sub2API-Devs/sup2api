@@ -31470,7 +31470,6 @@
 {"file":"chunk-e6aww6q8.js","key":"@3597673","min":"e","name":"slug","source":"reference","confidence":0.68,"via":"param","ref":"utils/worktree.ts#flattenSlug"}
 {"file":"chunk-e6aww6q8.js","key":"@3630477","min":"Vpn","name":"parsePRReference","source":"reference","confidence":0.75,"via":"top","ref":"utils/worktree.ts#parsePRReference"}
 {"file":"chunk-e6aww6q8.js","key":"@3630481","min":"e","name":"input","source":"reference","confidence":0.68,"via":"param","ref":"utils/worktree.ts#parsePRReference"}
-{"file":"chunk-e6aww6q8.js","key":"@3653991","min":"_Xn","name":"worktreesDir","source":"reference","confidence":0.55,"via":"top","ref":"utils/worktree.ts#worktreesDir"}
 {"file":"chunk-e6aww6q8.js","key":"@3651347","min":"cfe","name":"removeAgentWorktree","source":"reference","confidence":0.52,"via":"top","ref":"utils/worktree.ts#removeAgentWorktree"}
 {"file":"chunk-ag5x7vhf.js","key":"@28571","min":"aC","name":"assistantHasVisibleText","source":"reference","confidence":0.75,"via":"top","ref":"components/FullscreenLayout.tsx#assistantHasVisibleText"}
 {"file":"chunk-ag5x7vhf.js","key":"@28574","min":"m","name":"m","source":"reference","confidence":0.68,"via":"param","ref":"components/FullscreenLayout.tsx#assistantHasVisibleText"}

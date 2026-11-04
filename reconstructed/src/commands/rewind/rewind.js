@@ -21,3 +21,4 @@ async function rewindCommandCall(args, context) {
     type: "skip",
   };
 }
+export { rewindCommandCall };

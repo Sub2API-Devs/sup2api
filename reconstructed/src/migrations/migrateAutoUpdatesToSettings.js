@@ -19,7 +19,7 @@ import { logForDebugging } from "../utils/debug.js";
 /**
  * 迁移：全局配置 autoUpdates=false（且非原生安装保护）→ userSettings.env.DISABLE_AUTOUPDATER=1，并清除旧字段。
  */
-async function migrateAutoUpdatesToSettings(e) {
+async function migrateAutoUpdatesToSettings(context) {
   let globalConfig = getGlobalConfig();
   if (globalConfig.autoUpdates !== false || globalConfig.autoUpdatesProtectedForNative === true) return true;
   try {
@@ -32,7 +32,7 @@ async function migrateAutoUpdatesToSettings(e) {
         },
       },
       undefined,
-      e,
+      context,
     );
     if (error) throw error;
     logEvent("tengu_migrate_autoupdates_to_settings", {
@@ -43,7 +43,7 @@ async function migrateAutoUpdatesToSettings(e) {
     await saveGlobalConfig((current) => {
       let { autoUpdates, autoUpdatesProtectedForNative, ...updatedConfig } = current;
       return updatedConfig;
-    }, e);
+    }, context);
     logFeatureOk("migration_auto_updates_to_settings");
     return true;
   } catch (error) {

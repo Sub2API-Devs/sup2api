@@ -9,7 +9,7 @@
  * attribution: affinity 3, fingerprint 5, layout 43, sole-consumer 1, placement 10, file-local 3
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, _enum, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, _enum, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   REPO_NAME_PATTERN,
   GOOGLESOURCE_HOST_PATTERN,
@@ -46,16 +46,20 @@ import { currentPrStatusFetcher, getPrStatus, findGerritReview } from "../../uti
 import { getTextAfterLastRuleMatch } from "../../services/teamMemorySync/secretScanner.js";
 import { logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { isWorkspacePersistedTrusted } from "../../utils/config.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:567893-567998 affinity
 /**
  * 生成匹配 "git [-c k=v|--opt=v]* <子命令>" 的正则。
  */
-function gitCmdRe(verb, n = "") {
-  return new RegExp(`\\bgit(?:\\s+-[cC]\\s+\\S+|\\s+--[^\\s=]+=\\S+)*\\s+${verb}\\b${n}`);
+function gitCmdRe(verb, suffix = "") {
+  return new RegExp(`\\bgit(?:\\s+-[cC]\\s+\\S+|\\s+--[^\\s=]+=\\S+)*\\s+${verb}\\b${suffix}`);
 }
 //@ chunk-s61vbvea.js:567998-568018 fingerprint = GIT_COMMIT_RE (1)
-var GIT_COMMIT_RE = gitCmdRe("commit");
+var GIT_COMMIT_RE; // deferred: uses gitCmdRe of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:567998", () => {
+  GIT_COMMIT_RE = gitCmdRe("commit");
+});
 //@ chunk-s61vbvea.js:568018-568052 layout
 /**
  * 命令是否包含 git commit。
@@ -67,44 +71,53 @@ function isGitCommitCommand(command) {
 /**
  * git push / cl upload / cherry-pick / merge / rebase 的命令正则、--dry-run 正则，以及 gitOperation 输出 schema（commit{sha,kind,branch}、push、branch、pr…）。
  */
-var GIT_PUSH_RE = gitCmdRe("push");
-var GIT_CL_UPLOAD_RE = gitCmdRe(String.raw`cl\s+upload`);
-var DRY_RUN_FLAG_RE = /(?:^|\s)(?:-n|--dry-run)(?=\s|$)/;
-var GIT_CHERRY_PICK_RE = gitCmdRe("cherry-pick");
-var GIT_MERGE_RE = gitCmdRe("merge", "(?!-)");
-var GIT_REBASE_RE = gitCmdRe("rebase");
-var gitOperationSchema = DoctorLazy(() =>
-  u({
-    commit: u({
-      sha: string(),
-      kind: _enum(["committed", "amended", "cherry-picked"]),
-      branch: string().optional(),
-    }).optional(),
-    push: u({
-      branch: string(),
-    }).optional(),
-    branch: u({
-      ref: string(),
-      action: _enum(["merged", "rebased"]),
-    }).optional(),
-    pr: u({
-      number: E(),
-      url: string().optional(),
-      action: _enum([
-        "created",
-        "edited",
-        "merged",
-        "commented",
-        "closed",
-        "reopened",
-        "ready",
-        "draft",
-        "auto-merge-enabled",
-        "auto-merge-disabled",
-      ]),
-    }).optional(),
-  }),
-);
+var GIT_PUSH_RE; // deferred: uses gitCmdRe of its import cycle while loading; runs once the cycle is complete
+var GIT_CL_UPLOAD_RE;
+var DRY_RUN_FLAG_RE;
+var GIT_CHERRY_PICK_RE;
+var GIT_MERGE_RE;
+var GIT_REBASE_RE;
+var gitOperationSchema;
+deferInit("chunk-s61vbvea.js:568052", () => {
+  GIT_PUSH_RE = gitCmdRe("push");
+  GIT_CL_UPLOAD_RE = gitCmdRe(String.raw`cl\s+upload`);
+  DRY_RUN_FLAG_RE = /(?:^|\s)(?:-n|--dry-run)(?=\s|$)/;
+  GIT_CHERRY_PICK_RE = gitCmdRe("cherry-pick");
+  GIT_MERGE_RE = gitCmdRe("merge", "(?!-)");
+  GIT_REBASE_RE = gitCmdRe("rebase");
+  gitOperationSchema = DoctorLazy(() =>
+    objectSchema({
+      commit: objectSchema({
+        sha: stringSchema(),
+        kind: _enum(["committed", "amended", "cherry-picked"]),
+        branch: stringSchema().optional(),
+      }).optional(),
+      push: objectSchema({
+        branch: stringSchema(),
+      }).optional(),
+      branch: objectSchema({
+        ref: stringSchema(),
+        action: _enum(["merged", "rebased"]),
+      }).optional(),
+      pr: objectSchema({
+        number: numberSchema(),
+        url: stringSchema().optional(),
+        action: _enum([
+          "created",
+          "edited",
+          "merged",
+          "commented",
+          "closed",
+          "reopened",
+          "ready",
+          "draft",
+          "auto-merge-enabled",
+          "auto-merge-disabled",
+        ]),
+      }).optional(),
+    }),
+  );
+});
 //@ chunk-s61vbvea.js:568590-568658 layout
 /**
  * 生成匹配 "gh pr <子命令>" 的正则。
@@ -116,90 +129,96 @@ function ghPrCmdRe(subcmd, suffix = "") {
 /**
  * gh pr 子命令表 GH_PR_ACTIONS（create/edit/merge/comment/close/ready…→ 动作与遥测 op），以及 gh pr checkout N 正则；tc 为 glab mr 等同类表。
  */
-var GH_PR_CHECKOUT_RE = ghPrCmdRe("checkout", String.raw`[^&|;]*\s(\d+)(?=\s|$|[&|;])`);
-var regExp_11 = new RegExp(`^${REPO_NAME_PATTERN}/${REPO_NAME_PATTERN}$`);
-var GH_PR_ACTIONS = [
-  {
-    re: ghPrCmdRe("create"),
-    action: "created",
-    op: "pr_create",
-  },
-  {
-    re: ghPrCmdRe("edit"),
-    action: "edited",
-    op: "pr_edit",
-  },
-  {
-    re: ghPrCmdRe("merge"),
-    action: "merged",
-    op: "pr_merge",
-  },
-  {
-    re: ghPrCmdRe("comment"),
-    action: "commented",
-    op: "pr_comment",
-  },
-  {
-    re: ghPrCmdRe("close"),
-    action: "closed",
-    op: "pr_close",
-  },
-  {
-    re: ghPrCmdRe("reopen"),
-    action: "reopened",
-    op: "pr_reopen",
-  },
-  {
-    re: ghPrCmdRe("ready"),
-    action: "ready",
-    op: "pr_ready",
-  },
-];
-var GLAB_MR_ACTIONS = [
-  {
-    re: /\bglab\s+mr\s+create\b/,
-    action: "created",
-    op: "pr_create",
-  },
-  {
-    re: /\bglab\s+mr\s+update\b/,
-    action: "edited",
-    op: "pr_edit",
-  },
-  {
-    re: /\bglab\s+mr\s+merge\b/,
-    action: "merged",
-    op: "pr_merge",
-  },
-  {
-    re: /\bglab\s+mr\s+note\b/,
-    action: "commented",
-    op: "pr_comment",
-  },
-  {
-    re: /\bglab\s+mr\s+close\b/,
-    action: "closed",
-    op: "pr_close",
-  },
-  {
-    re: /\bglab\s+mr\s+reopen\b/,
-    action: "reopened",
-    op: "pr_reopen",
-  },
-];
+var GH_PR_CHECKOUT_RE; // deferred: uses ghPrCmdRe of its import cycle while loading; runs once the cycle is complete
+var regExp_11;
+var GH_PR_ACTIONS;
+var GLAB_MR_ACTIONS;
+deferInit("chunk-s61vbvea.js:568658", () => {
+  GH_PR_CHECKOUT_RE = ghPrCmdRe("checkout", String.raw`[^&|;]*\s(\d+)(?=\s|$|[&|;])`);
+  regExp_11 = new RegExp(`^${REPO_NAME_PATTERN}/${REPO_NAME_PATTERN}$`);
+  GH_PR_ACTIONS = [
+    {
+      re: ghPrCmdRe("create"),
+      action: "created",
+      op: "pr_create",
+    },
+    {
+      re: ghPrCmdRe("edit"),
+      action: "edited",
+      op: "pr_edit",
+    },
+    {
+      re: ghPrCmdRe("merge"),
+      action: "merged",
+      op: "pr_merge",
+    },
+    {
+      re: ghPrCmdRe("comment"),
+      action: "commented",
+      op: "pr_comment",
+    },
+    {
+      re: ghPrCmdRe("close"),
+      action: "closed",
+      op: "pr_close",
+    },
+    {
+      re: ghPrCmdRe("reopen"),
+      action: "reopened",
+      op: "pr_reopen",
+    },
+    {
+      re: ghPrCmdRe("ready"),
+      action: "ready",
+      op: "pr_ready",
+    },
+  ];
+  GLAB_MR_ACTIONS = [
+    {
+      re: /\bglab\s+mr\s+create\b/,
+      action: "created",
+      op: "pr_create",
+    },
+    {
+      re: /\bglab\s+mr\s+update\b/,
+      action: "edited",
+      op: "pr_edit",
+    },
+    {
+      re: /\bglab\s+mr\s+merge\b/,
+      action: "merged",
+      op: "pr_merge",
+    },
+    {
+      re: /\bglab\s+mr\s+note\b/,
+      action: "commented",
+      op: "pr_comment",
+    },
+    {
+      re: /\bglab\s+mr\s+close\b/,
+      action: "closed",
+      op: "pr_close",
+    },
+    {
+      re: /\bglab\s+mr\s+reopen\b/,
+      action: "reopened",
+      op: "pr_reopen",
+    },
+  ];
+});
 //@ chunk-s61vbvea.js:569467-569876 affinity
 /**
  * 从命令推断 PR 动作（created/merged/auto-merge-enabled/ready/draft…），兼顾 gh 与 glab。
  */
-function getPrAction(e) {
-  let action = GH_PR_ACTIONS.find((h) => h.re.test(e))?.action;
-  let replaced = e.replace(QUOTED_SEGMENT_RE, " ");
+function getPrAction(command) {
+  let action = GH_PR_ACTIONS.find((entry) => entry.re.test(command))?.action;
+  let replaced = command.replace(QUOTED_SEGMENT_RE, " ");
   if (action === "merged") {
     if (/--disable-auto\b/.test(replaced)) return "auto-merge-disabled";
     if (/--auto\b/.test(replaced)) return "auto-merge-enabled";
   } else if (action === "ready" && /--undo\b/.test(replaced)) return "draft";
   if (action) return action;
-  let action_2 = GLAB_MR_ACTIONS.find((h) => h.re.test(e))?.action;
+  let action_2 = GLAB_MR_ACTIONS.find((entry) => entry.re.test(command))?.action;
   if (action_2 === "edited") {
     if (/--ready\b/.test(replaced)) return "ready";
     if (/--draft\b/.test(replaced)) return "draft";
@@ -210,23 +229,27 @@ function getPrAction(e) {
 /**
  * 匹配 gh pr review 命令的正则。
  */
-var GH_PR_REVIEW_RE = ghPrCmdRe("review");
-var QUOTED_SEGMENT_RE = /"(?:[^"\\]|\\.)*"|'[^']*'/g;
+var GH_PR_REVIEW_RE; // deferred: uses ghPrCmdRe of its import cycle while loading; runs once the cycle is complete
+var QUOTED_SEGMENT_RE;
+deferInit("chunk-s61vbvea.js:570050", () => {
+  GH_PR_REVIEW_RE = ghPrCmdRe("review");
+  QUOTED_SEGMENT_RE = /"(?:[^"\\]|\\.)*"|'[^']*'/g;
+});
 //@ chunk-s61vbvea.js:570102-570386 affinity
 /**
  * 找到未被注释的 gh repo create 命令，返回其后的参数文本。
  */
-function ghRepoCreateArgs(e) {
-  let replaced = e.replace(QUOTED_SEGMENT_RE, " ");
+function ghRepoCreateArgs(command) {
+  let replaced = command.replace(QUOTED_SEGMENT_RE, " ");
   let regExp = new RegExp(GH_PR_REVIEW_RE.source, "g");
   for (let match = regExp.exec(replaced); match !== null; match = regExp.exec(replaced)) {
-    let h =
+    let lineStart =
       replaced.lastIndexOf(
         `
 `,
         match.index,
       ) + 1;
-    if (/(^|\s)#/.test(replaced.slice(h, match.index))) continue;
+    if (/(^|\s)#/.test(replaced.slice(lineStart, match.index))) continue;
     return (replaced.slice(match.index + match[0].length).split(/[&|;\n]/)[0] ?? "").split(/\s#/)[0] ?? "";
   }
   return null;
@@ -235,30 +258,35 @@ function ghRepoCreateArgs(e) {
 /**
  * 识别 gh repo create/new 命令用的正则、带值选项、可见性选项。
  */
-var GH_REPO_CREATE_PATTERN = /\bgh\s+repo\s+(?:create|new)\b/;
-var GH_REPO_CREATE_VALUE_FLAGS = new Set([
-  "-d",
-  "--description",
-  "-h",
-  "--homepage",
-  "-t",
-  "--team",
-  "-p",
-  "--template",
-  "-s",
-  "--source",
-  "-r",
-  "--remote",
-  "-g",
-  "--gitignore",
-  "-l",
-  "--license",
-]);
-var GH_REPO_VISIBILITY_FLAGS = new Map([
-  ["--public", "public"],
-  ["--private", "private"],
-  ["--internal", "internal"],
-]);
+var GH_REPO_CREATE_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var GH_REPO_CREATE_VALUE_FLAGS;
+var GH_REPO_VISIBILITY_FLAGS;
+deferInit("chunk-s61vbvea.js:570386", () => {
+  GH_REPO_CREATE_PATTERN = /\bgh\s+repo\s+(?:create|new)\b/;
+  GH_REPO_CREATE_VALUE_FLAGS = new Set([
+    "-d",
+    "--description",
+    "-h",
+    "--homepage",
+    "-t",
+    "--team",
+    "-p",
+    "--template",
+    "-s",
+    "--source",
+    "-r",
+    "--remote",
+    "-g",
+    "--gitignore",
+    "-l",
+    "--license",
+  ]);
+  GH_REPO_VISIBILITY_FLAGS = new Map([
+    ["--public", "public"],
+    ["--private", "private"],
+    ["--internal", "internal"],
+  ]);
+});
 //@ chunk-s61vbvea.js:570665-571016 placement = buildDeepLink (0.415)
 /**
  * （误归 deepLink）从 Bash 命令中解析每个 gh repo create 的仓库名与可见性，用于上报 tengu_gh_repo_created。
@@ -266,15 +294,15 @@ var GH_REPO_VISIBILITY_FLAGS = new Map([
 function parseGhRepoCreateCommands(action) {
   if (!GH_REPO_CREATE_PATTERN.test(action)) return [];
   let results = [];
-  for (let r of splitCommand(action)) {
-    let argv = getCommandArgv(r);
+  for (let segment of splitCommand(action)) {
+    let argv = getCommandArgv(segment);
     if (argv[0] !== "gh" || argv[1] !== "repo" || (argv[2] !== "create" && argv[2] !== "new")) continue;
     let repo;
     let visibility;
     for (let index = 3; index < argv.length; index++) {
       let arg = argv[index];
-      let R = GH_REPO_VISIBILITY_FLAGS.get(arg);
-      if (R !== undefined) visibility = R;
+      let visibilityFlag = GH_REPO_VISIBILITY_FLAGS.get(arg);
+      if (visibilityFlag !== undefined) visibility = visibilityFlag;
       else if (arg.startsWith("-")) {
         if (!arg.includes("=") && GH_REPO_CREATE_VALUE_FLAGS.has(arg)) index++;
       } else if (repo === undefined) repo = arg;
@@ -287,41 +315,44 @@ function parseGhRepoCreateCommands(action) {
   return results;
 }
 //@ chunk-s61vbvea.js:571016-571081 layout
-var regExp_12 = new RegExp(`^https://github\\.com/(${REPO_NAME_PATTERN}/${REPO_NAME_PATTERN})/?$`, "gm");
+var regExp_12; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:571016", () => {
+  regExp_12 = new RegExp(`^https://github\\.com/(${REPO_NAME_PATTERN}/${REPO_NAME_PATTERN})/?$`, "gm");
+});
 //@ chunk-s61vbvea.js:571081-571279 layout
 /**
  * 在输出中的仓库名里找与命令参数匹配的唯一一个。
  */
-function matchCreatedRepo(repo, n, r) {
-  let s =
+function matchCreatedRepo(repo, createdRepos, onlyOneCommand) {
+  let candidates =
     repo === undefined
-      ? r
-        ? n
+      ? onlyOneCommand
+        ? createdRepos
         : []
-      : n.filter((h) =>
+      : createdRepos.filter((createdRepo) =>
           repo.includes("/")
-            ? h.toLowerCase() === repo.toLowerCase()
-            : h.slice(h.indexOf("/") + 1).toLowerCase() === repo.toLowerCase(),
+            ? createdRepo.toLowerCase() === repo.toLowerCase()
+            : createdRepo.slice(createdRepo.indexOf("/") + 1).toLowerCase() === repo.toLowerCase(),
         );
-  return s.length === 1 ? s[0] : undefined;
+  return candidates.length === 1 ? candidates[0] : undefined;
 }
 //@ chunk-s61vbvea.js:571279-571614 layout
 /**
  * 识别 gh repo create 创建的仓库并记 tengu_gh_repo_created（可见性、仓库哈希）。
  */
-function logReposCreated(action, n) {
-  if (n === undefined) return;
+function logReposCreated(action, output) {
+  if (output === undefined) return;
   let ghRepoCreateCommands = parseGhRepoCreateCommands(action);
   if (ghRepoCreateCommands.length === 0) return;
-  let h = [...uniq([...n.matchAll(regExp_12)].map((y) => y[1]))];
+  let reposInOutput = [...uniq([...output.matchAll(regExp_12)].map((match) => match[1]))];
   for (let { repo, visibility } of ghRepoCreateCommands) {
-    let w = matchCreatedRepo(repo, h, ghRepoCreateCommands.length === 1);
-    if (w === undefined) continue;
-    h.splice(h.indexOf(w), 1);
-    let R = repo !== undefined && regExp_11.test(repo) ? repo : undefined;
+    let createdRepo = matchCreatedRepo(repo, reposInOutput, ghRepoCreateCommands.length === 1);
+    if (createdRepo === undefined) continue;
+    reposInOutput.splice(reposInOutput.indexOf(createdRepo), 1);
+    let repoForHash = repo !== undefined && regExp_11.test(repo) ? repo : undefined;
     logEvent("tengu_gh_repo_created", {
       visibility: fromEnumOpt(visibility),
-      repo_hash: shortHash(R ?? w),
+      repo_hash: shortHash(repoForHash ?? createdRepo),
     });
   }
 }
@@ -329,13 +360,19 @@ function logReposCreated(action, n) {
 /**
  * PR/MR URL 正则（GitHub/GitHub Enterprise/Bitbucket/GitLab）与 Gerrit 变更 URL、remote: 输出行正则。
  */
-var PR_URL_RE_2 = /https?:\/\/[^/\s"]+\/([^\s"]+?)\/(?:pull|pull-requests|-\/merge_requests)\/(\d+)/;
-var GERRIT_CHANGE_URL_RE = new RegExp(
-  String.raw`https://${GOOGLESOURCE_HOST_PATTERN}/c/((?:${REPO_NAME_PATTERN}/)*${REPO_NAME_PATTERN})/\+/(\d{1,9})(?!\d)`,
-);
-var regExp_13 = new RegExp(String.raw`^remote:\s+(${GERRIT_CHANGE_URL_RE.source})`, "m");
-var GITLAB_MR_REMOTE_RE =
-  /^remote:[ \t]+View merge request for \S+:[ \t]*\r?\n[ \t]*remote:[ \t]+(https?:\/\/[^/\s"]+\/[^\s"]+?\/-\/merge_requests\/\d{1,9})(?!\d)/m;
+var PR_URL_RE_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var GERRIT_CHANGE_URL_RE;
+var regExp_13;
+var GITLAB_MR_REMOTE_RE;
+deferInit("chunk-s61vbvea.js:571614", () => {
+  PR_URL_RE_2 = /https?:\/\/[^/\s"]+\/([^\s"]+?)\/(?:pull|pull-requests|-\/merge_requests)\/(\d+)/;
+  GERRIT_CHANGE_URL_RE = new RegExp(
+    String.raw`https://${GOOGLESOURCE_HOST_PATTERN}/c/((?:${REPO_NAME_PATTERN}/)*${REPO_NAME_PATTERN})/\+/(\d{1,9})(?!\d)`,
+  );
+  regExp_13 = new RegExp(String.raw`^remote:\s+(${GERRIT_CHANGE_URL_RE.source})`, "m");
+  GITLAB_MR_REMOTE_RE =
+    /^remote:[ \t]+View merge request for \S+:[ \t]*\r?\n[ \t]*remote:[ \t]+(https?:\/\/[^/\s"]+\/[^\s"]+?\/-\/merge_requests\/\d{1,9})(?!\d)/m;
+});
 //@ chunk-s61vbvea.js:571987-572147 fingerprint = parsePrUrl (0.878)
 /**
  * 从 URL 解析 PR 编号、仓库、提供方。
@@ -355,23 +392,26 @@ function parsePrUrl_2(url) {
 /**
  * 按 URL 判断 PR 提供方：gitlab / gerrit / bitbucket / github / github-enterprise。
  */
-function detectPrProvider(e) {
-  if (e.includes("/-/merge_requests/")) return "gitlab";
-  if (regExp_18.test(e)) return "gerrit";
-  if (e.includes("/pull-requests/")) return "bitbucket";
-  let n;
+function detectPrProvider(url) {
+  if (url.includes("/-/merge_requests/")) return "gitlab";
+  if (regExp_18.test(url)) return "gerrit";
+  if (url.includes("/pull-requests/")) return "bitbucket";
+  let hostname;
   try {
-    n = new URL(e).hostname;
+    hostname = new URL(url).hostname;
   } catch {
     return "github-enterprise";
   }
-  return isGithubDotCom(n) ? "github" : "github-enterprise";
+  return isGithubDotCom(hostname) ? "github" : "github-enterprise";
 }
 //@ chunk-s61vbvea.js:572400-572560 layout
-var regExp_14 = new RegExp(
-  `^https?://${HOSTNAME_PATTERN}(?::\\d{1,5})?/(?:${REPO_NAME_PATTERN}/${REPO_NAME_PATTERN}/(?:pull|pull-requests|cr)|projects/${REPO_NAME_PATTERN}/repos/${REPO_NAME_PATTERN}/pull-requests|${GITLAB_MR_PATH_PATTERN}` +
-    String.raw`)/\d+$`,
-);
+var regExp_14; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:572400", () => {
+  regExp_14 = new RegExp(
+    `^https?://${HOSTNAME_PATTERN}(?::\\d{1,5})?/(?:${REPO_NAME_PATTERN}/${REPO_NAME_PATTERN}/(?:pull|pull-requests|cr)|projects/${REPO_NAME_PATTERN}/repos/${REPO_NAME_PATTERN}/pull-requests|${GITLAB_MR_PATH_PATTERN}` +
+      String.raw`)/\d+$`,
+  );
+});
 //@ chunk-s61vbvea.js:572560-572624 layout
 function isValidPrUrl(prUrl) {
   return prUrl.length <= MAX_REPO_URL_CHARS && (regExp_14.test(prUrl) || regExp_18.test(prUrl));
@@ -390,27 +430,29 @@ function isSafeBranchName(taskListId) {
     SAFE_BRANCH_NAME_RE.test(taskListId) &&
     !taskListId.includes("..") &&
     !taskListId.endsWith(".") &&
-    taskListId.split("/").every((n) => n !== "" && !n.startsWith(".") && !n.endsWith(".lock"))
+    taskListId
+      .split("/")
+      .every((segment) => segment !== "" && !segment.startsWith(".") && !segment.endsWith(".lock"))
   );
 }
 //@ chunk-s61vbvea.js:572831-573119 layout
 /**
  * PR URL 有效时发出 code_change_published 系统事件（切分误归）。
  */
-function announceCodeChangePublished(e) {
-  if (!isValidPrUrl(e.prUrl)) return false;
+function announceCodeChangePublished(publication) {
+  if (!isValidPrUrl(publication.prUrl)) return false;
   enqueueTaskNotification({
     type: "system",
     subtype: "code_change_published",
-    provider: e.provider,
-    url: e.prUrl,
-    repo: e.prRepository,
-    identifier: e.identifier,
-    action: e.action,
-    ...((e.provider === "gerrit" || e.action === "created") &&
-      e.branch &&
-      isSafeBranchName(e.branch) && {
-        branch: e.branch,
+    provider: publication.provider,
+    url: publication.prUrl,
+    repo: publication.prRepository,
+    identifier: publication.identifier,
+    action: publication.action,
+    ...((publication.provider === "gerrit" || publication.action === "created") &&
+      publication.branch &&
+      isSafeBranchName(publication.branch) && {
+        branch: publication.branch,
       }),
   });
   return true;
@@ -419,55 +461,55 @@ function announceCodeChangePublished(e) {
 /**
  * 根据解析出的 git 动作（commit、push 及推送分支、merge/rebase）发出 vcs_state_changed 系统事件。
  */
-function emitVcsStateChanges(gitOperation, n, r) {
-  let s = [];
+function emitVcsStateChanges(gitOperation, output, commandInfo) {
+  let changes = [];
   if (gitOperation.commit)
-    s.push({
+    changes.push({
       kind: "commit",
       branch: gitOperation.commit.branch,
     });
-  let replaced = r.command.replace(QUOTED_SEGMENT_RE, " ");
+  let replaced = commandInfo.command.replace(QUOTED_SEGMENT_RE, " ");
   if (
     !gitOperation.push &&
-    r.exitCode === 0 &&
+    commandInfo.exitCode === 0 &&
     GIT_PUSH_RE.test(replaced) &&
     !DRY_RUN_FLAG_RE.test(pushedBranchOf(replaced))
   )
-    s.push({
+    changes.push({
       kind: "push",
     });
   if (gitOperation.push) {
-    let pushedBranches = parsePushedBranches(n);
+    let pushedBranches = parsePushedBranches(output);
     let filtered = pushedBranches.filter(isTrackableBranch);
     if (filtered.length < Math.max(pushedBranches.length, 1))
-      s.push({
+      changes.push({
         kind: "push",
       });
     for (let branch of filtered)
-      s.push({
+      changes.push({
         kind: "push",
         branch,
       });
   }
   if (gitOperation.branch) {
-    let S = {
+    let actionKinds = {
       merged: "merge",
       rebased: "rebase",
     };
-    s.push({
-      kind: S[gitOperation.branch.action],
+    changes.push({
+      kind: actionKinds[gitOperation.branch.action],
     });
   }
-  for (let S of s)
+  for (let change of changes)
     enqueueTaskNotification({
       type: "system",
       subtype: "vcs_state_changed",
-      kind: S.kind,
-      ...("branch" in S &&
-        S.branch !== undefined && {
-          branch: S.branch,
+      kind: change.kind,
+      ...("branch" in change &&
+        change.branch !== undefined && {
+          branch: change.branch,
         }),
-      cwd: r.cwd,
+      cwd: commandInfo.cwd,
     });
 }
 //@ chunk-s61vbvea.js:573682-573767 file-local
@@ -478,36 +520,36 @@ function findLastPrUrl(stdout) {
 //@ chunk-s61vbvea.js:573767-573777 layout
 var MAX_TRACKED_PRS = 10;
 //@ chunk-s61vbvea.js:573777-573912 layout
-function dedupePrUrls(e, n = MAX_TRACKED_PRS) {
-  let r = new Map();
-  for (let s of e) {
-    let prUrl = parsePrUrl_2(s);
+function dedupePrUrls(urls, maxCount = MAX_TRACKED_PRS) {
+  let byUrl = new Map();
+  for (let url of urls) {
+    let prUrl = parsePrUrl_2(url);
     if (prUrl) {
-      r.delete(prUrl.prUrl);
-      r.set(prUrl.prUrl, prUrl);
+      byUrl.delete(prUrl.prUrl);
+      byUrl.set(prUrl.prUrl, prUrl);
     }
   }
-  return [...r.values()].slice(-n);
+  return [...byUrl.values()].slice(-maxCount);
 }
 //@ chunk-s61vbvea.js:573912-573982 file-local
 /**
  * 从文本里提取全部 PR URL，按 prUrl 去重保留最新，最多 10 个。
  */
-function extractPrUrls(e, n) {
-  return dedupePrUrls(e.match(new RegExp(PR_URL_RE_2.source, "g")) ?? [], n);
+function extractPrUrls(text, maxCount) {
+  return dedupePrUrls(text.match(new RegExp(PR_URL_RE_2.source, "g")) ?? [], maxCount);
 }
 //@ chunk-s61vbvea.js:573982-574097 layout
-function recordPrActions(e, action) {
-  let r = 0;
-  for (let s of e) {
-    let h = announceCodeChangePublished({
-      ...s,
-      identifier: String(s.prNumber),
+function recordPrActions(prs, action) {
+  let announcedCount = 0;
+  for (let pr of prs) {
+    let announced = announceCodeChangePublished({
+      ...pr,
+      identifier: String(pr.prNumber),
       action,
     });
-    r += h ? 1 : 0;
+    announcedCount += announced ? 1 : 0;
   }
-  return r;
+  return announcedCount;
 }
 //@ chunk-s61vbvea.js:574097-574109 layout
 var SPILLED_OUTPUT_TAIL_BYTES = 8192;
@@ -534,8 +576,8 @@ ${content}`
   }
 }
 //@ chunk-s61vbvea.js:574337-574440 layout
-function normalizeTerminalOutput(e) {
-  return e
+function normalizeTerminalOutput(text) {
+  return text
     .replace(/\x1b\[[0-9;]*K/g, "")
     .replace(
       /\x1b\[[0-9]*G/g,
@@ -551,8 +593,8 @@ function normalizeTerminalOutput(e) {
 //@ chunk-s61vbvea.js:574440-574520 layout
 var GIT_COMMIT_SUMMARY_RE = /^\[(?:([\w./-]+)|detached HEAD)(?: \(root-commit\))? ([0-9a-f]{4,})\]/m;
 //@ chunk-s61vbvea.js:574520-574632 layout
-function parseCommitSummary(e) {
-  let match = normalizeTerminalOutput(e).match(GIT_COMMIT_SUMMARY_RE);
+function parseCommitSummary(output) {
+  let match = normalizeTerminalOutput(output).match(GIT_COMMIT_SUMMARY_RE);
   if (match?.[2] === undefined) return;
   return {
     sha: match[2],
@@ -565,12 +607,13 @@ function parseCommitSummary(e) {
 /**
  * 从提交输出解析 sha 与分支，必要时把短 sha 扩展成完整 commitId。
  */
-async function resolveCommitInfo(e, n, r) {
-  let commitSummary = parseCommitSummary(e);
-  if (!commitSummary) return r === undefined ? undefined : readCommitAppendedToHeadReflog(r);
-  let h = n === null ? null : await getHeadForDir(n);
+async function resolveCommitInfo(stdout, gitDir, reflogPath) {
+  let commitSummary = parseCommitSummary(stdout);
+  if (!commitSummary)
+    return reflogPath === undefined ? undefined : readCommitAppendedToHeadReflog(reflogPath);
+  let head = gitDir === null ? null : await getHeadForDir(gitDir);
   return {
-    commitId: h?.startsWith(commitSummary.sha) ? h : commitSummary.sha,
+    commitId: head?.startsWith(commitSummary.sha) ? head : commitSummary.sha,
     ...(commitSummary.branch !== undefined && {
       branch: commitSummary.branch,
     }),
@@ -582,36 +625,38 @@ var GIT_PUSH_REF_RE = /^\s*[+\-*!= ]?\s*(?:\[new branch\]|[0-9a-f]+\.\.+[0-9a-f]
 /**
  * 从 git push 输出（"To <remote>" 之后的缩进行）解析被推送的分支名。
  */
-function parsePushedBranches(e) {
-  let filtered = normalizeTerminalOutput(e)
+function parsePushedBranches(output) {
+  let filtered = normalizeTerminalOutput(output)
     .split(
       `
 `,
     )
     .filter((line) => line !== "");
-  let r = new Set();
+  let branches = new Set();
   for (let j = 0; j < filtered.length; j++) {
     if (!filtered[j].startsWith("To ")) continue;
     for (let j_2 = j + 1; j_2 < filtered.length && /^\s/.test(filtered[j_2]); j_2++) {
-      let y = filtered[j_2].match(GIT_PUSH_REF_RE)?.[1];
-      if (y) r.add(y);
+      let branch = filtered[j_2].match(GIT_PUSH_REF_RE)?.[1];
+      if (branch) branches.add(branch);
     }
   }
-  return [...r];
+  return [...branches];
 }
 //@ chunk-s61vbvea.js:575150-575473 layout
-function isGhApiPullCreate(e) {
-  let n = (e.replace(QUOTED_SEGMENT_RE, " ").split(/\bgh\s+api\b/)[1] ?? "").split(/[&|;\n]/)[0];
-  if (!n || !/(?:^|\s)\/?repos\/[^\s/]+\/[^\s/]+\/pulls(?=\s|$)/.test(n)) return false;
-  let r = n.match(/(?:^|\s)(?:-X|--method)(?:\s+|=)([A-Za-z]+)/)?.[1];
-  return r ? r.toUpperCase() === "POST" : /(?:^|\s)(?:-f|-F|--field|--raw-field)(?:\s|=)/.test(n);
+function isGhApiPullCreate(command) {
+  let apiArgs = (command.replace(QUOTED_SEGMENT_RE, " ").split(/\bgh\s+api\b/)[1] ?? "").split(/[&|;\n]/)[0];
+  if (!apiArgs || !/(?:^|\s)\/?repos\/[^\s/]+\/[^\s/]+\/pulls(?=\s|$)/.test(apiArgs)) return false;
+  let method = apiArgs.match(/(?:^|\s)(?:-X|--method)(?:\s+|=)([A-Za-z]+)/)?.[1];
+  return method
+    ? method.toUpperCase() === "POST"
+    : /(?:^|\s)(?:-f|-F|--field|--raw-field)(?:\s|=)/.test(apiArgs);
 }
 //@ chunk-s61vbvea.js:575473-575539 layout
 /**
  * 取 git push 之后到分隔符前的参数串。
  */
-function pushedBranchOf(e) {
-  return (e.split(GIT_PUSH_RE)[1] ?? "").split(/[&|;\n]/)[0] ?? "";
+function pushedBranchOf(command) {
+  return (command.split(GIT_PUSH_RE)[1] ?? "").split(/[&|;\n]/)[0] ?? "";
 }
 //@ chunk-s61vbvea.js:575539-575680 layout = parsePrUrl (0.792)
 function parsePrNumberFromText(url) {
@@ -658,10 +703,10 @@ function detectGitOperation(command, output) {
   if (GIT_PUSH_RE.test(command)) {
     let branch = pushedBranchOf(command);
     if (!DRY_RUN_FLAG_RE.test(branch)) {
-      let S = output.match(GIT_PUSH_REF_RE)?.[1];
-      if (S)
+      let pushedRef = output.match(GIT_PUSH_REF_RE)?.[1];
+      if (pushedRef)
         result.push = {
-          branch: S,
+          branch: pushedRef,
         };
     }
   }
@@ -690,7 +735,7 @@ function detectGitOperation(command, output) {
         url: lastPrUrl.prUrl,
         action: prAction,
       };
-    else if (GH_PR_ACTIONS.some((S) => S.re.test(command))) {
+    else if (GH_PR_ACTIONS.some((actionEntry) => actionEntry.re.test(command))) {
       let num = parsePrNumberFromText(output);
       if (num)
         result.pr = {
@@ -712,20 +757,21 @@ var GIT_LIKE_COMMAND_RE = /\b(?:git|gh|glab|curl)\b/;
 /**
  * 待查推送分支表的键（cwd + 分支）与"可跟踪分支"判定（排除 HEAD、选项、纯数字）。
  */
-var pendingBranchKey = (e, n) => `${e}\x00${n}`;
-var isTrackableBranch = (e) => e !== "HEAD" && !e.startsWith("-") && !/^#?\d+$/.test(e);
+var pendingBranchKey = (sessionId, branch) => `${sessionId}\x00${branch}`;
+var isTrackableBranch = (branch) => branch !== "HEAD" && !branch.startsWith("-") && !/^#?\d+$/.test(branch);
 //@ chunk-s61vbvea.js:576678-576821 layout
 /**
  * 记下推送的分支（待查 PR），有上限。
  */
-function rememberPushedBranch(e, n, r) {
+function rememberPushedBranch(pendingBranchLinks, sessionId, branch) {
   if (isEssentialTrafficOnly()) return;
-  let s = pendingBranchKey(n, r);
-  e.delete(s);
-  if (e.size >= MAX_PENDING_BRANCH_LINKS) e.delete(e.keys().next().value);
-  e.set(s, {
-    cwd: n,
-    branch: r,
+  let key = pendingBranchKey(sessionId, branch);
+  pendingBranchLinks.delete(key);
+  if (pendingBranchLinks.size >= MAX_PENDING_BRANCH_LINKS)
+    pendingBranchLinks.delete(pendingBranchLinks.keys().next().value);
+  pendingBranchLinks.set(key, {
+    cwd: sessionId,
+    branch,
     attempts: 0,
   });
 }
@@ -734,51 +780,55 @@ function rememberPushedBranch(e, n, r) {
  * 清除某工作目录下所有待查分支记录。
  */
 function clearPendingBranchesForCwd(pendingBranchLinks, cwd) {
-  for (let [r, s] of pendingBranchLinks) if (s.cwd === cwd) pendingBranchLinks.delete(r);
+  for (let [key, link] of pendingBranchLinks) if (link.cwd === cwd) pendingBranchLinks.delete(key);
 }
 //@ chunk-s61vbvea.js:576880-576998 layout
 /**
  * 推送后按是否已有 PR 记下或清除该分支。
  */
-async function trackPushedBranch(pendingBranchLinks, sessionId, r, s) {
-  let h = await s;
-  let y = await r;
-  if (y === undefined || !isTrackableBranch(y)) return;
-  if (h) pendingBranchLinks.delete(pendingBranchKey(sessionId, y));
-  else rememberPushedBranch(pendingBranchLinks, sessionId, y);
+async function trackPushedBranch(pendingBranchLinks, sessionId, branchPromise, pushedPromise) {
+  let wasPushed = await pushedPromise;
+  let branch = await branchPromise;
+  if (branch === undefined || !isTrackableBranch(branch)) return;
+  if (wasPushed) pendingBranchLinks.delete(pendingBranchKey(sessionId, branch));
+  else rememberPushedBranch(pendingBranchLinks, sessionId, branch);
 }
 //@ chunk-s61vbvea.js:576998-577268 layout
 /**
  * 命令只包含 gh pr create / glab mr create（及 auth/config/api user）且非 dry-run。
  */
-function isPrCreateOnlyCommand(e) {
-  let n = e.match(/\b(?:gh|glab)\s+\S+(?:\s+\S+)?/g) ?? [];
-  let r = /^gh\s+pr\s+create$|^glab\s+mr\s+create$/;
-  let s = /^(?:gh|glab)\s+(?:auth|config)\b|^(?:gh|glab)\s+api\s+\/?user$/;
-  return !e.includes("--dry-run") && n.some((h) => r.test(h)) && n.every((h) => r.test(h) || s.test(h));
+function isPrCreateOnlyCommand(command) {
+  let subcommands = command.match(/\b(?:gh|glab)\s+\S+(?:\s+\S+)?/g) ?? [];
+  let createOnlyRe = /^gh\s+pr\s+create$|^glab\s+mr\s+create$/;
+  let harmlessRe = /^(?:gh|glab)\s+(?:auth|config)\b|^(?:gh|glab)\s+api\s+\/?user$/;
+  return (
+    !command.includes("--dry-run") &&
+    subcommands.some((subcommand) => createOnlyRe.test(subcommand)) &&
+    subcommands.every((subcommand) => createOnlyRe.test(subcommand) || harmlessRe.test(subcommand))
+  );
 }
 //@ chunk-s61vbvea.js:577268-577553 layout
 /**
  * 记录新建的 PR：发遥测 tengu_git_created_prs、异步登记 PR、清理当前目录的待查推送分支。
  */
 function recordCreatedPr(
-  stdout,
-  textAfterLastRuleMatch = "created",
-  r = false,
-  s = Promise.resolve(undefined),
+  output,
+  action = "created",
+  announceEarlier = false,
+  linkPromise = Promise.resolve(undefined),
 ) {
-  let h = stdout ? findLastPrUrl(stdout) : null;
-  if (!stdout || !h) return null;
+  let lastPr = output ? findLastPrUrl(output) : null;
+  if (!output || !lastPr) return null;
   let announcedPrs =
-    (isValidPrUrl(h.prUrl) ? 1 : 0) +
-    (r ? recordPrActions(extractPrUrls(stdout).slice(0, -1), "created") : 0);
+    (isValidPrUrl(lastPr.prUrl) ? 1 : 0) +
+    (announceEarlier ? recordPrActions(extractPrUrls(output).slice(0, -1), "created") : 0);
   logEvent("tengu_git_created_prs", {
-    printedPrs: extractPrUrls(stdout, 1 / 0).length,
+    printedPrs: extractPrUrls(output, 1 / 0).length,
     announcedPrs,
   });
-  trackPendingPrLink(s.then((S) => linkPrToSession(h, textAfterLastRuleMatch, S)));
+  trackPendingPrLink(linkPromise.then((linkedPr) => linkPrToSession(lastPr, action, linkedPr)));
   clearPendingBranchesForCwd(getPendingBranchLinks(), getCwd());
-  return h;
+  return lastPr;
 }
 //@ chunk-s61vbvea.js:577553-577565 layout
 /**
@@ -789,21 +839,21 @@ var BRANCH_LOOKUP_TIMEOUT_MS = 2000;
 /**
  * 从 pr create 命令的 --head/--source-branch 取分支，否则读当前分支（带超时）。
  */
-function prHeadBranch(e, n) {
-  let replaced = e.replace(QUOTED_SEGMENT_RE, (w) => " ".repeat(w.length));
-  let s = n === "gh" ? /\bgh\s+pr\s+create\b/g : /\bglab\s+mr\s+create\b/g;
-  let index = [...replaced.matchAll(s)].at(-1)?.index;
+function prHeadBranch(command, cli) {
+  let replaced = command.replace(QUOTED_SEGMENT_RE, (quoted) => " ".repeat(quoted.length));
+  let createRe = cli === "gh" ? /\bgh\s+pr\s+create\b/g : /\bglab\s+mr\s+create\b/g;
+  let index = [...replaced.matchAll(createRe)].at(-1)?.index;
   if (index === undefined) return Promise.resolve(undefined);
   let match = (replaced.slice(index).split(/[&|;\n]/)[0] ?? "").match(
-    n === "gh" ? /(?:^|\s)(?:--head|-H)(?==|\s)/ : /(?:^|\s)(?:--source-branch|-s)(?==|\s)/,
+    cli === "gh" ? /(?:^|\s)(?:--head|-H)(?==|\s)/ : /(?:^|\s)(?:--source-branch|-s)(?==|\s)/,
   );
   if (match?.index !== undefined) {
-    let match_2 = e
+    let match_2 = command
       .slice(index + match.index + match[0].length)
       .match(/^(?:=|\s+)(?:"([^"\\$`]*)"|'([^']*)'|([^\s"'`$;&|]+))/);
-    let R = match_2?.[1] ?? match_2?.[2] ?? match_2?.[3];
-    let x = n === "gh" ? R?.replace(/^[^:]*:/, "") : R;
-    if (x && isSafeBranchName(x)) return Promise.resolve(x);
+    let headValue = match_2?.[1] ?? match_2?.[2] ?? match_2?.[3];
+    let branchName = cli === "gh" ? headValue?.replace(/^[^:]*:/, "") : headValue;
+    if (branchName && isSafeBranchName(branchName)) return Promise.resolve(branchName);
   }
   return withDeadline(
     getBranch(getCwd()).catch(() => {
@@ -816,34 +866,38 @@ function prHeadBranch(e, n) {
 /**
  * 开关 tengu_record_created_pr_to_ccr 打开时把新 PR 记录到 CCR（远程会话）。
  */
-function recordCreatedPrToCcr(e) {
+function recordCreatedPrToCcr(pr) {
   if (
-    !e ||
+    !pr ||
     !getFeatureValue_CACHED_MAY_BE_STALE("tengu_record_created_pr_to_ccr", false) ||
-    !isValidPrUrl(e.prUrl)
+    !isValidPrUrl(pr.prUrl)
   )
     return;
   let cwd = getCwd();
-  trackPendingPrLink(import("./chunk-fnctemcf.js").then((r) => r.recordCreatedPrToCcr(e, cwd)));
+  trackPendingPrLink(
+    import("../../services/ccr/recordCreatedPr.js").then((ccrModule) =>
+      ccrModule.recordCreatedPrToCcr(pr, cwd),
+    ),
+  );
 }
 //@ chunk-s61vbvea.js:578336-578558 layout
 /**
  * 有相关输出时重新查询当前目录待查分支的 PR（有次数上限）。
  */
-function recheckPendingBranches(e) {
+function recheckPendingBranches(command) {
   let pendingBranchLinks = getPendingBranchLinks();
-  if (pendingBranchLinks.size === 0 || !GIT_LIKE_COMMAND_RE.test(e)) return;
+  if (pendingBranchLinks.size === 0 || !GIT_LIKE_COMMAND_RE.test(command)) return;
   let cwd = getCwd();
-  for (let [s, h] of pendingBranchLinks) {
-    if (h.cwd !== cwd) continue;
-    if (h.attempts >= MAX_BRANCH_LOOKUP_ATTEMPTS) {
-      pendingBranchLinks.delete(s);
+  for (let [key, link] of pendingBranchLinks) {
+    if (link.cwd !== cwd) continue;
+    if (link.attempts >= MAX_BRANCH_LOOKUP_ATTEMPTS) {
+      pendingBranchLinks.delete(key);
       continue;
     }
-    h.attempts++;
+    link.attempts++;
     trackPendingPrLink(
-      getNpmDistTags("pushed", h.branch).then((npmDistTags) => {
-        if (npmDistTags) pendingBranchLinks.delete(s);
+      getNpmDistTags("pushed", link.branch).then((npmDistTags) => {
+        if (npmDistTags) pendingBranchLinks.delete(key);
       }),
     );
   }
@@ -857,37 +911,42 @@ var MAX_PR_COMMAND_CHARS = 1e4;
 /**
  * 命令是否通过 curl POST 或 gh api 创建 PR/MR。
  */
-function isApiPrCreate(e, n) {
+function isApiPrCreate(command, hasGhPrAction) {
   return (
-    (/\bcurl\b/.test(e) &&
-      (/-X\s*POST\b/i.test(e) || /--request\s*=?\s*POST\b/i.test(e) || /\s-d\s/.test(e)) &&
-      /https?:\/\/[^\s'"]*\/(?:pulls|pull-requests|merge[-_]requests)(?!\/\d)/i.test(e)) ||
-    (!n && isGhApiPullCreate(e))
+    (/\bcurl\b/.test(command) &&
+      (/-X\s*POST\b/i.test(command) || /--request\s*=?\s*POST\b/i.test(command) || /\s-d\s/.test(command)) &&
+      /https?:\/\/[^\s'"]*\/(?:pulls|pull-requests|merge[-_]requests)(?!\/\d)/i.test(command)) ||
+    (!hasGhPrAction && isGhApiPullCreate(command))
   );
 }
 //@ chunk-s61vbvea.js:578785-578996 layout
 /**
  * 命令在其他进程执行时，仅根据命令文本累加提交数与 PR 创建数计数器。
  */
-function countGitOpsFromCommand(e) {
-  if (e.length > MAX_PR_COMMAND_CHARS) return;
-  if (GIT_COMMIT_RE.test(e)) getCommitCounter()?.add(1);
-  let n = [GH_PR_ACTIONS.find((s) => s.re.test(e)), GLAB_MR_ACTIONS.find((s) => s.re.test(e))];
-  let r = count(n, (s) => s?.action === "created") + (isApiPrCreate(e, n.some(Boolean)) ? 1 : 0);
-  if (r > 0) getPrCounter()?.add(r);
+function countGitOpsFromCommand(command) {
+  if (command.length > MAX_PR_COMMAND_CHARS) return;
+  if (GIT_COMMIT_RE.test(command)) getCommitCounter()?.add(1);
+  let actions = [
+    GH_PR_ACTIONS.find((actionEntry) => actionEntry.re.test(command)),
+    GLAB_MR_ACTIONS.find((actionEntry) => actionEntry.re.test(command)),
+  ];
+  let createCount =
+    count(actions, (actionEntry) => actionEntry?.action === "created") +
+    (isApiPrCreate(command, actions.some(Boolean)) ? 1 : 0);
+  if (createCount > 0) getPrCounter()?.add(createCount);
 }
 //@ chunk-s61vbvea.js:578996-581324 fingerprint = trackGitOperations (0.49)
 /**
  * 命令成功（退出码 0）后跟踪 git 操作：遥测 tengu_git_operation（commit/commit_amend/push/merge/rebase/pr_*），累加提交/PR 计数，识别 PR URL 与 gh pr checkout，记录推送分支以便稍后查 PR；返回是否解决了 PR（BashTool 据此 markPrResolvedThisSession）。
  */
-function trackGitOperations(host, command, code, stdout) {
+function trackGitOperations(host, command, code, output) {
   if (code !== 0)
     return {
       prResolved: false,
     };
   let prResolved = false;
   try {
-    logReposCreated(command, stdout);
+    logReposCreated(command, output);
   } catch (error) {
     logError(error);
   }
@@ -902,34 +961,34 @@ function trackGitOperations(host, command, code, stdout) {
     getCommitCounter()?.add(1);
   }
   let replaced = command.replace(QUOTED_SEGMENT_RE, "''");
-  let w = GIT_PUSH_RE.test(replaced) || GIT_CL_UPLOAD_RE.test(replaced);
-  if (GIT_PUSH_RE.test(command) || w) {
+  let isCliUpload = GIT_PUSH_RE.test(replaced) || GIT_CL_UPLOAD_RE.test(replaced);
+  if (GIT_PUSH_RE.test(command) || isCliUpload) {
     logEvent("tengu_git_operation", {
       operation: lit("push"),
     });
     currentPrStatusFetcher().bump.emit();
   }
-  let found = GH_PR_ACTIONS.find((ee) => ee.re.test(command));
-  let prHit = GLAB_MR_ACTIONS.find((ee) => ee.re.test(command));
-  let P = found ?? prHit;
+  let found = GH_PR_ACTIONS.find((actionEntry) => actionEntry.re.test(command));
+  let prHit = GLAB_MR_ACTIONS.find((mrActionEntry) => mrActionEntry.re.test(command));
+  let prActionEntry = found ?? prHit;
   let prInfo = getPrAction(command);
   let textAfterLastRuleMatch = getTextAfterLastRuleMatch(command);
-  if (P) {
+  if (prActionEntry) {
     logEvent("tengu_git_operation", {
-      operation: fromEnum(P.op),
+      operation: fromEnum(prActionEntry.op),
     });
     currentPrStatusFetcher().bump.emit();
   }
-  let L = ghRepoCreateArgs(command);
-  if (L !== null) {
+  let repoCreateArgs = ghRepoCreateArgs(command);
+  if (repoCreateArgs !== null) {
     logEvent("tengu_git_operation", {
       operation: lit("pr_review"),
     });
-    if (/--approve\b/.test(L) || /(?:^|\s)-a(?=\s|$)/.test(L))
+    if (/--approve\b/.test(repoCreateArgs) || /(?:^|\s)-a(?=\s|$)/.test(repoCreateArgs))
       logEvent("tengu_git_operation", {
         operation: lit("pr_review_approve"),
       });
-    else if (/--request-changes\b/.test(L) || /(?:^|\s)-r(?=\s|$)/.test(L))
+    else if (/--request-changes\b/.test(repoCreateArgs) || /(?:^|\s)-r(?=\s|$)/.test(repoCreateArgs))
       logEvent("tengu_git_operation", {
         operation: lit("pr_review_request_changes"),
       });
@@ -941,35 +1000,41 @@ function trackGitOperations(host, command, code, stdout) {
     if (prHit?.action === "created") getPrCounter()?.add(1);
     let replaced = command.replace(QUOTED_SEGMENT_RE, " ");
     let matches = /(?:^|\s)--dry-run(?=\s|$)/.test(replaced);
-    let se = recordCreatedPr(
-      stdout,
+    let createdPr = recordCreatedPr(
+      output,
       textAfterLastRuleMatch,
       isPrCreateOnlyCommand(command),
       prHeadBranch(command, "gh"),
     );
-    if (!matches) recordCreatedPrToCcr(se);
+    if (!matches) recordCreatedPrToCcr(createdPr);
   } else if (prHit?.action === "created") {
     getPrCounter()?.add(1);
     recordCreatedPr(
-      stdout,
+      output,
       textAfterLastRuleMatch,
       isPrCreateOnlyCommand(command),
       prHeadBranch(command, "glab"),
     );
-  } else if (textAfterLastRuleMatch && stdout) {
-    let lastPrUrl = findLastPrUrl(stdout);
+  } else if (textAfterLastRuleMatch && output) {
+    let lastPrUrl = findLastPrUrl(output);
     if (lastPrUrl)
       trackPendingPrLink(
-        linkPrToSession(lastPrUrl, textAfterLastRuleMatch).then((ae) =>
-          ae === "linked" ? logFeatureOk("pr_contribute_link") : logFeatureBad("pr_contribute_link", ae),
+        linkPrToSession(lastPrUrl, textAfterLastRuleMatch).then((linkResult) =>
+          linkResult === "linked"
+            ? logFeatureOk("pr_contribute_link")
+            : logFeatureBad("pr_contribute_link", linkResult),
         ),
       );
     else if (!prHit || found) {
-      let url = stdout.match(/^\u2713.*$/m)?.[0];
-      let se = url ? parsePrNumberFromText(url) : undefined;
-      if (se)
+      let url = output.match(/^\u2713.*$/m)?.[0];
+      let prNumberInfo = url ? parsePrNumberFromText(url) : undefined;
+      if (prNumberInfo)
         trackPendingPrLink(
-          getNpmDistTags(textAfterLastRuleMatch, String(se.prNumber), se.prRepository).then((npmDistTags) =>
+          getNpmDistTags(
+            textAfterLastRuleMatch,
+            String(prNumberInfo.prNumber),
+            prNumberInfo.prRepository,
+          ).then((npmDistTags) =>
             npmDistTags
               ? logFeatureOk("pr_contribute_link")
               : logFeatureBad("pr_contribute_link", "gh_view_failed"),
@@ -978,51 +1043,56 @@ function trackGitOperations(host, command, code, stdout) {
     }
   }
   let match = command.match(GH_PR_CHECKOUT_RE);
-  let Q =
-    w && !P && stdout && !DRY_RUN_FLAG_RE.test(pushedBranchOf(command))
+  let pushedPrUrls =
+    isCliUpload && !prActionEntry && output && !DRY_RUN_FLAG_RE.test(pushedBranchOf(command))
       ? dedupePrUrls(
           [regExp_13, GITLAB_MR_REMOTE_RE]
-            .flatMap((ee) => [...stdout.matchAll(new RegExp(ee, "gm"))])
-            .sort((ee, ae) => ee.index - ae.index)
-            .map((ee) => ee[1] ?? ""),
+            .flatMap((pattern) => [...output.matchAll(new RegExp(pattern, "gm"))])
+            .sort((match, otherMatch) => match.index - otherMatch.index)
+            .map((match) => match[1] ?? ""),
         )
       : [];
-  let last = Q.at(-1);
+  let last = pushedPrUrls.at(-1);
   if (match?.[1]) trackPendingPrLink(getNpmDistTags("checked-out", match[1]));
   else if (last) {
-    recordPrActions(Q.slice(0, -1), "pushed");
+    recordPrActions(pushedPrUrls.slice(0, -1), "pushed");
     trackPendingPrLink(
       last.provider === "gerrit"
         ? getBranch(getCwd()).then((branch) => linkPrToSession(last, "pushed", branch))
         : linkPrToSession(last, "pushed"),
     );
-  } else if (GIT_PUSH_RE.test(command) && !P) {
-    let ee = pushedBranchOf(command);
-    let ae = ee.match(/\S+/g)?.filter((ie) => !ie.startsWith("-"))[1];
-    let se = ae ? ae.indexOf(":") : -1;
-    let re = ae && se > 0 && se < ae.length - 1 ? ae.slice(se + 1).replace(/^refs\/heads\//, "") : undefined;
+  } else if (GIT_PUSH_RE.test(command) && !prActionEntry) {
+    let pushSpec = pushedBranchOf(command);
+    let refspec = pushSpec.match(/\S+/g)?.filter((token) => !token.startsWith("-"))[1];
+    let colonIndex = refspec ? refspec.indexOf(":") : -1;
+    let destBranch =
+      refspec && colonIndex > 0 && colonIndex < refspec.length - 1
+        ? refspec.slice(colonIndex + 1).replace(/^refs\/heads\//, "")
+        : undefined;
     let sessionId = getCwd();
     let pendingBranchLinks = getPendingBranchLinks();
-    let matches = DRY_RUN_FLAG_RE.test(ee);
-    let we = matches || isEssentialTrafficOnly() ? undefined : getBranch(sessionId);
-    if (re && isTrackableBranch(re) && !matches)
-      trackPendingPrLink(trackPushedBranch(pendingBranchLinks, sessionId, re, getNpmDistTags("pushed", re)));
+    let matches = DRY_RUN_FLAG_RE.test(pushSpec);
+    let branchPromise = matches || isEssentialTrafficOnly() ? undefined : getBranch(sessionId);
+    if (destBranch && isTrackableBranch(destBranch) && !matches)
+      trackPendingPrLink(
+        trackPushedBranch(pendingBranchLinks, sessionId, destBranch, getNpmDistTags("pushed", destBranch)),
+      );
     trackPendingPrLink(
       trackPushedBranch(
         pendingBranchLinks,
         sessionId,
-        we,
+        branchPromise,
         matches ? Promise.resolve(false) : getNpmDistTags("pushed"),
       ),
     );
   }
-  if (isApiPrCreate(command, P !== undefined)) {
+  if (isApiPrCreate(command, prActionEntry !== undefined)) {
     logEvent("tengu_git_operation", {
       operation: lit("pr_create"),
     });
     getPrCounter()?.add(1);
     currentPrStatusFetcher().bump.emit();
-    recordCreatedPr(stdout);
+    recordCreatedPr(output);
   }
   recheckPendingBranches(command);
   return {
@@ -1033,13 +1103,13 @@ function trackGitOperations(host, command, code, stdout) {
 /**
  * 登记后台 Promise（吞掉错误），供退出前等待。
  */
-function trackPendingPrLink(e) {
+function trackPendingPrLink(linkPromise) {
   let pendingPrLinks = getPendingPrLinks();
-  let r = e.catch(() => {
+  let tracked = linkPromise.catch(() => {
     return;
   });
-  pendingPrLinks.add(r);
-  r.finally(() => pendingPrLinks.delete(r));
+  pendingPrLinks.add(tracked);
+  tracked.finally(() => pendingPrLinks.delete(tracked));
 }
 //@ chunk-s61vbvea.js:581411-581423 placement
 /**
@@ -1061,13 +1131,13 @@ async function settlePendingPrLinks() {
  */
 function announcePrStarted(host) {
   if (isEssentialTrafficOnly() || !isWorkspacePersistedTrusted(getCwd())) return Promise.resolve();
-  let n = announcePrStarted_2(host);
-  trackPendingPrLink(n);
-  return n;
+  let announcePromise = announcePrStarted_2(host);
+  trackPendingPrLink(announcePromise);
+  return announcePromise;
 }
 //@ chunk-s61vbvea.js:581604-582063 placement
-async function announcePrStarted_2(e) {
-  let [prStatus, branch] = await Promise.all([getPrStatus(e), getBranch(getCwd())]);
+async function announcePrStarted_2(host) {
+  let [prStatus, branch] = await Promise.all([getPrStatus(host), getBranch(getCwd())]);
   if (prStatus === "fetch-failed") {
     logFeatureBad("pr_started_announce", "lookup_failed");
     return;
@@ -1101,21 +1171,21 @@ async function announcePrStarted_2(e) {
 /**
  * 把 PR 与当前会话关联并发通知，返回 linked/no_session/url_rejected。
  */
-async function linkPrToSession(e, action, branch) {
-  if (!isValidPrUrl(e.prUrl)) return "url_rejected";
-  let [{ linkSessionToPR: s }, { getSessionId: h }] = await Promise.all([
-    import("./chunk-hs5khexj.js"),
-    import("./chunk-nj7t53r7.js"),
+async function linkPrToSession(pr, action, branch) {
+  if (!isValidPrUrl(pr.prUrl)) return "url_rejected";
+  let [{ linkSessionToPR }, { getSessionId }] = await Promise.all([
+    import("../../utils/sessionStorage.lazy.js"),
+    import("../../bootstrap/state.js"),
   ]);
-  let y = h();
-  if (!y) return "no_session";
+  let sessionId = getSessionId();
+  if (!sessionId) return "no_session";
   announceCodeChangePublished({
-    ...e,
-    identifier: String(e.prNumber),
+    ...pr,
+    identifier: String(pr.prNumber),
     action,
     branch,
   });
-  await s(y, e.prNumber, e.prUrl, e.prRepository);
+  await linkSessionToPR(sessionId, pr.prNumber, pr.prUrl, pr.prRepository);
   return "linked";
 }
 //@ chunk-s61vbvea.js:582400-582603 placement
@@ -1135,9 +1205,10 @@ class PrLinkBackoffState {
   backoffUntil = 0;
 }
 //@ chunk-s61vbvea.js:582628-583010 placement
-function GITHUB_RATE_LIMIT_REMINDER(command, n, r) {
-  if (!GH_COMMAND_RE.test(command) || !GITHUB_RATE_LIMIT_RE.test(n) || Date.now() < r.backoffUntil) return;
-  r.backoffUntil = Date.now() + RATE_LIMIT_REMINDER_INTERVAL_MS;
+function GITHUB_RATE_LIMIT_REMINDER(command, branch, output) {
+  if (!GH_COMMAND_RE.test(command) || !GITHUB_RATE_LIMIT_RE.test(branch) || Date.now() < output.backoffUntil)
+    return;
+  output.backoffUntil = Date.now() + RATE_LIMIT_REMINDER_INTERVAL_MS;
   return "<system-reminder>GitHub API rate limit exceeded (5,000/hr shared across all tools and agents). Run `gh api rate_limit --jq .resources` and sleep until reset before further gh calls. If polling in a loop, use ScheduleWakeup instead of retrying.</system-reminder>";
 }
 export {

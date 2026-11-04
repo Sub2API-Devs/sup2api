@@ -19,7 +19,7 @@ var APPLY_PROJECT_SETTINGS_DESCRIPTION =
 /**
  * 判断 argv[2] 是否为 apply-project-settings 子命令。
  */
-function isApplyProjectSettingsCommand(t = process.argv) {
-  return t[2] === "apply-project-settings";
+function isApplyProjectSettingsCommand(argv = process.argv) {
+  return argv[2] === "apply-project-settings";
 }
-export { APPLY_PROJECT_SETTINGS, APPLY_PROJECT_SETTINGS_DESCRIPTION, isApplyProjectSettingsCommand };
+export { isApplyProjectSettingsCommand, APPLY_PROJECT_SETTINGS, APPLY_PROJECT_SETTINGS_DESCRIPTION };

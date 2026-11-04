@@ -20,3 +20,4 @@ async function setColorCall(args, context) {
     value: await performSetColor(args, context),
   };
 }
+export { setColorCall };

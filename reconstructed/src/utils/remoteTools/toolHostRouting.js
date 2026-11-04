@@ -33,14 +33,18 @@ import {
 import { isHostOnlyNativeTool } from "../../services/api/deferredToolsState.js";
 import { isolationRuntimeService } from "../worktreeIsolation.js";
 import { getToolRemoteExecution } from "../../Tool.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1406520-1406548 placement
-var toolHostRoutingSlot = new SessionRootSlot(() => new Map());
+var toolHostRoutingSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1406520", () => {
+  toolHostRoutingSlot = new SessionRootSlot(() => new Map());
+});
 //@ chunk-e6aww6q8.js:1406548-1406620 placement
-function logToolHostRefused(name, n) {
+function logToolHostRefused(name, reason) {
   logEvent("tengu_tool_host_refused", {
     tool: sanitizeToolNameForAnalytics(name),
-    reason: fromEnum(n),
+    reason: fromEnum(reason),
   });
 }
 //@ chunk-e6aww6q8.js:1406620-1406711 placement
@@ -53,37 +57,37 @@ function hostOnlyToolMessage(name, name_2) {
  */
 function findHostServingTool(session, name) {
   if (session === undefined) return;
-  let r = toolHostRoutingSlot.peek(session);
-  return r && [...r.values()].find((s) => s.servedTools.has(name));
+  let hostsBySession = toolHostRoutingSlot.peek(session);
+  return hostsBySession && [...hostsBySession.values()].find((host) => host.servedTools.has(name));
 }
 //@ chunk-e6aww6q8.js:1406826-1407661 placement
-function resolveToolHost(e, n, r) {
-  let hostServingTool = findHostServingTool(r.session, e.name);
+function resolveToolHost(tool, input, context) {
+  let hostServingTool = findHostServingTool(context.session, tool.name);
   if (hostServingTool === undefined) return;
-  let h = n[HOST_TOOL_INPUT_FIELD];
-  if (typeof h === "string" && isReservedMachineName(h))
+  let hostField = input[HOST_TOOL_INPUT_FIELD];
+  if (typeof hostField === "string" && isReservedMachineName(hostField))
     return {
       kind: "refused",
       reason: "named_own_process",
       dispatch: {
         where: "refused",
-        message: hostOnlyToolMessage(hostServingTool.name, e.name),
+        message: hostOnlyToolMessage(hostServingTool.name, tool.name),
       },
     };
-  let { requested, input } = splitHostField(n);
+  let { requested, input: input_2 } = splitHostField(input);
   if (requested === undefined || requested === hostServingTool.name)
     return {
       kind: "decided",
       dispatch: {
         where: "here",
-        input,
+        input: input_2,
       },
     };
   if (machineNameMatches(requested, hostServingTool.name))
-    return r.toolState
+    return context.toolState
       .get(ToolHostRegistry)
       .hosts()
-      .some((w) => w.kind === "remote" && machineNameMatches(requested, w.name))
+      .some((host) => host.kind === "remote" && machineNameMatches(requested, host.name))
       ? {
           kind: "refused",
           reason: "ambiguous_spelling",
@@ -96,14 +100,14 @@ function resolveToolHost(e, n, r) {
           kind: "decided",
           dispatch: {
             where: "here",
-            input,
+            input: input_2,
           },
         };
   return {
     kind: "names_other",
     refusal: {
       where: "refused",
-      message: `No machine named "${machineLabelForMessage(requested)}" is attached to this session. ${hostOnlyToolMessage(hostServingTool.name, e.name)}`,
+      message: `No machine named "${machineLabelForMessage(requested)}" is attached to this session. ${hostOnlyToolMessage(hostServingTool.name, tool.name)}`,
     },
   };
 }
@@ -111,67 +115,80 @@ function resolveToolHost(e, n, r) {
 /**
  * 路由工具调用；接管的重启调用不能路由到别处时拒绝并记录。
  */
-async function routeToolCallWithAdoption(e, n, toolUseContext, id, h) {
-  let y = adoptedToolHost(toolUseContext, id);
-  let S = id === undefined ? undefined : y?.adopted(id);
-  let w = await routeToolCallToHost(e, withToolHostField(e, n, S), toolUseContext, h);
-  if (w.where === "elsewhere" || id === undefined || y === undefined || S === undefined) return w;
-  y.takeAdopted(id);
-  y.remove(id);
+async function routeToolCallWithAdoption(tool, input, context, toolUseId, statusStream) {
+  let registry = adoptedToolHost(context, toolUseId);
+  let adoptedCall = toolUseId === undefined ? undefined : registry?.adopted(toolUseId);
+  let dispatch = await routeToolCallToHost(
+    tool,
+    withToolHostField(tool, input, adoptedCall),
+    context,
+    statusStream,
+  );
+  if (
+    dispatch.where === "elsewhere" ||
+    toolUseId === undefined ||
+    registry === undefined ||
+    adoptedCall === undefined
+  )
+    return dispatch;
+  registry.takeAdopted(toolUseId);
+  registry.remove(toolUseId);
   logEvent("tengu_remote_tool_restart_adoption_unroutable", {
     where: lit_2("here"),
-    parked_at_restart: S.parkedAtRestart === true,
+    parked_at_restart: adoptedCall.parkedAtRestart === true,
   });
   return {
     where: "refused",
     message: restartNoticeFor(
       {
-        host: S.host,
+        host: adoptedCall.host,
       },
-      S,
+      adoptedCall,
     ),
   };
 }
 //@ chunk-e6aww6q8.js:1408033-1408104 placement
-function adoptedToolHost(e, n) {
-  return n === undefined || !isRemoteToolForwardingSwitchOn()
+function adoptedToolHost(context, toolUseId) {
+  return toolUseId === undefined || !isRemoteToolForwardingSwitchOn()
     ? undefined
-    : e.toolState.get(ServedCallRegistry);
+    : context.toolState.get(ServedCallRegistry);
 }
 //@ chunk-e6aww6q8.js:1408104-1408195 placement
-function withToolHostField(e, n, r) {
-  return r !== undefined && isHostOnlyNativeTool(e) && typeof n[HOST_TOOL_INPUT_FIELD] !== "string"
+function withToolHostField(tool, input, adoptedCall) {
+  return adoptedCall !== undefined &&
+    isHostOnlyNativeTool(tool) &&
+    typeof input[HOST_TOOL_INPUT_FIELD] !== "string"
     ? {
-        ...n,
-        [HOST_TOOL_INPUT_FIELD]: r.host,
+        ...input,
+        [HOST_TOOL_INPUT_FIELD]: adoptedCall.host,
       }
-    : n;
+    : input;
 }
 //@ chunk-e6aww6q8.js:1408195-1408963 placement
-async function routeToolCallToHost(e, n, r, s) {
-  if (r.remoteCall !== undefined) {
-    let hostServingTool = findHostServingTool(r.session, e.name);
+async function routeToolCallToHost(tool, input, context, statusStream) {
+  if (context.remoteCall !== undefined) {
+    let hostServingTool = findHostServingTool(context.session, tool.name);
     if (hostServingTool !== undefined) {
-      logToolHostRefused(e.name, "serving_another_session");
+      logToolHostRefused(tool.name, "serving_another_session");
       return {
         where: "refused",
-        message: `${e.name} was not run: this session runs it on ${hostServingTool.name}, and a call served for another session does not travel there.`,
+        message: `${tool.name} was not run: this session runs it on ${hostServingTool.name}, and a call served for another session does not travel there.`,
       };
     }
   }
-  let toolHost = resolveToolHost(e, n, r);
+  let toolHost = resolveToolHost(tool, input, context);
   if (toolHost?.kind === "refused") {
-    logToolHostRefused(e.name, toolHost.reason);
+    logToolHostRefused(tool.name, toolHost.reason);
     return toolHost.dispatch;
   }
   if (toolHost?.kind === "decided") return toolHost.dispatch;
   let remote = isolationRuntimeService().remote;
-  if (toolHost?.kind === "names_other" && (remote === undefined || !remote.applies(e))) {
-    logToolHostRefused(e.name, "machine_not_attached");
+  if (toolHost?.kind === "names_other" && (remote === undefined || !remote.applies(tool))) {
+    logToolHostRefused(tool.name, "machine_not_attached");
     return toolHost.refusal;
   }
-  if (remote === undefined || !remote.applies(e))
-    return supportsRemoteExecution(e) && hasHostField(n)
+  if (remote === undefined || !remote.applies(tool))
+    return supportsRemoteExecution(tool) && hasHostField(input)
       ? {
           where: "refused",
           message: isRemoteToolForwardingEnabledCached()
@@ -180,17 +197,17 @@ async function routeToolCallToHost(e, n, r, s) {
         }
       : {
           where: "here",
-          input: n,
+          input,
         };
-  let S = await remote.route(e, n, r, s);
-  return S.kind === "local"
+  let route = await remote.route(tool, input, context, statusStream);
+  return route.kind === "local"
     ? {
         where: "here",
-        input: S.input,
+        input: route.input,
       }
     : {
         where: "elsewhere",
-        route: S,
+        route,
         hosts: remote,
       };
 }
@@ -198,25 +215,25 @@ async function routeToolCallToHost(e, n, r, s) {
 /**
  * supportsRemoteExecution：工具支持远程执行。
  */
-function supportsRemoteExecution(e) {
-  return canRunToolsOnThisMachine() && getToolRemoteExecution(e).supported;
+function supportsRemoteExecution(tool) {
+  return canRunToolsOnThisMachine() && getToolRemoteExecution(tool).supported;
 }
 //@ chunk-e6aww6q8.js:1409008-1409084 placement
 /**
  * shouldRouteToolToHost：该调用是否转给远程宿主。
  */
-function shouldRouteToolToHost(e, n, toolUseContext, id) {
+function shouldRouteToolToHost(tool, input, context, toolUseId) {
   return (
-    supportsRemoteExecution(e) &&
-    (hasHostField(n) || adoptedToolHost(toolUseContext, id)?.adopted(id) !== undefined)
+    supportsRemoteExecution(tool) &&
+    (hasHostField(input) || adoptedToolHost(context, toolUseId)?.adopted(toolUseId) !== undefined)
   );
 }
 //@ chunk-e6aww6q8.js:1409084-1409130 placement
 /**
  * remoteRoutingCandidate：远程路由候选。
  */
-function remoteRoutingCandidate(e) {
+function remoteRoutingCandidate(input) {
   if (!isRemoteToolForwardingSwitchOn()) return;
-  return requestedMachineLabel(e);
+  return requestedMachineLabel(input);
 }
 export { remoteRoutingCandidate, shouldRouteToolToHost, routeToolCallWithAdoption, supportsRemoteExecution };

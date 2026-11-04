@@ -13,7 +13,7 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growt
 import { identity } from "./identity.js";
 import { logForDiagnosticsNoPII } from "./diagLogs.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, union, string, E } from "../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, union, stringSchema, numberSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { apiClient } from "../services/routines/routinesApi.js";
 import { classifyAxiosError } from "./errors.js";
 import { withDeadline } from "./sleep.js";
@@ -38,8 +38,8 @@ var storeCheckPauseState = identity(
   {
     pausedUntilMs: 0,
   },
-  (e) => {
-    e.pausedUntilMs = 0;
+  (state) => {
+    state.pausedUntilMs = 0;
   },
 );
 //@ chunk-0f0jmzwa.js:700-749 placement
@@ -47,15 +47,15 @@ function storeCheckPaused() {
   return Date.now() < storeCheckPauseState.pausedUntilMs;
 }
 //@ chunk-0f0jmzwa.js:749-1010 placement
-function pauseStoreCheck(cause, t) {
-  let max = Math.max(storeCheckPauseState.pausedUntilMs, Date.now() + t);
+function pauseStoreCheck(cause, durationMs) {
+  let max = Math.max(storeCheckPauseState.pausedUntilMs, Date.now() + durationMs);
   if (max === storeCheckPauseState.pausedUntilMs) return;
   storeCheckPauseState.pausedUntilMs = max;
   logForDiagnosticsNoPII("warn", "stage_file_store_check_paused", {
     cause,
-    until: Number.isFinite(t) ? "timer" : "process_exit",
-    ...(Number.isFinite(t) && {
-      for_s: Math.round(t / 1000),
+    until: Number.isFinite(durationMs) ? "timer" : "process_exit",
+    ...(Number.isFinite(durationMs) && {
+      for_s: Math.round(durationMs / 1000),
     }),
   });
 }
@@ -64,11 +64,11 @@ function pauseStoreCheck(cause, t) {
  * filestore 元数据响应 schema 与 md5 正则。
  */
 var FILESTORE_METADATA_SCHEMA = DoctorLazy(() =>
-  u({
-    file: u({
-      file: u({
-        size: union([string(), E()]).optional(),
-        md5: string().optional(),
+  objectSchema({
+    file: objectSchema({
+      file: objectSchema({
+        size: union([stringSchema(), numberSchema()]).optional(),
+        md5: stringSchema().optional(),
       }),
     }),
   }),
@@ -79,9 +79,9 @@ var MD5_HEX_RE = /^[0-9a-f]{32}$/;
  * 向 filestore 询问已存文件的大小与 md5（/v1/filestore/fs/readFileMetadata），用于 stage_file 判断本地文件是否与存储一致；连续失败会暂停检查（tengu_quiet_ledger）。
  */
 async function askStoreWhatItHolds(cred, path) {
-  let i = AbortSignal.timeout(STORE_CHECK_TIMEOUT_MS);
+  let abortSignal = AbortSignal.timeout(STORE_CHECK_TIMEOUT_MS);
   try {
-    let n = await apiClient.post(
+    let response = await apiClient.post(
       "/v1/filestore/fs/readFileMetadata",
       {
         filesystem_id: cred.filesystemId,
@@ -95,46 +95,46 @@ async function askStoreWhatItHolds(cred, path) {
           Authorization: `Bearer ${cred.filestoreJwt}`,
         },
         timeout: STORE_CHECK_TIMEOUT_MS,
-        signal: i,
+        signal: abortSignal,
         maxContentLength: 65536,
         validateStatus: () => true,
       },
     );
-    if (!n.ok)
+    if (!response.ok)
       return {
         answer: "not_sent",
       };
-    if (n.status === 404)
+    if (response.status === 404)
       return {
         answer: "not_found",
       };
-    if (n.status === 401)
+    if (response.status === 401)
       return {
         answer: "credential_expired",
       };
-    if (n.status === 403)
+    if (response.status === 403)
       return {
         answer: "credential_refused",
       };
-    if (n.status < 200 || n.status >= 300)
+    if (response.status < 200 || response.status >= 300)
       return {
         answer: "other_http_status",
       };
-    let r = FILESTORE_METADATA_SCHEMA().safeParse(n.data);
-    if (!r.success)
+    let parsed = FILESTORE_METADATA_SCHEMA().safeParse(response.data);
+    if (!parsed.success)
       return {
         answer: "unexpected_shape",
       };
-    let s = Number(r.data.file.file.size ?? 0);
-    let lower = (r.data.file.file.md5 ?? "").toLowerCase();
-    if (!Number.isSafeInteger(s) || s < 0)
+    let size = Number(parsed.data.file.file.size ?? 0);
+    let lower = (parsed.data.file.file.md5 ?? "").toLowerCase();
+    if (!Number.isSafeInteger(size) || size < 0)
       return {
         answer: "unexpected_shape",
       };
     return MD5_HEX_RE.test(lower)
       ? {
           answer: "size_and_md5",
-          size: s,
+          size,
           md5: lower,
         }
       : {
@@ -142,55 +142,56 @@ async function askStoreWhatItHolds(cred, path) {
         };
   } catch (error) {
     return {
-      answer: i.aborted || classifyAxiosError(error).kind === "timeout" ? "timed_out" : "request_error",
+      answer:
+        abortSignal.aborted || classifyAxiosError(error).kind === "timeout" ? "timed_out" : "request_error",
     };
   }
 }
 //@ chunk-0f0jmzwa.js:2076-2212 placement
-function sameFileUntouched(e, t) {
+function sameFileUntouched(openedStats, currentStats) {
   return (
-    e.dev === t.dev &&
-    e.ino === t.ino &&
-    e.nlink === t.nlink &&
-    e.size === t.size &&
-    e.mtimeNs === t.mtimeNs &&
-    e.ctimeNs === t.ctimeNs
+    openedStats.dev === currentStats.dev &&
+    openedStats.ino === currentStats.ino &&
+    openedStats.nlink === currentStats.nlink &&
+    openedStats.size === currentStats.size &&
+    openedStats.mtimeNs === currentStats.mtimeNs &&
+    openedStats.ctimeNs === currentStats.ctimeNs
   );
 }
 //@ chunk-0f0jmzwa.js:2212-2275 placement
-async function hashStandingFile(e, t) {
-  return (await withDeadline(md5IfUntouched(e, t), MD5_TIMEOUT_MS)) ?? "timed_out";
+async function hashStandingFile(path, openedStats) {
+  return (await withDeadline(md5IfUntouched(path, openedStats), MD5_TIMEOUT_MS)) ?? "timed_out";
 }
 //@ chunk-0f0jmzwa.js:2275-2674 placement
 /**
  * 文件未改动时计算 md5
  */
-async function md5IfUntouched(e, t) {
-  let i;
+async function md5IfUntouched(path, openedStats) {
+  let handle;
   try {
-    let { handle, withNoAtime } = await openRegularFileForReadWithNoAtime(e);
-    i = handle;
-    let stats = await i.stat({
+    let { handle: handle_2, withNoAtime } = await openRegularFileForReadWithNoAtime(path);
+    handle = handle_2;
+    let currentStats = await handle.stat({
       bigint: true,
     });
-    if (!stats.isFile() || !sameFileUntouched(t, stats)) return "changed";
+    if (!currentStats.isFile() || !sameFileUntouched(openedStats, currentStats)) return "changed";
     let hash = createHash("md5");
-    for await (let _ of i.createReadStream({
+    for await (let chunk of handle.createReadStream({
       autoClose: false,
       start: 0,
-      end: Number(stats.size),
+      end: Number(currentStats.size),
       signal: AbortSignal.timeout(MD5_TIMEOUT_MS),
     }))
-      hash.update(_);
+      hash.update(chunk);
     return {
       md5: hash.digest("hex"),
-      opened: stats,
+      opened: currentStats,
       withNoAtime,
     };
   } catch {
     return "unreadable";
   } finally {
-    i?.close().catch(() => {});
+    handle?.close().catch(() => {});
   }
 }
 export {
@@ -201,4 +202,5 @@ export {
   STORE_CHECK_PAUSE_MS,
   hashStandingFile,
   sameFileUntouched,
+  sameStandingFlag,
 };

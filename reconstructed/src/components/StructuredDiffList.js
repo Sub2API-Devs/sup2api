@@ -17,7 +17,7 @@ import { NoSelect } from "../ink/components/Input.js";
 //@ chunk-887tgx6t.js:7247-7553 fingerprint = StructuredDiffList (0.768)
 function StructuredDiffList({ hunks, dim, width, filePath, firstLine, fileContent }) {
   return intersperse(
-    hunks.map((hunk, f) =>
+    hunks.map((hunk, hunkIndex) =>
       jsxProd_default(
         Box,
         {
@@ -31,7 +31,7 @@ function StructuredDiffList({ hunks, dim, width, filePath, firstLine, fileConten
             fileContent,
           }),
         },
-        `hunk-${f}`,
+        `hunk-${hunkIndex}`,
       ),
     ),
     (i) =>

@@ -20,14 +20,14 @@ import { getErrnoCode } from "../errors.js";
 /**
  * 路径是否为网络路径。
  */
-function isNetworkPath(e) {
-  return sanitizeDisplayChars(stripVariationSelectors(stripCombiningRepeated(e)), false);
+function isNetworkPath(value) {
+  return sanitizeDisplayChars(stripVariationSelectors(stripCombiningRepeated(value)), false);
 }
 //@ chunk-t0gq9gyw.js:5961-5971 placement
 var MAX_SYMLINK_HOPS = 40;
 //@ chunk-t0gq9gyw.js:5971-6020 placement = getUnameSR (0.793)
-function getUnameSR(e) {
-  return e === "win32" ? /[\\/]+/ : /\/+/;
+function getUnameSR(platform) {
+  return platform === "win32" ? /[\\/]+/ : /\/+/;
 }
 //@ chunk-t0gq9gyw.js:6020-6360 placement
 /**
@@ -45,14 +45,14 @@ function isNetworkPath_2(chord, platform = "linux") {
   return isUncOrNetworkSpelling(chord) || classifyHomeMount(chord, platform);
 }
 //@ chunk-t0gq9gyw.js:6409-6641 placement
-async function checkNetworkPath(e, n = "linux") {
-  if (!isAbsolute(e)) return UNVETTABLE_LINK_MESSAGE;
-  if (isNetworkPath_2(e, n)) return NETWORK_PATH_MESSAGE;
-  let r = {
+async function checkNetworkPath(filePath, platform = "linux") {
+  if (!isAbsolute(filePath)) return UNVETTABLE_LINK_MESSAGE;
+  if (isNetworkPath_2(filePath, platform)) return NETWORK_PATH_MESSAGE;
+  let budget = {
     hops: MAX_SYMLINK_HOPS,
     steps: MAX_SYMLINK_HOPS * 64,
   };
-  switch ((await classifyPathLocation(parse(e).root, e, r, n)).kind) {
+  switch ((await classifyPathLocation(parse(filePath).root, filePath, budget, platform)).kind) {
     case "network":
       return NETWORK_LINK_MESSAGE;
     case "unvettable":
@@ -68,115 +68,122 @@ var WIN32_DRIVE_FROM_DEVICE_RE = /^(?:[\\/]{2}[?.]|[\\/]\?\?)[\\/]([A-Za-z]:[\\/
 /**
  * 判断路径为本地、网络或无法检查。
  */
-async function classifyPathLocation(e, n, r, o, s = false) {
-  if (o === "win32" && s) {
-    let match = WIN32_DRIVE_FROM_DEVICE_RE.exec(n);
-    if (match) n = match[1];
+async function classifyPathLocation(rootPath, filePath, budget, platform, isLinkTarget = false) {
+  if (platform === "win32" && isLinkTarget) {
+    let match = WIN32_DRIVE_FROM_DEVICE_RE.exec(filePath);
+    if (match) filePath = match[1];
   }
-  if (isNetworkPath_2(n, o))
+  if (isNetworkPath_2(filePath, platform))
     return {
       kind: "network",
     };
-  let a = n;
-  if (o === "win32") {
-    if (DRIVE_RELATIVE_PATTERN.test(n))
+  let currentPath = filePath;
+  if (platform === "win32") {
+    if (DRIVE_RELATIVE_PATTERN.test(filePath))
       return {
         kind: "unvettable",
       };
-    if (s) {
-      if (hasDotDotSegment(n))
+    if (isLinkTarget) {
+      if (hasDotDotSegment(filePath))
         return {
           kind: "unvettable",
         };
     } else {
-      a = normalize(n);
-      if (isNetworkPath_2(a, o))
+      currentPath = normalize(filePath);
+      if (isNetworkPath_2(currentPath, platform))
         return {
           kind: "network",
         };
     }
   }
-  let c = o === "win32" && /^[\\/](?![\\/])/.test(a) ? `${parse(e).root.replace(/[\\/]+$/, "")}${a}` : a;
-  let { root } = parse(c);
-  let p = isAbsolute(c) ? root : e;
-  let y = !s;
-  for (let w of c.slice(isAbsolute(c) ? root.length : 0).split(getUnameSR(o))) {
-    if (w === "" || w === ".") continue;
-    if (--r.steps < 0)
+  let absolutePath =
+    platform === "win32" && /^[\\/](?![\\/])/.test(currentPath)
+      ? `${parse(rootPath).root.replace(/[\\/]+$/, "")}${currentPath}`
+      : currentPath;
+  let { root } = parse(absolutePath);
+  let parentPath = isAbsolute(absolutePath) ? root : rootPath;
+  let checkAncestors = !isLinkTarget;
+  for (let segment of absolutePath
+    .slice(isAbsolute(absolutePath) ? root.length : 0)
+    .split(getUnameSR(platform))) {
+    if (segment === "" || segment === ".") continue;
+    if (--budget.steps < 0)
       return {
         kind: "unvettable",
       };
-    if (w === "..") {
-      p = dirname(p);
+    if (segment === "..") {
+      parentPath = dirname(parentPath);
       continue;
     }
-    let E = p.endsWith(sep) ? `${p}${w}` : `${p}${sep}${w}`;
-    if (isNetworkPath_2(E, o))
+    let candidatePath = parentPath.endsWith(sep)
+      ? `${parentPath}${segment}`
+      : `${parentPath}${sep}${segment}`;
+    if (isNetworkPath_2(candidatePath, platform))
       return {
         kind: "network",
       };
-    let h;
+    let isLink;
     try {
-      h = (await lstat(E)).isSymbolicLink();
+      isLink = (await lstat(candidatePath)).isSymbolicLink();
     } catch (error) {
       let errnoCode = getErrnoCode(error);
       if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR")
         return {
           kind: "dead-end",
         };
-      if (y) {
-        let L =
-          o !== "win32"
+      if (checkAncestors) {
+        let treatAsLocal =
+          platform !== "win32"
             ? errnoCode === "EACCES" ||
               errnoCode === "EPERM" ||
               errnoCode === "ENAMETOOLONG" ||
               errnoCode === "ELOOP"
             : errnoCode === "ENAMETOOLONG";
-        if (!L)
+        if (!treatAsLocal)
           try {
-            await lstat(p);
+            await lstat(parentPath);
           } catch (error) {
             let errnoCode = getErrnoCode(error);
-            L =
+            treatAsLocal =
               errnoCode === "ENOENT" ||
               errnoCode === "ENOTDIR" ||
               errnoCode === "ENODEV" ||
               errnoCode === "ENXIO";
           }
-        if (L)
+        if (treatAsLocal)
           return {
             kind: "local",
-            physical: p,
+            physical: parentPath,
           };
       }
       return {
         kind: "unvettable",
       };
     }
-    if (!h) {
-      p = E;
+    if (!isLink) {
+      parentPath = candidatePath;
       continue;
     }
-    if (--r.hops < 0)
+    if (--budget.hops < 0)
       return {
         kind: "unvettable",
       };
-    let b;
+    let linkText;
     try {
-      b = await readlink(E);
+      linkText = await readlink(candidatePath);
     } catch {
       return {
         kind: "unvettable",
       };
     }
-    let v = await classifyPathLocation(p, b, r, o, true);
-    if (v.kind !== "local") return v;
-    y = false;
-    p = v.physical;
+    let linkResult = await classifyPathLocation(parentPath, linkText, budget, platform, true);
+    if (linkResult.kind !== "local") return linkResult;
+    checkAncestors = false;
+    parentPath = linkResult.physical;
   }
   return {
     kind: "local",
-    physical: p,
+    physical: parentPath,
   };
 }
 export { isNetworkPath, checkNetworkPath, UNVETTABLE_LINK_MESSAGE, isNetworkPath_2 };

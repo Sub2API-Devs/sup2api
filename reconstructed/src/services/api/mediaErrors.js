@@ -16,18 +16,18 @@ import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 /**
  * 从 API 错误文本判断受影响的媒体类型（request_too_large/媒体预算 → document+image；否则按错误里的块类型）。
  */
-function getMediaKindsFromError(errorDetails) {
-  if (errorDetails.includes("request_too_large") || isMediaBudgetError(errorDetails))
+function getMediaKindsFromError(message) {
+  if (message.includes("request_too_large") || isMediaBudgetError(message))
     return new Set(["document", "image"]);
-  let n = classifyMediaError(errorDetails);
-  return n ? new Set([n.kind]) : undefined;
+  let mediaError = classifyMediaError(message);
+  return mediaError ? new Set([mediaError.kind]) : undefined;
 }
 //@ chunk-e6aww6q8.js:123333-123421 placement
 /**
  * 错误文本含 "too much media" 或 media_budget。
  */
-function isMediaBudgetError(e) {
-  return e.toLowerCase().includes("too much media") || includesWholeWord(e, "media_budget");
+function isMediaBudgetError(message) {
+  return message.toLowerCase().includes("too much media") || includesWholeWord(message, "media_budget");
 }
 //@ chunk-e6aww6q8.js:123421-123593 placement
 /**
@@ -59,18 +59,18 @@ function getPdfUnsupportedByModelMessage() {
 /**
  * 媒体被移除时的错误消息参数：content、apiError=media_removed、media_reason（media_budget/unsupported_by_model/unprocessable）。
  */
-function buildMediaRemovedError(e, n) {
-  let r = e === "document" && isPdfUnsupportedError(n);
+function buildMediaRemovedError(kind, message) {
+  let pdfUnsupported = kind === "document" && isPdfUnsupportedError(message);
   return {
-    content: r ? getPdfUnsupportedByModelMessage() : getMediaRemovedMessage(e),
+    content: pdfUnsupported ? getPdfUnsupportedByModelMessage() : getMediaRemovedMessage(kind),
     apiError: "media_removed",
-    apiErrorParams: isMediaBudgetError(n)
+    apiErrorParams: isMediaBudgetError(message)
       ? {
           media_reason: "media_budget",
         }
       : {
-          media: e,
-          media_reason: r ? "unsupported_by_model" : "unprocessable",
+          media: kind,
+          media_reason: pdfUnsupported ? "unsupported_by_model" : "unprocessable",
         },
   };
 }
@@ -78,12 +78,12 @@ function buildMediaRemovedError(e, n) {
 /**
  * "API Error: an image/a document … was removed" 一类提示，交互式时提示双击 esc 编辑。
  */
-function getMediaRemovedMessage(e) {
-  let n = e === "document" ? "a document" : "an image";
-  let r = getIsNonInteractiveSession()
+function getMediaRemovedMessage(kind) {
+  let noun = kind === "document" ? "a document" : "an image";
+  let tail = getIsNonInteractiveSession()
     ? "Re-read the file with a different approach if you still need it."
     : "Double press esc to edit your message, or re-read the file if you still need it.";
-  return `${API_ERROR_MESSAGE_PREFIX}: ${n} in the conversation could not be processed and was removed. ${r}`;
+  return `${API_ERROR_MESSAGE_PREFIX}: ${noun} in the conversation could not be processed and was removed. ${tail}`;
 }
 export {
   getMediaRemovedMessage,

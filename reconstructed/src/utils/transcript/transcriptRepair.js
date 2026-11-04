@@ -20,96 +20,97 @@ import {
   getValidStringArray,
 } from "../collapseHookSummaries.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:331756-332732 placement
 /**
  * 返回逐行修复函数与收尾函数：system 行按子类型修补字段；user/assistant 行去掉非法内容块（字符串内容包装为文本块）， 无法修复的行丢弃并记录，收尾时把指向被丢弃行的 parentUuid 重接到其祖先，返回各类计数。
  */
 function createRowRepairer() {
-  let e = new Map();
-  let n = 0;
+  let seenById = new Map();
+  let cleanedRows = 0;
   let droppedBlocks = 0;
-  let s = 0;
-  let h = 0;
-  let y = 0;
-  let S = 0;
-  function w(q, Z) {
+  let wrappedRows = 0;
+  let droppedRows = 0;
+  let stopHookRepairs = 0;
+  let otherSystemRepairs = 0;
+  function admit(row, droppedUuids) {
     try {
-      let Se = q.type;
-      if (Se === "system") {
-        let we = planSystemRowRepair(q);
-        if (we === "keep") return true;
-        applyFieldEdits(we.target, we.edits);
-        if (we.subtype === "stop_hook_summary") y++;
-        else S++;
+      let rowType = row.type;
+      if (rowType === "system") {
+        let repair = planSystemRowRepair(row);
+        if (repair === "keep") return true;
+        applyFieldEdits(repair.target, repair.edits);
+        if (repair.subtype === "stop_hook_summary") stopHookRepairs++;
+        else otherSystemRepairs++;
         return true;
       }
-      if (!isMessageRole(Se)) return true;
-      let ke = repairMessageContent(Se, q.message);
-      if (ke === "keep") return true;
-      if (ke !== "drop") {
-        ke.message.content = ke.content;
-        droppedBlocks += ke.droppedBlocks;
-        if (ke.wrapped) s++;
-        else n++;
+      if (!isMessageRole(rowType)) return true;
+      let repaired = repairMessageContent(rowType, row.message);
+      if (repaired === "keep") return true;
+      if (repaired !== "drop") {
+        repaired.message.content = repaired.content;
+        droppedBlocks += repaired.droppedBlocks;
+        if (repaired.wrapped) wrappedRows++;
+        else cleanedRows++;
         return true;
       }
-      h++;
-      if (!Z.has(q.uuid)) e.set(q.uuid, q.parentUuid);
+      droppedRows++;
+      if (!droppedUuids.has(row.uuid)) seenById.set(row.uuid, row.parentUuid);
       return false;
     } catch {
       return true;
     }
   }
-  function L(q) {
+  function finish(byUuid) {
     try {
-      if (e.size > 0)
-        for (let Se of q.values()) {
-          let parentUuid = Se.parentUuid;
-          if (parentUuid !== null && !q.has(parentUuid) && e.has(parentUuid))
-            Se.parentUuid = G(parentUuid, q);
+      if (seenById.size > 0)
+        for (let row of byUuid.values()) {
+          let parentUuid = row.parentUuid;
+          if (parentUuid !== null && !byUuid.has(parentUuid) && seenById.has(parentUuid))
+            row.parentUuid = nearestPresentAncestor(parentUuid, byUuid);
         }
-      let Z = {
+      let stats = {
         droppedBlocks,
-        cleanedRows: n,
-        wrappedRows: s,
-        droppedRows: h,
-        stopHookSummariesRepaired: y,
-        otherSystemRowsRepaired: S,
+        cleanedRows,
+        wrappedRows,
+        droppedRows,
+        stopHookSummariesRepaired: stopHookRepairs,
+        otherSystemRowsRepaired: otherSystemRepairs,
       };
-      if (isRepairNoop(Z)) return;
-      logRowRepair("transcript_load", Z);
+      if (isRepairNoop(stats)) return;
+      logRowRepair("transcript_load", stats);
     } catch {}
   }
-  function G(parentUuid, Z) {
-    let Se = new Set();
-    let ke = parentUuid;
-    while (ke !== null && !Z.has(ke) && e.has(ke)) {
-      if (Se.has(ke)) {
-        ke = null;
+  function nearestPresentAncestor(parentUuid, byUuid) {
+    let visited = new Set();
+    let ancestorUuid = parentUuid;
+    while (ancestorUuid !== null && !byUuid.has(ancestorUuid) && seenById.has(ancestorUuid)) {
+      if (visited.has(ancestorUuid)) {
+        ancestorUuid = null;
         break;
       }
-      Se.add(ke);
-      ke = e.get(ke) ?? null;
+      visited.add(ancestorUuid);
+      ancestorUuid = seenById.get(ancestorUuid) ?? null;
     }
-    for (let we of Se) e.set(we, ke);
-    return ke;
+    for (let uuid of visited) seenById.set(uuid, ancestorUuid);
+    return ancestorUuid;
   }
   return {
-    admit: w,
-    finish: L,
+    admit,
+    finish,
   };
 }
 //@ chunk-e6aww6q8.js:332732-333133 placement
 /**
  * 消息内容修复：keep/drop 或过滤后的内容块。
  */
-function repairMessageContent(e, message) {
+function repairMessageContent(site, message) {
   if (!isPlainObject_5(message)) return "drop";
   let content = message.content;
   if (typeof content === "string") {
-    if (e !== "assistant") return "keep";
+    if (site !== "assistant") return "keep";
     if (content.trim() === "") return "drop";
     return {
       message,
@@ -135,46 +136,46 @@ function repairMessageContent(e, message) {
   };
 }
 //@ chunk-e6aww6q8.js:333133-333187 placement
-function isTypedContentBlock(e) {
-  return isPlainObject_5(e) && typeof e.type === "string";
+function isTypedContentBlock(block) {
+  return isPlainObject_5(block) && typeof block.type === "string";
 }
 //@ chunk-e6aww6q8.js:333187-333238 placement
-function isMessageRole(e) {
-  return e === "user" || e === "assistant";
+function isMessageRole(role) {
+  return role === "user" || role === "assistant";
 }
 //@ chunk-e6aww6q8.js:333238-333381 placement
-function isRepairNoop(e) {
+function isRepairNoop(stats) {
   return (
-    e.cleanedRows === 0 &&
-    e.wrappedRows === 0 &&
-    e.droppedRows === 0 &&
-    e.stopHookSummariesRepaired === 0 &&
-    e.otherSystemRowsRepaired === 0
+    stats.cleanedRows === 0 &&
+    stats.wrappedRows === 0 &&
+    stats.droppedRows === 0 &&
+    stats.stopHookSummariesRepaired === 0 &&
+    stats.otherSystemRowsRepaired === 0
   );
 }
 //@ chunk-e6aww6q8.js:333381-333750 placement
 /**
  * 记修复 warn 与 transcript_row_repair feature sad。
  */
-function logRowRepair(e, n) {
-  logForDebugging(repairMalformedContent(e === "transcript_load" ? "transcript load" : "resume", n), {
+function logRowRepair(site, stats) {
+  logForDebugging(repairMalformedContent(site === "transcript_load" ? "transcript load" : "resume", stats), {
     level: "warn",
   });
   logFeatureSad("transcript_row_repair", "rows_repaired", {
-    site: fromEnum(e),
-    dropped_rows: n.droppedRows,
-    cleaned_rows: n.cleanedRows,
-    wrapped_rows: n.wrappedRows,
-    dropped_blocks: n.droppedBlocks,
-    stop_hook_summaries_repaired: n.stopHookSummariesRepaired,
-    other_system_rows_repaired: n.otherSystemRowsRepaired,
+    site: fromEnum(site),
+    dropped_rows: stats.droppedRows,
+    cleaned_rows: stats.cleanedRows,
+    wrapped_rows: stats.wrappedRows,
+    dropped_blocks: stats.droppedBlocks,
+    stop_hook_summaries_repaired: stats.stopHookSummariesRepaired,
+    other_system_rows_repaired: stats.otherSystemRowsRepaired,
   });
 }
 //@ chunk-e6aww6q8.js:333750-334378 placement
 /**
  * 修复转录中格式错误的消息内容。
  */
-function repairMalformedContent(e, n) {
+function repairMalformedContent(site, extra) {
   let {
     droppedBlocks,
     cleanedRows,
@@ -182,7 +183,7 @@ function repairMalformedContent(e, n) {
     droppedRows,
     stopHookSummariesRepaired,
     otherSystemRowsRepaired,
-  } = n;
+  } = extra;
   let filtered = [
     cleanedRows > 0
       ? `removed ${droppedBlocks} malformed content ${plural(droppedBlocks, "block")} from ${cleanedRows} ${plural(cleanedRows, "row")}`
@@ -197,12 +198,12 @@ function repairMalformedContent(e, n) {
     otherSystemRowsRepaired > 0
       ? `repaired malformed fields on ${otherSystemRowsRepaired} system ${plural(otherSystemRowsRepaired, "row")} (not stop hook summaries)`
       : undefined,
-  ].filter((G) => G !== undefined);
-  return `${e}: ${filtered.join(", ")}`;
+  ].filter((part) => part !== undefined);
+  return `${site}: ${filtered.join(", ")}`;
 }
 //@ chunk-e6aww6q8.js:334378-335072 placement
-function filterStopHookSummariesOnResume(e) {
-  let n = {
+function filterStopHookSummariesOnResume(messages) {
+  let stats = {
     droppedBlocks: 0,
     cleanedRows: 0,
     wrappedRows: 0,
@@ -210,105 +211,105 @@ function filterStopHookSummariesOnResume(e) {
     stopHookSummariesRepaired: 0,
     otherSystemRowsRepaired: 0,
   };
-  let flattened = e.flatMap((s) => {
+  let flattened = messages.flatMap((row) => {
     try {
-      let h = s.type;
-      if (h === "system") {
-        let S = planSystemRowRepair(s);
-        if (S === "keep") return [s];
-        let w = {
-          ...s,
+      let rowType = row.type;
+      if (rowType === "system") {
+        let repair = planSystemRowRepair(row);
+        if (repair === "keep") return [row];
+        let repairedRow = {
+          ...row,
         };
-        let L = w;
-        if (isPlainObject_5(L)) applyFieldEdits(L, S.edits);
-        if (S.subtype === "stop_hook_summary") n.stopHookSummariesRepaired++;
-        else n.otherSystemRowsRepaired++;
-        return [w];
+        let target = repairedRow;
+        if (isPlainObject_5(target)) applyFieldEdits(target, repair.edits);
+        if (repair.subtype === "stop_hook_summary") stats.stopHookSummariesRepaired++;
+        else stats.otherSystemRowsRepaired++;
+        return [repairedRow];
       }
-      if (!isMessageRole(h)) return [s];
-      let y = repairMessageContent(h, s.message);
-      if (y === "keep") return [s];
-      if (y === "drop") {
-        n.droppedRows++;
+      if (!isMessageRole(rowType)) return [row];
+      let repaired = repairMessageContent(rowType, row.message);
+      if (repaired === "keep") return [row];
+      if (repaired === "drop") {
+        stats.droppedRows++;
         return [];
       }
-      n.droppedBlocks += y.droppedBlocks;
-      if (y.wrapped) n.wrappedRows++;
-      else n.cleanedRows++;
+      stats.droppedBlocks += repaired.droppedBlocks;
+      if (repaired.wrapped) stats.wrappedRows++;
+      else stats.cleanedRows++;
       return [
         {
-          ...s,
+          ...row,
           message: {
-            ...y.message,
-            content: y.content,
+            ...repaired.message,
+            content: repaired.content,
           },
         },
       ];
     } catch {
-      return [s];
+      return [row];
     }
   });
-  if (isRepairNoop(n)) return e;
+  if (isRepairNoop(stats)) return messages;
   try {
-    logRowRepair("resume", n);
+    logRowRepair("resume", stats);
   } catch {}
   return flattened;
 }
 //@ chunk-e6aww6q8.js:335072-335225 placement
-function planSystemRowRepair(e) {
-  let n = e;
-  if (!isPlainObject_5(n)) return "keep";
-  let { subtype } = n;
-  let s = [...ensureStringField(n, "content"), ...systemRowEdits(n)];
-  return s.length === 0
+function planSystemRowRepair(row) {
+  let target = row;
+  if (!isPlainObject_5(target)) return "keep";
+  let { subtype } = target;
+  let edits = [...ensureStringField(target, "content"), ...systemRowEdits(target)];
+  return edits.length === 0
     ? "keep"
     : {
-        target: n,
+        target,
         subtype,
-        edits: s,
+        edits,
       };
 }
 //@ chunk-e6aww6q8.js:335225-336178 placement
 /**
  * 按子类型列出 system 行字段修补操作。
  */
-function systemRowEdits(e) {
-  switch (e.subtype) {
+function systemRowEdits(row) {
+  switch (row.subtype) {
     case "stop_hook_summary":
-      return hookSummaryEdits(e);
+      return hookSummaryEdits(row);
     case "informational":
-      return ensureFieldEdit(e, "content");
+      return ensureFieldEdit(row, "content");
     case "memory_saved":
       return [
-        ...ensureStringArrayField(e, "writtenPaths", "required"),
-        ...remove(e, "verb"),
-        ...removeInvalidCountFields(e, ["teamCount"]),
+        ...ensureStringArrayField(row, "writtenPaths", "required"),
+        ...remove(row, "verb"),
+        ...removeInvalidCountFields(row, ["teamCount"]),
       ];
     case "permission_retry":
-      return ensureStringArrayField(e, "commands", "required");
+      return ensureStringArrayField(row, "commands", "required");
     case "model_refusal_fallback":
       return [
-        ...ensureFieldEdit(e, "content"),
-        ...ensureStringArrayField(e, "retractedMessageUuids", "optional"),
-        ...ensureStringField(e, "fallbackModel", "fill"),
-        ...ensureStringField(e, "originalModel", "fill"),
+        ...ensureFieldEdit(row, "content"),
+        ...ensureStringArrayField(row, "retractedMessageUuids", "optional"),
+        ...ensureStringField(row, "fallbackModel", "fill"),
+        ...ensureStringField(row, "originalModel", "fill"),
       ];
     case "compact_boundary":
-      return repairCompactMetadata(e);
+      return repairCompactMetadata(row);
     case "scheduled_task_fire":
       return [
-        ...ensureStringArrayField(e, "foldedUuids", "optional"),
-        ...removeInvalidCountFields(e, ["noOpStreak"]),
-        ...remove(e, "streakStartedAt"),
+        ...ensureStringArrayField(row, "foldedUuids", "optional"),
+        ...removeInvalidCountFields(row, ["noOpStreak"]),
+        ...remove(row, "streakStartedAt"),
       ];
     case "local_command":
       return [
-        ...ensureFieldEdit(e, "content"),
-        ...removeIfSchemaInvalid(e, "commandRun", COMMAND_RUN_SCHEMA()),
+        ...ensureFieldEdit(row, "content"),
+        ...removeIfSchemaInvalid(row, "commandRun", COMMAND_RUN_SCHEMA()),
       ];
     case "turn_duration":
       return [
-        ...(isNonNegativeNumber(e.durationMs)
+        ...(isNonNegativeNumber(row.durationMs)
           ? []
           : [
               {
@@ -317,20 +318,20 @@ function systemRowEdits(e) {
                 value: 0,
               },
             ]),
-        ...((isNonNegativeNumber(e.budgetTokens) && isNonNegativeNumber(e.budgetLimit)) ||
-        BUDGET_COUNT_FIELDS.every((n) => e[n] === undefined)
-          ? removeInvalidCountFields(e, ["budgetNudges"])
-          : BUDGET_COUNT_FIELDS.flatMap((n) =>
-              e[n] === undefined
+        ...((isNonNegativeNumber(row.budgetTokens) && isNonNegativeNumber(row.budgetLimit)) ||
+        BUDGET_COUNT_FIELDS.every((field) => row[field] === undefined)
+          ? removeInvalidCountFields(row, ["budgetNudges"])
+          : BUDGET_COUNT_FIELDS.flatMap((field) =>
+              row[field] === undefined
                 ? []
                 : [
                     {
                       kind: "remove",
-                      key: n,
+                      key: field,
                     },
                   ],
             )),
-        ...removeInvalidCountFields(e, TURN_DURATION_COUNT_FIELDS),
+        ...removeInvalidCountFields(row, TURN_DURATION_COUNT_FIELDS),
       ];
     default:
       return [];
@@ -348,14 +349,14 @@ var TURN_DURATION_COUNT_FIELDS = [
 /**
  * 不是非负安全整数的字段生成 remove 修复操作。旧版名 remove 为错配。
  */
-function removeInvalidCountFields(e, n) {
-  return n.flatMap((r) =>
-    e[r] === undefined || isNonNegativeSafeInteger(e[r])
+function removeInvalidCountFields(row, fields) {
+  return fields.flatMap((field) =>
+    row[field] === undefined || isNonNegativeSafeInteger(row[field])
       ? []
       : [
           {
             kind: "remove",
-            key: r,
+            key: field,
           },
         ],
   );
@@ -364,14 +365,14 @@ function removeInvalidCountFields(e, n) {
 /**
  * 不是非负数的字段生成 remove 修复操作。
  */
-function removeInvalidNumberFields(compactMetadata, n) {
-  return n.flatMap((r) =>
-    compactMetadata[r] === undefined || isNonNegativeNumber(compactMetadata[r])
+function removeInvalidNumberFields(compactMetadata, row) {
+  return row.flatMap((field) =>
+    compactMetadata[field] === undefined || isNonNegativeNumber(compactMetadata[field])
       ? []
       : [
           {
             kind: "remove",
-            key: r,
+            key: field,
           },
         ],
   );
@@ -380,34 +381,38 @@ function removeInvalidNumberFields(compactMetadata, n) {
 /**
  * 非负安全整数判断。
  */
-function isNonNegativeSafeInteger(e) {
-  return typeof e === "number" && Number.isSafeInteger(e) && e >= 0;
+function isNonNegativeSafeInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 //@ chunk-e6aww6q8.js:336583-336618 placement
 /**
  * 非负有限数判断。
  */
-function isNonNegativeNumber(e) {
-  return isFiniteNumber_2(e) && e >= 0;
+function isNonNegativeNumber(value) {
+  return isFiniteNumber_2(value) && value >= 0;
 }
 //@ chunk-e6aww6q8.js:336618-336739 placement
 /**
  * 压缩元数据修复用：commandRun schema 与可选数字字段列表（postTokens/cumulativeDroppedTokens/durationMs）。
  */
-var COMMAND_RUN_SCHEMA = DoctorLazy(() =>
-  u({
-    command: string(),
-    args: string(),
-    plugin: string().optional(),
-  }),
-);
-var OPTIONAL_COMPACT_NUMBER_FIELDS = ["postTokens", "cumulativeDroppedTokens", "durationMs"];
+var COMMAND_RUN_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var OPTIONAL_COMPACT_NUMBER_FIELDS;
+deferInit("chunk-e6aww6q8.js:336618", () => {
+  COMMAND_RUN_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      command: stringSchema(),
+      args: stringSchema(),
+      plugin: stringSchema().optional(),
+    }),
+  );
+  OPTIONAL_COMPACT_NUMBER_FIELDS = ["postTokens", "cumulativeDroppedTokens", "durationMs"];
+});
 //@ chunk-e6aww6q8.js:336739-337431 placement
 /**
  * 校验 compact_boundary 的 compactMetadata，生成 set/remove 修复操作（trigger 缺省 auto、preTokens 缺省 0 等）。
  */
-function repairCompactMetadata(e) {
-  let compactMetadata = e.compactMetadata;
+function repairCompactMetadata(row) {
+  let compactMetadata = row.compactMetadata;
   if (compactMetadata === undefined) return [];
   if (!isPlainObject_5(compactMetadata))
     return [
@@ -420,7 +425,7 @@ function repairCompactMetadata(e) {
         },
       },
     ];
-  let r = [
+  let triggerEdits = [
     ...(compactMetadata.trigger === "auto" || compactMetadata.trigger === "manual"
       ? []
       : [
@@ -445,27 +450,27 @@ function repairCompactMetadata(e) {
     ...ensureStringArrayField(compactMetadata, "preCompactDiscoveredTools", "optional"),
   ];
   let preservedMessages = compactMetadata.preservedMessages;
-  let h =
-    r.every((S) => S.key !== "preservedMessages") && isPlainObject_5(preservedMessages)
+  let preservedEdits =
+    triggerEdits.every((edit) => edit.key !== "preservedMessages") && isPlainObject_5(preservedMessages)
       ? ensureStringArrayField(preservedMessages, "allUuids", "optional")
       : [];
-  if (r.length === 0 && h.length === 0) return [];
-  let y = {
+  if (triggerEdits.length === 0 && preservedEdits.length === 0) return [];
+  let nextMetadata = {
     ...compactMetadata,
   };
-  applyFieldEdits(y, r);
-  if (h.length > 0 && isPlainObject_5(preservedMessages)) {
-    let S = {
+  applyFieldEdits(nextMetadata, triggerEdits);
+  if (preservedEdits.length > 0 && isPlainObject_5(preservedMessages)) {
+    let nextPreserved = {
       ...preservedMessages,
     };
-    applyFieldEdits(S, h);
-    y.preservedMessages = S;
+    applyFieldEdits(nextPreserved, preservedEdits);
+    nextMetadata.preservedMessages = nextPreserved;
   }
   return [
     {
       kind: "set",
       key: "compactMetadata",
-      value: y,
+      value: nextMetadata,
     },
   ];
 }
@@ -489,125 +494,125 @@ function repairPreservedMessages(compactMetadata) {
 /**
  * 字段不符合 schema 时生成 remove 操作。旧版名 remove 为错配。
  */
-function removeIfSchemaInvalid(e, n, r) {
-  let s = e[n];
-  return s === undefined || r.safeParse(s).success
+function removeIfSchemaInvalid(row, field, schema) {
+  let value = row[field];
+  return value === undefined || schema.safeParse(value).success
     ? []
     : [
         {
           kind: "remove",
-          key: n,
+          key: field,
         },
       ];
 }
 //@ chunk-e6aww6q8.js:337666-337934 placement
-function hookSummaryEdits(e) {
-  let n = normalizeHookSummary(e);
-  return HOOK_SUMMARY_FIELDS.flatMap((r) => {
-    let s = e[r];
-    if (!(r in n))
-      return s === undefined
+function hookSummaryEdits(row) {
+  let normalized = normalizeHookSummary(row);
+  return HOOK_SUMMARY_FIELDS.flatMap((field) => {
+    let currentValue = row[field];
+    if (!(field in normalized))
+      return currentValue === undefined
         ? []
         : [
             {
               kind: "remove",
-              key: r,
+              key: field,
             },
           ];
-    let h = n[r];
-    if (s === undefined)
-      return r === "hookInfos" || r === "hookErrors"
+    let normalizedValue = normalized[field];
+    if (currentValue === undefined)
+      return field === "hookInfos" || field === "hookErrors"
         ? [
             {
               kind: "set",
-              key: r,
-              value: h,
+              key: field,
+              value: normalizedValue,
             },
           ]
         : [];
-    return s === h
+    return currentValue === normalizedValue
       ? []
       : [
           {
             kind: "set",
-            key: r,
-            value: h,
+            key: field,
+            value: normalizedValue,
           },
         ];
   });
 }
 //@ chunk-e6aww6q8.js:337934-338069 placement
-function ensureStringField(e, n, r = "leave") {
-  let s = e[n];
-  if (typeof s === "string") return [];
-  return s === undefined && r === "leave"
+function ensureStringField(row, field, onMissing = "leave") {
+  let value = row[field];
+  if (typeof value === "string") return [];
+  return value === undefined && onMissing === "leave"
     ? []
     : [
         {
           kind: "set",
-          key: n,
+          key: field,
           value: "",
         },
       ];
 }
 //@ chunk-e6aww6q8.js:338069-338141 placement
-function ensureFieldEdit(e, n) {
-  return e[n] === undefined
+function ensureFieldEdit(row, field) {
+  return row[field] === undefined
     ? [
         {
           kind: "set",
-          key: n,
+          key: field,
           value: "",
         },
       ]
     : [];
 }
 //@ chunk-e6aww6q8.js:338141-338236 placement = remove (0.814)
-function remove(e, n) {
-  let r = e[n];
-  return r === undefined || typeof r === "string"
+function remove(row, field) {
+  let value = row[field];
+  return value === undefined || typeof value === "string"
     ? []
     : [
         {
           kind: "remove",
-          key: n,
+          key: field,
         },
       ];
 }
 //@ chunk-e6aww6q8.js:338236-338459 placement
-function ensureStringArrayField(e, n, r) {
-  let s = e[n];
-  if (s === undefined)
-    return r === "required"
+function ensureStringArrayField(row, field, value) {
+  let current = row[field];
+  if (current === undefined)
+    return value === "required"
       ? [
           {
             kind: "set",
-            key: n,
+            key: field,
             value: [],
           },
         ]
       : [];
-  let validStringArray = getValidStringArray(s);
-  if (validStringArray === s) return [];
-  return Array.isArray(s) || r === "required"
+  let validStringArray = getValidStringArray(current);
+  if (validStringArray === current) return [];
+  return Array.isArray(current) || value === "required"
     ? [
         {
           kind: "set",
-          key: n,
+          key: field,
           value: validStringArray,
         },
       ]
     : [
         {
           kind: "remove",
-          key: n,
+          key: field,
         },
       ];
 }
 //@ chunk-e6aww6q8.js:338459-338564 placement
-function applyFieldEdits(e, edits) {
-  for (let r of edits)
-    if (r.kind === "set") e[r.key] = r.value;
-    else Reflect.deleteProperty(e, r.key);
+function applyFieldEdits(row, edits) {
+  for (let edit of edits)
+    if (edit.kind === "set") row[edit.key] = edit.value;
+    else Reflect.deleteProperty(row, edit.key);
 }
 export { createRowRepairer, filterStopHookSummariesOnResume };

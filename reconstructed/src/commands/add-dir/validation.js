@@ -40,12 +40,12 @@ async function validateDirectoryForWorkspace(directoryPath, permissionContext) {
   try {
     absolutePath = resolve(expandPath(directoryPath));
   } catch (error) {
-    let i = error instanceof NullBytePathError;
-    if (!i) logError(Error("validateDirectoryForWorkspace: expandPath threw"));
+    let isNullByte = error instanceof NullBytePathError;
+    if (!isNullByte) logError(Error("validateDirectoryForWorkspace: expandPath threw"));
     return {
       resultType: "invalidPath",
       directoryPath,
-      containsNullByte: i,
+      containsNullByte: isNullByte,
     };
   }
   if (
@@ -108,10 +108,10 @@ function addDirHelpMessage(result) {
     case "emptyPath":
       return "Please provide a directory path.";
     case "invalidPath": {
-      let r = sequential.bold(jsonStringify(result.directoryPath));
+      let quoted = sequential.bold(jsonStringify(result.directoryPath));
       return result.containsNullByte
-        ? `Path ${r} contains a null character, so it can't be used as a working directory. Remove the null character from the path or from the settings entry that lists it.`
-        : `Path ${r} couldn't be resolved, so it can't be used as a working directory. Check the path or the settings entry that lists it.`;
+        ? `Path ${quoted} contains a null character, so it can't be used as a working directory. Remove the null character from the path or from the settings entry that lists it.`
+        : `Path ${quoted} couldn't be resolved, so it can't be used as a working directory. Check the path or the settings entry that lists it.`;
     }
     case "pathNotFound":
       return `Path ${sequential.bold(result.absolutePath)} was not found.`;
@@ -122,13 +122,13 @@ function addDirHelpMessage(result) {
       return `${sequential.bold(result.directoryPath)} is not a directory. Did you mean to add the parent directory ${sequential.bold(parentDir)}?`;
     }
     case "alreadyInWorkingDirectory": {
-      let r = sequential.bold(result.directoryPath);
+      let quoted = sequential.bold(result.directoryPath);
       if (result.isExactMatch)
         return result.isOriginalCwd
-          ? `${r} is already the current working directory.`
-          : `${r} is already added as a working directory.`;
-      let e = result.isOriginalCwd ? "the current working directory" : "the additional working directory";
-      return `${r} is already accessible within ${e} ${sequential.bold(result.workingDir)}.`;
+          ? `${quoted} is already the current working directory.`
+          : `${quoted} is already added as a working directory.`;
+      let where = result.isOriginalCwd ? "the current working directory" : "the additional working directory";
+      return `${quoted} is already accessible within ${where} ${sequential.bold(result.workingDir)}.`;
     }
     case "success":
       return `Added ${sequential.bold(result.absolutePath)} as a working directory.`;

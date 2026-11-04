@@ -9,7 +9,7 @@
  * attribution: placement 2, fingerprint 1
  */
 import { init_react_production } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default_2,
   jsxProd_default,
@@ -25,7 +25,7 @@ init_react_production();
 init_react_production();
 //@ chunk-9h8dr0qb.js:6542-7565 fingerprint = ChannelDowngradeDialog (0.849)
 function ChannelDowngradeDialog(props) {
-  let $ = w(17);
+  let $ = useMemoCache(17);
   let { currentVersion, onChoice } = props;
   let t1;
   if ($[0] !== onChoice) {

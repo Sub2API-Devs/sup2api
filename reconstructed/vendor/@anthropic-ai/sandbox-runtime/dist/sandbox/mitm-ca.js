@@ -11,21 +11,21 @@ import { rmSync, readFileSync, writeFileSync, mkdtempSync } from "fs";
 import { dirname, join } from "path";
 import { rootCertificates } from "tls";
 import { tmpdir } from "os";
-import { EC } from "../../../../unresolved-cjs/index.js";
+import { forgeModule_2 } from "../../../../unresolved-cjs/index.js";
 import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
 
 //@ chunk-fq0cr76a.js:645014-645021 esm-layout
-var _C;
+var cachedRootCertificates;
 //@ chunk-fq0cr76a.js:645021-645056 esm-layout
-function No() {
-  return _C ?? (_C = EC());
+function getRootCertificates() {
+  return cachedRootCertificates ?? (cachedRootCertificates = forgeModule_2());
 }
 //@ chunk-fq0cr76a.js:645056-645141 esm-fingerprint
 var PEM_CERT_BLOCK = /-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g;
 var CRL_PATH = "/srt.crl";
 //@ chunk-fq0cr76a.js:645141-645326 esm-fingerprint
 function caSubjectKeyId(caCert) {
-  let { util } = No();
+  let { util } = getRootCertificates();
   let extension = caCert.getExtension("subjectKeyIdentifier");
   return extension?.subjectKeyIdentifier
     ? util.hexToBytes(extension.subjectKeyIdentifier)
@@ -33,7 +33,7 @@ function caSubjectKeyId(caCert) {
 }
 //@ chunk-fq0cr76a.js:645326-645587 esm-fingerprint
 function signCertificateNative(cert, keyPem) {
-  let { asn1, pki, md } = No();
+  let { asn1, pki, md } = getRootCertificates();
   let oid = pki.oids.sha256WithRSAEncryption;
   cert.siginfo.algorithmOid = oid;
   cert.signatureOid = oid;
@@ -141,7 +141,7 @@ function writeTrustBundle(dir, caCertPem, extraCaCertPaths) {
 }
 //@ chunk-fq0cr76a.js:647057-647857 esm-fingerprint
 function generateEmptyCrl(cert, keyPem) {
-  let { asn1, pki } = No();
+  let { asn1, pki } = getRootCertificates();
   let { Class: C, Type: T } = asn1;
   let sha256WithRSAEncryption = pki.oids.sha256WithRSAEncryption;
   let sigAlg = () =>
@@ -179,14 +179,14 @@ function generateEmptyCrl(cert, keyPem) {
   return Buffer.from(asn1.toDer(crl).getBytes(), "binary");
 }
 //@ chunk-fq0cr76a.js:647857-647953 esm-layout
-function seq(e) {
-  let { asn1 } = No();
+function seq(value) {
+  let { asn1 } = getRootCertificates();
   let { Class, Type } = asn1;
-  return asn1.create(Class.UNIVERSAL, Type.SEQUENCE, true, e);
+  return asn1.create(Class.UNIVERSAL, Type.SEQUENCE, true, value);
 }
 //@ chunk-fq0cr76a.js:647953-648159 esm-fingerprint
 function asn1Time(d) {
-  let { asn1 } = No();
+  let { asn1 } = getRootCertificates();
   let { Class, Type } = asn1;
   return d.getUTCFullYear() < 2050
     ? asn1.create(Class.UNIVERSAL, Type.UTCTIME, false, asn1.dateToUtcTime(d))
@@ -224,7 +224,7 @@ function buildMitmCA(certPem, keyPem, cert, key, opts) {
 }
 //@ chunk-fq0cr76a.js:648710-649353 esm-fingerprint
 function generateCa(opts = {}) {
-  let { pki } = No();
+  let { pki } = getRootCertificates();
   let keys = pki.rsa.generateKeyPair(2048);
   let cert = pki.createCertificate();
   cert.publicKey = keys.publicKey;
@@ -275,7 +275,7 @@ function certThumbprint(certPem) {
 }
 //@ chunk-fq0cr76a.js:649428-650044 esm-fingerprint
 function validateCaPair(certPem, keyPem) {
-  let { pki } = No();
+  let { pki } = getRootCertificates();
   let cert;
   let key;
   try {
@@ -355,7 +355,7 @@ function readPem(path, label, field) {
 }
 //@ chunk-fq0cr76a.js:650548-650677 esm-fingerprint
 function randomSerial() {
-  let { random, util } = No();
+  let { random, util } = getRootCertificates();
   let hex = util.bytesToHex(random.getBytesSync(16));
   return ((parseInt(hex[0], 16) & 3) | 4).toString(16) + hex.slice(1);
 }
@@ -367,7 +367,7 @@ function daysFromNow(days) {
 }
 export {
   certThumbprint,
-  No,
+  getRootCertificates,
   randomSerial,
   daysFromNow,
   caSubjectKeyId,

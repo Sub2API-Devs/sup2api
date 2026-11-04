@@ -1,5 +1,5 @@
 {
- "files": 6941,
+ "files": 7325,
  "declarations": {
   "expected": 81667,
   "found": 81667,
@@ -10,7 +10,7 @@
  "duplicateDeclarations": 0,
  "missingImportFiles": 0,
  "missingImportNames": 0,
- "freeIdentifiers": 31,
+ "freeIdentifiers": 32,
  "freeNames": [
   "Af",
   "AsyncIterator",
@@ -22,6 +22,7 @@
   "FileReader",
   "INTERVAL_PRESETS",
   "Jh",
+  "L",
   "M",
   "QUIET_PRESETS",
   "QuotaExceededError",
@@ -44,6 +45,7 @@
   "t",
   "w"
  ],
+ "freeSameAsOriginal": true,
  "samples": {
   "parseErrors": [],
   "dupes": [],
@@ -81,7 +83,8 @@
    [
     "C",
     [
-     "src/components/Settings/WellbeingSettings.js"
+     "src/components/Settings/WellbeingSettings.js",
+     "vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs"
     ]
    ],
    [
@@ -207,6 +210,12 @@
     [
      "vendor/@bufbuild/protobuf/dist/commonjs/wire/size-delimited.js",
      "vendor/tslib/tslib.js"
+    ]
+   ],
+   [
+    "L",
+    [
+     "vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs"
     ]
    ],
    [

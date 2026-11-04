@@ -8,7 +8,7 @@
  * pieces: chunk-ak1qv1dp.js (3), chunk-q8cyy466.js (1)
  * attribution: placement 3, fingerprint 1
  */
-import { init_react_production, R, P } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useRef, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -22,7 +22,7 @@ import {
   collapseShorthandResultOffBox,
 } from "./configShorthand.js";
 import { sanitizeTelemetryString } from "../../utils/sanitization.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme } from "../../components/design-system/ThemeProvider.js";
 import { isBridgeOrTransport } from "../../cli/transportState.js";
 import { isVimModeEnabled } from "../../components/PromptInput/utils.js";
@@ -35,8 +35,8 @@ init_react_production();
  * /config 命令：无参数时打开设置界面，有 key=value 时直接设置。
  */
 var call = async (onDone, context, args) => {
-  let r = args?.trim() || "";
-  if (!r)
+  let rawArgs = args?.trim() || "";
+  if (!rawArgs)
     return jsxProd_default(Settings, {
       onClose: onDone,
       storageV5: context.storageV5,
@@ -46,7 +46,7 @@ var call = async (onDone, context, args) => {
       ideInstallationStatus: context.options.ideInstallationStatus,
       defaultTab: "Config",
     });
-  let lower = r.toLowerCase();
+  let lower = rawArgs.toLowerCase();
   if (COMMON_HELP_ARGS.includes(lower) || COMMON_INFO_ARGS_ALIAS.includes(lower)) {
     onDone(
       `Run /config to open settings, or /config key=value to set one directly.
@@ -57,9 +57,9 @@ ${listConfigKeys(context)}`,
     );
     return;
   }
-  let configShorthand = parseConfigShorthand(r);
+  let configShorthand = parseConfigShorthand(rawArgs);
   if (!configShorthand) {
-    onDone(`Expected key=value, got "${sanitizeTelemetryString(r)}". Run /config to open settings.`, {
+    onDone(`Expected key=value, got "${sanitizeTelemetryString(rawArgs)}". Run /config to open settings.`, {
       display: "system",
     });
     return;
@@ -72,23 +72,24 @@ ${listConfigKeys(context)}`,
 };
 //@ chunk-ak1qv1dp.js:17856-18207 placement = ShowHelp (0.383)
 function ShowHelp(props) {
-  let C = w(6);
+  let $ = useMemoCache(6);
   let { pairs, caller, onDone } = props;
-  let [, o] = useTheme();
-  let a = R(false);
-  let f;
-  let u;
-  if (C[0] !== caller || C[1] !== onDone || C[2] !== pairs || C[3] !== o) {
-    f = () => {
-      if (a.current) {
+  let [, setTheme] = useTheme();
+  let committed = useRef(false);
+  let commit;
+  let deps;
+  if ($[0] !== caller || $[1] !== onDone || $[2] !== pairs || $[3] !== setTheme) {
+    commit = () => {
+      if (committed.current) {
         return;
       }
-      a.current = true;
+      committed.current = true;
       applyConfigShorthand(pairs, caller, {
-        setTheme: o,
-      }).then((h) =>
+        setTheme,
+      }).then((results) =>
         onDone(
-          h.map((S) => collapseShorthandResultOffBox(S, isBridgeOrTransport(caller.session))).join(`
+          results.map((result) => collapseShorthandResultOffBox(result, isBridgeOrTransport(caller.session)))
+            .join(`
 `),
           {
             display: "system",
@@ -96,39 +97,40 @@ function ShowHelp(props) {
         ),
       );
     };
-    u = [pairs, caller, onDone, o];
-    C[0] = caller;
-    C[1] = onDone;
-    C[2] = pairs;
-    C[3] = o;
-    C[4] = f;
-    C[5] = u;
+    deps = [pairs, caller, onDone, setTheme];
+    $[0] = caller;
+    $[1] = onDone;
+    $[2] = pairs;
+    $[3] = setTheme;
+    $[4] = commit;
+    $[5] = deps;
   } else {
-    f = C[4];
-    u = C[5];
+    commit = $[4];
+    deps = $[5];
   }
-  P(f, u);
+  useEffect(commit, deps);
   return null;
 }
 //@ chunk-q8cyy466.js:17324-17644 fingerprint = call (0.717)
-var call_2 = async (o, t, g, l) => {
-  let i = isVimModeEnabled(l);
+var call_2 = async (onDone, storageV5, context, args) => {
+  let isVimMode = isVimModeEnabled(args);
   return jsxProd_default_2(Box, {
     flexDirection: "column",
     children: [
       jsxProd_default(Text, {
         color: "suggestion",
-        children: i,
+        children: isVimMode,
       }),
       jsxProd_default(Settings, {
-        onClose: () => o(i),
-        storageV5: t.storageV5,
-        credentials: t.credentials,
-        messages: t.messages,
-        mcpClients: t.options.mcpClients,
-        ideInstallationStatus: t.options.ideInstallationStatus,
+        onClose: () => onDone(isVimMode),
+        storageV5: storageV5.storageV5,
+        credentials: storageV5.credentials,
+        messages: storageV5.messages,
+        mcpClients: storageV5.options.mcpClients,
+        ideInstallationStatus: storageV5.options.ideInstallationStatus,
         defaultTab: "Config",
       }),
     ],
   });
 };
+export { call, call_2 };

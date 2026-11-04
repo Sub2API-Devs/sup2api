@@ -9,39 +9,43 @@
  * attribution: fingerprint 2
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, literal, E, string } from "../../vendor/zod/v4/classic/schemas.js";
-import { R, P } from "../../vendor/react/cjs/react.production.js";
+import { objectSchema, literal, numberSchema, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
+import { useRef, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { hasAccessToIDEExtensionDiffFeature } from "../services/compact/idleToolResultClearing.js";
 import { onMcpNotification } from "../services/mcp/mcpWireUtils.js";
 import { logError } from "../utils/log.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:208035-208244 fingerprint = SelectionChangedSchema (0.834)
-var SelectionChangedSchema = DoctorLazy(() =>
-  u({
-    method: literal("selection_changed"),
-    params: u({
-      selection: u({
-        start: u({
-          line: E(),
-          character: E(),
-        }),
-        end: u({
-          line: E(),
-          character: E(),
-        }),
-      })
-        .nullable()
-        .optional(),
-      text: string().optional(),
-      filePath: string().optional(),
+var SelectionChangedSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:208035", () => {
+  SelectionChangedSchema = DoctorLazy(() =>
+    objectSchema({
+      method: literal("selection_changed"),
+      params: objectSchema({
+        selection: objectSchema({
+          start: objectSchema({
+            line: numberSchema(),
+            character: numberSchema(),
+          }),
+          end: objectSchema({
+            line: numberSchema(),
+            character: numberSchema(),
+          }),
+        })
+          .nullable()
+          .optional(),
+        text: stringSchema().optional(),
+        filePath: stringSchema().optional(),
+      }),
     }),
-  }),
-);
+  );
+});
 //@ chunk-18hwfzwa.js:208244-208743 fingerprint = useIdeSelection (0.876)
 function useIdeSelection(mcpClients, onSelect) {
-  let handlersRegistered = R(false);
-  let currentIDERef = R(null);
-  P(() => {
+  let handlersRegistered = useRef(false);
+  let currentIDERef = useRef(null);
+  useEffect(() => {
     let ideClient = hasAccessToIDEExtensionDiffFeature(mcpClients);
     if (currentIDERef.current !== (ideClient ?? null)) {
       handlersRegistered.current = false;

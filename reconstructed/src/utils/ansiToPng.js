@@ -11,7 +11,13 @@
 import { inflateRawSync, deflateSync } from "zlib";
 import { DEFAULT_BG_RGB, parseAnsi } from "./ansiToSvg.js";
 import { bunStringWidth } from "../ink/stringWidth.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-bzr73sfg.js:267618-267665 file-local
+var PNG_SIGNATURE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bzr73sfg.js:267618", () => {
+  PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+});
 //@ chunk-t6e3jxy0.js:2159-17192 sole-consumer
 /**
  * 内置位图字体常量：字形宽 24、高 48、每字形像素数，以及压缩并 base64 编码的字体数据。
@@ -25,7 +31,10 @@ var FONT_DATA_BASE64 =
 /**
  * 字体里缺字时使用的兜底字形。
  */
-var fallbackGlyph = buildFallbackGlyph();
+var fallbackGlyph; // deferred: uses buildFallbackGlyph of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-t6e3jxy0.js:17192", () => {
+  fallbackGlyph = buildFallbackGlyph();
+});
 //@ chunk-t6e3jxy0.js:17202-17354 sole-consumer
 function buildFallbackGlyph() {
   let uint8Array = new Uint8Array(GLYPH_PIXELS);
@@ -39,14 +48,17 @@ function buildFallbackGlyph() {
 /**
  * 解码后的小字形表（码点 → 字形）。
  */
-var fontGlyphs = decodeFont();
+var fontGlyphs; // deferred: uses decodeFont of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-t6e3jxy0.js:17354", () => {
+  fontGlyphs = decodeFont();
+});
 //@ chunk-t6e3jxy0.js:17364-17535 fingerprint = decodeFont (1)
 function decodeFont() {
   let buf = inflateRawSync(Buffer.from(FONT_DATA_BASE64, "base64"));
   let count = buf.readUInt16LE(0);
   let map = new Map();
   let off = 2;
-  for (let i = 0; i < count; i++) {
+  for (let glyphIndex = 0; glyphIndex < count; glyphIndex++) {
     let cp = buf.readUInt32LE(off);
     off += 4;
     map.set(cp, buf.subarray(off, off + GLYPH_PIXELS));
@@ -98,9 +110,9 @@ function ansiToPng(ansiText, options = {}) {
 }
 //@ chunk-t6e3jxy0.js:18156-18216 file-local
 function lineWidthCells(line) {
-  let r = 0;
-  for (let span of line) r += bunStringWidth(span.text);
-  return r;
+  let widthCells = 0;
+  for (let span of line) widthCells += bunStringWidth(span.text);
+  return widthCells;
 }
 //@ chunk-t6e3jxy0.js:18216-18302 callgraph-fingerprint = fillBackground (1)
 function fillBackground(px, bg) {
@@ -142,56 +154,60 @@ function blitShade(px, width, x, y, fg, bg, alpha, scale) {
 function blitGlyph(px, width, x, y, glyph, color, bold, scale) {
   for (let idx = 0; idx < GLYPH_HEIGHT; idx++)
     for (let idx_2 = 0; idx_2 < GLYPH_WIDTH; idx_2++) {
-      let f = glyph[idx * GLYPH_WIDTH + idx_2];
-      if (f === 0) continue;
-      if (bold) f = Math.min(255, f * 1.4);
-      let inv = 255 - f;
+      let alpha = glyph[idx * GLYPH_WIDTH + idx_2];
+      if (alpha === 0) continue;
+      if (bold) alpha = Math.min(255, alpha * 1.4);
+      let inv = 255 - alpha;
       for (let idx_3 = 0; idx_3 < scale; idx_3++) {
         let rowBase = ((y + idx * scale + idx_3) * width + x + idx_2 * scale) * 4;
-        for (let p = 0; p < scale; p++) {
-          let i = rowBase + p * 4;
-          px[i] = (color.r * f + px[i] * inv) >> 8;
-          px[i + 1] = (color.g * f + px[i + 1] * inv) >> 8;
-          px[i + 2] = (color.b * f + px[i + 2] * inv) >> 8;
+        for (let pixelOffset = 0; pixelOffset < scale; pixelOffset++) {
+          let i = rowBase + pixelOffset * 4;
+          px[i] = (color.r * alpha + px[i] * inv) >> 8;
+          px[i + 1] = (color.g * alpha + px[i + 1] * inv) >> 8;
+          px[i + 2] = (color.b * alpha + px[i + 2] * inv) >> 8;
         }
       }
     }
 }
 //@ chunk-t6e3jxy0.js:18878-19089 layout
-function roundCorners(t, width, height, e) {
-  let i = e * e;
-  for (let idx = 0; idx < e; idx++)
-    for (let idx_2 = 0; idx_2 < e; idx_2++) {
-      let o = e - idx_2 - 0.5;
-      let g = e - idx - 0.5;
-      if (o * o + g * g <= i) continue;
-      t[(idx * width + idx_2) * 4 + 3] = 0;
-      t[(idx * width + (width - 1 - idx_2)) * 4 + 3] = 0;
-      t[((height - 1 - idx) * width + idx_2) * 4 + 3] = 0;
-      t[((height - 1 - idx) * width + (width - 1 - idx_2)) * 4 + 3] = 0;
+function roundCorners(pixels, width, height, radius) {
+  let radiusSquared = radius * radius;
+  for (let idx = 0; idx < radius; idx++)
+    for (let idx_2 = 0; idx_2 < radius; idx_2++) {
+      let dx = radius - idx_2 - 0.5;
+      let dy = radius - idx - 0.5;
+      if (dx * dx + dy * dy <= radiusSquared) continue;
+      pixels[(idx * width + idx_2) * 4 + 3] = 0;
+      pixels[(idx * width + (width - 1 - idx_2)) * 4 + 3] = 0;
+      pixels[((height - 1 - idx) * width + idx_2) * 4 + 3] = 0;
+      pixels[((height - 1 - idx) * width + (width - 1 - idx_2)) * 4 + 3] = 0;
     }
 }
 //@ chunk-t6e3jxy0.js:19089-19141 layout
 /**
  * 生成 PNG 时用的 CRC 查表。
  */
-var buffer = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-var CRC_TABLE = buildCrcTable();
+var buffer; // deferred: uses buildCrcTable of its import cycle while loading; runs once the cycle is complete
+var CRC_TABLE;
+deferInit("chunk-t6e3jxy0.js:19089", () => {
+  buffer = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  CRC_TABLE = buildCrcTable();
+});
 //@ chunk-t6e3jxy0.js:19141-19281 layout
 function buildCrcTable() {
   let uint32Array = new Uint32Array(256);
   for (let n_2 = 0; n_2 < 256; n_2++) {
-    let n = n_2;
-    for (let k = 0; k < 8; k++) n = n & 1 ? 3988292384 ^ (n >>> 1) : n >>> 1;
-    uint32Array[n_2] = n >>> 0;
+    let crc = n_2;
+    for (let k = 0; k < 8; k++) crc = crc & 1 ? 3988292384 ^ (crc >>> 1) : crc >>> 1;
+    uint32Array[n_2] = crc >>> 0;
   }
   return uint32Array;
 }
 //@ chunk-t6e3jxy0.js:19281-19388 file-local
 function crc32(data) {
-  let r = 4294967295;
-  for (let i = 0; i < data.length; i++) r = CRC_TABLE[(r ^ data[i]) & 255] ^ (r >>> 8);
-  return (r ^ 4294967295) >>> 0;
+  let crc = 4294967295;
+  for (let i = 0; i < data.length; i++) crc = CRC_TABLE[(crc ^ data[i]) & 255] ^ (crc >>> 8);
+  return (crc ^ 4294967295) >>> 0;
 }
 //@ chunk-t6e3jxy0.js:19388-19581 fingerprint = chunk (1)
 function chunk(type, data) {
@@ -224,6 +240,4 @@ function encodePng(px, width, height) {
   let idat = deflateSync(raw);
   return Buffer.concat([buffer, chunk("IHDR", ihdr), chunk("IDAT", idat), chunk("IEND", new Uint8Array(0))]);
 }
-//@ chunk-bzr73sfg.js:267618-267665 file-local
-var PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-export { PNG_SIGNATURE };
+export { PNG_SIGNATURE, ansiToPng };

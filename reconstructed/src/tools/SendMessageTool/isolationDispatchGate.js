@@ -13,13 +13,17 @@ import { hasIsolatePeerMachines } from "../../utils/settings/settings.js";
 import { parkOnUser } from "../../utils/sessionActivity.js";
 import { isEmptyObject } from "../../utils/toolInputPlaceholder.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
-import { wi } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_reject } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-vx0qz0bd.js:409-461 placement
 /**
  * 标记“本次权限阶段由隔离闸门自己铸造”的 Symbol。
  */
-var MINTED_REENTRY_SYMBOL = Symbol("isolationDispatchGate.mintedReentry");
+var MINTED_REENTRY_SYMBOL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vx0qz0bd.js:409", () => {
+  MINTED_REENTRY_SYMBOL = Symbol("isolationDispatchGate.mintedReentry");
+});
 //@ chunk-vx0qz0bd.js:461-2173 placement
 /**
  * isolatePeerMachines 开启时发消息前询问，并检查权限处理器是否改动接收方/输入形状。
@@ -41,7 +45,7 @@ async function isolationDispatchGate({
       input,
       asked: false,
     };
-  let u = {
+  let reentryContext = {
     ...permissionPhase,
     ...(resolution !== undefined && {
       dispatchResolution: {
@@ -50,63 +54,63 @@ async function isolationDispatchGate({
       },
     }),
   };
-  Object.defineProperty(u, MINTED_REENTRY_SYMBOL, {
+  Object.defineProperty(reentryContext, MINTED_REENTRY_SYMBOL, {
     value: true,
     configurable: true,
   });
   let toolUseId = randomUUID();
-  let f = parkOnUser();
-  let t;
+  let releasePark = parkOnUser();
+  let decision;
   try {
-    t = await ask(input, {
+    decision = await ask(input, {
       toolUseId,
-      reentry: u,
+      reentry: reentryContext,
     });
   } finally {
-    f();
-    Reflect.deleteProperty(u, MINTED_REENTRY_SYMBOL);
+    releasePark();
+    Reflect.deleteProperty(reentryContext, MINTED_REENTRY_SYMBOL);
   }
-  if (t.behavior !== "allow")
+  if (decision.behavior !== "allow")
     return {
       proceed: false,
       asked: true,
       reason: "denied",
       message:
-        t.behavior === "deny" && t.message
-          ? t.message
+        decision.behavior === "deny" && decision.message
+          ? decision.message
           : askUnconditionally
             ? `Sending to ${recipientLabel} needs your approval \u2014 nothing was sent.`
             : `isolatePeerMachines is enabled: sending to ${recipientLabel} needs your approval \u2014 nothing was sent.`,
-      ...(t.behavior === "deny" &&
-        t.decisionReason && {
-          decisionReason: t.decisionReason,
+      ...(decision.behavior === "deny" &&
+        decision.decisionReason && {
+          decisionReason: decision.decisionReason,
         }),
     };
-  if (t.updatedInput === undefined || isEmptyObject(t.updatedInput))
+  if (decision.updatedInput === undefined || isEmptyObject(decision.updatedInput))
     return {
       proceed: true,
       input,
       asked: true,
-      ...(t.decisionReason && {
-        decisionReason: t.decisionReason,
+      ...(decision.decisionReason && {
+        decisionReason: decision.decisionReason,
       }),
     };
-  let d = isUnrecognizedKeysIssue(parse, t.updatedInput);
-  if (!d.success)
+  let narrowedInput = isUnrecognizedKeysIssue(parse, decision.updatedInput);
+  if (!narrowedInput.success)
     return {
       proceed: false,
       asked: true,
       reason: "bad_shape",
       message: `The permission handler narrowed the input to a shape ${tool.name} does not accept \u2014 nothing was sent.`,
     };
-  if (d.data.to !== input.to)
+  if (narrowedInput.data.to !== input.to)
     return {
       proceed: false,
       asked: true,
       reason: "recipient_changed",
       message: `The permission handler changed the recipient (from ${recipientLabel}) after this send was resolved \u2014 nothing was sent. Send again to the recipient you intend.`,
     };
-  if (d.data.message !== undefined && typeof d.data.message !== "string")
+  if (narrowedInput.data.message !== undefined && typeof narrowedInput.data.message !== "string")
     return {
       proceed: false,
       asked: true,
@@ -116,10 +120,10 @@ async function isolationDispatchGate({
     };
   return {
     proceed: true,
-    input: d.data,
+    input: narrowedInput.data,
     asked: true,
-    ...(t.decisionReason && {
-      decisionReason: t.decisionReason,
+    ...(decision.decisionReason && {
+      decisionReason: decision.decisionReason,
     }),
   };
 }
@@ -127,67 +131,69 @@ async function isolationDispatchGate({
 /**
  * 判断权限阶段是否已对相同输入询问过（且符合给定条件）。
  */
-function wasAskedForSameInput(deps, n, o, isIsolatePeerAsk) {
+function wasAskedForSameInput(deps, input, dedupeKey, isIsolatePeerAsk) {
   let pipeline = deps.permissionPhase?.pipeline;
   if (pipeline === undefined) return false;
-  let r = pipeline.result.behavior === "ask" ? pipeline.result : pipeline.answered;
-  if (r === undefined || r.behavior !== "ask" || !isIsolatePeerAsk(r)) return false;
-  return sameJson(o(pipeline.input), o(n));
+  let askResult = pipeline.result.behavior === "ask" ? pipeline.result : pipeline.answered;
+  if (askResult === undefined || askResult.behavior !== "ask" || !isIsolatePeerAsk(askResult)) return false;
+  return sameJson(dedupeKey(pipeline.input), dedupeKey(input));
 }
 //@ chunk-vx0qz0bd.js:2380-2496 placement
 /**
  * 若输入与已检查的输入相同，返回已有的检查结果。
  */
-function getCheckedResultForInput(e, n, sendFileDedupeKey) {
-  let checked = e.permissionPhase?.checked;
+function getCheckedResultForInput(deps, input, sendFileDedupeKey) {
+  let checked = deps.permissionPhase?.checked;
   if (checked === undefined) return;
-  return sameJson(sendFileDedupeKey(checked.input), sendFileDedupeKey(n)) ? checked.result : undefined;
+  return sameJson(sendFileDedupeKey(checked.input), sendFileDedupeKey(input)) ? checked.result : undefined;
 }
 //@ chunk-vx0qz0bd.js:2496-2625 placement
 /**
  * 若输入与已检查的输入相同，返回检查附带的说明。
  */
-function getCheckedNoteForInput(e, n, o) {
-  let checked = e.permissionPhase?.checked;
+function getCheckedNoteForInput(deps, input, dedupeKey) {
+  let checked = deps.permissionPhase?.checked;
   if (checked === undefined || !("note" in checked)) return;
-  return sameJson(o(checked.input), o(n)) ? checked.note : undefined;
+  return sameJson(dedupeKey(checked.input), dedupeKey(input)) ? checked.note : undefined;
 }
 //@ chunk-vx0qz0bd.js:2625-2861 placement
 /**
  * 输入被改写后，把权限阶段中与原输入相同的记录改为新输入。
  */
-function rebasePermissionPhase(permissionPhase, n, input, getToAndMessageFields) {
+function rebasePermissionPhase(permissionPhase, previousInput, input, getToAndMessageFields) {
   if (permissionPhase === undefined) return;
-  let i = getToAndMessageFields(n);
-  let r = {
+  let toAndMessage = getToAndMessageFields(previousInput);
+  let rebased = {
     ...permissionPhase,
   };
   if (
     permissionPhase.checked !== undefined &&
-    sameJson(getToAndMessageFields(permissionPhase.checked.input), i)
+    sameJson(getToAndMessageFields(permissionPhase.checked.input), toAndMessage)
   )
-    r.checked = {
+    rebased.checked = {
       ...permissionPhase.checked,
       input,
     };
   if (
     permissionPhase.pipeline !== undefined &&
-    sameJson(getToAndMessageFields(permissionPhase.pipeline.input), i)
+    sameJson(getToAndMessageFields(permissionPhase.pipeline.input), toAndMessage)
   )
-    r.pipeline = {
+    rebased.pipeline = {
       ...permissionPhase.pipeline,
       input,
     };
-  return r;
+  return rebased;
 }
 //@ chunk-vx0qz0bd.js:2861-2986 placement
 /**
  * 若输入与派发解析时相同，返回派发说明。
  */
-function getDispatchNoteForInput(deps, n, getToField) {
+function getDispatchNoteForInput(deps, input, getToField) {
   let dispatchResolution = deps.permissionPhase?.dispatchResolution;
   if (dispatchResolution === undefined) return;
-  return sameJson(getToField(dispatchResolution.input), getToField(n)) ? dispatchResolution.note : undefined;
+  return sameJson(getToField(dispatchResolution.input), getToField(input))
+    ? dispatchResolution.note
+    : undefined;
 }
 //@ chunk-vx0qz0bd.js:2986-3064 placement
 /**
@@ -201,31 +207,31 @@ function hasMintedReentry(deps) {
 /**
  * 判断权限结果是否为"隔离对等机器"熔断引起的询问。
  */
-function isIsolatePeerAsk(e) {
+function isIsolatePeerAsk(result) {
   return (
-    e.behavior === "ask" &&
-    e.decisionReason?.type === "safetyCheck" &&
-    e.decisionReason.circuitBreaker === "isolatePeerMachines"
+    result.behavior === "ask" &&
+    result.decisionReason?.type === "safetyCheck" &&
+    result.decisionReason.circuitBreaker === "isolatePeerMachines"
   );
 }
 //@ chunk-vx0qz0bd.js:3203-3238 placement
 /**
  * 比较两个值序列化后是否相同（判断输入是否被改写）。
  */
-function sameJson(e, n) {
-  return jsonStringify(e) === jsonStringify(n);
+function sameJson(left, right) {
+  return jsonStringify(left) === jsonStringify(right);
 }
 //@ chunk-vx0qz0bd.js:3238-3521 placement = isUnrecognizedKeysIssue (0.804)
 function isUnrecognizedKeysIssue(parse, updatedInput) {
-  let o = parse(updatedInput);
-  if (o.success || o.error === undefined) return o;
-  let s = new Set();
-  for (let issue of o.error.issues) {
-    if (issue.code !== "unrecognized_keys" || issue.path.length > 0) return o;
-    for (let key of issue.keys) s.add(key);
+  let parsed = parse(updatedInput);
+  if (parsed.success || parsed.error === undefined) return parsed;
+  let unrecognizedKeys = new Set();
+  for (let issue of parsed.error.issues) {
+    if (issue.code !== "unrecognized_keys" || issue.path.length > 0) return parsed;
+    for (let key of issue.keys) unrecognizedKeys.add(key);
   }
-  if (s.size === 0 || typeof updatedInput !== "object" || updatedInput === null) return o;
-  return parse(wi(updatedInput, (i, r) => s.has(r)));
+  if (unrecognizedKeys.size === 0 || typeof updatedInput !== "object" || updatedInput === null) return parsed;
+  return parse(import_reject(updatedInput, (value, key) => unrecognizedKeys.has(key)));
 }
 export {
   hasMintedReentry,

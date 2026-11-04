@@ -8,7 +8,7 @@
  * pieces: chunk-kvpw3x0k.js (3)
  * attribution: placement 3
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { usePrefersReducedMotion } from "./spinnerFlags.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { useAnimationFrame } from "../../ink/components/Input.js";
@@ -20,41 +20,41 @@ import { Box } from "../../ink/components/Text.js";
 var SPINNER_COLUMN_TICK_MS = 150;
 //@ chunk-kvpw3x0k.js:385-781 placement
 function SpinnerColumn(props) {
-  let p = w(8);
+  let $ = useMemoCache(8);
   let { tone, text } = props;
   let prefersReducedMotion = usePrefersReducedMotion();
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let o = prefersReducedMotion || isScreenReaderEnabled;
-  let [c, P] = useAnimationFrame(o ? null : SPINNER_COLUMN_TICK_MS);
-  const frame = Math.floor(P / SPINNER_COLUMN_TICK_MS);
+  let reducedMotion = prefersReducedMotion || isScreenReaderEnabled;
+  let [time, setTime] = useAnimationFrame(reducedMotion ? null : SPINNER_COLUMN_TICK_MS);
+  const frame = Math.floor(setTime / SPINNER_COLUMN_TICK_MS);
   let children;
-  if (p[0] !== o || p[1] !== frame || p[2] !== text || p[3] !== tone) {
+  if ($[0] !== reducedMotion || $[1] !== frame || $[2] !== text || $[3] !== tone) {
     children = jsxProd_default(NoticeLine, {
       state: "live",
       tone,
       text,
       linkify: false,
       frame,
-      reducedMotion: o,
+      reducedMotion,
     });
-    p[0] = o;
-    p[1] = frame;
-    p[2] = text;
-    p[3] = tone;
-    p[4] = children;
-  } else children = p[4];
-  let m;
-  if (p[5] !== c || p[6] !== children) {
-    m = jsxProd_default(Box, {
-      ref: c,
+    $[0] = reducedMotion;
+    $[1] = frame;
+    $[2] = text;
+    $[3] = tone;
+    $[4] = children;
+  } else children = $[4];
+  let boxElement;
+  if ($[5] !== time || $[6] !== children) {
+    boxElement = jsxProd_default(Box, {
+      ref: time,
       flexDirection: "column",
       children,
     });
-    p[5] = c;
-    p[6] = children;
-    p[7] = m;
-  } else m = p[7];
-  return m;
+    $[5] = time;
+    $[6] = children;
+    $[7] = boxElement;
+  } else boxElement = $[7];
+  return boxElement;
 }
 //@ chunk-kvpw3x0k.js:781-791 placement
 /**

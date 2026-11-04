@@ -71,7 +71,7 @@ function sanitizeViolationText(text) {
   return text.replace(DISPLAY_UNSAFE_CHARACTERS, " ").replace(/[<>]/g, "").trim();
 }
 //@ chunk-fq0cr76a.js:654711-654747 esm-layout
-function DC(decodedKey) {
+function dedupeFingerprint(decodedKey) {
   return cutBetweenCharacters(sanitizeViolationText(decodedKey), SANDBOXED_COMMAND_KEY_LENGTH);
 }
 //@ chunk-fq0cr76a.js:654747-654758 esm-layout
@@ -85,4 +85,4 @@ function cutBetweenCharacters(text, length) {
   let cut = text.slice(0, length);
   return /[\uD800-\uDBFF]$/.test(cut) ? cut.slice(0, -1) : cut;
 }
-export { sanitizeDenialReason, SandboxViolationStore, DC, shouldIgnoreViolation };
+export { sanitizeDenialReason, SandboxViolationStore, dedupeFingerprint, shouldIgnoreViolation };

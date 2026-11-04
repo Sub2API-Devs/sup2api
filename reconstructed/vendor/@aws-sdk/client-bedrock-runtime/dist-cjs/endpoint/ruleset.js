@@ -18,7 +18,7 @@ var i = {
 var j_2 = {
   ["ref"]: "Endpoint",
 };
-var k_2 = {
+var k = {
   ["fn"]: "booleanEquals",
   ["argv"]: [
     {
@@ -61,14 +61,14 @@ var o = {
     },
   ],
 };
-var p = [k_2];
+var p = [k];
 var q_2 = [l_2];
 var r = [
   {
     ["ref"]: "Region",
   },
 ];
-var jt = {
+var ruleSetData = {
   version: "1.0",
   parameters: {
     Region: h,
@@ -131,7 +131,7 @@ var jt = {
               ],
               rules: [
                 {
-                  conditions: [k_2, l_2],
+                  conditions: [k, l_2],
                   rules: [
                     {
                       conditions: [
@@ -257,5 +257,5 @@ var jt = {
     },
   ],
 };
-var Ue = jt;
-export { Ue };
+var ruleSet = ruleSetData;
+export { ruleSet };

@@ -1,0 +1,234 @@
+/**
+ * google-auth-library/build/src/auth/jwtclient.js
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * third-party: google-auth-library@10.6.2
+ * pieces: chunk-na3pph4p.js (1)
+ * attribution: cjs-fingerprint 1
+ */
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
+import { require_googleToken } from "../gtoken/googleToken.js";
+import { require_getCredentials } from "../gtoken/getCredentials.js";
+import { require_jwtaccess } from "./jwtaccess.js";
+import { require_oauth2client } from "./oauth2client.js";
+import { require_authclient } from "./authclient.js";
+
+//@ chunk-na3pph4p.js:93504-98004 cjs-fingerprint
+var require_jwtclient = __commonJS(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.JWT = undefined;
+  var gtoken_1 = require_googleToken();
+  var getCredentialsModule = require_getCredentials();
+  var jwtaccess_1 = require_jwtaccess();
+  var oauth2client_1 = require_oauth2client();
+  var authclient_1 = require_authclient();
+  class JWT extends oauth2client_1.OAuth2Client {
+    email;
+    keyFile;
+    key;
+    keyId;
+    defaultScopes;
+    scopes;
+    scope;
+    subject;
+    gtoken;
+    additionalClaims;
+    useJWTAccessWithScope;
+    defaultServicePath;
+    access;
+    constructor(options = {}) {
+      super(options);
+      this.email = options.email;
+      this.keyFile = options.keyFile;
+      this.key = options.key;
+      this.keyId = options.keyId;
+      this.scopes = options.scopes;
+      this.subject = options.subject;
+      this.additionalClaims = options.additionalClaims;
+      this.credentials = {
+        refresh_token: "jwt-placeholder",
+        expiry_date: 1,
+      };
+    }
+    createScoped(scopes) {
+      let jwt = new JWT(this);
+      jwt.scopes = scopes;
+      return jwt;
+    }
+    async getRequestMetadataAsync(url) {
+      url = this.defaultServicePath ? `https://${this.defaultServicePath}/` : url;
+      let useSelfSignedJWT =
+        (!this.hasUserScopes() && url) ||
+        (this.useJWTAccessWithScope && this.hasAnyScopes()) ||
+        this.universeDomain !== authclient_1.DEFAULT_UNIVERSE;
+      if (this.subject && this.universeDomain !== authclient_1.DEFAULT_UNIVERSE)
+        throw RangeError(
+          `Service Account user is configured for the credential. Domain-wide delegation is not supported in universes other than ${authclient_1.DEFAULT_UNIVERSE}`,
+        );
+      if (!this.apiKey && useSelfSignedJWT) {
+        if (this.additionalClaims && this.additionalClaims.target_audience) {
+          let { tokens } = await this.refreshToken();
+          return {
+            headers: this.addSharedMetadataHeaders(
+              new Headers({
+                authorization: `Bearer ${tokens.id_token}`,
+              }),
+            ),
+          };
+        } else {
+          if (!this.access)
+            this.access = new jwtaccess_1.JWTAccess(
+              this.email,
+              this.key,
+              this.keyId,
+              this.eagerRefreshThresholdMillis,
+            );
+          let scopes;
+          if (this.hasUserScopes()) scopes = this.scopes;
+          else if (!url) scopes = this.defaultScopes;
+          let useScopes = this.useJWTAccessWithScope || this.universeDomain !== authclient_1.DEFAULT_UNIVERSE;
+          let headers = await this.access.getRequestHeaders(
+            url ?? undefined,
+            this.additionalClaims,
+            useScopes ? scopes : undefined,
+          );
+          return {
+            headers: this.addSharedMetadataHeaders(headers),
+          };
+        }
+      } else if (this.hasAnyScopes() || this.apiKey) return super.getRequestMetadataAsync(url);
+      else
+        return {
+          headers: new Headers(),
+        };
+    }
+    async fetchIdToken(targetAudience) {
+      let gtoken = new gtoken_1.GoogleToken({
+        iss: this.email,
+        sub: this.subject,
+        scope: this.scopes || this.defaultScopes,
+        keyFile: this.keyFile,
+        key: this.key,
+        additionalClaims: {
+          target_audience: targetAudience,
+        },
+        transporter: this.transporter,
+      });
+      await gtoken.getToken({
+        forceRefresh: true,
+      });
+      if (!gtoken.idToken) throw Error("Unknown error: Failed to fetch ID token");
+      return gtoken.idToken;
+    }
+    hasUserScopes() {
+      if (!this.scopes) return false;
+      return this.scopes.length > 0;
+    }
+    hasAnyScopes() {
+      if (this.scopes && this.scopes.length > 0) return true;
+      if (this.defaultScopes && this.defaultScopes.length > 0) return true;
+      return false;
+    }
+    authorize(callback) {
+      if (callback) this.authorizeAsync().then((r) => callback(null, r), callback);
+      else return this.authorizeAsync();
+    }
+    async authorizeAsync() {
+      let result = await this.refreshToken();
+      if (!result) throw Error("No result returned");
+      this.credentials = result.tokens;
+      this.credentials.refresh_token = "jwt-placeholder";
+      this.key = this.gtoken.googleTokenOptions?.key;
+      this.email = this.gtoken.googleTokenOptions?.iss;
+      return result.tokens;
+    }
+    async refreshTokenNoCache() {
+      let gtoken = this.createGToken();
+      let tokens = {
+        access_token: (
+          await gtoken.getToken({
+            forceRefresh: this.isTokenExpiring(),
+          })
+        ).access_token,
+        token_type: "Bearer",
+        expiry_date: gtoken.expiresAt,
+        id_token: gtoken.idToken,
+      };
+      this.emit("tokens", tokens);
+      return {
+        res: null,
+        tokens,
+      };
+    }
+    createGToken() {
+      if (!this.gtoken)
+        this.gtoken = new gtoken_1.GoogleToken({
+          iss: this.email,
+          sub: this.subject,
+          scope: this.scopes || this.defaultScopes,
+          keyFile: this.keyFile,
+          key: this.key,
+          additionalClaims: this.additionalClaims,
+          transporter: this.transporter,
+        });
+      return this.gtoken;
+    }
+    fromJSON(json) {
+      if (!json) throw Error("Must pass in a JSON object containing the service account auth settings.");
+      if (!json.client_email) throw Error("The incoming JSON object does not contain a client_email field");
+      if (!json.private_key) throw Error("The incoming JSON object does not contain a private_key field");
+      this.email = json.client_email;
+      this.key = json.private_key;
+      this.keyId = json.private_key_id;
+      this.projectId = json.project_id;
+      this.quotaProjectId = json.quota_project_id;
+      this.universeDomain = json.universe_domain || this.universeDomain;
+    }
+    fromStream(inputStream, callback) {
+      if (callback) this.fromStreamAsync(inputStream).then(() => callback(), callback);
+      else return this.fromStreamAsync(inputStream);
+    }
+    fromStreamAsync(inputStream) {
+      return new Promise((resolve, reject) => {
+        if (!inputStream) throw Error("Must pass in a stream containing the service account auth settings.");
+        let settings = "";
+        inputStream
+          .setEncoding("utf8")
+          .on("error", reject)
+          .on("data", (chunk) => (settings += chunk))
+          .on("end", () => {
+            try {
+              let data = JSON.parse(settings);
+              this.fromJSON(data);
+              resolve();
+            } catch (e) {
+              reject(e);
+            }
+          });
+      });
+    }
+    fromAPIKey(apiKey) {
+      if (typeof apiKey !== "string") throw Error("Must provide an API Key string.");
+      this.apiKey = apiKey;
+    }
+    async getCredentials() {
+      if (this.key)
+        return {
+          private_key: this.key,
+          client_email: this.email,
+        };
+      else if (this.keyFile) {
+        let gtoken = this.createGToken();
+        let creds = await getCredentialsModule.getCredentials(this.keyFile);
+        return {
+          private_key: creds.privateKey,
+          client_email: creds.clientEmail,
+        };
+      }
+      throw Error("A key or a keyFile must be provided to getCredentials.");
+    }
+  }
+  cjsExports.JWT = JWT;
+});
+export { require_jwtclient };

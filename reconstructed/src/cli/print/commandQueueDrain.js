@@ -61,43 +61,45 @@ function maybeYieldToPersonPrompt({ head, messageQueue, prewaitLatch, fetchingFi
   )
     return null;
   let deferred = Promise.withResolvers();
-  let y = messageQueue.subscribe(() => {
+  let unsubscribe = messageQueue.subscribe(() => {
     if (hasBatchablePersonPrompt(messageQueue.getCommandQueueSnapshot())) deferred.resolve("queued");
   });
   return withDeadline(deferred.promise, QUEUED_INTERRUPT_BUDGET_MS)
-    .then(async (S) => {
-      let R = S === undefined && !prewaitLatch.stopLatched ? fetchingFiles.untilNone() : undefined;
-      if (R === undefined) return S ?? "timed_out";
-      let w = await withDeadline(
-        Promise.race([deferred.promise, R]).then(() => true),
+    .then(async (queuedOutcome) => {
+      let filesWait =
+        queuedOutcome === undefined && !prewaitLatch.stopLatched ? fetchingFiles.untilNone() : undefined;
+      if (filesWait === undefined) return queuedOutcome ?? "timed_out";
+      let filesArrived = await withDeadline(
+        Promise.race([deferred.promise, filesWait]).then(() => true),
         ATTACHMENT_FILES_WAIT_TIMEOUT_MS,
       );
       if (hasBatchablePersonPrompt(messageQueue.getCommandQueueSnapshot())) return "files_wait_queued";
-      return w ? "files_wait_none_queued" : "files_wait_timed_out";
+      return filesArrived ? "files_wait_none_queued" : "files_wait_timed_out";
     })
-    .finally(y);
+    .finally(unsubscribe);
 }
 //@ chunk-tyg7f3ek.js:115976-116456 placement
 function shouldYieldRescueTurn({ head, queued, stopLatched, decidedAt, promptWait }) {
   if (!isRescueTurn(head)) return false;
-  let y = hasBatchablePersonPrompt(queued);
-  let S = rescueYieldMode(head);
-  let R = y && !stopLatched && S === "on";
-  if (R || decidedAt === "before_start") {
+  let promptWaiting = hasBatchablePersonPrompt(queued);
+  let switchState = rescueYieldMode(head);
+  let shouldYield = promptWaiting && !stopLatched && switchState === "on";
+  if (shouldYield || decidedAt === "before_start") {
     logEvent("tengu_resume_rescue_yield", {
-      outcome: fromEnum(R ? "yielded" : "kept"),
+      outcome: fromEnum(shouldYield ? "yielded" : "kept"),
       decided_at: fromEnum(decidedAt),
-      switch_state: fromEnum(S),
-      prompt_waiting: y,
+      switch_state: fromEnum(switchState),
+      prompt_waiting: promptWaiting,
       stop_latched: stopLatched,
       drain_only: head.drainOnly === true,
       prompt_wait: fromEnum(promptWait),
       error_kind: fromEnumOpt(head.yieldsToPersonPrompt),
     });
-    if (R) logFeatureOk("ccr_rescue_yields_to_prompt");
-    else if (y && S === "on") logFeatureSad("ccr_rescue_yields_to_prompt", "stop_latched");
+    if (shouldYield) logFeatureOk("ccr_rescue_yields_to_prompt");
+    else if (promptWaiting && switchState === "on")
+      logFeatureSad("ccr_rescue_yields_to_prompt", "stop_latched");
   }
-  return R;
+  return shouldYield;
 }
 //@ chunk-tyg7f3ek.js:116456-116517 placement
 function isRescueTurn(head) {
@@ -112,31 +114,32 @@ function rescueYieldMode(head) {
     : remoteFeatureGateState;
 }
 //@ chunk-tyg7f3ek.js:116657-116722 placement
-function hasBatchablePersonPrompt(e) {
-  return e.some((n) => canBatchWith(n) && isHumanOrigin(n.origin) && !isSlashCommand_2(n));
+function hasBatchablePersonPrompt(queued) {
+  return queued.some((item) => canBatchWith(item) && isHumanOrigin(item.origin) && !isSlashCommand_2(item));
 }
 //@ chunk-tyg7f3ek.js:116722-116764 placement
-function isActiveHandbackPrompt(e) {
-  return isPeerHandbackPrompt(e) && !e.drainOnly;
+function isActiveHandbackPrompt(item) {
+  return isPeerHandbackPrompt(item) && !item.drainOnly;
 }
 //@ chunk-tyg7f3ek.js:116764-116928 placement
-function makeHandbackFilter(e) {
-  let n = new Set(
-    e
+function makeHandbackFilter(queued) {
+  let senderTaskIds = new Set(
+    queued
       .filter(isActiveHandbackPrompt)
-      .map((r) => (r.origin?.kind === "peer" ? r.origin.senderTaskId : undefined)),
+      .map((item) => (item.origin?.kind === "peer" ? item.origin.senderTaskId : undefined)),
   );
-  return (r) => isActiveHandbackPrompt(r) || (r.handbackPointer === true && n.has(r.taskId));
+  return (item) =>
+    isActiveHandbackPrompt(item) || (item.handbackPointer === true && senderTaskIds.has(item.taskId));
 }
 //@ chunk-tyg7f3ek.js:116928-117148 placement
-function shouldHandbacksStandAside({ queued, stopLatched, next: r }) {
+function shouldHandbacksStandAside({ queued, stopLatched, next }) {
   if (
     !queued.some(isActiveHandbackPrompt) ||
     !hasBatchablePersonPrompt(queued) ||
     getRemoteFeatureGateState(TENGU_TENDER_MITTEN) !== "on"
   )
     return false;
-  if (r !== undefined && isActiveHandbackPrompt(r))
+  if (next !== undefined && isActiveHandbackPrompt(next))
     if (stopLatched) logFeatureSad("headless_handbacks_stand_aside", "stop_latched");
     else logFeatureOk("headless_handbacks_stand_aside");
   return !stopLatched;
@@ -160,13 +163,13 @@ class CommandQueueDrain {
     this.holdsEvalSettles = holdsEvalSettles ?? (() => false);
   }
   takeHead() {
-    let e = this.exceptHandbacksThatStandAside(
+    let matchCommand = this.exceptHandbacksThatStandAside(
       isActiveMainAgentCommand,
       this.messageQueue.peek(isActiveMainAgentCommand),
     );
     if (
       this.pollDispatchTarget !== undefined &&
-      this.messageQueue.peek(e) === this.pollDispatchTarget &&
+      this.messageQueue.peek(matchCommand) === this.pollDispatchTarget &&
       !this.lastDispatchAborted
     ) {
       this.pollEmptyDispatchStalled = true;
@@ -176,126 +179,154 @@ class CommandQueueDrain {
     this.messageQueue.setTurnStartFoldTarget(undefined);
     this.lastDispatchAborted = false;
     if (this.holdsEvalSettles()) return;
-    let n = this.messageQueue.peek(e);
-    let r = n !== undefined && neverDeclaresEvents(n);
+    let head = this.messageQueue.peek(matchCommand);
+    let neverDeclares = head !== undefined && neverDeclaresEvents(head);
     if (
-      n !== undefined &&
-      isPollEventWakeInput(n, this.pollEmptyDispatchStalled, r) &&
+      head !== undefined &&
+      isPollEventWakeInput(head, this.pollEmptyDispatchStalled, neverDeclares) &&
       this.messageQueue.peek(isOrphanedPermissionCommand) === undefined &&
       !this.deferredHumanTurnQueued()
     ) {
-      let h = r
+      let foldTarget = neverDeclares
         ? undefined
         : this.messageQueue.peek(
-            (y) => e(y) && !isPollEventMode(y) && isPromptCapableMode(y.mode, y.clientBashCommand),
+            (candidate) =>
+              matchCommand(candidate) &&
+              !isPollEventMode(candidate) &&
+              isPromptCapableMode(candidate.mode, candidate.clientBashCommand),
           );
-      if (h !== undefined) return this.messageQueue.dequeue((y) => y === h);
-      this.pollDispatchTarget = n;
-      if (r) this.messageQueue.setTurnStartFoldTarget(n);
+      if (foldTarget !== undefined)
+        return this.messageQueue.dequeue((queuedItem) => queuedItem === foldTarget);
+      this.pollDispatchTarget = head;
+      if (neverDeclares) this.messageQueue.setTurnStartFoldTarget(head);
       return {
         value: [],
         mode: "prompt",
-        agentId: n.agentId,
+        agentId: head.agentId,
         isMeta: true,
         pollEmptyDispatch: true,
         skipSubmissionHooks: true,
       };
     }
-    let s = this.dequeueOrphansFirst(e);
+    let orphanHead = this.dequeueOrphansFirst(matchCommand);
     if (
-      s?.mode === "poll-event" &&
-      s.pollEvent !== undefined &&
-      mentionsSessionNoticeKind(s.pollEvent.kind)
+      orphanHead?.mode === "poll-event" &&
+      orphanHead.pollEvent !== undefined &&
+      mentionsSessionNoticeKind(orphanHead.pollEvent.kind)
     ) {
-      discardPollEvent([s], "reserved kind refused legacy value dispatch; redelivered on reconnect");
+      discardPollEvent([orphanHead], "reserved kind refused legacy value dispatch; redelivered on reconnect");
       this.pollEmptyDispatchStalled = false;
       return this.takeHead();
     }
-    if (s?.mode === "poll-event" && this.pollEmptyDispatchStalled) this.pollEmptyDispatchStalled = false;
-    return s;
+    if (orphanHead?.mode === "poll-event" && this.pollEmptyDispatchStalled)
+      this.pollEmptyDispatchStalled = false;
+    return orphanHead;
   }
-  takeFollowers(e, n) {
-    let r = [];
-    if (e.mode !== "prompt") return r;
-    let s = this.exceptHandbacksThatStandAside(isDispatchablePrompt);
+  takeFollowers(head, canFollow) {
+    let followers = [];
+    if (head.mode !== "prompt") return followers;
+    let matchCommand = this.exceptHandbacksThatStandAside(isDispatchablePrompt);
     while (true) {
-      let h = this.messageQueue.peek(s);
-      if (!canMergePromptCommands(e, h) || !n(h)) break;
-      if (this.prewaitLatch.isDoomBoundary(e, h)) break;
+      let next = this.messageQueue.peek(matchCommand);
+      if (!canMergePromptCommands(head, next) || !canFollow(next)) break;
+      if (this.prewaitLatch.isDoomBoundary(head, next)) break;
       if (
-        e.shouldQuery === false &&
-        this.queuedBefore(h).some((y) => isOrphanedPermissionCommand(y) && y.handedOffTurn !== undefined)
+        head.shouldQuery === false &&
+        this.queuedBefore(next).some(
+          (queuedItem) => isOrphanedPermissionCommand(queuedItem) && queuedItem.handedOffTurn !== undefined,
+        )
       )
         break;
-      r.push(this.messageQueue.dequeue(s));
+      followers.push(this.messageQueue.dequeue(matchCommand));
     }
-    return r;
+    return followers;
   }
-  holdsQueryForFollower(e, n, r) {
+  holdsQueryForFollower(head, canFollow, exclude) {
     if (this.deferredHumanTurnQueued()) return false;
-    let s = this.messageQueue.peek((h) => isDispatchablePrompt(h) && h.handbackPointer !== true && !r(h));
-    return s !== undefined && canBatchCommands(e, s) && n(s) && !this.prewaitLatch.isDoomBoundary(e, s);
+    let next = this.messageQueue.peek(
+      (queuedItem) =>
+        isDispatchablePrompt(queuedItem) && queuedItem.handbackPointer !== true && !exclude(queuedItem),
+    );
+    return (
+      next !== undefined &&
+      canBatchCommands(head, next) &&
+      canFollow(next) &&
+      !this.prewaitLatch.isDoomBoundary(head, next)
+    );
   }
   noteTurnEnded(lastDispatchAborted) {
     this.lastDispatchAborted = lastDispatchAborted;
     this.messageQueue.setTurnStartFoldTarget(undefined);
   }
-  holdsBack(e) {
-    return e.handedOffTurn !== undefined && this.deferredToolUsePending();
+  holdsBack(item) {
+    return item.handedOffTurn !== undefined && this.deferredToolUsePending();
   }
-  queuedBefore(e) {
+  queuedBefore(item) {
     let commandQueue = this.messageQueue.getCommandQueue();
-    let index = commandQueue.indexOf(e);
+    let index = commandQueue.indexOf(item);
     return index < 0 ? [] : commandQueue.slice(0, index);
   }
   deferredHumanTurnQueued() {
-    return this.messageQueue.peek((e) => isMainAgentCommand(e) && isVerifiedSlackHumanTurn(e)) !== undefined;
-  }
-  dequeueOrphansFirst(e) {
-    let n =
+    return (
       this.messageQueue.peek(
-        (r) => isOrphanedPermissionCommand(r) && r.handedOffTurn?.continues === true && !this.holdsBack(r),
-      ) ??
-      this.messageQueue.peek((r) => isOrphanedPermissionCommand(r) && r.handedOffTurn === undefined) ??
-      this.messageQueue.peek((r) => isOrphanedPermissionCommand(r) && !this.holdsBack(r));
-    if (n?.handedOffTurn !== undefined && !n.handedOffTurn.continues) {
-      let found = this.queuedBefore(n).find(isNoQueryPrompt);
-      if (found !== undefined) return this.messageQueue.dequeue((s) => s === found);
-    }
-    if (n) {
-      this.messageQueue.dequeue((r) => r === n);
-      logForDebugging(
-        `drainCommandQueue: prioritizing orphaned-permission for toolUseID=${n.orphanedPermission?.permissionResult?.toolUseID ?? n.handedOffTurn?.toolUseIDs.join(",") ?? "<unknown>"}`,
-      );
-      return n;
-    }
-    return dequeueQueuedMessage(this.messageQueue, e);
+        (queuedItem) => isMainAgentCommand(queuedItem) && isVerifiedSlackHumanTurn(queuedItem),
+      ) !== undefined
+    );
   }
-  exceptHandbacksThatStandAside(e, next) {
-    let commandQueue = this.messageQueue.getCommandQueue();
+  dequeueOrphansFirst(matchCommand) {
+    let orphan =
+      this.messageQueue.peek(
+        (queuedItem) =>
+          isOrphanedPermissionCommand(queuedItem) &&
+          queuedItem.handedOffTurn?.continues === true &&
+          !this.holdsBack(queuedItem),
+      ) ??
+      this.messageQueue.peek(
+        (queuedItem) => isOrphanedPermissionCommand(queuedItem) && queuedItem.handedOffTurn === undefined,
+      ) ??
+      this.messageQueue.peek(
+        (queuedItem) => isOrphanedPermissionCommand(queuedItem) && !this.holdsBack(queuedItem),
+      );
+    if (orphan?.handedOffTurn !== undefined && !orphan.handedOffTurn.continues) {
+      let found = this.queuedBefore(orphan).find(isNoQueryPrompt);
+      if (found !== undefined) return this.messageQueue.dequeue((item) => item === found);
+    }
+    if (orphan) {
+      this.messageQueue.dequeue((item) => item === orphan);
+      logForDebugging(
+        `drainCommandQueue: prioritizing orphaned-permission for toolUseID=${orphan.orphanedPermission?.permissionResult?.toolUseID ?? orphan.handedOffTurn?.toolUseIDs.join(",") ?? "<unknown>"}`,
+      );
+      return orphan;
+    }
+    return dequeueQueuedMessage(this.messageQueue, matchCommand);
+  }
+  exceptHandbacksThatStandAside(matchCommand, next) {
+    let queued = this.messageQueue.getCommandQueue();
     if (
       !shouldHandbacksStandAside({
-        queued: commandQueue,
+        queued,
         stopLatched: this.prewaitLatch.stopLatched,
         next,
       })
     )
-      return e;
-    let handbackFilter = makeHandbackFilter(commandQueue);
-    return (h) => e(h) && !handbackFilter(h);
+      return matchCommand;
+    let handbackFilter = makeHandbackFilter(queued);
+    return (item) => matchCommand(item) && !handbackFilter(item);
   }
 }
 //@ chunk-tyg7f3ek.js:120577-120637 placement
-function isOrphanedPermissionCommand(e) {
-  return isMainAgentCommand(e) && e.mode === "orphaned-permission";
+function isOrphanedPermissionCommand(command) {
+  return isMainAgentCommand(command) && command.mode === "orphaned-permission";
 }
 //@ chunk-tyg7f3ek.js:120637-120704 placement
-function isNoQueryPrompt(e) {
-  return isActiveMainAgentCommand(e) && e.mode === "prompt" && e.shouldQuery === false;
+function isNoQueryPrompt(command) {
+  return isActiveMainAgentCommand(command) && command.mode === "prompt" && command.shouldQuery === false;
 }
 //@ chunk-tyg7f3ek.js:120704-120765 placement
-function isPassiveQueueItem(e) {
-  return isNoQueryPrompt(e) || (isOrphanedPermissionCommand(e) && e.handedOffTurn === undefined);
+function isPassiveQueueItem(command) {
+  return (
+    isNoQueryPrompt(command) || (isOrphanedPermissionCommand(command) && command.handedOffTurn === undefined)
+  );
 }
 //@ chunk-tyg7f3ek.js:120834-120902 placement
 var BANG_COMMAND_LIMITS = 65536;
@@ -334,23 +365,23 @@ class BangCommandRunner {
   get isBusy() {
     return this.current !== undefined || this.admitting.size > 0;
   }
-  whileAdmitting(uuid, n, r) {
-    let s = r.finally(() => {
-      this.admitting.delete(h);
-      n.abort();
+  whileAdmitting(uuid, controller, admission) {
+    let settled = admission.finally(() => {
+      this.admitting.delete(record);
+      controller.abort();
     });
-    let h = {
+    let record = {
       uuid,
-      controller: n,
-      settled: s.catch(() => {}),
+      controller,
+      settled: settled.catch(() => {}),
     };
-    this.admitting.add(h);
-    return s;
+    this.admitting.add(record);
+    return settled;
   }
-  start(uuid, n, r) {
+  start(uuid, abortController, run) {
     if (this.current !== undefined) throw Error("a bash command is already running");
-    let childAbortController = createChildAbortController(n);
-    let h = r(childAbortController.signal)
+    let childAbortController = createChildAbortController(abortController);
+    let ended = run(childAbortController.signal)
       .catch(logError)
       .finally(() => {
         if (this.current?.controller === childAbortController) this.current = undefined;
@@ -359,23 +390,30 @@ class BangCommandRunner {
     this.current = {
       uuid,
       controller: childAbortController,
-      ended: h,
+      ended,
     };
-    return h;
+    return ended;
   }
-  interrupt(e) {
-    for (let r of this.admitting)
-      if (e === undefined || (r.uuid !== undefined && e.names([r.uuid])))
-        r.controller.abort(userAbortReason("interrupt"));
-    let n = this.current;
-    if (n === undefined) return false;
-    if (e !== undefined && (n.uuid === undefined || !e.names([n.uuid]))) return false;
-    n.controller.abort(userAbortReason("interrupt"));
+  interrupt(interruptFilter) {
+    for (let admission of this.admitting)
+      if (
+        interruptFilter === undefined ||
+        (admission.uuid !== undefined && interruptFilter.names([admission.uuid]))
+      )
+        admission.controller.abort(userAbortReason("interrupt"));
+    let current = this.current;
+    if (current === undefined) return false;
+    if (
+      interruptFilter !== undefined &&
+      (current.uuid === undefined || !interruptFilter.names([current.uuid]))
+    )
+      return false;
+    current.controller.abort(userAbortReason("interrupt"));
     return true;
   }
   async ended() {
     while (this.current !== undefined || this.admitting.size > 0)
-      await Promise.all([this.current?.ended, ...[...this.admitting].map((e) => e.settled)]);
+      await Promise.all([this.current?.ended, ...[...this.admitting].map((admission) => admission.settled)]);
   }
 }
 export {

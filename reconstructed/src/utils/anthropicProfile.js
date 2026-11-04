@@ -12,7 +12,7 @@ import { join } from "path";
 import { mkdir, unlink, readFile, writeFile } from "fs/promises";
 import { CLAUDE_AI_PROFILE_SCOPE, CLAUDE_AI_INFERENCE_SCOPE } from "../constants/oauth.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { looseObject, string } from "../../vendor/zod/v4/classic/schemas.js";
+import { looseObject, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   getErrnoCode,
@@ -24,50 +24,62 @@ import { env } from "./env.js";
 import { getAPIProvider, THIRD_PARTY_PROVIDER_LABELS, isFirstPartyAnthropicHost } from "./model/providers.js";
 import { getAnthropicApiKeyWithSourceAsyncSafe, isProfileAuthShadowed } from "./auth.js";
 import { withWifLockForDir, resetWIFCredentialState } from "../services/oauth/wifCredentials.js";
-import { Sbi, gAn } from "../../vendor/@anthropic-ai/sdk/core/credentials.mjs";
+import {
+  CONFIG_FILE_VERSION,
+  CREDENTIALS_FILE_VERSION,
+} from "../../vendor/@anthropic-ai/sdk/core/credentials.mjs";
 import { writeCredentialsFileAtomic } from "../../vendor/@anthropic-ai/sdk/lib/credentials/types.mjs";
 import { logForDebugging } from "./debug.js";
 import { jsonParse } from "./slowOperations.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-tv8z1ygb.js:703-1257 placement
 /**
  * Anthropic Console 配置档登录的常量：OAuth client_id、所需 scope、created_by 标记、配置/凭据文件的 zod schema，以及各拒绝原因是否可以回退到普通登录（I）。
  */
-var CONSOLE_PROFILE_CLIENT_ID = "41077d10-94b8-4194-be48-d251e9eb21b4";
-var PROFILE_LOGIN_SCOPES = [CLAUDE_AI_PROFILE_SCOPE, CLAUDE_AI_INFERENCE_SCOPE];
-var CREATED_BY_CLAUDE_CODE = {
-  created_by: "claude-code",
-};
-var profileConfigSchema = DoctorLazy(() =>
-  looseObject({
-    created_by: string().optional(),
-    base_url: string().optional(),
-    authentication: looseObject({
-      type: string(),
-      client_id: string().optional(),
-      credentials_path: string().optional(),
+var CONSOLE_PROFILE_CLIENT_ID; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var PROFILE_LOGIN_SCOPES;
+var CREATED_BY_CLAUDE_CODE;
+var profileConfigSchema;
+var profileCredentialsSchema;
+var PROFILE_REFUSAL_FALLS_BACK;
+deferInit("chunk-tv8z1ygb.js:703", () => {
+  CONSOLE_PROFILE_CLIENT_ID = "41077d10-94b8-4194-be48-d251e9eb21b4";
+  PROFILE_LOGIN_SCOPES = [CLAUDE_AI_PROFILE_SCOPE, CLAUDE_AI_INFERENCE_SCOPE];
+  CREATED_BY_CLAUDE_CODE = {
+    created_by: "claude-code",
+  };
+  profileConfigSchema = DoctorLazy(() =>
+    looseObject({
+      created_by: stringSchema().optional(),
+      base_url: stringSchema().optional(),
+      authentication: looseObject({
+        type: stringSchema(),
+        client_id: stringSchema().optional(),
+        credentials_path: stringSchema().optional(),
+      }),
     }),
-  }),
-);
-var profileCredentialsSchema = DoctorLazy(() =>
-  looseObject({
-    created_by: string().optional(),
-  }),
-);
-var PROFILE_REFUSAL_FALLS_BACK = {
-  no_config_dir: true,
-  invalid_profile_name: true,
-  foreign_profile: true,
-  custom_credentials_path: true,
-  api_key_env_nondispatching: true,
-  wif_env_quad: false,
-  third_party_provider: false,
-  api_key_env: false,
-  env_credential_shadow: false,
-  other_deployment_profile: false,
-  federation_profile: false,
-  unreadable_profile: false,
-};
+  );
+  profileCredentialsSchema = DoctorLazy(() =>
+    looseObject({
+      created_by: stringSchema().optional(),
+    }),
+  );
+  PROFILE_REFUSAL_FALLS_BACK = {
+    no_config_dir: true,
+    invalid_profile_name: true,
+    foreign_profile: true,
+    custom_credentials_path: true,
+    api_key_env_nondispatching: true,
+    wif_env_quad: false,
+    third_party_provider: false,
+    api_key_env: false,
+    env_credential_shadow: false,
+    other_deployment_profile: false,
+    federation_profile: false,
+    unreadable_profile: false,
+  };
+});
 //@ chunk-tv8z1ygb.js:1257-1297 placement
 /**
  * 判断该配置档拒绝原因是否允许退回普通登录。
@@ -237,13 +249,13 @@ async function saveConsoleProfileLogin(login) {
  */
 async function writeConsoleProfileFiles(login) {
   let { profile, configDir, isNewProfile } = await resolveConsoleProfileTarget();
-  let s = join(configDir, "configs", `${profile}.json`);
+  let profileConfigPath = join(configDir, "configs", `${profile}.json`);
   await mkdir(join(configDir, "configs"), {
     recursive: true,
     mode: 448,
   });
-  let l = {
-    version: Sbi,
+  let profileConfig = {
+    version: CONFIG_FILE_VERSION,
     organization_id: login.organizationUuid,
     workspace_id: login.workspaceId,
     authentication: {
@@ -252,10 +264,10 @@ async function writeConsoleProfileFiles(login) {
     },
     ...CREATED_BY_CLAUDE_CODE,
   };
-  await writeCredentialsFileAtomic(s, l);
-  let c = isNewProfile;
-  let _ = {
-    version: gAn,
+  await writeCredentialsFileAtomic(profileConfigPath, profileConfig);
+  let isNewProfile_2 = isNewProfile;
+  let credentials = {
+    version: CREDENTIALS_FILE_VERSION,
     type: "oauth_token",
     access_token: login.accessToken,
     refresh_token: login.refreshToken,
@@ -266,19 +278,19 @@ async function writeConsoleProfileFiles(login) {
     account_email: login.accountEmail,
   };
   await writeCredentialsFileAtomic(profileCredentialsPath(configDir, profile), {
-    ..._,
+    ...credentials,
     workspace_id: login.workspaceId,
     workspace_name: login.workspaceName,
     ...CREATED_BY_CLAUDE_CODE,
   });
-  let A = await tryCreateExclusive(
+  let setActive = await tryCreateExclusive(
     join(configDir, "active_config"),
     profile +
       `
 `,
   );
   logForDebugging(
-    `Console profile login: wrote credentials for profile ${profile}${c ? " (new profile)" : ""}${A ? " (set active)" : ""}`,
+    `Console profile login: wrote credentials for profile ${profile}${isNewProfile_2 ? " (new profile)" : ""}${setActive ? " (set active)" : ""}`,
   );
   resetWIFCredentialState();
   return {
@@ -297,24 +309,24 @@ async function removeConsoleProfileCredentials({ revoke } = {}) {
       return {
         removed: false,
       };
-    let r;
+    let profileName;
     try {
-      r = resolveProfileName(configDir);
+      profileName = resolveProfileName(configDir);
     } catch {
       return {
         removed: false,
       };
     }
-    let profileConfig = await readProfileConfig(join(configDir, "configs", `${r}.json`));
+    let profileConfig = await readProfileConfig(join(configDir, "configs", `${profileName}.json`));
     if (profileConfig === null || !isClaudeCodeProfile(profileConfig))
       return {
         removed: false,
       };
-    if ((await readProfileCredentials(profileCredentialsPath(configDir, r))) === null)
+    if ((await readProfileCredentials(profileCredentialsPath(configDir, profileName))) === null)
       return {
         removed: false,
       };
-    return await withWifLockForDir(profileCredentialsPath(configDir, r), () =>
+    return await withWifLockForDir(profileCredentialsPath(configDir, profileName), () =>
       removeProfileCredentialsLocked(revoke),
     );
   } catch (error) {
@@ -340,78 +352,78 @@ async function removeProfileCredentialsLocked(revoke) {
     return {
       removed: false,
     };
-  let r;
+  let profileName;
   try {
-    r = resolveProfileName(configDir);
+    profileName = resolveProfileName(configDir);
   } catch {
     return {
       removed: false,
     };
   }
-  let profileConfig = await readProfileConfig(join(configDir, "configs", `${r}.json`));
+  let profileConfig = await readProfileConfig(join(configDir, "configs", `${profileName}.json`));
   if (profileConfig === null || !isClaudeCodeProfile(profileConfig))
     return {
       removed: false,
     };
-  let s = profileCredentialsPath(configDir, r);
-  let profileCredentials = await readProfileCredentials(s);
+  let credentialsPath = profileCredentialsPath(configDir, profileName);
+  let profileCredentials = await readProfileCredentials(credentialsPath);
   if (profileCredentials === null)
     return {
       removed: false,
     };
-  let c = {
+  let revokeResult = {
     refreshToken: profileCredentials.refreshToken,
     clientId: CONSOLE_PROFILE_CLIENT_ID,
   };
-  if (revoke && c.refreshToken)
+  if (revoke && revokeResult.refreshToken)
     await revoke({
-      refreshToken: c.refreshToken,
-      clientId: c.clientId,
+      refreshToken: revokeResult.refreshToken,
+      clientId: revokeResult.clientId,
     });
   try {
-    await unlink(s);
+    await unlink(credentialsPath);
   } catch (error) {
     logForDebugging(`Logout: could not remove profile credentials: ${errorMessage(error)}`, {
       level: "error",
     });
     return {
       removed: false,
-      ...c,
+      ...revokeResult,
     };
   }
-  logForDebugging(`Logout: removed credentials for profile ${r}`);
+  logForDebugging(`Logout: removed credentials for profile ${profileName}`);
   resetWIFCredentialState();
   return {
     removed: true,
-    ...c,
+    ...revokeResult,
   };
 }
 //@ chunk-tv8z1ygb.js:7271-7511 placement
 function resolveProfileName(configDir) {
-  let n = env.ANTHROPIC_PROFILE || resolveImplicitProfileName(configDir);
-  if (!isLoadableProfileName(n))
+  let profileName = env.ANTHROPIC_PROFILE || resolveImplicitProfileName(configDir);
+  if (!isLoadableProfileName(profileName))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `ANTHROPIC_PROFILE "${n}" is not a valid profile name (letters, digits, '_', '.', '-')`,
+      `ANTHROPIC_PROFILE "${profileName}" is not a valid profile name (letters, digits, '_', '.', '-')`,
       "ANTHROPIC_PROFILE is not a valid profile name",
       "invalid_profile_name",
     );
-  return n;
+  return profileName;
 }
 //@ chunk-tv8z1ygb.js:7511-7565 placement
 /**
  * 配置档凭据文件的路径。
  */
-function profileCredentialsPath(configDir, n) {
-  return join(configDir, "credentials", `${n}.json`);
+function profileCredentialsPath(configDir, profileName) {
+  return join(configDir, "credentials", `${profileName}.json`);
 }
 //@ chunk-tv8z1ygb.js:7565-7933 placement
 /**
  * 读取配置档 JSON：不存在返回 null，不可读或格式不符视为 unreadable。
  */
-async function readProfileConfig(e) {
-  let n;
+async function readProfileConfig(configPath) {
+  let configText;
   try {
-    n = await readFile(e, "utf-8");
+    configText = await readFile(configPath, "utf-8");
   } catch (error) {
     if (getErrnoCode(error) === "ENOENT") return null;
     if (isFsInaccessible(error))
@@ -422,9 +434,9 @@ async function readProfileConfig(e) {
       };
     throw error;
   }
-  let r;
+  let parsed;
   try {
-    r = jsonParse(n);
+    parsed = jsonParse(configText);
   } catch (error) {
     logForDebugging(`Profile config is not JSON, treating as foreign: ${errorMessage(error)}`);
     return {
@@ -433,9 +445,9 @@ async function readProfileConfig(e) {
       },
     };
   }
-  let a = profileConfigSchema().safeParse(r);
-  return a.success
-    ? a.data
+  let parseResult = profileConfigSchema().safeParse(parsed);
+  return parseResult.success
+    ? parseResult.data
     : {
         authentication: {
           type: "unreadable",
@@ -451,23 +463,23 @@ function isClaudeCodeProfile(profileConfig) {
   );
 }
 //@ chunk-tv8z1ygb.js:8054-8339 placement
-async function readProfileCredentials(e) {
-  let n;
+async function readProfileCredentials(credentialsPath) {
+  let credentialsText;
   try {
-    n = await readFile(e, "utf-8");
+    credentialsText = await readFile(credentialsPath, "utf-8");
   } catch (error) {
     if (isFsInaccessible(error)) return null;
     throw error;
   }
-  let r;
+  let parsed;
   try {
-    r = jsonParse(n);
+    parsed = jsonParse(credentialsText);
   } catch {
     return null;
   }
-  let a = profileCredentialsSchema().safeParse(r);
-  if (!a.success || a.data.created_by !== CREATED_BY_CLAUDE_CODE.created_by) return null;
-  let refreshToken = a.data.refresh_token;
+  let parseResult = profileCredentialsSchema().safeParse(parsed);
+  if (!parseResult.success || parseResult.data.created_by !== CREATED_BY_CLAUDE_CODE.created_by) return null;
+  let refreshToken = parseResult.data.refresh_token;
   return {
     refreshToken: typeof refreshToken === "string" ? refreshToken : undefined,
   };
@@ -496,9 +508,9 @@ async function alwaysFalseProfileCheck() {
   return false;
 }
 //@ chunk-tv8z1ygb.js:8504-8620 placement = tryCreateExclusive (1)
-async function tryCreateExclusive(e, n) {
+async function tryCreateExclusive(filePath, data) {
   try {
-    await writeFile(e, n, {
+    await writeFile(filePath, data, {
       flag: "wx",
       mode: 420,
     });

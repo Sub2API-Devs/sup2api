@@ -8,17 +8,17 @@
  * pieces: chunk-xe7zq1p4.js (3)
  * attribution: placement 2, fingerprint 1
  */
-import { qt, Se } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { createContext, useContext } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { Mailbox } from "../utils/mailbox.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 
 //@ chunk-xe7zq1p4.js:12161-12179 placement
-var mailboxContext = qt(undefined);
+var mailboxContext = createContext(undefined);
 //@ chunk-xe7zq1p4.js:12179-12357 placement
 function MailboxProvider(props) {
-  let $ = w(3);
+  let $ = useMemoCache(3);
   let { children } = props;
   let t1;
   if ($[0] === MEMO_CACHE_SENTINEL) {
@@ -42,7 +42,7 @@ function MailboxProvider(props) {
  * 读取 Mailbox 上下文，不在 MailboxProvider 内时抛错。
  */
 function useMailbox() {
-  let mailbox = Se(mailboxContext);
+  let mailbox = useContext(mailboxContext);
   if (!mailbox) {
     throw Error("useMailbox must be used within a MailboxProvider");
   }

@@ -27,12 +27,12 @@ var PG_RETRY_INTERVAL_MS = 5000;
 /**
  * OAuth 风格错误响应 {error, error_description}。
  */
-function oauthErrorResponse(error, status = 400, n) {
+function oauthErrorResponse(error, status = 400, description) {
   return Response.json(
     {
       error,
-      ...(n && {
-        error_description: n,
+      ...(description && {
+        error_description: description,
       }),
     },
     {
@@ -54,20 +54,23 @@ function notFoundResponse() {
 /**
  * User-Agent 是否来自宿主入口的 Claude Code 客户端。
  */
-function isHostEntrypointClient(e) {
-  let t = /^claude-(?:cli|code)\/\S+ \(([^)]*)\)/.exec(e ?? "")?.[1];
-  return t !== undefined && t.split(",").some((n) => isHostEntrypointName(n.trim()));
+function isHostEntrypointClient(userAgent) {
+  let hostEntrypoint = /^claude-(?:cli|code)\/\S+ \(([^)]*)\)/.exec(userAgent ?? "")?.[1];
+  return (
+    hostEntrypoint !== undefined &&
+    hostEntrypoint.split(",").some((name) => isHostEntrypointName(name.trim()))
+  );
 }
 //@ chunk-1ny7cxrt.js:1520628-1520720 placement
 /**
  * 由 CRI 令牌声明构造的运维字段（cri、org、act、upstream_kind）。
  */
-function criIdentityFields(e, upstreamKind) {
-  return e !== null
+function criIdentityFields(criClaims, upstreamKind) {
+  return criClaims !== null
     ? {
         cri: true,
-        org: e.org,
-        act: e.act?.sub ?? null,
+        org: criClaims.org,
+        act: criClaims.act?.sub ?? null,
         upstream_kind: upstreamKind,
       }
     : {};
@@ -93,12 +96,12 @@ var SECURITY_HEADERS = {
 /**
  * 补上安全响应头（HTTPS 时加 HSTS）。
  */
-function withSecurityHeaders(e, t) {
+function withSecurityHeaders(response, secure) {
   for (let [key, value] of Object.entries(SECURITY_HEADERS))
-    if (!e.headers.has(key)) e.headers.set(key, value);
-  if (t && !e.headers.has("Strict-Transport-Security"))
-    e.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-  return e;
+    if (!response.headers.has(key)) response.headers.set(key, value);
+  if (secure && !response.headers.has("Strict-Transport-Security"))
+    response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  return response;
 }
 //@ chunk-1ny7cxrt.js:1521245-1521471 placement
 /**
@@ -121,16 +124,16 @@ var PG_CONNECT_REFUSED_RE = /connect|ECONNREFUSED|ENOTFOUND|ETIMEDOUT/i;
 /**
  * 启动时连接 Postgres 失败最多重试 3 次（间隔 2 秒）。
  */
-async function retryPostgresConnect(e) {
+async function retryPostgresConnect(connectFn) {
   for (let j = 1; ; j++)
     try {
-      return await e();
+      return await connectFn();
     } catch (error) {
-      let o = errorMessage(error);
-      if (j === 3 || !PG_CONNECT_REFUSED_RE.test(o)) throw error;
+      let message = errorMessage(error);
+      if (j === 3 || !PG_CONNECT_REFUSED_RE.test(message)) throw error;
       gatewayLog(
         "warn",
-        `could not connect to Postgres at boot, attempt ${j} of 3: ${o}. Trying again in 2s`,
+        `could not connect to Postgres at boot, attempt ${j} of 3: ${message}. Trying again in 2s`,
       );
       await sleep(2000);
     }

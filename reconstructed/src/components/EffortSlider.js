@@ -8,7 +8,13 @@
  * pieces: chunk-3rwvzn82.js (40)
  * attribution: placement 39, sole-consumer 1
  */
-import { init_react_production, R, y, P, Kc } from "../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useRef,
+  useState,
+  useEffect,
+  fragmentTypeExport,
+} from "../../vendor/react/cjs/react.production.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -22,7 +28,7 @@ import {
   shouldSaveEffortDefault,
   ULTRACODE_DESCRIPTION,
 } from "../commands/effort/effort.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useQueuedMessageText } from "../context/QueuedMessageContext.js";
 import { useAppState, useSetAppState } from "../state/AppState.js";
 import { useMainLoopModel } from "../hooks/useMainLoopModel.js";
@@ -39,6 +45,7 @@ import {
   getOrgOverriddenEffort,
   getEffortEnvOverride,
   getAppliedEffortLevel,
+  isSpecialEffortKeywordDisabled,
   isEffortUnset,
   isUltracodeAvailable,
   getEffortLevelDescription,
@@ -56,10 +63,6 @@ import { getRainbowColor } from "../utils/thinking.js";
 import { ULTRACODE_HIGHLIGHT_COLOR } from "./EffortIndicator.js";
 import { getRemoteCaps } from "../remote/remoteMode.js";
 import { useIsScreenReaderEnabled } from "../ink/components/ErrorBoundary.js";
-import {
-  isSpecialEffortKeywordDisabled,
-  isMaxEffortReminderEnabled,
-} from "../utils/permissions/permissionSetup.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import { useShortcutDisplay } from "../keybindings/useKeybindingDisplay.js";
 import { stableEmptyObject } from "../utils/stableEmptyObject.js";
@@ -69,80 +72,88 @@ import { useGlobalExitKeybindings } from "../keybindings/useKeybinding.js";
 import { MessageActionsKeybindings } from "./messageActions.js";
 import { useShortcutDisplay as useShortcutDisplay_2 } from "../keybindings/useShortcutDisplay.js";
 import { repeatString } from "../utils/stringUtils.js";
+import { isMaxEffortReminderEnabled } from "../utils/permissions/permissionSetup.js";
 import { Title } from "./design-system/Title.js";
-import { WARNING_GLYPH } from "../utils/permissions/autoModeRulesPrompt.js";
+import { WARNING_GLYPH } from "../constants/figures.js";
 import { Byline } from "./design-system/Byline.js";
 import { Pane } from "./design-system/Pane.js";
 import { Select } from "./CustomSelect/selectTypeahead.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-3rwvzn82.js:14223-14227 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3rwvzn82.js:14223", () => {
+  init_react_production();
+});
 //@ chunk-3rwvzn82.js:14227-14231 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3rwvzn82.js:14227", () => {
+  init_react_production();
+});
 //@ chunk-3rwvzn82.js:14231-14262 placement
-function arrayLength(U) {
-  return U.length;
+function arrayLength(list) {
+  return list.length;
 }
 //@ chunk-3rwvzn82.js:14262-14350 placement
-function renderSelectedBar(i, v) {
-  return i.startsWith("\u2587")
+function renderSelectedBar(bar, key) {
+  return bar.startsWith("\u2587")
     ? jsxProd_default(
         Text,
         {
           color: "permission",
-          children: i,
+          children: bar,
         },
-        v,
+        key,
       )
-    : i;
+    : bar;
 }
 //@ chunk-3rwvzn82.js:14350-14384 placement
-function selectUltracode(m) {
-  return m.ultracode;
+function selectUltracode(state) {
+  return state.ultracode;
 }
 //@ chunk-3rwvzn82.js:14384-14418 placement
-function selectUltracode_2(F) {
-  return F.ultracode;
+function selectUltracode_2(state) {
+  return state.ultracode;
 }
 //@ chunk-3rwvzn82.js:14418-14471 placement
-function selectCacheMissAck(O) {
-  return O.cacheMissAckedAtOutputTokens;
+function selectCacheMissAck(state) {
+  return state.cacheMissAckedAtOutputTokens;
 }
 //@ chunk-3rwvzn82.js:14471-14522 placement
-function selectMode(E) {
-  return E.toolPermissionContext.mode;
+function selectMode(state) {
+  return state.toolPermissionContext.mode;
 }
 //@ chunk-3rwvzn82.js:14522-14577 placement
-function selectCacheMissAck_2(il) {
-  return il.cacheMissAckedAtOutputTokens;
+function selectCacheMissAck_2(state) {
+  return state.cacheMissAckedAtOutputTokens;
 }
 //@ chunk-3rwvzn82.js:14577-14630 placement
-function selectMode_2(cl) {
-  return cl.toolPermissionContext.mode;
+function selectMode_2(state) {
+  return state.toolPermissionContext.mode;
 }
 //@ chunk-3rwvzn82.js:14630-14666 placement
-function selectUltracode_3(dl) {
-  return dl.ultracode;
+function selectUltracode_3(state) {
+  return state.ultracode;
 }
 //@ chunk-3rwvzn82.js:14666-14689 placement
 function returnFalse() {
   return false;
 }
 //@ chunk-3rwvzn82.js:14689-14715 placement
-function not(ul) {
-  return !ul;
+function not(value) {
+  return !value;
 }
 //@ chunk-3rwvzn82.js:14715-14770 placement
-function selectCacheMissAck_3(io) {
-  return io.cacheMissAckedAtOutputTokens;
+function selectCacheMissAck_3(state) {
+  return state.cacheMissAckedAtOutputTokens;
 }
 //@ chunk-3rwvzn82.js:14770-14823 placement
-function selectMode_3(ln) {
-  return ln.toolPermissionContext.mode;
+function selectMode_3(state) {
+  return state.toolPermissionContext.mode;
 }
 //@ chunk-3rwvzn82.js:14823-14859 placement
-function selectUltracode_4(ce) {
-  return ce.ultracode;
+function selectUltracode_4(state) {
+  return state.ultracode;
 }
 //@ chunk-3rwvzn82.js:14859-14882 placement
 function returnFalse_2() {
@@ -153,51 +164,55 @@ function returnFalse_3() {
   return false;
 }
 //@ chunk-3rwvzn82.js:14998-15078 sole-consumer
-async function applyEffortAndReport(u, l, setAppState, onDone, storageV5, f = true) {
-  let m = await applyEffortCommand(u, l, setAppState, f, storageV5);
-  onDone(m.message, ApplyEffortAndClose(m));
+async function applyEffortAndReport(value, context, setAppState, onDone, storageV5, closeDialog = true) {
+  let result = await applyEffortCommand(value, context, setAppState, closeDialog, storageV5);
+  onDone(result.message, ApplyEffortAndClose(result));
 }
 //@ chunk-3rwvzn82.js:15078-15136 placement
-function levelChangedOnly(u) {
-  return u.levelChanged || !u.ultracodeChanged;
+function levelChangedOnly(change) {
+  return change.levelChanged || !change.ultracodeChanged;
 }
 //@ chunk-3rwvzn82.js:15136-15554 placement
-async function applyEffortSelection(u, l, setAppState, onDone, storageV5, f = true) {
-  let { level, ultracode, ultracodeChanged } = u;
-  let p = [];
-  let t = false;
-  let U = false;
-  if (levelChangedOnly(u)) {
-    let i = await applyEffortCommand(
+async function applyEffortSelection(selection, context, setAppState, onDone, storageV5, showMessages = true) {
+  let { level, ultracode, ultracodeChanged } = selection;
+  let messages = [];
+  let closeAfterApply = false;
+  let ultracodeApplied = false;
+  if (levelChangedOnly(selection)) {
+    let levelResult = await applyEffortCommand(
       level,
       {
-        ...l,
+        ...context,
         ultracodeConfirmed: ultracode,
       },
       setAppState,
-      f,
+      showMessages,
       storageV5,
     );
-    p.push(i.message);
-    t = ApplyEffortAndClose(i);
-    U = isUltracodeToggleAvailable() && i.effortUpdate !== undefined;
-    if (U && ultracodeChanged && ultracode) p.push("Ultracode on");
+    messages.push(levelResult.message);
+    closeAfterApply = ApplyEffortAndClose(levelResult);
+    ultracodeApplied = isUltracodeToggleAvailable() && levelResult.effortUpdate !== undefined;
+    if (ultracodeApplied && ultracodeChanged && ultracode) messages.push("Ultracode on");
   }
-  if (ultracodeChanged && !U) {
-    let i = await applyEffortCommand(
+  if (ultracodeChanged && !ultracodeApplied) {
+    let ultracodeResult = await applyEffortCommand(
       ultracode ? "ultracode on" : "ultracode off",
-      l,
+      context,
       setAppState,
-      f,
+      showMessages,
       storageV5,
     );
-    p.push(p.length === 0 || !i.effortUpdate ? i.message : `Ultracode ${ultracode ? "on" : "off"}`);
+    messages.push(
+      messages.length === 0 || !ultracodeResult.effortUpdate
+        ? ultracodeResult.message
+        : `Ultracode ${ultracode ? "on" : "off"}`,
+    );
   }
-  onDone(p.join(" \xB7 "), t);
+  onDone(messages.join(" \xB7 "), closeAfterApply);
 }
 //@ chunk-3rwvzn82.js:15554-16836 placement
 function EffortCommandView(props) {
-  let I = w(29);
+  let $ = useMemoCache(29);
   let { args, route, ultracodeConfirmed, getMessages, onDone, storageV5 } = props;
   let route_2 = route === undefined ? "typed" : route;
   let queuedMessageText = useQueuedMessageText();
@@ -206,41 +221,41 @@ function EffortCommandView(props) {
   let permissionMode = useAppState(selectMode);
   let model = useMainLoopModel();
   let setAppState = useSetAppState();
-  let Y;
-  if (I[0] !== args) {
-    Y = parseEffortArg(args);
-    I[0] = args;
-    I[1] = Y;
-  } else Y = I[1];
-  let C = Y;
-  let re;
-  if (I[2] !== queuedMessageText || I[3] !== route_2 || I[4] !== ultracodeConfirmed || I[5] !== ultracode) {
-    re = {
+  let parsedArgCached;
+  if ($[0] !== args) {
+    parsedArgCached = parseEffortArg(args);
+    $[0] = args;
+    $[1] = parsedArgCached;
+  } else parsedArgCached = $[1];
+  let parsedArg = parsedArgCached;
+  let initialSelectionCached;
+  if ($[2] !== queuedMessageText || $[3] !== route_2 || $[4] !== ultracodeConfirmed || $[5] !== ultracode) {
+    initialSelectionCached = {
       effort: queuedMessageText,
       ultracode,
       ultracodeConfirmed,
       route: route_2,
     };
-    I[2] = queuedMessageText;
-    I[3] = route_2;
-    I[4] = ultracodeConfirmed;
-    I[5] = ultracode;
-    I[6] = re;
-  } else re = I[6];
-  let b = R(re);
-  let X;
+    $[2] = queuedMessageText;
+    $[3] = route_2;
+    $[4] = ultracodeConfirmed;
+    $[5] = ultracode;
+    $[6] = initialSelectionCached;
+  } else initialSelectionCached = $[6];
+  let selectionRef = useRef(initialSelectionCached);
+  let needsNoticeCached;
   if (
-    I[7] !== ackedAtOutputTokens ||
-    I[8] !== queuedMessageText ||
-    I[9] !== getMessages ||
-    I[10] !== model ||
-    I[11] !== permissionMode ||
-    I[12] !== C
+    $[7] !== ackedAtOutputTokens ||
+    $[8] !== queuedMessageText ||
+    $[9] !== getMessages ||
+    $[10] !== model ||
+    $[11] !== permissionMode ||
+    $[12] !== parsedArg
   ) {
-    X = () =>
-      C !== null &&
+    needsNoticeCached = () =>
+      parsedArg !== null &&
       shouldShowEffortNotice({
-        target: C.value,
+        target: parsedArg.value,
         current: queuedMessageText,
         model,
         permissionMode,
@@ -248,75 +263,75 @@ function EffortCommandView(props) {
         ackedAtOutputTokens,
         promptCacheMayBeWarm: isMainThreadSource(getMessages()),
       });
-    I[7] = ackedAtOutputTokens;
-    I[8] = queuedMessageText;
-    I[9] = getMessages;
-    I[10] = model;
-    I[11] = permissionMode;
-    I[12] = C;
-    I[13] = X;
-  } else X = I[13];
-  let [ee, T] = y(X);
-  let le;
-  let D;
+    $[7] = ackedAtOutputTokens;
+    $[8] = queuedMessageText;
+    $[9] = getMessages;
+    $[10] = model;
+    $[11] = permissionMode;
+    $[12] = parsedArg;
+    $[13] = needsNoticeCached;
+  } else needsNoticeCached = $[13];
+  let [needsNotice, setNeedsNotice] = useState(needsNoticeCached);
+  let applyOnMountEffect;
+  let applyOnMountDeps;
   if (
-    I[14] !== args ||
-    I[15] !== onDone ||
-    I[16] !== ee ||
-    I[17] !== setAppState ||
-    I[18] !== storageV5 ||
-    I[19] !== C
+    $[14] !== args ||
+    $[15] !== onDone ||
+    $[16] !== needsNotice ||
+    $[17] !== setAppState ||
+    $[18] !== storageV5 ||
+    $[19] !== parsedArg
   ) {
-    le = () => {
-      if (ee && C !== null) {
+    applyOnMountEffect = () => {
+      if (needsNotice && parsedArg !== null) {
         return;
       }
-      applyEffortAndReport(args, b.current, setAppState, onDone, storageV5);
+      applyEffortAndReport(args, selectionRef.current, setAppState, onDone, storageV5);
     };
-    D = [ee, C, args, setAppState, onDone, storageV5];
-    I[14] = args;
-    I[15] = onDone;
-    I[16] = ee;
-    I[17] = setAppState;
-    I[18] = storageV5;
-    I[19] = C;
-    I[20] = le;
-    I[21] = D;
+    applyOnMountDeps = [needsNotice, parsedArg, args, setAppState, onDone, storageV5];
+    $[14] = args;
+    $[15] = onDone;
+    $[16] = needsNotice;
+    $[17] = setAppState;
+    $[18] = storageV5;
+    $[19] = parsedArg;
+    $[20] = applyOnMountEffect;
+    $[21] = applyOnMountDeps;
   } else {
-    le = I[20];
-    D = I[21];
+    applyOnMountEffect = $[20];
+    applyOnMountDeps = $[21];
   }
-  P(le, D);
-  if (ee && C !== null) {
+  useEffect(applyOnMountEffect, applyOnMountDeps);
+  if (needsNotice && parsedArg !== null) {
     let onConfirm;
-    if (I[22] === MEMO_CACHE_SENTINEL) {
-      onConfirm = () => T(false);
-      I[22] = onConfirm;
-    } else onConfirm = I[22];
+    if ($[22] === MEMO_CACHE_SENTINEL) {
+      onConfirm = () => setNeedsNotice(false);
+      $[22] = onConfirm;
+    } else onConfirm = $[22];
     let onCancel;
-    if (I[23] !== queuedMessageText || I[24] !== onDone) {
+    if ($[23] !== queuedMessageText || $[24] !== onDone) {
       onCancel = () =>
         onDone(
           `Kept effort level as ${queuedMessageText !== undefined ? effortValueToString(queuedMessageText) : "auto"}`,
         );
-      I[23] = queuedMessageText;
-      I[24] = onDone;
-      I[25] = onCancel;
-    } else onCancel = I[25];
-    let A;
-    if (I[26] !== onCancel || I[27] !== C.value) {
-      A = jsxProd_default(ModelEffortSwitchConfirm, {
+      $[23] = queuedMessageText;
+      $[24] = onDone;
+      $[25] = onCancel;
+    } else onCancel = $[25];
+    let confirmElement;
+    if ($[26] !== onCancel || $[27] !== parsedArg.value) {
+      confirmElement = jsxProd_default(ModelEffortSwitchConfirm, {
         kind: "effort",
         model: null,
-        effort: C.value,
+        effort: parsedArg.value,
         onConfirm,
         onCancel,
       });
-      I[26] = onCancel;
-      I[27] = C.value;
-      I[28] = A;
-    } else A = I[28];
-    return A;
+      $[26] = onCancel;
+      $[27] = parsedArg.value;
+      $[28] = confirmElement;
+    } else confirmElement = $[28];
+    return confirmElement;
   }
   return null;
 }
@@ -356,49 +371,55 @@ var EFFORT_LEVEL_OPTIONS = [
 var SLIDER_MIN_WIDTH = 3;
 var EFFORT_CAPPED_TEXT = "Higher effort levels are capped by your settings or organization.";
 //@ chunk-3rwvzn82.js:17222-17511 placement
-function computeEffortSliderLayout(u) {
-  let min = Math.min(Math.max(u, 1), EFFORT_LEVEL_OPTIONS.length);
-  let sliced = EFFORT_LEVEL_OPTIONS.slice(0, min);
-  let sliced_2 = SLIDER_SEGMENT_CELLS.slice(0, min - 1);
+function computeEffortSliderLayout(count) {
+  let min = Math.min(Math.max(count, 1), EFFORT_LEVEL_OPTIONS.length);
+  let levels = EFFORT_LEVEL_OPTIONS.slice(0, min);
+  let spacers = SLIDER_SEGMENT_CELLS.slice(0, min - 1);
   let trianglePositions = SLIDER_TICK_STEPS.slice(0, min);
   if (min === EFFORT_LEVEL_OPTIONS.length)
     return {
-      levels: sliced,
+      levels,
       width: SLIDER_MAX_WIDTH,
       trianglePositions,
-      spacers: sliced_2,
+      spacers,
     };
-  let f = labelOffsets(sliced, sliced_2);
-  let width = Math.max(f[min - 1] + sliced[min - 1].label.length, SLIDER_TICK_WIDTH);
+  let offsets = labelOffsets(levels, spacers);
+  let width = Math.max(offsets[min - 1] + levels[min - 1].label.length, SLIDER_TICK_WIDTH);
   return {
-    levels: sliced,
+    levels,
     width,
     trianglePositions,
-    spacers: sliced_2,
+    spacers,
   };
 }
 //@ chunk-3rwvzn82.js:17511-17603 placement
-function labelOffsets(u, l) {
-  return u.map((o, a) => u.slice(0, a).reduce((acc, f, m) => acc + f.label.length + l[m], 0));
+function labelOffsets(levels, spacers) {
+  return levels.map((level, index) =>
+    levels.slice(0, index).reduce((acc, level, index) => acc + level.label.length + spacers[index], 0),
+  );
 }
 //@ chunk-3rwvzn82.js:17603-17665 placement
-function hasEffortOverride(u) {
-  return u !== undefined && isEffortCostShown() && effortCostRatio(u, getDefaultEffortLevel(u)) !== null;
+function hasEffortOverride(level) {
+  return (
+    level !== undefined &&
+    isEffortCostShown() &&
+    effortCostRatio(level, getDefaultEffortLevel(level)) !== null
+  );
 }
 //@ chunk-3rwvzn82.js:17665-17990 placement
-function describeEffortLevel(u, l) {
-  let defaultEffortLevel = getDefaultEffortLevel(u);
-  if (l === "max" && modelSupportsMaxEffort(u)) {
-    let price = effortCostRatio(u, "max");
+function describeEffortLevel(model, level) {
+  let defaultEffortLevel = getDefaultEffortLevel(model);
+  if (level === "max" && modelSupportsMaxEffort(model)) {
+    let price = effortCostRatio(model, "max");
     return price === null
       ? MAX_EFFORT_DESCRIPTION
       : `${MAX_EFFORT_DESCRIPTION} (${formatCostMultiplier(price)})`;
   }
-  if (l === defaultEffortLevel)
-    return getOrgDefaultEffort(u) === null
+  if (level === defaultEffortLevel)
+    return getOrgDefaultEffort(model) === null
       ? "The default effort for this model"
       : "The default effort for this model, set by your organization";
-  let price = effortCostRatio(u, l);
+  let price = effortCostRatio(model, level);
   return price === null
     ? ""
     : `${formatCostMultiplier(price)} the estimated cost of ${defaultEffortLevel} (the default)`;
@@ -407,18 +428,20 @@ function describeEffortLevel(u, l) {
 /**
  * 计算当前模型可选的 effort 档位、组织默认值与上限说明，供 effort 滑块使用。
  */
-function getEffortSliderModel(mainLoopModel) {
-  let l = mainLoopModel ? getEffortCap(mainLoopModel) : null;
-  let effortSliderLayout = computeEffortSliderLayout(l ? EFFORT_LEVELS.indexOf(l) + 1 : EFFORT_LEVELS.length);
-  let a = mainLoopModel && hasEffortLevelsAboveCap(mainLoopModel) ? EFFORT_CAPPED_TEXT : undefined;
-  let c = mainLoopModel ? getOrgOverriddenEffort(mainLoopModel) : null;
-  let f =
-    c !== null
-      ? `Your organization starts new sessions on this model at ${c} effort.`
-      : mainLoopModel && getOrgDefaultEffort(mainLoopModel) !== null
-        ? `Your organization's default effort for this model is ${getDefaultEffortLevel(mainLoopModel)}.`
+function getEffortSliderModel(model) {
+  let cap = model ? getEffortCap(model) : null;
+  let effortSliderLayout = computeEffortSliderLayout(
+    cap ? EFFORT_LEVELS.indexOf(cap) + 1 : EFFORT_LEVELS.length,
+  );
+  let cappedNote = model && hasEffortLevelsAboveCap(model) ? EFFORT_CAPPED_TEXT : undefined;
+  let orgOverride = model ? getOrgOverriddenEffort(model) : null;
+  let orgDefaultNote =
+    orgOverride !== null
+      ? `Your organization starts new sessions on this model at ${orgOverride} effort.`
+      : model && getOrgDefaultEffort(model) !== null
+        ? `Your organization's default effort for this model is ${getDefaultEffortLevel(model)}.`
         : undefined;
-  let filtered = [a, f].filter((p) => p !== undefined);
+  let filtered = [cappedNote, orgDefaultNote].filter((note) => note !== undefined);
   let orgNote = filtered.length > 0 ? filtered.join(" ") : undefined;
   let labelStarts = labelOffsets(effortSliderLayout.levels, effortSliderLayout.spacers);
   return {
@@ -433,180 +456,180 @@ function getEffortSliderModel(mainLoopModel) {
 }
 //@ chunk-3rwvzn82.js:18511-18994 placement
 function EffortLevelLabel(props) {
-  let c = w(9);
+  let $ = useMemoCache(9);
   let { level, selected } = props;
   let label = level.label;
   if (!selected) {
-    let f;
-    if (c[0] !== label) {
-      f = jsxProd_default(Text, {
+    let plainLabel;
+    if ($[0] !== label) {
+      plainLabel = jsxProd_default(Text, {
         dimColor: true,
         children: label,
       });
-      c[0] = label;
-      c[1] = f;
-    } else f = c[1];
-    return f;
+      $[0] = label;
+      $[1] = plainLabel;
+    } else plainLabel = $[1];
+    return plainLabel;
   }
   if (level.color === "rainbow-animated") {
-    let f;
-    if (c[2] !== label) {
-      f = jsxProd_default(ShimmerText, {
+    let rainbowLabel;
+    if ($[2] !== label) {
+      rainbowLabel = jsxProd_default(ShimmerText, {
         text: label,
       });
-      c[2] = label;
-      c[3] = f;
-    } else f = c[3];
-    return f;
+      $[2] = label;
+      $[3] = rainbowLabel;
+    } else rainbowLabel = $[3];
+    return rainbowLabel;
   }
   if (level.color === "autoAccept-shimmer") {
-    let f;
-    if (c[4] !== label) {
-      f = jsxProd_default(ShimmerText_2, {
+    let autoAcceptLabel;
+    if ($[4] !== label) {
+      autoAcceptLabel = jsxProd_default(ShimmerText_2, {
         text: label,
       });
-      c[4] = label;
-      c[5] = f;
-    } else f = c[5];
-    return f;
+      $[4] = label;
+      $[5] = autoAcceptLabel;
+    } else autoAcceptLabel = $[5];
+    return autoAcceptLabel;
   }
-  let f;
-  if (c[6] !== level.color || c[7] !== label) {
-    f = jsxProd_default(Text, {
+  let coloredLabel;
+  if ($[6] !== level.color || $[7] !== label) {
+    coloredLabel = jsxProd_default(Text, {
       bold: true,
       color: level.color,
       children: label,
     });
-    c[6] = level.color;
-    c[7] = label;
-    c[8] = f;
-  } else f = c[8];
-  return f;
+    $[6] = level.color;
+    $[7] = label;
+    $[8] = coloredLabel;
+  } else coloredLabel = $[8];
+  return coloredLabel;
 }
 //@ chunk-3rwvzn82.js:18994-19271 placement
 function ShimmerText(props) {
-  let f = w(5);
+  let $ = useMemoCache(5);
   let { text } = props;
   let prefersReducedMotion = usePrefersReducedMotion();
-  let [, a] = useAnimationFrame(prefersReducedMotion ? null : 100);
-  let floored = Math.floor(a / 100);
-  let m;
-  if (f[0] !== text) {
-    m = [...text];
-    f[0] = text;
-    f[1] = m;
-  } else m = f[1];
-  let g;
-  if (f[2] !== floored || f[3] !== m) {
-    g = jsxProd_default(Text, {
+  let [, frame] = useAnimationFrame(prefersReducedMotion ? null : 100);
+  let floored = Math.floor(frame / 100);
+  let chars;
+  if ($[0] !== text) {
+    chars = [...text];
+    $[0] = text;
+    $[1] = chars;
+  } else chars = $[1];
+  let textNode;
+  if ($[2] !== floored || $[3] !== chars) {
+    textNode = jsxProd_default(Text, {
       bold: true,
-      children: m.map((children, p) =>
+      children: chars.map((children, index) =>
         jsxProd_default(
           Text,
           {
-            color: getRainbowColor(p + floored),
+            color: getRainbowColor(index + floored),
             children,
           },
-          p,
+          index,
         ),
       ),
     });
-    f[2] = floored;
-    f[3] = m;
-    f[4] = g;
-  } else g = f[4];
-  return g;
+    $[2] = floored;
+    $[3] = chars;
+    $[4] = textNode;
+  } else textNode = $[4];
+  return textNode;
 }
 //@ chunk-3rwvzn82.js:19271-19676 placement = RARITY_COLORS (0.418)
 /**
  * 文字逐字符"闪光"高亮动画组件。
  */
 function ShimmerText_2(props) {
-  let d = w(6);
+  let $ = useMemoCache(6);
   let { text, color } = props;
-  let a = color === undefined ? "autoAccept" : color;
+  let shimmerColor = color === undefined ? "autoAccept" : color;
   let prefersReducedMotion = usePrefersReducedMotion();
-  let [, f] = useAnimationFrame(prefersReducedMotion ? null : 100);
-  let m = text.length + 4;
-  let g = prefersReducedMotion ? SPINNER_FLAG_PRIORITY : Math.floor(f / 100) % m;
-  let p;
-  if (d[0] !== text) {
-    p = [...text];
-    d[0] = text;
-    d[1] = p;
-  } else p = d[1];
-  let t;
-  if (d[2] !== a || d[3] !== g || d[4] !== p) {
-    t = jsxProd_default(Text, {
+  let [, frame] = useAnimationFrame(prefersReducedMotion ? null : 100);
+  let cycleLength = text.length + 4;
+  let highlightIndex = prefersReducedMotion ? SPINNER_FLAG_PRIORITY : Math.floor(frame / 100) % cycleLength;
+  let chars;
+  if ($[0] !== text) {
+    chars = [...text];
+    $[0] = text;
+    $[1] = chars;
+  } else chars = $[1];
+  let textNode;
+  if ($[2] !== shimmerColor || $[3] !== highlightIndex || $[4] !== chars) {
+    textNode = jsxProd_default(Text, {
       bold: true,
-      children: p.map((children, i) => {
-        let v = i === g;
-        let I = i === g - 1 || i === g + 1;
+      children: chars.map((children, index) => {
+        let isHighlighted = index === highlightIndex;
+        let isNeighbor = index === highlightIndex - 1 || index === highlightIndex + 1;
         return jsxProd_default(
           Text,
           {
-            color: v ? ULTRACODE_HIGHLIGHT_COLOR : a,
-            bold: v || I,
+            color: isHighlighted ? ULTRACODE_HIGHLIGHT_COLOR : shimmerColor,
+            bold: isHighlighted || isNeighbor,
             children,
           },
-          i,
+          index,
         );
       }),
     });
-    d[2] = a;
-    d[3] = g;
-    d[4] = p;
-    d[5] = t;
-  } else t = d[5];
-  return t;
+    $[2] = shimmerColor;
+    $[3] = highlightIndex;
+    $[4] = chars;
+    $[5] = textNode;
+  } else textNode = $[5];
+  return textNode;
 }
 //@ chunk-3rwvzn82.js:19676-19899 placement
 /**
  * 计算 effort 滑块的初始位置：先看环境变量覆盖或当前设定值，再取已应用/默认 effort 等级，找不到时用默认下标。
  */
-function resolveInitialEffortIndex(mainLoopModel, queuedMessageText, o) {
-  let a = getRemoteCaps() ? undefined : getEffortEnvOverride();
-  let c = a === null ? undefined : (a ?? queuedMessageText);
-  if (c !== undefined) {
-    let index = o.levels.findIndex((level) => level.value === c);
+function resolveInitialEffortIndex(mainLoopModel, queuedMessageText, slider) {
+  let envOverride = getRemoteCaps() ? undefined : getEffortEnvOverride();
+  let candidate = envOverride === null ? undefined : (envOverride ?? queuedMessageText);
+  if (candidate !== undefined) {
+    let index = slider.levels.findIndex((level) => level.value === candidate);
     if (index !== -1) return index;
   }
-  let f = getAppliedEffortLevel(mainLoopModel, c) ?? getDefaultEffortLevel(mainLoopModel);
-  let index = o.levels.findIndex((level) => level.value === f);
+  let appliedLevel = getAppliedEffortLevel(mainLoopModel, candidate) ?? getDefaultEffortLevel(mainLoopModel);
+  let index = slider.levels.findIndex((level) => level.value === appliedLevel);
   return index === -1 ? SLIDER_MIN_WIDTH : index;
 }
 //@ chunk-3rwvzn82.js:19899-19908 placement
 var NO_SELECTION = -1;
 //@ chunk-3rwvzn82.js:19908-20079 placement
-function EffortSliderOrPicker(u) {
-  let o = w(4);
+function EffortSliderOrPicker(props) {
+  let $ = useMemoCache(4);
   if (useIsScreenReaderEnabled()) {
-    let a;
-    if (o[0] !== u) {
-      a = jsxProd_default(EffortPicker, {
-        ...u,
+    let picker;
+    if ($[0] !== props) {
+      picker = jsxProd_default(EffortPicker, {
+        ...props,
       });
-      o[0] = u;
-      o[1] = a;
-    } else a = o[1];
-    return a;
+      $[0] = props;
+      $[1] = picker;
+    } else picker = $[1];
+    return picker;
   }
-  let a;
-  if (o[2] !== u) {
-    a = jsxProd_default(EffortSlider, {
-      ...u,
+  let slider;
+  if ($[2] !== props) {
+    slider = jsxProd_default(EffortSlider, {
+      ...props,
     });
-    o[2] = u;
-    o[3] = a;
-  } else a = o[3];
-  return a;
+    $[2] = props;
+    $[3] = slider;
+  } else slider = $[3];
+  return slider;
 }
 //@ chunk-3rwvzn82.js:20079-28776 placement
 /**
  * /effort 交互滑块：在 low…max 间切换，支持 Ultracode 开关和"仅本会话"。
  */
 function EffortSlider(props) {
-  let t = w(170);
+  let $ = useMemoCache(170);
   let { getMessages, onDone, storageV5 } = props;
   let queuedMessageText = useQueuedMessageText();
   let ackedAtOutputTokens = useAppState(selectCacheMissAck_2);
@@ -614,125 +637,130 @@ function EffortSlider(props) {
   let appState = useAppState(selectUltracode_3);
   let mainLoopModel = useMainLoopModel();
   let setAppState = useSetAppState();
-  let U;
-  if (t[0] !== mainLoopModel) {
-    U = getEffortSliderModel(mainLoopModel);
-    t[0] = mainLoopModel;
-    t[1] = U;
-  } else U = t[1];
-  let i = U;
-  let [v] = y(isSpecialEffortKeywordDisabled);
-  let I;
-  if (t[2] !== queuedMessageText || t[3] !== i || t[4] !== v || t[5] !== mainLoopModel) {
-    I =
-      v && isEffortUnset(queuedMessageText, mainLoopModel)
+  let sliderModelCached;
+  if ($[0] !== mainLoopModel) {
+    sliderModelCached = getEffortSliderModel(mainLoopModel);
+    $[0] = mainLoopModel;
+    $[1] = sliderModelCached;
+  } else sliderModelCached = $[1];
+  let sliderModel = sliderModelCached;
+  let [specialKeywordDisabled] = useState(isSpecialEffortKeywordDisabled);
+  let initialIndexCached;
+  if (
+    $[2] !== queuedMessageText ||
+    $[3] !== sliderModel ||
+    $[4] !== specialKeywordDisabled ||
+    $[5] !== mainLoopModel
+  ) {
+    initialIndexCached =
+      specialKeywordDisabled && isEffortUnset(queuedMessageText, mainLoopModel)
         ? NO_SELECTION
-        : resolveInitialEffortIndex(mainLoopModel, queuedMessageText, i);
-    t[2] = queuedMessageText;
-    t[3] = i;
-    t[4] = v;
-    t[5] = mainLoopModel;
-    t[6] = I;
-  } else I = t[6];
-  let Y = I;
-  let [C, re] = y(Y);
-  let min = Math.min(C, i.levels.length - 1);
-  let X = min === NO_SELECTION;
-  let ee;
-  if (t[7] !== queuedMessageText || t[8] !== i || t[9] !== mainLoopModel) {
-    ee = resolveInitialEffortIndex(mainLoopModel, queuedMessageText, i);
-    t[7] = queuedMessageText;
-    t[8] = i;
-    t[9] = mainLoopModel;
-    t[10] = ee;
-  } else ee = t[10];
-  let T = ee;
-  let le;
-  if (t[11] !== mainLoopModel) {
-    le = isUltracodeAvailable(mainLoopModel);
-    t[11] = mainLoopModel;
-    t[12] = le;
-  } else le = t[12];
-  let D = le;
-  let N = appState === true;
-  let [x, A] = y(N);
+        : resolveInitialEffortIndex(mainLoopModel, queuedMessageText, sliderModel);
+    $[2] = queuedMessageText;
+    $[3] = sliderModel;
+    $[4] = specialKeywordDisabled;
+    $[5] = mainLoopModel;
+    $[6] = initialIndexCached;
+  } else initialIndexCached = $[6];
+  let initialIndex = initialIndexCached;
+  let [selectedIndex, setSelectedIndex] = useState(initialIndex);
+  let min = Math.min(selectedIndex, sliderModel.levels.length - 1);
+  let isNoSelection = min === NO_SELECTION;
+  let resolvedIndexCached;
+  if ($[7] !== queuedMessageText || $[8] !== sliderModel || $[9] !== mainLoopModel) {
+    resolvedIndexCached = resolveInitialEffortIndex(mainLoopModel, queuedMessageText, sliderModel);
+    $[7] = queuedMessageText;
+    $[8] = sliderModel;
+    $[9] = mainLoopModel;
+    $[10] = resolvedIndexCached;
+  } else resolvedIndexCached = $[10];
+  let resolvedIndex = resolvedIndexCached;
+  let ultracodeAvailableCached;
+  if ($[11] !== mainLoopModel) {
+    ultracodeAvailableCached = isUltracodeAvailable(mainLoopModel);
+    $[11] = mainLoopModel;
+    $[12] = ultracodeAvailableCached;
+  } else ultracodeAvailableCached = $[12];
+  let isUltracodeAvailableNow = ultracodeAvailableCached;
+  let isUltracodeOn = appState === true;
+  let [ultracodeToggle, setUltracodeToggle] = useState(isUltracodeOn);
   let { columns } = useTerminalSize();
   let chord = useShortcutDisplay("effortSlider:toggleUltracode", "EffortSlider", "tab");
-  let [E] = y(returnFalse);
-  let k;
-  let rt;
-  if (t[13] !== E || t[14] !== chord) {
-    k = stableEmptyObject(E);
-    rt = bunStringWidth(
+  let [isReadonly] = useState(returnFalse);
+  let hintExtras;
+  let toggleHintWidth;
+  if ($[13] !== isReadonly || $[14] !== chord) {
+    hintExtras = stableEmptyObject(isReadonly);
+    toggleHintWidth = bunStringWidth(
       formatShortcutHint({
         chord,
         action: "toggle",
-        ...k,
+        ...hintExtras,
       }),
     );
-    t[13] = E;
-    t[14] = chord;
-    t[15] = k;
-    t[16] = rt;
+    $[13] = isReadonly;
+    $[14] = chord;
+    $[15] = hintExtras;
+    $[16] = toggleHintWidth;
   } else {
-    k = t[15];
-    rt = t[16];
+    hintExtras = $[15];
+    toggleHintWidth = $[16];
   }
-  let se = rt;
-  let max = Math.max(SLIDER_LABEL_WIDTH, se);
-  let _ = columns >= SLIDER_TOTAL_WIDTH + max - SLIDER_LABEL_WIDTH;
-  let [M, Re] = y(null);
-  let be;
-  if (t[17] !== queuedMessageText || t[18] !== appState) {
-    be = {
+  let hintWidth = toggleHintWidth;
+  let max = Math.max(SLIDER_LABEL_WIDTH, hintWidth);
+  let hasSidePane = columns >= SLIDER_TOTAL_WIDTH + max - SLIDER_LABEL_WIDTH;
+  let [pendingConfirm, setPendingConfirm] = useState(null);
+  let selectionCached;
+  if ($[17] !== queuedMessageText || $[18] !== appState) {
+    selectionCached = {
       effort: queuedMessageText,
       ultracode: appState,
       route: "slider",
     };
-    t[17] = queuedMessageText;
-    t[18] = appState;
-    t[19] = be;
-  } else be = t[19];
-  let te = be;
-  let ae = R(false);
-  let io;
+    $[17] = queuedMessageText;
+    $[18] = appState;
+    $[19] = selectionCached;
+  } else selectionCached = $[19];
+  let selection = selectionCached;
+  let submittedRef = useRef(false);
+  let applyCached;
   if (
-    t[20] !== ackedAtOutputTokens ||
-    t[21] !== te ||
-    t[22] !== queuedMessageText ||
-    t[23] !== i.levels ||
-    t[24] !== getMessages ||
-    t[25] !== Y ||
-    t[26] !== N ||
-    t[27] !== X ||
-    t[28] !== mainLoopModel ||
-    t[29] !== onDone ||
-    t[30] !== permissionMode ||
-    t[31] !== min ||
-    t[32] !== setAppState ||
-    t[33] !== storageV5 ||
-    t[34] !== x
+    $[20] !== ackedAtOutputTokens ||
+    $[21] !== selection ||
+    $[22] !== queuedMessageText ||
+    $[23] !== sliderModel.levels ||
+    $[24] !== getMessages ||
+    $[25] !== initialIndex ||
+    $[26] !== isUltracodeOn ||
+    $[27] !== isNoSelection ||
+    $[28] !== mainLoopModel ||
+    $[29] !== onDone ||
+    $[30] !== permissionMode ||
+    $[31] !== min ||
+    $[32] !== setAppState ||
+    $[33] !== storageV5 ||
+    $[34] !== ultracodeToggle
   ) {
-    io = function de(asDefault) {
-      if (ae.current) {
+    applyCached = function handleApply(asDefault) {
+      if (submittedRef.current) {
         return;
       }
-      let ce = {
-        level: X ? "auto" : i.levels[min].value,
-        levelChanged: min !== Y,
-        ultracode: x,
-        ultracodeChanged: x !== N,
+      let choice = {
+        level: isNoSelection ? "auto" : sliderModel.levels[min].value,
+        levelChanged: min !== initialIndex,
+        ultracode: ultracodeToggle,
+        ultracodeChanged: ultracodeToggle !== isUltracodeOn,
       };
-      let sn = shouldSaveEffortDefault({
+      let persistAsDefault = shouldSaveEffortDefault({
         asDefault,
-        levelChanged: ce.levelChanged,
+        levelChanged: choice.levelChanged,
         chosen: queuedMessageText,
         model: mainLoopModel,
       });
       if (
-        levelChangedOnly(ce) &&
+        levelChangedOnly(choice) &&
         shouldShowEffortNotice({
-          target: ce.level === "auto" ? undefined : ce.level,
+          target: choice.level === "auto" ? undefined : choice.level,
           current: queuedMessageText,
           model: mainLoopModel,
           permissionMode,
@@ -741,261 +769,279 @@ function EffortSlider(props) {
           promptCacheMayBeWarm: isMainThreadSource(getMessages()),
         })
       ) {
-        Re({
-          choice: ce,
-          persistAsDefault: sn,
+        setPendingConfirm({
+          choice,
+          persistAsDefault,
         });
         return;
       }
-      ae.current = true;
-      applyEffortSelection(ce, te, setAppState, onDone, storageV5, sn);
+      submittedRef.current = true;
+      applyEffortSelection(choice, selection, setAppState, onDone, storageV5, persistAsDefault);
     };
-    t[20] = ackedAtOutputTokens;
-    t[21] = te;
-    t[22] = queuedMessageText;
-    t[23] = i.levels;
-    t[24] = getMessages;
-    t[25] = Y;
-    t[26] = N;
-    t[27] = X;
-    t[28] = mainLoopModel;
-    t[29] = onDone;
-    t[30] = permissionMode;
-    t[31] = min;
-    t[32] = setAppState;
-    t[33] = storageV5;
-    t[34] = x;
-    t[35] = io;
-  } else io = t[35];
-  let de = io;
-  let an;
-  if (t[36] !== onDone) {
-    an = function Te() {
-      if (ae.current) {
+    $[20] = ackedAtOutputTokens;
+    $[21] = selection;
+    $[22] = queuedMessageText;
+    $[23] = sliderModel.levels;
+    $[24] = getMessages;
+    $[25] = initialIndex;
+    $[26] = isUltracodeOn;
+    $[27] = isNoSelection;
+    $[28] = mainLoopModel;
+    $[29] = onDone;
+    $[30] = permissionMode;
+    $[31] = min;
+    $[32] = setAppState;
+    $[33] = storageV5;
+    $[34] = ultracodeToggle;
+    $[35] = applyCached;
+  } else applyCached = $[35];
+  let applySelection = applyCached;
+  let cancelCached;
+  if ($[36] !== onDone) {
+    cancelCached = function handleCancel() {
+      if (submittedRef.current) {
         return;
       }
-      ae.current = true;
+      submittedRef.current = true;
       onDone("Cancelled");
     };
-    t[36] = onDone;
-    t[37] = an;
-  } else an = t[37];
-  let Te = an;
-  let globalExitKeybindings = useGlobalExitKeybindings(Te, undefined, M === null);
-  let cn;
-  if (t[38] !== Te || t[39] !== de) {
-    cn = function st(event) {
+    $[36] = onDone;
+    $[37] = cancelCached;
+  } else cancelCached = $[37];
+  let cancel = cancelCached;
+  let globalExitKeybindings = useGlobalExitKeybindings(cancel, undefined, pendingConfirm === null);
+  let keyDownCached;
+  if ($[38] !== cancel || $[39] !== applySelection) {
+    keyDownCached = function handleKeyDown(event) {
       if (event.key === "return") {
         event.preventDefault();
-        de(true);
+        applySelection(true);
       } else if (event.key === "escape") {
         event.preventDefault();
-        Te();
+        cancel();
       }
     };
-    t[38] = Te;
-    t[39] = de;
-    t[40] = cn;
-  } else cn = t[40];
-  let onKeyDown = cn;
-  let at;
-  if (t[41] !== T) {
-    at = () => re((dn) => (dn === NO_SELECTION ? T : Math.max(0, dn - 1)));
-    t[41] = T;
-    t[42] = at;
-  } else at = t[42];
-  let it;
-  if (t[43] !== i.levels.length || t[44] !== T) {
-    it = () => re((fn) => (fn === NO_SELECTION ? T : Math.min(i.levels.length - 1, fn + 1)));
-    t[43] = i.levels.length;
-    t[44] = T;
-    t[45] = it;
-  } else it = t[45];
-  let ct;
-  if (t[46] !== T || t[47] !== v) {
-    ct = () => {
-      if (!v) {
+    $[38] = cancel;
+    $[39] = applySelection;
+    $[40] = keyDownCached;
+  } else keyDownCached = $[40];
+  let onKeyDown = keyDownCached;
+  let decreaseCached;
+  if ($[41] !== resolvedIndex) {
+    decreaseCached = () =>
+      setSelectedIndex((previous) => (previous === NO_SELECTION ? resolvedIndex : Math.max(0, previous - 1)));
+    $[41] = resolvedIndex;
+    $[42] = decreaseCached;
+  } else decreaseCached = $[42];
+  let increaseCached;
+  if ($[43] !== sliderModel.levels.length || $[44] !== resolvedIndex) {
+    increaseCached = () =>
+      setSelectedIndex((previous) =>
+        previous === NO_SELECTION ? resolvedIndex : Math.min(sliderModel.levels.length - 1, previous + 1),
+      );
+    $[43] = sliderModel.levels.length;
+    $[44] = resolvedIndex;
+    $[45] = increaseCached;
+  } else increaseCached = $[45];
+  let adaptiveCached;
+  if ($[46] !== resolvedIndex || $[47] !== specialKeywordDisabled) {
+    adaptiveCached = () => {
+      if (!specialKeywordDisabled) {
         return false;
       }
-      re((nl) => (nl === NO_SELECTION ? T : NO_SELECTION));
+      setSelectedIndex((previous) => (previous === NO_SELECTION ? resolvedIndex : NO_SELECTION));
     };
-    t[46] = T;
-    t[47] = v;
-    t[48] = ct;
-  } else ct = t[48];
-  let dt;
-  if (t[49] !== D) {
-    dt = () => {
-      if (!D) {
+    $[46] = resolvedIndex;
+    $[47] = specialKeywordDisabled;
+    $[48] = adaptiveCached;
+  } else adaptiveCached = $[48];
+  let toggleUltracodeCached;
+  if ($[49] !== isUltracodeAvailableNow) {
+    toggleUltracodeCached = () => {
+      if (!isUltracodeAvailableNow) {
         return false;
       }
-      A(not);
+      setUltracodeToggle(not);
     };
-    t[49] = D;
-    t[50] = dt;
-  } else dt = t[50];
-  let ut;
-  if (t[51] !== de) {
-    ut = () => de(false);
-    t[51] = de;
-    t[52] = ut;
-  } else ut = t[52];
-  let gn;
-  if (t[53] !== at || t[54] !== it || t[55] !== ct || t[56] !== dt || t[57] !== ut) {
-    gn = {
-      "effortSlider:decreaseEffort": at,
-      "effortSlider:increaseEffort": it,
-      "effortSlider:adaptive": ct,
-      "effortSlider:toggleUltracode": dt,
-      "effortSlider:thisSessionOnly": ut,
+    $[49] = isUltracodeAvailableNow;
+    $[50] = toggleUltracodeCached;
+  } else toggleUltracodeCached = $[50];
+  let thisSessionOnlyCached;
+  if ($[51] !== applySelection) {
+    thisSessionOnlyCached = () => applySelection(false);
+    $[51] = applySelection;
+    $[52] = thisSessionOnlyCached;
+  } else thisSessionOnlyCached = $[52];
+  let bindings;
+  if (
+    $[53] !== decreaseCached ||
+    $[54] !== increaseCached ||
+    $[55] !== adaptiveCached ||
+    $[56] !== toggleUltracodeCached ||
+    $[57] !== thisSessionOnlyCached
+  ) {
+    bindings = {
+      "effortSlider:decreaseEffort": decreaseCached,
+      "effortSlider:increaseEffort": increaseCached,
+      "effortSlider:adaptive": adaptiveCached,
+      "effortSlider:toggleUltracode": toggleUltracodeCached,
+      "effortSlider:thisSessionOnly": thisSessionOnlyCached,
     };
-    t[53] = at;
-    t[54] = it;
-    t[55] = ct;
-    t[56] = dt;
-    t[57] = ut;
-    t[58] = gn;
-  } else gn = t[58];
-  const isActive = M === null;
-  let mn;
-  if (t[59] !== isActive) {
-    mn = {
+    $[53] = decreaseCached;
+    $[54] = increaseCached;
+    $[55] = adaptiveCached;
+    $[56] = toggleUltracodeCached;
+    $[57] = thisSessionOnlyCached;
+    $[58] = bindings;
+  } else bindings = $[58];
+  const isActive = pendingConfirm === null;
+  let keybindingOptions;
+  if ($[59] !== isActive) {
+    keybindingOptions = {
       context: "EffortSlider",
       isActive,
     };
-    t[59] = isActive;
-    t[60] = mn;
-  } else mn = t[60];
-  MessageActionsKeybindings(gn, mn);
+    $[59] = isActive;
+    $[60] = keybindingOptions;
+  } else keybindingOptions = $[60];
+  MessageActionsKeybindings(bindings, keybindingOptions);
   const shortcutDisplay = useShortcutDisplay("effortSlider:decreaseEffort", "EffortSlider", "left");
   const shortcutDisplay_2 = useShortcutDisplay("effortSlider:increaseEffort", "EffortSlider", "right");
-  let pn;
-  if (t[61] !== shortcutDisplay || t[62] !== shortcutDisplay_2) {
-    pn = [shortcutDisplay, shortcutDisplay_2];
-    t[61] = shortcutDisplay;
-    t[62] = shortcutDisplay_2;
-    t[63] = pn;
-  } else pn = t[63];
-  let ft = pn;
+  let sliderChords;
+  if ($[61] !== shortcutDisplay || $[62] !== shortcutDisplay_2) {
+    sliderChords = [shortcutDisplay, shortcutDisplay_2];
+    $[61] = shortcutDisplay;
+    $[62] = shortcutDisplay_2;
+    $[63] = sliderChords;
+  } else sliderChords = $[63];
+  let adjustChords = sliderChords;
   let shortcutDisplay_3 = useShortcutDisplay_2("effortSlider:thisSessionOnly", "EffortSlider", "s");
-  if (M !== null) {
-    const effort = M.choice.level === "auto" ? undefined : M.choice.level;
+  if (pendingConfirm !== null) {
+    const effort = pendingConfirm.choice.level === "auto" ? undefined : pendingConfirm.choice.level;
     let onConfirm;
     if (
-      t[64] !== te ||
-      t[65] !== onDone ||
-      t[66] !== M.choice ||
-      t[67] !== M.persistAsDefault ||
-      t[68] !== setAppState ||
-      t[69] !== storageV5
+      $[64] !== selection ||
+      $[65] !== onDone ||
+      $[66] !== pendingConfirm.choice ||
+      $[67] !== pendingConfirm.persistAsDefault ||
+      $[68] !== setAppState ||
+      $[69] !== storageV5
     ) {
       onConfirm = () => {
-        if (ae.current) {
+        if (submittedRef.current) {
           return;
         }
-        ae.current = true;
-        applyEffortSelection(M.choice, te, setAppState, onDone, storageV5, M.persistAsDefault);
+        submittedRef.current = true;
+        applyEffortSelection(
+          pendingConfirm.choice,
+          selection,
+          setAppState,
+          onDone,
+          storageV5,
+          pendingConfirm.persistAsDefault,
+        );
       };
-      t[64] = te;
-      t[65] = onDone;
-      t[66] = M.choice;
-      t[67] = M.persistAsDefault;
-      t[68] = setAppState;
-      t[69] = storageV5;
-      t[70] = onConfirm;
-    } else onConfirm = t[70];
+      $[64] = selection;
+      $[65] = onDone;
+      $[66] = pendingConfirm.choice;
+      $[67] = pendingConfirm.persistAsDefault;
+      $[68] = setAppState;
+      $[69] = storageV5;
+      $[70] = onConfirm;
+    } else onConfirm = $[70];
     let onCancel;
-    if (t[71] === MEMO_CACHE_SENTINEL) {
-      onCancel = () => Re(null);
-      t[71] = onCancel;
-    } else onCancel = t[71];
-    let Ne;
-    if (t[72] !== effort || t[73] !== onConfirm) {
-      Ne = jsxProd_default(ModelEffortSwitchConfirm, {
+    if ($[71] === MEMO_CACHE_SENTINEL) {
+      onCancel = () => setPendingConfirm(null);
+      $[71] = onCancel;
+    } else onCancel = $[71];
+    let confirmElement;
+    if ($[72] !== effort || $[73] !== onConfirm) {
+      confirmElement = jsxProd_default(ModelEffortSwitchConfirm, {
         kind: "effort",
         model: null,
         effort,
         onConfirm,
         onCancel,
       });
-      t[72] = effort;
-      t[73] = onConfirm;
-      t[74] = Ne;
-    } else Ne = t[74];
-    return Ne;
+      $[72] = effort;
+      $[73] = onConfirm;
+      $[74] = confirmElement;
+    } else confirmElement = $[74];
+    return confirmElement;
   }
-  let Le = X ? null : i.trianglePositions[min];
-  const ue = i.width - 6 - 7;
-  let fe;
-  if (t[75] !== ue) {
-    fe = repeatString(" ", ue);
-    t[75] = ue;
-    t[76] = fe;
-  } else fe = t[76];
-  let children = fe;
-  const last = i.labelStarts.at(-1);
-  let Ne;
-  if (t[77] !== i.levels) {
-    Ne = i.levels.at(-1);
-    t[77] = i.levels;
-    t[78] = Ne;
-  } else Ne = t[78];
-  let rl = last + Ne.label.length;
-  const mo = i.width - rl;
-  let hn;
-  if (t[79] !== mo) {
-    hn = repeatString(" ", mo);
-    t[79] = mo;
-    t[80] = hn;
-  } else hn = t[80];
-  let pt = hn;
-  let W = X ? undefined : i.levels[min].value;
-  let vn;
-  if (t[81] !== W || t[82] !== mainLoopModel) {
-    vn = !hasEffortOverride(mainLoopModel)
+  let trianglePos = isNoSelection ? null : sliderModel.trianglePositions[min];
+  const leftPadWidth = sliderModel.width - 6 - 7;
+  let leftPad;
+  if ($[75] !== leftPadWidth) {
+    leftPad = repeatString(" ", leftPadWidth);
+    $[75] = leftPadWidth;
+    $[76] = leftPad;
+  } else leftPad = $[76];
+  let children = leftPad;
+  const last = sliderModel.labelStarts.at(-1);
+  let lastLevel;
+  if ($[77] !== sliderModel.levels) {
+    lastLevel = sliderModel.levels.at(-1);
+    $[77] = sliderModel.levels;
+    $[78] = lastLevel;
+  } else lastLevel = $[78];
+  let rightPadStart = last + lastLevel.label.length;
+  const rightPadWidth = sliderModel.width - rightPadStart;
+  let rightPad;
+  if ($[79] !== rightPadWidth) {
+    rightPad = repeatString(" ", rightPadWidth);
+    $[79] = rightPadWidth;
+    $[80] = rightPad;
+  } else rightPad = $[80];
+  let trailingPad = rightPad;
+  let currentLevelValue = isNoSelection ? undefined : sliderModel.levels[min].value;
+  let levelDescription;
+  if ($[81] !== currentLevelValue || $[82] !== mainLoopModel) {
+    levelDescription = !hasEffortOverride(mainLoopModel)
       ? null
-      : W === undefined
+      : currentLevelValue === undefined
         ? ""
-        : describeEffortLevel(mainLoopModel, W);
-    t[81] = W;
-    t[82] = mainLoopModel;
-    t[83] = vn;
-  } else vn = t[83];
-  let Ue = vn;
-  let xn;
-  if (t[84] !== W || t[85] !== mainLoopModel) {
-    xn = W === "max" && modelSupportsMaxEffort(mainLoopModel) && isMaxEffortReminderEnabled();
-    t[84] = W;
-    t[85] = mainLoopModel;
-    t[86] = xn;
-  } else xn = t[86];
-  let ht = xn;
-  let yn;
-  if (t[87] !== i.spacers) {
-    yn = (ll) => " ".repeat(i.spacers[ll]);
-    t[87] = i.spacers;
-    t[88] = yn;
-  } else yn = t[88];
-  let Ie = yn;
-  let Cn;
-  if (t[89] !== k || t[90] !== chord || t[91] !== max || t[92] !== x) {
-    Cn = jsxProd_default(UltracodeToggle, {
-      on: x,
+        : describeEffortLevel(mainLoopModel, currentLevelValue);
+    $[81] = currentLevelValue;
+    $[82] = mainLoopModel;
+    $[83] = levelDescription;
+  } else levelDescription = $[83];
+  let levelDescriptionText = levelDescription;
+  let showMaxWarning;
+  if ($[84] !== currentLevelValue || $[85] !== mainLoopModel) {
+    showMaxWarning =
+      currentLevelValue === "max" && modelSupportsMaxEffort(mainLoopModel) && isMaxEffortReminderEnabled();
+    $[84] = currentLevelValue;
+    $[85] = mainLoopModel;
+    $[86] = showMaxWarning;
+  } else showMaxWarning = $[86];
+  let maxWarning = showMaxWarning;
+  let spacerFnCached;
+  if ($[87] !== sliderModel.spacers) {
+    spacerFnCached = (spacerIndex) => " ".repeat(sliderModel.spacers[spacerIndex]);
+    $[87] = sliderModel.spacers;
+    $[88] = spacerFnCached;
+  } else spacerFnCached = $[88];
+  let spacerFor = spacerFnCached;
+  let toggleElement;
+  if ($[89] !== hintExtras || $[90] !== chord || $[91] !== max || $[92] !== ultracodeToggle) {
+    toggleElement = jsxProd_default(UltracodeToggle, {
+      on: ultracodeToggle,
       chord,
       width: max,
-      hint: k,
+      hint: hintExtras,
     });
-    t[89] = k;
-    t[90] = chord;
-    t[91] = max;
-    t[92] = x;
-    t[93] = Cn;
-  } else Cn = t[93];
-  let Ve = Cn;
-  let vt;
-  if (t[94] !== E) {
-    vt =
-      !E &&
+    $[89] = hintExtras;
+    $[90] = chord;
+    $[91] = max;
+    $[92] = ultracodeToggle;
+    $[93] = toggleElement;
+  } else toggleElement = $[93];
+  let ultracodeToggleElement = toggleElement;
+  let titleElement;
+  if ($[94] !== isReadonly) {
+    titleElement =
+      !isReadonly &&
       jsxProd_default_2(Fragment, {
         children: [
           jsxProd_default(Title, {
@@ -1006,53 +1052,53 @@ function EffortSlider(props) {
           }),
         ],
       });
-    t[94] = E;
-    t[95] = vt;
-  } else vt = t[95];
-  const width = i.width;
-  let Dn;
-  if (t[96] === MEMO_CACHE_SENTINEL) {
-    Dn = jsxProd_default(Text, {
+    $[94] = isReadonly;
+    $[95] = titleElement;
+  } else titleElement = $[95];
+  const width = sliderModel.width;
+  let fasterText;
+  if ($[96] === MEMO_CACHE_SENTINEL) {
+    fasterText = jsxProd_default(Text, {
       children: "Faster",
     });
-    t[96] = Dn;
-  } else Dn = t[96];
-  let xt;
-  if (t[97] !== children) {
-    xt = jsxProd_default(Text, {
+    $[96] = fasterText;
+  } else fasterText = $[96];
+  let spacerText;
+  if ($[97] !== children) {
+    spacerText = jsxProd_default(Text, {
       children,
     });
-    t[97] = children;
-    t[98] = xt;
-  } else xt = t[98];
-  let An;
-  if (t[99] === MEMO_CACHE_SENTINEL) {
-    An = jsxProd_default(Text, {
+    $[97] = children;
+    $[98] = spacerText;
+  } else spacerText = $[98];
+  let smarterText;
+  if ($[99] === MEMO_CACHE_SENTINEL) {
+    smarterText = jsxProd_default(Text, {
       children: "Smarter",
     });
-    t[99] = An;
-  } else An = t[99];
-  let yt;
-  if (t[100] !== xt) {
-    yt = jsxProd_default_2(Box, {
-      children: [Dn, xt, An],
+    $[99] = smarterText;
+  } else smarterText = $[99];
+  let directionRow;
+  if ($[100] !== spacerText) {
+    directionRow = jsxProd_default_2(Box, {
+      children: [fasterText, spacerText, smarterText],
     });
-    t[100] = xt;
-    t[101] = yt;
-  } else yt = t[101];
-  let Ct;
-  if (t[102] !== i.trackChars || t[103] !== Le) {
-    Ct =
-      Le === null
+    $[100] = spacerText;
+    $[101] = directionRow;
+  } else directionRow = $[101];
+  let trackElement;
+  if ($[102] !== sliderModel.trackChars || $[103] !== trianglePos) {
+    trackElement =
+      trianglePos === null
         ? jsxProd_default(Text, {
             dimColor: true,
-            children: i.trackChars,
+            children: sliderModel.trackChars,
           })
         : jsxProd_default_2(Box, {
             children: [
               jsxProd_default(Text, {
                 dimColor: true,
-                children: i.trackChars.slice(0, Le),
+                children: sliderModel.trackChars.slice(0, trianglePos),
               }),
               jsxProd_default(Text, {
                 bold: true,
@@ -1060,111 +1106,123 @@ function EffortSlider(props) {
               }),
               jsxProd_default(Text, {
                 dimColor: true,
-                children: i.trackChars.slice(Le + 1),
+                children: sliderModel.trackChars.slice(trianglePos + 1),
               }),
             ],
           });
-    t[102] = i.trackChars;
-    t[103] = Le;
-    t[104] = Ct;
-  } else Ct = t[104];
-  let Dt;
-  if (t[105] !== i.levels || t[106] !== min || t[107] !== Ie) {
-    let ge;
-    if (t[109] !== min || t[110] !== Ie) {
-      ge = (Rn, po) =>
+    $[102] = sliderModel.trackChars;
+    $[103] = trianglePos;
+    $[104] = trackElement;
+  } else trackElement = $[104];
+  let levelLabels;
+  if ($[105] !== sliderModel.levels || $[106] !== min || $[107] !== spacerFor) {
+    let renderLevel;
+    if ($[109] !== min || $[110] !== spacerFor) {
+      renderLevel = (level, index) =>
         jsxProd_default_2(
-          Kc,
+          fragmentTypeExport,
           {
             children: [
-              po > 0 &&
+              index > 0 &&
                 jsxProd_default(Text, {
-                  children: Ie(po - 1),
+                  children: spacerFor(index - 1),
                 }),
               jsxProd_default(EffortLevelLabel, {
-                level: Rn,
-                selected: min === po,
+                level,
+                selected: min === index,
               }),
             ],
           },
-          Rn.value,
+          level.value,
         );
-      t[109] = min;
-      t[110] = Ie;
-      t[111] = ge;
-    } else ge = t[111];
-    Dt = i.levels.map(ge);
-    t[105] = i.levels;
-    t[106] = min;
-    t[107] = Ie;
-    t[108] = Dt;
-  } else Dt = t[108];
-  let ge;
-  if (t[112] !== pt) {
-    ge = pt
+      $[109] = min;
+      $[110] = spacerFor;
+      $[111] = renderLevel;
+    } else renderLevel = $[111];
+    levelLabels = sliderModel.levels.map(renderLevel);
+    $[105] = sliderModel.levels;
+    $[106] = min;
+    $[107] = spacerFor;
+    $[108] = levelLabels;
+  } else levelLabels = $[108];
+  let trailingPadElement;
+  if ($[112] !== trailingPad) {
+    trailingPadElement = trailingPad
       ? jsxProd_default(Text, {
-          children: pt,
+          children: trailingPad,
         })
       : null;
-    t[112] = pt;
-    t[113] = ge;
-  } else ge = t[113];
-  let At;
-  if (t[114] !== Dt || t[115] !== ge) {
-    At = jsxProd_default_2(Box, {
-      children: [Dt, ge],
+    $[112] = trailingPad;
+    $[113] = trailingPadElement;
+  } else trailingPadElement = $[113];
+  let labelsRow;
+  if ($[114] !== levelLabels || $[115] !== trailingPadElement) {
+    labelsRow = jsxProd_default_2(Box, {
+      children: [levelLabels, trailingPadElement],
     });
-    t[114] = Dt;
-    t[115] = ge;
-    t[116] = At;
-  } else At = t[116];
-  let Rt;
-  if (t[117] !== i.width || t[118] !== yt || t[119] !== Ct || t[120] !== At) {
-    Rt = jsxProd_default_2(Box, {
+    $[114] = levelLabels;
+    $[115] = trailingPadElement;
+    $[116] = labelsRow;
+  } else labelsRow = $[116];
+  let sliderColumn;
+  if (
+    $[117] !== sliderModel.width ||
+    $[118] !== directionRow ||
+    $[119] !== trackElement ||
+    $[120] !== labelsRow
+  ) {
+    sliderColumn = jsxProd_default_2(Box, {
       flexDirection: "column",
       width,
-      children: [yt, Ct, At],
+      children: [directionRow, trackElement, labelsRow],
     });
-    t[117] = i.width;
-    t[118] = yt;
-    t[119] = Ct;
-    t[120] = At;
-    t[121] = Rt;
-  } else Rt = t[121];
-  let bt;
-  if (t[122] !== _ || t[123] !== D || t[124] !== Ve) {
-    bt =
-      D && _
+    $[117] = sliderModel.width;
+    $[118] = directionRow;
+    $[119] = trackElement;
+    $[120] = labelsRow;
+    $[121] = sliderColumn;
+  } else sliderColumn = $[121];
+  let sideToggleElement;
+  if ($[122] !== hasSidePane || $[123] !== isUltracodeAvailableNow || $[124] !== ultracodeToggleElement) {
+    sideToggleElement =
+      isUltracodeAvailableNow && hasSidePane
         ? jsxProd_default(Box, {
             marginLeft: SLIDER_GAP,
             marginTop: 1,
-            children: Ve,
+            children: ultracodeToggleElement,
           })
         : null;
-    t[122] = _;
-    t[123] = D;
-    t[124] = Ve;
-    t[125] = bt;
-  } else bt = t[125];
-  let Et;
-  if (t[126] !== Rt || t[127] !== bt) {
-    Et = jsxProd_default_2(Box, {
+    $[122] = hasSidePane;
+    $[123] = isUltracodeAvailableNow;
+    $[124] = ultracodeToggleElement;
+    $[125] = sideToggleElement;
+  } else sideToggleElement = $[125];
+  let mainRow;
+  if ($[126] !== sliderColumn || $[127] !== sideToggleElement) {
+    mainRow = jsxProd_default_2(Box, {
       flexDirection: "row",
       alignItems: "flex-start",
-      children: [Rt, bt],
+      children: [sliderColumn, sideToggleElement],
     });
-    t[126] = Rt;
-    t[127] = bt;
-    t[128] = Et;
-  } else Et = t[128];
-  let Mt;
-  if (t[129] !== i.width || t[130] !== v || t[131] !== _ || t[132] !== max || t[133] !== x || t[134] !== D) {
-    Mt =
-      D || v
+    $[126] = sliderColumn;
+    $[127] = sideToggleElement;
+    $[128] = mainRow;
+  } else mainRow = $[128];
+  let ultracodeDescriptionRow;
+  if (
+    $[129] !== sliderModel.width ||
+    $[130] !== specialKeywordDisabled ||
+    $[131] !== hasSidePane ||
+    $[132] !== max ||
+    $[133] !== ultracodeToggle ||
+    $[134] !== isUltracodeAvailableNow
+  ) {
+    ultracodeDescriptionRow =
+      isUltracodeAvailableNow || specialKeywordDisabled
         ? jsxProd_default(Box, {
             height: 1,
-            width: i.width + (_ ? SLIDER_GAP + max : 0),
-            children: x
+            width: sliderModel.width + (hasSidePane ? SLIDER_GAP + max : 0),
+            children: ultracodeToggle
               ? jsxProd_default_2(Text, {
                   dimColor: true,
                   wrap: "truncate-end",
@@ -1173,43 +1231,43 @@ function EffortSlider(props) {
               : null,
           })
         : null;
-    t[129] = i.width;
-    t[130] = v;
-    t[131] = _;
-    t[132] = max;
-    t[133] = x;
-    t[134] = D;
-    t[135] = Mt;
-  } else Mt = t[135];
-  let Vt;
-  if (t[136] !== Et || t[137] !== Mt) {
-    Vt = jsxProd_default_2(Box, {
+    $[129] = sliderModel.width;
+    $[130] = specialKeywordDisabled;
+    $[131] = hasSidePane;
+    $[132] = max;
+    $[133] = ultracodeToggle;
+    $[134] = isUltracodeAvailableNow;
+    $[135] = ultracodeDescriptionRow;
+  } else ultracodeDescriptionRow = $[135];
+  let mainColumn;
+  if ($[136] !== mainRow || $[137] !== ultracodeDescriptionRow) {
+    mainColumn = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [Et, Mt],
+      children: [mainRow, ultracodeDescriptionRow],
     });
-    t[136] = Et;
-    t[137] = Mt;
-    t[138] = Vt;
-  } else Vt = t[138];
-  let St;
-  if (t[139] !== Ue || t[140] !== W || t[141] !== ht) {
-    St =
-      Ue !== null
+    $[136] = mainRow;
+    $[137] = ultracodeDescriptionRow;
+    $[138] = mainColumn;
+  } else mainColumn = $[138];
+  let descriptionRow;
+  if ($[139] !== levelDescriptionText || $[140] !== currentLevelValue || $[141] !== maxWarning) {
+    descriptionRow =
+      levelDescriptionText !== null
         ? jsxProd_default(Box, {
             minHeight: 2,
-            children: ht
+            children: maxWarning
               ? jsxProd_default(Text, {
                   color: "warning",
-                  children: Ue,
+                  children: levelDescriptionText,
                 })
               : jsxProd_default(Text, {
                   dimColor: true,
-                  children: Ue,
+                  children: levelDescriptionText,
                 }),
           })
-        : W === "max"
+        : currentLevelValue === "max"
           ? jsxProd_default(Box, {
-              children: ht
+              children: maxWarning
                 ? jsxProd_default_2(Text, {
                     color: "warning",
                     children: [WARNING_GLYPH, " ", MAX_EFFORT_DESCRIPTION],
@@ -1220,88 +1278,98 @@ function EffortSlider(props) {
                   }),
             })
           : null;
-    t[139] = Ue;
-    t[140] = W;
-    t[141] = ht;
-    t[142] = St;
-  } else St = t[142];
-  let Ot;
-  if (t[143] !== i.orgNote) {
-    Ot = i.orgNote
+    $[139] = levelDescriptionText;
+    $[140] = currentLevelValue;
+    $[141] = maxWarning;
+    $[142] = descriptionRow;
+  } else descriptionRow = $[142];
+  let orgNoteRow;
+  if ($[143] !== sliderModel.orgNote) {
+    orgNoteRow = sliderModel.orgNote
       ? jsxProd_default(Box, {
           children: jsxProd_default(Text, {
             dimColor: true,
-            children: i.orgNote,
+            children: sliderModel.orgNote,
           }),
         })
       : null;
-    t[143] = i.orgNote;
-    t[144] = Ot;
-  } else Ot = t[144];
-  let wt;
-  if (t[145] !== v || t[146] !== _ || t[147] !== D || t[148] !== Ve) {
-    wt =
-      (v || D) && !_
+    $[143] = sliderModel.orgNote;
+    $[144] = orgNoteRow;
+  } else orgNoteRow = $[144];
+  let inlineToggleRow;
+  if (
+    $[145] !== specialKeywordDisabled ||
+    $[146] !== hasSidePane ||
+    $[147] !== isUltracodeAvailableNow ||
+    $[148] !== ultracodeToggleElement
+  ) {
+    inlineToggleRow =
+      (specialKeywordDisabled || isUltracodeAvailableNow) && !hasSidePane
         ? jsxProd_default_2(Fragment, {
             children: [
               jsxProd_default(Box, {
                 height: 1,
               }),
-              v ? null : null,
-              D ? Ve : null,
+              specialKeywordDisabled ? null : null,
+              isUltracodeAvailableNow ? ultracodeToggleElement : null,
             ],
           })
         : null;
-    t[145] = v;
-    t[146] = _;
-    t[147] = D;
-    t[148] = Ve;
-    t[149] = wt;
-  } else wt = t[149];
-  let kt;
-  if (t[150] !== Vt || t[151] !== St || t[152] !== Ot || t[153] !== wt) {
-    kt = jsxProd_default_2(Box, {
+    $[145] = specialKeywordDisabled;
+    $[146] = hasSidePane;
+    $[147] = isUltracodeAvailableNow;
+    $[148] = ultracodeToggleElement;
+    $[149] = inlineToggleRow;
+  } else inlineToggleRow = $[149];
+  let bodyColumn;
+  if (
+    $[150] !== mainColumn ||
+    $[151] !== descriptionRow ||
+    $[152] !== orgNoteRow ||
+    $[153] !== inlineToggleRow
+  ) {
+    bodyColumn = jsxProd_default_2(Box, {
       flexDirection: "column",
       alignItems: "center",
       width: "100%",
-      children: [Vt, St, Ot, wt],
+      children: [mainColumn, descriptionRow, orgNoteRow, inlineToggleRow],
     });
-    t[150] = Vt;
-    t[151] = St;
-    t[152] = Ot;
-    t[153] = wt;
-    t[154] = kt;
-  } else kt = t[154];
-  let bn;
-  if (t[155] === MEMO_CACHE_SENTINEL) {
-    bn = jsxProd_default(Box, {
+    $[150] = mainColumn;
+    $[151] = descriptionRow;
+    $[152] = orgNoteRow;
+    $[153] = inlineToggleRow;
+    $[154] = bodyColumn;
+  } else bodyColumn = $[154];
+  let spacerBox;
+  if ($[155] === MEMO_CACHE_SENTINEL) {
+    spacerBox = jsxProd_default(Box, {
       height: 1,
     });
-    t[155] = bn;
-  } else bn = t[155];
+    $[155] = spacerBox;
+  } else spacerBox = $[155];
   let children_2;
   if (
-    t[156] !== ft ||
-    t[157] !== globalExitKeybindings.keyName ||
-    t[158] !== globalExitKeybindings.pending ||
-    t[159] !== k ||
-    t[160] !== shortcutDisplay_3
+    $[156] !== adjustChords ||
+    $[157] !== globalExitKeybindings.keyName ||
+    $[158] !== globalExitKeybindings.pending ||
+    $[159] !== hintExtras ||
+    $[160] !== shortcutDisplay_3
   ) {
     children_2 = globalExitKeybindings.pending
       ? `Press ${globalExitKeybindings.keyName} again to cancel`
       : jsxProd_default_2(Byline, {
           children: [
-            ft.some(Boolean)
+            adjustChords.some(Boolean)
               ? jsxProd_default(KeyboardShortcutHint, {
-                  chord: ft,
+                  chord: adjustChords,
                   action: "adjust",
-                  ...k,
+                  ...hintExtras,
                 })
               : null,
             jsxProd_default(KeyboardShortcutHint, {
               chord: "enter",
               action: "confirm",
-              ...k,
+              ...hintExtras,
             }),
             shortcutDisplay_3
               ? jsxProd_default_2(Text, {
@@ -1311,47 +1379,47 @@ function EffortSlider(props) {
             jsxProd_default(KeyboardShortcutHint, {
               chord: "escape",
               action: "cancel",
-              ...k,
+              ...hintExtras,
             }),
           ],
         });
-    t[156] = ft;
-    t[157] = globalExitKeybindings.keyName;
-    t[158] = globalExitKeybindings.pending;
-    t[159] = k;
-    t[160] = shortcutDisplay_3;
-    t[161] = children_2;
-  } else children_2 = t[161];
-  let Tt;
-  if (t[162] !== E || t[163] !== children_2) {
-    Tt = jsxProd_default(Text, {
+    $[156] = adjustChords;
+    $[157] = globalExitKeybindings.keyName;
+    $[158] = globalExitKeybindings.pending;
+    $[159] = hintExtras;
+    $[160] = shortcutDisplay_3;
+    $[161] = children_2;
+  } else children_2 = $[161];
+  let hintRow;
+  if ($[162] !== isReadonly || $[163] !== children_2) {
+    hintRow = jsxProd_default(Text, {
       dimColor: true,
-      italic: E,
+      italic: isReadonly,
       children: children_2,
     });
-    t[162] = E;
-    t[163] = children_2;
-    t[164] = Tt;
-  } else Tt = t[164];
-  let En;
-  if (t[165] !== onKeyDown || t[166] !== vt || t[167] !== kt || t[168] !== Tt) {
+    $[162] = isReadonly;
+    $[163] = children_2;
+    $[164] = hintRow;
+  } else hintRow = $[164];
+  let sliderElement;
+  if ($[165] !== onKeyDown || $[166] !== titleElement || $[167] !== bodyColumn || $[168] !== hintRow) {
     let children = jsxProd_default_2(Box, {
       flexDirection: "column",
       tabIndex: 0,
       autoFocus: true,
       onKeyDown,
-      children: [vt, kt, bn, Tt],
+      children: [titleElement, bodyColumn, spacerBox, hintRow],
     });
-    En = jsxProd_default(Pane, {
+    sliderElement = jsxProd_default(Pane, {
       children,
     });
-    t[165] = onKeyDown;
-    t[166] = vt;
-    t[167] = kt;
-    t[168] = Tt;
-    t[169] = En;
-  } else En = t[169];
-  return En;
+    $[165] = onKeyDown;
+    $[166] = titleElement;
+    $[167] = bodyColumn;
+    $[168] = hintRow;
+    $[169] = sliderElement;
+  } else sliderElement = $[169];
+  return sliderElement;
 }
 //@ chunk-3rwvzn82.js:28776-28797 placement
 var SLIDER_TOTAL_WIDTH = 70;
@@ -1359,11 +1427,11 @@ var SLIDER_GAP = 6;
 var SLIDER_LABEL_WIDTH = 14;
 //@ chunk-3rwvzn82.js:28797-29349 placement
 function UltracodeToggle(props) {
-  let f = w(9);
+  let $ = useMemoCache(9);
   let { on, chord, width, hint } = props;
-  let m;
-  if (f[0] !== on) {
-    m = jsxProd_default(Box, {
+  let labelElement;
+  if ($[0] !== on) {
+    labelElement = jsxProd_default(Box, {
       children: on
         ? jsxProd_default(ShimmerText_2, {
             text: "Ultracode  on",
@@ -1385,12 +1453,12 @@ function UltracodeToggle(props) {
             ],
           }),
     });
-    f[0] = on;
-    f[1] = m;
-  } else m = f[1];
-  let g;
-  if (f[2] !== chord || f[3] !== hint) {
-    g = chord
+    $[0] = on;
+    $[1] = labelElement;
+  } else labelElement = $[1];
+  let hintElement;
+  if ($[2] !== chord || $[3] !== hint) {
+    hintElement = chord
       ? jsxProd_default(Text, {
           dimColor: true,
           children: jsxProd_default(KeyboardShortcutHint, {
@@ -1400,30 +1468,30 @@ function UltracodeToggle(props) {
           }),
         })
       : null;
-    f[2] = chord;
-    f[3] = hint;
-    f[4] = g;
-  } else g = f[4];
-  let d;
-  if (f[5] !== m || f[6] !== g || f[7] !== width) {
-    d = jsxProd_default_2(Box, {
+    $[2] = chord;
+    $[3] = hint;
+    $[4] = hintElement;
+  } else hintElement = $[4];
+  let toggleElement;
+  if ($[5] !== labelElement || $[6] !== hintElement || $[7] !== width) {
+    toggleElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       width,
-      children: [m, g],
+      children: [labelElement, hintElement],
     });
-    f[5] = m;
-    f[6] = g;
-    f[7] = width;
-    f[8] = d;
-  } else d = f[8];
-  return d;
+    $[5] = labelElement;
+    $[6] = hintElement;
+    $[7] = width;
+    $[8] = toggleElement;
+  } else toggleElement = $[8];
+  return toggleElement;
 }
 //@ chunk-3rwvzn82.js:29425-29461 placement
 var ULTRACODE_TOGGLE = "ultracode-toggle";
 var AUTO = "auto";
 //@ chunk-3rwvzn82.js:29461-32366 placement
 function EffortPicker(props) {
-  let t = w(63);
+  let $ = useMemoCache(63);
   let { getMessages, onDone, storageV5 } = props;
   let queuedMessageText = useQueuedMessageText();
   let ackedAtOutputTokens = useAppState(selectCacheMissAck_3);
@@ -1431,46 +1499,46 @@ function EffortPicker(props) {
   let appState = useAppState(selectUltracode_4);
   let mainLoopModel = useMainLoopModel();
   let setAppState = useSetAppState();
-  let U;
-  if (t[0] !== mainLoopModel) {
-    U = getEffortSliderModel(mainLoopModel);
-    t[0] = mainLoopModel;
-    t[1] = U;
-  } else U = t[1];
-  let i = U;
-  let initialEffortIndex = resolveInitialEffortIndex(mainLoopModel, queuedMessageText, i);
-  let I;
-  if (t[2] !== mainLoopModel) {
-    I = isUltracodeAvailable(mainLoopModel);
-    t[2] = mainLoopModel;
-    t[3] = I;
-  } else I = t[3];
-  let Y = I;
-  let [C, re] = y(null);
-  let [b] = y(isSpecialEffortKeywordDisabled);
-  let [X, ee] = y(false);
-  let [T] = y(returnFalse_2);
+  let pickerModelCached;
+  if ($[0] !== mainLoopModel) {
+    pickerModelCached = getEffortSliderModel(mainLoopModel);
+    $[0] = mainLoopModel;
+    $[1] = pickerModelCached;
+  } else pickerModelCached = $[1];
+  let pickerModel = pickerModelCached;
+  let initialEffortIndex = resolveInitialEffortIndex(mainLoopModel, queuedMessageText, pickerModel);
+  let ultracodeAvailableCached;
+  if ($[2] !== mainLoopModel) {
+    ultracodeAvailableCached = isUltracodeAvailable(mainLoopModel);
+    $[2] = mainLoopModel;
+    $[3] = ultracodeAvailableCached;
+  } else ultracodeAvailableCached = $[3];
+  let ultracodeAvailable = ultracodeAvailableCached;
+  let [pendingTarget, setPendingTarget] = useState(null);
+  let [specialKeywordDisabled] = useState(isSpecialEffortKeywordDisabled);
+  let [showAutoView, setShowAutoView] = useState(false);
+  let [isReadonly] = useState(returnFalse_2);
   const ultracodeConfirmed = appState === true;
-  let D;
-  if (t[4] !== queuedMessageText || t[5] !== ultracodeConfirmed || t[6] !== appState) {
-    D = {
+  let selectionCached;
+  if ($[4] !== queuedMessageText || $[5] !== ultracodeConfirmed || $[6] !== appState) {
+    selectionCached = {
       effort: queuedMessageText,
       ultracode: appState,
       ultracodeConfirmed,
       route: "slider",
     };
-    t[4] = queuedMessageText;
-    t[5] = ultracodeConfirmed;
-    t[6] = appState;
-    t[7] = D;
-  } else D = t[7];
-  let N = D;
-  let x = R(false);
-  if (X) {
+    $[4] = queuedMessageText;
+    $[5] = ultracodeConfirmed;
+    $[6] = appState;
+    $[7] = selectionCached;
+  } else selectionCached = $[7];
+  let selection = selectionCached;
+  let submittedRef = useRef(false);
+  if (showAutoView) {
     const ultracodeConfirmed = appState === true;
-    let F;
-    if (t[8] !== getMessages || t[9] !== onDone || t[10] !== storageV5 || t[11] !== ultracodeConfirmed) {
-      F = jsxProd_default(EffortCommandView, {
+    let autoViewElement;
+    if ($[8] !== getMessages || $[9] !== onDone || $[10] !== storageV5 || $[11] !== ultracodeConfirmed) {
+      autoViewElement = jsxProd_default(EffortCommandView, {
         args: "auto",
         route: "slider",
         ultracodeConfirmed,
@@ -1478,149 +1546,166 @@ function EffortPicker(props) {
         onDone,
         storageV5,
       });
-      t[8] = getMessages;
-      t[9] = onDone;
-      t[10] = storageV5;
-      t[11] = ultracodeConfirmed;
-      t[12] = F;
-    } else F = t[12];
-    return F;
+      $[8] = getMessages;
+      $[9] = onDone;
+      $[10] = storageV5;
+      $[11] = ultracodeConfirmed;
+      $[12] = autoViewElement;
+    } else autoViewElement = $[12];
+    return autoViewElement;
   }
-  if (C !== null) {
+  if (pendingTarget !== null) {
     let onConfirm;
-    if (t[13] !== N || t[14] !== onDone || t[15] !== C || t[16] !== setAppState || t[17] !== storageV5) {
+    if (
+      $[13] !== selection ||
+      $[14] !== onDone ||
+      $[15] !== pendingTarget ||
+      $[16] !== setAppState ||
+      $[17] !== storageV5
+    ) {
       onConfirm = () => {
-        if (x.current) {
+        if (submittedRef.current) {
           return;
         }
-        x.current = true;
-        applyEffortAndReport(C, N, setAppState, onDone, storageV5);
+        submittedRef.current = true;
+        applyEffortAndReport(pendingTarget, selection, setAppState, onDone, storageV5);
       };
-      t[13] = N;
-      t[14] = onDone;
-      t[15] = C;
-      t[16] = setAppState;
-      t[17] = storageV5;
-      t[18] = onConfirm;
-    } else onConfirm = t[18];
+      $[13] = selection;
+      $[14] = onDone;
+      $[15] = pendingTarget;
+      $[16] = setAppState;
+      $[17] = storageV5;
+      $[18] = onConfirm;
+    } else onConfirm = $[18];
     let onCancel;
-    if (t[19] === MEMO_CACHE_SENTINEL) {
-      onCancel = () => re(null);
-      t[19] = onCancel;
-    } else onCancel = t[19];
-    let O;
-    if (t[20] !== C || t[21] !== onConfirm) {
-      O = jsxProd_default(ModelEffortSwitchConfirm, {
+    if ($[19] === MEMO_CACHE_SENTINEL) {
+      onCancel = () => setPendingTarget(null);
+      $[19] = onCancel;
+    } else onCancel = $[19];
+    let confirmElement;
+    if ($[20] !== pendingTarget || $[21] !== onConfirm) {
+      confirmElement = jsxProd_default(ModelEffortSwitchConfirm, {
         kind: "effort",
         model: null,
-        effort: C,
+        effort: pendingTarget,
         onConfirm,
         onCancel,
       });
-      t[20] = C;
-      t[21] = onConfirm;
-      t[22] = O;
-    } else O = t[22];
-    return O;
+      $[20] = pendingTarget;
+      $[21] = onConfirm;
+      $[22] = confirmElement;
+    } else confirmElement = $[22];
+    return confirmElement;
   }
-  let E;
-  if (t[23] !== i.levels || t[24] !== mainLoopModel || t[25] !== Y || t[26] !== appState) {
-    let A;
-    if (t[28] !== mainLoopModel) {
-      A = (k) => {
-        let effortLevelDescription = getEffortLevelDescription(mainLoopModel, k);
+  let options;
+  if (
+    $[23] !== pickerModel.levels ||
+    $[24] !== mainLoopModel ||
+    $[25] !== ultracodeAvailable ||
+    $[26] !== appState
+  ) {
+    let toOption;
+    if ($[28] !== mainLoopModel) {
+      toOption = (level) => {
+        let effortLevelDescription = getEffortLevelDescription(mainLoopModel, level);
         return {
-          label: effortLevelDescription === "" ? k.label : `${k.label} (${effortLevelDescription})`,
-          value: k.value,
+          label: effortLevelDescription === "" ? level.label : `${level.label} (${effortLevelDescription})`,
+          value: level.value,
         };
       };
-      t[28] = mainLoopModel;
-      t[29] = A;
-    } else A = t[29];
-    E = i.levels.map(A);
-    if (Y)
-      E.push({
+      $[28] = mainLoopModel;
+      $[29] = toOption;
+    } else toOption = $[29];
+    options = pickerModel.levels.map(toOption);
+    if (ultracodeAvailable)
+      options.push({
         label: `Ultracode: ${appState ? "on" : "off"} (select to turn it ${appState ? "off" : "on"}; ${ULTRACODE_DESCRIPTION})`,
         value: ULTRACODE_TOGGLE,
       });
-    t[23] = i.levels;
-    t[24] = mainLoopModel;
-    t[25] = Y;
-    t[26] = appState;
-    t[27] = E;
-  } else E = t[27];
-  let A;
+    $[23] = pickerModel.levels;
+    $[24] = mainLoopModel;
+    $[25] = ultracodeAvailable;
+    $[26] = appState;
+    $[27] = options;
+  } else options = $[27];
+  let currentValue;
   if (
-    t[30] !== queuedMessageText ||
-    t[31] !== i.levels ||
-    t[32] !== initialEffortIndex ||
-    t[33] !== b ||
-    t[34] !== mainLoopModel
+    $[30] !== queuedMessageText ||
+    $[31] !== pickerModel.levels ||
+    $[32] !== initialEffortIndex ||
+    $[33] !== specialKeywordDisabled ||
+    $[34] !== mainLoopModel
   ) {
-    A =
-      b && isEffortUnset(queuedMessageText, mainLoopModel)
+    currentValue =
+      specialKeywordDisabled && isEffortUnset(queuedMessageText, mainLoopModel)
         ? AUTO
-        : i.levels[Math.min(initialEffortIndex, i.levels.length - 1)].value;
-    t[30] = queuedMessageText;
-    t[31] = i.levels;
-    t[32] = initialEffortIndex;
-    t[33] = b;
-    t[34] = mainLoopModel;
-    t[35] = A;
-  } else A = t[35];
-  let se = A;
-  let F;
-  if (t[36] !== T) {
-    F =
-      !T &&
+        : pickerModel.levels[Math.min(initialEffortIndex, pickerModel.levels.length - 1)].value;
+    $[30] = queuedMessageText;
+    $[31] = pickerModel.levels;
+    $[32] = initialEffortIndex;
+    $[33] = specialKeywordDisabled;
+    $[34] = mainLoopModel;
+    $[35] = currentValue;
+  } else currentValue = $[35];
+  let defaultValue = currentValue;
+  let titleElement;
+  if ($[36] !== isReadonly) {
+    titleElement =
+      !isReadonly &&
       jsxProd_default(Title, {
         children: EFFORT_TITLE,
       });
-    t[36] = T;
-    t[37] = F;
-  } else F = t[37];
-  let O;
-  if (t[38] !== i.orgNote) {
-    O = i.orgNote
+    $[36] = isReadonly;
+    $[37] = titleElement;
+  } else titleElement = $[37];
+  let orgNoteElement;
+  if ($[38] !== pickerModel.orgNote) {
+    orgNoteElement = pickerModel.orgNote
       ? jsxProd_default(Text, {
-          children: i.orgNote,
+          children: pickerModel.orgNote,
         })
       : null;
-    t[38] = i.orgNote;
-    t[39] = O;
-  } else O = t[39];
+    $[38] = pickerModel.orgNote;
+    $[39] = orgNoteElement;
+  } else orgNoteElement = $[39];
   let onChange;
   if (
-    t[40] !== ackedAtOutputTokens ||
-    t[41] !== N ||
-    t[42] !== se ||
-    t[43] !== queuedMessageText ||
-    t[44] !== getMessages ||
-    t[45] !== mainLoopModel ||
-    t[46] !== onDone ||
-    t[47] !== permissionMode ||
-    t[48] !== setAppState ||
-    t[49] !== storageV5 ||
-    t[50] !== appState
+    $[40] !== ackedAtOutputTokens ||
+    $[41] !== selection ||
+    $[42] !== defaultValue ||
+    $[43] !== queuedMessageText ||
+    $[44] !== getMessages ||
+    $[45] !== mainLoopModel ||
+    $[46] !== onDone ||
+    $[47] !== permissionMode ||
+    $[48] !== setAppState ||
+    $[49] !== storageV5 ||
+    $[50] !== appState
   ) {
-    onChange = (_) => {
-      if (x.current) {
+    onChange = (nextValue) => {
+      if (submittedRef.current) {
         return;
       }
-      if (_ === ULTRACODE_TOGGLE) {
-        x.current = true;
-        applyEffortAndReport(appState ? "ultracode off" : "ultracode on", N, setAppState, onDone, storageV5);
+      if (nextValue === ULTRACODE_TOGGLE) {
+        submittedRef.current = true;
+        applyEffortAndReport(
+          appState ? "ultracode off" : "ultracode on",
+          selection,
+          setAppState,
+          onDone,
+          storageV5,
+        );
         return;
       }
-      if (_ === AUTO) {
-        x.current = true;
-        ee(true);
+      if (nextValue === AUTO) {
+        submittedRef.current = true;
+        setShowAutoView(true);
         return;
       }
-      let M = _;
+      let targetValue = nextValue;
       if (
         shouldShowEffortNotice({
-          target: M,
+          target: targetValue,
           current: queuedMessageText,
           model: mainLoopModel,
           permissionMode,
@@ -1629,89 +1714,89 @@ function EffortPicker(props) {
           promptCacheMayBeWarm: isMainThreadSource(getMessages()),
         })
       ) {
-        re(M);
+        setPendingTarget(targetValue);
         return;
       }
-      x.current = true;
+      submittedRef.current = true;
       applyEffortAndReport(
-        M,
-        N,
+        targetValue,
+        selection,
         setAppState,
         onDone,
         storageV5,
         shouldSaveEffortDefault({
           asDefault: true,
-          levelChanged: M !== se,
+          levelChanged: targetValue !== defaultValue,
           chosen: queuedMessageText,
           model: mainLoopModel,
         }),
       );
     };
-    t[40] = ackedAtOutputTokens;
-    t[41] = N;
-    t[42] = se;
-    t[43] = queuedMessageText;
-    t[44] = getMessages;
-    t[45] = mainLoopModel;
-    t[46] = onDone;
-    t[47] = permissionMode;
-    t[48] = setAppState;
-    t[49] = storageV5;
-    t[50] = appState;
-    t[51] = onChange;
-  } else onChange = t[51];
+    $[40] = ackedAtOutputTokens;
+    $[41] = selection;
+    $[42] = defaultValue;
+    $[43] = queuedMessageText;
+    $[44] = getMessages;
+    $[45] = mainLoopModel;
+    $[46] = onDone;
+    $[47] = permissionMode;
+    $[48] = setAppState;
+    $[49] = storageV5;
+    $[50] = appState;
+    $[51] = onChange;
+  } else onChange = $[51];
   let onCancel;
-  if (t[52] !== onDone) {
+  if ($[52] !== onDone) {
     onCancel = () => {
-      if (x.current) {
+      if (submittedRef.current) {
         return;
       }
-      x.current = true;
+      submittedRef.current = true;
       onDone("Cancelled");
     };
-    t[52] = onDone;
-    t[53] = onCancel;
-  } else onCancel = t[53];
-  let be;
-  if (t[54] !== se || t[55] !== E || t[56] !== onChange || t[57] !== onCancel) {
-    be = jsxProd_default(Select, {
-      options: E,
-      defaultValue: se,
+    $[52] = onDone;
+    $[53] = onCancel;
+  } else onCancel = $[53];
+  let selectElement;
+  if ($[54] !== defaultValue || $[55] !== options || $[56] !== onChange || $[57] !== onCancel) {
+    selectElement = jsxProd_default(Select, {
+      options,
+      defaultValue,
       onChange,
       onCancel,
     });
-    t[54] = se;
-    t[55] = E;
-    t[56] = onChange;
-    t[57] = onCancel;
-    t[58] = be;
-  } else be = t[58];
-  let te;
-  if (t[59] !== be || t[60] !== F || t[61] !== O) {
+    $[54] = defaultValue;
+    $[55] = options;
+    $[56] = onChange;
+    $[57] = onCancel;
+    $[58] = selectElement;
+  } else selectElement = $[58];
+  let pickerElement;
+  if ($[59] !== selectElement || $[60] !== titleElement || $[61] !== orgNoteElement) {
     let children = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [F, O, be],
+      children: [titleElement, orgNoteElement, selectElement],
     });
-    te = jsxProd_default(Pane, {
+    pickerElement = jsxProd_default(Pane, {
       children,
     });
-    t[59] = be;
-    t[60] = F;
-    t[61] = O;
-    t[62] = te;
-  } else te = t[62];
-  return te;
+    $[59] = selectElement;
+    $[60] = titleElement;
+    $[61] = orgNoteElement;
+    $[62] = pickerElement;
+  } else pickerElement = $[62];
+  return pickerElement;
 }
 //@ chunk-3rwvzn82.js:32366-32635 placement
 /**
  * /effort 命令的 JSX 入口：带参数时显示 EffortCommandView，否则显示交互滑块（屏幕阅读器下为选择列表）。
  */
 function EffortCommand(props) {
-  let f = w(5);
+  let $ = useMemoCache(5);
   let { args, onDone, getMessages, storageV5 } = props;
-  let m;
-  if (f[0] !== args || f[1] !== getMessages || f[2] !== onDone || f[3] !== storageV5) {
-    m = args
+  let contentElement;
+  if ($[0] !== args || $[1] !== getMessages || $[2] !== onDone || $[3] !== storageV5) {
+    contentElement = args
       ? jsxProd_default(EffortCommandView, {
           args,
           onDone,
@@ -1723,12 +1808,12 @@ function EffortCommand(props) {
           getMessages,
           storageV5,
         });
-    f[0] = args;
-    f[1] = getMessages;
-    f[2] = onDone;
-    f[3] = storageV5;
-    f[4] = m;
-  } else m = f[4];
-  return m;
+    $[0] = args;
+    $[1] = getMessages;
+    $[2] = onDone;
+    $[3] = storageV5;
+    $[4] = contentElement;
+  } else contentElement = $[4];
+  return contentElement;
 }
-export { hasEffortOverride, describeEffortLevel, selectUltracode, EffortCommand };
+export { hasEffortOverride, describeEffortLevel, selectUltracode, EffortCommand, getEffortSliderModel };

@@ -22,6 +22,7 @@ import { env } from "../../env.js";
 import { getHostAuthEnvVar } from "../../managedEnvConstants.js";
 import { pickByHelper } from "../gitSafeEnv.js";
 import { getEnvCaseInsensitive } from "../../plugins/securityDefaultPlugin.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:214361-214438 placement
 /**
@@ -32,16 +33,16 @@ var WITHHELD_STDERR_NOTICE = "git's own message is not shown, because it can quo
 /**
  * 取 git 输出的 stderr（可能带隐去标注）。
  */
-function seenStderr(e) {
-  return e.withheldStderr?.() ?? e.stderr;
+function seenStderr(result) {
+  return result.withheldStderr?.() ?? result.stderr;
 }
 //@ chunk-s61vbvea.js:214492-214642 placement
-function withholdGitStderr(e) {
-  let stderr = e.stderr;
+function withholdGitStderr(result) {
+  let stderr = result.stderr;
   return stderr === ""
-    ? e
+    ? result
     : {
-        ...e,
+        ...result,
         stderr: "git's own message is not shown, because it can quote private files",
         withheldStderr: () => stderr,
       };
@@ -61,7 +62,7 @@ var LITERAL_PATHSPEC_ENV = {
  * 把路径用双引号包裹并转义引号/反斜杠。
  */
 function annotateStderr(borrowedObjects) {
-  return `"${borrowedObjects.replace(/["\\]/g, (n) => `\\${n}`)}"`;
+  return `"${borrowedObjects.replace(/["\\]/g, (char) => `\\${char}`)}"`;
 }
 //@ chunk-s61vbvea.js:214960-214973 placement
 var MAX_ARG_SLICE_BYTES = 16384;
@@ -69,22 +70,22 @@ var MAX_ARG_SLICE_BYTES = 16384;
 /**
  * 按字节上限把参数分批。
  */
-function chunkArgsByBytes(e) {
-  return e.reduce(
-    (acc, r) => {
-      let s = Buffer.byteLength(r) + 1;
+function chunkArgsByBytes(args) {
+  return args.reduce(
+    (acc, arg) => {
+      let argBytes = Buffer.byteLength(arg) + 1;
       let last = acc.slices.at(-1);
-      if (last !== undefined && last.length > 0 && acc.bytes + s <= MAX_ARG_SLICE_BYTES) {
-        last.push(r);
+      if (last !== undefined && last.length > 0 && acc.bytes + argBytes <= MAX_ARG_SLICE_BYTES) {
+        last.push(arg);
         return {
           slices: acc.slices,
-          bytes: acc.bytes + s,
+          bytes: acc.bytes + argBytes,
         };
       }
-      acc.slices.push([r]);
+      acc.slices.push([arg]);
       return {
         slices: acc.slices,
-        bytes: s,
+        bytes: argBytes,
       };
     },
     {
@@ -97,123 +98,134 @@ function chunkArgsByBytes(e) {
 /**
  * 按 1 MiB 分块读取文件并回调。
  */
-async function readFileChunks(e, n) {
-  let r = Buffer.alloc(1048576);
-  for (let s = 0; ;) {
-    let { bytesRead } = await e.read(r, 0, r.length, s);
+async function readFileChunks(handle, onChunk) {
+  let buffer = Buffer.alloc(1048576);
+  for (let offset = 0; ;) {
+    let { bytesRead } = await handle.read(buffer, 0, buffer.length, offset);
     if (bytesRead === 0) return;
-    n(r.subarray(0, bytesRead));
-    s += bytesRead;
+    onChunk(buffer.subarray(0, bytesRead));
+    offset += bytesRead;
   }
 }
 //@ chunk-s61vbvea.js:215387-215432 placement
 /**
  * 判断索引条目是否为 stage 0 且唯一。
  */
-function splitArgsIntoSlices(e) {
-  return e.stage === "0" && e.sole;
+function splitArgsIntoSlices(entry) {
+  return entry.stage === "0" && entry.sole;
 }
 //@ chunk-s61vbvea.js:215432-215514 placement
 /**
  * git 输出捕获用文件打开 flags（读写/只写，含 O_EXCL 与边界读取标志）。
  */
-var GIT_STDOUT_CAPTURE_FLAGS = constants.O_RDWR | constants.O_CREAT | constants.O_EXCL | READ_LIMITS;
-var GIT_STDERR_CAPTURE_FLAGS = constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | READ_LIMITS;
+var GIT_STDOUT_CAPTURE_FLAGS; // deferred: uses READ_LIMITS (../../fsBoundRead.js) of its import cycle while loading; runs once the cycle is complete
+var GIT_STDERR_CAPTURE_FLAGS;
+deferInit("chunk-s61vbvea.js:215432", () => {
+  GIT_STDOUT_CAPTURE_FLAGS = constants.O_RDWR | constants.O_CREAT | constants.O_EXCL | READ_LIMITS;
+  GIT_STDERR_CAPTURE_FLAGS = constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | READ_LIMITS;
+});
 //@ chunk-s61vbvea.js:215514-216287 placement
-async function listIndexEntriesNamed(e, n, r, s) {
-  let h = join(s, `named-${randomBytes(6).toString("hex")}.ls`);
-  let y = await open(h, GIT_STDOUT_CAPTURE_FLAGS, 384);
+async function listIndexEntriesNamed(runGit, indexFile, paths, dir) {
+  let listFilePath = join(dir, `named-${randomBytes(6).toString("hex")}.ls`);
+  let handle = await open(listFilePath, GIT_STDOUT_CAPTURE_FLAGS, 384);
   try {
-    for (let x of chunkArgsByBytes([...r])) {
-      let P = await e(
-        ["-c", "core.precomposeUnicode=false", "ls-files", "-s", "-z", "--", ...x],
+    for (let argSlice of chunkArgsByBytes([...paths])) {
+      let result = await runGit(
+        ["-c", "core.precomposeUnicode=false", "ls-files", "-s", "-z", "--", ...argSlice],
         {
-          GIT_INDEX_FILE: n,
+          GIT_INDEX_FILE: indexFile,
           ...LITERAL_PATHSPEC_ENV,
         },
         undefined,
         undefined,
-        y.fd,
+        handle.fd,
       );
-      if (P.code !== 0) {
-        logForDebugging(`[indexEntriesNamed] ls-files exited ${String(P.code)}`);
+      if (result.code !== 0) {
+        logForDebugging(`[indexEntriesNamed] ls-files exited ${String(result.code)}`);
         return null;
       }
     }
-    let S = new Map();
-    let w = "";
-    let R = (x) => {
-      let index = x.indexOf("\t");
-      let str = Buffer.from(x.slice(index + 1), "latin1").toString("utf8");
-      if (r.has(str)) {
-        let [G = "", L = "", q = ""] = x.slice(0, index).split(" ");
-        let Q = S.get(str);
-        let sole = Q === undefined || (Q.sole && Q.mode === G && Q.id === L && Q.stage === q);
-        S.set(str, {
-          mode: G,
-          id: L,
-          stage: q,
+    let entries = new Map();
+    let partial = "";
+    let handleRecord = (record) => {
+      let index = record.indexOf("\t");
+      let str = Buffer.from(record.slice(index + 1), "latin1").toString("utf8");
+      if (paths.has(str)) {
+        let [mode = "", id = "", stage = ""] = record.slice(0, index).split(" ");
+        let entry = entries.get(str);
+        let sole =
+          entry === undefined ||
+          (entry.sole && entry.mode === mode && entry.id === id && entry.stage === stage);
+        entries.set(str, {
+          mode,
+          id,
+          stage,
           sole,
         });
       }
     };
-    await readFileChunks(y, (x) => {
-      let parts = (w + x.toString("latin1")).split("\x00");
-      w = parts.pop() ?? "";
-      parts.forEach(R);
+    await readFileChunks(handle, (chunk) => {
+      let parts = (partial + chunk.toString("latin1")).split("\x00");
+      partial = parts.pop() ?? "";
+      parts.forEach(handleRecord);
     });
-    return w === "" ? S : null;
+    return partial === "" ? entries : null;
   } finally {
-    await y.close();
-    await unlink(h).catch(() => {});
+    await handle.close();
+    await unlink(listFilePath).catch(() => {});
   }
 }
 //@ chunk-s61vbvea.js:216287-216599 placement
 /**
  * 影响 git 配置位置的变量与需保留的变量集合。
  */
-var GIT_LOCATION_ENV_VARS = [
-  "GIT_CONFIG_GLOBAL",
-  "GIT_CONFIG_SYSTEM",
-  "GIT_CONFIG_NOSYSTEM",
-  "HOME",
-  "XDG_CONFIG_HOME",
-  "HOMEDRIVE",
-  "HOMEPATH",
-  "USERPROFILE",
-  "PROGRAMDATA",
-  "PATH",
-];
-var PRESERVED_ENV_VARS = new Set(
-  [
-    ...GIT_LOCATION_ENV_VARS,
-    ...PROTECTED_ENV_VARS,
-    ...DIRECTORY_ENV_NAMES,
-    ...caCertEnvVars,
-    "NO_PROXY",
-    "GNUPGHOME",
-    "SSH_AUTH_SOCK",
-    "NoDefaultCurrentDirectoryInExePath",
-  ].map((e) => e.toUpperCase()),
-);
-var ACTION_INPUT_RE = /^INPUT_|-/i;
+var GIT_LOCATION_ENV_VARS; // deferred: uses PROTECTED_ENV_VARS (../../permissions/protectedEnvAndGitPaths.js) of its import cycle while loading; runs once the cycle is complete
+var PRESERVED_ENV_VARS;
+var ACTION_INPUT_RE;
+deferInit("chunk-s61vbvea.js:216287", () => {
+  GIT_LOCATION_ENV_VARS = [
+    "GIT_CONFIG_GLOBAL",
+    "GIT_CONFIG_SYSTEM",
+    "GIT_CONFIG_NOSYSTEM",
+    "HOME",
+    "XDG_CONFIG_HOME",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    "USERPROFILE",
+    "PROGRAMDATA",
+    "PATH",
+  ];
+  PRESERVED_ENV_VARS = new Set(
+    [
+      ...GIT_LOCATION_ENV_VARS,
+      ...PROTECTED_ENV_VARS,
+      ...DIRECTORY_ENV_NAMES,
+      ...caCertEnvVars,
+      "NO_PROXY",
+      "GNUPGHOME",
+      "SSH_AUTH_SOCK",
+      "NoDefaultCurrentDirectoryInExePath",
+    ].map((name) => name.toUpperCase()),
+  );
+  ACTION_INPUT_RE = /^INPUT_|-/i;
+});
 //@ chunk-s61vbvea.js:216599-216828 placement
 /**
  * 只保留受保护或与子进程环境不同的变量。
  */
 function pickPreservedEnv(preSettingsEnv) {
-  let n = subprocessEnv();
+  let env_2 = subprocessEnv();
   let mapped = [
     preSettingsEnv,
     {
       CLAUDE_CODE_HOST_AUTH_ENV_VAR: env.CLAUDE_CODE_HOST_AUTH_ENV_VAR,
     },
-  ].map((s) => getHostAuthEnvVar(s)?.toUpperCase());
+  ].map((hostAuthVar) => getHostAuthEnvVar(hostAuthVar)?.toUpperCase());
   return pickByHelper(
     preSettingsEnv,
-    (s, h) =>
-      (PRESERVED_ENV_VARS.has(h.toUpperCase()) && !mapped.includes(h.toUpperCase())) ||
-      (!ACTION_INPUT_RE.test(h) && getEnvCaseInsensitive(n, h) === s),
+    (value, key) =>
+      (PRESERVED_ENV_VARS.has(key.toUpperCase()) && !mapped.includes(key.toUpperCase())) ||
+      (!ACTION_INPUT_RE.test(key) && getEnvCaseInsensitive(env_2, key) === value),
   );
 }
 //@ chunk-s61vbvea.js:216828-216853 placement
@@ -239,8 +251,8 @@ var GIT_REFUSAL_PATTERNS = [
 /**
  * 按前缀匹配给出首条 git 失败分类。
  */
-function firstGitFailureClass(e) {
-  return GIT_REFUSAL_PATTERNS.find(([n]) => e.startsWith(n))?.[1];
+function firstGitFailureClass(stderr) {
+  return GIT_REFUSAL_PATTERNS.find(([prefix]) => stderr.startsWith(prefix))?.[1];
 }
 export {
   LITERAL_PATHSPEC_ENV,

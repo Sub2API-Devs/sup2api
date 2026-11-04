@@ -14,7 +14,7 @@ import {
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { SandboxManager, shouldAllowManagedSandboxDomainsOnly } from "../../utils/sandbox/sandbox-adapter.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 
@@ -33,7 +33,7 @@ function renderDimLine(w, i) {
 }
 //@ chunk-55w3ydvj.js:14076-16494 fingerprint = SandboxConfigTab (0.616)
 function SandboxConfigTab() {
-  let $ = w(3);
+  let $ = useMemoCache(3);
   let isEnabled = SandboxManager.isSandboxingEnabled();
   let t0;
   if ($[0] === MEMO_CACHE_SENTINEL) {

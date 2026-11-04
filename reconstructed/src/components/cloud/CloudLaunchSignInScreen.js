@@ -75,12 +75,12 @@ async function cloudLaunchSignInScreen({
     !validateForceLoginMethod(true).valid
   )
     return null;
-  let h = await consoleLoginReplacedNotes();
-  let a;
-  a = [
+  let replacedNotes = await consoleLoginReplacedNotes();
+  let bodyText;
+  bodyText = [
     "No cloud session started: cloud sessions need a claude.ai sign-in, and this machine isn't signed in to claude.ai.",
     "Run /login to sign in, and the cloud session starts.",
-    ...h,
+    ...replacedNotes,
   ].join(`
 `);
   setRemoteSessionAwaits(true);
@@ -88,13 +88,13 @@ async function cloudLaunchSignInScreen({
   logFeatureSad("cloud_launch_sign_in", "opened", {
     defaulted: defaultedToCloud,
   });
-  let r = loginEventCounter.of(session);
-  let credentialsPersisted = r.getSnapshot().credentialsPersisted;
-  let b = r.subscribe(() => {
-    if (r.getSnapshot().credentialsPersisted === credentialsPersisted) return;
-    b();
+  let counter = loginEventCounter.of(session);
+  let credentialsPersisted = counter.getSnapshot().credentialsPersisted;
+  let unsubscribe = counter.subscribe(() => {
+    if (counter.getSnapshot().credentialsPersisted === credentialsPersisted) return;
+    unsubscribe();
     if (isTerminalShutdown()) return;
-    let s = {
+    let dims = {
       defaulted: defaultedToCloud,
     };
     relaunchClaudeCode(
@@ -113,7 +113,7 @@ Signed in. Starting your cloud session.
 
 `,
           ),
-        onShutdownClaimed: () => logFeatureOk("cloud_launch_sign_in", s),
+        onShutdownClaimed: () => logFeatureOk("cloud_launch_sign_in", dims),
       },
       storageV5,
     )
@@ -121,7 +121,7 @@ Signed in. Starting your cloud session.
         logForDebugging(`Couldn't restart after the sign-in: ${errorMessage(error)}`, {
           level: "error",
         });
-        logFeatureBad("cloud_launch_sign_in", "restart_refused", s);
+        logFeatureBad("cloud_launch_sign_in", "restart_refused", dims);
         return gracefulShutdown(0, "other", {
           finalMessage: SIGN_IN_SAVED_RESTART_TEXT,
         });
@@ -142,9 +142,10 @@ Signed in. Starting your cloud session.
       replBridgeExplicit: false,
     },
     props: {
-      initialMessages: [createSystemMessage(a, "warning")],
+      initialMessages: [createSystemMessage(bodyText, "warning")],
       disableQuery: true,
       filterCommands: isLocalRemoteCommand,
     },
   };
 }
+export { cloudLaunchSignInScreen };

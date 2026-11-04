@@ -53,14 +53,15 @@ import { isFoamySpringEnabled } from "../services/analytics/growthbookGates.js";
 import { getEchoWireToolInputsState, isServerClassifierEnabled } from "../utils/wireToolInputEcho.js";
 import { TOOL_SEARCH_TOOL_NAME } from "../tools/ToolSearchTool/prompt.js";
 import { isToolSearchLockedOffByDefault } from "../utils/toolSearch.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ha3km179.js:129854-129924 placement
 /**
  * 是否被放回
  */
-function wasPutBackSafe(messageQueue, n) {
+function wasPutBackSafe(messageQueue, uuid) {
   try {
-    return messageQueue.wasPutBack(n);
+    return messageQueue.wasPutBack(uuid);
   } catch (error) {
     logError(error);
     return false;
@@ -110,7 +111,7 @@ function crossOrgThinkingAttachments(messagesForQuery, { querySource, mainThread
         : getStoredOauthAccountInfo()?.organizationUuid,
     )?.toLowerCase();
     let organizationUuid = messagesForQuery.findLast(
-      (T) => T.type === "attachment" && T.attachment?.type === "credential_org",
+      (message) => message.type === "attachment" && message.attachment?.type === "credential_org",
     )?.attachment.organizationUuid;
     if (lower === undefined || lower === organizationUuid) return [];
     let attachmentMessage = createAttachmentMessage_2(
@@ -121,20 +122,22 @@ function crossOrgThinkingAttachments(messagesForQuery, { querySource, mainThread
       stamp,
     );
     if (typeof organizationUuid !== "string") return [attachmentMessage];
-    let R =
+    let warnThinking =
       mainThread &&
       messagesForQuery.some(
-        (T) =>
-          T.type === "assistant" &&
-          Array.isArray(T.message?.content) &&
-          T.message.content.some((w) => w?.type === "thinking" || w?.type === "redacted_thinking"),
+        (message) =>
+          message.type === "assistant" &&
+          Array.isArray(message.message?.content) &&
+          message.message.content.some(
+            (block) => block?.type === "thinking" || block?.type === "redacted_thinking",
+          ),
       ) &&
       isModelCapabilityEnabled("org_locked_thinking", getCanonicalName(model), model) &&
       getFeatureValue_CACHED_MAY_BE_STALE("tengu_lexical_glade", false);
     logFeatureOk("context_credential_org_change", {
-      warned: R,
+      warned: warnThinking,
     });
-    return R
+    return warnThinking
       ? [attachmentMessage, createInformationalSystemMessage(CROSS_ORG_THINKING_NOTICE, "warning")]
       : [attachmentMessage];
   } catch (error) {
@@ -147,35 +150,40 @@ function crossOrgThinkingAttachments(messagesForQuery, { querySource, mainThread
 /**
  * 无待发工具描述
  */
-var EMPTY_TOOL_STANDING = {
-  epoch: 0,
-  owed: new Set(),
-};
+var EMPTY_TOOL_STANDING; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ha3km179.js:131368", () => {
+  EMPTY_TOOL_STANDING = {
+    epoch: 0,
+    owed: new Set(),
+  };
+});
 //@ chunk-ha3km179.js:131398-132074 placement
 /**
  * 跟踪工具描述的待发送状态。
  */
 function createToolDescriptionStandings() {
-  let e = {
+  let state = {
     standings: new WeakMap(),
   };
-  function n(y, S) {
+  function redescribing(promptRender, epoch) {
     try {
-      if (y === undefined || y.toolDescriptions.size === 0)
-        return S > 0
+      if (promptRender === undefined || promptRender.toolDescriptions.size === 0)
+        return epoch > 0
           ? {
               names: EMPTY_TOOL_STANDING.owed,
-              epoch: S,
+              epoch,
             }
           : undefined;
-      let M = e.standings.get(y.record) ?? EMPTY_TOOL_STANDING;
-      let R = S > M.epoch;
-      if (!R && M.owed.size === 0) return;
-      let filtered = [...y.toolDescriptions.keys()].filter(R ? isHookDescribed : (P) => M.owed.has(P));
-      return R || filtered.length > 0
+      let standing = state.standings.get(promptRender.record) ?? EMPTY_TOOL_STANDING;
+      let newEpoch = epoch > standing.epoch;
+      if (!newEpoch && standing.owed.size === 0) return;
+      let filtered = [...promptRender.toolDescriptions.keys()].filter(
+        newEpoch ? isHookDescribed : (toolName) => standing.owed.has(toolName),
+      );
+      return newEpoch || filtered.length > 0
         ? {
             names: new Set(filtered),
-            epoch: Math.max(S, M.epoch),
+            epoch: Math.max(epoch, standing.epoch),
           }
         : undefined;
     } catch (error) {
@@ -183,21 +191,21 @@ function createToolDescriptionStandings() {
       return;
     }
   }
-  let noteRedescribed = (y, S, M) =>
-    void e.standings.set(y, {
-      epoch: S.epoch,
-      owed: new Set([...S.names].filter((R) => !M.has(R))),
+  let noteRedescribed = (record, target, sentNames) =>
+    void state.standings.set(record, {
+      epoch: target.epoch,
+      owed: new Set([...target.names].filter((toolName) => !sentNames.has(toolName))),
     });
-  function s(y, S) {
-    let M = e.standings.get(y);
-    if (M !== undefined) e.standings.set(S, M);
+  function copyCounters(fromRecord, toRecord) {
+    let standing = state.standings.get(fromRecord);
+    if (standing !== undefined) state.standings.set(toRecord, standing);
   }
   return {
-    redescribing: n,
+    redescribing,
     noteRedescribed,
-    noteCopied: s,
+    noteCopied: copyCounters,
     forgetStandings: () => {
-      e.standings = new WeakMap();
+      state.standings = new WeakMap();
     },
   };
 }
@@ -205,7 +213,12 @@ function createToolDescriptionStandings() {
 /**
  * 工具描述待发状态
  */
-var toolDescriptionStandings = identity(createToolDescriptionStandings(), (e) => e.forgetStandings());
+var toolDescriptionStandings; // deferred: uses createToolDescriptionStandings of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ha3km179.js:132074", () => {
+  toolDescriptionStandings = identity(createToolDescriptionStandings(), (standings) =>
+    standings.forgetStandings(),
+  );
+});
 //@ chunk-ha3km179.js:132115-132198 placement
 /**
  * 需要重新描述时的代次
@@ -228,52 +241,55 @@ var MAX_PROMPT_HASHES = 16;
  * 记录最近的系统提示哈希（有上限）。
  */
 function createSystemPromptHistory() {
-  let e = new Map();
-  function n(s, h) {
-    e.delete(s);
-    e.set(s, h);
-    for (let key of [...e.keys()].slice(0, -MAX_PROMPT_HASHES)) e.delete(key);
+  let history = new Map();
+  function remember(hash, answers) {
+    history.delete(hash);
+    history.set(hash, answers);
+    for (let key of [...history.keys()].slice(0, -MAX_PROMPT_HASHES)) history.delete(key);
   }
-  function r(s, h, y) {
+  function owedPrompt(promptRender, systemPrompt, snapshot) {
     try {
-      let S = e.get(s.systemPromptHash);
-      if (y === undefined || !y.isFresh) return;
-      if (S === undefined) {
-        n(s.systemPromptHash, y.answers);
+      let held = history.get(promptRender.systemPromptHash);
+      if (snapshot === undefined || !snapshot.isFresh) return;
+      if (held === undefined) {
+        remember(promptRender.systemPromptHash, snapshot.answers);
         return;
       }
-      let M = changedSectionAnswers(S, y.answers);
-      let R = diffPromptSections(s.systemPrompt, h, [...M.values()]);
-      if (R !== undefined || S === "behind")
-        n(
-          R === undefined ? s.systemPromptHash : hashSystemPrompt(R),
+      let changed = changedSectionAnswers(held, snapshot.answers);
+      let prompt = diffPromptSections(promptRender.systemPrompt, systemPrompt, [...changed.values()]);
+      if (prompt !== undefined || held === "behind")
+        remember(
+          prompt === undefined ? promptRender.systemPromptHash : hashSystemPrompt(prompt),
           resolveHeldAnswers({
-            held: S,
-            answers: y.answers,
-            owed: M,
-            sent: R,
+            held,
+            answers: snapshot.answers,
+            owed: changed,
+            sent: prompt,
           }),
         );
-      return R;
+      return prompt;
     } catch (error) {
       logError(toError(error));
       return;
     }
   }
   return {
-    owedPrompt: r,
-    noteRendered: (s, h) => {
-      if (h !== undefined) n(s, h.isFresh ? h.answers : "behind");
+    owedPrompt,
+    noteRendered: (hash, snapshot) => {
+      if (snapshot !== undefined) remember(hash, snapshot.isFresh ? snapshot.answers : "behind");
     },
-    notedCount: () => e.size,
-    forgetStandings: () => e.clear(),
+    notedCount: () => history.size,
+    forgetStandings: () => history.clear(),
   };
 }
 //@ chunk-ha3km179.js:132818-132859 placement
 /**
  * 系统提示哈希历史
  */
-var systemPromptHistory = identity(createSystemPromptHistory(), (e) => e.forgetStandings());
+var systemPromptHistory; // deferred: uses createSystemPromptHistory of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ha3km179.js:132818", () => {
+  systemPromptHistory = identity(createSystemPromptHistory(), (history) => history.forgetStandings());
+});
 //@ chunk-ha3km179.js:132859-132999 placement
 function sectionAnswersSnapshot(toolUseContext, promptRenderEpoch) {
   try {
@@ -292,25 +308,27 @@ function sectionAnswersSnapshot(toolUseContext, promptRenderEpoch) {
 /**
  * 空串转 null
  */
-function nonEmptyOrNull(e) {
-  return e === "" ? null : e;
+function nonEmptyOrNull(text) {
+  return text === "" ? null : text;
 }
 //@ chunk-ha3km179.js:133035-133306 placement
-function changedSectionAnswers(e, answers) {
+function changedSectionAnswers(held, answers) {
   return new Map(
-    [...answers].flatMap(([r, s]) => {
-      let h = e === "behind" ? undefined : e.get(r);
-      let y = nonEmptyOrNull(s.answer);
-      let S = h === undefined ? undefined : nonEmptyOrNull(h.answer);
-      let M = h !== undefined && S !== nonEmptyOrNull(h.text);
-      let R = y !== nonEmptyOrNull(s.text);
-      return y !== S && (M || R) && (y !== null || typeof S === "string")
+    [...answers].flatMap(([hash, answer]) => {
+      let before = held === "behind" ? undefined : held.get(hash);
+      let after = nonEmptyOrNull(answer.answer);
+      let beforeAnswer = before === undefined ? undefined : nonEmptyOrNull(before.answer);
+      let answerChanged = before !== undefined && beforeAnswer !== nonEmptyOrNull(before.text);
+      let textChanged = after !== nonEmptyOrNull(answer.text);
+      return after !== beforeAnswer &&
+        (answerChanged || textChanged) &&
+        (after !== null || typeof beforeAnswer === "string")
         ? [
             [
-              r,
+              hash,
               {
-                before: S,
-                after: y,
+                before: beforeAnswer,
+                after,
               },
             ],
           ]
@@ -321,13 +339,13 @@ function changedSectionAnswers(e, answers) {
 //@ chunk-ha3km179.js:133306-133587 placement
 function resolveHeldAnswers({ held, answers, owed, sent }) {
   return new Map(
-    [...answers].flatMap(([h, y]) => {
-      let S = owed.get(h);
-      let M = held === "behind" ? undefined : held.get(h);
-      let R = S?.after === null && sent?.includes(S.before ?? "") === false;
-      let T = typeof S?.after === "string" && sent?.includes(S.after) === true;
-      let w = R || T ? y : M;
-      return w === undefined ? [] : [[h, w]];
+    [...answers].flatMap(([hash, answer]) => {
+      let owedEntry = owed.get(hash);
+      let heldEntry = held === "behind" ? undefined : held.get(hash);
+      let removedButNotSent = owedEntry?.after === null && sent?.includes(owedEntry.before ?? "") === false;
+      let insertedAndSent = typeof owedEntry?.after === "string" && sent?.includes(owedEntry.after) === true;
+      let chosen = removedButNotSent || insertedAndSent ? answer : heldEntry;
+      return chosen === undefined ? [] : [[hash, chosen]];
     }),
   );
 }
@@ -335,75 +353,83 @@ function resolveHeldAnswers({ held, answers, owed, sent }) {
 /**
  * 比较两版提示段落的顺序与增删。
  */
-function diffPromptSections(systemPrompt, n, r) {
-  let s = indexParts(systemPrompt);
-  let h = indexParts(n);
-  let filtered = systemPrompt.filter((D) => D !== "" && s.counts.get(D) === 1 && h.counts.get(D) === 1);
-  let mapped = filtered.map((D) => h.places.get(D) ?? -1);
-  let all = mapped.every((D, L) => L === 0 || (mapped[L - 1] ?? D) < D);
-  let flattened = r.flatMap(({ before, after }) => {
-    let z = typeof before === "string" && s.counts.get(before) === 1 && !h.counts.has(before);
-    return after === null && !z
+function diffPromptSections(parts, nextPrompt, edits) {
+  let prevIndex = indexParts(parts);
+  let nextIndex = indexParts(nextPrompt);
+  let filtered = parts.filter(
+    (part) => part !== "" && prevIndex.counts.get(part) === 1 && nextIndex.counts.get(part) === 1,
+  );
+  let mapped = filtered.map((part) => nextIndex.places.get(part) ?? -1);
+  let all = mapped.every((position, index) => index === 0 || (mapped[index - 1] ?? position) < position);
+  let edits_2 = edits.flatMap(({ before, after }) => {
+    let beforeUnsent =
+      typeof before === "string" && prevIndex.counts.get(before) === 1 && !nextIndex.counts.has(before);
+    return after === null && !beforeUnsent
       ? []
       : [
           {
-            before: z || before === null ? before : undefined,
+            before: beforeUnsent || before === null ? before : undefined,
             after,
           },
         ];
   });
-  let flattened_2 = [...filtered, undefined].flatMap((D, L) => {
-    let z = filtered[L - 1];
-    let G = applyPromptSectionEdits(partsBetween(s, z, D), partsBetween(h, z, D), flattened);
-    return D === undefined ? G : [...G, D];
+  let flattened = [...filtered, undefined].flatMap((part, index) => {
+    let previousPart = filtered[index - 1];
+    let applied = applyPromptSectionEdits(
+      partsBetween(prevIndex, previousPart, part),
+      partsBetween(nextIndex, previousPart, part),
+      edits_2,
+    );
+    return part === undefined ? applied : [...applied, part];
   });
-  let filtered_2 = flattened_2.filter((D) => D !== "");
-  let filtered_3 = systemPrompt.filter((D) => D !== "");
-  let Q = filtered_2.length === filtered_3.length && filtered_2.every((D, L) => D === filtered_3[L]);
-  return !all || Q ? undefined : asSystemPrompt(flattened_2);
+  let filtered_2 = flattened.filter((part) => part !== "");
+  let filtered_3 = parts.filter((originalPart) => originalPart !== "");
+  let isUnchanged =
+    filtered_2.length === filtered_3.length && filtered_2.every((part, index) => part === filtered_3[index]);
+  return !all || isUnchanged ? undefined : asSystemPrompt(flattened);
 }
 //@ chunk-ha3km179.js:134155-134291 placement
-function indexParts(e) {
-  let n = new Map();
-  let r = new Map();
-  for (let [s, h] of e.entries()) {
-    n.set(h, (n.get(h) ?? 0) + 1);
-    r.set(h, s);
+function indexParts(parts) {
+  let counts = new Map();
+  let places = new Map();
+  for (let [index, part] of parts.entries()) {
+    counts.set(part, (counts.get(part) ?? 0) + 1);
+    places.set(part, index);
   }
   return {
-    parts: e,
-    counts: n,
-    places: r,
+    parts,
+    counts,
+    places,
   };
 }
 //@ chunk-ha3km179.js:134291-134411 placement
-function partsBetween(e, n, r) {
-  return e.parts.slice(
-    n === undefined ? 0 : (e.places.get(n) ?? -1) + 1,
-    r === undefined ? e.parts.length : e.places.get(r),
+function partsBetween(index, fromPart, toPart) {
+  return index.parts.slice(
+    fromPart === undefined ? 0 : (index.places.get(fromPart) ?? -1) + 1,
+    toPart === undefined ? index.parts.length : index.places.get(toPart),
   );
 }
 //@ chunk-ha3km179.js:134411-134491 placement = formatSnippet (0.806)
-function formatSnippet(e, n, r) {
-  return e.filter((s) => n.some((h) => h.after === s && h.before === r));
+function formatSnippet(parts, edits, before) {
+  return parts.filter((part) => edits.some((edit) => edit.after === part && edit.before === before));
 }
 //@ chunk-ha3km179.js:134491-134854 placement = formatSnippet (0.806)
 /**
  * 应用提示段落编辑。
  */
-function applyPromptSectionEdits(e, n, r) {
-  let filtered = n.filter((T) => T !== "");
-  let filtered_2 = r.filter((T) => T.after === null || filtered.includes(T.after));
-  let flattened = e.flatMap((T) => {
-    let found = filtered_2.find((P) => P.before === T);
-    return found === undefined ? [T] : (found.after ?? []);
+function applyPromptSectionEdits(prevParts, nextParts, edits) {
+  let parts = nextParts.filter((part) => part !== "");
+  let edits_2 = edits.filter((edit) => edit.after === null || parts.includes(edit.after));
+  let flattened = prevParts.flatMap((part) => {
+    let found = edits_2.find((edit) => edit.before === part);
+    return found === undefined ? [part] : (found.after ?? []);
   });
-  let filtered_3 = e.filter((T) => T !== "" && !filtered_2.some((w) => w.before === T));
-  let M = formatSnippet(filtered, filtered_2, undefined);
-  return filtered.every((T) => filtered_2.some((w) => w.after === T)) &&
-    filtered_3.length === M.length &&
-    (M.length > 0 || formatSnippet(filtered, filtered_2, null).length > 0)
-    ? filtered
+  let filtered = prevParts.filter((part) => part !== "" && !edits_2.some((edit) => edit.before === part));
+  let keptInserted = formatSnippet(parts, edits_2, undefined);
+  return parts.every((part) => edits_2.some((edit) => edit.after === part)) &&
+    filtered.length === keptInserted.length &&
+    (keptInserted.length > 0 || formatSnippet(parts, edits_2, null).length > 0)
+    ? parts
     : flattened;
 }
 //@ chunk-ha3km179.js:134854-134932 placement
@@ -414,8 +440,8 @@ function isRedescribable({ options, querySource }) {
   return !options.bareFork && classifyQuerySource(querySource) !== "auxiliary";
 }
 //@ chunk-ha3km179.js:134932-135162 placement
-function recordReminderFold(carriedForward, n) {
-  let { fold, cached } = resolveReminderFold(n);
+function recordReminderFold(carriedForward, inheritedFold) {
+  let { fold, cached } = resolveReminderFold(inheritedFold);
   try {
     logEvent("tengu_reminder_fold_recorded", {
       recorded: fold !== undefined,
@@ -423,7 +449,7 @@ function recordReminderFold(carriedForward, n) {
         fold,
       }),
       carriedForward,
-      inherited: n !== undefined,
+      inherited: inheritedFold !== undefined,
       cached: cached.value,
       cachedSource: fromEnum(cached.source),
     });
@@ -453,7 +479,7 @@ function applyWireShape(wireShape, wireShape_2) {
       wireShape,
       changed: false,
     };
-  let r = pickWireShape({
+  let merged = pickWireShape({
     systemTurns: wireShape_2.systemTurns ?? wireShape.systemTurns,
     toolChangeHeader: wireShape_2.toolChangeHeader ?? wireShape.toolChangeHeader,
     inlineTools: wireShape_2.inlineTools ?? wireShape.inlineTools,
@@ -461,25 +487,27 @@ function applyWireShape(wireShape, wireShape_2) {
     toolResultSafeguards: wireShape_2.toolResultSafeguards ?? wireShape.toolResultSafeguards,
     systemTurnsAnsweredBy: wireShape_2.systemTurnsAnsweredBy ?? wireShape.systemTurnsAnsweredBy,
   });
-  let any = REQUEST_SHAPE_KEYS.some((h) => r[h] !== wireShape[h]);
+  let any = REQUEST_SHAPE_KEYS.some((key) => merged[key] !== wireShape[key]);
   if (any)
     try {
-      let { systemTurnsAnsweredBy, ...y } = r;
+      let { systemTurnsAnsweredBy, ...loggedShape } = merged;
       logEvent("tengu_wire_shape_recorded", {
-        ...y,
-        overwrote: REQUEST_SHAPE_KEYS.some((S) => wireShape[S] !== undefined && r[S] !== wireShape[S]),
+        ...loggedShape,
+        overwrote: REQUEST_SHAPE_KEYS.some(
+          (key) => wireShape[key] !== undefined && merged[key] !== wireShape[key],
+        ),
       });
     } catch (error) {
       logError(error);
     }
   return {
-    wireShape: r,
-    changed: any || r.systemTurnsAnsweredBy !== wireShape.systemTurnsAnsweredBy,
+    wireShape: merged,
+    changed: any || merged.systemTurnsAnsweredBy !== wireShape.systemTurnsAnsweredBy,
   };
 }
 //@ chunk-ha3km179.js:135920-136157 placement
-function recordWireToolInputEcho(carriedForward, n) {
-  let { echo, cached } = getEchoWireToolInputsState(n);
+function recordWireToolInputEcho(carriedForward, inheritedEcho) {
+  let { echo, cached } = getEchoWireToolInputsState(inheritedEcho);
   try {
     logEvent("tengu_wire_tool_input_echo_recorded", {
       recorded: echo !== undefined,
@@ -487,7 +515,7 @@ function recordWireToolInputEcho(carriedForward, n) {
         echo,
       }),
       carriedForward,
-      inherited: n !== undefined,
+      inherited: inheritedEcho !== undefined,
       cached: cached.value,
       cachedSource: fromEnum(cached.source),
     });
@@ -513,23 +541,23 @@ function recordContextRendering(carriedForward, contextRendering) {
 /**
  * 记录提示快照并处理复制关系。
  */
-function recordPromptSnapshot(messagesForQuery, systemPrompt, r) {
-  let promptSnapshot = resolvePromptSnapshot(messagesForQuery, systemPrompt, r);
+function recordPromptSnapshot(messages, systemPrompt, options) {
+  let promptSnapshot = resolvePromptSnapshot(messages, systemPrompt, options);
   try {
-    let h = snapshotIfEnabled(messagesForQuery, r.options);
-    if (h !== undefined && promptSnapshot.record?.attachment.type === "prompt_snapshot")
-      toolDescriptionStandings.noteCopied(h.record, promptSnapshot.record.attachment);
+    let existingSnapshot = snapshotIfEnabled(messages, options.options);
+    if (existingSnapshot !== undefined && promptSnapshot.record?.attachment.type === "prompt_snapshot")
+      toolDescriptionStandings.noteCopied(existingSnapshot.record, promptSnapshot.record.attachment);
     if (promptSnapshot.source === "live_recorded" && promptSnapshot.snapshotHash && !promptSnapshot.rewritten)
-      systemPromptHistory.noteRendered(promptSnapshot.snapshotHash, r.turnSections);
-    let y =
-      r.toolDescribeEpoch !== undefined && isRedescribable(r)
-        ? toolDescriptionStandings.redescribing(h, r.toolDescribeEpoch)
+      systemPromptHistory.noteRendered(promptSnapshot.snapshotHash, options.turnSections);
+    let redescribing =
+      options.toolDescribeEpoch !== undefined && isRedescribable(options)
+        ? toolDescriptionStandings.redescribing(existingSnapshot, options.toolDescribeEpoch)
         : undefined;
-    return y === undefined
+    return redescribing === undefined
       ? promptSnapshot
       : {
           ...promptSnapshot,
-          redescribing: y,
+          redescribing,
         };
   } catch (error) {
     logError(error);
@@ -541,8 +569,8 @@ function recordPromptSnapshot(messagesForQuery, systemPrompt, r) {
  * 计算本次请求的提示快照（实时/快照/继承来源）。
  */
 function resolvePromptSnapshot(
-  e,
-  n,
+  messages,
+  systemPrompt,
   {
     resumeActive,
     stamp,
@@ -551,11 +579,11 @@ function resolvePromptSnapshot(
     inheritedEchoWireToolInputs,
     contextRendering,
     turnSections,
-    ...T
+    ...options
   },
 ) {
-  let w = {
-    systemPrompt: n,
+  let emptySnapshot = {
+    systemPrompt,
     toolDescriptions: undefined,
     toolEntries: undefined,
     toolServers: undefined,
@@ -566,62 +594,64 @@ function resolvePromptSnapshot(
     snapshotHash: undefined,
   };
   try {
-    if (!shouldSnapshotSystemPrompt(T.options)) return w;
-    let P = snapshotIfEnabled(e, T.options);
-    let Q = P !== undefined && isRenderPointNewer(e);
-    let D =
-      P !== undefined &&
-      !Q &&
+    if (!shouldSnapshotSystemPrompt(options.options)) return emptySnapshot;
+    let snapshot = snapshotIfEnabled(messages, options.options);
+    let renderPointNewer = snapshot !== undefined && isRenderPointNewer(messages);
+    let rewrittenPrompt =
+      snapshot !== undefined &&
+      !renderPointNewer &&
       !resumeActive &&
-      isRedescribable(T) &&
-      classifyQuerySource(T.querySource) === "main"
-        ? systemPromptHistory.owedPrompt(P, n, turnSections)
+      isRedescribable(options) &&
+      classifyQuerySource(options.querySource) === "main"
+        ? systemPromptHistory.owedPrompt(snapshot, systemPrompt, turnSections)
         : undefined;
-    let L = D !== undefined;
-    let z = Q || L;
-    let G = D ?? n;
-    if (P && (!z || resumeActive || !isRedescribable(T))) {
-      let Z = !z && !resumeActive && isRedescribable(T);
-      let re =
-        Z && P.reminderFold === undefined && isThreadStateFeatureOn()
+    let wasRewritten = rewrittenPrompt !== undefined;
+    let needsRender = renderPointNewer || wasRewritten;
+    let promptToSend = rewrittenPrompt ?? systemPrompt;
+    if (snapshot && (!needsRender || resumeActive || !isRedescribable(options))) {
+      let allowFill = !needsRender && !resumeActive && isRedescribable(options);
+      let reminderFold =
+        allowFill && snapshot.reminderFold === undefined && isThreadStateFeatureOn()
           ? recordReminderFold(true, inheritedReminderFold?.())
           : undefined;
-      let Re =
-        Z && P.echoWireToolInputs === undefined && isServerClassifierEnabled()
+      let echoWireToolInputs =
+        allowFill && snapshot.echoWireToolInputs === undefined && isServerClassifierEnabled()
           ? recordWireToolInputEcho(true, inheritedEchoWireToolInputs?.())
           : undefined;
-      let se =
-        Z && P.contextRendering === undefined && isPromptSnapshotFeatureOn()
+      let recordedContextRendering =
+        allowFill && snapshot.contextRendering === undefined && isPromptSnapshotFeatureOn()
           ? recordContextRendering(true, contextRendering)
           : undefined;
-      let reminderFold = P.reminderFold ?? re;
-      let echoWireToolInputs = P.echoWireToolInputs ?? Re;
-      let contextRendering_2 = P.contextRendering ?? se;
+      let reminderFold_2 = snapshot.reminderFold ?? reminderFold;
+      let echoWireToolInputs_2 = snapshot.echoWireToolInputs ?? echoWireToolInputs;
+      let contextRendering_2 = snapshot.contextRendering ?? recordedContextRendering;
       return {
-        systemPrompt: P.systemPrompt,
-        toolDescriptions: P.toolDescriptions,
-        toolEntries: P.toolEntries,
-        toolServers: P.toolServers,
-        recordedCliPrefix: P.cliPrefix,
-        recordedWireShape: P.wireShape,
+        systemPrompt: snapshot.systemPrompt,
+        toolDescriptions: snapshot.toolDescriptions,
+        toolEntries: snapshot.toolEntries,
+        toolServers: snapshot.toolServers,
+        recordedCliPrefix: snapshot.cliPrefix,
+        recordedWireShape: snapshot.wireShape,
         record:
-          re !== undefined || Re !== undefined || se !== undefined
+          reminderFold !== undefined ||
+          echoWireToolInputs !== undefined ||
+          recordedContextRendering !== undefined
             ? createAttachmentMessage_2(
                 {
                   type: "prompt_snapshot",
-                  systemPrompt: [...P.systemPrompt],
-                  ...(P.toolDescriptions.size > 0 && {
-                    tools: snapshotToolEntries(P),
+                  systemPrompt: [...snapshot.systemPrompt],
+                  ...(snapshot.toolDescriptions.size > 0 && {
+                    tools: snapshotToolEntries(snapshot),
                   }),
-                  ...(P.cliPrefix !== undefined && {
-                    cliPrefix: P.cliPrefix,
+                  ...(snapshot.cliPrefix !== undefined && {
+                    cliPrefix: snapshot.cliPrefix,
                   }),
-                  ...(reminderFold !== undefined && {
-                    reminderFold,
+                  ...(reminderFold_2 !== undefined && {
+                    reminderFold: reminderFold_2,
                   }),
-                  ...pickWireShape(P.wireShape),
-                  ...(echoWireToolInputs !== undefined && {
-                    echoWireToolInputs,
+                  ...pickWireShape(snapshot.wireShape),
+                  ...(echoWireToolInputs_2 !== undefined && {
+                    echoWireToolInputs: echoWireToolInputs_2,
                   }),
                   ...(contextRendering_2 !== undefined && {
                     contextRendering: contextRendering_2,
@@ -631,133 +661,157 @@ function resolvePromptSnapshot(
               )
             : undefined,
         source: "from_snapshot",
-        snapshotHash: P.systemPromptHash,
+        snapshotHash: snapshot.systemPromptHash,
       };
     }
-    if (resumeActive || !isRedescribable(T)) return w;
-    let ee =
-      P?.reminderFold ??
-      (isThreadStateFeatureOn() ? recordReminderFold(P !== undefined, inheritedReminderFold?.()) : undefined);
-    let V = P?.wireShape ?? dropSystemTurnsAnsweredBy(inheritedWireShape?.());
-    let fe =
-      P?.echoWireToolInputs ??
-      (isServerClassifierEnabled()
-        ? recordWireToolInputEcho(P !== undefined, inheritedEchoWireToolInputs?.())
+    if (resumeActive || !isRedescribable(options)) return emptySnapshot;
+    let reminderFold =
+      snapshot?.reminderFold ??
+      (isThreadStateFeatureOn()
+        ? recordReminderFold(snapshot !== undefined, inheritedReminderFold?.())
         : undefined);
-    let ie =
-      P?.contextRendering ??
-      (isPromptSnapshotFeatureOn() ? recordContextRendering(P !== undefined, contextRendering) : undefined);
+    let wireShape = snapshot?.wireShape ?? dropSystemTurnsAnsweredBy(inheritedWireShape?.());
+    let echoWireToolInputs =
+      snapshot?.echoWireToolInputs ??
+      (isServerClassifierEnabled()
+        ? recordWireToolInputEcho(snapshot !== undefined, inheritedEchoWireToolInputs?.())
+        : undefined);
+    let recordedContextRendering =
+      snapshot?.contextRendering ??
+      (isPromptSnapshotFeatureOn()
+        ? recordContextRendering(snapshot !== undefined, contextRendering)
+        : undefined);
     return {
-      systemPrompt: G,
-      toolDescriptions: P?.toolDescriptions,
-      toolEntries: P?.toolEntries,
-      toolServers: P?.toolServers,
-      recordedCliPrefix: P?.cliPrefix,
-      recordedWireShape: V,
+      systemPrompt: promptToSend,
+      toolDescriptions: snapshot?.toolDescriptions,
+      toolEntries: snapshot?.toolEntries,
+      toolServers: snapshot?.toolServers,
+      recordedCliPrefix: snapshot?.cliPrefix,
+      recordedWireShape: wireShape,
       record: createAttachmentMessage_2(
         {
           type: "prompt_snapshot",
-          systemPrompt: [...G],
-          ...(P !== undefined &&
-            P.toolDescriptions.size > 0 && {
-              tools: snapshotToolEntries(P),
+          systemPrompt: [...promptToSend],
+          ...(snapshot !== undefined &&
+            snapshot.toolDescriptions.size > 0 && {
+              tools: snapshotToolEntries(snapshot),
             }),
-          ...(P?.cliPrefix !== undefined && {
-            cliPrefix: P.cliPrefix,
+          ...(snapshot?.cliPrefix !== undefined && {
+            cliPrefix: snapshot.cliPrefix,
           }),
-          ...(ee !== undefined && {
-            reminderFold: ee,
+          ...(reminderFold !== undefined && {
+            reminderFold,
           }),
-          ...pickWireShape(V),
-          ...(fe !== undefined && {
-            echoWireToolInputs: fe,
+          ...pickWireShape(wireShape),
+          ...(echoWireToolInputs !== undefined && {
+            echoWireToolInputs,
           }),
-          ...(ie !== undefined && {
-            contextRendering: ie,
+          ...(recordedContextRendering !== undefined && {
+            contextRendering: recordedContextRendering,
           }),
         },
         stamp,
       ),
       source: "live_recorded",
-      snapshotHash: hashSystemPrompt(G),
-      atRenderPoint: L || (Q && P !== undefined && !isDeepStrictEqual([...G], [...P.systemPrompt])),
-      ...(L && {
-        rewritten: L,
+      snapshotHash: hashSystemPrompt(promptToSend),
+      atRenderPoint:
+        wasRewritten ||
+        (renderPointNewer &&
+          snapshot !== undefined &&
+          !isDeepStrictEqual([...promptToSend], [...snapshot.systemPrompt])),
+      ...(wasRewritten && {
+        rewritten: wasRewritten,
       }),
     };
   } catch (error) {
     logError(error);
-    return w;
+    return emptySnapshot;
   }
 }
 //@ chunk-ha3km179.js:138963-140211 placement
 /**
  * 记录本回合发送的工具描述。
  */
-function recordToolDescriptions(messagesForQuery, inlineToolsDeclared, { head, stamp, handed, ...y }) {
+function recordToolDescriptions(messagesForQuery, inlineToolsDeclared, { head, stamp, handed, ...options }) {
   try {
-    if (inlineToolsDeclared === undefined || !shouldSnapshotSystemPrompt(y.options) || !isRedescribable(y))
+    if (
+      inlineToolsDeclared === undefined ||
+      !shouldSnapshotSystemPrompt(options.options) ||
+      !isRedescribable(options)
+    )
       return;
-    let S = promptSnapshotUnlessRenderPoint(messagesForQuery, y.options);
-    if (!S) return;
-    let filtered = inlineToolsDeclared.filter((G) => !S.toolDescriptions.has(G.name));
-    let R = new Map(
-      inlineToolsDeclared.flatMap((G) =>
-        handed?.names.has(G.name) === true && S.toolDescriptions.get(G.name) !== G.description
-          ? [[G.name, G]]
+    let snapshot = promptSnapshotUnlessRenderPoint(messagesForQuery, options.options);
+    if (!snapshot) return;
+    let filtered = inlineToolsDeclared.filter(
+      (inlineTool) => !snapshot.toolDescriptions.has(inlineTool.name),
+    );
+    let redescribedByName = new Map(
+      inlineToolsDeclared.flatMap((inlineTool) =>
+        handed?.names.has(inlineTool.name) === true &&
+        snapshot.toolDescriptions.get(inlineTool.name) !== inlineTool.description
+          ? [[inlineTool.name, inlineTool]]
           : [],
       ),
     );
-    let T = new Set(inlineToolsDeclared.map((G) => G.name));
-    let w =
-      S.toolDescriptions.has(TOOL_SEARCH_TOOL_NAME) &&
-      !T.has(TOOL_SEARCH_TOOL_NAME) &&
+    let sentNames = new Set(inlineToolsDeclared.map((inlineTool) => inlineTool.name));
+    let lockedToolSearch =
+      snapshot.toolDescriptions.has(TOOL_SEARCH_TOOL_NAME) &&
+      !sentNames.has(TOOL_SEARCH_TOOL_NAME) &&
       isToolSearchLockedOffByDefault()
         ? new Set([TOOL_SEARCH_TOOL_NAME])
         : undefined;
-    let cliPrefix = S.cliPrefix ?? head?.cliPrefix;
-    let Q = cliPrefix !== S.cliPrefix;
-    let { wireShape, changed } = applyWireShape(S.wireShape, head?.wireShape);
-    if (filtered.length === 0 && R.size === 0 && !Q && !changed && w === undefined) {
-      if (handed !== undefined) toolDescriptionStandings.noteRedescribed(S.record, handed, T);
+    let cliPrefix = snapshot.cliPrefix ?? head?.cliPrefix;
+    let cliPrefixChanged = cliPrefix !== snapshot.cliPrefix;
+    let { wireShape, changed } = applyWireShape(snapshot.wireShape, head?.wireShape);
+    if (
+      filtered.length === 0 &&
+      redescribedByName.size === 0 &&
+      !cliPrefixChanged &&
+      !changed &&
+      lockedToolSearch === undefined
+    ) {
+      if (handed !== undefined) toolDescriptionStandings.noteRedescribed(snapshot.record, handed, sentNames);
       return;
     }
     let attachmentMessage = createAttachmentMessage_2(
       {
         type: "prompt_snapshot",
-        systemPrompt: [...S.systemPrompt],
-        tools: [...snapshotToolEntries(S, w).map((G) => R.get(G.name) ?? G), ...filtered].map(
-          ({ name: G, description, schema, server }) => ({
-            name: G,
-            description,
-            ...(schema && {
-              schema,
-            }),
-            ...(server !== undefined && {
-              server,
-            }),
+        systemPrompt: [...snapshot.systemPrompt],
+        tools: [
+          ...snapshotToolEntries(snapshot, lockedToolSearch).map(
+            (toolEntry) => redescribedByName.get(toolEntry.name) ?? toolEntry,
+          ),
+          ...filtered,
+        ].map(({ name, description, schema, server }) => ({
+          name,
+          description,
+          ...(schema && {
+            schema,
           }),
-        ),
+          ...(server !== undefined && {
+            server,
+          }),
+        })),
         ...(cliPrefix !== undefined && {
           cliPrefix,
         }),
-        ...(S.reminderFold !== undefined && {
-          reminderFold: S.reminderFold,
+        ...(snapshot.reminderFold !== undefined && {
+          reminderFold: snapshot.reminderFold,
         }),
         ...wireShape,
-        ...(S.echoWireToolInputs !== undefined && {
-          echoWireToolInputs: S.echoWireToolInputs,
+        ...(snapshot.echoWireToolInputs !== undefined && {
+          echoWireToolInputs: snapshot.echoWireToolInputs,
         }),
-        ...(S.contextRendering !== undefined && {
-          contextRendering: S.contextRendering,
+        ...(snapshot.contextRendering !== undefined && {
+          contextRendering: snapshot.contextRendering,
         }),
       },
       stamp,
     );
     if (attachmentMessage.attachment.type === "prompt_snapshot") {
-      toolDescriptionStandings.noteCopied(S.record, attachmentMessage.attachment);
+      toolDescriptionStandings.noteCopied(snapshot.record, attachmentMessage.attachment);
       if (handed !== undefined)
-        toolDescriptionStandings.noteRedescribed(attachmentMessage.attachment, handed, T);
+        toolDescriptionStandings.noteRedescribed(attachmentMessage.attachment, handed, sentNames);
     }
     return attachmentMessage;
   } catch (error) {
@@ -769,38 +823,40 @@ function recordToolDescriptions(messagesForQuery, inlineToolsDeclared, { head, s
 /**
  * 延迟加载工具附件
  */
-function lazyToolAttachment(e) {
-  return createAttachmentMessage_2(setModelRenderPoint(), e);
+function lazyToolAttachment(stamp) {
+  return createAttachmentMessage_2(setModelRenderPoint(), stamp);
 }
 //@ chunk-ha3km179.js:140246-140987 placement
 /**
  * 记录延迟加载的工具。
  */
-function recordDeferredTools(messagesForQuery, deferredToolsSent, { stamp, toolInputCopies, ...h }) {
+function recordDeferredTools(messagesForQuery, deferredToolsSent, { stamp, toolInputCopies, ...options }) {
   try {
-    if (!isRedescribable(h)) return;
+    if (!isRedescribable(options)) return;
     if (deferredToolsSent === undefined && (toolInputCopies?.size ?? 0) === 0) return;
-    let y = recordedDeferredTools(messagesForQuery);
-    let S = new Map();
-    for (let w of deferredToolsSent?.entries ?? [])
-      if (!S.has(w.name) && !isDeepStrictEqual(y.entries.get(w.name), w)) S.set(w.name, w);
+    let recorded = recordedDeferredTools(messagesForQuery);
+    let newEntries = new Map();
+    for (let entry of deferredToolsSent?.entries ?? [])
+      if (!newEntries.has(entry.name) && !isDeepStrictEqual(recorded.entries.get(entry.name), entry))
+        newEntries.set(entry.name, entry);
     let filtered = [...(deferredToolsSent?.nameOnlyAnnouncements ?? [])].filter(
-      (w) => !y.nameOnlyAnnouncements.has(w),
+      (name) => !recorded.nameOnlyAnnouncements.has(name),
     );
     let filtered_2 = [...(deferredToolsSent?.strippedReferences ?? [])].filter(
-      (w) => !y.strippedReferences.has(w),
+      (name) => !recorded.strippedReferences.has(name),
     );
     let mapped = [...(toolInputCopies ?? [])]
-      .filter(([w, P]) => y.toolInputCopies.get(w) !== P)
-      .map(([w, P]) => ({
-        id: w,
-        copy: P,
+      .filter(([id, copy]) => recorded.toolInputCopies.get(id) !== copy)
+      .map(([id, copy]) => ({
+        id,
+        copy,
       }));
-    if (S.size === 0 && filtered.length === 0 && filtered_2.length === 0 && mapped.length === 0) return;
+    if (newEntries.size === 0 && filtered.length === 0 && filtered_2.length === 0 && mapped.length === 0)
+      return;
     return createAttachmentMessage_2(
       {
         type: "deferred_tools_record",
-        entries: [...S.values()],
+        entries: [...newEntries.values()],
         ...(filtered.length > 0 && {
           nameOnlyAnnouncements: filtered,
         }),

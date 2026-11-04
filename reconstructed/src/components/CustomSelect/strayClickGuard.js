@@ -8,18 +8,22 @@
  * pieces: chunk-5g13d392.js (5)
  * attribution: placement 5
  */
-import { init_react_production, y, ce } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState, useCallback } from "../../../vendor/react/cjs/react.production.js";
 import { useClock } from "../../ink/components/ClockContext.js";
 import { lit } from "../../services/analytics/safeMetadata.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { DOUBLE_CLICK_MS } from "../../ink/components/ErrorBoundary.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-5g13d392.js:409-413 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5g13d392.js:409", () => {
+  init_react_production();
+});
 //@ chunk-5g13d392.js:413-467 placement
-function isWindowActivationOrDoubleClick(o, n, r) {
-  return o.isWindowActivation || isWithinDoubleClickMs(n, r);
+function isWindowActivationOrDoubleClick(event, mountedAt, now) {
+  return event.isWindowActivation || isWithinDoubleClickMs(mountedAt, now);
 }
 //@ chunk-5g13d392.js:467-822 placement
 /**
@@ -27,32 +31,32 @@ function isWindowActivationOrDoubleClick(o, n, r) {
  */
 function useStrayClickGuard() {
   let clock = useClock();
-  let [n] = y(() => clock.now());
-  return ce(
-    (r) => {
-      let e = clock.now();
-      if (!isWindowActivationOrDoubleClick(r, n, e)) return false;
-      let reason = r.isWindowActivation ? lit("window_activation") : lit("mount_settle");
+  let [mountedAt] = useState(() => clock.now());
+  return useCallback(
+    (event) => {
+      let now = clock.now();
+      if (!isWindowActivationOrDoubleClick(event, mountedAt, now)) return false;
+      let reason = event.isWindowActivation ? lit("window_activation") : lit("mount_settle");
       logForDebugging(
-        `Select: dropped stray click (${r.isWindowActivation ? "window-activation click" : `${e - n}ms after mount`})`,
+        `Select: dropped stray click (${event.isWindowActivation ? "window-activation click" : `${now - mountedAt}ms after mount`})`,
       );
       logEvent("tengu_select_stray_click_dropped", {
         reason,
       });
-      r.dropAsStray();
+      event.dropAsStray();
       return true;
     },
-    [clock, n],
+    [clock, mountedAt],
   );
 }
 //@ chunk-5g13d392.js:822-901 placement
 function useIsWithinStrayWindow() {
   let clock = useClock();
-  let [n] = y(() => clock.now());
-  return ce(() => isWithinDoubleClickMs(n, clock.now()), [clock, n]);
+  let [mountedAt] = useState(() => clock.now());
+  return useCallback(() => isWithinDoubleClickMs(mountedAt, clock.now()), [clock, mountedAt]);
 }
 //@ chunk-5g13d392.js:901-932 placement
-function isWithinDoubleClickMs(o, n) {
-  return n - o < DOUBLE_CLICK_MS;
+function isWithinDoubleClickMs(from, to) {
+  return to - from < DOUBLE_CLICK_MS;
 }
 export { useStrayClickGuard, useIsWithinStrayWindow };

@@ -10,20 +10,20 @@
  */
 
 //@ chunk-n5fvvrgq.js:419-506 placement
-function MAX_COUNT_ITERATIONS(r) {
-  let e = 0;
+function MAX_COUNT_ITERATIONS(text) {
+  let newlines = 0;
   for (
-    let index = r.indexOf(`
+    let index = text.indexOf(`
 `);
     index >= 0;
-    index = r.indexOf(
+    index = text.indexOf(
       `
 `,
       index + 1,
     )
   )
-    e += 1;
-  return e;
+    newlines += 1;
+  return newlines;
 }
 //@ chunk-n5fvvrgq.js:506-646 placement
 class HighlightBoundError extends Error {
@@ -33,9 +33,9 @@ class HighlightBoundError extends Error {
   }
 }
 //@ chunk-n5fvvrgq.js:646-696 placement
-function HighlightBudgetExceeded(r, e) {
-  r.left -= e;
-  if (r.left < 0) throw new HighlightBoundError();
+function HighlightBudgetExceeded(budget, cost) {
+  budget.left -= cost;
+  if (budget.left < 0) throw new HighlightBoundError();
 }
 //@ chunk-n5fvvrgq.js:696-706 placement
 var MAX_TOKEN_LENGTH = 32;
@@ -53,50 +53,51 @@ var MAX_MATCH_DEPTH = 16;
 /**
  * 包装 highlight.js 发射器类：按节点、文本长度、嵌套深度与子语言计入预算，超出时抛出高亮超限错误。
  */
-var createBoundedEmitter = (r, e) =>
-  class o extends r {
+var createBoundedEmitter = (BaseEmitter, budget) =>
+  class BoundedEmitter extends BaseEmitter {
     static isBounded = true;
     held = 0;
     breaks = 0;
     height = 0;
-    constructor(n) {
-      super(n);
-      HighlightBudgetExceeded(e, MAX_MATCH_DEPTH);
+    constructor(options) {
+      super(options);
+      HighlightBudgetExceeded(budget, MAX_MATCH_DEPTH);
     }
-    openNode(n) {
+    openNode(node) {
       this.held += 1;
-      HighlightBudgetExceeded(e, 1);
-      super.openNode(n);
+      HighlightBudgetExceeded(budget, 1);
+      super.openNode(node);
       this.grownTo(this.stack.length - 1);
     }
-    addText(n) {
-      let i = MAX_COUNT_ITERATIONS(n);
-      this.held += n.length;
-      this.breaks += i;
-      HighlightBudgetExceeded(e, n.length + i * (this.stack.length - 1) ** 2);
-      super.addText(n);
+    addText(text) {
+      let newlines = MAX_COUNT_ITERATIONS(text);
+      this.held += text.length;
+      this.breaks += newlines;
+      HighlightBudgetExceeded(budget, text.length + newlines * (this.stack.length - 1) ** 2);
+      super.addText(text);
     }
-    __addSublanguage(n, i) {
-      if (n instanceof o) {
-        let s = this.stack.length + n.height;
-        this.held += n.held;
-        this.breaks += n.breaks;
-        this.grownTo(s);
-        HighlightBudgetExceeded(e, n.breaks * s ** 2);
+    __addSublanguage(emitter, name) {
+      if (emitter instanceof BoundedEmitter) {
+        let height = this.stack.length + emitter.height;
+        this.held += emitter.held;
+        this.breaks += emitter.breaks;
+        this.grownTo(height);
+        HighlightBudgetExceeded(budget, emitter.breaks * height ** 2);
       }
-      super.__addSublanguage(n, i);
+      super.__addSublanguage(emitter, name);
     }
     toHTML() {
-      HighlightBudgetExceeded(e, this.held);
+      HighlightBudgetExceeded(budget, this.held);
       return super.toHTML();
     }
-    grownTo(n) {
-      this.height = Math.max(this.height, n);
-      if (this.height > MAX_TOKEN_LENGTH) HighlightBudgetExceeded(e, Number.POSITIVE_INFINITY);
+    grownTo(height) {
+      this.height = Math.max(this.height, height);
+      if (this.height > MAX_TOKEN_LENGTH) HighlightBudgetExceeded(budget, Number.POSITIVE_INFINITY);
     }
   };
 //@ chunk-n5fvvrgq.js:1382-1463 placement
-var isBoundedGrammar = (r) => typeof r === "function" && "openNode" in r.prototype && !("isBounded" in r);
+var isBoundedGrammar = (Emitter) =>
+  typeof Emitter === "function" && "openNode" in Emitter.prototype && !("isBounded" in Emitter);
 //@ chunk-n5fvvrgq.js:1463-1475 placement
 var DEFAULT_MAX_CODE_BYTES = 50000;
 //@ chunk-n5fvvrgq.js:1475-1487 placement
@@ -271,25 +272,25 @@ var TOTAL_BUDGET_BYTES = MAX_EMIT_BUDGET + DEFAULT_MAX_CODE_BYTES * EMIT_COST_FA
 /**
  * 恒等包装：直接调用回调（无预算限制时的占位）。
  */
-var noopRun = (r, e) => e();
+var noopRun = (grammar, fn) => fn();
 //@ chunk-n5fvvrgq.js:2913-2983 placement
-var withBudgetReset = (r) => (e, o) => {
-  r.spent = 0;
+var withBudgetReset = (spent) => (budget, fn) => {
+  spent.spent = 0;
   try {
-    return o();
+    return fn();
   } finally {
-    e.left -= r.spent;
+    budget.left -= spent.spent;
   }
 };
 //@ chunk-n5fvvrgq.js:2983-3198 placement
-var languageChildren = (r, e) => [
-  ...[("subLanguage" in e ? e.subLanguage : undefined) ?? []]
+var languageChildren = (hljs, mode) => [
+  ...[("subLanguage" in mode ? mode.subLanguage : undefined) ?? []]
     .flat()
-    .filter((o) => typeof o === "string")
-    .map((o) => r.getLanguage(o)),
-  ...(e.contains ?? []),
-  ...("variants" in e ? (e.variants ?? []) : []),
-  "starts" in e ? e.starts : undefined,
+    .filter((name) => typeof name === "string")
+    .map((name) => hljs.getLanguage(name)),
+  ...(mode.contains ?? []),
+  ...("variants" in mode ? (mode.variants ?? []) : []),
+  "starts" in mode ? mode.starts : undefined,
 ];
 //@ chunk-n5fvvrgq.js:3198-3331 placement
 class HighlightLimitError extends Error {
@@ -307,77 +308,78 @@ var MARKDOWN_TRIGGERS = new Map([["markdown", [MARKDOWN_FENCE_CHARS, SCRIPT_STYL
 //@ chunk-n5fvvrgq.js:3416-3436 placement
 var WHITESPACE_OR_LINE_RE = /\s+|[^\n]+/g;
 //@ chunk-n5fvvrgq.js:3436-3545 placement
-function countBreakChars(r, e) {
-  let o = 0;
-  for (let n of e === undefined ? "" : r) o += e?.includes(n) === true ? 1 : 0;
-  return e === undefined ? r.length : o;
+function countBreakChars(text, breaks) {
+  let count = 0;
+  for (let char of breaks === undefined ? "" : text) count += breaks?.includes(char) === true ? 1 : 0;
+  return breaks === undefined ? text.length : count;
 }
 //@ chunk-n5fvvrgq.js:3545-3674 placement
-function longTokenCost(r, e) {
-  let o = 0;
-  if (r.length <= MAX_SUBLANGUAGE_CHARS) return o;
-  for (let [n] of r.matchAll(WHITESPACE_OR_LINE_RE)) {
-    let i = n.length > MAX_SUBLANGUAGE_CHARS;
-    o += i ? countBreakChars(n, e) * n.length : 0;
+function longTokenCost(text, breaks) {
+  let cost = 0;
+  if (text.length <= MAX_SUBLANGUAGE_CHARS) return cost;
+  for (let [token] of text.matchAll(WHITESPACE_OR_LINE_RE)) {
+    let isLong = token.length > MAX_SUBLANGUAGE_CHARS;
+    cost += isLong ? countBreakChars(token, breaks) * token.length : 0;
   }
-  return o;
+  return cost;
 }
 //@ chunk-n5fvvrgq.js:3674-3715 placement
-var isWithinCodeBudget = (code) =>
-  code.length <= min && longTokenCost(code, undefined) <= MAX_SUBLANGUAGE_BYTES;
+var isWithinCodeBudget = (text) =>
+  text.length <= min && longTokenCost(text, undefined) <= MAX_SUBLANGUAGE_BYTES;
 //@ chunk-n5fvvrgq.js:3715-3790 placement
-function markdownTriggerChar(r, e) {
-  let o = MARKDOWN_TRIGGERS.get(e);
-  return o === undefined || o[1].test(r) ? undefined : o[0];
+function markdownTriggerChar(text, language) {
+  let trigger = MARKDOWN_TRIGGERS.get(language);
+  return trigger === undefined || trigger[1].test(text) ? undefined : trigger[0];
 }
 //@ chunk-n5fvvrgq.js:3790-3852 placement
 /**
  * 对需要预算的语言，计算超长子语言文本的裁剪结果。
  */
-function sublanguageOverflowCheck(r, e) {
-  return HIGHLIGHT_LANGUAGES.has(e) && r.length > MAX_SUBLANGUAGE_CHARS
-    ? longTokenCost(r, markdownTriggerChar(r, e))
+function sublanguageOverflowCheck(text, language) {
+  return HIGHLIGHT_LANGUAGES.has(language) && text.length > MAX_SUBLANGUAGE_CHARS
+    ? longTokenCost(text, markdownTriggerChar(text, language))
     : 0;
 }
 //@ chunk-n5fvvrgq.js:3852-3906 placement
 /**
  * 判断某语言的文本是否可在预算内高亮（长度与子语言预算）。
  */
-var languageSubLanguageMap = (r, e) =>
-  r.length <= (LANGUAGE_MAX_BYTES.get(e) ?? DEFAULT_MAX_CODE_BYTES) &&
-  sublanguageOverflowCheck(r, e) <= MAX_SUBLANGUAGE_BYTES;
+var languageSubLanguageMap = (text, language) =>
+  text.length <= (LANGUAGE_MAX_BYTES.get(language) ?? DEFAULT_MAX_CODE_BYTES) &&
+  sublanguageOverflowCheck(text, language) <= MAX_SUBLANGUAGE_BYTES;
 //@ chunk-n5fvvrgq.js:3906-4389 placement
 /**
  * 沿子语言图找到某语言实际依赖的受限语言名（用于套用该语言的长度上限）。
  */
-function rootHighlightLanguage(r, e) {
-  let o = new Map(
-    [...KNOWN_LANGUAGES].flatMap((a) => {
-      let language = r.getLanguage(a);
-      return language === undefined ? [] : [[language, a]];
+function rootHighlightLanguage(hljs, language) {
+  let languageByName = new Map(
+    [...KNOWN_LANGUAGES].flatMap((name) => {
+      let language = hljs.getLanguage(name);
+      return language === undefined ? [] : [[language, name]];
     }),
   );
-  let n = new Set();
-  let i = KNOWN_LANGUAGES.has(e) ? [] : [r.getLanguage(e)];
-  let s = e;
-  while (i.length > 0) {
-    let a = i.pop();
-    if (typeof a !== "object" || a === null || n.has(a)) continue;
-    let g =
-      "subLanguage" in a && Array.isArray(a.subLanguage) && a.subLanguage.length === 0
-        ? ([...o.values()].find((_r) => !MARKDOWN_TRIGGERS.has(_r)) ?? o.values().next().value)
-        : o.get(a);
-    if (g !== undefined && !MARKDOWN_TRIGGERS.has(g)) return g;
-    s = g ?? s;
-    n.add(a);
-    i.push(...(g === undefined ? languageChildren(r, a) : []));
+  let visited = new Set();
+  let pending = KNOWN_LANGUAGES.has(language) ? [] : [hljs.getLanguage(language)];
+  let fallback = language;
+  while (pending.length > 0) {
+    let node = pending.pop();
+    if (typeof node !== "object" || node === null || visited.has(node)) continue;
+    let resolved =
+      "subLanguage" in node && Array.isArray(node.subLanguage) && node.subLanguage.length === 0
+        ? ([...languageByName.values()].find((name) => !MARKDOWN_TRIGGERS.has(name)) ??
+          languageByName.values().next().value)
+        : languageByName.get(node);
+    if (resolved !== undefined && !MARKDOWN_TRIGGERS.has(resolved)) return resolved;
+    fallback = resolved ?? fallback;
+    visited.add(node);
+    pending.push(...(resolved === undefined ? languageChildren(hljs, node) : []));
   }
-  return s;
+  return fallback;
 }
 //@ chunk-n5fvvrgq.js:4389-4487 placement
-var withMarkdownBudgetHooks = (r) => ({
+var withMarkdownBudgetHooks = (hljs) => ({
   "before:highlight": ({ code, language }) => {
-    if (!isWithinCodeBudget(code) && !languageSubLanguageMap(code, rootHighlightLanguage(r, language)))
+    if (!isWithinCodeBudget(code) && !languageSubLanguageMap(code, rootHighlightLanguage(hljs, language)))
       throw new HighlightLimitError();
   },
 });
@@ -385,94 +387,96 @@ var withMarkdownBudgetHooks = (r) => ({
 /**
  * 计算语言定义中子语言的最大扇出。
  */
-function maxSubLanguageFanout(r, e) {
-  let o = new Set();
-  let n = [e];
-  let i = 0;
-  while (n.length > 0) {
-    let s = n.pop();
-    if (typeof s !== "object" || s === null || o.has(s)) continue;
-    o.add(s);
-    let subLanguage = "subLanguage" in s ? s.subLanguage : undefined;
-    let p = Array.isArray(subLanguage);
-    i = Math.max(i, p ? subLanguage.length || Number.POSITIVE_INFINITY : 0);
-    n.push(
+function maxSubLanguageFanout(hljs, rootMode) {
+  let visited = new Set();
+  let stack = [rootMode];
+  let fanout = 0;
+  while (stack.length > 0) {
+    let node = stack.pop();
+    if (typeof node !== "object" || node === null || visited.has(node)) continue;
+    visited.add(node);
+    let subLanguage = "subLanguage" in node ? node.subLanguage : undefined;
+    let isArray = Array.isArray(subLanguage);
+    fanout = Math.max(fanout, isArray ? subLanguage.length || Number.POSITIVE_INFINITY : 0);
+    stack.push(
       ...[subLanguage ?? []]
         .flat()
-        .filter((g) => typeof g === "string")
-        .map((g) => r.getLanguage(g)),
-      ...(s.contains ?? []),
-      ...("variants" in s ? (s.variants ?? []) : []),
-      "starts" in s ? s.starts : undefined,
+        .filter((name) => typeof name === "string")
+        .map((name) => hljs.getLanguage(name)),
+      ...(node.contains ?? []),
+      ...("variants" in node ? (node.variants ?? []) : []),
+      "starts" in node ? node.starts : undefined,
     );
   }
-  return i;
+  return fanout;
 }
 //@ chunk-n5fvvrgq.js:4915-5150 placement
-function createHighlightBudget(r, e) {
+function createHighlightBudget(hljs, cap) {
   let weakMap = new WeakMap();
-  let n = 0;
-  function i(language) {
-    let a = r.listLanguages().length;
-    if (language === undefined) return 0;
-    if (a !== n) {
+  let knownLanguages = 0;
+  function fanoutOf(rootMode) {
+    let languageCount = hljs.listLanguages().length;
+    if (rootMode === undefined) return 0;
+    if (languageCount !== knownLanguages) {
       weakMap = new WeakMap();
-      n = a;
+      knownLanguages = languageCount;
     }
-    let p = weakMap.get(language) ?? maxSubLanguageFanout(r, language);
-    weakMap.set(language, p);
-    return Math.min(p, a, e);
+    let fanout = weakMap.get(rootMode) ?? maxSubLanguageFanout(hljs, rootMode);
+    weakMap.set(rootMode, fanout);
+    return Math.min(fanout, languageCount, cap);
   }
-  return (s, a) => MAX_EMIT_BUDGET + a * (EMIT_COST_FACTOR + MAX_REPEAT_SPAN * i(r.getLanguage(s)));
+  return (languageName, codeLength) =>
+    MAX_EMIT_BUDGET +
+    codeLength * (EMIT_COST_FACTOR + MAX_REPEAT_SPAN * fanoutOf(hljs.getLanguage(languageName)));
 }
 //@ chunk-n5fvvrgq.js:5150-5362 placement
-var budgetHooks = (r, highlightBudget, o) => ({
-  "before:highlight": (n) => {
-    r.left = highlightBudget(n.language, n.code.length);
-    o.spent = r.left;
+var budgetHooks = (budget, highlightBudget, spentRef) => ({
+  "before:highlight": (context) => {
+    budget.left = highlightBudget(context.language, context.code.length);
+    spentRef.spent = budget.left;
   },
   "after:highlight": () => {
-    let n = r.left < 0;
-    o.spent -= Math.max(r.left, 0);
-    r.left = Number.POSITIVE_INFINITY;
-    if (n) throw new HighlightBoundError();
+    let overspent = budget.left < 0;
+    spentRef.spent -= Math.max(budget.left, 0);
+    budget.left = Number.POSITIVE_INFINITY;
+    if (overspent) throw new HighlightBoundError();
   },
 });
 //@ chunk-n5fvvrgq.js:5362-5615 placement
 /**
  * 给 highlight.js 实例装上有界高亮：替换发射器并加入预算插件，返回包装高亮调用的函数。
  */
-function installHighlightBounds(r, e) {
-  let o = r.highlightAuto("", [])._emitter.constructor;
-  if ("isBounded" in o) return noopRun;
-  r.addPlugin(withMarkdownBudgetHooks(r));
-  if (!isBoundedGrammar(o)) return noopRun;
-  let n = {
+function installHighlightBounds(hljs, cap) {
+  let Emitter = hljs.highlightAuto("", [])._emitter.constructor;
+  if ("isBounded" in Emitter) return noopRun;
+  hljs.addPlugin(withMarkdownBudgetHooks(hljs));
+  if (!isBoundedGrammar(Emitter)) return noopRun;
+  let budget = {
     left: Number.POSITIVE_INFINITY,
   };
-  let i = {
+  let spentRef = {
     spent: 0,
   };
-  r.configure({
-    __emitter: createBoundedEmitter(o, n),
+  hljs.configure({
+    __emitter: createBoundedEmitter(Emitter, budget),
   });
-  r.addPlugin(budgetHooks(n, createHighlightBudget(r, e), i));
-  return withBudgetReset(i);
+  hljs.addPlugin(budgetHooks(budget, createHighlightBudget(hljs, cap), spentRef));
+  return withBudgetReset(spentRef);
 }
 //@ chunk-n5fvvrgq.js:5615-5635 placement
 /**
  * 以最大嵌套深度包装高亮运行函数。
  */
-var withMaxDepth = (r) => installHighlightBounds(r, MAX_NESTING_DEPTH);
+var withMaxDepth = (hljs) => installHighlightBounds(hljs, MAX_NESTING_DEPTH);
 //@ chunk-n5fvvrgq.js:5635-5676 placement
 var cloneGrammar = ["begin", "end", "match", "illegal"];
 //@ chunk-n5fvvrgq.js:5676-5793 placement
-var regexpRewriter = (r) => (e) => {
-  let o = r.get(typeof e === "string" ? e : e.source);
+var regexpRewriter = (rewrites) => (value) => {
+  let rewritten = rewrites.get(typeof value === "string" ? value : value.source);
   try {
-    return o === undefined ? e : new RegExp(o);
+    return rewritten === undefined ? value : new RegExp(rewritten);
   } catch {
-    return e;
+    return value;
   }
 };
 //@ chunk-n5fvvrgq.js:5793-5873 placement
@@ -487,24 +491,25 @@ function cloneGrammarDeep(starts) {
 /**
  * 遍历语言定义的模式树，把已知会回溯爆炸的正则替换为有界版本。
  */
-function rewriteLanguageRegexps(r, e) {
-  let o = new Set();
-  let n = [r];
-  let i = regexpRewriter(e);
-  while (n.length > 0) {
-    let s = n.pop();
-    if (!(typeof s === "object" && s !== null) || o.has(s)) continue;
-    o.add(s);
-    for (let p of cloneGrammar) {
-      let g = s[p];
-      if (g !== undefined && g !== null) s[p] = Array.isArray(g) ? g.map(i) : i(g);
+function rewriteLanguageRegexps(grammar, rewrites) {
+  let visited = new Set();
+  let stack = [grammar];
+  let rewrite = regexpRewriter(rewrites);
+  while (stack.length > 0) {
+    let node = stack.pop();
+    if (!(typeof node === "object" && node !== null) || visited.has(node)) continue;
+    visited.add(node);
+    for (let key of cloneGrammar) {
+      let value = node[key];
+      if (value !== undefined && value !== null)
+        node[key] = Array.isArray(value) ? value.map(rewrite) : rewrite(value);
     }
-    s.contains &&= s.contains.map(cloneGrammarDeep);
-    s.variants &&= s.variants.map(cloneGrammarDeep);
-    s.starts &&= cloneGrammarDeep(s.starts);
-    n.push(...(s.contains ?? []), ...(s.variants ?? []), s.starts);
+    node.contains &&= node.contains.map(cloneGrammarDeep);
+    node.variants &&= node.variants.map(cloneGrammarDeep);
+    node.starts &&= cloneGrammarDeep(node.starts);
+    stack.push(...(node.contains ?? []), ...(node.variants ?? []), node.starts);
   }
-  return r;
+  return grammar;
 }
 //@ chunk-n5fvvrgq.js:6249-6261 placement
 var MAX_CPP_REGEX_BYTES = 1000;
@@ -521,19 +526,19 @@ var MAX_CPP_REGEX_ITEM_BYTES = 1500;
 //@ chunk-n5fvvrgq.js:6317-6328 placement
 var MAX_CPP_REGEX_REPEAT = 1e4;
 //@ chunk-n5fvvrgq.js:6328-6338 placement
-var CPP_TEMPLATE_RE = 16;
+var CPP_TEMPLATE_MAX_PARTS = 16;
 //@ chunk-n5fvvrgq.js:6338-6749 placement
 /**
  * C/C++ 函数声明正则的原版与有界版本。
  */
-var cppFunctionPatterns = (r) => [
-  String.raw`(${r}(decltype\(auto\)|(?:[a-zA-Z_]\w*::)?[a-zA-Z_]\w*` +
+var cppFunctionPatterns = (declSpec) => [
+  String.raw`(${declSpec}(decltype\(auto\)|(?:[a-zA-Z_]\w*::)?[a-zA-Z_]\w*` +
     String.raw`(?:<[^<>]+>)?)[\*&\s]+)+` +
     String.raw`(?:[a-zA-Z_]\w*::)?[a-zA-Z]\w*\s*\(`,
   String.raw`(?=[a-zA-Z_])` +
-    String.raw`(?:(?=decltype\(auto\))|(?<!${r}[a-zA-Z_]\w*?))` +
-    String.raw`(${r}(decltype\(auto\)|(?:[a-zA-Z_]\w*::)?[a-zA-Z_]\w*` +
-    String.raw`(?:<[^<>]+>)?)[\*&\s]+){1,${CPP_TEMPLATE_RE}}` +
+    String.raw`(?:(?=decltype\(auto\))|(?<!${declSpec}[a-zA-Z_]\w*?))` +
+    String.raw`(${declSpec}(decltype\(auto\)|(?:[a-zA-Z_]\w*::)?[a-zA-Z_]\w*` +
+    String.raw`(?:<[^<>]+>)?)[\*&\s]+){1,${CPP_TEMPLATE_MAX_PARTS}}` +
     String.raw`(?:[a-zA-Z_]\w*::)?[a-zA-Z]\w*\s*\(`,
 ];
 //@ chunk-n5fvvrgq.js:6749-6764 placement
@@ -586,7 +591,10 @@ var mapped = [
     "`" +
     String.raw`{|}~]+))*`,
   String.raw`(\[\]|\[[^\]]+\]|[^\s!"#%&'()*+,.\/;<=>@\[\\\]^` + "`" + String.raw`{|}~]+)(?==)`,
-].map((r) => [r, r.replaceAll(String.raw`[^\]]+\]`, String.raw`[^\]]{1,${MAX_CPP_REGEX_BYTES}}\]`)]);
+].map((regex) => [
+  regex,
+  regex.replaceAll(String.raw`[^\]]+\]`, String.raw`[^\]]{1,${MAX_CPP_REGEX_BYTES}}\]`),
+]);
 //@ chunk-n5fvvrgq.js:8135-8499 placement
 /**
  * INI 的危险正则替换。
@@ -636,7 +644,7 @@ var mapped_2 = [
   String.raw`(?:m|qr)\((?:\\.|[^\\\/])*?\)[dualxmsipngr]{0,12}`,
   String.raw`(?:m|qr)\[(?:\\.|[^\\\/])*?\][dualxmsipngr]{0,12}`,
   String.raw`(?:m|qr)\{(?:\\.|[^\\\/])*?\}[dualxmsipngr]{0,12}`,
-].map((r) => [r, r.replaceAll(")*?", `){0,${MAX_CPP_REGEX_ITEM_BYTES}}?`)]);
+].map((regex) => [regex, regex.replaceAll(")*?", `){0,${MAX_CPP_REGEX_ITEM_BYTES}}?`)]);
 //@ chunk-n5fvvrgq.js:9929-10429 placement
 /**
  * Python 数字字面量的危险正则替换。
@@ -679,15 +687,15 @@ var LANGUAGE_REGEX_REWRITES = new Map([
 /**
  * 包装语言定义工厂：用有界正则替换已知的危险正则，失败时退回原定义。
  */
-var withBoundedRegexps = (r, e) => (o) => {
-  let n = e(o);
+var withBoundedRegexps = (languageId, resolveGrammar) => (grammar) => {
+  let resolved = resolveGrammar(grammar);
   try {
     return rewriteLanguageRegexps(
-      n,
-      new Map([...SHARED_REGEX_REWRITES, ...(LANGUAGE_REGEX_REWRITES.get(r) ?? [])]),
+      resolved,
+      new Map([...SHARED_REGEX_REWRITES, ...(LANGUAGE_REGEX_REWRITES.get(languageId) ?? [])]),
     );
   } catch {
-    return e(o);
+    return resolveGrammar(grammar);
   }
 };
 export {

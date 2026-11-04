@@ -78,7 +78,7 @@ async function checkAndInstallOfficialMarketplace(storageV5) {
       reason,
     };
   }
-  let D = false;
+  let triedGit = false;
   try {
     if (isOfficialMarketplaceAutoInstallDisabled()) {
       logForDebugging("Official marketplace auto-install disabled via env var, skipping");
@@ -148,15 +148,15 @@ async function checkAndInstallOfficialMarketplace(storageV5) {
     let installLocation = join(cacheDir, CLAUDE_PLUGINS_OFFICIAL);
     if ((await fetchOfficialMarketplaceFromGcs(installLocation, cacheDir, storageV5)) !== null) {
       logFeatureOk("plugin_official_marketplace_fetch");
-      await updateKnownMarketplaces((We) => {
-        let ze = We[CLAUDE_PLUGINS_OFFICIAL];
-        if (ze && seedDirFor(ze.installLocation)) return null;
-        We[CLAUDE_PLUGINS_OFFICIAL] = {
+      await updateKnownMarketplaces((config) => {
+        let existingEntry = config[CLAUDE_PLUGINS_OFFICIAL];
+        if (existingEntry && seedDirFor(existingEntry.installLocation)) return null;
+        config[CLAUDE_PLUGINS_OFFICIAL] = {
           source: OFFICIAL_MARKETPLACE_SOURCE,
           installLocation,
           lastUpdated: new Date().toISOString(),
         };
-        return We;
+        return config;
       }, storageV5);
       await saveGlobalConfig(
         (current) => ({
@@ -212,7 +212,7 @@ async function checkAndInstallOfficialMarketplace(storageV5) {
         reason: "gcs_unavailable",
       };
     }
-    D = true;
+    triedGit = true;
     if (!(await isGitUsable())) {
       logFeatureBad("plugin_official_marketplace_fetch", "gcs_failed_git_unavailable");
       logForDebugging("Git not available, skipping official marketplace auto-install");
@@ -274,7 +274,7 @@ async function checkAndInstallOfficialMarketplace(storageV5) {
     let errorMessage = error instanceof Error ? error.message : String(error);
     if (errorMessage.includes("xcrun: error:")) {
       markGitUnavailable();
-      if (D) logFeatureBad("plugin_official_marketplace_fetch", "gcs_failed_git_unavailable");
+      if (triedGit) logFeatureBad("plugin_official_marketplace_fetch", "gcs_failed_git_unavailable");
       logForDebugging(
         "Official marketplace auto-install: git is a non-functional macOS xcrun shim, treating as git_unavailable",
       );
@@ -290,7 +290,7 @@ async function checkAndInstallOfficialMarketplace(storageV5) {
         reason: "git_unavailable",
       };
     }
-    if (D) logFeatureBad("plugin_official_marketplace_fetch", "gcs_and_git_failed");
+    if (triedGit) logFeatureBad("plugin_official_marketplace_fetch", "gcs_and_git_failed");
     logForDebugging(`Failed to auto-install official marketplace: ${errorMessage}`, {
       level: "error",
     });

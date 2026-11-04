@@ -21,3 +21,4 @@ var BUNDLE_RESOURCE = __cc_resource_0;
  * 读取资源文本
  */
 var bundleResourceText = readEmbeddedTextSync(BUNDLE_RESOURCE, import.meta.dirname);
+export { bundleResourceText };

@@ -12,106 +12,118 @@ import { hasMcpRenderOverride } from "../components/Message.js";
 import { AGENT } from "../tools/AgentTool/constants.js";
 import { hasSubagentOverride } from "../tools/AgentTool/agentDisplay.js";
 import { arraysEqual } from "./collections.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ag5x7vhf.js:120727-120746 placement
-var weakMap = new WeakMap();
+var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:120727", () => {
+  weakMap = new WeakMap();
+});
 //@ chunk-ag5x7vhf.js:120746-120896 placement
-function getGroupableToolNames(m) {
-  let h = weakMap.get(m);
-  if (!h) {
-    h = new Set(
-      m
-        .filter((x) => hasMcpRenderOverride(x.uiTableKey ?? x.name, "renderGroupedToolUse"))
-        .map((x) => x.name),
+function getGroupableToolNames(tools) {
+  let names = weakMap.get(tools);
+  if (!names) {
+    names = new Set(
+      tools
+        .filter((tool) => hasMcpRenderOverride(tool.uiTableKey ?? tool.name, "renderGroupedToolUse"))
+        .map((tool) => tool.name),
     );
-    weakMap.set(m, h);
+    weakMap.set(tools, names);
   }
-  return h;
+  return names;
 }
 //@ chunk-ag5x7vhf.js:120896-121759 placement = countToolCallsSince (1)
-function countToolCallsSince_2(m, tools, x = false, activeAgents) {
-  if (x)
+function countToolCallsSince_2(messages, tools, skip = false, activeAgents) {
+  if (skip)
     return {
-      messages: m,
+      messages,
     };
   let groupableToolNames = getGroupableToolNames(tools);
-  let _ = new Map();
-  for (let V of m) {
-    if (V.type !== "assistant") continue;
-    let W = V.message.content[0];
-    if (W?.type !== "tool_use" || !groupableToolNames.has(W.name)) continue;
-    if (W.name === AGENT && hasSubagentOverride(W.input, activeAgents)) continue;
-    let z = `${V.message.id}:${W.name}`;
-    let K = _.get(z);
-    if (K === undefined) {
-      K = [];
-      _.set(z, K);
+  let byMessageTool = new Map();
+  for (let message of messages) {
+    if (message.type !== "assistant") continue;
+    let toolUse = message.message.content[0];
+    if (toolUse?.type !== "tool_use" || !groupableToolNames.has(toolUse.name)) continue;
+    if (toolUse.name === AGENT && hasSubagentOverride(toolUse.input, activeAgents)) continue;
+    let groupKey = `${message.message.id}:${toolUse.name}`;
+    let group = byMessageTool.get(groupKey);
+    if (group === undefined) {
+      group = [];
+      byMessageTool.set(groupKey, group);
     }
-    K.push(V);
+    group.push(message);
   }
-  let I = new Map();
-  let D = new Set();
-  for (let V of _.values()) {
-    if (V.length < 2) continue;
-    for (let W of V) {
-      I.set(W, V);
-      D.add(W.message.content[0].id);
+  let runs = new Map();
+  let toolUseIds = new Set();
+  for (let group of byMessageTool.values()) {
+    if (group.length < 2) continue;
+    for (let message of group) {
+      runs.set(message, group);
+      toolUseIds.add(message.message.content[0].id);
     }
   }
-  if (I.size === 0)
+  if (runs.size === 0)
     return {
-      messages: m,
+      messages,
     };
-  let A = new Map();
-  for (let V of m) {
-    if (V.type !== "user") continue;
-    let W = V.message.content[0];
-    if (W.type === "tool_result" && D.has(W.tool_use_id)) A.set(W.tool_use_id, V);
+  let resultsById = new Map();
+  for (let message of messages) {
+    if (message.type !== "user") continue;
+    let toolResult = message.message.content[0];
+    if (toolResult.type === "tool_result" && toolUseIds.has(toolResult.tool_use_id))
+      resultsById.set(toolResult.tool_use_id, message);
   }
-  let L = [];
-  for (let message of m) {
-    let W = I.get(message);
-    if (W !== undefined) {
-      if (message === W[0]) L.push(applyGrouping(W, A));
+  let out = [];
+  for (let message of messages) {
+    let group = runs.get(message);
+    if (group !== undefined) {
+      if (message === group[0]) out.push(applyGrouping(group, resultsById));
       continue;
     }
     if (message.type === "user") {
-      let z = message.message.content[0];
-      if (z.type === "tool_result" && D.has(z.tool_use_id)) continue;
+      let toolResult = message.message.content[0];
+      if (toolResult.type === "tool_result" && toolUseIds.has(toolResult.tool_use_id)) continue;
     }
-    L.push(message);
+    out.push(message);
   }
   return {
-    messages: L,
+    messages: out,
   };
 }
 //@ chunk-ag5x7vhf.js:121759-121778 layout
-var weakMap_2 = new WeakMap();
+var weakMap_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:121759", () => {
+  weakMap_2 = new WeakMap();
+});
 //@ chunk-ag5x7vhf.js:121778-122149 fingerprint = applyGrouping (0.96)
 /**
  * 把同一 assistant 消息里的同类并行工具调用合并为 grouped_tool_use 以便一起渲染。
  */
-function applyGrouping(m, h) {
-  let x = m[0];
-  let T = [];
-  for (let msg of m) {
-    let group = h.get(msg.message.content[0].id);
-    if (group) T.push(group);
+function applyGrouping(messages, resultsById) {
+  let first = messages[0];
+  let results = [];
+  for (let msg of messages) {
+    let group = resultsById.get(msg.message.content[0].id);
+    if (group) results.push(group);
   }
-  let resultMsg = weakMap_2.get(x);
-  if (resultMsg !== undefined && arraysEqual(resultMsg.messages, m) && arraysEqual(resultMsg.results, T))
+  let resultMsg = weakMap_2.get(first);
+  if (
+    resultMsg !== undefined &&
+    arraysEqual(resultMsg.messages, messages) &&
+    arraysEqual(resultMsg.results, results)
+  )
     return resultMsg;
   let groupedMessage = {
     type: "grouped_tool_use",
-    toolName: x.message.content[0].name,
-    messages: m,
-    results: T,
-    displayMessage: x,
-    uuid: `grouped-${x.uuid}`,
-    timestamp: x.timestamp,
-    messageId: x.message.id,
+    toolName: first.message.content[0].name,
+    messages,
+    results,
+    displayMessage: first,
+    uuid: `grouped-${first.uuid}`,
+    timestamp: first.timestamp,
+    messageId: first.message.id,
   };
-  weakMap_2.set(x, groupedMessage);
+  weakMap_2.set(first, groupedMessage);
   return groupedMessage;
 }
 export { countToolCallsSince_2 };

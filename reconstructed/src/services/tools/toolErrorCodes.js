@@ -26,7 +26,7 @@ async function getToolErrorCode(error, name, mcpClients) {
   let taggedObject = getTaggedObject(error);
   if (taggedObject !== undefined) return taggedObject;
   if (error instanceof McpAuthError) {
-    let filtered = mcpClients.filter((S) => S.name === error.serverName);
+    let filtered = mcpClients.filter((client) => client.name === error.serverName);
     return filtered.length === 1 ? getMcpAuthErrorCode(error, filtered[0]) : undefined;
   }
   if (error instanceof ShellError && error.hadSandboxViolation)
@@ -69,19 +69,23 @@ function getDenialErrorCode(permissionDecision) {
   }
 }
 //@ chunk-e6aww6q8.js:2498538-2498742 placement
-async function getMcpAuthErrorCode(e, n) {
-  if (e.firstPartyBearer !== undefined)
-    return e.authErrorKind === "token_expired" ? getAuthExpiredCode(e.firstPartyBearer, n.config) : undefined;
-  return hasCustomMcpAuth(n)
+async function getMcpAuthErrorCode(error, mcpClient) {
+  if (error.firstPartyBearer !== undefined)
+    return error.authErrorKind === "token_expired"
+      ? getAuthExpiredCode(error.firstPartyBearer, mcpClient.config)
+      : undefined;
+  return hasCustomMcpAuth(mcpClient)
     ? undefined
     : {
         kind: "mcp_needs_auth",
-        servers: [e.serverName],
+        servers: [error.serverName],
       };
 }
 //@ chunk-e6aww6q8.js:2498742-2498886 placement
-function getNeedsAuthServers(e) {
-  let mapped = e.filter((r) => r.type === "needs-auth" && !hasCustomMcpAuth(r)).map((r) => r.name);
+function getNeedsAuthServers(connections) {
+  let mapped = connections
+    .filter((connection) => connection.type === "needs-auth" && !hasCustomMcpAuth(connection))
+    .map((connection) => connection.name);
   return mapped.length > 0
     ? {
         kind: "mcp_needs_auth",
@@ -93,8 +97,8 @@ function getNeedsAuthServers(e) {
 /**
  * MCP 服务器是否使用自定义认证（Authorization 头、headersHelper 等）而无需 OAuth 重新授权。
  */
-function hasCustomMcpAuth(e) {
-  let { config } = e;
+function hasCustomMcpAuth(mcpClient) {
+  let { config } = mcpClient;
   switch (config.type) {
     case "http":
     case "sse":
@@ -105,11 +109,11 @@ function hasCustomMcpAuth(e) {
     default:
       return false;
   }
-  switch (e.type) {
+  switch (mcpClient.type) {
     case "connected":
-      return !hasCliOwnedAuthProvider(e);
+      return !hasCliOwnedAuthProvider(mcpClient);
     case "failed":
-      return e.errorCode === "HEADERS_HELPER_AUTH_REJECTED";
+      return mcpClient.errorCode === "HEADERS_HELPER_AUTH_REJECTED";
     default:
       return false;
   }
@@ -143,10 +147,10 @@ async function getAuthExpiredCode(firstPartyBearer, config) {
   }
 }
 //@ chunk-e6aww6q8.js:2499478-2499615 placement
-function isDesignMcpUrl(e) {
-  if (e.type !== "http" && e.type !== "sse") return false;
+function isDesignMcpUrl(config) {
+  if (config.type !== "http" && config.type !== "sse") return false;
   try {
-    return new URL(e.url).pathname.startsWith("/v1/design/");
+    return new URL(config.url).pathname.startsWith("/v1/design/");
   } catch {
     return false;
   }

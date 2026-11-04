@@ -11,6 +11,29 @@
 import { registerBundledSkill } from "../bundledSkills.js";
 import { isArtifactTypeAliasReady, buildArtifactTypeAliasPrompt } from "./artifactTypeAlias.js";
 
+//@ chunk-p583jsvp.js:4803-5032 callgraph-fingerprint = registerLoremIpsumSkill (0.389)
+/**
+ * 通用注册器：按传入定义注册一个只能用户调用的内置 skill（例如 lorem-ipsum 测试 skill），isEnabled 由调用方给出。
+ */
+function registerLoremIpsumSkill(skillDefinition, policyGate) {
+  registerBundledSkill({
+    name: skillDefinition.name,
+    description: skillDefinition.description,
+    argumentHint: skillDefinition.argumentHint,
+    policyGate,
+    isEnabled: () => isArtifactTypeAliasReady(skillDefinition),
+    userInvocable: true,
+    disableModelInvocation: true,
+    async getPromptForCommand(args) {
+      return [
+        {
+          type: "text",
+          text: buildArtifactTypeAliasPrompt(skillDefinition, args),
+        },
+      ];
+    },
+  });
+}
 //@ chunk-hantmvxa.js:181559-182847 fingerprint = ONE_TOKEN_WORDS (1)
 /**
  * lorem-ipsum skill 用的「一个 token 的英文单词」表，用于生成指定 token 数的填充文本。
@@ -226,28 +249,5 @@ function generateLoremIpsum(targetTokens) {
 `;
   }
   return result.trim();
-}
-//@ chunk-p583jsvp.js:4803-5032 callgraph-fingerprint = registerLoremIpsumSkill (0.389)
-/**
- * 通用注册器：按传入定义注册一个只能用户调用的内置 skill（例如 lorem-ipsum 测试 skill），isEnabled 由调用方给出。
- */
-function registerLoremIpsumSkill(t, policyGate) {
-  registerBundledSkill({
-    name: t.name,
-    description: t.description,
-    argumentHint: t.argumentHint,
-    policyGate,
-    isEnabled: () => isArtifactTypeAliasReady(t),
-    userInvocable: true,
-    disableModelInvocation: true,
-    async getPromptForCommand(e) {
-      return [
-        {
-          type: "text",
-          text: buildArtifactTypeAliasPrompt(t, e),
-        },
-      ];
-    },
-  });
 }
 export { registerLoremIpsumSkill };

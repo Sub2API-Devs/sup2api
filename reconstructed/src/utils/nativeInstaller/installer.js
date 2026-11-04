@@ -8,9 +8,12 @@
  * pieces: chunk-ch0vxh4c.js (1), chunk-e6aww6q8.js (1), chunk-s61vbvea.js (6), chunk-zw17mz74.js (48)
  * attribution: fingerprint 21, placement 5, sole-consumer 1, affinity 2, facade-exports 9, layout 18
  */
-import { join, dirname, basename, resolve, delimiter, sep } from "path";
 import {
   stat,
+  access,
+  lstat,
+  readlink,
+  realpath,
   mkdir,
   writeFile,
   utimes,
@@ -20,31 +23,32 @@ import {
   unlink,
   readdir,
   rm,
-  realpath,
   rmdir,
   symlink,
-  access,
-  readlink,
-  lstat,
 } from "fs/promises";
 import { constants } from "fs";
+import { sep, join, resolve, dirname, basename, delimiter } from "path";
 import { randomBytes } from "crypto";
 import { homedir } from "os";
-import { Re } from "../../../runtime/bun-runtime.js";
-import { require_semver_3 } from "../../../vendor/semver/index.js";
+import { isEssentialTrafficOnly } from "../privacyLevel.js";
+import { getCachedOrFetchPassesEligibility } from "../../services/api/referral.js";
 import { env } from "../env.js";
-import { logForDebugging } from "../debug.js";
-import { envDynamicProbe } from "../envDynamic.js";
-import { getNativeVersionsDir, getXDGCacheHome, getXDGStateHome, getUserBinDir } from "../xdg.js";
+import { getSessionBypassPermissionsMode, getRootSession } from "../../bootstrap/state.js";
+import { getPlatform as getPlatform_2 } from "../platform.js";
 import {
+  isENOENT,
   getErrnoCode,
   errorMessage,
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   isSyscallError,
   toError,
   sanitizedErrCodeForTelemetry,
-  isENOENT,
 } from "../errors.js";
+import { __toESM } from "../../../runtime/bun-runtime.js";
+import { require_semver_3 } from "../../../vendor/semver/index.js";
+import { logForDebugging } from "../debug.js";
+import { envDynamicProbe } from "../envDynamic.js";
+import { getNativeVersionsDir, getXDGCacheHome, getXDGStateHome, getUserBinDir } from "../xdg.js";
 import {
   isAutoUpdateEnabled,
   sha256File,
@@ -69,7 +73,6 @@ import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../services/analy
 import { logError } from "../log.js";
 import { HostScoped } from "../hostScoped.js";
 import { isEnvTruthy } from "../envUtils.js";
-import { getRootSession, getSessionBypassPermissionsMode } from "../../bootstrap/state.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { resolveMaxVersionConfig, isForceDowngradeActive, shouldSkipVersion } from "../autoUpdater.js";
 import { isSemverVersion } from "../model/modelCatalog/catalogCapabilities.js";
@@ -86,12 +89,79 @@ import {
 } from "../shellConfig.js";
 import { registerCleanup } from "../cleanupRegistry.js";
 import { execFileNoThrowWithCwd } from "../execFileNoThrow.js";
-import { isEssentialTrafficOnly } from "../privacyLevel.js";
-import { getCachedOrFetchPassesEligibility } from "../../services/api/referral.js";
-import { getPlatform as getPlatform_2 } from "../platform.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-ch0vxh4c.js:1552-1657 fingerprint = isPossibleClaudeBinary (1)
+/**
+ * 路径是否是可执行的普通文件。
+ */
+async function isPossibleClaudeBinary(filePath) {
+  try {
+    if (!(await stat(filePath)).isFile()) return false;
+    await access(filePath, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+//@ chunk-s61vbvea.js:504239-504287 placement
+/**
+ * 若需要则预取资格判定（非必要流量时跳过）。
+ */
+async function prefetchEligibilityIfNeeded(request, options) {
+  if (isEssentialTrafficOnly()) return;
+  getCachedOrFetchPassesEligibility(request, options);
+}
+//@ chunk-s61vbvea.js:504426-504505 placement
+/**
+ * 判断是否为 bridge 子进程并带机器设置。
+ */
+function isBridgeChildMachineSettings() {
+  return env.CLAUDE_CODE_BRIDGE_CHILD_MACHINE_SETTINGS === true && !getSessionBypassPermissionsMode();
+}
+//@ chunk-s61vbvea.js:504639-504676 placement
+var VERSIONS_DIR_SEGMENT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:504639", () => {
+  VERSIONS_DIR_SEGMENT = sep + join("claude", "versions") + sep;
+});
+//@ chunk-s61vbvea.js:504676-504783 placement
+/**
+ * 判断安装链接是否存在且指向安装目录（Windows 或不存在时视为是）。
+ */
+async function isInstallLinkOrMissing(linkPath) {
+  if (getPlatform_2() === "windows") return true;
+  try {
+    return await isSymlinkIntoInstallDir(linkPath, await lstat(linkPath));
+  } catch (error) {
+    return isENOENT(error);
+  }
+}
+//@ chunk-s61vbvea.js:504783-504888 placement
+/**
+ * 判断路径是否为指向安装目录的符号链接。
+ */
+async function isSymlinkIntoInstallDir(linkPath, stats) {
+  if (!stats.isSymbolicLink()) return false;
+  let target = await readlink(linkPath);
+  return resolve(dirname(linkPath), target).includes(VERSIONS_DIR_SEGMENT);
+}
+//@ chunk-s61vbvea.js:504888-504981 fingerprint = isNpmSymlink (0.912)
+/**
+ * 启动器是否是 npm 生成的符号链接（指向 .js 或 node_modules）。
+ */
+async function isNpmSymlink(executablePath) {
+  let targetPath = await realpath(executablePath);
+  return targetPath.endsWith(".js") || targetPath.includes("node_modules");
+}
+//@ chunk-e6aww6q8.js:617698-617740 fingerprint = atomicMoveToInstallPath (0.508)
+function atomicMoveToInstallPath_2(path) {
+  return path.includes(".tmp.");
+}
 //@ chunk-zw17mz74.js:1332-1350 sole-consumer
-var semver = Re(require_semver_3(), 1);
+var semver; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-zw17mz74.js:1332", () => {
+  semver = __toESM(require_semver_3(), 1);
+});
 //@ chunk-zw17mz74.js:2073-2083 affinity
 var FORCE_ARM64 = false;
 //@ chunk-zw17mz74.js:2083-2410 fingerprint = getPlatform (0.712)
@@ -140,27 +210,27 @@ function getBaseDirectories() {
   };
 }
 //@ chunk-zw17mz74.js:20260-20332 layout
-async function isNonEmptyFile(e) {
-  return stat(e).then(
-    (n) => n.isFile() && n.size > 0,
+async function isNonEmptyFile(filePath) {
+  return stat(filePath).then(
+    (stats) => stats.isFile() && stats.size > 0,
     () => false,
   );
 }
 //@ chunk-zw17mz74.js:20332-20404 layout
-async function findFirstExistingFile(e, n) {
-  for (let r of e) if (await isNonEmptyFile(n(r))) return r;
+async function findFirstExistingFile(candidates, toPath) {
+  for (let candidate of candidates) if (await isNonEmptyFile(toPath(candidate))) return candidate;
   return;
 }
 //@ chunk-zw17mz74.js:20404-20465 layout
-function backupPathFor(e) {
-  return `${e}.old.${Date.now()}.${process.pid}`;
+function backupPathFor(installPath) {
+  return `${installPath}.old.${Date.now()}.${process.pid}`;
 }
 //@ chunk-zw17mz74.js:20465-20483 layout
 var BACKUP_RETENTION_MS = 2592000000;
 //@ chunk-zw17mz74.js:20483-20810 layout
-function parseBackupOrStagedName(file, n) {
-  if (!file.toLowerCase().startsWith(`${n.toLowerCase()}.`)) return;
-  let match = /^(?:old\.(\d+)(?:\.(\d+))?|new\.\d+\.(\d+)\.[0-9a-f]+)$/i.exec(file.slice(n.length + 1));
+function parseBackupOrStagedName(file, prefix) {
+  if (!file.toLowerCase().startsWith(`${prefix.toLowerCase()}.`)) return;
+  let match = /^(?:old\.(\d+)(?:\.(\d+))?|new\.\d+\.(\d+)\.[0-9a-f]+)$/i.exec(file.slice(prefix.length + 1));
   return match === null
     ? undefined
     : match[1] !== undefined
@@ -315,48 +385,56 @@ var ATOMIC_MOVE_RETRY_DELAYS_MS = [100, 500, 2000];
 /**
  * staging 中的二进制与校验和不再一致时拒绝安装。
  */
-class StagedBinaryChecksumError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  constructor() {
-    super(
-      "Staged binary no longer matches the verified checksum; refusing to install",
-      "Staged binary checksum mismatch at install",
-    );
-  }
-}
+let StagedBinaryChecksumError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-zw17mz74.js:22606", () => {
+  StagedBinaryChecksumError = class StagedBinaryChecksumError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    constructor() {
+      super(
+        "Staged binary no longer matches the verified checksum; refusing to install",
+        "Staged binary checksum mismatch at install",
+      );
+    }
+  };
+});
 //@ chunk-zw17mz74.js:22770-23309 layout
-async function atomicMoveToInstallPath(stagedBinaryPath, installPath, r) {
+async function atomicMoveToInstallPath(stagedBinaryPath, installPath, expectedChecksum) {
   await mkdir(dirname(installPath), {
     recursive: true,
   });
-  let s;
+  let lastError;
   for (let j = 1; j <= ATOMIC_MOVE_RETRY_DELAYS_MS.length + 1; j++) {
-    let w = `${installPath}.tmp.${process.pid}.${Date.now()}.${j}`;
+    let tempPath = `${installPath}.tmp.${process.pid}.${Date.now()}.${j}`;
     try {
-      await copyFile(stagedBinaryPath, w);
-      await chmod(w, 493);
-      if (r !== undefined && (await sha256File(w)) !== r) throw new StagedBinaryChecksumError();
-      await rename(w, installPath);
+      await copyFile(stagedBinaryPath, tempPath);
+      await chmod(tempPath, 493);
+      if (expectedChecksum !== undefined && (await sha256File(tempPath)) !== expectedChecksum)
+        throw new StagedBinaryChecksumError();
+      await rename(tempPath, installPath);
       logForDebugging(`Atomically installed binary to ${installPath}` + (j > 1 ? ` (attempt ${j})` : ""));
       return {
         attempts: j,
       };
     } catch (error) {
-      s = error;
+      lastError = error;
       try {
-        await unlink(w);
+        await unlink(tempPath);
       } catch {}
       let errnoCode = getErrnoCode(error);
-      let S = errnoCode === "EBUSY" || (errnoCode === "EPERM" && false);
-      let R = ATOMIC_MOVE_RETRY_DELAYS_MS[j - 1];
-      if (!S || R === undefined) throw error;
-      logForDebugging(`atomicMoveToInstallPath attempt ${j} failed with ${errnoCode}; retrying in ${R}ms`);
-      await sleep(R);
+      let isRetryable = errnoCode === "EBUSY" || (errnoCode === "EPERM" && false);
+      let delayMs = ATOMIC_MOVE_RETRY_DELAYS_MS[j - 1];
+      if (!isRetryable || delayMs === undefined) throw error;
+      logForDebugging(
+        `atomicMoveToInstallPath attempt ${j} failed with ${errnoCode}; retrying in ${delayMs}ms`,
+      );
+      await sleep(delayMs);
     }
   }
-  throw s;
+  throw lastError;
 }
 //@ chunk-zw17mz74.js:23309-24418 fingerprint = installVersionFromPackage (0.811)
-async function installVersionFromPackage(stagingPath, installPath, r) {
+async function installVersionFromPackage(stagingPath, installPath, expectedChecksum) {
   try {
     let nodeModulesDir = join(stagingPath, "node_modules", "@anthropic-ai");
     let nativePackage = (await readdir(nodeModulesDir)).find((entry) =>
@@ -379,7 +457,7 @@ async function installVersionFromPackage(stagingPath, installPath, r) {
       });
       throw Error("Native binary not found in staged package");
     }
-    let { attempts } = await atomicMoveToInstallPath(stagedBinaryPath, installPath, r);
+    let { attempts } = await atomicMoveToInstallPath(stagedBinaryPath, installPath, expectedChecksum);
     await rm(stagingPath, {
       recursive: true,
       force: true,
@@ -413,7 +491,7 @@ async function installVersionFromPackage(stagingPath, installPath, r) {
   }
 }
 //@ chunk-zw17mz74.js:24418-25351 fingerprint = installVersionFromBinary (0.618)
-async function installVersionFromBinary(stagingPath, installPath, r) {
+async function installVersionFromBinary(stagingPath, installPath, expectedChecksum) {
   try {
     let platform = getPlatform();
     let binaryName = getBinaryName(platform);
@@ -428,7 +506,7 @@ async function installVersionFromBinary(stagingPath, installPath, r) {
       });
       throw Error("Staged binary not found");
     }
-    let { attempts } = await atomicMoveToInstallPath(stagedBinaryPath, installPath, r);
+    let { attempts } = await atomicMoveToInstallPath(stagedBinaryPath, installPath, expectedChecksum);
     await rm(stagingPath, {
       recursive: true,
       force: true,
@@ -463,12 +541,15 @@ async function installVersionFromBinary(stagingPath, installPath, r) {
   }
 }
 //@ chunk-zw17mz74.js:25351-25425 fingerprint = installVersion (1)
-async function installVersion(stagingPath, installPath, downloadType, checksum) {
-  if (downloadType === "npm") return installVersionFromPackage(stagingPath, installPath, checksum);
-  return installVersionFromBinary(stagingPath, installPath, checksum);
+async function installVersion(stagingPath, installPath, downloadType, expectedChecksum) {
+  if (downloadType === "npm") return installVersionFromPackage(stagingPath, installPath, expectedChecksum);
+  return installVersionFromBinary(stagingPath, installPath, expectedChecksum);
 }
 //@ chunk-zw17mz74.js:25425-25451 layout
-var versionLockSlots = new HostScoped(() => new Map());
+var versionLockSlots; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-zw17mz74.js:25425", () => {
+  versionLockSlots = new HostScoped(() => new Map());
+});
 //@ chunk-zw17mz74.js:25451-27799 fingerprint = performVersionUpdate (0.385)
 /**
  * performVersionUpdate：下载到 staging、校验、原子移动到安装路径（可复用保留的已下载版本）。
@@ -479,38 +560,38 @@ async function performVersionUpdate(
 ) {
   let { stagingPath: baseStagingPath, installPath } = await getVersionPaths(version);
   let { executable: executablePath } = getBaseDirectories();
-  let y = isEnvTruthy("true");
-  let stagingPath = y
+  let isolateStaging = isEnvTruthy("true");
+  let stagingPath = isolateStaging
     ? `${baseStagingPath}.${process.pid}.${Date.now()}.${randomBytes(4).toString("hex")}`
     : baseStagingPath;
-  let R = versionLockSlots.of(getRootSession().host);
-  let F = R.get(version);
-  let I = !(F && (F.enforcingRelease || !requireEnforcingRelease));
-  let O = {
+  let locks = versionLockSlots.of(getRootSession().host);
+  let lock = locks.get(version);
+  let canReuseVerified = !(lock && (lock.enforcingRelease || !requireEnforcingRelease));
+  let result = {
     wasNewInstall: false,
     moveRetried: false,
     activationFailed: false,
     activationRefused: false,
     skippedUnverifiedRelease: true,
   };
-  let checksum = I ? undefined : F?.checksum;
+  let checksum = canReuseVerified ? undefined : lock?.checksum;
   let needsInstall = forceReinstall || !(await versionIsAvailable(version));
-  if (!needsInstall && I)
+  if (!needsInstall && canReuseVerified)
     try {
-      let x = await reverifyRetainedVersion(version, installPath, {
+      let reverified = await reverifyRetainedVersion(version, installPath, {
         explicitVersionRequested,
         requireEnforcingRelease,
       });
-      checksum = x.expectedChecksum;
-      if (!x.binaryMatches) needsInstall = true;
-      else if (x.signatureVerified)
-        R.set(version, {
+      checksum = reverified.expectedChecksum;
+      if (!reverified.binaryMatches) needsInstall = true;
+      else if (reverified.signatureVerified)
+        locks.set(version, {
           enforcingRelease: requireEnforcingRelease,
           checksum,
         });
     } catch (error) {
       if (error instanceof ManifestSignatureError) {
-        if (requireEnforcingRelease && error.reason === "release_predates_enforcement") return O;
+        if (requireEnforcingRelease && error.reason === "release_predates_enforcement") return result;
         throw error;
       }
       if (!explicitVersionRequested || requireEnforcingRelease || !isRetryableNetworkError(error))
@@ -522,15 +603,15 @@ async function performVersionUpdate(
         },
       );
     }
-  else if (!needsInstall && F?.checksum !== undefined) {
-    if (!(await fileMatchesChecksum(installPath, F.checksum))) {
+  else if (!needsInstall && lock?.checksum !== undefined) {
+    if (!(await fileMatchesChecksum(installPath, lock.checksum))) {
       logForDebugging(
         `Retained ${version} no longer matches the checksum verified earlier in this process; re-downloading`,
         {
           level: "warn",
         },
       );
-      R.delete(version);
+      locks.delete(version);
       needsInstall = true;
     }
   }
@@ -543,11 +624,11 @@ async function performVersionUpdate(
     );
     await cleanupOldStagingDirs(dirname(stagingPath));
     let downloadType;
-    let M;
+    let signatureVerified;
     try {
       ({
         downloadType,
-        signatureVerified: M,
+        signatureVerified,
         expectedChecksum: checksum,
       } = await downloadVersion(version, stagingPath, {
         explicitVersionRequested,
@@ -560,10 +641,10 @@ async function performVersionUpdate(
         error instanceof ManifestSignatureError &&
         error.reason === "release_predates_enforcement"
       )
-        return O;
+        return result;
       throw error;
     } finally {
-      if (y)
+      if (isolateStaging)
         await rm(stagingPath, {
           recursive: true,
           force: true,
@@ -576,32 +657,32 @@ async function performVersionUpdate(
           ),
         );
     }
-    if (M)
-      R.set(version, {
+    if (signatureVerified)
+      locks.set(version, {
         enforcingRelease: requireEnforcingRelease,
         checksum,
       });
   } else logForDebugging(`Version ${version} already installed, updating symlink`);
   await removeDirectoryIfEmpty(executablePath);
-  let P = await updateSymlink(executablePath, installPath, {
+  let symlinkResult = await updateSymlink(executablePath, installPath, {
     expectedChecksum: checksum,
   });
-  if (P !== "updated" && !(await isExecutableFile(executablePath))) {
-    let x = false;
+  if (symlinkResult !== "updated" && !(await isExecutableFile(executablePath))) {
+    let sourceExists = false;
     try {
       await stat(installPath);
-      x = true;
+      sourceExists = true;
     } catch {}
     logFeatureBad("update_apply", "update_apply_native_symlink_failed");
     throw Error(
-      `Failed to create executable at ${executablePath}. Source file exists: ${x}. Either ${executablePath} is not writable, or the existing file there was not created by the native installer and is not a working launcher \u2014 the updater will not overwrite a launcher it does not own. Remove it and re-run the update.`,
+      `Failed to create executable at ${executablePath}. Source file exists: ${sourceExists}. Either ${executablePath} is not writable, or the existing file there was not created by the native installer and is not a working launcher \u2014 the updater will not overwrite a launcher it does not own. Remove it and re-run the update.`,
     );
   }
   return {
     wasNewInstall: needsInstall,
     moveRetried,
-    activationFailed: P === "failed",
-    activationRefused: P === "refused",
+    activationFailed: symlinkResult === "failed",
+    activationRefused: symlinkResult === "refused",
     skippedUnverifiedRelease: false,
   };
 }
@@ -619,36 +700,36 @@ async function isNativeInstallPresent() {
 //@ chunk-zw17mz74.js:27977-28262 layout
 async function isRunningFromVersionsDir() {
   let { versions, executable } = getBaseDirectories();
-  let r = false;
-  let s = [
+  let found = false;
+  let candidates = [
     {
       versions,
       executable,
     },
   ];
-  let [h, w] = await Promise.all([
+  let [realVersions, realExecutableDir] = await Promise.all([
     realpath(versions).catch(() => versions),
     realpath(dirname(executable)).catch(() => dirname(executable)),
   ]);
-  let b = join(w, basename(executable));
-  if (h !== versions || b !== executable)
-    s.push({
-      versions: h,
-      executable: b,
+  let realExecutable = join(realExecutableDir, basename(executable));
+  if (realVersions !== versions || realExecutable !== executable)
+    candidates.push({
+      versions: realVersions,
+      executable: realExecutable,
     });
-  return s.some((y) =>
+  return candidates.some((candidate) =>
     isUnderVersionsOrExecutable(process.execPath, {
-      ...y,
+      ...candidate,
       isWindows: false,
     }),
   );
 }
 //@ chunk-zw17mz74.js:28262-28437 layout
-function isUnderVersionsOrExecutable(execPath, { versions, executable, isWindows }) {
-  let h = (y) => (isWindows ? y.replaceAll("\\", "/").toLowerCase() : y);
-  let w = h(execPath);
-  let b = h(versions).replace(/\/+$/, "") + "/";
-  return w.startsWith(b) || w === h(executable);
+function isUnderVersionsOrExecutable(inputPath, { versions, executable, isWindows }) {
+  let normalize = (inputPath) => (isWindows ? inputPath.replaceAll("\\", "/").toLowerCase() : inputPath);
+  let normalizedExec = normalize(inputPath);
+  let normalizedVersionsPrefix = normalize(versions).replace(/\/+$/, "") + "/";
+  return normalizedExec.startsWith(normalizedVersionsPrefix) || normalizedExec === normalize(executable);
 }
 //@ chunk-zw17mz74.js:28437-28632 layout
 function getCanaryVersion() {
@@ -671,12 +752,12 @@ function getCanaryVersion() {
 async function updateLatest(channelOrVersion, forceReinstall = false) {
   let startTime = Date.now();
   let { executable: executablePath } = getBaseDirectories();
-  let h = !/^v?\d+\.\d+\.\d+(-\S+)?$/.test(channelOrVersion);
+  let isChannel = !/^v?\d+\.\d+\.\d+(-\S+)?$/.test(channelOrVersion);
   let { maxVersion, forceDowngradeEnabled } = await resolveMaxVersionConfig();
-  let y =
+  let isForcedDowngrade =
     forceDowngradeEnabled &&
     !forceReinstall &&
-    h &&
+    isChannel &&
     !!maxVersion &&
     isForceDowngradeActive(
       {
@@ -693,27 +774,27 @@ async function updateLatest(channelOrVersion, forceReinstall = false) {
       maxVersion,
       "native_update",
     );
-  let version = y ? maxVersion : await getLatestVersion(channelOrVersion);
-  let R = version.length;
+  let version = isForcedDowngrade ? maxVersion : await getLatestVersion(channelOrVersion);
+  let versionLength = version.length;
   if (!isSemverVersion(version))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Invalid version string from ${h ? "version pointer" : "argument"}: not a well-formed version (${R} characters)`,
+      `Invalid version string from ${isChannel ? "version pointer" : "argument"}: not a well-formed version (${versionLength} characters)`,
       "Invalid version string: not a well-formed version",
     );
   logForDebugging(`Checking for native installer update to version ${version}`);
-  let requireEnforcingRelease = h && (await isNativeInstallPresent());
-  if (channelOrVersion === "latest" && !y) {
+  let requireEnforcingRelease = isChannel && (await isNativeInstallPresent());
+  if (channelOrVersion === "latest" && !isForcedDowngrade) {
     let canaryVersion = getCanaryVersion();
-    let M = canaryVersion && maxVersion && semverGte(canaryVersion, maxVersion);
-    if (canaryVersion && semverGte(canaryVersion, version) && !M) {
+    let canaryExceedsMax = canaryVersion && maxVersion && semverGte(canaryVersion, maxVersion);
+    if (canaryVersion && semverGte(canaryVersion, version) && !canaryExceedsMax) {
       logForDebugging(`Native installer: canary ${canaryVersion} active, overriding ${version}`);
       version = canaryVersion;
-    } else if (M)
+    } else if (canaryExceedsMax)
       logForDebugging(
         `Native installer: canary ${canaryVersion} exceeds maxVersion ${maxVersion}, not applying`,
       );
   }
-  if (!y && !forceReinstall && maxVersion && semverGte(version, maxVersion)) {
+  if (!isForcedDowngrade && !forceReinstall && maxVersion && semverGte(version, maxVersion)) {
     logForDebugging(
       `Native installer: maxVersion ${maxVersion} is set, capping update from ${version} to ${maxVersion}`,
     );
@@ -802,7 +883,7 @@ async function updateLatest(channelOrVersion, forceReinstall = false) {
       latestVersion: version,
     };
   }
-  if (y)
+  if (isForcedDowngrade)
     logEvent("tengu_native_update_forced_downgrade", {
       from_version: sanitizeVersion(
         {
@@ -819,24 +900,19 @@ async function updateLatest(channelOrVersion, forceReinstall = false) {
       ),
       to_version: sanitizeVersion(version),
     });
-  let I = false;
-  let O = false;
-  let L = false;
-  let D = false;
-  let A = false;
+  let wasNewInstall = false;
+  let moveRetried = false;
+  let activationFailed = false;
+  let activationRefused = false;
+  let skippedUnverifiedRelease = false;
   let latencyMs;
   if (isEnvTruthy("true")) {
-    ({
-      wasNewInstall: I,
-      moveRetried: O,
-      activationFailed: L,
-      activationRefused: D,
-      skippedUnverifiedRelease: A,
-    } = await performVersionUpdate(version, {
-      forceReinstall,
-      explicitVersionRequested: !h,
-      requireEnforcingRelease,
-    }));
+    ({ wasNewInstall, moveRetried, activationFailed, activationRefused, skippedUnverifiedRelease } =
+      await performVersionUpdate(version, {
+        forceReinstall,
+        explicitVersionRequested: !isChannel,
+        requireEnforcingRelease,
+      }));
     latencyMs = Date.now() - startTime;
   } else {
     let { installPath } = await getVersionPaths(version);
@@ -844,17 +920,12 @@ async function updateLatest(channelOrVersion, forceReinstall = false) {
     let lockAcquired = await tryWithVersionLock(
       installPath,
       async () => {
-        ({
-          wasNewInstall: I,
-          moveRetried: O,
-          activationFailed: L,
-          activationRefused: D,
-          skippedUnverifiedRelease: A,
-        } = await performVersionUpdate(version, {
-          forceReinstall,
-          explicitVersionRequested: !h,
-          requireEnforcingRelease,
-        }));
+        ({ wasNewInstall, moveRetried, activationFailed, activationRefused, skippedUnverifiedRelease } =
+          await performVersionUpdate(version, {
+            forceReinstall,
+            explicitVersionRequested: !isChannel,
+            requireEnforcingRelease,
+          }));
       },
       3,
     );
@@ -879,7 +950,7 @@ async function updateLatest(channelOrVersion, forceReinstall = false) {
       };
     }
   }
-  if (A) {
+  if (skippedUnverifiedRelease) {
     logEvent("tengu_native_update_skipped_unverified_release", {
       latency_ms: latencyMs,
       target_version: sanitizeVersion(version),
@@ -909,13 +980,15 @@ async function updateLatest(channelOrVersion, forceReinstall = false) {
       latestVersion: version,
     };
   }
-  if (L) logFeatureSad("update_apply", "update_apply_native_activation_failed_old_binary_kept");
-  else if (D) logFeatureSad("update_apply", "update_apply_native_activation_refused_external_launcher");
-  else if (O) logFeatureSad("update_apply", "update_apply_native_move_retry");
+  if (activationFailed)
+    logFeatureSad("update_apply", "update_apply_native_activation_failed_old_binary_kept");
+  else if (activationRefused)
+    logFeatureSad("update_apply", "update_apply_native_activation_refused_external_launcher");
+  else if (moveRetried) logFeatureSad("update_apply", "update_apply_native_move_retry");
   else logFeatureOk("update_apply");
   logEvent("tengu_native_update_complete", {
     latency_ms: latencyMs,
-    was_new_install: I,
+    was_new_install: wasNewInstall,
     was_force_reinstall: forceReinstall,
   });
   logForDebugging(`Successfully updated to version ${version}`);
@@ -963,14 +1036,15 @@ async function updateSymlink(executablePath, installPath, { expectedChecksum } =
         if (isENOENT(copyError)) throw Error(`Source file does not exist: ${installPath}`);
         throw copyError;
       }
-      let F;
+      let checksumMatches;
       try {
-        F = expectedChecksum === undefined || (await sha256File(oldFileName)) === expectedChecksum;
+        checksumMatches =
+          expectedChecksum === undefined || (await sha256File(oldFileName)) === expectedChecksum;
       } catch (restoreError) {
         await unlink(oldFileName).catch(() => {});
         throw restoreError;
       }
-      if (!F) {
+      if (!checksumMatches) {
         await unlink(oldFileName).catch(() => {});
         logForDebugging(
           `Refusing to install a launcher copy of ${installPath} that does not match its signed checksum`,
@@ -981,23 +1055,23 @@ async function updateSymlink(executablePath, installPath, { expectedChecksum } =
         return "failed";
       }
       try {
-        let I = existingStats !== undefined;
-        if (!I)
+        let needsReplace = existingStats !== undefined;
+        if (!needsReplace)
           try {
             await rename(oldFileName, executablePath);
           } catch (error) {
             let errnoCode = getErrnoCode(error);
             if (errnoCode !== "EEXIST" && errnoCode !== "EPERM" && errnoCode !== "EBUSY") throw error;
-            I = true;
+            needsReplace = true;
           }
-        if (I) {
-          let O = backupPathFor(executablePath);
-          await rename(executablePath, O);
+        if (needsReplace) {
+          let backupPath = backupPathFor(executablePath);
+          await rename(executablePath, backupPath);
           try {
             await rename(oldFileName, executablePath);
           } catch (copyError) {
             try {
-              await rename(O, executablePath);
+              await rename(backupPath, executablePath);
             } catch (restoreError) {
               let errorWithCause = Error(`Failed to restore old executable: ${restoreError}`, {
                 cause: copyError,
@@ -1083,7 +1157,7 @@ async function checkInstall(force = false) {
   if (!(force || installationType === "native" || config.installMethod === "native")) return [];
   let dirs = getBaseDirectories();
   let messages = [];
-  let b = [];
+  let issues = [];
   let localBinDir = dirname(dirs.executable);
   let resolvedLocalBinPath = resolve(localBinDir);
   let isWindows = getPlatform().startsWith("win32");
@@ -1095,7 +1169,7 @@ async function checkInstall(force = false) {
       userActionRequired: true,
       type: "error",
     });
-    b.push("bin_dir_missing");
+    issues.push("bin_dir_missing");
   }
   if (isWindows) {
     if (!(await isExecutableFile(dirs.executable))) {
@@ -1104,7 +1178,7 @@ async function checkInstall(force = false) {
         userActionRequired: true,
         type: "error",
       });
-      b.push("executable_missing");
+      issues.push("executable_missing");
     }
   } else
     try {
@@ -1116,7 +1190,7 @@ async function checkInstall(force = false) {
           userActionRequired: true,
           type: "error",
         });
-        b.push("executable_invalid");
+        issues.push("executable_invalid");
       }
     } catch (e) {
       if (isENOENT(e)) {
@@ -1125,14 +1199,14 @@ async function checkInstall(force = false) {
           userActionRequired: true,
           type: "error",
         });
-        b.push("executable_missing");
+        issues.push("executable_missing");
       } else if (!(await isExecutableFile(dirs.executable))) {
         messages.push({
           message: `claude command at ${dirs.executable} missing or broken (not a valid Claude binary)`,
           userActionRequired: true,
           type: "error",
         });
-        b.push("executable_invalid");
+        issues.push("executable_invalid");
       }
     }
   if (
@@ -1146,7 +1220,7 @@ async function checkInstall(force = false) {
       }
     })
   ) {
-    b.push("not_in_path");
+    issues.push("not_in_path");
     if (isWindows) {
       let windowsBinPath = localBinDir.replaceAll("/", "\\");
       messages.push({
@@ -1167,8 +1241,8 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ${displayPath} && source ${displa
       });
     }
   }
-  if (b.length === 0) logFeatureOk("native_check_install");
-  else logFeatureSad("native_check_install", b[0]);
+  if (issues.length === 0) logFeatureOk("native_check_install");
+  else logFeatureSad("native_check_install", issues[0]);
   return messages;
 }
 //@ chunk-zw17mz74.js:38900-38976 layout
@@ -1182,22 +1256,25 @@ class InFlightInstall {
   }
 }
 //@ chunk-zw17mz74.js:38976-39001 layout
-var installLatestInFlight = new HostScoped(() => new InFlightInstall());
+var installLatestInFlight; // deferred: uses InFlightInstall of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-zw17mz74.js:38976", () => {
+  installLatestInFlight = new HostScoped(() => new InFlightInstall());
+});
 //@ chunk-zw17mz74.js:39001-39213 facade-exports = installLatest (0.696)
 /**
  * installLatest：合并同进程内并发调用（in-flight）后调用 installLatestImpl。
  */
-function installLatest(channelOrVersion, forceReinstall = false, storageV5) {
-  if (forceReinstall) return installLatestImpl(channelOrVersion, forceReinstall, storageV5);
-  let s = installLatestInFlight.of(getRootSession().host);
-  if (s.inFlight) {
+function installLatest(channelOrVersion, forceReinstall = false, storageBackend) {
+  if (forceReinstall) return installLatestImpl(channelOrVersion, forceReinstall, storageBackend);
+  let storageBackend_2 = installLatestInFlight.of(getRootSession().host);
+  if (storageBackend_2.inFlight) {
     logForDebugging("installLatest: joining in-flight call");
-    return s.inFlight;
+    return storageBackend_2.inFlight;
   }
-  let promise = installLatestImpl(channelOrVersion, forceReinstall, storageV5);
-  s.begin(promise);
+  let promise = installLatestImpl(channelOrVersion, forceReinstall, storageBackend);
+  storageBackend_2.begin(promise);
   let clear = () => {
-    s.reset();
+    storageBackend_2.reset();
   };
   promise.then(clear, clear);
   return promise;
@@ -1206,7 +1283,7 @@ function installLatest(channelOrVersion, forceReinstall = false, storageV5) {
 /**
  * installLatestImpl：updateLatest 成功后把 installMethod 设为 native 并关闭旧的自动更新方式。
  */
-async function installLatestImpl(channelOrVersion, forceReinstall = false, r) {
+async function installLatestImpl(channelOrVersion, forceReinstall = false, storageBackend) {
   let updateResult = await updateLatest(channelOrVersion, forceReinstall);
   if (!updateResult.success)
     return {
@@ -1231,7 +1308,7 @@ async function installLatestImpl(channelOrVersion, forceReinstall = false, r) {
         autoUpdates: false,
         autoUpdatesProtectedForNative: true,
       }),
-      r,
+      storageBackend,
     );
     logForDebugging(
       'Native installer: Set installMethod to "native" and disabled legacy auto-updater for protection',
@@ -1248,9 +1325,9 @@ async function installLatestImpl(channelOrVersion, forceReinstall = false, r) {
 //@ chunk-zw17mz74.js:39858-39958 layout
 async function getVersionFromSymlink(executable) {
   try {
-    let n = await readlink(executable);
-    let r = resolve(dirname(executable), n);
-    if (await isExecutableFile(r)) return r;
+    let linkTarget = await readlink(executable);
+    let resolvedTarget = resolve(dirname(executable), linkTarget);
+    if (await isExecutableFile(resolvedTarget)) return resolvedTarget;
   } catch {}
   return null;
 }
@@ -1359,28 +1436,28 @@ async function forceRemoveLock(versionFilePath) {
 //@ chunk-zw17mz74.js:41443-41458 layout
 var STALE_STAGING_MS = 3600000;
 //@ chunk-zw17mz74.js:41458-41862 layout
-async function cleanupOldStagingDirs(e) {
-  let n = Date.now() - STALE_STAGING_MS;
+async function cleanupOldStagingDirs(stagingDir) {
+  let cutoff = Date.now() - STALE_STAGING_MS;
   try {
-    let r = await readdir(e);
-    let s = 0;
-    for (let h of r) {
-      let w = join(e, h);
+    let entries = await readdir(stagingDir);
+    let cleanedCount = 0;
+    for (let entry of entries) {
+      let entryPath = join(stagingDir, entry);
       try {
-        if ((await stat(w)).mtime.getTime() < n) {
-          await rm(w, {
+        if ((await stat(entryPath)).mtime.getTime() < cutoff) {
+          await rm(entryPath, {
             recursive: true,
             force: true,
           });
-          s++;
-          logForDebugging(`Cleaned up old staging directory: ${h}`);
+          cleanedCount++;
+          logForDebugging(`Cleaned up old staging directory: ${entry}`);
         }
       } catch {}
     }
-    if (s > 0) {
-      logForDebugging(`Cleaned up ${s} orphaned staging directories`);
+    if (cleanedCount > 0) {
+      logForDebugging(`Cleaned up ${cleanedCount} orphaned staging directories`);
       logEvent("tengu_native_staging_cleanup", {
-        cleaned_count: s,
+        cleaned_count: cleanedCount,
       });
     }
   } catch (error) {
@@ -1395,15 +1472,15 @@ async function cleanupOldVersions() {
   await Promise.resolve();
   let dirs = getBaseDirectories();
   let oneHourAgo = Date.now() - 3600000;
-  let r = Date.now() - 1209600000;
-  let s = Date.now() - BACKUP_RETENTION_MS;
+  let twoWeekCutoff = Date.now() - 1209600000;
+  let backupCutoff = Date.now() - BACKUP_RETENTION_MS;
   if (getPlatform().startsWith("win32")) {
     let executableDir = dirname(dirs.executable);
-    let S = basename(dirs.executable);
+    let executableName = basename(dirs.executable);
     try {
       let files = await readdir(executableDir);
       let flattened = files.flatMap((file) => {
-        let backupOrStagedName = parseBackupOrStagedName(file, S);
+        let backupOrStagedName = parseBackupOrStagedName(file, executableName);
         return backupOrStagedName === undefined
           ? []
           : [
@@ -1413,14 +1490,22 @@ async function cleanupOldVersions() {
               },
             ];
       });
-      let sorted = flattened.filter((P) => P.kind === "backup").sort((P, x) => x.stampedMs - P.stampedMs);
-      let found = files.find((file) => file.toLowerCase() === S.toLowerCase());
-      let L =
-        sorted.length > 0 && !(found !== undefined && (await isNonEmptyFile(join(executableDir, found))));
-      let D = L ? await findFirstExistingFile(sorted, (P) => join(executableDir, P.file)) : undefined;
+      let candidates = flattened
+        .filter((candidate) => candidate.kind === "backup")
+        .sort((left, right) => right.stampedMs - left.stampedMs);
+      let found = files.find((file) => file.toLowerCase() === executableName.toLowerCase());
+      let needsBaseCopy =
+        candidates.length > 0 && !(found !== undefined && (await isNonEmptyFile(join(executableDir, found))));
+      let keptBackup = needsBaseCopy
+        ? await findFirstExistingFile(candidates, (candidate) => join(executableDir, candidate.file))
+        : undefined;
       let stagingCleanedCount = 0;
       for (let file of flattened) {
-        if (file.kind === "backup" && L && ((file === D && file.stampedMs >= s) || file.stampedMs >= r))
+        if (
+          file.kind === "backup" &&
+          needsBaseCopy &&
+          ((file === keptBackup && file.stampedMs >= backupCutoff) || file.stampedMs >= twoWeekCutoff)
+        )
           continue;
         try {
           let stagingPath = join(executableDir, file.file);
@@ -1512,9 +1597,9 @@ async function cleanupOldVersions() {
     if (currentSymlinkVersion) protectedVersions.add(currentSymlinkVersion);
     else if (getPlatform().startsWith("win32"))
       try {
-        let A = await stat(dirs.executable);
+        let executableStats = await stat(dirs.executable);
         for (let versionFile of versionFiles)
-          if (versionFile.size === A.size) protectedVersions.add(versionFile.resolvedPath);
+          if (versionFile.size === executableStats.size) protectedVersions.add(versionFile.resolvedPath);
       } catch {}
     for (let v of versionFiles) {
       if (protectedVersions.has(v.resolvedPath)) continue;
@@ -1538,7 +1623,7 @@ async function cleanupOldVersions() {
     }
     let eligibleVersions = versionFiles
       .filter((v) => !protectedVersions.has(v.resolvedPath))
-      .sort((A, P) => P.mtime.getTime() - A.mtime.getTime());
+      .sort((left, right) => right.mtime.getTime() - left.mtime.getTime());
     let versionsToDelete = [
       ...eligibleVersions
         .filter((eligibleVersion) => eligibleVersion.size > 0)
@@ -1565,18 +1650,18 @@ async function cleanupOldVersions() {
     await Promise.all(
       versionsToDelete.map(async (version) => {
         try {
-          let P = true;
+          let canCount = true;
           let deleted = await tryWithVersionLock(version.path, async () => {
             if (version.size === 0) {
-              let M = await stat(version.path);
-              if (M.size > 0 || M.mtime.getTime() >= oneHourAgo) {
-                P = false;
+              let rechecked = await stat(version.path);
+              if (rechecked.size > 0 || rechecked.mtime.getTime() >= oneHourAgo) {
+                canCount = false;
                 return;
               }
             }
             await unlink(version.path);
           });
-          if (deleted && P) deletedCount++;
+          if (deleted && canCount) deletedCount++;
           else if (!deleted) {
             lockFailedCount++;
             logForDebugging(`Skipping deletion of ${version.name} - locked by another process`);
@@ -1650,7 +1735,7 @@ async function removeInstalledSymlink() {
 async function cleanupShellAliases() {
   let messages = [];
   let configMap = getShellConfigPaths();
-  let r = false;
+  let writeFailed = false;
   for (let [shellType, configFile] of Object.entries(configMap))
     try {
       let lines = await readFileLinesOrNull(configFile);
@@ -1666,7 +1751,7 @@ async function cleanupShellAliases() {
         logForDebugging(`Cleaned up claude alias from ${shellType} config`);
       }
     } catch (error) {
-      r = true;
+      writeFailed = true;
       logForDebugging(`Failed to clean up claude alias from ${configFile}: ${error}`, {
         level: "error",
       });
@@ -1676,7 +1761,7 @@ async function cleanupShellAliases() {
         type: "error",
       });
     }
-  if (r) logFeatureSad("native_cleanup_aliases", "config_write_failed");
+  if (writeFailed) logFeatureSad("native_cleanup_aliases", "config_write_failed");
   else logFeatureOk("native_cleanup_aliases");
   return messages;
 }
@@ -1785,15 +1870,15 @@ async function cleanupNpmInstallations() {
   let errors = [];
   let warnings = [];
   let removed = 0;
-  let s = false;
-  let h = false;
+  let npmUninstallFailed = false;
+  let localInstallRemoveFailed = false;
   let codePackageResult = await attemptNpmUninstall("@anthropic-ai/claude-code");
   if (codePackageResult.success) {
     removed++;
     if (codePackageResult.warning) warnings.push(codePackageResult.warning);
   } else if (codePackageResult.error) {
     errors.push(codePackageResult.error);
-    s = true;
+    npmUninstallFailed = true;
   }
   if (
     {
@@ -1837,7 +1922,7 @@ async function cleanupNpmInstallations() {
       if (macroPackageResult.warning) warnings.push(macroPackageResult.warning);
     } else if (macroPackageResult.error) {
       errors.push(macroPackageResult.error);
-      s = true;
+      npmUninstallFailed = true;
     }
   }
   let localInstallDir = join(homedir(), ".claude", "local");
@@ -1853,82 +1938,21 @@ async function cleanupNpmInstallations() {
       logForDebugging(`Failed to remove local installation: ${error}`, {
         level: "error",
       });
-      h = true;
+      localInstallRemoveFailed = true;
     }
   }
   if (errors.length === 0) logFeatureOk("native_cleanup_npm");
   else if (removed > 0) logFeatureSad("native_cleanup_npm", "partial_errors");
-  else if (s && !h) logFeatureBad("native_cleanup_npm", "npm_uninstall_failed");
-  else if (h && !s) logFeatureBad("native_cleanup_npm", "local_install_remove_failed");
+  else if (npmUninstallFailed && !localInstallRemoveFailed)
+    logFeatureBad("native_cleanup_npm", "npm_uninstall_failed");
+  else if (localInstallRemoveFailed && !npmUninstallFailed)
+    logFeatureBad("native_cleanup_npm", "local_install_remove_failed");
   else logFeatureBad("native_cleanup_npm", "npm_uninstall_failed");
   return {
     removed,
     errors,
     warnings,
   };
-}
-//@ chunk-s61vbvea.js:504239-504287 placement
-/**
- * 若需要则预取资格判定（非必要流量时跳过）。
- */
-async function prefetchEligibilityIfNeeded(e, n) {
-  if (isEssentialTrafficOnly()) return;
-  getCachedOrFetchPassesEligibility(e, n);
-}
-//@ chunk-s61vbvea.js:504426-504505 placement
-/**
- * 判断是否为 bridge 子进程并带机器设置。
- */
-function isBridgeChildMachineSettings() {
-  return env.CLAUDE_CODE_BRIDGE_CHILD_MACHINE_SETTINGS === true && !getSessionBypassPermissionsMode();
-}
-//@ chunk-s61vbvea.js:504639-504676 placement
-var VERSIONS_DIR_SEGMENT = sep + join("claude", "versions") + sep;
-//@ chunk-s61vbvea.js:504676-504783 placement
-/**
- * 判断安装链接是否存在且指向安装目录（Windows 或不存在时视为是）。
- */
-async function isInstallLinkOrMissing(executable) {
-  if (getPlatform_2() === "windows") return true;
-  try {
-    return await isSymlinkIntoInstallDir(executable, await lstat(executable));
-  } catch (error) {
-    return isENOENT(error);
-  }
-}
-//@ chunk-s61vbvea.js:504783-504888 placement
-/**
- * 判断路径是否为指向安装目录的符号链接。
- */
-async function isSymlinkIntoInstallDir(e, n) {
-  if (!n.isSymbolicLink()) return false;
-  let r = await readlink(e);
-  return resolve(dirname(e), r).includes(VERSIONS_DIR_SEGMENT);
-}
-//@ chunk-s61vbvea.js:504888-504981 fingerprint = isNpmSymlink (0.912)
-/**
- * 启动器是否是 npm 生成的符号链接（指向 .js 或 node_modules）。
- */
-async function isNpmSymlink(executablePath) {
-  let targetPath = await realpath(executablePath);
-  return targetPath.endsWith(".js") || targetPath.includes("node_modules");
-}
-//@ chunk-ch0vxh4c.js:1552-1657 fingerprint = isPossibleClaudeBinary (1)
-/**
- * 路径是否是可执行的普通文件。
- */
-async function isPossibleClaudeBinary(filePath) {
-  try {
-    if (!(await stat(filePath)).isFile()) return false;
-    await access(filePath, constants.X_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
-//@ chunk-e6aww6q8.js:617698-617740 fingerprint = atomicMoveToInstallPath (0.508)
-function atomicMoveToInstallPath_2(e) {
-  return e.includes(".tmp.");
 }
 export {
   checkInstall,

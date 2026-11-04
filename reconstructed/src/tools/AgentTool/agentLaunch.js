@@ -8,27 +8,10 @@
  * pieces: chunk-0m7em5b4.js (20), chunk-e6aww6q8.js (13)
  * attribution: placement 33
  */
-import {
-  OBSERVER_EXCLUDED_TOOLS,
-  observerReportTool,
-  launchAgentsWithHooks,
-} from "../ObserverReportTool/ObserverReportTool.js";
-import { toolMatchesName } from "../../Tool.js";
-import { identity } from "../../utils/identity.js";
-import { AGENT, TASK } from "./constants.js";
-import { isWebFetchAgent_2 } from "../WebFetchTool/harnessNotes.js";
-import { isForegroundAgentMoveDisabled } from "./backgroundGates.js";
-import { env } from "../../utils/env.js";
-import { notifyNestedChainDropped } from "../../utils/sessionActivity.js";
-import { getIsNonInteractiveSession, isDiskless } from "../../bootstrap/state.js";
-import { addAgentKeepaliveReason } from "../../tasks/taskKinds.js";
-import { spawnProvenanceOf } from "../../plugins/functionHooks/inputHold.js";
-import { xxo } from "./subagentSpawn.js";
-import { isAbortedNotByInterrupt } from "../../entrypoints/sdk/controlSchemas.js";
-import { AbortError, getErrnoCode, storageCauseErrnoCode } from "../../utils/errors.js";
-import { isPlainObject } from "../../utils/isPlainObject.js";
 import { getAutoModeUnavailableReason } from "../../utils/permissions/permissionSetup.js";
 import { logForDebugging } from "../../utils/debug.js";
+import { env } from "../../utils/env.js";
+import { isDiskless, getIsNonInteractiveSession } from "../../bootstrap/state.js";
 import { isFirstPartyProvider } from "../../utils/model/providers.js";
 import { getHostAgentPolicy } from "../../utils/hostAgentPolicy.js";
 import { hasStoredOAuthToken } from "../../utils/auth.js";
@@ -47,201 +30,37 @@ import { NOTEBOOK_EDIT_TOOL_NAME } from "../NotebookEditTool/constants.js";
 import { countCharInString } from "../../utils/stringUtils.js";
 import { parseWildcardAgentTypes } from "../../utils/permissions/permissions.js";
 import { samePath } from "../../utils/file.js";
+import {
+  OBSERVER_EXCLUDED_TOOLS,
+  observerReportTool,
+  launchAgentsWithHooks,
+} from "../ObserverReportTool/ObserverReportTool.js";
+import { toolMatchesName } from "../../Tool.js";
+import { identity } from "../../utils/identity.js";
+import { AGENT, TASK } from "./constants.js";
+import { isWebFetchAgent_2 } from "../WebFetchTool/harnessNotes.js";
+import { isForegroundAgentMoveDisabled } from "./backgroundGates.js";
+import { notifyNestedChainDropped } from "../../utils/sessionActivity.js";
+import { addAgentKeepaliveReason } from "../../tasks/taskKinds.js";
+import { spawnProvenanceOf } from "../../plugins/functionHooks/inputHold.js";
+import { STARTED_HANDLE } from "./subagentSpawn.js";
+import { isAbortedNotByInterrupt } from "../../entrypoints/sdk/controlSchemas.js";
+import { AbortError, getErrnoCode, storageCauseErrnoCode } from "../../utils/errors.js";
+import { isPlainObject } from "../../utils/isPlainObject.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0m7em5b4.js:10958-11027 placement
-function observerToolset(resolvedTools) {
-  return [
-    ...resolvedTools.filter((h) => OBSERVER_EXCLUDED_TOOLS.every((w) => !toolMatchesName(h, w))),
-    observerReportTool,
-  ];
-}
-//@ chunk-0m7em5b4.js:11027-11061 placement
-/**
- * 本次恢复中「已停止」的代理 id 集合（可重置）。
- */
-var stoppedAgentIds = identity(new Set(), (e) => e.clear());
-//@ chunk-0m7em5b4.js:11061-11102 placement
-/**
- * 把一批代理 id 记为已停止。
- */
-function rememberStoppedAgents(e) {
-  for (let h of e) stoppedAgentIds.add(h);
-}
-//@ chunk-0m7em5b4.js:11102-11134 placement
-/**
- * 判断某代理 id 是否被记为已停止。
- */
-function isStoppedAgent(agentId) {
-  return stoppedAgentIds.has(agentId);
-}
-//@ chunk-0m7em5b4.js:11134-11168 placement
-/**
- * 「可恢复」的代理 id 集合（可重置）。
- */
-var resumableAgentIds = identity(new Set(), (e) => e.clear());
-//@ chunk-0m7em5b4.js:11168-11209 placement
-/**
- * 把一批代理 id 记为可恢复。
- */
-function rememberResumableAgents(e) {
-  for (let h of e) resumableAgentIds.add(h);
-}
-//@ chunk-0m7em5b4.js:11209-11241 placement
-/**
- * 判断某代理 id 是否被记为可恢复。
- */
-function isResumableAgent(agentId) {
-  return resumableAgentIds.has(agentId);
-}
-//@ chunk-0m7em5b4.js:11241-11388 placement
-function isAgentLaunchToolUse(e) {
-  return (
-    (e.name === AGENT || e.name === TASK) &&
-    typeof e.input === "object" &&
-    e.input !== null &&
-    "subagent_type" in e.input &&
-    isWebFetchAgent_2(e.input.subagent_type)
-  );
-}
-//@ chunk-0m7em5b4.js:11388-11821 placement
-function findAgentLaunchResults(messages, agentId) {
-  let w = new Set();
-  for (let A of messages)
-    if (A.type === "assistant") {
-      let content = A.message.content;
-      if (!Array.isArray(content)) continue;
-      for (let P of content) if (P.type === "tool_use" && isAgentLaunchToolUse(P)) w.add(P.id);
-    } else if (A.type === "user" && w.size > 0) {
-      let toolUseResult = A.toolUseResult;
-      let content = A.message.content;
-      if (
-        typeof toolUseResult !== "object" ||
-        toolUseResult === null ||
-        !("agentId" in toolUseResult) ||
-        toolUseResult.agentId !== agentId ||
-        !Array.isArray(content)
-      )
-        continue;
-      if (content.some((E) => E.type === "tool_result" && w.has(E.tool_use_id))) return true;
-    }
-  return false;
-}
-//@ chunk-0m7em5b4.js:11821-11865 placement
-/**
- * 前台代理自动转后台的等待时间：未指定时沿用传入值，否则看是否禁止了前台转后台。
- */
-function autoBackgroundMsForLaunch(e, h) {
-  return e === undefined ? h : isForegroundAgentMoveDisabled();
-}
-//@ chunk-0m7em5b4.js:11865-11988 placement
-function autoBackgroundOptions(e, h) {
-  return {
-    autoBackgroundMs: h || !env.CLAUDE_AUTO_BACKGROUND_TASKS ? undefined : 120000,
-    waitsOnRuleMove: e !== undefined && !h,
-  };
-}
-//@ chunk-0m7em5b4.js:11988-12098 placement
-function raceAgentLaunch(e, backgroundSignal, w) {
-  return w
-    ? e.then(() => "done")
-    : Promise.race([e.then(() => "done"), backgroundSignal.then(() => "backgrounded")]);
-}
-//@ chunk-0m7em5b4.js:12098-12583 placement
-function settleBackgroundedAgent({
-  outcome,
-  registration,
-  wait,
-  ownerAgentId,
-  taskRegistry,
-  sessionScratch,
-  agentTask,
-}) {
-  let { taskId } = registration;
-  let F = outcome === "done" && agentTask.hasAgentChildKeepalive(taskId, taskRegistry);
-  if (F) agentTask.backgroundAgentTask(taskId, taskRegistry);
-  let status = taskRegistry.get(taskId)?.status;
-  let Z =
-    outcome === "backgrounded" &&
-    !F &&
-    status !== undefined &&
-    status !== "running" &&
-    !agentTask.hasAgentChildKeepalive(taskId, taskRegistry);
-  let r = outcome === "backgrounded" && !Z;
-  if (!r && !F) return false;
-  wait.moved = true;
-  if (r) agentTask.armWorkerCheckinForBackgroundedAgent(taskId, taskRegistry, sessionScratch);
-  registration.detachParentAbortRelay();
-  notifyNestedChainDropped(taskId);
-  if (!getIsNonInteractiveSession()) addAgentKeepaliveReason(ownerAgentId, `agent:${taskId}`, taskRegistry);
-  return true;
-}
-//@ chunk-0m7em5b4.js:12583-12847 placement
-async function runResumeStartHooks(e, { origin, ...w }) {
-  let hookOrigin = spawnProvenanceOf(e)?.hookOrigin;
-  let S = await launchAgentsWithHooks({
-    ...w,
-    agents: [],
-    resume: Object.freeze({
-      agentId: e,
-    }),
-    origin: hookOrigin === undefined ? origin : [...hookOrigin, ...(origin ?? [])],
-  });
-  if (S.starting !== xxo && isAbortedNotByInterrupt(w.signal, w.background)) {
-    S.starting?.[Symbol.dispose]();
-    throw new AbortError();
-  }
-  return S;
-}
-//@ chunk-0m7em5b4.js:12847-12906 placement
-function pluginDeclinedResumeMessage(deny) {
-  return `a plugin declined the resume: ${deny}`;
-}
-//@ chunk-0m7em5b4.js:12906-13191 placement
-function isTranscriptChainIntact(e, h) {
-  let filtered = e.filter(isPlainObject);
-  let A = new Map(filtered.flatMap((O) => (O.uuid === undefined ? [] : [[O.uuid, O.parentUuid]])));
-  let S = new Set(h);
-  let P = (parentUuid) => A.has(parentUuid) || S.has(parentUuid);
-  let E = new Set(filtered.flatMap(getPreservedMessageUuids));
-  return (
-    h.length > 0 &&
-    isNil(A.get(h[0])) &&
-    [...E].every(P) &&
-    filtered.every((O) => isNil(O.parentUuid) || P(O.parentUuid) || E.has(O.uuid))
-  );
-}
-//@ chunk-0m7em5b4.js:13191-13234 placement
-/**
- * 值为 undefined 或 null（用于判断消息链是否完整）。
- */
-function isNil(e) {
-  return e === undefined || e === null;
-}
-//@ chunk-0m7em5b4.js:13234-13352 placement
-function getPreservedMessageUuids({ compactMetadata }) {
-  let preservedMessages = isPlainObject(compactMetadata) ? compactMetadata.preservedMessages : undefined;
-  return isPlainObject(preservedMessages) && Array.isArray(preservedMessages.uuids)
-    ? preservedMessages.uuids
-    : [];
-}
-//@ chunk-0m7em5b4.js:13352-13364 placement
-var SETTLE_AGENT_BACKGROUND_MS = 2000;
-//@ chunk-0m7em5b4.js:13364-13597 placement
-function unreadableStateMessage(e, h) {
-  return `its saved state cannot be read (${getErrnoCode(e) ?? storageCauseErrnoCode(e) ?? "storage error"}), so it cannot be told whether the user stopped it. ${h ? "Send the message again in a moment, or the user" : "The user"} can resume it themselves.`;
-}
 //@ chunk-e6aww6q8.js:3262427-3262685 placement
-function fallbackFromUnavailableAutoMode(e, n, r) {
-  if (e !== "auto") return e;
-  let autoModeUnavailableReason = getAutoModeUnavailableReason(r);
-  if (autoModeUnavailableReason === null) return e;
+function fallbackFromUnavailableAutoMode(declaredMode, parentMode, model) {
+  if (declaredMode !== "auto") return declaredMode;
+  let autoModeUnavailableReason = getAutoModeUnavailableReason(model);
+  if (autoModeUnavailableReason === null) return declaredMode;
   logForDebugging(
-    `Subagent definition's permissionMode would put it in auto mode, but auto mode is unavailable to this subagent (reason=${autoModeUnavailableReason}); keeping parent mode '${n}'.`,
+    `Subagent definition's permissionMode would put it in auto mode, but auto mode is unavailable to this subagent (reason=${autoModeUnavailableReason}); keeping parent mode '${parentMode}'.`,
     {
       level: "warn",
     },
   );
-  return n;
+  return parentMode;
 }
 //@ chunk-e6aww6q8.js:3262685-3262959 placement
 function isRemoteAgentIsolationAvailable() {
@@ -280,10 +99,10 @@ async function getPushedBranchForRemoteAgent() {
 /**
  * 把父代理的权限模式转换成子代理可用的模式（bubble 不透传、bypassPermissions 降为 auto）。
  */
-function subagentPermissionMode(e) {
-  if (e === "bubble") return;
-  if (e === "bypassPermissions") return "auto";
-  return e;
+function subagentPermissionMode(mode) {
+  if (mode === "bubble") return;
+  if (mode === "bypassPermissions") return "auto";
+  return mode;
 }
 //@ chunk-e6aww6q8.js:3263357-3263593 placement
 /**
@@ -303,23 +122,26 @@ function resolveSubagentPermissionMode({
         (parentMode === "auto" && declaredMode !== "plan")))
   )
     return subagentPermissionMode(parentModeToHand);
-  let y = subagentPermissionMode(declaredMode);
-  if (y !== "auto") return y;
+  let resolvedMode = subagentPermissionMode(declaredMode);
+  if (resolvedMode !== "auto") return resolvedMode;
   return subagentPermissionMode(fallbackFromUnavailableAutoMode("auto", parentModeToHand, model));
 }
 //@ chunk-e6aww6q8.js:3263593-3263621 placement
 /**
  * 会写文件的工具名集合（Edit/Write/NotebookEdit）。
  */
-var FILE_EDITING_TOOL_NAMES = new Set([FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME]);
+var FILE_EDITING_TOOL_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3263593", () => {
+  FILE_EDITING_TOOL_NAMES = new Set([FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME]);
+});
 //@ chunk-e6aww6q8.js:3263621-3263689 placement
 /**
  * 统计字符串行数（空或非字符串为 0），用于估算编辑行数。
  */
-function countLines(e) {
-  return typeof e === "string" && e.length > 0
+function countLines(text) {
+  return typeof text === "string" && text.length > 0
     ? countCharInString(
-        e,
+        text,
         `
 `,
       ) + 1
@@ -329,22 +151,22 @@ function countLines(e) {
 /**
  * 根据工具输入估算编辑的增加/删除行数：Edit（含多段 edits）按 new_string/old_string，Write 按 content，NotebookEdit 按 new_source。
  */
-function countEditLines(e, n) {
-  if (typeof n !== "object" || n === null)
+function countEditLines(toolName, input) {
+  if (typeof input !== "object" || input === null)
     return {
       added: 0,
       removed: 0,
     };
-  let r = n;
-  if (e === FILE_EDIT_TOOL_NAME) {
-    if (Array.isArray(r.edits)) {
+  let record = input;
+  if (toolName === FILE_EDIT_TOOL_NAME) {
+    if (Array.isArray(record.edits)) {
       let added = 0;
       let removed = 0;
-      for (let edit of r.edits)
+      for (let edit of record.edits)
         if (typeof edit === "object" && edit !== null) {
-          let S = edit;
-          added += countLines(S.new_string);
-          removed += countLines(S.old_string);
+          let editEntry = edit;
+          added += countLines(editEntry.new_string);
+          removed += countLines(editEntry.old_string);
         }
       return {
         added,
@@ -352,18 +174,18 @@ function countEditLines(e, n) {
       };
     }
     return {
-      added: countLines(r.new_string),
-      removed: countLines(r.old_string),
+      added: countLines(record.new_string),
+      removed: countLines(record.old_string),
     };
   }
-  if (e === FILE_WRITE_TOOL_NAME)
+  if (toolName === FILE_WRITE_TOOL_NAME)
     return {
-      added: countLines(r.content),
+      added: countLines(record.content),
       removed: 0,
     };
-  if (e === NOTEBOOK_EDIT_TOOL_NAME)
+  if (toolName === NOTEBOOK_EDIT_TOOL_NAME)
     return {
-      added: countLines(r.new_source),
+      added: countLines(record.new_source),
       removed: 0,
     };
   return {
@@ -384,9 +206,12 @@ function isTwinklingBooleOn() {
 }
 //@ chunk-e6aww6q8.js:3264731-3264875 placement
 function agentCanEditFiles(selectedAgent) {
-  let n = parseWildcardAgentTypes(selectedAgent.tools) !== null;
-  for (let r of FILE_EDITING_TOOL_NAMES)
-    if ((n || selectedAgent.tools?.includes(r) === true) && !selectedAgent.disallowedTools?.includes(r))
+  let hasWildcardTools = parseWildcardAgentTypes(selectedAgent.tools) !== null;
+  for (let toolName of FILE_EDITING_TOOL_NAMES)
+    if (
+      (hasWildcardTools || selectedAgent.tools?.includes(toolName) === true) &&
+      !selectedAgent.disallowedTools?.includes(toolName)
+    )
       return true;
   return false;
 }
@@ -406,15 +231,215 @@ function hasConcurrentEditingAgentInCwd({
   if (effectiveIsolation !== undefined || !agentCanEditFiles(selectedAgent)) return false;
   if (cwd !== undefined && !samePath(cwd, parentCwd)) return false;
   return Object.values(taskRegistry.all()).some(
-    (S) =>
-      S.type === "local_agent" &&
-      S.status === "running" &&
-      S.isObserver !== true &&
-      S.agentId !== parentAgentId &&
-      (S.cwd === undefined || samePath(S.cwd, parentCwd)) &&
-      S.selectedAgent !== undefined &&
-      agentCanEditFiles(S.selectedAgent),
+    (task) =>
+      task.type === "local_agent" &&
+      task.status === "running" &&
+      task.isObserver !== true &&
+      task.agentId !== parentAgentId &&
+      (task.cwd === undefined || samePath(task.cwd, parentCwd)) &&
+      task.selectedAgent !== undefined &&
+      agentCanEditFiles(task.selectedAgent),
   );
+}
+//@ chunk-0m7em5b4.js:10958-11027 placement
+function observerToolset(resolvedTools) {
+  return [
+    ...resolvedTools.filter((tool) =>
+      OBSERVER_EXCLUDED_TOOLS.every((excludedToolName) => !toolMatchesName(tool, excludedToolName)),
+    ),
+    observerReportTool,
+  ];
+}
+//@ chunk-0m7em5b4.js:11027-11061 placement
+/**
+ * 本次恢复中「已停止」的代理 id 集合（可重置）。
+ */
+var stoppedAgentIds; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0m7em5b4.js:11027", () => {
+  stoppedAgentIds = identity(new Set(), (stoppedAgentIds) => stoppedAgentIds.clear());
+});
+//@ chunk-0m7em5b4.js:11061-11102 placement
+/**
+ * 把一批代理 id 记为已停止。
+ */
+function rememberStoppedAgents(agentIds) {
+  for (let agentId of agentIds) stoppedAgentIds.add(agentId);
+}
+//@ chunk-0m7em5b4.js:11102-11134 placement
+/**
+ * 判断某代理 id 是否被记为已停止。
+ */
+function isStoppedAgent(agentId) {
+  return stoppedAgentIds.has(agentId);
+}
+//@ chunk-0m7em5b4.js:11134-11168 placement
+/**
+ * 「可恢复」的代理 id 集合（可重置）。
+ */
+var resumableAgentIds; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0m7em5b4.js:11134", () => {
+  resumableAgentIds = identity(new Set(), (resumableAgentIds) => resumableAgentIds.clear());
+});
+//@ chunk-0m7em5b4.js:11168-11209 placement
+/**
+ * 把一批代理 id 记为可恢复。
+ */
+function rememberResumableAgents(agentIds) {
+  for (let agentId of agentIds) resumableAgentIds.add(agentId);
+}
+//@ chunk-0m7em5b4.js:11209-11241 placement
+/**
+ * 判断某代理 id 是否被记为可恢复。
+ */
+function isResumableAgent(agentId) {
+  return resumableAgentIds.has(agentId);
+}
+//@ chunk-0m7em5b4.js:11241-11388 placement
+function isAgentLaunchToolUse(toolUse) {
+  return (
+    (toolUse.name === AGENT || toolUse.name === TASK) &&
+    typeof toolUse.input === "object" &&
+    toolUse.input !== null &&
+    "subagent_type" in toolUse.input &&
+    isWebFetchAgent_2(toolUse.input.subagent_type)
+  );
+}
+//@ chunk-0m7em5b4.js:11388-11821 placement
+function findAgentLaunchResults(messages, agentId) {
+  let launchToolUseIds = new Set();
+  for (let message of messages)
+    if (message.type === "assistant") {
+      let content = message.message.content;
+      if (!Array.isArray(content)) continue;
+      for (let block of content)
+        if (block.type === "tool_use" && isAgentLaunchToolUse(block)) launchToolUseIds.add(block.id);
+    } else if (message.type === "user" && launchToolUseIds.size > 0) {
+      let toolUseResult = message.toolUseResult;
+      let content = message.message.content;
+      if (
+        typeof toolUseResult !== "object" ||
+        toolUseResult === null ||
+        !("agentId" in toolUseResult) ||
+        toolUseResult.agentId !== agentId ||
+        !Array.isArray(content)
+      )
+        continue;
+      if (content.some((block) => block.type === "tool_result" && launchToolUseIds.has(block.tool_use_id)))
+        return true;
+    }
+  return false;
+}
+//@ chunk-0m7em5b4.js:11821-11865 placement
+/**
+ * 前台代理自动转后台的等待时间：未指定时沿用传入值，否则看是否禁止了前台转后台。
+ */
+function autoBackgroundMsForLaunch(backgroundLaunchGate, backgroundTasksAvailable) {
+  return backgroundLaunchGate === undefined ? backgroundTasksAvailable : isForegroundAgentMoveDisabled();
+}
+//@ chunk-0m7em5b4.js:11865-11988 placement
+function autoBackgroundOptions(backgroundLaunchGate, autoBackgroundMs) {
+  return {
+    autoBackgroundMs: autoBackgroundMs || !env.CLAUDE_AUTO_BACKGROUND_TASKS ? undefined : 120000,
+    waitsOnRuleMove: backgroundLaunchGate !== undefined && !autoBackgroundMs,
+  };
+}
+//@ chunk-0m7em5b4.js:11988-12098 placement
+function raceAgentLaunch(launchPromise, backgroundSignal, alreadyBackgrounded) {
+  return alreadyBackgrounded
+    ? launchPromise.then(() => "done")
+    : Promise.race([launchPromise.then(() => "done"), backgroundSignal.then(() => "backgrounded")]);
+}
+//@ chunk-0m7em5b4.js:12098-12583 placement
+function settleBackgroundedAgent({
+  outcome,
+  registration,
+  wait,
+  ownerAgentId,
+  taskRegistry,
+  sessionScratch,
+  agentTask,
+}) {
+  let { taskId } = registration;
+  let keptAlive = outcome === "done" && agentTask.hasAgentChildKeepalive(taskId, taskRegistry);
+  if (keptAlive) agentTask.backgroundAgentTask(taskId, taskRegistry);
+  let status = taskRegistry.get(taskId)?.status;
+  let endedBeforeBackgrounding =
+    outcome === "backgrounded" &&
+    !keptAlive &&
+    status !== undefined &&
+    status !== "running" &&
+    !agentTask.hasAgentChildKeepalive(taskId, taskRegistry);
+  let isBackgrounded = outcome === "backgrounded" && !endedBeforeBackgrounding;
+  if (!isBackgrounded && !keptAlive) return false;
+  wait.moved = true;
+  if (isBackgrounded) agentTask.armWorkerCheckinForBackgroundedAgent(taskId, taskRegistry, sessionScratch);
+  registration.detachParentAbortRelay();
+  notifyNestedChainDropped(taskId);
+  if (!getIsNonInteractiveSession()) addAgentKeepaliveReason(ownerAgentId, `agent:${taskId}`, taskRegistry);
+  return true;
+}
+//@ chunk-0m7em5b4.js:12583-12847 placement
+async function runResumeStartHooks(agentId, { origin, ...launchOptions }) {
+  let hookOrigin = spawnProvenanceOf(agentId)?.hookOrigin;
+  let launchResult = await launchAgentsWithHooks({
+    ...launchOptions,
+    agents: [],
+    resume: Object.freeze({
+      agentId,
+    }),
+    origin: hookOrigin === undefined ? origin : [...hookOrigin, ...(origin ?? [])],
+  });
+  if (
+    launchResult.starting !== STARTED_HANDLE &&
+    isAbortedNotByInterrupt(launchOptions.signal, launchOptions.background)
+  ) {
+    launchResult.starting?.[Symbol.dispose]();
+    throw new AbortError();
+  }
+  return launchResult;
+}
+//@ chunk-0m7em5b4.js:12847-12906 placement
+function pluginDeclinedResumeMessage(deny) {
+  return `a plugin declined the resume: ${deny}`;
+}
+//@ chunk-0m7em5b4.js:12906-13191 placement
+function isTranscriptChainIntact(messages, preservedUuids) {
+  let filtered = messages.filter(isPlainObject);
+  let parentUuidByUuid = new Map(
+    filtered.flatMap((message) => (message.uuid === undefined ? [] : [[message.uuid, message.parentUuid]])),
+  );
+  let preservedUuidSet = new Set(preservedUuids);
+  let isAnchored = (parentUuid) => parentUuidByUuid.has(parentUuid) || preservedUuidSet.has(parentUuid);
+  let exemptUuids = new Set(filtered.flatMap(getPreservedMessageUuids));
+  return (
+    preservedUuids.length > 0 &&
+    isNil(parentUuidByUuid.get(preservedUuids[0])) &&
+    [...exemptUuids].every(isAnchored) &&
+    filtered.every(
+      (message) =>
+        isNil(message.parentUuid) || isAnchored(message.parentUuid) || exemptUuids.has(message.uuid),
+    )
+  );
+}
+//@ chunk-0m7em5b4.js:13191-13234 placement
+/**
+ * 值为 undefined 或 null（用于判断消息链是否完整）。
+ */
+function isNil(value) {
+  return value === undefined || value === null;
+}
+//@ chunk-0m7em5b4.js:13234-13352 placement
+function getPreservedMessageUuids({ compactMetadata }) {
+  let preservedMessages = isPlainObject(compactMetadata) ? compactMetadata.preservedMessages : undefined;
+  return isPlainObject(preservedMessages) && Array.isArray(preservedMessages.uuids)
+    ? preservedMessages.uuids
+    : [];
+}
+//@ chunk-0m7em5b4.js:13352-13364 placement
+var SETTLE_AGENT_BACKGROUND_MS = 2000;
+//@ chunk-0m7em5b4.js:13364-13597 placement
+function unreadableStateMessage(error, canRetry) {
+  return `its saved state cannot be read (${getErrnoCode(error) ?? storageCauseErrnoCode(error) ?? "storage error"}), so it cannot be told whether the user stopped it. ${canRetry ? "Send the message again in a moment, or the user" : "The user"} can resume it themselves.`;
 }
 export {
   FILE_EDITING_TOOL_NAMES,

@@ -11,10 +11,10 @@ import {
   leadingAndTrailingWs,
   longestCommonPrefix,
   replaceSuffix,
-  W,
+  stripPrefixOnce,
   longestCommonSuffix,
   replacePrefix,
-  y,
+  stripSuffixOnce,
   leadingWs,
   trailingWs,
   maximumOverlap,
@@ -85,7 +85,7 @@ class WordDiff extends Diff {
   }
 }
 //@ chunk-7vb8p3zb.js:5764-5776 esm-layout
-var B = new WordDiff();
+var wordDiff = new WordDiff();
 //@ chunk-7vb8p3zb.js:5776-6496 esm-fingerprint
 function dedupeWhitespaceInChangeObjects(startKeep, deletion, insertion, endKeep, segmenter) {
   if (deletion && insertion) {
@@ -94,14 +94,14 @@ function dedupeWhitespaceInChangeObjects(startKeep, deletion, insertion, endKeep
     if (startKeep) {
       let commonWsPrefix = longestCommonPrefix(oldWsPrefix, newWsPrefix);
       startKeep.value = replaceSuffix(startKeep.value, newWsPrefix, commonWsPrefix);
-      deletion.value = W(deletion.value, commonWsPrefix);
-      insertion.value = W(insertion.value, commonWsPrefix);
+      deletion.value = stripPrefixOnce(deletion.value, commonWsPrefix);
+      insertion.value = stripPrefixOnce(insertion.value, commonWsPrefix);
     }
     if (endKeep) {
       let commonWsSuffix = longestCommonSuffix(oldWsSuffix, newWsSuffix);
       endKeep.value = replacePrefix(endKeep.value, newWsSuffix, commonWsSuffix);
-      deletion.value = y(deletion.value, commonWsSuffix);
-      insertion.value = y(insertion.value, commonWsSuffix);
+      deletion.value = stripSuffixOnce(deletion.value, commonWsSuffix);
+      insertion.value = stripSuffixOnce(insertion.value, commonWsSuffix);
     }
   } else if (insertion) {
     if (startKeep) {
@@ -116,9 +116,9 @@ function dedupeWhitespaceInChangeObjects(startKeep, deletion, insertion, endKeep
     let newWsFull = leadingWs(endKeep.value, segmenter);
     let [delWsStart, delWsEnd] = leadingAndTrailingWs(deletion.value, segmenter);
     let newWsStart = longestCommonPrefix(newWsFull, delWsStart);
-    deletion.value = W(deletion.value, newWsStart);
-    let newWsEnd = longestCommonSuffix(W(newWsFull, newWsStart), delWsEnd);
-    deletion.value = y(deletion.value, newWsEnd);
+    deletion.value = stripPrefixOnce(deletion.value, newWsStart);
+    let newWsEnd = longestCommonSuffix(stripPrefixOnce(newWsFull, newWsStart), delWsEnd);
+    deletion.value = stripSuffixOnce(deletion.value, newWsEnd);
     endKeep.value = replacePrefix(endKeep.value, newWsFull, newWsEnd);
     startKeep.value = replaceSuffix(
       startKeep.value,
@@ -129,12 +129,12 @@ function dedupeWhitespaceInChangeObjects(startKeep, deletion, insertion, endKeep
     let endKeepWsPrefix = leadingWs(endKeep.value, segmenter);
     let deletionWsSuffix = trailingWs(deletion.value, segmenter);
     let overlap = maximumOverlap(deletionWsSuffix, endKeepWsPrefix);
-    deletion.value = y(deletion.value, overlap);
+    deletion.value = stripSuffixOnce(deletion.value, overlap);
   } else if (startKeep) {
     let startKeepWsSuffix = trailingWs(startKeep.value, segmenter);
     let deletionWsPrefix = leadingWs(deletion.value, segmenter);
     let overlap = maximumOverlap(startKeepWsSuffix, deletionWsPrefix);
-    deletion.value = W(deletion.value, overlap);
+    deletion.value = stripPrefixOnce(deletion.value, overlap);
   }
 }
 //@ chunk-7vb8p3zb.js:6496-6614 esm-fingerprint

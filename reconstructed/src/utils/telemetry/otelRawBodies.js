@@ -27,11 +27,12 @@ import {
   collectToolUseIds as collectToolUseIds_2,
   redactMessageContent,
 } from "./messageContentAttributes.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:2505576-2505735 placement
-function parseRawBodiesSetting(e) {
-  if (e?.startsWith("file:")) {
-    let sliced = e.slice(5);
+function parseRawBodiesSetting(setting) {
+  if (setting?.startsWith("file:")) {
+    let sliced = setting.slice(5);
     return sliced
       ? {
           mode: "file",
@@ -41,7 +42,7 @@ function parseRawBodiesSetting(e) {
           mode: "disabled",
         };
   }
-  return isEnvTruthy(e)
+  return isEnvTruthy(setting)
     ? {
         mode: "inline",
       }
@@ -55,21 +56,24 @@ class OtelRawBodiesState {
   indexAppendChain = Promise.resolve();
 }
 //@ chunk-e6aww6q8.js:2505794-2505821 placement
-var otelRawBodiesStateByHost = new HostScoped(() => new OtelRawBodiesState());
+var otelRawBodiesStateByHost; // deferred: uses OtelRawBodiesState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2505794", () => {
+  otelRawBodiesStateByHost = new HostScoped(() => new OtelRawBodiesState());
+});
 //@ chunk-e6aww6q8.js:2505821-2506013 placement
 function getRawBodiesConfig() {
   if (isDiskless())
     return {
       mode: "disabled",
     };
-  let e = otelRawBodiesStateByHost.of(getRootSession().host);
+  let state = otelRawBodiesStateByHost.of(getRootSession().host);
   let envOtelLogRawApiBodies = process.env.OTEL_LOG_RAW_API_BODIES;
-  if (!e.cached || e.cached.raw !== envOtelLogRawApiBodies)
-    e.cached = {
+  if (!state.cached || state.cached.raw !== envOtelLogRawApiBodies)
+    state.cached = {
       raw: envOtelLogRawApiBodies,
       config: parseRawBodiesSetting(envOtelLogRawApiBodies),
     };
-  return e.cached.config;
+  return state.cached.config;
 }
 //@ chunk-e6aww6q8.js:2506013-2506059 placement
 function isRawBodiesEnabled() {
@@ -78,164 +82,165 @@ function isRawBodiesEnabled() {
 //@ chunk-e6aww6q8.js:2506059-2506081 placement
 var INDEX_JSONL = "index.jsonl";
 //@ chunk-e6aww6q8.js:2506081-2506151 placement
-function rawBodyId(e) {
-  return e !== undefined && /^[A-Za-z0-9_-]+$/.test(e) ? e : randomUUID();
+function rawBodyId(id) {
+  return id !== undefined && /^[A-Za-z0-9_-]+$/.test(id) ? id : randomUUID();
 }
 //@ chunk-e6aww6q8.js:2506151-2506197 placement
-function rawBodyFileName(e, n) {
-  return `${rawBodyId(e)}.${n}.json`;
+function rawBodyFileName(requestId, kind) {
+  return `${rawBodyId(requestId)}.${kind}.json`;
 }
 //@ chunk-e6aww6q8.js:2506197-2506300 placement
-async function writeWithMkdir(e, n) {
+async function writeWithMkdir(dir, write) {
   try {
-    await n();
+    await write();
   } catch (error) {
     if (!isENOENT(error)) throw error;
-    await mkdir(e, {
+    await mkdir(dir, {
       recursive: true,
     });
-    await n();
+    await write();
   }
 }
 //@ chunk-e6aww6q8.js:2506300-2506315 placement
 var RAW_BODY_MAX_BYTES = 524288;
 //@ chunk-e6aww6q8.js:2506315-2507232 placement
-async function openOtelRawBodyFile(e, n, r, s = false) {
-  let h;
+async function openOtelRawBodyFile(path, json, mode, retried = false) {
+  let handle;
   try {
-    let S = await lstat(e, {
+    let stats = await lstat(path, {
       bigint: true,
     });
-    if (!S.isFile() || S.nlink > 1n)
+    if (!stats.isFile() || stats.nlink > 1n)
       throw Error("OTEL raw body target is not a regular single-link file; not writing");
-    h = {
-      dev: S.dev,
-      ino: S.ino,
+    handle = {
+      dev: stats.dev,
+      ino: stats.ino,
     };
   } catch (error) {
     if (!isENOENT(error)) throw error;
   }
-  let y;
+  let linkStats;
   try {
-    y = await open(
-      e,
+    linkStats = await open(
+      path,
       constants.O_WRONLY |
-        (h ? 0 : constants.O_CREAT | constants.O_EXCL) |
-        (r === "append" ? constants.O_APPEND : 0) |
+        (handle ? 0 : constants.O_CREAT | constants.O_EXCL) |
+        (mode === "append" ? constants.O_APPEND : 0) |
         NOFOLLOW_NONBLOCK_FLAGS |
         RAW_BODY_MAX_BYTES,
     );
   } catch (error) {
-    if (!h && !s && getErrnoCode(error) === "EEXIST") return openOtelRawBodyFile(e, n, r, true);
+    if (!handle && !retried && getErrnoCode(error) === "EEXIST")
+      return openOtelRawBodyFile(path, json, mode, true);
     throw error;
   }
   try {
-    let S = await lstat(e, {
+    let currentStats = await lstat(path, {
       bigint: true,
     });
-    let stats = await y.stat({
+    let stats = await linkStats.stat({
       bigint: true,
     });
     if (
       !stats.isFile() ||
       stats.nlink > 1n ||
-      S.isSymbolicLink() ||
-      S.dev !== stats.dev ||
-      S.ino !== stats.ino ||
-      (h && (stats.dev !== h.dev || stats.ino !== h.ino))
+      currentStats.isSymbolicLink() ||
+      currentStats.dev !== stats.dev ||
+      currentStats.ino !== stats.ino ||
+      (handle && (stats.dev !== handle.dev || stats.ino !== handle.ino))
     )
       throw Error("OTEL raw body target changed identity around the open; not writing");
-    if (r === "replace") await y.truncate(0);
-    let L = undefined;
-    let buffer = Buffer.from(n, "utf8");
-    let q = 0;
-    while (q < buffer.length) {
-      let { bytesWritten } = await y.write(buffer, q, buffer.length - q, L);
+    if (mode === "replace") await linkStats.truncate(0);
+    let written = undefined;
+    let buffer = Buffer.from(json, "utf8");
+    let offset = 0;
+    while (offset < buffer.length) {
+      let { bytesWritten } = await linkStats.write(buffer, offset, buffer.length - offset, written);
       if (bytesWritten === 0) throw Error("OTEL raw body write made no progress");
-      q += bytesWritten;
-      if (L !== undefined) L += bytesWritten;
+      offset += bytesWritten;
+      if (written !== undefined) written += bytesWritten;
     }
   } finally {
-    await y.close();
+    await linkStats.close();
   }
 }
 //@ chunk-e6aww6q8.js:2507232-2507330 placement
-function writeRawBodyInBackground(dir, n) {
-  writeWithMkdir(dir, n).catch((error) =>
+function writeRawBodyInBackground(dir, dir_2) {
+  writeWithMkdir(dir, dir_2).catch((error) =>
     logForDebugging(`OTEL raw body file write failed: ${error}`, {
       level: "error",
     }),
   );
 }
 //@ chunk-e6aww6q8.js:2507330-2507834 placement
-function writeOtelRequestBody(e, n, r, s, h) {
+function writeOtelRequestBody(kind, body, requestId, extra, onError) {
   let rawBodiesConfig = getRawBodiesConfig();
   if (rawBodiesConfig.mode === "disabled") return;
-  let S =
-    "withheld" in n
+  let withheldFields =
+    "withheld" in body
       ? {
-          body_withheld: n.withheld,
+          body_withheld: body.withheld,
         }
       : undefined;
-  let w = jsonStringify(
-    "withheld" in n
+  let json = jsonStringify(
+    "withheld" in body
       ? {
-          not_recorded: notRecordedReason(n.withheld),
+          not_recorded: notRecordedReason(body.withheld),
         }
-      : n.value,
+      : body.value,
   );
   if (rawBodiesConfig.mode === "file") {
-    let q = e === "api_request_body" ? "request" : "response";
-    let Z = join(rawBodiesConfig.dir, rawBodyFileName(r, q));
-    writeRawBodyInBackground(rawBodiesConfig.dir, () => openOtelRawBodyFile(Z, w, "replace"));
+    let flow = kind === "api_request_body" ? "request" : "response";
+    let filePath = join(rawBodiesConfig.dir, rawBodyFileName(requestId, flow));
+    writeRawBodyInBackground(rawBodiesConfig.dir, () => openOtelRawBodyFile(filePath, json, "replace"));
     logOTelEvent(
-      e,
+      kind,
       {
-        body_ref: Z,
-        body_length: String(Buffer.byteLength(w)),
-        ...S,
-        ...s,
+        body_ref: filePath,
+        body_length: String(Buffer.byteLength(json)),
+        ...withheldFields,
+        ...extra,
       },
-      h,
+      onError,
     );
     return;
   }
-  let { content, truncated } = truncateContentForTelemetry(w);
+  let { content, truncated } = truncateContentForTelemetry(json);
   logOTelEvent(
-    e,
+    kind,
     {
       body: content,
-      body_length: String(w.length),
+      body_length: String(json.length),
       ...(truncated && {
         body_truncated: "true",
       }),
-      ...S,
-      ...s,
+      ...withheldFields,
+      ...extra,
     },
-    h,
+    onError,
   );
 }
 //@ chunk-e6aww6q8.js:2507834-2508001 placement
-function redactThinkingBlocks(e) {
-  return e.map((n) => {
-    if (n.type === "thinking")
+function redactThinkingBlocks(blocks) {
+  return blocks.map((block) => {
+    if (block.type === "thinking")
       return {
-        ...n,
+        ...block,
         thinking: "<REDACTED>",
       };
-    if (n.type === "redacted_thinking")
+    if (block.type === "redacted_thinking")
       return {
-        ...n,
+        ...block,
         data: "<REDACTED>",
       };
-    return n;
+    return block;
   });
 }
 //@ chunk-e6aww6q8.js:2508001-2508139 placement
-function redactRequestThinking(e) {
+function redactRequestThinking(request) {
   return {
-    ...e,
-    messages: e.messages.map((message) =>
+    ...request,
+    messages: request.messages.map((message) =>
       message.role === "assistant" && Array.isArray(message.content)
         ? {
             ...message,
@@ -246,76 +251,77 @@ function redactRequestThinking(e) {
   };
 }
 //@ chunk-e6aww6q8.js:2508139-2508401 placement
-function logApiRequestBody(e, querySource, r, messages = e.messages, agentContext) {
+function logApiRequestBody(request, querySource, redaction, messages = request.messages, onError) {
   if (!isRawBodiesEnabled()) return;
-  let y = randomUUID();
-  let S = redactRequestThinking(e);
-  let w = redactWithIndex(r, querySource, (L) => ({
-    ...S,
-    ...(S.system !== undefined && {
-      system: redactMessageFields(S.system, L),
+  let id = randomUUID();
+  let redactedRequest = redactRequestThinking(request);
+  let redactedMessages = redactWithIndex(redaction, querySource, (redact) => ({
+    ...redactedRequest,
+    ...(redactedRequest.system !== undefined && {
+      system: redactMessageFields(redactedRequest.system, redact),
     }),
-    messages: collectToolUseIds_2(S.messages, L, messages),
+    messages: collectToolUseIds_2(redactedRequest.messages, redact, messages),
   }));
   writeOtelRequestBody(
     "api_request_body",
-    w,
-    y,
+    redactedMessages,
+    id,
     {
-      model: e.model,
+      model: request.model,
       query_source: querySource,
-      request_body_id: y,
+      request_body_id: id,
     },
-    agentContext,
+    onError,
   );
-  return y;
+  return id;
 }
 //@ chunk-e6aww6q8.js:2508401-2509310 placement
-function writeOtelResponseBody(newMessages, n) {
+function writeOtelResponseBody(newMessages, options) {
   let rawBodiesConfig = getRawBodiesConfig();
   if (rawBodiesConfig.mode === "disabled" || newMessages.length === 0) return;
   let last = newMessages.at(-1);
-  let flattened = newMessages.flatMap((G) => G.message.content);
-  let y = redactThinkingBlocks(flattened);
-  let S = redactWithIndex(n.accountMemoryKeys, n.querySource, (G) => ({
+  let blocks = newMessages.flatMap((message) => message.message.content);
+  let blocks_2 = redactThinkingBlocks(blocks);
+  let redacted = redactWithIndex(options.accountMemoryKeys, options.querySource, (redact) => ({
     ...last.message,
-    content: redactMessageContent(y, G),
+    content: redactMessageContent(blocks_2, redact),
   }));
-  let requestId = n.requestId ?? undefined;
-  let L = rawBodyId(requestId);
+  let requestId = options.requestId ?? undefined;
+  let requestId_2 = rawBodyId(requestId);
   writeOtelRequestBody(
     "api_response_body",
-    S,
-    L,
+    redacted,
+    requestId_2,
     {
-      model: n.model,
-      query_source: n.querySource,
+      model: options.model,
+      query_source: options.querySource,
       request_id: requestId,
-      request_body_id: n.requestBodyId,
+      request_body_id: options.requestBodyId,
       "message.id": last.message.id,
       "message.uuid": last.uuid,
     },
-    n.agentContext,
+    options.agentContext,
   );
   if (rawBodiesConfig.mode === "file") {
-    let G = jsonStringify({
+    let record = jsonStringify({
       timestamp: new Date().toISOString(),
       session_id: getSessionId(),
-      query_source: n.querySource,
-      model: n.model,
+      query_source: options.querySource,
+      model: options.model,
       request_id: requestId,
       message_id: last.message.id,
       message_uuid: last.uuid,
-      request_file: n.requestBodyId !== undefined ? rawBodyFileName(n.requestBodyId, "request") : undefined,
-      response_file: rawBodyFileName(L, "response"),
+      request_file:
+        options.requestBodyId !== undefined ? rawBodyFileName(options.requestBodyId, "request") : undefined,
+      response_file: rawBodyFileName(requestId_2, "response"),
     });
-    let q = join(rawBodiesConfig.dir, INDEX_JSONL);
-    let Z = otelRawBodiesStateByHost.of(getRootSession().host);
-    Z.indexAppendChain = Z.indexAppendChain.then(() =>
+    let indexPath = join(rawBodiesConfig.dir, INDEX_JSONL);
+    let state = otelRawBodiesStateByHost.of(getRootSession().host);
+    state.indexAppendChain = state.indexAppendChain.then(() =>
       writeWithMkdir(rawBodiesConfig.dir, () =>
         openOtelRawBodyFile(
-          q,
-          `${G}
+          indexPath,
+          `${record}
 `,
           "append",
         ),

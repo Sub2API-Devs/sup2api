@@ -11,7 +11,13 @@
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, looseObject, string, array, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  looseObject,
+  stringSchema,
+  array,
+  _enum,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { identity as identity_2 } from "../../utils/identity.js";
@@ -20,12 +26,16 @@ import { logMCPError } from "../../utils/log.js";
 import { logEvent } from "../analytics/index.js";
 import { lit } from "../analytics/safeMetadata.js";
 import { toolNameForTelemetry } from "../analytics/metadata.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:471772-471798 placement
 /**
  * 按宿主记录的超长工具名。
  */
-var longToolNamesByHost = new HostScoped(() => new Map());
+var longToolNamesByHost; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:471772", () => {
+  longToolNamesByHost = new HostScoped(() => new Map());
+});
 //@ chunk-s61vbvea.js:471798-471835 placement
 /**
  * 取当前宿主的超长工具名记录。
@@ -37,49 +47,61 @@ function getLongToolNames() {
 /**
  * 判断该工具名是否已被标记。
  */
-function isToolNameFlagged(e, n) {
-  return getLongToolNames().get(e)?.has(n) === true;
+function isToolNameFlagged(serverName, toolName) {
+  return getLongToolNames().get(serverName)?.has(toolName) === true;
 }
 //@ chunk-s61vbvea.js:471884-472370 placement
 /**
  * 工具界面元数据的 schema。
  */
-var UI = "ui://";
-var UI_RESOURCEURI = "ui/resourceUri";
-var MAX_UI_META_CHARS = 4096;
-var UI_VISIBILITY_VALUES = ["model", "app"];
-var MCP_APP = "mcp-app";
-var MAX_MIME_CHARS = 1024;
-var MEDIA_TYPE_TOKEN = "[!#$%&'*+.^_`|~0-9A-Za-z-]+";
-var regExp_8 = new RegExp(`^[ \\t]*(${MEDIA_TYPE_TOKEN})/(${MEDIA_TYPE_TOKEN})`);
-var regExp_9 = new RegExp(
-  `[ \\t\\r\\n]*;[ \\t\\r\\n]*(?:(${MEDIA_TYPE_TOKEN})=(?:(${MEDIA_TYPE_TOKEN})|"((?:[^"\\\\]|\\\\.)*)")(?=[ \\t\\r\\n]*(?:;|$)))?`,
-  "y",
-);
-var toolUiMetaSchema = DoctorLazy(() =>
-  u({
-    ui: looseObject({
-      resourceUri: string().startsWith(UI).optional(),
-      visibility: array(_enum(UI_VISIBILITY_VALUES)).optional(),
-    })
-      .refine((e) => jsonStringify(e).length <= MAX_UI_META_CHARS)
-      .optional()
-      .catch(undefined),
-    [UI_RESOURCEURI]: string().startsWith(UI).max(MAX_UI_META_CHARS).optional().catch(undefined),
-  }),
-);
+var UI; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var UI_RESOURCEURI;
+var MAX_UI_META_CHARS;
+var UI_VISIBILITY_VALUES;
+var MCP_APP;
+var MAX_MIME_CHARS;
+var MEDIA_TYPE_TOKEN;
+var regExp_8;
+var regExp_9;
+var toolUiMetaSchema;
+deferInit("chunk-s61vbvea.js:471884", () => {
+  UI = "ui://";
+  UI_RESOURCEURI = "ui/resourceUri";
+  MAX_UI_META_CHARS = 4096;
+  UI_VISIBILITY_VALUES = ["model", "app"];
+  MCP_APP = "mcp-app";
+  MAX_MIME_CHARS = 1024;
+  MEDIA_TYPE_TOKEN = "[!#$%&'*+.^_`|~0-9A-Za-z-]+";
+  regExp_8 = new RegExp(`^[ \\t]*(${MEDIA_TYPE_TOKEN})/(${MEDIA_TYPE_TOKEN})`);
+  regExp_9 = new RegExp(
+    `[ \\t\\r\\n]*;[ \\t\\r\\n]*(?:(${MEDIA_TYPE_TOKEN})=(?:(${MEDIA_TYPE_TOKEN})|"((?:[^"\\\\]|\\\\.)*)")(?=[ \\t\\r\\n]*(?:;|$)))?`,
+    "y",
+  );
+  toolUiMetaSchema = DoctorLazy(() =>
+    objectSchema({
+      ui: looseObject({
+        resourceUri: stringSchema().startsWith(UI).optional(),
+        visibility: array(_enum(UI_VISIBILITY_VALUES)).optional(),
+      })
+        .refine((meta) => jsonStringify(meta).length <= MAX_UI_META_CHARS)
+        .optional()
+        .catch(undefined),
+      [UI_RESOURCEURI]: stringSchema().startsWith(UI).max(MAX_UI_META_CHARS).optional().catch(undefined),
+    }),
+  );
+});
 //@ chunk-s61vbvea.js:472370-472637 placement
-function uiVisibilityOf(e) {
-  let ui = e?.ui;
+function uiVisibilityOf(meta) {
+  let ui = meta?.ui;
   if (ui === undefined || ui === null) return;
   if (typeof ui !== "object" || Array.isArray(ui)) return [];
-  let r = Object.hasOwn(ui, "visibility") ? Reflect.get(ui, "visibility") : undefined;
-  if (r === undefined || r === null) return;
-  return Array.isArray(r) ? UI_VISIBILITY_VALUES.filter((s) => r.includes(s)) : [];
+  let declared = Object.hasOwn(ui, "visibility") ? Reflect.get(ui, "visibility") : undefined;
+  if (declared === undefined || declared === null) return;
+  return Array.isArray(declared) ? UI_VISIBILITY_VALUES.filter((value) => declared.includes(value)) : [];
 }
 //@ chunk-s61vbvea.js:472637-472689 placement = createModelSwitchBreadcrumbs (1)
-function createModelSwitchBreadcrumbs(e) {
-  return uiVisibilityOf(e)?.includes("model") === false;
+function createModelSwitchBreadcrumbs(meta) {
+  return uiVisibilityOf(meta)?.includes("model") === false;
 }
 //@ chunk-s61vbvea.js:472689-473087 placement
 /**
@@ -92,24 +114,24 @@ function isMcpAppResource({ uri, mimeType }) {
   if (match?.[1]?.toLowerCase() !== "text" || match[2]?.toLowerCase() !== "html") return false;
   regExp_9.lastIndex = match[0].length;
   for (let match = regExp_9.exec(mimeType); match !== null; match = regExp_9.exec(mimeType)) {
-    let [, h, y, S] = match;
-    let w = y ?? S?.replace(/\\(.)/g, "$1");
-    if (h?.toLowerCase() === "profile" && w?.toLowerCase() === MCP_APP) return true;
+    let [, attrName, quotedValue, bareValue] = match;
+    let attrValue = quotedValue ?? bareValue?.replace(/\\(.)/g, "$1");
+    if (attrName?.toLowerCase() === "profile" && attrValue?.toLowerCase() === MCP_APP) return true;
   }
   return false;
 }
 //@ chunk-s61vbvea.js:473087-473498 placement
-function describeHiddenMcpTool(e, serverName, name) {
-  if (isToolNameFlagged(serverName, name)) {
+function describeHiddenMcpTool(meta, serverName, toolName) {
+  if (isToolNameFlagged(serverName, toolName)) {
     logForDebugging(
-      `MCP server "${serverName}": tool "${name}" is kept from the model because this session keeps this tool, or every tool of this server, from it (toolsKeptFromModel.ts); hosts still see it in mcp_status`,
+      `MCP server "${serverName}": tool "${toolName}" is kept from the model because this session keeps this tool, or every tool of this server, from it (toolsKeptFromModel.ts); hosts still see it in mcp_status`,
     );
     return true;
   }
-  let modelSwitchBreadcrumbs = createModelSwitchBreadcrumbs(e);
+  let modelSwitchBreadcrumbs = createModelSwitchBreadcrumbs(meta);
   if (modelSwitchBreadcrumbs)
     logForDebugging(
-      `MCP server "${serverName}": tool "${name}" is kept from the model (its _meta.ui.visibility omits "model" or cannot be read); hosts still see it in mcp_status`,
+      `MCP server "${serverName}": tool "${toolName}" is kept from the model (its _meta.ui.visibility omits "model" or cannot be read); hosts still see it in mcp_status`,
     );
   return modelSwitchBreadcrumbs;
 }
@@ -117,34 +139,38 @@ function describeHiddenMcpTool(e, serverName, name) {
 /**
  * 已告警过的工具名集合。
  */
-var MAX_FLAGGED_TOOL_NAMES = 256;
-var flaggedToolNames = identity_2(new Set(), (e) => e.clear());
+var MAX_FLAGGED_TOOL_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var flaggedToolNames;
+deferInit("chunk-s61vbvea.js:473498", () => {
+  MAX_FLAGGED_TOOL_NAMES = 256;
+  flaggedToolNames = identity_2(new Set(), (set) => set.clear());
+});
 //@ chunk-s61vbvea.js:473539-474039 placement
 /**
  * MCP 工具名超过 API 长度上限时不发给模型并告警（tengu_mcp_degraded）
  */
 function warnMcpToolNameTooLong(tools) {
-  let n = new Map();
-  let filtered = tools.filter((s) => {
-    if (!s.mcpInfo) return true;
-    if (s.mcpInfo.hiddenFromModel === true) return false;
-    if (s.name.length <= MAX_WIRE_TOOL_NAME_BYTES) return true;
-    if (flaggedToolNames.size < MAX_FLAGGED_TOOL_NAMES && !flaggedToolNames.has(s.name)) {
-      flaggedToolNames.add(s.name);
-      let { serverName } = s.mcpInfo;
-      n.set(serverName, (n.get(serverName) ?? 0) + 1);
+  let tooLongByServer = new Map();
+  let filtered = tools.filter((tool) => {
+    if (!tool.mcpInfo) return true;
+    if (tool.mcpInfo.hiddenFromModel === true) return false;
+    if (tool.name.length <= MAX_WIRE_TOOL_NAME_BYTES) return true;
+    if (flaggedToolNames.size < MAX_FLAGGED_TOOL_NAMES && !flaggedToolNames.has(tool.name)) {
+      flaggedToolNames.add(tool.name);
+      let { serverName } = tool.mcpInfo;
+      tooLongByServer.set(serverName, (tooLongByServer.get(serverName) ?? 0) + 1);
       logMCPError(
         serverName,
-        `Tool "${s.name}" is not sent to Claude: its name has ${s.name.length} characters and the API accepts at most ${MAX_WIRE_TOOL_NAME_BYTES}`,
+        `Tool "${tool.name}" is not sent to Claude: its name has ${tool.name.length} characters and the API accepts at most ${MAX_WIRE_TOOL_NAME_BYTES}`,
       );
     }
     return false;
   });
-  for (let [s, h] of n)
+  for (let [serverName, count] of tooLongByServer)
     logEvent("tengu_mcp_degraded", {
       reason: lit("tool_name_too_long"),
-      skippedCount: h,
-      mcpServerKeyHash: toolNameForTelemetry(s),
+      skippedCount: count,
+      mcpServerKeyHash: toolNameForTelemetry(serverName),
     });
   return filtered;
 }
@@ -159,24 +185,24 @@ function hasUiResource(uiMeta) {
 /**
  * 提取工具元数据中的界面信息（ui 或可见性，以及界面资源地址）。
  */
-function toolUiMeta(e) {
-  if (e?.ui === undefined && e?.[UI_RESOURCEURI] === undefined) return;
-  let n = toolUiMetaSchema().safeParse(e ?? {}).data ?? {};
-  let { ui, [UI_RESOURCEURI]: s } = n;
-  let h = ui ? undefined : uiVisibilityOf(e);
-  let y =
+function toolUiMeta(meta) {
+  if (meta?.ui === undefined && meta?.[UI_RESOURCEURI] === undefined) return;
+  let parsed = toolUiMetaSchema().safeParse(meta ?? {}).data ?? {};
+  let { ui, [UI_RESOURCEURI]: resourceUri } = parsed;
+  let visibility = ui ? undefined : uiVisibilityOf(meta);
+  let uiValue =
     ui ??
-    (h && {
-      visibility: h,
+    (visibility && {
+      visibility,
     });
-  let S = {
-    ...(y !== undefined && {
-      ui: y,
+  let result = {
+    ...(uiValue !== undefined && {
+      ui: uiValue,
     }),
-    ...(s !== undefined && {
-      [UI_RESOURCEURI]: s,
+    ...(resourceUri !== undefined && {
+      [UI_RESOURCEURI]: resourceUri,
     }),
   };
-  return Object.keys(S).length > 0 ? S : undefined;
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 export { warnMcpToolNameTooLong, isMcpAppResource, toolUiMeta, describeHiddenMcpTool, hasUiResource };

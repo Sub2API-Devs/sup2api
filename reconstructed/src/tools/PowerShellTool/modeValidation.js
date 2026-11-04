@@ -27,19 +27,26 @@ import {
   stripPsParameterPrefix,
   skipLeadingWhitespaceAndComments,
 } from "./powershellParsing.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-v0yfsee9.js:17169-17245 fingerprint = ACCEPT_EDITS_ALLOWED_CMDLETS (1)
 /**
  * acceptEdits 模式自动允许的 cmdlet：Set-Content、Add-Content、Remove-Item、Clear-Content。
  */
-var ACCEPT_EDITS_ALLOWED_CMDLETS = new Set(["set-content", "add-content", "remove-item", "clear-content"]);
+var ACCEPT_EDITS_ALLOWED_CMDLETS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-v0yfsee9.js:17169", () => {
+  ACCEPT_EDITS_ALLOWED_CMDLETS = new Set(["set-content", "add-content", "remove-item", "clear-content"]);
+});
 //@ chunk-v0yfsee9.js:17245-17289 file-local
 function isAcceptEditsAllowedCmdlet(name) {
   let canonical = resolveToCanonical(name);
   return ACCEPT_EDITS_ALLOWED_CMDLETS.has(canonical);
 }
 //@ chunk-v0yfsee9.js:17289-17344 fingerprint = LINK_ITEM_TYPES (1)
-var LINK_ITEM_TYPES = new Set(["symboliclink", "junction", "hardlink"]);
+var LINK_ITEM_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-v0yfsee9.js:17289", () => {
+  LINK_ITEM_TYPES = new Set(["symboliclink", "junction", "hardlink"]);
+});
 //@ chunk-v0yfsee9.js:17344-17441 fingerprint = isItemTypeParamAbbrev (1)
 function isItemTypeParamAbbrev(p) {
   return (p.length >= 3 && "-itemtype".startsWith(p)) || (p.length >= 3 && "-type".startsWith(p));
@@ -65,7 +72,7 @@ function isSymlinkCreatingCommand(cmd) {
       skipLeadingWhitespaceAndComments(unescapePsDoubleQuoted(rawVal.replace(/`[\r\n]+\s*/g, ""))),
     ).toLowerCase();
     if (/[?*[\]($]/.test(lower_2)) return true;
-    for (let v of LINK_ITEM_TYPES) if (lower_2.length > 0 && v.startsWith(lower_2)) return true;
+    for (let linkType of LINK_ITEM_TYPES) if (lower_2.length > 0 && linkType.startsWith(lower_2)) return true;
   }
   return false;
 }
@@ -124,14 +131,14 @@ function checkPermissionMode(input, parsed, toolPermissionContext) {
     };
   if (totalCommands > 1) {
     let hasCdCommand = false;
-    let h = false;
+    let hasAcceptEditsCmdlet = false;
     for (let seg of segments)
       for (let cmd of seg.commands) {
         if (cmd.elementType !== "CommandAst") continue;
         if (isCwdChangingCmdlet(cmd.name)) hasCdCommand = true;
-        if (isAcceptEditsAllowedCmdlet(cmd.name)) h = true;
+        if (isAcceptEditsAllowedCmdlet(cmd.name)) hasAcceptEditsCmdlet = true;
       }
-    if (hasCdCommand && h)
+    if (hasCdCommand && hasAcceptEditsCmdlet)
       return {
         behavior: "passthrough",
         message:

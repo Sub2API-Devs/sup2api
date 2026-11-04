@@ -42,15 +42,16 @@ import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { isPlainObject } from "../../utils/objectUtils.js";
 import { stripHostOwnedInputKeys } from "../../utils/permissions/permissionAnswer.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-fe6rs39h.js:36483-36617 placement
-async function isServingConnected(e) {
-  let n = await e.readSession().catch(() => {
+async function isServingConnected(args) {
+  let session = await args.readSession().catch(() => {
     return;
   });
   return (
-    isConnectedAndResumed(parseToolHostStatus(n?.tool_host_status, e)) &&
-    isSameDevice(n?.bound_device_uuid, e)
+    isConnectedAndResumed(parseToolHostStatus(session?.tool_host_status, args)) &&
+    isSameDevice(session?.bound_device_uuid, args)
   );
 }
 //@ chunk-fe6rs39h.js:36617-36682 placement
@@ -58,18 +59,18 @@ function isConnectedAndResumed(toolHostStatus) {
   return toolHostStatus?.state === "connected" && toolHostStatus.resumed_at != null;
 }
 //@ chunk-fe6rs39h.js:36682-36750 placement
-function isSameDevice(boundDeviceUuid, n) {
-  return boundDeviceUuid?.toLowerCase() === n.deviceId.toLowerCase();
+function isSameDevice(boundDeviceUuid, uuid) {
+  return boundDeviceUuid?.toLowerCase() === uuid.deviceId.toLowerCase();
 }
 //@ chunk-fe6rs39h.js:36750-37828 placement
 /**
  * 根据启动参数、宿主设置与权限模式拼出云会话创建/附加时转发的配置（模型、权限、子进程环境）。
  */
 function buildCloudCreateOptions(
-  e,
+  options,
   {
     settingsToCloudEnabled,
-    launchConsent = hostConsentToMode(e.homeSettingsConsent),
+    launchConsent = hostConsentToMode(options.homeSettingsConsent),
     settings,
     hostFillsDefault,
     typedLevel,
@@ -77,31 +78,31 @@ function buildCloudCreateOptions(
     model = getMainLoopModel(),
     settingsNeverForwarded = false,
   },
-  k = {},
+  implied = {},
 ) {
-  let I =
+  let gateOn =
     canForwardHomeSettings(settingsToCloudEnabled) &&
-    e.forwardHomeSettings !== false &&
+    options.forwardHomeSettings !== false &&
     !isLaunchConsentBlocked(launchConsent) &&
     (launchConsent !== undefined || storedForwardMode() === "forward");
   let startupModeTelemetry = getStartupModeTelemetry({
-    gateOn: I,
-    permissionModeTyped: e.permissionModeCli !== undefined,
+    gateOn,
+    permissionModeTyped: options.permissionModeCli !== undefined,
     dangerouslySkipPermissions: false,
     scrubbed: isScrubEnabled(),
     settings,
     effort: undefined,
   });
-  let P = (k.internalModel ?? isRestrictedModelAllowed)(model);
-  let N = cloudPermissionModeFrom(e.permissionModeCli);
-  let L = describeSelfHostedModeNotice({
+  let internalModel = (implied.internalModel ?? isRestrictedModelAllowed)(model);
+  let explicitMode = cloudPermissionModeFrom(options.permissionModeCli);
+  let modeInfo = describeSelfHostedModeNotice({
     model,
-    internal: P,
-    explicitMode: N,
-    droppedMode: e.permissionModeCli !== undefined && N === undefined,
-    pinnedDefault: hostFillsDefault && e.permissionModeCli !== PERMISSION_MODE_MANUAL_ALIAS,
+    internal: internalModel,
+    explicitMode,
+    droppedMode: options.permissionModeCli !== undefined && explicitMode === undefined,
+    pinnedDefault: hostFillsDefault && options.permissionModeCli !== PERMISSION_MODE_MANUAL_ALIAS,
     settingsMode: startupModeTelemetry.settingsDefault,
-    settingsModeForwardable: I,
+    settingsModeForwardable: gateOn,
     settingsNeverForwarded,
     ...getAutoSeedFactors({
       settings,
@@ -109,46 +110,49 @@ function buildCloudCreateOptions(
       typedLevel,
       carriedMode,
     }),
-    repositoryModel: P
-      ? (k.repositoryModel ?? resolveStartupModel)({
+    repositoryModel: internalModel
+      ? (implied.repositoryModel ?? resolveStartupModel)({
           model,
-          modelCli: e.modelCli,
-          agent: e.mainThreadAgentDefinition,
-          agentSelectedByCli: e.agentCli !== undefined,
-          agents: e.agentDefinitions.allAgents,
-          effectiveModel: e.effectiveModel,
-          initialMainLoopModel: e.initialMainLoopModel,
-          restrictedModel: e.restrictedModel,
+          modelCli: options.modelCli,
+          agent: options.mainThreadAgentDefinition,
+          agentSelectedByCli: options.agentCli !== undefined,
+          agents: options.agentDefinitions.allAgents,
+          effectiveModel: options.effectiveModel,
+          initialMainLoopModel: options.initialMainLoopModel,
+          restrictedModel: options.restrictedModel,
         })
       : undefined,
   });
   return {
     model,
-    explicitMode: N,
-    ...L,
+    explicitMode,
+    ...modeInfo,
   };
 }
 //@ chunk-fe6rs39h.js:37828-38193 placement
-function buildInitialMessageOptions(e) {
-  let n = e.poolOnBranch ?? e.poolRef ?? undefined;
+function buildInitialMessageOptions(openArgs) {
+  let branch = openArgs.poolOnBranch ?? openArgs.poolRef ?? undefined;
   return {
-    initialMessage: e.prompt,
-    initialMessageUuid: e.promptUuid,
-    signal: e.signal,
+    initialMessage: openArgs.prompt,
+    initialMessageUuid: openArgs.promptUuid,
+    signal: openArgs.signal,
     source: "remote",
-    branchName: (n ?? e.currentBranch) || undefined,
-    branchFromHead: n === undefined,
-    title: e.title,
-    reuseOutcomeBranch: e.poolOnBranch ?? undefined,
-    explicitRef: n,
-    permissionMode: e.permissionMode,
-    model: e.model,
+    branchName: (branch ?? openArgs.currentBranch) || undefined,
+    branchFromHead: branch === undefined,
+    title: openArgs.title,
+    reuseOutcomeBranch: openArgs.poolOnBranch ?? undefined,
+    explicitRef: branch,
+    permissionMode: openArgs.permissionMode,
+    model: openArgs.model,
     allowBundle: true,
     staysAttached: false,
   };
 }
 //@ chunk-fe6rs39h.js:38267-38355 placement
-var FINAL_ANSWER_STATES = new Set(["answered", "failed_host_error", "failed_invalid_reply", "answer_failed"]);
+var FINAL_ANSWER_STATES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fe6rs39h.js:38267", () => {
+  FINAL_ANSWER_STATES = new Set(["answered", "failed_host_error", "failed_invalid_reply", "answer_failed"]);
+});
 //@ chunk-fe6rs39h.js:38355-38390 placement
 function truncateForDisplay(requestId) {
   return sanitizeCloudText(truncateToLength(requestId, 64));
@@ -175,54 +179,55 @@ class HostPermissionBridge {
   get settledCount() {
     return this.settledTotal;
   }
-  passPermissionRequest(e, n, s) {
+  passPermissionRequest(request, context, requestId) {
     return this.pass({
       subtype: "can_use_tool",
-      requestId: s,
+      requestId,
       ask: (signal, requestId) =>
-        this.ports.io.passControlRequestToHost(n, {
+        this.ports.io.passControlRequestToHost(context, {
           requestId,
           schema: permissionPromptResultSchemaRefusing(),
           signal,
         }),
-      answer: (r) => e.respondToPermissionRequest(s, completeHostAllow(r, n)),
-      answerOnError: (r) =>
-        e.respondToPermissionRequest(s, {
+      answer: (signal) => request.respondToPermissionRequest(requestId, completeHostAllow(signal, context)),
+      answerOnError: (answer) =>
+        request.respondToPermissionRequest(requestId, {
           behavior: "deny",
-          message: r ? CAN_USE_TOOL_INVALID_RESULT_REASON : CAN_USE_TOOL_REQUEST_FAILED_REASON,
-          toolUseID: n.tool_use_id,
+          message: answer ? CAN_USE_TOOL_INVALID_RESULT_REASON : CAN_USE_TOOL_REQUEST_FAILED_REASON,
+          toolUseID: context.tool_use_id,
         }),
     });
   }
-  passUserDialogRequest(e, n, s) {
+  passUserDialogRequest(request, context, requestId) {
     this.pass({
       subtype: "request_user_dialog",
-      requestId: s,
+      requestId,
       ask: (signal, requestId) =>
-        this.ports.io.passControlRequestToHost(n, {
+        this.ports.io.passControlRequestToHost(context, {
           requestId,
           schema: UserDialogResponseSchema(),
           signal,
         }),
-      answer: (r) => e.respondToUserDialogRequest(s, r),
+      answer: (signal) => request.respondToUserDialogRequest(requestId, signal),
       answerOnError: () =>
-        e.respondToUserDialogRequest(s, {
+        request.respondToUserDialogRequest(requestId, {
           behavior: "cancelled",
         }),
     });
   }
-  cancel(e) {
-    this.retiredIds.add(e);
-    this.inFlight.get(e)?.abort();
+  cancel(answer) {
+    this.retiredIds.add(answer);
+    this.inFlight.get(answer)?.abort();
   }
-  reinstate(e) {
-    this.retiredIds.delete(e);
-    if (this.inFlight.get(e)?.signal.aborted === true) this.inFlight.delete(e);
-    if (this.askedOfHost.has(e)) this.reaskGeneration.set(e, (this.reaskGeneration.get(e) ?? 0) + 1);
+  reinstate(requestId) {
+    this.retiredIds.delete(requestId);
+    if (this.inFlight.get(requestId)?.signal.aborted === true) this.inFlight.delete(requestId);
+    if (this.askedOfHost.has(requestId))
+      this.reaskGeneration.set(requestId, (this.reaskGeneration.get(requestId) ?? 0) + 1);
   }
   cancelAll() {
     this.tearingDown = true;
-    for (let e of this.inFlight.values()) e.abort();
+    for (let requestId of this.inFlight.values()) requestId.abort();
   }
   pass({ subtype, requestId, ask, answer, answerOnError }) {
     if (this.tearingDown) {
@@ -245,88 +250,93 @@ class HostPermissionBridge {
     }
     let abortController = new AbortController();
     this.inFlight.set(requestId, abortController);
-    let S = this.reaskGeneration.get(requestId);
-    let w = S === undefined ? requestId : `${requestId}-reask-${S}-${randomUUID()}`;
-    if (S === undefined) this.askedOfHost.add(requestId);
-    else this.derivedIds.add(w);
-    let R = () => this.inFlight.get(requestId) === abortController && this.inFlight.delete(requestId);
-    let k = this.ports.clock.now();
-    let I = false;
-    let O = (P) => {
-      I = true;
+    let controller = this.reaskGeneration.get(requestId);
+    let reask = controller === undefined ? requestId : `${requestId}-reask-${controller}-${randomUUID()}`;
+    if (controller === undefined) this.askedOfHost.add(requestId);
+    else this.derivedIds.add(reask);
+    let hostRequestId = () =>
+      this.inFlight.get(requestId) === abortController && this.inFlight.delete(requestId);
+    let forget = this.ports.clock.now();
+    let startedAt = false;
+    let didFinish = (finish) => {
+      startedAt = true;
       this.settledTotal += 1;
-      if (FINAL_ANSWER_STATES.has(P)) this.retiredIds.add(requestId);
-      this.log(subtype, P, k, S !== undefined);
+      if (FINAL_ANSWER_STATES.has(finish)) this.retiredIds.add(requestId);
+      this.log(subtype, finish, forget, controller !== undefined);
     };
     this.ports.track(
-      ask(abortController.signal, w)
+      ask(abortController.signal, reask)
         .then(
-          (P) => {
-            if (!R() || abortController.signal.aborted) {
-              O("dropped");
+          (outcome) => {
+            if (!hostRequestId() || abortController.signal.aborted) {
+              didFinish("dropped");
               return;
             }
-            answer(P);
-            O("answered");
+            answer(outcome);
+            didFinish("answered");
           },
           (error) => {
-            let N = R();
+            let stillLive = hostRequestId();
             if (error instanceof StreamClosedAbortError) {
-              O("stream_closed");
+              didFinish("stream_closed");
               return;
             }
             if (error instanceof AbortError) {
-              O(!abortController.signal.aborted ? "dropped" : this.tearingDown ? "teardown" : "cancelled");
+              didFinish(
+                !abortController.signal.aborted ? "dropped" : this.tearingDown ? "teardown" : "cancelled",
+              );
               return;
             }
-            if (!N || abortController.signal.aborted) {
-              O("dropped");
+            if (!stillLive || abortController.signal.aborted) {
+              didFinish("dropped");
               return;
             }
-            let L = !(error instanceof Error) || error instanceof ZodError;
-            let z = L
+            let wasLive = !(error instanceof Error) || error instanceof ZodError;
+            let errorText = wasLive
               ? truncateToLength(errorMessage(error), 2000)
               : truncateToLength(getFirstLine(errorMessage(error)), 200);
             logForDebugging(
-              `[headlessCloudClient] host could not answer ${subtype} ${truncateForDisplay(requestId)}: ${z}`,
+              `[headlessCloudClient] host could not answer ${subtype} ${truncateForDisplay(requestId)}: ${errorText}`,
               {
                 level: "error",
               },
             );
-            answerOnError(L);
-            O(L ? "failed_invalid_reply" : "failed_host_error");
+            answerOnError(wasLive);
+            didFinish(wasLive ? "failed_invalid_reply" : "failed_host_error");
           },
         )
         .catch((error) => {
           logError(error);
-          if (!I) O("answer_failed");
+          if (!startedAt) didFinish("answer_failed");
         }),
     );
     return true;
   }
-  log(e, n, s, reasked = false) {
+  log(error, subtype, outcome, reasked = false) {
     logEvent("tengu_remote_headless_client_agent_request", {
-      subtype: fromEnum(e),
-      outcome: fromEnum(n),
-      latency_ms: this.ports.clock.now() - s,
+      subtype: fromEnum(error),
+      outcome: fromEnum(subtype),
+      latency_ms: this.ports.clock.now() - outcome,
       reasked,
     });
   }
 }
 //@ chunk-fe6rs39h.js:41184-41526 placement
-function completeHostAllow(e, n) {
-  let toolUseID = n.tool_use_id ?? e.toolUseID;
-  if (e.behavior === "deny")
+function completeHostAllow(result, context) {
+  let toolUseID = context.tool_use_id ?? result.toolUseID;
+  if (result.behavior === "deny")
     return {
-      ...e,
+      ...result,
       toolUseID,
     };
-  let h = !(e.updatedInput !== undefined && Object.keys(e.updatedInput).length > 0) && isPlainObject(n.input);
-  if (h) logForDebugging("[headlessCloudClient] completing the host's allow with the shown input");
+  let toolUseId =
+    !(result.updatedInput !== undefined && Object.keys(result.updatedInput).length > 0) &&
+    isPlainObject(context.input);
+  if (toolUseId) logForDebugging("[headlessCloudClient] completing the host's allow with the shown input");
   return {
-    ...e,
+    ...result,
     toolUseID,
-    updatedInput: h ? stripHostOwnedInputKeys(n.tool_name, n.input) : e.updatedInput,
+    updatedInput: toolUseId ? stripHostOwnedInputKeys(context.tool_name, context.input) : result.updatedInput,
   };
 }
 export {

@@ -9,26 +9,30 @@
  * attribution: callgraph-fingerprint 1, facade-exports 4, placement 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { array, u, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { array, objectSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { isPolicyAllowed, policyDenyKind } from "../policyLimits/policyEvidence.js";
 import { parsePluginIdentifier_2, marketplaceOf } from "../../utils/plugins/pluginIdentifier.js";
 import { INLINE_PLUGIN_MARKETPLACE } from "../../utils/telemetry/pluginTelemetry.js";
 import { findChannelEntry, isPluginNamedByChannelEntry } from "./channelNotification.js";
 import { getAllowedChannels } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-124m26t7.js:375-423 callgraph-fingerprint = ChannelAllowlistSchema (0.366)
 /**
  * ChannelAllowlistSchema：GrowthBook tengu_harbor_ledger 的形状 [{marketplace, plugin}]。
  */
-var ChannelAllowlistSchema = DoctorLazy(() =>
-  array(
-    u({
-      marketplace: string(),
-      plugin: string(),
-    }),
-  ),
-);
+var ChannelAllowlistSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-124m26t7.js:375", () => {
+  ChannelAllowlistSchema = DoctorLazy(() =>
+    array(
+      objectSchema({
+        marketplace: stringSchema(),
+        plugin: stringSchema(),
+      }),
+    ),
+  );
+});
 //@ chunk-124m26t7.js:423-518 facade-exports = getChannelAllowlist (1)
 /**
  * getChannelAllowlist：读 GrowthBook tengu_harbor_ledger 并校验，失败返回空数组。
@@ -51,8 +55,8 @@ function isChannelsEnabled() {
  */
 function isChannelsOffForSession() {
   if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_harbor", false)) return true;
-  let e = policyDenyKind("allow_channels");
-  return e !== null && e !== "cache_miss" && e !== "route_missing";
+  let denyKind = policyDenyKind("allow_channels");
+  return denyKind !== null && denyKind !== "cache_miss" && denyKind !== "route_missing";
 }
 //@ chunk-124m26t7.js:713-847 facade-exports = getVersionedCachePathIn (0.472)
 /**
@@ -62,15 +66,17 @@ function isChannelAllowlisted(pluginSource) {
   if (!pluginSource) return false;
   let { name: pluginName, marketplace } = parsePluginIdentifier_2(pluginSource);
   if (!marketplace) return false;
-  return getChannelAllowlist().some((t) => t.plugin === pluginName && t.marketplace === marketplace);
+  return getChannelAllowlist().some(
+    (entry) => entry.plugin === pluginName && entry.marketplace === marketplace,
+  );
 }
 //@ chunk-4q6mp9e8.js:987-1153 placement
-function isChannelPluginAllowed(n, e) {
-  if (e.pluginSource !== undefined && marketplaceOf(e.pluginSource) === INLINE_PLUGIN_MARKETPLACE)
+function isChannelPluginAllowed(serverName, config) {
+  if (config.pluginSource !== undefined && marketplaceOf(config.pluginSource) === INLINE_PLUGIN_MARKETPLACE)
     return true;
-  let channelEntry = findChannelEntry(n, getAllowedChannels());
-  if (channelEntry === undefined) return false;
-  return channelEntry.kind === "server" || isPluginNamedByChannelEntry(e.pluginSource, channelEntry);
+  let entry = findChannelEntry(serverName, getAllowedChannels());
+  if (entry === undefined) return false;
+  return entry.kind === "server" || isPluginNamedByChannelEntry(config.pluginSource, entry);
 }
 export {
   getChannelAllowlist,

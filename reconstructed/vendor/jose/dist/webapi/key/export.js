@@ -10,7 +10,7 @@ import { encode_2 } from "../util/base64url.js";
 import { message_3 } from "../../node/esm/lib/invalid_key_input.js";
 
 //@ chunk-5h78gfwc.js:23388-23811 esm-fingerprint
-async function Et(key) {
+async function keyToJWK(key) {
   if (isKeyObject(key))
     if (key.type === "secret") key = key.export();
     else
@@ -28,4 +28,4 @@ async function Et(key) {
   if (jwk.kty === "AKP") jwk.alg = alg;
   return jwk;
 }
-export { Et };
+export { keyToJWK };

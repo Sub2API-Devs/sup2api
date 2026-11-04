@@ -56,38 +56,40 @@ import { sanitizeTelemetryString } from "../../utils/sanitization.js";
  * 汇总挂接主机（remote 类型）上透传的 MCP 服务器：按主机+服务器名计数工具，并记录每台主机读不懂的工具数。
  */
 function collectAttachedMcpServers(hosts) {
-  let l = new Map();
-  let g = new Map();
+  let byHostServer = new Map();
+  let mcpInfoByHost = new Map();
   for (let host of hosts) {
     if (host.kind !== "remote") continue;
     let size = host.rejectedPassthroughTools?.size ?? 0;
-    if (size > 0) g.set(host.name, size);
-    for (let E of host.passthroughTools?.values() ?? []) {
-      let y = mcpInfoFromString(E.localName);
-      if (y === null) continue;
-      let e = `${host.name}\x00${y.serverName}`;
-      let u = l.get(e);
-      l.set(
-        e,
-        u === undefined
+    if (size > 0) mcpInfoByHost.set(host.name, size);
+    for (let tool of host.passthroughTools?.values() ?? []) {
+      let mcpInfo = mcpInfoFromString(tool.localName);
+      if (mcpInfo === null) continue;
+      let cacheKey = `${host.name}\x00${mcpInfo.serverName}`;
+      let existing = byHostServer.get(cacheKey);
+      byHostServer.set(
+        cacheKey,
+        existing === undefined
           ? {
               hostName: host.name,
               hostStatus: hostConnectionStatus(host),
-              serverName: y.serverName,
+              serverName: mcpInfo.serverName,
               toolCount: 1,
             }
           : {
-              ...u,
-              toolCount: u.toolCount + 1,
+              ...existing,
+              toolCount: existing.toolCount + 1,
             },
       );
     }
   }
   return {
-    servers: [...l.values()].sort(
-      (r, b) => r.hostName.localeCompare(b.hostName) || r.serverName.localeCompare(b.serverName),
+    servers: [...byHostServer.values()].sort(
+      (hostName, mcpInfo) =>
+        hostName.hostName.localeCompare(mcpInfo.hostName) ||
+        hostName.serverName.localeCompare(mcpInfo.serverName),
     ),
-    rejectedCounts: g,
+    rejectedCounts: mcpInfoByHost,
   };
 }
 //@ chunk-3re05e6m.js:12871-12958 placement
@@ -140,21 +142,24 @@ async function mcpInlineCommand(args, context) {
 ${MCP_USAGE}`
         }`,
       );
-    let S = count(clients, (v) => v.type === "connected");
-    let N = count(clients, (v) => v.type === "cached");
-    let w = count(clients, (v) => v.type === "pending");
-    let j = count(clients, isUnconfiguredFailure);
-    let D = count(clients, isMcpConnectivityIssue);
-    let P = count(clients, (v) => v.type === "disabled");
-    let R = clients.length - S - N - w - P - j;
+    let connectedCount = count(clients, (client) => client.type === "connected");
+    let cachedCount = count(clients, (client) => client.type === "cached");
+    let pendingCount = count(clients, (client) => client.type === "pending");
+    let unconfiguredCount = count(clients, isUnconfiguredFailure);
+    let connectivityIssueCount = count(clients, isMcpConnectivityIssue);
+    let disabledCount = count(clients, (client) => client.type === "disabled");
+    let otherCount =
+      clients.length - connectedCount - cachedCount - pendingCount - disabledCount - unconfiguredCount;
     return textResult(
-      `${clients.length} MCP server(s): ${S} connected, ` +
-        (N > 0 ? `${N} cached, ` : "") +
-        (w > 0 ? `${w} connecting, ` : "") +
-        `${R} not connected, ` +
-        (j > 0 ? `${j} not configured, ` : "") +
-        `${P} disabled.` +
-        (D > 0 && !isNonInteractiveSession ? " Reply `/mcp reconnect all` here to retry." : "") +
+      `${clients.length} MCP server(s): ${connectedCount} connected, ` +
+        (cachedCount > 0 ? `${cachedCount} cached, ` : "") +
+        (pendingCount > 0 ? `${pendingCount} connecting, ` : "") +
+        `${otherCount} not connected, ` +
+        (unconfiguredCount > 0 ? `${unconfiguredCount} not configured, ` : "") +
+        `${disabledCount} disabled.` +
+        (connectivityIssueCount > 0 && !isNonInteractiveSession
+          ? " Reply `/mcp reconnect all` here to retry."
+          : "") +
         (isNonInteractiveSession
           ? vscodeHintOrTerminal(
               " Use `/mcp` in the terminal for details.",
@@ -175,17 +180,17 @@ ${MCP_USAGE}`),
   logEvent("tengu_mcp_command_inline", {
     action: fromEnum(lower_2),
   });
-  let u = serverName === "all" ? clients : clients.filter((o) => o.name === serverName);
-  if (u.length === 0)
+  let targets = serverName === "all" ? clients : clients.filter((client) => client.name === serverName);
+  if (targets.length === 0)
     return textResult(
       serverName === "all"
         ? `No MCP servers are configured.${vscodeHintOrTerminal(" Add one with `claude mcp add`.", " Open MCP servers from the command menu.")}`
         : `There's no MCP server named "${redactServerName(serverName)}".${vscodeHintOrTerminal(" Run `/mcp` in the terminal to see configured servers.", " Open MCP servers from the command menu.")}`,
     );
-  let reconnectHandle = getReconnectHandle();
+  let reconnect = getReconnectHandle();
   let toggleHandle = getToggleHandle();
   let isDisabledHandle = getIsDisabledHandle();
-  if (!reconnectHandle || !toggleHandle || !isDisabledHandle) {
+  if (!reconnect || !toggleHandle || !isDisabledHandle) {
     if (getIsNonInteractiveSession())
       return textResult("Reconnect, enable, and disable aren't available in this session.");
     return textResult(
@@ -193,9 +198,9 @@ ${MCP_USAGE}`),
     );
   }
   if (lower_2 === "reconnect") {
-    let o = serverName !== "all" ? u[0] : undefined;
-    let M = o && toggleStateOf(o);
-    if (M === "disabled") {
+    let singleTarget = serverName !== "all" ? targets[0] : undefined;
+    let singleToggleState = singleTarget && toggleStateOf(singleTarget);
+    if (singleToggleState === "disabled") {
       if (isArtifactMountMode())
         return textResult(
           `"${redactServerName(serverName)}" is disabled for this project. Run \`/mcp\` in this project, in a terminal where this session runs, to bring it back.`,
@@ -208,49 +213,56 @@ ${MCP_USAGE}`),
         ),
       );
     }
-    if (M === "pending")
+    if (singleToggleState === "pending")
       return textResult(
         `"${redactServerName(serverName)}" is already reconnecting \u2014 retries can take a few minutes when a server keeps failing.`,
       );
-    if (M === "needs-approval")
+    if (singleToggleState === "needs-approval")
       return textResult(
         `"${redactServerName(serverName)}" is pending approval.${vscodeHintOrTerminal(" Approve it with `/mcp` in the terminal first.", " Open MCP servers from the command menu.")}`,
       );
-    let S = serverName === "all" ? reconnectTargets(u, isDisabledHandle) : null;
-    let N = S ? S.targets : u;
-    let outOfBandNote = S ? S.outOfBandNote : null;
-    if (N.length === 0) {
-      let P = count(u, (_) => _.type === "disabled");
-      let R = count(u, (_) => isUnconfiguredFailure(_) && !isDisabledHandle(_.name));
-      if (P === 0 && outOfBandNote === null && R > 0)
+    let reconnectPlan = serverName === "all" ? reconnectTargets(targets, isDisabledHandle) : null;
+    let reconnectList = reconnectPlan ? reconnectPlan.targets : targets;
+    let outOfBandNote = reconnectPlan ? reconnectPlan.outOfBandNote : null;
+    if (reconnectList.length === 0) {
+      let disabledTargetCount = count(targets, (client) => client.type === "disabled");
+      let unconfiguredTargetCount = count(
+        targets,
+        (client) => isUnconfiguredFailure(client) && !isDisabledHandle(client.name),
+      );
+      if (disabledTargetCount === 0 && outOfBandNote === null && unconfiguredTargetCount > 0)
         return textResult(
-          `${R} MCP server(s) aren't configured yet, so there's nothing to reconnect. The rest are already connected or connecting.`,
+          `${unconfiguredTargetCount} MCP server(s) aren't configured yet, so there's nothing to reconnect. The rest are already connected or connecting.`,
         );
-      let v = [
-        ...(P > 0
+      let resultLines = [
+        ...(disabledTargetCount > 0
           ? [
               isArtifactMountMode()
-                ? `${P} MCP server(s) are disabled for this project. Run \`/mcp\` in this project, in a terminal where this session runs, to bring them back.`
-                : `${P} MCP server(s) are disabled. Run \`/mcp enable all\` to bring them back.`,
+                ? `${disabledTargetCount} MCP server(s) are disabled for this project. Run \`/mcp\` in this project, in a terminal where this session runs, to bring them back.`
+                : `${disabledTargetCount} MCP server(s) are disabled. Run \`/mcp enable all\` to bring them back.`,
             ]
           : []),
         ...(outOfBandNote !== null ? [outOfBandNote] : []),
-        ...(R > 0 ? [`${R} MCP server(s) aren't configured yet, so there's nothing to reconnect.`] : []),
+        ...(unconfiguredTargetCount > 0
+          ? [
+              `${unconfiguredTargetCount} MCP server(s) aren't configured yet, so there's nothing to reconnect.`,
+            ]
+          : []),
       ];
-      if (v.length > 0) return textResult(v.join(" "));
+      if (resultLines.length > 0) return textResult(resultLines.join(" "));
       return textResult("All enabled MCP servers are already connected or connecting.");
     }
-    let { results, connected } = await reconnectAllServers(N, reconnectHandle);
+    let { results, connected } = await reconnectAllServers(reconnectList, reconnect);
     if (serverName !== "all") {
-      let P = results[0];
-      if (P?.status !== "fulfilled")
-        return formatMcpActionFailure("reconnect", serverName, P?.reason, {
-          config: N[0]?.config,
+      let singleResult = results[0];
+      if (singleResult?.status !== "fulfilled")
+        return formatMcpActionFailure("reconnect", serverName, singleResult?.reason, {
+          config: reconnectList[0]?.config,
           persistsOffBox: isBridgeOrTransport(context.session),
         });
-      let R = P.value.client.type;
-      let v =
-        R === "needs-auth"
+      let singleResultType = singleResult.value.client.type;
+      let hint =
+        singleResultType === "needs-auth"
           ? vscodeHintOrTerminal(
               " Authenticate with `/mcp` in the terminal.",
               " Open MCP servers from the command menu.",
@@ -260,13 +272,13 @@ ${MCP_USAGE}`),
               " Open MCP servers from the command menu.",
             );
       return textResult(
-        R === "connected"
+        singleResultType === "connected"
           ? `Reconnected "${redactServerName(serverName)}".`
-          : `Couldn't reconnect "${redactServerName(serverName)}" (${MCP_STATUS_LABELS[R]}).${v}`,
+          : `Couldn't reconnect "${redactServerName(serverName)}" (${MCP_STATUS_LABELS[singleResultType]}).${hint}`,
       );
     }
     return textResult(
-      `Reconnected ${connected} of ${N.length} MCP server(s).` +
+      `Reconnected ${connected} of ${reconnectList.length} MCP server(s).` +
         (outOfBandNote !== null ? ` ${outOfBandNote}` : "") +
         vscodeHintOrTerminal(
           " Run `/mcp` in the terminal to see status.",
@@ -274,34 +286,42 @@ ${MCP_USAGE}`),
         ),
     );
   }
-  let p = lower_2 === "enable";
-  if (serverName !== "all" && u.some((o) => connectionTypeOf(o) === "needs-approval"))
+  let enabling = lower_2 === "enable";
+  if (serverName !== "all" && targets.some((client) => connectionTypeOf(client) === "needs-approval"))
     return textResult(
       `"${redactServerName(serverName)}" is pending approval.${vscodeHintOrTerminal(" Approve it with `/mcp` in the terminal first.", " Open MCP servers from the command menu.")}`,
     );
-  let filtered = u.filter((o) =>
-    p ? o.type === "disabled" : o.type !== "disabled" && connectionTypeOf(o) !== "needs-approval",
+  let filtered = targets.filter((client) =>
+    enabling
+      ? client.type === "disabled"
+      : client.type !== "disabled" && connectionTypeOf(client) !== "needs-approval",
   );
   if (filtered.length === 0) {
-    if (p && serverName !== "all" && isDisabledHandle(serverName)) {
-      if (u.some(isConnectedOrCached)) return textResult(disabledInOtherSessionText(serverName));
+    if (enabling && serverName !== "all" && isDisabledHandle(serverName)) {
+      if (targets.some(isConnectedOrCached)) return textResult(disabledInOtherSessionText(serverName));
       return textResult(disabledElsewhereText(serverName));
     }
-    if (!p && serverName !== "all" && !isDisabledHandle(serverName))
+    if (!enabling && serverName !== "all" && !isDisabledHandle(serverName))
       return textResult(reenabledElsewhereText(serverName));
     if (serverName === "all") {
-      let o = describeDisabledServers(u, p, isDisabledHandle);
-      if (o !== null) {
-        let M = p ? count(u, (S) => isUnhiddenFailedServer(S, isDisabledHandle)) : 0;
-        return textResult(M > 0 ? `${o} ${notConnectedRetryHint(M)}` : o);
+      let disabledRows = describeDisabledServers(targets, enabling, isDisabledHandle);
+      if (disabledRows !== null) {
+        let unhiddenFailedCount = enabling
+          ? count(targets, (client) => isUnhiddenFailedServer(client, isDisabledHandle))
+          : 0;
+        return textResult(
+          unhiddenFailedCount > 0
+            ? `${disabledRows} ${notConnectedRetryHint(unhiddenFailedCount)}`
+            : disabledRows,
+        );
       }
     }
-    if (p) {
-      let o = count(u, isMcpConnectivityIssue);
-      if (o > 0)
+    if (enabling) {
+      let failingCount = count(targets, isMcpConnectivityIssue);
+      if (failingCount > 0)
         return textResult(
           serverName === "all"
-            ? `All MCP servers are already enabled, but ${notConnectedRetryHint(o)}`
+            ? `All MCP servers are already enabled, but ${notConnectedRetryHint(failingCount)}`
             : cliHintOrPlain(
                 `"${redactServerName(serverName)}" is already enabled but not connected.`,
                 ` Run \`/mcp reconnect ${serverName}\` to retry.`,
@@ -311,32 +331,38 @@ ${MCP_USAGE}`),
     }
     return textResult(
       serverName === "all"
-        ? `All MCP servers are already ${p ? "enabled" : "disabled"}.`
-        : `"${redactServerName(serverName)}" is already ${p ? "enabled" : "disabled"}.`,
+        ? `All MCP servers are already ${enabling ? "enabled" : "disabled"}.`
+        : `"${redactServerName(serverName)}" is already ${enabling ? "enabled" : "disabled"}.`,
     );
   }
-  let U = serverName === "all" ? describeDisabledServers(u, p, isDisabledHandle) : null;
-  let settled = await Promise.allSettled(filtered.map((o) => toggleHandle(o.name)));
-  let k = count(settled, (o) => o.status === "fulfilled");
-  let W = p ? count(settled, (o) => o.status === "fulfilled" && o.value.type === "connected") : k;
-  let Q = p ? "Enabled" : "Disabled";
-  let X = p && W < k ? ` (${k - W} enabled but not yet connected)` : "";
+  let disabledSummary =
+    serverName === "all" ? describeDisabledServers(targets, enabling, isDisabledHandle) : null;
+  let settled = await Promise.allSettled(filtered.map((client) => toggleHandle(client.name)));
+  let fulfilledCount = count(settled, (result) => result.status === "fulfilled");
+  let reconnectedCount = enabling
+    ? count(settled, (result) => result.status === "fulfilled" && result.value.type === "connected")
+    : fulfilledCount;
+  let verb = enabling ? "Enabled" : "Disabled";
+  let summaryLine =
+    enabling && reconnectedCount < fulfilledCount
+      ? ` (${fulfilledCount - reconnectedCount} enabled but not yet connected)`
+      : "";
   if (serverName !== "all") {
-    if (!p)
+    if (!enabling)
       return textResult(
-        k > 0
+        fulfilledCount > 0
           ? `Disabled "${redactServerName(serverName)}".`
           : `Couldn't disable "${redactServerName(serverName)}" \u2014 it may have been removed, or its configuration couldn't be read.${vscodeHintOrTerminal(" Run `/mcp` in the terminal to check.", " Open MCP servers from the command menu.")}`,
       );
-    let o = settled[0];
-    if (o?.status !== "fulfilled")
-      return formatMcpActionFailure("enable", serverName, o?.reason, {
+    let singleSettled = settled[0];
+    if (singleSettled?.status !== "fulfilled")
+      return formatMcpActionFailure("enable", serverName, singleSettled?.reason, {
         config: filtered[0]?.config,
         persistsOffBox: isBridgeOrTransport(context.session),
       });
-    let M = o.value.type;
-    let S =
-      M === "needs-auth"
+    let singleSettledType = singleSettled.value.type;
+    let detailLines =
+      singleSettledType === "needs-auth"
         ? vscodeHintOrTerminal(
             " Authenticate with `/mcp` in the terminal.",
             " Open MCP servers from the command menu.",
@@ -346,17 +372,17 @@ ${MCP_USAGE}`),
             " Open MCP servers from the command menu.",
           );
     return textResult(
-      M === "connected"
+      singleSettledType === "connected"
         ? `Enabled "${redactServerName(serverName)}".`
-        : `Enabled "${redactServerName(serverName)}", but it isn't connected yet${M !== "failed" ? ` (${MCP_STATUS_LABELS[M]})` : ""}.${S}`,
+        : `Enabled "${redactServerName(serverName)}", but it isn't connected yet${singleSettledType !== "failed" ? ` (${MCP_STATUS_LABELS[singleSettledType]})` : ""}.${detailLines}`,
     );
   }
-  let z = filtered.length - k;
+  let failedCount = filtered.length - fulfilledCount;
   return textResult(
-    `${Q} ${k} MCP server(s)${X}` +
-      (z > 0 ? ` (${z} couldn't be changed)` : "") +
+    `${verb} ${fulfilledCount} MCP server(s)${summaryLine}` +
+      (failedCount > 0 ? ` (${failedCount} couldn't be changed)` : "") +
       "." +
-      (U !== null ? ` ${U}` : "") +
+      (disabledSummary !== null ? ` ${disabledSummary}` : "") +
       vscodeHintOrTerminal(
         " Run `/mcp` in the terminal to see status.",
         " Open MCP servers from the command menu.",
@@ -364,17 +390,17 @@ ${MCP_USAGE}`),
   );
 }
 //@ chunk-3re05e6m.js:19334-19361 placement
-function redactServerName(n) {
-  return normalizeServerNameShort(n);
+function redactServerName(serverName) {
+  return normalizeServerNameShort(serverName);
 }
 //@ chunk-3re05e6m.js:19361-19434 placement
-function cliHintOrPlain(n, l, g) {
-  let r = `${n}${l}`;
-  return isSafeCliArg(g) && [...r].length <= 1024 ? r : n;
+function cliHintOrPlain(prefix, hint, fallback) {
+  let text = `${prefix}${hint}`;
+  return isSafeCliArg(fallback) && [...text].length <= 1024 ? text : prefix;
 }
 //@ chunk-3re05e6m.js:19434-19469 placement
-function vscodeHintOrTerminal(n, l = "") {
-  return isVsCodeTopSession() ? l : n;
+function vscodeHintOrTerminal(name, terminalHint = "") {
+  return isVsCodeTopSession() ? terminalHint : name;
 }
 //@ chunk-3re05e6m.js:19469-19511 placement
 function textResult(value) {
@@ -389,44 +415,44 @@ function textResult(value) {
  */
 function formatCloudMcpStatus(clients, tools, hostRegistry) {
   let { servers, rejectedCounts } = collectAttachedMcpServers(hostRegistry.hosts());
-  let E = uniq([...servers.map((server) => server.hostName), ...rejectedCounts.keys()]);
-  let y =
+  let hostNames = uniq([...servers.map((server) => server.hostName), ...rejectedCounts.keys()]);
+  let headerLine =
     clients.length === 0
       ? ["  (none configured)"]
       : [...clients]
-          .sort((f, T) => f.name.localeCompare(T.name))
+          .sort((a, b) => a.name.localeCompare(b.name))
           .map((client) => {
             let mcpPrefix = getMcpPrefix(client.name);
-            let C = count(tools, (A) => A.name.startsWith(mcpPrefix));
-            let p = isUnconfiguredFailure(client)
+            let toolCount = count(tools, (tool) => tool.name.startsWith(mcpPrefix));
+            let statusText = isUnconfiguredFailure(client)
               ? "not configured"
               : MCP_STATUS_LABELS[connectionTypeOf(client)];
-            return `  ${padToColumn(redactServerName(client.name))}  ${padToColumn(p)}  ${client.config.type ?? "stdio"}${toolCountSuffix(C)}`;
+            return `  ${padToColumn(redactServerName(client.name))}  ${padToColumn(statusText)}  ${client.config.type ?? "stdio"}${toolCountSuffix(toolCount)}`;
           });
-  let mapped = E.map((f) => {
-    let filtered = servers.filter((server) => server.hostName === f);
-    let C = rejectedCounts.get(f) ?? 0;
+  let mapped = hostNames.map((hostName) => {
+    let filtered = servers.filter((server) => server.hostName === hostName);
+    let rejectedCount = rejectedCounts.get(hostName) ?? 0;
     return [
       "",
-      `On ${redactServerName(f)} (attached):`,
+      `On ${redactServerName(hostName)} (attached):`,
       ...filtered.map(formatRemoteServerRow),
-      ...(C > 0
+      ...(rejectedCount > 0
         ? [
-            `  (${C} more of its MCP ${plural(C, "tool")} couldn't be read \u2014 likely a Claude Code version mismatch between this session and that machine)`,
+            `  (${rejectedCount} more of its MCP ${plural(rejectedCount, "tool")} couldn't be read \u2014 likely a Claude Code version mismatch between this session and that machine)`,
           ]
         : []),
     ].join(`
 `);
   });
-  let u =
-    E.length > 0
+  let hostLines =
+    hostNames.length > 0
       ? `
 
-Servers on ${E.map(redactServerName).join(", ")} are managed there \u2014 run \`/mcp\` in a local terminal on that machine. A server that's failed or disabled there won't appear here, and its transport type isn't reported to the cloud session.`
+Servers on ${hostNames.map(redactServerName).join(", ")} are managed there \u2014 run \`/mcp\` in a local terminal on that machine. A server that's failed or disabled there won't appear here, and its transport type isn't reported to the cloud session.`
       : "";
   return (
-    ["This cloud session's MCP servers:", ...y, ...mapped].join(`
-`) + u
+    ["This cloud session's MCP servers:", ...headerLine, ...mapped].join(`
+`) + hostLines
   );
 }
 //@ chunk-3re05e6m.js:20468-20564 placement
@@ -436,29 +462,29 @@ var HOST_STATUS_LABELS = {
   incompatible: "unreachable (version mismatch)",
 };
 //@ chunk-3re05e6m.js:20564-20663 placement
-function formatRemoteServerRow(n) {
-  return `  ${padToColumn(redactServerName(n.serverName))}  ${padToColumn(HOST_STATUS_LABELS[n.hostStatus])}  via ${REMOTE_DEVICES}${toolCountSuffix(n.toolCount)}`;
+function formatRemoteServerRow(server) {
+  return `  ${padToColumn(redactServerName(server.serverName))}  ${padToColumn(HOST_STATUS_LABELS[server.hostStatus])}  via ${REMOTE_DEVICES}${toolCountSuffix(server.toolCount)}`;
 }
 //@ chunk-3re05e6m.js:20663-20719 placement
-function padToColumn(n) {
-  return n + " ".repeat(Math.max(0, 28 - bunStringWidth(n)));
+function padToColumn(text) {
+  return text + " ".repeat(Math.max(0, 28 - bunStringWidth(text)));
 }
 //@ chunk-3re05e6m.js:20719-20775 placement
-function toolCountSuffix(n) {
-  return n > 0 ? ` \xB7 ${n} ${plural(n, "tool")}` : "";
+function toolCountSuffix(count) {
+  return count > 0 ? ` \xB7 ${count} ${plural(count, "tool")}` : "";
 }
 //@ chunk-3re05e6m.js:20775-21267 placement
 /**
  * 生成 /mcp 操作失败的提示（远程连接时隐藏细节），区分终端与菜单入口。
  */
 function formatMcpActionFailure(action, serverName, error, options) {
-  let b = options.config
+  let detail = options.config
     ? redactMcpErrorDetail(serverName, options.config, errorMessage(error))
     : errorMessage(error);
   if (error instanceof WireSafeControlError)
     return textResult(normalizeMcpServerName(errorMessage(error), undefined, "none"));
   if (options.persistsOffBox) {
-    logForDebugging(`mcp ${action} refused for ${sanitizeTelemetryString(serverName)}: ${b}`, {
+    logForDebugging(`mcp ${action} refused for ${sanitizeTelemetryString(serverName)}: ${detail}`, {
       level: "error",
     });
     return textResult(
@@ -466,10 +492,11 @@ function formatMcpActionFailure(action, serverName, error, options) {
     );
   }
   return textResult(
-    `Couldn't ${action} "${redactServerName(serverName)}" \u2014 ${normalizeMcpServerName(b)}.${vscodeHintOrTerminal(" Run `/mcp` in the terminal to check.", " Open MCP servers from the command menu.")}`,
+    `Couldn't ${action} "${redactServerName(serverName)}" \u2014 ${normalizeMcpServerName(detail)}.${vscodeHintOrTerminal(" Run `/mcp` in the terminal to check.", " Open MCP servers from the command menu.")}`,
   );
 }
 //@ chunk-3re05e6m.js:21267-21381 placement
-function notConnectedRetryHint(n) {
-  return `${n} ${n === 1 ? "isn't" : "aren't"} connected \u2014 reply \`/mcp reconnect all\` here to retry.`;
+function notConnectedRetryHint(serverName) {
+  return `${serverName} ${serverName === 1 ? "isn't" : "aren't"} connected \u2014 reply \`/mcp reconnect all\` here to retry.`;
 }
+export { mcpInlineCommand };

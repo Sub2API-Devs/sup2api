@@ -19,27 +19,27 @@ var TENGU_ORG_POLICY_DENIED = "tengu_org_policy_denied";
 /**
  * 组织策略拒绝事件字段
  */
-function orgPolicyDeniedFields(i, o) {
-  let e = policyDenyKind(i);
-  if (e === null || e === "unregistered") return null;
+function orgPolicyDeniedFields(policyKey, surface) {
+  let denyKind = policyDenyKind(policyKey);
+  if (denyKind === null || denyKind === "unregistered") return null;
   return {
-    org_policy_key: fromEnum(i),
-    org_policy_deny_kind: fromEnum(e),
+    org_policy_key: fromEnum(policyKey),
+    org_policy_deny_kind: fromEnum(denyKind),
     org_policy_taint_named: hipaaTaintsOnly(getComplianceTaints()).length > 0,
-    surface: fromEnum(o),
+    surface: fromEnum(surface),
   };
 }
 //@ chunk-gevvgx0q.js:553-595 placement
-function logOrgPolicyDenied(i, o) {
-  let e = orgPolicyDeniedFields(i, o);
-  if (e) logEvent(TENGU_ORG_POLICY_DENIED, e);
+function logOrgPolicyDenied(policyKey, surface) {
+  let fields = orgPolicyDeniedFields(policyKey, surface);
+  if (fields) logEvent(TENGU_ORG_POLICY_DENIED, fields);
 }
 //@ chunk-gevvgx0q.js:595-650 placement
 /**
  * 记录组织策略拒绝事件 tengu_org_policy_denied。
  */
-async function logOrgPolicyDeniedAsync(i, o) {
-  let metadata = orgPolicyDeniedFields(i, o);
+async function logOrgPolicyDeniedAsync(policyKey, surface) {
+  let metadata = orgPolicyDeniedFields(policyKey, surface);
   if (metadata) await logEventAsync(TENGU_ORG_POLICY_DENIED, metadata);
 }
 export { logOrgPolicyDenied, logOrgPolicyDeniedAsync };

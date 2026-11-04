@@ -26,6 +26,7 @@ import {
 import { MAX_ARTIFACT_BYTES, isFrameDeclaredThumbnailEnabled } from "../../services/artifacts/frameFlags.js";
 import { THUMBNAIL_LINK_HELP } from "./thumbnails.js";
 import { isArtifactToolsetSplit } from "../../services/artifacts/artifactToolGates.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-2s0t9kzn.js:7516-8014 placement
 function statefulPagesParagraph() {
@@ -36,12 +37,12 @@ function commentsWatchUnavailableNote() {
   return ' Watching for new comments isn\'t available in this session, so none reach it on their own: read them with `action: "comments"` when the user asks, and if the user expects you to notice comments as they arrive, say so plainly.';
 }
 //@ chunk-2s0t9kzn.js:8264-12443 placement
-function republishWatchParagraph(e, a) {
-  return a === "none"
-    ? `**Watching for republishes**: not available in this session \u2014 nothing notifies it when an artifact is republished elsewhere${e ? " or when a comment on one is sent to Claude" : ""}, and \`action: "watch"\` only reports that${noWatchRailCollabNote()}. If the user asks you to watch an artifact, say so plainly, and never claim you are watching one. \`action: "status"\` lists this session's watches (pass \`url\` to check one); \`action: "unwatch"\` with \`url\` stops one.${e ? "" : COMMENTS_OFF_SENTENCE}`
-    : a === "durable"
-      ? `**Watching for republishes**: in this remote session a watch is a durable wake subscription held by the artifact service, not a live connection: this session is woken with a new turn when the watched artifact is republished elsewhere${e ? ", or when a comment on it is sent to Claude" : ""}; nothing streams in between, so on a wake re-read the artifact${e ? " (and its comments, on a comment wake)" : ""} before editing.${e ? ' Plain comments never wake this session \u2014 read them with `action: "comments"` when the user asks.' : COMMENTS_OFF_SENTENCE} Publishing an artifact starts registering its watch in the background, and the result line says whether that began, was skipped, or was already registered; \`action: "status"\` lists the watches that actually registered and what wakes each (pass \`url\` to check one). To watch an artifact you did not just publish, pass \`action: "watch"\` with its \`url\`; \`action: "unwatch"\` with \`url\` stops one. Do not claim you are watching an artifact unless a watch result, \`status\`, or a publish result's "already registered" line says so \u2014 its "arming" line is not yet a watch.`
-      : `**Watching for republishes**: publishing an artifact starts subscribing this session to its live changes in the background, and the result line says whether that began, was skipped, or was already connected \u2014 \`status\` shows whether it actually connected, and you are told if it cannot; watches reconnect on their own if the connection drops. To watch an artifact you did not just publish (or to restart a stopped watch), pass \`action: "watch"\` with its \`url\`; a later republish from elsewhere \u2014 another session, or someone saving from a page that can publish new versions of itself \u2014 starts no turn and sends no notification. Some Artifact results open with one line saying a newer version was published; when one does, fetch the artifact's URL again (the \`${ARTIFACT_TOOL_NAME}\` tool's \`action: "read"\`, not your local file) and merge your edits onto that version before publishing. When a publish is refused because the artifact changed, follow the refusal, which usually hands you that version to merge.${e ? ' A comment on a watched artifact that is sent to Claude wakes this session, but only while that artifact\'s `status` row says auto-replies armed (when comment auto-replies are on for this session, a publish arms those, and so does `action: "watch"` on an artifact the user can edit whose link the user gave in their own message \u2014 never on one the user can only view); plain comments never notify this session \u2014 read them with `action: "comments"` when the user asks.' : COMMENTS_OFF_SENTENCE} \`action: "status"\` lists this session's watches (pass \`url\` to check one); \`action: "unwatch"\` with \`url\` stops one. Watches are session-local, and the user can see and stop them in /tasks. ${e ? "After a `--resume` or `--continue` in an interactive terminal, the watch on the artifact this session most recently published or read usually comes back, along with every watch that was replying to comments (replying again, unless the user had stopped it); other clients may restore nothing. `status` shows what is armed." : "After a `--resume` or `--continue` in an interactive terminal, the watch on the artifact this session most recently published or read usually comes back; other clients may restore nothing. `status` shows what is armed."} Do not claim you are watching an artifact unless a watch result, \`status\`, or a publish result's "already connected" line says so \u2014 its "arming" line is not yet a watch. Only a main-loop session (interactive, SDK, or background) holds a watch, not a subagent, teammate, or print session.`;
+function republishWatchParagraph(commentsOn, watchRail) {
+  return watchRail === "none"
+    ? `**Watching for republishes**: not available in this session \u2014 nothing notifies it when an artifact is republished elsewhere${commentsOn ? " or when a comment on one is sent to Claude" : ""}, and \`action: "watch"\` only reports that${noWatchRailCollabNote()}. If the user asks you to watch an artifact, say so plainly, and never claim you are watching one. \`action: "status"\` lists this session's watches (pass \`url\` to check one); \`action: "unwatch"\` with \`url\` stops one.${commentsOn ? "" : COMMENTS_OFF_SENTENCE}`
+    : watchRail === "durable"
+      ? `**Watching for republishes**: in this remote session a watch is a durable wake subscription held by the artifact service, not a live connection: this session is woken with a new turn when the watched artifact is republished elsewhere${commentsOn ? ", or when a comment on it is sent to Claude" : ""}; nothing streams in between, so on a wake re-read the artifact${commentsOn ? " (and its comments, on a comment wake)" : ""} before editing.${commentsOn ? ' Plain comments never wake this session \u2014 read them with `action: "comments"` when the user asks.' : COMMENTS_OFF_SENTENCE} Publishing an artifact starts registering its watch in the background, and the result line says whether that began, was skipped, or was already registered; \`action: "status"\` lists the watches that actually registered and what wakes each (pass \`url\` to check one). To watch an artifact you did not just publish, pass \`action: "watch"\` with its \`url\`; \`action: "unwatch"\` with \`url\` stops one. Do not claim you are watching an artifact unless a watch result, \`status\`, or a publish result's "already registered" line says so \u2014 its "arming" line is not yet a watch.`
+      : `**Watching for republishes**: publishing an artifact starts subscribing this session to its live changes in the background, and the result line says whether that began, was skipped, or was already connected \u2014 \`status\` shows whether it actually connected, and you are told if it cannot; watches reconnect on their own if the connection drops. To watch an artifact you did not just publish (or to restart a stopped watch), pass \`action: "watch"\` with its \`url\`; a later republish from elsewhere \u2014 another session, or someone saving from a page that can publish new versions of itself \u2014 starts no turn and sends no notification. Some Artifact results open with one line saying a newer version was published; when one does, fetch the artifact's URL again (the \`${ARTIFACT_TOOL_NAME}\` tool's \`action: "read"\`, not your local file) and merge your edits onto that version before publishing. When a publish is refused because the artifact changed, follow the refusal, which usually hands you that version to merge.${commentsOn ? ' A comment on a watched artifact that is sent to Claude wakes this session, but only while that artifact\'s `status` row says auto-replies armed (when comment auto-replies are on for this session, a publish arms those, and so does `action: "watch"` on an artifact the user can edit whose link the user gave in their own message \u2014 never on one the user can only view); plain comments never notify this session \u2014 read them with `action: "comments"` when the user asks.' : COMMENTS_OFF_SENTENCE} \`action: "status"\` lists this session's watches (pass \`url\` to check one); \`action: "unwatch"\` with \`url\` stops one. Watches are session-local, and the user can see and stop them in /tasks. ${commentsOn ? "After a `--resume` or `--continue` in an interactive terminal, the watch on the artifact this session most recently published or read usually comes back, along with every watch that was replying to comments (replying again, unless the user had stopped it); other clients may restore nothing. `status` shows what is armed." : "After a `--resume` or `--continue` in an interactive terminal, the watch on the artifact this session most recently published or read usually comes back; other clients may restore nothing. `status` shows what is armed."} Do not claim you are watching an artifact unless a watch result, \`status\`, or a publish result's "already connected" line says so \u2014 its "arming" line is not yet a watch. Only a main-loop session (interactive, SDK, or background) holds a watch, not a subagent, teammate, or print session.`;
 }
 //@ chunk-2s0t9kzn.js:12443-23267 placement
 /**
@@ -73,37 +74,41 @@ var PAGE_RULES_DEVICE_TEXT = [
   ],
 ];
 //@ chunk-2s0t9kzn.js:23267-23433 placement
-function liftPromptParagraphs(e, a) {
-  let t = e;
-  for (let [n, r] of a) {
-    if (!t.includes(n)) throw Error("core prompt: a lifted paragraph lacks a spelling it rewrites");
-    t = t.replaceAll(n, r);
+function liftPromptParagraphs(text, replacements) {
+  let result = text;
+  for (let [from, to] of replacements) {
+    if (!result.includes(from)) throw Error("core prompt: a lifted paragraph lacks a spelling it rewrites");
+    result = result.replaceAll(from, to);
   }
-  return t;
+  return result;
 }
 //@ chunk-2s0t9kzn.js:23433-23849 placement
 /**
  * 完整版页面提示词使用的措辞替换表。
  */
-var PROMPT_SPELLING_SWAPS = [
-  [
-    '`action: "status"` lists the rooms',
-    `the \`${ARTIFACT_COMMENTS_TOOL_NAME}\` tool's \`watch\` action with no \`url\` lists the rooms`,
-  ],
-];
-var PROMPT_SPELLING_SWAPS_FULL = [
-  [
-    '`action: "status"` lists the rooms this session is in and, while your own user has the page open, the presence data their page shares with the room',
-    "no tool in this session lists the rooms it is in; while your own user has the page open, their page shares presence data with the room",
-  ],
-];
+var PROMPT_SPELLING_SWAPS; // deferred: uses ARTIFACT_TOOL_NAME (./constants.js) of its import cycle while loading; runs once the cycle is complete
+var PROMPT_SPELLING_SWAPS_FULL;
+deferInit("chunk-2s0t9kzn.js:23433", () => {
+  PROMPT_SPELLING_SWAPS = [
+    [
+      '`action: "status"` lists the rooms',
+      `the \`${ARTIFACT_COMMENTS_TOOL_NAME}\` tool's \`watch\` action with no \`url\` lists the rooms`,
+    ],
+  ];
+  PROMPT_SPELLING_SWAPS_FULL = [
+    [
+      '`action: "status"` lists the rooms this session is in and, while your own user has the page open, the presence data their page shares with the room',
+      "no tool in this session lists the rooms it is in; while your own user has the page open, their page shares presence data with the room",
+    ],
+  ];
+});
 //@ chunk-2s0t9kzn.js:23849-23963 placement
 function artifactToolsPresent(tools) {
-  let a = new Set((tools ?? []).map((t) => t.name));
+  let names = new Set((tools ?? []).map((tool) => tool.name));
   return {
-    comments: a.has(ARTIFACT_COMMENTS_TOOL_NAME),
-    data: a.has(ARTIFACT_DATA_TOOL_NAME),
-    check: a.has(ARTIFACT_CHECK_TOOL_NAME),
+    comments: names.has(ARTIFACT_COMMENTS_TOOL_NAME),
+    data: names.has(ARTIFACT_DATA_TOOL_NAME),
+    check: names.has(ARTIFACT_CHECK_TOOL_NAME),
   };
 }
 //@ chunk-2s0t9kzn.js:23963-24127 placement
@@ -111,13 +116,15 @@ var CSP_HOSTS_IN_TOOL_DESCRIPTION =
   "the Artifact tool's description lists the few other script hosts the CSP admits";
 var CSP_HOSTS_IN_PAGE_CONTRACT = "the page contract above lists the few other script hosts the CSP admits";
 //@ chunk-2s0t9kzn.js:24127-24186 placement
-function withPageContractHeader(e) {
-  let a = pageContractSection();
-  return a === "" ? e : a + e.replace(CSP_HOSTS_IN_TOOL_DESCRIPTION, CSP_HOSTS_IN_PAGE_CONTRACT);
+function withPageContractHeader(prompt) {
+  let header = pageContractSection();
+  return header === ""
+    ? prompt
+    : header + prompt.replace(CSP_HOSTS_IN_TOOL_DESCRIPTION, CSP_HOSTS_IN_PAGE_CONTRACT);
 }
 //@ chunk-2s0t9kzn.js:24186-24305 placement
 function pageRulesText() {
-  let e = isFrameDeclaredThumbnailEnabled()
+  let thumbnailText = isFrameDeclaredThumbnailEnabled()
     ? `**Thumbnail** (optional): ${THUMBNAIL_LINK_HELP}
 
 `
@@ -128,7 +135,7 @@ function pageRulesText() {
 
 ${TITLE_PARAGRAPH}
 
-${e}${PAGE_RULES_LIBRARY_TEXT}`;
+${thumbnailText}${PAGE_RULES_LIBRARY_TEXT}`;
 }
 //@ chunk-2s0t9kzn.js:24305-24518 placement
 function pageContractSection() {

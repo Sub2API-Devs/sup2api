@@ -5,12 +5,12 @@
  * pieces: chunk-wjd9n4jx.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { require_headStream_browser } from "./headStream.browser.js";
 import { require_stream_type_check } from "./stream-type-check.js";
 
 //@ chunk-wjd9n4jx.js:7005-7747 cjs-fingerprint
-var require_headStream = x(function (cjsExports) {
+var require_headStream = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

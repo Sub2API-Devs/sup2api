@@ -10,58 +10,62 @@
  */
 import { useKillRing, topOfKillRing, nextYankPop } from "../utils/killRing.js";
 import { useTerminalSize } from "./useTerminalSize.js";
-import { y, R, Q, ce } from "../../vendor/react/cjs/react.production.js";
+import { useState, useRef, useMemo, useCallback } from "../../vendor/react/cjs/react.production.js";
 import { useStoreSelector } from "./useStoreSelector.js";
 import { Cursor } from "../utils/Cursor.js";
 import { EDITOR_MODES } from "../utils/configConstants.js";
 import { useVimInput } from "./useVimInput.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-tzghj6zv.js:5963-6203 affinity
-var NON_TEXT_KEYS = new Set([
-  "escape",
-  "return",
-  "enter",
-  "tab",
-  "backspace",
-  "delete",
-  "up",
-  "down",
-  "left",
-  "right",
-  "pageup",
-  "pagedown",
-  "home",
-  "end",
-  "insert",
-  "clear",
-  "center",
-  "undefined",
-  "mouse",
-  "f1",
-  "f2",
-  "f3",
-  "f4",
-  "f5",
-  "f6",
-  "f7",
-  "f8",
-  "f9",
-  "f10",
-  "f11",
-  "f12",
-]);
+var NON_TEXT_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-tzghj6zv.js:5963", () => {
+  NON_TEXT_KEYS = new Set([
+    "escape",
+    "return",
+    "enter",
+    "tab",
+    "backspace",
+    "delete",
+    "up",
+    "down",
+    "left",
+    "right",
+    "pageup",
+    "pagedown",
+    "home",
+    "end",
+    "insert",
+    "clear",
+    "center",
+    "undefined",
+    "mouse",
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f6",
+    "f7",
+    "f8",
+    "f9",
+    "f10",
+    "f11",
+    "f12",
+  ]);
+});
 //@ chunk-tzghj6zv.js:6203-6304 fingerprint = isYankKey (1)
-function isYankKey(d, key) {
+function isYankKey(text, key) {
   if (key.ctrl || key.meta) return false;
-  if (NON_TEXT_KEYS.has(d)) return false;
-  return d.length > 0 && !/^\s/.test(d);
+  if (NON_TEXT_KEYS.has(text)) return false;
+  return text.length > 0 && !/^\s/.test(text);
 }
 //@ chunk-tzghj6zv.js:6304-6372 layout
 /**
  * 函数 startsWithPunctuation（首字符是标点）；位于「搜索输入 hook：Emacs 风格编辑键（kill/yank）、退出/取消，供 transcript 搜索、选择器等使用」模块。
  */
-function startsWithPunctuation(d) {
-  return d.length > 0 && ".,?!:;)]".includes(d.charAt(0));
+function startsWithPunctuation(text) {
+  return text.length > 0 && ".,?!:;)]".includes(text.charAt(0));
 }
 //@ chunk-tzghj6zv.js:6372-6561 fingerprint = isKillKey (1)
 function isKillKey(e) {
@@ -75,28 +79,31 @@ function isYankKey_2(e) {
   return (e.ctrl || e.meta) && e.key === "y";
 }
 //@ chunk-tzghj6zv.js:6612-6768 fingerprint = UNHANDLED_SPECIAL_KEYS (0.925)
-var UNHANDLED_SPECIAL_KEYS = new Set([
-  "pageup",
-  "pagedown",
-  "insert",
-  "wheelup",
-  "wheeldown",
-  "mouse",
-  "clear",
-  "enter",
-  "f1",
-  "f2",
-  "f3",
-  "f4",
-  "f5",
-  "f6",
-  "f7",
-  "f8",
-  "f9",
-  "f10",
-  "f11",
-  "f12",
-]);
+var UNHANDLED_SPECIAL_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-tzghj6zv.js:6612", () => {
+  UNHANDLED_SPECIAL_KEYS = new Set([
+    "pageup",
+    "pagedown",
+    "insert",
+    "wheelup",
+    "wheeldown",
+    "mouse",
+    "clear",
+    "enter",
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f6",
+    "f7",
+    "f8",
+    "f9",
+    "f10",
+    "f11",
+    "f12",
+  ]);
+});
 //@ chunk-tzghj6zv.js:6768-11964 fingerprint = useSearchInput (0.606)
 /**
  * 搜索输入：维护 query/cursorOffset，处理字符输入、退格、Emacs kill/yank、左右移动，return 触发 onExit，escape 触发 onCancel；不处理翻页/滚轮等键。
@@ -119,85 +126,85 @@ function useSearchInput({
 }) {
   let killRing = useKillRing();
   let { columns: terminalColumns } = useTerminalSize();
-  let we = columns ?? terminalColumns;
-  let [Te, L] = y(initialQuery);
-  let [ee, ye] = y(initialQuery.length);
-  let setQuery = useStoreSelector(buffer, (_) => _.query);
-  let cursorOffset = useStoreSelector(buffer, (_) => _.cursorOffset);
-  let ae = setQuery ?? Te;
-  let X = cursorOffset ?? ee;
-  let F = R(Te);
-  let re = R(ee);
-  let H = Q(
+  let width = columns ?? terminalColumns;
+  let [localQuery, setLocalQuery] = useState(initialQuery);
+  let [localCursorOffset, setLocalCursorOffset] = useState(initialQuery.length);
+  let setQuery = useStoreSelector(buffer, (state) => state.query);
+  let cursorOffset = useStoreSelector(buffer, (state) => state.cursorOffset);
+  let query = setQuery ?? localQuery;
+  let cursorOffset_2 = cursorOffset ?? localCursorOffset;
+  let queryFallbackRef = useRef(localQuery);
+  let cursorFallbackRef = useRef(localCursorOffset);
+  let queryRef = useMemo(
     () =>
       buffer
         ? {
             get current() {
               return buffer.getSnapshot().query;
             },
-            set current(_) {
-              buffer.setQueryAndCursor(_, buffer.getSnapshot().cursorOffset);
+            set current(nextQuery) {
+              buffer.setQueryAndCursor(nextQuery, buffer.getSnapshot().cursorOffset);
             },
           }
-        : F,
+        : queryFallbackRef,
     [buffer],
   );
-  let D = Q(
+  let cursorOffsetRef = useMemo(
     () =>
       buffer
         ? {
             get current() {
               return buffer.getSnapshot().cursorOffset;
             },
-            set current(_) {
-              buffer.setQueryAndCursor(buffer.getSnapshot().query, _);
+            set current(nextOffset) {
+              buffer.setQueryAndCursor(buffer.getSnapshot().query, nextOffset);
             },
           }
-        : re,
+        : cursorFallbackRef,
     [buffer],
   );
-  let setQueryState = ce(
-    (_) => {
+  let setQueryState = useCallback(
+    (nextQuery) => {
       if (buffer) {
-        buffer.setQueryAndCursor(_, buffer.getSnapshot().cursorOffset);
+        buffer.setQueryAndCursor(nextQuery, buffer.getSnapshot().cursorOffset);
         return;
       }
-      F.current = _;
-      L(_);
+      queryFallbackRef.current = nextQuery;
+      setLocalQuery(nextQuery);
     },
     [buffer],
   );
-  let setCursorOffset = ce(
-    (_) => {
+  let setCursorOffset = useCallback(
+    (nextOffset) => {
       if (buffer) {
-        buffer.setQueryAndCursor(buffer.getSnapshot().query, _);
+        buffer.setQueryAndCursor(buffer.getSnapshot().query, nextOffset);
         return;
       }
-      re.current = _;
-      ye(_);
+      cursorFallbackRef.current = nextOffset;
+      setLocalCursorOffset(nextOffset);
     },
     [buffer],
   );
-  let setQuery_2 = ce(
-    (_) => {
-      setQueryState(_);
-      setCursorOffset(_.length);
+  let setQuery_2 = useCallback(
+    (nextQuery) => {
+      setQueryState(nextQuery);
+      setCursorOffset(nextQuery.length);
     },
     [setQueryState, setCursorOffset],
   );
-  let se = ce(
-    (_) => {
-      if (!isActive || !multiline || _.name !== "return") return false;
-      let ge = D.current;
-      return (ge > 0 && H.current[ge - 1] === "\\") || _.shift || _.meta;
+  let willInsertNewline = useCallback(
+    (key) => {
+      if (!isActive || !multiline || key.name !== "return") return false;
+      let offset = cursorOffsetRef.current;
+      return (offset > 0 && queryRef.current[offset - 1] === "\\") || key.shift || key.meta;
     },
     [isActive, multiline],
   );
   let handleKeyDown = (e) => {
     if (!isActive) return;
-    let ge = H.current;
-    let ke = D.current;
-    let cursor = Cursor.fromText(ge, we, ke);
+    let text = queryRef.current;
+    let offset = cursorOffsetRef.current;
+    let cursor = Cursor.fromText(text, width, offset);
     if (!isKillKey(e) && !isYankKey_2(e))
       killRing.dispatch({
         type: "interrupt",
@@ -205,23 +212,23 @@ function useSearchInput({
     if (e.ctrl && passthroughCtrlKeys.includes(e.key.toLowerCase())) return;
     if (e.name === "return") {
       e.preventDefault();
-      if (se(e)) {
-        if (ge[ke - 1] === "\\") {
+      if (willInsertNewline(e)) {
+        if (text[offset - 1] === "\\") {
           setQueryState(
-            ge.slice(0, ke - 1) +
+            text.slice(0, offset - 1) +
               `
 ` +
-              ge.slice(ke),
+              text.slice(offset),
           );
           return;
         }
         setQueryState(
-          ge.slice(0, ke) +
+          text.slice(0, offset) +
             `
 ` +
-            ge.slice(ke),
+            text.slice(offset),
         );
-        setCursorOffset(ke + 1);
+        setCursorOffset(offset + 1);
         return;
       }
       onExit();
@@ -229,18 +236,18 @@ function useSearchInput({
     }
     if (multiline && (e.name === "enter" || (e.ctrl && !e.shift && !e.meta && e.name === "j"))) {
       e.preventDefault();
-      let U = cursor.insert(`
+      let nextCursor = cursor.insert(`
 `);
-      setQueryState(U.text);
-      setCursorOffset(U.offset);
+      setQueryState(nextCursor.text);
+      setCursorOffset(nextCursor.offset);
       return;
     }
     if (e.name === "down") {
       e.preventDefault();
       if (multiline) {
-        let U = cursor.down();
-        if (!U.equals(cursor)) {
-          setCursorOffset(U.offset);
+        let nextCursor = cursor.down();
+        if (!nextCursor.equals(cursor)) {
+          setCursorOffset(nextCursor.offset);
           return;
         }
       }
@@ -251,9 +258,9 @@ function useSearchInput({
     if (e.name === "up") {
       e.preventDefault();
       if (multiline) {
-        let U = cursor.up();
-        if (!U.equals(cursor)) {
-          setCursorOffset(U.offset);
+        let nextCursor = cursor.up();
+        if (!nextCursor.equals(cursor)) {
+          setCursorOffset(nextCursor.offset);
           return;
         }
       }
@@ -263,7 +270,7 @@ function useSearchInput({
     if (e.name === "escape") {
       e.preventDefault();
       if (onCancel) onCancel();
-      else if (ge.length > 0) {
+      else if (text.length > 0) {
         setQueryState("");
         setCursorOffset(0);
       } else onExit();
@@ -282,7 +289,7 @@ function useSearchInput({
         setCursorOffset(newCursor.offset);
         return;
       }
-      if (ge.length === 0) {
+      if (text.length === 0) {
         if (backspaceExitsOnEmpty) (onCancel ?? onExit)();
         return;
       }
@@ -345,7 +352,7 @@ function useSearchInput({
           setCursorOffset(cursor.right().offset);
           return;
         case "d": {
-          if (ge.length === 0) {
+          if (text.length === 0) {
             (onCancel ?? onExit)();
             return;
           }
@@ -355,7 +362,7 @@ function useSearchInput({
           return;
         }
         case "h": {
-          if (ge.length === 0) {
+          if (text.length === 0) {
             if (backspaceExitsOnEmpty) (onCancel ?? onExit)();
             return;
           }
@@ -443,17 +450,17 @@ function useSearchInput({
         case "y": {
           let popResult = nextYankPop(killRing.state);
           if (popResult) {
-            let { text, start, length } = popResult;
+            let { text: text_2, start, length } = popResult;
             killRing.dispatch({
               type: "yankPop",
             });
-            let before = ge.slice(0, start);
-            let after = ge.slice(start + length);
-            let newText = before + text + after;
-            let newOffset = start + text.length;
+            let before = text.slice(0, start);
+            let after = text.slice(start + length);
+            let newText = before + text_2 + after;
+            let newOffset = start + text_2.length;
             killRing.dispatch({
               type: "updateYankLength",
-              length: text.length,
+              length: text_2.length,
             });
             setQueryState(newText);
             setCursorOffset(newOffset);
@@ -465,10 +472,10 @@ function useSearchInput({
     }
     if (e.name === "tab") {
       e.preventDefault();
-      if (onTabOnEmpty && ge === "") onTabOnEmpty();
+      if (onTabOnEmpty && text === "") onTabOnEmpty();
       return;
     }
-    if (onSpaceOnEmpty && e.key === " " && ge === "") {
+    if (onSpaceOnEmpty && e.key === " " && text === "") {
       e.preventDefault();
       onSpaceOnEmpty();
       return;
@@ -480,60 +487,60 @@ function useSearchInput({
       setCursorOffset(newCursor.offset);
     }
   };
-  let Ce = honorEditorMode && EDITOR_MODES();
+  let vimEnabled = honorEditorMode && EDITOR_MODES();
   let vimInput = useVimInput({
-    value: ae,
+    value: query,
     onChange: setQueryState,
-    columns: we,
+    columns: width,
     onHistoryUp: onExitUp,
     onHistoryDown: onExitDown,
-    isActive: Ce && isActive,
+    isActive: vimEnabled && isActive,
   });
-  let _e = {
+  let vimCallbacks = {
     handleKeyDown,
-    offset: X,
+    offset: cursorOffset_2,
     setOffset: setCursorOffset,
   };
   return {
-    query: ae,
-    queryRef: H,
+    query,
+    queryRef,
     setQuery: setQuery_2,
-    cursorOffset: X,
-    cursorOffsetRef: D,
-    willInsertNewline: se,
+    cursorOffset: cursorOffset_2,
+    cursorOffsetRef,
+    willInsertNewline,
     setCursorOffset,
-    handleKeyDown: (_) => {
-      if (!Ce) {
-        handleKeyDown(_);
+    handleKeyDown: (key) => {
+      if (!vimEnabled) {
+        handleKeyDown(key);
         return;
       }
       if (!isActive) return;
-      if (_.name === "escape" && vimInput.mode === "NORMAL") {
-        vimInput.handleKeyDown(_, _e);
-        handleKeyDown(_);
+      if (key.name === "escape" && vimInput.mode === "NORMAL") {
+        vimInput.handleKeyDown(key, vimCallbacks);
+        handleKeyDown(key);
         return;
       }
-      vimInput.handleKeyDown(_, _e);
+      vimInput.handleKeyDown(key, vimCallbacks);
     },
     handlePaste: (event) => {
       if (!isActive || event.text.length === 0) return;
       event.preventDefault();
       vimInput.cancelPendingRemap();
-      let ge = multiline
+      let pasteText = multiline
         ? event.text.replace(
             /\r\n|\r/g,
             `
 `,
           )
         : (event.text.split(/\r\n|\r|\n/, 2)[0] ?? "");
-      if (ge.length === 0) return;
-      let q = Cursor.fromText(H.current, we, D.current).insert(ge);
-      setQueryState(q.text);
-      setCursorOffset(q.offset);
+      if (pasteText.length === 0) return;
+      let nextCursor = Cursor.fromText(queryRef.current, width, cursorOffsetRef.current).insert(pasteText);
+      setQueryState(nextCursor.text);
+      setCursorOffset(nextCursor.offset);
     },
-    vimMode: Ce ? vimInput.mode : undefined,
+    vimMode: vimEnabled ? vimInput.mode : undefined,
     enterInsertMode: () => {
-      if (Ce) vimInput.setMode("INSERT", _e);
+      if (vimEnabled) vimInput.setMode("INSERT", vimCallbacks);
     },
   };
 }

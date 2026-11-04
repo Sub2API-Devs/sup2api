@@ -26,3 +26,4 @@ async function call() {
       value: "Failed to open browser. Visit: https://www.stickermule.com/claudecode",
     };
 }
+export { call };

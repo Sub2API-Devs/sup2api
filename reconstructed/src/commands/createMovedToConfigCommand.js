@@ -9,6 +9,7 @@
  * attribution: placement 4
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1694311-1694361 placement
 /**
@@ -39,9 +40,13 @@ function createMovedToConfigCommand(name, label, extraRequires) {
 /**
  * vimMovedToConfigCommand：createMovedToConfigCommand("vim","Editor mode")。
  */
-var vimMovedToConfigCommand = createMovedToConfigCommand("vim", "Editor mode");
-var outputStyleMovedToConfigCommand = createMovedToConfigCommand("output-style", "Output style", {
-  workspace: true,
+var vimMovedToConfigCommand; // deferred: uses createMovedToConfigCommand of its import cycle while loading; runs once the cycle is complete
+var outputStyleMovedToConfigCommand;
+deferInit("chunk-e6aww6q8.js:1694538", () => {
+  vimMovedToConfigCommand = createMovedToConfigCommand("vim", "Editor mode");
+  outputStyleMovedToConfigCommand = createMovedToConfigCommand("output-style", "Output style", {
+    workspace: true,
+  });
 });
 //@ chunk-e6aww6q8.js:1694625-1694649 placement
 /**

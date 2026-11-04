@@ -19,13 +19,13 @@ import { isBridgeOrTransport } from "../../cli/transportState.js";
 var call = async (args, context) => {
   let [
     {
-      peers: a,
-      bridgeWalkFailed: e,
-      cloudListFailed: l,
-      localListFailed: r,
-      ownEndpointShadowed: i,
-      messagingDisabled: o,
-      listTruncated: t,
+      peers,
+      bridgeWalkFailed,
+      cloudListFailed,
+      localListFailed,
+      ownEndpointShadowed,
+      messagingDisabled,
+      listTruncated,
     },
     subagentExtras,
   ] = await Promise.all([
@@ -34,14 +34,15 @@ var call = async (args, context) => {
   ]);
   return {
     type: "text",
-    value: formatForUser(a, subagentExtras, {
-      bridgeWalkFailed: e,
-      cloudListFailed: l,
-      localListFailed: r,
-      ownEndpointShadowed: i,
-      messagingDisabled: o,
-      listTruncated: t,
+    value: formatForUser(peers, subagentExtras, {
+      bridgeWalkFailed,
+      cloudListFailed,
+      localListFailed,
+      ownEndpointShadowed,
+      messagingDisabled,
+      listTruncated,
       omitDirectories: isBridgeOrTransport(context.session),
     }),
   };
 };
+export { call };

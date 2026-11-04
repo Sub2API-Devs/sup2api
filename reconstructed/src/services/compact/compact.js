@@ -143,7 +143,7 @@ import {
   extractDiscoveredToolNames,
 } from "../../utils/toolSearch.js";
 import { forkStickyBetaLatches } from "../../bootstrap/stateSlices.js";
-import { Ji } from "../../../vendor/lodash-es/uniqBy.js";
+import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { FileReadTool } from "../../tools/FileReadTool/FileReadTool.js";
 import { ToolSearchTool } from "../../tools/ToolSearchTool/ToolSearchTool.js";
 import { needsOverageConsentForModel } from "../api/overageConsent.js";
@@ -227,6 +227,7 @@ import { getMemoryPath } from "../../utils/config.js";
 import { formatApiErrorType } from "../api/errorUtils.js";
 import { recoveryTimeoutForContextTokens } from "../../utils/abortController.js";
 import { env } from "../../utils/env.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1630181-1630292 placement
 var SKILL_TRUNCATION_NOTE = `
@@ -241,9 +242,9 @@ function metaMessageText(message) {
   let content = message.message?.content;
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return null;
-  let filtered = content.filter((s) => s?.type === "text");
+  let filtered = content.filter((block) => block?.type === "text");
   if (filtered.length !== content.length) return null;
-  return filtered.map((s) => s.text).join(`
+  return filtered.map((block) => block.text).join(`
 
 `);
 }
@@ -253,24 +254,29 @@ function metaMessageText(message) {
  */
 function withToolsLoadedBeforeSummary(deferredToolsDeltaAttachments, discoveredToolNames) {
   try {
-    return deferredToolsDeltaAttachments.map((r) => {
-      if (r.type !== "deferred_tools_delta" || r.toolSearchAbsent === true) return r;
-      let s = new Set([...(r.loadedNames ?? []), ...(r.surfacedNames ?? []), ...(r.replacedNames ?? [])]);
-      let filtered = r.addedNames.filter(
-        (addedName) => discoveredToolNames.has(addedName) && !s.has(addedName),
+    return deferredToolsDeltaAttachments.map((attachment) => {
+      if (attachment.type !== "deferred_tools_delta" || attachment.toolSearchAbsent === true)
+        return attachment;
+      let known = new Set([
+        ...(attachment.loadedNames ?? []),
+        ...(attachment.surfacedNames ?? []),
+        ...(attachment.replacedNames ?? []),
+      ]);
+      let filtered = attachment.addedNames.filter(
+        (addedName) => discoveredToolNames.has(addedName) && !known.has(addedName),
       );
-      if (filtered.length === 0) return r;
+      if (filtered.length === 0) return attachment;
       if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_radiant_lemur", false)) {
         logFeatureSad("compact_names_loaded_tools", "flag_off", {
           count: filtered.length,
         });
-        return r;
+        return attachment;
       }
       logFeatureOk("compact_names_loaded_tools", {
         count: filtered.length,
       });
       return {
-        ...r,
+        ...attachment,
         loadedBeforeSummaryNames: filtered,
       };
     });
@@ -301,9 +307,9 @@ function getProactivityAttachmentToKeep(preCompactMessages, messagesToKeep) {
 /**
  * 消息是 proactivity 附件，且已撤回或级别/工具有效。
  */
-function isProactivityAttachment(e) {
-  if (e.type !== "attachment" || e.attachment.type !== "proactivity") return false;
-  let attachment = e.attachment;
+function isProactivityAttachment(message) {
+  if (message.type !== "attachment" || message.attachment.type !== "proactivity") return false;
+  let attachment = message.attachment;
   return (
     attachment.status === "withdrawn" ||
     (isProactivityMode(attachment.level) && isProactivitySettingsValid(attachment.tools))
@@ -313,7 +319,10 @@ function isProactivityAttachment(e) {
 /**
  * 按宿主保存的权限上下文日志状态。
  */
-var permissionContextLogState = new HostScoped(() => new PermissionContextLogState());
+var permissionContextLogState; // deferred: uses PermissionContextLogState (../internalLogging.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2085167", () => {
+  permissionContextLogState = new HostScoped(() => new PermissionContextLogState());
+});
 //@ chunk-e6aww6q8.js:2085194-2085233 placement
 /**
  * 取当前宿主的权限上下文日志状态。
@@ -332,7 +341,7 @@ function getOciContainerId() {
 /**
  * 异步空实现（保留调用点，目前不做任何事）。
  */
-async function noopAsync_3(toolPermissionContext, n) {
+async function noopAsync_3(toolPermissionContext, context) {
   return;
 }
 //@ chunk-e6aww6q8.js:2085309-2085323 placement
@@ -352,28 +361,33 @@ function startCompactingStatusTicker(onCompactEvent) {
 /**
  * 按 API 回合（助手消息 id 变化）把消息分组。
  */
-function groupByApiRound(e) {
-  let n = [];
-  let r = [];
-  let s;
-  for (let h of e) {
-    if (isVirtualConversationMessage(h)) {
-      r.push(h);
+function groupByApiRound(messages) {
+  let rounds = [];
+  let currentRound = [];
+  let lastAssistantId;
+  for (let message of messages) {
+    if (isVirtualConversationMessage(message)) {
+      currentRound.push(message);
       continue;
     }
-    if (h.type === "assistant" && h.message.id !== s && !h.resumedFromIncompleteThinking && r.length > 0) {
-      n.push(r);
-      r = [h];
-    } else r.push(h);
-    if (h.type === "assistant") s = h.message.id;
+    if (
+      message.type === "assistant" &&
+      message.message.id !== lastAssistantId &&
+      !message.resumedFromIncompleteThinking &&
+      currentRound.length > 0
+    ) {
+      rounds.push(currentRound);
+      currentRound = [message];
+    } else currentRound.push(message);
+    if (message.type === "assistant") lastAssistantId = message.message.id;
   }
-  if (r.length > 0) n.push(r);
-  return n;
+  if (currentRound.length > 0) rounds.push(currentRound);
+  return rounds;
 }
 //@ chunk-e6aww6q8.js:2085728-2085802 placement = countUnseenAssistantTurns (1)
-function countNonProgressMessages(e) {
-  let filtered = messagesSinceCompactBoundary(e).filter((r) => r.type !== "progress");
-  return groupByApiRound(filtered);
+function countNonProgressMessages(messages) {
+  let messages_2 = messagesSinceCompactBoundary(messages).filter((message) => message.type !== "progress");
+  return groupByApiRound(messages_2);
 }
 //@ chunk-e6aww6q8.js:2085802-2085841 placement
 /**
@@ -386,7 +400,7 @@ function hasTooFewMessagesToCompact(messagesForQuery) {
 /**
  * 反应式/预计算压缩成功后组装 CompactionResult：清 readFileState、边界消息、保留消息（可剥 thinking）、压缩后附件、PostCompact 钩子、计算 postTokens，记 tengu_reactive_compact_succeeded。旧版名 createCompactionResultFromSessionMemory 为错配。
  */
-async function buildReactiveCompactionResult(e) {
+async function buildReactiveCompactionResult(input) {
   let {
     compactResult,
     preCompactMessages,
@@ -401,11 +415,11 @@ async function buildReactiveCompactionResult(e) {
     precomputeTelemetry,
     mainChainTailAtStart,
     cacheCold,
-  } = e;
+  } = input;
   let { toolUseContext } = cacheSafeParams;
-  let compactionKind = e.compactionKind ?? resolveCompactionKind(trigger, thresholdSource);
+  let compactionKind = input.compactionKind ?? resolveCompactionKind(trigger, thresholdSource);
   let isMainThreadQuery = isMainQuerySource(querySource);
-  let preCompactTokens = e.preCompactTokens ?? estimateTokensWithAnchor(preCompactMessages);
+  let preCompactTokens = input.preCompactTokens ?? estimateTokensWithAnchor(preCompactMessages);
   let preCompactReadFileState = remoteFileStateToObject(toolUseContext.readFileState);
   toolUseContext.readFileState.clear();
   resetPickerState(toolUseContext.memorySelector);
@@ -413,7 +427,7 @@ async function buildReactiveCompactionResult(e) {
   if (isMainThreadQuery) {
     await reAppendSessionMetadataAfterCompaction(toolUseContext.storageV5);
     markPostCompaction(
-      roughTokenCountEstimationForMessages([...compactResult.summaryMessages, ...e.messagesToPreserve]),
+      roughTokenCountEstimationForMessages([...compactResult.summaryMessages, ...input.messagesToPreserve]),
     );
   }
   let uuid = preCompactMessages.at(-1)?.uuid;
@@ -424,19 +438,19 @@ async function buildReactiveCompactionResult(e) {
   if (discoveredToolNames.size > 0)
     boundaryMarker.compactMetadata.preCompactDiscoveredTools = [...discoveredToolNames].sort();
   stampPreCompactReadVersions(boundaryMarker, toolUseContext.agentId, toolUseContext.getAppState());
-  let messagesToKeep = e.messagesToPreserve.map(getTokenCountFromUsage_4);
+  let messagesToKeep = input.messagesToPreserve.map(getTokenCountFromUsage_4);
   let keptThinking = decideKeptThinkingStrip(messagesToKeep, toolUseContext);
-  let isMainThread = isMainQueryCompaction(querySource, toolUseContext.agentId);
+  let isMainQuery = isMainQueryCompaction(querySource, toolUseContext.agentId);
   let postCompactAttachments = await buildPostCompactAttachments(
     preCompactReadFileState,
     toolUseContext,
     messagesToKeep,
     "reactive_compact",
     preCompactMessages,
-    isMainThread,
+    isMainQuery,
     compactionKind === "reactive",
   ).catch((error) =>
-    fallbackPostCompactAttachments(error, toolUseContext, preCompactMessages, messagesToKeep, isMainThread),
+    fallbackPostCompactAttachments(error, toolUseContext, preCompactMessages, messagesToKeep, isMainQuery),
   );
   toolUseContext.onCompactEvent?.({
     type: "compact_progress",
@@ -464,7 +478,7 @@ async function buildReactiveCompactionResult(e) {
     messagesToKeep.length > 0
       ? compactResult.summaryMessages.map(appendPreservedTailNote)
       : compactResult.summaryMessages;
-  let It = {
+  let compactionOutput = {
     boundaryMarker: annotatedBoundary,
     summaryMessages,
     messagesToKeep,
@@ -478,11 +492,13 @@ async function buildReactiveCompactionResult(e) {
       compactionUsage: compactResult.totalUsage,
     }),
   };
-  let postCompactTokenCount = roughTokenCountEstimationForMessages(buildPostCompactMessages(It));
+  let postCompactTokenCount = roughTokenCountEstimationForMessages(
+    buildPostCompactMessages(compactionOutput),
+  );
   annotatedBoundary.compactMetadata.postTokens = postCompactTokenCount;
   setCumulativeDroppedTokens(annotatedBoundary, preCompactMessages);
   if (isMainThreadQuery) setLastMainThreadContextTokens(postCompactTokenCount);
-  let qt = (() => {
+  let contextMetrics = (() => {
     try {
       return tokenStatsToStatsigMetrics(analyzeContext(preCompactMessages));
     } catch (error) {
@@ -491,7 +507,7 @@ async function buildReactiveCompactionResult(e) {
     }
   })();
   let totalUsage = compactResult.totalUsage;
-  let rn =
+  let totalInputTokens =
     totalUsage.input_tokens + totalUsage.cache_creation_input_tokens + totalUsage.cache_read_input_tokens;
   let effortLevelIfSupported = getEffortLevelIfSupported(
     toolUseContext.options.mainLoopModel,
@@ -553,10 +569,10 @@ async function buildReactiveCompactionResult(e) {
     compactionOutputTokens: totalUsage.output_tokens,
     compactionCacheReadTokens: totalUsage.cache_read_input_tokens,
     compactionCacheCreationTokens: totalUsage.cache_creation_input_tokens,
-    compactionTotalTokens: rn + totalUsage.output_tokens,
-    cacheHitRate: rn > 0 ? totalUsage.cache_read_input_tokens / rn : 0,
+    compactionTotalTokens: totalInputTokens + totalUsage.output_tokens,
+    cacheHitRate: totalInputTokens > 0 ? totalUsage.cache_read_input_tokens / totalInputTokens : 0,
     cacheCold,
-    ...qt,
+    ...contextMetrics,
   });
   if (isMainQueryCompaction(querySource, toolUseContext.agentId)) {
     armPendingContextCompacted(compactionKind, mainChainTailAtStart);
@@ -564,29 +580,30 @@ async function buildReactiveCompactionResult(e) {
   }
   return {
     ok: true,
-    result: It,
+    result: compactionOutput,
   };
 }
 //@ chunk-e6aww6q8.js:2138079-2139711 placement
 /**
  * 压缩前后运行压缩相关钩子，钩子可替换压缩结果。
  */
-async function runCompactHooks(e) {
-  let { replacement, preCompactMessages, cacheSafeParams, querySource, trigger, startTime, coreBoundary } = e;
+async function runCompactHooks(input) {
+  let { replacement, preCompactMessages, cacheSafeParams, querySource, trigger, startTime, coreBoundary } =
+    input;
   let { toolUseContext } = cacheSafeParams;
-  let G = coreBoundary !== undefined;
-  let q = isMainQuerySource(querySource);
-  let Z = estimateTokensWithAnchor(preCompactMessages);
-  if (!G) {
+  let ranCore = coreBoundary !== undefined;
+  let isMainThreadQuery = isMainQuerySource(querySource);
+  let preCompactTokens = estimateTokensWithAnchor(preCompactMessages);
+  if (!ranCore) {
     toolUseContext.readFileState.clear();
     resetPickerState(toolUseContext.memorySelector);
     notifyCompaction(toolUseContext.agentId);
-    if (q) {
+    if (isMainThreadQuery) {
       await reAppendSessionMetadataAfterCompaction(toolUseContext.storageV5);
       markPostCompaction(roughTokenCountEstimationForMessages(replacement));
     }
   }
-  let Se =
+  let boundaryMarker =
     coreBoundary !== undefined && isCompactBoundaryMessage_3(coreBoundary)
       ? {
           ...coreBoundary,
@@ -597,12 +614,12 @@ async function runCompactHooks(e) {
             preCompactArtifactReadVersions: undefined,
           },
         }
-      : createCompactBoundaryMessage(trigger, Z, preCompactMessages.at(-1)?.uuid);
-  Se.compactMetadata.durationMs = Math.round(performance.now() - startTime);
-  if (e.precomputed) Se.compactMetadata.precomputed = true;
+      : createCompactBoundaryMessage(trigger, preCompactTokens, preCompactMessages.at(-1)?.uuid);
+  boundaryMarker.compactMetadata.durationMs = Math.round(performance.now() - startTime);
+  if (input.precomputed) boundaryMarker.compactMetadata.precomputed = true;
   let hookResults = [];
   let userDisplayMessage;
-  if (!G) {
+  if (!ranCore) {
     toolUseContext.onCompactEvent?.({
       type: "compact_progress",
       event: {
@@ -640,35 +657,39 @@ async function runCompactHooks(e) {
       });
     }
   }
-  let Ee = {
-    boundaryMarker: Se,
+  let result = {
+    boundaryMarker,
     summaryMessages: [],
     replacement,
     messagesToKeep: [],
     attachments: [],
     hookResults,
     userDisplayMessage,
-    preCompactTokenCount: Z,
+    preCompactTokenCount: preCompactTokens,
   };
-  let Ae = roughTokenCountEstimationForMessages(buildPostCompactMessages(Ee));
-  Se.compactMetadata.postTokens = Ae;
-  setCumulativeDroppedTokens(Se, preCompactMessages);
-  if (q) setLastMainThreadContextTokens(Ae);
-  if (q) notePendingConversationEdit("compact");
-  if (!G && e.compactionKind !== undefined && isMainQueryCompaction(querySource, toolUseContext.agentId))
-    armPendingContextCompacted(e.compactionKind, e.mainChainTailAtStart);
+  let postCompactTokens = roughTokenCountEstimationForMessages(buildPostCompactMessages(result));
+  boundaryMarker.compactMetadata.postTokens = postCompactTokens;
+  setCumulativeDroppedTokens(boundaryMarker, preCompactMessages);
+  if (isMainThreadQuery) setLastMainThreadContextTokens(postCompactTokens);
+  if (isMainThreadQuery) notePendingConversationEdit("compact");
+  if (
+    !ranCore &&
+    input.compactionKind !== undefined &&
+    isMainQueryCompaction(querySource, toolUseContext.agentId)
+  )
+    armPendingContextCompacted(input.compactionKind, input.mainChainTailAtStart);
   logEvent("tengu_compact_replaced_by_hook", {
     trigger: fromEnum(trigger),
-    ranCore: G,
-    precomputed: e.precomputed === true,
-    preCompactTokens: Z,
-    postCompactTokens: Ae,
+    ranCore,
+    precomputed: input.precomputed === true,
+    preCompactTokens,
+    postCompactTokens,
     messageCount: replacement.length,
     ...(querySource !== undefined && {
       querySource: agentTypeForTelemetry(querySource),
     }),
   });
-  return Ee;
+  return result;
 }
 //@ chunk-e6aww6q8.js:2139711-2139787 placement
 /**
@@ -681,9 +702,15 @@ function resolveCompactionKind(trigger, thresholdSource) {
 /**
  * 压缩附件生成失败时的兜底附件（计划模式、项目线程询问、目标、定时任务）。
  */
-async function fallbackPostCompactAttachments(error, context, preCompactMessages, messagesToKeep, h) {
+async function fallbackPostCompactAttachments(
+  error,
+  context,
+  preCompactMessages,
+  messagesToKeep,
+  precompute,
+) {
   logError(error);
-  let y = await createPlanModeAttachmentIfNeeded(context).catch((error) => {
+  let planAttachment = await createPlanModeAttachmentIfNeeded(context).catch((error) => {
     logError(error);
     return null;
   });
@@ -691,28 +718,30 @@ async function fallbackPostCompactAttachments(error, context, preCompactMessages
     preCompactMessages,
     messagesToKeep,
     context.options.tools,
-    h,
+    precompute,
   );
   let goalStatusAttachmentIfNeeded = createGoalStatusAttachmentIfNeeded(
     context,
     preCompactMessages,
     messagesToKeep,
-    h,
+    precompute,
   );
   let sessionCronCarryAttachmentIfNeeded = createSessionCronCarryAttachmentIfNeeded(
     preCompactMessages,
     messagesToKeep,
-    h,
+    precompute,
   );
   let announcementWalk = context.options.announcementWalk;
-  let q = [
-    ...(y ? [y] : []),
+  let attachments = [
+    ...(planAttachment ? [planAttachment] : []),
     ...(projectsThreadAskAttachmentIfNeeded ? [projectsThreadAskAttachmentIfNeeded] : []),
     ...(goalStatusAttachmentIfNeeded ? [goalStatusAttachmentIfNeeded] : []),
     ...(sessionCronCarryAttachmentIfNeeded ? [sessionCronCarryAttachmentIfNeeded] : []),
   ];
   return {
-    attachments: announcementWalk ? q.map((Z) => announcementWalk(Z)) : q,
+    attachments: announcementWalk
+      ? attachments.map((attachment) => announcementWalk(attachment))
+      : attachments,
     hookResults: [],
   };
 }
@@ -737,12 +766,16 @@ function getTokenCountFromUsage_4(usage) {
 /**
  * 找出压缩边界保留的消息及锚点。
  */
-function resolvePreservedMessages(e, n, r) {
-  let preservedMessages = n.compactMetadata.preservedMessages;
+function resolvePreservedMessages(messages, boundary, initialMessages) {
+  let preservedMessages = boundary.compactMetadata.preservedMessages;
   if (!preservedMessages) return null;
   let mapped = (preservedMessages.allUuids ?? preservedMessages.uuids)
-    .map((y) => e.find((S) => S.uuid === y) ?? r?.find((S) => S.uuid === y))
-    .filter((y) => y !== undefined)
+    .map(
+      (uuid) =>
+        messages.find((message) => message.uuid === uuid) ??
+        initialMessages?.find((message) => message.uuid === uuid),
+    )
+    .filter((message) => message !== undefined)
     .map(getTokenCountFromUsage_4);
   return mapped.length > 0
     ? {
@@ -755,31 +788,32 @@ function resolvePreservedMessages(e, n, r) {
 /**
  * 在消息列表中按锚点移动保留的消息。
  */
-function applyPreservedMessages(e, n, r, initialMessages) {
-  if (isCompactBoundaryMessage_3(n)) {
-    let preservedMessages = resolvePreservedMessages(e, n, initialMessages);
+function applyPreservedMessages(messages, message, pending, initialMessages) {
+  if (isCompactBoundaryMessage_3(message)) {
+    let preservedMessages = resolvePreservedMessages(messages, message, initialMessages);
     if (preservedMessages === null) return null;
-    let y = new Set(preservedMessages.preserved.map((w) => w.uuid));
-    let filtered = e.filter((w) => !y.has(w.uuid));
-    e.length = 0;
-    e.push(...filtered);
-    if (preservedMessages.anchorUuid === n.uuid) {
-      e.push(...preservedMessages.preserved);
+    let preservedUuids = new Set(preservedMessages.preserved.map((message) => message.uuid));
+    let filtered = messages.filter((message) => !preservedUuids.has(message.uuid));
+    messages.length = 0;
+    messages.push(...filtered);
+    if (preservedMessages.anchorUuid === message.uuid) {
+      messages.push(...preservedMessages.preserved);
       return null;
     }
     return preservedMessages;
   }
-  if (r !== null && r.anchorUuid === n.uuid) {
-    e.push(...r.preserved);
+  if (pending !== null && pending.anchorUuid === message.uuid) {
+    messages.push(...pending.preserved);
     return null;
   }
-  return r;
+  return pending;
 }
 //@ chunk-e6aww6q8.js:2140841-2141025 placement = buildPostCompactMessages (0.833)
-function buildPostCompactMessages_2(e, n) {
-  let mapped = e.messagesToKeep.map(getTokenCountFromUsage_4);
-  let s = n === "up_to" ? [...e.summaryMessages, ...mapped] : [...mapped, ...e.summaryMessages];
-  return [e.boundaryMarker, ...s, ...e.attachments, ...e.hookResults];
+function buildPostCompactMessages_2(plan, placement) {
+  let mapped = plan.messagesToKeep.map(getTokenCountFromUsage_4);
+  let ordered =
+    placement === "up_to" ? [...plan.summaryMessages, ...mapped] : [...mapped, ...plan.summaryMessages];
+  return [plan.boundaryMarker, ...ordered, ...plan.attachments, ...plan.hookResults];
 }
 //@ chunk-e6aww6q8.js:2406920-2406984 placement
 /**
@@ -800,23 +834,25 @@ function stripMediaFromAttachment(attachment) {
   if (
     attachment.type === "queued_command" &&
     Array.isArray(attachment.prompt) &&
-    attachment.prompt.some((n) => isObjectBlock(n) && (n.type === "image" || n.type === "document"))
+    attachment.prompt.some(
+      (block) => isObjectBlock(block) && (block.type === "image" || block.type === "document"),
+    )
   )
     return {
       ...attachment,
-      prompt: attachment.prompt.map((n) => {
-        if (!isObjectBlock(n)) return n;
-        if (n.type === "image")
+      prompt: attachment.prompt.map((block) => {
+        if (!isObjectBlock(block)) return block;
+        if (block.type === "image")
           return {
             type: "text",
             text: "[image]",
           };
-        if (n.type === "document")
+        if (block.type === "document")
           return {
             type: "text",
             text: "[document]",
           };
-        return n;
+        return block;
       }),
     };
   if (
@@ -847,8 +883,8 @@ function stripMediaFromAttachment(attachment) {
 function stripImagesFromMessages(messages) {
   return messages.map((message) => {
     if (message.type === "attachment") {
-      let y = stripMediaFromAttachment(message.attachment);
-      return y === message.attachment ? message : withRenderedAttachment(message, y);
+      let stripped = stripMediaFromAttachment(message.attachment);
+      return stripped === message.attachment ? message : withRenderedAttachment(message, stripped);
     }
     if (message.type !== "user") return message;
     let content = message.message.content;
@@ -922,14 +958,14 @@ function stripImagesFromMessages(messages) {
  */
 function keepEssentialAttachmentsOnly(requestMessages) {
   return requestMessages.filter(
-    (n) =>
-      n.type !== "attachment" ||
-      n.attachment.type === "queued_command" ||
-      n.attachment.type === "poll_events" ||
-      n.attachment.type === "dir_sync_notice" ||
-      n.attachment.type === "fork_briefing" ||
-      n.attachment.type === "thinking_stripped" ||
-      n.attachment.type === "advisor_stripped",
+    (message) =>
+      message.type !== "attachment" ||
+      message.attachment.type === "queued_command" ||
+      message.attachment.type === "poll_events" ||
+      message.attachment.type === "dir_sync_notice" ||
+      message.attachment.type === "fork_briefing" ||
+      message.attachment.type === "thinking_stripped" ||
+      message.attachment.type === "advisor_stripped",
   );
 }
 //@ chunk-e6aww6q8.js:2408569-2408581 layout
@@ -941,42 +977,42 @@ var COLD_COMPACT_TRUNCATE_CHARS = 100;
 /**
  * 字符串超过 100 字符时截断并标注原长度（避开代理对）。
  */
-function truncateForColdCompact(e) {
-  if (e.length <= COLD_COMPACT_TRUNCATE_CHARS) return e;
-  let n = COLD_COMPACT_TRUNCATE_CHARS;
-  let code = e.charCodeAt(n - 1);
-  if (code >= 55296 && code <= 56319) n--;
-  return `${e.slice(0, n)}\u2026[truncated, original ${e.length} chars]`;
+function truncateForColdCompact(text) {
+  if (text.length <= COLD_COMPACT_TRUNCATE_CHARS) return text;
+  let cutIndex = COLD_COMPACT_TRUNCATE_CHARS;
+  let code = text.charCodeAt(cutIndex - 1);
+  if (code >= 55296 && code <= 56319) cutIndex--;
+  return `${text.slice(0, cutIndex)}\u2026[truncated, original ${text.length} chars]`;
 }
 //@ chunk-e6aww6q8.js:2408748-2409016 layout
 /**
  * 递归截断对象/数组里的所有字符串（未变时返回原对象）。旧版名 shouldExcludeFromPostCompactRestore 为错配。
  */
-function truncateStringsDeep(e) {
-  if (typeof e === "string") return truncateForColdCompact(e);
-  if (Array.isArray(e)) {
-    let mapped = e.map(truncateStringsDeep);
-    return mapped.some((r, s) => r !== e[s]) ? mapped : e;
+function truncateStringsDeep(value) {
+  if (typeof value === "string") return truncateForColdCompact(value);
+  if (Array.isArray(value)) {
+    let mapped = value.map(truncateStringsDeep);
+    return mapped.some((entry, index) => entry !== value[index]) ? mapped : value;
   }
-  if (typeof e === "object" && e !== null) {
-    let n = e;
-    let r = false;
-    let s = {};
-    for (let [key, value] of Object.entries(n)) {
-      let S = truncateStringsDeep(value);
-      if (S !== value) r = true;
-      s[key] = S;
+  if (typeof value === "object" && value !== null) {
+    let record = value;
+    let changed = false;
+    let copy = {};
+    for (let [key, value] of Object.entries(record)) {
+      let nextValue = truncateStringsDeep(value);
+      if (nextValue !== value) changed = true;
+      copy[key] = nextValue;
     }
-    return r ? s : e;
+    return changed ? copy : value;
   }
-  return e;
+  return value;
 }
 //@ chunk-e6aww6q8.js:2409016-2409053 layout
 /**
  * 块是对象且为 thinking/redacted_thinking。
  */
-function isThinkingContentBlock(e) {
-  return isObjectBlock(e) && isThinkingBlock(e);
+function isThinkingContentBlock(block) {
+  return isObjectBlock(block) && isThinkingBlock(block);
 }
 //@ chunk-e6aww6q8.js:2409053-2409880 layout
 /**
@@ -988,21 +1024,23 @@ function stripNonEssentialContent(messages) {
       let content = message.message.content;
       if (!Array.isArray(content)) return message;
       let any = content.some(isThinkingContentBlock);
-      let content_2 = (any ? content.filter((L) => !isThinkingContentBlock(L)) : content).map((L) => {
-        if (!isObjectBlock(L) || L.type !== "tool_use") return L;
-        let G = truncateStringsDeep(L.input);
-        if (G === L.input) return L;
-        any = true;
-        return {
-          ...L,
-          input: G,
-        };
-      });
+      let content_2 = (any ? content.filter((block) => !isThinkingContentBlock(block)) : content).map(
+        (block) => {
+          if (!isObjectBlock(block) || block.type !== "tool_use") return block;
+          let truncatedInput = truncateStringsDeep(block.input);
+          if (truncatedInput === block.input) return block;
+          any = true;
+          return {
+            ...block,
+            input: truncatedInput,
+          };
+        },
+      );
       if (!any && message.wireToolInputs === undefined && message.wireIngestContext === undefined)
         return message;
-      let { wireToolInputs, wireIngestContext, ...w } = message;
+      let { wireToolInputs, wireIngestContext, ...rest } = message;
       return {
-        ...w,
+        ...rest,
         message: {
           ...message.message,
           content: content_2,
@@ -1012,24 +1050,24 @@ function stripNonEssentialContent(messages) {
     if (message.type === "user") {
       let content = message.message.content;
       if (!Array.isArray(content)) return message;
-      let s = false;
-      let content_2 = content.map((y) => {
-        if (!isObjectBlock(y) || y.type !== "tool_result") return y;
-        let S =
-          typeof y.content === "string"
-            ? y.content
-            : Array.isArray(y.content)
-              ? extractTextContent_2(y.content.filter(isObjectBlock))
+      let changed = false;
+      let content_2 = content.map((block) => {
+        if (!isObjectBlock(block) || block.type !== "tool_result") return block;
+        let text =
+          typeof block.content === "string"
+            ? block.content
+            : Array.isArray(block.content)
+              ? extractTextContent_2(block.content.filter(isObjectBlock))
               : "";
-        let w = truncateForColdCompact(S);
-        if (y.content === w) return y;
-        s = true;
+        let truncated = truncateForColdCompact(text);
+        if (block.content === truncated) return block;
+        changed = true;
         return {
-          ...y,
-          content: w,
+          ...block,
+          content: truncated,
         };
       });
-      if (!s) return message;
+      if (!changed) return message;
       return {
         ...message,
         message: {
@@ -1052,14 +1090,14 @@ var PTL_RETRY_MARKER = "[earlier conversation truncated for compaction retry]";
 /**
  * 按错误里给出的超出量（getPromptTooLongGap）截掉开头的消息组。
  */
-function truncateHeadForPromptTooLong(messages, summaryResponse, mediaStripped) {
-  return truncateHeadForPTLRetry(messages, getPromptTooLongGap(summaryResponse), mediaStripped);
+function truncateHeadForPromptTooLong(messages, summaryResponse, bytesPerToken) {
+  return truncateHeadForPTLRetry(messages, getPromptTooLongGap(summaryResponse), bytesPerToken);
 }
 //@ chunk-e6aww6q8.js:2410031-2410438 fingerprint = truncateHeadForPTLRetry (1)
 /**
  * 摘要请求 prompt too long 时丢弃最早的若干 API 轮次组：有超出量就丢到够为止，否则丢 20%；至少保留一组；开头变成 assistant 时补 PTL_RETRY_MARKER 用户消息。
  */
-function truncateHeadForPTLRetry(messages, n, r) {
+function truncateHeadForPTLRetry(messages, budget, bytesPerToken) {
   let input =
     messages[0]?.type === "user" && messages[0].isMeta && messages[0].message.content === PTL_RETRY_MARKER
       ? messages.slice(1)
@@ -1067,13 +1105,13 @@ function truncateHeadForPTLRetry(messages, n, r) {
   let groups = groupByApiRound(input);
   if (groups.length < 2) return null;
   let dropCount;
-  if (n !== undefined) {
+  if (budget !== undefined) {
     let acc = 0;
     dropCount = 0;
     for (let group of groups) {
-      acc += roughTokenCountEstimationForMessages(r ? stripImagesFromMessages(group) : group);
+      acc += roughTokenCountEstimationForMessages(bytesPerToken ? stripImagesFromMessages(group) : group);
       dropCount++;
-      if (acc >= n) break;
+      if (acc >= budget) break;
     }
   } else dropCount = Math.max(1, Math.floor(groups.length * 0.2));
   dropCount = Math.min(dropCount, groups.length - 1);
@@ -1100,12 +1138,12 @@ var COMPACTION_BLOCKED_BY_HOOK = "Compaction blocked by PreCompact hook";
 /**
  * PreCompact 钩子返回 blockedBy 时记日志、（非自动时）通知，并抛 CompactionError。
  */
-function throwIfPreCompactHookBlocked(preCompactHookResult, onNotification, r) {
+function throwIfPreCompactHookBlocked(preCompactHookResult, onNotification, hookName) {
   if (!preCompactHookResult.blockedBy) return;
   logForDebugging(`Compaction blocked by PreCompact hook: ${preCompactHookResult.blockedBy}`, {
     level: "warn",
   });
-  if (!r?.suppressNotification)
+  if (!hookName?.suppressNotification)
     onNotification?.({
       key: "compaction-blocked-by-hook",
       text: "compaction blocked by PreCompact hook",
@@ -1143,17 +1181,19 @@ function buildPostCompactMessages(result) {
 /**
  * 自动模式分类器因上下文过长无法审查而触发压缩时，生成 critical_system_reminder（说明哪些工具调用未执行）。
  */
-function createClassifierOverflowReminder(e, n) {
-  if (e === 0)
+function createClassifierOverflowReminder(callCount, names) {
+  if (callCount === 0)
     return createAttachmentMessage_2({
       type: "critical_system_reminder",
       content: "The conversation was compacted because it had become too long for auto mode's classifier.",
     });
-  let r = e === 1;
-  let s = r ? `an earlier tool call (${n.join(", ")})` : `${e} earlier tool calls (${n.join(", ")})`;
+  let single = callCount === 1;
+  let description = single
+    ? `an earlier tool call (${names.join(", ")})`
+    : `${callCount} earlier tool calls (${names.join(", ")})`;
   return createAttachmentMessage_2({
     type: "critical_system_reminder",
-    content: `Auto mode could not review ${s} because the conversation was too long for its classifier, so ${r ? "that call" : "those calls"} did not run. The conversation has now been compacted. If still needed, issue ${r ? "it" : "them"} again and ${r ? "it" : "they"} will be reviewed normally.`,
+    content: `Auto mode could not review ${description} because the conversation was too long for its classifier, so ${single ? "that call" : "those calls"} did not run. The conversation has now been compacted. If still needed, issue ${single ? "it" : "them"} again and ${single ? "it" : "they"} will be reviewed normally.`,
   });
 }
 //@ chunk-e6aww6q8.js:2411731-2411848 layout = buildPostCompactMessages (0.801)
@@ -1173,41 +1213,41 @@ function buildPostCompactMessagesWithoutKept(result) {
 /**
  * 按出现顺序去重 uuid（重复时保留最后一次出现的位置）。
  */
-function uniqueUuidsKeepLast(e) {
-  let n = new Set();
-  let r = [];
-  for (let idx = e.length - 1; idx >= 0; idx--) {
-    let { uuid } = e[idx];
-    if (!n.has(uuid)) {
-      n.add(uuid);
-      r.push(uuid);
+function uniqueUuidsKeepLast(messages) {
+  let seen = new Set();
+  let uuids = [];
+  for (let idx = messages.length - 1; idx >= 0; idx--) {
+    let { uuid } = messages[idx];
+    if (!seen.has(uuid)) {
+      seen.add(uuid);
+      uuids.push(uuid);
     }
   }
-  return r.reverse();
+  return uuids.reverse();
 }
 //@ chunk-e6aww6q8.js:2411982-2412250 fingerprint = annotateBoundaryWithPreservedSegment (0.786)
 /**
  * 在边界消息 compactMetadata 上记录保留段（preservedSegment head/anchor/tail）与保留消息 uuid。
  */
-function annotateBoundaryWithPreservedSegment(boundary, anchorUuid, r, s = r) {
-  let h = uniqueUuidsKeepLast(r);
-  let y = uniqueUuidsKeepLast(cleanMessagesForLogging([...r], s));
-  if (h.length === 0) return boundary;
+function annotateBoundaryWithPreservedSegment(boundary, anchorUuid, messages, fallbackMessages = messages) {
+  let uuids = uniqueUuidsKeepLast(messages);
+  let loggedUuids = uniqueUuidsKeepLast(cleanMessagesForLogging([...messages], fallbackMessages));
+  if (uuids.length === 0) return boundary;
   return {
     ...boundary,
     compactMetadata: {
       ...boundary.compactMetadata,
-      ...(y.length > 0 && {
+      ...(loggedUuids.length > 0 && {
         preservedSegment: {
-          headUuid: y[0],
+          headUuid: loggedUuids[0],
           anchorUuid,
-          tailUuid: y.at(-1),
+          tailUuid: loggedUuids.at(-1),
         },
       }),
       preservedMessages: {
         anchorUuid,
-        uuids: y,
-        allUuids: h,
+        uuids: loggedUuids,
+        allUuids: uuids,
       },
     },
   };
@@ -1216,10 +1256,10 @@ function annotateBoundaryWithPreservedSegment(boundary, anchorUuid, r, s = r) {
 /**
  * 保留的尾部若含 thinking 块，按模型 thinking 模式决定是否全部剥离；剥离时返回 thinking_stripped 标记附件。
  */
-function decideKeptThinkingStrip(messagesToKeep, n) {
+function decideKeptThinkingStrip(messagesToKeep, context) {
   let thinkingBlockCount = 0;
-  for (let w of messagesToKeep)
-    if (w.type === "assistant") thinkingBlockCount += count(w.message.content, isThinkingBlock);
+  for (let message of messagesToKeep)
+    if (message.type === "assistant") thinkingBlockCount += count(message.message.content, isThinkingBlock);
   if (thinkingBlockCount === 0)
     return {
       marker: undefined,
@@ -1227,20 +1267,20 @@ function decideKeptThinkingStrip(messagesToKeep, n) {
       decidedBy: undefined,
     };
   let runtimeModel = getRuntimeMainLoopModel({
-    permissionMode: getToolPermissionContext(n).mode,
-    mainLoopModel: getMainLoopModel_2(n),
+    permissionMode: getToolPermissionContext(context).mode,
+    mainLoopModel: getMainLoopModel_2(context),
   });
-  let h = runtimeModel.includes("application-inference-profile")
+  let backingModel = runtimeModel.includes("application-inference-profile")
     ? (getInferenceProfileBackingModelCached(stripAnyVersatileSuffix(runtimeModel)) ?? runtimeModel)
     : runtimeModel;
-  let y = modelSupportsAdaptiveThinking({
+  let supportsAdaptive = modelSupportsAdaptiveThinking({
     runtimeOverride: getThinkingTypeOverride(runtimeModel),
-    resolvedModel: h,
-    canonicalModel: getCanonicalName(h),
+    resolvedModel: backingModel,
+    canonicalModel: getCanonicalName(backingModel),
   });
-  let stripDecision = keptThinkingStripDecision(y);
+  let stripDecision = keptThinkingStripDecision(supportsAdaptive);
   logForDebugging(
-    `compact: kept tail holds ${thinkingBlockCount} thinking block(s); strip=${stripDecision.strip ? "on" : "off"} (decided by ${stripDecision.source}; model=${runtimeModel}, thinking=${y})`,
+    `compact: kept tail holds ${thinkingBlockCount} thinking block(s); strip=${stripDecision.strip ? "on" : "off"} (decided by ${stripDecision.source}; model=${runtimeModel}, thinking=${supportsAdaptive})`,
     {
       level: "info",
     },
@@ -1271,19 +1311,21 @@ ${hookInstructions}`;
 /**
  * 非 API 错误、非虚拟的 assistant 消息。
  */
-function isRealAssistantMessage(e) {
-  return e.type === "assistant" && !e.isApiErrorMessage && e.isVirtual !== true;
+function isRealAssistantMessage(message) {
+  return message.type === "assistant" && !message.isApiErrorMessage && message.isVirtual !== true;
 }
 //@ chunk-e6aww6q8.js:2413032-2413151 layout
 /**
  * 最后一条真实 assistant 或 tool_result 用户消息之后的位置（摘要回复审计用）。
  */
-function getIndexAfterLastAssistantOrToolResult(e) {
+function getIndexAfterLastAssistantOrToolResult(messages) {
   return (
     1 +
     Math.max(
-      e.findLastIndex(isRealAssistantMessage),
-      e.findLastIndex((n) => n.type === "user" && n.isVirtual !== true && isToolResultMessage(n)),
+      messages.findLastIndex(isRealAssistantMessage),
+      messages.findLastIndex(
+        (message) => message.type === "user" && message.isVirtual !== true && isToolResultMessage(message),
+      ),
     )
   );
 }
@@ -1291,13 +1333,13 @@ function getIndexAfterLastAssistantOrToolResult(e) {
 /**
  * 真实的用户输入消息（非 meta、非虚拟、非合成、非 tool_result）。
  */
-function isHumanPromptMessage(e) {
+function isHumanPromptMessage(message) {
   return (
-    e.type === "user" &&
-    !e.isMeta &&
-    e.isVirtual !== true &&
-    !isSyntheticMessage(e) &&
-    !isToolResultMessage(e)
+    message.type === "user" &&
+    !message.isMeta &&
+    message.isVirtual !== true &&
+    !isSyntheticMessage(message) &&
+    !isToolResultMessage(message)
   );
 }
 //@ chunk-e6aww6q8.js:2413235-2419147 fingerprint = compactConversation (0.673)
@@ -1509,7 +1551,7 @@ async function compactConversation(messages, context, cacheSafeParams, suppressF
         isCompactSummary: true,
         isVisibleInTranscriptOnly: true,
       }),
-    ].map((So) => withTurnPosition(So, messages));
+    ].map((fp) => withTurnPosition(fp, messages));
     let postCompactTokenCount = tokenCountFromLastAPIResponse([summaryResponse]);
     let truePostCompactTokenCount = roughTokenCountEstimationForMessages([
       boundaryMarker,
@@ -1675,12 +1717,12 @@ async function compactConversation(messages, context, cacheSafeParams, suppressF
 /**
  * 部分压缩（消息选择器）：direction=from 摘要选中点之后、保留之前；up_to 摘要之前、保留之后（保留部分可能剥离 thinking）。流程同 compactConversation，用 getPartialCompactPrompt，边界消息记录 userFeedback 与摘要条数，tengu_partial_compact 遥测。
  */
-async function partialCompactConversation(messages, pivotIndex, context, cacheSafeParams, h) {
-  let { userFeedback, direction = "from", onNotification, onResponseLength } = h ?? {};
+async function partialCompactConversation(messages, pivotIndex, context, cacheSafeParams, options) {
+  let { userFeedback, direction = "from", onNotification, onResponseLength } = options ?? {};
   let lastMainRequestId = getLastMainRequestId();
-  let errorMessage;
+  let compactionErrorMessage;
   let preTokens;
-  let Se;
+  let postTokens;
   let startTime = performance.now();
   try {
     let messagesToSummarize =
@@ -1703,27 +1745,27 @@ async function partialCompactConversation(messages, pivotIndex, context, cacheSa
           : "Nothing to summarize after the selected message.",
       );
     let appendedMarkerCount = 0;
-    let Ie = false;
+    let keptMarker = false;
     let keptThinkingInfo =
       direction === "up_to" ? decideKeptThinkingStrip(messagesToKeep, context) : undefined;
     if (direction === "up_to") {
       if (keptThinkingInfo?.marker) {
         messagesToKeep.push(keptThinkingInfo.marker);
         appendedMarkerCount++;
-        Ie = true;
+        keptMarker = true;
       }
     } else {
-      let vn = messagesToKeep.some((co) => co.type === "assistant")
+      let thinkingScope = messagesToKeep.some((message) => message.type === "assistant")
         ? computeThinkingStrippedScope(messagesToKeep, messagesToSummarize)
         : undefined;
-      if (vn) {
-        messagesToKeep.push(createAttachmentMessage_2(vn));
+      if (thinkingScope) {
+        messagesToKeep.push(createAttachmentMessage_2(thinkingScope));
         appendedMarkerCount++;
       }
       if (
-        messagesToKeep.some((co) => co.type === "assistant") &&
+        messagesToKeep.some((message) => message.type === "assistant") &&
         messagesToSummarize.some(
-          (co) => co.type === "attachment" && co.attachment.type === "advisor_stripped",
+          (message) => message.type === "attachment" && message.attachment.type === "advisor_stripped",
         )
       ) {
         messagesToKeep.push(
@@ -1798,7 +1840,7 @@ async function partialCompactConversation(messages, pivotIndex, context, cacheSa
     let summaryText;
     let ptlAttempts = 0;
     for (;;) {
-      let vn = await streamCompactSummary({
+      let summary = await streamCompactSummary({
         messages: summaryInputMessages,
         summaryRequest,
         appState: context.getAppState(),
@@ -1810,13 +1852,13 @@ async function partialCompactConversation(messages, pivotIndex, context, cacheSa
         advisorStripPlan: getAdvisorStrippedMessageIds(messages),
         compactionRequestKind: "manual",
       });
-      summaryResponse = vn.response;
+      summaryResponse = summary.response;
       summaryText = getAssistantMessageText(summaryResponse);
       if (!summaryText?.startsWith(PROMPT_TOO_LONG_ERROR_MESSAGE)) break;
       ptlAttempts++;
       let truncatedMessages =
         ptlAttempts <= MAX_PTL_RETRIES
-          ? truncateHeadForPromptTooLong(summaryInputMessages, summaryResponse, vn.mediaStripped)
+          ? truncateHeadForPromptTooLong(summaryInputMessages, summaryResponse, summary.mediaStripped)
           : null;
       if (!truncatedMessages) {
         logEvent("tengu_partial_compact_failed", {
@@ -1898,7 +1940,7 @@ async function partialCompactConversation(messages, pivotIndex, context, cacheSa
       direction: fromEnum(direction),
       hasUserFeedback: !!userFeedback,
       keptThinkingBlockCount: keptThinkingInfo?.thinkingBlockCount ?? 0,
-      keptThinkingStripped: direction === "up_to" && Ie,
+      keptThinkingStripped: direction === "up_to" && keptMarker,
       keptThinkingStripDecidedBy: fromEnumOpt(keptThinkingInfo?.decidedBy),
       trigger: lit_2("message_selector"),
       compactionInputTokens: compactionUsage?.input_tokens,
@@ -1947,7 +1989,9 @@ async function partialCompactConversation(messages, pivotIndex, context, cacheSa
               isVisibleInTranscriptOnly: true,
             }),
       }),
-    ].map((vn) => withTurnPosition(vn, direction === "up_to" ? messagesToSummarize : messages));
+    ].map((summaryMessage) =>
+      withTurnPosition(summaryMessage, direction === "up_to" ? messagesToSummarize : messages),
+    );
     notifyCompaction(context.agentId);
     await reAppendSessionMetadataAfterCompaction(context.storageV5);
     markPostCompaction(roughTokenCountEstimationForMessages([...summaryMessages, ...messagesToKeep]), {
@@ -1969,15 +2013,15 @@ async function partialCompactConversation(messages, pivotIndex, context, cacheSa
       context,
       context.abortController.signal,
     );
-    Se = roughTokenCountEstimationForMessages([
+    postTokens = roughTokenCountEstimationForMessages([
       boundaryMarker,
       ...summaryMessages,
       ...messagesToKeep,
       ...attachments,
       ...hookResults,
     ]);
-    boundaryMarker.compactMetadata.postTokens = Se;
-    setLastMainThreadContextTokens(Se);
+    boundaryMarker.compactMetadata.postTokens = postTokens;
+    setLastMainThreadContextTokens(postTokens);
     setCumulativeDroppedTokens(boundaryMarker, messages);
     let anchorUuid =
       direction === "up_to" ? (summaryMessages.at(-1)?.uuid ?? boundaryMarker.uuid) : boundaryMarker.uuid;
@@ -2001,7 +2045,7 @@ async function partialCompactConversation(messages, pivotIndex, context, cacheSa
       compactionUsage,
     };
   } catch (error) {
-    errorMessage = error instanceof Error ? error.message : "partial compaction failed";
+    compactionErrorMessage = error instanceof Error ? error.message : "partial compaction failed";
     addErrorNotificationIfNeeded(error, onNotification);
     throw error;
   } finally {
@@ -2022,11 +2066,11 @@ async function partialCompactConversation(messages, pivotIndex, context, cacheSa
     logCompactionEvent(
       {
         trigger: "manual",
-        success: !errorMessage,
+        success: !compactionErrorMessage,
         durationMs: performance.now() - startTime,
         preTokens,
-        postTokens: Se,
-        error: errorMessage,
+        postTokens,
+        error: compactionErrorMessage,
       },
       context.agentContext,
     );
@@ -2034,9 +2078,9 @@ async function partialCompactConversation(messages, pivotIndex, context, cacheSa
       type: "sdk_status",
       status: null,
       metadata: {
-        compactResult: errorMessage ? "failed" : "success",
-        ...(errorMessage && {
-          compactError: errorMessage,
+        compactResult: compactionErrorMessage ? "failed" : "success",
+        ...(compactionErrorMessage && {
+          compactError: compactionErrorMessage,
         }),
       },
     });
@@ -2081,10 +2125,10 @@ function describeLastAssistantKind(lastAssistant) {
 /**
  * 从 fallback 模型列表里去掉与当前模型等同的项。
  */
-function excludeSameModelFallbacks(e, fallbackModel) {
+function excludeSameModelFallbacks(modelInfo, fallbackModel) {
   return (
     Array.isArray(fallbackModel) ? fallbackModel : fallbackModel !== undefined ? [fallbackModel] : []
-  ).filter((s) => !swapShrinksContextWindow(e, s));
+  ).filter((candidate) => !swapShrinksContextWindow(modelInfo, candidate));
 }
 //@ chunk-e6aww6q8.js:2425273-2425465 fingerprint = createCompactCanUseTool (1)
 /**
@@ -2117,11 +2161,12 @@ async function streamCompactSummary({
   advisorStripPlan,
   compactionRequestKind,
 }) {
-  let Z = !stripNonEssential && getFeatureValue_CACHED_MAY_BE_STALE("tengu_compact_cache_prefix", true);
+  let cacheSharingEnabled =
+    !stripNonEssential && getFeatureValue_CACHED_MAY_BE_STALE("tengu_compact_cache_prefix", true);
   let compactingStatusTicker = startCompactingStatusTicker(context.onCompactEvent);
   let compactStreamProgress = createCompactStreamProgress(onResponseLength, context.onCompactEvent);
   try {
-    if (Z)
+    if (cacheSharingEnabled)
       try {
         let forkResult = await runForkedAgent({
           promptMessages: [summaryRequest],
@@ -2150,7 +2195,7 @@ async function streamCompactSummary({
         let forkSummaryText = summaryTextOf(forkResult.messages);
         let forkAssistantMessageCount = count(
           forkResult.messages,
-          (qt) => qt.type === "assistant" && !qt.isApiErrorMessage,
+          (message) => message.type === "assistant" && !message.isApiErrorMessage,
         );
         if (lastAssistant && forkSummaryText && !lastAssistant.isApiErrorMessage) {
           if (!forkSummaryText.startsWith(PROMPT_TOO_LONG_ERROR_MESSAGE))
@@ -2210,7 +2255,7 @@ async function streamCompactSummary({
           preCompactTokenCount,
         });
       }
-    let Ee =
+    let summaryTools =
       !stripNonEssential &&
       !(context.stickyBetas && toolSearchRejectedOn(context.stickyBetas, context.options.mainLoopModel)) &&
       (await isToolSearchEnabled(
@@ -2223,7 +2268,7 @@ async function streamCompactSummary({
         undefined,
         forkStickyBetaLatches(getStickyBetas()),
       ))
-        ? Ji(
+        ? uniqByExport(
             [
               FileReadTool,
               ToolSearchTool,
@@ -2236,19 +2281,19 @@ async function streamCompactSummary({
     let assistantMsg = stripImagesFromMessages(
       stripNonEssential ? keepEssentialAttachmentsOnly(requestMessages) : requestMessages,
     );
-    let Me = stripNonEssential ? stripNonEssentialContent(assistantMsg) : assistantMsg;
+    let requestMessages_2 = stripNonEssential ? stripNonEssentialContent(assistantMsg) : assistantMsg;
     let summaryModel = cacheSafeParams.model ?? context.options.mainLoopModel;
     let isMainAgent = context.agentId === undefined;
     if (needsOverageConsentForModel(summaryModel, context.requestDialog)) {
-      let gt = getUsageCreditsOnlyModelConsentDeclineFallback();
-      if (gt === null) {
-        let At = isNoModelFallbackEnabled();
+      let consentFallback = getUsageCreditsOnlyModelConsentDeclineFallback();
+      if (consentFallback === null) {
+        let noFallback = isNoModelFallbackEnabled();
         if (isMainAgent)
           logFeatureBad(
             "model_fable_consent",
-            At ? "compact_no_model_fallback_env" : "compact_no_allowed_fallback",
+            noFallback ? "compact_no_model_fallback_env" : "compact_no_allowed_fallback",
           );
-        if (At)
+        if (noFallback)
           throw Error(
             "Compaction unavailable: CLAUDE_CODE_NO_MODEL_FALLBACK is set and model substitution is disabled \xB7 unset it to allow the swap",
           );
@@ -2258,27 +2303,27 @@ async function streamCompactSummary({
         );
       }
       if (isMainAgent) logFeatureSad("model_fable_consent", "compact_substituted");
-      summaryModel = gt;
+      summaryModel = consentFallback;
     }
-    let lt = excludeSameModelFallbacks(summaryModel, context.options.fallbackModel);
-    let modelChain = buildAvailabilityFallbackChain(summaryModel, lt);
+    let fallbackModelList = excludeSameModelFallbacks(summaryModel, context.options.fallbackModel);
+    let modelChain = buildAvailabilityFallbackChain(summaryModel, fallbackModelList);
     let chainIndex = 0;
-    let pt;
-    let Et;
-    let yt;
+    let swappedModel;
+    let creditInfo;
+    let fallbackStamp;
     while (true) {
-      let gt = pt ?? modelChain[chainIndex];
-      let At = nextFallbackModel(modelChain, chainIndex, gt);
-      let It = false;
-      let Yt;
-      let qt = Et;
-      Et = undefined;
-      let Zt = yt;
-      yt = undefined;
+      let currentModel = swappedModel ?? modelChain[chainIndex];
+      let accessFallback = nextFallbackModel(modelChain, chainIndex, currentModel);
+      let startedStreaming = false;
+      let fallbackRequest;
+      let pendingCredit = creditInfo;
+      creditInfo = undefined;
+      let pendingStamp = fallbackStamp;
+      fallbackStamp = undefined;
       let visibleModel = resolveRefusalFallback({
-        currentModel: gt,
+        currentModel,
         compiledTablesOnly: false,
-        alreadyUsed: pt !== undefined,
+        alreadyUsed: swappedModel !== undefined,
         declined: false,
         inCascadeEpisode: false,
         cascadeNext: undefined,
@@ -2292,7 +2337,7 @@ async function streamCompactSummary({
         sticky: getStickyBetas(),
         threadedRequest: false,
       }).visibleModel;
-      let pn = [];
+      let assistantMessages = [];
       context.onCompactEvent?.({
         type: "stream_mode",
         mode: "requesting",
@@ -2305,39 +2350,44 @@ async function streamCompactSummary({
         let reminderFold = resolveReminderFold_2(requestMessages);
         let streamingGen = shouldEchoWireToolInputs(requestMessages);
         let streamIter = queryModelWithStreaming({
-          messages: normalizeMessagesForAPI(Me, stripNonEssential ? [] : context.options.tools, undefined, {
-            echoWireToolInputs: streamingGen,
-            echoApiBlockOrder: isStellarDriftEnabled(),
-            thinkingStripPlan,
-            advisorStripPlan,
-            reminderFold,
-          }),
+          messages: normalizeMessagesForAPI(
+            requestMessages_2,
+            stripNonEssential ? [] : context.options.tools,
+            undefined,
+            {
+              echoWireToolInputs: streamingGen,
+              echoApiBlockOrder: isStellarDriftEnabled(),
+              thinkingStripPlan,
+              advisorStripPlan,
+              reminderFold,
+            },
+          ),
           systemPrompt: asSystemPrompt([
             "You are a helpful AI assistant tasked with summarizing conversations.",
           ]),
           thinkingConfig: getThinkingConfig(context),
-          tools: stripNonEssential ? [] : Ee,
+          tools: stripNonEssential ? [] : summaryTools,
           signal: context.abortController.signal,
           options: {
             async getToolPermissionContext() {
               return context.getAppState().toolPermissionContext;
             },
-            model: gt,
+            model: currentModel,
             withoutToolDescribeHooks: context.options.settingsHooksOff,
             reminderFold,
             echoWireToolInputs: streamingGen,
             fallbackModel: modelChain[chainIndex + 1],
-            accessFallbackModel: At,
+            accessFallbackModel: accessFallback,
             refusalFallbackModel: visibleModel,
             refusalFallbackModelLane: "visible",
             fallbackCreditLaneArmed: visibleModel !== undefined,
-            fallbackCreditCode: qt?.code,
-            fallbackCreditMintModel: qt?.mintModel,
-            fallbackCreditMintRequestId: qt?.mintRequestId,
-            fallbackStampFromModel: Zt?.fromModel,
-            fallbackStampCategory: Zt?.category,
-            fallbackStampTrigger: Zt?.trigger,
-            fallbackStampOriginalRequestId: Zt?.originalRequestId,
+            fallbackCreditCode: pendingCredit?.code,
+            fallbackCreditMintModel: pendingCredit?.mintModel,
+            fallbackCreditMintRequestId: pendingCredit?.mintRequestId,
+            fallbackStampFromModel: pendingStamp?.fromModel,
+            fallbackStampCategory: pendingStamp?.category,
+            fallbackStampTrigger: pendingStamp?.trigger,
+            fallbackStampOriginalRequestId: pendingStamp?.originalRequestId,
             toolChoice: undefined,
             isNonInteractiveSession: context.options.isNonInteractiveSession,
             hasAppendSystemPrompt: !!context.options.appendSystemPrompt,
@@ -2354,7 +2404,7 @@ async function streamCompactSummary({
             effortValue: getEffortValue(context),
             effortSetAsideByHold: getEffortSetAsideByHold(context),
             turnEffort: getEffortLayerOverride(context.permissionLayers),
-            refusalFallbackEffort: Zt?.effort ?? undefined,
+            refusalFallbackEffort: pendingStamp?.effort ?? undefined,
             enablePromptCaching: false,
             promptTooLongIsHandled: true,
             onRetryStatus: context.onRetryStatus,
@@ -2365,13 +2415,13 @@ async function streamCompactSummary({
           let event = next.value;
           if (event.type === "stream_event") {
             if (event.event.type === "content_block_start" && event.event.content_block.type === "text")
-              It = true;
+              startedStreaming = true;
             compactStreamProgress?.(event);
           }
-          if (event.type === "assistant") pn.push(event);
+          if (event.type === "assistant") assistantMessages.push(event);
           if (event.type === "model_fallback_triggered") throw event.error;
           if (event.type === "fallback_request") {
-            Yt = event;
+            fallbackRequest = event;
             try {
               await streamIter.return(undefined);
             } catch (error) {
@@ -2383,18 +2433,21 @@ async function streamCompactSummary({
           }
           next = await streamIter.next();
         }
-        if (Yt !== undefined) {
-          let fallbackModel = Yt.fallbackModel;
+        if (fallbackRequest !== undefined) {
+          let fallbackModel = fallbackRequest.fallbackModel;
           if (needsOverageConsentForModel(fallbackModel, context.requestDialog)) {
-            let To = getUsageCreditsOnlyModelConsentDeclineFallback();
-            let bo = To !== null && swapShrinksContextWindow(modelChain[0], To);
-            if (To === null || bo) {
+            let refusalFallback = getUsageCreditsOnlyModelConsentDeclineFallback();
+            let shrinksWindow =
+              refusalFallback !== null && swapShrinksContextWindow(modelChain[0], refusalFallback);
+            if (refusalFallback === null || shrinksWindow) {
               if (isMainAgent)
                 logFeatureBad(
                   "model_fable_consent",
-                  bo ? "compact_refusal_fallback_shrinks_window" : "compact_refusal_no_allowed_fallback",
+                  shrinksWindow
+                    ? "compact_refusal_fallback_shrinks_window"
+                    : "compact_refusal_no_allowed_fallback",
                 );
-              if (bo)
+              if (shrinksWindow)
                 throw Error(
                   "Compaction unavailable: the only model allowed after this refusal has a smaller context window \xB7 retry, or /model to change models",
                 );
@@ -2404,29 +2457,29 @@ async function streamCompactSummary({
               );
             }
             if (isMainAgent) logFeatureSad("model_fable_consent", "compact_substituted");
-            fallbackModel = To;
+            fallbackModel = refusalFallback;
           }
-          pt = fallbackModel;
-          Et =
-            Yt.creditCode !== null
+          swappedModel = fallbackModel;
+          creditInfo =
+            fallbackRequest.creditCode !== null
               ? {
-                  code: Yt.creditCode,
-                  mintModel: gt,
-                  mintRequestId: Yt.requestId ?? undefined,
+                  code: fallbackRequest.creditCode,
+                  mintModel: currentModel,
+                  mintRequestId: fallbackRequest.requestId ?? undefined,
                 }
               : undefined;
-          yt = {
-            fromModel: Yt.originalModel,
-            category: Yt.apiRefusalCategory ?? undefined,
-            trigger: Yt.trigger,
-            originalRequestId: Yt.requestId ?? undefined,
-            effort: Yt.refusedEffort.carry,
+          fallbackStamp = {
+            fromModel: fallbackRequest.originalModel,
+            category: fallbackRequest.apiRefusalCategory ?? undefined,
+            trigger: fallbackRequest.trigger,
+            originalRequestId: fallbackRequest.requestId ?? undefined,
+            effort: fallbackRequest.refusedEffort.carry,
           };
           logEvent("tengu_refusal_fallback_triggered", {
-            original_model: telemetrySafeModelName(gt),
-            fallback_model: telemetrySafeModelName(pt),
-            trigger: fromEnum(Yt.trigger),
-            request_id: sanitizeMarkName(Yt.requestId),
+            original_model: telemetrySafeModelName(currentModel),
+            fallback_model: telemetrySafeModelName(swappedModel),
+            trigger: fromEnum(fallbackRequest.trigger),
+            request_id: sanitizeMarkName(fallbackRequest.requestId),
             prompt_skipped_reason: fromEnum(
               getFallbackDialogSkipReason({
                 requestDialog: context.requestDialog,
@@ -2435,13 +2488,14 @@ async function streamCompactSummary({
                 consumerLacksDialogCapability: true,
               }) ?? "no_dialog_host",
             ),
-            api_refusal_category: Yt.apiRefusalCategory
-              ? fromEnum(normalizeRefusalCategory(Yt.apiRefusalCategory))
+            api_refusal_category: fallbackRequest.apiRefusalCategory
+              ? fromEnum(normalizeRefusalCategory(fallbackRequest.apiRefusalCategory))
               : undefined,
-            route_matched: Yt.routeMatched != null ? fromEnum(Yt.routeMatched) : undefined,
-            has_api_refusal_explanation: Boolean(Yt.apiRefusalExplanation),
-            credit_minted: Yt.creditCode !== null,
-            ...refusedEffortTelemetryFields(Yt.refusedEffort),
+            route_matched:
+              fallbackRequest.routeMatched != null ? fromEnum(fallbackRequest.routeMatched) : undefined,
+            has_api_refusal_explanation: Boolean(fallbackRequest.apiRefusalExplanation),
+            credit_minted: fallbackRequest.creditCode !== null,
+            ...refusedEffortTelemetryFields(fallbackRequest.refusedEffort),
             querySource: lit_2("compact"),
             queryChainId: sanitizeMarkName(context.queryTracking?.chainId) ?? lit_2(""),
             queryDepth: context.queryTracking?.depth ?? -1,
@@ -2455,39 +2509,42 @@ async function streamCompactSummary({
           if (context.abortController.signal.aborted) throw Error(API_REQUEST_ABORTED_MESSAGE);
           continue;
         }
-        let last = pn.at(-1);
+        let last = assistantMessages.at(-1);
         if (last) {
-          if (pt !== undefined && !last.isApiErrorMessage) logFeatureOk("refusal_fallback");
+          if (swappedModel !== undefined && !last.isApiErrorMessage) logFeatureOk("refusal_fallback");
           return {
-            response: last.isApiErrorMessage ? last : (findSummaryMessage(pn) ?? last),
+            response: last.isApiErrorMessage ? last : (findSummaryMessage(assistantMessages) ?? last),
             mediaStripped: true,
           };
         }
         if (context.abortController.signal.aborted) throw Error(API_REQUEST_ABORTED_MESSAGE);
-        logForDebugging(`Compact streaming failed. hasStartedStreaming=${It}`, {
+        logForDebugging(`Compact streaming failed. hasStartedStreaming=${startedStreaming}`, {
           level: "error",
         });
         logEvent("tengu_compact_failed", {
           reason: lit_2("no_streaming_response"),
           preCompactTokenCount,
-          hasStartedStreaming: It,
-          promptCacheSharingEnabled: Z,
+          hasStartedStreaming: startedStreaming,
+          promptCacheSharingEnabled: cacheSharingEnabled,
         });
         throw Error(ERROR_MESSAGE_INCOMPLETE_RESPONSE);
       } catch (error) {
-        if (isFallbackTo(At, error)) modelChain.push(At);
-        let hn = modelChain[chainIndex + 1];
-        if (hn !== undefined && needsOverageConsentForModel(hn, context.requestDialog)) {
-          let ho = getUsageCreditsOnlyModelConsentDeclineFallback() ?? undefined;
-          hn = ho !== undefined && !swapShrinksContextWindow(modelChain[0], ho) ? ho : undefined;
-          if (hn !== undefined) modelChain[chainIndex + 1] = hn;
+        if (isFallbackTo(accessFallback, error)) modelChain.push(accessFallback);
+        let nextModel = modelChain[chainIndex + 1];
+        if (nextModel !== undefined && needsOverageConsentForModel(nextModel, context.requestDialog)) {
+          let consentFallback = getUsageCreditsOnlyModelConsentDeclineFallback() ?? undefined;
+          nextModel =
+            consentFallback !== undefined && !swapShrinksContextWindow(modelChain[0], consentFallback)
+              ? consentFallback
+              : undefined;
+          if (nextModel !== undefined) modelChain[chainIndex + 1] = nextModel;
         }
-        if (error instanceof FallbackTriggeredError && hn !== undefined) {
+        if (error instanceof FallbackTriggeredError && nextModel !== undefined) {
           if (isNoModelFallbackEnabled()) noModelFallbackTripwire();
           logFeatureOk("model_fallback");
           logEvent("tengu_model_fallback_triggered", {
             original_model: telemetrySafeModelName(error.originalModel),
-            fallback_model: telemetrySafeModelName(hn),
+            fallback_model: telemetrySafeModelName(nextModel),
             chain_index: chainIndex + 1,
             query_source: lit_2("compact"),
             reason: fromEnum(error.reason),
@@ -2502,7 +2559,7 @@ async function streamCompactSummary({
             },
           );
           chainIndex++;
-          pt = undefined;
+          swappedModel = undefined;
           continue;
         }
         if (error instanceof FallbackTriggeredError && error.reason === "model_blocked")
@@ -2518,8 +2575,8 @@ async function streamCompactSummary({
 /**
  * 从消息中提取已发现（ToolSearch 加载过）的工具名，压缩边界上记录。
  */
-function getDiscoveredToolNames(e, context) {
-  return extractDiscoveredToolNames([...e], {
+function getDiscoveredToolNames(messages, context) {
+  return extractDiscoveredToolNames([...messages], {
     surfaced: (context.stickyBetas ?? getStickyBetas()).surfacedOnWire,
   });
 }
@@ -2534,7 +2591,7 @@ async function buildPostCompactAttachments(
   callSite,
   preCompactMessages,
   isMainThread,
-  S = false,
+  includeScratchTools = false,
 ) {
   let isSubagentContext = isDelegatedObservationContext(context.agentContext);
   let postCompactFileAttachments = await createPostCompactFileAttachments(
@@ -2543,37 +2600,38 @@ async function buildPostCompactAttachments(
     POST_COMPACT_MAX_FILES_TO_RESTORE,
     messagesToKeep,
   );
-  let G = isSubagentContext ? [] : await createAsyncAgentAttachmentsIfNeeded(context);
-  let q = isSubagentContext ? [] : createBackgroundShellAttachments(context);
+  let asyncAgentAttachments = isSubagentContext ? [] : await createAsyncAgentAttachmentsIfNeeded(context);
+  let shellAttachments = isSubagentContext ? [] : createBackgroundShellAttachments(context);
   let peerHandbackCommands = collectPeerHandbackCommands(preCompactMessages, messagesToKeep);
   let agentId = context.agentId;
   let planAttachmentIfNeeded = await createPlanAttachmentIfNeeded(agentId, context.storageV5);
   let planModeAttachmentIfNeeded = await createPlanModeAttachmentIfNeeded(context);
   let skillAttachmentIfNeeded = createSkillAttachmentIfNeeded(agentId, messagesToKeep, preCompactMessages);
-  let Ae = stickyBetasForRequest(context);
-  let Ie = Ae === undefined ? undefined : asDeclaredToolSet(Ae);
-  let Me = [];
-  let We = [];
-  let ze = undefined;
-  let lt = undefined;
+  let stickyBetas = stickyBetasForRequest(context);
+  let declaredTools = stickyBetas === undefined ? undefined : asDeclaredToolSet(stickyBetas);
+  let revokedTools = [];
+  let scratchTools = [];
+  let promptSnapshot = undefined;
+  let stalePoint = undefined;
   try {
-    Me = getRevokedDeferredToolNames(Ie, context);
-    We = S ? hasScratchToolSet(Ae, context.options.tools) : [];
-    let qt = [...Me, ...We];
-    ze =
-      qt.length === 0
+    revokedTools = getRevokedDeferredToolNames(declaredTools, context);
+    scratchTools = includeScratchTools ? hasScratchToolSet(stickyBetas, context.options.tools) : [];
+    let droppedToolNames = [...revokedTools, ...scratchTools];
+    promptSnapshot =
+      droppedToolNames.length === 0
         ? undefined
-        : buildPromptSnapshotAttachment(messagesToKeep, new Set(qt), context.options);
-    lt = ze === undefined ? undefined : renderPointIfStale(messagesToKeep);
+        : buildPromptSnapshotAttachment(messagesToKeep, new Set(droppedToolNames), context.options);
+    stalePoint = promptSnapshot === undefined ? undefined : renderPointIfStale(messagesToKeep);
   } catch (error) {
     logError(error);
-    Me = [];
-    We = [];
-    ze = undefined;
-    lt = undefined;
+    revokedTools = [];
+    scratchTools = [];
+    promptSnapshot = undefined;
+    stalePoint = undefined;
   }
-  let Je = Me.length === 0 ? Ie : Ie?.without(new Set(Me));
-  let nt = context.options.refreshTools !== undefined;
+  let toolsAfterRevocation =
+    revokedTools.length === 0 ? declaredTools : declaredTools?.without(new Set(revokedTools));
+  let refreshesTools = context.options.refreshTools !== undefined;
   let mapped = [
     ...withToolsLoadedBeforeSummary(
       await getDeferredToolsDeltaAttachments(
@@ -2587,9 +2645,9 @@ async function buildPostCompactAttachments(
         undefined,
         undefined,
         undefined,
-        Je,
-        buildDeferredToolsLatchContext(Ae, context),
-        nt ? buildToolRevocationClassifier(context) : undefined,
+        toolsAfterRevocation,
+        buildDeferredToolsLatchContext(stickyBetas, context),
+        refreshesTools ? buildToolRevocationClassifier(context) : undefined,
         context.options,
       ),
       getDiscoveredToolNames(preCompactMessages, context),
@@ -2606,8 +2664,8 @@ async function buildPostCompactAttachments(
       context.options.tools,
       context.options.mainLoopModel,
       messagesToKeep,
-      Je,
-      nt && isSortedOtterOn(),
+      toolsAfterRevocation,
+      refreshesTools && isSortedOtterOn(),
     ),
     ...getMcpDroppedToolsAttachment(context, messagesToKeep),
     ...getSandboxInstructionsAttachments(context.options.tools, messagesToKeep),
@@ -2622,7 +2680,7 @@ async function buildPostCompactAttachments(
           "post_compact",
         )) ?? [])
       : []),
-  ].map((qt) => createAttachmentMessage_2(qt));
+  ].map((attachment) => createAttachmentMessage_2(attachment));
   let hookResults = [];
   if (!isSubagentContext) {
     if (!context.options.settingsHooksOff) {
@@ -2658,15 +2716,15 @@ async function buildPostCompactAttachments(
     messagesToKeep,
     isMainThread,
   );
-  if (Ae !== undefined) {
-    logDeclaredToolsDroppedAtCompaction(Ae, Me);
-    logDeclaredToolsDroppedAtCompaction2(Ae, We);
+  if (stickyBetas !== undefined) {
+    logDeclaredToolsDroppedAtCompaction(stickyBetas, revokedTools);
+    logDeclaredToolsDroppedAtCompaction2(stickyBetas, scratchTools);
   }
   let announcementWalk = context.options.announcementWalk;
-  let Yt = [
+  let attachments = [
     ...postCompactFileAttachments,
-    ...G,
-    ...q,
+    ...asyncAgentAttachments,
+    ...shellAttachments,
     ...peerHandbackCommands,
     ...(planAttachmentIfNeeded ? [planAttachmentIfNeeded] : []),
     ...(planModeAttachmentIfNeeded ? [planModeAttachmentIfNeeded] : []),
@@ -2675,11 +2733,13 @@ async function buildPostCompactAttachments(
     ...(projectsThreadAskAttachmentIfNeeded ? [projectsThreadAskAttachmentIfNeeded] : []),
     ...(goalStatusAttachmentIfNeeded ? [goalStatusAttachmentIfNeeded] : []),
     ...(sessionCronCarryAttachmentIfNeeded ? [sessionCronCarryAttachmentIfNeeded] : []),
-    ...(ze ? [createAttachmentMessage_2(ze)] : []),
-    ...(lt ? [createAttachmentMessage_2(lt)] : []),
+    ...(promptSnapshot ? [createAttachmentMessage_2(promptSnapshot)] : []),
+    ...(stalePoint ? [createAttachmentMessage_2(stalePoint)] : []),
   ];
   return {
-    attachments: announcementWalk ? Yt.map((qt) => announcementWalk(qt)) : Yt,
+    attachments: announcementWalk
+      ? attachments.map((attachment) => announcementWalk(attachment))
+      : attachments,
     hookResults,
   };
 }
@@ -2694,8 +2754,8 @@ async function createPostCompactFileAttachments(
   preservedMessages = [],
 ) {
   let preservedReadPaths = collectReadToolFilePaths(preservedMessages);
-  let y = shouldExcludeFromPostCompactRestore();
-  let S = true;
+  let excludePlanFile = shouldExcludeFromPostCompactRestore();
+  let restored = true;
   let recentFiles = Object.entries(readFileState)
     .map(([filename, state]) => ({
       filename,
@@ -2703,11 +2763,11 @@ async function createPostCompactFileAttachments(
     }))
     .filter(
       (file) =>
-        !isPlanFile(file.filename, y, toolUseContext.agentId) &&
+        !isPlanFile(file.filename, excludePlanFile, toolUseContext.agentId) &&
         !preservedReadPaths.has(expandPath(file.filename)) &&
         !isPersistedArtifactPath(expandPath(file.filename)),
     )
-    .sort((Z, Se) => Se.timestamp - Z.timestamp)
+    .sort((left, right) => right.timestamp - left.timestamp)
     .slice(0, maxFiles);
   let results = (
     await Promise.all(
@@ -2756,51 +2816,51 @@ async function createPlanAttachmentIfNeeded(agentId, storageV5) {
 /**
  * 已调用技能（含从对话中恢复的）按最近调用排序，单个截到 5000 token、总预算 25000，生成 invoked_skills 附件。
  */
-function createSkillAttachmentIfNeeded(agentId, messagesToKeep = [], preCompactMessages = []) {
+function createSkillAttachmentIfNeeded(agentId, messages = [], messages_2 = []) {
   let invokedSkills = getInvokedSkillsForAgent(agentId);
-  let h = new Set();
+  let fromConversation = new Set();
   if (agentId === undefined && isSoftSparkEnabled())
-    for (let G of messagesSinceCompactBoundary([...preCompactMessages])) {
-      let q = Date.parse(G.timestamp) || 0;
-      if (G.type === "attachment" && G.attachment.type === "invoked_skills") {
-        let Ee = q;
-        for (let skill of G.attachment.skills) {
-          let Ie = `:${skill.name}`;
-          if (!invokedSkills.has(Ie) && skill.name && skill.path) {
-            h.add(Ie);
-            invokedSkills.set(Ie, {
+    for (let message of messagesSinceCompactBoundary([...messages_2])) {
+      let messageMs = Date.parse(message.timestamp) || 0;
+      if (message.type === "attachment" && message.attachment.type === "invoked_skills") {
+        let invokedAtMs = messageMs;
+        for (let skill of message.attachment.skills) {
+          let skillKey = `:${skill.name}`;
+          if (!invokedSkills.has(skillKey) && skill.name && skill.path) {
+            fromConversation.add(skillKey);
+            invokedSkills.set(skillKey, {
               skillName: skill.name,
               skillPath: skill.path,
               content: skill.content,
-              invokedAt: Ee,
+              invokedAt: invokedAtMs,
               agentId: null,
               ...(skill.mcpSkill !== undefined && {
                 servedByMcp: true,
               }),
             });
           }
-          Ee = Math.min(Ee, invokedSkills.get(Ie)?.invokedAt ?? Ee);
+          invokedAtMs = Math.min(invokedAtMs, invokedSkills.get(skillKey)?.invokedAt ?? invokedAtMs);
         }
       }
-      if (G.type !== "user" || !G.invokedSkill) continue;
-      let { name: Z, path } = G.invokedSkill;
-      let ke = invokedSkills.get(`:${Z}`);
-      let we = metaMessageText(G);
+      if (message.type !== "user" || !message.invokedSkill) continue;
+      let { name: skillName, path } = message.invokedSkill;
+      let existing = invokedSkills.get(`:${skillName}`);
+      let text = metaMessageText(message);
       if (
-        typeof Z === "string" &&
+        typeof skillName === "string" &&
         typeof path === "string" &&
-        we &&
-        we !== ke?.content &&
-        (ke?.invokedAt ?? -1) < q
+        text &&
+        text !== existing?.content &&
+        (existing?.invokedAt ?? -1) < messageMs
       ) {
-        h.add(`:${Z}`);
-        invokedSkills.set(`:${Z}`, {
-          skillName: Z,
+        fromConversation.add(`:${skillName}`);
+        invokedSkills.set(`:${skillName}`, {
+          skillName,
           skillPath: path,
-          content: we,
-          invokedAt: q,
+          content: text,
+          invokedAt: messageMs,
           agentId: null,
-          ...(G.mcpSkill != null && {
+          ...(message.mcpSkill != null && {
             servedByMcp: true,
           }),
         });
@@ -2808,41 +2868,43 @@ function createSkillAttachmentIfNeeded(agentId, messagesToKeep = [], preCompactM
     }
   if (invokedSkills.size === 0) return null;
   let usedTokens = 0;
-  let S = [];
-  let sorted = Array.from(invokedSkills.entries()).sort(([, G], [, q]) => q.invokedAt - G.invokedAt);
-  for (let [G, q] of sorted) {
-    if (!q.content) continue;
-    let invokedMcpSkill = findInvokedMcpSkill(preCompactMessages, q.skillName, q.content);
-    if (q.servedByMcp && invokedMcpSkill === undefined) continue;
-    let Se = restoreSkillStateFromMessages(messagesToKeep, q.content);
-    if (Se === "attachment") continue;
-    let ke = Se === "body" || h.has(G);
-    let content = truncateToTokens(q.content, POST_COMPACT_MAX_TOKENS_PER_SKILL);
-    let Ee = roughTokenCountEstimation(content);
-    if (usedTokens + Ee > POST_COMPACT_SKILLS_TOKEN_BUDGET) {
-      if (!ke) updateInvokedSkillContent(G, "");
+  let skills = [];
+  let sorted = Array.from(invokedSkills.entries()).sort(
+    ([, left], [, right]) => right.invokedAt - left.invokedAt,
+  );
+  for (let [skillKey, skill] of sorted) {
+    if (!skill.content) continue;
+    let invokedMcpSkill = findInvokedMcpSkill(messages_2, skill.skillName, skill.content);
+    if (skill.servedByMcp && invokedMcpSkill === undefined) continue;
+    let restoreState = restoreSkillStateFromMessages(messages, skill.content);
+    if (restoreState === "attachment") continue;
+    let keepFullContent = restoreState === "body" || fromConversation.has(skillKey);
+    let content = truncateToTokens(skill.content, POST_COMPACT_MAX_TOKENS_PER_SKILL);
+    let tokens = roughTokenCountEstimation(content);
+    if (usedTokens + tokens > POST_COMPACT_SKILLS_TOKEN_BUDGET) {
+      if (!keepFullContent) updateInvokedSkillContent(skillKey, "");
       continue;
     }
-    usedTokens += Ee;
-    if (!ke && content !== q.content) updateInvokedSkillContent(G, content);
-    S.push({
-      name: q.skillName,
-      path: q.skillPath,
+    usedTokens += tokens;
+    if (!keepFullContent && content !== skill.content) updateInvokedSkillContent(skillKey, content);
+    skills.push({
+      name: skill.skillName,
+      path: skill.skillPath,
       content,
       ...(invokedMcpSkill !== undefined && {
         mcpSkill: invokedMcpSkill,
       }),
     });
   }
-  if (S.length === 0) return null;
-  let L = count(S, (skill) => h.has(`:${skill.name}`));
-  if (L > 0)
+  if (skills.length === 0) return null;
+  let fromConversationCount = count(skills, (skill) => fromConversation.has(`:${skill.name}`));
+  if (fromConversationCount > 0)
     logFeatureOk("compact_skill_from_conversation", {
-      count: L,
+      count: fromConversationCount,
     });
   return createAttachmentMessage_2({
     type: "invoked_skills",
-    skills: S,
+    skills,
   });
 }
 //@ chunk-e6aww6q8.js:2438287-2438628 fingerprint = createPlanModeAttachmentIfNeeded (0.836)
@@ -2871,24 +2933,24 @@ async function createPlanModeAttachmentIfNeeded(context) {
 /**
  * 有活动目标或保留段之外有目标条件时生成 goal_status 附件。
  */
-function createGoalStatusAttachmentIfNeeded(e, n, r, s) {
-  if (!s) return null;
-  let activeGoal = e.getAppState().activeGoal;
+function createGoalStatusAttachmentIfNeeded(context, messagesToKeep, tools, carried) {
+  if (!carried) return null;
+  let activeGoal = context.getAppState().activeGoal;
   if (activeGoal !== undefined)
     return createAttachmentMessage_2(buildGoalSentinelAttachment(false, activeGoal.condition));
-  let condition = findActiveGoalCondition(r);
-  if (condition === null || findActiveGoalCondition(n) === condition) return null;
+  let condition = findActiveGoalCondition(tools);
+  if (condition === null || findActiveGoalCondition(messagesToKeep) === condition) return null;
   return createAttachmentMessage_2(buildGoalSentinelAttachment(true, condition));
 }
 //@ chunk-e6aww6q8.js:2438816-2438927 layout
 /**
  * 把会话 cron/loop 唤醒等定时任务以 session_cron_carry 附件带过压缩。
  */
-function createSessionCronCarryAttachmentIfNeeded(e, n, r) {
-  if (!r) return null;
+function createSessionCronCarryAttachmentIfNeeded(preCompactMessages, messagesToKeep, carry) {
+  if (!carry) return null;
   try {
-    let s = carryLoopCronAcrossCompact(e, n);
-    return s === null ? null : createAttachmentMessage_2(s);
+    let carried = carryLoopCronAcrossCompact(preCompactMessages, messagesToKeep);
+    return carried === null ? null : createAttachmentMessage_2(carried);
   } catch (error) {
     logError(error);
     return null;
@@ -2898,12 +2960,12 @@ function createSessionCronCarryAttachmentIfNeeded(e, n, r) {
 /**
  * 自动模式 projects 线程中待回答请求的携带附件。
  */
-function createProjectsThreadAskAttachmentIfNeeded(e, n, tools, s) {
-  if (!s) return null;
+function createProjectsThreadAskAttachmentIfNeeded(preCompactMessages, messagesToKeep, context, carry) {
+  if (!carry) return null;
   try {
-    if (!hasUpdateStatusToolOnly(tools)) return null;
-    let h = carryProjectsThreadAsk(e, n, tools);
-    return h === null ? null : createAttachmentMessage_2(h);
+    if (!hasUpdateStatusToolOnly(context)) return null;
+    let carried = carryProjectsThreadAsk(preCompactMessages, messagesToKeep, context);
+    return carried === null ? null : createAttachmentMessage_2(carried);
   } catch (error) {
     logError(error);
     logFeatureBad("auto_mode_projects_thread_ask_carry", "carry_failed");
@@ -2917,7 +2979,7 @@ function createProjectsThreadAskAttachmentIfNeeded(e, n, tools, s) {
 async function createAsyncAgentAttachmentsIfNeeded(context) {
   let appState = context.getAppState();
   let asyncAgents = Object.values(appState.tasks).filter((task) => task.type === "local_agent");
-  let s = willToolsLoseSessionState(context.options.tools);
+  let losesState = willToolsLoseSessionState(context.options.tools);
   let canContinueAgent = hasSendMessageTool(context.options.tools);
   return asyncAgents.flatMap((agent) => {
     if (
@@ -2935,7 +2997,7 @@ async function createAsyncAgentAttachmentsIfNeeded(context) {
         description: agent.description,
         status: agent.status,
         deltaSummary: agent.status === "running" ? (agent.progress?.summary ?? null) : (agent.error ?? null),
-        outputFilePath: agent.webFetchSavedFiles || !s ? undefined : agent.outputFile,
+        outputFilePath: agent.webFetchSavedFiles || !losesState ? undefined : agent.outputFile,
         canContinueAgent,
       }),
     ];
@@ -2946,7 +3008,7 @@ async function createAsyncAgentAttachmentsIfNeeded(context) {
  * 当前代理仍在运行的后台 shell 生成 task_status 附件（命令与描述截断）。
  */
 function createBackgroundShellAttachments(context) {
-  let n = willToolsLoseSessionState(context.options.tools);
+  let losesState = willToolsLoseSessionState(context.options.tools);
   return Object.values(context.taskRegistry.all()).flatMap((agent) => {
     if (
       agent.type !== "local_bash" ||
@@ -2964,7 +3026,7 @@ function createBackgroundShellAttachments(context) {
         description: truncateWithCount(stripIgnorables(agent.description), TASK_STATUS_DESCRIPTION_MAX_CHARS),
         status: agent.status,
         deltaSummary: null,
-        outputFilePath: n ? agent.outputFile : undefined,
+        outputFilePath: losesState ? agent.outputFile : undefined,
         shell: {
           command: truncateWithCount(stripIgnorables(agent.command), TASK_STATUS_COMMAND_MAX_CHARS),
           kind: agent.kind ?? "bash",
@@ -2980,18 +3042,18 @@ function createBackgroundShellAttachments(context) {
  */
 function collectPeerHandbackCommands(preCompactMessages, messagesToKeep) {
   let lastIndex = preCompactMessages.findLastIndex(
-    (h) => h.type === "assistant" && !h.isApiErrorMessage && !h.isVirtual,
+    (message) => message.type === "assistant" && !message.isApiErrorMessage && !message.isVirtual,
   );
-  let s = new Set(messagesToKeep.map((h) => h.uuid));
-  return preCompactMessages.slice(lastIndex + 1).flatMap((h) =>
-    h.type === "attachment" &&
-    h.attachment.type === "queued_command" &&
-    h.attachment.origin?.kind === "peer" &&
-    h.attachment.origin.handback === true &&
-    !s.has(h.uuid)
+  let keptUuids = new Set(messagesToKeep.map((message) => message.uuid));
+  return preCompactMessages.slice(lastIndex + 1).flatMap((message) =>
+    message.type === "attachment" &&
+    message.attachment.type === "queued_command" &&
+    message.attachment.origin?.kind === "peer" &&
+    message.attachment.origin.handback === true &&
+    !keptUuids.has(message.uuid)
       ? [
           createAttachmentMessage_2({
-            ...h.attachment,
+            ...message.attachment,
             timestamp: undefined,
           }),
         ]
@@ -3021,8 +3083,8 @@ function collectReadToolFilePaths(messages) {
       if (block.type !== "tool_use" || block.name !== FILE_READ_TOOL_NAME || stubIds.has(block.id)) continue;
       let input = block.input;
       if (input && typeof input === "object" && "file_path" in input && typeof input.file_path === "string") {
-        let S = expandPathOrNull(input.file_path);
-        if (S !== null) paths.add(S);
+        let expandedPath = expandPathOrNull(input.file_path);
+        if (expandedPath !== null) paths.add(expandedPath);
       }
     }
   }
@@ -3039,16 +3101,16 @@ function truncateToTokens(content, maxTokens) {
  * 压缩后可恢复的记忆文件类型。
  */
 function restorableMemoryTypes() {
-  let e = getOriginalCwdOrNull() !== null;
-  return MEMORY_TYPE_VALUES.filter((n) => {
-    switch (n) {
+  let hasCwd = getOriginalCwdOrNull() !== null;
+  return MEMORY_TYPE_VALUES.filter((type) => {
+    switch (type) {
       case "User":
         return !isDiskless();
       case "Project":
       case "Local":
-        return e;
+        return hasCwd;
       case "AutoMem":
-        return !isDiskless() && (e || getAutoMemPathOrNull() !== null);
+        return !isDiskless() && (hasCwd || getAutoMemPathOrNull() !== null);
       case "Managed":
         return true;
     }
@@ -3066,13 +3128,13 @@ function shouldExcludeFromPostCompactRestore() {
 /**
  * 判断文件是否就是当前计划的文件（压缩时不保留）。
  */
-function isPlanFile(filename, n, agentId) {
-  let s = expandPath(filename);
+function isPlanFile(filename, excludePlanFile, agentId) {
+  let expanded = expandPath(filename);
   try {
-    let h = expandPath(getPlanFilePath(agentId));
-    if (s === h) return true;
+    let planPath = expandPath(getPlanFilePath(agentId));
+    if (expanded === planPath) return true;
   } catch {}
-  return n.has(s);
+  return excludePlanFile.has(expanded);
 }
 //@ chunk-e6aww6q8.js:2441491-2441623 placement
 /**
@@ -3097,15 +3159,15 @@ function logSummaryReply({ path, reply, sent, outputTokens, stopReason, attempt,
         ? lit_2("open")
         : lit_2("none"),
     unansweredRequestTail: sliced.some(
-      (L) =>
-        (L.type === "attachment" &&
-          L.attachment.type === "queued_command" &&
-          L.attachment.commandMode === "prompt" &&
-          L.attachment.isMeta !== true) ||
-        (isHumanPromptMessage(L) && !(L.type === "user" && L.isCompactSummary)),
+      (message) =>
+        (message.type === "attachment" &&
+          message.attachment.type === "queued_command" &&
+          message.attachment.commandMode === "prompt" &&
+          message.attachment.isMeta !== true) ||
+        (isHumanPromptMessage(message) && !(message.type === "user" && message.isCompactSummary)),
     )
       ? lit_2("prompt")
-      : sliced.some((L) => L.type === "user" && L.isVirtual !== true)
+      : sliced.some((message) => message.type === "user" && message.isVirtual !== true)
         ? lit_2("other_message")
         : lit_2("none"),
     outputTokens,
@@ -3120,18 +3182,18 @@ function logSummaryReply({ path, reply, sent, outputTokens, stopReason, attempt,
 /**
  * 压缩时引用的 transcript 路径（无盘或关闭持久化时 undefined）。
  */
-function compactTranscriptPath(e) {
-  if (isDiskless() || isTranscriptPersistenceDisabled() || e.compactTranscriptUnavailable) return;
-  return e.agentId !== undefined ? getAgentTranscriptPath(e.agentId) : getTranscriptPath();
+function compactTranscriptPath(context) {
+  if (isDiskless() || isTranscriptPersistenceDisabled() || context.compactTranscriptUnavailable) return;
+  return context.agentId !== undefined ? getAgentTranscriptPath(context.agentId) : getTranscriptPath();
 }
 //@ chunk-e6aww6q8.js:2442339-2442435 placement
 /**
  * 按消息 token 数给出压缩恢复的超时。
  */
-function recoveryTimeoutForMessages(e, rawMessage) {
-  let r = estimateTokensWithAnchor(e) || 0;
-  let s = (rawMessage !== undefined && parsePromptTooLongTokenCounts(rawMessage).actualTokens) || 0;
-  return recoveryTimeoutForContextTokens(Math.max(r, s));
+function recoveryTimeoutForMessages(messages, rawMessage) {
+  let estimated = estimateTokensWithAnchor(messages) || 0;
+  let actual = (rawMessage !== undefined && parsePromptTooLongTokenCounts(rawMessage).actualTokens) || 0;
+  return recoveryTimeoutForContextTokens(Math.max(estimated, actual));
 }
 //@ chunk-e6aww6q8.js:2442435-2442507 placement
 /**
@@ -3154,30 +3216,30 @@ var MAX_CONSECUTIVE_COMPACT_FAILURES = 3;
 /**
  * 记一次自动压缩失败，连续失败达到上限时触发熔断。
  */
-function autocompactFailure(e, n, r, compactFailure) {
-  let h = (e?.consecutiveFailures ?? 0) + 1;
-  if (h >= MAX_CONSECUTIVE_COMPACT_FAILURES) {
+function autocompactFailure(state, reactive, reason, compactFailure) {
+  let failures = (state?.consecutiveFailures ?? 0) + 1;
+  if (failures >= MAX_CONSECUTIVE_COMPACT_FAILURES) {
     logForDebugging(
-      `autocompact: circuit breaker tripped after ${h} consecutive failures${n ? " (reactive path)" : ""} \u2014 skipping future attempts this session`,
+      `autocompact: circuit breaker tripped after ${failures} consecutive failures${reactive ? " (reactive path)" : ""} \u2014 skipping future attempts this session`,
       {
         level: "warn",
       },
     );
     logEvent("tengu_auto_compact_circuit_breaker", {
-      consecutiveFailures: h,
-      ...(n && {
-        routedThroughReactive: n,
+      consecutiveFailures: failures,
+      ...(reactive && {
+        routedThroughReactive: reactive,
       }),
-      ...(r && {
-        thresholdSource: fromEnum(r),
+      ...(reason && {
+        thresholdSource: fromEnum(reason),
       }),
     });
   }
   return {
     kind: "failed",
-    consecutiveFailures: h,
-    routedThroughReactive: n,
-    thresholdSource: r,
+    consecutiveFailures: failures,
+    routedThroughReactive: reactive,
+    thresholdSource: reason,
     compactFailure,
   };
 }
@@ -3185,39 +3247,40 @@ function autocompactFailure(e, n, r, compactFailure) {
 /**
  * 实际输入超过阈值时分析前缀大小与文档/图片块数量。
  */
-function analyzeOversizedPrefix(e, n, autoCompactWindow, s = 0) {
-  let lastApiUsage = getLastApiUsage(e);
+function analyzeOversizedPrefix(messages, modelInfo, autoCompactWindow, snipTokensFreed = 0) {
+  let lastApiUsage = getLastApiUsage(messages);
   if (!lastApiUsage) return null;
-  let y =
+  let totalInputTokens =
     lastApiUsage.input_tokens +
     lastApiUsage.cache_read_input_tokens +
     lastApiUsage.cache_creation_input_tokens;
-  let S = roughTokenCountEstimationForMessages(e, n.bytesPerToken);
-  let max = Math.max(0, y - s - S);
-  let autoCompactThresholdTokens = getAutoCompactThresholdTokens(n, autoCompactWindow);
+  let messagesEstimate = roughTokenCountEstimationForMessages(messages, modelInfo.bytesPerToken);
+  let max = Math.max(0, totalInputTokens - snipTokensFreed - messagesEstimate);
+  let autoCompactThresholdTokens = getAutoCompactThresholdTokens(modelInfo, autoCompactWindow);
   if (max <= autoCompactThresholdTokens) return null;
-  let G = 0;
-  let q = 0;
-  let Z = (content) => {
-    for (let ke of content) {
-      let we = ke;
-      if (we.type === "document" && we.source?.type !== "text" && we.source?.type !== "content") G++;
-      else if (we.type === "image") q++;
-      else if (we.type === "tool_result" && Array.isArray(we.content)) Z(we.content);
+  let documentBlockCount = 0;
+  let imageBlockCount = 0;
+  let countBlocks = (content) => {
+    for (let block of content) {
+      let entry = block;
+      if (entry.type === "document" && entry.source?.type !== "text" && entry.source?.type !== "content")
+        documentBlockCount++;
+      else if (entry.type === "image") imageBlockCount++;
+      else if (entry.type === "tool_result" && Array.isArray(entry.content)) countBlocks(entry.content);
     }
   };
-  for (let Se of e) {
-    let content = Se.message?.content;
-    if (Array.isArray(content)) Z(content);
+  for (let message of messages) {
+    let content = message.message?.content;
+    if (Array.isArray(content)) countBlocks(content);
   }
   return {
     prefixTokens: max,
     thresholdTokens: autoCompactThresholdTokens,
-    totalInputTokens: y,
-    messagesEstimate: S,
-    snipTokensFreed: s,
-    documentBlockCount: G,
-    imageBlockCount: q,
+    totalInputTokens,
+    messagesEstimate,
+    snipTokensFreed,
+    documentBlockCount,
+    imageBlockCount,
   };
 }
 //@ chunk-e6aww6q8.js:2443623-2443672 placement

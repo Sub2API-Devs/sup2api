@@ -19,12 +19,12 @@ function isStorageV5Enabled() {
   return storageV5Flag === true;
 }
 //@ chunk-byeye1yp.js:224-323 placement
-function pinStorageV5Flag(t) {
-  let n = t === true;
+function pinStorageV5Flag(flag) {
+  let wanted = flag === true;
   if (storageV5Flag === undefined) {
-    storageV5Flag = n;
+    storageV5Flag = wanted;
     return "pinned";
   }
-  return storageV5Flag === n ? "unchanged" : "conflict";
+  return storageV5Flag === wanted ? "unchanged" : "conflict";
 }
 export { isStorageV5Enabled, pinStorageV5Flag };

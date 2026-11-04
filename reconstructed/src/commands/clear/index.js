@@ -21,7 +21,7 @@ var clearCommandDefinition = {
   aliases: ["reset", "new"],
   supportsNonInteractive: true,
   thinClientDispatch: "post-text",
-  load: () => import("./chunk-4mtxrwhe.js"),
+  load: () => import("./clear.js"),
 };
 var clearCommand = clearCommandDefinition;
 export { clearCommand };

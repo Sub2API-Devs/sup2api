@@ -9,7 +9,7 @@
  * attribution: placement 78
  */
 import { IdeStatusIndicator } from "../IdeStatusIndicator.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -79,7 +79,15 @@ import {
 } from "../dialogs/dialogKinds.js";
 import { useDialogStore, useDialogOfKind } from "../../state/dialogQueue.js";
 import { useProactivityStepState, isViewingTeammate } from "../ProactivityMenu.js";
-import { yt, R, y, P, zt, Rh, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import {
+  useSyncExternalStore,
+  useRef,
+  useState,
+  useEffect,
+  useLayoutEffect,
+  memo,
+  init_react_production,
+} from "../../../vendor/react/cjs/react.production.js";
 import { onAttacherCapsChange, clearRefusalFallbackModelLatch } from "../../bootstrap/state.js";
 import { alwaysFalseB } from "../../screens/repl/backgroundConfirm.js";
 import {
@@ -104,7 +112,7 @@ import {
 import { useSetVoiceState } from "../../context/voice.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import { useCommandQueueOrDefault, useQueuedMessageText } from "../../context/QueuedMessageContext.js";
-import { countNonAmbientTasks, countVisibleTasks } from "../../utils/claudeInChrome/toolRendering.js";
+import { countNonAmbientTasks } from "../../utils/tasks.js";
 import { shouldHideTasksFooter } from "../tasks/taskStatusUtils.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import {
@@ -143,6 +151,7 @@ import {
   isViewingThisAgent,
 } from "../CoordinatorAgentStatus.js";
 import { subscribeCoordinatorPanel } from "../../utils/transcriptDiagnostics.js";
+import { countVisibleTasks } from "../../utils/claudeInChrome/toolRendering.js";
 import { useClock } from "../../ink/components/ClockContext.js";
 import { shouldOfferAutoModeEnvOnboarding, AutoModeEnvOnboardingDialog } from "../AutoModeEnvOnboarding.js";
 import { runningWorkflowTasks } from "../Spinner/workflowStatus.js";
@@ -202,7 +211,7 @@ import { parseSlashCommand } from "../../utils/slashCommandParsing.js";
 import { EXIT_COMMAND_WORDS } from "../../utils/handlePromptSubmit.js";
 import { isUnattendedBgSession } from "../../utils/concurrentSessions.js";
 import { createFrozenMarker } from "../../utils/frozenMarkers.js";
-import { useHistorySearch, IT } from "../../hooks/useHistorySearch.js";
+import { useHistorySearch, historyPromptOrigin } from "../../hooks/useHistorySearch.js";
 import { PASTE_THRESHOLD } from "../../utils/imagePaste.js";
 import { getInsertModeEscapeRemaps } from "../../vim/operators.js";
 import { queryTerminalBackground } from "../../utils/terminalProbe.js";
@@ -282,17 +291,18 @@ import { WizardNavigationFooter } from "../wizard/WizardNavigationFooter.js";
 import { BridgeDialog } from "../BridgeDialog.js";
 import { PromptInputMemo } from "./promptText.js";
 import { NoConversationsMessage } from "../../screens/ResumeConversation.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:120241-120283 placement
-function shouldShowIdeStatus(h, rowsDrawn) {
-  return rowsDrawn && IdeStatusIndicator(h) !== null;
+function shouldShowIdeStatus(props, rowsDrawn) {
+  return rowsDrawn && IdeStatusIndicator(props) !== null;
 }
 //@ chunk-18hwfzwa.js:770563-770990 placement = ConfirmRemoveTag (0.165)
 function ConfirmRemoveTag(props) {
-  let ke = w(8);
+  let $ = useMemoCache(8);
   let { title, confirmLabel, onConfirm, onCancel } = props;
   let children;
-  if (ke[0] !== confirmLabel || ke[1] !== onCancel || ke[2] !== onConfirm) {
+  if ($[0] !== confirmLabel || $[1] !== onCancel || $[2] !== onConfirm) {
     children = jsxProd_default(ConfirmSelect, {
       cancelFirst: true,
       focus: "cancel",
@@ -302,42 +312,42 @@ function ConfirmRemoveTag(props) {
       onConfirm,
       onCancel,
     });
-    ke[0] = confirmLabel;
-    ke[1] = onCancel;
-    ke[2] = onConfirm;
-    ke[3] = children;
-  } else children = ke[3];
-  let Be;
-  if (ke[4] !== onCancel || ke[5] !== children || ke[6] !== title) {
-    Be = jsxProd_default(Dialog, {
+    $[0] = confirmLabel;
+    $[1] = onCancel;
+    $[2] = onConfirm;
+    $[3] = children;
+  } else children = $[3];
+  let dialogElement;
+  if ($[4] !== onCancel || $[5] !== children || $[6] !== title) {
+    dialogElement = jsxProd_default(Dialog, {
       title,
       onCancel,
       children,
     });
-    ke[4] = onCancel;
-    ke[5] = children;
-    ke[6] = title;
-    ke[7] = Be;
-  } else Be = ke[7];
-  return Be;
+    $[4] = onCancel;
+    $[5] = children;
+    $[6] = title;
+    $[7] = dialogElement;
+  } else dialogElement = $[7];
+  return dialogElement;
 }
 //@ chunk-18hwfzwa.js:920094-920856 placement = CompanionSprite (0.359)
 /**
  * "Save and close editor to continue..." 等待提示（外部编辑器打开期间显示），可上下加分隔线。
  */
 function EditorWaitNotice(props) {
-  let $ = w(15);
+  let $ = useMemoCache(15);
   let { mode, columns } = props;
   let setAppState = useIsScreenReaderEnabled();
   let companion = showSwarmFooterGate();
-  let Re;
+  let borderStyle;
   if ($[0] !== companion || $[1] !== setAppState || $[2] !== mode) {
-    Re = companion ? {} : getEditorWaitBorderStyle(mode, setAppState);
+    borderStyle = companion ? {} : getEditorWaitBorderStyle(mode, setAppState);
     $[0] = companion;
     $[1] = setAppState;
     $[2] = mode;
-    $[3] = Re;
-  } else Re = $[3];
+    $[3] = borderStyle;
+  } else borderStyle = $[3];
   let children;
   if ($[4] === MEMO_CACHE_SENTINEL) {
     children = jsxProd_default(Text, {
@@ -347,61 +357,61 @@ function EditorWaitNotice(props) {
     });
     $[4] = children;
   } else children = $[4];
-  let He;
-  if ($[5] !== Re) {
-    He = jsxProd_default(Box, {
+  let noticeBox;
+  if ($[5] !== borderStyle) {
+    noticeBox = jsxProd_default(Box, {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      ...Re,
+      ...borderStyle,
       width: "100%",
       children,
     });
-    $[5] = Re;
-    $[6] = He;
-  } else He = $[6];
-  let We = He;
+    $[5] = borderStyle;
+    $[6] = noticeBox;
+  } else noticeBox = $[6];
+  let noticeBoxMemo = noticeBox;
   if (!companion) {
-    return We;
+    return noticeBoxMemo;
   }
-  let ze;
+  let topDivider;
   if ($[7] !== columns) {
-    ze = jsxProd_default(Divider, {
+    topDivider = jsxProd_default(Divider, {
       width: columns,
     });
     $[7] = columns;
-    $[8] = ze;
-  } else ze = $[8];
-  let Xe;
+    $[8] = topDivider;
+  } else topDivider = $[8];
+  let bottomDivider;
   if ($[9] !== columns) {
-    Xe = jsxProd_default(Divider, {
+    bottomDivider = jsxProd_default(Divider, {
       width: columns,
     });
     $[9] = columns;
-    $[10] = Xe;
-  } else Xe = $[10];
-  let rt;
-  if ($[11] !== We || $[12] !== ze || $[13] !== Xe) {
-    rt = jsxProd_default_2(Fragment, {
-      children: [ze, We, Xe],
+    $[10] = bottomDivider;
+  } else bottomDivider = $[10];
+  let noticeRow;
+  if ($[11] !== noticeBoxMemo || $[12] !== topDivider || $[13] !== bottomDivider) {
+    noticeRow = jsxProd_default_2(Fragment, {
+      children: [topDivider, noticeBoxMemo, bottomDivider],
     });
-    $[11] = We;
-    $[12] = ze;
-    $[13] = Xe;
-    $[14] = rt;
-  } else rt = $[14];
-  return rt;
+    $[11] = noticeBoxMemo;
+    $[12] = topDivider;
+    $[13] = bottomDivider;
+    $[14] = noticeRow;
+  } else noticeRow = $[14];
+  return noticeRow;
 }
 //@ chunk-18hwfzwa.js:927945-928268 placement
 function usePromptChromeRows({ scope, chrome, rowsDrawn }) {
-  let L = showSwarmFooterGate();
+  let swarmFooterVisible = showSwarmFooterGate();
   let mergedClients = useMergedClients(
     scope.initialMcpClients,
-    useAppState((He) => He.mcp.clients),
+    useAppState((state) => state.mcp.clients),
   );
-  let ideSelection = useStoreSelector(chrome, (He) => He.ideSelection);
-  let isViewingAgent = useAppState((He) => He.viewingAgentTaskId !== undefined);
-  if (!L) return false;
+  let ideSelection = useStoreSelector(chrome, (state) => state.ideSelection);
+  let isViewingAgent = useAppState((state) => state.viewingAgentTaskId !== undefined);
+  if (!swarmFooterVisible) return false;
   let ideConnectionStatus = useIdeConnectionStatus(mergedClients);
   return shouldShowIdeStatus(
     {
@@ -415,85 +425,85 @@ function usePromptChromeRows({ scope, chrome, rowsDrawn }) {
   );
 }
 //@ chunk-18hwfzwa.js:928268-928306 placement
-function selectEmbedded(jJo) {
-  return jJo.embedded;
+function selectEmbedded(state) {
+  return state.embedded;
 }
 //@ chunk-18hwfzwa.js:928306-928348 placement
-function selectIdeSelection(qJo) {
-  return qJo.ideSelection;
+function selectIdeSelection(state) {
+  return state.ideSelection;
 }
 //@ chunk-18hwfzwa.js:928348-928390 placement
-function selectBashesDialog($Jo) {
-  return $Jo.bashesDialog;
+function selectBashesDialog(state) {
+  return state.bashesDialog;
 }
 //@ chunk-18hwfzwa.js:928390-928440 placement
-function selectHasSuppressedDialogs(VJo) {
-  return VJo.hasSuppressedDialogs;
+function selectHasSuppressedDialogs(state) {
+  return state.hasSuppressedDialogs;
 }
 //@ chunk-18hwfzwa.js:928440-928485 placement
-function selectHideLoginNotice_2(KJo) {
-  return KJo.hideLoginNotice;
+function selectHideLoginNotice_2(state) {
+  return state.hideLoginNotice;
 }
 //@ chunk-18hwfzwa.js:928485-928524 placement
-function selectIsLoading2(GJo) {
-  return GJo.isLoading;
+function selectIsLoading2(state) {
+  return state.isLoading;
 }
 //@ chunk-18hwfzwa.js:928524-928571 placement
-function selectIsExternalLoading2(QJo) {
-  return QJo.isExternalLoading;
+function selectIsExternalLoading2(state) {
+  return state.isExternalLoading;
 }
 //@ chunk-18hwfzwa.js:928571-928612 placement
-function selectSubmitCount(zJo) {
-  return zJo.submitCount;
+function selectSubmitCount(state) {
+  return state.submitCount;
 }
 //@ chunk-18hwfzwa.js:928612-928663 placement
-function selectToolPermissionContext(YJo) {
-  return YJo.toolPermissionContext;
+function selectToolPermissionContext(state) {
+  return state.toolPermissionContext;
 }
 //@ chunk-18hwfzwa.js:928663-928700 placement
-function selectVerbose2(JJo) {
-  return JJo.verbose;
+function selectVerbose2(state) {
+  return state.verbose;
 }
 //@ chunk-18hwfzwa.js:928700-928746 placement
-function selectOnDetachToCaller(XJo) {
-  return XJo.onDetachToCaller;
+function selectOnDetachToCaller(state) {
+  return state.onDetachToCaller;
 }
 //@ chunk-18hwfzwa.js:928746-928790 placement
-function selectQueueEditIndex2(ZJo) {
-  return ZJo.queueEditIndex;
+function selectQueueEditIndex2(state) {
+  return state.queueEditIndex;
 }
 //@ chunk-18hwfzwa.js:928790-928874 placement
-function clearQueueEditIndex(QNe) {
-  return QNe.queueEditIndex === null
-    ? QNe
+function clearQueueEditIndex(state) {
+  return state.queueEditIndex === null
+    ? state
     : {
-        ...QNe,
+        ...state,
         queueEditIndex: null,
       };
 }
 //@ chunk-18hwfzwa.js:928874-928909 placement
-function selectTasks2(eXo) {
-  return eXo.tasks;
+function selectTasks2(state) {
+  return state.tasks;
 }
 //@ chunk-18hwfzwa.js:928909-928960 placement
-function selectRemoteBackgroundTasks2(tXo) {
-  return tXo.remoteBackgroundTasks;
+function selectRemoteBackgroundTasks2(state) {
+  return state.remoteBackgroundTasks;
 }
 //@ chunk-18hwfzwa.js:928960-929004 placement
-function selectWorkflowDetail(oXo) {
-  return oXo.workflowDetail;
+function selectWorkflowDetail(state) {
+  return state.workflowDetail;
 }
 //@ chunk-18hwfzwa.js:929004-929188 placement
-function shouldShowBridgeStatus(XB) {
+function shouldShowBridgeStatus(state) {
   return (
-    (XB.replBridgeError !== undefined && !XB.replBridgeOutboundOnly) ||
-    (XB.replBridgeConnected &&
-      !XB.replBridgeOutboundOnly &&
-      (XB.replBridgeExplicit || XB.replBridgeReconnecting))
+    (state.replBridgeError !== undefined && !state.replBridgeOutboundOnly) ||
+    (state.replBridgeConnected &&
+      !state.replBridgeOutboundOnly &&
+      (state.replBridgeExplicit || state.replBridgeReconnecting))
   );
 }
 //@ chunk-18hwfzwa.js:929188-929215 placement
-function selectNever(J9s) {
+function selectNever(state) {
   return false;
 }
 //@ chunk-18hwfzwa.js:929215-929256 placement = _temp (1)
@@ -501,28 +511,28 @@ function selectTeamContext_2(s) {
   return s.teamContext;
 }
 //@ chunk-18hwfzwa.js:929256-929302 placement
-function selectPromptSuggestion(rXo) {
-  return rXo.promptSuggestion;
+function selectPromptSuggestion(state) {
+  return state.promptSuggestion;
 }
 //@ chunk-18hwfzwa.js:929302-929350 placement = _temp2 (1)
 function selectViewingAgentTaskId_4(s_0) {
   return s_0.viewingAgentTaskId;
 }
 //@ chunk-18hwfzwa.js:929350-929391 placement
-function selectIsBriefOnly_3(iXo) {
-  return iXo.isBriefOnly;
+function selectIsBriefOnly_3(state) {
+  return state.isBriefOnly;
 }
 //@ chunk-18hwfzwa.js:929391-929434 placement
-function selectMainLoopModel(aXo) {
-  return aXo.mainLoopModel;
+function selectMainLoopModel(state) {
+  return state.mainLoopModel;
 }
 //@ chunk-18hwfzwa.js:929487-929532 placement
-function selectThinkingEnabled2(dXo) {
-  return dXo.thinkingEnabled;
+function selectThinkingEnabled2(state) {
+  return state.thinkingEnabled;
 }
 //@ chunk-18hwfzwa.js:929578-929617 placement
-function selectUltracode_2(uXo) {
-  return uXo.ultracode;
+function selectUltracode_2(state) {
+  return state.ultracode;
 }
 //@ chunk-18hwfzwa.js:929617-929652 placement
 function getIdleInFlightState() {
@@ -531,65 +541,65 @@ function getIdleInFlightState() {
   };
 }
 //@ chunk-18hwfzwa.js:929652-929702 placement
-function selectCoordinatorTaskIndex2(mXo) {
-  return mXo.coordinatorTaskIndex;
+function selectCoordinatorTaskIndex2(state) {
+  return state.coordinatorTaskIndex;
 }
 //@ chunk-18hwfzwa.js:929702-929747 placement
-function selectTaskDecorations_3(pXo) {
-  return pXo.taskDecorations;
+function selectTaskDecorations_3(state) {
+  return state.taskDecorations;
 }
 //@ chunk-18hwfzwa.js:929747-929802 placement
-function selectIdleTeammatesExpanded_3(fXo) {
-  return fXo.idleTeammatesExpanded ?? false;
+function selectIdleTeammatesExpanded_3(state) {
+  return state.idleTeammatesExpanded ?? false;
 }
 //@ chunk-18hwfzwa.js:929802-929834 placement
-function selectId(gXo) {
-  return gXo.id;
+function selectId(state) {
+  return state.id;
 }
 //@ chunk-18hwfzwa.js:929834-929866 placement
-function selectId2(hXo) {
-  return hXo.id;
+function selectId2(state) {
+  return state.id;
 }
 //@ chunk-18hwfzwa.js:929866-929916 placement
-function selectEnvOnboardingOffered(SXo) {
-  return SXo.envOnboardingOffered;
+function selectEnvOnboardingOffered(state) {
+  return state.envOnboardingOffered;
 }
 //@ chunk-18hwfzwa.js:929916-929997 placement
-function hasSuggestionContent(HAt) {
-  return HAt.suggestions.length > 0 || !!HAt.suggestionsEmptyMessage;
+function hasSuggestionContent(state) {
+  return state.suggestions.length > 0 || !!state.suggestionsEmptyMessage;
 }
 //@ chunk-18hwfzwa.js:929997-930031 placement
-function isFooterTabEnabled(bXo) {
-  return !FOOTER_TAB_ENABLED[bXo];
+function isFooterTabEnabled(tab) {
+  return !FOOTER_TAB_ENABLED[tab];
 }
 //@ chunk-18hwfzwa.js:930031-930080 placement
-function selectWorkflowFooterIndex2(wXo) {
-  return wXo.workflowFooterIndex;
+function selectWorkflowFooterIndex2(state) {
+  return state.workflowFooterIndex;
 }
 //@ chunk-18hwfzwa.js:930080-930112 placement
-function selectId3(kXo) {
-  return kXo.id;
+function selectId3(state) {
+  return state.id;
 }
 //@ chunk-18hwfzwa.js:930112-930157 placement
-function selectFooterSelection2(vXo) {
-  return vXo.footerSelection;
+function selectFooterSelection2(state) {
+  return state.footerSelection;
 }
 //@ chunk-18hwfzwa.js:930157-930186 placement
-function toggleHelpOpen(CXo) {
-  return !CXo;
+function toggleHelpOpen(isOpen) {
+  return !isOpen;
 }
 //@ chunk-18hwfzwa.js:930186-930265 placement
-function markTasksHintSeen(zNe) {
-  return zNe.hasSeenTasksHint
-    ? zNe
+function markTasksHintSeen(state) {
+  return state.hasSeenTasksHint
+    ? state
     : {
-        ...zNe,
+        ...state,
         hasSeenTasksHint: true,
       };
 }
 //@ chunk-18hwfzwa.js:930265-930296 placement
-function bumpCounter(TXo) {
-  return TXo + 1;
+function bumpCounter(count) {
+  return count + 1;
 }
 //@ chunk-18hwfzwa.js:930296-930340 placement = _temp (1)
 function isPastedImageBlock(c) {
@@ -598,47 +608,47 @@ function isPastedImageBlock(c) {
 //@ chunk-18hwfzwa.js:930395-930411 placement
 function noopResetHistory() {}
 //@ chunk-18hwfzwa.js:930411-930444 placement
-function foldKeepNewest(X9s, PXo) {
-  return PXo;
+function foldKeepNewest(previous, next) {
+  return next;
 }
 //@ chunk-18hwfzwa.js:930444-930460 placement
 function noopAfterSubmit() {}
 //@ chunk-18hwfzwa.js:930460-930527 placement
-function clearPromptSuggestion(IXo) {
+function clearPromptSuggestion(state) {
   return {
-    ...IXo,
+    ...state,
     promptSuggestion: {
       status: "empty",
     },
   };
 }
 //@ chunk-18hwfzwa.js:930527-930558 placement
-function bumpRetryCount(EXo) {
-  return EXo + 1;
+function bumpRetryCount(count) {
+  return count + 1;
 }
 //@ chunk-18hwfzwa.js:930558-930587 placement
-function toggleFlag(DXo) {
-  return !DXo;
+function toggleFlag(flag) {
+  return !flag;
 }
 //@ chunk-18hwfzwa.js:930587-930646 placement
-function unavailableReasonState(OXo) {
-  return OXo
+function unavailableReasonState(isAvailable) {
+  return isAvailable
     ? null
     : {
         unavailableReason: getFastModeUnavailableMessage(),
       };
 }
 //@ chunk-18hwfzwa.js:930646-930675 placement
-function negateBoolean_2(NXo) {
-  return !NXo;
+function negateBoolean_2(flag) {
+  return !flag;
 }
 //@ chunk-18hwfzwa.js:930675-930723 placement
-function dismissShowFlag(WAt) {
-  return WAt.show
+function dismissShowFlag(state) {
+  return state.show
     ? {
         show: false,
       }
-    : WAt;
+    : state;
 }
 //@ chunk-18hwfzwa.js:930723-930739 placement
 function noopOnConfirm() {}
@@ -647,9 +657,9 @@ function returnFalse() {
   return false;
 }
 //@ chunk-18hwfzwa.js:930763-930854 placement
-function withAutoModeSetupMessage(LXo) {
+function withAutoModeSetupMessage(state) {
   return {
-    ...LXo,
+    ...state,
     initialMessage: {
       message: createUserMessage({
         content: "/auto-mode-setup",
@@ -662,41 +672,41 @@ function isImagePasteBlock(c) {
   return c.type === "image";
 }
 //@ chunk-18hwfzwa.js:930898-930929 placement
-function decrementIndex(BXo) {
-  return BXo - 1;
+function decrementIndex(index) {
+  return index - 1;
 }
 //@ chunk-18hwfzwa.js:930929-930960 placement
-function decrementWorkflowIndex(HXo) {
-  return HXo - 1;
+function decrementWorkflowIndex(index) {
+  return index - 1;
 }
 //@ chunk-18hwfzwa.js:930960-930991 placement
-function incrementIndex(UXo) {
-  return UXo + 1;
+function incrementIndex(index) {
+  return index + 1;
 }
 //@ chunk-18hwfzwa.js:930991-931022 placement
-function incrementWorkflowIndex(WXo) {
-  return WXo + 1;
+function incrementWorkflowIndex(index) {
+  return index + 1;
 }
 //@ chunk-18hwfzwa.js:931022-931111 placement
-function collapseIdleTeammates(YNe) {
-  return !YNe.idleTeammatesExpanded
-    ? YNe
+function collapseIdleTeammates(state) {
+  return !state.idleTeammatesExpanded
+    ? state
     : {
-        ...YNe,
+        ...state,
         idleTeammatesExpanded: false,
       };
 }
 //@ chunk-18hwfzwa.js:931111-931127 placement
 function noopOutputHandler() {}
 //@ chunk-18hwfzwa.js:931127-931166 placement
-function isEffortLevelNotice(jXo) {
-  return jXo?.key === EFFORT_LEVEL_KEY;
+function isEffortLevelNotice(notice) {
+  return notice?.key === EFFORT_LEVEL_KEY;
 }
 //@ chunk-18hwfzwa.js:931166-931182 placement
 function noopReplyHandler() {}
 //@ chunk-18hwfzwa.js:931182-931227 placement
-function unsavedTextState(qXo) {
-  return qXo
+function unsavedTextState(isDraft) {
+  return isDraft
     ? {
         unsaved: "",
       }
@@ -707,15 +717,15 @@ function isNotOffBox() {
   return false;
 }
 //@ chunk-18hwfzwa.js:931251-931322 placement
-function logSetMaxThinkingTokensFailure($Xo) {
-  logForDebugging(`[remote] set_max_thinking_tokens failed: ${$Xo}`);
+function logSetMaxThinkingTokensFailure(error) {
+  logForDebugging(`[remote] set_max_thinking_tokens failed: ${error}`);
 }
 //@ chunk-18hwfzwa.js:931322-931459 placement
-function clearFooterSelection(ore) {
-  return ore.workflowDetail === undefined && ore.footerSelection === null
-    ? ore
+function clearFooterSelection(state) {
+  return state.workflowDetail === undefined && state.footerSelection === null
+    ? state
     : {
-        ...ore,
+        ...state,
         workflowDetail: undefined,
         footerSelection: null,
       };
@@ -731,18 +741,18 @@ var FOOTER_TAB_ENABLED = {
 };
 var FOOTER_DOUBLE_CLICK_MS = 150;
 //@ chunk-18hwfzwa.js:931543-931612 placement
-function stripPastedRefMarkers(h) {
-  return h.replace(regExp_5, (x, D, L) => `[${D} #${Number(L)}]`);
+function stripPastedRefMarkers(text) {
+  return text.replace(regExp_5, (fullMatch, label, pasteId) => `[${label} #${Number(pasteId)}]`);
 }
 //@ chunk-18hwfzwa.js:931612-978434 placement
 /**
  * 2.1.316 的主输入框组件（约 47 KB）：组合草稿、vim 模式、bash/模式切换、自动补全、页脚各胶囊、排队命令、提交到主线程或代理；取代旧版 PromptInput 的大部分逻辑。
  */
 function PromptComposer(props) {
-  let $ = w(666);
+  let $ = useMemoCache(666);
   let { turn, transcript, scope, draft, chrome, gesture, submit } = props;
   let isFullscreen = useIsFullscreen();
-  let We = showSwarmFooterGate();
+  let isSwarmFooterVisible = showSwarmFooterGate();
   let { submit: submit_2, submitEmpty, submitToAgent } = submit;
   let embedded = useStoreSelector(chrome, selectEmbedded);
   let ideSelection = useStoreSelector(chrome, selectIdeSelection);
@@ -764,11 +774,11 @@ function PromptComposer(props) {
   let appState = useAppState(selectToolPermissionContext);
   let proactivityStepState = useProactivityStepState();
   let verbose = useAppState(selectVerbose2);
-  let Cn = yt(onAttacherCapsChange, alwaysFalseB);
+  let isDetachSuppressed = useSyncExternalStore(onAttacherCapsChange, alwaysFalseB);
   const onDetachToCaller = useStoreSelector(chrome, selectOnDetachToCaller);
-  let Yo;
+  let gestureArgs;
   if ($[0] !== gesture || $[1] !== onDetachToCaller || $[2] !== transcript || $[3] !== turn) {
-    Yo = {
+    gestureArgs = {
       gesture,
       turn,
       transcript,
@@ -778,595 +788,651 @@ function PromptComposer(props) {
     $[1] = onDetachToCaller;
     $[2] = transcript;
     $[3] = turn;
-    $[4] = Yo;
-  } else Yo = $[4];
-  let leftArrowGesture = useLeftArrowGesture(Yo);
+    $[4] = gestureArgs;
+  } else gestureArgs = $[4];
+  let leftArrowGesture = useLeftArrowGesture(gestureArgs);
   let mainLoopModel = useMainLoopModel_3();
   let dialogOfKind = useDialogOfKind(LOCAL_JSX_DIALOG.kind);
-  let Go = useThirdOverlayKeys() || dialogOfKind;
+  let isModalOverlayActive = useThirdOverlayKeys() || dialogOfKind;
   let vimMode = useVimMode();
   let session = useSession();
-  let Xo = R(null);
+  let composerHandleRef = useRef(null);
   let editorMode = useEditorMode();
-  let [$n, on] = useLatestState(false);
-  let [_o] = y(createEmptyAutocompleteStore);
-  let [, cn, Dn] = useLatestState(null);
-  let wn = editorMode && vimMode !== "NORMAL";
-  let mr;
-  let Kn;
-  if ($[5] !== draft || $[6] !== wn) {
-    mr = () => {
-      draft.setVimEditing(wn);
+  let [isHelpOpen, setHelpOpen] = useLatestState(false);
+  let [suggestionsStore] = useState(createEmptyAutocompleteStore);
+  let [, setPendingEnterSelection, takePendingEnterSelection] = useLatestState(null);
+  let isVimEditing = editorMode && vimMode !== "NORMAL";
+  let vimEditingEffect;
+  let vimEditingDeps;
+  if ($[5] !== draft || $[6] !== isVimEditing) {
+    vimEditingEffect = () => {
+      draft.setVimEditing(isVimEditing);
       return () => draft.setVimEditing(false);
     };
-    Kn = [wn, draft];
+    vimEditingDeps = [isVimEditing, draft];
     $[5] = draft;
-    $[6] = wn;
-    $[7] = mr;
-    $[8] = Kn;
+    $[6] = isVimEditing;
+    $[7] = vimEditingEffect;
+    $[8] = vimEditingDeps;
   } else {
-    mr = $[7];
-    Kn = $[8];
+    vimEditingEffect = $[7];
+    vimEditingDeps = $[8];
   }
-  P(mr, Kn);
-  let Wn;
-  let Fr;
+  useEffect(vimEditingEffect, vimEditingDeps);
+  let warnInsertModeEffect;
+  let warnInsertModeDeps;
   if ($[9] !== session || $[10] !== editorMode) {
-    Wn = () => {
+    warnInsertModeEffect = () => {
       if (!editorMode) setLaunchWarningFor(session, "INSERT");
     };
-    Fr = [session, editorMode];
+    warnInsertModeDeps = [session, editorMode];
     $[9] = session;
     $[10] = editorMode;
-    $[11] = Wn;
-    $[12] = Fr;
+    $[11] = warnInsertModeEffect;
+    $[12] = warnInsertModeDeps;
   } else {
-    Wn = $[11];
-    Fr = $[12];
+    warnInsertModeEffect = $[11];
+    warnInsertModeDeps = $[12];
   }
-  P(Wn, Fr);
-  let [Zn, Un] = y(false);
-  let dr;
+  useEffect(warnInsertModeEffect, warnInsertModeDeps);
+  let [isAutoUpdating, setIsAutoUpdating] = useState(false);
+  let initialExitMessage;
   if ($[13] === MEMO_CACHE_SENTINEL) {
-    dr = {
+    initialExitMessage = {
       show: false,
     };
-    $[13] = dr;
-  } else dr = $[13];
-  let [or, pr] = y(dr);
-  let Qn;
+    $[13] = initialExitMessage;
+  } else initialExitMessage = $[13];
+  let [exitMessage, setExitMessage] = useState(initialExitMessage);
+  let showExitMessage;
   if ($[14] === MEMO_CACHE_SENTINEL) {
-    Qn = (ur, key) =>
-      pr(
-        ur
+    showExitMessage = (showExitMessage, key) =>
+      setExitMessage(
+        showExitMessage
           ? {
-              show: ur,
+              show: showExitMessage,
               key,
             }
           : {
               show: false,
             },
       );
-    $[14] = Qn;
-  } else Qn = $[14];
-  let onExitMessage = Qn;
-  let ts;
+    $[14] = showExitMessage;
+  } else showExitMessage = $[14];
+  let onExitMessage = showExitMessage;
+  let resolvedPromise;
   if ($[15] === MEMO_CACHE_SENTINEL) {
-    ts = Promise.resolve();
-    $[15] = ts;
-  } else ts = $[15];
-  let Gn = R(ts);
-  let Ur;
+    resolvedPromise = Promise.resolve();
+    $[15] = resolvedPromise;
+  } else resolvedPromise = $[15];
+  let pendingModeSync = useRef(resolvedPromise);
+  let emptySet;
   if ($[16] === MEMO_CACHE_SENTINEL) {
-    Ur = new Set();
-    $[16] = Ur;
-  } else Ur = $[16];
-  let Zr = R(Ur);
-  let appStoreDirect = useAppStoreDirect();
-  let setAppState = useSetAppState();
+    emptySet = new Set();
+    $[16] = emptySet;
+  } else emptySet = $[16];
+  let sentDirectMessages = useRef(emptySet);
+  let store = useAppStoreDirect();
+  let setShowState = useSetAppState();
   let appState_2 = useAppState(selectQueueEditIndex2);
-  let fr;
-  if ($[17] !== setAppState) {
-    fr = () => setAppState(clearQueueEditIndex);
-    $[17] = setAppState;
-    $[18] = fr;
-  } else fr = $[18];
-  let $r = fr;
-  let setVoiceState = useSetVoiceState();
+  let clearQueueEditEffect;
+  if ($[17] !== setShowState) {
+    clearQueueEditEffect = () => setShowState(clearQueueEditIndex);
+    $[17] = setShowState;
+    $[18] = clearQueueEditEffect;
+  } else clearQueueEditEffect = $[18];
+  let clearQueueEditIndexAction = clearQueueEditEffect;
+  let taskStore = useSetVoiceState();
   let { storageV5 } = useTheme_2();
   let commandQueueOrDefault = useCommandQueueOrDefault();
-  let appState_3 = useAppState(selectTasks2);
-  let appState_4 = useAppState(selectRemoteBackgroundTasks2);
-  let Ls;
-  if ($[19] !== appState_4 || $[20] !== appState_3) {
-    Ls = countNonAmbientTasks(appState_4) > 0 && !Object.values(appState_3).some(shouldHideTasksFooter);
-    $[19] = appState_4;
-    $[20] = appState_3;
-    $[21] = Ls;
-  } else Ls = $[21];
-  let is = Ls;
-  let ws = Boolean(storeSelector);
-  let [Ci, oi] = y(ws);
-  let [Oi, Hi] = y(is);
-  if (ws !== Ci) {
-    oi(ws);
-    Hi(is);
+  let tasks = useAppState(selectTasks2);
+  let options = useAppState(selectRemoteBackgroundTasks2);
+  let hasBackgroundTasks;
+  if ($[19] !== options || $[20] !== tasks) {
+    hasBackgroundTasks =
+      countNonAmbientTasks(options) > 0 && !Object.values(tasks).some(shouldHideTasksFooter);
+    $[19] = options;
+    $[20] = tasks;
+    $[21] = hasBackgroundTasks;
+  } else hasBackgroundTasks = $[21];
+  let showTasksFooter = hasBackgroundTasks;
+  let isBashDialogOpen = Boolean(storeSelector);
+  let [bashDialogOpen, setBashDialogOpen] = useState(isBashDialogOpen);
+  let [tasksFooterVisible, setTasksFooterVisible] = useState(showTasksFooter);
+  if (isBashDialogOpen !== bashDialogOpen) {
+    setBashDialogOpen(isBashDialogOpen);
+    setTasksFooterVisible(showTasksFooter);
   }
-  let appState_5 = useAppState(selectWorkflowDetail);
-  let taskId = appState_5?.taskId;
+  let appState_3 = useAppState(selectWorkflowDetail);
+  let taskId = appState_3?.taskId;
   let { columns } = useTerminalSize();
-  let appState_6 = useAppState(shouldShowBridgeStatus);
-  let xs;
-  if ($[22] !== appState_6 || $[23] !== columns || $[24] !== isFullscreen || $[25] !== We) {
-    xs = (!isFullscreen || We) && appState_6 && columns >= FOOTER_WIDE_COLUMNS && isBridgeEnabled();
-    $[22] = appState_6;
+  let appState_4 = useAppState(shouldShowBridgeStatus);
+  let showBridgeTab;
+  if ($[22] !== appState_4 || $[23] !== columns || $[24] !== isFullscreen || $[25] !== isSwarmFooterVisible) {
+    showBridgeTab =
+      (!isFullscreen || isSwarmFooterVisible) &&
+      appState_4 &&
+      columns >= FOOTER_WIDE_COLUMNS &&
+      isBridgeEnabled();
+    $[22] = appState_4;
     $[23] = columns;
     $[24] = isFullscreen;
-    $[25] = We;
-    $[26] = xs;
-  } else xs = $[26];
-  let kr = xs;
-  let appState_7 = useAppState(selectNever);
+    $[25] = isSwarmFooterVisible;
+    $[26] = showBridgeTab;
+  } else showBridgeTab = $[26];
+  let bridgeTabEnabled = showBridgeTab;
+  let appState_5 = useAppState(selectNever);
   let frameFooterState = useFrameFooterState();
   let teamContext = useAppState(selectTeamContext_2);
   let commandQueue = useCommandQueue();
-  let appState_8 = useAppState(selectPromptSuggestion);
-  let appState_9 = useAppState(selectViewingAgentTaskId_4);
-  let Hs = useAppState(selectIsBriefOnly_3) && !appState_9;
-  let appState_10 = useAppState(selectMainLoopModel);
-  let appState_11 = useAppState(selectMainLoopModelForSession_2);
-  let appState_12 = useAppState(selectThinkingEnabled2);
-  let appState_13 = useAppState(selectIsFastModeOn);
-  let queuedMessageText = useQueuedMessageText();
-  let appState_14 = useAppState(selectUltracode_2);
-  let appState_15 = useAppState(getViewedTeammateTask_2_2);
-  let viewingAgentName = appState_15?.identity.agentName;
+  let suggestion = useAppState(selectPromptSuggestion);
+  let tasks_2 = useAppState(selectViewingAgentTaskId_4);
+  let isBriefOnly = useAppState(selectIsBriefOnly_3) && !tasks_2;
+  let appState_6 = useAppState(selectMainLoopModel);
+  let appState_7 = useAppState(selectMainLoopModelForSession_2);
+  let appState_8 = useAppState(selectThinkingEnabled2);
+  let model = useAppState(selectIsFastModeOn);
+  let level = useQueuedMessageText();
+  let appState_9 = useAppState(selectUltracode_2);
+  let appState_10 = useAppState(getViewedTeammateTask_2_2);
+  let viewingAgentName = appState_10?.identity.agentName;
   let viewingAgentName_2 = useAppState(getActiveAgentName);
-  let Ss;
-  if ($[27] !== appState_15) {
-    Ss =
-      appState_15?.identity.color && AGENT_COLOR_NAMES.includes(appState_15.identity.color)
-        ? appState_15.identity.color
+  let viewingAgentColorRaw;
+  if ($[27] !== appState_10) {
+    viewingAgentColorRaw =
+      appState_10?.identity.color && AGENT_COLOR_NAMES.includes(appState_10.identity.color)
+        ? appState_10.identity.color
         : undefined;
-    $[27] = appState_15;
-    $[28] = Ss;
-  } else Ss = $[28];
-  let viewingAgentColor = Ss;
-  let Ws;
+    $[27] = appState_10;
+    $[28] = viewingAgentColorRaw;
+  } else viewingAgentColorRaw = $[28];
+  let viewingAgentColor = viewingAgentColorRaw;
+  let agentPermissionContext;
   cl: {
-    if (appState_15) {
-      let za;
-      if ($[29] !== appState || $[30] !== appState_15.permissionMode) {
-        za = {
+    if (appState_10) {
+      let agentContext;
+      if ($[29] !== appState || $[30] !== appState_10.permissionMode) {
+        agentContext = {
           ...appState,
-          mode: appState_15.permissionMode,
+          mode: appState_10.permissionMode,
         };
         $[29] = appState;
-        $[30] = appState_15.permissionMode;
-        $[31] = za;
-      } else za = $[31];
-      Ws = za;
+        $[30] = appState_10.permissionMode;
+        $[31] = agentContext;
+      } else agentContext = $[31];
+      agentPermissionContext = agentContext;
       break cl;
     }
-    Ws = appState;
+    agentPermissionContext = appState;
   }
-  let toolPermissionContext = Ws;
-  let za;
+  let toolPermissionContext = agentPermissionContext;
+  let seedPasteIdsEffect;
   if ($[32] !== transcript) {
-    za = () => primePasteIdsFromMessages(transcript.getSnapshot());
+    seedPasteIdsEffect = () => primePasteIdsFromMessages(transcript.getSnapshot());
     $[32] = transcript;
-    $[33] = za;
-  } else za = $[33];
-  y(za);
-  let [as, pi] = y(false);
-  let [qa, pd] = y(false);
-  let [$l] = y(getIdleInFlightState);
-  let appState_16 = useAppState(selectCoordinatorTaskIndex2);
-  let appState_17 = useAppState(selectTaskDecorations_3);
-  let appState_18 = useAppState(selectIdleTeammatesExpanded_3);
-  let _c;
-  if ($[34] !== setAppState) {
-    _c = (mc) =>
-      setAppState((Vd) => {
-        let cd = typeof mc === "function" ? mc(Vd.coordinatorTaskIndex) : mc;
-        if (cd === Vd.coordinatorTaskIndex) {
-          return Vd;
+    $[33] = seedPasteIdsEffect;
+  } else seedPasteIdsEffect = $[33];
+  useState(seedPasteIdsEffect);
+  let [isBridgeDialogOpen, setBridgeDialogOpen] = useState(false);
+  let [isWizardOpen, setWizardOpen] = useState(false);
+  let [cloudRowCheck] = useState(getIdleInFlightState);
+  let appState_11 = useAppState(selectCoordinatorTaskIndex2);
+  let appState_12 = useAppState(selectTaskDecorations_3);
+  let appState_13 = useAppState(selectIdleTeammatesExpanded_3);
+  let updateCoordinatorIndex;
+  if ($[34] !== setShowState) {
+    updateCoordinatorIndex = (nextIndex) =>
+      setShowState((prevState) => {
+        let nextCoordinatorIndex =
+          typeof nextIndex === "function" ? nextIndex(prevState.coordinatorTaskIndex) : nextIndex;
+        if (nextCoordinatorIndex === prevState.coordinatorTaskIndex) {
+          return prevState;
         }
         return {
-          ...Vd,
-          coordinatorTaskIndex: cd,
+          ...prevState,
+          coordinatorTaskIndex: nextCoordinatorIndex,
         };
       });
-    $[34] = setAppState;
-    $[35] = _c;
-  } else _c = $[35];
-  let Ka = _c;
+    $[34] = setShowState;
+    $[35] = updateCoordinatorIndex;
+  } else updateCoordinatorIndex = $[35];
+  let setCoordinatorTaskIndex = updateCoordinatorIndex;
   let visibleAgentTaskCount = useVisibleAgentTaskCount();
-  let Gl = subscribeCoordinatorPanel();
-  let gd = storeSelector_4 !== "bash" && countVisibleTasks(appState_3, appState_4) > 0;
-  let hd = gd ? -1 : 0;
-  let bd;
-  if ($[36] !== appState_18 || $[37] !== appState_17 || $[38] !== appState_3 || $[39] !== appState_9) {
-    bd = getVisibleBackgroundTasks(appState_3, appState_17, appState_9, appState_18);
-    $[36] = appState_18;
-    $[37] = appState_17;
-    $[38] = appState_3;
-    $[39] = appState_9;
-    $[40] = bd;
-  } else bd = $[40];
-  let Od = bd;
-  let pc;
-  if ($[41] !== Od) {
-    pc = Od.map(selectId);
-    $[41] = Od;
-    $[42] = pc;
-  } else pc = $[42];
-  let Kd = pc;
-  let ec;
-  if ($[43] !== appState_17 || $[44] !== appState_3 || $[45] !== appState_9 || $[46] !== Od) {
-    ec = Od.some(isAgentRowVisible)
-      ? getVisibleBackgroundTasks(appState_3, appState_17, appState_9, true).map(selectId2)
+  let isCoordinatorPanelSubscribed = subscribeCoordinatorPanel();
+  let isPromptModeWithTasks = storeSelector_4 !== "bash" && countVisibleTasks(tasks, options) > 0;
+  let firstTaskIndex = isPromptModeWithTasks ? -1 : 0;
+  let visibleTasksRaw;
+  if ($[36] !== appState_13 || $[37] !== appState_12 || $[38] !== tasks || $[39] !== tasks_2) {
+    visibleTasksRaw = getVisibleBackgroundTasks(tasks, appState_12, tasks_2, appState_13);
+    $[36] = appState_13;
+    $[37] = appState_12;
+    $[38] = tasks;
+    $[39] = tasks_2;
+    $[40] = visibleTasksRaw;
+  } else visibleTasksRaw = $[40];
+  let visibleBackgroundTasks = visibleTasksRaw;
+  let taskIdsRaw;
+  if ($[41] !== visibleBackgroundTasks) {
+    taskIdsRaw = visibleBackgroundTasks.map(selectId);
+    $[41] = visibleBackgroundTasks;
+    $[42] = taskIdsRaw;
+  } else taskIdsRaw = $[42];
+  let taskIds = taskIdsRaw;
+  let agentRowTaskIds;
+  if ($[43] !== appState_12 || $[44] !== tasks || $[45] !== tasks_2 || $[46] !== visibleBackgroundTasks) {
+    agentRowTaskIds = visibleBackgroundTasks.some(isAgentRowVisible)
+      ? getVisibleBackgroundTasks(tasks, appState_12, tasks_2, true).map(selectId2)
       : undefined;
-    $[43] = appState_17;
-    $[44] = appState_3;
-    $[45] = appState_9;
-    $[46] = Od;
-    $[47] = ec;
-  } else ec = $[47];
-  let qu = ec;
-  let Ku = R(Kd);
-  let iu = R(qu);
-  let Iu;
-  let Am;
+    $[43] = appState_12;
+    $[44] = tasks;
+    $[45] = tasks_2;
+    $[46] = visibleBackgroundTasks;
+    $[47] = agentRowTaskIds;
+  } else agentRowTaskIds = $[47];
+  let agentRowTaskIdsStable = agentRowTaskIds;
+  let prevTaskIdsRef = useRef(taskIds);
+  let prevAgentRowIdsRef = useRef(agentRowTaskIdsStable);
+  let clampTaskIndexEffect;
+  let clampTaskIndexDeps;
   if (
     $[48] !== visibleAgentTaskCount ||
-    $[49] !== appState_16 ||
-    $[50] !== appState_18 ||
-    $[51] !== hd ||
-    $[52] !== Ka ||
-    $[53] !== qu ||
-    $[54] !== Od ||
-    $[55] !== Kd
+    $[49] !== appState_11 ||
+    $[50] !== appState_13 ||
+    $[51] !== firstTaskIndex ||
+    $[52] !== setCoordinatorTaskIndex ||
+    $[53] !== agentRowTaskIdsStable ||
+    $[54] !== visibleBackgroundTasks ||
+    $[55] !== taskIds
   ) {
-    Iu = () => {
-      let Kp = (appState_18 ? iu.current : undefined) ?? Ku.current;
-      Ku.current = Kd;
-      iu.current = qu;
-      let nl = remapTaskPanelIndex(appState_16, Kp, Kd, Od);
-      if (nl !== appState_16) Ka(nl);
-      else if (appState_16 >= visibleAgentTaskCount) Ka(Math.max(hd, visibleAgentTaskCount - 1));
-      else if (appState_16 < hd) Ka(hd);
+    clampTaskIndexEffect = () => {
+      let previousSelectedId =
+        (appState_13 ? prevAgentRowIdsRef.current : undefined) ?? prevTaskIdsRef.current;
+      prevTaskIdsRef.current = taskIds;
+      prevAgentRowIdsRef.current = agentRowTaskIdsStable;
+      let remappedIndex = remapTaskPanelIndex(
+        appState_11,
+        previousSelectedId,
+        taskIds,
+        visibleBackgroundTasks,
+      );
+      if (remappedIndex !== appState_11) setCoordinatorTaskIndex(remappedIndex);
+      else if (appState_11 >= visibleAgentTaskCount)
+        setCoordinatorTaskIndex(Math.max(firstTaskIndex, visibleAgentTaskCount - 1));
+      else if (appState_11 < firstTaskIndex) setCoordinatorTaskIndex(firstTaskIndex);
     };
-    Am = [appState_18, qu, Kd, Od, visibleAgentTaskCount, appState_16, hd, Ka];
+    clampTaskIndexDeps = [
+      appState_13,
+      agentRowTaskIdsStable,
+      taskIds,
+      visibleBackgroundTasks,
+      visibleAgentTaskCount,
+      appState_11,
+      firstTaskIndex,
+      setCoordinatorTaskIndex,
+    ];
     $[48] = visibleAgentTaskCount;
-    $[49] = appState_16;
-    $[50] = appState_18;
-    $[51] = hd;
-    $[52] = Ka;
-    $[53] = qu;
-    $[54] = Od;
-    $[55] = Kd;
-    $[56] = Iu;
-    $[57] = Am;
+    $[49] = appState_11;
+    $[50] = appState_13;
+    $[51] = firstTaskIndex;
+    $[52] = setCoordinatorTaskIndex;
+    $[53] = agentRowTaskIdsStable;
+    $[54] = visibleBackgroundTasks;
+    $[55] = taskIds;
+    $[56] = clampTaskIndexEffect;
+    $[57] = clampTaskIndexDeps;
   } else {
-    Iu = $[56];
-    Am = $[57];
+    clampTaskIndexEffect = $[56];
+    clampTaskIndexDeps = $[57];
   }
-  P(Iu, Am);
-  let [ss, Gs] = y(false);
-  let [ma, $a] = y(false);
+  useEffect(clampTaskIndexEffect, clampTaskIndexDeps);
+  let [isPasting, setIsPasting] = useState(false);
+  let [showExpandPasteHint, setShowExpandPasteHint] = useState(false);
   let clock = useClock();
-  let [Si, na] = y(false);
-  let [js, Ya] = y(false);
-  let tl = R(false);
-  let [ol, ed] = y(false);
-  let [_d, ga] = y(null);
-  let [du, rg] = y(false);
+  let [isExternalEditorActive, setIsExternalEditorActive] = useState(false);
+  let [isModelPickerOpen, setModelPickerOpen] = useState(false);
+  let isModelSwitchPendingRef = useRef(false);
+  let [isHistorySearchOpen, setHistorySearchOpen] = useState(false);
+  let [fastModePickerState, setFastModePickerState] = useState(null);
+  let [isThinkingToggleOpen, setThinkingToggleOpen] = useState(false);
   let storeSelector_7 = useStoreSelector(turn, selectEnvOnboardingOffered);
-  let Wd = appState.mode === "auto";
-  let Rl;
-  if ($[58] !== storeSelector_5 || $[59] !== Wd || $[60] !== storeSelector_7) {
-    Rl = storeSelector_7 && !storeSelector_5 && Wd && shouldOfferAutoModeEnvOnboarding();
+  let isAutoPermissionMode = appState.mode === "auto";
+  let shouldOfferEnvOnboarding;
+  if ($[58] !== storeSelector_5 || $[59] !== isAutoPermissionMode || $[60] !== storeSelector_7) {
+    shouldOfferEnvOnboarding =
+      storeSelector_7 && !storeSelector_5 && isAutoPermissionMode && shouldOfferAutoModeEnvOnboarding();
     $[58] = storeSelector_5;
-    $[59] = Wd;
+    $[59] = isAutoPermissionMode;
     $[60] = storeSelector_7;
-    $[61] = Rl;
-  } else Rl = $[61];
-  let Yd = Rl;
-  let Pi;
-  if ($[62] !== appState_3) {
-    Pi = runningWorkflowTasks(appState_3);
-    $[62] = appState_3;
-    $[63] = Pi;
-  } else Pi = $[63];
-  let fa = Pi;
-  let sa = visibleAgentTaskCount > 0 || gd;
-  let td = fa.length > 0 && !Gl && storeSelector_4 === "prompt" && !or.show && !ss;
-  let Pl;
-  if ($[64] !== or || $[65] !== frameFooterState || $[66] !== ss || $[67] !== storeSelector_4) {
-    Pl =
+    $[61] = shouldOfferEnvOnboarding;
+  } else shouldOfferEnvOnboarding = $[61];
+  let showEnvOnboarding = shouldOfferEnvOnboarding;
+  let memoRunningWorkflows;
+  if ($[62] !== tasks) {
+    memoRunningWorkflows = runningWorkflowTasks(tasks);
+    $[62] = tasks;
+    $[63] = memoRunningWorkflows;
+  } else memoRunningWorkflows = $[63];
+  let runningWorkflows = memoRunningWorkflows;
+  let tasksTabVisible = visibleAgentTaskCount > 0 || isPromptModeWithTasks;
+  let workflowsTabVisible =
+    runningWorkflows.length > 0 &&
+    !isCoordinatorPanelSubscribed &&
+    storeSelector_4 === "prompt" &&
+    !exitMessage.show &&
+    !isPasting;
+  let frameTabVisible;
+  if (
+    $[64] !== exitMessage ||
+    $[65] !== frameFooterState ||
+    $[66] !== isPasting ||
+    $[67] !== storeSelector_4
+  ) {
+    frameTabVisible =
       frameFooterState &&
       getArtifactPublishStubDir() === null &&
       storeSelector_4 === "prompt" &&
-      !or.show &&
-      !ss;
-    $[64] = or;
+      !exitMessage.show &&
+      !isPasting;
+    $[64] = exitMessage;
     $[65] = frameFooterState;
-    $[66] = ss;
+    $[66] = isPasting;
     $[67] = storeSelector_4;
-    $[68] = Pl;
-  } else Pl = $[68];
-  let Ad = Pl;
-  let od;
-  if ($[69] !== appState_7 || $[70] !== or || $[71] !== ss || $[72] !== storeSelector_4) {
-    od = appState_7 && storeSelector_4 !== "bash" && !isRemoteSessionAvailable() && !or.show && !ss;
-    $[69] = appState_7;
-    $[70] = or;
-    $[71] = ss;
+    $[68] = frameTabVisible;
+  } else frameTabVisible = $[68];
+  let isFrameTabVisible = frameTabVisible;
+  let isBagelTabVisible;
+  if ($[69] !== appState_5 || $[70] !== exitMessage || $[71] !== isPasting || $[72] !== storeSelector_4) {
+    isBagelTabVisible =
+      appState_5 &&
+      storeSelector_4 !== "bash" &&
+      !isRemoteSessionAvailable() &&
+      !exitMessage.show &&
+      !isPasting;
+    $[69] = appState_5;
+    $[70] = exitMessage;
+    $[71] = isPasting;
     $[72] = storeSelector_4;
-    $[73] = od;
-  } else od = $[73];
-  let md = od;
-  let hasSuggestionContent_2 = useStoreSelector(_o.drawn, hasSuggestionContent);
-  let sg;
-  if ($[74] !== isFullscreen || $[75] !== $n || $[76] !== hasSuggestionContent_2) {
-    sg = shouldShowFooterStatus({
+    $[73] = isBagelTabVisible;
+  } else isBagelTabVisible = $[73];
+  let bagelTabVisible = isBagelTabVisible;
+  let hasSuggestionContent_2 = useStoreSelector(suggestionsStore.drawn, hasSuggestionContent);
+  let footerStatusVisible;
+  if ($[74] !== isFullscreen || $[75] !== isHelpOpen || $[76] !== hasSuggestionContent_2) {
+    footerStatusVisible = shouldShowFooterStatus({
       hasSuggestionContent: hasSuggestionContent_2,
       isFullscreen,
-      helpOpen: $n,
+      helpOpen: isHelpOpen,
     });
     $[74] = isFullscreen;
-    $[75] = $n;
+    $[75] = isHelpOpen;
     $[76] = hasSuggestionContent_2;
-    $[77] = sg;
-  } else sg = $[77];
-  let zi = sg;
-  let rd;
-  if ($[78] !== chrome || $[79] !== zi || $[80] !== scope) {
-    rd = {
+    $[77] = footerStatusVisible;
+  } else footerStatusVisible = $[77];
+  let showFooterStatus = footerStatusVisible;
+  let chromeRowsArgs;
+  if ($[78] !== chrome || $[79] !== showFooterStatus || $[80] !== scope) {
+    chromeRowsArgs = {
       scope,
       chrome,
-      rowsDrawn: zi,
+      rowsDrawn: showFooterStatus,
     };
     $[78] = chrome;
-    $[79] = zi;
+    $[79] = showFooterStatus;
     $[80] = scope;
-    $[81] = rd;
-  } else rd = $[81];
-  let promptChromeRows = usePromptChromeRows(rd);
-  let zd;
+    $[81] = chromeRowsArgs;
+  } else chromeRowsArgs = $[81];
+  let promptChromeRows = usePromptChromeRows(chromeRowsArgs);
+  let footerTabCandidates;
   if (
-    $[82] !== md ||
-    $[83] !== kr ||
-    $[84] !== Ad ||
+    $[82] !== bagelTabVisible ||
+    $[83] !== bridgeTabEnabled ||
+    $[84] !== isFrameTabVisible ||
     $[85] !== promptChromeRows ||
-    $[86] !== zi ||
-    $[87] !== sa ||
-    $[88] !== td
+    $[86] !== showFooterStatus ||
+    $[87] !== tasksTabVisible ||
+    $[88] !== workflowsTabVisible
   ) {
-    zd = !zi
+    footerTabCandidates = !showFooterStatus
       ? []
       : [
-          sa && "tasks",
-          Ad && "frame",
-          md && "bagel",
+          tasksTabVisible && "tasks",
+          isFrameTabVisible && "frame",
+          bagelTabVisible && "bagel",
           promptChromeRows && "ideSelection",
-          kr && "bridge",
-          td && "workflows",
+          bridgeTabEnabled && "bridge",
+          workflowsTabVisible && "workflows",
         ].filter(Boolean);
-    $[82] = md;
-    $[83] = kr;
-    $[84] = Ad;
+    $[82] = bagelTabVisible;
+    $[83] = bridgeTabEnabled;
+    $[84] = isFrameTabVisible;
     $[85] = promptChromeRows;
-    $[86] = zi;
-    $[87] = sa;
-    $[88] = td;
-    $[89] = zd;
-  } else zd = $[89];
-  let Hc = zd;
-  let xc = visibleAgentTaskCount > 0 || td;
-  let Yc;
-  if ($[90] !== Hc || $[91] !== xc) {
-    Yc = xc ? Hc.filter(isFooterTabEnabled) : Hc;
-    $[90] = Hc;
-    $[91] = xc;
-    $[92] = Yc;
-  } else Yc = $[92];
-  let tc = Yc;
-  let appState_19 = useAppState(selectWorkflowFooterIndex2);
-  let Eu;
-  if ($[93] !== setAppState) {
-    Eu = (Rp) =>
-      setAppState((Fh) => {
-        let cy = typeof Rp === "function" ? Rp(Fh.workflowFooterIndex) : Rp;
-        if (cy === Fh.workflowFooterIndex) {
-          return Fh;
+    $[86] = showFooterStatus;
+    $[87] = tasksTabVisible;
+    $[88] = workflowsTabVisible;
+    $[89] = footerTabCandidates;
+  } else footerTabCandidates = $[89];
+  let footerTabs = footerTabCandidates;
+  let hasTasksOrWorkflowsSelected = visibleAgentTaskCount > 0 || workflowsTabVisible;
+  let enabledFooterTabs;
+  if ($[90] !== footerTabs || $[91] !== hasTasksOrWorkflowsSelected) {
+    enabledFooterTabs = hasTasksOrWorkflowsSelected ? footerTabs.filter(isFooterTabEnabled) : footerTabs;
+    $[90] = footerTabs;
+    $[91] = hasTasksOrWorkflowsSelected;
+    $[92] = enabledFooterTabs;
+  } else enabledFooterTabs = $[92];
+  let footerTabsEnabled = enabledFooterTabs;
+  let appState_14 = useAppState(selectWorkflowFooterIndex2);
+  let setWorkflowFooterIndexThunk;
+  if ($[93] !== setShowState) {
+    setWorkflowFooterIndexThunk = (nextWorkflowIndex) =>
+      setShowState((prevState) => {
+        let workflowIndex =
+          typeof nextWorkflowIndex === "function"
+            ? nextWorkflowIndex(prevState.workflowFooterIndex)
+            : nextWorkflowIndex;
+        if (workflowIndex === prevState.workflowFooterIndex) {
+          return prevState;
         }
         return {
-          ...Fh,
-          workflowFooterIndex: cy,
+          ...prevState,
+          workflowFooterIndex: workflowIndex,
         };
       });
-    $[93] = setAppState;
-    $[94] = Eu;
-  } else Eu = $[94];
-  let Nd = Eu;
-  let Af;
-  if ($[95] !== fa) {
-    Af = fa.map(selectId3);
-    $[95] = fa;
-    $[96] = Af;
-  } else Af = $[96];
-  let Du = Af;
-  let Va = R(Du);
-  let Fg;
-  let ns;
-  if ($[97] !== Du || $[98] !== Nd || $[99] !== appState_19) {
-    Fg = () => {
-      let ba = Va.current;
-      Va.current = Du;
-      let Mi = ba[appState_19];
-      if (Mi !== undefined) {
-        let index = Du.indexOf(Mi);
-        if (index !== -1 && index !== appState_19) {
-          Nd(index);
+    $[93] = setShowState;
+    $[94] = setWorkflowFooterIndexThunk;
+  } else setWorkflowFooterIndexThunk = $[94];
+  let setWorkflowFooterIndex = setWorkflowFooterIndexThunk;
+  let workflowIdsRaw;
+  if ($[95] !== runningWorkflows) {
+    workflowIdsRaw = runningWorkflows.map(selectId3);
+    $[95] = runningWorkflows;
+    $[96] = workflowIdsRaw;
+  } else workflowIdsRaw = $[96];
+  let runningWorkflowIds = workflowIdsRaw;
+  let prevWorkflowIdsRef = useRef(runningWorkflowIds);
+  let clampWorkflowIndexEffect;
+  let clampWorkflowDeps;
+  if ($[97] !== runningWorkflowIds || $[98] !== setWorkflowFooterIndex || $[99] !== appState_14) {
+    clampWorkflowIndexEffect = () => {
+      let previousIds = prevWorkflowIdsRef.current;
+      prevWorkflowIdsRef.current = runningWorkflowIds;
+      let selectedWorkflowId = previousIds[appState_14];
+      if (selectedWorkflowId !== undefined) {
+        let index = runningWorkflowIds.indexOf(selectedWorkflowId);
+        if (index !== -1 && index !== appState_14) {
+          setWorkflowFooterIndex(index);
           return;
         }
       }
-      if (appState_19 >= Du.length) Nd(Math.max(0, Du.length - 1));
+      if (appState_14 >= runningWorkflowIds.length)
+        setWorkflowFooterIndex(Math.max(0, runningWorkflowIds.length - 1));
     };
-    ns = [Du, appState_19, Nd];
-    $[97] = Du;
-    $[98] = Nd;
-    $[99] = appState_19;
-    $[100] = Fg;
-    $[101] = ns;
+    clampWorkflowDeps = [runningWorkflowIds, appState_14, setWorkflowFooterIndex];
+    $[97] = runningWorkflowIds;
+    $[98] = setWorkflowFooterIndex;
+    $[99] = appState_14;
+    $[100] = clampWorkflowIndexEffect;
+    $[101] = clampWorkflowDeps;
   } else {
-    Fg = $[100];
-    ns = $[101];
+    clampWorkflowIndexEffect = $[100];
+    clampWorkflowDeps = $[101];
   }
-  P(Fg, ns);
-  let appState_20 = useAppState(selectFooterSelection2);
-  let Gp = appState_20 === "tasks" && storeSelector_4 === "bash" && appState_16 < 0;
-  let yl = appState_20 && Hc.includes(appState_20) && !Gp ? appState_20 : null;
-  let Dc;
-  let Bh;
-  if ($[102] !== yl || $[103] !== appState_20 || $[104] !== setAppState) {
-    Dc = () => {
-      if (appState_20 && !yl) setAppState(clearFooterSelectionState);
+  useEffect(clampWorkflowIndexEffect, clampWorkflowDeps);
+  let appState_15 = useAppState(selectFooterSelection2);
+  let isBashTasksSelection = appState_15 === "tasks" && storeSelector_4 === "bash" && appState_11 < 0;
+  let activeFooterTab =
+    appState_15 && footerTabs.includes(appState_15) && !isBashTasksSelection ? appState_15 : null;
+  let clearStaleFooterEffect;
+  let clearStaleFooterDeps;
+  if ($[102] !== activeFooterTab || $[103] !== appState_15 || $[104] !== setShowState) {
+    clearStaleFooterEffect = () => {
+      if (appState_15 && !activeFooterTab) setShowState(clearFooterSelectionState);
     };
-    Bh = [appState_20, yl, setAppState];
-    $[102] = yl;
-    $[103] = appState_20;
-    $[104] = setAppState;
-    $[105] = Dc;
-    $[106] = Bh;
+    clearStaleFooterDeps = [appState_15, activeFooterTab, setShowState];
+    $[102] = activeFooterTab;
+    $[103] = appState_15;
+    $[104] = setShowState;
+    $[105] = clearStaleFooterEffect;
+    $[106] = clearStaleFooterDeps;
   } else {
-    Dc = $[105];
-    Bh = $[106];
+    clearStaleFooterEffect = $[105];
+    clearStaleFooterDeps = $[106];
   }
-  P(Dc, Bh);
-  let Hh = shouldShowStatusNotices(We && !$n);
-  const footerNavActive = yl !== null;
-  let vu;
+  useEffect(clearStaleFooterEffect, clearStaleFooterDeps);
+  let showStatusNotices = shouldShowStatusNotices(isSwarmFooterVisible && !isHelpOpen);
+  const footerNavActive = activeFooterTab !== null;
+  let hintRowArgs;
   if (
-    $[107] !== or ||
+    $[107] !== exitMessage ||
     $[108] !== storeSelector_2 ||
-    $[109] !== ss ||
+    $[109] !== isPasting ||
     $[110] !== storeSelector_4 ||
-    $[111] !== Hh ||
-    $[112] !== ma ||
+    $[111] !== showStatusNotices ||
+    $[112] !== showExpandPasteHint ||
     $[113] !== footerNavActive
   ) {
-    vu = {
-      enabled: Hh,
-      exitMessage: or,
-      isPasting: ss,
-      showExpandPasteHint: ma,
+    hintRowArgs = {
+      enabled: showStatusNotices,
+      exitMessage,
+      isPasting,
+      showExpandPasteHint,
       mode: storeSelector_4,
       permissionParked: storeSelector_2,
       footerNavActive,
     };
-    $[107] = or;
+    $[107] = exitMessage;
     $[108] = storeSelector_2;
-    $[109] = ss;
+    $[109] = isPasting;
     $[110] = storeSelector_4;
-    $[111] = Hh;
-    $[112] = ma;
+    $[111] = showStatusNotices;
+    $[112] = showExpandPasteHint;
     $[113] = footerNavActive;
-    $[114] = vu;
-  } else vu = $[114];
-  let dm = PromptHintRow(vu);
-  let Uc = yl === "tasks";
-  let uy = yl === "workflows";
-  let bridgeSelected = yl === "bridge";
-  let ideSelectionSelected = yl === "ideSelection";
-  let jh = yl !== null && !tc.includes(yl);
-  let Jb;
-  if ($[115] !== We || $[116] !== hd || $[117] !== setAppState || $[118] !== Ka || $[119] !== Nd) {
-    Jb = (Im) => {
-      setAppState((Hg) => {
-        if (Hg.footerSelection === Im) {
-          return Hg;
+    $[114] = hintRowArgs;
+  } else hintRowArgs = $[114];
+  let row1Hint = PromptHintRow(hintRowArgs);
+  let tasksTabSelected = activeFooterTab === "tasks";
+  let workflowsTabSelected = activeFooterTab === "workflows";
+  let bridgeSelected = activeFooterTab === "bridge";
+  let ideSelectionSelected = activeFooterTab === "ideSelection";
+  let footerTabMissing = activeFooterTab !== null && !footerTabsEnabled.includes(activeFooterTab);
+  let setFooterTabThunk;
+  if (
+    $[115] !== isSwarmFooterVisible ||
+    $[116] !== firstTaskIndex ||
+    $[117] !== setShowState ||
+    $[118] !== setCoordinatorTaskIndex ||
+    $[119] !== setWorkflowFooterIndex
+  ) {
+    setFooterTabThunk = (tab) => {
+      setShowState((prevState) => {
+        if (prevState.footerSelection === tab) {
+          return prevState;
         }
-        let Zb = {
-          ...Hg,
-          footerSelection: Im,
+        let nextState = {
+          ...prevState,
+          footerSelection: tab,
         };
-        if (Im === "frame") Zb.frameOpenFailedSeen = frameOpenFailed(Hg);
-        if (Hg.footerSelection === "tasks") Zb.idleTeammatesExpanded = false;
-        return Zb;
+        if (tab === "frame") nextState.frameOpenFailedSeen = frameOpenFailed(prevState);
+        if (prevState.footerSelection === "tasks") nextState.idleTeammatesExpanded = false;
+        return nextState;
       });
-      if (Im === "tasks") Ka(hd);
-      if (Im === "workflows") Nd(0);
-      if (Im !== null && !We) $a(false);
+      if (tab === "tasks") setCoordinatorTaskIndex(firstTaskIndex);
+      if (tab === "workflows") setWorkflowFooterIndex(0);
+      if (tab !== null && !isSwarmFooterVisible) setShowExpandPasteHint(false);
     };
-    $[115] = We;
-    $[116] = hd;
-    $[117] = setAppState;
-    $[118] = Ka;
-    $[119] = Nd;
-    $[120] = Jb;
-  } else Jb = $[120];
-  let Dd = Jb;
-  let p_;
+    $[115] = isSwarmFooterVisible;
+    $[116] = firstTaskIndex;
+    $[117] = setShowState;
+    $[118] = setCoordinatorTaskIndex;
+    $[119] = setWorkflowFooterIndex;
+    $[120] = setFooterTabThunk;
+  } else setFooterTabThunk = $[120];
+  let selectFooterTab = setFooterTabThunk;
+  let moveFooterSelection;
   if (
     $[121] !== visibleAgentTaskCount ||
-    $[122] !== yl ||
-    $[123] !== fa.length ||
-    $[124] !== Dd ||
-    $[125] !== jh ||
-    $[126] !== Ka ||
-    $[127] !== Nd
+    $[122] !== activeFooterTab ||
+    $[123] !== runningWorkflows.length ||
+    $[124] !== selectFooterTab ||
+    $[125] !== footerTabMissing ||
+    $[126] !== setCoordinatorTaskIndex ||
+    $[127] !== setWorkflowFooterIndex
   ) {
-    p_ = function Br(Mf, Zd, ig) {
-      let fy = ig === undefined ? false : ig;
-      let Fx = yl ? Mf.indexOf(yl) : -1;
-      let Wk = Mf[Fx + Zd];
-      if (Wk) {
-        Dd(Wk);
-        let Qp = Zd < 0 && !jh;
-        if (Qp && Wk === "tasks" && visibleAgentTaskCount > 0) Ka(visibleAgentTaskCount - 1);
-        if (Qp && Wk === "workflows") Nd(Math.max(0, fa.length - 1));
+    moveFooterSelection = function moveFooterSelectionImpl(tabs, delta, allowLeave) {
+      let allowClear = allowLeave === undefined ? false : allowLeave;
+      let currentTabIndex = activeFooterTab ? tabs.indexOf(activeFooterTab) : -1;
+      let nextTab = tabs[currentTabIndex + delta];
+      if (nextTab) {
+        selectFooterTab(nextTab);
+        let isBackward = delta < 0 && !footerTabMissing;
+        if (isBackward && nextTab === "tasks" && visibleAgentTaskCount > 0)
+          setCoordinatorTaskIndex(visibleAgentTaskCount - 1);
+        if (isBackward && nextTab === "workflows")
+          setWorkflowFooterIndex(Math.max(0, runningWorkflows.length - 1));
         return true;
       }
-      if (Zd < 0 && fy) {
-        Dd(null);
+      if (delta < 0 && allowClear) {
+        selectFooterTab(null);
         return true;
       }
       return false;
     };
     $[121] = visibleAgentTaskCount;
-    $[122] = yl;
-    $[123] = fa.length;
-    $[124] = Dd;
-    $[125] = jh;
-    $[126] = Ka;
-    $[127] = Nd;
-    $[128] = p_;
-  } else p_ = $[128];
-  let Br = p_;
+    $[122] = activeFooterTab;
+    $[123] = runningWorkflows.length;
+    $[124] = selectFooterTab;
+    $[125] = footerTabMissing;
+    $[126] = setCoordinatorTaskIndex;
+    $[127] = setWorkflowFooterIndex;
+    $[128] = moveFooterSelection;
+  } else moveFooterSelection = $[128];
+  let moveFooterSelectionStable = moveFooterSelection;
   const hasInput = !storeSelector_3;
-  let Fi;
+  let suggestionArgs;
   if ($[129] !== storeSelector_5 || $[130] !== hasInput) {
-    Fi = {
+    suggestionArgs = {
       hasInput,
       isAssistantResponding: storeSelector_5,
     };
     $[129] = storeSelector_5;
     $[130] = hasInput;
-    $[131] = Fi;
-  } else Fi = $[131];
-  let { suggestion, markAccepted, logOutcomeAtSubmission, markShown } = usePromptSuggestion(Fi);
+    $[131] = suggestionArgs;
+  } else suggestionArgs = $[131];
+  let {
+    suggestion: suggestion_2,
+    markAccepted,
+    logOutcomeAtSubmission,
+    markShown,
+  } = usePromptSuggestion(suggestionArgs);
   let { addNotification, removeNotification } = useNotifications();
-  let Gu;
+  let placeholderArgs;
   if (
     $[132] !== hasMessages ||
     $[133] !== storeSelector_3 ||
     $[134] !== submitCount ||
     $[135] !== viewingAgentName_2
   ) {
-    Gu = {
+    placeholderArgs = {
       isInputEmpty: storeSelector_3,
       submitCount,
       hasMessages,
@@ -1376,41 +1442,41 @@ function PromptComposer(props) {
     $[133] = storeSelector_3;
     $[134] = submitCount;
     $[135] = viewingAgentName_2;
-    $[136] = Gu;
-  } else Gu = $[136];
-  let promptInputPlaceholder = usePromptInputPlaceholder(Gu);
-  let qh;
-  if ($[137] !== on) {
-    qh = () => {
+    $[136] = placeholderArgs;
+  } else placeholderArgs = $[136];
+  let promptInputPlaceholder = usePromptInputPlaceholder(placeholderArgs);
+  let toggleHelp;
+  if ($[137] !== setHelpOpen) {
+    toggleHelp = () => {
       logEvent("tengu_help_toggled", {});
-      on(toggleHelpOpen);
+      setHelpOpen(toggleHelpOpen);
     };
-    $[137] = on;
-    $[138] = qh;
-  } else qh = $[138];
-  let Pc = qh;
-  let Aa;
-  if ($[139] !== Dd || $[140] !== storageV5 || $[141] !== tc[0]) {
-    Aa = () => {
-      let rl = tc[0];
-      if (rl === undefined) {
+    $[137] = setHelpOpen;
+    $[138] = toggleHelp;
+  } else toggleHelp = $[138];
+  let toggleHelpStable = toggleHelp;
+  let onHistoryDownPastEnd;
+  if ($[139] !== selectFooterTab || $[140] !== storageV5 || $[141] !== footerTabsEnabled[0]) {
+    onHistoryDownPastEnd = () => {
+      let firstTab = footerTabsEnabled[0];
+      if (firstTab === undefined) {
         return;
       }
-      Dd(rl);
-      if (rl === "tasks" && !getGlobalConfig().hasSeenTasksHint)
+      selectFooterTab(firstTab);
+      if (firstTab === "tasks" && !getGlobalConfig().hasSeenTasksHint)
         saveGlobalConfig(markTasksHintSeen, storageV5);
     };
-    $[139] = Dd;
+    $[139] = selectFooterTab;
     $[140] = storageV5;
-    $[141] = tc[0];
-    $[142] = Aa;
-  } else Aa = $[142];
-  let onHistoryDownPastEnd = Aa;
-  let _a;
+    $[141] = footerTabsEnabled[0];
+    $[142] = onHistoryDownPastEnd;
+  } else onHistoryDownPastEnd = $[142];
+  let onHistoryDownPastEnd_2 = onHistoryDownPastEnd;
+  let popQueuedInput;
   if (
     $[143] !== addNotification ||
     $[144] !== chrome ||
-    $[145] !== $r ||
+    $[145] !== clearQueueEditIndexAction ||
     $[146] !== draft ||
     $[147] !== setMode ||
     $[148] !== commandQueueOrDefault ||
@@ -1418,17 +1484,17 @@ function PromptComposer(props) {
     $[150] !== setCursorOffset ||
     $[151] !== setValue ||
     $[152] !== setPastedContents ||
-    $[153] !== appStoreDirect ||
+    $[153] !== store ||
     $[154] !== editorMode
   ) {
-    _a = () => {
-      let queueEditIndex = appStoreDirect.getState().queueEditIndex;
+    popQueuedInput = () => {
+      let queueEditIndex = store.getState().queueEditIndex;
       if (queueEditIndex === null) {
         return false;
       }
-      let Cu = draft.value;
-      let ew = commandQueueOrDefault.getCommandQueue().filter(isRefillableInput)[queueEditIndex];
-      if (ew && !shouldPrependModeChar(ew, Cu === "")) {
+      let currentDraftValue = draft.value;
+      let queuedCommand = commandQueueOrDefault.getCommandQueue().filter(isRefillableInput)[queueEditIndex];
+      if (queuedCommand && !shouldPrependModeChar(queuedCommand, currentDraftValue === "")) {
         addNotification({
           key: "queue-pull-needs-empty-input",
           kind: "feedback",
@@ -1437,37 +1503,38 @@ function PromptComposer(props) {
           priority: "immediate",
           timeoutMs: 2000,
         });
-        $r();
+        clearQueueEditIndexAction();
         logFeatureSad("input_queue_pop_to_edit", "bash_needs_empty_draft");
         return true;
       }
-      let Wg = commandQueueOrDefault.popEditableAt(
+      let queuedInput = commandQueueOrDefault.popEditableAt(
         queueEditIndex,
-        Cu,
+        currentDraftValue,
         draft.cursorOffset,
         draft.pastedContents,
       );
-      $r();
-      if (!Wg) {
+      clearQueueEditIndexAction();
+      if (!queuedInput) {
         logFeatureSad("input_queue_pop_to_edit", "stale_index");
         return true;
       }
-      setValue(Wg.text);
-      if (Wg.unpassed) draft.markCameBack();
-      setMode(Wg.mode);
+      setValue(queuedInput.text);
+      if (queuedInput.unpassed) draft.markCameBack();
+      setMode(queuedInput.mode);
       setCursorOffset(
         editorMode && promptInputStoreFor(session).getState().vimMode === "NORMAL"
-          ? setCwdState(draft.value, Wg.cursorOffset)
-          : Wg.cursorOffset,
+          ? setCwdState(draft.value, queuedInput.cursorOffset)
+          : queuedInput.cursorOffset,
       );
-      chrome.returnIdeSelection(Wg.ideSelection);
-      if (Wg.images.length > 0) setPastedContents((g_) => mergeTurnTags(g_, Wg.images));
+      chrome.returnIdeSelection(queuedInput.ideSelection);
+      if (queuedInput.images.length > 0)
+        setPastedContents((pastedContents) => mergeTurnTags(pastedContents, queuedInput.images));
       logFeatureOk("input_queue_pop_to_edit");
       return true;
     };
     $[143] = addNotification;
     $[144] = chrome;
-    $[145] = $r;
+    $[145] = clearQueueEditIndexAction;
     $[146] = draft;
     $[147] = setMode;
     $[148] = commandQueueOrDefault;
@@ -1475,156 +1542,164 @@ function PromptComposer(props) {
     $[150] = setCursorOffset;
     $[151] = setValue;
     $[152] = setPastedContents;
-    $[153] = appStoreDirect;
+    $[153] = store;
     $[154] = editorMode;
-    $[155] = _a;
-  } else _a = $[155];
-  let fc = _a;
-  let Hx = R(null);
-  let gy = R(null);
-  let tw = R(null);
-  let Ux;
+    $[155] = popQueuedInput;
+  } else popQueuedInput = $[155];
+  let popQueuedInputStable = popQueuedInput;
+  let lastSubmittedInputRef = useRef(null);
+  let lastConfirmedAgentCommand = useRef(null);
+  let agentCommandDialog = useRef(null);
+  let cleanupAgentNoticeEffect;
   if ($[156] !== removeNotification) {
-    Ux = () => () => {
-      gy.current = null;
-      tw.current?.close();
+    cleanupAgentNoticeEffect = () => () => {
+      lastConfirmedAgentCommand.current = null;
+      agentCommandDialog.current?.close();
       removeNotification(AGENT_VIEW_COMMAND_NOTICE);
     };
     $[156] = removeNotification;
-    $[157] = Ux;
-  } else Ux = $[157];
-  let ow;
-  if ($[158] !== removeNotification || $[159] !== appState_9) {
-    ow = [appState_9, removeNotification];
+    $[157] = cleanupAgentNoticeEffect;
+  } else cleanupAgentNoticeEffect = $[157];
+  let cleanupAgentNoticeDeps;
+  if ($[158] !== removeNotification || $[159] !== tasks_2) {
+    cleanupAgentNoticeDeps = [tasks_2, removeNotification];
     $[158] = removeNotification;
-    $[159] = appState_9;
-    $[160] = ow;
-  } else ow = $[160];
-  P(Ux, ow);
-  let jg = R(false);
-  let S_;
+    $[159] = tasks_2;
+    $[160] = cleanupAgentNoticeDeps;
+  } else cleanupAgentNoticeDeps = $[160];
+  useEffect(cleanupAgentNoticeEffect, cleanupAgentNoticeDeps);
+  let submittedRecentlyRef = useRef(false);
+  let resetSubmitTracking;
   if ($[161] === MEMO_CACHE_SENTINEL) {
-    S_ = () => {
-      Hx.current = null;
-      jg.current = false;
+    resetSubmitTracking = () => {
+      lastSubmittedInputRef.current = null;
+      submittedRecentlyRef.current = false;
     };
-    $[161] = S_;
-  } else S_ = $[161];
-  let pu = S_;
-  let qx;
+    $[161] = resetSubmitTracking;
+  } else resetSubmitTracking = $[161];
+  let resetSubmitTrackingStable = resetSubmitTracking;
+  let isChordGestureSpent;
   if ($[162] !== draft.changedFromOutside || $[163] !== draft.value) {
-    qx = ($x) => {
-      if ($x === undefined && jg.current && draft.changedFromOutside) {
+    isChordGestureSpent = (inputValue) => {
+      if (inputValue === undefined && submittedRecentlyRef.current && draft.changedFromOutside) {
         return true;
       }
-      let C0 = Hx.current;
-      if (C0 === null) {
+      let lastSubmittedInput = lastSubmittedInputRef.current;
+      if (lastSubmittedInput === null) {
         return false;
       }
-      return $x === "" || $x === C0 || draft.value === "" || draft.value === C0;
+      return (
+        inputValue === "" ||
+        inputValue === lastSubmittedInput ||
+        draft.value === "" ||
+        draft.value === lastSubmittedInput
+      );
     };
     $[162] = draft.changedFromOutside;
     $[163] = draft.value;
-    $[164] = qx;
-  } else qx = $[164];
-  let Yp = qx;
-  let Vx;
+    $[164] = isChordGestureSpent;
+  } else isChordGestureSpent = $[164];
+  let chordGestureSpent = isChordGestureSpent;
+  let markSubmitted;
   if ($[165] !== clock) {
-    Vx = (RE) => {
-      Hx.current = RE;
-      jg.current = true;
-      clock.setTimeout(pu, 0);
+    markSubmitted = (submittedInput) => {
+      lastSubmittedInputRef.current = submittedInput;
+      submittedRecentlyRef.current = true;
+      clock.setTimeout(resetSubmitTrackingStable, 0);
     };
     $[165] = clock;
-    $[166] = Vx;
-  } else Vx = $[166];
-  let qg = Vx;
-  let $g;
+    $[166] = markSubmitted;
+  } else markSubmitted = $[166];
+  let markSubmittedStable = markSubmitted;
+  let markSubmittedOnly;
   if ($[167] !== clock) {
-    $g = () => {
-      jg.current = true;
-      clock.setTimeout(pu, 0);
+    markSubmittedOnly = () => {
+      submittedRecentlyRef.current = true;
+      clock.setTimeout(resetSubmitTrackingStable, 0);
     };
     $[167] = clock;
-    $[168] = $g;
-  } else $g = $[168];
-  let OS = $g;
-  let xE = R(null);
-  let nw;
+    $[168] = markSubmittedOnly;
+  } else markSubmittedOnly = $[168];
+  let markSubmittedOnlyStable = markSubmittedOnly;
+  let lastClickRef = useRef(null);
+  let noteClick;
   if ($[169] === MEMO_CACHE_SENTINEL) {
-    nw = () => {
-      let qk = {
+    noteClick = () => {
+      let clickStamp = {
         sameChunk: true,
         at: performance.now(),
       };
-      xE.current = qk;
+      lastClickRef.current = clickStamp;
       queueMicrotask(() => {
-        qk.sameChunk = false;
+        clickStamp.sameChunk = false;
       });
     };
-    $[169] = nw;
-  } else nw = $[169];
-  let PE = nw;
-  let b_;
+    $[169] = noteClick;
+  } else noteClick = $[169];
+  let noteDoubleClickCandidate = noteClick;
+  let isDoubleClick;
   if ($[170] === MEMO_CACHE_SENTINEL) {
-    b_ = () => {
-      let $k = xE.current;
-      return $k !== null && ($k.sameChunk || performance.now() - $k.at < FOOTER_DOUBLE_CLICK_MS);
+    isDoubleClick = () => {
+      let lastClick = lastClickRef.current;
+      return (
+        lastClick !== null &&
+        (lastClick.sameChunk || performance.now() - lastClick.at < FOOTER_DOUBLE_CLICK_MS)
+      );
     };
-    $[170] = b_;
-  } else b_ = $[170];
-  let Gx = b_;
-  let Md;
-  if ($[171] !== Hc || $[172] !== appStoreDirect) {
-    Md = () => {
-      let { footerSelection } = appStoreDirect.getState();
-      return footerSelection !== null && Hc.includes(footerSelection);
+    $[170] = isDoubleClick;
+  } else isDoubleClick = $[170];
+  let isDoubleClickActive = isDoubleClick;
+  let footerOwnsKey;
+  if ($[171] !== footerTabs || $[172] !== store) {
+    footerOwnsKey = () => {
+      let { footerSelection } = store.getState();
+      return footerSelection !== null && footerTabs.includes(footerSelection);
     };
-    $[171] = Hc;
-    $[172] = appStoreDirect;
-    $[173] = Md;
-  } else Md = $[173];
-  let If = Md;
-  let shadowedFooterActionHandler = useShadowedFooterActionHandler(If);
-  let w_;
+    $[171] = footerTabs;
+    $[172] = store;
+    $[173] = footerOwnsKey;
+  } else footerOwnsKey = $[173];
+  let footerOwnsKeyCheck = footerOwnsKey;
+  let shadowedFooterActionHandler = useShadowedFooterActionHandler(footerOwnsKeyCheck);
+  let clearBuffer;
   if ($[174] === MEMO_CACHE_SENTINEL) {
-    w_ = () => Xo.current?.clearBuffer();
-    $[174] = w_;
-  } else w_ = $[174];
-  let Vg = w_;
-  let [k_, Vk] = y(0);
-  let NS;
-  let Kk;
-  if ($[175] !== k_) {
-    NS = () => {
-      if (k_ === 0) {
+    clearBuffer = () => composerHandleRef.current?.clearBuffer();
+    $[174] = clearBuffer;
+  } else clearBuffer = $[174];
+  let clearBufferStable = clearBuffer;
+  let [redrawCount, setRedrawCount] = useState(0);
+  let forceRedrawEffect;
+  let redrawDeps;
+  if ($[175] !== redrawCount) {
+    forceRedrawEffect = () => {
+      if (redrawCount === 0) {
         return;
       }
       getSecondRootError().get(process.stdout)?.forceRedraw();
     };
-    Kk = [k_];
-    $[175] = k_;
-    $[176] = NS;
-    $[177] = Kk;
+    redrawDeps = [redrawCount];
+    $[175] = redrawCount;
+    $[176] = forceRedrawEffect;
+    $[177] = redrawDeps;
   } else {
-    NS = $[176];
-    Kk = $[177];
+    forceRedrawEffect = $[176];
+    redrawDeps = $[177];
   }
-  zt(NS, Kk);
-  let C_;
+  useLayoutEffect(forceRedrawEffect, redrawDeps);
+  let handleSubmitRaw;
   if (
     $[178] !== addNotification ||
     $[179] !== dialogStore ||
     $[180] !== draft ||
-    $[181] !== If ||
+    $[181] !== footerOwnsKeyCheck ||
     $[182] !== logOutcomeAtSubmission ||
     $[183] !== markAccepted ||
-    $[184] !== OS ||
+    $[184] !== markSubmittedOnlyStable ||
     $[185] !== submitToAgent ||
     $[186] !== submitEmpty ||
     $[187] !== submit_2 ||
-    $[188] !== appState_8 ||
-    $[189] !== fc ||
+    $[188] !== suggestion ||
+    $[189] !== popQueuedInputStable ||
     $[190] !== removeNotification ||
     $[191] !== scope ||
     $[192] !== session ||
@@ -1632,87 +1707,103 @@ function PromptComposer(props) {
     $[194] !== setValue ||
     $[195] !== setPastedContents ||
     $[196] !== storageV5 ||
-    $[197] !== appStoreDirect ||
-    $[198] !== _o.own ||
+    $[197] !== store ||
+    $[198] !== suggestionsStore.own ||
     $[199] !== teamContext
   ) {
-    C_ = async (Jp, T_, sw, hy, FS, lw, WS) => {
-      let ane = T_ === undefined ? false : T_;
-      let Xp = hy === undefined ? false : hy;
-      let Qx = lw === undefined ? false : lw;
-      let _0 = WS === undefined ? false : WS;
-      let ME = Jp === "";
-      let x_ = gy.current;
-      gy.current = null;
+    handleSubmitRaw = async (
+      input,
+      fromKeybinding,
+      pastedContentsOverride,
+      waitForResume,
+      keyboard,
+      inputModeOverride,
+      sendNow,
+    ) => {
+      let isFromKeybinding = fromKeybinding === undefined ? false : fromKeybinding;
+      let shouldWaitForResume = waitForResume === undefined ? false : waitForResume;
+      let shouldForcePromptMode = inputModeOverride === undefined ? false : inputModeOverride;
+      let shouldSendNow = sendNow === undefined ? false : sendNow;
+      let isInputEmpty = input === "";
+      let lastAgentCommand = lastConfirmedAgentCommand.current;
+      lastConfirmedAgentCommand.current = null;
       if (hasDraftHiddenCueDialog(dialogStore.getState())) {
         return;
       }
-      let state = appStoreDirect.getState();
-      if (isKbCohesionFixesOn() && state.queueEditIndex !== null && fc()) {
+      let state = store.getState();
+      if (isKbCohesionFixesOn() && state.queueEditIndex !== null && popQueuedInputStable()) {
         return;
       }
-      if (If()) {
+      if (footerOwnsKeyCheck()) {
         return;
       }
-      if (Gx()) {
+      if (isDoubleClickActive()) {
         return;
       }
-      let cm = expandPastedTextRefs(Jp, sw ?? draft.pastedContents);
-      if (cm.removed.removedTotal > 0) {
-        stripInvisiblePromptChars(cm.removed, "prompt");
-        let R0 = cm.input.trim() === "";
-        let P_ = skipInvisibleCharsNotice(cm.input, cm.removed, draft.mode);
-        noteLinkSuppliedEdit(session, Jp, cm.input);
-        setValue(cm.input);
-        setCursorOffset(cm.input.length);
-        if (cm.pastedContents !== draft.pastedContents) setPastedContents(cm.pastedContents);
+      let expanded = expandPastedTextRefs(input, pastedContentsOverride ?? draft.pastedContents);
+      if (expanded.removed.removedTotal > 0) {
+        stripInvisiblePromptChars(expanded.removed, "prompt");
+        let inputEmptyAfterStrip = expanded.input.trim() === "";
+        let needsReview = skipInvisibleCharsNotice(expanded.input, expanded.removed, draft.mode);
+        noteLinkSuppliedEdit(session, input, expanded.input);
+        setValue(expanded.input);
+        setCursorOffset(expanded.input.length);
+        if (expanded.pastedContents !== draft.pastedContents) setPastedContents(expanded.pastedContents);
         addNotification({
           key: "prompt-invisible-removed",
           kind: "feedback",
           text: formatInvisibleCharsRemoved(
-            cm.removed.removedTotal,
-            R0 ? "empty" : P_ ? "review" : "cleaned",
+            expanded.removed.removedTotal,
+            inputEmptyAfterStrip ? "empty" : needsReview ? "review" : "cleaned",
           ),
           priority: "immediate",
           timeoutMs: NOTIFICATION_TIMEOUT_MS,
         });
-        Vk(bumpCounter);
-        PE();
-        if (P_) {
+        setRedrawCount(bumpCounter);
+        noteDoubleClickCandidate();
+        if (needsReview) {
           return;
         }
-        Jp = cm.input;
-        sw = cm.pastedContents;
-        FS = undefined;
+        input = expanded.input;
+        pastedContentsOverride = expanded.pastedContents;
+        keyboard = undefined;
       }
-      Jp = Jp.trimEnd();
-      let UK = sw ?? draft.pastedContents;
-      let any = Object.values(UK).some(isPastedImageBlock);
-      let A_ = suggestionTextOrNull(appState_8);
-      let Zp = Jp === A_;
+      input = input.trimEnd();
+      let pastedContents_2 = pastedContentsOverride ?? draft.pastedContents;
+      let any = Object.values(pastedContents_2).some(isPastedImageBlock);
+      let suggestionText = suggestionTextOrNull(suggestion);
+      let matchesSuggestion = input === suggestionText;
       if (getAutoModeConfigOrDefault().typedMarks === true) {
-        let WK = A_ === null ? "" : stripPastedRefMarkers(expandPastedTextRefs(A_, {}).input.trimEnd());
-        let M_ = stripPastedRefMarkers(cm.input.trimEnd());
-        Zp = M_ !== "" && (M_ === WK || M_ === stripModePrefix(WK));
+        let suggestionPlainText =
+          suggestionText === null
+            ? ""
+            : stripPastedRefMarkers(expandPastedTextRefs(suggestionText, {}).input.trimEnd());
+        let inputPlainText = stripPastedRefMarkers(expanded.input.trimEnd());
+        matchesSuggestion =
+          inputPlainText !== "" &&
+          (inputPlainText === suggestionPlainText || inputPlainText === stripModePrefix(suggestionPlainText));
       }
-      let DE = Boolean(
-        Zp && A_ && appState_8.status === "accepted" && appState_8.acceptedAt > appState_8.shownAt,
+      let isSuggestionAccepted = Boolean(
+        matchesSuggestion &&
+        suggestionText &&
+        suggestion.status === "accepted" &&
+        suggestion.acceptedAt > suggestion.shownAt,
       );
-      if (Zp && A_ && !any && !state.viewingAgentTaskId) {
-        if (isShownOrAcceptedSuggestion(appState_8)) markAccepted();
+      if (matchesSuggestion && suggestionText && !any && !state.viewingAgentTaskId) {
+        if (isShownOrAcceptedSuggestion(suggestion)) markAccepted();
       }
       if (isAgentSwarmsEnabled()) {
-        let directMemberMessage = parseDirectMemberMessage(Jp);
+        let directMemberMessage = parseDirectMemberMessage(input);
         if (directMemberMessage) {
-          if (Zr.current.has(Jp)) {
+          if (sentDirectMessages.current.has(input)) {
             return;
           }
-          Zr.current.add(Jp);
-          OS();
+          sentDirectMessages.current.add(input);
+          markSubmittedOnlyStable();
           if (
             (await sendDirectMemberMessageAndNotify({
               recipientName: directMemberMessage.recipientName,
-              message: requestDialogWrapper(directMemberMessage.message, UK),
+              message: requestDialogWrapper(directMemberMessage.message, pastedContents_2),
               teamContext,
               writeToMailbox,
               storageV5,
@@ -1721,50 +1812,53 @@ function PromptComposer(props) {
                 setValue("");
                 setPastedContents({});
                 setCursorOffset(0);
-                Vg();
-                Xo.current?.resetHistory();
+                clearBufferStable();
+                composerHandleRef.current?.resetHistory();
               },
             }).finally(() => {
-              Zr.current.delete(Jp);
+              sentDirectMessages.current.delete(input);
             })) === "handled"
           ) {
             return;
           }
         }
       }
-      let jS = draft.mode === "prompt" && getActiveAgentForInput(appStoreDirect.getState()).type === "leader";
-      let VS = Jp;
-      let yy = false;
-      if (VS.trim() === "" && !any && jS) {
-        let x0 = autoResumePromptIfStale();
-        if (x0 !== null) {
-          VS = x0;
-          yy = true;
+      let isLeaderInput =
+        draft.mode === "prompt" && getActiveAgentForInput(store.getState()).type === "leader";
+      let submitText = input;
+      let resumedFromKeybinding = false;
+      if (submitText.trim() === "" && !any && isLeaderInput) {
+        let autoResumeInput = autoResumePromptIfStale();
+        if (autoResumeInput !== null) {
+          submitText = autoResumeInput;
+          resumedFromKeybinding = true;
         }
       }
-      if (VS.trim() === "" && !any) {
-        if (!(jS && ME && !Xp && submitEmpty())) logFeatureOk("prompt_submit_empty");
+      if (submitText.trim() === "" && !any) {
+        if (!(isLeaderInput && isInputEmpty && !shouldWaitForResume && submitEmpty()))
+          logFeatureOk("prompt_submit_empty");
         return;
       }
-      let { suggestions } = _o.own.getState();
-      let P0 = suggestions.length > 0 && suggestions.every(scanDirectory);
-      if (suggestions.length > 0 && !ane && !P0) {
+      let { suggestions } = suggestionsStore.own.getState();
+      let allSuggestionsScan = suggestions.length > 0 && suggestions.every(scanDirectory);
+      if (suggestions.length > 0 && !isFromKeybinding && !allSuggestionsScan) {
         logForDebugging(`[onSubmit] early return: suggestions showing (count=${suggestions.length})`);
         return;
       }
-      if (isShownOrAcceptedSuggestion(appState_8)) {
-        let jK = logOutcomeAtSubmission(Jp);
-        if (jK !== null) recordSuggestionOutcome(jK, storageV5, session.promptSuggestion);
+      if (isShownOrAcceptedSuggestion(suggestion)) {
+        let suggestionOutcome = logOutcomeAtSubmission(input);
+        if (suggestionOutcome !== null)
+          recordSuggestionOutcome(suggestionOutcome, storageV5, session.promptSuggestion);
       }
-      let slashCommand = parseSlashCommand(VS);
-      let Kg = slashCommand && findCommand(slashCommand.commandName, scope.commands);
-      let A0 = Kg?.type === "local" || Kg?.type === "local-jsx";
+      let slashCommand = parseSlashCommand(submitText);
+      let matchedCommand = slashCommand && findCommand(slashCommand.commandName, scope.commands);
+      let isLocalCommand = matchedCommand?.type === "local" || matchedCommand?.type === "local-jsx";
       if (
-        jS &&
-        !A0 &&
-        !EXIT_COMMAND_WORDS.includes(Jp.trim()) &&
+        isLeaderInput &&
+        !isLocalCommand &&
+        !EXIT_COMMAND_WORDS.includes(input.trim()) &&
         !isUnattendedBgSession() &&
-        appStoreDirect.getState().promptSuggestionEnabled &&
+        store.getState().promptSuggestionEnabled &&
         logPromptSuggestionBackOff(storageV5)
       ) {
         session.promptSuggestion.askOnNextTurn();
@@ -1776,32 +1870,32 @@ function PromptComposer(props) {
         });
       }
       removeNotification("stash-hint");
-      Xo.current?.resetHistory();
-      let activeAgentForInput = getActiveAgentForInput(appStoreDirect.getState());
+      composerHandleRef.current?.resetHistory();
+      let activeAgentForInput = getActiveAgentForInput(store.getState());
       if (activeAgentForInput.type !== "leader") {
-        if (!A0) {
+        if (!isLocalCommand) {
           logEvent("tengu_transcript_input_to_teammate", {});
-          OS();
+          markSubmittedOnlyStable();
           await submitToAgent(
-            VS,
+            submitText,
             activeAgentForInput.task,
             {
               setCursorOffset,
-              clearBuffer: Vg,
+              clearBuffer: clearBufferStable,
               resetHistory: noopResetHistory,
             },
-            sw,
+            pastedContentsOverride,
           );
           return;
         }
-        let KS =
-          slashCommand && Kg
-            ? AgentViewCommandNotice(Kg, {
+        let agentCommandNotice =
+          slashCommand && matchedCommand
+            ? AgentViewCommandNotice(matchedCommand, {
                 invokedAs: slashCommand.commandName,
                 isTeammate: activeAgentForInput.type === "viewed",
               })
             : undefined;
-        E0: switch (KS?.onSubmit) {
+        E0: switch (agentCommandNotice?.onSubmit) {
           case undefined: {
             break E0;
           }
@@ -1810,7 +1904,7 @@ function PromptComposer(props) {
             addNotification({
               key: AGENT_VIEW_COMMAND_NOTICE,
               kind: "feedback",
-              segments: KS.segments,
+              segments: agentCommandNotice.segments,
               priority: "immediate",
               exemptFromDiffPanelHold: true,
               fold: foldKeepNewest,
@@ -1820,87 +1914,95 @@ function PromptComposer(props) {
           case "confirm": {
             let taskId = activeAgentForInput.task.id;
             if (
-              isSameAgentViewCommand(x_, {
-                input: VS,
+              isSameAgentViewCommand(lastAgentCommand, {
+                input: submitText,
                 taskId,
               })
             ) {
               logEvent("tengu_agent_view_leader_command_confirmed", {});
               break E0;
             }
-            if (tw.current !== null) {
+            if (agentCommandDialog.current !== null) {
               return;
             }
             logEvent("tengu_agent_view_leader_command_notice", {});
-            let I_ = scope.localJsx.show(
+            let confirmDialog = scope.localJsx.show(
               jsxProd_default(ConfirmRemoveTag, {
-                title: KS.title,
-                confirmLabel: KS.confirmLabel,
-                onCancel: () => I_.close(),
+                title: agentCommandNotice.title,
+                confirmLabel: agentCommandNotice.confirmLabel,
+                onCancel: () => confirmDialog.close(),
                 onConfirm: () => {
-                  I_.close();
-                  gy.current = {
-                    input: VS,
+                  confirmDialog.close();
+                  lastConfirmedAgentCommand.current = {
+                    input: submitText,
                     taskId,
                   };
-                  draft.submit(VS, true);
+                  draft.submit(submitText, true);
                 },
               }),
               {
-                commandName: KS.commandName,
+                commandName: agentCommandNotice.commandName,
                 immediate: true,
                 hidesPrompt: false,
                 retireAtTurnBoundary: false,
               },
             );
-            tw.current = I_;
-            I_.closed.then(() => {
-              if (tw.current === I_) tw.current = null;
+            agentCommandDialog.current = confirmDialog;
+            confirmDialog.closed.then(() => {
+              if (agentCommandDialog.current === confirmDialog) agentCommandDialog.current = null;
             });
             return;
           }
         }
       }
-      let zk = Xo.current?.isWorkflowKeywordSuppressed() ?? false;
-      let NE = yy || Qx ? undefined : createFrozenMarker();
-      let qK =
-        zk || DE || sw || yy || Xp || FS || NE || _0 || Qx
+      let isWorkflowKeywordSuppressed = composerHandleRef.current?.isWorkflowKeywordSuppressed() ?? false;
+      let frozenMarker = resumedFromKeybinding || shouldForcePromptMode ? undefined : createFrozenMarker();
+      let submitOptions =
+        isWorkflowKeywordSuppressed ||
+        isSuggestionAccepted ||
+        pastedContentsOverride ||
+        resumedFromKeybinding ||
+        shouldWaitForResume ||
+        keyboard ||
+        frozenMarker ||
+        shouldSendNow ||
+        shouldForcePromptMode
           ? {
-              suppressWorkflowKeyword: zk || undefined,
-              inputSource: DE ? "suggestion_accepted" : undefined,
-              pastedContentsOverride: sw,
-              fromKeybinding: yy || undefined,
-              resumesStaleQuotaWait: yy || undefined,
-              wait: Xp || undefined,
-              keyboard: yy ? undefined : FS,
-              composerEnter: NE,
-              sendNow: _0 || undefined,
-              inputModeOverride: Qx ? "prompt" : undefined,
+              suppressWorkflowKeyword: isWorkflowKeywordSuppressed || undefined,
+              inputSource: isSuggestionAccepted ? "suggestion_accepted" : undefined,
+              pastedContentsOverride,
+              fromKeybinding: resumedFromKeybinding || undefined,
+              resumesStaleQuotaWait: resumedFromKeybinding || undefined,
+              wait: shouldWaitForResume || undefined,
+              keyboard: resumedFromKeybinding ? undefined : keyboard,
+              composerEnter: frozenMarker,
+              sendNow: shouldSendNow || undefined,
+              inputModeOverride: shouldForcePromptMode ? "prompt" : undefined,
             }
           : undefined;
-      OS();
+      markSubmittedOnlyStable();
       await submit_2(
-        VS,
+        submitText,
         {
           setCursorOffset,
-          clearBuffer: Vg,
+          clearBuffer: clearBufferStable,
           resetHistory: noopAfterSubmit,
         },
-        qK,
+        submitOptions,
       );
     };
     $[178] = addNotification;
     $[179] = dialogStore;
     $[180] = draft;
-    $[181] = If;
+    $[181] = footerOwnsKeyCheck;
     $[182] = logOutcomeAtSubmission;
     $[183] = markAccepted;
-    $[184] = OS;
+    $[184] = markSubmittedOnlyStable;
     $[185] = submitToAgent;
     $[186] = submitEmpty;
     $[187] = submit_2;
-    $[188] = appState_8;
-    $[189] = fc;
+    $[188] = suggestion;
+    $[189] = popQueuedInputStable;
     $[190] = removeNotification;
     $[191] = scope;
     $[192] = session;
@@ -1908,36 +2010,39 @@ function PromptComposer(props) {
     $[194] = setValue;
     $[195] = setPastedContents;
     $[196] = storageV5;
-    $[197] = appStoreDirect;
-    $[198] = _o.own;
+    $[197] = store;
+    $[198] = suggestionsStore.own;
     $[199] = teamContext;
-    $[200] = C_;
-  } else C_ = $[200];
-  let Tc = C_;
-  let T_;
-  let hy;
-  if ($[201] !== draft || $[202] !== Tc) {
-    T_ = () => draft.onSubmitRequest(($K, VK) => void Tc($K, VK));
-    hy = [draft, Tc];
+    $[200] = handleSubmitRaw;
+  } else handleSubmitRaw = $[200];
+  let handleSubmit = handleSubmitRaw;
+  let submitRequestHandler;
+  let submitDeps;
+  if ($[201] !== draft || $[202] !== handleSubmit) {
+    submitRequestHandler = () =>
+      draft.onSubmitRequest(
+        (requestInput, requestOptions) => void handleSubmit(requestInput, requestOptions),
+      );
+    submitDeps = [draft, handleSubmit];
     $[201] = draft;
-    $[202] = Tc;
-    $[203] = T_;
-    $[204] = hy;
+    $[202] = handleSubmit;
+    $[203] = submitRequestHandler;
+    $[204] = submitDeps;
   } else {
-    T_ = $[203];
-    hy = $[204];
+    submitRequestHandler = $[203];
+    submitDeps = $[204];
   }
-  zt(T_, hy);
-  let lw;
-  if ($[205] !== Tc || $[206] !== setPastedContents) {
-    lw = (D0) => {
-      setPastedContents(D0.pastedContents);
-      Tc(D0.display, false, D0.pastedContents);
+  useLayoutEffect(submitRequestHandler, submitDeps);
+  let historySubmitHandler;
+  if ($[205] !== handleSubmit || $[206] !== setPastedContents) {
+    historySubmitHandler = (historyEntry) => {
+      setPastedContents(historyEntry.pastedContents);
+      handleSubmit(historyEntry.display, false, historyEntry.pastedContents);
     };
-    $[205] = Tc;
+    $[205] = handleSubmit;
     $[206] = setPastedContents;
-    $[207] = lw;
-  } else lw = $[207];
+    $[207] = historySubmitHandler;
+  } else historySubmitHandler = $[207];
   let {
     isSearching,
     historyQuery,
@@ -1946,99 +2051,102 @@ function PromptComposer(props) {
     historyFailedMatch,
     handleKeyDown,
     openSearch,
-  } = useHistorySearch(draft, lw);
-  let Qm = isSearching || $n;
-  let WS;
-  let j0;
-  if ($[208] !== draft || $[209] !== Qm) {
-    WS = () => {
-      draft.setInputOverlayActive(Qm);
+  } = useHistorySearch(draft, historySubmitHandler);
+  let isOverlayOpen = isSearching || isHelpOpen;
+  let overlayEffect;
+  let overlayDeps;
+  if ($[208] !== draft || $[209] !== isOverlayOpen) {
+    overlayEffect = () => {
+      draft.setInputOverlayActive(isOverlayOpen);
       return () => draft.setInputOverlayActive(false);
     };
-    j0 = [Qm, draft];
+    overlayDeps = [isOverlayOpen, draft];
     $[208] = draft;
-    $[209] = Qm;
-    $[210] = WS;
-    $[211] = j0;
+    $[209] = isOverlayOpen;
+    $[210] = overlayEffect;
+    $[211] = overlayDeps;
   } else {
-    WS = $[210];
-    j0 = $[211];
+    overlayEffect = $[210];
+    overlayDeps = $[211];
   }
-  P(WS, j0);
-  let uw;
+  useEffect(overlayEffect, overlayDeps);
+  let inputOwnsEscape;
   if (
     $[212] !== storeSelector_3 ||
-    $[213] !== Qm ||
-    $[214] !== wn ||
+    $[213] !== isOverlayOpen ||
+    $[214] !== isVimEditing ||
     $[215] !== storeSelector_4 ||
     $[216] !== appState_2 ||
     $[217] !== commandQueue
   ) {
-    uw =
-      wn ||
-      Qm ||
+    inputOwnsEscape =
+      isVimEditing ||
+      isOverlayOpen ||
       storeSelector_4 !== "prompt" ||
       appState_2 !== null ||
-      (!isKbCohesionFixesOn() && commandQueue.some((lne) => shouldPrependModeChar(lne, storeSelector_3)));
+      (!isKbCohesionFixesOn() &&
+        commandQueue.some((queuedCommand_2) => shouldPrependModeChar(queuedCommand_2, storeSelector_3)));
     $[212] = storeSelector_3;
-    $[213] = Qm;
-    $[214] = wn;
+    $[213] = isOverlayOpen;
+    $[214] = isVimEditing;
     $[215] = storeSelector_4;
     $[216] = appState_2;
     $[217] = commandQueue;
-    $[218] = uw;
-  } else uw = $[218];
-  let Xx = uw;
-  let KK;
-  let GK;
-  if ($[219] !== draft || $[220] !== Xx) {
-    KK = () => {
-      draft.setInputOwnsEscape(Xx);
+    $[218] = inputOwnsEscape;
+  } else inputOwnsEscape = $[218];
+  let inputOwnsEscapeFlag = inputOwnsEscape;
+  let escapeOwnershipEffect;
+  let escapeOwnershipDeps;
+  if ($[219] !== draft || $[220] !== inputOwnsEscapeFlag) {
+    escapeOwnershipEffect = () => {
+      draft.setInputOwnsEscape(inputOwnsEscapeFlag);
       return () => draft.setInputOwnsEscape(false);
     };
-    GK = [Xx, draft];
+    escapeOwnershipDeps = [inputOwnsEscapeFlag, draft];
     $[219] = draft;
-    $[220] = Xx;
-    $[221] = KK;
-    $[222] = GK;
+    $[220] = inputOwnsEscapeFlag;
+    $[221] = escapeOwnershipEffect;
+    $[222] = escapeOwnershipDeps;
   } else {
-    KK = $[221];
-    GK = $[222];
+    escapeOwnershipEffect = $[221];
+    escapeOwnershipDeps = $[222];
   }
-  P(KK, GK);
-  let storeSelector_8 = useStoreSelector(_o.drawn, hasSuggestions);
-  let storeSelector_9 = useStoreSelector(_o, hasSuggestions);
-  let Jk;
+  useEffect(escapeOwnershipEffect, escapeOwnershipDeps);
+  let storeSelector_8 = useStoreSelector(suggestionsStore.drawn, hasSuggestions);
+  let storeSelector_9 = useStoreSelector(suggestionsStore, hasSuggestions);
+  let onSelectSuggestionImpl;
   if ($[223] === MEMO_CACHE_SENTINEL) {
-    Jk = (HE, UE) => Xo.current?.selectSuggestion(HE, UE);
-    $[223] = Jk;
-  } else Jk = $[223];
-  let onSelectSuggestion = Jk;
-  let V0;
+    onSelectSuggestionImpl = (suggestionIndex, hovered) =>
+      composerHandleRef.current?.selectSuggestion(suggestionIndex, hovered);
+    $[223] = onSelectSuggestionImpl;
+  } else onSelectSuggestionImpl = $[223];
+  let onSelectSuggestion = onSelectSuggestionImpl;
+  let onHoverSuggestionImpl;
   if ($[224] === MEMO_CACHE_SENTINEL) {
-    V0 = (Zx) => Xo.current?.setHoveredSuggestion(Zx);
-    $[224] = V0;
-  } else V0 = $[224];
-  let onHoverSuggestion = V0;
-  let JS;
+    onHoverSuggestionImpl = (suggestionIndex) =>
+      composerHandleRef.current?.setHoveredSuggestion(suggestionIndex);
+    $[224] = onHoverSuggestionImpl;
+  } else onHoverSuggestionImpl = $[224];
+  let onHoverSuggestion = onHoverSuggestionImpl;
+  let emptyArray;
   if ($[225] === MEMO_CACHE_SENTINEL) {
-    JS = [];
-    $[225] = JS;
-  } else JS = $[225];
-  let Sy = R(JS);
-  let XS;
+    emptyArray = [];
+    $[225] = emptyArray;
+  } else emptyArray = $[225];
+  let pendingPastes = useRef(emptyArray);
+  let takePendingPastesImpl;
   if ($[226] === MEMO_CACHE_SENTINEL) {
-    XS = () => Sy.current.splice(0);
-    $[226] = XS;
-  } else XS = $[226];
-  let takePendingPastes = XS;
-  let onKeyDown = function hw(event) {
+    takePendingPastesImpl = () => pendingPastes.current.splice(0);
+    $[226] = takePendingPastesImpl;
+  } else takePendingPastesImpl = $[226];
+  let takePendingPastes = takePendingPastesImpl;
+  let onKeyDown = function onKeyDown(event) {
     useComposerEscape(event, {
       draft,
       vimEnabled: editorMode,
       vimMode,
-      helpOpen: $n,
-      setHelpOpen: on,
+      helpOpen: isHelpOpen,
+      setHelpOpen,
     });
     if (event.ctrl || event.meta) {
       return;
@@ -2046,67 +2154,68 @@ function PromptComposer(props) {
     if (editorMode && vimMode === "NORMAL") {
       if (event.key === "j") {
         event.preventDefault();
-        return Qg();
+        return moveFooterDown();
       }
       if (event.key === "k") {
         event.preventDefault();
-        return ag();
+        return moveFooterUp();
       }
       if (event.key === "l") {
         event.preventDefault();
-        return O_();
+        return footerNext();
       }
       if (event.key === "h") {
         event.preventDefault();
-        return lg();
+        return footerPrevious();
       }
     }
     if (event.key.length > PASTE_THRESHOLD) {
       event.preventDefault();
-      gw(event.key);
+      queuePaste(event.key);
       return;
     }
-    let N_ = [...event.key].length === 1;
+    let isSingleChar = [...event.key].length === 1;
     let normalized = event.key.normalize("NFC");
     let sliced = draft.value.slice(0, draft.cursorOffset);
-    let QK =
-      !N_ &&
+    let shouldTypeText =
+      !isSingleChar &&
       event.name === "" &&
       event.key !== "" &&
       (!editorMode || (vimMode === "INSERT" && !getInsertModeEscapeRemaps().has(normalized))) &&
       draft.value === draft.value.normalize("NFC") &&
       (sliced + normalized).normalize("NFC").length === sliced.length + normalized.length;
-    if (N_ || QK) {
+    if (isSingleChar || shouldTypeText) {
       event.preventDefault();
       if (event.key === "?" && draft.value === "") {
-        Pc();
+        toggleHelpStable();
         return;
       }
-      Xo.current?.typeText(normalized);
+      composerHandleRef.current?.typeText(normalized);
     }
   };
-  function gw(zK) {
-    Sy.current.push(zK);
-    setAppState(clearFooterSelectionState);
+  function queuePaste(pastedText) {
+    pendingPastes.current.push(pastedText);
+    setShowState(clearFooterSelectionState);
   }
-  let WE = storeSelector_4 === "prompt" && !storeSelector_8 && suggestion && !appState_9;
-  if (WE) markShown();
-  if (appState_8.status === "generated" && !suggestion && !appState_9) {
+  let shouldMarkSuggestionShown =
+    storeSelector_4 === "prompt" && !storeSelector_8 && suggestion_2 && !tasks_2;
+  if (shouldMarkSuggestionShown) markShown();
+  if (suggestion.status === "generated" && !suggestion_2 && !tasks_2) {
     logSuggestionSuppressed("timing");
-    setAppState(clearPromptSuggestion);
+    setShowState(clearPromptSuggestion);
   }
   queryTerminalBackground();
-  let iP;
+  let clearScreen;
   if ($[227] === MEMO_CACHE_SENTINEL) {
-    iP = () => {
-      Vk(bumpRetryCount);
+    clearScreen = () => {
+      setRedrawCount(bumpRetryCount);
     };
-    $[227] = iP;
-  } else iP = $[227];
-  let L_ = iP;
-  let jE;
+    $[227] = clearScreen;
+  } else clearScreen = $[227];
+  let clearScreenStable = clearScreen;
+  let showRemoteSwitchNotice;
   if ($[228] !== addNotification) {
-    jE = () => {
+    showRemoteSwitchNotice = () => {
       if (!isRemoteSessionAvailable()) {
         return false;
       }
@@ -2119,21 +2228,26 @@ function PromptComposer(props) {
       return true;
     };
     $[228] = addNotification;
-    $[229] = jE;
-  } else jE = $[229];
-  let Sw = jE;
-  let $E;
+    $[229] = showRemoteSwitchNotice;
+  } else showRemoteSwitchNotice = $[229];
+  let remoteSwitchNotice = showRemoteSwitchNotice;
+  let openModelPicker;
   if (
     $[230] !== addNotification ||
     $[231] !== storeSelector_6 ||
     $[232] !== storeSelector_5 ||
     $[233] !== storeSelector_4 ||
     $[234] !== submit_2 ||
-    $[235] !== on
+    $[235] !== setHelpOpen
   ) {
-    $E = () => {
+    openModelPicker = () => {
       if (isRemoteSessionAvailable()) {
-        if (storeSelector_5 || storeSelector_6 || storeSelector_4 !== "prompt" || tl.current) {
+        if (
+          storeSelector_5 ||
+          storeSelector_6 ||
+          storeSelector_4 !== "prompt" ||
+          isModelSwitchPendingRef.current
+        ) {
           addNotification({
             key: "remote-model-picker-unavailable",
             kind: "feedback",
@@ -2142,48 +2256,53 @@ function PromptComposer(props) {
           });
           return;
         }
-        tl.current = true;
+        isModelSwitchPendingRef.current = true;
         submit_2("/model", NOOP_HELPERS, {
           fromKeybinding: true,
           inputModeOverride: "prompt",
         }).finally(() => {
-          tl.current = false;
+          isModelSwitchPendingRef.current = false;
         });
         return;
       }
-      Ya(toggleFlag);
-      on(false);
+      setModelPickerOpen(toggleFlag);
+      setHelpOpen(false);
     };
     $[230] = addNotification;
     $[231] = storeSelector_6;
     $[232] = storeSelector_5;
     $[233] = storeSelector_4;
     $[234] = submit_2;
-    $[235] = on;
-    $[236] = $E;
-  } else $E = $[236];
-  let K0 = $E;
-  let Q0;
-  if ($[237] !== Sw || $[238] !== on) {
-    Q0 = () => {
-      if (!isRemoteControlChannelAvailable() && Sw()) {
+    $[235] = setHelpOpen;
+    $[236] = openModelPicker;
+  } else openModelPicker = $[236];
+  let openModelPickerStable = openModelPicker;
+  let toggleFastMode;
+  if ($[237] !== remoteSwitchNotice || $[238] !== setHelpOpen) {
+    toggleFastMode = () => {
+      if (!isRemoteControlChannelAvailable() && remoteSwitchNotice()) {
         return;
       }
-      ga(unavailableReasonState);
-      on(false);
+      setFastModePickerState(unavailableReasonState);
+      setHelpOpen(false);
     };
-    $[237] = Sw;
-    $[238] = on;
-    $[239] = Q0;
-  } else Q0 = $[239];
-  let lP = Q0;
-  let VE;
-  if ($[240] !== addNotification || $[241] !== mainLoopModel || $[242] !== Sw || $[243] !== on) {
-    VE = () => {
-      if (!isRemoteControlChannelAvailable() && Sw()) {
+    $[237] = remoteSwitchNotice;
+    $[238] = setHelpOpen;
+    $[239] = toggleFastMode;
+  } else toggleFastMode = $[239];
+  let toggleFastModeStable = toggleFastMode;
+  let toggleThinking;
+  if (
+    $[240] !== addNotification ||
+    $[241] !== mainLoopModel ||
+    $[242] !== remoteSwitchNotice ||
+    $[243] !== setHelpOpen
+  ) {
+    toggleThinking = () => {
+      if (!isRemoteControlChannelAvailable() && remoteSwitchNotice()) {
         return;
       }
-      on(false);
+      setHelpOpen(false);
       let thinkingCannotBeDisabledMessage = getThinkingCannotBeDisabledMessage(mainLoopModel);
       if (thinkingCannotBeDisabledMessage !== undefined) {
         addNotification({
@@ -2194,61 +2313,61 @@ function PromptComposer(props) {
         });
         return;
       }
-      rg(negateBoolean_2);
+      setThinkingToggleOpen(negateBoolean_2);
     };
     $[240] = addNotification;
     $[241] = mainLoopModel;
-    $[242] = Sw;
-    $[243] = on;
-    $[244] = VE;
-  } else VE = $[244];
-  let GE = VE;
-  let PAt = (cne) => {
+    $[242] = remoteSwitchNotice;
+    $[243] = setHelpOpen;
+    $[244] = toggleThinking;
+  } else toggleThinking = $[244];
+  let toggleThinkingStable = toggleThinking;
+  let cycleAttentionBudget = (delta) => {
     if (getRemoteCaps() || isRemoteSessionAvailable()) {
       return;
     }
-    let attentionBudget = appStoreDirect.getState().attentionBudget;
-    let z0 = stepStatusLineWidth(attentionBudget, cne);
-    if (z0 === attentionBudget) {
+    let attentionBudget = store.getState().attentionBudget;
+    let nextBudget = stepStatusLineWidth(attentionBudget, delta);
+    if (nextBudget === attentionBudget) {
       return;
     }
-    setAppState((J0) =>
-      J0.attentionBudget === z0
-        ? J0
+    setShowState((prevState) =>
+      prevState.attentionBudget === nextBudget
+        ? prevState
         : {
-            ...J0,
-            attentionBudget: z0,
+            ...prevState,
+            attentionBudget: nextBudget,
           },
     );
     logEvent("tengu_attention_budget_cycle", {
-      to: fromEnum(z0),
+      to: fromEnum(nextBudget),
     });
     logFeatureOk("attention_budget");
   };
-  let X0;
+  let cycleMode;
   if (
     $[245] !== addNotification ||
     $[246] !== session ||
-    $[247] !== setAppState ||
-    $[248] !== on ||
+    $[247] !== setShowState ||
+    $[248] !== setHelpOpen ||
     $[249] !== storeSelector_7 ||
     $[250] !== storageV5 ||
-    $[251] !== appStoreDirect ||
-    $[252] !== setVoiceState ||
+    $[251] !== store ||
+    $[252] !== taskStore ||
     $[253] !== teamContext ||
     $[254] !== turn
   ) {
-    X0 = (bw) => {
-      let toolPermissionContext = appStoreDirect.getState().toolPermissionContext;
-      $a(false);
-      pr(dismissShowFlag);
-      let YK = isViewingTeammate(appStoreDirect.getState())
-        ? getViewedTeammateTask_2_2(appStoreDirect.getState())
+    cycleMode = (cycleSource) => {
+      let toolPermissionContext = store.getState().toolPermissionContext;
+      setShowExpandPasteHint(false);
+      setExitMessage(dismissShowFlag);
+      let viewedTask = isViewingTeammate(store.getState())
+        ? getViewedTeammateTask_2_2(store.getState())
         : undefined;
-      if (YK) {
+      if (viewedTask) {
         let context = {
           ...toolPermissionContext,
-          mode: YK.permissionMode,
+          mode: viewedTask.permissionMode,
         };
         let nextPermissionMode = getNextPermissionMode_2(context, undefined);
         logEvent("tengu_mode_cycle", {
@@ -2256,41 +2375,41 @@ function PromptComposer(props) {
           trigger: fromEnum("shift_tab"),
         });
         logFeatureOk("mode_switch");
-        let id = YK.id;
-        setAppState((Zk) => {
-          let Z0 = Zk.tasks[id];
-          if (!Z0 || Z0.type !== "in_process_teammate") {
-            return Zk;
+        let id = viewedTask.id;
+        setShowState((prevState) => {
+          let task = prevState.tasks[id];
+          if (!task || task.type !== "in_process_teammate") {
+            return prevState;
           }
-          if (Z0.permissionMode === nextPermissionMode) {
-            return Zk;
+          if (task.permissionMode === nextPermissionMode) {
+            return prevState;
           }
           return {
-            ...Zk,
+            ...prevState,
             tasks: {
-              ...Zk.tasks,
+              ...prevState.tasks,
               [id]: {
-                ...Z0,
+                ...task,
                 permissionMode: nextPermissionMode,
                 planHeldAfterSpawn: nextPermissionMode === "plan",
               },
             },
           };
         });
-        if (nextPermissionMode !== "plan") exitTeammatePlanMode(id, setVoiceState);
-        on(false);
+        if (nextPermissionMode !== "plan") exitTeammatePlanMode(id, taskStore);
+        setHelpOpen(false);
         return;
       }
-      let ev = null ? null.currentMode : toolPermissionContext.mode;
+      let currentMode = null ? null.currentMode : toolPermissionContext.mode;
       logForDebugging(
-        `[auto-mode] handleCycleMode: currentMode=${ev} isAutoModeAvailable=${toolPermissionContext.isAutoModeAvailable}`,
+        `[auto-mode] handleCycleMode: currentMode=${currentMode} isAutoModeAvailable=${toolPermissionContext.isAutoModeAvailable}`,
       );
       let mode = null ? null.nextMode : (null ?? getNextPermissionMode_2(toolPermissionContext, teamContext));
-      if ((null || false) && mode === ev) {
-        on(false);
+      if ((null || false) && mode === currentMode) {
+        setHelpOpen(false);
         return;
       }
-      if (mode === ev) {
+      if (mode === currentMode) {
         logFeatureBad("mode_switch", "no_other_modes");
         if (isRemoteSessionAvailable())
           addNotification({
@@ -2300,15 +2419,15 @@ function PromptComposer(props) {
             row1Hint: "no other modes in cloud",
             priority: "medium",
           });
-        on(false);
+        setHelpOpen(false);
         return;
       }
-      if (storeSelector_7 && ev === "auto") turn.dismissEnvOnboardingOffer();
+      if (storeSelector_7 && currentMode === "auto") turn.dismissEnvOnboardingOffer();
       let { context } =
         null ??
         (false
           ? {
-              context: transitionPermissionMode(ev, null, toolPermissionContext, "shift_tab"),
+              context: transitionPermissionMode(currentMode, null, toolPermissionContext, "shift_tab"),
             }
           : cyclePermissionMode(toolPermissionContext, teamContext, "shift_tab"));
       announce(`[${permissionModeIndicator(mode)} on]`);
@@ -2318,98 +2437,104 @@ function PromptComposer(props) {
       });
       if (!isRemoteControlChannelAvailable()) logFeatureOk("mode_switch");
       if (mode === "plan") logFeatureOk("mode_plan_enter");
-      else if (ev === "plan") logFeatureOk("mode_plan_exit");
+      else if (currentMode === "plan") logFeatureOk("mode_plan_exit");
       if (mode === "auto") logFeatureOk("mode_auto_enter");
-      if (mode === "plan" && (bw.kind === "carousel" || bw.selection.mode === "plan")) {
+      if (mode === "plan" && (cycleSource.kind === "carousel" || cycleSource.selection.mode === "plan")) {
         let now = Date.now();
-        saveGlobalConfig((mne) => touchPlanModeUse(mne, now), storageV5);
+        saveGlobalConfig((config) => touchPlanModeUse(config, now), storageV5);
       }
       tabCycleState.of(session.host).cycled = true;
-      setToolPermissionContextAndNotify(setAppState, {
+      setToolPermissionContextAndNotify(setShowState, {
         ...context,
         mode,
       });
-      Gn.current = Gn.current.then(() => syncTeammateMode(mode, teamContext?.teamName, storageV5));
-      on(false);
+      pendingModeSync.current = pendingModeSync.current.then(() =>
+        syncTeammateMode(mode, teamContext?.teamName, storageV5),
+      );
+      setHelpOpen(false);
     };
     $[245] = addNotification;
     $[246] = session;
-    $[247] = setAppState;
-    $[248] = on;
+    $[247] = setShowState;
+    $[248] = setHelpOpen;
     $[249] = storeSelector_7;
     $[250] = storageV5;
-    $[251] = appStoreDirect;
-    $[252] = setVoiceState;
+    $[251] = store;
+    $[252] = taskStore;
     $[253] = teamContext;
     $[254] = turn;
-    $[255] = X0;
-  } else X0 = $[255];
-  let mm = X0;
-  let AAt = noopOnConfirm;
-  let pne;
-  if ($[256] !== Dn || $[257] !== mm || $[258] !== cn) {
-    pne = () => {
-      let JE = Dn();
-      if (JE === null) {
+    $[255] = cycleMode;
+  } else cycleMode = $[255];
+  let cycleModeStable = cycleMode;
+  let onConfirmPlaceholder = noopOnConfirm;
+  let acceptCarouselSelection;
+  if (
+    $[256] !== takePendingEnterSelection ||
+    $[257] !== cycleModeStable ||
+    $[258] !== setPendingEnterSelection
+  ) {
+    acceptCarouselSelection = () => {
+      let carouselSelection = takePendingEnterSelection();
+      if (carouselSelection === null) {
         return false;
       }
-      cn(null);
-      mm({
+      setPendingEnterSelection(null);
+      cycleModeStable({
         kind: "select",
-        selection: JE,
+        selection: carouselSelection,
       });
       return true;
     };
-    $[256] = Dn;
-    $[257] = mm;
-    $[258] = cn;
-    $[259] = pne;
-  } else pne = $[259];
-  let ZE = pne;
+    $[256] = takePendingEnterSelection;
+    $[257] = cycleModeStable;
+    $[258] = setPendingEnterSelection;
+    $[259] = acceptCarouselSelection;
+  } else acceptCarouselSelection = $[259];
+  let acceptCarouselSelectionStable = acceptCarouselSelection;
   let takeEnter = returnFalse;
-  let hne;
-  if ($[260] !== setAppState || $[261] !== turn) {
-    hne = () => {
+  let acceptEnvOnboarding;
+  if ($[260] !== setShowState || $[261] !== turn) {
+    acceptEnvOnboarding = () => {
       setAutoModeEnvOnboardingEligible(false);
       turn.dismissEnvOnboardingOffer();
       if (!isAutoModeSetupNotOverridden()) {
         return;
       }
-      setAppState(withAutoModeSetupMessage);
+      setShowState(withAutoModeSetupMessage);
     };
-    $[260] = setAppState;
+    $[260] = setShowState;
     $[261] = turn;
-    $[262] = hne;
-  } else hne = $[262];
-  let onAccept = hne;
-  let oNe;
+    $[262] = acceptEnvOnboarding;
+  } else acceptEnvOnboarding = $[262];
+  let onAccept = acceptEnvOnboarding;
+  let dismissEnvOnboarding;
   if ($[263] !== turn) {
-    oNe = () => {
+    dismissEnvOnboarding = () => {
       setAutoModeEnvOnboardingEligible(false);
       turn.dismissEnvOnboardingOffer();
     };
     $[263] = turn;
-    $[264] = oNe;
-  } else oNe = $[264];
-  let eG = oNe;
+    $[264] = dismissEnvOnboarding;
+  } else dismissEnvOnboarding = $[264];
+  let dismissEnvOnboardingStable = dismissEnvOnboarding;
   let keybindingContext = useKeybindingContext();
-  let yne;
+  let registerSubmitHandler;
   if (
-    $[265] !== Yp ||
+    $[265] !== chordGestureSpent ||
     $[266] !== draft.typedOnly ||
     $[267] !== draft.value ||
     $[268] !== shadowedFooterActionHandler ||
-    $[269] !== Go ||
+    $[269] !== isModalOverlayActive ||
     $[270] !== isSearching ||
     $[271] !== keybindingContext ||
-    $[272] !== qg ||
-    $[273] !== Tc
+    $[272] !== markSubmittedStable ||
+    $[273] !== handleSubmit
   ) {
-    yne = () => {
-      if (!keybindingContext || Go || isSearching) {
+    registerSubmitHandler = () => {
+      if (!keybindingContext || isModalOverlayActive || isSearching) {
         return;
       }
-      let MAt =
+      let isEnterSingleKey =
         getSingleKeyAction(parseKeystroke("enter"), "Chat", keybindingContext.bindings) === "chat:submit";
       return keybindingContext.registerHandler({
         action: "chat:submit",
@@ -2418,252 +2543,281 @@ function PromptComposer(props) {
           if (shadowedFooterActionHandler("chat:submit")) {
             return false;
           }
-          if (Yp(undefined)) {
+          if (chordGestureSpent(undefined)) {
             return;
           }
-          let eB = draft.value;
-          qg(eB);
-          Tc(eB, false, undefined, false, draft.typedOnly ? createFrozenEmpty() : undefined);
+          let inputValue = draft.value;
+          markSubmittedStable(inputValue);
+          handleSubmit(
+            inputValue,
+            false,
+            undefined,
+            false,
+            draft.typedOnly ? createFrozenEmpty() : undefined,
+          );
         },
-        singleKey: !MAt,
+        singleKey: !isEnterSingleKey,
       });
     };
-    $[265] = Yp;
+    $[265] = chordGestureSpent;
     $[266] = draft.typedOnly;
     $[267] = draft.value;
     $[268] = shadowedFooterActionHandler;
-    $[269] = Go;
+    $[269] = isModalOverlayActive;
     $[270] = isSearching;
     $[271] = keybindingContext;
-    $[272] = qg;
-    $[273] = Tc;
-    $[274] = yne;
-  } else yne = $[274];
-  let oD;
+    $[272] = markSubmittedStable;
+    $[273] = handleSubmit;
+    $[274] = registerSubmitHandler;
+  } else registerSubmitHandler = $[274];
+  let submitHandlerDeps;
   if (
-    $[275] !== Yp ||
-    $[276] !== ZE ||
+    $[275] !== chordGestureSpent ||
+    $[276] !== acceptCarouselSelectionStable ||
     $[277] !== draft ||
     $[278] !== shadowedFooterActionHandler ||
-    $[279] !== Go ||
+    $[279] !== isModalOverlayActive ||
     $[280] !== isSearching ||
     $[281] !== keybindingContext ||
-    $[282] !== qg ||
-    $[283] !== Tc
+    $[282] !== markSubmittedStable ||
+    $[283] !== handleSubmit
   ) {
-    oD = [keybindingContext, Go, isSearching, draft, shadowedFooterActionHandler, ZE, Yp, qg, Tc];
-    $[275] = Yp;
-    $[276] = ZE;
+    submitHandlerDeps = [
+      keybindingContext,
+      isModalOverlayActive,
+      isSearching,
+      draft,
+      shadowedFooterActionHandler,
+      acceptCarouselSelectionStable,
+      chordGestureSpent,
+      markSubmittedStable,
+      handleSubmit,
+    ];
+    $[275] = chordGestureSpent;
+    $[276] = acceptCarouselSelectionStable;
     $[277] = draft;
     $[278] = shadowedFooterActionHandler;
-    $[279] = Go;
+    $[279] = isModalOverlayActive;
     $[280] = isSearching;
     $[281] = keybindingContext;
-    $[282] = qg;
-    $[283] = Tc;
-    $[284] = oD;
-  } else oD = $[284];
-  P(yne, oD);
-  let nNe;
-  if ($[285] !== Yp || $[286] !== draft.value || $[287] !== qg || $[288] !== Tc) {
-    nNe = () => {
-      if (Yp(undefined)) {
+    $[282] = markSubmittedStable;
+    $[283] = handleSubmit;
+    $[284] = submitHandlerDeps;
+  } else submitHandlerDeps = $[284];
+  useEffect(registerSubmitHandler, submitHandlerDeps);
+  let queueSubmitHandler;
+  if (
+    $[285] !== chordGestureSpent ||
+    $[286] !== draft.value ||
+    $[287] !== markSubmittedStable ||
+    $[288] !== handleSubmit
+  ) {
+    queueSubmitHandler = () => {
+      if (chordGestureSpent(undefined)) {
         return;
       }
-      let iNe = draft.value;
-      qg(iNe);
-      Tc(iNe, true, undefined, true);
+      let inputValue = draft.value;
+      markSubmittedStable(inputValue);
+      handleSubmit(inputValue, true, undefined, true);
     };
-    $[285] = Yp;
+    $[285] = chordGestureSpent;
     $[286] = draft.value;
-    $[287] = qg;
-    $[288] = Tc;
-    $[289] = nNe;
-  } else nNe = $[289];
-  let tG = nNe;
+    $[287] = markSubmittedStable;
+    $[288] = handleSubmit;
+    $[289] = queueSubmitHandler;
+  } else queueSubmitHandler = $[289];
+  let queueSubmit = queueSubmitHandler;
   let sendQueuedNow = submit.sendQueuedNow;
-  let Sne;
+  let sendNowHandler;
   if (
-    $[290] !== Yp ||
+    $[290] !== chordGestureSpent ||
     $[291] !== draft.mode ||
     $[292] !== draft.pastedContents ||
     $[293] !== draft.value ||
-    $[294] !== qg ||
-    $[295] !== Tc ||
+    $[294] !== markSubmittedStable ||
+    $[295] !== handleSubmit ||
     $[296] !== sendQueuedNow ||
-    $[297] !== appStoreDirect ||
+    $[297] !== store ||
     $[298] !== turn
   ) {
-    Sne = () => {
-      if (Yp(undefined)) {
+    sendNowHandler = () => {
+      if (chordGestureSpent(undefined)) {
         return;
       }
-      let nG = draft.value;
-      let bne = nG.trim() !== "" || Object.values(draft.pastedContents).some(isImagePasteBlock);
+      let inputValue = draft.value;
+      let hasSubmitContent =
+        inputValue.trim() !== "" || Object.values(draft.pastedContents).some(isImagePasteBlock);
       let mode = draft.mode;
-      let activeAgentForInput = getActiveAgentForInput(appStoreDirect.getState());
+      let activeAgentForInput = getActiveAgentForInput(store.getState());
       let id = activeAgentForInput.type === "named_agent" ? activeAgentForInput.task.id : undefined;
-      let nD = mode === "prompt" && activeAgentForInput.type === "leader";
-      let iG = mode === "prompt" && id !== undefined;
-      if (!bne || appStoreDirect.getState().queueEditIndex !== null) {
-        if (nD || iG) sendQueuedNow(mode, id);
+      let isLeaderPromptMode = mode === "prompt" && activeAgentForInput.type === "leader";
+      let isNamedAgentPromptMode = mode === "prompt" && id !== undefined;
+      if (!hasSubmitContent || store.getState().queueEditIndex !== null) {
+        if (isLeaderPromptMode || isNamedAgentPromptMode) sendQueuedNow(mode, id);
         return;
       }
       let abortController = turn.getSnapshot().abortController;
-      qg(nG);
-      Tc(nG, true, undefined, false, undefined, false, true)
+      markSubmittedStable(inputValue);
+      handleSubmit(inputValue, true, undefined, false, undefined, false, true)
         .then(() => {
-          let dG = abortController !== null && turn.getSnapshot().abortController === abortController;
-          if ((nD && dG) || iG) sendQueuedNow(mode, id);
+          let requestAborted =
+            abortController !== null && turn.getSnapshot().abortController === abortController;
+          if ((isLeaderPromptMode && requestAborted) || isNamedAgentPromptMode) sendQueuedNow(mode, id);
         })
         .catch(logError);
     };
-    $[290] = Yp;
+    $[290] = chordGestureSpent;
     $[291] = draft.mode;
     $[292] = draft.pastedContents;
     $[293] = draft.value;
-    $[294] = qg;
-    $[295] = Tc;
+    $[294] = markSubmittedStable;
+    $[295] = handleSubmit;
     $[296] = sendQueuedNow;
-    $[297] = appStoreDirect;
+    $[297] = store;
     $[298] = turn;
-    $[299] = Sne;
-  } else Sne = $[299];
-  let cG = Sne;
-  let sB;
-  if ($[300] !== mm) {
-    sB = () =>
-      mm({
+    $[299] = sendNowHandler;
+  } else sendNowHandler = $[299];
+  let sendNowAction = sendNowHandler;
+  let cycleModeAction;
+  if ($[300] !== cycleModeStable) {
+    cycleModeAction = () =>
+      cycleModeStable({
         kind: "carousel",
       });
-    $[300] = mm;
-    $[301] = sB;
-  } else sB = $[301];
-  let kne;
-  let vne;
+    $[300] = cycleModeStable;
+    $[301] = cycleModeAction;
+  } else cycleModeAction = $[301];
+  let extraMessageActionsA;
+  let extraMessageActionsB;
   if ($[302] === MEMO_CACHE_SENTINEL) {
-    kne = {};
-    vne = {};
-    $[302] = kne;
-    $[303] = vne;
+    extraMessageActionsA = {};
+    extraMessageActionsB = {};
+    $[302] = extraMessageActionsA;
+    $[303] = extraMessageActionsB;
   } else {
-    kne = $[302];
-    vne = $[303];
+    extraMessageActionsA = $[302];
+    extraMessageActionsB = $[303];
   }
-  let dNe;
-  if ($[304] !== K0 || $[305] !== tG || $[306] !== cG || $[307] !== GE || $[308] !== sB) {
-    dNe = {
-      "chat:queueSubmit": tG,
-      "chat:sendNow": cG,
-      "chat:clearScreen": L_,
-      "chat:clearInput": L_,
-      "chat:modelPicker": K0,
-      "chat:thinkingToggle": GE,
-      "chat:cycleMode": sB,
-      ...kne,
-      ...vne,
+  let messageActions;
+  if (
+    $[304] !== openModelPickerStable ||
+    $[305] !== queueSubmit ||
+    $[306] !== sendNowAction ||
+    $[307] !== toggleThinkingStable ||
+    $[308] !== cycleModeAction
+  ) {
+    messageActions = {
+      "chat:queueSubmit": queueSubmit,
+      "chat:sendNow": sendNowAction,
+      "chat:clearScreen": clearScreenStable,
+      "chat:clearInput": clearScreenStable,
+      "chat:modelPicker": openModelPickerStable,
+      "chat:thinkingToggle": toggleThinkingStable,
+      "chat:cycleMode": cycleModeAction,
+      ...extraMessageActionsA,
+      ...extraMessageActionsB,
     };
-    $[304] = K0;
-    $[305] = tG;
-    $[306] = cG;
-    $[307] = GE;
-    $[308] = sB;
-    $[309] = dNe;
-  } else dNe = $[309];
-  let uNe = dNe;
-  let iB = !Go && !isSearching;
-  let mNe;
-  if ($[310] !== iB || $[311] !== shadowedFooterActionHandler) {
-    mNe = {
-      isActive: iB,
+    $[304] = openModelPickerStable;
+    $[305] = queueSubmit;
+    $[306] = sendNowAction;
+    $[307] = toggleThinkingStable;
+    $[308] = cycleModeAction;
+    $[309] = messageActions;
+  } else messageActions = $[309];
+  let messageActionsStable = messageActions;
+  let isActionsActive = !isModalOverlayActive && !isSearching;
+  let actionsArgs;
+  if ($[310] !== isActionsActive || $[311] !== shadowedFooterActionHandler) {
+    actionsArgs = {
+      isActive: isActionsActive,
       footerOwnsKeyOf: shadowedFooterActionHandler,
     };
-    $[310] = iB;
+    $[310] = isActionsActive;
     $[311] = shadowedFooterActionHandler;
-    $[312] = mNe;
-  } else mNe = $[312];
-  useFooterAwareMessageActions(uNe, mNe);
-  const isActive = iB && storeSelector_4 === "prompt";
-  let pNe;
+    $[312] = actionsArgs;
+  } else actionsArgs = $[312];
+  useFooterAwareMessageActions(messageActionsStable, actionsArgs);
+  const isActive = isActionsActive && storeSelector_4 === "prompt";
+  let sendNowKeyOptions;
   if ($[313] !== isActive) {
-    pNe = {
+    sendNowKeyOptions = {
       context: "Chat",
       isActive,
     };
     $[313] = isActive;
-    $[314] = pNe;
-  } else pNe = $[314];
-  useKeybinding(SEND_NOW_HINT_KEY, cG, pNe);
-  const isActive_2 = !Go && !isSearching && !storeSelector_9 && !$n;
-  let fNe;
+    $[314] = sendNowKeyOptions;
+  } else sendNowKeyOptions = $[314];
+  useKeybinding(SEND_NOW_HINT_KEY, sendNowAction, sendNowKeyOptions);
+  const isActive_2 = !isModalOverlayActive && !isSearching && !storeSelector_9 && !isHelpOpen;
+  let successorKeyArgs;
   if ($[315] !== shadowedFooterActionHandler || $[316] !== isActive_2) {
-    fNe = {
+    successorKeyArgs = {
       isActive: isActive_2,
       footerOwnsKeyOf: shadowedFooterActionHandler,
     };
     $[315] = shadowedFooterActionHandler;
     $[316] = isActive_2;
-    $[317] = fNe;
-  } else fNe = $[317];
-  useSavedModelSuccessorKey(fNe);
-  const isActive_3 = !Go && !isSearching;
-  let gNe;
+    $[317] = successorKeyArgs;
+  } else successorKeyArgs = $[317];
+  useSavedModelSuccessorKey(successorKeyArgs);
+  const isActive_3 = !isModalOverlayActive && !isSearching;
+  let effortStepArgs;
   if ($[318] !== shadowedFooterActionHandler || $[319] !== isActive_3) {
-    gNe = {
+    effortStepArgs = {
       isActive: isActive_3,
       footerOwnsKeyOf: shadowedFooterActionHandler,
     };
     $[318] = shadowedFooterActionHandler;
     $[319] = isActive_3;
-    $[320] = gNe;
-  } else gNe = $[320];
-  let effortStepKeys = useEffortStepKeys(transcript, gNe);
-  let pG;
-  if ($[321] !== lP) {
-    pG = {
-      "chat:fastMode": lP,
+    $[320] = effortStepArgs;
+  } else effortStepArgs = $[320];
+  let effortStepKeys = useEffortStepKeys(transcript, effortStepArgs);
+  let fastModeActions;
+  if ($[321] !== toggleFastModeStable) {
+    fastModeActions = {
+      "chat:fastMode": toggleFastModeStable,
     };
-    $[321] = lP;
-    $[322] = pG;
-  } else pG = $[322];
+    $[321] = toggleFastModeStable;
+    $[322] = fastModeActions;
+  } else fastModeActions = $[322];
   let isActive_4;
-  if ($[323] !== Go) {
-    isActive_4 = !Go && isFastModeEnabled() && isFastModeAvailable();
-    $[323] = Go;
+  if ($[323] !== isModalOverlayActive) {
+    isActive_4 = !isModalOverlayActive && isFastModeEnabled() && isFastModeAvailable();
+    $[323] = isModalOverlayActive;
     $[324] = isActive_4;
   } else isActive_4 = $[324];
-  let hNe;
+  let fastModeArgs;
   if ($[325] !== shadowedFooterActionHandler || $[326] !== isActive_4) {
-    hNe = {
+    fastModeArgs = {
       isActive: isActive_4,
       footerOwnsKeyOf: shadowedFooterActionHandler,
     };
     $[325] = shadowedFooterActionHandler;
     $[326] = isActive_4;
-    $[327] = hNe;
-  } else hNe = $[327];
-  useFooterAwareMessageActions(pG, hNe);
-  let bNe;
-  if ($[328] !== on) {
-    bNe = () => {
-      on(false);
+    $[327] = fastModeArgs;
+  } else fastModeArgs = $[327];
+  useFooterAwareMessageActions(fastModeActions, fastModeArgs);
+  let dismissHelp;
+  if ($[328] !== setHelpOpen) {
+    dismissHelp = () => {
+      setHelpOpen(false);
     };
-    $[328] = on;
-    $[329] = bNe;
-  } else bNe = $[329];
-  let pP;
-  if ($[330] !== $n) {
-    pP = {
+    $[328] = setHelpOpen;
+    $[329] = dismissHelp;
+  } else dismissHelp = $[329];
+  let helpKeyArgs;
+  if ($[330] !== isHelpOpen) {
+    helpKeyArgs = {
       context: "Help",
-      isActive: $n,
+      isActive: isHelpOpen,
     };
-    $[330] = $n;
-    $[331] = pP;
-  } else pP = $[331];
-  useKeybinding("help:dismiss", bNe, pP);
-  let xne;
-  if ($[332] !== addNotification || $[333] !== on) {
-    xne = () => {
+    $[330] = isHelpOpen;
+    $[331] = helpKeyArgs;
+  } else helpKeyArgs = $[331];
+  useKeybinding("help:dismiss", dismissHelp, helpKeyArgs);
+  let openHistorySearch;
+  if ($[332] !== addNotification || $[333] !== setHelpOpen) {
+    openHistorySearch = () => {
       if (isRemoteSessionAvailable()) {
         addNotification({
           key: "remote-history-search-unavailable",
@@ -2674,117 +2828,117 @@ function PromptComposer(props) {
         });
         return;
       }
-      ed(true);
-      on(false);
+      setHistorySearchOpen(true);
+      setHelpOpen(false);
     };
     $[332] = addNotification;
-    $[333] = on;
-    $[334] = xne;
-  } else xne = $[334];
-  let fG = xne;
+    $[333] = setHelpOpen;
+    $[334] = openHistorySearch;
+  } else openHistorySearch = $[334];
+  let openHistorySearchStable = openHistorySearch;
   let isActive_5;
-  if ($[335] !== Go) {
-    isActive_5 = isFullscreenActive() && !Go;
-    $[335] = Go;
+  if ($[335] !== isModalOverlayActive) {
+    isActive_5 = isFullscreenActive() && !isModalOverlayActive;
+    $[335] = isModalOverlayActive;
     $[336] = isActive_5;
   } else isActive_5 = $[336];
-  let Ane;
+  let historySearchKeyArgs;
   if ($[337] !== isActive_5) {
-    Ane = {
+    historySearchKeyArgs = {
       context: "Global",
       isActive: isActive_5,
     };
     $[337] = isActive_5;
-    $[338] = Ane;
-  } else Ane = $[338];
-  useKeybinding("history:search", fG, Ane);
-  function ag() {
-    if (jh) {
-      Dd(null);
+    $[338] = historySearchKeyArgs;
+  } else historySearchKeyArgs = $[338];
+  useKeybinding("history:search", openHistorySearchStable, historySearchKeyArgs);
+  function moveFooterUp() {
+    if (footerTabMissing) {
+      selectFooterTab(null);
       return;
     }
-    if (Uc && visibleAgentTaskCount > 0 && appState_16 > hd) {
-      Ka(decrementIndex);
+    if (tasksTabSelected && visibleAgentTaskCount > 0 && appState_11 > firstTaskIndex) {
+      setCoordinatorTaskIndex(decrementIndex);
       return;
     }
-    if (uy && appState_19 > 0) {
-      Nd(decrementWorkflowIndex);
+    if (workflowsTabSelected && appState_14 > 0) {
+      setWorkflowFooterIndex(decrementWorkflowIndex);
       return;
     }
-    Br(tc, -1, true);
+    moveFooterSelectionStable(footerTabsEnabled, -1, true);
   }
-  function Qg() {
-    if (jh) {
+  function moveFooterDown() {
+    if (footerTabMissing) {
       if (visibleAgentTaskCount > 0) {
-        Dd("tasks");
-        Ka(0);
-      } else Dd("workflows");
+        selectFooterTab("tasks");
+        setCoordinatorTaskIndex(0);
+      } else selectFooterTab("workflows");
       return;
     }
-    if (Uc && visibleAgentTaskCount > 0) {
-      if (appState_16 < visibleAgentTaskCount - 1) {
-        Ka(incrementIndex);
+    if (tasksTabSelected && visibleAgentTaskCount > 0) {
+      if (appState_11 < visibleAgentTaskCount - 1) {
+        setCoordinatorTaskIndex(incrementIndex);
         return;
       }
-      Br(tc, 1);
+      moveFooterSelectionStable(footerTabsEnabled, 1);
       return;
     }
-    if (Uc) {
-      if (!Br(tc, 1)) {
+    if (tasksTabSelected) {
+      if (!moveFooterSelectionStable(footerTabsEnabled, 1)) {
         chrome.openBashesDialog();
-        Dd(null);
+        selectFooterTab(null);
       }
       return;
     }
-    if (uy) {
-      if (appState_19 < fa.length - 1) {
-        Nd(incrementWorkflowIndex);
+    if (workflowsTabSelected) {
+      if (appState_14 < runningWorkflows.length - 1) {
+        setWorkflowFooterIndex(incrementWorkflowIndex);
         return;
       }
-      Br(tc, 1);
+      moveFooterSelectionStable(footerTabsEnabled, 1);
       return;
     }
-    Br(tc, 1);
+    moveFooterSelectionStable(footerTabsEnabled, 1);
   }
-  let mB;
+  let dispatchCommandImpl;
   if ($[339] !== submit_2) {
-    mB = (gG) => {
-      submit_2(gG, NOOP_HELPERS, {
+    dispatchCommandImpl = (commandText) => {
+      submit_2(commandText, NOOP_HELPERS, {
         fromKeybinding: true,
         inputModeOverride: "prompt",
         leavesIdeSelection: true,
       });
     };
     $[339] = submit_2;
-    $[340] = mB;
-  } else mB = $[340];
-  let dispatchCommand = mB;
-  let Mne;
+    $[340] = dispatchCommandImpl;
+  } else dispatchCommandImpl = $[340];
+  let dispatchCommand = dispatchCommandImpl;
+  let openArtifacts;
   if (
     $[341] !== addNotification ||
-    $[342] !== $l ||
+    $[342] !== cloudRowCheck ||
     $[343] !== submit_2 ||
     $[344] !== removeNotification ||
-    $[345] !== appStoreDirect
+    $[345] !== store
   ) {
-    Mne = function F_() {
+    openArtifacts = function openArtifacts() {
       if (isRemoteSessionAvailable()) {
-        let { frameUrls } = appStoreDirect.getState();
-        let pB = visibleArtifactFrames(frameUrls);
-        if (pB.length > 1) {
-          pd(true);
+        let { frameUrls } = store.getState();
+        let frames = visibleArtifactFrames(frameUrls);
+        if (frames.length > 1) {
+          setWizardOpen(true);
           return;
         }
-        let wNe = liveFramesForSlug(frameUrls, pB[0]?.slug);
-        if (wNe !== undefined)
+        let liveFrame = liveFramesForSlug(frameUrls, frames[0]?.slug);
+        if (liveFrame !== undefined)
           openArtifactRow(
-            wNe,
-            appStoreDirect,
+            liveFrame,
+            store,
             {
               addNotification,
               removeNotification,
             },
-            $l,
+            cloudRowCheck,
           );
         return;
       }
@@ -2794,22 +2948,21 @@ function PromptComposer(props) {
       });
     };
     $[341] = addNotification;
-    $[342] = $l;
+    $[342] = cloudRowCheck;
     $[343] = submit_2;
     $[344] = removeNotification;
-    $[345] = appStoreDirect;
-    $[346] = Mne;
-  } else Mne = $[346];
-  let F_ = Mne;
-  let bG;
-  if ($[347] !== appStoreDirect) {
-    bG = function rv() {
-      let state = appStoreDirect.getState();
+    $[345] = store;
+    $[346] = openArtifacts;
+  } else openArtifacts = $[346];
+  let openArtifactsStable = openArtifacts;
+  let findSelectedTask;
+  if ($[347] !== store) {
+    findSelectedTask = function findSelectedTask() {
+      let state = store.getState();
       let idleTeammatesExpanded = state.idleTeammatesExpanded ?? false;
-      let ZS = ((idleTeammatesExpanded ? iu.current : undefined) ?? Ku.current)[
-        state.coordinatorTaskIndex - 1
-      ];
-      if (ZS === undefined) {
+      let selectedTaskId = ((idleTeammatesExpanded ? prevAgentRowIdsRef.current : undefined) ??
+        prevTaskIdsRef.current)[state.coordinatorTaskIndex - 1];
+      if (selectedTaskId === undefined) {
         return;
       }
       let visibleBackgroundTasks = getVisibleBackgroundTasks(
@@ -2818,74 +2971,76 @@ function PromptComposer(props) {
         state.viewingAgentTaskId,
         idleTeammatesExpanded,
       );
-      let found = visibleBackgroundTasks.find((visibleBackgroundTask) => visibleBackgroundTask.id === ZS);
+      let found = visibleBackgroundTasks.find(
+        (visibleBackgroundTask) => visibleBackgroundTask.id === selectedTaskId,
+      );
       if (found) {
         return found;
       }
       return visibleBackgroundTasks.some(
         (visibleBackgroundTask) =>
-          isAgentRowVisible(visibleBackgroundTask) && visibleBackgroundTask.taskIds.includes(ZS),
+          isAgentRowVisible(visibleBackgroundTask) && visibleBackgroundTask.taskIds.includes(selectedTaskId),
       )
         ? "folded"
         : undefined;
     };
-    $[347] = appStoreDirect;
-    $[348] = bG;
-  } else bG = $[348];
-  let rv = bG;
-  function O_() {
-    Br(Hc, 1);
+    $[347] = store;
+    $[348] = findSelectedTask;
+  } else findSelectedTask = $[348];
+  let findSelectedTaskStable = findSelectedTask;
+  function footerNext() {
+    moveFooterSelectionStable(footerTabs, 1);
   }
-  function lg() {
-    Br(Hc, -1);
+  function footerPrevious() {
+    moveFooterSelectionStable(footerTabs, -1);
   }
-  let sv;
+  let footerOpenSelected;
   if (
     $[349] !== chrome ||
     $[350] !== visibleAgentTaskCount ||
-    $[351] !== If ||
-    $[352] !== F_ ||
-    $[353] !== rv ||
-    $[354] !== Dd ||
-    $[355] !== setAppState ||
-    $[356] !== on ||
-    $[357] !== appStoreDirect
+    $[351] !== footerOwnsKeyCheck ||
+    $[352] !== openArtifactsStable ||
+    $[353] !== findSelectedTaskStable ||
+    $[354] !== selectFooterTab ||
+    $[355] !== setShowState ||
+    $[356] !== setHelpOpen ||
+    $[357] !== store
   ) {
-    sv = () => {
-      on(false);
-      let state = appStoreDirect.getState();
-      U_: switch (If() ? state.footerSelection : null) {
+    footerOpenSelected = () => {
+      setHelpOpen(false);
+      let state = store.getState();
+      U_: switch (footerOwnsKeyCheck() ? state.footerSelection : null) {
         case "tasks": {
           if (state.coordinatorTaskIndex >= 1) {
-            let iD = rv();
-            if (iD === undefined || iD === "folded") {
+            let selectedTask = findSelectedTaskStable();
+            if (selectedTask === undefined || selectedTask === "folded") {
               break U_;
             }
-            if (isAgentRowVisible(iD)) setAppState(expandIdleTeammates);
-            else enterTeammateView(iD.id, setAppState);
+            if (isAgentRowVisible(selectedTask)) setShowState(expandIdleTeammates);
+            else enterTeammateView(selectedTask.id, setShowState);
           } else if (state.coordinatorTaskIndex === 0 && visibleAgentTaskCount > 0)
-            exitTeammateView(setAppState);
+            exitTeammateView(setShowState);
           else {
             chrome.openBashesDialog();
-            Dd(null);
+            selectFooterTab(null);
           }
           break U_;
         }
         case "workflows": {
-          let Ene = runningWorkflowTasks(state.tasks)[state.workflowFooterIndex];
-          if (Ene) {
+          let workflowTask = runningWorkflowTasks(state.tasks)[state.workflowFooterIndex];
+          if (workflowTask) {
             logFeatureOk("workflow_progress_preview");
-            setAppState((vG) =>
-              vG.workflowDetail?.taskId === Ene.id
-                ? vG
+            setShowState((prevState) =>
+              prevState.workflowDetail?.taskId === workflowTask.id
+                ? prevState
                 : {
-                    ...vG,
+                    ...prevState,
                     workflowDetail: {
-                      taskId: Ene.id,
+                      taskId: workflowTask.id,
                     },
                   },
             );
-            Dd(null);
+            selectFooterTab(null);
           }
           break U_;
         }
@@ -2893,328 +3048,354 @@ function PromptComposer(props) {
           break U_;
         }
         case "bridge": {
-          RemoteControlPill(appStoreDirect.getState());
-          pi(true);
-          Dd(null);
+          RemoteControlPill(store.getState());
+          setBridgeDialogOpen(true);
+          selectFooterTab(null);
           break U_;
         }
         case "frame": {
-          F_();
-          Dd(null);
+          openArtifactsStable();
+          selectFooterTab(null);
         }
       }
     };
     $[349] = chrome;
     $[350] = visibleAgentTaskCount;
-    $[351] = If;
-    $[352] = F_;
-    $[353] = rv;
-    $[354] = Dd;
-    $[355] = setAppState;
-    $[356] = on;
-    $[357] = appStoreDirect;
-    $[358] = sv;
-  } else sv = $[358];
-  let kB;
+    $[351] = footerOwnsKeyCheck;
+    $[352] = openArtifactsStable;
+    $[353] = findSelectedTaskStable;
+    $[354] = selectFooterTab;
+    $[355] = setShowState;
+    $[356] = setHelpOpen;
+    $[357] = store;
+    $[358] = footerOpenSelected;
+  } else footerOpenSelected = $[358];
+  let footerClearSelection;
   if (
-    $[359] !== $r ||
-    $[360] !== $n ||
-    $[361] !== appState_18 ||
-    $[362] !== Dd ||
-    $[363] !== setAppState ||
-    $[364] !== on ||
-    $[365] !== appStoreDirect ||
-    $[366] !== appState_17 ||
-    $[367] !== appState_3 ||
-    $[368] !== Uc ||
-    $[369] !== appState_9
+    $[359] !== clearQueueEditIndexAction ||
+    $[360] !== isHelpOpen ||
+    $[361] !== appState_13 ||
+    $[362] !== selectFooterTab ||
+    $[363] !== setShowState ||
+    $[364] !== setHelpOpen ||
+    $[365] !== store ||
+    $[366] !== appState_12 ||
+    $[367] !== tasks ||
+    $[368] !== tasksTabSelected ||
+    $[369] !== tasks_2
   ) {
-    kB = () => {
-      if (Uc && appState_18) {
-        let visibleBackgroundTasks = getVisibleBackgroundTasks(appState_3, appState_17, appState_9, true);
-        setAppState(collapseIdleTeammates);
-        if (hasFoldedIdleTeammates(visibleBackgroundTasks, appState_9)) {
+    footerClearSelection = () => {
+      if (tasksTabSelected && appState_13) {
+        let visibleBackgroundTasks = getVisibleBackgroundTasks(tasks, appState_12, tasks_2, true);
+        setShowState(collapseIdleTeammates);
+        if (hasFoldedIdleTeammates(visibleBackgroundTasks, tasks_2)) {
           return;
         }
       }
       dismissPromptOverlay({
-        store: appStoreDirect,
-        clearQueueSelection: $r,
-        helpOpen: $n,
-        setHelpOpen: on,
+        store,
+        clearQueueSelection: clearQueueEditIndexAction,
+        helpOpen: isHelpOpen,
+        setHelpOpen,
       });
-      Dd(null);
+      selectFooterTab(null);
     };
-    $[359] = $r;
-    $[360] = $n;
-    $[361] = appState_18;
-    $[362] = Dd;
-    $[363] = setAppState;
-    $[364] = on;
-    $[365] = appStoreDirect;
-    $[366] = appState_17;
-    $[367] = appState_3;
-    $[368] = Uc;
-    $[369] = appState_9;
-    $[370] = kB;
-  } else kB = $[370];
-  let kw;
+    $[359] = clearQueueEditIndexAction;
+    $[360] = isHelpOpen;
+    $[361] = appState_13;
+    $[362] = selectFooterTab;
+    $[363] = setShowState;
+    $[364] = setHelpOpen;
+    $[365] = store;
+    $[366] = appState_12;
+    $[367] = tasks;
+    $[368] = tasksTabSelected;
+    $[369] = tasks_2;
+    $[370] = footerClearSelection;
+  } else footerClearSelection = $[370];
+  let footerClose;
   if (
-    $[371] !== If ||
+    $[371] !== footerOwnsKeyCheck ||
     $[372] !== keybindingContext ||
-    $[373] !== hd ||
-    $[374] !== rv ||
+    $[373] !== firstTaskIndex ||
+    $[374] !== findSelectedTaskStable ||
     $[375] !== session ||
-    $[376] !== setAppState ||
-    $[377] !== Ka ||
+    $[376] !== setShowState ||
+    $[377] !== setCoordinatorTaskIndex ||
     $[378] !== storageV5 ||
-    $[379] !== appStoreDirect ||
-    $[380] !== setVoiceState
+    $[379] !== store ||
+    $[380] !== taskStore
   ) {
-    kw = () => {
-      let state = appStoreDirect.getState();
-      let footerSelection = If() ? state.footerSelection : null;
+    footerClose = () => {
+      let state = store.getState();
+      let footerSelection = footerOwnsKeyCheck() ? state.footerSelection : null;
       if (footerSelection === "tasks" && state.coordinatorTaskIndex >= 1) {
-        let W_ = rv();
-        if (!W_) {
+        let selectedTask = findSelectedTaskStable();
+        if (!selectedTask) {
           return false;
         }
-        if (W_ === "folded" || isAgentRowVisible(W_)) {
+        if (selectedTask === "folded" || isAgentRowVisible(selectedTask)) {
           return;
         }
-        if (isViewingThisAgent(W_, state)) {
+        if (isViewingThisAgent(selectedTask, state)) {
           let printableKey = getPrintableKey(keybindingContext?.singleKeyEvent() ?? null);
-          if (printableKey !== null) Xo.current?.typeText(printableKey);
+          if (printableKey !== null) composerHandleRef.current?.typeText(printableKey);
           return;
         }
         if (
-          stopTask(W_, setVoiceState, setAppState, {
+          stopTask(selectedTask, taskStore, setShowState, {
             source: "user",
             session,
             storageV5,
           }) === "dismissed"
         )
-          Ka((vNe) => Math.max(hd, vNe - 1));
+          setCoordinatorTaskIndex((index) => Math.max(firstTaskIndex, index - 1));
         return;
       }
       if (footerSelection === "workflows") {
-        let One = runningWorkflowTasks(state.tasks)[state.workflowFooterIndex];
-        if (!One) {
+        let workflowTask = runningWorkflowTasks(state.tasks)[state.workflowFooterIndex];
+        if (!workflowTask) {
           return false;
         }
         stopWorkflowTask({
-          taskId: One.id,
-          taskStatus: One.status,
-          taskRegistry: setVoiceState,
-          setAppState,
+          taskId: workflowTask.id,
+          taskStatus: workflowTask.status,
+          taskRegistry: taskStore,
+          setAppState: setShowState,
         });
         return;
       }
       return false;
     };
-    $[371] = If;
+    $[371] = footerOwnsKeyCheck;
     $[372] = keybindingContext;
-    $[373] = hd;
-    $[374] = rv;
+    $[373] = firstTaskIndex;
+    $[374] = findSelectedTaskStable;
     $[375] = session;
-    $[376] = setAppState;
-    $[377] = Ka;
+    $[376] = setShowState;
+    $[377] = setCoordinatorTaskIndex;
     $[378] = storageV5;
-    $[379] = appStoreDirect;
-    $[380] = setVoiceState;
-    $[381] = kw;
-  } else kw = $[381];
-  let dD;
-  if ($[382] !== chrome || $[383] !== If || $[384] !== Dd || $[385] !== appStoreDirect) {
-    dD = () => {
-      if ((If() ? appStoreDirect.getState().footerSelection : null) === "ideSelection") {
+    $[379] = store;
+    $[380] = taskStore;
+    $[381] = footerClose;
+  } else footerClose = $[381];
+  let footerDismiss;
+  if ($[382] !== chrome || $[383] !== footerOwnsKeyCheck || $[384] !== selectFooterTab || $[385] !== store) {
+    footerDismiss = () => {
+      if ((footerOwnsKeyCheck() ? store.getState().footerSelection : null) === "ideSelection") {
         chrome.dismissIdeSelection();
-        Dd(null);
+        selectFooterTab(null);
         return;
       }
       return false;
     };
     $[382] = chrome;
-    $[383] = If;
-    $[384] = Dd;
-    $[385] = appStoreDirect;
-    $[386] = dD;
-  } else dD = $[386];
-  let Nne;
+    $[383] = footerOwnsKeyCheck;
+    $[384] = selectFooterTab;
+    $[385] = store;
+    $[386] = footerDismiss;
+  } else footerDismiss = $[386];
+  let footerKeybindings;
   if (
-    $[387] !== Qg ||
-    $[388] !== O_ ||
-    $[389] !== lg ||
-    $[390] !== ag ||
-    $[391] !== sv ||
-    $[392] !== kB ||
-    $[393] !== kw ||
-    $[394] !== dD
+    $[387] !== moveFooterDown ||
+    $[388] !== footerNext ||
+    $[389] !== footerPrevious ||
+    $[390] !== moveFooterUp ||
+    $[391] !== footerOpenSelected ||
+    $[392] !== footerClearSelection ||
+    $[393] !== footerClose ||
+    $[394] !== footerDismiss
   ) {
-    Nne = {
-      "footer:up": ag,
-      "footer:down": Qg,
-      "footer:next": O_,
-      "footer:previous": lg,
-      "footer:openSelected": sv,
-      "footer:clearSelection": kB,
-      "footer:close": kw,
-      "footer:dismiss": dD,
+    footerKeybindings = {
+      "footer:up": moveFooterUp,
+      "footer:down": moveFooterDown,
+      "footer:next": footerNext,
+      "footer:previous": footerPrevious,
+      "footer:openSelected": footerOpenSelected,
+      "footer:clearSelection": footerClearSelection,
+      "footer:close": footerClose,
+      "footer:dismiss": footerDismiss,
     };
-    $[387] = Qg;
-    $[388] = O_;
-    $[389] = lg;
-    $[390] = ag;
-    $[391] = sv;
-    $[392] = kB;
-    $[393] = kw;
-    $[394] = dD;
-    $[395] = Nne;
-  } else Nne = $[395];
-  const isActive_6 = !!yl && !Go;
-  let TG;
+    $[387] = moveFooterDown;
+    $[388] = footerNext;
+    $[389] = footerPrevious;
+    $[390] = moveFooterUp;
+    $[391] = footerOpenSelected;
+    $[392] = footerClearSelection;
+    $[393] = footerClose;
+    $[394] = footerDismiss;
+    $[395] = footerKeybindings;
+  } else footerKeybindings = $[395];
+  const isActive_6 = !!activeFooterTab && !isModalOverlayActive;
+  let footerKeyArgs;
   if ($[396] !== isActive_6) {
-    TG = {
+    footerKeyArgs = {
       context: "Footer",
       isActive: isActive_6,
     };
     $[396] = isActive_6;
-    $[397] = TG;
-  } else TG = $[397];
-  MessageActionsKeybindings(Nne, TG);
+    $[397] = footerKeyArgs;
+  } else footerKeyArgs = $[397];
+  MessageActionsKeybindings(footerKeybindings, footerKeyArgs);
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let cooldown = useFastModeCooldownActive();
-  let CNe;
-  if ($[398] !== cooldown || $[399] !== appState_13 || $[400] !== mainLoopModel) {
-    CNe = () => isFastModeOnForRequestModel(appState_13, cooldown, mainLoopModel);
-    $[398] = cooldown;
-    $[399] = appState_13;
+  let fastModeCooldownActive = useFastModeCooldownActive();
+  let isFastModeOnForRequestedModel;
+  if ($[398] !== fastModeCooldownActive || $[399] !== model || $[400] !== mainLoopModel) {
+    isFastModeOnForRequestedModel = () =>
+      isFastModeOnForRequestModel(model, fastModeCooldownActive, mainLoopModel);
+    $[398] = fastModeCooldownActive;
+    $[399] = model;
     $[400] = mainLoopModel;
-    $[401] = CNe;
-  } else CNe = $[401];
-  let CB = yt(onFastRejectedFallbackModelsChanged, CNe);
-  let showFastIconHint = useShowFastIconHint(CB ?? false);
-  let j_;
+    $[401] = isFastModeOnForRequestedModel;
+  } else isFastModeOnForRequestedModel = $[401];
+  let fastModeSignals = useSyncExternalStore(
+    onFastRejectedFallbackModelsChanged,
+    isFastModeOnForRequestedModel,
+  );
+  let showFastIconHint = useShowFastIconHint(fastModeSignals ?? false);
+  let fastModeTag;
   if (
-    $[402] !== cooldown ||
+    $[402] !== fastModeCooldownActive ||
     $[403] !== isScreenReaderEnabled ||
-    $[404] !== CB ||
+    $[404] !== fastModeSignals ||
     $[405] !== showFastIconHint
   ) {
-    j_ = CB
+    fastModeTag = fastModeSignals
       ? isScreenReaderEnabled
-        ? cooldown
+        ? fastModeCooldownActive
           ? "fast mode (cooling down)"
           : "fast mode"
         : showFastIconHint
-          ? `${getFastIconString(true, cooldown)} ${sequential.reset.dim("/fast")}`
-          : getFastIconString(true, cooldown)
+          ? `${getFastIconString(true, fastModeCooldownActive)} ${sequential.reset.dim("/fast")}`
+          : getFastIconString(true, fastModeCooldownActive)
       : undefined;
-    $[402] = cooldown;
+    $[402] = fastModeCooldownActive;
     $[403] = isScreenReaderEnabled;
-    $[404] = CB;
+    $[404] = fastModeSignals;
     $[405] = showFastIconHint;
-    $[406] = j_;
-  } else j_ = $[406];
-  let tb = j_;
-  let cD = isEffortIndicatorShown(queuedMessageText, mainLoopModel, Hs);
-  let _Ne = cD;
+    $[406] = fastModeTag;
+  } else fastModeTag = $[406];
+  let fastModeTagStable = fastModeTag;
+  let isEffortShown = isEffortIndicatorShown(level, mainLoopModel, isBriefOnly);
+  let isEffortShownStable = isEffortShown;
   let statusField = useStatusField("sentEffort");
   let statusField_2 = useStatusField("turnEffort");
-  let TB;
-  if ($[407] !== Hs || $[408] !== mainLoopModel || $[409] !== appState_14) {
-    TB = !Hs && isUltracodeActive(appState_14, mainLoopModel);
-    $[407] = Hs;
+  let isUltracodeOn;
+  if ($[407] !== isBriefOnly || $[408] !== mainLoopModel || $[409] !== appState_9) {
+    isUltracodeOn = !isBriefOnly && isUltracodeActive(appState_9, mainLoopModel);
+    $[407] = isBriefOnly;
     $[408] = mainLoopModel;
-    $[409] = appState_14;
-    $[410] = TB;
-  } else TB = $[410];
-  let nf = TB;
-  let zg = yt(onRefusalSettingsChange, noopOutputHandler);
-  let options = useUltracodeShimmer(nf && !isScreenReaderEnabled);
+    $[409] = appState_9;
+    $[410] = isUltracodeOn;
+  } else isUltracodeOn = $[410];
+  let ultraEffortActive = isUltracodeOn;
+  let refusalSettingsTag = useSyncExternalStore(onRefusalSettingsChange, noopOutputHandler);
+  let options_2 = useUltracodeShimmer(ultraEffortActive && !isScreenReaderEnabled);
   let ultraEffortTag;
   let topBorderText;
-  if ($[411] !== tb || $[412] !== zg || $[413] !== options || $[414] !== nf) {
-    let Hne = treeify(nf, options);
-    ultraEffortTag = Hne;
-    topBorderText = buildBorderText([Hne, tb, zg]);
-    $[411] = tb;
-    $[412] = zg;
-    $[413] = options;
-    $[414] = nf;
+  if (
+    $[411] !== fastModeTagStable ||
+    $[412] !== refusalSettingsTag ||
+    $[413] !== options_2 ||
+    $[414] !== ultraEffortActive
+  ) {
+    let ultraTag = treeify(ultraEffortActive, options_2);
+    ultraEffortTag = ultraTag;
+    topBorderText = buildBorderText([ultraTag, fastModeTagStable, refusalSettingsTag]);
+    $[411] = fastModeTagStable;
+    $[412] = refusalSettingsTag;
+    $[413] = options_2;
+    $[414] = ultraEffortActive;
     $[415] = ultraEffortTag;
     $[416] = topBorderText;
   } else {
     ultraEffortTag = $[415];
     topBorderText = $[416];
   }
-  let fP;
+  let borderProps;
   if ($[417] !== ultraEffortTag || $[418] !== topBorderText) {
-    fP = {
+    borderProps = {
       ultraEffortTag,
       topBorderText,
     };
     $[417] = ultraEffortTag;
     $[418] = topBorderText;
-    $[419] = fP;
-  } else fP = $[419];
-  let { ultraEffortTag: ultraEffortTag_2, topBorderText: topBorderText_2 } = fP;
-  let q_ = effortStatusText(cD, nf, isScreenReaderEnabled, false, _Ne);
-  let gP =
+    $[419] = borderProps;
+  } else borderProps = $[419];
+  let { ultraEffortTag: ultraEffortTag_2, topBorderText: topBorderText_2 } = borderProps;
+  let effortStatus = effortStatusText(
+    isEffortShown,
+    ultraEffortActive,
+    isScreenReaderEnabled,
+    false,
+    isEffortShownStable,
+  );
+  let supportsPerTurnEffort =
     statusField !== null &&
     statusField_2 === null &&
-    statusField !== cD &&
+    statusField !== isEffortShown &&
     modelSupportsPerTurnEffortControl(mainLoopModel);
-  let $_ = effortStatusText(cD, nf, isScreenReaderEnabled, gP, _Ne);
-  let RNe;
+  let effortStatusText_2 = effortStatusText(
+    isEffortShown,
+    ultraEffortActive,
+    isScreenReaderEnabled,
+    supportsPerTurnEffort,
+    isEffortShownStable,
+  );
+  let syncEffortNotice;
   if (
     $[420] !== addNotification ||
-    $[421] !== gP ||
-    $[422] !== $_ ||
+    $[421] !== supportsPerTurnEffort ||
+    $[422] !== effortStatusText_2 ||
     $[423] !== removeNotification ||
-    $[424] !== appStoreDirect
+    $[424] !== store
   ) {
-    RNe = () => {
-      let { current: IAt, queue } = appStoreDirect.getState().notifications;
-      let any = [IAt, ...queue].some(isEffortLevelNotice);
-      if (!gP) removeNotification(EFFORT_LEVEL_KEY);
-      else if (any && $_) {
+    syncEffortNotice = () => {
+      let { current: notification, queue } = store.getState().notifications;
+      let any = [notification, ...queue].some(isEffortLevelNotice);
+      if (!supportsPerTurnEffort) removeNotification(EFFORT_LEVEL_KEY);
+      else if (any && effortStatusText_2) {
         removeNotification(EFFORT_LEVEL_KEY);
         addNotification({
           key: EFFORT_LEVEL_KEY,
           kind: "feedback",
-          text: $_,
+          text: effortStatusText_2,
           priority: "high",
           timeoutMs: 1e4,
         });
       }
     };
     $[420] = addNotification;
-    $[421] = gP;
-    $[422] = $_;
+    $[421] = supportsPerTurnEffort;
+    $[422] = effortStatusText_2;
     $[423] = removeNotification;
-    $[424] = appStoreDirect;
-    $[425] = RNe;
-  } else RNe = $[425];
-  let Wne;
+    $[424] = store;
+    $[425] = syncEffortNotice;
+  } else syncEffortNotice = $[425];
+  let syncEffortDeps;
   if (
     $[426] !== addNotification ||
-    $[427] !== gP ||
+    $[427] !== supportsPerTurnEffort ||
     $[428] !== removeNotification ||
-    $[429] !== appStoreDirect
+    $[429] !== store
   ) {
-    Wne = [gP, appStoreDirect, addNotification, removeNotification];
+    syncEffortDeps = [supportsPerTurnEffort, store, addNotification, removeNotification];
     $[426] = addNotification;
-    $[427] = gP;
+    $[427] = supportsPerTurnEffort;
     $[428] = removeNotification;
-    $[429] = appStoreDirect;
-    $[430] = Wne;
-  } else Wne = $[430];
-  P(RNe, Wne);
-  let PNe;
-  if ($[431] !== addNotification || $[432] !== q_ || $[433] !== $_ || $[434] !== removeNotification) {
-    PNe = () => {
-      if (!q_) {
+    $[429] = store;
+    $[430] = syncEffortDeps;
+  } else syncEffortDeps = $[430];
+  useEffect(syncEffortNotice, syncEffortDeps);
+  let showEffortNotice;
+  if (
+    $[431] !== addNotification ||
+    $[432] !== effortStatus ||
+    $[433] !== effortStatusText_2 ||
+    $[434] !== removeNotification
+  ) {
+    showEffortNotice = () => {
+      if (!effortStatus) {
         removeNotification(EFFORT_LEVEL_KEY);
         return;
       }
@@ -3222,156 +3403,165 @@ function PromptComposer(props) {
       addNotification({
         key: EFFORT_LEVEL_KEY,
         kind: "feedback",
-        text: $_ ?? q_,
+        text: effortStatusText_2 ?? effortStatus,
         priority: "high",
         timeoutMs: 1e4,
       });
     };
     $[431] = addNotification;
-    $[432] = q_;
-    $[433] = $_;
+    $[432] = effortStatus;
+    $[433] = effortStatusText_2;
     $[434] = removeNotification;
-    $[435] = PNe;
-  } else PNe = $[435];
-  let hP;
-  if ($[436] !== addNotification || $[437] !== q_ || $[438] !== removeNotification) {
-    hP = [q_, addNotification, removeNotification];
+    $[435] = showEffortNotice;
+  } else showEffortNotice = $[435];
+  let showEffortDeps;
+  if ($[436] !== addNotification || $[437] !== effortStatus || $[438] !== removeNotification) {
+    showEffortDeps = [effortStatus, addNotification, removeNotification];
     $[436] = addNotification;
-    $[437] = q_;
+    $[437] = effortStatus;
     $[438] = removeNotification;
-    $[439] = hP;
-  } else hP = $[439];
-  P(PNe, hP);
-  useMaxEffortNotice(cD);
-  let placeholder = WE && suggestion ? suggestion : promptInputPlaceholder;
-  let xB = R(0);
-  let _w;
+    $[439] = showEffortDeps;
+  } else showEffortDeps = $[439];
+  useEffect(showEffortNotice, showEffortDeps);
+  useMaxEffortNotice(isEffortShown);
+  let placeholder = shouldMarkSuggestionShown && suggestion_2 ? suggestion_2 : promptInputPlaceholder;
+  let modelSwitchGeneration = useRef(0);
+  let applyModelSwitch;
   if (
     $[440] !== addNotification ||
     $[441] !== session ||
-    $[442] !== setAppState ||
+    $[442] !== setShowState ||
     $[443] !== storageV5 ||
-    $[444] !== appStoreDirect
+    $[444] !== store
   ) {
-    _w = async (av, PB, AB, yP, IG) => {
-      let mD = false;
-      let MB = false;
-      if (yP !== undefined) persistEffortSetting(yP, resolveRequestedModel(av), AB, storageV5);
+    applyModelSwitch = async (model, hookMessages, saveAsDefault, effortSetting, generation) => {
+      let wasFastMode = false;
+      let willBeFastMode = false;
+      if (effortSetting !== undefined)
+        persistEffortSetting(effortSetting, resolveRequestedModel(model), saveAsDefault, storageV5);
       clearRefusalFallbackModelLatch();
       if (isFastModeEnabled()) clearFastModeCooldown();
-      recordSwitchIfChanged(session, appStoreDirect.getState(), av, "picker");
-      setAppState((jne) => {
-        mD = !!jne.fastMode;
-        MB = isFastModeEnabled() ? isFastModeActive(av, jne.fastMode) : mD;
+      recordSwitchIfChanged(session, store.getState(), model, "picker");
+      setShowState((prevState) => {
+        wasFastMode = !!prevState.fastMode;
+        willBeFastMode = isFastModeEnabled() ? isFastModeActive(model, prevState.fastMode) : wasFastMode;
         return {
-          ...jne,
-          mainLoopModel: av,
+          ...prevState,
+          mainLoopModel: model,
           mainLoopModelForSession: null,
-          ...(yP !== undefined && {
-            sessionEffort: levelEffortSetting(yP),
+          ...(effortSetting !== undefined && {
+            sessionEffort: levelEffortSetting(effortSetting),
           }),
-          ...(MB !== mD && {
-            fastMode: MB,
+          ...(willBeFastMode !== wasFastMode && {
+            fastMode: willBeFastMode,
           }),
         };
       });
-      reportFastModeToggle(mD, MB);
-      let IB = AB ? await setDefaultModel(av, storageV5) : null;
-      let ANe = IB?.kind === "failed";
-      if (IG !== xB.current) {
-        return ANe;
+      reportFastModeToggle(wasFastMode, willBeFastMode);
+      let saveResult = saveAsDefault ? await setDefaultModel(model, storageV5) : null;
+      let saveFailed = saveResult?.kind === "failed";
+      if (generation !== modelSwitchGeneration.current) {
+        return saveFailed;
       }
-      let G_ = `Model set to ${modelDisplayString(av)}${IB?.kind === "saved" ? SAVED_AS_DEFAULT_SUFFIX : " for this session only"}`;
-      G_ = G_ + formatFastModeSuffix(mD, MB, av);
-      G_ = G_ + describeDefaultSaved(IB);
-      if (PB.length > 0) G_ = G_ + ` \xB7 ${PB.map(sanitizeHookText).join(" \xB7 ")}`;
+      let message = `Model set to ${modelDisplayString(model)}${saveResult?.kind === "saved" ? SAVED_AS_DEFAULT_SUFFIX : " for this session only"}`;
+      message = message + formatFastModeSuffix(wasFastMode, willBeFastMode, model);
+      message = message + describeDefaultSaved(saveResult);
+      if (hookMessages.length > 0)
+        message = message + ` \xB7 ${hookMessages.map(sanitizeHookText).join(" \xB7 ")}`;
       addNotification({
         key: "model-switched",
         kind: "feedback",
         segments: [
           {
-            text: G_,
+            text: message,
           },
         ],
         priority: "immediate",
-        timeoutMs: IB === null || IB.kind === "saved" ? 3000 : undefined,
+        timeoutMs: saveResult === null || saveResult.kind === "saved" ? 3000 : undefined,
       });
       logEvent("tengu_model_picker_hotkey", {
-        model: telemetrySafeModelName(av),
+        model: telemetrySafeModelName(model),
       });
-      return ANe;
+      return saveFailed;
     };
     $[440] = addNotification;
     $[441] = session;
-    $[442] = setAppState;
+    $[442] = setShowState;
     $[443] = storageV5;
-    $[444] = appStoreDirect;
-    $[445] = _w;
-  } else _w = $[445];
-  let fD = _w;
-  let DB = R(false);
-  let NB;
+    $[444] = store;
+    $[445] = applyModelSwitch;
+  } else applyModelSwitch = $[445];
+  let applyModelSwitchStable = applyModelSwitch;
+  let isSavedPick = useRef(false);
+  let onSelectModel;
   if (
     $[446] !== addNotification ||
-    $[447] !== fD ||
+    $[447] !== applyModelSwitchStable ||
     $[448] !== session ||
-    $[449] !== setAppState ||
+    $[449] !== setShowState ||
     $[450] !== storageV5 ||
-    $[451] !== appStoreDirect
+    $[451] !== store
   ) {
-    NB = (lv, qne) => {
-      let MNe = DB.current;
-      DB.current = false;
-      let gD = (xB.current = xB.current + 1);
-      Ya(false);
-      serializeModelSwitch(session, () =>
-        runPreModelSwitchHooks(session, appStoreDirect.getState, lv, "picker"),
-      )
-        .then((Q_) => {
-          if (gD !== xB.current) {
+    onSelectModel = (model, saveAsDefault) => {
+      let wasSavedPick = isSavedPick.current;
+      isSavedPick.current = false;
+      let generation = (modelSwitchGeneration.current = modelSwitchGeneration.current + 1);
+      setModelPickerOpen(false);
+      serializeModelSwitch(session, () => runPreModelSwitchHooks(session, store.getState, model, "picker"))
+        .then((decisionResult) => {
+          if (generation !== modelSwitchGeneration.current) {
             return;
           }
-          if (Q_.decision !== "proceed") {
+          if (decisionResult.decision !== "proceed") {
             logFeatureSad("model_switch", "blocked_by_hook");
             addNotification({
               key: "model-switch-blocked",
               kind: "warning",
               text: preModelSwitchBlockedMessage(
-                lv,
-                Q_.decision === "ask"
-                  ? `${Q_.reason ?? "confirmation required"} (use /model to confirm)`
-                  : Q_.reason,
-                Q_.messages,
+                model,
+                decisionResult.decision === "ask"
+                  ? `${decisionResult.reason ?? "confirmation required"} (use /model to confirm)`
+                  : decisionResult.reason,
+                decisionResult.messages,
               ),
               color: "warning",
               priority: "immediate",
             });
             return;
           }
-          if (!MNe) {
-            return fD(lv, Q_.messages, false, qne, gD).then(noopReplyHandler);
+          if (!wasSavedPick) {
+            return applyModelSwitchStable(
+              model,
+              decisionResult.messages,
+              false,
+              saveAsDefault,
+              generation,
+            ).then(noopReplyHandler);
           }
-          let $ne = effectiveModelForContext(appStoreDirect.getState());
+          let effectiveBefore = effectiveModelForContext(store.getState());
           return savedModelPickReply(
-            lv,
+            model,
             {
-              getAppState: appStoreDirect.getState,
-              setAppState,
+              getAppState: store.getState,
+              setAppState: setShowState,
               session,
               storageV5,
               options: {
                 mcpClients: [],
               },
             },
-            () => fD(lv, Q_.messages, true, qne, gD).then(unsavedTextState),
+            () =>
+              applyModelSwitchStable(model, decisionResult.messages, true, saveAsDefault, generation).then(
+                unsavedTextState,
+              ),
             {
               persistsOffBox: isNotOffBox,
-              isSuperseded: () => gD !== xB.current,
-              hasModelMoved: () => effectiveModelForContext(appStoreDirect.getState()) !== $ne,
+              isSuperseded: () => generation !== modelSwitchGeneration.current,
+              hasModelMoved: () => effectiveModelForContext(store.getState()) !== effectiveBefore,
             },
-          ).then((FB) => {
-            let { text, isRefusal, rewrittenTo } = FB;
-            if (gD !== xB.current) {
+          ).then((reply) => {
+            let { text, isRefusal, rewrittenTo } = reply;
+            if (generation !== modelSwitchGeneration.current) {
               return;
             }
             if (isRefusal)
@@ -3407,72 +3597,72 @@ function PromptComposer(props) {
         });
     };
     $[446] = addNotification;
-    $[447] = fD;
+    $[447] = applyModelSwitchStable;
     $[448] = session;
-    $[449] = setAppState;
+    $[449] = setShowState;
     $[450] = storageV5;
-    $[451] = appStoreDirect;
-    $[452] = NB;
-  } else NB = $[452];
-  let onSelect = NB;
-  let FB;
+    $[451] = store;
+    $[452] = onSelectModel;
+  } else onSelectModel = $[452];
+  let onSelect = onSelectModel;
+  let onCancelModelPicker;
   if ($[453] === MEMO_CACHE_SENTINEL) {
-    FB = () => {
-      DB.current = false;
-      Ya(false);
+    onCancelModelPicker = () => {
+      isSavedPick.current = false;
+      setModelPickerOpen(false);
     };
-    $[453] = FB;
-  } else FB = $[453];
-  let onCancel = FB;
-  let EG;
-  if ($[454] !== appState_11 || $[455] !== appState_10) {
-    EG = useMainLoopModel({
-      mainLoopModel: appState_10,
-      mainLoopModelForSession: appState_11,
+    $[453] = onCancelModelPicker;
+  } else onCancelModelPicker = $[453];
+  let onCancel = onCancelModelPicker;
+  let resolvedModel;
+  if ($[454] !== appState_7 || $[455] !== appState_6) {
+    resolvedModel = useMainLoopModel({
+      mainLoopModel: appState_6,
+      mainLoopModelForSession: appState_7,
     });
-    $[454] = appState_11;
-    $[455] = appState_10;
-    $[456] = EG;
-  } else EG = $[456];
-  let SD = EG;
-  let fastModeOnForModel = useFastModeOnForModel(appState_13, SD);
-  let $B;
+    $[454] = appState_7;
+    $[455] = appState_6;
+    $[456] = resolvedModel;
+  } else resolvedModel = $[456];
+  let activeModel = resolvedModel;
+  let fastModeOnForModel = useFastModeOnForModel(model, activeModel);
+  let modelPickerElement;
   ONe: {
-    if (!js) {
-      $B = null;
+    if (!isModelPickerOpen) {
+      modelPickerElement = null;
       break ONe;
     }
     let onSetDefault;
     if ($[457] === MEMO_CACHE_SENTINEL) {
-      onSetDefault = (Kne) => {
-        if (hasLadderForSetting(Kne)) {
+      onSetDefault = (model) => {
+        if (hasLadderForSetting(model)) {
           return;
         }
-        DB.current = true;
+        isSavedPick.current = true;
       };
       $[457] = onSetDefault;
     } else onSetDefault = $[457];
     let showFastModeNotice;
-    if ($[458] !== fastModeOnForModel || $[459] !== SD) {
+    if ($[458] !== fastModeOnForModel || $[459] !== activeModel) {
       showFastModeNotice =
-        isFastModeEnabled() && fastModeOnForModel && supportsFastMode(SD) && isFastModeAvailable();
+        isFastModeEnabled() && fastModeOnForModel && supportsFastMode(activeModel) && isFastModeAvailable();
       $[458] = fastModeOnForModel;
-      $[459] = SD;
+      $[459] = activeModel;
       $[460] = showFastModeNotice;
     } else showFastModeNotice = $[460];
-    let nb;
+    let pickerBox;
     if (
       $[461] !== onSelect ||
-      $[462] !== appState_11 ||
-      $[463] !== appState_10 ||
+      $[462] !== appState_7 ||
+      $[463] !== appState_6 ||
       $[464] !== showFastModeNotice
     ) {
-      nb = jsxProd_default(Box, {
+      pickerBox = jsxProd_default(Box, {
         flexDirection: "column",
         marginTop: 1,
         children: jsxProd_default(ModelPicker, {
-          initial: appState_10,
-          sessionModel: appState_11,
+          initial: appState_6,
+          sessionModel: appState_7,
           onSelect,
           onSetDefault,
           onCancel,
@@ -3481,25 +3671,25 @@ function PromptComposer(props) {
         }),
       });
       $[461] = onSelect;
-      $[462] = appState_11;
-      $[463] = appState_10;
+      $[462] = appState_7;
+      $[463] = appState_6;
       $[464] = showFastModeNotice;
-      $[465] = nb;
-    } else nb = $[465];
-    $B = nb;
+      $[465] = pickerBox;
+    } else pickerBox = $[465];
+    modelPickerElement = pickerBox;
   }
-  let Gne = $B;
-  let SP;
+  let modelPickerBox = modelPickerElement;
+  let showFastModeResult;
   if ($[466] !== addNotification) {
-    SP = (NG) => {
-      ga(null);
-      if (NG)
+    showFastModeResult = (resultText) => {
+      setFastModePickerState(null);
+      if (resultText)
         addNotification({
           key: "fast-mode-toggled",
           kind: "feedback",
           segments: [
             {
-              text: boldDirectMemberMessage(NG),
+              text: boldDirectMemberMessage(resultText),
             },
           ],
           priority: "immediate",
@@ -3507,58 +3697,58 @@ function PromptComposer(props) {
         });
     };
     $[466] = addNotification;
-    $[467] = SP;
-  } else SP = $[467];
-  let onDone = SP;
-  let uv;
+    $[467] = showFastModeResult;
+  } else showFastModeResult = $[467];
+  let onDone = showFastModeResult;
+  let fastModePickerBox;
   NNe: {
-    if (!_d) {
-      uv = null;
+    if (!fastModePickerState) {
+      fastModePickerBox = null;
       break NNe;
     }
-    let nb;
-    if ($[468] !== _d.unavailableReason || $[469] !== onDone || $[470] !== storageV5) {
-      nb = jsxProd_default(Box, {
+    let fastModeBox;
+    if ($[468] !== fastModePickerState.unavailableReason || $[469] !== onDone || $[470] !== storageV5) {
+      fastModeBox = jsxProd_default(Box, {
         flexDirection: "column",
         marginTop: 1,
         children: jsxProd_default(FastModePicker, {
           onDone,
-          unavailableReason: _d.unavailableReason,
+          unavailableReason: fastModePickerState.unavailableReason,
           storageV5,
         }),
       });
-      $[468] = _d.unavailableReason;
+      $[468] = fastModePickerState.unavailableReason;
       $[469] = onDone;
       $[470] = storageV5;
-      $[471] = nb;
-    } else nb = $[471];
-    uv = nb;
+      $[471] = fastModeBox;
+    } else fastModeBox = $[471];
+    fastModePickerBox = fastModeBox;
   }
-  let Qne = uv;
-  let nb;
-  if ($[472] !== addNotification || $[473] !== setAppState) {
-    nb = (Yg) => {
-      setAppState((Jg) => ({
-        ...Jg,
-        thinkingEnabled: Yg,
+  let fastModePickerColumn = fastModePickerBox;
+  let toggleThinkingHandler;
+  if ($[472] !== addNotification || $[473] !== setShowState) {
+    toggleThinkingHandler = (enabled) => {
+      setShowState((prevState) => ({
+        ...prevState,
+        thinkingEnabled: enabled,
       }));
-      rg(false);
+      setThinkingToggleOpen(false);
       getRemoteCaps()
         ?.sendControlRequest({
           subtype: "set_max_thinking_tokens",
-          max_thinking_tokens: Yg ? null : 0,
+          max_thinking_tokens: enabled ? null : 0,
         })
         .catch(logSetMaxThinkingTokensFailure);
       logEvent("tengu_thinking_toggled_hotkey", {
-        enabled: Yg,
+        enabled,
       });
       logFeatureOk("thinking_toggle");
       addNotification({
         key: "thinking-toggled-hotkey",
         kind: "feedback",
-        text: `Thinking ${Yg ? "on" : "off"}`,
-        row1Hint: `thinking ${Yg ? "on" : "off"}`,
-        ...(Yg && {
+        text: `Thinking ${enabled ? "on" : "off"}`,
+        row1Hint: `thinking ${enabled ? "on" : "off"}`,
+        ...(enabled && {
           color: "suggestion",
         }),
         priority: "immediate",
@@ -3566,28 +3756,28 @@ function PromptComposer(props) {
       });
     };
     $[472] = addNotification;
-    $[473] = setAppState;
-    $[474] = nb;
-  } else nb = $[474];
-  let onSelect_2 = nb;
-  let Xg;
+    $[473] = setShowState;
+    $[474] = toggleThinkingHandler;
+  } else toggleThinkingHandler = $[474];
+  let onSelect_2 = toggleThinkingHandler;
+  let closeThinkingToggle;
   if ($[475] === MEMO_CACHE_SENTINEL) {
-    Xg = () => {
-      rg(false);
+    closeThinkingToggle = () => {
+      setThinkingToggleOpen(false);
     };
-    $[475] = Xg;
-  } else Xg = $[475];
-  let onCancel_2 = Xg;
-  let wP;
+    $[475] = closeThinkingToggle;
+  } else closeThinkingToggle = $[475];
+  let onCancel_2 = closeThinkingToggle;
+  let thinkingBox;
   UJo: {
-    if (!du) {
-      wP = null;
+    if (!isThinkingToggleOpen) {
+      thinkingBox = null;
       break UJo;
     }
-    const currentValue = appState_12 ?? true;
-    let GB;
+    const currentValue = appState_8 ?? true;
+    let thinkingElement;
     if ($[476] !== onSelect_2 || $[477] !== isMidConversation || $[478] !== currentValue) {
-      GB = jsxProd_default(Box, {
+      thinkingElement = jsxProd_default(Box, {
         flexDirection: "column",
         marginTop: 1,
         children: jsxProd_default(ThinkingToggle, {
@@ -3600,36 +3790,36 @@ function PromptComposer(props) {
       $[476] = onSelect_2;
       $[477] = isMidConversation;
       $[478] = currentValue;
-      $[479] = GB;
-    } else GB = $[479];
-    wP = GB;
+      $[479] = thinkingElement;
+    } else thinkingElement = $[479];
+    thinkingBox = thinkingElement;
   }
-  let LNe = wP;
-  let wD;
-  if ($[480] !== Yd || $[481] !== onAccept || $[482] !== eG) {
-    wD = Yd
+  let thinkingToggleBox = thinkingBox;
+  let onboardingDialog;
+  if ($[480] !== showEnvOnboarding || $[481] !== onAccept || $[482] !== dismissEnvOnboardingStable) {
+    onboardingDialog = showEnvOnboarding
       ? jsxProd_default(AutoModeEnvOnboardingDialog, {
           onAccept,
-          onLater: eG,
-          onDismiss: eG,
+          onLater: dismissEnvOnboardingStable,
+          onDismiss: dismissEnvOnboardingStable,
         })
       : null;
-    $[480] = Yd;
+    $[480] = showEnvOnboarding;
     $[481] = onAccept;
-    $[482] = eG;
-    $[483] = wD;
-  } else wD = $[483];
-  let FNe = wD;
-  useFullscreenDialogSlot(isFullscreen ? FNe : null);
+    $[482] = dismissEnvOnboardingStable;
+    $[483] = onboardingDialog;
+  } else onboardingDialog = $[483];
+  let onboardingDialogStable = onboardingDialog;
+  useFullscreenDialogSlot(isFullscreen ? onboardingDialogStable : null);
   let ref = useFullscreenAnchor();
-  let GB;
+  let modeIndicatorElement;
   if (
     $[484] !== storeSelector_5 ||
     $[485] !== storeSelector_4 ||
     $[486] !== viewingAgentName ||
     $[487] !== viewingAgentColor
   ) {
-    GB = jsxProd_default(PromptInputModeIndicator, {
+    modeIndicatorElement = jsxProd_default(PromptInputModeIndicator, {
       mode: storeSelector_4,
       isLoading: storeSelector_5,
       viewingAgentName,
@@ -3639,116 +3829,120 @@ function PromptComposer(props) {
     $[485] = storeSelector_4;
     $[486] = viewingAgentName;
     $[487] = viewingAgentColor;
-    $[488] = GB;
-  } else GB = $[488];
-  let modeIndicator = GB;
-  let Ym = null;
-  let Jm = taskId ? appState_3[taskId] : undefined;
-  if (Jm && Jm.type === "local_workflow") {
-    let ky = Jm.status === "running";
-    let $c;
-    if ($[489] !== addNotification || $[490] !== setAppState) {
-      $c = (BNe) => {
-        if (BNe)
+    $[488] = modeIndicatorElement;
+  } else modeIndicatorElement = $[488];
+  let modeIndicator = modeIndicatorElement;
+  let dialogElement = null;
+  let workflowTask = taskId ? tasks[taskId] : undefined;
+  if (workflowTask && workflowTask.type === "local_workflow") {
+    let isWorkflowRunning = workflowTask.status === "running";
+    let onWorkflowDone;
+    if ($[489] !== addNotification || $[490] !== setShowState) {
+      onWorkflowDone = (errorText) => {
+        if (errorText)
           addNotification({
             key: "workflow-save-result",
             kind: "feedback",
-            text: BNe,
+            text: errorText,
             priority: "high",
             timeoutMs: 8000,
           });
-        setAppState(clearFooterSelection);
+        setShowState(clearFooterSelection);
       };
       $[489] = addNotification;
-      $[490] = setAppState;
-      $[491] = $c;
-    } else $c = $[491];
-    let CD = $c;
-    const initialPhaseIndex = appState_5?.phaseIndex;
+      $[490] = setShowState;
+      $[491] = onWorkflowDone;
+    } else onWorkflowDone = $[491];
+    let onWorkflowDoneStable = onWorkflowDone;
+    const initialPhaseIndex = appState_3?.phaseIndex;
     let onKill;
-    if ($[492] !== ky || $[493] !== setVoiceState || $[494] !== Jm.id) {
-      onKill = ky ? () => killWorkflowTask_2(Jm.id, setVoiceState, "user") : undefined;
-      $[492] = ky;
-      $[493] = setVoiceState;
-      $[494] = Jm.id;
+    if ($[492] !== isWorkflowRunning || $[493] !== taskStore || $[494] !== workflowTask.id) {
+      onKill = isWorkflowRunning ? () => killWorkflowTask_2(workflowTask.id, taskStore, "user") : undefined;
+      $[492] = isWorkflowRunning;
+      $[493] = taskStore;
+      $[494] = workflowTask.id;
       $[495] = onKill;
     } else onKill = $[495];
     let onPause;
-    if ($[496] !== ky || $[497] !== setVoiceState || $[498] !== Jm.id) {
-      onPause = ky ? () => pauseWorkflowTask_2(Jm.id, setVoiceState) : undefined;
-      $[496] = ky;
-      $[497] = setVoiceState;
-      $[498] = Jm.id;
+    if ($[496] !== isWorkflowRunning || $[497] !== taskStore || $[498] !== workflowTask.id) {
+      onPause = isWorkflowRunning ? () => pauseWorkflowTask_2(workflowTask.id, taskStore) : undefined;
+      $[496] = isWorkflowRunning;
+      $[497] = taskStore;
+      $[498] = workflowTask.id;
       $[499] = onPause;
     } else onPause = $[499];
     let onResume;
-    if ($[500] !== CD || $[501] !== Tc) {
-      onResume = (EAt) => {
-        CD();
-        Tc(EAt, true, undefined, false, undefined, true);
+    if ($[500] !== onWorkflowDoneStable || $[501] !== handleSubmit) {
+      onResume = (input) => {
+        onWorkflowDoneStable();
+        handleSubmit(input, true, undefined, false, undefined, true);
       };
-      $[500] = CD;
-      $[501] = Tc;
+      $[500] = onWorkflowDoneStable;
+      $[501] = handleSubmit;
       $[502] = onResume;
     } else onResume = $[502];
     let onSkipAgent;
-    if ($[503] !== ky || $[504] !== setVoiceState || $[505] !== Jm.id) {
-      onSkipAgent = ky ? (DAt) => skipWorkflowAgent_2(Jm.id, DAt, setVoiceState) : undefined;
-      $[503] = ky;
-      $[504] = setVoiceState;
-      $[505] = Jm.id;
+    if ($[503] !== isWorkflowRunning || $[504] !== taskStore || $[505] !== workflowTask.id) {
+      onSkipAgent = isWorkflowRunning
+        ? (agentId) => skipWorkflowAgent_2(workflowTask.id, agentId, taskStore)
+        : undefined;
+      $[503] = isWorkflowRunning;
+      $[504] = taskStore;
+      $[505] = workflowTask.id;
       $[506] = onSkipAgent;
     } else onSkipAgent = $[506];
     let onRetryAgent;
-    if ($[507] !== ky || $[508] !== setVoiceState || $[509] !== Jm.id) {
-      onRetryAgent = ky ? (Yne) => retryWorkflowAgent_2(Jm.id, Yne, setVoiceState) : undefined;
-      $[507] = ky;
-      $[508] = setVoiceState;
-      $[509] = Jm.id;
+    if ($[507] !== isWorkflowRunning || $[508] !== taskStore || $[509] !== workflowTask.id) {
+      onRetryAgent = isWorkflowRunning
+        ? (agentId) => retryWorkflowAgent_2(workflowTask.id, agentId, taskStore)
+        : undefined;
+      $[507] = isWorkflowRunning;
+      $[508] = taskStore;
+      $[509] = workflowTask.id;
       $[510] = onRetryAgent;
     } else onRetryAgent = $[510];
-    let CP;
+    let workflowDialog;
     if (
-      $[511] !== CD ||
+      $[511] !== onWorkflowDoneStable ||
       $[512] !== initialPhaseIndex ||
       $[513] !== onKill ||
       $[514] !== onPause ||
       $[515] !== onResume ||
       $[516] !== onSkipAgent ||
       $[517] !== onRetryAgent ||
-      $[518] !== Jm
+      $[518] !== workflowTask
     ) {
-      CP = jsxProd_default(WorkflowDetailDialog_2, {
-        workflow: Jm,
+      workflowDialog = jsxProd_default(WorkflowDetailDialog_2, {
+        workflow: workflowTask,
         initialPhaseIndex,
-        onDone: CD,
+        onDone: onWorkflowDoneStable,
         onKill,
         onPause,
         onResume,
         onSkipAgent,
         onRetryAgent,
       });
-      $[511] = CD;
+      $[511] = onWorkflowDoneStable;
       $[512] = initialPhaseIndex;
       $[513] = onKill;
       $[514] = onPause;
       $[515] = onResume;
       $[516] = onSkipAgent;
       $[517] = onRetryAgent;
-      $[518] = Jm;
-      $[519] = CP;
-    } else CP = $[519];
-    Ym = CP;
-  } else if (storeSelector && Oi) {
-    let $c;
+      $[518] = workflowTask;
+      $[519] = workflowDialog;
+    } else workflowDialog = $[519];
+    dialogElement = workflowDialog;
+  } else if (storeSelector && tasksFooterVisible) {
+    let cloudTasksDialog;
     if ($[520] !== chrome.closeBashesDialog) {
-      $c = jsxProd_default(CloudTasksDialog, {
+      cloudTasksDialog = jsxProd_default(CloudTasksDialog, {
         onDone: chrome.closeBashesDialog,
       });
       $[520] = chrome.closeBashesDialog;
-      $[521] = $c;
-    } else $c = $[521];
-    Ym = $c;
+      $[521] = cloudTasksDialog;
+    } else cloudTasksDialog = $[521];
+    dialogElement = cloudTasksDialog;
   } else if (storeSelector) {
     const onDone = chrome.closeBashesDialog;
     let tools;
@@ -3758,7 +3952,7 @@ function PromptComposer(props) {
       $[523] = tools;
     } else tools = $[523];
     const initialDetailTaskId = typeof storeSelector === "string" ? storeSelector : undefined;
-    let vy;
+    let backgroundTasksDialog;
     if (
       $[524] !== chrome.closeBashesDialog ||
       $[525] !== commandQueueOrDefault ||
@@ -3769,7 +3963,7 @@ function PromptComposer(props) {
       $[530] !== initialDetailTaskId ||
       $[531] !== verbose
     ) {
-      vy = jsxProd_default(BackgroundTasksDialog, {
+      backgroundTasksDialog = jsxProd_default(BackgroundTasksDialog, {
         onDone,
         storageV5,
         session,
@@ -3787,10 +3981,10 @@ function PromptComposer(props) {
       $[529] = tools;
       $[530] = initialDetailTaskId;
       $[531] = verbose;
-      $[532] = vy;
-    } else vy = $[532];
-    Ym = vy;
-  } else if (isFullscreenActive() && ol) {
+      $[532] = backgroundTasksDialog;
+    } else backgroundTasksDialog = $[532];
+    dialogElement = backgroundTasksDialog;
+  } else if (isFullscreenActive() && isHistorySearchOpen) {
     let onSelect;
     if (
       $[533] !== draft ||
@@ -3799,18 +3993,18 @@ function PromptComposer(props) {
       $[536] !== setValue ||
       $[537] !== setPastedContents
     ) {
-      onSelect = (OAt) => {
-        let HNe = renumberPastedContents({
-          display: OAt.display,
-          pastedContents: OAt.pastedContents,
+      onSelect = (entry) => {
+        let renumbered = renumberPastedContents({
+          display: entry.display,
+          pastedContents: entry.pastedContents,
         });
-        let modeFromInput = getModeFromInput_2(HNe.display);
-        let NAt = stripModePrefix(HNe.display);
+        let modeFromInput = getModeFromInput_2(renumbered.display);
+        let strippedDisplay = stripModePrefix(renumbered.display);
         setMode(modeFromInput);
-        draft.attribute(IT, () => setValue(NAt));
-        setPastedContents(HNe.pastedContents);
-        setCursorOffset(NAt.length);
-        ed(false);
+        draft.attribute(historyPromptOrigin, () => setValue(strippedDisplay));
+        setPastedContents(renumbered.pastedContents);
+        setCursorOffset(strippedDisplay.length);
+        setHistorySearchOpen(false);
       };
       $[533] = draft;
       $[534] = setMode;
@@ -3821,107 +4015,108 @@ function PromptComposer(props) {
     } else onSelect = $[538];
     let onCancel;
     if ($[539] === MEMO_CACHE_SENTINEL) {
-      onCancel = () => ed(false);
+      onCancel = () => setHistorySearchOpen(false);
       $[539] = onCancel;
     } else onCancel = $[539];
-    let cg;
+    let historySearchDialog;
     if ($[540] !== draft.value || $[541] !== onSelect) {
-      cg = jsxProd_default(HistorySearchDialog, {
+      historySearchDialog = jsxProd_default(HistorySearchDialog, {
         initialQuery: draft.value,
         onSelect,
         onCancel,
       });
       $[540] = draft.value;
       $[541] = onSelect;
-      $[542] = cg;
-    } else cg = $[542];
-    Ym = cg;
-  } else if (Gne) Ym = Gne;
-  else if (Qne) Ym = Qne;
-  else if (LNe) Ym = LNe;
-  else if (effortStepKeys !== null) Ym = effortStepKeys;
-  else if (qa) {
+      $[542] = historySearchDialog;
+    } else historySearchDialog = $[542];
+    dialogElement = historySearchDialog;
+  } else if (modelPickerBox) dialogElement = modelPickerBox;
+  else if (fastModePickerColumn) dialogElement = fastModePickerColumn;
+  else if (thinkingToggleBox) dialogElement = thinkingToggleBox;
+  else if (effortStepKeys !== null) dialogElement = effortStepKeys;
+  else if (isWizardOpen) {
     let onDone;
     if ($[543] === MEMO_CACHE_SENTINEL) {
-      onDone = () => pd(false);
+      onDone = () => setWizardOpen(false);
       $[543] = onDone;
     } else onDone = $[543];
-    let sf;
-    if ($[544] !== $l) {
-      sf = jsxProd_default(WizardNavigationFooter, {
+    let wizardFooter;
+    if ($[544] !== cloudRowCheck) {
+      wizardFooter = jsxProd_default(WizardNavigationFooter, {
         onDone,
-        cloudRowCheck: $l,
+        cloudRowCheck,
       });
-      $[544] = $l;
-      $[545] = sf;
-    } else sf = $[545];
-    Ym = sf;
-  } else if (as) {
-    let $c;
-    if ($[546] !== Dd) {
-      $c = jsxProd_default(BridgeDialog, {
+      $[544] = cloudRowCheck;
+      $[545] = wizardFooter;
+    } else wizardFooter = $[545];
+    dialogElement = wizardFooter;
+  } else if (isBridgeDialogOpen) {
+    let bridgeDialog;
+    if ($[546] !== selectFooterTab) {
+      bridgeDialog = jsxProd_default(BridgeDialog, {
         onDone: () => {
-          pi(false);
-          Dd(null);
+          setBridgeDialogOpen(false);
+          selectFooterTab(null);
         },
       });
-      $[546] = Dd;
-      $[547] = $c;
-    } else $c = $[547];
-    Ym = $c;
-  } else if (Si) {
-    let $c;
+      $[546] = selectFooterTab;
+      $[547] = bridgeDialog;
+    } else bridgeDialog = $[547];
+    dialogElement = bridgeDialog;
+  } else if (isExternalEditorActive) {
+    let editorWaitNotice;
     if ($[548] !== columns || $[549] !== storeSelector_4) {
-      $c = jsxProd_default(EditorWaitNotice, {
+      editorWaitNotice = jsxProd_default(EditorWaitNotice, {
         mode: storeSelector_4,
         columns,
       });
       $[548] = columns;
       $[549] = storeSelector_4;
-      $[550] = $c;
-    } else $c = $[550];
-    Ym = $c;
+      $[550] = editorWaitNotice;
+    } else editorWaitNotice = $[550];
+    dialogElement = editorWaitNotice;
   }
-  let inputTakesFocus = Ym === null && !isSearching && !Go;
-  let Jne = Ym !== null || Qm || appState_2 !== null || yl !== null;
-  let $c;
-  let sf;
-  if ($[551] !== draft || $[552] !== Jne) {
-    $c = () => {
-      draft.setInputRowReplaced(Jne);
+  let inputTakesFocus = dialogElement === null && !isSearching && !isModalOverlayActive;
+  let isInputRowReplaced =
+    dialogElement !== null || isOverlayOpen || appState_2 !== null || activeFooterTab !== null;
+  let inputRowReplacedEffect;
+  let inputRowReplacedDeps;
+  if ($[551] !== draft || $[552] !== isInputRowReplaced) {
+    inputRowReplacedEffect = () => {
+      draft.setInputRowReplaced(isInputRowReplaced);
       return () => draft.setInputRowReplaced(false);
     };
-    sf = [Jne, draft];
+    inputRowReplacedDeps = [isInputRowReplaced, draft];
     $[551] = draft;
-    $[552] = Jne;
-    $[553] = $c;
-    $[554] = sf;
+    $[552] = isInputRowReplaced;
+    $[553] = inputRowReplacedEffect;
+    $[554] = inputRowReplacedDeps;
   } else {
-    $c = $[553];
-    sf = $[554];
+    inputRowReplacedEffect = $[553];
+    inputRowReplacedDeps = $[554];
   }
-  P($c, sf);
-  const hidden = Ym !== null;
+  useEffect(inputRowReplacedEffect, inputRowReplacedDeps);
+  const hidden = dialogElement !== null;
   let onOpenHistorySearch;
-  if ($[555] !== openSearch || $[556] !== fG) {
-    onOpenHistorySearch = isFullscreenActive() ? fG : openSearch;
+  if ($[555] !== openSearch || $[556] !== openHistorySearchStable) {
+    onOpenHistorySearch = isFullscreenActive() ? openHistorySearchStable : openSearch;
     $[555] = openSearch;
-    $[556] = fG;
+    $[556] = openHistorySearchStable;
     $[557] = onOpenHistorySearch;
   } else onOpenHistorySearch = $[557];
-  const footerItemSelected = yl !== null;
-  let Y_;
+  const footerItemSelected = activeFooterTab !== null;
+  let promptInputElement;
   if (
-    $[558] !== Yp ||
+    $[558] !== chordGestureSpent ||
     $[559] !== chrome ||
     $[560] !== dispatchCommand ||
     $[561] !== draft ||
     $[562] !== embedded ||
-    $[563] !== onHistoryDownPastEnd ||
-    $[564] !== cooldown ||
-    $[565] !== tb ||
+    $[563] !== onHistoryDownPastEnd_2 ||
+    $[564] !== fastModeCooldownActive ||
+    $[565] !== fastModeTagStable ||
     $[566] !== shadowedFooterActionHandler ||
-    $[567] !== $n ||
+    $[567] !== isHelpOpen ||
     $[568] !== historyFailedMatch ||
     $[569] !== historyMatch ||
     $[570] !== historyQuery ||
@@ -3929,45 +4124,45 @@ function PromptComposer(props) {
     $[572] !== ideSelection ||
     $[573] !== promptChromeRows ||
     $[574] !== inputTakesFocus ||
-    $[575] !== zg ||
-    $[576] !== Go ||
+    $[575] !== refusalSettingsTag ||
+    $[576] !== isModalOverlayActive ||
     $[577] !== isSearching ||
     $[578] !== leftArrowGesture ||
     $[579] !== markAccepted ||
     $[580] !== modeIndicator ||
-    $[581] !== Tc ||
+    $[581] !== handleSubmit ||
     $[582] !== placeholder ||
     $[583] !== scope ||
-    $[584] !== on ||
-    $[585] !== _o ||
+    $[584] !== setHelpOpen ||
+    $[585] !== suggestionsStore ||
     $[586] !== hidden ||
     $[587] !== onOpenHistorySearch ||
     $[588] !== footerItemSelected ||
     $[589] !== takeEnter ||
-    $[590] !== Pc ||
+    $[590] !== toggleHelpStable ||
     $[591] !== topBorderText_2 ||
     $[592] !== transcript ||
     $[593] !== turn ||
     $[594] !== ultraEffortTag_2
   ) {
-    Y_ = jsxProd_default(
+    promptInputElement = jsxProd_default(
       PromptInputMemo,
       {
-        ref: Xo,
+        ref: composerHandleRef,
         draft,
         transcript,
         scope,
         turn,
         chrome,
-        suggestionsStore: _o,
+        suggestionsStore,
         hidden,
         inputTakesFocus,
         takePendingPastes,
         takeEnter,
         embedded,
-        onSubmit: Tc,
+        onSubmit: handleSubmit,
         dispatchCommand,
-        chordGestureSpent: Yp,
+        chordGestureSpent,
         markAccepted,
         isSearchingHistory: isSearching,
         historyQuery,
@@ -3975,40 +4170,40 @@ function PromptComposer(props) {
         historyFailedMatch,
         historySearchKeyDown: handleKeyDown,
         onOpenHistorySearch,
-        helpOpen: $n,
-        setHelpOpen: on,
-        toggleHelp: Pc,
-        isModalOverlayActive: Go,
+        helpOpen: isHelpOpen,
+        setHelpOpen,
+        toggleHelp: toggleHelpStable,
+        isModalOverlayActive,
         footerItemSelected,
         ideSelectionRidesRow1: promptChromeRows,
         footerOwnsKeyOf: shadowedFooterActionHandler,
-        onHistoryDownPastEnd,
+        onHistoryDownPastEnd: onHistoryDownPastEnd_2,
         placeholder,
         leftArrowRoute: leftArrowGesture,
         modeIndicator,
         ideSelection,
         topBorderText: topBorderText_2,
-        fastModeTag: tb,
-        fastModeCooldown: cooldown,
+        fastModeTag: fastModeTagStable,
+        fastModeCooldown: fastModeCooldownActive,
         ultraEffortTag: ultraEffortTag_2,
-        internalTag: zg,
-        onIsPastingChange: Gs,
+        internalTag: refusalSettingsTag,
+        onIsPastingChange: setIsPasting,
         onExitMessage,
-        onExpandPasteHintChange: $a,
-        onExternalEditorActiveChange: na,
+        onExpandPasteHintChange: setShowExpandPasteHint,
+        onExternalEditorActiveChange: setIsExternalEditorActive,
       },
       "editor",
     );
-    $[558] = Yp;
+    $[558] = chordGestureSpent;
     $[559] = chrome;
     $[560] = dispatchCommand;
     $[561] = draft;
     $[562] = embedded;
-    $[563] = onHistoryDownPastEnd;
-    $[564] = cooldown;
-    $[565] = tb;
+    $[563] = onHistoryDownPastEnd_2;
+    $[564] = fastModeCooldownActive;
+    $[565] = fastModeTagStable;
     $[566] = shadowedFooterActionHandler;
-    $[567] = $n;
+    $[567] = isHelpOpen;
     $[568] = historyFailedMatch;
     $[569] = historyMatch;
     $[570] = historyQuery;
@@ -4016,68 +4211,73 @@ function PromptComposer(props) {
     $[572] = ideSelection;
     $[573] = promptChromeRows;
     $[574] = inputTakesFocus;
-    $[575] = zg;
-    $[576] = Go;
+    $[575] = refusalSettingsTag;
+    $[576] = isModalOverlayActive;
     $[577] = isSearching;
     $[578] = leftArrowGesture;
     $[579] = markAccepted;
     $[580] = modeIndicator;
-    $[581] = Tc;
+    $[581] = handleSubmit;
     $[582] = placeholder;
     $[583] = scope;
-    $[584] = on;
-    $[585] = _o;
+    $[584] = setHelpOpen;
+    $[585] = suggestionsStore;
     $[586] = hidden;
     $[587] = onOpenHistorySearch;
     $[588] = footerItemSelected;
     $[589] = takeEnter;
-    $[590] = Pc;
+    $[590] = toggleHelpStable;
     $[591] = topBorderText_2;
     $[592] = transcript;
     $[593] = turn;
     $[594] = ultraEffortTag_2;
-    $[595] = Y_;
-  } else Y_ = $[595];
-  let FG = Y_;
-  if (Ym !== null) {
-    let Cy;
-    if ($[596] !== FG || $[597] !== Ym) {
-      Cy = jsxProd_default_2(Box, {
+    $[595] = promptInputElement;
+  } else promptInputElement = $[595];
+  let promptInputElementStable = promptInputElement;
+  if (dialogElement !== null) {
+    let dialogColumn;
+    if ($[596] !== promptInputElementStable || $[597] !== dialogElement) {
+      dialogColumn = jsxProd_default_2(Box, {
         flexDirection: "column",
-        children: [Ym, FG],
+        children: [dialogElement, promptInputElementStable],
       });
-      $[596] = FG;
-      $[597] = Ym;
-      $[598] = Cy;
-    } else Cy = $[598];
-    return Cy;
+      $[596] = promptInputElementStable;
+      $[597] = dialogElement;
+      $[598] = dialogColumn;
+    } else dialogColumn = $[598];
+    return dialogColumn;
   }
-  const marginTop = Hs ? 0 : 1;
-  let CP;
-  if ($[599] !== yl || $[600] !== onKeyDown || $[601] !== Go || $[602] !== gw) {
-    CP =
-      yl &&
-      !Go &&
+  const marginTop = isBriefOnly ? 0 : 1;
+  let footerKeyCapture;
+  if (
+    $[599] !== activeFooterTab ||
+    $[600] !== onKeyDown ||
+    $[601] !== isModalOverlayActive ||
+    $[602] !== queuePaste
+  ) {
+    footerKeyCapture =
+      activeFooterTab &&
+      !isModalOverlayActive &&
       jsxProd_default(Box, {
         tabIndex: 0,
         autoFocus: true,
         onKeyDown,
         onPaste: (event) => {
           event.preventDefault();
-          gw(event);
+          queuePaste(event);
         },
       });
-    $[599] = yl;
+    $[599] = activeFooterTab;
     $[600] = onKeyDown;
-    $[601] = Go;
-    $[602] = gw;
-    $[603] = CP;
-  } else CP = $[603];
-  let Xne;
-  if ($[604] !== storeSelector_2 || $[605] !== Hh) {
-    Xne =
+    $[601] = isModalOverlayActive;
+    $[602] = queuePaste;
+    $[603] = footerKeyCapture;
+  } else footerKeyCapture = $[603];
+  let waitingForPermission;
+  if ($[604] !== storeSelector_2 || $[605] !== showStatusNotices) {
+    waitingForPermission =
       storeSelector_2 &&
-      !Hh &&
+      !showStatusNotices &&
       jsxProd_default(Box, {
         marginTop: 1,
         marginLeft: 2,
@@ -4087,224 +4287,241 @@ function PromptComposer(props) {
         }),
       });
     $[604] = storeSelector_2;
-    $[605] = Hh;
-    $[606] = Xne;
-  } else Xne = $[606];
-  const UNe = !isScreenReaderEnabled && FG;
-  let FAt;
+    $[605] = showStatusNotices;
+    $[606] = waitingForPermission;
+  } else waitingForPermission = $[606];
+  const promptInputVisible = !isScreenReaderEnabled && promptInputElementStable;
+  let statusNoticeList;
   if ($[607] === MEMO_CACHE_SENTINEL) {
-    FAt = jsxProd_default(StatusNoticeList, {});
-    $[607] = FAt;
-  } else FAt = $[607];
-  const leftArrowDetachAvailable = leftArrowGesture !== undefined && !leftArrowGesture.onlyExplains && !Cn;
+    statusNoticeList = jsxProd_default(StatusNoticeList, {});
+    $[607] = statusNoticeList;
+  } else statusNoticeList = $[607];
+  const leftArrowDetachAvailable =
+    leftArrowGesture !== undefined && !leftArrowGesture.onlyExplains && !isDetachSuppressed;
   const vimMode_2 = editorMode ? vimMode : undefined;
   const suppressHint = !storeSelector_3;
-  let Zne;
+  let footerElement;
   if (
     $[608] !== bridgeSelected ||
     $[609] !== chrome ||
     $[610] !== toolPermissionContext ||
-    $[611] !== or ||
+    $[611] !== exitMessage ||
     $[612] !== hasStash ||
-    $[613] !== $n ||
+    $[613] !== isHelpOpen ||
     $[614] !== historyFailedMatch ||
     $[615] !== historyQuery ||
     $[616] !== ideSelectionSelected ||
     $[617] !== inputTakesFocus ||
-    $[618] !== Zn ||
+    $[618] !== isAutoUpdating ||
     $[619] !== isInputWrapped ||
-    $[620] !== ss ||
+    $[620] !== isPasting ||
     $[621] !== isSearching ||
     $[622] !== proactivityStepState.collapsed ||
     $[623] !== proactivityStepState.stepped ||
     $[624] !== storeSelector_4 ||
-    $[625] !== F_ ||
-    $[626] !== dm ||
+    $[625] !== openArtifactsStable ||
+    $[626] !== row1Hint ||
     $[627] !== scope ||
     $[628] !== setHistoryQuery ||
-    $[629] !== ma ||
-    $[630] !== _o.drawn ||
+    $[629] !== showExpandPasteHint ||
+    $[630] !== suggestionsStore.drawn ||
     $[631] !== leftArrowDetachAvailable ||
     $[632] !== vimMode_2 ||
     $[633] !== suppressHint ||
-    $[634] !== Uc ||
+    $[634] !== tasksTabSelected ||
     $[635] !== transcript ||
     $[636] !== turn ||
     $[637] !== verbose
   ) {
-    Zne = jsxProd_default(PromptInputFooterMemo, {
+    footerElement = jsxProd_default(PromptInputFooterMemo, {
       scope,
       transcript,
       turn,
       chrome,
-      exitMessage: or,
-      row1Hint: dm,
+      exitMessage,
+      row1Hint,
       leftArrowDetachAvailable,
       proactivityLevelStepped: proactivityStepState.stepped,
       proactivityPillCollapsed: proactivityStepState.collapsed,
       vimMode: vimMode_2,
       mode: storeSelector_4,
-      isAutoUpdating: Zn,
+      isAutoUpdating,
       verbose,
-      onChangeIsUpdating: Un,
-      suggestionsStore: _o.drawn,
+      onChangeIsUpdating: setIsAutoUpdating,
+      suggestionsStore: suggestionsStore.drawn,
       inputTakesFocus,
       onSelectSuggestion,
       onHoverSuggestion,
       toolPermissionContext,
-      helpOpen: $n,
+      helpOpen: isHelpOpen,
       suppressHint,
-      tasksSelected: Uc,
+      tasksSelected: tasksTabSelected,
       bridgeSelected,
       ideSelectionSelected,
-      isPasting: ss,
-      showExpandPasteHint: ma,
+      isPasting,
+      showExpandPasteHint,
       hasStash,
       isInputWrapped,
       isSearching,
       historyQuery,
       setHistoryQuery,
       historyFailedMatch,
-      onOpenArtifacts: F_,
+      onOpenArtifacts: openArtifactsStable,
     });
     $[608] = bridgeSelected;
     $[609] = chrome;
     $[610] = toolPermissionContext;
-    $[611] = or;
+    $[611] = exitMessage;
     $[612] = hasStash;
-    $[613] = $n;
+    $[613] = isHelpOpen;
     $[614] = historyFailedMatch;
     $[615] = historyQuery;
     $[616] = ideSelectionSelected;
     $[617] = inputTakesFocus;
-    $[618] = Zn;
+    $[618] = isAutoUpdating;
     $[619] = isInputWrapped;
-    $[620] = ss;
+    $[620] = isPasting;
     $[621] = isSearching;
     $[622] = proactivityStepState.collapsed;
     $[623] = proactivityStepState.stepped;
     $[624] = storeSelector_4;
-    $[625] = F_;
-    $[626] = dm;
+    $[625] = openArtifactsStable;
+    $[626] = row1Hint;
     $[627] = scope;
     $[628] = setHistoryQuery;
-    $[629] = ma;
-    $[630] = _o.drawn;
+    $[629] = showExpandPasteHint;
+    $[630] = suggestionsStore.drawn;
     $[631] = leftArrowDetachAvailable;
     $[632] = vimMode_2;
     $[633] = suppressHint;
-    $[634] = Uc;
+    $[634] = tasksTabSelected;
     $[635] = transcript;
     $[636] = turn;
     $[637] = verbose;
-    $[638] = Zne;
-  } else Zne = $[638];
-  let ere;
-  if ($[639] !== $l || $[640] !== frameFooterState) {
-    ere = frameFooterState
+    $[638] = footerElement;
+  } else footerElement = $[638];
+  let noConversationsMessage;
+  if ($[639] !== cloudRowCheck || $[640] !== frameFooterState) {
+    noConversationsMessage = frameFooterState
       ? jsxProd_default(NoConversationsMessage, {
-          cloudRowCheck: $l,
+          cloudRowCheck,
         })
       : null;
-    $[639] = $l;
+    $[639] = cloudRowCheck;
     $[640] = frameFooterState;
-    $[641] = ere;
-  } else ere = $[641];
-  const VNe = isFullscreen ? null : FNe;
-  let tre;
+    $[641] = noConversationsMessage;
+  } else noConversationsMessage = $[641];
+  const onboardingNotice = isFullscreen ? null : onboardingDialogStable;
+  let notificationOverlay;
   if (
-    $[642] !== Yd ||
-    $[643] !== Hs ||
+    $[642] !== showEnvOnboarding ||
+    $[643] !== isBriefOnly ||
     $[644] !== isFullscreen ||
     $[645] !== hasStash ||
     $[646] !== storeSelector_8 ||
     $[647] !== hideLoginNotice ||
-    $[648] !== Zn ||
+    $[648] !== isAutoUpdating ||
     $[649] !== isInputWrapped ||
-    $[650] !== dm?.id ||
+    $[650] !== row1Hint?.id ||
     $[651] !== scope ||
     $[652] !== transcript ||
     $[653] !== verbose
   ) {
-    tre = isFullscreen
+    notificationOverlay = isFullscreen
       ? jsxProd_default(NotificationOverlay, {
-          marginTop: Hs ? -2 : -1,
-          height: !storeSelector_8 && !Yd ? 1 : 0,
+          marginTop: isBriefOnly ? -2 : -1,
+          height: !storeSelector_8 && !showEnvOnboarding ? 1 : 0,
           children: jsxProd_default(Notifications, {
             apiKeyVerification: scope.apiKeyVerification,
             hideLoginNotice,
-            isAutoUpdating: Zn,
+            isAutoUpdating,
             verbose,
             transcript,
-            onChangeIsUpdating: Un,
+            onChangeIsUpdating: setIsAutoUpdating,
             isInputWrapped,
             hasStash,
-            row1HintId: dm?.id,
+            row1HintId: row1Hint?.id,
           }),
         })
       : null;
-    $[642] = Yd;
-    $[643] = Hs;
+    $[642] = showEnvOnboarding;
+    $[643] = isBriefOnly;
     $[644] = isFullscreen;
     $[645] = hasStash;
     $[646] = storeSelector_8;
     $[647] = hideLoginNotice;
-    $[648] = Zn;
+    $[648] = isAutoUpdating;
     $[649] = isInputWrapped;
-    $[650] = dm?.id;
+    $[650] = row1Hint?.id;
     $[651] = scope;
     $[652] = transcript;
     $[653] = verbose;
-    $[654] = tre;
-  } else tre = $[654];
-  const GNe = isScreenReaderEnabled && FG;
-  let BAt;
+    $[654] = notificationOverlay;
+  } else notificationOverlay = $[654];
+  const promptInputScreenReader = isScreenReaderEnabled && promptInputElementStable;
+  let rootBox;
   if (
     $[655] !== ref ||
     $[656] !== marginTop ||
-    $[657] !== CP ||
-    $[658] !== Xne ||
-    $[659] !== UNe ||
-    $[660] !== Zne ||
-    $[661] !== ere ||
-    $[662] !== VNe ||
-    $[663] !== tre ||
-    $[664] !== GNe
+    $[657] !== footerKeyCapture ||
+    $[658] !== waitingForPermission ||
+    $[659] !== promptInputVisible ||
+    $[660] !== footerElement ||
+    $[661] !== noConversationsMessage ||
+    $[662] !== onboardingNotice ||
+    $[663] !== notificationOverlay ||
+    $[664] !== promptInputScreenReader
   ) {
-    BAt = jsxProd_default_2(Box, {
+    rootBox = jsxProd_default_2(Box, {
       ref,
       flexDirection: "column",
       marginTop,
-      children: [CP, Xne, UNe, FAt, Zne, ere, VNe, tre, GNe],
+      children: [
+        footerKeyCapture,
+        waitingForPermission,
+        promptInputVisible,
+        statusNoticeList,
+        footerElement,
+        noConversationsMessage,
+        onboardingNotice,
+        notificationOverlay,
+        promptInputScreenReader,
+      ],
     });
     $[655] = ref;
     $[656] = marginTop;
-    $[657] = CP;
-    $[658] = Xne;
-    $[659] = UNe;
-    $[660] = Zne;
-    $[661] = ere;
-    $[662] = VNe;
-    $[663] = tre;
-    $[664] = GNe;
-    $[665] = BAt;
-  } else BAt = $[665];
-  return BAt;
+    $[657] = footerKeyCapture;
+    $[658] = waitingForPermission;
+    $[659] = promptInputVisible;
+    $[660] = footerElement;
+    $[661] = noConversationsMessage;
+    $[662] = onboardingNotice;
+    $[663] = notificationOverlay;
+    $[664] = promptInputScreenReader;
+    $[665] = rootBox;
+  } else rootBox = $[665];
+  return rootBox;
 }
 //@ chunk-18hwfzwa.js:978434-978508 placement
-function hasUserOrAssistantMessage(h) {
-  return h.some((x) => x.type === "user" || x.type === "assistant");
+function hasUserOrAssistantMessage(messages) {
+  return messages.some((message) => message.type === "user" || message.type === "assistant");
 }
 //@ chunk-18hwfzwa.js:978508-978565 placement
-function hasAssistantMessage(h) {
-  return h.some((x) => x.type === "assistant");
+function hasAssistantMessage(messages) {
+  return messages.some((message) => message.type === "assistant");
 }
 //@ chunk-18hwfzwa.js:978565-978610 placement
-function hasSuggestions(h) {
-  return h.suggestions.length > 0;
+function hasSuggestions(state) {
+  return state.suggestions.length > 0;
 }
 //@ chunk-18hwfzwa.js:978610-978626 placement
-var PromptComposerMemo = Rh(PromptComposer);
+var PromptComposerMemo; // deferred: uses PromptComposer of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:978610", () => {
+  PromptComposerMemo = memo(PromptComposer);
+});
 //@ chunk-18hwfzwa.js:978626-978630 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:978626", () => {
+  init_react_production();
+});
 export { PromptComposerMemo };

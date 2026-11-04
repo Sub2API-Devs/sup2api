@@ -11,7 +11,13 @@
 import { mkdir, lstat, rm } from "fs/promises";
 import { posix } from "path";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { zodStrictObject, string, M, u, _enum } from "../../vendor/zod/v4/classic/schemas.js";
+import {
+  zodStrictObject,
+  stringSchema,
+  booleanSchema,
+  objectSchema,
+  _enum,
+} from "../../vendor/zod/v4/classic/schemas.js";
 import { getAPIProvider } from "../utils/model/providers.js";
 import { getStageFileRoot } from "../utils/stageFileRoots.js";
 import { env } from "../utils/env.js";
@@ -23,15 +29,15 @@ import { retryFsOp } from "../utils/atomicPublishWrite.js";
  */
 var fetchAttachmentInputSchema = DoctorLazy(() =>
   zodStrictObject({
-    file_uuid: string().min(1).max(256),
-    name: string().min(1),
-    keep_existing: M().optional(),
+    file_uuid: stringSchema().min(1).max(256),
+    name: stringSchema().min(1),
+    keep_existing: booleanSchema().optional(),
   }),
 );
 var fetchAttachmentResultSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     outcome: _enum(["placed", "kept", "too_large", "failed"]),
-    reason: string()
+    reason: stringSchema()
       .regex(/^[a-z_]{1,32}$/)
       .optional(),
   }),
@@ -41,12 +47,12 @@ var fetchAttachmentResultSchema = DoctorLazy(() =>
  * 下载会话附件：校验文件名、只在第一方 API 提供方下可用
  */
 async function fetchSessionAttachment(
-  y,
-  r,
+  input,
+  signal,
   { heldDirectory, isPlaceableName, placeUnlessFileStands, refuseLinkToNetworkPath },
 ) {
-  let t = fetchAttachmentInputSchema().parse(y);
-  if (!isPlaceableName(t.name))
+  let request = fetchAttachmentInputSchema().parse(input);
+  if (!isPlaceableName(request.name))
     throw Error(
       'name must be a file name of at most 255 bytes, with no directory, that does not begin with ".stage-tmp."',
     );
@@ -63,12 +69,12 @@ async function fetchSessionAttachment(
   await mkdir(stageFileRoot, {
     recursive: true,
   });
-  await using l = await heldDirectory(stageFileRoot);
-  let joined = posix.join(l.path, t.name);
+  await using holding = await heldDirectory(stageFileRoot);
+  let joined = posix.join(holding.path, request.name);
   if (
-    t.keep_existing &&
+    request.keep_existing &&
     (await lstat(joined).then(
-      (n) => n.isFile(),
+      (stat) => stat.isFile(),
       () => false,
     ))
   )
@@ -79,18 +85,18 @@ async function fetchSessionAttachment(
       },
     };
   let [
-    { DOWNLOAD_TRIES: d, downloadWithRetries: b },
-    { openSpill: k },
-    { getBridgeAccessToken: v, getBridgeBaseUrlOverride: x, isBridgeFileLoginRefused: z },
-    { settleStoredLoginRefusal: T },
+    { DOWNLOAD_TRIES: tries, downloadWithRetries },
+    { openSpill },
+    { getBridgeAccessToken, getBridgeBaseUrlOverride, isBridgeFileLoginRefused },
+    { settleStoredLoginRefusal },
   ] = await Promise.all([
-    import("./chunk-xth3wpgt.js"),
-    import("./chunk-pw15vxqt.js"),
-    import("./chunk-prxvet9q.js"),
-    import("./chunk-4pp40e39.js"),
+    import("./inboundAttachments.js"),
+    import("./inboundAttachmentSpill.js"),
+    import("./bridgeConfig.js"),
+    import("../utils/auth/storedLoginRefused.js"),
   ]);
-  await T();
-  if (z())
+  await settleStoredLoginRefusal();
+  if (isBridgeFileLoginRefused())
     return {
       summary: "not downloaded (reason code: stored_login_refused)",
       output: {
@@ -99,32 +105,38 @@ async function fetchSessionAttachment(
       },
     };
   let abortController = new AbortController();
-  let m = () => abortController.abort();
-  r.addEventListener("abort", m, {
+  let onAbort = () => abortController.abort();
+  signal.addEventListener("abort", onAbort, {
     once: true,
   });
-  if (r.aborted) m();
-  let e = await b(t.keep_existing ? d.noTurn : d.startsTurn, 0, abortController, undefined, {
-    fileUuid: t.file_uuid,
-    baseUrl: x() ?? env.ANTHROPIC_BASE_URL,
-    modelCopy: false,
-    forPrefetch: false,
-    maxBytes: 0,
-    spillTo: () =>
-      k(
-        {
-          at: l.path,
-          release: async () => {},
-        },
-        posix.join(stageFileRoot, t.name),
-        292,
-      ),
-    token: v,
-    admitBytes: () => true,
-  });
-  r.removeEventListener("abort", m);
-  if ("failure" in e)
-    return e.failure === "too_large"
+  if (signal.aborted) onAbort();
+  let download = await downloadWithRetries(
+    request.keep_existing ? tries.noTurn : tries.startsTurn,
+    0,
+    abortController,
+    undefined,
+    {
+      fileUuid: request.file_uuid,
+      baseUrl: getBridgeBaseUrlOverride() ?? env.ANTHROPIC_BASE_URL,
+      modelCopy: false,
+      forPrefetch: false,
+      maxBytes: 0,
+      spillTo: () =>
+        openSpill(
+          {
+            at: holding.path,
+            release: async () => {},
+          },
+          posix.join(stageFileRoot, request.name),
+          292,
+        ),
+      token: getBridgeAccessToken,
+      admitBytes: () => true,
+    },
+  );
+  signal.removeEventListener("abort", onAbort);
+  if ("failure" in download)
+    return download.failure === "too_large"
       ? {
           summary: "not downloaded: over 500 MiB",
           output: {
@@ -132,13 +144,13 @@ async function fetchSessionAttachment(
           },
         }
       : {
-          summary: `not downloaded (reason code: ${e.failure})`,
+          summary: `not downloaded (reason code: ${download.failure})`,
           output: {
             outcome: "failed",
-            reason: e.failure,
+            reason: download.failure,
           },
         };
-  if ("writeFailed" in e)
+  if ("writeFailed" in download)
     return {
       summary: "not placed: a write to disk failed",
       output: {
@@ -146,7 +158,7 @@ async function fetchSessionAttachment(
         reason: "write",
       },
     };
-  if ("data" in e)
+  if ("data" in download)
     return {
       summary: "not placed: the file is empty",
       output: {
@@ -155,9 +167,9 @@ async function fetchSessionAttachment(
       },
     };
   try {
-    r.throwIfAborted();
-    let n = await lstat(e.file.path);
-    if (`${n.dev}:${n.ino}` !== e.file.identity)
+    signal.throwIfAborted();
+    let stat = await lstat(download.file.path);
+    if (`${stat.dev}:${stat.ino}` !== download.file.identity)
       return {
         summary: "not placed: the downloaded file was replaced",
         output: {
@@ -165,8 +177,8 @@ async function fetchSessionAttachment(
           reason: "replaced",
         },
       };
-    if (!t.keep_existing) await retryFsOp(e.file.path, joined);
-    else if (!(await placeUnlessFileStands(e.file.path, joined)))
+    if (!request.keep_existing) await retryFsOp(download.file.path, joined);
+    else if (!(await placeUnlessFileStands(download.file.path, joined)))
       return {
         summary: "left the file that was there",
         output: {
@@ -174,14 +186,15 @@ async function fetchSessionAttachment(
         },
       };
     return {
-      summary: `placed ${e.file.size} bytes`,
+      summary: `placed ${download.file.size} bytes`,
       output: {
         outcome: "placed",
       },
     };
   } finally {
-    await rm(e.file.path, {
+    await rm(download.file.path, {
       force: true,
     }).catch(() => {});
   }
 }
+export { fetchSessionAttachment };

@@ -10,13 +10,20 @@
  */
 import { ENGINE } from "./dispatch/chain.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, array, string, M, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  array,
+  stringSchema,
+  booleanSchema,
+  numberSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { pluginStateRegistry, stateEntryKey, writeStateValue } from "./api/state.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 import { isPolicyTier } from "./hookDispatch.js";
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
 import { toldRefusals, tellOnce } from "./ui/renderNotices.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:772988-773044 placement
 /**
@@ -27,18 +34,18 @@ var pluginToastText = (key) => key?.match(/^plugin-toast-[^:]*:(.*)$/s)?.[1];
 /**
  * 从通知队列中取出插件提示：当前显示的与等待中的（各自的 key 与时长），以及是否隐藏。
  */
-function pluginToastQueueView(notifications, isHidden, r) {
-  let [s, ...h] = [notifications.current, ...notifications.queue].map((y) =>
-    y !== null && pluginToastText(y.key) !== undefined
+function pluginToastQueueView(notifications, isHidden, defaultMs) {
+  let [current, ...queue] = [notifications.current, ...notifications.queue].map((entry) =>
+    entry !== null && pluginToastText(entry.key) !== undefined
       ? {
-          key: y.key,
-          ms: y.timeoutMs ?? r,
+          key: entry.key,
+          ms: entry.timeoutMs ?? defaultMs,
         }
       : undefined,
   );
   return {
-    current: s,
-    waiting: h.flatMap((y) => y ?? []),
+    current,
+    waiting: queue.flatMap((entry) => entry ?? []),
     isHidden,
   };
 }
@@ -51,128 +58,144 @@ var UNTOLD_TOAST_MS = 50;
 /**
  * 状态区提示的存盘键
  */
-var BAR_TOASTS_STATE = {
-  plugin: ENGINE,
-  key: "bar-toasts",
-};
+var BAR_TOASTS_STATE; // deferred: uses ENGINE (./dispatch/chain.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:773244", () => {
+  BAR_TOASTS_STATE = {
+    plugin: ENGINE,
+    key: "bar-toasts",
+  };
+});
 //@ chunk-e6aww6q8.js:773282-773519 placement
-var barToastsSchema = DoctorLazy(() =>
-  u({
-    toasts: array(
-      u({
-        key: string(),
-        plugin: string(),
-        text: string(),
-        isManaged: M(),
-        leftMs: E(),
-        wasShown: M(),
-        lentMs: E(),
-        untoldMs: E(),
-      }).readonly(),
-    ).readonly(),
-    at: E(),
-    slot: u({
-      key: string(),
-      endsAt: E(),
-      shown: string().optional(),
-    })
-      .readonly()
-      .optional(),
-  }).readonly(),
-);
+var barToastsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:773282", () => {
+  barToastsSchema = DoctorLazy(() =>
+    objectSchema({
+      toasts: array(
+        objectSchema({
+          key: stringSchema(),
+          plugin: stringSchema(),
+          text: stringSchema(),
+          isManaged: booleanSchema(),
+          leftMs: numberSchema(),
+          wasShown: booleanSchema(),
+          lentMs: numberSchema(),
+          untoldMs: numberSchema(),
+        }).readonly(),
+      ).readonly(),
+      at: numberSchema(),
+      slot: objectSchema({
+        key: stringSchema(),
+        endsAt: numberSchema(),
+        shown: stringSchema().optional(),
+      })
+        .readonly()
+        .optional(),
+    }).readonly(),
+  );
+});
 //@ chunk-e6aww6q8.js:773519-773595 placement
 /**
  * 托管提示排前
  */
-var managedFirst = (e) => [...e.filter((n) => n.isManaged), ...e.filter((n) => !n.isManaged)];
+var managedFirst = (toasts) => [
+  ...toasts.filter((toast) => toast.isManaged),
+  ...toasts.filter((toast) => !toast.isManaged),
+];
 //@ chunk-e6aww6q8.js:773595-773753 placement
-function chargeToastTime(toast, slot, r) {
-  let s = toast.key === slot.key;
-  let h = toast.key === (slot.shown ?? slot.key);
-  let y = Number(s && !h) - Number(h && !s);
+function chargeToastTime(toast, slot, elapsedMs) {
+  let isCharging = toast.key === slot.key;
+  let isChargedBySlot = toast.key === (slot.shown ?? slot.key);
+  let lentDelta = Number(isCharging && !isChargedBySlot) - Number(isChargedBySlot && !isCharging);
   return {
     ...toast,
-    leftMs: toast.leftMs - Number(h) * r,
-    lentMs: toast.lentMs + y * r,
+    leftMs: toast.leftMs - Number(isChargedBySlot) * elapsedMs,
+    lentMs: toast.lentMs + lentDelta * elapsedMs,
   };
 }
 //@ chunk-e6aww6q8.js:773753-773852 placement
 /**
  * 记录提示账本
  */
-var withLedger = (e, n, at) => ({
-  toasts: e.map((s) => ({
-    ...s,
-    wasShown: s.wasShown || s.key === n?.shown,
+var withLedger = (toasts, slot, at) => ({
+  toasts: toasts.map((toast) => ({
+    ...toast,
+    wasShown: toast.wasShown || toast.key === slot?.shown,
   })),
   at,
-  slot: n,
+  slot,
 });
 //@ chunk-e6aww6q8.js:773852-774156 placement
 /**
  * 按剩余预算截短提示时间，超出部分记为丢失。
  */
-function trimToastsToBudget(e, n) {
-  let mapped = e.map((s, h) => {
+function trimToastsToBudget(toasts, budgetMs) {
+  let mapped = toasts.map((toast, index) => {
     let min = Math.min(
-      s.leftMs,
+      toast.leftMs,
       Math.max(
         0,
-        e.slice(0, h + 1).reduce((acc, w) => acc + w.leftMs, -n),
+        toasts.slice(0, index + 1).reduce((acc, prior) => acc + prior.leftMs, -budgetMs),
       ),
     );
     return {
-      ...s,
-      leftMs: s.leftMs - min,
-      untoldMs: s.untoldMs + min,
+      ...toast,
+      leftMs: toast.leftMs - min,
+      untoldMs: toast.untoldMs + min,
     };
   });
   return {
-    kept: mapped.map((s) =>
-      s.untoldMs > UNTOLD_TOAST_MS
+    kept: mapped.map((toast) =>
+      toast.untoldMs > UNTOLD_TOAST_MS
         ? {
-            ...s,
+            ...toast,
             untoldMs: 0,
           }
-        : s,
+        : toast,
     ),
     lost: mapped
-      .filter((s) => s.untoldMs > UNTOLD_TOAST_MS)
-      .map((s) => ({
-        ...s,
-        leftMs: s.untoldMs,
+      .filter((toast) => toast.untoldMs > UNTOLD_TOAST_MS)
+      .map((toast) => ({
+        ...toast,
+        leftMs: toast.untoldMs,
       })),
   };
 }
 //@ chunk-e6aww6q8.js:774156-774223 placement
-var J$o = Object.freeze({
-  toasts: Object.freeze([]),
-  at: 0,
-  slot: undefined,
+var EMPTY_BAR_TOASTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:774156", () => {
+  EMPTY_BAR_TOASTS = Object.freeze({
+    toasts: Object.freeze([]),
+    at: 0,
+    slot: undefined,
+  });
 });
 //@ chunk-e6aww6q8.js:774223-774336 placement
 /**
  * 读取持久化的通知栏插件提示账本（不合法时为空账本）。
  */
-function readBarToasts(e = pluginStateRegistry().values.getState()) {
-  let n = barToastsSchema().safeParse(e.get(stateEntryKey(BAR_TOASTS_STATE))?.value);
-  return n.success ? n.data : J$o;
+function readBarToasts(state = pluginStateRegistry().values.getState()) {
+  let parsed = barToastsSchema().safeParse(state.get(stateEntryKey(BAR_TOASTS_STATE))?.value);
+  return parsed.success ? parsed.data : EMPTY_BAR_TOASTS;
 }
 //@ chunk-e6aww6q8.js:774336-774474 placement
 /**
  * 判断某提示是否已显示过（或在可显示时排在首位）。
  */
 function wasToastShown(barToasts, givesWay, isCutShort) {
-  let filtered = barToasts.toasts.filter((toast) => toast.leftMs > 0);
-  let h = managedFirst(filtered).at(0)?.key === givesWay;
-  return barToasts.toasts.some((toast) => toast.key === givesWay && toast.wasShown) || (isCutShort && h);
+  let toasts = barToasts.toasts.filter((toast) => toast.leftMs > 0);
+  let isNextDrawn = managedFirst(toasts).at(0)?.key === givesWay;
+  return (
+    barToasts.toasts.some((toast) => toast.key === givesWay && toast.wasShown) || (isCutShort && isNextDrawn)
+  );
 }
 //@ chunk-e6aww6q8.js:774474-774664 placement
 /**
  * 保存通知栏插件提示账本（新旧都为空时跳过），失败记录错误。
  */
 function saveBarToasts(ledger) {
-  let all = [readBarToasts(), ledger].every((r) => r.toasts.length === 0 && r.slot === undefined);
+  let all = [readBarToasts(), ledger].every(
+    (ledger) => ledger.toasts.length === 0 && ledger.slot === undefined,
+  );
   try {
     if (!all) writeStateValue(stateEntryKey(BAR_TOASTS_STATE), ledger);
   } catch (error) {
@@ -182,111 +205,120 @@ function saveBarToasts(ledger) {
   }
 }
 //@ chunk-e6aww6q8.js:774664-774764 placement
-var keepLiveToasts = (e, kept, r) =>
-  e.flatMap((s) => kept.filter((h) => h.key === s.key).filter((h) => h.leftMs > 0 || r.has(h.key)));
+var keepLiveToasts = (previous, kept, knownKeys) =>
+  previous.flatMap((toast) =>
+    kept
+      .filter((entry) => entry.key === toast.key)
+      .filter((entry) => entry.leftMs > 0 || knownKeys.has(entry.key)),
+  );
 //@ chunk-e6aww6q8.js:774764-775166 placement
 /**
  * 推进提示计时：扣除已显示的时间，移除已用完的提示。
  */
-function advanceToastClock(e, n, r) {
-  let s = new Set([n.current, ...n.waiting].map((w) => w?.key));
-  let slot = e.slot;
-  let max = Math.max(0, Math.min(r, slot?.endsAt ?? 0) - e.at);
-  let S = slot?.key !== n.current?.key;
-  return e.toasts
+function advanceToastClock(ledger, view, now) {
+  let liveKeys = new Set([view.current, ...view.waiting].map((entry) => entry?.key));
+  let slot = ledger.slot;
+  let max = Math.max(0, Math.min(now, slot?.endsAt ?? 0) - ledger.at);
+  let hasNewCurrent = slot?.key !== view.current?.key;
+  return ledger.toasts
     .map((toast) => (slot === undefined ? toast : chargeToastTime(toast, slot, max)))
-    .map((w, L) => {
-      let G = s.has(w.key);
-      let q = G && !(S && w.leftMs !== e.toasts[L]?.leftMs);
-      let Z = G ? w.leftMs : Math.min(w.leftMs, w.lentMs);
-      let Se = Z <= (q ? 0 : UNTOLD_TOAST_MS);
+    .map((toast, index) => {
+      let isLive = liveKeys.has(toast.key);
+      let chargesFull = isLive && !(hasNewCurrent && toast.leftMs !== ledger.toasts[index]?.leftMs);
+      let leftMs = isLive ? toast.leftMs : Math.min(toast.leftMs, toast.lentMs);
+      let isSpent = leftMs <= (chargesFull ? 0 : UNTOLD_TOAST_MS);
       return {
-        ...w,
-        leftMs: Se ? 0 : Z,
+        ...toast,
+        leftMs: isSpent ? 0 : leftMs,
       };
     })
-    .filter((w) => w.leftMs > 0 || s.has(w.key));
+    .filter((toast) => toast.leftMs > 0 || liveKeys.has(toast.key));
 }
 //@ chunk-e6aww6q8.js:775166-775259 placement
 /**
  * key → 文本
  */
-var toastTextMap = (e, n) =>
+var toastTextMap = (toasts, texts) =>
   new Map(
-    e.flatMap((r, s) => {
-      let h = n[s];
-      return h === undefined ? [] : [[r.key, h.text]];
+    toasts.flatMap((toast, index) => {
+      let entry = texts[index];
+      return entry === undefined ? [] : [[toast.key, entry.text]];
     }),
   );
 //@ chunk-e6aww6q8.js:775259-775333 placement
 /**
  * 账本条目
  */
-function toastLedgerEntry(e, endsAt, shown) {
-  return e === undefined
+function toastLedgerEntry(slot, endsAt, shown) {
+  return slot === undefined
     ? undefined
     : {
-        key: e.key,
+        key: slot.key,
         endsAt,
         shown,
       };
 }
 //@ chunk-e6aww6q8.js:775333-775509 placement
-function toastForSlots(e, n) {
-  let mapped = e.map((s, h) => e.slice(0, h + 1).reduce((acc, S) => acc + S.leftMs, 0));
-  return n.map((s, h) => {
-    let reduced = n.slice(0, h).reduce((acc, w) => acc + w, 0);
-    return e[mapped.findIndex((S) => S > reduced)];
+function toastForSlots(toasts, durations) {
+  let mapped = toasts.map((toast, index) =>
+    toasts.slice(0, index + 1).reduce((acc, prior) => acc + prior.leftMs, 0),
+  );
+  return durations.map((duration, index) => {
+    let reduced = durations.slice(0, index).reduce((acc, prior) => acc + prior, 0);
+    return toasts[mapped.findIndex((cumulative) => cumulative > reduced)];
   });
 }
 //@ chunk-e6aww6q8.js:775509-776028 placement
 /**
  * 按通知栏剩余时间重排插件提示：推进计时、按管理优先排序、分配显示时间，返回新账本、要显示的文字与丢失时间的提示。
  */
-function planBarToasts(e, n, r) {
-  let { current: s } = n;
-  let endsAt = s !== undefined && e.slot?.key === s.key ? (e.slot?.endsAt ?? r) : r + (s?.ms ?? 0);
-  let S = advanceToastClock(e, n, r);
-  let w = new Set(S.map((Ee) => Ee.key));
-  let flattened = [s, ...n.waiting].flatMap((Ee) => Ee ?? []);
-  let G = new Set(flattened.map((Ee) => Ee.key));
-  let filtered = flattened.filter((Ee) => w.has(Ee.key));
-  let mapped = filtered.map((Ee) => (Ee === s ? Math.max(0, endsAt - r) : Ee.ms));
-  let Se = trimToastsToBudget(
-    managedFirst(S),
-    mapped.reduce((acc, Ae) => acc + Ae, 0),
+function planBarToasts(ledger, view, now) {
+  let { current } = view;
+  let endsAt =
+    current !== undefined && ledger.slot?.key === current.key
+      ? (ledger.slot?.endsAt ?? now)
+      : now + (current?.ms ?? 0);
+  let advanced = advanceToastClock(ledger, view, now);
+  let liveKeys = new Set(advanced.map((toast) => toast.key));
+  let flattened = [current, ...view.waiting].flatMap((entry) => entry ?? []);
+  let knownKeys = new Set(flattened.map((entry) => entry.key));
+  let toasts = flattened.filter((entry) => liveKeys.has(entry.key));
+  let durations = toasts.map((entry) => (entry === current ? Math.max(0, endsAt - now) : entry.ms));
+  let trimmed = trimToastsToBudget(
+    managedFirst(advanced),
+    durations.reduce((acc, duration) => acc + duration, 0),
   );
-  let ke = toastForSlots(
-    Se.kept.filter((Ee) => Ee.leftMs > 0),
-    mapped,
+  let slotTexts = toastForSlots(
+    trimmed.kept.filter((toast) => toast.leftMs > 0),
+    durations,
   );
-  let we = s === undefined || n.isHidden || !w.has(s.key);
+  let isSlotHidden = current === undefined || view.isHidden || !liveKeys.has(current.key);
   return {
     ledger: withLedger(
-      keepLiveToasts(S, Se.kept, G),
-      toastLedgerEntry(s, endsAt, we ? undefined : ke[0]?.key),
-      r,
+      keepLiveToasts(advanced, trimmed.kept, knownKeys),
+      toastLedgerEntry(current, endsAt, isSlotHidden ? undefined : slotTexts[0]?.key),
+      now,
     ),
-    texts: toastTextMap(filtered, ke),
-    lost: Se.lost,
+    texts: toastTextMap(toasts, slotTexts),
+    lost: trimmed.lost,
   };
 }
 //@ chunk-e6aww6q8.js:776028-776197 placement
 /**
  * 把插件提示加入通知栏账本（托管层插件优先）。
  */
-function enqueueBarToast(e) {
+function enqueueBarToast(notice) {
   let barToasts = readBarToasts();
   saveBarToasts({
     ...barToasts,
     toasts: [
       ...barToasts.toasts,
       {
-        key: e.key,
-        plugin: e.plugin,
-        text: e.text,
-        isManaged: isPolicyTier(e.plugin),
-        leftMs: e.ms,
+        key: notice.key,
+        plugin: notice.plugin,
+        text: notice.text,
+        isManaged: isPolicyTier(notice.plugin),
+        leftMs: notice.ms,
         wasShown: false,
         lentMs: 0,
         untoldMs: 0,
@@ -298,13 +330,13 @@ function enqueueBarToast(e) {
 /**
  * 合并两个提示账本：保留旧账本中新账本没有的提示。
  */
-function mergeToastLedgers(e, barToasts) {
-  let r = new Set(barToasts.toasts.map((toast) => toast.key));
-  let filtered = e.toasts.filter((toast) => !r.has(toast.key));
+function mergeToastLedgers(ledger, barToasts) {
+  let barKeys = new Set(barToasts.toasts.map((toast) => toast.key));
+  let filtered = ledger.toasts.filter((toast) => !barKeys.has(toast.key));
   return filtered.length === 0
     ? barToasts
     : {
-        ...e,
+        ...ledger,
         toasts: [...filtered, ...barToasts.toasts],
       };
 }
@@ -322,36 +354,36 @@ function shownToastEndsAt(ledger) {
 /**
  * 记录插件提示因通知栏无剩余时间而丢失的时长。
  */
-var logToastTimeLost = (e) =>
+var logToastTimeLost = (lost) =>
   logForDebugging(
-    `$.ui.toast (${e.plugin}): ${e.key} lost ${e.leftMs} ms of its time, the notification bar having no toast time left for it`,
+    `$.ui.toast (${lost.plugin}): ${lost.key} lost ${lost.leftMs} ms of its time, the notification bar having no toast time left for it`,
   );
 //@ chunk-e6aww6q8.js:776626-776721 placement
 /**
  * 覆盖提示文本
  */
-function applyToastText(e, n) {
-  let r = n.get(e.key);
-  return r !== undefined && "text" in e && e.text !== r
+function applyToastText(toast, texts) {
+  let text = texts.get(toast.key);
+  return text !== undefined && "text" in toast && toast.text !== text
     ? {
-        ...e,
-        text: r,
+        ...toast,
+        text,
       }
-    : e;
+    : toast;
 }
 //@ chunk-e6aww6q8.js:776721-776878 placement
 /**
  * 重写通知队列中插件提示的 key（未变时返回原队列）。
  */
 function rekeyToastQueue(notifications, texts) {
-  let { current: r, queue } = notifications;
-  let h = r === null ? null : applyToastText(r, texts);
-  let mapped = queue.map((w) => applyToastText(w, texts));
-  return h === r && mapped.every((w, L) => w === queue[L])
+  let { current, queue } = notifications;
+  let nextCurrent = current === null ? null : applyToastText(current, texts);
+  let mapped = queue.map((entry) => applyToastText(entry, texts));
+  return nextCurrent === current && mapped.every((entry, index) => entry === queue[index])
     ? notifications
     : {
         ...notifications,
-        current: h,
+        current: nextCurrent,
         queue: mapped,
       };
 }
@@ -364,30 +396,30 @@ var MAX_QUEUED_TOASTS = 50;
 /**
  * 让位给哪个提示
  */
-function toastGivesWayKey(queue, n) {
-  let filtered = queue.filter((s) => pluginToastText(s.key) === n);
+function toastGivesWayKey(queue, pluginName) {
+  let filtered = queue.filter((entry) => pluginToastText(entry.key) === pluginName);
   return filtered.length < MAX_QUEUED_TOASTS ? undefined : filtered[0]?.key;
 }
 //@ chunk-e6aww6q8.js:776979-777078 placement
 /**
  * plugin#环境
  */
-var pluginToastScopeKey = (e) =>
+var pluginToastScopeKey = (pluginName) =>
   [
-    e,
+    pluginName,
     ...getPluginRegistry()
-      .loadedModules.filter((loadedModule) => loadedModule.name === e)
+      .loadedModules.filter((loadedModule) => loadedModule.name === pluginName)
       .map((loadedModule) => loadedModule.environmentId),
   ].join("#");
 //@ chunk-e6aww6q8.js:777078-777153 placement
 /**
  * 每次只提示一次让位
  */
-function tellRefusalOnce(e, plugin, r) {
-  let joined = [e, pluginToastScopeKey(plugin)].join(" ");
+function tellRefusalOnce(reason, plugin, tell) {
+  let joined = [reason, pluginToastScopeKey(plugin)].join(" ");
   if (!toldRefusals.has(joined)) {
     toldRefusals.add(joined);
-    r();
+    tell();
   }
 }
 //@ chunk-e6aww6q8.js:777153-777173 placement
@@ -415,27 +447,31 @@ function logToastGaveWay({ key, plugin, isCutShort }) {
 /**
  * 提示的键 plugin-toast-<plugin>:<text>，按插件与正文区分同文提示。
  */
-var toastKeyFor = (e, n) => `plugin-toast-${n}:${e}`;
+var toastKeyFor = (id, pluginName) => `plugin-toast-${pluginName}:${id}`;
 //@ chunk-e6aww6q8.js:777510-777796 placement
 /**
  * 判断插件新提示的排队情况：是否需等待、让位给哪个提示、当前显示的是否被截断。
  */
-function toastQueueState(e, n) {
-  if (e.isHeld)
+function toastQueueState(view, pluginName) {
+  if (view.isHeld)
     return {
       isWaiting: false,
-      givesWay: toastGivesWayKey(e.queue, n),
+      givesWay: toastGivesWayKey(view.queue, pluginName),
       isCutShort: false,
     };
-  let r = pluginToastText(e.current?.key);
-  let s = r === n;
-  let h = (r !== undefined && !s) || e.queue.some((w) => pluginToastText(w.key) !== undefined);
-  let y = !h && s;
-  let S = y ? e.current : e.queue.findLast((w) => pluginToastText(w.key) === n);
+  let currentPlugin = pluginToastText(view.current?.key);
+  let isCurrentOurs = currentPlugin === pluginName;
+  let hasOthers =
+    (currentPlugin !== undefined && !isCurrentOurs) ||
+    view.queue.some((entry) => pluginToastText(entry.key) !== undefined);
+  let isShownShort = !hasOthers && isCurrentOurs;
+  let giver = isShownShort
+    ? view.current
+    : view.queue.findLast((entry) => pluginToastText(entry.key) === pluginName);
   return {
-    isWaiting: h,
-    givesWay: S?.key,
-    isCutShort: y,
+    isWaiting: hasOthers,
+    givesWay: giver?.key,
+    isCutShort: isShownShort,
   };
 }
 export {
@@ -451,7 +487,7 @@ export {
   logToastTimeLost,
   rekeyToastQueue,
   shownToastEndsAt,
-  J$o,
+  EMPTY_BAR_TOASTS,
   toastQueueState,
   toastKeyFor,
   logToastGaveWay,

@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import {
   jsxProd_default,
@@ -27,7 +27,7 @@ import { ConfirmSelect } from "../../design-system/ConfirmSelect.js";
 
 //@ chunk-18hwfzwa.js:1293852-1295825 fingerprint = SubmitQuestionsView (0.78)
 function SubmitQuestionsView(props) {
-  let $ = w(24);
+  let $ = useMemoCache(24);
   let { questions, currentQuestionIndex, answers, allQuestionsAnswered, permissionResult, onFinalResponse } =
     props;
   let t1;
@@ -37,9 +37,9 @@ function SubmitQuestionsView(props) {
     });
     $[0] = t1;
   } else t1 = $[0];
-  let We;
+  let navigationBar;
   if ($[1] !== answers || $[2] !== currentQuestionIndex || $[3] !== questions) {
-    We = jsxProd_default(QuestionNavigationBar, {
+    navigationBar = jsxProd_default(QuestionNavigationBar, {
       questions,
       currentQuestionIndex,
       answers,
@@ -47,8 +47,8 @@ function SubmitQuestionsView(props) {
     $[1] = answers;
     $[2] = currentQuestionIndex;
     $[3] = questions;
-    $[4] = We;
-  } else We = $[4];
+    $[4] = navigationBar;
+  } else navigationBar = $[4];
   let t3;
   if ($[5] === MEMO_CACHE_SENTINEL) {
     t3 = jsxProd_default(PermissionRequestTitle, {
@@ -57,9 +57,9 @@ function SubmitQuestionsView(props) {
     });
     $[5] = t3;
   } else t3 = $[5];
-  let Xe;
+  let unansweredNotice;
   if ($[6] !== allQuestionsAnswered) {
-    Xe =
+    unansweredNotice =
       !allQuestionsAnswered &&
       jsxProd_default(Box, {
         marginBottom: 1,
@@ -69,11 +69,11 @@ function SubmitQuestionsView(props) {
         }),
       });
     $[6] = allQuestionsAnswered;
-    $[7] = Xe;
-  } else Xe = $[7];
-  let rt;
+    $[7] = unansweredNotice;
+  } else unansweredNotice = $[7];
+  let answersSummary;
   if ($[8] !== answers || $[9] !== questions) {
-    rt =
+    answersSummary =
       Object.keys(answers).length > 0 &&
       jsxProd_default(Box, {
         flexDirection: "column",
@@ -109,17 +109,17 @@ function SubmitQuestionsView(props) {
       });
     $[8] = answers;
     $[9] = questions;
-    $[10] = rt;
-  } else rt = $[10];
-  let Ot;
+    $[10] = answersSummary;
+  } else answersSummary = $[10];
+  let ruleExplanation;
   if ($[11] !== permissionResult) {
-    Ot = jsxProd_default(PermissionRuleExplanation, {
+    ruleExplanation = jsxProd_default(PermissionRuleExplanation, {
       permissionResult,
       toolType: "tool",
     });
     $[11] = permissionResult;
-    $[12] = Ot;
-  } else Ot = $[12];
+    $[12] = ruleExplanation;
+  } else ruleExplanation = $[12];
   let t7;
   if ($[13] === MEMO_CACHE_SENTINEL) {
     t7 = jsxProd_default(Text, {
@@ -128,9 +128,9 @@ function SubmitQuestionsView(props) {
     });
     $[13] = t7;
   } else t7 = $[13];
-  let Dt;
+  let submitActions;
   if ($[14] !== onFinalResponse) {
-    Dt = jsxProd_default(Box, {
+    submitActions = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(ConfirmSelect, {
         confirmLabel: "Submit answers",
@@ -140,23 +140,28 @@ function SubmitQuestionsView(props) {
       }),
     });
     $[14] = onFinalResponse;
-    $[15] = Dt;
-  } else Dt = $[15];
+    $[15] = submitActions;
+  } else submitActions = $[15];
   let t11;
-  if ($[16] !== Xe || $[17] !== rt || $[18] !== Ot || $[19] !== Dt) {
+  if (
+    $[16] !== unansweredNotice ||
+    $[17] !== answersSummary ||
+    $[18] !== ruleExplanation ||
+    $[19] !== submitActions
+  ) {
     t11 = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginTop: 1,
-      children: [Xe, rt, Ot, t7, Dt],
+      children: [unansweredNotice, answersSummary, ruleExplanation, t7, submitActions],
     });
-    $[16] = Xe;
-    $[17] = rt;
-    $[18] = Ot;
-    $[19] = Dt;
+    $[16] = unansweredNotice;
+    $[17] = answersSummary;
+    $[18] = ruleExplanation;
+    $[19] = submitActions;
     $[20] = t11;
   } else t11 = $[20];
   let t12;
-  if ($[21] !== We || $[22] !== t11) {
+  if ($[21] !== navigationBar || $[22] !== t11) {
     t12 = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginTop: 1,
@@ -167,11 +172,11 @@ function SubmitQuestionsView(props) {
           borderTop: true,
           borderColor: "inactive",
           paddingTop: 0,
-          children: [We, t3, t11],
+          children: [navigationBar, t3, t11],
         }),
       ],
     });
-    $[21] = We;
+    $[21] = navigationBar;
     $[22] = t11;
     $[23] = t12;
   } else t12 = $[23];

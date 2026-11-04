@@ -11,7 +11,7 @@
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { errorOf } from "./PluginDetails.js";
-import { y, ce, P, R } from "../../../vendor/react/cjs/react.production.js";
+import { useState, useCallback, useEffect, useRef } from "../../../vendor/react/cjs/react.production.js";
 import { DiscoverPlugins, DiscoverPluginsKeyHint } from "./DiscoverPlugins.js";
 import { useKeybinding } from "../../keybindings/useKeybinding.js";
 import {
@@ -83,13 +83,13 @@ function BrowseMarketplace({
   let storeSelector = useStoreSelector(screen, errorOf);
   let { setError, setResult } = screen;
   let setViewState = screen.setViewState;
-  let [marketplaceName, B] = y(null);
-  let [_, J] = y([]);
-  let [pe, fe] = y([]);
-  let [me, ne] = y(false);
-  let [he, W] = y(true);
-  let [Oe, rt] = y("Loading\u2026");
-  let [et, je] = y(null);
+  let [marketplaceName, setMarketplaceName] = useState(null);
+  let [plugins, setPlugins] = useState([]);
+  let [marketplaces, setMarketplaces] = useState([]);
+  let [loading, setLoading] = useState(false);
+  let [searching, setSearching] = useState(true);
+  let [statusText, setStatusText] = useState("Loading\u2026");
+  let [error, setLoadError] = useState(null);
   let {
     viewState,
     setViewState: setViewState_2,
@@ -119,28 +119,28 @@ function BrowseMarketplace({
     screen,
     surface: "browse",
     initialViewState: "marketplace-list",
-    availablePlugins: pe,
-    loading: he,
+    availablePlugins: marketplaces,
+    loading: searching,
     searchMarketplaceName: false,
     onInstallComplete,
     onSearchModeChange,
   });
-  let [on, rn] = y(null);
-  let [mn, xn] = y(null);
-  let handleBack = ce(() => {
+  let [focusedPlugin, setSelectedPlugin] = useState(null);
+  let [pendingInstall, setPendingInstall] = useState(null);
+  let handleBack = useCallback(() => {
     if (viewState === "plugin-list") {
       if (targetMarketplace)
         setViewState({
           type: "manage-marketplaces",
           targetMarketplace,
         });
-      else if (_.length === 1)
+      else if (plugins.length === 1)
         setViewState({
           type: "menu",
         });
       else {
         setViewState_2("marketplace-list");
-        B(null);
+        setMarketplaceName(null);
         setSelectedForInstall(new Set());
       }
     } else if (viewState === "plugin-details") closeDetails();
@@ -154,33 +154,33 @@ function BrowseMarketplace({
     closeDetails,
     targetMarketplace,
     setViewState,
-    _.length,
+    plugins.length,
     setSelectedForInstall,
   ]);
   useKeybinding("confirm:no", handleBack, {
     context: "Settings",
     isActive: typeof viewState === "string" && !(viewState === "plugin-list" && isSearchMode),
   });
-  P(() => {
-    let Be = false;
+  useEffect(() => {
+    let cancelled = false;
     async function loadMarketplaceData() {
       try {
         let knownMarketplacesWithDeclared = await loadKnownMarketplacesWithDeclared(storageV5);
-        let Te;
+        let loadedData;
         if (targetMarketplace && targetPlugin && !isOfficialMarketplace(targetMarketplace)) {
-          rt(`Checking ${displayMarketplaceName(targetMarketplace)} for new plugins\u2026`);
-          let Ce = await refreshBeforeScopedInstall(
+          setStatusText(`Checking ${displayMarketplaceName(targetMarketplace)} for new plugins\u2026`);
+          let refreshed = await refreshBeforeScopedInstall(
             targetMarketplace,
             knownMarketplacesWithDeclared[targetMarketplace],
             storageV5,
           );
-          logInstallRefreshFirst(Ce.outcome);
-          if (Be) return;
-          rt("Loading\u2026");
-          if (Ce.outcome === "refresh-failed") {
-            Te = Ce.errorMessage;
-            xn(
-              `Couldn't refresh marketplace "${targetMarketplace}" (${Ce.errorMessage}) \u2014 showing the cached catalog.`,
+          logInstallRefreshFirst(refreshed.outcome);
+          if (cancelled) return;
+          setStatusText("Loading\u2026");
+          if (refreshed.outcome === "refresh-failed") {
+            loadedData = refreshed.errorMessage;
+            setPendingInstall(
+              `Couldn't refresh marketplace "${targetMarketplace}" (${refreshed.errorMessage}) \u2014 showing the cached catalog.`,
             );
           }
         }
@@ -188,7 +188,7 @@ function BrowseMarketplace({
           knownMarketplacesWithDeclared,
           storageV5,
         );
-        if (Be) return;
+        if (cancelled) return;
         let marketplaceInfos = [];
         for (let { name, config: marketplaceConfig, data: marketplace } of marketplaces)
           if (marketplace) {
@@ -202,17 +202,17 @@ function BrowseMarketplace({
               source: getMarketplaceSourceDisplay(marketplaceConfig.source),
             });
           }
-        marketplaceInfos.sort((Ce, Ve) => {
-          if (Ce.name === ANTHROPIC_PLUGIN_DIRECTORY) return -1;
-          if (Ve.name === ANTHROPIC_PLUGIN_DIRECTORY) return 1;
+        marketplaceInfos.sort((a, b) => {
+          if (a.name === ANTHROPIC_PLUGIN_DIRECTORY) return -1;
+          if (b.name === ANTHROPIC_PLUGIN_DIRECTORY) return 1;
           return 0;
         });
-        J(marketplaceInfos);
+        setPlugins(marketplaceInfos);
         let successCount = count(marketplaces, (m) => m.data !== null);
         let errorResult = formatMarketplaceLoadingErrors(failures, successCount);
         if (errorResult)
           if (errorResult.type === "warning")
-            rn(
+            setSelectedPlugin(
               filterSuccessfulMarketplaces(failures).length === 0
                 ? errorResult.message
                 : errorResult.message + ". Showing available marketplaces.",
@@ -221,7 +221,7 @@ function BrowseMarketplace({
         if (marketplaceInfos.length === 1 && !targetMarketplace && !targetPlugin) {
           let singleMarketplace = marketplaceInfos[0];
           if (singleMarketplace) {
-            B(singleMarketplace.name);
+            setMarketplaceName(singleMarketplace.name);
             setViewState_2("plugin-list");
           }
         }
@@ -234,64 +234,69 @@ function BrowseMarketplace({
           );
         } else if (targetPlugin) {
           let foundPlugin = null;
-          for (let { name: Ve, data: ke } of marketplaces) {
-            if (targetMarketplace && Ve !== targetMarketplace) continue;
-            let found = ke?.plugins.find((plugin) => plugin.name === targetPlugin);
+          for (let { name, data } of marketplaces) {
+            if (targetMarketplace && name !== targetMarketplace) continue;
+            let found = data?.plugins.find((plugin) => plugin.name === targetPlugin);
             if (!found) continue;
-            let pluginId = formatPluginId(found.name, Ve);
-            let [qt] = await pluginInstallPath(Ve, [found], knownMarketplacesWithDeclared, storageV5);
+            let pluginId = formatPluginId(found.name, name);
+            let [installPath] = await pluginInstallPath(
+              name,
+              [found],
+              knownMarketplacesWithDeclared,
+              storageV5,
+            );
             foundPlugin = {
-              entry: qt ?? found,
-              marketplaceName: Ve,
+              entry: installPath ?? found,
+              marketplaceName: name,
               pluginId,
               isInstalled: isPluginGloballyInstalled(pluginId),
             };
             break;
           }
-          if (Be) return;
+          if (cancelled) return;
           if (foundPlugin) {
             let pluginId_0 = foundPlugin.pluginId;
             if (isPluginGloballyInstalled(pluginId_0)) {
-              let ht = await installMissingDependencies(pluginId_0, storageV5);
-              let Jt = await savePluginOptions(pluginId_0, ht, storageV5, credentials);
-              if (Be) return;
-              if (Jt) setViewState_2(Jt);
-              else if (ht === null)
+              let deps = await installMissingDependencies(pluginId_0, storageV5);
+              let savedOptions = await savePluginOptions(pluginId_0, deps, storageV5, credentials);
+              if (cancelled) return;
+              if (savedOptions) setViewState_2(savedOptions);
+              else if (deps === null)
                 setError(
                   `Plugin '${pluginId_0}' is already installed globally. Use '/plugin' to manage existing plugins.`,
                 );
-              else if (ht.changed) {
-                let qt = await onInstallComplete([pluginId_0]);
-                if (Be) return;
+              else if (deps.changed) {
+                let completion = await onInstallComplete([pluginId_0]);
+                if (cancelled) return;
                 setResult(
-                  `Plugin "${pluginId_0}" is already installed${ht.suffix}${qt === "load-failed" ? ". The plugin couldn't be loaded \u2014 see /plugin for details." : ""}`,
+                  `Plugin "${pluginId_0}" is already installed${deps.suffix}${completion === "load-failed" ? ". The plugin couldn't be loaded \u2014 see /plugin for details." : ""}`,
                 );
-              } else setResult(`Plugin "${pluginId_0}" is already installed${ht.suffix}`);
+              } else setResult(`Plugin "${pluginId_0}" is already installed${deps.suffix}`);
             } else {
-              B(foundPlugin.marketplaceName);
+              setMarketplaceName(foundPlugin.marketplaceName);
               openDetails(foundPlugin);
             }
           } else {
-            let Ve = targetMarketplace ? `marketplace "${targetMarketplace}"` : "any marketplace";
-            let ke = Te
-              ? `. The marketplace couldn't be refreshed (${Te}), so its cached catalog may be out of date`
+            let whereLabel = targetMarketplace ? `marketplace "${targetMarketplace}"` : "any marketplace";
+            let loadedForPlugins = loadedData
+              ? `. The marketplace couldn't be refreshed (${loadedData}), so its cached catalog may be out of date`
               : "";
-            setError(`Plugin "${targetPlugin}" not found in ${Ve}${ke}`);
+            setError(`Plugin "${targetPlugin}" not found in ${whereLabel}${loadedForPlugins}`);
           }
         } else if (targetMarketplace) {
-          B(targetMarketplace);
+          setMarketplaceName(targetMarketplace);
           setViewState_2("plugin-list");
         }
       } catch (err) {
-        if (Be) return;
+        if (cancelled) return;
         setError(err instanceof Error ? err.message : "Failed to load marketplaces");
       } finally {
-        if (!Be) W(false);
+        if (!cancelled) setSearching(false);
       }
     }
     loadMarketplaceData();
     return () => {
-      Be = true;
+      cancelled = true;
     };
   }, [
     setError,
@@ -304,14 +309,14 @@ function BrowseMarketplace({
     storageV5,
     credentials,
   ]);
-  let globallyInstalled = R(0);
-  P(() => {
+  let globallyInstalled = useRef(0);
+  useEffect(() => {
     if (!marketplaceName) return;
     let cancelled = false;
-    let jt = ++globallyInstalled.current;
+    let installTicket = ++globallyInstalled.current;
     async function loadPluginsForMarketplace(marketplaceName) {
-      W(true);
-      rt("Loading\u2026");
+      setSearching(true);
+      setStatusText("Loading\u2026");
       try {
         let [marketplace, knownMarketplaces] = await Promise.all([
           getMarketplace(marketplaceName, storageV5),
@@ -319,18 +324,23 @@ function BrowseMarketplace({
         ]);
         if (cancelled) return;
         if (!marketplace) throw Error(`Failed to load marketplace: ${marketplaceName}`);
-        let Dt = await pluginInstallPath(marketplaceName, marketplace.plugins, knownMarketplaces, storageV5);
+        let installPath = await pluginInstallPath(
+          marketplaceName,
+          marketplace.plugins,
+          knownMarketplaces,
+          storageV5,
+        );
         if (cancelled) return;
         let installablePlugins = [];
         let source = knownMarketplaces[marketplaceName]?.source;
-        let Ce =
+        let found =
           source !== undefined &&
           isPluginDirectorySource(source) &&
           (commandSourceSession().catalogEntryNames?.size ?? 0) > marketplace.plugins.length;
-        for (let entry of Dt) {
+        for (let entry of installPath) {
           let pluginId = formatPluginId(entry.name, marketplaceName);
           if (isPluginBlockedByPolicy(pluginId)) {
-            Ce = true;
+            found = true;
             continue;
           }
           installablePlugins.push({
@@ -343,7 +353,7 @@ function BrowseMarketplace({
         try {
           let counts = await getUniqueInstallCounts(storageV5);
           if (cancelled) return;
-          je(counts);
+          setLoadError(counts);
           if (counts)
             installablePlugins.sort((a_1, b_1) => {
               let countA = counts.get(a_1.pluginId) ?? 0;
@@ -357,8 +367,8 @@ function BrowseMarketplace({
           logForDebugging(`Failed to fetch install counts: ${errorMessage(error)}`);
           installablePlugins.sort((a_0, b_0) => a_0.entry.name.localeCompare(b_0.entry.name));
         }
-        fe(installablePlugins);
-        ne(Ce);
+        setMarketplaces(installablePlugins);
+        setLoading(found);
         setSelectedIndex(0);
         setSelectedForInstall(new Set());
         setIsSearchMode(false);
@@ -367,7 +377,7 @@ function BrowseMarketplace({
         if (cancelled) return;
         setError(err instanceof Error ? err.message : "Failed to load plugins");
       } finally {
-        if (globallyInstalled.current === jt) W(false);
+        if (globallyInstalled.current === installTicket) setSearching(false);
       }
     }
     loadPluginsForMarketplace(marketplaceName);
@@ -394,16 +404,16 @@ function BrowseMarketplace({
         });
       },
     });
-  if (he)
+  if (searching)
     return jsxProd_default(WorkerBadge, {
-      message: Oe,
+      message: statusText,
     });
   if (storeSelector)
     return jsxProd_default(ErrorText, {
       error: storeSelector,
     });
   if (viewState === "marketplace-list") {
-    if (_.length === 0)
+    if (plugins.length === 0)
       return jsxProd_default_2(Box, {
         flexDirection: "column",
         children: [
@@ -446,7 +456,7 @@ function BrowseMarketplace({
             children: "Select marketplace",
           }),
         }),
-        on &&
+        focusedPlugin &&
           jsxProd_default(Box, {
             marginBottom: 1,
             flexDirection: "column",
@@ -457,18 +467,18 @@ function BrowseMarketplace({
                   status: "warning",
                   withSpace: true,
                 }),
-                on,
+                focusedPlugin,
               ],
             }),
           }),
         jsxProd_default(OrderedListWithItem, {
           onSelect: (p_1) => {
-            let marketplace = _[p_1];
+            let marketplace = plugins[p_1];
             if (!marketplace) return;
-            B(marketplace.name);
+            setMarketplaceName(marketplace.name);
             setViewState_2("plugin-list");
           },
-          children: _.map((msg) =>
+          children: plugins.map((msg) =>
             jsxProd_default(
               OrderedListWithItem.Item,
               {
@@ -513,7 +523,7 @@ function BrowseMarketplace({
     return jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
-        mn &&
+        pendingInstall &&
           jsxProd_default(Box, {
             marginBottom: 1,
             flexDirection: "column",
@@ -524,7 +534,7 @@ function BrowseMarketplace({
                   status: "warning",
                   withSpace: true,
                 }),
-                mn,
+                pendingInstall,
               ],
             }),
           }),
@@ -543,7 +553,7 @@ function BrowseMarketplace({
         }),
       ],
     });
-  if (pe.length === 0)
+  if (marketplaces.length === 0)
     return jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
@@ -554,7 +564,7 @@ function BrowseMarketplace({
             children: "Install plugins",
           }),
         }),
-        isPluginDirectoryModeOn() && me
+        isPluginDirectoryModeOn() && loading
           ? jsxProd_default(Box, {
               marginBottom: 1,
               children: jsxProd_default(HintText, {
@@ -637,7 +647,7 @@ function BrowseMarketplace({
         let isSelectedForInstall = selectedForInstall.has(plugin.pluginId);
         let isInstalling = installingPlugins.has(plugin.pluginId);
         let isLast = visibleIndex === visiblePlugins.length - 1;
-        let installCounts = et?.get(plugin.pluginId);
+        let installCounts = error?.get(plugin.pluginId);
         return jsxProd_default_2(
           TwoColumnRow,
           {

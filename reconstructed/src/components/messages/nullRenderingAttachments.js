@@ -100,21 +100,21 @@ var NULL_RENDERING_ATTACHMENT_TYPE_SET = new Set(NULL_RENDERING_ATTACHMENT_TYPES
 /**
  * 不渲染的附件消息判定
  */
-function isHiddenAttachmentMessage(m) {
-  if (m.type !== "attachment") return false;
-  if (m.attachment.type === "hook_cancelled")
-    return !(m.attachment.hookEvent === "UserPromptSubmit" && m.attachment.timedOut);
-  if (m.attachment.type === "tool_host_result_lines")
+function isHiddenAttachmentMessage(message) {
+  if (message.type !== "attachment") return false;
+  if (message.attachment.type === "hook_cancelled")
+    return !(message.attachment.hookEvent === "UserPromptSubmit" && message.attachment.timedOut);
+  if (message.attachment.type === "tool_host_result_lines")
     return (
       !(
-        m.attachment.unverified === true &&
-        typeof m.attachment.label === "string" &&
-        m.attachment.label.trim() !== ""
+        message.attachment.unverified === true &&
+        typeof message.attachment.label === "string" &&
+        message.attachment.label.trim() !== ""
       ) &&
-      !(Array.isArray(m.attachment.lines) ? m.attachment.lines : []).some(
-        (x) => typeof x === "string" && x.trim() !== "",
+      !(Array.isArray(message.attachment.lines) ? message.attachment.lines : []).some(
+        (line) => typeof line === "string" && line.trim() !== "",
       )
     );
-  return NULL_RENDERING_ATTACHMENT_TYPE_SET.has(m.attachment.type);
+  return NULL_RENDERING_ATTACHMENT_TYPE_SET.has(message.attachment.type);
 }
 export { isHiddenAttachmentMessage };

@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:496224-498651 cjs-fingerprint
-var require_twig = x(function (cjsExports, cjsModule) {
+var require_twig = __commonJS(function (cjsExports, cjsModule) {
   function twig(hljs) {
     let regex = hljs.regex;
     let FUNCTION_NAMES = [

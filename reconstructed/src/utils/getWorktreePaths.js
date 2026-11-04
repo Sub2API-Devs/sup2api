@@ -28,9 +28,9 @@ async function getWorktreePaths(cwd) {
       preserveOutputOnError: false,
     },
   );
-  let h = null;
+  let worktreePaths = null;
   if (code === 0)
-    h = stdout
+    worktreePaths = stdout
       .split(
         `
 `,
@@ -38,7 +38,7 @@ async function getWorktreePaths(cwd) {
       .filter((line) => line.startsWith("worktree "))
       .map((line) => identity(line.slice(9)));
   let durationMs = Date.now() - startTime;
-  if (h === null) {
+  if (worktreePaths === null) {
     logEvent("tengu_worktree_detection", {
       duration_ms: durationMs,
       worktree_count: 0,
@@ -48,11 +48,13 @@ async function getWorktreePaths(cwd) {
   }
   logEvent("tengu_worktree_detection", {
     duration_ms: durationMs,
-    worktree_count: h.length,
+    worktree_count: worktreePaths.length,
     success: true,
   });
-  let currentWorktree = h.find((path) => cwd === path || cwd.startsWith(path + sep));
-  let otherWorktrees = h.filter((path) => path !== currentWorktree).sort((L, G) => L.localeCompare(G));
+  let currentWorktree = worktreePaths.find((path) => cwd === path || cwd.startsWith(path + sep));
+  let otherWorktrees = worktreePaths
+    .filter((path) => path !== currentWorktree)
+    .sort((leftPath, rightPath) => leftPath.localeCompare(rightPath));
   return currentWorktree ? [currentWorktree, ...otherWorktrees] : otherWorktrees;
 }
 export { getWorktreePaths };

@@ -8,8 +8,8 @@
  * pieces: chunk-4v9zy7gn.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
-import { y } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { useState } from "../../../vendor/react/cjs/react.production.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { MessageActionsKeybindings } from "../../components/messageActions.js";
 import {
@@ -21,10 +21,10 @@ import { TextInput } from "../../components/TextInput.js";
 
 //@ chunk-4v9zy7gn.js:27559-29707 fingerprint = ChooseRepoStep (0.84)
 function ChooseRepoStep(props) {
-  let $ = w(44);
+  let $ = useMemoCache(44);
   let { currentRepo, useCurrentRepo, repoUrl, onRepoUrlChange, onSubmit, onToggleUseCurrentRepo } = props;
-  let [cursorOffset, setCursorOffset] = y(0);
-  let [showEmptyError, setShowEmptyError] = y(false);
+  let [cursorOffset, setCursorOffset] = useState(0);
+  let [showEmptyError, setShowEmptyError] = useState(false);
   let textInputColumns = useTerminalSize().columns;
   let t1;
   if ($[0] !== currentRepo || $[1] !== onSubmit || $[2] !== repoUrl || $[3] !== useCurrentRepo) {
@@ -90,16 +90,16 @@ function ChooseRepoStep(props) {
     $[15] = t6;
   } else t6 = $[15];
   MessageActionsKeybindings(t4, t6);
-  let D;
+  let keybinds;
   if ($[16] !== handleNext || $[17] !== handlePrevious) {
-    D = {
+    keybinds = {
       "confirm:previous": handlePrevious,
       "confirm:next": handleNext,
     };
     $[16] = handleNext;
     $[17] = handlePrevious;
-    $[18] = D;
-  } else D = $[18];
+    $[18] = keybinds;
+  } else keybinds = $[18];
   let t8;
   if ($[19] !== isTextInputVisible) {
     t8 = {
@@ -109,10 +109,10 @@ function ChooseRepoStep(props) {
     $[19] = isTextInputVisible;
     $[20] = t8;
   } else t8 = $[20];
-  MessageActionsKeybindings(D, t8);
-  let X;
+  MessageActionsKeybindings(keybinds, t8);
+  let repoList;
   if ($[21] !== currentRepo || $[22] !== useCurrentRepo) {
-    X =
+    repoList =
       currentRepo &&
       jsxProd_default(Box, {
         children: jsxProd_default_2(Text, {
@@ -123,15 +123,15 @@ function ChooseRepoStep(props) {
       });
     $[21] = currentRepo;
     $[22] = useCurrentRepo;
-    $[23] = X;
-  } else X = $[23];
+    $[23] = repoList;
+  } else repoList = $[23];
   const bold = !useCurrentRepo || !currentRepo;
   const color = !useCurrentRepo || !currentRepo ? "permission" : undefined;
   const t13 = !useCurrentRepo || !currentRepo ? "> " : "  ";
   const t14 = currentRepo ? "Enter a different repository" : "Enter repository";
-  let te;
+  let row;
   if ($[24] !== bold || $[25] !== color || $[26] !== t13 || $[27] !== t14) {
-    te = jsxProd_default(Box, {
+    row = jsxProd_default(Box, {
       children: jsxProd_default_2(Text, {
         bold,
         color,
@@ -142,9 +142,9 @@ function ChooseRepoStep(props) {
     $[25] = color;
     $[26] = t13;
     $[27] = t14;
-    $[28] = te;
-  } else te = $[28];
-  let me;
+    $[28] = row;
+  } else row = $[28];
+  let emptyHint;
   if (
     $[29] !== currentRepo ||
     $[30] !== cursorOffset ||
@@ -154,7 +154,7 @@ function ChooseRepoStep(props) {
     $[34] !== textInputColumns ||
     $[35] !== useCurrentRepo
   ) {
-    me =
+    emptyHint =
       (!useCurrentRepo || !currentRepo) &&
       jsxProd_default(Box, {
         marginLeft: 2,
@@ -180,32 +180,32 @@ function ChooseRepoStep(props) {
     $[33] = repoUrl;
     $[34] = textInputColumns;
     $[35] = useCurrentRepo;
-    $[36] = me;
-  } else me = $[36];
-  let se;
+    $[36] = emptyHint;
+  } else emptyHint = $[36];
+  let footer;
   if ($[37] !== showEmptyError) {
-    se =
+    footer =
       showEmptyError &&
       jsxProd_default(Text, {
         color: "error",
         children: "Please enter a repository name to continue",
       });
     $[37] = showEmptyError;
-    $[38] = se;
-  } else se = $[38];
-  let ge;
-  if ($[39] !== te || $[40] !== me || $[41] !== se || $[42] !== X) {
-    ge = jsxProd_default_2(Box, {
+    $[38] = footer;
+  } else footer = $[38];
+  let statusLine;
+  if ($[39] !== row || $[40] !== emptyHint || $[41] !== footer || $[42] !== repoList) {
+    statusLine = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [X, te, me, se],
+      children: [repoList, row, emptyHint, footer],
     });
-    $[39] = te;
-    $[40] = me;
-    $[41] = se;
-    $[42] = X;
-    $[43] = ge;
-  } else ge = $[43];
-  return ge;
+    $[39] = row;
+    $[40] = emptyHint;
+    $[41] = footer;
+    $[42] = repoList;
+    $[43] = statusLine;
+  } else statusLine = $[43];
+  return statusLine;
 }
 export { ChooseRepoStep };

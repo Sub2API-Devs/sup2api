@@ -8,13 +8,68 @@
  * pieces: chunk-18hwfzwa.js (1), chunk-d1cgs5na.js (7), chunk-mvhmq2z8.js (30)
  * attribution: fingerprint 6, placement 4, sole-consumer 8, affinity 1, callgraph-fingerprint 2, layout 15, file-local 2
  */
-import { init_react_production, y, R, P } from "../../../vendor/react/cjs/react.production.js";
+import {
+  renderDefaultModelSetting as renderDefaultModelSetting_2,
+  isOpus1mMergeEnabled,
+  parseUserSpecifiedModel,
+  renderUsageCreditsOnlyModelName,
+} from "../../utils/model/modelDisplay.js";
+import {
+  getDefaultMainLoopModelSetting,
+  isModeDependentModelSetting,
+  planModeConstituentFamily,
+} from "../../utils/model/planModeModel.js";
+import { strip1mSuffix, stripAnyVersatileSuffix } from "../../utils/model/modelIds.js";
+import { isAliasSpelling, formatModelRestrictedNotice } from "../../utils/model/validateModel.js";
+import { is1mContextDisabled, modelHasNative1MContext } from "../../utils/model/contextWindow1m.js";
+import { renderDefaultModelSetting } from "../../utils/model/model.js";
+import { isKnownNon1mTarget } from "../../utils/model/defaultModel.js";
+import {
+  shouldProbeThirdPartyDefaults,
+  shouldProbeThirdPartyDefaultsAlt,
+} from "../../utils/model/thirdPartyModelDefaults.js";
+import { LEGACY_SONNET_MODELS, getModelOptionsWithTelemetry } from "../../utils/model/modelOptions.js";
+import { getCanonicalName } from "../../utils/model/canonicalModelName.js";
+import {
+  getTotalOutputTokens,
+  getServedModelsForRequestedModel,
+  clearRefusalFallbackModelLatch,
+} from "../../bootstrap/state.js";
+import {
+  getModelSwitchTarget,
+  serializeModelSwitch,
+  effectiveModelForContext,
+  recordSwitchIfChanged,
+  useMainLoopModel as useMainLoopModel_3,
+} from "../../utils/model/modelSwitchHooks.js";
+import {
+  toInlineCode,
+  CURRENT_MODEL_PREFIX,
+  KEPT_MODEL_PREFIX,
+  SET_MODEL_PREFIX,
+  SAVED_AS_DEFAULT_SUFFIX,
+  CLOUD_SWITCH_NO_RESPONSE_PREFIX,
+  CLOUD_SWITCH_FAILED_PREFIX,
+} from "./modelMessages.js";
+import {
+  resolveEffortLevel,
+  persistEffortSetting,
+  levelEffortSetting,
+  toPersistableEffort,
+} from "../../utils/effort.js";
+import { getActiveModelFallback, describeAutoSwitchedModel } from "../../services/api/safeguardMessages.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { findPluginOptionsTarget } from "../plugin/PluginOptionsFlow.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { fromEnum, lit } from "../../services/analytics/safeMetadata.js";
-import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import {
   classifyControlRequestError,
   ControlRequestTimeoutError,
@@ -25,21 +80,10 @@ import {
   isRemoteSessionAvailable,
   hasRemoteCap,
 } from "../../remote/remoteMode.js";
-import { strip1mSuffix, stripAnyVersatileSuffix } from "../../utils/model/modelIds.js";
-import {
-  KEPT_MODEL_PREFIX,
-  toInlineCode,
-  SET_MODEL_PREFIX,
-  SAVED_AS_DEFAULT_SUFFIX,
-  CLOUD_SWITCH_NO_RESPONSE_PREFIX,
-  CLOUD_SWITCH_FAILED_PREFIX,
-  CURRENT_MODEL_PREFIX,
-} from "./modelMessages.js";
 import { useAppStoreDirect, useAppState, useSetAppState } from "../../state/AppState.js";
 import { useMainLoopModelSetting } from "../../hooks/useMainLoopModel.js";
 import { useFastModeOnForModel } from "../../hooks/usePromptSuggestion.js";
 import { useNotifications } from "../../context/notifications.js";
-import { getModelOptionsWithTelemetry, LEGACY_SONNET_MODELS } from "../../utils/model/modelOptions.js";
 import {
   isFastModeEnabled,
   clearFastModeCooldown,
@@ -50,19 +94,7 @@ import {
 } from "../../utils/fastMode.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { managedDenyStartupRefusal } from "../../utils/model/modelAllowlist.js";
-import {
-  getDefaultMainLoopModelSetting,
-  isModeDependentModelSetting,
-  planModeConstituentFamily,
-} from "../../utils/model/planModeModel.js";
 import { ladderForDefaultModel, hasLadderForSetting } from "../../utils/model/modelUnavailability.js";
-import {
-  serializeModelSwitch,
-  effectiveModelForContext,
-  recordSwitchIfChanged,
-  useMainLoopModel as useMainLoopModel_3,
-  getModelSwitchTarget,
-} from "../../utils/model/modelSwitchHooks.js";
 import {
   runPreModelSwitchHooks,
   preModelSwitchBlockedMessage,
@@ -78,52 +110,141 @@ import { logError } from "../../utils/log.js";
 import { toError, errorMessage } from "../../utils/errors.js";
 import { lastMainThreadResponse, isMainThreadSource } from "../../utils/querySource.js";
 import { shouldShowEffortNotice } from "../../components/PromptInput/promptInputState.js";
-import {
-  resolveEffortLevel,
-  persistEffortSetting,
-  levelEffortSetting,
-  toPersistableEffort,
-} from "../../utils/effort.js";
 import { savedModelPickReply } from "../config/configShorthand.js";
 import { isBridgeOrTransport } from "../../cli/transportState.js";
 import { telemetrySafeModelName } from "../../utils/model/telemetryModelName.js";
-import {
-  clearRefusalFallbackModelLatch,
-  getTotalOutputTokens,
-  getServedModelsForRequestedModel,
-} from "../../bootstrap/state.js";
 import { formatFastModeSuffix } from "../fast/fast.js";
-import {
-  parseUserSpecifiedModel,
-  renderUsageCreditsOnlyModelName,
-  renderDefaultModelSetting as renderDefaultModelSetting_2,
-  isOpus1mMergeEnabled,
-} from "../../utils/model/modelDisplay.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { FableUsageCreditsConsent } from "../../components/usageCredits/FableUsageCreditsConsent.js";
 import { PromptDialog } from "../../components/hooks/PromptDialog.js";
 import { ModelEffortSwitchConfirm } from "../../components/ModelEffortSwitchConfirm.js";
 import { ModelPicker } from "../../components/ModelPicker.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { formatModelRestrictedNotice, isAliasSpelling } from "../../utils/model/validateModel.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { getDeprecationStatusLine } from "../../utils/model/deprecation.js";
 import { isCommonInfoArg } from "../../types/logs.js";
 import { COMMON_HELP_ARGS } from "../../constants/xml.js";
 import { shortHash } from "../../utils/shortHash.js";
-import { is1mContextDisabled, modelHasNative1MContext } from "../../utils/model/contextWindow1m.js";
-import { renderDefaultModelSetting } from "../../utils/model/model.js";
-import { isKnownNon1mTarget } from "../../utils/model/defaultModel.js";
-import {
-  shouldProbeThirdPartyDefaults,
-  shouldProbeThirdPartyDefaultsAlt,
-} from "../../utils/model/thirdPartyModelDefaults.js";
-import { getCanonicalName } from "../../utils/model/canonicalModelName.js";
-import { getActiveModelFallback, describeAutoSwitchedModel } from "../../services/api/safeguardMessages.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-d1cgs5na.js:1834-1903 fingerprint = renderModelLabel (1)
+function renderModelLabel(model) {
+  let rendered = renderDefaultModelSetting_2(model ?? getDefaultMainLoopModelSetting());
+  return model === null ? `${rendered} (default)` : rendered;
+}
+//@ chunk-d1cgs5na.js:12136-12407 placement
+/**
+ * 判断切到带 [1m] 的别名是否有问题：1M 上下文被禁用、目标模型不支持 1M、或模式相关的设置没有对应的 1M 变体；正常返回 null。
+ */
+function diagnose1mAliasSwitch(setting) {
+  let setting_2 = setting.toLowerCase().trim();
+  let stripped = strip1mSuffix(setting_2);
+  if (stripped === setting_2 || !isAliasSpelling(setting_2)) return null;
+  if (is1mContextDisabled())
+    return {
+      kind: "disabled",
+    };
+  let found = renderDefaultModelSetting(setting_2).find((candidate) => isKnownNon1mTarget(candidate));
+  if (found !== undefined)
+    return {
+      kind: "unsupported",
+      carrier: strip1mSuffix(found),
+    };
+  if (isModeDependentModelSetting(stripped) && planModeConstituentFamily(setting_2) === null)
+    return {
+      kind: "noModeDependentVariant",
+    };
+  return null;
+}
+//@ chunk-d1cgs5na.js:12407-12554 fingerprint = isOpus1mUnavailable (1)
+function isOpus1mUnavailable(model) {
+  let m = model.toLowerCase();
+  if (!(m.includes("opus") && m.includes("[1m]"))) return false;
+  if (renderDefaultModelSetting(model).every((model) => modelHasNative1MContext(model))) return false;
+  return !shouldProbeThirdPartyDefaults() && !isOpus1mMergeEnabled();
+}
+//@ chunk-d1cgs5na.js:12651-12852 placement
+/**
+ * 判断 sonnet[1m]/opusplan[1m] 这类设置是否需要额外检查 1M 资格：排除旧版 sonnet、原生支持 1M 的模型以及第三方默认探测场景。
+ */
+function requires1mEntitlementCheck(model) {
+  let lower = model.toLowerCase();
+  if (!((lower.includes("sonnet") && lower.includes("[1m]")) || lower.trim() === "opusplan[1m]"))
+    return false;
+  if (
+    LEGACY_SONNET_MODELS.has(
+      getCanonicalName(lower.trim(), {
+        identity: true,
+      }),
+    )
+  )
+    return false;
+  if (modelHasNative1MContext(parseUserSpecifiedModel(model))) return false;
+  return !shouldProbeThirdPartyDefaultsAlt();
+}
+//@ chunk-d1cgs5na.js:12852-12887 placement
+/**
+ * 把用户指定的模型（或默认主循环模型）解析成实际模型名。
+ */
+function resolveRequestedModel(model) {
+  return parseUserSpecifiedModel(model ?? getDefaultMainLoopModelSetting());
+}
+//@ chunk-d1cgs5na.js:12887-13152 placement = useMainLoopModel (0.833)
+function useMainLoopModel(
+  model,
+  mainLoopModel,
+  mainLoopModelForSession,
+  cacheMissAckedAtOutputTokens,
+  options,
+) {
+  if (options === undefined) return false;
+  let totalOutputTokens = getTotalOutputTokens();
+  if (totalOutputTokens === 0 || totalOutputTokens === cacheMissAckedAtOutputTokens) return false;
+  let mainLoopModel_2 = stripAnyVersatileSuffix(resolveRequestedModel(model));
+  if (
+    mainLoopModel_2 ===
+    stripAnyVersatileSuffix(
+      resolveRequestedModel(
+        useMainLoopModel_3({
+          mainLoopModel,
+          mainLoopModelForSession,
+        }),
+      ),
+    )
+  )
+    return false;
+  let model_2 = options.response?.message.model;
+  return !(
+    typeof model_2 === "string" &&
+    (model_2 === mainLoopModel_2 || getServedModelsForRequestedModel(mainLoopModel_2)?.has(model_2) === true)
+  );
+}
+//@ chunk-d1cgs5na.js:13152-13461 fingerprint = ShowModelAndClose (0.354)
+function ShowModelAndClose(t0) {
+  let mainLoopModel = toInlineCode(renderModelLabel(t0.mainLoopModel));
+  let mainLoopModelForSession = resolveEffortLevel(t0);
+  let effortSuffix = mainLoopModelForSession !== undefined ? ` (effort: ${mainLoopModelForSession})` : "";
+  let modelSwitchTarget = getModelSwitchTarget(t0.mainLoopModelForSession, t0.mainLoopModel);
+  if (modelSwitchTarget !== null)
+    return `${CURRENT_MODEL_PREFIX}${toInlineCode(renderModelLabel(modelSwitchTarget))} (this session only)${effortSuffix}
+Base model: ${mainLoopModel}`;
+  let activeModelFallback = getActiveModelFallback();
+  let fallbackText =
+    activeModelFallback !== undefined
+      ? ` (${describeAutoSwitchedModel(toInlineCode(renderModelLabel(activeModelFallback.previousModel)))})`
+      : "";
+  return `${CURRENT_MODEL_PREFIX}${mainLoopModel}${fallbackText}${effortSuffix}`;
+}
+//@ chunk-18hwfzwa.js:929434-929487 fingerprint = _temp2 (1)
+function selectMainLoopModelForSession_2(s_0) {
+  return s_0.mainLoopModelForSession;
+}
 //@ chunk-mvhmq2z8.js:16272-16276 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-mvhmq2z8.js:16272", () => {
+  init_react_production();
+});
 //@ chunk-mvhmq2z8.js:16276-16347 sole-consumer
 function isRemoteModelListEnabled() {
   try {
@@ -133,29 +254,32 @@ function isRemoteModelListEnabled() {
   }
 }
 //@ chunk-mvhmq2z8.js:16347-16373 sole-consumer
-var REMOTE_MODEL_LIST_CACHE = new HostScoped(() => new Map());
+var REMOTE_MODEL_LIST_CACHE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-mvhmq2z8.js:16347", () => {
+  REMOTE_MODEL_LIST_CACHE = new HostScoped(() => new Map());
+});
 //@ chunk-mvhmq2z8.js:16373-16437 sole-consumer
 function pluginOptionsTargets({ models }) {
-  return models.map(findPluginOptionsTarget).filter((o) => o !== null);
+  return models.map(findPluginOptionsTarget).filter((target) => target !== null);
 }
 //@ chunk-mvhmq2z8.js:16437-16550 sole-consumer
-function cachedRemoteModelListWithDefault(r, sessionId) {
+function cachedRemoteModelListWithDefault(cache, sessionId) {
   if (sessionId === undefined || !isRemoteModelListEnabled()) return null;
-  let i = r.get(sessionId);
-  return i?.rows.some((n) => n.value === null) ? i : null;
+  let entry = cache.get(sessionId);
+  return entry?.rows.some((row) => row.value === null) ? entry : null;
 }
 //@ chunk-mvhmq2z8.js:16550-16594 sole-consumer
-function cacheRemoteModelList(r, o, i) {
-  if (o !== undefined) r.set(o, i);
+function cacheRemoteModelList(cache, sessionId, entry) {
+  if (sessionId !== undefined) cache.set(sessionId, entry);
 }
 //@ chunk-mvhmq2z8.js:16594-16746 sole-consumer
-function refreshRemoteModelList(r, o, i) {
-  if (o.sessionId === undefined || !isRemoteModelListEnabled()) return Promise.resolve(null);
+function refreshRemoteModelList(cache, sessionId, options) {
+  if (sessionId.sessionId === undefined || !isRemoteModelListEnabled()) return Promise.resolve(null);
   return trackRemoteModelListRefresh(
-    r,
-    o.sessionId,
-    i,
-    o.sendControlRequest({
+    cache,
+    sessionId.sessionId,
+    options,
+    sessionId.sendControlRequest({
       subtype: "list_models",
     }),
   );
@@ -164,39 +288,39 @@ function refreshRemoteModelList(r, o, i) {
 /**
  * 发出 list_models 控制请求后的处理：成功时记录与上次结果是否相同并缓存行；失败时记遥测，若缓存未被替换则删除该会话的缓存，返回 null。
  */
-function trackRemoteModelListRefresh(r, sessionId, i, n) {
-  let C = r.get(sessionId);
-  return n.then(pluginOptionsTargets).then(
-    (h) => {
-      let p = r.get(sessionId);
+function trackRemoteModelListRefresh(cache, sessionId, startedAt, done) {
+  let existing = cache.get(sessionId);
+  return done.then(pluginOptionsTargets).then(
+    (row) => {
+      let entry = cache.get(sessionId);
       logFeatureOk("remote_model_list_refresh", {
-        trigger: fromEnum(i),
-        ...(p === undefined
+        trigger: fromEnum(startedAt),
+        ...(entry === undefined
           ? {
               last_answer: lit("none"),
             }
           : {
-              last_answer: lit(En(p.rows, h) ? "same" : "differed"),
-              last_trigger: fromEnum(p.trigger),
+              last_answer: lit(import_sortedIndex_2(entry.rows, row) ? "same" : "differed"),
+              last_trigger: fromEnum(entry.trigger),
             }),
       });
-      cacheRemoteModelList(r, sessionId, {
-        rows: h,
-        trigger: i,
+      cacheRemoteModelList(cache, sessionId, {
+        rows: row,
+        trigger: startedAt,
       });
-      return h;
+      return row;
     },
     (error) => {
       logFeatureSad("remote_model_list_refresh", classifyControlRequestError(error), {
-        trigger: fromEnum(i),
+        trigger: fromEnum(startedAt),
       });
-      if (r.get(sessionId) === C) r.delete(sessionId);
+      if (cache.get(sessionId) === existing) cache.delete(sessionId);
       return null;
     },
   );
 }
 //@ chunk-mvhmq2z8.js:17121-17149 affinity
-function cloudModelRefusal(r, setAppState, storageV5) {
+function cloudModelRefusal(model, setAppState, storageV5) {
   return "";
 }
 //@ chunk-mvhmq2z8.js:17149-17189 callgraph-fingerprint = _temp (1)
@@ -223,65 +347,67 @@ function selectMainLoopModelForSession(s_0) {
   return s_0.mainLoopModelForSession;
 }
 //@ chunk-mvhmq2z8.js:17359-17397 layout
-function selectSessionEffort(A) {
-  return A.sessionEffort;
+function selectSessionEffort(state) {
+  return state.sessionEffort;
 }
 //@ chunk-mvhmq2z8.js:17397-17441 layout
-function selectSettingsEffortTable(T) {
-  return T.settingsEffortTable;
+function selectSettingsEffortTable(settings) {
+  return settings.settingsEffortTable;
 }
 //@ chunk-mvhmq2z8.js:17441-17524 layout
-function validateEffortChange(r) {
-  let o = noEffortRefusal(r);
-  if (o !== null)
+function validateEffortChange(change) {
+  let refusal = noEffortRefusal(change);
+  if (refusal !== null)
     return {
       kind: "refuse",
-      message: o,
+      message: refusal,
     };
   return null;
 }
 //@ chunk-mvhmq2z8.js:17524-17551 layout
-function noEffortRefusal(r) {
+function noEffortRefusal(change) {
   return null;
 }
 //@ chunk-mvhmq2z8.js:17551-18016 layout
 /**
- * CLOUD_MODEL_LIST_TIMEOUT_MS：15000。
+ * 云会话模型选择器的提示文案组：et 本地选项不可用、Po 列表加载失败、Lo 等待超时的说明（"Stopped waiting for the cloud session’s model list …"）；No 是超时毫秒 15000；Kt/xo 是别名判断与最长值挑选。
  */
 var CLOUD_MODEL_PICKER_UNAVAILABLE =
   "Model picker shows local options in cloud sessions \u2014 pass a model name, e.g. /model sonnet";
 var CLOUD_MODEL_LIST_FAILED =
   "Couldn\u2019t load the model list from the cloud session \u2014 pass a model name, e.g. /model sonnet";
-var CLOUD_MODEL_LIST_TIMEOUT =
+var CLOUD_MODEL_LIST_TIMEOUT_MESSAGE =
   "Stopped waiting for the cloud session\u2019s model list \u2014 run /model again, or pass a model name, e.g. /model sonnet";
 var CLOUD_MODEL_LIST_TIMEOUT_MS = 15000;
-var isAliasModel = (r) => strip1mSuffix(r) !== r;
-var longestModelValue = (r) =>
-  r.reduce((acc, i) => (acc === null || (i.value?.length ?? 0) > (acc.value?.length ?? 0) ? i : acc), null)
-    ?.value ?? null;
+var isAliasModel = (model) => strip1mSuffix(model) !== model;
+var longestModelValue = (models) =>
+  models.reduce(
+    (acc, row) => (acc === null || (row.value?.length ?? 0) > (acc.value?.length ?? 0) ? row : acc),
+    null,
+  )?.value ?? null;
 //@ chunk-mvhmq2z8.js:18016-18177 file-local
-function isKnownAlias(rows, mainLoopModel) {
-  let found = rows.find((n) => n.value === mainLoopModel);
+function isKnownAlias(rows, model) {
+  let found = rows.find((row) => row.value === model);
   return found
     ? found.value
     : longestModelValue(
-        mainLoopModel === null
+        model === null
           ? []
           : rows.filter(
-              (n) =>
-                n.value !== null &&
-                strip1mSuffix(mainLoopModel).includes(strip1mSuffix(n.value)) &&
-                isAliasModel(mainLoopModel) === isAliasModel(n.value),
+              (row) =>
+                row.value !== null &&
+                strip1mSuffix(model).includes(strip1mSuffix(row.value)) &&
+                isAliasModel(model) === isAliasModel(row.value),
             ),
       );
 }
 //@ chunk-mvhmq2z8.js:18177-18259 layout
 var CLOUD_MODEL_PICKER_SUBTITLE = "Models reported by the cloud session. Your pick applies to that session.";
 //@ chunk-mvhmq2z8.js:18259-18353 layout
-function keptModelMessage(r) {
-  return r === null
+function keptModelMessage(message) {
+  return message === null
     ? "Kept the workspace\u2019s current model"
-    : `${KEPT_MODEL_PREFIX}${toInlineCode(renderModelLabel(r))}`;
+    : `${KEPT_MODEL_PREFIX}${toInlineCode(renderModelLabel(message))}`;
 }
 //@ chunk-mvhmq2z8.js:18353-18475 layout
 var MODEL_KEPT_MESSAGE =
@@ -289,178 +415,181 @@ var MODEL_KEPT_MESSAGE =
 //@ chunk-mvhmq2z8.js:18475-23406 layout
 function LocalModelPicker({ getMessages, onDone, storageV5, session, onQueryEvent }) {
   let appStoreDirect = useAppStoreDirect();
-  let p = useAppState((s) => s.mainLoopModel);
-  let sessionModel = useAppState((s) => s.mainLoopModelForSession);
-  let A = useMainLoopModelSetting() ?? p;
-  let T = useAppState((s) => s.fastMode);
-  let fastModeOnForModel = useFastModeOnForModel(T, A);
+  let appModel = useAppState((state) => state.mainLoopModel);
+  let sessionModel = useAppState((state) => state.mainLoopModelForSession);
+  let modelSetting = useMainLoopModelSetting() ?? appModel;
+  let fastMode = useAppState((state) => state.fastMode);
+  let fastModeOnForModel = useFastModeOnForModel(fastMode, modelSetting);
   let setAppState = useSetAppState();
   let { addNotification } = useNotifications();
-  let [E] = y(() => {
+  let [viewModel] = useState(() => {
     return;
   });
-  let [ie] = y(() =>
-    E !== undefined ? getModelOptionsWithTelemetry(isFastModeEnabled() && !!T, E) : undefined,
+  let [modelOptions] = useState(() =>
+    viewModel !== undefined
+      ? getModelOptionsWithTelemetry(isFastModeEnabled() && !!fastMode, viewModel)
+      : undefined,
   );
-  let L = R(undefined);
-  let Q = (s) => s;
-  let [_, q] = y(null);
-  let messagesRef = R([]);
-  let [Ee, z] = y(null);
-  let [ne, ge] = y(null);
-  let Se = R(false);
-  let de = R(0);
-  let Ce = R(null);
-  let U = R(null);
-  let se = R(false);
-  let De = R(false);
-  let Pe = R(0);
-  let [xt, Le] = y(false);
-  let abortControllerRef = R(null);
-  let [$t, We] = y(false);
-  let ot = R(null);
+  let sessionRef = useRef(undefined);
+  let identity = (value) => value;
+  let [confirmRequest, setConfirmRequest] = useState(null);
+  let messagesRef = useRef([]);
+  let [ladderRequest, setLadderRequest] = useState(null);
+  let [effortRequest, setEffortRequest] = useState(null);
+  let savingDefault = useRef(false);
+  let savedCount = useRef(0);
+  let creditNotice = useRef(null);
+  let limitNotice = useRef(null);
+  let pendingSaveAsDefault = useRef(false);
+  let pendingLadder = useRef(false);
+  let ladderCount = useRef(0);
+  let [switching, setSwitching] = useState(false);
+  let abortControllerRef = useRef(null);
+  let [busy, setBusy] = useState(false);
+  let abortController = useRef(null);
   function handleCancel() {
     logEvent("tengu_model_command_menu", {
       action: lit("cancel"),
     });
-    let displayModel = renderModelLabel(A);
-    onDone(ee(`${KEPT_MODEL_PREFIX}${toInlineCode(displayModel)}`), {
+    let displayModel = renderModelLabel(modelSetting);
+    onDone(toDoneText(`${KEPT_MODEL_PREFIX}${toInlineCode(displayModel)}`), {
       display: "system",
     });
   }
-  function st(s, M, I = false) {
-    let Y = validateEffortChange(s);
-    if (Y?.kind === "refuse") {
-      onDone(Y.message, {
+  function requestSwitch(model, effort, saveAsDefault = false) {
+    let refusal = validateEffortChange(model);
+    if (refusal?.kind === "refuse") {
+      onDone(refusal.message, {
         display: "system",
       });
       return;
     }
-    if (Y?.kind === "confirm") {
-      Se.current = false;
-      de.current += 1;
-      ge({
-        model: s,
-        effort: M,
+    if (refusal?.kind === "confirm") {
+      savingDefault.current = false;
+      savedCount.current += 1;
+      setEffortRequest({
+        model,
+        effort,
       });
       return;
     }
-    let k = s === null ? managedDenyStartupRefusal(getDefaultMainLoopModelSetting(), "switch") : null;
-    if (k !== null) {
+    let denyReason =
+      model === null ? managedDenyStartupRefusal(getDefaultMainLoopModelSetting(), "switch") : null;
+    if (denyReason !== null) {
       logFeatureBad("model_switch", "denied_by_managed_settings");
-      onDone(ee(k), {
+      onDone(toDoneText(denyReason), {
         display: "system",
       });
       return;
     }
-    if (!I && ladderForDefaultModel(s)) {
-      De.current = false;
-      Pe.current += 1;
-      z({
-        model: s,
-        effort: M,
+    if (!saveAsDefault && ladderForDefaultModel(model)) {
+      pendingLadder.current = false;
+      ladderCount.current += 1;
+      setLadderRequest({
+        model,
+        effort,
       });
       return;
     }
-    let V = se.current;
-    se.current = false;
+    let wasPending = pendingSaveAsDefault.current;
+    pendingSaveAsDefault.current = false;
     let abortController = new AbortController();
     abortControllerRef.current = abortController;
-    Le(true);
+    setSwitching(true);
     serializeModelSwitch(session, () =>
-      runPreModelSwitchHooks(session, appStoreDirect.getState, s, "picker", {
+      runPreModelSwitchHooks(session, appStoreDirect.getState, model, "picker", {
         signal: abortController.signal,
       }),
     )
-      .then((B) => {
-        Le(false);
+      .then((decision) => {
+        setSwitching(false);
         if (abortController.signal.aborted) return;
-        messagesRef.current = B.messages;
-        if (B.decision === "block") {
+        messagesRef.current = decision.messages;
+        if (decision.decision === "block") {
           logFeatureSad("model_switch", "blocked_by_hook");
-          onDone(ee(preModelSwitchBlockedMessage(s, B.reason, B.messages)), {
+          onDone(toDoneText(preModelSwitchBlockedMessage(model, decision.reason, decision.messages)), {
             display: "system",
           });
           return;
         }
-        if (B.decision === "ask") {
-          q({
-            model: s,
-            pick: M,
+        if (decision.decision === "ask") {
+          setConfirmRequest({
+            model,
+            pick: effort,
             kind: "model",
-            hookReason: B.reason ?? "Confirm switching the model",
+            hookReason: decision.reason ?? "Confirm switching the model",
             vettedFrom: effectiveModelForContext(appStoreDirect.getState()),
-            saveAsDefault: V,
+            saveAsDefault: wasPending,
           });
           return;
         }
-        return Te(s, M, B.skipConfirm, V);
+        return completeSwitch(model, effort, decision.skipConfirm, wasPending);
       })
       .catch((error) => {
-        Le(false);
+        setSwitching(false);
         if (abortController.signal.aborted) return;
-        Ke(error);
+        showError(error);
       });
   }
-  function Ke(error) {
+  function showError(error) {
     logError(toError(error));
-    onDone(ee(`Model switch failed: ${sanitizeHookText(errorMessage(error))}`), {
+    onDone(toDoneText(`Model switch failed: ${sanitizeHookText(errorMessage(error))}`), {
       display: "system",
     });
   }
-  async function Te(s, M, skipConfirm, Y) {
+  async function completeSwitch(model, pick, skipConfirm, saveAsDefault) {
     let state = appStoreDirect.getState();
     if (
       !skipConfirm &&
       useMainLoopModel(
-        s,
+        model,
         state.mainLoopModel,
         state.mainLoopModelForSession,
         state.cacheMissAckedAtOutputTokens,
         lastMainThreadResponse(getMessages()),
       )
     ) {
-      q({
-        model: s,
-        pick: M,
+      setConfirmRequest({
+        model,
+        pick,
         kind: "model",
         vettedFrom: effectiveModelForContext(appStoreDirect.getState()),
-        saveAsDefault: Y,
+        saveAsDefault,
       });
       return;
     }
     if (
-      M !== undefined &&
+      pick !== undefined &&
       shouldShowEffortNotice({
-        target: M,
+        target: pick,
         current: resolveEffortLevel(state),
-        model: resolveRequestedModel(s),
+        model: resolveRequestedModel(model),
         permissionMode: state.toolPermissionContext.mode,
         messages: getMessages(),
         ackedAtOutputTokens: state.cacheMissAckedAtOutputTokens,
         promptCacheMayBeWarm: isMainThreadSource(getMessages()),
-        setting: s,
+        setting: model,
       })
     ) {
-      q({
-        model: s,
-        pick: M,
+      setConfirmRequest({
+        model,
+        pick,
         kind: "effort",
         vettedFrom: effectiveModelForContext(appStoreDirect.getState()),
-        saveAsDefault: Y,
+        saveAsDefault,
       });
       return;
     }
-    await Ne(s, M, Y);
+    await applyModelWithHooks(model, pick, saveAsDefault);
   }
-  async function Ne(s, M, I) {
-    We(true);
-    let Y = effectiveModelForContext(appStoreDirect.getState());
-    let k;
+  async function applyModelWithHooks(model, effort, saveAsDefault) {
+    setBusy(true);
+    let modelBefore = effectiveModelForContext(appStoreDirect.getState());
+    let result;
     try {
-      k = I
+      result = saveAsDefault
         ? await savedModelPickReply(
-            s,
+            model,
             {
               getAppState: appStoreDirect.getState,
               setAppState,
@@ -471,124 +600,125 @@ function LocalModelPicker({ getMessages, onDone, storageV5, session, onQueryEven
               },
             },
             () =>
-              rt(s, M, true).then((V) =>
-                V.hasDefaultSaveFailed
+              applyModelCore(model, effort, true).then((settled) =>
+                settled.hasDefaultSaveFailed
                   ? {
-                      unsaved: V.message,
+                      unsaved: settled.message,
                     }
-                  : V.message,
+                  : settled.message,
               ),
             {
               persistsOffBox: () => isBridgeOrTransport(session),
-              hasModelMoved: () => effectiveModelForContext(appStoreDirect.getState()) !== Y,
+              hasModelMoved: () => effectiveModelForContext(appStoreDirect.getState()) !== modelBefore,
             },
           )
         : {
-            text: (await rt(s, M, false)).message,
+            text: (await applyModelCore(model, effort, false)).message,
             isRefusal: false,
           };
     } finally {
-      We(false);
+      setBusy(false);
     }
-    if (k.isRefusal) {
+    if (result.isRefusal) {
       messagesRef.current = [];
-      onDone(ee(k.text), {
+      onDone(toDoneText(result.text), {
         display: "system",
       });
       return;
     }
-    if (k.rewrittenTo !== undefined) {
+    if (result.rewrittenTo !== undefined) {
       messagesRef.current = [];
-      U.current = null;
+      limitNotice.current = null;
     }
-    onDone(ee(k.text));
+    onDone(toDoneText(result.text));
   }
-  async function rt(s, M, I) {
-    U.current = null;
+  async function applyModelCore(model, effort, saveAsDefault) {
+    limitNotice.current = null;
     logEvent("tengu_model_command_menu", {
-      action: telemetrySafeModelName(s),
-      from_model: telemetrySafeModelName(p),
-      to_model: telemetrySafeModelName(s),
+      action: telemetrySafeModelName(model),
+      from_model: telemetrySafeModelName(appModel),
+      to_model: telemetrySafeModelName(model),
     });
-    let Y = I && M !== L.current?.effort;
-    if (M !== undefined) persistEffortSetting(M, resolveRequestedModel(s), Y, storageV5);
+    let effortChanged = saveAsDefault && effort !== sessionRef.current?.effort;
+    if (effort !== undefined)
+      persistEffortSetting(effort, resolveRequestedModel(model), effortChanged, storageV5);
     clearRefusalFallbackModelLatch();
-    let k = false;
-    let V = false;
+    let failed = false;
+    let fastModeOff = false;
     if (isFastModeEnabled()) clearFastModeCooldown();
-    recordSwitchIfChanged(session, appStoreDirect.getState(), s, "picker");
-    setAppState((re) => {
-      k = !!re.fastMode;
-      V = isFastModeEnabled() ? isFastModeActive(s, re.fastMode) : k;
+    recordSwitchIfChanged(session, appStoreDirect.getState(), model, "picker");
+    setAppState((prev) => {
+      failed = !!prev.fastMode;
+      fastModeOff = isFastModeEnabled() ? isFastModeActive(model, prev.fastMode) : failed;
       return {
-        ...re,
-        mainLoopModel: s,
+        ...prev,
+        mainLoopModel: model,
         mainLoopModelForSession: null,
-        ...(M !== undefined && {
-          sessionEffort: levelEffortSetting(M),
+        ...(effort !== undefined && {
+          sessionEffort: levelEffortSetting(effort),
         }),
-        ...(V !== k && {
-          fastMode: V,
+        ...(fastModeOff !== failed && {
+          fastMode: fastModeOff,
         }),
       };
     });
-    reportFastModeToggle(k, V);
-    let J = cloudModelRefusal(L.current, setAppState, storageV5);
+    reportFastModeToggle(failed, fastModeOff);
+    let cloudRefusal = cloudModelRefusal(sessionRef.current, setAppState, storageV5);
     logFeatureOk("model_switch");
-    notifyModelDeprecation(s, addNotification);
-    let B = I ? await setDefaultModel(s, storageV5) : null;
-    let xe = B?.kind === "saved";
-    let te = `${SET_MODEL_PREFIX}${toInlineCode(renderModelLabel(s))}${xe ? SAVED_AS_DEFAULT_SUFFIX : " for this session only"}`;
-    if (M !== undefined)
-      te +=
-        xe && (!Y || toPersistableEffort(M) === undefined)
-          ? ` \xB7 ${toInlineCode(M)} effort for this session only`
-          : ` with ${toInlineCode(M)} effort`;
-    te += J;
-    te += formatFastModeSuffix(k, V, s, {
+    notifyModelDeprecation(model, addNotification);
+    let saveResult = saveAsDefault ? await setDefaultModel(model, storageV5) : null;
+    let savedAsDefault = saveResult?.kind === "saved";
+    let notice = `${SET_MODEL_PREFIX}${toInlineCode(renderModelLabel(model))}${savedAsDefault ? SAVED_AS_DEFAULT_SUFFIX : " for this session only"}`;
+    if (effort !== undefined)
+      notice +=
+        savedAsDefault && (!effortChanged || toPersistableEffort(effort) === undefined)
+          ? ` \xB7 ${toInlineCode(effort)} effort for this session only`
+          : ` with ${toInlineCode(effort)} effort`;
+    notice += cloudRefusal;
+    notice += formatFastModeSuffix(failed, fastModeOff, model, {
       announceKeptOn: true,
     });
-    te += describeDefaultSaved(B);
-    if (xe) te += anthropicModelEnvNotice(s) || findModelSettingSource(s);
+    notice += describeDefaultSaved(saveResult);
+    if (savedAsDefault) notice += anthropicModelEnvNotice(model) || findModelSettingSource(model);
     if (messagesRef.current.length > 0) {
-      te += `
+      notice += `
 ${messagesRef.current.map(sanitizeHookText).join(`
 `)}`;
       messagesRef.current = [];
     }
     return {
-      message: te,
-      hasDefaultSaveFailed: B?.kind === "failed",
+      message: notice,
+      hasDefaultSaveFailed: saveResult?.kind === "failed",
     };
   }
-  function ee(text) {
-    let M = U.current;
-    U.current = null;
-    M?.();
-    let I = Ce.current;
-    Ce.current = null;
-    return I === null ? text : text + I;
+  function toDoneText(text) {
+    let usageLimitNotice = limitNotice.current;
+    limitNotice.current = null;
+    usageLimitNotice?.();
+    let usageCreditNotice = creditNotice.current;
+    creditNotice.current = null;
+    return usageCreditNotice === null ? text : text + usageCreditNotice;
   }
-  if (Ee) {
-    let { model, effort } = Ee;
+  if (ladderRequest) {
+    let { model, effort } = ladderRequest;
     let userSpecifiedModel = parseUserSpecifiedModel(model ?? getDefaultMainLoopModelSetting());
-    let Y = Pe.current;
+    let ladderRemaining = ladderCount.current;
     return jsxProd_default(FableUsageCreditsConsent, {
       variant: "picker",
       modelName: renderUsageCreditsOnlyModelName(userSpecifiedModel),
       model: userSpecifiedModel,
-      onDone: (k, V) => {
-        if (Y !== Pe.current) return false;
-        if (De.current) return false;
-        De.current = true;
-        z(null);
-        if (k === "consent") {
-          st(model, effort, true);
+      onDone: (result, consent) => {
+        if (ladderRemaining !== ladderCount.current) return false;
+        if (pendingLadder.current) return false;
+        pendingLadder.current = true;
+        setLadderRequest(null);
+        if (result === "consent") {
+          requestSwitch(model, effort, true);
           return;
         }
-        se.current = false;
-        if (k === "upgrade") {
-          let trimmed = ee("").trim();
+        pendingSaveAsDefault.current = false;
+        if (result === "upgrade") {
+          let trimmed = toDoneText("").trim();
           onDone(trimmed === "" ? undefined : trimmed, {
             display: trimmed === "" ? "skip" : "system",
             nextInput: "/upgrade",
@@ -596,77 +726,79 @@ ${messagesRef.current.map(sanitizeHookText).join(`
           });
           return;
         }
-        onDone(ee(V ?? `${KEPT_MODEL_PREFIX}${toInlineCode(renderModelLabel(A))}`), {
+        onDone(toDoneText(consent ?? `${KEPT_MODEL_PREFIX}${toInlineCode(renderModelLabel(modelSetting))}`), {
           display: "system",
         });
       },
     });
   }
-  if ($t) return null;
-  if (xt)
+  if (busy) return null;
+  if (switching)
     return jsxProd_default(PromptDialog, {
       message: "Running PreModelSwitch hooks\u2026",
       onCancel: () => {
         abortControllerRef.current?.abort();
-        Le(false);
-        onDone(ee("Model switch cancelled"), {
+        setSwitching(false);
+        onDone(toDoneText("Model switch cancelled"), {
           display: "system",
         });
       },
     });
-  if (_)
+  if (confirmRequest)
     return jsxProd_default(ModelEffortSwitchConfirm, {
-      kind: _.kind,
-      model: _.model,
-      effort: _.pick,
-      hookReason: _.hookReason,
+      kind: confirmRequest.kind,
+      model: confirmRequest.model,
+      effort: confirmRequest.pick,
+      hookReason: confirmRequest.hookReason,
       onConfirm: () => {
-        if (ot.current === _) return;
-        ot.current = _;
+        if (abortController.current === confirmRequest) return;
+        abortController.current = confirmRequest;
         if (
-          _.vettedFrom !== undefined &&
-          effectiveModelForContext(appStoreDirect.getState()) !== _.vettedFrom
+          confirmRequest.vettedFrom !== undefined &&
+          effectiveModelForContext(appStoreDirect.getState()) !== confirmRequest.vettedFrom
         ) {
-          q(null);
-          onDone(ee("The model changed while you were confirming; pick again"), {
+          setConfirmRequest(null);
+          onDone(toDoneText("The model changed while you were confirming; pick again"), {
             display: "system",
           });
           return;
         }
-        Ne(_.model, _.pick, _.saveAsDefault).catch(Ke);
+        applyModelWithHooks(confirmRequest.model, confirmRequest.pick, confirmRequest.saveAsDefault).catch(
+          showError,
+        );
       },
       onCancel: () => {
-        q(null);
-        se.current = false;
+        setConfirmRequest(null);
+        pendingSaveAsDefault.current = false;
       },
     });
   return jsxProd_default(ModelPicker, {
-    initial: p,
+    initial: appModel,
     sessionModel,
-    options: ie,
-    onSelect: (s, M) => {
-      L.current = undefined;
-      st(Q(s), M ?? L.current?.effort);
+    options: modelOptions,
+    onSelect: (choice, extra) => {
+      sessionRef.current = undefined;
+      requestSwitch(identity(choice), extra ?? sessionRef.current?.effort);
     },
-    onSetDefault: (s) => {
-      if (noEffortRefusal(Q(s)) !== null) return;
-      se.current = true;
+    onSetDefault: (value) => {
+      if (noEffortRefusal(identity(value)) !== null) return;
+      pendingSaveAsDefault.current = true;
     },
     onCancel: handleCancel,
     isStandaloneCommand: true,
     showFastModeNotice:
-      isFastModeEnabled() && fastModeOnForModel && supportsFastMode(A) && isFastModeAvailable(),
+      isFastModeEnabled() && fastModeOnForModel && supportsFastMode(modelSetting) && isFastModeAvailable(),
   });
 }
 //@ chunk-mvhmq2z8.js:23406-24820 layout
 function CloudModelPickerLoader({ getMessages, onDone, storageV5, credentials, session }) {
-  let h = useAppState((L) => L.mainLoopModel);
-  let [p, u] = y(null);
-  let [A, T] = y(null);
-  let [D] = y(() => new AbortController());
-  let [x, O] = y();
-  let E = R(false);
-  P(() => {
+  let model = useAppState((state) => state.mainLoopModel);
+  let [error, setError] = useState(null);
+  let [selected, setSelected] = useState(null);
+  let [abortController] = useState(() => new AbortController());
+  let [officialAlt, setOfficialAlt] = useState();
+  let busy = useRef(false);
+  useEffect(() => {
     let remoteCaps = getRemoteCaps();
     if (!remoteCaps) {
       onDone(CLOUD_MODEL_PICKER_UNAVAILABLE, {
@@ -674,90 +806,90 @@ function CloudModelPickerLoader({ getMessages, onDone, storageV5, credentials, s
       });
       return;
     }
-    let Q = false;
+    let cancelled = false;
     remoteCaps
       .sendControlRequest(
         {
           subtype: "list_models",
         },
         {
-          signal: D.signal,
+          signal: abortController.signal,
           timeoutMs: CLOUD_MODEL_LIST_TIMEOUT_MS,
           awaitWorkerStart: {
-            onChange: (_) => {
-              E.current ||= _;
-              O(_);
+            onChange: (value) => {
+              busy.current ||= value;
+              setOfficialAlt(value);
             },
           },
         },
       )
-      .then((_) => {
-        if (Q || D.signal.aborted) return;
-        let q = pluginOptionsTargets(_);
+      .then((args) => {
+        if (cancelled || abortController.signal.aborted) return;
+        let targets = pluginOptionsTargets(args);
         cacheRemoteModelList(REMOTE_MODEL_LIST_CACHE.of(session.host), remoteCaps.sessionId, {
-          rows: q,
+          rows: targets,
           trigger: "open",
         });
         logEvent("tengu_remote_model_picker", {
           outcome: lit("opened"),
-          model_count: q.length,
-          waited_for_worker: E.current,
+          model_count: targets.length,
+          waited_for_worker: busy.current,
         });
-        u(q);
+        setError(targets);
       })
       .catch((error) => {
-        if (Q || D.signal.aborted) return;
+        if (cancelled || abortController.signal.aborted) return;
         logEvent("tengu_remote_model_picker", {
           outcome: lit(error instanceof ControlRequestTimeoutError ? "timeout" : "fallback"),
-          waited_for_worker: E.current,
+          waited_for_worker: busy.current,
         });
         onDone(CLOUD_MODEL_LIST_FAILED, {
           display: "system",
         });
       });
-    O((_) => _ ?? false);
+    setOfficialAlt((prev) => prev ?? false);
     return () => {
-      Q = true;
+      cancelled = true;
     };
-  }, [onDone, D, session]);
-  if (A !== null)
+  }, [onDone, abortController, session]);
+  if (selected !== null)
     return jsxProd_default(SetModelFromArgs, {
-      args: A,
+      args: selected,
       getMessages,
       onDone,
       storageV5,
       credentials,
       session,
     });
-  if (p === null) {
-    if (x === undefined) return null;
+  if (error === null) {
+    if (officialAlt === undefined) return null;
     return jsxProd_default(PromptDialog, {
-      message: x
+      message: officialAlt
         ? "Waiting for the cloud session to be ready\u2026"
         : "Loading models from the cloud session\u2026",
       onCancel: () => {
-        D.abort();
+        abortController.abort();
         logEvent("tengu_remote_model_picker", {
           outcome: lit("cancelled"),
-          waited_for_worker: E.current,
+          waited_for_worker: busy.current,
         });
-        onDone(CLOUD_MODEL_LIST_TIMEOUT, {
+        onDone(CLOUD_MODEL_LIST_TIMEOUT_MESSAGE, {
           display: "system",
         });
       },
     });
   }
-  let initial = isKnownAlias(p, h);
+  let initial = isKnownAlias(error, model);
   return jsxProd_default(ModelPicker, {
     initial,
-    options: p,
+    options: error,
     headerText: CLOUD_MODEL_PICKER_SUBTITLE,
-    onSelect: (L) => T(L ?? "default"),
+    onSelect: (choice) => setSelected(choice ?? "default"),
     onCancel: () => {
       logEvent("tengu_model_command_menu", {
         action: lit("cancel"),
       });
-      onDone(keptModelMessage(h), {
+      onDone(keptModelMessage(model), {
         display: "system",
       });
     },
@@ -766,31 +898,31 @@ function CloudModelPickerLoader({ getMessages, onDone, storageV5, credentials, s
 }
 //@ chunk-mvhmq2z8.js:24820-26826 fingerprint = ModelPickerWrapper (0.322)
 function ModelPickerWrapper(props) {
-  let x = w(38);
+  let $ = useMemoCache(38);
   let { kept, getMessages, onDone, storageV5, credentials, session } = props;
   let mainLoopModel = useAppState(selectMainLoopModel);
   let appStoreDirect = useAppStoreDirect();
-  let [T, D] = y(null);
-  let O;
-  if (x[0] !== kept.rows || x[1] !== mainLoopModel) {
-    O = () => isKnownAlias(kept.rows, mainLoopModel);
-    x[0] = kept.rows;
-    x[1] = mainLoopModel;
-    x[2] = O;
-  } else O = x[2];
-  let [E] = y(O);
-  let ie = R("pending");
-  let mainLoopModelForSession = R(false);
-  let Q;
+  let [error, setError] = useState(null);
+  let fallbackModel;
+  if ($[0] !== kept.rows || $[1] !== mainLoopModel) {
+    fallbackModel = () => isKnownAlias(kept.rows, mainLoopModel);
+    $[0] = kept.rows;
+    $[1] = mainLoopModel;
+    $[2] = fallbackModel;
+  } else fallbackModel = $[2];
+  let [initialModel] = useState(fallbackModel);
+  let statusRef = useRef("pending");
+  let mainLoopModelForSession = useRef(false);
+  let content;
   if (
-    x[3] !== kept.rows ||
-    x[4] !== kept.trigger ||
-    x[5] !== onDone ||
-    x[6] !== E ||
-    x[7] !== session ||
-    x[8] !== appStoreDirect
+    $[3] !== kept.rows ||
+    $[4] !== kept.trigger ||
+    $[5] !== onDone ||
+    $[6] !== initialModel ||
+    $[7] !== session ||
+    $[8] !== appStoreDirect
   ) {
-    Q = () => {
+    content = () => {
       let setAppState = getRemoteCaps();
       if (!setAppState) {
         mainLoopModelForSession.current = true;
@@ -805,93 +937,101 @@ function ModelPickerWrapper(props) {
         waited_for_worker: false,
         kept_rows_trigger: fromEnum(kept.trigger),
       });
-      refreshRemoteModelList(REMOTE_MODEL_LIST_CACHE.of(session.host), setAppState, "open").then((q) => {
-        let le = En(q, kept.rows) && isKnownAlias(kept.rows, appStoreDirect.getState().mainLoopModel) === E;
-        ie.current = q === null ? "failed" : le ? "same" : "differed";
+      refreshRemoteModelList(REMOTE_MODEL_LIST_CACHE.of(session.host), setAppState, "open").then((option) => {
+        let label =
+          import_sortedIndex_2(option, kept.rows) &&
+          isKnownAlias(kept.rows, appStoreDirect.getState().mainLoopModel) === initialModel;
+        statusRef.current = option === null ? "failed" : label ? "same" : "differed";
       });
     };
-    x[3] = kept.rows;
-    x[4] = kept.trigger;
-    x[5] = onDone;
-    x[6] = E;
-    x[7] = session;
-    x[8] = appStoreDirect;
-    x[9] = Q;
-  } else Q = x[9];
-  let Ee;
-  if (x[10] !== kept || x[11] !== onDone || x[12] !== E || x[13] !== session || x[14] !== appStoreDirect) {
-    Ee = [kept, E, session, appStoreDirect, onDone];
-    x[10] = kept;
-    x[11] = onDone;
-    x[12] = E;
-    x[13] = session;
-    x[14] = appStoreDirect;
-    x[15] = Ee;
-  } else Ee = x[15];
-  P(Q, Ee);
-  if (T !== null) {
-    let z;
+    $[3] = kept.rows;
+    $[4] = kept.trigger;
+    $[5] = onDone;
+    $[6] = initialModel;
+    $[7] = session;
+    $[8] = appStoreDirect;
+    $[9] = content;
+  } else content = $[9];
+  let row;
+  if (
+    $[10] !== kept ||
+    $[11] !== onDone ||
+    $[12] !== initialModel ||
+    $[13] !== session ||
+    $[14] !== appStoreDirect
+  ) {
+    row = [kept, initialModel, session, appStoreDirect, onDone];
+    $[10] = kept;
+    $[11] = onDone;
+    $[12] = initialModel;
+    $[13] = session;
+    $[14] = appStoreDirect;
+    $[15] = row;
+  } else row = $[15];
+  useEffect(content, row);
+  if (error !== null) {
+    let footer;
     if (
-      x[16] !== credentials ||
-      x[17] !== getMessages ||
-      x[18] !== onDone ||
-      x[19] !== T ||
-      x[20] !== session ||
-      x[21] !== storageV5
+      $[16] !== credentials ||
+      $[17] !== getMessages ||
+      $[18] !== onDone ||
+      $[19] !== error ||
+      $[20] !== session ||
+      $[21] !== storageV5
     ) {
-      z = jsxProd_default(SetModelFromArgs, {
-        args: T,
+      footer = jsxProd_default(SetModelFromArgs, {
+        args: error,
         getMessages,
         onDone,
         storageV5,
         credentials,
         session,
       });
-      x[16] = credentials;
-      x[17] = getMessages;
-      x[18] = onDone;
-      x[19] = T;
-      x[20] = session;
-      x[21] = storageV5;
-      x[22] = z;
-    } else z = x[22];
-    return z;
+      $[16] = credentials;
+      $[17] = getMessages;
+      $[18] = onDone;
+      $[19] = error;
+      $[20] = session;
+      $[21] = storageV5;
+      $[22] = footer;
+    } else footer = $[22];
+    return footer;
   }
-  let z;
-  if (x[23] !== kept.rows || x[24] !== mainLoopModel) {
-    z = isKnownAlias(kept.rows, mainLoopModel);
-    x[23] = kept.rows;
-    x[24] = mainLoopModel;
-    x[25] = z;
-  } else z = x[25];
-  let ne = z;
+  let hoverModel;
+  if ($[23] !== kept.rows || $[24] !== mainLoopModel) {
+    hoverModel = isKnownAlias(kept.rows, mainLoopModel);
+    $[23] = kept.rows;
+    $[24] = mainLoopModel;
+    $[25] = hoverModel;
+  } else hoverModel = $[25];
+  let hoverModelValue = hoverModel;
   let onSelect;
-  if (x[26] !== ne || x[27] !== onDone || x[28] !== E) {
+  if ($[26] !== hoverModelValue || $[27] !== onDone || $[28] !== initialModel) {
     onSelect = (prev) => {
       if (mainLoopModelForSession.current) {
         return;
       }
       mainLoopModelForSession.current = true;
-      let de = prev === E || prev === ne;
-      let Ce = !de || (ie.current === "same" && ne === E);
+      let isSameModel = prev === initialModel || prev === hoverModelValue;
+      let showCurrent = !isSameModel || (statusRef.current === "same" && hoverModelValue === initialModel);
       logEvent("tengu_remote_model_kept_rows_pick", {
-        is_ticked_row: de,
-        is_sent: Ce,
-        own_answer: fromEnum(ie.current),
+        is_ticked_row: isSameModel,
+        is_sent: showCurrent,
+        own_answer: fromEnum(statusRef.current),
       });
-      if (Ce) D(prev ?? "default");
+      if (showCurrent) setError(prev ?? "default");
       else
         onDone(MODEL_KEPT_MESSAGE, {
           display: "system",
         });
     };
-    x[26] = ne;
-    x[27] = onDone;
-    x[28] = E;
-    x[29] = onSelect;
-  } else onSelect = x[29];
+    $[26] = hoverModelValue;
+    $[27] = onDone;
+    $[28] = initialModel;
+    $[29] = onSelect;
+  } else onSelect = $[29];
   let onCancel;
-  if (x[30] !== mainLoopModel || x[31] !== onDone) {
+  if ($[30] !== mainLoopModel || $[31] !== onDone) {
     onCancel = () => {
       if (mainLoopModelForSession.current) {
         return;
@@ -904,93 +1044,93 @@ function ModelPickerWrapper(props) {
         display: "system",
       });
     };
-    x[30] = mainLoopModel;
-    x[31] = onDone;
-    x[32] = onCancel;
-  } else onCancel = x[32];
-  let se;
-  if (x[33] !== ne || x[34] !== kept.rows || x[35] !== onSelect || x[36] !== onCancel) {
-    se = jsxProd_default(ModelPicker, {
-      initial: ne,
+    $[30] = mainLoopModel;
+    $[31] = onDone;
+    $[32] = onCancel;
+  } else onCancel = $[32];
+  let details;
+  if ($[33] !== hoverModelValue || $[34] !== kept.rows || $[35] !== onSelect || $[36] !== onCancel) {
+    details = jsxProd_default(ModelPicker, {
+      initial: hoverModelValue,
       options: kept.rows,
       headerText: CLOUD_MODEL_PICKER_SUBTITLE,
       onSelect,
       onCancel,
       isStandaloneCommand: true,
     });
-    x[33] = ne;
-    x[34] = kept.rows;
-    x[35] = onSelect;
-    x[36] = onCancel;
-    x[37] = se;
-  } else se = x[37];
-  return se;
+    $[33] = hoverModelValue;
+    $[34] = kept.rows;
+    $[35] = onSelect;
+    $[36] = onCancel;
+    $[37] = details;
+  } else details = $[37];
+  return details;
 }
 //@ chunk-mvhmq2z8.js:26826-33595 layout
 function SetModelFromArgs(props) {
-  let O = w(72);
+  let $ = useMemoCache(72);
   let { args, getMessages, onDone, storageV5, credentials, session } = props;
   let appStoreDirect = useAppStoreDirect();
   let setAppState = useSetAppState();
   let { addNotification } = useNotifications();
-  let [D, x] = y(null);
-  let E;
-  if (O[0] === MEMO_CACHE_SENTINEL) {
-    E = [];
-    O[0] = E;
-  } else E = O[0];
-  let messagesRef = R(E);
-  let [L, Q] = y(false);
-  let abortControllerRef = R(null);
-  let [q, le] = y(null);
-  let [Ee] = y(isUltracodeConfirmable);
-  let z = R(false);
-  let ne = R(false);
-  let ge = R(0);
-  let Se = R(null);
-  let de = R(false);
-  let Ce;
+  let [confirmPicker, setConfirmPicker] = useState(null);
+  let notifications;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    notifications = [];
+    $[0] = notifications;
+  } else notifications = $[0];
+  let notificationsRef = useRef(notifications);
+  let [switching, setSwitching] = useState(false);
+  let abortControllerRef = useRef(null);
+  let [ladderRequest, setLadderRequest] = useState(null);
+  let [ultracodeConfirmable] = useState(isUltracodeConfirmable);
+  let cancelledRef = useRef(false);
+  let pendingLadderRef = useRef(false);
+  let ladderTickRef = useRef(0);
+  let creditNoticeRef = useRef(null);
+  let failedRef = useRef(false);
+  let applyModel;
   if (
-    O[1] !== addNotification ||
-    O[2] !== onDone ||
-    O[3] !== session ||
-    O[4] !== setAppState ||
-    O[5] !== storageV5 ||
-    O[6] !== appStoreDirect
+    $[1] !== addNotification ||
+    $[2] !== onDone ||
+    $[3] !== session ||
+    $[4] !== setAppState ||
+    $[5] !== storageV5 ||
+    $[6] !== appStoreDirect
   ) {
-    Ce = (U, se) => {
-      let De = !isRemoteSessionAvailable();
-      x(null);
-      let Pe = false;
-      let We = () => {
-        let Le = saveModelSwitch(
+    applyModel = (model, effort) => {
+      let notRemote = !isRemoteSessionAvailable();
+      setConfirmPicker(null);
+      let failed = false;
+      let persistSwitch = () => {
+        let savePromise = saveModelSwitch(
           session,
-          U,
+          model,
           () => appStoreDirect.getState(),
           setAppState,
-          De,
+          notRemote,
           "command",
-          se,
+          effort,
           storageV5,
-          (xt) => {
-            Pe = xt?.kind === "failed";
+          (outcome) => {
+            failed = outcome?.kind === "failed";
           },
         );
-        let tt = cloudModelRefusal(undefined, setAppState, storageV5);
-        if (se !== undefined && U !== null)
+        let cloudRefusal = cloudModelRefusal(undefined, setAppState, storageV5);
+        if (effort !== undefined && model !== null)
           addNotification({
-            key: `model-restricted-${U}`,
+            key: `model-restricted-${model}`,
             kind: "warning",
-            text: formatModelRestrictedNotice(se, U),
+            text: formatModelRestrictedNotice(effort, model),
             priority: "immediate",
           });
-        notifyModelDeprecation(U, addNotification);
-        return Le.then(($t) => $t + tt);
+        notifyModelDeprecation(model, addNotification);
+        return savePromise.then((prefix) => prefix + cloudRefusal);
       };
-      let ot = effectiveModelForContext(appStoreDirect.getState());
-      let st = De
+      let modelAtStart = effectiveModelForContext(appStoreDirect.getState());
+      let switchPromise = notRemote
         ? savedModelPickReply(
-            U,
+            model,
             {
               getAppState: () => appStoreDirect.getState(),
               setAppState,
@@ -1001,32 +1141,32 @@ function SetModelFromArgs(props) {
               },
             },
             () =>
-              We().then((nt) =>
-                Pe
+              persistSwitch().then((text) =>
+                failed
                   ? {
-                      unsaved: nt,
+                      unsaved: text,
                     }
-                  : nt,
+                  : text,
               ),
             {
               persistsOffBox: () => isBridgeOrTransport(session),
-              hasModelMoved: () => effectiveModelForContext(appStoreDirect.getState()) !== ot,
+              hasModelMoved: () => effectiveModelForContext(appStoreDirect.getState()) !== modelAtStart,
             },
           )
-        : We().then(textNotRefusal);
-      let Ke = messagesRef.current;
-      messagesRef.current = [];
-      st.then(
-        (Te) => {
-          let { text, isRefusal, rewrittenTo } = Te;
+        : persistSwitch().then(textNotRefusal);
+      let heldMessages = notificationsRef.current;
+      notificationsRef.current = [];
+      switchPromise.then(
+        (result) => {
+          let { text, isRefusal, rewrittenTo } = result;
           return isRefusal
             ? onDone(text, {
                 display: "system",
               })
             : onDone(
-                Ke.length > 0 && rewrittenTo === undefined
+                heldMessages.length > 0 && rewrittenTo === undefined
                   ? `${text}
-${Ke.map(sanitizeHookText).join(`
+${heldMessages.map(sanitizeHookText).join(`
 `)}`
                   : text,
               );
@@ -1039,81 +1179,81 @@ ${Ke.map(sanitizeHookText).join(`
         },
       );
     };
-    O[1] = addNotification;
-    O[2] = onDone;
-    O[3] = session;
-    O[4] = setAppState;
-    O[5] = storageV5;
-    O[6] = appStoreDirect;
-    O[7] = Ce;
-  } else Ce = O[7];
-  let s = Ce;
-  let Te;
-  if (O[8] !== s || O[9] !== getMessages || O[10] !== appStoreDirect) {
-    Te = (M, I, Y) => {
+    $[1] = addNotification;
+    $[2] = onDone;
+    $[3] = session;
+    $[4] = setAppState;
+    $[5] = storageV5;
+    $[6] = appStoreDirect;
+    $[7] = applyModel;
+  } else applyModel = $[7];
+  let applyModelDirect = applyModel;
+  let applySubstituted;
+  if ($[8] !== applyModelDirect || $[9] !== getMessages || $[10] !== appStoreDirect) {
+    applySubstituted = (model, substitutedFrom, skipConfirm) => {
       let state = appStoreDirect.getState();
       if (
-        !Y &&
+        !skipConfirm &&
         useMainLoopModel(
-          M,
+          model,
           state.mainLoopModel,
           state.mainLoopModelForSession,
           state.cacheMissAckedAtOutputTokens,
           lastMainThreadResponse(getMessages()),
         )
       ) {
-        x({
-          model: M,
-          substitutedFrom: I,
+        setConfirmPicker({
+          model,
+          substitutedFrom,
           vettedFrom: effectiveModelForContext(appStoreDirect.getState()),
         });
         return;
       }
-      s(M, I);
+      applyModelDirect(model, substitutedFrom);
     };
-    O[8] = s;
-    O[9] = getMessages;
-    O[10] = appStoreDirect;
-    O[11] = Te;
-  } else Te = O[11];
-  let V = Te;
-  let J;
-  if (O[12] !== V || O[13] !== onDone || O[14] !== session || O[15] !== appStoreDirect) {
-    J = (B, xe) => {
+    $[8] = applyModelDirect;
+    $[9] = getMessages;
+    $[10] = appStoreDirect;
+    $[11] = applySubstituted;
+  } else applySubstituted = $[11];
+  let applyWithHooks = applySubstituted;
+  let requestSwitch;
+  if ($[12] !== applyWithHooks || $[13] !== onDone || $[14] !== session || $[15] !== appStoreDirect) {
+    requestSwitch = (model, substitutedFrom) => {
       let abortController = new AbortController();
       abortControllerRef.current = abortController;
-      Q(true);
+      setSwitching(true);
       serializeModelSwitch(session, () =>
-        runPreModelSwitchHooks(session, appStoreDirect.getState, B, "command", {
+        runPreModelSwitchHooks(session, appStoreDirect.getState, model, "command", {
           signal: abortController.signal,
         }),
       )
-        .then((re) => {
-          Q(false);
+        .then((decision) => {
+          setSwitching(false);
           if (abortController.signal.aborted) {
             return;
           }
-          messagesRef.current = re.messages;
-          if (re.decision === "block") {
+          notificationsRef.current = decision.messages;
+          if (decision.decision === "block") {
             logFeatureSad("model_switch", "blocked_by_hook");
-            onDone(preModelSwitchBlockedMessage(B, re.reason, re.messages), {
+            onDone(preModelSwitchBlockedMessage(model, decision.reason, decision.messages), {
               display: "system",
             });
             return;
           }
-          if (re.decision === "ask") {
-            x({
-              model: B,
-              substitutedFrom: xe,
-              hookReason: re.reason ?? "Confirm switching the model",
+          if (decision.decision === "ask") {
+            setConfirmPicker({
+              model,
+              substitutedFrom,
+              hookReason: decision.reason ?? "Confirm switching the model",
               vettedFrom: effectiveModelForContext(appStoreDirect.getState()),
             });
             return;
           }
-          V(B, xe, re.skipConfirm);
+          applyWithHooks(model, substitutedFrom, decision.skipConfirm);
         })
         .catch((error) => {
-          Q(false);
+          setSwitching(false);
           if (abortController.signal.aborted) {
             return;
           }
@@ -1123,72 +1263,72 @@ ${Ke.map(sanitizeHookText).join(`
           });
         });
     };
-    O[12] = V;
-    O[13] = onDone;
-    O[14] = session;
-    O[15] = appStoreDirect;
-    O[16] = J;
-  } else J = O[16];
-  let Me = J;
-  let Ro;
+    $[12] = applyWithHooks;
+    $[13] = onDone;
+    $[14] = session;
+    $[15] = appStoreDirect;
+    $[16] = requestSwitch;
+  } else requestSwitch = $[16];
+  let applyCommand = requestSwitch;
+  let runCommand;
   if (
-    O[17] !== addNotification ||
-    O[18] !== args ||
-    O[19] !== credentials ||
-    O[20] !== onDone ||
-    O[21] !== Me ||
-    O[22] !== session ||
-    O[23] !== setAppState ||
-    O[24] !== storageV5
+    $[17] !== addNotification ||
+    $[18] !== args ||
+    $[19] !== credentials ||
+    $[20] !== onDone ||
+    $[21] !== applyCommand ||
+    $[22] !== session ||
+    $[23] !== setAppState ||
+    $[24] !== storageV5
   ) {
-    Ro = () => {
-      let remoteCaps = getRemoteCaps();
-      if (remoteCaps && isRemoteControlChannelAvailable()) {
-        switchMainLoopModelSafe(args, storageV5, credentials).then((he) => {
-          if (z.current) {
+    runCommand = () => {
+      let sessionId = getRemoteCaps();
+      if (sessionId && isRemoteControlChannelAvailable()) {
+        switchMainLoopModelSafe(args, storageV5, credentials).then((outcome) => {
+          if (cancelledRef.current) {
             return;
           }
-          if (!he.ok) {
-            de.current = true;
-            onDone(he.message, {
+          if (!outcome.ok) {
+            failedRef.current = true;
+            onDone(outcome.message, {
               display: "system",
             });
             return;
           }
-          if (he.model !== null && hasLadderForSetting(he.model)) {
+          if (outcome.model !== null && hasLadderForSetting(outcome.model)) {
             logFeatureSad("model_fable_consent", "remote_thin_client_blocked");
-            de.current = true;
+            failedRef.current = true;
             onDone(
-              `${renderUsageCreditsOnlyModelName(parseUserSpecifiedModel(he.model))} uses usage credits, and this cloud session can\u2019t show the consent prompt yet \xB7 switch models from the workspace, or consent once in a local session first`,
+              `${renderUsageCreditsOnlyModelName(parseUserSpecifiedModel(outcome.model))} uses usage credits, and this cloud session can\u2019t show the consent prompt yet \xB7 switch models from the workspace, or consent once in a local session first`,
               {
                 display: "system",
               },
             );
             return;
           }
-          let model = he.model;
-          return remoteCaps
+          let model = outcome.model;
+          return sessionId
             .sendControlRequest({
               subtype: "set_model",
               model: model ?? undefined,
             })
             .then(() => {
-              let Bt = false;
-              setAppState((it) => {
-                Bt = isFastModeEnabled() && !!it.fastMode && !isFastModeActive(model, it.fastMode);
-                recordSwitchIfChanged(session, it, model, "command");
+              let turnedOff = false;
+              setAppState((prev) => {
+                turnedOff = isFastModeEnabled() && !!prev.fastMode && !isFastModeActive(model, prev.fastMode);
+                recordSwitchIfChanged(session, prev, model, "command");
                 return {
-                  ...it,
+                  ...prev,
                   mainLoopModel: model,
                   mainLoopModelForSession: null,
-                  ...(Bt && {
+                  ...(turnedOff && {
                     fastMode: false,
                   }),
                 };
               });
-              if (Bt) reportFastModeToggle(true, false);
-              refreshRemoteModelList(REMOTE_MODEL_LIST_CACHE.of(session.host), remoteCaps, "switch");
-              if (z.current) {
+              if (turnedOff) reportFastModeToggle(true, false);
+              refreshRemoteModelList(REMOTE_MODEL_LIST_CACHE.of(session.host), sessionId, "switch");
+              if (cancelledRef.current) {
                 addNotification({
                   key: `remote-model-switch-landed-${model ?? "default"}`,
                   kind: "event",
@@ -1200,17 +1340,17 @@ ${Ke.map(sanitizeHookText).join(`
                 });
                 return;
               }
-              if (he.substitutedFrom !== undefined && model !== null)
+              if (outcome.substitutedFrom !== undefined && model !== null)
                 addNotification({
                   key: `model-restricted-${model}`,
                   kind: "warning",
-                  text: formatModelRestrictedNotice(he.substitutedFrom, model),
+                  text: formatModelRestrictedNotice(outcome.substitutedFrom, model),
                   priority: "immediate",
                 });
-              if (he.substitutedFrom !== undefined)
+              if (outcome.substitutedFrom !== undefined)
                 logFeatureSad("model_switch", "family_alias_stepped_down");
               else logFeatureOk("model_switch");
-              de.current = true;
+              failedRef.current = true;
               onDone(
                 model === null
                   ? "Reset model to the workspace default"
@@ -1219,14 +1359,14 @@ ${Ke.map(sanitizeHookText).join(`
             })
             .catch((error) => {
               logForDebugging(`[remote] set_model rejected: ${errorMessage(error)}`);
-              if (z.current) {
+              if (cancelledRef.current) {
                 return;
               }
-              let So = error instanceof ControlRequestTimeoutError;
-              logFeatureBad("model_switch", So ? "timeout" : "remote_rejected");
-              de.current = true;
+              let isTimeout = error instanceof ControlRequestTimeoutError;
+              logFeatureBad("model_switch", isTimeout ? "timeout" : "remote_rejected");
+              failedRef.current = true;
               onDone(
-                So
+                isTimeout
                   ? `${CLOUD_SWITCH_NO_RESPONSE_PREFIX}${toInlineCode(args)} may still have been applied`
                   : `${CLOUD_SWITCH_FAILED_PREFIX}${toInlineCode(args)}: ${sanitizeHookText(errorMessage(error))}`,
                 {
@@ -1239,70 +1379,70 @@ ${Ke.map(sanitizeHookText).join(`
       }
       switchMainLoopModelSafe(args, storageV5, credentials, {
         acceptCreditsRequired: true,
-      }).then((ye) => {
-        if (!ye.ok) {
-          onDone(ye.message, {
+      }).then((localOutcome) => {
+        if (!localOutcome.ok) {
+          onDone(localOutcome.message, {
             display: "system",
           });
           return;
         }
-        if (ladderForDefaultModel(ye.model)) {
-          ne.current = false;
-          ge.current = ge.current + 1;
-          le({
-            model: ye.model,
-            substitutedFrom: ye.substitutedFrom,
+        if (ladderForDefaultModel(localOutcome.model)) {
+          pendingLadderRef.current = false;
+          ladderTickRef.current = ladderTickRef.current + 1;
+          setLadderRequest({
+            model: localOutcome.model,
+            substitutedFrom: localOutcome.substitutedFrom,
           });
           return;
         }
-        if (ye.creditsRefusal !== undefined) {
-          onDone(ye.creditsRefusal, {
+        if (localOutcome.creditsRefusal !== undefined) {
+          onDone(localOutcome.creditsRefusal, {
             display: "system",
           });
           return;
         }
-        Me(ye.model, ye.substitutedFrom);
+        applyCommand(localOutcome.model, localOutcome.substitutedFrom);
       });
     };
-    O[17] = addNotification;
-    O[18] = args;
-    O[19] = credentials;
-    O[20] = onDone;
-    O[21] = Me;
-    O[22] = session;
-    O[23] = setAppState;
-    O[24] = storageV5;
-    O[25] = Ro;
-  } else Ro = O[25];
-  let Co;
+    $[17] = addNotification;
+    $[18] = args;
+    $[19] = credentials;
+    $[20] = onDone;
+    $[21] = applyCommand;
+    $[22] = session;
+    $[23] = setAppState;
+    $[24] = storageV5;
+    $[25] = runCommand;
+  } else runCommand = $[25];
+  let footer;
   if (
-    O[26] !== args ||
-    O[27] !== credentials ||
-    O[28] !== onDone ||
-    O[29] !== Me ||
-    O[30] !== setAppState ||
-    O[31] !== storageV5
+    $[26] !== args ||
+    $[27] !== credentials ||
+    $[28] !== onDone ||
+    $[29] !== applyCommand ||
+    $[30] !== setAppState ||
+    $[31] !== storageV5
   ) {
-    Co = [args, onDone, setAppState, Me, storageV5, credentials];
-    O[26] = args;
-    O[27] = credentials;
-    O[28] = onDone;
-    O[29] = Me;
-    O[30] = setAppState;
-    O[31] = storageV5;
-    O[32] = Co;
-  } else Co = O[32];
-  P(Ro, Co);
-  if (Ee) {
+    footer = [args, onDone, setAppState, applyCommand, storageV5, credentials];
+    $[26] = args;
+    $[27] = credentials;
+    $[28] = onDone;
+    $[29] = applyCommand;
+    $[30] = setAppState;
+    $[31] = storageV5;
+    $[32] = footer;
+  } else footer = $[32];
+  useEffect(runCommand, footer);
+  if (ultracodeConfirmable) {
     const message = `Switching the cloud session to ${args}\u2026`;
     let onCancel;
-    if (O[33] !== args || O[34] !== onDone) {
+    if ($[33] !== args || $[34] !== onDone) {
       onCancel = () => {
-        if (de.current) {
+        if (failedRef.current) {
           return;
         }
-        de.current = true;
-        z.current = true;
+        failedRef.current = true;
+        cancelledRef.current = true;
         logFeatureSad("model_switch", "remote_wait_cancelled");
         onDone(
           `Stopped waiting for the cloud session \u2014 you\u2019ll get a notice if the switch to ${args} still lands`,
@@ -1311,70 +1451,70 @@ ${Ke.map(sanitizeHookText).join(`
           },
         );
       };
-      O[33] = args;
-      O[34] = onDone;
-      O[35] = onCancel;
-    } else onCancel = O[35];
-    let ae;
-    if (O[36] !== message || O[37] !== onCancel) {
-      ae = jsxProd_default(PromptDialog, {
+      $[33] = args;
+      $[34] = onDone;
+      $[35] = onCancel;
+    } else onCancel = $[35];
+    let promptDialog;
+    if ($[36] !== message || $[37] !== onCancel) {
+      promptDialog = jsxProd_default(PromptDialog, {
         message,
         onCancel,
       });
-      O[36] = message;
-      O[37] = onCancel;
-      O[38] = ae;
-    } else ae = O[38];
-    return ae;
+      $[36] = message;
+      $[37] = onCancel;
+      $[38] = promptDialog;
+    } else promptDialog = $[38];
+    return promptDialog;
   }
-  if (q) {
-    let { model, substitutedFrom } = q;
-    let lt;
-    let Do;
-    let Ue;
+  if (ladderRequest) {
+    let { model, substitutedFrom } = ladderRequest;
+    let ConsentComponent;
+    let ladderTick;
+    let parsedModel;
     let variant;
     let modelName;
-    if (O[39] !== model) {
-      Ue = parseUserSpecifiedModel(model ?? getDefaultMainLoopModelSetting());
-      Do = ge.current;
-      lt = FableUsageCreditsConsent;
+    if ($[39] !== model) {
+      parsedModel = parseUserSpecifiedModel(model ?? getDefaultMainLoopModelSetting());
+      ladderTick = ladderTickRef.current;
+      ConsentComponent = FableUsageCreditsConsent;
       variant = "picker";
-      modelName = renderUsageCreditsOnlyModelName(Ue);
-      O[39] = model;
-      O[40] = lt;
-      O[41] = Do;
-      O[42] = Ue;
-      O[43] = variant;
-      O[44] = modelName;
+      modelName = renderUsageCreditsOnlyModelName(parsedModel);
+      $[39] = model;
+      $[40] = ConsentComponent;
+      $[41] = ladderTick;
+      $[42] = parsedModel;
+      $[43] = variant;
+      $[44] = modelName;
     } else {
-      lt = O[40];
-      Do = O[41];
-      Ue = O[42];
-      variant = O[43];
-      modelName = O[44];
+      ConsentComponent = $[40];
+      ladderTick = $[41];
+      parsedModel = $[42];
+      variant = $[43];
+      modelName = $[44];
     }
     let onDone_2;
     if (
-      O[45] !== model ||
-      O[46] !== onDone ||
-      O[47] !== Me ||
-      O[48] !== appStoreDirect ||
-      O[49] !== substitutedFrom
+      $[45] !== model ||
+      $[46] !== onDone ||
+      $[47] !== applyCommand ||
+      $[48] !== appStoreDirect ||
+      $[49] !== substitutedFrom
     ) {
-      onDone_2 = (Oo, Rn) => {
-        if (Do !== ge.current) {
+      onDone_2 = (outcome, extra) => {
+        if (ladderTick !== ladderTickRef.current) {
           return false;
         }
-        if (ne.current) {
+        if (pendingLadderRef.current) {
           return false;
         }
-        ne.current = true;
-        le(null);
-        if (Oo === "consent") {
-          Me(model, substitutedFrom);
+        pendingLadderRef.current = true;
+        setLadderRequest(null);
+        if (outcome === "consent") {
+          applyCommand(model, substitutedFrom);
           return;
         }
-        if (Oo === "upgrade") {
+        if (outcome === "upgrade") {
           onDone(undefined, {
             display: "skip",
             nextInput: "/upgrade",
@@ -1383,64 +1523,75 @@ ${Ke.map(sanitizeHookText).join(`
           return;
         }
         onDone(
-          Rn ??
+          extra ??
             `${KEPT_MODEL_PREFIX}${toInlineCode(renderModelLabel(useMainLoopModel_3(appStoreDirect.getState())))}`,
           {
             display: "system",
           },
         );
       };
-      O[45] = model;
-      O[46] = onDone;
-      O[47] = Me;
-      O[48] = appStoreDirect;
-      O[49] = substitutedFrom;
-      O[50] = onDone_2;
-    } else onDone_2 = O[50];
-    let Fo;
-    if (O[51] !== lt || O[52] !== Ue || O[53] !== variant || O[54] !== modelName || O[55] !== onDone_2) {
-      Fo = jsxProd_default(lt, {
+      $[45] = model;
+      $[46] = onDone;
+      $[47] = applyCommand;
+      $[48] = appStoreDirect;
+      $[49] = substitutedFrom;
+      $[50] = onDone_2;
+    } else onDone_2 = $[50];
+    let consentElement;
+    if (
+      $[51] !== ConsentComponent ||
+      $[52] !== parsedModel ||
+      $[53] !== variant ||
+      $[54] !== modelName ||
+      $[55] !== onDone_2
+    ) {
+      consentElement = jsxProd_default(ConsentComponent, {
         variant,
         modelName,
-        model: Ue,
+        model: parsedModel,
         onDone: onDone_2,
       });
-      O[51] = lt;
-      O[52] = Ue;
-      O[53] = variant;
-      O[54] = modelName;
-      O[55] = onDone_2;
-      O[56] = Fo;
-    } else Fo = O[56];
-    return Fo;
+      $[51] = ConsentComponent;
+      $[52] = parsedModel;
+      $[53] = variant;
+      $[54] = modelName;
+      $[55] = onDone_2;
+      $[56] = consentElement;
+    } else consentElement = $[56];
+    return consentElement;
   }
-  if (D) {
+  if (confirmPicker) {
     let onConfirm;
-    if (O[57] !== s || O[58] !== onDone || O[59] !== D || O[60] !== appStoreDirect) {
+    if (
+      $[57] !== applyModelDirect ||
+      $[58] !== onDone ||
+      $[59] !== confirmPicker ||
+      $[60] !== appStoreDirect
+    ) {
       onConfirm = () => {
-        if (Se.current === D) {
+        if (creditNoticeRef.current === confirmPicker) {
           return;
         }
-        Se.current = D;
+        creditNoticeRef.current = confirmPicker;
         if (
-          D.vettedFrom !== undefined &&
-          effectiveModelForContext(appStoreDirect.getState()) !== D.vettedFrom
+          confirmPicker.vettedFrom !== undefined &&
+          effectiveModelForContext(appStoreDirect.getState()) !== confirmPicker.vettedFrom
         ) {
           onDone("The model changed while you were confirming; pick again", {
             display: "system",
           });
           return;
         }
-        s(D.model, D.substitutedFrom);
+        applyModelDirect(confirmPicker.model, confirmPicker.substitutedFrom);
       };
-      O[57] = s;
-      O[58] = onDone;
-      O[59] = D;
-      O[60] = appStoreDirect;
-      O[61] = onConfirm;
-    } else onConfirm = O[61];
+      $[57] = applyModelDirect;
+      $[58] = onDone;
+      $[59] = confirmPicker;
+      $[60] = appStoreDirect;
+      $[61] = onConfirm;
+    } else onConfirm = $[61];
     let onCancel;
-    if (O[62] !== onDone || O[63] !== appStoreDirect) {
+    if ($[62] !== onDone || $[63] !== appStoreDirect) {
       onCancel = () =>
         onDone(
           `${KEPT_MODEL_PREFIX}${toInlineCode(renderModelLabel(useMainLoopModel_3(appStoreDirect.getState())))}`,
@@ -1448,45 +1599,50 @@ ${Ke.map(sanitizeHookText).join(`
             display: "system",
           },
         );
-      O[62] = onDone;
-      O[63] = appStoreDirect;
-      O[64] = onCancel;
-    } else onCancel = O[64];
-    let ae;
-    if (O[65] !== D.hookReason || O[66] !== D.model || O[67] !== onConfirm || O[68] !== onCancel) {
-      ae = jsxProd_default(ModelEffortSwitchConfirm, {
+      $[62] = onDone;
+      $[63] = appStoreDirect;
+      $[64] = onCancel;
+    } else onCancel = $[64];
+    let content;
+    if (
+      $[65] !== confirmPicker.hookReason ||
+      $[66] !== confirmPicker.model ||
+      $[67] !== onConfirm ||
+      $[68] !== onCancel
+    ) {
+      content = jsxProd_default(ModelEffortSwitchConfirm, {
         kind: "model",
-        model: D.model,
+        model: confirmPicker.model,
         effort: undefined,
-        hookReason: D.hookReason,
+        hookReason: confirmPicker.hookReason,
         onConfirm,
         onCancel,
       });
-      O[65] = D.hookReason;
-      O[66] = D.model;
-      O[67] = onConfirm;
-      O[68] = onCancel;
-      O[69] = ae;
-    } else ae = O[69];
-    return ae;
+      $[65] = confirmPicker.hookReason;
+      $[66] = confirmPicker.model;
+      $[67] = onConfirm;
+      $[68] = onCancel;
+      $[69] = content;
+    } else content = $[69];
+    return content;
   }
-  if (L) {
-    let K;
-    if (O[70] !== onDone) {
-      K = jsxProd_default(PromptDialog, {
+  if (switching) {
+    let footer;
+    if ($[70] !== onDone) {
+      footer = jsxProd_default(PromptDialog, {
         message: "Running PreModelSwitch hooks\u2026",
         onCancel: () => {
           abortControllerRef.current?.abort();
-          Q(false);
+          setSwitching(false);
           onDone("Model switch cancelled", {
             display: "system",
           });
         },
       });
-      O[70] = onDone;
-      O[71] = K;
-    } else K = O[71];
-    return K;
+      $[70] = onDone;
+      $[71] = footer;
+    } else footer = $[71];
+    return footer;
   }
   return null;
 }
@@ -1504,8 +1660,8 @@ function notifyModelDeprecation(modelId, addNotification) {
   });
 }
 //@ chunk-mvhmq2z8.js:33776-33941 callgraph-fingerprint = SetModelAndClose (0.23)
-function SetModelAndClose(r) {
-  let { onDone } = r;
+function SetModelAndClose(state) {
+  let { onDone } = state;
   let isFastMode = useAppState(selectMainLoopModelForFastMode);
   let mainLoopModelForSession = useAppState(selectMainLoopModelForSession);
   let sessionEffort = useAppState(selectSessionEffort);
@@ -1556,13 +1712,13 @@ var call = async (onDone, context, args) => {
   }
   if (getRemoteCaps()) {
     if (hasRemoteCap("modelCatalog") && isRemoteControlChannelAvailable()) {
-      let n = cachedRemoteModelListWithDefault(
+      let cached = cachedRemoteModelListWithDefault(
         REMOTE_MODEL_LIST_CACHE.of(context.session.host),
         getRemoteCaps()?.sessionId,
       );
-      if (n !== null)
+      if (cached !== null)
         return jsxProd_default(ModelPickerWrapper, {
-          kept: n,
+          kept: cached,
           getMessages: () => context.getMessages?.() ?? context.messages,
           onDone,
           storageV5: context.storageV5,
@@ -1590,112 +1746,6 @@ var call = async (onDone, context, args) => {
     onQueryEvent: context.onQueryEvent,
   });
 };
-//@ chunk-d1cgs5na.js:1834-1903 fingerprint = renderModelLabel (1)
-function renderModelLabel(model) {
-  let rendered = renderDefaultModelSetting_2(model ?? getDefaultMainLoopModelSetting());
-  return model === null ? `${rendered} (default)` : rendered;
-}
-//@ chunk-d1cgs5na.js:12136-12407 placement
-/**
- * 判断切到带 [1m] 的别名是否有问题：1M 上下文被禁用、目标模型不支持 1M、或模式相关的设置没有对应的 1M 变体；正常返回 null。
- */
-function diagnose1mAliasSwitch(e) {
-  let setting = e.toLowerCase().trim();
-  let s = strip1mSuffix(setting);
-  if (s === setting || !isAliasSpelling(setting)) return null;
-  if (is1mContextDisabled())
-    return {
-      kind: "disabled",
-    };
-  let found = renderDefaultModelSetting(setting).find((n) => isKnownNon1mTarget(n));
-  if (found !== undefined)
-    return {
-      kind: "unsupported",
-      carrier: strip1mSuffix(found),
-    };
-  if (isModeDependentModelSetting(s) && planModeConstituentFamily(setting) === null)
-    return {
-      kind: "noModeDependentVariant",
-    };
-  return null;
-}
-//@ chunk-d1cgs5na.js:12407-12554 fingerprint = isOpus1mUnavailable (1)
-function isOpus1mUnavailable(model) {
-  let m = model.toLowerCase();
-  if (!(m.includes("opus") && m.includes("[1m]"))) return false;
-  if (renderDefaultModelSetting(model).every((s) => modelHasNative1MContext(s))) return false;
-  return !shouldProbeThirdPartyDefaults() && !isOpus1mMergeEnabled();
-}
-//@ chunk-d1cgs5na.js:12651-12852 placement
-/**
- * 判断 sonnet[1m]/opusplan[1m] 这类设置是否需要额外检查 1M 资格：排除旧版 sonnet、原生支持 1M 的模型以及第三方默认探测场景。
- */
-function requires1mEntitlementCheck(e) {
-  let lower = e.toLowerCase();
-  if (!((lower.includes("sonnet") && lower.includes("[1m]")) || lower.trim() === "opusplan[1m]"))
-    return false;
-  if (
-    LEGACY_SONNET_MODELS.has(
-      getCanonicalName(lower.trim(), {
-        identity: true,
-      }),
-    )
-  )
-    return false;
-  if (modelHasNative1MContext(parseUserSpecifiedModel(e))) return false;
-  return !shouldProbeThirdPartyDefaultsAlt();
-}
-//@ chunk-d1cgs5na.js:12852-12887 placement
-/**
- * 把用户指定的模型（或默认主循环模型）解析成实际模型名。
- */
-function resolveRequestedModel(e) {
-  return parseUserSpecifiedModel(e ?? getDefaultMainLoopModelSetting());
-}
-//@ chunk-d1cgs5na.js:12887-13152 placement = useMainLoopModel (0.833)
-function useMainLoopModel(e, mainLoopModel, mainLoopModelForSession, cacheMissAckedAtOutputTokens, n) {
-  if (n === undefined) return false;
-  let totalOutputTokens = getTotalOutputTokens();
-  if (totalOutputTokens === 0 || totalOutputTokens === cacheMissAckedAtOutputTokens) return false;
-  let mainLoopModel_2 = stripAnyVersatileSuffix(resolveRequestedModel(e));
-  if (
-    mainLoopModel_2 ===
-    stripAnyVersatileSuffix(
-      resolveRequestedModel(
-        useMainLoopModel_3({
-          mainLoopModel,
-          mainLoopModelForSession,
-        }),
-      ),
-    )
-  )
-    return false;
-  let model = n.response?.message.model;
-  return !(
-    typeof model === "string" &&
-    (model === mainLoopModel_2 || getServedModelsForRequestedModel(mainLoopModel_2)?.has(model) === true)
-  );
-}
-//@ chunk-d1cgs5na.js:13152-13461 fingerprint = ShowModelAndClose (0.354)
-function ShowModelAndClose(t0) {
-  let mainLoopModel = toInlineCode(renderModelLabel(t0.mainLoopModel));
-  let mainLoopModelForSession = resolveEffortLevel(t0);
-  let a = mainLoopModelForSession !== undefined ? ` (effort: ${mainLoopModelForSession})` : "";
-  let modelSwitchTarget = getModelSwitchTarget(t0.mainLoopModelForSession, t0.mainLoopModel);
-  if (modelSwitchTarget !== null)
-    return `${CURRENT_MODEL_PREFIX}${toInlineCode(renderModelLabel(modelSwitchTarget))} (this session only)${a}
-Base model: ${mainLoopModel}`;
-  let activeModelFallback = getActiveModelFallback();
-  let r =
-    activeModelFallback !== undefined
-      ? ` (${describeAutoSwitchedModel(toInlineCode(renderModelLabel(activeModelFallback.previousModel)))})`
-      : "";
-  return `${CURRENT_MODEL_PREFIX}${mainLoopModel}${r}${a}`;
-}
-//@ chunk-18hwfzwa.js:929434-929487 fingerprint = _temp2 (1)
-function selectMainLoopModelForSession_2(s_0) {
-  return s_0.mainLoopModelForSession;
-}
 export {
   ShowModelAndClose,
   selectMainLoopModelForSession_2,
@@ -1704,4 +1754,5 @@ export {
   diagnose1mAliasSwitch,
   isOpus1mUnavailable,
   requires1mEntitlementCheck,
+  call,
 };

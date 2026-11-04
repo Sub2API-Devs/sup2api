@@ -11,47 +11,47 @@
 import { delimiter, isAbsolute } from "path";
 
 //@ chunk-jhrww53q.js:49257-49296 fingerprint = bunWhich (0.601)
-function bunWhich(o) {
-  return identityPath(o, Bun.which(o));
+function bunWhich(command) {
+  return identityPath(command, Bun.which(command));
 }
 //@ chunk-jhrww53q.js:49296-49321 layout
-function identityPath(o, t) {
-  return t;
+function identityPath(command, resolvedPath) {
+  return resolvedPath;
 }
 //@ chunk-jhrww53q.js:49321-49348 placement
 /**
  * Bun.which 的同步封装。
  */
-var whichAsync = async (o) => bunWhich(o);
+var whichAsync = async (command) => bunWhich(command);
 var bunWhichSync = bunWhich;
 //@ chunk-jhrww53q.js:49348-49406 placement
-function whichOnPath(o, t) {
-  let _ = sanitizePathEnv(t);
-  return _ === "" ? null : bunWhichOnPath(o, _);
+function whichOnPath(command, pathEnv) {
+  let sanitizedPathEnv = sanitizePathEnv(pathEnv);
+  return sanitizedPathEnv === "" ? null : bunWhichOnPath(command, sanitizedPathEnv);
 }
 //@ chunk-jhrww53q.js:49406-49485 placement
-function sanitizePathEnv(o) {
-  return o
+function sanitizePathEnv(pathEnv) {
+  return pathEnv
     .split(delimiter)
-    .map((t) => stripPathQuotes(t))
-    .filter((t) => isAbsolutePathEntry(t))
+    .map((entry) => stripPathQuotes(entry))
+    .filter((entry) => isAbsolutePathEntry(entry))
     .join(delimiter);
 }
 //@ chunk-jhrww53q.js:49485-49553 placement
-function stripPathQuotes(o, t = "linux") {
-  return t === "win32" ? o.replaceAll('"', "") : o;
+function stripPathQuotes(entry, platform = "linux") {
+  return platform === "win32" ? entry.replaceAll('"', "") : entry;
 }
 //@ chunk-jhrww53q.js:49553-49597 placement
-function isAbsolutePathEntry(o) {
-  if (!isAbsolute(o)) return false;
+function isAbsolutePathEntry(entry) {
+  if (!isAbsolute(entry)) return false;
   return true;
 }
 //@ chunk-jhrww53q.js:49597-49649 placement
-function bunWhichOnPath(o, t) {
+function bunWhichOnPath(command, pathEnv) {
   return identityPath(
-    o,
-    Bun.which(o, {
-      PATH: t,
+    command,
+    Bun.which(command, {
+      PATH: pathEnv,
     }),
   );
 }

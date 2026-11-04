@@ -31,27 +31,27 @@ async function generateRecap(context) {
   )
     return null;
   let [
-    { fetchSystemPromptParts: a },
-    { getToolPermissionContext: l },
-    { getMainLoopModel: s, getRuntimeMainLoopModel: o },
-    { asSystemPrompt: c },
-    { baseSystemPromptOf: u },
-    { withCliSections: d },
+    { fetchSystemPromptParts },
+    { getToolPermissionContext },
+    { getMainLoopModel, getRuntimeMainLoopModel },
+    { asSystemPrompt },
+    { baseSystemPromptOf },
+    { withCliSections },
   ] = await Promise.all([
-    import("./chunk-cqycffet.js"),
-    import("./chunk-bvy3yerb.js"),
-    import("./chunk-gqemcfsb.js"),
-    import("./chunk-xpgm632z.js"),
-    import("./chunk-dtmdbzw0.js"),
-    import("./chunk-n5p5ppmp.js"),
+    import("../../utils/queryContext.js"),
+    import("../../utils/permissions/toolPermissionContext.js"),
+    import("../../utils/model/DEFAULT_3P_FABLE_KEY.lazy.js"),
+    import("../../utils/systemPromptType.js"),
+    import("../../utils/systemPromptBoundary.js"),
+    import("../../constants/promptSections.js"),
   ]);
-  let y = l(context);
-  let mainLoopModel = o({
-    permissionMode: y.mode,
-    mainLoopModel: s(),
+  let permissionContext = getToolPermissionContext(context);
+  let mainLoopModel = getRuntimeMainLoopModel({
+    permissionMode: permissionContext.mode,
+    mainLoopModel: getMainLoopModel(),
   });
   let { customSystemPrompt, appendSystemPrompt } = context.options;
-  let { defaultSystemPrompt, userContext, systemContext } = await a({
+  let { defaultSystemPrompt, userContext, systemContext } = await fetchSystemPromptParts({
     session: context.session,
     tools: context.options.tools,
     mainLoopModel,
@@ -62,8 +62,8 @@ async function generateRecap(context) {
     storageV5: context.storageV5,
     credentials: context.credentials,
   });
-  let systemPrompt = c(
-    d(u(customSystemPrompt, defaultSystemPrompt), {
+  let systemPrompt = asSystemPrompt(
+    withCliSections(baseSystemPromptOf(customSystemPrompt, defaultSystemPrompt), {
       tools: context.options.tools,
       appendSystemPrompt,
     }),
@@ -102,14 +102,14 @@ var recapCommandCall = async (args, context) => {
       value: RECAP_USER_ONLY_MESSAGE,
     };
   let fallbackParams = false;
-  let l = false;
+  let fallbackFailed = false;
   let awaySummary = await generateAwaySummary(context.abortController.signal, async () => {
     try {
       let recap = await generateRecap(context);
       fallbackParams = recap !== null;
       return recap;
     } catch (error) {
-      l = true;
+      fallbackFailed = true;
       throw error;
     }
   });
@@ -149,7 +149,7 @@ var recapCommandCall = async (args, context) => {
         value: "Recap cancelled.",
       };
     case "failed":
-      logFeatureBad("recap_command", l ? "fallback_rebuild_failed" : "failed", {
+      logFeatureBad("recap_command", fallbackFailed ? "fallback_rebuild_failed" : "failed", {
         fallback_params: fallbackParams,
       });
       return {
@@ -161,3 +161,4 @@ var recapCommandCall = async (args, context) => {
       };
   }
 };
+export { recapCommandCall };

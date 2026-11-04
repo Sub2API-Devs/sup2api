@@ -21,9 +21,9 @@ import { buildPluginTelemetryFields, buildPluginEventFieldsFromId } from "../tel
 /**
  * pluginGitUrlError：解析插件 git URL 的错误。
  */
-function pluginGitUrlError(e) {
+function pluginGitUrlError(url) {
   try {
-    parsePluginGitUrl(e);
+    parsePluginGitUrl(url);
     return null;
   } catch (error) {
     return toError(error);
@@ -40,8 +40,8 @@ function isPluginGitUrlValid(url) {
 /**
  * isOfficialDirectoryPlugin：插件来自官方目录。
  */
-function isOfficialDirectoryPlugin(e) {
-  return isOfficialNameUsableHere(parsePluginIdentifier_2(e).marketplace);
+function isOfficialDirectoryPlugin(pluginId) {
+  return isOfficialNameUsableHere(parsePluginIdentifier_2(pluginId).marketplace);
 }
 //@ chunk-9qwbw2qr.js:5156-5272 placement
 /**
@@ -60,35 +60,35 @@ function directoryInstallFields({ pluginId, surface, replaced }) {
 /**
  * 上报插件目录 catalog 加载事件（页数、条目数、各类跳过数、耗时、缓存年龄等）， 再按 outcome 记 feature 状态：fresh_cache/walked 为 ok，陈旧/退避类为 sad，不完整/重复 id 为 bad，refused 按拒绝原因区分。
  */
-function logDirectoryCatalogLoad(e) {
+function logDirectoryCatalogLoad(fields) {
   switch (
     (logEvent("tengu_plugin_directory_catalog_load", {
-      outcome: fromEnum(e.outcome),
-      trigger: fromEnum(e.trigger),
-      pages: e.pages,
-      listing_count: e.listingCount,
-      installable_count: e.tally.installable,
-      skipped_unparseable: e.tally.unparseable,
-      skipped_other_surface: e.tally.skipped.other_surface,
-      skipped_no_pin: e.tally.skipped.no_pin,
-      skipped_bad_url: e.tally.skipped.bad_url,
-      skipped_bad_path: e.tally.skipped.bad_path,
-      name_clashes: e.tally.nameClashes,
-      ...(e.namesRepaired !== undefined && {
-        names_repaired: e.namesRepaired,
+      outcome: fromEnum(fields.outcome),
+      trigger: fromEnum(fields.trigger),
+      pages: fields.pages,
+      listing_count: fields.listingCount,
+      installable_count: fields.tally.installable,
+      skipped_unparseable: fields.tally.unparseable,
+      skipped_other_surface: fields.tally.skipped.other_surface,
+      skipped_no_pin: fields.tally.skipped.no_pin,
+      skipped_bad_url: fields.tally.skipped.bad_url,
+      skipped_bad_path: fields.tally.skipped.bad_path,
+      name_clashes: fields.tally.nameClashes,
+      ...(fields.namesRepaired !== undefined && {
+        names_repaired: fields.namesRepaired,
       }),
-      duration_ms: e.durationMs,
-      ...(e.cacheAgeMin !== undefined && {
-        cache_age_min: e.cacheAgeMin,
+      duration_ms: fields.durationMs,
+      ...(fields.cacheAgeMin !== undefined && {
+        cache_age_min: fields.cacheAgeMin,
       }),
-      ...(e.outcome === "stale_failed" && {
-        incomplete_walk: e.incompleteWalk,
+      ...(fields.outcome === "stale_failed" && {
+        incomplete_walk: fields.incompleteWalk,
       }),
-      ...(e.outcome === "refused" && {
-        refusal: fromEnum(e.refusal),
+      ...(fields.outcome === "refused" && {
+        refusal: fromEnum(fields.refusal),
       }),
     }),
-    e.outcome)
+    fields.outcome)
   ) {
     case "fresh_cache":
     case "walked":
@@ -100,21 +100,21 @@ function logDirectoryCatalogLoad(e) {
     case "stale_empty":
     case "stale_duplicate_id":
     case "backoff":
-      logFeatureSad("plugin_directory_catalog", e.outcome);
+      logFeatureSad("plugin_directory_catalog", fields.outcome);
       return;
     case "incomplete":
     case "duplicate_id":
     case "backoff_cold":
-      logFeatureBad("plugin_directory_catalog", e.outcome);
+      logFeatureBad("plugin_directory_catalog", fields.outcome);
       return;
     case "refused":
-      switch (e.refusal) {
+      switch (fields.refusal) {
         case "not-served":
         case "failed":
-          logFeatureBad("plugin_directory_catalog", e.refusal);
+          logFeatureBad("plugin_directory_catalog", fields.refusal);
           return;
         case "policy":
-          if (!e.blockedByOrganization) logFeatureSad("plugin_directory_catalog", "policy_not_loaded");
+          if (!fields.blockedByOrganization) logFeatureSad("plugin_directory_catalog", "policy_not_loaded");
           return;
       }
   }
@@ -146,20 +146,20 @@ function logDiscoverShown({
 /**
  * 记录插件从一个市场切换到另一个：bad 直接记 feature bad；主切换按结果记 sad/ok； 再上报 tengu_plugin_marketplace_switched（作用域变化、数据目录迁移、钉住变化、替换数及前后插件的脱敏标识）。
  */
-function logMarketplaceSwitch({ fromPluginId, toPluginId, surface, managedNames, result: s }) {
+function logMarketplaceSwitch({ fromPluginId, toPluginId, surface, managedNames, result }) {
   {
-    let y = {
+    let base = {
       surface: fromEnum(surface),
       from_is_directory: isOfficialDirectoryPlugin(fromPluginId),
       to_is_directory: isOfficialDirectoryPlugin(toPluginId),
     };
-    if (s.outcome === "bad") {
-      logFeatureBad("plugin_directory_switch", s.code, y);
+    if (result.outcome === "bad") {
+      logFeatureBad("plugin_directory_switch", result.code, base);
       return;
     }
-    if (s.isPrimary)
-      if (s.outcome === "sad") logFeatureSad("plugin_directory_switch", s.code, y);
-      else logFeatureOk("plugin_directory_switch", y);
+    if (result.isPrimary)
+      if (result.outcome === "sad") logFeatureSad("plugin_directory_switch", result.code, base);
+      else logFeatureOk("plugin_directory_switch", base);
     let pluginIdentifier = parsePluginIdentifier_2(fromPluginId);
     let pluginTelemetryFields = buildPluginTelemetryFields(
       pluginIdentifier.name,
@@ -167,13 +167,13 @@ function logMarketplaceSwitch({ fromPluginId, toPluginId, surface, managedNames,
       managedNames,
     );
     logEvent("tengu_plugin_marketplace_switched", {
-      ...y,
-      scope_changed: s.scopeChanged,
-      stayed_disabled: s.stayedDisabled,
-      data_dir_carried: s.dataDirCarried,
-      pin_changed: s.pinChanged,
-      replaced_count: s.replacedCount,
-      is_primary: s.isPrimary,
+      ...base,
+      scope_changed: result.scopeChanged,
+      stayed_disabled: result.stayedDisabled,
+      data_dir_carried: result.dataDirCarried,
+      pin_changed: result.pinChanged,
+      replaced_count: result.replacedCount,
+      is_primary: result.isPrimary,
       from_plugin_id_hash: pluginTelemetryFields.plugin_id_hash,
       from_plugin_scope: pluginTelemetryFields.plugin_scope,
       from_plugin_name_redacted: pluginTelemetryFields.plugin_name_redacted,
@@ -188,29 +188,29 @@ function logMarketplaceSwitch({ fromPluginId, toPluginId, surface, managedNames,
  */
 function logDirectoryToggle({ enabled, surface, failure }) {
   {
-    let n = {
+    let fields = {
       enabled,
       surface: fromEnum(surface),
     };
     if (failure !== undefined) {
-      logFeatureBad("plugin_directory_toggle", failure, n);
+      logFeatureBad("plugin_directory_toggle", failure, fields);
       return;
     }
-    logFeatureOk("plugin_directory_toggle", n);
-    logEvent("tengu_plugin_directory_toggled", n);
+    logFeatureOk("plugin_directory_toggle", fields);
+    logEvent("tengu_plugin_directory_toggled", fields);
   }
 }
 //@ chunk-9qwbw2qr.js:7768-7899 placement
 /**
  * 每种原因只记一次 tengu_plugin_directory_blocked。
  */
-function logDirectoryBlockedOnce(e) {
+function logDirectoryBlockedOnce(blockKind) {
   {
-    let i = commandSourceSession();
-    if (i.blockedLogged.has(e)) return;
-    i.blockedLogged.add(e);
+    let session = commandSourceSession();
+    if (session.blockedLogged.has(blockKind)) return;
+    session.blockedLogged.add(blockKind);
     logEvent("tengu_plugin_directory_blocked", {
-      by: fromEnum(e),
+      by: fromEnum(blockKind),
     });
   }
 }
@@ -221,9 +221,9 @@ function logDirectoryBlockedOnce(e) {
 function logDirectoryListingViewed({ pluginId, surface, resultIndex }) {
   {
     if (!isOfficialDirectoryPlugin(pluginId)) return;
-    let { name: n, marketplace } = parsePluginIdentifier_2(pluginId);
+    let { name, marketplace } = parsePluginIdentifier_2(pluginId);
     logEvent("tengu_plugin_directory_listing_viewed", {
-      ...buildPluginTelemetryFields(n, marketplace),
+      ...buildPluginTelemetryFields(name, marketplace),
       surface: fromEnum(surface),
       result_index: resultIndex,
     });
@@ -236,9 +236,9 @@ function logDirectoryListingViewed({ pluginId, surface, resultIndex }) {
 function logDirectoryLinkOpened({ pluginId, linkKind }) {
   {
     if (!isOfficialDirectoryPlugin(pluginId)) return;
-    let { name: r, marketplace } = parsePluginIdentifier_2(pluginId);
+    let { name, marketplace } = parsePluginIdentifier_2(pluginId);
     logEvent("tengu_plugin_directory_link_opened", {
-      ...buildPluginTelemetryFields(r, marketplace),
+      ...buildPluginTelemetryFields(name, marketplace),
       link_kind: fromEnum(linkKind),
     });
   }

@@ -22,28 +22,29 @@ var ATTRIBUTION_PROJECT_NOTICE = {
     let subscriberAttributionProject = getSubscriberAttributionProject();
     if (subscriberAttributionProject === undefined) return null;
     let { project, written, ignored } = subscriberAttributionProject;
-    let [e] = ignored;
+    let [ignoredSource] = ignored;
     if (project !== undefined) {
-      let i;
+      let sourceLabel;
       switch (project.source) {
         case "harness":
-          i = "CLAUDE_CODE_ATTRIBUTION_PROJECT";
+          sourceLabel = "CLAUDE_CODE_ATTRIBUTION_PROJECT";
           break;
         case "admin_default":
-          i = "your organization's default";
+          sourceLabel = "your organization's default";
           break;
         default:
-          i = settingsSourceLabel(project.source);
+          sourceLabel = settingsSourceLabel(project.source);
       }
-      let u = e === undefined ? "" : `; ignored the invalid ${attributionSourceLabel(e)}`;
+      let ignoredSuffix =
+        ignoredSource === undefined ? "" : `; ignored the invalid ${attributionSourceLabel(ignoredSource)}`;
       return {
         key: "attribution-project",
         kind: "contextual",
-        text: `This session names claude.ai Project ${written ?? project.taggedId} for usage reports (${i}${u})`,
+        text: `This session names claude.ai Project ${written ?? project.taggedId} for usage reports (${sourceLabel}${ignoredSuffix})`,
         priority: "low",
       };
     }
-    switch (e) {
+    switch (ignoredSource) {
       case undefined:
         return null;
       case "managed":
@@ -51,7 +52,7 @@ var ATTRIBUTION_PROJECT_NOTICE = {
         return {
           key: "attribution-project",
           kind: "warning",
-          text: `No claude.ai Project for usage reports: ${attributionSourceLabel(e)} is not a valid Project ID; ask your administrator`,
+          text: `No claude.ai Project for usage reports: ${attributionSourceLabel(ignoredSource)} is not a valid Project ID; ask your administrator`,
           color: "warning",
           priority: "low",
         };
@@ -59,7 +60,7 @@ var ATTRIBUTION_PROJECT_NOTICE = {
         return {
           key: "attribution-project",
           kind: "warning",
-          text: `No claude.ai Project for usage reports: ${attributionSourceLabel(e)} is not a Project UUID or claude_proj_ ID`,
+          text: `No claude.ai Project for usage reports: ${attributionSourceLabel(ignoredSource)} is not a Project UUID or claude_proj_ ID`,
           color: "warning",
           priority: "high",
         };
@@ -67,19 +68,19 @@ var ATTRIBUTION_PROJECT_NOTICE = {
   },
 };
 //@ chunk-x08x6vab.js:4330-4519 placement
-function attributionSourceLabel(t) {
-  switch (t) {
+function attributionSourceLabel(source) {
+  switch (source) {
     case "harness":
       return "CLAUDE_CODE_ATTRIBUTION_PROJECT";
     case "admin_default":
       return "your organization's default Project";
     default:
-      return `attributionProject in ${settingsSourceLabel(t)}`;
+      return `attributionProject in ${settingsSourceLabel(source)}`;
   }
 }
 //@ chunk-x08x6vab.js:4519-4773 placement
-function settingsSourceLabel(t) {
-  switch (t) {
+function settingsSourceLabel(source) {
+  switch (source) {
     case "user":
       return tildify(getSettingsFilePathForSource("userSettings") ?? "~/.claude/settings.json");
     case "project":
@@ -92,3 +93,4 @@ function settingsSourceLabel(t) {
       return "managed settings";
   }
 }
+export { ATTRIBUTION_PROJECT_NOTICE };

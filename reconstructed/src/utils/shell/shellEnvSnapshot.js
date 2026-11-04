@@ -9,10 +9,11 @@
  * attribution: placement 12
  */
 import { logForDebugging } from "../debug.js";
-import { string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { subprocessEnv } from "../subprocessEnv.js";
 import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1015407-1015747 placement
 /**
@@ -69,23 +70,23 @@ class ShellEnvSnapshotState {
   spawnEnvKeys(sessionKeys) {
     if (!this.#e || this.#o === null || sessionKeys === undefined) return null;
     let keys = new Set(Object.keys(subprocessEnv(this.#r)));
-    for (let r of ALWAYS_SPAWN_ENV_KEYS) keys.add(r);
+    for (let key of ALWAYS_SPAWN_ENV_KEYS) keys.add(key);
     for (let sessionKey of sessionKeys) keys.add(sessionKey);
-    for (let r of this.#o) keys.add(r);
+    for (let key of this.#o) keys.add(key);
     return keys;
   }
-  markSnapshotAvailable(e) {
-    this.#e = e;
+  markSnapshotAvailable(snapshot) {
+    this.#e = snapshot;
     this.#t = true;
   }
-  replaceLastCheckedSessionEnvVarKeys(e) {
-    this.#n = new Set(e);
+  replaceLastCheckedSessionEnvVarKeys(keys) {
+    this.#n = new Set(keys);
   }
-  replaceProbedEnvKeys(e) {
-    this.#o = e === null ? null : new Set(e);
+  replaceProbedEnvKeys(keys) {
+    this.#o = keys === null ? null : new Set(keys);
   }
-  reportShellExports(e) {
-    this.#r ??= Object.fromEntries(e);
+  reportShellExports(shellExports) {
+    this.#r ??= Object.fromEntries(shellExports);
   }
   reset() {
     this.#e = false;
@@ -96,18 +97,21 @@ class ShellEnvSnapshotState {
   }
 }
 //@ chunk-e6aww6q8.js:1016473-1016500 placement
-var shellEnvSnapshotByHost = new HostScoped(() => new ShellEnvSnapshotState());
+var shellEnvSnapshotByHost; // deferred: uses ShellEnvSnapshotState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1016473", () => {
+  shellEnvSnapshotByHost = new HostScoped(() => new ShellEnvSnapshotState());
+});
 //@ chunk-e6aww6q8.js:1016500-1016538 placement
 function shellEnvSnapshot() {
   return shellEnvSnapshotByHost.of(getRootSession().host);
 }
 //@ chunk-e6aww6q8.js:1016538-1016584 placement
-function markSnapshotAvailable(e) {
-  shellEnvSnapshot().markSnapshotAvailable(e);
+function markSnapshotAvailable(snapshot) {
+  shellEnvSnapshot().markSnapshotAvailable(snapshot);
 }
 //@ chunk-e6aww6q8.js:1016584-1016644 placement
-function setLastCheckedSessionEnvVarKeys(e) {
-  shellEnvSnapshot().replaceLastCheckedSessionEnvVarKeys(e);
+function setLastCheckedSessionEnvVarKeys(keys) {
+  shellEnvSnapshot().replaceLastCheckedSessionEnvVarKeys(keys);
 }
 //@ chunk-e6aww6q8.js:1016644-1016700 placement
 function getLastCheckedSessionEnvVarKeys() {
@@ -122,16 +126,16 @@ function reportShellExports(shellExports) {
   shellEnvSnapshot().reportShellExports(shellExports);
 }
 //@ chunk-e6aww6q8.js:1016788-1016850 placement
-function wasShellExportReported(e) {
-  return Object.hasOwn(shellEnvSnapshot().shellExports ?? {}, e);
+function wasShellExportReported(name) {
+  return Object.hasOwn(shellEnvSnapshot().shellExports ?? {}, name);
 }
 //@ chunk-e6aww6q8.js:1016850-1016906 placement
-function sessionEnvVarNameSet(e) {
-  return new Set(e.sessionEnvVars?.keys());
+function sessionEnvVarNameSet(options) {
+  return new Set(options.sessionEnvVars?.keys());
 }
 //@ chunk-e6aww6q8.js:1016906-1016950 placement
-function spawnEnvKeysForSession(e) {
-  return shellEnvSnapshot().spawnEnvKeys(e);
+function spawnEnvKeysForSession(options) {
+  return shellEnvSnapshot().spawnEnvKeys(options);
 }
 export {
   shellEnvSnapshot,

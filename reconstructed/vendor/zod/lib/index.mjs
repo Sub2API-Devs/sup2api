@@ -41,6 +41,7 @@ import {
   ZodNullable,
   ZodPipeline,
 } from "../v3/types.js";
+import { deferInit, runDeferredInits } from "../../../runtime/deferred-init.js";
 
 //@ chunk-j2t139r9.js:3800-3823 esm-layout
 ZodError.create = (issues) => new ZodError(issues);
@@ -144,8 +145,8 @@ function getErrorMap() {
   return errorMap_default;
 }
 //@ chunk-j2t139r9.js:7022-7312 esm-fingerprint
-var makeIssue = (e) => {
-  let { data, path, errorMaps, issueData } = e;
+var makeIssue = (params) => {
+  let { data, path, errorMaps, issueData } = params;
   let fullPath = [...path, ...(issueData.path || [])];
   let fullIssue = {
     ...issueData,
@@ -256,7 +257,7 @@ var OK = (value) => ({
 var isAborted = (x) => x.status === "aborted";
 var isDirty = (x) => x.status === "dirty";
 var isValid = (x) => x.status === "valid";
-var Y = (result) => typeof Promise !== "undefined" && result instanceof Promise;
+var isPromise = (result) => typeof Promise !== "undefined" && result instanceof Promise;
 //@ chunk-j2t139r9.js:8505-8511 esm-layout
 var errorUtil;
 //@ chunk-j2t139r9.js:8511-8640 esm-fingerprint
@@ -270,57 +271,93 @@ var errorUtil;
   errorUtil.toString = (message) => (typeof message === "string" ? message : message?.message);
 })(errorUtil || (errorUtil = {}));
 //@ chunk-j2t139r9.js:58896-59342 esm-fingerprint
-var create_2 = ZodString.create;
-var create_3 = ZodNumber.create;
-var create_4 = ZodNaN.create;
-var create_5 = ZodBigInt.create;
-var create_6 = ZodBoolean.create;
-var create_7 = ZodDate.create;
-var create_8 = ZodSymbol.create;
-var create_9 = ZodUndefined.create;
-var create_10 = ZodNull.create;
-var create_11 = ZodAny.create;
-var create_12 = ZodUnknown.create;
-var create_13 = ZodNever.create;
-var create_14 = ZodVoid.create;
-var create_15 = ZodArray.create;
-var { create, strictCreate } = ZodObject;
-var create_16 = ZodUnion.create;
-var create_17 = ZodDiscriminatedUnion.create;
-var create_18 = ZodIntersection.create;
-var create_19 = ZodTuple.create;
-var create_20 = ZodRecord.create;
-var create_21 = ZodMap.create;
-var create_22 = ZodSet.create;
-var create_23 = ZodFunction.create;
-var create_24 = ZodLazy.create;
-var create_25 = ZodLiteral.create;
-var create_26 = ZodEnum.create;
-var create_27 = ZodNativeEnum.create;
-var create_28 = ZodPromise.create;
-var create_29 = ZodEffects.create;
-var create_30 = ZodOptional.create;
-var create_31 = ZodNullable.create;
-var createWithPreprocess = ZodEffects.createWithPreprocess;
-var create_32 = ZodPipeline.create;
+var create_2; // deferred: uses ZodString (../v3/types.js) of its import cycle while loading; runs once the cycle is complete
+var create_3;
+var create_4;
+var create_5;
+var create_6;
+var create_7;
+var create_8;
+var create_9;
+var create_10;
+var create_11;
+var create_12;
+var create_13;
+var create_14;
+var create_15;
+var create;
+var strictCreate;
+var create_16;
+var create_17;
+var create_18;
+var create_19;
+var create_20;
+var create_21;
+var create_22;
+var create_23;
+var create_24;
+var create_25;
+var create_26;
+var create_27;
+var create_28;
+var create_29;
+var create_30;
+var create_31;
+var createWithPreprocess;
+var create_32;
+deferInit("chunk-j2t139r9.js:58896", () => {
+  create_2 = ZodString.create;
+  create_3 = ZodNumber.create;
+  create_4 = ZodNaN.create;
+  create_5 = ZodBigInt.create;
+  create_6 = ZodBoolean.create;
+  create_7 = ZodDate.create;
+  create_8 = ZodSymbol.create;
+  create_9 = ZodUndefined.create;
+  create_10 = ZodNull.create;
+  create_11 = ZodAny.create;
+  create_12 = ZodUnknown.create;
+  create_13 = ZodNever.create;
+  create_14 = ZodVoid.create;
+  create_15 = ZodArray.create;
+  ({ create, strictCreate } = ZodObject);
+  create_16 = ZodUnion.create;
+  create_17 = ZodDiscriminatedUnion.create;
+  create_18 = ZodIntersection.create;
+  create_19 = ZodTuple.create;
+  create_20 = ZodRecord.create;
+  create_21 = ZodMap.create;
+  create_22 = ZodSet.create;
+  create_23 = ZodFunction.create;
+  create_24 = ZodLazy.create;
+  create_25 = ZodLiteral.create;
+  create_26 = ZodEnum.create;
+  create_27 = ZodNativeEnum.create;
+  create_28 = ZodPromise.create;
+  create_29 = ZodEffects.create;
+  create_30 = ZodOptional.create;
+  create_31 = ZodNullable.create;
+  createWithPreprocess = ZodEffects.createWithPreprocess;
+  create_32 = ZodPipeline.create;
+});
 //@ chunk-j2t139r9.js:59342-59545 esm-fingerprint
 /**
  * zod 的 coerce 构造器表（string/number/boolean/bigint/date）。属于第三方 zod，不是 SDK schema。
  */
 var zodCoerce = {
-  string: (e) =>
+  string: (stringParams) =>
     ZodString.create({
-      ...e,
+      ...stringParams,
       coerce: true,
     }),
-  number: (e) =>
+  number: (numberParams) =>
     ZodNumber.create({
-      ...e,
+      ...numberParams,
       coerce: true,
     }),
-  boolean: (e) =>
+  boolean: (booleanParams) =>
     ZodBoolean.create({
-      ...e,
+      ...booleanParams,
       coerce: true,
     }),
   bigint: (arg) =>
@@ -336,6 +373,11 @@ var zodCoerce = {
 };
 //@ chunk-j2t139r9.js:59545-59555 esm-layout
 var INVALID_default = INVALID;
+
+// The import cycle this module closes (2 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("vendor/zod/lib/index.mjs");
+runDeferredInits("worker:vendor/zod/lib/index.mjs");
 export {
   create,
   create_2,
@@ -355,7 +397,7 @@ export {
   create_19,
   isValid,
   ParseStatus,
-  Y,
+  isPromise,
   addIssueToContext,
   INVALID,
   errorUtil,

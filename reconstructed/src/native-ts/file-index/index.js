@@ -79,19 +79,19 @@ class FileIndex {
     };
   }
   async buildAsync(fileList, markQueryable) {
-    let r = ++this.buildGen;
-    let s = new Set();
+    let gen = ++this.buildGen;
+    let seen = new Set();
     let paths = [];
     let chunkStart = performance.now();
     for (let i = 0; i < fileList.length; i++) {
       let line = fileList[i];
-      if (line.length > 0 && !s.has(line)) {
-        s.add(line);
+      if (line.length > 0 && !seen.has(line)) {
+        seen.add(line);
         paths.push(line);
       }
       if ((i & 255) === 255 && performance.now() - chunkStart > CHUNK_MS) {
         await yieldToEventLoop();
-        if (this.buildGen !== r) {
+        if (this.buildGen !== gen) {
           markQueryable();
           return false;
         }
@@ -110,7 +110,7 @@ class FileIndex {
           firstChunk = false;
         }
         await yieldToEventLoop();
-        if (this.buildGen !== r) return false;
+        if (this.buildGen !== gen) return false;
         chunkStart = performance.now();
       }
     }
@@ -125,13 +125,13 @@ class FileIndex {
     this.readyCount = paths.length;
   }
   resetArrays(paths) {
-    let n = paths.length;
+    let count = paths.length;
     this.paths = paths;
-    this.lowerPaths = Array(n);
-    this.charBits = new Int32Array(n);
-    this.pathLens = new Uint16Array(n);
-    this.nameStarts = new Uint16Array(n);
-    this.nameCharBits = new Int32Array(n);
+    this.lowerPaths = Array(count);
+    this.charBits = new Int32Array(count);
+    this.pathLens = new Uint16Array(count);
+    this.nameStarts = new Uint16Array(count);
+    this.nameCharBits = new Int32Array(count);
     this.readyCount = 0;
     this.topLevelCache = computeTopLevelEntries(paths, TOP_LEVEL_CACHE_LIMIT);
   }
@@ -141,21 +141,21 @@ class FileIndex {
     let len = lower.length;
     this.pathLens[i] = len;
     let bits = 0;
-    let a = 0;
-    let c = 0;
+    let nameStart = 0;
+    let nameBits = 0;
     for (let j = 0; j < len; j++) {
       let code = lower.charCodeAt(j);
       if (code >= 97 && code <= 122) {
         bits |= 1 << (code - 97);
-        c |= 1 << (code - 97);
+        nameBits |= 1 << (code - 97);
       } else if ((code === 47 || code === 92) && j < len - 1) {
-        a = j + 1;
-        c = 0;
+        nameStart = j + 1;
+        nameBits = 0;
       }
     }
     this.charBits[i] = bits;
-    this.nameStarts[i] = len === this.paths[i].length ? a : 0;
-    this.nameCharBits[i] = c;
+    this.nameStarts[i] = len === this.paths[i].length ? nameStart : 0;
+    this.nameCharBits[i] = nameBits;
   }
   search(query, limit) {
     if (limit <= 0) return [];
@@ -174,9 +174,9 @@ class FileIndex {
     let needleChars = Array(min);
     let needleBitmap = 0;
     for (let j = 0; j < min; j++) {
-      let ae = needle.charAt(j);
-      needleChars[j] = ae;
-      let code = ae.charCodeAt(0);
+      let char = needle.charAt(j);
+      needleChars[j] = char;
+      let code = char.charCodeAt(0);
       if (code >= 97 && code <= 122) needleBitmap |= 1 << (code - 97);
     }
     let scoreCeiling = min * (SCORE_MATCH + BONUS_BOUNDARY) + BONUS_FIRST_CHAR + 32;
@@ -204,22 +204,22 @@ class FileIndex {
         else gapPenalty += PENALTY_GAP_START + gap * PENALTY_GAP_EXTENSION;
         prev = pos;
       }
-      let R = nameStarts[i];
-      let N =
-        gapPenalty > 0 && matchPositions[0] < R && (nameCharBits[i] & needleBitmap) === needleBitmap
-          ? scoreNameMatch(haystack, needleChars, R, nameMatchPositions)
+      let nameStart = nameStarts[i];
+      let nameScore =
+        gapPenalty > 0 && matchPositions[0] < nameStart && (nameCharBits[i] & needleBitmap) === needleBitmap
+          ? scoreNameMatch(haystack, needleChars, nameStart, nameMatchPositions)
           : -1 / 0;
-      if (topK.length === limit && scoreCeiling + Math.max(consecBonus - gapPenalty, N) <= threshold)
+      if (topK.length === limit && scoreCeiling + Math.max(consecBonus - gapPenalty, nameScore) <= threshold)
         continue;
       let path = paths[i];
       let hLen = pathLens[i];
       let score = consecBonus - gapPenalty + sumBoundaryBonuses(path, matchPositions, min);
       let scanFrom = 0;
-      if (N !== -1 / 0) {
-        let de = N + sumBoundaryBonuses(path, nameMatchPositions, min);
-        if (de >= score) {
-          score = de;
-          scanFrom = R;
+      if (nameScore !== -1 / 0) {
+        let nameTotal = nameScore + sumBoundaryBonuses(path, nameMatchPositions, min);
+        if (nameTotal >= score) {
+          score = nameTotal;
+          scanFrom = nameStart;
         }
       }
       score += min * SCORE_MATCH + Math.max(0, 32 - (hLen >> 2));
@@ -230,7 +230,7 @@ class FileIndex {
           scanFrom,
         });
         if (topK.length === limit) {
-          topK.sort((de, Se) => de.fuzzScore - Se.fuzzScore);
+          topK.sort((a, b) => a.fuzzScore - b.fuzzScore);
           threshold = topK[0].fuzzScore;
         }
       } else if (score > threshold) {
@@ -250,53 +250,53 @@ class FileIndex {
         threshold = topK[0].fuzzScore;
       }
     }
-    topK.sort((Z, ae) => ae.fuzzScore - Z.fuzzScore);
-    let K = topK.length;
-    let denom = Math.max(K, 1);
-    let ee = Array(K);
-    for (let idx = 0; idx < K; idx++) {
+    topK.sort((a, b) => b.fuzzScore - a.fuzzScore);
+    let matchCount = topK.length;
+    let denom = Math.max(matchCount, 1);
+    let results = Array(matchCount);
+    for (let idx = 0; idx < matchCount; idx++) {
       let pathIndex = topK[idx].pathIndex;
-      let me = paths[pathIndex];
-      let he = lowerPaths[pathIndex];
-      let Re = caseSensitive ? me : he;
-      let P = Array(min);
+      let path = paths[pathIndex];
+      let lowerPath = lowerPaths[pathIndex];
+      let haystack = caseSensitive ? path : lowerPath;
+      let positions = Array(min);
       let scanFrom = topK[idx].scanFrom;
       for (let i = 0; i < min; i++) {
-        let index = Re.indexOf(needleChars[i], scanFrom);
-        P[i] = index;
+        let index = haystack.indexOf(needleChars[i], scanFrom);
+        positions[i] = index;
         scanFrom = index + 1;
       }
-      if (!caseSensitive && he.length !== me.length) mapLowerPositionsToOriginal(me, P);
+      if (!caseSensitive && lowerPath.length !== path.length) mapLowerPositionsToOriginal(path, positions);
       let positionScore = idx / denom;
-      let finalScore = me.includes("test") ? Math.min(positionScore * 1.05, 1) : positionScore;
-      ee[idx] = {
-        path: me,
+      let finalScore = path.includes("test") ? Math.min(positionScore * 1.05, 1) : positionScore;
+      results[idx] = {
+        path,
         score: finalScore,
-        positions: P,
+        positions,
       };
     }
-    return ee;
+    return results;
   }
 }
 //@ chunk-dcmhvw5a.js:48582-48754 layout
-function scoreNameMatch(haystack, needleChars, r, nameMatchPositions) {
-  let a = 0;
-  let c = r - 1;
+function scoreNameMatch(haystack, needleChars, nameStart, nameMatchPositions) {
+  let score = 0;
+  let prev = nameStart - 1;
   for (let j = 0; j < needleChars.length; j++) {
-    let index = haystack.indexOf(needleChars[j], c + 1);
+    let index = haystack.indexOf(needleChars[j], prev + 1);
     if (index === -1) return -1 / 0;
     nameMatchPositions[j] = index;
-    let f = index - c - 1;
-    if (j > 0) a += f === 0 ? BONUS_CONSECUTIVE : -(PENALTY_GAP_START + f * PENALTY_GAP_EXTENSION);
-    c = index;
+    let gap = index - prev - 1;
+    if (j > 0) score += gap === 0 ? BONUS_CONSECUTIVE : -(PENALTY_GAP_START + gap * PENALTY_GAP_EXTENSION);
+    prev = index;
   }
-  return a;
+  return score;
 }
 //@ chunk-dcmhvw5a.js:48754-48839 layout
-function sumBoundaryBonuses(path, n, r) {
-  let s = scoreBonusAt(path, n[0], true);
-  for (let j = 1; j < r; j++) s += scoreBonusAt(path, n[j], false);
-  return s;
+function sumBoundaryBonuses(path, positions, count) {
+  let bonus = scoreBonusAt(path, positions[0], true);
+  for (let j = 1; j < count; j++) bonus += scoreBonusAt(path, positions[j], false);
+  return bonus;
 }
 //@ chunk-dcmhvw5a.js:48839-48973 file-local
 function scoreBonusAt(path, pos, first) {
@@ -319,20 +319,20 @@ function isUpperAscii(code) {
   return code >= 65 && code <= 90;
 }
 //@ chunk-dcmhvw5a.js:49113-49309 layout
-function mapLowerPositionsToOriginal(e, n) {
-  let r = 0;
-  let s = 0;
-  let a = 0;
-  while (a < n.length && r < e.length) {
-    let codePoint = e.codePointAt(r);
-    let g = codePoint > 65535 ? 2 : 1;
-    let m = String.fromCodePoint(codePoint).toLowerCase().length;
-    while (a < n.length && n[a] < s + m) {
-      n[a] = r;
-      a++;
+function mapLowerPositionsToOriginal(path, positions) {
+  let origIndex = 0;
+  let lowerIndex = 0;
+  let positionIndex = 0;
+  while (positionIndex < positions.length && origIndex < path.length) {
+    let codePoint = path.codePointAt(origIndex);
+    let charLen = codePoint > 65535 ? 2 : 1;
+    let lowerLen = String.fromCodePoint(codePoint).toLowerCase().length;
+    while (positionIndex < positions.length && positions[positionIndex] < lowerIndex + lowerLen) {
+      positions[positionIndex] = origIndex;
+      positionIndex++;
     }
-    r += g;
-    s += m;
+    origIndex += charLen;
+    lowerIndex += lowerLen;
   }
 }
 //@ chunk-dcmhvw5a.js:49309-49677 fingerprint = computeTopLevelEntries (0.74)
@@ -357,10 +357,10 @@ function computeTopLevelEntries(paths, limit) {
     }
   }
   let sorted = Array.from(topLevel);
-  sorted.sort((a, c) => {
-    let lenDiff = a.length - c.length;
+  sorted.sort((leftName, b) => {
+    let lenDiff = leftName.length - b.length;
     if (lenDiff !== 0) return lenDiff;
-    return a < c ? -1 : a > c ? 1 : 0;
+    return leftName < b ? -1 : leftName > b ? 1 : 0;
   });
   return sorted.slice(0, limit).map((path) => ({
     path,

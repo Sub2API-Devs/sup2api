@@ -5,314 +5,314 @@
  * pieces: chunk-a8ee6x44.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-a8ee6x44.js:2573-6233 cjs-require-graph
-var require_ruleset = x(function (cjsExports) {
+var require_ruleset = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.ruleSet = undefined;
-  var Fe = "required";
-  var o = "type";
-  var i = "fn";
-  var s = "argv";
-  var E = "ref";
-  var Te = false;
-  var pe = true;
-  var P = "booleanEquals";
-  var d = "stringEquals";
+  var required = "required";
+  var type = "type";
+  var fn = "fn";
+  var argv = "argv";
+  var ref = "ref";
+  var FALSE = false;
+  var TRUE = true;
+  var booleanEquals = "booleanEquals";
+  var stringEquals = "stringEquals";
   var name = "sigv4";
   var signingName = "sts";
-  var Me = "us-east-1";
-  var a = "endpoint";
+  var usEast1 = "us-east-1";
+  var endpoint = "endpoint";
   var url = "https://sts.{Region}.{PartitionResult#dnsSuffix}";
-  var f = "tree";
-  var O = "error";
-  var me = "getAttr";
-  var be = {
-    [Fe]: false,
-    [o]: "string",
+  var tree = "tree";
+  var error = "error";
+  var getAttr = "getAttr";
+  var stringParamSchema = {
+    [required]: false,
+    [type]: "string",
   };
-  var ge = {
-    [Fe]: true,
+  var booleanParamSchema = {
+    [required]: true,
     default: false,
-    [o]: "boolean",
+    [type]: "boolean",
   };
-  var $e = {
-    [E]: "Endpoint",
+  var endpointRef = {
+    [ref]: "Endpoint",
   };
-  var we = {
-    [i]: "isSet",
-    [s]: [
+  var isSetRegionCondition = {
+    [fn]: "isSet",
+    [argv]: [
       {
-        [E]: "Region",
+        [ref]: "Region",
       },
     ],
   };
-  var p = {
-    [E]: "Region",
+  var regionRef = {
+    [ref]: "Region",
   };
-  var qe = {
-    [i]: "aws.partition",
-    [s]: [p],
+  var awsPartitionCondition = {
+    [fn]: "aws.partition",
+    [argv]: [regionRef],
     assign: "PartitionResult",
   };
-  var Ke = {
-    [E]: "UseFIPS",
+  var useFipsRef = {
+    [ref]: "UseFIPS",
   };
-  var Ge = {
-    [E]: "UseDualStack",
+  var useDualStackRef = {
+    [ref]: "UseDualStack",
   };
-  var m = {
+  var globalStsEndpoint = {
     url: "https://sts.amazonaws.com",
     properties: {
       authSchemes: [
         {
           name,
           signingName,
-          signingRegion: Me,
+          signingRegion: usEast1,
         },
       ],
     },
     headers: {},
   };
-  var _ = {};
-  var ke = {
+  var emptyObject = {};
+  var awsGlobalEndpointRule = {
     conditions: [
       {
-        [i]: d,
-        [s]: [p, "aws-global"],
+        [fn]: stringEquals,
+        [argv]: [regionRef, "aws-global"],
       },
     ],
-    [a]: m,
-    [o]: a,
+    [endpoint]: globalStsEndpoint,
+    [type]: endpoint,
   };
-  var ze = {
-    [i]: P,
-    [s]: [Ke, true],
+  var useFipsEqualsTrue = {
+    [fn]: booleanEquals,
+    [argv]: [useFipsRef, true],
   };
-  var Ve = {
-    [i]: P,
-    [s]: [Ge, true],
+  var useDualStackEqualsTrue = {
+    [fn]: booleanEquals,
+    [argv]: [useDualStackRef, true],
   };
-  var Oe = {
-    [i]: me,
-    [s]: [
+  var partitionSupportsFips = {
+    [fn]: getAttr,
+    [argv]: [
       {
-        [E]: "PartitionResult",
+        [ref]: "PartitionResult",
       },
       "supportsFIPS",
     ],
   };
-  var Be = {
-    [E]: "PartitionResult",
+  var partitionResultRef = {
+    [ref]: "PartitionResult",
   };
-  var He = {
-    [i]: P,
-    [s]: [
+  var partitionSupportsDualStack = {
+    [fn]: booleanEquals,
+    [argv]: [
       true,
       {
-        [i]: me,
-        [s]: [Be, "supportsDualStack"],
+        [fn]: getAttr,
+        [argv]: [partitionResultRef, "supportsDualStack"],
       },
     ],
   };
-  var Ne = [
+  var conditionList = [
     {
-      [i]: "isSet",
-      [s]: [$e],
+      [fn]: "isSet",
+      [argv]: [endpointRef],
     },
   ];
-  var conditions = [ze];
-  var conditions_2 = [Ve];
+  var conditions = [useFipsEqualsTrue];
+  var conditions_2 = [useDualStackEqualsTrue];
   var ruleSet = {
     version: "1.0",
     parameters: {
-      Region: be,
-      UseDualStack: ge,
-      UseFIPS: ge,
-      Endpoint: be,
-      UseGlobalEndpoint: ge,
+      Region: stringParamSchema,
+      UseDualStack: booleanParamSchema,
+      UseFIPS: booleanParamSchema,
+      Endpoint: stringParamSchema,
+      UseGlobalEndpoint: booleanParamSchema,
     },
     rules: [
       {
         conditions: [
           {
-            [i]: P,
-            [s]: [
+            [fn]: booleanEquals,
+            [argv]: [
               {
-                [E]: "UseGlobalEndpoint",
+                [ref]: "UseGlobalEndpoint",
               },
-              pe,
+              TRUE,
             ],
           },
           {
-            [i]: "not",
-            [s]: Ne,
+            [fn]: "not",
+            [argv]: conditionList,
           },
-          we,
-          qe,
+          isSetRegionCondition,
+          awsPartitionCondition,
           {
-            [i]: P,
-            [s]: [Ke, Te],
+            [fn]: booleanEquals,
+            [argv]: [useFipsRef, FALSE],
           },
           {
-            [i]: P,
-            [s]: [Ge, Te],
+            [fn]: booleanEquals,
+            [argv]: [useDualStackRef, FALSE],
           },
         ],
         rules: [
           {
             conditions: [
               {
-                [i]: d,
-                [s]: [p, "ap-northeast-1"],
+                [fn]: stringEquals,
+                [argv]: [regionRef, "ap-northeast-1"],
               },
             ],
-            endpoint: m,
-            [o]: a,
+            endpoint: globalStsEndpoint,
+            [type]: endpoint,
           },
           {
             conditions: [
               {
-                [i]: d,
-                [s]: [p, "ap-south-1"],
+                [fn]: stringEquals,
+                [argv]: [regionRef, "ap-south-1"],
               },
             ],
-            endpoint: m,
-            [o]: a,
+            endpoint: globalStsEndpoint,
+            [type]: endpoint,
           },
           {
             conditions: [
               {
-                [i]: d,
-                [s]: [p, "ap-southeast-1"],
+                [fn]: stringEquals,
+                [argv]: [regionRef, "ap-southeast-1"],
               },
             ],
-            endpoint: m,
-            [o]: a,
+            endpoint: globalStsEndpoint,
+            [type]: endpoint,
           },
           {
             conditions: [
               {
-                [i]: d,
-                [s]: [p, "ap-southeast-2"],
+                [fn]: stringEquals,
+                [argv]: [regionRef, "ap-southeast-2"],
               },
             ],
-            endpoint: m,
-            [o]: a,
+            endpoint: globalStsEndpoint,
+            [type]: endpoint,
           },
-          ke,
+          awsGlobalEndpointRule,
           {
             conditions: [
               {
-                [i]: d,
-                [s]: [p, "ca-central-1"],
+                [fn]: stringEquals,
+                [argv]: [regionRef, "ca-central-1"],
               },
             ],
-            endpoint: m,
-            [o]: a,
-          },
-          {
-            conditions: [
-              {
-                [i]: d,
-                [s]: [p, "eu-central-1"],
-              },
-            ],
-            endpoint: m,
-            [o]: a,
+            endpoint: globalStsEndpoint,
+            [type]: endpoint,
           },
           {
             conditions: [
               {
-                [i]: d,
-                [s]: [p, "eu-north-1"],
+                [fn]: stringEquals,
+                [argv]: [regionRef, "eu-central-1"],
               },
             ],
-            endpoint: m,
-            [o]: a,
+            endpoint: globalStsEndpoint,
+            [type]: endpoint,
           },
           {
             conditions: [
               {
-                [i]: d,
-                [s]: [p, "eu-west-1"],
+                [fn]: stringEquals,
+                [argv]: [regionRef, "eu-north-1"],
               },
             ],
-            endpoint: m,
-            [o]: a,
+            endpoint: globalStsEndpoint,
+            [type]: endpoint,
           },
           {
             conditions: [
               {
-                [i]: d,
-                [s]: [p, "eu-west-2"],
+                [fn]: stringEquals,
+                [argv]: [regionRef, "eu-west-1"],
               },
             ],
-            endpoint: m,
-            [o]: a,
+            endpoint: globalStsEndpoint,
+            [type]: endpoint,
           },
           {
             conditions: [
               {
-                [i]: d,
-                [s]: [p, "eu-west-3"],
+                [fn]: stringEquals,
+                [argv]: [regionRef, "eu-west-2"],
               },
             ],
-            endpoint: m,
-            [o]: a,
+            endpoint: globalStsEndpoint,
+            [type]: endpoint,
           },
           {
             conditions: [
               {
-                [i]: d,
-                [s]: [p, "sa-east-1"],
+                [fn]: stringEquals,
+                [argv]: [regionRef, "eu-west-3"],
               },
             ],
-            endpoint: m,
-            [o]: a,
+            endpoint: globalStsEndpoint,
+            [type]: endpoint,
           },
           {
             conditions: [
               {
-                [i]: d,
-                [s]: [p, Me],
+                [fn]: stringEquals,
+                [argv]: [regionRef, "sa-east-1"],
               },
             ],
-            endpoint: m,
-            [o]: a,
+            endpoint: globalStsEndpoint,
+            [type]: endpoint,
           },
           {
             conditions: [
               {
-                [i]: d,
-                [s]: [p, "us-east-2"],
+                [fn]: stringEquals,
+                [argv]: [regionRef, usEast1],
               },
             ],
-            endpoint: m,
-            [o]: a,
+            endpoint: globalStsEndpoint,
+            [type]: endpoint,
           },
           {
             conditions: [
               {
-                [i]: d,
-                [s]: [p, "us-west-1"],
+                [fn]: stringEquals,
+                [argv]: [regionRef, "us-east-2"],
               },
             ],
-            endpoint: m,
-            [o]: a,
+            endpoint: globalStsEndpoint,
+            [type]: endpoint,
           },
           {
             conditions: [
               {
-                [i]: d,
-                [s]: [p, "us-west-2"],
+                [fn]: stringEquals,
+                [argv]: [regionRef, "us-west-1"],
               },
             ],
-            endpoint: m,
-            [o]: a,
+            endpoint: globalStsEndpoint,
+            [type]: endpoint,
+          },
+          {
+            conditions: [
+              {
+                [fn]: stringEquals,
+                [argv]: [regionRef, "us-west-2"],
+              },
+            ],
+            endpoint: globalStsEndpoint,
+            [type]: endpoint,
           },
           {
             endpoint: {
@@ -326,72 +326,72 @@ var require_ruleset = x(function (cjsExports) {
                   },
                 ],
               },
-              headers: _,
+              headers: emptyObject,
             },
-            [o]: a,
+            [type]: endpoint,
           },
         ],
-        [o]: f,
+        [type]: tree,
       },
       {
-        conditions: Ne,
+        conditions: conditionList,
         rules: [
           {
             conditions,
             error: "Invalid Configuration: FIPS and custom endpoint are not supported",
-            [o]: O,
+            [type]: error,
           },
           {
             conditions: conditions_2,
             error: "Invalid Configuration: Dualstack and custom endpoint are not supported",
-            [o]: O,
+            [type]: error,
           },
           {
             endpoint: {
-              url: $e,
-              properties: _,
-              headers: _,
+              url: endpointRef,
+              properties: emptyObject,
+              headers: emptyObject,
             },
-            [o]: a,
+            [type]: endpoint,
           },
         ],
-        [o]: f,
+        [type]: tree,
       },
       {
-        conditions: [we],
+        conditions: [isSetRegionCondition],
         rules: [
           {
-            conditions: [qe],
+            conditions: [awsPartitionCondition],
             rules: [
               {
-                conditions: [ze, Ve],
+                conditions: [useFipsEqualsTrue, useDualStackEqualsTrue],
                 rules: [
                   {
                     conditions: [
                       {
-                        [i]: P,
-                        [s]: [pe, Oe],
+                        [fn]: booleanEquals,
+                        [argv]: [TRUE, partitionSupportsFips],
                       },
-                      He,
+                      partitionSupportsDualStack,
                     ],
                     rules: [
                       {
                         endpoint: {
                           url: "https://sts-fips.{Region}.{PartitionResult#dualStackDnsSuffix}",
-                          properties: _,
-                          headers: _,
+                          properties: emptyObject,
+                          headers: emptyObject,
                         },
-                        [o]: a,
+                        [type]: endpoint,
                       },
                     ],
-                    [o]: f,
+                    [type]: tree,
                   },
                   {
                     error: "FIPS and DualStack are enabled, but this partition does not support one or both",
-                    [o]: O,
+                    [type]: error,
                   },
                 ],
-                [o]: f,
+                [type]: tree,
               },
               {
                 conditions,
@@ -399,19 +399,19 @@ var require_ruleset = x(function (cjsExports) {
                   {
                     conditions: [
                       {
-                        [i]: P,
-                        [s]: [Oe, pe],
+                        [fn]: booleanEquals,
+                        [argv]: [partitionSupportsFips, TRUE],
                       },
                     ],
                     rules: [
                       {
                         conditions: [
                           {
-                            [i]: d,
-                            [s]: [
+                            [fn]: stringEquals,
+                            [argv]: [
                               {
-                                [i]: me,
-                                [s]: [Be, "name"],
+                                [fn]: getAttr,
+                                [argv]: [partitionResultRef, "name"],
                               },
                               "aws-us-gov",
                             ],
@@ -419,71 +419,71 @@ var require_ruleset = x(function (cjsExports) {
                         ],
                         endpoint: {
                           url: "https://sts.{Region}.amazonaws.com",
-                          properties: _,
-                          headers: _,
+                          properties: emptyObject,
+                          headers: emptyObject,
                         },
-                        [o]: a,
+                        [type]: endpoint,
                       },
                       {
                         endpoint: {
                           url: "https://sts-fips.{Region}.{PartitionResult#dnsSuffix}",
-                          properties: _,
-                          headers: _,
+                          properties: emptyObject,
+                          headers: emptyObject,
                         },
-                        [o]: a,
+                        [type]: endpoint,
                       },
                     ],
-                    [o]: f,
+                    [type]: tree,
                   },
                   {
                     error: "FIPS is enabled but this partition does not support FIPS",
-                    [o]: O,
+                    [type]: error,
                   },
                 ],
-                [o]: f,
+                [type]: tree,
               },
               {
                 conditions: conditions_2,
                 rules: [
                   {
-                    conditions: [He],
+                    conditions: [partitionSupportsDualStack],
                     rules: [
                       {
                         endpoint: {
                           url: "https://sts.{Region}.{PartitionResult#dualStackDnsSuffix}",
-                          properties: _,
-                          headers: _,
+                          properties: emptyObject,
+                          headers: emptyObject,
                         },
-                        [o]: a,
+                        [type]: endpoint,
                       },
                     ],
-                    [o]: f,
+                    [type]: tree,
                   },
                   {
                     error: "DualStack is enabled but this partition does not support DualStack",
-                    [o]: O,
+                    [type]: error,
                   },
                 ],
-                [o]: f,
+                [type]: tree,
               },
-              ke,
+              awsGlobalEndpointRule,
               {
                 endpoint: {
                   url,
-                  properties: _,
-                  headers: _,
+                  properties: emptyObject,
+                  headers: emptyObject,
                 },
-                [o]: a,
+                [type]: endpoint,
               },
             ],
-            [o]: f,
+            [type]: tree,
           },
         ],
-        [o]: f,
+        [type]: tree,
       },
       {
         error: "Invalid Configuration: Missing Region",
-        [o]: O,
+        [type]: error,
       },
     ],
   };

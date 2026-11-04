@@ -5,10 +5,10 @@
  * pieces: chunk-h6b7mazd.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-h6b7mazd.js:5653-5825 cjs-fingerprint
-var require_abort = x(function (cjsExports, cjsModule) {
+var require_abort = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = abort;
   function abort(state) {
     Object.keys(state.jobs).forEach(clean.bind(state));

@@ -9,22 +9,22 @@ import { promises } from "fs";
 import { dirname, join } from "path";
 import { homedir } from "os";
 import { createHash, createPrivateKey, createPublicKey, sign } from "crypto";
-import { Re } from "../../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_client } from "../../core/dist-cjs/submodules/client/index.js";
 import { require_property_provider } from "../../../@smithy/property-provider/dist-cjs/index.js";
 import { require_shared_ini_file_loader } from "../../../@smithy/shared-ini-file-loader/dist-cjs/index.js";
 import { require_protocol_http } from "../../../@smithy/protocol-http/dist-cjs/index.js";
 
 //@ chunk-hecvqqcj.js:3742-3757 esm-layout
-var import_client_2 = Re(require_client());
+var import_client_2 = __toESM(require_client());
 //@ chunk-hecvqqcj.js:3757-3794 esm-layout
-var import_client_3 = Re(require_client());
-var import_property_provider_3 = Re(require_property_provider());
-var import_shared_ini_file_loader_2 = Re(require_shared_ini_file_loader());
+var import_client_3 = __toESM(require_client());
+var import_property_provider_3 = __toESM(require_property_provider());
+var import_shared_ini_file_loader_2 = __toESM(require_shared_ini_file_loader());
 //@ chunk-hecvqqcj.js:3794-3831 esm-layout
-var config = Re(require_property_provider());
-var protocols = Re(require_protocol_http());
-var import_shared_ini_file_loader_3 = Re(require_shared_ini_file_loader());
+var config = __toESM(require_property_provider());
+var protocols = __toESM(require_protocol_http());
+var import_shared_ini_file_loader_3 = __toESM(require_shared_ini_file_loader());
 //@ chunk-hecvqqcj.js:4026-9353 esm-fingerprint
 class LoginCredentialsFetcher {
   profileData;
@@ -65,9 +65,10 @@ class LoginCredentialsFetcher {
     return this.profileData.login_session;
   }
   async refresh(token) {
-    let { SigninClient, CreateOAuth2TokenCommand } = await import("./chunk-y366fgzk.js").then((m) =>
-      Re(m.default),
-    );
+    let { SigninClient, CreateOAuth2TokenCommand } =
+      await import("../../nested-clients/dist-cjs/submodules/signin/index.js").then((mod) =>
+        __toESM(mod.default),
+      );
     let { logger, userAgentAppId } = this.callerClientConfig ?? {};
     let requestHandler = ((requestHandler) => requestHandler?.metadata?.handlerProtocol === "h2")(
       this.callerClientConfig?.requestHandler,
@@ -284,8 +285,8 @@ class LoginCredentialsFetcher {
       let headerB64 = Buffer.from(JSON.stringify(header)).toString("base64url");
       let payloadB64 = Buffer.from(JSON.stringify(payload)).toString("base64url");
       let message = `${headerB64}.${payloadB64}`;
-      let h = sign("sha256", Buffer.from(message), privateKey);
-      let str = this.derToRawSignature(h).toString("base64url");
+      let signature = sign("sha256", Buffer.from(message), privateKey);
+      let str = this.derToRawSignature(signature).toString("base64url");
       return `${message}.${str}`;
     } catch (error) {
       throw new config.CredentialsProviderError(

@@ -27,8 +27,8 @@ var isEmpty = isEmpty_2;
 /**
  * 判断值是否为 undefined。
  */
-function isUndefined(e) {
-  return e === undefined;
+function isUndefined(value) {
+  return value === undefined;
 }
 //@ chunk-wy9dbk5f.js:18098-18108 placement
 /**

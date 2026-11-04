@@ -14,9 +14,13 @@ import { getRootSession } from "../../bootstrap/state.js";
 import { logError } from "../log.js";
 import { logForDebugging } from "../debug.js";
 import { errorMessage, withTelemetryMessage, toError, getTelemetryMessage } from "../errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-fq0cr76a.js:854253-854277 placement
-var sandboxErrorSignalSlot = new HostScoped(() => createSignal());
+var sandboxErrorSignalSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fq0cr76a.js:854253", () => {
+  sandboxErrorSignalSlot = new HostScoped(() => createSignal());
+});
 //@ chunk-fq0cr76a.js:854277-854316 placement
 function sandboxErrorSignal() {
   return sandboxErrorSignalSlot.of(getRootSession().host);
@@ -25,7 +29,10 @@ function sandboxErrorSignal() {
 /**
  * sandboxErrorSignalLazy：沙箱错误的惰性信号。
  */
-var sandboxErrorSignalLazy = createLazySignal(sandboxErrorSignal);
+var sandboxErrorSignalLazy; // deferred: uses sandboxErrorSignal of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-fq0cr76a.js:854316", () => {
+  sandboxErrorSignalLazy = createLazySignal(sandboxErrorSignal);
+});
 //@ chunk-fq0cr76a.js:854331-857015 placement
 /**
  * 沙箱各类失败的遥测安全消息（无法包装命令、配置无法安装、清扫残留等）。
@@ -67,43 +74,43 @@ var SANDBOX_TELEMETRY_MESSAGES = {
     "sandbox: post-command scrub moved aside an indicator it could not classify at config build",
 };
 //@ chunk-fq0cr76a.js:857015-857237 placement
-function reportSandboxErrorUnderStandIn(error, n) {
-  let r = SANDBOX_TELEMETRY_MESSAGES[n];
-  let s = isTelemetryMessageWrapped(error, r);
-  if (s !== undefined) {
-    logError(s);
+function reportSandboxErrorUnderStandIn(error, code) {
+  let message = SANDBOX_TELEMETRY_MESSAGES[code];
+  let wrapped = isTelemetryMessageWrapped(error, message);
+  if (wrapped !== undefined) {
+    logError(wrapped);
     return;
   }
   try {
-    logForDebugging(`[sandbox] reported under a stand-in error as "${r}": ${errorMessage(error)}`, {
+    logForDebugging(`[sandbox] reported under a stand-in error as "${message}": ${errorMessage(error)}`, {
       level: "error",
     });
   } catch {}
-  logError(withTelemetryMessage(Error("sandbox error (details are in the debug log)"), r));
+  logError(withTelemetryMessage(Error("sandbox error (details are in the debug log)"), message));
 }
 //@ chunk-fq0cr76a.js:857237-857397 placement
-function describeUnreadableSandboxError(e, n) {
-  let r = SANDBOX_TELEMETRY_MESSAGES[n];
-  let s = isTelemetryMessageWrapped(e, r);
-  if (s !== undefined) return s;
-  let h = "sandbox error (its message could not be read)";
+function describeUnreadableSandboxError(error, code) {
+  let message = SANDBOX_TELEMETRY_MESSAGES[code];
+  let wrapped = isTelemetryMessageWrapped(error, message);
+  if (wrapped !== undefined) return wrapped;
+  let text = "sandbox error (its message could not be read)";
   try {
-    h = String(errorMessage(e));
+    text = String(errorMessage(error));
   } catch {}
-  return withTelemetryMessage(toError(h), r);
+  return withTelemetryMessage(toError(text), message);
 }
 //@ chunk-fq0cr76a.js:857397-857431 placement
 /**
  * reportSandboxTelemetryError：上报沙箱遥测错误。
  */
-function reportSandboxTelemetryError(e) {
-  reportSandboxErrorUnderStandIn(Error(SANDBOX_TELEMETRY_MESSAGES[e]), e);
+function reportSandboxTelemetryError(code) {
+  reportSandboxErrorUnderStandIn(Error(SANDBOX_TELEMETRY_MESSAGES[code]), code);
 }
 //@ chunk-fq0cr76a.js:857431-857514 placement
-function isTelemetryMessageWrapped(e, n) {
+function isTelemetryMessageWrapped(error, message) {
   try {
-    let r = withTelemetryMessage(toError(e), n);
-    return getTelemetryMessage(r) === undefined ? undefined : r;
+    let wrapped = withTelemetryMessage(toError(error), message);
+    return getTelemetryMessage(wrapped) === undefined ? undefined : wrapped;
   } catch {
     return;
   }

@@ -8,8 +8,15 @@
  * pieces: chunk-530hfzwb.js (7)
  * attribution: placement 5, affinity 1, fingerprint 1
  */
-import { init_react_production, Se, P, R, y, ce } from "../../vendor/react/cjs/react.production.js";
-import { kp } from "../../vendor/convert-to-spaces/dist/index.js";
+import {
+  init_react_production,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+} from "../../vendor/react/cjs/react.production.js";
+import { APP_CONTEXT } from "../../vendor/convert-to-spaces/dist/index.js";
 import { createInitialVimState, BACKSPACE_KEY, createInitialPersistentState } from "../vim/types.js";
 import {
   isTextInputKey,
@@ -59,20 +66,27 @@ import {
 import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { useTextInput } from "./useTextInput.js";
 import { getVimSharedState, setVimSharedState } from "../bootstrap/state.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-530hfzwb.js:672-676 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-530hfzwb.js:672", () => {
+  init_react_production();
+});
 //@ chunk-530hfzwb.js:676-680 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-530hfzwb.js:676", () => {
+  init_react_production();
+});
 //@ chunk-530hfzwb.js:680-745 placement
-function useWatchLoop(e) {
-  let { watchLoop } = Se(kp);
-  P(() => (e ? watchLoop() : undefined), [e, watchLoop]);
+function useWatchLoop(active) {
+  let { watchLoop } = useContext(APP_CONTEXT);
+  useEffect(() => (active ? watchLoop() : undefined), [active, watchLoop]);
 }
 //@ chunk-530hfzwb.js:30136-30218 affinity
-function preferredWantedValue(e, t, wanted) {
-  if (e.wanted !== undefined) return e.wanted ?? undefined;
-  return t ? undefined : wanted;
+function preferredWantedValue(ctx, isInsert, wanted) {
+  if (ctx.wanted !== undefined) return ctx.wanted ?? undefined;
+  return isInsert ? undefined : wanted;
 }
 //@ chunk-530hfzwb.js:30218-41931 fingerprint = useVimInput (0.505)
 /**
@@ -80,7 +94,7 @@ function preferredWantedValue(e, t, wanted) {
  */
 function useVimInput(props) {
   let {
-    value: t,
+    value,
     onChange,
     columns,
     disableEscapeDoublePress,
@@ -94,38 +108,41 @@ function useVimInput(props) {
     getInputMode,
     isActive,
   } = props;
-  let initialVimStateRef = R(createInitialVimState());
-  let [I, F] = y("INSERT");
-  let [D, K] = y(null);
-  let [it, oe] = y(false);
-  useWatchLoop(isActive && I === "INSERT");
-  let te = R(null);
-  let vimInputHelperRef = R(getVimInputHelper());
-  let newTextRef = R(null);
-  let newTextRef_2 = R(null);
-  let _e = R(null);
-  function Qt(a, c) {
-    let l = initialVimStateRef.current;
-    if (l.mode === "INSERT" && !c.ctrl && !c.meta && isTextInputKey(c, [...c.key].length === 1))
+  let initialVimStateRef = useRef(createInitialVimState());
+  let [displayMode, setDisplayMode] = useState("INSERT");
+  let [visualAnchor, setVisualAnchor] = useState(null);
+  let [isLooping, setIsLooping] = useState(false);
+  useWatchLoop(isActive && displayMode === "INSERT");
+  let pendingRemapRef = useRef(null);
+  let vimInputHelperRef = useRef(getVimInputHelper());
+  let newTextRef = useRef(null);
+  let newTextRef_2 = useRef(null);
+  let insertStartTextRef = useRef(null);
+  function recordInsertedText(text, key) {
+    let state = initialVimStateRef.current;
+    if (state.mode === "INSERT" && !key.ctrl && !key.meta && isTextInputKey(key, [...key.key].length === 1))
       initialVimStateRef.current = {
         mode: "INSERT",
-        insertedText: l.insertedText + a.normalize("NFC"),
+        insertedText: state.insertedText + text.normalize("NFC"),
       };
   }
-  let switchToInsertMode = ce((a, c = "") => {
-    let l = initialVimStateRef.current;
-    if (l.mode !== "INSERT") return;
-    let m = c !== "" && l.insertedText.endsWith(c) ? l.insertedText.slice(0, -c.length) : l.insertedText;
+  let switchToInsertMode = useCallback((inserted, replacement = "") => {
+    let state = initialVimStateRef.current;
+    if (state.mode !== "INSERT") return;
+    let previousText =
+      replacement !== "" && state.insertedText.endsWith(replacement)
+        ? state.insertedText.slice(0, -replacement.length)
+        : state.insertedText;
     initialVimStateRef.current = {
       mode: "INSERT",
-      insertedText: m + a,
+      insertedText: previousText + inserted,
     };
   }, []);
-  function at(insertModeEscapeRemaps, c, offsetAfter, recorded) {
+  function recordPendingRemap(insertModeEscapeRemaps, char, offsetAfter, recorded) {
     for (let key of insertModeEscapeRemaps.keys())
-      if (key.startsWith(c)) {
-        te.current = {
-          char: c,
+      if (key.startsWith(char)) {
+        pendingRemapRef.current = {
+          char,
           at: Date.now(),
           offsetAfter,
           recorded,
@@ -133,72 +150,73 @@ function useVimInput(props) {
         return;
       }
   }
-  let cancelPendingRemap = ce(() => {
-    te.current = null;
+  let cancelPendingRemap = useCallback(() => {
+    pendingRemapRef.current = null;
   }, []);
-  let forgetColumn = ce(() => {
-    let a = initialVimStateRef.current;
-    if (a.mode !== "INSERT")
+  let forgetColumn = useCallback(() => {
+    let state = initialVimStateRef.current;
+    if (state.mode !== "INSERT")
       initialVimStateRef.current = {
-        ...a,
+        ...state,
         wanted: undefined,
       };
   }, []);
-  let De = ce(
-    (a, c) => {
-      if (c !== undefined) a.setOffset(c);
-      te.current = null;
+  let finishModeSwitch = useCallback(
+    (cursor, options) => {
+      if (options !== undefined) cursor.setOffset(options);
+      pendingRemapRef.current = null;
       newTextRef_2.current = null;
-      _e.current = null;
+      insertStartTextRef.current = null;
       initialVimStateRef.current = {
         mode: "INSERT",
         insertedText: "",
       };
-      F("INSERT");
-      K(null);
+      setDisplayMode("INSERT");
+      setVisualAnchor(null);
       onModeChange?.("INSERT");
     },
     [onModeChange],
   );
-  let switchToNormalMode = ce(
-    (a, c) => {
+  let switchToNormalMode = useCallback(
+    (cursor, options) => {
       let current = initialVimStateRef.current;
       if (current.mode === "INSERT") {
-        let m = newTextRef.current;
-        let T = m === newTextRef_2.current;
-        if (m?.type === "visualOp" && m.op === "change" && T)
+        let lastChange = newTextRef.current;
+        let isFreshChange = lastChange === newTextRef_2.current;
+        if (lastChange?.type === "visualOp" && lastChange.op === "change" && isFreshChange)
           newTextRef.current = {
             type: "visualChange",
-            span: m.span,
-            linewise: m.linewise,
+            span: lastChange.span,
+            linewise: lastChange.linewise,
             text: current.insertedText ?? "",
           };
         else if (
-          changeEntersInsert(m) &&
-          m.type !== "visualOp" &&
-          T &&
-          (current.insertedText || (c?.buffer ? c.buffer.text : t.normalize("NFC")) === _e.current)
+          changeEntersInsert(lastChange) &&
+          lastChange.type !== "visualOp" &&
+          isFreshChange &&
+          (current.insertedText ||
+            (options?.buffer ? options.buffer.text : value.normalize("NFC")) === insertStartTextRef.current)
         )
           newTextRef.current = {
-            ...m,
+            ...lastChange,
             insertedText: current.insertedText,
           };
-        else if (current.insertedText || (c?.claimEmptyInsert && !changeEntersInsert(m)))
+        else if (current.insertedText || (options?.claimEmptyInsert && !changeEntersInsert(lastChange)))
           newTextRef.current = {
             type: "insert",
             text: current.insertedText,
           };
-        let offset = c?.buffer ? c.buffer.offset : a.offset;
-        let M = c?.buffer ? c.buffer.text : t.normalize("NFC");
+        let offset = options?.buffer ? options.buffer.offset : cursor.offset;
+        let text = options?.buffer ? options.buffer.text : value.normalize("NFC");
         if (
           offset > 0 &&
-          M[offset - 1] !==
+          text[offset - 1] !==
             `
 `
         ) {
-          let S = offset > M.length ? 1 : lastGrapheme(M.slice(0, offset)).length;
-          a.setOffset(offset - S);
-        } else if (c?.buffer) a.setOffset(offset);
+          let graphemeLength = offset > text.length ? 1 : lastGrapheme(text.slice(0, offset)).length;
+          cursor.setOffset(offset - graphemeLength);
+        } else if (options?.buffer) cursor.setOffset(offset);
       }
       initialVimStateRef.current = {
         mode: "NORMAL",
@@ -206,43 +224,43 @@ function useVimInput(props) {
           type: "idle",
         },
       };
-      F("NORMAL");
-      K(null);
+      setDisplayMode("NORMAL");
+      setVisualAnchor(null);
       onModeChange?.("NORMAL");
     },
-    [onModeChange, t],
+    [onModeChange, value],
   );
-  let Ke = ce(
-    (a, c, wanted) => {
+  let enterVisualMode = useCallback(
+    (anchor, kind, wanted) => {
       initialVimStateRef.current = {
         mode: "VISUAL",
-        kind: c,
-        anchor: a,
+        kind,
+        anchor,
         command: {
           type: "idle",
         },
         wanted,
       };
-      let m = c === "line" ? "VISUAL LINE" : "VISUAL";
-      F(m);
-      K(a);
-      onModeChange?.(m);
+      let modeLabel = kind === "line" ? "VISUAL LINE" : "VISUAL";
+      setDisplayMode(modeLabel);
+      setVisualAnchor(anchor);
+      onModeChange?.(modeLabel);
     },
     [onModeChange],
   );
-  function createOperatorContext(cursor, c, l = false) {
-    let m;
+  function createOperatorContext(cursor, options, linewise = false) {
+    let writtenText;
     return {
       cursor,
       text: cursor.text,
-      setText: (newText, v) => {
-        m = newText;
-        onChange(newText, v);
+      setText: (newText, options) => {
+        writtenText = newText;
+        onChange(newText, options);
       },
-      setOffset: (offset) => c.setOffset(offset),
-      enterInsert: (T) => {
-        De(c, T);
-        _e.current = m ?? cursor.text;
+      setOffset: (offset) => options.setOffset(offset),
+      enterInsert: (cursor_2) => {
+        finishModeSwitch(options, cursor_2);
+        insertStartTextRef.current = writtenText ?? cursor.text;
       },
       getRegister: () => vimInputHelperRef.current.register,
       getRegisterIsLinewise: () => vimInputHelperRef.current.registerIsLinewise,
@@ -257,7 +275,7 @@ function useVimInput(props) {
           char,
         };
       },
-      recordChange: l
+      recordChange: linewise
         ? () => {}
         : (newText) => {
             newTextRef.current = newText;
@@ -266,215 +284,219 @@ function useVimInput(props) {
           },
     };
   }
-  function ut(a, c, l) {
-    let text = a.text;
+  function replaceRangeWithInsert(cursor, replacement, linewise) {
+    let text = cursor.text;
     return {
-      ...a,
-      setText: (T, v) => {
+      ...cursor,
+      setText: (newText, options) => {
         let previous = {
           value: text,
-          cursorOffset: a.cursor.offset,
+          cursorOffset: cursor.cursor.offset,
         };
-        text = T;
-        a.setText(
-          T,
-          v ?? {
+        text = newText;
+        cursor.setText(
+          newText,
+          options ?? {
             previous,
           },
         );
       },
       enterInsert: (offset) => {
-        let v = text.slice(0, offset) + c + text.slice(offset);
-        let M = {
+        let proposedText = text.slice(0, offset) + replacement + text.slice(offset);
+        let snapshot = {
           value: text,
           cursorOffset: offset,
         };
-        let S = xe(v, l, M) ? c.slice(1) : c;
-        a.setText(v, {
-          previous: M,
+        let nextReplacement = shouldDropFirstChar(proposedText, linewise, snapshot)
+          ? replacement.slice(1)
+          : replacement;
+        cursor.setText(proposedText, {
+          previous: snapshot,
         });
         let sliced = text.slice(0, offset);
-        let normalized = (sliced + S).normalize("NFC");
-        let A = normalized.startsWith(sliced) ? lastGrapheme(normalized.slice(sliced.length)) : "";
-        let L = A && !/^[\p{Mn}\p{Me}]/u.test(A) ? A : lastGrapheme(normalized);
-        let E = normalized.endsWith(`
+        let normalized = (sliced + nextReplacement).normalize("NFC");
+        let nextGrapheme = normalized.startsWith(sliced) ? lastGrapheme(normalized.slice(sliced.length)) : "";
+        let lastChar =
+          nextGrapheme && !/^[\p{Mn}\p{Me}]/u.test(nextGrapheme) ? nextGrapheme : lastGrapheme(normalized);
+        let endsWithNewline = normalized.endsWith(`
 `)
           ? normalized.length
-          : normalized.length - L.length;
-        let W =
+          : normalized.length - lastChar.length;
+        let trailingText =
           offset > 0 &&
           sliced[offset - 1] !==
             `
 `
             ? offset - lastGrapheme(sliced).length
             : offset;
-        a.setOffset(S ? E : W);
+        cursor.setOffset(nextReplacement ? endsWithNewline : trailingText);
       },
     };
   }
-  function xe(nextValue, linewise, l) {
+  function shouldDropFirstChar(nextValue, linewise, options) {
     return (
       getInputMode !== undefined &&
       isModeCharTyped({
         nextValue,
-        value: l?.value ?? t,
-        cursorOffset: l?.cursorOffset ?? linewise.offset,
+        value: options?.value ?? value,
+        cursorOffset: options?.cursorOffset ?? linewise.offset,
         mode: getInputMode(),
       })
     );
   }
-  function lt(a, c, ctx, m) {
-    if (a.type === "insertCommand") {
-      if (a.insertedText === undefined) return;
-      let insertOffset = getInsertOffset(a.key, c);
-      c = new Cursor(c.measuredText, insertOffset);
-      a = {
+  function applyInsertAtCursor(cursor, inserted, ctx, ctx_2) {
+    if (cursor.type === "insertCommand") {
+      if (cursor.insertedText === undefined) return;
+      let insertOffset = getInsertOffset(cursor.key, inserted);
+      inserted = new Cursor(inserted.measuredText, insertOffset);
+      cursor = {
         type: "insert",
-        text: a.insertedText,
+        text: cursor.insertedText,
       };
     }
-    if ("insertedText" in a && a.insertedText !== undefined) ctx = ut(ctx, a.insertedText, m);
-    switch (a.type) {
+    if ("insertedText" in cursor && cursor.insertedText !== undefined)
+      ctx = replaceRangeWithInsert(ctx, cursor.insertedText, ctx_2);
+    switch (cursor.type) {
       case "insert":
-        if (a.text) {
-          let T = c.insert(a.text);
-          let v = xe(T.text, m);
-          ctx.setText(T.text);
-          let M = v ? T.text.slice(1) : T.text;
-          let S = T.offset - (v ? 1 : 0);
+        if (cursor.text) {
+          let insertResult = inserted.insert(cursor.text);
+          let dropFirst = shouldDropFirstChar(insertResult.text, ctx_2);
+          ctx.setText(insertResult.text);
+          let nextText = dropFirst ? insertResult.text.slice(1) : insertResult.text;
+          let nextOffset = insertResult.offset - (dropFirst ? 1 : 0);
           ctx.setOffset(
-            M[S - 1] ===
+            nextText[nextOffset - 1] ===
               `
 `
-              ? S
-              : S - lastGrapheme(M.slice(0, S)).length,
+              ? nextOffset
+              : nextOffset - lastGrapheme(nextText.slice(0, nextOffset)).length,
           );
         }
         break;
       case "x":
-        executeX(a.count, ctx);
+        executeX(cursor.count, ctx);
         break;
       case "substitute":
-        executeSubstitute(a.count, ctx);
+        executeSubstitute(cursor.count, ctx);
         break;
       case "replace":
-        executeReplace(a.char, a.count, ctx);
+        executeReplace(cursor.char, cursor.count, ctx);
         break;
       case "toggleCase":
-        executeToggleCase(a.count, ctx);
+        executeToggleCase(cursor.count, ctx);
         break;
       case "indent":
-        executeIndent(a.dir, a.count, ctx);
+        executeIndent(cursor.dir, cursor.count, ctx);
         break;
       case "join":
-        executeJoinIfNotLastLine(a.count, ctx);
+        executeJoinIfNotLastLine(cursor.count, ctx);
         break;
       case "openLine":
-        executeOpenLine(a.direction, ctx);
+        executeOpenLine(cursor.direction, ctx);
         break;
       case "operator":
-        if (a.motion === a.op[0]) executeLineOp(a.op, a.count, ctx);
-        else if (a.motion === "gg") executeOperatorGg(a.op, a.count, ctx);
-        else if (a.motion === "G") executeOperatorG(a.op, a.count, ctx);
-        else executeOperatorMotion(a.op, a.motion, a.count, ctx);
+        if (cursor.motion === cursor.op[0]) executeLineOp(cursor.op, cursor.count, ctx);
+        else if (cursor.motion === "gg") executeOperatorGg(cursor.op, cursor.count, ctx);
+        else if (cursor.motion === "G") executeOperatorG(cursor.op, cursor.count, ctx);
+        else executeOperatorMotion(cursor.op, cursor.motion, cursor.count, ctx);
         break;
       case "operatorFind":
-        executeOperatorFind(a.op, a.find, a.char, a.count, ctx);
+        executeOperatorFind(cursor.op, cursor.find, cursor.char, cursor.count, ctx);
         break;
       case "operatorTextObj":
-        executeOperatorTextObj(a.op, a.scope, a.objType, a.count, ctx);
+        executeOperatorTextObj(cursor.op, cursor.scope, cursor.objType, cursor.count, ctx);
         break;
       case "visualOp":
-        repeatVisualOperator(a.op, a.span, a.linewise, ctx);
+        repeatVisualOperator(cursor.op, cursor.span, cursor.linewise, ctx);
         break;
       case "visualReplace":
-        repeatVisualReplace(a.char, a.span, a.linewise, ctx);
+        repeatVisualReplace(cursor.char, cursor.span, cursor.linewise, ctx);
         break;
       case "visualCase":
-        repeatVisualCase(a.caseOp, a.span, a.linewise, ctx);
+        repeatVisualCase(cursor.caseOp, cursor.span, cursor.linewise, ctx);
         break;
       case "visualPaste":
         repeatVisualPaste(
-          a.content,
-          a.registerLinewise,
-          a.selectionEndsLine,
-          a.selectionOnOneLine,
-          a.span,
-          a.linewise,
+          cursor.content,
+          cursor.registerLinewise,
+          cursor.selectionEndsLine,
+          cursor.selectionOnOneLine,
+          cursor.span,
+          cursor.linewise,
           ctx,
         );
         break;
       case "visualIndent":
-        repeatVisualIndent(a.dir, a.count, a.lines, ctx);
+        repeatVisualIndent(cursor.dir, cursor.count, cursor.lines, ctx);
         break;
       case "visualChange":
-        repeatVisualChange(a.span, a.linewise, ut(ctx, a.text, m));
+        repeatVisualChange(cursor.span, cursor.linewise, replaceRangeWithInsert(ctx, cursor.text, ctx_2));
         break;
       case "paste":
-        executePaste(a.after, a.count, ctx);
+        executePaste(cursor.after, cursor.count, ctx);
         break;
     }
   }
-  function ft(offset) {
-    let c = newTextRef.current;
-    if (c && offset !== undefined && "count" in c && isCursorMovingChange(c))
+  function columnFromOffset(offset) {
+    let text = newTextRef.current;
+    if (text && offset !== undefined && "count" in text && isCursorMovingChange(text))
       return {
-        ...c,
+        ...text,
         count: offset,
       };
-    return c;
+    return text;
   }
-  function ct(key, wantedColumn, offset) {
-    let m = ft(offset);
-    if (!m) return;
-    let T = Cursor.fromText(t, columns, key.offset);
-    lt(
-      m,
-      T,
+  function targetForMotion(ctx, wantedColumn, offset) {
+    let column = columnFromOffset(offset);
+    if (!column) return;
+    let cursor = Cursor.fromText(value, columns, ctx.offset);
+    applyInsertAtCursor(
+      column,
+      cursor,
       {
-        ...createOperatorContext(T, key, true),
+        ...createOperatorContext(cursor, ctx, true),
         wantedColumn,
       },
-      key,
+      ctx,
     );
   }
-  function nn(content, linewise) {
-    let normalized = t.normalize("NFC");
+  function deleteContent(content, linewise) {
+    let normalized = value.normalize("NFC");
     let offset = linewise.offset;
     let setText = (type, char) => {
       let previous = char?.previous;
-      if (!xe(type, linewise, previous)) normalized = type;
-      else if (type.length !== (previous?.value ?? t).length + 1) normalized = type.slice(1);
+      if (!shouldDropFirstChar(type, linewise, previous)) normalized = type;
+      else if (type.length !== (previous?.value ?? value).length + 1) normalized = type.slice(1);
       onChange(type, char);
     };
-    let v = (wantedColumn, offset_2) => {
-      let w = ft(offset_2);
-      if (!w) return;
-      let A = Cursor.fromText(normalized, columns, offset);
-      lt(
-        w,
-        A,
+    let targetAt = (wantedColumn, offset_2) => {
+      let column = columnFromOffset(offset_2);
+      if (!column) return;
+      let cursor = Cursor.fromText(normalized, columns, offset);
+      applyInsertAtCursor(
+        column,
+        cursor,
         {
-          ...createOperatorContext(A, linewise, true),
+          ...createOperatorContext(cursor, linewise, true),
           text: normalized,
           setText,
           setOffset: (change) => {
             offset = change;
             linewise.setOffset(change);
           },
-          enterInsert: (L) => {
-            offset = L;
-            De(linewise, L);
+          enterInsert: (cursor) => {
+            offset = cursor;
+            finishModeSwitch(linewise, cursor);
           },
           wantedColumn,
         },
         linewise,
       );
     };
-    let M = [...content];
-    for (let idx = 0; idx < M.length; idx++) {
+    let lines = [...content];
+    for (let idx = 0; idx < lines.length; idx++) {
       if (initialVimStateRef.current.mode === "INSERT") {
-        let joined = M.slice(idx).join("");
+        let joined = lines.slice(idx).join("");
         let insertModeEscapeRemaps = getInsertModeEscapeRemaps();
         if (insertModeEscapeRemaps.size > 0 && insertModeEscapeRemaps.has(joined.normalize("NFC"))) {
           logFeatureOk("vim_insert_remap");
@@ -487,66 +509,73 @@ function useVimInput(props) {
           });
           return;
         }
-        let N = Cursor.fromText(normalized, columns, offset).insert(joined);
-        let q = xe(N.text, linewise);
-        let offsetAfter = N.offset - (q ? 1 : 0);
-        onChange(N.text);
+        let inserted = Cursor.fromText(normalized, columns, offset).insert(joined);
+        let dropFirst = shouldDropFirstChar(inserted.text, linewise);
+        let offsetAfter = inserted.offset - (dropFirst ? 1 : 0);
+        onChange(inserted.text);
         linewise.setOffset(offsetAfter);
         initialVimStateRef.current = {
           mode: "INSERT",
           insertedText: initialVimStateRef.current.insertedText + joined,
         };
-        let an = q ? joined.slice(1) : joined;
-        let Ue = lastGrapheme(N.text.slice(0, N.offset));
-        if (Ue && an.endsWith(Ue)) at(insertModeEscapeRemaps, Ue, offsetAfter, true);
+        let joined_2 = dropFirst ? joined.slice(1) : joined;
+        let lastChar = lastGrapheme(inserted.text.slice(0, inserted.offset));
+        if (lastChar && joined_2.endsWith(lastChar))
+          recordPendingRemap(insertModeEscapeRemaps, lastChar, offsetAfter, true);
         return;
       }
-      let V = initialVimStateRef.current;
-      if (V.mode !== "NORMAL") return;
-      let w = M[idx];
-      if ((w === "v" || w === "V") && (V.command.type === "idle" || V.command.type === "count")) {
-        Ke(offset, w === "V" ? "line" : "char", V.wanted);
+      let state = initialVimStateRef.current;
+      if (state.mode !== "NORMAL") return;
+      let keyText = lines[idx];
+      if (
+        (keyText === "v" || keyText === "V") &&
+        (state.command.type === "idle" || state.command.type === "count")
+      ) {
+        enterVisualMode(offset, keyText === "V" ? "line" : "char", state.wanted);
         return;
       }
       let cursor = Cursor.fromText(normalized, columns, offset);
-      let L = false;
-      let E = {
+      let didYank = false;
+      let motionContext = {
         ...createOperatorContext(cursor, linewise, false),
         text: normalized,
         setText,
-        setOffset: (C) => {
-          offset = C;
-          linewise.setOffset(C);
+        setOffset: (offset_2) => {
+          offset = offset_2;
+          linewise.setOffset(offset_2);
         },
-        enterInsert: (C) => {
-          offset = C;
-          De(linewise, C);
+        enterInsert: (cursor) => {
+          offset = cursor;
+          finishModeSwitch(linewise, cursor);
         },
-        onDotRepeat: (C) => {
-          L ||= newTextRef.current !== null;
-          v(V.wanted, C);
+        onDotRepeat: (change) => {
+          didYank ||= newTextRef.current !== null;
+          targetAt(state.wanted, change);
         },
-        wantedColumn: V.wanted,
+        wantedColumn: state.wanted,
       };
-      let ctx = wrapCtxWithHook(E, () => {
-        L = true;
+      let ctx = wrapCtxWithHook(motionContext, () => {
+        didYank = true;
       });
-      let k = transition(V.command, w, ctx);
-      if (k.execute) k.execute();
-      if (initialVimStateRef.current.mode === "NORMAL" && (k.next || k.execute || k.wanted !== undefined))
+      let transitionResult = transition(state.command, keyText, ctx);
+      if (transitionResult.execute) transitionResult.execute();
+      if (
+        initialVimStateRef.current.mode === "NORMAL" &&
+        (transitionResult.next || transitionResult.execute || transitionResult.wanted !== undefined)
+      )
         initialVimStateRef.current = {
           mode: "NORMAL",
-          command: k.next ?? {
+          command: transitionResult.next ?? {
             type: "idle",
           },
-          wanted: preferredWantedValue(k, L, V.wanted),
+          wanted: preferredWantedValue(transitionResult, didYank, state.wanted),
         };
     }
   }
-  function rn(rawInput, key) {
+  function handleVimKeyDown(rawInput, key) {
     handleVimInput(rawInput, key);
-    let l = initialVimStateRef.current;
-    oe(l.mode !== "INSERT" && l.command.type !== "idle");
+    let state = initialVimStateRef.current;
+    setIsLooping(state.mode !== "INSERT" && state.command.type !== "idle");
   }
   function handleVimInput(rawInput, key) {
     let state = initialVimStateRef.current;
@@ -559,8 +588,8 @@ function useVimInput(props) {
       rawInput.preventDefault();
       return;
     }
-    let m = Cursor.fromText(t, columns, key.offset);
-    let T = () => inputFilter?.(rawInput.key, rawInput);
+    let cursor = Cursor.fromText(value, columns, key.offset);
+    let filterInput = () => inputFilter?.(rawInput.key, rawInput);
     if (!(
       rawInput.name === "left" &&
       !rawInput.ctrl &&
@@ -570,11 +599,11 @@ function useVimInput(props) {
       !rawInput.shift
     ))
       key.disarmLeftArrowConfirm?.();
-    let v = te.current;
-    te.current = null;
+    let remap = pendingRemapRef.current;
+    pendingRemapRef.current = null;
     if (rawInput.ctrl || rawInput.meta) {
       if (state.mode === "VISUAL") {
-        T();
+        filterInput();
         switchToNormalMode(key);
         rawInput.preventDefault();
         return;
@@ -583,7 +612,7 @@ function useVimInput(props) {
       return;
     }
     if (rawInput.name === "escape") {
-      T();
+      filterInput();
       if (state.mode === "NORMAL")
         initialVimStateRef.current = {
           mode: "NORMAL",
@@ -600,7 +629,7 @@ function useVimInput(props) {
           },
         };
       else {
-        if (state.mode === "VISUAL") clampCursorInPlace(m, key);
+        if (state.mode === "VISUAL") clampCursorInPlace(cursor, key);
         switchToNormalMode(key);
       }
       if (!disableEscapeDoublePress) rawInput.preventDefault();
@@ -621,40 +650,40 @@ function useVimInput(props) {
       let insertModeEscapeRemaps = getInsertModeEscapeRemaps();
       if (insertModeEscapeRemaps.size > 0) {
         let normalized = rawInput.key.normalize("NFC");
-        let W = [...normalized].length;
-        let k = W === 1;
-        let C = isTextInputKey(rawInput, k);
+        let charCount = [...normalized].length;
+        let isSingleChar = charCount === 1;
+        let isTextKey = isTextInputKey(rawInput, isSingleChar);
         if (
-          C &&
-          W <= 2 &&
-          v &&
-          insertModeEscapeRemaps.has(v.char + firstGrapheme(normalized)) &&
-          Date.now() - v.at <= VIM_ESCAPE_REMAP_TIMEOUT_MS &&
-          key.offset === v.offsetAfter &&
-          m.text.startsWith(v.char, m.offset - v.char.length)
+          isTextKey &&
+          charCount <= 2 &&
+          remap &&
+          insertModeEscapeRemaps.has(remap.char + firstGrapheme(normalized)) &&
+          Date.now() - remap.at <= VIM_ESCAPE_REMAP_TIMEOUT_MS &&
+          key.offset === remap.offsetAfter &&
+          cursor.text.startsWith(remap.char, cursor.offset - remap.char.length)
         ) {
-          T();
-          if (v.recorded && state.insertedText.endsWith(v.char))
+          filterInput();
+          if (remap.recorded && state.insertedText.endsWith(remap.char))
             initialVimStateRef.current = {
               mode: "INSERT",
-              insertedText: state.insertedText.slice(0, -v.char.length),
+              insertedText: state.insertedText.slice(0, -remap.char.length),
             };
-          let q = m.offset - v.char.length;
-          let J = m.text.slice(0, q) + m.text.slice(m.offset);
-          onChange(J);
+          let remapStart = cursor.offset - remap.char.length;
+          let withoutRemap = cursor.text.slice(0, remapStart) + cursor.text.slice(cursor.offset);
+          onChange(withoutRemap);
           logFeatureOk("vim_insert_remap");
           switchToNormalMode(key, {
             buffer: {
-              text: J,
-              offset: q,
+              text: withoutRemap,
+              offset: remapStart,
             },
             claimEmptyInsert: true,
           });
           rawInput.preventDefault();
           return;
         }
-        if (C && !k && insertModeEscapeRemaps.has(normalized)) {
-          T();
+        if (isTextKey && !isSingleChar && insertModeEscapeRemaps.has(normalized)) {
+          filterInput();
           logFeatureOk("vim_insert_remap");
           switchToNormalMode(key, {
             claimEmptyInsert: true,
@@ -662,11 +691,11 @@ function useVimInput(props) {
           rawInput.preventDefault();
           return;
         }
-        let N = C ? lastGrapheme(normalized) : "";
-        if (N)
-          at(
+        let lastChar = isTextKey ? lastGrapheme(normalized) : "";
+        if (lastChar)
+          recordPendingRemap(
             insertModeEscapeRemaps,
-            N,
+            lastChar,
             key.offset + normalized.length,
             isTextInputKey(rawInput, [...rawInput.key].length === 1),
           );
@@ -675,31 +704,31 @@ function useVimInput(props) {
       return;
     }
     if (state.mode === "VISUAL") {
-      let L = false;
+      let hooked = false;
       let ctx = wrapCtxWithHook(
         {
-          ...createOperatorContext(m, key, false),
+          ...createOperatorContext(cursor, key, false),
           onUndo,
-          onDotRepeat: () => ct(key, state.wanted),
+          onDotRepeat: () => targetForMotion(key, state.wanted),
           wantedColumn: state.wanted,
         },
         () => {
-          L = true;
+          hooked = true;
         },
       );
-      let W = state.command.type === "idle" || state.command.type === "count";
+      let isIdleOrCount = state.command.type === "idle" || state.command.type === "count";
       let key_2 = rawInput.key;
-      if (rawInput.name === "left") key_2 = W ? "h" : "";
-      else if (rawInput.name === "right") key_2 = W ? "l" : "";
-      else if (rawInput.name === "up") key_2 = W ? "k" : "";
-      else if (rawInput.name === "down") key_2 = W ? "j" : "";
+      if (rawInput.name === "left") key_2 = isIdleOrCount ? "h" : "";
+      else if (rawInput.name === "right") key_2 = isIdleOrCount ? "l" : "";
+      else if (rawInput.name === "up") key_2 = isIdleOrCount ? "k" : "";
+      else if (rawInput.name === "down") key_2 = isIdleOrCount ? "j" : "";
       else if (rawInput.name === "return")
-        key_2 = W
+        key_2 = isIdleOrCount
           ? "j"
           : `
 `;
-      else if (rawInput.name === "backspace") key_2 = W ? BACKSPACE_KEY : "";
-      else if (rawInput.name === "delete") key_2 = W && state.command.type !== "count" ? "x" : "";
+      else if (rawInput.name === "backspace") key_2 = isIdleOrCount ? BACKSPACE_KEY : "";
+      else if (rawInput.name === "delete") key_2 = isIdleOrCount && state.command.type !== "count" ? "x" : "";
       else if (rawInput.key === "" || NON_TEXT_KEY_NAMES.has(rawInput.name)) {
         rawInput.preventDefault();
         return;
@@ -707,35 +736,40 @@ function useVimInput(props) {
         rawInput.preventDefault();
         return;
       }
-      T();
-      let C = visualTransition(state.command, key_2, ctx);
-      let G = state.kind === "line";
-      if ("next" in C) {
-        C.move?.();
+      filterInput();
+      let visualTransitionResult = visualTransition(state.command, key_2, ctx);
+      let isLinewiseKind = state.kind === "line";
+      if ("next" in visualTransitionResult) {
+        visualTransitionResult.move?.();
         initialVimStateRef.current = {
           mode: "VISUAL",
           kind: state.kind,
           anchor: state.anchor,
-          command: C.next,
-          wanted: preferredWantedValue(C, L, state.wanted),
+          command: visualTransitionResult.next,
+          wanted: preferredWantedValue(visualTransitionResult, hooked, state.wanted),
         };
       } else
-        switch (C.exit) {
+        switch (visualTransitionResult.exit) {
           case "operator":
-            executeVisualOperator(C.op, state.anchor, ctx, G || C.forceLinewise === true);
+            executeVisualOperator(
+              visualTransitionResult.op,
+              state.anchor,
+              ctx,
+              isLinewiseKind || visualTransitionResult.forceLinewise === true,
+            );
             if (initialVimStateRef.current.mode === "VISUAL") switchToNormalMode(key);
             break;
           case "replace":
-            executeVisualReplace(C.char, state.anchor, ctx, G);
+            executeVisualReplace(visualTransitionResult.char, state.anchor, ctx, isLinewiseKind);
             switchToNormalMode(key);
             break;
           case "case":
-            executeVisualCase(C.op, state.anchor, ctx, G);
+            executeVisualCase(visualTransitionResult.op, state.anchor, ctx, isLinewiseKind);
             switchToNormalMode(key);
             break;
           case "paste":
             if (ctx.getRegister()) {
-              executeVisualPaste(state.anchor, ctx, G);
+              executeVisualPaste(state.anchor, ctx, isLinewiseKind);
               switchToNormalMode(key);
             } else
               initialVimStateRef.current = {
@@ -746,15 +780,15 @@ function useVimInput(props) {
               };
             break;
           case "join":
-            executeVisualJoin(state.anchor, ctx, G);
+            executeVisualJoin(state.anchor, ctx, isLinewiseKind);
             switchToNormalMode(key);
             break;
           case "indent":
-            executeVisualIndent(C.dir, C.count, state.anchor, ctx);
+            executeVisualIndent(visualTransitionResult.dir, visualTransitionResult.count, state.anchor, ctx);
             switchToNormalMode(key);
             break;
           case "swap": {
-            let offset = m.offset;
+            let offset = cursor.offset;
             key.setOffset(state.anchor);
             initialVimStateRef.current = {
               mode: "VISUAL",
@@ -764,30 +798,33 @@ function useVimInput(props) {
                 type: "idle",
               },
             };
-            K(offset);
+            setVisualAnchor(offset);
             break;
           }
           case "selectRange": {
-            let N = C.end > C.start ? m.measuredText.prevOffset(C.end) : C.start;
-            key.setOffset(N);
+            let pendingResult =
+              visualTransitionResult.end > visualTransitionResult.start
+                ? cursor.measuredText.prevOffset(visualTransitionResult.end)
+                : visualTransitionResult.start;
+            key.setOffset(pendingResult);
             initialVimStateRef.current = {
               mode: "VISUAL",
               kind: state.kind,
-              anchor: C.start,
+              anchor: visualTransitionResult.start,
               command: {
                 type: "idle",
               },
             };
-            K(C.start);
+            setVisualAnchor(visualTransitionResult.start);
             break;
           }
           default: {
-            let N = C.key === "V" ? "line" : "char";
-            if (N === state.kind) {
-              let offset = clampCursorInPlace(m, key);
+            let visualKind = visualTransitionResult.key === "V" ? "line" : "char";
+            if (visualKind === state.kind) {
+              let offset = clampCursorInPlace(cursor, key);
               switchToNormalMode(key);
               let { wanted } = state;
-              if (wanted?.offset === m.offset && wanted.text === m.text)
+              if (wanted?.offset === cursor.offset && wanted.text === cursor.text)
                 initialVimStateRef.current = {
                   mode: "NORMAL",
                   command: {
@@ -798,7 +835,7 @@ function useVimInput(props) {
                     offset,
                   },
                 };
-            } else Ke(state.anchor, N, state.wanted);
+            } else enterVisualMode(state.anchor, visualKind, state.wanted);
             break;
           }
         }
@@ -809,7 +846,7 @@ function useVimInput(props) {
     if (
       state.command.type === "idle" &&
       !rawInput.shift &&
-      (rawInput.name === "up" || rawInput.name === "down" || (rawInput.name === "left" && m.text === ""))
+      (rawInput.name === "up" || rawInput.name === "down" || (rawInput.name === "left" && cursor.text === ""))
     ) {
       key.handleKeyDown(rawInput);
       return;
@@ -819,7 +856,7 @@ function useVimInput(props) {
       rawInput.preventDefault();
       return;
     }
-    T();
+    filterInput();
     if (state.command.type === "idle" && rawInput.key === "/" && onOpenHistorySearch) {
       onOpenHistorySearch();
       rawInput.preventDefault();
@@ -827,40 +864,40 @@ function useVimInput(props) {
     }
     if (state.command.type === "idle") {
       if (rawInput.key === "k") {
-        let index = m.text.indexOf(`
+        let index = cursor.text.indexOf(`
 `);
-        if (index === -1 || m.offset <= index) {
+        if (index === -1 || cursor.offset <= index) {
           onHistoryUp?.();
           rawInput.preventDefault();
           return;
         }
       }
       if (rawInput.key === "j") {
-        let index = m.text.lastIndexOf(`
+        let index = cursor.text.lastIndexOf(`
 `);
-        if (index === -1 || m.offset > index) {
+        if (index === -1 || cursor.offset > index) {
           onHistoryDown?.();
           rawInput.preventDefault();
           return;
         }
       }
     }
-    let M = false;
+    let unusedVimFlag = false;
     let ctx = wrapCtxWithHook(
       {
-        ...createOperatorContext(m, key, false),
+        ...createOperatorContext(cursor, key, false),
         onUndo,
-        onDotRepeat: (L) => {
-          M ||= newTextRef.current !== null;
-          ct(key, state.wanted, L);
+        onDotRepeat: (change) => {
+          unusedVimFlag ||= newTextRef.current !== null;
+          targetForMotion(key, state.wanted, change);
         },
         wantedColumn: state.wanted,
       },
       () => {
-        M = true;
+        unusedVimFlag = true;
       },
     );
-    let V =
+    let retryResult =
       state.command.type === "idle" ||
       state.command.type === "count" ||
       state.command.type === "operator" ||
@@ -870,11 +907,11 @@ function useVimInput(props) {
     else if (rawInput.name === "right") key_2 = "l";
     else if (rawInput.name === "up") key_2 = "k";
     else if (rawInput.name === "down") key_2 = "j";
-    else if (V && rawInput.name === "backspace") key_2 = BACKSPACE_KEY;
-    else if (V && state.command.type !== "count" && rawInput.name === "delete") key_2 = "x";
+    else if (retryResult && rawInput.name === "backspace") key_2 = BACKSPACE_KEY;
+    else if (retryResult && state.command.type !== "count" && rawInput.name === "delete") key_2 = "x";
     else if (rawInput.key === "" || NON_TEXT_KEY_NAMES.has(rawInput.name)) return;
     else if ([...rawInput.key].length > 1) {
-      nn(rawInput.key, key);
+      deleteContent(rawInput.key, key);
       rawInput.preventDefault();
       return;
     }
@@ -882,7 +919,7 @@ function useVimInput(props) {
       (key_2 === "v" || key_2 === "V") &&
       (state.command.type === "idle" || state.command.type === "count")
     ) {
-      Ke(m.offset, key_2 === "V" ? "line" : "char", state.wanted);
+      enterVisualMode(cursor.offset, key_2 === "V" ? "line" : "char", state.wanted);
       return;
     }
     let result = transition(state.command, key_2, ctx);
@@ -896,68 +933,68 @@ function useVimInput(props) {
         command: result.next ?? {
           type: "idle",
         },
-        wanted: preferredWantedValue(result, M, state.wanted),
+        wanted: preferredWantedValue(result, unusedVimFlag, state.wanted),
       };
     rawInput.preventDefault();
   }
-  let setModeExternal = ce(
-    (a, c) => {
-      te.current = null;
+  let setModeExternal = useCallback(
+    (offset, options) => {
+      pendingRemapRef.current = null;
       newTextRef_2.current = null;
-      if (a === "INSERT") {
+      if (offset === "INSERT") {
         initialVimStateRef.current = {
           mode: "INSERT",
           insertedText: "",
         };
-        K(null);
-      } else if (a === "NORMAL") {
+        setVisualAnchor(null);
+      } else if (offset === "NORMAL") {
         initialVimStateRef.current = {
           mode: "NORMAL",
           command: {
             type: "idle",
           },
         };
-        K(null);
+        setVisualAnchor(null);
       } else {
-        let kind = a === "VISUAL LINE" ? "line" : "char";
-        let offset = c.offset;
+        let kind = offset === "VISUAL LINE" ? "line" : "char";
+        let offset_2 = options.offset;
         initialVimStateRef.current = {
           mode: "VISUAL",
           kind,
-          anchor: offset,
+          anchor: offset_2,
           command: {
             type: "idle",
           },
         };
-        K(offset);
+        setVisualAnchor(offset_2);
       }
-      F(a);
-      oe(false);
-      onModeChange?.(a);
+      setDisplayMode(offset);
+      setIsLooping(false);
+      onModeChange?.(offset);
     },
     [onModeChange],
   );
   return {
-    handleKeyDown: rn,
-    mode: I,
+    handleKeyDown: handleVimKeyDown,
+    mode: displayMode,
     setMode: setModeExternal,
-    visualAnchor: D,
-    recordInsertedText: Qt,
+    visualAnchor,
+    recordInsertedText,
     recordInsert: switchToInsertMode,
     cancelPendingRemap,
     forgetColumn,
-    isCommandPending: it,
+    isCommandPending: isLooping,
   };
 }
 //@ chunk-530hfzwb.js:41931-43138 placement
 function VimInputHook(props) {
   let { inputFilter } = props;
-  let r = R(null);
+  let clearHintRef = useRef(null);
   let vimInput = useVimInput({
     value: props.value,
-    onChange: (o, i) => {
-      if (o === "" && props.value !== "") r.current?.();
-      props.onChange(o, i);
+    onChange: (text, options) => {
+      if (text === "" && props.value !== "") clearHintRef.current?.();
+      props.onChange(text, options);
     },
     columns: props.columns,
     disableEscapeDoublePress: props.disableEscapeDoublePress,
@@ -965,7 +1002,7 @@ function VimInputHook(props) {
     onUndo:
       props.onUndo &&
       (() => {
-        r.current?.();
+        clearHintRef.current?.();
         props.onUndo?.();
       }),
     onOpenHistorySearch: props.onOpenHistorySearch,
@@ -973,13 +1010,13 @@ function VimInputHook(props) {
     onHistoryUp:
       props.onHistoryUp &&
       (() => {
-        r.current?.();
+        clearHintRef.current?.();
         props.onHistoryUp?.();
       }),
     onHistoryDown:
       props.onHistoryDown &&
       (() => {
-        r.current?.();
+        clearHintRef.current?.();
         props.onHistoryDown?.();
       }),
     inputFilter,
@@ -991,27 +1028,28 @@ function VimInputHook(props) {
     selectionAnchor: vimInput.visualAnchor,
     selectionLinewise: vimInput.mode === "VISUAL LINE",
     isCursorOnCharacter: vimInput.mode !== "INSERT",
-    inputFilter: (o, i) => {
-      let u = inputFilter ? inputFilter(o, i) : o;
+    inputFilter: (rawInput, key) => {
+      let filteredInput = inputFilter ? inputFilter(rawInput, key) : rawInput;
       if (
-        o ===
+        rawInput ===
           `
 ` &&
-        (i.name === "return" || i.name === "enter" || (i.ctrl && i.name === "j"))
+        (key.name === "return" || key.name === "enter" || (key.ctrl && key.name === "j"))
       ) {
-        let f = i.name === "return" && props.multiline === true && props.disableBackslashReturn !== true;
-        vimInput.recordInsert(u, f ? "\\" : "");
-      } else vimInput.recordInsertedText(u, i);
-      return u;
+        let isMultilineReturn =
+          key.name === "return" && props.multiline === true && props.disableBackslashReturn !== true;
+        vimInput.recordInsert(filteredInput, isMultilineReturn ? "\\" : "");
+      } else vimInput.recordInsertedText(filteredInput, key);
+      return filteredInput;
     },
   });
-  r.current = textInput.noteKeystrokeEmptied ?? null;
+  clearHintRef.current = textInput.noteKeystrokeEmptied ?? null;
   return {
     ...textInput,
-    handleKeyDown: (o) => vimInput.handleKeyDown(o, textInput),
+    handleKeyDown: (keyEvent) => vimInput.handleKeyDown(keyEvent, textInput),
     recordInsert: vimInput.recordInsert,
     mode: vimInput.mode,
-    setMode: (o) => vimInput.setMode(o, textInput),
+    setMode: (nextMode) => vimInput.setMode(nextMode, textInput),
     cancelPendingRemap: vimInput.cancelPendingRemap,
     forgetColumn: vimInput.forgetColumn,
     isCommandPending: vimInput.isCommandPending,

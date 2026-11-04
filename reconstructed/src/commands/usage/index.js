@@ -36,7 +36,7 @@ var usageNonInteractiveCommand = {
   get isHidden() {
     return !getIsNonInteractiveSession();
   },
-  load: () => import("./chunk-9689amr8.js"),
+  load: () => import("../cost/call.lazy.js"),
 };
 //@ chunk-e6aww6q8.js:2026266-2026674 placement
 /**
@@ -59,6 +59,6 @@ var skillDoctorNonInteractiveCommand = {
   get isHidden() {
     return !getIsNonInteractiveSession();
   },
-  load: () => import("./chunk-trqm4cp5.js"),
+  load: () => import("../skill-doctor/skill-doctor.js"),
 };
 export { skillDoctorCommand, skillDoctorNonInteractiveCommand, usageCommand, usageNonInteractiveCommand };

@@ -23,19 +23,26 @@ import {
 import { env } from "../../utils/env.js";
 import { isPluginServerConfig } from "../../services/mcp/types.js";
 import { isFirstPartyToolboxServer } from "../../services/mcp/fileReference/fileReferencePolicy.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-jgw6g6zz.js:502-559 placement
 /**
  * Docs 类型标题别名与内部键。
  */
-var DOCS_TYPE_TITLES = ["Docs"];
-var DOCS_TYPE_KEYS = new Set(["claudedocs", "claudepages"]);
+var DOCS_TYPE_TITLES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DOCS_TYPE_KEYS;
+deferInit("chunk-jgw6g6zz.js:502", () => {
+  DOCS_TYPE_TITLES = ["Docs"];
+  DOCS_TYPE_KEYS = new Set(["claudedocs", "claudepages"]);
+});
 //@ chunk-jgw6g6zz.js:559-636 placement
 /**
  * 判断类型是否是 Docs 的 core 类型。
  */
-function isCoreDocsType(e) {
-  return e.tier === "core" && DOCS_TYPE_TITLES.some((o) => typeNameKey(e.title) === typeNameKey(o));
+function isCoreDocsType(type) {
+  return (
+    type.tier === "core" && DOCS_TYPE_TITLES.some((title) => typeNameKey(type.title) === typeNameKey(title))
+  );
 }
 //@ chunk-jgw6g6zz.js:636-825 placement
 /**
@@ -47,19 +54,21 @@ var DOCS_CONNECTOR_UNATTACHED_NOTE =
 /**
  * 判断 MCP 服务器是否为第一方 Claude Docs 连接器：claude.ai 代理服务器、SDK 注入的对应服务器，或远程会话中的动态 http 服务器（非插件或特定配置）。
  */
-function isDocsConnectorServer(e) {
+function isDocsConnectorServer(client) {
   return (
-    (e.config.type === "claudeai-proxy" && isClaudeAiProxyServer(e.config) && isDocsConnectorUrl(e.config)) ||
-    isDocsConnectorClient(e) ||
+    (client.config.type === "claudeai-proxy" &&
+      isClaudeAiProxyServer(client.config) &&
+      isDocsConnectorUrl(client.config)) ||
+    isDocsConnectorClient(client) ||
     (isHostEntrypointSession() &&
-      e.config.type === "sdk" &&
-      normalizeUuidOrNull(e.name) !== null &&
-      DOCS_TYPE_KEYS.has(alnumLower(e.serverInfo?.name ?? ""))) ||
+      client.config.type === "sdk" &&
+      normalizeUuidOrNull(client.name) !== null &&
+      DOCS_TYPE_KEYS.has(alnumLower(client.serverInfo?.name ?? ""))) ||
     (env.CLAUDE_CODE_REMOTE === true &&
-      e.config.type === "http" &&
-      e.config.scope === "dynamic" &&
-      (!isPluginServerConfig(e.config) || isDocsConnectorUrl(e.config)) &&
-      (isDocsServerId(e.config) || DOCS_SERVER_NAMES.has(e.name)))
+      client.config.type === "http" &&
+      client.config.scope === "dynamic" &&
+      (!isPluginServerConfig(client.config) || isDocsConnectorUrl(client.config)) &&
+      (isDocsServerId(client.config) || DOCS_SERVER_NAMES.has(client.name)))
   );
 }
 //@ chunk-jgw6g6zz.js:1148-1225 placement
@@ -79,10 +88,11 @@ function isDocsConnectorClient(connection) {
 /**
  * 判断已连接/待连接/缓存的 MCP 客户端中是否有 Claude Docs 连接器。
  */
-function hasDocsConnector(e) {
-  return e.some(
-    (o) =>
-      (o.type === "connected" || o.type === "pending" || o.type === "cached") && isDocsConnectorServer(o),
+function hasDocsConnector(clients) {
+  return clients.some(
+    (client) =>
+      (client.type === "connected" || client.type === "pending" || client.type === "cached") &&
+      isDocsConnectorServer(client),
   );
 }
 export {

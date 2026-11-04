@@ -100,14 +100,14 @@ async function getOauthProfileFromOauthToken_2(accessToken) {
         ok: false,
         why: "no_answer",
       };
-    let h =
+    let requestId =
       typeof response.headers?.get === "function"
         ? response.headers.get("request-id")
         : response.headers?.["request-id"];
     return {
       ok: true,
       profile: oauthProfileResponse,
-      stamped: isSessionsToken(h),
+      stamped: isSessionsToken(requestId),
     };
   } catch (error) {
     if (isExpectedApiError(error)) {

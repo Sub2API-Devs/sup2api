@@ -5,7 +5,7 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS as x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:130453-132937 cjs-fingerprint
 var ao = x(function (cjsExports, cjsModule) {
@@ -25,7 +25,7 @@ var ao = x(function (cjsExports, cjsModule) {
 `,
     t: "\t",
   };
-  function jd(str) {
+  function unescapeString(str) {
     return str.replace(unescapeRe, function ($0, $1) {
       switch ($1) {
         case "\\":
@@ -36,7 +36,7 @@ var ao = x(function (cjsExports, cjsModule) {
       }
     });
   }
-  tokenize.unescape = jd;
+  tokenize.unescape = unescapeString;
   function tokenize(source, alternateCommentMode) {
     source = source.toString();
     var offset = 0;
@@ -57,7 +57,7 @@ var ao = x(function (cjsExports, cjsModule) {
       offset = re.lastIndex;
       push(stringDelim);
       stringDelim = null;
-      return jd(match[1]);
+      return unescapeString(match[1]);
     }
     function charAt(pos) {
       return source.charAt(pos);

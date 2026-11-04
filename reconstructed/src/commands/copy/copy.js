@@ -10,6 +10,7 @@
  */
 import { join } from "path";
 import { mkdir } from "fs/promises";
+import { isDesktopInstalled } from "../../utils/desktopDeepLink.js";
 import { countCharInString, repeatString, truncateToLength } from "../../utils/stringUtils.js";
 import {
   jsxProd_default,
@@ -23,7 +24,7 @@ import { bunStringWidth } from "../../ink/stringWidth.js";
 import { claudeTempDir } from "../../utils/tempDir.js";
 import { writeFileAtomic } from "../../utils/file.js";
 import { setClipboard, getOsc52Utf8Warning } from "../../ink/termio/osc.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 import { useGlobalExitKeybindings, useKeybinding } from "../../keybindings/useKeybinding.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
@@ -38,11 +39,22 @@ import { Byline } from "../../components/design-system/Byline.js";
 import { KeyboardShortcutHint } from "../../components/design-system/KeyboardShortcutHint.js";
 import { Pane } from "../../components/design-system/Pane.js";
 import { stripMemoryTags } from "../../services/orgMemory/promptIndex.js";
-import { isDesktopInstalled } from "../../utils/desktopDeepLink.js";
 
+//@ chunk-e6aww6q8.js:2659669-2659812 fingerprint = collectRecentAssistantTexts (0.709)
+function collectRecentAssistantTexts(messages) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    let msg = messages[i];
+    if (msg.type === "assistant" && msg.requestId && !msg.isApiErrorMessage) return msg.requestId;
+  }
+  return;
+}
+//@ chunk-5nte8cwj.js:1546-1584 fingerprint = COPY_DIR (1)
+async function COPY_DIR() {
+  return isDesktopInstalled("claude");
+}
 //@ chunk-0knprqgt.js:13722-13751 sole-consumer
-function returnSecond(Pn, Lt) {
-  return Lt;
+function returnSecond(first, second) {
+  return second;
 }
 //@ chunk-0knprqgt.js:13751-13791 affinity = isConnectionError (1)
 function isCodeSegment_2(err) {
@@ -85,11 +97,11 @@ var COPY_PICKER_TITLE = "Select content to copy";
 function extractCodeBlocks(markdown) {
   let { tokens } = lexMarkdownWindowed(marked, stripPromptXMLTags(markdown));
   let blocks = [];
-  let c;
+  let lastBlock;
   for (let token of tokens) {
     if (token.type === "space") continue;
     if (token.type !== "blockquote") {
-      c = undefined;
+      lastBlock = undefined;
       if (token.type === "code") {
         let codeToken = token;
         blocks.push({
@@ -100,71 +112,73 @@ function extractCodeBlocks(markdown) {
       }
       continue;
     }
-    let d = token.text.replace(/^\s*\n/, "").trimEnd();
-    if (d === "") continue;
-    if (c)
-      c.text = `${c.text}
+    let text = token.text.replace(/^\s*\n/, "").trimEnd();
+    if (text === "") continue;
+    if (lastBlock)
+      lastBlock.text = `${lastBlock.text}
 
-${d}`;
+${text}`;
     else {
-      c = {
+      lastBlock = {
         kind: "quote",
-        text: d,
+        text,
       };
-      blocks.push(c);
+      blocks.push(lastBlock);
     }
   }
   return blocks;
 }
 //@ chunk-0knprqgt.js:14450-14506 layout
-function tableCellText(i) {
-  return i.tokens.map((token) => token.raw).join("");
+function tableCellText(cell) {
+  return cell.tokens.map((token) => token.raw).join("");
 }
 //@ chunk-0knprqgt.js:14506-15048 layout
 /**
  * 把表格数据渲染为 Markdown 表格文本：转义竖线与换行，按显示宽度对齐列（最少 3 列宽），按对齐方式生成分隔行。
  */
 function formatMarkdownTable(table) {
-  let mapped = [table.header.map(tableCellText), ...table.rows.map((m) => m.map(tableCellText))].map((m) =>
-    m.map((f) => f.replace(/\|/g, "\\|").replace(/[\r\n]/g, " ")),
+  let mapped = [table.header.map(tableCellText), ...table.rows.map((row) => row.map(tableCellText))].map(
+    (row) => row.map((cell) => cell.replace(/\|/g, "\\|").replace(/[\r\n]/g, " ")),
   );
-  let mapped_2 = mapped[0].map((m, f) => Math.max(3, ...mapped.map((g) => bunStringWidth(g[f] ?? ""))));
-  let formatRow = (m) =>
-    `| ${m.map((f, g) => f + " ".repeat(Math.max(0, mapped_2[g] - bunStringWidth(f)))).join(" | ")} |`;
-  let u = (m, f) => {
-    switch (f) {
+  let mapped_2 = mapped[0].map((cell, columnIndex) =>
+    Math.max(3, ...mapped.map((row) => bunStringWidth(row[columnIndex] ?? ""))),
+  );
+  let formatRow = (row) =>
+    `| ${row.map((cell, columnIndex) => cell + " ".repeat(Math.max(0, mapped_2[columnIndex] - bunStringWidth(cell)))).join(" | ")} |`;
+  let padCell = (width, align) => {
+    switch (align) {
       case "center":
-        return `:${repeatString("-", m - 2)}:`;
+        return `:${repeatString("-", width - 2)}:`;
       case "right":
-        return `${repeatString("-", m - 1)}:`;
+        return `${repeatString("-", width - 1)}:`;
       case "left":
-        return `:${repeatString("-", m - 1)}`;
+        return `:${repeatString("-", width - 1)}`;
       default:
-        return "-".repeat(m);
+        return "-".repeat(width);
     }
   };
-  let d = `| ${mapped_2.map((m, f) => u(m, table.align[f] ?? null)).join(" | ")} |`;
-  let [o, ...p] = mapped;
-  return [formatRow(o), d, ...p.map(formatRow)].join(`
+  let separator = `| ${mapped_2.map((width, columnIndex) => padCell(width, table.align[columnIndex] ?? null)).join(" | ")} |`;
+  let [header, ...body] = mapped;
+  return [formatRow(header), separator, ...body.map(formatRow)].join(`
 `);
 }
 //@ chunk-0knprqgt.js:15048-15329 layout
-function normalizeMarkdownTables(i) {
-  let { tokens } = lexMarkdownWindowed(marked, i);
-  let t = i;
-  let c = 0;
-  let u = 0;
+function normalizeMarkdownTables(markdown) {
+  let { tokens } = lexMarkdownWindowed(marked, markdown);
+  let rest = markdown;
+  let from = 0;
+  let to = 0;
   for (let token of tokens) {
-    let index = i.indexOf(token.raw, c);
+    let index = markdown.indexOf(token.raw, from);
     if (index === -1) continue;
-    c = index + token.raw.length;
+    from = index + token.raw.length;
     if (token.type !== "table") continue;
-    let p = token.raw.match(/\n*$/)?.[0] ?? "";
-    let m = formatMarkdownTable(token) + p;
-    t = t.slice(0, index + u) + m + t.slice(index + token.raw.length + u);
-    u += m.length - token.raw.length;
+    let trailingNewlines = token.raw.match(/\n*$/)?.[0] ?? "";
+    let rewritten = formatMarkdownTable(token) + trailingNewlines;
+    rest = rest.slice(0, index + to) + rewritten + rest.slice(index + token.raw.length + to);
+    to += rewritten.length - token.raw.length;
   }
-  return t;
+  return rest;
 }
 //@ chunk-0knprqgt.js:15329-15558 layout
 function recentAssistantTexts(messages) {
@@ -197,9 +211,9 @@ function fileExtension(lang) {
  * /copy 命令：把文本写入临时目录下的文件并返回路径。
  */
 async function writeTempCopyFile(agentType, scope) {
-  let t = claudeTempDir();
-  let localMemDir = join(t, scope);
-  await mkdir(t, {
+  let tempDir = claudeTempDir();
+  let localMemDir = join(tempDir, scope);
+  await mkdir(tempDir, {
     recursive: true,
     mode: 448,
   });
@@ -219,66 +233,66 @@ async function copyOrWriteToFile(text, filename) {
 `,
     ) + 1;
   let charCount = `Copied to clipboard (${text.length} characters, ${lineCount} lines)`;
-  let o = getOsc52Utf8Warning(text);
+  let osc52Warning = getOsc52Utf8Warning(text);
   try {
     let filePath = await writeTempCopyFile(text, filename);
-    let m = o
+    let notice = osc52Warning
       ? `
-\u26A0 ${o}; the file below is unaffected`
+\u26A0 ${osc52Warning}; the file below is unaffected`
       : "";
-    return `${charCount}${m}
+    return `${charCount}${notice}
 Also written to ${filePath}`;
   } catch {
-    let p = o
+    let fallbackNotice = osc52Warning
       ? `
-\u26A0 ${o}`
+\u26A0 ${osc52Warning}`
       : "";
-    return `${charCount}${p}`;
+    return `${charCount}${fallbackNotice}`;
   }
 }
 //@ chunk-0knprqgt.js:16107-19748 fingerprint = CopyPicker (0.705)
 function CopyPicker(props) {
-  let o = w(54);
+  let $ = useMemoCache(54);
   let { fullText, blocks, messageAge, onDone } = props;
   let { storageV5 } = useTheme_2();
-  let p;
-  if (o[0] !== onDone) {
-    p = function m() {
+  let onCancel;
+  if ($[0] !== onDone) {
+    onCancel = function handleCancel() {
       onDone("Copy cancelled", {
         display: "system",
       });
     };
-    o[0] = onDone;
-    o[1] = p;
-  } else p = o[1];
-  let m = p;
-  let globalExitKeybindings = useGlobalExitKeybindings(m);
-  let g;
-  if (o[2] === MEMO_CACHE_SENTINEL) {
-    g = {
+    $[0] = onDone;
+    $[1] = onCancel;
+  } else onCancel = $[1];
+  let cancel = onCancel;
+  let globalExitKeybindings = useGlobalExitKeybindings(cancel);
+  let selection;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    selection = {
       context: "Select",
     };
-    o[2] = g;
-  } else g = o[2];
-  useKeybinding("select:cancel", m, g);
+    $[2] = selection;
+  } else selection = $[2];
+  useKeybinding("select:cancel", cancel, selection);
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let Fe;
-  if (o[3] === MEMO_CACHE_SENTINEL) {
-    Fe = stableEmptyObject(false);
-    o[3] = Fe;
-  } else Fe = o[3];
-  let fe = Fe;
-  let k = count(blocks, isCodeSegment);
-  let quoteCount = blocks.length - k;
-  let Ie;
-  if (o[4] !== blocks) {
-    Ie = ["full", ...blocks.map(returnSecond), "always"];
-    o[4] = blocks;
-    o[5] = Ie;
-  } else Ie = o[5];
-  let T = Ie;
+  let selectedBlock;
+  if ($[3] === MEMO_CACHE_SENTINEL) {
+    selectedBlock = stableEmptyObject(false);
+    $[3] = selectedBlock;
+  } else selectedBlock = $[3];
+  let selected = selectedBlock;
+  let codeCount = count(blocks, isCodeSegment);
+  let quoteCount = blocks.length - codeCount;
+  let mode;
+  if ($[4] !== blocks) {
+    mode = ["full", ...blocks.map(returnSecond), "always"];
+    $[4] = blocks;
+    $[5] = mode;
+  } else mode = $[5];
+  let modeState = mode;
   let t4;
-  if (o[6] !== blocks || o[7] !== fullText) {
+  if ($[6] !== blocks || $[7] !== fullText) {
     t4 = function getSelectionContent(selected) {
       if (selected === "full" || selected === "always") {
         return {
@@ -302,26 +316,26 @@ function CopyPicker(props) {
         isQuote: false,
       };
     };
-    o[6] = blocks;
-    o[7] = fullText;
-    o[8] = t4;
-  } else t4 = o[8];
-  let x = t4;
-  let Ke;
+    $[6] = blocks;
+    $[7] = fullText;
+    $[8] = t4;
+  } else t4 = $[8];
+  let blocksView = t4;
+  let scrollState;
   if (
-    o[9] !== k ||
-    o[10] !== x ||
-    o[11] !== messageAge ||
-    o[12] !== onDone ||
-    o[13] !== quoteCount ||
-    o[14] !== storageV5
+    $[9] !== codeCount ||
+    $[10] !== blocksView ||
+    $[11] !== messageAge ||
+    $[12] !== onDone ||
+    $[13] !== quoteCount ||
+    $[14] !== storageV5
   ) {
-    Ke = async function handleSelect(selected) {
-      let content = x(selected);
+    scrollState = async function handleSelect(selected) {
+      let content = blocksView(selected);
       if (selected === "always") {
         if (!getGlobalConfig().copyFullResponse) await saveGlobalConfig(withCopyFullResponse, storageV5);
         logEvent("tengu_copy", {
-          block_count: k,
+          block_count: codeCount,
           quote_count: quoteCount,
           always: true,
           message_age: messageAge,
@@ -334,30 +348,36 @@ Preference saved. Use /config to change copyFullResponse`);
       logEvent("tengu_copy", {
         selected_block: content.blockIndex,
         selected_quote: content.isQuote,
-        block_count: k,
+        block_count: codeCount,
         quote_count: quoteCount,
         message_age: messageAge,
       });
       let result = await copyOrWriteToFile(content.text, content.filename);
       onDone(result);
     };
-    o[9] = k;
-    o[10] = x;
-    o[11] = messageAge;
-    o[12] = onDone;
-    o[13] = quoteCount;
-    o[14] = storageV5;
-    o[15] = Ke;
-  } else Ke = o[15];
-  let N = Ke;
-  let Ne;
-  if (o[16] !== k || o[17] !== x || o[18] !== messageAge || o[19] !== onDone || o[20] !== quoteCount) {
-    Ne = async function handleWrite(selected) {
-      let content = x(selected);
+    $[9] = codeCount;
+    $[10] = blocksView;
+    $[11] = messageAge;
+    $[12] = onDone;
+    $[13] = quoteCount;
+    $[14] = storageV5;
+    $[15] = scrollState;
+  } else scrollState = $[15];
+  let scroll = scrollState;
+  let previewState;
+  if (
+    $[16] !== codeCount ||
+    $[17] !== blocksView ||
+    $[18] !== messageAge ||
+    $[19] !== onDone ||
+    $[20] !== quoteCount
+  ) {
+    previewState = async function handleWrite(selected) {
+      let content = blocksView(selected);
       logEvent("tengu_copy", {
         selected_block: content.blockIndex,
         selected_quote: content.isQuote,
-        block_count: k,
+        block_count: codeCount,
         quote_count: quoteCount,
         message_age: messageAge,
         write_shortcut: true,
@@ -370,94 +390,94 @@ Preference saved. Use /config to change copyFullResponse`);
         onDone(`Failed to write file: ${e instanceof Error ? e.message : e}`);
       }
     };
-    o[16] = k;
-    o[17] = x;
-    o[18] = messageAge;
-    o[19] = onDone;
-    o[20] = quoteCount;
-    o[21] = Ne;
-  } else Ne = o[21];
-  let h = Ne;
-  let Q;
-  if (o[22] !== h) {
-    Q = function handleKeyDown(e_0) {
+    $[16] = codeCount;
+    $[17] = blocksView;
+    $[18] = messageAge;
+    $[19] = onDone;
+    $[20] = quoteCount;
+    $[21] = previewState;
+  } else previewState = $[21];
+  let preview = previewState;
+  let statusState;
+  if ($[22] !== preview) {
+    statusState = function handleKeyDown(e_0) {
       if (e_0.key !== "w" || e_0.ctrl || e_0.meta) {
         return;
       }
       e_0.preventDefault();
-      h("full");
+      preview("full");
     };
-    o[22] = h;
-    o[23] = Q;
-  } else Q = o[23];
-  let Oe = Q;
-  let Qe;
-  if (o[24] !== h || o[25] !== T) {
-    Qe = function X(event, Et) {
-      let We = T[Et];
-      if (event.key !== "w" || event.ctrl || event.meta || We === undefined) {
+    $[22] = preview;
+    $[23] = statusState;
+  } else statusState = $[23];
+  let status = statusState;
+  let handleKeyDown;
+  if ($[24] !== preview || $[25] !== modeState) {
+    handleKeyDown = function keyEvent(event, index) {
+      let blockMode = modeState[index];
+      if (event.key !== "w" || event.ctrl || event.meta || blockMode === undefined) {
         return;
       }
       event.preventDefault();
-      h(We);
+      preview(blockMode);
     };
-    o[24] = h;
-    o[25] = T;
-    o[26] = Qe;
-  } else Qe = o[26];
-  let onRowKeyDown = Qe;
-  let Ue;
-  if (o[27] === MEMO_CACHE_SENTINEL) {
-    Ue =
+    $[24] = preview;
+    $[25] = modeState;
+    $[26] = handleKeyDown;
+  } else handleKeyDown = $[26];
+  let onRowKeyDown = handleKeyDown;
+  let previewText;
+  if ($[27] === MEMO_CACHE_SENTINEL) {
+    previewText =
       true &&
       jsxProd_default_2(Text, {
         dimColor: true,
         children: [COPY_PICKER_TITLE, ":"],
       });
-    o[27] = Ue;
-  } else Ue = o[27];
-  const onKeyDown = isScreenReaderEnabled ? Oe : undefined;
+    $[27] = previewText;
+  } else previewText = $[27];
+  const onKeyDown = isScreenReaderEnabled ? status : undefined;
   let onSelect;
-  if (o[28] !== N || o[29] !== T) {
+  if ($[28] !== scroll || $[29] !== modeState) {
     onSelect = (value) => {
-      let Xe = T[value];
-      if (Xe !== undefined) N(Xe);
+      let blockText = modeState[value];
+      if (blockText !== undefined) scroll(blockText);
     };
-    o[28] = N;
-    o[29] = T;
-    o[30] = onSelect;
-  } else onSelect = o[30];
-  const ke = `${fullText.length} chars`;
-  const ye = `${
+    $[28] = scroll;
+    $[29] = modeState;
+    $[30] = onSelect;
+  } else onSelect = $[30];
+  const charCount = `${fullText.length} chars`;
+  const sizeLabel = `${
     countCharInString(
       fullText,
       `
 `,
     ) + 1
   } lines`;
-  let J;
-  if (o[31] !== ke || o[32] !== ye) {
-    J = jsxProd_default(
+  let tip;
+  if ($[31] !== charCount || $[32] !== sizeLabel) {
+    tip = jsxProd_default(
       OrderedListWithItem.Item,
       {
         label: "Full response",
-        meta: [ke, ye],
+        meta: [charCount, sizeLabel],
       },
       "full",
     );
-    o[31] = ke;
-    o[32] = ye;
-    o[33] = J;
-  } else J = o[33];
-  let V;
-  if (o[34] !== blocks) {
-    V = blocks.map(renderCopyBlockItem);
-    o[34] = blocks;
-    o[35] = V;
-  } else V = o[35];
-  let ze;
-  if (o[36] === MEMO_CACHE_SENTINEL) {
-    ze = jsxProd_default(
+    $[31] = charCount;
+    $[32] = sizeLabel;
+    $[33] = tip;
+  } else tip = $[33];
+  let listWidth;
+  if ($[34] !== blocks) {
+    listWidth = blocks.map(renderCopyBlockItem);
+    $[34] = blocks;
+    $[35] = listWidth;
+  } else listWidth = $[35];
+  let headerRow;
+  if ($[36] === MEMO_CACHE_SENTINEL) {
+    headerRow = jsxProd_default(
       OrderedListWithItem.Item,
       {
         label: "Always copy full response",
@@ -465,37 +485,37 @@ Preference saved. Use /config to change copyFullResponse`);
       },
       "always",
     );
-    o[36] = ze;
-  } else ze = o[36];
+    $[36] = headerRow;
+  } else headerRow = $[36];
   let children;
-  if (o[37] !== onRowKeyDown || o[38] !== onSelect || o[39] !== J || o[40] !== V) {
+  if ($[37] !== onRowKeyDown || $[38] !== onSelect || $[39] !== tip || $[40] !== listWidth) {
     children = jsxProd_default_2(OrderedListWithItem, {
       onSelect,
       onRowKeyDown,
-      children: [J, V, ze],
+      children: [tip, listWidth, headerRow],
     });
-    o[37] = onRowKeyDown;
-    o[38] = onSelect;
-    o[39] = J;
-    o[40] = V;
-    o[41] = children;
-  } else children = o[41];
-  let Z;
-  if (o[42] !== onKeyDown || o[43] !== children) {
-    Z = jsxProd_default(Box, {
+    $[37] = onRowKeyDown;
+    $[38] = onSelect;
+    $[39] = tip;
+    $[40] = listWidth;
+    $[41] = children;
+  } else children = $[41];
+  let statusLine;
+  if ($[42] !== onKeyDown || $[43] !== children) {
+    statusLine = jsxProd_default(Box, {
       flexDirection: "column",
       onKeyDown,
       children,
     });
-    o[42] = onKeyDown;
-    o[43] = children;
-    o[44] = Z;
-  } else Z = o[44];
+    $[42] = onKeyDown;
+    $[43] = children;
+    $[44] = statusLine;
+  } else statusLine = $[44];
   let children_2;
   if (
-    o[45] !== globalExitKeybindings.keyName ||
-    o[46] !== globalExitKeybindings.pending ||
-    o[47] !== isScreenReaderEnabled
+    $[45] !== globalExitKeybindings.keyName ||
+    $[46] !== globalExitKeybindings.pending ||
+    $[47] !== isScreenReaderEnabled
   ) {
     children_2 = globalExitKeybindings.pending
       ? `Press ${globalExitKeybindings.keyName} again to cancel`
@@ -505,50 +525,50 @@ Preference saved. Use /config to change copyFullResponse`);
               jsxProd_default(KeyboardShortcutHint, {
                 chord: "enter",
                 action: "copy",
-                ...fe,
+                ...selected,
               }),
             jsxProd_default(KeyboardShortcutHint, {
               chord: "w",
               action: isScreenReaderEnabled ? "write full response to file" : "write to file",
-              ...fe,
+              ...selected,
             }),
             jsxProd_default(KeyboardShortcutHint, {
               chord: "escape",
               action: "cancel",
-              ...fe,
+              ...selected,
             }),
           ],
         });
-    o[45] = globalExitKeybindings.keyName;
-    o[46] = globalExitKeybindings.pending;
-    o[47] = isScreenReaderEnabled;
-    o[48] = children_2;
-  } else children_2 = o[48];
-  let H;
-  if (o[49] !== children_2) {
-    H = jsxProd_default(Text, {
+    $[45] = globalExitKeybindings.keyName;
+    $[46] = globalExitKeybindings.pending;
+    $[47] = isScreenReaderEnabled;
+    $[48] = children_2;
+  } else children_2 = $[48];
+  let hintLine;
+  if ($[49] !== children_2) {
+    hintLine = jsxProd_default(Text, {
       dimColor: true,
       italic: false,
       children: children_2,
     });
-    o[49] = children_2;
-    o[50] = H;
-  } else H = o[50];
-  let Je;
-  if (o[51] !== Z || o[52] !== H) {
+    $[49] = children_2;
+    $[50] = hintLine;
+  } else hintLine = $[50];
+  let footer;
+  if ($[51] !== statusLine || $[52] !== hintLine) {
     let children = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [Ue, Z, H],
+      children: [previewText, statusLine, hintLine],
     });
-    Je = jsxProd_default(Pane, {
+    footer = jsxProd_default(Pane, {
       children,
     });
-    o[51] = Z;
-    o[52] = H;
-    o[53] = Je;
-  } else Je = o[53];
-  return Je;
+    $[51] = statusLine;
+    $[52] = hintLine;
+    $[53] = footer;
+  } else footer = $[53];
+  return footer;
 }
 //@ chunk-0knprqgt.js:19748-19885 layout
 function blockLabel(text) {
@@ -559,8 +579,8 @@ function blockLabel(text) {
     )
     .find((line) => line.trim() !== "");
   if (found === undefined) return "(code block)";
-  let t = truncateToLength(found, MAX_BLOCK_LABEL_WIDTH);
-  return t === found ? found : `${t}\u2026`;
+  let label = truncateToLength(found, MAX_BLOCK_LABEL_WIDTH);
+  return label === found ? found : `${label}\u2026`;
 }
 //@ chunk-0knprqgt.js:19885-20560 fingerprint = call (0.933)
 /**
@@ -593,11 +613,11 @@ var call = async (onDone, context, args) => {
   let codeBlocks = extractCodeBlocks(text);
   let config = getGlobalConfig();
   if (codeBlocks.length === 0 || config.copyFullResponse) {
-    let f = count(codeBlocks, (y) => y.kind === "code");
+    let codeBlockCount = count(codeBlocks, (block) => block.kind === "code");
     logEvent("tengu_copy", {
       always: config.copyFullResponse,
-      block_count: f,
-      quote_count: codeBlocks.length - f,
+      block_count: codeBlockCount,
+      quote_count: codeBlocks.length - codeBlockCount,
       message_age: age,
     });
     let result = await copyOrWriteToFile(text, RESPONSE_FILENAME);
@@ -611,16 +631,12 @@ var call = async (onDone, context, args) => {
     onDone,
   });
 };
-//@ chunk-5nte8cwj.js:1546-1584 fingerprint = COPY_DIR (1)
-async function COPY_DIR() {
-  return isDesktopInstalled("claude");
-}
-//@ chunk-e6aww6q8.js:2659669-2659812 fingerprint = collectRecentAssistantTexts (0.709)
-function collectRecentAssistantTexts(messages) {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    let msg = messages[i];
-    if (msg.type === "assistant" && msg.requestId && !msg.isApiErrorMessage) return msg.requestId;
-  }
-  return;
-}
-export { collectRecentAssistantTexts, COPY_DIR };
+export {
+  collectRecentAssistantTexts,
+  COPY_DIR,
+  call,
+  recentAssistantTexts,
+  fileExtension,
+  normalizeMarkdownTables,
+  formatMarkdownTable,
+};

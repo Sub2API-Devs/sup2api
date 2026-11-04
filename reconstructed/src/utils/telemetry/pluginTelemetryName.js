@@ -28,37 +28,38 @@ import { getBuiltinPlugin } from "../../plugins/builtinPlugins.js";
 /**
  * 插件遥测字段（官方插件确认存在，否则名字记为第三方）。
  */
-async function pluginTelemetryFields(n, i, r) {
-  let o = normalizePluginId(n);
-  let { name: a, marketplace } = parsePluginIdentifier_2(o);
+async function pluginTelemetryFields(pluginIdRaw, managedNames, storage) {
+  let pluginId = normalizePluginId(pluginIdRaw);
+  let { name, marketplace } = parsePluginIdentifier_2(pluginId);
   if (marketplace === OFFICIAL_MARKETPLACE_NAME && commandSourceSession().nameRegistration === undefined)
-    await loadKnownMarketplacesSafe(r);
-  let pluginEventFields = buildPluginEventFields(a, marketplace, i);
-  let m = isOfficialOrCommunityMarketplace(marketplace);
-  if (!m && marketplace !== BUILTIN && !isKnownOfficialPluginName(a, marketplace)) return pluginEventFields;
-  let s = false;
+    await loadKnownMarketplacesSafe(storage);
+  let pluginEventFields = buildPluginEventFields(name, marketplace, managedNames);
+  let isOfficialMarketplace = isOfficialOrCommunityMarketplace(marketplace);
+  if (!isOfficialMarketplace && marketplace !== BUILTIN && !isKnownOfficialPluginName(name, marketplace))
+    return pluginEventFields;
+  let exists = false;
   try {
-    s = await pluginExists(o, a, marketplace, r);
+    exists = await pluginExists(pluginId, name, marketplace, storage);
   } catch (error) {
     logForDebugging(
-      `Plugin telemetry: could not read the marketplace catalog to confirm "${n}" exists (${errorMessage(error)}); logging its name as third-party`,
+      `Plugin telemetry: could not read the marketplace catalog to confirm "${pluginIdRaw}" exists (${errorMessage(error)}); logging its name as third-party`,
     );
   }
   return {
     ...pluginEventFields,
-    ...(m &&
+    ...(isOfficialMarketplace &&
       marketplace !== undefined && {
         marketplace_name_redacted: redactedMarketplaceName(marketplace),
       }),
-    ...(!s && {
+    ...(!exists && {
       plugin_name_redacted: lit(THIRD_PARTY),
     }),
   };
 }
 //@ chunk-g8nydygk.js:956-1063 placement
-async function pluginExists(n, i, marketplace, o) {
-  if (isKnownOfficialPluginName(i, marketplace)) return true;
-  if (marketplace === BUILTIN) return getBuiltinPlugin(i) !== undefined;
-  return (await getPluginByIdCacheOnly(n, o)) !== null;
+async function pluginExists(pluginId, name, marketplace, storage) {
+  if (isKnownOfficialPluginName(name, marketplace)) return true;
+  if (marketplace === BUILTIN) return getBuiltinPlugin(name) !== undefined;
+  return (await getPluginByIdCacheOnly(pluginId, storage)) !== null;
 }
 export { pluginTelemetryFields };

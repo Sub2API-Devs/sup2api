@@ -19,14 +19,14 @@ import { chromeSkillGuidance } from "../../utils/claudeInChrome/skillAvailabilit
  * 判断工具名是否属于 Claude in Chrome MCP 工具集。
  */
 function CLAUDE_IN_CHROME_MCP_TOOLS(tool) {
-  let e = chromeToolSuffix(tool);
-  return e === null ? tool : "mcp__claude-in-chrome__" + e;
+  let suffixedTool = chromeToolSuffix(tool);
+  return suffixedTool === null ? tool : "mcp__claude-in-chrome__" + suffixedTool;
 }
 //@ chunk-hantmvxa.js:48192-49051 fingerprint = registerClaudeInChromeSkill (0.867)
 /**
  * 注册 claude-in-chrome 内置 skill；disabled（CLAUDE_CODE_DISABLE_CFC_PROMPT 等）为假且 Chrome 扩展可用时启用。
  */
-function registerClaudeInChromeSkill({ disabled: e = false } = {}) {
+function registerClaudeInChromeSkill({ disabled = false } = {}) {
   registerBundledSkill({
     name: "claude-in-chrome",
     menuDescription: "Let Claude browse and interact with pages in your Chrome",
@@ -36,7 +36,7 @@ function registerClaudeInChromeSkill({ disabled: e = false } = {}) {
       "When the user wants to interact with web pages, automate browser tasks, capture screenshots, read console logs, or perform any browser-based actions. Always invoke BEFORE attempting to use any mcp__claude-in-chrome__* tools.",
     allowedTools: [],
     userInvocable: true,
-    isEnabled: () => !e && (isClaudeInChromeWiredThisSession() || shouldOfferChromeInstallUpsell()),
+    isEnabled: () => !disabled && (isClaudeInChromeWiredThisSession() || shouldOfferChromeInstallUpsell()),
     async getPromptForCommand(args, context) {
       let prompt = await chromeSkillGuidance(context);
       if (args)

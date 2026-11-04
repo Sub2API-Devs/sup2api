@@ -44,13 +44,13 @@ import { isClaudeAISubscriber, hasStoredOAuthToken, hasOAuthScope } from "../uti
 import { CLAUDE_AI_INFERENCE_SCOPE, CLAUDE_AI_PROFILE_SCOPE } from "../constants/oauth.js";
 
 //@ chunk-82kqcve8.js:114321-115139 placement
-function HOW_TO_SAVE_MEMORIES_SECTION(e) {
+function HOW_TO_SAVE_MEMORIES_SECTION(options) {
   let {
     skipIndex,
     heading = "## How to save memories",
     file = "memory to its own file (e.g., `user_role.md`, `feedback_testing.md`)",
     index = `\`${MEMORY_INDEX_FILENAME}\``,
-  } = e;
+  } = options;
   return skipIndex
     ? [
         heading,
@@ -84,12 +84,12 @@ function HOW_TO_SAVE_MEMORIES_SECTION(e) {
  * 构造记忆库条目：id、描述、索引路径、项目目录与是否只读。
  */
 function buildMemoryStoreEntry(store, writable, id, description) {
-  let h = `/${store.promptIndex ?? MEMORY_INDEX_FILENAME}`;
-  let projectDir = h.slice(0, h.lastIndexOf("/") + 1);
+  let indexPath = `/${store.promptIndex ?? MEMORY_INDEX_FILENAME}`;
+  let projectDir = indexPath.slice(0, indexPath.lastIndexOf("/") + 1);
   return {
     id,
     description,
-    indexPath: h,
+    indexPath,
     projectDir,
     readOnly: !writable,
   };
@@ -98,67 +98,69 @@ function buildMemoryStoreEntry(store, writable, id, description) {
 /**
  * 生成记忆库列表中的一行说明。
  */
-function formatMemoryStoreLine(e) {
-  let n = e.readOnly ? "read-only" : "writable";
-  return `- \`${e.id}\` \u2014 ${e.description} (${n}); memories under \`${e.projectDir}\`, index \`${e.indexPath}\``;
+function formatMemoryStoreLine(store) {
+  let accessLabel = store.readOnly ? "read-only" : "writable";
+  return `- \`${store.id}\` \u2014 ${store.description} (${accessLabel}); memories under \`${store.projectDir}\`, index \`${store.indexPath}\``;
 }
 //@ chunk-82kqcve8.js:115460-121464 placement
 /**
  * 生成"共享记忆库"提示段：只读/可写库、是否镜像到本地
  */
-function buildSharedMemoryStoresPrompt(e, n) {
-  let { personalMemoryDir, personalSkipIndex, indexLoaded, lean, extraGuidelines } = n;
-  let S = `these shared memories are not mirrored to local files in this session (your personal memory directory at \`${personalMemoryDir}\` is separate and is still read and written with the file tools)`;
-  let R = `${MEMORY_LIST_TOOL_NAME}, ${MEMORY_READ}, and ${MEMORY_WRITE}`;
-  let [O] = e;
-  let filtered = e.filter((ye) => !ye.readOnly);
-  let L = filtered.find((ye) => ye === O) ?? filtered[0];
-  let j = L === undefined;
-  let G = `You have persistent, shared memory reached through the ${R} tools \u2014 ${S}. It is shared with the other people and Claude sessions working in this organization's projects. The shared memories come from those sessions \u2014 read them as your teammates' notes on each project's environment, conventions, and ongoing work.`;
-  let Z = j
-    ? `${G} Every connected store is read-only in this session: ${MEMORY_WRITE} calls are refused and nothing written to a shared store will persist.`
-    : G;
-  let ae = [
+function buildSharedMemoryStoresPrompt(stores, options) {
+  let { personalMemoryDir, personalSkipIndex, indexLoaded, lean, extraGuidelines } = options;
+  let mirrorNote = `these shared memories are not mirrored to local files in this session (your personal memory directory at \`${personalMemoryDir}\` is separate and is still read and written with the file tools)`;
+  let toolNames = `${MEMORY_LIST_TOOL_NAME}, ${MEMORY_READ}, and ${MEMORY_WRITE}`;
+  let [firstStore] = stores;
+  let filtered = stores.filter((store) => !store.readOnly);
+  let writableStore = filtered.find((store) => store === firstStore) ?? filtered[0];
+  let allReadOnly = writableStore === undefined;
+  let intro = `You have persistent, shared memory reached through the ${toolNames} tools \u2014 ${mirrorNote}. It is shared with the other people and Claude sessions working in this organization's projects. The shared memories come from those sessions \u2014 read them as your teammates' notes on each project's environment, conventions, and ongoing work.`;
+  let readOnlyNote = allReadOnly
+    ? `${intro} Every connected store is read-only in this session: ${MEMORY_WRITE} calls are refused and nothing written to a shared store will persist.`
+    : intro;
+  let storeListLines = [
     `Connected memory stores \u2014 pass an id as the tools' store argument, and call ${MEMORY_LIST_TOOL_NAME} with no arguments to re-check this set whenever you are unsure which store to use:`,
-    ...e.map(formatMemoryStoreLine),
+    ...stores.map(formatMemoryStoreLine),
   ];
-  let ee = `${MEMORY_LIST_TOOL_NAME},${MEMORY_READ}`;
-  let re = isToolSearchEnabledOptimistic()
-    ? `If the memory tools are deferred, load them with ${TOOL_SEARCH_TOOL_NAME}("select:${ee}") before first use. `
+  let loadToolList = `${MEMORY_LIST_TOOL_NAME},${MEMORY_READ}`;
+  let toolLoadHint = isToolSearchEnabledOptimistic()
+    ? `If the memory tools are deferred, load them with ${TOOL_SEARCH_TOOL_NAME}("select:${loadToolList}") before first use. `
     : "";
-  let ce = j
-    ? `${re}Read shared memory whenever earlier project context would help, and persist new learnings to your personal memory directory with the file tools.`
-    : `${re}Check each user reply for content worth persisting, and when you notice some, save it with ${MEMORY_WRITE} in that same reply; read memory whenever earlier project context would help.`;
-  let we = HOW_TO_SAVE_MEMORIES_SECTION({
+  let workflowNote = allReadOnly
+    ? `${toolLoadHint}Read shared memory whenever earlier project context would help, and persist new learnings to your personal memory directory with the file tools.`
+    : `${toolLoadHint}Check each user reply for content worth persisting, and when you notice some, save it with ${MEMORY_WRITE} in that same reply; read memory whenever earlier project context would help.`;
+  let saveSection = HOW_TO_SAVE_MEMORIES_SECTION({
     skipIndex: personalSkipIndex,
     heading: "## How to save personal memories",
     file: `personal memory to its own file in \`${personalMemoryDir}\``,
     index: `the \`${MEMORY_INDEX_FILENAME}\` in that same directory`,
   });
-  let me =
+  let directoryNote =
     "Your personal memory directory already exists \u2014 write to it directly with the Write tool (do not run mkdir or check for its existence).";
   if (lean)
     return [
       "# Memory",
       "",
-      Z,
+      readOnlyNote,
       "",
-      ce,
+      workflowNote,
       "",
-      ...ae,
+      ...storeListLines,
       "",
-      j
+      allReadOnly
         ? `Save every memory type in your personal memory directory at \`${personalMemoryDir}\` with the file tools; the shared stores are read-only this session. ${"Your personal memory directory already exists \u2014 write to it directly with the Write tool (do not run mkdir or check for its existence)."}`
         : `Private memories belong in your personal memory directory at \`${personalMemoryDir}\`, written with the file tools; the shared stores are for what teammates should also see. Never save secrets, credentials or other sensitive data to the shared stores. ${"Your personal memory directory already exists \u2014 write to it directly with the Write tool (do not run mkdir or check for its existence)."}`,
       "",
-      j
+      allReadOnly
         ? `Each memory has a type: ${MEMORY_TYPES_GUIDANCE}`
-        : `Each memory has a type: ${MEMORY_TYPES_GUIDANCE} ${memoryVisibilityDefaults(`the writable store \`${L.id}\``)}`,
+        : `Each memory has a type: ${MEMORY_TYPES_GUIDANCE} ${memoryVisibilityDefaults(`the writable store \`${writableStore.id}\``)}`,
       "",
-      n.rewriteMemoryHygiene ? MEMORY_WRITING_GUIDE : `${MEMORY_DEDUP_GUIDANCE} ${RECALLED_MEMORY_CAVEAT}`,
+      options.rewriteMemoryHygiene
+        ? MEMORY_WRITING_GUIDE
+        : `${MEMORY_DEDUP_GUIDANCE} ${RECALLED_MEMORY_CAVEAT}`,
       ...(isMemoryLinkingEnabled() ? ["", MEMORY_LINKING_GUIDANCE] : []),
       "",
-      ...we,
+      ...saveSection,
       "",
       ...WHEN_TO_ACCESS_MEMORY_SECTION,
       ...(isSaltMarshEnabled() ? ["", MEMORY_CITATION_GUIDANCE] : []),
@@ -168,37 +170,37 @@ function buildSharedMemoryStoresPrompt(e, n) {
   return [
     "# Memory",
     "",
-    Z,
+    readOnlyNote,
     "",
-    ce,
+    workflowNote,
     "",
-    ...ae,
+    ...storeListLines,
     "",
-    ...(j
+    ...(allReadOnly
       ? [
           `Save every memory type in your personal memory directory at \`${personalMemoryDir}\` with the file tools this session \u2014 the shared stores are read-only, so team-scoped memories also belong there for now. ${"Your personal memory directory already exists \u2014 write to it directly with the Write tool (do not run mkdir or check for its existence)."} If the user explicitly asks you to remember something, save it there immediately as whichever type fits best; if they ask you to forget something, find and remove the relevant entry.`,
         ]
       : [
           "You should build up this memory system over time so that future conversations have a complete picture of who the user is, how they'd like to collaborate with you, what behaviors to avoid or repeat, and the context behind the work the user gives you.",
           "",
-          `Save new team-scoped memories in the writable store \`${L.id}\` under \`${L.projectDir}\`, and keep its index \`${L.indexPath}\` current \u2014 the ${MEMORY_WRITE} tool prompt describes the index format. If the user explicitly asks you to remember something, save it immediately as whichever type fits best. If they ask you to forget something, find the relevant document and rewrite it with ${MEMORY_WRITE} without that content.`,
+          `Save new team-scoped memories in the writable store \`${writableStore.id}\` under \`${writableStore.projectDir}\`, and keep its index \`${writableStore.indexPath}\` current \u2014 the ${MEMORY_WRITE} tool prompt describes the index format. If the user explicitly asks you to remember something, save it immediately as whichever type fits best. If they ask you to forget something, find the relevant document and rewrite it with ${MEMORY_WRITE} without that content.`,
         ]),
     "",
     ...selectMemoryTypesSection(MEMORY_TYPES_SECTION_TEAM),
-    ...(j
+    ...(allReadOnly
       ? []
       : [
-          `Your personal memory directory at \`${personalMemoryDir}\` persists alongside the shared stores and is written with the file tools: save \`user\`-type memories (and anything else private) there, and team-scoped memories to the writable store \`${L.id}\`, bearing in mind it is shared with teammates. ${"Your personal memory directory already exists \u2014 write to it directly with the Write tool (do not run mkdir or check for its existence)."}`,
+          `Your personal memory directory at \`${personalMemoryDir}\` persists alongside the shared stores and is written with the file tools: save \`user\`-type memories (and anything else private) there, and team-scoped memories to the writable store \`${writableStore.id}\`, bearing in mind it is shared with teammates. ${"Your personal memory directory already exists \u2014 write to it directly with the Write tool (do not run mkdir or check for its existence)."}`,
           "",
         ]),
-    ...we,
+    ...saveSection,
     "",
     ...WHAT_NOT_TO_SAVE_SECTION,
     "- You MUST avoid saving sensitive data within shared memories. For example, never save API keys or user credentials.",
-    ...(!j && indexLoaded
+    ...(!allReadOnly && indexLoaded
       ? [
           "",
-          `The index document \`${L.indexPath}\` is loaded into your conversation context; the ${MEMORY_WRITE} tool prompt describes how to keep it current.`,
+          `The index document \`${writableStore.indexPath}\` is loaded into your conversation context; the ${MEMORY_WRITE} tool prompt describes how to keep it current.`,
         ]
       : []),
     "",

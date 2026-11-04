@@ -5,7 +5,7 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_mode } from "./mode.js";
 import { require_numeric_data } from "./numeric-data.js";
 import { require_alphanumeric_data } from "./alphanumeric-data.js";
@@ -16,7 +16,7 @@ import { require_utils } from "./utils.js";
 import { require_dijkstra } from "../../../dijkstrajs/dijkstra.js";
 
 //@ chunk-spjgqa4y.js:14833-17575 cjs-fingerprint
-var require_segments = x(function (cjsExports) {
+var require_segments = __commonJS(function (cjsExports) {
   var Mode = require_mode();
   var NumericData = require_numeric_data();
   var AlphanumericData = require_alphanumeric_data();
